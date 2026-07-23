@@ -515,9 +515,7 @@ const incumbentAlive = (
   // under claim (verify dials the incumbent while claim holds the registry fiber).
   const probe = Effect.gen(function* () {
     const ctx = yield* Layer.build(
-      Hyperlink.client(NodeStatus.Tag, target).pipe(
-        Layer.provide(Hyperlink.clientVerify(false)),
-      ),
+      NodeStatus.client(target),
     );
     yield* Effect.gen(function* () {
       const status = yield* NodeStatus.Tag;
@@ -553,9 +551,7 @@ const incumbentYield = (
   // Same as incumbentAlive — skip nested default-on verify around the yield RPC.
   const ask = Effect.gen(function* () {
     const ctx = yield* Layer.build(
-      Hyperlink.client(NodeStatus.Tag, target).pipe(
-        Layer.provide(Hyperlink.clientVerify(false)),
-      ),
+      NodeStatus.client(target),
     );
     return yield* Effect.gen(function* () {
       const status = yield* NodeStatus.Tag;

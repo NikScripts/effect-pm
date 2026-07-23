@@ -15,19 +15,18 @@ import { createServer } from "node:http";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as Hyperlink from "../../src/Hyperlink";
-import { serve as queueEntry } from "../../src/QueueHyperlink";
-import * as CustomQueueHyperlink from "../../src/CustomQueueHyperlink";
+import { serve as queueEntry } from "../../src/WorkPool";
 import * as FleetHealth from "../../src/FleetHealth";
 import * as Telemetry from "../../src/Telemetry";
 import * as ShardMap from "../../src/ShardMap";
-import * as RunHyperlink from "../../src/RunHyperlink";
-import { serve as processEntry } from "../../src/Process";
+import * as Gate from "../../src/Gate";
+import { serve as processEntry } from "../../src/Daemon";
 import { HistoryStore } from "../../src/HistoryStore";
 import * as Logs from "../../src/Logs";
 import { Polling } from "../../src/Polling";
 import * as Store from "../../src/Store";
-import * as QueueHyperlink from "../../src/QueueHyperlink";
-import * as Process from "../../src/Process";
+import * as WorkPool from "../../src/WorkPool";
+import * as Daemon from "../../src/Daemon";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../../src/ApiUsageSchema";
 import { BoxScoreQueue, FetchGate, HOST_PORTS, ImportJobs, LiveNode, LiveScorePoller, MeshHealth, FleetMetrics, PlayByPlayQueue, ScoresApi, ScoresDb, Sessions, StatsNode, WnbaNode, WorkerPool } from "./hub";
 import { combineByNode, combineQuery, combineSum } from "../../src/MultiNode";
@@ -108,7 +107,7 @@ const pollerWindows = wnbaGames.map((g) => ({
 }));
 
 // ── ScoresApi — synthetic API-usage windows (served on WnbaNode) ─────────────
-// A real consumer instruments its outbound client (`HttpApiHyperlink.instrumentEndpoints`) and serves
+// A real consumer instruments its outbound client (`Gate.instrumentEndpoints`) and serves
 // `ApiMetrics.serve(tag)` (fed from the Metric registry). For the fixture there's no real
 // client, so we hand the served tag a mock `{ metrics, usage }` with synthetic windows — a
 // realistic-ish WNBA stats surface (HttpApi groups × endpoints), accumulated for `topEndpoints`.
@@ -229,19 +228,19 @@ const scoresDbImpl = {
 
 class WnbaStore extends Store.Service<WnbaStore>("@examples/resource-web/WnbaStore")(
   WnbaNode.logs,
-  QueueHyperlink.store(BoxScoreQueue),
+  WorkPool.store(BoxScoreQueue),
 ) {}
 
 class LiveStore extends Store.Service<LiveStore>("@examples/resource-web/LiveStore")(
   LiveNode.logs,
-  Process.store(LiveScorePoller),
-  RunHyperlink.store(FetchGate),
+  Daemon.store(LiveScorePoller),
+  Gate.store(FetchGate),
 ) {}
 
 class StatsStore extends Store.Service<StatsStore>("@examples/resource-web/StatsStore")(
   StatsNode.logs,
-  QueueHyperlink.store(PlayByPlayQueue),
-  CustomQueueHyperlink.store(ImportJobs),
+  WorkPool.store(PlayByPlayQueue),
+  WorkPool.store(ImportJobs),
 ) {}
 
 // Dogfood durable registration journals: after the live-score poller has logged a few times, read
@@ -313,9 +312,9 @@ const liveNode = Node.wsServer([
   Telemetry.serve(FleetMetrics),
   ShardMap.serve(Sessions),
   // a bounded-concurrency run gate (4 permits) over a simulated box-score fetch — a slow effect that
-  // usually succeeds with a byte count, ~1-in-8 fails with a timeout, so the RunHyperlinkCard shows
+  // usually succeeds with a byte count, ~1-in-8 fails with a timeout, so the GateCard shows
   // live in-flight / done / failed counters.
-  RunHyperlink.serve(FetchGate, {
+  Gate.serve(FetchGate, {
     concurrency: 4,
     effect: (url: string) =>
       Effect.gen(function* () {
@@ -345,9 +344,9 @@ const statsNode = Node.wsServer([
   }),
   // a custom queue with named lanes (hot/warm/cold); its store facet lives in StatsStore (above), so
   // `serve` (not serveMemory) — one Store.Storage per node, shared like the queue's.
-  CustomQueueHyperlink.serve(ImportJobs, {
-    levelCount: 3,
-    namedLevels: { hot: 0, warm: 1, cold: 2 },
+  WorkPool.serve(ImportJobs, {
+    laneCount: 3,
+    namedLanes: { hot: 0, warm: 1, cold: 2 },
     concurrency: 1, // drain slower than we fill, so the named lanes carry a visible backlog
     effect: importWorker,
     autoStart: true,
@@ -375,7 +374,7 @@ const liveNodeProgram = Effect.gen(function* () {
   const poller = yield* LiveScorePoller;
   yield* poller.schedule.set(pollerWindows);
   // Drive the run gate: fork runs faster than four permits can drain, so a `waiting` backlog builds
-  // and the RunHyperlinkCard's in-flight gauge sits near its limit. Each run's failure is swallowed
+  // and the GateCard's in-flight gauge sits near its limit. Each run's failure is swallowed
   // here (the gate already tallies it) so the producer fiber keeps going.
   const gate = yield* FetchGate;
   let g = 0;

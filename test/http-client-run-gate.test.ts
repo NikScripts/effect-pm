@@ -2,7 +2,7 @@ import { it, describe, expect } from "@effect/vitest"
 import { Effect, Ref } from "effect"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import type { HttpClientError } from "effect/unstable/http"
-import { HttpClientRunGate, RunHyperlink } from "../src"
+import { HttpClientRunGate, Gate } from "../src"
 
 const makeRecordingClient = (activeRef: Ref.Ref<number>, peakRef: Ref.Ref<number>): HttpClient.HttpClient =>
   HttpClient.makeWith<never, never, HttpClientError.HttpClientError, never>(
@@ -22,7 +22,7 @@ const makeRecordingClient = (activeRef: Ref.Ref<number>, peakRef: Ref.Ref<number
 
 describe("HttpClientRunGate", () => {
   it.live("transformClient gates execute through the runner", () => {
-    const Runner = RunHyperlink.makeRunner({
+    const Runner = Gate.makeRunner({
       name: "test/http-gate-c1",
       concurrency: 1,
     })
@@ -46,7 +46,7 @@ describe("HttpClientRunGate", () => {
   })
 
   it.live("withRunner is pipe-friendly and respects concurrency", () => {
-    const Runner = RunHyperlink.makeRunner({
+    const Runner = Gate.makeRunner({
       name: "test/http-gate-pipe",
       concurrency: 3,
     })

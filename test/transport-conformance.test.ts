@@ -3,7 +3,7 @@ import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { RpcClient } from "effect/unstable/rpc";
 import { describe, expect, it } from "vitest";
-import { Process, QueueHyperlink, RunHyperlink } from "../src";
+import { Daemon, WorkPool, Gate } from "../src";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
@@ -42,13 +42,13 @@ const remote = <A, E, R>(
   );
 };
 
-// ── QueueHyperlink ────────────────────────────────────────────────────────────────────────────────
+// ── WorkPool ────────────────────────────────────────────────────────────────────────────────
 const Item = Schema.Struct({ n: Schema.Number });
 interface Item {
   readonly n: number;
 }
-class ConfQueue extends QueueHyperlink.Tag<ConfQueue>()("conf/Q", { payload: Item }) {}
-const queueServe = QueueHyperlink.serveMemory(ConfQueue, { effect: () => Effect.void });
+class ConfQueue extends WorkPool.Tag<ConfQueue>()("conf/Q", { payload: Item }) {}
+const queueServe = WorkPool.serveMemory(ConfQueue, { effect: () => Effect.void });
 const queueOp = Effect.gen(function* () {
   const q = yield* ConfQueue;
   const completed: number[] = [];
@@ -62,9 +62,9 @@ const queueOp = Effect.gen(function* () {
   return completed.at(-1) ?? 0;
 });
 
-// ── Process ──────────────────────────────────────────────────────────────────────────────────────
-class ConfProc extends Process.Tag<ConfProc>()("conf/P").pipe(Process.schedule([])) {}
-const procServe = Process.serveMemory(ConfProc, { effect: Effect.void });
+// ── Daemon ──────────────────────────────────────────────────────────────────────────────────────
+class ConfProc extends Daemon.Tag<ConfProc>()("conf/P").pipe(Daemon.schedule([])) {}
+const procServe = Daemon.serveMemory(ConfProc, { effect: Effect.void });
 const procOp = Effect.gen(function* () {
   const proc = yield* ConfProc;
   // read the current snapshot off the changes stream (the ref's replayed head), proving control-plane
@@ -76,12 +76,12 @@ const procOp = Effect.gen(function* () {
   return typeof snap.supervising === "boolean";
 });
 
-// ── RunHyperlink ──────────────────────────────────────────────────────────────────────────────────
-class ConfGate extends RunHyperlink.Tag<ConfGate>()("conf/G", {
+// ── Gate ──────────────────────────────────────────────────────────────────────────────────
+class ConfGate extends Gate.Tag<ConfGate>()("conf/G", {
   payload: Schema.Number,
   success: Schema.Number,
 }) {}
-const gateServe = RunHyperlink.serveMemory(ConfGate, {
+const gateServe = Gate.serveMemory(ConfGate, {
   effect: (n: number) => Effect.succeed(n * 2),
 });
 const gateOp = Effect.gen(function* () {

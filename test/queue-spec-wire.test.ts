@@ -3,7 +3,7 @@ import { Duration, Effect, Layer, Ref, Schema, Stream } from "effect";
 import { FetchHttpClient, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
-import * as QueueHyperlink from "../src/QueueHyperlink";
+import * as WorkPool from "../src/WorkPool";
 import * as Hyperlink from "../src/Hyperlink";
 import { flattenHyperlinkSpec } from "../src/Hyperlink";
 import type { AnyMethod } from "../src/Hyperlink";
@@ -15,7 +15,7 @@ import * as Node from "../src/Node";
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
-class NumberQueue extends QueueHyperlink.Tag<NumberQueue>()("@test/queue-spec-wire/Number", {
+class NumberQueue extends WorkPool.Tag<NumberQueue>()("@test/queue-spec-wire/Number", {
   payload: jobSchema,
   success: Schema.Number,
 }) {}
@@ -33,8 +33,8 @@ const clientHttp = (port: number) =>
 
 describe("queueSpec wire — structural validation", () => {
   it("wired spec keys and method kinds match erased baseline (only events schema differs)", () => {
-    const wired = QueueHyperlink.queueSpec(jobSchema, { success: Schema.Number });
-    const baseline = QueueHyperlink.queueSpec(jobSchema);
+    const wired = WorkPool.queueSpec(jobSchema, { success: Schema.Number });
+    const baseline = WorkPool.queueSpec(jobSchema);
     const flatWired = flattenHyperlinkSpec(wired);
     const flatBaseline = flattenHyperlinkSpec(baseline);
     expect(Object.keys(flatWired).sort()).toEqual(Object.keys(flatBaseline).sort());
@@ -56,18 +56,18 @@ describe("queueSpec wire — structural validation", () => {
 
   it("rejects specs with extra keys", () => {
     const wired = {
-      ...QueueHyperlink.queueSpec(jobSchema),
-      extra: QueueHyperlink.queueSpec(jobSchema).add,
+      ...WorkPool.queueSpec(jobSchema),
+      extra: WorkPool.queueSpec(jobSchema).add,
     };
     expect(() =>
-      assertQueueInstanceSpec(wired, QueueHyperlink.queueSpec(jobSchema)),
+      assertQueueInstanceSpec(wired, WorkPool.queueSpec(jobSchema)),
     ).toThrow(QueueSpecShapeError);
   });
 });
 
 describe("queueSpec wire — RPC round-trip", () => {
   const numberQueueServer = Node.httpServer([
-    QueueHyperlink.serveMemory(NumberQueue, {
+    WorkPool.serveMemory(NumberQueue, {
       effect: (job) => Effect.succeed(job.id.length),
       concurrency: 1,
     }),

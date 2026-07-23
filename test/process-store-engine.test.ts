@@ -1,10 +1,10 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Data, DateTime, Deferred, Duration, Effect, Layer, Schema } from "effect";
 import { TestClock } from "effect/testing";
-import * as Process from "../src/Process";
+import * as Daemon from "../src/Daemon";
 import * as Store from "../src/Store";
 import * as Polling from "../src/Polling";
-import { builtInProcessStoreContract } from "../src/internal/store/processStoreSpec";
+import { builtInDaemonStoreContract } from "../src/internal/store/processStoreSpec";
 
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
@@ -13,38 +13,38 @@ const Snapshot = Schema.Struct({
   count: Schema.Number,
 });
 
-class VoidExec extends Process.Tag<VoidExec>()("test/engine/Void") {}
+class VoidExec extends Daemon.Tag<VoidExec>()("test/engine/Void") {}
 
-class PricedExec extends Process.Tag<PricedExec>()("test/engine/Priced", { success: Price }) {}
+class PricedExec extends Daemon.Tag<PricedExec>()("test/engine/Priced", { success: Price }) {}
 
-class FailingExec extends Process.Tag<FailingExec>()("test/engine/Failing", {
+class FailingExec extends Daemon.Tag<FailingExec>()("test/engine/Failing", {
   success: Price,
   error: FetchErr,
 }) {}
 
-class StringFailExec extends Process.Tag<StringFailExec>()("test/engine/StringFail") {}
+class StringFailExec extends Daemon.Tag<StringFailExec>()("test/engine/StringFail") {}
 
-class RichSuccessExec extends Process.Tag<RichSuccessExec>()("test/engine/RichSuccess", {
+class RichSuccessExec extends Daemon.Tag<RichSuccessExec>()("test/engine/RichSuccess", {
   success: Snapshot,
 }) {}
 
-class InterruptExec extends Process.Tag<InterruptExec>()("test/engine/Interrupt") {}
+class InterruptExec extends Daemon.Tag<InterruptExec>()("test/engine/Interrupt") {}
 
-class ServeExec extends Process.Tag<ServeExec>()("test/engine/Serve") {}
+class ServeExec extends Daemon.Tag<ServeExec>()("test/engine/Serve") {}
 
-class ServeRemoteExec extends Process.Tag<ServeRemoteExec>()("test/engine/ServeRemote") {}
+class ServeRemoteExec extends Daemon.Tag<ServeRemoteExec>()("test/engine/ServeRemote") {}
 
 class Boom extends Data.TaggedError("Boom")<{ readonly code: number }> {}
 
 class EngineStore extends Store.Service<EngineStore>("@test/EngineStore")(
-  Store.register(VoidExec, builtInProcessStoreContract(VoidExec)),
-  Store.register(PricedExec, builtInProcessStoreContract(PricedExec)),
-  Store.register(FailingExec, builtInProcessStoreContract(FailingExec)),
-  Store.register(StringFailExec, builtInProcessStoreContract(StringFailExec)),
-  Store.register(RichSuccessExec, builtInProcessStoreContract(RichSuccessExec)),
-  Store.register(InterruptExec, builtInProcessStoreContract(InterruptExec)),
-  Store.register(ServeExec, builtInProcessStoreContract(ServeExec)),
-  Store.register(ServeRemoteExec, builtInProcessStoreContract(ServeRemoteExec)),
+  Store.register(VoidExec, builtInDaemonStoreContract(VoidExec)),
+  Store.register(PricedExec, builtInDaemonStoreContract(PricedExec)),
+  Store.register(FailingExec, builtInDaemonStoreContract(FailingExec)),
+  Store.register(StringFailExec, builtInDaemonStoreContract(StringFailExec)),
+  Store.register(RichSuccessExec, builtInDaemonStoreContract(RichSuccessExec)),
+  Store.register(InterruptExec, builtInDaemonStoreContract(InterruptExec)),
+  Store.register(ServeExec, builtInDaemonStoreContract(ServeExec)),
+  Store.register(ServeRemoteExec, builtInDaemonStoreContract(ServeRemoteExec)),
 ) {}
 
 const processLayer = <A, E, R>(layer: Layer.Layer<A, E, R>) =>
@@ -52,11 +52,11 @@ const processLayer = <A, E, R>(layer: Layer.Layer<A, E, R>) =>
 
 const storeAndClock = Layer.mergeAll(EngineStore.layerMemory, TestClock.layer());
 
-describe("Process.layer — Process.store auto-write", () => {
+describe("Daemon.layer — Daemon.store auto-write", () => {
   it.effect("records void run completion via the built-in store contract", () =>
     Effect.gen(function* () {
       const live = processLayer(
-        Process.layer(VoidExec, {
+        Daemon.layer(VoidExec, {
           effect: Effect.void,
           polling: Polling.spaced(Duration.millis(50)),
         }),
@@ -81,7 +81,7 @@ describe("Process.layer — Process.store auto-write", () => {
   it.effect("records optional success on value-returning processes", () =>
     Effect.gen(function* () {
       const live = processLayer(
-        Process.layer(PricedExec, {
+        Daemon.layer(PricedExec, {
           effect: Effect.succeed({ symbol: "AAPL", usd: 42 }),
           polling: Polling.spaced(Duration.millis(50)),
         }),
@@ -106,7 +106,7 @@ describe("Process.layer — Process.store auto-write", () => {
         status: 503,
       });
       const live = processLayer(
-        Process.layer(FailingExec, {
+        Daemon.layer(FailingExec, {
           effect: Effect.fail(fail),
           polling: Polling.spaced(Duration.millis(50)),
         }),
@@ -129,7 +129,7 @@ describe("Process.layer — Process.store auto-write", () => {
       const entered = yield* Deferred.make<void, never>();
       const hold = yield* Deferred.make<void, never>();
       const live = processLayer(
-        Process.layer(InterruptExec, {
+        Daemon.layer(InterruptExec, {
           effect: Effect.gen(function* () {
             yield* Deferred.succeed(entered, void 0);
             yield* Deferred.await(hold);
@@ -159,7 +159,7 @@ describe("Process.layer — Process.store auto-write", () => {
     Effect.gen(function* () {
       const boom = new Boom({ code: 9 });
       const live = processLayer(
-        Process.layer(StringFailExec, {
+        Daemon.layer(StringFailExec, {
           effect: Effect.fail(boom),
           polling: Polling.spaced(Duration.millis(50)),
         }),
@@ -182,7 +182,7 @@ describe("Process.layer — Process.store auto-write", () => {
     Effect.gen(function* () {
       const at = DateTime.makeUnsafe("2026-02-01T12:00:00.000Z");
       const live = processLayer(
-        Process.layer(RichSuccessExec, {
+        Daemon.layer(RichSuccessExec, {
           effect: Effect.succeed({ at, count: 7 }),
           polling: Polling.spaced(Duration.millis(50)),
         }),
@@ -201,11 +201,11 @@ describe("Process.layer — Process.store auto-write", () => {
   );
 });
 
-describe("Process.serve / serveRemote — store auto-write", () => {
-  it.effect("Process.serve records terminal runs via the app store", () =>
+describe("Daemon.serve / serveRemote — store auto-write", () => {
+  it.effect("Daemon.serve records terminal runs via the app store", () =>
     Effect.gen(function* () {
       const live = processLayer(
-        Process.serve(ServeExec, {
+        Daemon.serve(ServeExec, {
           effect: Effect.void,
           polling: Polling.spaced(Duration.millis(50)),
         }),
@@ -220,10 +220,10 @@ describe("Process.serve / serveRemote — store auto-write", () => {
     }).pipe(Effect.provide(storeAndClock), Effect.scoped),
   );
 
-  it.effect("Process.serveRemote records terminal runs without granting the local tag", () =>
+  it.effect("Daemon.serveRemote records terminal runs without granting the local tag", () =>
     Effect.gen(function* () {
       const live = processLayer(
-        Process.serveRemote(ServeRemoteExec, {
+        Daemon.serveRemote(ServeRemoteExec, {
           effect: Effect.void,
           polling: Polling.spaced(Duration.millis(50)),
         }),
@@ -232,7 +232,7 @@ describe("Process.serve / serveRemote — store auto-write", () => {
         yield* TestClock.adjust(Duration.millis(200));
         const store = yield* Store.resolveOrDie(
           ServeRemoteExec.key,
-          builtInProcessStoreContract(ServeRemoteExec),
+          builtInDaemonStoreContract(ServeRemoteExec),
         );
         const events = yield* store.events();
         expect(events.some((row) => row._tag === "Completed")).toBe(true);

@@ -1,7 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Option } from "effect";
 import { buildLogQuery, LogQueryError } from "../src/internal/manager/logQuery";
-import { testBillingNodeKey, testSyncProcessKey } from "./fixtures/logKeys";
+import { testBillingNodeKey, testSyncDaemonKey } from "./fixtures/logKeys";
 
 describe("logQuery", () => {
   it("builds an open query with defaults when no filters are set", () =>
@@ -42,7 +42,7 @@ describe("logQuery", () => {
         scope: {
           _tag: "process",
           groupId: testBillingNodeKey,
-          key: testSyncProcessKey,
+          key: testSyncDaemonKey,
         },
         from: Option.none(),
         to: Option.none(),
@@ -51,7 +51,7 @@ describe("logQuery", () => {
         limit: 10,
         sort: "desc",
       });
-      assert.strictEqual(query.key, testSyncProcessKey);
+      assert.strictEqual(query.key, testSyncDaemonKey);
       assert.strictEqual(query.groupId, testBillingNodeKey);
     }));
 });

@@ -1,5 +1,5 @@
 /**
- * QueueHyperlink — Effect-idiomatic managed priority queue with workers.
+ * WorkPool — Effect-idiomatic managed priority queue with workers.
  *
  * Provides a three-level priority queue (high, normal, low) backed by bounded
  * Effect `Queue`s with configurable concurrency, optional start-gap throttling,
@@ -24,19 +24,19 @@
  *
  * | Function | Purpose |
  * |----------|---------|
- * | `QueueHyperlink.make` | Scoped Effect producing a {@link QueueHandle} |
- * | `QueueHyperlink.layer` | Builds a `Layer` from tag + config |
- * | `QueueHyperlink.Service` | Class factory: tag + baked-in `.layer` |
- * | `QueueHyperlink.Tag` | Class factory: pure identity tag (no layer) |
+ * | `WorkPool.make` | Scoped Effect producing a {@link QueueHandle} |
+ * | `WorkPool.layer` | Builds a `Layer` from tag + config |
+ * | `WorkPool.Service` | Class factory: tag + baked-in `.layer` |
+ * | `WorkPool.Tag` | Class factory: pure identity tag (no layer) |
  *
  * ## Usage
  *
  * ```ts
  * import { Effect, Stream } from "effect"
- * import { QueueHyperlink, Hyperlink } from "hyperlink-ts"
+ * import { WorkPool, Hyperlink } from "hyperlink-ts"
  *
  * // Declare service via class factory
- * const EmailQueue = QueueHyperlink.Service<typeof EmailQueue, Email, SmtpError>()(
+ * const EmailQueue = WorkPool.Service<typeof EmailQueue, Email, SmtpError>()(
  *   "@app/EmailQueue",
  *   {
  *     effect: (email, ctx) => sendEmail(email).pipe(Effect.asVoid),
@@ -133,7 +133,7 @@ import {
   QueueItemEncodingError,
   QueueMissingItemSchemaError,
 } from "./queueSchema";
-// Re-export for back-compat (consumers import these from the public QueueHyperlink namespace / the barrel).
+// Re-export for back-compat (consumers import these from the public WorkPool namespace / the barrel).
 export {
   QueueItemCodecDescriptorSchema,
   QueueItemEncodingError,
@@ -157,7 +157,7 @@ export {
 export type Priority = "high" | "normal" | "low";
 
 /**
- * Built-in lane take algorithms for {@link QueueHyperlinkConfigBase.takeAlgorithm}.
+ * Built-in lane take algorithms for {@link WorkPoolConfigBase.takeAlgorithm}.
  *
  * - `"priority"` — lowest level index first (default; classic high → normal → low on 3 levels).
  * - `"strict-descending"` — highest level index first (can starve lower levels).
@@ -328,7 +328,7 @@ export type QueueReleaseEncodingError = QueueMissingItemSchemaError | QueueItemE
 /**
  * Enqueue a single item or a readonly batch of items.
  *
- * @typeParam E - Validation errors when {@link QueueHyperlinkConfig.itemSchema} is set
+ * @typeParam E - Validation errors when {@link WorkPoolConfig.itemSchema} is set
  * @typeParam R - Dependencies needed to encode items (schema requirements) when called from the ambient program
  *
  * @category models
@@ -378,7 +378,7 @@ export type QueueHandlePhantomWorkerFailures<E = never> = {
  *
  * @typeParam T - Item type processed by this queue
  * @typeParam E - Recoverable/item failure channel of the worker `effect`
- * @typeParam EEnqueue - Errors from schema-backed enqueue validation (see {@link QueueHyperlinkConfig.itemSchema})
+ * @typeParam EEnqueue - Errors from schema-backed enqueue validation (see {@link WorkPoolConfig.itemSchema})
  * @typeParam R - Dependencies required while running the worker `effect` and the enqueue helpers
  *
  * @example
@@ -455,7 +455,7 @@ export interface QueueHandleApi<
 
   /**
    * Fork the worker pool. Idempotent — safe to call multiple times.
-   * Only needed when {@link QueueHyperlinkConfigBase.autoStart} was `false`; otherwise workers already started at acquisition.
+   * Only needed when {@link WorkPoolConfigBase.autoStart} was `false`; otherwise workers already started at acquisition.
    *
    * After {@link shutdown}, `start` is a no-op (warning logged).
    */
@@ -475,7 +475,7 @@ export interface QueueHandleApi<
    * Permanently stop the queue (graceful). Returns immediately after **initiating** shutdown:
    * status `phase` → `"draining"`, new enqueues are rejected (logged + dropped), and once the
    * queue is empty + idle it emits `ShutdownComplete` and `phase` → `"off"`. How already-queued
-   * items are handled is set by {@link QueueHyperlinkConfigBase.shutdownMode} (`"drain"` processes
+   * items are handled is set by {@link WorkPoolConfigBase.shutdownMode} (`"drain"` processes
    * them, the default; `"finishActive"` discards them, emitting a `Dropped` event). In-flight
    * items always finish. Idempotent — a second call is a no-op. Emits `ShutdownRequested` /
    * `ShutdownComplete` on the {@link QueueHandleApi.events} stream.
@@ -551,7 +551,7 @@ export interface QueueEngineHandle<
   A = void,
 > extends EngineQueueHandle<T, E, EEnqueue, R, A> {
   /** Enqueue at an explicit lane index (custom queues). */
-  readonly enqueueAtLevel: (
+  readonly enqueueAtLane: (
     items: T | ReadonlyArray<T>,
     level: number,
   ) => Effect.Effect<void, EEnqueue, R>;
@@ -581,8 +581,8 @@ export interface QueueEntry<T> {
   readonly entryId: string;
   readonly key?: string;
   readonly priority: Priority;
-  /** Numeric lane index when enqueued on a multi-level (custom) queue. */
-  readonly level?: number;
+  /** Numeric lane index when enqueued on a priority-lane (WorkPool.priority) queue. */
+  readonly lane?: number;
   readonly attempts: number;
   readonly timestamps: QueueEntryTimestamps;
   readonly batchId?: string;
@@ -824,13 +824,13 @@ export type QueueStoreWriter<T, _E = unknown, _A = void> = import("./store/queue
 >;
 
 /**
- * Queue declaration metadata for {@link QueueHyperlinkDefinition} and
- * {@link QueueHyperlinkServiceDefinition}.
+ * Queue declaration metadata for {@link WorkPoolDefinition} and
+ * {@link WorkPoolServiceDefinition}.
  *
  * @category models
  * @public
  */
-export interface QueueHyperlinkMetadata<
+export interface WorkPoolMetadata<
   Id extends string,
   T,
   E = never,
@@ -841,8 +841,8 @@ export interface QueueHyperlinkMetadata<
   readonly kind: "queue";
   readonly tag: Context.Service<Id, EngineQueueHandle<T, E, EEnqueue, R>>;
   /**
-   * Serializable item codec metadata when {@link QueueHyperlinkConfig.itemSchema}
-   * was provided on {@link QueueHyperlink.Service}. Used by typed the process manager
+   * Serializable item codec metadata when {@link WorkPoolConfig.itemSchema}
+   * was provided on {@link WorkPool.Service}. Used by typed the process manager
    * contracts for remote discovery and drift checks.
    */
   readonly item?: QueueItemCodecDescriptor;
@@ -854,22 +854,22 @@ export interface QueueHyperlinkMetadata<
  * @category models
  * @public
  */
-export type QueueHyperlinkDefinition<
+export type WorkPoolDefinition<
   Id extends string,
   T,
   E = never,
   EEnqueue = never,
   R = never,
 > = Context.Service<Id, EngineQueueHandle<T, E, EEnqueue, R>> &
-  QueueHyperlinkMetadata<Id, T, E, EEnqueue, R>;
+  WorkPoolMetadata<Id, T, E, EEnqueue, R>;
 
 /**
- * Class-based queue service declaration from {@link QueueHyperlink.Service}.
+ * Class-based queue service declaration from {@link WorkPool.Service}.
  *
  * @category models
  * @public
  */
-export interface QueueHyperlinkServiceDefinition<
+export interface WorkPoolServiceDefinition<
   Self,
   Id extends string,
   T,
@@ -877,24 +877,24 @@ export interface QueueHyperlinkServiceDefinition<
   EEnqueue = never,
   R = never,
 > extends Context.ServiceClass<Self, Id, EngineQueueHandle<T, E, EEnqueue, R>>,
-    Omit<QueueHyperlinkMetadata<Id, T, E, EEnqueue, R>, "tag"> {
+    Omit<WorkPoolMetadata<Id, T, E, EEnqueue, R>, "tag"> {
   readonly tag: Context.Key<Self, EngineQueueHandle<T, E, EEnqueue, R>>;
   readonly layer: Layer.Layer<Self, never, R>;
   /** Factory defaults before configure layers (`HyperlinkConfigure` module). */
-  readonly defaultSpec: QueueHyperlinkConfig<T, E, R>;
+  readonly defaultSpec: WorkPoolConfig<T, E, R>;
   /**
    * Append a configure patch; merge with {@link layer} before scope acquisition.
    */
   readonly configure: (
-    patch: ConfigPatch<QueueHyperlinkConfig<T, E, R>>,
+    patch: ConfigPatch<WorkPoolConfig<T, E, R>>,
   ) => Layer.Layer<never>;
   /**
    * Patch only the worker `effect`: `fn(previous) => next` (item + {@link EffectContext}).
    */
   readonly wrapWorker: (
     fn: (
-      previous: QueueHyperlinkConfig<T, E, R>["effect"],
-    ) => QueueHyperlinkConfig<T, E, R>["effect"],
+      previous: WorkPoolConfig<T, E, R>["effect"],
+    ) => WorkPoolConfig<T, E, R>["effect"],
   ) => Layer.Layer<never>;
 }
 
@@ -906,7 +906,7 @@ export interface QueueHyperlinkServiceDefinition<
  * and silently drops the item to prevent infinite processing loops.
  *
  * For intentional re-processing, fail the worker `effect` (auto re-enqueue applies up to
- * {@link QueueHyperlinkConfigBase.attempts}) or re-inject via `queue.enqueue` off the events stream.
+ * {@link WorkPoolConfigBase.attempts}) or re-inject via `queue.enqueue` off the events stream.
  *
  * @typeParam T - Item type
  *
@@ -929,7 +929,7 @@ export interface EffectContext<T, EEnqueue = never, R = never> {
 }
 
 /**
- * Configuration for {@link QueueHyperlink.make}.
+ * Configuration for {@link WorkPool.make}.
  *
  * @typeParam T - Item type
  * @typeParam E - Failure channel surfaced as `Exit` failures from the worker `effect`
@@ -948,7 +948,7 @@ export interface EffectContext<T, EEnqueue = never, R = never> {
  * @category models
  * @public
  */
-export type QueueHyperlinkRateLimitOptions = Omit<
+export type WorkPoolRateLimitOptions = Omit<
   Parameters<EffectRateLimiter["consume"]>[0],
   "key"
 > & {
@@ -960,12 +960,12 @@ export type QueueHyperlinkRateLimitOptions = Omit<
 export type { ConsumeResult } from "effect/unstable/persistence/RateLimiter";
 
 /**
- * Shared queue configuration fields (see {@link QueueHyperlinkConfig}).
+ * Shared queue configuration fields (see {@link WorkPoolConfig}).
  *
  * @category models
  * @public
  */
-export interface QueueHyperlinkConfigBase<T> {
+export interface WorkPoolConfigBase<T> {
   /** Queue name used for log annotations and error messages. @default "anonymous" */
   readonly name?: string;
   /** Start with processing paused. Call `resume` to begin. @default false */
@@ -984,7 +984,7 @@ export interface QueueHyperlinkConfigBase<T> {
    * Optional Effect `RateLimiter` on item workers (before concurrency semaphore).
    * Omitted = no rate limit (only `concurrency`).
    */
-  readonly rateLimit?: QueueHyperlinkRateLimitOptions;
+  readonly rateLimit?: WorkPoolRateLimitOptions;
   /** Max items per priority queue (bounded backpressure). @default 50_000 */
   readonly capacity?: number;
   /**
@@ -992,7 +992,7 @@ export interface QueueHyperlinkConfigBase<T> {
    *
    * @default 3
    */
-  readonly levelCount?: number;
+  readonly laneCount?: number;
   /**
    * How workers pick among non-empty lanes when taking the next item. `"priority"` is strict
    * lowest-index-first (the default 3-level behavior). `"weighted"` and `"strict-descending"`
@@ -1043,7 +1043,7 @@ export interface QueueHyperlinkConfigBase<T> {
 // lease/poll use engine defaults for now (moving onto the backend layer next).
 
 /**
- * Per-error disposition returned by {@link QueueHyperlinkConfigWithoutItemSchema.onFailure}.
+ * Per-error disposition returned by {@link WorkPoolConfigWithoutItemSchema.onFailure}.
  *
  * - `"retry"` — re-enqueue the item at its own priority, honoring the `attempts` budget
  *   (emits `RetryScheduled`, or `RetryExhausted` once the budget is spent).
@@ -1092,17 +1092,17 @@ export interface QueueRefill<T, E, EEnqueue, R, A = void> {
 }
 
 /**
- * Queue configuration **without** {@link QueueHyperlinkConfigBase} item schema.
+ * Queue configuration **without** {@link WorkPoolConfigBase} item schema.
  * Enqueue helpers on {@link QueueHandle} and the {@link EffectContext} do not fail with
  * schema validation errors.
  *
  * @category models
  * @public
  */
-export type QueueHyperlinkConfigWithoutItemSchema<T, E, R> = QueueHyperlinkConfigBase<T> & {
+export type WorkPoolConfigWithoutItemSchema<T, E, R> = WorkPoolConfigBase<T> & {
   readonly itemSchema?: undefined;
   /**
-   * Process each item. Receives a guarded {@link EffectContext} for spawning
+   * Daemon each item. Receives a guarded {@link EffectContext} for spawning
    * derived work. The exit of this effect determines success/failure for the item;
    * the success channel is always **`void`**.
    */
@@ -1114,23 +1114,28 @@ export type QueueHyperlinkConfigWithoutItemSchema<T, E, R> = QueueHyperlinkConfi
 };
 
 /**
- * Queue configuration **with** {@link QueueHyperlinkConfigBase} item schema.
+ * Queue configuration **with** {@link WorkPoolConfigBase} item schema.
  * Public enqueue operations and {@link EffectContext} enqueue helpers can fail with
  * {@link QueueItemValidationError} or {@link QueueBatchValidationError}.
  *
  * @public
  */
 /**
- * Enqueue validation errors when {@link QueueHyperlinkConfigWithItemSchema.itemSchema} is set.
+ * Enqueue validation errors when {@link WorkPoolConfigWithItemSchema.itemSchema} is set.
  *
  * @public
  */
 export type QueueEnqueueErrors = QueueItemValidationError | QueueBatchValidationError;
 
-export type QueueHyperlinkConfigWithItemSchema<T, E, R, A = void> = QueueHyperlinkConfigBase<T> & {
+/**
+ * A {@link WorkPool} config that carries an explicit `itemSchema` (typed items over the wire).
+ * @category models
+ * @public
+ */
+export type WorkPoolConfigWithItemSchema<T, E, R, A = void> = WorkPoolConfigBase<T> & {
   readonly itemSchema: Schema.Codec<T, unknown, never, never>;
   /**
-   * Process each item. The **success channel `A`** is driven by the tag's `success` wire schema
+   * Daemon each item. The **success channel `A`** is driven by the tag's `success` wire schema
    * (default `void`): with a `success` schema the worker must return `Effect<A, E, R>` and that
    * value rides `Completed.success` / `store.completed`; without one it stays `Effect<void, E, R>`.
    */
@@ -1142,13 +1147,13 @@ export type QueueHyperlinkConfigWithItemSchema<T, E, R, A = void> = QueueHyperli
   /**
    * Internal store recorder — the engine records each published event through its narrow, semantic
    * writes ({@link QueueStoreWriter}) at the source (`publishEvent`) so no burst is dropped by a late
-   * `Stream.fromPubSub` subscription. Wired by `QueueHyperlink.layer` from the baked-in store. @internal
+   * `Stream.fromPubSub` subscription. Wired by `WorkPool.layer` from the baked-in store. @internal
    */
   readonly store?: QueueStoreWriter<T, E, A>;
 };
 
 /**
- * Configuration for {@link QueueHyperlink.make}.
+ * Configuration for {@link WorkPool.make}.
  *
  * @typeParam T - Item type
  * @typeParam E - Worker `effect` failure channel
@@ -1157,18 +1162,18 @@ export type QueueHyperlinkConfigWithItemSchema<T, E, R, A = void> = QueueHyperli
  * @category models
  * @public
  */
-export type QueueHyperlinkConfig<T, E, R, A = void> =
-  | QueueHyperlinkConfigWithoutItemSchema<T, E, R>
-  | QueueHyperlinkConfigWithItemSchema<T, E, R, A>;
+export type WorkPoolConfig<T, E, R, A = void> =
+  | WorkPoolConfigWithoutItemSchema<T, E, R>
+  | WorkPoolConfigWithItemSchema<T, E, R, A>;
 
 /**
- * @public Config fields for {@link QueueHyperlink.make} / {@link QueueHyperlink.Service} without `effect`.
+ * @public Config fields for {@link WorkPool.make} / {@link WorkPool.Service} without `effect`.
  *
  * @category models
  * @public
  */
-export type QueueHyperlinkOptionsWithoutItemSchema<T, E, R> = Omit<
-  QueueHyperlinkConfigWithoutItemSchema<T, E, R>,
+export type WorkPoolOptionsWithoutItemSchema<T, E, R> = Omit<
+  WorkPoolConfigWithoutItemSchema<T, E, R>,
   "effect"
 >;
 
@@ -1178,8 +1183,8 @@ export type QueueHyperlinkOptionsWithoutItemSchema<T, E, R> = Omit<
  * @category models
  * @public
  */
-export type QueueHyperlinkOptionsWithItemSchema<T, E, R> = Omit<
-  QueueHyperlinkConfigWithItemSchema<T, E, R>,
+export type WorkPoolOptionsWithItemSchema<T, E, R> = Omit<
+  WorkPoolConfigWithItemSchema<T, E, R>,
   "effect"
 >;
 
@@ -1221,7 +1226,7 @@ const isReadonlyArray = <A>(input: A | ReadonlyArray<A>): input is ReadonlyArray
 
 const queueHyperlinkKind = "queue" as const;
 
-type EnqueueErrOf<C> = C extends QueueHyperlinkConfigWithItemSchema<
+type EnqueueErrOf<C> = C extends WorkPoolConfigWithItemSchema<
   infer _T,
   infer _E,
   infer _R,
@@ -1301,8 +1306,8 @@ export type InferQueueWorkerRequirements<
 
 
 const hasItemSchema = <T, E, R, A = void>(
-  config: QueueHyperlinkConfig<T, E, R, A>,
-): config is QueueHyperlinkConfigWithItemSchema<T, E, R, A> => config.itemSchema !== undefined;
+  config: WorkPoolConfig<T, E, R, A>,
+): config is WorkPoolConfigWithItemSchema<T, E, R, A> => config.itemSchema !== undefined;
 
 /**
  * @public Merged config shape for positional queue factories.
@@ -1313,8 +1318,8 @@ const hasItemSchema = <T, E, R, A = void>(
 export type QueueConfigFromEffect<
   F extends QueueWorkerEffect<any, any, any, any>,
   O extends
-    | QueueHyperlinkOptionsWithoutItemSchema<any, any, any>
-    | QueueHyperlinkOptionsWithItemSchema<any, any, any>
+    | WorkPoolOptionsWithoutItemSchema<any, any, any>
+    | WorkPoolOptionsWithItemSchema<any, any, any>
     | undefined = undefined,
 > = { readonly effect: F } & (O extends undefined ? unknown : O);
 
@@ -1324,11 +1329,11 @@ export type QueueConfigFromEffect<
  *
  * @internal
  */
-type QueueRuntimeConfig<T, E, EEnqueue, R, A = void> = QueueHyperlinkConfigBase<T> & {
+type QueueRuntimeConfig<T, E, EEnqueue, R, A = void> = WorkPoolConfigBase<T> & {
   readonly effect: (item: T, ctx: EffectContext<T, EEnqueue, R>) => Effect.Effect<A, E, R>;
   readonly onFailure?: QueueOnFailure<T, E, R>;
   readonly refill?: QueueRefill<T, E, EEnqueue, R, A>;
-  /** Internal store recorder — see {@link QueueHyperlinkConfigWithItemSchema.store}. @internal */
+  /** Internal store recorder — see {@link WorkPoolConfigWithItemSchema.store}. @internal */
   readonly store?: QueueStoreWriter<T, E, A>;
 };
 
@@ -1338,7 +1343,7 @@ type ReleaseEntryEncoder<T> = (
   attributes: Record<string, unknown> | undefined,
 ) => Effect.Effect<QueueEncodedEntry, QueueItemEncodingError>;
 
-/** Item ⇄ durable payload codec for {@link QueueHyperlinkConfigBase.persist} (built from `itemSchema`). */
+/** Item ⇄ durable payload codec for {@link WorkPoolConfigBase.persist} (built from `itemSchema`). */
 type PersistCodec<T> = {
   readonly encode: (item: T) => Exit.Exit<unknown, unknown>;
   readonly decode: (json: unknown) => Exit.Exit<T, unknown>;
@@ -1380,7 +1385,7 @@ const queueEntryFromInternal = <T>(
   entryId: internal.entryId,
   key: internal.key,
   priority: levelToPriority(internal.level),
-  level: internal.level,
+  lane: internal.level,
   attempts: internal.retries + 1,
   timestamps: {
     enqueuedAt: DateTime.makeUnsafe(internal.enqueuedAt),
@@ -1413,7 +1418,7 @@ interface RateLimitExceededEmit<T> {
 
 /**
  * In-memory {@link RateLimiterTag} + store layers for queues with `rateLimit` set.
- * Merged automatically on {@link QueueHyperlink.Service} `.layer` when `rateLimit` is
+ * Merged automatically on {@link WorkPool.Service} `.layer` when `rateLimit` is
  * present; compose at the app root for Redis via `RateLimiter.layerStoreRedis`.
  *
  * @category layers & serving
@@ -1424,7 +1429,7 @@ export const queueRateLimiterLayer = Layer.provide(rateLimiterLayer, layerStoreM
 /** @internal */
 const layerWithQueueRateLimiterIfNeeded = <A, E, R>(
   layer: Layer.Layer<A, E, R>,
-  config: Pick<QueueHyperlinkConfigBase<unknown>, "rateLimit">,
+  config: Pick<WorkPoolConfigBase<unknown>, "rateLimit">,
 ): Layer.Layer<A, E, R> =>
   config.rateLimit === undefined
     ? layer
@@ -1432,7 +1437,7 @@ const layerWithQueueRateLimiterIfNeeded = <A, E, R>(
 
 const resolveRateLimitConsumeOptions = (
   queueName: string,
-  rateLimit: QueueHyperlinkRateLimitOptions,
+  rateLimit: WorkPoolRateLimitOptions,
 ): Parameters<EffectRateLimiter["consume"]>[0] => {
   const { key: limitKey, ...rest } = rateLimit;
   return {
@@ -1444,22 +1449,22 @@ const resolveRateLimitConsumeOptions = (
   };
 };
 
-const assertValidRateLimit = (rateLimit: QueueHyperlinkRateLimitOptions): void => {
+const assertValidRateLimit = (rateLimit: WorkPoolRateLimitOptions): void => {
   if (!(rateLimit.limit > 0) || !Number.isFinite(rateLimit.limit)) {
     throw new Error(
-      `QueueHyperlink rateLimit.limit must be a positive number, got ${String(rateLimit.limit)}`,
+      `WorkPool rateLimit.limit must be a positive number, got ${String(rateLimit.limit)}`,
     );
   }
   const windowMs = Duration.toMillis(Duration.fromInputUnsafe(rateLimit.window));
   if (!(windowMs > 0) || !Number.isFinite(windowMs)) {
     throw new Error(
-      `QueueHyperlink rateLimit.window must be positive, got ${String(rateLimit.window)}`,
+      `WorkPool rateLimit.window must be positive, got ${String(rateLimit.window)}`,
     );
   }
   if (rateLimit.tokens !== undefined) {
     if (!(rateLimit.tokens > 0) || !Number.isFinite(rateLimit.tokens)) {
       throw new Error(
-        `QueueHyperlink rateLimit.tokens must be a positive number, got ${String(rateLimit.tokens)}`,
+        `WorkPool rateLimit.tokens must be a positive number, got ${String(rateLimit.tokens)}`,
       );
     }
   }
@@ -1471,7 +1476,7 @@ const isRateLimitExceededReason = (
 
 const acquireQueueRateLimitAwait = <T, R>(
   queueName: string,
-  rateLimit: QueueHyperlinkRateLimitOptions,
+  rateLimit: WorkPoolRateLimitOptions,
   emitExceeded: (payload: RateLimitExceededEmit<T>) => Effect.Effect<void, never, R>,
 ): Effect.Effect<RateLimitAwait<T, R>, never, RateLimiterTag> =>
   Effect.gen(function* () {
@@ -1520,7 +1525,7 @@ const acquireQueueRateLimitAwait = <T, R>(
  * Architecture:
  * - Three bounded `Queue<InternalItem<T>>` (one per priority level)
  * - N worker fibers (managed by `FiberSet`) that loop: latch → take → latch → process
- * - Optional deferred fork via {@link QueueHyperlinkConfigBase.autoStart}: when `false`,
+ * - Optional deferred fork via {@link WorkPoolConfigBase.autoStart}: when `false`,
  *   call {@link QueueHandleApi.start} to fork the worker pool.
  * - Drain wake: waits until queues drain empty after processed work (not cold-start empty) — emits a `Drained` event.
  * - Worker wake (`takeNext`): enqueue / shutdown — avoids priority inversion vs racing priority queues.
@@ -1598,9 +1603,9 @@ interface BuildQueueEngineBindings<T, E, EEnqueue, R, A = void> {
   readonly validateForEnqueue: ValidateForEnqueue<T, EEnqueue>;
   readonly encodeForRelease: ReleaseEntryEncoder<T> | undefined;
   readonly persistCodec: PersistCodec<T> | undefined;
-  /** Override config `levelCount` when wiring a custom preset. */
-  readonly levelCount?: number;
-  /** Fully custom lane store; when omitted, derived from config `levelCount` + `takeAlgorithm`. */
+  /** Override config `laneCount` when wiring a custom preset. */
+  readonly laneCount?: number;
+  /** Fully custom lane store; when omitted, derived from config `laneCount` + `takeAlgorithm`. */
   readonly makeLaneStore?: (
     capacity: number,
   ) => Effect.Effect<LaneStore<InternalItem<T>>>;
@@ -1619,11 +1624,11 @@ interface BuildQueueEngineBindings<T, E, EEnqueue, R, A = void> {
 function buildQueueEngine<T, E, EEnqueue, R, A = void>(
   bindings: BuildQueueEngineBindings<T, E, EEnqueue, R, A>,
 ): Effect.Effect<QueueEngineHandle<T, E, EEnqueue, R, A>, never, Scope.Scope | R> {
-  const levelCount = bindings.levelCount ?? bindings.config.levelCount ?? 3;
+  const laneCount = bindings.laneCount ?? bindings.config.laneCount ?? 3;
   const makeLaneStore =
     bindings.makeLaneStore ??
     laneStoreFactoryFromConfig<InternalItem<T>>({
-      levelCount,
+      laneCount,
       takeAlgorithm: bindings.config.takeAlgorithm,
     });
   const projection = bindings.projection ?? defaultQueueProjection;
@@ -1637,8 +1642,8 @@ function buildQueueEngine<T, E, EEnqueue, R, A = void>(
   );
 }
 
-type MakeQueueEffectResult<C extends QueueHyperlinkConfig<any, any, any, any>> =
-  [C] extends [QueueHyperlinkConfigWithItemSchema<any, any, any, any>]
+type MakeQueueEffectResult<C extends WorkPoolConfig<any, any, any, any>> =
+  [C] extends [WorkPoolConfigWithItemSchema<any, any, any, any>]
     ? EngineQueueHandle<
         InferQueueItem<C>,
         InferQueueWorkerError<C>,
@@ -1655,7 +1660,7 @@ type MakeQueueEffectResult<C extends QueueHyperlinkConfig<any, any, any, any>> =
       >;
 
 const makeQueueEffectWithoutSchema = <
-  const C extends QueueHyperlinkConfigWithoutItemSchema<any, any, any>,
+  const C extends WorkPoolConfigWithoutItemSchema<any, any, any>,
 >(
   config: Types.NoInfer<C>,
 ): Effect.Effect<
@@ -1676,7 +1681,7 @@ const makeQueueEffectWithoutSchema = <
   });
 
 const makeQueueEffectWithSchema = <
-  const C extends QueueHyperlinkConfigWithItemSchema<any, any, any, any>,
+  const C extends WorkPoolConfigWithItemSchema<any, any, any, any>,
 >(
   config: Types.NoInfer<C>,
 ): Effect.Effect<
@@ -1738,7 +1743,7 @@ const makeQueueEffectWithSchema = <
 };
 
 const makeQueueEffectFromConfig = (
-  config: QueueHyperlinkConfig<any, any, any, any>,
+  config: WorkPoolConfig<any, any, any, any>,
 ): Effect.Effect<
   EngineQueueHandle<unknown, unknown, unknown, unknown, unknown>,
   never,
@@ -1755,8 +1760,8 @@ const makeQueueEffectFromConfig = (
 function makeQueueEffect<
   F extends QueueWorkerEffect<any, any, any, any>,
   O extends
-    | QueueHyperlinkOptionsWithoutItemSchema<any, any, any>
-    | QueueHyperlinkOptionsWithItemSchema<any, any, any>
+    | WorkPoolOptionsWithoutItemSchema<any, any, any>
+    | WorkPoolOptionsWithItemSchema<any, any, any>
     | undefined = undefined,
 >(
   effect: F,
@@ -1766,7 +1771,7 @@ function makeQueueEffect<
   never,
   Scope.Scope | InferQueueWorkerRequirements<QueueConfigFromEffect<F, O>>
 >;
-function makeQueueEffect<const C extends QueueHyperlinkConfig<any, any, any, any>>(
+function makeQueueEffect<const C extends WorkPoolConfig<any, any, any, any>>(
   config: Types.NoInfer<C>,
 ): Effect.Effect<
   MakeQueueEffectResult<C>,
@@ -1774,8 +1779,8 @@ function makeQueueEffect<const C extends QueueHyperlinkConfig<any, any, any, any
   Scope.Scope | InferQueueWorkerRequirements<C>
 >;
 function makeQueueEffect(
-  effectOrConfig: QueueWorkerEffect<any, any, any, any> | QueueHyperlinkConfig<any, any, any, any>,
-  options?: QueueHyperlinkOptionsWithoutItemSchema<any, any, any> | QueueHyperlinkOptionsWithItemSchema<any, any, any>,
+  effectOrConfig: QueueWorkerEffect<any, any, any, any> | WorkPoolConfig<any, any, any, any>,
+  options?: WorkPoolOptionsWithoutItemSchema<any, any, any> | WorkPoolOptionsWithItemSchema<any, any, any>,
 ): Effect.Effect<
   EngineQueueHandle<unknown, unknown, unknown, unknown, unknown>,
   never,
@@ -2538,7 +2543,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
         (entry) =>
           enqueueInternal(
             [entry.item],
-            entry.level ?? levelOf(entry.priority),
+            entry.lane ?? levelOf(entry.priority),
             Math.max(0, entry.attempts - 1),
             DateTime.toEpochMillis(entry.timestamps.enqueuedAt),
           ),
@@ -2640,7 +2645,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
     // ─── Internal: item processing ───
 
     /**
-     * Process a single item within the semaphore gate.
+     * Daemon a single item within the semaphore gate.
      * 1. Run user's `effect` and capture Exit
      * 2. Increment completed counter
      * 3. Release dedup key
@@ -2806,7 +2811,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
      * 2. Await latch (blocks when paused)
      * 3. Take next item (blocks when all queues empty)
      * 4. Await latch again (in case pause happened during take)
-     * 5. Process item (within semaphore gate)
+     * 5. Daemon item (within semaphore gate)
      *
      * The double latch-await ensures that items taken during a race with
      * `pause` are held until resume, preserving priority ordering.
@@ -2925,7 +2930,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
     ): Effect.Effect<void, never, R> =>
       refillConfig === undefined ? Effect.void : refillConfig.load(handle);
 
-    const forkProcessingFibers = Effect.gen(function* () {
+    const forkDaemoningFibers = Effect.gen(function* () {
       if (yield* Ref.get(isShutdownRef)) {
         yield* Effect.logWarning(
           `Queue "${queueName}" start ignored: queue already shut down`,
@@ -3243,7 +3248,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
       defer: (items: T | ReadonlyArray<T>) => enqueuePublic(items, "low", "defer"),
       enqueue: (input: QueueEntry<T> | ReadonlyArray<QueueEntry<T>>) =>
         enqueueEntries(input),
-      enqueueAtLevel: enqueueAtLevelPublic,
+      enqueueAtLane: enqueueAtLevelPublic,
       levelSizes,
 
       // `size`/`isEmpty` are reactive Subscribables (the contract shape) — `.get` keeps the
@@ -3279,7 +3284,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
       // Windowed metrics stream (dynamic windows)
       metrics: Stream.fromPubSub(metricsHub),
 
-      start: tapLogs(forkProcessingFibers).pipe(Effect.asVoid),
+      start: tapLogs(forkDaemoningFibers).pipe(Effect.asVoid),
 
       // Close latch → workers block on next iteration before taking items
       pause: latch.close.pipe(
@@ -3372,7 +3377,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
     queueHandleSlot.current = queueHandle;
 
     if (autoStart) {
-      yield* tapLogs(forkProcessingFibers);
+      yield* tapLogs(forkDaemoningFibers);
     }
 
     return queueHandle;
@@ -3384,7 +3389,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
 
 const queueHyperlinkLayerFromConfig = (
   tag: Context.Key<any, EngineQueueHandle<any, any, any, any, any>>,
-  config: QueueHyperlinkConfig<any, any, any, any>,
+  config: WorkPoolConfig<any, any, any, any>,
 ): Layer.Layer<any, never, any> => {
   const resourceId = config.name ?? "anonymous";
   const defaultSpec = { ...config, name: resourceId };
@@ -3402,15 +3407,15 @@ function queueHyperlinkLayer<
   Self,
   F extends QueueWorkerEffect<any, any, any, any>,
   O extends
-    | QueueHyperlinkOptionsWithoutItemSchema<any, any, any>
-    | QueueHyperlinkOptionsWithItemSchema<any, any, any>
+    | WorkPoolOptionsWithoutItemSchema<any, any, any>
+    | WorkPoolOptionsWithItemSchema<any, any, any>
     | undefined = undefined,
 >(
   tag: Context.Key<Self, EngineQueueHandle<any, any, any, any>>,
   effect: F,
   options?: O,
 ): Layer.Layer<Self, never, InferQueueWorkerRequirements<QueueConfigFromEffect<F, O>>>;
-function queueHyperlinkLayer<Self, const C extends QueueHyperlinkConfig<any, any, any>>(
+function queueHyperlinkLayer<Self, const C extends WorkPoolConfig<any, any, any>>(
   tag: Context.Key<
     Self,
     EngineQueueHandle<
@@ -3424,8 +3429,8 @@ function queueHyperlinkLayer<Self, const C extends QueueHyperlinkConfig<any, any
 ): Layer.Layer<Self, never, InferQueueWorkerRequirements<C>>;
 function queueHyperlinkLayer(
   tag: Context.Key<any, EngineQueueHandle<any, any, any, any>>,
-  effectOrConfig: QueueWorkerEffect<any, any, any, any> | QueueHyperlinkConfig<any, any, any>,
-  options?: QueueHyperlinkOptionsWithoutItemSchema<any, any, any> | QueueHyperlinkOptionsWithItemSchema<any, any, any>,
+  effectOrConfig: QueueWorkerEffect<any, any, any, any> | WorkPoolConfig<any, any, any>,
+  options?: WorkPoolOptionsWithoutItemSchema<any, any, any> | WorkPoolOptionsWithItemSchema<any, any, any>,
 ): Layer.Layer<any, never, any> {
   if (typeof effectOrConfig === "function") {
     return queueHyperlinkLayerFromConfig(tag, { ...(options ?? {}), effect: effectOrConfig });
@@ -3436,7 +3441,7 @@ function queueHyperlinkLayer(
 const queueServiceLayerFromDefaultSpec = <
   Self,
   const Name extends string,
-  C extends QueueHyperlinkConfig<any, any, any>,
+  C extends WorkPoolConfig<any, any, any>,
   H,
 >(
   base: Context.Service<Self, H>,
@@ -3448,12 +3453,12 @@ const queueServiceLayerFromDefaultSpec = <
     foldConfiguredSpec(resourceId, defaultSpec).pipe(Effect.flatMap(run)),
   );
 
-const queueServiceConfigure = <C extends QueueHyperlinkConfig<any, any, any>>(
+const queueServiceConfigure = <C extends WorkPoolConfig<any, any, any>>(
   resourceId: string,
   patch: ConfigPatch<C>,
 ): Layer.Layer<never> => configureLayer(resourceId, patch);
 
-const queueServiceWrapWorker = <C extends QueueHyperlinkConfig<any, any, any>>(
+const queueServiceWrapWorker = <C extends WorkPoolConfig<any, any, any>>(
   resourceId: string,
   fn: (previous: C["effect"]) => C["effect"],
 ): Layer.Layer<never> => configureWrapEffectField(resourceId, fn);
@@ -3461,11 +3466,11 @@ const queueServiceWrapWorker = <C extends QueueHyperlinkConfig<any, any, any>>(
 const queueHyperlinkServiceWithoutSchema = <
   Self,
   const Name extends string,
-  const C extends QueueHyperlinkConfigWithoutItemSchema<any, any, any>,
+  const C extends WorkPoolConfigWithoutItemSchema<any, any, any>,
 >(
   name: Name,
   config: C,
-): QueueHyperlinkServiceDefinition<
+): WorkPoolServiceDefinition<
   Self,
   Name,
   InferQueueItem<C>,
@@ -3483,12 +3488,12 @@ const queueHyperlinkServiceWithoutSchema = <
       InferQueueWorkerRequirements<C>
     >
   >()(name);
-  type Spec = QueueHyperlinkConfig<
+  type Spec = WorkPoolConfig<
     InferQueueItem<C>,
     InferQueueWorkerError<C>,
     InferQueueWorkerRequirements<C>
   >;
-  type ServiceDef = QueueHyperlinkServiceDefinition<
+  type ServiceDef = WorkPoolServiceDefinition<
     Self,
     Name,
     InferQueueItem<C>,
@@ -3519,11 +3524,11 @@ const queueHyperlinkServiceWithoutSchema = <
 const queueHyperlinkServiceWithSchema = <
   Self,
   const Name extends string,
-  const C extends QueueHyperlinkConfigWithItemSchema<any, any, any>,
+  const C extends WorkPoolConfigWithItemSchema<any, any, any>,
 >(
   name: Name,
   config: C,
-): QueueHyperlinkServiceDefinition<
+): WorkPoolServiceDefinition<
   Self,
   Name,
   InferQueueItem<C>,
@@ -3542,12 +3547,12 @@ const queueHyperlinkServiceWithSchema = <
     >
   >()(name);
   const item = makeQueueItemCodecDescriptor(name, config.itemSchema);
-  type Spec = QueueHyperlinkConfig<
+  type Spec = WorkPoolConfig<
     InferQueueItem<C>,
     InferQueueWorkerError<C>,
     InferQueueWorkerRequirements<C>
   >;
-  type ServiceDef = QueueHyperlinkServiceDefinition<
+  type ServiceDef = WorkPoolServiceDefinition<
     Self,
     Name,
     InferQueueItem<C>,
@@ -3579,41 +3584,41 @@ const queueHyperlinkServiceWithSchema = <
 // ============================================================================
 // Engine flat surface
 //
-// The public `QueueHyperlink` namespace (`src/QueueHyperlink.ts`) re-exports these under their
+// The public `WorkPool` namespace (`src/WorkPool.ts`) re-exports these under their
 // public names: `makeQueueEffect` → `make`, {@link Service}, {@link queueSchemaGroup} → `Schema`,
 // {@link queueErrorsGroup} → `Errors`, and `queueRateLimiterLayer` → `rateLimiterLayer`.
 // `queueHyperlinkLayer` / {@link Tag} are engine primitives kept for internal reuse — the public
 // namespace surfaces the *contract's* `Tag` / `layer` instead. Flat exports (not an object literal)
-// so `import * as QueueHyperlink` member access tree-shakes: `QueueHyperlink.Tag` pulls no engine code.
+// so `import * as WorkPool` member access tree-shakes: `WorkPool.Tag` pulls no engine code.
 // ============================================================================
 
 export { makeQueueEffect, queueHyperlinkLayer, buildQueueEngine };
 
 /**
  * Engine class factory: creates a Context tag with a baked-in `.layer`. Surfaced publicly as
- * {@link QueueHyperlink.Service}.
+ * {@link WorkPool.Service}.
  *
  * The returned value is both a `Context.Service` (yieldable tag) and has a `.layer` property for
  * providing the queue to your program. When `itemSchema` is set, the declaration also exposes
- * {@link QueueHyperlinkDefinition.item} for typed process-manager contracts.
+ * {@link WorkPoolDefinition.item} for typed process-manager contracts.
  *
  * @internal
  */
 export const Service = <Self, T, E = never>() => {
     // Callable surface uses overloads; runtime dispatcher is a single function + cast.
-    type QueueHyperlinkServiceFactory = {
+    type WorkPoolServiceFactory = {
       <
         const Name extends string,
         F extends QueueWorkerEffect<T, E, any, any>,
         O extends
-          | QueueHyperlinkOptionsWithoutItemSchema<T, E, any>
-          | QueueHyperlinkOptionsWithItemSchema<T, E, any>
+          | WorkPoolOptionsWithoutItemSchema<T, E, any>
+          | WorkPoolOptionsWithItemSchema<T, E, any>
           | undefined,
       >(
         name: Name,
         effect: F,
         options?: O,
-      ): QueueHyperlinkServiceDefinition<
+      ): WorkPoolServiceDefinition<
         Self,
         Name,
         InferQueueItem<QueueConfigFromEffect<F, O>>,
@@ -3623,18 +3628,18 @@ export const Service = <Self, T, E = never>() => {
       >;
       <const Name extends string, R>(
         name: Name,
-        config: QueueHyperlinkConfigWithoutItemSchema<T, E, R>,
-      ): QueueHyperlinkServiceDefinition<Self, Name, T, E, never, NormalizeQueueRequirements<R>>;
+        config: WorkPoolConfigWithoutItemSchema<T, E, R>,
+      ): WorkPoolServiceDefinition<Self, Name, T, E, never, NormalizeQueueRequirements<R>>;
       <const Name extends string, R>(
         name: Name,
-        config: QueueHyperlinkConfigWithItemSchema<T, E, R>,
-      ): QueueHyperlinkServiceDefinition<Self, Name, T, E, QueueEnqueueErrors, NormalizeQueueRequirements<R>>;
+        config: WorkPoolConfigWithItemSchema<T, E, R>,
+      ): WorkPoolServiceDefinition<Self, Name, T, E, QueueEnqueueErrors, NormalizeQueueRequirements<R>>;
     };
 
     const queueHyperlinkServiceImpl = (
       name: string,
-      effect: QueueWorkerEffect<T, E, any, any> | QueueHyperlinkConfig<T, E, any>,
-      options?: QueueHyperlinkOptionsWithoutItemSchema<T, E, any> | QueueHyperlinkOptionsWithItemSchema<T, E, any>,
+      effect: QueueWorkerEffect<T, E, any, any> | WorkPoolConfig<T, E, any>,
+      options?: WorkPoolOptionsWithoutItemSchema<T, E, any> | WorkPoolOptionsWithItemSchema<T, E, any>,
     ) => {
       if (typeof effect === "function") {
         if (options !== undefined && options.itemSchema !== undefined) {
@@ -3654,11 +3659,11 @@ export const Service = <Self, T, E = never>() => {
       return queueHyperlinkServiceWithoutSchema(name, { ...rest, name });
     };
 
-    return queueHyperlinkServiceImpl as QueueHyperlinkServiceFactory;
+    return queueHyperlinkServiceImpl as WorkPoolServiceFactory;
   };
 
 /**
- * Engine identity-tag factory (no default layer). The public `QueueHyperlink.Tag` comes from the
+ * Engine identity-tag factory (no default layer). The public `WorkPool.Tag` comes from the
  * contract; this engine primitive is kept for internal reuse.
  *
  * @internal
@@ -3674,7 +3679,7 @@ export const Tag = <Self, T, E = never, R = never>() =>
 };
 
 /**
- * Codec-descriptor helpers, surfaced publicly as `QueueHyperlink.Schema`.
+ * Codec-descriptor helpers, surfaced publicly as `WorkPool.Schema`.
  *
  * @internal
  */
@@ -3684,7 +3689,7 @@ export const queueSchemaGroup = {
 };
 
 /**
- * Queue error classes, surfaced publicly as `QueueHyperlink.Errors`.
+ * Queue error classes, surfaced publicly as `WorkPool.Errors`.
  *
  * @internal
  */

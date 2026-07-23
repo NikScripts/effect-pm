@@ -6,15 +6,15 @@
 
 import { Duration, Effect, Fiber, Layer, Ref } from "effect";
 import { TestClock } from "effect/testing";
-import { Polling, Process } from "../../../src";
+import { Polling, Daemon } from "../../../src";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { utcDateFromMillis } from "../../../src/internal/utcDate";
 
 const runtime = Layer.mergeAll(
   Polling.spaced(Duration.millis(100)),
-  Process.scheduleInMemory([
+  Daemon.scheduleInMemory([
     // Disarmed until t=500 ms — supervisor runs but tick body never executes before this.
-    Process.at("delayed-start", utcDateFromMillis(500)),
+    Daemon.at("delayed-start", utcDateFromMillis(500)),
   ]),
 );
 
@@ -23,7 +23,7 @@ const env = Layer.mergeAll(TestClock.layer(), runtime);
 const program = Effect.gen(function* () {
   const ticks = yield* Ref.make(0);
 
-  const proc = Process.make("examples/forms/schedule-delayed-start", {
+  const proc = Daemon.make("examples/forms/schedule-delayed-start", {
     effect: Ref.update(ticks, (n) => n + 1),
   });
 

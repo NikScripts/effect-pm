@@ -7,10 +7,10 @@ import { CurrentLogAnnotations } from "effect/References";
 import * as LogEntry from "../src/LogEntry";
 import { LogAnnotationKeys } from "../src/LogContext";
 import * as Logs from "../src/Logs";
-import * as Process from "../src/Process";
+import * as Daemon from "../src/Daemon";
 
-class Parent extends Process.Tag<Parent>()("test/lineage/Parent") {}
-class Child extends Process.Tag<Child>()("test/lineage/Child") {}
+class Parent extends Daemon.Tag<Parent>()("test/lineage/Parent") {}
+class Child extends Daemon.Tag<Child>()("test/lineage/Child") {}
 
 const parseLineage = (raw: unknown): ReadonlyArray<string> => {
   if (typeof raw !== "string") return [];

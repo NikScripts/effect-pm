@@ -1,16 +1,16 @@
 import { describe, expect, it } from "@effect/vitest";
 import { DateTime, Duration, Schema } from "effect";
 import {
-  makeProcessExecutionEvent,
+  makeDaemonExecutionEvent,
   processExecutionEventVoid,
 } from "../src/internal/processEvent";
-import { makeRunHyperlinkFactEvent } from "../src/internal/runHyperlinkEvent";
-import { buildQueueEvent } from "../src/QueueHyperlink";
+import { makeGateFactEvent } from "../src/internal/runHyperlinkEvent";
+import { buildQueueEvent } from "../src/WorkPool";
 
 const terminalTags = ["Started", "Completed", "Failed"] as const;
 
 const processDecode = Schema.decodeUnknownSync(processExecutionEventVoid);
-const runFactDecode = Schema.decodeUnknownSync(makeRunHyperlinkFactEvent());
+const runFactDecode = Schema.decodeUnknownSync(makeGateFactEvent());
 
 const itemSchema = Schema.Struct({ id: Schema.String });
 const queueDecode = Schema.decodeUnknownSync(
@@ -60,7 +60,7 @@ describe("store event _tag alignment", () => {
     expect(failed._tag).toBe("Failed");
 
     expect(
-      makeProcessExecutionEvent().members.length,
+      makeDaemonExecutionEvent().members.length,
     ).toBeGreaterThanOrEqual(terminalTags.length + 1);
   });
 

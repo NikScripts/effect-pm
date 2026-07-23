@@ -21,7 +21,7 @@ import {
   type DashboardRuntime,
   type GroupNode,
   type NodeRef,
-  type ProcessTag,
+  type DaemonTag,
   type QueueBundle,
   type QueueTag,
   isCustomQueueTag,
@@ -39,17 +39,17 @@ import {
 } from "./data";
 import * as Group from "../Group";
 import { RegistryProvider, useAtomValue } from "../ui/atom-react";
-import { RuntimeProvider, useApiBundle, useNodeBundle, useProcessBundle, useQueueBundle, useRuntime } from "./runtime";
+import { RuntimeProvider, useApiBundle, useNodeBundle, useDaemonBundle, useQueueBundle, useRuntime } from "./runtime";
 import { ViewTransitionProvider, useViewTransition, useViewTransitionStyle } from "./useViewTransition";
 import { useGroupRoute } from "./useGroupRoute";
 import { Button } from "./components/ui/button";
-import { ApiEndpointTable, ApiMetricChart, ApiStats, ApiStatusBadge, base, Cell, ConfirmDialog, CustomQueueDetail, FleetHealthDetail, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, MetricChart, ProcessControls, ProcessStats, ProcessStatusBadge, QueueControls, QueueStats, HyperlinkReadinessBanner, RunHyperlinkDetail, ScheduleEditor, ShardMapDetail, StatusBadge, TelemetryDetail, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
+import { ApiEndpointTable, ApiMetricChart, ApiStats, ApiStatusBadge, base, Cell, ConfirmDialog, CustomQueueDetail, FleetHealthDetail, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, MetricChart, DaemonControls, DaemonStats, DaemonStatusBadge, QueueControls, QueueStats, HyperlinkReadinessBanner, GateDetail, ScheduleEditor, ShardMapDetail, StatusBadge, TelemetryDetail, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
 import { WidgetsProvider, isLeafTag, type WidgetRegistry } from "./widget-registry";
 import { fmtDayLabel, now, startOfWeekMillis } from "./now";
 import { DebugConsole } from "./debug-console";
 
 // route.selected is an opaque leaf tag — narrow it to a queue / process / api by its contract.
-const isProcessTag = (m: unknown): m is ProcessTag => kindOf(m) === "process";
+const isDaemonTag = (m: unknown): m is DaemonTag => kindOf(m) === "process";
 const isQueueTag = (m: unknown): m is QueueTag => kindOf(m) === "queue";
 const isApiTag = (m: unknown): m is ApiTag => kindOf(m) === "api";
 
@@ -110,19 +110,19 @@ const LogBox = (props: {
 };
 
 /** Fullscreen logs page for a resource — its own route (`/…/Hyperlink/logs`). */
-const LogsPage = (props: { readonly tag: QueueTag | ProcessTag; readonly onClose: () => void }): React.ReactElement => {
+const LogsPage = (props: { readonly tag: QueueTag | DaemonTag; readonly onClose: () => void }): React.ReactElement => {
   const runtime = useRuntime();
-  const bundle = isProcessTag(props.tag) ? processBundle(runtime, props.tag) : queueBundle(runtime, props.tag);
+  const bundle = isDaemonTag(props.tag) ? processBundle(runtime, props.tag) : queueBundle(runtime, props.tag);
   return <LogBox bundle={bundle} full onToggle={props.onClose} meta={<> · {displayName(props.tag.key)}</>} />;
 };
 
 const DAY_MS = 86_400_000;
 
-/** Fullscreen weekly schedule view for a process — its own route (`/…/Process/schedule`): a 7-day
+/** Fullscreen weekly schedule view for a process — its own route (`/…/Daemon/schedule`): a 7-day
  *  calendar grid of the run windows. Week nav up top (top-right kept free); add / clear / lock in a
  *  bottom bar; tap a window to edit or delete it. */
-const SchedulePage = (props: { readonly tag: ProcessTag; readonly onClose: () => void }): React.ReactElement => {
-  const bundle = useProcessBundle(props.tag);
+const SchedulePage = (props: { readonly tag: DaemonTag; readonly onClose: () => void }): React.ReactElement => {
+  const bundle = useDaemonBundle(props.tag);
   const { list, addEntry, update, remove, clearAll } = useScheduleEdit(bundle);
   const [weekStart, setWeekStart] = React.useState(() => startOfWeekMillis(now()));
   const [editing, setEditing] = React.useState<number | "new" | undefined>(undefined);
@@ -218,13 +218,13 @@ const QueueDetail = (props: {
   );
 };
 
-const ProcessDetail = (props: {
-  readonly tag: ProcessTag;
+const DaemonDetail = (props: {
+  readonly tag: DaemonTag;
   readonly onBack: () => void;
   readonly onOpenLogs: () => void;
   readonly onOpenSchedule: () => void;
 }): React.ReactElement => {
-  const bundle = useProcessBundle(props.tag);
+  const bundle = useDaemonBundle(props.tag);
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
@@ -235,11 +235,11 @@ const ProcessDetail = (props: {
       <div className="flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
         <strong className="flex-1 truncate text-base">⚙ {displayName(props.tag.key)}</strong>
-        <ProcessStatusBadge supervising={s?.supervising} />
+        <DaemonStatusBadge supervising={s?.supervising} />
       </div>
       <HyperlinkReadinessBanner tag={props.tag} />
-      <ProcessStats bundle={bundle} />
-      <ProcessControls bundle={bundle} locked={locked} onToggleLock={() => setLocked((l) => !l)} />
+      <DaemonStats bundle={bundle} />
+      <DaemonControls bundle={bundle} locked={locked} onToggleLock={() => setLocked((l) => !l)} />
       <ScheduleEditor bundle={bundle} onOpenFull={props.onOpenSchedule} />
       <LogBox bundle={bundle} full={false} onToggle={props.onOpenLogs} />
     </div>
@@ -305,21 +305,21 @@ const DashboardInner = (props: {
     const openSchedule = (): void => transition("schedule-panel", () => route.open("schedule"));
     const closeSchedule = (): void => transition("schedule-panel", () => route.back());
     if (route.view === "logs") {
-      if (isProcessTag(selected) || isQueueTag(selected)) return <LogsPage tag={selected} onClose={closeLogs} />;
+      if (isDaemonTag(selected) || isQueueTag(selected)) return <LogsPage tag={selected} onClose={closeLogs} />;
       return <></>;
     }
     if (route.view === "schedule") {
-      if (isProcessTag(selected)) return <SchedulePage tag={selected} onClose={closeSchedule} />;
+      if (isDaemonTag(selected)) return <SchedulePage tag={selected} onClose={closeSchedule} />;
       return <></>;
     }
     if (isApiTag(selected)) return <ApiDetail tag={selected} onBack={toGrid(selected.key)} />;
-    if (isProcessTag(selected)) return <ProcessDetail tag={selected} onBack={toGrid(selected.key)} onOpenLogs={openLogs} onOpenSchedule={openSchedule} />;
+    if (isDaemonTag(selected)) return <DaemonDetail tag={selected} onBack={toGrid(selected.key)} onOpenLogs={openLogs} onOpenSchedule={openSchedule} />;
     if (isQueueTag(selected)) return <QueueDetail tag={selected} onBack={toGrid(selected.key)} onOpenLogs={openLogs} />;
     if (isCustomQueueTag(selected)) return <CustomQueueDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
     if (isFleetHealthTag(selected)) return <FleetHealthDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
     if (isTelemetryTag(selected)) return <TelemetryDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
     if (isShardMapTag(selected)) return <ShardMapDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
-    if (isRunTag(selected)) return <RunHyperlinkDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
+    if (isRunTag(selected)) return <GateDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
     return <></>;
   }
 
@@ -430,16 +430,16 @@ const NodeResourceView = (props: {
 }): React.ReactElement => {
   const [view, setView] = React.useState<"main" | "logs" | "schedule">("main");
   const { tag } = props;
-  if (view === "logs" && (isProcessTag(tag) || isQueueTag(tag))) {
+  if (view === "logs" && (isDaemonTag(tag) || isQueueTag(tag))) {
     return <LogsPage tag={tag} onClose={() => setView("main")} />;
   }
-  if (view === "schedule" && isProcessTag(tag)) {
+  if (view === "schedule" && isDaemonTag(tag)) {
     return <SchedulePage tag={tag} onClose={() => setView("main")} />;
   }
   if (isApiTag(tag)) return <ApiDetail tag={tag} onBack={props.onBack} />;
-  if (isProcessTag(tag)) {
+  if (isDaemonTag(tag)) {
     return (
-      <ProcessDetail
+      <DaemonDetail
         tag={tag}
         onBack={props.onBack}
         onOpenLogs={() => setView("logs")}
@@ -454,7 +454,7 @@ const NodeResourceView = (props: {
   if (isFleetHealthTag(tag)) return <FleetHealthDetail tag={tag} onBack={props.onBack} />;
   if (isTelemetryTag(tag)) return <TelemetryDetail tag={tag} onBack={props.onBack} />;
   if (isShardMapTag(tag)) return <ShardMapDetail tag={tag} onBack={props.onBack} />;
-  if (isRunTag(tag)) return <RunHyperlinkDetail tag={tag} onBack={props.onBack} />;
+  if (isRunTag(tag)) return <GateDetail tag={tag} onBack={props.onBack} />;
   return <></>;
 };
 

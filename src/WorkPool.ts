@@ -5,7 +5,7 @@
  * local or remote; only the layer changes).
  *
  * @remarks
- * This is the first slice of porting `QueueHyperlink` onto the toolkit. It covers the
+ * This is the first slice of porting `WorkPool` onto the toolkit. It covers the
  * **control / observation** verbs only — `size`, `sizes`, `isEmpty`, `completed`, `start`,
  * `pause`, `resume`, `shutdown`, `clear` — all of which have fixed schemas (no item type).
  *
@@ -20,27 +20,30 @@
  * items natively on both sides (no codec descriptor, no manual encode/decode). This is the
  * "model B / fully per-instance" approach; the shared-spec + `key`-header path
  * ({@link Hyperlink.serveInstances}) remains for resources whose contract is identical
- * across instances (e.g. RunHyperlink).
+ * across instances (e.g. Gate).
  *
- * This module is the **public `QueueHyperlink` namespace** — the `hyperlink-ts/QueueHyperlink`
- * subpath and the barrel `export * as QueueHyperlink` both resolve here. The light `Tag` / spec /
+ * This module is the **public `WorkPool` namespace** — the `hyperlink-ts/WorkPool`
+ * subpath and the barrel `export * as WorkPool` both resolve here. The light `Tag` / spec /
  * schemas live in this file (engine-free, tree-shakeable); the heavy engine lives in
  * `./internal/queueHyperlink` and is pulled in only by the runtime verbs (`layer` / `serve` /
  * `serveRemote` / `make`). Consume it as a module namespace:
  *
- *   import * as QueueHyperlink from "hyperlink-ts/QueueHyperlink";
- *   class Mail extends QueueHyperlink.Tag<Mail>()("@app/Mail", { payload: JobSchema }) {}
+ *   import * as WorkPool from "hyperlink-ts/WorkPool";
+ *   class Mail extends WorkPool.Tag<Mail>()("@app/Mail", { payload: JobSchema }) {}
  *
- * @module QueueHyperlink
+ * @module WorkPool
  */
-import { DateTime, Effect, Layer, Option, Schema, Stream } from "effect";
+import { DateTime, Effect, Layer, Option, Schema, Scope, Stream } from "effect";
 import * as Hyperlink from "./Hyperlink";
+import { specSym } from "./Hyperlink";
 import { HistoryStore } from "./HistoryStore";
 import type { HistoryReadOptions, HistoryStoreShape } from "./HistoryStore";
 import type {
   HandlerContextOf,
   ImplOf,
   Local,
+  Method,
+  MethodAnnotations,
   NodeBoundTag,
   HyperlinkTag,
 } from "./Hyperlink";
@@ -61,15 +64,26 @@ import {
   itemSchemaSym,
   type QueueItemSchemaCarrier,
 } from "./internal/queueTagSchemas";
-import { assertQueueInstanceSpec } from "./internal/queueSpecAssert";
+import {
+  assertQueueInstanceSpec,
+  assertCustomQueueInstanceSpec,
+} from "./internal/queueSpecAssert";
 import * as Store from "./Store";
 import { facetStoreRegistration } from "./internal/store/facetStore";
 import {
   makeQueueStoreAnalyticsContract,
   materializeEngineQueueStoreForTag,
+  materializeEngineQueueStoreForItem,
   type QueueStoreAnalyticsContract,
   type QueueStoreTag,
 } from "./internal/store/queueStoreSpec";
+// The priority (N-level lane) engine — pulled in only by the priority runtime verbs below.
+import { makeCustomQueueEffect } from "./internal/customQueueHyperlink";
+import type {
+  CustomQueueHandle,
+  CustomQueueLaneConfig,
+  CustomQueueHyperlinkConfigWithItemSchema,
+} from "./internal/customQueueHyperlink";
 import type { StoreShapes } from "./internal/store/contractDef";
 import type {
   QueueEnqueue,
@@ -81,7 +95,7 @@ import type {
   QueueMetrics,
   QueueReleaseEncodingError,
   QueueReleaseOptions,
-  QueueHyperlinkConfigWithItemSchema,
+  WorkPoolConfigWithItemSchema,
   QueueRouteOptions,
   QueueStatus,
 } from "./internal/queueHyperlink";
@@ -257,7 +271,7 @@ export const queueEntry = <Sch extends Schema.Top>(itemSchema: Sch) =>
  * (encodable; it crosses RPC) — subscribers discriminate on `_tag`.
  *
  * `success` defaults to {@link Schema.Void} and `error` to {@link Schema.Unknown} when the slot
- * is absent (the untyped / `CustomQueueHyperlink` fallback). The worker outcome is recorded
+ * is absent (the untyped / `WorkPool.priority` fallback). The worker outcome is recorded
  * **once** — `Completed` (with the typed `success`) or `Failed` (with the typed `cause`); there
  * is no separate `Exit` event (a consumer reconstructs `Exit<A, E>` from the two if needed). The
  * non-encodable `retry` affordance the old callbacks received is dropped — a subscriber holds the
@@ -393,7 +407,7 @@ export type QueueEventSchema<
 /**
  * Build the `events` union **schema** for a queue item schema `Sch` with optional `success`/`error`
  * wire slots (default {@link Schema.Void} / {@link Schema.Never}) — the runtime schema behind
- * {@link QueueHyperlink.events}, whose decoded type is {@link QueueEventSchema}. @public
+ * {@link WorkPool.events}, whose decoded type is {@link QueueEventSchema}. @public
  * @category wire schemas
  */
 export const queueEvent = <
@@ -509,7 +523,7 @@ export const historyQuery = {
 /**
  * The queue **control + observation** contract: the fixed-schema verbs of a queue handle,
  * shared by every queue instance. The data-plane (item-typed) verbs are added in a later
- * slice. Mirrors the matching members of `QueueHyperlink`'s `QueueHandleApi`.
+ * slice. Mirrors the matching members of `WorkPool`'s `QueueHandleApi`.
  *
  * @category wire schemas
  * @public
@@ -523,7 +537,7 @@ export const queueControlSpec = {
       "Live current-state snapshot: per-priority sizes, paused, in-flight, completed, phase.",
   }),
   size: Hyperlink.ref(Schema.Number).annotate({
-    description: "Total pending items across all priority levels.",
+    description: "Total pending items across all priority lanes.",
   }),
   isEmpty: Hyperlink.ref(Schema.Boolean).annotate({
     description: "Whether all priority queues are empty.",
@@ -729,7 +743,7 @@ type QueueInstanceSpec<
  * type and `itemSchema` baked in:
  *
  * ```ts
- * class MyQueue extends QueueHyperlink.Tag<MyQueue>()("@app/MyQueue", JobSchema) {}
+ * class MyQueue extends WorkPool.Tag<MyQueue>()("@app/MyQueue", JobSchema) {}
  * // or: Tag()(key, { payload: JobSchema, success?, error? })
  * const q = yield* MyQueue;
  * yield* q.add(aJob); // the item itself is the payload — validated against JobSchema on both sides
@@ -747,7 +761,7 @@ type QueueInstanceSpec<
  *
  * @category utils
  */
-export const kind = "hyperlink-ts/QueueHyperlink";
+export const kind = "hyperlink-ts/WorkPool";
 
 /**
  * Config-object overload of {@link Tag}. `payload` is the item schema (required); `success` (worker
@@ -829,11 +843,11 @@ const materializeQueueTag = <
 /**
  * A queue handle — the value `yield* MyQueue` produces. The **named** compact form of a queue's
  * service (both the light `Tag` path and the engine-included `Service` path yield this one type), so
- * it hovers as `QueueHyperlink<EmailJob>` instead of an expanded member wall; prettify-ts / the docs
+ * it hovers as `WorkPool<EmailJob>` instead of an expanded member wall; prettify-ts / the docs
  * D3 popover expand it to the full shape on demand.
  *
  * @typeParam Payload - the decoded item type (`add(item)` etc.)
- * @typeParam Success - the worker success value (`Completed.success` on {@link QueueHyperlink.events})
+ * @typeParam Success - the worker success value (`Completed.success` on {@link WorkPool.events})
  * @typeParam Error - the worker failure channel (`Failed.cause`)
  * @typeParam Requirements - the transport requirement (`never` for a local `yield*`, the `Protocol`
  *   for a remote {@link Hyperlink.client})
@@ -841,7 +855,7 @@ const materializeQueueTag = <
  * @category models
  * @public
  */
-export interface QueueHyperlink<
+export interface WorkPool<
   Payload,
   Success = void,
   Error = never,
@@ -849,7 +863,7 @@ export interface QueueHyperlink<
 > {
   /** Live current-state snapshot (per-priority sizes, paused, in-flight, completed, phase). */
   readonly status: Hyperlink.Subscribable<QueueStatus>;
-  /** Total pending items across all priority levels. */
+  /** Total pending items across all priority lanes. */
   readonly size: Hyperlink.Subscribable<number>;
   /** Whether all priority queues are empty. */
   readonly isEmpty: Hyperlink.Subscribable<boolean>;
@@ -908,13 +922,13 @@ export interface QueueHyperlink<
   readonly events: Stream.Stream<QueueEvent<Payload, Error, Success>>;
 }
 
-/** This queue's decoded item type — the `Payload` of its {@link QueueHyperlink} handle. @internal */
+/** This queue's decoded item type — the `Payload` of its {@link WorkPool} handle. @internal */
 type QueueItemOf<F extends Schema.Struct.Fields> = Hyperlink.Decoded<Schema.Struct<F>>;
 
 /**
- * The queue's {@link Hyperlink.Tag} whose service value is the **named** {@link QueueHyperlink} handle
+ * The queue's {@link Hyperlink.Tag} whose service value is the **named** {@link WorkPool} handle
  * (via the `Svc` seam on {@link HyperlinkTag}), so `yield* MyQueue` hovers as
- * `QueueHyperlink<EmailJob>` rather than the expanded `ServiceOf<…>` wall. @public
+ * `WorkPool<EmailJob>` rather than the expanded `ServiceOf<…>` wall. @public
  * @category models
  */
 export type QueueTag<
@@ -925,7 +939,7 @@ export type QueueTag<
 > = HyperlinkTag<
   Self,
   QueueInstanceSpec<F, Success, Error>,
-  QueueHyperlink<QueueItemOf<F>, Success["Type"], Error["Type"]>
+  WorkPool<QueueItemOf<F>, Success["Type"], Error["Type"]>
 >;
 
 /**
@@ -944,13 +958,13 @@ export type QueueNodeBoundTag<
   Self,
   QueueInstanceSpec<F, Success, Error>,
   HSelf,
-  QueueHyperlink<QueueItemOf<F>, Success["Type"], Error["Type"]>
+  WorkPool<QueueItemOf<F>, Success["Type"], Error["Type"]>
 >;
 
 /**
- * Name the built queue tag's service as {@link QueueHyperlink}. The single, deliberate cast in this
+ * Name the built queue tag's service as {@link WorkPool}. The single, deliberate cast in this
  * module: `ServiceOf<QueueInstanceSpec<F, Success, Error>>` and
- * `QueueHyperlink<QueueItemOf<F>, Success["Type"], Error["Type"]>` are **mutually assignable** — proven
+ * `WorkPool<QueueItemOf<F>, Success["Type"], Error["Type"]>` are **mutually assignable** — proven
  * bidirectionally in `test/queue-handle.test-d.ts` — but TS can't verify that equality for *generic*
  * `F` at the invariant service-`Shape` position, so the generic factory needs one assertion here.
  * Owner-approved (the alternative was a schema-field hover, not `EmailJob`). The `.test-d.ts` is the
@@ -969,8 +983,8 @@ const nameQueueService = <
 
 /**
  * Define a queue as a named service {@link Tag}:
- * `class Mail extends QueueHyperlink.Tag<Mail>()("@app/Mail", { payload: JobSchema }) {}`. The class
- * *is* the Tag — `yield* Mail` inside an Effect resolves the {@link QueueHyperlink} handle
+ * `class Mail extends WorkPool.Tag<Mail>()("@app/Mail", { payload: JobSchema }) {}`. The class
+ * *is* the Tag — `yield* Mail` inside an Effect resolves the {@link WorkPool} handle
  * (enqueue / status / metrics), while {@link layer} provides the running queue and {@link serve}
  * exposes it over RPC. `payload` is the item schema; the {@link QueueTagConfig} overload adds
  * `success` / `error` wire schemas for the worker's result and failures.
@@ -1067,7 +1081,7 @@ const queueTag = <Self>() => {
 };
 
 /**
- * The worker config for {@link QueueHyperlink.layer} — the engine queue config **without**
+ * The worker config for {@link WorkPool.layer} — the engine queue config **without**
  * `itemSchema` (the tag already carries it). The item type is the tag's `itemSchema` decoded
  * type, so `effect: (item, ctx) => …` is typed against it.
  *
@@ -1075,7 +1089,7 @@ const queueTag = <Self>() => {
  * @public
  */
 export type QueueLayerConfig<Item, A, E, R, RR = never> = Omit<
-  QueueHyperlinkConfigWithItemSchema<Item, E, R, A>,
+  WorkPoolConfigWithItemSchema<Item, E, R, A>,
   "itemSchema" | "refill"
 > & {
   /**
@@ -1206,10 +1220,10 @@ const buildQueueImpl = <
     // location-transparent `QueueInstanceSpec<F>` baseline) without a raw↔prettified `View` mismatch
     // on the enqueue payloads, nor a generic discriminated-union reduction wall on `events`. The
     // declared worker `Success`/`Error` ride the tag's carriers and surface on the named
-    // `QueueHyperlink` handle (what `yield* Tag` reads); the worker `effect`'s own signature (via the
+    // `WorkPool` handle (what `yield* Tag` reads); the worker `effect`'s own signature (via the
     // config's `QueueErrorValueOf`/`QueueSuccessValueOf`) is what constrains them at build.
     const handle = yield* makeQueueEffect<
-      QueueHyperlinkConfigWithItemSchema<
+      WorkPoolConfigWithItemSchema<
         any,
         QueueErrorValueOf<Error>,
         R | RR,
@@ -1220,7 +1234,7 @@ const buildQueueImpl = <
       ...effectiveConfig,
       itemSchema,
       store,
-    } as QueueHyperlinkConfigWithItemSchema<
+    } as WorkPoolConfigWithItemSchema<
       any,
       QueueErrorValueOf<Error>,
       R | RR,
@@ -1350,12 +1364,532 @@ const withDefaultMemory = <A, E, R>(
 
 /**
  * Local queue layer — soft-defaults {@link Store.Storage} (R fulfilled). Override with
- * `QueueHyperlink.layer(…).pipe(Layer.provideMerge(AppStore.layer…))`.
+ * `WorkPool.layer(…).pipe(Layer.provideMerge(AppStore.layer…))`.
  *
  * @category layers & serving
  * @public
  */
-export const layer = <
+// ============================================================================
+// Priority (N-level lane) variant — WorkPool.priority
+//
+// Folded from the former CustomQueueHyperlink module: the leveled tag/spec/schemas + the
+// `buildCustomQueueImpl` builder. The runtime verbs (layer/serve/serveRemote) below dispatch to
+// this builder when the tag is a priority tag (see priorityKind); the engine lives in
+// ./internal/customQueueHyperlink and is pulled in only by those verbs.
+// ============================================================================
+
+/**
+ * Per-lane pending counts keyed by configured name (or `"0"`, `"1"`, …).
+ *
+ * @category wire schemas
+ * @public
+ */
+export const customQueueSizes = Schema.Record(Schema.String, Schema.Number);
+
+/**
+ * Custom-queue current-state snapshot — element of the `status` stream.
+ *
+ * @category wire schemas
+ * @public
+ */
+export const customQueueStatus = Schema.Struct({
+  sizes: customQueueSizes,
+  paused: Schema.Boolean,
+  inFlight: Schema.Number,
+  completed: Schema.Number,
+  phase: Schema.Literals(["running", "draining", "off"]),
+});
+
+/**
+ * Level argument on the wire — numeric lane index or a name from the tag's
+ * `namedLanes` registry (when declared at tag construction).
+ *
+ * @category wire schemas
+ * @public
+ */
+export const customQueueLane = (
+  namedLanes?: Readonly<Record<string, number>>,
+): Schema.Schema<number | string> => {
+  const names =
+    namedLanes === undefined ? [] : Object.keys(namedLanes).filter((n) => n.length > 0);
+  return names.length === 0
+    ? Schema.Union([Schema.Number, Schema.String])
+    : Schema.Union([
+        Schema.Number,
+        Schema.Literals(names as [string, ...string[]]),
+      ]);
+};
+
+/**
+ * Custom queue entry on the wire — like {@link queueEntry} plus optional numeric `level`.
+ *
+ * @category wire schemas
+ * @public
+ */
+export const customQueueEntry = <Sch extends Schema.Top>(
+  itemSchema: Sch,
+) =>
+  Schema.Struct({
+    item: itemSchema,
+    entryId: Schema.String,
+    key: Schema.optional(Schema.String),
+    priority: queuePriority,
+    lane: Schema.optional(Schema.Number),
+    attempts: Schema.Number,
+    timestamps: queueEntryTimestamps,
+    batchId: Schema.optional(Schema.String),
+    releaseId: Schema.optional(Schema.String),
+    sourceHyperlinkId: Schema.optional(Schema.String),
+    attributes: Schema.optional(queueEntryAttributes),
+  });
+
+/**
+ * Selector for custom-queue routing verbs.
+ *
+ * @category wire schemas
+ * @public
+ */
+export const customQueueEntrySelector = <Sch extends Schema.Top>(itemSchema: Sch) =>
+  Schema.Struct({
+    entryId: Schema.optionalKey(Schema.String),
+    key: Schema.optional(Schema.String),
+    item: Schema.optionalKey(itemSchema),
+  });
+
+/** Total pending across all lanes — the `size`/`isEmpty` `value`s derive from `status.sizes`. @internal */
+const sumLaneSizes = (sizes: Record<string, number>): number =>
+  Object.values(sizes).reduce((a, b) => a + b, 0);
+
+/**
+ * Shared control + observation contract for every custom-queue instance.
+ *
+ * @category wire schemas
+ * @public
+ */
+export const customQueueControlSpec = {
+  // ── live current state — one SubscriptionRef-backed source of truth ──
+  // `status` is the whole snapshot; `size`/`isEmpty` are `Stream.map` derivations of it (SSOT). Plain
+  // reads (`p.size`) and subscribable (`Hyperlink.changes(p, (s) => s.size)`).
+  status: Hyperlink.ref(customQueueStatus).annotate({
+    description:
+      "Live current-state snapshot: per-lane sizes, paused, in-flight, completed, phase.",
+  }),
+  size: Hyperlink.ref(Schema.Number).annotate({
+    description: "Total pending items across all lanes.",
+  }),
+  isEmpty: Hyperlink.ref(Schema.Boolean).annotate({
+    description: "Whether all lanes are empty.",
+  }),
+  // stays `effect`: the raw per-index array isn't in the named-Record `status.sizes`, so it can't be a
+  // reliable `Stream.map` of `status` — an on-demand pull is the honest shape.
+  levelSizes: Hyperlink.effect(Schema.Array(Schema.Number)).annotate({
+    description: "Raw per-lane occupancy (`levelSizes[i]` = count at lane `i`).",
+  }),
+
+  // ── lifecycle commands ──
+  start: Hyperlink.effect(Schema.Void).annotate({
+    description:
+      "Fork the worker pool + lifecycle monitor (idempotent; no-op after shutdown).",
+  }),
+  pause: Hyperlink.effect(Schema.Void).annotate({
+    description: "Pause processing; items can still be enqueued and accumulate.",
+  }),
+  resume: Hyperlink.effect(Schema.Void).annotate({
+    description: "Resume processing after a pause.",
+  }),
+  shutdown: Hyperlink.effect(Schema.Void).annotate({
+    description:
+      "Permanently stop the queue (graceful): phase → draining, later enqueues dropped, " +
+      "in-flight finishes, queued items drained or discarded per shutdownMode, then phase → off.",
+    destructive: true,
+  }),
+  clear: Hyperlink.effect(Schema.Number).annotate({
+    description:
+      "Drain all pending items and reset the completed counter; returns the count cleared.",
+    destructive: true,
+  }),
+
+  // ── observability — stream + query, paired by nesting ──
+  metrics: {
+    stream: Hyperlink.stream(queueMetrics).annotate({
+      description:
+        "Windowed metrics (per-window counts + throughput/latency) emitted once per window.",
+    }),
+    query: Hyperlink.effectFn(historyQuery, Schema.Array(queueMetrics)).annotate({
+      description:
+        "Past windowed metrics from the HistoryStore; empty unless HistoryStore is provided.",
+    }),
+  },
+};
+
+/** Lane config for a custom queue tag. @internal */
+type CustomQueueTagLaneConfig = CustomQueueLaneConfig;
+
+/**
+ * Build a custom-queue **instance** spec: shared {@link customQueueControlSpec} plus
+ * per-instance data-plane procedures typed by `itemSchema`.
+ *
+ * @category wire schemas
+ * @public
+ */
+export const customQueueSpec = <F extends Schema.Struct.Fields>(
+  itemSchema: Schema.Struct<F>,
+  laneConfig: CustomQueueLaneConfig,
+  wire?: { readonly success?: Schema.Top; readonly error?: Schema.Top },
+) => {
+  const itemOrItems = Schema.Union([itemSchema, Schema.Array(itemSchema)]);
+  const level = customQueueLane(laneConfig.namedLanes);
+  const entry = customQueueEntry(itemSchema);
+  const eventSchema = buildQueueEvent(
+    itemSchema,
+    wire?.success ?? Schema.Void,
+    wire?.error ?? Schema.Unknown,
+  );
+  return {
+    ...customQueueControlSpec,
+    add: Hyperlink.mutatePair(Schema.Void, itemOrItems, Schema.optional(level)).annotate({
+      description:
+        "Enqueue an item (or batch) at an optional lane — numeric index or configured name.",
+    }),
+    enqueue: Hyperlink.effectFn(Schema.Array(entry)).annotate({
+      description:
+        "Re-inject existing entries — each re-enters at its own level with attempts preserved.",
+    }),
+    release: Hyperlink.effectFn(
+      { options: Schema.optionalKey(queueReleaseOptions) },
+      Schema.Array(entry),
+    ).annotate({
+      description:
+        "Export pending entries for handoff and remove them from this queue.",
+      destructive: true,
+    }),
+    releaseEncoded: Hyperlink.effectFn(
+      { options: Schema.optionalKey(queueReleaseOptions) },
+      Schema.Array(queueEncodedEntry),
+      queueReleaseEncodingError,
+    ).annotate({
+      description: "Export pending entries in encoded/wire form for remote handoff.",
+      destructive: true,
+    }),
+    deadLetter: Hyperlink.effectFn(
+      {
+        selector: customQueueEntrySelector(itemSchema),
+        options: queueRouteOptions,
+      },
+      Schema.Array(entry),
+    ).annotate({
+      description: "Remove pending entries matching the selector and route to dead letter.",
+      destructive: true,
+    }),
+    drop: Hyperlink.effectFn(
+      {
+        selector: customQueueEntrySelector(itemSchema),
+        options: queueRouteOptions,
+      },
+      Schema.Array(entry),
+    ).annotate({
+      description: "Remove pending entries matching the selector without preserving them.",
+      destructive: true,
+    }),
+    events: Hyperlink.stream(eventSchema).annotate({
+      description: "Discrete entry / worker / queue lifecycle events.",
+    }),
+  };
+};
+
+type CustomQueuePairAnnotations = MethodAnnotations & { readonly callStyle: "pair" };
+
+/**
+ * Wire `add` member — tuple payload surfaced as `add(item, lane?)`.
+ *
+ * @category models
+ * @public
+ */
+export type CustomQueueAddMethod = Method<
+  Schema.Tuple<readonly [Schema.Top, Schema.Top]>,
+  Schema.Void,
+  Schema.Never,
+  false,
+  CustomQueuePairAnnotations
+>;
+
+/**
+ * Full custom-queue instance contract for `itemSchema` `F`.
+ *
+ * @category models
+ * @public
+ */
+export type CustomQueueInstanceSpec<F extends Schema.Struct.Fields> = Omit<
+  ReturnType<typeof customQueueSpec<F>>,
+  "add"
+> & {
+  readonly add: CustomQueueAddMethod;
+};
+
+/**
+ * Define a custom-queue **instance** — same shape as {@link WorkPool.Tag}, with
+ * `laneCount` / `namedLanes` baked into the wire level union:
+ *
+ * ```ts
+ * class Jobs extends WorkPool.priority<Jobs>()(
+ *   "@app/Jobs",
+ *   JobSchema,
+ *   8,
+ *   { urgent: 0, batch: 7 },
+ * ) {}
+ * // or: (id, schema, ["urgent", "normal", "batch"])
+ * const q = yield* Jobs;
+ * yield* q.add(aJob, "urgent");
+ * ```
+ *
+ * @public
+ */
+/** This contract's canonical kind — stamped on every tag so consumers (e.g. the dashboard) can
+ *  classify it via {@link Hyperlink.kindOf} without sniffing the spec. */
+export const priorityKind = "hyperlink-ts/WorkPool/priority";
+
+/**
+ * CustomQueue `Tag` config — **config object only** (no positional schemas). `payload` is the item
+ * schema; `laneCount` is the number of priority lanes; `namedLanes` maps names → lane indices.
+ * Optional `success` / `error` wire slots match {@link WorkPool.Tag} (stamped for engine + store).
+ *
+ * @category models
+ * @public
+ */
+export interface CustomQueueTagConfig<
+  F extends Schema.Struct.Fields,
+  Success extends Schema.Top = typeof Schema.Void,
+> {
+  readonly payload: Schema.Struct<F>;
+  readonly laneCount: number;
+  readonly namedLanes?: Readonly<Record<string, number>>;
+  readonly success?: Success;
+  readonly error?: Schema.Top;
+  readonly description?: string;
+  readonly node?: NodeKey<unknown>;
+}
+
+/**
+ * Define an N-level managed queue as a named service {@link Tag} (also exported as
+ * {@link priority}): `class Jobs extends WorkPool.priority<Jobs>()("@app/Jobs", { … }) {}`.
+ * The **priority (N-level lane)** peer of {@link Tag} — same WorkPool, with `laneCount` /
+ * `namedLanes` priority lanes and `add(item, lane?)`. `class Jobs extends
+ * WorkPool.priority<Jobs>()("@app/Jobs", { payload, laneCount: 2 }) {}`. The class *is* the Tag —
+ * `yield* Jobs` resolves the handle, {@link layer} provides it and {@link serve} exposes it over RPC
+ * (both dispatch to the leveled engine for a priority tag). `payload` is the item schema; optional
+ * `success` / `error` add the worker wire schemas.
+ *
+ * @public
+ * @category constructors
+ */
+export const priority = <Self>() => {
+  function build<
+    F extends Schema.Struct.Fields,
+    Success extends Schema.Top,
+    HSelf,
+  >(
+    key: string,
+    config: CustomQueueTagConfig<F, Success> & { readonly node: NodeKey<HSelf> },
+  ): NodeBoundTag<Self, CustomQueueInstanceSpec<F>, HSelf>;
+  function build<
+    F extends Schema.Struct.Fields,
+    Success extends Schema.Top = typeof Schema.Void,
+  >(
+    key: string,
+    config: CustomQueueTagConfig<F, Success>,
+  ): HyperlinkTag<Self, CustomQueueInstanceSpec<F>>;
+  function build<F extends Schema.Struct.Fields, Success extends Schema.Top>(
+    key: string,
+    config: CustomQueueTagConfig<F, Success>,
+  ): HyperlinkTag<Self, CustomQueueInstanceSpec<F>> {
+    const laneConfig: CustomQueueTagLaneConfig = {
+      laneCount: config.laneCount,
+      namedLanes: config.namedLanes ?? {},
+    };
+    const wire = { success: config.success, error: config.error };
+    const spec = assertCustomQueueInstanceSpec<F>(
+      customQueueSpec(config.payload, laneConfig, wire),
+      customQueueSpec(config.payload, laneConfig),
+      wire,
+    );
+    const base =
+      config.node === undefined
+        ? Hyperlink.Tag<Self>()(key, spec, { description: config.description, kind: priorityKind })
+        : Hyperlink.Tag<Self>()(key, spec, {
+            description: config.description,
+            kind: priorityKind,
+            node: config.node,
+          });
+    const ready = Hyperlink.withReadiness(base, (svc) =>
+      Effect.map(svc.status.get, (status) => ({
+        ready: status.phase === "running",
+        ...(status.phase === "running"
+          ? {}
+          : { detail: `phase: ${status.phase}` }),
+      })),
+    );
+    return stampQueueWireSchemas(ready, {
+      success: config.success,
+      error: config.error,
+    });
+  }
+  return build;
+};
+
+/**
+ * Worker/layer config for a toolkit custom queue (tag carries `itemSchema`).
+ *
+ * @category models
+ * @public
+ */
+export type CustomQueueLayerConfig<A, E, R, RR = never> = Omit<
+  CustomQueueHyperlinkConfigWithItemSchema<A, E, R>,
+  "itemSchema" | "refill" | "name"
+> & {
+  readonly refill?: {
+    readonly onStart?: boolean;
+    readonly onDrained?: boolean;
+    readonly load: (
+      queue: CustomQueueHandle<A, E, QueueEnqueueErrors, never>,
+    ) => Effect.Effect<void, never, RR>;
+  };
+};
+
+type CustomQueueItemFields = Record<
+  string,
+  Schema.Codec<unknown, unknown, never, never>
+>;
+
+const itemSchemaFromCustomQueueAdd = <F extends Schema.Struct.Fields>(
+  addPayload: CustomQueueInstanceSpec<F>["add"]["payload"],
+): Schema.Struct<F> => {
+  const tuple = addPayload as unknown as {
+    readonly elements: ReadonlyArray<{
+      readonly members: ReadonlyArray<Schema.Struct<F>>;
+    }>;
+  };
+  return tuple.elements[0]!.members[0]!;
+};
+
+const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = never>(
+  tag: HyperlinkTag<Self, CustomQueueInstanceSpec<F>>,
+  config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
+): Effect.Effect<
+  Hyperlink.BuiltHyperlink<CustomQueueInstanceSpec<F>, R | RR>,
+  never,
+  R | RR | Scope.Scope | Store.Storage
+> =>
+  Effect.gen(function* () {
+    // `specSym` holds the flat spec (opaque leaf types) at runtime — recover the precise `add` payload
+    // at this introspection boundary.
+    const addMethod = tag[specSym].add as unknown as {
+      readonly payload: CustomQueueInstanceSpec<F>["add"]["payload"];
+    };
+    const itemSchema: Schema.Codec<Schema.Struct<F>["Type"], unknown, never, never> =
+      itemSchemaFromCustomQueueAdd(addMethod.payload);
+    const context = yield* Effect.context<R | RR>();
+    const effectiveConfig = yield* foldConfiguredSpec<
+      CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>
+    >(tag.key, config);
+    const store = yield* materializeEngineQueueStoreForItem(tag.key, itemSchema, {
+      success: successOf(tag),
+      error: errorOf(tag),
+    });
+    const handle = yield* makeCustomQueueEffect({
+      name: tag.key,
+      ...effectiveConfig,
+      itemSchema,
+      store,
+    } as CustomQueueHyperlinkConfigWithItemSchema<Schema.Struct<F>["Type"], E, R | RR>);
+
+    const history = yield* Effect.serviceOption(HistoryStore);
+    const decodeMetric = Schema.decodeUnknownEffect(queueMetrics);
+    const metricsStreamId = `${tag.key}/metrics`;
+    yield* Option.match(history, {
+      onNone: () => Effect.void,
+      onSome: (store) =>
+        Effect.forkScoped(
+          Stream.runForEach(handle.metrics, (m) =>
+            Schema.encodeEffect(queueMetrics)(m).pipe(
+              Effect.flatMap((enc) => store.append(metricsStreamId, enc)),
+              Effect.orDie,
+            ),
+          ),
+        ),
+    });
+
+    // `status` is the SSOT Subscribable on the handle; scalars are mapped views of it.
+    // Worker methods are built unwrapped (each still carrying `R | RR`); `grantLocal` / wire invoke
+    // discharge `context` into every Effect method uniformly — same bundle pattern as WorkPool.
+    const impl: Hyperlink.WithRequirement<
+      ImplOf<CustomQueueInstanceSpec<F>>,
+      R | RR
+    > = {
+      status: handle.status,
+      size: Hyperlink.mapSubscribable(handle.status, (s) => sumLaneSizes(s.sizes)),
+      isEmpty: Hyperlink.mapSubscribable(handle.status, (s) => sumLaneSizes(s.sizes) === 0),
+      levelSizes: handle.levelSizes,
+      start: handle.start,
+      pause: handle.pause,
+      resume: handle.resume,
+      shutdown: handle.shutdown,
+      clear: handle.clear,
+      metrics: {
+        stream: handle.metrics,
+        query: ({ limit, since, until }) =>
+          Option.match(history, {
+            onNone: () => Effect.succeed<ReadonlyArray<typeof queueMetrics.Type>>([]),
+            onSome: (store) =>
+              store.read(metricsStreamId, { limit, since, until }).pipe(
+                Effect.flatMap((arr) =>
+                  Effect.forEach(arr, (e) => decodeMetric(e).pipe(Effect.orDie)),
+                ),
+              ),
+          }),
+      },
+      add: ((
+        itemOrItems: Schema.Struct<F>["Type"] | ReadonlyArray<Schema.Struct<F>["Type"]>,
+        lane?: number | string,
+      ) => handle.add(itemOrItems, lane).pipe(Effect.orDie)) as Hyperlink.WithRequirement<
+        ImplOf<CustomQueueInstanceSpec<F>>,
+        R | RR
+      >["add"],
+      enqueue: (entries) => handle.enqueue(entries),
+      release: ({ options }) => handle.release(options),
+      releaseEncoded: ({ options }) => handle.releaseEncoded(options),
+      deadLetter: ({ selector, options }) =>
+        handle.deadLetter(selector, options),
+      drop: ({ selector, options }) => handle.drop(selector, options),
+      events: handle.events,
+    };
+    return Hyperlink.builtHyperlink(tag, impl, context);
+  });
+
+/** A WorkPool tag — plain or {@link priority} — the runtime verbs dispatch over by kind. @internal */
+type AnyPoolTag =
+  | QueueTagFor<unknown, QueueItemFields, Schema.Top, Schema.Top>
+  | HyperlinkTag<unknown, CustomQueueInstanceSpec<CustomQueueItemFields>>;
+
+/** True when `tag` was minted by {@link priority} — routes to the leveled engine. @internal */
+const isPriorityTag = (
+  tag: AnyPoolTag,
+): tag is HyperlinkTag<unknown, CustomQueueInstanceSpec<CustomQueueItemFields>> =>
+  Hyperlink.kindOf(tag) === priorityKind;
+
+// The runtime verbs are overloaded (plain tag / priority tag) and dispatch on {@link isPriorityTag}.
+// The type guard narrows the TAG inside each branch, so build + wrap stay within the narrowed spec;
+// only `config` needs a contained assert — TS can't correlate a second parameter through a guard on
+// the first, and the queue engine already carries the same assertions at its spec boundaries.
+
+/**
+ * Run this WorkPool **locally** — soft-defaults {@link Store.Storage} (R fulfilled; override by
+ * providing an app store into this layer). Accepts a plain {@link Tag} or a {@link priority} tag and
+ * dispatches to the matching engine. {@link layerMemory} is an alias for the same soft-default.
+ *
+ * @category layers & serving
+ * @public
+ */
+export function layer<
   Self,
   F extends QueueItemFields = QueueItemFields,
   R = never,
@@ -1365,14 +1899,42 @@ export const layer = <
 >(
   tag: QueueTagFor<Self, F, Success, Error>,
   config: QueueVerbConfig<F, QueueErrorValueOf<Error>, R, RR, Success>,
-): Layer.Layer<Self | Local<Self> | Store.Storage, never, R | RR> =>
-  withDefaultMemory(
-    Layer.unwrap(
-      Effect.map(buildQueueImpl(tag, config), (built) =>
-        Hyperlink.layer(tag, Hyperlink.grantLocal(tag, built)),
-      ),
-    ),
-  );
+): Layer.Layer<Self | Local<Self> | Store.Storage, never, R | RR>;
+export function layer<
+  Self,
+  F extends CustomQueueItemFields = CustomQueueItemFields,
+  E = never,
+  R = never,
+  RR = never,
+>(
+  tag: HyperlinkTag<Self, CustomQueueInstanceSpec<F>>,
+  config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
+): Layer.Layer<Self | Local<Self> | Store.Storage, never, R | RR>;
+export function layer(
+  tag: AnyPoolTag,
+  config: unknown,
+): Layer.Layer<unknown, never, unknown> {
+  return isPriorityTag(tag)
+    ? withDefaultMemory(
+        Layer.unwrap(
+          Effect.map(
+            buildCustomQueueImpl(
+              tag,
+              config as CustomQueueLayerConfig<Schema.Struct<CustomQueueItemFields>["Type"], never, never, never>,
+            ),
+            (built) => Hyperlink.layer(tag, Hyperlink.grantLocal(tag, built)),
+          ),
+        ),
+      )
+    : withDefaultMemory(
+        Layer.unwrap(
+          Effect.map(
+            buildQueueImpl(tag, config as QueueVerbConfig<QueueItemFields, unknown, never, never, Schema.Top>),
+            (built) => Hyperlink.layer(tag, Hyperlink.grantLocal(tag, built)),
+          ),
+        ),
+      );
+}
 
 /**
  * Alias of {@link layer}.
@@ -1380,18 +1942,7 @@ export const layer = <
  * @category layers & serving
  * @public
  */
-export const layerMemory = <
-  Self,
-  F extends QueueItemFields = QueueItemFields,
-  R = never,
-  RR = never,
-  Success extends Schema.Top = typeof Schema.Void,
-  Error extends Schema.Top = typeof Schema.Never,
->(
-  tag: QueueTagFor<Self, F, Success, Error>,
-  config: QueueVerbConfig<F, QueueErrorValueOf<Error>, R, RR, Success>,
-): Layer.Layer<Self | Local<Self> | Store.Storage, never, R | RR> =>
-  layer(tag, config);
+export const layerMemory = layer;
 
 /**
  * Serve this queue **remotely (served-only)** — run the worker / refill / `persist`
@@ -1405,15 +1956,15 @@ export const layerMemory = <
  *
  * ```ts
  * Node.httpServer([
- *   QueueHyperlink.serveRemote(RosterImportQueue, rosterCfg).pipe(Layer.provide(emptyHookSource)),
- *   QueueHyperlink.serveRemote(MediaImportQueue,  mediaCfg).pipe(Layer.provide(emptyHookSource)),
+ *   WorkPool.serveRemote(RosterImportQueue, rosterCfg).pipe(Layer.provide(emptyHookSource)),
+ *   WorkPool.serveRemote(MediaImportQueue,  mediaCfg).pipe(Layer.provide(emptyHookSource)),
  * ]).pipe(Layer.provide(NodeHttpServer.layer(() => createServer(), { port })));
  * ```
  *
  * @category layers & serving
  * @public
  */
-export const serveRemote = <
+export function serveRemote<
   Self,
   F extends QueueItemFields = QueueItemFields,
   R = never,
@@ -1423,14 +1974,39 @@ export const serveRemote = <
 >(
   tag: QueueTagFor<Self, F, Success, Error>,
   config: QueueVerbConfig<F, QueueErrorValueOf<Error>, R, RR, Success>,
-) =>
-  withDefaultMemory(
-    Layer.unwrap(
-      Effect.map(buildQueueImpl(tag, config), (built) =>
-        Hyperlink.serveRemote(tag, built) as any,
-      ),
-    ) as any,
-  ) as any;
+): Layer.Layer<HandlerContextOf<QueueInstanceSpec<F>>, never, R | RR>;
+export function serveRemote<
+  Self,
+  F extends CustomQueueItemFields = CustomQueueItemFields,
+  E = never,
+  R = never,
+  RR = never,
+>(
+  tag: HyperlinkTag<Self, CustomQueueInstanceSpec<F>>,
+  config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
+): Layer.Layer<HandlerContextOf<CustomQueueInstanceSpec<F>>, never, R | RR>;
+export function serveRemote(tag: AnyPoolTag, config: unknown): Layer.Layer<unknown, never, unknown> {
+  return isPriorityTag(tag)
+    ? withDefaultMemory(
+        Layer.unwrap(
+          Effect.map(
+            buildCustomQueueImpl(
+              tag,
+              config as CustomQueueLayerConfig<Schema.Struct<CustomQueueItemFields>["Type"], never, never, never>,
+            ),
+            (built) => Hyperlink.serveRemote(tag, built as never) as Layer.Layer<unknown, never, unknown>,
+          ),
+        ) as Layer.Layer<unknown, never, unknown>,
+      )
+    : withDefaultMemory(
+        Layer.unwrap(
+          Effect.map(
+            buildQueueImpl(tag, config as QueueVerbConfig<QueueItemFields, unknown, never, never, Schema.Top>),
+            (built) => Hyperlink.serveRemote(tag, built as never) as Layer.Layer<unknown, never, unknown>,
+          ),
+        ) as Layer.Layer<unknown, never, unknown>,
+      );
+}
 
 /**
  * Alias of {@link serveRemote}.
@@ -1438,17 +2014,7 @@ export const serveRemote = <
  * @category layers & serving
  * @public
  */
-export const serveRemoteMemory = <
-  Self,
-  F extends QueueItemFields = QueueItemFields,
-  R = never,
-  RR = never,
-  Success extends Schema.Top = typeof Schema.Void,
-  Error extends Schema.Top = typeof Schema.Never,
->(
-  tag: QueueTagFor<Self, F, Success, Error>,
-  config: QueueVerbConfig<F, QueueErrorValueOf<Error>, R, RR, Success>,
-) => serveRemote(tag, config) as any;
+export const serveRemoteMemory = serveRemote;
 
 /**
  * Serve this queue **and** grant its local instance from **one** materialization — run the worker /
@@ -1460,15 +2026,15 @@ export const serveRemoteMemory = <
  *
  * ```ts
  * Node.httpServer([
- *   QueueHyperlink.serve(RosterQueue, { effect, itemSchema }),
- *   Process.serve(SeasonMatches, { effect }),
+ *   WorkPool.serve(RosterQueue, { effect, itemSchema }),
+ *   Daemon.serve(SeasonMatches, { effect }),
  * ]).pipe(Layer.provide(NodeHttpServer.layer({ port: 3001 })));
  * ```
  *
  * @category layers & serving
  * @public
  */
-export const serve = <
+export function serve<
   Self,
   F extends QueueItemFields = QueueItemFields,
   R = never,
@@ -1482,12 +2048,43 @@ export const serve = <
   Self | Local<Self> | HandlerContextOf<QueueInstanceSpec<F>> | Store.Storage,
   never,
   R | RR
-> =>
-  withDefaultMemory(
-    Layer.unwrap(
-      Effect.map(buildQueueImpl(tag, config), (built) => Hyperlink.serve(tag, built)),
-    ),
-  );
+>;
+export function serve<
+  Self,
+  F extends CustomQueueItemFields = CustomQueueItemFields,
+  E = never,
+  R = never,
+  RR = never,
+>(
+  tag: HyperlinkTag<Self, CustomQueueInstanceSpec<F>>,
+  config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
+): Layer.Layer<
+  Self | Local<Self> | HandlerContextOf<CustomQueueInstanceSpec<F>> | Store.Storage,
+  never,
+  R | RR
+>;
+export function serve(tag: AnyPoolTag, config: unknown): Layer.Layer<unknown, never, unknown> {
+  return isPriorityTag(tag)
+    ? withDefaultMemory(
+        Layer.unwrap(
+          Effect.map(
+            buildCustomQueueImpl(
+              tag,
+              config as CustomQueueLayerConfig<Schema.Struct<CustomQueueItemFields>["Type"], never, never, never>,
+            ),
+            (built) => Hyperlink.serve(tag, built),
+          ),
+        ),
+      )
+    : withDefaultMemory(
+        Layer.unwrap(
+          Effect.map(
+            buildQueueImpl(tag, config as QueueVerbConfig<QueueItemFields, unknown, never, never, Schema.Top>),
+            (built) => Hyperlink.serve(tag, built),
+          ),
+        ),
+      );
+}
 
 /**
  * Alias of {@link serve}.
@@ -1495,21 +2092,7 @@ export const serve = <
  * @category layers & serving
  * @public
  */
-export const serveMemory = <
-  Self,
-  F extends QueueItemFields = QueueItemFields,
-  R = never,
-  RR = never,
-  Success extends Schema.Top = typeof Schema.Void,
-  Error extends Schema.Top = typeof Schema.Never,
->(
-  tag: QueueTagFor<Self, F, Success, Error>,
-  config: QueueVerbConfig<F, QueueErrorValueOf<Error>, R, RR, Success>,
-): Layer.Layer<
-  Self | Local<Self> | HandlerContextOf<QueueInstanceSpec<F>> | Store.Storage,
-  never,
-  R | RR
-> => serve(tag, config);
+export const serveMemory = serve;
 
 /**
  * Queue resource toolkit — managed priority queues on the {@link Hyperlink} toolkit.
@@ -1521,22 +2104,22 @@ export const serveMemory = <
  */
 /**
  * A **config-patch layer** for the queue `tag` — the toolkit successor to the old
- * `QueueHyperlink.Service(...).configure(...)`. Merge it with the queue's {@link layer} (e.g. per
+ * `WorkPool.Service(...).configure(...)`. Merge it with the queue's {@link layer} (e.g. per
  * environment) and its patch (concurrency / rateLimit / attempts / …) folds onto the layer's base
  * config at build. Keyed by `tag.key`; later patches win. Config lives in the layer, not the tag,
  * so `configure` takes the tag and returns a layer rather than being a tag method.
  *
  * ```ts
  * const Prod = Layer.mergeAll(
- *   QueueHyperlink.layer(MyQueue, { effect }),
- *   QueueHyperlink.configure(MyQueue, { concurrency: 3, rateLimit: { window: "1 second", limit: 5 } }),
+ *   WorkPool.layer(MyQueue, { effect }),
+ *   WorkPool.configure(MyQueue, { concurrency: 3, rateLimit: { window: "1 second", limit: 5 } }),
  * );
  * ```
  *
  * @category layers & serving
  * @public
  */
-export const configure = <
+export function configure<
   Self,
   F extends QueueItemFields = QueueItemFields,
   R = never,
@@ -1546,15 +2129,31 @@ export const configure = <
 >(
   tag: QueueTagFor<Self, F, Success, Error>,
   patch: ConfigPatch<QueueVerbConfig<F, QueueErrorValueOf<Error>, R, RR, Success>>,
-): Layer.Layer<never> => configureLayer(tag.key, patch);
+): Layer.Layer<never>;
+export function configure<
+  Self,
+  F extends CustomQueueItemFields = CustomQueueItemFields,
+  E = never,
+  R = never,
+  RR = never,
+>(
+  tag: HyperlinkTag<Self, CustomQueueInstanceSpec<F>>,
+  patch: ConfigPatch<CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>>,
+): Layer.Layer<never>;
+export function configure(
+  tag: AnyPoolTag,
+  patch: ConfigPatch<unknown>,
+): Layer.Layer<never> {
+  return configureLayer(tag.key, patch);
+}
 
 /**
  * Register this queue on an app {@link Store.Service} — built-in analytics spec with the tag's
  * `itemSchema` injected. Pass a bare spec object to add app-specific methods (merged with built-in):
  *
  * ```ts
- * QueueHyperlink.store(Mail)
- * QueueHyperlink.store(Mail, {
+ * WorkPool.store(Mail)
+ * WorkPool.store(Mail, {
  *   campaignAudit: campaignAuditSchema,
  * }, ({ campaignAudit, entry }) => ({
  *   appendCampaignAudit: campaignAudit.append,
@@ -1580,8 +2179,8 @@ export function store(tag: QueueStoreTag, extended?: StoreShapes) {
     : facetStoreRegistration(tag, contract, extended);
 }
 
-// The light `Tag` lives here (no engine) so `QueueHyperlink.Tag` member access tree-shakes.
-// DX: `import * as QueueHyperlink from "hyperlink-ts/QueueHyperlink"` → `QueueHyperlink.Tag`.
+// The light `Tag` lives here (no engine) so `WorkPool.Tag` member access tree-shakes.
+// DX: `import * as WorkPool from "hyperlink-ts/WorkPool"` → `WorkPool.Tag`.
 export { queueTag as Tag };
 
 /**
@@ -1608,6 +2207,9 @@ export {
   queueRateLimiterLayer as rateLimiterLayer,
 } from "./internal/queueHyperlink";
 
+// The priority (N-level lane) engine constructor — the {@link priority} peer of {@link make}.
+export { makeCustomQueueEffect as makePriority } from "./internal/customQueueHyperlink";
+
 // Codec schemas already imported locally from the light `queueSchema` module — surface them here.
 export {
   QueueItemCodecDescriptorSchema,
@@ -1627,7 +2229,7 @@ export {
   withSchemaVersion,
 } from "./internal/queueHyperlink";
 export type { EffectContext, QueueEntry, QueueHandle } from "./internal/queueHyperlink";
-// The queue type surface lives HERE, namespace-style (`QueueHyperlink.QueueStatus`) — the barrel
+// The queue type surface lives HERE, namespace-style (`WorkPool.QueueStatus`) — the barrel
 // no longer re-exports these bare (effect has no top-level; neither do we).
 export type {
   BuiltInTakeAlgorithm,
@@ -1652,16 +2254,16 @@ export type {
   QueueOnFailure,
   QueueReleaseEncodingError,
   QueueReleaseOptions,
-  QueueHyperlinkConfig,
-  QueueHyperlinkConfigBase,
-  QueueHyperlinkConfigWithItemSchema,
-  QueueHyperlinkConfigWithoutItemSchema,
-  QueueHyperlinkDefinition,
-  QueueHyperlinkMetadata,
-  QueueHyperlinkOptionsWithItemSchema,
-  QueueHyperlinkOptionsWithoutItemSchema,
-  QueueHyperlinkRateLimitOptions,
-  QueueHyperlinkServiceDefinition,
+  WorkPoolConfig,
+  WorkPoolConfigBase,
+  WorkPoolConfigWithItemSchema,
+  WorkPoolConfigWithoutItemSchema,
+  WorkPoolDefinition,
+  WorkPoolMetadata,
+  WorkPoolOptionsWithItemSchema,
+  WorkPoolOptionsWithoutItemSchema,
+  WorkPoolRateLimitOptions,
+  WorkPoolServiceDefinition,
   QueueRouteOptions,
   QueueStatus,
   QueueWorkerEffect,

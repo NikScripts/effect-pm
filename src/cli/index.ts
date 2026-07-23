@@ -28,9 +28,10 @@ import type { AnyLocalMethod, AnyMethod, FlatSpec } from "../Hyperlink";
 
 /**
  * The structural shape the CLI reads from a resource tag: yieldable (→ its service), with
- * `key` / `description` and the stowed contract spec. A `Hyperlink.Tag` / `QueueHyperlink.Tag`
- * / `Process.Tag` class satisfies this — pass the classes directly.
+ * `key` / `description` and the stowed contract spec. A `Hyperlink.Tag` / `WorkPool.Tag`
+ * / `Daemon.Tag` class satisfies this — pass the classes directly.
  *
+ * @public
  */
 export type CliHyperlinkTag = Effect.Effect<unknown, never, unknown> & {
   readonly key: string;
@@ -135,6 +136,7 @@ const methodCommand = (name: string, method: AnyMethod, tag: CliHyperlinkTag) =>
  * resources. `rootName` is the top command name. Returns an `effect/unstable/cli`
  * `Command` — drive it with `Command.runWith` and provide the resources' layer.
  *
+ * @public
  */
 export const makeHyperlinkCli = (resources: Record<string, CliHyperlinkTag>, rootName = "cli") => {
   const namespaces = Object.entries(resources).map(([name, tag]) =>

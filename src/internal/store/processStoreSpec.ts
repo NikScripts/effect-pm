@@ -1,9 +1,9 @@
 /**
- * Built-in {@link Process} store contract.
+ * Built-in {@link Daemon} store contract.
  *
- * Two tiers (mirrors {@link RunHyperlink} / {@link QueueHyperlink}):
- * - **Tier 1** — lean base (`builtInProcessStoreContract`)
- * - **Tier 2** — analytics read-extension (`makeProcessStoreAnalyticsContract`)
+ * Two tiers (mirrors {@link Gate} / {@link WorkPool}):
+ * - **Tier 1** — lean base (`builtInDaemonStoreContract`)
+ * - **Tier 2** — analytics read-extension (`makeDaemonStoreAnalyticsContract`)
  *
  * Tier 2 composes tier 1 via {@link Store.extend} — shapes stay on tier 1;
  * the extension only adds analytics read methods. The engine writes via shape
@@ -15,9 +15,9 @@
 
 import { Effect, Option, Schema, Stream } from "effect";
 import {
-  makeProcessExecutionEvent,
+  makeDaemonExecutionEvent,
   processExecutionEventVoid,
-  type ProcessExecutionEventVoid,
+  type DaemonExecutionEventVoid,
 } from "../processEvent";
 import { errorOf, successOf } from "../processTagSchemas";
 import * as Store from "../../Store";
@@ -36,58 +36,58 @@ const processEventSchema = (
 ) =>
   success === undefined && error === undefined
     ? processExecutionEventVoid
-    : makeProcessExecutionEvent(success, error);
+    : makeDaemonExecutionEvent(success, error);
 
 /**
  * Erased persisted event **schema** for contract typing — `success` / `error` wire slots are
  * `Schema.Top` here (mirrors {@link QueueEventSchemaOf}). Runtime validation uses the tag's wire
- * slots in {@link makeProcessStoreBaseContract}; decoded rows use {@link ProcessEventOf}.
+ * slots in {@link makeDaemonStoreBaseContract}; decoded rows use {@link DaemonEventOf}.
  * @internal
  */
-export type ProcessEventSchemaOf<_Tag extends StoreScopeTag> = ReturnType<
-  typeof makeProcessExecutionEvent<Schema.Top, Schema.Top>
+export type DaemonEventSchemaOf<_Tag extends StoreScopeTag> = ReturnType<
+  typeof makeDaemonExecutionEvent<Schema.Top, Schema.Top>
 >;
 
 /**
  * The persisted process event for a tag — the base `record` / `events` surface stays **erased**
  * (`success?: unknown`, `error: unknown`). @internal
  */
-export type ProcessEventOf<_Tag extends StoreScopeTag> =
-  | Extract<ProcessExecutionEventVoid, { readonly _tag: "Started" }>
-  | (Extract<ProcessExecutionEventVoid, { readonly _tag: "Completed" }> & {
+export type DaemonEventOf<_Tag extends StoreScopeTag> =
+  | Extract<DaemonExecutionEventVoid, { readonly _tag: "Started" }>
+  | (Extract<DaemonExecutionEventVoid, { readonly _tag: "Completed" }> & {
     readonly success?: unknown;
   })
-  | (Omit<Extract<ProcessExecutionEventVoid, { readonly _tag: "Failed" }>, "error"> & {
+  | (Omit<Extract<DaemonExecutionEventVoid, { readonly _tag: "Failed" }>, "error"> & {
     readonly error: unknown;
   })
-  | Extract<ProcessExecutionEventVoid, { readonly _tag: "Interrupted" }>;
+  | Extract<DaemonExecutionEventVoid, { readonly _tag: "Interrupted" }>;
 
 /** Event union schema for a process store contract. @internal */
 export const processStoreEventSchema = processEventSchema;
 
 /** Decoded persisted event for a tag. @internal */
-export type ProcessStoreEvent<Tag extends StoreScopeTag = StoreScopeTag> = ProcessEventOf<Tag>;
+export type DaemonStoreEvent<Tag extends StoreScopeTag = StoreScopeTag> = DaemonEventOf<Tag>;
 
 /** @internal */
-export type ProcessStoreFailed<Tag extends StoreScopeTag> = Extract<
-  ProcessStoreEvent<Tag>,
+export type DaemonStoreFailed<Tag extends StoreScopeTag> = Extract<
+  DaemonStoreEvent<Tag>,
   { readonly _tag: "Failed" }
 >;
 
 /** @internal */
-export type ProcessStoreCompleted<Tag extends StoreScopeTag> = Extract<
-  ProcessStoreEvent<Tag>,
+export type DaemonStoreCompleted<Tag extends StoreScopeTag> = Extract<
+  DaemonStoreEvent<Tag>,
   { readonly _tag: "Completed" }
 >;
 
 /** @internal */
-export type ProcessStoreStarted<Tag extends StoreScopeTag> = Extract<
-  ProcessStoreEvent<Tag>,
+export type DaemonStoreStarted<Tag extends StoreScopeTag> = Extract<
+  DaemonStoreEvent<Tag>,
   { readonly _tag: "Started" }
 >;
 
 /** Lifetime execution counts. @internal */
-export interface ProcessStoreStats {
+export interface DaemonStoreStats {
   readonly started: number;
   readonly completed: number;
   readonly failed: number;
@@ -95,7 +95,7 @@ export interface ProcessStoreStats {
 }
 
 /** Duration distribution over completions (`durationMs`). @internal */
-export interface ProcessStoreDurationStats {
+export interface DaemonStoreDurationStats {
   readonly meanMs: number;
   readonly p50Ms: number;
   readonly p95Ms: number;
@@ -103,28 +103,28 @@ export interface ProcessStoreDurationStats {
   readonly maxMs: number;
 }
 
-/** Analytics reads on {@link Process.store}. @internal */
-export type ProcessStoreReads<Tag extends StoreScopeTag> = {
-  readonly failures: () => Effect.Effect<ReadonlyArray<ProcessStoreFailed<Tag>>>;
-  readonly completions: () => Effect.Effect<ReadonlyArray<ProcessStoreCompleted<Tag>>>;
-  readonly interruptions: () => Effect.Effect<ReadonlyArray<ProcessStoreEvent<Tag>>>;
-  readonly inFlight: () => Effect.Effect<ReadonlyArray<ProcessStoreStarted<Tag>>>;
-  readonly lastFailure: () => Effect.Effect<Option.Option<ProcessStoreFailed<Tag>>>;
-  readonly lastCompletion: () => Effect.Effect<Option.Option<ProcessStoreCompleted<Tag>>>;
-  readonly recent: (n: number) => Effect.Effect<ReadonlyArray<ProcessStoreEvent<Tag>>>;
-  readonly stats: () => Effect.Effect<ProcessStoreStats>;
+/** Analytics reads on {@link Daemon.store}. @internal */
+export type DaemonStoreReads<Tag extends StoreScopeTag> = {
+  readonly failures: () => Effect.Effect<ReadonlyArray<DaemonStoreFailed<Tag>>>;
+  readonly completions: () => Effect.Effect<ReadonlyArray<DaemonStoreCompleted<Tag>>>;
+  readonly interruptions: () => Effect.Effect<ReadonlyArray<DaemonStoreEvent<Tag>>>;
+  readonly inFlight: () => Effect.Effect<ReadonlyArray<DaemonStoreStarted<Tag>>>;
+  readonly lastFailure: () => Effect.Effect<Option.Option<DaemonStoreFailed<Tag>>>;
+  readonly lastCompletion: () => Effect.Effect<Option.Option<DaemonStoreCompleted<Tag>>>;
+  readonly recent: (n: number) => Effect.Effect<ReadonlyArray<DaemonStoreEvent<Tag>>>;
+  readonly stats: () => Effect.Effect<DaemonStoreStats>;
   readonly failureRate: () => Effect.Effect<number>;
-  readonly durationStats: () => Effect.Effect<ProcessStoreDurationStats>;
+  readonly durationStats: () => Effect.Effect<DaemonStoreDurationStats>;
   readonly bySchedule: (
     scheduleKey: string | null,
-  ) => Effect.Effect<ReadonlyArray<ProcessStoreEvent<Tag>>>;
-  readonly startupRuns: () => Effect.Effect<ReadonlyArray<ProcessStoreEvent<Tag>>>;
+  ) => Effect.Effect<ReadonlyArray<DaemonStoreEvent<Tag>>>;
+  readonly startupRuns: () => Effect.Effect<ReadonlyArray<DaemonStoreEvent<Tag>>>;
   readonly longestRuns: (
     n: number,
-  ) => Effect.Effect<ReadonlyArray<ProcessStoreCompleted<Tag>>>;
+  ) => Effect.Effect<ReadonlyArray<DaemonStoreCompleted<Tag>>>;
   /** Live decoded event stream (via {@link Store.changes}). */
   readonly changes: () => Stream.Stream<
-    ProcessStoreEvent<Tag>,
+    DaemonStoreEvent<Tag>,
     StoreJournalDecodeError,
     Store.Storage
   >;
@@ -143,12 +143,12 @@ const runKey = (startedAt: number, scheduleKey: string | null): string =>
 // Base — shared event shape + append/read aliases (internal + public SSOT)
 // ============================================================================
 
-type ProcessEventHandles = ShapeHandles<{
+type DaemonEventHandles = ShapeHandles<{
   readonly event: ReturnType<typeof Store.shape<ReturnType<typeof processEventSchema>>>;
 }>;
 
 /** Shared base methods — extensions close over the same `event.append` / `event.read`. @internal */
-const processStoreBaseMethods = ({ event }: ProcessEventHandles) => ({
+const processStoreBaseMethods = ({ event }: DaemonEventHandles) => ({
   record: event.append,
   events: event.read,
   hasPriorExecutions: () =>
@@ -156,29 +156,29 @@ const processStoreBaseMethods = ({ event }: ProcessEventHandles) => ({
 });
 
 /** Built-in process store contract for a tag — one `event` shape (mirrors {@link BuiltInQueueContract}). @internal */
-export type BuiltInProcessContract<Tag extends StoreScopeTag> = StoreContractValue<
+export type BuiltInDaemonContract<Tag extends StoreScopeTag> = StoreContractValue<
   {
-    readonly event: StoreShapeDef<ProcessEventSchemaOf<Tag>>;
+    readonly event: StoreShapeDef<DaemonEventSchemaOf<Tag>>;
   },
   {
     readonly record: (
-      event: ProcessStoreEvent<Tag>,
+      event: DaemonStoreEvent<Tag>,
     ) => Effect.Effect<void, StoreWriteError>;
     readonly events: (
-      payload?: Store.StoreReadPayload<ProcessStoreEvent<Tag>>,
-    ) => Effect.Effect<ReadonlyArray<ProcessStoreEvent<Tag>>>;
+      payload?: Store.StoreReadPayload<DaemonStoreEvent<Tag>>,
+    ) => Effect.Effect<ReadonlyArray<DaemonStoreEvent<Tag>>>;
     readonly hasPriorExecutions: () => Effect.Effect<boolean>;
   }
 >;
 
-/** @deprecated Use {@link BuiltInProcessContract}. @internal */
-export type ProcessStoreBaseContract<Tag extends StoreScopeTag> = BuiltInProcessContract<Tag>;
+/** @deprecated Use {@link BuiltInDaemonContract}. @internal */
+export type DaemonStoreBaseContract<Tag extends StoreScopeTag> = BuiltInDaemonContract<Tag>;
 
 /**
  * Build the shared base contract (optional success / error schemas on the event union).
  * @internal
  */
-export const makeProcessStoreBaseContract = (
+export const makeDaemonStoreBaseContract = (
   success?: Schema.Top,
   error?: Schema.Top,
 ) =>
@@ -190,20 +190,20 @@ export const makeProcessStoreBaseContract = (
   );
 
 /** Built-in process store contract for a tag (tier-1 / engine / tests / simple registration). @internal */
-export const builtInProcessStoreContract = <const Tag extends StoreScopeTag>(
+export const builtInDaemonStoreContract = <const Tag extends StoreScopeTag>(
   tag: Tag,
-): BuiltInProcessContract<Tag> =>
-  makeProcessStoreBaseContract(successOf(tag), errorOf(tag));
+): BuiltInDaemonContract<Tag> =>
+  makeDaemonStoreBaseContract(successOf(tag), errorOf(tag));
 
 /** Narrow write inputs — engine supplies resource `key` when building rows. @internal */
-export type ProcessStoreStartedInput = {
+export type DaemonStoreStartedInput = {
   readonly scheduleKey: string | null;
   readonly startedAt: number;
   readonly isStartupRun: boolean;
 };
 
 /** @internal */
-export type ProcessStoreTerminalInput = {
+export type DaemonStoreTerminalInput = {
   readonly scheduleKey: string | null;
   readonly startedAt: number;
   readonly completedAt: number;
@@ -215,21 +215,21 @@ export type ProcessStoreTerminalInput = {
 // ============================================================================
 
 /** Build the public analytics contract — base + read derivations. @internal */
-export const makeProcessStoreAnalyticsContract = <const Tag extends StoreScopeTag>(
+export const makeDaemonStoreAnalyticsContract = <const Tag extends StoreScopeTag>(
   tag: Tag,
 ) => {
-  const base = builtInProcessStoreContract(tag);
+  const base = builtInDaemonStoreContract(tag);
   const storeClass = { scopeKey: tag.key, contract: base };
-  const isFailed = (event: ProcessStoreEvent<Tag>): event is ProcessStoreFailed<Tag> =>
+  const isFailed = (event: DaemonStoreEvent<Tag>): event is DaemonStoreFailed<Tag> =>
     event._tag === "Failed";
 
-  const isCompleted = (event: ProcessStoreEvent<Tag>): event is ProcessStoreCompleted<Tag> =>
+  const isCompleted = (event: DaemonStoreEvent<Tag>): event is DaemonStoreCompleted<Tag> =>
     event._tag === "Completed";
 
-  const isStarted = (event: ProcessStoreEvent<Tag>): event is ProcessStoreStarted<Tag> =>
+  const isStarted = (event: DaemonStoreEvent<Tag>): event is DaemonStoreStarted<Tag> =>
     event._tag === "Started";
 
-  const isTerminal = (event: ProcessStoreEvent<Tag>): boolean =>
+  const isTerminal = (event: DaemonStoreEvent<Tag>): boolean =>
     event._tag === "Completed" ||
     event._tag === "Failed" ||
     event._tag === "Interrupted";
@@ -237,21 +237,21 @@ export const makeProcessStoreAnalyticsContract = <const Tag extends StoreScopeTa
   return withImplicitLogShape(
     Store.extend(
       ({ event }) => ({
-        failures: (): Effect.Effect<ReadonlyArray<ProcessStoreFailed<Tag>>> =>
+        failures: (): Effect.Effect<ReadonlyArray<DaemonStoreFailed<Tag>>> =>
           Effect.map(event.read(), (events) =>
-            (events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter(isFailed),
+            (events as ReadonlyArray<DaemonStoreEvent<Tag>>).filter(isFailed),
           ),
-        completions: (): Effect.Effect<ReadonlyArray<ProcessStoreCompleted<Tag>>> =>
+        completions: (): Effect.Effect<ReadonlyArray<DaemonStoreCompleted<Tag>>> =>
           Effect.map(event.read(), (events) => events.filter(isCompleted)),
-        interruptions: (): Effect.Effect<ReadonlyArray<ProcessStoreEvent<Tag>>> =>
+        interruptions: (): Effect.Effect<ReadonlyArray<DaemonStoreEvent<Tag>>> =>
           Effect.map(event.read(), (events) =>
-            (events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter(
+            (events as ReadonlyArray<DaemonStoreEvent<Tag>>).filter(
               (e) => e._tag === "Interrupted",
             ),
           ),
-        inFlight: (): Effect.Effect<ReadonlyArray<ProcessStoreStarted<Tag>>> =>
+        inFlight: (): Effect.Effect<ReadonlyArray<DaemonStoreStarted<Tag>>> =>
           Effect.map(event.read(), (events) => {
-            const rows = events as ReadonlyArray<ProcessStoreEvent<Tag>>;
+            const rows = events as ReadonlyArray<DaemonStoreEvent<Tag>>;
             const terminated = new Set<string>();
             for (const e of rows) {
               if (isTerminal(e)) {
@@ -259,33 +259,33 @@ export const makeProcessStoreAnalyticsContract = <const Tag extends StoreScopeTa
               }
             }
             return rows.filter(
-              (e): e is ProcessStoreStarted<Tag> =>
+              (e): e is DaemonStoreStarted<Tag> =>
                 isStarted(e) &&
                 !terminated.has(runKey(e.startedAt, e.scheduleKey)),
             );
           }),
-        lastFailure: (): Effect.Effect<Option.Option<ProcessStoreFailed<Tag>>> =>
+        lastFailure: (): Effect.Effect<Option.Option<DaemonStoreFailed<Tag>>> =>
           Effect.map(event.read(), (events) => {
-            const failures = (events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter(isFailed);
+            const failures = (events as ReadonlyArray<DaemonStoreEvent<Tag>>).filter(isFailed);
             return failures.length === 0
               ? Option.none()
               : Option.some(failures[failures.length - 1]!);
           }),
-        lastCompletion: (): Effect.Effect<Option.Option<ProcessStoreCompleted<Tag>>> =>
+        lastCompletion: (): Effect.Effect<Option.Option<DaemonStoreCompleted<Tag>>> =>
           Effect.map(event.read(), (events) => {
-            const completions = (events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter(isCompleted);
+            const completions = (events as ReadonlyArray<DaemonStoreEvent<Tag>>).filter(isCompleted);
             return completions.length === 0
               ? Option.none()
               : Option.some(completions[completions.length - 1]!);
           }),
-        recent: (n: number): Effect.Effect<ReadonlyArray<ProcessStoreEvent<Tag>>> =>
+        recent: (n: number): Effect.Effect<ReadonlyArray<DaemonStoreEvent<Tag>>> =>
           Effect.map(event.read(), (events) => {
-            const rows = events as ReadonlyArray<ProcessStoreEvent<Tag>>;
+            const rows = events as ReadonlyArray<DaemonStoreEvent<Tag>>;
             return n <= 0 ? [] : rows.slice(Math.max(0, rows.length - n));
           }),
-        stats: (): Effect.Effect<ProcessStoreStats> =>
+        stats: (): Effect.Effect<DaemonStoreStats> =>
           Effect.map(event.read(), (events) => {
-            const rows = events as ReadonlyArray<ProcessStoreEvent<Tag>>;
+            const rows = events as ReadonlyArray<DaemonStoreEvent<Tag>>;
             let started = 0;
             let completed = 0;
             let failed = 0;
@@ -312,7 +312,7 @@ export const makeProcessStoreAnalyticsContract = <const Tag extends StoreScopeTa
           }),
         failureRate: (): Effect.Effect<number> =>
           Effect.map(event.read(), (events) => {
-            const rows = events as ReadonlyArray<ProcessStoreEvent<Tag>>;
+            const rows = events as ReadonlyArray<DaemonStoreEvent<Tag>>;
             let completed = 0;
             let failed = 0;
             for (const e of rows) {
@@ -322,9 +322,9 @@ export const makeProcessStoreAnalyticsContract = <const Tag extends StoreScopeTa
             const total = completed + failed;
             return total === 0 ? 0 : failed / total;
           }),
-        durationStats: (): Effect.Effect<ProcessStoreDurationStats> =>
+        durationStats: (): Effect.Effect<DaemonStoreDurationStats> =>
           Effect.map(event.read(), (events) => {
-            const durations = (events as ReadonlyArray<ProcessStoreEvent<Tag>>)
+            const durations = (events as ReadonlyArray<DaemonStoreEvent<Tag>>)
               .filter(isCompleted)
               .map((e) => e.durationMs);
             if (durations.length === 0) {
@@ -342,26 +342,26 @@ export const makeProcessStoreAnalyticsContract = <const Tag extends StoreScopeTa
           }),
         bySchedule: (
           scheduleKey: string | null,
-        ): Effect.Effect<ReadonlyArray<ProcessStoreEvent<Tag>>> =>
+        ): Effect.Effect<ReadonlyArray<DaemonStoreEvent<Tag>>> =>
           Effect.map(event.read(), (events) =>
-            (events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter(
+            (events as ReadonlyArray<DaemonStoreEvent<Tag>>).filter(
               (e) => e.scheduleKey === scheduleKey,
             ),
           ),
-        startupRuns: (): Effect.Effect<ReadonlyArray<ProcessStoreEvent<Tag>>> =>
+        startupRuns: (): Effect.Effect<ReadonlyArray<DaemonStoreEvent<Tag>>> =>
           Effect.map(event.read(), (events) =>
-            (events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter((e) => e.isStartupRun),
+            (events as ReadonlyArray<DaemonStoreEvent<Tag>>).filter((e) => e.isStartupRun),
           ),
         longestRuns: (
           n: number,
-        ): Effect.Effect<ReadonlyArray<ProcessStoreCompleted<Tag>>> =>
+        ): Effect.Effect<ReadonlyArray<DaemonStoreCompleted<Tag>>> =>
           Effect.map(event.read(), (events) =>
-            [...(events as ReadonlyArray<ProcessStoreEvent<Tag>>).filter(isCompleted)]
+            [...(events as ReadonlyArray<DaemonStoreEvent<Tag>>).filter(isCompleted)]
               .sort((a, b) => b.durationMs - a.durationMs)
               .slice(0, Math.max(0, n)),
           ),
         changes: (): Stream.Stream<
-          ProcessStoreEvent<Tag>,
+          DaemonStoreEvent<Tag>,
           StoreJournalDecodeError,
           Store.Storage
         > => Stream.unwrap(Store.changes(storeClass, (shapes) => shapes.event)),
@@ -371,14 +371,14 @@ export const makeProcessStoreAnalyticsContract = <const Tag extends StoreScopeTa
   );
 };
 
-/** Public analytics contract type for {@link Process.store}. @internal */
-export type ProcessStoreAnalyticsContract<Tag extends StoreScopeTag> = ReturnType<
-  typeof makeProcessStoreAnalyticsContract<Tag>
+/** Public analytics contract type for {@link Daemon.store}. @internal */
+export type DaemonStoreAnalyticsContract<Tag extends StoreScopeTag> = ReturnType<
+  typeof makeDaemonStoreAnalyticsContract<Tag>
 >;
 
-/** @deprecated Use {@link ProcessStoreEvent}. @internal */
-export type ProcessStoreEventRow = ProcessStoreEvent;
+/** @deprecated Use {@link DaemonStoreEvent}. @internal */
+export type DaemonStoreEventRow = DaemonStoreEvent;
 
-/** @deprecated Internal flat spec — use {@link builtInProcessStoreContract}. @internal */
-export const builtInProcessStoreSpec = (tag: StoreScopeTag) =>
-  builtInProcessStoreContract(tag).spec;
+/** @deprecated Internal flat spec — use {@link builtInDaemonStoreContract}. @internal */
+export const builtInDaemonStoreSpec = (tag: StoreScopeTag) =>
+  builtInDaemonStoreContract(tag).spec;

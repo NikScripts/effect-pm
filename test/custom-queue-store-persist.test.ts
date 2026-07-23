@@ -1,23 +1,23 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Schema } from "effect";
-import * as CustomQueueHyperlink from "../src/CustomQueueHyperlink";
+import * as WorkPool from "../src/WorkPool";
 import { Storage } from "../src/Store";
 import { builtInQueueStoreContract } from "../src/internal/store/queueStoreSpec";
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
-class Jobs extends CustomQueueHyperlink.Tag<Jobs>()("@app/CustomJobs", {
+class Jobs extends WorkPool.priority<Jobs>()("@app/CustomJobs", {
   payload: jobSchema,
-  levelCount: 3,
-  namedLevels: { urgent: 0 },
+  laneCount: 3,
+  namedLanes: { urgent: 0 },
 }) {}
 
-class FailingJobs extends CustomQueueHyperlink.Tag<FailingJobs>()("@app/FailingCustomJobs", {
+class FailingJobs extends WorkPool.priority<FailingJobs>()("@app/FailingCustomJobs", {
   payload: jobSchema,
-  levelCount: 2,
+  laneCount: 2,
 }) {}
 
-describe("CustomQueueHyperlink → baked store persistence", () => {
+describe("WorkPool.priority → baked store persistence", () => {
   it.live("persists lifecycle events to the baked-in store, readable back", () =>
     Effect.gen(function* () {
       const queue = yield* Jobs;
@@ -44,9 +44,9 @@ describe("CustomQueueHyperlink → baked store persistence", () => {
       expect(tags).toContain("Completed");
     }).pipe(
       Effect.provide(
-        CustomQueueHyperlink.layerMemory(Jobs, {
-          levelCount: 3,
-          namedLevels: { urgent: 0 },
+        WorkPool.layerMemory(Jobs, {
+          laneCount: 3,
+          namedLanes: { urgent: 0 },
           effect: () => Effect.void,
           autoStart: true,
         }),
@@ -80,8 +80,8 @@ describe("CustomQueueHyperlink → baked store persistence", () => {
       expect(tags).toContain("RetryExhausted");
     }).pipe(
       Effect.provide(
-        CustomQueueHyperlink.layerMemory(FailingJobs, {
-          levelCount: 2,
+        WorkPool.layerMemory(FailingJobs, {
+          laneCount: 2,
           effect: () => Effect.fail("boom" as const),
           attempts: 1,
           autoStart: true,

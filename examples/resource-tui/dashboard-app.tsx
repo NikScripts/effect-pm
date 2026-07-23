@@ -30,7 +30,7 @@ import {
   type CommandAtom,
   type GroupNode,
   type LeafTag,
-  type ProcessTag,
+  type DaemonTag,
 } from "../web-dashboard/queue-data";
 import { RegistryProvider, useAtomSet, useAtomValue } from "../../src/ui/atom-react";
 import {
@@ -65,10 +65,10 @@ const LEVEL_COLOR: Record<string, string> = {
 // ── tag dispatch ──────────────────────────────────────────────────────────────
 // A leaf tag carries no discriminant TS can narrow on, so `kindOf` (which inspects the
 // contract) becomes a type guard — the sanctioned alternative to a cast.
-const isProcessTag = (m: unknown): m is ProcessTag => kindOf(m) === "process";
+const isDaemonTag = (m: unknown): m is DaemonTag => kindOf(m) === "process";
 const isQueueTag = (m: unknown): m is LeafTag => kindOf(m) === "queue";
 /** Every leaf (queue + process) of the fleet — the command palette's targets. */
-const ALL_LEAVES: ReadonlyArray<LeafTag | ProcessTag> = [...queueLeaves(Fleet), ...processLeaves(Fleet)];
+const ALL_LEAVES: ReadonlyArray<LeafTag | DaemonTag> = [...queueLeaves(Fleet), ...processLeaves(Fleet)];
 
 const statusOf = (phase: string, paused: boolean): Status =>
   phase === "off" ? "off" : phase === "draining" ? "draining" : paused ? "paused" : "running";
@@ -160,8 +160,8 @@ const QueueCell = (props: {
 };
 
 // a process grid cell — supervision state + active instances
-const ProcessCell = (props: {
-  readonly tag: ProcessTag;
+const DaemonCell = (props: {
+  readonly tag: DaemonTag;
   readonly width: number;
   readonly selected: boolean;
 }): React.ReactElement => {
@@ -213,7 +213,7 @@ const GroupCell = (props: {
       {width >= 22
         ? members.slice(0, 4).map((m, i) => (
             <Text key={`${node.key}-${i}`} dimColor wrap="truncate">
-              {Group.isGroup(m) ? "▸ " : isProcessTag(m) ? "⚙ " : "  "}
+              {Group.isGroup(m) ? "▸ " : isDaemonTag(m) ? "⚙ " : "  "}
               {displayName(idOf(m))}
             </Text>
           ))
@@ -230,8 +230,8 @@ const Cell = (props: {
   if (Group.isGroup(props.member)) {
     return <GroupCell node={props.member} width={props.width} selected={props.selected} />;
   }
-  if (isProcessTag(props.member)) {
-    return <ProcessCell tag={props.member} width={props.width} selected={props.selected} />;
+  if (isDaemonTag(props.member)) {
+    return <DaemonCell tag={props.member} width={props.width} selected={props.selected} />;
   }
   if (isQueueTag(props.member)) {
     return <QueueCell tag={props.member} width={props.width} selected={props.selected} />;
@@ -245,12 +245,12 @@ const leafCountOf = (node: GroupNode): number =>
   Object.values(Group.members(node)).reduce<number>((n, m) => n + (Group.isGroup(m) ? leafCountOf(m) : 1), 0);
 /** Display key of any nav member (group node or leaf tag). */
 const idOf = (m: unknown): string =>
-  Group.isGroup(m) ? m.key : isProcessTag(m) || isQueueTag(m) ? m.key : "";
+  Group.isGroup(m) ? m.key : isDaemonTag(m) || isQueueTag(m) ? m.key : "";
 
 // bottom bar — view-specific hint, or the command palette (reversed: top match nearest input)
 const Bar = (props: {
   readonly cmd: string | null;
-  readonly suggestions: ReadonlyArray<LeafTag | ProcessTag>;
+  readonly suggestions: ReadonlyArray<LeafTag | DaemonTag>;
   readonly cmdSel: number;
   readonly hint: React.ReactElement;
 }): React.ReactElement => {
@@ -267,7 +267,7 @@ const Bar = (props: {
           <Box key={tag.key} paddingX={1}>
             <Text color={i === sel ? "cyan" : undefined} dimColor={i !== sel}>
               {i === sel ? "› " : "  "}
-              {isProcessTag(tag) ? "⚙ " : ""}
+              {isDaemonTag(tag) ? "⚙ " : ""}
               {displayName(tag.key)}
               <Text dimColor> {tag.key}</Text>
             </Text>
@@ -436,8 +436,8 @@ const FocusedQueue = (props: {
 };
 
 // open process full-screen: supervision stats + the real logs tail
-const FocusedProcess = (props: {
-  readonly tag: ProcessTag;
+const FocusedDaemon = (props: {
+  readonly tag: DaemonTag;
   readonly cols: number;
   readonly rows: number;
   readonly editMode: boolean;
@@ -525,7 +525,7 @@ export const App = (): React.ReactElement => {
   const { cols, rows } = useTerminalSize();
   const [path, setPath] = React.useState<ReadonlyArray<GroupNode>>([Fleet]);
   const [sel, setSel] = React.useState(0);
-  const [focused, setFocused] = React.useState<LeafTag | ProcessTag | null>(null);
+  const [focused, setFocused] = React.useState<LeafTag | DaemonTag | null>(null);
   const [editMode, setEditMode] = React.useState(false);
   const [cmd, setCmd] = React.useState<string | null>(null);
   const [cmdSel, setCmdSel] = React.useState(0);
@@ -626,7 +626,7 @@ export const App = (): React.ReactElement => {
     if (Group.isGroup(member)) {
       setPath((p) => [...p, member]);
       setSel(0);
-    } else if (isProcessTag(member) || isQueueTag(member)) {
+    } else if (isDaemonTag(member) || isQueueTag(member)) {
       setFocused(() => member);
     }
   };
@@ -700,8 +700,8 @@ export const App = (): React.ReactElement => {
 
   // ── focused resource ──
   if (focused !== null) {
-    return isProcessTag(focused) ? (
-      <FocusedProcess
+    return isDaemonTag(focused) ? (
+      <FocusedDaemon
         key={focused.key}
         tag={focused}
         cols={cols}

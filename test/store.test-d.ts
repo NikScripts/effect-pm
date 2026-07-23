@@ -1,11 +1,11 @@
 import { Effect, Schema } from "effect";
-import * as QueueHyperlink from "../src/QueueHyperlink";
-import * as RunHyperlink from "../src/RunHyperlink";
+import * as WorkPool from "../src/WorkPool";
+import * as Gate from "../src/Gate";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Store from "../src/Store";
 import { builtInQueueStoreContract, type QueueEventOf } from "../src/internal/store/queueStoreSpec";
 import {
-  builtInRunHyperlinkStoreContract,
+  builtInGateStoreContract,
   runFactSchemaForTag,
 } from "../src/internal/store/runHyperlinkStoreSpec";
 import type { RegistrationHandleOf, StoreHandleAtKey } from "../src/internal/store/defineStore";
@@ -38,9 +38,9 @@ class Mail extends Hyperlink.Tag<Mail>()("@app/Mail", {
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
-class MailQueue extends QueueHyperlink.Tag<MailQueue>()("@app/MailQueue", { payload: jobSchema }) {}
+class MailQueue extends WorkPool.Tag<MailQueue>()("@app/MailQueue", { payload: jobSchema }) {}
 
-class FetchGate extends RunHyperlink.Tag<FetchGate>()("@app/FetchGate", { payload: Schema.String, success: Schema.Number }) {}
+class FetchGate extends Gate.Tag<FetchGate>()("@app/FetchGate", { payload: Schema.String, success: Schema.Number }) {}
 
 const mailQueueContract = builtInQueueStoreContract(MailQueue).pipe(
   Store.extend({ campaignAudit: Schema.Struct({ campaignId: Schema.String }) }),
@@ -64,7 +64,7 @@ type QueueEventsResult = ReturnType<MailQueueHandle["events"]> extends Effect.Ef
 
 void ({} as QueueEventsResult satisfies ReadonlyArray<QueueEvent>);
 
-const runGateContract = builtInRunHyperlinkStoreContract(FetchGate);
+const runGateContract = builtInGateStoreContract(FetchGate);
 type RunGateHandle = Store.HandleOf<typeof runGateContract>;
 
 declare const _runGateHandle: RunGateHandle;
@@ -132,7 +132,7 @@ const campaignAuditSchema = Schema.Struct({ campaignId: Schema.String });
 type FacetQueueRegs = RegsOfStoreInput<
   [
     ReturnType<
-      typeof QueueHyperlink.store<
+      typeof WorkPool.store<
         typeof MailQueue,
         { readonly campaignAudit: typeof campaignAuditSchema }
       >

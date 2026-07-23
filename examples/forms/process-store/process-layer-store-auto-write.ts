@@ -1,7 +1,7 @@
 /**
  * @module examples/forms/process-store/process-layer-store-auto-write
  *
- * Process.layer soft-defaults in-memory Storage (R fulfilled). Provide AppStore into the
+ * Daemon.layer soft-defaults in-memory Storage (R fulfilled). Provide AppStore into the
  * layer to override Soft capture (journals + Logs). One AppStore — do not also wrap the
  * program in a second `DemoStore.layerMemory` (split journals).
  * Run: `pnpm run example:process-layer-store-auto-write`
@@ -9,22 +9,22 @@
 
 import { Duration, Effect, Layer, Option, Schema } from "effect";
 import { TestClock } from "effect/testing";
-import * as Process from "../../../src/Process";
+import * as Daemon from "../../../src/Daemon";
 import * as Store from "../../../src/Store";
 import * as Polling from "../../../src/Polling";
-import { builtInProcessStoreContract } from "../../../src/internal/store/processStoreSpec";
+import { builtInDaemonStoreContract } from "../../../src/internal/store/processStoreSpec";
 import { runNodeProgramOrExit } from "../../shared/demo-harness";
 
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 
-class PricesProcess extends Process.Tag<PricesProcess>()("examples/Prices", { success: Price }) {}
+class PricesDaemon extends Daemon.Tag<PricesDaemon>()("examples/Prices", { success: Price }) {}
 
 class DemoStore extends Store.Service<DemoStore>("@examples/DemoStore")(
-  Store.register(PricesProcess, builtInProcessStoreContract(PricesProcess)),
+  Store.register(PricesDaemon, builtInDaemonStoreContract(PricesDaemon)),
 ) {}
 
 const program = Effect.gen(function* () {
-  yield* PricesProcess;
+  yield* PricesDaemon;
   yield* TestClock.adjust(Duration.millis(200));
 
   const store = yield* DemoStore;
@@ -46,7 +46,7 @@ const program = Effect.gen(function* () {
 }).pipe(
   Effect.provide(
     Layer.mergeAll(
-      Process.layer(PricesProcess, {
+      Daemon.layer(PricesDaemon, {
         effect: Effect.succeed({ symbol: "BTC", usd: 100_000 }),
         polling: Polling.spaced(Duration.millis(50)),
       }).pipe(Layer.provideMerge(DemoStore.layerMemory)),

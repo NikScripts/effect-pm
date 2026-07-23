@@ -1,5 +1,5 @@
 /**
- * Process live `events` stream — Queue-aligned (persist == stream).
+ * Daemon live `events` stream — Queue-aligned (persist == stream).
  */
 import { describe, expect, it } from "@effect/vitest";
 import {
@@ -15,46 +15,46 @@ import {
   Schema,
   Stream,
 } from "effect";
-import * as Process from "../src/Process";
+import * as Daemon from "../src/Daemon";
 import * as Store from "../src/Store";
-import { builtInProcessStoreContract } from "../src/internal/store/processStoreSpec";
+import { builtInDaemonStoreContract } from "../src/internal/store/processStoreSpec";
 import { flattenHyperlinkSpec } from "../src/Hyperlink";
 import type { AnyMethod } from "../src/Hyperlink";
 
 const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
 
 /** Disarmed so we can subscribe before emitting, then drive with `run`. */
-class LiveEventsProc extends Process.Tag<LiveEventsProc>()(
+class LiveEventsProc extends Daemon.Tag<LiveEventsProc>()(
   "test/process-events/Live",
-).pipe(Process.schedule([])) {}
+).pipe(Daemon.schedule([])) {}
 
-class TypedFailProc extends Process.Tag<TypedFailProc>()("test/process-events/TypedFail", {
+class TypedFailProc extends Daemon.Tag<TypedFailProc>()("test/process-events/TypedFail", {
   error: FetchErr,
-}).pipe(Process.schedule([])) {}
+}).pipe(Daemon.schedule([])) {}
 
-class StringFailProc extends Process.Tag<StringFailProc>()(
+class StringFailProc extends Daemon.Tag<StringFailProc>()(
   "test/process-events/StringFail",
-).pipe(Process.schedule([])) {}
+).pipe(Daemon.schedule([])) {}
 
-class InterruptProc extends Process.Tag<InterruptProc>()(
+class InterruptProc extends Daemon.Tag<InterruptProc>()(
   "test/process-events/Interrupt",
-).pipe(Process.schedule([])) {}
+).pipe(Daemon.schedule([])) {}
 
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 
-class SuccessEventsProc extends Process.Tag<SuccessEventsProc>()(
+class SuccessEventsProc extends Daemon.Tag<SuccessEventsProc>()(
   "test/process-events/Success",
   { success: Price },
-).pipe(Process.schedule([])) {}
+).pipe(Daemon.schedule([])) {}
 
 class Boom extends Data.TaggedError("Boom")<{ readonly code: number }> {}
 
-class EventsStore extends Store.Service<EventsStore>("@test/ProcessEventsStore")(
-  Store.register(LiveEventsProc, builtInProcessStoreContract(LiveEventsProc)),
-  Store.register(TypedFailProc, builtInProcessStoreContract(TypedFailProc)),
-  Store.register(StringFailProc, builtInProcessStoreContract(StringFailProc)),
-  Store.register(InterruptProc, builtInProcessStoreContract(InterruptProc)),
-  Store.register(SuccessEventsProc, builtInProcessStoreContract(SuccessEventsProc)),
+class EventsStore extends Store.Service<EventsStore>("@test/DaemonEventsStore")(
+  Store.register(LiveEventsProc, builtInDaemonStoreContract(LiveEventsProc)),
+  Store.register(TypedFailProc, builtInDaemonStoreContract(TypedFailProc)),
+  Store.register(StringFailProc, builtInDaemonStoreContract(StringFailProc)),
+  Store.register(InterruptProc, builtInDaemonStoreContract(InterruptProc)),
+  Store.register(SuccessEventsProc, builtInDaemonStoreContract(SuccessEventsProc)),
 ) {}
 
 const withStore = <A, E, R>(layer: Layer.Layer<A, E, R>) =>
@@ -65,15 +65,15 @@ const asRpcMethod = (m: unknown): AnyMethod | undefined =>
     ? (m as AnyMethod)
     : undefined;
 
-describe("Process.events — wire", () => {
-  it("buildProcessSpec / processSpec expose events as a stream method", () => {
-    const flat = flattenHyperlinkSpec(Process.processSpec);
+describe("Daemon.events — wire", () => {
+  it("buildDaemonSpec / processSpec expose events as a stream method", () => {
+    const flat = flattenHyperlinkSpec(Daemon.processSpec);
     const events = asRpcMethod(flat.events);
     expect(events?.stream).toBe(true);
   });
 });
 
-describe("Process.events — live stream", () => {
+describe("Daemon.events — live stream", () => {
   it.live("emits Started → Completed for a successful manual run", () =>
     Effect.gen(function* () {
       const proc = yield* LiveEventsProc;
@@ -85,7 +85,7 @@ describe("Process.events — live stream", () => {
       const tags = Array.from(yield* Fiber.join(collected)).map((e) => e._tag);
       expect(tags).toEqual(["Started", "Completed"]);
     }).pipe(
-      Effect.provide(Process.layerMemory(LiveEventsProc, { effect: Effect.void })),
+      Effect.provide(Daemon.layerMemory(LiveEventsProc, { effect: Effect.void })),
       Effect.scoped,
     ),
   );
@@ -109,7 +109,7 @@ describe("Process.events — live stream", () => {
       }
     }).pipe(
       Effect.provide(
-        Process.layerMemory(StringFailProc, {
+        Daemon.layerMemory(StringFailProc, {
           effect: Effect.fail(new Boom({ code: 7 })),
         }),
       ),
@@ -142,7 +142,7 @@ describe("Process.events — live stream", () => {
       });
     }).pipe(
       Effect.provide(
-        Process.layerMemory(TypedFailProc, {
+        Daemon.layerMemory(TypedFailProc, {
           effect: Effect.fail({ _tag: "FetchError" as const, status: 503 }),
         }),
       ),
@@ -168,7 +168,7 @@ describe("Process.events — live stream", () => {
       });
     }).pipe(
       Effect.provide(
-        Process.layerMemory(SuccessEventsProc, {
+        Daemon.layerMemory(SuccessEventsProc, {
           effect: Effect.succeed({ symbol: "AAPL", usd: 42 }),
         }),
       ),
@@ -192,7 +192,7 @@ describe("Process.events — live stream", () => {
       expect(live).toEqual(durable);
     }).pipe(
       Effect.provide(
-        withStore(Process.layer(LiveEventsProc, { effect: Effect.void })),
+        withStore(Daemon.layer(LiveEventsProc, { effect: Effect.void })),
       ),
       Effect.scoped,
     ),
@@ -203,7 +203,7 @@ describe("Process.events — live stream", () => {
       const entered = yield* Deferred.make<void, never>();
       const hold = yield* Deferred.make<void, never>();
       const live = withStore(
-        Process.layer(InterruptProc, {
+        Daemon.layer(InterruptProc, {
           effect: Effect.gen(function* () {
             yield* Deferred.succeed(entered, void 0);
             yield* Deferred.await(hold);
@@ -230,12 +230,12 @@ describe("Process.events — live stream", () => {
   );
 });
 
-describe("Process.make — events without store", () => {
+describe("Daemon.make — events without store", () => {
   it.live("publishes lifecycle on the engine handle even without a store", () =>
     Effect.gen(function* () {
-      const handle = Process.make("test/process-events/direct", {
+      const handle = Daemon.make("test/process-events/direct", {
         effect: Effect.void,
-        schedule: Process.scheduleInMemory(),
+        schedule: Daemon.scheduleInMemory(),
       });
       const collected = yield* Effect.forkChild(
         Stream.runCollect(Stream.take(handle.events, 2)),

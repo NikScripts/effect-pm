@@ -9,7 +9,7 @@ Built entirely on **Effect 4's native reactive layer** (`effect/unstable/reactiv
 pnpm run example:queue-widget   # → http://localhost:5174
 ```
 
-A **real `QueueHyperlink` runs client-side** (no server, no RPC, no mock) — "Effect
+A **real `WorkPool` runs client-side** (no server, no RPC, no mock) — "Effect
 PM runs on the client." Everything the queue service exposes is driven from the
 browser:
 

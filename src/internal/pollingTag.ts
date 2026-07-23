@@ -10,7 +10,7 @@
 import { Context, Duration, Effect, Option } from "effect";
 
 /**
- * Cadence policy used by the Process supervisor between ticks while armed.
+ * Cadence policy used by the Daemon supervisor between ticks while armed.
  * Implement this and wrap it with `Polling.layer` for a custom cadence.
  *
  * @category models
@@ -29,7 +29,7 @@ export interface PollingService {
   readonly peekCadence: Effect.Effect<Option.Option<Duration.Duration>>;
 }
 
-/** Context tag for the Polling service — provided by the Process supervisor. @internal */
+/** Context tag for the Polling service — provided by the Daemon supervisor. @internal */
 export class PollingTag extends Context.Service<PollingTag, PollingService>()(
   "hyperlink-ts/internal/pollingTag",
 ) {}

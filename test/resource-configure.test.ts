@@ -1,9 +1,9 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Clock, Duration, Effect, Layer, Ref } from "effect";
-import * as Process from "../src/Process";
+import * as Daemon from "../src/Daemon";
 import { foldConfig } from "../src/HyperlinkConfigure";
-import * as QueueHyperlink from "../src/QueueHyperlink";
-import type { EffectContext } from "../src/QueueHyperlink";
+import * as WorkPool from "../src/WorkPool";
+import type { EffectContext } from "../src/WorkPool";
 
 describe("HyperlinkConfigure", () => {
   it("foldConfig stacks partial patches and function updaters", () => {
@@ -29,11 +29,11 @@ describe("HyperlinkConfigure", () => {
     expect(effective.effect(3)).toBe(8);
   });
 
-  it.effect("QueueHyperlink.Service folds configure layer before runtime", () =>
+  it.effect("WorkPool.Service folds configure layer before runtime", () =>
     Effect.gen(function* () {
       const handled = yield* Ref.make(0);
 
-      class TestQueue extends QueueHyperlink.Service<TestQueue, number, never>()(
+      class TestQueue extends WorkPool.Service<TestQueue, number, never>()(
         "@test/ConfigureQueue",
         {
           effect: (_item: number, _ctx: EffectContext<number, never, never>) =>
@@ -64,11 +64,11 @@ describe("HyperlinkConfigure", () => {
     }),
   );
 
-  it.live("QueueHyperlink.Service configure can patch rateLimit", () =>
+  it.live("WorkPool.Service configure can patch rateLimit", () =>
     Effect.gen(function* () {
       const starts = yield* Ref.make(0);
 
-      class RateLimitedQueue extends QueueHyperlink.Service<RateLimitedQueue, number, never>()(
+      class RateLimitedQueue extends WorkPool.Service<RateLimitedQueue, number, never>()(
         "@test/ConfigureRateLimitQueue",
         {
           effect: () => Ref.update(starts, (n) => n + 1),
@@ -106,14 +106,14 @@ describe("HyperlinkConfigure", () => {
     }),
   );
 
-  it.effect("Process.Service buildConfiguredProcess applies configure patches", () =>
+  it.effect("Daemon.Service buildConfiguredDaemon applies configure patches", () =>
     Effect.scoped(
       Effect.gen(function* () {
-        class Worker extends Process.Service<Worker>()("@test/ConfigureProcess", {
+        class Worker extends Daemon.Service<Worker>()("@test/ConfigureDaemon", {
           effect: Effect.succeed("default"),
         }) {}
 
-        const process = yield* Worker.buildConfiguredProcess.pipe(
+        const process = yield* Worker.buildConfiguredDaemon.pipe(
           Effect.provide(
             Worker.configure((spec) => ({
               ...spec,
@@ -122,7 +122,7 @@ describe("HyperlinkConfigure", () => {
           ),
         );
 
-        expect(process.name).toBe("@test/ConfigureProcess");
+        expect(process.name).toBe("@test/ConfigureDaemon");
         expect(Worker.defaultSpec.effect).not.toBe(process.effect);
       }),
     ),

@@ -22,8 +22,8 @@ import {
   type RunTag,
   type NodeBundle,
   type NodeRef,
-  type ProcessBundle,
-  type ProcessTag,
+  type DaemonBundle,
+  type DaemonTag,
   type QueueBundle,
   type QueueTag,
   apiBundle,
@@ -80,7 +80,7 @@ export const useRunBundle = (tag: RunTag): RunBundle =>
   runBundle(useRuntime(), tag);
 
 /** Atom bundle for a process tag, memoized per runtime+tag. @public */
-export const useProcessBundle = (tag: ProcessTag): ProcessBundle => processBundle(useRuntime(), tag);
+export const useDaemonBundle = (tag: DaemonTag): DaemonBundle => processBundle(useRuntime(), tag);
 
 /** Atom bundle for an API-metrics tag, memoized per runtime+tag. @public */
 export const useApiBundle = (tag: ApiTag): ApiBundle => apiBundle(useRuntime(), tag);

@@ -1,9 +1,8 @@
 import { Schema } from "effect";
 import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
-import * as QueueHyperlink from "../src/QueueHyperlink";
-import * as Process from "../src/Process";
-import * as CustomQueueHyperlink from "../src/CustomQueueHyperlink";
+import * as WorkPool from "../src/WorkPool";
+import * as Daemon from "../src/Daemon";
 import * as ApiMetrics from "../src/ApiMetrics";
 import * as FleetHealth from "../src/FleetHealth";
 import * as Telemetry from "../src/Telemetry";
@@ -13,9 +12,9 @@ import * as Telemetry from "../src/Telemetry";
 // `Hyperlink.kind` (`…/Hyperlink`), so nothing is ever kind-less.
 const Item = Schema.Struct({ n: Schema.Number });
 
-class Q extends QueueHyperlink.Tag<Q>()("kindtest/Q", { payload: Item }) {}
-class P extends Process.Tag<P>()("kindtest/P") {}
-class C extends CustomQueueHyperlink.Tag<C>()("kindtest/C", { payload: Item, levelCount: 3 }) {}
+class Q extends WorkPool.Tag<Q>()("kindtest/Q", { payload: Item }) {}
+class P extends Daemon.Tag<P>()("kindtest/P") {}
+class C extends WorkPool.priority<C>()("kindtest/C", { payload: Item, laneCount: 3 }) {}
 class M extends ApiMetrics.Tag<M>()("kindtest/M") {}
 class T extends Telemetry.Tag<T>()() {}
 class F extends FleetHealth.Tag<F>()() {}
@@ -24,9 +23,9 @@ class Bare extends Hyperlink.Tag<Bare>()("kindtest/Bare", {
 }) {}
 
 it("each contract stamps its kind; a bare Hyperlink.Tag defaults to Hyperlink.kind", () => {
-  expect(Hyperlink.kindOf(Q)).toBe(QueueHyperlink.kind);
-  expect(Hyperlink.kindOf(P)).toBe(Process.kind);
-  expect(Hyperlink.kindOf(C)).toBe(CustomQueueHyperlink.kind);
+  expect(Hyperlink.kindOf(Q)).toBe(WorkPool.kind);
+  expect(Hyperlink.kindOf(P)).toBe(Daemon.kind);
+  expect(Hyperlink.kindOf(C)).toBe(WorkPool.priorityKind);
   expect(Hyperlink.kindOf(M)).toBe(ApiMetrics.kind);
   expect(Hyperlink.kindOf(T)).toBe(Telemetry.kind);
   expect(Hyperlink.kindOf(F)).toBe(FleetHealth.kind);

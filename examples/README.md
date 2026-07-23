@@ -30,7 +30,7 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | **Dashboard / TUI** | [`resource-tui/`](./resource-tui/) — terminal dashboards over the resource tags |
 | **Queues** | [`forms/queue/queue-hyperlink-priority-retry.ts`](./forms/queue/queue-hyperlink-priority-retry.ts) → [`forms/queue/custom-queue-hyperlink-n-level.ts`](./forms/queue/custom-queue-hyperlink-n-level.ts) |
 | **Schedule controls** | `pnpm run example:schedule-control-basics` → `example:schedule-control-surfaces` → [`scenarios/schedule-sync-from-external-db.ts`](./scenarios/schedule-sync-from-external-db.ts) |
-| **Process runtime** | `pnpm run example:process-supervisor-patterns` |
+| **Daemon runtime** | `pnpm run example:process-supervisor-patterns` |
 | **Polling patterns** | `pnpm run example:sports-polling-accelerating` |
 | **Hyperlink gating** | [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) → [`run-resource-store-readback.ts`](./forms/resource/run-resource-store-readback.ts) → [`run-resource-runtime-observer.ts`](./forms/resource/run-resource-runtime-observer.ts) → http-client → http-api forms |
 | **Fleet glass** | `pnpm run example:telemetry-fleet-glass` → `example:fleet-health-glass` → `example:shardmap-sessions` |
@@ -45,15 +45,15 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 
 | File | Teaches |
 |------|---------|
-| [`forms/queue/queue-hyperlink-priority-retry.ts`](./forms/queue/queue-hyperlink-priority-retry.ts) | `QueueHyperlink.Service`, priority, dedup key, handler retry |
+| [`forms/queue/queue-hyperlink-priority-retry.ts`](./forms/queue/queue-hyperlink-priority-retry.ts) | `WorkPool.Service`, priority, dedup key, handler retry |
 | [`forms/queue/custom-queue-hyperlink-n-level.ts`](./forms/queue/custom-queue-hyperlink-n-level.ts) | `CustomQueueHyperlink.Tag`, named lanes, `add(item, level?)`, weighted take |
 
 ### Hyperlink
 
 | File | Teaches |
 |------|---------|
-| [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) | `RunHyperlink.Service` unit/input forms + concurrency + `Store.layerDefaultMemory` |
-| [`forms/resource/run-resource-store-readback.ts`](./forms/resource/run-resource-store-readback.ts) | Engine auto-write + `RunHyperlink.store` + `Store.Service.at` readback |
+| [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) | `Gate.Service` unit/input forms + concurrency + `Store.layerDefaultMemory` |
+| [`forms/resource/run-resource-store-readback.ts`](./forms/resource/run-resource-store-readback.ts) | Engine auto-write + `Gate.store` + `Store.Service.at` readback |
 | [`forms/resource/run-resource-runtime-observer.ts`](./forms/resource/run-resource-runtime-observer.ts) | Observable handle (`status`, counters) via `Subscribable` |
 | [`forms/resource/http-client-run-gate.ts`](./forms/resource/http-client-run-gate.ts) | `HttpClientRunGate.transformClient` |
 | [`forms/resource/http-api-resource-tag-layer.ts`](./forms/resource/http-api-resource-tag-layer.ts) | `HttpApiHyperlink.Service` + `ApiMetrics.Tag` |
@@ -77,30 +77,30 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | [`forms/resource/node-verify-connection.ts`](./forms/resource/node-verify-connection.ts) | `Hyperlink.verifyConnection` tier-1 + `{ deep: true, resource }` |
 | [`forms/resource/shardmap-sessions.ts`](./forms/resource/shardmap-sessions.ts) | `ShardMap` routed ops across distributed nodes |
 
-### Process store (EventJournal)
+### Daemon store (EventJournal)
 
 | File | Teaches |
 |------|---------|
-| [`forms/process-store/process-layer-store-auto-write.ts`](./forms/process-store/process-layer-store-auto-write.ts) | **`Process.layer`** + **`Process.store(tag)`** — auto-append on terminal runs, app store override |
+| [`forms/process-store/process-layer-store-auto-write.ts`](./forms/process-store/process-layer-store-auto-write.ts) | **`Daemon.layer`** + **`Daemon.store(tag)`** — auto-append on terminal runs, app store override |
 | [`forms/process-store/process-layer-typed-error-store.ts`](./forms/process-store/process-layer-typed-error-store.ts) | Tag `{ error }` → typed `Failed.error` in execution history |
 
-Start here for execution history. **`Process.make`** does not auto-append.
+Start here for execution history. **`Daemon.make`** does not auto-append.
 
 Storage:
 
-- **`Store.Service` + `Process.store(tag)`** — execution events (`Started` / `Completed` / `Failed` / `Interrupted`) on EventJournal; auto-write on **`Process.layer`** only.
+- **`Store.Service` + `Daemon.store(tag)`** — execution events (`Started` / `Completed` / `Failed` / `Interrupted`) on EventJournal; auto-write on **`Daemon.layer`** only.
 - **Durable logs** — `Node.logs` / toolkit `*.store` on a `Store.Service`; `hyperlink-ts/Logs` handles capture/relay + `byNode` / `byHyperlink`.
 
 ### Schedule
 
 | File | Teaches |
 |------|---------|
-| [`forms/schedule/schedule-at.ts`](./forms/schedule/schedule-at.ts) | `ProcessSchedule.at` (one-shot) |
-| [`forms/schedule/schedule-window.ts`](./forms/schedule/schedule-window.ts) | `ProcessSchedule.window` (bounded) |
-| [`forms/schedule/schedule-define.ts`](./forms/schedule/schedule-define.ts) | `ProcessSchedule.define` composition |
+| [`forms/schedule/schedule-at.ts`](./forms/schedule/schedule-at.ts) | `DaemonSchedule.at` (one-shot) |
+| [`forms/schedule/schedule-window.ts`](./forms/schedule/schedule-window.ts) | `DaemonSchedule.window` (bounded) |
+| [`forms/schedule/schedule-define.ts`](./forms/schedule/schedule-define.ts) | `DaemonSchedule.define` composition |
 | [`forms/schedule/schedule-controls-initializer.ts`](./forms/schedule/schedule-controls-initializer.ts) | Controls from `schedule` initializer |
-| [`forms/schedule/schedule-controls-in-effect.ts`](./forms/schedule/schedule-controls-in-effect.ts) | `Process.scheduleControls` in tick body |
-| [`forms/schedule/schedule-controls-external-fiber.ts`](./forms/schedule/schedule-controls-external-fiber.ts) | External fiber via `ProcessSchedule` service |
+| [`forms/schedule/schedule-controls-in-effect.ts`](./forms/schedule/schedule-controls-in-effect.ts) | `Daemon.scheduleControls` in tick body |
+| [`forms/schedule/schedule-controls-external-fiber.ts`](./forms/schedule/schedule-controls-external-fiber.ts) | External fiber via `DaemonSchedule` service |
 
 ### Polling
 
@@ -134,8 +134,8 @@ Storage:
 | `pnpm run example:schedule-control-surfaces` | All three schedule control forms |
 | `pnpm run example:schedule-control-basics` | `at` + `window` + `define` forms |
 | `pnpm run example:schedule-control-db-sync` | DB sync scenario |
-| `pnpm run example:run-resource` | RunHyperlink concurrency form |
-| `pnpm run example:run-resource-store-readback` | RunHyperlink store auto-write + readback |
+| `pnpm run example:run-resource` | Gate concurrency form |
+| `pnpm run example:run-resource-store-readback` | Gate store auto-write + readback |
 | `pnpm run example:http-client-run-gate` | HttpClient gate form |
 | `pnpm run example:http-api-resource` | HttpApiHyperlink form |
 | `pnpm run example:http-api-resource-layer-effect` | `layerEffect` form |

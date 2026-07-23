@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { DateTime, Duration, Effect, Ref, Schema, Stream } from "effect";
-import * as QueueHyperlink from "../src/QueueHyperlink";
+import * as WorkPool from "../src/WorkPool";
 import * as Store from "../src/Store";
 
 // Phase 4 — the queue Tag's `success` schema slot drives the worker's `effect` return type, and that
@@ -10,26 +10,26 @@ import * as Store from "../src/Store";
 const jobSchema = Schema.Struct({ id: Schema.String });
 
 // ── queue WITH a success schema ──────────────────────────────────────────────
-class Doubler extends QueueHyperlink.Tag<Doubler>()("@test/Doubler", {
+class Doubler extends WorkPool.Tag<Doubler>()("@test/Doubler", {
   payload: jobSchema,
   success: Schema.Number,
 }) {}
 
 // The worker returns the typed success value (`Effect<number, …>`), driven by `success: Schema.Number`.
-const doublerLayer = QueueHyperlink.layerMemory(Doubler, {
+const doublerLayer = WorkPool.layerMemory(Doubler, {
   effect: (job) => Effect.succeed(job.id.length * 2),
   concurrency: 1,
 });
 
 // ── queue WITHOUT a success schema (historic void channel) ───────────────────
-class Sink extends QueueHyperlink.Tag<Sink>()("@test/Sink", { payload: jobSchema }) {}
-const sinkLayer = QueueHyperlink.layerMemory(Sink, {
+class Sink extends WorkPool.Tag<Sink>()("@test/Sink", { payload: jobSchema }) {}
+const sinkLayer = WorkPool.layerMemory(Sink, {
   effect: (_job) => Effect.void,
   concurrency: 1,
 });
 
 // ── store round-trip for the success value ───────────────────────────────────
-const doublerStore = QueueHyperlink.store(Doubler);
+const doublerStore = WorkPool.store(Doubler);
 class DoublerStore extends Store.Service<DoublerStore>("@test/DoublerStore")(
   doublerStore,
 ) {}
@@ -43,7 +43,7 @@ const entry = (id: string) => ({
   timestamps: { enqueuedAt: DateTime.makeUnsafe(t0) },
 });
 
-describe("QueueHyperlink — success-value channel", () => {
+describe("WorkPool — success-value channel", () => {
   it.live(
     "a success-schema worker records its typed value on Completed.success",
     () =>

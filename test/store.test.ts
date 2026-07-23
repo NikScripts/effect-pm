@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Cause, Effect, Schema } from "effect";
-import * as QueueHyperlink from "../src/QueueHyperlink";
-import * as RunHyperlink from "../src/RunHyperlink";
+import * as WorkPool from "../src/WorkPool";
+import * as Gate from "../src/Gate";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Store from "../src/Store";
 
@@ -35,15 +35,15 @@ class Mail extends Hyperlink.Tag<Mail>()("@app/Mail", {
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
-class MailQueue extends QueueHyperlink.Tag<MailQueue>()("@app/MailQueue", { payload: jobSchema }) {}
+class MailQueue extends WorkPool.Tag<MailQueue>()("@app/MailQueue", { payload: jobSchema }) {}
 
-class FetchGate extends RunHyperlink.Tag<FetchGate>()("@app/FetchGate", { payload: Schema.String, success: Schema.Number }) {}
+class FetchGate extends Gate.Tag<FetchGate>()("@app/FetchGate", { payload: Schema.String, success: Schema.Number }) {}
 
-const fetchGateRegistration = RunHyperlink.store(FetchGate);
+const fetchGateRegistration = Gate.store(FetchGate);
 
 const campaignAuditSchema = Schema.Struct({ campaignId: Schema.String });
 
-const mailQueueRegistration = QueueHyperlink.store(MailQueue, {
+const mailQueueRegistration = WorkPool.store(MailQueue, {
   campaignAudit: campaignAuditSchema,
 });
 
@@ -194,7 +194,7 @@ describe("Store.Service", () => {
     }).pipe(Effect.provide(DropletStoreArray.layerMemory), Effect.scoped),
   );
 
-  it.effect("QueueHyperlink.store exposes typed emit effects + extended shapes", () =>
+  it.effect("WorkPool.store exposes typed emit effects + extended shapes", () =>
     Effect.gen(function* () {
       const store = yield* QueueStore;
       // record persists the same QueueEvent the live stream carries; events reads them back.
@@ -213,7 +213,7 @@ describe("Store.Service", () => {
     }).pipe(Effect.provide(QueueStore.layerMemory), Effect.scoped),
   );
 
-  it.effect("RunHyperlink.store exposes typed fact + stateHistory methods", () =>
+  it.effect("Gate.store exposes typed fact + stateHistory methods", () =>
     Effect.gen(function* () {
       const store = yield* RunGateStore;
       const keys = Object.keys(store);

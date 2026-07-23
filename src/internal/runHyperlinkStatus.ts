@@ -1,12 +1,12 @@
 /**
- * Pure status transitions for the RunHyperlink gate engine.
+ * Pure status transitions for the Gate gate engine.
  *
  * @module internal/runHyperlinkStatus
  * @internal
  */
 
 import type { RunGateStatus } from "./runHyperlink";
-import type { RunHyperlinkStateChangeReason } from "./store/runHyperlinkStoreSpec";
+import type { GateStateChangeReason } from "./store/runHyperlinkStoreSpec";
 
 /** Pair a counter update with the store reason emitted alongside it. @internal */
 export interface RunStatusTransition {
@@ -15,7 +15,7 @@ export interface RunStatusTransition {
     observedAt: number,
     durationMs?: number,
   ) => RunGateStatus;
-  readonly reason: RunHyperlinkStateChangeReason;
+  readonly reason: GateStateChangeReason;
 }
 
 const withObservedAt = (

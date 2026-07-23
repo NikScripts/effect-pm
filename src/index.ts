@@ -7,28 +7,28 @@
  * @remarks
  * ## What this package provides
  *
- * - **`Process`**, **`Polling`** — Build a **managed process** with a trigger-driven runtime: a
+ * - **`Daemon`**, **`Polling`** — Build a **managed process** with a trigger-driven runtime: a
  *   long-lived driver follows a schedule and spawns process instances; each instance checks its
  *   schedule and exits naturally when disarmed while `Polling` controls in-instance repeat cadence.
- *   Optional `polling` / `schedule` layers on `Process.make` are merged into `process.effect` so
+ *   Optional `polling` / `schedule` layers on `Daemon.make` are merged into `process.effect` so
  *   fork-time requirements stay accurate in TypeScript. Run windows are built with
- *   `Process.scheduleInMemory` / `scheduleDefine` (and the toolkit `Process.Schedule` resource /
- *   `Process.window` / `Process.at`).
- * - **`QueueHyperlink`** — Three-level **priority** queues with **concurrency** and optional
+ *   `Daemon.scheduleInMemory` / `scheduleDefine` (and the toolkit `Daemon.Schedule` resource /
+ *   `Daemon.window` / `Daemon.at`).
+ * - **`WorkPool`** — Three-level **priority** queues with **concurrency** and optional
  *   **`rateLimit`** (Effect `RateLimiter`); each queue is a **Context**
  *   service with a `.layer`.
  * - **`Store`** — EventJournal-backed execution / queue / run / log history; process stores via
- *   `Process.store(tag)` and `Store.Service`.
+ *   `Daemon.store(tag)` and `Store.Service`.
  * - **Toolkit (location-transparent resources)** — **`Hyperlink`** is the foundation: a tag is
  *   driven by the same `yield* Tag` code whether it runs **local or remote** (`Hyperlink.client` /
  *   `serve` / `serveRemote` / `Node` switch only the layer). Batteries-included resource kinds build
- *   on it — the toolkit process (`Process.Tag` / `Process.Schedule`, from
- *   `hyperlink-ts/Process`) and the toolkit queue (from
- *   `hyperlink-ts/QueueHyperlink`) — each with `Tag` / `layer` / `configure` / `serve` /
+ *   on it — the toolkit process (`Daemon.Tag` / `Daemon.Schedule`, from
+ *   `hyperlink-ts/Daemon`) and the toolkit queue (from
+ *   `hyperlink-ts/WorkPool`) — each with `Tag` / `layer` / `configure` / `serve` /
  *   `serveRemote`. **`Group`** organizes member tags (nestable; members may be on the same or
  *   different nodes). Contracts are introspectable via `specOf` + `methodMeta` (build generic UIs).
  *   See the live book under `docs/resources/` and `docs/guides/`.
- * - **`RunHyperlink`**, **`HttpClientRunGate`**, **`HttpApiHyperlink`** —
+ * - **`Gate`**, **`HttpClientRunGate`**, **`Gate.httpApiClient`** —
  *   Optional building blocks for **gated** HTTP and reusable resource patterns.
  * - **Persistence** — `DurableQueueStore` (durable priority queue) + `HistoryStore`
  *   (metrics/logs history); in-memory or SQLite (`hyperlink-ts/storage/sqlite`).
@@ -49,12 +49,12 @@
  *
  * ## Dedicated subpaths
  *
- * Service/resource subpaths mirror namespaces: **`hyperlink-ts/Process`**,
- * **`hyperlink-ts/QueueHyperlink`**, **`hyperlink-ts/HyperlinkConfigure`**,
+ * Service/resource subpaths mirror namespaces: **`hyperlink-ts/Daemon`**,
+ * **`hyperlink-ts/WorkPool`**, **`hyperlink-ts/HyperlinkConfigure`**,
  * **`hyperlink-ts/Store`**, and **`hyperlink-ts/Logs`**.
  *
  * Toolkit subpaths: **`hyperlink-ts/Hyperlink`** (foundation + `specOf` / `methodMeta`),
- * **`hyperlink-ts/QueueHyperlink`** (toolkit queue),
+ * **`hyperlink-ts/WorkPool`** (toolkit queue),
  * **`hyperlink-ts/MultiNode`** (multi-instance gather/fold),
  * **`hyperlink-ts/Group`**,
  * **`hyperlink-ts/HistoryStore`**,
@@ -87,26 +87,25 @@
 // hyperlink-ts - Main exports (see @packageDocumentation above)
 // ============================================================================
 
-// The single unified `Process` namespace. `export * as` (module namespace, Effect-style) so member
-// access tree-shakes: `Process.Tag` pulls zero engine code; `make` / `layer` / `serve` pull the
-// engine only when used. Engine + Hyperlink toolkit are both members (`Process.make`, `Process.Tag`, …).
-export * as Process from "./Process";
-export { ProcessMakeInvalidLayerArgument } from "./Process";
-export type { ProcessSnapshot } from "./Process";
+// The single unified `Daemon` namespace. `export * as` (module namespace, Effect-style) so member
+// access tree-shakes: `Daemon.Tag` pulls zero engine code; `make` / `layer` / `serve` pull the
+// engine only when used. Engine + Hyperlink toolkit are both members (`Daemon.make`, `Daemon.Tag`, …).
+export * as Daemon from "./Daemon";
+export { DaemonMakeInvalidLayerArgument } from "./Daemon";
+export type { DaemonSnapshot } from "./Daemon";
 export * as Polling from "./Polling";
-// The single unified QueueHyperlink namespace. `export * as` (module namespace, Effect-style) so
-// member access tree-shakes: `QueueHyperlink.Tag` pulls zero engine code; `make`/`layer`/`serve`
+// The single unified WorkPool namespace. `export * as` (module namespace, Effect-style) so
+// member access tree-shakes: `WorkPool.Tag` pulls zero engine code; `make`/`layer`/`serve`
 // pull the engine only when used.
-export * as QueueHyperlink from "./QueueHyperlink";
-export * as RunHyperlink from "./RunHyperlink";
+export * as WorkPool from "./WorkPool";
+export * as Gate from "./Gate";
 export * as HttpClientRunGate from "./HttpClientRunGate";
 export {
   acceptJson,
   instrumentEndpoints,
-  type HttpApiHyperlinkConfig,
-  type HttpApiHyperlinkLayerEffectConfig,
-} from "./HttpApiHyperlink";
-export * as HttpApiHyperlink from "./HttpApiHyperlink";
+  type HttpApiClientConfig,
+  type HttpApiClientLayerEffectConfig,
+} from "./Gate";
 export * as ApiMetrics from "./ApiMetrics";
 export {
   apiUsageEndpointMetrics,
@@ -194,8 +193,8 @@ export type {
 } from "./Node";
 
 /**
- * Layer-composed configure patches for {@link Process.Service}, {@link QueueHyperlink.Service},
- * and {@link RunHyperlink.Service}.
+ * Layer-composed configure patches for {@link Daemon.Service}, {@link WorkPool.Service},
+ * and {@link Gate.Service}.
  */
 export {
   configureLayer,
@@ -207,7 +206,7 @@ export type { ConfigPatch } from "./HyperlinkConfigure";
 
 // CLI
 
-// Process Manager
+// Daemon Manager
 export {
   encodeLogEntryNdjson,
   decodeLogEntryNdjson,
@@ -240,39 +239,37 @@ export {
   withNodeLogAnnotations,
 } from "./LogContext";
 export * as LogContext from "./LogContext";
-// Types - Process
+// Types - Daemon
 export type {
-  Process as ProcessInterface,
-  ProcessDefinition,
-  ProcessServiceDefinition,
-  ProcessMakeConfig,
-  ProcessMakeOptions,
-  ProcessSupervisorRequirements,
-  ProcessPollingInput,
-  ProcessScheduleInput,
-  ProcessScheduleLayerInput,
-  ProcessMake,
-  ProcessServiceBuilder,
-  ProcessServiceFactory,
-} from "./Process";
+  Daemon as DaemonInterface,
+  DaemonDefinition,
+  DaemonServiceDefinition,
+  DaemonMakeConfig,
+  DaemonMakeOptions,
+  DaemonSupervisorRequirements,
+  DaemonPollingInput,
+  DaemonScheduleInput,
+  DaemonScheduleLayerInput,
+  DaemonMake,
+  DaemonServiceBuilder,
+  DaemonServiceFactory,
+} from "./Daemon";
 
 // Types - Polling
 
-// Types - QueueHyperlink
-export * as CustomQueueHyperlink from "./CustomQueueHyperlink";
-
+// Types - WorkPool (the leveled queue folded into WorkPool.priority)
 export type {
   CustomQueueTagConfig,
-} from "./CustomQueueHyperlink";
+} from "./WorkPool";
 
 export {
   customQueueControlSpec,
   customQueueEntry,
-  customQueueLevel,
+  customQueueLane,
   customQueueSizes,
   customQueueSpec,
   customQueueStatus,
-} from "./CustomQueueHyperlink";
+} from "./WorkPool";
 
 export {
   QueueItemCodecDescriptorSchema,
@@ -285,27 +282,27 @@ export {
   QueueMissingItemSchemaError,
   QueueItemEncodingError,
   queueRateLimiterLayer,
-} from "./QueueHyperlink";
+} from "./WorkPool";
 
-// Types - RunHyperlink
+// Types - Gate
 export type {
   RunGateHandle,
   RunGateStatus,
-  RunHyperlinkConfig,
-  RunHyperlinkHandle,
-  RunHyperlinkLayerConfig,
-  RunHyperlinkLayerEffect,
-  RunHyperlinkRunner,
-  RunHyperlinkRunnerConfig,
-  RunHyperlinkServiceConfig,
-  RunHyperlinkServiceDefinition,
-  RunHyperlinkServiceEffect,
-  RunHyperlinkStaticRun,
-  RunHyperlinkTagDefinition,
-  RunHyperlinkTagSchemas,
-  RunHyperlinkWireSchemas,
+  GateConfig,
+  GateHandle,
+  GateLayerConfig,
+  GateLayerEffect,
+  GateRunner,
+  GateRunnerConfig,
+  GateServiceConfig,
+  GateServiceDefinition,
+  GateServiceEffect,
+  GateStaticRun,
+  GateTagDefinition,
+  GateTagSchemas,
+  GateWireSchemas,
   RunInstanceSpec,
-} from "./RunHyperlink";
+} from "./Gate";
 export {
   runGateStatus,
   runSpec,
@@ -313,6 +310,6 @@ export {
   layer as runHyperlinkLayer,
   serve as runHyperlinkServe,
   serveRemote as runHyperlinkServeRemote,
-} from "./RunHyperlink";
+} from "./Gate";
 
 // Types - Control Service

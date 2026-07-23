@@ -27,7 +27,7 @@ const peerOk = {
   local: Effect.succeed(
     FleetHealth.LocalHealth.make({
       status: "ok",
-      resources: [{ key: "app/Jobs", kind: "hyperlink-ts/QueueHyperlink", ready: true }],
+      resources: [{ key: "app/Jobs", kind: "hyperlink-ts/WorkPool", ready: true }],
     }),
   ),
 };

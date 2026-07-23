@@ -2,7 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Logger } from "effect";
 import { Storage, type StorageApi } from "../src/Store";
 import { StoreWriteError } from "../src/internal/store/errors";
-import { makeRunHyperlinkHandleEffect } from "../src/internal/runHyperlink";
+import { makeGateHandleEffect } from "../src/internal/runHyperlink";
 
 const scopeKey = "@test/failing-store";
 
@@ -21,7 +21,7 @@ const failingBridge = {
   changes: () => Effect.die(new Error("unused in store tests")),
 } as unknown as StorageApi;
 
-describe("makeRunHyperlinkHandleEffect store writes", () => {
+describe("makeGateHandleEffect store writes", () => {
   it.effect("swallows StoreWriteError via Store.catchWriteErrors", () => {
     const captured: Array<string> = [];
     const captureLogger = Logger.make<unknown, void>(({ message }) => {
@@ -29,7 +29,7 @@ describe("makeRunHyperlinkHandleEffect store writes", () => {
     });
 
     return Effect.gen(function* () {
-      const handle = yield* makeRunHyperlinkHandleEffect<void, void, never>({
+      const handle = yield* makeGateHandleEffect<void, void, never>({
         name: scopeKey,
         scopeKey,
         effect: () => Effect.void,

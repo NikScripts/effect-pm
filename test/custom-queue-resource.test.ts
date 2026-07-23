@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Fiber, Ref, Stream } from "effect";
-import * as CustomQueueHyperlink from "../src/CustomQueueHyperlink";
+import * as WorkPool from "../src/WorkPool";
 
 const waitUntilCompleted = (
   queue: { readonly completed: Effect.Effect<number> },
@@ -13,13 +13,13 @@ const waitUntilCompleted = (
     }
   });
 
-describe("CustomQueueHyperlink.make", () => {
+describe("WorkPool.makePriority", () => {
   it.live("strict-descending takes highest level first", () =>
     Effect.gen(function* () {
       const seen = yield* Ref.make<number[]>([]);
-      const queue = yield* CustomQueueHyperlink.make({
+      const queue = yield* WorkPool.makePriority({
         name: "custom-levels",
-        levelCount: 5,
+        laneCount: 5,
         takeAlgorithm: "strict-descending",
         effect: (n: number) => Ref.update(seen, (arr) => [...arr, n]),
         concurrency: 1,
@@ -36,10 +36,10 @@ describe("CustomQueueHyperlink.make", () => {
 
   it.live("resolves named levels and reports Record sizes", () =>
     Effect.gen(function* () {
-      const queue = yield* CustomQueueHyperlink.make({
+      const queue = yield* WorkPool.makePriority({
         name: "custom-named",
-        levelCount: 4,
-        namedLevels: { urgent: 0, batch: 3 },
+        laneCount: 4,
+        namedLanes: { urgent: 0, batch: 3 },
         defaultLevel: 1,
         effect: (_item: string) => Effect.void,
         autoStart: false,
@@ -60,9 +60,9 @@ describe("CustomQueueHyperlink.make", () => {
   it.live("weighted take algorithm favors higher level indices", () =>
     Effect.gen(function* () {
       const samples = yield* Ref.make({ g1: 0, g3: 0, n: 0 });
-      const queue = yield* CustomQueueHyperlink.make({
+      const queue = yield* WorkPool.makePriority({
         name: "custom-weighted",
-        levelCount: 4,
+        laneCount: 4,
         takeAlgorithm: "weighted",
         effect: (n: number) =>
           Effect.gen(function* () {
@@ -91,9 +91,9 @@ describe("CustomQueueHyperlink.make", () => {
 
   it.live("status stream emits CustomQueueStatus snapshots", () =>
     Effect.gen(function* () {
-      const queue = yield* CustomQueueHyperlink.make({
+      const queue = yield* WorkPool.makePriority({
         name: "custom-status",
-        levelCount: 3,
+        laneCount: 3,
         effect: (_n: number) => Effect.void,
         autoStart: false,
       });

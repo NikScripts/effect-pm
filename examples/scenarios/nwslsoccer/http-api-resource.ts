@@ -1,9 +1,9 @@
 /**
- * NWSL SDP client via {@link HttpApiHyperlink.make} (same API as {@link NwslsoccerClient}, plus optional `limits`).
+ * NWSL SDP client via {@link Gate.httpApiClient} (same API as {@link NwslsoccerClient}, plus optional `limits`).
  *
  * Compare `client.ts`: that uses `Context.Tag` + `HttpApiClient.make`. Here the factory returns a
  * **tag + `layer`** from this package — concurrency / throttle apply on the transport like
- * `RunHyperlink` + `HttpClientRunGate`.
+ * `Gate` + `HttpClientRunGate`.
  *
  * Run (from repo root):
  *   `npm run example:nwsl-http-api-resource`
@@ -19,7 +19,7 @@
 
 import { FetchHttpClient } from "effect/unstable/http";
 import { ConfigProvider, Effect, Layer } from "effect";
-import { HttpApiHyperlink } from "../../../src";
+import { Gate } from "../../../src";
 import { NwslsoccerApi } from "./api";
 import { NWSL_SDP_DEFAULT_LOCALE } from "./constants";
 import { NwslSoccerApiBaseUrl } from "./config";
@@ -31,11 +31,11 @@ const DEFAULT_SEASON =
 
 const program = Effect.gen(function* () {
   const baseUrl = yield* NwslSoccerApiBaseUrl;
-  const NwslTag = HttpApiHyperlink.make(NwslsoccerApi, {
+  const NwslTag = Gate.httpApiClient(NwslsoccerApi, {
     name: "examples/nwslsoccer/NwslHttpApiHyperlink",
     client: {
       baseUrl,
-      transformClient: HttpApiHyperlink.acceptJson,
+      transformClient: Gate.acceptJson,
     },
     limits: { concurrency: 2 },
   });

@@ -41,7 +41,7 @@ import { utcDateFromMillis } from "../../src/internal/utcDate";
  * You model “we are down until **T**” with:
  *
  * - **`armed: Ref false`** — gate closed; **no** polling ticks.
- * - **`nextScheduleTransition: Ref Some(T)`** — tells **`Process`** “something about the gate
+ * - **`nextScheduleTransition: Ref Some(T)`** — tells **`Daemon`** “something about the gate
  *   might change near **T**”, so the supervisor can sleep **toward **T****
  *   instead of only a coarse fallback interval.
  *

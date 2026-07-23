@@ -2,20 +2,20 @@ import { Duration, Effect } from "effect";
 import { expect, it } from "vitest";
 import * as Logs from "../src/Logs";
 import { LogAnnotationKeys } from "../src/LogContext";
-import * as Process from "../src/Process";
+import * as Daemon from "../src/Daemon";
 import * as Store from "../src/Store";
-import { testBillingNodeKey, testSyncProcessKey } from "./fixtures/logKeys";
+import { testBillingNodeKey, testSyncDaemonKey } from "./fixtures/logKeys";
 import * as Node from "../src/Node";
 
 class BillingNode extends Node.Tag<BillingNode>()(testBillingNodeKey) {}
 
-class SyncProc extends Process.Tag<SyncProc>()(testSyncProcessKey).pipe(
-  Process.schedule([]),
+class SyncProc extends Daemon.Tag<SyncProc>()(testSyncDaemonKey).pipe(
+  Daemon.schedule([]),
 ) {}
 
 class AppStore extends Store.Service<AppStore>("@test/host-logs/Store")(
   BillingNode.logs,
-  Process.store(SyncProc),
+  Daemon.store(SyncProc),
 ) {}
 
 it("persists runtime logs bucketed by node — readable by node and by resource", () =>
@@ -27,7 +27,7 @@ it("persists runtime logs bucketed by node — readable by node and by resource"
       yield* Effect.gen(function* () {
         while (
           (yield* Logs.byNode(BillingNode)).length < 2 ||
-          !(yield* Logs.byHyperlink(testSyncProcessKey)).some(
+          !(yield* Logs.byHyperlink(testSyncDaemonKey)).some(
             (row) => row.message === "worker line",
           )
         ) {
@@ -44,7 +44,7 @@ it("persists runtime logs bucketed by node — readable by node and by resource"
       ).toBe(true);
       expect(nodeRows.some((row) => row.message.includes("node-wide line"))).toBe(true);
 
-      const workerRows = yield* Logs.byHyperlink(testSyncProcessKey);
+      const workerRows = yield* Logs.byHyperlink(testSyncDaemonKey);
       expect(workerRows.some((row) => row.message === "worker line")).toBe(true);
     }).pipe(Effect.provide(AppStore.layerMemory), Effect.scoped),
   ));

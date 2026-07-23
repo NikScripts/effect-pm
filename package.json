@@ -32,21 +32,17 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./Process": {
-      "types": "./dist/Process.d.ts",
-      "default": "./dist/Process.js"
+    "./Daemon": {
+      "types": "./dist/Daemon.d.ts",
+      "default": "./dist/Daemon.js"
     },
     "./Polling": {
       "types": "./dist/Polling.d.ts",
       "default": "./dist/Polling.js"
     },
-    "./QueueHyperlink": {
-      "types": "./dist/QueueHyperlink.d.ts",
-      "default": "./dist/QueueHyperlink.js"
-    },
-    "./CustomQueueHyperlink": {
-      "types": "./dist/CustomQueueHyperlink.d.ts",
-      "default": "./dist/CustomQueueHyperlink.js"
+    "./WorkPool": {
+      "types": "./dist/WorkPool.d.ts",
+      "default": "./dist/WorkPool.js"
     },
     "./Hyperlink": {
       "types": "./dist/Hyperlink.d.ts",
@@ -120,13 +116,9 @@
       "types": "./dist/ApiUsageSchema.d.ts",
       "default": "./dist/ApiUsageSchema.js"
     },
-    "./HttpApiHyperlink": {
-      "types": "./dist/HttpApiHyperlink.d.ts",
-      "default": "./dist/HttpApiHyperlink.js"
-    },
-    "./RunHyperlink": {
-      "types": "./dist/RunHyperlink.d.ts",
-      "default": "./dist/RunHyperlink.js"
+    "./Gate": {
+      "types": "./dist/Gate.d.ts",
+      "default": "./dist/Gate.js"
     },
     "./HttpClientRunGate": {
       "types": "./dist/HttpClientRunGate.d.ts",

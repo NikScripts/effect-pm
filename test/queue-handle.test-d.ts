@@ -1,10 +1,10 @@
 import { Schema } from "effect";
-import * as QueueHyperlink from "../src/QueueHyperlink";
-import { queueSpec } from "../src/QueueHyperlink";
+import * as WorkPool from "../src/WorkPool";
+import { queueSpec } from "../src/WorkPool";
 import * as Hyperlink from "../src/Hyperlink";
 
 // ── The soundness guard for the ONE cast in `nameQueueService` ───────────────
-// `yield* MyQueue` is asserted to be `QueueHyperlink<Decoded<F>>`; that assertion is only sound if
+// `yield* MyQueue` is asserted to be `WorkPool<Decoded<F>>`; that assertion is only sound if
 // the named handle is bidirectionally equal to the raw contract `ServiceOf<QueueInstanceSpec<F>>`.
 // TS can't prove that for generic `F` (invariant service Shape), so we prove it here for a concrete
 // representative `F`. If the shapes ever drift, THIS FAILS THE BUILD — which is what licenses the cast.
@@ -15,7 +15,7 @@ type F = typeof EmailJob.fields;
 // the raw contract the tag actually carries, pre-cast:
 type Contract = Hyperlink.ShapeOf<ReturnType<typeof queueSpec<F>>>;
 // the named handle the tag is asserted to expose:
-type Handle = QueueHyperlink.QueueHyperlink<Hyperlink.Decoded<typeof EmailJob>>;
+type Handle = WorkPool.WorkPool<Hyperlink.Decoded<typeof EmailJob>>;
 
 declare const contract: Contract;
 declare const handle: Handle;
@@ -26,7 +26,7 @@ const _contractToHandle: Handle = contract;
 void [_handleToContract, _contractToHandle];
 
 // and confirm the naming actually took effect: `yield* Emails` (= Shape<Emails>) IS the named handle.
-class Emails extends QueueHyperlink.Tag<Emails>()("test/queue-handle/Emails", {
+class Emails extends WorkPool.Tag<Emails>()("test/queue-handle/Emails", {
   payload: EmailJob,
 }) {}
 declare const emailsService: Hyperlink.Shape<typeof Emails>;
@@ -36,11 +36,11 @@ void [_yieldToHandle, _handleToYield];
 
 // ── threaded guard: the cast is now over `QueueInstanceSpec<F, Success, Error>` ──────────────────
 // nameQueueService asserts `ServiceOf<QueueInstanceSpec<F, Success, Error>>` ⇄
-// `QueueHyperlink<Decoded<F>, Success["Type"], Error["Type"], never>`. Prove it for concrete slots.
+// `WorkPool<Decoded<F>, Success["Type"], Error["Type"], never>`. Prove it for concrete slots.
 type ContractSE = Hyperlink.ShapeOf<
   ReturnType<typeof queueSpec<F, typeof Schema.Number, typeof Schema.String>>
 >;
-type HandleSE = QueueHyperlink.QueueHyperlink<
+type HandleSE = WorkPool.WorkPool<
   Hyperlink.Decoded<typeof EmailJob>,
   number,
   string
@@ -51,20 +51,20 @@ const _seHandleToContract: ContractSE = handleSE;
 const _seContractToHandle: HandleSE = contractSE;
 void [_seHandleToContract, _seContractToHandle];
 
-// ── DoD #4: a payload-only tag hovers/types as `QueueHyperlink<Payload, void, never, never>` ─────
+// ── DoD #4: a payload-only tag hovers/types as `WorkPool<Payload, void, never, never>` ─────
 type Exact<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 const assertExact = <_ extends true>(): void => {};
 assertExact<
   Exact<
     Hyperlink.Shape<typeof Emails>,
-    QueueHyperlink.QueueHyperlink<Hyperlink.Decoded<typeof EmailJob>, void, never, never>
+    WorkPool.WorkPool<Hyperlink.Decoded<typeof EmailJob>, void, never, never>
   >
 >();
 
 // ── DoD #4: a tag declaring `error` surfaces that error type on the named handle (Error param,
 // which flows into `events`' `Cause<E>`). A tag declaring `success` surfaces it likewise. ───────────
-class Failing extends QueueHyperlink.Tag<Failing>()("test/queue-handle/Failing", {
+class Failing extends WorkPool.Tag<Failing>()("test/queue-handle/Failing", {
   payload: EmailJob,
   success: Schema.Number,
   error: Schema.String,
@@ -72,6 +72,6 @@ class Failing extends QueueHyperlink.Tag<Failing>()("test/queue-handle/Failing",
 assertExact<
   Exact<
     Hyperlink.Shape<typeof Failing>,
-    QueueHyperlink.QueueHyperlink<Hyperlink.Decoded<typeof EmailJob>, number, string, never>
+    WorkPool.WorkPool<Hyperlink.Decoded<typeof EmailJob>, number, string, never>
   >
 >();

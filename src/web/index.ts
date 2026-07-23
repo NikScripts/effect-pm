@@ -15,7 +15,7 @@
  * <Dashboard runtime={runtime} group={ServicesHub} />
  * ```
  *
- * Or compose the pieces: `DashboardView` + the widgets + `useQueueBundle` / `useProcessBundle`
+ * Or compose the pieces: `DashboardView` + the widgets + `useQueueBundle` / `useDaemonBundle`
  * under `RegistryProvider` + `RuntimeProvider` + `ViewTransitionProvider`.
  *
  * Peers: `react`, `react-dom`, `recharts`. Styled with Tailwind utility classes + shadcn theme

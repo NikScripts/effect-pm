@@ -4,7 +4,7 @@ import { LogAnnotationKeys } from "../src/LogContext";
 import { logEntryMatchesScope, resolveLogScope } from "../src/internal/manager/logScope";
 import type { LogEntry } from "../src/LogEntry";
 
-import { testBillingNodeKey, testSyncProcessKey } from "./fixtures/logKeys";
+import { testBillingNodeKey, testSyncDaemonKey } from "./fixtures/logKeys";
 
 const entry = (
   annotations: LogEntry["annotations"],
@@ -21,12 +21,12 @@ describe("logContext", () => {
     const scope = {
       _tag: "process" as const,
       groupId: testBillingNodeKey,
-      key: testSyncProcessKey,
+      key: testSyncDaemonKey,
     };
     assert.strictEqual(
       logEntryMatchesScope(
         entry({
-          [LogAnnotationKeys.lineage]: JSON.stringify([testSyncProcessKey]),
+          [LogAnnotationKeys.lineage]: JSON.stringify([testSyncDaemonKey]),
         }),
         scope,
       ),
@@ -50,7 +50,7 @@ describe("logContext", () => {
         Option.some("SyncWorker"),
         [
           {
-            key: testSyncProcessKey,
+            key: testSyncDaemonKey,
             kind: "process",
             groupId: testBillingNodeKey,
             controls: [],
@@ -60,7 +60,7 @@ describe("logContext", () => {
       assert.strictEqual(scope._tag, "process");
       if (scope._tag === "process") {
         assert.strictEqual(scope.groupId, testBillingNodeKey);
-        assert.strictEqual(scope.key, testSyncProcessKey);
+        assert.strictEqual(scope.key, testSyncDaemonKey);
       }
     }));
 });
