@@ -9,7 +9,7 @@
 Stadium-board health across a **meshed** pack of nodes — without letting a down neighbour take
 your local `/health` with it.
 
-Per-node readiness (`withReadiness` → `GET /health` / `NodeStatus`) stays **local**. FleetHealth is
+Per-node readiness (`withReadiness` → `GET /health` / `Node.status`) stays **local**. FleetHealth is
 a separate glass on the same mesh Telemetry uses: leaf for this node, fleet fields that fold peers
 with Effect `Exit` kept so silence never lies.
 
@@ -27,13 +27,13 @@ class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
 class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
 
 class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
-  Hyperlink.distributed([DropletEast, DropletWest]),
+  Hyperlink.nodes([DropletEast, DropletWest]),
 ) {}
 ```
 
 ## Serve with peers + optional readiness
 
-Pass the same readiness rows `/health` uses when you want the leaf to match `NodeStatus`.
+Pass the same readiness rows `/health` uses when you want the leaf to match `Node.status`.
 Discharge the mesh with `Hyperlink.peersLayer` (or `FleetHealth.alone` for a single node).
 
 {.twoslash}
@@ -45,7 +45,7 @@ import { Effect, Layer } from "effect"
 class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
 class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
 class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
-  Hyperlink.distributed([DropletEast, DropletWest]),
+  Hyperlink.nodes([DropletEast, DropletWest]),
 ) {}
 // ---cut---
 const readiness = Effect.succeed([
@@ -76,7 +76,7 @@ import { Effect } from "effect"
 class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
 class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
 class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
-  Hyperlink.distributed([DropletEast, DropletWest]),
+  Hyperlink.nodes([DropletEast, DropletWest]),
 ) {}
 const program = Effect.gen(function* () {
 // ---cut---

@@ -31,7 +31,7 @@ program.pipe(Effect.provide(JobsLive)) // `yield* Jobs` now runs jobsImpl locall
 
 To expose a Hyperlink over RPC, mount it on an HTTP server. `Hyperlink.serve(Tag, impl)` is one served
 entry; `Node.httpServer([...])` (or `Node.wsServer([...])`) hosts a list of them on one
-`/rpc`, alongside an auto-mounted `NodeStatus` and a `/health` route:
+`/rpc`, alongside an auto-mounted `Node.status` and a `/health` route:
 
 ``` ts
 const Node = Node.httpServer([

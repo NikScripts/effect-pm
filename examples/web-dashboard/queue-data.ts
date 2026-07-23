@@ -4,7 +4,7 @@
  * Tag-driven data layer. Each queue **tag** is the source of truth; this builds the
  * atom bundle the widgets need (status / metrics+history / trend / logs + controls)
  * straight from the tag's live service. The service comes from `Hyperlink.client` over
- * http — so this is the **remote** layer (swap `clientLayer` for `QueueHyperlink.layer`
+ * http — so this is the **remote** layer (swap `clientLayer` for `WorkPool.layer`
  * to run the engine locally; the widgets don't change). No `REGISTRY`, no `TREE`.
  */
 import { Effect, Layer, Stream } from "effect";
@@ -13,7 +13,7 @@ import * as Hyperlink from "../../src/Hyperlink";
 import { specOf } from "../../src/Hyperlink";
 import * as Group from "../../src/Group";
 import * as LogEntry from "../../src/LogEntry";
-import * as NodeStatus from "../../src/NodeStatus";
+import * as Node from "../../src/Node";
 import { FRESH_MS, readCache, writeCache } from "./cache";
 import {
   Billing,
@@ -54,9 +54,9 @@ type AllQueues =
 type QueueSvc = [typeof Mail] extends [Effect.Effect<infer A, infer _E, infer _R>] ? A : never;
 /** A leaf queue tag (yieldable for the fleet's queue service). */
 export type LeafTag = Effect.Effect<QueueSvc, never, AllQueues> & { readonly key: string };
-type ProcessSvc = [typeof KeyRotation] extends [Effect.Effect<infer A, infer _E, infer _R>] ? A : never;
+type DaemonSvc = [typeof KeyRotation] extends [Effect.Effect<infer A, infer _E, infer _R>] ? A : never;
 /** A leaf process tag (yieldable for a process service). */
-export type ProcessTag = Effect.Effect<ProcessSvc, never, KeyRotation> & { readonly key: string };
+export type DaemonTag = Effect.Effect<DaemonSvc, never, KeyRotation> & { readonly key: string };
 
 /** A node in the `Group.Tag` tree (a group). */
 export interface GroupNode {
@@ -88,16 +88,16 @@ export const miniUrl = inBrowser ? "/mini/rpc" : "http://localhost:7778/rpc";
 const dropletTransport = Hyperlink.ws(Droplet, { url: dropletRpc });
 const miniTransport = Hyperlink.ws(MiniNode, { url: miniUrl });
 
-// Point the nodeless NodeStatus client at a specific node with the 2-arg `client(tag, node)` form — it
+// Point the nodeless Node.status client at a specific node with the 2-arg `client(tag, node)` form — it
 // reads the node's value and unwraps its transport. (The node is exposed in `appLayer` below.)
 const nodeStatusLayer = (resourceKey: string) =>
-  Hyperlink.client(NodeStatus.Tag, nodeOf(resourceKey) === "mini" ? MiniNode : Droplet);
+  Hyperlink.client(Node.status.Tag, nodeOf(resourceKey) === "mini" ? MiniNode : Droplet);
 
 /** The merged remote client layer — every fleet resource over http. Shared by the
  *  reactive runtime (below) and the `pm` CLI (run-and-exit commands). */
 export const appLayer = Layer.mergeAll(
   // EXPOSE each node's transport (not just provide it INTO the queue clients) so the node tag itself is
-  // in the runtime context. The HealthBoard's per-node `NodeStatus` reads it via `client(tag, node)`;
+  // in the runtime context. The HealthBoard's per-node `Node.status` reads it via `client(tag, node)`;
   // without this, that node isn't resolvable and the node status hangs on "connecting…".
   dropletTransport,
   miniTransport,
@@ -192,11 +192,11 @@ const hyperlinkLogsAccumulator = (resourceKey: string) =>
     cachedAccumulator({
       key: `${resourceKey}/logs`,
       cap: 300,
-      stream: Stream.unwrap(Effect.map(NodeStatus.Tag, (h) => h.logs.stream)).pipe(
+      stream: Stream.unwrap(Effect.map(Node.status.Tag, (h) => h.logs.stream)).pipe(
         Stream.filter(LogEntry.hasKey(resourceKey)),
         Stream.map(toLogLine),
       ),
-      query: Effect.flatMap(NodeStatus.Tag, (h) => h.logs.query({ limit: 300 })).pipe(
+      query: Effect.flatMap(Node.status.Tag, (h) => h.logs.query({ limit: 300 })).pipe(
         Effect.map((entries) => entries.filter(LogEntry.hasKey(resourceKey)).map(toLogLine)),
       ),
     }).pipe(Stream.provide(nodeStatusLayer(resourceKey))),
@@ -274,25 +274,25 @@ export const queueBundle = (tag: LeafTag): QueueBundle => {
   return bundle;
 };
 
-type ProcessStatus = ProcessSvc["status"] extends Hyperlink.Subscribable<infer S> ? S : never;
+type DaemonStatus = DaemonSvc["status"] extends Hyperlink.Subscribable<infer S> ? S : never;
 
 /** The atoms + controls one process card needs — derived from the tag. */
-export interface ProcessBundle {
-  readonly status: ValueAtom<ProcessStatus>;
+export interface DaemonBundle {
+  readonly status: ValueAtom<DaemonStatus>;
   readonly logs: ValueAtom<ReadonlyArray<LogLine>>;
   readonly start: CommandAtom;
   readonly stop: CommandAtom;
   readonly run: CommandAtom;
 }
-const processCache = new Map<string, ProcessBundle>();
+const processCache = new Map<string, DaemonBundle>();
 
 /** Build (once per tag) the atom bundle for a process tag. */
-export const processBundle = (tag: ProcessTag): ProcessBundle => {
+export const processBundle = (tag: DaemonTag): DaemonBundle => {
   const existing = processCache.get(tag.key);
   if (existing !== undefined) return existing;
   const statusStream = Stream.unwrap(Effect.map(tag, (p) => p.status.changes));
   bumpLogIdFrom(`${tag.key}/logs`);
-  const bundle: ProcessBundle = {
+  const bundle: DaemonBundle = {
     status: runtime.atom(statusStream),
     // cached + query-then-tail, same generic mechanism as the queue.
     logs: hyperlinkLogsAccumulator(tag.key),
@@ -313,8 +313,8 @@ export const queueLeaves = (node: { readonly members: Record<string, unknown> })
   leafTags(node).filter((m) => kindOf(m) === "queue") as ReadonlyArray<LeafTag>;
 
 /** Only the process leaves of a tree. */
-export const processLeaves = (node: { readonly members: Record<string, unknown> }): ReadonlyArray<ProcessTag> =>
-  leafTags(node).filter((m) => kindOf(m) === "process") as ReadonlyArray<ProcessTag>;
+export const processLeaves = (node: { readonly members: Record<string, unknown> }): ReadonlyArray<DaemonTag> =>
+  leafTags(node).filter((m) => kindOf(m) === "process") as ReadonlyArray<DaemonTag>;
 
 /** One row of the fleet table — headline status + metrics, carrying its tag. */
 export interface FleetRow {

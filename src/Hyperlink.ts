@@ -386,7 +386,7 @@ export interface MethodAnnotations {
   readonly destructive?: boolean;
   /**
    * When `"pair"`, a 2-tuple payload is surfaced as two call arguments `(first, second?)`
-   * instead of a single tuple (used by custom-queue `add(item, level?)`).
+   * instead of a single tuple (used by custom-queue `add(item, lane?)`).
    */
   readonly callStyle?: "pair";
 }
@@ -1079,7 +1079,7 @@ export {
  * ```ts
  * class AppStore extends Store.Service<AppStore>("@app/Store")(
  *   Hyperlink.store(WnbaNode),
- *   Process.store(Daily),
+ *   Daemon.store(Daily),
  * ) {}
  * ```
  *
@@ -1315,7 +1315,7 @@ export const builtHyperlinkSym: unique symbol = Symbol.for(
 /**
  * A resource impl **before** worker-context discharge — the impl still carries requirement `R` on its
  * Effect methods, paired with the {@link Context.Context} captured at build time. Used by
- * {@link QueueHyperlink}, {@link RunHyperlink}, and {@link Process} (any toolkit resource that builds
+ * {@link WorkPool}, {@link Gate}, and {@link Daemon} (any toolkit resource that builds
  * its driver under ambient `R`). {@link layer} / {@link serve} grant locally via {@link grantLocal};
  * {@link serveRemote} defers discharge to each wire call via {@link invokeWireMethodWithContext} so
  * one materialization backs both paths.
@@ -1506,7 +1506,7 @@ type PairMethodAnnotations = MethodAnnotations & { readonly callStyle: "pair" };
 
 /**
  * Like {@link effectFn}, but the payload must be a 2-tuple schema surfaced as two call
- * arguments `(first, second?)` — used by custom-queue `add(item, level?)`.
+ * arguments `(first, second?)` — used by custom-queue `add(item, lane?)`.
  *
  * @category spec fields
  * @public
@@ -2106,7 +2106,7 @@ export const localCapSym: unique symbol = Symbol.for(
 export const fromServiceSym: unique symbol = Symbol.for(
   "hyperlink-ts/Hyperlink/fromService",
 );
-/** Where a contract's **kind** (its canonical id, e.g. `hyperlink-ts/QueueHyperlink`) is
+/** Where a contract's **kind** (its canonical id, e.g. `hyperlink-ts/WorkPool`) is
  *  stowed on a Tag — set by each contract's `.Tag` factory so consumers (the dashboard) can
  *  classify a tag without sniffing its spec. Absent on a bare {@link Hyperlink.Tag}. @internal */
 export const kindSym: unique symbol = Symbol.for(
@@ -2495,14 +2495,14 @@ export interface NodeBoundTag<Self, S extends Spec, HSelf, Svc = ServiceOf<S, Se
 
 /** The kind stamped on a bare {@link Hyperlink.Tag} that declares none — every resource tag carries a
  *  kind, and a plain resource's is this. The typed factories stamp their own (e.g.
- *  `hyperlink-ts/QueueHyperlink`); a bare tag defaults to this so nothing is ever kind-less.
+ *  `hyperlink-ts/WorkPool`); a bare tag defaults to this so nothing is ever kind-less.
  *
  * @category nodes & fleet
  * @public
  */
 export const kind = "hyperlink-ts/Hyperlink";
 
-/** The contract kind a tag was built for (e.g. `hyperlink-ts/QueueHyperlink`, or {@link kind}
+/** The contract kind a tag was built for (e.g. `hyperlink-ts/WorkPool`, or {@link kind}
  *  for a bare {@link Hyperlink.Tag}); `undefined` only for a non-tag. The robust replacement for
  *  sniffing a tag's spec; accepts `unknown` so a `Group` member can be passed straight in. */
 export const kindOf = (tag: unknown): string | undefined => {
@@ -4898,7 +4898,7 @@ export const distributedOf = nodesOf;
  * Lookup first — winner runs the local impl; loser becomes a client of the winner's endpoint.
  * Requires {@link LookupIdentity} in the layer graph (fail-closed if Lookup is down).
  *
- * Pipe onto any Hyperlink / Process / Queue tag (same shape as {@link withReadiness}):
+ * Pipe onto any Hyperlink / Daemon / Queue tag (same shape as {@link withReadiness}):
  *
  * ```ts
  * class Mail extends Hyperlink.Tag<Mail>()("app/Mail", spec).pipe(Hyperlink.identity) {}

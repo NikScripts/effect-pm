@@ -26,7 +26,7 @@ class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
 class DropletCentral extends Node.Tag<DropletCentral>()("app/DropletCentral") {}
 
 class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
-  Hyperlink.distributed([DropletEast, DropletWest, DropletCentral]),
+  Hyperlink.nodes([DropletEast, DropletWest, DropletCentral]),
 ) {}
 ```
 
@@ -47,7 +47,7 @@ class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
 class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
 class DropletCentral extends Node.Tag<DropletCentral>()("app/DropletCentral") {}
 class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
-  Hyperlink.distributed([DropletEast, DropletWest, DropletCentral]),
+  Hyperlink.nodes([DropletEast, DropletWest, DropletCentral]),
 ) {}
 const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) =>
   Node.httpServer(resource).pipe(

@@ -1,9 +1,9 @@
 /**
- * Engine schedule primitive — centralized run-window storage + controls that the `Process`
- * supervisor watches. **Internal**: the public face lives on the `Process` namespace
- * (`Process.scheduleInMemory` / `Process.scheduleDefine`, the `Process.ScheduleService` /
- * `Process.ScheduleEntry` types, the `Process.at` / `Process.window` window builders, and the
- * toolkit `Process.Schedule` resource). Not exported from the barrel and carries no subpath.
+ * Engine schedule primitive — centralized run-window storage + controls that the `Daemon`
+ * supervisor watches. **Internal**: the public face lives on the `Daemon` namespace
+ * (`Daemon.scheduleInMemory` / `Daemon.scheduleDefine`, the `Daemon.ScheduleService` /
+ * `Daemon.ScheduleEntry` types, the `Daemon.at` / `Daemon.window` window builders, and the
+ * toolkit `Daemon.Schedule` resource). Not exported from the barrel and carries no subpath.
  *
  * A process schedule defines when run instances should be spawned. Each entry has a `startAt`
  * time and optional `stopAt` (the run window). The supervisor watches this service for changes
@@ -41,7 +41,7 @@ import { registerScheduleLayer } from "./processLayerBrand";
  *
  * @public
  */
-export interface ProcessScheduleEntry {
+export interface DaemonScheduleEntry {
   /** Stable identity for this entry. Used for CRUD, reconcile, and removal cleanup. */
   readonly id: Option.Option<string>;
   /** When the run instance should be triggered. */
@@ -67,25 +67,25 @@ export interface ReconcileResult {
  *
  * @public
  */
-export interface ProcessScheduleService {
+export interface DaemonScheduleService {
   /** Read all current entries (sorted by startAt). */
-  readonly entries: Effect.Effect<ReadonlyArray<ProcessScheduleEntry>>;
+  readonly entries: Effect.Effect<ReadonlyArray<DaemonScheduleEntry>>;
   /** Block until the next mutation occurs. */
   readonly changed: Effect.Effect<void>;
 
   // ─── Lookup ───
   /** Get entry by id. Returns None if not found or entry has no id. */
-  readonly get: (id: string) => Effect.Effect<Option.Option<ProcessScheduleEntry>>;
+  readonly get: (id: string) => Effect.Effect<Option.Option<DaemonScheduleEntry>>;
   /** Check if an entry with given id exists. */
   readonly has: (id: string) => Effect.Effect<boolean>;
 
   // ─── Mutate ───
   /** Replace all entries (triggers changed). */
-  readonly set: (entries: ReadonlyArray<ProcessScheduleEntry>) => Effect.Effect<void>;
+  readonly set: (entries: ReadonlyArray<DaemonScheduleEntry>) => Effect.Effect<void>;
   /** Append an entry (triggers changed). */
-  readonly add: (entry: ProcessScheduleEntry) => Effect.Effect<void>;
+  readonly add: (entry: DaemonScheduleEntry) => Effect.Effect<void>;
   /** Insert or update by id (triggers changed). */
-  readonly upsert: (entry: ProcessScheduleEntry) => Effect.Effect<void>;
+  readonly upsert: (entry: DaemonScheduleEntry) => Effect.Effect<void>;
   /** Remove entry by id. Returns true if found and removed. */
   readonly remove: (id: string) => Effect.Effect<boolean>;
   /** Remove multiple entries by id. Returns count removed. */
@@ -100,27 +100,27 @@ export interface ProcessScheduleService {
    * Entries without ids are matched by reference only.
    */
   readonly reconcile: (
-    next: ReadonlyArray<ProcessScheduleEntry>,
+    next: ReadonlyArray<DaemonScheduleEntry>,
   ) => Effect.Effect<ReconcileResult>;
 }
 
 /**
- * Context tag for the ProcessSchedule service.
+ * Context tag for the DaemonSchedule service.
  *
  * @public
  */
-export class ProcessScheduleTag extends Context.Service<
-  ProcessScheduleTag,
-  ProcessScheduleService
->()("hyperlink-ts/internal/processSchedule/ProcessScheduleTag") {}
+export class DaemonScheduleTag extends Context.Service<
+  DaemonScheduleTag,
+  DaemonScheduleService
+>()("hyperlink-ts/internal/processSchedule/DaemonScheduleTag") {}
 
 // ============================================================================
 // Internal: sorting and normalization
 // ============================================================================
 
 const sortEntries = (
-  entries: ReadonlyArray<ProcessScheduleEntry>,
-): ReadonlyArray<ProcessScheduleEntry> =>
+  entries: ReadonlyArray<DaemonScheduleEntry>,
+): ReadonlyArray<DaemonScheduleEntry> =>
   [...entries].sort((a, b) => {
     const byStart = a.startAt.getTime() - b.startAt.getTime();
     if (byStart !== 0) return byStart;
@@ -129,13 +129,13 @@ const sortEntries = (
     return aStop - bStop;
   });
 
-const getEntryId = (entry: ProcessScheduleEntry): string | undefined =>
+const getEntryId = (entry: DaemonScheduleEntry): string | undefined =>
   Option.getOrUndefined(entry.id);
 
 const entriesById = (
-  entries: ReadonlyArray<ProcessScheduleEntry>,
-): Map<string, ProcessScheduleEntry> => {
-  const byId = new Map<string, ProcessScheduleEntry>();
+  entries: ReadonlyArray<DaemonScheduleEntry>,
+): Map<string, DaemonScheduleEntry> => {
+  const byId = new Map<string, DaemonScheduleEntry>();
   for (const entry of entries) {
     const id = getEntryId(entry);
     if (id !== undefined) {
@@ -150,10 +150,10 @@ const entriesById = (
 // ============================================================================
 
 const buildInMemoryService = (
-  initial: ReadonlyArray<ProcessScheduleEntry>,
-): Effect.Effect<ProcessScheduleService> =>
+  initial: ReadonlyArray<DaemonScheduleEntry>,
+): Effect.Effect<DaemonScheduleService> =>
   Effect.gen(function* () {
-    const entriesRef = yield* Ref.make<ReadonlyArray<ProcessScheduleEntry>>(sortEntries(initial));
+    const entriesRef = yield* Ref.make<ReadonlyArray<DaemonScheduleEntry>>(sortEntries(initial));
     const changeSignal = yield* Ref.make<Deferred.Deferred<void, never>>(Deferred.makeUnsafe());
 
     // Notify subscribers that a mutation occurred
@@ -164,12 +164,12 @@ const buildInMemoryService = (
     });
 
     // Core setter: normalize + notify
-    const setEntries = (next: ReadonlyArray<ProcessScheduleEntry>) =>
+    const setEntries = (next: ReadonlyArray<DaemonScheduleEntry>) =>
       Ref.set(entriesRef, sortEntries(next)).pipe(Effect.andThen(notify));
 
     const mutateEntries = <A>(
-      mutation: (current: ReadonlyArray<ProcessScheduleEntry>) => {
-        readonly entries: ReadonlyArray<ProcessScheduleEntry>;
+      mutation: (current: ReadonlyArray<DaemonScheduleEntry>) => {
+        readonly entries: ReadonlyArray<DaemonScheduleEntry>;
         readonly changed: boolean;
         readonly value: A;
       },
@@ -289,7 +289,7 @@ const buildInMemoryService = (
           const result: ReconcileResult = { added, updated, removed, unchanged };
           return Effect.as(setEntries([...next]), result);
         }),
-    } satisfies ProcessScheduleService;
+    } satisfies DaemonScheduleService;
   });
 
 // ============================================================================
@@ -297,10 +297,10 @@ const buildInMemoryService = (
 // ============================================================================
 
 const inMemoryLayer = (
-  initial: ReadonlyArray<ProcessScheduleEntry> = [],
-): Layer.Layer<ProcessScheduleTag> =>
+  initial: ReadonlyArray<DaemonScheduleEntry> = [],
+): Layer.Layer<DaemonScheduleTag> =>
   registerScheduleLayer(
-    Layer.effect(ProcessScheduleTag, buildInMemoryService(initial)),
+    Layer.effect(DaemonScheduleTag, buildInMemoryService(initial)),
   );
 
 // ============================================================================
@@ -311,51 +311,51 @@ const toId = (id: string | undefined): Option.Option<string> =>
   id === undefined ? Option.none() : Option.some(id);
 
 /** Create an open-ended entry (no stop time). */
-function at(startAt: Date): ProcessScheduleEntry;
-function at(id: string, startAt: Date): ProcessScheduleEntry;
-function at(idOrStartAt: string | Date, maybeStartAt?: Date): ProcessScheduleEntry {
+function at(startAt: Date): DaemonScheduleEntry;
+function at(id: string, startAt: Date): DaemonScheduleEntry;
+function at(idOrStartAt: string | Date, maybeStartAt?: Date): DaemonScheduleEntry {
   if (idOrStartAt instanceof Date) {
     return { id: Option.none(), startAt: idOrStartAt, stopAt: Option.none() };
   }
   if (maybeStartAt === undefined) {
-    throw new Error("ProcessSchedule.at(id, startAt): startAt is required");
+    throw new Error("DaemonSchedule.at(id, startAt): startAt is required");
   }
   return { id: toId(idOrStartAt), startAt: maybeStartAt, stopAt: Option.none() };
 }
 
 /** Create a windowed entry (start + stop). */
-function window(startAt: Date, stopAt: Date): ProcessScheduleEntry;
-function window(id: string, startAt: Date, stopAt: Date): ProcessScheduleEntry;
+function window(startAt: Date, stopAt: Date): DaemonScheduleEntry;
+function window(id: string, startAt: Date, stopAt: Date): DaemonScheduleEntry;
 function window(
   idOrStartAt: string | Date,
   startAtOrStopAt: Date,
   maybeStopAt?: Date,
-): ProcessScheduleEntry {
+): DaemonScheduleEntry {
   if (idOrStartAt instanceof Date) {
     return { id: Option.none(), startAt: idOrStartAt, stopAt: Option.some(startAtOrStopAt) };
   }
   if (maybeStopAt === undefined) {
-    throw new Error("ProcessSchedule.window(id, startAt, stopAt): stopAt is required");
+    throw new Error("DaemonSchedule.window(id, startAt, stopAt): stopAt is required");
   }
   return { id: toId(idOrStartAt), startAt: startAtOrStopAt, stopAt: Option.some(maybeStopAt) };
 }
 
 /** Create entries from bare Date starts (no ids, no stop times). */
-const fromStarts = (starts: ReadonlyArray<Date>): ReadonlyArray<ProcessScheduleEntry> =>
+const fromStarts = (starts: ReadonlyArray<Date>): ReadonlyArray<DaemonScheduleEntry> =>
   starts.map((startAt) => at(startAt));
 
 /**
  * Empty in-memory schedule store.
  *
  * Use when the driver may run but no entry covers "now" until you `set`, `add`,
- * `reconcile`, or populate entries via a schedule initializer on `Process.make`.
+ * `reconcile`, or populate entries via a schedule initializer on `Daemon.make`.
  *
- * Equivalent to `ProcessSchedule.inMemory()` with no initial entries.
+ * Equivalent to `DaemonSchedule.inMemory()` with no initial entries.
  */
-const empty: Layer.Layer<ProcessScheduleTag> = inMemoryLayer([]);
+const empty: Layer.Layer<DaemonScheduleTag> = inMemoryLayer([]);
 
 /** Always-armed: single entry starting at epoch, never stops. */
-const alwaysArmed: Layer.Layer<ProcessScheduleTag> =
+const alwaysArmed: Layer.Layer<DaemonScheduleTag> =
   inMemoryLayer([
     {
       id: Option.some("always"),
@@ -370,16 +370,16 @@ const alwaysArmed: Layer.Layer<ProcessScheduleTag> =
 
 /**
  * The builder handed to {@link define} (`at` / `window` / `fromStarts` / `all`). Exported so the
- * public re-export (`Process.scheduleDefine`) can name it; the dts bundler inlines it into the
- * `hyperlink-ts/Process` declarations.
+ * public re-export (`Daemon.scheduleDefine`) can name it; the dts bundler inlines it into the
+ * `hyperlink-ts/Daemon` declarations.
  */
 export interface ScheduleDefineApi {
   readonly at: typeof at;
   readonly window: typeof window;
   readonly fromStarts: typeof fromStarts;
   readonly all: (
-    ...entries: ReadonlyArray<ProcessScheduleEntry>
-  ) => ReadonlyArray<ProcessScheduleEntry>;
+    ...entries: ReadonlyArray<DaemonScheduleEntry>
+  ) => ReadonlyArray<DaemonScheduleEntry>;
 }
 
 /**
@@ -387,15 +387,15 @@ export interface ScheduleDefineApi {
  *
  * @example
  * ```ts
- * ProcessSchedule.define(({ at, window }) => [
+ * DaemonSchedule.define(({ at, window }) => [
  *   at("job-1", new Date("2025-06-01T00:00:00Z")),
  *   window("game", gameStart, gameEnd),
  * ])
  * ```
  */
 const define = (
-  build: (api: ScheduleDefineApi) => ReadonlyArray<ProcessScheduleEntry>,
-): Layer.Layer<ProcessScheduleTag> =>
+  build: (api: ScheduleDefineApi) => ReadonlyArray<DaemonScheduleEntry>,
+): Layer.Layer<DaemonScheduleTag> =>
   inMemoryLayer(build({ at, window, fromStarts, all: (...entries) => entries }));
 
 // ============================================================================
@@ -403,19 +403,19 @@ const define = (
 // ============================================================================
 
 /**
- * ProcessSchedule — schedule storage, CRUD, and sync.
+ * DaemonSchedule — schedule storage, CRUD, and sync.
  *
  * @public
  */
-export const ProcessSchedule: typeof ProcessScheduleTag & {
+export const DaemonSchedule: typeof DaemonScheduleTag & {
   readonly inMemory: typeof inMemoryLayer;
-  readonly empty: Layer.Layer<ProcessScheduleTag>;
-  readonly alwaysArmed: Layer.Layer<ProcessScheduleTag>;
+  readonly empty: Layer.Layer<DaemonScheduleTag>;
+  readonly alwaysArmed: Layer.Layer<DaemonScheduleTag>;
   readonly at: typeof at;
   readonly window: typeof window;
   readonly fromStarts: typeof fromStarts;
   readonly define: typeof define;
-} = Object.assign(ProcessScheduleTag, {
+} = Object.assign(DaemonScheduleTag, {
   inMemory: inMemoryLayer,
   empty,
   alwaysArmed,

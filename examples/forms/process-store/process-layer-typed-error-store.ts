@@ -1,27 +1,27 @@
 /**
  * @module examples/forms/process-store/process-layer-typed-error-store
  *
- * `Process.layer` auto-writes typed `Failed.error` when the tag stamps an `error` schema.
+ * `Daemon.layer` auto-writes typed `Failed.error` when the tag stamps an `error` schema.
  * Register the tag on an app `Store.Service` and Soft-override via `provideMerge`.
  * Run: `pnpm run example:process-layer-typed-error-store`
  */
 
 import { Duration, Effect, Layer, Schema } from "effect";
 import { TestClock } from "effect/testing";
-import * as Process from "../../../src/Process";
+import * as Daemon from "../../../src/Daemon";
 import * as Store from "../../../src/Store";
 import * as Polling from "../../../src/Polling";
-import { builtInProcessStoreContract } from "../../../src/internal/store/processStoreSpec";
+import { builtInDaemonStoreContract } from "../../../src/internal/store/processStoreSpec";
 import { runNodeProgramOrExit } from "../../shared/demo-harness";
 
 const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
 
-class FailingPrices extends Process.Tag<FailingPrices>()("examples/FailingPrices", {
+class FailingPrices extends Daemon.Tag<FailingPrices>()("examples/FailingPrices", {
   error: FetchErr,
 }) {}
 
 class DemoStore extends Store.Service<DemoStore>("@examples/DemoStore")(
-  Store.register(FailingPrices, builtInProcessStoreContract(FailingPrices)),
+  Store.register(FailingPrices, builtInDaemonStoreContract(FailingPrices)),
 ) {}
 
 const program = Effect.gen(function* () {
@@ -41,7 +41,7 @@ const program = Effect.gen(function* () {
     );
   }).pipe(
     Effect.provide(
-      Process.layer(FailingPrices, {
+      Daemon.layer(FailingPrices, {
         effect: Effect.fail(fail),
         polling: Polling.spaced(Duration.millis(50)),
       }).pipe(Layer.provideMerge(DemoStore.layerMemory)),

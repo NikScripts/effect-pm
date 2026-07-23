@@ -6,7 +6,7 @@
 
 import { Duration, Effect, Fiber, Ref } from "effect";
 import { TestClock } from "effect/testing";
-import { Polling, Process } from "../../../src";
+import { Polling, Daemon } from "../../../src";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { utcDateFromMillis } from "../../../src/internal/utcDate";
 
@@ -15,19 +15,19 @@ const env = TestClock.layer();
 const program = Effect.gen(function* () {
   const ticks = yield* Ref.make(0);
 
-  const proc = Process.make("examples/forms/schedule-controls-initializer", {
+  const proc = Daemon.make("examples/forms/schedule-controls-initializer", {
     polling: Polling.spaced(Duration.millis(100)),
     // Function form runs once before the supervisor loop — bootstrap from config/DB here.
     schedule: ({ entries, set, add }) =>
       Effect.gen(function* () {
         yield* Effect.sleep(Duration.millis(10));
         yield* set([
-          Process.window("init-window", utcDateFromMillis(0), utcDateFromMillis(700)),
+          Daemon.window("init-window", utcDateFromMillis(0), utcDateFromMillis(700)),
         ]);
         const existing = yield* entries;
         if (existing.length === 1) {
           yield* add(
-            Process.window("late-window", utcDateFromMillis(1_200), utcDateFromMillis(1_700)),
+            Daemon.window("late-window", utcDateFromMillis(1_200), utcDateFromMillis(1_700)),
           );
         }
       }),

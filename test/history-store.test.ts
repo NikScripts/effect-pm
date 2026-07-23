@@ -1,12 +1,12 @@
 import { Effect, Schema } from "effect";
 import { expect, it } from "vitest";
-import { HistoryStore, QueueHyperlink } from "../src";
+import { HistoryStore, WorkPool } from "../src";
 
 const NumberItem = Schema.Struct({ n: Schema.Number });
 interface NumberItem {
   readonly n: number;
 }
-class HQueue extends QueueHyperlink.Tag<HQueue>()("history/Q", { payload: NumberItem }) {}
+class HQueue extends WorkPool.Tag<HQueue>()("history/Q", { payload: NumberItem }) {}
 
 it("HistoryStore.layerMemory: append + read (newest-first limit, per stream)", () =>
   Effect.runPromise(
@@ -29,7 +29,7 @@ it("metricsHistory is empty when no HistoryStore is provided (graceful, opt-in)"
       expect(yield* queue.metrics.query({})).toEqual([]);
     }).pipe(
       Effect.provide(
-        QueueHyperlink.layerMemory(HQueue, {
+        WorkPool.layerMemory(HQueue, {
           effect: (_item) => Effect.void,
         }),
       ),

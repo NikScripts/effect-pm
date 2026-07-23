@@ -21,6 +21,7 @@ import { Layer } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import * as Hyperlink from "./Hyperlink";
+import type { AddressedNode } from "./Node";
 import {
   NodeStatusHyperlink,
   nodeStatus,
@@ -57,10 +58,12 @@ export const resourceReadiness = nodeHyperlinkReadiness;
 export type ResourceReadiness = NodeHyperlinkReadinessType;
 
 /**
- * The reserved node status resource tag — nodeless. Drive it with {@link NodeStatus.clientHttp}
- * (or any `RpcClient.Protocol` layer) pointed at a node's `/rpc`.
+ * The reserved node-status **service** — you never declare one (it's auto-served by every node);
+ * you *dial + read* it, the `HttpClient` shape. Provide a client layer ({@link NodeStatus.client}
+ * for a node, or {@link NodeStatus.clientHttp} for a url), then `yield*` this tag to read
+ * `status` / `logs` / `ping`. Not a resource kind like `WorkPool` / `Gate` / `Daemon`.
  *
- * @category constructors
+ * @category services
  * @public
  */
 export const Tag = NodeStatusHyperlink;
@@ -81,4 +84,25 @@ export const clientHttp = (url: string): Layer.Layer<NodeStatusHyperlink> =>
         Layer.provide(FetchHttpClient.layer),
       ),
     ),
+  );
+
+/**
+ * A client layer for a **node's** reserved status resource — the node-addressed parallel of
+ * {@link clientHttp}. Auto-connects to `node` (its declared transport) with default-on client verify
+ * disabled, because this *is* the health probe. Provide it, then read {@link Tag} — the status is a
+ * plumbing **service** you dial + read (the `HttpClient` shape), not a resource kind you declare.
+ *
+ * ```ts
+ * yield* Effect.gen(function* () {
+ *   const pulse = yield* NodeStatus.Tag;
+ *   const snap = yield* pulse.status.get;
+ * }).pipe(Effect.provide(NodeStatus.client(Droplet)), Effect.scoped);
+ * ```
+ *
+ * @category clients
+ * @public
+ */
+export const client = (node: AddressedNode<unknown>) =>
+  Hyperlink.client(NodeStatusHyperlink, node).pipe(
+    Layer.provide(Hyperlink.clientVerify(false)),
   );

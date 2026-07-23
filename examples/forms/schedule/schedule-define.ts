@@ -1,12 +1,12 @@
 /**
  * @module examples/forms/schedule/schedule-define
  *
- * Process.scheduleDefine composition. Run: `pnpm run example:form:schedule-define`
+ * Daemon.scheduleDefine composition. Run: `pnpm run example:form:schedule-define`
  */
 
 import { Duration, Effect, Fiber, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
-import { Polling, Process } from "../../../src";
+import { Polling, Daemon } from "../../../src";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { utcDateFromMillis } from "../../../src/internal/utcDate";
 
@@ -15,9 +15,9 @@ const env = TestClock.layer();
 const program = Effect.gen(function* () {
   const seen = yield* Ref.make<ReadonlyArray<string>>([]);
 
-  const proc = Process.make("examples/forms/schedule-define", {
+  const proc = Daemon.make("examples/forms/schedule-define", {
     polling: Polling.spaced(Duration.millis(120)),
-    schedule: Process.scheduleDefine(({ all, at, window }) =>
+    schedule: Daemon.scheduleDefine(({ all, at, window }) =>
       all(
         at("define-one-shot", utcDateFromMillis(0)),
         window("define-window", utcDateFromMillis(900), utcDateFromMillis(1_500)),
@@ -25,7 +25,7 @@ const program = Effect.gen(function* () {
     ),
     effect: Effect.gen(function* () {
       // Which entry armed this tick instance — useful when multiple windows overlap.
-      const currentId = yield* Process.currentScheduleId;
+      const currentId = yield* Daemon.currentScheduleId;
       yield* Option.match(currentId, {
         onNone: () => Effect.void,
         onSome: (id) => Ref.update(seen, (ids) => [...ids, id]),

@@ -2162,3 +2162,50 @@ body:has(.landing) .sidebar {
   color: var(--fg);
   max-width: 46rem;
 }
+
+/* dev-only gen-hovers restamp toast (HoverGenProgress island) — Safari-download style,
+   bottom right: label + count over a thin determinate bar. */
+.hovergen-toast {
+  position: fixed;
+  right: 1rem;
+  bottom: calc(1rem + env(safe-area-inset-bottom));
+  z-index: 80;
+  width: 18.5rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--popup-bg);
+  box-shadow: 0 6px 24px oklch(0 0 0 / 0.14);
+}
+.hovergen-toast-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-bottom: 0.45rem;
+}
+.hovergen-toast-label {
+  font-size: 0.8rem;
+  color: var(--fg);
+}
+.hovergen-toast-count {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted-fg);
+  white-space: nowrap;
+}
+.hovergen-toast-label {
+  white-space: nowrap;
+}
+.hovergen-toast-track {
+  height: 0.3rem;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+.hovergen-toast-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--primary);
+  transition: width 0.6s ease;
+}

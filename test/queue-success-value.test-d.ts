@@ -1,5 +1,5 @@
 import { Effect, Schema } from "effect";
-import * as QueueHyperlink from "../src/QueueHyperlink";
+import * as WorkPool from "../src/WorkPool";
 import type { QueueStoreCompleted } from "../src/internal/store/queueStoreSpec";
 import type { StoreHandleAtKey } from "../src/internal/store/defineStore";
 import type { RegsOfStoreInput } from "../src/internal/store/registrationTypes";
@@ -15,26 +15,26 @@ const expectExact = <_Check extends true>(): void => {};
 const jobSchema = Schema.Struct({ id: Schema.String });
 
 // ── (a) declaring `success: Schema.Number` ──────────────────────────────────
-class NumberQueue extends QueueHyperlink.Tag<NumberQueue>()("@td/NumberQueue", {
+class NumberQueue extends WorkPool.Tag<NumberQueue>()("@td/NumberQueue", {
   payload: jobSchema,
   success: Schema.Number,
 }) {}
 
 // the worker `effect` is REQUIRED to return `Effect<number, …>` (the success schema drives it)
-const _numberLayer = QueueHyperlink.layerMemory(NumberQueue, {
+const _numberLayer = WorkPool.layerMemory(NumberQueue, {
   effect: (job) => Effect.succeed(job.id.length),
 });
 void _numberLayer;
 
-// returning the wrong success type is a type error
-QueueHyperlink.layerMemory(NumberQueue, {
-  // @ts-expect-error worker must return `Effect<number, …>`, not `Effect<string, …>`
+// returning the wrong success type is a type error (overloaded verb → error at the call)
+// @ts-expect-error worker must return `Effect<number, …>`, not `Effect<string, …>`
+WorkPool.layerMemory(NumberQueue, {
   effect: (_job) => Effect.succeed("nope"),
 });
 
 // a `void`-returning worker is rejected when a success schema is declared
-QueueHyperlink.layerMemory(NumberQueue, {
-  // @ts-expect-error worker must return `Effect<number, …>`, not `Effect<void, …>`
+// @ts-expect-error worker must return `Effect<number, …>`, not `Effect<void, …>`
+WorkPool.layerMemory(NumberQueue, {
   effect: (_job) => Effect.void,
 });
 
@@ -44,7 +44,7 @@ expectExact<Equals<NumberCompleted["success"], number>>();
 
 // `slowest()` carries the typed `Completed` (success = number)
 type NumberRegs = RegsOfStoreInput<
-  [ReturnType<typeof QueueHyperlink.store<typeof NumberQueue>>]
+  [ReturnType<typeof WorkPool.store<typeof NumberQueue>>]
 >;
 type NumberHandle = StoreHandleAtKey<NumberRegs, typeof NumberQueue>;
 expectExact<
@@ -55,10 +55,10 @@ expectExact<
 >();
 
 // ── (b) NO success schema → the worker stays `Effect<void, …>` ───────────────
-class VoidQueue extends QueueHyperlink.Tag<VoidQueue>()("@td/VoidQueue", { payload: jobSchema }) {}
+class VoidQueue extends WorkPool.Tag<VoidQueue>()("@td/VoidQueue", { payload: jobSchema }) {}
 
 // a `void`-returning worker compiles
-const _voidLayer = QueueHyperlink.layerMemory(VoidQueue, {
+const _voidLayer = WorkPool.layerMemory(VoidQueue, {
   effect: (_job) => Effect.void,
 });
 void _voidLayer;

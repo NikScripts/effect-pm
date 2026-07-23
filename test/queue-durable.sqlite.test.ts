@@ -3,7 +3,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Context, Duration, Effect, Layer, Ref, Schema, Scope } from "effect";
 import { SqlClient } from "effect/unstable/sql/SqlClient";
 import { DurableQueueStore } from "../src/DurableQueueStore";
-import * as QueueHyperlink from "../src/QueueHyperlink";
+import * as WorkPool from "../src/WorkPool";
 import { SQLiteDurableQueueStore } from "../src/storage/sqlite";
 
 // A DurableQueueStore over a shared in-memory SQLite client — the same store can back two queue
@@ -24,13 +24,13 @@ const waitUntil = (predicate: Effect.Effect<boolean>) =>
     while (!(yield* predicate)) yield* Effect.sleep(Duration.millis(10));
   }).pipe(Effect.timeout(Duration.seconds(3)));
 
-describe("QueueHyperlink persist (SQLite durability)", () => {
+describe("WorkPool persist (SQLite durability)", () => {
   it.live("processes persisted items via the feeder, then drains the store", () =>
     Effect.gen(function* () {
       const storeLayer = yield* makeStoreLayer;
       const results = yield* Ref.make<Array<number>>([]);
       yield* Effect.gen(function* () {
-        const queue = yield* QueueHyperlink.make({
+        const queue = yield* WorkPool.make({
           name: "dq-basic",
           itemSchema: Schema.Number,
           effect: (n: number) => Ref.update(results, (a) => [...a, n]),
@@ -49,7 +49,7 @@ describe("QueueHyperlink persist (SQLite durability)", () => {
 
       // Instance 1: enqueue without starting workers — items land in the store, unprocessed.
       yield* Effect.gen(function* () {
-        const queue = yield* QueueHyperlink.make({
+        const queue = yield* WorkPool.make({
           name: "dq-recover",
           itemSchema: Schema.Number,
           effect: (_n: number) => Effect.void,
@@ -62,7 +62,7 @@ describe("QueueHyperlink persist (SQLite durability)", () => {
       // Instance 2: same store, fresh runtime — recovers + processes the leftover work.
       const results = yield* Ref.make<Array<number>>([]);
       yield* Effect.gen(function* () {
-        const queue = yield* QueueHyperlink.make({
+        const queue = yield* WorkPool.make({
           name: "dq-recover",
           itemSchema: Schema.Number,
           effect: (n: number) => Ref.update(results, (a) => [...a, n]),
@@ -79,7 +79,7 @@ describe("QueueHyperlink persist (SQLite durability)", () => {
       const storeLayer = yield* makeStoreLayer;
       const runs = yield* Ref.make(0);
       yield* Effect.gen(function* () {
-        const queue = yield* QueueHyperlink.make({
+        const queue = yield* WorkPool.make({
           name: "dq-retry",
           itemSchema: Schema.Number,
           effect: (_n: number) =>
@@ -101,7 +101,7 @@ describe("QueueHyperlink persist (SQLite durability)", () => {
     Effect.gen(function* () {
       const storeLayer = yield* makeStoreLayer;
       yield* Effect.gen(function* () {
-        const queue = yield* QueueHyperlink.make({
+        const queue = yield* WorkPool.make({
           name: "dq-release",
           itemSchema: Schema.Number,
           effect: (_n: number) => Effect.void,
@@ -119,7 +119,7 @@ describe("QueueHyperlink persist (SQLite durability)", () => {
     Effect.gen(function* () {
       const storeLayer = yield* makeStoreLayer;
       yield* Effect.gen(function* () {
-        const queue = yield* QueueHyperlink.make({
+        const queue = yield* WorkPool.make({
           name: "dq-route",
           itemSchema: Schema.Number,
           key: (n: number) => String(n),

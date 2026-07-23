@@ -3,15 +3,15 @@
  *
  * @internal
  */
-export const resolveCustomQueueLevel = (options: {
-  readonly levelCount: number;
-  readonly namedLevels: Readonly<Record<string, number>>;
+export const resolveCustomQueueLane = (options: {
+  readonly laneCount: number;
+  readonly namedLanes: Readonly<Record<string, number>>;
   readonly defaultLevel: number;
   readonly input: number | string | undefined;
 }): number => {
-  const levelCount = Math.max(1, Math.floor(options.levelCount));
+  const laneCount = Math.max(1, Math.floor(options.laneCount));
   const clamp = (level: number): number =>
-    Math.min(levelCount - 1, Math.max(0, Math.floor(level)));
+    Math.min(laneCount - 1, Math.max(0, Math.floor(level)));
 
   if (options.input === undefined) {
     return clamp(options.defaultLevel);
@@ -19,7 +19,7 @@ export const resolveCustomQueueLevel = (options: {
   if (typeof options.input === "number") {
     return clamp(options.input);
   }
-  const named = options.namedLevels[options.input];
+  const named = options.namedLanes[options.input];
   if (named !== undefined) {
     return clamp(named);
   }

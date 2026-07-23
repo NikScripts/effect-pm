@@ -1,12 +1,12 @@
 /**
- * Layer-composed configuration for {@link Process.Service}, {@link QueueHyperlink.Service},
- * and {@link RunHyperlink.Service}.
+ * Layer-composed configuration for {@link Daemon.Service}, {@link WorkPool.Service},
+ * and {@link Gate.Service}.
  *
  * @remarks
  * - **Defaults** live on the service factory (`defaultSpec` / factory config).
  * - **`configureLayer`** appends a {@link ConfigPatch} under a resource id (Context tag).
  * - The resource **`layer`** calls {@link foldConfiguredSpec} once at acquisition, then builds
- *   runtime state (for example {@link QueueHyperlink}'s `makeQueueRuntime`).
+ *   runtime state (for example {@link WorkPool}'s `makeQueueRuntime`).
  * - Patches are **not** hot-reloaded after the layer is built.
  * - **`Layer.provide` / `Layer.provideMerge` order** is ordinary Effect layering for patch/service
  *   conflicts. Soft Storage override is **not** “later wins”: provide the app

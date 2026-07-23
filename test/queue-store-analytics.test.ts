@@ -9,18 +9,18 @@ import {
   Schema,
   Stream,
 } from "effect";
-import * as QueueHyperlink from "../src/QueueHyperlink";
+import * as WorkPool from "../src/WorkPool";
 import * as Store from "../src/Store";
 
-// Tier 3 — the advanced analytics read-extension on `QueueHyperlink.store(queue)`. Seeds a
+// Tier 3 — the advanced analytics read-extension on `WorkPool.store(queue)`. Seeds a
 // deterministic event log through the base `record` (append) and asserts every derivation, plus the
 // live `changes()` stream.
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
-class Jobs extends QueueHyperlink.Tag<Jobs>()("@test/AnalyticsJobs", { payload: jobSchema }) {}
+class Jobs extends WorkPool.Tag<Jobs>()("@test/AnalyticsJobs", { payload: jobSchema }) {}
 
-const jobsRegistration = QueueHyperlink.store(Jobs);
+const jobsRegistration = WorkPool.store(Jobs);
 
 class JobsStore extends Store.Service<JobsStore>("@test/AnalyticsStore")(
   jobsRegistration,
@@ -51,7 +51,7 @@ const entry = (
   },
 });
 
-describe("QueueHyperlink.store — analytics read-extension", () => {
+describe("WorkPool.store — analytics read-extension", () => {
   it.effect("derivations compute over the seeded event log", () =>
     Effect.gen(function* () {
       const store = yield* JobsStore;

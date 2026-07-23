@@ -1,17 +1,17 @@
 import { Duration, Effect, Layer } from "effect";
 import { expect, it } from "vitest";
 import * as Logs from "../src/Logs";
-import * as Process from "../src/Process";
+import * as Daemon from "../src/Daemon";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Store from "../src/Store";
 
 // A process started disarmed (empty inline schedule) so it only runs on `run`; with the logs
 // stack provided, worker lines are scoped by tag key and read back via Hyperlink.logs.
-class LogProc extends Process.Tag<LogProc>()(
+class LogProc extends Daemon.Tag<LogProc>()(
   "test/process-log-history/Proc",
-).pipe(Process.schedule([])) {}
+).pipe(Daemon.schedule([])) {}
 
-const logProcRegistration = Process.store(LogProc);
+const logProcRegistration = Daemon.store(LogProc);
 
 class AppStore extends Store.Service<AppStore>("@test/process-log-history/Store")(
   logProcRegistration,
@@ -34,7 +34,7 @@ it("Hyperlink.logs reads back process worker logs", () =>
       expect(rows.some((r) => r.message.includes("process tick"))).toBe(true);
     }).pipe(
       Effect.provide(
-        Process.layer(LogProc, {
+        Daemon.layer(LogProc, {
           effect: Effect.logInfo("process tick"),
         }).pipe(Layer.provideMerge(AppStore.layerMemory)),
       ),
@@ -53,7 +53,7 @@ it("Hyperlink.logs query is empty without store registration (live relay only)",
       expect(yield* query({})).toEqual([]);
     }).pipe(
       Effect.provide(
-        Process.layerMemory(LogProc, {
+        Daemon.layerMemory(LogProc, {
           effect: Effect.logInfo("process tick"),
         }).pipe(Layer.provide(Logs.layer)),
       ),

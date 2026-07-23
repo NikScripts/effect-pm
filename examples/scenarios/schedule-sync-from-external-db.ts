@@ -1,12 +1,12 @@
 /**
  * @module examples/scenarios/schedule-sync-from-external-db
  *
- * DB rows → Process schedule entries, synced at startup and each tick. Run: `pnpm run example:schedule-control-db-sync`
+ * DB rows → Daemon schedule entries, synced at startup and each tick. Run: `pnpm run example:schedule-control-db-sync`
  */
 
 import { Duration, Effect, Fiber, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
-import { Polling, Process } from "../../src";
+import { Polling, Daemon } from "../../src";
 import { runNodeProgramWithLayer } from "../shared/demo-harness";
 import { utcDateFromMillis } from "../../src/internal/utcDate";
 
@@ -16,7 +16,7 @@ interface DbScheduleRow {
   readonly stopMs?: number;
 }
 
-const toEntry = (row: DbScheduleRow): Process.ScheduleEntry => ({
+const toEntry = (row: DbScheduleRow): Daemon.ScheduleEntry => ({
   id: Option.some(row.id),
   startAt: utcDateFromMillis(row.startMs),
   stopAt: row.stopMs === undefined ? Option.none() : Option.some(utcDateFromMillis(row.stopMs)),
@@ -29,7 +29,7 @@ const program = Effect.gen(function* () {
   ]);
   const ticks = yield* Ref.make(0);
 
-  const proc = Process.make("examples/schedule-db-sync", {
+  const proc = Daemon.make("examples/schedule-db-sync", {
     polling: Polling.spaced(Duration.millis(100)),
     // Initial sync at process startup.
     schedule: ({ set }) =>
@@ -39,7 +39,7 @@ const program = Effect.gen(function* () {
       }),
     // Ongoing sync while running (simulated polling strategy).
     effect: Effect.gen(function* () {
-      const controls = yield* Process.scheduleControls;
+      const controls = yield* Daemon.scheduleControls;
       const rows = yield* Ref.get(dbRows);
       yield* controls.set(rows.map(toEntry));
       yield* Ref.update(ticks, (n) => n + 1);

@@ -1,5 +1,5 @@
 /**
- * Pure builders for RunHyperlink store rows.
+ * Pure builders for Gate store rows.
  *
  * @module internal/runHyperlinkFacts
  * @internal

@@ -40,7 +40,7 @@ class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
   value: Session,
   keyOf: (s) => s.id,
 }).pipe(
-  Hyperlink.distributed([DropletEast, DropletWest, DropletCentral]),
+  Hyperlink.nodes([DropletEast, DropletWest, DropletCentral]),
 ) {}
 ```
 
@@ -71,7 +71,7 @@ class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
   value: Session,
   keyOf: (s) => s.id,
 }).pipe(
-  Hyperlink.distributed([DropletEast, DropletWest, DropletCentral]),
+  Hyperlink.nodes([DropletEast, DropletWest, DropletCentral]),
 ) {}
 const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) =>
   Node.httpServer(resource).pipe(
@@ -174,7 +174,7 @@ class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
   key: SessionId,
   value: Session,
   keyOf: (s) => s.id,
-}).pipe(Hyperlink.distributed([DropletEast])) {}
+}).pipe(Hyperlink.nodes([DropletEast])) {}
 // ---cut---
 const live = ShardMap.serve(Sessions, {
   filename: ".hyperlink-ts/sessions.sqlite",

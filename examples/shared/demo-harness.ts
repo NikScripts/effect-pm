@@ -9,7 +9,7 @@ import { TestClock } from "effect/testing";
 
 /** Fork supervised process + side fiber, advance simulated time, interrupt process. */
 export const forkSupervisedAndSideThenAdvanceTime = <R>(options: {
-  /** Process (or other) effect; environment must be supplied by the caller’s scope. */
+  /** Daemon (or other) effect; environment must be supplied by the caller’s scope. */
   readonly supervised: Effect.Effect<void, never, R>;
   readonly sideFiber: Effect.Effect<void, never, never>;
   readonly advanceBy: Duration.Duration;

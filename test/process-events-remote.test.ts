@@ -1,5 +1,5 @@
 /**
- * Process.events over real HTTP RPC — Hyperlink.client ∩ Process.serve.
+ * Daemon.events over real HTTP RPC — Hyperlink.client ∩ Daemon.serve.
  * Complements local `process-events.test.ts` and control-plane `process-remote-http.test.ts`.
  */
 import { describe, expect, it } from "@effect/vitest";
@@ -7,7 +7,7 @@ import { Cause, Duration, Effect, Exit, Fiber, Layer, Option, Schema, Stream } f
 import { FetchHttpClient, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
-import * as Process from "../src/Process";
+import * as Daemon from "../src/Daemon";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
@@ -15,18 +15,18 @@ const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 
 /** Disarmed — subscribe to events, then drive with manual `run`. */
-class RemoteEventsProc extends Process.Tag<RemoteEventsProc>()(
+class RemoteEventsProc extends Daemon.Tag<RemoteEventsProc>()(
   "proc-remote-events/Ok",
-).pipe(Process.schedule([])) {}
+).pipe(Daemon.schedule([])) {}
 
-class RemoteFailProc extends Process.Tag<RemoteFailProc>()("proc-remote-events/Fail", {
+class RemoteFailProc extends Daemon.Tag<RemoteFailProc>()("proc-remote-events/Fail", {
   error: FetchErr,
-}).pipe(Process.schedule([])) {}
+}).pipe(Daemon.schedule([])) {}
 
-class RemoteSuccessProc extends Process.Tag<RemoteSuccessProc>()(
+class RemoteSuccessProc extends Daemon.Tag<RemoteSuccessProc>()(
   "proc-remote-events/Success",
   { success: Price },
-).pipe(Process.schedule([])) {}
+).pipe(Daemon.schedule([])) {}
 
 const clientHttp = (port: number) =>
   RpcClient.layerProtocolHttp({ url: `http://127.0.0.1:${port}/rpc` }).pipe(
@@ -34,13 +34,13 @@ const clientHttp = (port: number) =>
     Layer.provide(FetchHttpClient.layer),
   );
 
-/** Test harness — concrete Tags are not assignable under Process.serve's overloaded erasure. */
-const withProcessHttp = (
+/** Test harness — concrete Tags are not assignable under Daemon.serve's overloaded erasure. */
+const withDaemonHttp = (
   tag: any,
-  config: Process.ProcessLayerConfig<any, any, any>,
+  config: Daemon.DaemonLayerConfig<any, any, any>,
   use: (port: number) => Effect.Effect<any, any, any>,
 ) => {
-  const server = Node.httpServer([Process.serveMemory(tag, config)]).pipe(
+  const server = Node.httpServer([Daemon.serveMemory(tag, config)]).pipe(
     Layer.provideMerge(NodeHttpServer.layerTest),
   );
   return Effect.gen(function* () {
@@ -55,9 +55,9 @@ const withProcessHttp = (
   }).pipe(Effect.provide(server), Effect.scoped);
 };
 
-describe("Process.events — remote HTTP", () => {
+describe("Daemon.events — remote HTTP", () => {
   it.live("Started → Completed over Hyperlink.client after remote run", () =>
-    withProcessHttp(RemoteEventsProc, { effect: Effect.void }, (_port) =>
+    withDaemonHttp(RemoteEventsProc, { effect: Effect.void }, (_port) =>
       Effect.gen(function* () {
         const proc = yield* RemoteEventsProc;
         const collected = yield* Effect.forkChild(
@@ -72,7 +72,7 @@ describe("Process.events — remote HTTP", () => {
   );
 
   it.live("Failed carries stamped typed error on events over HTTP", () =>
-    withProcessHttp(
+    withDaemonHttp(
       RemoteFailProc,
       { effect: Effect.fail({ _tag: "FetchError" as const, status: 503 }) },
       (_port) =>
@@ -102,7 +102,7 @@ describe("Process.events — remote HTTP", () => {
   );
 
   it.live("Completed.success crosses the wire when the tag stamps success", () =>
-    withProcessHttp(
+    withDaemonHttp(
       RemoteSuccessProc,
       { effect: Effect.succeed({ symbol: "AAPL", usd: 42 }) },
       (_port) =>

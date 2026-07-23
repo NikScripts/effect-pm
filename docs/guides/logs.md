@@ -15,7 +15,7 @@ There is no separate “process log API” and “queue log API.” Capture is c
 carve the bus into journals and Handle-facing exports.
 
 This chapter is the narrative guide. Deep tables and fixture indexes remain in
-[`docs/LOGS.md`](https://github.com/NikScripts/effect-pm/blob/integration/docs/LOGS.md) when you need
+[`docs/LOGS.md`](https://github.com/nikolasstow/Hyperlink/blob/integration/docs/LOGS.md) when you need
 a lookup.
 
 ## What you get
@@ -27,7 +27,7 @@ Your Node (key: billing/scores)
   Store.Service
     └── Logs.layer          — one capture Logger + Logs.Relay bus
     └── BillingNode.logs    — match-all durable tail → node journal
-    └── Process.store(Daily)— lineage durable tail → resource journal
+    └── Daemon.store(Daily)— lineage durable tail → resource journal
   Process / Queue layers
     └── Logs.withScope(tag) — appends tag.key onto the fiber lineage path
 ```
@@ -43,7 +43,7 @@ Your Node (key: billing/scores)
   for app reads; apps may freely declare their own Store shape named `log`.
 
 {.note}
-**Two copies are intentional.** If both `Node.logs` and `Process.store(Daily)` are registered, the
+**Two copies are intentional.** If both `Node.logs` and `Daemon.store(Daily)` are registered, the
 same published line can appear in the node journal *and* the resource journal. Dedup is per scope, not
 global.
 
@@ -79,22 +79,22 @@ Live-only is enough for ephemeral UIs. History needs Storage.
 
 Register journals on a `Store.Service`. Node-wide history uses `Node.logs` (or
 `Hyperlink.store(Node)`). Per-Hyperlink history uses the toolkit store registration —
-`Process.store(tag)`, `QueueHyperlink.store(tag)`, and friends — which carry a private `_logs`
+`Daemon.store(tag)`, `WorkPool.store(tag)`, and friends — which carry a private `_logs`
 journal. Read durable history with `Logs.byNode` / `Logs.byHyperlink` / `Hyperlink.logs(tag).query`
 (not a public `handle.log` surface).
 
 {.twoslash}
 ``` ts
-import { Logs, Process, Hyperlink, Store } from "hyperlink-ts"
+import { Logs, Daemon, Hyperlink, Store } from "hyperlink-ts"
 import * as Node from "hyperlink-ts/Node"
 import { Effect } from "effect"
 
 class BillingNode extends Node.Tag<BillingNode>()("billing/scores") {}
-class Daily extends Process.Tag<Daily>()("app/Daily") {}
+class Daily extends Daemon.Tag<Daily>()("app/Daily") {}
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
   BillingNode.logs,
-  Process.store(Daily),
+  Daemon.store(Daily),
 ) {}
 
 const program = Effect.gen(function* () {
@@ -121,13 +121,13 @@ before queue workers fork at Layer build:
 ``` ts
 Effect.provide(
   program,
-  QueueHyperlink.layer(MyQueue, { effect: worker }).pipe(
+  WorkPool.layer(MyQueue, { effect: worker }).pipe(
     Layer.provideMerge(AppStore.layerMemory),
   ),
 )
 ```
 
-Bare `QueueHyperlink.layer` / `Process.layer` (or `*Memory` aliases) work without an AppStore;
+Bare `WorkPool.layer` / `Daemon.layer` (or `*Memory` aliases) work without an AppStore;
 durable logs still need `Store.Service.layer*`. Recipe SSOT: [`docs/guides/stores.md`](./stores.md).
 
 ## Keys
@@ -137,7 +137,7 @@ Say the identifier kind out loud. Mixing them is the common failure mode.
 | Kind | Identifies | Declared as | Used for |
 |------|------------|-------------|----------|
 | **Node log key** | One OS process / runtime host | `Node.Tag(…)` → `.key` | `Node.logs`, `Logs.byNode`, `annotations.node` |
-| **Hyperlink key** | One Queue, Process, or custom Tag | `Tag(…)` → `.key` | store scope, lineage segments, `byHyperlink` |
+| **Hyperlink key** | One Queue, Daemon, or custom Tag | `Tag(…)` → `.key` | store scope, lineage segments, `byHyperlink` |
 | **Lineage segment** | One hop in ancestry | element of the lineage JSON array | `LogEntry.hasKey` / `atRoot` / `atLeaf` |
 | **Annotation key** | Field name on `LogEntry.annotations` | `LogAnnotationKeys.*` | metadata keys, not buckets |
 
@@ -205,16 +205,16 @@ Prefer `Hyperlink.logs(tag)` for Handle-shaped access — live Stream plus durab
 
 {.twoslash}
 ``` ts
-import { LogEntry, Process, Hyperlink } from "hyperlink-ts"
+import { LogEntry, Daemon, Hyperlink } from "hyperlink-ts"
 import { Effect } from "effect"
 
-class Daily extends Process.Tag<Daily>()("app/Daily") {}
+class Daily extends Daemon.Tag<Daily>()("app/Daily") {}
 
 const program = Effect.gen(function* () {
   const { stream, query } = yield* Hyperlink.logs(Daily)
 
   // Live: already filtered to lineage containing Daily.key (plus optional stream level).
-  // Durable: registration Storage when local; NodeStatus fallback when remote.
+  // Durable: registration Storage when local; Node.status fallback when remote.
   const history = yield* query({ limit: 50 })
   const mine = history.filter(LogEntry.hasKey(Daily.key))
 
@@ -225,7 +225,7 @@ const program = Effect.gen(function* () {
 Pipe `Hyperlink.withLogExport` onto a Tag when you want `yield* Tag.logs` as a member:
 
 ``` ts
-class MailQueue extends QueueHyperlink.Tag<MailQueue>()("app/Mail", MailJob).pipe(
+class MailQueue extends WorkPool.Tag<MailQueue>()("app/Mail", MailJob).pipe(
   Hyperlink.withLogExport,
 ) {}
 
@@ -249,12 +249,12 @@ Two knobs, two jobs:
 
 ``` ts
 class AppStore extends Store.Service<AppStore>("@app/Store")(
-  Store.streamLevelWarn(Process.store(QuietProc)),
+  Store.streamLevelWarn(Daemon.store(QuietProc)),
   BillingNode.logs,
 ) {}
 
 // Tag-side live floor (Hyperlink.logs stream)
-class QuietProc extends Process.Tag<QuietProc>()("app/Quiet").pipe(
+class QuietProc extends Daemon.Tag<QuietProc>()("app/Quiet").pipe(
   Hyperlink.logStreamLevelWarn,
 ) {}
 ```
@@ -264,25 +264,25 @@ class QuietProc extends Process.Tag<QuietProc>()("app/Quiet").pipe(
 ## Remote clients
 
 When the dashboard (or any client) reaches a Node over RPC, durable per-resource rows come from that
-Node’s journal — typically `NodeStatus.logs.query` — filtered by **resource key**. Locally,
-`Hyperlink.logs(tag).query` prefers registration Storage and falls back to NodeStatus when Storage
+Node’s journal — typically `Node.status.logs.query` — filtered by **resource key**. Locally,
+`Hyperlink.logs(tag).query` prefers registration Storage and falls back to Node.status when Storage
 isn’t there.
 
 ``` ts
-import { LogEntry, NodeStatus } from "hyperlink-ts"
+import { LogEntry, Node } from "hyperlink-ts"
 import { Stream } from "effect"
 
 const resourceKey = LiveScorePoller.key
 
-NodeStatus.logs.stream.pipe(Stream.filter(LogEntry.hasKey(resourceKey)))
+Node.status.logs.stream.pipe(Stream.filter(LogEntry.hasKey(resourceKey)))
 
-const rows = yield* NodeStatus.logs.query({ limit: 300 })
+const rows = yield* Node.status.logs.query({ limit: 300 })
 const scoped = rows.filter(LogEntry.hasKey(resourceKey))
 ```
 
 The server must still provide a `Store.Service` with `Node.logs` (and any toolkit stores you care
 about) on the Node stack. `httpServer` infers the node log key from served Tags’ bound Node for
-`NodeStatus.logs.query`.
+`Node.status.logs.query`.
 
 ## Modules
 
@@ -307,5 +307,5 @@ about) on the Node stack. `httpServer` infers the node log key from served Tags�
 ## See also
 
 - [Stores](/docs/stores) — registering journals and reading Storage  
-- [`docs/LOGS.md`](https://github.com/NikScripts/effect-pm/blob/integration/docs/LOGS.md) — key catalog and fixture map  
-- [Queues](/docs/queues) / [Processes](/docs/processes) — engines that stamp lineage at materialize  
+- [`docs/LOGS.md`](https://github.com/nikolasstow/Hyperlink/blob/integration/docs/LOGS.md) — key catalog and fixture map  
+- [Queues](/docs/work-pools) / [Processes](/docs/daemons) — engines that stamp lineage at materialize  

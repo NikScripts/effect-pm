@@ -9,9 +9,9 @@ import { Effect, Option } from "effect";
 import type { LogEntry } from "../../LogEntry";
 import * as LogEntryModule from "../../LogEntry";
 import {
-  normalizeProcessManagerTarget,
-  resolveProcessManagerTarget,
-  type ProcessManagerTargetCandidate,
+  normalizeDaemonManagerTarget,
+  resolveDaemonManagerTarget,
+  type DaemonManagerTargetCandidate,
 } from "./targetResolver";
 
 /**
@@ -56,9 +56,9 @@ const resolveGroupFromInput = <G extends GroupCatalogEntry>(
   groups: ReadonlyArray<G>,
   input: string,
 ): Option.Option<G> => {
-  const normalizedInput = normalizeProcessManagerTarget(input);
+  const normalizedInput = normalizeDaemonManagerTarget(input);
   const matches = groups.filter((group) => {
-    const normalizedId = normalizeProcessManagerTarget(group.key);
+    const normalizedId = normalizeDaemonManagerTarget(group.key);
     return (
       normalizedId === normalizedInput || normalizedId.endsWith(`/${normalizedInput}`)
     );
@@ -73,7 +73,7 @@ const resolveGroupFromInput = <G extends GroupCatalogEntry>(
 export const resolveLogScope = <G extends GroupCatalogEntry>(
   groups: ReadonlyArray<G>,
   input: Option.Option<string>,
-  candidates: ReadonlyArray<ProcessManagerTargetCandidate>,
+  candidates: ReadonlyArray<DaemonManagerTargetCandidate>,
 ): Effect.Effect<
   LogScope,
   { readonly reason: string }
@@ -86,7 +86,7 @@ export const resolveLogScope = <G extends GroupCatalogEntry>(
         if (Option.isSome(asGroup)) {
           return { _tag: "group", groupId: asGroup.value.key };
         }
-        const resolution = resolveProcessManagerTarget(value, candidates);
+        const resolution = resolveDaemonManagerTarget(value, candidates);
         if (resolution._tag === "Resolved") {
           const { candidate } = resolution;
           if (candidate.kind === "process") {

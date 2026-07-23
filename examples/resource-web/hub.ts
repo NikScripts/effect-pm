@@ -13,15 +13,14 @@
 import { Effect, Layer, Schema } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import * as Hyperlink from "../../src/Hyperlink";
-import * as QueueHyperlink from "../../src/QueueHyperlink";
-import * as CustomQueueHyperlink from "../../src/CustomQueueHyperlink";
-import * as Process from "../../src/Process";
+import * as WorkPool from "../../src/WorkPool";
+import * as Daemon from "../../src/Daemon";
 import * as Group from "../../src/Group";
 import * as ApiMetrics from "../../src/ApiMetrics";
 import * as FleetHealth from "../../src/FleetHealth";
 import * as Telemetry from "../../src/Telemetry";
 import * as ShardMap from "../../src/ShardMap";
-import * as RunHyperlink from "../../src/RunHyperlink";
+import * as Gate from "../../src/Gate";
 import * as Node from "../../src/Node";
 
 const importJob = Schema.Struct({ id: Schema.String });
@@ -76,8 +75,8 @@ export class Sessions extends ShardMap.Tag<Sessions>()("wnba/Sessions", {
 
 // A **run gate** — a bounded-concurrency gate over an effect (here a simulated box-score fetch). No
 // queues/priorities; each `run` acquires one of `concurrency` permits inline. Served on LiveNode and
-// driven concurrently so the RunHyperlinkCard shows live in-flight / waiting / done counters.
-export class FetchGate extends RunHyperlink.Tag<FetchGate>()("wnba/FetchGate", {
+// driven concurrently so the GateCard shows live in-flight / waiting / done counters.
+export class FetchGate extends Gate.Tag<FetchGate>()("wnba/FetchGate", {
   payload: Schema.String,
   success: Schema.Number,
   error: Schema.String,
@@ -98,7 +97,7 @@ export class ScoresDb extends Hyperlink.Tag<ScoresDb>()(
   ),
 ) {}
 
-export class BoxScoreQueue extends QueueHyperlink.Tag<BoxScoreQueue>()(
+export class BoxScoreQueue extends WorkPool.Tag<BoxScoreQueue>()(
   "wnba/BoxScoreQueue",
   { payload: importJob, node: WnbaNode },
 ).pipe(
@@ -118,20 +117,20 @@ export class BoxScoreQueue extends QueueHyperlink.Tag<BoxScoreQueue>()(
 ) {}
 // Owns an inline schedule (seeded empty; `server.ts` seeds the live game windows at startup) so the
 // dashboard can read + edit its run windows through the `schedule` verb group.
-export class LiveScorePoller extends Process.Tag<LiveScorePoller>()(
+export class LiveScorePoller extends Daemon.Tag<LiveScorePoller>()(
   "wnba/LiveScorePoller",
   { node: LiveNode },
-).pipe(Process.schedule([])) {}
-export class PlayByPlayQueue extends QueueHyperlink.Tag<PlayByPlayQueue>()(
+).pipe(Daemon.schedule([])) {}
+export class PlayByPlayQueue extends WorkPool.Tag<PlayByPlayQueue>()(
   "wnba/PlayByPlayQueue",
   { payload: importJob, node: StatsNode },
 ) {}
 // A **custom queue** — named lanes (hot / warm / cold) rather than the fixed high/normal/low. Exercises
-// the CustomQueueHyperlink widget: `status.sizes` is an arbitrary Record, rendered a bar per lane.
-export class ImportJobs extends CustomQueueHyperlink.Tag<ImportJobs>()("wnba/ImportJobs", {
+// the priority-lane widget: `status.sizes` is an arbitrary Record, rendered a bar per lane.
+export class ImportJobs extends WorkPool.priority<ImportJobs>()("wnba/ImportJobs", {
   payload: importJob,
-  levelCount: 3,
-  namedLevels: { hot: 0, warm: 1, cold: 2 },
+  laneCount: 3,
+  namedLanes: { hot: 0, warm: 1, cold: 2 },
   node: StatsNode,
 }) {}
 export class ScoresApi extends ApiMetrics.Tag<ScoresApi>()("@wnba/ScoresApi", {
@@ -162,7 +161,7 @@ export class ServicesHub extends Group.Tag<ServicesHub>("hub/ServicesHub")({
 // Every resource — the box-score queue, live-score poller, play-by-play queue, and the scores
 // API-usage tap — is served remotely (server.ts); the browser is a thin `Hyperlink.client` over each
 // node's `/rpc` (vite proxies them). `ScoresApi` lives on `WnbaNode` alongside the box-score queue.
-// One transport per node → one pip each, auto-fed by `NodeStatus`.
+// One transport per node → one pip each, auto-fed by `Node.status`.
 // A browser opens many concurrent live streams (each resource's status + metrics + logs); over
 // HTTP/1.1 that dies at the ~6-connection-per-origin cap. `ws` rides ONE multiplexed
 // WebSocket per node instead — vite proxies these same-origin ws paths to each server (ws: true).
@@ -173,7 +172,7 @@ const liveTransport = Hyperlink.ws(LiveNode, { url: "/live/rpc" });
 const statsTransport = Hyperlink.ws(StatsNode, { url: "/stats/rpc" });
 
 // Expose each node itself in the runtime (not only the resource clients): the node-status die reads
-// `NodeStatus` over each node's transport, so it needs the node in context. Each transport is one
+// `Node.status` over each node's transport, so it needs the node in context. Each transport is one
 // const (shared by reference), so the client + the die reuse a single connection per node.
 const appLayer = Layer.mergeAll(
   wnbaTransport,

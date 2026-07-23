@@ -11,7 +11,7 @@ import type { HttpClientError } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
 import * as ApiMetrics from "../src/ApiMetrics";
-import * as HttpApiHyperlink from "../src/HttpApiHyperlink";
+import * as Gate from "../src/Gate";
 import { resetClientUsageForTest } from "../src/internal/apiUsageRegistry";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
@@ -28,7 +28,7 @@ const demoApi = HttpApi.make("api-metrics-demo").add(
   HttpApiGroup.make("g").add(pingEndpoint),
 );
 
-class DemoClient extends HttpApiHyperlink.Service<DemoClient>()(ClientId, demoApi, {
+class DemoClient extends Gate.httpApiClientService<DemoClient>()(ClientId, demoApi, {
   concurrency: 2,
 }) {}
 
@@ -191,7 +191,7 @@ describe("ApiMetrics per-instance groups + httpServer", () => {
 });
 
 describe("ApiMetrics.layerFor", () => {
-  it("links metrics tag to HttpApiHyperlink.Service key", () => {
+  it("links metrics tag to Gate.httpApiClientService key", () => {
     const layer = ApiMetrics.layerFor(DemoMetrics, DemoClient);
     expect(layer).toBeDefined();
   });

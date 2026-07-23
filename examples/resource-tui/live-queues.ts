@@ -1,7 +1,7 @@
 /**
  * @module examples/resource-tui/live-queues
  *
- * A small fleet of **real toolkit `QueueHyperlink`s** + their live atoms — the data
+ * A small fleet of **real toolkit `WorkPool`s** + their live atoms — the data
  * layer behind the dashboard. Each queue is a tag with a local layer (worker +
  * producer daemon); `Atom.runtime(AppLayer)` is the seam (swap in `Hyperlink.client`
  * per tag for remote later). One bundle per queue exposes the live `status` /
@@ -24,7 +24,7 @@ import {
   SubscriptionRef,
 } from "effect";
 import { Atom } from "effect/unstable/reactivity";
-import { QueueHyperlink } from "../../src";
+import { WorkPool } from "../../src";
 import * as LogEntry from "../../src/LogEntry";
 import * as Hyperlink from "../../src/Hyperlink";
 import * as Store from "../../src/Store";
@@ -36,17 +36,17 @@ class TuiNode extends Node.Tag<TuiNode>()("acme/tui") {}
 const Job = Schema.Struct({ id: Schema.String });
 
 // the fleet — one tag per queue (unique id + Self)
-class Mail extends QueueHyperlink.Tag<Mail>()("@acme/queues/Mail", { payload: Job }) {}
-class Jobs extends QueueHyperlink.Tag<Jobs>()("@acme/queues/Jobs", { payload: Job }) {}
-class Billing extends QueueHyperlink.Tag<Billing>()("@acme/queues/Billing", { payload: Job }) {}
-class Notify extends QueueHyperlink.Tag<Notify>()("@acme/queues/Notify", { payload: Job }) {}
-class Worker1 extends QueueHyperlink.Tag<Worker1>()("@acme/queues/Worker1", { payload: Job }) {}
-class Worker2 extends QueueHyperlink.Tag<Worker2>()("@acme/queues/Worker2", { payload: Job }) {}
-class Worker3 extends QueueHyperlink.Tag<Worker3>()("@acme/queues/Worker3", { payload: Job }) {}
-class RegionUS extends QueueHyperlink.Tag<RegionUS>()("@acme/queues/RegionUS", { payload: Job }) {}
-class RegionEU extends QueueHyperlink.Tag<RegionEU>()("@acme/queues/RegionEU", { payload: Job }) {}
-class Daily extends QueueHyperlink.Tag<Daily>()("@acme/queues/Daily", { payload: Job }) {}
-class Weekly extends QueueHyperlink.Tag<Weekly>()("@acme/queues/Weekly", { payload: Job }) {}
+class Mail extends WorkPool.Tag<Mail>()("@acme/queues/Mail", { payload: Job }) {}
+class Jobs extends WorkPool.Tag<Jobs>()("@acme/queues/Jobs", { payload: Job }) {}
+class Billing extends WorkPool.Tag<Billing>()("@acme/queues/Billing", { payload: Job }) {}
+class Notify extends WorkPool.Tag<Notify>()("@acme/queues/Notify", { payload: Job }) {}
+class Worker1 extends WorkPool.Tag<Worker1>()("@acme/queues/Worker1", { payload: Job }) {}
+class Worker2 extends WorkPool.Tag<Worker2>()("@acme/queues/Worker2", { payload: Job }) {}
+class Worker3 extends WorkPool.Tag<Worker3>()("@acme/queues/Worker3", { payload: Job }) {}
+class RegionUS extends WorkPool.Tag<RegionUS>()("@acme/queues/RegionUS", { payload: Job }) {}
+class RegionEU extends WorkPool.Tag<RegionEU>()("@acme/queues/RegionEU", { payload: Job }) {}
+class Daily extends WorkPool.Tag<Daily>()("@acme/queues/Daily", { payload: Job }) {}
+class Weekly extends WorkPool.Tag<Weekly>()("@acme/queues/Weekly", { payload: Job }) {}
 
 type AllQueues =
   | Mail
@@ -117,17 +117,17 @@ type Metrics = QueueSvc extends { readonly metrics: Stream.Stream<infer M, infer
 
 class TuiStore extends Store.Service<TuiStore>("@examples/resource-tui/TuiStore")(
   TuiNode.logs,
-  QueueHyperlink.store(Mail),
-  QueueHyperlink.store(Jobs),
-  QueueHyperlink.store(Billing),
-  QueueHyperlink.store(Notify),
-  QueueHyperlink.store(Worker1),
-  QueueHyperlink.store(Worker2),
-  QueueHyperlink.store(Worker3),
-  QueueHyperlink.store(RegionUS),
-  QueueHyperlink.store(RegionEU),
-  QueueHyperlink.store(Daily),
-  QueueHyperlink.store(Weekly),
+  WorkPool.store(Mail),
+  WorkPool.store(Jobs),
+  WorkPool.store(Billing),
+  WorkPool.store(Notify),
+  WorkPool.store(Worker1),
+  WorkPool.store(Worker2),
+  WorkPool.store(Worker3),
+  WorkPool.store(RegionUS),
+  WorkPool.store(RegionEU),
+  WorkPool.store(Daily),
+  WorkPool.store(Weekly),
 ) {}
 
 // The queue engines only (workers). Producers + accumulators are run imperatively in
@@ -135,17 +135,17 @@ class TuiStore extends Store.Service<TuiStore>("@examples/resource-tui/TuiStore"
 // can skip side-effecting daemon layers entirely. Running them on a ManagedRuntime
 // from module load makes accumulation deterministic and independent of the UI.
 const AppLayer = Layer.mergeAll(
-  QueueHyperlink.layerMemory(Mail, cfg),
-  QueueHyperlink.layerMemory(Jobs, cfg),
-  QueueHyperlink.layerMemory(Billing, cfg),
-  QueueHyperlink.layerMemory(Notify, cfg),
-  QueueHyperlink.layerMemory(Worker1, cfg),
-  QueueHyperlink.layerMemory(Worker2, cfg),
-  QueueHyperlink.layerMemory(Worker3, cfg),
-  QueueHyperlink.layerMemory(RegionUS, cfg),
-  QueueHyperlink.layerMemory(RegionEU, cfg),
-  QueueHyperlink.layerMemory(Daily, cfg),
-  QueueHyperlink.layerMemory(Weekly, cfg),
+  WorkPool.layerMemory(Mail, cfg),
+  WorkPool.layerMemory(Jobs, cfg),
+  WorkPool.layerMemory(Billing, cfg),
+  WorkPool.layerMemory(Notify, cfg),
+  WorkPool.layerMemory(Worker1, cfg),
+  WorkPool.layerMemory(Worker2, cfg),
+  WorkPool.layerMemory(Worker3, cfg),
+  WorkPool.layerMemory(RegionUS, cfg),
+  WorkPool.layerMemory(RegionEU, cfg),
+  WorkPool.layerMemory(Daily, cfg),
+  WorkPool.layerMemory(Weekly, cfg),
 ).pipe(
   Layer.provide(TuiStore.layerMemory),
   // silence the default console logger so worker logs don't bleed onto the Ink alt-screen

@@ -3,31 +3,31 @@ import { Duration, Effect, Fiber, Layer, Stream } from "effect";
 import { TestClock } from "effect/testing";
 import { LogAnnotationKeys } from "../src/LogContext";
 import * as Logs from "../src/Logs";
-import * as Process from "../src/Process";
+import * as Daemon from "../src/Daemon";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Store from "../src/Store";
 import * as Node from "../src/Node";
 
 class BillingNode extends Node.Tag<BillingNode>()("test/two-copies/node") {}
-class SyncProc extends Process.Tag<SyncProc>()("test/two-copies/proc") {}
+class SyncProc extends Daemon.Tag<SyncProc>()("test/two-copies/proc") {}
 
-class QuietProc extends Process.Tag<QuietProc>()("test/stream-level/quiet") {}
+class QuietProc extends Daemon.Tag<QuietProc>()("test/stream-level/quiet") {}
 const QuietProcWithStreamLevel = Hyperlink.logStreamLevelWarn(QuietProc);
 
-class RegProc extends Process.Tag<RegProc>()("test/stream-level/reg") {}
+class RegProc extends Daemon.Tag<RegProc>()("test/stream-level/reg") {}
 
-const syncRegistration = Process.store(SyncProc);
+const syncRegistration = Daemon.store(SyncProc);
 class TwoCopyStore extends Store.Service<TwoCopyStore>("@test/logs-two-copies/Store")(
   BillingNode.logs,
   syncRegistration,
 ) {}
 
-const quietRegistration = Process.store(QuietProcWithStreamLevel);
+const quietRegistration = Daemon.store(QuietProcWithStreamLevel);
 class TagStreamStore extends Store.Service<TagStreamStore>("@test/logs-tag-stream/Store")(
   quietRegistration,
 ) {}
 
-const regStreamRegistration = Process.store(RegProc).pipe(Store.streamLevelWarn);
+const regStreamRegistration = Daemon.store(RegProc).pipe(Store.streamLevelWarn);
 class RegStreamStore extends Store.Service<RegStreamStore>("@test/logs-reg-stream/Store")(
   regStreamRegistration,
 ) {}
@@ -78,7 +78,7 @@ describe("Hyperlink.logStreamLevel / Store.streamLevel", () => {
         expect(live?.message).toBe("kept-warn");
       }).pipe(
         Effect.provide(
-          Process.layer(QuietProc, { effect: Effect.void }).pipe(
+          Daemon.layer(QuietProc, { effect: Effect.void }).pipe(
             Layer.provideMerge(TagStreamStore.layerMemory),
           ),
         ),

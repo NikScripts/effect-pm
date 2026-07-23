@@ -2,7 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Fiber, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
 import * as Polling from "../src/Polling";
-import { Process } from "../src";
+import { Daemon } from "../src";
 
 describe("Polling.cron", () => {
   it.effect(
@@ -10,7 +10,7 @@ describe("Polling.cron", () => {
     () =>
       Effect.gen(function* () {
         const ticks = yield* Ref.make(0);
-        const proc = Process.make("test/cron-minutely", {
+        const proc = Daemon.make("test/cron-minutely", {
           effect: Ref.update(ticks, (n) => n + 1),
           polling: Polling.cron("* * * * *"),
         });

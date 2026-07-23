@@ -13,7 +13,7 @@ describe("Logs.byHyperlink full key", () => {
     expectTypeOf(Logs.byHyperlink("app/Daily")).toEqualTypeOf<ByHyperlink>();
 
     // @ts-expect-error bag removed — identity is Tag.key / full key only
-    const _bagProcess: ByHyperlink = Logs.byHyperlink({ processId: "app/Daily" });
+    const _bagDaemon: ByHyperlink = Logs.byHyperlink({ processId: "app/Daily" });
     // @ts-expect-error bag removed
     const _bagQueue: ByHyperlink = Logs.byHyperlink({ queueId: "q" });
   });

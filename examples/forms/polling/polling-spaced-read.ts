@@ -6,7 +6,7 @@
 
 import { DateTime, Duration, Effect } from "effect";
 import { TestClock } from "effect/testing";
-import { Process, Polling } from "../../../src";
+import { Daemon, Polling } from "../../../src";
 import {
   forkSupervisedAndSideThenAdvanceTime,
   runNodeProgramWithLayer,
@@ -20,11 +20,11 @@ const env = TestClock.layer();
 const program = Effect.gen(function* () {
   const feed = yield* makeSportsScoreFeedTestDouble();
 
-  const proc = Process.make("examples/forms/polling-spaced-read", {
+  const proc = Daemon.make("examples/forms/polling-spaced-read", {
     // 500 ms so the first tick (t≈500) still sees 0-0 before the feed changes at t≈600.
     polling: Polling.spaced(Duration.millis(500)),
-    schedule: Process.scheduleInMemory([
-      Process.at("sports-basic", scheduleStartAtUnixEpoch),
+    schedule: Daemon.scheduleInMemory([
+      Daemon.at("sports-basic", scheduleStartAtUnixEpoch),
     ]),
     effect: Effect.gen(function* () {
       // Production: HttpClient.get → parse JSON → GameScore.

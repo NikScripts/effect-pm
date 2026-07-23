@@ -10,10 +10,10 @@ import {
   HttpClientRequest,
 } from "effect/unstable/http";
 import { Clock, Effect, Layer } from "effect";
-import { HttpClientRunGate, RunHyperlink } from "../../../src";
+import { HttpClientRunGate, Gate } from "../../../src";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 
-const DemoHttpRunner = RunHyperlink.makeRunner({
+const DemoHttpRunner = Gate.makeRunner({
   name: "examples/DemoHttpRunner",
   concurrency: 2,
 });
@@ -21,7 +21,7 @@ const DemoHttpRunner = RunHyperlink.makeRunner({
 const program = Effect.gen(function* () {
   const base = yield* HttpClient.HttpClient;
   const runner = yield* DemoHttpRunner;
-  // Same gate pattern as HttpApiHyperlink limits — applied at HttpClient level.
+  // Same gate pattern as Gate.httpApiClient limits — applied at HttpClient level.
   const client = HttpClientRunGate.transformClient(base, runner);
 
   yield* Effect.log("10 parallel GETs through the run gate…");

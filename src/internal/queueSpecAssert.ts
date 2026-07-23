@@ -1,10 +1,10 @@
 /**
- * Queue instance spec validation — single boundary cast site for {@link QueueHyperlink.Tag}
+ * Queue instance spec validation — single boundary cast site for {@link WorkPool.Tag}
  * and {@link CustomQueueHyperlink.Tag}.
  *
  * @remarks
  * **Invariant:** every method key and RPC kind on a wired spec must match the erased baseline
- * (`queueSpec(payload)` / `customQueueSpec(payload, levelConfig)`) — only the **`events`** stream
+ * (`queueSpec(payload)` / `customQueueSpec(payload, laneConfig)`) — only the **`events`** stream
  * element schema may differ (tag `success` / `error` wire slots).
  *
  * @module internal/queueSpecAssert
@@ -14,8 +14,8 @@
 import { Data, DateTime, Duration, Schema } from "effect";
 import type { AnyLocalMethod, AnyMethod, FlatSpec } from "../Hyperlink";
 import { flattenHyperlinkSpec } from "../Hyperlink";
-import { buildQueueEvent } from "../QueueHyperlink";
-import type { CustomQueueInstanceSpec } from "../CustomQueueHyperlink";
+import { buildQueueEvent } from "../WorkPool";
+import type { CustomQueueInstanceSpec } from "../WorkPool";
 
 /** Structural mismatch between wired and baseline queue specs. @internal */
 export class QueueSpecShapeError extends Data.TaggedError("QueueSpecShapeError")<{
@@ -150,7 +150,7 @@ const smokeWireSlots = (
 
 /**
  * Validate a wired queue spec against its erased baseline.
- * **The only** `QueueInstanceSpec` boundary assertion in QueueHyperlink tag build.
+ * **The only** `QueueInstanceSpec` boundary assertion in WorkPool tag build.
  *
  * @internal
  */

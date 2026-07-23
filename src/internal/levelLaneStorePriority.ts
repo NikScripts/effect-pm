@@ -5,10 +5,10 @@
  * @internal
  */
 import { Effect, Option, Queue } from "effect";
-import type { LaneStore, LevelSizes } from "./laneStore";
+import type { LaneStore, LaneSizes } from "./laneStore";
 
-const clampLevel = (level: number, levelCount: number): number =>
-  Math.min(levelCount - 1, Math.max(0, Math.floor(level)));
+const clampLevel = (level: number, laneCount: number): number =>
+  Math.min(laneCount - 1, Math.max(0, Math.floor(level)));
 
 /**
  * Build an N-level lane store with strict index priority (`poll` tries 0, then 1, …).
@@ -16,13 +16,13 @@ const clampLevel = (level: number, levelCount: number): number =>
  * @internal
  */
 export const makeLevelLaneStorePriority = <A>(options: {
-  readonly levelCount: number;
+  readonly laneCount: number;
   readonly capacity: number;
 }): Effect.Effect<LaneStore<A>> =>
   Effect.gen(function* () {
-    const levelCount = Math.max(1, Math.floor(options.levelCount));
+    const laneCount = Math.max(1, Math.floor(options.laneCount));
     const queues: Array<Queue.Queue<A>> = [];
-    for (let i = 0; i < levelCount; i++) {
+    for (let i = 0; i < laneCount; i++) {
       queues.push(yield* Queue.bounded<A>(options.capacity));
     }
 
@@ -30,10 +30,10 @@ export const makeLevelLaneStorePriority = <A>(options: {
       Effect.map(Queue.size(q), (n) => Math.max(0, n));
 
     const offer = (item: A, level: number): Effect.Effect<void> =>
-      Queue.offer(queues[clampLevel(level, levelCount)]!, item);
+      Queue.offer(queues[clampLevel(level, laneCount)]!, item);
 
     const poll: Effect.Effect<Option.Option<A>> = Effect.gen(function* () {
-      for (let i = 0; i < levelCount; i++) {
+      for (let i = 0; i < laneCount; i++) {
         const item = yield* Queue.poll(queues[i]!);
         if (Option.isSome(item)) return item;
       }
@@ -41,15 +41,15 @@ export const makeLevelLaneStorePriority = <A>(options: {
     });
 
     const isEmpty: Effect.Effect<boolean> = Effect.gen(function* () {
-      for (let i = 0; i < levelCount; i++) {
+      for (let i = 0; i < laneCount; i++) {
         if ((yield* sizeOf(queues[i]!)) > 0) return false;
       }
       return true;
     });
 
-    const sizes: Effect.Effect<LevelSizes> = Effect.gen(function* () {
+    const sizes: Effect.Effect<LaneSizes> = Effect.gen(function* () {
       const out: number[] = [];
-      for (let i = 0; i < levelCount; i++) {
+      for (let i = 0; i < laneCount; i++) {
         out.push(yield* sizeOf(queues[i]!));
       }
       return out;
@@ -71,7 +71,7 @@ export const makeLevelLaneStorePriority = <A>(options: {
 
     const drain: Effect.Effect<ReadonlyArray<A>> = Effect.gen(function* () {
       const out: A[] = [];
-      for (let i = 0; i < levelCount; i++) {
+      for (let i = 0; i < laneCount; i++) {
         yield* drainLane(queues[i]!, (item) => (out.push(item), true));
       }
       return out;
@@ -89,7 +89,7 @@ export const makeLevelLaneStorePriority = <A>(options: {
           }
           return false;
         };
-        for (let i = 0; i < levelCount; i++) {
+        for (let i = 0; i < laneCount; i++) {
           yield* drainLane(queues[i]!, take);
         }
         return matched;

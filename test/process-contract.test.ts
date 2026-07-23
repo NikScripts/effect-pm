@@ -1,16 +1,16 @@
 import { DateTime, Duration, Effect, Ref } from "effect";
 import { expect, it } from "vitest";
-import * as Process from "../src/Process";
+import * as Daemon from "../src/Daemon";
 
 // A managed process as a toolkit resource — driven through the same `yield* Tag` surface a
-// remote consumer uses (only the provided layer differs). A base `Process.Tag` is armed and runs
-// immediately (default always-armed); a `.pipe(Process.schedule([]))` tag owns an empty inline
+// remote consumer uses (only the provided layer differs). A base `Daemon.Tag` is armed and runs
+// immediately (default always-armed); a `.pipe(Daemon.schedule([]))` tag owns an empty inline
 // schedule (disarmed, and gains the `schedule` verb group) so `run` / schedule CRUD can
 // be observed in isolation.
-class ArmedProc extends Process.Tag<ArmedProc>()("test/process-contract/Armed") {}
-class ScheduledProc extends Process.Tag<ScheduledProc>()(
+class ArmedProc extends Daemon.Tag<ArmedProc>()("test/process-contract/Armed") {}
+class ScheduledProc extends Daemon.Tag<ScheduledProc>()(
   "test/process-contract/Scheduled",
-).pipe(Process.schedule([])) {}
+).pipe(Daemon.schedule([])) {}
 
 it("with the default schedule a process arms and runs its effect immediately", () =>
   Effect.runPromise(
@@ -25,7 +25,7 @@ it("with the default schedule a process arms and runs its effect immediately", (
         expect(yield* Ref.get(ran)).toBeGreaterThanOrEqual(1);
         expect((yield* proc.status.get).armed).toBe(true);
       }).pipe(
-        Effect.provide(Process.layerMemory(ArmedProc, { effect: Ref.update(ran, (n) => n + 1) })),
+        Effect.provide(Daemon.layerMemory(ArmedProc, { effect: Ref.update(ran, (n) => n + 1) })),
       );
     }),
   ));
@@ -53,7 +53,7 @@ it("effect runs the worker once (disarmed via an empty inline schedule)", () =>
         expect(typeof after.lastRunDurationMillis).toBe("number");
       }).pipe(
         Effect.provide(
-          Process.layerMemory(ScheduledProc, { effect: Ref.update(ran, (n) => n + 1) }),
+          Daemon.layerMemory(ScheduledProc, { effect: Ref.update(ran, (n) => n + 1) }),
         ),
       );
     }),
@@ -76,7 +76,7 @@ it("schedule round-trips through set/add/clear and the reactive read", () =>
       yield* proc.schedule.clear;
       entries = yield* proc.schedule.entries.get;
       expect(entries).toEqual([]);
-    }).pipe(Effect.provide(Process.layerMemory(ScheduledProc, { effect: Effect.void }))),
+    }).pipe(Effect.provide(Daemon.layerMemory(ScheduledProc, { effect: Effect.void }))),
   ));
 
 it("stop/start toggles supervision (observable via status.supervising)", () =>
@@ -90,5 +90,5 @@ it("stop/start toggles supervision (observable via status.supervising)", () =>
 
       yield* proc.start;
       expect((yield* proc.status.get).supervising).toBe(true);
-    }).pipe(Effect.provide(Process.layerMemory(ArmedProc, { effect: Effect.void }))),
+    }).pipe(Effect.provide(Daemon.layerMemory(ArmedProc, { effect: Effect.void }))),
   ));

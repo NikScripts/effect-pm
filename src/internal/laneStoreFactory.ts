@@ -13,7 +13,7 @@ import type { TakeAlgorithm } from "./takeAlgorithm";
 
 /** Lane-store inputs derived from queue config. @internal */
 export interface LaneStoreConfig {
-  readonly levelCount?: number;
+  readonly laneCount?: number;
   readonly takeAlgorithm?: TakeAlgorithm;
 }
 
@@ -29,18 +29,18 @@ export interface LaneStoreConfig {
 export const laneStoreFactoryFromConfig = <A>(
   config: LaneStoreConfig,
 ): ((capacity: number) => Effect.Effect<LaneStore<A>>) => {
-  const levelCount = config.levelCount ?? 3;
+  const laneCount = config.laneCount ?? 3;
   const takeAlgorithm = config.takeAlgorithm ?? "priority";
 
   if (takeAlgorithm === "priority") {
-    return (capacity) => makeLevelLaneStorePriority({ levelCount, capacity });
+    return (capacity) => makeLevelLaneStorePriority({ laneCount, capacity });
   }
 
   return (capacity: number): Effect.Effect<LaneStore<A>> =>
     Effect.gen(function* () {
       const mod = yield* Effect.promise(() => import("./levelLaneStoreScheduled.js"));
       return yield* mod.makeLevelLaneStoreScheduled<A>({
-        levelCount,
+        laneCount,
         capacity,
         takeAlgorithm,
       });

@@ -1,5 +1,5 @@
 /**
- * RunHyperlink wire schemas and RPC spec factory.
+ * Gate wire schemas and RPC spec factory.
  *
  * @module internal/runHyperlinkSchema
  * @internal

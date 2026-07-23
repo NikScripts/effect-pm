@@ -7,19 +7,19 @@ import { LogAnnotationKeys } from "../src/LogContext";
 import * as LogEntry from "../src/LogEntry";
 import type { LogEntry as LogEntryT } from "../src/LogEntry";
 import * as Logs from "../src/Logs";
-import * as Process from "../src/Process";
+import * as Daemon from "../src/Daemon";
 import * as Store from "../src/Store";
 import { durableTailPolicy, meetsStoreLevel } from "../src/internal/logs/durableTailPolicy";
 import { lineIdFromEntry, makeLineIdClaim } from "../src/internal/logs/lineId";
 
 const nodePlatform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
-class ProcA extends Process.Tag<ProcA>()("test/logs-tail/A") {}
-class ProcB extends Process.Tag<ProcB>()("test/logs-tail/B") {}
+class ProcA extends Daemon.Tag<ProcA>()("test/logs-tail/A") {}
+class ProcB extends Daemon.Tag<ProcB>()("test/logs-tail/B") {}
 
 class AppStore extends Store.Service<AppStore>("@test/logs-durable-tail/Store")(
-  Process.store(ProcA),
-  Process.store(ProcB).pipe(Store.logLevelWarn),
+  Daemon.store(ProcA),
+  Daemon.store(ProcB).pipe(Store.logLevelWarn),
 ) {}
 
 const entry = (

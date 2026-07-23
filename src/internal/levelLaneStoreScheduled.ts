@@ -6,11 +6,11 @@
  * @internal
  */
 import { Effect, Option, Queue, SynchronizedRef } from "effect";
-import type { LaneStore, LevelSizes } from "./laneStore";
+import type { LaneStore, LaneSizes } from "./laneStore";
 import type { TakeAlgorithm, TakeAlgorithmPickContext } from "./takeAlgorithm";
 
-const clampLevel = (level: number, levelCount: number): number =>
-  Math.min(levelCount - 1, Math.max(0, Math.floor(level)));
+const clampLevel = (level: number, laneCount: number): number =>
+  Math.min(laneCount - 1, Math.max(0, Math.floor(level)));
 
 const weightOf = (level: number): number => Math.max(1, Math.floor(level));
 
@@ -86,16 +86,16 @@ const resolvePick = (
  * @internal
  */
 export const makeLevelLaneStoreScheduled = <A>(options: {
-  readonly levelCount: number;
+  readonly laneCount: number;
   readonly capacity: number;
   readonly takeAlgorithm: Exclude<TakeAlgorithm, "priority">;
 }): Effect.Effect<LaneStore<A>> =>
   Effect.gen(function* () {
-    const levelCount = Math.max(1, Math.floor(options.levelCount));
+    const laneCount = Math.max(1, Math.floor(options.laneCount));
     const takeAlgorithm = options.takeAlgorithm;
 
     const queues: Array<Queue.Queue<A>> = [];
-    for (let i = 0; i < levelCount; i++) {
+    for (let i = 0; i < laneCount; i++) {
       queues.push(yield* Queue.bounded<A>(options.capacity));
     }
     const sched = yield* SynchronizedRef.make<unknown>(undefined);
@@ -108,7 +108,7 @@ export const makeLevelLaneStoreScheduled = <A>(options: {
     > =>
       Effect.gen(function* () {
         const out: Array<{ level: number; size: number }> = [];
-        for (let i = 0; i < levelCount; i++) {
+        for (let i = 0; i < laneCount; i++) {
           const size = yield* sizeOf(queues[i]!);
           if (size > 0) out.push({ level: i, size });
         }
@@ -116,7 +116,7 @@ export const makeLevelLaneStoreScheduled = <A>(options: {
       });
 
     const offer = (item: A, level: number): Effect.Effect<void> =>
-      Queue.offer(queues[clampLevel(level, levelCount)]!, item);
+      Queue.offer(queues[clampLevel(level, laneCount)]!, item);
 
     const poll: Effect.Effect<Option.Option<A>> = SynchronizedRef.modifyEffect(
       sched,
@@ -148,15 +148,15 @@ export const makeLevelLaneStoreScheduled = <A>(options: {
     );
 
     const isEmpty: Effect.Effect<boolean> = Effect.gen(function* () {
-      for (let i = 0; i < levelCount; i++) {
+      for (let i = 0; i < laneCount; i++) {
         if ((yield* sizeOf(queues[i]!)) > 0) return false;
       }
       return true;
     });
 
-    const sizes: Effect.Effect<LevelSizes> = Effect.gen(function* () {
+    const sizes: Effect.Effect<LaneSizes> = Effect.gen(function* () {
       const out: number[] = [];
-      for (let i = 0; i < levelCount; i++) {
+      for (let i = 0; i < laneCount; i++) {
         out.push(yield* sizeOf(queues[i]!));
       }
       return out;
@@ -178,7 +178,7 @@ export const makeLevelLaneStoreScheduled = <A>(options: {
 
     const drain: Effect.Effect<ReadonlyArray<A>> = Effect.gen(function* () {
       const out: A[] = [];
-      for (let i = 0; i < levelCount; i++) {
+      for (let i = 0; i < laneCount; i++) {
         yield* drainLane(queues[i]!, (item) => (out.push(item), true));
       }
       yield* SynchronizedRef.set(sched, undefined);
@@ -197,7 +197,7 @@ export const makeLevelLaneStoreScheduled = <A>(options: {
           }
           return false;
         };
-        for (let i = 0; i < levelCount; i++) {
+        for (let i = 0; i < laneCount; i++) {
           yield* drainLane(queues[i]!, take);
         }
         return matched;

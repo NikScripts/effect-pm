@@ -1,5 +1,5 @@
 /**
- * Wire schemas stamped on {@link Process.Tag} factories (`success` / `error` slots).
+ * Wire schemas stamped on {@link Daemon.Tag} factories (`success` / `error` slots).
  *
  * @module internal/processTagSchemas
  * @internal
@@ -8,11 +8,11 @@
 import type { Schema } from "effect";
 
 export const successSym: unique symbol = Symbol.for(
-  "hyperlink-ts/Process/success",
+  "hyperlink-ts/Daemon/success",
 );
 
 export const errorSym: unique symbol = Symbol.for(
-  "hyperlink-ts/Process/error",
+  "hyperlink-ts/Daemon/error",
 );
 
 /** Read a wire schema stamped on a process tag. @internal */

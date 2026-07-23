@@ -1,5 +1,5 @@
 import { Effect, Schema } from "effect";
-import { QueueHyperlink } from "../src";
+import { WorkPool } from "../src";
 
 interface Email {
   readonly to: string;
@@ -7,22 +7,22 @@ interface Email {
 
 const EmailSchema = Schema.Struct({ to: Schema.String });
 
-// @ts-expect-error QueueHyperlink.make requires effect or config
-const _invalidMake = QueueHyperlink.make({ concurrency: 1 });
+// @ts-expect-error WorkPool.make requires effect or config
+const _invalidMake = WorkPool.make({ concurrency: 1 });
 void _invalidMake;
 
-class EmailQueue extends QueueHyperlink.Service<EmailQueue, Email, never>()(
+class EmailQueue extends WorkPool.Service<EmailQueue, Email, never>()(
   "@app/EmailQueue",
   (_email) => Effect.void,
 ) {}
 
-class EmailQueueWithOptions extends QueueHyperlink.Service<EmailQueueWithOptions, Email, never>()(
+class EmailQueueWithOptions extends WorkPool.Service<EmailQueueWithOptions, Email, never>()(
   "@app/EmailQueueWithOptions",
   (_email) => Effect.void,
   { concurrency: 3 },
 ) {}
 
-class SchemaEmailQueue extends QueueHyperlink.Service<SchemaEmailQueue, Email, never>()(
+class SchemaEmailQueue extends WorkPool.Service<SchemaEmailQueue, Email, never>()(
   "@app/SchemaEmailQueue",
   (_email) => Effect.void,
   { itemSchema: EmailSchema, concurrency: 1 },
@@ -30,19 +30,19 @@ class SchemaEmailQueue extends QueueHyperlink.Service<SchemaEmailQueue, Email, n
 
 // Tag/layer are the unified (toolkit) forms: a service tag keyed by id + item schema, and a
 // config-object layer. (make/Service above remain the engine helpers, kept via the spread.)
-class NotificationTag extends QueueHyperlink.Tag<NotificationTag>()("@app/NotificationTag", {
+class NotificationTag extends WorkPool.Tag<NotificationTag>()("@app/NotificationTag", {
   payload: EmailSchema,
 }) {}
 
 const _makeEffectOnly = Effect.scoped(
-  QueueHyperlink.make((item: string) => Effect.logInfo(item)),
+  WorkPool.make((item: string) => Effect.logInfo(item)),
 );
 
 const _makeWithOptions = Effect.scoped(
-  QueueHyperlink.make((item: string) => Effect.logInfo(item), { concurrency: 2 }),
+  WorkPool.make((item: string) => Effect.logInfo(item), { concurrency: 2 }),
 );
 
-const _layer = QueueHyperlink.layerMemory(NotificationTag, {
+const _layer = WorkPool.layerMemory(NotificationTag, {
   effect: (_email) => Effect.void,
   concurrency: 1,
 });

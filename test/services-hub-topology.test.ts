@@ -9,7 +9,7 @@ import * as Node from "../src/Node";
 // The real target topology: a ServicesHub group containing league groups (nesting), where almost
 // everything runs LOCAL on one Droplet (provided by its `.layer`) and one member runs REMOTE on
 // the Mini (a different node, reached by a client). One runtime, one group tree, mixed provision —
-// reached uniformly through the group accessors. This is the ProcessManager-free deploy shape.
+// reached uniformly through the group accessors. This is the DaemonManager-free deploy shape.
 
 class MiniNode extends Node.Tag<MiniNode>()("hub/miniNode") {}
 

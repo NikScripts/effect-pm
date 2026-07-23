@@ -4,44 +4,43 @@ import { Duration, Effect, Exit, FileSystem, Layer, Path, Schema } from "effect"
 import { TestClock } from "effect/testing";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
-import * as CustomQueueHyperlink from "../src/CustomQueueHyperlink";
-import * as Process from "../src/Process";
-import * as QueueHyperlink from "../src/QueueHyperlink";
-import * as RunHyperlink from "../src/RunHyperlink";
+import * as Daemon from "../src/Daemon";
+import * as WorkPool from "../src/WorkPool";
+import * as Gate from "../src/Gate";
 import * as Store from "../src/Store";
 import * as Polling from "../src/Polling";
-import { builtInProcessStoreContract } from "../src/internal/store/processStoreSpec";
+import { builtInDaemonStoreContract } from "../src/internal/store/processStoreSpec";
 import * as Node from "../src/Node";
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
-class Exec extends Process.Tag<Exec>()("test/storage-correctness/Exec") {}
+class Exec extends Daemon.Tag<Exec>()("test/storage-correctness/Exec") {}
 
-class Jobs extends QueueHyperlink.Tag<Jobs>()("test/storage-correctness/Jobs", {
+class Jobs extends WorkPool.Tag<Jobs>()("test/storage-correctness/Jobs", {
   payload: jobSchema,
 }) {}
 
-class CustomJobs extends CustomQueueHyperlink.Tag<CustomJobs>()(
+class CustomJobs extends WorkPool.priority<CustomJobs>()(
   "test/storage-correctness/CustomJobs",
   {
     payload: jobSchema,
-    levelCount: 2,
-    namedLevels: { interactive: 0, batch: 1 },
+    laneCount: 2,
+    namedLanes: { interactive: 0, batch: 1 },
   },
 ) {}
 
-class Gate extends RunHyperlink.Tag<{ readonly _tag: "Gate" }>()(
+class TestGate extends Gate.Tag<{ readonly _tag: "Gate" }>()(
   "test/storage-correctness/Gate",
   { payload: Schema.Number, success: Schema.Number },
 ) {}
 
 class AppStore extends Store.Service<AppStore>("@test/storage-correctness/FileStore")(
-  Store.register(Exec, builtInProcessStoreContract(Exec)),
+  Store.register(Exec, builtInDaemonStoreContract(Exec)),
 ) {}
 
-const jobsRegistration = QueueHyperlink.store(Jobs);
-const customJobsRegistration = CustomQueueHyperlink.store(CustomJobs);
-const gateRegistration = RunHyperlink.store(Gate);
+const jobsRegistration = WorkPool.store(Jobs);
+const customJobsRegistration = WorkPool.store(CustomJobs);
+const gateRegistration = Gate.store(TestGate);
 
 class QueueStore extends Store.Service<QueueStore>("@test/storage-correctness/QueueStore")(
   jobsRegistration,
@@ -72,24 +71,24 @@ const waitFor = (
     }
   }).pipe(Effect.timeout(Duration.seconds(3)));
 
-describe("storage correctness — Process soft-default + AppStore override", () => {
-  it.effect("Process.layer alone soft-defaults Memory (R fulfilled, no AppStore)", () =>
+describe("storage correctness — Daemon soft-default + AppStore override", () => {
+  it.effect("Daemon.layer alone soft-defaults Memory (R fulfilled, no AppStore)", () =>
     Effect.gen(function* () {
-      const live = Process.layer(Exec, {
+      const live = Daemon.layer(Exec, {
         effect: Effect.void,
         polling: Polling.spaced(Duration.millis(50)),
       });
       yield* Effect.gen(function* () {
         yield* Exec;
         yield* TestClock.adjust(Duration.millis(200));
-        const store = yield* Store.resolveOrDie(Exec.key, builtInProcessStoreContract(Exec));
+        const store = yield* Store.resolveOrDie(Exec.key, builtInDaemonStoreContract(Exec));
         const events = yield* store.events();
         expect(events.some((row) => row._tag === "Completed")).toBe(true);
       }).pipe(Effect.provide(live), Effect.scoped);
     }).pipe(Effect.provide(clock), Effect.scoped),
   );
 
-  it.effect("Process.layer + Layer.provideMerge(AppStore.sqlite) persists across reconnect", () =>
+  it.effect("Daemon.layer + Layer.provideMerge(AppStore.sqlite) persists across reconnect", () =>
     Effect.gen(function* () {
       const path = yield* Path.Path;
       const fs = yield* FileSystem.FileSystem;
@@ -102,7 +101,7 @@ describe("storage correctness — Process soft-default + AppStore override", () 
 
       yield* Effect.scoped(
         Effect.gen(function* () {
-          const live = Process.layer(Exec, {
+          const live = Daemon.layer(Exec, {
             effect: Effect.void,
             polling: Polling.spaced(Duration.millis(50)),
           }).pipe(Layer.provideMerge(AppStore.layer({ filename })));
@@ -124,7 +123,7 @@ describe("storage correctness — Process soft-default + AppStore override", () 
     }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, clock)), Effect.scoped),
   );
 
-  it.effect("sibling Layer.merge(Process.layer, AppStore.sqlite) leaves the SQLite file empty", () =>
+  it.effect("sibling Layer.merge(Daemon.layer, AppStore.sqlite) leaves the SQLite file empty", () =>
     Effect.gen(function* () {
       const path = yield* Path.Path;
       const fs = yield* FileSystem.FileSystem;
@@ -138,7 +137,7 @@ describe("storage correctness — Process soft-default + AppStore override", () 
       yield* Effect.scoped(
         Effect.gen(function* () {
           const live = Layer.merge(
-            Process.layer(Exec, {
+            Daemon.layer(Exec, {
               effect: Effect.void,
               polling: Polling.spaced(Duration.millis(50)),
             }),
@@ -162,8 +161,8 @@ describe("storage correctness — Process soft-default + AppStore override", () 
 
   it.effect("Node-logs-only Soft override — layer build dies (fail-loud)", () =>
     Effect.gen(function* () {
-      // Soft captures NodeOnly Storage. Exec is not registered → die at Process.layer build.
-      const live = Process.layer(Exec, {
+      // Soft captures NodeOnly Storage. Exec is not registered → die at Daemon.layer build.
+      const live = Daemon.layer(Exec, {
         effect: Effect.void,
         polling: Polling.spaced(Duration.millis(50)),
       }).pipe(Layer.provideMerge(NodeOnlyStore.layerMemory));
@@ -174,7 +173,7 @@ describe("storage correctness — Process soft-default + AppStore override", () 
 
   it.effect("Queue Soft with Node-logs-only AppStore dies at layer build", () =>
     Effect.gen(function* () {
-      const live = QueueHyperlink.layer(Jobs, {
+      const live = WorkPool.layer(Jobs, {
         effect: () => Effect.void,
       }).pipe(Layer.provideMerge(NodeOnlyStore.layerMemory));
       const exit = yield* Effect.exit(Layer.build(live).pipe(Effect.scoped));
@@ -183,8 +182,8 @@ describe("storage correctness — Process soft-default + AppStore override", () 
   );
 });
 
-describe("storage correctness — QueueHyperlink Soft override parity", () => {
-  it.live("QueueHyperlink.layer + provideMerge(AppStore.sqlite) persists across reconnect", () =>
+describe("storage correctness — WorkPool Soft override parity", () => {
+  it.live("WorkPool.layer + provideMerge(AppStore.sqlite) persists across reconnect", () =>
     Effect.gen(function* () {
       const path = yield* Path.Path;
       const fs = yield* FileSystem.FileSystem;
@@ -197,7 +196,7 @@ describe("storage correctness — QueueHyperlink Soft override parity", () => {
 
       yield* Effect.scoped(
         Effect.gen(function* () {
-          const live = QueueHyperlink.layer(Jobs, {
+          const live = WorkPool.layer(Jobs, {
             effect: () => Effect.void,
             autoStart: true,
           }).pipe(Layer.provideMerge(QueueStore.layer({ filename })));
@@ -220,7 +219,7 @@ describe("storage correctness — QueueHyperlink Soft override parity", () => {
     }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
   );
 
-  it.live("sibling Layer.merge(QueueHyperlink.layer, AppStore.sqlite) leaves the SQLite file empty", () =>
+  it.live("sibling Layer.merge(WorkPool.layer, AppStore.sqlite) leaves the SQLite file empty", () =>
     Effect.gen(function* () {
       const path = yield* Path.Path;
       const fs = yield* FileSystem.FileSystem;
@@ -234,7 +233,7 @@ describe("storage correctness — QueueHyperlink Soft override parity", () => {
       yield* Effect.scoped(
         Effect.gen(function* () {
           const live = Layer.merge(
-            QueueHyperlink.layer(Jobs, {
+            WorkPool.layer(Jobs, {
               effect: () => Effect.void,
               autoStart: true,
             }),
@@ -258,8 +257,8 @@ describe("storage correctness — QueueHyperlink Soft override parity", () => {
   );
 });
 
-describe("storage correctness — RunHyperlink Soft override parity", () => {
-  it.effect("RunHyperlink.layer + provideMerge(AppStore.sqlite) persists across reconnect", () =>
+describe("storage correctness — Gate Soft override parity", () => {
+  it.effect("Gate.layer + provideMerge(AppStore.sqlite) persists across reconnect", () =>
     Effect.gen(function* () {
       const path = yield* Path.Path;
       const fs = yield* FileSystem.FileSystem;
@@ -272,11 +271,11 @@ describe("storage correctness — RunHyperlink Soft override parity", () => {
 
       yield* Effect.scoped(
         Effect.gen(function* () {
-          const live = RunHyperlink.layer(Gate, {
+          const live = Gate.layer(TestGate, {
             effect: (n: number) => Effect.succeed(n * 2),
           }).pipe(Layer.provideMerge(RunStore.layer({ filename })));
           yield* Effect.gen(function* () {
-            const gate = yield* Gate;
+            const gate = yield* TestGate;
             yield* gate.run(21);
             const facts = yield* (yield* RunStore).facts();
             expect(facts.some((row) => row._tag === "Completed")).toBe(true);
@@ -293,7 +292,7 @@ describe("storage correctness — RunHyperlink Soft override parity", () => {
     }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
   );
 
-  it.effect("sibling Layer.merge(RunHyperlink.layer, AppStore.sqlite) leaves the SQLite file empty", () =>
+  it.effect("sibling Layer.merge(Gate.layer, AppStore.sqlite) leaves the SQLite file empty", () =>
     Effect.gen(function* () {
       const path = yield* Path.Path;
       const fs = yield* FileSystem.FileSystem;
@@ -307,13 +306,13 @@ describe("storage correctness — RunHyperlink Soft override parity", () => {
       yield* Effect.scoped(
         Effect.gen(function* () {
           const live = Layer.merge(
-            RunHyperlink.layer(Gate, {
+            Gate.layer(TestGate, {
               effect: (n: number) => Effect.succeed(n * 2),
             }),
             RunStore.layer({ filename }),
           );
           yield* Effect.gen(function* () {
-            const gate = yield* Gate;
+            const gate = yield* TestGate;
             yield* gate.run(21);
           }).pipe(Effect.provide(live));
         }),
@@ -331,7 +330,7 @@ describe("storage correctness — RunHyperlink Soft override parity", () => {
 
 describe("storage correctness — CustomQueue Soft override parity", () => {
   it.live(
-    "CustomQueueHyperlink.layer + provideMerge(AppStore.sqlite) persists across reconnect",
+    "WorkPool.layer + provideMerge(AppStore.sqlite) persists across reconnect",
     () =>
       Effect.gen(function* () {
         const path = yield* Path.Path;
@@ -345,9 +344,9 @@ describe("storage correctness — CustomQueue Soft override parity", () => {
 
         yield* Effect.scoped(
           Effect.gen(function* () {
-            const live = CustomQueueHyperlink.layer(CustomJobs, {
-              levelCount: 2,
-              namedLevels: { interactive: 0, batch: 1 },
+            const live = WorkPool.layer(CustomJobs, {
+              laneCount: 2,
+              namedLanes: { interactive: 0, batch: 1 },
               effect: () => Effect.void,
               autoStart: true,
             }).pipe(Layer.provideMerge(CustomQueueStore.layer({ filename })));
@@ -373,7 +372,7 @@ describe("storage correctness — CustomQueue Soft override parity", () => {
   );
 
   it.live(
-    "sibling Layer.merge(CustomQueueHyperlink.layer, AppStore.sqlite) leaves the SQLite file empty",
+    "sibling Layer.merge(WorkPool.layer, AppStore.sqlite) leaves the SQLite file empty",
     () =>
       Effect.gen(function* () {
         const path = yield* Path.Path;
@@ -391,9 +390,9 @@ describe("storage correctness — CustomQueue Soft override parity", () => {
         yield* Effect.scoped(
           Effect.gen(function* () {
             const live = Layer.merge(
-              CustomQueueHyperlink.layer(CustomJobs, {
-                levelCount: 2,
-                namedLevels: { interactive: 0, batch: 1 },
+              WorkPool.layer(CustomJobs, {
+                laneCount: 2,
+                namedLanes: { interactive: 0, batch: 1 },
                 effect: () => Effect.void,
                 autoStart: true,
               }),

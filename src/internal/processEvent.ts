@@ -32,7 +32,7 @@ const runStartedFields = {
  *
  * @internal
  */
-export const makeProcessExecutionEvent = <
+export const makeDaemonExecutionEvent = <
   Success extends Schema.Top | void = void,
   Error extends Schema.Top | void = void,
 >(
@@ -58,17 +58,17 @@ export const makeProcessExecutionEvent = <
 };
 
 /** Void-process execution events (no `result` field). @internal */
-export const processExecutionEventVoid = makeProcessExecutionEvent();
+export const processExecutionEventVoid = makeDaemonExecutionEvent();
 
 /** Execution event type for a void process. @internal */
-export type ProcessExecutionEventVoid = typeof processExecutionEventVoid.Type;
+export type DaemonExecutionEventVoid = typeof processExecutionEventVoid.Type;
 
 /** Execution event type parameterized by optional success / error schemas. @internal */
-export type ProcessExecutionEvent<
+export type DaemonExecutionEvent<
   Success extends Schema.Top | void = void,
   Error extends Schema.Top | void = void,
 > = ReturnType<
-  typeof makeProcessExecutionEvent<
+  typeof makeDaemonExecutionEvent<
     Success extends Schema.Top ? Success : void,
     Error extends Schema.Top ? Error : void
   >

@@ -1,8 +1,8 @@
 import { DateTime, Duration, Effect, Option, Ref, Schema } from "effect";
 import { expect, it } from "vitest";
-import * as Process from "../src/Process";
+import * as Daemon from "../src/Daemon";
 
-// The revamped `Process` toolkit: one namespace whose light contract (`Tag` / `Schedule` / `schedule`
+// The revamped `Daemon` toolkit: one namespace whose light contract (`Tag` / `Schedule` / `schedule`
 // / `result`) is shaped by pipeable combinators and driven by the heavy layers (`layer` / `serve`).
 // Exercised through the same `yield* Tag` surface a remote consumer uses — only the layer differs.
 
@@ -10,21 +10,21 @@ import * as Process from "../src/Process";
 const farFuture = DateTime.makeUnsafe(4_102_444_800_000);
 
 // base — observation + lifecycle only; always-armed by default so it runs immediately.
-class BaseProc extends Process.Tag<BaseProc>()("test/toolkit/Base") {}
+class BaseProc extends Daemon.Tag<BaseProc>()("test/toolkit/Base") {}
 
 // owns an inline schedule seeded empty (disarmed) — gains the `schedule` verb group.
-class SchedProc extends Process.Tag<SchedProc>()("test/toolkit/Sched").pipe(
-  Process.schedule([]),
+class SchedProc extends Daemon.Tag<SchedProc>()("test/toolkit/Sched").pipe(
+  Daemon.schedule([]),
 ) {}
 
 // value-returning + disarmed inline schedule, so `result` is observable before/after a manual run.
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
-class Priced extends Process.Tag<Priced>()("test/toolkit/Priced", { success: Price }).pipe(
-  Process.schedule([]),
+class Priced extends Daemon.Tag<Priced>()("test/toolkit/Priced", { success: Price }).pipe(
+  Daemon.schedule([]),
 ) {}
 
 // standalone reusable window manager.
-class Windows extends Process.Schedule<Windows>()("test/toolkit/Windows") {}
+class Windows extends Daemon.Schedule<Windows>()("test/toolkit/Windows") {}
 
 it("base process arms and runs its effect immediately (default schedule)", () =>
   Effect.runPromise(
@@ -38,7 +38,7 @@ it("base process arms and runs its effect immediately (default schedule)", () =>
         expect(yield* Ref.get(ran)).toBeGreaterThanOrEqual(1);
         expect((yield* proc.status.get).armed).toBe(true);
       }).pipe(
-        Effect.provide(Process.layerMemory(BaseProc, { effect: Ref.update(ran, (n) => n + 1) })),
+        Effect.provide(Daemon.layerMemory(BaseProc, { effect: Ref.update(ran, (n) => n + 1) })),
       );
     }),
   ));
@@ -54,7 +54,7 @@ it("stop/start toggles supervision (observable via status.supervising)", () =>
 
       yield* proc.start;
       expect((yield* proc.status.get).supervising).toBe(true);
-    }).pipe(Effect.provide(Process.layerMemory(BaseProc, { effect: Effect.void }))),
+    }).pipe(Effect.provide(Daemon.layerMemory(BaseProc, { effect: Effect.void }))),
   ));
 
 it("inline schedule verb group round-trips through set/add/clear and the entries ref", () =>
@@ -76,7 +76,7 @@ it("inline schedule verb group round-trips through set/add/clear and the entries
 
       yield* proc.schedule.clear;
       expect(yield* proc.schedule.entries.get).toEqual([]);
-    }).pipe(Effect.provide(Process.layerMemory(SchedProc, { effect: Effect.void }))),
+    }).pipe(Effect.provide(Daemon.layerMemory(SchedProc, { effect: Effect.void }))),
   ));
 
 it("result captures the latest success (absent before the first run)", () =>
@@ -95,7 +95,7 @@ it("result captures the latest success (absent before the first run)", () =>
       }
     }).pipe(
       Effect.provide(
-        Process.layerMemory(Priced, {
+        Daemon.layerMemory(Priced, {
           effect: Effect.succeed({ symbol: "AAPL", usd: 42 }),
         }),
       ),
@@ -123,5 +123,5 @@ it("standalone Schedule resource supports full CRUD", () =>
 
       yield* s.clear;
       expect(yield* s.entries.get).toEqual([]);
-    }).pipe(Effect.provide(Process.scheduleLayer(Windows))),
+    }).pipe(Effect.provide(Daemon.scheduleLayer(Windows))),
   ));

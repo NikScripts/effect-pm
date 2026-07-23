@@ -1,15 +1,15 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Fiber, Ref } from "effect";
 import { TestClock } from "effect/testing";
-import { Process, Polling } from "../src";
+import { Daemon, Polling } from "../src";
 
 // The handle's cadence controls — wake/resetCadence reach the RUNNING supervisor's polling
 // service through the polling mirror, same ownership story as the status mirror.
-describe("Process handle polling controls", () => {
+describe("Daemon handle polling controls", () => {
   it.effect("wake ends the current wait — the next tick runs without the interval elapsing", () =>
     Effect.gen(function* () {
       const ticks = yield* Ref.make(0);
-      const proc = Process.make("test/polling-wake", {
+      const proc = Daemon.make("test/polling-wake", {
         effect: Ref.update(ticks, (n) => n + 1),
         polling: Polling.spaced(Duration.minutes(10)),
       });
@@ -30,7 +30,7 @@ describe("Process handle polling controls", () => {
   it.effect("resetCadence returns backoff to its initial interval (and wakes)", () =>
     Effect.gen(function* () {
       const ticks = yield* Ref.make(0);
-      const proc = Process.make("test/polling-reset", {
+      const proc = Daemon.make("test/polling-reset", {
         effect: Ref.update(ticks, (n) => n + 1),
         polling: Polling.backoff({
           initial: Duration.seconds(1),
@@ -59,7 +59,7 @@ describe("Process handle polling controls", () => {
 
   it.effect("controls are no-ops while the driver isn't supervising", () =>
     Effect.gen(function* () {
-      const proc = Process.make("test/polling-idle", {
+      const proc = Daemon.make("test/polling-idle", {
         effect: Effect.void,
         polling: Polling.spaced(Duration.seconds(5)),
       });

@@ -11,8 +11,8 @@ import { Duration, Effect, Layer, Logger } from "effect";
 import { createServer } from "node:http";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { serve as queueEntry } from "../../src/QueueHyperlink";
-import * as QueueHyperlink from "../../src/QueueHyperlink";
+import { serve as queueEntry } from "../../src/WorkPool";
+import * as WorkPool from "../../src/WorkPool";
 import { HistoryStore } from "../../src/HistoryStore";
 import * as Hyperlink from "../../src/Hyperlink";
 import * as Store from "../../src/Store";
@@ -38,17 +38,17 @@ const PORT = 7777;
 /** Node journal + per-queue log shapes — `layerMemory` bakes in Logs.layer + durable tails. */
 class DropletStore extends Store.Service<DropletStore>("@examples/web-dashboard/DropletStore")(
   Droplet.logs,
-  QueueHyperlink.store(Mail),
-  QueueHyperlink.store(Jobs),
-  QueueHyperlink.store(Billing),
-  QueueHyperlink.store(Notify),
-  QueueHyperlink.store(Worker1),
-  QueueHyperlink.store(Worker2),
-  QueueHyperlink.store(Worker3),
-  QueueHyperlink.store(RegionUS),
-  QueueHyperlink.store(RegionEU),
-  QueueHyperlink.store(Daily),
-  QueueHyperlink.store(Weekly),
+  WorkPool.store(Mail),
+  WorkPool.store(Jobs),
+  WorkPool.store(Billing),
+  WorkPool.store(Notify),
+  WorkPool.store(Worker1),
+  WorkPool.store(Worker2),
+  WorkPool.store(Worker3),
+  WorkPool.store(RegionUS),
+  WorkPool.store(RegionEU),
+  WorkPool.store(Daily),
+  WorkPool.store(Weekly),
 ) {}
 
 // ── request-rate monitor ─────────────────────────────────────────────────────
@@ -103,7 +103,7 @@ const serveLayer = Node.wsServer([
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(DropletStore.layerMemory),
   // silence the served layer's console logging (per-request http access logs) — node logs
-  // still reach the dashboard via NodeStatus.logs + lineage filter.
+  // still reach the dashboard via Node.status.logs + lineage filter.
   Layer.provide(Logger.layer([], { mergeWithExisting: false })),
   Layer.provideMerge(NodeHttpServer.layer(makeServer, { port: PORT })),
 );

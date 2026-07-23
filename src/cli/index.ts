@@ -28,8 +28,8 @@ import type { AnyLocalMethod, AnyMethod, FlatSpec } from "../Hyperlink";
 
 /**
  * The structural shape the CLI reads from a resource tag: yieldable (→ its service), with
- * `key` / `description` and the stowed contract spec. A `Hyperlink.Tag` / `QueueHyperlink.Tag`
- * / `Process.Tag` class satisfies this — pass the classes directly.
+ * `key` / `description` and the stowed contract spec. A `Hyperlink.Tag` / `WorkPool.Tag`
+ * / `Daemon.Tag` class satisfies this — pass the classes directly.
  *
  * @public
  */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Cause, Effect, Option, Ref, Schema, Stream } from "effect";
-import * as QueueHyperlink from "../src/QueueHyperlink";
+import * as WorkPool from "../src/WorkPool";
 
 // The error-side mirror of queue-success-value: the queue Tag's `error` schema slot drives the
 // worker's failure channel (M2/M4), and that typed error flows onto the event `cause` (a
@@ -12,18 +12,18 @@ import * as QueueHyperlink from "../src/QueueHyperlink";
 const jobSchema = Schema.Struct({ id: Schema.String });
 
 // queue WITH an error schema — the worker may fail with the declared type
-class Flaky extends QueueHyperlink.Tag<Flaky>()("@test/Flaky", {
+class Flaky extends WorkPool.Tag<Flaky>()("@test/Flaky", {
   payload: jobSchema,
   error: Schema.String,
 }) {}
 
-const flakyLayer = QueueHyperlink.layerMemory(Flaky, {
+const flakyLayer = WorkPool.layerMemory(Flaky, {
   effect: (job) => Effect.fail(`boom:${job.id}`),
   attempts: 1, // no re-enqueue → a single terminal failure carrying the typed cause
   concurrency: 1,
 });
 
-describe("QueueHyperlink — error-value channel", () => {
+describe("WorkPool — error-value channel", () => {
   it.live(
     "an error-schema worker records its typed failure value on the event cause",
     () =>
