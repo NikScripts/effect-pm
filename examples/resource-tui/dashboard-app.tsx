@@ -2,7 +2,7 @@
  * @module examples/resource-tui/dashboard
  *
  * The navigable dashboard on the **shared, tag-driven data layer** (`../web-dashboard`)
- * — the same `Fleet` group tag + `queueBundle`/`processBundle` the web dashboard uses,
+ * — the same `Fleet` group tag + `queueBundle`/`daemonBundle` the web dashboard uses,
  * reached over http (env-aware transport: direct `:7777`/`:7778` from Node). No mock,
  * no `REGISTRY`/`TREE`. The `Group.Tag` tree IS the navigation; each leaf is dispatched
  * to a queue or process cell by `kindOf`; opening one shows the live detail page.
@@ -23,7 +23,7 @@ import { Fleet } from "../web-dashboard/fleet";
 import {
   nodeOf,
   kindOf,
-  processBundle,
+  daemonBundle,
   processLeaves,
   queueBundle,
   queueLeaves,
@@ -166,7 +166,7 @@ const DaemonCell = (props: {
   readonly selected: boolean;
 }): React.ReactElement => {
   const { tag, width, selected } = props;
-  const r = useAtomValue(processBundle(tag).status);
+  const r = useAtomValue(daemonBundle(tag).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   const up = s?.supervising === true;
   return (
@@ -446,7 +446,7 @@ const FocusedDaemon = (props: {
   readonly barRows: number;
 }): React.ReactElement => {
   const { tag, cols, rows, editMode } = props;
-  const bundle = processBundle(tag);
+  const bundle = daemonBundle(tag);
   const statusR = useAtomValue(bundle.status);
   const logsR = useAtomValue(bundle.logs);
 

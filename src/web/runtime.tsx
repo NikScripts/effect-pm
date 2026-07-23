@@ -33,7 +33,7 @@ import {
   shardMapBundle,
   runBundle,
   nodeStatusBundle,
-  processBundle,
+  daemonBundle,
   queueBundle,
 } from "./data";
 
@@ -80,7 +80,7 @@ export const useRunBundle = (tag: RunTag): RunBundle =>
   runBundle(useRuntime(), tag);
 
 /** Atom bundle for a process tag, memoized per runtime+tag. @public */
-export const useDaemonBundle = (tag: DaemonTag): DaemonBundle => processBundle(useRuntime(), tag);
+export const useDaemonBundle = (tag: DaemonTag): DaemonBundle => daemonBundle(useRuntime(), tag);
 
 /** Atom bundle for an API-metrics tag, memoized per runtime+tag. @public */
 export const useApiBundle = (tag: ApiTag): ApiBundle => apiBundle(useRuntime(), tag);

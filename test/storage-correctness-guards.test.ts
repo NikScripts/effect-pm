@@ -9,7 +9,7 @@ import * as WorkPool from "../src/WorkPool";
 import * as Gate from "../src/Gate";
 import * as Store from "../src/Store";
 import * as Polling from "../src/Polling";
-import { builtInDaemonStoreContract } from "../src/internal/store/processStoreSpec";
+import { builtInDaemonStoreContract } from "../src/internal/store/daemonStoreSpec";
 import * as Node from "../src/Node";
 
 const jobSchema = Schema.Struct({ id: Schema.String });

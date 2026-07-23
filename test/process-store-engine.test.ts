@@ -4,7 +4,7 @@ import { TestClock } from "effect/testing";
 import * as Daemon from "../src/Daemon";
 import * as Store from "../src/Store";
 import * as Polling from "../src/Polling";
-import { builtInDaemonStoreContract } from "../src/internal/store/processStoreSpec";
+import { builtInDaemonStoreContract } from "../src/internal/store/daemonStoreSpec";
 
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
@@ -47,7 +47,7 @@ class EngineStore extends Store.Service<EngineStore>("@test/EngineStore")(
   Store.register(ServeRemoteExec, builtInDaemonStoreContract(ServeRemoteExec)),
 ) {}
 
-const processLayer = <A, E, R>(layer: Layer.Layer<A, E, R>) =>
+const daemonLayer = <A, E, R>(layer: Layer.Layer<A, E, R>) =>
   layer.pipe(Layer.provideMerge(EngineStore.layerMemory));
 
 const storeAndClock = Layer.mergeAll(EngineStore.layerMemory, TestClock.layer());
@@ -55,7 +55,7 @@ const storeAndClock = Layer.mergeAll(EngineStore.layerMemory, TestClock.layer())
 describe("Daemon.layer — Daemon.store auto-write", () => {
   it.effect("records void run completion via the built-in store contract", () =>
     Effect.gen(function* () {
-      const live = processLayer(
+      const live = daemonLayer(
         Daemon.layer(VoidExec, {
           effect: Effect.void,
           polling: Polling.spaced(Duration.millis(50)),
@@ -80,7 +80,7 @@ describe("Daemon.layer — Daemon.store auto-write", () => {
 
   it.effect("records optional success on value-returning processes", () =>
     Effect.gen(function* () {
-      const live = processLayer(
+      const live = daemonLayer(
         Daemon.layer(PricedExec, {
           effect: Effect.succeed({ symbol: "AAPL", usd: 42 }),
           polling: Polling.spaced(Duration.millis(50)),
@@ -105,7 +105,7 @@ describe("Daemon.layer — Daemon.store auto-write", () => {
         _tag: "FetchError",
         status: 503,
       });
-      const live = processLayer(
+      const live = daemonLayer(
         Daemon.layer(FailingExec, {
           effect: Effect.fail(fail),
           polling: Polling.spaced(Duration.millis(50)),
@@ -128,7 +128,7 @@ describe("Daemon.layer — Daemon.store auto-write", () => {
     Effect.gen(function* () {
       const entered = yield* Deferred.make<void, never>();
       const hold = yield* Deferred.make<void, never>();
-      const live = processLayer(
+      const live = daemonLayer(
         Daemon.layer(InterruptExec, {
           effect: Effect.gen(function* () {
             yield* Deferred.succeed(entered, void 0);
@@ -158,7 +158,7 @@ describe("Daemon.layer — Daemon.store auto-write", () => {
   it.effect("stringifies Failed.error when the tag has no error schema", () =>
     Effect.gen(function* () {
       const boom = new Boom({ code: 9 });
-      const live = processLayer(
+      const live = daemonLayer(
         Daemon.layer(StringFailExec, {
           effect: Effect.fail(boom),
           polling: Polling.spaced(Duration.millis(50)),
@@ -181,7 +181,7 @@ describe("Daemon.layer — Daemon.store auto-write", () => {
   it.effect("round-trips rich success values through the journal codec", () =>
     Effect.gen(function* () {
       const at = DateTime.makeUnsafe("2026-02-01T12:00:00.000Z");
-      const live = processLayer(
+      const live = daemonLayer(
         Daemon.layer(RichSuccessExec, {
           effect: Effect.succeed({ at, count: 7 }),
           polling: Polling.spaced(Duration.millis(50)),
@@ -204,7 +204,7 @@ describe("Daemon.layer — Daemon.store auto-write", () => {
 describe("Daemon.serve / serveRemote — store auto-write", () => {
   it.effect("Daemon.serve records terminal runs via the app store", () =>
     Effect.gen(function* () {
-      const live = processLayer(
+      const live = daemonLayer(
         Daemon.serve(ServeExec, {
           effect: Effect.void,
           polling: Polling.spaced(Duration.millis(50)),
@@ -222,7 +222,7 @@ describe("Daemon.serve / serveRemote — store auto-write", () => {
 
   it.effect("Daemon.serveRemote records terminal runs without granting the local tag", () =>
     Effect.gen(function* () {
-      const live = processLayer(
+      const live = daemonLayer(
         Daemon.serveRemote(ServeRemoteExec, {
           effect: Effect.void,
           polling: Polling.spaced(Duration.millis(50)),

@@ -46,8 +46,8 @@ const cases = [
     name: "Daemon",
     entry: "src/Daemon.ts",
     engine: [
-      "src/internal/processSchedule.ts",
-      "src/store/processExecution.ts",
+      "src/internal/daemonSchedule.ts",
+      "src/store/daemonExecution.ts",
       "src/Polling.ts",
     ],
     member: "Tag",

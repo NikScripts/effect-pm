@@ -29,7 +29,7 @@
  *
  * Every engine lifecycle write (`Started` / `Completed` / `Failed` / `Interrupted`) is published to a
  * sliding PubSub **and** appended to the store when one is wired — the same union as
- * {@link processExecutionEvent} / {@link Daemon.store}. Consume with `yield* proc.events` (Queue-shaped).
+ * {@link daemonExecutionEvent} / {@link Daemon.store}. Consume with `yield* proc.events` (Queue-shaped).
  * Fan-out may drop under load; the store remains the durable source of truth. Tick / run-body failures
  * emit `Failed` on the stream; manual {@link run} stays the typed RPC failure path.
  *
@@ -77,26 +77,26 @@ import {
   foldConfiguredSpec,
   type ConfigPatch,
 } from "./HyperlinkConfigure";
-import { isPollingLayer, isScheduleLayer } from "./internal/processLayerBrand";
+import { isPollingLayer, isScheduleLayer } from "./internal/daemonLayerBrand";
 import {
   makeDaemonExecutionEvent,
-  processExecutionEventVoid,
-} from "./internal/processEvent";
+  daemonExecutionEventVoid,
+} from "./internal/daemonEvent";
 import {
   errorOf,
   errorSym,
   successOf,
   successSym,
-} from "./internal/processTagSchemas";
+} from "./internal/daemonTagSchemas";
 import { withLogScope } from "./internal/logs/scope";
 import { PollingTag, type PollingService } from "./internal/pollingTag";
-import { DaemonSchedule, DaemonScheduleTag } from "./internal/processSchedule";
+import { DaemonSchedule, DaemonScheduleTag } from "./internal/daemonSchedule";
 import type {
   DaemonScheduleEntry,
   DaemonScheduleService,
   ReconcileResult,
   ScheduleDefineApi,
-} from "./internal/processSchedule";
+} from "./internal/daemonSchedule";
 // ── toolkit (Hyperlink) surface — the light contract + heavy layers assembled into `Daemon` ──
 import * as Hyperlink from "./Hyperlink";
 import { buildRpcGroup, groupSym, specSym } from "./Hyperlink";
@@ -119,12 +119,12 @@ import * as Store from "./Store";
 import {
   builtInDaemonStoreContract,
   makeDaemonStoreAnalyticsContract,
-  processStoreEventSchema,
+  daemonStoreEventSchema,
   type DaemonStoreAnalyticsContract,
   type DaemonStoreEvent,
   type DaemonStoreStartedInput,
   type DaemonStoreTerminalInput,
-} from "./internal/store/processStoreSpec";
+} from "./internal/store/daemonStoreSpec";
 import type { StoreScopeTag } from "./internal/store/registration";
 import type { StoreShapes } from "./internal/store/contractDef";
 // ============================================================================
@@ -134,7 +134,7 @@ import type { StoreShapes } from "./internal/store/contractDef";
 /**
  * A one-shot read of a managed process's runtime mirror — the observable state the supervisor
  * maintains as it reconciles the schedule and spawns instances. Native (engine-side) types;
- * the toolkit contract ({@link processStatus}) maps these to its wire form.
+ * the toolkit contract ({@link daemonStatus}) maps these to its wire form.
  *
  * @category models
  * @public
@@ -1361,7 +1361,7 @@ function make<const Id extends string, E, RUser>(
  */
 export type DaemonMake = typeof make;
 
-const processDefinitionKind = "process" as const;
+const daemonDefinitionKind = "process" as const;
 
 const makeDaemonDefinition = <const Id extends string, E, RUser>(
   id: Id,
@@ -1370,7 +1370,7 @@ const makeDaemonDefinition = <const Id extends string, E, RUser>(
   const process = make(id, config);
   return {
     id,
-    kind: processDefinitionKind,
+    kind: daemonDefinitionKind,
     process,
   };
 };
@@ -1512,7 +1512,7 @@ export const Errors = {
  * @category schedule
  * @public
  */
-export const processScheduleEntry = Schema.Struct({
+export const daemonScheduleEntry = Schema.Struct({
   id: Schema.optionalKey(Schema.String),
   startAt: Schema.DateTimeUtc,
   stopAt: Schema.optionalKey(Schema.DateTimeUtc),
@@ -1526,7 +1526,7 @@ export const processScheduleEntry = Schema.Struct({
  * @category wire schemas
  * @public
  */
-export const processStatus = Schema.Struct({
+export const daemonStatus = Schema.Struct({
   supervising: Schema.Boolean,
   armed: Schema.Boolean,
   activeInstances: Schema.Number,
@@ -1546,7 +1546,7 @@ export const processStatus = Schema.Struct({
  * @category wire schemas
  * @public
  */
-export const processLogEntry = LogEntrySchema;
+export const daemonLogEntry = LogEntrySchema;
 
 /**
  * Execution event union for void processes (no `success` field on `Completed`).
@@ -1554,14 +1554,14 @@ export const processLogEntry = LogEntrySchema;
  * @category wire schemas
  * @public
  */
-export const processExecutionEvent = processExecutionEventVoid;
+export const daemonExecutionEvent = daemonExecutionEventVoid;
 
 /**
  *
  * @category models
  * @public
  */
-export type DaemonExecutionEvent = typeof processExecutionEventVoid.Type;
+export type DaemonExecutionEvent = typeof daemonExecutionEventVoid.Type;
 
 /**
  * Build an execution event union when the process tag carries a {@link DaemonTagOptions.success}.
@@ -1569,7 +1569,7 @@ export type DaemonExecutionEvent = typeof processExecutionEventVoid.Type;
  * @category wire schemas
  * @public
  */
-export const processExecutionEventFor = makeDaemonExecutionEvent;
+export const daemonExecutionEventFor = makeDaemonExecutionEvent;
 
 /**
  * This contract's canonical **kind** — stamped on every process tag so consumers (e.g. the
@@ -1601,11 +1601,11 @@ export const scheduleKind = "hyperlink-ts/Daemon/Schedule";
  * @category wire schemas
  * @public
  */
-export const processControlSpec = {
+export const daemonControlSpec = {
   // ── live current state — one SubscriptionRef-backed source of truth ──
   // `status` is the whole snapshot; `status.get` reads it once, `status.changes` streams every
   // change (uniform local + remote), mirroring the queue's `status` ref.
-  status: Hyperlink.ref(processStatus).annotate({
+  status: Hyperlink.ref(daemonStatus).annotate({
     description:
       "Live current-state snapshot: supervising, armed, active instances, next trigger/transition, " +
       "poll cadence, and cumulative run metrics.",
@@ -1634,7 +1634,7 @@ export const processControlSpec = {
 /**
  * Build a process **instance** spec — control surface, live {@link events} stream, and a typed
  * manual {@link run} RPC. Event element schema matches the durable store union
- * ({@link processExecutionEventFor} with the tag's optional `success` / `error`).
+ * ({@link daemonExecutionEventFor} with the tag's optional `success` / `error`).
  *
  * @category wire schemas
  * @public
@@ -1646,10 +1646,10 @@ export const buildDaemonSpec = <
   readonly success?: A;
   readonly error?: E;
 }) => {
-  // Same schema helper as the durable store (`processStoreEventSchema`) so persist == stream on the wire.
-  const eventSchema = processStoreEventSchema(wire?.success, wire?.error);
+  // Same schema helper as the durable store (`daemonStoreEventSchema`) so persist == stream on the wire.
+  const eventSchema = daemonStoreEventSchema(wire?.success, wire?.error);
   return {
-    ...processControlSpec,
+    ...daemonControlSpec,
     events: Hyperlink.stream(eventSchema).annotate({
       description:
         "Live execution lifecycle (Started / Completed / Failed / Interrupted). Same union as the " +
@@ -1671,7 +1671,7 @@ export const buildDaemonSpec = <
  * @category wire schemas
  * @public
  */
-export const processSpec = buildDaemonSpec();
+export const daemonSpec = buildDaemonSpec();
 // Note: no `satisfies Spec` — it contextually widens each method's error channel to `unknown`.
 // The spec is validated (without widening) at the `Hyperlink.Tag` call site.
 
@@ -1681,7 +1681,7 @@ export const processSpec = buildDaemonSpec();
  * @category models
  * @public
  */
-export type DaemonSpec = typeof processSpec;
+export type DaemonSpec = typeof daemonSpec;
 
 // ============================================================================
 // Tag options + schema stamps
@@ -1717,13 +1717,13 @@ export { successOf, errorOf };
  * @public
  */
 export const scheduleGroupSpec = {
-  entries: Hyperlink.ref(Schema.Array(processScheduleEntry)).annotate({
+  entries: Hyperlink.ref(Schema.Array(daemonScheduleEntry)).annotate({
     description: "The process's current schedule entries (run windows), reactive.",
   }),
-  set: Hyperlink.effectFn(Schema.Array(processScheduleEntry)).annotate({
+  set: Hyperlink.effectFn(Schema.Array(daemonScheduleEntry)).annotate({
     description: "Replace all schedule entries.",
   }),
-  add: Hyperlink.effectFn(processScheduleEntry).annotate({
+  add: Hyperlink.effectFn(daemonScheduleEntry).annotate({
     description: "Append one schedule entry.",
   }),
   clear: Hyperlink.effect(Schema.Void).annotate({
@@ -1749,22 +1749,22 @@ type ScheduleGroupSpec = { readonly schedule: typeof scheduleGroupSpec };
  * @public
  */
 export const scheduleHyperlinkSpec = {
-  entries: Hyperlink.ref(Schema.Array(processScheduleEntry)).annotate({
+  entries: Hyperlink.ref(Schema.Array(daemonScheduleEntry)).annotate({
     description: "All schedule entries (run windows), reactive.",
   }),
-  get: Hyperlink.effectFn({ id: Schema.String }, Schema.Option(processScheduleEntry)).annotate({
+  get: Hyperlink.effectFn({ id: Schema.String }, Schema.Option(daemonScheduleEntry)).annotate({
     description: "Look up a single entry by id (absent if none matches).",
   }),
   has: Hyperlink.effectFn({ id: Schema.String }, Schema.Boolean).annotate({
     description: "Whether an entry with the given id exists.",
   }),
-  set: Hyperlink.effectFn(Schema.Array(processScheduleEntry)).annotate({
+  set: Hyperlink.effectFn(Schema.Array(daemonScheduleEntry)).annotate({
     description: "Replace all schedule entries.",
   }),
-  add: Hyperlink.effectFn(processScheduleEntry).annotate({
+  add: Hyperlink.effectFn(daemonScheduleEntry).annotate({
     description: "Append one schedule entry.",
   }),
-  upsert: Hyperlink.effectFn(processScheduleEntry).annotate({
+  upsert: Hyperlink.effectFn(daemonScheduleEntry).annotate({
     description: "Insert or replace an entry, keyed by its id.",
   }),
   remove: Hyperlink.effectFn({ id: Schema.String }, Schema.Boolean).annotate({
@@ -1812,7 +1812,7 @@ type ResultGroupSpec<A extends Schema.Top> = { readonly result: ResultField<A> }
 export type DaemonInstanceSpec<
   A extends Schema.Top = typeof Schema.Void,
   E extends Schema.Top = typeof Schema.Never,
-> = typeof processControlSpec & {
+> = typeof daemonControlSpec & {
   readonly events: ReturnType<typeof buildDaemonSpec<A, E>>["events"];
   readonly run: Hyperlink.Method<undefined, A, E>;
 } & (A extends typeof Schema.Void ? Record<string, never> : ResultGroupSpec<A>);
@@ -2304,7 +2304,7 @@ export interface DaemonLayerConfig<A, E, R> {
 // wire ⇄ engine mapping
 // ============================================================================
 
-type WireEntry = typeof processScheduleEntry.Type;
+type WireEntry = typeof daemonScheduleEntry.Type;
 
 const toWireEntry = (entry: DaemonScheduleEntry): WireEntry => ({
   ...(Option.isSome(entry.id) ? { id: entry.id.value } : {}),
@@ -2326,7 +2326,7 @@ const fromWireEntry = (wire: WireEntry): DaemonScheduleEntry => ({
 const toWireStatus = (
   snap: DaemonSnapshot,
   supervising: boolean,
-): typeof processStatus.Type => ({
+): typeof daemonStatus.Type => ({
   supervising,
   armed: snap.armed,
   activeInstances: snap.activeInstances,

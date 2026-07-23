@@ -33,7 +33,7 @@ import {
   leafByKey,
   leafTags,
   nodesOf,
-  processBundle,
+  daemonBundle,
   queueBundle,
   tagWireKey,
 } from "./data";
@@ -112,7 +112,7 @@ const LogBox = (props: {
 /** Fullscreen logs page for a resource — its own route (`/…/Hyperlink/logs`). */
 const LogsPage = (props: { readonly tag: QueueTag | DaemonTag; readonly onClose: () => void }): React.ReactElement => {
   const runtime = useRuntime();
-  const bundle = isDaemonTag(props.tag) ? processBundle(runtime, props.tag) : queueBundle(runtime, props.tag);
+  const bundle = isDaemonTag(props.tag) ? daemonBundle(runtime, props.tag) : queueBundle(runtime, props.tag);
   return <LogBox bundle={bundle} full onToggle={props.onClose} meta={<> · {displayName(props.tag.key)}</>} />;
 };
 

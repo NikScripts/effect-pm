@@ -32,7 +32,7 @@ const DEFAULT_SEASON =
 const program = Effect.gen(function* () {
   const baseUrl = yield* NwslSoccerApiBaseUrl;
   const NwslTag = Gate.httpApiClient(NwslsoccerApi, {
-    name: "examples/nwslsoccer/NwslHttpApiHyperlink",
+    name: "examples/nwslsoccer/NwslHttpApiClient",
     client: {
       baseUrl,
       transformClient: Gate.acceptJson,

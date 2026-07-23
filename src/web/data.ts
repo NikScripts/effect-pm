@@ -2,7 +2,7 @@
  * @module web/data
  *
  * Tag-driven data layer for the dashboard. Each resource **tag** is the source of truth;
- * `queueBundle` / `processBundle` build the atom bundle the widgets read (status /
+ * `queueBundle` / `daemonBundle` build the atom bundle the widgets read (status /
  * metrics+history / trend / logs + controls) straight from the tag's live service over the
  * consumer's reactive `runtime` (an `Atom.runtime(layer)` that provides the tags — local
  * engine or `Hyperlink.client` over http; the widgets don't care which).
@@ -21,7 +21,7 @@ import { kind as fleetHealthKind, type FleetStatus, type NodeReport } from "../F
 import { kind as telemetryKind, MetricsSnapshot, type MetricDatum } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";
 import { kind as runKind, type RunGateStatus } from "../Gate";
-import { kind as processKind, processScheduleEntry, processStatus } from "../Daemon";
+import { kind as daemonKind, daemonScheduleEntry, daemonStatus } from "../Daemon";
 import { kind as apiKind } from "../ApiMetrics";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../ApiUsageSchema";
 import { FRESH_MS, readCache, writeCache } from "./cache";
@@ -35,9 +35,9 @@ export type CustomQueueStatus = Schema.Schema.Type<typeof customQueueStatus>;
 /** Live queue metrics (from the contract schema). */
 export type QueueMetrics = Schema.Schema.Type<typeof queueMetrics>;
 /** Live process status (from the contract schema). */
-export type DaemonStatus = Schema.Schema.Type<typeof processStatus>;
+export type DaemonStatus = Schema.Schema.Type<typeof daemonStatus>;
 /** One scheduled run window (from the contract schema): `{ id?, startAt, stopAt? }`. */
-export type ScheduleEntry = Schema.Schema.Type<typeof processScheduleEntry>;
+export type ScheduleEntry = Schema.Schema.Type<typeof daemonScheduleEntry>;
 
 /** A captured log line for the log pane. */
 export interface LogLine {
@@ -350,7 +350,7 @@ export const leafByKey = (group: unknown, key: string): unknown => {
 export const kindOf = (member: unknown): "queue" | "process" | "api" | "hyperlink" => {
   const stamped = hyperlinkKindOf(member);
   if (stamped === queueKind) return "queue";
-  if (stamped === processKind) return "process";
+  if (stamped === daemonKind) return "process";
   if (stamped === apiKind) return "api";
   return "hyperlink";
 };
@@ -425,7 +425,7 @@ const cachedAccumulator = <A, R>(opts: {
 
 // bundles are runtime-specific (their atoms close over the runtime), so cache per runtime+tag
 const bundleCache = new WeakMap<object, Map<string, QueueBundle>>();
-const processBundleCache = new WeakMap<object, Map<string, DaemonBundle>>();
+const daemonBundleCache = new WeakMap<object, Map<string, DaemonBundle>>();
 const apiBundleCache = new WeakMap<object, Map<string, ApiBundle>>();
 const nodeBundleCache = new WeakMap<object, Map<string, NodeBundle>>();
 const cacheFor = <V>(map: WeakMap<object, Map<string, V>>, runtime: object): Map<string, V> => {
@@ -731,8 +731,8 @@ export const runBundle = <R, ER>(
 };
 
 /** Build (once per runtime+tag) the atom bundle for a process tag. */
-export const processBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: DaemonTag<R>): DaemonBundle => {
-  const cache = cacheFor(processBundleCache, runtime);
+export const daemonBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: DaemonTag<R>): DaemonBundle => {
+  const cache = cacheFor(daemonBundleCache, runtime);
   const existing = cache.get(tag.key);
   if (existing !== undefined) return existing;
   const node = nodeOf(tag);

@@ -61,7 +61,7 @@ import { kind as fleetHealthKind, type NodeReport } from "../FleetHealth";
 import { kind as telemetryKind, type MetricDatum } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";
 import { kind as runKind } from "../Gate";
-import { kind as processKind } from "../Daemon";
+import { kind as daemonKind } from "../Daemon";
 import { kind as apiKind } from "../ApiMetrics";
 import {
   type LeafTag,
@@ -2913,7 +2913,7 @@ const queueWidget: Widget = ({ tag, name, onOpen }) =>
   ) : (
     <FallbackCard tag={tag} name={name} onOpen={onOpen} />
   );
-const processWidget: Widget = ({ tag, name, onOpen }) =>
+const daemonWidget: Widget = ({ tag, name, onOpen }) =>
   isDaemonTag(tag) ? (
     <DaemonCard tag={tag} name={name} onOpen={onOpen} />
   ) : (
@@ -2970,7 +2970,7 @@ export const base: WidgetRegistry = withEntries(
   [
     forKind(queueKind, queueWidget),
     forKind(customQueueKind, customQueueWidget),
-    forKind(processKind, processWidget),
+    forKind(daemonKind, daemonWidget),
     forKind(apiKind, apiWidget),
     forKind(fleetHealthKind, fleetHealthWidget),
     forKind(telemetryKind, telemetryWidget),

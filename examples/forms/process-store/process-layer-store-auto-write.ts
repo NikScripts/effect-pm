@@ -12,7 +12,7 @@ import { TestClock } from "effect/testing";
 import * as Daemon from "../../../src/Daemon";
 import * as Store from "../../../src/Store";
 import * as Polling from "../../../src/Polling";
-import { builtInDaemonStoreContract } from "../../../src/internal/store/processStoreSpec";
+import { builtInDaemonStoreContract } from "../../../src/internal/store/daemonStoreSpec";
 import { runNodeProgramOrExit } from "../../shared/demo-harness";
 
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });

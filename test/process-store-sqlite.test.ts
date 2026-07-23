@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import * as Daemon from "../src/Daemon";
 import * as Store from "../src/Store";
 import * as Polling from "../src/Polling";
-import { builtInDaemonStoreContract } from "../src/internal/store/processStoreSpec";
+import { builtInDaemonStoreContract } from "../src/internal/store/daemonStoreSpec";
 
 const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
 

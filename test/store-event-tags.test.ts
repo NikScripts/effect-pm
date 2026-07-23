@@ -2,14 +2,14 @@ import { describe, expect, it } from "@effect/vitest";
 import { DateTime, Duration, Schema } from "effect";
 import {
   makeDaemonExecutionEvent,
-  processExecutionEventVoid,
-} from "../src/internal/processEvent";
+  daemonExecutionEventVoid,
+} from "../src/internal/daemonEvent";
 import { makeGateFactEvent } from "../src/internal/gateEvent";
 import { buildQueueEvent } from "../src/WorkPool";
 
 const terminalTags = ["Started", "Completed", "Failed"] as const;
 
-const processDecode = Schema.decodeUnknownSync(processExecutionEventVoid);
+const processDecode = Schema.decodeUnknownSync(daemonExecutionEventVoid);
 const runFactDecode = Schema.decodeUnknownSync(makeGateFactEvent());
 
 const itemSchema = Schema.Struct({ id: Schema.String });

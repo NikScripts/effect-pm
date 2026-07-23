@@ -290,7 +290,7 @@ export interface DaemonBundle {
 const processCache = new Map<string, DaemonBundle>();
 
 /** Build (once per tag) the atom bundle for a process tag. */
-export const processBundle = (tag: DaemonTag): DaemonBundle => {
+export const daemonBundle = (tag: DaemonTag): DaemonBundle => {
   const existing = processCache.get(tag.key);
   if (existing !== undefined) return existing;
   const statusStream = Stream.unwrap(Effect.map(tag, (p) => p.status.changes));

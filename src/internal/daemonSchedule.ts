@@ -25,12 +25,12 @@
  * | `clear` | Remove all entries |
  * | `reconcile` | Diff-based sync from external source (DB) |
  *
- * @module internal/processSchedule
+ * @module internal/daemonSchedule
  * @internal
  */
 
 import { Context, DateTime, Deferred, Effect, Layer, Option, Ref } from "effect";
-import { registerScheduleLayer } from "./processLayerBrand";
+import { registerScheduleLayer } from "./daemonLayerBrand";
 
 // ============================================================================
 // Public Types
@@ -112,7 +112,7 @@ export interface DaemonScheduleService {
 export class DaemonScheduleTag extends Context.Service<
   DaemonScheduleTag,
   DaemonScheduleService
->()("hyperlink-ts/internal/processSchedule/DaemonScheduleTag") {}
+>()("hyperlink-ts/internal/daemonSchedule/DaemonScheduleTag") {}
 
 // ============================================================================
 // Internal: sorting and normalization

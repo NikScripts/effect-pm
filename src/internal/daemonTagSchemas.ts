@@ -1,7 +1,7 @@
 /**
  * Wire schemas stamped on {@link Daemon.Tag} factories (`success` / `error` slots).
  *
- * @module internal/processTagSchemas
+ * @module internal/daemonTagSchemas
  * @internal
  */
 
