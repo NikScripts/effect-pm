@@ -1,4 +1,9 @@
 {#shardmap title="ShardMap" status="draft" done="api previews types verified" appliesTo=all}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://hyperlink.cool/docs/shardmap>.
+<!-- docs-site-link:end -->
 # ShardMap
 
 The intro's Sessions beat — a key lives on *someone's* node; `get` forwards to the owner via

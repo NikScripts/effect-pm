@@ -1,4 +1,9 @@
 {#type-previews title="Type previews (demo)" status="draft"}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://hyperlink.cool/docs/type-previews>.
+<!-- docs-site-link:end -->
 # Type previews — the dual-view trick
 
 A scratch page to verify one thing on a phone: a handle can hover as a **compact named

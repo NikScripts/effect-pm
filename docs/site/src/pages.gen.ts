@@ -12,7 +12,7 @@ import type { getConfig as File_ApiPkgModuleIndex_getConfig } from './pages/api/
 // prettier-ignore
 import type { getConfig as File_ApiPkgIndex_getConfig } from './pages/api/[pkg]/index';
 // prettier-ignore
-import type { getConfig as File_ApiEffectPmModuleSymbol_getConfig } from './pages/api/effect-pm/[module]/[symbol]';
+import type { getConfig as File_ApiHyperlinkTsModuleSymbol_getConfig } from './pages/api/hyperlink-ts/[module]/[symbol]';
 // prettier-ignore
 import type { getConfig as File_ApiIndex_getConfig } from './pages/api/index';
 // prettier-ignore
@@ -28,7 +28,7 @@ type Page =
 | ({ path: '/api/[pkg]/[module]/[symbol]' } & GetConfigResponse<typeof File_ApiPkgModuleSymbol_getConfig>)
 | ({ path: '/api/[pkg]/[module]' } & GetConfigResponse<typeof File_ApiPkgModuleIndex_getConfig>)
 | ({ path: '/api/[pkg]' } & GetConfigResponse<typeof File_ApiPkgIndex_getConfig>)
-| ({ path: '/api/effect-pm/[module]/[symbol]' } & GetConfigResponse<typeof File_ApiEffectPmModuleSymbol_getConfig>)
+| ({ path: '/api/hyperlink-ts/[module]/[symbol]' } & GetConfigResponse<typeof File_ApiHyperlinkTsModuleSymbol_getConfig>)
 | ({ path: '/api' } & GetConfigResponse<typeof File_ApiIndex_getConfig>)
 | ({ path: '/docs/[chapter]' } & GetConfigResponse<typeof File_DocsChapter_getConfig>)
 | ({ path: '/' } & GetConfigResponse<typeof File_Index_getConfig>)

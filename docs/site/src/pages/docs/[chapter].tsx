@@ -15,7 +15,7 @@ export default async function ChapterPage({ chapter }: { chapter: string }) {
   const { element, meta, toc } = await renderChapter(c.raw);
   return (
     <>
-      <PageMeta title={`${meta.title} — hyperlink-ts`} description={firstParagraphs(c.raw)} />
+      <PageMeta title={`${meta.title} — Hyperlink`} description={firstParagraphs(c.raw)} />
       <DraftBanner meta={meta} />
       <article className="prose">
         {element}
@@ -42,5 +42,5 @@ export const getConfig = async () =>
     ? ({ render: "dynamic" } as const)
     : ({
         render: "static",
-        staticPaths: chapters.filter((c) => c.slug !== "index").map((c) => c.slug),
+        staticPaths: chapters.map((c) => c.slug),
       } as const);

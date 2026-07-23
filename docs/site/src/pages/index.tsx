@@ -1,28 +1,51 @@
-import { chapterBySlug } from "../lib/content.js";
-import { renderChapter } from "../lib/docs-content.js";
-import { PrevNext } from "../components/PrevNext.js";
-import { DraftBanner, PageAside } from "../components/PageAside.js";
 import { PageMeta } from "../components/PageMeta.js";
-import { firstParagraphs } from "../lib/page-desc.js";
 
-// Home = the "Getting started" overview chapter, rendered through the Effect pipeline.
-export default async function HomePage() {
-  const chapter = chapterBySlug("index");
-  if (!chapter) return <p>Missing content/index.dj</p>;
-  const { element, meta, toc } = await renderChapter(chapter.raw);
+// Landing — full-viewport brand hero. The docs proper start at /docs/index.
+export default function LandingPage() {
   return (
     <>
-      <PageMeta title={`${meta.title} — hyperlink-ts`} description={firstParagraphs(chapter.raw)} />
-      <DraftBanner meta={meta} />
-      <article className="prose">
-        {element}
-        <PrevNext slug="index" />
-      </article>
-      <PageAside meta={meta} toc={toc} />
+      <PageMeta
+        title="Hyperlink for Effect"
+        description="Hyperlink Services for Effect — define a Service once, run it in any runtime, and yield* the same typed Handle everywhere."
+      />
+      <section className="landing">
+        <div className="landing-inner">
+          <h1 className="landing-title">Hyperlink</h1>
+          <h3 className="landing-sub">for Effect</h3>
+          <div className="landing-tagline">
+            <span>Define once</span>
+            <span>run anywhere</span>
+            <span>
+              <code>yield*</code> everywhere
+            </span>
+          </div>
+          <p className="landing-pitch">
+            JavaScript has been multi-core for a decade. Hyperlink makes writing it feel
+            single-threaded again.
+          </p>
+          <p className="landing-body">
+            <code>yield*</code> a Service and it answers, from a parallel process, a second
+            machine, the far side of the network. Typed end to end, schema-validated at the wire.
+            You never write the difference.
+          </p>
+          <p className="landing-body">
+            Heavy work moves off the event loop and onto your other cores, the app spreads across
+            machines, and not one call site changes: monolith in dev, fleet in prod, the same
+            code either way.
+          </p>
+          <p className="landing-body">
+            Change a contract and the compiler flags every caller, in every process, on every
+            machine. One typed surface.
+          </p>
+          <p className="landing-credit">Inspired by and built on Effect RPC.</p>
+          <p className="landing-soon">Coming soon</p>
+          <a className="landing-preview" href="/docs/index">
+            Preview the docs →
+          </a>
+        </div>
+      </section>
     </>
   );
 }
 
-// Dynamic in dev so content edits re-render (HMR); static SSG in the build.
-export const getConfig = async () =>
-  import.meta.env.DEV ? ({ render: "dynamic" } as const) : ({ render: "static" } as const);
+export const getConfig = async () => ({ render: "static" }) as const;

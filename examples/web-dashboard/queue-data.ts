@@ -13,7 +13,7 @@ import * as Hyperlink from "../../src/Hyperlink";
 import { specOf } from "../../src/Hyperlink";
 import * as Group from "../../src/Group";
 import * as LogEntry from "../../src/LogEntry";
-import * as NodeStatus from "../../src/NodeStatus";
+import * as Node from "../../src/Node";
 import { FRESH_MS, readCache, writeCache } from "./cache";
 import {
   Billing,
@@ -88,16 +88,16 @@ export const miniUrl = inBrowser ? "/mini/rpc" : "http://localhost:7778/rpc";
 const dropletTransport = Hyperlink.ws(Droplet, { url: dropletRpc });
 const miniTransport = Hyperlink.ws(MiniNode, { url: miniUrl });
 
-// Point the nodeless NodeStatus client at a specific node with the 2-arg `client(tag, node)` form — it
+// Point the nodeless Node.status client at a specific node with the 2-arg `client(tag, node)` form — it
 // reads the node's value and unwraps its transport. (The node is exposed in `appLayer` below.)
 const nodeStatusLayer = (resourceKey: string) =>
-  Hyperlink.client(NodeStatus.Tag, nodeOf(resourceKey) === "mini" ? MiniNode : Droplet);
+  Hyperlink.client(Node.status.Tag, nodeOf(resourceKey) === "mini" ? MiniNode : Droplet);
 
 /** The merged remote client layer — every fleet resource over http. Shared by the
  *  reactive runtime (below) and the `pm` CLI (run-and-exit commands). */
 export const appLayer = Layer.mergeAll(
   // EXPOSE each node's transport (not just provide it INTO the queue clients) so the node tag itself is
-  // in the runtime context. The HealthBoard's per-node `NodeStatus` reads it via `client(tag, node)`;
+  // in the runtime context. The HealthBoard's per-node `Node.status` reads it via `client(tag, node)`;
   // without this, that node isn't resolvable and the node status hangs on "connecting…".
   dropletTransport,
   miniTransport,
@@ -192,11 +192,11 @@ const hyperlinkLogsAccumulator = (resourceKey: string) =>
     cachedAccumulator({
       key: `${resourceKey}/logs`,
       cap: 300,
-      stream: Stream.unwrap(Effect.map(NodeStatus.Tag, (h) => h.logs.stream)).pipe(
+      stream: Stream.unwrap(Effect.map(Node.status.Tag, (h) => h.logs.stream)).pipe(
         Stream.filter(LogEntry.hasKey(resourceKey)),
         Stream.map(toLogLine),
       ),
-      query: Effect.flatMap(NodeStatus.Tag, (h) => h.logs.query({ limit: 300 })).pipe(
+      query: Effect.flatMap(Node.status.Tag, (h) => h.logs.query({ limit: 300 })).pipe(
         Effect.map((entries) => entries.filter(LogEntry.hasKey(resourceKey)).map(toLogLine)),
       ),
     }).pipe(Stream.provide(nodeStatusLayer(resourceKey))),

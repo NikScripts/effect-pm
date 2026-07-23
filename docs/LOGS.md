@@ -1,3 +1,8 @@
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://hyperlink.cool/docs/LOGS>.
+<!-- docs-site-link:end -->
 # Logs platform — key catalog & reference
 
 **Narrative guide (start here):** [`docs/guides/logs.md`](./guides/logs.md) — architecture, live bus, durable journals, lineage, remote clients, migration.
@@ -260,23 +265,23 @@ Lineage JSON uses annotation key `LogAnnotationKeys.lineage`. Hyperlink kind is 
 
 ## Remote dashboard (browser → node)
 
-When the dashboard reaches resources over RPC, durable per-resource rows come from the node's journal (`NodeStatus.logs.query`) filtered by **resource key**. Locally, `Hyperlink.logs(tag).query` prefers registration Storage and falls back to NodeStatus when remote.
+When the dashboard reaches resources over RPC, durable per-resource rows come from the node's journal (`Node.status.logs.query`) filtered by **resource key**. Locally, `Hyperlink.logs(tag).query` prefers registration Storage and falls back to Node.status when remote.
 
 ```ts
-import * as NodeStatus from "hyperlink-ts/NodeStatus";
+import * as NodeStatus from "hyperlink-ts/Node (Node.status)";
 import * as LogEntry from "hyperlink-ts/LogEntry";
 
 const resourceKey = LiveScorePoller.key;
 
-NodeStatus.logs.stream.pipe(Stream.filter(LogEntry.hasKey(resourceKey)));
+Node.status.logs.stream.pipe(Stream.filter(LogEntry.hasKey(resourceKey)));
 
-const rows = yield* NodeStatus.logs.query({ limit: 300 });
+const rows = yield* Node.status.logs.query({ limit: 300 });
 const scoped = rows.filter(LogEntry.hasKey(resourceKey));
 ```
 
 Example: `src/web/data.ts` (`hyperlinkLogsAtom`), `examples/web-dashboard/queue-data.ts` (`hyperlinkLogsAccumulator`).
 
-Server must provide an app `Store.Service` with `Node.logs` (and desired toolkit stores) on the node stack — e.g. `DropletStore.layerMemory` in `examples/web-dashboard/queue-server.ts`. `httpServer` infers the node log key from served tags' bound `Node` for `NodeStatus.logs.query`.
+Server must provide an app `Store.Service` with `Node.logs` (and desired toolkit stores) on the node stack — e.g. `DropletStore.layerMemory` in `examples/web-dashboard/queue-server.ts`. `httpServer` infers the node log key from served tags' bound `Node` for `Node.status.logs.query`.
 
 ## Migration
 
@@ -286,7 +291,7 @@ Server must provide an app `Store.Service` with `Node.logs` (and desired toolkit
 | `NodeLogs.*` / `/NodeLogs` | **Removed** — use `Logs.*` / `hyperlink-ts/Logs` |
 | `ProcessStore` log facet | private `_logs` shape on toolkit store registrations (hidden from handle types) |
 | `captureLogs` on engines | **Removed** — `Logs.layer` (baked into Store) + `Logs.withScope(tag)` |
-| `queue.logs` / `proc.logs` on handle | `Hyperlink.logs(tag)` (local Storage / remote NodeStatus) |
+| `queue.logs` / `proc.logs` on handle | `Hyperlink.logs(tag)` (local Storage / remote Node.status) |
 | `HistoryStore` `${tag.key}/logs` | **Removed** — durable logs via registration `_logs` + `Hyperlink.logs` / `Logs.by*` |
 | `HostLogs` (docs) | `Logs` |
 

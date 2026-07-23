@@ -216,7 +216,6 @@ export {
 export * as LogEntry from "./LogEntry";
 // Module namespace (Effect-style): `Logs.layer` / `Logs.Relay` / `Logs.replay`.
 export * as Logs from "./Logs";
-export * as NodeStatus from "./NodeStatus";
 export { HistoryStore } from "./HistoryStore";
 export type { HistoryReadOptions, HistoryStoreShape } from "./HistoryStore";
 export {

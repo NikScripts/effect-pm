@@ -1,4 +1,9 @@
 {#modules-and-boundaries title="Modules & Boundaries" order=20 appliesTo=src}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://hyperlink.cool/docs/modules-and-boundaries>.
+<!-- docs-site-link:end -->
 # Modules & Boundaries
 
 How the code is split into modules, what each one exposes, and how the public and browser-safe boundary is kept. Covers module layout, the public/internal line, and build & tree-shaking.

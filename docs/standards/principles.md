@@ -1,4 +1,9 @@
 {#principles title="Principles" order=10 appliesTo=all}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://hyperlink.cool/docs/principles>.
+<!-- docs-site-link:end -->
 # Principles
 
 How we write code here, and how we shape the system. Every concrete rule downstream enforces one of

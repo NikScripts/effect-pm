@@ -1,4 +1,9 @@
 {#creating-a-hyperlink title="Creating a Hyperlink" status="draft" appliesTo=all}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://hyperlink.cool/docs/creating-a-hyperlink>.
+<!-- docs-site-link:end -->
 # Creating a Hyperlink
 
 {.draft}

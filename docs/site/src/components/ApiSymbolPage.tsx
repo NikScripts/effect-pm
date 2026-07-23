@@ -48,7 +48,7 @@ export async function ApiSymbolPage({
   return (
     <>
       <PageMeta
-        title={`${s.qualifiedName} — API — hyperlink-ts`}
+        title={`${s.qualifiedName} — API — Hyperlink`}
         description={
           s.summary !== "" ? s.summary : `API reference for ${s.qualifiedName} (${s.kind}).`
         }

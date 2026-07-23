@@ -1,4 +1,9 @@
 {#logs title="Logs" status="draft" appliesTo=all}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://hyperlink.cool/docs/logs>.
+<!-- docs-site-link:end -->
 # Logs
 
 Logs in hyperlink-ts are one pipeline: every `Effect.log` on a [Node](/docs/glossary#node) lands on a
@@ -209,7 +214,7 @@ const program = Effect.gen(function* () {
   const { stream, query } = yield* Hyperlink.logs(Daily)
 
   // Live: already filtered to lineage containing Daily.key (plus optional stream level).
-  // Durable: registration Storage when local; NodeStatus fallback when remote.
+  // Durable: registration Storage when local; Node.status fallback when remote.
   const history = yield* query({ limit: 50 })
   const mine = history.filter(LogEntry.hasKey(Daily.key))
 
@@ -259,25 +264,25 @@ class QuietProc extends Process.Tag<QuietProc>()("app/Quiet").pipe(
 ## Remote clients
 
 When the dashboard (or any client) reaches a Node over RPC, durable per-resource rows come from that
-Node’s journal — typically `NodeStatus.logs.query` — filtered by **resource key**. Locally,
-`Hyperlink.logs(tag).query` prefers registration Storage and falls back to NodeStatus when Storage
+Node’s journal — typically `Node.status.logs.query` — filtered by **resource key**. Locally,
+`Hyperlink.logs(tag).query` prefers registration Storage and falls back to Node.status when Storage
 isn’t there.
 
 ``` ts
-import { LogEntry, NodeStatus } from "hyperlink-ts"
+import { LogEntry, Node } from "hyperlink-ts"
 import { Stream } from "effect"
 
 const resourceKey = LiveScorePoller.key
 
-NodeStatus.logs.stream.pipe(Stream.filter(LogEntry.hasKey(resourceKey)))
+Node.status.logs.stream.pipe(Stream.filter(LogEntry.hasKey(resourceKey)))
 
-const rows = yield* NodeStatus.logs.query({ limit: 300 })
+const rows = yield* Node.status.logs.query({ limit: 300 })
 const scoped = rows.filter(LogEntry.hasKey(resourceKey))
 ```
 
 The server must still provide a `Store.Service` with `Node.logs` (and any toolkit stores you care
 about) on the Node stack. `httpServer` infers the node log key from served Tags’ bound Node for
-`NodeStatus.logs.query`.
+`Node.status.logs.query`.
 
 ## Modules
 

@@ -1,4 +1,9 @@
 {#types-and-naming title="Types & Naming" order=30 appliesTo=src}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://hyperlink.cool/docs/types-and-naming>.
+<!-- docs-site-link:end -->
 # Types & Naming
 
 The type-level rules: making types true instead of asserting them, how everything is named, and how public shapes are declared.

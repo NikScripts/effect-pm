@@ -1,10 +1,15 @@
 {#index title="Introduction" done="api previews types" appliesTo=all}
-# hyperlink-ts
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://hyperlink.cool/docs/index>.
+<!-- docs-site-link:end -->
+# Hyperlink for Effect
 
 **Build cross-runtime Services on Effect.**
 
-An Effect Service lives inside one runtime. A *cross-runtime Service* doesn't: define it once, run it
-on one runtime, and call it from another over RPC — with the same typed Handle.
+An Effect Service lives inside one runtime. A *Hyperlink Service* doesn't: define it once, run it
+on one runtime, and call it from another over RPC, with the same typed Handle.
 
 A real app runs as more than one runtime — a worker draining a queue here, a scheduler filling it
 there. Wiring those together normally means one side owns a Hyperlink and the others reach it through

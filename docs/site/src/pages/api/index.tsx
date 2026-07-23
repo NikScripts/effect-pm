@@ -8,8 +8,8 @@ export default async function ApiIndex() {
   return (
     <>
       <PageMeta
-        title="API Reference — hyperlink-ts"
-        description="Compiler-accurate API reference for hyperlink-ts and its effect dependencies."
+        title="API Reference — Hyperlink"
+        description="Compiler-accurate API reference for Hyperlink and its Effect dependencies."
       />
       <article className="prose">
         <h1>API Reference</h1>

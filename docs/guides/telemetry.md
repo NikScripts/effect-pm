@@ -1,4 +1,9 @@
 {#telemetry title="Telemetry" status="draft" done="api previews types verified" appliesTo=all}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://hyperlink.cool/docs/telemetry>.
+<!-- docs-site-link:end -->
 # Telemetry
 
 Every hyperlink-ts node already writes into Effect's `Metric` registry — queues, processes, HTTP

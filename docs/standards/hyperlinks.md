@@ -1,4 +1,9 @@
 {#resources title="Hyperlink Factories" order=60 appliesTo=src}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://hyperlink.cool/docs/hyperlinks>.
+<!-- docs-site-link:end -->
 # Hyperlink Factories
 
 How a resource is defined, served, and meshed across nodes. Covers the tag/layer split, the serve vocabulary, and multi-node meshing.

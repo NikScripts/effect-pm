@@ -1,4 +1,9 @@
 {#managing-layers title="Managing Layers" status="draft" appliesTo=all}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://hyperlink.cool/docs/managing-layers>.
+<!-- docs-site-link:end -->
 # Managing Layers
 
 A Hyperlink is defined **once** — a Tag with a Contract, and an Implementation behind it. Where it
@@ -26,7 +31,7 @@ program.pipe(Effect.provide(JobsLive)) // `yield* Jobs` now runs jobsImpl locall
 
 To expose a Hyperlink over RPC, mount it on an HTTP server. `Hyperlink.serve(Tag, impl)` is one served
 entry; `Node.httpServer([...])` (or `Node.wsServer([...])`) hosts a list of them on one
-`/rpc`, alongside an auto-mounted `NodeStatus` and a `/health` route:
+`/rpc`, alongside an auto-mounted `Node.status` and a `/health` route:
 
 ``` ts
 const Node = Node.httpServer([

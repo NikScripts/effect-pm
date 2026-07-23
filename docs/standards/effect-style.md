@@ -1,4 +1,9 @@
 {#effect-style title="Effect Style" order=40 appliesTo=src}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://hyperlink.cool/docs/effect-style>.
+<!-- docs-site-link:end -->
 # Effect Style
 
 How Effect code reads day to day — the platform surface and idioms, plus formatting and comments.

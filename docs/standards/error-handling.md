@@ -1,4 +1,9 @@
 {#error-handling title="Error Handling & Correctness" order=120 appliesTo=src}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://hyperlink.cool/docs/error-handling>.
+<!-- docs-site-link:end -->
 # Error Handling & Correctness
 
 Errors are first-class values here — modelled, named, carried, and handled with the same care as any

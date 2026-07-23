@@ -100,7 +100,7 @@ const program = Effect.gen(function* () {
 
   // ---- llms.txt: the index ----
   const indexLines: Array<string> = [
-    "# hyperlink-ts",
+    "# Hyperlink",
     "",
     "> Build cross-runtime Services on Effect: declare a service shape once as a Hyperlink Tag,",
     "> run it on one runtime, and call it from another over RPC with the same typed Handle.",
@@ -127,7 +127,7 @@ const program = Effect.gen(function* () {
 
   // ---- llms-full.txt: chapters verbatim + API one-liners ----
   const fullParts: Array<string> = [
-    "# hyperlink-ts — full documentation",
+    "# Hyperlink — full documentation",
     "",
     "Generated from the docs sources and the compiler-extracted API model.",
     "",

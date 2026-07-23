@@ -1,10 +1,15 @@
 {#fleet-health title="Fleet Health" status="draft" done="api" appliesTo=all}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://hyperlink.cool/docs/fleet-health>.
+<!-- docs-site-link:end -->
 # Fleet Health
 
 Stadium-board health across a **meshed** pack of nodes — without letting a down neighbour take
 your local `/health` with it.
 
-Per-node readiness (`withReadiness` → `GET /health` / `NodeStatus`) stays **local**. FleetHealth is
+Per-node readiness (`withReadiness` → `GET /health` / `Node.status`) stays **local**. FleetHealth is
 a separate glass on the same mesh Telemetry uses: leaf for this node, fleet fields that fold peers
 with Effect `Exit` kept so silence never lies.
 
@@ -28,7 +33,7 @@ class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
 
 ## Serve with peers + optional readiness
 
-Pass the same readiness rows `/health` uses when you want the leaf to match `NodeStatus`.
+Pass the same readiness rows `/health` uses when you want the leaf to match `Node.status`.
 Discharge the mesh with `Hyperlink.peersLayer` (or `FleetHealth.alone` for a single node).
 
 {.twoslash}
