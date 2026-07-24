@@ -5,7 +5,7 @@ import {
   builtInDaemonStoreContract,
   type BuiltInDaemonContract,
   type DaemonStoreEvent,
-} from "../src/internal/store/processStoreSpec";
+} from "../src/internal/store/daemonStoreSpec";
 
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 

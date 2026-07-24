@@ -2,7 +2,7 @@
  * @module web/data
  *
  * Tag-driven data layer for the dashboard. Each resource **tag** is the source of truth;
- * `queueBundle` / `processBundle` build the atom bundle the widgets read (status /
+ * `queueBundle` / `daemonBundle` build the atom bundle the widgets read (status /
  * metrics+history / trend / logs + controls) straight from the tag's live service over the
  * consumer's reactive `runtime` (an `Atom.runtime(layer)` that provides the tags — local
  * engine or `Hyperlink.client` over http; the widgets don't care which).
@@ -11,17 +11,17 @@
 import { DateTime, Duration, Effect, Option, type Schema, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
 import * as Group from "../Group";
-import { client, nodeOf, kindOf as hyperlinkKindOf, type Subscribable } from "../Hyperlink";
-import type { NodeKey } from "../Node";
+import { nodeOf, kindOf as hyperlinkKindOf, type Subscribable } from "../Hyperlink";
+import { connect } from "../Node";
+import type { NodeKey, AddressedNode, Status as NodeStatusSnapshot } from "../Node";
 import * as LogEntry from "../LogEntry";
-import * as NodeStatus from "../NodeStatus";
 import { kind as queueKind, queueMetrics, queueStatus } from "../WorkPool";
 import { priorityKind as customQueueKind, customQueueStatus } from "../WorkPool";
 import { kind as fleetHealthKind, type FleetStatus, type NodeReport } from "../FleetHealth";
 import { kind as telemetryKind, MetricsSnapshot, type MetricDatum } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";
 import { kind as runKind, type RunGateStatus } from "../Gate";
-import { kind as processKind, processScheduleEntry, processStatus } from "../Daemon";
+import { kind as daemonKind, daemonScheduleEntry, daemonStatus } from "../Daemon";
 import { kind as apiKind } from "../ApiMetrics";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../ApiUsageSchema";
 import { FRESH_MS, readCache, writeCache } from "./cache";
@@ -35,9 +35,9 @@ export type CustomQueueStatus = Schema.Schema.Type<typeof customQueueStatus>;
 /** Live queue metrics (from the contract schema). */
 export type QueueMetrics = Schema.Schema.Type<typeof queueMetrics>;
 /** Live process status (from the contract schema). */
-export type DaemonStatus = Schema.Schema.Type<typeof processStatus>;
+export type DaemonStatus = Schema.Schema.Type<typeof daemonStatus>;
 /** One scheduled run window (from the contract schema): `{ id?, startAt, stopAt? }`. */
-export type ScheduleEntry = Schema.Schema.Type<typeof processScheduleEntry>;
+export type ScheduleEntry = Schema.Schema.Type<typeof daemonScheduleEntry>;
 
 /** A captured log line for the log pane. */
 export interface LogLine {
@@ -265,7 +265,7 @@ export interface DaemonBundle {
  *  Read-only. */
 export interface NodeBundle {
   readonly id: string;
-  readonly status: ValueAtom<NodeStatus.Status>;
+  readonly status: ValueAtom<NodeStatusSnapshot>;
   /** The node's runtime-wide log stream (recent tail, then live). */
   readonly logs: ValueAtom<ReadonlyArray<LogLine>>;
   /** Ready-resource count over time (one point per status tick) — a readiness sparkline that dips
@@ -327,7 +327,7 @@ export const resourceNodeRef = (tag: unknown): NodeRef | undefined => {
 };
 
 /** The leaf resource tag in a group tree whose wire key is `key` (as reported by a node's
- *  `NodeStatus.resources[].key`), or `undefined` if not found. Lets the node page open a served
+ *  `Node.Status.resources[].key`), or `undefined` if not found. Lets the node page open a served
  *  resource's detail directly (without round-tripping through the group route). */
 export const leafByKey = (group: unknown, key: string): unknown => {
   const walk = (node: unknown): unknown => {
@@ -345,22 +345,13 @@ export const leafByKey = (group: unknown, key: string): unknown => {
   return walk(group);
 };
 
-/** Which kind of leaf a tag is — purely by its **stamped** kind (every tag carries one; a bare
- *  `Hyperlink.Tag` is `"resource"`). No spec-sniffing: the kind key is the single source of truth. */
-export const kindOf = (member: unknown): "queue" | "process" | "api" | "hyperlink" => {
-  const stamped = hyperlinkKindOf(member);
-  if (stamped === queueKind) return "queue";
-  if (stamped === processKind) return "process";
-  if (stamped === apiKind) return "api";
-  return "hyperlink";
-};
-
-/** Group-member type-guards, keyed off the same stamped `kind` as {@link kindOf}. @public */
-export const isQueueTag = (m: unknown): m is QueueTag => kindOf(m) === "queue";
+/** Group-member type-guards — each keyed directly off the tag's **stamped** kind, the single
+ *  source of truth (every tag carries one; no spec-sniffing, no second short vocabulary). @public */
+export const isQueueTag = (m: unknown): m is QueueTag => hyperlinkKindOf(m) === queueKind;
 /** @public */
-export const isDaemonTag = (m: unknown): m is DaemonTag => kindOf(m) === "process";
+export const isDaemonTag = (m: unknown): m is DaemonTag => hyperlinkKindOf(m) === daemonKind;
 /** @public */
-export const isApiTag = (m: unknown): m is ApiTag => kindOf(m) === "api";
+export const isApiTag = (m: unknown): m is ApiTag => hyperlinkKindOf(m) === apiKind;
 /** Custom-queue guard — its own stamped kind (not folded into {@link kindOf}, which stays the four
  *  primary kinds; a custom queue dispatches by its exact kind key). @public */
 export const isCustomQueueTag = (m: unknown): m is CustomQueueTag =>
@@ -425,7 +416,7 @@ const cachedAccumulator = <A, R>(opts: {
 
 // bundles are runtime-specific (their atoms close over the runtime), so cache per runtime+tag
 const bundleCache = new WeakMap<object, Map<string, QueueBundle>>();
-const processBundleCache = new WeakMap<object, Map<string, DaemonBundle>>();
+const daemonBundleCache = new WeakMap<object, Map<string, DaemonBundle>>();
 const apiBundleCache = new WeakMap<object, Map<string, ApiBundle>>();
 const nodeBundleCache = new WeakMap<object, Map<string, NodeBundle>>();
 const cacheFor = <V>(map: WeakMap<object, Map<string, V>>, runtime: object): Map<string, V> => {
@@ -446,14 +437,18 @@ const hyperlinkLogsAtom = <R, ER>(
     cachedAccumulator({
       key: `${resourceKey}/logs`,
       cap: 300,
-      stream: Stream.unwrap(Effect.map(NodeStatus.Tag, (h) => h.logs.stream)).pipe(
+      // A dead node surfaces NodeUnreachable; the dashboard atoms have no error channel, so it
+      // becomes a defect the atom's AsyncResult reports (same as before the node-handle move).
+      stream: Stream.unwrap(Effect.map(node, (h) => h.logs.stream)).pipe(
         Stream.filter(LogEntry.hasKey(resourceKey)),
         Stream.map(toLogLine),
+        Stream.orDie,
       ),
-      query: Effect.flatMap(NodeStatus.Tag, (h) => h.logs.query({ limit: 300 })).pipe(
+      query: Effect.flatMap(node, (h) => h.logs.query({ limit: 300 })).pipe(
         Effect.map((entries) => entries.filter(LogEntry.hasKey(resourceKey)).map(toLogLine)),
+        Effect.orDie,
       ),
-    }).pipe(Stream.provide(nodeStatusClient(node))),
+    }).pipe(Stream.provide(nodeConn(node))),
   );
 
 /** Build (once per runtime+tag) the atom bundle for a queue tag. */
@@ -727,8 +722,8 @@ export const runBundle = <R, ER>(
 };
 
 /** Build (once per runtime+tag) the atom bundle for a process tag. */
-export const processBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: DaemonTag<R>): DaemonBundle => {
-  const cache = cacheFor(processBundleCache, runtime);
+export const daemonBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: DaemonTag<R>): DaemonBundle => {
+  const cache = cacheFor(daemonBundleCache, runtime);
   const existing = cache.get(tag.key);
   if (existing !== undefined) return existing;
   const node = nodeOf(tag);
@@ -799,7 +794,7 @@ export const apiBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: ApiTag<R
   return bundle;
 };
 
-// A NodeStatus client over a specific node's transport: a NodeKey's *value* is the RPC `Protocol`,
+// (comment removed)
 // so provide it as the ambient `RpcClient.Protocol`. The tag-walk (`nodesOf`) erases the node's
 // identity, and the runtime supplies its transport via `connect`, so we restate the resolved
 // requirement — the same contained boundary assertion `Hyperlink.client` makes for node-bearing tags.
@@ -807,8 +802,10 @@ export const apiBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: ApiTag<R
 // way to point a nodeless tag (NodeStatus) at a specific node. (The node is exposed at runtime via
 // `connect`, so we erase its identity to `never` — the same contained boundary assertion Hyperlink.client
 // makes for node-bearing tags.)
-const nodeStatusClient = (node: NodeKey<unknown>) =>
-  client(NodeStatus.Tag, node as NodeKey<never>);
+const nodeConn = (node: NodeKey<unknown>) =>
+  // Connect the node so `yield* node` yields its handle (protocol + status/logs/ping). The list is
+  // heterogeneous, so the node is erased; these are real addressed dashboard nodes.
+  connect(node as AddressedNode<unknown>);
 
 /** Build (once per runtime+node) the atom bundle for a node's live status — read straight from the
  *  reserved `NodeStatus` resource over that node's transport. */
@@ -827,21 +824,26 @@ export const nodeStatusBundle = <R, ER>(
       // Provide the per-node client at the STREAM level so its scope spans the whole subscription.
       // (Providing it to the producing Effect tore the scoped RPC client down as soon as that effect
       // returned the stream, interrupting it — "all fibers interrupted".)
-      Stream.unwrap(Effect.map(NodeStatus.Tag, (h) => h.status.changes)).pipe(
-        Stream.provide(nodeStatusClient(ref.node)),
+      Stream.unwrap(Effect.map(ref.node, (h) => h.status.changes)).pipe(
+        Stream.provide(nodeConn(ref.node)),
+        Stream.orDie,
       ),
     ),
     logs: runtime.atom(
-      // `cachedAccumulator`'s live + history both require `NodeStatus.Tag`; provide the per-node
-      // client once over the combined stream (same stream-scoped provide as `status`).
+      // `cachedAccumulator`'s live + history both read the node's status; provide the per-node
+      // connection once over the combined stream (stream-scoped so it spans the subscription).
       cachedAccumulator({
         key: logsKey,
         cap: 300,
-        stream: Stream.unwrap(Effect.map(NodeStatus.Tag, (h) => h.logs.stream)).pipe(Stream.map(toLogLine)),
-        query: Effect.flatMap(NodeStatus.Tag, (h) => h.logs.query({ limit: 300 })).pipe(
-          Effect.map((entries) => entries.map(toLogLine)),
+        stream: Stream.unwrap(Effect.map(ref.node, (h) => h.logs.stream)).pipe(
+          Stream.map(toLogLine),
+          Stream.orDie,
         ),
-      }).pipe(Stream.provide(nodeStatusClient(ref.node))),
+        query: Effect.flatMap(ref.node, (h) => h.logs.query({ limit: 300 })).pipe(
+          Effect.map((entries) => entries.map(toLogLine)),
+          Effect.orDie,
+        ),
+      }).pipe(Stream.provide(nodeConn(ref.node))),
     ),
     // Ready-count over time, accumulated client-side from the status stream — a compact readiness
     // sparkline (no server change). Dips when a resource degrades (e.g. a dependency blips).
@@ -849,10 +851,11 @@ export const nodeStatusBundle = <R, ER>(
       cachedAccumulator({
         key: `${ref.id}/health`,
         cap: 120,
-        stream: Stream.unwrap(Effect.map(NodeStatus.Tag, (h) => h.status.changes)).pipe(
+        stream: Stream.unwrap(Effect.map(ref.node, (h) => h.status.changes)).pipe(
           Stream.map((st) => st.resources.filter((x) => x.ready).length),
+          Stream.orDie,
         ),
-      }).pipe(Stream.provide(nodeStatusClient(ref.node))),
+      }).pipe(Stream.provide(nodeConn(ref.node))),
     ),
   };
   cache.set(ref.id, bundle);

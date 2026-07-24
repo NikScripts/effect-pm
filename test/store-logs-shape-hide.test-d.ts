@@ -4,7 +4,7 @@
 import * as Daemon from "../src/Daemon";
 import * as Store from "../src/Store";
 import type { StoreHandleFromContract } from "../src/internal/store/spec";
-import { makeDaemonStoreAnalyticsContract } from "../src/internal/store/processStoreSpec";
+import { makeDaemonStoreAnalyticsContract } from "../src/internal/store/daemonStoreSpec";
 
 class HideLogsProc extends Daemon.Tag<HideLogsProc>()("test/store-logs-hide/Proc") {}
 
@@ -24,7 +24,7 @@ void handle.log;
 
 // Domain shape named `log` is allowed on a custom contract.
 const domainLogContract = Store.contract({
-  log: Store.shape(Daemon.processExecutionEvent),
+  log: Store.shape(Daemon.daemonExecutionEvent),
 });
 type DomainHandle = Store.HandleOf<typeof domainLogContract>;
 declare const domain: DomainHandle;

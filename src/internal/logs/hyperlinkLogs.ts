@@ -57,10 +57,10 @@ const queryResourceLogs = (
     } else if (local.length > 0) {
       return local;
     }
-    const { NodeStatusHyperlink } = yield* Effect.promise(
-      () => import("../nodeStatusHyperlink"),
+    const { NodeStatusTag } = yield* Effect.promise(
+      () => import("../nodeStatus"),
     );
-    const status = yield* Effect.serviceOption(NodeStatusHyperlink);
+    const status = yield* Effect.serviceOption(NodeStatusTag);
     if (Option.isNone(status)) {
       return local;
     }
@@ -91,10 +91,10 @@ export const logs = <Tag extends StoreScopeTag>(
           floor,
         );
       }
-      const { NodeStatusHyperlink } = yield* Effect.promise(
-        () => import("../nodeStatusHyperlink"),
+      const { NodeStatusTag } = yield* Effect.promise(
+        () => import("../nodeStatus"),
       );
-      const status = yield* Effect.serviceOption(NodeStatusHyperlink);
+      const status = yield* Effect.serviceOption(NodeStatusTag);
       if (Option.isNone(status)) {
         return Stream.empty;
       }

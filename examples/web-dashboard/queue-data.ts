@@ -11,6 +11,8 @@ import { Effect, Layer, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
 import * as Hyperlink from "../../src/Hyperlink";
 import { specOf } from "../../src/Hyperlink";
+import { kind as workPoolKind } from "../../src/WorkPool";
+import { kind as daemonKind } from "../../src/Daemon";
 import * as Group from "../../src/Group";
 import * as LogEntry from "../../src/LogEntry";
 import * as Node from "../../src/Node";
@@ -67,11 +69,10 @@ export interface GroupNode {
 /** Which node a resource runs on (the Mini, else undefined = the Droplet). */
 export const nodeOf = (id: string): string | undefined => (id.includes("/Mini/") ? "mini" : undefined);
 
-/** Which kind of leaf a tag is, by its contract (a queue enqueues; a process runs). */
-export const kindOf = (member: unknown): "queue" | "process" => {
-  const spec = specOf(member as { readonly [k: symbol]: unknown } as Parameters<typeof specOf>[0]);
-  return "enqueue" in spec || "sizes" in spec ? "queue" : "process";
-};
+/** Whether a leaf tag is a WorkPool / Daemon — by its **stamped** kind, the single source of
+ *  truth. No spec-sniffing: every tag carries its kind. */
+export const isQueueLeaf = (m: unknown): boolean => Hyperlink.kindOf(m) === workPoolKind;
+export const isDaemonLeaf = (m: unknown): boolean => Hyperlink.kindOf(m) === daemonKind;
 
 // In the browser the client is same-origin (vite proxies /rpc → Droplet, /mini → Mini).
 // In Node (the TUI) there's no proxy, so reach the servers directly.
@@ -88,17 +89,18 @@ export const miniUrl = inBrowser ? "/mini/rpc" : "http://localhost:7778/rpc";
 const dropletTransport = Hyperlink.ws(Droplet, { url: dropletRpc });
 const miniTransport = Hyperlink.ws(MiniNode, { url: miniUrl });
 
-// Point the nodeless Node.status client at a specific node with the 2-arg `client(tag, node)` form — it
-// reads the node's value and unwraps its transport. (The node is exposed in `appLayer` below.)
-const nodeStatusLayer = (resourceKey: string) =>
-  Hyperlink.client(Node.status.Tag, nodeOf(resourceKey) === "mini" ? MiniNode : Droplet);
+// The node this resource lives on — connect it so `yield* node` yields the handle (status/logs/ping).
+const nodeFor = (resourceKey: string) =>
+  nodeOf(resourceKey) === "mini" ? MiniNode : Droplet;
+const nodeStatusLayer = (resourceKey: string) => Node.connect(nodeFor(resourceKey));
 
 /** The merged remote client layer — every fleet resource over http. Shared by the
  *  reactive runtime (below) and the `pm` CLI (run-and-exit commands). */
 export const appLayer = Layer.mergeAll(
   // EXPOSE each node's transport (not just provide it INTO the queue clients) so the node tag itself is
-  // in the runtime context. The HealthBoard's per-node `Node.status` reads it via `client(tag, node)`;
-  // without this, that node isn't resolvable and the node status hangs on "connecting…".
+  // in the runtime context. The HealthBoard reads each node's status straight off its connected
+  // handle (`(yield* node).status`), which dials the node's own transport; without the node in
+  // context that dial can't resolve and the node status hangs on "connecting…".
   dropletTransport,
   miniTransport,
   Hyperlink.client(Mail).pipe(Layer.provide(dropletTransport)),
@@ -192,12 +194,14 @@ const hyperlinkLogsAccumulator = (resourceKey: string) =>
     cachedAccumulator({
       key: `${resourceKey}/logs`,
       cap: 300,
-      stream: Stream.unwrap(Effect.map(Node.status.Tag, (h) => h.logs.stream)).pipe(
+      stream: Stream.unwrap(Effect.map(nodeFor(resourceKey), (h) => h.logs.stream)).pipe(
         Stream.filter(LogEntry.hasKey(resourceKey)),
         Stream.map(toLogLine),
+        Stream.orDie,
       ),
-      query: Effect.flatMap(Node.status.Tag, (h) => h.logs.query({ limit: 300 })).pipe(
+      query: Effect.flatMap(nodeFor(resourceKey), (h) => h.logs.query({ limit: 300 })).pipe(
         Effect.map((entries) => entries.filter(LogEntry.hasKey(resourceKey)).map(toLogLine)),
+        Effect.orDie,
       ),
     }).pipe(Stream.provide(nodeStatusLayer(resourceKey))),
   );
@@ -287,7 +291,7 @@ export interface DaemonBundle {
 const processCache = new Map<string, DaemonBundle>();
 
 /** Build (once per tag) the atom bundle for a process tag. */
-export const processBundle = (tag: DaemonTag): DaemonBundle => {
+export const daemonBundle = (tag: DaemonTag): DaemonBundle => {
   const existing = processCache.get(tag.key);
   if (existing !== undefined) return existing;
   const statusStream = Stream.unwrap(Effect.map(tag, (p) => p.status.changes));
@@ -310,11 +314,11 @@ export const leafTags = (node: { readonly members: Record<string, unknown> }): R
 
 /** Only the queue leaves of a tree. */
 export const queueLeaves = (node: { readonly members: Record<string, unknown> }): ReadonlyArray<LeafTag> =>
-  leafTags(node).filter((m) => kindOf(m) === "queue") as ReadonlyArray<LeafTag>;
+  leafTags(node).filter((m) => isQueueLeaf(m)) as ReadonlyArray<LeafTag>;
 
 /** Only the process leaves of a tree. */
 export const processLeaves = (node: { readonly members: Record<string, unknown> }): ReadonlyArray<DaemonTag> =>
-  leafTags(node).filter((m) => kindOf(m) === "process") as ReadonlyArray<DaemonTag>;
+  leafTags(node).filter((m) => isDaemonLeaf(m)) as ReadonlyArray<DaemonTag>;
 
 /** One row of the fleet table — headline status + metrics, carrying its tag. */
 export interface FleetRow {

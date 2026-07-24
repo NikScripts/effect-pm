@@ -1,7 +1,7 @@
 /**
  * Wire schemas for process execution store events.
  *
- * @module internal/processEvent
+ * @module internal/daemonEvent
  * @internal
  */
 
@@ -58,10 +58,10 @@ export const makeDaemonExecutionEvent = <
 };
 
 /** Void-process execution events (no `result` field). @internal */
-export const processExecutionEventVoid = makeDaemonExecutionEvent();
+export const daemonExecutionEventVoid = makeDaemonExecutionEvent();
 
 /** Execution event type for a void process. @internal */
-export type DaemonExecutionEventVoid = typeof processExecutionEventVoid.Type;
+export type DaemonExecutionEventVoid = typeof daemonExecutionEventVoid.Type;
 
 /** Execution event type parameterized by optional success / error schemas. @internal */
 export type DaemonExecutionEvent<

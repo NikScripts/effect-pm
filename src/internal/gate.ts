@@ -17,13 +17,13 @@ import {
   builtInGateStoreContract,
   type GateStateChangeReason,
   type RunStateChange,
-} from "./store/runHyperlinkStoreSpec";
+} from "./store/gateStoreSpec";
 import { mapSubscribable, subscribable, type Subscribable } from "../Hyperlink";
 import * as Store from "../Store";
 import type { StoreScopeTag } from "./store/registration";
-import { errorOf, successOf } from "./runTagSchemas";
-import { makeRunStateChange, extractRunFailure } from "./runHyperlinkFacts";
-import { runStatusTransitions } from "./runHyperlinkStatus";
+import { errorOf, successOf } from "./gateTagSchemas";
+import { makeRunStateChange, extractRunFailure } from "./gateFacts";
+import { runStatusTransitions } from "./gateStatus";
 
 // ============================================================================
 // Engine types

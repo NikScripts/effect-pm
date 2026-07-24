@@ -1,7 +1,7 @@
 /**
  * Wire schemas for Gate store facts.
  *
- * @module internal/runHyperlinkEvent
+ * @module internal/gateEvent
  * @internal
  */
 
@@ -58,10 +58,10 @@ export const makeGateFactEvent = <
 };
 
 /** Void run facts (no `success`; string `error` fallback). @internal */
-export const runHyperlinkFactEventVoid = makeGateFactEvent();
+export const gateFactEventVoid = makeGateFactEvent();
 
 /** Run fact type for the default void contract. @internal */
-export type GateFactEventVoid = typeof runHyperlinkFactEventVoid.Type;
+export type GateFactEventVoid = typeof gateFactEventVoid.Type;
 
 /** Run fact type parameterized by optional success / error schemas. @internal */
 export type GateFactEvent<

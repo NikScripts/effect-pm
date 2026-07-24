@@ -1,5 +1,5 @@
 /**
- * HttpApiHyperlink — typed HTTP API client with transport-level concurrency gating.
+ * HttpApiClient — typed HTTP API client with transport-level concurrency gating.
  *
  * Wraps Effect's `HttpApiClient.make` with a `Semaphore`-based concurrency gate
  * on the `HttpClient` transport layer (via `HttpClientRunGate.withRunner` applied to
@@ -26,13 +26,13 @@
  *
  * | Function | Purpose |
  * |----------|---------|
- * | `HttpApiHyperlink.Service` | Class factory: tag + baked-in `.layer` |
- * | `HttpApiHyperlink.make` | Functional tag + `.layer` from an HttpApi schema |
- * | `HttpApiHyperlink.layerEffect` | Gate an existing client-building effect |
- * | `HttpApiHyperlink.instrumentEndpoints` | Wrap client after custom build |
- * | `HttpApiHyperlink.acceptJson` | `Accept: application/json` header helper |
+ * | `HttpApiClient.Service` | Class factory: tag + baked-in `.layer` |
+ * | `HttpApiClient.make` | Functional tag + `.layer` from an HttpApi schema |
+ * | `HttpApiClient.layerEffect` | Gate an existing client-building effect |
+ * | `HttpApiClient.instrumentEndpoints` | Wrap client after custom build |
+ * | `HttpApiClient.acceptJson` | `Accept: application/json` header helper |
  *
- * @module HttpApiHyperlink
+ * @module HttpApiClient
  */
 
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
@@ -47,19 +47,19 @@ import {
   usageExit,
 } from "./apiUsageRegistry";
 import type { GateRunner } from "../Gate";
-import { makeRunnerFromConcurrency } from "./runHyperlink";
+import { makeRunnerFromConcurrency } from "./gate";
 
 // ============================================================================
 // Public Types
 // ============================================================================
 
 /**
- * Configuration for {@link HttpApiHyperlink.make} / {@link HttpApiHyperlink.Service}.
+ * Configuration for {@link HttpApiClient.make} / {@link HttpApiClient.Service}.
  *
  * @category models
  * @public
  */
-export interface HttpApiHyperlinkConfig<
+export interface HttpApiClientConfig<
   _ApiId extends string,
   _Groups extends HttpApiGroup.Constraint,
   Name extends string = string,
@@ -76,12 +76,12 @@ export interface HttpApiHyperlinkConfig<
 }
 
 /**
- * Configuration for {@link HttpApiHyperlink.layerEffect}.
+ * Configuration for {@link HttpApiClient.layerEffect}.
  *
  * @category models
  * @public
  */
-export interface HttpApiHyperlinkLayerEffectConfig<
+export interface HttpApiClientLayerEffectConfig<
   ApiId extends string = string,
   Groups extends HttpApiGroup.Constraint = HttpApiGroup.Top,
 > {
@@ -275,7 +275,7 @@ const applyTransportMiddleware = (
   options: {
     readonly runner: GateRunner;
     readonly withInFlight: InFlightTransform;
-    readonly transformClient?: HttpApiHyperlinkConfig<string, HttpApiGroup.Top, string>["transformClient"];
+    readonly transformClient?: HttpApiClientConfig<string, HttpApiGroup.Top, string>["transformClient"];
   },
 ): HttpClient.HttpClient => {
   const userTransformed =
@@ -307,7 +307,7 @@ const buildLayer = <
 >(
   tag: Context.Key<Self, HttpApiClient.Client<Groups>>,
   api: HttpApiType.HttpApi<ApiId, Groups>,
-  config: HttpApiHyperlinkConfig<ApiId, Groups, Name>,
+  config: HttpApiClientConfig<ApiId, Groups, Name>,
 ) =>
   Layer.unwrap(
     Effect.gen(function* () {
@@ -332,13 +332,13 @@ const buildLayer = <
     }),
   );
 
-function makeHttpApiHyperlink<
+function makeHttpApiClient<
   ApiId extends string,
   Groups extends HttpApiGroup.Constraint,
   Name extends string,
 >(
   api: HttpApiType.HttpApi<ApiId, Groups>,
-  config: HttpApiHyperlinkConfig<ApiId, Groups, Name>,
+  config: HttpApiClientConfig<ApiId, Groups, Name>,
 ) {
   type ClientShape = HttpApiClient.Client<Groups>;
 
@@ -356,12 +356,12 @@ const httpApiResourceService = <Self>() =>
   >(
     name: Name,
     api: HttpApiType.HttpApi<ApiId, Groups>,
-    config?: Omit<HttpApiHyperlinkConfig<ApiId, Groups, Name>, "name">,
+    config?: Omit<HttpApiClientConfig<ApiId, Groups, Name>, "name">,
   ): Context.ServiceClass<Self, Name, HttpApiClient.Client<Groups>> & {
     readonly layer: Layer.Layer<Self, never, HttpClient.HttpClient | Scope.Scope>;
   } => {
     type ClientShape = HttpApiClient.Client<Groups>;
-    const fullConfig = { ...config, name } as HttpApiHyperlinkConfig<ApiId, Groups, Name>;
+    const fullConfig = { ...config, name } as HttpApiClientConfig<ApiId, Groups, Name>;
     const Base = Context.Service<Self, ClientShape>()(name);
     const layer = buildLayer(Base, api, fullConfig);
     return class extends Base {
@@ -381,7 +381,7 @@ function layerEffect<
 >(
   tag: Context.Key<Identifier, Service>,
   effect: Effect.Effect<Service, Error, Requirements>,
-  config: HttpApiHyperlinkLayerEffectConfig<ApiId, Groups> = {},
+  config: HttpApiClientLayerEffectConfig<ApiId, Groups> = {},
 ) {
   const clientId = String(tag.key);
   return Layer.unwrap(
@@ -406,8 +406,8 @@ function layerEffect<
 // Public API
 // ============================================================================
 
-// HttpApiHyperlink namespace — typed HTTP API client with transport gating. The module
-// is the namespace (`import * as HttpApiHyperlink`): each entry point is a flat top-level
+// HttpApiClient namespace — typed HTTP API client with transport gating. The module
+// is the namespace (`import * as HttpApiClient`): each entry point is a flat top-level
 // export (`acceptJson` / `instrumentEndpoints` are declared above), so a partial import
 // tree-shakes the unused builders out.
 
@@ -416,7 +416,7 @@ function layerEffect<
  *
  * @example
  * ```ts
- * class MyClient extends HttpApiHyperlink.Service<MyClient>()("@app/MyClient", MyApi, {
+ * class MyClient extends HttpApiClient.Service<MyClient>()("@app/MyClient", MyApi, {
  *   baseUrl: "https://api.example.com",
  *   concurrency: 5,
  * }) {}
@@ -434,6 +434,6 @@ export const Service = httpApiResourceService;
  * @category constructors
  * @public
  */
-export const make = makeHttpApiHyperlink;
+export const make = makeHttpApiClient;
 
 export { layerEffect };

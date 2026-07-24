@@ -46,7 +46,7 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | File | Teaches |
 |------|---------|
 | [`forms/queue/queue-hyperlink-priority-retry.ts`](./forms/queue/queue-hyperlink-priority-retry.ts) | `WorkPool.Service`, priority, dedup key, handler retry |
-| [`forms/queue/custom-queue-hyperlink-n-level.ts`](./forms/queue/custom-queue-hyperlink-n-level.ts) | `CustomQueueHyperlink.Tag`, named lanes, `add(item, level?)`, weighted take |
+| [`forms/queue/custom-queue-hyperlink-n-level.ts`](./forms/queue/custom-queue-hyperlink-n-level.ts) | `WorkPoolPriority.Tag`, named lanes, `add(item, level?)`, weighted take |
 
 ### Hyperlink
 
@@ -56,8 +56,8 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | [`forms/resource/run-resource-store-readback.ts`](./forms/resource/run-resource-store-readback.ts) | Engine auto-write + `Gate.store` + `Store.Service.at` readback |
 | [`forms/resource/run-resource-runtime-observer.ts`](./forms/resource/run-resource-runtime-observer.ts) | Observable handle (`status`, counters) via `Subscribable` |
 | [`forms/resource/http-client-run-gate.ts`](./forms/resource/http-client-run-gate.ts) | `HttpClientRunGate.transformClient` |
-| [`forms/resource/http-api-resource-tag-layer.ts`](./forms/resource/http-api-resource-tag-layer.ts) | `HttpApiHyperlink.Service` + `ApiMetrics.Tag` |
-| [`forms/resource/http-api-resource-layer-effect.ts`](./forms/resource/http-api-resource-layer-effect.ts) | `HttpApiHyperlink.layerEffect` + sidecar capture |
+| [`forms/resource/http-api-resource-tag-layer.ts`](./forms/resource/http-api-resource-tag-layer.ts) | `HttpApiClient.Service` + `ApiMetrics.Tag` |
+| [`forms/resource/http-api-resource-layer-effect.ts`](./forms/resource/http-api-resource-layer-effect.ts) | `HttpApiClient.layerEffect` + sidecar capture |
 | [`forms/resource/telemetry-fleet-glass.ts`](./forms/resource/telemetry-fleet-glass.ts) | `Telemetry` leaf snapshot + fleet `inFlightByNode` / `fleetInFlight` |
 | [`forms/resource/fleet-health-glass.ts`](./forms/resource/fleet-health-glass.ts) | `FleetHealth` leaf `local` + fleet `byNode` / `status` (`Reachable` \| `Unreachable`) |
 | [`forms/resource/node-tag-addressed.ts`](./forms/resource/node-tag-addressed.ts) | `Node.Tag` with `{ path }` + `Node.unix` / `client` |
@@ -137,7 +137,7 @@ Storage:
 | `pnpm run example:run-resource` | Gate concurrency form |
 | `pnpm run example:run-resource-store-readback` | Gate store auto-write + readback |
 | `pnpm run example:http-client-run-gate` | HttpClient gate form |
-| `pnpm run example:http-api-resource` | HttpApiHyperlink form |
+| `pnpm run example:http-api-resource` | HttpApiClient form |
 | `pnpm run example:http-api-resource-layer-effect` | `layerEffect` form |
 | `pnpm run example:form:*` | Individual form scripts that are registered in `package.json` |
 

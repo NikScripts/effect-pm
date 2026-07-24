@@ -12,28 +12,26 @@ re-derive the naming from chat history.
   requirement: the new name names the thing you declare, not just the package.
   `class Emails extends Hyperlink.Tag<Emails>()("app/Emails", { … }) {}`
 
-## Kind renames — the `*Resource`/`*Hyperlink` types (owner-locked 2026-07-22, CORRECTS the shipped suffix)
+## Kind renames — the `*Resource` types (owner-locked 2026-07-22) — ✅ SHIPPED 2026-07-23
 
-The first sweep mechanically renamed `*Resource` → `*Hyperlink` (`QueueHyperlink`, `RunHyperlink`,
-`CustomQueueHyperlink`, `HttpApiHyperlink`). **The owner rejected that suffix scheme** — the product
-modules get **generic, pattern-free nouns**, and two of them **fold away**. This is a focused second
-pass on top of the shipped rename (the heavy `Resource→Hyperlink` + package + call-site work is done).
-"What would Effect do" throughout: behavior-named peer constructors, `with*` reserved for aspect
-config, inference over overloads.
+Generic, pattern-free nouns — **not** a `*Resource`/`*Link` suffix. "What would Effect do" applied
+throughout: behavior-named peer constructors, `with*` reserved for aspect config, inference over
+overloads. Two of the old kinds **collapse** into others, so the public kind list shrinks. The table
+below is the AS-SHIPPED outcome (a couple of the original predictions — `NodeStatus` and the
+`Built`/`Served` shapes — landed differently than sketched; corrected in place).
 
-| Shipped (suffix) | Correct to | Notes |
+| Today | New | Notes |
 |---|---|---|
-| `Hyperlink` | `Hyperlink` | ✅ keep — the core namespace/primitive is right |
-| `QueueHyperlink` | **`WorkPool`** | |
-| `CustomQueueHyperlink` | **`WorkPool.priority(…)`** | FOLD into WorkPool as a behavior-named **peer constructor** beside `WorkPool.Tag` (Effect's `Queue.bounded`/`dropping` shape). NOT an overload on `.Tag`, NOT `.leveled`, NOT `withLane` (lanes change the *contract* — wire level union + `add(item, lane?)` — so a constructor, not a `with*`), NOT `makeCustom`. Keep the leveled **engine its own internal module** (the tree-shake split). Sweep the mixed `level`/`lane`/`priority` vocab to ONE term. |
-| `RunHyperlink` | **`Gate`** | it's a concurrency gate for effects, not a process runner |
-| `HttpApiHyperlink` | **`Gate.httpApiClient(…)`** | FOLD into Gate — the module *is* a `Semaphore` gate over the HttpClient transport (`HttpClientRunGate.withRunner` wrapping `HttpApiClient.make`) + endpoint metrics. Peer constructor beside `Gate.Tag`. Takes an HttpApi schema, builds+gates the client → name = the output. `HttpClientRunGate` stays the shared internal engine. |
-| `Process` | **`Daemon`** | supervised long-running process (untouched by the first sweep) |
-| `NodeStatus` | **node accessor** — `node.pulse` / `Hyperlink.status(node)` | Reserved resource every node auto-serves. It MUST stay a served RPC resource on the wire (live server-side state can't be static node data; only a served resource answers over the transport). DEMOTE the public surface: no user declares a `NodeStatus.Tag`; expose a node accessor. `Pulse` is the name iff that accessor is first-class. |
-| `BuiltResource`/`ServedResource` (now `*Hyperlink`) | `Built`/`Served` (or `*Link`) | structural shapes, low stakes — pick during the sweep |
+| `Resource` | **`Hyperlink`** | core namespace + the thing you declare |
+| `QueueResource` | **`WorkPool`** | |
+| `CustomQueueResource` | **`WorkPool.priority(…)`** | FOLDED IN as a behavior-named **peer constructor** beside `WorkPool.Tag` (Effect's `Queue.bounded`/`dropping` shape). NOT an overload on `.Tag`, NOT `.leveled`, NOT `withLane`, NOT `makeCustom`. Leveled **engine stays its own internal module** (the tree-shake split). Vocab swept to **`lane`** (`laneCount`/`namedLanes`/`add(item, lane?)`; wire field `lane`). |
+| `RunResource` | **`Gate`** | it's a concurrency gate for effects, not a process runner |
+| `HttpApiResource` | **`Gate.httpApiClient(…)`** | FOLDED IN — the module *is* a `Semaphore` gate over the HttpClient transport (`HttpClientRunGate.withRunner` wrapping `HttpApiClient.make`) + per-endpoint metrics. Peer constructor beside `Gate.Tag` (+ `httpApiClientService`/`httpApiClientLayer`/`acceptJson`/`instrumentEndpoints`). `HttpClientRunGate` stays the shared internal engine. |
+| `Process` | **`Daemon`** | supervised long-running process |
+| `NodeStatus` | **node-handle accessors** — `(yield* node).status` / `.logs` / `.ping` | SHIPPED as accessors ON THE CONNECTED NODE HANDLE, not a `node.pulse` / `Hyperlink.status(node)` free function. Each node auto-serves its own status/logs/ping; because a node tag *is* its own `Context.Service`, reading node A vs B is `yield* NodeA` vs `yield* NodeB` — no shared slot, no cast. The `NodeStatus` module + `Node.status` namespace are **deleted**; the light snapshot types survive as flat `Node.Status` / `Node.ResourceReadiness` / `Node.resourceReadiness`. Engine is a lazy internal (`Node.Tag` stays light). See [[project-nodestatus-on-handle]]. |
+| `BuiltResource` / `ServedResource` | **`Driver`** / `ServedHyperlink` **@internal** | `BuiltHyperlink` → **`Hyperlink.Driver`** (+ `driver`/`isDriver`/`driverSym`). `ServedHyperlink`/`ServedHyperlinks`/`servedHyperlinksLayer` **demoted to `@internal`** (server plumbing, zero user refs) — not renamed. |
 
-Before locking short names, **check `WorkPool`/`Gate`/`priority`/`pulse` against Effect's namespace**
-(the `Queue`-collision lesson).
+Namespace clash check done before locking: `WorkPool` / `Gate` / `Daemon` clear of Effect's namespace
 
 ## Already secured on npm (owner's account: `nikolasstow`)
 
@@ -82,8 +80,8 @@ The 17 node-transport test failures once on integration's tip are **RESOLVED** (
 `63b51ea1a`, 2026-07-22). Cause: default-on client verify probes real sockets with real-time
 `Effect.sleep`/`Effect.timeout`, which deadlock under `@effect/vitest`'s `it.effect` virtual
 `TestClock`. Fix: real-transport verify tests use `it.live`; the browser-guard `ws` test opts out
-via `clientVerify(false)`. **House rule for this sweep:** any test that builds a real client+server
-(thus hits default-on verify) MUST use `it.live`, never `it.effect`.
+via `Hyperlink.clientVerify(false)`. **House rule for this sweep:** any test that builds a real
+client+server (thus hits default-on verify) MUST use `it.live`, never `it.effect`.
 
 ## Open questions for the owner (ask, don't assume)
 

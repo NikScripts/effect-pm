@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import { Console, Data, Effect, Exit, Schema } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import { NodeServices } from "@effect/platform-node";
+import ts from "typescript";
 // Reuse the LIVE render pipeline (dual-preview expand, markdown-rendered JSDoc, api-typelinks) so the
 // precomputed effect hovers are identical to our own package's — one renderer, no drift.
 import { highlightToHast, loadHighlighter } from "../src/lib/highlight.js";
@@ -30,6 +31,33 @@ const repoRoot = nodePath.resolve(fileURLToPath(new URL("../../../", import.meta
 // a pinned submodule's files never change, so after the first pass every file is skipped.
 const hoversDir = nodePath.join(repoRoot, "docs/site/api-hovers");
 const cachePath = nodePath.join(hoversDir, "cache.json");
+
+// Comment/type-erased fingerprint of a pipeline source, folded into {@link pipelineVersion}. A
+// pipeline file feeds the cache-buster only through its RUNTIME behaviour — comments and type
+// annotations can't change a byte of generated hover HTML — so we fingerprint the TypeScript
+// EMITTER's output (`removeComments`, types erased) instead of the raw text. Effect: editing a
+// comment in any `src/lib` / `docgen/src` file no longer cold-invalidates the whole hover cache
+// (the ~1.5h "delete api-hovers/ after touching lib" papercut). Uses the real compiler emit, so it
+// can never drop live code; on any transpile miss it falls back to raw text (conservative — that
+// file's comment edits would still invalidate, but nothing goes stale).
+const pipelineFingerprint = (fileName: string, text: string): string => {
+  try {
+    const out = ts.transpileModule(text, {
+      fileName,
+      reportDiagnostics: false,
+      compilerOptions: {
+        removeComments: true,
+        target: ts.ScriptTarget.ESNext,
+        module: ts.ModuleKind.ESNext,
+        jsx: ts.JsxEmit.Preserve,
+        isolatedModules: true,
+      },
+    }).outputText;
+    return out.length > 0 ? out : text;
+  } catch {
+    return text;
+  }
+};
 
 class FileError extends Data.TaggedError("FileError")<{
   readonly path: string;
@@ -274,6 +302,8 @@ const program = Effect.gen(function* () {
   // exist in hoversDir). A pinned submodule → every file skipped after the first pass.
   // The cache SELF-INVALIDATES when the hover pipeline changes: the version is a hash of the
   // pipeline's own sources, folded into every entry — no more "delete api-hovers/ after editing".
+  // Each source is fingerprinted through {@link pipelineFingerprint} (comment/type-erased emit), so
+  // only a RUNTIME-behaviour change to a pipeline file busts the cache — a comment sweep does not.
   const pipelineVersion = yield* Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const siteDir = nodePath.join(repoRoot, "docs/site");
@@ -291,9 +321,10 @@ const program = Effect.gen(function* () {
     ].sort();
     const hasher = createHash("sha1");
     for (const rel of sources) {
-      hasher.update(
-        yield* fs.readFileString(nodePath.join(siteDir, rel)).pipe(Effect.orElseSucceed(() => ""))
-      );
+      const text = yield* fs
+        .readFileString(nodePath.join(siteDir, rel))
+        .pipe(Effect.orElseSucceed(() => ""));
+      hasher.update(pipelineFingerprint(rel, text));
     }
     return hasher.digest("hex").slice(0, 12);
   });

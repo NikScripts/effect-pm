@@ -1,7 +1,7 @@
 /**
  * Gate wire schemas and RPC spec factory.
  *
- * @module internal/runHyperlinkSchema
+ * @module internal/gateSchema
  * @internal
  */
 

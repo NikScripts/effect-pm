@@ -5,13 +5,14 @@
  *
  * @internal
  */
-import { Effect, Layer } from "effect"
+import { Context, Effect, Layer, Stream } from "effect"
 import { RpcClient } from "effect/unstable/rpc"
 import type {
   AddressedNode,
   AnyNode,
   Endpoints,
   NodeKey,
+  NodeStatusAccessors,
   ProtocolKind,
 } from "./nodeCore"
 import {
@@ -46,18 +47,41 @@ const protocols = (): NodeProtocolBuilders => {
 }
 
 /**
- * Re-key an RPC protocol under a {@link Node} service — the transport-agnostic
- * primitive both {@link Node.connect} and auto-wired {@link Hyperlink.client} use.
- *
+ * The status/logs/ping accessors on a connected node handle — lazy over the node's own `protocol`.
+ * Each dynamically imports the status engine on access (so nodeConnect never statically pulls it,
+ * and it stays off the light Tag path); the real dial logic is `nodeStatus.nodeStatusAccessors`.
  * @internal
  */
+const lazyStatusAccessors = (
+  protocol: Context.Service.Shape<typeof RpcClient.Protocol>,
+): NodeStatusAccessors => {
+  const load = Effect.promise(() => import("./nodeStatus"))
+  const of = (protocol: Context.Service.Shape<typeof RpcClient.Protocol>) =>
+    Effect.map(load, (m) => m.nodeStatusAccessors(protocol))
+  return {
+    ping: Effect.flatMap(of(protocol), (a) => a.ping),
+    status: {
+      get: Effect.flatMap(of(protocol), (a) => a.status.get),
+      changes: Stream.unwrap(Effect.map(of(protocol), (a) => a.status.changes)),
+    },
+    logs: {
+      stream: Stream.unwrap(Effect.map(of(protocol), (a) => a.logs.stream)),
+      query: (options) => Effect.flatMap(of(protocol), (a) => a.logs.query(options)),
+    },
+  }
+}
+
+/** Provide a node handle for `node` over `protocol` — its `{ protocol }` plus lazy status accessors. @internal */
 export const connectLayer = <Self, E, RIn>(
   node: NodeKey<Self>,
   protocol: Layer.Layer<RpcClient.Protocol, E, RIn>,
 ): Layer.Layer<Self, E, RIn> =>
   Layer.effect(
     node,
-    Effect.map(RpcClient.Protocol, (protocol) => ({ protocol })),
+    Effect.map(RpcClient.Protocol, (protocol) => ({
+      protocol,
+      ...lazyStatusAccessors(protocol),
+    })),
   ).pipe(Layer.provide(protocol))
 
 /** Fail a Layer build with {@link UnaddressedNode}. @internal */

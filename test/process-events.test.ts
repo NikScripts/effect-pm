@@ -17,7 +17,7 @@ import {
 } from "effect";
 import * as Daemon from "../src/Daemon";
 import * as Store from "../src/Store";
-import { builtInDaemonStoreContract } from "../src/internal/store/processStoreSpec";
+import { builtInDaemonStoreContract } from "../src/internal/store/daemonStoreSpec";
 import { flattenHyperlinkSpec } from "../src/Hyperlink";
 import type { AnyMethod } from "../src/Hyperlink";
 
@@ -66,8 +66,8 @@ const asRpcMethod = (m: unknown): AnyMethod | undefined =>
     : undefined;
 
 describe("Daemon.events — wire", () => {
-  it("buildDaemonSpec / processSpec expose events as a stream method", () => {
-    const flat = flattenHyperlinkSpec(Daemon.processSpec);
+  it("buildDaemonSpec / daemonSpec expose events as a stream method", () => {
+    const flat = flattenHyperlinkSpec(Daemon.daemonSpec);
     const events = asRpcMethod(flat.events);
     expect(events?.stream).toBe(true);
   });

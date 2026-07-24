@@ -3,7 +3,7 @@ import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import { WorkPool } from "../src";
-import * as NodeStatus from "../src/NodeStatus";
+import { NodeStatusTag } from "../src/internal/nodeStatus";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
@@ -38,7 +38,7 @@ it("fleet data-path smoke (ws): a producer feeds queues and NodeStatus reports r
 
       yield* Effect.gen(function* () {
         const mail = yield* Mail;
-        const node = yield* NodeStatus.Tag;
+        const node = yield* NodeStatusTag;
 
         // 1. producer → the queue drains over the wire.
         const completed: number[] = [];
@@ -64,7 +64,7 @@ it("fleet data-path smoke (ws): a producer feeds queues and NodeStatus reports r
         Effect.provide(
           Layer.mergeAll(
             Hyperlink.client(Mail).pipe(Layer.provide(wire)),
-            Hyperlink.client(NodeStatus.Tag).pipe(Layer.provide(wire)),
+            Hyperlink.client(NodeStatusTag).pipe(Layer.provide(wire)),
           ),
         ),
         Effect.scoped,

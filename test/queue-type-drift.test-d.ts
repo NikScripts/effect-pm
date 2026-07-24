@@ -5,7 +5,7 @@ import type {
   QueueEvent,
   QueueMetrics,
   QueueReleaseOptions,
-} from "../src/internal/queueHyperlink";
+} from "../src/internal/workPool";
 import * as Hyperlink from "../src/Hyperlink";
 
 // SSOT drift guard (Stage-2 M6): each hand-authored PUBLIC type must stay structurally equal to its

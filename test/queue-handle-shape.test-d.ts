@@ -1,7 +1,7 @@
 import { Effect, Schema, Stream } from "effect";
-import type { QueueHandle } from "../src/internal/queueHyperlink";
+import type { QueueHandle } from "../src/internal/workPool";
 import type { queueStatus } from "../src/WorkPool";
-import type { CustomQueueHandle } from "../src/internal/customQueueHyperlink";
+import type { CustomQueueHandle } from "../src/internal/workPoolPriority";
 import type { customQueueStatus } from "../src/WorkPool";
 import * as Hyperlink from "../src/Hyperlink";
 

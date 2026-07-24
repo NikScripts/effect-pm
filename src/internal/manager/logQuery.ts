@@ -1,5 +1,7 @@
 import { Data, Effect, Option } from "effect";
 import { utcDateFromMillis } from "../utcDate";
+import { kind as daemonKind } from "../../Daemon";
+import { kind as workPoolKind } from "../../WorkPool";
 import type { LogScope } from "./logScope";
 import type { LogEntry } from "../../LogEntry";
 import { replayLogEntry } from "../logs/relay";
@@ -106,8 +108,8 @@ const scopeToQueryFields = (
       return {};
     case "group":
       return { groupId: scope.groupId };
-    case "process":
-    case "queue":
+    case daemonKind:
+    case workPoolKind:
       return { groupId: scope.groupId, key: scope.key };
   }
 };

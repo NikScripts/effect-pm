@@ -5,6 +5,7 @@ import { logEntryMatchesScope, resolveLogScope } from "../src/internal/manager/l
 import type { LogEntry } from "../src/LogEntry";
 
 import { testBillingNodeKey, testSyncDaemonKey } from "./fixtures/logKeys";
+import { kind as daemonKind } from "../src/Daemon";
 
 const entry = (
   annotations: LogEntry["annotations"],
@@ -19,7 +20,7 @@ const entry = (
 describe("logContext", () => {
   it("matches process scope by lineage key", () => {
     const scope = {
-      _tag: "process" as const,
+      _tag: daemonKind,
       groupId: testBillingNodeKey,
       key: testSyncDaemonKey,
     };
@@ -51,14 +52,14 @@ describe("logContext", () => {
         [
           {
             key: testSyncDaemonKey,
-            kind: "process",
+            kind: daemonKind,
             groupId: testBillingNodeKey,
             controls: [],
           },
         ],
       );
-      assert.strictEqual(scope._tag, "process");
-      if (scope._tag === "process") {
+      assert.strictEqual(scope._tag, daemonKind);
+      if (scope._tag === daemonKind) {
         assert.strictEqual(scope.groupId, testBillingNodeKey);
         assert.strictEqual(scope.key, testSyncDaemonKey);
       }

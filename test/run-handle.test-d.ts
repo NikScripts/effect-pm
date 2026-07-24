@@ -1,6 +1,6 @@
 import { Effect, Schema } from "effect";
 import * as Gate from "../src/Gate";
-import { runSpec } from "../src/internal/runHyperlinkSchema";
+import { runSpec } from "../src/internal/gateSchema";
 import * as Hyperlink from "../src/Hyperlink";
 
 // ── The soundness guard for the ONE cast in `nameRunService` ─────────────────

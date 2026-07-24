@@ -45,24 +45,24 @@ class Ingest extends Daemon.Tag<Ingest>()("shape/Ingest").pipe(
 const _proof = Effect.gen(function* () {
   const h = yield* Health;
   // `status` is a reactive `ref`: `.get` reads it once, `.changes` streams it.
-  const _status: typeof Daemon.processStatus.Type = yield* h.status.get;
+  const _status: typeof Daemon.daemonStatus.Type = yield* h.status.get;
   yield* h.start; // void lifecycle command
   yield* h.run;
   const _logExport = yield* Hyperlink.logs(Health);
-  const _logHistory: ReadonlyArray<typeof Daemon.processLogEntry.Type> = yield* _logExport.query({});
+  const _logHistory: ReadonlyArray<typeof Daemon.daemonLogEntry.Type> = yield* _logExport.query({});
 
   const p = yield* Prices;
   const latest: Option.Option<typeof Price.Type> = yield* p.result.get;
 
   const m = yield* Matches;
-  const entries: ReadonlyArray<typeof Daemon.processScheduleEntry.Type> =
+  const entries: ReadonlyArray<typeof Daemon.daemonScheduleEntry.Type> =
     yield* m.schedule.entries.get;
   yield* m.schedule.add(entries[0]!);
   yield* m.schedule.clear;
 
   const s = yield* SeasonSchedule;
   yield* s.add(entries[0]!);
-  const one: Option.Option<typeof Daemon.processScheduleEntry.Type> = yield* s.get({ id: "x" });
+  const one: Option.Option<typeof Daemon.daemonScheduleEntry.Type> = yield* s.get({ id: "x" });
 
   const i = yield* Ingest;
   yield* i.start;

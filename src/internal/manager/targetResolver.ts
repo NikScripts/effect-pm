@@ -12,7 +12,7 @@
 /** Candidate command target from a fetched group contract. */
 export interface DaemonManagerTargetCandidate {
   readonly key: string;
-  readonly kind: "process" | "queue";
+  readonly kind: string;
   readonly groupId: string;
   readonly controls: ReadonlyArray<string>;
 }

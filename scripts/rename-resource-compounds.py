@@ -14,23 +14,23 @@ ROOT = Path(__file__).resolve().parents[1]
 
 # Public + internal file moves (old relative → new relative).
 FILE_MOVES = [
-    ("src/QueueResource.ts", "src/QueueHyperlink.ts"),
-    ("src/CustomQueueResource.ts", "src/CustomQueueHyperlink.ts"),
-    ("src/RunResource.ts", "src/RunHyperlink.ts"),
-    ("src/HttpApiResource.ts", "src/HttpApiHyperlink.ts"),
+    ("src/QueueResource.ts", "src/WorkPool.ts"),
+    ("src/CustomQueueResource.ts", "src/WorkPoolPriority.ts"),
+    ("src/RunResource.ts", "src/Gate.ts"),
+    ("src/HttpApiResource.ts", "src/HttpApiClient.ts"),
     ("src/ResourceConfigure.ts", "src/HyperlinkConfigure.ts"),
-    ("src/internal/queueResource.ts", "src/internal/queueHyperlink.ts"),
-    ("src/internal/customQueueResource.ts", "src/internal/customQueueHyperlink.ts"),
-    ("src/internal/runResource.ts", "src/internal/runHyperlink.ts"),
-    ("src/internal/runResourceSchema.ts", "src/internal/runHyperlinkSchema.ts"),
-    ("src/internal/runResourceStatus.ts", "src/internal/runHyperlinkStatus.ts"),
-    ("src/internal/runResourceEvent.ts", "src/internal/runHyperlinkEvent.ts"),
-    ("src/internal/runResourceFacts.ts", "src/internal/runHyperlinkFacts.ts"),
+    ("src/internal/queueResource.ts", "src/internal/workPool.ts"),
+    ("src/internal/customQueueResource.ts", "src/internal/workPoolPriority.ts"),
+    ("src/internal/runResource.ts", "src/internal/gate.ts"),
+    ("src/internal/runResourceSchema.ts", "src/internal/gateSchema.ts"),
+    ("src/internal/runResourceStatus.ts", "src/internal/gateStatus.ts"),
+    ("src/internal/runResourceEvent.ts", "src/internal/gateEvent.ts"),
+    ("src/internal/runResourceFacts.ts", "src/internal/gateFacts.ts"),
     ("src/internal/nodeStatusResource.ts", "src/internal/nodeStatusHyperlink.ts"),
     ("src/internal/logs/resourceLogs.ts", "src/internal/logs/hyperlinkLogs.ts"),
     ("src/internal/logs/resourceStreamLevel.ts", "src/internal/logs/hyperlinkStreamLevel.ts"),
-    ("src/internal/store/runResourceStoreSpec.ts", "src/internal/store/runHyperlinkStoreSpec.ts"),
-    ("docs/site/src/islands/RunResourceIsland.tsx", "docs/site/src/islands/RunHyperlinkIsland.tsx"),
+    ("src/internal/store/runResourceStoreSpec.ts", "src/internal/store/gateStoreSpec.ts"),
+    ("docs/site/src/islands/RunResourceIsland.tsx", "docs/site/src/islands/GateIsland.tsx"),
     ("docs/site/src/islands/counter-resource.ts", "docs/site/src/islands/counter-hyperlink.ts"),
     ("docs/site/src/islands/double-resource.ts", "docs/site/src/islands/double-hyperlink.ts"),
     ("docs/getting-started/creating-a-resource.md", "docs/getting-started/creating-a-hyperlink.md"),
@@ -44,10 +44,10 @@ FILE_MOVES = [
 
 # Longest-first identifier renames (prefix families covered by stem replaces).
 STEMS = [
-    ("CustomQueueResource", "CustomQueueHyperlink"),
-    ("HttpApiResource", "HttpApiHyperlink"),
-    ("QueueResource", "QueueHyperlink"),
-    ("RunResource", "RunHyperlink"),
+    ("CustomQueueResource", "WorkPoolPriority"),
+    ("HttpApiResource", "HttpApiClient"),
+    ("QueueResource", "WorkPool"),
+    ("RunResource", "Gate"),
     ("ResourceConfigure", "HyperlinkConfigure"),
     ("NodeStatusResource", "NodeStatusHyperlink"),
     ("ProcessScheduleResource", "ProcessScheduleHyperlink"),
@@ -74,14 +74,14 @@ STEMS = [
     ("resourceKindOf", "hyperlinkKindOf"),
     ("resourceKind", "hyperlinkKind"),
     # camelCase internal module stems (path fragments + imports)
-    ("customQueueResource", "customQueueHyperlink"),
-    ("queueResource", "queueHyperlink"),
-    ("runResourceStoreSpec", "runHyperlinkStoreSpec"),
-    ("runResourceSchema", "runHyperlinkSchema"),
-    ("runResourceStatus", "runHyperlinkStatus"),
-    ("runResourceEvent", "runHyperlinkEvent"),
-    ("runResourceFacts", "runHyperlinkFacts"),
-    ("runResource", "runHyperlink"),
+    ("customQueueResource", "workPoolPriority"),
+    ("queueResource", "workPool"),
+    ("runResourceStoreSpec", "gateStoreSpec"),
+    ("runResourceSchema", "gateSchema"),
+    ("runResourceStatus", "gateStatus"),
+    ("runResourceEvent", "gateEvent"),
+    ("runResourceFacts", "gateFacts"),
+    ("runResource", "gate"),
     ("nodeStatusResource", "nodeStatusHyperlink"),
     ("resourceStreamLevel", "hyperlinkStreamLevel"),
     ("resourceLogs", "hyperlinkLogs"),
@@ -149,7 +149,7 @@ def transform(text: str) -> str:
     text = text.replace("standards/resources", "standards/hyperlinks")
     text = text.replace("counter-resource", "counter-hyperlink")
     text = text.replace("double-resource", "double-hyperlink")
-    text = text.replace("RunResourceIsland", "RunHyperlinkIsland")
+    text = text.replace("RunResourceIsland", "GateIsland")
 
     # Default wire kind for bare Hyperlink tags (+ journal scope kind)
     text = text.replace('kind ?? "resource"', 'kind ?? "hyperlink"')

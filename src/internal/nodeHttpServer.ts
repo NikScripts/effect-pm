@@ -112,7 +112,7 @@ const httpServerBase = (
       // registered resources, so a client can inspect any node without the author wiring it. Built here
       // (not a registered `serve` layer) so it reports the user resources without counting itself.
       const { nodeStatusServeEntry } = yield* Effect.promise(
-        () => import("./nodeStatusHyperlink"),
+        () => import("./nodeStatus"),
       );
       const nodeEntry = nodeStatusServeEntry({
         startedAt,

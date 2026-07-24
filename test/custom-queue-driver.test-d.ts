@@ -4,11 +4,11 @@ import * as Hyperlink from "../src/Hyperlink";
 import type { CustomQueueInstanceSpec } from "../src/WorkPool";
 import { Schema } from "effect";
 
-// Type-level proof: CustomQueue toolkit layers materialize a `BuiltHyperlink` — impl carries worker `R`
+// Type-level proof: CustomQueue toolkit layers materialize a `Driver` — impl carries worker `R`
 // until `grantLocal` discharges it (same bundle pattern as WorkPool / Daemon / Gate).
 
 class WorkerDep extends Context.Service<WorkerDep, string>()(
-  "hyperlink-ts/test/custom-queue-built-resource.test-d/WorkerDep",
+  "hyperlink-ts/test/custom-queue-driver.test-d/WorkerDep",
 ) {}
 
 const JobSchema = Schema.Struct({ id: Schema.String });
@@ -18,12 +18,12 @@ class TypedCqr extends WorkPool.priority<TypedCqr>()("test/built-resource/Cqr", 
   laneCount: 2,
 }) {}
 
-type Built = Hyperlink.BuiltHyperlink<
+type Built = Hyperlink.Driver<
   CustomQueueInstanceSpec<typeof JobSchema.fields>,
   WorkerDep
 >;
 
-// `BuiltHyperlink` pairs a requirement-carrying impl with captured worker context.
+// `Driver` pairs a requirement-carrying impl with captured worker context.
 type ImplCarriesWorkerDep = Built["impl"] extends Hyperlink.WithRequirement<
   Hyperlink.ImplOf<CustomQueueInstanceSpec<typeof JobSchema.fields>>,
   WorkerDep
@@ -37,8 +37,8 @@ type ContextHasWorkerDep = Built["workerContext"] extends Context.Context<Worker
   : false;
 true satisfies ContextHasWorkerDep;
 
-// `grantLocal` signature: `BuiltHyperlink<S, R>` in → `ImplOf<S>` out (R stripped from Effect methods).
-type GrantLocalOut = Hyperlink.BuiltHyperlink<
+// `grantLocal` signature: `Driver<S, R>` in → `ImplOf<S>` out (R stripped from Effect methods).
+type GrantLocalOut = Hyperlink.Driver<
   CustomQueueInstanceSpec<typeof JobSchema.fields>,
   WorkerDep
 > extends Parameters<
@@ -56,8 +56,8 @@ type GrantLocalOut = Hyperlink.BuiltHyperlink<
   : false;
 true satisfies GrantLocalOut;
 
-// Soundness: a plain `ImplOf` is not assignable to `BuiltHyperlink` without the marker.
-type PlainImplIsNotBuilt = Hyperlink.BuiltHyperlink<
+// Soundness: a plain `ImplOf` is not assignable to `Driver` without the marker.
+type PlainImplIsNotBuilt = Hyperlink.Driver<
   CustomQueueInstanceSpec<typeof JobSchema.fields>,
   WorkerDep
 > extends Hyperlink.ImplOf<CustomQueueInstanceSpec<typeof JobSchema.fields>>

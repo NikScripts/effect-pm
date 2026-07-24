@@ -3,7 +3,7 @@ import { Effect, Fiber, Option } from "effect";
 // The engine schedule primitive is internal now (its public face is `Daemon.scheduleInMemory` /
 // `scheduleDefine` + the `Daemon.Schedule` resource); this suite exercises the primitive itself, so
 // it imports the internal module directly.
-import { DaemonSchedule } from "../src/internal/processSchedule";
+import { DaemonSchedule } from "../src/internal/daemonSchedule";
 import { utcDateFromMillis } from "../src/internal/utcDate";
 
 describe("engine schedule primitive (internal)", () => {

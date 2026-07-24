@@ -2,7 +2,7 @@
  * @module examples/resource-tui/dashboard
  *
  * The navigable dashboard on the **shared, tag-driven data layer** (`../web-dashboard`)
- * — the same `Fleet` group tag + `queueBundle`/`processBundle` the web dashboard uses,
+ * — the same `Fleet` group tag + `queueBundle`/`daemonBundle` the web dashboard uses,
  * reached over http (env-aware transport: direct `:7777`/`:7778` from Node). No mock,
  * no `REGISTRY`/`TREE`. The `Group.Tag` tree IS the navigation; each leaf is dispatched
  * to a queue or process cell by `kindOf`; opening one shows the live detail page.
@@ -22,8 +22,9 @@ import * as Group from "../../src/Group";
 import { Fleet } from "../web-dashboard/fleet";
 import {
   nodeOf,
-  kindOf,
-  processBundle,
+  isDaemonLeaf,
+  isQueueLeaf,
+  daemonBundle,
   processLeaves,
   queueBundle,
   queueLeaves,
@@ -65,8 +66,8 @@ const LEVEL_COLOR: Record<string, string> = {
 // ── tag dispatch ──────────────────────────────────────────────────────────────
 // A leaf tag carries no discriminant TS can narrow on, so `kindOf` (which inspects the
 // contract) becomes a type guard — the sanctioned alternative to a cast.
-const isDaemonTag = (m: unknown): m is DaemonTag => kindOf(m) === "process";
-const isQueueTag = (m: unknown): m is LeafTag => kindOf(m) === "queue";
+const isDaemonTag = (m: unknown): m is DaemonTag => isDaemonLeaf(m);
+const isQueueTag = (m: unknown): m is LeafTag => isQueueLeaf(m);
 /** Every leaf (queue + process) of the fleet — the command palette's targets. */
 const ALL_LEAVES: ReadonlyArray<LeafTag | DaemonTag> = [...queueLeaves(Fleet), ...processLeaves(Fleet)];
 
@@ -166,7 +167,7 @@ const DaemonCell = (props: {
   readonly selected: boolean;
 }): React.ReactElement => {
   const { tag, width, selected } = props;
-  const r = useAtomValue(processBundle(tag).status);
+  const r = useAtomValue(daemonBundle(tag).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   const up = s?.supervising === true;
   return (
@@ -446,7 +447,7 @@ const FocusedDaemon = (props: {
   readonly barRows: number;
 }): React.ReactElement => {
   const { tag, cols, rows, editMode } = props;
-  const bundle = processBundle(tag);
+  const bundle = daemonBundle(tag);
   const statusR = useAtomValue(bundle.status);
   const logsR = useAtomValue(bundle.logs);
 

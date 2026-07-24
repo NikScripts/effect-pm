@@ -6,15 +6,15 @@ import {
   interruptRunBody,
   interruptWaitingAcquire,
   startRun,
-} from "../src/internal/runHyperlinkStatus";
+} from "../src/internal/gateStatus";
 import {
   makeRunCompletedFact,
   makeRunFailedFact,
   makeRunStartedFact,
   makeRunStateChange,
   toHyperlinkState,
-} from "../src/internal/runHyperlinkFacts";
-import type { RunGateStatus } from "../src/internal/runHyperlink";
+} from "../src/internal/gateFacts";
+import type { RunGateStatus } from "../src/internal/gate";
 
 const baseStatus = (patch: Partial<RunGateStatus> = {}): RunGateStatus => ({
   resourceId: "@test/Gate",
@@ -30,7 +30,7 @@ const baseStatus = (patch: Partial<RunGateStatus> = {}): RunGateStatus => ({
   ...patch,
 });
 
-describe("runHyperlinkStatus", () => {
+describe("gateStatus", () => {
   it("enterWaiting increments waiting and stamps observedAt", () => {
     const next = enterWaiting(baseStatus(), 100);
     expect(next).toMatchObject({ waiting: 1, observedAt: 100 });
@@ -62,7 +62,7 @@ describe("runHyperlinkStatus", () => {
   });
 });
 
-describe("runHyperlinkFacts", () => {
+describe("gateFacts", () => {
   it("builds typed fact rows", () => {
     expect(
       makeRunStartedFact({
