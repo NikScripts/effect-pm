@@ -85,7 +85,7 @@ setInterval(() => {
 
 // node every queue as ONE group on ONE port: `httpServer` mounts a single `/rpc`
 // endpoint with group-id-prefixed procedures behind the Droplet node. (The wnba
-// key-rotation process lives on the Mini — see mini-server.ts.)
+// key-rotation daemon lives on the Mini — see mini-server.ts.)
 const serveLayer = Node.wsServer([
   queueEntry(Mail, cfg),
   queueEntry(Jobs, cfg),

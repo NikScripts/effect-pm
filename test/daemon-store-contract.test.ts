@@ -49,7 +49,7 @@ describe("Daemon store contract", () => {
     }).pipe(Effect.provide(DaemonStore.layerMemory), Effect.scoped),
   );
 
-  it.effect("value process record includes optional success field", () =>
+  it.effect("value daemon record includes optional success field", () =>
     Effect.gen(function* () {
       const store = yield* DaemonStore.at(PricedProc);
       yield* store.record({

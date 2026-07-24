@@ -192,7 +192,7 @@ const _wireViaClient: Promise<number> = Effect.runPromise(
 void _wireViaClient;
 
 // ── clientInstances: one shared client serves many instances of one control shape ──
-// (100 processes that can only start/drop cost ONE client, not one each.)
+// (100 daemons that can only start/drop cost ONE client, not one each.)
 const Proc = Hyperlink.tagFor("proc", {
   start: Hyperlink.effect(Schema.Void),
   drop: Hyperlink.effect(Schema.Void),

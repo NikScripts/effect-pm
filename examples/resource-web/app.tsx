@@ -2,7 +2,7 @@
  * @module examples/resource-web/app
  *
  * The whole dashboard: point the shipped {@link Dashboard} at the hub. The built-in widgets
- * (queues, processes, API taps, subgroups) are derived from each tag — this file hard-codes nothing
+ * (queues, daemons, API taps, subgroups) are derived from each tag — this file hard-codes nothing
  * about those. The one exception is `WorkerPool`, a consumer-defined multi-node resource with no
  * built-in card: a custom {@link WorkerPoolCard} is bound to its key and layered **onto** the
  * shipped `base` set via `withEntries` — so that one resource gets a bespoke card and every other

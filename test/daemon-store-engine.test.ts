@@ -78,7 +78,7 @@ describe("Daemon.layer — Daemon.store auto-write", () => {
     }).pipe(Effect.provide(storeAndClock), Effect.scoped),
   );
 
-  it.effect("records optional success on value-returning processes", () =>
+  it.effect("records optional success on value-returning daemons", () =>
     Effect.gen(function* () {
       const live = daemonLayer(
         Daemon.layer(PricedExec, {

@@ -8,7 +8,7 @@ import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
 // Extends the transport conformance matrix to the last resource type — ShardMap must put/get over the
-// wire (both transports) and FAIL loudly on a protocol mismatch, same as queue/process/run. ShardMap's
+// wire (both transports) and FAIL loudly on a protocol mismatch, same as queue/daemon/gate. ShardMap's
 // remote path is heavier (SQL-backed shard + peers/selfNode), so it lives in its own file.
 
 const Session = Schema.Struct({ id: Schema.String, userId: Schema.String });

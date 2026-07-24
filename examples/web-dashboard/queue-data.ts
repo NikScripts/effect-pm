@@ -307,7 +307,7 @@ export const daemonBundle = (tag: DaemonTag): DaemonBundle => {
   return bundle;
 };
 
-/** Walk a `Group.Tag` tree to its leaf resource tags (queues + processes), raw. */
+/** Walk a `Group.Tag` tree to its leaf resource tags (queues + daemons), raw. */
 export const leafTags = (node: { readonly members: Record<string, unknown> }): ReadonlyArray<unknown> =>
   Object.values(Group.members(node)).flatMap((m) => (Group.isGroup(m) ? leafTags(m) : [m]));
 

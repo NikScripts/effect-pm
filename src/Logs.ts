@@ -170,7 +170,7 @@ export interface LogReadOptions {
 }
 
 /**
- * Read durable logs for a **whole node** (every resource on that process).
+ * Read durable logs for a **whole node** (every resource on that node).
  *
  * Needs `Node.logs` / `Hyperlink.store(Node)` on an app {@link Store.Service} (Soft-override the
  * toolkit layer — see `docs/guides/stores.md`). Soft-default Memory alone is engine observability

@@ -62,7 +62,7 @@ import { utcDateFromMillis } from "../../src/internal/utcDate";
  *
  * ## Automated tests (library behavior, not this file)
  *
- * - **`test/process-schedule.test.ts`** — schedule entry storage + mutation semantics.
+ * - **`test/daemon-schedule.test.ts`** — schedule entry storage + mutation semantics.
  * - **`test/daemon.test.ts`** — schedule-driven instance behavior.
  */
 

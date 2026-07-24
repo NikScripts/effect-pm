@@ -18,7 +18,7 @@ const entry = (
 });
 
 describe("logContext", () => {
-  it("matches process scope by lineage key", () => {
+  it("matches daemon scope by lineage key", () => {
     const scope = {
       _tag: daemonKind,
       groupId: testBillingNodeKey,

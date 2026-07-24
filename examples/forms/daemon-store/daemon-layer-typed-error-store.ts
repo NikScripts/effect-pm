@@ -50,4 +50,4 @@ const program = Effect.gen(function* () {
   );
 }).pipe(Effect.provide(TestClock.layer()), Effect.scoped, Effect.orDie);
 
-runNodeProgramOrExit(program, "process-layer-typed-error-store finished");
+runNodeProgramOrExit(program, "daemon-layer-typed-error-store finished");
