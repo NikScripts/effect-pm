@@ -18,8 +18,8 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 | Log entry + predicates | `hyperlink-ts/LogEntry` | `src/LogEntry.ts` |
 | Hyperlink foundation | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` |
 | Store (registrations) | `hyperlink-ts/Store` | `src/Store.ts` |
-| Process tags | `hyperlink-ts/Process` | `src/Process.ts` |
-| Queue tags | `hyperlink-ts/WorkPool` | `src/WorkPool.ts` |
+| Daemon tags | `hyperlink-ts/Daemon` | `src/Daemon.ts` |
+| WorkPool tags | `hyperlink-ts/WorkPool` | `src/WorkPool.ts` |
 
 | Example | Short path | Role |
 |---------|------------|------|
@@ -34,7 +34,7 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 | Key kind | Identifies | Declared on | Stored / queried as |
 |----------|------------|-------------|---------------------|
 | **Node log key** | One OS process / runtime host (durable bucket) | `Node.Tag` constructor arg → `.key` | `Node.logs` scope; `annotations.node` |
-| **Hyperlink key** | One queue, process, or custom tag | `Hyperlink.Tag` / `Daemon.Tag` / `WorkPool.Tag` constructor arg → `.key` | registration scope; lineage JSON |
+| **Hyperlink key** | One work pool, daemon, or custom tag | `Hyperlink.Tag` / `Daemon.Tag` / `WorkPool.Tag` constructor arg → `.key` | registration scope; lineage JSON |
 | **Annotation key** | Name of a field on `LogEntry.annotations` | `LogAnnotationKeys.*` | Not a bucket — metadata field name |
 | **Store scope key** | Journal partition for a registration | Same as node or resource key | Durable `_logs` journal (private); read via `Hyperlink.logs` / `Logs.by*` |
 | **Lineage segment key** | One hop in resource ancestry | Each element in lineage JSON array | `LogEntry.hasKey` / `atRoot` / `atLeaf` |
@@ -62,7 +62,7 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 | Symbol | Key kind | Key value | Package import | Source | Example |
 |--------|----------|-----------|----------------|--------|---------|
 | `BoxScoreQueue.key` | resource key | `wnba/BoxScoreQueue` | `hyperlink-ts/WorkPool` | `src/WorkPool.ts` | `resource-web/hub.ts` |
-| `LiveScorePoller.key` | resource key | `wnba/LiveScorePoller` | `hyperlink-ts/Process` | `src/Process.ts` | `resource-web/hub.ts` |
+| `LiveScorePoller.key` | resource key | `wnba/LiveScorePoller` | `hyperlink-ts/Daemon` | `src/Daemon.ts` | `resource-web/hub.ts` |
 | `PlayByPlayQueue.key` | resource key | `wnba/PlayByPlayQueue` | `hyperlink-ts/WorkPool` | `src/WorkPool.ts` | `resource-web/hub.ts` |
 | `ScoresDb.key` | resource key | `wnba/ScoresDb` | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` | `resource-web/hub.ts` |
 | `ScoresApi.key` | resource key | `@wnba/ScoresApi` | `hyperlink-ts/ApiMetrics` | `src/ApiMetrics.ts` | `resource-web/hub.ts` |
@@ -187,7 +187,7 @@ class AppStore extends Store.Service<AppStore>("@app/Store")(
 ) {}
 
 // Provide the store *into* the resource layer so Logs.layer is installed before
-// auto-started queue workers fork (Process can use either order — workers start on `run`).
+// auto-started WorkPool workers fork (Daemon can use either order — workers start on `run`).
 Effect.provide(
   program,
   Daemon.layer(...).pipe(Layer.provideMerge(AppStore.layerMemory)),
@@ -292,7 +292,7 @@ Server must provide an app `Store.Service` with `Node.logs` (and desired toolkit
 |-----|-----|
 | `Logs.persistLayer` + `hyperlink-ts/store/Log` | **Removed** — `Node.logs` + toolkit `.store` on `Store.Service` |
 | `NodeLogs.*` / `/NodeLogs` | **Removed** — use `Logs.*` / `hyperlink-ts/Logs` |
-| `ProcessStore` log facet | private `_logs` shape on toolkit store registrations (hidden from handle types) |
+| Process-store log facet | private `_logs` shape on toolkit store registrations (hidden from handle types) |
 | `captureLogs` on engines | **Removed** — `Logs.layer` (baked into Store) + `Logs.withScope(tag)` |
 | `queue.logs` / `proc.logs` on handle | `Hyperlink.logs(tag)` (local Storage / remote node-handle logs) |
 | `HistoryStore` `${tag.key}/logs` | **Removed** — durable logs via registration `_logs` + `Hyperlink.logs` / `Logs.by*` |

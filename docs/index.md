@@ -284,7 +284,7 @@ Hyperlink.serve(Counter, counterImpl).pipe(nodeServer(4000)) // served over RPC
 Hyperlink.connect(Counter, Hyperlink.protocolHttp(4000))                          // reached from another runtime
 ```
 
-And it gets the rest for free — the live `value`, runtime control, and a slot in the `pm` CLI, TUI,
+And it gets the rest for free — the live `value`, runtime control, and a slot in the CLI, TUI,
 and web dashboards — because it's the same kind of thing `Emails` is.
 
 ## Included HyperServices

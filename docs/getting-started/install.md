@@ -24,12 +24,12 @@ can still change between betas — nothing is frozen until 1.0 (there's no `@sin
 hyperlink-ts effect
 ```
 
-That's the core — queues, processes, resources, and serving them over RPC.
+That's the core — Hyperlink Services, included WorkPool / Daemon / Gate kinds, and serving them over RPC.
 
 ## Additional dependencies
 
 Beyond `effect`, some entry points want extra peers. Install them **only when you use that entry
-point** — nothing here is needed for core resources.
+point** — nothing here is needed for core Hyperlink work.
 
 **Serving over HTTP** needs a platform HTTP server. Pick the one that matches your runtime —
 `@effect/platform-node` already ships as a dependency, so it's there for Node:
@@ -55,8 +55,8 @@ react react-dom recharts @tanstack/react-table
 
 Each area is a tree-shakeable subpath under `hyperlink-ts/*` — import only what you use:
 
-- **`/Hyperlink`** — build your own resource
-- **`/WorkPool`**, **`/Process`**, **`/ShardMap`** — ready-made resource kinds
+- **`/Hyperlink`** — build your own Hyperlink Service
+- **`/WorkPool`**, **`/Daemon`**, **`/Gate`**, **`/ShardMap`** — included HyperServices
 - **`/Store`** — durable storage
 - **`/web`**, **`/tui`**, **`/cli`** — dashboards
 - **`hyperlink-ts`** — the barrel: everything under short names

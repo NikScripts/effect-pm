@@ -13,8 +13,9 @@ accumulated since 0.8.0-beta.28.
   (`hyperlink-ts/Hyperlink`, `hyperlink-ts/Node`, ...). Wire ids, `Symbol.for` keys, and Context
   ids move from `@nikscripts/effect-pm/...` to `hyperlink-ts/...`.
 - The primitive `Resource` is now **`Hyperlink`**: module, namespace, and every foundation symbol
-  (`ResourceTag` → `HyperlinkTag`, `BuiltResource` → `BuiltHyperlink`, `ServedResources` →
-  `ServedHyperlinks`, `DuplicateResourceKey` → `DuplicateHyperlinkKey`, ...).
+  (`ResourceTag` → `HyperlinkTag`, `DuplicateResourceKey` → `DuplicateHyperlinkKey`, …). The
+  advanced-authoring bundle is **`Hyperlink.Driver`** (was `BuiltResource` / briefly
+  `BuiltHyperlink`); `ServedHyperlink*` is `@internal`.
 
 ### Major: kinds renamed to generic nouns, variants folded
 
