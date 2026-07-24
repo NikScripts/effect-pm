@@ -16,7 +16,7 @@ can still change between betas — nothing is frozen until 1.0 (there's no `@sin
 ## Requirements
 
 - **Node.js ≥ 20.19**
-- **Effect** `^4.0.0-beta.92` — a peer dependency, installed alongside (below).
+- **Effect** `^4.0.0-beta.98` — a peer dependency, installed alongside (below).
 
 ## Install
 
@@ -56,7 +56,7 @@ react react-dom recharts @tanstack/react-table
 Each area is a tree-shakeable subpath under `hyperlink-ts/*` — import only what you use:
 
 - **`/Hyperlink`** — build your own Hyperlink Service
-- **`/WorkPool`**, **`/Daemon`**, **`/Gate`**, **`/ShardMap`** — included HyperServices
+- **`/WorkPool`**, **`/Daemon`**, **`/Gate`**, **`/ShardMap`** — included Hyperlink Services
 - **`/Store`** — durable storage
 - **`/web`**, **`/tui`**, **`/cli`** — dashboards
 - **`hyperlink-ts`** — the barrel: everything under short names
