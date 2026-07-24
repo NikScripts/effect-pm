@@ -22,7 +22,8 @@ import * as Group from "../../src/Group";
 import { Fleet } from "../web-dashboard/fleet";
 import {
   nodeOf,
-  kindOf,
+  isDaemonLeaf,
+  isQueueLeaf,
   daemonBundle,
   processLeaves,
   queueBundle,
@@ -65,8 +66,8 @@ const LEVEL_COLOR: Record<string, string> = {
 // ── tag dispatch ──────────────────────────────────────────────────────────────
 // A leaf tag carries no discriminant TS can narrow on, so `kindOf` (which inspects the
 // contract) becomes a type guard — the sanctioned alternative to a cast.
-const isDaemonTag = (m: unknown): m is DaemonTag => kindOf(m) === "process";
-const isQueueTag = (m: unknown): m is LeafTag => kindOf(m) === "queue";
+const isDaemonTag = (m: unknown): m is DaemonTag => isDaemonLeaf(m);
+const isQueueTag = (m: unknown): m is LeafTag => isQueueLeaf(m);
 /** Every leaf (queue + process) of the fleet — the command palette's targets. */
 const ALL_LEAVES: ReadonlyArray<LeafTag | DaemonTag> = [...queueLeaves(Fleet), ...processLeaves(Fleet)];
 

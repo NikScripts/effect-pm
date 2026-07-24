@@ -11,6 +11,8 @@ import { Effect, Layer, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
 import * as Hyperlink from "../../src/Hyperlink";
 import { specOf } from "../../src/Hyperlink";
+import { kind as workPoolKind } from "../../src/WorkPool";
+import { kind as daemonKind } from "../../src/Daemon";
 import * as Group from "../../src/Group";
 import * as LogEntry from "../../src/LogEntry";
 import * as Node from "../../src/Node";
@@ -67,11 +69,10 @@ export interface GroupNode {
 /** Which node a resource runs on (the Mini, else undefined = the Droplet). */
 export const nodeOf = (id: string): string | undefined => (id.includes("/Mini/") ? "mini" : undefined);
 
-/** Which kind of leaf a tag is, by its contract (a queue enqueues; a process runs). */
-export const kindOf = (member: unknown): "queue" | "process" => {
-  const spec = specOf(member as { readonly [k: symbol]: unknown } as Parameters<typeof specOf>[0]);
-  return "enqueue" in spec || "sizes" in spec ? "queue" : "process";
-};
+/** Whether a leaf tag is a WorkPool / Daemon — by its **stamped** kind, the single source of
+ *  truth. No spec-sniffing: every tag carries its kind. */
+export const isQueueLeaf = (m: unknown): boolean => Hyperlink.kindOf(m) === workPoolKind;
+export const isDaemonLeaf = (m: unknown): boolean => Hyperlink.kindOf(m) === daemonKind;
 
 // In the browser the client is same-origin (vite proxies /rpc → Droplet, /mini → Mini).
 // In Node (the TUI) there's no proxy, so reach the servers directly.
@@ -313,11 +314,11 @@ export const leafTags = (node: { readonly members: Record<string, unknown> }): R
 
 /** Only the queue leaves of a tree. */
 export const queueLeaves = (node: { readonly members: Record<string, unknown> }): ReadonlyArray<LeafTag> =>
-  leafTags(node).filter((m) => kindOf(m) === "queue") as ReadonlyArray<LeafTag>;
+  leafTags(node).filter((m) => isQueueLeaf(m)) as ReadonlyArray<LeafTag>;
 
 /** Only the process leaves of a tree. */
 export const processLeaves = (node: { readonly members: Record<string, unknown> }): ReadonlyArray<DaemonTag> =>
-  leafTags(node).filter((m) => kindOf(m) === "process") as ReadonlyArray<DaemonTag>;
+  leafTags(node).filter((m) => isDaemonLeaf(m)) as ReadonlyArray<DaemonTag>;
 
 /** One row of the fleet table — headline status + metrics, carrying its tag. */
 export interface FleetRow {
