@@ -266,10 +266,9 @@ export const cli: {
   (tree: CliTree, options: CliOptions): CliRun;
 } = ((tree: CliTree, second?: string | CliOptions) => {
   if (typeof second === "object" && second !== null) {
-    const rootName = second.name ?? "cli";
-    return Command.runWith(buildCommand(tree, rootName), {
+    return Command.runWith(buildCommand(tree, second.name ?? "cli"), {
       version: second.version,
-    }) as CliRun;
+    });
   }
   return buildCommand(tree, second ?? "cli");
 }) as typeof cli;
