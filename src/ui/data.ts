@@ -25,7 +25,7 @@ import {
 import { kind as fleetHealthKind, type FleetStatus, type NodeReport } from "../FleetHealth";
 import { kind as telemetryKind, MetricsSnapshot, type MetricDatum } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";
-import { kind as gateKind, type Status as GateStatus } from "../Gate";
+import { kind as gateKind, type Handle as GateHandle, type Status as GateStatus } from "../Gate";
 import { kind as daemonKind, daemonScheduleEntry, daemonStatus } from "../Daemon";
 import { kind as apiKind } from "../ApiMetrics";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../ApiUsageSchema";
@@ -174,11 +174,8 @@ interface ShardMapService {
 /** A shard-map tag — yieldable for its live service. @public */
 export type ShardMapTag<R = never> = Effect.Effect<ShardMapService, never, R> & { readonly key: string };
 
-/** The structural shape of a **Gate** resource's live service — a reactive `status` ref carrying
- *  the live concurrency counters (waiting / in-flight / completed / failed / interrupted / duration). */
-interface GateService {
-  readonly status: Subscribable<GateStatus>;
-}
+/** Dashboard observe surface for a Gate — projected from {@link GateHandle} so it can't drift. */
+type GateService = Pick<GateHandle<unknown, unknown, never>, "status">;
 /** A Gate tag — yieldable for its live service. @public */
 export type GateTag<R = never> = Effect.Effect<GateService, never, R> & { readonly key: string };
 /** A daemon tag — yieldable for its live service. */
@@ -186,11 +183,18 @@ export type DaemonTag<R = never> = Effect.Effect<DaemonService, never, R> & { re
 /** An API-metrics tag — yieldable for its live service. */
 export type ApiTag<R = never> = Effect.Effect<ApiService, never, R> & { readonly key: string };
 
-/** A node in a `Group.Tag` tree. */
-export interface GroupNode {
+/**
+ * Erased shape of a {@link Group.isGroup} value — one place in a `Group.Tag` tree
+ * (`key` + named `members`). **Not** a Hyperlink transport {@link Node} / `Node.Tag`.
+ *
+ * Dashboard props use this when the concrete `Group.Tag` class is irrelevant (walk, route, render).
+ *
+ * @public
+ */
+export type GroupNode = {
   readonly key: string;
   readonly members: Record<string, unknown>;
-}
+};
 
 /** A read/stream value atom (error channel erased — widgets only read success). */
 export type ValueAtom<A> = Atom.Atom<AsyncResult.AsyncResult<A, unknown>>;

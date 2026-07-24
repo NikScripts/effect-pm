@@ -20,7 +20,7 @@ import * as React from "react";
 import { Option } from "effect";
 import { AsyncResult, type Atom } from "effect/unstable/reactivity";
 import * as Group from "../Group";
-import { nodeOf } from "../Hyperlink";
+import { kindOf as hyperlinkKindOf, nodeOf } from "../Hyperlink";
 import {
   daemonBundle,
   daemonLeaves,
@@ -359,25 +359,37 @@ const GroupCell = (props: {
 
 const FallbackCell = (props: {
   readonly name: string;
+  readonly member?: unknown;
   readonly width: number;
   readonly selected: boolean;
-}): React.ReactElement => (
-  <Box
-    flexDirection="column"
-    borderStyle={props.selected ? "double" : "round"}
-    borderColor={props.selected ? "green" : "gray"}
-    height={CELL_HEIGHT}
-    width={props.width}
-    marginRight={1}
-    marginBottom={1}
-    paddingX={1}
-  >
-    <Text bold wrap="truncate">
-      {props.name}
-    </Text>
-    <Text dimColor>resource</Text>
-  </Box>
-);
+}): React.ReactElement => {
+  const kind = props.member !== undefined ? hyperlinkKindOf(props.member) : undefined;
+  const node = props.member !== undefined ? nodeOf(props.member) : undefined;
+  return (
+    <Box
+      flexDirection="column"
+      borderStyle={props.selected ? "double" : "round"}
+      borderColor={props.selected ? "green" : "gray"}
+      height={CELL_HEIGHT}
+      width={props.width}
+      marginRight={1}
+      marginBottom={1}
+      paddingX={1}
+    >
+      <Text bold wrap="truncate">
+        {props.name}
+      </Text>
+      <Text dimColor wrap="truncate">
+        {kind !== undefined ? displayName(kind) : "resource"}
+      </Text>
+      {node !== undefined ? (
+        <Text dimColor wrap="truncate">
+          ⬡ {displayName(node.key)}
+        </Text>
+      ) : null}
+    </Box>
+  );
+};
 
 const Cell = (props: {
   readonly name: string;
@@ -396,7 +408,12 @@ const Cell = (props: {
           selected={props.selected}
         />
       ) : (
-        <FallbackCell name={props.name} width={props.width} selected={props.selected} />
+        <FallbackCell
+          name={props.name}
+          member={props.member}
+          width={props.width}
+          selected={props.selected}
+        />
       );
     case "daemon":
       return isDaemonTag(props.member) ? (
@@ -407,7 +424,12 @@ const Cell = (props: {
           selected={props.selected}
         />
       ) : (
-        <FallbackCell name={props.name} width={props.width} selected={props.selected} />
+        <FallbackCell
+          name={props.name}
+          member={props.member}
+          width={props.width}
+          selected={props.selected}
+        />
       );
     case "queue":
       return isQueueTag(props.member) ? (
@@ -418,7 +440,12 @@ const Cell = (props: {
           selected={props.selected}
         />
       ) : (
-        <FallbackCell name={props.name} width={props.width} selected={props.selected} />
+        <FallbackCell
+          name={props.name}
+          member={props.member}
+          width={props.width}
+          selected={props.selected}
+        />
       );
     case "priority":
       return isPriorityTag(props.member) ? (
@@ -429,7 +456,12 @@ const Cell = (props: {
           selected={props.selected}
         />
       ) : (
-        <FallbackCell name={props.name} width={props.width} selected={props.selected} />
+        <FallbackCell
+          name={props.name}
+          member={props.member}
+          width={props.width}
+          selected={props.selected}
+        />
       );
     case "gate":
       return isGateTag(props.member) ? (
@@ -441,7 +473,12 @@ const Cell = (props: {
           selected={props.selected}
         />
       ) : (
-        <FallbackCell name={props.name} width={props.width} selected={props.selected} />
+        <FallbackCell
+          name={props.name}
+          member={props.member}
+          width={props.width}
+          selected={props.selected}
+        />
       );
     case "api":
       return isApiTag(props.member) ? (
@@ -453,7 +490,12 @@ const Cell = (props: {
           selected={props.selected}
         />
       ) : (
-        <FallbackCell name={props.name} width={props.width} selected={props.selected} />
+        <FallbackCell
+          name={props.name}
+          member={props.member}
+          width={props.width}
+          selected={props.selected}
+        />
       );
     case "fleetHealth":
       return isFleetHealthTag(props.member) ? (
@@ -465,7 +507,12 @@ const Cell = (props: {
           selected={props.selected}
         />
       ) : (
-        <FallbackCell name={props.name} width={props.width} selected={props.selected} />
+        <FallbackCell
+          name={props.name}
+          member={props.member}
+          width={props.width}
+          selected={props.selected}
+        />
       );
     case "telemetry":
       return isTelemetryTag(props.member) ? (
@@ -477,7 +524,12 @@ const Cell = (props: {
           selected={props.selected}
         />
       ) : (
-        <FallbackCell name={props.name} width={props.width} selected={props.selected} />
+        <FallbackCell
+          name={props.name}
+          member={props.member}
+          width={props.width}
+          selected={props.selected}
+        />
       );
     case "shardMap":
       return isShardMapTag(props.member) ? (
@@ -489,10 +541,22 @@ const Cell = (props: {
           selected={props.selected}
         />
       ) : (
-        <FallbackCell name={props.name} width={props.width} selected={props.selected} />
+        <FallbackCell
+          name={props.name}
+          member={props.member}
+          width={props.width}
+          selected={props.selected}
+        />
       );
     default:
-      return <FallbackCell name={props.name} width={props.width} selected={props.selected} />;
+      return (
+        <FallbackCell
+          name={props.name}
+          member={props.member}
+          width={props.width}
+          selected={props.selected}
+        />
+      );
   }
 };
 
@@ -1218,14 +1282,28 @@ const DashboardApp = (props: {
         />
       );
     }
+    const kind = hyperlinkKindOf(focused) ?? "unknown";
+    const node = nodeOf(focused);
     return (
       <Box flexDirection="column" width={cols} height={rows}>
         <Box paddingX={1}>
           <Text bold>{focusName}</Text>
           <Text dimColor> · Esc back</Text>
         </Box>
-        <Box paddingX={1} marginTop={1}>
-          <Text dimColor>No terminal detail widget for this resource kind yet.</Text>
+        <Box paddingX={1} marginTop={1} flexDirection="column">
+          <Text>
+            kind <Text color="cyan">{kind}</Text>
+          </Text>
+          {node !== undefined ? (
+            <Text>
+              node <Text color="cyan">⬡ {displayName(node.key)}</Text>
+            </Text>
+          ) : (
+            <Text dimColor>no node bind</Text>
+          )}
+          <Box marginTop={1}>
+            <Text dimColor>No richer terminal detail for this kind yet.</Text>
+          </Box>
         </Box>
         {renderBar(
           <Box paddingX={1} backgroundColor="gray">

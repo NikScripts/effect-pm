@@ -56,6 +56,7 @@ import {
 } from "../ui/data";
 import { dateFromMillis, fmtClock, fmtDayLabel, millisFromLocalInput, now, startOfDayMillis, toLocalInput } from "../ui/now";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
+import { memberKindOf } from "../ui/memberKind";
 import { kindOf as hyperlinkKindOf, kind as hyperlinkKind } from "../Hyperlink";
 import { kind as queueKind } from "../WorkPool";
 import { priorityKind } from "../WorkPool";
@@ -391,7 +392,8 @@ export const Cell = (props: {
   readonly onOpenGroup: (g: GroupNode) => void;
 }): React.ReactElement => {
   const registry = useWidgets();
-  if (Group.isGroup(props.member)) {
+  // Same bucket as TUI (`memberKindOf`); leaves still resolve via the key→kind registry.
+  if (memberKindOf(props.member) === "group" && Group.isGroup(props.member)) {
     return <GroupCard node={props.member} name={props.name} onOpen={props.onOpenGroup} />;
   }
   // A non-group member is a resource tag; resolve its widget by key → kind → fallback.

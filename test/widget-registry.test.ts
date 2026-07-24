@@ -1,6 +1,8 @@
 import * as React from "react";
 import { HashMap } from "effect";
 import { expect, it } from "vitest";
+import { leafMemberKinds, wireKindOf } from "../src/ui/memberKind";
+import { base } from "../src/web/widgets";
 import {
   forKey,
   forKind,
@@ -49,4 +51,10 @@ it("isLeafTag accepts a keyed tag, rejects groups and non-tags", () => {
   expect(isLeafTag(null)).toBe(false);
   expect(isLeafTag("app/Q")).toBe(false);
   expect(isLeafTag({ key: 42 })).toBe(false); // key must be a string
+});
+
+it("web base registry covers every leaf MemberKind wire stamp", () => {
+  for (const leaf of leafMemberKinds) {
+    expect(HashMap.has(base.byKind, wireKindOf[leaf])).toBe(true);
+  }
 });
