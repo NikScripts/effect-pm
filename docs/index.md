@@ -39,49 +39,25 @@ class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob })
 class Digest extends Daemon.Tag<Digest>()("app/Digest") {}
 ```
 
-Serve the queue on the **worker** runtime. `Node.httpServer` is platform-agnostic — pair it with
-whatever HTTP server your runtime provides (here Node; Bun, Deno, or an edge runtime is the same
-shape):
+The minimalist serve is nameless and address-less. `Node.unix` mints a Unix socket, advertises at
+Lookup, and mounts the engine — no `Node.Tag`, no path, no port:
 
 {.twoslash}
 ``` ts
 import * as WorkPool from "hyperlink-ts/WorkPool"
 import * as Node from "hyperlink-ts/Node"
+import * as Lookup from "hyperlink-ts/Lookup"
 import { Effect, Schema, Layer } from "effect"
-import { NodeHttpServer } from "@effect/platform-node"
-import { createServer } from "node:http"
 const EmailJob = Schema.Struct({ to: Schema.String })
 class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
 declare const sendEmail: (job: typeof EmailJob.Type) => Effect.Effect<void>
 // ---cut---
-const worker = Node.httpServer(
+const worker = Node.unix([
   WorkPool.serve(Emails, { effect: sendEmail }),
-).pipe(
-  Layer.provide(NodeHttpServer.layer(() => createServer(), { port: 3001 })),
-)
+]).pipe(Layer.provide(Lookup.layer))
 ```
 
-That platform provide is worth extracting once — a small data-last helper you reuse for every served
-HyperService. Swapping Node for Bun/Deno is the only line that changes:
-
-{.twoslash}
-``` ts
-import * as Node from "hyperlink-ts/Node"
-import { Layer } from "effect"
-import { NodeHttpServer } from "@effect/platform-node"
-import { createServer } from "node:http"
-// ---cut---
-const nodeServer = (port: number) => <A, E, R>(layer: Layer.Layer<A, E, R>) =>
-  Node.httpServer(layer).pipe(
-    Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
-  )
-```
-
-Later examples use `nodeServer`. The worker above is the same as
-`WorkPool.serve(Emails, { effect: sendEmail }).pipe(nodeServer(3001))`.
-
-On the **scheduler** runtime, `Digest` ticks every hour and enqueues into `Emails` — a queue that
-lives on the *other* runtime. Inside the effect it still reads as `yield* Emails`:
+The scheduler discovers `Emails` the same way — still `yield* Emails`, no address to type:
 
 {.twoslash}
 ``` ts
@@ -97,17 +73,37 @@ declare const nextEmail: Effect.Effect<typeof EmailJob.Type>
 // ---cut---
 const scheduler = Daemon.layer(Digest, {
   effect: Effect.gen(function* () {
-    const emails = yield* Emails   // RPC client — same Handle type as local
+    const emails = yield* Emails   // discovered client — same Handle type as local
     const email = yield* nextEmail
     yield* emails.add(email)
   }),
   polling: Polling.spaced(Duration.hours(1)),
-}).pipe(Layer.provide(Hyperlink.connect(Emails, Hyperlink.protocolHttp(3001))))
+}).pipe(Layer.provide(Hyperlink.discoverClients(Emails)))
 ```
 
 `Digest` runs on the scheduler, `Emails` on the worker — yet `emails.add(…)` looks like one process.
-**Two HyperServices, two runtimes, one program.** Move a runtime to another machine and only the
-address changes.
+**Two HyperServices, two runtimes, one program.**
+
+When you need a host address (another machine, HTTP, browsers), step up to `Node.httpServer` and
+pair it with whatever HTTP server your runtime provides. Extract that once as a helper — later
+examples use `nodeServer`:
+
+{.twoslash}
+``` ts
+import * as Node from "hyperlink-ts/Node"
+import { Layer } from "effect"
+import { NodeHttpServer } from "@effect/platform-node"
+import { createServer } from "node:http"
+// ---cut---
+const nodeServer = (port: number) => <A, E, R>(layer: Layer.Layer<A, E, R>) =>
+  Node.httpServer(layer).pipe(
+    Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
+  )
+```
+
+Same worker over HTTP is `WorkPool.serve(Emails, { effect: sendEmail }).pipe(nodeServer(3001))`,
+and the scheduler dials with `Hyperlink.connect(Emails, Hyperlink.protocolHttp(3001))`. Move a
+runtime to another machine and only the address changes.
 
 ## The same Handle steers it
 
