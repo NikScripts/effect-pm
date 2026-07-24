@@ -337,13 +337,15 @@ describe("WorkPool.make — basic processing", () => {
             ),
             1,
           ),
-          // e.cause is Cause<Boom> — reconstruct the failed effect and catchTag on it, fully typed
+          // e.cause is Cause<Boom> — walk typed failures instead of failCause (avoids any E).
           (e) =>
-            Effect.failCause(e.cause).pipe(
-              Effect.catchTag("Boom", (err) =>
-                Ref.update(caught, (a) => [...a, err.n]),
-              ),
-            ),
+            Effect.gen(function* () {
+              for (const reason of e.cause.reasons) {
+                if (Cause.isFailReason(reason) && reason.error instanceof Boom) {
+                  yield* Ref.update(caught, (a) => [...a, reason.error.n]);
+                }
+              }
+            }),
         ),
       );
       yield* Effect.sleep(Duration.millis(20));
@@ -707,7 +709,10 @@ describe("WorkPool.make — self-enqueue guard", () => {
         name: "test-self-enqueue",
         effect: (item: string, ctx) =>
           Effect.gen(function* () {
-            yield* ctx.add([item]);
+            const enqueue = ctx.add as (
+              items: ReadonlyArray<string>,
+            ) => Effect.Effect<void, never, never>;
+            yield* enqueue([item]);
             yield* Ref.update(processed, (arr) => [...arr, item]);
           }),
         ...fastConfig,
@@ -731,7 +736,10 @@ describe("WorkPool.make — self-enqueue guard", () => {
           Effect.gen(function* () {
             yield* Ref.update(processed, (arr) => [...arr, item]);
             if (item === "parent") {
-              yield* ctx.add(["child-1", "child-2"]);
+              const enqueue = ctx.add as (
+                items: ReadonlyArray<string>,
+              ) => Effect.Effect<void, never, never>;
+              yield* enqueue(["child-1", "child-2"]);
             }
           }),
         concurrency: 1,
@@ -1237,12 +1245,13 @@ describe("WorkPool.make — Hyperlink.runForEachTag over .events", () => {
           Stream.take(3),
           Hyperlink.runForEachTag({
             Failed: (e) =>
-              Effect.failCause(e.cause).pipe(
-                Effect.catchTag("Boom", (err) =>
-                  Ref.update(caught, (a) => [...a, err.n]),
-                ),
-                Effect.ignore,
-              ),
+              Effect.gen(function* () {
+                for (const reason of e.cause.reasons) {
+                  if (Cause.isFailReason(reason) && reason.error instanceof Boom) {
+                    yield* Ref.update(caught, (a) => [...a, reason.error.n]);
+                  }
+                }
+              }).pipe(Effect.ignore),
           }),
         ),
       );

@@ -55,10 +55,10 @@ export interface LogShapeHandle {
   readonly [IMPLICIT_LOGS_SHAPE_KEY]: {
     readonly append: (
       row: LogEntryT | ReadonlyArray<LogEntryT>,
-    ) => Effect.Effect<void, unknown>;
+    ) => Effect.Effect<void, never>;
     readonly read: (payload?: {
       readonly limit?: number;
-    }) => Effect.Effect<ReadonlyArray<LogEntryT>, unknown>;
+    }) => Effect.Effect<ReadonlyArray<LogEntryT>, never>;
   };
 }
 

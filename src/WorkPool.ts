@@ -2015,7 +2015,7 @@ export function serveRemote<
   tag: HyperlinkTag<Self, PriorityInstanceSpec<F>>,
   config: PriorityLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ): Layer.Layer<HandlerContextOf<PriorityInstanceSpec<F>>, never, R | RR>;
-export function serveRemote(tag: AnyPoolTag, config: unknown): Layer.Layer<unknown, never, unknown> {
+export function serveRemote(tag: AnyPoolTag, config: unknown): Layer.Any {
   return isPriorityTag(tag)
     ? withDefaultMemory(
         Layer.unwrap(
@@ -2024,17 +2024,17 @@ export function serveRemote(tag: AnyPoolTag, config: unknown): Layer.Layer<unkno
               tag,
               config as PriorityLayerConfig<Schema.Struct<PriorityItemFields>["Type"], never, never, never>,
             ),
-            (built) => Hyperlink.serveRemote(tag, built as never) as Layer.Layer<unknown, never, unknown>,
+            (built) => Hyperlink.serveRemoteDriver(tag, built),
           ),
-        ) as Layer.Layer<unknown, never, unknown>,
+        ),
       )
     : withDefaultMemory(
         Layer.unwrap(
           Effect.map(
             buildQueueImpl(tag, config as QueueVerbConfig<QueueItemFields, unknown, never, never, Schema.Top>),
-            (built) => Hyperlink.serveRemote(tag, built as never) as Layer.Layer<unknown, never, unknown>,
+            (built) => Hyperlink.serveRemoteDriver(tag, built),
           ),
-        ) as Layer.Layer<unknown, never, unknown>,
+        ),
       );
 }
 

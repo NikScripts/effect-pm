@@ -6,14 +6,11 @@
 import { Effect, Layer } from "effect"
 import * as Hyperlink from "../Hyperlink"
 import {
-  AddressLessClaimLost,
   AnyNode,
   catalogSym,
   ListenNode,
   ListenOptions,
-  ListenTagNodeRequired,
   ListenUseProtocol,
-  UnaddressedNode,
 } from "./nodeCore"
 import { unaddressedLayer } from "./nodeConnect"
 import {
@@ -58,31 +55,21 @@ export function listen<
 ): Layer.Layer<Self | Hyperlink.Local<Self> | ListenNode, never, R>;
 export function listen<
   Node extends AnyNode & { readonly [catalogSym]?: unknown },
-  Serves extends ServeLayerList,
+  const Serves extends ServeLayerList,
 >(
   node: Node,
   serves: Serves & ServesForCatalog<CatalogROut<Node>, Serves>,
   options?: ListenOptions,
 ): Layer.Layer<
   Layer.Success<Serves[number]> | ListenNode,
-  never,
+  Layer.Error<Serves[number]>,
   Layer.Services<Serves[number]>
 >;
 export function listen(
   nodeOrTag: AnyNode | Hyperlink.PipeableTag,
-  _servesOrImpl?:
-    | Layer.Layer<never, any, never>
-    | ServeLayerList
-    | object,
+  _servesOrImpl?: Layer.Any | ServeLayerList | object,
   _options?: ListenOptions,
-): Layer.Layer<
-  never,
-  | UnaddressedNode
-  | AddressLessClaimLost
-  | ListenTagNodeRequired
-  | ListenUseProtocol,
-  unknown
-> {
+): Layer.Any {
   if (isHyperlinkTagArg(nodeOrTag)) {
     const tag = nodeOrTag;
     const tagKey = (() => {

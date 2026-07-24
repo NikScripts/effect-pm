@@ -1,5 +1,11 @@
 # Per-resource dependencies at the serve
 
+> **Live book:** the current recipe is
+> [Managing Layers → HyperServices may require other services](../../getting-started/managing-layers.md)
+> (and the must-rule *Serve / listen / `*Server` preserve open `R`* in standards). This legacy page
+> keeps the long-form example; APIs below may say `Hyperlink.httpServer` / `Process` where today's
+> surface is `Node.httpServer` / `Daemon`.
+
 When several resources run on one host, they usually **share** their dependencies — one database, one
 HTTP client, provided once. `Hyperlink.httpServer([...serve-layers])` handles that directly: provide the
 shared dependency once (to the whole set, or via `Hyperlink.provide`) and every resource memoizes the

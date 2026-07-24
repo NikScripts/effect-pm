@@ -1,37 +1,52 @@
 # Inventory: `anyUnknownInErrorContext`
 
-**Status:** rule is **`error`** in tsconfig again; continue clearing residual expression-level hits (internal first).  
-**Baseline (pre-batch-1):** 224 hits / 49 files.  
-**After batch 1 (Node transports):** ~169 hits / 42 files.  
-**After batch 2 (Hyperlink + serve followers):** ~112 hits / 35 files.
+**Status:** **Eng’d + tip-synced.** Rule is `"error"` in both typecheck tsconfigs. Cleared on tip —
+no channel casts, no rule disables except `serviceNotAsClass` at Service/Tag factories.
+
+**Product docs:** open-`R` serve composition lives in
+[`docs/getting-started/managing-layers.md`](../getting-started/managing-layers.md) and the must-rules
+in [`docs/standards/hyperlinks.md`](../standards/hyperlinks.md) (`serve-preserves-requirements`).
+
+## Locked product invariant
+
+**Every HyperService may have requirements** — including other HyperServices. Serve / listen /
+`httpServer` / `wsServer` / `ipcServer` must **preserve `R`** (and `E`) from serve layers so callers
+`Layer.provide` dependencies outside. Closing `R` at the server boundary is rejected.
+
+## What shipped
+
+| Piece | Notes |
+|------|--------|
+| Open-`R` serve lists (D1) | `Layer.Any` constraints; public overloads reify channels |
+| Gate / Daemon | No public `as any` on serve; memory aliases are identity |
+| `Hyperlink.serveRemoteDriver` | Driver mount preserves worker `R`; toolkits call it directly |
+| Plain `serveRemote` | Still `ServeRequirements`-inferred for object impls |
+| Negative proofs | Bare `AddressedNode`, incomplete client `Layer.Services` |
+
+## Parked erase debt (do **not** spin an agent)
+
+These are Effect/Rpc factory edges. Further chasing has low app-facing leverage; the language
+service tracks through most bridges. Leave until a concrete breakage or a package-wide erase audit:
+
+1. `serveRemoteHandlers` → `RpcGroup.toLayer` (`retype`)
+2. Wire `invokeWireMethodWithContext` → `Effect.provideContext` (`as any` on dynamic members)
+3. D1 `httpServer` / listen internal factory retypes
 
 ## How to reproduce
 
 ```bash
-pnpm exec effect-language-service diagnostics --project tsconfig.json \
-  --lspconfig '{"diagnosticSeverity":{"anyUnknownInErrorContext":"error"}}'
+pnpm exec tsgo --noEmit -p tsconfig.json 2>&1 | rg 'anyUnknownInErrorContext|TS377030'
+# expect: no matches
 ```
-
-## Kind split (baseline)
-
-| Kind | Hits | Meaning |
-|------|-----:|---------|
-| Requirements `unknown`/`any` | ~180 | Layer/Effect `R` not a service id |
-| Error `unknown`/`any` | ~44 | Untyped `E` |
 
 ## Batches
 
 | Batch | Scope | Status |
 |------|--------|--------|
-| **1** | Node transports (`src/internal/node*`, `Node.ts`) | **Mostly Eng’d** — listen/connect **0 hits**. Residual ~19 on `httpServer`/`wsServer`/`ipcServer` open-`R` `any` variance (Effect `mergeAll` shape). |
-| **2** | `Hyperlink.ts` + Process/Store/Run/Queue serveRemote | **Eng'd** — public targets **0 hits**. Residual `ReadinessOf`/`any` on {@link withReadiness} public type; `clientLayer` node path uses contained `(Layer.effect as any)` gen (mirrors protocol branch). `missingLayerContext` on `localLayer` unchanged. |
-| **3** | Tests | After 2 |
-| **4** | Examples + consider stage-enable | Last |
-
-## Residual batch-1 note
-
-Public `Node.httpServer` / `wsServer` / `ipcServer` must accept serve layers with open `R` (deps provided outside). That forces `Layer.Layer<never, any, any>` bounds — the same variance hole Effect's `Layer.mergeAll` uses. Clearing those hits means either dropping open-`R` servers or waiting on a tighter Effect pattern. **Do not** flip the rule on for those three files until decided.
-
-## Phase C / B2–B4 timing
-
-Run **after** batches 1–2 (typing churn on Store/Logs would collide with refuse-second-bus Eng).
+| **0** | Lock D1 + open-`R` serve lists (listen + `*Server`) | **Done** |
+| **1** | `nodeHttpServer` / `nodeIpcServer` / `nodeServerCommon` | **Done** |
+| **2** | `ServeLayerList` on `unix` / `http` / `ws` / `nPipe` listen | **Done** |
+| **3** | WorkPool / store / daemon / logs / cli expression hits | **Done** |
+| **4** | Tests + examples | **Done** |
+| **5** | `serviceNotAsClass` factories + `missingLayerContext` test-d | **Done** |
+| **6** | Critique follow-through + `serveRemoteDriver` + live docs | **Done** |

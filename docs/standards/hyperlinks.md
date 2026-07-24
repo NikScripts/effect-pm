@@ -147,11 +147,24 @@ Four verbs, one axis — how a resource is made available:
 
 - **`layer`** — local only.
 - **`serve`** — local **and** served over RPC (the default for a node).
-- **`serveRemote`** — served only, not runnable in-process.
+- **`serveRemote`** — served only, not runnable in-process (plain impl; `R` via handler requirements).
 - **`client`** — a remote handle to a served resource.
+
+Toolkit engines that build a Hyperlink `Driver` mount with **`Hyperlink.serveRemoteDriver`**
+(preserves the driver's worker `R`). Apps call `Gate.serveRemote` / `Daemon.serveRemote` /
+`WorkPool.serveRemote` — not the Driver helper — unless they are assembling a custom engine.
 
 Transport is a **separate** line: `httpServer` / `http` / `connect`. `Http` appears **only**
 there — the core verbs stay transport-agnostic, so the same resource can be served over any protocol.
+
+{#serve-preserves-requirements .must appliesTo="src examples"}
+## Serve / listen / `*Server` preserve open `R` (and `E`)
+
+Every HyperService may have requirements — including other HyperServices. Serve layers,
+`Node.listen` / `unix` / `http` / `ws`, and `httpServer` / `wsServer` / `ipcServer` must **keep**
+those channels open so callers `Layer.provide` dependencies outside. Closing `R` at the server
+boundary is rejected. Shared deps: provide once onto the server. Mutually exclusive deps of the
+same tag: `Layer.provide` onto each serve layer (see *Managing Layers*).
 
 {#serve-through-spec-checked-forms .must appliesTo="src examples"}
 ## Serve through the engine's spec-checked form, never a bare literal
@@ -163,20 +176,21 @@ queue leaves the worker dead. Never hand-write a `{ tag, impl }` literal: it typ
 the tag.
 
 {#provide-merge-serve-layers .must appliesTo="src examples"}
-## `provideMerge` serve layers onto `httpServer`, never `provide`
+## Put serve layers in the `httpServer` list; provide deps outside
 
-`httpServer([...serveLayers])` unions each layer's requirement `R`, like `Layer.mergeAll`. Compose
-with `Layer.provideMerge` so the serve layers stay in context; a bare `Layer.provide` prunes them,
-because `httpServer`'s own type doesn't demand them.
+`Node.httpServer([...serveLayers])` unions each layer's requirement `R`, like `Layer.mergeAll`.
+Pass serves as the list argument (not a later bare `Layer.provide` of a serve onto something that
+doesn't demand it — that prunes). Discharge deps with `Layer.provide` / `provideMerge` **after**
+the server (shared) or on each serve layer (isolated).
 
 ``` ts
-// ✅ good — serve layers preserved
+// ✅ good — serves in the list; shared dep outside
 const live = Node.httpServer([
   Hyperlink.serve(Counter, counterImpl),
   Hyperlink.serve(Mail, mailImpl),
-])
+]).pipe(Layer.provide(Db.layer))
 
-// ❌ bad — provide prunes the serve layers off the server
+// ❌ bad — bare provide of a serve layer onto a program that doesn't require it prunes the mount
 program.pipe(Layer.provide(Hyperlink.serve(Counter, counterImpl)))
 ```
 

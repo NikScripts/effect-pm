@@ -21,18 +21,15 @@ class Worker extends Node.Tag<Worker, Jobs | Emails>()("listen-d/Worker", {
 const jobsImpl = { jobs: Effect.succeed(1) };
 const emailsImpl = { emails: Effect.succeed("ok") };
 
-const full: Layer.Layer<any, any, any> = Node.unix(Worker, [
+const full: Layer.Any = Node.unix(Worker, [
   Hyperlink.serve(Jobs, jobsImpl),
   Hyperlink.serve(Emails, emailsImpl),
 ]);
-
-// @ts-expect-error C3: Emails missing from listen catalog
-const partial: Layer.Layer<any, any, any> = Node.unix(Worker, [
-  Hyperlink.serve(Jobs, jobsImpl),
-]);
-
 void full;
-void partial;
+
+// Statement form — avoids `missingLayerContext` on a `Layer.Any` annotation.
+// @ts-expect-error C3: Emails missing from listen catalog
+Node.unix(Worker, [Hyperlink.serve(Jobs, jobsImpl)]);
 
 const clientsRest = Node.clients(Worker, Jobs, Emails);
 void clientsRest;

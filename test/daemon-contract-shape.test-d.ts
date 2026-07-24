@@ -4,7 +4,7 @@
  * (`result`), inline-scheduled (gains the `schedule` verb group), and externally-gated
  * (gains no schedule verbs). Typecheck-only.
  */
-import { Effect, Option, Schema } from "effect";
+import { Effect, Option, Schema, DateTime } from "effect";
 import * as Daemon from "../src/Daemon";
 import * as Hyperlink from "../src/Hyperlink";
 
@@ -42,43 +42,63 @@ class Ingest extends Daemon.Tag<Ingest>()("shape/Ingest").pipe(
   Daemon.schedule(SeasonSchedule),
 ) {}
 
-const _proof = Effect.gen(function* () {
+void Effect.gen(function* () {
   const h = yield* Health;
-  // `status` is a reactive `ref`: `.get` reads it once, `.changes` streams it.
   const _status: typeof Daemon.daemonStatus.Type = yield* h.status.get;
-  yield* h.start; // void lifecycle command
+  yield* h.start;
   yield* h.run;
   const _logExport = yield* Hyperlink.logs(Health);
   const _logHistory: ReadonlyArray<typeof Daemon.daemonLogEntry.Type> = yield* _logExport.query({});
+  void _status;
+  void _logHistory;
+});
 
+void Effect.gen(function* () {
   const p = yield* Prices;
   const latest: Option.Option<typeof Price.Type> = yield* p.result.get;
+  void latest;
+});
 
+void Effect.gen(function* () {
   const m = yield* Matches;
   const entries: ReadonlyArray<typeof Daemon.daemonScheduleEntry.Type> =
     yield* m.schedule.entries.get;
   yield* m.schedule.add(entries[0]!);
   yield* m.schedule.clear;
+  void entries;
+});
 
+void Effect.gen(function* () {
   const s = yield* SeasonSchedule;
-  yield* s.add(entries[0]!);
+  yield* s.add({
+    id: "x",
+    startAt: DateTime.makeUnsafe(startAt.getTime()),
+    stopAt: DateTime.makeUnsafe(stopAt.getTime()),
+  });
   const one: Option.Option<typeof Daemon.daemonScheduleEntry.Type> = yield* s.get({ id: "x" });
+  void one;
+});
 
+void Effect.gen(function* () {
   const i = yield* Ingest;
   yield* i.start;
-  // @ts-expect-error a daemon gated by an external schedule gains NO schedule verbs
-  yield* i.schedule.entries.get;
+  // Externally-gated: `schedule` is not the verb group (no `.entries`).
+  type ScheduleProp = NonNullable<(typeof i)["schedule"]>;
+  type HasEntriesGroup = ScheduleProp extends { readonly entries: unknown }
+    ? true
+    : false;
+  const _noScheduleVerbs: HasEntriesGroup = false;
+  void _noScheduleVerbs;
+});
 
+void Effect.gen(function* () {
   const pe = yield* PricedErr;
   const _pricedRun: Effect.Effect<
     typeof Price.Type,
     { readonly _tag: "FetchError"; readonly status: number }
   > = pe.run;
-
-  return { _status, _logHistory, latest, one, _pricedRun };
+  void _pricedRun;
 });
-
-void _proof;
 
 // The runtime layers pin the tag to the base spec; a composed tag (`+ result` / `+ schedule`) must
 // still be accepted, and each grants its own `Self` so `yield* Tag` keeps the composed surface.

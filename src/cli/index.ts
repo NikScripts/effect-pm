@@ -32,7 +32,9 @@ import * as Group from "../Group";
 import { methodMeta, specOf } from "../Hyperlink";
 import type { AnyLocalMethod, AnyMethod, FlatSpec } from "../Hyperlink";
 import { openTui } from "./Tui";
+import type { TuiNotConfigured } from "./Tui";
 import type { CliHyperlinkTag, CliNode, CliTree } from "./types";
+import { retype } from "../internal/nodeServerCommon";
 
 export type { CliGroup, CliHyperlinkTag, CliNode, CliTree } from "./types";
 export { openTui, Tui, TuiNotConfigured, type TuiOpenInput } from "./Tui";
@@ -119,7 +121,7 @@ const methodCommand = (name: string, method: AnyMethod, tag: CliHyperlinkTag) =>
   const command = Command.make(name, flagsOf(method)).pipe(Command.withDescription(describe(name, method)));
   return Command.withHandler((input: Record<string, unknown>) =>
     Effect.gen(function* () {
-      const service = (yield* tag) as Record<string, unknown>;
+      const service = yield* retype<Effect.Effect<Record<string, unknown>, never, never>>(tag as never);
       const target = service[name];
       const result = yield* (hasPayload
         ? (target as (p: unknown) => Effect.Effect<unknown>)(input)
@@ -228,7 +230,7 @@ export type CliOptions = {
  */
 export type CliRun = (
   args: ReadonlyArray<string>,
-) => Effect.Effect<void, unknown, unknown>;
+) => Effect.Effect<void, TuiNotConfigured, never>;
 
 /**
  * Name a list of leaf tags by the **shortest unique slash-suffix** of each key —

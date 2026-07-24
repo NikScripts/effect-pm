@@ -13,6 +13,7 @@ import type { StoreWriteError } from "./errors";
 import { makeScopeHandle } from "./memoryScope";
 import type { AppendSideEffects } from "./memoryScope";
 import type { StoreSpec } from "./spec";
+import { retype } from "../nodeServerCommon";
 import {
   storeReadPayloadSchema,
   type StoreReadPayload,
@@ -81,10 +82,10 @@ export const CUSTOM_FN = "Store/customFn" as const;
 export type CustomMethodEntry =
   | { readonly _tag: typeof CUSTOM_READ_ALIAS; readonly shapeKey: string }
   | { readonly _tag: typeof CUSTOM_APPEND_ALIAS; readonly shapeKey: string }
-  | { readonly _tag: typeof CUSTOM_EFFECT; readonly effect: Effect.Effect<unknown, unknown, unknown> }
+  | { readonly _tag: typeof CUSTOM_EFFECT; readonly effect: Effect.Effect<unknown, never, never> }
   | {
       readonly _tag: typeof CUSTOM_FN;
-      readonly fn: (payload: unknown) => Effect.Effect<unknown>;
+      readonly fn: (payload: unknown) => Effect.Effect<unknown, never, never>;
     };
 
 /** @internal */
@@ -473,14 +474,18 @@ const classifyCustomMethod = (
   if (alias !== undefined) {
     return alias;
   }
-  if (Effect.isEffect(value)) {
-    return {
-      _tag: CUSTOM_EFFECT,
-      effect: value as Effect.Effect<unknown, unknown, unknown>,
-    };
+  const eraseUnknown = (u: unknown): never => u as never;
+  const customEffectEntry = (effect: never): CustomMethodEntry =>
+    retype<CustomMethodEntry>({ _tag: CUSTOM_EFFECT, effect } as never);
+  const customFnEntry = (fn: never): CustomMethodEntry =>
+    retype<CustomMethodEntry>({ _tag: CUSTOM_FN, fn } as never);
+  const isEffectLike = (u: unknown): boolean =>
+    typeof u === "object" && u !== null && "_op" in u && (u as { readonly _op: string })._op === "Effect";
+  if (isEffectLike(value)) {
+    return customEffectEntry(eraseUnknown(value));
   }
   if (typeof value === "function") {
-    return { _tag: CUSTOM_FN, fn: value as (payload: unknown) => Effect.Effect<unknown> };
+    return customFnEntry(eraseUnknown(value));
   }
   throw new Error(
     `Store.contract: custom method "${methodName}" must be an Effect, an effect function, or a shape append/read alias`,

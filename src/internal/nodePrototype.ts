@@ -176,14 +176,14 @@ export const Prototype = <Self, ROut = never>(
      * Returns a **Layer** only — after `Layer.build`, the minted Node is
      * {@link ListenNode} in context.
      */
-    listen: <Serves extends ServeLayerList>(
+    listen: <const Serves extends ServeLayerList>(
       serves: Serves & ServesForCatalog<Exclude<ROut, undefined>, Serves>,
       listenOptions?: NamelessListenOptions,
     ): ((
       suffix?: string,
     ) => Layer.Layer<
       Layer.Success<Serves[number]> | ListenNode,
-      never,
+      Layer.Error<Serves[number]>,
       Layer.Services<Serves[number]>
     >) =>
       (suffix?: string) => {

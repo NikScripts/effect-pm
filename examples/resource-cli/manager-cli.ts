@@ -16,16 +16,18 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Layer } from "effect";
-import * as Hyperlink from "../../src/Hyperlink";
+import { cli, type CliRun, TuiNotConfigured } from "../../src/cli";
 import { resources, resourcesLayer } from "./manager-resources";
 
-const program = Hyperlink.cli(resources, {
+const runCli = cli(resources, {
   name: "hyperlink",
   version: "0.0.0",
-})(process.argv.slice(2)).pipe(
+}) as CliRun;
+
+const program = runCli(process.argv.slice(2)).pipe(
   Effect.provide(Layer.mergeAll(resourcesLayer, NodeServices.layer)),
 );
 
 // Boundary: loose requirement from the dynamic record of tags; the layer above
 // fully provides it at run time.
-NodeRuntime.runMain(program as Effect.Effect<void, unknown>);
+NodeRuntime.runMain(program as Effect.Effect<void, TuiNotConfigured, never>);

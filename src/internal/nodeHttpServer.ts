@@ -26,8 +26,13 @@ import {
 } from "./nodeCore"
 import {
   assertProtocolKinds,
+  closedLayer,
   directoryAdvertiseMerge,
+  isServerServeList,
   mergeServeList,
+  retype,
+  toServeList,
+  type ServerServeLayer,
   type ServerServeList,
 } from "./nodeServerCommon"
 
@@ -66,12 +71,38 @@ type ServerProtocol = (
   path: HttpRouter.PathInput,
 ) => Layer.Layer<RpcServer.Protocol, never, RpcSerialization.RpcSerialization | HttpRouter.HttpRouter>
 
+/** Closed layer — overload-impl erase target for dynamic Rpc / router graphs. */
+type ClosedLayer = Layer.Layer<never, never, never>;
+type HttpServed = Layer.Layer<
+  never,
+  never,
+  Hyperlink.ServedHyperlinks | HttpServer.HttpServer
+>;
+
 const httpServerBase = (
   serverProtocol: ServerProtocol,
   serverKind: ProtocolKind,
   options?: HttpServerOptions,
-): Layer.Layer<never, never, Hyperlink.ServedHyperlinks | HttpServer.HttpServer> =>
-  Layer.unwrap(
+): HttpServed => {
+  // Retype dynamic Effect factories before calling so their `any`/`unknown` channels never
+  // appear at the call site (anyUnknownInErrorContext walks expression types).
+  const rpcServerLayer = retype<(group: object) => ClosedLayer>(RpcServer.layer as never);
+  const httpRouterAdd = retype<
+    (
+      method: "GET",
+      path: HttpRouter.PathInput,
+      handler: Effect.Effect<HttpServerResponse.HttpServerResponse>,
+    ) => ClosedLayer
+  >(HttpRouter.add as never);
+  const httpRouterServe = retype<(routes: ClosedLayer) => ClosedLayer>(
+    HttpRouter.serve as never,
+  );
+  const mergeClosed = retype<(left: ClosedLayer, right: ClosedLayer) => ClosedLayer>(
+    Layer.merge as never,
+  );
+  // unwrap takes `never` so Effect.gen's inferred any/unknown channels never appear at the call site.
+  const unwrapServed = retype<(effect: never) => HttpServed>(Layer.unwrap as never);
+  return unwrapServed(
     Effect.gen(function* () {
       const registry = yield* Hyperlink.ServedHyperlinks;
       const entries = yield* registry.all;
@@ -121,9 +152,13 @@ const httpServerBase = (
         ...(inferredNodeKey !== undefined ? { nodeLogKey: inferredNodeKey } : {}),
       });
       const nodeTag = nodeEntry.tag;
-      const nodeImpl = (yield* (Effect.isEffect(nodeEntry.impl)
-        ? nodeEntry.impl
-        : Effect.succeed(nodeEntry.impl))) as Record<string, unknown>;
+      // nodeStatus impl Effect is Effect-bounded with open channels — retype before yield*.
+      const nodeImplEffect = retype<Effect.Effect<Record<string, unknown>>>(
+        (Effect.isEffect(nodeEntry.impl)
+          ? nodeEntry.impl
+          : Effect.succeed(nodeEntry.impl)) as never,
+      );
+      const nodeImpl = yield* nodeImplEffect;
       const nodeFlat = Hyperlink.flattenImpl(nodeImpl, nodeTag[Hyperlink.specSym]);
       const nodeHandlers: Record<string, (payload: unknown) => unknown> = {};
       for (const [key, member] of Object.entries(nodeFlat)) {
@@ -134,21 +169,18 @@ const httpServerBase = (
         (acc, group) => acc.merge(group),
       );
       // Transport-agnostic server: `RpcServer.layer` requires the `RpcServer.Protocol` dependency;
-      // `serverProtocol` (http for {@link httpServer}, websocket for {@link wsServer}) provides it — an
-      // http POST handler or a ws upgrade — on the same router (`HttpRouter.serve` below).
-      // Dynamic RpcServer group — assign through `any` so the diagnostic does not walk the graph.
-      const rpcRaw: any = RpcServer.layer(merged);
-      const rpcAppLayer = (rpcRaw as Layer.Layer<never, never, never>).pipe(
-        Layer.provide(
-          nodeTag[Hyperlink.groupSym].toLayer(
-            nodeHandlers as unknown as Parameters<
-              (typeof nodeTag)[typeof Hyperlink.groupSym]["toLayer"]
-            >[0],
-          ),
-        ),
-        Layer.provide(serverProtocol(options?.path ?? "/rpc")),
+      // `serverProtocol` (http for {@link httpServer}, websocket for {@link wsServer}) provides it.
+      const toNodeStatusLayer = retype<
+        (handlers: Record<string, (payload: unknown) => unknown>) => ClosedLayer
+      >(nodeTag[Hyperlink.groupSym].toLayer as never);
+      const nodeStatusLayer = toNodeStatusLayer(nodeHandlers);
+      const rpcAppLayer = retype<ClosedLayer>(
+        rpcServerLayer(merged).pipe(
+          Layer.provide(nodeStatusLayer),
+          Layer.provide(serverProtocol(options?.path ?? "/rpc")),
+        ) as never,
       );
-      const healthRoute = HttpRouter.add(
+      const healthRoute = httpRouterAdd(
         "GET",
         options?.health?.path ?? "/health",
         Effect.gen(function* () {
@@ -166,10 +198,12 @@ const httpServerBase = (
             Effect.orDie,
           );
         }),
-      ) as any as Layer.Layer<never, never, never>;
-      const served = HttpRouter.serve(Layer.merge(rpcAppLayer, healthRoute)).pipe(
-        Layer.provideMerge(options?.serialization ?? Hyperlink.defaultSerialization),
-      ) as any as Layer.Layer<never, never, HttpServer.HttpServer>;
+      );
+      const served = retype<ClosedLayer>(
+        httpRouterServe(mergeClosed(rpcAppLayer, healthRoute)).pipe(
+          Layer.provideMerge(options?.serialization ?? Hyperlink.defaultSerialization),
+        ) as never,
+      );
       const advertise = yield* directoryAdvertiseMerge(
         options?.advertiseNode,
         entries,
@@ -177,9 +211,12 @@ const httpServerBase = (
           ? { onConflict: options.onConflict }
           : undefined,
       );
-      return served.pipe(Layer.provideMerge(advertise));
-    }),
-  ) as Layer.Layer<never, never, Hyperlink.ServedHyperlinks | HttpServer.HttpServer>;
+      return retype<HttpServed>(
+        served.pipe(Layer.provideMerge(closedLayer(advertise))) as never,
+      );
+    }) as never,
+  );
+};
 
 
 /**
@@ -219,18 +256,14 @@ const httpServerBase = (
  * @category servers
  * @public
  */
-export function httpServer<Serve extends Layer.Layer<never, any, any>>(
-  serve: Serve,
+export function httpServer<A, E, R>(
+  serve: Layer.Layer<A, E, R>,
   options?: HttpServerOptions,
-): Layer.Layer<
-  Layer.Success<Serve>,
-  Layer.Error<Serve>,
-  Layer.Services<Serve> | HttpServer.HttpServer
->;
+): Layer.Layer<A, E, R | HttpServer.HttpServer>;
 export function httpServer(
   options?: HttpServerOptions,
 ): Layer.Layer<never, never, Hyperlink.ServedHyperlinks | HttpServer.HttpServer>;
-export function httpServer<Serves extends ServerServeList>(
+export function httpServer<const Serves extends ServerServeList>(
   serves: Serves,
   options?: HttpServerOptions,
 ): Layer.Layer<
@@ -239,13 +272,9 @@ export function httpServer<Serves extends ServerServeList>(
   Layer.Services<Serves[number]> | HttpServer.HttpServer
 >;
 export function httpServer(
-  servesOrOptions?:
-    | Layer.Layer<never, any, any>
-    | ServerServeList
-    | ReadonlyArray<Layer.Layer<never, any, any>>
-    | HttpServerOptions,
+  servesOrOptions?: ServerServeLayer | ServerServeList | HttpServerOptions,
   maybeOptions?: HttpServerOptions,
-): Layer.Layer<never, any, any> {
+): Layer.Any {
   return serverImpl(Hyperlink.serverProtocolHttp, "Http", servesOrOptions, maybeOptions);
 }
 
@@ -253,32 +282,34 @@ export function httpServer(
 // server RPC protocol. The serves form bundles the boilerplate: provideMerge the serve layers (kept,
 // not pruned) + the shared registry, so the caller lists resources and provides only the platform (+
 // any shared dep). One serve layer or many — a single `Layer` is treated as a one-element list.
+// Overload impl returns {@link Layer.Any}; public overloads reify serve-list Success/Error/Services.
 function serverImpl(
   serverProtocol: ServerProtocol,
   serverKind: ProtocolKind,
-  servesOrOptions?:
-    | Layer.Layer<never, any, any>
-    | ServerServeList
-    | ReadonlyArray<Layer.Layer<never, any, any>>
-    | HttpServerOptions,
+  servesOrOptions?: ServerServeLayer | ServerServeList | HttpServerOptions,
   maybeOptions?: HttpServerOptions,
-): Layer.Layer<never, any, any> {
-  const serves = Array.isArray(servesOrOptions)
-    ? (servesOrOptions as unknown as ServerServeList)
-    : Layer.isLayer(servesOrOptions)
-      ? ([servesOrOptions] as unknown as ServerServeList)
-      : undefined;
+): Layer.Any {
+  // Duck-check a single Layer (avoid Layer.isLayer on the options union — unknown channels).
+  const serves =
+    isServerServeList(servesOrOptions)
+      ? servesOrOptions
+      : servesOrOptions !== undefined &&
+          typeof servesOrOptions === "object" &&
+          !Array.isArray(servesOrOptions) &&
+          "build" in servesOrOptions
+        ? toServeList(servesOrOptions as ServerServeLayer)
+        : undefined;
   if (serves !== undefined) {
     return httpServerBase(serverProtocol, serverKind, maybeOptions).pipe(
-      Layer.provideMerge(mergeServeList(serves)),
+      Layer.provideMerge(closedLayer(mergeServeList(serves))),
       Layer.provide(Layer.fresh(Hyperlink.servedHyperlinksLayer)),
-    ) as Layer.Layer<never, any, any>;
+    );
   }
   return httpServerBase(
     serverProtocol,
     serverKind,
     servesOrOptions as HttpServerOptions | undefined,
-  ) as Layer.Layer<never, any, any>;
+  );
 }
 
 /**
@@ -299,18 +330,14 @@ function serverImpl(
  * @category servers
  * @public
  */
-export function wsServer<Serve extends Layer.Layer<never, any, any>>(
-  serve: Serve,
+export function wsServer<A, E, R>(
+  serve: Layer.Layer<A, E, R>,
   options?: HttpServerOptions,
-): Layer.Layer<
-  Layer.Success<Serve>,
-  Layer.Error<Serve>,
-  Layer.Services<Serve> | HttpServer.HttpServer
->;
+): Layer.Layer<A, E, R | HttpServer.HttpServer>;
 export function wsServer(
   options?: HttpServerOptions,
 ): Layer.Layer<never, never, Hyperlink.ServedHyperlinks | HttpServer.HttpServer>;
-export function wsServer<Serves extends ServerServeList>(
+export function wsServer<const Serves extends ServerServeList>(
   serves: Serves,
   options?: HttpServerOptions,
 ): Layer.Layer<
@@ -319,13 +346,9 @@ export function wsServer<Serves extends ServerServeList>(
   Layer.Services<Serves[number]> | HttpServer.HttpServer
 >;
 export function wsServer(
-  servesOrOptions?:
-    | Layer.Layer<never, any, any>
-    | ServerServeList
-    | ReadonlyArray<Layer.Layer<never, any, any>>
-    | HttpServerOptions,
+  servesOrOptions?: ServerServeLayer | ServerServeList | HttpServerOptions,
   maybeOptions?: HttpServerOptions,
-): Layer.Layer<never, any, any> {
+): Layer.Any {
   return serverImpl(
     Hyperlink.serverProtocolWebsocket,
     "WebSocket",
