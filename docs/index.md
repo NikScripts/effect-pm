@@ -39,54 +39,62 @@ class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob })
 class Digest extends Daemon.Tag<Digest>()("app/Digest") {}
 ```
 
-The minimalist serve is nameless and address-less. `Node.unix` mints a Unix socket, advertises at
-Lookup, and mounts the engine — no `Node.Tag`, no path, no port:
+Same-machine, batteries included: `Node.unix` listens; `Hyperlink.unix` dials. One Node, no
+Lookup, no HTTP server to wire:
 
 {.twoslash}
 ``` ts
 import * as WorkPool from "hyperlink-ts/WorkPool"
 import * as Node from "hyperlink-ts/Node"
-import * as Lookup from "hyperlink-ts/Lookup"
-import { Effect, Schema, Layer } from "effect"
+import { Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String })
 class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+class Worker extends Node.Tag<Worker>()("app/Worker", {
+  path: "/tmp/app-emails.sock",
+}) {}
 declare const sendEmail: (job: typeof EmailJob.Type) => Effect.Effect<void>
 // ---cut---
-const worker = Node.unix([
+const worker = Node.unix(Worker, [
   WorkPool.serve(Emails, { effect: sendEmail }),
-]).pipe(Layer.provide(Lookup.layer))
+])
 ```
 
-The scheduler discovers `Emails` the same way — still `yield* Emails`, no address to type:
+The scheduler reaches `Emails` through that Node — still `yield* Emails`:
 
 {.twoslash}
 ``` ts
 import * as Daemon from "hyperlink-ts/Daemon"
 import * as WorkPool from "hyperlink-ts/WorkPool"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
+import * as Node from "hyperlink-ts/Node"
 import * as Polling from "hyperlink-ts/Polling"
 import { Effect, Duration, Layer, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String })
 class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
 class Digest extends Daemon.Tag<Digest>()("app/Digest") {}
+class Worker extends Node.Tag<Worker>()("app/Worker", {
+  path: "/tmp/app-emails.sock",
+}) {}
 declare const nextEmail: Effect.Effect<typeof EmailJob.Type>
 // ---cut---
 const scheduler = Daemon.layer(Digest, {
   effect: Effect.gen(function* () {
-    const emails = yield* Emails   // discovered client — same Handle type as local
+    const emails = yield* Emails   // same Handle type as local
     const email = yield* nextEmail
     yield* emails.add(email)
   }),
   polling: Polling.spaced(Duration.hours(1)),
-}).pipe(Layer.provide(Hyperlink.discoverClient(Emails)))
+}).pipe(
+  Layer.provide(Hyperlink.client(Emails)),
+  Layer.provide(Hyperlink.unix(Worker)),
+)
 ```
 
 `Digest` runs on the scheduler, `Emails` on the worker — yet `emails.add(…)` looks like one process.
 **Two HyperServices, two runtimes, one program.**
 
-When you need a host address (another machine, HTTP, browsers), step up to `Node.httpServer` and
-pair it with whatever HTTP server your runtime provides. Extract that once as a helper — later
-examples use `nodeServer`:
+When you need another machine (or a browser), step up to HTTP. `Node.httpServer` pairs with whatever
+HTTP server your runtime provides — extract that once; later examples use `nodeServer`:
 
 {.twoslash}
 ``` ts
