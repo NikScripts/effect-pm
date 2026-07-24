@@ -25,16 +25,11 @@ const full: Layer.Any = Node.unix(Worker, [
   Hyperlink.serve(Jobs, jobsImpl),
   Hyperlink.serve(Emails, emailsImpl),
 ]);
-
-// @effect-diagnostics missingLayerContext:off
-// @ts-expect-error C3: Emails missing from listen catalog
-const partial: Layer.Any = Node.unix(Worker, [
-  Hyperlink.serve(Jobs, jobsImpl),
-]);
-// @effect-diagnostics missingLayerContext:error
-
 void full;
-void partial;
+
+// Statement form — avoids `missingLayerContext` on a `Layer.Any` annotation.
+// @ts-expect-error C3: Emails missing from listen catalog
+Node.unix(Worker, [Hyperlink.serve(Jobs, jobsImpl)]);
 
 const clientsRest = Node.clients(Worker, Jobs, Emails);
 void clientsRest;

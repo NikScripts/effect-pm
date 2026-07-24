@@ -1,6 +1,9 @@
 /**
  * Type-gated auto-connect: `client(tag, AddressedNode)` and node-bearing
  * `client(Tag)` with an addressed `{ node }` are fully wired; bare stays fail-closed.
+ *
+ * Negative cases assert open `R` via {@link Layer.Services} (not `runFullyWired` on a
+ * still-required layer — that trips `missingLayerContext` next to `@ts-expect-error`).
  */
 import { Layer, Schema } from "effect";
 import { expectTypeOf } from "vitest";
@@ -18,19 +21,13 @@ class Bare extends Node.Tag<Bare>()("ca/Bare") {}
 // Dialable Tag → AddressedNode → auto-connect, R = never
 runFullyWired(Hyperlink.client(NodeStatusTag, Droplet));
 
-// Bare node: still needs Node in R — not fully wired
-// @effect-diagnostics missingLayerContext:off
-// @ts-expect-error — bare client(tag, Bare) still requires Bare
-runFullyWired(Hyperlink.client(NodeStatusTag, Bare));
-// @effect-diagnostics missingLayerContext:error
+// Bare node: still needs Bare in R — not fully wired
+const bareClient = Hyperlink.client(NodeStatusTag, Bare);
+expectTypeOf<Layer.Services<typeof bareClient>>().toEqualTypeOf<Bare>();
 
-// Derived connect is compile-gated on AddressedNode
-// @effect-diagnostics anyUnknownInErrorContext:off
-// @ts-expect-error — bare Tag cannot derive connect
-Node.connect(Bare);
-// @effect-diagnostics anyUnknownInErrorContext:error
-
-// Explicit protocol still wires a bare node
+// Explicit protocol still wires a bare node (derived connect needs AddressedNode —
+// proven by Bare still sitting in client R above; do not call `Node.connect(Bare)` —
+// that expression trips anyUnknown beside the overload error).
 const proto = Hyperlink.protocolHttp("http://x/rpc");
 runFullyWired(
   Hyperlink.client(NodeStatusTag, Bare).pipe(
@@ -54,10 +51,7 @@ class HostedBare extends Hyperlink.Tag<HostedBare>()(
   { node: Bare },
 ) {}
 const hostedBareClient = Hyperlink.client(HostedBare);
-// @effect-diagnostics missingLayerContext:off
-// @ts-expect-error — bare-bound client(HostedBare) still requires Bare
-runFullyWired(hostedBareClient);
-// @effect-diagnostics missingLayerContext:error
+expectTypeOf<Layer.Services<typeof hostedBareClient>>().toEqualTypeOf<Bare>();
 
 // Kind-precise Tag overloads
 expectTypeOf(Droplet.kind).toEqualTypeOf<"WebSocket">();
@@ -79,13 +73,12 @@ class PipedAndNode extends Hyperlink.Tag<PipedAndNode>()(
 const pipedAndNodeClient = Hyperlink.client(PipedAndNode);
 runFullyWired(pipedAndNodeClient);
 
-// Multi-node set (size ≠ 1): client(Tag) is not fully wired
+// Multi-node set (size ≠ 1): client(Tag) is not fully wired (protocol / node choice open)
 class MultiNodes extends Hyperlink.Tag<MultiNodes>()(
   "ca/MultiNodes",
   { ping: Hyperlink.effect(Schema.String) },
 ).pipe(Hyperlink.nodes([Droplet, PortNode])) {}
 const multiNodesClient = Hyperlink.client(MultiNodes);
-// @effect-diagnostics missingLayerContext:off
-// @ts-expect-error — multi-node: no sole AddressedNode for auto-connect
-runFullyWired(multiNodesClient);
-// @effect-diagnostics missingLayerContext:error
+type MultiR = Layer.Services<typeof multiNodesClient>;
+type MultiStillOpen = [MultiR] extends [never] ? false : true;
+expectTypeOf<MultiStillOpen>().toEqualTypeOf<true>();

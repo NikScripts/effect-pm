@@ -1,12 +1,12 @@
 import { Layer } from "effect";
+import { expectTypeOf } from "vitest";
 import { NodeStatusTag } from "../src/internal/nodeStatus";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
 // P1: a node's value is a wrapper (`{ protocol }`), type-distinct from a bare `RpcClient.Protocol`.
 // So supplying a node where an ambient protocol is required no longer type-checks as fully wired — the
-// dashboard's "connecting… forever" bug is now a compile error. This file is the proof: it only
-// type-checks if the hole is closed (the `@ts-expect-error` fires).
+// dashboard's "connecting… forever" bug is now a compile error. This file is the proof.
 
 class Droplet extends Node.Tag<Droplet>()("np/Droplet", { url: "wss://x/rpc" }) {}
 const transport = Hyperlink.ws(Droplet, { url: "ws://x/rpc" });
@@ -22,9 +22,11 @@ runFullyWired(Hyperlink.client(NodeStatusTag, Droplet));
 runFullyWired(Hyperlink.client(NodeStatusTag, Droplet).pipe(Layer.provide(transport)));
 
 // THE HOLE, now closed: a nodeless `client(tag)` given the node *transport* still needs an ambient
-// `RpcClient.Protocol` — it is NOT fully wired. Pre-P1 this compiled (requirement collapsed to `never`)
-// and then threw at runtime; now it is a type error, so the `@ts-expect-error` is required.
-// @effect-diagnostics missingLayerContext:off
-// @ts-expect-error — node transport does not satisfy an ambient RpcClient.Protocol requirement
-runFullyWired(Hyperlink.client(NodeStatusTag).pipe(Layer.provide(transport)));
-// @effect-diagnostics missingLayerContext:error
+// `RpcClient.Protocol` — it is NOT fully wired. Assert open R (do not call `runFullyWired` —
+// that would trip `missingLayerContext` on an intentionally incomplete layer).
+const nodelessWithTransport = Hyperlink.client(NodeStatusTag).pipe(
+  Layer.provide(transport),
+);
+type NodelessR = Layer.Services<typeof nodelessWithTransport>;
+type StillNeedsProtocol = [NodelessR] extends [never] ? false : true;
+expectTypeOf<StillNeedsProtocol>().toEqualTypeOf<true>();

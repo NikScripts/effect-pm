@@ -1,7 +1,7 @@
 # Inventory: `anyUnknownInErrorContext`
 
-**Status:** rule is **`error`** in both typecheck tsconfigs. Fix for real — no channel casts, no rule
-disables (except `serviceNotAsClass` at Service/Tag factories).
+**Status:** rule is **`error`** in both typecheck tsconfigs. **Cleared** on tip (Agent 4) —
+no channel casts, no rule disables except `serviceNotAsClass` at Service/Tag factories.
 
 ## Locked product invariant
 
@@ -17,9 +17,12 @@ writing `any`/`unknown` into expression-level `E`/`R`. Prefer:
 - Public overloads: open `<A, E, R>` for a single serve, or `Serves extends ServeLayerList` with
   return `Layer.Success` / `Error` / `Services` extracted from the argument
 - Overload **implementation** returns `Layer.Any` (structural; no Effect channels)
-- Dynamic Effect/Rpc factories: **retype before call** via `retype<T>(fn as never)` so the call
+- Dynamic Effect/Rpc factories: **retype before call** via `retype<T>(value as never)` so the call
   site never sees `any`/`unknown` channels; `unwrap` takes `never` the same way
+- Negative type tests: assert open `R` via `Layer.Services` / statement `@ts-expect-error` — do not
+  call sinks that expect `R = never` on intentionally incomplete layers (trips `missingLayerContext`)
 - **Forbidden:** `as any`, `as unknown as`, ErasedChannel=`unknown`, next-line off for this rule
+  (except `serviceNotAsClass` at true `Context.Service` / `Tag` factories)
 
 ## Proven contracts
 
@@ -31,6 +34,7 @@ writing `any`/`unknown` into expression-level `E`/`R`. Prefer:
 
 ```bash
 pnpm exec tsgo --noEmit -p tsconfig.json 2>&1 | rg 'anyUnknownInErrorContext|TS377030'
+# expect: no matches
 ```
 
 ## Batches
@@ -40,6 +44,6 @@ pnpm exec tsgo --noEmit -p tsconfig.json 2>&1 | rg 'anyUnknownInErrorContext|TS3
 | **0** | Lock D1 + open-`R` serve lists (listen + `*Server`) | **Done** |
 | **1** | `nodeHttpServer` / `nodeIpcServer` / `nodeServerCommon` | **Done** |
 | **2** | `ServeLayerList` on `unix` / `http` / `ws` / `nPipe` listen | **Done** |
-| **3** | WorkPool / store / daemon / logs / cli expression hits | Pending |
-| **4** | Tests + examples (`Effect<void, unknown>`, etc.) | Pending |
-| **5** | `serviceNotAsClass` factories + `missingLayerContext` test-d | Pending |
+| **3** | WorkPool / store / daemon / logs / cli expression hits | **Done** |
+| **4** | Tests + examples | **Done** |
+| **5** | `serviceNotAsClass` factories + `missingLayerContext` test-d | **Done** |

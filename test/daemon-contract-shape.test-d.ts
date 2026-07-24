@@ -79,14 +79,17 @@ void Effect.gen(function* () {
   void one;
 });
 
-// @effect-diagnostics anyUnknownInErrorContext:off
 void Effect.gen(function* () {
   const i = yield* Ingest;
   yield* i.start;
-  // @ts-expect-error a daemon gated by an external schedule gains NO schedule verbs
-  yield* i.schedule.entries.get;
+  // Externally-gated: `schedule` is not the verb group (no `.entries`).
+  type ScheduleProp = NonNullable<(typeof i)["schedule"]>;
+  type HasEntriesGroup = ScheduleProp extends { readonly entries: unknown }
+    ? true
+    : false;
+  const _noScheduleVerbs: HasEntriesGroup = false;
+  void _noScheduleVerbs;
 });
-// @effect-diagnostics anyUnknownInErrorContext:error
 
 void Effect.gen(function* () {
   const pe = yield* PricedErr;
