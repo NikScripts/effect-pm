@@ -24,8 +24,8 @@ Run: `pnpm run example:queue-hyperlink`
 
 ### [Custom N-Lane Priorities](/docs/workpool-priority-lanes)
 
-Source: `examples/forms/queue/custom-queue-hyperlink-n-level.ts`  
-Run: `pnpm run example:custom-queue-hyperlink`
+Source: `examples/forms/queue/workpool-priority-lanes.ts`  
+Run: `pnpm run example:workpool-priority`
 
 ---
 
@@ -49,7 +49,7 @@ Coming next (`examples/forms/polling`).
 
 ## Process Store
 
-Coming next (`examples/forms/process-store`).
+Coming next (`examples/forms/daemon-store`).
 
 ---
 

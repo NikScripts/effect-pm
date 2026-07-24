@@ -411,7 +411,7 @@ interface DaemonMirror {
 /**
  * Engine-facing process store recorder — Storage-free writes at run boundaries.
  * Built in {@link buildDaemonImpl} from `pipe(Store.effects, Store.catchWriteErrors)` with
- * `Storage` discharged once via {@link Store.provideContext} (queue / run-resource golden pattern).
+ * `Storage` discharged once via {@link Store.provideContext} (queue / gate golden pattern).
  * @internal
  */
 interface DaemonStoreWriter<Tag extends StoreScopeTag = StoreScopeTag> {

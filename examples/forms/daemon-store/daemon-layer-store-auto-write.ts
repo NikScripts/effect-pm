@@ -1,10 +1,10 @@
 /**
- * @module examples/forms/process-store/process-layer-store-auto-write
+ * @module examples/forms/daemon-store/daemon-layer-store-auto-write
  *
  * Daemon.layer soft-defaults in-memory Storage (R fulfilled). Provide AppStore into the
  * layer to override Soft capture (journals + Logs). One AppStore — do not also wrap the
  * program in a second `DemoStore.layerMemory` (split journals).
- * Run: `pnpm run example:process-layer-store-auto-write`
+ * Run: `pnpm run example:daemon-layer-store-auto-write`
  */
 
 import { Duration, Effect, Layer, Option, Schema } from "effect";

@@ -1,11 +1,11 @@
 /**
- * @module examples/forms/resource/run-resource-runtime-observer
+ * @module examples/forms/resource/gate-runtime-observer
  *
  * Live observation on {@link Gate.Service} handles via {@link Subscribable}
  * views (`status`, `waiting`, `completed`, …). `Service.layer` already merges the
  * default store bridge — no extra `Store.layerDefaultMemory` is required here.
  *
- * Run: `npx tsx examples/forms/resource/run-resource-runtime-observer.ts`
+ * Run: `npx tsx examples/forms/resource/gate-runtime-observer.ts`
  */
 
 import { Effect, Ref, Schema, Stream } from "effect";

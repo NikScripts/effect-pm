@@ -26,16 +26,16 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 
 | Track | Read / run in this order |
 |-------|--------------------------|
-| **Start here** | [`forms/queue/queue-hyperlink-priority-retry.ts`](./forms/queue/queue-hyperlink-priority-retry.ts) → [Examples (docs)](../docs/examples.md#queue) |
+| **Start here** | [`forms/queue/workpool-priority-retry.ts`](./forms/queue/workpool-priority-retry.ts) → [Examples (docs)](../docs/examples.md#queue) |
 | **Dashboard / TUI** | [`resource-tui/`](./resource-tui/) — terminal dashboards over the resource tags |
-| **Queues** | [`forms/queue/queue-hyperlink-priority-retry.ts`](./forms/queue/queue-hyperlink-priority-retry.ts) → [`forms/queue/custom-queue-hyperlink-n-level.ts`](./forms/queue/custom-queue-hyperlink-n-level.ts) |
+| **Queues** | [`forms/queue/workpool-priority-retry.ts`](./forms/queue/workpool-priority-retry.ts) → [`forms/queue/workpool-priority-lanes.ts`](./forms/queue/workpool-priority-lanes.ts) |
 | **Schedule controls** | `pnpm run example:schedule-control-basics` → `example:schedule-control-surfaces` → [`scenarios/schedule-sync-from-external-db.ts`](./scenarios/schedule-sync-from-external-db.ts) |
-| **Daemon runtime** | `pnpm run example:process-supervisor-patterns` |
+| **Daemon runtime** | `pnpm run example:daemon-supervisor-patterns` |
 | **Polling patterns** | `pnpm run example:sports-polling-accelerating` |
-| **Hyperlink gating** | [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) → [`run-resource-store-readback.ts`](./forms/resource/run-resource-store-readback.ts) → [`run-resource-runtime-observer.ts`](./forms/resource/run-resource-runtime-observer.ts) → http-client → http-api forms |
+| **Hyperlink gating** | [`forms/resource/gate-unit-and-input.ts`](./forms/resource/gate-unit-and-input.ts) → [`gate-store-readback.ts`](./forms/resource/gate-store-readback.ts) → [`gate-runtime-observer.ts`](./forms/resource/gate-runtime-observer.ts) → http-client → http-api forms |
 | **Fleet glass** | `pnpm run example:telemetry-fleet-glass` → `example:fleet-health-glass` → `example:shardmap-sessions` |
 | **Node module** | (1) `node-tag-addressed` → (2) `node-tag-bound` → (3) `node-clients` → (4) addressless → (5) nameless unix → (6) `node-prototype` → (7) `node-lookup` → (8) nameless `http`/`ws` siblings → identity coordinator (`node-identity-coordinator`). Keep protocol listens in sync — [§ Protocol listen siblings](../docs/handoffs/node-catalog-and-discovery.md#protocol-listen-siblings-keep-in-sync). |
-| **Storage** | [`forms/process-store/process-layer-store-auto-write.ts`](./forms/process-store/process-layer-store-auto-write.ts) (execution events) → [`process-layer-typed-error-store.ts`](./forms/process-store/process-layer-typed-error-store.ts) |
+| **Storage** | [`forms/daemon-store/daemon-layer-store-auto-write.ts`](./forms/daemon-store/daemon-layer-store-auto-write.ts) (execution events) → [`daemon-layer-typed-error-store.ts`](./forms/daemon-store/daemon-layer-typed-error-store.ts) |
 
 ---
 
@@ -45,16 +45,16 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 
 | File | Teaches |
 |------|---------|
-| [`forms/queue/queue-hyperlink-priority-retry.ts`](./forms/queue/queue-hyperlink-priority-retry.ts) | `WorkPool.Service`, priority, dedup key, handler retry |
-| [`forms/queue/custom-queue-hyperlink-n-level.ts`](./forms/queue/custom-queue-hyperlink-n-level.ts) | `WorkPoolPriority.Tag`, named lanes, `add(item, level?)`, weighted take |
+| [`forms/queue/workpool-priority-retry.ts`](./forms/queue/workpool-priority-retry.ts) | `WorkPool.Service`, priority, dedup key, handler retry |
+| [`forms/queue/workpool-priority-lanes.ts`](./forms/queue/workpool-priority-lanes.ts) | `WorkPool.priority`, named lanes, `add(item, lane?)`, weighted take |
 
 ### Hyperlink
 
 | File | Teaches |
 |------|---------|
-| [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) | `Gate.Service` unit/input forms + concurrency + `Store.layerDefaultMemory` |
-| [`forms/resource/run-resource-store-readback.ts`](./forms/resource/run-resource-store-readback.ts) | Engine auto-write + `Gate.store` + `Store.Service.at` readback |
-| [`forms/resource/run-resource-runtime-observer.ts`](./forms/resource/run-resource-runtime-observer.ts) | Observable handle (`status`, counters) via `Subscribable` |
+| [`forms/resource/gate-unit-and-input.ts`](./forms/resource/gate-unit-and-input.ts) | `Gate.Service` unit/input forms + concurrency + `Store.layerDefaultMemory` |
+| [`forms/resource/gate-store-readback.ts`](./forms/resource/gate-store-readback.ts) | Engine auto-write + `Gate.store` + `Store.Service.at` readback |
+| [`forms/resource/gate-runtime-observer.ts`](./forms/resource/gate-runtime-observer.ts) | Observable handle (`status`, counters) via `Subscribable` |
 | [`forms/resource/http-client-gate.ts`](./forms/resource/http-client-gate.ts) | `HttpClientGate.transformClient` |
 | [`forms/resource/http-api-resource-tag-layer.ts`](./forms/resource/http-api-resource-tag-layer.ts) | `HttpApiClient.Service` + `ApiMetrics.Tag` |
 | [`forms/resource/http-api-resource-layer-effect.ts`](./forms/resource/http-api-resource-layer-effect.ts) | `HttpApiClient.layerEffect` + sidecar capture |
@@ -81,8 +81,8 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 
 | File | Teaches |
 |------|---------|
-| [`forms/process-store/process-layer-store-auto-write.ts`](./forms/process-store/process-layer-store-auto-write.ts) | **`Daemon.layer`** + **`Daemon.store(tag)`** — auto-append on terminal runs, app store override |
-| [`forms/process-store/process-layer-typed-error-store.ts`](./forms/process-store/process-layer-typed-error-store.ts) | Tag `{ error }` → typed `Failed.error` in execution history |
+| [`forms/daemon-store/daemon-layer-store-auto-write.ts`](./forms/daemon-store/daemon-layer-store-auto-write.ts) | **`Daemon.layer`** + **`Daemon.store(tag)`** — auto-append on terminal runs, app store override |
+| [`forms/daemon-store/daemon-layer-typed-error-store.ts`](./forms/daemon-store/daemon-layer-typed-error-store.ts) | Tag `{ error }` → typed `Failed.error` in execution history |
 
 Start here for execution history. **`Daemon.make`** does not auto-append.
 
@@ -128,14 +128,14 @@ Storage:
 | Script | What it runs |
 |--------|----------------|
 | `pnpm run example:queue-hyperlink` | Queue form |
-| `pnpm run example:process-patterns` | Alias for `example:process-supervisor-patterns` |
-| `pnpm run example:process-supervisor-patterns` | Accelerating + delayed-start forms |
+| `pnpm run example:daemon-patterns` | Alias for `example:daemon-supervisor-patterns` |
+| `pnpm run example:daemon-supervisor-patterns` | Accelerating + delayed-start forms |
 | `pnpm run example:sports-polling-accelerating` | All three sports polling forms |
 | `pnpm run example:schedule-control-surfaces` | All three schedule control forms |
 | `pnpm run example:schedule-control-basics` | `at` + `window` + `define` forms |
 | `pnpm run example:schedule-control-db-sync` | DB sync scenario |
-| `pnpm run example:run-resource` | Gate concurrency form |
-| `pnpm run example:run-resource-store-readback` | Gate store auto-write + readback |
+| `pnpm run example:gate` | Gate concurrency form |
+| `pnpm run example:gate-store-readback` | Gate store auto-write + readback |
 | `pnpm run example:http-client-gate` | HttpClient gate form |
 | `pnpm run example:http-api-resource` | HttpApiClient form |
 | `pnpm run example:http-api-resource-layer-effect` | `layerEffect` form |

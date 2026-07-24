@@ -1,7 +1,7 @@
 /**
  * Shared store read derivations for resource analytics contracts.
  *
- * Pure helpers over a shape's `read` — used by queue and run-resource tier-3
+ * Pure helpers over a shape's `read` — used by queue and gate tier-3
  * contracts so domain-specific specs stay thin.
  *
  * @module internal/store/analytics

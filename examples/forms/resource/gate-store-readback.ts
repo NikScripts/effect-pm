@@ -1,5 +1,5 @@
 /**
- * @module examples/forms/resource/run-resource-store-readback
+ * @module examples/forms/resource/gate-store-readback
  *
  * Gate engine auto-writes run facts + state history; read them back via
  * {@link Store.Service} registration (`Gate.store`) on an app store layer.
@@ -7,7 +7,7 @@
  * `DemoStore.layerMemory` provides `StoreScopeBridgeTag` (same role as
  * {@link Store.layerDefaultMemory} when you have no custom aggregate store).
  *
- * Run: `pnpm run example:run-resource-store-readback`
+ * Run: `pnpm run example:gate-store-readback`
  */
 
 import { Effect, Layer, Schema } from "effect";
@@ -56,4 +56,4 @@ const program = Effect.gen(function* () {
   yield* Effect.log("");
 });
 
-runNodeProgramWithLayer(program, live, "form:run-resource-store-readback finished OK");
+runNodeProgramWithLayer(program, live, "form:gate-store-readback finished OK");

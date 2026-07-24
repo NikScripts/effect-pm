@@ -117,7 +117,7 @@ type GateStoreWrites = {
   ) => Effect.Effect<ReadonlyArray<RunStateChange>>;
 };
 
-/** Built-in run-resource store contract (tier 1). @internal */
+/** Built-in Gate store contract (tier 1). @internal */
 export type BuiltInGateContract = StoreContractValue<
   {
     readonly fact: StoreShapeDef<typeof runFactSchema>;
@@ -167,7 +167,7 @@ export const makeGateStoreContract = (
   );
 };
 
-/** Built-in run-resource store contract for a tag (reads `success` / `error` from tag). @internal */
+/** Built-in Gate store contract for a tag (reads `success` / `error` from tag). @internal */
 export const builtInGateStoreContract = <const Tag extends StoreScopeTag>(
   tag: Tag,
 ) => makeGateStoreContract(successOf(tag), errorOf(tag));

@@ -1,9 +1,9 @@
 /**
- * @module examples/forms/process-store/process-layer-typed-error-store
+ * @module examples/forms/daemon-store/daemon-layer-typed-error-store
  *
  * `Daemon.layer` auto-writes typed `Failed.error` when the tag stamps an `error` schema.
  * Register the tag on an app `Store.Service` and Soft-override via `provideMerge`.
- * Run: `pnpm run example:process-layer-typed-error-store`
+ * Run: `pnpm run example:daemon-layer-typed-error-store`
  */
 
 import { Duration, Effect, Layer, Schema } from "effect";

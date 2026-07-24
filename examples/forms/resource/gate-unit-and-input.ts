@@ -1,7 +1,7 @@
 /**
- * @module examples/forms/resource/run-resource-unit-and-input
+ * @module examples/forms/resource/gate-unit-and-input
  *
- * Gate unit + input forms. Run: `pnpm run example:run-resource`
+ * Gate unit + input forms. Run: `pnpm run example:gate`
  */
 
 import { Clock, Duration, Effect, Layer, Schema } from "effect";
@@ -71,4 +71,4 @@ const program = Effect.gen(function* () {
 
 const mainLayer = Layer.mergeAll(TimedWorkGate.layer, DoubleGate.layer);
 
-runNodeProgramWithLayer(program, mainLayer, "form:run-resource-unit-and-input finished OK");
+runNodeProgramWithLayer(program, mainLayer, "form:gate-unit-and-input finished OK");

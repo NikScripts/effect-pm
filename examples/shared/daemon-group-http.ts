@@ -1,5 +1,5 @@
 /**
- * @module examples/shared/process-group-http
+ * @module examples/shared/daemon-group-http
  *
  * HTTP + queue helpers for **`examples/forms/process-group/*`** contract demos.
  */

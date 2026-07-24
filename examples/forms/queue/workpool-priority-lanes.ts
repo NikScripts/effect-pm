@@ -1,11 +1,11 @@
 /**
- * @module examples/forms/queue/custom-queue-hyperlink-n-level
+ * @module examples/forms/queue/workpool-priority-lanes
  *
  * WorkPool.priority — N named priority lanes, `add(item, lane?)`, and `sizes: Record<string, number>`.
  * `layerMemory` soft-defaults in-memory Storage (R fulfilled). For durable journals + Logs,
  * Soft-override: `WorkPool.layer(…).pipe(Layer.provideMerge(AppStore.layer…))`
  * — see `docs/guides/stores.md`.
- * Run: `pnpm run example:custom-queue-hyperlink`
+ * Run: `pnpm run example:workpool-priority`
  */
 
 import { Effect, Schema } from "effect";
