@@ -188,8 +188,9 @@ Either way the name says "layer."
 ## Discriminant tags are PascalCase
 
 A tagged-union `_tag` value is PascalCase: `Started`, `Completed`, `Failed`, `Interrupted` — never
-kebab (`run-started`) or a `Run*`-style prefix. The tag names the case; it reads like the variant it
-is.
+kebab (`run-started`), dotted prefixes (`gate.run.started`), or a `Run*`-style prefix. The same
+rule applies to store state-transition `reason` strings (`Waiting`, `WaitInterrupted`, …). The
+tag names the case; it reads like the variant it is.
 
 {#canonical-ids-slash-scoped .must appliesTo="src examples"}
 ## Canonical ids are slash-scoped

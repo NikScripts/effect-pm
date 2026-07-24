@@ -20,11 +20,11 @@ Read first: `docs/guides/store.md`, `docs/guides/store-migration.md`, `docs/guid
   `Failed.error` (presence-driven; untyped tags stringify failures via `extractRunFailure`).
 - **Resource bundle** — `buildRunImpl` returns `Resource.builtResource`; `layer` uses `grantLocal`.
 
-## State `reason` strings (unchanged)
+## State `reason` strings
 
-State transitions still use kebab `reason` values (`run-resource.run.started`, …) on the **`state`**
-shape — separate from fact `_tag` rows. Fact tags are PascalCase only.
+State-transition `reason` values are PascalCase discriminants — same rule as fact `_tag`
+(`Started`, `Waiting`, `WaitInterrupted`, …). Never kebab or dotted prefixes.
 
 ## Verify
 
-`pnpm run typecheck` + run-resource / store suites.
+`pnpm run typecheck` + gate / store suites.
