@@ -10,9 +10,11 @@ import {
   catalogSym,
   HttpListenRequiresHttp,
   ListenNode,
+  type ListenOptions,
   ListenTagNodeRequired,
   ListenUseProtocol,
   NPipeListenRequiresIpc,
+  Tag,
   UnixListenRequiresIpc,
   WsListenRequiresWs,
 } from "./nodeCore"
@@ -195,6 +197,58 @@ export const withListenNode = <A, E, R>(
   server: Layer.Layer<A, E, R>,
 ): Layer.Layer<A | ListenNode, E, R> =>
   server.pipe(Layer.provideMerge(Layer.succeed(ListenNode, node)));
+
+/**
+ * Resolve a fixed Http listen url from {@link ListenOptions.port} / {@link ListenOptions.url}.
+ * `url` wins when both are set. @internal
+ */
+export const httpListenUrlFromOptions = (
+  options: ListenOptions | undefined,
+): string | undefined => {
+  if (options?.url !== undefined && options.url.length > 0) {
+    return options.url;
+  }
+  if (options?.port !== undefined) {
+    return `http://127.0.0.1:${String(options.port)}/rpc`;
+  }
+  return undefined;
+};
+
+/**
+ * Resolve a fixed WebSocket listen url from options. Bare `http(s)://` urls are rewritten to
+ * `ws(s)://` so `port` / `url` match the Http listen shape. @internal
+ */
+export const wsListenUrlFromOptions = (
+  options: ListenOptions | undefined,
+): string | undefined => {
+  if (options?.url !== undefined && options.url.length > 0) {
+    const raw = options.url;
+    if (raw.startsWith("http://")) return `ws://${raw.slice("http://".length)}`;
+    if (raw.startsWith("https://")) return `wss://${raw.slice("https://".length)}`;
+    return raw;
+  }
+  if (options?.port !== undefined) {
+    return `ws://127.0.0.1:${String(options.port)}/rpc`;
+  }
+  return undefined;
+};
+
+/**
+ * When `node` has no address yet, stamp a fixed listen url from options (nameless / address-less
+ * Http·Ws). Leaves already-addressed nodes alone. @internal
+ */
+export const stampListenUrl = (
+  node: AnyNode,
+  url: string | undefined,
+  kind: "Http" | "WebSocket",
+): AnyNode => {
+  if (url === undefined || node.url !== undefined || node.path !== undefined) {
+    return node;
+  }
+  return Object.assign(Tag()(node.key, { url, kind }), {
+    [catalogSym]: (node as { readonly [catalogSym]?: unknown })[catalogSym],
+  }) as AnyNode;
+};
 
 /**
  * The key an anonymous `unix` / `http` / `ws` / `nPipe` listen mints for its address-less node: a

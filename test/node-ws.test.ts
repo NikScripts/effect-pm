@@ -71,6 +71,32 @@ describe("Node.ws", () => {
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
   );
 
+  it.effect("nameless serve — fixed port; client dials that url", () =>
+    Effect.gen(function* () {
+      const port = 19200 + (process.pid % 1000);
+      const lookupPath = yield* tmpSock("fixed-port");
+      const serverCtx = yield* Layer.build(
+        Node.ws(Hyperlink.serve(JobsAnon, { jobs: Effect.succeed(9) }), {
+          port,
+        }).pipe(
+          Layer.provide(
+            Lookup.layerOptions({ path: lookupPath, unlink: true }),
+          ),
+        ),
+      );
+      const listenNode = Context.get(serverCtx, Node.ListenNode);
+      expect(listenNode.url).toBe(`ws://127.0.0.1:${String(port)}/rpc`);
+      const clientCtx = yield* Layer.build(
+        Hyperlink.connect(JobsAnon, Hyperlink.protocolWebsocket(port)),
+      );
+      const n = yield* Effect.gen(function* () {
+        const jobs = yield* JobsAnon;
+        return yield* jobs.jobs;
+      }).pipe(Effect.provide(Context.merge(serverCtx, clientCtx)));
+      expect(n).toBe(9);
+    }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
+  );
+
   it.effect("rejects Ipc Node with WsListenRequiresWs", () =>
     Effect.gen(function* () {
       class IpcWorker extends Node.Tag<IpcWorker>()("ws/IpcWorker", {

@@ -280,7 +280,7 @@ export class ListenNode extends Context.Service<ListenNode, AnyNode>()(
 
 /**
  * Shared options for {@link unix} / {@link http} / {@link ws} (and low-level `*Server`) —
- * rpc path / health / ipc unlink. Not the TCP bind port (platform layer owns that).
+ * rpc path / health / ipc unlink, plus optional fixed listen address for nameless Http/Ws.
  *
  * @category models
  * @public
@@ -296,12 +296,22 @@ export type ListenOptions = {
    * Omit / `"inherit"` → continue resolve chain.
    */
   readonly onConflict?: OnConflict;
+  /**
+   * Fixed listen address for nameless / address-less {@link http} / {@link ws}.
+   * `port` is loopback shorthand (`http://127.0.0.1:<port>/rpc` or `ws://…`).
+   * `url` wins when both are set; battery bind still requires a loopback url (non-loopback
+   * → use {@link httpServer} / {@link wsServer} + your platform layer).
+   * Omit both for an ephemeral loopback port (`port: 0`).
+   */
+  readonly port?: number;
+  readonly url?: string;
 };
 
 /**
  * Options for {@link unix} / {@link http} / {@link ws} / {@link Node.listenLocal}.
  * Same as {@link ListenOptions} — Lookup is composed with `.pipe(Layer.provide(…))`,
  * not listen options (`lookupPath` / `bootstrapLookup` removed).
+ * Http / Ws nameless listens accept {@link ListenOptions.port} / {@link ListenOptions.url}.
  *
  * @category models
  * @public

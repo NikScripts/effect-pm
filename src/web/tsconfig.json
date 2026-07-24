@@ -85,6 +85,14 @@
       }
     ]
   },
-  "include": ["./**/*.ts", "./**/*.tsx", "../ui/**/*.ts", "../ui/**/*.tsx"],
+  "include": [
+    "./**/*.ts",
+    "./**/*.tsx",
+    "../ui/**/*.ts",
+    "../ui/**/*.tsx",
+    // Covers ui + web + tui base registries; kept out of root tsconfig (strict Effect rules).
+    "../../test/widget-registry.test.ts",
+    "../tui/cellWidgets.tsx"
+  ],
   "exclude": ["../../node_modules", "../../dist"]
 }

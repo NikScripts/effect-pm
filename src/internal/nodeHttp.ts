@@ -28,6 +28,8 @@ import {
   isHyperlinkTagArg,
   isServeArg,
   anonymousNodeKey,
+  httpListenUrlFromOptions,
+  stampListenUrl,
   withListenNode,
   type CatalogROut,
   type ServeLayerList,
@@ -45,8 +47,11 @@ type ListenLayer = Layer.Layer<
 /**
  * Local Http listen — localhost bind. Compose Lookup via
  * `Layer.provide(Lookup.layer)` / `Lookup.layerOptions` when claim / advertise needs it.
+ * Nameless / address-less forms accept `options.port` or `options.url` for a fixed loopback
+ * address (`Node.http([serve], { port: 3000 })`); omit them for an ephemeral port.
  * Protocol listen sibling of {@link unix} / {@link ws} / {@link nPipe} / {@link Prototype.listen}
- * — keep in sync (handoff § Protocol listen siblings). Prefer this for same-machine HTTP.
+ * — keep in sync (handoff § Protocol listen siblings). Prefer this over {@link httpServer} when
+ * the battery localhost bind is enough.
  *
  * @category listen
  * @public
@@ -204,45 +209,53 @@ const httpListenOn = (
   list: ServeLayerList,
   options: ListenOptions | undefined,
 ): ListenLayer => {
-  if (isPrototypeNode(node)) {
-    return unaddressedLayer(node.key);
+  // Nameless / address-less + options.port|url → fixed loopback bind (not ephemeral port 0).
+  const addressed = stampListenUrl(
+    node,
+    httpListenUrlFromOptions(options),
+    "Http",
+  );
+  if (isPrototypeNode(addressed)) {
+    return unaddressedLayer(addressed.key);
   }
-  if (isDynamicInstanceNode(node)) {
+  if (isDynamicInstanceNode(addressed)) {
     return retype<ListenLayer>(
       Layer.unwrap(
         Effect.gen(function* () {
-          const protoKey = dynamicPrototypeKeyOf(node);
+          const protoKey = dynamicPrototypeKeyOf(addressed);
           const suffix =
-            dynamicInstanceSuffixOf(node) ?? (yield* uniqueInstanceSuffix());
+            dynamicInstanceSuffixOf(addressed) ?? (yield* uniqueInstanceSuffix());
           const wireKey = `${protoKey}#${suffix}`;
-          return ephemeralHttpListen(wireKey, list, options, node);
+          return ephemeralHttpListen(wireKey, list, options, addressed);
         }),
       ) as never,
     );
   }
   if (
-    node.path === undefined &&
-    node.url === undefined &&
-    (node.kind === undefined || node.kind === "Http")
+    addressed.path === undefined &&
+    addressed.url === undefined &&
+    (addressed.kind === undefined || addressed.kind === "Http")
   ) {
-    return ephemeralHttpListen(node.key, list, options, node, {
+    return ephemeralHttpListen(addressed.key, list, options, addressed, {
       claimIdentity: true,
     });
   }
-  if (node.kind === "Http" || typeof node.url === "string") {
-    const port = parseLoopbackHttpPort(node.url);
+  if (addressed.kind === "Http" || typeof addressed.url === "string") {
+    const port = parseLoopbackHttpPort(addressed.url);
     if (port === undefined) {
       return httpRequiresHttpLayer(
-        node.key,
-        typeof node.url === "string" ? `remote:${node.url}` : "Http",
+        addressed.key,
+        typeof addressed.url === "string" ? `remote:${addressed.url}` : "Http",
       );
     }
     return withListenNode(
-      node,
-      httpBind(node, list, options).pipe(Layer.provide(localhostHttpPlatform(port))),
+      addressed,
+      httpBind(addressed, list, options).pipe(
+        Layer.provide(localhostHttpPlatform(port)),
+      ),
     );
   }
-  return unaddressedLayer(node.key);
+  return unaddressedLayer(addressed.key);
 };
 
 /**

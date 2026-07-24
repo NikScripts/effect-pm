@@ -170,10 +170,11 @@ const httpServerBase = (
       );
       // Transport-agnostic server: `RpcServer.layer` requires the `RpcServer.Protocol` dependency;
       // `serverProtocol` (http for {@link httpServer}, websocket for {@link wsServer}) provides it.
-      const toNodeStatusLayer = retype<
-        (handlers: Record<string, (payload: unknown) => unknown>) => ClosedLayer
-      >(nodeTag[Hyperlink.groupSym].toLayer as never);
-      const nodeStatusLayer = toNodeStatusLayer(nodeHandlers);
+      // Call `toLayer` on the group (don't extract) — RpcGroup methods need `this`.
+      const nodeStatusGroup = nodeTag[Hyperlink.groupSym];
+      const nodeStatusLayer = retype<ClosedLayer>(
+        nodeStatusGroup.toLayer(nodeHandlers as never) as never,
+      );
       const rpcAppLayer = retype<ClosedLayer>(
         rpcServerLayer(merged).pipe(
           Layer.provide(nodeStatusLayer),

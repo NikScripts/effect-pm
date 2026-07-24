@@ -28,7 +28,9 @@ import {
   isHyperlinkTagArg,
   isServeArg,
   anonymousNodeKey,
+  stampListenUrl,
   withListenNode,
+  wsListenUrlFromOptions,
   type CatalogROut,
   type ServeLayerList,
   type ServesForCatalog,
@@ -38,8 +40,11 @@ import { retype } from "./nodeServerCommon"
 /**
  * Local WebSocket listen — localhost bind. Compose Lookup via
  * `Layer.provide(Lookup.layer)` / `Lookup.layerOptions` when claim / advertise needs it.
+ * Nameless / address-less forms accept `options.port` or `options.url` for a fixed loopback
+ * address (`Node.ws([serve], { port: 3000 })`); omit them for an ephemeral port.
  * Protocol listen sibling of {@link unix} / {@link http} / {@link nPipe} / {@link Prototype.listen}
- * — keep in sync (handoff § Protocol listen siblings). Prefer this for same-machine WebSocket.
+ * — keep in sync (handoff § Protocol listen siblings). Prefer this over {@link wsServer} when
+ * the battery localhost bind is enough.
  *
  * @category listen
  * @public
@@ -206,45 +211,55 @@ const wsListenOn = (
   list: ServeLayerList,
   options: ListenOptions | undefined,
 ): ListenLayer => {
-  if (isPrototypeNode(node)) {
-    return unaddressedLayer(node.key);
+  // Nameless / address-less + options.port|url → fixed loopback bind (not ephemeral port 0).
+  const addressed = stampListenUrl(
+    node,
+    wsListenUrlFromOptions(options),
+    "WebSocket",
+  );
+  if (isPrototypeNode(addressed)) {
+    return unaddressedLayer(addressed.key);
   }
-  if (isDynamicInstanceNode(node)) {
+  if (isDynamicInstanceNode(addressed)) {
     return retype<ListenLayer>(
       Layer.unwrap(
         Effect.gen(function* () {
-          const protoKey = dynamicPrototypeKeyOf(node);
+          const protoKey = dynamicPrototypeKeyOf(addressed);
           const suffix =
-            dynamicInstanceSuffixOf(node) ?? (yield* uniqueInstanceSuffix());
+            dynamicInstanceSuffixOf(addressed) ?? (yield* uniqueInstanceSuffix());
           const wireKey = `${protoKey}#${suffix}`;
-          return ephemeralWsListen(wireKey, list, options, node);
+          return ephemeralWsListen(wireKey, list, options, addressed);
         }),
       ) as never,
     );
   }
   if (
-    node.path === undefined &&
-    node.url === undefined &&
-    (node.kind === undefined || node.kind === "WebSocket")
+    addressed.path === undefined &&
+    addressed.url === undefined &&
+    (addressed.kind === undefined || addressed.kind === "WebSocket")
   ) {
-    return ephemeralWsListen(node.key, list, options, node, {
+    return ephemeralWsListen(addressed.key, list, options, addressed, {
       claimIdentity: true,
     });
   }
-  if (node.kind === "WebSocket" || typeof node.url === "string") {
-    const port = parseLoopbackWsPort(node.url);
+  if (addressed.kind === "WebSocket" || typeof addressed.url === "string") {
+    const port = parseLoopbackWsPort(addressed.url);
     if (port === undefined) {
       return wsRequiresWsLayer(
-        node.key,
-        typeof node.url === "string" ? `remote:${node.url}` : "WebSocket",
+        addressed.key,
+        typeof addressed.url === "string"
+          ? `remote:${addressed.url}`
+          : "WebSocket",
       );
     }
     return withListenNode(
-      node,
-      wsBind(node, list, options).pipe(Layer.provide(localhostWsPlatform(port))),
+      addressed,
+      wsBind(addressed, list, options).pipe(
+        Layer.provide(localhostWsPlatform(port)),
+      ),
     );
   }
-  return unaddressedLayer(node.key);
+  return unaddressedLayer(addressed.key);
 };
 
 /**

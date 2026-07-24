@@ -195,10 +195,11 @@ const ipcServerBase = (options: IpcServerOptions): IpcServed => {
       if (fsCtx !== undefined) {
         yield* Effect.provide(unlinkBestEffort(options.path), fsCtx);
       }
-      const toNodeStatusLayer = retype<
-        (handlers: Record<string, (payload: unknown) => unknown>) => ClosedLayer
-      >(nodeTag[Hyperlink.groupSym].toLayer as never);
-      const nodeStatusLayer = toNodeStatusLayer(nodeHandlers);
+      // Call `toLayer` on the group (don't extract) — RpcGroup methods need `this`.
+      const nodeStatusGroup = nodeTag[Hyperlink.groupSym];
+      const nodeStatusLayer = retype<ClosedLayer>(
+        nodeStatusGroup.toLayer(nodeHandlers as never) as never,
+      );
       const socketServerLayer = retype<(options: { readonly path: string }) => ClosedLayer>(
         NodeSocketServer.layer as never,
       );

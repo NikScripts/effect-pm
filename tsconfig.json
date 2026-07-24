@@ -135,6 +135,8 @@
     "src/ui/**",
     "src/web/**",
     "src/tui/**",
+    // Imports ui/web/tui bases — typechecked under those projects' relaxed Effect rules.
+    "test/widget-registry.test.ts",
     "examples/scenarios/nwslsoccer",
     "examples/queue-widget/**",
     "examples/resource-tui/**",
