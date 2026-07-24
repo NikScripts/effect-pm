@@ -10,7 +10,6 @@
 import { Effect, Layer, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
 import * as Hyperlink from "../../src/Hyperlink";
-import { specOf } from "../../src/Hyperlink";
 import { kind as workPoolKind } from "../../src/WorkPool";
 import { kind as daemonKind } from "../../src/Daemon";
 import * as Group from "../../src/Group";

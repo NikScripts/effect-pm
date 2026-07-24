@@ -25,16 +25,26 @@ accumulated since 0.8.0-beta.28.
 - `HttpApiHyperlink` folds into **`Gate.httpApiClient(...)`** (+ `httpApiClientService`,
   `httpApiClientLayer`, `acceptJson`, `instrumentEndpoints`). Subpath removed.
 - Priority-lane vocabulary unified to **lane**: `laneCount`, `namedLanes`, `add(item, lane?)`.
-- `NodeStatus` folds into the Node namespace as **`Node.status`** (subpath and barrel export
-  removed), with a node-addressed `client(node)` layer factory.
+- **One kind per resource (SSOT):** the short `"queue"` / `"process"` discriminator is gone.
+  Definitions and dashboard guards use the stamped kind (`WorkPool.kind` /
+  `Daemon.kind` / `Hyperlink.kindOf(tag)`).
+- **`BuiltHyperlink` → `Hyperlink.Driver`** (`driver` / `isDriver` / `driverSym`).
+  `ServedHyperlink` / `ServedHyperlinks` / `servedHyperlinksLayer` demoted to `@internal`.
+- **Node status/logs/ping live on the connected node handle** — `(yield* node).status` /
+  `.logs` / `.ping`. The `NodeStatus` module and `Node.status` namespace are **removed**.
+  Light types survive as `Node.Status` / `Node.ResourceReadiness` /
+  `Node.resourceReadiness`.
 
 ### Nodes, transports, and loud failures
 
 - Two-stage tag factories: `Node.Tag<Self>()("name", target)` (and Lookup), eliminating
   context-inference false positives structurally.
 - Multi-protocol nodes: http, WebSocket, unix socket, and named-pipe servers/dialers with
-  protocol-precise kinds; `connect(tag, protocol(target))` replaces `clientHttp`; bare-port
-  targets resolve their dial host via Config.
+  protocol-precise kinds.
+- **Client transport surface:** two families — `Hyperlink.connect(tag, protocol)` (bring your
+  own wire) and `Hyperlink.http` / `ws` / `unix` / `nPipe(node)` (batteries). **`clientHttp`
+  removed** — migrate to `connect(tag, protocolHttp(target))`. Bare-port dials resolve via
+  `Hyperlink.clientHost` (`HYPERLINK_CLIENT_HOST`, default `localhost`).
 - Transport wiring fails **loud and typed** (`ProtocolUnanswered`, `UnaddressedNode`,
   contract-hash verification, deep `verifyConnection`); silent-wiring paths removed.
 - Per-resource serving with isolated deps on one `/rpc`; listen/local catalogs; RPC transport is
@@ -42,7 +52,7 @@ accumulated since 0.8.0-beta.28.
 
 ### Lookup and fleet
 
-- `Identity.claim` (first-wins, dead-incumbent replacement via NodeStatus ping),
+- `Identity.claim` (first-wins, dead-incumbent replacement via node-handle ping),
   `Directory.advertise`/`resolve`/`nodesServing` (`IncumbentAlive` guard), and placement
   **Advice** (`advise`/`preferred`/`clearAdvice`).
 - Peers model (`Hyperlink.nodes([...])`) for multi-node placement; `FleetHealth`, `ShardMap`,

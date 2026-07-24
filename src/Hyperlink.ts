@@ -31,8 +31,9 @@
  *   routed by the per-call instance-key header.
  *
  * Over **http**, pair {@link Hyperlink.serve} with {@link Node.httpServer} (ndjson by default so
- * client/server can't disagree on the codec). Dial with {@link Hyperlink.clientHttp} /
- * {@link Node.connect} against a {@link Node.Tag}.
+ * client/server can't disagree on the codec). Dial with {@link Hyperlink.connect}`(tag,
+ * {@link Hyperlink.protocolHttp}(target))` or a node batteries client ({@link Hyperlink.http} /
+ * {@link Hyperlink.ws} / …).
  *
  * A method is {@link effect} (one-shot read), {@link effectFn} (mutation), or
  * {@link Hyperlink.stream} (a live `Stream` source, e.g. `changes`).
@@ -57,7 +58,6 @@ import {
   Pipeable,
   Predicate,
   Ref,
-  Result,
   Schema,
   Scope,
   Stream,
@@ -99,7 +99,6 @@ import {
   AnyNode,
   bindNodeStore,
   Endpoints,
-  InvalidHttpTarget,
   isAddressedNode,
   ListenNode,
   NodeKey,
@@ -107,7 +106,6 @@ import {
   NodeUnreachable,
   ProtocolKind,
   ProtocolUnanswered,
-  resolveHttpTarget,
   ServiceNotReady,
   ServiceNotServed,
   Tag as makeNode,
@@ -118,7 +116,6 @@ import {
   bindNodeProtocolBuilders,
   connectAddressed,
   connectLayer,
-  invalidHttpTargetLayer,
   selectEndpoint,
   unaddressedLayer,
 } from "./internal/nodeConnect";
@@ -226,7 +223,7 @@ export class ProtocolMismatch extends Data.TaggedError("ProtocolMismatch")<{
     return (
       `Hyperlink "${this.resource}" method "${this.method}" hit a transport/protocol mismatch ` +
       `(often an http client dialing a WebSocket server). Use Node.connect / the node's declared ` +
-      `kind (protocolWebsocket / socketClient), not a guessed transport.`
+      `kind (protocolWebsocket / Hyperlink.ws), not a guessed transport.`
     );
   }
 }
@@ -247,21 +244,21 @@ export class MissingClientProtocol extends Data.TaggedError("MissingClientProtoc
   override get message() {
     return (
       `Hyperlink.client("${this.resource}") has no ambient RpcClient.Protocol. ` +
-      `Connect it with Node.connect(node) / Hyperlink.client(tag, node), ` +
-      `Hyperlink.clientHttp(tag, target), or Hyperlink.socketClient(node) ` +
-      `(or Layer.provide a protocolHttp / protocolWebsocket / protocolIpc layer).`
+      `Connect it with Hyperlink.connect(tag, protocolHttp|protocolWebsocket|protocolIpc(target)), ` +
+      `Hyperlink.client(tag, node), Hyperlink.http|ws|unix|nPipe(node), or Node.connect(node).`
     );
   }
 }
 
 /**
- * Default-on verify mode for addressed {@link client} / {@link clientHttp} / {@link socketClient}.
+ * Default-on verify mode for addressed {@link client} Layers (and {@link ws}).
  * - `"reject"` (default) — layer build runs {@link verifyConnection}; peer down → {@link NodeUnreachable}
  *   (tag-aware clients also deep-check the resource + F4 {@link contractHash})
  * - `"status"` — probe runs but failure is ignored (connect proceeds)
  * - `false` — skip verify
  *
  * Opt out: `Hyperlink.client(Tag).pipe(Layer.provide(Hyperlink.clientVerify(false)))`.
+ * Nodeless {@link connect}`(tag, protocol)` does not probe — call {@link verifyConnection} yourself.
  *
  * @category models
  * @public
@@ -4054,13 +4051,13 @@ export const layerProtocol = (
 
 /**
  * The default **host** a bare-**port** client shorthand resolves against — an Effect {@link Config}
- * (`EFFECT_PM_CLIENT_HOST`) defaulting to `"localhost"`. In dev nothing is set → `localhost`; in
- * production set it (`EFFECT_PM_CLIENT_HOST=api.myapp.com`) and every `protocolHttp(3009)` /
+ * (`HYPERLINK_CLIENT_HOST`) defaulting to `"localhost"`. In dev nothing is set → `localhost`; in
+ * production set it (`HYPERLINK_CLIENT_HOST=api.myapp.com`) and every `protocolHttp(3009)` /
  * `protocolWebsocket(3009)` / `connect(tag, …(port))` becomes `…://api.myapp.com:3009/rpc` — no
  * `NODE_ENV` branching, just "did they configure a host". @category transports @public
  */
 export const clientHost: Config.Config<string> = Config.string(
-  "EFFECT_PM_CLIENT_HOST",
+  "HYPERLINK_CLIENT_HOST",
 ).pipe(Config.withDefault("localhost"));
 
 /** A bare **port** (`3009`) / `":3009"` resolves to `${scheme}://${clientHost}:port/rpc` (Config host,
@@ -4148,7 +4145,9 @@ export const protocolWebsocket = (
  * ```
  *
  * The port shorthand (`3009`) resolves against {@link clientHost} (default `"localhost"`), so the same
- * `3009` points at your production host once `EFFECT_PM_CLIENT_HOST` is set.
+ * `3009` points at your production host once `HYPERLINK_CLIENT_HOST` is set.
+ *
+ * Replaces the retired `clientHttp(tag, target)` — use `connect(tag, protocolHttp(target))`.
  *
  * @category clients
  * @public
@@ -4638,68 +4637,6 @@ const applyClientVerify = (
     }
     yield* probe;
   });
-
-/**
- * The single-resource client mirror of {@link httpServer}. Wire a served resource `tag` to a remote
- * over **http** and get a ready client `Layer` in one call — {@link client}`(tag)` plus the
- * batteries-included transport (Fetch + ndjson serialization), bundled.
- *
- * The `target` is a **port** (`3009` or `":3009"` → `http://localhost:3009/rpc`) for a runtime on the
- * same machine, or a full **url** for one across the network. A bad target fails the Layer with
- * {@link InvalidHttpTarget} (not a sync throw):
- *
- * ```ts
- * Effect.provide(program, Hyperlink.clientHttp(Emails, 3001));                       // same machine
- * Effect.provide(program, Hyperlink.clientHttp(Emails, "https://mail.internal/rpc")); // anywhere
- * ```
- *
- * @category clients
- * @public
- */
-export function clientHttp<Self, S extends Spec>(
-  tag: HyperlinkTag<Self, S>,
-  target: number | `:${number}` | `http://${string}` | `https://${string}`,
-  options?: {
-    readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
-  },
-): Layer.Layer<Self>;
-export function clientHttp<Self, S extends Spec>(
-  tag: HyperlinkTag<Self, S>,
-  target: number | string,
-  options?: {
-    readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
-  },
-): Layer.Layer<Self, InvalidHttpTarget>;
-export function clientHttp<Self, S extends Spec>(
-  tag: HyperlinkTag<Self, S>,
-  target: number | string,
-  options?: {
-    readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
-  },
-): Layer.Layer<Self, InvalidHttpTarget | ClientVerifyError> {
-  const resolved = resolveHttpTarget(target);
-  if (Result.isFailure(resolved)) {
-    return invalidHttpTargetLayer(resolved.failure);
-  }
-  const url = resolved.success;
-  const wired = clientLayer(tag).pipe(
-    Layer.provide(protocolHttp(url, options?.serialization)),
-  );
-  // Nodeless clientHttp — deep F3/F4 probe on the resolved URL (default-on verify).
-  return Layer.unwrap(
-    Effect.gen(function* () {
-      yield* applyClientVerify(
-        { key: tag.key } as AnyNode,
-        {
-          url,
-          resource: tag.groupId,
-          contractHash: contractHash(tag),
-        },
-      );
-      return wired;
-    }),
-  ) as Layer.Layer<Self, InvalidHttpTarget | ClientVerifyError>;
-}
 
 // ── multi-node: the fleet + peer clients ──
 

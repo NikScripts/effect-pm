@@ -44,7 +44,7 @@ describe("bare-port node: localhost preview, Config-resolved dial host", () => {
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(15))),
   );
 
-  // The host-override behavior (bogus EFFECT_PM_CLIENT_HOST → dial fails to reach the localhost server)
+  // The host-override behavior (bogus HYPERLINK_CLIENT_HOST → dial fails to reach the localhost server)
   // is deterministic but not reliable as an in-process vitest: the default ConfigProvider caches the
   // first `clientHost` read, and the earlier tests read `localhost`. It's proven directly instead —
   // a fresh process with the env set dials a bare-port node to the non-routable host and fails.
