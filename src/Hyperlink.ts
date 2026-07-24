@@ -778,7 +778,7 @@ export const isVoidCommand = (m: AnyMethod): boolean => {
 
 /**
  * True when a wire member was built with {@link effect} (no payload schema) — including
- * unit run gates and value reads. Contrast {@link isVoidCommand}, which is only void commands.
+ * unit gates and value reads. Contrast {@link isVoidCommand}, which is only void commands.
  * Not {@link Effect.isEffect | `Effect.isEffect`} (runtime value guard).
  *
  * @category guards

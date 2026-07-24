@@ -2522,7 +2522,7 @@ export const ShardMapCard = (props: {
   );
 };
 
-/** One labelled counter for the run-gate card's outcome row. */
+/** One labelled counter for the gate card's outcome row. */
 const RunCounter = (props: {
   readonly label: string;
   readonly value: number;

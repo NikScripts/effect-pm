@@ -65,7 +65,7 @@ class NamedDropletStore extends Store.Service<NamedDropletStore>("@repo/app/Name
 
 class QueueStore extends Store.Service<QueueStore>("@repo/app/QueueStore")(mailQueueRegistration) {}
 
-class RunGateStore extends Store.Service<RunGateStore>("@repo/app/RunGateStore")(
+class GateStore extends Store.Service<GateStore>("@repo/app/GateStore")(
   fetchGateRegistration,
 ) {}
 
@@ -182,9 +182,9 @@ describe("Store.Service", () => {
 
   it.effect("single Store.Service yields the store handle directly", () =>
     Effect.gen(function* () {
-      const store = yield* RunGateStore;
+      const store = yield* GateStore;
       expect(typeof store.record).toBe("function");
-    }).pipe(Effect.provide(RunGateStore.layerMemory), Effect.scoped),
+    }).pipe(Effect.provide(GateStore.layerMemory), Effect.scoped),
   );
 
   it.effect("array Store.Service still resolves via at", () =>
@@ -215,7 +215,7 @@ describe("Store.Service", () => {
 
   it.effect("Gate.store exposes typed fact + stateHistory methods", () =>
     Effect.gen(function* () {
-      const store = yield* RunGateStore;
+      const store = yield* GateStore;
       const keys = Object.keys(store);
       expect(keys).toContain("record");
       expect(keys).toContain("facts");
@@ -259,7 +259,7 @@ describe("Store.Service", () => {
       const history = yield* store.stateHistory();
       expect(history).toHaveLength(1);
       expect(history[0]?.reason).toBe("run-resource.run.started");
-    }).pipe(Effect.provide(RunGateStore.layerMemory), Effect.scoped),
+    }).pipe(Effect.provide(GateStore.layerMemory), Effect.scoped),
   );
 
   it.effect("Store.extend adds shapes and keeps pipe", () =>

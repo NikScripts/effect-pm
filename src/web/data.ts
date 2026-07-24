@@ -20,7 +20,7 @@ import { priorityKind, priorityStatus } from "../WorkPool";
 import { kind as fleetHealthKind, type FleetStatus, type NodeReport } from "../FleetHealth";
 import { kind as telemetryKind, MetricsSnapshot, type MetricDatum } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";
-import { kind as gateKind, type RunGateStatus } from "../Gate";
+import { kind as gateKind, type GateStatus } from "../Gate";
 import { kind as daemonKind, daemonScheduleEntry, daemonStatus } from "../Daemon";
 import { kind as apiKind } from "../ApiMetrics";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../ApiUsageSchema";
@@ -173,7 +173,7 @@ export type ShardMapTag<R = never> = Effect.Effect<ShardMapService, never, R> & 
 /** The structural shape of a **Gate** resource's live service — a reactive `status` ref carrying
  *  the live concurrency counters (waiting / in-flight / completed / failed / interrupted / duration). */
 interface GateService {
-  readonly status: Subscribable<RunGateStatus>;
+  readonly status: Subscribable<GateStatus>;
 }
 /** A Gate tag — yieldable for its live service. @public */
 export type GateTag<R = never> = Effect.Effect<GateService, never, R> & { readonly key: string };
@@ -246,7 +246,7 @@ export interface ShardMapBundle {
 /** The atoms one **Gate** card needs — the live status (concurrency counters) streamed from the
  *  reactive `status` ref. Read-only. @public */
 export interface GateBundle {
-  readonly status: ValueAtom<RunGateStatus>;
+  readonly status: ValueAtom<GateStatus>;
 }
 /** The atoms + controls one process card needs — derived from the tag. */
 export interface DaemonBundle {

@@ -5,24 +5,24 @@
  * @internal
  */
 
-import type { RunGateStatus } from "./gate";
+import type { GateStatus } from "./gate";
 import type { GateStateChangeReason } from "./store/gateStoreSpec";
 
 /** Pair a counter update with the store reason emitted alongside it. @internal */
 export interface RunStatusTransition {
   readonly update: (
-    state: RunGateStatus,
+    state: GateStatus,
     observedAt: number,
     durationMs?: number,
-  ) => RunGateStatus;
+  ) => GateStatus;
   readonly reason: GateStateChangeReason;
 }
 
 const withObservedAt = (
-  state: RunGateStatus,
+  state: GateStatus,
   observedAt: number,
-  patch: Omit<Partial<RunGateStatus>, "observedAt">,
-): RunGateStatus => ({
+  patch: Omit<Partial<GateStatus>, "observedAt">,
+): GateStatus => ({
   ...state,
   ...patch,
   observedAt,
@@ -30,18 +30,18 @@ const withObservedAt = (
 
 /** Increment waiting before acquiring a permit. @internal */
 export const enterWaiting = (
-  state: RunGateStatus,
+  state: GateStatus,
   observedAt: number,
   _durationMs?: number,
-): RunGateStatus =>
+): GateStatus =>
   withObservedAt(state, observedAt, { waiting: state.waiting + 1 });
 
 /** Waiting permit acquire interrupted — drop waiting, bump interrupted. @internal */
 export const interruptWaitingAcquire = (
-  state: RunGateStatus,
+  state: GateStatus,
   observedAt: number,
   _durationMs?: number,
-): RunGateStatus =>
+): GateStatus =>
   withObservedAt(state, observedAt, {
     waiting: Math.max(0, state.waiting - 1),
     interrupted: state.interrupted + 1,
@@ -49,10 +49,10 @@ export const interruptWaitingAcquire = (
 
 /** Permit acquired — move one waiter into in-flight. @internal */
 export const startRun = (
-  state: RunGateStatus,
+  state: GateStatus,
   observedAt: number,
   _durationMs?: number,
-): RunGateStatus =>
+): GateStatus =>
   withObservedAt(state, observedAt, {
     waiting: Math.max(0, state.waiting - 1),
     inFlight: state.inFlight + 1,
@@ -60,10 +60,10 @@ export const startRun = (
 
 /** Run body interrupted — drop in-flight, bump interrupted, accumulate duration. @internal */
 export const interruptRunBody = (
-  state: RunGateStatus,
+  state: GateStatus,
   observedAt: number,
   durationMs = 0,
-): RunGateStatus =>
+): GateStatus =>
   withObservedAt(state, observedAt, {
     inFlight: Math.max(0, state.inFlight - 1),
     interrupted: state.interrupted + 1,
@@ -72,10 +72,10 @@ export const interruptRunBody = (
 
 /** Run failed — drop in-flight, bump failed, accumulate duration. @internal */
 export const failRun = (
-  state: RunGateStatus,
+  state: GateStatus,
   observedAt: number,
   durationMs = 0,
-): RunGateStatus =>
+): GateStatus =>
   withObservedAt(state, observedAt, {
     inFlight: Math.max(0, state.inFlight - 1),
     failed: state.failed + 1,
@@ -84,10 +84,10 @@ export const failRun = (
 
 /** Run completed — drop in-flight, bump completed, accumulate duration. @internal */
 export const completeRun = (
-  state: RunGateStatus,
+  state: GateStatus,
   observedAt: number,
   durationMs = 0,
-): RunGateStatus =>
+): GateStatus =>
   withObservedAt(state, observedAt, {
     inFlight: Math.max(0, state.inFlight - 1),
     completed: state.completed + 1,

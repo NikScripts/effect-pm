@@ -286,8 +286,8 @@ export {
 
 // Types - Gate
 export type {
-  RunGateHandle,
-  RunGateStatus,
+  GateRunHandle,
+  GateStatus,
   GateConfig,
   GateHandle,
   GateLayerConfig,
@@ -301,11 +301,11 @@ export type {
   GateTagDefinition,
   GateTagSchemas,
   GateWireSchemas,
-  RunInstanceSpec,
+  GateInstanceSpec,
 } from "./Gate";
 export {
-  runGateStatus,
-  runSpec,
+  gateStatus,
+  gateSpec,
   kind as gateKind,
   layer as gateLayer,
   serve as gateServe,

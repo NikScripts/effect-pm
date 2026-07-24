@@ -7,14 +7,14 @@
 
 import { Cause, Option } from "effect";
 import type { RunFact, RunStateChange } from "./store/gateStoreSpec";
-import type { RunGateStatus } from "./gate";
+import type { GateStatus } from "./gate";
 
 /** Extract the failure value for store rows (store-core §5). @internal */
 export const extractRunFailure = (cause: Cause.Cause<unknown>): unknown =>
   Option.getOrElse(Cause.findErrorOption(cause), () => Cause.squash(cause));
 
 /** Map live counters to the persisted state shape. @internal */
-export const toHyperlinkState = (status: RunGateStatus): RunStateChange["current"] => ({
+export const toHyperlinkState = (status: GateStatus): RunStateChange["current"] => ({
   resourceId: status.resourceId,
   observedAt: status.observedAt,
   configVersion: status.configVersion,
@@ -95,8 +95,8 @@ export const makeRunStateChange = (input: {
   readonly resourceId: string;
   readonly changedAt: number;
   readonly reason: RunStateChange["reason"];
-  readonly previous: RunGateStatus | null;
-  readonly current: RunGateStatus;
+  readonly previous: GateStatus | null;
+  readonly current: GateStatus;
 }): RunStateChange => ({
   id: input.id,
   resourceId: input.resourceId,

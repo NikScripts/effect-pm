@@ -20,6 +20,9 @@ accumulated since 0.8.0-beta.28.
 ### Major: kinds renamed to generic nouns, variants folded
 
 - `QueueHyperlink` → **`WorkPool`** · `RunHyperlink` → **`Gate`** · `Process` → **`Daemon`**.
+  Gate wire helpers follow: `runGateStatus` / `runSpec` / `RunInstanceSpec` /
+  `RunGateStatus` / `RunGateHandle` → `gateStatus` / `gateSpec` / `GateInstanceSpec` /
+  `GateStatus` / `GateRunHandle`.
 - `CustomQueueHyperlink` folds into **`WorkPool.priority(...)`** (peer constructor beside
   `WorkPool.Tag`; `layer`/`serve`/`store`/`configure` dispatch on the tag; engine stays
   tree-shakeable as `WorkPool.makePriority`). Subpath removed. Public wire helpers rename

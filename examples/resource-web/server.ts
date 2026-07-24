@@ -311,7 +311,7 @@ const liveNode = Node.wsServer([
   FleetHealth.serve(MeshHealth),
   Telemetry.serve(FleetMetrics),
   ShardMap.serve(Sessions),
-  // a bounded-concurrency run gate (4 permits) over a simulated box-score fetch — a slow effect that
+  // a bounded-concurrency gate (4 permits) over a simulated box-score fetch — a slow effect that
   // usually succeeds with a byte count, ~1-in-8 fails with a timeout, so the GateCard shows
   // live in-flight / done / failed counters.
   Gate.serve(FetchGate, {
@@ -373,7 +373,7 @@ const statsNode = Node.wsServer([
 const liveNodeProgram = Effect.gen(function* () {
   const poller = yield* LiveScorePoller;
   yield* poller.schedule.set(pollerWindows);
-  // Drive the run gate: fork runs faster than four permits can drain, so a `waiting` backlog builds
+  // Drive the gate: fork runs faster than four permits can drain, so a `waiting` backlog builds
   // and the GateCard's in-flight gauge sits near its limit. Each run's failure is swallowed
   // here (the gate already tallies it) so the producer fiber keeps going.
   const gate = yield* FetchGate;

@@ -30,7 +30,7 @@ import { runStatusTransitions } from "./gateStatus";
 // ============================================================================
 
 /** Live counters for a gated resource handle. @internal */
-export interface RunGateStatus {
+export interface GateStatus {
   readonly resourceId: string;
   readonly observedAt: number;
   readonly configVersion: number;
@@ -43,18 +43,18 @@ export interface RunGateStatus {
   readonly totalDurationMs: number;
 }
 
-type RunGateRun<T, A, E> = [T] extends [void]
+type GateRunFn<T, A, E> = [T] extends [void]
   ? () => Effect.Effect<A, E>
   : (input: T) => Effect.Effect<A, E>;
 
-/** Minimal handle from {@link makeRunGateHandleEffect} — run only. @internal */
-export type RunGateHandle<T, A, E> = {
-  readonly run: RunGateRun<T, A, E>;
+/** Minimal handle from {@link makeGateRunHandleEffect} — run only. @internal */
+export type GateRunHandle<T, A, E> = {
+  readonly run: GateRunFn<T, A, E>;
 };
 
 /** Observable handle from {@link makeGateHandleEffect}. @internal */
-export type GateHandle<T, A, E> = RunGateHandle<T, A, E> & {
-  readonly status: Subscribable<RunGateStatus>;
+export type GateHandle<T, A, E> = GateRunHandle<T, A, E> & {
+  readonly status: Subscribable<GateStatus>;
   readonly waiting: Subscribable<number>;
   readonly inFlight: Subscribable<number>;
   readonly completed: Subscribable<number>;
@@ -92,8 +92,8 @@ interface GateStoreContext {
   };
   readonly recordStateChange: (
     reason: GateStateChangeReason,
-    previous: RunGateStatus | null,
-    current: RunGateStatus,
+    previous: GateStatus | null,
+    current: GateStatus,
   ) => Effect.Effect<void>;
   readonly nextFactId: (runId: string, suffix: string) => Effect.Effect<string>;
 }
@@ -108,7 +108,7 @@ const makeInitialStatus = (
   resourceId: string,
   concurrency: number,
   observedAt: number,
-): RunGateStatus => ({
+): GateStatus => ({
   resourceId,
   observedAt,
   configVersion: 1,
@@ -122,7 +122,7 @@ const makeInitialStatus = (
 });
 
 const makeStatusSubscribables = (
-  statusRef: SubscriptionRef.SubscriptionRef<RunGateStatus>,
+  statusRef: SubscriptionRef.SubscriptionRef<GateStatus>,
 ) => {
   const status = subscribable(statusRef);
   return {
@@ -191,11 +191,11 @@ const makeObservedRun =
   <T, A, E>(
     sem: Semaphore.Semaphore,
     effect: (input: T) => Effect.Effect<A, E>,
-    statusRef: SubscriptionRef.SubscriptionRef<RunGateStatus>,
+    statusRef: SubscriptionRef.SubscriptionRef<GateStatus>,
     store: GateStoreContext,
     runSeqRef: Ref.Ref<number>,
     concurrency: number,
-  ): RunGateRun<T, A, E> => {
+  ): GateRunFn<T, A, E> => {
   const publishStatus = (
     update: (typeof runStatusTransitions)[keyof typeof runStatusTransitions]["update"],
     reason: GateStateChangeReason,
@@ -310,7 +310,7 @@ const makeObservedRun =
     );
   };
 
-  return ((input?: T) => runBody(input as T)) as RunGateRun<T, A, E>;
+  return ((input?: T) => runBody(input as T)) as GateRunFn<T, A, E>;
 };
 
 /**
@@ -318,9 +318,9 @@ const makeObservedRun =
  *
  * @internal
  */
-export const makeRunGateHandleEffect = <T, A, E>(
+export const makeGateRunHandleEffect = <T, A, E>(
   config: GateConfig<T, A, E>,
-): Effect.Effect<RunGateHandle<T, A, E>, never, Store.Storage> =>
+): Effect.Effect<GateRunHandle<T, A, E>, never, Store.Storage> =>
   Effect.map(makeGateHandleEffect(config), (handle) => ({
     run: handle.run,
   }));
