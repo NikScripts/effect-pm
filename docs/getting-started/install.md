@@ -44,6 +44,7 @@ point** — nothing here is needed for core Hyperlink work.
 |-------|--------------|
 | `/web` Web dashboard | `react`, `react-dom`, `recharts`, `@tanstack/react-table` |
 | `/tui` Terminal dashboard | `react`, `ink` |
+| `/ui` Shared dashboard core | pulled in by `/web` / `/tui` — no extra install if you only use those |
 
 Install them the same way — for the full web dashboard:
 
@@ -58,7 +59,8 @@ Each area is a tree-shakeable subpath under `hyperlink-ts/*` — import only wha
 - **`/Hyperlink`** — build your own Hyperlink Service
 - **`/WorkPool`**, **`/Daemon`**, **`/Gate`**, **`/ShardMap`** — included Hyperlink Services
 - **`/Store`** — durable storage
-- **`/web`**, **`/tui`**, **`/cli`** — dashboards
+- **`/ui`** — shared dashboard core (data, routing, atoms) used by web and TUI
+- **`/web`**, **`/tui`**, **`/cli`** — web dashboard, terminal dashboard, CLI
 - **`hyperlink-ts`** — the barrel: everything under short names
 
 ## TypeScript
@@ -108,30 +110,33 @@ are several, because the right rules for Effect-domain code are not the right ru
 **What hyperlink-ts's own source enforces.** Effect language-service diagnostics are `error` by
 default — including `anyUnknownInErrorContext`, `missingLayerContext`, and `effectDoNotation`.
 `serviceNotAsClass` is also `error`; the only allowed silence is a next-line off at a real
-`Context.Service` / `Context.Tag` **factory**. `strictEffectProvide` is `message` in both typecheck
-projects: it still surfaces in the editor / `tsc` output, but does not fail the build. So our source
-is held to Effect's idioms — no raw `Date` / `console` / `setTimeout` / `fetch` / `Math.random` /
-`process.env` reached for outside Effect, `Schema` over hand-rolled JSON, pipeables over nesting,
-typed error channels, and so on. `typecheck` actually runs **two** passes:
+`Context.Service` / `Context.Tag` **factory**. `strictEffectProvide` is `message` in both Effect-domain
+typecheck projects: it still surfaces in the editor / `tsc` output, but does not fail the build. So
+our Effect source is held to Effect's idioms — no raw `Date` / `console` / `setTimeout` / `fetch` /
+`Math.random` / `process.env` outside Effect, `Schema` over hand-rolled JSON, pipeables over nesting,
+typed error channels, and so on. `typecheck` runs several passes:
 
 | Config | Scope | Notes |
 |--------|-------|-------|
-| `tsconfig.json` | `src`, `test`, `examples` | full diagnostic set; `strictEffectProvide: message` |
-| `tsconfig.src.strict-effect-provide.json` | `src/**` only | same severities (incl. `strictEffectProvide: message`) |
+| `tsconfig.json` | `src`, `test`, `examples` (excludes UI trees) | full diagnostic set; `strictEffectProvide: message` |
+| `tsconfig.src.strict-effect-provide.json` | Effect-domain `src/**` | same severities |
+| `src/ui/tsconfig.json` | shared dashboard core | relaxed Effect-purity rules |
+| `src/web/tsconfig.json` | web dashboard (+ `src/ui`) | relaxed Effect-purity rules |
+| `src/tui/tsconfig.json` | terminal dashboard | relaxed Effect-purity rules |
 
-**Browser / React code is a different ruleset.** A handful of these rules assume Effect-domain code
-and are wrong for a browser/React layer, where raw `Date.now()`, `console`, `setTimeout`, `fetch` and
-`async` event handlers *are* the correct primitives: `globalDate`, `globalConsole`, `globalTimers`,
-`globalFetch`, `globalRandom`, `asyncFunction`. So our own `src/web` dashboard (and each React example
-app) lives under its **own `tsconfig`** with those turned off — the `@effect/language-service` plugin is
-configured **per `tsconfig`**, not per glob. The root config excludes `src/web`, and the browser config
-is wired into `typecheck` and into the `web` bundle's declaration build, so UI code is checked under the
-relaxed rules end-to-end with no inline exemptions.
+**UI / React code is a different ruleset.** A handful of Effect rules assume Effect-domain code and
+are wrong for a UI layer, where raw `Date.now()`, `console`, `setTimeout`, `fetch` and `async` event
+handlers *are* the correct primitives (`globalDate`, `globalConsole`, `globalTimers`, `globalFetch`,
+`globalRandom`, `asyncFunction`, plus `newPromise` / `nodeBuiltinImport` where the UI tsconfigs turn
+them off). Shared dashboard logic lives under **`src/ui`**; the **`src/web`** and **`src/tui`**
+shells each have their own `tsconfig` with that relaxed plugin config. The root config **excludes**
+`src/ui/**`, `src/web/**`, and `src/tui/**` so the editor and `typecheck` resolve those trees to the
+UI configs. Declaration builds for the UI entries point at those configs too (see `tsup.config.ts`).
 
 {.note}
 A bundler build (`tsup`/Vite) doesn't mind the split — it compiles from an entry, not the config's
-`include`. The one wrinkle: tsup's `.d.ts` step runs the plugin too, so the `web` entry's declaration
-build is pointed at the browser `tsconfig` (see `tsup.config.ts`), not the strict root.
+`include`. The wrinkle: tsup's `.d.ts` step runs the plugin too, so each UI entry's declaration build
+is pointed at the matching UI `tsconfig`, not the strict root.
 
 The same layer also gets a **React ESLint ruleset** — `eslint-plugin-react` + `eslint-plugin-react-hooks`
 (`rules-of-hooks` / `exhaustive-deps`) with browser globals — scoped to `src/web` and `src/tui`, since
