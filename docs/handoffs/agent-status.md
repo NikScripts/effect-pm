@@ -6,7 +6,7 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **4** | `cursor/beta0-release-prep-125f` | beta.0 release prep (changelog · kill `clientHttp` · `HYPERLINK_CLIENT_HOST`) | **ready** — Eng green; on `integration` tip | same tip as `integration` | typecheck / lint / test / markers green | Owner still: publish, `effect-hyperlink` keep/unpublish, docs domain | 2026-07-24 |
+| **4** | `cursor/beta0-release-prep-125f` | beta.0 release prep + final docs/README touch | **ready** — Eng green; on `integration` tip | same tip as `integration` | typecheck / lint / markers / build green | Owner still: publish, `effect-hyperlink` keep/unpublish, docs domain | 2026-07-24 |
 | **1** | `cursor/docs-corpus-phase3-ce05` | [Examples book](./agent-01-examples-book.md) · [Phase 3](./agent-01-docs-corpus-phase3-plan.md) | **E1 in flight** — Examples hub + queue Twoslash pairs | branch tip | hub + 2 queue docs | **Next:** E2 forms/resource pairs | 2026-07-15 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
 | **3** | `cursor/logs-store-followers-plan-906e` | [identity-coordinator](./identity-coordinator.md) · [loud-failures](./loud-failures-design.md) | **idle** — Soft / default-on verify / F4 / lineId memo Eng’d | same tip as `integration` | typecheck + targeted suites green | Ready for next major | 2026-07-21 |
