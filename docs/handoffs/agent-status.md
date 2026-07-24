@@ -30,10 +30,10 @@
 4. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
 
 ### Ready / owner calls
-4. **Node catalog + identity lookup** — design [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md); Phase-2–3 catalog/directory/**D3**/**D4**/**D7**/`Node.Prototype` Eng on tip; **`askIncumbent` Eng’d**; **X1 Eng’d**; **managers → [`identity-coordinator.md`](./identity-coordinator.md) M4–M6 Eng’d** (v1 complete)
-5. Store-layer `(scopeKey, lineId)` memo — **Eng’d**
-6. Fail-loud Soft when AppStore lacks engine registration — **Eng’d**
-7. `main` merge + `pnpm run version` — still deferred
+5. **Node catalog + identity lookup** — design [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md); Phase-2–3 catalog/directory/**D3**/**D4**/**D7**/`Node.Prototype` Eng on tip; **`askIncumbent` Eng’d**; **X1 Eng’d**; **managers → [`identity-coordinator.md`](./identity-coordinator.md) M4–M6 Eng’d** (v1 complete)
+6. Store-layer `(scopeKey, lineId)` memo — **Eng’d**
+7. Fail-loud Soft when AppStore lacks engine registration — **Eng’d**
+8. `main` merge + `pnpm run version` — still deferred
 
 ### Done prior (Agent 3)
 - [#62](https://github.com/NikScripts/effect-pm/pull/62) Soft bake+override (`withDefaultStorage`) — **merged**
