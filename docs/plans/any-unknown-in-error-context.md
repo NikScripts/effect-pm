@@ -4,10 +4,10 @@
 no channel casts, no rule disables except `serviceNotAsClass` at Service/Tag factories.
 
 **Critique follow-through:** Gate / Daemon public `serve` / `serveRemote` no longer use `as any`;
-memory aliases are identity; WorkPool.`serveRemote` uses a short factory-retype bridge (not nested
-erase soup). `Hyperlink.serveRemote` keeps plain-impl `ServeRequirements` inference; Driver `R` is
-retyped at toolkit call sites (open-`S` Driver overloads hit TS2589). Remaining honest erase:
-`RpcGroup.toLayer` + wire `provideContext` inside Hyperlink, D1 server factories.
+memory aliases are identity. **`Hyperlink.serveRemoteDriver`** is the typed Driver mount (preserves
+worker `R`); plain `serveRemote` keeps `ServeRequirements` inference — toolkit call sites call the
+Driver API directly (no factory retype). Remaining honest erase: shared `serveRemoteHandlers`
+(`RpcGroup.toLayer`), wire `provideContext`, D1 server factories.
 
 ## Locked product invariant
 
