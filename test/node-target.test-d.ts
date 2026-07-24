@@ -1,5 +1,5 @@
 /**
- * Type tests for the {@link Node.Tag} address overload — mirrors clientHttp's `target`:
+ * Type tests for the {@link Node.Tag} address overload — mirrors dial `target`:
  * a port, a `":port"`, a full url, an explicit `{ url }`, or nothing.
  * Dialable targets narrow to {@link Node.AddressedNode} with precise `kind`.
  */

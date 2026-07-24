@@ -25,16 +25,15 @@ codebase does not use `@param` / `@returns`; they duplicate the types and rot as
 
 ``` ts
 /**
- * Wire a served resource `tag` to a remote over http and get a ready client `Layer` — {@link client}
- * plus the batteries-included transport, bundled. `target` is a port (`3009` → `localhost:3009/rpc`)
- * for a runtime on the same machine, or a full url for one across the network.
+ * Dial a resource `tag` over a transport you provide — no batteries. Pass
+ * {@link protocolHttp} / {@link protocolWebsocket} / {@link protocolIpc}.
  *
  * @example
- * Effect.provide(program, Hyperlink.clientHttp(Emails, 3001))
+ * Effect.provide(program, Hyperlink.connect(Emails, Hyperlink.protocolHttp(3001)))
  *
  * @public
  */
-export const clientHttp = /* … */
+export const connect = /* … */
 ```
 
 {#example-must-be-real .must appliesTo="src examples"}

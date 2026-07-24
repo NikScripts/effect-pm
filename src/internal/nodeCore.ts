@@ -312,7 +312,7 @@ export type NamelessListenOptions = ListenOptions;
  * {@link resolveHttpTarget} / a positional `Node.Tag()(name, badString)` got a string that is
  * neither a port (`":3009"`), a port number, nor an `http(s)://` url. Surfaces on the
  * **Layer / Effect error channel** (same precedent as {@link UnaddressedNode}) — never a
- * sync throw. Catch via `Exit` / `CatchTag` when building `clientHttp` or derived `connect`.
+ * sync throw. Catch via `Exit` / `CatchTag` when building `connect` / protocol derivation.
  *
  * @category errors
  * @public
@@ -349,7 +349,7 @@ export const invalidHttpTargetOf = (
 };
 
 /**
- * Resolve a {@link clientHttp} / positional Tag target to an RPC url.
+ * Resolve a positional Tag / dial target to an RPC url.
  * Port (`3009` / `":3009"`) → `http://localhost:3009/rpc`; `http(s)://…` as-is;
  * anything else → {@link InvalidHttpTarget} (Failure). Pure — no throw.
  *
@@ -659,7 +659,7 @@ const isNodeTagValue = <Self, ROut, Addr>(
  * class MailWorker extends Node.Prototype<MailWorker, Mail>("app/MailWorker") {}
  * ```
  *
- * The `key` is the service key. The optional address matches {@link clientHttp}'s `target`: a **port**
+ * The `key` is the service key. The optional address matches a dial `target`: a **port**
  * (`3001` or `":3001"` → `http://localhost:3001/rpc`), a full **url** (used as-is), `{ url, kind }` for
  * an explicit endpoint, `{ path }` for a **Unix-domain** socket (`kind: "IpcSocket"`), or the
  * `{ http, ws, ipc }` multi-protocol shorthand. The node carries {@link ProtocolKind} so the topology
@@ -759,9 +759,9 @@ export const Tag = <Self, ROut = never>() => {
     | UrlAddressLoose
     | MultiAddress<ProtocolKind>
   > {
-  // matches clientHttp's target: a port / ":port" / url resolves to an /rpc url; an explicit
+  // matches dial target: a port / ":port" / url resolves to an /rpc url; an explicit
   // `{ url }` is used verbatim. IPC nodes omit `url`. Bad positional strings do **not** throw —
-  // stamp {@link InvalidHttpTarget} and leave the node unaddressed (fail on connect / clientHttp).
+  // stamp {@link InvalidHttpTarget} and leave the node unaddressed (fail on connect).
   let httpPort: number | undefined;
   let url: string | undefined;
   let path: string | undefined;
