@@ -77,12 +77,12 @@ const scheduler = Daemon.layer(Digest, {
     yield* emails.add(email)
   }),
   polling: Polling.spaced(Duration.hours(1)),
-}).pipe(Layer.provide(Hyperlink.discoverClient(Emails)))
+}).pipe(Layer.provide(Hyperlink.unix(Emails)))
 ```
 
 `Digest` runs on the scheduler, `Emails` on the worker — yet `emails.add(…)` looks like one process.
-**Two HyperServices, two runtimes, one program.** (When you already have a named Node,
-`Node.unix(Worker, …)` pairs with `Hyperlink.unix(Worker)`.)
+**Two HyperServices, two runtimes, one program.** (Named Node: `Node.unix(Worker, …)` pairs with
+`Hyperlink.unix(Worker)`; nameless: `Node.unix([serve…])` pairs with `Hyperlink.unix(Tag)`.)
 
 When you need another machine (or a browser), step up to HTTP. `Node.httpServer` pairs with whatever
 HTTP server your runtime provides — extract that once; later examples use `nodeServer`:

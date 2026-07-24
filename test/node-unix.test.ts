@@ -44,7 +44,7 @@ describe("Node.unix", () => {
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
   );
 
-  it.effect("nameless serve — ipc + Lookup; discoverClient dials", () =>
+  it.effect("nameless serve — ipc + Lookup; Hyperlink.unix(tag) dials", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("lookup");
       const serverCtx = yield* Layer.build(
@@ -55,7 +55,7 @@ describe("Node.unix", () => {
         ),
       );
       const clientCtx = yield* Layer.build(
-        Hyperlink.discoverClient(JobsAnon, { lookupPath, unlink: false }),
+        Hyperlink.unix(JobsAnon, { lookupPath, unlink: false }),
       );
       const n = yield* Effect.gen(function* () {
         const jobs = yield* JobsAnon;

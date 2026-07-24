@@ -27,7 +27,7 @@ const jobsImpl = { jobs: Effect.succeed(11) };
 const emailsImpl = { emails: Effect.succeed("ok") };
 
 describe("Node.unix nameless", () => {
-  it.effect("mints address-less node + Lookup; discoverClient dials", () =>
+  it.effect("mints address-less node + Lookup; Hyperlink.unix(tag) dials", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("lookup");
       const serverCtx = yield* Layer.build(
@@ -38,7 +38,7 @@ describe("Node.unix nameless", () => {
         ),
       );
       const clientCtx = yield* Layer.build(
-        Hyperlink.discoverClient(Jobs, { lookupPath, unlink: false }),
+        Hyperlink.unix(Jobs, { lookupPath, unlink: false }),
       );
 
       const n = yield* Effect.gen(function* () {
@@ -64,7 +64,7 @@ describe("Node.unix nameless", () => {
         ),
       );
       const clientCtx = yield* Layer.build(
-        Hyperlink.discoverClient(Jobs, { lookupPath, unlink: false }),
+        Hyperlink.unix(Jobs, { lookupPath, unlink: false }),
       );
       const n = yield* Effect.gen(function* () {
         const jobs = yield* Jobs;

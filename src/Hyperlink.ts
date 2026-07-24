@@ -4250,19 +4250,19 @@ bindNodeProtocolBuilders({
 // [extracted to Node module — was Hyperlink.ts:4539-4649]
 
 /**
- * Per-node ipc shortcut — {@link connect} + {@link protocolIpc} (same-machine Unix socket).
+ * Per-node ipc dial — {@link connect} + {@link protocolIpc}. Shared by {@link unix}`(node)` and
+ * {@link nPipe}. Tag / Lookup discovery is the other {@link unix} overload (defined with
+ * {@link DiscoverClientOptions} below).
  *
- * @category clients
- * @public
+ * @internal
  */
-const unix = <Self>(
+const unixNodeDial = <Self>(
   node: NodeKey<Self> & { readonly path?: string; readonly endpoints?: Endpoints },
   options?: {
     readonly path?: string;
     readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
   },
 ): Layer.Layer<Self, UnaddressedNode> => {
-  // The client sibling of {@link Node.unix} — dial a Unix-domain ipc path.
   const sock = options?.path ?? node.endpoints?.IpcSocket?.path ?? node.path;
   if (sock === undefined) {
     return unaddressedLayer(node.key);
@@ -4271,8 +4271,8 @@ const unix = <Self>(
 };
 
 /** Dial a {@link Node} over a **Windows named pipe** — the client sibling of {@link Node.nPipe}.
- *  Same ipc dial as {@link unix} (the `path` is a `\\.\pipe\…` name). @public @category clients */
-const nPipe = unix;
+ *  Same ipc dial as {@link unix}`(node)` (the `path` is a `\\.\pipe\…` name). @public @category clients */
+const nPipe = unixNodeDial;
 
 // [extracted to Node module — was Hyperlink.ts:4669-4685]
 
@@ -4972,8 +4972,8 @@ export const lookupClient = <Self, S extends Spec>(
   >;
 
 /**
- * Options for {@link discoverClient} / {@link discoverClients} — Lookup soft-pick
- * plus default-lookup bootstrap knobs.
+ * Options for {@link unix}`(tag)` / {@link discoverClients} — Lookup soft-pick plus
+ * default-lookup bootstrap knobs (`lookupPath`, `unlink`).
  *
  * @category models
  * @public
@@ -4983,19 +4983,18 @@ export type DiscoverClientOptions = LookupClientOptions & {
   readonly unlink?: boolean;
 };
 
+/** True when `u` is a Hyperlink resource Tag (`specSym`), not a {@link Node}. @internal */
+const isUnixDiscoverTag = (u: unknown): u is HyperlinkTag<any, any> =>
+  (typeof u === "object" || typeof u === "function") &&
+  u !== null &&
+  specSym in u;
+
 /**
- * Sugar: {@link lookupClient} + {@link Lookup.layer} / {@link Lookup.layerOptions} —
- * discover an endpoint for `tag` via Lookup (identity, then directory) and dial it.
- * Not Effect “local” vs remote; name is **discover**.
+ * Lookup bootstrap + {@link lookupClient} for one tag — body of {@link unix}`(tag)`.
  *
- * ```ts
- * Hyperlink.discoverClient(Jobs, { lookupPath })
- * ```
- *
- * @category clients
- * @public
+ * @internal
  */
-export const discoverClient = <Self, S extends Spec>(
+const unixDiscoverDial = <Self, S extends Spec>(
   tag: HyperlinkTag<Self, S>,
   options?: DiscoverClientOptions,
 ): Layer.Layer<Self, LookupClientError> => {
@@ -5018,6 +5017,55 @@ export const discoverClient = <Self, S extends Spec>(
   ) as Layer.Layer<Self, LookupClientError>;
 };
 
+/**
+ * Same-machine ipc client — sibling of {@link Node.unix}.
+ *
+ * - **`unix(node)`** — dial that Node’s Unix-domain path (`connect` + {@link protocolIpc}).
+ * - **`unix(tag)`** — nameless / Lookup path: soft-bake Lookup, resolve an endpoint for `tag`,
+ *   and dial it (identity, then directory). Pairs with nameless {@link Node.unix}`([serve…])`.
+ *
+ * ```ts
+ * // Named node you already addressed:
+ * Hyperlink.unix(Worker)
+ *
+ * // Nameless serve advertised via Lookup:
+ * Hyperlink.unix(Emails)
+ * Hyperlink.unix(Jobs, { lookupPath, pick: "first" })
+ * ```
+ *
+ * @category clients
+ * @public
+ */
+function unix<Self, S extends Spec>(
+  tag: HyperlinkTag<Self, S>,
+  options?: DiscoverClientOptions,
+): Layer.Layer<Self, LookupClientError>;
+function unix<Self>(
+  node: NodeKey<Self> & { readonly path?: string; readonly endpoints?: Endpoints },
+  options?: {
+    readonly path?: string;
+    readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
+  },
+): Layer.Layer<Self, UnaddressedNode>;
+function unix(
+  tagOrNode: unknown,
+  options?: DiscoverClientOptions & {
+    readonly path?: string;
+    readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
+  },
+): Layer.Layer<unknown, LookupClientError | UnaddressedNode> {
+  if (isUnixDiscoverTag(tagOrNode)) {
+    return unixDiscoverDial(tagOrNode, options);
+  }
+  return unixNodeDial(
+    tagOrNode as NodeKey<unknown> & {
+      readonly path?: string;
+      readonly endpoints?: Endpoints;
+    },
+    options,
+  );
+}
+
 /** Non-empty tag list for {@link discoverClients}. @internal */
 type DiscoverTagList = readonly [
   PipeableTag,
@@ -5037,7 +5085,7 @@ const isDiscoverTagList = (value: unknown): value is DiscoverTagList =>
   );
 
 /**
- * {@link discoverClient} for many tags — one Lookup bootstrap, then
+ * {@link unix}`(tag)` for many tags — one Lookup bootstrap, then
  * {@link Layer.mergeAll} of each {@link lookupClient}.
  *
  * Options (`lookupPath`, `pick`, …) ride the **array** form; rest uses Lookup defaults.
@@ -5519,7 +5567,7 @@ const buildClientService = <Self, S extends Spec>(
  *   dialable: auto-wires connect (`R = never`). Bare bound nodes still require the node service.
  * - **nodeless tag + {@link AddressedNode}** — `client(tag, Worker)` same auto-connect gate.
  * - **bare node** — `client(tag, Bare)` / bare-bound `client(Hosted)` still require the node;
- *   provide {@link Node.connect}`(Bare, protocol)` (or lookup / discoverClient) yourself.
+ *   provide {@link Node.connect}`(Bare, protocol)` (or lookup / {@link unix}`(tag)`) yourself.
  * - **nodeless tag, ambient transport** — ambient `RpcClient.Protocol`.
  *
  * @category clients
