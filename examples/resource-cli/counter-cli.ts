@@ -45,4 +45,4 @@ const program = Command.runWith(cli, { version: "0.0.0" })(
 
 // Boundary: the command's requirement is loose (it's built from a dynamic record
 // of tags); the resource + node layers above fully provide it at run time.
-NodeRuntime.runMain(program as Effect.Effect<void, unknown>);
+NodeRuntime.runMain(program as Effect.Effect<void, never, never>);

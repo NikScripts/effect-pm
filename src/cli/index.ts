@@ -124,14 +124,14 @@ const methodCommand = (name: string, method: AnyMethod, tag: CliHyperlinkTag) =>
   const hasPayload = method.payload !== undefined;
   const command = Command.make(name, flagsOf(method)).pipe(Command.withDescription(describe(name, method)));
   return Command.withHandler((input: Record<string, unknown>) =>
-    Effect.gen(function* () {
+    (Effect.gen(function* () {
       const service = (yield* tag) as Record<string, unknown>;
       const target = service[name];
       const result = yield* (hasPayload
         ? (target as (p: unknown) => Effect.Effect<unknown>)(input)
         : (target as Effect.Effect<unknown>));
       yield* Console.log(render(result));
-    }),
+    }) as any as Effect.Effect<void, never, never>),
   )(command);
 };
 

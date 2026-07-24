@@ -120,5 +120,5 @@ it("enqueue round-trips a full entry (item + metadata) over real http", () => {
       Effect.scoped,
     );
   }).pipe(Effect.provide(HttpQueueServer), Effect.scoped);
-  return Effect.runPromise(program as Effect.Effect<void, unknown, never>);
+  return Effect.runPromise(program as Effect.Effect<void, never, never>);
 });

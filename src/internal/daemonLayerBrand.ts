@@ -25,9 +25,13 @@ export const registerScheduleLayer = <I, E, R>(
 };
 
 /** @internal */
-export const isPollingLayer = (u: unknown): u is Layer.Layer<PollingTag, never, never> =>
-  Layer.isLayer(u) && pollingLayerRegistry.has(u);
+export const isPollingLayer = (u: unknown): u is Layer.Layer<PollingTag, never, never> => {
+  const isLayer = (Layer.isLayer as any)(u) as boolean;
+  return isLayer && pollingLayerRegistry.has(u as object);
+};
 
 /** @internal */
-export const isScheduleLayer = (u: unknown): u is Layer.Layer<DaemonScheduleTag, never, never> =>
-  Layer.isLayer(u) && scheduleLayerRegistry.has(u);
+export const isScheduleLayer = (u: unknown): u is Layer.Layer<DaemonScheduleTag, never, never> => {
+  const isLayer = (Layer.isLayer as any)(u) as boolean;
+  return isLayer && scheduleLayerRegistry.has(u as object);
+};

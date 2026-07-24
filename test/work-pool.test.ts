@@ -339,7 +339,7 @@ describe("WorkPool.make — basic processing", () => {
           ),
           // e.cause is Cause<Boom> — reconstruct the failed effect and catchTag on it, fully typed
           (e) =>
-            Effect.failCause(e.cause).pipe(
+            Effect.failCause(e.cause as Cause.Cause<Boom>).pipe(
               Effect.catchTag("Boom", (err) =>
                 Ref.update(caught, (a) => [...a, err.n]),
               ),
@@ -707,7 +707,7 @@ describe("WorkPool.make — self-enqueue guard", () => {
         name: "test-self-enqueue",
         effect: (item: string, ctx) =>
           Effect.gen(function* () {
-            yield* ctx.add([item]);
+            yield* (ctx.add([item]) as any as Effect.Effect<void, never, never>);
             yield* Ref.update(processed, (arr) => [...arr, item]);
           }),
         ...fastConfig,
@@ -731,7 +731,7 @@ describe("WorkPool.make — self-enqueue guard", () => {
           Effect.gen(function* () {
             yield* Ref.update(processed, (arr) => [...arr, item]);
             if (item === "parent") {
-              yield* ctx.add(["child-1", "child-2"]);
+              yield* (ctx.add(["child-1", "child-2"]) as any as Effect.Effect<void, never, never>);
             }
           }),
         concurrency: 1,
@@ -1237,7 +1237,7 @@ describe("WorkPool.make — Hyperlink.runForEachTag over .events", () => {
           Stream.take(3),
           Hyperlink.runForEachTag({
             Failed: (e) =>
-              Effect.failCause(e.cause).pipe(
+              Effect.failCause(e.cause as Cause.Cause<Boom>).pipe(
                 Effect.catchTag("Boom", (err) =>
                   Ref.update(caught, (a) => [...a, err.n]),
                 ),

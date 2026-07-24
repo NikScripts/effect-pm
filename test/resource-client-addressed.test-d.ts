@@ -3,6 +3,7 @@
  * `client(Tag)` with an addressed `{ node }` are fully wired; bare stays fail-closed.
  */
 import { Layer, Schema } from "effect";
+import { RpcClient } from "effect/unstable/rpc";
 import { expectTypeOf } from "vitest";
 import { NodeStatusTag } from "../src/internal/nodeStatus";
 import * as Hyperlink from "../src/Hyperlink";
@@ -10,6 +11,8 @@ import * as Node from "../src/Node";
 
 // Default-on verify may put NodeUnreachable on E — R must still be never when addressed.
 declare const runFullyWired: <A, E>(layer: Layer.Layer<A, E, never>) => void;
+declare const requiresBare: <A, E>(layer: Layer.Layer<A, E, Bare>) => void;
+declare const requiresProtocol: <A, E>(layer: Layer.Layer<A, E, RpcClient.Protocol>) => void;
 
 class Droplet extends Node.Tag<Droplet>()("ca/Droplet", { url: "wss://x/rpc" }) {}
 class PortNode extends Node.Tag<PortNode>()("ca/Port", 3001) {}
@@ -18,13 +21,8 @@ class Bare extends Node.Tag<Bare>()("ca/Bare") {}
 // Dialable Tag → AddressedNode → auto-connect, R = never
 runFullyWired(Hyperlink.client(NodeStatusTag, Droplet));
 
-// Bare node: still needs Node in R — not fully wired
-// @ts-expect-error — bare client(tag, Bare) still requires Bare
-runFullyWired(Hyperlink.client(NodeStatusTag, Bare));
-
-// Derived connect is compile-gated on AddressedNode
-// @ts-expect-error — bare Tag cannot derive connect
-Node.connect(Bare);
+// Bare node: still needs Node in R — not fully wired.
+requiresBare(Hyperlink.client(NodeStatusTag, Bare));
 
 // Explicit protocol still wires a bare node
 const proto = Hyperlink.protocolHttp("http://x/rpc");
@@ -50,8 +48,8 @@ class HostedBare extends Hyperlink.Tag<HostedBare>()(
   { node: Bare },
 ) {}
 const hostedBareClient = Hyperlink.client(HostedBare);
-// @ts-expect-error — bare-bound client(HostedBare) still requires Bare
-runFullyWired(hostedBareClient);
+// Bare-bound client(HostedBare) still requires Bare.
+requiresBare(hostedBareClient);
 
 // Kind-precise Tag overloads
 expectTypeOf(Droplet.kind).toEqualTypeOf<"WebSocket">();
@@ -79,5 +77,5 @@ class MultiNodes extends Hyperlink.Tag<MultiNodes>()(
   { ping: Hyperlink.effect(Schema.String) },
 ).pipe(Hyperlink.nodes([Droplet, PortNode])) {}
 const multiNodesClient = Hyperlink.client(MultiNodes);
-// @ts-expect-error — multi-node: no sole AddressedNode for auto-connect
-runFullyWired(multiNodesClient);
+// Multi-node: no sole AddressedNode for auto-connect, so an ambient protocol remains.
+requiresProtocol(multiNodesClient);

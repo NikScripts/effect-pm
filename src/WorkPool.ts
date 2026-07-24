@@ -2016,26 +2016,31 @@ export function serveRemote<
   config: PriorityLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ): Layer.Layer<HandlerContextOf<PriorityInstanceSpec<F>>, never, R | RR>;
 export function serveRemote(tag: AnyPoolTag, config: unknown): Layer.Layer<unknown, never, unknown> {
-  return isPriorityTag(tag)
-    ? withDefaultMemory(
-        Layer.unwrap(
-          Effect.map(
-            buildPriorityImpl(
-              tag,
-              config as PriorityLayerConfig<Schema.Struct<PriorityItemFields>["Type"], never, never, never>,
-            ),
-            (built) => Hyperlink.serveRemote(tag, built as never) as Layer.Layer<unknown, never, unknown>,
-          ),
-        ) as Layer.Layer<unknown, never, unknown>,
-      )
-    : withDefaultMemory(
-        Layer.unwrap(
-          Effect.map(
-            buildQueueImpl(tag, config as QueueVerbConfig<QueueItemFields, unknown, never, never, Schema.Top>),
-            (built) => Hyperlink.serveRemote(tag, built as never) as Layer.Layer<unknown, never, unknown>,
-          ),
-        ) as Layer.Layer<unknown, never, unknown>,
-      );
+  if (isPriorityTag(tag)) {
+    const layer = Layer.unwrap(
+      Effect.map(
+        buildPriorityImpl(
+          tag,
+          config as PriorityLayerConfig<Schema.Struct<PriorityItemFields>["Type"], never, never, never>,
+        ),
+        (built) => {
+          const served = Hyperlink.serveRemote(tag, built as never) as any;
+          return served;
+        },
+      ) as any,
+    ) as any;
+    return withDefaultMemory(layer) as any;
+  }
+  const layer = Layer.unwrap(
+    Effect.map(
+      buildQueueImpl(tag, config as QueueVerbConfig<QueueItemFields, unknown, never, never, Schema.Top>),
+      (built) => {
+        const served = Hyperlink.serveRemote(tag, built as never) as any;
+        return served;
+      },
+    ) as any,
+  ) as any;
+  return withDefaultMemory(layer) as any;
 }
 
 /**

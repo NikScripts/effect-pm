@@ -70,7 +70,7 @@ it("streams a resource's changes over real http (chunked, in order)", () => {
       Effect.scoped,
     );
   }).pipe(Effect.provide(TickerServer), Effect.scoped);
-  return Effect.runPromise(program as Effect.Effect<void, unknown>);
+  return Effect.runPromise(program as Effect.Effect<void, never, never>);
 });
 
 // The real use case: a live status source backed by a `SubscriptionRef` — the impl pattern a
@@ -128,7 +128,7 @@ it("streams the queue status snapshot over real http", () => {
       Effect.scoped,
     );
   }).pipe(Effect.provide(QueueWatchServer), Effect.scoped);
-  return Effect.runPromise(program as Effect.Effect<void, unknown>);
+  return Effect.runPromise(program as Effect.Effect<void, never, never>);
 });
 
 it("a SubscriptionRef-backed `changes` drives live status updates", () => {

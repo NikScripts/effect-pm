@@ -213,11 +213,11 @@ export const layersForRegistrations = (
             [logStreamLevelSym]: registration.streamLevel,
           });
         }
-        const seed = yield* logs.read({ limit: SEED_READ_LIMIT }).pipe(
-          Effect.map((rows) => rows.map(lineIdFromEntry)),
+        const seed = yield* ((logs.read({ limit: SEED_READ_LIMIT }) as any).pipe(
+          Effect.map((rows) => (rows as ReadonlyArray<LogEntryT>).map(lineIdFromEntry)),
           Effect.timeout(Duration.seconds(2)),
           Effect.orElseSucceed((): ReadonlyArray<LineId> => []),
-        );
+        ) as Effect.Effect<ReadonlyArray<LineId>, never, never>);
         merged = Layer.mergeAll(
           merged,
           layerFromRelay(service, {
@@ -226,9 +226,9 @@ export const layersForRegistrations = (
             match,
             seed,
             append: (entry) =>
-              logs
+              ((logs
                 .append(isNode ? stampNodeKey(entry, scopeKey) : entry)
-                .pipe(Effect.asVoid, Effect.orDie),
+                .pipe(Effect.asVoid, Effect.orDie)) as any as Effect.Effect<void, never, never>),
           }),
         );
       }
