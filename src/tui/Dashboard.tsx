@@ -24,9 +24,14 @@ import { nodeOf } from "../Hyperlink";
 import {
   daemonBundle,
   daemonLeaves,
+  isApiTag,
   isDaemonTag,
+  isFleetHealthTag,
+  isGateTag,
   isPriorityTag,
   isQueueTag,
+  isShardMapTag,
+  isTelemetryTag,
   priorityBundle,
   queueBundle,
   queueLeaves,
@@ -39,18 +44,19 @@ import {
 } from "../ui/data";
 import { memberKindOf } from "../ui/memberKind";
 import { RegistryProvider, useAtomSet, useAtomValue } from "../ui/atom-react";
-
-// Same seam as `web/runtime`: React context can't be generic over the consumer's `R`.
-type AnyRuntime = Atom.AtomRuntime<any, any>;
-const RuntimeContext = React.createContext<AnyRuntime | null>(null);
-const useRuntime = (): AnyRuntime => {
-  const runtime = React.useContext(RuntimeContext);
-  if (runtime === null) {
-    throw new Error("TUI Dashboard widgets require <Dashboard runtime={…} />");
-  }
-  return runtime;
-};
 import { spark } from "./chrome";
+import {
+  ApiCell,
+  FleetHealthCell,
+  FocusedApi,
+  FocusedFleetHealth,
+  FocusedGate,
+  FocusedShardMap,
+  FocusedTelemetry,
+  GateCell,
+  ShardMapCell,
+  TelemetryCell,
+} from "./kindCells";
 import {
   bar,
   BLANK_BORDER,
@@ -65,6 +71,17 @@ import {
   type View,
 } from "./queueWidget";
 import { useGroupRoute } from "./useGroupRoute";
+
+// Same seam as `web/runtime`: React context can't be generic over the consumer's `R`.
+type AnyRuntime = Atom.AtomRuntime<any, any>;
+const RuntimeContext = React.createContext<AnyRuntime | null>(null);
+const useRuntime = (): AnyRuntime => {
+  const runtime = React.useContext(RuntimeContext);
+  if (runtime === null) {
+    throw new Error("TUI Dashboard widgets require <Dashboard runtime={…} />");
+  }
+  return runtime;
+};
 
 const CELL_HEIGHT = 7;
 const SYM: Record<Priority, { symbol: string; color: string }> = {
@@ -368,6 +385,7 @@ const Cell = (props: {
   readonly width: number;
   readonly selected: boolean;
 }): React.ReactElement => {
+  const runtime = useRuntime();
   switch (memberKindOf(props.member)) {
     case "group":
       return Group.isGroup(props.member) ? (
@@ -405,6 +423,66 @@ const Cell = (props: {
     case "priority":
       return isPriorityTag(props.member) ? (
         <PriorityCell
+          name={props.name}
+          tag={props.member}
+          width={props.width}
+          selected={props.selected}
+        />
+      ) : (
+        <FallbackCell name={props.name} width={props.width} selected={props.selected} />
+      );
+    case "gate":
+      return isGateTag(props.member) ? (
+        <GateCell
+          runtime={runtime}
+          name={props.name}
+          tag={props.member}
+          width={props.width}
+          selected={props.selected}
+        />
+      ) : (
+        <FallbackCell name={props.name} width={props.width} selected={props.selected} />
+      );
+    case "api":
+      return isApiTag(props.member) ? (
+        <ApiCell
+          runtime={runtime}
+          name={props.name}
+          tag={props.member}
+          width={props.width}
+          selected={props.selected}
+        />
+      ) : (
+        <FallbackCell name={props.name} width={props.width} selected={props.selected} />
+      );
+    case "fleetHealth":
+      return isFleetHealthTag(props.member) ? (
+        <FleetHealthCell
+          runtime={runtime}
+          name={props.name}
+          tag={props.member}
+          width={props.width}
+          selected={props.selected}
+        />
+      ) : (
+        <FallbackCell name={props.name} width={props.width} selected={props.selected} />
+      );
+    case "telemetry":
+      return isTelemetryTag(props.member) ? (
+        <TelemetryCell
+          runtime={runtime}
+          name={props.name}
+          tag={props.member}
+          width={props.width}
+          selected={props.selected}
+        />
+      ) : (
+        <FallbackCell name={props.name} width={props.width} selected={props.selected} />
+      );
+    case "shardMap":
+      return isShardMapTag(props.member) ? (
+        <ShardMapCell
+          runtime={runtime}
           name={props.name}
           tag={props.member}
           width={props.width}
@@ -1033,6 +1111,7 @@ const DashboardApp = (props: {
 
   const focused = route.selected;
   const focusName = route.keys[route.keys.length - 1] ?? displayName(idOf(focused));
+  const runtime = useRuntime();
   if (focused !== null) {
     if (isDaemonTag(focused)) {
       return (
@@ -1076,6 +1155,66 @@ const DashboardApp = (props: {
           cmd={cmd}
           barRows={barRows}
           bar={renderBar}
+        />
+      );
+    }
+    if (isGateTag(focused)) {
+      return (
+        <FocusedGate
+          key={focused.key}
+          runtime={runtime}
+          name={focusName}
+          tag={focused}
+          cols={cols}
+          rows={rows}
+        />
+      );
+    }
+    if (isApiTag(focused)) {
+      return (
+        <FocusedApi
+          key={focused.key}
+          runtime={runtime}
+          name={focusName}
+          tag={focused}
+          cols={cols}
+          rows={rows}
+        />
+      );
+    }
+    if (isFleetHealthTag(focused)) {
+      return (
+        <FocusedFleetHealth
+          key={focused.key}
+          runtime={runtime}
+          name={focusName}
+          tag={focused}
+          cols={cols}
+          rows={rows}
+        />
+      );
+    }
+    if (isTelemetryTag(focused)) {
+      return (
+        <FocusedTelemetry
+          key={focused.key}
+          runtime={runtime}
+          name={focusName}
+          tag={focused}
+          cols={cols}
+          rows={rows}
+        />
+      );
+    }
+    if (isShardMapTag(focused)) {
+      return (
+        <FocusedShardMap
+          key={focused.key}
+          runtime={runtime}
+          name={focusName}
+          tag={focused}
+          cols={cols}
+          rows={rows}
         />
       );
     }
