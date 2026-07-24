@@ -16,15 +16,15 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Layer } from "effect";
-import { Command } from "effect/unstable/cli";
+import * as Hyperlink from "../../src/Hyperlink";
 import { resources, resourcesLayer } from "./manager-resources";
-import { makeHyperlinkCli } from "../../src/cli";
 
-const cli = makeHyperlinkCli(resources, "hyperlink");
-
-const program = Command.runWith(cli, { version: "0.0.0" })(
-  process.argv.slice(2),
-).pipe(Effect.provide(Layer.mergeAll(resourcesLayer, NodeServices.layer)));
+const program = Hyperlink.cli(resources, {
+  name: "hyperlink",
+  version: "0.0.0",
+})(process.argv.slice(2)).pipe(
+  Effect.provide(Layer.mergeAll(resourcesLayer, NodeServices.layer)),
+);
 
 // Boundary: loose requirement from the dynamic record of tags; the layer above
 // fully provides it at run time.

@@ -5931,3 +5931,11 @@ export {
 // namespace: **`import * as Hyperlink from "hyperlink-ts/Hyperlink"`** — `Hyperlink.Tag`
 // pulls only what's used. Transport nodes: `import * as Node from "hyperlink-ts/Node"`.
 
+/**
+ * CLI + default-TUI control surface (`hyperlink-ts/cli`). Bare paths open the TUI when
+ * `hyperlink-ts/tui`'s `layer` is provided; full `<resource> <action>` paths run verbs.
+ *
+ * @public
+ */
+export { cli, Tui, TuiNotConfigured } from "./cli/index";
+

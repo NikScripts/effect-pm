@@ -37,7 +37,7 @@ of React/Ink/recharts.
 | `…/HistoryStore`, `…/DurableQueueStore` | history backfill + durable queue |
 | `…/ProcessStore`, `…/ProcessStorage`, `…/RuntimeStorage`, `…/Logs` | storage facets + structured logs |
 | `…/storage/sqlite` · `/redis` | durable storage backends |
-| **`…/cli`** | `makeHyperlinkCli`, `resourcesByName`, `render` — a run-and-exit CLI from your tags |
+| **`…/cli`** | `Hyperlink.cli` — CLI + default TUI from a Group or tag record |
 | **`…/tui`** | the reactive binding + terminal primitives for Ink dashboards |
 | **`…/web`** | React widgets + the reactive binding for browser dashboards — incl. the host **`HealthBoard`** (die → degraded resources + per-host cards) and `HyperlinkReadinessBanner` |
 
@@ -202,17 +202,18 @@ To run a resource **in-process** instead, provide its `.layer` (from `…/QueueC
 ### CLI (`…/cli`)
 
 ```ts
-import { Effect } from "effect";
-import { Command } from "effect/unstable/cli";
+import { Effect, Layer } from "effect";
 import { NodeRuntime, NodeServices } from "@effect/platform-node";
-import { makeHyperlinkCli, resourcesByName } from "hyperlink-ts/cli";
+import * as Hyperlink from "hyperlink-ts/Hyperlink";
+import { layer as tuiLayer } from "hyperlink-ts/tui";
 
-const cli = makeHyperlinkCli(resourcesByName([RosterQueue, SeasonMatches]), "hub");
-// hub RosterQueue status.get · hub RosterQueue pause · hub SeasonMatches start · hub ls
+// hub RosterQueue status.get · hub RosterQueue · hub ls (bare → TUI when tuiLayer provided)
 NodeRuntime.runMain(
-  Command.runWith(cli, { version: "0.0.0" })(process.argv.slice(2)).pipe(
-    Effect.provide(clients),
-    Effect.provide(NodeServices.layer),
+  Hyperlink.cli(
+    { RosterQueue, SeasonMatches },
+    { name: "hub", version: "0.0.0" },
+  )(process.argv.slice(2)).pipe(
+    Effect.provide(Layer.mergeAll(clients, tuiLayer, NodeServices.layer)),
   ) as Effect.Effect<void, unknown>,
 );
 ```

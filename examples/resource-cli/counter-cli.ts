@@ -8,14 +8,14 @@
  *   tsx examples/resource-cli/counter-cli.ts counter current
  *   tsx examples/resource-cli/counter-cli.ts counter increment --by 5
  *   tsx examples/resource-cli/counter-cli.ts --help
+ *
+ * Bare `counter` (no action) needs `hyperlink-ts/tui`'s layer — this example is CLI-only.
  */
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Layer, Schema } from "effect";
-import { Command } from "effect/unstable/cli";
 import * as Hyperlink from "../../src/Hyperlink";
-import { makeHyperlinkCli } from "../../src/cli";
 
 class Counter extends Hyperlink.Tag<Counter>()("Counter", {
   current: Hyperlink.effect(Schema.Number),
@@ -35,11 +35,10 @@ const counterLayer = Hyperlink.layer(Counter, {
     }),
 });
 
-const cli = makeHyperlinkCli({ counter: Counter }, "counter-cli");
-
-const program = Command.runWith(cli, { version: "0.0.0" })(
-  process.argv.slice(2),
-).pipe(
+const program = Hyperlink.cli(
+  { counter: Counter },
+  { name: "counter-cli", version: "0.0.0" },
+)(process.argv.slice(2)).pipe(
   Effect.provide(counterLayer.pipe(Layer.provideMerge(NodeServices.layer))),
 );
 

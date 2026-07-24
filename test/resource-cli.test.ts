@@ -1,22 +1,112 @@
-import { expect, it } from "vitest";
-import { render } from "../src/cli";
+import { describe, expect, it } from "@effect/vitest";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { Cause, Effect, Exit, Layer, Option, Schema } from "effect";
+import { Command } from "effect/unstable/cli";
+import * as Group from "../src/Group";
+import * as Hyperlink from "../src/Hyperlink";
+import { byName, cli, render, Tui, TuiNotConfigured } from "../src/cli";
+
 
 it("renders CLI output by value shape", () => {
-  // void / nullish → ok
   expect(render(undefined)).toBe("ok");
   expect(render(null)).toBe("ok");
-
-  // scalars → plain
   expect(render(0)).toBe("0");
   expect(render("hi")).toBe("hi");
   expect(render(true)).toBe("true");
-
-  // arrays → one indented line each (empty → marker)
   expect(render(["jobs", "mail"])).toBe("  jobs\n  mail");
   expect(render([])).toBe("(empty)");
-
-  // structs → aligned key / value
   expect(render({ id: "mail", pending: 2, paused: true })).toBe(
     "  id       mail\n  pending  2\n  paused   true",
+  );
+});
+
+class Counter extends Hyperlink.Tag<Counter>()("test/cli/Counter", {
+  current: Hyperlink.effect(Schema.Number),
+  pause: Hyperlink.effect(Schema.Void),
+}) {}
+
+class Bundle extends Group.Tag<Bundle>("test/cli/Bundle")({ Counter }) {}
+
+const counterLayer = Hyperlink.layer(Counter, {
+  current: Effect.succeed(1),
+  pause: Effect.void,
+});
+
+const expectTuiNotConfigured = <A, E>(exit: Exit.Exit<A, E>): void => {
+  expect(Exit.isFailure(exit)).toBe(true);
+  if (!Exit.isFailure(exit)) {
+    return;
+  }
+  const err = Option.getOrThrow(Cause.findErrorOption(exit.cause));
+  expect(err).toBeInstanceOf(TuiNotConfigured);
+  expect((err as TuiNotConfigured)._tag).toBe("TuiNotConfigured");
+};
+
+// Edge: Command.runWith + heterogeneous tags → Environment / CliError; assert on Exit.
+const runCli = (args: ReadonlyArray<string>, layer: Layer.Layer<Counter, never, never>) =>
+  Effect.exit(
+    Command.runWith(cli(Bundle, "hyperlink"), { version: "0.0.0" })(args).pipe(
+      Effect.provide(Layer.mergeAll(layer, NodeServices.layer)),
+    ) as Effect.Effect<void, TuiNotConfigured>,
+  );
+
+it("byName shortens unique suffixes", () => {
+  expect(Object.keys(byName([Counter]))).toEqual(["Counter"]);
+});
+
+describe("Hyperlink.cli TUI default", () => {
+  it.effect("bare root without Tui → TuiNotConfigured", () =>
+    Effect.gen(function* () {
+      const exit = yield* runCli([], counterLayer);
+      expectTuiNotConfigured(exit);
+    }),
+  );
+
+  it.effect("resource path without action without Tui → TuiNotConfigured", () =>
+    Effect.gen(function* () {
+      const exit = yield* Effect.exit(
+        Command.runWith(Hyperlink.cli({ counter: Counter }, "app"), { version: "0.0.0" })([
+          "counter",
+        ]).pipe(Effect.provide(Layer.mergeAll(counterLayer, NodeServices.layer))) as Effect.Effect<
+          void,
+          TuiNotConfigured
+        >,
+      );
+      expectTuiNotConfigured(exit);
+    }),
+  );
+
+  it.effect("full action runs the verb", () =>
+    Effect.gen(function* () {
+      const exit = yield* Effect.exit(
+        Command.runWith(cli({ counter: Counter }, "app"), { version: "0.0.0" })([
+          "counter",
+          "pause",
+        ]).pipe(Effect.provide(Layer.mergeAll(counterLayer, NodeServices.layer))) as Effect.Effect<
+          void,
+          TuiNotConfigured
+        >,
+      );
+      expect(Exit.isSuccess(exit)).toBe(true);
+    }),
+  );
+
+  it.effect("bare root with Tui opens via service", () =>
+    Effect.gen(function* () {
+      let opened: ReadonlyArray<string> | undefined;
+      const tuiLayer = Layer.succeed(Tui, {
+        open: (resources) =>
+          Effect.sync(() => {
+            opened = Object.keys(resources);
+          }),
+      });
+      const exit = yield* Effect.exit(
+        Command.runWith(cli(Bundle, "hyperlink"), { version: "0.0.0" })([]).pipe(
+          Effect.provide(Layer.mergeAll(counterLayer, tuiLayer, NodeServices.layer)),
+        ) as Effect.Effect<void, TuiNotConfigured>,
+      );
+      expect(Exit.isSuccess(exit)).toBe(true);
+      expect(opened).toEqual(["Counter"]);
+    }),
   );
 });

@@ -2,8 +2,8 @@
  * @module examples/resource-tui/manager-tui
  *
  * The TUI projection of the *same* record the CLI uses (`manager-resources.ts`) —
- * `makeHyperlinkTui(resources, runtime)`. One widget per resource, live `query`
- * fields, numbered actions. Runs in the alternate screen.
+ * `make(resources, runtime)` from `hyperlink-ts/tui`. One widget per resource, live
+ * `query` fields, numbered actions. Runs in the alternate screen.
  *
  *   pnpm run example:resource-tui-manager
  *   # ←→ select · 1-9 act · : command (e.g. `status id=mail`, `increment by=5`) · q
@@ -13,10 +13,10 @@ import { render } from "ink";
 import * as React from "react";
 import { Atom } from "effect/unstable/reactivity";
 import { resources, resourcesLayer } from "../resource-cli/manager-resources";
-import { makeHyperlinkTui } from "./make-resource-tui";
+import { make } from "../../src/tui";
 
 const runtime = Atom.runtime(resourcesLayer);
-const { App } = makeHyperlinkTui(resources, runtime);
+const { App } = make(resources, runtime);
 
 const out = process.stdout;
 const tty = out.isTTY === true;
