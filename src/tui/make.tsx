@@ -33,6 +33,7 @@ import {
   useAtomValue,
 } from "../ui/atom-react";
 import type { CliHyperlinkTag } from "../cli/index";
+import { retype } from "../internal/nodeServerCommon";
 
 /** @public */
 export type AnyTag = CliHyperlinkTag;
@@ -91,7 +92,7 @@ const buildWidget = (
         atom: Atom.withReactivity(reactivityKey)(
           runtime.atom(
             Effect.gen(function* () {
-              const service = yield* tag;
+              const service = yield* retype<Effect.Effect<unknown, never, never>>(tag as never);
               return yield* (call(service, name) as Effect.Effect<unknown>);
             }),
           ),
@@ -112,7 +113,7 @@ const buildWidget = (
         atom: runtime.fn(
           (arg: unknown) =>
             Effect.gen(function* () {
-              const service = yield* tag;
+              const service = yield* retype<Effect.Effect<unknown, never, never>>(tag as never);
               const target = call(service, name);
               return yield* (hasPayload
                 ? (target as (p: unknown) => Effect.Effect<unknown>)(arg)

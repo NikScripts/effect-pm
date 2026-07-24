@@ -9,6 +9,7 @@ import { Effect, Schema, Stream } from "effect";
 import type { Scope } from "effect/Scope";
 import * as EventJournal from "effect/unstable/eventlog/EventJournal";
 import { StoreScopeNotRegistered, StoreWriteError } from "./errors";
+import { retype } from "../nodeServerCommon";
 import {
   isStoreContractValue,
   materializeContractHandle,
@@ -21,6 +22,18 @@ import { decodeJournalPayload, encodeJournalPayload } from "./journalCodec";
 import { trimScopeRetention } from "./journalRetention";
 import { APPEND_TAG, QUERY_TAG, type FlatStoreHandleOf, type StoreHandleOf, type StoreSpec } from "./spec";
 import { filterRowsByWhere } from "./where";
+
+const encodeCodecJson = <S extends Schema.Schema<unknown>>(
+  schema: S,
+  value: unknown,
+): Effect.Effect<unknown, never, never> =>
+  retype(Schema.encodeUnknownEffect(Schema.toCodecJson(schema))(value) as never);
+
+const decodeUnknownSchema = <S extends Schema.Schema<unknown>>(
+  schema: S,
+  value: unknown,
+): Effect.Effect<Schema.Schema.Type<S>, never, never> =>
+  retype(Schema.decodeUnknownEffect(schema)(value) as never);
 
 /** @internal */
 export interface StoredRow {
@@ -128,7 +141,7 @@ export const makeScopeHandle = <S extends StoreSpec>(
             // bug) rather than becoming a catchable failure. The `journal.write` below is left as a
             // normal failure: a journal/IO write error stays in the cause and remains catchable.
             const wire = yield* Effect.orDie(
-              Schema.encodeUnknownEffect(Schema.toCodecJson(entry.schema))(one),
+              encodeCodecJson(entry.schema, one),
             );
             const encoded = yield* Effect.orDie(encodeJournalPayload(wire));
             // The journal/IO write is the genuine catchable write failure — surface it as
@@ -168,7 +181,7 @@ export const makeScopeHandle = <S extends StoreSpec>(
       const sourceKeys = querySourceKeys(spec, entry);
       (handle as Record<string, unknown>)[name] = (payload: unknown) =>
         Effect.gen(function* () {
-          const decodedPayload = yield* Schema.decodeUnknownEffect(entry.payload)(payload);
+          const decodedPayload = yield* decodeUnknownSchema(entry.payload, payload);
           const entries = yield* sideEffects.journal.entries;
           const rows = yield* rowsForScope(entries, sideEffects.scopeKey, sourceKeys);
           const capped = capRetention(
@@ -192,7 +205,7 @@ export const makeScopeHandle = <S extends StoreSpec>(
             limitOpts(queryOpts),
             (row) => row.occurredAtMillis,
           ).map((row) => row.payload);
-          return yield* Schema.decodeUnknownEffect(Schema.toCodecJson(entry.result))(matched);
+          return yield* decodeUnknownSchema(Schema.toCodecJson(entry.result), matched);
         });
     }
   }

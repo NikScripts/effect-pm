@@ -128,6 +128,7 @@ import {
   foldConfiguredSpec,
   type ConfigPatch,
 } from "../HyperlinkConfigure";
+import { retype } from "./nodeServerCommon";
 // Wire/error schemas live in a light module (effect-only) so the contract's Tag/spec is engine-free.
 import {
   QueueItemCodecDescriptorSchema,
@@ -1642,6 +1643,10 @@ function buildQueueEngine<T, E, EEnqueue, R, A = void>(
   );
 }
 
+/** Erased {@link buildQueueEngine} reference — keeps `any`-bounded config dispatch off call sites. */
+const callBuildQueueEngine = retype<typeof buildQueueEngine>(buildQueueEngine as never);
+const invokeBuildQueueEngine = retype<(bindings: never) => never>(callBuildQueueEngine as never);
+
 type MakeQueueEffectResult<C extends WorkPoolConfig<any, any, any, any>> =
   [C] extends [WorkPoolConfigWithItemSchema<any, any, any, any>]
     ? EngineQueueHandle<
@@ -1673,12 +1678,28 @@ const makeQueueEffectWithoutSchema = <
   never,
   Scope.Scope | InferQueueWorkerRequirements<C>
 > =>
-  buildQueueEngine({
-    config,
-    validateForEnqueue: (items, _operation) => Effect.succeed(items),
-    encodeForRelease: undefined,
-    persistCodec: undefined,
-  });
+  retype<
+    Effect.Effect<
+      EngineQueueHandle<
+        InferQueueItem<C>,
+        InferQueueWorkerError<C>,
+        never,
+        InferQueueWorkerRequirements<C>
+      >,
+      never,
+      Scope.Scope | InferQueueWorkerRequirements<C>
+    >
+  >(
+    invokeBuildQueueEngine({
+      config,
+      validateForEnqueue: (
+        items: ReadonlyArray<InferQueueItem<C>>,
+        _operation: "add" | "prioritize" | "defer",
+      ) => Effect.succeed(items),
+      encodeForRelease: undefined,
+      persistCodec: undefined,
+    } as never) as never,
+  );
 
 const makeQueueEffectWithSchema = <
   const C extends WorkPoolConfigWithItemSchema<any, any, any, any>,
@@ -1733,13 +1754,30 @@ const makeQueueEffectWithSchema = <
         ),
     });
   };
-  return buildQueueEngine({
-    config,
-    validateForEnqueue: (items, operation) =>
-      validateItemsWithSchema(queueName, config.itemSchema, codecId, items, operation),
-    encodeForRelease,
-    persistCodec: { encode: encodeItem, decode: Schema.decodeUnknownExit(config.itemSchema) },
-  });
+  return retype<
+    Effect.Effect<
+      EngineQueueHandle<
+        InferQueueItem<C>,
+        InferQueueWorkerError<C>,
+        QueueEnqueueErrors,
+        InferQueueWorkerRequirements<C>,
+        InferQueueWorkerSuccess<C>
+      >,
+      never,
+      Scope.Scope | InferQueueWorkerRequirements<C>
+    >
+  >(
+    invokeBuildQueueEngine({
+      config,
+      validateForEnqueue: (
+        items: ReadonlyArray<InferQueueItem<C>>,
+        operation: "add" | "prioritize" | "defer",
+      ) =>
+        validateItemsWithSchema(queueName, config.itemSchema, codecId, items, operation),
+      encodeForRelease,
+      persistCodec: { encode: encodeItem, decode: Schema.decodeUnknownExit(config.itemSchema) },
+    } as never) as never,
+  );
 };
 
 const makeQueueEffectFromConfig = (
@@ -1747,15 +1785,11 @@ const makeQueueEffectFromConfig = (
 ): Effect.Effect<
   EngineQueueHandle<unknown, unknown, unknown, unknown, unknown>,
   never,
-  // Internal erased boundary: the worker's requirement is `any` here (the config is
-  // `any`-typed at this dispatch). `any` — not `unknown` — is the honest erasure: it stays
-  // assignable both ways, and the precise `R` is preserved on the public `makeQueueEffect`
-  // overloads. (`unknown` would assert an unprovidable service → `missingEffectContext`.)
-  Scope.Scope | any
+  Scope.Scope
 > =>
   hasItemSchema(config)
-    ? makeQueueEffectWithSchema(config)
-    : makeQueueEffectWithoutSchema(config);
+    ? retype(makeQueueEffectWithSchema(config) as never)
+    : retype(makeQueueEffectWithoutSchema(config) as never);
 
 function makeQueueEffect<
   F extends QueueWorkerEffect<any, any, any, any>,
@@ -1784,16 +1818,13 @@ function makeQueueEffect(
 ): Effect.Effect<
   EngineQueueHandle<unknown, unknown, unknown, unknown, unknown>,
   never,
-  // Erased overload-impl boundary — the precise `R` (`Scope.Scope |
-  // InferQueueWorkerRequirements<...>`) is on the overloads above; here the worker
-  // requirement is `any`, not `unknown` (see {@link makeQueueEffectFromConfig}).
-  Scope.Scope | any
+  Scope.Scope
 > {
   if (typeof effectOrConfig === "function") {
     const config = { ...(options ?? {}), effect: effectOrConfig };
-    return makeQueueEffectFromConfig(config);
+    return retype(makeQueueEffectFromConfig(config) as never);
   }
-  return makeQueueEffectFromConfig(effectOrConfig);
+  return retype(makeQueueEffectFromConfig(effectOrConfig) as never);
 }
 
 type ValidateForEnqueue<T, EEnqueue> = (
@@ -3390,16 +3421,26 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
 const workPoolLayerFromConfig = (
   tag: Context.Key<any, EngineQueueHandle<any, any, any, any, any>>,
   config: WorkPoolConfig<any, any, any, any>,
-): Layer.Layer<any, never, any> => {
+): Layer.Any => {
   const resourceId = config.name ?? "anonymous";
   const defaultSpec = { ...config, name: resourceId };
-  return layerWithQueueRateLimiterIfNeeded(
-    Layer.effect(tag)(
-      foldConfiguredSpec(resourceId, defaultSpec).pipe(
-        Effect.flatMap(makeQueueEffectFromConfig),
+  const layerEffect = retype<(key: Context.Key<any, unknown>, effect: never) => Layer.Any>(
+    Layer.effect as never,
+  );
+  return retype<Layer.Any>(
+    layerWithQueueRateLimiterIfNeeded(
+      retype<Layer.Layer<never, never, never>>(
+        layerEffect(
+          tag,
+          retype(
+            foldConfiguredSpec(resourceId, defaultSpec).pipe(
+              Effect.flatMap(makeQueueEffectFromConfig),
+            ) as never,
+          ),
+        ) as never,
       ),
-    ),
-    defaultSpec,
+      defaultSpec,
+    ) as never,
   );
 };
 
@@ -3431,11 +3472,11 @@ function workPoolLayer(
   tag: Context.Key<any, EngineQueueHandle<any, any, any, any>>,
   effectOrConfig: QueueWorkerEffect<any, any, any, any> | WorkPoolConfig<any, any, any>,
   options?: WorkPoolOptionsWithoutItemSchema<any, any, any> | WorkPoolOptionsWithItemSchema<any, any, any>,
-): Layer.Layer<any, never, any> {
+): Layer.Any {
   if (typeof effectOrConfig === "function") {
-    return workPoolLayerFromConfig(tag, { ...(options ?? {}), effect: effectOrConfig });
+    return retype(workPoolLayerFromConfig(tag, { ...(options ?? {}), effect: effectOrConfig }) as never);
   }
-  return workPoolLayerFromConfig(tag, effectOrConfig);
+  return retype(workPoolLayerFromConfig(tag, effectOrConfig) as never);
 }
 
 const queueServiceLayerFromDefaultSpec = <

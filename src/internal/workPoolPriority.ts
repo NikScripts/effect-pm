@@ -57,6 +57,10 @@ import {
   makeQueueItemCodecDescriptor,
   type QueueStoreWriter,
 } from "./workPool";
+import { retype } from "./nodeServerCommon";
+
+const callBuildQueueEngine = retype<typeof buildQueueEngine>(buildQueueEngine as never);
+const invokeBuildQueueEngine = retype<(bindings: never) => never>(callBuildQueueEngine as never);
 
 export type { WorkPoolPriorityStatus } from "./workPoolProjection";
 
@@ -383,18 +387,31 @@ const makePriorityEffectWithoutSchema = <
   Effect.gen(function* () {
     const levels = levelResolution(config);
     const projection = buildPriorityProjectionFromConfig(config);
-    const engine = yield* buildQueueEngine({
-      config: {
-        ...config,
+    const engine = yield* retype<
+      Effect.Effect<
+        QueueEngineHandle<
+          InferQueueItem<C>,
+          InferQueueWorkerError<C>,
+          never,
+          InferQueueWorkerRequirements<C>
+        >,
+        never,
+        Scope.Scope | InferQueueWorkerRequirements<C>
+      >
+    >(
+      invokeBuildQueueEngine({
+        config: {
+          ...config,
+          laneCount: levels.laneCount,
+          refill: adaptRefill(config, levels, projection),
+        },
         laneCount: levels.laneCount,
-        refill: adaptRefill(config, levels, projection),
-      },
-      laneCount: levels.laneCount,
-      projection: castProjection(projection),
-      validateForEnqueue: (items) => Effect.succeed(items),
-      encodeForRelease: undefined,
-      persistCodec: undefined,
-    });
+        projection: castProjection(projection),
+        validateForEnqueue: (items: ReadonlyArray<InferQueueItem<C>>) => Effect.succeed(items),
+        encodeForRelease: undefined,
+        persistCodec: undefined,
+      } as never) as never,
+    );
     return wrapWorkPoolPriorityHandle(engine, levels, projection);
   });
 
@@ -468,22 +485,35 @@ const makePriorityEffectWithSchema = <
   return Effect.gen(function* () {
     const levels = levelResolution(config);
     const projection = buildPriorityProjectionFromConfig(config);
-    const engine = yield* buildQueueEngine({
-      config: {
-        ...config,
+    const engine = yield* retype<
+      Effect.Effect<
+        QueueEngineHandle<
+          InferQueueItem<C>,
+          InferQueueWorkerError<C>,
+          QueueEnqueueErrors,
+          InferQueueWorkerRequirements<C>
+        >,
+        never,
+        Scope.Scope | InferQueueWorkerRequirements<C>
+      >
+    >(
+      invokeBuildQueueEngine({
+        config: {
+          ...config,
+          laneCount: levels.laneCount,
+          refill: adaptRefill(config, levels, projection),
+        },
         laneCount: levels.laneCount,
-        refill: adaptRefill(config, levels, projection),
-      },
-      laneCount: levels.laneCount,
-      projection: castProjection(projection),
-      validateForEnqueue: (items) =>
-        validateItemsWithSchema(queueName, config.itemSchema, codecId, items),
-      encodeForRelease,
-      persistCodec: {
-        encode: encodeItem,
-        decode: Schema.decodeUnknownExit(config.itemSchema),
-      },
-    });
+        projection: castProjection(projection),
+        validateForEnqueue: (items: ReadonlyArray<InferQueueItem<C>>) =>
+          validateItemsWithSchema(queueName, config.itemSchema, codecId, items),
+        encodeForRelease,
+        persistCodec: {
+          encode: encodeItem,
+          decode: Schema.decodeUnknownExit(config.itemSchema),
+        },
+      } as never) as never,
+    );
     return wrapWorkPoolPriorityHandle(engine, levels, projection);
   });
 };
@@ -495,10 +525,10 @@ const hasItemSchema = <T, E, R>(
 
 const makePriorityEffectFromConfig = (
   config: WorkPoolPriorityConfig<any, any, any>,
-): Effect.Effect<WorkPoolPriorityHandle<unknown, unknown, unknown, unknown>, never, Scope.Scope | any> =>
+): Effect.Effect<WorkPoolPriorityHandle<unknown, unknown, unknown, unknown>, never, Scope.Scope> =>
   hasItemSchema(config)
-    ? makePriorityEffectWithSchema(config)
-    : makePriorityEffectWithoutSchema(config);
+    ? retype(makePriorityEffectWithSchema(config) as never)
+    : retype(makePriorityEffectWithoutSchema(config) as never);
 
 type CustomConfigFromEffect<
   F extends QueueWorkerEffect<any, any, any, any>,
@@ -543,16 +573,16 @@ function makePriorityEffect(
   effectOrConfig: QueueWorkerEffect<any, any, any, any> | WorkPoolPriorityConfig<any, any, any>,
   options?: (WorkPoolPriorityOptionsWithoutItemSchema<any, any, any> &
     WorkPoolPriorityLaneConfig),
-): Effect.Effect<WorkPoolPriorityHandle<any, any, any, any>, never, Scope.Scope | any> {
+): Effect.Effect<WorkPoolPriorityHandle<any, any, any, any>, never, Scope.Scope> {
   if (typeof effectOrConfig === "function") {
     if (options === undefined || options.laneCount === undefined) {
       return Effect.die(
         new Error("WorkPool.makePriority requires laneCount in config or options"),
       );
     }
-    return makePriorityEffectFromConfig({ ...(options ?? {}), effect: effectOrConfig });
+    return retype(makePriorityEffectFromConfig({ ...(options ?? {}), effect: effectOrConfig }) as never);
   }
-  return makePriorityEffectFromConfig(effectOrConfig);
+  return retype(makePriorityEffectFromConfig(effectOrConfig) as never);
 }
 
 // Flat engine surface. Public `WorkPool` re-exports `makePriorityEffect` as `makePriority` and
