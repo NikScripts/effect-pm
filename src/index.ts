@@ -1,35 +1,34 @@
 /**
  * @packageDocumentation
  *
- * **hyperlink-ts** (`hyperlink-ts`) — Effect-first **process orchestration** and **queue
- * resources** for long-running applications.
+ * **hyperlink-ts** — Effect Hyperlink: location-transparent **services** for Effect (WorkPool,
+ * Daemon, Gate, stores, logs, dashboards).
  *
  * @remarks
  * ## What this package provides
  *
- * - **`Daemon`**, **`Polling`** — Build a **managed process** with a trigger-driven runtime: a
- *   long-lived driver follows a schedule and spawns process instances; each instance checks its
+ * - **`Daemon`**, **`Polling`** — Build a **managed daemon** with a trigger-driven runtime: a
+ *   long-lived driver follows a schedule and spawns run instances; each instance checks its
  *   schedule and exits naturally when disarmed while `Polling` controls in-instance repeat cadence.
- *   Optional `polling` / `schedule` layers on `Daemon.make` are merged into `process.effect` so
+ *   Optional `polling` / `schedule` layers on `Daemon.make` are merged into the daemon effect so
  *   fork-time requirements stay accurate in TypeScript. Run windows are built with
  *   `Daemon.scheduleInMemory` / `scheduleDefine` (and the toolkit `Daemon.Schedule` resource /
  *   `Daemon.window` / `Daemon.at`).
  * - **`WorkPool`** — Three-level **priority** queues with **concurrency** and optional
  *   **`rateLimit`** (Effect `RateLimiter`); each queue is a **Context**
- *   service with a `.layer`.
- * - **`Store`** — EventJournal-backed execution / queue / run / log history; process stores via
+ *   service with a `.layer`. `WorkPool.priority` adds named N-lane queues.
+ * - **`Store`** — EventJournal-backed execution / queue / gate / log history; daemon stores via
  *   `Daemon.store(tag)` and `Store.Service`.
- * - **Toolkit (location-transparent resources)** — **`Hyperlink`** is the foundation: a tag is
+ * - **Toolkit (location-transparent services)** — **`Hyperlink`** is the foundation: a tag is
  *   driven by the same `yield* Tag` code whether it runs **local or remote** (`Hyperlink.client` /
- *   `serve` / `serveRemote` / `Node` switch only the layer). Batteries-included resource kinds build
- *   on it — the toolkit process (`Daemon.Tag` / `Daemon.Schedule`, from
- *   `hyperlink-ts/Daemon`) and the toolkit queue (from
- *   `hyperlink-ts/WorkPool`) — each with `Tag` / `layer` / `configure` / `serve` /
- *   `serveRemote`. **`Group`** organizes member tags (nestable; members may be on the same or
- *   different nodes). Contracts are introspectable via `specOf` + `methodMeta` (build generic UIs).
- *   See the live book under `docs/resources/` and `docs/guides/`.
+ *   `serve` / `serveRemote` / `Node` switch only the layer). Batteries-included kinds build on it —
+ *   `Daemon.Tag` / `Daemon.Schedule` and `WorkPool.Tag` / `WorkPool.priority` — each with
+ *   `Tag` / `layer` / `configure` / `serve` / `serveRemote`. **`Group`** organizes member tags
+ *   (nestable; members may be on the same or different nodes). Contracts are introspectable via
+ *   `specOf` + `methodMeta` (build generic UIs). See the live book under `docs/resources/` and
+ *   `docs/guides/`.
  * - **`Gate`**, **`HttpClientRunGate`**, **`Gate.httpApiClient`** —
- *   Optional building blocks for **gated** HTTP and reusable resource patterns.
+ *   Optional building blocks for **gated** HTTP and reusable service patterns.
  * - **Persistence** — `DurableQueueStore` (durable priority queue) + `HistoryStore`
  *   (metrics/logs history); in-memory or SQLite (`hyperlink-ts/storage/sqlite`).
  *

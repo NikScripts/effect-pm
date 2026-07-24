@@ -509,7 +509,7 @@ const isGateTagSchemaConfig = (value: unknown): value is GateTagSchemas =>
  * Name the built gate tag's service as {@link Gate}. The single deliberate cast in this
  * module: `ServiceOf<GateInstanceSpec<I, A, E>>` and
  * `Gate<Decoded<I>, A["Type"], E["Type"], never>` are **mutually assignable** — proven
- * bidirectionally in `test/run-handle.test-d.ts` — but TS can't verify that equality for *generic*
+ * bidirectionally in `test/gate-handle.test-d.ts` — but TS can't verify that equality for *generic*
  * params at the invariant service-`Shape` position, so the generic factory needs one assertion here.
  * The `.test-d.ts` is the soundness guard: if the shapes ever drift, it fails the build. @internal
  */

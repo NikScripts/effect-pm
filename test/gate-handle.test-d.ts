@@ -67,7 +67,7 @@ assertExact<
 >();
 
 // ── DoD: the static `.run` shortcut is Effect (unit) vs a call (parameterized) ───────────────────────
-// (mirrors run-resource.test-d.ts; ensures the naming cast keeps the static run's shape.)
+// (mirrors gate.test-d.ts; ensures the naming cast keeps the static run's shape.)
 // @ts-expect-error — void gates reject positional input
 void Tick.run(1);
 // @ts-expect-error — parameterized gates require input
