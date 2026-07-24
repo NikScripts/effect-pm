@@ -6,20 +6,25 @@
 <!-- docs-site-link:end -->
 # Hyperlink for Effect
 
-**Build cross-runtime Services on Effect.**
+**Define once. Run anywhere. `yield*` everywhere.**
 
-An Effect Service lives inside one runtime. A *Hyperlink Service* doesn't: define it once, run it
-on one runtime, and call it from another over RPC — with the **same typed Handle**.
+JavaScript has been multi-core for a decade. Hyperlink makes writing it feel single-threaded again.
 
-That is the hook. Not a second client library. Not a different API for "remote." The Tag you
-`yield*` locally is the Tag you `yield*` across the network, and the Handle can **call, observe,
-and steer** the service wherever it runs.
+`yield*` a Service and it answers — from a parallel process, a second machine, the far side of the
+network. Typed end to end, schema-validated at the wire. You never write the difference.
+
+Heavy work moves off the event loop and onto your other cores; the app spreads across machines; and
+not one call site changes: monolith in dev, fleet in prod, the same code either way. Change a
+contract and the compiler flags every caller, in every process, on every machine. One typed surface.
+
+That Service is a *Hyperlink Service*: define it once, run it on one runtime, call it from another
+over RPC — with the **same typed Handle**. The Handle can **call, observe, and steer** wherever the
+service runs. Inspired by and built on Effect RPC.
 
 ## Two runtimes, one program
 
-A real app is more than one runtime — a worker draining a queue here, a scheduler filling it there.
-Normally one side owns the service and the other hand-rolls an HTTP client. With Hyperlink, both
-sides use the same Tag.
+Here is that claim as a program. A worker drains a queue; a scheduler fills it — two runtimes, one
+Tag. No hand-rolled HTTP client on the scheduler side.
 
 Define two HyperServices once — a priority queue and a scheduled daemon (included tools, used here
 as the demo):
