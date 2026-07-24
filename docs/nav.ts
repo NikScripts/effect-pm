@@ -29,7 +29,7 @@ export const nav: ReadonlyArray<NavGroup> = [
     slugs: ["index", "install", "core-concepts", "managing-layers"],
   },
   {
-    // Build-your-own is the book's focus. Included HyperServices come after.
+    // Build-your-own is the book's focus. Included Hyperlink Services come after.
     label: "Hyperlink Services",
     slugs: [
       "creating-a-hyperlink",
@@ -40,8 +40,8 @@ export const nav: ReadonlyArray<NavGroup> = [
     ],
   },
   {
-    // Prebuilt HyperServices / factories — useful tools, secondary to building your own.
-    label: "Included HyperServices",
+    // Prebuilt Hyperlink Services / factories — useful tools, secondary to building your own.
+    label: "Included Hyperlink Services",
     slugs: [
       "work-pools",
       "gates",

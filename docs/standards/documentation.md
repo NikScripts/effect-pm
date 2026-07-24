@@ -296,8 +296,8 @@ parsed straight from the blocks, so a page is both prose and a machine contract.
   slug and the filename. `title` is the **sidebar** label (nav derives it; do not duplicate titles in
   `nav.ts`). The **H1** is the full page title — they may differ when the sidebar needs the short
   form. Pattern for Hyperlink Service pages: sidebar uses **HyperService** (e.g. `Creating a
-  HyperService`); H1 uses the full term (e.g. `Creating a Hyperlink Service`). Included HyperService
-  pages use the module name in the sidebar (`WorkPool`, `Daemon`, …).
+  HyperService`); H1 uses the full term (e.g. `Creating a Hyperlink Service`). Included Hyperlink
+  Service pages use the module name in the sidebar (`WorkPool`, `Daemon`, …).
 - **Rule block.** A standard is `{#id .severity appliesTo="…"}` followed by an H2 whose text *is* the
   rule's title. `severity` is a closed set: `must` / `should` / `may`.
 - **`appliesTo` is a rule concern.** It scopes a rule to code trees — `src` / `examples` / `test` /

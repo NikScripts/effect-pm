@@ -286,10 +286,10 @@ const program = Effect.gen(function* () {
 An unreachable owner degrades to a miss instead of blocking. **Every instance an equal — reached,
 and reaching others, through the same Tag.**
 
-## Included HyperServices
+## Included Hyperlink Services
 
-Building your own is the focus. The package also ships a few **included** HyperServices — full
-HyperServices you can drop in when you need them:
+Building your own is the focus. The package also ships a few **included** Hyperlink Services — full
+Hyperlink Services you can drop in when you need them:
 
 - **[`WorkPool`](/docs/work-pools)** — priority work queue: enqueue, drain, dedup, retry, concurrency
 - **[`Daemon`](/docs/daemons)** — continuous or recurring work: polling, schedules, run history
