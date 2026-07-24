@@ -89,6 +89,7 @@ import {
   successSym,
 } from "./internal/daemonTagSchemas";
 import { withLogScope } from "./internal/logs/scope";
+import { retype } from "./internal/nodeServerCommon";
 import { PollingTag, type PollingService } from "./internal/pollingTag";
 import { DaemonSchedule, DaemonScheduleTag } from "./internal/daemonSchedule";
 import type {
@@ -2548,15 +2549,19 @@ export function layer<Self, S extends Spec, A = void, E = never, R = never>(
 export function layer(
   tag: HyperlinkTag<any, any, any>,
   config: DaemonLayerConfig<any, any, any>,
-): Layer.Layer<any, any, any> {
-  const baseTag: HyperlinkTag<any, DaemonSpec> = tag;
+): Layer.Any {
+  // Pin the composed tag to the concrete base spec so HandlerContext/Impl walks stay shallow
+  // (see overload note above). Close the loose overload's `any` R before Effect.map so
+  // anyUnknownInErrorContext never sees a requirements `any`.
+  const baseTag: HyperlinkTag<unknown, DaemonSpec> = tag;
+  const closedConfig = retype<DaemonLayerConfig<unknown, never, never>>(config as never);
   return withDefaultMemory(
     Layer.unwrap(
-      Effect.map(buildDaemonImpl(tag, config), (built) =>
+      Effect.map(buildDaemonImpl(tag, closedConfig), (built) =>
         Hyperlink.layer(baseTag, Hyperlink.grantLocal(baseTag, built)),
       ),
-    ) as any,
-  ) as any;
+    ),
+  );
 }
 
 /**
@@ -2565,16 +2570,7 @@ export function layer(
  * @category layers & serving
  * @public
  */
-export function layerMemory<Self, S extends Spec, A = void, E = never, R = never>(
-  tag: HyperlinkTag<Self, S>,
-  config: DaemonLayerConfig<A, E, R>,
-): Layer.Layer<Self | Local<Self> | Store.Storage, never, R>;
-export function layerMemory(
-  tag: HyperlinkTag<any, any, any>,
-  config: DaemonLayerConfig<any, any, any>,
-): Layer.Layer<any, any, any> {
-  return layer(tag, config) as any;
-}
+export const layerMemory = layer;
 
 /**
  * Serve a daemon **and** grant its local instance from one materialization.
@@ -2595,16 +2591,16 @@ export function serve<Self, S extends Spec, A = void, E = never, R = never>(
 export function serve(
   tag: HyperlinkTag<any, any, any>,
   config: DaemonLayerConfig<any, any, any>,
-): Layer.Layer<any, any, any> {
-  const baseTag: HyperlinkTag<any, DaemonSpec> = tag;
+): Layer.Any {
+  const baseTag: HyperlinkTag<unknown, DaemonSpec> = tag;
+  const closedConfig = retype<DaemonLayerConfig<unknown, never, never>>(config as never);
   return withDefaultMemory(
     Layer.unwrap(
-      Effect.map(
-        buildDaemonImpl(tag, config),
-        (built) => Hyperlink.serve(baseTag, built) as any,
+      Effect.map(buildDaemonImpl(tag, closedConfig), (built) =>
+        Hyperlink.serve(baseTag, built),
       ),
-    ) as any,
-  ) as any;
+    ),
+  );
 }
 
 /**
@@ -2613,20 +2609,7 @@ export function serve(
  * @category layers & serving
  * @public
  */
-export function serveMemory<Self, S extends Spec, A = void, E = never, R = never>(
-  tag: HyperlinkTag<Self, S>,
-  config: DaemonLayerConfig<A, E, R>,
-): Layer.Layer<
-  Self | Local<Self> | HandlerContextOf<DaemonSpec> | Store.Storage,
-  never,
-  R
->;
-export function serveMemory(
-  tag: HyperlinkTag<any, any, any>,
-  config: DaemonLayerConfig<any, any, any>,
-): Layer.Layer<any, any, any> {
-  return serve(tag, config) as any;
-}
+export const serveMemory = serve;
 
 /**
  * Serve a daemon **remotely (served-only)** — mounts its RPC handlers without granting the local
@@ -2644,16 +2627,16 @@ export function serveRemote<Self, S extends Spec, A = void, E = never, R = never
 export function serveRemote(
   tag: HyperlinkTag<any, any, any>,
   config: DaemonLayerConfig<any, any, any>,
-): Layer.Layer<any, any, any> {
-  const baseTag: HyperlinkTag<any, DaemonSpec> = tag;
+): Layer.Any {
+  const baseTag: HyperlinkTag<unknown, DaemonSpec> = tag;
+  const closedConfig = retype<DaemonLayerConfig<unknown, never, never>>(config as never);
   return withDefaultMemory(
     Layer.unwrap(
-      Effect.map(
-        buildDaemonImpl(tag, config),
-        (built) => Hyperlink.serveRemote(baseTag, built) as any,
+      Effect.map(buildDaemonImpl(tag, closedConfig), (built) =>
+        Hyperlink.serveRemoteDriver(baseTag, built),
       ),
-    ) as any,
-  ) as any;
+    ),
+  );
 }
 
 /**
@@ -2662,16 +2645,7 @@ export function serveRemote(
  * @category layers & serving
  * @public
  */
-export function serveRemoteMemory<Self, S extends Spec, A = void, E = never, R = never>(
-  tag: HyperlinkTag<Self, S>,
-  config: DaemonLayerConfig<A, E, R>,
-): Layer.Layer<HandlerContextOf<DaemonSpec> | Store.Storage, never, R>;
-export function serveRemoteMemory(
-  tag: HyperlinkTag<any, any, any>,
-  config: DaemonLayerConfig<any, any, any>,
-): Layer.Layer<any, any, any> {
-  return serveRemote(tag, config) as any;
-}
+export const serveRemoteMemory = serveRemote;
 
 /**
  * A **config-patch layer** for the daemon `tag` — merge it with the daemon's {@link layer} and its

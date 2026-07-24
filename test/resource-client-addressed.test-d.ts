@@ -25,9 +25,11 @@ runFullyWired(Hyperlink.client(NodeStatusTag, Droplet));
 const bareClient = Hyperlink.client(NodeStatusTag, Bare);
 expectTypeOf<Layer.Services<typeof bareClient>>().toEqualTypeOf<Bare>();
 
-// Explicit protocol still wires a bare node (derived connect needs AddressedNode —
-// proven by Bare still sitting in client R above; do not call `Node.connect(Bare)` —
-// that expression trips anyUnknown beside the overload error).
+// Derived single-arg connect requires AddressedNode — Bare is not addressed.
+type BareAddressed = typeof Bare extends Node.AddressedNode<infer _S> ? true : false;
+expectTypeOf<BareAddressed>().toEqualTypeOf<false>();
+
+// Explicit protocol still wires a bare node.
 const proto = Hyperlink.protocolHttp("http://x/rpc");
 runFullyWired(
   Hyperlink.client(NodeStatusTag, Bare).pipe(

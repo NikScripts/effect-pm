@@ -815,7 +815,7 @@ export const layerMemory = <
  * @category layers & serving
  * @public
  */
-export function serveRemote<
+export const serveRemote = <
   Self,
   I extends Schema.Top,
   A extends Schema.Top,
@@ -824,24 +824,14 @@ export function serveRemote<
 >(
   tag: HyperlinkTag<Self, InstanceSpec<I, A, E>, any>,
   config: LayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
-): Layer.Layer<HandlerContextOf<InstanceSpec<I, A, E>> | Store.Storage, never, R>;
-export function serveRemote(
-  tag: HyperlinkTag<any, any, any>,
-  config: LayerConfig<any, any, any, any>,
-): Layer.Layer<any, any, any> {
-  // Pin the loose impl-signature tag to its instance spec so `buildRunImpl`'s `Driver` and
-  // `Hyperlink.serveRemote` line up cast-free (the `any` payload/success/error are fixed by the public
-  // overload above). Mirrors `Daemon.serveRemote`.
-  const baseTag: HyperlinkTag<any, InstanceSpec<any, any, any>> = tag;
-  return withDefaultStoreBridge(
+): Layer.Layer<HandlerContextOf<InstanceSpec<I, A, E>> | Store.Storage, never, R> =>
+  withDefaultStoreBridge(
     Layer.unwrap(
-      Effect.map(
-        buildRunImpl(baseTag, config),
-        (built) => Hyperlink.serveRemote(baseTag, built) as any,
+      Effect.map(buildRunImpl(tag, config), (built) =>
+        Hyperlink.serveRemoteDriver(tag, built),
       ),
-    ) as any,
-  ) as any;
-}
+    ),
+  );
 
 /**
  * Alias of {@link serveRemote}.
@@ -849,22 +839,7 @@ export function serveRemote(
  * @category layers & serving
  * @public
  */
-export function serveRemoteMemory<
-  Self,
-  I extends Schema.Top,
-  A extends Schema.Top,
-  E extends Schema.Top = typeof Schema.Never,
-  R = never,
->(
-  tag: HyperlinkTag<Self, InstanceSpec<I, A, E>>,
-  config: LayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
-): Layer.Layer<HandlerContextOf<InstanceSpec<I, A, E>> | Store.Storage, never, R>;
-export function serveRemoteMemory(
-  tag: HyperlinkTag<any, any, any>,
-  config: LayerConfig<any, any, any, any>,
-): Layer.Layer<any, any, any> {
-  return serveRemote(tag as any, config as any) as any;
-}
+export const serveRemoteMemory = serveRemote;
 
 /**
  * Serve this gate **and** grant its local instance from one materialization.
@@ -874,7 +849,7 @@ export function serveRemoteMemory(
  * @category layers & serving
  * @public
  */
-export function serve<
+export const serve = <
   Self,
   I extends Schema.Top,
   A extends Schema.Top,
@@ -887,21 +862,12 @@ export function serve<
   Self | Local<Self> | HandlerContextOf<InstanceSpec<I, A, E>> | Store.Storage,
   never,
   R
->;
-export function serve(
-  tag: HyperlinkTag<any, any, any>,
-  config: LayerConfig<any, any, any, any>,
-): Layer.Layer<any, any, any> {
-  const baseTag: HyperlinkTag<any, InstanceSpec<any, any, any>> = tag;
-  return withDefaultStoreBridge(
+> =>
+  withDefaultStoreBridge(
     Layer.unwrap(
-      Effect.map(
-        buildRunImpl(baseTag, config),
-        (built) => Hyperlink.serve(baseTag, built) as any,
-      ),
-    ) as any,
-  ) as any;
-}
+      Effect.map(buildRunImpl(tag, config), (built) => Hyperlink.serve(tag, built)),
+    ),
+  );
 
 /**
  * Alias of {@link serve}.
@@ -909,26 +875,7 @@ export function serve(
  * @category layers & serving
  * @public
  */
-export function serveMemory<
-  Self,
-  I extends Schema.Top,
-  A extends Schema.Top,
-  E extends Schema.Top = typeof Schema.Never,
-  R = never,
->(
-  tag: HyperlinkTag<Self, InstanceSpec<I, A, E>>,
-  config: LayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
-): Layer.Layer<
-  Self | Local<Self> | HandlerContextOf<InstanceSpec<I, A, E>> | Store.Storage,
-  never,
-  R
->;
-export function serveMemory(
-  tag: HyperlinkTag<any, any, any>,
-  config: LayerConfig<any, any, any, any>,
-): Layer.Layer<any, any, any> {
-  return serve(tag as any, config as any) as any;
-}
+export const serveMemory = serve;
 
 /**
  * Class factory: tag + wire schemas + baked-in `.layer` + `.configure`.

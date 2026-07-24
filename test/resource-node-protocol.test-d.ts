@@ -22,11 +22,13 @@ runFullyWired(Hyperlink.client(NodeStatusTag, Droplet));
 runFullyWired(Hyperlink.client(NodeStatusTag, Droplet).pipe(Layer.provide(transport)));
 
 // THE HOLE, now closed: a nodeless `client(tag)` given the node *transport* still needs an ambient
-// `RpcClient.Protocol` — it is NOT fully wired. Assert open R (do not call `runFullyWired` —
-// that would trip `missingLayerContext` on an intentionally incomplete layer).
+// `RpcClient.Protocol` — it is NOT fully wired. Assert open R via Layer.Services (do not call
+// `runFullyWired` on an incomplete layer — that trips `missingLayerContext`).
 const nodelessWithTransport = Hyperlink.client(NodeStatusTag).pipe(
   Layer.provide(transport),
 );
 type NodelessR = Layer.Services<typeof nodelessWithTransport>;
 type StillNeedsProtocol = [NodelessR] extends [never] ? false : true;
 expectTypeOf<StillNeedsProtocol>().toEqualTypeOf<true>();
+// Stronger: R is not never (protocol still required after providing only the node transport).
+expectTypeOf<[NodelessR] extends [never] ? true : false>().toEqualTypeOf<false>();
