@@ -108,30 +108,36 @@ The language service is more than nicer hovers — it enforces a **ruleset**. It
 are several, because the right rules for Effect-domain code are not the right rules for a browser UI.
 
 **What hyperlink-ts's own source enforces.** Effect language-service diagnostics are `error` by
-default — including `anyUnknownInErrorContext`, `missingLayerContext`, and `effectDoNotation`.
+default — including `anyUnknownInErrorContext`, `missingLayerContext`, `effectDoNotation`,
+`outdatedEffectCodegen`, `unsupportedServiceAccessors`, and `flatMapToMap`.
 `serviceNotAsClass` is also `error`; the only allowed silence is a next-line off at a real
-`Context.Service` / `Context.Tag` **factory**. `strictEffectProvide` is `message` in both Effect-domain
-typecheck projects: it still surfaces in the editor / `tsc` output, but does not fail the build. So
-our Effect source is held to Effect's idioms — no raw `Date` / `console` / `setTimeout` / `fetch` /
-`Math.random` / `process.env` outside Effect, `Schema` over hand-rolled JSON, pipeables over nesting,
-typed error channels, and so on. `typecheck` runs several passes:
+`Context.Service` / `Context.Tag` **factory**. Two rules stay `message` (surface in the editor /
+`tsc` output, do not fail the build): `strictEffectProvide`, and `unsafeEffectTypeAssertion`
+(flags `as Effect` / `as Layer` / `as Stream` channel narrowing — remaining toolkit erase debt,
+same non-blocking posture as `strictEffectProvide`). So our Effect source is held to Effect's
+idioms — no raw `Date` / `console` / `setTimeout` / `fetch` / `Math.random` / `process.env` outside
+Effect, `Schema` over hand-rolled JSON, pipeables over nesting, typed error channels, and so on.
+`typecheck` runs several passes:
 
 | Config | Scope | Notes |
 |--------|-------|-------|
-| `tsconfig.json` | `src`, `test`, `examples` (excludes UI trees) | full diagnostic set; `strictEffectProvide: message` |
+| `tsconfig.json` | `src`, `test`, `examples` (excludes UI trees) | full diagnostic set; `strictEffectProvide` + `unsafeEffectTypeAssertion`: `message` |
 | `tsconfig.src.strict-effect-provide.json` | Effect-domain `src/**` | same severities |
-| `src/ui/tsconfig.json` | shared dashboard core | relaxed Effect-purity rules |
-| `src/web/tsconfig.json` | web dashboard (+ `src/ui`) | relaxed Effect-purity rules |
-| `src/tui/tsconfig.json` | terminal dashboard | relaxed Effect-purity rules |
+| `src/ui/tsconfig.json` | shared dashboard core | same set; purity + `anyUnknownInErrorContext` `off` |
+| `src/web/tsconfig.json` | web dashboard (+ `src/ui`) | same set; purity + `anyUnknownInErrorContext` `off` |
+| `src/tui/tsconfig.json` | terminal dashboard | same set; purity + `anyUnknownInErrorContext` `off` |
 
-**UI / React code is a different ruleset.** A handful of Effect rules assume Effect-domain code and
-are wrong for a UI layer, where raw `Date.now()`, `console`, `setTimeout`, `fetch` and `async` event
-handlers *are* the correct primitives (`globalDate`, `globalConsole`, `globalTimers`, `globalFetch`,
-`globalRandom`, `asyncFunction`, plus `newPromise` / `nodeBuiltinImport` where the UI tsconfigs turn
-them off). Shared dashboard logic lives under **`src/ui`**; the **`src/web`** and **`src/tui`**
-shells each have their own `tsconfig` with that relaxed plugin config. The root config **excludes**
-`src/ui/**`, `src/web/**`, and `src/tui/**` so the editor and `typecheck` resolve those trees to the
-UI configs. Declaration builds for the UI entries point at those configs too (see `tsup.config.ts`).
+**UI / React code keeps the same suite, minus UI-layer exceptions.** Effect-purity rules assume
+Effect-domain code and are wrong for a UI layer, where raw `Date.now()`, `console`, `setTimeout`,
+and `async` event handlers *are* the correct primitives. The UI tsconfigs turn off
+`globalDate` / `globalConsole` / `globalTimers` / `asyncFunction` / `newPromise` /
+`nodeBuiltinImport`, plus `anyUnknownInErrorContext` (dashboard atoms still carry loose `R` until
+the typesafety pass). Everything else matches the Effect-domain severities (tsconfig `plugins`
+arrays replace on `extends`, so the UI configs restate the full map). Shared dashboard logic lives
+under **`src/ui`**; the **`src/web`** and **`src/tui`** shells each have their own `tsconfig`. The
+root and strict-provide configs **exclude** `src/ui/**`, `src/web/**`, and `src/tui/**` so the
+editor and `typecheck` resolve those trees to the UI configs. Declaration builds for the UI entries
+point at those configs too (see `tsup.config.ts`).
 
 {.note}
 A bundler build (`tsup`/Vite) doesn't mind the split — it compiles from an entry, not the config's

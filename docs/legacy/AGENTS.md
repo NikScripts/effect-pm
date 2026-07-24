@@ -153,7 +153,7 @@ breaking notes into one coherent changeset when possible (see
 | Add a public export | Add the symbol to the module **namespace** object, export the same binding at the module top level (short name), then re-export namespace + short name from `src/index.ts`. Add a `tsup` entry and `package.json` `exports` subpath when the module is a standalone import surface. |
 | Change process semantics | Update `src/Process.ts`, tests in `test/process*.ts`, and the relevant regular docs if behavior is contractual. |
 | Add an example | Add a **form** under `examples/forms/<area>/` or a **scenario** under `examples/scenarios/`; document in `examples/README.md`; add `package.json` script if runnable. Put heavy mock / scenario prose in `examples/shared/` when it would drown the entry script. |
-| Verify types (strict Effect rules) | `pnpm run typecheck` (uses `tsgo`). Do **not** turn diagnostics off. `anyUnknownInErrorContext` / `missingLayerContext` / `effectDoNotation` / `serviceNotAsClass` are `"error"` (`serviceNotAsClass` next-line off only at Service/Tag factories). `strictEffectProvide` is `"message"` (non-blocking). |
+| Verify types (strict Effect rules) | `pnpm run typecheck` (uses `tsgo`). Do **not** turn diagnostics off. `anyUnknownInErrorContext` / `missingLayerContext` / `effectDoNotation` / `serviceNotAsClass` / `flatMapToMap` / `outdatedEffectCodegen` / `unsupportedServiceAccessors` are `"error"` (`serviceNotAsClass` next-line off only at Service/Tag factories). `strictEffectProvide` and `unsafeEffectTypeAssertion` are `"message"` (non-blocking). |
 | Run tests | `pnpm test` |
 | Pick up future work | [`STORAGE.md`](./STORAGE.md) for the persistence model; [`docs/plans/README.md`](../plans/README.md) for the reviewed roadmap. |
 

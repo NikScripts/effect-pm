@@ -1,10 +1,7 @@
 {
-  // The browser/React ruleset. `src/web` is a UI layer, not Effect-domain code: raw `Date` /
-  // `console` / `setTimeout`, DOM `async` handlers and `new Promise` are the correct primitives here,
-  // so the matching Effect-purity diagnostics are turned off (same set as the React example apps —
-  // examples/web-dashboard, examples/resource-tui). The root config excludes `src/web/**`, so these
-  // files resolve to this config in the editor and in `typecheck`. Bundled by tsup (from the `web`
-  // entry), so this is check-only (`noEmit`).
+  // Browser/React ruleset: full Effect diagnostic suite with Effect-purity + anyUnknown off (raw
+  // `Date` / `console` / `setTimeout`, DOM `async` / `new Promise`, loose atom `R`). Plugins replace
+  // on extends, so the map is restated here. Root excludes `src/web/**`. Check-only (`noEmit`).
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
@@ -17,13 +14,74 @@
       {
         "name": "@effect/language-service",
         "diagnosticSeverity": {
-          "globalTimers": "off",
-          "globalDate": "off",
-          "globalConsole": "off",
-          "newPromise": "off",
-          "asyncFunction": "off",
-          "nodeBuiltinImport": "off"
-        }
+            "anyUnknownInErrorContext": "off",
+            "asyncFunction": "off",
+            "catchAllToMapError": "error",
+            "catchUnfailableEffect": "error",
+            "cryptoRandomUUID": "error",
+            "cryptoRandomUUIDInEffect": "error",
+            "deterministicKeys": "error",
+            "duplicatePackage": "error",
+            "effectDoNotation": "error",
+            "effectFnIife": "error",
+            "effectFnOpportunity": "error",
+            "effectGenUsesAdapter": "error",
+            "effectInFailure": "error",
+            "effectInVoidSuccess": "error",
+            "effectMapFlatten": "error",
+            "effectMapVoid": "error",
+            "effectSucceedWithVoid": "error",
+            "extendsNativeError": "error",
+            "flatMapToMap": "error",
+            "genericEffectServices": "error",
+            "globalConsole": "off",
+            "globalConsoleInEffect": "error",
+            "globalDate": "off",
+            "globalDateInEffect": "error",
+            "globalErrorInEffectCatch": "error",
+            "globalErrorInEffectFailure": "error",
+            "globalFetch": "error",
+            "globalFetchInEffect": "error",
+            "globalRandom": "error",
+            "globalRandomInEffect": "error",
+            "globalTimers": "off",
+            "globalTimersInEffect": "error",
+            "instanceOfSchema": "error",
+            "layerMergeAllWithDependencies": "error",
+            "lazyPromiseInEffectSync": "error",
+            "leakingRequirements": "error",
+            "missedPipeableOpportunity": "error",
+            "missingEffectServiceDependency": "error",
+            "missingLayerContext": "error",
+            "multipleEffectProvide": "error",
+            "nestedEffectGenYield": "error",
+            "newPromise": "off",
+            "nodeBuiltinImport": "off",
+            "outdatedApi": "error",
+            "outdatedEffectCodegen": "error",
+            "preferSchemaOverJson": "error",
+            "processEnv": "error",
+            "processEnvInEffect": "error",
+            "redundantSchemaTagIdentifier": "error",
+            "returnEffectInGen": "error",
+            "runEffectInsideEffect": "error",
+            "schemaStructWithTag": "error",
+            "schemaSyncInEffect": "error",
+            "schemaUnionOfLiterals": "error",
+            "scopeInLayerEffect": "error",
+            "serviceNotAsClass": "error",
+            "strictBooleanExpressions": "error",
+            "strictEffectProvide": "message",
+            "tryCatchInEffectGen": "error",
+            "unknownInEffectCatch": "error",
+            "unnecessaryArrowBlock": "error",
+            "unnecessaryEffectGen": "error",
+            "unnecessaryFailYieldableError": "error",
+            "unnecessaryPipe": "error",
+            "unnecessaryPipeChain": "error",
+            "unsafeEffectTypeAssertion": "message",
+            "unsupportedServiceAccessors": "error"
+          }
       }
     ]
   },

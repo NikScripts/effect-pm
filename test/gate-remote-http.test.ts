@@ -1,5 +1,6 @@
 import { Duration, Effect, Layer, Option, Schema, Stream } from "effect";
 import { FetchHttpClient, HttpServer } from "effect/unstable/http";
+import { ServeError } from "effect/unstable/http/HttpServerError";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
@@ -21,7 +22,7 @@ const httpProtocol = (port: number) =>
 
 const withServer = <A, E>(
   use: (port: number) => Effect.Effect<A, E, RemoteGate>,
-): Effect.Effect<A, E, never> => {
+): Effect.Effect<A, E | ServeError, never> => {
   const server = Node.httpServer([
     Gate.serveMemory(RemoteGate, {
       effect: (n: number) =>
@@ -41,7 +42,7 @@ const withServer = <A, E>(
       ),
       Effect.scoped,
     );
-  }).pipe(Effect.provide(server), Effect.scoped) as Effect.Effect<A, E, never>;
+  }).pipe(Effect.provide(server), Effect.scoped);
 };
 
 it("run + status round-trip over http against the real driver", () =>
