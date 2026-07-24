@@ -5,7 +5,7 @@
  * `Daemon.ScheduleEntry` types, the `Daemon.at` / `Daemon.window` window builders, and the
  * toolkit `Daemon.Schedule` resource). Not exported from the barrel and carries no subpath.
  *
- * A process schedule defines when run instances should be spawned. Each entry has a `startAt`
+ * A daemon schedule defines when run instances should be spawned. Each entry has a `startAt`
  * time and optional `stopAt` (the run window). The supervisor watches this service for changes
  * and manages trigger fibers.
  *
@@ -37,7 +37,7 @@ import { registerScheduleLayer } from "./daemonLayerBrand";
 // ============================================================================
 
 /**
- * One scheduled run window for a process.
+ * One scheduled run window for a daemon.
  *
  * @public
  */
@@ -63,7 +63,7 @@ export interface ReconcileResult {
 }
 
 /**
- * Schedule service used by process runtimes and control APIs.
+ * Schedule service used by daemon runtimes and control APIs.
  *
  * @public
  */

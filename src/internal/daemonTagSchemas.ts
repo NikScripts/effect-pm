@@ -15,7 +15,7 @@ export const errorSym: unique symbol = Symbol.for(
   "hyperlink-ts/Daemon/error",
 );
 
-/** Read a wire schema stamped on a process tag. @internal */
+/** Read a wire schema stamped on a daemon tag. @internal */
 export const schemaOf = (
   tag: unknown,
   sym: typeof successSym | typeof errorSym,

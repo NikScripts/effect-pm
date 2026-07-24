@@ -28,7 +28,7 @@ const isUnaryUpdater = <F>(
 ): patch is (previous: F) => F => isCallable(patch) && patch.length === 1;
 
 /**
- * Patch for a resource or process spec.
+ * Patch for a resource or daemon spec.
  *
  * - **Partial object** — shallow-merge fields; use a function value to replace a field.
  * - **`effect` field** — a **unary** function `(previous) => next` updates the prior worker /

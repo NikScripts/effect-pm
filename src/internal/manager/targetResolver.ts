@@ -17,7 +17,7 @@ export interface DaemonManagerTargetCandidate {
   readonly controls: ReadonlyArray<string>;
 }
 
-/** Exactly one process or queue matched the user's input. */
+/** Exactly one daemon or queue matched the user's input. */
 export interface ResolvedDaemonManagerTarget {
   readonly _tag: "Resolved";
   readonly input: string;
@@ -25,7 +25,7 @@ export interface ResolvedDaemonManagerTarget {
   readonly candidate: DaemonManagerTargetCandidate;
 }
 
-/** More than one process or queue matched the user's input. */
+/** More than one daemon or queue matched the user's input. */
 export interface AmbiguousDaemonManagerTarget {
   readonly _tag: "Ambiguous";
   readonly input: string;
@@ -37,7 +37,7 @@ export interface AmbiguousDaemonManagerTarget {
   }>;
 }
 
-/** No process or queue matched the user's input. */
+/** No daemon or queue matched the user's input. */
 export interface MissingDaemonManagerTarget {
   readonly _tag: "Missing";
   readonly input: string;
@@ -65,7 +65,7 @@ const normalizeSegment = (segment: string): string =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
-/** Normalize a full process/queue key or user-entered alias. */
+/** Normalize a full daemon/queue key or user-entered alias. */
 export const normalizeDaemonManagerTarget = (input: string): string =>
   splitSegments(input)
     .map(normalizeSegment)
@@ -104,7 +104,7 @@ const shortestUniqueSuffix = (
 };
 
 /**
- * Resolve one user-entered target against process and queue candidates.
+ * Resolve one user-entered target against daemon and queue candidates.
  */
 export const resolveDaemonManagerTarget = (
   input: string,

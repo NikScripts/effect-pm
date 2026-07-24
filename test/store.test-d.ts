@@ -64,11 +64,11 @@ type QueueEventsResult = ReturnType<MailQueueHandle["events"]> extends Effect.Ef
 
 void ({} as QueueEventsResult satisfies ReadonlyArray<QueueEvent>);
 
-const runGateContract = builtInGateStoreContract(FetchGate);
-type GateRunHandle = Store.HandleOf<typeof runGateContract>;
+const gateContract = builtInGateStoreContract(FetchGate);
+type GateStoreHandle = Store.HandleOf<typeof gateContract>;
 
-declare const _runGateHandle: GateRunHandle;
-void _runGateHandle.record({
+declare const _gateHandle: GateStoreHandle;
+void _gateHandle.record({
   id: "run-1/started",
   resourceId: FetchGate.key,
   runId: "run-1",
@@ -76,8 +76,8 @@ void _runGateHandle.record({
   occurredAt: 1,
   concurrency: 2,
 });
-void _runGateHandle.facts();
-void _runGateHandle.recordStateChange({
+void _gateHandle.facts();
+void _gateHandle.recordStateChange({
   id: "state-1",
   resourceId: FetchGate.key,
   changedAt: 2,
@@ -96,9 +96,9 @@ void _runGateHandle.recordStateChange({
     totalDurationMs: 0,
   },
 });
-void _runGateHandle.stateHistory();
+void _gateHandle.stateHistory();
 
-type GateFactsResult = ReturnType<GateRunHandle["facts"]> extends Effect.Effect<
+type GateFactsResult = ReturnType<GateStoreHandle["facts"]> extends Effect.Effect<
   infer A,
   infer _E,
   infer _R
@@ -274,7 +274,7 @@ const runEngineContract = Store.extend(
       readonly concurrency: number;
     }) => handles.fact.append({ _tag: "Started", ...row }),
   }),
-  runGateContract,
+  gateContract,
 );
 
 type RunEngineHandle = Store.HandleOf<typeof runEngineContract>;

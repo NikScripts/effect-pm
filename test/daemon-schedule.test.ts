@@ -19,7 +19,7 @@ describe("engine schedule primitive (internal)", () => {
     ]))),
   );
 
-  it.effect("replace and get update process schedules", () =>
+  it.effect("replace and get update daemon schedules", () =>
     Effect.gen(function* () {
       const schedule = yield* DaemonSchedule;
       yield* schedule.set([

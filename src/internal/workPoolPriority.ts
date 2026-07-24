@@ -23,7 +23,7 @@ import { resolvePriorityLane } from "./workPoolLanes";
 import { levelToDefaultPriority } from "./priorityMapping";
 import {
   buildPriorityProjection,
-  type PriorityStatus,
+  type WorkPoolPriorityStatus,
 } from "./queueProjection";
 import type { QueueRuntimeProjection } from "./queueProjection";
 import {
@@ -58,7 +58,7 @@ import {
   type QueueStoreWriter,
 } from "./workPool";
 
-export type { PriorityStatus } from "./queueProjection";
+export type { WorkPoolPriorityStatus } from "./queueProjection";
 
 // ============================================================================
 // Public types
@@ -106,7 +106,7 @@ export interface WorkPoolPriorityHandleApi<
   readonly isEmpty: Hyperlink.Subscribable<boolean>;
   readonly completed: Effect.Effect<number>;
   readonly events: Stream.Stream<QueueEvent<T, E>>;
-  readonly status: Hyperlink.Subscribable<PriorityStatus>;
+  readonly status: Hyperlink.Subscribable<WorkPoolPriorityStatus>;
   readonly metrics: Stream.Stream<QueueMetrics>;
   readonly start: Effect.Effect<void, never, R>;
   readonly pause: Effect.Effect<void>;
@@ -343,13 +343,13 @@ const adaptRefill = <T, E, EEnqueue, R>(
           );
           return (
             config.refill!.load as (
-              custom: WorkPoolPriorityHandle<T, E, EEnqueue, R>,
+              queue: WorkPoolPriorityHandle<T, E, EEnqueue, R>,
             ) => Effect.Effect<void, never, R>
           )(handle);
         },
       } satisfies QueueRefill<T, E, EEnqueue, R>);
 
-const buildCustomProjection = (config: WorkPoolPriorityLaneConfig) =>
+const buildPriorityProjectionFromConfig = (config: WorkPoolPriorityLaneConfig) =>
   buildPriorityProjection({
     laneCount: levelResolution(config).laneCount,
     namedLanes: config.namedLanes,
@@ -382,7 +382,7 @@ const makePriorityEffectWithoutSchema = <
 > =>
   Effect.gen(function* () {
     const levels = levelResolution(config);
-    const projection = buildCustomProjection(config);
+    const projection = buildPriorityProjectionFromConfig(config);
     const engine = yield* buildQueueEngine({
       config: {
         ...config,
@@ -467,7 +467,7 @@ const makePriorityEffectWithSchema = <
 
   return Effect.gen(function* () {
     const levels = levelResolution(config);
-    const projection = buildCustomProjection(config);
+    const projection = buildPriorityProjectionFromConfig(config);
     const engine = yield* buildQueueEngine({
       config: {
         ...config,

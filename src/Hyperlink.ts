@@ -2028,7 +2028,7 @@ export type HandlerContextOf<S extends Spec> = Rpc.ToHandler<RpcUnionOf<S>>;
 
 /**
  * The wire tag of a method on the shared transport: the resource's **group id** prefixes
- * the bare method name (`queue/pause`, `process/stop`). The prefix namespaces a resource's
+ * the bare method name (`queue/pause`, `daemon/stop`). The prefix namespaces a resource's
  * procedures so unrelated resource types sharing one `RpcServer` can't collide on a common
  * method name — it's a transport detail, never part of the logical contract (the type-level
  * tag and the `yield* Tag` service surface stay the bare method name).

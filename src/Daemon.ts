@@ -2,7 +2,7 @@
  * **Daemon** — trigger-driven supervised instances.
  *
  * @remarks
- * A started process has a long-lived **driver** fiber that follows
+ * A started daemon has a long-lived **driver** fiber that follows
  * {@link DaemonSchedule} entries. Each eligible `startAt` spawns a run instance.
  * Inside an instance,
  * we repeatedly:
@@ -317,7 +317,7 @@ export const currentScheduleId: Effect.Effect<Option.Option<string>, never, neve
   );
 
 /**
- * Schedule controls for the currently running process runtime.
+ * Schedule controls for the currently running daemon runtime.
  *
  * @remarks
  * Available from both:
@@ -408,7 +408,7 @@ interface DaemonMirror {
 }
 
 /**
- * Engine-facing process store recorder — Storage-free writes at run boundaries.
+ * Engine-facing daemon store recorder — Storage-free writes at run boundaries.
  * Built in {@link buildDaemonImpl} from `pipe(Store.effects, Store.catchWriteErrors)` with
  * `Storage` discharged once via {@link Store.provideContext} (queue / gate golden pattern).
  * @internal
@@ -419,7 +419,7 @@ interface DaemonStoreWriter<Tag extends StoreScopeTag = StoreScopeTag> {
 }
 
 /**
- * One process execution lifecycle fact — shared by live {@link Daemon.events} and durable store
+ * One daemon execution lifecycle fact — shared by live {@link Daemon.events} and durable store
  * rows (`Started` | `Completed` | `Failed` | `Interrupted`). Tag-stamped `success` / `error`
  * ride `Completed.success?` / `Failed.error` the same way on both surfaces.
  *
@@ -441,7 +441,7 @@ interface DaemonBuildStateBase<E, RUser> {
 }
 
 /**
- * User-facing controls for a process's schedule — enumerate, set, add, and clear entries.
+ * User-facing controls for a daemon's schedule — enumerate, set, add, and clear entries.
  *
  * @category models
  * @public
@@ -458,7 +458,7 @@ export interface DaemonScheduleControls {
 }
 
 /**
- * A function that seeds a process's schedule via its {@link DaemonScheduleControls}.
+ * A function that seeds a daemon's schedule via its {@link DaemonScheduleControls}.
  *
  * @category models
  * @public
@@ -1499,7 +1499,7 @@ export const Errors = {
 // #                                                                          #
 // #  Hyperlink toolkit — the light contract (schemas / specs / combinators /  #
 // #  Tag / Schedule) plus the heavy layers (layer / serve / serveRemote).    #
-// #  A process is a Hyperlink: driven locally or remotely over RPC through    #
+// #  A daemon is a Hyperlink: driven locally or remotely over RPC through    #
 // #  the toolkit's location-transparent layers, exactly like WorkPool.  #
 // #                                                                          #
 // ############################################################################
@@ -1585,14 +1585,14 @@ export const daemonExecutionEventFor = makeDaemonExecutionEvent;
 export const scheduleKind = "hyperlink-ts/Daemon/Schedule";
 
 // ============================================================================
-// Base process spec (observation + lifecycle — no schedule verbs)
+// Base daemon spec (observation + lifecycle — no schedule verbs)
 // ============================================================================
 
 /**
- * The **base** process control + observation contract — shared by every process. Mirrors the
+ * The **base** daemon control + observation contract — shared by every daemon. Mirrors the
  * observable/controllable seams the engine supervisor exposes ({@link DaemonSnapshot} + lifecycle).
- * A base process has **no** schedule mutation verbs: arm/disarm is done by mutating a schedule, so
- * those verbs appear only when a process {@link schedule | owns an inline schedule}.
+ * A base daemon has **no** schedule mutation verbs: arm/disarm is done by mutating a schedule, so
+ * those verbs appear only when a daemon {@link schedule | owns an inline schedule}.
  *
  * @category wire schemas
  * @public
@@ -1628,7 +1628,7 @@ export const daemonControlSpec = {
 };
 
 /**
- * Build a process **instance** spec — control surface, live {@link events} stream, and a typed
+ * Build a daemon **instance** spec — control surface, live {@link events} stream, and a typed
  * manual {@link run} RPC. Event element schema matches the durable store union
  * ({@link daemonExecutionEventFor} with the tag's optional `success` / `error`).
  *
@@ -1662,7 +1662,7 @@ export const buildDaemonSpec = <
 };
 
 /**
- * Erased baseline process spec (`Void` success, `Never` error).
+ * Erased baseline daemon spec (`Void` success, `Never` error).
  *
  * @category wire schemas
  * @public
@@ -1672,7 +1672,7 @@ export const daemonSpec = buildDaemonSpec();
 // The spec is validated (without widening) at the `Hyperlink.Tag` call site.
 
 /**
- * The base (schedule-less, result-less) process spec.
+ * The base (schedule-less, result-less) daemon spec.
  *
  * @category models
  * @public
@@ -1697,15 +1697,15 @@ export type DaemonTagOptions = {
   readonly node?: NodeKey<unknown>;
 };
 
-/** Read the success schema stamped on a process tag, if any. @public */
+/** Read the success schema stamped on a daemon tag, if any. @public */
 export { successOf, errorOf };
 
 // ============================================================================
-// The `schedule` verb group (grafted onto a process that owns an inline schedule)
+// The `schedule` verb group (grafted onto a daemon that owns an inline schedule)
 // ============================================================================
 
 /**
- * The schedule mutation verbs a process gains when it {@link schedule | owns an inline schedule}.
+ * The schedule mutation verbs a daemon gains when it {@link schedule | owns an inline schedule}.
  * Reading is `entries` (reactive); mutation is `set` / `add` / `clear`. This is how you arm/disarm:
  * `armed` is derived from the entries, so arming is done by mutating them.
  *
@@ -1714,7 +1714,7 @@ export { successOf, errorOf };
  */
 export const scheduleGroupSpec = {
   entries: Hyperlink.ref(Schema.Array(daemonScheduleEntry)).annotate({
-    description: "The process's current schedule entries (run windows), reactive.",
+    description: "The daemon's current schedule entries (run windows), reactive.",
   }),
   set: Hyperlink.effectFn(Schema.Array(daemonScheduleEntry)).annotate({
     description: "Replace all schedule entries.",
@@ -1788,10 +1788,10 @@ export const scheduleHyperlinkSpec = {
 export type ScheduleHyperlinkSpec = typeof scheduleHyperlinkSpec;
 
 // ============================================================================
-// The `result` field (grafted onto a value-returning process)
+// The `result` field (grafted onto a value-returning daemon)
 // ============================================================================
 
-/** The reactive `result` field a value-returning process gains via {@link result}. */
+/** The reactive `result` field a value-returning daemon gains via {@link result}. */
 type ResultField<A extends Schema.Top> = RefField<
   Method<undefined, Schema.Option<A>, typeof Schema.Never, true>
 >;
@@ -1800,7 +1800,7 @@ type ResultField<A extends Schema.Top> = RefField<
 type ResultGroupSpec<A extends Schema.Top> = { readonly result: ResultField<A> };
 
 /**
- * Per-tag process spec — control surface, live `events`, plus stamped `run` success/error on the wire.
+ * Per-tag daemon spec — control surface, live `events`, plus stamped `run` success/error on the wire.
  *
  * @category models
  * @public
@@ -1969,7 +1969,7 @@ export const scheduleDefine = (
 // Combinator plumbing: augment a tag's spec (rebuild the flat spec + RPC group)
 // ============================================================================
 
-/** Where a process tag's schedule mode (inline windows vs external reference) is stowed. @internal */
+/** Where a daemon tag's schedule mode (inline windows vs external reference) is stowed. @internal */
 const scheduleModeSym: unique symbol = Symbol.for(
   "hyperlink-ts/Daemon/scheduleMode",
 );
@@ -1984,7 +1984,7 @@ const isDaemonTagOptions = (value: unknown): value is DaemonTagOptions =>
     "success" in value ||
     "error" in value);
 
-/** Graft `result` ref + stamp wire schemas on a process tag. @internal */
+/** Graft `result` ref + stamp wire schemas on a daemon tag. @internal */
 const applyDaemonTagSchemas = (
   tag: HyperlinkTag<any, any, any>,
   schemas: {
@@ -2052,7 +2052,7 @@ const buildDaemonTag = <Self>(
   return withDaemonReadiness(stamped);
 };
 
-/** How a process is scheduled — read by the runtime to build the right impl. @internal */
+/** How a daemon is scheduled — read by the runtime to build the right impl. @internal */
 type ScheduleMode =
   | { readonly _tag: "inline"; readonly windows: ReadonlyArray<ScheduleWindow> }
   | { readonly _tag: "reference"; readonly source: HyperlinkTag<unknown, ScheduleHyperlinkSpec> };
@@ -2064,7 +2064,7 @@ const isScheduleMode = (value: unknown): value is ScheduleMode =>
   "_tag" in value &&
   (value._tag === "inline" || value._tag === "reference");
 
-/** Read a process tag's {@link ScheduleMode}, if any (set by {@link schedule}). @internal */
+/** Read a daemon tag's {@link ScheduleMode}, if any (set by {@link schedule}). @internal */
 const scheduleModeOf = (tag: unknown): ScheduleMode | undefined => {
   if ((typeof tag === "object" || typeof tag === "function") && tag !== null && scheduleModeSym in tag) {
     const value = tag[scheduleModeSym];
@@ -2101,7 +2101,7 @@ const scheduleGroupFlat: FlatSpec = Object.fromEntries(
 // ============================================================================
 
 /**
- * Attach a schedule to a process (pipeable). Two forms, distinguished by argument:
+ * Attach a schedule to a daemon (pipeable). Two forms, distinguished by argument:
  *
  * - **inline windows** — the daemon **owns** an in-memory schedule seeded with `windows`, and its
  *   contract gains the `schedule` verb group (`entries` / `set` / `add` / `clear`):
@@ -2237,20 +2237,20 @@ export const Tag = <Self>() => {
   // The single, guarded cast: an overloaded *function* (`build`) isn't structurally assignable to a
   // call-signature *object* type (`DaemonTagBuild<Self>`) even when it implements exactly those
   // overloads — a known TS limitation (the same class as WorkPool's `nameQueueService` cast).
-  // It's soundness-guarded: `process-driver` / `daemon-contract-shape` .test-d.ts exercise
+  // It's soundness-guarded: `daemon-driver` / `daemon-contract-shape` .test-d.ts exercise
   // `Daemon.Tag()` in every form, so a drift between `build` and `DaemonTagBuild` fails the build.
   return build as DaemonTagBuild<Self>;
 };
 
 /**
  * Define a standalone {@link Schedule} resource — a reusable, RPC-capable window manager one or more
- * processes can be gated by (via `.pipe(`{@link schedule}`(ThisSchedule))`). Full CRUD; pass
+ * daemons can be gated by (via `.pipe(`{@link schedule}`(ThisSchedule))`). Full CRUD; pass
  * `options.node` to bind it to a {@link Node.Tag}, like {@link Tag}.
  *
  * ```ts
  * class SeasonSchedule extends Daemon.Schedule<SeasonSchedule>()("app/SeasonSchedule") {}
  * const s = yield* SeasonSchedule;
- * yield* s.add({ id: "wk2", startAt: wk2Start, stopAt: wk2End }); // arms every gated process
+ * yield* s.add({ id: "wk2", startAt: wk2Start, stopAt: wk2End }); // arms every gated daemon
  * ```
  *
  * @category schedule
@@ -2379,7 +2379,7 @@ const fromWindow = (w: ScheduleWindow): DaemonScheduleEntry => ({
 // ============================================================================
 
 /**
- * Build the live process driver behind `tag` and map it onto the toolkit service impl — the adapter
+ * Build the live daemon driver behind `tag` and map it onto the toolkit service impl — the adapter
  * shared by {@link layer} / {@link serve} / {@link serveRemote}. The returned record is shaped to the
  * tag's composed spec (base, `+ schedule`, `+ result`); `Hyperlink.layer` flattens it against the
  * tag's flat spec, so extra members are simply present when the spec declares them.
@@ -2399,7 +2399,7 @@ const buildDaemonImpl = <A, E, R>(
       return yield* Effect.die(new ReferenceScheduleNotWired({ daemon: tag.key }));
     }
 
-    // ── result capture (value-returning process) ──
+    // ── result capture (value-returning daemon) ──
     const successSchema = successOf(tag);
     const resultRef =
       successSchema !== undefined
@@ -2528,7 +2528,7 @@ const withDefaultMemory = <A, E, R>(
 ): Layer.Layer<A | Store.Storage, E, R> => Store.withDefaultStorage(layer);
 
 /**
- * The **local** layer for a process: build its driver (auto-started) and provide its service.
+ * The **local** layer for a daemon: build its driver (auto-started) and provide its service.
  *
  * Soft-defaults an in-memory {@link Store.Storage} (R fulfilled). Override with your app store:
  *
@@ -2577,7 +2577,7 @@ export function layerMemory(
 }
 
 /**
- * Serve a process **and** grant its local instance from one materialization.
+ * Serve a daemon **and** grant its local instance from one materialization.
  *
  * Soft-defaults {@link Store.Storage}. Override with `Layer.provide` / `provideMerge(AppStore)`.
  *
@@ -2629,7 +2629,7 @@ export function serveMemory(
 }
 
 /**
- * Serve a process **remotely (served-only)** — mounts its RPC handlers without granting the local
+ * Serve a daemon **remotely (served-only)** — mounts its RPC handlers without granting the local
  * instance, preserving the requirement `R` for a per-resource `Layer.provide`.
  *
  * Soft-defaults {@link Store.Storage}. Override with `Layer.provide` / `provideMerge(AppStore)`.
@@ -2686,7 +2686,7 @@ export const configure = <A = void, E = never, R = never>(
 ): Layer.Layer<never> => configureLayer(tag.key, patch);
 
 /**
- * Register this process on an app {@link Store.Service} — built-in execution analytics with an
+ * Register this daemon on an app {@link Store.Service} — built-in execution analytics with an
  * optional bare spec object merged in:
  *
  * ```ts

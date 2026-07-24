@@ -279,7 +279,7 @@ export const queueBundle = (tag: LeafTag): QueueBundle => {
 
 type DaemonStatus = DaemonSvc["status"] extends Hyperlink.Subscribable<infer S> ? S : never;
 
-/** The atoms + controls one process card needs — derived from the tag. */
+/** The atoms + controls one daemon card needs — derived from the tag. */
 export interface DaemonBundle {
   readonly status: ValueAtom<DaemonStatus>;
   readonly logs: ValueAtom<ReadonlyArray<LogLine>>;
@@ -315,7 +315,7 @@ export const leafTags = (node: { readonly members: Record<string, unknown> }): R
 export const queueLeaves = (node: { readonly members: Record<string, unknown> }): ReadonlyArray<LeafTag> =>
   leafTags(node).filter((m) => isQueueLeaf(m)) as ReadonlyArray<LeafTag>;
 
-/** Only the process leaves of a tree. */
+/** Only the daemon leaves of a tree. */
 export const daemonLeaves = (node: { readonly members: Record<string, unknown> }): ReadonlyArray<DaemonTag> =>
   leafTags(node).filter((m) => isDaemonLeaf(m)) as ReadonlyArray<DaemonTag>;
 

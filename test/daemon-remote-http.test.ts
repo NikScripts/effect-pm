@@ -10,7 +10,7 @@ import * as Node from "../src/Node";
 // `httpServer([Daemon.serveMemory(...)])`, driven by `Hyperlink.client` over the wire — the same
 // `yield* Tag` surface a local consumer uses, only the layer differs. Proves the control plane
 // (start/stop), observation (`status`), the out-of-band run (run), and the schedule
-// CRUD all cross real RPC. An empty inline schedule keeps the process disarmed (so `armed` is
+// CRUD all cross real RPC. An empty inline schedule keeps the daemon disarmed (so `armed` is
 // observably false) and grants the `schedule` verb group.
 class RemoteProc extends Daemon.Tag<RemoteProc>()("proc-remote/P").pipe(
   Daemon.schedule([]),

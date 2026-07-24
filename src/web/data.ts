@@ -248,7 +248,7 @@ export interface ShardMapBundle {
 export interface GateBundle {
   readonly status: ValueAtom<GateStatus>;
 }
-/** The atoms + controls one process card needs — derived from the tag. */
+/** The atoms + controls one daemon card needs — derived from the tag. */
 export interface DaemonBundle {
   readonly status: ValueAtom<DaemonStatus>;
   readonly logs: ValueAtom<ReadonlyArray<LogLine>>;
@@ -707,7 +707,7 @@ export const shardMapBundle = <R, ER>(
 const gateBundleCache = new WeakMap<object, Map<string, GateBundle>>();
 
 /** Build (once per runtime+tag) the atom bundle for a **Gate** tag — subscribes to the reactive
- *  `status` ref (streamed, like the queue/process cards). @public */
+ *  `status` ref (streamed, like the queue/daemon cards). @public */
 export const gateBundle = <R, ER>(
   runtime: DashboardRuntime<R, ER>,
   tag: GateTag<R>,
@@ -723,18 +723,18 @@ export const gateBundle = <R, ER>(
   return bundle;
 };
 
-/** Build (once per runtime+tag) the atom bundle for a process tag. */
+/** Build (once per runtime+tag) the atom bundle for a daemon tag. */
 export const daemonBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: DaemonTag<R>): DaemonBundle => {
   const cache = cacheFor(daemonBundleCache, runtime);
   const existing = cache.get(tag.key);
   if (existing !== undefined) return existing;
   const node = nodeOf(tag);
   if (node === undefined) {
-    throw new Error(`process tag ${tag.key} is missing a node`);
+    throw new Error(`daemon tag ${tag.key} is missing a node`);
   }
   bumpLogIdFrom(`${tag.key}/logs`);
   // The inline `schedule` group is optional (only processes that own an inline schedule have it),
-  // so the schedule read/mutations degrade to empty / no-op when a process is schedule-less.
+  // so the schedule read/mutations degrade to empty / no-op when a daemon is schedule-less.
   const scheduleEntries = Effect.flatMap(tag, (p) =>
     p.schedule === undefined
       ? Effect.succeed<ReadonlyArray<ScheduleEntry>>([])

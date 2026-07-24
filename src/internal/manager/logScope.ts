@@ -20,7 +20,7 @@ import {
  * Resolved operator log filter from a single user-entered target string.
  *
  * Hyperlink scopes carry the registration **key** (same as `Tag.key`). Kind is in `_tag`
- * (`process` | `queue`); RPC wire prefix stays `groupId`.
+ * (`hyperlink-ts/Daemon` | `hyperlink-ts/WorkPool`); RPC wire prefix stays `groupId`.
  *
  * @internal
  */
@@ -116,7 +116,7 @@ export const resolveLogScope = <G extends GroupCatalogEntry>(
           });
         }
         return yield* Effect.fail({
-          reason: `No group, process, or queue matched '${value}'`,
+          reason: `No group, daemon, or queue matched '${value}'`,
         });
       }),
   });

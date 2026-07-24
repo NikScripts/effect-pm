@@ -20,7 +20,7 @@ export const testBillingNodeKey = "billing/scores" as const;
 /** **Node log key** — relay + `Node.logs` integration test. */
 export const testRelayNodeKey = "test/relay" as const;
 
-/** **Hyperlink key** — process tag key paired with {@link testBillingNodeKey}. */
+/** **Hyperlink key** — daemon tag key paired with {@link testBillingNodeKey}. */
 export const testSyncDaemonKey = "billing/SyncWorker" as const;
 
 /** **Node log key** — TUI example fleet (`Node.Tag` `acme/tui`). */

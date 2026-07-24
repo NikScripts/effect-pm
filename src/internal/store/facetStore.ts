@@ -1,5 +1,5 @@
 /**
- * Shared registration helpers for resource-kind store facets (queue, process, …).
+ * Shared registration helpers for resource-kind store facets (queue, daemon, …).
  *
  * @module internal/store/facetStore
  * @internal

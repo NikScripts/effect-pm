@@ -79,7 +79,7 @@ export const useShardMapBundle = (tag: ShardMapTag): ShardMapBundle =>
 export const useGateBundle = (tag: GateTag): GateBundle =>
   gateBundle(useRuntime(), tag);
 
-/** Atom bundle for a process tag, memoized per runtime+tag. @public */
+/** Atom bundle for a daemon tag, memoized per runtime+tag. @public */
 export const useDaemonBundle = (tag: DaemonTag): DaemonBundle => daemonBundle(useRuntime(), tag);
 
 /** Atom bundle for an API-metrics tag, memoized per runtime+tag. @public */

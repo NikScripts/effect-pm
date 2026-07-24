@@ -15,13 +15,13 @@ const alwaysOnEntry = {
 };
 
 describe("Daemon.make", () => {
-  it("sets process.name to the id passed as the first argument", () => {
+  it("sets daemon.name to the id passed as the first argument", () => {
     const id = "test/make-id-first" as const;
     const proc = Daemon.make(id, { effect: Effect.void });
     expect(proc.name).toBe(id);
   });
 
-  it("sets process.name for positional effect overload", () => {
+  it("sets daemon.name for positional effect overload", () => {
     const id = "test/make-positional" as const;
     const proc = Daemon.make(id, Effect.void);
     expect(proc.name).toBe(id);

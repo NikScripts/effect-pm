@@ -65,7 +65,7 @@ import * as relay from "./internal/logs/relay";
 export type NodeLogKey = string;
 
 /**
- * **Hyperlink key** — identity of a queue, process, or tag (`Hyperlink.Tag.key`). Used in lineage,
+ * **Hyperlink key** — identity of a queue, daemon, or tag (`Hyperlink.Tag.key`). Used in lineage,
  * `byHyperlink`, and {@link LogEntry.hasKey}.
  *
  * @see `docs/LOGS.md` — Key catalog → Hyperlink keys

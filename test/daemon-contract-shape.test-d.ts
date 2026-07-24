@@ -36,7 +36,7 @@ class Matches extends Daemon.Tag<Matches>()("shape/Matches").pipe(
   ]),
 ) {}
 
-// standalone schedule resource + a process gated by it (no schedule verbs on the process)
+// standalone schedule resource + a daemon gated by it (no schedule verbs on the daemon)
 class SeasonSchedule extends Daemon.Schedule<SeasonSchedule>()("shape/SeasonSchedule") {}
 class Ingest extends Daemon.Tag<Ingest>()("shape/Ingest").pipe(
   Daemon.schedule(SeasonSchedule),

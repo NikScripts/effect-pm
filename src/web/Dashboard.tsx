@@ -116,7 +116,7 @@ const LogsPage = (props: { readonly tag: QueueTag | DaemonTag; readonly onClose:
 
 const DAY_MS = 86_400_000;
 
-/** Fullscreen weekly schedule view for a process — its own route (`/…/Daemon/schedule`): a 7-day
+/** Fullscreen weekly schedule view for a daemon — its own route (`/…/Daemon/schedule`): a 7-day
  *  calendar grid of the run windows. Week nav up top (top-right kept free); add / clear / lock in a
  *  bottom bar; tap a window to edit or delete it. */
 const SchedulePage = (props: { readonly tag: DaemonTag; readonly onClose: () => void }): React.ReactElement => {
@@ -178,7 +178,7 @@ const SchedulePage = (props: { readonly tag: DaemonTag; readonly onClose: () => 
         open={confirmClear}
         onOpenChange={setConfirmClear}
         title="Clear schedule?"
-        description="Remove all run windows. The process disarms until new windows are added."
+        description="Remove all run windows. The daemon disarms until new windows are added."
         confirmLabel="Clear"
         destructive
         onConfirm={clearAll}
@@ -226,7 +226,7 @@ const DaemonDetail = (props: {
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
-  // One lock for the whole process detail — guards both the controls and the schedule editor.
+  // One lock for the whole daemon detail — guards both the controls and the schedule editor.
   const [locked, setLocked] = React.useState(true);
   return (
     <div className="flex h-[100dvh] flex-col gap-3 overflow-hidden safe-area landscape:h-auto landscape:min-h-[100dvh] landscape:overflow-visible" style={vt}>
