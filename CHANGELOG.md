@@ -82,7 +82,9 @@ accumulated since 0.8.0-beta.28.
 ### Observability and UI
 
 - Custom metrics served from the Metric registry; per-type dashboard widgets (browser + Ink TUI
-  over one data layer); unified `pm` CLI (no-arg → TUI); `/cli`, `/tui`, `/web` subpath exports.
+  over one data layer); `/cli`, `/tui`, `/web` subpath exports.
+- **Web dashboard naming:** `RunTag` / `isRunTag` / `useRunBundle` / `runBundle` →
+  `GateTag` / `isGateTag` / `useGateBundle` / `gateBundle`; `processLeaves` → `daemonLeaves`.
 
 ### Docs
 

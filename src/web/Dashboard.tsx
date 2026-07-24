@@ -29,7 +29,7 @@ import {
   isDaemonTag,
   isFleetHealthTag,
   isQueueTag,
-  isRunTag,
+  isGateTag,
   isShardMapTag,
   isTelemetryTag,
   leafByKey,
@@ -317,7 +317,7 @@ const DashboardInner = (props: {
     if (isFleetHealthTag(selected)) return <FleetHealthDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
     if (isTelemetryTag(selected)) return <TelemetryDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
     if (isShardMapTag(selected)) return <ShardMapDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
-    if (isRunTag(selected)) return <GateDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
+    if (isGateTag(selected)) return <GateDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
     return <></>;
   }
 
@@ -452,7 +452,7 @@ const NodeResourceView = (props: {
   if (isFleetHealthTag(tag)) return <FleetHealthDetail tag={tag} onBack={props.onBack} />;
   if (isTelemetryTag(tag)) return <TelemetryDetail tag={tag} onBack={props.onBack} />;
   if (isShardMapTag(tag)) return <ShardMapDetail tag={tag} onBack={props.onBack} />;
-  if (isRunTag(tag)) return <GateDetail tag={tag} onBack={props.onBack} />;
+  if (isGateTag(tag)) return <GateDetail tag={tag} onBack={props.onBack} />;
   return <></>;
 };
 

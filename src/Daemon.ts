@@ -38,8 +38,8 @@
  * This module is consumed as an Effect **module namespace** (`export * as Daemon`), so member
  * access tree-shakes. It carries two cooperating surfaces:
  * - **Engine** — {@link make} (+ {@link Service}, {@link currentScheduleId}, {@link scheduleControls},
- *   {@link Errors}): construct and run a supervised process directly.
- * - **Hyperlink toolkit** — {@link Tag} / {@link Schedule} / {@link schedule} shape a process as a
+ *   {@link Errors}): construct and run a supervised daemon directly.
+ * - **Hyperlink toolkit** — {@link Tag} / {@link Schedule} / {@link schedule} shape a daemon as a
  *   {@link Hyperlink}; declare optional {@link DaemonTagOptions.success} and
  *   {@link DaemonTagOptions.error} on {@link Tag} (positional or config object). Use
  *   {@link layer} / {@link serve} / {@link serveRemote} / {@link configure} to run it locally or over

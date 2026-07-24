@@ -20,7 +20,7 @@ import { priorityKind as customQueueKind, customQueueStatus } from "../WorkPool"
 import { kind as fleetHealthKind, type FleetStatus, type NodeReport } from "../FleetHealth";
 import { kind as telemetryKind, MetricsSnapshot, type MetricDatum } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";
-import { kind as runKind, type RunGateStatus } from "../Gate";
+import { kind as gateKind, type RunGateStatus } from "../Gate";
 import { kind as daemonKind, daemonScheduleEntry, daemonStatus } from "../Daemon";
 import { kind as apiKind } from "../ApiMetrics";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../ApiUsageSchema";
@@ -169,14 +169,14 @@ interface ShardMapService {
 /** A shard-map tag — yieldable for its live service. @public */
 export type ShardMapTag<R = never> = Effect.Effect<ShardMapService, never, R> & { readonly key: string };
 
-/** The structural shape of a **run-gate** resource's live service — a reactive `status` ref carrying
+/** The structural shape of a **Gate** resource's live service — a reactive `status` ref carrying
  *  the live concurrency counters (waiting / in-flight / completed / failed / interrupted / duration). */
-interface RunService {
+interface GateService {
   readonly status: Subscribable<RunGateStatus>;
 }
-/** A run-gate tag — yieldable for its live service. @public */
-export type RunTag<R = never> = Effect.Effect<RunService, never, R> & { readonly key: string };
-/** A process tag — yieldable for its live service. */
+/** A Gate tag — yieldable for its live service. @public */
+export type GateTag<R = never> = Effect.Effect<GateService, never, R> & { readonly key: string };
+/** A daemon tag — yieldable for its live service. */
 export type DaemonTag<R = never> = Effect.Effect<DaemonService, never, R> & { readonly key: string };
 /** An API-metrics tag — yieldable for its live service. */
 export type ApiTag<R = never> = Effect.Effect<ApiService, never, R> & { readonly key: string };
@@ -242,9 +242,9 @@ export interface ShardMapBundle {
   readonly sizeByNode: ValueAtom<Record<string, number>>;
   readonly sizeLocal: ValueAtom<number>;
 }
-/** The atoms one **run-gate** card needs — the live status (concurrency counters) streamed from the
+/** The atoms one **Gate** card needs — the live status (concurrency counters) streamed from the
  *  reactive `status` ref. Read-only. @public */
-export interface RunBundle {
+export interface GateBundle {
   readonly status: ValueAtom<RunGateStatus>;
 }
 /** The atoms + controls one process card needs — derived from the tag. */
@@ -366,8 +366,8 @@ export const isTelemetryTag = (m: unknown): m is TelemetryTag =>
 export const isShardMapTag = (m: unknown): m is ShardMapTag =>
   hyperlinkKindOf(m) === shardMapKind;
 /** Run-gate guard — its own stamped kind (dispatched by exact kind key). @public */
-export const isRunTag = (m: unknown): m is RunTag =>
-  hyperlinkKindOf(m) === runKind;
+export const isGateTag = (m: unknown): m is GateTag =>
+  hyperlinkKindOf(m) === gateKind;
 
 // one combined metrics stream carries both backfill points and live raw metrics
 type MetricsItem = { readonly point: MetricPoint } | { readonly metric: QueueMetrics };
@@ -702,19 +702,19 @@ export const shardMapBundle = <R, ER>(
   return bundle;
 };
 
-const runBundleCache = new WeakMap<object, Map<string, RunBundle>>();
+const gateBundleCache = new WeakMap<object, Map<string, GateBundle>>();
 
-/** Build (once per runtime+tag) the atom bundle for a **run-gate** tag — subscribes to the reactive
+/** Build (once per runtime+tag) the atom bundle for a **Gate** tag — subscribes to the reactive
  *  `status` ref (streamed, like the queue/process cards). @public */
-export const runBundle = <R, ER>(
+export const gateBundle = <R, ER>(
   runtime: DashboardRuntime<R, ER>,
-  tag: RunTag<R>,
-): RunBundle => {
-  const cache = cacheFor(runBundleCache, runtime);
+  tag: GateTag<R>,
+): GateBundle => {
+  const cache = cacheFor(gateBundleCache, runtime);
   const existing = cache.get(tag.key);
   if (existing !== undefined) return existing;
 
-  const bundle: RunBundle = {
+  const bundle: GateBundle = {
     status: runtime.atom(Stream.unwrap(Effect.map(tag, (r) => r.status.changes))),
   };
   cache.set(tag.key, bundle);
@@ -862,7 +862,7 @@ export const nodeStatusBundle = <R, ER>(
   return bundle;
 };
 
-/** Walk a `Group.Tag` tree to its leaf resource tags (queues + processes), raw. */
+/** Walk a `Group.Tag` tree to its leaf resource tags (WorkPools + Daemons), raw. */
 export const leafTags = (node: GroupNode): ReadonlyArray<unknown> =>
   Object.values(Group.members(node)).flatMap((m) => (Group.isGroup(m) ? leafTags(m) : [m]));
 
@@ -870,6 +870,6 @@ export const leafTags = (node: GroupNode): ReadonlyArray<unknown> =>
 export const queueLeaves = (node: GroupNode): ReadonlyArray<QueueTag> =>
   leafTags(node).filter(isQueueTag);
 
-/** Only the process leaves of a tree. */
-export const processLeaves = (node: GroupNode): ReadonlyArray<DaemonTag> =>
+/** Only the daemon leaves of a tree. */
+export const daemonLeaves = (node: GroupNode): ReadonlyArray<DaemonTag> =>
   leafTags(node).filter(isDaemonTag);

@@ -1,7 +1,7 @@
 /**
  * @module web
  *
- * **The resource dashboard for the browser** — the web counterpart to the CLI/TUI renderers.
+ * **The HyperService dashboard for the browser** — the web counterpart to the CLI/TUI renderers.
  * Point `<Dashboard runtime group />` at a reactive `runtime` (an `Atom.runtime(layer)` over
  * your tags — local engine or `Hyperlink.client` over http) and a root `Group`, and it renders
  * the responsive drill-down: WorkPool / Daemon / subgroup cards, a styled detail per HyperService

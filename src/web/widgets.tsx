@@ -30,7 +30,7 @@ import {
   type FleetHealthTag,
   type TelemetryTag,
   type ShardMapTag,
-  type RunTag,
+  type GateTag,
   type GroupNode,
   type LogLine,
   type MetricPoint,
@@ -45,7 +45,7 @@ import {
   isFleetHealthTag,
   isTelemetryTag,
   isShardMapTag,
-  isRunTag,
+  isGateTag,
   isDaemonTag,
   isQueueTag,
   nodesOf,
@@ -76,7 +76,7 @@ import {
 } from "./widget-registry";
 import type { ApiUsageMetrics } from "../ApiUsageSchema";
 import type { Status as NodeStatusValue } from "../Node";
-import { useApiBundle, useCustomQueueBundle, useFleetHealthBundle, useNodeBundle, useDaemonBundle, useQueueBundle, useRunBundle, useShardMapBundle, useTelemetryBundle } from "./runtime";
+import { useApiBundle, useCustomQueueBundle, useFleetHealthBundle, useNodeBundle, useDaemonBundle, useQueueBundle, useGateBundle, useShardMapBundle, useTelemetryBundle } from "./runtime";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
 import { useViewTransitionStyle } from "./useViewTransition";
 import { dlog } from "./debug-console";
@@ -2540,13 +2540,13 @@ const RunCounter = (props: {
  * interrupted outcome tallies, and the mean run duration. Read-only. @public
  */
 export const GateCard = (props: {
-  readonly tag: RunTag;
+  readonly tag: GateTag;
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
-  readonly onOpen: (tag: RunTag) => void;
+  readonly onOpen: (tag: GateTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
-  const bundle = useRunBundle(props.tag);
+  const bundle = useGateBundle(props.tag);
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const concurrency = s !== undefined ? s.concurrency : 0;
@@ -2850,11 +2850,11 @@ export const FleetHealthDetail = (props: {
  * @public
  */
 export const GateDetail = (props: {
-  readonly tag: RunTag;
+  readonly tag: GateTag;
   readonly name?: string;
   readonly onBack: () => void;
 }): React.ReactElement => {
-  const bundle = useRunBundle(props.tag);
+  const bundle = useGateBundle(props.tag);
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const concurrency = s?.concurrency ?? 0;
@@ -2950,7 +2950,7 @@ const shardMapWidget: Widget = ({ tag, name, onOpen }) =>
     <FallbackCard tag={tag} name={name} onOpen={onOpen} />
   );
 const runWidget: Widget = ({ tag, name, onOpen }) =>
-  isRunTag(tag) ? (
+  isGateTag(tag) ? (
     <GateCard tag={tag} name={name} onOpen={onOpen} />
   ) : (
     <FallbackCard tag={tag} name={name} onOpen={onOpen} />
