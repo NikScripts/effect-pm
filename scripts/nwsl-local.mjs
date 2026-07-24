@@ -3,7 +3,7 @@
  * Optional local-only NWSL SDP tree under `examples/scenarios/nwslsoccer/` (gitignored).
  * CI and fresh clones: exits 0 with a short message when the tree is missing.
  *
- *   node scripts/nwsl-local.mjs example   → tsx examples/scenarios/nwslsoccer/http-api-resource.ts
+ *   node scripts/nwsl-local.mjs example   → tsx examples/scenarios/nwslsoccer/gate-http-api-client.ts
  *   node scripts/nwsl-local.mjs test      → vitest --config vitest.nwsl.config.ts
  */
 import { spawnSync } from "node:child_process";
@@ -17,10 +17,10 @@ const nwslRoot = join(root, "examples", "scenarios", "nwslsoccer");
 const cmd = process.argv[2];
 
 if (cmd === "example") {
-  const entry = join(nwslRoot, "http-api-resource.ts");
+  const entry = join(nwslRoot, "gate-http-api-client.ts");
   if (!existsSync(entry)) {
     console.log(
-      "Skip: examples/scenarios/nwslsoccer/http-api-resource.ts not found (optional gitignored tree).",
+      "Skip: examples/scenarios/nwslsoccer/gate-http-api-client.ts not found (optional gitignored tree).",
     );
     process.exit(0);
   }

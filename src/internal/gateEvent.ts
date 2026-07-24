@@ -8,12 +8,12 @@
 import { Schema } from "effect";
 
 /** Read payload for the built-in `facts` query. @internal */
-export const runFactReadPayload = Schema.Struct({
+export const gateFactReadPayload = Schema.Struct({
   limit: Schema.optional(Schema.Number),
   runId: Schema.optional(Schema.String),
 });
 
-const runFinishedBase = {
+const gateFinishedBase = {
   id: Schema.String,
   resourceId: Schema.String,
   runId: Schema.String,
@@ -36,11 +36,11 @@ export const makeGateFactEvent = <
 ) => {
   const completedFields =
     success === undefined
-      ? runFinishedBase
-      : { ...runFinishedBase, success: Schema.optional(success) };
+      ? gateFinishedBase
+      : { ...gateFinishedBase, success: Schema.optional(success) };
 
   const failedFields = {
-    ...runFinishedBase,
+    ...gateFinishedBase,
     error: error === undefined ? Schema.String : error,
   };
 

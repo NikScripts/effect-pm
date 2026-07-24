@@ -6,7 +6,7 @@
  * `Gate` + `HttpClientGate`.
  *
  * Run (from repo root):
- *   `npm run example:nwsl-http-api-resource`
+ *   `npm run example:nwsl-gate-http-api`
  *
  * Requires this `examples/nwslsoccer` tree (same as the hand-rolled client). Uses
  * `NWSL_SOCCER_API_BASE_URL` (optional; default `https://api-sdp.nwslsoccer.com`) and optional
@@ -60,7 +60,7 @@ const program = Effect.gen(function* () {
 }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv())));
 
 Effect.runPromise(program).then(
-  () => console.log("example:nwsl-http-api-resource finished OK"),
+  () => console.log("example:nwsl-gate-http-api finished OK"),
   (e) => {
     console.error(e);
     process.exitCode = 1;

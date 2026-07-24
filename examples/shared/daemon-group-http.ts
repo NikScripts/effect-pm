@@ -1,7 +1,7 @@
 /**
  * @module examples/shared/daemon-group-http
  *
- * HTTP + queue helpers for **`examples/forms/process-group/*`** contract demos.
+ * HTTP + queue helpers for **`daemon/group contract demos`** contract demos.
  */
 
 import { Duration, Effect, Schema } from "effect";

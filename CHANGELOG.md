@@ -23,7 +23,9 @@ accumulated since 0.8.0-beta.28.
   Gate wire helpers follow: `runGateStatus` / `runSpec` / `RunInstanceSpec` /
   `RunGateStatus` / `RunGateHandle` → `gateStatus` / `gateSpec` / `GateInstanceSpec` /
   `GateStatus` / `GateRunHandle`. `HttpClientRunGate` → **`HttpClientGate`**
-  (subpath too). `DaemonDefinition.process` → **`daemon`**.
+  (subpath too). `DaemonDefinition.process` → **`daemon`**. Gate store
+  state-change reasons: `run-resource.run.*` → **`gate.run.*`**. Daemon handle
+  discriminant `type: "managed"` → **`"daemon"`**.
 - `CustomQueueHyperlink` folds into **`WorkPool.priority(...)`** (peer constructor beside
   `WorkPool.Tag`; `layer`/`serve`/`store`/`configure` dispatch on the tag; engine stays
   tree-shakeable as `WorkPool.makePriority`). Subpath removed. Public wire helpers rename
@@ -1371,7 +1373,7 @@ undefined>` overrides per host (env ports, tunnels, Effect `Config`), falling ba
 
   The multi-group CLI now checks target contract capabilities before issuing remote status/control requests, so unsupported process and queue commands fail locally before HTTP.
 
-  Adds the first runtime state/fact vocabulary for `RunResource`. Originally landed as a generic `RuntimeObserver` + `RuntimeFact` model; it has since been re-shaped into a per-domain **`RunResourceStore`** storage facet (`@nikscripts/effect-pm/store/RunResource`) — see the separate `process-store-runtime-facet` changeset for the breaking shape. `RunResource` publishes `run-resource.run.started` / `run-resource.run.completed` / `run-resource.run.failed` facts plus `RunResourceState` transitions through `RunResourceStore.recordRunStarted` / `.recordRunCompleted` / `.recordRunFailed` / `.recordStateChange` static optional emitters, which no-op when the facet layer is absent and persist as `run-resource.fact.recorded` / `run-resource.state.changed` analytics events when composed. The Prisma codec supports those event types.
+  Adds the first runtime state/fact vocabulary for `RunResource`. Originally landed as a generic `RuntimeObserver` + `RuntimeFact` model; it has since been re-shaped into a per-domain **`RunResourceStore`** storage facet (`@nikscripts/effect-pm/store/RunResource`) — see the separate `process-store-runtime-facet` changeset for the breaking shape. `RunResource` publishes `gate.run.started` / `gate.run.completed` / `gate.run.failed` facts plus `RunResourceState` transitions through `RunResourceStore.recordRunStarted` / `.recordRunCompleted` / `.recordRunFailed` / `.recordStateChange` static optional emitters, which no-op when the facet layer is absent and persist as `run-resource.fact.recorded` / `run-resource.state.changed` analytics events when composed. The Prisma codec supports those event types.
 
   In-process listeners are implemented by providing a custom service typed as `RunResourceStore.Type` via `Effect.provideService` / `Layer.succeed` — there is no `RuntimeObserver.layerListeners` helper.
 

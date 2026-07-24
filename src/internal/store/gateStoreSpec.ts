@@ -26,21 +26,21 @@ import type { StoreScopeTag } from "./registration";
 
 /** Reasons attached to gate state transitions. @internal */
 export type GateStateChangeReason =
-  | "run-resource.run.waiting"
-  | "run-resource.run.started"
-  | "run-resource.run.completed"
-  | "run-resource.run.failed"
-  | "run-resource.run.interrupted"
-  | "run-resource.run.wait.interrupted";
+  | "gate.run.waiting"
+  | "gate.run.started"
+  | "gate.run.completed"
+  | "gate.run.failed"
+  | "gate.run.interrupted"
+  | "gate.run.wait.interrupted";
 
 /** Live gate counters persisted on state transitions. @internal */
 export const gateStateSchema = gateStatus;
 
 /** Default void run facts. @internal */
-export const runFactSchema = makeGateFactEvent();
+export const gateFactSchema = makeGateFactEvent();
 
 /** State transition row — mirrors legacy `GateStateChange`. @internal */
-export const runStateChangeSchema = Schema.Struct({
+export const gateStateChangeSchema = Schema.Struct({
   id: Schema.String,
   resourceId: Schema.String,
   changedAt: Schema.Number,
@@ -50,78 +50,78 @@ export const runStateChangeSchema = Schema.Struct({
 });
 
 /** Persisted run fact for the default void contract. @internal */
-export type RunFact = Schema.Schema.Type<typeof runFactSchema>;
+export type GateFact = Schema.Schema.Type<typeof gateFactSchema>;
 
 /** Persisted state transition for a tag scope. @internal */
-export type RunStateChange = Schema.Schema.Type<typeof runStateChangeSchema>;
+export type GateStateChange = Schema.Schema.Type<typeof gateStateChangeSchema>;
 
 /** Decoded fact union persisted for a scope. @internal */
-export type RunStoreFact<_Tag extends StoreScopeTag = StoreScopeTag> = RunFact;
+export type GateStoreFact<_Tag extends StoreScopeTag = StoreScopeTag> = GateFact;
 
 /** Fact row schema for a tag scope. @internal */
-export const runFactSchemaForTag = (tag: StoreScopeTag) =>
+export const gateFactSchemaForTag = (tag: StoreScopeTag) =>
   makeGateFactEvent(successOf(tag), errorOf(tag));
 
 /** Type guard — `Started` fact row. @internal */
-export const isRunStoreStarted = (
+export const isGateStoreStarted = (
   row: { readonly _tag: string },
-): row is RunStoreStarted => row._tag === "Started";
+): row is GateStoreStarted => row._tag === "Started";
 
 /** Type guard — `Completed` fact row. @internal */
-export const isRunStoreCompleted = (
+export const isGateStoreCompleted = (
   row: { readonly _tag: string },
-): row is RunStoreCompleted => row._tag === "Completed";
+): row is GateStoreCompleted => row._tag === "Completed";
 
 /** Type guard — `Failed` fact row. @internal */
-export const isRunStoreFailed = (
+export const isGateStoreFailed = (
   row: { readonly _tag: string },
-): row is RunStoreFailed => row._tag === "Failed";
+): row is GateStoreFailed => row._tag === "Failed";
 
 /** Decoded `Started` row. @internal */
-export type RunStoreStarted<Tag extends StoreScopeTag = StoreScopeTag> = Extract<
-  RunStoreFact<Tag>,
+export type GateStoreStarted<Tag extends StoreScopeTag = StoreScopeTag> = Extract<
+  GateStoreFact<Tag>,
   { readonly _tag: "Started" }
 >;
 
 /** Decoded `Failed` row. @internal */
-export type RunStoreFailed<Tag extends StoreScopeTag = StoreScopeTag> = Extract<
-  RunStoreFact<Tag>,
+export type GateStoreFailed<Tag extends StoreScopeTag = StoreScopeTag> = Extract<
+  GateStoreFact<Tag>,
   { readonly _tag: "Failed" }
 >;
 
 /** Decoded `Completed` row. @internal */
-export type RunStoreCompleted<Tag extends StoreScopeTag = StoreScopeTag> = Extract<
-  RunStoreFact<Tag>,
+export type GateStoreCompleted<Tag extends StoreScopeTag = StoreScopeTag> = Extract<
+  GateStoreFact<Tag>,
   { readonly _tag: "Completed" }
 >;
 
 /** Lifetime run fact counts. @internal */
-export interface RunStoreStats {
+export interface GateStoreStats {
   readonly started: number;
   readonly completed: number;
   readonly failed: number;
 }
 
 /** @deprecated Prefer `Store.StoreReadPayload<FactRow>` with `where: { runId }`. @internal */
-export type RunFactReadPayload = Store.StoreReadPayload<RunFact>;
+export type GateFactReadPayload = Store.StoreReadPayload<GateFact>;
 
 /** Shared write surface for tier-1 contracts. @internal */
 type GateStoreWrites = {
-  readonly record: (fact: RunFact) => Effect.Effect<void, StoreWriteError>;
+  readonly record: (fact: GateFact) => Effect.Effect<void, StoreWriteError>;
   readonly facts: (
-    payload?: Store.StoreReadPayload<RunFact>,
-  ) => Effect.Effect<ReadonlyArray<RunFact>>;
-  readonly recordStateChange: (change: RunStateChange) => Effect.Effect<void, StoreWriteError>;
+    payload?: Store.StoreReadPayload<GateFact>,
+  ) => Effect.Effect<ReadonlyArray<GateFact>>;
+  readonly recordStateChange: (change: GateStateChange) => Effect.Effect<void, StoreWriteError>;
   readonly stateHistory: (
-    payload?: Store.StoreReadPayload<RunStateChange>,
-  ) => Effect.Effect<ReadonlyArray<RunStateChange>>;
+    payload?: Store.StoreReadPayload<GateStateChange>,
+  ) => Effect.Effect<ReadonlyArray<GateStateChange>>;
 };
 
 /** Built-in Gate store contract (tier 1). @internal */
 export type BuiltInGateContract = StoreContractValue<
   {
-    readonly fact: StoreShapeDef<typeof runFactSchema>;
-    readonly state: StoreShapeDef<typeof runStateChangeSchema>;
+    readonly fact: StoreShapeDef<typeof gateFactSchema>;
+    readonly state: StoreShapeDef<typeof gateStateChangeSchema>;
   },
   GateStoreWrites
 >;
@@ -138,10 +138,10 @@ const gateTier1Methods = <FactRow extends { readonly runId: string }>({
     ) => Effect.Effect<ReadonlyArray<FactRow>>;
   };
   readonly state: {
-    readonly append: (row: RunStateChange) => Effect.Effect<void, StoreWriteError>;
+    readonly append: (row: GateStateChange) => Effect.Effect<void, StoreWriteError>;
     readonly read: (
-      payload?: Store.StoreReadPayload<RunStateChange>,
-    ) => Effect.Effect<ReadonlyArray<RunStateChange>>;
+      payload?: Store.StoreReadPayload<GateStateChange>,
+    ) => Effect.Effect<ReadonlyArray<GateStateChange>>;
   };
 }) => ({
   record: fact.append,
@@ -161,7 +161,7 @@ export const makeGateStoreContract = (
   return Store.contract(
     {
       fact: Store.shape(factSchema),
-      state: Store.shape(runStateChangeSchema),
+      state: Store.shape(gateStateChangeSchema),
     },
     (handles) => gateTier1Methods<FactRow>(handles),
   );
@@ -181,22 +181,22 @@ export const builtInGateStoreContract = <const Tag extends StoreScopeTag>(
  * state history, plus live {@link Store.changes} streams.
  * @internal
  */
-export type RunStoreReads<Tag extends StoreScopeTag> = {
-  readonly completed: () => Effect.Effect<ReadonlyArray<RunStoreCompleted<Tag>>>;
-  readonly failed: () => Effect.Effect<ReadonlyArray<RunStoreFailed<Tag>>>;
-  readonly recent: (n: number) => Effect.Effect<ReadonlyArray<RunStoreFact<Tag>>>;
-  readonly history: (runId: string) => Effect.Effect<ReadonlyArray<RunStoreFact<Tag>>>;
-  readonly lastFailure: () => Effect.Effect<Option.Option<RunStoreFailed<Tag>>>;
-  readonly stats: () => Effect.Effect<RunStoreStats>;
+export type GateStoreReads<Tag extends StoreScopeTag> = {
+  readonly completed: () => Effect.Effect<ReadonlyArray<GateStoreCompleted<Tag>>>;
+  readonly failed: () => Effect.Effect<ReadonlyArray<GateStoreFailed<Tag>>>;
+  readonly recent: (n: number) => Effect.Effect<ReadonlyArray<GateStoreFact<Tag>>>;
+  readonly history: (runId: string) => Effect.Effect<ReadonlyArray<GateStoreFact<Tag>>>;
+  readonly lastFailure: () => Effect.Effect<Option.Option<GateStoreFailed<Tag>>>;
+  readonly stats: () => Effect.Effect<GateStoreStats>;
   readonly failureRate: () => Effect.Effect<number>;
   readonly meanDurationMs: () => Effect.Effect<number>;
   readonly factChanges: () => Stream.Stream<
-    RunStoreFact<Tag>,
+    GateStoreFact<Tag>,
     StoreJournalDecodeError,
     Store.Storage
   >;
   readonly stateChanges: () => Stream.Stream<
-    RunStateChange,
+    GateStateChange,
     StoreJournalDecodeError,
     Store.Storage
   >;
@@ -210,7 +210,7 @@ const gateAnalyticsMethods = <
   TagStarted extends TagFactRow,
 >(options: {
   readonly fact: {
-    readonly read: (payload?: RunFactReadPayload) => Effect.Effect<ReadonlyArray<TagFactRow>>;
+    readonly read: (payload?: GateFactReadPayload) => Effect.Effect<ReadonlyArray<TagFactRow>>;
   };
   readonly storeClass: { readonly scopeKey: string; readonly contract: StoreContractValue };
   readonly isStarted: (row: TagFactRow) => row is TagStarted;
@@ -234,7 +234,7 @@ const gateAnalyticsMethods = <
           ? Option.none()
           : Option.some(failures[failures.length - 1]!);
       }),
-    stats: (): Effect.Effect<RunStoreStats> =>
+    stats: (): Effect.Effect<GateStoreStats> =>
       Effect.map(readAll(), (rows) => {
         let started = 0;
         let completed = 0;
@@ -263,13 +263,13 @@ const gateAnalyticsMethods = <
           (shapes) => (shapes as { readonly fact: (typeof shapes)["fact"] }).fact,
         ),
       ) as Stream.Stream<TagFactRow, StoreJournalDecodeError, Store.Storage>,
-    stateChanges: (): Stream.Stream<RunStateChange, StoreJournalDecodeError, Store.Storage> =>
+    stateChanges: (): Stream.Stream<GateStateChange, StoreJournalDecodeError, Store.Storage> =>
       Stream.unwrap(
         Store.changes(
           options.storeClass,
           (shapes) => (shapes as { readonly state: (typeof shapes)["state"] }).state,
         ),
-      ) as Stream.Stream<RunStateChange, StoreJournalDecodeError, Store.Storage>,
+      ) as Stream.Stream<GateStateChange, StoreJournalDecodeError, Store.Storage>,
   };
 };
 
@@ -282,7 +282,7 @@ export type GateStoreAnalyticsContract<Tag extends StoreScopeTag> = ReturnType<
 export const makeGateStoreAnalyticsContract = <const Tag extends StoreScopeTag>(
   tag: Tag,
 ) => {
-  const _tagFactSchema = runFactSchemaForTag(tag);
+  const _tagFactSchema = gateFactSchemaForTag(tag);
   type TagFactRow = Schema.Schema.Type<typeof _tagFactSchema>;
   type TagCompleted = Extract<TagFactRow, { readonly _tag: "Completed" }>;
   type TagFailed = Extract<TagFactRow, { readonly _tag: "Failed" }>;
@@ -315,4 +315,4 @@ export const builtInGateStoreSpec = (tag: StoreScopeTag) =>
   builtInGateStoreContract(tag).spec;
 
 /** @deprecated Use {@link Store.StoreReadPayload}. @internal */
-export { runFactReadPayload } from "../gateEvent";
+export { gateFactReadPayload } from "../gateEvent";

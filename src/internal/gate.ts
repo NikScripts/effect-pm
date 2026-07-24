@@ -16,13 +16,13 @@ import {
 import {
   builtInGateStoreContract,
   type GateStateChangeReason,
-  type RunStateChange,
+  type GateStateChange,
 } from "./store/gateStoreSpec";
 import { mapSubscribable, subscribable, type Subscribable } from "../Hyperlink";
 import * as Store from "../Store";
 import type { StoreScopeTag } from "./store/registration";
 import { errorOf, successOf } from "./gateTagSchemas";
-import { makeRunStateChange, extractRunFailure } from "./gateFacts";
+import { makeGateStateChange, extractGateFailure } from "./gateFacts";
 import { runStatusTransitions } from "./gateStatus";
 
 // ============================================================================
@@ -144,7 +144,7 @@ const makeGateStoreContext = (options: {
       readonly append: (row: unknown) => Effect.Effect<void>;
     };
     readonly state: {
-      readonly append: (change: RunStateChange) => Effect.Effect<void>;
+      readonly append: (change: GateStateChange) => Effect.Effect<void>;
     };
   };
 }): Effect.Effect<GateStoreContext> =>
@@ -174,7 +174,7 @@ const makeGateStoreContext = (options: {
       nextFactId,
       recordStateChange: (reason, previous, current) =>
         Effect.gen(function* () {
-          const change = makeRunStateChange({
+          const change = makeGateStateChange({
             id: yield* nextStateId(),
             resourceId,
             changedAt: current.observedAt,
@@ -288,7 +288,7 @@ const makeObservedRun =
                     );
                   } else {
                     const failedId = yield* store.nextFactId(runId, "Failed");
-                    const error = extractRunFailure(exit.cause);
+                    const error = extractGateFailure(exit.cause);
                     yield* store.fact.append({
                       _tag: "Failed",
                       id: failedId,
@@ -362,7 +362,7 @@ export const makeGateHandleEffect = <T, A, E>(
       tag: config.tag,
       storeEffects: storeEffects as {
         readonly fact: { readonly append: (row: unknown) => Effect.Effect<void> };
-        readonly state: { readonly append: (change: RunStateChange) => Effect.Effect<void> };
+        readonly state: { readonly append: (change: GateStateChange) => Effect.Effect<void> };
       },
     });
     const runSeqRef = yield* Ref.make(0);

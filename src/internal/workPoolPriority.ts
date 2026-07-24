@@ -147,7 +147,7 @@ export type PriorityHandle<
  * @category models
  * @public
  */
-export type WorkPoolPriorityConfigWithoutItemSchema<T, E, R> = Omit<
+export type PriorityConfigWithoutItemSchema<T, E, R> = Omit<
   WorkPoolConfigBase<T>,
   "laneCount"
 > &
@@ -166,7 +166,7 @@ export type WorkPoolPriorityConfigWithoutItemSchema<T, E, R> = Omit<
  * @category models
  * @public
  */
-export type WorkPoolPriorityConfigWithItemSchema<T, E, R> = Omit<
+export type PriorityConfigWithItemSchema<T, E, R> = Omit<
   WorkPoolConfigBase<T>,
   "laneCount"
 > &
@@ -187,19 +187,19 @@ export type WorkPoolPriorityConfigWithItemSchema<T, E, R> = Omit<
  * @category models
  * @public
  */
-export type WorkPoolPriorityConfig<T, E, R> =
-  | WorkPoolPriorityConfigWithoutItemSchema<T, E, R>
-  | WorkPoolPriorityConfigWithItemSchema<T, E, R>;
+export type PriorityConfig<T, E, R> =
+  | PriorityConfigWithoutItemSchema<T, E, R>
+  | PriorityConfigWithItemSchema<T, E, R>;
 
 /** @public */
-export type WorkPoolPriorityOptionsWithoutItemSchema<T, E, R> = Omit<
-  WorkPoolPriorityConfigWithoutItemSchema<T, E, R>,
+export type PriorityOptionsWithoutItemSchema<T, E, R> = Omit<
+  PriorityConfigWithoutItemSchema<T, E, R>,
   "effect"
 >;
 
 /** @public */
-export type WorkPoolPriorityOptionsWithItemSchema<T, E, R> = Omit<
-  WorkPoolPriorityConfigWithItemSchema<T, E, R>,
+export type PriorityOptionsWithItemSchema<T, E, R> = Omit<
+  PriorityConfigWithItemSchema<T, E, R>,
   "effect"
 >;
 
@@ -326,7 +326,7 @@ const validateItemsWithSchema = <T>(
 };
 
 const adaptRefill = <T, E, EEnqueue, R>(
-  config: WorkPoolPriorityConfig<T, E, R>,
+  config: PriorityConfig<T, E, R>,
   levels: ReturnType<typeof levelResolution>,
   projection: ReturnType<typeof buildPriorityProjection>,
 ): QueueRefill<T, E, EEnqueue, R> | undefined =>
@@ -367,7 +367,7 @@ const castProjection = (
   >;
 
 const makePriorityEffectWithoutSchema = <
-  const C extends WorkPoolPriorityConfigWithoutItemSchema<any, any, any>,
+  const C extends PriorityConfigWithoutItemSchema<any, any, any>,
 >(
   config: Types.NoInfer<C>,
 ): Effect.Effect<
@@ -399,7 +399,7 @@ const makePriorityEffectWithoutSchema = <
   });
 
 const makePriorityEffectWithSchema = <
-  const C extends WorkPoolPriorityConfigWithItemSchema<any, any, any>,
+  const C extends PriorityConfigWithItemSchema<any, any, any>,
 >(
   config: Types.NoInfer<C>,
 ): Effect.Effect<
@@ -489,12 +489,12 @@ const makePriorityEffectWithSchema = <
 };
 
 const hasItemSchema = <T, E, R>(
-  config: WorkPoolPriorityConfig<T, E, R>,
-): config is WorkPoolPriorityConfigWithItemSchema<T, E, R> =>
+  config: PriorityConfig<T, E, R>,
+): config is PriorityConfigWithItemSchema<T, E, R> =>
   config.itemSchema !== undefined;
 
 const makePriorityEffectFromConfig = (
-  config: WorkPoolPriorityConfig<any, any, any>,
+  config: PriorityConfig<any, any, any>,
 ): Effect.Effect<PriorityHandle<unknown, unknown, unknown, unknown>, never, Scope.Scope | any> =>
   hasItemSchema(config)
     ? makePriorityEffectWithSchema(config)
@@ -503,16 +503,16 @@ const makePriorityEffectFromConfig = (
 type CustomConfigFromEffect<
   F extends QueueWorkerEffect<any, any, any, any>,
   O extends
-    | WorkPoolPriorityOptionsWithoutItemSchema<any, any, any>
-    | WorkPoolPriorityOptionsWithItemSchema<any, any, any>
+    | PriorityOptionsWithoutItemSchema<any, any, any>
+    | PriorityOptionsWithItemSchema<any, any, any>
     | undefined = undefined,
 > = { readonly effect: F } & (O extends undefined ? unknown : O);
 
 function makePriorityEffect<
   const F extends QueueWorkerEffect<any, any, any, any>,
   const O extends
-    | WorkPoolPriorityOptionsWithoutItemSchema<any, any, any>
-    | WorkPoolPriorityOptionsWithItemSchema<any, any, any>
+    | PriorityOptionsWithoutItemSchema<any, any, any>
+    | PriorityOptionsWithItemSchema<any, any, any>
     | undefined = undefined,
 >(
   effect: F,
@@ -527,7 +527,7 @@ function makePriorityEffect<
   never,
   Scope.Scope | InferQueueWorkerRequirements<CustomConfigFromEffect<F, O>>
 >;
-function makePriorityEffect<const C extends WorkPoolPriorityConfig<any, any, any>>(
+function makePriorityEffect<const C extends PriorityConfig<any, any, any>>(
   config: C,
 ): Effect.Effect<
   PriorityHandle<
@@ -540,8 +540,8 @@ function makePriorityEffect<const C extends WorkPoolPriorityConfig<any, any, any
   Scope.Scope | InferQueueWorkerRequirements<C>
 >;
 function makePriorityEffect(
-  effectOrConfig: QueueWorkerEffect<any, any, any, any> | WorkPoolPriorityConfig<any, any, any>,
-  options?: (WorkPoolPriorityOptionsWithoutItemSchema<any, any, any> &
+  effectOrConfig: QueueWorkerEffect<any, any, any, any> | PriorityConfig<any, any, any>,
+  options?: (PriorityOptionsWithoutItemSchema<any, any, any> &
     PriorityLaneConfig),
 ): Effect.Effect<PriorityHandle<any, any, any, any>, never, Scope.Scope | any> {
   if (typeof effectOrConfig === "function") {

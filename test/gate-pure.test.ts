@@ -8,10 +8,10 @@ import {
   startRun,
 } from "../src/internal/gateStatus";
 import {
-  makeRunCompletedFact,
-  makeRunFailedFact,
-  makeRunStartedFact,
-  makeRunStateChange,
+  makeGateCompletedFact,
+  makeGateFailedFact,
+  makeGateStartedFact,
+  makeGateStateChange,
   toHyperlinkState,
 } from "../src/internal/gateFacts";
 import type { GateStatus } from "../src/internal/gate";
@@ -65,7 +65,7 @@ describe("gateStatus", () => {
 describe("gateFacts", () => {
   it("builds typed fact rows", () => {
     expect(
-      makeRunStartedFact({
+      makeGateStartedFact({
         id: "r/run/1/started/1",
         resourceId: "@test/Gate",
         runId: "r/run/1",
@@ -74,7 +74,7 @@ describe("gateFacts", () => {
       })._tag,
     ).toBe("Started");
 
-    const completed = makeRunCompletedFact({
+    const completed = makeGateCompletedFact({
       id: "r/run/1/completed/1",
       resourceId: "@test/Gate",
       runId: "r/run/1",
@@ -86,7 +86,7 @@ describe("gateFacts", () => {
       expect(completed.durationMs).toBe(10);
     }
 
-    const failed = makeRunFailedFact({
+    const failed = makeGateFailedFact({
       id: "r/run/1/failed/1",
       resourceId: "@test/Gate",
       runId: "r/run/1",
@@ -102,11 +102,11 @@ describe("gateFacts", () => {
 
   it("maps state transitions with null previous", () => {
     const current = baseStatus({ inFlight: 1, observedAt: 50 });
-    const change = makeRunStateChange({
+    const change = makeGateStateChange({
       id: "state-1",
       resourceId: "@test/Gate",
       changedAt: 50,
-      reason: "run-resource.run.started",
+      reason: "gate.run.started",
       previous: null,
       current,
     });

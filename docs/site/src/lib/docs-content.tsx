@@ -170,7 +170,7 @@ const toReact = (n: any): React.ReactNode => {
     case "code_block":
       // island seam: a ```queue block becomes a live client component (RSC boundary)
       if (n.lang === "queue") return h(QueueIsland, { key: keySeq++ });
-      if (n.lang === "run-resource") return h(RunHyperlinkIsland, { key: keySeq++ });
+      if (n.lang === "gate" || n.lang === "run-resource") return h(RunHyperlinkIsland, { key: keySeq++ });
       if (n.lang === "hyperlink") return h(CounterIsland, { key: keySeq++ });
       if (n.lang === "install") return h(PackageInstall, { key: keySeq++, packages: n.text });
       // everything else is Shiki-highlighted server-side (real React nodes). A `{.twoslash}`

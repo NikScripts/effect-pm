@@ -7,7 +7,7 @@
 
 import { Schema } from "effect";
 
-const runFinishedBase = {
+const gateFinishedBase = {
   key: Schema.String,
   scheduleKey: Schema.NullOr(Schema.String),
   startedAt: Schema.Number,
@@ -41,11 +41,11 @@ export const makeDaemonExecutionEvent = <
 ) => {
   const completedFields =
     success === undefined
-      ? runFinishedBase
-      : { ...runFinishedBase, success: Schema.optional(success) };
+      ? gateFinishedBase
+      : { ...gateFinishedBase, success: Schema.optional(success) };
 
   const failedFields = {
-    ...runFinishedBase,
+    ...gateFinishedBase,
     error: error === undefined ? Schema.String : error,
   };
 
@@ -53,7 +53,7 @@ export const makeDaemonExecutionEvent = <
     Schema.TaggedStruct("Started", runStartedFields),
     Schema.TaggedStruct("Completed", completedFields),
     Schema.TaggedStruct("Failed", failedFields),
-    Schema.TaggedStruct("Interrupted", runFinishedBase),
+    Schema.TaggedStruct("Interrupted", gateFinishedBase),
   ]);
 };
 

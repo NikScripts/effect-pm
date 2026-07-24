@@ -540,7 +540,7 @@ export type QueueHandle<
 > = EngineQueueHandle<T, E, EEnqueue, R, A>;
 
 /**
- * Engine handle — includes priority-queue hooks used by {@link WorkPoolPriority}.
+ * Engine handle — includes priority-queue hooks used by `WorkPool.priority`.
  *
  * @internal
  */
@@ -1597,7 +1597,7 @@ const validateItemsWithSchema = <T>(
   });
 };
 
-/** Extension point for {@link WorkPoolPriority} and other queue presets. @internal */
+/** Extension point for `WorkPool.priority` and other queue presets. @internal */
 interface BuildQueueEngineBindings<T, E, EEnqueue, R, A = void> {
   readonly config: QueueRuntimeConfig<T, E, EEnqueue, R, A>;
   readonly validateForEnqueue: ValidateForEnqueue<T, EEnqueue>;
@@ -1807,7 +1807,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
   encodeForRelease: ReleaseEntryEncoder<T> | undefined,
   persistCodec: PersistCodec<T> | undefined,
   // Injected lane structure — the only lane-specific dependency. The default queue passes the FIFO
-  // factory; WorkPoolPriority passes the weighted one. The engine imports neither impl (only the
+  // factory; WorkPool.priority passes the weighted one. The engine imports neither impl (only the
   // `LaneStore` type), so a bundle pulls only the lane store it actually wires.
   makeLaneStore: (
     capacity: number,
@@ -1833,7 +1833,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
     // disposition by handling `Failed`/`Exit` there.
     const autoReEnqueue = config.attempts !== undefined;
     // ─── Allocate internal state ───
-    // The lane store is injected (FIFO for the default queue, weighted for WorkPoolPriority); the
+    // The lane store is injected (FIFO for the default queue, weighted for WorkPool.priority); the
     // rest of the engine drives it lane-agnostically through the `LaneStore` interface.
     const laneStore = yield* makeLaneStore(capacity);
 

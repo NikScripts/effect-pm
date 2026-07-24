@@ -6,15 +6,15 @@
  */
 
 import { Cause, Option } from "effect";
-import type { RunFact, RunStateChange } from "./store/gateStoreSpec";
+import type { GateFact, GateStateChange } from "./store/gateStoreSpec";
 import type { GateStatus } from "./gate";
 
 /** Extract the failure value for store rows (store-core §5). @internal */
-export const extractRunFailure = (cause: Cause.Cause<unknown>): unknown =>
+export const extractGateFailure = (cause: Cause.Cause<unknown>): unknown =>
   Option.getOrElse(Cause.findErrorOption(cause), () => Cause.squash(cause));
 
 /** Map live counters to the persisted state shape. @internal */
-export const toHyperlinkState = (status: GateStatus): RunStateChange["current"] => ({
+export const toHyperlinkState = (status: GateStatus): GateStateChange["current"] => ({
   resourceId: status.resourceId,
   observedAt: status.observedAt,
   configVersion: status.configVersion,
@@ -28,13 +28,13 @@ export const toHyperlinkState = (status: GateStatus): RunStateChange["current"] 
 });
 
 /** @internal */
-export const makeRunStartedFact = (input: {
+export const makeGateStartedFact = (input: {
   readonly id: string;
   readonly resourceId: string;
   readonly runId: string;
   readonly occurredAt: number;
   readonly concurrency: number;
-}): RunFact => ({
+}): GateFact => ({
   _tag: "Started",
   id: input.id,
   resourceId: input.resourceId,
@@ -44,14 +44,14 @@ export const makeRunStartedFact = (input: {
 });
 
 /** @internal */
-export const makeRunCompletedFact = (input: {
+export const makeGateCompletedFact = (input: {
   readonly id: string;
   readonly resourceId: string;
   readonly runId: string;
   readonly occurredAt: number;
   readonly durationMs: number;
   readonly success?: unknown;
-}): RunFact =>
+}): GateFact =>
   input.success === undefined
     ? {
         _tag: "Completed",
@@ -69,17 +69,17 @@ export const makeRunCompletedFact = (input: {
         occurredAt: input.occurredAt,
         durationMs: input.durationMs,
         success: input.success,
-      } as RunFact);
+      } as GateFact);
 
 /** @internal */
-export const makeRunFailedFact = (input: {
+export const makeGateFailedFact = (input: {
   readonly id: string;
   readonly resourceId: string;
   readonly runId: string;
   readonly occurredAt: number;
   readonly durationMs: number;
   readonly error: unknown;
-}): RunFact => ({
+}): GateFact => ({
   _tag: "Failed",
   id: input.id,
   resourceId: input.resourceId,
@@ -87,17 +87,17 @@ export const makeRunFailedFact = (input: {
   occurredAt: input.occurredAt,
   durationMs: input.durationMs,
   error: input.error,
-} as RunFact);
+} as GateFact);
 
 /** @internal */
-export const makeRunStateChange = (input: {
+export const makeGateStateChange = (input: {
   readonly id: string;
   readonly resourceId: string;
   readonly changedAt: number;
-  readonly reason: RunStateChange["reason"];
+  readonly reason: GateStateChange["reason"];
   readonly previous: GateStatus | null;
   readonly current: GateStatus;
-}): RunStateChange => ({
+}): GateStateChange => ({
   id: input.id,
   resourceId: input.resourceId,
   changedAt: input.changedAt,

@@ -239,7 +239,7 @@ describe("Gate.httpApiClientLayer", () => {
       })
       type ClientShape = Effect.Success<typeof makeClient>
       class Tag extends Context.Service<Tag, ClientShape>()(
-        "hyperlink-ts/test/http-api-resource.test/Tag",
+        "hyperlink-ts/test/gate-http-api.test/Tag",
       ) {}
       const layerCapture = Gate.httpApiClientLayer(Tag, makeClient, {
         concurrency: 1,

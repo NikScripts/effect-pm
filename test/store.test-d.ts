@@ -6,7 +6,7 @@ import * as Store from "../src/Store";
 import { builtInQueueStoreContract, type QueueEventOf } from "../src/internal/store/queueStoreSpec";
 import {
   builtInGateStoreContract,
-  runFactSchemaForTag,
+  gateFactSchemaForTag,
 } from "../src/internal/store/gateStoreSpec";
 import type { RegistrationHandleOf, StoreHandleAtKey } from "../src/internal/store/defineStore";
 import type { RegsOfStoreInput } from "../src/internal/store/registrationTypes";
@@ -81,7 +81,7 @@ void _runGateHandle.recordStateChange({
   id: "state-1",
   resourceId: FetchGate.key,
   changedAt: 2,
-  reason: "run-resource.run.started",
+  reason: "gate.run.started",
   previous: null,
   current: {
     resourceId: FetchGate.key,
@@ -98,7 +98,7 @@ void _runGateHandle.recordStateChange({
 });
 void _runGateHandle.stateHistory();
 
-type RunFactsResult = ReturnType<GateRunHandle["facts"]> extends Effect.Effect<
+type GateFactsResult = ReturnType<GateRunHandle["facts"]> extends Effect.Effect<
   infer A,
   infer _E,
   infer _R
@@ -106,10 +106,10 @@ type RunFactsResult = ReturnType<GateRunHandle["facts"]> extends Effect.Effect<
   ? A
   : never;
 
-const fetchGateFactSchema = runFactSchemaForTag(FetchGate);
-type FetchGateRunFact = Schema.Schema.Type<typeof fetchGateFactSchema>;
+const fetchGateFactSchema = gateFactSchemaForTag(FetchGate);
+type FetchGateGateFact = Schema.Schema.Type<typeof fetchGateFactSchema>;
 
-void ({} as RunFactsResult satisfies ReadonlyArray<FetchGateRunFact>);
+void ({} as GateFactsResult satisfies ReadonlyArray<FetchGateGateFact>);
 
 type _QueueReadPayload = Parameters<MailQueueHandle["events"]>[0];
 void ({} as _QueueReadPayload satisfies { readonly limit?: number } | undefined);

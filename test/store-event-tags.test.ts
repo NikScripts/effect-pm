@@ -64,7 +64,7 @@ describe("store event _tag alignment", () => {
     ).toBeGreaterThanOrEqual(terminalTags.length + 1);
   });
 
-  it("run-resource facts use shared terminal tags", () => {
+  it("gate facts use shared terminal tags", () => {
     const started = runFactDecode({
       _tag: "Started",
       id: "f1",

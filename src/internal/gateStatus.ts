@@ -98,26 +98,26 @@ export const completeRun = (
 export const runStatusTransitions = {
   waiting: {
     update: enterWaiting,
-    reason: "run-resource.run.waiting",
+    reason: "gate.run.waiting",
   },
   waitInterrupted: {
     update: interruptWaitingAcquire,
-    reason: "run-resource.run.wait.interrupted",
+    reason: "gate.run.wait.interrupted",
   },
   started: {
     update: startRun,
-    reason: "run-resource.run.started",
+    reason: "gate.run.started",
   },
   interrupted: {
     update: interruptRunBody,
-    reason: "run-resource.run.interrupted",
+    reason: "gate.run.interrupted",
   },
   failed: {
     update: failRun,
-    reason: "run-resource.run.failed",
+    reason: "gate.run.failed",
   },
   completed: {
     update: completeRun,
-    reason: "run-resource.run.completed",
+    reason: "gate.run.completed",
   },
 } as const satisfies Record<string, RunStatusTransition>;

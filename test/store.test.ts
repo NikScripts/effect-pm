@@ -234,7 +234,7 @@ describe("Store.Service", () => {
         id: "state-1",
         resourceId: FetchGate.key,
         changedAt: 2,
-        reason: "run-resource.run.started",
+        reason: "gate.run.started",
         previous: null,
         current: {
           resourceId: FetchGate.key,
@@ -258,7 +258,7 @@ describe("Store.Service", () => {
       });
       const history = yield* store.stateHistory();
       expect(history).toHaveLength(1);
-      expect(history[0]?.reason).toBe("run-resource.run.started");
+      expect(history[0]?.reason).toBe("gate.run.started");
     }).pipe(Effect.provide(GateStore.layerMemory), Effect.scoped),
   );
 

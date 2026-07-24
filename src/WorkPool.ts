@@ -83,7 +83,7 @@ import { makePriorityEffect } from "./internal/workPoolPriority";
 import type {
   PriorityHandle,
   PriorityLaneConfig,
-  WorkPoolPriorityConfigWithItemSchema,
+  PriorityConfigWithItemSchema,
 } from "./internal/workPoolPriority";
 import type { StoreShapes } from "./internal/store/contractDef";
 import type {
@@ -1726,7 +1726,7 @@ export const priority = <Self>() => {
  * @public
  */
 export type PriorityLayerConfig<A, E, R, RR = never> = Omit<
-  WorkPoolPriorityConfigWithItemSchema<A, E, R>,
+  PriorityConfigWithItemSchema<A, E, R>,
   "itemSchema" | "refill" | "name"
 > & {
   readonly refill?: {
@@ -1783,7 +1783,7 @@ const buildPriorityImpl = <Self, F extends PriorityItemFields, E, R, RR = never>
       ...effectiveConfig,
       itemSchema,
       store,
-    } as WorkPoolPriorityConfigWithItemSchema<Schema.Struct<F>["Type"], E, R | RR>);
+    } as PriorityConfigWithItemSchema<Schema.Struct<F>["Type"], E, R | RR>);
 
     const history = yield* Effect.serviceOption(HistoryStore);
     const decodeMetric = Schema.decodeUnknownEffect(queueMetrics);

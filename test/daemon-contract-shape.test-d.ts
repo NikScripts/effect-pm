@@ -24,7 +24,7 @@ class PricedErr extends Daemon.Tag<PricedErr>()("shape/PricedErr", {
   error: Schema.TaggedStruct("FetchError", { status: Schema.Number }),
 }) {}
 
-// error stamp surfaces on manual `run` RPC when stamped (see process-run-rpc.test.ts)
+// error stamp surfaces on manual `run` RPC when stamped (see daemon-run-rpc.test.ts)
 void Daemon.errorOf(PricedErr);
 
 // owns an inline schedule — gains the `schedule` verb group (id optional on windows)

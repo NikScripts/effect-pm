@@ -307,7 +307,7 @@ export type EngineQueueStoreContract<Tag extends QueueStoreTag> = ReturnType<
 /**
  * Storage-free engine store handle — SSOT derived from {@link makeEngineQueueStoreContract} after
  * {@link Store.catchWriteErrors} + {@link Store.provideContext}. Shared by {@link WorkPool} and
- * {@link WorkPoolPriority} engines. @internal
+ * `WorkPool.priority` engines. @internal
  */
 export type MaterializedEngineQueueStore<Item extends Schema.Top> = StoreProvidedContext<
   CatchWriteError<StoreEffectsOf<ReturnType<typeof makeEngineQueueStoreContract<Item>>>>,
