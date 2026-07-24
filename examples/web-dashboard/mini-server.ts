@@ -15,7 +15,7 @@ import { serve as daemonEntry } from "../../src/Daemon";
 import * as Daemon from "../../src/Daemon";
 import * as Store from "../../src/Store";
 import { HistoryStore } from "../../src/HistoryStore";
-import { Polling } from "../../src/Polling";
+import * as Polling from "../../src/Polling";
 import { KeyRotation, MiniNode } from "./fleet";
 import * as Node from "../../src/Node";
 
