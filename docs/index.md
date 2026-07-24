@@ -1,4 +1,4 @@
-{#index title="Introduction" done="api previews types" appliesTo=all}
+{#index title="Introduction" appliesTo=all}
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
@@ -9,14 +9,20 @@
 **Build cross-runtime Services on Effect.**
 
 An Effect Service lives inside one runtime. A *Hyperlink Service* doesn't: define it once, run it
-on one runtime, and call it from another over RPC, with the same typed Handle.
+on one runtime, and call it from another over RPC — with the **same typed Handle**.
 
-A real app runs as more than one runtime — a worker draining a queue here, a scheduler filling it
-there. Wiring those together normally means one side owns a Hyperlink and the others reach it through
-a hand-rolled HTTP client. Cross-runtime Services drop that: every Hyperlink is reached with the same
-typed Handle, wherever it runs.
+That is the hook. Not a second client library. Not a different API for "remote." The Tag you
+`yield*` locally is the Tag you `yield*` across the network, and the Handle can **call, observe,
+and steer** the service wherever it runs.
 
-Here are two Hyperlinks — a queue and a scheduled process — on two runtimes, working together.
+## Two runtimes, one program
+
+A real app is more than one runtime — a worker draining a queue here, a scheduler filling it there.
+Normally one side owns the service and the other hand-rolls an HTTP client. With Hyperlink, both
+sides use the same Tag.
+
+Define two HyperServices once — a priority queue and a scheduled daemon (included tools, used here
+as the demo):
 
 {.twoslash}
 ``` ts
@@ -25,57 +31,35 @@ import * as Daemon from "hyperlink-ts/Daemon"
 import { Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String })
 // ---cut---
-// two resources, defined once
-class Emails extends WorkPool.Tag<Emails>()("app/Emails", EmailJob) {} // a queue of EmailJob
-class Digest extends Daemon.Tag<Digest>()("app/Digest") {}                 // a scheduled process
+class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+class Digest extends Daemon.Tag<Digest>()("app/Digest") {}
 ```
 
-[`Node.httpServer(serve)`](/docs/managing-layers) is platform-agnostic: it just needs an HTTP server
-provided, and that provide is where you pick your runtime. Define it **once** as a small helper; swapping `NodeHttpServer`
-for Bun, Deno, or an edge runtime is the only line that changes:
-
-{.twoslash}
-``` ts
-import * as Hyperlink from "hyperlink-ts/Hyperlink"
-import * as Node from "hyperlink-ts/Node"
-import { Layer } from "effect"
-import { NodeHttpServer } from "@effect/platform-node"
-import { createServer } from "node:http"
-// ---cut---
-// your app, once — the single place that names a platform (data-last, so it pipes)
-const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) =>
-  Node.httpServer(resource).pipe(
-    Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
-  )
-```
-
-Now the **worker runtime** is one pipe — [`WorkPool.serve`](/docs/work-pools) gives `Emails` its worker (the `effect`
-that drains each job), piped onto port 3001:
+Serve the queue on the **worker** runtime. `Node.httpServer` is platform-agnostic — you provide the
+HTTP server once (Node, Bun, Deno, edge); that is the only line that names a platform:
 
 {.twoslash}
 ``` ts
 import * as WorkPool from "hyperlink-ts/WorkPool"
-import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import * as Node from "hyperlink-ts/Node"
 import { Effect, Schema, Layer } from "effect"
 import { NodeHttpServer } from "@effect/platform-node"
 import { createServer } from "node:http"
 const EmailJob = Schema.Struct({ to: Schema.String })
-class Emails extends WorkPool.Tag<Emails>()("app/Emails", EmailJob) {}
+class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
 declare const sendEmail: (job: typeof EmailJob.Type) => Effect.Effect<void>
-const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) =>
-  Node.httpServer(resource).pipe(
+const nodeServer = (port: number) => <A, E, R>(layer: Layer.Layer<A, E, R>) =>
+  Node.httpServer(layer).pipe(
     Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
   )
 // ---cut---
 const worker = WorkPool
   .serve(Emails, { effect: sendEmail })
   .pipe(nodeServer(3001))
-// worker: Layer — provide it to a runtime to run the queue on :3001
 ```
 
-The **scheduler runtime** runs `Digest` every hour, and each run **enqueues into `Emails`** — a queue
-that lives on the *other* runtime, reached by port:
+On the **scheduler** runtime, `Digest` ticks every hour and enqueues into `Emails` — a queue that
+lives on the *other* runtime. Inside the effect it still reads as `yield* Emails`:
 
 {.twoslash}
 ``` ts
@@ -85,58 +69,121 @@ import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import * as Polling from "hyperlink-ts/Polling"
 import { Effect, Duration, Layer, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String })
-class Emails extends WorkPool.Tag<Emails>()("app/Emails", EmailJob) {}
+class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
 class Digest extends Daemon.Tag<Digest>()("app/Digest") {}
 declare const nextEmail: Effect.Effect<typeof EmailJob.Type>
 // ---cut---
 const scheduler = Daemon.layer(Digest, {
   effect: Effect.gen(function* () {
-    const emails = yield* Emails            // emails: the Emails handle (here, an RPC client)
-    const email = yield* nextEmail          // email: EmailJob
-    yield* emails.add(email)                // add(email: EmailJob): Effect<void>
+    const emails = yield* Emails   // RPC client — same Handle type as local
+    const email = yield* nextEmail
+    yield* emails.add(email)
   }),
   polling: Polling.spaced(Duration.hours(1)),
 }).pipe(Layer.provide(Hyperlink.connect(Emails, Hyperlink.protocolHttp(3001))))
-// scheduler: Layer — the scheduler runtime
 ```
 
-`Digest` runs on the scheduler, `Emails` on the worker — yet inside the process, `yield* Emails` and
-`emails.add(…)` read exactly as if the two shared one process. **Two Hyperlinks, two runtimes, one
-program.** Move a runtime to another machine and only its port becomes a url — nothing else changes.
+`Digest` runs on the scheduler, `Emails` on the worker — yet `emails.add(…)` looks like one process.
+**Two HyperServices, two runtimes, one program.** Move a runtime to another machine and only the
+address changes.
 
-## Operate them live
+## The same Handle steers it
 
-A cross-runtime Service isn't just callable across runtimes — it's **operable** across them. The same
-Handle that enqueues also controls and observes, so you steer and inspect the worker's queue from
-anywhere it's reached:
+Callable across runtimes is half the product. The Handle is also **operable** across them — pause,
+depth, live events — from anywhere the Tag is reached:
 
 {.twoslash}
 ``` ts
 import * as WorkPool from "hyperlink-ts/WorkPool"
 import { Effect, Stream, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String })
-class Emails extends WorkPool.Tag<Emails>()("app/Emails", EmailJob) {}
+class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
 declare const onChange: (e: unknown) => Effect.Effect<void>
 const program = Effect.gen(function* () {
 // ---cut---
-const emails = yield* Emails            // emails: the Emails handle — local OR an RPC client, same type
+const emails = yield* Emails            // local OR remote — same type
 
-yield* emails.pause                     // pause: Effect<void> — stop draining, at runtime
-const depth = yield* emails.size.get    // depth: number — how many are waiting, right now
-yield* emails.events.pipe(Stream.runForEach(onChange)) // events: Stream<QueueEvent> — every change, live
+yield* emails.pause                     // stop draining, at runtime
+const depth = yield* emails.size.get    // how many waiting, right now
+yield* emails.events.pipe(Stream.runForEach(onChange))
 // ---cut-after---
 })
 ```
 
-And it comes with dashboards over the same Tag — a **`pm` CLI**, a **TUI**, and a **web** dashboard —
-each reading the Hyperlink without ever touching its Implementation.
+Dashboards ride the same Tag — a **`pm` CLI**, a **TUI**, and a **web** dashboard — without touching
+the Implementation.
+
+## Build your own
+
+`Emails` and `Digest` are not special cases. Every Hyperlink Service is a **Contract** plus an
+**Implementation**. You use that primitive directly:
+
+{.twoslash}
+``` ts
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
+import { Schema } from "effect"
+// ---cut---
+class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
+  value: Hyperlink.ref(Schema.Number),
+  increment: Hyperlink.effectFn({ by: Schema.Number }),
+  reset: Hyperlink.effect(Schema.Void),
+}) {}
+```
+
+{.twoslash}
+``` ts
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
+import { Effect, Schema, SubscriptionRef } from "effect"
+class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
+  value: Hyperlink.ref(Schema.Number),
+  increment: Hyperlink.effectFn({ by: Schema.Number }),
+  reset: Hyperlink.effect(Schema.Void),
+}) {}
+// ---cut---
+const counterImpl = Effect.gen(function* () {
+  const ref = yield* SubscriptionRef.make(0)
+  return {
+    value: Hyperlink.subscribable(ref),
+    increment: ({ by }: { by: number }) => SubscriptionRef.update(ref, (n) => n + by),
+    reset: SubscriptionRef.set(ref, 0),
+  }
+})
+```
+
+Same Tag, three placements — in-process, served, or connected:
+
+{.twoslash}
+``` ts
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
+import { Effect, Schema, SubscriptionRef, Layer } from "effect"
+class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
+  value: Hyperlink.ref(Schema.Number),
+  increment: Hyperlink.effectFn({ by: Schema.Number }),
+  reset: Hyperlink.effect(Schema.Void),
+}) {}
+const counterImpl = Effect.gen(function* () {
+  const ref = yield* SubscriptionRef.make(0)
+  return {
+    value: Hyperlink.subscribable(ref),
+    increment: ({ by }: { by: number }) => SubscriptionRef.update(ref, (n) => n + by),
+    reset: SubscriptionRef.set(ref, 0),
+  }
+})
+const nodeServer = (port: number) => <A, E, R>(layer: Layer.Layer<A, E, R>) => layer
+// ---cut---
+Hyperlink.layer(Counter, counterImpl)                                         // in-process
+Hyperlink.serve(Counter, counterImpl).pipe(nodeServer(4000))                  // served over RPC
+Hyperlink.connect(Counter, Hyperlink.protocolHttp(4000))                      // from another runtime
+```
+
+It gets operability and dashboard slots for free — because it is the same kind of thing `Emails` is.
+Walk through this end to end in [Creating a Hyperlink Service](/docs/creating-a-hyperlink).
 
 ## Working with peers
 
-The same Tag also lets a Hyperlink reach its **peers** — its own other instances — and coordinate with
-them. Take sessions sharded across droplets: each Node holds the entries it owns, and a lookup for
-someone else's session is **forwarded to the Node that owns it**. [`ShardMap`](/docs/shardmap) is that
-pattern as a Hyperlink factory — schemas on the Tag, routed ops, leaf shards, fleet sizes.
+The same Tag can reach its **peers** — other instances of itself — and coordinate. Sessions sharded
+across droplets: each Node holds what it owns; a lookup for someone else's session is **forwarded to
+the owner**. [`ShardMap`](/docs/shardmap) is that pattern as an included HyperService factory:
 
 {.twoslash}
 ``` ts
@@ -159,7 +206,7 @@ class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
 ) {}
 ```
 
-Serve a droplet with the mesh discharge — local shard + peer clients from one materialization:
+Serve a droplet — local shard + peer clients from one materialization:
 
 {.twoslash}
 ``` ts
@@ -181,8 +228,8 @@ class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
 }).pipe(
   Hyperlink.nodes([DropletEast, DropletWest, DropletCentral]),
 ) {}
-const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) =>
-  Node.httpServer(resource).pipe(
+const nodeServer = (port: number) => <A, E, R>(layer: Layer.Layer<A, E, R>) =>
+  Node.httpServer(layer).pipe(
     Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
   )
 // ---cut---
@@ -192,7 +239,7 @@ const east = ShardMap.serve(Sessions).pipe(
 )
 ```
 
-From any Node, a caller just asks — ownership and the cross-Node hop stay inside the Hyperlink:
+From any Node, a caller just asks — ownership and the hop stay inside the HyperService:
 
 {.twoslash}
 ``` ts
@@ -213,88 +260,16 @@ const program = Effect.gen(function* () {
 })
 ```
 
-An unreachable owner degrades to a miss instead of blocking. **Every instance an equal — reached, and
-reaching others, through the same Tag.**
-
-## Build your own
-
-Everything so far — `Emails`, `Digest`, `Sessions` — is built on one primitive you use directly. A
-Hyperlink is a **Contract** plus an **Implementation**, and it's first-class, not an escape hatch.
-
-Describe the Contract — methods and their schemas:
-
-{.twoslash}
-``` ts
-import * as Hyperlink from "hyperlink-ts/Hyperlink"
-import { Schema } from "effect"
-// ---cut---
-class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
-  value: Hyperlink.ref(Schema.Number),          // an observable value — get + live changes
-  increment: Hyperlink.effectFn({ by: Schema.Number }),
-  reset: Hyperlink.effect(Schema.Void),
-}) {}
-```
-
-Give it an Implementation:
-
-{.twoslash}
-``` ts
-import * as Hyperlink from "hyperlink-ts/Hyperlink"
-import { Effect, Schema, SubscriptionRef } from "effect"
-class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
-  value: Hyperlink.ref(Schema.Number),
-  increment: Hyperlink.effectFn({ by: Schema.Number }),
-  reset: Hyperlink.effect(Schema.Void),
-}) {}
-// ---cut---
-const counterImpl = Effect.gen(function* () {
-  const ref = yield* SubscriptionRef.make(0)
-  return {
-    value: Hyperlink.subscribable(ref),                    // surface the ref as the observable field
-    increment: ({ by }: { by: number }) => SubscriptionRef.update(ref, (n) => n + by),
-    reset: SubscriptionRef.set(ref, 0),
-  }
-})
-```
-
-That's it — it's now a cross-runtime Service like any built-in. The **same Tag**, provided the same
-three ways:
-
-{.twoslash}
-``` ts
-import * as Hyperlink from "hyperlink-ts/Hyperlink"
-import { Effect, Schema, SubscriptionRef, Layer } from "effect"
-class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
-  value: Hyperlink.ref(Schema.Number),
-  increment: Hyperlink.effectFn({ by: Schema.Number }),
-  reset: Hyperlink.effect(Schema.Void),
-}) {}
-const counterImpl = Effect.gen(function* () {
-  const ref = yield* SubscriptionRef.make(0)
-  return {
-    value: Hyperlink.subscribable(ref),
-    increment: ({ by }: { by: number }) => SubscriptionRef.update(ref, (n) => n + by),
-    reset: SubscriptionRef.set(ref, 0),
-  }
-})
-const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) => resource
-// ---cut---
-Hyperlink.layer(Counter, counterImpl)                        // in-process
-Hyperlink.serve(Counter, counterImpl).pipe(nodeServer(4000)) // served over RPC
-Hyperlink.connect(Counter, Hyperlink.protocolHttp(4000))                          // reached from another runtime
-```
-
-And it gets the rest for free — the live `value`, runtime control, and a slot in the `pm` CLI, TUI,
-and web dashboards — because it's the same kind of thing `Emails` is.
+An unreachable owner degrades to a miss instead of blocking. **Every instance an equal — reached,
+and reaching others, through the same Tag.**
 
 ## Included HyperServices
 
-Building your own Hyperlink Service is the focus. The package also ships a few **included**
-HyperServices — basic tools that are full HyperServices when you need them:
+Building your own is the focus. The package also ships a few **included** HyperServices — full
+HyperServices you can drop in when you need them:
 
-- **[`Daemon`](/docs/daemons)** — continuous or recurring work: a polling cadence, arm/disarm
-  schedule windows, execution history, and more.
-- **[`WorkPool`](/docs/work-pools)** — a priority work queue: enqueue items, workers drain them with
-  dedup, retry, and concurrency control; durable when you provide a store.
-- **[`ShardMap`](/docs/shardmap)** — partitioned key/value across a fleet: routed `get` / `put` /
-  `delete`, leaf shards, and fleet size folds via peers.
+- **[`WorkPool`](/docs/work-pools)** — priority work queue: enqueue, drain, dedup, retry, concurrency
+- **[`Daemon`](/docs/daemons)** — continuous or recurring work: polling, schedules, run history
+- **[`ShardMap`](/docs/shardmap)** — partitioned key/value across a fleet, with peer routing
+- **[`Gate`](/docs/gates)** · **[`Telemetry`](/docs/telemetry)** · **[`FleetHealth`](/docs/fleet-health)** —
+  concurrency gates and glass over the mesh
