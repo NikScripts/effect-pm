@@ -41,9 +41,12 @@ Epsilon is the intended worktree for this once the design locks.
   (Layer memoization makes overlapping groups safe — same Tag provided twice dedupes.)
 - **Identity injection**: launcher spawns ONE shared entry with the node name injected
   (env/argv); `assembleNode` builds that node. No per-node entry files.
-- **CLI**: canonical product bin **`hyperlink`** with bundled alias **`hl`** (pnpm/`pn`
-  pattern). Locked 2026-07-24 (owner). `link` stays rejected (POSIX `link(1)` collision).
-  Repo-dev gates are a **separate** bin **`hyp`** (not the product CLI).
+- **CLI naming**: public brand / future launcher bin **`hyperlink`** with alias **`hl`**
+  (pnpm/`pn` pattern). Locked 2026-07-24 (owner). `link` stays rejected (POSIX `link(1)`).
+  Today that name is examples + tooling only — there is **no** shipped `hyperlink` command
+  surface for running/controlling app Hyperlinks yet (`makeHyperlinkCli` is a helper that
+  plugs into Effect CLI; apps bring their own bin name). Private repo-dev gates are a
+  **separate** bin **`hyp`**.
 - **CLI targets from group paths**: nested record names give addressable paths
   (`Ops.Jobs.Counter` → `hl up ops.jobs`).
 - **Deploy sequence** (later, with delta's handoff): spawn new → readiness → `Advice.advise`
