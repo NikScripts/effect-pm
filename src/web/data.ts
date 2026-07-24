@@ -733,7 +733,7 @@ export const daemonBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: Daemo
     throw new Error(`daemon tag ${tag.key} is missing a node`);
   }
   bumpLogIdFrom(`${tag.key}/logs`);
-  // The inline `schedule` group is optional (only processes that own an inline schedule have it),
+  // The inline `schedule` group is optional (only daemons that own an inline schedule have it),
   // so the schedule read/mutations degrade to empty / no-op when a daemon is schedule-less.
   const scheduleEntries = Effect.flatMap(tag, (p) =>
     p.schedule === undefined

@@ -3769,7 +3769,7 @@ export interface HyperlinkInstance<S extends Spec> {
  *
  * **Not** how you serve a single custom resource on a shared node: this returns a
  * {@link HyperlinkInstance} for the {@link serveInstances} family. To serve a custom `Hyperlink.Tag`
- * alongside queues/processes, pass its {@link Hyperlink.serve} layer to {@link Node.httpServer},
+ * alongside queues/daemons, pass its {@link Hyperlink.serve} layer to {@link Node.httpServer},
  * then reach it with {@link Hyperlink.client}.
  *
  * @category constructors

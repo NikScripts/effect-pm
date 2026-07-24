@@ -30,7 +30,7 @@ class DaemonStore extends Store.Service<DaemonStore>("@test/DaemonStore")(
 ) {}
 
 describe("Daemon store contract", () => {
-  it.effect("void process exposes record and events", () =>
+  it.effect("void daemon exposes record and events", () =>
     Effect.gen(function* () {
       const store = yield* DaemonStore.at(VoidProc);
       yield* store.record({

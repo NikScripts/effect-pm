@@ -68,7 +68,7 @@ const LEVEL_COLOR: Record<string, string> = {
 // contract) becomes a type guard — the sanctioned alternative to a cast.
 const isDaemonTag = (m: unknown): m is DaemonTag => isDaemonLeaf(m);
 const isQueueTag = (m: unknown): m is LeafTag => isQueueLeaf(m);
-/** Every leaf (queue + process) of the fleet — the command palette's targets. */
+/** Every leaf (queue + daemon) of the fleet — the command palette's targets. */
 const ALL_LEAVES: ReadonlyArray<LeafTag | DaemonTag> = [...queueLeaves(Fleet), ...daemonLeaves(Fleet)];
 
 const statusOf = (phase: string, paused: boolean): Status =>

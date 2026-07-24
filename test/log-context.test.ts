@@ -44,7 +44,7 @@ describe("logContext", () => {
     );
   });
 
-  it("resolves a process target without a group flag", () =>
+  it("resolves a daemon target without a group flag", () =>
     Effect.gen(function* () {
       const scope = yield* resolveLogScope(
         [{ key: testBillingNodeKey }],

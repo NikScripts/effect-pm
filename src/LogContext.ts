@@ -6,7 +6,7 @@
  *
  * Full catalog: `docs/LOGS.md` — Annotation keys.
  *
- * Hyperlink kind (process vs queue vs …) is {@link Hyperlink.kindOf} on the tag — not an annotation.
+ * Hyperlink kind (daemon vs queue vs …) is {@link Hyperlink.kindOf} on the tag — not an annotation.
  *
  * @module LogContext
  */

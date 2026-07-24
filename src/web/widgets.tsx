@@ -60,7 +60,7 @@ import { priorityKind } from "../WorkPool";
 import { kind as fleetHealthKind, type NodeReport } from "../FleetHealth";
 import { kind as telemetryKind, type MetricDatum } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";
-import { kind as runKind } from "../Gate";
+import { kind as gateKind } from "../Gate";
 import { kind as daemonKind } from "../Daemon";
 import { kind as apiKind } from "../ApiMetrics";
 import {
@@ -2950,7 +2950,7 @@ const shardMapWidget: Widget = ({ tag, name, onOpen }) =>
   ) : (
     <FallbackCard tag={tag} name={name} onOpen={onOpen} />
   );
-const runWidget: Widget = ({ tag, name, onOpen }) =>
+const gateWidget: Widget = ({ tag, name, onOpen }) =>
   isGateTag(tag) ? (
     <GateCard tag={tag} name={name} onOpen={onOpen} />
   ) : (
@@ -2976,7 +2976,7 @@ export const base: WidgetRegistry = withEntries(
     forKind(fleetHealthKind, fleetHealthWidget),
     forKind(telemetryKind, telemetryWidget),
     forKind(shardMapKind, shardMapWidget),
-    forKind(runKind, runWidget),
+    forKind(gateKind, gateWidget),
     forKind(hyperlinkKind, HyperlinkCard),
   ],
 );

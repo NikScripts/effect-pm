@@ -9,7 +9,7 @@ import type { GateStatus } from "./gate";
 import type { GateStateChangeReason } from "./store/gateStoreSpec";
 
 /** Pair a counter update with the store reason emitted alongside it. @internal */
-export interface RunStatusTransition {
+export interface GateStatusTransition {
   readonly update: (
     state: GateStatus,
     observedAt: number,
@@ -120,4 +120,4 @@ export const runStatusTransitions = {
     update: completeRun,
     reason: "Completed",
   },
-} as const satisfies Record<string, RunStatusTransition>;
+} as const satisfies Record<string, GateStatusTransition>;

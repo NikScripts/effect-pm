@@ -1554,7 +1554,7 @@ export const daemonStatus = Schema.Struct({
 export const daemonLogEntry = LogEntrySchema;
 
 /**
- * Execution event union for void processes (no `success` field on `Completed`).
+ * Execution event union for void daemons (no `success` field on `Completed`).
  *
  * @category wire schemas
  * @public
@@ -1739,7 +1739,7 @@ type ScheduleGroupSpec = { readonly schedule: typeof scheduleGroupSpec };
 
 /**
  * The full CRUD contract of a standalone {@link Schedule} resource — the reusable window manager
- * one or more processes can be gated by. Mirrors the engine's {@link DaemonScheduleService}.
+ * one or more daemons can be gated by. Mirrors the engine's {@link DaemonScheduleService}.
  *
  * @category schedule
  * @public
@@ -2113,7 +2113,7 @@ const scheduleGroupFlat: FlatSpec = Object.fromEntries(
  * ```
  *
  * - **an external {@link Schedule}** — the daemon is **gated by** a shared schedule resource and
- *   gains **no** schedule verbs (they live on the resource, which can arm many processes at once):
+ *   gains **no** schedule verbs (they live on the resource, which can arm many daemons at once):
  *
  * ```ts
  * class IngestScores extends Daemon.Tag<IngestScores>()("app/IngestScores").pipe(
@@ -2750,7 +2750,7 @@ const buildScheduleImpl = (
 
 /**
  * The **local** layer for a standalone {@link Schedule} resource — an in-memory window manager
- * (optionally seeded with `initial` windows) that any number of processes can be gated by.
+ * (optionally seeded with `initial` windows) that any number of daemons can be gated by.
  *
  * @category schedule
  * @public

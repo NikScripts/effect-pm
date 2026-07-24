@@ -248,7 +248,7 @@ export const serve = <Self>(
 
 /**
  * Class factory for an {@link ApiMetrics} instance tag — its own per-instance RPC group, so it
- * serves on a node alongside queues/processes via {@link ApiMetrics.serve} and is reached with
+ * serves on a node alongside queues/daemons via {@link ApiMetrics.serve} and is reached with
  * `Hyperlink.client`. Bind it to a node with `{ node }`.
  *
  * @example

@@ -33,14 +33,14 @@ it("resolves key → kind → fallback, in that order", () => {
 
 it("withEntries extends the base and overrides only the matching entry", () => {
   const q = mk("queue");
-  const p = mk("process");
-  const base = withEntries(empty(mk("fb")), [forKind("queue", q), forKind("process", p)]);
+  const p = mk("daemon");
+  const base = withEntries(empty(mk("fb")), [forKind("queue", q), forKind("daemon", p)]);
 
   const q2 = mk("queue-v2");
   const extended = withEntries(base, [forKind("queue", q2)]);
 
   expect(widgetFor(extended, "x", "queue")).toBe(q2); // overridden
-  expect(widgetFor(extended, "x", "process")).toBe(p); // base entry intact
+  expect(widgetFor(extended, "x", "daemon")).toBe(p); // base entry intact
 });
 
 it("isLeafTag accepts a keyed tag, rejects groups and non-tags", () => {

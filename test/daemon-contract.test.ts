@@ -12,7 +12,7 @@ class ScheduledProc extends Daemon.Tag<ScheduledProc>()(
   "test/daemon-contract/Scheduled",
 ).pipe(Daemon.schedule([])) {}
 
-it("with the default schedule a process arms and runs its effect immediately", () =>
+it("with the default schedule a daemon arms and runs its effect immediately", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const ran = yield* Ref.make(0);

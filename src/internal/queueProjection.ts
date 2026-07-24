@@ -68,7 +68,7 @@ export const buildLevelIndexLabels = (
  * Priority-queue status snapshot (Record sizes).
  *
  * @category models
- * @public
+ * @internal
  */
 export interface WorkPoolPriorityStatus {
   readonly sizes: Record<string, number>;

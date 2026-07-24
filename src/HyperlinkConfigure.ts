@@ -183,7 +183,7 @@ export const configureWrapEffectField = <
     effect: fn(spec.effect),
   }));
 
-// Layer-composed configure patches for resource and process services. The module is the
+// Layer-composed configure patches for resource and daemon services. The module is the
 // namespace (`import * as HyperlinkConfigure`): `configureLayer` / `foldConfig` /
 // `foldConfiguredSpec` are the flat exports above; `tagKey` / `wrapEffectField` are aliased
 // below so the namespace members match. Root imports match these bindings.

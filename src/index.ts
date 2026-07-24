@@ -259,6 +259,7 @@ export type {
 // Types - WorkPool (the leveled queue folded into WorkPool.priority)
 export type {
   PriorityTagConfig,
+  PriorityStatus,
 } from "./WorkPool";
 
 export {

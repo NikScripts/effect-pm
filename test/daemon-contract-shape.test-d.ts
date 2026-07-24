@@ -66,7 +66,7 @@ const _proof = Effect.gen(function* () {
 
   const i = yield* Ingest;
   yield* i.start;
-  // @ts-expect-error a process gated by an external schedule gains NO schedule verbs
+  // @ts-expect-error a daemon gated by an external schedule gains NO schedule verbs
   yield* i.schedule.entries.get;
 
   const pe = yield* PricedErr;

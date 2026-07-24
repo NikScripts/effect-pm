@@ -88,6 +88,7 @@ import type {
   WorkPoolPriorityConfigWithoutItemSchema,
   WorkPoolPriorityOptionsWithItemSchema,
   WorkPoolPriorityOptionsWithoutItemSchema,
+  WorkPoolPriorityStatus,
 } from "./internal/workPoolPriority";
 
 /**
@@ -123,6 +124,14 @@ export type PriorityHandle<T, E = never, EEnqueue = never, R = never> = WorkPool
 >;
 /** @category models @public */
 export type PriorityLaneConfig = WorkPoolPriorityLaneConfig;
+/**
+ * Priority-lane live status snapshot — namespaced short form of {@link WorkPoolPriorityStatus}.
+ * Matches the wire shape of {@link priorityStatus}.
+ *
+ * @category models
+ * @public
+ */
+export type PriorityStatus = WorkPoolPriorityStatus;
 import type { StoreShapes } from "./internal/store/contractDef";
 import type {
   QueueEnqueue,
