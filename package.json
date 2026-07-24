@@ -153,7 +153,7 @@
   ],
   "scripts": {
     "build": "tsup",
-    "typecheck": "tsgo --noEmit -p tsconfig.json && tsgo --noEmit -p tsconfig.src.strict-effect-provide.json && tsgo --noEmit -p src/web/tsconfig.json && tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsgo --noEmit -p tsconfig.json && tsgo --noEmit -p tsconfig.src.strict-effect-provide.json && tsgo --noEmit -p src/web/tsconfig.json && tsgo --noEmit -p src/tui/tsconfig.json && tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "treeshake": "node scripts/treeshake-check.mjs",
     "check:markers": "tsx scripts/mark-the-surface-check.ts --baseline",

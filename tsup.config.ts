@@ -40,7 +40,6 @@ export default defineConfig([
       Gate: "src/Gate.ts",
       HttpClientGate: "src/HttpClientGate.ts",
       cli: "src/cli/index.ts",
-      tui: "src/tui/index.ts",
       "storage/sqlite": "src/storage/sqlite/index.ts",
     },
     dts: true,
@@ -50,15 +49,27 @@ export default defineConfig([
     },
   },
   {
-    // The `web` (browser/React) entry builds its declarations under the relaxed browser ruleset
-    // (src/web/tsconfig.json) — the root config's Effect-purity plugin (globalDate / globalTimers /
-    // globalConsole / asyncFunction) is wrong for UI code and would fail the DTS build. `clean` stays
-    // off so it doesn't wipe the first build's output.
+    // The `web` (browser/React) and `tui` (Ink/React) entries build declarations under their
+    // relaxed UI rulesets — the root config's Effect-purity plugin (globalDate / globalTimers /
+    // globalConsole / asyncFunction) is wrong for UI code and would fail the DTS build. `clean`
+    // stays off so later entries don't wipe earlier output.
     ...shared,
     entry: {
       web: "src/web/index.ts",
     },
     tsconfig: "src/web/tsconfig.json",
+    dts: true,
+    clean: false,
+    esbuildOptions(options) {
+      options.jsx = "automatic";
+    },
+  },
+  {
+    ...shared,
+    entry: {
+      tui: "src/tui/index.ts",
+    },
+    tsconfig: "src/tui/tsconfig.json",
     dts: true,
     clean: false,
     esbuildOptions(options) {

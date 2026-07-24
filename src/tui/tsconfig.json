@@ -1,0 +1,29 @@
+{
+  // The Ink/React TUI ruleset. Same rationale as `src/web/tsconfig.json`: widgets use
+  // `Date` / `setTimeout` / resize listeners — not Effect-domain purity. Root config excludes
+  // `src/tui/**`; this project is check-only (`noEmit`). Bundled by tsup's `tui` entry.
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "../..",
+    "declaration": false,
+    "declarationMap": false,
+    "jsx": "react-jsx",
+    "types": ["node", "react"],
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "diagnosticSeverity": {
+          "globalTimers": "off",
+          "globalDate": "off",
+          "globalConsole": "off",
+          "newPromise": "off",
+          "asyncFunction": "off",
+          "nodeBuiltinImport": "off"
+        }
+      }
+    ]
+  },
+  "include": ["./**/*.ts", "./**/*.tsx", "../web/data.ts", "../web/cache.ts", "../web/now.ts", "../ui/**/*.ts", "../ui/**/*.tsx"],
+  "exclude": ["../../node_modules", "../../dist"]
+}

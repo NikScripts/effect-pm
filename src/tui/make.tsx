@@ -11,8 +11,8 @@
  *   **action**: no-payload actions fire on the number key; actions with a payload
  *   open the command bar prefilled (`name field=…`), coerced from the field schema.
  *
- * Prefer {@link layer} from `hyperlink-ts/tui` with {@link cli} — bare paths open this
- * dashboard via the optional {@link Tui} service.
+ * For a `Group.Tag`, prefer {@link Dashboard} / {@link layer} (Group nav + kind widgets).
+ * `make` remains the generic contract-driven grid for a flat `Record` of tags.
  */
 
 import { Box, Text, useApp, useInput, useStdout } from "ink";

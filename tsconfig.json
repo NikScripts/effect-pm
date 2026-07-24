@@ -126,8 +126,10 @@
     "node_modules",
     "dist",
     "repos",
-    // The browser/React layer has its own (relaxed) ruleset — see src/web/tsconfig.json.
+    // The browser/React and Ink/React layers have their own (relaxed) rulesets —
+    // see src/web/tsconfig.json and src/tui/tsconfig.json.
     "src/web/**",
+    "src/tui/**",
     "examples/scenarios/nwslsoccer",
     "examples/queue-widget/**",
     "examples/resource-tui/**",

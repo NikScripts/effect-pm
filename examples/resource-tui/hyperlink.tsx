@@ -23,10 +23,19 @@ import { appLayer } from "../web-dashboard/queue-data";
 import * as Hyperlink from "../../src/Hyperlink";
 import { layer as tuiLayer } from "../../src/tui";
 
+// Args after this script. `pnpm run example:hyperlink -- Mail` forwards a literal `--`.
+const raw = process.argv.slice(
+  Math.max(
+    2,
+    process.argv.findIndex((a) => a.endsWith("hyperlink.tsx")) + 1,
+  ),
+);
+const args = raw[0] === "--" ? raw.slice(1) : raw;
+
 const program = Hyperlink.cli(Fleet, {
   name: "hyperlink",
   version: "0.9.0-beta.0",
-})(process.argv.slice(2)).pipe(
+})(args).pipe(
   Effect.provide(Layer.mergeAll(appLayer, tuiLayer, NodeServices.layer)),
 );
 // Boundary: the heterogeneous resource tree erases the requirement to `unknown`;

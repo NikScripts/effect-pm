@@ -26,10 +26,18 @@ class MyGroup extends Group.Tag<MyGroup>("hyperlink-ts/MyGroup")({
   QueueManager,
 }) {}
 
+const raw = process.argv.slice(
+  Math.max(
+    2,
+    process.argv.findIndex((a) => a.endsWith("group-terminal.tsx")) + 1,
+  ),
+);
+const args = raw[0] === "--" ? raw.slice(1) : raw;
+
 const program = Hyperlink.cli(MyGroup, {
   name: "my-group",
   version: "0.0.0",
-})(process.argv.slice(2)).pipe(
+})(args).pipe(
   Effect.provide(Layer.mergeAll(resourcesLayer, tuiLayer, NodeServices.layer)),
 );
 

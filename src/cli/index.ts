@@ -35,7 +35,7 @@ import { openTui } from "./Tui";
 import type { CliHyperlinkTag, CliNode, CliTree } from "./types";
 
 export type { CliGroup, CliHyperlinkTag, CliNode, CliTree } from "./types";
-export { openTui, Tui, TuiNotConfigured } from "./Tui";
+export { openTui, Tui, TuiNotConfigured, type TuiOpenInput } from "./Tui";
 
 // A spec entry is a runnable CLI verb when it's a wire method (`kind`: query/mutate) that
 // isn't a streaming read. Streams have no run-and-exit form; local methods aren't on the wire.
@@ -157,21 +157,23 @@ const nodeCommand = (
   name: string,
   node: CliNode,
   path: ReadonlyArray<string>,
+  root: CliTree,
 ): AnyCliCommand => {
   const here = [...path, name];
   if (Group.isGroup(node)) {
     const kids = Object.entries(Group.members(node)).map(([childName, child]) =>
-      nodeCommand(childName, child as CliNode, here),
+      nodeCommand(childName, child as CliNode, here, root),
     );
     return Command.make(name).pipe(
       Command.withDescription(`group ${node.key}`),
-      Command.withHandler(() => openTui(leavesOf(node, here), here)),
+      // Same tree the web Dashboard gets — path focuses the subgroup (parity with `/Mini`).
+      Command.withHandler(() => openTui({ tree: root, path: here })),
       Command.withSubcommands(kids),
     ) as AnyCliCommand;
   }
   return Command.make(name).pipe(
     Command.withDescription(node.description ?? `commands for ${name}`),
-    Command.withHandler(() => openTui({ [name]: node }, here)),
+    Command.withHandler(() => openTui({ tree: root, path: here })),
     Command.withSubcommands(
       Object.entries(specOf(node) as unknown as FlatSpec).flatMap(([method, spec]) =>
         isCliMethod(spec) ? [methodCommand(method, spec, node)] : [],
@@ -183,7 +185,7 @@ const nodeCommand = (
 const buildCommand = (tree: CliTree, rootName: string) => {
   const members = membersOf(tree);
   const namespaces = Object.entries(members).map(([name, node]) =>
-    nodeCommand(name, node, []),
+    nodeCommand(name, node, [], tree),
   );
   // Group → flatten leaves by path; flat record → keep command names as keys.
   const rootFocus: Record<string, CliHyperlinkTag> = Group.isGroup(tree)
@@ -208,7 +210,7 @@ const buildCommand = (tree: CliTree, rootName: string) => {
   );
   return Command.make(rootName).pipe(
     Command.withDescription("Resource CLI — bare path opens the TUI when configured."),
-    Command.withHandler(() => openTui(rootFocus, [])),
+    Command.withHandler(() => openTui({ tree, path: [] })),
     Command.withSubcommands([...namespaces, ls]),
   );
 };

@@ -93,15 +93,37 @@ describe("Hyperlink.cli TUI default", () => {
 
   it.effect("bare root with Tui opens via service", () =>
     Effect.gen(function* () {
-      let opened: ReadonlyArray<string> | undefined;
+      let opened: { treeKey: string; path: ReadonlyArray<string> } | undefined;
       const tuiLayer = Layer.succeed(Tui, {
-        open: (resources) =>
+        open: (input) =>
           Effect.sync(() => {
-            opened = Object.keys(resources);
+            opened = {
+              treeKey: Group.isGroup(input.tree) ? input.tree.key : "record",
+              path: input.path,
+            };
           }),
       });
       const exit = yield* Effect.exit(
         Command.runWith(cli(Bundle, "hyperlink"), { version: "0.0.0" })([]).pipe(
+          Effect.provide(Layer.mergeAll(counterLayer, tuiLayer, NodeServices.layer)),
+        ) as Effect.Effect<void, TuiNotConfigured>,
+      );
+      expect(Exit.isSuccess(exit)).toBe(true);
+      expect(opened).toEqual({ treeKey: Bundle.key, path: [] });
+    }),
+  );
+
+  it.effect("resource path opens Tui focused on that path", () =>
+    Effect.gen(function* () {
+      let opened: ReadonlyArray<string> | undefined;
+      const tuiLayer = Layer.succeed(Tui, {
+        open: (input) =>
+          Effect.sync(() => {
+            opened = input.path;
+          }),
+      });
+      const exit = yield* Effect.exit(
+        Command.runWith(cli(Bundle, "hyperlink"), { version: "0.0.0" })(["Counter"]).pipe(
           Effect.provide(Layer.mergeAll(counterLayer, tuiLayer, NodeServices.layer)),
         ) as Effect.Effect<void, TuiNotConfigured>,
       );
