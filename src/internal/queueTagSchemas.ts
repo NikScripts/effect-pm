@@ -13,15 +13,15 @@
 import { Schema } from "effect";
 
 export const successSym: unique symbol = Symbol.for(
-  "hyperlink-ts/Queue/success",
+  "hyperlink-ts/WorkPool/success",
 );
 
 export const errorSym: unique symbol = Symbol.for(
-  "hyperlink-ts/Queue/error",
+  "hyperlink-ts/WorkPool/error",
 );
 
 export const itemSchemaSym: unique symbol = Symbol.for(
-  "hyperlink-ts/Queue/itemSchema",
+  "hyperlink-ts/WorkPool/itemSchema",
 );
 
 /**

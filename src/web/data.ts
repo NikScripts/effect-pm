@@ -15,8 +15,13 @@ import { nodeOf, kindOf as hyperlinkKindOf, type Subscribable } from "../Hyperli
 import { connect } from "../Node";
 import type { NodeKey, AddressedNode, Status as NodeStatusSnapshot } from "../Node";
 import * as LogEntry from "../LogEntry";
-import { kind as queueKind, queueMetrics, queueStatus } from "../WorkPool";
-import { priorityKind, priorityStatus } from "../WorkPool";
+import {
+  kind as queueKind,
+  queueMetrics,
+  queueStatus,
+  priorityKind,
+  type PriorityStatus,
+} from "../WorkPool";
 import { kind as fleetHealthKind, type FleetStatus, type NodeReport } from "../FleetHealth";
 import { kind as telemetryKind, MetricsSnapshot, type MetricDatum } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";
@@ -29,9 +34,8 @@ import { now } from "./now";
 
 /** Live queue status (from the contract schema). */
 export type QueueStatus = Schema.Schema.Type<typeof queueStatus>;
-/** A `WorkPool.priority` queue's live status — like a WorkPool's, but `sizes` is a **named-lane**
- *  record (not the fixed high/normal/low), and `phase` is `running | draining | off`. @public */
-export type PriorityStatus = Schema.Schema.Type<typeof priorityStatus>;
+/** A `WorkPool.priority` queue's live status — re-export of {@link PriorityStatus}. @public */
+export type { PriorityStatus };
 /** Live queue metrics (from the contract schema). */
 export type QueueMetrics = Schema.Schema.Type<typeof queueMetrics>;
 /** Live daemon status (from the contract schema). */

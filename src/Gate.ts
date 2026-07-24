@@ -83,7 +83,7 @@ import {
   type ConfigPatch,
 } from "./HyperlinkConfigure";
 import * as internal from "./internal/gate";
-import { stampRunWireSchemas } from "./internal/gateTagSchemas";
+import { stampGateWireSchemas } from "./internal/gateTagSchemas";
 import * as Store from "./Store";
 import {
   gateStatus,
@@ -549,7 +549,7 @@ const materializeGateTag = <Self>() =>
     const ready = Hyperlink.withReadiness(tag, (svc) =>
       Effect.map(svc.status.get, () => ({ ready: true })),
     );
-    const stamped = stampRunWireSchemas(ready, {
+    const stamped = stampGateWireSchemas(ready, {
       success: config.success,
       error: config.error,
     });

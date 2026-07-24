@@ -21,7 +21,7 @@ export const errorSym: unique symbol = Symbol.for(
  * it is a real (non-{@link Schema.Never}) schema, so `errorOf` stays `undefined` for infallible gates.
  * @internal
  */
-export const stampRunWireSchemas = <T extends object>(
+export const stampGateWireSchemas = <T extends object>(
   tag: T,
   schemas: { readonly success?: Schema.Top; readonly error?: Schema.Top },
 ): T => {
