@@ -78,7 +78,7 @@ const scheduler = Daemon.layer(Digest, {
     yield* emails.add(email)
   }),
   polling: Polling.spaced(Duration.hours(1)),
-}).pipe(Layer.provide(Hyperlink.discoverClients(Emails)))
+}).pipe(Layer.provide(Hyperlink.discoverClient(Emails)))
 ```
 
 `Digest` runs on the scheduler, `Emails` on the worker — yet `emails.add(…)` looks like one process.
