@@ -35,5 +35,5 @@ Pre-1.0: breaking changes land as minor bumps.
 
 ## Hygiene
 
-- **Re-enable `anyUnknownInErrorContext`** — tighten the strict-unknown TypeScript/lint gate.
+- **Ratchet `anyUnknownInErrorContext` to `error`** — currently `"message"` (visible, non-failing); tighten the strict-unknown TypeScript/lint gate.
   Inventory (counts + heaviest files, rule still off): [any-unknown-in-error-context.md](./any-unknown-in-error-context.md).
