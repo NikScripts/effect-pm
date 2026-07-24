@@ -105,18 +105,19 @@ and install the package:
 The language service is more than nicer hovers — it enforces a **ruleset**. It's worth knowing there
 are several, because the right rules for Effect-domain code are not the right rules for a browser UI.
 
-**What hyperlink-ts's own source enforces.** We run every diagnostic at `error`, with a few
-deliberate softer severities that still surface in the editor / `tsc` output but do **not** fail
-the build: `anyUnknownInErrorContext`, `missingLayerContext`, and `serviceNotAsClass` are
-`message`; `effectDoNotation` is a `warning`. So our source is held to Effect's idioms — no raw
-`Date` / `console` / `setTimeout` / `fetch` / `Math.random` / `process.env` reached for outside
-Effect, `Schema` over hand-rolled JSON, pipeables over nesting, typed error channels, and so on.
-`typecheck` actually runs **two** passes:
+**What hyperlink-ts's own source enforces.** Effect language-service diagnostics are `error` by
+default — including `anyUnknownInErrorContext`, `missingLayerContext`, and `effectDoNotation`.
+`serviceNotAsClass` is also `error`; the only allowed silence is a next-line off at a real
+`Context.Service` / `Context.Tag` **factory**. `strictEffectProvide` is `message` in both typecheck
+projects: it still surfaces in the editor / `tsc` output, but does not fail the build. So our source
+is held to Effect's idioms — no raw `Date` / `console` / `setTimeout` / `fetch` / `Math.random` /
+`process.env` reached for outside Effect, `Schema` over hand-rolled JSON, pipeables over nesting,
+typed error channels, and so on. `typecheck` actually runs **two** passes:
 
-| Config | Scope | Adds over the base |
-|--------|-------|--------------------|
-| `tsconfig.json` | `src`, `test`, `examples` | the full diagnostic set at `error` |
-| `tsconfig.src.strict-effect-provide.json` | `src/**` only | `strictEffectProvide: error` — too noisy to demand of tests/examples |
+| Config | Scope | Notes |
+|--------|-------|-------|
+| `tsconfig.json` | `src`, `test`, `examples` | full diagnostic set; `strictEffectProvide: message` |
+| `tsconfig.src.strict-effect-provide.json` | `src/**` only | same severities (incl. `strictEffectProvide: message`) |
 
 **Browser / React code is a different ruleset.** A handful of these rules assume Effect-domain code
 and are wrong for a browser/React layer, where raw `Date.now()`, `console`, `setTimeout`, `fetch` and
