@@ -2,6 +2,9 @@
 // NOT here; they're derived from each page's own block (single source of truth). To add a
 // page, drop its slug into a group; anything unlisted still shows under "More" so nothing
 // silently disappears. Reorder = edit these lists (no file renames, no per-page churn).
+//
+// Page-block `title=` is the **sidebar** label (short). The page H1 is the full title when
+// they differ — e.g. title="Creating a HyperService" / H1 "Creating a Hyperlink Service".
 
 export interface NavGroup {
   readonly label: string;
@@ -26,7 +29,8 @@ export const nav: ReadonlyArray<NavGroup> = [
     slugs: ["index", "install", "core-concepts", "managing-layers"],
   },
   {
-    label: "Resources",
+    // Build-your-own is the book's focus. Included HyperServices come after.
+    label: "Hyperlink Services",
     slugs: [
       "creating-a-hyperlink",
       "contracts",
@@ -36,18 +40,20 @@ export const nav: ReadonlyArray<NavGroup> = [
     ],
   },
   {
-    label: "Guides",
+    // Prebuilt HyperServices / factories — useful tools, secondary to building your own.
+    label: "Included HyperServices",
     slugs: [
       "work-pools",
       "gates",
       "daemons",
-      "stores",
-      "logs",
-      "metrics",
+      "shardmap",
       "telemetry",
       "fleet-health",
-      "shardmap",
     ],
+  },
+  {
+    label: "Guides",
+    slugs: ["stores", "logs", "metrics"],
   },
   {
     // Tentative group name — "Observe and Control" per the outline, may change.

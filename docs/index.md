@@ -287,14 +287,14 @@ Hyperlink.connect(Counter, Hyperlink.protocolHttp(4000))                        
 And it gets the rest for free — the live `value`, runtime control, and a slot in the `pm` CLI, TUI,
 and web dashboards — because it's the same kind of thing `Emails` is.
 
-## The included types
+## Included HyperServices
 
-You don't start from scratch, either — the types you reach for most ship ready-made, each a
-cross-runtime Service you use like an Effect primitive:
+Building your own Hyperlink Service is the focus. The package also ships a few **included**
+HyperServices — basic tools that are full HyperServices when you need them:
 
-- **Long-running processes** ([`Process`](/docs/daemons)) — continuous or recurring work: a polling
-  cadence, arm/disarm schedule windows, execution history, and more.
-- **Queue** ([`WorkPool`](/docs/work-pools)) — a priority work queue: enqueue items, workers drain them
-  with dedup, retry, and concurrency control; durable when you provide a store.
-- **Shard map** ([`ShardMap`](/docs/shardmap)) — partitioned key/value across a fleet: routed
-  `get` / `put` / `delete`, leaf shards, and fleet size folds via peers.
+- **[`Daemon`](/docs/daemons)** — continuous or recurring work: a polling cadence, arm/disarm
+  schedule windows, execution history, and more.
+- **[`WorkPool`](/docs/work-pools)** — a priority work queue: enqueue items, workers drain them with
+  dedup, retry, and concurrency control; durable when you provide a store.
+- **[`ShardMap`](/docs/shardmap)** — partitioned key/value across a fleet: routed `get` / `put` /
+  `delete`, leaf shards, and fleet size folds via peers.

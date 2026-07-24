@@ -147,4 +147,4 @@ shapes instead of a collapsed `…`. Nearly every type in hyperlink-ts reads bet
 ## Next
 
 Head to **[Core Concepts](/docs/core-concepts)** for the mental model, or jump straight into
-**[Creating a Hyperlink](/docs/creating-a-hyperlink)**.
+**[Creating a Hyperlink Service](/docs/creating-a-hyperlink)**.
