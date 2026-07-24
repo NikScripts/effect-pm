@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@effect/vitest";
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Cause, Effect, Exit, Layer, Option, Schema } from "effect";
 import { Command } from "effect/unstable/cli";
 import * as Group from "../src/Group";
@@ -40,28 +41,31 @@ const expectTuiNotConfigured = <A, E>(exit: Exit.Exit<A, E>): void => {
   expect((err as TuiNotConfigured)._tag).toBe("TuiNotConfigured");
 };
 
-// Command trees erase resource requirements to `unknown`; layers satisfy them at runtime.
-const runCli = (effect: Effect.Effect<void, unknown, unknown>): Effect.Effect<Exit.Exit<void, unknown>> =>
-  Effect.exit(effect as Effect.Effect<void, unknown>);
+// Edge: Command.runWith + heterogeneous tags → Environment / CliError; assert on Exit.
+const runCli = (args: ReadonlyArray<string>, layer: Layer.Layer<Counter, never, never>) =>
+  Effect.exit(
+    Command.runWith(cli(Bundle, "hyperlink"), { version: "0.0.0" })(args).pipe(
+      Effect.provide(Layer.mergeAll(layer, NodeServices.layer)),
+    ) as Effect.Effect<void, TuiNotConfigured>,
+  );
 
 describe("Hyperlink.cli TUI default", () => {
   it.effect("bare root without Tui → TuiNotConfigured", () =>
     Effect.gen(function* () {
-      const command = cli(Bundle, "hyperlink");
-      const exit = yield* runCli(
-        Command.runWith(command, { version: "0.0.0" })([]).pipe(Effect.provide(counterLayer)),
-      );
+      const exit = yield* runCli([], counterLayer);
       expectTuiNotConfigured(exit);
     }),
   );
 
   it.effect("resource path without action without Tui → TuiNotConfigured", () =>
     Effect.gen(function* () {
-      const command = Hyperlink.cli({ counter: Counter }, "app");
-      const exit = yield* runCli(
-        Command.runWith(command, { version: "0.0.0" })(["counter"]).pipe(
-          Effect.provide(counterLayer),
-        ),
+      const exit = yield* Effect.exit(
+        Command.runWith(Hyperlink.cli({ counter: Counter }, "app"), { version: "0.0.0" })([
+          "counter",
+        ]).pipe(Effect.provide(Layer.mergeAll(counterLayer, NodeServices.layer))) as Effect.Effect<
+          void,
+          TuiNotConfigured
+        >,
       );
       expectTuiNotConfigured(exit);
     }),
@@ -69,11 +73,14 @@ describe("Hyperlink.cli TUI default", () => {
 
   it.effect("full action runs the verb", () =>
     Effect.gen(function* () {
-      const command = cli({ counter: Counter }, "app");
-      const exit = yield* runCli(
-        Command.runWith(command, { version: "0.0.0" })(["counter", "pause"]).pipe(
-          Effect.provide(counterLayer),
-        ),
+      const exit = yield* Effect.exit(
+        Command.runWith(cli({ counter: Counter }, "app"), { version: "0.0.0" })([
+          "counter",
+          "pause",
+        ]).pipe(Effect.provide(Layer.mergeAll(counterLayer, NodeServices.layer))) as Effect.Effect<
+          void,
+          TuiNotConfigured
+        >,
       );
       expect(Exit.isSuccess(exit)).toBe(true);
     }),
@@ -88,11 +95,10 @@ describe("Hyperlink.cli TUI default", () => {
             opened = Object.keys(resources);
           }),
       });
-      const command = cli(Bundle, "hyperlink");
-      const exit = yield* runCli(
-        Command.runWith(command, { version: "0.0.0" })([]).pipe(
-          Effect.provide(Layer.mergeAll(counterLayer, tuiLayer)),
-        ),
+      const exit = yield* Effect.exit(
+        Command.runWith(cli(Bundle, "hyperlink"), { version: "0.0.0" })([]).pipe(
+          Effect.provide(Layer.mergeAll(counterLayer, tuiLayer, NodeServices.layer)),
+        ) as Effect.Effect<void, TuiNotConfigured>,
       );
       expect(Exit.isSuccess(exit)).toBe(true);
       expect(opened).toEqual(["Counter"]);
