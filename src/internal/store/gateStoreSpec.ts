@@ -26,12 +26,12 @@ import type { StoreScopeTag } from "./registration";
 
 /** Reasons attached to gate state transitions. @internal */
 export type GateStateChangeReason =
-  | "gate.run.waiting"
-  | "gate.run.started"
-  | "gate.run.completed"
-  | "gate.run.failed"
-  | "gate.run.interrupted"
-  | "gate.run.wait.interrupted";
+  | "Waiting"
+  | "Started"
+  | "Completed"
+  | "Failed"
+  | "Interrupted"
+  | "WaitInterrupted";
 
 /** Live gate counters persisted on state transitions. @internal */
 export const gateStateSchema = gateStatus;
@@ -44,7 +44,14 @@ export const gateStateChangeSchema = Schema.Struct({
   id: Schema.String,
   resourceId: Schema.String,
   changedAt: Schema.Number,
-  reason: Schema.String,
+  reason: Schema.Literals([
+    "Waiting",
+    "Started",
+    "Completed",
+    "Failed",
+    "Interrupted",
+    "WaitInterrupted",
+  ]),
   previous: Schema.NullOr(gateStateSchema),
   current: gateStateSchema,
 });

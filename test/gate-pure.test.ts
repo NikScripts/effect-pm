@@ -106,7 +106,7 @@ describe("gateFacts", () => {
       id: "state-1",
       resourceId: "@test/Gate",
       changedAt: 50,
-      reason: "gate.run.started",
+      reason: "Started",
       previous: null,
       current,
     });
