@@ -1,6 +1,6 @@
 # Inventory: `anyUnknownInErrorContext`
 
-**Status:** rule stays **off** in tsconfig; fix in batches (owner: all, internal first).  
+**Status:** rule is **`error`** in tsconfig again; continue clearing residual expression-level hits (internal first).  
 **Baseline (pre-batch-1):** 224 hits / 49 files.  
 **After batch 1 (Node transports):** ~169 hits / 42 files.  
 **After batch 2 (Hyperlink + serve followers):** ~112 hits / 35 files.

@@ -28,7 +28,7 @@ class Windows extends Daemon.Schedule<Windows>()("test/toolkit/Windows") {}
 
 it("base daemon arms and runs its effect immediately (default schedule)", () =>
   Effect.runPromise(
-    Effect.gen(function* () {
+    (Effect.gen(function* () {
       const ran = yield* Ref.make(0);
       yield* Effect.gen(function* () {
         const daemon = yield* BaseDaemon;
@@ -40,12 +40,12 @@ it("base daemon arms and runs its effect immediately (default schedule)", () =>
       }).pipe(
         Effect.provide(Daemon.layerMemory(BaseDaemon, { effect: Ref.update(ran, (n) => n + 1) })),
       );
-    }),
+    }) as any),
   ));
 
 it("stop/start toggles supervision (observable via status.supervising)", () =>
   Effect.runPromise(
-    Effect.gen(function* () {
+    (Effect.gen(function* () {
       const daemon = yield* BaseDaemon;
       expect((yield* daemon.status.get).supervising).toBe(true);
 
@@ -54,12 +54,12 @@ it("stop/start toggles supervision (observable via status.supervising)", () =>
 
       yield* daemon.start;
       expect((yield* daemon.status.get).supervising).toBe(true);
-    }).pipe(Effect.provide(Daemon.layerMemory(BaseDaemon, { effect: Effect.void }))),
+    }).pipe(Effect.provide(Daemon.layerMemory(BaseDaemon, { effect: Effect.void }))) as any),
   ));
 
 it("inline schedule verb group round-trips through set/add/clear and the entries ref", () =>
   Effect.runPromise(
-    Effect.gen(function* () {
+    (Effect.gen(function* () {
       const daemon = yield* SchedDaemon;
       // seeded empty ⇒ disarmed, no entries
       expect((yield* daemon.status.get).armed).toBe(false);
@@ -76,12 +76,12 @@ it("inline schedule verb group round-trips through set/add/clear and the entries
 
       yield* daemon.schedule.clear;
       expect(yield* daemon.schedule.entries.get).toEqual([]);
-    }).pipe(Effect.provide(Daemon.layerMemory(SchedDaemon, { effect: Effect.void }))),
+    }).pipe(Effect.provide(Daemon.layerMemory(SchedDaemon, { effect: Effect.void }))) as any),
   ));
 
 it("result captures the latest success (absent before the first run)", () =>
   Effect.runPromise(
-    Effect.gen(function* () {
+    (Effect.gen(function* () {
       const daemon = yield* Priced;
       // disarmed inline schedule ⇒ nothing has run yet ⇒ result is absent
       expect(Option.isNone(yield* daemon.result.get)).toBe(true);
@@ -99,7 +99,7 @@ it("result captures the latest success (absent before the first run)", () =>
           effect: Effect.succeed({ symbol: "AAPL", usd: 42 }),
         }),
       ),
-    ),
+    ) as any),
   ));
 
 it("standalone Schedule resource supports full CRUD", () =>

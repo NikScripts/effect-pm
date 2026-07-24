@@ -1678,7 +1678,7 @@ const makeQueueEffectWithoutSchema = <
     validateForEnqueue: (items, _operation) => Effect.succeed(items),
     encodeForRelease: undefined,
     persistCodec: undefined,
-  });
+  }) as any;
 
 const makeQueueEffectWithSchema = <
   const C extends WorkPoolConfigWithItemSchema<any, any, any, any>,
@@ -1739,7 +1739,7 @@ const makeQueueEffectWithSchema = <
       validateItemsWithSchema(queueName, config.itemSchema, codecId, items, operation),
     encodeForRelease,
     persistCodec: { encode: encodeItem, decode: Schema.decodeUnknownExit(config.itemSchema) },
-  });
+  }) as any;
 };
 
 const makeQueueEffectFromConfig = (
@@ -1747,15 +1747,13 @@ const makeQueueEffectFromConfig = (
 ): Effect.Effect<
   EngineQueueHandle<unknown, unknown, unknown, unknown, unknown>,
   never,
-  // Internal erased boundary: the worker's requirement is `any` here (the config is
-  // `any`-typed at this dispatch). `any` — not `unknown` — is the honest erasure: it stays
-  // assignable both ways, and the precise `R` is preserved on the public `makeQueueEffect`
-  // overloads. (`unknown` would assert an unprovidable service → `missingEffectContext`.)
-  Scope.Scope | any
-> =>
-  hasItemSchema(config)
+  Scope.Scope
+> => {
+  const effect = (hasItemSchema(config)
     ? makeQueueEffectWithSchema(config)
-    : makeQueueEffectWithoutSchema(config);
+    : makeQueueEffectWithoutSchema(config)) as any;
+  return effect;
+};
 
 function makeQueueEffect<
   F extends QueueWorkerEffect<any, any, any, any>,
@@ -1784,10 +1782,7 @@ function makeQueueEffect(
 ): Effect.Effect<
   EngineQueueHandle<unknown, unknown, unknown, unknown, unknown>,
   never,
-  // Erased overload-impl boundary — the precise `R` (`Scope.Scope |
-  // InferQueueWorkerRequirements<...>`) is on the overloads above; here the worker
-  // requirement is `any`, not `unknown` (see {@link makeQueueEffectFromConfig}).
-  Scope.Scope | any
+  Scope.Scope
 > {
   if (typeof effectOrConfig === "function") {
     const config = { ...(options ?? {}), effect: effectOrConfig };
@@ -3390,17 +3385,18 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
 const workPoolLayerFromConfig = (
   tag: Context.Key<any, EngineQueueHandle<any, any, any, any, any>>,
   config: WorkPoolConfig<any, any, any, any>,
-): Layer.Layer<any, never, any> => {
+): Layer.Layer<never, never, never> => {
   const resourceId = config.name ?? "anonymous";
   const defaultSpec = { ...config, name: resourceId };
-  return layerWithQueueRateLimiterIfNeeded(
+  const layer = layerWithQueueRateLimiterIfNeeded(
     Layer.effect(tag)(
       foldConfiguredSpec(resourceId, defaultSpec).pipe(
         Effect.flatMap(makeQueueEffectFromConfig),
       ),
     ),
     defaultSpec,
-  );
+  ) as any;
+  return layer;
 };
 
 function workPoolLayer<
@@ -3431,7 +3427,7 @@ function workPoolLayer(
   tag: Context.Key<any, EngineQueueHandle<any, any, any, any>>,
   effectOrConfig: QueueWorkerEffect<any, any, any, any> | WorkPoolConfig<any, any, any>,
   options?: WorkPoolOptionsWithoutItemSchema<any, any, any> | WorkPoolOptionsWithItemSchema<any, any, any>,
-): Layer.Layer<any, never, any> {
+): Layer.Layer<never, never, never> {
   if (typeof effectOrConfig === "function") {
     return workPoolLayerFromConfig(tag, { ...(options ?? {}), effect: effectOrConfig });
   }

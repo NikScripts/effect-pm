@@ -9,7 +9,7 @@ const waitUntil = (predicate: Effect.Effect<boolean>) =>
 
 describe("WorkPool refill", () => {
   it.live("refill.onStart bootstraps the queue from a source", () =>
-    Effect.gen(function* () {
+    (Effect.gen(function* () {
       const processed = yield* Ref.make<Array<number>>([]);
       yield* WorkPool.make({
         name: "refill-start",
@@ -19,11 +19,11 @@ describe("WorkPool refill", () => {
       });
       yield* waitUntil(Effect.map(Ref.get(processed), (p) => p.length >= 3));
       expect((yield* Ref.get(processed)).sort()).toEqual([1, 2, 3]);
-    }).pipe(Effect.scoped),
+    }).pipe(Effect.scoped) as any),
   );
 
   it.live("refill.onDrained re-polls the source on each drain until empty", () =>
-    Effect.gen(function* () {
+    (Effect.gen(function* () {
       const source = yield* Ref.make<Array<number>>([2, 3]); // refilled one-per-drain
       const processed = yield* Ref.make<Array<number>>([]);
       const queue = yield* WorkPool.make({
@@ -45,6 +45,6 @@ describe("WorkPool refill", () => {
       yield* queue.add([1]); // prime; each drain pulls the next from `source`
       yield* waitUntil(Effect.map(Ref.get(processed), (p) => p.length >= 3));
       expect(yield* Ref.get(processed)).toEqual([1, 2, 3]);
-    }).pipe(Effect.scoped),
+    }).pipe(Effect.scoped) as any),
   );
 });

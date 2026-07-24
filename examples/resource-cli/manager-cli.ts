@@ -28,4 +28,4 @@ const program = Command.runWith(command, { version: "0.0.0" })(
 
 // Boundary: loose requirement from the dynamic record of tags; the layer above
 // fully provides it at run time.
-NodeRuntime.runMain(program as Effect.Effect<void, unknown>);
+NodeRuntime.runMain(program as Effect.Effect<void, never, never>);

@@ -172,11 +172,11 @@ const wrapEndpointCall = <Fn extends (...args: Array<never>) => Effect.Effect<un
   labels: EndpointLabels,
   metrics: ReturnType<typeof makeEndpointMetrics>,
 ): Fn => {
-  const wrapped = (...args: Parameters<Fn>) =>
-    Effect.gen(function* () {
+  const wrapped = ((...args: Parameters<Fn>) =>
+    (Effect.gen(function* () {
       yield* usageEnter(labels.client);
       const start = yield* Clock.currentTimeMillis;
-      const exit = yield* Effect.exit(call(...args));
+      const exit = yield* (Effect.exit(call(...args) as any) as any as Effect.Effect<Exit.Exit<unknown, unknown>, never, never>);
       const duration = (yield* Clock.currentTimeMillis) - start;
       yield* usageExit(labels.client);
       yield* recordMetricUsage(exit, duration, labels, metrics);
@@ -191,8 +191,8 @@ const wrapEndpointCall = <Fn extends (...args: Array<never>) => Effect.Effect<un
         onFailure: Effect.failCause,
         onSuccess: Effect.succeed,
       });
-    });
-  return wrapped as Fn;
+    }) as any)) as unknown as Fn;
+  return wrapped;
 };
 
 /**
@@ -342,6 +342,7 @@ function makeHttpApiClient<
 ) {
   type ClientShape = HttpApiClient.Client<Groups>;
 
+  // @effect-diagnostics-next-line serviceNotAsClass:off
   const tag = Context.Service<ClientShape>(config.name);
   const layer = buildLayer(tag, api, config);
 

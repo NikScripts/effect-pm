@@ -19,7 +19,7 @@ class AppStore extends Store.Service<AppStore>("@test/daemon-log-history/Store")
 
 it("Hyperlink.logs reads back daemon worker logs", () =>
   Effect.runPromise(
-    Effect.gen(function* () {
+    (Effect.gen(function* () {
       const daemon = yield* LogDaemon;
       const { query } = yield* Hyperlink.logs(LogDaemon);
       yield* daemon.run;
@@ -39,12 +39,12 @@ it("Hyperlink.logs reads back daemon worker logs", () =>
         }).pipe(Layer.provideMerge(AppStore.layerMemory)),
       ),
       Effect.scoped,
-    ),
+    ) as any),
   ));
 
 it("Hyperlink.logs query is empty without store registration (live relay only)", () =>
   Effect.runPromise(
-    Effect.gen(function* () {
+    (Effect.gen(function* () {
       const daemon = yield* LogDaemon;
       const { query } = yield* Hyperlink.logs(LogDaemon);
       expect(yield* query({})).toEqual([]);
@@ -58,5 +58,5 @@ it("Hyperlink.logs query is empty without store registration (live relay only)",
         }).pipe(Layer.provide(Logs.layer)),
       ),
       Effect.scoped,
-    ),
+    ) as any),
   ));

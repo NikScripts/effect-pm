@@ -476,7 +476,7 @@ const classifyCustomMethod = (
   if (Effect.isEffect(value)) {
     return {
       _tag: CUSTOM_EFFECT,
-      effect: value as Effect.Effect<unknown, unknown, unknown>,
+      effect: value as any,
     };
   }
   if (typeof value === "function") {
@@ -820,7 +820,7 @@ export const materializeContractHandle = (
         break;
       }
       case CUSTOM_EFFECT:
-        handle[methodName] = entry.effect;
+        handle[methodName] = entry.effect as any;
         break;
       case CUSTOM_FN:
         handle[methodName] = entry.fn;

@@ -1,5 +1,5 @@
 {
-  // Same options as tsconfig.json, but strictEffectProvide is enforced for src/**/*.ts only.
+  // Same Effect diagnostic severities as tsconfig.json; scoped to src/** for a second typecheck pass.
   "$schema": "https://raw.githubusercontent.com/Effect-TS/tsgo/refs/heads/main/schema.json",
   "compilerOptions": {
     // Language and Environment
@@ -48,7 +48,7 @@
       {
         "name": "@effect/language-service",
         "diagnosticSeverity": {
-          "anyUnknownInErrorContext": "off",
+          "anyUnknownInErrorContext": "error",
           "asyncFunction": "error",
           "catchAllToMapError": "error",
           "catchUnfailableEffect": "error",
@@ -56,7 +56,7 @@
           "cryptoRandomUUIDInEffect": "error",
           "deterministicKeys": "error",
           "duplicatePackage": "error",
-          "effectDoNotation": "warning",
+          "effectDoNotation": "error",
           "effectFnIife": "error",
           "effectFnOpportunity": "error",
           "effectGenUsesAdapter": "error",
@@ -85,7 +85,7 @@
           "leakingRequirements": "error",
           "missedPipeableOpportunity": "error",
           "missingEffectServiceDependency": "error",
-          "missingLayerContext": "off",
+          "missingLayerContext": "error",
           "multipleEffectProvide": "error",
           "nestedEffectGenYield": "error",
           "newPromise": "error",
@@ -101,9 +101,9 @@
           "schemaSyncInEffect": "error",
           "schemaUnionOfLiterals": "error",
           "scopeInLayerEffect": "error",
-          "serviceNotAsClass": "off",
+          "serviceNotAsClass": "error",
           "strictBooleanExpressions": "error",
-          "strictEffectProvide": "error",
+          "strictEffectProvide": "message",
           "tryCatchInEffectGen": "error",
           "unknownInEffectCatch": "error",
           "unnecessaryArrowBlock": "error",
