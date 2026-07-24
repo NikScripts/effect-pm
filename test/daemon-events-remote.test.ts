@@ -9,6 +9,7 @@ import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
 import * as Daemon from "../src/Daemon";
 import * as Hyperlink from "../src/Hyperlink";
+import type { HyperlinkTag, Spec } from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
 const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
@@ -35,10 +36,10 @@ const httpProtocol = (port: number) =>
   );
 
 /** Test harness — concrete Tags are not assignable under Daemon.serve's overloaded erasure. */
-const withDaemonHttp = (
-  tag: any,
-  config: Daemon.DaemonLayerConfig<any, any, any>,
-  use: (port: number) => Effect.Effect<any, any, any>,
+const withDaemonHttp = <Self, S extends Spec, A, E>(
+  tag: HyperlinkTag<Self, S>,
+  config: Daemon.DaemonLayerConfig<void, E, never>,
+  use: (port: number) => Effect.Effect<A, E, Self>,
 ) => {
   const server = Node.httpServer([Daemon.serveMemory(tag, config)]).pipe(
     Layer.provideMerge(NodeHttpServer.layerTest),

@@ -15,6 +15,7 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Layer, Schema } from "effect";
+import { cli, type CliRun, TuiNotConfigured } from "../../src/cli";
 import * as Hyperlink from "../../src/Hyperlink";
 
 class Counter extends Hyperlink.Tag<Counter>()("Counter", {
@@ -35,13 +36,15 @@ const counterLayer = Hyperlink.layer(Counter, {
     }),
 });
 
-const program = Hyperlink.cli(
+const runCli = cli(
   { counter: Counter },
   { name: "counter-cli", version: "0.0.0" },
-)(process.argv.slice(2)).pipe(
+) as CliRun;
+
+const program = runCli(process.argv.slice(2)).pipe(
   Effect.provide(counterLayer.pipe(Layer.provideMerge(NodeServices.layer))),
 );
 
 // Boundary: the command's requirement is loose (it's built from a dynamic record
 // of tags); the resource + node layers above fully provide it at run time.
-NodeRuntime.runMain(program as Effect.Effect<void, unknown>);
+NodeRuntime.runMain(program as Effect.Effect<void, TuiNotConfigured, never>);

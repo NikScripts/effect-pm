@@ -1,4 +1,5 @@
 import { Duration, Effect, Layer, Schema } from "effect";
+import type { ClientVerifyError } from "../src/Hyperlink";
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import { createServer } from "node:http";
 import { HttpServer } from "effect/unstable/http";
@@ -24,10 +25,12 @@ class Warming extends Hyperlink.Tag<Warming>()("verify/Warming", {
   Hyperlink.withReadiness(() => Effect.succeed({ ready: false, detail: "warming up" })),
 ) {}
 
+type VerifyCheck<A = void> = (port: number) => Effect.Effect<A, ClientVerifyError, never>;
+
 // Run `check(port)` against a live test server (its layer is inlined per-`it` so its type infers).
-const onServer = (
-  server: Layer.Layer<VQueue | HttpServer.HttpServer, unknown, never>,
-  check: (port: number) => Effect.Effect<unknown, unknown, never>,
+const onServer = <A, E, R>(
+  server: Layer.Layer<VQueue | HttpServer.HttpServer, E, R>,
+  check: VerifyCheck<A>,
 ) =>
   Effect.gen(function* () {
     const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
@@ -35,9 +38,7 @@ const onServer = (
     return yield* check(port);
   }).pipe(Effect.provide(server), Effect.scoped);
 
-const onWarmingServer = (
-  check: (port: number) => Effect.Effect<unknown, unknown, never>,
-) => {
+const onWarmingServer = <A>(check: VerifyCheck<A>) => {
   const server = Node.httpServer([
     Hyperlink.serve(Warming, { ping: Effect.succeed("pong") }),
   ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));

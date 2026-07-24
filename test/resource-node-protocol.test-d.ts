@@ -24,5 +24,7 @@ runFullyWired(Hyperlink.client(NodeStatusTag, Droplet).pipe(Layer.provide(transp
 // THE HOLE, now closed: a nodeless `client(tag)` given the node *transport* still needs an ambient
 // `RpcClient.Protocol` — it is NOT fully wired. Pre-P1 this compiled (requirement collapsed to `never`)
 // and then threw at runtime; now it is a type error, so the `@ts-expect-error` is required.
+// @effect-diagnostics missingLayerContext:off
 // @ts-expect-error — node transport does not satisfy an ambient RpcClient.Protocol requirement
 runFullyWired(Hyperlink.client(NodeStatusTag).pipe(Layer.provide(transport)));
+// @effect-diagnostics missingLayerContext:error

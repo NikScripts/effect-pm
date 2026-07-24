@@ -14,7 +14,15 @@ describe("WorkPool refill", () => {
       yield* WorkPool.make({
         name: "refill-start",
         effect: (n: number) => Ref.update(processed, (a) => [...a, n]),
-        refill: { onStart: true, load: (q) => q.add([1, 2, 3]) },
+        refill: {
+          onStart: true,
+          load: (q) => {
+            const enqueue = q.add as (
+              items: ReadonlyArray<number>,
+            ) => Effect.Effect<void, never, never>;
+            return enqueue([1, 2, 3]);
+          },
+        },
         concurrency: 2,
       });
       yield* waitUntil(Effect.map(Ref.get(processed), (p) => p.length >= 3));
@@ -36,8 +44,12 @@ describe("WorkPool refill", () => {
               const remaining = yield* Ref.get(source);
               if (remaining.length === 0) return;
               const [head, ...tail] = remaining;
+              if (head === undefined) return;
               yield* Ref.set(source, tail);
-              yield* q.add([head]);
+              const enqueue = q.add as (
+                items: ReadonlyArray<number>,
+              ) => Effect.Effect<void, never, never>;
+              yield* enqueue([head]);
             }),
         },
         concurrency: 1,

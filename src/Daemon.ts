@@ -2126,10 +2126,10 @@ const scheduleGroupFlat: FlatSpec = Object.fromEntries(
  */
 export function schedule(
   windows: ReadonlyArray<ScheduleWindow>,
-): <Self, S extends Spec>(tag: HyperlinkTag<Self, S>) => HyperlinkTag<any, S & ScheduleGroupSpec>;
+): <Self, S extends Spec>(tag: HyperlinkTag<Self, S>) => HyperlinkTag<Self, S & ScheduleGroupSpec>;
 export function schedule(
   source: HyperlinkTag<any, ScheduleHyperlinkSpec>,
-): <Self, S extends Spec>(tag: HyperlinkTag<Self, S>) => HyperlinkTag<any, S>;
+): <Self, S extends Spec>(tag: HyperlinkTag<Self, S>) => HyperlinkTag<Self, S>;
 export function schedule(
   windowsOrSource: ReadonlyArray<ScheduleWindow> | HyperlinkTag<any, any, any>,
 ): (tag: HyperlinkTag<any, any, any>) => HyperlinkTag<any, any, any> {
