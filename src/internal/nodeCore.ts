@@ -1137,7 +1137,7 @@ export class ProtocolUnanswered extends Data.TaggedError("ProtocolUnanswered")<{
 }
 
 /**
- * The peer answered {@link NodeStatus}, but the target resource key is not in `status.resources`.
+ * The peer answered the node-status RPC, but the target resource key is not in `status.resources`.
  * Surfaced by {@link Hyperlink.verifyConnection}`(node, { deep: true, resource })`.
  *
  * @category errors

@@ -3600,7 +3600,7 @@ export { makeQueueEffect, workPoolLayer, buildQueueEngine };
  *
  * The returned value is both a `Context.Service` (yieldable tag) and has a `.layer` property for
  * providing the queue to your program. When `itemSchema` is set, the declaration also exposes
- * {@link WorkPoolDefinition.item} for typed process-manager contracts.
+ * {@link WorkPoolDefinition.item} for typed WorkPool contracts.
  *
  * @internal
  */

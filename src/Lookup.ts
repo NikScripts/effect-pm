@@ -512,7 +512,7 @@ const incumbentAlive = (
   // Skip default-on verify — this *is* the liveness probe (`ping`); nested verify deadlocks
   // under claim (verify dials the incumbent while claim holds the registry fiber).
   const probe = Effect.gen(function* () {
-    // NodeStatus is Hyperlink-internal (dynamic import dodges the Hyperlink⇄Lookup cycle).
+    // Node-status engine is Hyperlink-internal (dynamic import dodges the Hyperlink⇄Lookup cycle).
     const { NodeStatusTag } = yield* Effect.promise(
       () => import("./internal/nodeStatus"),
     );

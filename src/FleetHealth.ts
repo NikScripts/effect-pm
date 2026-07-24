@@ -1,10 +1,10 @@
 /**
  * FleetHealth — stadium-board health across a meshed pack of nodes.
  *
- * Per-node readiness (`withReadiness` → `/health` / `NodeStatus`) stays **local** and never hops to
- * peers. FleetHealth is the **separate** glass: leaf `local` is this node's readiness aggregate;
- * fleet fields fold peers' `local` via {@link Hyperlink.peers} with Effect `Exit` kept intact so a
- * down neighbour is {@link Unreachable}, not silently omitted.
+ * Per-node readiness (`withReadiness` → `/health` / node-handle `.status`) stays **local** and never
+ * hops to peers. FleetHealth is the **separate** glass: leaf `local` is this node's readiness
+ * aggregate; fleet fields fold peers' `local` via {@link Hyperlink.peers} with Effect `Exit` kept
+ * intact so a down neighbour is {@link Unreachable}, not silently omitted.
  *
  * ## Shape (Telemetry twin)
  *
@@ -201,7 +201,8 @@ export const Tag = <Self>() => {
  * Options for {@link layer} / {@link serve} / {@link serveRemote}.
  *
  * Pass the **same** per-resource readiness Effect {@link Node.httpServer} uses for `/health`
- * when you want FleetHealth's leaf to match NodeStatus. Absent ⇒ empty resources / `ok`.
+ * when you want FleetHealth's leaf to match the node-handle status snapshot. Absent ⇒ empty
+ * resources / `ok`.
  *
  * @category models
  * @public
