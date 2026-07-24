@@ -55,5 +55,5 @@ it("drives a resource over real http (server + client through the toolkit)", () 
       Effect.scoped,
     );
   }).pipe(Effect.provide(ServerLive), Effect.scoped);
-  return Effect.runPromise(program as Effect.Effect<void, never, never>);
+  return Effect.runPromise(program as Effect.Effect<void, unknown>);
 });

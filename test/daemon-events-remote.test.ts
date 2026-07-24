@@ -40,10 +40,10 @@ const withDaemonHttp = (
   config: Daemon.DaemonLayerConfig<any, any, any>,
   use: (port: number) => Effect.Effect<any, any, any>,
 ) => {
-  const server = (Node.httpServer([Daemon.serveMemory(tag, config)]) as any).pipe(
+  const server = Node.httpServer([Daemon.serveMemory(tag, config)]).pipe(
     Layer.provideMerge(NodeHttpServer.layerTest),
-  ) as any;
-  return (Effect.gen(function* () {
+  );
+  return Effect.gen(function* () {
     const address = yield* HttpServer.HttpServer.pipe(
       Effect.map((s) => s.address),
     );
@@ -52,13 +52,13 @@ const withDaemonHttp = (
       Effect.provide(Hyperlink.client(tag).pipe(Layer.provide(httpProtocol(port)))),
       Effect.scoped,
     );
-  }).pipe(Effect.provide(server), Effect.scoped) as any);
+  }).pipe(Effect.provide(server), Effect.scoped);
 };
 
 describe("Daemon.events — remote HTTP", () => {
   it.live("Started → Completed over Hyperlink.client after remote run", () =>
     withDaemonHttp(RemoteEventsProc, { effect: Effect.void }, (_port) =>
-      (Effect.gen(function* () {
+      Effect.gen(function* () {
         const proc = yield* RemoteEventsProc;
         const collected = yield* Effect.forkChild(
           Stream.runCollect(Stream.take(proc.events, 2)),
@@ -67,7 +67,7 @@ describe("Daemon.events — remote HTTP", () => {
         yield* proc.run;
         const tags = Array.from(yield* Fiber.join(collected)).map((e) => e._tag);
         expect(tags).toEqual(["Started", "Completed"]);
-      }) as any),
+      }),
     ),
   );
 
@@ -76,7 +76,7 @@ describe("Daemon.events — remote HTTP", () => {
       RemoteFailProc,
       { effect: Effect.fail({ _tag: "FetchError" as const, status: 503 }) },
       (_port) =>
-        (Effect.gen(function* () {
+        Effect.gen(function* () {
           const proc = yield* RemoteFailProc;
           const collected = yield* Effect.forkChild(
             Stream.runCollect(
@@ -97,7 +97,7 @@ describe("Daemon.events — remote HTTP", () => {
             _tag: "Failed",
             error: { _tag: "FetchError", status: 503 },
           });
-        }) as any),
+        }),
     ),
   );
 
@@ -106,7 +106,7 @@ describe("Daemon.events — remote HTTP", () => {
       RemoteSuccessProc,
       { effect: Effect.succeed({ symbol: "AAPL", usd: 42 }) },
       (_port) =>
-        (Effect.gen(function* () {
+        Effect.gen(function* () {
           const proc = yield* RemoteSuccessProc;
           const collected = yield* Effect.forkChild(
             Stream.runCollect(
@@ -121,7 +121,7 @@ describe("Daemon.events — remote HTTP", () => {
             _tag: "Completed",
             success: { symbol: "AAPL", usd: 42 },
           });
-        }) as any),
+        }),
     ),
   );
 });

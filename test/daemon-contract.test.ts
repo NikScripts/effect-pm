@@ -14,7 +14,7 @@ class ScheduledDaemon extends Daemon.Tag<ScheduledDaemon>()(
 
 it("with the default schedule a daemon arms and runs its effect immediately", () =>
   Effect.runPromise(
-    (Effect.gen(function* () {
+    Effect.gen(function* () {
       const ran = yield* Ref.make(0);
       yield* Effect.gen(function* () {
         const daemon = yield* ArmedDaemon;
@@ -27,12 +27,12 @@ it("with the default schedule a daemon arms and runs its effect immediately", ()
       }).pipe(
         Effect.provide(Daemon.layerMemory(ArmedDaemon, { effect: Ref.update(ran, (n) => n + 1) })),
       );
-    }) as any),
+    }),
   ));
 
 it("effect runs the worker once (disarmed via an empty inline schedule)", () =>
   Effect.runPromise(
-    (Effect.gen(function* () {
+    Effect.gen(function* () {
       const ran = yield* Ref.make(0);
       yield* Effect.gen(function* () {
         const daemon = yield* ScheduledDaemon;
@@ -56,12 +56,12 @@ it("effect runs the worker once (disarmed via an empty inline schedule)", () =>
           Daemon.layerMemory(ScheduledDaemon, { effect: Ref.update(ran, (n) => n + 1) }),
         ),
       );
-    }) as any),
+    }),
   ));
 
 it("schedule round-trips through set/add/clear and the reactive read", () =>
   Effect.runPromise(
-    (Effect.gen(function* () {
+    Effect.gen(function* () {
       const daemon = yield* ScheduledDaemon;
       const future = DateTime.makeUnsafe(4_102_444_800_000); // 2100-01-01, fixed far-future
 
@@ -76,12 +76,12 @@ it("schedule round-trips through set/add/clear and the reactive read", () =>
       yield* daemon.schedule.clear;
       entries = yield* daemon.schedule.entries.get;
       expect(entries).toEqual([]);
-    }).pipe(Effect.provide(Daemon.layerMemory(ScheduledDaemon, { effect: Effect.void }))) as any),
+    }).pipe(Effect.provide(Daemon.layerMemory(ScheduledDaemon, { effect: Effect.void }))),
   ));
 
 it("stop/start toggles supervision (observable via status.supervising)", () =>
   Effect.runPromise(
-    (Effect.gen(function* () {
+    Effect.gen(function* () {
       const daemon = yield* ArmedDaemon;
       expect((yield* daemon.status.get).supervising).toBe(true);
 
@@ -90,5 +90,5 @@ it("stop/start toggles supervision (observable via status.supervising)", () =>
 
       yield* daemon.start;
       expect((yield* daemon.status.get).supervising).toBe(true);
-    }).pipe(Effect.provide(Daemon.layerMemory(ArmedDaemon, { effect: Effect.void }))) as any),
+    }).pipe(Effect.provide(Daemon.layerMemory(ArmedDaemon, { effect: Effect.void }))),
   ));

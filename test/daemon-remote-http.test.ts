@@ -27,12 +27,12 @@ const withServer = <A, E>(
   config: Daemon.DaemonLayerConfig<void, never, never>,
   use: (port: number) => Effect.Effect<A, E, RemoteProc>,
 ) => {
-  const server = (Node.httpServer([
+  const server = Node.httpServer([
     Daemon.serveMemory(RemoteProc, config),
-  ]) as any).pipe(
+  ]).pipe(
     Layer.provideMerge(NodeHttpServer.layerTest),
-  ) as any;
-  return (Effect.gen(function* () {
+  );
+  return Effect.gen(function* () {
     const address = yield* HttpServer.HttpServer.pipe(
       Effect.map((s) => s.address),
     );
@@ -43,13 +43,13 @@ const withServer = <A, E>(
       ),
       Effect.scoped,
     );
-  }).pipe(Effect.provide(server), Effect.scoped) as any);
+  }).pipe(Effect.provide(server), Effect.scoped);
 };
 
 it("status + start/stop round-trip over http against the real driver", () =>
   Effect.runPromise(
     withServer({ effect: Effect.void }, (_port) =>
-      (Effect.gen(function* () {
+      Effect.gen(function* () {
         const proc = yield* RemoteProc;
         // `status` is a ref: over RPC `.get` reads a client cache fed by `.changes`, so control-plane
         // effects (start/stop) are observed by waiting on the `changes` stream (current snapshot first).
@@ -67,13 +67,13 @@ it("status + start/stop round-trip over http against the real driver", () =>
 
         yield* proc.start;
         expect((yield* awaitSupervising(true)).supervising).toBe(true);
-      }) as any),
+      }),
     )));
 
 it("schedule set/add/clear + read round-trip over http (entries cross the wire)", () =>
   Effect.runPromise(
     withServer({ effect: Effect.void }, (_port) =>
-      (Effect.gen(function* () {
+      Effect.gen(function* () {
         const proc = yield* RemoteProc;
         const future = DateTime.makeUnsafe(4_102_444_800_000); // 2100-01-01
         // `entries` is a ref: over RPC, mutations land on the server and propagate back through the
@@ -91,31 +91,30 @@ it("schedule set/add/clear + read round-trip over http (entries cross the wire)"
 
         yield* proc.schedule.clear;
         expect(yield* awaitEntries((es) => es.length === 0)).toEqual([]);
-      }) as any),
+      }),
     )));
 
 it("the status stream flows over http from the real driver", () =>
   Effect.runPromise(
     withServer({ effect: Effect.void }, (_port) =>
-      (Effect.gen(function* () {
+      Effect.gen(function* () {
         const proc = yield* RemoteProc;
         const collected = yield* Stream.runCollect(Stream.take(proc.status.changes, 1));
         const snap = Array.from(collected)[0];
         expect(snap?.supervising).toBe(true);
-      }) as any),
+      }),
     )));
 
 it("effect crosses the wire and runs the server-side worker once", () =>
   Effect.runPromise(
-    (Effect.gen(function* () {
+    Effect.gen(function* () {
       // a server-side side effect we can observe after the run
       let ran = 0;
       yield* withServer({ effect: Effect.sync(() => { ran += 1; }) }, (_port) =>
-        (Effect.gen(function* () {
+        Effect.gen(function* () {
           const proc = yield* RemoteProc;
           yield* proc.run;
-        }) as any),
-      );
+        }));
       expect(ran).toBe(1);
-    }) as any),
+    }),
   ));

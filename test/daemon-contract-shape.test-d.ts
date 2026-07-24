@@ -42,7 +42,7 @@ class Ingest extends Daemon.Tag<Ingest>()("shape/Ingest").pipe(
   Daemon.schedule(SeasonSchedule),
 ) {}
 
-const _proof = (Effect.gen(function* () {
+const _proof = Effect.gen(function* () {
   const h = yield* Health;
   // `status` is a reactive `ref`: `.get` reads it once, `.changes` streams it.
   const _status: typeof Daemon.daemonStatus.Type = yield* h.status.get;
@@ -76,7 +76,7 @@ const _proof = (Effect.gen(function* () {
   > = pe.run;
 
   return { _status, _logHistory, latest, one, _pricedRun };
-}) as any);
+});
 
 void _proof;
 
@@ -86,7 +86,7 @@ const _baseLocal = Daemon.layerMemory(Health, { effect: Effect.void });
 const _resultServe = Daemon.serveMemory(Prices, {
   effect: Effect.succeed({ symbol: "AAPL", usd: 1 }),
 });
-const _scheduleServeRemote = Daemon.serveRemoteMemory(Matches, { effect: Effect.void }) as any;
+const _scheduleServeRemote = Daemon.serveRemoteMemory(Matches, { effect: Effect.void });
 const _scheduleResLocal = Daemon.scheduleLayer(SeasonSchedule);
 const _scheduleResServe = Daemon.scheduleServe(SeasonSchedule, {
   initial: [Daemon.window("wk1", startAt, stopAt)],
