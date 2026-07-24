@@ -11,9 +11,7 @@ import {
   catalogSym,
   ListenNode,
   ListenOptions,
-  ListenTagNodeRequired,
   NamelessListenOptions,
-  NPipeListenRequiresIpc,
   NPipeRequiresWindows,
   Tag,
   UnaddressedNode,
@@ -34,6 +32,7 @@ import {
   type ServeLayerList,
   type ServesForCatalog,
 } from "./nodeListenCommon"
+import { retype } from "./nodeServerCommon"
 
 /** Fail closed unless the host is Windows. @internal */
 const requireWindows = <A, E, R>(
@@ -76,53 +75,43 @@ export function nPipe<
       >,
   options?: NamelessListenOptions,
 ): Layer.Layer<Self | Hyperlink.Local<Self> | ListenNode, never, R>;
-export function nPipe<Serve extends Layer.Layer<never, never, never>>(
-  serve: Serve,
+export function nPipe<A, E, R>(
+  serve: Layer.Layer<A, E, R>,
   options?: NamelessListenOptions,
-): Layer.Layer<
-  Layer.Success<Serve> | ListenNode,
-  never,
-  Layer.Services<Serve>
->;
-export function nPipe<Serves extends ServeLayerList>(
+): Layer.Layer<A | ListenNode, E, R>;
+export function nPipe<const Serves extends ServeLayerList>(
   serves: Serves,
   options?: NamelessListenOptions,
 ): Layer.Layer<
   Layer.Success<Serves[number]> | ListenNode,
-  never,
+  Layer.Error<Serves[number]>,
   Layer.Services<Serves[number]>
 >;
 export function nPipe<
   Node extends AnyNode & { readonly [catalogSym]?: unknown },
-  Serves extends ServeLayerList,
+  const Serves extends ServeLayerList,
 >(
   node: Node,
   serves: Serves & ServesForCatalog<CatalogROut<Node>, Serves>,
   options?: NamelessListenOptions,
 ): Layer.Layer<
   Layer.Success<Serves[number]> | ListenNode,
-  never,
+  Layer.Error<Serves[number]>,
   Layer.Services<Serves[number]>
 >;
 export function nPipe(
   nodeOrServesOrTag:
     | AnyNode
-    | Layer.Layer<never, never, never>
+    | Layer.Any
     | ServeLayerList
     | Hyperlink.PipeableTag,
   servesOrOptionsOrImpl?:
-    | Layer.Layer<never, never, never>
+    | Layer.Any
     | ServeLayerList
     | NamelessListenOptions
     | object,
   options?: NamelessListenOptions,
-): Layer.Layer<
-  never,
-  | UnaddressedNode
-  | AddressLessClaimLost
-  | ListenTagNodeRequired
-  | NPipeListenRequiresIpc
-  | NPipeRequiresWindows, any> {
+): Layer.Any {
   const listenOptions = (
     isServeArg(nodeOrServesOrTag) ? servesOrOptionsOrImpl : options
   ) as NamelessListenOptions | undefined;
@@ -135,68 +124,43 @@ export function nPipe(
         ? nodeOrServesOrTag
         : [nodeOrServesOrTag]
     ) as ServeLayerList;
-    return requireWindows(nPipeNameless(list, listenOptions)) as Layer.Layer<
-      never,
-      | UnaddressedNode
-      | AddressLessClaimLost
-      | ListenTagNodeRequired
-      | NPipeListenRequiresIpc
-      | NPipeRequiresWindows, never>;
+    return requireWindows(nPipeNameless(list, listenOptions));
   }
 
   if (isHyperlinkTagArg(nodeOrServesOrTag)) {
     const tag = nodeOrServesOrTag;
     const tagKey = (() => {
-      const key = (tag as unknown as { readonly key?: unknown }).key;
+      const key = (tag as { readonly key?: unknown }).key;
       return typeof key === "string" ? key : "unknown";
     })();
     const bound = Hyperlink.nodeOf(tag);
     const fleet = Hyperlink.nodesOf(
-      tag as unknown as Hyperlink.HyperlinkTag<unknown, Hyperlink.Spec>,
+      tag as Hyperlink.HyperlinkTag<unknown, Hyperlink.Spec>,
     );
     if (bound === undefined) {
       return failListenTagNode({
         tag: tagKey,
         reason: fleet.length > 1 ? "ambiguous" : "missing",
         count: fleet.length,
-      }) as Layer.Layer<
-        never,
-        | UnaddressedNode
-        | AddressLessClaimLost
-        | ListenTagNodeRequired
-        | NPipeListenRequiresIpc
-        | NPipeRequiresWindows, never>;
+      });
     }
     if (isNonIpcNode(bound as AnyNode)) {
       const n = bound as AnyNode;
       return nPipeRequiresIpcLayer(
         n.key,
         n.kind ?? (typeof n.url === "string" ? "url" : "unknown"),
-      ) as Layer.Layer<
-        never,
-        | UnaddressedNode
-        | AddressLessClaimLost
-        | ListenTagNodeRequired
-        | NPipeListenRequiresIpc
-        | NPipeRequiresWindows, never>;
+      );
     }
-    const serveErased = Hyperlink.serve as unknown as (
-      tag: Hyperlink.PipeableTag,
-      impl: unknown,
-    ) => Layer.Layer<never, never, never>;
+    const serveErased = retype<
+      (tag: Hyperlink.PipeableTag, impl: unknown) => Layer.Layer<never, never, never>
+    >(Hyperlink.serve as never);
     return requireWindows(
       nPipeListenOn(
         bound as AnyNode,
         [serveErased(tag, servesOrOptionsOrImpl)] as ServeLayerList,
         listenOptions,
       ),
-    ) as Layer.Layer<
-      never,
-      | UnaddressedNode
-      | AddressLessClaimLost
-      | ListenTagNodeRequired
-      | NPipeListenRequiresIpc
-      | NPipeRequiresWindows, never>;
+    );
   }
 
   const node = nodeOrServesOrTag as AnyNode;
@@ -204,39 +168,34 @@ export function nPipe(
     return nPipeRequiresIpcLayer(
       node.key,
       node.kind ?? (typeof node.url === "string" ? "url" : "unknown"),
-    ) as Layer.Layer<
-      never,
-      | UnaddressedNode
-      | AddressLessClaimLost
-      | ListenTagNodeRequired
-      | NPipeListenRequiresIpc
-      | NPipeRequiresWindows, never>;
+    );
   }
 
   const serves = servesOrOptionsOrImpl as
     | Layer.Layer<never, never, never>
     | ServeLayerList;
   const list = (Array.isArray(serves) ? serves : [serves]) as ServeLayerList;
-  return requireWindows(nPipeListenOn(node, list, listenOptions)) as Layer.Layer<
-    never,
-    | UnaddressedNode
-    | AddressLessClaimLost
-    | ListenTagNodeRequired
-    | NPipeListenRequiresIpc
-    | NPipeRequiresWindows, never>;
+  return requireWindows(nPipeListenOn(node, list, listenOptions));
 }
+
+/**
+ * Listen-side erase — keeps address/claim errors; public overloads still reify serve-list E/R.
+ */
+type ListenLayer = Layer.Layer<never, AddressLessClaimLost | UnaddressedNode, never>;
 
 /** Nameless anonymous named-pipe Node + bind (pipe Lookup when needed). @internal */
 const nPipeNameless = (
   list: ServeLayerList,
   options: ListenOptions | undefined,
-): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, never> =>
-  Layer.unwrap(
-    Effect.gen(function* () {
-      const key = yield* anonymousNodeKey(list);
-      return nPipeListenOn(Tag()(key), list, options);
-    }),
-  ) as any;
+): Layer.Layer<never, never, never> =>
+  retype<Layer.Layer<never, never, never>>(
+    Layer.unwrap(
+      Effect.gen(function* () {
+        const key = yield* anonymousNodeKey(list);
+        return nPipeListenOn(Tag()(key), list, options);
+      }),
+    ) as never,
+  );
 
 /**
  * Bind named-pipe ipc for a Node — mint/claim when address-less or dynamic; else {@link ipcServer}.
@@ -247,72 +206,76 @@ const nPipeListenOn = (
   node: AnyNode,
   list: ServeLayerList,
   options: ListenOptions | undefined,
-): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, never> => {
+): ListenLayer => {
   if (isPrototypeNode(node)) {
     return unaddressedLayer(node.key);
   }
   if (isDynamicInstanceNode(node)) {
-    return Layer.unwrap(
-      Effect.gen(function* () {
-        const protoKey = dynamicPrototypeKeyOf(node);
-        const suffix =
-          dynamicInstanceSuffixOf(node) ?? (yield* uniqueInstanceSuffix());
-        const wireKey = `${protoKey}#${suffix}`;
-        const path = yield* ephemeralNPipePath(wireKey);
-        const addressed = Object.assign(Tag()(wireKey, { path }), {
-          [catalogSym]: (node as { readonly [catalogSym]?: unknown })[
-            catalogSym
-          ],
-        }) as AnyNode & { readonly key: string };
-        return withListenNode(addressed, nPipeBind(addressed, list, options));
-      }),
-    ) as any;
+    return retype<ListenLayer>(
+      Layer.unwrap(
+        Effect.gen(function* () {
+          const protoKey = dynamicPrototypeKeyOf(node);
+          const suffix =
+            dynamicInstanceSuffixOf(node) ?? (yield* uniqueInstanceSuffix());
+          const wireKey = `${protoKey}#${suffix}`;
+          const path = yield* ephemeralNPipePath(wireKey);
+          const addressed = Object.assign(Tag()(wireKey, { path }), {
+            [catalogSym]: (node as { readonly [catalogSym]?: unknown })[
+              catalogSym
+            ],
+          }) as AnyNode & { readonly key: string };
+          return withListenNode(addressed, nPipeBind(addressed, list, options));
+        }),
+      ) as never,
+    );
   }
   if (
     node.path === undefined &&
     node.url === undefined &&
     (node.kind === undefined || node.kind === "IpcSocket")
   ) {
-    return Layer.unwrap(
-      Effect.gen(function* () {
-        const path = yield* ephemeralNPipePath(node.key);
-        const addressed = Object.assign(Tag()(node.key, { path }), {
-          [catalogSym]: (node as { readonly [catalogSym]?: unknown })[
-            catalogSym
-          ],
-        }) as AnyNode & { readonly key: string };
-        const Lookup = yield* Effect.promise(() => import("../Lookup"));
-        const identity = yield* Effect.serviceOption(Lookup.Identity);
-        if (Option.isNone(identity)) {
-          return yield* new Hyperlink.IdentitySelfRequired({ tag: node.key });
-        }
-        const outcome = yield* identity.value
-          .claim(
-            new Lookup.ClaimRequest({
-              key: node.key,
-              nodeKey: node.key,
-              kind: "IpcSocket",
-              path,
-            }),
-          )
-          .pipe(
-            Effect.map((endpoint) => ({ _tag: "Won" as const, endpoint })),
-            Effect.catchTag("DuplicateIdentity", (duplicate) =>
-              Effect.succeed({
-                _tag: "Lost" as const,
-                original: duplicate.original,
+    return retype<ListenLayer>(
+      Layer.unwrap(
+        Effect.gen(function* () {
+          const path = yield* ephemeralNPipePath(node.key);
+          const addressed = Object.assign(Tag()(node.key, { path }), {
+            [catalogSym]: (node as { readonly [catalogSym]?: unknown })[
+              catalogSym
+            ],
+          }) as AnyNode & { readonly key: string };
+          const Lookup = yield* Effect.promise(() => import("../Lookup"));
+          const identity = yield* Effect.serviceOption(Lookup.Identity);
+          if (Option.isNone(identity)) {
+            return yield* new Hyperlink.IdentitySelfRequired({ tag: node.key });
+          }
+          const outcome = yield* identity.value
+            .claim(
+              new Lookup.ClaimRequest({
+                key: node.key,
+                nodeKey: node.key,
+                kind: "IpcSocket",
+                path,
               }),
-            ),
-          );
-        if (outcome._tag === "Lost") {
-          return yield* new AddressLessClaimLost({
-            node: node.key,
-            original: outcome.original,
-          });
-        }
-        return withListenNode(addressed, nPipeBind(addressed, list, options));
-      }),
-    ) as any;
+            )
+            .pipe(
+              Effect.map((endpoint) => ({ _tag: "Won" as const, endpoint })),
+              Effect.catchTag("DuplicateIdentity", (duplicate) =>
+                Effect.succeed({
+                  _tag: "Lost" as const,
+                  original: duplicate.original,
+                }),
+              ),
+            );
+          if (outcome._tag === "Lost") {
+            return yield* new AddressLessClaimLost({
+              node: node.key,
+              original: outcome.original,
+            });
+          }
+          return withListenNode(addressed, nPipeBind(addressed, list, options));
+        }),
+      ) as never,
+    );
   }
   if (node.kind === "IpcSocket" || typeof node.path === "string") {
     return withListenNode(node, nPipeBind(node, list, options));
@@ -325,12 +288,15 @@ const nPipeBind = (
   node: AnyNode,
   list: ServeLayerList,
   options: ListenOptions | undefined,
-): Layer.Layer<never, UnaddressedNode, never> => {
+): ListenLayer => {
   if (node.path === undefined) {
     return unaddressedLayer(node.key);
   }
   const advertiseNode = node as AnyNode & { readonly key: string };
-  return ipcServer(list, {
+  const server = retype<
+    (serves: ServeLayerList, options: Parameters<typeof ipcServer>[1]) => ListenLayer
+  >(ipcServer as never);
+  return server(list, {
     path: node.path,
     // Named pipes are not sock files — default off; caller may still opt in.
     unlink: options?.unlink ?? false,
@@ -342,7 +308,7 @@ const nPipeBind = (
       ? { onConflict: options.onConflict }
       : {}),
     advertiseNode,
-  }) as Layer.Layer<never, UnaddressedNode, never>;
+  });
 };
 
 

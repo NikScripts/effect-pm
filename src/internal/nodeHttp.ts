@@ -13,7 +13,6 @@ import {
   HttpListenRequiresHttp,
   ListenNode,
   ListenOptions,
-  ListenTagNodeRequired,
   NamelessListenOptions,
   Tag,
   UnaddressedNode,
@@ -34,6 +33,14 @@ import {
   type ServeLayerList,
   type ServesForCatalog,
 } from "./nodeListenCommon"
+import { retype } from "./nodeServerCommon"
+
+/** Listen-side erase — keeps address/claim/protocol errors; public overloads reify serve E/R. */
+type ListenLayer = Layer.Layer<
+  never,
+  AddressLessClaimLost | UnaddressedNode | HttpListenRequiresHttp,
+  never
+>
 
 /**
  * Local Http listen — localhost bind. Compose Lookup via
@@ -61,52 +68,43 @@ export function http<
       >,
   options?: NamelessListenOptions,
 ): Layer.Layer<Self | Hyperlink.Local<Self> | ListenNode, never, R>;
-export function http<Serve extends Layer.Layer<never, never, never>>(
-  serve: Serve,
+export function http<A, E, R>(
+  serve: Layer.Layer<A, E, R>,
   options?: NamelessListenOptions,
-): Layer.Layer<
-  Layer.Success<Serve> | ListenNode,
-  never,
-  Layer.Services<Serve>
->;
-export function http<Serves extends ServeLayerList>(
+): Layer.Layer<A | ListenNode, E, R>;
+export function http<const Serves extends ServeLayerList>(
   serves: Serves,
   options?: NamelessListenOptions,
 ): Layer.Layer<
   Layer.Success<Serves[number]> | ListenNode,
-  never,
+  Layer.Error<Serves[number]>,
   Layer.Services<Serves[number]>
 >;
 export function http<
   Node extends AnyNode & { readonly [catalogSym]?: unknown },
-  Serves extends ServeLayerList,
+  const Serves extends ServeLayerList,
 >(
   node: Node,
   serves: Serves & ServesForCatalog<CatalogROut<Node>, Serves>,
   options?: NamelessListenOptions,
 ): Layer.Layer<
   Layer.Success<Serves[number]> | ListenNode,
-  never,
+  Layer.Error<Serves[number]>,
   Layer.Services<Serves[number]>
 >;
 export function http(
   nodeOrServesOrTag:
     | AnyNode
-    | Layer.Layer<never, never, never>
+    | Layer.Any
     | ServeLayerList
     | Hyperlink.PipeableTag,
   servesOrOptionsOrImpl?:
-    | Layer.Layer<never, never, never>
+    | Layer.Any
     | ServeLayerList
     | NamelessListenOptions
     | object,
   options?: NamelessListenOptions,
-): Layer.Layer<
-  never,
-  | UnaddressedNode
-  | AddressLessClaimLost
-  | ListenTagNodeRequired
-  | HttpListenRequiresHttp, any> {
+): Layer.Any {
   const listenOptions = (
     isServeArg(nodeOrServesOrTag) ? servesOrOptionsOrImpl : options
   ) as NamelessListenOptions | undefined;
@@ -119,12 +117,7 @@ export function http(
         ? nodeOrServesOrTag
         : [nodeOrServesOrTag]
     ) as ServeLayerList;
-    return httpNameless(list, listenOptions) as Layer.Layer<
-      never,
-      | UnaddressedNode
-      | AddressLessClaimLost
-      | ListenTagNodeRequired
-      | HttpListenRequiresHttp, never>;
+    return httpNameless(list, listenOptions);
   }
 
   if (isHyperlinkTagArg(nodeOrServesOrTag)) {
@@ -142,12 +135,7 @@ export function http(
         tag: tagKey,
         reason: fleet.length > 1 ? "ambiguous" : "missing",
         count: fleet.length,
-      }) as Layer.Layer<
-        never,
-        | UnaddressedNode
-        | AddressLessClaimLost
-        | ListenTagNodeRequired
-        | HttpListenRequiresHttp, never>;
+      });
     }
     if (isNonHttpNode(bound as AnyNode)) {
       const n = bound as AnyNode;
@@ -159,27 +147,16 @@ export function http(
             : typeof n.url === "string"
               ? "url"
               : "unknown"),
-      ) as Layer.Layer<
-        never,
-        | UnaddressedNode
-        | AddressLessClaimLost
-        | ListenTagNodeRequired
-        | HttpListenRequiresHttp, never>;
+      );
     }
-    const serveErased = Hyperlink.serve as unknown as (
-      tag: Hyperlink.PipeableTag,
-      impl: unknown,
-    ) => Layer.Layer<never, never, never>;
+    const serveErased = retype<
+      (tag: Hyperlink.PipeableTag, impl: unknown) => Layer.Layer<never, never, never>
+    >(Hyperlink.serve as never);
     return httpListenOn(
       bound as AnyNode,
       [serveErased(tag, servesOrOptionsOrImpl)] as ServeLayerList,
       listenOptions,
-    ) as Layer.Layer<
-      never,
-      | UnaddressedNode
-      | AddressLessClaimLost
-      | ListenTagNodeRequired
-      | HttpListenRequiresHttp, never>;
+    );
   }
 
   const node = nodeOrServesOrTag as AnyNode;
@@ -192,37 +169,29 @@ export function http(
           : typeof node.url === "string"
             ? "url"
             : "unknown"),
-    ) as Layer.Layer<
-      never,
-      | UnaddressedNode
-      | AddressLessClaimLost
-      | ListenTagNodeRequired
-      | HttpListenRequiresHttp, never>;
+    );
   }
 
   const serves = servesOrOptionsOrImpl as
     | Layer.Layer<never, never, never>
     | ServeLayerList;
   const list = (Array.isArray(serves) ? serves : [serves]) as ServeLayerList;
-  return httpListenOn(node, list, listenOptions) as Layer.Layer<
-    never,
-    | UnaddressedNode
-    | AddressLessClaimLost
-    | ListenTagNodeRequired
-    | HttpListenRequiresHttp, never>;
+  return httpListenOn(node, list, listenOptions);
 }
 
 /** Nameless anonymous Http Node + bind (pipe Lookup when needed). @internal */
 const httpNameless = (
   list: ServeLayerList,
   options: ListenOptions | undefined,
-): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, never> =>
-  Layer.unwrap(
-    Effect.gen(function* () {
-      const key = yield* anonymousNodeKey(list);
-      return httpListenOn(Tag()(key, { kind: "Http" }), list, options);
-    }),
-  ) as any;
+): ListenLayer =>
+  retype<ListenLayer>(
+    Layer.unwrap(
+      Effect.gen(function* () {
+        const key = yield* anonymousNodeKey(list);
+        return httpListenOn(Tag()(key, { kind: "Http" }), list, options);
+      }),
+    ) as never,
+  );
 
 /**
  * Bind Http for a Node — mint/claim when address-less or dynamic; else {@link httpServer}
@@ -234,22 +203,22 @@ const httpListenOn = (
   node: AnyNode,
   list: ServeLayerList,
   options: ListenOptions | undefined,
-): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost | HttpListenRequiresHttp, never> => {
+): ListenLayer => {
   if (isPrototypeNode(node)) {
     return unaddressedLayer(node.key);
   }
   if (isDynamicInstanceNode(node)) {
-    return Layer.unwrap(
-      Effect.gen(function* () {
-        const protoKey = dynamicPrototypeKeyOf(node);
-        const suffix =
-          dynamicInstanceSuffixOf(node) ?? (yield* uniqueInstanceSuffix());
-        const wireKey = `${protoKey}#${suffix}`;
-        return ephemeralHttpListen(wireKey, list, options, node);
-      }),
-    ) as Layer.Layer<
-      never,
-      UnaddressedNode | AddressLessClaimLost | HttpListenRequiresHttp, never>;
+    return retype<ListenLayer>(
+      Layer.unwrap(
+        Effect.gen(function* () {
+          const protoKey = dynamicPrototypeKeyOf(node);
+          const suffix =
+            dynamicInstanceSuffixOf(node) ?? (yield* uniqueInstanceSuffix());
+          const wireKey = `${protoKey}#${suffix}`;
+          return ephemeralHttpListen(wireKey, list, options, node);
+        }),
+      ) as never,
+    );
   }
   if (
     node.path === undefined &&
@@ -286,90 +255,94 @@ const ephemeralHttpListen = (
   options: ListenOptions | undefined,
   catalogSource: AnyNode,
   claim?: { readonly claimIdentity: true },
-): Layer.Layer<never, UnaddressedNode | AddressLessClaimLost, never> =>
-  Layer.unwrap(
-    Effect.gen(function* () {
-      const platform = yield* localhostHttpPlatformEffect(0);
-      return Layer.unwrap(
-        Effect.gen(function* () {
-          const server = yield* HttpServer.HttpServer;
-          const port =
-            server.address._tag === "TcpAddress" ? server.address.port : 0;
-          const url = `http://127.0.0.1:${String(port)}/rpc`;
-          const addressed = Object.assign(
-            Tag()(wireKey, { url, kind: "Http" as const }),
-            {
-              [catalogSym]: (
-                catalogSource as { readonly [catalogSym]?: unknown }
-              )[catalogSym],
-            },
-          ) as AnyNode & { readonly key: string };
-          if (claim?.claimIdentity === true) {
-            const Lookup = yield* Effect.promise(() => import("../Lookup"));
-            const identity = yield* Effect.serviceOption(Lookup.Identity);
-            if (Option.isNone(identity)) {
-              return yield* new Hyperlink.IdentitySelfRequired({ tag: wireKey });
-            }
-            const outcome = yield* identity.value
-              .claim(
-                new Lookup.ClaimRequest({
-                  key: wireKey,
-                  nodeKey: wireKey,
-                  kind: "Http",
-                  url,
-                }),
-              )
-              .pipe(
-                Effect.map((endpoint) => ({
-                  _tag: "Won" as const,
-                  endpoint,
-                })),
-                Effect.catchTag("DuplicateIdentity", (duplicate) =>
-                  Effect.succeed({
-                    _tag: "Lost" as const,
-                    original: duplicate.original,
+): ListenLayer =>
+  retype<ListenLayer>(
+    Layer.unwrap(
+      Effect.gen(function* () {
+        const platform = yield* localhostHttpPlatformEffect(0);
+        return Layer.unwrap(
+          Effect.gen(function* () {
+            const server = yield* HttpServer.HttpServer;
+            const port =
+              server.address._tag === "TcpAddress" ? server.address.port : 0;
+            const url = `http://127.0.0.1:${String(port)}/rpc`;
+            const addressed = Object.assign(
+              Tag()(wireKey, { url, kind: "Http" as const }),
+              {
+                [catalogSym]: (
+                  catalogSource as { readonly [catalogSym]?: unknown }
+                )[catalogSym],
+              },
+            ) as AnyNode & { readonly key: string };
+            if (claim?.claimIdentity === true) {
+              const Lookup = yield* Effect.promise(() => import("../Lookup"));
+              const identity = yield* Effect.serviceOption(Lookup.Identity);
+              if (Option.isNone(identity)) {
+                return yield* new Hyperlink.IdentitySelfRequired({ tag: wireKey });
+              }
+              const outcome = yield* identity.value
+                .claim(
+                  new Lookup.ClaimRequest({
+                    key: wireKey,
+                    nodeKey: wireKey,
+                    kind: "Http",
+                    url,
                   }),
-                ),
-              );
-            if (outcome._tag === "Lost") {
-              return yield* new AddressLessClaimLost({
-                node: wireKey,
-                original: outcome.original,
-              });
+                )
+                .pipe(
+                  Effect.map((endpoint) => ({
+                    _tag: "Won" as const,
+                    endpoint,
+                  })),
+                  Effect.catchTag("DuplicateIdentity", (duplicate) =>
+                    Effect.succeed({
+                      _tag: "Lost" as const,
+                      original: duplicate.original,
+                    }),
+                  ),
+                );
+              if (outcome._tag === "Lost") {
+                return yield* new AddressLessClaimLost({
+                  node: wireKey,
+                  original: outcome.original,
+                });
+              }
             }
-          }
-          return withListenNode(
-            addressed,
-            httpBind(addressed, list, options),
-          );
-        }),
-      ).pipe(Layer.provide(platform));
-    }),
-  ) as any;
+            return withListenNode(
+              addressed,
+              httpBind(addressed, list, options),
+            );
+          }),
+        ).pipe(Layer.provide(platform));
+      }),
+    ) as never,
+  );
 
 /** {@link httpServer} for an addressed Http node (platform provided by caller). @internal */
 const httpBind = (
   node: AnyNode,
   list: ServeLayerList,
   options: ListenOptions | undefined,
-): Layer.Layer<never, UnaddressedNode, never> => {
+): ListenLayer => {
   if (node.url === undefined) {
     return unaddressedLayer(node.key);
   }
   const advertiseNode = node as AnyNode & { readonly key: string };
   // Platform HttpServer is provided by the listen caller (localhost bind / NodeHttpServer).
-  return httpServer(list, {
-    ...(options?.path !== undefined ? { path: options.path } : {}),
-    ...(options?.serialization !== undefined
-      ? { serialization: options.serialization }
-      : {}),
-    ...(options?.health !== undefined ? { health: options.health } : {}),
-    ...(options?.node !== undefined ? { node: options.node } : {}),
-    ...(options?.onConflict !== undefined
-      ? { onConflict: options.onConflict }
-      : {}),
-    advertiseNode,
-  }) as any;
+  return retype<ListenLayer>(
+    httpServer(list, {
+      ...(options?.path !== undefined ? { path: options.path } : {}),
+      ...(options?.serialization !== undefined
+        ? { serialization: options.serialization }
+        : {}),
+      ...(options?.health !== undefined ? { health: options.health } : {}),
+      ...(options?.node !== undefined ? { node: options.node } : {}),
+      ...(options?.onConflict !== undefined
+        ? { onConflict: options.onConflict }
+        : {}),
+      advertiseNode,
+    }) as never,
+  );
 };
 
 /** Loopback port from an `http://127.0.0.1:N/…` or `http://localhost:N/…` url. @internal */

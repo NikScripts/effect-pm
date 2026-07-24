@@ -18,13 +18,16 @@ import {
 } from "./nodeCore"
 
 /**
- * Non-empty serve-layer list for {@link listen} / {@link unix} (deps already discharged).
+ * Non-empty serve-layer list for {@link listen} / {@link unix} / {@link http} / {@link ws} /
+ * {@link nPipe}. Open in `E`/`R` — a HyperService may depend on other services (including other
+ * HyperServices); callers `Layer.provide` outside. Uses {@link Layer.Any} (not closed `never`
+ * channels) so deps remain expressible without expression-level `any`.
  *
  * @internal
  */
 export type ServeLayerList = readonly [
-  Layer.Layer<never, never, never>,
-  ...ReadonlyArray<Layer.Layer<never, never, never>>,
+  Layer.Any,
+  ...ReadonlyArray<Layer.Any>,
 ];
 
 /**
@@ -54,7 +57,7 @@ export const isHyperlinkTagArg = (u: unknown): u is Hyperlink.PipeableTag =>
 /** True when the first arg is a serve layer or non-empty serve list. @internal */
 export const isServeArg = (
   u: unknown,
-): u is Layer.Layer<never, never, never> | ServeLayerList => {
+): u is Layer.Any | ServeLayerList => {
   if (Layer.isLayer(u)) return true;
   return (
     Array.isArray(u) &&

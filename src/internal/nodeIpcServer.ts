@@ -20,8 +20,12 @@ import {
 } from "./nodeCore"
 import {
   assertProtocolKinds,
+  closedLayer,
   directoryAdvertiseMerge,
   mergeServeList,
+  retype,
+  toServeList,
+  type ServerServeLayer,
   type ServerServeList,
 } from "./nodeServerCommon"
 
@@ -83,15 +87,11 @@ export interface IpcServerOptions {
  * @category servers
  * @public
  */
-export function ipcServer<Serve extends Layer.Layer<never, any, any>>(
-  serve: Serve,
+export function ipcServer<A, E, R>(
+  serve: Layer.Layer<A, E, R>,
   options: IpcServerOptions,
-): Layer.Layer<
-  Layer.Success<Serve>,
-  Layer.Error<Serve>,
-  Layer.Services<Serve>
->;
-export function ipcServer<Serves extends ServerServeList>(
+): Layer.Layer<A, E, R>;
+export function ipcServer<const Serves extends ServerServeList>(
   serves: Serves,
   options: IpcServerOptions,
 ): Layer.Layer<
@@ -100,25 +100,28 @@ export function ipcServer<Serves extends ServerServeList>(
   Layer.Services<Serves[number]>
 >;
 export function ipcServer(
-  serves: Layer.Layer<never, any, any> | ServerServeList | ReadonlyArray<Layer.Layer<never, any, any>>,
+  serves: ServerServeLayer | ServerServeList,
   options: IpcServerOptions,
-): Layer.Layer<never, any, any> {
-  const list = (
-    Array.isArray(serves) ? serves : [serves]
-  ) as unknown as ServerServeList;
+): Layer.Any {
+  const list = toServeList(serves);
   return ipcServerBase(options).pipe(
-    Layer.provideMerge(mergeServeList(list)),
+    Layer.provideMerge(closedLayer(mergeServeList(list))),
     // Fresh registry per server — Lookup + Worker in one process must not share.
     Layer.provide(Layer.fresh(Hyperlink.servedHyperlinksLayer)),
-  ) as Layer.Layer<never, any, any>;
+  );
 }
 
+/** Closed layer — overload-impl erase target for dynamic Rpc graphs. */
+type ClosedLayer = Layer.Layer<never, never, never>;
+type IpcServed = Layer.Layer<never, never, Hyperlink.ServedHyperlinks>;
 
 /** Registry → one RpcServer over a Unix-domain {@link SocketServer}. @internal */
-const ipcServerBase = (
-  options: IpcServerOptions,
-): Layer.Layer<never, never, Hyperlink.ServedHyperlinks> =>
-  Layer.unwrap(
+const ipcServerBase = (options: IpcServerOptions): IpcServed => {
+  const rpcServerLayer = retype<(group: object) => ClosedLayer>(
+    RpcServer.layer as never,
+  );
+  const unwrapServed = retype<(effect: never) => IpcServed>(Layer.unwrap as never);
+  return unwrapServed(
     Effect.gen(function* () {
       const registry = yield* Hyperlink.ServedHyperlinks;
       const entries = yield* registry.all;
@@ -165,9 +168,13 @@ const ipcServerBase = (
         ...(inferredNodeKey !== undefined ? { nodeLogKey: inferredNodeKey } : {}),
       });
       const nodeTag = nodeEntry.tag;
-      const nodeImpl = (yield* (Effect.isEffect(nodeEntry.impl)
-        ? nodeEntry.impl
-        : Effect.succeed(nodeEntry.impl))) as Record<string, unknown>;
+      // nodeStatus impl Effect is Effect-bounded with open channels — retype before yield*.
+      const nodeImplEffect = retype<Effect.Effect<Record<string, unknown>>>(
+        (Effect.isEffect(nodeEntry.impl)
+          ? nodeEntry.impl
+          : Effect.succeed(nodeEntry.impl)) as never,
+      );
+      const nodeImpl = yield* nodeImplEffect;
       const nodeFlat = Hyperlink.flattenImpl(nodeImpl, nodeTag[Hyperlink.specSym]);
       const nodeHandlers: Record<string, (payload: unknown) => unknown> = {};
       for (const [key, member] of Object.entries(nodeFlat)) {
@@ -188,38 +195,37 @@ const ipcServerBase = (
       if (fsCtx !== undefined) {
         yield* Effect.provide(unlinkBestEffort(options.path), fsCtx);
       }
-      // Dynamic RpcServer group — assign through `any` so the diagnostic does not walk the graph.
-      const rpcRaw: any = RpcServer.layer(merged);
-      const rpc = (rpcRaw as Layer.Layer<never, never, never>).pipe(
-        Layer.provide(
-          nodeTag[Hyperlink.groupSym].toLayer(
-            nodeHandlers as unknown as Parameters<
-              (typeof nodeTag)[typeof Hyperlink.groupSym]["toLayer"]
-            >[0],
+      const toNodeStatusLayer = retype<
+        (handlers: Record<string, (payload: unknown) => unknown>) => ClosedLayer
+      >(nodeTag[Hyperlink.groupSym].toLayer as never);
+      const nodeStatusLayer = toNodeStatusLayer(nodeHandlers);
+      const socketServerLayer = retype<(options: { readonly path: string }) => ClosedLayer>(
+        NodeSocketServer.layer as never,
+      );
+      const rpc = retype<ClosedLayer>(
+        rpcServerLayer(merged).pipe(
+          Layer.provide(nodeStatusLayer),
+          // Fresh per ipcServer — two Unix servers in one process (Lookup + Worker)
+          // must not share SocketServer / protocol layers via MemoMap.
+          Layer.provide(Layer.fresh(RpcServer.layerProtocolSocketServer)),
+          Layer.provide(
+            Layer.fresh(options.serialization ?? Hyperlink.defaultSerialization),
           ),
-        ),
-        // Fresh per ipcServer — two Unix servers in one process (Lookup + Worker)
-        // must not share SocketServer / protocol layers via MemoMap.
-        Layer.provide(Layer.fresh(RpcServer.layerProtocolSocketServer)),
-        Layer.provide(
-          Layer.fresh(options.serialization ?? Hyperlink.defaultSerialization),
-        ),
-        Layer.provide(
-          Layer.fresh(
-            NodeSocketServer.layer({ path: options.path }).pipe(Layer.orDie),
-          ),
-        ),
+          Layer.provide(Layer.fresh(socketServerLayer({ path: options.path }))),
+        ) as never,
       );
       const withUnlink =
         fsCtx !== undefined
-          ? rpc.pipe(
-              Layer.provideMerge(
-                Layer.effectDiscard(
-                  Effect.addFinalizer(() =>
-                    Effect.provide(unlinkBestEffort(options.path), fsCtx),
+          ? retype<ClosedLayer>(
+              rpc.pipe(
+                Layer.provideMerge(
+                  Layer.effectDiscard(
+                    Effect.addFinalizer(() =>
+                      Effect.provide(unlinkBestEffort(options.path), fsCtx),
+                    ),
                   ),
                 ),
-              ),
+              ) as never,
             )
           : rpc;
       // After serve registration (+ socket bind layer composed): soft Lookup advertise.
@@ -230,6 +236,9 @@ const ipcServerBase = (
           ? { onConflict: options.onConflict }
           : undefined,
       );
-      return withUnlink.pipe(Layer.provideMerge(advertise));
-    }),
-  ) as Layer.Layer<never, never, Hyperlink.ServedHyperlinks>;
+      return retype<IpcServed>(
+        withUnlink.pipe(Layer.provideMerge(closedLayer(advertise))) as never,
+      );
+    }) as never,
+  );
+};

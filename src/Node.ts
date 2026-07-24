@@ -79,20 +79,14 @@ export {
 import { Layer } from "effect"
 import { unix } from "./internal/nodeUnix"
 import {
-  AddressLessClaimLost,
   AnyNode,
   catalogSym,
   ListenNode,
-  UnaddressedNode,
-  UnixListenRequiresIpc,
 } from "./internal/nodeCore"
 import type { NamelessListenOptions } from "./internal/nodeCore"
 
-/** Non-empty serve list — same constraint as {@link listen}. */
-type ServeLayerList = readonly [
-  Layer.Layer<never, never, never>,
-  ...ReadonlyArray<Layer.Layer<never, never, never>>,
-]
+/** Non-empty serve list — same open-`R` constraint as {@link listen}. */
+type ServeLayerList = readonly [Layer.Any, ...ReadonlyArray<Layer.Any>]
 
 /** C3 catalog proof — every `ROut` member appears in merged serve success. */
 type ServesForCatalog<ROut, Serves extends ServeLayerList> = [ROut] extends [
@@ -123,23 +117,14 @@ export function listenLocal<
   options?: NamelessListenOptions,
 ): Layer.Layer<
   Layer.Success<Serves[number]> | ListenNode,
-  never,
+  Layer.Error<Serves[number]>,
   Layer.Services<Serves[number]>
 >
 export function listenLocal(
   node: AnyNode,
-  serves: Layer.Layer<never, never, never> | ServeLayerList,
+  serves: Layer.Any | ServeLayerList,
   options?: NamelessListenOptions,
-): Layer.Layer<
-  never,
-  UnaddressedNode | AddressLessClaimLost | UnixListenRequiresIpc, any>
-export function listenLocal(
-  node: AnyNode,
-  serves: Layer.Layer<never, never, never> | ServeLayerList,
-  options?: NamelessListenOptions,
-): Layer.Layer<
-  never,
-  UnaddressedNode | AddressLessClaimLost | UnixListenRequiresIpc, any> {
+): Layer.Any {
   return unix(node, serves as ServeLayerList, options)
 }
 
