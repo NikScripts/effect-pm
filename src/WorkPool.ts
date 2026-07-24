@@ -2017,37 +2017,32 @@ export function serveRemote<
   config: PriorityLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ): Layer.Layer<HandlerContextOf<PriorityInstanceSpec<F>>, never, R | RR>;
 export function serveRemote(tag: AnyPoolTag, config: unknown): Layer.Any {
-  const serveRemoteErased = retype<
-    (tag: Hyperlink.PipeableTag, impl: unknown) => Layer.Any
+  // Factory retypes for Driver→Layer `R` — closed channels in the middle, Layer.Any at the edge.
+  const serveRemoteDriver = retype<
+    (tag: AnyPoolTag, impl: unknown) => Layer.Layer<never, never, never>
   >(Hyperlink.serveRemote as never);
-  const unwrapLayer = retype<(effect: never) => Layer.Any>(Layer.unwrap as never);
-  const withDefaultMemoryErased = retype<typeof withDefaultMemory>(withDefaultMemory as never);
+  const unwrapLayer = retype<(effect: never) => Layer.Layer<never, never, never>>(
+    Layer.unwrap as never,
+  );
+  const withMem = retype<(layer: never) => Layer.Any>(withDefaultMemory as never);
   return isPriorityTag(tag)
-    ? retype<Layer.Any>(
-        withDefaultMemoryErased(
-          retype<Layer.Layer<never, never, never | Store.Storage>>(
-            unwrapLayer(
-              Effect.map(
-                buildPriorityImpl(
-                  tag,
-                  config as PriorityLayerConfig<Schema.Struct<PriorityItemFields>["Type"], never, never, never>,
-                ),
-                (built) => serveRemoteErased(tag, built),
-              ) as never,
-            ) as never,
-          ),
+    ? withMem(
+        unwrapLayer(
+          Effect.map(
+            buildPriorityImpl(
+              tag,
+              config as PriorityLayerConfig<Schema.Struct<PriorityItemFields>["Type"], never, never, never>,
+            ),
+            (built) => serveRemoteDriver(tag, built),
+          ) as never,
         ) as never,
       )
-    : retype<Layer.Any>(
-        withDefaultMemoryErased(
-          retype<Layer.Layer<never, never, never | Store.Storage>>(
-            unwrapLayer(
-              Effect.map(
-                buildQueueImpl(tag, config as QueueVerbConfig<QueueItemFields, unknown, never, never, Schema.Top>),
-                (built) => serveRemoteErased(tag, built),
-              ) as never,
-            ) as never,
-          ),
+    : withMem(
+        unwrapLayer(
+          Effect.map(
+            buildQueueImpl(tag, config as QueueVerbConfig<QueueItemFields, unknown, never, never, Schema.Top>),
+            (built) => serveRemoteDriver(tag, built),
+          ) as never,
         ) as never,
       );
 }

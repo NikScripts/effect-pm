@@ -1332,8 +1332,16 @@ export interface Driver<S extends Spec, R> {
  * @category guards
  * @public
  */
-export const isDriver = (u: unknown): u is Driver<Spec, unknown> =>
-  Predicate.hasProperty(u, driverSym);
+export const isDriver = <S extends Spec = Spec, R = unknown>(
+  u: unknown,
+): u is Driver<S, R> => Predicate.hasProperty(u, driverSym);
+
+/**
+ * Retype through `never` (not `any`/`unknown` channels) at dynamic Effect/Rpc factories.
+ * Same bridge as `internal/nodeServerCommon.retype` — kept local so this module does not
+ * import server plumbing.
+ */
+const retype = <T>(value: never): T => value;
 
 /**
  * Pair a pre-provide impl with the worker context captured at build time. Pass `tag` so the concrete
@@ -3423,6 +3431,8 @@ const invokeWireMethodWithContext = (
 ): unknown => {
   const invoked = invokeWireMethod(member, method, payload);
   if (Effect.isEffect(invoked)) {
+    // Dynamic wire member — provideContext's open overload channels are not expressible as
+    // concrete E/R. `as any` here is the established wire-discharge boundary (not a Layer channel).
     return Effect.provideContext(invoked as any, context as any) as any;
   }
   if (Stream.isStream(invoked)) {
@@ -3563,6 +3573,10 @@ export type ServeRequirements<Impl> = {
  * implementations of the same tag, each isolated — merge the layers onto one `RpcServer` (groups are
  * prefix-keyed).
  *
+ * Plain impls infer `R` via {@link ServeRequirements}. {@link Driver} inputs are accepted at the
+ * value level; toolkit callers that need the driver's `R` on the returned Layer retype the factory
+ * (Gate / Daemon / WorkPool) — open-`S` Driver overloads hit TS2589.
+ *
  * @category serving
  * @public
  */
@@ -3592,11 +3606,12 @@ export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
             workerContext,
           );
   }
-  // dynamic handler construction (the group's `toLayer` boundary); the outer assertion **preserves**
-  // the handlers' requirement `R` — extracted from `impl` by {@link ServeRequirements} — instead of
-  // erasing it, so a per-resource `Layer.provide` can discharge it. `HandlerContextOf<S>` is the rpc
-  // handler slots; the requirement is the union of the handlers' run-time needs.
-  const handlerLayer: any = group.toLayer(handlers as any);
+  // RpcGroup.toLayer is a dynamically-keyed factory — bridge with retype so `any`/`unknown`
+  // never enter Layer E/R channels. Public `R` is {@link ServeRequirements} of the impl.
+  const toHandlerLayer = retype<
+    (handlers: never) => Layer.Layer<HandlerContextOf<S>, never, ServeRequirements<Impl>>
+  >(group.toLayer.bind(group) as never);
+  const handlerLayer = toHandlerLayer(handlers as never);
   // register into the served-resources registry when one is present (`httpServer` provides it), so the
   // shared server + `/health` discover this resource without the caller listing it twice. Merged (not
   // provided) so it isn't pruned as unused; a no-op when no registry is in context (standalone `serve`).
@@ -3611,7 +3626,7 @@ export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
             const kind = kindOf(tag) ?? "hyperlink";
             return registry.register({
               groupId: tag.groupId,
-              group,
+              group: retype(group as never),
               kind,
               contractHash: hashContract(tag.groupId, kind, tag[specSym]),
               readiness: readinessCheckServed(tag, wireImpl),
@@ -3623,7 +3638,7 @@ export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
       ),
     ),
   );
-  return Layer.merge(handlerLayer, registration) as any;
+  return Layer.merge(handlerLayer, registration);
 };
 
 /**
@@ -3649,27 +3664,43 @@ const servePlain = <Self, S extends Spec, R = never>(
     | ImplOf<S>
     | Driver<S, R>
     | Effect.Effect<ImplOf<S> | Driver<S, R>, never, R>,
-): Layer.Layer<Self | Local<Self> | HandlerContextOf<S>, never, R> =>
-  Layer.unwrap(
+): Layer.Layer<Self | Local<Self> | HandlerContextOf<S>, never, R> => {
+  const unwrapServe = retype<
+    (
+      effect: never,
+    ) => Layer.Layer<Self | Local<Self> | HandlerContextOf<S>, never, R>
+  >(Layer.unwrap as never);
+  const mergeServe = retype<
+    (
+      left: Layer.Layer<Self | Local<Self>, never, never>,
+      right: Layer.Layer<HandlerContextOf<S>, never, R>,
+    ) => Layer.Layer<Self | Local<Self> | HandlerContextOf<S>, never, R>
+  >(Layer.merge as never);
+  return unwrapServe(
     Effect.map(Effect.isEffect(impl) ? impl : Effect.succeed(impl), (built) => {
-      if (isDriver(built)) {
-        const bundle = built as Driver<S, R>;
+      if (isDriver<S, R>(built)) {
         // Plain local — identity claim (if any) already happened in {@link serve}.
-        return Layer.merge(
-          localLayerPlain(tag, grantLocal(tag, bundle)),
-          serveRemote(tag, bundle as any) as any,
+        // Driver `R` is preserved on {@link serve}; serveRemote's public `R` is ServeRequirements —
+        // retype so the merge keeps the outer `R` (toolkit builders do the same).
+        const serveRemoteDriver = retype<
+          (tag: HyperlinkTag<Self, S>, impl: Driver<S, R>) => Layer.Layer<HandlerContextOf<S>, never, R>
+        >(serveRemote as never);
+        return mergeServe(
+          localLayerPlain(tag, grantLocal(tag, built)),
+          serveRemoteDriver(tag, built),
         );
       }
-      const granted = built as ImplOf<S>;
-      return Layer.merge(
-        localLayerPlain(tag, granted),
-        // `built` is a valid serve impl, but `ImplOf` keeps `local` members that `ServeImplOf` omits
-        // (off the wire) — a structural gap the compiler can't bridge, the same boundary `serve` casts at.
-        // `R` was discharged by the Effect form above, so the handlers are requirement-free.
-        serveRemote(tag, granted as unknown as ServeImplOf<S, never>) as any,
+      // Wire handlers only: `flattenImpl` drops `local` members. Bridge ImplOf → ServeImplOf at the
+      // wire boundary (local members are off the wire; R already discharged by the Effect form).
+      return mergeServe(
+        localLayerPlain(tag, built),
+        retype<Layer.Layer<HandlerContextOf<S>, never, R>>(
+          serveRemote(tag, retype<ServeImplOf<S, never>>(built as never)) as never,
+        ),
       );
-    }),
-  ) as any;
+    }) as never,
+  );
+};
 
 /** Stamped on a {@link serve} layer with the served tag's key — lets an anonymous `listen` derive a
  *  legible node name from the first resource it serves without building the layer. @public */

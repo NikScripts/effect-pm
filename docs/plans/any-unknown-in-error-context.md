@@ -3,6 +3,12 @@
 **Status:** rule is **`error`** in both typecheck tsconfigs. **Cleared** on tip (Agent 4) —
 no channel casts, no rule disables except `serviceNotAsClass` at Service/Tag factories.
 
+**Critique follow-through:** Gate / Daemon public `serve` / `serveRemote` no longer use `as any`;
+memory aliases are identity; WorkPool.`serveRemote` uses a short factory-retype bridge (not nested
+erase soup). `Hyperlink.serveRemote` keeps plain-impl `ServeRequirements` inference; Driver `R` is
+retyped at toolkit call sites (open-`S` Driver overloads hit TS2589). Remaining honest erase:
+`RpcGroup.toLayer` + wire `provideContext` inside Hyperlink, D1 server factories.
+
 ## Locked product invariant
 
 **Every HyperService may have requirements** — including other HyperServices. Serve / listen /
