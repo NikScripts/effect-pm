@@ -1,7 +1,7 @@
 /**
  * Wire schemas stamped on {@link Gate.Tag} / {@link Gate.Service} factories.
  *
- * @module internal/runTagSchemas
+ * @module internal/gateTagSchemas
  * @internal
  */
 

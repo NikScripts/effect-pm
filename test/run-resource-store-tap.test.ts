@@ -2,7 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Logger } from "effect";
 import { Storage, type StorageApi } from "../src/Store";
 import { StoreWriteError } from "../src/internal/store/errors";
-import { makeGateHandleEffect } from "../src/internal/runHyperlink";
+import { makeGateHandleEffect } from "../src/internal/gate";
 
 const scopeKey = "@test/failing-store";
 

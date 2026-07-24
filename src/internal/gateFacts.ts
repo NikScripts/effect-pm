@@ -1,13 +1,13 @@
 /**
  * Pure builders for Gate store rows.
  *
- * @module internal/runHyperlinkFacts
+ * @module internal/gateFacts
  * @internal
  */
 
 import { Cause, Option } from "effect";
-import type { RunFact, RunStateChange } from "./store/runHyperlinkStoreSpec";
-import type { RunGateStatus } from "./runHyperlink";
+import type { RunFact, RunStateChange } from "./store/gateStoreSpec";
+import type { RunGateStatus } from "./gate";
 
 /** Extract the failure value for store rows (store-core §5). @internal */
 export const extractRunFailure = (cause: Cause.Cause<unknown>): unknown =>

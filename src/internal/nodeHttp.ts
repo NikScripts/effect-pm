@@ -53,9 +53,9 @@ export function http<
   tag: Hyperlink.NodeBoundTag<Self, S, HSelf>,
   impl:
     | Hyperlink.ImplOf<S>
-    | Hyperlink.BuiltHyperlink<S, R>
+    | Hyperlink.Driver<S, R>
     | Effect.Effect<
-        Hyperlink.ImplOf<S> | Hyperlink.BuiltHyperlink<S, R>,
+        Hyperlink.ImplOf<S> | Hyperlink.Driver<S, R>,
         never,
         R
       >,

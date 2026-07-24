@@ -61,7 +61,7 @@ import { kind as fleetHealthKind, type NodeReport } from "../FleetHealth";
 import { kind as telemetryKind, type MetricDatum } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";
 import { kind as runKind } from "../Gate";
-import { kind as processKind } from "../Daemon";
+import { kind as daemonKind } from "../Daemon";
 import { kind as apiKind } from "../ApiMetrics";
 import {
   type LeafTag,
@@ -75,7 +75,7 @@ import {
   withEntries,
 } from "./widget-registry";
 import type { ApiUsageMetrics } from "../ApiUsageSchema";
-import type { Status as NodeStatusValue } from "../NodeStatus";
+import type { Status as NodeStatusValue } from "../Node";
 import { useApiBundle, useCustomQueueBundle, useFleetHealthBundle, useNodeBundle, useDaemonBundle, useQueueBundle, useRunBundle, useShardMapBundle, useTelemetryBundle } from "./runtime";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
 import { useViewTransitionStyle } from "./useViewTransition";
@@ -232,7 +232,7 @@ const LaneRow = (props: {
 const CQ_PHASE: Record<string, string> = { running: "#22c55e", draining: "#eab308", off: "#94a3b8" };
 
 /**
- * A **custom queue** as a grid card — the {@link QueueCard} sibling for `CustomQueueHyperlink`: same
+ * A **custom queue** as a grid card — the {@link QueueCard} sibling for `WorkPoolPriority`: same
  * pending / done / phase, but its **named lanes** (`status.sizes`, an arbitrary set) render one bar
  * each instead of the fixed high/normal/low priorities. @public
  */
@@ -2223,7 +2223,7 @@ export const HyperlinkReadinessBanner = (props: { readonly tag: unknown }): Reac
 export const NodeDetail = (props: {
   readonly node: NodeRef;
   readonly onBack: () => void;
-  /** Open a served resource's detail page, by its wire key (`NodeStatus.resources[].key`). */
+  /** Open a served resource's detail page, by its wire key (`Node.Status.resources[].key`). */
   readonly onOpenHyperlink: (resourceKey: string) => void;
 }): React.ReactElement => {
   const bundle = useNodeBundle(props.node);
@@ -2913,7 +2913,7 @@ const queueWidget: Widget = ({ tag, name, onOpen }) =>
   ) : (
     <FallbackCard tag={tag} name={name} onOpen={onOpen} />
   );
-const processWidget: Widget = ({ tag, name, onOpen }) =>
+const daemonWidget: Widget = ({ tag, name, onOpen }) =>
   isDaemonTag(tag) ? (
     <DaemonCard tag={tag} name={name} onOpen={onOpen} />
   ) : (
@@ -2970,7 +2970,7 @@ export const base: WidgetRegistry = withEntries(
   [
     forKind(queueKind, queueWidget),
     forKind(customQueueKind, customQueueWidget),
-    forKind(processKind, processWidget),
+    forKind(daemonKind, daemonWidget),
     forKind(apiKind, apiWidget),
     forKind(fleetHealthKind, fleetHealthWidget),
     forKind(telemetryKind, telemetryWidget),

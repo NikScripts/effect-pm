@@ -6,6 +6,8 @@
  */
 
 import { Effect, Option } from "effect";
+import { kind as daemonKind } from "../../Daemon";
+import { kind as workPoolKind } from "../../WorkPool";
 import type { LogEntry } from "../../LogEntry";
 import * as LogEntryModule from "../../LogEntry";
 import {
@@ -25,8 +27,8 @@ import {
 export type LogScope =
   | { readonly _tag: "all" }
   | { readonly _tag: "group"; readonly groupId: string }
-  | { readonly _tag: "process"; readonly groupId: string; readonly key: string }
-  | { readonly _tag: "queue"; readonly groupId: string; readonly key: string };
+  | { readonly _tag: typeof daemonKind; readonly groupId: string; readonly key: string }
+  | { readonly _tag: typeof workPoolKind; readonly groupId: string; readonly key: string };
 
 /** @internal */
 export const logScopeGroupId = (scope: LogScope): string | undefined =>
@@ -89,15 +91,15 @@ export const resolveLogScope = <G extends GroupCatalogEntry>(
         const resolution = resolveDaemonManagerTarget(value, candidates);
         if (resolution._tag === "Resolved") {
           const { candidate } = resolution;
-          if (candidate.kind === "process") {
+          if (candidate.kind === daemonKind) {
             return {
-              _tag: "process",
+              _tag: daemonKind,
               groupId: candidate.groupId,
               key: candidate.key,
             };
           }
           return {
-            _tag: "queue",
+            _tag: workPoolKind,
             groupId: candidate.groupId,
             key: candidate.key,
           };

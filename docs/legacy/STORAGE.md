@@ -87,7 +87,7 @@ Tag wire is SSOT — layer config must not override `payload` / `success` / `err
 
 `layer` / `serve` / `serveRemote` on Process, QueueHyperlink, CustomQueueHyperlink, and RunHyperlink all
 merge `Store.layerDefaultMemory` (Process via `withDefaultMemory`). Worker resources use
-`Hyperlink.builtHyperlink` + `grantLocal` where applicable.
+`Hyperlink.driver` + `grantLocal` where applicable.
 
 **ShardMap** does **not** use the Store bridge for shard state. Local keys are SQLite SSOT
 (`effect_pm_shard_map`) opened by the toolkit layer (`:memory:` by default, or `{ filename }`).

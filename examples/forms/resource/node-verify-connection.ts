@@ -1,7 +1,7 @@
 /**
  * @module examples/forms/resource/node-verify-connection
  *
- * **Eager node verify** — tier-1 reachability, then `{ deep: true }` Node.status
+ * **Eager node verify** — tier-1 reachability, then `{ deep: true }` node.status
  * classification (`ProtocolUnanswered` / `ServiceNotServed` / `ServiceNotReady`).
  *
  * ```bash
@@ -32,7 +32,7 @@ const program = Effect.gen(function* () {
 
   // Tier 1 — cheap transport probe (default).
   yield* Hyperlink.verifyConnection(Droplet, { url })
-  // Deep — RPC Node.status + require Emails ready.
+  // Deep — RPC node.status + require Emails ready.
   yield* Hyperlink.verifyConnection(Droplet, {
     url,
     deep: true,

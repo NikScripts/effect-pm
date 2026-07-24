@@ -103,7 +103,7 @@ const serveLayer = Node.wsServer([
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(DropletStore.layerMemory),
   // silence the served layer's console logging (per-request http access logs) — node logs
-  // still reach the dashboard via Node.status.logs + lineage filter.
+  // still reach the dashboard via node.logs + lineage filter.
   Layer.provide(Logger.layer([], { mergeWithExisting: false })),
   Layer.provideMerge(NodeHttpServer.layer(makeServer, { port: PORT })),
 );

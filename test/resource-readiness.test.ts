@@ -3,7 +3,7 @@ import { FetchHttpClient, HttpClient, HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
-import * as NodeStatus from "../src/NodeStatus";
+import { NodeStatusTag, clientHttp as nodeStatusClientHttp } from "../src/internal/nodeStatus";
 import * as Node from "../src/Node";
 
 // A resource carries its own readiness derivation (here a bare Hyperlink.Tag opts in via
@@ -46,7 +46,7 @@ it("NodeStatus reports the same per-resource readiness (degraded board)", () =>
   Effect.runPromise(
     withPort((port) =>
       Effect.gen(function* () {
-        const node = yield* NodeStatus.Tag;
+        const node = yield* NodeStatusTag;
         const snap = yield* node.status.get;
         expect(snap.status).toBe("degraded");
         expect(snap.resources.length).toBe(1);
@@ -54,7 +54,7 @@ it("NodeStatus reports the same per-resource readiness (degraded board)", () =>
         expect(snap.resources[0]?.detail).toBe("warming up");
         expect(snap.resources[0]?.key).toBe("readiness/Warming");
       }).pipe(
-        Effect.provide(NodeStatus.clientHttp(`http://127.0.0.1:${port}/rpc`)),
+        Effect.provide(nodeStatusClientHttp(`http://127.0.0.1:${port}/rpc`)),
         Effect.scoped,
       ),
     ).pipe(Effect.provide(Server), Effect.scoped),

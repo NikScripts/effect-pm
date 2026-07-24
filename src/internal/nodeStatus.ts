@@ -1,26 +1,32 @@
 /**
- * @module internal/nodeStatusHyperlink
+ * @module internal/nodeStatus
  *
  * The reserved **node status** resource — every node that serves a group over
  * {@link Node.httpServer} automatically also serves this, so a client can ask any node
  * "are you up, how long, how many resources, and what are your logs?" without the node author
  * wiring anything. It's a nodeless {@link Hyperlink.Tag} (one reserved group id); a client reaches
- * a specific node by pointing the ambient transport at that node's url (see {@link NodeStatus}).
+ * a specific node by pointing the ambient transport at that node's url.
  *
- * Kept internal (not the public face) so {@link Hyperlink} can dynamically import it from
- * `httpServer` without a static import cycle (`Hyperlink` ⇄ this); `src/NodeStatus.ts` is the
- * public re-export.
+ * Kept internal so {@link Hyperlink} can dynamically import it from `httpServer` without a
+ * static cycle (`Hyperlink` ⇄ this). The public face is the NODE HANDLE accessors (`yield* node`
+ * -> ping/status/logs) wired in `internal/nodeConnect`; see `Node` for the light status types.
  */
 import {
   Clock,
+  Context,
   DateTime,
   Duration,
   Effect,
+  Layer,
   Option,
   Schema,
   Stream,
 } from "effect";
+import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
+import { FetchHttpClient } from "effect/unstable/http";
+import type { AddressedNode } from "./nodeCore";
 import * as Hyperlink from "../Hyperlink";
+import { NodeUnreachable, type NodeStatusAccessors } from "./nodeCore";
 import { Relay as LogRelay } from "../Logs";
 import { LogEntrySchema } from "../LogEntry";
 import type { LogEntry } from "../LogEntry";
@@ -29,7 +35,7 @@ import { queryDurableNode } from "./logs/durableRead";
 /** The reserved group id (wire prefix) for the node status resource. */
 const HOST_STATUS_KEY = "@pm/node-status";
 
-/** How often the live {@link NodeStatusHyperlink} `status` stream re-emits a snapshot. */
+/** How often the live {@link NodeStatusTag} `status` stream re-emits a snapshot. */
 const STATUS_INTERVAL = Duration.seconds(2);
 
 /**
@@ -39,7 +45,7 @@ const STATUS_INTERVAL = Duration.seconds(2);
  *
  * @internal
  */
-export const nodeHyperlinkReadiness = Schema.Struct({
+export const resourceReadiness = Schema.Struct({
   key: Schema.String,
   kind: Schema.String,
   ready: Schema.Boolean,
@@ -49,7 +55,7 @@ export const nodeHyperlinkReadiness = Schema.Struct({
 });
 
 /** A served resource's readiness as reported by its node. @internal */
-export type NodeHyperlinkReadiness = typeof nodeHyperlinkReadiness.Type;
+export type ResourceReadiness = typeof resourceReadiness.Type;
 
 /**
  * A node's live status — whether it's up, its overall readiness rollup, when it started, how long
@@ -64,7 +70,7 @@ export const nodeStatus = Schema.Struct({
   startedAt: Schema.DateTimeUtc,
   uptimeMillis: Schema.Number,
   resourceCount: Schema.Number,
-  resources: Schema.Array(nodeHyperlinkReadiness),
+  resources: Schema.Array(resourceReadiness),
 });
 
 /** Live node status. @internal */
@@ -76,7 +82,7 @@ export type NodeStatus = typeof nodeStatus.Type;
  *
  * @internal
  */
-export class NodeStatusHyperlink extends Hyperlink.Tag<NodeStatusHyperlink>()(
+export class NodeStatusTag extends Hyperlink.Tag<NodeStatusTag>()(
   HOST_STATUS_KEY,
   {
   status: Hyperlink.ref(nodeStatus).annotate({
@@ -116,14 +122,14 @@ export const buildNodeStatusImpl = (options: {
   readonly startedAt: number;
   readonly resourceCount: number;
   /** Per-resource readiness aggregate (same one `/health` reads); absent ⇒ no resources, `ok`. */
-  readonly readiness?: Effect.Effect<ReadonlyArray<NodeHyperlinkReadiness>>;
+  readonly readiness?: Effect.Effect<ReadonlyArray<ResourceReadiness>>;
   /**
    * Node log key for durable `logs.query` via registration Storage (`Node.logs`).
    * When omitted, query returns `[]`.
    */
   readonly nodeLogKey?: string;
   /**
-   * Cooperative handoff handler for {@link NodeStatusHyperlink}.`yield`.
+   * Cooperative handoff handler for {@link NodeStatusTag}.`yield`.
    * Default: accept (`true`) — Lookup then replaces the directory row.
    */
   readonly onYield?: Effect.Effect<boolean>;
@@ -181,12 +187,73 @@ export const buildNodeStatusImpl = (options: {
 export const nodeStatusServeEntry = (options: {
   readonly startedAt: number;
   readonly resourceCount: number;
-  readonly readiness?: Effect.Effect<ReadonlyArray<NodeHyperlinkReadiness>>;
+  readonly readiness?: Effect.Effect<ReadonlyArray<ResourceReadiness>>;
   readonly nodeLogKey?: string;
 }): {
-  readonly tag: typeof NodeStatusHyperlink;
+  readonly tag: typeof NodeStatusTag;
   readonly impl: ReturnType<typeof buildNodeStatusImpl>;
 } => ({
-  tag: NodeStatusHyperlink,
+  tag: NodeStatusTag,
   impl: buildNodeStatusImpl(options),
 });
+
+/**
+ * Build the {@link NodeStatusAccessors} for a connected node from its own transport `protocol` — the
+ * real dial logic behind `yield* MyNode` → `n.ping` / `n.status` / `n.logs`. Verify is off (this IS
+ * the health probe); every access dials the node's reserved status resource, scoped per read. Called
+ * lazily from `connectLayer` via dynamic import so nodeConnect never statically pulls this engine.
+ * @internal
+ */
+export const nodeStatusAccessors = (
+  protocol: Context.Service.Shape<typeof RpcClient.Protocol>,
+): NodeStatusAccessors => {
+  const clientLayer = Hyperlink.client(NodeStatusTag).pipe(
+    Layer.provide(Layer.succeed(RpcClient.Protocol, protocol)),
+    Layer.provide(Hyperlink.clientVerify(false)),
+  );
+  const toUnreachable = (cause: unknown) =>
+    new NodeUnreachable({ node: HOST_STATUS_KEY, url: "node handle", cause });
+  // One-shot read: build the per-node status client into a Context (scoped) and provide THAT — never
+  // `Effect.provide(effect, Layer)` in a library internal (breaks scope lifetimes; strictEffectProvide).
+  const oneShot = <A>(
+    read: Effect.Effect<A, unknown, NodeStatusTag>,
+  ): Effect.Effect<A, NodeUnreachable> =>
+    Effect.scoped(
+      Effect.flatMap(Layer.build(clientLayer), (ctx) => Effect.provide(read, ctx)),
+    ).pipe(Effect.mapError(toUnreachable));
+  return {
+    ping: oneShot(Effect.flatMap(NodeStatusTag, (h) => h.ping)),
+    status: {
+      get: oneShot(Effect.flatMap(NodeStatusTag, (h) => h.status.get)),
+      changes: Stream.unwrap(Effect.map(NodeStatusTag, (h) => h.status.changes)).pipe(
+        Stream.provide(clientLayer),
+        Stream.mapError(toUnreachable),
+      ),
+    },
+    logs: {
+      stream: Stream.unwrap(Effect.map(NodeStatusTag, (h) => h.logs.stream)).pipe(
+        Stream.provide(clientLayer),
+        Stream.mapError(toUnreachable),
+      ),
+      query: (options) =>
+        oneShot(Effect.flatMap(NodeStatusTag, (h) => h.logs.query(options))),
+    },
+  };
+};
+
+/** A status client for a node's `/rpc` url (ndjson/http) — internal dial helper (tests, url probes). @internal */
+export const clientHttp = (url: string): Layer.Layer<NodeStatusTag> =>
+  Hyperlink.client(NodeStatusTag).pipe(
+    Layer.provide(
+      RpcClient.layerProtocolHttp({ url }).pipe(
+        Layer.provide(RpcSerialization.layerNdjson),
+        Layer.provide(FetchHttpClient.layer),
+      ),
+    ),
+  );
+
+/** A status client for a specific addressed node (verify off — it IS the probe). @internal */
+export const client = (node: AddressedNode<unknown>) =>
+  Hyperlink.client(NodeStatusTag, node).pipe(
+    Layer.provide(Hyperlink.clientVerify(false)),
+  );

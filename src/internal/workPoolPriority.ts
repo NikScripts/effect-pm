@@ -1,10 +1,10 @@
 /**
  * WorkPool priority (N-level lane) engine — N-level managed queue engine (local `make` entry point).
  *
- * For toolkit tags, layers, and RPC use the public `CustomQueueHyperlink` namespace
- * (`src/CustomQueueHyperlink.ts`) / `CustomQueueHyperlink.Tag` from the barrel.
+ * For toolkit tags, layers, and RPC use the public `WorkPoolPriority` namespace
+ * (`src/WorkPoolPriority.ts`) / `WorkPoolPriority.Tag` from the barrel.
  *
- * @module internal/customQueueHyperlink
+ * @module internal/workPoolPriority
  * @internal
  */
 import {
@@ -19,7 +19,7 @@ import {
 } from "effect";
 import * as Hyperlink from "../Hyperlink";
 import { isJsonValue } from "./json";
-import { resolveCustomQueueLane } from "./customQueueLevels";
+import { resolveCustomQueueLane } from "./workPoolLanes";
 import { levelToDefaultPriority } from "./priorityMapping";
 import {
   buildCustomQueueProjection,
@@ -56,7 +56,7 @@ import {
   QueueItemValidationError,
   makeQueueItemCodecDescriptor,
   type QueueStoreWriter,
-} from "./queueHyperlink";
+} from "./workPool";
 
 export type { CustomQueueStatus } from "./queueProjection";
 
@@ -65,7 +65,7 @@ export type { CustomQueueStatus } from "./queueProjection";
 // ============================================================================
 
 /**
- * Named level registry and default lane for {@link CustomQueueHyperlink}.
+ * Named level registry and default lane for {@link WorkPoolPriority}.
  *
  * @category models
  * @public
@@ -147,7 +147,7 @@ export type CustomQueueHandle<
  * @category models
  * @public
  */
-export type CustomQueueHyperlinkConfigWithoutItemSchema<T, E, R> = Omit<
+export type WorkPoolPriorityConfigWithoutItemSchema<T, E, R> = Omit<
   WorkPoolConfigBase<T>,
   "laneCount"
 > &
@@ -166,7 +166,7 @@ export type CustomQueueHyperlinkConfigWithoutItemSchema<T, E, R> = Omit<
  * @category models
  * @public
  */
-export type CustomQueueHyperlinkConfigWithItemSchema<T, E, R> = Omit<
+export type WorkPoolPriorityConfigWithItemSchema<T, E, R> = Omit<
   WorkPoolConfigBase<T>,
   "laneCount"
 > &
@@ -178,7 +178,7 @@ export type CustomQueueHyperlinkConfigWithItemSchema<T, E, R> = Omit<
     ) => Effect.Effect<void, E, R>;
     readonly onFailure?: QueueOnFailure<T, E, R>;
     readonly refill?: CustomQueueRefill<T, E, QueueEnqueueErrors, R>;
-    /** Internal store recorder — wired by {@link CustomQueueHyperlink.layer}. @internal */
+    /** Internal store recorder — wired by {@link WorkPoolPriority.layer}. @internal */
     readonly store?: QueueStoreWriter<T, E, void>;
   };
 
@@ -187,19 +187,19 @@ export type CustomQueueHyperlinkConfigWithItemSchema<T, E, R> = Omit<
  * @category models
  * @public
  */
-export type CustomQueueHyperlinkConfig<T, E, R> =
-  | CustomQueueHyperlinkConfigWithoutItemSchema<T, E, R>
-  | CustomQueueHyperlinkConfigWithItemSchema<T, E, R>;
+export type WorkPoolPriorityConfig<T, E, R> =
+  | WorkPoolPriorityConfigWithoutItemSchema<T, E, R>
+  | WorkPoolPriorityConfigWithItemSchema<T, E, R>;
 
 /** @public */
-export type CustomQueueHyperlinkOptionsWithoutItemSchema<T, E, R> = Omit<
-  CustomQueueHyperlinkConfigWithoutItemSchema<T, E, R>,
+export type WorkPoolPriorityOptionsWithoutItemSchema<T, E, R> = Omit<
+  WorkPoolPriorityConfigWithoutItemSchema<T, E, R>,
   "effect"
 >;
 
 /** @public */
-export type CustomQueueHyperlinkOptionsWithItemSchema<T, E, R> = Omit<
-  CustomQueueHyperlinkConfigWithItemSchema<T, E, R>,
+export type WorkPoolPriorityOptionsWithItemSchema<T, E, R> = Omit<
+  WorkPoolPriorityConfigWithItemSchema<T, E, R>,
   "effect"
 >;
 
@@ -326,7 +326,7 @@ const validateItemsWithSchema = <T>(
 };
 
 const adaptRefill = <T, E, EEnqueue, R>(
-  config: CustomQueueHyperlinkConfig<T, E, R>,
+  config: WorkPoolPriorityConfig<T, E, R>,
   levels: ReturnType<typeof levelResolution>,
   projection: ReturnType<typeof buildCustomQueueProjection>,
 ): QueueRefill<T, E, EEnqueue, R> | undefined =>
@@ -367,7 +367,7 @@ const castProjection = (
   >;
 
 const makeCustomQueueEffectWithoutSchema = <
-  const C extends CustomQueueHyperlinkConfigWithoutItemSchema<any, any, any>,
+  const C extends WorkPoolPriorityConfigWithoutItemSchema<any, any, any>,
 >(
   config: Types.NoInfer<C>,
 ): Effect.Effect<
@@ -399,7 +399,7 @@ const makeCustomQueueEffectWithoutSchema = <
   });
 
 const makeCustomQueueEffectWithSchema = <
-  const C extends CustomQueueHyperlinkConfigWithItemSchema<any, any, any>,
+  const C extends WorkPoolPriorityConfigWithItemSchema<any, any, any>,
 >(
   config: Types.NoInfer<C>,
 ): Effect.Effect<
@@ -489,12 +489,12 @@ const makeCustomQueueEffectWithSchema = <
 };
 
 const hasItemSchema = <T, E, R>(
-  config: CustomQueueHyperlinkConfig<T, E, R>,
-): config is CustomQueueHyperlinkConfigWithItemSchema<T, E, R> =>
+  config: WorkPoolPriorityConfig<T, E, R>,
+): config is WorkPoolPriorityConfigWithItemSchema<T, E, R> =>
   config.itemSchema !== undefined;
 
 const makeCustomQueueEffectFromConfig = (
-  config: CustomQueueHyperlinkConfig<any, any, any>,
+  config: WorkPoolPriorityConfig<any, any, any>,
 ): Effect.Effect<CustomQueueHandle<unknown, unknown, unknown, unknown>, never, Scope.Scope | any> =>
   hasItemSchema(config)
     ? makeCustomQueueEffectWithSchema(config)
@@ -503,16 +503,16 @@ const makeCustomQueueEffectFromConfig = (
 type CustomConfigFromEffect<
   F extends QueueWorkerEffect<any, any, any, any>,
   O extends
-    | CustomQueueHyperlinkOptionsWithoutItemSchema<any, any, any>
-    | CustomQueueHyperlinkOptionsWithItemSchema<any, any, any>
+    | WorkPoolPriorityOptionsWithoutItemSchema<any, any, any>
+    | WorkPoolPriorityOptionsWithItemSchema<any, any, any>
     | undefined = undefined,
 > = { readonly effect: F } & (O extends undefined ? unknown : O);
 
 function makeCustomQueueEffect<
   const F extends QueueWorkerEffect<any, any, any, any>,
   const O extends
-    | CustomQueueHyperlinkOptionsWithoutItemSchema<any, any, any>
-    | CustomQueueHyperlinkOptionsWithItemSchema<any, any, any>
+    | WorkPoolPriorityOptionsWithoutItemSchema<any, any, any>
+    | WorkPoolPriorityOptionsWithItemSchema<any, any, any>
     | undefined = undefined,
 >(
   effect: F,
@@ -527,7 +527,7 @@ function makeCustomQueueEffect<
   never,
   Scope.Scope | InferQueueWorkerRequirements<CustomConfigFromEffect<F, O>>
 >;
-function makeCustomQueueEffect<const C extends CustomQueueHyperlinkConfig<any, any, any>>(
+function makeCustomQueueEffect<const C extends WorkPoolPriorityConfig<any, any, any>>(
   config: C,
 ): Effect.Effect<
   CustomQueueHandle<
@@ -540,14 +540,14 @@ function makeCustomQueueEffect<const C extends CustomQueueHyperlinkConfig<any, a
   Scope.Scope | InferQueueWorkerRequirements<C>
 >;
 function makeCustomQueueEffect(
-  effectOrConfig: QueueWorkerEffect<any, any, any, any> | CustomQueueHyperlinkConfig<any, any, any>,
-  options?: (CustomQueueHyperlinkOptionsWithoutItemSchema<any, any, any> &
+  effectOrConfig: QueueWorkerEffect<any, any, any, any> | WorkPoolPriorityConfig<any, any, any>,
+  options?: (WorkPoolPriorityOptionsWithoutItemSchema<any, any, any> &
     CustomQueueLaneConfig),
 ): Effect.Effect<CustomQueueHandle<any, any, any, any>, never, Scope.Scope | any> {
   if (typeof effectOrConfig === "function") {
     if (options === undefined || options.laneCount === undefined) {
       return Effect.die(
-        new Error("CustomQueueHyperlink.make requires laneCount in config or options"),
+        new Error("WorkPoolPriority.make requires laneCount in config or options"),
       );
     }
     return makeCustomQueueEffectFromConfig({ ...(options ?? {}), effect: effectOrConfig });
@@ -555,9 +555,9 @@ function makeCustomQueueEffect(
   return makeCustomQueueEffectFromConfig(effectOrConfig);
 }
 
-// Flat engine surface. The public `CustomQueueHyperlink` namespace (`src/CustomQueueHyperlink.ts`)
+// Flat engine surface. The public `WorkPoolPriority` namespace (`src/WorkPoolPriority.ts`)
 // re-exports `makeCustomQueueEffect` as `make` and `queueRateLimiterLayer` as `rateLimiterLayer` —
-// flat (not an object literal) so `import * as CustomQueueHyperlink` member access tree-shakes:
-// `CustomQueueHyperlink.Tag` pulls no engine code. `queueRateLimiterLayer` re-exported here so the
+// flat (not an object literal) so `import * as WorkPoolPriority` member access tree-shakes:
+// `WorkPoolPriority.Tag` pulls no engine code. `queueRateLimiterLayer` re-exported here so the
 // public namespace can source both engine helpers from one module.
 export { makeCustomQueueEffect, queueRateLimiterLayer };

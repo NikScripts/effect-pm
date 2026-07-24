@@ -25,7 +25,7 @@
  * This module is the **public `WorkPool` namespace** — the `hyperlink-ts/WorkPool`
  * subpath and the barrel `export * as WorkPool` both resolve here. The light `Tag` / spec /
  * schemas live in this file (engine-free, tree-shakeable); the heavy engine lives in
- * `./internal/queueHyperlink` and is pulled in only by the runtime verbs (`layer` / `serve` /
+ * `./internal/workPool` and is pulled in only by the runtime verbs (`layer` / `serve` /
  * `serveRemote` / `make`). Consume it as a module namespace:
  *
  *   import * as WorkPool from "hyperlink-ts/WorkPool";
@@ -55,7 +55,8 @@ import {
   QueueMissingItemSchemaError,
 } from "./internal/queueSchema";
 // The engine is used only by the runtime verbs (buildQueueImpl/layer/serve/serveRemote) below.
-import { makeQueueEffect } from "./internal/queueHyperlink";
+import { makeQueueEffect } from "./internal/workPool";
+import { kind } from "./internal/workPoolKind";
 import {
   successOf,
   errorOf,
@@ -78,12 +79,12 @@ import {
   type QueueStoreTag,
 } from "./internal/store/queueStoreSpec";
 // The priority (N-level lane) engine — pulled in only by the priority runtime verbs below.
-import { makeCustomQueueEffect } from "./internal/customQueueHyperlink";
+import { makeCustomQueueEffect } from "./internal/workPoolPriority";
 import type {
   CustomQueueHandle,
   CustomQueueLaneConfig,
-  CustomQueueHyperlinkConfigWithItemSchema,
-} from "./internal/customQueueHyperlink";
+  WorkPoolPriorityConfigWithItemSchema,
+} from "./internal/workPoolPriority";
 import type { StoreShapes } from "./internal/store/contractDef";
 import type {
   QueueEnqueue,
@@ -98,7 +99,7 @@ import type {
   WorkPoolConfigWithItemSchema,
   QueueRouteOptions,
   QueueStatus,
-} from "./internal/queueHyperlink";
+} from "./internal/workPool";
 import type { JsonValue } from "./internal/json";
 import { LogEntrySchema } from "./LogEntry";
 import { configureLayer, foldConfiguredSpec } from "./HyperlinkConfigure";
@@ -761,7 +762,7 @@ type QueueInstanceSpec<
  *
  * @category utils
  */
-export const kind = "hyperlink-ts/WorkPool";
+export { kind };
 
 /**
  * Config-object overload of {@link Tag}. `payload` is the item schema (required); `success` (worker
@@ -1334,7 +1335,7 @@ const buildQueueImpl = <
       drop: ({ selector, options }) => handle.drop(selector, options),
       events: handle.events,
     };
-    return Hyperlink.builtHyperlink(tag, impl, context);
+    return Hyperlink.driver(tag, impl, context);
   });
 
 /**
@@ -1372,10 +1373,10 @@ const withDefaultMemory = <A, E, R>(
 // ============================================================================
 // Priority (N-level lane) variant — WorkPool.priority
 //
-// Folded from the former CustomQueueHyperlink module: the leveled tag/spec/schemas + the
+// Folded from the former WorkPoolPriority module: the leveled tag/spec/schemas + the
 // `buildCustomQueueImpl` builder. The runtime verbs (layer/serve/serveRemote) below dispatch to
 // this builder when the tag is a priority tag (see priorityKind); the engine lives in
-// ./internal/customQueueHyperlink and is pulled in only by those verbs.
+// ./internal/workPoolPriority and is pulled in only by those verbs.
 // ============================================================================
 
 /**
@@ -1743,7 +1744,7 @@ export const priority = <Self>() => {
  * @public
  */
 export type CustomQueueLayerConfig<A, E, R, RR = never> = Omit<
-  CustomQueueHyperlinkConfigWithItemSchema<A, E, R>,
+  WorkPoolPriorityConfigWithItemSchema<A, E, R>,
   "itemSchema" | "refill" | "name"
 > & {
   readonly refill?: {
@@ -1775,7 +1776,7 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
   tag: HyperlinkTag<Self, CustomQueueInstanceSpec<F>>,
   config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ): Effect.Effect<
-  Hyperlink.BuiltHyperlink<CustomQueueInstanceSpec<F>, R | RR>,
+  Hyperlink.Driver<CustomQueueInstanceSpec<F>, R | RR>,
   never,
   R | RR | Scope.Scope | Store.Storage
 > =>
@@ -1800,7 +1801,7 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
       ...effectiveConfig,
       itemSchema,
       store,
-    } as CustomQueueHyperlinkConfigWithItemSchema<Schema.Struct<F>["Type"], E, R | RR>);
+    } as WorkPoolPriorityConfigWithItemSchema<Schema.Struct<F>["Type"], E, R | RR>);
 
     const history = yield* Effect.serviceOption(HistoryStore);
     const decodeMetric = Schema.decodeUnknownEffect(queueMetrics);
@@ -1862,7 +1863,7 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
       drop: ({ selector, options }) => handle.drop(selector, options),
       events: handle.events,
     };
-    return Hyperlink.builtHyperlink(tag, impl, context);
+    return Hyperlink.driver(tag, impl, context);
   });
 
 /** A WorkPool tag — plain or {@link priority} — the runtime verbs dispatch over by kind. @internal */
@@ -2194,7 +2195,7 @@ export { successOf, errorOf };
 // ============================================================================
 // Engine surface
 //
-// The runtime helpers and error/codec re-exports below pull in `./internal/queueHyperlink` only when
+// The runtime helpers and error/codec re-exports below pull in `./internal/workPool` only when
 // referenced. `Tag` / `configure` (above) plus the wire schemas stay engine-free, so a `Tag`-only
 // consumer tree-shakes the engine away entirely.
 // ============================================================================
@@ -2205,10 +2206,10 @@ export {
   queueSchemaGroup as Schema,
   queueErrorsGroup as Errors,
   queueRateLimiterLayer as rateLimiterLayer,
-} from "./internal/queueHyperlink";
+} from "./internal/workPool";
 
 // The priority (N-level lane) engine constructor — the {@link priority} peer of {@link make}.
-export { makeCustomQueueEffect as makePriority } from "./internal/customQueueHyperlink";
+export { makeCustomQueueEffect as makePriority } from "./internal/workPoolPriority";
 
 // Codec schemas already imported locally from the light `queueSchema` module — surface them here.
 export {
@@ -2227,8 +2228,8 @@ export {
   schemaVersionAnnotation,
   schemaVersionOf,
   withSchemaVersion,
-} from "./internal/queueHyperlink";
-export type { EffectContext, QueueEntry, QueueHandle } from "./internal/queueHyperlink";
+} from "./internal/workPool";
+export type { EffectContext, QueueEntry, QueueHandle } from "./internal/workPool";
 // The queue type surface lives HERE, namespace-style (`WorkPool.QueueStatus`) — the barrel
 // no longer re-exports these bare (effect has no top-level; neither do we).
 export type {
@@ -2270,4 +2271,4 @@ export type {
   TakeAlgorithm,
   TakeAlgorithmPick,
   TakeAlgorithmPickContext,
-} from "./internal/queueHyperlink";
+} from "./internal/workPool";

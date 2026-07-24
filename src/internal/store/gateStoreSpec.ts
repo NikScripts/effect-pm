@@ -9,16 +9,16 @@
  * the extension only adds analytics read methods. The engine writes via shape
  * `append` handles (`fact.append` / `state.append`) directly.
  *
- * @module internal/store/runHyperlinkStoreSpec
+ * @module internal/store/gateStoreSpec
  * @internal
  */
 
 import { Effect, Option, Schema, Stream } from "effect";
 import * as Store from "../../Store";
 import { failureRate, recent } from "./analytics";
-import { makeGateFactEvent } from "../runHyperlinkEvent";
-import { errorOf, successOf } from "../runTagSchemas";
-import { runGateStatus } from "../runHyperlinkSchema";
+import { makeGateFactEvent } from "../gateEvent";
+import { errorOf, successOf } from "../gateTagSchemas";
+import { runGateStatus } from "../gateSchema";
 import type { StoreContractValue, StoreShapeDef } from "./contractDef";
 import type { StoreJournalDecodeError, StoreWriteError } from "./errors";
 import { withImplicitLogShape } from "./logShapes";
@@ -127,7 +127,7 @@ export type BuiltInGateContract = StoreContractValue<
 >;
 
 /** Tier-1 custom methods over `fact` + `state` shape handles. @internal */
-const runHyperlinkTier1Methods = <FactRow extends { readonly runId: string }>({
+const gateTier1Methods = <FactRow extends { readonly runId: string }>({
   fact,
   state,
 }: {
@@ -163,7 +163,7 @@ export const makeGateStoreContract = (
       fact: Store.shape(factSchema),
       state: Store.shape(runStateChangeSchema),
     },
-    (handles) => runHyperlinkTier1Methods<FactRow>(handles),
+    (handles) => gateTier1Methods<FactRow>(handles),
   );
 };
 
@@ -203,7 +203,7 @@ export type RunStoreReads<Tag extends StoreScopeTag> = {
 };
 
 /** Analytics derivations over a tag's fact rows. @internal */
-const runHyperlinkAnalyticsMethods = <
+const gateAnalyticsMethods = <
   TagFactRow extends { readonly _tag: string; readonly runId: string },
   TagCompleted extends TagFactRow,
   TagFailed extends TagFactRow,
@@ -298,7 +298,7 @@ export const makeGateStoreAnalyticsContract = <const Tag extends StoreScopeTag>(
   return withImplicitLogShape(
     Store.extend(
       (handles) =>
-        runHyperlinkAnalyticsMethods<TagFactRow, TagCompleted, TagFailed, TagStarted>({
+        gateAnalyticsMethods<TagFactRow, TagCompleted, TagFailed, TagStarted>({
           fact: handles.fact,
           storeClass,
           isStarted,
@@ -315,4 +315,4 @@ export const builtInGateStoreSpec = (tag: StoreScopeTag) =>
   builtInGateStoreContract(tag).spec;
 
 /** @deprecated Use {@link Store.StoreReadPayload}. @internal */
-export { runFactReadPayload } from "../runHyperlinkEvent";
+export { runFactReadPayload } from "../gateEvent";

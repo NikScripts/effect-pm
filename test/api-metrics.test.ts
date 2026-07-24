@@ -66,7 +66,7 @@ describe("ApiMetrics.Tag", () => {
 });
 
 describe("ApiMetrics.layer", () => {
-  it.effect("usage.get reflects HttpApiHyperlink endpoint calls", () =>
+  it.effect("usage.get reflects HttpApiClient endpoint calls", () =>
     Effect.gen(function* () {
       const client = yield* DemoClient;
       const metrics = yield* DemoMetrics;

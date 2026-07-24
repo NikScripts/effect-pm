@@ -48,7 +48,7 @@ import {
   Scope,
   Stream,
 } from "effect";
-import { registerPollingLayer } from "./internal/processLayerBrand";
+import { registerPollingLayer } from "./internal/daemonLayerBrand";
 import {
   DynamicConfigStore,
   type FixedField,

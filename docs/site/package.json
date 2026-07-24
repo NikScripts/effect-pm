@@ -12,6 +12,7 @@
     "docs:manifest": "tsx scripts/gen-manifest.ts",
     "docs:manifest:check": "tsx scripts/gen-manifest.ts --check",
     "docs:api": "tsx scripts/gen-api.ts && NODE_OPTIONS=--max-old-space-size=8192 tsx scripts/gen-hovers.ts && tsx scripts/gen-search.ts && tsx scripts/gen-llms.ts",
+    "docs:restamp-hovers": "tsx scripts/restamp-hover-cache.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "docs:check-links": "tsx scripts/check-links.ts",

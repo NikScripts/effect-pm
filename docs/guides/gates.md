@@ -10,7 +10,7 @@
 **⚠️ Example only** — placeholder content that demonstrates the docs platform. **Not final**; to be replaced by Agent A. Do not treat as canonical.
 
 A `Gate` wraps an effect behind a **concurrency gate** with typed input
-and output. Where a queue drains items in the background, a run resource is
+and output. Where a queue drains items in the background, a gate is
 called on demand — every caller waits for its result, but only so many run at
 once.
 

@@ -2,6 +2,7 @@ import { assert, describe, it } from "@effect/vitest";
 import { Effect, Option } from "effect";
 import { buildLogQuery, LogQueryError } from "../src/internal/manager/logQuery";
 import { testBillingNodeKey, testSyncDaemonKey } from "./fixtures/logKeys";
+import { kind as daemonKind } from "../src/Daemon";
 
 describe("logQuery", () => {
   it("builds an open query with defaults when no filters are set", () =>
@@ -40,7 +41,7 @@ describe("logQuery", () => {
     Effect.gen(function* () {
       const query = yield* buildLogQuery({
         scope: {
-          _tag: "process",
+          _tag: daemonKind,
           groupId: testBillingNodeKey,
           key: testSyncDaemonKey,
         },

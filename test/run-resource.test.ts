@@ -4,7 +4,7 @@ import * as Gate from "../src/Gate";
 import * as Store from "../src/Store";
 import { Storage, type StorageApi } from "../src/Store";
 import { StoreWriteError } from "../src/internal/store/errors";
-import { builtInGateStoreContract } from "../src/internal/store/runHyperlinkStoreSpec";
+import { builtInGateStoreContract } from "../src/internal/store/gateStoreSpec";
 
 const trackedWork = (active: Ref.Ref<number>, peak: Ref.Ref<number>) =>
   Effect.gen(function* () {

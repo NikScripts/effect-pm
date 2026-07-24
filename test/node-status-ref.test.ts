@@ -4,8 +4,8 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
-import * as NodeStatus from "../src/NodeStatus";
-import { buildNodeStatusImpl } from "../src/internal/nodeStatusHyperlink";
+import { NodeStatusTag, clientHttp as nodeStatusClientHttp } from "../src/internal/nodeStatus";
+import { buildNodeStatusImpl } from "../src/internal/nodeStatus";
 import * as Node from "../src/Node";
 
 class Echo extends Hyperlink.Tag<Echo>()("nodeStatus-ref/Echo", {
@@ -22,7 +22,7 @@ describe("NodeStatus Subscribable", () => {
       const addr = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
       const port = addr._tag === "TcpAddress" ? addr.port : 0;
       yield* Effect.gen(function* () {
-        const node = yield* NodeStatus.Tag;
+        const node = yield* NodeStatusTag;
         expect("get" in node.status).toBe(true);
         expect("changes" in node.status).toBe(true);
         expect("statusNow" in node).toBe(false);
@@ -38,7 +38,7 @@ describe("NodeStatus Subscribable", () => {
         expect(Option.isSome(head)).toBe(true);
         expect(yield* node.logs.query({ limit: 10 })).toEqual([]);
       }).pipe(
-        Effect.provide(NodeStatus.clientHttp(`http://127.0.0.1:${port}/rpc`)),
+        Effect.provide(nodeStatusClientHttp(`http://127.0.0.1:${port}/rpc`)),
         Effect.scoped,
       );
     }).pipe(Effect.provide(Server), Effect.scoped),

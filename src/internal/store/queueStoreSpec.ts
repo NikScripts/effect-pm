@@ -18,7 +18,7 @@ import { specSym } from "../../Hyperlink";
 import { buildQueueEvent, queueEntry, queueSpec } from "../../WorkPool";
 import type { QueueEventSchema, QueueSuccessSchemaOf } from "../../WorkPool";
 import { successOf, errorOf } from "../queueTagSchemas";
-import type { Priority, QueueEvent } from "../queueHyperlink";
+import type { Priority, QueueEvent } from "../workPool";
 import * as Store from "../../Store";
 import type {
   CatchWriteError,
@@ -307,7 +307,7 @@ export type EngineQueueStoreContract<Tag extends QueueStoreTag> = ReturnType<
 /**
  * Storage-free engine store handle — SSOT derived from {@link makeEngineQueueStoreContract} after
  * {@link Store.catchWriteErrors} + {@link Store.provideContext}. Shared by {@link WorkPool} and
- * {@link CustomQueueHyperlink} engines. @internal
+ * {@link WorkPoolPriority} engines. @internal
  */
 export type MaterializedEngineQueueStore<Item extends Schema.Top> = StoreProvidedContext<
   CatchWriteError<StoreEffectsOf<ReturnType<typeof makeEngineQueueStoreContract<Item>>>>,

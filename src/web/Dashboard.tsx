@@ -25,15 +25,17 @@ import {
   type QueueBundle,
   type QueueTag,
   isCustomQueueTag,
+  isApiTag,
+  isDaemonTag,
   isFleetHealthTag,
+  isQueueTag,
   isRunTag,
   isShardMapTag,
   isTelemetryTag,
-  kindOf,
   leafByKey,
   leafTags,
   nodesOf,
-  processBundle,
+  daemonBundle,
   queueBundle,
   tagWireKey,
 } from "./data";
@@ -48,10 +50,6 @@ import { WidgetsProvider, isLeafTag, type WidgetRegistry } from "./widget-regist
 import { fmtDayLabel, now, startOfWeekMillis } from "./now";
 import { DebugConsole } from "./debug-console";
 
-// route.selected is an opaque leaf tag — narrow it to a queue / process / api by its contract.
-const isDaemonTag = (m: unknown): m is DaemonTag => kindOf(m) === "process";
-const isQueueTag = (m: unknown): m is QueueTag => kindOf(m) === "queue";
-const isApiTag = (m: unknown): m is ApiTag => kindOf(m) === "api";
 
 /** Invisible: reads one node's `NodeStatus` and reports the keys of its **not-ready** resources, so the
  *  grid can float degraded members to the top. A child-level hook (not a `.map` over the node list)
@@ -112,7 +110,7 @@ const LogBox = (props: {
 /** Fullscreen logs page for a resource — its own route (`/…/Hyperlink/logs`). */
 const LogsPage = (props: { readonly tag: QueueTag | DaemonTag; readonly onClose: () => void }): React.ReactElement => {
   const runtime = useRuntime();
-  const bundle = isDaemonTag(props.tag) ? processBundle(runtime, props.tag) : queueBundle(runtime, props.tag);
+  const bundle = isDaemonTag(props.tag) ? daemonBundle(runtime, props.tag) : queueBundle(runtime, props.tag);
   return <LogBox bundle={bundle} full onToggle={props.onClose} meta={<> · {displayName(props.tag.key)}</>} />;
 };
 

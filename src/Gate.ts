@@ -63,7 +63,7 @@
 import { Context, Effect, Layer, Schema, Scope } from "effect";
 import * as Hyperlink from "./Hyperlink";
 import type {
-  BuiltHyperlink,
+  Driver,
   HandlerContextOf,
   ImplOf,
   Local,
@@ -73,7 +73,7 @@ import { facetStoreRegistration } from "./internal/store/facetStore";
 import {
   makeGateStoreAnalyticsContract,
   type GateStoreAnalyticsContract,
-} from "./internal/store/runHyperlinkStoreSpec";
+} from "./internal/store/gateStoreSpec";
 import type { StoreShapes } from "./internal/store/contractDef";
 import type { StoreScopeTag } from "./internal/store/registration";
 import {
@@ -82,14 +82,14 @@ import {
   foldConfiguredSpec,
   type ConfigPatch,
 } from "./HyperlinkConfigure";
-import * as internal from "./internal/runHyperlink";
-import { stampRunWireSchemas } from "./internal/runTagSchemas";
+import * as internal from "./internal/gate";
+import { stampRunWireSchemas } from "./internal/gateTagSchemas";
 import * as Store from "./Store";
 import {
   runGateStatus,
   runSpec,
   type RunInstanceSpec,
-} from "./internal/runHyperlinkSchema";
+} from "./internal/gateSchema";
 
 // ============================================================================
 // Public wire schemas + spec
@@ -670,7 +670,7 @@ const buildRunImpl = <
   tag: HyperlinkTag<Self, RunInstanceSpec<I, A, E>, any>,
   config: GateLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
 ): Effect.Effect<
-  BuiltHyperlink<RunInstanceSpec<I, A, E>, R>,
+  Driver<RunInstanceSpec<I, A, E>, R>,
   never,
   R | Scope.Scope | Store.Storage
 > =>
@@ -718,7 +718,7 @@ const buildRunImpl = <
       interrupted: handle.interrupted,
       run: runImpl,
     } as Hyperlink.WithRequirement<ImplOf<RunInstanceSpec<I, A, E>>, R>;
-    return Hyperlink.builtHyperlink(tag, impl, context);
+    return Hyperlink.driver(tag, impl, context);
   });
 
 // ============================================================================
@@ -818,7 +818,7 @@ export function serveRemote(
   tag: HyperlinkTag<any, any, any>,
   config: GateLayerConfig<any, any, any, any>,
 ): Layer.Layer<any, any, any> {
-  // Pin the loose impl-signature tag to its instance spec so `buildRunImpl`'s `BuiltHyperlink` and
+  // Pin the loose impl-signature tag to its instance spec so `buildRunImpl`'s `Driver` and
   // `Hyperlink.serveRemote` line up cast-free (the `any` payload/success/error are fixed by the public
   // overload above). Mirrors `Daemon.serveRemote`.
   const baseTag: HyperlinkTag<any, RunInstanceSpec<any, any, any>> = tag;
@@ -1037,7 +1037,7 @@ export const makeRunner = <const Name extends string>(
 };
 
 // ── HTTP API client ─────────────────────────────────────────────────────────
-// A concurrency-gated typed HttpApiClient — the former HttpApiHyperlink module folded into Gate.
+// A concurrency-gated typed HttpApiClient — the former HttpApiClient module folded into Gate.
 // `httpApiClient` builds + gates the client from an HttpApi schema (a Semaphore gate over the
 // HttpClient transport via HttpClientRunGate); the engine lives in ./internal/httpApiClient and is
 // pulled in only when these are referenced.
@@ -1050,6 +1050,6 @@ export {
   instrumentEndpoints,
 } from "./internal/httpApiClient";
 export type {
-  HttpApiHyperlinkConfig as HttpApiClientConfig,
-  HttpApiHyperlinkLayerEffectConfig as HttpApiClientLayerEffectConfig,
+  HttpApiClientConfig as HttpApiClientConfig,
+  HttpApiClientLayerEffectConfig as HttpApiClientLayerEffectConfig,
 } from "./internal/httpApiClient";

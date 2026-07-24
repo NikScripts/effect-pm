@@ -9,17 +9,17 @@
  * the extension only adds analytics read methods. The engine writes via shape
  * `event.append` directly (`store.record`).
  *
- * @module internal/store/processStoreSpec
+ * @module internal/store/daemonStoreSpec
  * @internal
  */
 
 import { Effect, Option, Schema, Stream } from "effect";
 import {
   makeDaemonExecutionEvent,
-  processExecutionEventVoid,
+  daemonExecutionEventVoid,
   type DaemonExecutionEventVoid,
-} from "../processEvent";
-import { errorOf, successOf } from "../processTagSchemas";
+} from "../daemonEvent";
+import { errorOf, successOf } from "../daemonTagSchemas";
 import * as Store from "../../Store";
 import type {
   StoreContractValue,
@@ -30,12 +30,12 @@ import type { StoreJournalDecodeError, StoreWriteError } from "./errors";
 import { withImplicitLogShape } from "./logShapes";
 import type { StoreScopeTag } from "./registration";
 
-const processEventSchema = (
+const daemonEventSchema = (
   success?: Schema.Top,
   error?: Schema.Top,
 ) =>
   success === undefined && error === undefined
-    ? processExecutionEventVoid
+    ? daemonExecutionEventVoid
     : makeDaemonExecutionEvent(success, error);
 
 /**
@@ -63,7 +63,7 @@ export type DaemonEventOf<_Tag extends StoreScopeTag> =
   | Extract<DaemonExecutionEventVoid, { readonly _tag: "Interrupted" }>;
 
 /** Event union schema for a process store contract. @internal */
-export const processStoreEventSchema = processEventSchema;
+export const daemonStoreEventSchema = daemonEventSchema;
 
 /** Decoded persisted event for a tag. @internal */
 export type DaemonStoreEvent<Tag extends StoreScopeTag = StoreScopeTag> = DaemonEventOf<Tag>;
@@ -144,11 +144,11 @@ const runKey = (startedAt: number, scheduleKey: string | null): string =>
 // ============================================================================
 
 type DaemonEventHandles = ShapeHandles<{
-  readonly event: ReturnType<typeof Store.shape<ReturnType<typeof processEventSchema>>>;
+  readonly event: ReturnType<typeof Store.shape<ReturnType<typeof daemonEventSchema>>>;
 }>;
 
 /** Shared base methods — extensions close over the same `event.append` / `event.read`. @internal */
-const processStoreBaseMethods = ({ event }: DaemonEventHandles) => ({
+const daemonStoreBaseMethods = ({ event }: DaemonEventHandles) => ({
   record: event.append,
   events: event.read,
   hasPriorExecutions: () =>
@@ -184,9 +184,9 @@ export const makeDaemonStoreBaseContract = (
 ) =>
   Store.contract(
     {
-      event: Store.shape(processEventSchema(success, error)),
+      event: Store.shape(daemonEventSchema(success, error)),
     },
-    processStoreBaseMethods,
+    daemonStoreBaseMethods,
   );
 
 /** Built-in process store contract for a tag (tier-1 / engine / tests / simple registration). @internal */

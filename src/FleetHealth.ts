@@ -9,7 +9,7 @@
  * ## Shape (Telemetry twin)
  *
  * - Leaf: `local` — this node's `ok` / `degraded` + per-resource rows (same readiness SSOT
- *   shape as `NodeStatus.resources`).
+ *   shape as `Node.Status.resources`).
  * - Fleet: `byNode` / `status` — map + rollup (`ok` | `degraded` | `partial`).
  *
  * Discharge the mesh with {@link Hyperlink.peersLayer} (or {@link alone} for a single node).
@@ -18,7 +18,7 @@
  */
 import { Effect, Exit, Layer, Schema } from "effect";
 import { combineByNodeExit, combineQuery } from "./MultiNode";
-import * as NodeStatus from "./NodeStatus";
+import { resourceReadiness, type ResourceReadiness } from "./Node";
 import * as Hyperlink from "./Hyperlink";
 import {
   Tag as resourceTag,
@@ -40,14 +40,14 @@ import * as Node from "./Node";
 // ============================================================================
 
 /**
- * This node's readiness aggregate — same element shape as {@link NodeStatus.resourceReadiness}.
+ * This node's readiness aggregate — same element shape as {@link resourceReadiness}.
  *
  * @category models
  * @public
  */
 export class LocalHealth extends Schema.Class<LocalHealth>("FleetHealthLocal")({
   status: Schema.Literals(["ok", "degraded"]),
-  resources: Schema.Array(NodeStatus.resourceReadiness),
+  resources: Schema.Array(resourceReadiness),
 }) {}
 
 /**
@@ -58,7 +58,7 @@ export class LocalHealth extends Schema.Class<LocalHealth>("FleetHealthLocal")({
  */
 export class Reachable extends Schema.TaggedClass<Reachable>()("Reachable", {
   status: Schema.Literals(["ok", "degraded"]),
-  resources: Schema.Array(NodeStatus.resourceReadiness),
+  resources: Schema.Array(resourceReadiness),
 }) {}
 
 /**
@@ -102,7 +102,7 @@ const byNodeSchema = Schema.Record(Schema.String, nodeReport);
 const fleetHealthSpec = {
   local: effect(LocalHealth).annotate({
     description:
-      "This node's readiness aggregate (same SSOT shape as NodeStatus.resources) — leaf only.",
+      "This node's readiness aggregate (same SSOT shape as Node.Status.resources) — leaf only.",
   }),
   byNode: effect(byNodeSchema).pipe(fleet).annotate({
     description:
@@ -207,7 +207,7 @@ export const Tag = <Self>() => {
  * @public
  */
 export interface FleetHealthOptions {
-  readonly readiness?: Effect.Effect<ReadonlyArray<NodeStatus.ResourceReadiness>>;
+  readonly readiness?: Effect.Effect<ReadonlyArray<ResourceReadiness>>;
 }
 
 /** Identity node for a **non-meshed** FleetHealth instance. @internal */
@@ -231,7 +231,7 @@ export const alone = <Self>(
 
 /** Build {@link LocalHealth} from a readiness row list. @internal */
 const localFrom = (
-  resources: ReadonlyArray<NodeStatus.ResourceReadiness>,
+  resources: ReadonlyArray<ResourceReadiness>,
 ): LocalHealth =>
   LocalHealth.make({
     status: resources.every((r) => r.ready) ? "ok" : "degraded",

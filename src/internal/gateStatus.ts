@@ -1,12 +1,12 @@
 /**
  * Pure status transitions for the Gate gate engine.
  *
- * @module internal/runHyperlinkStatus
+ * @module internal/gateStatus
  * @internal
  */
 
-import type { RunGateStatus } from "./runHyperlink";
-import type { GateStateChangeReason } from "./store/runHyperlinkStoreSpec";
+import type { RunGateStatus } from "./gate";
+import type { GateStateChangeReason } from "./store/gateStoreSpec";
 
 /** Pair a counter update with the store reason emitted alongside it. @internal */
 export interface RunStatusTransition {

@@ -36,29 +36,28 @@ const cases = [
     // (priority) engine — the leveled variant folded in as WorkPool.priority but stays tree-shakeable.
     name: "WorkPool",
     entry: "src/WorkPool.ts",
-    engine: ["src/internal/queueHyperlink.ts", "src/internal/customQueueHyperlink.ts"],
+    engine: ["src/internal/workPool.ts", "src/internal/workPoolPriority.ts"],
     member: "Tag",
   },
   {
-    // `Process` is one module carrying both the toolkit contract (`Tag` / `Schedule` / `schedule`
-    // / `window`) and the engine (`make` / `layer` / `serve`). A `Process.Tag`-only import must not
+    // `Daemon` is one module carrying both the toolkit contract (`Tag` / `Schedule` / `schedule`
+    // / `window`) and the engine (`make` / `layer` / `serve`). A `Daemon.Tag`-only import must not
     // retain the engine's separate source files.
     name: "Daemon",
     entry: "src/Daemon.ts",
     engine: [
-      "src/internal/processSchedule.ts",
-      "src/store/processExecution.ts",
+      "src/internal/daemonSchedule.ts",
+      "src/store/daemonExecution.ts",
       "src/Polling.ts",
     ],
     member: "Tag",
   },
   {
-    // `RunHyperlink` carries the light `Tag` (spec + wire schemas + named handle) alongside the gate
-    // engine. A `RunHyperlink.Tag`-only import must not retain the engine (`makeRunHyperlinkHandleEffect`
-    // / `make` / `layer` / `serve`).
+    // `Gate` carries the light `Tag` (spec + wire schemas + named handle) alongside the gate
+    // engine. A `Gate.Tag`-only import must not retain the engine (`make` / `layer` / `serve`).
     name: "Gate",
     entry: "src/Gate.ts",
-    engine: ["src/internal/runHyperlink.ts"],
+    engine: ["src/internal/gate.ts"],
     member: "Tag",
   },
   {
