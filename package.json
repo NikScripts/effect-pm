@@ -120,9 +120,9 @@
       "types": "./dist/Gate.d.ts",
       "default": "./dist/Gate.js"
     },
-    "./HttpClientRunGate": {
-      "types": "./dist/HttpClientRunGate.d.ts",
-      "default": "./dist/HttpClientRunGate.js"
+    "./HttpClientGate": {
+      "types": "./dist/HttpClientGate.d.ts",
+      "default": "./dist/HttpClientGate.js"
     },
     "./web": {
       "types": "./dist/web.d.ts",
@@ -206,7 +206,7 @@
     "example:fleet-health-glass": "tsx examples/forms/resource/fleet-health-glass.ts",
     "example:shardmap-sessions": "tsx examples/forms/resource/shardmap-sessions.ts",
     "example:run-resource-store-readback": "tsx examples/forms/resource/run-resource-store-readback.ts",
-    "example:http-client-run-gate": "tsx examples/forms/resource/http-client-run-gate.ts",
+    "example:http-client-gate": "tsx examples/forms/resource/http-client-gate.ts",
     "example:http-api-resource": "tsx examples/forms/resource/http-api-resource-tag-layer.ts",
     "example:nwsl-http-api-resource": "node scripts/nwsl-local.mjs example",
     "example:http-api-resource-layer-effect": "tsx examples/forms/resource/http-api-resource-layer-effect.ts",

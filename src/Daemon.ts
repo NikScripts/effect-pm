@@ -214,7 +214,7 @@ export interface Daemon<out R> {
  * Canonical daemon declaration that can be registered with a typed Hyperlink group.
  *
  * @remarks
- * The declaration carries the daemon handle under {@link process} rather than
+ * The declaration carries the daemon handle under {@link daemon} rather than
  * copying handle fields onto the service class. Function/class `name` is a
  * read-only JavaScript property, so storing the runtime handle separately keeps
  * the service class safe while preserving the canonical daemon id.
@@ -226,7 +226,7 @@ export interface DaemonDefinition<out Id extends string, out R>
 {
   readonly id: Id;
   readonly kind: typeof kind;
-  readonly process: Daemon<R>;
+  readonly daemon: Daemon<R>;
 }
 
 /**
@@ -1374,11 +1374,11 @@ const makeDaemonDefinition = <const Id extends string, E, RUser>(
   id: Id,
   config: DaemonMakeOptions<E, RUser>,
 ): DaemonDefinition<Id, RUser> => {
-  const process = make(id, config);
+  const daemon = make(id, config);
   return {
     id,
     kind,
-    process,
+    daemon,
   };
 };
 
@@ -1437,13 +1437,13 @@ const defineDaemonService = <Self>() => {
     fourth?: DaemonMakeLayerArg<RUser>,
   ): DaemonServiceDefinition<Self, Id, E, RUser> {
     const defaultSpec = resolveDaemonMakeConfig(effectOrConfig, third, fourth);
-    const process = makeDaemonDefinition(id, defaultSpec);
+    const definition = makeDaemonDefinition(id, defaultSpec);
     const buildConfiguredDaemon = foldConfiguredSpec(id, defaultSpec).pipe(
       Effect.map((effective) => make(id, effective)),
     );
     const base = Context.Service<Self, Daemon<RUser>>()(id);
     return Object.assign(base, {
-      ...process,
+      ...definition,
       tag: base,
       defaultSpec,
       configure: (patch: ConfigPatch<DaemonMakeOptions<E, RUser>>) =>
@@ -2363,10 +2363,10 @@ const entriesSubscribable = (
   ).pipe(Stream.map((entries) => entries.map(toWireEntry))),
 });
 
-/** Thrown (as a defect) when a reference-mode process is materialized before its runtime lands. */
+/** Thrown (as a defect) when a reference-mode daemon is materialized before its runtime lands. */
 class ReferenceScheduleNotWired extends Data.TaggedError(
   "ReferenceScheduleNotWired",
-)<{ readonly process: string }> {}
+)<{ readonly daemon: string }> {}
 
 const statusPollInterval = Duration.millis(500);
 
@@ -2398,7 +2398,7 @@ const buildDaemonImpl = <A, E, R>(
 
     const mode = scheduleModeOf(tag);
     if (mode?._tag === "reference") {
-      return yield* Effect.die(new ReferenceScheduleNotWired({ process: tag.key }));
+      return yield* Effect.die(new ReferenceScheduleNotWired({ daemon: tag.key }));
     }
 
     // ── result capture (value-returning process) ──

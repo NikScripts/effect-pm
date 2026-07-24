@@ -1039,7 +1039,7 @@ export const makeRunner = <const Name extends string>(
 // ── HTTP API client ─────────────────────────────────────────────────────────
 // A concurrency-gated typed HttpApiClient — the former HttpApiClient module folded into Gate.
 // `httpApiClient` builds + gates the client from an HttpApi schema (a Semaphore gate over the
-// HttpClient transport via HttpClientRunGate); the engine lives in ./internal/httpApiClient and is
+// HttpClient transport via HttpClientGate); the engine lives in ./internal/httpApiClient and is
 // pulled in only when these are referenced.
 
 export {

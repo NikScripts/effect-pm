@@ -27,7 +27,7 @@
  *   (nestable; members may be on the same or different nodes). Contracts are introspectable via
  *   `specOf` + `methodMeta` (build generic UIs). See the live book under `docs/resources/` and
  *   `docs/guides/`.
- * - **`Gate`**, **`HttpClientRunGate`**, **`Gate.httpApiClient`** —
+ * - **`Gate`**, **`HttpClientGate`**, **`Gate.httpApiClient`** —
  *   Optional building blocks for **gated** HTTP and reusable service patterns.
  * - **Persistence** — `DurableQueueStore` (durable priority queue) + `HistoryStore`
  *   (metrics/logs history); in-memory or SQLite (`hyperlink-ts/storage/sqlite`).
@@ -98,7 +98,7 @@ export * as Polling from "./Polling";
 // pull the engine only when used.
 export * as WorkPool from "./WorkPool";
 export * as Gate from "./Gate";
-export * as HttpClientRunGate from "./HttpClientRunGate";
+export * as HttpClientGate from "./HttpClientGate";
 export {
   acceptJson,
   instrumentEndpoints,

@@ -1,7 +1,7 @@
 /**
  * @module examples/forms/resource/http-client-gate
  *
- * HttpClientRunGate on a fetch client. Run: `pnpm run example:http-client-gate`
+ * HttpClientGate on a fetch client. Run: `pnpm run example:http-client-gate`
  */
 
 import {
@@ -10,7 +10,7 @@ import {
   HttpClientRequest,
 } from "effect/unstable/http";
 import { Clock, Effect, Layer } from "effect";
-import { HttpClientRunGate, Gate } from "../../../src";
+import { HttpClientGate, Gate } from "../../../src";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 
 const DemoHttpRunner = Gate.makeRunner({
@@ -22,7 +22,7 @@ const program = Effect.gen(function* () {
   const base = yield* HttpClient.HttpClient;
   const runner = yield* DemoHttpRunner;
   // Same gate pattern as Gate.httpApiClient limits — applied at HttpClient level.
-  const client = HttpClientRunGate.transformClient(base, runner);
+  const client = HttpClientGate.transformClient(base, runner);
 
   yield* Effect.log("10 parallel GETs through the gate…");
   const t0 = yield* Clock.currentTimeMillis;
