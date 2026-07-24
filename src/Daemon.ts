@@ -2239,7 +2239,7 @@ export const Tag = <Self>() => {
   // The single, guarded cast: an overloaded *function* (`build`) isn't structurally assignable to a
   // call-signature *object* type (`DaemonTagBuild<Self>`) even when it implements exactly those
   // overloads — a known TS limitation (the same class as WorkPool's `nameQueueService` cast).
-  // It's soundness-guarded: `process-driver` / `process-contract-shape` .test-d.ts exercise
+  // It's soundness-guarded: `process-driver` / `daemon-contract-shape` .test-d.ts exercise
   // `Daemon.Tag()` in every form, so a drift between `build` and `DaemonTagBuild` fails the build.
   return build as DaemonTagBuild<Self>;
 };

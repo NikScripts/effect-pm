@@ -7,9 +7,9 @@ import * as Daemon from "../src/Daemon";
 // immediately (default always-armed); a `.pipe(Daemon.schedule([]))` tag owns an empty inline
 // schedule (disarmed, and gains the `schedule` verb group) so `run` / schedule CRUD can
 // be observed in isolation.
-class ArmedProc extends Daemon.Tag<ArmedProc>()("test/process-contract/Armed") {}
+class ArmedProc extends Daemon.Tag<ArmedProc>()("test/daemon-contract/Armed") {}
 class ScheduledProc extends Daemon.Tag<ScheduledProc>()(
-  "test/process-contract/Scheduled",
+  "test/daemon-contract/Scheduled",
 ).pipe(Daemon.schedule([])) {}
 
 it("with the default schedule a process arms and runs its effect immediately", () =>

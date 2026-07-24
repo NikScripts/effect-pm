@@ -8,12 +8,12 @@ import * as Store from "../src/Store";
 // A process started disarmed (empty inline schedule) so it only runs on `run`; with the logs
 // stack provided, worker lines are scoped by tag key and read back via Hyperlink.logs.
 class LogProc extends Daemon.Tag<LogProc>()(
-  "test/process-log-history/Proc",
+  "test/daemon-log-history/Proc",
 ).pipe(Daemon.schedule([])) {}
 
 const logProcRegistration = Daemon.store(LogProc);
 
-class AppStore extends Store.Service<AppStore>("@test/process-log-history/Store")(
+class AppStore extends Store.Service<AppStore>("@test/daemon-log-history/Store")(
   logProcRegistration,
 ) {}
 

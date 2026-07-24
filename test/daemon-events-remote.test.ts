@@ -1,6 +1,6 @@
 /**
  * Daemon.events over real HTTP RPC — Hyperlink.client ∩ Daemon.serve.
- * Complements local `process-events.test.ts` and control-plane `process-remote-http.test.ts`.
+ * Complements local `daemon-events.test.ts` and control-plane `daemon-remote-http.test.ts`.
  */
 import { describe, expect, it } from "@effect/vitest";
 import { Cause, Duration, Effect, Exit, Fiber, Layer, Option, Schema, Stream } from "effect";
