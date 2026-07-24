@@ -25,6 +25,25 @@ import {
   type ServerServeList,
 } from "./nodeServerCommon"
 
+type ErasedChannel = NonNullable<unknown>
+
+const toServeList = (
+  layers: ReadonlyArray<Layer.Layer<never, ErasedChannel, ErasedChannel>>,
+): ServerServeList | undefined => {
+  const [first, ...rest] = layers;
+  return first === undefined ? undefined : [first, ...rest];
+}
+
+const isServeArray = (
+  value: unknown,
+): value is ReadonlyArray<Layer.Layer<never, ErasedChannel, ErasedChannel>> =>
+  Array.isArray(value);
+
+const isServeLayer = (
+  value: unknown,
+): value is Layer.Layer<never, ErasedChannel, ErasedChannel> =>
+  Layer.isLayer(value) === true;
+
 /**
  * Options for {@link ipcServer} — Unix-domain RPC (same-machine).
  *
@@ -83,7 +102,7 @@ export interface IpcServerOptions {
  * @category servers
  * @public
  */
-export function ipcServer<Serve extends Layer.Layer<never, any, any>>(
+export function ipcServer<Serve extends Layer.Layer<never, ErasedChannel, ErasedChannel>>(
   serve: Serve,
   options: IpcServerOptions,
 ): Layer.Layer<
@@ -100,17 +119,22 @@ export function ipcServer<Serves extends ServerServeList>(
   Layer.Services<Serves[number]>
 >;
 export function ipcServer(
-  serves: Layer.Layer<never, any, any> | ServerServeList | ReadonlyArray<Layer.Layer<never, any, any>>,
+  serves: unknown,
   options: IpcServerOptions,
-): Layer.Layer<never, any, any> {
-  const list = (
-    Array.isArray(serves) ? serves : [serves]
-  ) as unknown as ServerServeList;
+): Layer.Layer<unknown, ErasedChannel, never> {
+  const list: ServerServeList | undefined = isServeArray(serves)
+    ? toServeList(serves)
+    : isServeLayer(serves)
+      ? [serves]
+      : undefined;
+  if (list === undefined) {
+    return ipcServerBase(options) as never;
+  }
   return ipcServerBase(options).pipe(
     Layer.provideMerge(mergeServeList(list)),
     // Fresh registry per server — Lookup + Worker in one process must not share.
     Layer.provide(Layer.fresh(Hyperlink.servedHyperlinksLayer)),
-  ) as Layer.Layer<never, any, any>;
+  ) as Layer.Layer<unknown, ErasedChannel, never>;
 }
 
 
@@ -165,9 +189,11 @@ const ipcServerBase = (
         ...(inferredNodeKey !== undefined ? { nodeLogKey: inferredNodeKey } : {}),
       });
       const nodeTag = nodeEntry.tag;
-      const nodeImpl = (yield* (Effect.isEffect(nodeEntry.impl)
-        ? nodeEntry.impl
-        : Effect.succeed(nodeEntry.impl))) as Record<string, unknown>;
+      const rawNodeImpl: unknown = nodeEntry.impl;
+      const nodeImplEffect: Effect.Effect<unknown> = Effect.isEffect(rawNodeImpl)
+        ? Effect.orDie(rawNodeImpl as Effect.Effect<unknown, ErasedChannel, never>)
+        : Effect.succeed(rawNodeImpl);
+      const nodeImpl = (yield* nodeImplEffect) as Record<string, unknown>;
       const nodeFlat = Hyperlink.flattenImpl(nodeImpl, nodeTag[Hyperlink.specSym]);
       const nodeHandlers: Record<string, (payload: unknown) => unknown> = {};
       for (const [key, member] of Object.entries(nodeFlat)) {
@@ -188,14 +214,10 @@ const ipcServerBase = (
       if (fsCtx !== undefined) {
         yield* Effect.provide(unlinkBestEffort(options.path), fsCtx);
       }
-      // Dynamic RpcServer group — assign through `any` so the diagnostic does not walk the graph.
-      const rpcRaw: any = RpcServer.layer(merged);
-      const rpc = (rpcRaw as Layer.Layer<never, never, never>).pipe(
+      const rpc = (RpcServer.layer(merged as never) as Layer.Layer<never>).pipe(
         Layer.provide(
           nodeTag[Hyperlink.groupSym].toLayer(
-            nodeHandlers as unknown as Parameters<
-              (typeof nodeTag)[typeof Hyperlink.groupSym]["toLayer"]
-            >[0],
+            nodeHandlers as never,
           ),
         ),
         // Fresh per ipcServer — two Unix servers in one process (Lookup + Worker)

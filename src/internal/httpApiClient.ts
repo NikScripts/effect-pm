@@ -167,7 +167,12 @@ const recordMetricUsage = (
     }
   });
 
-const wrapEndpointCall = <Fn extends (...args: Array<never>) => Effect.Effect<unknown, unknown, unknown>>(
+const wrapEndpointCall = <
+  A,
+  E,
+  R,
+  Fn extends (...args: Array<never>) => Effect.Effect<A, E, R>,
+>(
   call: Fn,
   labels: EndpointLabels,
   metrics: ReturnType<typeof makeEndpointMetrics>,
@@ -342,6 +347,7 @@ function makeHttpApiClient<
 ) {
   type ClientShape = HttpApiClient.Client<Groups>;
 
+  // @effect-diagnostics-next-line serviceNotAsClass:off -- dynamic HttpApi client tag factory.
   const tag = Context.Service<ClientShape>(config.name);
   const layer = buildLayer(tag, api, config);
 

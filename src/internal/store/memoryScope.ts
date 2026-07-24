@@ -22,6 +22,9 @@ import { trimScopeRetention } from "./journalRetention";
 import { APPEND_TAG, QUERY_TAG, type FlatStoreHandleOf, type StoreHandleOf, type StoreSpec } from "./spec";
 import { filterRowsByWhere } from "./where";
 
+type EffectEncoder = Schema.ConstraintEncoder<unknown>;
+type EffectDecoder = Schema.ConstraintDecoder<unknown>;
+
 /** @internal */
 export interface StoredRow {
   readonly method: string;
@@ -127,8 +130,9 @@ export const makeScopeHandle = <S extends StoreSpec>(
             // a programming bug, not a runtime condition — so it `orDie`s as a defect (surfacing the
             // bug) rather than becoming a catchable failure. The `journal.write` below is left as a
             // normal failure: a journal/IO write error stays in the cause and remains catchable.
+            const entryCodec: unknown = Schema.toCodecJson(entry.schema);
             const wire = yield* Effect.orDie(
-              Schema.encodeUnknownEffect(Schema.toCodecJson(entry.schema))(one),
+              Schema.encodeUnknownEffect(entryCodec as EffectEncoder)(one),
             );
             const encoded = yield* Effect.orDie(encodeJournalPayload(wire));
             // The journal/IO write is the genuine catchable write failure — surface it as
@@ -168,7 +172,10 @@ export const makeScopeHandle = <S extends StoreSpec>(
       const sourceKeys = querySourceKeys(spec, entry);
       (handle as Record<string, unknown>)[name] = (payload: unknown) =>
         Effect.gen(function* () {
-          const decodedPayload = yield* Schema.decodeUnknownEffect(entry.payload)(payload);
+          const payloadSchema: unknown = entry.payload;
+          const decodedPayload = yield* Effect.orDie(
+            Schema.decodeUnknownEffect(payloadSchema as EffectDecoder)(payload),
+          );
           const entries = yield* sideEffects.journal.entries;
           const rows = yield* rowsForScope(entries, sideEffects.scopeKey, sourceKeys);
           const capped = capRetention(
@@ -192,7 +199,10 @@ export const makeScopeHandle = <S extends StoreSpec>(
             limitOpts(queryOpts),
             (row) => row.occurredAtMillis,
           ).map((row) => row.payload);
-          return yield* Schema.decodeUnknownEffect(Schema.toCodecJson(entry.result))(matched);
+          const resultCodec: unknown = Schema.toCodecJson(entry.result);
+          return yield* Effect.orDie(
+            Schema.decodeUnknownEffect(resultCodec as EffectDecoder)(matched),
+          );
         });
     }
   }

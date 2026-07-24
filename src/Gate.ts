@@ -1039,6 +1039,7 @@ export function store(tag: StoreScopeTag, extended?: StoreShapes) {
 export const makeRunner = <const Name extends string>(
   config: RunnerConfig & { readonly name: Name },
 ) => {
+  // @effect-diagnostics-next-line serviceNotAsClass:off -- dynamic runner tag factory.
   const tag = Context.Service<
     Runner & { readonly _tag: Name },
     Runner
