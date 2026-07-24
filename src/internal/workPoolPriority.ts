@@ -555,8 +555,8 @@ function makePriorityEffect(
   return makePriorityEffectFromConfig(effectOrConfig);
 }
 
-// Flat engine surface. Public `WorkPool` re-exports `makePriorityEffect` as `make` and `queueRateLimiterLayer` as `rateLimiterLayer` —
-// flat (not an object literal) so `import * as WorkPoolPriority` member access tree-shakes:
-// `WorkPool.priority` pulls no engine code. `queueRateLimiterLayer` re-exported here so the
-// public namespace can source both engine helpers from one module.
+// Flat engine surface. Public `WorkPool` re-exports `makePriorityEffect` as `makePriority` and
+// `queueRateLimiterLayer` — flat (not an object literal) so `WorkPool.priority` pulls no engine
+// code. `queueRateLimiterLayer` is re-exported here so the public namespace can source both engine
+// helpers from one module.
 export { makePriorityEffect, queueRateLimiterLayer };
