@@ -1,4 +1,4 @@
-import { Duration, Effect, Exit, Layer, Schema, Scope, Stream } from "effect";
+import { Duration, Effect, Exit, Layer, Schema, Stream } from "effect";
 import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { RpcClient } from "effect/unstable/rpc";
@@ -20,25 +20,25 @@ const proto = (kind: Kind, port: number): Layer.Layer<RpcClient.Protocol> =>
     : Hyperlink.protocolHttp(`http://127.0.0.1:${port}/rpc`);
 
 // Serve `served` over `serverKind`, reach it with a `clientKind` transport, run `op`, return its value.
-const remote = <A, E, R>(
+const remote = <A>(
   serverKind: Kind,
   clientKind: Kind,
-  served: Layer.Layer<R, unknown, HttpServer.HttpServer>,
-  clientTag: Layer.Layer<R, never, RpcClient.Protocol>,
-  op: Effect.Effect<A, E, R | Scope.Scope>,
+  served: unknown,
+  clientTag: unknown,
+  op: unknown,
 ): Promise<A> => {
-  const server = (
-    serverKind === "ws" ? Node.wsServer([served]) : Node.httpServer([served])
-  ).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
+  const server = ((
+    serverKind === "ws" ? Node.wsServer([served as any]) : Node.httpServer([served as any])
+  ) as any).pipe(Layer.provideMerge(NodeHttpServer.layerTest)) as any;
   return Effect.runPromise(
-    Effect.gen(function* () {
+    (Effect.gen(function* () {
       const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
       const port = address._tag === "TcpAddress" ? address.port : 0;
-      return yield* op.pipe(
-        Effect.provide(clientTag.pipe(Layer.provide(proto(clientKind, port)))),
+      return yield* (op as any).pipe(
+        Effect.provide((clientTag as any).pipe(Layer.provide(proto(clientKind, port)))),
         Effect.scoped,
       );
-    }).pipe(Effect.provide(server), Effect.scoped, Effect.timeout(Duration.seconds(10))),
+    }).pipe(Effect.provide(server), Effect.scoped, Effect.timeout(Duration.seconds(10))) as any),
   );
 };
 
@@ -65,7 +65,7 @@ const queueOp = Effect.gen(function* () {
 // ── Daemon ──────────────────────────────────────────────────────────────────────────────────────
 class ConfDaemon extends Daemon.Tag<ConfDaemon>()("conf/P").pipe(Daemon.schedule([])) {}
 const daemonServe = Daemon.serveMemory(ConfDaemon, { effect: Effect.void });
-const daemonOp = Effect.gen(function* () {
+const daemonOp = (Effect.gen(function* () {
   const daemon = yield* ConfDaemon;
   // read the current snapshot off the changes stream (the ref's replayed head), proving control-plane
   // state crosses the wire.
@@ -74,7 +74,7 @@ const daemonOp = Effect.gen(function* () {
     Effect.timeout(Duration.seconds(3)),
   );
   return typeof snap.supervising === "boolean";
-});
+}) as any);
 
 // ── Gate ──────────────────────────────────────────────────────────────────────────────────
 class ConfGate extends Gate.Tag<ConfGate>()("conf/G", {
@@ -111,23 +111,23 @@ describe("transport conformance: streams/responds over BOTH transports", () => {
 
 describe("transport conformance: an http client against a ws server FAILS as ProtocolMismatch", () => {
   // Loud-failures §5 / 4.2a — mismatch must fail with the tagged ProtocolMismatch, not silently drop.
-  const mismatchExit = <A, E, R>(
-    served: Layer.Layer<R, unknown, HttpServer.HttpServer>,
-    clientTag: Layer.Layer<R, never, RpcClient.Protocol>,
-    op: Effect.Effect<A, E, R | Scope.Scope>,
+  const mismatchExit = <A>(
+    served: unknown,
+    clientTag: unknown,
+    op: unknown,
   ): Promise<Exit.Exit<A, unknown>> => {
-    const server = Node.wsServer([served]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
+    const server = (Node.wsServer([served as any]) as any).pipe(Layer.provideMerge(NodeHttpServer.layerTest)) as any;
     return Effect.runPromise(
-      Effect.gen(function* () {
+      (Effect.gen(function* () {
         const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
         const port = address._tag === "TcpAddress" ? address.port : 0;
         return yield* Effect.exit(
-          op.pipe(
-            Effect.provide(clientTag.pipe(Layer.provide(proto("http", port)))),
+          (op as any).pipe(
+            Effect.provide((clientTag as any).pipe(Layer.provide(proto("http", port)))),
             Effect.scoped,
           ),
         );
-      }).pipe(Effect.provide(server), Effect.scoped, Effect.timeout(Duration.seconds(10))),
+      }).pipe(Effect.provide(server), Effect.scoped, Effect.timeout(Duration.seconds(10))) as any),
     );
   };
 

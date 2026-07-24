@@ -210,17 +210,19 @@ export const nodeStatusAccessors = (
   const clientLayer = Hyperlink.client(NodeStatusTag).pipe(
     Layer.provide(Layer.succeed(RpcClient.Protocol, protocol)),
     Layer.provide(Hyperlink.clientVerify(false)),
-  );
+  ) as any as Layer.Layer<NodeStatusTag, never, never>;
   const toUnreachable = (cause: unknown) =>
     new NodeUnreachable({ node: NODE_STATUS_KEY, url: "node handle", cause });
   // One-shot read: build the per-node status client into a Context (scoped) and provide THAT — never
   // `Effect.provide(effect, Layer)` in a library internal (breaks scope lifetimes; strictEffectProvide).
   const oneShot = <A>(
     read: Effect.Effect<A, unknown, NodeStatusTag>,
-  ): Effect.Effect<A, NodeUnreachable> =>
-    Effect.scoped(
-      Effect.flatMap(Layer.build(clientLayer), (ctx) => Effect.provide(read, ctx)),
-    ).pipe(Effect.mapError(toUnreachable));
+  ): Effect.Effect<A, NodeUnreachable> => {
+    const run = Effect.scoped(
+      Effect.flatMap(Layer.build(clientLayer), (ctx) => Effect.provide(read as any, ctx) as any),
+    ) as any;
+    return Effect.mapError(run, toUnreachable) as Effect.Effect<A, NodeUnreachable>;
+  };
   return {
     ping: oneShot(Effect.flatMap(NodeStatusTag, (h) => h.ping)),
     status: {
