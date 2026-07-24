@@ -69,7 +69,6 @@ import type {
   Local,
   HyperlinkTag,
 } from "./Hyperlink";
-import { retype } from "./internal/nodeServerCommon";
 import { facetStoreRegistration } from "./internal/store/facetStore";
 import {
   makeGateStoreAnalyticsContract,
@@ -825,21 +824,14 @@ export const serveRemote = <
 >(
   tag: HyperlinkTag<Self, InstanceSpec<I, A, E>, any>,
   config: LayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
-): Layer.Layer<HandlerContextOf<InstanceSpec<I, A, E>> | Store.Storage, never, R> => {
-  // Hyperlink.serveRemote's public `R` is ServeRequirements (plain impls); Driver `R` is retyped
-  // at this factory so the layer keeps the gate worker requirement (open-S Driver overloads TS2589).
-  const serveRemoteDriver = retype<
-    (
-      tag: HyperlinkTag<Self, InstanceSpec<I, A, E>, any>,
-      impl: Driver<InstanceSpec<I, A, E>, R>,
-    ) => Layer.Layer<HandlerContextOf<InstanceSpec<I, A, E>>, never, R>
-  >(Hyperlink.serveRemote as never);
-  return withDefaultStoreBridge(
+): Layer.Layer<HandlerContextOf<InstanceSpec<I, A, E>> | Store.Storage, never, R> =>
+  withDefaultStoreBridge(
     Layer.unwrap(
-      Effect.map(buildRunImpl(tag, config), (built) => serveRemoteDriver(tag, built)),
+      Effect.map(buildRunImpl(tag, config), (built) =>
+        Hyperlink.serveRemoteDriver(tag, built),
+      ),
     ),
   );
-};
 
 /**
  * Alias of {@link serveRemote}.

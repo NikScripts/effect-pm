@@ -3558,41 +3558,24 @@ export type ServeRequirements<Impl> = {
           : never;
 }[keyof Impl];
 
+/** Shallow tag shape for serve-remote mounts — avoids open `RpcGroupOf<S>` walks (TS2589). */
+type ServeRemoteTag = {
+  readonly groupId: string;
+  readonly [specSym]: FlatSpec;
+  readonly [groupSym]: { readonly toLayer: (handlers: never) => Layer.Any };
+};
+
 /**
- * A resource's **served-only handler layer** — mounts the tag's group handlers (wire members only,
- * **no** local grant), with the handlers' requirement `R` **preserved** (not erased). This is the
- * served-only counterpart to {@link serve}, which additionally grants {@link Local} so
- * members stay callable in-process. `serveRemote`'s `R` rides the layer's requirement channel, so a
- * per-resource `Layer.provide` discharges *this* resource's dependency in isolation:
- *
- * ```ts
- * Hyperlink.serveRemote(SeasonMatches, seasonMatchesImpl).pipe(Layer.provide(importHandlersLayer))
- * ```
- *
- * The point of `serveRemote` is the run-time-requirement case: N resources needing different
- * implementations of the same tag, each isolated — merge the layers onto one `RpcServer` (groups are
- * prefix-keyed).
- *
- * Plain impls infer `R` via {@link ServeRequirements}. {@link Driver} inputs are accepted at the
- * value level; toolkit callers that need the driver's `R` on the returned Layer retype the factory
- * (Gate / Daemon / WorkPool) — open-`S` Driver overloads hit TS2589.
- *
- * @category serving
- * @public
+ * Shared handler mount + registry registration for {@link serveRemote} / {@link serveRemoteDriver}.
+ * Returns {@link Layer.Any}; public wrappers reify `R` / {@link HandlerContextOf}.
  */
-export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
-  tag: {
-    readonly groupId: string;
-    readonly [specSym]: FlatSpec;
-    readonly [specTypeSym]?: S;
-    readonly [groupSym]: RpcGroupOf<S>;
-  },
-  impl: Impl | Driver<S, any>,
-): Layer.Layer<HandlerContextOf<S>, never, ServeRequirements<Impl>> => {
+const serveRemoteHandlers = (
+  tag: ServeRemoteTag,
+  wireImpl: unknown,
+  workerContext: Context.Context<unknown> | undefined,
+): Layer.Any => {
   const group = tag[groupSym];
   const handlers: Record<string, (payload: unknown) => unknown> = {};
-  const wireImpl = isDriver(impl) ? impl.impl : impl;
-  const workerContext = isDriver(impl) ? impl.workerContext : undefined;
   // flatten a (possibly nested) impl to path keys matching the flat spec + path-keyed group procedures.
   const flatImpl = flattenImpl(wireImpl as Record<string, unknown>, tag[specSym]);
   for (const [key, member] of Object.entries(flatImpl)) {
@@ -3607,10 +3590,10 @@ export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
           );
   }
   // RpcGroup.toLayer is a dynamically-keyed factory — bridge with retype so `any`/`unknown`
-  // never enter Layer E/R channels. Public `R` is {@link ServeRequirements} of the impl.
-  const toHandlerLayer = retype<
-    (handlers: never) => Layer.Layer<HandlerContextOf<S>, never, ServeRequirements<Impl>>
-  >(group.toLayer.bind(group) as never);
+  // never enter Layer E/R channels.
+  const toHandlerLayer = retype<(handlers: never) => Layer.Any>(
+    group.toLayer.bind(group) as never,
+  );
   const handlerLayer = toHandlerLayer(handlers as never);
   // register into the served-resources registry when one is present (`httpServer` provides it), so the
   // shared server + `/health` discover this resource without the caller listing it twice. Merged (not
@@ -3638,8 +3621,69 @@ export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
       ),
     ),
   );
-  return Layer.merge(handlerLayer, registration);
+  const mergeAny = retype<(left: Layer.Any, right: Layer.Any) => Layer.Any>(
+    Layer.merge as never,
+  );
+  return mergeAny(handlerLayer, registration);
 };
+
+/**
+ * A resource's **served-only handler layer** — mounts the tag's group handlers (wire members only,
+ * **no** local grant), with the handlers' requirement `R` **preserved** (not erased). This is the
+ * served-only counterpart to {@link serve}, which additionally grants {@link Local} so
+ * members stay callable in-process. `serveRemote`'s `R` rides the layer's requirement channel, so a
+ * per-resource `Layer.provide` discharges *this* resource's dependency in isolation:
+ *
+ * ```ts
+ * Hyperlink.serveRemote(SeasonMatches, seasonMatchesImpl).pipe(Layer.provide(importHandlersLayer))
+ * ```
+ *
+ * The point of `serveRemote` is the run-time-requirement case: N resources needing different
+ * implementations of the same tag, each isolated — merge the layers onto one `RpcServer` (groups are
+ * prefix-keyed).
+ *
+ * Plain impls infer `R` via {@link ServeRequirements}. For a {@link Driver}, use
+ * {@link serveRemoteDriver} so the driver's `R` is the Layer requirement (no toolkit retype).
+ *
+ * @category serving
+ * @public
+ */
+export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
+  tag: {
+    readonly groupId: string;
+    readonly [specSym]: FlatSpec;
+    readonly [specTypeSym]?: S;
+    readonly [groupSym]: RpcGroupOf<S>;
+  },
+  impl: Impl,
+): Layer.Layer<HandlerContextOf<S>, never, ServeRequirements<Impl>> =>
+  retype<Layer.Layer<HandlerContextOf<S>, never, ServeRequirements<Impl>>>(
+    serveRemoteHandlers(tag, impl, undefined) as never,
+  );
+
+/**
+ * Served-only mount for a {@link Driver} — preserves the driver's requirement `R` on the Layer.
+ * Separate from {@link serveRemote} so plain-impl `ServeRequirements` inference stays sharp and
+ * open-`S` Driver overloads don't hit TS2589. Used by Gate / Daemon / WorkPool / {@link serve}.
+ *
+ * Success channel is {@link HandlerContextOf}`<S>` when `S` is concrete on the tag; callers that
+ * already name handler slots on their public return can treat this as the R-preserving mount.
+ *
+ * @category serving
+ * @public
+ */
+export const serveRemoteDriver = <S extends Spec, R>(
+  tag: {
+    readonly groupId: string;
+    readonly [specSym]: FlatSpec;
+    readonly [specTypeSym]?: S;
+    readonly [groupSym]: ServeRemoteTag[typeof groupSym];
+  },
+  driver: Driver<S, R>,
+): Layer.Layer<HandlerContextOf<S>, never, R> =>
+  retype<Layer.Layer<HandlerContextOf<S>, never, R>>(
+    serveRemoteHandlers(tag, driver.impl, driver.workerContext as Context.Context<unknown>) as never,
+  );
 
 /**
  * Serve a resource **and** grant its local instance from **one** materialization — the co-located "expose
@@ -3680,11 +3724,6 @@ const servePlain = <Self, S extends Spec, R = never>(
     Effect.map(Effect.isEffect(impl) ? impl : Effect.succeed(impl), (built) => {
       if (isDriver<S, R>(built)) {
         // Plain local — identity claim (if any) already happened in {@link serve}.
-        // Driver `R` is preserved on {@link serve}; serveRemote's public `R` is ServeRequirements —
-        // retype so the merge keeps the outer `R` (toolkit builders do the same).
-        const serveRemoteDriver = retype<
-          (tag: HyperlinkTag<Self, S>, impl: Driver<S, R>) => Layer.Layer<HandlerContextOf<S>, never, R>
-        >(serveRemote as never);
         return mergeServe(
           localLayerPlain(tag, grantLocal(tag, built)),
           serveRemoteDriver(tag, built),

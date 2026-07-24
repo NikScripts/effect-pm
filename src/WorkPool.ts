@@ -57,7 +57,6 @@ import {
 // The engine is used only by the runtime verbs (buildQueueImpl/layer/serve/serveRemote) below.
 import { makeQueueEffect } from "./internal/workPool";
 import { kind } from "./internal/workPoolKind";
-import { retype } from "./internal/nodeServerCommon";
 import {
   successOf,
   errorOf,
@@ -2017,33 +2016,25 @@ export function serveRemote<
   config: PriorityLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ): Layer.Layer<HandlerContextOf<PriorityInstanceSpec<F>>, never, R | RR>;
 export function serveRemote(tag: AnyPoolTag, config: unknown): Layer.Any {
-  // Factory retypes for Driver→Layer `R` — closed channels in the middle, Layer.Any at the edge.
-  const serveRemoteDriver = retype<
-    (tag: AnyPoolTag, impl: unknown) => Layer.Layer<never, never, never>
-  >(Hyperlink.serveRemote as never);
-  const unwrapLayer = retype<(effect: never) => Layer.Layer<never, never, never>>(
-    Layer.unwrap as never,
-  );
-  const withMem = retype<(layer: never) => Layer.Any>(withDefaultMemory as never);
   return isPriorityTag(tag)
-    ? withMem(
-        unwrapLayer(
+    ? withDefaultMemory(
+        Layer.unwrap(
           Effect.map(
             buildPriorityImpl(
               tag,
               config as PriorityLayerConfig<Schema.Struct<PriorityItemFields>["Type"], never, never, never>,
             ),
-            (built) => serveRemoteDriver(tag, built),
-          ) as never,
-        ) as never,
+            (built) => Hyperlink.serveRemoteDriver(tag, built),
+          ),
+        ),
       )
-    : withMem(
-        unwrapLayer(
+    : withDefaultMemory(
+        Layer.unwrap(
           Effect.map(
             buildQueueImpl(tag, config as QueueVerbConfig<QueueItemFields, unknown, never, never, Schema.Top>),
-            (built) => serveRemoteDriver(tag, built),
-          ) as never,
-        ) as never,
+            (built) => Hyperlink.serveRemoteDriver(tag, built),
+          ),
+        ),
       );
 }
 

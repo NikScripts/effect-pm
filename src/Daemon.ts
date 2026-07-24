@@ -2630,23 +2630,12 @@ export function serveRemote(
 ): Layer.Any {
   const baseTag: HyperlinkTag<unknown, DaemonSpec> = tag;
   const closedConfig = retype<DaemonLayerConfig<unknown, never, never>>(config as never);
-  // Driver `R` → Layer `R`: retype Hyperlink.serveRemote (plain-impl ServeRequirements public type).
-  const serveRemoteDriver = retype<
-    (
-      tag: HyperlinkTag<unknown, DaemonSpec>,
-      impl: Hyperlink.Driver<DaemonSpec, never>,
-    ) => Layer.Layer<never, never, never>
-  >(Hyperlink.serveRemote as never);
-  const unwrapLayer = retype<(effect: never) => Layer.Layer<never, never, never>>(
-    Layer.unwrap as never,
-  );
-  const withMem = retype<(layer: never) => Layer.Any>(withDefaultMemory as never);
-  return withMem(
-    unwrapLayer(
+  return withDefaultMemory(
+    Layer.unwrap(
       Effect.map(buildDaemonImpl(tag, closedConfig), (built) =>
-        serveRemoteDriver(baseTag, built),
-      ) as never,
-    ) as never,
+        Hyperlink.serveRemoteDriver(baseTag, built),
+      ),
+    ),
   );
 }
 
