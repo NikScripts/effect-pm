@@ -2,28 +2,29 @@
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
-> and live type previews — is at <https://hyperlink.cool/docs/queues>.
+> and live type previews — is at <https://hyperlink.cool/docs/work-pools>.
 <!-- docs-site-link:end -->
-# Queues
+# Work Pools
 
-A **queue** takes a stream of items and drains them through a worker effect — one
-item at a time, or many in parallel, with priority, de-duplication, retries, and
-back-pressure. In this toolkit a queue is a **resource**: you declare it once, and
-everywhere you `yield* MyQueue` you get a single handle that does *everything* —
-enqueue work, watch it drain, and steer it — through the same value.
+A **Work Pool** (`WorkPool`) is a priority work queue: it takes a stream of items and
+drains them through a worker effect — one at a time, or many in parallel, with
+priority, de-duplication, retries, and back-pressure. In this toolkit it is a
+**Hyperlink**: you declare it once, and everywhere you `yield* Emails` you get a
+single handle that does *everything* — enqueue work, watch it drain, and steer it —
+through the same value.
 
 That handle is the whole surface. There is no separate "producer" and "admin"
-API: the code that enqueues an email can also pause the queue, read how many are
-pending, and subscribe to every completion. And because it's a resource, the
-handle reads identically whether the queue runs in this process or across the
+API: the code that enqueues an email can also pause the pool, read how many are
+pending, and subscribe to every completion. And because it's a Hyperlink, the
+handle reads identically whether the pool runs in this process or across the
 network — only the layer that provides it changes.
 
-This guide starts at the start: the smallest queue that works, then each piece it
-was built from.
+This guide starts at the start: the smallest Work Pool that works, then each piece
+it was built from.
 
-## Your first queue
+## Your first Work Pool
 
-A queue has two halves: a [**Tag**](/docs/glossary#tag) (what the queue *is* — its
+A Work Pool has two halves: a [**Tag**](/docs/glossary#tag) (what the pool *is* — its
 item type and name) and a **layer** (how it *runs* — the worker). Here is the whole
 thing:
 
@@ -50,7 +51,7 @@ const EmailsLive = WorkPool.layer(Emails, {
 })
 ```
 
-That's a complete, running queue. To use it, `yield* Emails` for the handle and
+That's a complete, running Work Pool. To use it, `yield* Emails` for the handle and
 `add` an item — anywhere the layer is provided:
 
 {.twoslash}
@@ -535,9 +536,10 @@ flag, or a live `DynamicConfig` swap that re-tunes the queue while it runs.
 ## Custom priority lanes
 
 `high` / `normal` / `defer` covers most needs, but some domains have their own
-ordering — tiers, SLAs, numbered levels. `WorkPool` is the same queue
-with **arbitrary lanes**: you define the levels, and `add` targets one by name. The
-handle reads the same; only the priority axis is yours to shape.
+ordering — tiers, SLAs, numbered levels. Reach for
+`WorkPool.priority` — the same Work Pool with **arbitrary lanes**: you define the
+levels, and `add` targets one by name. The handle reads the same; only the priority
+axis is yours to shape.
 
 ## A live control panel
 
@@ -556,8 +558,8 @@ extra wiring.
 
 ## The raw engine
 
-Under the resource wrapper is a plain queue engine. `WorkPool.make(config)`
+Under the Hyperlink wrapper is a plain queue engine. `WorkPool.make(config)`
 returns a handle directly — the workers, retries, and events, without the Tag,
 Layer, or RPC machinery. `layer` and `Service` are built on it; reach for `make`
-only when you want to embed a queue inside something else and manage its scope
-yourself. For everything else, the tag *is* the queue.
+only when you want to embed a pool inside something else and manage its scope
+yourself. For everything else, the Tag *is* the Work Pool.
