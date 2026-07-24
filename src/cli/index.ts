@@ -126,11 +126,7 @@ const methodCommand = (name: string, method: AnyMethod, tag: CliHyperlinkTag) =>
         ? (target as (p: unknown) => Effect.Effect<unknown>)(input)
         : (target as Effect.Effect<unknown>));
       yield* Console.log(render(result));
-<<<<<<< HEAD
-    }) as any as Effect.Effect<void, never, never>,
-=======
     }) as any as Effect.Effect<void, never, never>),
->>>>>>> parent of 0797c01f4 (Revert "Fix Effect diagnostic errors")
   )(command);
 };
 
