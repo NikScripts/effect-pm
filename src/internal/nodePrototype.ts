@@ -11,7 +11,7 @@ import {
 import {
   catalogSym,
   ListenNode,
-  NamelessListenOptions,
+  ListenOptions,
   OnConflict,
   ProtocolKind,
   Tag,
@@ -178,7 +178,8 @@ export const Prototype = <Self, ROut = never>(
      */
     listen: <const Serves extends ServeLayerList>(
       serves: Serves & ServesForCatalog<Exclude<ROut, undefined>, Serves>,
-      listenOptions?: NamelessListenOptions,
+      // Positional address — protocol-specific templates live on http/ws/unix/nPipe.
+      listenOptions?: number | string | ListenOptions,
     ): ((
       suffix?: string,
     ) => Layer.Layer<
@@ -191,15 +192,15 @@ export const Prototype = <Self, ROut = never>(
         // intersection (nested `ServesForCatalog` would otherwise fail to unify).
         const node = instance(suffix);
         if (options?.kind === "Http") {
-          return http<typeof node, Serves>(node, serves, listenOptions);
+          return http<typeof node, Serves>(node, serves, listenOptions as never);
         }
         if (options?.kind === "WebSocket") {
-          return ws<typeof node, Serves>(node, serves, listenOptions);
+          return ws<typeof node, Serves>(node, serves, listenOptions as never);
         }
         if (options?.ipc === "nPipe") {
-          return nPipe<typeof node, Serves>(node, serves, listenOptions);
+          return nPipe<typeof node, Serves>(node, serves, listenOptions as never);
         }
-        return unix<typeof node, Serves>(node, serves, listenOptions);
+        return unix<typeof node, Serves>(node, serves, listenOptions as never);
       },
   });
 };

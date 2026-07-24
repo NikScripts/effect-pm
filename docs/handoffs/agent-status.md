@@ -6,7 +6,7 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **4** | `cursor/hyperservice-open-deps-5679` | Nameless listen + address (`port`/`url`); Getting started layers | **Eng’d** — tip-syncing | same tip as `integration` | typecheck + listen/http/ws/unix/lookup green | `RpcGroup.toLayer` `this` fix unblocked Lookup; widget-registry test out of root tsconfig | 2026-07-24 |
+| **4** | `cursor/hyperservice-open-deps-5679` | Nameless listen address shorthand | **Eng’d** — tip-synced | same tip as `integration` | typecheck + listen suites green | `3000`/`":3000"`/url/path; object form kept | 2026-07-24 |
 | **G / TUI** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity | **registry in ui** — TUI `widgets?`; tip-synced | same tip as `integration` | widget-registry + resource-cli green | Kept GroupNode name; observe-surface parked (explained to owner) | 2026-07-24 |
 | **1** | `cursor/docs-corpus-phase3-ce05` | [Examples book](./agent-01-examples-book.md) · [Phase 3](./agent-01-docs-corpus-phase3-plan.md) | **E1 in flight** — Examples hub + queue Twoslash pairs | branch tip | hub + 2 queue docs | **Next:** E2 forms/resource pairs | 2026-07-15 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |

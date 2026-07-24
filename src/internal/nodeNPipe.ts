@@ -10,8 +10,8 @@ import {
   AnyNode,
   catalogSym,
   ListenNode,
+  IpcListenArg,
   ListenOptions,
-  NamelessListenOptions,
   NPipeRequiresWindows,
   Tag,
   UnaddressedNode,
@@ -27,6 +27,8 @@ import {
   isServeArg,
   nPipeRequiresIpcLayer,
   anonymousNodeKey,
+  coerceIpcListenArg,
+  stampListenPath,
   withListenNode,
   type CatalogROut,
   type ServeLayerList,
@@ -50,10 +52,10 @@ const requireWindows = <A, E, R>(
 
 /**
  * Windows named-pipe IPC listen — same overload shapes as {@link unix}.
- * Same `IpcSocket` kind; paths are `\\.\pipe\…`. Prefer {@link unix} on POSIX.
- * Compose Lookup via `Layer.provide(Lookup.layer)` / `Lookup.layerOptions` when needed.
- * Protocol listen sibling of {@link unix} / {@link http} / {@link ws} / {@link Prototype.listen}
- * — keep in sync (handoff § Protocol listen siblings).
+ * Same `IpcSocket` kind; paths are `\\.\pipe\…` (positional string or omit for ephemeral).
+ * Prefer {@link unix} on POSIX. Compose Lookup via `Layer.provide(Lookup.layer)` /
+ * `Lookup.layerOptions` when needed. Protocol listen sibling of {@link unix} / {@link http} /
+ * {@link ws} / {@link Prototype.listen} — keep in sync (handoff § Protocol listen siblings).
  *
  * @category listen
  * @public
@@ -73,15 +75,15 @@ export function nPipe<
         never,
         R
       >,
-  options?: NamelessListenOptions,
+  options?: IpcListenArg,
 ): Layer.Layer<Self | Hyperlink.Local<Self> | ListenNode, never, R>;
 export function nPipe<A, E, R>(
   serve: Layer.Layer<A, E, R>,
-  options?: NamelessListenOptions,
+  options?: IpcListenArg,
 ): Layer.Layer<A | ListenNode, E, R>;
 export function nPipe<const Serves extends ServeLayerList>(
   serves: Serves,
-  options?: NamelessListenOptions,
+  options?: IpcListenArg,
 ): Layer.Layer<
   Layer.Success<Serves[number]> | ListenNode,
   Layer.Error<Serves[number]>,
@@ -93,7 +95,7 @@ export function nPipe<
 >(
   node: Node,
   serves: Serves & ServesForCatalog<CatalogROut<Node>, Serves>,
-  options?: NamelessListenOptions,
+  options?: IpcListenArg,
 ): Layer.Layer<
   Layer.Success<Serves[number]> | ListenNode,
   Layer.Error<Serves[number]>,
@@ -108,13 +110,15 @@ export function nPipe(
   servesOrOptionsOrImpl?:
     | Layer.Any
     | ServeLayerList
-    | NamelessListenOptions
+    | IpcListenArg
     | object,
-  options?: NamelessListenOptions,
+  options?: IpcListenArg,
 ): Layer.Any {
-  const listenOptions = (
-    isServeArg(nodeOrServesOrTag) ? servesOrOptionsOrImpl : options
-  ) as NamelessListenOptions | undefined;
+  const { options: listenOptions, path: listenPath } = coerceIpcListenArg(
+    (isServeArg(nodeOrServesOrTag) ? servesOrOptionsOrImpl : options) as
+      | IpcListenArg
+      | undefined,
+  );
   // Lookup is not baked in — pipe `Layer.provide(Lookup.layerOptions(…))`
   // when claim / advertise needs it. Windows gate stays on every path.
 
@@ -124,7 +128,7 @@ export function nPipe(
         ? nodeOrServesOrTag
         : [nodeOrServesOrTag]
     ) as ServeLayerList;
-    return requireWindows(nPipeNameless(list, listenOptions));
+    return requireWindows(nPipeNameless(list, listenOptions, listenPath));
   }
 
   if (isHyperlinkTagArg(nodeOrServesOrTag)) {
@@ -156,7 +160,7 @@ export function nPipe(
     >(Hyperlink.serve as never);
     return requireWindows(
       nPipeListenOn(
-        bound as AnyNode,
+        stampListenPath(bound as AnyNode, listenPath),
         [serveErased(tag, servesOrOptionsOrImpl)] as ServeLayerList,
         listenOptions,
       ),
@@ -175,7 +179,9 @@ export function nPipe(
     | Layer.Layer<never, never, never>
     | ServeLayerList;
   const list = (Array.isArray(serves) ? serves : [serves]) as ServeLayerList;
-  return requireWindows(nPipeListenOn(node, list, listenOptions));
+  return requireWindows(
+    nPipeListenOn(stampListenPath(node, listenPath), list, listenOptions),
+  );
 }
 
 /**
@@ -187,12 +193,17 @@ type ListenLayer = Layer.Layer<never, AddressLessClaimLost | UnaddressedNode, ne
 const nPipeNameless = (
   list: ServeLayerList,
   options: ListenOptions | undefined,
+  path: string | undefined,
 ): Layer.Layer<never, never, never> =>
   retype<Layer.Layer<never, never, never>>(
     Layer.unwrap(
       Effect.gen(function* () {
         const key = yield* anonymousNodeKey(list);
-        return nPipeListenOn(Tag()(key), list, options);
+        return nPipeListenOn(
+          stampListenPath(Tag()(key), path),
+          list,
+          options,
+        );
       }),
     ) as never,
   );

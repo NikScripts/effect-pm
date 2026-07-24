@@ -187,6 +187,9 @@ export type {
   DialableTarget,
   ListenOptions,
   NamelessListenOptions,
+  HttpListenArg,
+  WsListenArg,
+  IpcListenArg,
   NodeKey,
   ProtocolKind,
 } from "./Node";

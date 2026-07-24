@@ -72,14 +72,15 @@ describe("Node.http", () => {
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
   );
 
-  it.effect("nameless serve — fixed port; client dials that url", () =>
+  it.effect("nameless serve — fixed port shorthand; client dials that url", () =>
     Effect.gen(function* () {
       const port = 19100 + (process.pid % 1000);
       const lookupPath = yield* tmpSock("fixed-port");
       const serverCtx = yield* Layer.build(
-        Node.http(Hyperlink.serve(JobsAnon, { jobs: Effect.succeed(9) }), {
+        Node.http(
+          Hyperlink.serve(JobsAnon, { jobs: Effect.succeed(9) }),
           port,
-        }).pipe(
+        ).pipe(
           Layer.provide(
             Lookup.layerOptions({ path: lookupPath, unlink: true }),
           ),
@@ -95,6 +96,31 @@ describe("Node.http", () => {
         return yield* jobs.jobs;
       }).pipe(Effect.provide(Context.merge(serverCtx, clientCtx)));
       expect(n).toBe(9);
+    }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
+  );
+
+  it.effect("nameless serve — :port and url string shorthand", () =>
+    Effect.gen(function* () {
+      const port = 19150 + (process.pid % 500);
+      const urlCtx = yield* Layer.build(
+        Node.http(
+          Hyperlink.serve(JobsAnon, { jobs: Effect.succeed(2) }),
+          `http://127.0.0.1:${String(port)}/rpc`,
+        ).pipe(Layer.provide(Lookup.layer)),
+      );
+      expect(Context.get(urlCtx, Node.ListenNode).url).toBe(
+        `http://127.0.0.1:${String(port)}/rpc`,
+      );
+      const colonPort = port + 1;
+      const colonCtx = yield* Layer.build(
+        Node.http(
+          Hyperlink.serve(JobsAnon, { jobs: Effect.succeed(3) }),
+          `:${String(colonPort)}` as `:${number}`,
+        ).pipe(Layer.provide(Lookup.layer)),
+      );
+      expect(Context.get(colonCtx, Node.ListenNode).url).toBe(
+        `http://127.0.0.1:${String(colonPort)}/rpc`,
+      );
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
   );
 

@@ -199,6 +199,44 @@ export const withListenNode = <A, E, R>(
   server.pipe(Layer.provideMerge(Layer.succeed(ListenNode, node)));
 
 /**
+ * Normalize a positional {@link HttpListenArg} to {@link ListenOptions}.
+ * `3000` / `":3000"` → `{ port }`; `http(s)://…` → `{ url }`; object as-is. @internal
+ */
+export const coerceHttpListenOptions = (
+  arg: number | string | ListenOptions | undefined,
+): ListenOptions | undefined => {
+  if (arg === undefined) return undefined;
+  if (typeof arg === "number") return { port: arg };
+  if (typeof arg === "string") {
+    if (/^:\d+$/.test(arg)) return { port: Number(arg.slice(1)) };
+    return { url: arg };
+  }
+  return arg;
+};
+
+/**
+ * Normalize a positional {@link WsListenArg} to {@link ListenOptions}. @internal
+ */
+export const coerceWsListenOptions = (
+  arg: number | string | ListenOptions | undefined,
+): ListenOptions | undefined => coerceHttpListenOptions(arg);
+
+/**
+ * Normalize a positional {@link IpcListenArg}: path string → stamp target; object → options.
+ * @internal
+ */
+export const coerceIpcListenArg = (
+  arg: string | ListenOptions | undefined,
+): {
+  readonly options: ListenOptions | undefined;
+  readonly path: string | undefined;
+} => {
+  if (arg === undefined) return { options: undefined, path: undefined };
+  if (typeof arg === "string") return { options: undefined, path: arg };
+  return { options: arg, path: undefined };
+};
+
+/**
  * Resolve a fixed Http listen url from {@link ListenOptions.port} / {@link ListenOptions.url}.
  * `url` wins when both are set. @internal
  */
@@ -246,6 +284,22 @@ export const stampListenUrl = (
     return node;
   }
   return Object.assign(Tag()(node.key, { url, kind }), {
+    [catalogSym]: (node as { readonly [catalogSym]?: unknown })[catalogSym],
+  }) as AnyNode;
+};
+
+/**
+ * When `node` has no address yet, stamp a fixed ipc path (nameless unix / nPipe shorthand).
+ * Leaves already-addressed nodes alone. @internal
+ */
+export const stampListenPath = (
+  node: AnyNode,
+  path: string | undefined,
+): AnyNode => {
+  if (path === undefined || path.length === 0 || node.path !== undefined || node.url !== undefined) {
+    return node;
+  }
+  return Object.assign(Tag()(node.key, { path }), {
     [catalogSym]: (node as { readonly [catalogSym]?: unknown })[catalogSym],
   }) as AnyNode;
 };

@@ -308,15 +308,54 @@ export type ListenOptions = {
 };
 
 /**
- * Options for {@link unix} / {@link http} / {@link ws} / {@link Node.listenLocal}.
- * Same as {@link ListenOptions} — Lookup is composed with `.pipe(Layer.provide(…))`,
- * not listen options (`lookupPath` / `bootstrapLookup` removed).
- * Http / Ws nameless listens accept {@link ListenOptions.port} / {@link ListenOptions.url}.
+ * Object-form options for {@link unix} / {@link http} / {@link ws} / {@link Node.listenLocal}.
+ * Prefer positional address shorthand on each protocol (`Node.http(serves, 3000)`,
+ * `Node.unix(serves, "/tmp/x.sock")`) when you only need a bind address — see
+ * {@link HttpListenArg} / {@link WsListenArg} / {@link IpcListenArg}.
  *
  * @category models
  * @public
  */
 export type NamelessListenOptions = ListenOptions;
+
+/**
+ * Positional listen address for {@link http} — same shapes as {@link Tag} / `protocolHttp`:
+ * port (`3000` / `":3000"`), `http(s)://…` url, or full {@link ListenOptions}.
+ *
+ * @category models
+ * @public
+ */
+export type HttpListenArg =
+  | number
+  | `:${number}`
+  | `http://${string}`
+  | `https://${string}`
+  | ListenOptions;
+
+/**
+ * Positional listen address for {@link ws} — port / `":port"` / `ws(s)://` / `http(s)://` (rewritten)
+ * or full {@link ListenOptions}.
+ *
+ * @category models
+ * @public
+ */
+export type WsListenArg =
+  | number
+  | `:${number}`
+  | `ws://${string}`
+  | `wss://${string}`
+  | `http://${string}`
+  | `https://${string}`
+  | ListenOptions;
+
+/**
+ * Positional listen address for {@link unix} / {@link nPipe} — socket/pipe path string or
+ * full {@link ListenOptions} (`unlink`, …).
+ *
+ * @category models
+ * @public
+ */
+export type IpcListenArg = string | ListenOptions;
 
 /**
  * {@link resolveHttpTarget} / a positional `Node.Tag()(name, badString)` got a string that is

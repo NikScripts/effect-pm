@@ -93,7 +93,7 @@ const counterImpl = Effect.gen(function* () {
 const inProcess = Hyperlink.layer(Counter, counterImpl) // run it in this runtime
 const served = Hyperlink.serve(Counter, counterImpl)    // RPC handlers — mount with Node.http / Node.ws
 const client = Hyperlink.connect(Counter, Hyperlink.protocolHttp(4000)) // dial one running elsewhere
-// A browser dashboard opens many live streams — serve with Node.ws({ port }) and connect with
+// A browser dashboard opens many live streams — serve with Node.ws(…, port) and connect with
 // Hyperlink.ws (WebSocket), or an HTTP client starves at the browser's connection cap.
 // See Managing Layers for the full set of provide / serve / client layers.
 // ---cut-after---

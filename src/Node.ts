@@ -53,6 +53,9 @@ export type {
   DialableTarget,
   ListenOptions,
   NamelessListenOptions,
+  HttpListenArg,
+  WsListenArg,
+  IpcListenArg,
   OnConflict,
   OnConflictResolved,
 } from "./internal/nodeCore"
@@ -83,7 +86,7 @@ import {
   catalogSym,
   ListenNode,
 } from "./internal/nodeCore"
-import type { NamelessListenOptions } from "./internal/nodeCore"
+import type { IpcListenArg } from "./internal/nodeCore"
 
 /** Non-empty serve list — same open-`R` constraint as {@link listen}. */
 type ServeLayerList = readonly [Layer.Any, ...ReadonlyArray<Layer.Any>]
@@ -114,7 +117,7 @@ export function listenLocal<
 >(
   node: Node,
   serves: Serves & ServesForCatalog<CatalogROut<Node>, Serves>,
-  options?: NamelessListenOptions,
+  options?: IpcListenArg,
 ): Layer.Layer<
   Layer.Success<Serves[number]> | ListenNode,
   Layer.Error<Serves[number]>,
@@ -123,7 +126,7 @@ export function listenLocal<
 export function listenLocal(
   node: AnyNode,
   serves: Layer.Any | ServeLayerList,
-  options?: NamelessListenOptions,
+  options?: IpcListenArg,
 ): Layer.Any {
   return unix(node, serves as ServeLayerList, options)
 }

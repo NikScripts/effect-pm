@@ -10,8 +10,8 @@ import {
   AnyNode,
   catalogSym,
   ListenNode,
+  IpcListenArg,
   ListenOptions,
-  NamelessListenOptions,
   Tag,
   UnaddressedNode,
 } from "./nodeCore"
@@ -26,6 +26,8 @@ import {
   isServeArg,
   unixRequiresIpcLayer,
   anonymousNodeKey,
+  coerceIpcListenArg,
+  stampListenPath,
   withListenNode,
   type CatalogROut,
   type ServeLayerList,
@@ -36,6 +38,7 @@ import { retype } from "./nodeServerCommon"
 /**
  * Unix-domain IPC listen — all ipc mint/bind. **Nameless** `unix([serve…])` / `unix(serve)` Soft-bakes
  * {@link Lookup.layer} (claim + advertise) — override with `Layer.provide(Lookup.layerOptions({ path }))`.
+ * Pass a path string for a fixed socket (`Node.unix([serve], "/tmp/x.sock")`); omit for ephemeral.
  * Named / address-less `Node.Tag` listens still pipe Lookup when they claim. Protocol listen sibling of
  * {@link http} / {@link ws} / {@link nPipe} / {@link Prototype.listen} — keep in sync. Prefer this for
  * same-machine.
@@ -58,15 +61,15 @@ export function unix<
         never,
         R
       >,
-  options?: NamelessListenOptions,
+  options?: IpcListenArg,
 ): Layer.Layer<Self | Hyperlink.Local<Self> | ListenNode, never, R>;
 export function unix<A, E, R>(
   serve: Layer.Layer<A, E, R>,
-  options?: NamelessListenOptions,
+  options?: IpcListenArg,
 ): Layer.Layer<A | ListenNode, E, R>;
 export function unix<const Serves extends ServeLayerList>(
   serves: Serves,
-  options?: NamelessListenOptions,
+  options?: IpcListenArg,
 ): Layer.Layer<
   Layer.Success<Serves[number]> | ListenNode,
   Layer.Error<Serves[number]>,
@@ -78,7 +81,7 @@ export function unix<
 >(
   node: Node,
   serves: Serves & ServesForCatalog<CatalogROut<Node>, Serves>,
-  options?: NamelessListenOptions,
+  options?: IpcListenArg,
 ): Layer.Layer<
   Layer.Success<Serves[number]> | ListenNode,
   Layer.Error<Serves[number]>,
@@ -93,20 +96,22 @@ export function unix(
   servesOrOptionsOrImpl?:
     | Layer.Any
     | ServeLayerList
-    | NamelessListenOptions
+    | IpcListenArg
     | object,
-  options?: NamelessListenOptions,
+  options?: IpcListenArg,
 ): Layer.Any {
-  const listenOptions = (
-    isServeArg(nodeOrServesOrTag) ? servesOrOptionsOrImpl : options
-  ) as NamelessListenOptions | undefined;
+  const { options: listenOptions, path: listenPath } = coerceIpcListenArg(
+    (isServeArg(nodeOrServesOrTag) ? servesOrOptionsOrImpl : options) as
+      | IpcListenArg
+      | undefined,
+  );
   if (isServeArg(nodeOrServesOrTag)) {
     const list = (
       Array.isArray(nodeOrServesOrTag)
         ? nodeOrServesOrTag
         : [nodeOrServesOrTag]
     ) as ServeLayerList;
-    return ipcNameless(list, listenOptions);
+    return ipcNameless(list, listenOptions, listenPath);
   }
 
   if (isHyperlinkTagArg(nodeOrServesOrTag)) {
@@ -137,7 +142,7 @@ export function unix(
       (tag: Hyperlink.PipeableTag, impl: unknown) => Layer.Layer<never, never, never>
     >(Hyperlink.serve as never);
     return ipcListenOn(
-      bound as AnyNode,
+      stampListenPath(bound as AnyNode, listenPath),
       [serveErased(tag, servesOrOptionsOrImpl)] as ServeLayerList,
       listenOptions,
     );
@@ -153,7 +158,7 @@ export function unix(
 
   const serves = servesOrOptionsOrImpl as Layer.Any | ServeLayerList;
   const list = (Array.isArray(serves) ? serves : [serves]) as ServeLayerList;
-  return ipcListenOn(node, list, listenOptions);
+  return ipcListenOn(stampListenPath(node, listenPath), list, listenOptions);
 }
 
 /**
@@ -171,12 +176,17 @@ type ListenLayer = Layer.Layer<never, AddressLessClaimLost | UnaddressedNode, ne
 const ipcNameless = (
   list: ServeLayerList,
   options: ListenOptions | undefined,
+  path: string | undefined,
 ): ListenLayer =>
   retype<ListenLayer>(
     Layer.unwrap(
       Effect.gen(function* () {
         const key = yield* anonymousNodeKey(list);
-        const core = ipcListenOn(Tag()(key), list, options);
+        const core = ipcListenOn(
+          stampListenPath(Tag()(key), path),
+          list,
+          options,
+        );
         const Lookup = yield* Effect.promise(() => import("../Lookup"));
         const identity = yield* Effect.serviceOption(Lookup.Identity);
         if (Option.isSome(identity)) {

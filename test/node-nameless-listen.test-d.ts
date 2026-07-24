@@ -19,6 +19,19 @@ expectTypeOf(anonOne).toMatchTypeOf<
   Layer.Layer<Jobs | Node.ListenNode, never, never>
 >();
 
+const httpPort = Node.http([serve], 3000);
+expectTypeOf(httpPort).toMatchTypeOf<
+  Layer.Layer<Jobs | Node.ListenNode, never, never>
+>();
+const httpColon = Node.http([serve], ":3000");
+expectTypeOf(httpColon).toMatchTypeOf<
+  Layer.Layer<Jobs | Node.ListenNode, never, never>
+>();
+const unixPath = Node.unix([serve], "/tmp/nameless-d.sock");
+expectTypeOf(unixPath).toMatchTypeOf<
+  Layer.Layer<Jobs | Node.ListenNode, never, never>
+>();
+
 class Worker extends Node.Tag<Worker, Jobs>()("nameless-d/Worker", {
   path: "/tmp/x.sock",
 }) {}

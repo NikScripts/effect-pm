@@ -34,8 +34,8 @@ program.pipe(Effect.provide(JobsLive)) // `yield* Jobs` now runs jobsImpl locall
 
 To expose a HyperService over RPC, use a **protocol listen**. `Hyperlink.serve(Tag, impl)` is one
 served entry; `Node.http([...])` or `Node.ws([...])` hosts a list of them on one `/rpc` (with
-auto-mounted `Node.status` and `/health`). Pass `port` or `url` for a fixed loopback address — omit
-them for an ephemeral port:
+auto-mounted `Node.status` and `/health`). Pass a positional address — same shapes as `Node.Tag` /
+`protocolHttp` — or omit for an ephemeral port:
 
 ``` ts
 const server = Node.http(
@@ -43,21 +43,24 @@ const server = Node.http(
     Hyperlink.serve(Jobs, jobsImpl),
     Hyperlink.serve(Emails, emailsImpl),
   ],
-  { port: 3000 }, // → http://127.0.0.1:3000/rpc
+  3000, // or ":3000" or "http://127.0.0.1:3000/rpc"
 )
 ```
 
 Two protocol listens, differing only in the wire they speak:
 
-- **`Node.http([...], { port? | url? })`** — RPC over HTTP POST. The default for servers, CLIs, and
-  a handful of concurrent streams.
-- **`Node.ws([...], { port? | url? })`** — RPC over **one multiplexed WebSocket per client**. Use
-  this when a **browser** connects: a dashboard opens many live streams (each resource's status +
+- **`Node.http([...], 3000 | ":3000" | "http://…")`** — RPC over HTTP POST. The default for servers,
+  CLIs, and a handful of concurrent streams.
+- **`Node.ws([...], 3000 | ":3000" | "ws://…")`** — RPC over **one multiplexed WebSocket per client**.
+  Use this when a **browser** connects: a dashboard opens many live streams (each resource's status +
   metrics + logs) and the browser caps at **~6 connections per origin on HTTP/1.1**, starving the
   rest. A WebSocket sidesteps the cap entirely.
+- **`Node.unix([...], "/tmp/x.sock")`** / **`Node.nPipe([...], "\\\\.\\pipe\\x")`** — same-machine
+  IPC; path string or omit for ephemeral.
 
 Nameless listens mint an anonymous Node that still carries the address — clients dial
 `Hyperlink.connect(Tag, Hyperlink.protocolHttp(3000))` (or `protocolWebsocket`) the same way.
+Object form (`{ port, url, unlink, … }`) remains when you need more than the address.
 
 {.note}
 `Node.httpServer` / `Node.wsServer` remain as escape hatches when you need a custom platform bind
@@ -80,7 +83,7 @@ Node.http(
     WorkPool.serve(Emails, { effect: sendEmail }),
     Daemon.serve(Digest, { effect: fillQueue }),
   ],
-  { port: 3000 },
+  3000,
 ).pipe(Layer.provide(Db.layer))
 ```
 
@@ -94,7 +97,7 @@ Node.http(
     Hyperlink.serveRemote(Matches, impl).pipe(Layer.provide(plainHandlers)),
     Hyperlink.serveRemote(Import, impl).pipe(Layer.provide(hookedHandlers)),
   ],
-  { port: 3000 },
+  3000,
 )
 ```
 
@@ -163,7 +166,7 @@ HTTP, so a fleet whose nodes serve WebSocket must move the peer mesh onto WebSoc
 knob per node:
 
 ``` ts
-Node.ws([Hyperlink.serve(WorkerPool, poolImpl)], { port: 3000 }).pipe(
+Node.ws([Hyperlink.serve(WorkerPool, poolImpl)], 3000).pipe(
   Layer.provide(Hyperlink.peersLayer(WorkerPool, ThisNode)),
   Layer.provide(Hyperlink.layerPeerProtocol(Hyperlink.protocolWebsocket)), // peers speak ws too
 )
@@ -177,8 +180,8 @@ Without it, a websocket-served fleet's fold (`fleetActive`, `activeByNode`, …)
 
 | | Server | Client | Peers |
 |---|---|---|---|
-| **HTTP** (default) | `Node.http([...], { port })` | `http(node)` / `connect(tag, protocolHttp(port))` | default |
-| **WebSocket** (browser, many streams) | `Node.ws([...], { port })` | `ws(node)` | `layerPeerProtocol(protocolWebsocket)` |
+| **HTTP** (default) | `Node.http([...], 3000)` | `http(node)` / `connect(tag, protocolHttp(port))` | default |
+| **WebSocket** (browser, many streams) | `Node.ws([...], 3000)` | `ws(node)` | `layerPeerProtocol(protocolWebsocket)` |
 
 Pick per **deployment**, not per call — every side of one wire must agree. In-process resources
 (`Hyperlink.layer`) have no transport at all.

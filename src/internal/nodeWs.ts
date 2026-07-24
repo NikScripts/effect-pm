@@ -12,8 +12,8 @@ import {
   catalogSym,
   ListenNode,
   ListenOptions,
-  NamelessListenOptions,
   Tag,
+  WsListenArg,
   UnaddressedNode,
   WsListenRequiresWs,
 } from "./nodeCore"
@@ -28,6 +28,7 @@ import {
   isHyperlinkTagArg,
   isServeArg,
   anonymousNodeKey,
+  coerceWsListenOptions,
   stampListenUrl,
   withListenNode,
   wsListenUrlFromOptions,
@@ -40,8 +41,8 @@ import { retype } from "./nodeServerCommon"
 /**
  * Local WebSocket listen — localhost bind. Compose Lookup via
  * `Layer.provide(Lookup.layer)` / `Lookup.layerOptions` when claim / advertise needs it.
- * Nameless / address-less forms accept `options.port` or `options.url` for a fixed loopback
- * address (`Node.ws([serve], { port: 3000 })`); omit them for an ephemeral port.
+ * Nameless / address-less forms accept a positional address (`3000` / `":3000"` /
+ * `"ws://…"`, or `{ port | url }`); omit for an ephemeral port.
  * Protocol listen sibling of {@link unix} / {@link http} / {@link nPipe} / {@link Prototype.listen}
  * — keep in sync (handoff § Protocol listen siblings). Prefer this over {@link wsServer} when
  * the battery localhost bind is enough.
@@ -64,15 +65,15 @@ export function ws<
         never,
         R
       >,
-  options?: NamelessListenOptions,
+  options?: WsListenArg,
 ): Layer.Layer<Self | Hyperlink.Local<Self> | ListenNode, never, R>;
 export function ws<A, E, R>(
   serve: Layer.Layer<A, E, R>,
-  options?: NamelessListenOptions,
+  options?: WsListenArg,
 ): Layer.Layer<A | ListenNode, E, R>;
 export function ws<const Serves extends ServeLayerList>(
   serves: Serves,
-  options?: NamelessListenOptions,
+  options?: WsListenArg,
 ): Layer.Layer<
   Layer.Success<Serves[number]> | ListenNode,
   Layer.Error<Serves[number]>,
@@ -84,7 +85,7 @@ export function ws<
 >(
   node: Node,
   serves: Serves & ServesForCatalog<CatalogROut<Node>, Serves>,
-  options?: NamelessListenOptions,
+  options?: WsListenArg,
 ): Layer.Layer<
   Layer.Success<Serves[number]> | ListenNode,
   Layer.Error<Serves[number]>,
@@ -99,13 +100,15 @@ export function ws(
   servesOrOptionsOrImpl?:
     | Layer.Any
     | ServeLayerList
-    | NamelessListenOptions
+    | WsListenArg
     | object,
-  options?: NamelessListenOptions,
+  options?: WsListenArg,
 ): Layer.Any {
-  const listenOptions = (
-    isServeArg(nodeOrServesOrTag) ? servesOrOptionsOrImpl : options
-  ) as NamelessListenOptions | undefined;
+  const listenOptions = coerceWsListenOptions(
+    (isServeArg(nodeOrServesOrTag) ? servesOrOptionsOrImpl : options) as
+      | WsListenArg
+      | undefined,
+  );
   // Lookup is not baked in — pipe `Layer.provide(Lookup.layer)` (default) or
   // `Lookup.layerOptions({ path })` / `Lookup.client` when claim / advertise needs it.
 

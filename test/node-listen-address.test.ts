@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { Tag } from "../src/internal/nodeCore";
 import {
+  coerceHttpListenOptions,
+  coerceIpcListenArg,
+  coerceWsListenOptions,
   httpListenUrlFromOptions,
+  stampListenPath,
   stampListenUrl,
   wsListenUrlFromOptions,
 } from "../src/internal/nodeListenCommon";
@@ -14,6 +18,26 @@ describe("nameless listen address options", () => {
     expect(wsListenUrlFromOptions({ port: 3000 })).toBe(
       "ws://127.0.0.1:3000/rpc",
     );
+  });
+
+  it("positional shorthand → ListenOptions (port / :port / url / path)", () => {
+    expect(coerceHttpListenOptions(3000)).toEqual({ port: 3000 });
+    expect(coerceHttpListenOptions(":3000")).toEqual({ port: 3000 });
+    expect(
+      coerceHttpListenOptions("http://127.0.0.1:3000/rpc"),
+    ).toEqual({ url: "http://127.0.0.1:3000/rpc" });
+    expect(coerceWsListenOptions(3000)).toEqual({ port: 3000 });
+    expect(coerceWsListenOptions("ws://127.0.0.1:3000/rpc")).toEqual({
+      url: "ws://127.0.0.1:3000/rpc",
+    });
+    expect(coerceIpcListenArg("/tmp/x.sock")).toEqual({
+      options: undefined,
+      path: "/tmp/x.sock",
+    });
+    expect(coerceIpcListenArg({ unlink: true })).toEqual({
+      options: { unlink: true },
+      path: undefined,
+    });
   });
 
   it("url wins over port; ws rewrites http(s) schemes", () => {
@@ -45,5 +69,12 @@ describe("nameless listen address options", () => {
       "http://127.0.0.1:9/rpc",
     );
     expect(stampListenUrl(bare, undefined, "Http").url).toBeUndefined();
+  });
+
+  it("stampListenPath fills address-less ipc nodes", () => {
+    const bare = Tag()("listen-addr/ipc");
+    expect(stampListenPath(bare, "/tmp/x.sock").path).toBe("/tmp/x.sock");
+    const already = Tag()("listen-addr/ipc2", { path: "/tmp/a.sock" });
+    expect(stampListenPath(already, "/tmp/b.sock").path).toBe("/tmp/a.sock");
   });
 });

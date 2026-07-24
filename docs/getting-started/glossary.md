@@ -51,7 +51,7 @@ The code that fulfils a Contract — the concrete behaviour behind each of its m
 ## Layer
 
 How a HyperService is provided, and therefore where it runs: `Hyperlink.layer` runs it in process,
-`Node.http` / `Node.ws` serve it over RPC (HTTP or WebSocket; pass `port` / `url` for a fixed
+`Node.http` / `Node.ws` serve it over RPC (HTTP or WebSocket; pass `3000` / `":3000"` / a url for a fixed
 address), and `Hyperlink.connect` / `Hyperlink.ws` connect to one running elsewhere — a browser
 dashboard uses the WebSocket pair. See [Managing Layers](/docs/managing-layers).
 

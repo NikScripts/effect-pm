@@ -71,14 +71,15 @@ describe("Node.ws", () => {
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
   );
 
-  it.effect("nameless serve — fixed port; client dials that url", () =>
+  it.effect("nameless serve — fixed port shorthand; client dials that url", () =>
     Effect.gen(function* () {
       const port = 19200 + (process.pid % 1000);
       const lookupPath = yield* tmpSock("fixed-port");
       const serverCtx = yield* Layer.build(
-        Node.ws(Hyperlink.serve(JobsAnon, { jobs: Effect.succeed(9) }), {
+        Node.ws(
+          Hyperlink.serve(JobsAnon, { jobs: Effect.succeed(9) }),
           port,
-        }).pipe(
+        ).pipe(
           Layer.provide(
             Lookup.layerOptions({ path: lookupPath, unlink: true }),
           ),

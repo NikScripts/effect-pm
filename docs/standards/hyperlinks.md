@@ -178,19 +178,19 @@ the tag.
 {#provide-merge-serve-layers .must appliesTo="src examples"}
 ## Put serve layers in the listen / `*Server` list; provide deps outside
 
-`Node.http([...serveLayers], { port? })` / `Node.ws` / `httpServer` / `wsServer` union each layer's
+`Node.http([...serveLayers], 3000)` / `Node.ws` / `httpServer` / `wsServer` union each layer's
 requirement `R`, like `Layer.mergeAll`. Pass serves as the list argument (not a later bare
 `Layer.provide` of a serve onto something that doesn't demand it — that prunes). Discharge deps with
 `Layer.provide` / `provideMerge` **after** the server (shared) or on each serve layer (isolated).
-Prefer `Node.http` / `Node.ws` (nameless + `port` / `url`) over `httpServer` / `wsServer` when the
-battery localhost bind is enough.
+Prefer `Node.http` / `Node.ws` (nameless + port / `":port"` / url shorthand) over `httpServer` /
+`wsServer` when the battery localhost bind is enough.
 
 ``` ts
 // ✅ good — serves in the list; shared dep outside
 const live = Node.http([
   Hyperlink.serve(Counter, counterImpl),
   Hyperlink.serve(Mail, mailImpl),
-], { port: 3000 }).pipe(Layer.provide(Db.layer))
+], 3000).pipe(Layer.provide(Db.layer))
 
 // ❌ bad — bare provide of a serve layer onto a program that doesn't require it prunes the mount
 program.pipe(Layer.provide(Hyperlink.serve(Counter, counterImpl)))
