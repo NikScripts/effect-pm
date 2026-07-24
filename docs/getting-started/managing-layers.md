@@ -6,11 +6,11 @@
 <!-- docs-site-link:end -->
 # Managing Layers
 
-A Hyperlink is defined **once** — a Tag with a Contract, and an Implementation behind it. Where it
-runs and how you reach it is decided entirely by the **Layer** you provide. The code that uses it
-never changes: `yield* Tag` reads the same whether the Hyperlink runs in this process, is served over
-RPC, or is a client to one running on another machine. [Creating a
-Hyperlink](/docs/creating-a-hyperlink) ran one in-process; this page tours the layers that place it
+A Hyperlink Service is defined **once** — a Tag with a Contract, and an Implementation behind it.
+Where it runs and how you reach it is decided entirely by the **Layer** you provide. The code that
+uses it never changes: `yield* Tag` reads the same whether the HyperService runs in this process, is
+served over RPC, or is a client to one running on another machine. [Creating a Hyperlink
+Service](/docs/creating-a-hyperlink) ran one in-process; this page tours the layers that place it
 anywhere else — served, remote, or across a fleet.
 
 {.note}

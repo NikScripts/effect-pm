@@ -1,16 +1,16 @@
-{#creating-a-hyperlink title="Creating a Hyperlink" status="draft" appliesTo=all}
+{#creating-a-hyperlink title="Creating a HyperService" status="draft" appliesTo=all}
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
 > and live type previews — is at <https://hyperlink.cool/docs/creating-a-hyperlink>.
 <!-- docs-site-link:end -->
-# Creating a Hyperlink
+# Creating a Hyperlink Service
 
 {.draft}
 **Draft.** Tip-check before treating as SSOT.
 
-Build one [**Hyperlink**](/docs/glossary#resource) end to end: declare a [**Tag**](/docs/glossary#tag),
-fulfil its [**Contract**](/docs/glossary#contract) with an
+Build one [**Hyperlink Service**](/docs/glossary#hyperlink-service) end to end: declare a
+[**Tag**](/docs/glossary#tag), write its [**Contract**](/docs/glossary#contract) with an
 [**Implementation**](/docs/glossary#implementation), place it with a
 [**Layer**](/docs/glossary#layer), and call it through a [**Handle**](/docs/glossary#handle).
 
@@ -19,7 +19,9 @@ when you later serve or client it.
 
 This page teaches the task. Contract method shapes live in
 [Core Concepts](/docs/core-concepts). Serve, client, and fleet Layers live in
-[Managing Layers](/docs/managing-layers).
+[Managing Layers](/docs/managing-layers). Prebuilt HyperServices
+([`WorkPool`](/docs/work-pools), [`Daemon`](/docs/daemons), and the rest) are optional tools —
+secondary to building your own.
 
 ## Declare the Tag
 

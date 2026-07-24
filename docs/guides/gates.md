@@ -1,10 +1,10 @@
-{#gates title="Gates" status="draft" appliesTo=all}
+{#gates title="Gate" status="draft" appliesTo=all}
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
-> and live type previews — is at <https://hyperlink.cool/docs/run-hyperlinks>.
+> and live type previews — is at <https://hyperlink.cool/docs/gates>.
 <!-- docs-site-link:end -->
-# Run resources
+# Gate
 
 {.note}
 **⚠️ Example only** — placeholder content that demonstrates the docs platform. **Not final**; to be replaced by Agent A. Do not treat as canonical.

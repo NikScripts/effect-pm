@@ -1,10 +1,10 @@
-{#daemons title="Daemons" status="draft" appliesTo=all}
+{#daemons title="Daemon" status="draft" appliesTo=all}
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
-> and live type previews — is at <https://hyperlink.cool/docs/processes>.
+> and live type previews — is at <https://hyperlink.cool/docs/daemons>.
 <!-- docs-site-link:end -->
-# Processes
+# Daemon
 
 {.note}
 **⚠️ Example only** — placeholder content that demonstrates the docs platform. **Not final**; to be replaced by Agent A. Do not treat as canonical.

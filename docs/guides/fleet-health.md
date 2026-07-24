@@ -1,4 +1,4 @@
-{#fleet-health title="Fleet Health" status="draft" done="api" appliesTo=all}
+{#fleet-health title="FleetHealth" status="draft" done="api" appliesTo=all}
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
