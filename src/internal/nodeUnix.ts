@@ -35,10 +35,11 @@ import {
 } from "./nodeListenCommon"
 
 /**
- * Unix-domain IPC listen — all ipc mint/bind. Compose Lookup via
- * `Layer.provide(Lookup.layer)` / {@link Lookup.layerOptions} when claim / advertise needs it.
- * Protocol listen sibling of {@link http} / {@link ws} / {@link nPipe} / {@link Prototype.listen}
- * — keep in sync (handoff § Protocol listen siblings). Prefer this for same-machine.
+ * Unix-domain IPC listen — all ipc mint/bind. **Nameless** `unix([serve…])` / `unix(serve)` Soft-bakes
+ * {@link Lookup.layer} (claim + advertise) — override with `Layer.provide(Lookup.layerOptions({ path }))`.
+ * Named / address-less `Node.Tag` listens still pipe Lookup when they claim. Protocol listen sibling of
+ * {@link http} / {@link ws} / {@link nPipe} / {@link Prototype.listen} — keep in sync. Prefer this for
+ * same-machine.
  *
  * @category listen
  * @public
@@ -109,9 +110,6 @@ export function unix(
   const listenOptions = (
     isServeArg(nodeOrServesOrTag) ? servesOrOptionsOrImpl : options
   ) as NamelessListenOptions | undefined;
-  // Lookup is not baked in — pipe `Layer.provide(Lookup.layer)` (default) or
-  // `Lookup.layerOptions({ path })` / `Lookup.client` when claim / advertise needs it.
-
   if (isServeArg(nodeOrServesOrTag)) {
     const list = (
       Array.isArray(nodeOrServesOrTag)
@@ -201,7 +199,13 @@ export function unix(
     | UnixListenRequiresIpc, never>;
 }
 
-/** Nameless anonymous ipc Node + bind (pipe Lookup when needed). @internal */
+/**
+ * Nameless anonymous ipc Node + bind. Soft-bakes {@link Lookup.layer} when Identity is absent so
+ * `Node.unix([serve…])` needs no Lookup pipe; `Layer.provide(Lookup.layerOptions({ path }))` still
+ * overrides (Identity already in env → no default bake).
+ *
+ * @internal
+ */
 const ipcNameless = (
   list: ServeLayerList,
   options: ListenOptions | undefined,
@@ -209,7 +213,13 @@ const ipcNameless = (
   Layer.unwrap(
     Effect.gen(function* () {
       const key = yield* anonymousNodeKey(list);
-      return ipcListenOn(Tag()(key), list, options);
+      const core = ipcListenOn(Tag()(key), list, options);
+      const Lookup = yield* Effect.promise(() => import("../Lookup"));
+      const identity = yield* Effect.serviceOption(Lookup.Identity);
+      if (Option.isSome(identity)) {
+        return core;
+      }
+      return core.pipe(Layer.provide(Lookup.layer));
     }),
   ) as any;
 
