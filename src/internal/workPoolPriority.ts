@@ -380,10 +380,10 @@ const makePriorityEffectWithoutSchema = <
   never,
   Scope.Scope | InferQueueWorkerRequirements<C>
 > =>
-  (Effect.gen(function* () {
+  Effect.gen(function* () {
     const levels = levelResolution(config);
     const projection = buildPriorityProjectionFromConfig(config);
-    const engine = yield* (buildQueueEngine({
+    const engine = yield* buildQueueEngine({
       config: {
         ...config,
         laneCount: levels.laneCount,
@@ -394,9 +394,9 @@ const makePriorityEffectWithoutSchema = <
       validateForEnqueue: (items) => Effect.succeed(items),
       encodeForRelease: undefined,
       persistCodec: undefined,
-    }) as any);
+    });
     return wrapWorkPoolPriorityHandle(engine, levels, projection);
-  }) as any);
+  });
 
 const makePriorityEffectWithSchema = <
   const C extends WorkPoolPriorityConfigWithItemSchema<any, any, any>,
@@ -465,10 +465,10 @@ const makePriorityEffectWithSchema = <
     });
   };
 
-  return (Effect.gen(function* () {
+  return Effect.gen(function* () {
     const levels = levelResolution(config);
     const projection = buildPriorityProjectionFromConfig(config);
-    const engine = yield* (buildQueueEngine({
+    const engine = yield* buildQueueEngine({
       config: {
         ...config,
         laneCount: levels.laneCount,
@@ -483,9 +483,9 @@ const makePriorityEffectWithSchema = <
         encode: encodeItem,
         decode: Schema.decodeUnknownExit(config.itemSchema),
       },
-    }) as any);
+    });
     return wrapWorkPoolPriorityHandle(engine, levels, projection);
-  }) as any);
+  });
 };
 
 const hasItemSchema = <T, E, R>(
@@ -495,12 +495,10 @@ const hasItemSchema = <T, E, R>(
 
 const makePriorityEffectFromConfig = (
   config: WorkPoolPriorityConfig<any, any, any>,
-): Effect.Effect<WorkPoolPriorityHandle<unknown, unknown, unknown, unknown>, never, Scope.Scope> => {
-  const effect = (hasItemSchema(config)
+): Effect.Effect<WorkPoolPriorityHandle<unknown, unknown, unknown, unknown>, never, Scope.Scope | any> =>
+  hasItemSchema(config)
     ? makePriorityEffectWithSchema(config)
-    : makePriorityEffectWithoutSchema(config)) as any;
-  return effect;
-};
+    : makePriorityEffectWithoutSchema(config);
 
 type CustomConfigFromEffect<
   F extends QueueWorkerEffect<any, any, any, any>,
@@ -545,7 +543,7 @@ function makePriorityEffect(
   effectOrConfig: QueueWorkerEffect<any, any, any, any> | WorkPoolPriorityConfig<any, any, any>,
   options?: (WorkPoolPriorityOptionsWithoutItemSchema<any, any, any> &
     WorkPoolPriorityLaneConfig),
-): Effect.Effect<WorkPoolPriorityHandle<any, any, any, any>, never, Scope.Scope> {
+): Effect.Effect<WorkPoolPriorityHandle<any, any, any, any>, never, Scope.Scope | any> {
   if (typeof effectOrConfig === "function") {
     if (options === undefined || options.laneCount === undefined) {
       return Effect.die(

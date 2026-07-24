@@ -25,11 +25,6 @@ import {
   type ServerServeList,
 } from "./nodeServerCommon"
 
-type AnyServeLayer = Layer.Layer<never, any, any>
-type ServeSuccess<Serve> = Serve extends Layer.Layer<infer Success, any, any> ? Success : never
-type ServeError<Serve> = Serve extends Layer.Layer<any, infer Error, any> ? Error : never
-type ServeServices<Serve> = Serve extends Layer.Layer<any, any, infer Services> ? Services : never
-
 /**
  * Options for {@link ipcServer} — Unix-domain RPC (same-machine).
  *
@@ -88,13 +83,13 @@ export interface IpcServerOptions {
  * @category servers
  * @public
  */
-export function ipcServer<Serve>(
-  serve: Serve & AnyServeLayer,
+export function ipcServer<Serve extends Layer.Layer<never, any, any>>(
+  serve: Serve,
   options: IpcServerOptions,
 ): Layer.Layer<
-  ServeSuccess<Serve>,
-  ServeError<Serve>,
-  ServeServices<Serve>
+  Layer.Success<Serve>,
+  Layer.Error<Serve>,
+  Layer.Services<Serve>
 >;
 export function ipcServer<Serves extends ServerServeList>(
   serves: Serves,
@@ -105,18 +100,17 @@ export function ipcServer<Serves extends ServerServeList>(
   Layer.Services<Serves[number]>
 >;
 export function ipcServer(
-  serves: AnyServeLayer | ServerServeList | ReadonlyArray<AnyServeLayer>,
+  serves: Layer.Layer<never, any, any> | ServerServeList | ReadonlyArray<Layer.Layer<never, any, any>>,
   options: IpcServerOptions,
-): AnyServeLayer {
+): Layer.Layer<never, any, any> {
   const list = (
     Array.isArray(serves) ? serves : [serves]
   ) as unknown as ServerServeList;
-  const layer = ipcServerBase(options).pipe(
+  return ipcServerBase(options).pipe(
     Layer.provideMerge(mergeServeList(list)),
     // Fresh registry per server — Lookup + Worker in one process must not share.
     Layer.provide(Layer.fresh(Hyperlink.servedHyperlinksLayer)),
-  ) as any;
-  return layer;
+  ) as Layer.Layer<never, any, any>;
 }
 
 
@@ -125,7 +119,7 @@ const ipcServerBase = (
   options: IpcServerOptions,
 ): Layer.Layer<never, never, Hyperlink.ServedHyperlinks> =>
   Layer.unwrap(
-    (Effect.gen(function* () {
+    Effect.gen(function* () {
       const registry = yield* Hyperlink.ServedHyperlinks;
       const entries = yield* registry.all;
       if (entries.length === 0) {
@@ -194,14 +188,16 @@ const ipcServerBase = (
       if (fsCtx !== undefined) {
         yield* Effect.provide(unlinkBestEffort(options.path), fsCtx);
       }
-      // Dynamic RpcServer group — cast the call expression itself so the diagnostic does not walk it.
-      const nodeStatusLayer = (nodeTag[Hyperlink.groupSym].toLayer(
-        nodeHandlers as unknown as Parameters<
-          (typeof nodeTag)[typeof Hyperlink.groupSym]["toLayer"]
-        >[0],
-      ) as any) as Layer.Layer<never, never, never>;
-      const rpc = ((RpcServer.layer(merged) as any).pipe(
-        Layer.provide(nodeStatusLayer),
+      // Dynamic RpcServer group — assign through `any` so the diagnostic does not walk the graph.
+      const rpcRaw: any = RpcServer.layer(merged);
+      const rpc = (rpcRaw as Layer.Layer<never, never, never>).pipe(
+        Layer.provide(
+          nodeTag[Hyperlink.groupSym].toLayer(
+            nodeHandlers as unknown as Parameters<
+              (typeof nodeTag)[typeof Hyperlink.groupSym]["toLayer"]
+            >[0],
+          ),
+        ),
         // Fresh per ipcServer — two Unix servers in one process (Lookup + Worker)
         // must not share SocketServer / protocol layers via MemoMap.
         Layer.provide(Layer.fresh(RpcServer.layerProtocolSocketServer)),
@@ -213,7 +209,7 @@ const ipcServerBase = (
             NodeSocketServer.layer({ path: options.path }).pipe(Layer.orDie),
           ),
         ),
-      )) as Layer.Layer<never, never, never>;
+      );
       const withUnlink =
         fsCtx !== undefined
           ? rpc.pipe(
@@ -235,5 +231,5 @@ const ipcServerBase = (
           : undefined,
       );
       return withUnlink.pipe(Layer.provideMerge(advertise));
-    }) as any),
+    }),
   ) as Layer.Layer<never, never, Hyperlink.ServedHyperlinks>;
