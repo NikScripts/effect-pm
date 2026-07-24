@@ -39,8 +39,9 @@ class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob })
 class Digest extends Daemon.Tag<Digest>()("app/Digest") {}
 ```
 
-Serve the queue on the **worker** runtime. `Node.httpServer` is platform-agnostic — you provide the
-HTTP server once (Node, Bun, Deno, edge); that is the only line that names a platform:
+Serve the queue on the **worker** runtime. `Node.httpServer` is platform-agnostic — pair it with
+whatever HTTP server your runtime provides (here Node; Bun, Deno, or an edge runtime is the same
+shape):
 
 {.twoslash}
 ``` ts
@@ -52,15 +53,32 @@ import { createServer } from "node:http"
 const EmailJob = Schema.Struct({ to: Schema.String })
 class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
 declare const sendEmail: (job: typeof EmailJob.Type) => Effect.Effect<void>
+// ---cut---
+const worker = Node.httpServer(
+  WorkPool.serve(Emails, { effect: sendEmail }),
+).pipe(
+  Layer.provide(NodeHttpServer.layer(() => createServer(), { port: 3001 })),
+)
+```
+
+That platform provide is worth extracting once — a small data-last helper you reuse for every served
+HyperService. Swapping Node for Bun/Deno is the only line that changes:
+
+{.twoslash}
+``` ts
+import * as Node from "hyperlink-ts/Node"
+import { Layer } from "effect"
+import { NodeHttpServer } from "@effect/platform-node"
+import { createServer } from "node:http"
+// ---cut---
 const nodeServer = (port: number) => <A, E, R>(layer: Layer.Layer<A, E, R>) =>
   Node.httpServer(layer).pipe(
     Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
   )
-// ---cut---
-const worker = WorkPool
-  .serve(Emails, { effect: sendEmail })
-  .pipe(nodeServer(3001))
 ```
+
+Later examples use `nodeServer`. The worker above is the same as
+`WorkPool.serve(Emails, { effect: sendEmail }).pipe(nodeServer(3001))`.
 
 On the **scheduler** runtime, `Digest` ticks every hour and enqueues into `Emails` — a queue that
 lives on the *other* runtime. Inside the effect it still reads as `yield* Emails`:
@@ -159,7 +177,10 @@ Same Tag, three placements — in-process, served, or connected:
 {.twoslash}
 ``` ts
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
+import * as Node from "hyperlink-ts/Node"
 import { Effect, Schema, SubscriptionRef, Layer } from "effect"
+import { NodeHttpServer } from "@effect/platform-node"
+import { createServer } from "node:http"
 class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
   value: Hyperlink.ref(Schema.Number),
   increment: Hyperlink.effectFn({ by: Schema.Number }),
@@ -173,7 +194,10 @@ const counterImpl = Effect.gen(function* () {
     reset: SubscriptionRef.set(ref, 0),
   }
 })
-const nodeServer = (port: number) => <A, E, R>(layer: Layer.Layer<A, E, R>) => layer
+const nodeServer = (port: number) => <A, E, R>(layer: Layer.Layer<A, E, R>) =>
+  Node.httpServer(layer).pipe(
+    Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
+  )
 // ---cut---
 Hyperlink.layer(Counter, counterImpl)                                         // in-process
 Hyperlink.serve(Counter, counterImpl).pipe(nodeServer(4000))                  // served over RPC
