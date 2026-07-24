@@ -11,22 +11,17 @@
  * bars, sparklines, compact numbers, a status theme — that you compose into your own widgets.
  *
  * ```ts
- * import { cli } from "hyperlink-ts/cli"
+ * import * as Hyperlink from "hyperlink-ts/Hyperlink"
  * import { layer as tuiLayer } from "hyperlink-ts/tui"
  *
- * Command.runWith(cli(Fleet, "hyperlink"), { version })(args).pipe(
+ * Hyperlink.cli.run(Fleet, { name: "hyperlink", version })(args).pipe(
  *   Effect.provide(Layer.mergeAll(appLayer, tuiLayer)),
  * )
- * // hyperlink              → TUI at root
- * // hyperlink Mail         → TUI focused on Mail
- * // hyperlink Mail pause   → CLI verb
  * ```
  *
  */
 export * from "../ui/atom-react";
 export { make, type AnyTag } from "./make";
-/** @deprecated Use {@link make}. */
-export { make as makeHyperlinkTui } from "./make";
 export { layer } from "./layer";
 export { Tui, TuiNotConfigured } from "../cli/index";
 

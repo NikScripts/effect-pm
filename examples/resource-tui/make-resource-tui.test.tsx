@@ -3,7 +3,7 @@ import { Effect, Schema } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import { expect, it } from "vitest";
 import * as Hyperlink from "../../src/Hyperlink";
-import { makeHyperlinkTui } from "./make-resource-tui";
+import { make } from "../../src/tui";
 
 class Counter extends Hyperlink.Tag<Counter>()("TuiCounter", {
   current: Hyperlink.effect(Schema.Number),
@@ -27,7 +27,7 @@ const tick = () => new Promise((resolve) => setTimeout(resolve, 80));
 
 it("renders a widget per resource with live queries refreshed by command-bar actions", async () => {
   const runtime = Atom.runtime(layer);
-  const { App } = makeHyperlinkTui({ counter: Counter }, runtime);
+  const { App } = make({ counter: Counter }, runtime);
   const { lastFrame, stdin } = render(<App />);
   await tick();
 

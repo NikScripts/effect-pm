@@ -18,17 +18,14 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Layer } from "effect";
-import { Command } from "effect/unstable/cli";
 import { Fleet } from "../web-dashboard/fleet";
 import { appLayer } from "../web-dashboard/queue-data";
 import * as Hyperlink from "../../src/Hyperlink";
 import { layer as tuiLayer } from "../../src/tui";
 
-const argv = process.argv.slice(2);
-const command = Hyperlink.cli(Fleet, "hyperlink");
-const program = Command.runWith(command, { version: "0.9.0-beta.0" })(argv).pipe(
-  Effect.provide(Layer.mergeAll(appLayer, tuiLayer, NodeServices.layer)),
-);
+const program = Hyperlink.cli
+  .run(Fleet, { name: "hyperlink", version: "0.9.0-beta.0" })(process.argv.slice(2))
+  .pipe(Effect.provide(Layer.mergeAll(appLayer, tuiLayer, NodeServices.layer)));
 // Boundary: the heterogeneous resource tree erases the requirement to `unknown`;
 // `appLayer` provides every fleet service, so it's fully satisfied at run time.
 NodeRuntime.runMain(program as Effect.Effect<void, unknown>);

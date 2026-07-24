@@ -19,12 +19,12 @@
  * ```ts
  * import * as Hyperlink from "hyperlink-ts/Hyperlink"
  * import { layer as tuiLayer } from "hyperlink-ts/tui"
- * import { Command } from "effect/unstable/cli"
  *
- * const command = Hyperlink.cli(Fleet, "hyperlink")
- * Command.runWith(command, { version })(args).pipe(
+ * Hyperlink.cli(Fleet, { name: "hyperlink", version })(args).pipe(
  *   Effect.provide(Layer.mergeAll(appLayer, tuiLayer)),
  * )
+ * // or: Hyperlink.cli.run(Fleet, { name: "hyperlink", version })(args)
+ * // leaf list → record: Hyperlink.cli.byName([Mail, Jobs])
  * ```
  *
  */
@@ -222,47 +222,27 @@ export type CliOptions = {
 };
 
 /**
- * Build the Hyperlink control surface from a {@link CliTree}.
- *
- * - `cli(Fleet, "hyperlink")` → Effect `Command` (wire with `Command.runWith`)
- * - `cli(Fleet, { name: "hyperlink", version })` → args → Effect (runWith baked in)
+ * Args runner from {@link cli} / {@link cli.run}. Requirements are erased at the
+ * command-tree edge — provide resource + TUI layers when you run it.
  *
  * @public
  */
-export const cli: {
-  (tree: CliTree, rootName?: string): ReturnType<typeof buildCommand>;
-  (
-    tree: CliTree,
-    options: CliOptions,
-  ): (
-    args: ReadonlyArray<string>,
-  ) => Effect.Effect<void, unknown, unknown>;
-} = ((tree: CliTree, second?: string | CliOptions) => {
-  if (typeof second === "object" && second !== null) {
-    const rootName = second.name ?? "cli";
-    const command = buildCommand(tree, rootName);
-    return Command.runWith(command, { version: second.version });
-  }
-  return buildCommand(tree, second ?? "cli");
-}) as typeof cli;
+export type CliRun = (
+  args: ReadonlyArray<string>,
+) => Effect.Effect<void, never, never>;
 
 /**
- * @deprecated Use {@link cli}.
+ * Name a list of leaf tags by the **shortest unique slash-suffix** of each key —
+ * `@acme/Mail` → `Mail`; collisions lengthen (`Regional/RegionUS`). Prefer a `Group.Tag`
+ * when you have one — command paths then follow the group.
+ *
+ * Also available as {@link cli}.byName.
+ *
  * @public
  */
-export const makeHyperlinkCli = (
-  resources: Record<string, CliHyperlinkTag>,
-  rootName = "cli",
-): ReturnType<typeof buildCommand> => cli(resources, rootName);
-
-/**
- * Name a list of tags by the **shortest unique slash-suffix** of each key — `@acme/Mail` →
- * `Mail`; only on a collision are the clashing keys lengthened (`Regional/RegionUS`). Returns
- * the `{ commandName: tag }` record {@link cli} accepts. Prefer a `Group.Tag` when you have
- * one — command paths then follow the group.
- *
- */
-export const resourcesByName = <T extends CliHyperlinkTag>(tags: ReadonlyArray<T>): Record<string, T> => {
+export const byName = <T extends CliHyperlinkTag>(
+  tags: ReadonlyArray<T>,
+): Record<string, T> => {
   const segments = (id: string): ReadonlyArray<string> => id.split("/").filter((s) => s.length > 0);
   const suffix = (id: string, n: number): string => segments(id).slice(-n).join("/");
   const nameOf = (id: string): string => {
@@ -277,3 +257,51 @@ export const resourcesByName = <T extends CliHyperlinkTag>(tags: ReadonlyArray<T
   };
   return Object.fromEntries(tags.map((t) => [nameOf(t.key), t]));
 };
+
+const cliFn = ((tree: CliTree, second?: string | CliOptions) => {
+  if (typeof second === "object" && second !== null) {
+    const rootName = second.name ?? "cli";
+    const run = Command.runWith(buildCommand(tree, rootName), {
+      version: second.version,
+    });
+    // Boundary: heterogeneous tags + Effect CLI Environment erase to never at the app edge.
+    return ((args: ReadonlyArray<string>) =>
+      run(args) as Effect.Effect<void, never, never>) satisfies CliRun;
+  }
+  return buildCommand(tree, second ?? "cli");
+}) as {
+  (tree: CliTree, rootName?: string): ReturnType<typeof buildCommand>;
+  (tree: CliTree, options: CliOptions): CliRun;
+};
+
+/**
+ * Build the Hyperlink control surface from a {@link CliTree}.
+ *
+ * - `cli(Fleet, "hyperlink")` → Effect `Command` (wire with `Command.runWith`)
+ * - `cli(Fleet, { name: "hyperlink", version })` → {@link CliRun} (runWith baked in)
+ *
+ * Shortcuts on the same value:
+ * - {@link cli.run} — same as the options overload
+ * - {@link cli.command} — build the `Command` only
+ * - {@link cli.byName} — leaf list → `{ name: tag }` record
+ * - {@link cli.leaves} — flatten a group/record to leaves
+ * - {@link cli.open} — open the TUI for a focus record (`serviceOption`)
+ *
+ * @public
+ */
+export const cli: typeof cliFn & {
+  readonly run: (tree: CliTree, options: CliOptions) => CliRun;
+  readonly command: (
+    tree: CliTree,
+    rootName?: string,
+  ) => ReturnType<typeof buildCommand>;
+  readonly byName: typeof byName;
+  readonly leaves: typeof leavesOf;
+  readonly open: typeof openTui;
+} = Object.assign(cliFn, {
+  run: (tree: CliTree, options: CliOptions): CliRun => cliFn(tree, options),
+  command: (tree: CliTree, rootName = "cli") => buildCommand(tree, rootName),
+  byName,
+  leaves: leavesOf,
+  open: openTui,
+});

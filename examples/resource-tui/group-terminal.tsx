@@ -12,7 +12,6 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Layer } from "effect";
-import { Command } from "effect/unstable/cli";
 import * as Group from "../../src/Group";
 import * as Hyperlink from "../../src/Hyperlink";
 import { layer as tuiLayer } from "../../src/tui";
@@ -27,11 +26,9 @@ class MyGroup extends Group.Tag<MyGroup>("hyperlink-ts/MyGroup")({
   QueueManager,
 }) {}
 
-const command = Hyperlink.cli(MyGroup, "my-group");
-
-const program = Command.runWith(command, { version: "0.0.0" })(
-  process.argv.slice(2),
-).pipe(Effect.provide(Layer.mergeAll(resourcesLayer, tuiLayer, NodeServices.layer)));
+const program = Hyperlink.cli
+  .run(MyGroup, { name: "my-group", version: "0.0.0" })(process.argv.slice(2))
+  .pipe(Effect.provide(Layer.mergeAll(resourcesLayer, tuiLayer, NodeServices.layer)));
 
 // Boundary: loose requirement from the dynamic tags; the layer provides it.
 NodeRuntime.runMain(program as Effect.Effect<void, unknown>);

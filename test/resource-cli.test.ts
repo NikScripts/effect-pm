@@ -4,7 +4,7 @@ import { Cause, Effect, Exit, Layer, Option, Schema } from "effect";
 import { Command } from "effect/unstable/cli";
 import * as Group from "../src/Group";
 import * as Hyperlink from "../src/Hyperlink";
-import { cli, render, Tui, TuiNotConfigured } from "../src/cli";
+import { byName, cli, render, Tui, TuiNotConfigured } from "../src/cli";
 
 it("renders CLI output by value shape", () => {
   expect(render(undefined)).toBe("ok");
@@ -48,6 +48,11 @@ const runCli = (args: ReadonlyArray<string>, layer: Layer.Layer<Counter, never, 
       Effect.provide(Layer.mergeAll(layer, NodeServices.layer)),
     ) as Effect.Effect<void, TuiNotConfigured>,
   );
+
+it("cli.byName shortens unique suffixes", () => {
+  expect(Object.keys(byName([Counter]))).toEqual(["Counter"]);
+  expect(cli.byName([Counter])).toEqual(byName([Counter]));
+});
 
 describe("Hyperlink.cli TUI default", () => {
   it.effect("bare root without Tui → TuiNotConfigured", () =>

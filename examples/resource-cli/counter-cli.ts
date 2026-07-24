@@ -15,7 +15,6 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Layer, Schema } from "effect";
-import { Command } from "effect/unstable/cli";
 import * as Hyperlink from "../../src/Hyperlink";
 
 class Counter extends Hyperlink.Tag<Counter>()("Counter", {
@@ -36,13 +35,11 @@ const counterLayer = Hyperlink.layer(Counter, {
     }),
 });
 
-const command = Hyperlink.cli({ counter: Counter }, "counter-cli");
-
-const program = Command.runWith(command, { version: "0.0.0" })(
-  process.argv.slice(2),
-).pipe(
-  Effect.provide(counterLayer.pipe(Layer.provideMerge(NodeServices.layer))),
-);
+const program = Hyperlink.cli
+  .run({ counter: Counter }, { name: "counter-cli", version: "0.0.0" })(
+    process.argv.slice(2),
+  )
+  .pipe(Effect.provide(counterLayer.pipe(Layer.provideMerge(NodeServices.layer))));
 
 // Boundary: the command's requirement is loose (it's built from a dynamic record
 // of tags); the resource + node layers above fully provide it at run time.
