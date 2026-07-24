@@ -17,7 +17,6 @@ import {
 } from "effect";
 import * as Daemon from "../src/Daemon";
 import * as Store from "../src/Store";
-import * as Hyperlink from "../src/Hyperlink";
 import { builtInDaemonStoreContract } from "../src/internal/store/daemonStoreSpec";
 import { flattenHyperlinkSpec } from "../src/Hyperlink";
 import type { AnyMethod } from "../src/Hyperlink";
@@ -50,74 +49,6 @@ class SuccessEventsProc extends Daemon.Tag<SuccessEventsProc>()(
 
 class Boom extends Data.TaggedError("Boom")<{ readonly code: number }> {}
 
-type LiveEventsProcService = Effect.Success<typeof LiveEventsProc>;
-const LiveEventsProcEffect: Effect.Effect<LiveEventsProcService, never, LiveEventsProc> =
-  LiveEventsProc;
-const liveEventsLayer = <A, E>(
-  effect: Effect.Effect<A, E, never>,
-): Layer.Layer<
-  LiveEventsProc | LiveEventsProcService | Hyperlink.Local<LiveEventsProcService> | Store.Storage,
-  never,
-  never
-> => Daemon.layer(LiveEventsProc, { effect });
-const liveEventsMemoryLayer = <A, E>(
-  effect: Effect.Effect<A, E, never>,
-): Layer.Layer<
-  LiveEventsProc | LiveEventsProcService | Hyperlink.Local<LiveEventsProcService> | Store.Storage,
-  never,
-  never
-> => Daemon.layerMemory(LiveEventsProc, { effect });
-
-type TypedFailProcService = Effect.Success<typeof TypedFailProc>;
-const TypedFailProcEffect: Effect.Effect<TypedFailProcService, never, TypedFailProc> =
-  TypedFailProc;
-const typedFailLayer = <A, E>(
-  effect: Effect.Effect<A, E, never>,
-): Layer.Layer<
-  TypedFailProc | TypedFailProcService | Hyperlink.Local<TypedFailProcService> | Store.Storage,
-  never,
-  never
-> => Daemon.layerMemory(TypedFailProc, { effect });
-
-type StringFailProcService = Effect.Success<typeof StringFailProc>;
-const StringFailProcEffect: Effect.Effect<StringFailProcService, never, StringFailProc> =
-  StringFailProc;
-const stringFailLayer = <A, E>(
-  effect: Effect.Effect<A, E, never>,
-): Layer.Layer<
-  StringFailProc | StringFailProcService | Hyperlink.Local<StringFailProcService> | Store.Storage,
-  never,
-  never
-> => Daemon.layerMemory(StringFailProc, { effect });
-
-type InterruptProcService = Effect.Success<typeof InterruptProc>;
-const InterruptProcEffect: Effect.Effect<InterruptProcService, never, InterruptProc> =
-  InterruptProc;
-const interruptLayer = <A, E>(
-  effect: Effect.Effect<A, E, never>,
-): Layer.Layer<
-  InterruptProc | InterruptProcService | Hyperlink.Local<InterruptProcService> | Store.Storage,
-  never,
-  never
-> => Daemon.layer(InterruptProc, { effect });
-
-type SuccessEventsProcService = Effect.Success<typeof SuccessEventsProc>;
-const SuccessEventsProcEffect: Effect.Effect<
-  SuccessEventsProcService,
-  never,
-  SuccessEventsProc
-> = SuccessEventsProc;
-const successEventsLayer = (
-  effect: Effect.Effect<typeof Price.Type, never, never>,
-): Layer.Layer<
-  | SuccessEventsProc
-  | SuccessEventsProcService
-  | Hyperlink.Local<SuccessEventsProcService>
-  | Store.Storage,
-  never,
-  never
-> => Daemon.layerMemory(SuccessEventsProc, { effect });
-
 class EventsStore extends Store.Service<EventsStore>("@test/DaemonEventsStore")(
   Store.register(LiveEventsProc, builtInDaemonStoreContract(LiveEventsProc)),
   Store.register(TypedFailProc, builtInDaemonStoreContract(TypedFailProc)),
@@ -145,7 +76,7 @@ describe("Daemon.events — wire", () => {
 describe("Daemon.events — live stream", () => {
   it.live("emits Started → Completed for a successful manual run", () =>
     Effect.gen(function* () {
-      const proc = yield* LiveEventsProcEffect;
+      const proc = yield* LiveEventsProc;
       const collected = yield* Effect.forkChild(
         Stream.runCollect(Stream.take(proc.events, 2)),
       );
@@ -154,14 +85,14 @@ describe("Daemon.events — live stream", () => {
       const tags = Array.from(yield* Fiber.join(collected)).map((e) => e._tag);
       expect(tags).toEqual(["Started", "Completed"]);
     }).pipe(
-      Effect.provide(liveEventsMemoryLayer(Effect.void)),
+      Effect.provide(Daemon.layerMemory(LiveEventsProc, { effect: Effect.void })),
       Effect.scoped,
     ),
   );
 
   it.live("emits Failed when the run body fails (no error stamp → string)", () =>
     Effect.gen(function* () {
-      const proc = yield* StringFailProcEffect;
+      const proc = yield* StringFailProc;
       const collected = yield* Effect.forkChild(
         Stream.runCollect(Stream.take(proc.events, 2)),
       );
@@ -178,7 +109,9 @@ describe("Daemon.events — live stream", () => {
       }
     }).pipe(
       Effect.provide(
-        stringFailLayer(Effect.fail(new Boom({ code: 7 }))),
+        Daemon.layerMemory(StringFailProc, {
+          effect: Effect.fail(new Boom({ code: 7 })),
+        }),
       ),
       Effect.scoped,
     ),
@@ -186,7 +119,7 @@ describe("Daemon.events — live stream", () => {
 
   it.live("Failed carries the stamped typed error on events", () =>
     Effect.gen(function* () {
-      const proc = yield* TypedFailProcEffect;
+      const proc = yield* TypedFailProc;
       const collected = yield* Effect.forkChild(
         Stream.runCollect(
           Stream.takeUntil(proc.events, (e) => e._tag === "Failed"),
@@ -209,7 +142,9 @@ describe("Daemon.events — live stream", () => {
       });
     }).pipe(
       Effect.provide(
-        typedFailLayer(Effect.fail({ _tag: "FetchError" as const, status: 503 })),
+        Daemon.layerMemory(TypedFailProc, {
+          effect: Effect.fail({ _tag: "FetchError" as const, status: 503 }),
+        }),
       ),
       Effect.scoped,
     ),
@@ -217,7 +152,7 @@ describe("Daemon.events — live stream", () => {
 
   it.live("Completed.success carries the stamped success value on events", () =>
     Effect.gen(function* () {
-      const proc = yield* SuccessEventsProcEffect;
+      const proc = yield* SuccessEventsProc;
       const collected = yield* Effect.forkChild(
         Stream.runCollect(
           Stream.takeUntil(proc.events, (e) => e._tag === "Completed"),
@@ -233,7 +168,9 @@ describe("Daemon.events — live stream", () => {
       });
     }).pipe(
       Effect.provide(
-        successEventsLayer(Effect.succeed({ symbol: "AAPL", usd: 42 })),
+        Daemon.layerMemory(SuccessEventsProc, {
+          effect: Effect.succeed({ symbol: "AAPL", usd: 42 }),
+        }),
       ),
       Effect.scoped,
     ),
@@ -241,7 +178,7 @@ describe("Daemon.events — live stream", () => {
 
   it.live("live events match store rows for the same run (persist == stream)", () =>
     Effect.gen(function* () {
-      const proc = yield* LiveEventsProcEffect;
+      const proc = yield* LiveEventsProc;
       const collected = yield* Effect.forkChild(
         Stream.runCollect(Stream.take(proc.events, 2)),
       );
@@ -255,7 +192,7 @@ describe("Daemon.events — live stream", () => {
       expect(live).toEqual(durable);
     }).pipe(
       Effect.provide(
-        withStore(liveEventsLayer(Effect.void)),
+        withStore(Daemon.layer(LiveEventsProc, { effect: Effect.void })),
       ),
       Effect.scoped,
     ),
@@ -266,15 +203,15 @@ describe("Daemon.events — live stream", () => {
       const entered = yield* Deferred.make<void, never>();
       const hold = yield* Deferred.make<void, never>();
       const live = withStore(
-        interruptLayer(
-          Effect.gen(function* () {
+        Daemon.layer(InterruptProc, {
+          effect: Effect.gen(function* () {
             yield* Deferred.succeed(entered, void 0);
             yield* Deferred.await(hold);
           }),
-        ),
+        }),
       );
       yield* Effect.gen(function* () {
-        const proc = yield* InterruptProcEffect;
+        const proc = yield* InterruptProc;
         const collected = yield* Effect.forkChild(
           Stream.runCollect(
             Stream.takeUntil(proc.events, (e) => e._tag === "Interrupted"),

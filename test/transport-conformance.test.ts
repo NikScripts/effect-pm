@@ -23,7 +23,7 @@ const proto = (kind: Kind, port: number): Layer.Layer<RpcClient.Protocol> =>
 const remote = <A, E, R>(
   serverKind: Kind,
   clientKind: Kind,
-  served: Layer.Layer<R, never, HttpServer.HttpServer>,
+  served: Layer.Layer<R, unknown, HttpServer.HttpServer>,
   clientTag: Layer.Layer<R, never, RpcClient.Protocol>,
   op: Effect.Effect<A, E, R | Scope.Scope>,
 ): Promise<A> => {
@@ -64,11 +64,9 @@ const queueOp = Effect.gen(function* () {
 
 // ── Daemon ──────────────────────────────────────────────────────────────────────────────────────
 class ConfDaemon extends Daemon.Tag<ConfDaemon>()("conf/P").pipe(Daemon.schedule([])) {}
-const ConfDaemonEffect: Effect.Effect<Effect.Success<typeof ConfDaemon>, never, ConfDaemon> =
-  ConfDaemon;
 const daemonServe = Daemon.serveMemory(ConfDaemon, { effect: Effect.void });
 const daemonOp = Effect.gen(function* () {
-  const daemon = yield* ConfDaemonEffect;
+  const daemon = yield* ConfDaemon;
   // read the current snapshot off the changes stream (the ref's replayed head), proving control-plane
   // state crosses the wire.
   const snap = yield* Stream.runHead(daemon.status.changes).pipe(
@@ -114,10 +112,10 @@ describe("transport conformance: streams/responds over BOTH transports", () => {
 describe("transport conformance: an http client against a ws server FAILS as ProtocolMismatch", () => {
   // Loud-failures §5 / 4.2a — mismatch must fail with the tagged ProtocolMismatch, not silently drop.
   const mismatchExit = <A, E, R>(
-    served: Layer.Layer<R, never, HttpServer.HttpServer>,
+    served: Layer.Layer<R, unknown, HttpServer.HttpServer>,
     clientTag: Layer.Layer<R, never, RpcClient.Protocol>,
     op: Effect.Effect<A, E, R | Scope.Scope>,
-  ): Promise<Exit.Exit<A, E>> => {
+  ): Promise<Exit.Exit<A, unknown>> => {
     const server = Node.wsServer([served]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
     return Effect.runPromise(
       Effect.gen(function* () {

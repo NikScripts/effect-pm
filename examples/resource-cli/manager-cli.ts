@@ -18,15 +18,9 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Layer } from "effect";
 import { Command } from "effect/unstable/cli";
 import { resources, resourcesLayer } from "./manager-resources";
-import { makeHyperlinkCli, type CliHyperlinkTag } from "../../src/cli";
+import { makeHyperlinkCli } from "../../src/cli";
 
-const cli = makeHyperlinkCli(
-  {
-    counter: resources.counter as never as CliHyperlinkTag,
-    queue: resources.queue as never as CliHyperlinkTag,
-  },
-  "hyperlink",
-);
+const cli = makeHyperlinkCli(resources, "hyperlink");
 
 const program = Command.runWith(cli, { version: "0.0.0" })(
   process.argv.slice(2),
@@ -34,4 +28,4 @@ const program = Command.runWith(cli, { version: "0.0.0" })(
 
 // Boundary: loose requirement from the dynamic record of tags; the layer above
 // fully provides it at run time.
-NodeRuntime.runMain(program as Effect.Effect<void, never>);
+NodeRuntime.runMain(program as Effect.Effect<void, unknown>);

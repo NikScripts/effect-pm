@@ -46,4 +46,4 @@ const program = Effect.gen(function* () {
   return yield* Effect.never
 }).pipe(Effect.scoped, Effect.provide(NodeServices.layer))
 
-NodeRuntime.runMain(program as Effect.Effect<never, Config.ConfigError, never>)
+NodeRuntime.runMain(program as Effect.Effect<never, unknown, never>)

@@ -7,15 +7,6 @@ const waitUntil = (predicate: Effect.Effect<boolean>) =>
     while (!(yield* predicate)) yield* Effect.sleep(Duration.millis(10));
   }).pipe(Effect.timeout(Duration.seconds(2)));
 
-type NumberQueue = {
-  readonly add: (
-    items: number | ReadonlyArray<number>,
-  ) => Effect.Effect<void, never, never>;
-};
-
-const addNumbers = (queue: NumberQueue, items: ReadonlyArray<number>) =>
-  queue.add(items);
-
 describe("WorkPool refill", () => {
   it.live("refill.onStart bootstraps the queue from a source", () =>
     Effect.gen(function* () {
@@ -23,10 +14,7 @@ describe("WorkPool refill", () => {
       yield* WorkPool.make({
         name: "refill-start",
         effect: (n: number) => Ref.update(processed, (a) => [...a, n]),
-        refill: {
-          onStart: true,
-          load: (q) => addNumbers(q as never as NumberQueue, [1, 2, 3]),
-        },
+        refill: { onStart: true, load: (q) => q.add([1, 2, 3]) },
         concurrency: 2,
       });
       yield* waitUntil(Effect.map(Ref.get(processed), (p) => p.length >= 3));
@@ -49,7 +37,7 @@ describe("WorkPool refill", () => {
               if (remaining.length === 0) return;
               const [head, ...tail] = remaining;
               yield* Ref.set(source, tail);
-              yield* addNumbers(q as never as NumberQueue, [head!]);
+              yield* q.add([head]);
             }),
         },
         concurrency: 1,

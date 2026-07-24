@@ -8,23 +8,14 @@ import * as Store from "../src/Store";
 // append unconditionally — there is always a store, so no serviceOption.
 
 const readingsContract = Store.contract({
-  readings: Store.shape(Schema.Struct({ value: Schema.Number })),
+  readings: Schema.Struct({ value: Schema.Number }),
 });
-type Reading = typeof readingsContract.shapes.readings.row.Type;
-type ReadingsHandle = {
-  readonly readings: {
-    readonly append: (
-      row: Reading | ReadonlyArray<Reading>,
-    ) => Effect.Effect<void, Store.StoreWriteError, never>;
-    readonly read: () => Effect.Effect<ReadonlyArray<Reading>, never, never>;
-  };
-};
 
 describe("baked-in default store (layerDefaultMemory)", () => {
   it.effect("resolves + round-trips a scope with no app Store.Service provided", () =>
     Effect.gen(function* () {
-      const bridge = yield* Effect.service(Storage);
-      const handle: ReadingsHandle = yield* bridge.at("scope-a", readingsContract);
+      const bridge = yield* Storage;
+      const handle = yield* bridge.at("scope-a", readingsContract);
 
       yield* handle.readings.append({ value: 42 });
       yield* handle.readings.append({ value: 7 });
@@ -35,9 +26,9 @@ describe("baked-in default store (layerDefaultMemory)", () => {
 
   it.effect("keeps scopes isolated by scopeKey (one journal, keyed rows — no 'sharing')", () =>
     Effect.gen(function* () {
-      const bridge = yield* Effect.service(Storage);
-      const a: ReadingsHandle = yield* bridge.at("scope-a", readingsContract);
-      const b: ReadingsHandle = yield* bridge.at("scope-b", readingsContract);
+      const bridge = yield* Storage;
+      const a = yield* bridge.at("scope-a", readingsContract);
+      const b = yield* bridge.at("scope-b", readingsContract);
 
       yield* a.readings.append({ value: 1 });
       yield* b.readings.append({ value: 2 });

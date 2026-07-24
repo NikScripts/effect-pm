@@ -1,4 +1,5 @@
 import { Effect, Schema } from "effect";
+import type { Layer } from "effect";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
@@ -20,13 +21,13 @@ class Worker extends Node.Tag<Worker, Jobs | Emails>()("listen-d/Worker", {
 const jobsImpl = { jobs: Effect.succeed(1) };
 const emailsImpl = { emails: Effect.succeed("ok") };
 
-const full = Node.unix(Worker, [
+const full: Layer.Layer<any, any, any> = Node.unix(Worker, [
   Hyperlink.serve(Jobs, jobsImpl),
   Hyperlink.serve(Emails, emailsImpl),
 ]);
 
 // @ts-expect-error C3: Emails missing from listen catalog
-const partial = Node.unix(Worker, [
+const partial: Layer.Layer<any, any, any> = Node.unix(Worker, [
   Hyperlink.serve(Jobs, jobsImpl),
 ]);
 

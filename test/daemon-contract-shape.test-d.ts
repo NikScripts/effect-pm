@@ -7,7 +7,6 @@
 import { Effect, Option, Schema } from "effect";
 import * as Daemon from "../src/Daemon";
 import * as Hyperlink from "../src/Hyperlink";
-import * as Store from "../src/Store";
 
 declare const startAt: Date;
 declare const stopAt: Date;
@@ -43,30 +42,8 @@ class Ingest extends Daemon.Tag<Ingest>()("shape/Ingest").pipe(
   Daemon.schedule(SeasonSchedule),
 ) {}
 
-const HealthEffect: Effect.Effect<Effect.Success<typeof Health>, never, Health> = Health;
-const PricesEffect: Effect.Effect<Effect.Success<typeof Prices>, never, Prices> = Prices;
-const MatchesEffect: Effect.Effect<Effect.Success<typeof Matches>, never, Matches> = Matches;
-const SeasonScheduleEffect: Effect.Effect<
-  Effect.Success<typeof SeasonSchedule>,
-  never,
-  SeasonSchedule
-> = SeasonSchedule;
-const IngestEffect: Effect.Effect<Effect.Success<typeof Ingest>, never, Ingest> = Ingest;
-const PricedErrEffect: Effect.Effect<Effect.Success<typeof PricedErr>, never, PricedErr> =
-  PricedErr;
-
-const _proof: Effect.Effect<
-  object,
-  never,
-  | Health
-  | Prices
-  | Matches
-  | SeasonSchedule
-  | Ingest
-  | PricedErr
-  | Store.Storage
-> = Effect.gen(function* () {
-  const h = yield* HealthEffect;
+const _proof = Effect.gen(function* () {
+  const h = yield* Health;
   // `status` is a reactive `ref`: `.get` reads it once, `.changes` streams it.
   const _status: typeof Daemon.daemonStatus.Type = yield* h.status.get;
   yield* h.start; // void lifecycle command
@@ -74,23 +51,25 @@ const _proof: Effect.Effect<
   const _logExport = yield* Hyperlink.logs(Health);
   const _logHistory: ReadonlyArray<typeof Daemon.daemonLogEntry.Type> = yield* _logExport.query({});
 
-  const p = yield* PricesEffect;
+  const p = yield* Prices;
   const latest: Option.Option<typeof Price.Type> = yield* p.result.get;
 
-  const m = yield* MatchesEffect;
+  const m = yield* Matches;
   const entries: ReadonlyArray<typeof Daemon.daemonScheduleEntry.Type> =
     yield* m.schedule.entries.get;
   yield* m.schedule.add(entries[0]!);
   yield* m.schedule.clear;
 
-  const s = yield* SeasonScheduleEffect;
+  const s = yield* SeasonSchedule;
   yield* s.add(entries[0]!);
   const one: Option.Option<typeof Daemon.daemonScheduleEntry.Type> = yield* s.get({ id: "x" });
 
-  const i = yield* IngestEffect;
+  const i = yield* Ingest;
   yield* i.start;
+  // @ts-expect-error a daemon gated by an external schedule gains NO schedule verbs
+  yield* i.schedule.entries.get;
 
-  const pe = yield* PricedErrEffect;
+  const pe = yield* PricedErr;
   const _pricedRun: Effect.Effect<
     typeof Price.Type,
     { readonly _tag: "FetchError"; readonly status: number }

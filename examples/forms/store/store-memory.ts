@@ -28,11 +28,7 @@ class AppStore extends Store.Service<AppStore>("@examples/Store")(
   Store.register("bench", contract),
 ) {}
 
-const program: Effect.Effect<
-  void,
-  never,
-  AppStore | Store.Storage
-> = Effect.gen(function* () {
+const program = Effect.gen(function* () {
   const sensor = yield* LabSensor.store;
   const bench = yield* AppStore.at("bench");
 
@@ -48,6 +44,6 @@ const program: Effect.Effect<
   const events = yield* Store.changes(LabSensor);
   const collected = yield* events.pipe(Stream.take(1), Stream.runCollect);
   yield* Effect.log(`subscribed to changes (buffer size ${collected.length})`);
-}).pipe(Effect.scoped, Effect.orDie);
+});
 
-runNodeProgramWithLayer(program, AppStore.layerMemory, "store memory example finished");
+runNodeProgramWithLayer(Effect.scoped(program), AppStore.layerMemory, "store memory example finished");
