@@ -63,13 +63,13 @@ const queueOp = Effect.gen(function* () {
 });
 
 // ── Daemon ──────────────────────────────────────────────────────────────────────────────────────
-class ConfProc extends Daemon.Tag<ConfProc>()("conf/P").pipe(Daemon.schedule([])) {}
-const procServe = Daemon.serveMemory(ConfProc, { effect: Effect.void });
-const procOp = Effect.gen(function* () {
-  const proc = yield* ConfProc;
+class ConfDaemon extends Daemon.Tag<ConfDaemon>()("conf/P").pipe(Daemon.schedule([])) {}
+const daemonServe = Daemon.serveMemory(ConfDaemon, { effect: Effect.void });
+const daemonOp = Effect.gen(function* () {
+  const daemon = yield* ConfDaemon;
   // read the current snapshot off the changes stream (the ref's replayed head), proving control-plane
   // state crosses the wire.
-  const snap = yield* Stream.runHead(proc.status.changes).pipe(
+  const snap = yield* Stream.runHead(daemon.status.changes).pipe(
     Effect.flatMap((o) => (o._tag === "Some" ? Effect.succeed(o.value) : Effect.die("no snapshot"))),
     Effect.timeout(Duration.seconds(3)),
   );
@@ -98,7 +98,7 @@ describe("transport conformance: streams/responds over BOTH transports", () => {
     ),
   );
   it.each(["ws", "http"] as const)("daemon over %s", (kind) =>
-    remote(kind, kind, procServe, Hyperlink.client(ConfProc), procOp).then((r) =>
+    remote(kind, kind, daemonServe, Hyperlink.client(ConfDaemon), daemonOp).then((r) =>
       expect(r).toBe(true),
     ),
   );

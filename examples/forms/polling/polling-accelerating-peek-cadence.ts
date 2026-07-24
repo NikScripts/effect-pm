@@ -47,7 +47,7 @@ const program = Effect.gen(function* () {
   const logEvent = (line: string): Effect.Effect<void, never, never> =>
     Ref.update(events, (lines) => [...lines, line]).pipe(Effect.asVoid);
 
-  const proc = Daemon.make("examples/forms/polling-accelerating-peek-cadence", {
+  const daemon = Daemon.make("examples/forms/polling-accelerating-peek-cadence", {
     effect: Effect.gen(function* () {
       const snapshot = yield* feed.readScore;
       const prev = yield* Ref.get(lastScoreKey);
@@ -78,7 +78,7 @@ const program = Effect.gen(function* () {
 
   // Fork daemon + feed simulator, advance TestClock, tear down daemon fiber.
   yield* forkSupervisedAndSideThenAdvanceTime({
-    supervised: proc.effect,
+    supervised: daemon.effect,
     sideFiber: feed.runSimulator,
     advanceBy: Duration.millis(2_200),
   });

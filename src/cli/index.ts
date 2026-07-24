@@ -15,8 +15,8 @@
  * import { makeHyperlinkCli, resourcesByName } from "hyperlink-ts/cli";
  * import { Command } from "effect/unstable/cli";
  *
- * const cli = makeHyperlinkCli(resourcesByName([Mail, Jobs, KeyRotation]), "pm");
- * // pm Mail status.get · pm Mail pause · pm KeyRotation start · pm ls
+ * const cli = makeHyperlinkCli(resourcesByName([Mail, Jobs, KeyRotation]), "hyperlink");
+ * // hyperlink Mail status.get · hyperlink Mail pause · hyperlink KeyRotation start · hyperlink ls
  * Command.runWith(cli, { version })(process.argv.slice(2)).pipe(Effect.provide(appLayer));
  * ```
  *

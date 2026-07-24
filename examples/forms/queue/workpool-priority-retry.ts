@@ -1,10 +1,10 @@
 /**
- * @module examples/forms/queue/queue-hyperlink-priority-retry
+ * @module examples/forms/queue/workpool-priority-retry
  *
  * WorkPool priority lanes, in-flight dedup, auto re-enqueue (`attempts`), and lifecycle
  * observation via `events` + `Hyperlink.runForEachTag`.
  *
- * Tip surface: `Tag` + `layer` (see Queues guide). Run: `pnpm run example:queue-hyperlink`
+ * Tip surface: `Tag` + `layer` (see Queues guide). Run: `pnpm run example:workpool-retry`
  */
 
 import { Cause, Duration, Effect, Schema } from "effect";
@@ -122,6 +122,6 @@ void Effect.runPromise(
   program.pipe(
     Effect.provide(EmailQueueLive),
     Effect.scoped,
-    Effect.tap(() => Effect.logInfo("form:queue-hyperlink-priority-retry finished OK")),
+    Effect.tap(() => Effect.logInfo("form:workpool-priority-retry-priority-retry finished OK")),
   ),
 );

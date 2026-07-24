@@ -94,7 +94,7 @@ const nodeFor = (resourceKey: string) =>
 const nodeStatusLayer = (resourceKey: string) => Node.connect(nodeFor(resourceKey));
 
 /** The merged remote client layer — every fleet resource over http. Shared by the
- *  reactive runtime (below) and the `pm` CLI (run-and-exit commands). */
+ *  reactive runtime (below) and the `hyperlink` CLI (run-and-exit commands). */
 export const appLayer = Layer.mergeAll(
   // EXPOSE each node's transport (not just provide it INTO the queue clients) so the node tag itself is
   // in the runtime context. The HealthBoard reads each node's status straight off its connected

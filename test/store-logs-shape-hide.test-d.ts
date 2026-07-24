@@ -6,10 +6,10 @@ import * as Store from "../src/Store";
 import type { StoreHandleFromContract } from "../src/internal/store/spec";
 import { makeDaemonStoreAnalyticsContract } from "../src/internal/store/daemonStoreSpec";
 
-class HideLogsProc extends Daemon.Tag<HideLogsProc>()("test/store-logs-hide/Proc") {}
+class HideLogsDaemon extends Daemon.Tag<HideLogsDaemon>()("test/store-logs-hide/Daemon") {}
 
 type DaemonStoreHandle = StoreHandleFromContract<
-  ReturnType<typeof makeDaemonStoreAnalyticsContract<typeof HideLogsProc>>
+  ReturnType<typeof makeDaemonStoreAnalyticsContract<typeof HideLogsDaemon>>
 >;
 
 declare const handle: DaemonStoreHandle;

@@ -17,14 +17,14 @@ const alwaysOnEntry = {
 describe("Daemon.make", () => {
   it("sets daemon.name to the id passed as the first argument", () => {
     const id = "test/make-id-first" as const;
-    const proc = Daemon.make(id, { effect: Effect.void });
-    expect(proc.name).toBe(id);
+    const daemon = Daemon.make(id, { effect: Effect.void });
+    expect(daemon.name).toBe(id);
   });
 
   it("sets daemon.name for positional effect overload", () => {
     const id = "test/make-positional" as const;
-    const proc = Daemon.make(id, Effect.void);
-    expect(proc.name).toBe(id);
+    const daemon = Daemon.make(id, Effect.void);
+    expect(daemon.name).toBe(id);
   });
 
   it("throws DaemonMakeInvalidLayerArgument for unregistered positional layers", () => {
@@ -48,14 +48,14 @@ describe("Daemon runtime with schedule windows", () => {
 
   it.effect("positional make runs driver with polling before schedule in args", () =>
     Effect.gen(function* () {
-      const proc = Daemon.make(
+      const daemon = Daemon.make(
         "test/positional-order",
         Effect.void,
         Polling.spaced(Duration.millis(100)),
         Daemon.scheduleInMemory([alwaysOnEntry]),
       );
 
-      const fib = yield* Effect.forkChild(proc.effect);
+      const fib = yield* Effect.forkChild(daemon.effect);
       yield* TestClock.adjust(Duration.millis(250));
       yield* Fiber.interrupt(fib);
     }).pipe(Effect.provide(TestClock.layer()), Effect.scoped),
@@ -64,12 +64,12 @@ describe("Daemon runtime with schedule windows", () => {
   it.effect("omitted schedule defaults to always armed so polling ticks without manual set", () =>
     Effect.gen(function* () {
         const ticks = yield* Ref.make(0);
-        const proc = Daemon.make("test/default-schedule-armed", {
+        const daemon = Daemon.make("test/default-schedule-armed", {
           effect: Ref.update(ticks, (n) => n + 1),
           polling: Polling.spaced(Duration.millis(100)),
         });
 
-        const fib = yield* Effect.forkChild(proc.effect);
+        const fib = yield* Effect.forkChild(daemon.effect);
         yield* TestClock.adjust(Duration.seconds(1));
         yield* Effect.yieldNow;
         expect(yield* Ref.get(ticks)).toBeGreaterThan(0);
@@ -83,13 +83,13 @@ describe("Daemon runtime with schedule windows", () => {
   it.effect("Daemon.scheduleInMemory() stays disarmed with no ticks", () =>
     Effect.gen(function* () {
         const ticks = yield* Ref.make(0);
-        const proc = Daemon.make("test/schedule-empty", {
+        const daemon = Daemon.make("test/schedule-empty", {
           effect: Ref.update(ticks, (n) => n + 1),
           polling: Polling.spaced(Duration.millis(100)),
           schedule: Daemon.scheduleInMemory(),
         });
 
-        const fib = yield* Effect.forkChild(proc.effect);
+        const fib = yield* Effect.forkChild(daemon.effect);
         yield* TestClock.adjust(Duration.seconds(1));
         yield* Effect.yieldNow;
         expect(yield* Ref.get(ticks)).toBe(0);
@@ -103,13 +103,13 @@ describe("Daemon runtime with schedule windows", () => {
   it.effect("schedule initializer arms empty in-memory backing store", () =>
     Effect.gen(function* () {
         const ticks = yield* Ref.make(0);
-        const proc = Daemon.make("test/schedule-initializer-empty-backing", {
+        const daemon = Daemon.make("test/schedule-initializer-empty-backing", {
           effect: Ref.update(ticks, (n) => n + 1),
           polling: Polling.spaced(Duration.millis(100)),
           schedule: ({ set }) => set([alwaysOnEntry]),
         });
 
-        const fib = yield* Effect.forkChild(proc.effect);
+        const fib = yield* Effect.forkChild(daemon.effect);
         yield* TestClock.adjust(Duration.seconds(1));
         yield* Effect.yieldNow;
         expect(yield* Ref.get(ticks)).toBeGreaterThan(0);
@@ -123,7 +123,7 @@ describe("Daemon runtime with schedule windows", () => {
   it.effect("exposes current schedule id inside the running effect", () =>
     Effect.gen(function* () {
         const seenIds = yield* Ref.make<ReadonlyArray<string>>([]);
-        const proc = Daemon.make("test/schedule-id", {
+        const daemon = Daemon.make("test/schedule-id", {
           schedule: Daemon.scheduleInMemory([
             Daemon.at("match-101", utcDateFromMillis(0)),
           ]),
@@ -136,7 +136,7 @@ describe("Daemon runtime with schedule windows", () => {
           }),
         });
 
-        const fib = yield* Effect.forkChild(proc.effect);
+        const fib = yield* Effect.forkChild(daemon.effect);
         yield* TestClock.adjust(Duration.seconds(1));
         yield* Effect.yieldNow;
         expect(yield* Ref.get(seenIds)).toContain("match-101");
@@ -150,7 +150,7 @@ describe("Daemon runtime with schedule windows", () => {
   it.effect("exposes schedule controls inside process effect", () =>
     Effect.gen(function* () {
         const tickIds = yield* Ref.make<ReadonlyArray<string>>([]);
-        const proc = Daemon.make("test/schedule-controls-inside-effect", {
+        const daemon = Daemon.make("test/schedule-controls-inside-effect", {
           polling: Polling.spaced(Duration.millis(100)),
           schedule: ({ set }) =>
             set([
@@ -171,7 +171,7 @@ describe("Daemon runtime with schedule windows", () => {
           }),
         });
 
-        const fib = yield* Effect.forkChild(proc.effect);
+        const fib = yield* Effect.forkChild(daemon.effect);
         yield* TestClock.adjust(Duration.seconds(3));
         yield* Effect.yieldNow;
         yield* Fiber.interrupt(fib);
@@ -188,13 +188,13 @@ describe("Daemon runtime with schedule windows", () => {
   it.effect("starts from schedule startAt and repeats while stopAt is open", () =>
     Effect.gen(function* () {
         const ticks = yield* Ref.make(0);
-        const proc = Daemon.make("test/repeats-while-open", {
+        const daemon = Daemon.make("test/repeats-while-open", {
           effect: Ref.update(ticks, (n) => n + 1),
           polling: Polling.spaced(Duration.millis(100)),
           schedule: ({ set }) => set([alwaysOnEntry]),
         });
 
-        const fib = yield* Effect.forkChild(proc.effect);
+        const fib = yield* Effect.forkChild(daemon.effect);
         yield* TestClock.adjust(Duration.seconds(1));
         yield* Effect.yieldNow;
         expect(yield* Ref.get(ticks)).toBeGreaterThan(0);
@@ -208,7 +208,7 @@ describe("Daemon runtime with schedule windows", () => {
   it.effect("stops naturally after stopAt", () =>
     Effect.gen(function* () {
         const ticks = yield* Ref.make(0);
-        const proc = Daemon.make("test/stop-window", {
+        const daemon = Daemon.make("test/stop-window", {
           effect: Ref.update(ticks, (n) => n + 1),
           polling: Polling.spaced(Duration.millis(100)),
           schedule: ({ set }) =>
@@ -221,7 +221,7 @@ describe("Daemon runtime with schedule windows", () => {
             ]),
         });
 
-        const fib = yield* Effect.forkChild(proc.effect);
+        const fib = yield* Effect.forkChild(daemon.effect);
         yield* TestClock.adjust(Duration.seconds(1));
         yield* Effect.yieldNow;
         const afterWindow = yield* Ref.get(ticks);
@@ -237,7 +237,7 @@ describe("Daemon runtime with schedule windows", () => {
   it.effect("process without polling runs once for scheduled one-shot windows", () =>
     Effect.gen(function* () {
         const ticks = yield* Ref.make(0);
-        const proc = Daemon.make("test/one-shot", {
+        const daemon = Daemon.make("test/one-shot", {
           effect: Ref.update(ticks, (n) => n + 1),
           schedule: ({ set }) =>
             set([
@@ -246,7 +246,7 @@ describe("Daemon runtime with schedule windows", () => {
             ]),
         });
 
-        const fib = yield* Effect.forkChild(proc.effect);
+        const fib = yield* Effect.forkChild(daemon.effect);
         yield* TestClock.adjust(Duration.seconds(2));
         yield* Effect.yieldNow;
         expect(yield* Ref.get(ticks)).toBeGreaterThanOrEqual(1);
@@ -261,7 +261,7 @@ describe("Daemon runtime with schedule windows", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const seen = yield* Ref.make<ReadonlyArray<Option.Option<string>>>([]);
-        const proc = Daemon.make("test/run-immediately-no-schedule-id", {
+        const daemon = Daemon.make("test/run-immediately-no-schedule-id", {
           polling: Polling.spaced(Duration.millis(100)),
           schedule: Daemon.scheduleInMemory([
             Daemon.at("scheduled-id", utcDateFromMillis(0)),
@@ -272,7 +272,7 @@ describe("Daemon runtime with schedule windows", () => {
           }),
         });
 
-        yield* proc.run();
+        yield* daemon.run();
         const values = yield* Ref.get(seen);
         expect(values.length).toBe(1);
         expect(Option.isNone(values[0] ?? Option.none())).toBe(true);
@@ -284,7 +284,7 @@ describe("Daemon runtime with schedule windows", () => {
     Effect.gen(function* () {
         const ticks = yield* Ref.make(0);
         const mutated = yield* Ref.make(false);
-        const proc = Daemon.make("test/mutation-cancels-stale-pending", {
+        const daemon = Daemon.make("test/mutation-cancels-stale-pending", {
           schedule: ({ set }) =>
             set([
               Daemon.at("mutator", utcDateFromMillis(0)),
@@ -308,7 +308,7 @@ describe("Daemon runtime with schedule windows", () => {
           }),
         });
 
-        const fib = yield* Effect.forkChild(proc.effect);
+        const fib = yield* Effect.forkChild(daemon.effect);
         yield* TestClock.adjust(Duration.seconds(1));
         yield* Effect.yieldNow;
 

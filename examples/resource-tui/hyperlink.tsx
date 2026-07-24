@@ -1,15 +1,15 @@
 /**
- * @module examples/resource-tui/pm
+ * @module examples/resource-tui/hyperlink
  *
  * Configure once, get both. The `Fleet` tree (the tags) drives **two renderers**,
  * chosen by argv:
  *
- *   pnpm run example:pm                       # no subcommand → the styled TUI dashboard
- *   pnpm run example:pm ls                     # list resources (command name → id)
- *   pnpm run example:pm Mail status.get         # one-shot read, run & exit
- *   pnpm run example:pm Mail pause             # control, run & exit
- *   pnpm run example:pm KeyRotation start
- *   pnpm run example:pm --help
+ *   pnpm run example:hyperlink                       # no subcommand → the styled TUI dashboard
+ *   pnpm run example:hyperlink ls                     # list resources (command name → id)
+ *   pnpm run example:hyperlink Mail status.get         # one-shot read, run & exit
+ *   pnpm run example:hyperlink Mail pause             # control, run & exit
+ *   pnpm run example:hyperlink KeyRotation start
+ *   pnpm run example:hyperlink --help
  *
  * Hyperlink command names are the tag's display name (its last id segment: `Mail`,
  * `KeyRotation`). If two resources share one, the resolver lengthens just those to the
@@ -35,7 +35,7 @@ if (argv.length === 0) {
   runDashboard();
 } else {
   // command names = shortest unique slash-suffix of each tag key (Mail, KeyRotation, …).
-  const cli = makeHyperlinkCli(resourcesByName([...LEAVES, KeyRotation]), "pm");
+  const cli = makeHyperlinkCli(resourcesByName([...LEAVES, KeyRotation]), "hyperlink");
   const program = Command.runWith(cli, { version: "0.8.0-beta.6" })(argv).pipe(
     Effect.provide(Layer.mergeAll(appLayer, NodeServices.layer)),
   );

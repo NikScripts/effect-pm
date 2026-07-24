@@ -766,7 +766,7 @@ export const App = (): React.ReactElement => {
 };
 
 /** Launch the dashboard: enter the alt-screen, render the Ink app, restore on exit.
- *  Called by the `dashboard.tsx` entry and by `pm` (no subcommand → the TUI). */
+ *  Called by the `dashboard.tsx` entry and by `hyperlink` (no subcommand → the TUI). */
 export const runDashboard = (): void => {
   const out = process.stdout;
   const tty = out.isTTY === true;

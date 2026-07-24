@@ -7,22 +7,22 @@ import * as Store from "../src/Store";
 
 // A daemon started disarmed (empty inline schedule) so it only runs on `run`; with the logs
 // stack provided, worker lines are scoped by tag key and read back via Hyperlink.logs.
-class LogProc extends Daemon.Tag<LogProc>()(
-  "test/daemon-log-history/Proc",
+class LogDaemon extends Daemon.Tag<LogDaemon>()(
+  "test/daemon-log-history/Daemon",
 ).pipe(Daemon.schedule([])) {}
 
-const logProcRegistration = Daemon.store(LogProc);
+const logDaemonRegistration = Daemon.store(LogDaemon);
 
 class AppStore extends Store.Service<AppStore>("@test/daemon-log-history/Store")(
-  logProcRegistration,
+  logDaemonRegistration,
 ) {}
 
 it("Hyperlink.logs reads back daemon worker logs", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const proc = yield* LogProc;
-      const { query } = yield* Hyperlink.logs(LogProc);
-      yield* proc.run;
+      const daemon = yield* LogDaemon;
+      const { query } = yield* Hyperlink.logs(LogDaemon);
+      yield* daemon.run;
       yield* Effect.gen(function* () {
         while ((yield* query({})).length === 0) {
           yield* Effect.sleep(Duration.millis(20));
@@ -34,7 +34,7 @@ it("Hyperlink.logs reads back daemon worker logs", () =>
       expect(rows.some((r) => r.message.includes("daemon tick"))).toBe(true);
     }).pipe(
       Effect.provide(
-        Daemon.layer(LogProc, {
+        Daemon.layer(LogDaemon, {
           effect: Effect.logInfo("daemon tick"),
         }).pipe(Layer.provideMerge(AppStore.layerMemory)),
       ),
@@ -45,15 +45,15 @@ it("Hyperlink.logs reads back daemon worker logs", () =>
 it("Hyperlink.logs query is empty without store registration (live relay only)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const proc = yield* LogProc;
-      const { query } = yield* Hyperlink.logs(LogProc);
+      const daemon = yield* LogDaemon;
+      const { query } = yield* Hyperlink.logs(LogDaemon);
       expect(yield* query({})).toEqual([]);
-      yield* proc.run;
+      yield* daemon.run;
       yield* Effect.sleep(Duration.millis(50));
       expect(yield* query({})).toEqual([]);
     }).pipe(
       Effect.provide(
-        Daemon.layerMemory(LogProc, {
+        Daemon.layerMemory(LogDaemon, {
           effect: Effect.logInfo("daemon tick"),
         }).pipe(Layer.provide(Logs.layer)),
       ),

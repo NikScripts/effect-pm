@@ -46,7 +46,7 @@ import {
   usageEnter,
   usageExit,
 } from "./apiUsageRegistry";
-import type { GateRunner } from "../Gate";
+import type { Runner } from "../Gate";
 import { makeRunnerFromConcurrency } from "./gate";
 
 // ============================================================================
@@ -273,7 +273,7 @@ const makeInFlightTransform = (
 const applyTransportMiddleware = (
   client: HttpClient.HttpClient,
   options: {
-    readonly runner: GateRunner;
+    readonly runner: Runner;
     readonly withInFlight: InFlightTransform;
     readonly transformClient?: HttpApiClientConfig<string, HttpApiGroup.Top, string>["transformClient"];
   },

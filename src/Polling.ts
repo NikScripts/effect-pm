@@ -594,7 +594,7 @@ export const dynamic = (
  * Work-aware cadence — the complement of {@link backoff}. Ticks run at `active` after a work
  * signal and DECAY toward `idle` (each tick multiplies the wait by `factor`, capped at `idle`)
  * while nothing happens. Signal work by calling `resetCadence` — from inside the effect via
- * {@link current}, from the handle via `proc.polling.resetCadence`, or wire a stream to it with
+ * {@link current}, from the handle via `daemon.polling.resetCadence`, or wire a stream to it with
  * {@link wakeOn}. The reset snaps the cadence back to `active` and wakes the current wait.
  *
  * The queue-drainer shape: drain fast while entries keep arriving, back off to a lazy idle poll
@@ -663,12 +663,12 @@ export const adaptive = (options: {
  * external fact — a queue `add` event, a store change — ends the polling wait IMMEDIATELY
  * instead of waiting out the interval. Forked into the current scope.
  *
- * Pair with {@link adaptive}: point it at `proc.polling.resetCadence` and arrivals snap the
+ * Pair with {@link adaptive}: point it at `daemon.polling.resetCadence` and arrivals snap the
  * drainer back to its `active` cadence.
  *
  * @example
  * ```ts
- * yield* Polling.wakeOn(queue.events, proc.polling.resetCadence)
+ * yield* Polling.wakeOn(queue.events, daemon.polling.resetCadence)
  * ```
  * @category combinators
  * @public

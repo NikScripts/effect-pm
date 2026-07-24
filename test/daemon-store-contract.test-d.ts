@@ -9,19 +9,19 @@ import {
 
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 
-class PricedProc extends Daemon.Tag<PricedProc>()("test/store/Priced", { success: Price }) {}
+class PricedDaemon extends Daemon.Tag<PricedDaemon>()("test/store/Priced", { success: Price }) {}
 
-type Contract = BuiltInDaemonContract<typeof PricedProc>;
+type Contract = BuiltInDaemonContract<typeof PricedDaemon>;
 type Handle = Store.HandleOf<Contract>;
 
 declare const _handle: Handle;
 
 // Cast-free: factory return is assignable to the declared built-in contract type.
-void ({} as ReturnType<typeof builtInDaemonStoreContract<typeof PricedProc>> satisfies Contract);
+void ({} as ReturnType<typeof builtInDaemonStoreContract<typeof PricedDaemon>> satisfies Contract);
 
 void _handle.record({
   _tag: "Completed",
-  key: PricedProc.key,
+  key: PricedDaemon.key,
   scheduleKey: null,
   startedAt: 1,
   completedAt: 2,
@@ -30,7 +30,7 @@ void _handle.record({
   success: { symbol: "AAPL", usd: 1 },
 });
 
-type Event = DaemonStoreEvent<typeof PricedProc>;
+type Event = DaemonStoreEvent<typeof PricedDaemon>;
 type EventsResult = ReturnType<Handle["events"]> extends Effect.Effect<
   infer A,
   infer _E,

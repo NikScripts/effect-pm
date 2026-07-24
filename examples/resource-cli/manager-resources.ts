@@ -3,7 +3,7 @@
  *
  * The resources, layers, and the composed `Record` — defined **once** and shared
  * by every projection: the CLI (`manager-cli.ts`), the TUI (`manager-tui.tsx`),
- * and the unified entry (`pm.tsx`). Configure the surface here; pick a renderer
+ * and the unified entry (`hyperlink.tsx`). Configure the surface here; pick a renderer
  * there.
  *
  * - `Counter` — a plain resource (a live `current`, an `increment({ by })`).

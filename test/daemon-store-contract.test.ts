@@ -7,24 +7,24 @@ import { builtInDaemonStoreContract } from "../src/internal/store/daemonStoreSpe
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
 
-class VoidProc extends Daemon.Tag<VoidProc>()("test/store/Void") {}
+class VoidDaemon extends Daemon.Tag<VoidDaemon>()("test/store/Void") {}
 
-class PricedProc extends Daemon.Tag<PricedProc>()("test/store/Priced", Price) {}
+class PricedDaemon extends Daemon.Tag<PricedDaemon>()("test/store/Priced", Price) {}
 
-class PricedErrProc extends Daemon.Tag<PricedErrProc>()(
+class PricedErrDaemon extends Daemon.Tag<PricedErrDaemon>()(
   "test/store/PricedErr",
   Price,
   FetchErr,
 ) {}
 
-const pricedRegistration = Store.register(PricedProc, builtInDaemonStoreContract(PricedProc));
+const pricedRegistration = Store.register(PricedDaemon, builtInDaemonStoreContract(PricedDaemon));
 const pricedErrRegistration = Store.register(
-  PricedErrProc,
-  builtInDaemonStoreContract(PricedErrProc),
+  PricedErrDaemon,
+  builtInDaemonStoreContract(PricedErrDaemon),
 );
 
 class DaemonStore extends Store.Service<DaemonStore>("@test/DaemonStore")(
-  Store.register(VoidProc, builtInDaemonStoreContract(VoidProc)),
+  Store.register(VoidDaemon, builtInDaemonStoreContract(VoidDaemon)),
   pricedRegistration,
   pricedErrRegistration,
 ) {}
@@ -32,10 +32,10 @@ class DaemonStore extends Store.Service<DaemonStore>("@test/DaemonStore")(
 describe("Daemon store contract", () => {
   it.effect("void daemon exposes record and events", () =>
     Effect.gen(function* () {
-      const store = yield* DaemonStore.at(VoidProc);
+      const store = yield* DaemonStore.at(VoidDaemon);
       yield* store.record({
         _tag: "Completed",
-        key: VoidProc.key,
+        key: VoidDaemon.key,
         scheduleKey: null,
         startedAt: 1,
         completedAt: 2,
@@ -51,10 +51,10 @@ describe("Daemon store contract", () => {
 
   it.effect("value daemon record includes optional success field", () =>
     Effect.gen(function* () {
-      const store = yield* DaemonStore.at(PricedProc);
+      const store = yield* DaemonStore.at(PricedDaemon);
       yield* store.record({
         _tag: "Completed",
-        key: PricedProc.key,
+        key: PricedDaemon.key,
         scheduleKey: null,
         startedAt: 10,
         completedAt: 20,
@@ -71,17 +71,17 @@ describe("Daemon store contract", () => {
   );
 
   it("Tag stamps success and error from positional args", () => {
-    expect(Daemon.successOf(PricedProc)).toBe(Price);
-    expect(Daemon.errorOf(PricedErrProc)).toBe(FetchErr);
-    expect(Daemon.successOf(VoidProc)).toBeUndefined();
+    expect(Daemon.successOf(PricedDaemon)).toBe(Price);
+    expect(Daemon.errorOf(PricedErrDaemon)).toBe(FetchErr);
+    expect(Daemon.successOf(VoidDaemon)).toBeUndefined();
   });
 
   it.effect("Failed carries typed error when error schema is stamped", () =>
     Effect.gen(function* () {
-      const store = yield* DaemonStore.at(PricedErrProc);
+      const store = yield* DaemonStore.at(PricedErrDaemon);
       yield* store.record({
         _tag: "Failed",
-        key: PricedErrProc.key,
+        key: PricedErrDaemon.key,
         scheduleKey: null,
         startedAt: 1,
         completedAt: 2,
