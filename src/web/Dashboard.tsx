@@ -47,7 +47,9 @@ import { ViewTransitionProvider, useViewTransition, useViewTransitionStyle } fro
 import { useGroupRoute } from "./useGroupRoute";
 import { Button } from "./components/ui/button";
 import { ApiEndpointTable, ApiMetricChart, ApiStats, ApiStatusBadge, base, Cell, ConfirmDialog, PriorityDetail, FleetHealthDetail, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, MetricChart, DaemonControls, DaemonStats, DaemonStatusBadge, QueueControls, QueueStats, HyperlinkReadinessBanner, GateDetail, ScheduleEditor, ShardMapDetail, StatusBadge, TelemetryDetail, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
-import { WidgetsProvider, isLeafTag, type WidgetRegistry } from "./widget-registry";
+import { isLeafTag, type WidgetRegistry } from "../ui/widgetRegistry";
+import { WidgetsProvider } from "../ui/widgetsContext";
+import type { Widget } from "./widget-registry";
 import { DebugConsole } from "./debug-console";
 
 
@@ -509,7 +511,7 @@ export const Dashboard = <R, ER>(props: {
   readonly group: GroupNode;
   /** The widget set (defaults to the built-in {@link base}); extend/override with
    *  `withEntries(base, [forKind(...), forKey(...)])`. */
-  readonly widgets?: WidgetRegistry;
+  readonly widgets?: WidgetRegistry<Widget>;
 }): React.ReactElement => (
   <RegistryProvider>
     <WidgetsProvider registry={props.widgets ?? base}>

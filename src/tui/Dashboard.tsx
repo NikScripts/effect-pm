@@ -18,7 +18,7 @@
 import { Box, Text, useInput, useStdout } from "ink";
 import * as React from "react";
 import { Option } from "effect";
-import { AsyncResult, type Atom } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/unstable/reactivity";
 import * as Group from "../Group";
 import { kindOf as hyperlinkKindOf, nodeOf } from "../Hyperlink";
 import {
@@ -42,21 +42,18 @@ import {
   type PriorityTag,
   type QueueTag,
 } from "../ui/data";
-import { memberKindOf } from "../ui/memberKind";
 import { RegistryProvider, useAtomSet, useAtomValue } from "../ui/atom-react";
+import { WidgetsProvider } from "../ui/widgetsContext";
 import { spark } from "./chrome";
+import { base, Cell, type TuiWidgetRegistry } from "./cellWidgets";
 import {
-  ApiCell,
-  FleetHealthCell,
   FocusedApi,
   FocusedFleetHealth,
   FocusedGate,
   FocusedShardMap,
   FocusedTelemetry,
-  GateCell,
-  ShardMapCell,
-  TelemetryCell,
 } from "./kindCells";
+import { RuntimeProvider, useRuntime } from "./runtime";
 import {
   bar,
   BLANK_BORDER,
@@ -72,23 +69,7 @@ import {
 } from "./queueWidget";
 import { useGroupRoute } from "./useGroupRoute";
 
-// Same seam as `web/runtime`: React context can't be generic over the consumer's `R`.
-type AnyRuntime = Atom.AtomRuntime<any, any>;
-const RuntimeContext = React.createContext<AnyRuntime | null>(null);
-const useRuntime = (): AnyRuntime => {
-  const runtime = React.useContext(RuntimeContext);
-  if (runtime === null) {
-    throw new Error("TUI Dashboard widgets require <Dashboard runtime={…} />");
-  }
-  return runtime;
-};
-
 const CELL_HEIGHT = 7;
-const SYM: Record<Priority, { symbol: string; color: string }> = {
-  high: { symbol: "▲", color: "red" },
-  normal: { symbol: "•", color: "white" },
-  low: { symbol: "▼", color: "blue" },
-};
 const LEVEL_COLOR: Record<string, string> = {
   Trace: "gray",
   Debug: "gray",
@@ -133,431 +114,10 @@ const idOf = (m: unknown): string => {
   return "";
 };
 
-const leafCountOf = (node: GroupNode): number =>
-  Object.values(Group.members(node)).reduce<number>(
-    (n, m) => n + (Group.isGroup(m) ? leafCountOf(m) : 1),
-    0,
-  );
-
 const NodeMark = (props: { readonly tag: unknown }): React.ReactElement | null => {
   const node = nodeOf(props.tag);
   if (node === undefined) return null;
   return <Text color="cyan"> ⬡ {displayName(node.key)}</Text>;
-};
-
-const PrioRow = (props: {
-  readonly p: Priority;
-  readonly count: number;
-  readonly max: number;
-  readonly barWidth: number;
-}): React.ReactElement => {
-  const s = SYM[props.p];
-  return (
-    <Box>
-      <Box width={2}>
-        <Text>{s.symbol}</Text>
-      </Box>
-      <Box width={props.barWidth + 1}>
-        <Text color={s.color}>{bar(props.count, props.max, props.barWidth)}</Text>
-      </Box>
-      <Box width={5} justifyContent="flex-end">
-        <Text>{compact(props.count)}</Text>
-      </Box>
-    </Box>
-  );
-};
-
-const QueueCell = (props: {
-  readonly name: string;
-  readonly tag: QueueTag;
-  readonly width: number;
-  readonly selected: boolean;
-}): React.ReactElement => {
-  const { name, tag, width, selected } = props;
-  const r = useAtomValue(queueBundle(useRuntime(), tag).status);
-  const opt = AsyncResult.isSuccess(r) ? r.value : Option.none();
-  const s = Option.isSome(opt) ? opt.value : undefined;
-  const sizes = s?.sizes ?? { high: 0, normal: 0, low: 0 };
-  const status = statusOf(s?.phase ?? "running", s?.paused ?? false);
-  const pending = sizes.high + sizes.normal + sizes.low;
-  const max = Math.max(sizes.high, sizes.normal, sizes.low, 1);
-  const barWidth = Math.max(4, width - 4 - 2 - 1 - 5);
-  return (
-    <Box
-      flexDirection="column"
-      borderStyle={selected ? "double" : "round"}
-      borderColor={selected ? "green" : COLOR[status]}
-      height={CELL_HEIGHT}
-      width={width}
-      marginRight={1}
-      marginBottom={1}
-      paddingX={1}
-    >
-      <Box>
-        <Box flexGrow={1}>
-          <Text bold wrap="truncate">
-            {name}
-          </Text>
-          <NodeMark tag={tag} />
-        </Box>
-        <Text color={COLOR[status]}>{STATUS_ICON[status]}</Text>
-      </Box>
-      <Box>
-        <Box flexGrow={1}>
-          <Text>pending {compact(pending)}</Text>
-        </Box>
-        <Text dimColor>{compact(s?.completed ?? 0)} ✓</Text>
-      </Box>
-      <PrioRow p="high" count={sizes.high} max={max} barWidth={barWidth} />
-      <PrioRow p="normal" count={sizes.normal} max={max} barWidth={barWidth} />
-      <PrioRow p="low" count={sizes.low} max={max} barWidth={barWidth} />
-    </Box>
-  );
-};
-
-const PriorityCell = (props: {
-  readonly name: string;
-  readonly tag: PriorityTag;
-  readonly width: number;
-  readonly selected: boolean;
-}): React.ReactElement => {
-  const { name, tag, width, selected } = props;
-  const r = useAtomValue(priorityBundle(useRuntime(), tag).status);
-  const opt = AsyncResult.isSuccess(r) ? r.value : Option.none();
-  const s = Option.isSome(opt) ? opt.value : undefined;
-  const lanes = s !== undefined ? Object.entries(s.sizes) : [];
-  const pending = lanes.reduce((sum, [, n]) => sum + n, 0);
-  const max = Math.max(1, ...lanes.map(([, n]) => n));
-  const status = statusOf(s?.phase ?? "running", s?.paused ?? false);
-  const barWidth = Math.max(4, width - 4 - 2 - 1 - 5);
-  return (
-    <Box
-      flexDirection="column"
-      borderStyle={selected ? "double" : "round"}
-      borderColor={selected ? "green" : COLOR[status]}
-      height={CELL_HEIGHT}
-      width={width}
-      marginRight={1}
-      marginBottom={1}
-      paddingX={1}
-    >
-      <Box>
-        <Box flexGrow={1}>
-          <Text bold wrap="truncate">
-            {name}
-          </Text>
-          <NodeMark tag={tag} />
-        </Box>
-        <Text color={COLOR[status]}>{STATUS_ICON[status]}</Text>
-      </Box>
-      <Box>
-        <Box flexGrow={1}>
-          <Text>pending {compact(pending)}</Text>
-        </Box>
-        <Text dimColor>{compact(s?.completed ?? 0)} ✓</Text>
-      </Box>
-      {lanes.slice(0, 3).map(([lane, count]) => (
-        <Box key={lane}>
-          <Box width={2}>
-            <Text dimColor>•</Text>
-          </Box>
-          <Box width={barWidth + 1}>
-            <Text>{bar(count, max, barWidth)}</Text>
-          </Box>
-          <Box width={5} justifyContent="flex-end">
-            <Text>{compact(count)}</Text>
-          </Box>
-        </Box>
-      ))}
-    </Box>
-  );
-};
-
-const DaemonCell = (props: {
-  readonly name: string;
-  readonly tag: DaemonTag;
-  readonly width: number;
-  readonly selected: boolean;
-}): React.ReactElement => {
-  const { name, tag, width, selected } = props;
-  const r = useAtomValue(daemonBundle(useRuntime(), tag).status);
-  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
-  const up = s?.supervising === true;
-  return (
-    <Box
-      flexDirection="column"
-      borderStyle={selected ? "double" : "round"}
-      borderColor={selected ? "green" : up ? "green" : "gray"}
-      height={CELL_HEIGHT}
-      width={width}
-      marginRight={1}
-      marginBottom={1}
-      paddingX={1}
-    >
-      <Box>
-        <Box flexGrow={1}>
-          <Text bold wrap="truncate">
-            ⚙ {name}
-          </Text>
-          <NodeMark tag={tag} />
-        </Box>
-        <Text color={up ? "green" : "gray"}>{up ? "►" : "■"}</Text>
-      </Box>
-      <Box>
-        <Box flexGrow={1}>
-          <Text>{up ? "running" : "stopped"}</Text>
-        </Box>
-        <Text dimColor>{s?.armed === true ? "armed" : "disarmed"}</Text>
-      </Box>
-      <Box marginTop={1}>
-        <Text>active </Text>
-        <Text bold>{s?.activeInstances ?? 0}</Text>
-      </Box>
-    </Box>
-  );
-};
-
-const GroupCell = (props: {
-  readonly name: string;
-  readonly node: GroupNode;
-  readonly width: number;
-  readonly selected: boolean;
-}): React.ReactElement => {
-  const { name, node, width, selected } = props;
-  const members = Object.entries(Group.members(node));
-  const leafCount = leafCountOf(node);
-  return (
-    <Box
-      flexDirection="column"
-      borderStyle={selected ? "double" : "round"}
-      borderColor={selected ? "green" : "cyan"}
-      height={CELL_HEIGHT}
-      width={width}
-      marginRight={1}
-      marginBottom={1}
-      paddingX={1}
-    >
-      <Box>
-        <Box flexGrow={1}>
-          <Text bold color="cyan" wrap="truncate">
-            ▸ {name}
-          </Text>
-        </Box>
-        <Text dimColor>{leafCount}</Text>
-      </Box>
-      {width >= 22
-        ? members.slice(0, 4).map(([childName, m]) => (
-            <Text key={`${name}-${childName}`} dimColor wrap="truncate">
-              {Group.isGroup(m) ? "▸ " : isDaemonTag(m) ? "⚙ " : "  "}
-              {childName}
-            </Text>
-          ))
-        : null}
-    </Box>
-  );
-};
-
-const FallbackCell = (props: {
-  readonly name: string;
-  readonly member?: unknown;
-  readonly width: number;
-  readonly selected: boolean;
-}): React.ReactElement => {
-  const kind = props.member !== undefined ? hyperlinkKindOf(props.member) : undefined;
-  const node = props.member !== undefined ? nodeOf(props.member) : undefined;
-  return (
-    <Box
-      flexDirection="column"
-      borderStyle={props.selected ? "double" : "round"}
-      borderColor={props.selected ? "green" : "gray"}
-      height={CELL_HEIGHT}
-      width={props.width}
-      marginRight={1}
-      marginBottom={1}
-      paddingX={1}
-    >
-      <Text bold wrap="truncate">
-        {props.name}
-      </Text>
-      <Text dimColor wrap="truncate">
-        {kind !== undefined ? displayName(kind) : "resource"}
-      </Text>
-      {node !== undefined ? (
-        <Text dimColor wrap="truncate">
-          ⬡ {displayName(node.key)}
-        </Text>
-      ) : null}
-    </Box>
-  );
-};
-
-const Cell = (props: {
-  readonly name: string;
-  readonly member: unknown;
-  readonly width: number;
-  readonly selected: boolean;
-}): React.ReactElement => {
-  const runtime = useRuntime();
-  switch (memberKindOf(props.member)) {
-    case "group":
-      return Group.isGroup(props.member) ? (
-        <GroupCell
-          name={props.name}
-          node={props.member}
-          width={props.width}
-          selected={props.selected}
-        />
-      ) : (
-        <FallbackCell
-          name={props.name}
-          member={props.member}
-          width={props.width}
-          selected={props.selected}
-        />
-      );
-    case "daemon":
-      return isDaemonTag(props.member) ? (
-        <DaemonCell
-          name={props.name}
-          tag={props.member}
-          width={props.width}
-          selected={props.selected}
-        />
-      ) : (
-        <FallbackCell
-          name={props.name}
-          member={props.member}
-          width={props.width}
-          selected={props.selected}
-        />
-      );
-    case "queue":
-      return isQueueTag(props.member) ? (
-        <QueueCell
-          name={props.name}
-          tag={props.member}
-          width={props.width}
-          selected={props.selected}
-        />
-      ) : (
-        <FallbackCell
-          name={props.name}
-          member={props.member}
-          width={props.width}
-          selected={props.selected}
-        />
-      );
-    case "priority":
-      return isPriorityTag(props.member) ? (
-        <PriorityCell
-          name={props.name}
-          tag={props.member}
-          width={props.width}
-          selected={props.selected}
-        />
-      ) : (
-        <FallbackCell
-          name={props.name}
-          member={props.member}
-          width={props.width}
-          selected={props.selected}
-        />
-      );
-    case "gate":
-      return isGateTag(props.member) ? (
-        <GateCell
-          runtime={runtime}
-          name={props.name}
-          tag={props.member}
-          width={props.width}
-          selected={props.selected}
-        />
-      ) : (
-        <FallbackCell
-          name={props.name}
-          member={props.member}
-          width={props.width}
-          selected={props.selected}
-        />
-      );
-    case "api":
-      return isApiTag(props.member) ? (
-        <ApiCell
-          runtime={runtime}
-          name={props.name}
-          tag={props.member}
-          width={props.width}
-          selected={props.selected}
-        />
-      ) : (
-        <FallbackCell
-          name={props.name}
-          member={props.member}
-          width={props.width}
-          selected={props.selected}
-        />
-      );
-    case "fleetHealth":
-      return isFleetHealthTag(props.member) ? (
-        <FleetHealthCell
-          runtime={runtime}
-          name={props.name}
-          tag={props.member}
-          width={props.width}
-          selected={props.selected}
-        />
-      ) : (
-        <FallbackCell
-          name={props.name}
-          member={props.member}
-          width={props.width}
-          selected={props.selected}
-        />
-      );
-    case "telemetry":
-      return isTelemetryTag(props.member) ? (
-        <TelemetryCell
-          runtime={runtime}
-          name={props.name}
-          tag={props.member}
-          width={props.width}
-          selected={props.selected}
-        />
-      ) : (
-        <FallbackCell
-          name={props.name}
-          member={props.member}
-          width={props.width}
-          selected={props.selected}
-        />
-      );
-    case "shardMap":
-      return isShardMapTag(props.member) ? (
-        <ShardMapCell
-          runtime={runtime}
-          name={props.name}
-          tag={props.member}
-          width={props.width}
-          selected={props.selected}
-        />
-      ) : (
-        <FallbackCell
-          name={props.name}
-          member={props.member}
-          width={props.width}
-          selected={props.selected}
-        />
-      );
-    default:
-      return (
-        <FallbackCell
-          name={props.name}
-          member={props.member}
-          width={props.width}
-          selected={props.selected}
-        />
-      );
-  }
 };
 
 const Bar = (props: {
@@ -1376,10 +936,14 @@ export const Dashboard = <R, ER>(props: {
   readonly group: GroupNode;
   /** CLI / deep-link focus as member-key nicknames (`["Inbox"]`, `["Mini", "KeyRotation"]`). */
   readonly path?: ReadonlyArray<string>;
+  /** Cell set (defaults to {@link base}); extend with `withEntries(base, [forKind(...), forKey(...)])`. */
+  readonly widgets?: TuiWidgetRegistry;
 }): React.ReactElement => (
   <RegistryProvider>
-    <RuntimeContext.Provider value={props.runtime as AnyRuntime}>
-      <DashboardApp group={props.group} path={props.path ?? []} />
-    </RuntimeContext.Provider>
+    <WidgetsProvider registry={props.widgets ?? base}>
+      <RuntimeProvider runtime={props.runtime}>
+        <DashboardApp group={props.group} path={props.path ?? []} />
+      </RuntimeProvider>
+    </WidgetsProvider>
   </RegistryProvider>
 );

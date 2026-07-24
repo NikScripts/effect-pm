@@ -1,26 +1,22 @@
-import * as React from "react";
 import { HashMap } from "effect";
 import { expect, it } from "vitest";
 import { leafMemberKinds, wireKindOf } from "../src/ui/memberKind";
-import { base } from "../src/web/widgets";
 import {
+  emptyRegistry,
   forKey,
   forKind,
   isLeafTag,
   widgetFor,
   withEntries,
-  type Widget,
   type WidgetRegistry,
-} from "../src/web/widget-registry";
+} from "../src/ui/widgetRegistry";
+import { base as tuiBase } from "../src/tui/cellWidgets";
+import { base as webBase } from "../src/web/widgets";
 
 // Distinct widgets, compared by reference identity (widgetFor returns the stored one).
-const mk = (label: string): Widget => () => React.createElement("div", null, label);
+const mk = (label: string): string => label;
 
-const empty = (fallback: Widget): WidgetRegistry => ({
-  byKey: HashMap.empty<string, Widget>(),
-  byKind: HashMap.empty<string, Widget>(),
-  fallback,
-});
+const empty = (fallback: string): WidgetRegistry<string> => emptyRegistry(fallback);
 
 it("resolves key → kind → fallback, in that order", () => {
   const q = mk("queue");
@@ -55,6 +51,12 @@ it("isLeafTag accepts a keyed tag, rejects groups and non-tags", () => {
 
 it("web base registry covers every leaf MemberKind wire stamp", () => {
   for (const leaf of leafMemberKinds) {
-    expect(HashMap.has(base.byKind, wireKindOf[leaf])).toBe(true);
+    expect(HashMap.has(webBase.byKind, wireKindOf[leaf])).toBe(true);
+  }
+});
+
+it("tui base registry covers every leaf MemberKind wire stamp", () => {
+  for (const leaf of leafMemberKinds) {
+    expect(HashMap.has(tuiBase.byKind, wireKindOf[leaf])).toBe(true);
   }
 });

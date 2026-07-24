@@ -2,10 +2,11 @@
  * @module web
  *
  * **The HyperService dashboard for the browser** — the web renderer over the shared
- * `hyperlink-ts/ui` core (data bundles + group route). Point `<Dashboard runtime group />` at
- * a reactive `runtime` and a root `Group`, and it renders the responsive drill-down: WorkPool /
- * Daemon / subgroup cards, a styled detail per HyperService (stats + chart + controls + logs),
- * and a routed fullscreen log viewer — URL-backed navigation with view-transition animations.
+ * `hyperlink-ts/ui` core (data bundles + group route + widget registry). Point
+ * `<Dashboard runtime group />` at a reactive `runtime` and a root `Group`, and it renders
+ * the responsive drill-down: WorkPool / Daemon / subgroup cards, a styled detail per
+ * HyperService (stats + chart + controls + logs), and a routed fullscreen log viewer —
+ * URL-backed navigation with view-transition animations.
  *
  * ```tsx
  * import { Dashboard } from "hyperlink-ts/web";
@@ -26,7 +27,8 @@ export * from "./useViewTransition";
 export * from "./useGroupRoute";
 export * from "./runtime";
 export * from "./widgets";
-export * from "./widget-registry";
+export type { Widget, WidgetProps } from "./widget-registry";
+export { useWidgets } from "./widget-registry";
 export * from "./Dashboard";
 export * from "./debug-console";
 export { cn } from "./cn";

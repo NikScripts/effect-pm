@@ -67,16 +67,14 @@ import { kind as gateKind } from "../Gate";
 import { kind as daemonKind } from "../Daemon";
 import { kind as apiKind } from "../ApiMetrics";
 import {
-  type LeafTag,
-  type Widget,
-  type WidgetProps,
-  type WidgetRegistry,
   forKind,
   isLeafTag,
-  useWidgets,
   widgetFor,
   withEntries,
-} from "./widget-registry";
+  type LeafTag,
+  type WidgetRegistry,
+} from "../ui/widgetRegistry";
+import { type Widget, type WidgetProps, useWidgets } from "./widget-registry";
 import type { ApiUsageMetrics } from "../ApiUsageSchema";
 import type { Status as NodeStatusValue } from "../Node";
 import { useApiBundle, usePriorityBundle, useFleetHealthBundle, useNodeBundle, useDaemonBundle, useQueueBundle, useGateBundle, useShardMapBundle, useTelemetryBundle } from "./runtime";
@@ -2964,7 +2962,7 @@ const gateWidget: Widget = ({ tag, name, onOpen }) =>
  * everything else. The default for `<Dashboard>`; extend or override it with
  * `withEntries(base, [forKind(...), forKey(...)])`. @public
  */
-export const base: WidgetRegistry = withEntries(
+export const base: WidgetRegistry<Widget> = withEntries(
   {
     byKey: HashMap.empty<string, Widget>(),
     byKind: HashMap.empty<string, Widget>(),
