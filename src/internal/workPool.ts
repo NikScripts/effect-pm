@@ -843,8 +843,8 @@ export interface WorkPoolMetadata<
   readonly tag: Context.Service<Id, EngineQueueHandle<T, E, EEnqueue, R>>;
   /**
    * Serializable item codec metadata when {@link WorkPoolConfig.itemSchema}
-   * was provided on {@link WorkPool.Service}. Used by typed the process manager
-   * contracts for remote discovery and drift checks.
+   * was provided on {@link WorkPool.Service}. Used by typed Hyperlink contracts
+   * for remote discovery and drift checks.
    */
   readonly item?: QueueItemCodecDescriptor;
 }

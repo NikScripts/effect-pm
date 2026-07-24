@@ -16,7 +16,7 @@ import { connect } from "../Node";
 import type { NodeKey, AddressedNode, Status as NodeStatusSnapshot } from "../Node";
 import * as LogEntry from "../LogEntry";
 import { kind as queueKind, queueMetrics, queueStatus } from "../WorkPool";
-import { priorityKind as customQueueKind, customQueueStatus } from "../WorkPool";
+import { priorityKind, customQueueStatus } from "../WorkPool";
 import { kind as fleetHealthKind, type FleetStatus, type NodeReport } from "../FleetHealth";
 import { kind as telemetryKind, MetricsSnapshot, type MetricDatum } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";
@@ -29,12 +29,12 @@ import { now } from "./now";
 
 /** Live queue status (from the contract schema). */
 export type QueueStatus = Schema.Schema.Type<typeof queueStatus>;
-/** A custom-queue's live status — like a queue's, but `sizes` is a **named-lane** record (not the
- *  fixed high/normal/low), and `phase` is `running | draining | off`. @public */
-export type CustomQueueStatus = Schema.Schema.Type<typeof customQueueStatus>;
+/** A `WorkPool.priority` queue's live status — like a WorkPool's, but `sizes` is a **named-lane**
+ *  record (not the fixed high/normal/low), and `phase` is `running | draining | off`. @public */
+export type PriorityStatus = Schema.Schema.Type<typeof customQueueStatus>;
 /** Live queue metrics (from the contract schema). */
 export type QueueMetrics = Schema.Schema.Type<typeof queueMetrics>;
-/** Live process status (from the contract schema). */
+/** Live daemon status (from the contract schema). */
 export type DaemonStatus = Schema.Schema.Type<typeof daemonStatus>;
 /** One scheduled run window (from the contract schema): `{ id?, startAt, stopAt? }`. */
 export type ScheduleEntry = Schema.Schema.Type<typeof daemonScheduleEntry>;
@@ -86,8 +86,8 @@ interface RefLike<A> {
   readonly get: Effect.Effect<A>;
   readonly changes: Stream.Stream<A>;
 }
-/** The structural shape of a process's live service (the base `Daemon.Tag` contract). The inline
- *  `schedule` verb group is present only on a process that owns an inline schedule
+/** The structural shape of a daemon's live service (the base `Daemon.Tag` contract). The inline
+ *  `schedule` verb group is present only on a daemon that owns an inline schedule
  *  (`Daemon.schedule([...])`), so it is optional here. */
 interface DaemonService {
   readonly status: RefLike<DaemonStatus>;
@@ -111,10 +111,11 @@ interface ApiService {
   readonly usage: Subscribable<ApiUsageSnapshot>;
 }
 
-/** The structural shape of a **custom** queue's live service — like {@link QueueService} but with a
- *  named-lane `status`, an extra `levelSizes`, and a `start` command. Metrics/logs are identical. */
-interface CustomQueueService {
-  readonly status: Subscribable<CustomQueueStatus>;
+/** The structural shape of a `WorkPool.priority` queue's live service — like {@link QueueService}
+ *  but with a named-lane `status`, an extra `levelSizes`, and a `start` command. Metrics/logs are
+ *  identical. */
+interface PriorityService {
+  readonly status: Subscribable<PriorityStatus>;
   readonly size: Subscribable<number>;
   readonly isEmpty: Subscribable<boolean>;
   readonly levelSizes: Effect.Effect<ReadonlyArray<number>>;
@@ -137,8 +138,8 @@ interface CustomQueueService {
 
 /** A queue tag — yieldable for its live service. Requirement `R` is provided by the runtime. */
 export type QueueTag<R = never> = Effect.Effect<QueueService, never, R> & { readonly key: string };
-/** A custom-queue tag — yieldable for its live service. @public */
-export type CustomQueueTag<R = never> = Effect.Effect<CustomQueueService, never, R> & { readonly key: string };
+/** A `WorkPool.priority` tag — yieldable for its live service. @public */
+export type PriorityTag<R = never> = Effect.Effect<PriorityService, never, R> & { readonly key: string };
 
 /** The structural shape of a **fleet-health** resource's live service — a per-node health map + a
  *  rollup status, both `fleet` effect fields (read-once, polled — no reactive ref). */
@@ -207,10 +208,10 @@ export interface QueueBundle {
   readonly clear: CommandAtom;
   readonly shutdown: CommandAtom;
 }
-/** The atoms + controls one **custom-queue** card needs — like {@link QueueBundle} (named-lane status)
- *  plus a `start` command. @public */
-export interface CustomQueueBundle {
-  readonly status: ValueAtom<Option.Option<CustomQueueStatus>>;
+/** The atoms + controls one `WorkPool.priority` card needs — like {@link QueueBundle} (named-lane
+ *  status) plus a `start` command. @public */
+export interface PriorityBundle {
+  readonly status: ValueAtom<Option.Option<PriorityStatus>>;
   readonly metrics: ValueAtom<Option.Option<QueueMetrics>>;
   readonly history: ValueAtom<ReadonlyArray<MetricPoint>>;
   readonly trend: ValueAtom<ReadonlyArray<number>>;
@@ -352,10 +353,10 @@ export const isQueueTag = (m: unknown): m is QueueTag => hyperlinkKindOf(m) === 
 export const isDaemonTag = (m: unknown): m is DaemonTag => hyperlinkKindOf(m) === daemonKind;
 /** @public */
 export const isApiTag = (m: unknown): m is ApiTag => hyperlinkKindOf(m) === apiKind;
-/** Custom-queue guard — its own stamped kind (not folded into {@link kindOf}, which stays the four
- *  primary kinds; a custom queue dispatches by its exact kind key). @public */
-export const isCustomQueueTag = (m: unknown): m is CustomQueueTag =>
-  hyperlinkKindOf(m) === customQueueKind;
+/** `WorkPool.priority` guard — its own stamped kind (not folded into {@link kindOf}, which stays
+ *  the four primary kinds; a priority queue dispatches by its exact kind key). @public */
+export const isPriorityTag = (m: unknown): m is PriorityTag =>
+  hyperlinkKindOf(m) === priorityKind;
 /** Fleet-health guard — its own stamped kind (a mesh factory, dispatched by exact kind key). @public */
 export const isFleetHealthTag = (m: unknown): m is FleetHealthTag =>
   hyperlinkKindOf(m) === fleetHealthKind;
@@ -365,7 +366,7 @@ export const isTelemetryTag = (m: unknown): m is TelemetryTag =>
 /** Shard-map guard — its own stamped kind (a mesh factory, dispatched by exact kind key). @public */
 export const isShardMapTag = (m: unknown): m is ShardMapTag =>
   hyperlinkKindOf(m) === shardMapKind;
-/** Run-gate guard — its own stamped kind (dispatched by exact kind key). @public */
+/** Gate guard — its own stamped kind (dispatched by exact kind key). @public */
 export const isGateTag = (m: unknown): m is GateTag =>
   hyperlinkKindOf(m) === gateKind;
 
@@ -532,21 +533,22 @@ export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueT
   return bundle;
 };
 
-const customQueueBundleCache = new WeakMap<object, Map<string, CustomQueueBundle>>();
+const priorityBundleCache = new WeakMap<object, Map<string, PriorityBundle>>();
 
-/** Build (once per runtime+tag) the atom bundle for a **custom-queue** tag — the {@link queueBundle}
- *  parallel: same metrics/logs wire, a named-lane status, and a `start` command. @public */
-export const customQueueBundle = <R, ER>(
+/** Build (once per runtime+tag) the atom bundle for a `WorkPool.priority` tag — the
+ *  {@link queueBundle} parallel: same metrics/logs wire, a named-lane status, and a `start`
+ *  command. @public */
+export const priorityBundle = <R, ER>(
   runtime: DashboardRuntime<R, ER>,
-  tag: CustomQueueTag<R>,
-): CustomQueueBundle => {
-  const cache = cacheFor(customQueueBundleCache, runtime);
+  tag: PriorityTag<R>,
+): PriorityBundle => {
+  const cache = cacheFor(priorityBundleCache, runtime);
   const existing = cache.get(tag.key);
   if (existing !== undefined) return existing;
 
   const node = nodeOf(tag);
   if (node === undefined) {
-    throw new Error(`custom-queue tag ${tag.key} is missing a node`);
+    throw new Error(`WorkPool.priority tag ${tag.key} is missing a node`);
   }
 
   const statusStream = Stream.unwrap(Effect.map(tag, (q) => q.status.changes));
@@ -557,7 +559,7 @@ export const customQueueBundle = <R, ER>(
     latency: m.avgTotalMillis ?? 0,
   });
   // total pending across all named lanes (the fixed high/normal/low sum has no meaning here)
-  const trendValue = (s: CustomQueueStatus): number =>
+  const trendValue = (s: PriorityStatus): number =>
     Object.values(s.sizes).reduce((sum, n) => sum + n, 0);
   bumpLogIdFrom(`${tag.key}/logs`);
 
@@ -565,7 +567,7 @@ export const customQueueBundle = <R, ER>(
     statusStream.pipe(
       Stream.scan(
         {
-          latest: Option.none<CustomQueueStatus>(),
+          latest: Option.none<PriorityStatus>(),
           trend: readCache<number>(`${tag.key}/trend`)?.items ?? [],
         },
         (acc, s) => ({ latest: Option.some(s), trend: [...acc.trend, trendValue(s)].slice(-TREND) }),
@@ -598,7 +600,7 @@ export const customQueueBundle = <R, ER>(
     ),
   );
 
-  const bundle: CustomQueueBundle = {
+  const bundle: PriorityBundle = {
     status: Atom.mapResult(statusTrend, (a) => a.latest),
     metrics: Atom.mapResult(metricsHistory, (a) => a.latest),
     history: Atom.mapResult(metricsHistory, (a) => a.history),

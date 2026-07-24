@@ -84,7 +84,10 @@ accumulated since 0.8.0-beta.28.
 - Custom metrics served from the Metric registry; per-type dashboard widgets (browser + Ink TUI
   over one data layer); `/cli`, `/tui`, `/web` subpath exports.
 - **Web dashboard naming:** `RunTag` / `isRunTag` / `useRunBundle` / `runBundle` →
-  `GateTag` / `isGateTag` / `useGateBundle` / `gateBundle`; `processLeaves` → `daemonLeaves`.
+  `GateTag` / `isGateTag` / `useGateBundle` / `gateBundle`; `processLeaves` → `daemonLeaves`;
+  `CustomQueue*` / `useCustomQueueBundle` / `isCustomQueueTag` / `customQueueBundle` →
+  `Priority*` / `usePriorityBundle` / `isPriorityTag` / `priorityBundle` (matches
+  `WorkPool.priority`).
 
 ### Docs
 

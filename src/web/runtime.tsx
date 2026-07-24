@@ -10,8 +10,8 @@ import type { Atom } from "effect/unstable/reactivity";
 import {
   type ApiBundle,
   type ApiTag,
-  type CustomQueueBundle,
-  type CustomQueueTag,
+  type PriorityBundle,
+  type PriorityTag,
   type FleetHealthBundle,
   type FleetHealthTag,
   type TelemetryBundle,
@@ -27,7 +27,7 @@ import {
   type QueueBundle,
   type QueueTag,
   apiBundle,
-  customQueueBundle,
+  priorityBundle,
   fleetHealthBundle,
   telemetryBundle,
   shardMapBundle,
@@ -59,9 +59,9 @@ export const useRuntime = (): AnyRuntime => {
 /** Atom bundle for a queue tag, memoized per runtime+tag. @public */
 export const useQueueBundle = (tag: QueueTag): QueueBundle => queueBundle(useRuntime(), tag);
 
-/** Atom bundle for a custom-queue tag, memoized per runtime+tag. @public */
-export const useCustomQueueBundle = (tag: CustomQueueTag): CustomQueueBundle =>
-  customQueueBundle(useRuntime(), tag);
+/** Atom bundle for a `WorkPool.priority` tag, memoized per runtime+tag. @public */
+export const usePriorityBundle = (tag: PriorityTag): PriorityBundle =>
+  priorityBundle(useRuntime(), tag);
 
 /** Atom bundle for a fleet-health tag, memoized per runtime+tag. @public */
 export const useFleetHealthBundle = (tag: FleetHealthTag): FleetHealthBundle =>

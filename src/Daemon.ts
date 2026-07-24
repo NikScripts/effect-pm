@@ -163,7 +163,7 @@ export interface DaemonSnapshot {
 }
 
 /**
- * Managed process handle for the process manager.
+ * Managed daemon handle for Hyperlink supervision.
  *
  * @typeParam R — Environment required to run {@link Daemon.effect} (after optional inline layers).
  *
@@ -211,14 +211,13 @@ export interface Daemon<out R> {
 }
 
 /**
- * Canonical process declaration that can be registered with a typed
- * the process manager.
+ * Canonical daemon declaration that can be registered with a typed Hyperlink group.
  *
  * @remarks
- * The declaration carries the process handle under {@link process} rather than
+ * The declaration carries the daemon handle under {@link process} rather than
  * copying handle fields onto the service class. Function/class `name` is a
  * read-only JavaScript property, so storing the runtime handle separately keeps
- * the service class safe while preserving the canonical process id.
+ * the service class safe while preserving the canonical daemon id.
  *
  * @category models
  * @public
@@ -231,11 +230,11 @@ export interface DaemonDefinition<out Id extends string, out R>
 }
 
 /**
- * Canonical process service declaration.
+ * Canonical daemon service declaration.
  *
  * @remarks
  * This mirrors Effect's class-based `Context.Service` style while attaching the
- * metadata the process manager needs for typed registration and contract generation.
+ * metadata Hyperlink needs for typed registration and contract generation.
  *
  * @category models
  * @public
@@ -265,7 +264,7 @@ export interface DaemonServiceDefinition<Self, Id extends string, E, R>
   ) => Layer.Layer<never>;
   /**
    * {@link Daemon} built from {@link defaultSpec} after folding configure patches.
-   * the process manager uses this when assembling the group runtime.
+   * Hyperlink uses this when assembling the group runtime.
    */
   readonly buildConfiguredDaemon: Effect.Effect<Daemon<R>>;
 }
@@ -1363,7 +1362,7 @@ export type DaemonMake = typeof make;
 
 /**
  * The Daemon resource kind — the single source of truth (also the module's public `kind`).
- * The definition carries it and the process manager / dashboard match on it; there is no
+ * The definition carries it and Hyperlink / the dashboard match on it; there is no
  * second short discriminator.
  *
  * @category utils

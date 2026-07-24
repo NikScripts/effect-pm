@@ -26,7 +26,7 @@ import {
   type ApiPoint,
   type ApiTag,
   type CommandAtom,
-  type CustomQueueTag,
+  type PriorityTag,
   type FleetHealthTag,
   type TelemetryTag,
   type ShardMapTag,
@@ -41,7 +41,7 @@ import {
   type ScheduleEntry,
   type NodeRef,
   isApiTag,
-  isCustomQueueTag,
+  isPriorityTag,
   isFleetHealthTag,
   isTelemetryTag,
   isShardMapTag,
@@ -56,7 +56,7 @@ import {
 } from "./data";
 import { kindOf as hyperlinkKindOf, kind as hyperlinkKind } from "../Hyperlink";
 import { kind as queueKind } from "../WorkPool";
-import { priorityKind as customQueueKind } from "../WorkPool";
+import { priorityKind } from "../WorkPool";
 import { kind as fleetHealthKind, type NodeReport } from "../FleetHealth";
 import { kind as telemetryKind, type MetricDatum } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";
@@ -76,7 +76,7 @@ import {
 } from "./widget-registry";
 import type { ApiUsageMetrics } from "../ApiUsageSchema";
 import type { Status as NodeStatusValue } from "../Node";
-import { useApiBundle, useCustomQueueBundle, useFleetHealthBundle, useNodeBundle, useDaemonBundle, useQueueBundle, useGateBundle, useShardMapBundle, useTelemetryBundle } from "./runtime";
+import { useApiBundle, usePriorityBundle, useFleetHealthBundle, useNodeBundle, useDaemonBundle, useQueueBundle, useGateBundle, useShardMapBundle, useTelemetryBundle } from "./runtime";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
 import { useViewTransitionStyle } from "./useViewTransition";
 import { dlog } from "./debug-console";
@@ -214,7 +214,7 @@ export const QueueCard = (props: {
   );
 };
 
-/** One named lane as a labelled bar — the custom-queue counterpart to `PrioRow` (fixed high/normal/low);
+/** One named lane as a labelled bar — the `WorkPool.priority` counterpart to `PrioRow` (fixed high/normal/low);
  *  lanes are arbitrary, so the label is the lane name. */
 const LaneRow = (props: {
   readonly lane: string;
@@ -228,23 +228,23 @@ const LaneRow = (props: {
   </div>
 );
 
-/** Custom-queue phase colours (running / draining / off) — its phase set differs from a queue's. */
-const CQ_PHASE: Record<string, string> = { running: "#22c55e", draining: "#eab308", off: "#94a3b8" };
+/** `WorkPool.priority` phase colours (running / draining / off) — its phase set differs from a queue's. */
+const PRIORITY_PHASE: Record<string, string> = { running: "#22c55e", draining: "#eab308", off: "#94a3b8" };
 
 /**
- * A **custom queue** as a grid card — the {@link QueueCard} sibling for `WorkPoolPriority`: same
- * pending / done / phase, but its **named lanes** (`status.sizes`, an arbitrary set) render one bar
- * each instead of the fixed high/normal/low priorities. @public
+ * A `WorkPool.priority` queue as a grid card — the {@link QueueCard} sibling: same pending / done /
+ * phase, but its **named lanes** (`status.sizes`, an arbitrary set) render one bar each instead of
+ * the fixed high/normal/low priorities. @public
  */
-export const CustomQueueCard = (props: {
-  readonly tag: CustomQueueTag;
+export const PriorityCard = (props: {
+  readonly tag: PriorityTag;
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
   readonly selected?: boolean;
-  readonly onOpen: (tag: CustomQueueTag) => void;
+  readonly onOpen: (tag: PriorityTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
-  const r = useAtomValue(useCustomQueueBundle(props.tag).status);
+  const r = useAtomValue(usePriorityBundle(props.tag).status);
   const s = AsyncResult.isSuccess(r) ? Option.getOrUndefined(r.value) : undefined;
   const lanes = s !== undefined ? Object.entries(s.sizes) : [];
   const pending = lanes.reduce((sum, [, n]) => sum + n, 0);
@@ -262,7 +262,7 @@ export const CustomQueueCard = (props: {
     >
       <div className="mb-2 flex items-center gap-2">
         <strong className="flex-1 truncate">{props.name}</strong>
-        <Badge color={paused ? "#eab308" : CQ_PHASE[s?.phase ?? "running"] ?? "#22c55e"}>
+        <Badge color={paused ? "#eab308" : PRIORITY_PHASE[s?.phase ?? "running"] ?? "#22c55e"}>
           {paused ? "paused" : s?.phase ?? "running"}
         </Badge>
       </div>
@@ -2590,15 +2590,16 @@ export const GateCard = (props: {
 // `grow` so they stretch to fill and are measured as a spacer, not double-mounted.
 
 /**
- * Fullscreen detail for a **custom queue** — stats, lanes, controls, the throughput chart, and the
- * live log stream, auto-paginated. Fills the drill-in that the grid `CustomQueueCard` opens. @public
+ * Fullscreen detail for a `WorkPool.priority` queue — stats, lanes, controls, the throughput chart,
+ * and the live log stream, auto-paginated. Fills the drill-in that the grid {@link PriorityCard}
+ * opens. @public
  */
-export const CustomQueueDetail = (props: {
-  readonly tag: CustomQueueTag;
+export const PriorityDetail = (props: {
+  readonly tag: PriorityTag;
   readonly name?: string;
   readonly onBack: () => void;
 }): React.ReactElement => {
-  const bundle = useCustomQueueBundle(props.tag);
+  const bundle = usePriorityBundle(props.tag);
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? Option.getOrUndefined(statusR.value) : undefined;
   const paused = s?.paused === true;
@@ -2667,7 +2668,7 @@ export const CustomQueueDetail = (props: {
       onBack={props.onBack}
       vtKey={`res-${props.tag.key}`}
       readinessTag={props.tag}
-      badge={<Badge color={paused ? "#eab308" : CQ_PHASE[s?.phase ?? "running"] ?? "#22c55e"}>{paused ? "paused" : s?.phase ?? "running"}</Badge>}
+      badge={<Badge color={paused ? "#eab308" : PRIORITY_PHASE[s?.phase ?? "running"] ?? "#22c55e"}>{paused ? "paused" : s?.phase ?? "running"}</Badge>}
       sections={sections}
     />
   );
@@ -2925,9 +2926,9 @@ const apiWidget: Widget = ({ tag, name, onOpen }) =>
   ) : (
     <FallbackCard tag={tag} name={name} onOpen={onOpen} />
   );
-const customQueueWidget: Widget = ({ tag, name, onOpen }) =>
-  isCustomQueueTag(tag) ? (
-    <CustomQueueCard tag={tag} name={name} onOpen={onOpen} />
+const priorityWidget: Widget = ({ tag, name, onOpen }) =>
+  isPriorityTag(tag) ? (
+    <PriorityCard tag={tag} name={name} onOpen={onOpen} />
   ) : (
     <FallbackCard tag={tag} name={name} onOpen={onOpen} />
   );
@@ -2969,7 +2970,7 @@ export const base: WidgetRegistry = withEntries(
   },
   [
     forKind(queueKind, queueWidget),
-    forKind(customQueueKind, customQueueWidget),
+    forKind(priorityKind, priorityWidget),
     forKind(daemonKind, daemonWidget),
     forKind(apiKind, apiWidget),
     forKind(fleetHealthKind, fleetHealthWidget),

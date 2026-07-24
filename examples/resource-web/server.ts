@@ -342,7 +342,7 @@ const statsNode = Node.wsServer([
     effect: importWorker,
     concurrency: 3,
   }),
-  // a custom queue with named lanes (hot/warm/cold); its store facet lives in StatsStore (above), so
+  // a WorkPool.priority queue with named lanes (hot/warm/cold); its store facet lives in StatsStore (above), so
   // `serve` (not serveMemory) — one Store.Storage per node, shared like the queue's.
   WorkPool.serve(ImportJobs, {
     laneCount: 3,
@@ -417,7 +417,7 @@ const wnbaNodeProgram = Effect.gen(function* () {
 
 const statsNodeProgram = Effect.gen(function* () {
   yield* loadQueue(yield* PlayByPlayQueue, "pbp");
-  // feed the custom queue across its named lanes so the CustomQueueCard shows live per-lane bars.
+  // feed the WorkPool.priority queue across its named lanes so the PriorityCard shows live per-lane bars.
   const imports = yield* ImportJobs;
   const lanes = ["hot", "warm", "cold"] as const;
   yield* Effect.forkScoped(

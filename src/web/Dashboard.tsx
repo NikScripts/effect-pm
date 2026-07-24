@@ -24,7 +24,7 @@ import {
   type DaemonTag,
   type QueueBundle,
   type QueueTag,
-  isCustomQueueTag,
+  isPriorityTag,
   isApiTag,
   isDaemonTag,
   isFleetHealthTag,
@@ -45,7 +45,7 @@ import { RuntimeProvider, useApiBundle, useNodeBundle, useDaemonBundle, useQueue
 import { ViewTransitionProvider, useViewTransition, useViewTransitionStyle } from "./useViewTransition";
 import { useGroupRoute } from "./useGroupRoute";
 import { Button } from "./components/ui/button";
-import { ApiEndpointTable, ApiMetricChart, ApiStats, ApiStatusBadge, base, Cell, ConfirmDialog, CustomQueueDetail, FleetHealthDetail, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, MetricChart, DaemonControls, DaemonStats, DaemonStatusBadge, QueueControls, QueueStats, HyperlinkReadinessBanner, GateDetail, ScheduleEditor, ShardMapDetail, StatusBadge, TelemetryDetail, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
+import { ApiEndpointTable, ApiMetricChart, ApiStats, ApiStatusBadge, base, Cell, ConfirmDialog, PriorityDetail, FleetHealthDetail, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, MetricChart, DaemonControls, DaemonStats, DaemonStatusBadge, QueueControls, QueueStats, HyperlinkReadinessBanner, GateDetail, ScheduleEditor, ShardMapDetail, StatusBadge, TelemetryDetail, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
 import { WidgetsProvider, isLeafTag, type WidgetRegistry } from "./widget-registry";
 import { fmtDayLabel, now, startOfWeekMillis } from "./now";
 import { DebugConsole } from "./debug-console";
@@ -313,7 +313,7 @@ const DashboardInner = (props: {
     if (isApiTag(selected)) return <ApiDetail tag={selected} onBack={toGrid(selected.key)} />;
     if (isDaemonTag(selected)) return <DaemonDetail tag={selected} onBack={toGrid(selected.key)} onOpenLogs={openLogs} onOpenSchedule={openSchedule} />;
     if (isQueueTag(selected)) return <QueueDetail tag={selected} onBack={toGrid(selected.key)} onOpenLogs={openLogs} />;
-    if (isCustomQueueTag(selected)) return <CustomQueueDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
+    if (isPriorityTag(selected)) return <PriorityDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
     if (isFleetHealthTag(selected)) return <FleetHealthDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
     if (isTelemetryTag(selected)) return <TelemetryDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
     if (isShardMapTag(selected)) return <ShardMapDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
@@ -448,7 +448,7 @@ const NodeResourceView = (props: {
   if (isQueueTag(tag)) {
     return <QueueDetail tag={tag} onBack={props.onBack} onOpenLogs={() => setView("logs")} />;
   }
-  if (isCustomQueueTag(tag)) return <CustomQueueDetail tag={tag} onBack={props.onBack} />;
+  if (isPriorityTag(tag)) return <PriorityDetail tag={tag} onBack={props.onBack} />;
   if (isFleetHealthTag(tag)) return <FleetHealthDetail tag={tag} onBack={props.onBack} />;
   if (isTelemetryTag(tag)) return <TelemetryDetail tag={tag} onBack={props.onBack} />;
   if (isShardMapTag(tag)) return <ShardMapDetail tag={tag} onBack={props.onBack} />;
