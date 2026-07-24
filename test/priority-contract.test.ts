@@ -5,7 +5,7 @@ import { methodMeta, specOf } from "../src/Hyperlink";
 
 const JobSchema = Schema.Struct({ id: Schema.String });
 
-it("customQueueTag bakes named levels and pair-style add", () => {
+it("WorkPool.priority tag bakes named levels and pair-style add", () => {
   class Jobs extends WorkPool.priority<Jobs>()("@app/Jobs-spec", {
     payload: JobSchema,
     laneCount: 4,
@@ -18,7 +18,7 @@ it("customQueueTag bakes named levels and pair-style add", () => {
   expect(spec.add.annotations.callStyle).toBe("pair");
 });
 
-it("customQueueTag bakes named levels from the config object", () => {
+it("WorkPool.priority tag bakes named levels from the config object", () => {
   class Jobs extends WorkPool.priority<Jobs>()("@app/Jobs-names", {
     payload: JobSchema,
     laneCount: 3,

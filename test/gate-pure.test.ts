@@ -14,9 +14,9 @@ import {
   makeRunStateChange,
   toHyperlinkState,
 } from "../src/internal/gateFacts";
-import type { RunGateStatus } from "../src/internal/gate";
+import type { GateStatus } from "../src/internal/gate";
 
-const baseStatus = (patch: Partial<RunGateStatus> = {}): RunGateStatus => ({
+const baseStatus = (patch: Partial<GateStatus> = {}): GateStatus => ({
   resourceId: "@test/Gate",
   observedAt: 0,
   configVersion: 1,

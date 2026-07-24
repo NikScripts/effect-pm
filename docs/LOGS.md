@@ -18,8 +18,8 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 | Log entry + predicates | `hyperlink-ts/LogEntry` | `src/LogEntry.ts` |
 | Hyperlink foundation | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` |
 | Store (registrations) | `hyperlink-ts/Store` | `src/Store.ts` |
-| Process tags | `hyperlink-ts/Process` | `src/Process.ts` |
-| Queue tags | `hyperlink-ts/WorkPool` | `src/WorkPool.ts` |
+| Daemon tags | `hyperlink-ts/Daemon` | `src/Daemon.ts` |
+| WorkPool tags | `hyperlink-ts/WorkPool` | `src/WorkPool.ts` |
 
 | Example | Short path | Role |
 |---------|------------|------|
@@ -34,7 +34,7 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 | Key kind | Identifies | Declared on | Stored / queried as |
 |----------|------------|-------------|---------------------|
 | **Node log key** | One OS process / runtime host (durable bucket) | `Node.Tag` constructor arg → `.key` | `Node.logs` scope; `annotations.node` |
-| **Hyperlink key** | One queue, process, or custom tag | `Hyperlink.Tag` / `Daemon.Tag` / `WorkPool.Tag` constructor arg → `.key` | registration scope; lineage JSON |
+| **Hyperlink key** | One work pool, daemon, or custom tag | `Hyperlink.Tag` / `Daemon.Tag` / `WorkPool.Tag` constructor arg → `.key` | registration scope; lineage JSON |
 | **Annotation key** | Name of a field on `LogEntry.annotations` | `LogAnnotationKeys.*` | Not a bucket — metadata field name |
 | **Store scope key** | Journal partition for a registration | Same as node or resource key | Durable `_logs` journal (private); read via `Hyperlink.logs` / `Logs.by*` |
 | **Lineage segment key** | One hop in resource ancestry | Each element in lineage JSON array | `LogEntry.hasKey` / `atRoot` / `atLeaf` |
@@ -62,7 +62,7 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 | Symbol | Key kind | Key value | Package import | Source | Example |
 |--------|----------|-----------|----------------|--------|---------|
 | `BoxScoreQueue.key` | resource key | `wnba/BoxScoreQueue` | `hyperlink-ts/WorkPool` | `src/WorkPool.ts` | `resource-web/hub.ts` |
-| `LiveScorePoller.key` | resource key | `wnba/LiveScorePoller` | `hyperlink-ts/Process` | `src/Process.ts` | `resource-web/hub.ts` |
+| `LiveScorePoller.key` | resource key | `wnba/LiveScorePoller` | `hyperlink-ts/Daemon` | `src/Daemon.ts` | `resource-web/hub.ts` |
 | `PlayByPlayQueue.key` | resource key | `wnba/PlayByPlayQueue` | `hyperlink-ts/WorkPool` | `src/WorkPool.ts` | `resource-web/hub.ts` |
 | `ScoresDb.key` | resource key | `wnba/ScoresDb` | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` | `resource-web/hub.ts` |
 | `ScoresApi.key` | resource key | `@wnba/ScoresApi` | `hyperlink-ts/ApiMetrics` | `src/ApiMetrics.ts` | `resource-web/hub.ts` |
@@ -94,7 +94,7 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 1. **Must equal** the `Node.Tag` key for that process: `WnbaNode.key` → node log key `"wnba/scores"`.
 2. **Register** `Node.logs` (or `Hyperlink.store(Node)`) on the app `Store.Service`; query with `Logs.byNode(Node)`.
 3. **Stamped** on every node-journal line as annotation key `LogAnnotationKeys.node` → node log key value.
-4. **Two copies OK** — when both `Node.logs` and `Process.store` / `WorkPool.store` are registered, the same live line can land in both scopes (one append per active registration). Each scope’s durable tail seeds its `(scopeKey, lineId)` claim from existing `_logs` rows at acquire (rematerialize-safe).
+4. **Two copies OK** — when both `Node.logs` and `Daemon.store` / `WorkPool.store` are registered, the same live line can land in both scopes (one append per active registration). Each scope’s durable tail seeds its `(scopeKey, lineId)` claim from existing `_logs` rows at acquire (rematerialize-safe).
 5. Use **slash-separated** paths (`domain/role`), not placeholders (`my-node`, `node-a`, bare `wnba`).
 
 ```ts
@@ -109,7 +109,7 @@ class Daily extends Daemon.Tag<Daily>()("app/Daily") {}
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
   BillingNode.logs,
-  Process.store(Daily),
+  Daemon.store(Daily),
 ) {}
 
 Effect.provide(program, AppStore.layerMemory)
@@ -150,7 +150,7 @@ const { stream, query } = yield* Hyperlink.logs(LiveScorePoller);
 BillingNode process (node log key: billing/scores)
   AppStore.layerMemory          → Logs.layer (baked in) + Storage + durable tails
   BillingNode.logs              → match-all follower → private `_logs` journal (node)
-  Process.store(Daily)          → lineage follower → private `_logs` journal (resource)
+  Daemon.store(Daily)          → lineage follower → private `_logs` journal (resource)
   Logs.withScope(tag)           → appends resource key onto fiber lineage path
   Hyperlink.logs(tag)            → { stream, query } (live + durable)
 ```
@@ -183,11 +183,11 @@ import * as Store from "hyperlink-ts/Store";
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
   WnbaNode.logs,
-  Process.store(LiveScorePoller),
+  Daemon.store(LiveScorePoller),
 ) {}
 
 // Provide the store *into* the resource layer so Logs.layer is installed before
-// auto-started queue workers fork (Process can use either order — workers start on `run`).
+// auto-started WorkPool workers fork (Daemon can use either order — workers start on `run`).
 Effect.provide(
   program,
   Daemon.layer(...).pipe(Layer.provideMerge(AppStore.layerMemory)),
@@ -265,23 +265,26 @@ Lineage JSON uses annotation key `LogAnnotationKeys.lineage`. Hyperlink kind is 
 
 ## Remote dashboard (browser → node)
 
-When the dashboard reaches resources over RPC, durable per-resource rows come from the node's journal (`Node.status.logs.query`) filtered by **resource key**. Locally, `Hyperlink.logs(tag).query` prefers registration Storage and falls back to Node.status when remote.
+When the dashboard reaches resources over RPC, durable per-resource rows come from the node's journal
+(`(yield* MyNode).logs.query`) filtered by **resource key**. Locally, `Hyperlink.logs(tag).query`
+prefers registration Storage and falls back to the node-handle logs path when remote.
 
 ```ts
-import * as NodeStatus from "hyperlink-ts/Node (Node.status)";
 import * as LogEntry from "hyperlink-ts/LogEntry";
+import { Stream } from "effect";
 
 const resourceKey = LiveScorePoller.key;
+const n = yield* LiveNode; // connected node handle
 
-Node.status.logs.stream.pipe(Stream.filter(LogEntry.hasKey(resourceKey)));
+n.logs.stream.pipe(Stream.filter(LogEntry.hasKey(resourceKey)));
 
-const rows = yield* Node.status.logs.query({ limit: 300 });
+const rows = yield* n.logs.query({ limit: 300 });
 const scoped = rows.filter(LogEntry.hasKey(resourceKey));
 ```
 
 Example: `src/web/data.ts` (`hyperlinkLogsAtom`), `examples/web-dashboard/queue-data.ts` (`hyperlinkLogsAccumulator`).
 
-Server must provide an app `Store.Service` with `Node.logs` (and desired toolkit stores) on the node stack — e.g. `DropletStore.layerMemory` in `examples/web-dashboard/queue-server.ts`. `httpServer` infers the node log key from served tags' bound `Node` for `Node.status.logs.query`.
+Server must provide an app `Store.Service` with `Node.logs` (and desired toolkit stores) on the node stack — e.g. `DropletStore.layerMemory` in `examples/web-dashboard/queue-server.ts`. `httpServer` infers the node log key from served tags' bound `Node` for the handle’s `logs.query`.
 
 ## Migration
 
@@ -289,9 +292,9 @@ Server must provide an app `Store.Service` with `Node.logs` (and desired toolkit
 |-----|-----|
 | `Logs.persistLayer` + `hyperlink-ts/store/Log` | **Removed** — `Node.logs` + toolkit `.store` on `Store.Service` |
 | `NodeLogs.*` / `/NodeLogs` | **Removed** — use `Logs.*` / `hyperlink-ts/Logs` |
-| `ProcessStore` log facet | private `_logs` shape on toolkit store registrations (hidden from handle types) |
+| Process-store log facet | private `_logs` shape on toolkit store registrations (hidden from handle types) |
 | `captureLogs` on engines | **Removed** — `Logs.layer` (baked into Store) + `Logs.withScope(tag)` |
-| `queue.logs` / `proc.logs` on handle | `Hyperlink.logs(tag)` (local Storage / remote Node.status) |
+| `queue.logs` / `proc.logs` on handle | `Hyperlink.logs(tag)` (local Storage / remote node-handle logs) |
 | `HistoryStore` `${tag.key}/logs` | **Removed** — durable logs via registration `_logs` + `Hyperlink.logs` / `Logs.by*` |
 | `HostLogs` (docs) | `Logs` |
 

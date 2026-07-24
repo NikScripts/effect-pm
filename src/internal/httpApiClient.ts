@@ -2,7 +2,7 @@
  * HttpApiClient — typed HTTP API client with transport-level concurrency gating.
  *
  * Wraps Effect's `HttpApiClient.make` with a `Semaphore`-based concurrency gate
- * on the `HttpClient` transport layer (via `HttpClientRunGate.withRunner` applied to
+ * on the `HttpClient` transport layer (via `HttpClientGate.withRunner` applied to
  * `HttpClient.transform`).
  *
  * ## Node usage metrics
@@ -39,7 +39,7 @@ import { HttpClient, HttpClientRequest } from "effect/unstable/http";
 import { HttpApi, HttpApiClient } from "effect/unstable/httpapi";
 import type { HttpApi as HttpApiType, HttpApiGroup } from "effect/unstable/httpapi";
 import { Cause, Clock, Context, Effect, Exit, Layer, Metric, Predicate, Ref, Scope } from "effect";
-import * as HttpClientRunGate from "../HttpClientRunGate";
+import * as HttpClientGate from "../HttpClientGate";
 import {
   ensureClientUsage,
   recordEndpointUsage as recordRegistryUsage,
@@ -280,7 +280,7 @@ const applyTransportMiddleware = (
 ): HttpClient.HttpClient => {
   const userTransformed =
     options.transformClient !== undefined ? options.transformClient(client) : client;
-  const gated = HttpClientRunGate.withRunner(options.runner)(userTransformed);
+  const gated = HttpClientGate.withRunner(options.runner)(userTransformed);
   return options.withInFlight(gated);
 };
 

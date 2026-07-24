@@ -101,7 +101,7 @@ export interface Endpoints {
  * Directory advertise conflict policy when the same `nodeKey` already has a row.
  *
  * - `livenessReplace` — ping incumbent; alive → reject; dead → replace
- * - `askIncumbent` — if alive, Lookup asks `NodeStatus.yield`; refuse/timeout → reject
+ * - `askIncumbent` — if alive, Lookup asks the incumbent node-status `yield`; refuse/timeout → reject
  * - `reject` — alive → reject; dead → still replace
  * - `inherit` — continue up the resolve chain (call-site → node → Lookup → hard fallback)
  *
@@ -1137,7 +1137,7 @@ export class ProtocolUnanswered extends Data.TaggedError("ProtocolUnanswered")<{
 }
 
 /**
- * The peer answered {@link NodeStatus}, but the target resource key is not in `status.resources`.
+ * The peer answered the node-status RPC, but the target resource key is not in `status.resources`.
  * Surfaced by {@link Hyperlink.verifyConnection}`(node, { deep: true, resource })`.
  *
  * @category errors

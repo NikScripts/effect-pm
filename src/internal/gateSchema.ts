@@ -10,7 +10,7 @@ import * as Hyperlink from "../Hyperlink";
 import type { Method, RefField } from "../Hyperlink";
 
 /** Live gate counters on the wire — element of the reactive `status` ref. @internal */
-export const runGateStatus = Schema.Struct({
+export const gateStatus = Schema.Struct({
   resourceId: Schema.String,
   observedAt: Schema.Number,
   configVersion: Schema.Number,
@@ -25,16 +25,16 @@ export const runGateStatus = Schema.Struct({
 
 type Void = typeof Schema.Void;
 
-type RunStatusRef = RefField<
-  Method<undefined, typeof runGateStatus, typeof Schema.Never, true>
+type GateStatusRef = RefField<
+  Method<undefined, typeof gateStatus, typeof Schema.Never, true>
 >;
 
-type RunCountRef = RefField<
+type GateCountRef = RefField<
   Method<undefined, typeof Schema.Number, typeof Schema.Never, true>
 >;
 
 /** `run` wire member — inputless {@link Hyperlink.effect} for unit gates, {@link Hyperlink.effectFn} otherwise. @internal */
-export type RunWireMember<
+export type GateWireMember<
   I extends Schema.Top,
   A extends Schema.Top,
   E extends Schema.Top,
@@ -47,8 +47,8 @@ export type RunWireMember<
 const RUN_DESCRIPTION =
   "Acquire a permit, run the gated effect, release the permit — returns the effect result.";
 
-const runObservationRefs = () => ({
-  status: Hyperlink.ref(runGateStatus).annotate({
+const gateObservationRefs = () => ({
+  status: Hyperlink.ref(gateStatus).annotate({
     description:
       "Live current-state snapshot: waiting, in-flight, completed, failed, interrupted, total duration.",
   }),
@@ -69,45 +69,45 @@ const runObservationRefs = () => ({
   }),
 });
 
-/** Instance spec for a run gate typed by its wire schemas. @internal */
-export type RunInstanceSpec<
+/** Instance spec for a gate typed by its wire schemas. @internal */
+export type GateInstanceSpec<
   I extends Schema.Top,
   A extends Schema.Top,
   E extends Schema.Top = typeof Schema.Never,
 > = {
-  readonly status: RunStatusRef;
-  readonly waiting: RunCountRef;
-  readonly inFlight: RunCountRef;
-  readonly completed: RunCountRef;
-  readonly failed: RunCountRef;
-  readonly interrupted: RunCountRef;
-  readonly run: RunWireMember<I, A, E>;
+  readonly status: GateStatusRef;
+  readonly waiting: GateCountRef;
+  readonly inFlight: GateCountRef;
+  readonly completed: GateCountRef;
+  readonly failed: GateCountRef;
+  readonly interrupted: GateCountRef;
+  readonly run: GateWireMember<I, A, E>;
 };
 
-const runSpecVoid = <A extends Schema.Top>(
+const gateSpecVoid = <A extends Schema.Top>(
   success: A,
-): RunInstanceSpec<Void, A, typeof Schema.Never> => ({
-  ...runObservationRefs(),
-  run: Hyperlink.effect(success).annotate({ description: RUN_DESCRIPTION }) as RunWireMember<
+): GateInstanceSpec<Void, A, typeof Schema.Never> => ({
+  ...gateObservationRefs(),
+  run: Hyperlink.effect(success).annotate({ description: RUN_DESCRIPTION }) as GateWireMember<
     Void,
     A,
     typeof Schema.Never
   >,
 });
 
-const runSpecVoidWithError = <A extends Schema.Top, E extends Schema.Top>(
+const gateSpecVoidWithError = <A extends Schema.Top, E extends Schema.Top>(
   success: A,
   error: E,
-): RunInstanceSpec<Void, A, E> => ({
-  ...runObservationRefs(),
-  run: Hyperlink.effect(success, error).annotate({ description: RUN_DESCRIPTION }) as RunWireMember<
+): GateInstanceSpec<Void, A, E> => ({
+  ...gateObservationRefs(),
+  run: Hyperlink.effect(success, error).annotate({ description: RUN_DESCRIPTION }) as GateWireMember<
     Void,
     A,
     E
   >,
 });
 
-const runSpecWithPayload = <
+const gateSpecWithPayload = <
   I extends Exclude<Schema.Top, Void>,
   A extends Schema.Top,
   E extends Schema.Top,
@@ -115,32 +115,32 @@ const runSpecWithPayload = <
   payload: I,
   success: A,
   error: E,
-): RunInstanceSpec<I, A, E> => ({
-  ...runObservationRefs(),
+): GateInstanceSpec<I, A, E> => ({
+  ...gateObservationRefs(),
   run: Hyperlink.effectFn({ payload, success, error }).annotate({
     description: RUN_DESCRIPTION,
-  }) as unknown as RunWireMember<I, A, E>,
+  }) as unknown as GateWireMember<I, A, E>,
 });
 
 /**
- * Build a run-gate **instance** spec: observation refs plus the gated `run` mutation.
+ * Build a gate **instance** spec: observation refs plus the gated `run` mutation.
  *
  * @internal
  */
-export function runSpec<A extends Schema.Top>(
+export function gateSpec<A extends Schema.Top>(
   payload: Void,
   success: A,
-): RunInstanceSpec<Void, A, typeof Schema.Never>;
-export function runSpec<A extends Schema.Top, E extends Schema.Top>(
+): GateInstanceSpec<Void, A, typeof Schema.Never>;
+export function gateSpec<A extends Schema.Top, E extends Schema.Top>(
   payload: Void,
   success: A,
   error: E,
-): RunInstanceSpec<Void, A, E>;
-export function runSpec<I extends Exclude<Schema.Top, Void>, A extends Schema.Top>(
+): GateInstanceSpec<Void, A, E>;
+export function gateSpec<I extends Exclude<Schema.Top, Void>, A extends Schema.Top>(
   payload: I,
   success: A,
-): RunInstanceSpec<I, A, typeof Schema.Never>;
-export function runSpec<
+): GateInstanceSpec<I, A, typeof Schema.Never>;
+export function gateSpec<
   I extends Exclude<Schema.Top, Void>,
   A extends Schema.Top,
   E extends Schema.Top,
@@ -148,16 +148,16 @@ export function runSpec<
   payload: I,
   success: A,
   error: E,
-): RunInstanceSpec<I, A, E>;
-export function runSpec(
+): GateInstanceSpec<I, A, E>;
+export function gateSpec(
   payload: Schema.Top,
   success: Schema.Top,
   error: Schema.Top = Schema.Never,
-): RunInstanceSpec<Schema.Top, Schema.Top, Schema.Top> {
+): GateInstanceSpec<Schema.Top, Schema.Top, Schema.Top> {
   if (payload === Schema.Void) {
     return (error as Schema.Top) === Schema.Never
-      ? runSpecVoid(success)
-      : runSpecVoidWithError(success, error);
+      ? gateSpecVoid(success)
+      : gateSpecVoidWithError(success, error);
   }
-  return runSpecWithPayload(payload, success, error);
+  return gateSpecWithPayload(payload, success, error);
 }

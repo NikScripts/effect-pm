@@ -1,6 +1,6 @@
 /**
  * Daemon.events over real HTTP RPC — Hyperlink.client ∩ Daemon.serve.
- * Complements local `process-events.test.ts` and control-plane `process-remote-http.test.ts`.
+ * Complements local `daemon-events.test.ts` and control-plane `daemon-remote-http.test.ts`.
  */
 import { describe, expect, it } from "@effect/vitest";
 import { Cause, Duration, Effect, Exit, Fiber, Layer, Option, Schema, Stream } from "effect";
@@ -28,7 +28,7 @@ class RemoteSuccessProc extends Daemon.Tag<RemoteSuccessProc>()(
   { success: Price },
 ).pipe(Daemon.schedule([])) {}
 
-const clientHttp = (port: number) =>
+const httpProtocol = (port: number) =>
   RpcClient.layerProtocolHttp({ url: `http://127.0.0.1:${port}/rpc` }).pipe(
     Layer.provide(RpcSerialization.layerNdjson),
     Layer.provide(FetchHttpClient.layer),
@@ -49,7 +49,7 @@ const withDaemonHttp = (
     );
     const port = address._tag === "TcpAddress" ? address.port : 0;
     return yield* use(port).pipe(
-      Effect.provide(Hyperlink.client(tag).pipe(Layer.provide(clientHttp(port)))),
+      Effect.provide(Hyperlink.client(tag).pipe(Layer.provide(httpProtocol(port)))),
       Effect.scoped,
     );
   }).pipe(Effect.provide(server), Effect.scoped);

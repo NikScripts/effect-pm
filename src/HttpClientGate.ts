@@ -1,5 +1,5 @@
 /**
- * **HttpClientRunGate** — pipe-friendly {@link HttpClient.transform} that runs every
+ * **HttpClientGate** — pipe-friendly {@link HttpClient.transform} that runs every
  * request effect through a {@link GateRunner}.
  *
  * @remarks
@@ -8,14 +8,14 @@
  * Pair with {@link Gate.makeRunner} or the runner produced inside
  * {@link Gate.httpApiClient}.
  *
- * @module HttpClientRunGate
+ * @module HttpClientGate
  */
 
 import { HttpClient } from "effect/unstable/http";
 import type { GateRunner } from "./Gate";
 
 /**
- * Pipe-friendly: `client.pipe(HttpClientRunGate.withRunner(runner))`.
+ * Pipe-friendly: `client.pipe(HttpClientGate.withRunner(runner))`.
  *
  * @category combinators
  * @public
@@ -37,4 +37,4 @@ export const transformClient = <E, R>(
 ): HttpClient.HttpClient.With<E, R> => withRunner(runner)(client);
 
 // The module is the namespace: `withRunner` / `transformClient` are the flat
-// top-level exports above, consumed as `import * as HttpClientRunGate`.
+// top-level exports above, consumed as `import * as HttpClientGate`.

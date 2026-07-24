@@ -11,8 +11,8 @@
 import { Effect, Ref, Schema, Stream } from "effect";
 import { Gate, Store } from "../../../src";
 
-const ObservedRunGate = Gate.Service<{ readonly _tag: "ObservedRunGate" }>()(
-  "examples/ObservedRunGate",
+const ObservedGate = Gate.Service<{ readonly _tag: "ObservedGate" }>()(
+  "examples/ObservedGate",
   {
     payload: Schema.Number,
     success: Schema.Number,
@@ -25,7 +25,7 @@ const ObservedRunGate = Gate.Service<{ readonly _tag: "ObservedRunGate" }>()(
 
 const program = Effect.gen(function* () {
   yield* Effect.gen(function* () {
-    const gate = yield* ObservedRunGate;
+    const gate = yield* ObservedGate;
     const completedSamples = yield* Ref.make<ReadonlyArray<number>>([]);
 
     yield* Stream.runForEach(gate.completed.changes, (n) =>
@@ -36,7 +36,7 @@ const program = Effect.gen(function* () {
         Effect.gen(function* () {
           yield* gate.run(1);
           yield* gate.run(-1).pipe(Effect.flip);
-          yield* ObservedRunGate.run(2);
+          yield* ObservedGate.run(2);
 
           const samples = yield* Ref.get(completedSamples);
           const status = yield* gate.status.get;
@@ -48,14 +48,14 @@ const program = Effect.gen(function* () {
         }),
       ),
     );
-  }).pipe(Effect.provide(ObservedRunGate.layer), Effect.scoped);
+  }).pipe(Effect.provide(ObservedGate.layer), Effect.scoped);
 
   yield* Effect.log("");
   yield* Effect.log("=== make: run-only handle (no observation) ===");
   yield* Effect.log("(Gate.make still needs Store.layerDefaultMemory on the effect — see below)");
 
   const unobserved = yield* Gate.make({
-    name: "examples/UnobservedRunGate",
+    name: "examples/UnobservedGate",
     effect: (n: number) => Effect.succeed(n * 2),
   });
   const value = yield* unobserved.run(21);

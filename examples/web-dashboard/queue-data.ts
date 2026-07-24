@@ -56,7 +56,7 @@ type QueueSvc = [typeof Mail] extends [Effect.Effect<infer A, infer _E, infer _R
 /** A leaf queue tag (yieldable for the fleet's queue service). */
 export type LeafTag = Effect.Effect<QueueSvc, never, AllQueues> & { readonly key: string };
 type DaemonSvc = [typeof KeyRotation] extends [Effect.Effect<infer A, infer _E, infer _R>] ? A : never;
-/** A leaf process tag (yieldable for a process service). */
+/** A leaf daemon tag (yieldable for a daemon service). */
 export type DaemonTag = Effect.Effect<DaemonSvc, never, KeyRotation> & { readonly key: string };
 
 /** A node in the `Group.Tag` tree (a group). */
@@ -287,11 +287,11 @@ export interface DaemonBundle {
   readonly stop: CommandAtom;
   readonly run: CommandAtom;
 }
-const processCache = new Map<string, DaemonBundle>();
+const daemonCache = new Map<string, DaemonBundle>();
 
-/** Build (once per tag) the atom bundle for a process tag. */
+/** Build (once per tag) the atom bundle for a daemon tag. */
 export const daemonBundle = (tag: DaemonTag): DaemonBundle => {
-  const existing = processCache.get(tag.key);
+  const existing = daemonCache.get(tag.key);
   if (existing !== undefined) return existing;
   const statusStream = Stream.unwrap(Effect.map(tag, (p) => p.status.changes));
   bumpLogIdFrom(`${tag.key}/logs`);
@@ -303,7 +303,7 @@ export const daemonBundle = (tag: DaemonTag): DaemonBundle => {
     stop: runtime.fn(() => Effect.flatMap(tag, (p) => p.stop)),
     run: runtime.fn(() => Effect.flatMap(tag, (p) => p.run)),
   };
-  processCache.set(tag.key, bundle);
+  daemonCache.set(tag.key, bundle);
   return bundle;
 };
 
@@ -316,7 +316,7 @@ export const queueLeaves = (node: { readonly members: Record<string, unknown> })
   leafTags(node).filter((m) => isQueueLeaf(m)) as ReadonlyArray<LeafTag>;
 
 /** Only the process leaves of a tree. */
-export const processLeaves = (node: { readonly members: Record<string, unknown> }): ReadonlyArray<DaemonTag> =>
+export const daemonLeaves = (node: { readonly members: Record<string, unknown> }): ReadonlyArray<DaemonTag> =>
   leafTags(node).filter((m) => isDaemonLeaf(m)) as ReadonlyArray<DaemonTag>;
 
 /** One row of the fleet table — headline status + metrics, carrying its tag. */

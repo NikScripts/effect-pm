@@ -25,7 +25,7 @@ import {
   isDaemonLeaf,
   isQueueLeaf,
   daemonBundle,
-  processLeaves,
+  daemonLeaves,
   queueBundle,
   queueLeaves,
   type CommandAtom,
@@ -69,7 +69,7 @@ const LEVEL_COLOR: Record<string, string> = {
 const isDaemonTag = (m: unknown): m is DaemonTag => isDaemonLeaf(m);
 const isQueueTag = (m: unknown): m is LeafTag => isQueueLeaf(m);
 /** Every leaf (queue + process) of the fleet — the command palette's targets. */
-const ALL_LEAVES: ReadonlyArray<LeafTag | DaemonTag> = [...queueLeaves(Fleet), ...processLeaves(Fleet)];
+const ALL_LEAVES: ReadonlyArray<LeafTag | DaemonTag> = [...queueLeaves(Fleet), ...daemonLeaves(Fleet)];
 
 const statusOf = (phase: string, paused: boolean): Status =>
   phase === "off" ? "off" : phase === "draining" ? "draining" : paused ? "paused" : "running";

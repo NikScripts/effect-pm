@@ -1,12 +1,12 @@
 import { Effect, Schema, Stream } from "effect";
 import type { QueueHandle } from "../src/internal/workPool";
 import type { queueStatus } from "../src/WorkPool";
-import type { CustomQueueHandle } from "../src/internal/workPoolPriority";
-import type { customQueueStatus } from "../src/WorkPool";
+import type { PriorityHandle } from "../src/internal/workPoolPriority";
+import type { priorityStatus } from "../src/WorkPool";
 import * as Hyperlink from "../src/Hyperlink";
 
 type QueueStatus = Schema.Schema.Type<typeof queueStatus>;
-type CustomStatus = Schema.Schema.Type<typeof customQueueStatus>;
+type CustomStatus = Schema.Schema.Type<typeof priorityStatus>;
 
 // QueueHandle.status is a Subscribable ref — not a bare stream, and statusNow is removed.
 type Handle = QueueHandle<number>;
@@ -26,8 +26,8 @@ true satisfies StatusChanges;
 type StatusNowAbsent = "statusNow" extends keyof Handle ? false : true;
 true satisfies StatusNowAbsent;
 
-// CustomQueueHandle mirrors the same ref shape.
-type CustomHandle = CustomQueueHandle<string>;
+// PriorityHandle mirrors the same ref shape.
+type CustomHandle = PriorityHandle<string>;
 type CustomStatusShape = CustomHandle["status"];
 
 type CustomStatusIsSubscribable = CustomStatusShape extends Hyperlink.Subscribable<CustomStatus>

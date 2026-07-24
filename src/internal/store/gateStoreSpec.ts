@@ -18,13 +18,13 @@ import * as Store from "../../Store";
 import { failureRate, recent } from "./analytics";
 import { makeGateFactEvent } from "../gateEvent";
 import { errorOf, successOf } from "../gateTagSchemas";
-import { runGateStatus } from "../gateSchema";
+import { gateStatus } from "../gateSchema";
 import type { StoreContractValue, StoreShapeDef } from "./contractDef";
 import type { StoreJournalDecodeError, StoreWriteError } from "./errors";
 import { withImplicitLogShape } from "./logShapes";
 import type { StoreScopeTag } from "./registration";
 
-/** Reasons attached to run gate state transitions. @internal */
+/** Reasons attached to gate state transitions. @internal */
 export type GateStateChangeReason =
   | "run-resource.run.waiting"
   | "run-resource.run.started"
@@ -34,7 +34,7 @@ export type GateStateChangeReason =
   | "run-resource.run.wait.interrupted";
 
 /** Live gate counters persisted on state transitions. @internal */
-export const runStateSchema = runGateStatus;
+export const gateStateSchema = gateStatus;
 
 /** Default void run facts. @internal */
 export const runFactSchema = makeGateFactEvent();
@@ -45,8 +45,8 @@ export const runStateChangeSchema = Schema.Struct({
   resourceId: Schema.String,
   changedAt: Schema.Number,
   reason: Schema.String,
-  previous: Schema.NullOr(runStateSchema),
-  current: runStateSchema,
+  previous: Schema.NullOr(gateStateSchema),
+  current: gateStateSchema,
 });
 
 /** Persisted run fact for the default void contract. @internal */

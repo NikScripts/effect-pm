@@ -540,7 +540,7 @@ export type QueueHandle<
 > = EngineQueueHandle<T, E, EEnqueue, R, A>;
 
 /**
- * Engine handle — includes custom-queue hooks used by {@link WorkPoolPriority}.
+ * Engine handle — includes priority-queue hooks used by {@link WorkPoolPriority}.
  *
  * @internal
  */
@@ -551,7 +551,7 @@ export interface QueueEngineHandle<
   R = never,
   A = void,
 > extends EngineQueueHandle<T, E, EEnqueue, R, A> {
-  /** Enqueue at an explicit lane index (custom queues). */
+  /** Enqueue at an explicit lane index (priority queues). */
   readonly enqueueAtLane: (
     items: T | ReadonlyArray<T>,
     level: number,
@@ -843,8 +843,8 @@ export interface WorkPoolMetadata<
   readonly tag: Context.Service<Id, EngineQueueHandle<T, E, EEnqueue, R>>;
   /**
    * Serializable item codec metadata when {@link WorkPoolConfig.itemSchema}
-   * was provided on {@link WorkPool.Service}. Used by typed the process manager
-   * contracts for remote discovery and drift checks.
+   * was provided on {@link WorkPool.Service}. Used by typed Hyperlink contracts
+   * for remote discovery and drift checks.
    */
   readonly item?: QueueItemCodecDescriptor;
 }
@@ -3600,7 +3600,7 @@ export { makeQueueEffect, workPoolLayer, buildQueueEngine };
  *
  * The returned value is both a `Context.Service` (yieldable tag) and has a `.layer` property for
  * providing the queue to your program. When `itemSchema` is set, the declaration also exposes
- * {@link WorkPoolDefinition.item} for typed process-manager contracts.
+ * {@link WorkPoolDefinition.item} for typed WorkPool contracts.
  *
  * @internal
  */

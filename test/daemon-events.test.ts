@@ -25,25 +25,25 @@ const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
 
 /** Disarmed so we can subscribe before emitting, then drive with `run`. */
 class LiveEventsProc extends Daemon.Tag<LiveEventsProc>()(
-  "test/process-events/Live",
+  "test/daemon-events/Live",
 ).pipe(Daemon.schedule([])) {}
 
-class TypedFailProc extends Daemon.Tag<TypedFailProc>()("test/process-events/TypedFail", {
+class TypedFailProc extends Daemon.Tag<TypedFailProc>()("test/daemon-events/TypedFail", {
   error: FetchErr,
 }).pipe(Daemon.schedule([])) {}
 
 class StringFailProc extends Daemon.Tag<StringFailProc>()(
-  "test/process-events/StringFail",
+  "test/daemon-events/StringFail",
 ).pipe(Daemon.schedule([])) {}
 
 class InterruptProc extends Daemon.Tag<InterruptProc>()(
-  "test/process-events/Interrupt",
+  "test/daemon-events/Interrupt",
 ).pipe(Daemon.schedule([])) {}
 
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 
 class SuccessEventsProc extends Daemon.Tag<SuccessEventsProc>()(
-  "test/process-events/Success",
+  "test/daemon-events/Success",
   { success: Price },
 ).pipe(Daemon.schedule([])) {}
 
@@ -233,7 +233,7 @@ describe("Daemon.events — live stream", () => {
 describe("Daemon.make — events without store", () => {
   it.live("publishes lifecycle on the engine handle even without a store", () =>
     Effect.gen(function* () {
-      const handle = Daemon.make("test/process-events/direct", {
+      const handle = Daemon.make("test/daemon-events/direct", {
         effect: Effect.void,
         schedule: Daemon.scheduleInMemory(),
       });

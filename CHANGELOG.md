@@ -13,15 +13,22 @@ accumulated since 0.8.0-beta.28.
   (`hyperlink-ts/Hyperlink`, `hyperlink-ts/Node`, ...). Wire ids, `Symbol.for` keys, and Context
   ids move from `@nikscripts/effect-pm/...` to `hyperlink-ts/...`.
 - The primitive `Resource` is now **`Hyperlink`**: module, namespace, and every foundation symbol
-  (`ResourceTag` → `HyperlinkTag`, `BuiltResource` → `BuiltHyperlink`, `ServedResources` →
-  `ServedHyperlinks`, `DuplicateResourceKey` → `DuplicateHyperlinkKey`, ...).
+  (`ResourceTag` → `HyperlinkTag`, `DuplicateResourceKey` → `DuplicateHyperlinkKey`, …). The
+  advanced-authoring bundle is **`Hyperlink.Driver`** (was `BuiltResource` / briefly
+  `BuiltHyperlink`); `ServedHyperlink*` is `@internal`.
 
 ### Major: kinds renamed to generic nouns, variants folded
 
 - `QueueHyperlink` → **`WorkPool`** · `RunHyperlink` → **`Gate`** · `Process` → **`Daemon`**.
+  Gate wire helpers follow: `runGateStatus` / `runSpec` / `RunInstanceSpec` /
+  `RunGateStatus` / `RunGateHandle` → `gateStatus` / `gateSpec` / `GateInstanceSpec` /
+  `GateStatus` / `GateRunHandle`. `HttpClientRunGate` → **`HttpClientGate`**
+  (subpath too). `DaemonDefinition.process` → **`daemon`**.
 - `CustomQueueHyperlink` folds into **`WorkPool.priority(...)`** (peer constructor beside
   `WorkPool.Tag`; `layer`/`serve`/`store`/`configure` dispatch on the tag; engine stays
-  tree-shakeable as `WorkPool.makePriority`). Subpath removed.
+  tree-shakeable as `WorkPool.makePriority`). Subpath removed. Public wire helpers rename
+  with it: `customQueueStatus` / `customQueueSpec` / `CustomQueueTagConfig` / … →
+  `priorityStatus` / `prioritySpec` / `PriorityTagConfig` / ….
 - `HttpApiHyperlink` folds into **`Gate.httpApiClient(...)`** (+ `httpApiClientService`,
   `httpApiClientLayer`, `acceptJson`, `instrumentEndpoints`). Subpath removed.
 - Priority-lane vocabulary unified to **lane**: `laneCount`, `namedLanes`, `add(item, lane?)`.
@@ -45,6 +52,9 @@ accumulated since 0.8.0-beta.28.
   own wire) and `Hyperlink.http` / `ws` / `unix` / `nPipe(node)` (batteries). **`clientHttp`
   removed** — migrate to `connect(tag, protocolHttp(target))`. Bare-port dials resolve via
   `Hyperlink.clientHost` (`HYPERLINK_CLIENT_HOST`, default `localhost`).
+- Reserved wire ids drop the old `@pm/…` prefix: node-status is
+  `hyperlink-ts/node-status` (was `@pm/node-status`); ephemeral verify/lookup probe node keys
+  use `hyperlink-ts/verify/…` and `hyperlink-ts/lookup-*/…`.
 - Transport wiring fails **loud and typed** (`ProtocolUnanswered`, `UnaddressedNode`,
   contract-hash verification, deep `verifyConnection`); silent-wiring paths removed.
 - Per-resource serving with isolated deps on one `/rpc`; listen/local catalogs; RPC transport is
@@ -78,7 +88,12 @@ accumulated since 0.8.0-beta.28.
 ### Observability and UI
 
 - Custom metrics served from the Metric registry; per-type dashboard widgets (browser + Ink TUI
-  over one data layer); unified `pm` CLI (no-arg → TUI); `/cli`, `/tui`, `/web` subpath exports.
+  over one data layer); `/cli`, `/tui`, `/web` subpath exports.
+- **Web dashboard naming:** `RunTag` / `isRunTag` / `useRunBundle` / `runBundle` →
+  `GateTag` / `isGateTag` / `useGateBundle` / `gateBundle`; `processLeaves` → `daemonLeaves`;
+  `CustomQueue*` / `useCustomQueueBundle` / `isCustomQueueTag` / `customQueueBundle` →
+  `Priority*` / `usePriorityBundle` / `isPriorityTag` / `priorityBundle` (matches
+  `WorkPool.priority`).
 
 ### Docs
 
@@ -118,7 +133,7 @@ accumulated since 0.8.0-beta.28.
   namespace (`import * as Name`), members are flat top-level exports, and partial imports tree-shake.
 
   Now converted: **`Logs`**, **`Query`**, **`LogContext`**, **`LogEntry`**, **`NodeLogs`**, **`RunResource`**,
-  **`HttpApiResource`**, **`HttpClientRunGate`**, **`ResourceConfigure`**, and **`ProcessStorage`**. All documented
+  **`HttpApiResource`**, **`HttpClientGate`**, **`ResourceConfigure`**, and **`ProcessStorage`**. All documented
   members are preserved — the flat root re-exports (`And`, `captureLoggerLayer`, `LogAnnotationKeys`, `acceptJson`,
   `configureLayer`, …) and the namespace members (`Query.And`, `Logs.captureLoggerLayer`, `LogEntry.Schema`,
   `NodeLogs.layer`, `RunResource.Tag`, `HttpApiResource.Service`, `ResourceConfigure.tagKey`, …) are the same
@@ -132,7 +147,7 @@ accumulated since 0.8.0-beta.28.
 
   **Migration.** Direct subpath **value** imports of the converted namespace objects change form:
   `import { NodeLogs } from ".../NodeLogs"` → `import * as NodeLogs from ".../NodeLogs"` (and likewise
-  `ProcessStorage`, `RunResource`, `HttpApiResource`, `HttpClientRunGate`, `ResourceConfigure`, `Logs`, `Query`,
+  `ProcessStorage`, `RunResource`, `HttpApiResource`, `HttpClientGate`, `ResourceConfigure`, `Logs`, `Query`,
   `LogContext`, `LogEntry`). The barrel forms (`import { NodeLogs } from "@nikscripts/effect-pm"`, …) are
   unchanged.
 
@@ -1396,5 +1411,5 @@ undefined>` overrides per host (env ports, tunnels, Effect `Config`), falling ba
 - **Breaking — effect-first process runtime:** `Process.make` is centered on **`effect`**, with optional **`polling`** (`Polling.spaced`, `Polling.acceleratingScoped`, …) and **`schedule`** (`ProcessSchedule.alwaysArmed`, `ProcessSchedule.cronMatch`, `ProcessSchedule.fromArmedRef`, …) as **layers**. Compose at `make`, via **`Process.providePolling`** / **`Process.provideSchedule`**, or when providing **`process.effect`** at fork time.
 - **`Polling` / `ProcessSchedule`:** context services and preset layers; **`ProcessDetails`** / **`ProcessGroup`** status expose **`armed`**, **`nextPollCadence`**, and schedule transition hints where available.
 - **Supervisor:** **`start` / `startAll`** attaches schedule drivers; **disarm** pauses scheduled ticks while the fiber **waits** (hint-based or fallback idle sleep, **`Clock`**-aligned); **`cronMatch`** sampling uses the same **`Clock`**.
-- **Resource modules:** `QueueResource`, `RunResource`, `HttpClientRunGate`, and `HttpApiResource` use the current class/service patterns documented in **`docs/RESOURCE-API.md`**.
+- **Resource modules:** `QueueResource`, `RunResource`, `HttpClientGate`, and `HttpApiResource` use the current class/service patterns documented in **`docs/RESOURCE-API.md`**.
 - **Docs & examples:** **`docs/PROCESS-API.md`**, **`docs/RESOURCE-API.md`**, **`examples/queue-resource.ts`**, and the examples index describe the current beta surface.

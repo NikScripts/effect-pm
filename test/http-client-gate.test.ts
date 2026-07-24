@@ -2,7 +2,7 @@ import { it, describe, expect } from "@effect/vitest"
 import { Effect, Ref } from "effect"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import type { HttpClientError } from "effect/unstable/http"
-import { HttpClientRunGate, Gate } from "../src"
+import { HttpClientGate, Gate } from "../src"
 
 const makeRecordingClient = (activeRef: Ref.Ref<number>, peakRef: Ref.Ref<number>): HttpClient.HttpClient =>
   HttpClient.makeWith<never, never, HttpClientError.HttpClientError, never>(
@@ -20,7 +20,7 @@ const makeRecordingClient = (activeRef: Ref.Ref<number>, peakRef: Ref.Ref<number
     (request) => Effect.succeed(request)
   )
 
-describe("HttpClientRunGate", () => {
+describe("HttpClientGate", () => {
   it.live("transformClient gates execute through the runner", () => {
     const Runner = Gate.makeRunner({
       name: "test/http-gate-c1",
@@ -30,7 +30,7 @@ describe("HttpClientRunGate", () => {
       const active = yield* Ref.make(0)
       const peak = yield* Ref.make(0)
       const runner = yield* Runner
-      const gated = HttpClientRunGate.transformClient(
+      const gated = HttpClientGate.transformClient(
         makeRecordingClient(active, peak),
         runner
       )
@@ -55,7 +55,7 @@ describe("HttpClientRunGate", () => {
       const peak = yield* Ref.make(0)
       const runner = yield* Runner
       const gated = makeRecordingClient(active, peak).pipe(
-        HttpClientRunGate.withRunner(runner)
+        HttpClientGate.withRunner(runner)
       )
       yield* Effect.all(
         Array.from({ length: 15 }, () =>

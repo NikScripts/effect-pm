@@ -67,7 +67,7 @@ import {
 } from "./internal/queueTagSchemas";
 import {
   assertQueueInstanceSpec,
-  assertCustomQueueInstanceSpec,
+  assertPriorityInstanceSpec,
 } from "./internal/queueSpecAssert";
 import * as Store from "./Store";
 import { facetStoreRegistration } from "./internal/store/facetStore";
@@ -79,10 +79,10 @@ import {
   type QueueStoreTag,
 } from "./internal/store/queueStoreSpec";
 // The priority (N-level lane) engine — pulled in only by the priority runtime verbs below.
-import { makeCustomQueueEffect } from "./internal/workPoolPriority";
+import { makePriorityEffect } from "./internal/workPoolPriority";
 import type {
-  CustomQueueHandle,
-  CustomQueueLaneConfig,
+  PriorityHandle,
+  PriorityLaneConfig,
   WorkPoolPriorityConfigWithItemSchema,
 } from "./internal/workPoolPriority";
 import type { StoreShapes } from "./internal/store/contractDef";
@@ -1374,7 +1374,7 @@ const withDefaultMemory = <A, E, R>(
 // Priority (N-level lane) variant — WorkPool.priority
 //
 // Folded from the former WorkPoolPriority module: the leveled tag/spec/schemas + the
-// `buildCustomQueueImpl` builder. The runtime verbs (layer/serve/serveRemote) below dispatch to
+// `buildPriorityImpl` builder. The runtime verbs (layer/serve/serveRemote) below dispatch to
 // this builder when the tag is a priority tag (see priorityKind); the engine lives in
 // ./internal/workPoolPriority and is pulled in only by those verbs.
 // ============================================================================
@@ -1385,16 +1385,16 @@ const withDefaultMemory = <A, E, R>(
  * @category wire schemas
  * @public
  */
-export const customQueueSizes = Schema.Record(Schema.String, Schema.Number);
+export const prioritySizes = Schema.Record(Schema.String, Schema.Number);
 
 /**
- * Custom-queue current-state snapshot — element of the `status` stream.
+ * Priority-queue current-state snapshot — element of the `status` stream.
  *
  * @category wire schemas
  * @public
  */
-export const customQueueStatus = Schema.Struct({
-  sizes: customQueueSizes,
+export const priorityStatus = Schema.Struct({
+  sizes: prioritySizes,
   paused: Schema.Boolean,
   inFlight: Schema.Number,
   completed: Schema.Number,
@@ -1408,7 +1408,7 @@ export const customQueueStatus = Schema.Struct({
  * @category wire schemas
  * @public
  */
-export const customQueueLane = (
+export const priorityLane = (
   namedLanes?: Readonly<Record<string, number>>,
 ): Schema.Schema<number | string> => {
   const names =
@@ -1422,12 +1422,12 @@ export const customQueueLane = (
 };
 
 /**
- * Custom queue entry on the wire — like {@link queueEntry} plus optional numeric `level`.
+ * Priority queue entry on the wire — like {@link queueEntry} plus optional numeric `level`.
  *
  * @category wire schemas
  * @public
  */
-export const customQueueEntry = <Sch extends Schema.Top>(
+export const priorityEntry = <Sch extends Schema.Top>(
   itemSchema: Sch,
 ) =>
   Schema.Struct({
@@ -1445,12 +1445,12 @@ export const customQueueEntry = <Sch extends Schema.Top>(
   });
 
 /**
- * Selector for custom-queue routing verbs.
+ * Selector for priority-queue routing verbs.
  *
  * @category wire schemas
  * @public
  */
-export const customQueueEntrySelector = <Sch extends Schema.Top>(itemSchema: Sch) =>
+export const priorityEntrySelector = <Sch extends Schema.Top>(itemSchema: Sch) =>
   Schema.Struct({
     entryId: Schema.optionalKey(Schema.String),
     key: Schema.optional(Schema.String),
@@ -1462,16 +1462,16 @@ const sumLaneSizes = (sizes: Record<string, number>): number =>
   Object.values(sizes).reduce((a, b) => a + b, 0);
 
 /**
- * Shared control + observation contract for every custom-queue instance.
+ * Shared control + observation contract for every priority-queue instance.
  *
  * @category wire schemas
  * @public
  */
-export const customQueueControlSpec = {
+export const priorityControlSpec = {
   // ── live current state — one SubscriptionRef-backed source of truth ──
   // `status` is the whole snapshot; `size`/`isEmpty` are `Stream.map` derivations of it (SSOT). Plain
   // reads (`p.size`) and subscribable (`Hyperlink.changes(p, (s) => s.size)`).
-  status: Hyperlink.ref(customQueueStatus).annotate({
+  status: Hyperlink.ref(priorityStatus).annotate({
     description:
       "Live current-state snapshot: per-lane sizes, paused, in-flight, completed, phase.",
   }),
@@ -1523,31 +1523,31 @@ export const customQueueControlSpec = {
   },
 };
 
-/** Lane config for a custom queue tag. @internal */
-type CustomQueueTagLaneConfig = CustomQueueLaneConfig;
+/** Lane config for a priority queue tag. @internal */
+type PriorityTagLaneConfig = PriorityLaneConfig;
 
 /**
- * Build a custom-queue **instance** spec: shared {@link customQueueControlSpec} plus
+ * Build a priority-queue **instance** spec: shared {@link priorityControlSpec} plus
  * per-instance data-plane procedures typed by `itemSchema`.
  *
  * @category wire schemas
  * @public
  */
-export const customQueueSpec = <F extends Schema.Struct.Fields>(
+export const prioritySpec = <F extends Schema.Struct.Fields>(
   itemSchema: Schema.Struct<F>,
-  laneConfig: CustomQueueLaneConfig,
+  laneConfig: PriorityLaneConfig,
   wire?: { readonly success?: Schema.Top; readonly error?: Schema.Top },
 ) => {
   const itemOrItems = Schema.Union([itemSchema, Schema.Array(itemSchema)]);
-  const level = customQueueLane(laneConfig.namedLanes);
-  const entry = customQueueEntry(itemSchema);
+  const level = priorityLane(laneConfig.namedLanes);
+  const entry = priorityEntry(itemSchema);
   const eventSchema = buildQueueEvent(
     itemSchema,
     wire?.success ?? Schema.Void,
     wire?.error ?? Schema.Unknown,
   );
   return {
-    ...customQueueControlSpec,
+    ...priorityControlSpec,
     add: Hyperlink.mutatePair(Schema.Void, itemOrItems, Schema.optional(level)).annotate({
       description:
         "Enqueue an item (or batch) at an optional lane — numeric index or configured name.",
@@ -1574,7 +1574,7 @@ export const customQueueSpec = <F extends Schema.Struct.Fields>(
     }),
     deadLetter: Hyperlink.effectFn(
       {
-        selector: customQueueEntrySelector(itemSchema),
+        selector: priorityEntrySelector(itemSchema),
         options: queueRouteOptions,
       },
       Schema.Array(entry),
@@ -1584,7 +1584,7 @@ export const customQueueSpec = <F extends Schema.Struct.Fields>(
     }),
     drop: Hyperlink.effectFn(
       {
-        selector: customQueueEntrySelector(itemSchema),
+        selector: priorityEntrySelector(itemSchema),
         options: queueRouteOptions,
       },
       Schema.Array(entry),
@@ -1598,7 +1598,7 @@ export const customQueueSpec = <F extends Schema.Struct.Fields>(
   };
 };
 
-type CustomQueuePairAnnotations = MethodAnnotations & { readonly callStyle: "pair" };
+type PriorityPairAnnotations = MethodAnnotations & { readonly callStyle: "pair" };
 
 /**
  * Wire `add` member — tuple payload surfaced as `add(item, lane?)`.
@@ -1606,58 +1606,40 @@ type CustomQueuePairAnnotations = MethodAnnotations & { readonly callStyle: "pai
  * @category models
  * @public
  */
-export type CustomQueueAddMethod = Method<
+export type PriorityAddMethod = Method<
   Schema.Tuple<readonly [Schema.Top, Schema.Top]>,
   Schema.Void,
   Schema.Never,
   false,
-  CustomQueuePairAnnotations
+  PriorityPairAnnotations
 >;
 
 /**
- * Full custom-queue instance contract for `itemSchema` `F`.
+ * Full priority-queue instance contract for `itemSchema` `F`.
  *
  * @category models
  * @public
  */
-export type CustomQueueInstanceSpec<F extends Schema.Struct.Fields> = Omit<
-  ReturnType<typeof customQueueSpec<F>>,
+export type PriorityInstanceSpec<F extends Schema.Struct.Fields> = Omit<
+  ReturnType<typeof prioritySpec<F>>,
   "add"
 > & {
-  readonly add: CustomQueueAddMethod;
+  readonly add: PriorityAddMethod;
 };
 
-/**
- * Define a custom-queue **instance** — same shape as {@link WorkPool.Tag}, with
- * `laneCount` / `namedLanes` baked into the wire level union:
- *
- * ```ts
- * class Jobs extends WorkPool.priority<Jobs>()(
- *   "@app/Jobs",
- *   JobSchema,
- *   8,
- *   { urgent: 0, batch: 7 },
- * ) {}
- * // or: (id, schema, ["urgent", "normal", "batch"])
- * const q = yield* Jobs;
- * yield* q.add(aJob, "urgent");
- * ```
- *
- * @public
- */
 /** This contract's canonical kind — stamped on every tag so consumers (e.g. the dashboard) can
  *  classify it via {@link Hyperlink.kindOf} without sniffing the spec. */
 export const priorityKind = "hyperlink-ts/WorkPool/priority";
 
 /**
- * CustomQueue `Tag` config — **config object only** (no positional schemas). `payload` is the item
- * schema; `laneCount` is the number of priority lanes; `namedLanes` maps names → lane indices.
+ * `WorkPool.priority` tag config — **config object only** (no positional schemas). `payload` is the
+ * item schema; `laneCount` is the number of priority lanes; `namedLanes` maps names → lane indices.
  * Optional `success` / `error` wire slots match {@link WorkPool.Tag} (stamped for engine + store).
  *
  * @category models
  * @public
  */
-export interface CustomQueueTagConfig<
+export interface PriorityTagConfig<
   F extends Schema.Struct.Fields,
   Success extends Schema.Top = typeof Schema.Void,
 > {
@@ -1690,27 +1672,27 @@ export const priority = <Self>() => {
     HSelf,
   >(
     key: string,
-    config: CustomQueueTagConfig<F, Success> & { readonly node: NodeKey<HSelf> },
-  ): NodeBoundTag<Self, CustomQueueInstanceSpec<F>, HSelf>;
+    config: PriorityTagConfig<F, Success> & { readonly node: NodeKey<HSelf> },
+  ): NodeBoundTag<Self, PriorityInstanceSpec<F>, HSelf>;
   function build<
     F extends Schema.Struct.Fields,
     Success extends Schema.Top = typeof Schema.Void,
   >(
     key: string,
-    config: CustomQueueTagConfig<F, Success>,
-  ): HyperlinkTag<Self, CustomQueueInstanceSpec<F>>;
+    config: PriorityTagConfig<F, Success>,
+  ): HyperlinkTag<Self, PriorityInstanceSpec<F>>;
   function build<F extends Schema.Struct.Fields, Success extends Schema.Top>(
     key: string,
-    config: CustomQueueTagConfig<F, Success>,
-  ): HyperlinkTag<Self, CustomQueueInstanceSpec<F>> {
-    const laneConfig: CustomQueueTagLaneConfig = {
+    config: PriorityTagConfig<F, Success>,
+  ): HyperlinkTag<Self, PriorityInstanceSpec<F>> {
+    const laneConfig: PriorityTagLaneConfig = {
       laneCount: config.laneCount,
       namedLanes: config.namedLanes ?? {},
     };
     const wire = { success: config.success, error: config.error };
-    const spec = assertCustomQueueInstanceSpec<F>(
-      customQueueSpec(config.payload, laneConfig, wire),
-      customQueueSpec(config.payload, laneConfig),
+    const spec = assertPriorityInstanceSpec<F>(
+      prioritySpec(config.payload, laneConfig, wire),
+      prioritySpec(config.payload, laneConfig),
       wire,
     );
     const base =
@@ -1738,12 +1720,12 @@ export const priority = <Self>() => {
 };
 
 /**
- * Worker/layer config for a toolkit custom queue (tag carries `itemSchema`).
+ * Worker/layer config for a toolkit priority queue (tag carries `itemSchema`).
  *
  * @category models
  * @public
  */
-export type CustomQueueLayerConfig<A, E, R, RR = never> = Omit<
+export type PriorityLayerConfig<A, E, R, RR = never> = Omit<
   WorkPoolPriorityConfigWithItemSchema<A, E, R>,
   "itemSchema" | "refill" | "name"
 > & {
@@ -1751,18 +1733,18 @@ export type CustomQueueLayerConfig<A, E, R, RR = never> = Omit<
     readonly onStart?: boolean;
     readonly onDrained?: boolean;
     readonly load: (
-      queue: CustomQueueHandle<A, E, QueueEnqueueErrors, never>,
+      queue: PriorityHandle<A, E, QueueEnqueueErrors, never>,
     ) => Effect.Effect<void, never, RR>;
   };
 };
 
-type CustomQueueItemFields = Record<
+type PriorityItemFields = Record<
   string,
   Schema.Codec<unknown, unknown, never, never>
 >;
 
-const itemSchemaFromCustomQueueAdd = <F extends Schema.Struct.Fields>(
-  addPayload: CustomQueueInstanceSpec<F>["add"]["payload"],
+const itemSchemaFromPriorityAdd = <F extends Schema.Struct.Fields>(
+  addPayload: PriorityInstanceSpec<F>["add"]["payload"],
 ): Schema.Struct<F> => {
   const tuple = addPayload as unknown as {
     readonly elements: ReadonlyArray<{
@@ -1772,11 +1754,11 @@ const itemSchemaFromCustomQueueAdd = <F extends Schema.Struct.Fields>(
   return tuple.elements[0]!.members[0]!;
 };
 
-const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = never>(
-  tag: HyperlinkTag<Self, CustomQueueInstanceSpec<F>>,
-  config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
+const buildPriorityImpl = <Self, F extends PriorityItemFields, E, R, RR = never>(
+  tag: HyperlinkTag<Self, PriorityInstanceSpec<F>>,
+  config: PriorityLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ): Effect.Effect<
-  Hyperlink.Driver<CustomQueueInstanceSpec<F>, R | RR>,
+  Hyperlink.Driver<PriorityInstanceSpec<F>, R | RR>,
   never,
   R | RR | Scope.Scope | Store.Storage
 > =>
@@ -1784,19 +1766,19 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
     // `specSym` holds the flat spec (opaque leaf types) at runtime — recover the precise `add` payload
     // at this introspection boundary.
     const addMethod = tag[specSym].add as unknown as {
-      readonly payload: CustomQueueInstanceSpec<F>["add"]["payload"];
+      readonly payload: PriorityInstanceSpec<F>["add"]["payload"];
     };
     const itemSchema: Schema.Codec<Schema.Struct<F>["Type"], unknown, never, never> =
-      itemSchemaFromCustomQueueAdd(addMethod.payload);
+      itemSchemaFromPriorityAdd(addMethod.payload);
     const context = yield* Effect.context<R | RR>();
     const effectiveConfig = yield* foldConfiguredSpec<
-      CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>
+      PriorityLayerConfig<Schema.Struct<F>["Type"], E, R, RR>
     >(tag.key, config);
     const store = yield* materializeEngineQueueStoreForItem(tag.key, itemSchema, {
       success: successOf(tag),
       error: errorOf(tag),
     });
-    const handle = yield* makeCustomQueueEffect({
+    const handle = yield* makePriorityEffect({
       name: tag.key,
       ...effectiveConfig,
       itemSchema,
@@ -1823,7 +1805,7 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
     // Worker methods are built unwrapped (each still carrying `R | RR`); `grantLocal` / wire invoke
     // discharge `context` into every Effect method uniformly — same bundle pattern as WorkPool.
     const impl: Hyperlink.WithRequirement<
-      ImplOf<CustomQueueInstanceSpec<F>>,
+      ImplOf<PriorityInstanceSpec<F>>,
       R | RR
     > = {
       status: handle.status,
@@ -1852,7 +1834,7 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
         itemOrItems: Schema.Struct<F>["Type"] | ReadonlyArray<Schema.Struct<F>["Type"]>,
         lane?: number | string,
       ) => handle.add(itemOrItems, lane).pipe(Effect.orDie)) as Hyperlink.WithRequirement<
-        ImplOf<CustomQueueInstanceSpec<F>>,
+        ImplOf<PriorityInstanceSpec<F>>,
         R | RR
       >["add"],
       enqueue: (entries) => handle.enqueue(entries),
@@ -1869,12 +1851,12 @@ const buildCustomQueueImpl = <Self, F extends CustomQueueItemFields, E, R, RR = 
 /** A WorkPool tag — plain or {@link priority} — the runtime verbs dispatch over by kind. @internal */
 type AnyPoolTag =
   | QueueTagFor<unknown, QueueItemFields, Schema.Top, Schema.Top>
-  | HyperlinkTag<unknown, CustomQueueInstanceSpec<CustomQueueItemFields>>;
+  | HyperlinkTag<unknown, PriorityInstanceSpec<PriorityItemFields>>;
 
 /** True when `tag` was minted by {@link priority} — routes to the leveled engine. @internal */
 const isPriorityTag = (
   tag: AnyPoolTag,
-): tag is HyperlinkTag<unknown, CustomQueueInstanceSpec<CustomQueueItemFields>> =>
+): tag is HyperlinkTag<unknown, PriorityInstanceSpec<PriorityItemFields>> =>
   Hyperlink.kindOf(tag) === priorityKind;
 
 // The runtime verbs are overloaded (plain tag / priority tag) and dispatch on {@link isPriorityTag}.
@@ -1903,13 +1885,13 @@ export function layer<
 ): Layer.Layer<Self | Local<Self> | Store.Storage, never, R | RR>;
 export function layer<
   Self,
-  F extends CustomQueueItemFields = CustomQueueItemFields,
+  F extends PriorityItemFields = PriorityItemFields,
   E = never,
   R = never,
   RR = never,
 >(
-  tag: HyperlinkTag<Self, CustomQueueInstanceSpec<F>>,
-  config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
+  tag: HyperlinkTag<Self, PriorityInstanceSpec<F>>,
+  config: PriorityLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ): Layer.Layer<Self | Local<Self> | Store.Storage, never, R | RR>;
 export function layer(
   tag: AnyPoolTag,
@@ -1919,9 +1901,9 @@ export function layer(
     ? withDefaultMemory(
         Layer.unwrap(
           Effect.map(
-            buildCustomQueueImpl(
+            buildPriorityImpl(
               tag,
-              config as CustomQueueLayerConfig<Schema.Struct<CustomQueueItemFields>["Type"], never, never, never>,
+              config as PriorityLayerConfig<Schema.Struct<PriorityItemFields>["Type"], never, never, never>,
             ),
             (built) => Hyperlink.layer(tag, Hyperlink.grantLocal(tag, built)),
           ),
@@ -1978,22 +1960,22 @@ export function serveRemote<
 ): Layer.Layer<HandlerContextOf<QueueInstanceSpec<F>>, never, R | RR>;
 export function serveRemote<
   Self,
-  F extends CustomQueueItemFields = CustomQueueItemFields,
+  F extends PriorityItemFields = PriorityItemFields,
   E = never,
   R = never,
   RR = never,
 >(
-  tag: HyperlinkTag<Self, CustomQueueInstanceSpec<F>>,
-  config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
-): Layer.Layer<HandlerContextOf<CustomQueueInstanceSpec<F>>, never, R | RR>;
+  tag: HyperlinkTag<Self, PriorityInstanceSpec<F>>,
+  config: PriorityLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
+): Layer.Layer<HandlerContextOf<PriorityInstanceSpec<F>>, never, R | RR>;
 export function serveRemote(tag: AnyPoolTag, config: unknown): Layer.Layer<unknown, never, unknown> {
   return isPriorityTag(tag)
     ? withDefaultMemory(
         Layer.unwrap(
           Effect.map(
-            buildCustomQueueImpl(
+            buildPriorityImpl(
               tag,
-              config as CustomQueueLayerConfig<Schema.Struct<CustomQueueItemFields>["Type"], never, never, never>,
+              config as PriorityLayerConfig<Schema.Struct<PriorityItemFields>["Type"], never, never, never>,
             ),
             (built) => Hyperlink.serveRemote(tag, built as never) as Layer.Layer<unknown, never, unknown>,
           ),
@@ -2052,15 +2034,15 @@ export function serve<
 >;
 export function serve<
   Self,
-  F extends CustomQueueItemFields = CustomQueueItemFields,
+  F extends PriorityItemFields = PriorityItemFields,
   E = never,
   R = never,
   RR = never,
 >(
-  tag: HyperlinkTag<Self, CustomQueueInstanceSpec<F>>,
-  config: CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
+  tag: HyperlinkTag<Self, PriorityInstanceSpec<F>>,
+  config: PriorityLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ): Layer.Layer<
-  Self | Local<Self> | HandlerContextOf<CustomQueueInstanceSpec<F>> | Store.Storage,
+  Self | Local<Self> | HandlerContextOf<PriorityInstanceSpec<F>> | Store.Storage,
   never,
   R | RR
 >;
@@ -2069,9 +2051,9 @@ export function serve(tag: AnyPoolTag, config: unknown): Layer.Layer<unknown, ne
     ? withDefaultMemory(
         Layer.unwrap(
           Effect.map(
-            buildCustomQueueImpl(
+            buildPriorityImpl(
               tag,
-              config as CustomQueueLayerConfig<Schema.Struct<CustomQueueItemFields>["Type"], never, never, never>,
+              config as PriorityLayerConfig<Schema.Struct<PriorityItemFields>["Type"], never, never, never>,
             ),
             (built) => Hyperlink.serve(tag, built),
           ),
@@ -2133,13 +2115,13 @@ export function configure<
 ): Layer.Layer<never>;
 export function configure<
   Self,
-  F extends CustomQueueItemFields = CustomQueueItemFields,
+  F extends PriorityItemFields = PriorityItemFields,
   E = never,
   R = never,
   RR = never,
 >(
-  tag: HyperlinkTag<Self, CustomQueueInstanceSpec<F>>,
-  patch: ConfigPatch<CustomQueueLayerConfig<Schema.Struct<F>["Type"], E, R, RR>>,
+  tag: HyperlinkTag<Self, PriorityInstanceSpec<F>>,
+  patch: ConfigPatch<PriorityLayerConfig<Schema.Struct<F>["Type"], E, R, RR>>,
 ): Layer.Layer<never>;
 export function configure(
   tag: AnyPoolTag,
@@ -2209,7 +2191,7 @@ export {
 } from "./internal/workPool";
 
 // The priority (N-level lane) engine constructor — the {@link priority} peer of {@link make}.
-export { makeCustomQueueEffect as makePriority } from "./internal/workPoolPriority";
+export { makePriorityEffect as makePriority } from "./internal/workPoolPriority";
 
 // Codec schemas already imported locally from the light `queueSchema` module — surface them here.
 export {

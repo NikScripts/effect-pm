@@ -179,7 +179,7 @@ export const atLeaf = (key: string): Predicate.Predicate<LogEntry> => (entry) =>
 };
 
 /**
- * NDJSON log entry wire format for process-manager capture — the `LogEntry.Schema` /
+ * NDJSON log entry wire format for hyperlink-ts capture — the `LogEntry.Schema` /
  * `LogEntry.encode` / `LogEntry.decode` / `LogEntry.fromLoggerOptions` namespace members,
  * exposed as flat aliases so `import * as LogEntry` and the root re-exports stay identical.
  *

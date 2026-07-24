@@ -2,7 +2,7 @@
  * WorkPool priority (N-level lane) engine — N-level managed queue engine (local `make` entry point).
  *
  * For toolkit tags, layers, and RPC use the public `WorkPoolPriority` namespace
- * (`src/WorkPoolPriority.ts`) / `WorkPoolPriority.Tag` from the barrel.
+ * (`src/WorkPoolPriority.ts`) / `WorkPool.priority` from the barrel.
  *
  * @module internal/workPoolPriority
  * @internal
@@ -19,11 +19,11 @@ import {
 } from "effect";
 import * as Hyperlink from "../Hyperlink";
 import { isJsonValue } from "./json";
-import { resolveCustomQueueLane } from "./workPoolLanes";
+import { resolvePriorityLane } from "./workPoolLanes";
 import { levelToDefaultPriority } from "./priorityMapping";
 import {
-  buildCustomQueueProjection,
-  type CustomQueueStatus,
+  buildPriorityProjection,
+  type PriorityStatus,
 } from "./queueProjection";
 import type { QueueRuntimeProjection } from "./queueProjection";
 import {
@@ -58,7 +58,7 @@ import {
   type QueueStoreWriter,
 } from "./workPool";
 
-export type { CustomQueueStatus } from "./queueProjection";
+export type { PriorityStatus } from "./queueProjection";
 
 // ============================================================================
 // Public types
@@ -70,7 +70,7 @@ export type { CustomQueueStatus } from "./queueProjection";
  * @category models
  * @public
  */
-export interface CustomQueueLaneConfig {
+export interface PriorityLaneConfig {
   /** Required lane count — one bounded queue per level index `0 … laneCount - 1`. */
   readonly laneCount: number;
   /** Map configured names to lane indices (e.g. `{ interactive: 2, batch: 5 }`). */
@@ -84,7 +84,7 @@ export interface CustomQueueLaneConfig {
  * @category models
  * @public
  */
-export interface CustomQueueEnqueue<T, EEnqueue = never, R = never> {
+export interface PriorityEnqueue<T, EEnqueue = never, R = never> {
   (
     items: T | ReadonlyArray<T>,
     lane?: number | string,
@@ -92,13 +92,13 @@ export interface CustomQueueEnqueue<T, EEnqueue = never, R = never> {
 }
 
 /** Control + observe surface for custom N-lane queues. @public */
-export interface CustomQueueHandleApi<
+export interface PriorityHandleApi<
   T,
   E = never,
   EEnqueue = never,
   R = never,
 > {
-  readonly add: CustomQueueEnqueue<T, EEnqueue, R>;
+  readonly add: PriorityEnqueue<T, EEnqueue, R>;
   readonly enqueue: QueueEnqueueEntries<T, R>;
   readonly size: Hyperlink.Subscribable<number>;
   readonly sizes: Effect.Effect<Record<string, number>, never, R>;
@@ -106,7 +106,7 @@ export interface CustomQueueHandleApi<
   readonly isEmpty: Hyperlink.Subscribable<boolean>;
   readonly completed: Effect.Effect<number>;
   readonly events: Stream.Stream<QueueEvent<T, E>>;
-  readonly status: Hyperlink.Subscribable<CustomQueueStatus>;
+  readonly status: Hyperlink.Subscribable<PriorityStatus>;
   readonly metrics: Stream.Stream<QueueMetrics>;
   readonly start: Effect.Effect<void, never, R>;
   readonly pause: Effect.Effect<void>;
@@ -134,12 +134,12 @@ export interface CustomQueueHandleApi<
  * @category models
  * @public
  */
-export type CustomQueueHandle<
+export type PriorityHandle<
   T,
   E = never,
   EEnqueue = never,
   R = never,
-> = CustomQueueHandleApi<T, E, EEnqueue, R> &
+> = PriorityHandleApi<T, E, EEnqueue, R> &
   QueueHandlePhantomWorkerFailures<E>;
 
 /**
@@ -151,14 +151,14 @@ export type WorkPoolPriorityConfigWithoutItemSchema<T, E, R> = Omit<
   WorkPoolConfigBase<T>,
   "laneCount"
 > &
-  CustomQueueLaneConfig & {
+  PriorityLaneConfig & {
     readonly itemSchema?: undefined;
     readonly effect: (
       item: T,
       ctx: EffectContext<T, never, R>,
     ) => Effect.Effect<void, E, R>;
     readonly onFailure?: QueueOnFailure<T, E, R>;
-    readonly refill?: CustomQueueRefill<T, E, never, R>;
+    readonly refill?: PriorityRefill<T, E, never, R>;
   };
 
 /**
@@ -170,14 +170,14 @@ export type WorkPoolPriorityConfigWithItemSchema<T, E, R> = Omit<
   WorkPoolConfigBase<T>,
   "laneCount"
 > &
-  CustomQueueLaneConfig & {
+  PriorityLaneConfig & {
     readonly itemSchema: Schema.Codec<T, unknown, never, never>;
     readonly effect: (
       item: T,
       ctx: EffectContext<T, QueueEnqueueErrors, R>,
     ) => Effect.Effect<void, E, R>;
     readonly onFailure?: QueueOnFailure<T, E, R>;
-    readonly refill?: CustomQueueRefill<T, E, QueueEnqueueErrors, R>;
+    readonly refill?: PriorityRefill<T, E, QueueEnqueueErrors, R>;
     /** Internal store recorder — wired by {@link WorkPoolPriority.layer}. @internal */
     readonly store?: QueueStoreWriter<T, E, void>;
   };
@@ -208,11 +208,11 @@ export type WorkPoolPriorityOptionsWithItemSchema<T, E, R> = Omit<
  * @category models
  * @public
  */
-export interface CustomQueueRefill<T, E, EEnqueue, R> {
+export interface PriorityRefill<T, E, EEnqueue, R> {
   readonly onStart?: boolean;
   readonly onDrained?: boolean;
   readonly load: (
-    queue: CustomQueueHandle<T, E, EEnqueue, R>,
+    queue: PriorityHandle<T, E, EEnqueue, R>,
   ) => Effect.Effect<void, never, R>;
 }
 
@@ -226,19 +226,19 @@ const isReadonlyArray = <A>(input: A | ReadonlyArray<A>): input is ReadonlyArray
 const normalizeEnqueueInput = <A>(input: A | ReadonlyArray<A>): ReadonlyArray<A> =>
   isReadonlyArray(input) ? input : [input];
 
-const levelResolution = (config: CustomQueueLaneConfig) => ({
+const levelResolution = (config: PriorityLaneConfig) => ({
   laneCount: Math.max(1, Math.floor(config.laneCount)),
   namedLanes: config.namedLanes ?? {},
   defaultLevel: config.defaultLevel ?? 0,
 });
 
-const wrapCustomQueueHandle = <T, E, EEnqueue, R>(
+const wrapPriorityHandle = <T, E, EEnqueue, R>(
   engine: QueueEngineHandle<T, E, EEnqueue, R>,
   levels: ReturnType<typeof levelResolution>,
-  projection: ReturnType<typeof buildCustomQueueProjection>,
-): CustomQueueHandle<T, E, EEnqueue, R> => {
+  projection: ReturnType<typeof buildPriorityProjection>,
+): PriorityHandle<T, E, EEnqueue, R> => {
   const resolveLevel = (input?: number | string) =>
-    resolveCustomQueueLane({ ...levels, input });
+    resolvePriorityLane({ ...levels, input });
 
   return {
     add: (items, level?) =>
@@ -328,7 +328,7 @@ const validateItemsWithSchema = <T>(
 const adaptRefill = <T, E, EEnqueue, R>(
   config: WorkPoolPriorityConfig<T, E, R>,
   levels: ReturnType<typeof levelResolution>,
-  projection: ReturnType<typeof buildCustomQueueProjection>,
+  projection: ReturnType<typeof buildPriorityProjection>,
 ): QueueRefill<T, E, EEnqueue, R> | undefined =>
   config.refill === undefined
     ? undefined
@@ -336,27 +336,27 @@ const adaptRefill = <T, E, EEnqueue, R>(
         onStart: config.refill.onStart,
         onDrained: config.refill.onDrained,
         load: (queue) => {
-          const handle = wrapCustomQueueHandle(
+          const handle = wrapPriorityHandle(
             queue as QueueEngineHandle<T, E, EEnqueue, R>,
             levels,
             projection,
           );
           return (
             config.refill!.load as (
-              custom: CustomQueueHandle<T, E, EEnqueue, R>,
+              custom: PriorityHandle<T, E, EEnqueue, R>,
             ) => Effect.Effect<void, never, R>
           )(handle);
         },
       } satisfies QueueRefill<T, E, EEnqueue, R>);
 
-const buildCustomProjection = (config: CustomQueueLaneConfig) =>
-  buildCustomQueueProjection({
+const buildCustomProjection = (config: PriorityLaneConfig) =>
+  buildPriorityProjection({
     laneCount: levelResolution(config).laneCount,
     namedLanes: config.namedLanes,
   });
 
 const castProjection = (
-  projection: ReturnType<typeof buildCustomQueueProjection>,
+  projection: ReturnType<typeof buildPriorityProjection>,
 ): QueueRuntimeProjection<
   { readonly high: number; readonly normal: number; readonly low: number },
   QueueStatus
@@ -366,12 +366,12 @@ const castProjection = (
     QueueStatus
   >;
 
-const makeCustomQueueEffectWithoutSchema = <
+const makePriorityEffectWithoutSchema = <
   const C extends WorkPoolPriorityConfigWithoutItemSchema<any, any, any>,
 >(
   config: Types.NoInfer<C>,
 ): Effect.Effect<
-  CustomQueueHandle<
+  PriorityHandle<
     InferQueueItem<C>,
     InferQueueWorkerError<C>,
     never,
@@ -395,15 +395,15 @@ const makeCustomQueueEffectWithoutSchema = <
       encodeForRelease: undefined,
       persistCodec: undefined,
     });
-    return wrapCustomQueueHandle(engine, levels, projection);
+    return wrapPriorityHandle(engine, levels, projection);
   });
 
-const makeCustomQueueEffectWithSchema = <
+const makePriorityEffectWithSchema = <
   const C extends WorkPoolPriorityConfigWithItemSchema<any, any, any>,
 >(
   config: Types.NoInfer<C>,
 ): Effect.Effect<
-  CustomQueueHandle<
+  PriorityHandle<
     InferQueueItem<C>,
     InferQueueWorkerError<C>,
     QueueEnqueueErrors,
@@ -484,7 +484,7 @@ const makeCustomQueueEffectWithSchema = <
         decode: Schema.decodeUnknownExit(config.itemSchema),
       },
     });
-    return wrapCustomQueueHandle(engine, levels, projection);
+    return wrapPriorityHandle(engine, levels, projection);
   });
 };
 
@@ -493,12 +493,12 @@ const hasItemSchema = <T, E, R>(
 ): config is WorkPoolPriorityConfigWithItemSchema<T, E, R> =>
   config.itemSchema !== undefined;
 
-const makeCustomQueueEffectFromConfig = (
+const makePriorityEffectFromConfig = (
   config: WorkPoolPriorityConfig<any, any, any>,
-): Effect.Effect<CustomQueueHandle<unknown, unknown, unknown, unknown>, never, Scope.Scope | any> =>
+): Effect.Effect<PriorityHandle<unknown, unknown, unknown, unknown>, never, Scope.Scope | any> =>
   hasItemSchema(config)
-    ? makeCustomQueueEffectWithSchema(config)
-    : makeCustomQueueEffectWithoutSchema(config);
+    ? makePriorityEffectWithSchema(config)
+    : makePriorityEffectWithoutSchema(config);
 
 type CustomConfigFromEffect<
   F extends QueueWorkerEffect<any, any, any, any>,
@@ -508,7 +508,7 @@ type CustomConfigFromEffect<
     | undefined = undefined,
 > = { readonly effect: F } & (O extends undefined ? unknown : O);
 
-function makeCustomQueueEffect<
+function makePriorityEffect<
   const F extends QueueWorkerEffect<any, any, any, any>,
   const O extends
     | WorkPoolPriorityOptionsWithoutItemSchema<any, any, any>
@@ -516,9 +516,9 @@ function makeCustomQueueEffect<
     | undefined = undefined,
 >(
   effect: F,
-  options: O & CustomQueueLaneConfig,
+  options: O & PriorityLaneConfig,
 ): Effect.Effect<
-  CustomQueueHandle<
+  PriorityHandle<
     InferQueueItem<CustomConfigFromEffect<F, O>>,
     InferQueueWorkerError<CustomConfigFromEffect<F, O>>,
     InferQueueEnqueueError<CustomConfigFromEffect<F, O>>,
@@ -527,10 +527,10 @@ function makeCustomQueueEffect<
   never,
   Scope.Scope | InferQueueWorkerRequirements<CustomConfigFromEffect<F, O>>
 >;
-function makeCustomQueueEffect<const C extends WorkPoolPriorityConfig<any, any, any>>(
+function makePriorityEffect<const C extends WorkPoolPriorityConfig<any, any, any>>(
   config: C,
 ): Effect.Effect<
-  CustomQueueHandle<
+  PriorityHandle<
     InferQueueItem<C>,
     InferQueueWorkerError<C>,
     InferQueueEnqueueError<C>,
@@ -539,25 +539,25 @@ function makeCustomQueueEffect<const C extends WorkPoolPriorityConfig<any, any, 
   never,
   Scope.Scope | InferQueueWorkerRequirements<C>
 >;
-function makeCustomQueueEffect(
+function makePriorityEffect(
   effectOrConfig: QueueWorkerEffect<any, any, any, any> | WorkPoolPriorityConfig<any, any, any>,
   options?: (WorkPoolPriorityOptionsWithoutItemSchema<any, any, any> &
-    CustomQueueLaneConfig),
-): Effect.Effect<CustomQueueHandle<any, any, any, any>, never, Scope.Scope | any> {
+    PriorityLaneConfig),
+): Effect.Effect<PriorityHandle<any, any, any, any>, never, Scope.Scope | any> {
   if (typeof effectOrConfig === "function") {
     if (options === undefined || options.laneCount === undefined) {
       return Effect.die(
         new Error("WorkPoolPriority.make requires laneCount in config or options"),
       );
     }
-    return makeCustomQueueEffectFromConfig({ ...(options ?? {}), effect: effectOrConfig });
+    return makePriorityEffectFromConfig({ ...(options ?? {}), effect: effectOrConfig });
   }
-  return makeCustomQueueEffectFromConfig(effectOrConfig);
+  return makePriorityEffectFromConfig(effectOrConfig);
 }
 
 // Flat engine surface. The public `WorkPoolPriority` namespace (`src/WorkPoolPriority.ts`)
-// re-exports `makeCustomQueueEffect` as `make` and `queueRateLimiterLayer` as `rateLimiterLayer` —
+// re-exports `makePriorityEffect` as `make` and `queueRateLimiterLayer` as `rateLimiterLayer` —
 // flat (not an object literal) so `import * as WorkPoolPriority` member access tree-shakes:
-// `WorkPoolPriority.Tag` pulls no engine code. `queueRateLimiterLayer` re-exported here so the
+// `WorkPool.priority` pulls no engine code. `queueRateLimiterLayer` re-exported here so the
 // public namespace can source both engine helpers from one module.
-export { makeCustomQueueEffect, queueRateLimiterLayer };
+export { makePriorityEffect, queueRateLimiterLayer };

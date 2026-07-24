@@ -2,18 +2,18 @@
   "name": "hyperlink-ts",
   "version": "0.9.0-beta.0",
   "packageManager": "pnpm@10.33.4",
-  "description": "Manage long-running Effect processes with runtime control. Queue resource-heavy operations with configurable throttling and priorities. Schedule recurring tasks with cron. Check status, start/stop processes, and view metrics through a CLI while your application runs.",
+  "description": "Effect Hyperlink — location-transparent services for Effect. Define a Hyperlink once, run it on one runtime, and call it from another over RPC with the same typed Handle. Includes WorkPool, Daemon, Gate, stores, logs, and dashboards.",
   "keywords": [
     "effect",
-    "process-manager",
-    "cron",
-    "scheduler",
-    "queue",
-    "priority-queue",
-    "task-scheduler",
-    "job-queue",
+    "hyperlink",
+    "rpc",
+    "location-transparent",
+    "work-pool",
+    "daemon",
+    "gate",
     "orchestration",
-    "typescript"
+    "typescript",
+    "distributed-services"
   ],
   "author": "Nikolas Stow",
   "license": "MIT",
@@ -120,9 +120,9 @@
       "types": "./dist/Gate.d.ts",
       "default": "./dist/Gate.js"
     },
-    "./HttpClientRunGate": {
-      "types": "./dist/HttpClientRunGate.d.ts",
-      "default": "./dist/HttpClientRunGate.js"
+    "./HttpClientGate": {
+      "types": "./dist/HttpClientGate.d.ts",
+      "default": "./dist/HttpClientGate.js"
     },
     "./web": {
       "types": "./dist/web.d.ts",
@@ -206,7 +206,7 @@
     "example:fleet-health-glass": "tsx examples/forms/resource/fleet-health-glass.ts",
     "example:shardmap-sessions": "tsx examples/forms/resource/shardmap-sessions.ts",
     "example:run-resource-store-readback": "tsx examples/forms/resource/run-resource-store-readback.ts",
-    "example:http-client-run-gate": "tsx examples/forms/resource/http-client-run-gate.ts",
+    "example:http-client-gate": "tsx examples/forms/resource/http-client-gate.ts",
     "example:http-api-resource": "tsx examples/forms/resource/http-api-resource-tag-layer.ts",
     "example:nwsl-http-api-resource": "node scripts/nwsl-local.mjs example",
     "example:http-api-resource-layer-effect": "tsx examples/forms/resource/http-api-resource-layer-effect.ts",

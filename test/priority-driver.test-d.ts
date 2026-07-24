@@ -1,14 +1,14 @@
 import { Context, Effect } from "effect";
 import * as WorkPool from "../src/WorkPool";
 import * as Hyperlink from "../src/Hyperlink";
-import type { CustomQueueInstanceSpec } from "../src/WorkPool";
+import type { PriorityInstanceSpec } from "../src/WorkPool";
 import { Schema } from "effect";
 
-// Type-level proof: CustomQueue toolkit layers materialize a `Driver` — impl carries worker `R`
+// Type-level proof: Priority toolkit layers materialize a `Driver` — impl carries worker `R`
 // until `grantLocal` discharges it (same bundle pattern as WorkPool / Daemon / Gate).
 
 class WorkerDep extends Context.Service<WorkerDep, string>()(
-  "hyperlink-ts/test/custom-queue-driver.test-d/WorkerDep",
+  "hyperlink-ts/test/priority-driver.test-d/WorkerDep",
 ) {}
 
 const JobSchema = Schema.Struct({ id: Schema.String });
@@ -19,13 +19,13 @@ class TypedCqr extends WorkPool.priority<TypedCqr>()("test/built-resource/Cqr", 
 }) {}
 
 type Built = Hyperlink.Driver<
-  CustomQueueInstanceSpec<typeof JobSchema.fields>,
+  PriorityInstanceSpec<typeof JobSchema.fields>,
   WorkerDep
 >;
 
 // `Driver` pairs a requirement-carrying impl with captured worker context.
 type ImplCarriesWorkerDep = Built["impl"] extends Hyperlink.WithRequirement<
-  Hyperlink.ImplOf<CustomQueueInstanceSpec<typeof JobSchema.fields>>,
+  Hyperlink.ImplOf<PriorityInstanceSpec<typeof JobSchema.fields>>,
   WorkerDep
 >
   ? true
@@ -39,18 +39,18 @@ true satisfies ContextHasWorkerDep;
 
 // `grantLocal` signature: `Driver<S, R>` in → `ImplOf<S>` out (R stripped from Effect methods).
 type GrantLocalOut = Hyperlink.Driver<
-  CustomQueueInstanceSpec<typeof JobSchema.fields>,
+  PriorityInstanceSpec<typeof JobSchema.fields>,
   WorkerDep
 > extends Parameters<
-  typeof Hyperlink.grantLocal<typeof TypedCqr, CustomQueueInstanceSpec<typeof JobSchema.fields>, WorkerDep>
+  typeof Hyperlink.grantLocal<typeof TypedCqr, PriorityInstanceSpec<typeof JobSchema.fields>, WorkerDep>
 >[1]
   ? ReturnType<
       typeof Hyperlink.grantLocal<
         typeof TypedCqr,
-        CustomQueueInstanceSpec<typeof JobSchema.fields>,
+        PriorityInstanceSpec<typeof JobSchema.fields>,
         WorkerDep
       >
-    > extends Hyperlink.ImplOf<CustomQueueInstanceSpec<typeof JobSchema.fields>>
+    > extends Hyperlink.ImplOf<PriorityInstanceSpec<typeof JobSchema.fields>>
     ? true
     : false
   : false;
@@ -58,9 +58,9 @@ true satisfies GrantLocalOut;
 
 // Soundness: a plain `ImplOf` is not assignable to `Driver` without the marker.
 type PlainImplIsNotBuilt = Hyperlink.Driver<
-  CustomQueueInstanceSpec<typeof JobSchema.fields>,
+  PriorityInstanceSpec<typeof JobSchema.fields>,
   WorkerDep
-> extends Hyperlink.ImplOf<CustomQueueInstanceSpec<typeof JobSchema.fields>>
+> extends Hyperlink.ImplOf<PriorityInstanceSpec<typeof JobSchema.fields>>
   ? false
   : true;
 true satisfies PlainImplIsNotBuilt;

@@ -4,7 +4,7 @@
 Whether a served resource is actually able to do its job — beyond “the process is up.” A node folds every served resource’s readiness into one aggregate with two faces (same SSOT):
 
 - **`GET /health`** — `200` when all ready, `503` when any is not (`status: "degraded"`), body lists each resource’s `{ key, kind, ready, detail? }`
-- **`NodeStatus`** — the same aggregate for the dashboard health board
+- **`(yield* MyNode).status`** — the same aggregate on the connected node handle (dashboard health board)
 
 Readiness is **per-node and local**. It never hops to peers; a down neighbour must not cascade through `/health`. Fleet-wide health is a separate monitor — see [Fleet Health](/docs/fleet-health) (`FleetHealth` folds peer `local` with Reachable / Unreachable).
 

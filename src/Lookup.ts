@@ -7,16 +7,15 @@
  *
  * - {@link Identity} — `claim` by resource key (first wins / {@link DuplicateIdentity}).
  *   Live winner: same dial refreshes; different dial + dead/unreachable incumbent
- *   (NodeStatus `ping`) → replace; alive → {@link DuplicateIdentity}.
+ *   (node-handle `ping`) → replace; alive → {@link DuplicateIdentity}.
  * - {@link Directory} — `advertise` / `unregister` / `nodesServing` (D5/D6). Duplicate
  *   `nodeKey` conflict policy via {@link OnConflict} (default **livenessReplace**): ping
- *   incumbent {@link NodeStatus} `ping`; alive → {@link IncumbentAlive} (or ask
- *   {@link NodeStatus}.`yield` when `askIncumbent`); dead/unreachable → replace row.
+ *   incumbent node handle; alive → {@link IncumbentAlive} (or ask handle `yield` when
+ *   `askIncumbent`); dead/unreachable → replace row.
  * - {@link Advice} — last-write placement board (`prefer` a directory `nodeKey` for a
  *   resource key). {@link Hyperlink.lookupClient} honors a live preferred row before D4 `pick`.
  *
  * @module Lookup
- * @since 0.8.0
  */
 import { Data, Duration, Effect, Exit, Layer, Option, Schema } from "effect";
 import * as Hyperlink from "./Hyperlink";
@@ -162,7 +161,7 @@ export class NodesServingRequest extends Schema.Class<NodesServingRequest>(
 }) {}
 
 /**
- * Advertise rejected — an incumbent with the same `nodeKey` still answers NodeStatus ping.
+ * Advertise rejected — an incumbent with the same `nodeKey` still answers a node-handle ping.
  *
  * @category errors
  * @public
@@ -244,7 +243,7 @@ const identitySpec = {
   }).annotate({
     description:
       "First claim for `key` wins and returns the endpoint. Later claims: same dial " +
-      "refreshes; dead/unreachable incumbent (NodeStatus.ping) is replaced; a live " +
+      "refreshes; dead/unreachable incumbent (node-handle ping) is replaced; a live " +
       "different dial fails with DuplicateIdentity.",
   }),
   resolve: Hyperlink.effectFn({
@@ -276,8 +275,8 @@ const directorySpec = {
   }).annotate({
     description:
       "Register or refresh a node directory row. Same dial target refreshes serves; " +
-      "a different dial target runs onConflict (default livenessReplace via NodeStatus.ping; " +
-      "askIncumbent asks NodeStatus.yield on a live incumbent).",
+      "a different dial target runs onConflict (default livenessReplace via node-handle ping; " +
+      "askIncumbent asks the incumbent handle's yield on a live peer).",
   }),
   unregister: Hyperlink.effectFn({
     payload: UnregisterRequest,
@@ -490,17 +489,17 @@ const storedFromAdvertise = (
   ...(req.path !== undefined ? { path: req.path } : {}),
 });
 
-/** Ping incumbent via NodeStatus.ping — true if reachable within timeout. */
+/** Ping incumbent via the node-handle status path — true if reachable within timeout. */
 const incumbentAlive = (
   entry: internal.StoredEndpoint,
 ): Effect.Effect<boolean> => {
   const target =
     entry.kind === "IpcSocket" && entry.path !== undefined
-      ? NodeTag()(`@pm/lookup-ping/${entry.nodeKey}`, {
+      ? NodeTag()(`hyperlink-ts/lookup-ping/${entry.nodeKey}`, {
           path: entry.path,
         })
       : entry.url !== undefined
-        ? NodeTag()(`@pm/lookup-ping/${entry.nodeKey}`, {
+        ? NodeTag()(`hyperlink-ts/lookup-ping/${entry.nodeKey}`, {
             url: entry.url,
             kind: entry.kind,
           })
@@ -513,7 +512,7 @@ const incumbentAlive = (
   // Skip default-on verify — this *is* the liveness probe (`ping`); nested verify deadlocks
   // under claim (verify dials the incumbent while claim holds the registry fiber).
   const probe = Effect.gen(function* () {
-    // NodeStatus is Hyperlink-internal (dynamic import dodges the Hyperlink⇄Lookup cycle).
+    // Node-status engine is Hyperlink-internal (dynamic import dodges the Hyperlink⇄Lookup cycle).
     const { NodeStatusTag } = yield* Effect.promise(
       () => import("./internal/nodeStatus"),
     );
@@ -531,7 +530,7 @@ const incumbentAlive = (
 };
 
 /**
- * Ask incumbent {@link NodeStatus}.`yield` — true only on explicit accept within timeout.
+ * Ask incumbent node-status `yield` — true only on explicit accept within timeout.
  * Refuse / timeout / dial error → false (fail-closed).
  *
  * Note: wire RPC `status.yield` is unrelated to Effect generator `yield*`.
@@ -541,11 +540,11 @@ const incumbentYield = (
 ): Effect.Effect<boolean> => {
   const target =
     entry.kind === "IpcSocket" && entry.path !== undefined
-      ? NodeTag()(`@pm/lookup-yield/${entry.nodeKey}`, {
+      ? NodeTag()(`hyperlink-ts/lookup-yield/${entry.nodeKey}`, {
           path: entry.path,
         })
       : entry.url !== undefined
-        ? NodeTag()(`@pm/lookup-yield/${entry.nodeKey}`, {
+        ? NodeTag()(`hyperlink-ts/lookup-yield/${entry.nodeKey}`, {
             url: entry.url,
             kind: entry.kind,
           })

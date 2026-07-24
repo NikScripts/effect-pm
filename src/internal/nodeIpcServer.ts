@@ -36,7 +36,7 @@ export interface IpcServerOptions {
   readonly path: string;
   readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
   /**
-   * Node log key for auto-mounted {@link NodeStatus} durable `logs.query`.
+   * Node log key for auto-mounted node-status durable `logs.query`.
    * When omitted, inferred from served tags' bound {@link Node} when all share one key.
    */
   readonly node?: string | { readonly key: string };
@@ -77,8 +77,8 @@ export interface IpcServerOptions {
  * // or Node.unix(Worker, [Hyperlink.serve(Jobs, jobsImpl)])
  * ```
  *
- * Auto-mounts {@link NodeStatus} like the http/ws servers. There is no `/health` HTTP route
- * (no HTTP listener) — probe readiness via NodeStatus over RPC.
+ * Auto-mounts node status/logs/ping like the http/ws servers. There is no `/health` HTTP route
+ * (no HTTP listener) — probe readiness via the node-handle status RPC.
  *
  * @category servers
  * @public

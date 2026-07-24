@@ -46,8 +46,8 @@ class QueueStore extends Store.Service<QueueStore>("@test/storage-correctness/Qu
   jobsRegistration,
 ) {}
 
-class CustomQueueStore extends Store.Service<CustomQueueStore>(
-  "@test/storage-correctness/CustomQueueStore",
+class PriorityStore extends Store.Service<PriorityStore>(
+  "@test/storage-correctness/PriorityStore",
 )(customJobsRegistration) {}
 
 class RunStore extends Store.Service<RunStore>("@test/storage-correctness/RunStore")(
@@ -328,7 +328,7 @@ describe("storage correctness — Gate Soft override parity", () => {
   );
 });
 
-describe("storage correctness — CustomQueue Soft override parity", () => {
+describe("storage correctness — Priority Soft override parity", () => {
   it.live(
     "WorkPool.layer + provideMerge(AppStore.sqlite) persists across reconnect",
     () =>
@@ -340,7 +340,7 @@ describe("storage correctness — CustomQueue Soft override parity", () => {
           fs.makeDirectory(baseDir, { recursive: true }).pipe(Effect.as(baseDir)),
           (d) => fs.remove(d, { recursive: true, force: true }).pipe(Effect.ignore),
         );
-        const filename = path.join(dir, "custom-queue.db");
+        const filename = path.join(dir, "priority-queue.db");
 
         yield* Effect.scoped(
           Effect.gen(function* () {
@@ -349,11 +349,11 @@ describe("storage correctness — CustomQueue Soft override parity", () => {
               namedLanes: { interactive: 0, batch: 1 },
               effect: () => Effect.void,
               autoStart: true,
-            }).pipe(Layer.provideMerge(CustomQueueStore.layer({ filename })));
+            }).pipe(Layer.provideMerge(PriorityStore.layer({ filename })));
             yield* Effect.gen(function* () {
               const q = yield* CustomJobs;
               yield* q.add({ id: "c1" }, "interactive");
-              const store = yield* CustomQueueStore;
+              const store = yield* PriorityStore;
               yield* waitFor(store.events(), "Completed");
               expect((yield* store.events()).some((row) => row._tag === "Completed")).toBe(
                 true,
@@ -364,9 +364,9 @@ describe("storage correctness — CustomQueue Soft override parity", () => {
 
         yield* Effect.scoped(
           Effect.gen(function* () {
-            const events = yield* (yield* CustomQueueStore).events();
+            const events = yield* (yield* PriorityStore).events();
             expect(events.some((row) => row._tag === "Completed")).toBe(true);
-          }).pipe(Effect.provide(CustomQueueStore.layer({ filename }))),
+          }).pipe(Effect.provide(PriorityStore.layer({ filename }))),
         );
       }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
   );
@@ -385,7 +385,7 @@ describe("storage correctness — CustomQueue Soft override parity", () => {
           fs.makeDirectory(baseDir, { recursive: true }).pipe(Effect.as(baseDir)),
           (d) => fs.remove(d, { recursive: true, force: true }).pipe(Effect.ignore),
         );
-        const filename = path.join(dir, "custom-queue.db");
+        const filename = path.join(dir, "priority-queue.db");
 
         yield* Effect.scoped(
           Effect.gen(function* () {
@@ -396,7 +396,7 @@ describe("storage correctness — CustomQueue Soft override parity", () => {
                 effect: () => Effect.void,
                 autoStart: true,
               }),
-              CustomQueueStore.layer({ filename }),
+              PriorityStore.layer({ filename }),
             );
             yield* Effect.gen(function* () {
               const q = yield* CustomJobs;
@@ -408,9 +408,9 @@ describe("storage correctness — CustomQueue Soft override parity", () => {
 
         yield* Effect.scoped(
           Effect.gen(function* () {
-            const events = yield* (yield* CustomQueueStore).events();
+            const events = yield* (yield* PriorityStore).events();
             expect(events.length).toBe(0);
-          }).pipe(Effect.provide(CustomQueueStore.layer({ filename }))),
+          }).pipe(Effect.provide(PriorityStore.layer({ filename }))),
         );
       }).pipe(Effect.provide(NodeServices.layer), Effect.scoped),
   );

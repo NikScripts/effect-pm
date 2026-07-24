@@ -1,7 +1,7 @@
 {
-  "name": "effect-pm — Queue Dashboard",
-  "short_name": "Queues",
-  "description": "Live queue dashboard — status, metrics, and logs.",
+  "name": "hyperlink-ts — WorkPool Dashboard",
+  "short_name": "WorkPools",
+  "description": "Live work-pool dashboard — status, metrics, and logs.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

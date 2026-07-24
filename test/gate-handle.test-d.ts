@@ -1,18 +1,18 @@
 import { Effect, Schema } from "effect";
 import * as Gate from "../src/Gate";
-import { runSpec } from "../src/internal/gateSchema";
+import { gateSpec } from "../src/internal/gateSchema";
 import * as Hyperlink from "../src/Hyperlink";
 
 // ── The soundness guard for the ONE cast in `nameRunService` ─────────────────
 // `yield* MyRun` is asserted to be `Gate<Decoded<I>, A["Type"], E["Type"]>`; that assertion is
 // only sound if the named handle is bidirectionally equal to the raw contract
-// `ServiceOf<RunInstanceSpec<I, A, E>>`. TS can't prove that for generic params (invariant service
+// `ServiceOf<GateInstanceSpec<I, A, E>>`. TS can't prove that for generic params (invariant service
 // Shape), so we prove it here for concrete representative schemas. If the shapes ever drift, THIS FAILS
 // THE BUILD — which is what licenses the cast.
 
 // ── param gate with a typed error: bidirectional Contract ⇄ Handle ───────────
 type ContractIE = Hyperlink.ShapeOf<
-  ReturnType<typeof runSpec<typeof Schema.Number, typeof Schema.String, typeof Schema.Boolean>>
+  ReturnType<typeof gateSpec<typeof Schema.Number, typeof Schema.String, typeof Schema.Boolean>>
 >;
 type HandleIE = Gate.Gate<number, string, boolean>;
 
@@ -26,7 +26,7 @@ void [_handleToContractIE, _contractToHandleIE];
 
 // ── unit gate (void payload → `run` is a bare Effect): bidirectional ─────────
 type ContractUnit = Hyperlink.ShapeOf<
-  ReturnType<typeof runSpec<typeof Schema.Void, typeof Schema.Number>>
+  ReturnType<typeof gateSpec<typeof Schema.Void, typeof Schema.Number>>
 >;
 type HandleUnit = Gate.Gate<void, number, never>;
 declare const contractUnit: ContractUnit;
@@ -67,7 +67,7 @@ assertExact<
 >();
 
 // ── DoD: the static `.run` shortcut is Effect (unit) vs a call (parameterized) ───────────────────────
-// (mirrors run-resource.test-d.ts; ensures the naming cast keeps the static run's shape.)
+// (mirrors gate.test-d.ts; ensures the naming cast keeps the static run's shape.)
 // @ts-expect-error — void gates reject positional input
 void Tick.run(1);
 // @ts-expect-error — parameterized gates require input

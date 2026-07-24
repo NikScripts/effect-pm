@@ -73,7 +73,7 @@ export class Sessions extends ShardMap.Tag<Sessions>()("wnba/Sessions", {
   keyOf: (s) => s.id,
 }).pipe(Hyperlink.nodes([WnbaNode, LiveNode, StatsNode])) {}
 
-// A **run gate** — a bounded-concurrency gate over an effect (here a simulated box-score fetch). No
+// A **gate** — a bounded-concurrency gate over an effect (here a simulated box-score fetch). No
 // queues/priorities; each `run` acquires one of `concurrency` permits inline. Served on LiveNode and
 // driven concurrently so the GateCard shows live in-flight / waiting / done counters.
 export class FetchGate extends Gate.Tag<FetchGate>()("wnba/FetchGate", {
@@ -191,7 +191,7 @@ const appLayer = Layer.mergeAll(
   Hyperlink.client(MeshHealth, WnbaNode).pipe(Layer.provide(wnbaTransport)),
   Hyperlink.client(FleetMetrics, WnbaNode).pipe(Layer.provide(wnbaTransport)),
   Hyperlink.client(Sessions, WnbaNode).pipe(Layer.provide(wnbaTransport)),
-  // FetchGate is a nodeless run gate served on LiveNode; name the instance to read (like WorkerPool).
+  // FetchGate is a nodeless gate served on LiveNode; name the instance to read (like WorkerPool).
   Hyperlink.client(FetchGate, LiveNode).pipe(Layer.provide(liveTransport)),
 );
 

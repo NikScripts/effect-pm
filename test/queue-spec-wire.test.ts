@@ -25,7 +25,7 @@ const asRpcMethod = (m: unknown): AnyMethod | undefined =>
     ? (m as AnyMethod)
     : undefined;
 
-const clientHttp = (port: number) =>
+const httpProtocol = (port: number) =>
   RpcClient.layerProtocolHttp({ url: `http://127.0.0.1:${port}/rpc` }).pipe(
     Layer.provide(RpcSerialization.layerNdjson),
     Layer.provide(FetchHttpClient.layer),
@@ -92,7 +92,7 @@ describe("queueSpec wire — RPC round-trip", () => {
         const values = yield* Ref.get(successes);
         expect(values).toContain(4);
       }).pipe(
-        Effect.provide(Hyperlink.client(NumberQueue).pipe(Layer.provide(clientHttp(port)))),
+        Effect.provide(Hyperlink.client(NumberQueue).pipe(Layer.provide(httpProtocol(port)))),
         Effect.scoped,
       );
     }).pipe(Effect.provide(numberQueueServer), Effect.scoped),

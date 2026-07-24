@@ -9,13 +9,13 @@
 {.note}
 **⚠️ Example only** — placeholder content that demonstrates the docs platform. **Not final**; to be replaced by Agent A. Do not treat as canonical.
 
-A `Process` is long-running or scheduled work — a poller, a supervisor, a
+A `Daemon` is long-running or scheduled work — a poller, a supervisor, a
 periodic sync. You define it as a tag, then run it as a layer that ticks on a
 schedule and records its execution history.
 
 ## Define and run
 
-`Daemon.Tag` names the process and types its result. `Daemon.layer` runs it,
+`Daemon.Tag` names the daemon and types its result. `Daemon.layer` runs it,
 driving the `effect` on a `Polling` cadence.
 
 ``` ts
@@ -47,12 +47,12 @@ const events = yield* store.events()       // [{ _tag: "Completed", success, …
 ```
 
 {.note}
-`Daemon.layer` auto-writes history; `Process.make` does not. Reach for the
-layer form when you want the run timeline recorded.
+`Daemon.layer` auto-writes history; a bare engine make without the layer does not.
+Reach for the layer form when you want the run timeline recorded.
 
 ## Polling cadences
 
-`Polling` shapes when a process ticks — fixed spacing, or accelerating toward an
+`Polling` shapes when a daemon ticks — fixed spacing, or accelerating toward an
 event and relaxing afterward.
 
 ``` ts

@@ -188,7 +188,7 @@ describe("Gate.httpApiClient", () => {
     })
   )
 
-  it.live("applies transformClient before the run gate", () =>
+  it.live("applies transformClient before the gate", () =>
     Effect.gen(function* () {
       const api = HttpApi.make("vitest-tc").add(HttpApiGroup.make("g").add(pingEndpoint))
       const Tag = Gate.httpApiClient(api, {

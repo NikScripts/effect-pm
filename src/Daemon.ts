@@ -38,8 +38,8 @@
  * This module is consumed as an Effect **module namespace** (`export * as Daemon`), so member
  * access tree-shakes. It carries two cooperating surfaces:
  * - **Engine** — {@link make} (+ {@link Service}, {@link currentScheduleId}, {@link scheduleControls},
- *   {@link Errors}): construct and run a supervised process directly.
- * - **Hyperlink toolkit** — {@link Tag} / {@link Schedule} / {@link schedule} shape a process as a
+ *   {@link Errors}): construct and run a supervised daemon directly.
+ * - **Hyperlink toolkit** — {@link Tag} / {@link Schedule} / {@link schedule} shape a daemon as a
  *   {@link Hyperlink}; declare optional {@link DaemonTagOptions.success} and
  *   {@link DaemonTagOptions.error} on {@link Tag} (positional or config object). Use
  *   {@link layer} / {@link serve} / {@link serveRemote} / {@link configure} to run it locally or over
@@ -132,7 +132,7 @@ import type { StoreShapes } from "./internal/store/contractDef";
 // ============================================================================
 
 /**
- * A one-shot read of a managed process's runtime mirror — the observable state the supervisor
+ * A one-shot read of a managed daemon's runtime mirror — the observable state the supervisor
  * maintains as it reconciles the schedule and spawns instances. Native (engine-side) types;
  * the toolkit contract ({@link daemonStatus}) maps these to its wire form.
  *
@@ -140,7 +140,7 @@ import type { StoreShapes } from "./internal/store/contractDef";
  * @public
  */
 export interface DaemonSnapshot {
-  /** Whether the schedule currently places the process in a run window (derived from entries). */
+  /** Whether the schedule currently places the daemon in a run window (derived from entries). */
   readonly armed: boolean;
   /** How many run instances are executing right now. */
   readonly activeInstances: number;
@@ -163,7 +163,7 @@ export interface DaemonSnapshot {
 }
 
 /**
- * Managed process handle for the process manager.
+ * Managed daemon handle for Hyperlink supervision.
  *
  * @typeParam R — Environment required to run {@link Daemon.effect} (after optional inline layers).
  *
@@ -211,14 +211,13 @@ export interface Daemon<out R> {
 }
 
 /**
- * Canonical process declaration that can be registered with a typed
- * the process manager.
+ * Canonical daemon declaration that can be registered with a typed Hyperlink group.
  *
  * @remarks
- * The declaration carries the process handle under {@link process} rather than
+ * The declaration carries the daemon handle under {@link daemon} rather than
  * copying handle fields onto the service class. Function/class `name` is a
  * read-only JavaScript property, so storing the runtime handle separately keeps
- * the service class safe while preserving the canonical process id.
+ * the service class safe while preserving the canonical daemon id.
  *
  * @category models
  * @public
@@ -227,15 +226,15 @@ export interface DaemonDefinition<out Id extends string, out R>
 {
   readonly id: Id;
   readonly kind: typeof kind;
-  readonly process: Daemon<R>;
+  readonly daemon: Daemon<R>;
 }
 
 /**
- * Canonical process service declaration.
+ * Canonical daemon service declaration.
  *
  * @remarks
  * This mirrors Effect's class-based `Context.Service` style while attaching the
- * metadata the process manager needs for typed registration and contract generation.
+ * metadata Hyperlink needs for typed registration and contract generation.
  *
  * @category models
  * @public
@@ -265,7 +264,7 @@ export interface DaemonServiceDefinition<Self, Id extends string, E, R>
   ) => Layer.Layer<never>;
   /**
    * {@link Daemon} built from {@link defaultSpec} after folding configure patches.
-   * the process manager uses this when assembling the group runtime.
+   * Hyperlink uses this when assembling the group runtime.
    */
   readonly buildConfiguredDaemon: Effect.Effect<Daemon<R>>;
 }
@@ -324,7 +323,7 @@ export const currentScheduleId: Effect.Effect<Option.Option<string>, never, neve
  * @remarks
  * Available from both:
  * - `Daemon.make(id, { schedule: (controls) => ... })`
- * - inside the process `effect` via this accessor.
+ * - inside the daemon `effect` via this accessor.
  *
  * @category schedule
  * @public
@@ -1363,7 +1362,7 @@ export type DaemonMake = typeof make;
 
 /**
  * The Daemon resource kind — the single source of truth (also the module's public `kind`).
- * The definition carries it and the process manager / dashboard match on it; there is no
+ * The definition carries it and Hyperlink / the dashboard match on it; there is no
  * second short discriminator.
  *
  * @category utils
@@ -1375,11 +1374,11 @@ const makeDaemonDefinition = <const Id extends string, E, RUser>(
   id: Id,
   config: DaemonMakeOptions<E, RUser>,
 ): DaemonDefinition<Id, RUser> => {
-  const process = make(id, config);
+  const daemon = make(id, config);
   return {
     id,
     kind,
-    process,
+    daemon,
   };
 };
 
@@ -1438,13 +1437,13 @@ const defineDaemonService = <Self>() => {
     fourth?: DaemonMakeLayerArg<RUser>,
   ): DaemonServiceDefinition<Self, Id, E, RUser> {
     const defaultSpec = resolveDaemonMakeConfig(effectOrConfig, third, fourth);
-    const process = makeDaemonDefinition(id, defaultSpec);
+    const definition = makeDaemonDefinition(id, defaultSpec);
     const buildConfiguredDaemon = foldConfiguredSpec(id, defaultSpec).pipe(
       Effect.map((effective) => make(id, effective)),
     );
     const base = Context.Service<Self, Daemon<RUser>>()(id);
     return Object.assign(base, {
-      ...process,
+      ...definition,
       tag: base,
       defaultSpec,
       configure: (patch: ConfigPatch<DaemonMakeOptions<E, RUser>>) =>
@@ -1527,7 +1526,7 @@ export const daemonScheduleEntry = Schema.Struct({
 });
 
 /**
- * The current-state snapshot of a managed process — the wire form of the engine's
+ * The current-state snapshot of a managed daemon — the wire form of the engine's
  * {@link DaemonSnapshot} (plus `supervising`). The element of the reactive `status` field:
  * `status.get` reads it once, `status.changes` streams it.
  *
@@ -1572,7 +1571,7 @@ export const daemonExecutionEvent = daemonExecutionEventVoid;
 export type DaemonExecutionEvent = typeof daemonExecutionEventVoid.Type;
 
 /**
- * Build an execution event union when the process tag carries a {@link DaemonTagOptions.success}.
+ * Build an execution event union when the daemon tag carries a {@link DaemonTagOptions.success}.
  *
  * @category wire schemas
  * @public
@@ -1659,7 +1658,7 @@ export const buildDaemonSpec = <
       : Hyperlink.effect(wire?.success ?? Schema.Void)
     ).annotate({
       description:
-        "Run the process worker effect once, tracked — returns success; failures typed on error.",
+        "Run the daemon worker effect once, tracked — returns success; failures typed on error.",
     }),
   };
 };
@@ -1922,7 +1921,7 @@ export type ScheduleService = DaemonScheduleService;
 
 /**
  * The subset of schedule controls handed to a {@link DaemonScheduleInitializer}
- * (`entries` / `set` / `add` / `clear`) and available inside the process effect via
+ * (`entries` / `set` / `add` / `clear`) and available inside the daemon effect via
  * {@link scheduleControls}.
  *
  * @category models
@@ -2004,7 +2003,7 @@ const applyDaemonTagSchemas = (
       {
         result: Hyperlink.ref(Schema.Option(schemas.success)).annotate({
           description:
-            "The latest value the process effect resolved to (absent until the first run completes).",
+            "The latest value the daemon effect resolved to (absent until the first run completes).",
         }),
       },
       {},
@@ -2106,7 +2105,7 @@ const scheduleGroupFlat: FlatSpec = Object.fromEntries(
 /**
  * Attach a schedule to a process (pipeable). Two forms, distinguished by argument:
  *
- * - **inline windows** — the process **owns** an in-memory schedule seeded with `windows`, and its
+ * - **inline windows** — the daemon **owns** an in-memory schedule seeded with `windows`, and its
  *   contract gains the `schedule` verb group (`entries` / `set` / `add` / `clear`):
  *
  * ```ts
@@ -2115,7 +2114,7 @@ const scheduleGroupFlat: FlatSpec = Object.fromEntries(
  * ) {}
  * ```
  *
- * - **an external {@link Schedule}** — the process is **gated by** a shared schedule resource and
+ * - **an external {@link Schedule}** — the daemon is **gated by** a shared schedule resource and
  *   gains **no** schedule verbs (they live on the resource, which can arm many processes at once):
  *
  * ```ts
@@ -2195,7 +2194,7 @@ export type DaemonTagBuild<Self> = {
 };
 
 /**
- * Define a managed process as a toolkit resource. `Self` is given explicitly (Effect's `()`
+ * Define a managed daemon as a toolkit resource. `Self` is given explicitly (Effect's `()`
  * two-stage form). The base tag carries observation + lifecycle; add a schedule with
  * `.pipe(`{@link schedule}`(…))`. Declare value/error wire schemas on the tag:
  *
@@ -2212,7 +2211,7 @@ export type DaemonTagBuild<Self> = {
  * }) {}
  * ```
  *
- * Pass `options.node` to bind the process to a {@link Node.Tag}.
+ * Pass `options.node` to bind the daemon to a {@link Node.Tag}.
  *
  * @category constructors
  * @public
@@ -2240,7 +2239,7 @@ export const Tag = <Self>() => {
   // The single, guarded cast: an overloaded *function* (`build`) isn't structurally assignable to a
   // call-signature *object* type (`DaemonTagBuild<Self>`) even when it implements exactly those
   // overloads — a known TS limitation (the same class as WorkPool's `nameQueueService` cast).
-  // It's soundness-guarded: `process-built-resource` / `process-contract-shape` .test-d.ts exercise
+  // It's soundness-guarded: `process-driver` / `daemon-contract-shape` .test-d.ts exercise
   // `Daemon.Tag()` in every form, so a drift between `build` and `DaemonTagBuild` fails the build.
   return build as DaemonTagBuild<Self>;
 };
@@ -2364,10 +2363,10 @@ const entriesSubscribable = (
   ).pipe(Stream.map((entries) => entries.map(toWireEntry))),
 });
 
-/** Thrown (as a defect) when a reference-mode process is materialized before its runtime lands. */
+/** Thrown (as a defect) when a reference-mode daemon is materialized before its runtime lands. */
 class ReferenceScheduleNotWired extends Data.TaggedError(
   "ReferenceScheduleNotWired",
-)<{ readonly process: string }> {}
+)<{ readonly daemon: string }> {}
 
 const statusPollInterval = Duration.millis(500);
 
@@ -2399,7 +2398,7 @@ const buildDaemonImpl = <A, E, R>(
 
     const mode = scheduleModeOf(tag);
     if (mode?._tag === "reference") {
-      return yield* Effect.die(new ReferenceScheduleNotWired({ process: tag.key }));
+      return yield* Effect.die(new ReferenceScheduleNotWired({ daemon: tag.key }));
     }
 
     // ── result capture (value-returning process) ──
@@ -2677,7 +2676,7 @@ export function serveRemoteMemory(
 }
 
 /**
- * A **config-patch layer** for the process `tag` — merge it with the process's {@link layer} and its
+ * A **config-patch layer** for the daemon `tag` — merge it with the daemon's {@link layer} and its
  * patch (polling / a `(previous) => next` wrap of `effect`) folds onto the base config at build.
  *
  * @category layers & serving

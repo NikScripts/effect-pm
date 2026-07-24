@@ -16,11 +16,11 @@ import { connect } from "../Node";
 import type { NodeKey, AddressedNode, Status as NodeStatusSnapshot } from "../Node";
 import * as LogEntry from "../LogEntry";
 import { kind as queueKind, queueMetrics, queueStatus } from "../WorkPool";
-import { priorityKind as customQueueKind, customQueueStatus } from "../WorkPool";
+import { priorityKind, priorityStatus } from "../WorkPool";
 import { kind as fleetHealthKind, type FleetStatus, type NodeReport } from "../FleetHealth";
 import { kind as telemetryKind, MetricsSnapshot, type MetricDatum } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";
-import { kind as runKind, type RunGateStatus } from "../Gate";
+import { kind as gateKind, type GateStatus } from "../Gate";
 import { kind as daemonKind, daemonScheduleEntry, daemonStatus } from "../Daemon";
 import { kind as apiKind } from "../ApiMetrics";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../ApiUsageSchema";
@@ -29,12 +29,12 @@ import { now } from "./now";
 
 /** Live queue status (from the contract schema). */
 export type QueueStatus = Schema.Schema.Type<typeof queueStatus>;
-/** A custom-queue's live status — like a queue's, but `sizes` is a **named-lane** record (not the
- *  fixed high/normal/low), and `phase` is `running | draining | off`. @public */
-export type CustomQueueStatus = Schema.Schema.Type<typeof customQueueStatus>;
+/** A `WorkPool.priority` queue's live status — like a WorkPool's, but `sizes` is a **named-lane**
+ *  record (not the fixed high/normal/low), and `phase` is `running | draining | off`. @public */
+export type PriorityStatus = Schema.Schema.Type<typeof priorityStatus>;
 /** Live queue metrics (from the contract schema). */
 export type QueueMetrics = Schema.Schema.Type<typeof queueMetrics>;
-/** Live process status (from the contract schema). */
+/** Live daemon status (from the contract schema). */
 export type DaemonStatus = Schema.Schema.Type<typeof daemonStatus>;
 /** One scheduled run window (from the contract schema): `{ id?, startAt, stopAt? }`. */
 export type ScheduleEntry = Schema.Schema.Type<typeof daemonScheduleEntry>;
@@ -86,8 +86,8 @@ interface RefLike<A> {
   readonly get: Effect.Effect<A>;
   readonly changes: Stream.Stream<A>;
 }
-/** The structural shape of a process's live service (the base `Daemon.Tag` contract). The inline
- *  `schedule` verb group is present only on a process that owns an inline schedule
+/** The structural shape of a daemon's live service (the base `Daemon.Tag` contract). The inline
+ *  `schedule` verb group is present only on a daemon that owns an inline schedule
  *  (`Daemon.schedule([...])`), so it is optional here. */
 interface DaemonService {
   readonly status: RefLike<DaemonStatus>;
@@ -111,10 +111,11 @@ interface ApiService {
   readonly usage: Subscribable<ApiUsageSnapshot>;
 }
 
-/** The structural shape of a **custom** queue's live service — like {@link QueueService} but with a
- *  named-lane `status`, an extra `levelSizes`, and a `start` command. Metrics/logs are identical. */
-interface CustomQueueService {
-  readonly status: Subscribable<CustomQueueStatus>;
+/** The structural shape of a `WorkPool.priority` queue's live service — like {@link QueueService}
+ *  but with a named-lane `status`, an extra `levelSizes`, and a `start` command. Metrics/logs are
+ *  identical. */
+interface PriorityService {
+  readonly status: Subscribable<PriorityStatus>;
   readonly size: Subscribable<number>;
   readonly isEmpty: Subscribable<boolean>;
   readonly levelSizes: Effect.Effect<ReadonlyArray<number>>;
@@ -137,8 +138,8 @@ interface CustomQueueService {
 
 /** A queue tag — yieldable for its live service. Requirement `R` is provided by the runtime. */
 export type QueueTag<R = never> = Effect.Effect<QueueService, never, R> & { readonly key: string };
-/** A custom-queue tag — yieldable for its live service. @public */
-export type CustomQueueTag<R = never> = Effect.Effect<CustomQueueService, never, R> & { readonly key: string };
+/** A `WorkPool.priority` tag — yieldable for its live service. @public */
+export type PriorityTag<R = never> = Effect.Effect<PriorityService, never, R> & { readonly key: string };
 
 /** The structural shape of a **fleet-health** resource's live service — a per-node health map + a
  *  rollup status, both `fleet` effect fields (read-once, polled — no reactive ref). */
@@ -169,14 +170,14 @@ interface ShardMapService {
 /** A shard-map tag — yieldable for its live service. @public */
 export type ShardMapTag<R = never> = Effect.Effect<ShardMapService, never, R> & { readonly key: string };
 
-/** The structural shape of a **run-gate** resource's live service — a reactive `status` ref carrying
+/** The structural shape of a **Gate** resource's live service — a reactive `status` ref carrying
  *  the live concurrency counters (waiting / in-flight / completed / failed / interrupted / duration). */
-interface RunService {
-  readonly status: Subscribable<RunGateStatus>;
+interface GateService {
+  readonly status: Subscribable<GateStatus>;
 }
-/** A run-gate tag — yieldable for its live service. @public */
-export type RunTag<R = never> = Effect.Effect<RunService, never, R> & { readonly key: string };
-/** A process tag — yieldable for its live service. */
+/** A Gate tag — yieldable for its live service. @public */
+export type GateTag<R = never> = Effect.Effect<GateService, never, R> & { readonly key: string };
+/** A daemon tag — yieldable for its live service. */
 export type DaemonTag<R = never> = Effect.Effect<DaemonService, never, R> & { readonly key: string };
 /** An API-metrics tag — yieldable for its live service. */
 export type ApiTag<R = never> = Effect.Effect<ApiService, never, R> & { readonly key: string };
@@ -207,10 +208,10 @@ export interface QueueBundle {
   readonly clear: CommandAtom;
   readonly shutdown: CommandAtom;
 }
-/** The atoms + controls one **custom-queue** card needs — like {@link QueueBundle} (named-lane status)
- *  plus a `start` command. @public */
-export interface CustomQueueBundle {
-  readonly status: ValueAtom<Option.Option<CustomQueueStatus>>;
+/** The atoms + controls one `WorkPool.priority` card needs — like {@link QueueBundle} (named-lane
+ *  status) plus a `start` command. @public */
+export interface PriorityBundle {
+  readonly status: ValueAtom<Option.Option<PriorityStatus>>;
   readonly metrics: ValueAtom<Option.Option<QueueMetrics>>;
   readonly history: ValueAtom<ReadonlyArray<MetricPoint>>;
   readonly trend: ValueAtom<ReadonlyArray<number>>;
@@ -242,10 +243,10 @@ export interface ShardMapBundle {
   readonly sizeByNode: ValueAtom<Record<string, number>>;
   readonly sizeLocal: ValueAtom<number>;
 }
-/** The atoms one **run-gate** card needs — the live status (concurrency counters) streamed from the
+/** The atoms one **Gate** card needs — the live status (concurrency counters) streamed from the
  *  reactive `status` ref. Read-only. @public */
-export interface RunBundle {
-  readonly status: ValueAtom<RunGateStatus>;
+export interface GateBundle {
+  readonly status: ValueAtom<GateStatus>;
 }
 /** The atoms + controls one process card needs — derived from the tag. */
 export interface DaemonBundle {
@@ -308,8 +309,8 @@ export const nodesOf = (group: unknown): ReadonlyArray<NodeRef> => {
   return [...seen.values()];
 };
 
-/** A tag's wire identity (its `groupId`, falling back to `key`) — what a node's `NodeStatus`
- *  reports for each served resource. */
+/** A tag's wire identity (its `groupId`, falling back to `key`) — what a node's status
+ *  snapshot reports for each served resource. */
 export const tagWireKey = (member: unknown): string | undefined => {
   if ((typeof member !== "object" && typeof member !== "function") || member === null) {
     return undefined;
@@ -320,7 +321,7 @@ export const tagWireKey = (member: unknown): string | undefined => {
 };
 
 /** The {@link NodeRef} a resource tag is bound to (its `Node.Tag`), or `undefined` for a nodeless
- *  tag — lets a resource page read its own readiness from its node's `NodeStatus`. */
+ *  tag — lets a resource page read its own readiness from its node's status handle. */
 export const resourceNodeRef = (tag: unknown): NodeRef | undefined => {
   const node = nodeOf(tag);
   return node === undefined ? undefined : { id: node.key, node };
@@ -352,10 +353,10 @@ export const isQueueTag = (m: unknown): m is QueueTag => hyperlinkKindOf(m) === 
 export const isDaemonTag = (m: unknown): m is DaemonTag => hyperlinkKindOf(m) === daemonKind;
 /** @public */
 export const isApiTag = (m: unknown): m is ApiTag => hyperlinkKindOf(m) === apiKind;
-/** Custom-queue guard — its own stamped kind (not folded into {@link kindOf}, which stays the four
- *  primary kinds; a custom queue dispatches by its exact kind key). @public */
-export const isCustomQueueTag = (m: unknown): m is CustomQueueTag =>
-  hyperlinkKindOf(m) === customQueueKind;
+/** `WorkPool.priority` guard — its own stamped kind (not folded into {@link kindOf}, which stays
+ *  the four primary kinds; a priority queue dispatches by its exact kind key). @public */
+export const isPriorityTag = (m: unknown): m is PriorityTag =>
+  hyperlinkKindOf(m) === priorityKind;
 /** Fleet-health guard — its own stamped kind (a mesh factory, dispatched by exact kind key). @public */
 export const isFleetHealthTag = (m: unknown): m is FleetHealthTag =>
   hyperlinkKindOf(m) === fleetHealthKind;
@@ -365,9 +366,9 @@ export const isTelemetryTag = (m: unknown): m is TelemetryTag =>
 /** Shard-map guard — its own stamped kind (a mesh factory, dispatched by exact kind key). @public */
 export const isShardMapTag = (m: unknown): m is ShardMapTag =>
   hyperlinkKindOf(m) === shardMapKind;
-/** Run-gate guard — its own stamped kind (dispatched by exact kind key). @public */
-export const isRunTag = (m: unknown): m is RunTag =>
-  hyperlinkKindOf(m) === runKind;
+/** Gate guard — its own stamped kind (dispatched by exact kind key). @public */
+export const isGateTag = (m: unknown): m is GateTag =>
+  hyperlinkKindOf(m) === gateKind;
 
 // one combined metrics stream carries both backfill points and live raw metrics
 type MetricsItem = { readonly point: MetricPoint } | { readonly metric: QueueMetrics };
@@ -532,21 +533,22 @@ export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueT
   return bundle;
 };
 
-const customQueueBundleCache = new WeakMap<object, Map<string, CustomQueueBundle>>();
+const priorityBundleCache = new WeakMap<object, Map<string, PriorityBundle>>();
 
-/** Build (once per runtime+tag) the atom bundle for a **custom-queue** tag — the {@link queueBundle}
- *  parallel: same metrics/logs wire, a named-lane status, and a `start` command. @public */
-export const customQueueBundle = <R, ER>(
+/** Build (once per runtime+tag) the atom bundle for a `WorkPool.priority` tag — the
+ *  {@link queueBundle} parallel: same metrics/logs wire, a named-lane status, and a `start`
+ *  command. @public */
+export const priorityBundle = <R, ER>(
   runtime: DashboardRuntime<R, ER>,
-  tag: CustomQueueTag<R>,
-): CustomQueueBundle => {
-  const cache = cacheFor(customQueueBundleCache, runtime);
+  tag: PriorityTag<R>,
+): PriorityBundle => {
+  const cache = cacheFor(priorityBundleCache, runtime);
   const existing = cache.get(tag.key);
   if (existing !== undefined) return existing;
 
   const node = nodeOf(tag);
   if (node === undefined) {
-    throw new Error(`custom-queue tag ${tag.key} is missing a node`);
+    throw new Error(`WorkPool.priority tag ${tag.key} is missing a node`);
   }
 
   const statusStream = Stream.unwrap(Effect.map(tag, (q) => q.status.changes));
@@ -557,7 +559,7 @@ export const customQueueBundle = <R, ER>(
     latency: m.avgTotalMillis ?? 0,
   });
   // total pending across all named lanes (the fixed high/normal/low sum has no meaning here)
-  const trendValue = (s: CustomQueueStatus): number =>
+  const trendValue = (s: PriorityStatus): number =>
     Object.values(s.sizes).reduce((sum, n) => sum + n, 0);
   bumpLogIdFrom(`${tag.key}/logs`);
 
@@ -565,7 +567,7 @@ export const customQueueBundle = <R, ER>(
     statusStream.pipe(
       Stream.scan(
         {
-          latest: Option.none<CustomQueueStatus>(),
+          latest: Option.none<PriorityStatus>(),
           trend: readCache<number>(`${tag.key}/trend`)?.items ?? [],
         },
         (acc, s) => ({ latest: Option.some(s), trend: [...acc.trend, trendValue(s)].slice(-TREND) }),
@@ -598,7 +600,7 @@ export const customQueueBundle = <R, ER>(
     ),
   );
 
-  const bundle: CustomQueueBundle = {
+  const bundle: PriorityBundle = {
     status: Atom.mapResult(statusTrend, (a) => a.latest),
     metrics: Atom.mapResult(metricsHistory, (a) => a.latest),
     history: Atom.mapResult(metricsHistory, (a) => a.history),
@@ -702,19 +704,19 @@ export const shardMapBundle = <R, ER>(
   return bundle;
 };
 
-const runBundleCache = new WeakMap<object, Map<string, RunBundle>>();
+const gateBundleCache = new WeakMap<object, Map<string, GateBundle>>();
 
-/** Build (once per runtime+tag) the atom bundle for a **run-gate** tag — subscribes to the reactive
+/** Build (once per runtime+tag) the atom bundle for a **Gate** tag — subscribes to the reactive
  *  `status` ref (streamed, like the queue/process cards). @public */
-export const runBundle = <R, ER>(
+export const gateBundle = <R, ER>(
   runtime: DashboardRuntime<R, ER>,
-  tag: RunTag<R>,
-): RunBundle => {
-  const cache = cacheFor(runBundleCache, runtime);
+  tag: GateTag<R>,
+): GateBundle => {
+  const cache = cacheFor(gateBundleCache, runtime);
   const existing = cache.get(tag.key);
   if (existing !== undefined) return existing;
 
-  const bundle: RunBundle = {
+  const bundle: GateBundle = {
     status: runtime.atom(Stream.unwrap(Effect.map(tag, (r) => r.status.changes))),
   };
   cache.set(tag.key, bundle);
@@ -799,7 +801,7 @@ export const apiBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: ApiTag<R
 // identity, and the runtime supplies its transport via `connect`, so we restate the resolved
 // requirement — the same contained boundary assertion `Hyperlink.client` makes for node-bearing tags.
 // The 2-arg `client(tag, node)` form reads the node's value and unwraps its transport — the sanctioned
-// way to point a nodeless tag (NodeStatus) at a specific node. (The node is exposed at runtime via
+// way to point a nodeless reserved tag at a specific node. (The node is exposed at runtime via
 // `connect`, so we erase its identity to `never` — the same contained boundary assertion Hyperlink.client
 // makes for node-bearing tags.)
 const nodeConn = (node: NodeKey<unknown>) =>
@@ -807,8 +809,8 @@ const nodeConn = (node: NodeKey<unknown>) =>
   // heterogeneous, so the node is erased; these are real addressed dashboard nodes.
   connect(node as AddressedNode<unknown>);
 
-/** Build (once per runtime+node) the atom bundle for a node's live status — read straight from the
- *  reserved `NodeStatus` resource over that node's transport. */
+/** Build (once per runtime+node) the atom bundle for a node's live status — read from the
+ *  connected node handle's status/logs accessors. */
 export const nodeStatusBundle = <R, ER>(
   runtime: DashboardRuntime<R, ER>,
   ref: NodeRef,
@@ -862,7 +864,7 @@ export const nodeStatusBundle = <R, ER>(
   return bundle;
 };
 
-/** Walk a `Group.Tag` tree to its leaf resource tags (queues + processes), raw. */
+/** Walk a `Group.Tag` tree to its leaf resource tags (WorkPools + Daemons), raw. */
 export const leafTags = (node: GroupNode): ReadonlyArray<unknown> =>
   Object.values(Group.members(node)).flatMap((m) => (Group.isGroup(m) ? leafTags(m) : [m]));
 
@@ -870,6 +872,6 @@ export const leafTags = (node: GroupNode): ReadonlyArray<unknown> =>
 export const queueLeaves = (node: GroupNode): ReadonlyArray<QueueTag> =>
   leafTags(node).filter(isQueueTag);
 
-/** Only the process leaves of a tree. */
-export const processLeaves = (node: GroupNode): ReadonlyArray<DaemonTag> =>
+/** Only the daemon leaves of a tree. */
+export const daemonLeaves = (node: GroupNode): ReadonlyArray<DaemonTag> =>
   leafTags(node).filter(isDaemonTag);

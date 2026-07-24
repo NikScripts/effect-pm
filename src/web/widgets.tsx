@@ -26,11 +26,11 @@ import {
   type ApiPoint,
   type ApiTag,
   type CommandAtom,
-  type CustomQueueTag,
+  type PriorityTag,
   type FleetHealthTag,
   type TelemetryTag,
   type ShardMapTag,
-  type RunTag,
+  type GateTag,
   type GroupNode,
   type LogLine,
   type MetricPoint,
@@ -41,11 +41,11 @@ import {
   type ScheduleEntry,
   type NodeRef,
   isApiTag,
-  isCustomQueueTag,
+  isPriorityTag,
   isFleetHealthTag,
   isTelemetryTag,
   isShardMapTag,
-  isRunTag,
+  isGateTag,
   isDaemonTag,
   isQueueTag,
   nodesOf,
@@ -56,7 +56,7 @@ import {
 } from "./data";
 import { kindOf as hyperlinkKindOf, kind as hyperlinkKind } from "../Hyperlink";
 import { kind as queueKind } from "../WorkPool";
-import { priorityKind as customQueueKind } from "../WorkPool";
+import { priorityKind } from "../WorkPool";
 import { kind as fleetHealthKind, type NodeReport } from "../FleetHealth";
 import { kind as telemetryKind, type MetricDatum } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";
@@ -76,7 +76,7 @@ import {
 } from "./widget-registry";
 import type { ApiUsageMetrics } from "../ApiUsageSchema";
 import type { Status as NodeStatusValue } from "../Node";
-import { useApiBundle, useCustomQueueBundle, useFleetHealthBundle, useNodeBundle, useDaemonBundle, useQueueBundle, useRunBundle, useShardMapBundle, useTelemetryBundle } from "./runtime";
+import { useApiBundle, usePriorityBundle, useFleetHealthBundle, useNodeBundle, useDaemonBundle, useQueueBundle, useGateBundle, useShardMapBundle, useTelemetryBundle } from "./runtime";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
 import { useViewTransitionStyle } from "./useViewTransition";
 import { dlog } from "./debug-console";
@@ -214,7 +214,7 @@ export const QueueCard = (props: {
   );
 };
 
-/** One named lane as a labelled bar — the custom-queue counterpart to `PrioRow` (fixed high/normal/low);
+/** One named lane as a labelled bar — the `WorkPool.priority` counterpart to `PrioRow` (fixed high/normal/low);
  *  lanes are arbitrary, so the label is the lane name. */
 const LaneRow = (props: {
   readonly lane: string;
@@ -228,23 +228,23 @@ const LaneRow = (props: {
   </div>
 );
 
-/** Custom-queue phase colours (running / draining / off) — its phase set differs from a queue's. */
-const CQ_PHASE: Record<string, string> = { running: "#22c55e", draining: "#eab308", off: "#94a3b8" };
+/** `WorkPool.priority` phase colours (running / draining / off) — its phase set differs from a queue's. */
+const PRIORITY_PHASE: Record<string, string> = { running: "#22c55e", draining: "#eab308", off: "#94a3b8" };
 
 /**
- * A **custom queue** as a grid card — the {@link QueueCard} sibling for `WorkPoolPriority`: same
- * pending / done / phase, but its **named lanes** (`status.sizes`, an arbitrary set) render one bar
- * each instead of the fixed high/normal/low priorities. @public
+ * A `WorkPool.priority` queue as a grid card — the {@link QueueCard} sibling: same pending / done /
+ * phase, but its **named lanes** (`status.sizes`, an arbitrary set) render one bar each instead of
+ * the fixed high/normal/low priorities. @public
  */
-export const CustomQueueCard = (props: {
-  readonly tag: CustomQueueTag;
+export const PriorityCard = (props: {
+  readonly tag: PriorityTag;
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
   readonly selected?: boolean;
-  readonly onOpen: (tag: CustomQueueTag) => void;
+  readonly onOpen: (tag: PriorityTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
-  const r = useAtomValue(useCustomQueueBundle(props.tag).status);
+  const r = useAtomValue(usePriorityBundle(props.tag).status);
   const s = AsyncResult.isSuccess(r) ? Option.getOrUndefined(r.value) : undefined;
   const lanes = s !== undefined ? Object.entries(s.sizes) : [];
   const pending = lanes.reduce((sum, [, n]) => sum + n, 0);
@@ -262,7 +262,7 @@ export const CustomQueueCard = (props: {
     >
       <div className="mb-2 flex items-center gap-2">
         <strong className="flex-1 truncate">{props.name}</strong>
-        <Badge color={paused ? "#eab308" : CQ_PHASE[s?.phase ?? "running"] ?? "#22c55e"}>
+        <Badge color={paused ? "#eab308" : PRIORITY_PHASE[s?.phase ?? "running"] ?? "#22c55e"}>
           {paused ? "paused" : s?.phase ?? "running"}
         </Badge>
       </div>
@@ -296,7 +296,7 @@ const MemberRow = (props: { readonly tag: QueueTag; readonly name: string }): Re
   );
 };
 
-/** Invisible: reads ONE node's `NodeStatus` and reports how many of the group's leaves **on that
+/** Invisible: reads ONE node's node status and reports how many of the group's leaves **on that
  *  node** are degraded, so {@link GroupCard} can sum them for its aggregate badge. A child-level hook
  *  (not a `.map` over the node list) keeps a constant hook order if a group ever gains/loses a node —
  *  the same Rules-of-Hooks pattern {@link HealthBoard} uses. */
@@ -382,7 +382,7 @@ export const GroupCard = (props: {
   );
 };
 
-/** Dispatch a group member to its card (group / queue / process / api). */
+/** Dispatch a group member to its card (group / WorkPool / Daemon / api). */
 export const Cell = (props: {
   readonly member: unknown;
   /** Display name — the member key under which the current group holds this member. */
@@ -441,7 +441,7 @@ const DegradedOverlayInner = (props: {
   );
 };
 
-/** The card **problem overlay**, read from the resource's node `NodeStatus` (SSOT): a slate dim +
+/** The card **problem overlay**, read from the resource's node node status (SSOT): a slate dim +
  *  "not responding" when the node's heartbeat stalls (its data is frozen), else an amber ring +
  *  "degraded — <cause>" when the resource isn't ready. Absolute (no layout shift), works for every
  *  card type; nothing while live-and-ready, loading, or nodeless. @public */
@@ -1772,17 +1772,17 @@ export const ApiEndpointTable = (props: { readonly bundle: ApiBundle }): React.R
 
 // ── Node widgets ─────────────────────────────────────────────────────────────
 // Nodes are read straight off the tags (`nodesOf`): a dot per node the group's resources are bound
-// to. Each dot's colour + popover come from that node's `NodeStatus` (over its own transport).
+// to. Each dot's colour + popover come from that node's node status (over its own transport).
 
 /** A node's overall colour: grey while connecting, red down, amber degraded, green ok. */
 const nodeColor = (s: NodeStatusValue | undefined): string =>
   s === undefined ? "#64748b" : !s.up ? "#ef4444" : s.status === "degraded" ? "#eab308" : "#22c55e";
 
-/** ~3× the 2s `NodeStatus` heartbeat: no fresh status in this long → the node's stream is dead and
+/** ~3× the 2s node status heartbeat: no fresh status in this long → the node's stream is dead and
  *  the shown values are frozen (last-known, not live). */
 const STALE_MS = 6000;
 
-/** True once a node's heartbeat has stopped. `NodeStatus.changes` re-emits every ~2s, so `beat` (its
+/** True once a node's heartbeat has stopped. `status.changes` re-emits every ~2s, so `beat` (its
  *  `uptimeMillis`) advances each tick; when it stops advancing the age climbs past {@link STALE_MS}
  *  and a frozen card can say so instead of looking live. Only a **genuine new heartbeat** (an advanced
  *  `uptimeMillis`) refreshes the timer — the drop-to-`undefined` + reconnect-retry churn a dying
@@ -1862,7 +1862,7 @@ const pipRows = <A,>(items: ReadonlyArray<A>, rows: ReadonlyArray<number>): Read
   });
 };
 
-/** One node's pip — a coloured dot, colour from its NodeStatus. */
+/** One node's pip — a coloured dot, colour from its status snapshot. */
 const NodePip = (props: {
   readonly node: NodeRef;
   readonly size: string;
@@ -2059,7 +2059,7 @@ export const NodeBar = (props: {
 /** The full-screen **health board** (opened from the die): a top stat strip, then degraded resources
  *  across **every** node first (with their root-cause detail — tap → that resource's detail), then a
  *  card per node (status · uptime · ready/total · resource count, tap → its full screen) with its full
- *  resource roster. Reads each node's `NodeStatus` once (the node list is stable for a group, so the
+ *  resource roster. Reads each node's node status once (the node list is stable for a group, so the
  *  per-node reads keep a constant hook order; bundles are cached per runtime+node). */
 export const HealthBoard = (props: {
   readonly group: GroupNode;
@@ -2180,7 +2180,7 @@ const NodeHealthRow = (props: {
   );
 };
 
-/** Reads one resource's readiness from its node's `NodeStatus` (the node computes it — SSOT). Always
+/** Reads one resource's readiness from its node's node status (the node computes it — SSOT). Always
  *  has a node (the public wrapper renders nothing for a nodeless tag). Shows **only when degraded** —
  *  nothing while ready/connecting, so the banner only takes space when there's a problem. */
 const ReadinessBannerInner = (props: {
@@ -2210,7 +2210,7 @@ const ReadinessBannerInner = (props: {
 };
 
 /** A resource's **degraded** banner for its detail page — an amber "degraded — &lt;root cause&gt;" line
- *  read from its node's `NodeStatus` (the same SSOT the health board uses). Renders nothing while the
+ *  read from its node's node status (the same SSOT the health board uses). Renders nothing while the
  *  resource is ready/connecting or nodeless, so it only appears (pushing content down) on a problem. */
 export const HyperlinkReadinessBanner = (props: { readonly tag: unknown }): React.ReactElement | null => {
   const node = resourceNodeRef(props.tag);
@@ -2276,7 +2276,7 @@ export const NodeDetail = (props: {
             <div className="shrink-0 border-b px-3 py-2 text-sm font-semibold">logs</div>
             <LogStream bundle={{ logs: bundle.logs }} className="flex-1 py-1" />
           </div>
-          {/* Pass 2: node metrics graphs (CPU / mem / throughput) land here with NodeStatus.metrics. */}
+          {/* Pass 2: node metrics graphs (CPU / mem / throughput) land here with status metrics. */}
         </>
       ) : (
         <div className="text-muted-foreground">connecting to node…</div>
@@ -2291,7 +2291,7 @@ export const NodeDetail = (props: {
 
 /** A resource's readiness as a small "badge dot": a border-only **green** circle when ready, a filled
  *  **amber** one when not — the UI's ready/degraded colours (`#22c55e` / `#eab308`, as the readiness
- *  pips). Reads its node's `NodeStatus` — the SSOT the overlay uses. */
+ *  pips). Reads its node's node status — the SSOT the overlay uses. */
 const ReadinessDotInner = (props: {
   readonly tag: unknown;
   readonly node: NodeRef;
@@ -2522,7 +2522,7 @@ export const ShardMapCard = (props: {
   );
 };
 
-/** One labelled counter for the run-gate card's outcome row. */
+/** One labelled counter for the gate card's outcome row. */
 const RunCounter = (props: {
   readonly label: string;
   readonly value: number;
@@ -2540,13 +2540,13 @@ const RunCounter = (props: {
  * interrupted outcome tallies, and the mean run duration. Read-only. @public
  */
 export const GateCard = (props: {
-  readonly tag: RunTag;
+  readonly tag: GateTag;
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
-  readonly onOpen: (tag: RunTag) => void;
+  readonly onOpen: (tag: GateTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
-  const bundle = useRunBundle(props.tag);
+  const bundle = useGateBundle(props.tag);
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const concurrency = s !== undefined ? s.concurrency : 0;
@@ -2590,15 +2590,16 @@ export const GateCard = (props: {
 // `grow` so they stretch to fill and are measured as a spacer, not double-mounted.
 
 /**
- * Fullscreen detail for a **custom queue** — stats, lanes, controls, the throughput chart, and the
- * live log stream, auto-paginated. Fills the drill-in that the grid `CustomQueueCard` opens. @public
+ * Fullscreen detail for a `WorkPool.priority` queue — stats, lanes, controls, the throughput chart,
+ * and the live log stream, auto-paginated. Fills the drill-in that the grid {@link PriorityCard}
+ * opens. @public
  */
-export const CustomQueueDetail = (props: {
-  readonly tag: CustomQueueTag;
+export const PriorityDetail = (props: {
+  readonly tag: PriorityTag;
   readonly name?: string;
   readonly onBack: () => void;
 }): React.ReactElement => {
-  const bundle = useCustomQueueBundle(props.tag);
+  const bundle = usePriorityBundle(props.tag);
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? Option.getOrUndefined(statusR.value) : undefined;
   const paused = s?.paused === true;
@@ -2667,7 +2668,7 @@ export const CustomQueueDetail = (props: {
       onBack={props.onBack}
       vtKey={`res-${props.tag.key}`}
       readinessTag={props.tag}
-      badge={<Badge color={paused ? "#eab308" : CQ_PHASE[s?.phase ?? "running"] ?? "#22c55e"}>{paused ? "paused" : s?.phase ?? "running"}</Badge>}
+      badge={<Badge color={paused ? "#eab308" : PRIORITY_PHASE[s?.phase ?? "running"] ?? "#22c55e"}>{paused ? "paused" : s?.phase ?? "running"}</Badge>}
       sections={sections}
     />
   );
@@ -2850,11 +2851,11 @@ export const FleetHealthDetail = (props: {
  * @public
  */
 export const GateDetail = (props: {
-  readonly tag: RunTag;
+  readonly tag: GateTag;
   readonly name?: string;
   readonly onBack: () => void;
 }): React.ReactElement => {
-  const bundle = useRunBundle(props.tag);
+  const bundle = useGateBundle(props.tag);
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const concurrency = s?.concurrency ?? 0;
@@ -2925,9 +2926,9 @@ const apiWidget: Widget = ({ tag, name, onOpen }) =>
   ) : (
     <FallbackCard tag={tag} name={name} onOpen={onOpen} />
   );
-const customQueueWidget: Widget = ({ tag, name, onOpen }) =>
-  isCustomQueueTag(tag) ? (
-    <CustomQueueCard tag={tag} name={name} onOpen={onOpen} />
+const priorityWidget: Widget = ({ tag, name, onOpen }) =>
+  isPriorityTag(tag) ? (
+    <PriorityCard tag={tag} name={name} onOpen={onOpen} />
   ) : (
     <FallbackCard tag={tag} name={name} onOpen={onOpen} />
   );
@@ -2950,14 +2951,14 @@ const shardMapWidget: Widget = ({ tag, name, onOpen }) =>
     <FallbackCard tag={tag} name={name} onOpen={onOpen} />
   );
 const runWidget: Widget = ({ tag, name, onOpen }) =>
-  isRunTag(tag) ? (
+  isGateTag(tag) ? (
     <GateCard tag={tag} name={name} onOpen={onOpen} />
   ) : (
     <FallbackCard tag={tag} name={name} onOpen={onOpen} />
   );
 
 /**
- * The built-in widget set: queue / process / API cards by kind, with {@link FallbackCard} for
+ * The built-in widget set: WorkPool / Daemon / API cards by kind, with {@link FallbackCard} for
  * everything else. The default for `<Dashboard>`; extend or override it with
  * `withEntries(base, [forKind(...), forKey(...)])`. @public
  */
@@ -2969,7 +2970,7 @@ export const base: WidgetRegistry = withEntries(
   },
   [
     forKind(queueKind, queueWidget),
-    forKind(customQueueKind, customQueueWidget),
+    forKind(priorityKind, priorityWidget),
     forKind(daemonKind, daemonWidget),
     forKind(apiKind, apiWidget),
     forKind(fleetHealthKind, fleetHealthWidget),

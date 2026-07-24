@@ -43,7 +43,7 @@ const TickerServer = HttpRouter.serve(
   Layer.provideMerge(NodeHttpServer.layerTest),
 );
 
-const clientHttp = (port: number) =>
+const httpProtocol = (port: number) =>
   RpcClient.layerProtocolHttp({
     url: `http://127.0.0.1:${port}/rpc`,
   }).pipe(
@@ -66,7 +66,7 @@ it("streams a resource's changes over real http (chunked, in order)", () => {
       // one-shot reads still work on the same resource
       expect(yield* ticker.current).toBe(0);
     }).pipe(
-      Effect.provide(Hyperlink.client(Ticker).pipe(Layer.provide(clientHttp(port)))),
+      Effect.provide(Hyperlink.client(Ticker).pipe(Layer.provide(httpProtocol(port)))),
       Effect.scoped,
     );
   }).pipe(Effect.provide(TickerServer), Effect.scoped);
@@ -123,7 +123,7 @@ it("streams the queue status snapshot over real http", () => {
       expect(Array.from(seen)).toEqual([snapA, snapB]);
     }).pipe(
       Effect.provide(
-        Hyperlink.client(QueueWatch).pipe(Layer.provide(clientHttp(port))),
+        Hyperlink.client(QueueWatch).pipe(Layer.provide(httpProtocol(port))),
       ),
       Effect.scoped,
     );

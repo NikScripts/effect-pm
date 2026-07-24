@@ -7,7 +7,7 @@ import type { DaemonSpec } from "../src/Daemon";
 // until `grantLocal` discharges it (same bundle pattern as WorkPool / Gate).
 
 class WorkerDep extends Context.Service<WorkerDep, string>()(
-  "hyperlink-ts/test/process-driver.test-d/WorkerDep",
+  "hyperlink-ts/test/daemon-driver.test-d/WorkerDep",
 ) {}
 
 class TypedProc extends Daemon.Tag<TypedProc>()("test/built-resource/Typed") {}

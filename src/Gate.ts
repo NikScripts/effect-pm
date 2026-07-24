@@ -86,9 +86,9 @@ import * as internal from "./internal/gate";
 import { stampRunWireSchemas } from "./internal/gateTagSchemas";
 import * as Store from "./Store";
 import {
-  runGateStatus,
-  runSpec,
-  type RunInstanceSpec,
+  gateStatus,
+  gateSpec,
+  type GateInstanceSpec,
 } from "./internal/gateSchema";
 
 // ============================================================================
@@ -100,10 +100,10 @@ import {
  *
  * @public
  */
-export { runGateStatus };
+export { gateStatus };
 
 /**
- * This contract's canonical **kind** — stamped on every run-gate tag.
+ * This contract's canonical **kind** — stamped on every gate tag.
  *
  * @category utils
  * @public
@@ -111,27 +111,27 @@ export { runGateStatus };
 export const kind = "hyperlink-ts/Gate";
 
 /**
- * Build a run-gate **instance** spec from wire schemas — pass to {@link Hyperlink.Tag} or use via
+ * Build a gate **instance** spec from wire schemas — pass to {@link Hyperlink.Tag} or use via
  * {@link Tag} / {@link Service}.
  *
  * @public
  */
-export { runSpec };
+export { gateSpec };
 
 /** @public */
-export type { RunInstanceSpec };
+export type { GateInstanceSpec };
 
 // ============================================================================
 // Public Types
 // ============================================================================
 
 /**
- * Live counters for an observable run gate.
+ * Live counters for an observable gate.
  *
  * @category models
  * @public
  */
-export type RunGateStatus = internal.RunGateStatus;
+export type GateStatus = internal.GateStatus;
 
 /**
  * Minimal handle from {@link Gate.make} — `.run` only.
@@ -139,7 +139,7 @@ export type RunGateStatus = internal.RunGateStatus;
  * @category models
  * @public
  */
-export type RunGateHandle<T, A, E> = internal.RunGateHandle<T, A, E>;
+export type GateRunHandle<T, A, E> = internal.GateRunHandle<T, A, E>;
 
 /**
  * Observable handle from {@link Gate.make} with observation disabled, or the local-only
@@ -151,7 +151,7 @@ export type RunGateHandle<T, A, E> = internal.RunGateHandle<T, A, E>;
 export type GateHandle<T, A, E> = internal.GateHandle<T, A, E>;
 
 /**
- * A run-gate handle — the value `yield* MyRun` produces. The **named** compact form of a run gate's
+ * A gate handle — the value `yield* MyRun` produces. The **named** compact form of a gate's
  * service (both the light `Tag` path and the engine-included `Service` path yield this one type), so it
  * hovers as `Gate<Ticket, Price>` instead of the expanded `ServiceOf<…>` member wall; the docs
  * popover / prettify-ts expand it to the full shape on demand.
@@ -172,7 +172,7 @@ export interface Gate<
   Requirements = never,
 > {
   /** Live gate counters (waiting / in-flight / completed / failed / interrupted / durations). */
-  readonly status: Hyperlink.Subscribable<RunGateStatus>;
+  readonly status: Hyperlink.Subscribable<GateStatus>;
   /** Count of runs waiting for a concurrency permit. */
   readonly waiting: Hyperlink.Subscribable<number>;
   /** Count of runs currently executing. */
@@ -250,14 +250,14 @@ export interface GateServiceDefinition<
  * `Svc` seam on {@link HyperlinkTag}), so `yield* MyRun` hovers as `Gate<Ticket, Price>` rather
  * than the expanded `ServiceOf<…>` wall. @internal
  */
-type RunTagWithStaticRun<
+type GateTagWithStaticRun<
   Self,
   I extends Schema.Top,
   A extends Schema.Top,
   E extends Schema.Top = typeof Schema.Never,
 > = HyperlinkTag<
   Self,
-  RunInstanceSpec<I, A, E>,
+  GateInstanceSpec<I, A, E>,
   Gate<Hyperlink.Decoded<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>>
 > & {
   readonly run: GateStaticRun<I, A, E, Self>;
@@ -274,7 +274,7 @@ export type GateTagDefinition<
   I extends Schema.Top,
   A extends Schema.Top,
   E extends Schema.Top = typeof Schema.Never,
-> = RunTagWithStaticRun<Self, I, A, E>;
+> = GateTagWithStaticRun<Self, I, A, E>;
 
 /**
  * Wire schemas shared by {@link Tag} and {@link Service}.
@@ -468,11 +468,11 @@ const makeStaticRun = <
   A extends Schema.Top,
   E extends Schema.Top,
 >(
-  // Svc is left open (`any`) so the pre-naming `ServiceOf` tag (from {@link materializeRunTag}) is
+  // Svc is left open (`any`) so the pre-naming `ServiceOf` tag (from {@link materializeGateTag}) is
   // accepted; `svc.run` is read below through a concrete union regardless. The result — a bare Effect
   // (unit) or an input function (parameterized) — is blessed as the deferred `GateStaticRun`
   // conditional by {@link nameRunService}'s single cast, so this builder needs no return cast.
-  tag: HyperlinkTag<Self, RunInstanceSpec<I, A, E>, any>,
+  tag: HyperlinkTag<Self, GateInstanceSpec<I, A, E>, any>,
   payload: Schema.Top,
 ):
   | Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>, Self>
@@ -502,14 +502,14 @@ const makeStaticRun = <
   return payload === Schema.Void ? inputless : parameterized;
 };
 
-const isRunTagSchemaConfig = (value: unknown): value is GateTagSchemas =>
+const isGateTagSchemaConfig = (value: unknown): value is GateTagSchemas =>
   typeof value === "object" && value !== null && !Schema.isSchema(value);
 
 /**
- * Name the built run-gate tag's service as {@link Gate}. The single deliberate cast in this
- * module: `ServiceOf<RunInstanceSpec<I, A, E>>` and
+ * Name the built gate tag's service as {@link Gate}. The single deliberate cast in this
+ * module: `ServiceOf<GateInstanceSpec<I, A, E>>` and
  * `Gate<Decoded<I>, A["Type"], E["Type"], never>` are **mutually assignable** — proven
- * bidirectionally in `test/run-handle.test-d.ts` — but TS can't verify that equality for *generic*
+ * bidirectionally in `test/gate-handle.test-d.ts` — but TS can't verify that equality for *generic*
  * params at the invariant service-`Shape` position, so the generic factory needs one assertion here.
  * The `.test-d.ts` is the soundness guard: if the shapes ever drift, it fails the build. @internal
  */
@@ -522,16 +522,16 @@ const nameRunService = <
   // `run` is accepted loosely (the concrete Effect/function {@link makeStaticRun} builds): this one cast
   // blesses both the invariant service `Shape` (`ServiceOf ⇄ Gate`) *and* the static `.run`'s
   // deferred `[void] extends …` conditional in a single boundary.
-  tag: HyperlinkTag<Self, RunInstanceSpec<I, A, E>> & { readonly run: unknown },
-): RunTagWithStaticRun<Self, I, A, E> =>
-  tag as unknown as RunTagWithStaticRun<Self, I, A, E>;
+  tag: HyperlinkTag<Self, GateInstanceSpec<I, A, E>> & { readonly run: unknown },
+): GateTagWithStaticRun<Self, I, A, E> =>
+  tag as unknown as GateTagWithStaticRun<Self, I, A, E>;
 
 // Two-stage (`<Self>()` then the config): `Self` is provided by the caller (the outer `runTag<Self>`),
 // so it is never left to infer from arguments — where it appears only in the return position and would
 // resolve to `unknown`, leaking an unprovidable `unknown` requirement onto the tag's static `.run`
 // (`Effect<…, Self>`) and tripping effect-LSP `missingEffectContext`. `I`/`A`/`E` still infer from the
 // config in the second stage. @internal
-const materializeRunTag = <Self>() =>
+const materializeGateTag = <Self>() =>
   <
     I extends Schema.Top = typeof Schema.Void,
     A extends Schema.Top = typeof Schema.Void,
@@ -539,9 +539,9 @@ const materializeRunTag = <Self>() =>
   >(
     key: string,
     config: GateTagSchemas<I, A, E>,
-  ): RunTagWithStaticRun<Self, I, A, E> => {
+  ): GateTagWithStaticRun<Self, I, A, E> => {
     const resolved = resolveRunWireSchemas(config);
-    const spec = runSpec(resolved.payload, resolved.success, resolved.error);
+    const spec = gateSpec(resolved.payload, resolved.success, resolved.error);
     const tag = Hyperlink.Tag<Self>()(key, spec, {
       description: config.description,
       kind,
@@ -570,7 +570,7 @@ const materializeRunTag = <Self>() =>
  * @category constructors
  */
 const runTag = <Self>() => {
-  function build(key: string): RunTagWithStaticRun<Self, typeof Schema.Void, typeof Schema.Void, typeof Schema.Never>;
+  function build(key: string): GateTagWithStaticRun<Self, typeof Schema.Void, typeof Schema.Void, typeof Schema.Never>;
   function build<
     I extends Schema.Top,
     A extends Schema.Top,
@@ -578,13 +578,13 @@ const runTag = <Self>() => {
   >(
     key: string,
     config: GateTagSchemas<I, A, E>,
-  ): RunTagWithStaticRun<Self, I, A, E>;
+  ): GateTagWithStaticRun<Self, I, A, E>;
   function build<I extends Schema.Top, A extends Schema.Top>(
     key: string,
     payload: I,
     success: A,
     options?: { readonly description?: string },
-  ): RunTagWithStaticRun<Self, I, A, typeof Schema.Never>;
+  ): GateTagWithStaticRun<Self, I, A, typeof Schema.Never>;
   function build<
     I extends Schema.Top,
     A extends Schema.Top,
@@ -595,7 +595,7 @@ const runTag = <Self>() => {
     success: A,
     error: E,
     options?: { readonly description?: string },
-  ): RunTagWithStaticRun<Self, I, A, E>;
+  ): GateTagWithStaticRun<Self, I, A, E>;
   function build(
     key: string,
     inputOrSchemas?: Schema.Top | GateTagSchemas,
@@ -604,10 +604,10 @@ const runTag = <Self>() => {
     maybeOptions?: { readonly description?: string },
   ): any {
     if (inputOrSchemas === undefined) {
-      return materializeRunTag<Self>()(key, {});
+      return materializeGateTag<Self>()(key, {});
     }
-    if (isRunTagSchemaConfig(inputOrSchemas)) {
-      return materializeRunTag<Self>()(key, inputOrSchemas);
+    if (isGateTagSchemaConfig(inputOrSchemas)) {
+      return materializeGateTag<Self>()(key, inputOrSchemas);
     }
     const payload = inputOrSchemas;
     // `Schema.isSchema` is a type guard, so the 4th positional arg narrows cleanly into either the
@@ -620,7 +620,7 @@ const runTag = <Self>() => {
       errorOrOptions !== undefined && !Schema.isSchema(errorOrOptions)
         ? errorOrOptions
         : maybeOptions;
-    return materializeRunTag<Self>()(key, {
+    return materializeGateTag<Self>()(key, {
       payload,
       success: success!,
       ...(error !== undefined ? { error } : {}),
@@ -666,11 +666,11 @@ const buildRunImpl = <
 >(
   // Svc left open (`any`): the named {@link Gate} handle's `[Payload] extends [void]` `run`
   // conditional can't be reduced for generic params, so the redundant service slot (fully determined
-  // by the pinned `RunInstanceSpec<I, A, E>`) is not re-checked here — the tag flows in cast-free.
-  tag: HyperlinkTag<Self, RunInstanceSpec<I, A, E>, any>,
+  // by the pinned `GateInstanceSpec<I, A, E>`) is not re-checked here — the tag flows in cast-free.
+  tag: HyperlinkTag<Self, GateInstanceSpec<I, A, E>, any>,
   config: GateLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
 ): Effect.Effect<
-  Driver<RunInstanceSpec<I, A, E>, R>,
+  Driver<GateInstanceSpec<I, A, E>, R>,
   never,
   R | Scope.Scope | Store.Storage
 > =>
@@ -717,7 +717,7 @@ const buildRunImpl = <
       failed: handle.failed,
       interrupted: handle.interrupted,
       run: runImpl,
-    } as Hyperlink.WithRequirement<ImplOf<RunInstanceSpec<I, A, E>>, R>;
+    } as Hyperlink.WithRequirement<ImplOf<GateInstanceSpec<I, A, E>>, R>;
     return Hyperlink.driver(tag, impl, context);
   });
 
@@ -731,7 +731,7 @@ const buildRunImpl = <
  * @category constructors
  * @public
  */
-export const make = internal.makeRunGateHandleEffect;
+export const make = internal.makeGateRunHandleEffect;
 
 /**
  * Config-patch layer for a tag — merge with {@link layer} (Tag path).
@@ -740,7 +740,7 @@ export const make = internal.makeRunGateHandleEffect;
  * @public
  */
 export const configure = <Self, I extends Schema.Top, A extends Schema.Top, E extends Schema.Top>(
-  tag: HyperlinkTag<Self, RunInstanceSpec<I, A, E>, any>,
+  tag: HyperlinkTag<Self, GateInstanceSpec<I, A, E>, any>,
   patch: ConfigPatch<
     GateLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, never>
   >,
@@ -767,7 +767,7 @@ export const layer = <
   E extends Schema.Top = typeof Schema.Never,
   R = never,
 >(
-  tag: HyperlinkTag<Self, RunInstanceSpec<I, A, E>, any>,
+  tag: HyperlinkTag<Self, GateInstanceSpec<I, A, E>, any>,
   config: GateLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
 ): Layer.Layer<Self | Local<Self> | Store.Storage, never, R> =>
   withDefaultStoreBridge(
@@ -791,13 +791,13 @@ export const layerMemory = <
   E extends Schema.Top = typeof Schema.Never,
   R = never,
 >(
-  tag: HyperlinkTag<Self, RunInstanceSpec<I, A, E>>,
+  tag: HyperlinkTag<Self, GateInstanceSpec<I, A, E>>,
   config: GateLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
 ): Layer.Layer<Self | Local<Self> | Store.Storage, never, R> =>
   layer(tag, config);
 
 /**
- * Serve this run gate **remotely (served-only)** — RPC handlers without granting the local instance.
+ * Serve this gate **remotely (served-only)** — RPC handlers without granting the local instance.
  *
  * Soft-defaults {@link Store.Storage}. Override with `Layer.provide` / `provideMerge(AppStore)`.
  *
@@ -811,9 +811,9 @@ export function serveRemote<
   E extends Schema.Top = typeof Schema.Never,
   R = never,
 >(
-  tag: HyperlinkTag<Self, RunInstanceSpec<I, A, E>, any>,
+  tag: HyperlinkTag<Self, GateInstanceSpec<I, A, E>, any>,
   config: GateLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
-): Layer.Layer<HandlerContextOf<RunInstanceSpec<I, A, E>> | Store.Storage, never, R>;
+): Layer.Layer<HandlerContextOf<GateInstanceSpec<I, A, E>> | Store.Storage, never, R>;
 export function serveRemote(
   tag: HyperlinkTag<any, any, any>,
   config: GateLayerConfig<any, any, any, any>,
@@ -821,7 +821,7 @@ export function serveRemote(
   // Pin the loose impl-signature tag to its instance spec so `buildRunImpl`'s `Driver` and
   // `Hyperlink.serveRemote` line up cast-free (the `any` payload/success/error are fixed by the public
   // overload above). Mirrors `Daemon.serveRemote`.
-  const baseTag: HyperlinkTag<any, RunInstanceSpec<any, any, any>> = tag;
+  const baseTag: HyperlinkTag<any, GateInstanceSpec<any, any, any>> = tag;
   return withDefaultStoreBridge(
     Layer.unwrap(
       Effect.map(
@@ -845,9 +845,9 @@ export function serveRemoteMemory<
   E extends Schema.Top = typeof Schema.Never,
   R = never,
 >(
-  tag: HyperlinkTag<Self, RunInstanceSpec<I, A, E>>,
+  tag: HyperlinkTag<Self, GateInstanceSpec<I, A, E>>,
   config: GateLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
-): Layer.Layer<HandlerContextOf<RunInstanceSpec<I, A, E>> | Store.Storage, never, R>;
+): Layer.Layer<HandlerContextOf<GateInstanceSpec<I, A, E>> | Store.Storage, never, R>;
 export function serveRemoteMemory(
   tag: HyperlinkTag<any, any, any>,
   config: GateLayerConfig<any, any, any, any>,
@@ -856,7 +856,7 @@ export function serveRemoteMemory(
 }
 
 /**
- * Serve this run gate **and** grant its local instance from one materialization.
+ * Serve this gate **and** grant its local instance from one materialization.
  *
  * Soft-defaults {@link Store.Storage}. Override with `Layer.provide` / `provideMerge(AppStore)`.
  *
@@ -870,10 +870,10 @@ export function serve<
   E extends Schema.Top = typeof Schema.Never,
   R = never,
 >(
-  tag: HyperlinkTag<Self, RunInstanceSpec<I, A, E>, any>,
+  tag: HyperlinkTag<Self, GateInstanceSpec<I, A, E>, any>,
   config: GateLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
 ): Layer.Layer<
-  Self | Local<Self> | HandlerContextOf<RunInstanceSpec<I, A, E>> | Store.Storage,
+  Self | Local<Self> | HandlerContextOf<GateInstanceSpec<I, A, E>> | Store.Storage,
   never,
   R
 >;
@@ -881,7 +881,7 @@ export function serve(
   tag: HyperlinkTag<any, any, any>,
   config: GateLayerConfig<any, any, any, any>,
 ): Layer.Layer<any, any, any> {
-  const baseTag: HyperlinkTag<any, RunInstanceSpec<any, any, any>> = tag;
+  const baseTag: HyperlinkTag<any, GateInstanceSpec<any, any, any>> = tag;
   return withDefaultStoreBridge(
     Layer.unwrap(
       Effect.map(
@@ -905,10 +905,10 @@ export function serveMemory<
   E extends Schema.Top = typeof Schema.Never,
   R = never,
 >(
-  tag: HyperlinkTag<Self, RunInstanceSpec<I, A, E>>,
+  tag: HyperlinkTag<Self, GateInstanceSpec<I, A, E>>,
   config: GateLayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
 ): Layer.Layer<
-  Self | Local<Self> | HandlerContextOf<RunInstanceSpec<I, A, E>> | Store.Storage,
+  Self | Local<Self> | HandlerContextOf<GateInstanceSpec<I, A, E>> | Store.Storage,
   never,
   R
 >;
@@ -978,7 +978,7 @@ export const Service = <Self>() => {
         >["effect"],
       ) => configureWrapEffectField(name, fn),
       layer: layer(tag, layerConfig),
-      // `tag` already carries the named static `.run` (stamped by `materializeRunTag`), so it is not
+      // `tag` already carries the named static `.run` (stamped by `materializeGateTag`), so it is not
       // re-set here — `Object.assign` preserves it.
     });
   }
@@ -993,7 +993,7 @@ export const Service = <Self>() => {
 export { runTag as Tag };
 
 /**
- * Register this run gate on an app {@link Store.Service} — built-in analytics reads over run facts
+ * Register this gate on an app {@link Store.Service} — built-in analytics reads over run facts
  * and state history (tier 3), with the tag's `success` / `error` wire slots.
  *
  * @category layers & serving
@@ -1039,7 +1039,7 @@ export const makeRunner = <const Name extends string>(
 // ── HTTP API client ─────────────────────────────────────────────────────────
 // A concurrency-gated typed HttpApiClient — the former HttpApiClient module folded into Gate.
 // `httpApiClient` builds + gates the client from an HttpApi schema (a Semaphore gate over the
-// HttpClient transport via HttpClientRunGate); the engine lives in ./internal/httpApiClient and is
+// HttpClient transport via HttpClientGate); the engine lives in ./internal/httpApiClient and is
 // pulled in only when these are referenced.
 
 export {

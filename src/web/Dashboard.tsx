@@ -3,8 +3,8 @@
  *
  * The batteries-included resource dashboard: point it at a reactive `runtime` (an
  * `Atom.runtime(layer)` over your tags — local engine or `Hyperlink.client` over http) and a
- * root `Group`, and it renders the responsive drill-down — a grid of queue / process /
- * subgroup cards, a detail view per resource (stats + chart + controls + logs), and a routed
+ * root `Group`, and it renders the responsive drill-down — a grid of WorkPool / Daemon /
+ * subgroup cards, a detail view per HyperService (stats + chart + controls + logs), and a routed
  * fullscreen log viewer (`/Group/Hyperlink/logs`). Navigation is URL-backed (deep links +
  * back/forward) and animated with view transitions.
  *
@@ -24,12 +24,12 @@ import {
   type DaemonTag,
   type QueueBundle,
   type QueueTag,
-  isCustomQueueTag,
+  isPriorityTag,
   isApiTag,
   isDaemonTag,
   isFleetHealthTag,
   isQueueTag,
-  isRunTag,
+  isGateTag,
   isShardMapTag,
   isTelemetryTag,
   leafByKey,
@@ -45,13 +45,13 @@ import { RuntimeProvider, useApiBundle, useNodeBundle, useDaemonBundle, useQueue
 import { ViewTransitionProvider, useViewTransition, useViewTransitionStyle } from "./useViewTransition";
 import { useGroupRoute } from "./useGroupRoute";
 import { Button } from "./components/ui/button";
-import { ApiEndpointTable, ApiMetricChart, ApiStats, ApiStatusBadge, base, Cell, ConfirmDialog, CustomQueueDetail, FleetHealthDetail, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, MetricChart, DaemonControls, DaemonStats, DaemonStatusBadge, QueueControls, QueueStats, HyperlinkReadinessBanner, GateDetail, ScheduleEditor, ShardMapDetail, StatusBadge, TelemetryDetail, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
+import { ApiEndpointTable, ApiMetricChart, ApiStats, ApiStatusBadge, base, Cell, ConfirmDialog, PriorityDetail, FleetHealthDetail, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, MetricChart, DaemonControls, DaemonStats, DaemonStatusBadge, QueueControls, QueueStats, HyperlinkReadinessBanner, GateDetail, ScheduleEditor, ShardMapDetail, StatusBadge, TelemetryDetail, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
 import { WidgetsProvider, isLeafTag, type WidgetRegistry } from "./widget-registry";
 import { fmtDayLabel, now, startOfWeekMillis } from "./now";
 import { DebugConsole } from "./debug-console";
 
 
-/** Invisible: reads one node's `NodeStatus` and reports the keys of its **not-ready** resources, so the
+/** Invisible: reads one node's node status and reports the keys of its **not-ready** resources, so the
  *  grid can float degraded members to the top. A child-level hook (not a `.map` over the node list)
  *  keeps a constant hook order even if a group gains/loses a node. */
 const DegradedKeysProbe = (props: {
@@ -313,11 +313,11 @@ const DashboardInner = (props: {
     if (isApiTag(selected)) return <ApiDetail tag={selected} onBack={toGrid(selected.key)} />;
     if (isDaemonTag(selected)) return <DaemonDetail tag={selected} onBack={toGrid(selected.key)} onOpenLogs={openLogs} onOpenSchedule={openSchedule} />;
     if (isQueueTag(selected)) return <QueueDetail tag={selected} onBack={toGrid(selected.key)} onOpenLogs={openLogs} />;
-    if (isCustomQueueTag(selected)) return <CustomQueueDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
+    if (isPriorityTag(selected)) return <PriorityDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
     if (isFleetHealthTag(selected)) return <FleetHealthDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
     if (isTelemetryTag(selected)) return <TelemetryDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
     if (isShardMapTag(selected)) return <ShardMapDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
-    if (isRunTag(selected)) return <GateDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
+    if (isGateTag(selected)) return <GateDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
     return <></>;
   }
 
@@ -448,11 +448,11 @@ const NodeResourceView = (props: {
   if (isQueueTag(tag)) {
     return <QueueDetail tag={tag} onBack={props.onBack} onOpenLogs={() => setView("logs")} />;
   }
-  if (isCustomQueueTag(tag)) return <CustomQueueDetail tag={tag} onBack={props.onBack} />;
+  if (isPriorityTag(tag)) return <PriorityDetail tag={tag} onBack={props.onBack} />;
   if (isFleetHealthTag(tag)) return <FleetHealthDetail tag={tag} onBack={props.onBack} />;
   if (isTelemetryTag(tag)) return <TelemetryDetail tag={tag} onBack={props.onBack} />;
   if (isShardMapTag(tag)) return <ShardMapDetail tag={tag} onBack={props.onBack} />;
-  if (isRunTag(tag)) return <GateDetail tag={tag} onBack={props.onBack} />;
+  if (isGateTag(tag)) return <GateDetail tag={tag} onBack={props.onBack} />;
   return <></>;
 };
 

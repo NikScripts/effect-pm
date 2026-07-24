@@ -1,6 +1,6 @@
 /**
  * Maps lane-level occupancy to public queue observe shapes. Default projection is the classic
- * `{ high, normal, low }` trio; custom queues use a `Record<string, number>`.
+ * `{ high, normal, low }` trio; priority queues use a `Record<string, number>`.
  *
  * @internal
  */
@@ -65,12 +65,12 @@ export const buildLevelIndexLabels = (
 };
 
 /**
- * Custom-queue status snapshot (Record sizes).
+ * Priority-queue status snapshot (Record sizes).
  *
  * @category models
  * @public
  */
-export interface CustomQueueStatus {
+export interface PriorityStatus {
   readonly sizes: Record<string, number>;
   readonly paused: boolean;
   readonly inFlight: number;
@@ -79,14 +79,14 @@ export interface CustomQueueStatus {
 }
 
 /**
- * Custom-queue projection: per-level counts keyed by configured name (or `"0"`, `"1"`, …).
+ * Priority-queue projection: per-level counts keyed by configured name (or `"0"`, `"1"`, …).
  *
  * @internal
  */
-export const buildCustomQueueProjection = (options: {
+export const buildPriorityProjection = (options: {
   readonly laneCount: number;
   readonly namedLanes?: Readonly<Record<string, number>>;
-}): QueueRuntimeProjection<Record<string, number>, CustomQueueStatus> => {
+}): QueueRuntimeProjection<Record<string, number>, PriorityStatus> => {
   const laneCount = Math.max(1, Math.floor(options.laneCount));
   const labels = buildLevelIndexLabels(laneCount, options.namedLanes ?? {});
 

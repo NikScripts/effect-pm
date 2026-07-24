@@ -453,7 +453,7 @@ describe("Gate — unit gates and interrupts", () => {
     };
   };
 
-  // Waiting-acquire interrupt accounting is covered by `test/run-resource-pure.test.ts`
+  // Waiting-acquire interrupt accounting is covered by `test/gate-pure.test.ts`
   // (`interruptWaitingAcquire`). Live sem.take + Fiber.interrupt is scheduler-sensitive in Effect v4.
 
   it.live("in-flight interrupt increments interrupted without failing the gate service", () =>

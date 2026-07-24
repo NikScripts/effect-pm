@@ -55,7 +55,7 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | [`forms/resource/run-resource-unit-and-input.ts`](./forms/resource/run-resource-unit-and-input.ts) | `Gate.Service` unit/input forms + concurrency + `Store.layerDefaultMemory` |
 | [`forms/resource/run-resource-store-readback.ts`](./forms/resource/run-resource-store-readback.ts) | Engine auto-write + `Gate.store` + `Store.Service.at` readback |
 | [`forms/resource/run-resource-runtime-observer.ts`](./forms/resource/run-resource-runtime-observer.ts) | Observable handle (`status`, counters) via `Subscribable` |
-| [`forms/resource/http-client-run-gate.ts`](./forms/resource/http-client-run-gate.ts) | `HttpClientRunGate.transformClient` |
+| [`forms/resource/http-client-gate.ts`](./forms/resource/http-client-gate.ts) | `HttpClientGate.transformClient` |
 | [`forms/resource/http-api-resource-tag-layer.ts`](./forms/resource/http-api-resource-tag-layer.ts) | `HttpApiClient.Service` + `ApiMetrics.Tag` |
 | [`forms/resource/http-api-resource-layer-effect.ts`](./forms/resource/http-api-resource-layer-effect.ts) | `HttpApiClient.layerEffect` + sidecar capture |
 | [`forms/resource/telemetry-fleet-glass.ts`](./forms/resource/telemetry-fleet-glass.ts) | `Telemetry` leaf snapshot + fleet `inFlightByNode` / `fleetInFlight` |
@@ -136,7 +136,7 @@ Storage:
 | `pnpm run example:schedule-control-db-sync` | DB sync scenario |
 | `pnpm run example:run-resource` | Gate concurrency form |
 | `pnpm run example:run-resource-store-readback` | Gate store auto-write + readback |
-| `pnpm run example:http-client-run-gate` | HttpClient gate form |
+| `pnpm run example:http-client-gate` | HttpClient gate form |
 | `pnpm run example:http-api-resource` | HttpApiClient form |
 | `pnpm run example:http-api-resource-layer-effect` | `layerEffect` form |
 | `pnpm run example:form:*` | Individual form scripts that are registered in `package.json` |

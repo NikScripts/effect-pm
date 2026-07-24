@@ -16,7 +16,7 @@ export const errorSym: unique symbol = Symbol.for(
 );
 
 /**
- * Stamp `success` / `error` wire schemas onto a run-gate tag. `Object.assign`'s in-place mutation is
+ * Stamp `success` / `error` wire schemas onto a gate tag. `Object.assign`'s in-place mutation is
  * returned as the same `T` — no cast (mirrors `stampQueueWireSchemas`). `error` is only stamped when
  * it is a real (non-{@link Schema.Never}) schema, so `errorOf` stays `undefined` for infallible gates.
  * @internal
@@ -34,7 +34,7 @@ export const stampRunWireSchemas = <T extends object>(
   return tag;
 };
 
-/** Read the `success` schema stamped on a run gate tag, if any. @internal */
+/** Read the `success` schema stamped on a gate tag, if any. @internal */
 export const successOf = (tag: unknown): Schema.Top | undefined => {
   if (
     (typeof tag === "object" || typeof tag === "function") &&
@@ -47,7 +47,7 @@ export const successOf = (tag: unknown): Schema.Top | undefined => {
   return undefined;
 };
 
-/** Read the `error` schema stamped on a run gate tag, if any. @internal */
+/** Read the `error` schema stamped on a gate tag, if any. @internal */
 export const errorOf = (tag: unknown): Schema.Top | undefined => {
   if (
     (typeof tag === "object" || typeof tag === "function") &&

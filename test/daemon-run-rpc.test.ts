@@ -6,21 +6,21 @@ import { forwardClient, groupOf, specOf } from "../src/Hyperlink";
 
 const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
 
-class FailingProc extends Daemon.Tag<FailingProc>()("@test/process-run-rpc/Failing", {
+class FailingProc extends Daemon.Tag<FailingProc>()("@test/daemon-run-rpc/Failing", {
   error: FetchErr,
 }) {}
 
-class OkProc extends Daemon.Tag<OkProc>()("@test/process-run-rpc/Ok", {
+class OkProc extends Daemon.Tag<OkProc>()("@test/daemon-run-rpc/Ok", {
   success: Schema.Number,
 }) {}
 
-class VoidProc extends Daemon.Tag<VoidProc>()("@test/process-run-rpc/Void") {}
+class VoidProc extends Daemon.Tag<VoidProc>()("@test/daemon-run-rpc/Void") {}
 
 describe("Daemon manual run RPC", () => {
   it.effect("Daemon.make run returns captured success via resultRef", () =>
     Effect.gen(function* () {
       const resultRef = yield* SubscriptionRef.make<Option.Option<unknown>>(Option.none());
-      const handle = Daemon.make("@test/process-run-rpc/direct", {
+      const handle = Daemon.make("@test/daemon-run-rpc/direct", {
         effect: Effect.succeed(42).pipe(
           Effect.tap((value) => SubscriptionRef.set(resultRef, Option.some(value))),
           Effect.asVoid,
