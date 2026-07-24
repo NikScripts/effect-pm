@@ -1,12 +1,11 @@
 /**
  * @module web
  *
- * **The HyperService dashboard for the browser** — the web counterpart to the CLI/TUI renderers.
- * Point `<Dashboard runtime group />` at a reactive `runtime` (an `Atom.runtime(layer)` over
- * your tags — local engine or `Hyperlink.client` over http) and a root `Group`, and it renders
- * the responsive drill-down: WorkPool / Daemon / subgroup cards, a styled detail per HyperService
- * (stats + chart + controls + logs), and a routed fullscreen log viewer — URL-backed
- * navigation with view-transition animations.
+ * **The HyperService dashboard for the browser** — the web renderer over the shared
+ * `hyperlink-ts/ui` core (data bundles + group route). Point `<Dashboard runtime group />` at
+ * a reactive `runtime` and a root `Group`, and it renders the responsive drill-down: WorkPool /
+ * Daemon / subgroup cards, a styled detail per HyperService (stats + chart + controls + logs),
+ * and a routed fullscreen log viewer — URL-backed navigation with view-transition animations.
  *
  * ```tsx
  * import { Dashboard } from "hyperlink-ts/web";
