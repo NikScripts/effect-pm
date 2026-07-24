@@ -1,6 +1,6 @@
 /**
  * Telemetry — serve a node's whole Effect `Metric` registry as a Hyperlink, for **custom** in-app use
- * (dashboards, TUIs, fleet pages, a `hyperlink metrics` command). The thin counterpart to OTEL export: same
+ * (dashboards, TUIs, fleet pages, metrics CLIs). The thin counterpart to OTEL export: same
  * source (the per-node `Metric` registry), different sink. OTEL is the professional path — wire
  * `@effect/opentelemetry` and point OTLP at Sentry / Grafana / anything; Telemetry is for building
  * something custom without external infra.

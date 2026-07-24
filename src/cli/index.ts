@@ -11,15 +11,17 @@
  * `Hyperlink.client` + transport (drives a running server) when you run it — the command
  * tree is identical.
  *
- * The product bin is **`hyperlink`** (alias **`hl`**). Pass that as `rootName` so argv matches
- * the shipped command. The repo-dev gate CLI is a separate bin (**`hyp`**) — not this module.
+ * This module is **not** a shipped `hyperlink` / `hl` binary. It is a helper that builds an
+ * Effect `Command` tree from your tags; you choose `rootName` and wire `Command.runWith`
+ * yourself (examples often use `"hyperlink"`). The private repo-dev gate CLI is **`hyp`**
+ * and is unrelated.
  *
  * ```ts
  * import { makeHyperlinkCli, resourcesByName } from "hyperlink-ts/cli";
  * import { Command } from "effect/unstable/cli";
  *
- * const cli = makeHyperlinkCli(resourcesByName([Mail, Jobs, KeyRotation]), "hyperlink");
- * // hyperlink Mail status.get · hyperlink Mail pause · hyperlink KeyRotation start · hyperlink ls
+ * const cli = makeHyperlinkCli(resourcesByName([Mail, Jobs, KeyRotation]), "my-app");
+ * // my-app Mail status.get · my-app Mail pause · my-app KeyRotation start · my-app ls
  * Command.runWith(cli, { version })(process.argv.slice(2)).pipe(Effect.provide(appLayer));
  * ```
  *

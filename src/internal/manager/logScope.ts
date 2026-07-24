@@ -1,5 +1,5 @@
 /**
- * Operator log scope resolution for `hyperlink watch` / `hyperlink logs`.
+ * Operator log scope resolution for watch/logs-style CLI verbs.
  *
  * @module internal/manager/logScope
  * @internal
