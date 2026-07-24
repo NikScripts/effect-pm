@@ -37,7 +37,7 @@ of React/Ink/recharts.
 | `…/HistoryStore`, `…/DurableQueueStore` | history backfill + durable queue |
 | `…/ProcessStore`, `…/ProcessStorage`, `…/RuntimeStorage`, `…/Logs` | storage facets + structured logs |
 | `…/storage/sqlite` · `/redis` | durable storage backends |
-| **`…/cli`** | `Hyperlink.cli` / `cli.run` / `cli.byName` / `render` — CLI + default TUI from a Group or tags |
+| **`…/cli`** | `Hyperlink.cli` — CLI + default TUI from a Group or tag record |
 | **`…/tui`** | the reactive binding + terminal primitives for Ink dashboards |
 | **`…/web`** | React widgets + the reactive binding for browser dashboards — incl. the host **`HealthBoard`** (die → degraded resources + per-host cards) and `HyperlinkReadinessBanner` |
 
@@ -209,14 +209,12 @@ import { layer as tuiLayer } from "hyperlink-ts/tui";
 
 // hub RosterQueue status.get · hub RosterQueue · hub ls (bare → TUI when tuiLayer provided)
 NodeRuntime.runMain(
-  Hyperlink.cli
-    .run(Hyperlink.cli.byName([RosterQueue, SeasonMatches]), {
-      name: "hub",
-      version: "0.0.0",
-    })(process.argv.slice(2))
-    .pipe(
-      Effect.provide(Layer.mergeAll(clients, tuiLayer, NodeServices.layer)),
-    ) as Effect.Effect<void, unknown>,
+  Hyperlink.cli(
+    { RosterQueue, SeasonMatches },
+    { name: "hub", version: "0.0.0" },
+  )(process.argv.slice(2)).pipe(
+    Effect.provide(Layer.mergeAll(clients, tuiLayer, NodeServices.layer)),
+  ) as Effect.Effect<void, unknown>,
 );
 ```
 

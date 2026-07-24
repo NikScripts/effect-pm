@@ -35,11 +35,12 @@ const counterLayer = Hyperlink.layer(Counter, {
     }),
 });
 
-const program = Hyperlink.cli
-  .run({ counter: Counter }, { name: "counter-cli", version: "0.0.0" })(
-    process.argv.slice(2),
-  )
-  .pipe(Effect.provide(counterLayer.pipe(Layer.provideMerge(NodeServices.layer))));
+const program = Hyperlink.cli(
+  { counter: Counter },
+  { name: "counter-cli", version: "0.0.0" },
+)(process.argv.slice(2)).pipe(
+  Effect.provide(counterLayer.pipe(Layer.provideMerge(NodeServices.layer))),
+);
 
 // Boundary: the command's requirement is loose (it's built from a dynamic record
 // of tags); the resource + node layers above fully provide it at run time.

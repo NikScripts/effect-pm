@@ -23,9 +23,12 @@ import { appLayer } from "../web-dashboard/queue-data";
 import * as Hyperlink from "../../src/Hyperlink";
 import { layer as tuiLayer } from "../../src/tui";
 
-const program = Hyperlink.cli
-  .run(Fleet, { name: "hyperlink", version: "0.9.0-beta.0" })(process.argv.slice(2))
-  .pipe(Effect.provide(Layer.mergeAll(appLayer, tuiLayer, NodeServices.layer)));
+const program = Hyperlink.cli(Fleet, {
+  name: "hyperlink",
+  version: "0.9.0-beta.0",
+})(process.argv.slice(2)).pipe(
+  Effect.provide(Layer.mergeAll(appLayer, tuiLayer, NodeServices.layer)),
+);
 // Boundary: the heterogeneous resource tree erases the requirement to `unknown`;
 // `appLayer` provides every fleet service, so it's fully satisfied at run time.
 NodeRuntime.runMain(program as Effect.Effect<void, unknown>);

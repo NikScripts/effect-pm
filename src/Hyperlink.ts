@@ -5934,9 +5934,8 @@ export {
 /**
  * CLI + default-TUI control surface (`hyperlink-ts/cli`). Bare paths open the TUI when
  * `hyperlink-ts/tui`'s `layer` is provided; full `<resource> <action>` paths run verbs.
- * Shortcuts: `cli.run`, `cli.command`, `cli.byName`, `cli.leaves`, `cli.open`.
  *
  * @public
  */
-export { byName, cli, Tui, TuiNotConfigured } from "./cli/index";
+export { cli, Tui, TuiNotConfigured } from "./cli/index";
 

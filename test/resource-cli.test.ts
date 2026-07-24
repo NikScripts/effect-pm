@@ -6,6 +6,7 @@ import * as Group from "../src/Group";
 import * as Hyperlink from "../src/Hyperlink";
 import { byName, cli, render, Tui, TuiNotConfigured } from "../src/cli";
 
+
 it("renders CLI output by value shape", () => {
   expect(render(undefined)).toBe("ok");
   expect(render(null)).toBe("ok");
@@ -49,9 +50,8 @@ const runCli = (args: ReadonlyArray<string>, layer: Layer.Layer<Counter, never, 
     ) as Effect.Effect<void, TuiNotConfigured>,
   );
 
-it("cli.byName shortens unique suffixes", () => {
+it("byName shortens unique suffixes", () => {
   expect(Object.keys(byName([Counter]))).toEqual(["Counter"]);
-  expect(cli.byName([Counter])).toEqual(byName([Counter]));
 });
 
 describe("Hyperlink.cli TUI default", () => {

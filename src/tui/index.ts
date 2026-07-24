@@ -14,7 +14,7 @@
  * import * as Hyperlink from "hyperlink-ts/Hyperlink"
  * import { layer as tuiLayer } from "hyperlink-ts/tui"
  *
- * Hyperlink.cli.run(Fleet, { name: "hyperlink", version })(args).pipe(
+ * Hyperlink.cli(Fleet, { name: "hyperlink", version })(args).pipe(
  *   Effect.provide(Layer.mergeAll(appLayer, tuiLayer)),
  * )
  * ```
