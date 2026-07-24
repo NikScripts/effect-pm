@@ -10,7 +10,7 @@ hyperlink-ts is published as **`hyperlink-ts`**. It builds on Effect, so you bri
 `effect` version as a peer dependency — the toolkit pins a range, you pick the exact release.
 
 {.note}
-**Pre-1.0 beta** (`0.8.0-beta`, tracking Effect's own beta). It's stable enough to build on, but shapes
+**Pre-1.0 beta** (`0.9.0-beta`, tracking Effect's own beta). It's stable enough to build on, but shapes
 can still change between betas — nothing is frozen until 1.0 (there's no `@since` yet).
 
 ## Requirements

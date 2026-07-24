@@ -264,25 +264,26 @@ class QuietProc extends Daemon.Tag<QuietProc>()("app/Quiet").pipe(
 ## Remote clients
 
 When the dashboard (or any client) reaches a Node over RPC, durable per-resource rows come from that
-Node’s journal — typically `Node.status.logs.query` — filtered by **resource key**. Locally,
-`Hyperlink.logs(tag).query` prefers registration Storage and falls back to Node.status when Storage
-isn’t there.
+node’s journal — `(yield* MyNode).logs` — filtered by **resource key**. Locally,
+`Hyperlink.logs(tag).query` prefers registration Storage and falls back to the node-handle logs path
+when Storage isn’t there.
 
 ``` ts
-import { LogEntry, Node } from "hyperlink-ts"
+import * as LogEntry from "hyperlink-ts/LogEntry"
 import { Stream } from "effect"
 
 const resourceKey = LiveScorePoller.key
+const n = yield* LiveNode // connected node handle
 
-Node.status.logs.stream.pipe(Stream.filter(LogEntry.hasKey(resourceKey)))
+n.logs.stream.pipe(Stream.filter(LogEntry.hasKey(resourceKey)))
 
-const rows = yield* Node.status.logs.query({ limit: 300 })
+const rows = yield* n.logs.query({ limit: 300 })
 const scoped = rows.filter(LogEntry.hasKey(resourceKey))
 ```
 
 The server must still provide a `Store.Service` with `Node.logs` (and any toolkit stores you care
-about) on the Node stack. `httpServer` infers the node log key from served Tags’ bound Node for
-`Node.status.logs.query`.
+about) on the Node stack. `httpServer` infers the node log key from served Tags’ bound Node for the
+handle’s `logs.query`.
 
 ## Modules
 

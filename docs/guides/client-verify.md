@@ -39,7 +39,7 @@ Hyperlink.client(Emails, WorkerNode).pipe(
 )
 ```
 
-Tag-aware addressed clients escalate to **deep** verify (Node.status RPC + resource readiness +
+Tag-aware addressed clients escalate to **deep** verify (node-handle status RPC + resource readiness +
 F4 `contractHash`). Nodeless / bootstrap paths that would deadlock keep verify off.
 
 ## Explicit probe
@@ -49,7 +49,7 @@ import * as Hyperlink from "hyperlink-ts/Hyperlink"
 
 yield* Hyperlink.verifyConnection(WorkerNode) // tier 1 — transport reachability
 yield* Hyperlink.verifyConnection(WorkerNode, { timeout: "1 second" })
-yield* Hyperlink.verifyConnection(WorkerNode, { deep: true }) // + Node.status RPC
+yield* Hyperlink.verifyConnection(WorkerNode, { deep: true }) // + node status RPC
 yield* Hyperlink.verifyConnection(WorkerNode, {
   deep: true,
   resource: Emails.groupId,
@@ -63,7 +63,7 @@ yield* Hyperlink.verifyConnection(WorkerNode, { all: true }) // every declared e
 | Failure | When |
 |---------|------|
 | `NodeUnreachable` | Transport probe fails (tier 1) |
-| `ProtocolUnanswered` | Transport up, Node.status RPC silent |
+| `ProtocolUnanswered` | Transport up, node status RPC silent |
 | `ServiceNotServed` / `ServiceNotReady` | Deep + `resource` key missing / not ready |
 | `ContractMismatch` | Deep + `contractHash` disagrees with the peer (F4) |
 | `ProtocolMismatch` | Wrong transport (e.g. http client → ws server) on a call |
