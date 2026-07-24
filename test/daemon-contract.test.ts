@@ -17,13 +17,13 @@ it("with the default schedule a daemon arms and runs its effect immediately", ()
     Effect.gen(function* () {
       const ran = yield* Ref.make(0);
       yield* Effect.gen(function* () {
-        const proc = yield* ArmedProc;
+        const daemon = yield* ArmedProc;
         // wait for the supervisor to arm + run the always-open window once
         yield* Effect.gen(function* () {
           while ((yield* Ref.get(ran)) < 1) yield* Effect.sleep(Duration.millis(5));
         }).pipe(Effect.timeout(Duration.seconds(1)));
         expect(yield* Ref.get(ran)).toBeGreaterThanOrEqual(1);
-        expect((yield* proc.status.get).armed).toBe(true);
+        expect((yield* daemon.status.get).armed).toBe(true);
       }).pipe(
         Effect.provide(Daemon.layerMemory(ArmedProc, { effect: Ref.update(ran, (n) => n + 1) })),
       );
@@ -35,17 +35,17 @@ it("effect runs the worker once (disarmed via an empty inline schedule)", () =>
     Effect.gen(function* () {
       const ran = yield* Ref.make(0);
       yield* Effect.gen(function* () {
-        const proc = yield* ScheduledProc;
-        const before = yield* proc.status.get;
+        const daemon = yield* ScheduledProc;
+        const before = yield* daemon.status.get;
         expect(before.supervising).toBe(true);
         expect(before.armed).toBe(false);
         expect(before.activeInstances).toBe(0);
 
-        yield* proc.run;
+        yield* daemon.run;
         expect(yield* Ref.get(ran)).toBe(1);
 
         // run metrics increment at the single run boundary
-        const after = yield* proc.status.get;
+        const after = yield* daemon.status.get;
         expect(after.runsStarted).toBe(1);
         expect(after.runsSucceeded).toBe(1);
         expect(after.runsFailed).toBe(0);
@@ -62,19 +62,19 @@ it("effect runs the worker once (disarmed via an empty inline schedule)", () =>
 it("schedule round-trips through set/add/clear and the reactive read", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const proc = yield* ScheduledProc;
+      const daemon = yield* ScheduledProc;
       const future = DateTime.makeUnsafe(4_102_444_800_000); // 2100-01-01, fixed far-future
 
-      yield* proc.schedule.set([{ id: "e1", startAt: future }]);
-      let entries = yield* proc.schedule.entries.get;
+      yield* daemon.schedule.set([{ id: "e1", startAt: future }]);
+      let entries = yield* daemon.schedule.entries.get;
       expect(entries.map((e) => e.id)).toEqual(["e1"]);
 
-      yield* proc.schedule.add({ id: "e2", startAt: future });
-      entries = yield* proc.schedule.entries.get;
+      yield* daemon.schedule.add({ id: "e2", startAt: future });
+      entries = yield* daemon.schedule.entries.get;
       expect(entries.map((e) => e.id).sort()).toEqual(["e1", "e2"]);
 
-      yield* proc.schedule.clear;
-      entries = yield* proc.schedule.entries.get;
+      yield* daemon.schedule.clear;
+      entries = yield* daemon.schedule.entries.get;
       expect(entries).toEqual([]);
     }).pipe(Effect.provide(Daemon.layerMemory(ScheduledProc, { effect: Effect.void }))),
   ));
@@ -82,13 +82,13 @@ it("schedule round-trips through set/add/clear and the reactive read", () =>
 it("stop/start toggles supervision (observable via status.supervising)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const proc = yield* ArmedProc;
-      expect((yield* proc.status.get).supervising).toBe(true);
+      const daemon = yield* ArmedProc;
+      expect((yield* daemon.status.get).supervising).toBe(true);
 
-      yield* proc.stop;
-      expect((yield* proc.status.get).supervising).toBe(false);
+      yield* daemon.stop;
+      expect((yield* daemon.status.get).supervising).toBe(false);
 
-      yield* proc.start;
-      expect((yield* proc.status.get).supervising).toBe(true);
+      yield* daemon.start;
+      expect((yield* daemon.status.get).supervising).toBe(true);
     }).pipe(Effect.provide(Daemon.layerMemory(ArmedProc, { effect: Effect.void }))),
   ));

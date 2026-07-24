@@ -286,14 +286,14 @@ export {
 
 // Types - Gate
 export type {
-  GateRunHandle,
-  GateStatus,
+  RunHandle,
+  Status as GateStatus,
   GateConfig,
-  GateHandle,
+  Handle,
   GateLayerConfig,
   GateLayerEffect,
-  GateRunner,
-  GateRunnerConfig,
+  Runner,
+  RunnerConfig,
   GateServiceConfig,
   GateServiceDefinition,
   GateServiceEffect,

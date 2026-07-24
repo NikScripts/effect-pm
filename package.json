@@ -183,7 +183,7 @@
     "example:resource-tui": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/counter-tui.tsx",
     "example:resource-tui-grid": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/grid-tui.tsx",
     "example:resource-tui-manager": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/manager-tui.tsx",
-    "example:pm": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/pm.tsx",
+    "example:hyperlink": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/hyperlink.tsx",
     "example:group-terminal": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/group-terminal.tsx",
     "example:queue-mock": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/queue-mock.tsx",
     "example:group-grid": "tsx --tsconfig examples/resource-tui/tsconfig.json examples/resource-tui/group-grid-mock.tsx",

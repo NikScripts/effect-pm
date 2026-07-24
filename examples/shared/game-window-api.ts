@@ -2,7 +2,7 @@
  * @module examples/shared/game-window-api
  *
  * **Test double** for “we polled an external **game schedule** API and learned when the match
- * is **live** vs **finished**”. Used by **`examples/scenarios/game-window-polling-with-process-group.ts`**.
+ * is **live** vs **finished**”. Shared by schedule / polling game-window demos.
  *
  * ### Scripted timeline (simulated ms, under **`TestClock`**)
  *

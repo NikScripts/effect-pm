@@ -10,7 +10,7 @@
 import { Data, Effect, Schema } from "effect";
 import { SqlClient } from "effect/unstable/sql/SqlClient";
 
-const TABLE = "effect_pm_shard_map";
+const TABLE = "hyperlink_ts_shard_map";
 
 const encodeValue = Schema.encodeSync(Schema.UnknownFromJsonString);
 const decodeValue = Schema.decodeUnknownSync(Schema.UnknownFromJsonString);

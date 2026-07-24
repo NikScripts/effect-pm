@@ -126,12 +126,13 @@ export type { GateInstanceSpec };
 // ============================================================================
 
 /**
- * Live counters for an observable gate.
+ * Live gate status snapshot — namespaced short form of internal `GateStatus`
+ * (`import * as Gate` → `Gate.Status`).
  *
  * @category models
  * @public
  */
-export type GateStatus = internal.GateStatus;
+export type Status = internal.GateStatus;
 
 /**
  * Minimal handle from {@link Gate.make} — `.run` only.
@@ -139,7 +140,7 @@ export type GateStatus = internal.GateStatus;
  * @category models
  * @public
  */
-export type GateRunHandle<T, A, E> = internal.GateRunHandle<T, A, E>;
+export type RunHandle<T, A, E> = internal.GateRunHandle<T, A, E>;
 
 /**
  * Observable handle from {@link Gate.make} with observation disabled, or the local-only
@@ -148,7 +149,7 @@ export type GateRunHandle<T, A, E> = internal.GateRunHandle<T, A, E>;
  * @category models
  * @public
  */
-export type GateHandle<T, A, E> = internal.GateHandle<T, A, E>;
+export type Handle<T, A, E> = internal.GateHandle<T, A, E>;
 
 /**
  * A gate handle — the value `yield* MyRun` produces. The **named** compact form of a gate's
@@ -172,7 +173,7 @@ export interface Gate<
   Requirements = never,
 > {
   /** Live gate counters (waiting / in-flight / completed / failed / interrupted / durations). */
-  readonly status: Hyperlink.Subscribable<GateStatus>;
+  readonly status: Hyperlink.Subscribable<Status>;
   /** Count of runs waiting for a concurrency permit. */
   readonly waiting: Hyperlink.Subscribable<number>;
   /** Count of runs currently executing. */
@@ -397,7 +398,7 @@ export interface GateConfig<T, A, E> {
  * @category models
  * @public
  */
-export interface GateRunnerConfig {
+export interface RunnerConfig {
   readonly name?: string;
   readonly concurrency?: number;
 }
@@ -408,7 +409,7 @@ export interface GateRunnerConfig {
  * @category models
  * @public
  */
-export type GateRunner = internal.GateRunner;
+export type Runner = internal.GateRunner;
 
 // ============================================================================
 // Internal helpers
@@ -1026,11 +1027,11 @@ export function store(tag: StoreScopeTag, extended?: StoreShapes) {
  * @public
  */
 export const makeRunner = <const Name extends string>(
-  config: GateRunnerConfig & { readonly name: Name },
+  config: RunnerConfig & { readonly name: Name },
 ) => {
   const tag = Context.Service<
-    GateRunner & { readonly _tag: Name },
-    GateRunner
+    Runner & { readonly _tag: Name },
+    Runner
   >(config.name);
   const runnerLayer = Layer.effect(tag)(internal.makeRunnerEffect(config));
   return Object.assign(tag, { layer: runnerLayer });

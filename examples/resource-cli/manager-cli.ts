@@ -20,7 +20,7 @@ import { Command } from "effect/unstable/cli";
 import { resources, resourcesLayer } from "./manager-resources";
 import { makeHyperlinkCli } from "../../src/cli";
 
-const cli = makeHyperlinkCli(resources, "pm");
+const cli = makeHyperlinkCli(resources, "hyperlink");
 
 const program = Command.runWith(cli, { version: "0.0.0" })(
   process.argv.slice(2),

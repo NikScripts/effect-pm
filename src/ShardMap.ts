@@ -6,7 +6,7 @@
  * shard via {@link Hyperlink.peers}. Leaf `*Local` ops stay on this node. Fleet folds report
  * shard sizes. An unreachable owner degrades to a miss — not a cascading health failure.
  *
- * Persistence: the local shard is **SQLite SSOT** (table `effect_pm_shard_map`).
+ * Persistence: the local shard is **SQLite SSOT** (table `hyperlink_ts_shard_map`).
  * {@link layer} / {@link serve} / {@link serveRemote} open an in-memory SQLite client by
  * default (`:memory:`); pass `{ filename }` for a durable file. Boot `SELECT`s live rows;
  * mutations `UPSERT` / `DELETE`. No Store bridge, no event replay.

@@ -1,6 +1,6 @@
 /**
  * **HttpClientGate** — pipe-friendly {@link HttpClient.transform} that runs every
- * request effect through a {@link GateRunner}.
+ * request effect through a {@link Gate.Runner}.
  *
  * @remarks
  * `transform` sees the **entire** `execute` pipeline (DNS/TLS/body included), whereas
@@ -12,7 +12,7 @@
  */
 
 import { HttpClient } from "effect/unstable/http";
-import type { GateRunner } from "./Gate";
+import type { Runner } from "./Gate";
 
 /**
  * Pipe-friendly: `client.pipe(HttpClientGate.withRunner(runner))`.
@@ -21,7 +21,7 @@ import type { GateRunner } from "./Gate";
  * @public
  */
 export const withRunner =
-  (runner: GateRunner) =>
+  (runner: Runner) =>
   <E, R>(client: HttpClient.HttpClient.With<E, R>): HttpClient.HttpClient.With<E, R> =>
     HttpClient.transform(client, (effect, _request) => runner(effect));
 
@@ -33,7 +33,7 @@ export const withRunner =
  */
 export const transformClient = <E, R>(
   client: HttpClient.HttpClient.With<E, R>,
-  runner: GateRunner
+  runner: Runner
 ): HttpClient.HttpClient.With<E, R> => withRunner(runner)(client);
 
 // The module is the namespace: `withRunner` / `transformClient` are the flat

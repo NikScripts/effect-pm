@@ -22,7 +22,7 @@ const program = Effect.gen(function* () {
     Option.none(),
   );
 
-  const proc = Daemon.make("examples/forms/schedule-controls-external-fiber", {
+  const daemon = Daemon.make("examples/forms/schedule-controls-external-fiber", {
     polling: Polling.spaced(Duration.millis(100)),
     // Seed the first window, then hand the live controls to the external controller fiber.
     schedule: (controls) =>
@@ -48,7 +48,7 @@ const program = Effect.gen(function* () {
     });
   });
 
-  const supervised = yield* Effect.forkChild(proc.effect);
+  const supervised = yield* Effect.forkChild(daemon.effect);
   const side = yield* Effect.forkChild(controller);
   yield* TestClock.adjust(Duration.seconds(3));
   yield* Effect.yieldNow;

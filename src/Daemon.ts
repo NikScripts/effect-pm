@@ -29,7 +29,7 @@
  *
  * Every engine lifecycle write (`Started` / `Completed` / `Failed` / `Interrupted`) is published to a
  * sliding PubSub **and** appended to the store when one is wired — the same union as
- * {@link daemonExecutionEvent} / {@link Daemon.store}. Consume with `yield* proc.events` (Queue-shaped).
+ * {@link daemonExecutionEvent} / {@link Daemon.store}. Consume with `yield* daemon.events` (Queue-shaped).
  * Fan-out may drop under load; the store remains the durable source of truth. Tick / run-body failures
  * emit `Failed` on the stream; manual {@link run} stays the typed RPC failure path.
  *

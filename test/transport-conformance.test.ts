@@ -66,10 +66,10 @@ const queueOp = Effect.gen(function* () {
 class ConfProc extends Daemon.Tag<ConfProc>()("conf/P").pipe(Daemon.schedule([])) {}
 const procServe = Daemon.serveMemory(ConfProc, { effect: Effect.void });
 const procOp = Effect.gen(function* () {
-  const proc = yield* ConfProc;
+  const daemon = yield* ConfProc;
   // read the current snapshot off the changes stream (the ref's replayed head), proving control-plane
   // state crosses the wire.
-  const snap = yield* Stream.runHead(proc.status.changes).pipe(
+  const snap = yield* Stream.runHead(daemon.status.changes).pipe(
     Effect.flatMap((o) => (o._tag === "Some" ? Effect.succeed(o.value) : Effect.die("no snapshot"))),
     Effect.timeout(Duration.seconds(3)),
   );

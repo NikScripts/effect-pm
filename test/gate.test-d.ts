@@ -15,11 +15,11 @@ void UnitGate.run(1);
 // @ts-expect-error — parameterized gates require input
 void InputGate.run();
 
-type _GateHandleKeys = keyof Gate.GateRunHandle<number, number, never>;
+type _GateHandleKeys = keyof Gate.RunHandle<number, number, never>;
 declare const _statusAbsent: _GateHandleKeys extends "status" ? true : false;
 void (_statusAbsent satisfies false);
 
-declare const _observableHasStatus: "status" extends keyof Gate.GateHandle<
+declare const _observableHasStatus: "status" extends keyof Gate.Handle<
   number,
   number,
   never

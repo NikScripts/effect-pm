@@ -138,10 +138,10 @@ describe("Daemon.layer — Daemon.store auto-write", () => {
         }),
       );
       yield* Effect.gen(function* () {
-        const proc = yield* InterruptExec;
+        const daemon = yield* InterruptExec;
         yield* TestClock.adjust(Duration.millis(100));
         yield* Deferred.await(entered);
-        yield* proc.stop;
+        yield* daemon.stop;
         yield* Effect.yieldNow;
         yield* Effect.yieldNow;
         const store = yield* EngineStore.at(InterruptExec);

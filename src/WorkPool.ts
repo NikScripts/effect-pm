@@ -2125,15 +2125,7 @@ export function serve(tag: AnyPoolTag, config: unknown): Layer.Layer<unknown, ne
 export const serveMemory = serve;
 
 /**
- * Queue resource toolkit — managed priority queues on the {@link Hyperlink} toolkit.
- * (Model B: each instance is its own resource; data-plane procedures are typed by the
- * instance's `itemSchema`.) `layer` runs it locally; `serve` / `serveRemote` node it remotely;
- * a remote {@link Hyperlink.client} drives it with the same `yield* Tag` surface.
- *
- * @public
- */
-/**
- * A **config-patch layer** for the queue `tag` — the toolkit successor to the old
+ * A **config-patch layer** for the WorkPool `tag` — the toolkit successor to the old
  * `WorkPool.Service(...).configure(...)`. Merge it with the queue's {@link layer} (e.g. per
  * environment) and its patch (concurrency / rateLimit / attempts / …) folds onto the layer's base
  * config at build. Keyed by `tag.key`; later patches win. Config lives in the layer, not the tag,

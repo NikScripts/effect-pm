@@ -68,9 +68,9 @@ it("Hyperlink.logs surfaces queue worker lines on stream + query", () =>
 it("Hyperlink.logs surfaces process worker lines on query", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const proc = yield* LogProc;
+      const daemon = yield* LogProc;
       const { query } = yield* Hyperlink.logs(LogProc);
-      yield* proc.run;
+      yield* daemon.run;
       yield* Effect.gen(function* () {
         while ((yield* query({})).length === 0) {
           yield* Effect.sleep(Duration.millis(20));
@@ -91,10 +91,10 @@ it("Hyperlink.logs surfaces process worker lines on query", () =>
 it("Hyperlink.logs query is empty without store registration (live relay only)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const proc = yield* LogProc;
+      const daemon = yield* LogProc;
       const { query } = yield* Hyperlink.logs(LogProc);
       expect(yield* query({})).toEqual([]);
-      yield* proc.run;
+      yield* daemon.run;
       yield* Effect.sleep(Duration.millis(50));
       expect(yield* query({})).toEqual([]);
     }).pipe(
