@@ -6,8 +6,13 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
+<<<<<<< HEAD
 | **4** | `cursor/hyperservice-open-deps-5679` | Getting started docs — [Core Concepts](../getting-started/core-concepts.md) (after Install) | **docs** — refining Core Concepts; tip-synced | same tip as `integration` | — | Owner review Core Concepts; then Managing Layers | 2026-07-24 |
 | **G / TUI** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity | **registry in ui** — TUI `widgets?`; tip-synced | same tip as `integration` | widget-registry + resource-cli green | Kept GroupNode name; observe-surface parked (explained to owner) | 2026-07-24 |
+=======
+| **4** | `cursor/hyperservice-open-deps-5679` | Getting started docs — [Managing Layers](../getting-started/managing-layers.md) | **docs** — refining Managing Layers; tip-synced | same tip as `integration` | — | Owner review Managing Layers; Getting started nav done after that | 2026-07-24 |
+| **G / TUI** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity | **hygiene** — wireKindOf + coverage test; tip-synced | same tip as `integration` | widget-registry + resource-cli green | Need owner: rename GroupNode? observe-surface for all handles? lift widget registry to `ui` for TUI `widgets?` | 2026-07-24 |
+>>>>>>> origin/integration
 | **1** | `cursor/docs-corpus-phase3-ce05` | [Examples book](./agent-01-examples-book.md) · [Phase 3](./agent-01-docs-corpus-phase3-plan.md) | **E1 in flight** — Examples hub + queue Twoslash pairs | branch tip | hub + 2 queue docs | **Next:** E2 forms/resource pairs | 2026-07-15 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
 | **3** | `cursor/logs-store-followers-plan-906e` | [identity-coordinator](./identity-coordinator.md) · [loud-failures](./loud-failures-design.md) | **idle** — Soft / default-on verify / F4 / lineId memo Eng’d | same tip as `integration` | typecheck + targeted suites green | Ready for next major | 2026-07-21 |
@@ -25,7 +30,7 @@
 0. **Agent E:** impossible-states plan ([`impossible-states-proposal.md`](./impossible-states-proposal.md)). **DONE + merged:** P1 (node↔protocol wiring bug → compile error, cast-free) + P5 (http transport dies in browser). **P2 SKIPPED** (cast). **P4 already-enforced** (loose-fields payload already rejected; proposal mis-scoped). **P3 deferred** (opaque serve layers). Clean wins complete. Reserved `src/Resource.ts` node/client surface until fully merged (done). **Tag-config reservation RELEASED — Agent D queue/run/process payload-config unblocked.**
 
 ### Active (owner approval required)
-1. **Agent 4:** **docs** — Install + LS severities Eng’d; refining **Core Concepts**. Tip-sync after owner review.
+1. **Agent 4:** **docs** — Install + Core Concepts Eng’d; refining **Managing Layers**. Tip-sync after owner review.
 2. **Agent 1:** Examples book (`cursor/docs-corpus-phase3-ce05`) — hub in sidebar; Twoslash-paired `docs/examples/**` not in sidebar; forms first. Agent B: content glob + exclude example docs from More. Legacy Phase 3 leftovers background. Ignore effect β98 (Agent C).
 3. **Agent 3:** **idle** — Soft fail-loud, default-on verify, F4 `contractHash`, store-layer lineId memo Eng’d (owner “All of them”). Not handles/site.
 4. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
