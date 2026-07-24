@@ -17,12 +17,12 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Layer } from "effect";
 import { Command } from "effect/unstable/cli";
+import * as Hyperlink from "../../src/Hyperlink";
 import { resources, resourcesLayer } from "./manager-resources";
-import { makeHyperlinkCli } from "../../src/cli";
 
-const cli = makeHyperlinkCli(resources, "hyperlink");
+const command = Hyperlink.cli(resources, "hyperlink");
 
-const program = Command.runWith(cli, { version: "0.0.0" })(
+const program = Command.runWith(command, { version: "0.0.0" })(
   process.argv.slice(2),
 ).pipe(Effect.provide(Layer.mergeAll(resourcesLayer, NodeServices.layer)));
 

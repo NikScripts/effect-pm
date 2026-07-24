@@ -1,47 +1,43 @@
 /**
  * @module cli
  *
- * Build a **run-and-exit CLI from your resource `Tag`s** — the CLI counterpart to the
- * `web` widgets. Each resource becomes a subcommand namespace; each contract method
- * (query / mutate) becomes a verb, its flags derived from the payload schema and its help
- * text from the contract metadata (`specOf` / `methodMeta`). Streams are skipped — they
- * have no run-and-exit form (use their one-shot peers, e.g. `status.get` / `logs.query`).
+ * Build a **CLI + default TUI** from a `Group.Tag` (or a `{ name: tag }` record) — the
+ * control surface counterpart to `<Dashboard group={Fleet} />`.
  *
- * Location-transparent: provide a local layer (the resource runs in-process) or a
- * `Hyperlink.client` + transport (drives a running server) when you run it — the command
- * tree is identical.
+ * - `hyperlink` → open the TUI at the root
+ * - `hyperlink my-queue` → open the TUI focused on that resource (or group subtree)
+ * - `hyperlink my-queue pause` → run-and-exit CLI verb
  *
- * This module is **not** a shipped `hyperlink` / `hl` binary. It is a helper that builds an
- * Effect `Command` tree from your tags; you choose `rootName` and wire `Command.runWith`
- * yourself (examples often use `"hyperlink"`). The private repo-dev gate CLI is **`hyp`**
- * and is unrelated.
+ * The TUI is optional: handlers call {@link openTui}, which reads {@link Tui} via
+ * `Effect.serviceOption`. Provide `layer` from `hyperlink-ts/tui` to enable dashboards;
+ * without it, a path with no action fails as {@link TuiNotConfigured}.
+ *
+ * This module is **not** a shipped `hyperlink` / `hl` binary. Import as
+ * `Hyperlink.cli` (re-exported from `hyperlink-ts/Hyperlink`) or from `hyperlink-ts/cli`.
+ * The private repo-dev gate CLI is **`hyp`** and is unrelated.
  *
  * ```ts
- * import { makeHyperlinkCli, resourcesByName } from "hyperlink-ts/cli";
- * import { Command } from "effect/unstable/cli";
+ * import * as Hyperlink from "hyperlink-ts/Hyperlink"
+ * import { layer as tuiLayer } from "hyperlink-ts/tui"
+ * import { Command } from "effect/unstable/cli"
  *
- * const cli = makeHyperlinkCli(resourcesByName([Mail, Jobs, KeyRotation]), "my-app");
- * // my-app Mail status.get · my-app Mail pause · my-app KeyRotation start · my-app ls
- * Command.runWith(cli, { version })(process.argv.slice(2)).pipe(Effect.provide(appLayer));
+ * const command = Hyperlink.cli(Fleet, "hyperlink")
+ * Command.runWith(command, { version })(args).pipe(
+ *   Effect.provide(Layer.mergeAll(appLayer, tuiLayer)),
+ * )
  * ```
  *
  */
 import { Console, Effect, type Schema } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
+import * as Group from "../Group";
 import { methodMeta, specOf } from "../Hyperlink";
 import type { AnyLocalMethod, AnyMethod, FlatSpec } from "../Hyperlink";
+import { openTui } from "./Tui";
+import type { CliHyperlinkTag, CliNode, CliTree } from "./types";
 
-/**
- * The structural shape the CLI reads from a resource tag: yieldable (→ its service), with
- * `key` / `description` and the stowed contract spec. A `Hyperlink.Tag` / `WorkPool.Tag`
- * / `Daemon.Tag` class satisfies this — pass the classes directly.
- *
- * @public
- */
-export type CliHyperlinkTag = Effect.Effect<unknown, never, unknown> & {
-  readonly key: string;
-  readonly description: string | undefined;
-} & Parameters<typeof specOf>[0];
+export type { CliGroup, CliHyperlinkTag, CliNode, CliTree } from "./types";
+export { openTui, Tui, TuiNotConfigured } from "./Tui";
 
 // A spec entry is a runnable CLI verb when it's a wire method (`kind`: query/mutate) that
 // isn't a streaming read. Streams have no run-and-exit form; local methods aren't on the wire.
@@ -135,44 +131,134 @@ const methodCommand = (name: string, method: AnyMethod, tag: CliHyperlinkTag) =>
   )(command);
 };
 
-/**
- * Build a CLI from a record of resource tags (`{ commandName: tag }`). Each entry is a
- * subcommand namespace exposing the tag's query/mutate verbs; a `<root> ls` lists the
- * resources. `rootName` is the top command name. Returns an `effect/unstable/cli`
- * `Command` — drive it with `Command.runWith` and provide the resources' layer.
- *
- * @public
- */
-export const makeHyperlinkCli = (resources: Record<string, CliHyperlinkTag>, rootName = "cli") => {
-  const namespaces = Object.entries(resources).map(([name, tag]) =>
-    Command.make(name).pipe(
-      Command.withDescription(tag.description ?? `commands for ${name}`),
-      Command.withSubcommands(
-        Object.entries(specOf(tag) as unknown as FlatSpec).flatMap(([method, spec]) =>
-          isCliMethod(spec) ? [methodCommand(method, spec, tag)] : [],
-        ),
+const membersOf = (tree: CliTree): Record<string, CliNode> =>
+  Group.isGroup(tree) ? Group.members(tree) : tree;
+
+/** Flatten a node to leaf tags keyed by slash-joined command path segments. */
+export const leavesOf = (
+  node: CliNode,
+  path: ReadonlyArray<string> = [],
+): Record<string, CliHyperlinkTag> => {
+  if (Group.isGroup(node)) {
+    const out: Record<string, CliHyperlinkTag> = {};
+    for (const [name, child] of Object.entries(Group.members(node))) {
+      Object.assign(out, leavesOf(child as CliNode, [...path, name]));
+    }
+    return out;
+  }
+  const key = path.length > 0 ? path.join("/") : node.key;
+  return { [key]: node };
+};
+
+// Heterogeneous tree: group vs leaf handlers widen error/context; keep the builder unblocked.
+// Effect CLI types an empty config as `{}` — match that, don't invent a wider object type.
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- Effect CLI Command config
+type AnyCliCommand = Command.Command<string, {}, {}, never, never>;
+
+const nodeCommand = (
+  name: string,
+  node: CliNode,
+  path: ReadonlyArray<string>,
+): AnyCliCommand => {
+  const here = [...path, name];
+  if (Group.isGroup(node)) {
+    const kids = Object.entries(Group.members(node)).map(([childName, child]) =>
+      nodeCommand(childName, child as CliNode, here),
+    );
+    return Command.make(name).pipe(
+      Command.withDescription(`group ${node.key}`),
+      Command.withHandler(() => openTui(leavesOf(node, here), here)),
+      Command.withSubcommands(kids),
+    ) as AnyCliCommand;
+  }
+  return Command.make(name).pipe(
+    Command.withDescription(node.description ?? `commands for ${name}`),
+    Command.withHandler(() => openTui({ [name]: node }, here)),
+    Command.withSubcommands(
+      Object.entries(specOf(node) as unknown as FlatSpec).flatMap(([method, spec]) =>
+        isCliMethod(spec) ? [methodCommand(method, spec, node)] : [],
       ),
     ),
+  ) as AnyCliCommand;
+};
+
+const buildCommand = (tree: CliTree, rootName: string) => {
+  const members = membersOf(tree);
+  const namespaces = Object.entries(members).map(([name, node]) =>
+    nodeCommand(name, node, []),
   );
-  const width = Object.keys(resources).reduce((max, name) => Math.max(max, name.length), 0);
+  // Group → flatten leaves by path; flat record → keep command names as keys.
+  const rootFocus: Record<string, CliHyperlinkTag> = Group.isGroup(tree)
+    ? leavesOf(tree)
+    : Object.fromEntries(
+        Object.entries(members).flatMap(([name, node]) =>
+          Group.isGroup(node)
+            ? Object.entries(leavesOf(node, [name]))
+            : [[name, node as CliHyperlinkTag]],
+        ),
+      );
+  const width = Object.keys(rootFocus).reduce((max, name) => Math.max(max, name.length), 0);
   const ls = Command.make("ls").pipe(
     Command.withDescription("List resources (command name → id)."),
     Command.withHandler(() =>
       Console.log(
-        Object.entries(resources)
+        Object.entries(rootFocus)
           .map(([name, tag]) => `  ${name.padEnd(width)}  ${tag.key}`)
           .join("\n"),
       ),
     ),
   );
-  return Command.make(rootName).pipe(Command.withSubcommands([...namespaces, ls]));
+  return Command.make(rootName).pipe(
+    Command.withDescription("Resource CLI — bare path opens the TUI when configured."),
+    Command.withHandler(() => openTui(rootFocus, [])),
+    Command.withSubcommands([...namespaces, ls]),
+  );
 };
+
+export type CliOptions = {
+  readonly name?: string;
+  readonly version: string;
+};
+
+/**
+ * Build the Hyperlink control surface from a {@link CliTree}.
+ *
+ * - `cli(Fleet, "hyperlink")` → Effect `Command` (wire with `Command.runWith`)
+ * - `cli(Fleet, { name: "hyperlink", version })` → args → Effect (runWith baked in)
+ *
+ * @public
+ */
+export const cli: {
+  (tree: CliTree, rootName?: string): ReturnType<typeof buildCommand>;
+  (
+    tree: CliTree,
+    options: CliOptions,
+  ): (
+    args: ReadonlyArray<string>,
+  ) => Effect.Effect<void, unknown, unknown>;
+} = ((tree: CliTree, second?: string | CliOptions) => {
+  if (typeof second === "object" && second !== null) {
+    const rootName = second.name ?? "cli";
+    const command = buildCommand(tree, rootName);
+    return Command.runWith(command, { version: second.version });
+  }
+  return buildCommand(tree, second ?? "cli");
+}) as typeof cli;
+
+/**
+ * @deprecated Use {@link cli}.
+ * @public
+ */
+export const makeHyperlinkCli = (
+  resources: Record<string, CliHyperlinkTag>,
+  rootName = "cli",
+): ReturnType<typeof buildCommand> => cli(resources, rootName);
 
 /**
  * Name a list of tags by the **shortest unique slash-suffix** of each key — `@acme/Mail` →
  * `Mail`; only on a collision are the clashing keys lengthened (`Regional/RegionUS`). Returns
- * the `{ commandName: tag }` record {@link makeHyperlinkCli} takes. Adding a resource never
- * renames an existing command unless it actually collides.
+ * the `{ commandName: tag }` record {@link cli} accepts. Prefer a `Group.Tag` when you have
+ * one — command paths then follow the group.
  *
  */
 export const resourcesByName = <T extends CliHyperlinkTag>(tags: ReadonlyArray<T>): Record<string, T> => {

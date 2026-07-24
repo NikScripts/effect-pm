@@ -1,20 +1,34 @@
 /**
  * @module tui
  *
- * Building blocks for **terminal (Ink) resource dashboards** — the TUI counterpart to
- * `hyperlink-ts/web`. Re-exports the shared reactive binding (Ink is React, so the
- * same `useAtomValue` / `useAtomSet` / `RegistryProvider` drive an Ink tree) plus terminal
- * render primitives — bars, sparklines, compact numbers, a status theme — that you compose
- * into your own widgets. Composable pieces, **not** a generic auto-renderer.
+ * Building blocks for **terminal (Ink) resource dashboards** — the TUI half of the
+ * {@link cli} control surface (`hyperlink-ts/cli`). Provide {@link layer} alongside your
+ * resource layers so bare CLI paths open a dashboard; without it, bare paths fail as
+ * `TuiNotConfigured`.
  *
- * ```tsx
- * import { useAtomValue, bar, compact, statusColor } from "hyperlink-ts/tui";
- * import { Box, Text } from "ink";
- * // a queue cell, your styling: <Text color={statusColor[status]}>{bar(pending, max, 20)}</Text>
+ * Also re-exports the shared reactive binding (Ink is React, so the same `useAtomValue` /
+ * `useAtomSet` / `RegistryProvider` drive an Ink tree) plus terminal render primitives —
+ * bars, sparklines, compact numbers, a status theme — that you compose into your own widgets.
+ *
+ * ```ts
+ * import { cli } from "hyperlink-ts/cli"
+ * import { layer as tuiLayer } from "hyperlink-ts/tui"
+ *
+ * Command.runWith(cli(Fleet, "hyperlink"), { version })(args).pipe(
+ *   Effect.provide(Layer.mergeAll(appLayer, tuiLayer)),
+ * )
+ * // hyperlink              → TUI at root
+ * // hyperlink Mail         → TUI focused on Mail
+ * // hyperlink Mail pause   → CLI verb
  * ```
  *
  */
 export * from "../ui/atom-react";
+export { make, type AnyTag } from "./make";
+/** @deprecated Use {@link make}. */
+export { make as makeHyperlinkTui } from "./make";
+export { layer } from "./layer";
+export { Tui, TuiNotConfigured } from "../cli/index";
 
 /** A resource's folded lifecycle state — the key of the default status theme. */
 export type Status = "running" | "paused" | "draining" | "off";

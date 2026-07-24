@@ -43,10 +43,11 @@ Epsilon is the intended worktree for this once the design locks.
   (env/argv); `assembleNode` builds that node. No per-node entry files.
 - **CLI naming**: public brand / future launcher bin **`hyperlink`** with alias **`hl`**
   (pnpm/`pn` pattern). Locked 2026-07-24 (owner). `link` stays rejected (POSIX `link(1)`).
-  Today that name is examples + tooling only — there is **no** shipped `hyperlink` command
-  surface for running/controlling app Hyperlinks yet (`makeHyperlinkCli` is a helper that
-  plugs into Effect CLI; apps bring their own bin name). Private repo-dev gates are a
-  **separate** bin **`hyp`**.
+  Today that name is examples + tooling only — there is **no** shipped `hyperlink` bin yet.
+  Apps wire `Hyperlink.cli(Group|record, name)` into Effect CLI; bare paths open the TUI when
+  `hyperlink-ts/tui`'s `layer` is provided (`Tui` via `serviceOption`), full
+  `<resource> <action>` paths run-and-exit. Private repo-dev gates are a **separate** bin
+  **`hyp`**.
 - **CLI targets from group paths**: nested record names give addressable paths
   (`Ops.Jobs.Counter` → `hl up ops.jobs`).
 - **Deploy sequence** (later, with delta's handoff): spawn new → readiness → `Advice.advise`
