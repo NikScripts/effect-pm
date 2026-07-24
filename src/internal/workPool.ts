@@ -109,7 +109,7 @@ import { levelToDefaultPriority } from "./priorityMapping";
 import {
   defaultQueueProjection,
   type QueueRuntimeProjection,
-} from "./queueProjection";
+} from "./workPoolProjection";
 import type {
   BuiltInTakeAlgorithm as BuiltInTakeAlgorithmInternal,
   CustomTakeAlgorithm as CustomTakeAlgorithmInternal,
@@ -133,13 +133,13 @@ import {
   QueueItemCodecDescriptorSchema,
   QueueItemEncodingError,
   QueueMissingItemSchemaError,
-} from "./queueSchema";
+} from "./workPoolSchema";
 // Re-export for back-compat (consumers import these from the public WorkPool namespace / the barrel).
 export {
   QueueItemCodecDescriptorSchema,
   QueueItemEncodingError,
   QueueMissingItemSchemaError,
-} from "./queueSchema";
+} from "./workPoolSchema";
 
 // ============================================================================
 // Public Types
@@ -820,7 +820,7 @@ export type QueueEvent<T, E = unknown, A = void> =
  * write funnels to the shared `event.append`; `record` is the base append alias for queue-level
  * facts without a narrow write. @internal
  */
-export type QueueStoreWriter<T, _E = unknown, _A = void> = import("./store/queueStoreSpec").MaterializedEngineQueueStore<
+export type QueueStoreWriter<T, _E = unknown, _A = void> = import("./store/workPoolStoreSpec").MaterializedEngineQueueStore<
   Schema.Codec<T, unknown, never, never>
 >;
 

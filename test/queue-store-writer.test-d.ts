@@ -4,7 +4,7 @@ import type {
   EngineQueueStoreContract,
   makeEngineQueueStoreContract,
   MaterializedEngineQueueStore,
-} from "../src/internal/store/queueStoreSpec";
+} from "../src/internal/store/workPoolStoreSpec";
 import * as WorkPool from "../src/WorkPool";
 
 type Equals<A, B> =

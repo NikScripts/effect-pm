@@ -53,7 +53,7 @@ import {
   QueueItemCodecDescriptorSchema,
   QueueItemEncodingError,
   QueueMissingItemSchemaError,
-} from "./internal/queueSchema";
+} from "./internal/workPoolSchema";
 // The engine is used only by the runtime verbs (buildQueueImpl/layer/serve/serveRemote) below.
 import { makeQueueEffect } from "./internal/workPool";
 import { kind } from "./internal/workPoolKind";
@@ -64,11 +64,11 @@ import {
   stampQueueItemSchema,
   itemSchemaSym,
   type QueueItemSchemaCarrier,
-} from "./internal/queueTagSchemas";
+} from "./internal/workPoolTagSchemas";
 import {
   assertQueueInstanceSpec,
   assertPriorityInstanceSpec,
-} from "./internal/queueSpecAssert";
+} from "./internal/workPoolSpecAssert";
 import * as Store from "./Store";
 import { facetStoreRegistration } from "./internal/store/facetStore";
 import {
@@ -77,7 +77,7 @@ import {
   materializeEngineQueueStoreForItem,
   type QueueStoreAnalyticsContract,
   type QueueStoreTag,
-} from "./internal/store/queueStoreSpec";
+} from "./internal/store/workPoolStoreSpec";
 // The priority (N-level lane) engine — pulled in only by the priority runtime verbs below.
 import { makePriorityEffect } from "./internal/workPoolPriority";
 import type {
@@ -2232,7 +2232,7 @@ export {
 // The priority (N-level lane) engine constructor — the {@link priority} peer of {@link make}.
 export { makePriorityEffect as makePriority } from "./internal/workPoolPriority";
 
-// Codec schemas already imported locally from the light `queueSchema` module — surface them here.
+// Codec schemas already imported locally from the light `workPoolSchema` module — surface them here.
 export {
   QueueItemCodecDescriptorSchema,
   QueueItemEncodingError,

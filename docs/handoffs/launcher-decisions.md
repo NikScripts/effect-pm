@@ -41,9 +41,9 @@ Epsilon is the intended worktree for this once the design locks.
   (Layer memoization makes overlapping groups safe — same Tag provided twice dedupes.)
 - **Identity injection**: launcher spawns ONE shared entry with the node name injected
   (env/argv); `assembleNode` builds that node. No per-node entry files.
-- **CLI**: canonical bin `hyperlink` with bundled alias `hl` (pnpm/`pn` pattern). Owner listed
-  candidates hyperlink / link / hl; `link` collides with POSIX link(1) — recommended against.
-  NOT yet chosen by owner.
+- **CLI**: canonical product bin **`hyperlink`** with bundled alias **`hl`** (pnpm/`pn`
+  pattern). Locked 2026-07-24 (owner). `link` stays rejected (POSIX `link(1)` collision).
+  Repo-dev gates are a **separate** bin **`hyp`** (not the product CLI).
 - **CLI targets from group paths**: nested record names give addressable paths
   (`Ops.Jobs.Counter` → `hl up ops.jobs`).
 - **Deploy sequence** (later, with delta's handoff): spawn new → readiness → `Advice.advise`

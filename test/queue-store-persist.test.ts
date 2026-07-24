@@ -2,7 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Schema } from "effect";
 import * as WorkPool from "../src/WorkPool";
 import { Storage } from "../src/Store";
-import { builtInQueueStoreContract } from "../src/internal/store/queueStoreSpec";
+import { builtInQueueStoreContract } from "../src/internal/store/workPoolStoreSpec";
 
 // Soft-default Memory: WorkPool.layer exposes Storage (layerDefaultMemory) with no AppStore.
 // Engines write via a declared Storage dependency; read back through the same bridge. `it.live` = real clock.
