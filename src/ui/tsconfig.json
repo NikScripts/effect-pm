@@ -1,7 +1,6 @@
 {
-  // The Ink/React TUI ruleset. Same rationale as `src/web/tsconfig.json`: widgets use
-  // `Date` / `setTimeout` / resize listeners — not Effect-domain purity. Root config excludes
-  // `src/tui/**`; this project is check-only (`noEmit`). Bundled by tsup's `tui` entry.
+  // Shared UI core (data / route / atom-react). Relaxed Effect-purity — same rationale as
+  // web/tui (`Date.now`, localStorage no-op in Node). Root config excludes `src/ui/**`.
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
@@ -24,6 +23,6 @@
       }
     ]
   },
-  "include": ["./**/*.ts", "./**/*.tsx", "../ui/**/*.ts", "../ui/**/*.tsx"],
+  "include": ["./**/*.ts", "./**/*.tsx"],
   "exclude": ["../../node_modules", "../../dist"]
 }

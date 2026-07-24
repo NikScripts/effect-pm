@@ -11,7 +11,7 @@ import { Atom } from "effect/unstable/reactivity";
 import * as Group from "../Group";
 import { Tui, type TuiOpenInput } from "../cli/Tui";
 import type { CliTree } from "../cli/types";
-import type { GroupNode } from "../web/data";
+import type { GroupNode } from "../ui/data";
 import { Dashboard } from "./Dashboard";
 
 const toGroupNode = (tree: CliTree): GroupNode =>
@@ -55,7 +55,7 @@ export const layer: Layer.Layer<Tui> = Layer.succeed(Tui, {
         React.createElement(Dashboard<never, never>, {
           runtime,
           group,
-          initialPath: path,
+          path,
         }),
       );
     }),

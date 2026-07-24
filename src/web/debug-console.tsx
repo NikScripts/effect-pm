@@ -8,7 +8,7 @@
  */
 import * as React from "react";
 import { Bug, Check, Copy, Power, Trash2, X } from "lucide-react";
-import { fmtClock, now } from "./now";
+import { fmtClock, now } from "../ui/now";
 
 /** True when debug mode is on. `?debug` / `?debug=1` enables (and persists); `?debug=0` clears. */
 export const debugEnabled = (): boolean => {

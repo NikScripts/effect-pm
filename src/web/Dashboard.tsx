@@ -38,16 +38,16 @@ import {
   daemonBundle,
   queueBundle,
   tagWireKey,
-} from "./data";
-import * as Group from "../Group";
+} from "../ui/data";
+import { fmtDayLabel, now, startOfWeekMillis } from "../ui/now";
 import { RegistryProvider, useAtomValue } from "../ui/atom-react";
+import * as Group from "../Group";
 import { RuntimeProvider, useApiBundle, useNodeBundle, useDaemonBundle, useQueueBundle, useRuntime } from "./runtime";
 import { ViewTransitionProvider, useViewTransition, useViewTransitionStyle } from "./useViewTransition";
 import { useGroupRoute } from "./useGroupRoute";
 import { Button } from "./components/ui/button";
 import { ApiEndpointTable, ApiMetricChart, ApiStats, ApiStatusBadge, base, Cell, ConfirmDialog, PriorityDetail, FleetHealthDetail, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, MetricChart, DaemonControls, DaemonStats, DaemonStatusBadge, QueueControls, QueueStats, HyperlinkReadinessBanner, GateDetail, ScheduleEditor, ShardMapDetail, StatusBadge, TelemetryDetail, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
 import { WidgetsProvider, isLeafTag, type WidgetRegistry } from "./widget-registry";
-import { fmtDayLabel, now, startOfWeekMillis } from "./now";
 import { DebugConsole } from "./debug-console";
 
 

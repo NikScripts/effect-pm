@@ -126,8 +126,9 @@
     "node_modules",
     "dist",
     "repos",
-    // The browser/React and Ink/React layers have their own (relaxed) rulesets —
-    // see src/web/tsconfig.json and src/tui/tsconfig.json.
+    // Shared UI core + browser/Ink renderers have their own (relaxed) rulesets —
+    // see src/ui/tsconfig.json, src/web/tsconfig.json, src/tui/tsconfig.json.
+    "src/ui/**",
     "src/web/**",
     "src/tui/**",
     "examples/scenarios/nwslsoccer",

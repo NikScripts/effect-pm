@@ -1,9 +1,9 @@
 /**
- * @module web/now
+ * @module ui/now
  *
- * Current epoch milliseconds for the browser dashboard (log timestamps, cache freshness).
+ * Current epoch milliseconds for dashboard UIs (log timestamps, cache freshness).
  * The widgets run outside Effect (plain React), so a direct `Date.now()` is correct here —
- * not `Clock`. Confined to this one helper so the rest of `src/web` stays clean.
+ * not `Clock`. Confined to this one helper so renderer modules stay clean.
  *
  */
 import { utcDateFromMillis } from "../internal/utcDate";

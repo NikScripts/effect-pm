@@ -1,9 +1,9 @@
 /**
  * @module tui/useGroupRoute
  *
- * In-memory Group routing for the Ink dashboard — same resolve math as the web
- * {@link ../web/useGroupRoute}, without the History API. `initialPath` is the CLI bare-path
- * focus (`hyperlink Mail` → `["Mail"]`).
+ * In-memory Group routing for the Ink dashboard — same resolve math as
+ * `hyperlink-ts/ui` / web `useGroupRoute`, without the History API. `path` is the CLI
+ * bare-path focus (`hyperlink Mail` → `["Mail"]`).
  *
  */
 import * as React from "react";
@@ -24,7 +24,7 @@ export type { GroupRoute };
  */
 export const useGroupRoute = (
   root: RouteGroup,
-  initialPath: ReadonlyArray<string> = [],
+  path: ReadonlyArray<string> = [],
 ): GroupRoute & {
   /** Jump to an absolute key path (e.g. command-palette pick). */
   readonly goTo: (next: ReadonlyArray<string>) => void;
@@ -32,7 +32,7 @@ export const useGroupRoute = (
   readonly goToLeaf: (tagKey: string) => void;
 } => {
   const [keys, setKeys] = React.useState<ReadonlyArray<string>>(
-    () => resolveGroupRoute(root, initialPath).keys,
+    () => resolveGroupRoute(root, path).keys,
   );
 
   const navigate = React.useCallback((next: ReadonlyArray<string>): void => {

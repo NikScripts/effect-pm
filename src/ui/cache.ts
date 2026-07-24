@@ -1,5 +1,5 @@
 /**
- * @module examples/web-dashboard/cache
+ * @module ui/cache
  *
  * One generic localStorage cache for every resource — no per-type cache code. It stores
  * an accumulator's snapshot (`{ at, items }`) keyed by a string, so the UI can paint the

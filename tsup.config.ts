@@ -49,10 +49,21 @@ export default defineConfig([
     },
   },
   {
-    // The `web` (browser/React) and `tui` (Ink/React) entries build declarations under their
-    // relaxed UI rulesets — the root config's Effect-purity plugin (globalDate / globalTimers /
-    // globalConsole / asyncFunction) is wrong for UI code and would fail the DTS build. `clean`
-    // stays off so later entries don't wipe earlier output.
+    // Shared UI core + web/tui renderers use relaxed UI rulesets — the root Effect-purity
+    // plugin is wrong for Date/localStorage/React UI code. `clean` stays off so later
+    // entries don't wipe earlier output.
+    ...shared,
+    entry: {
+      ui: "src/ui/index.ts",
+    },
+    tsconfig: "src/ui/tsconfig.json",
+    dts: true,
+    clean: false,
+    esbuildOptions(options) {
+      options.jsx = "automatic";
+    },
+  },
+  {
     ...shared,
     entry: {
       web: "src/web/index.ts",

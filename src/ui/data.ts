@@ -1,11 +1,11 @@
 /**
- * @module web/data
+ * @module ui/data
  *
- * Tag-driven data layer for the dashboard. Each resource **tag** is the source of truth;
- * `queueBundle` / `daemonBundle` build the atom bundle the widgets read (status /
- * metrics+history / trend / logs + controls) straight from the tag's live service over the
- * consumer's reactive `runtime` (an `Atom.runtime(layer)` that provides the tags — local
- * engine or `Hyperlink.client` over http; the widgets don't care which).
+ * Tag-driven data layer shared by `hyperlink-ts/web` and `hyperlink-ts/tui`. Each resource
+ * **tag** is the source of truth; `queueBundle` / `daemonBundle` build the atom bundle the
+ * widgets read (status / metrics+history / trend / logs + controls) straight from the tag's
+ * live service over the consumer's reactive `runtime` (an `Atom.runtime(layer)` that provides
+ * the tags — local engine or `Hyperlink.client` over http; the widgets don't care which).
  *
  */
 import { DateTime, Duration, Effect, Option, type Schema, Stream } from "effect";

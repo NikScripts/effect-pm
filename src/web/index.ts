@@ -22,10 +22,9 @@
  * tokens (`@source` + theme wiring in the consuming app).
  *
  */
-export * from "../ui/atom-react";
+export * from "../ui";
 export * from "./useViewTransition";
 export * from "./useGroupRoute";
-export * from "./data";
 export * from "./runtime";
 export * from "./widgets";
 export * from "./widget-registry";

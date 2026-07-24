@@ -25,7 +25,7 @@ import {
   type GroupRoute,
   type RouteGroup,
 } from "../ui/groupRoute";
-import type { GroupNode } from "./data";
+import type { GroupNode } from "../ui/data";
 
 export type { GroupRoute };
 

@@ -35,7 +35,7 @@ import {
   nodeStatusBundle,
   daemonBundle,
   queueBundle,
-} from "./data";
+} from "../ui/data";
 
 // The injected runtime's requirement `R` varies per consumer; React context can't be generic,
 // so this single seam erases it. `<Dashboard runtime={...} />` keeps the consumer-facing type.

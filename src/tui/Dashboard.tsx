@@ -2,12 +2,12 @@
  * @module tui/Dashboard
  *
  * The Ink Group dashboard — terminal counterpart to `<Dashboard runtime group />` from
- * `hyperlink-ts/web`. Same `Group` tree, same `src/web/data` bundles, same path model
- * (member-key chain); Ink instead of DOM. Bare CLI paths open this via {@link layer}.
+ * `hyperlink-ts/web`. Same `Group` tree, same `hyperlink-ts/ui` data bundles, same path
+ * model (member nickname chain); Ink instead of DOM. Bare CLI paths open this via {@link layer}.
  *
  * ```tsx
  * <Dashboard runtime={Atom.runtime(appLayer)} group={Fleet} />
- * <Dashboard runtime={runtime} group={Fleet} initialPath={["Mail"]} />
+ * <Dashboard runtime={runtime} group={Fleet} path={["Mail"]} />
  * ```
  *
  *   ↑↓←→ / hjkl  move · Enter/Space open or drill · Esc/Backspace back/up
@@ -33,7 +33,7 @@ import {
   type DashboardRuntime,
   type GroupNode,
   type QueueTag,
-} from "../web/data";
+} from "../ui/data";
 import { RegistryProvider, useAtomSet, useAtomValue } from "../ui/atom-react";
 
 // Same seam as `web/runtime`: React context can't be generic over the consumer's `R`.
@@ -98,13 +98,6 @@ const useTerminalSize = (): { cols: number; rows: number } => {
   return size;
 };
 
-const memberKey = (group: GroupNode, member: unknown): string | undefined => {
-  for (const [name, m] of Object.entries(Group.members(group))) {
-    if (m === member) return name;
-  }
-  return undefined;
-};
-
 const idOf = (m: unknown): string => {
   if (Group.isGroup(m)) return m.key;
   if (
@@ -153,11 +146,12 @@ const PrioRow = (props: {
 };
 
 const QueueCell = (props: {
+  readonly name: string;
   readonly tag: QueueTag;
   readonly width: number;
   readonly selected: boolean;
 }): React.ReactElement => {
-  const { tag, width, selected } = props;
+  const { name, tag, width, selected } = props;
   const r = useAtomValue(queueBundle(useRuntime(), tag).status);
   const opt = AsyncResult.isSuccess(r) ? r.value : Option.none();
   const s = Option.isSome(opt) ? opt.value : undefined;
@@ -180,7 +174,7 @@ const QueueCell = (props: {
       <Box>
         <Box flexGrow={1}>
           <Text bold wrap="truncate">
-            {displayName(tag.key)}
+            {name}
           </Text>
           <NodeMark tag={tag} />
         </Box>
@@ -200,11 +194,12 @@ const QueueCell = (props: {
 };
 
 const DaemonCell = (props: {
+  readonly name: string;
   readonly tag: DaemonTag;
   readonly width: number;
   readonly selected: boolean;
 }): React.ReactElement => {
-  const { tag, width, selected } = props;
+  const { name, tag, width, selected } = props;
   const r = useAtomValue(daemonBundle(useRuntime(), tag).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   const up = s?.supervising === true;
@@ -222,7 +217,7 @@ const DaemonCell = (props: {
       <Box>
         <Box flexGrow={1}>
           <Text bold wrap="truncate">
-            ⚙ {displayName(tag.key)}
+            ⚙ {name}
           </Text>
           <NodeMark tag={tag} />
         </Box>
@@ -243,12 +238,13 @@ const DaemonCell = (props: {
 };
 
 const GroupCell = (props: {
+  readonly name: string;
   readonly node: GroupNode;
   readonly width: number;
   readonly selected: boolean;
 }): React.ReactElement => {
-  const { node, width, selected } = props;
-  const members = Object.values(Group.members(node));
+  const { name, node, width, selected } = props;
+  const members = Object.entries(Group.members(node));
   const leafCount = leafCountOf(node);
   return (
     <Box
@@ -264,16 +260,16 @@ const GroupCell = (props: {
       <Box>
         <Box flexGrow={1}>
           <Text bold color="cyan" wrap="truncate">
-            ▸ {displayName(node.key)}
+            ▸ {name}
           </Text>
         </Box>
         <Text dimColor>{leafCount}</Text>
       </Box>
       {width >= 22
-        ? members.slice(0, 4).map((m, i) => (
-            <Text key={`${node.key}-${i}`} dimColor wrap="truncate">
+        ? members.slice(0, 4).map(([childName, m]) => (
+            <Text key={`${name}-${childName}`} dimColor wrap="truncate">
               {Group.isGroup(m) ? "▸ " : isDaemonTag(m) ? "⚙ " : "  "}
-              {displayName(idOf(m))}
+              {childName}
             </Text>
           ))
         : null}
@@ -282,7 +278,7 @@ const GroupCell = (props: {
 };
 
 const FallbackCell = (props: {
-  readonly member: unknown;
+  readonly name: string;
   readonly width: number;
   readonly selected: boolean;
 }): React.ReactElement => (
@@ -297,27 +293,49 @@ const FallbackCell = (props: {
     paddingX={1}
   >
     <Text bold wrap="truncate">
-      {displayName(idOf(props.member))}
+      {props.name}
     </Text>
     <Text dimColor>resource</Text>
   </Box>
 );
 
 const Cell = (props: {
+  readonly name: string;
   readonly member: unknown;
   readonly width: number;
   readonly selected: boolean;
 }): React.ReactElement => {
   if (Group.isGroup(props.member)) {
-    return <GroupCell node={props.member} width={props.width} selected={props.selected} />;
+    return (
+      <GroupCell
+        name={props.name}
+        node={props.member}
+        width={props.width}
+        selected={props.selected}
+      />
+    );
   }
   if (isDaemonTag(props.member)) {
-    return <DaemonCell tag={props.member} width={props.width} selected={props.selected} />;
+    return (
+      <DaemonCell
+        name={props.name}
+        tag={props.member}
+        width={props.width}
+        selected={props.selected}
+      />
+    );
   }
   if (isQueueTag(props.member)) {
-    return <QueueCell tag={props.member} width={props.width} selected={props.selected} />;
+    return (
+      <QueueCell
+        name={props.name}
+        tag={props.member}
+        width={props.width}
+        selected={props.selected}
+      />
+    );
   }
-  return <FallbackCell member={props.member} width={props.width} selected={props.selected} />;
+  return <FallbackCell name={props.name} width={props.width} selected={props.selected} />;
 };
 
 const Bar = (props: {
@@ -414,6 +432,7 @@ const LogTail = (props: {
 );
 
 const FocusedQueue = (props: {
+  readonly name: string;
   readonly tag: QueueTag;
   readonly cols: number;
   readonly rows: number;
@@ -422,7 +441,7 @@ const FocusedQueue = (props: {
   readonly bar: (hint: React.ReactElement) => React.ReactElement;
   readonly barRows: number;
 }): React.ReactElement => {
-  const { tag, cols, rows, editMode } = props;
+  const { name, tag, cols, rows, editMode } = props;
   const bundle = queueBundle(useRuntime(), tag);
   const statusR = useAtomValue(bundle.status);
   const metricsR = useAtomValue(bundle.metrics);
@@ -452,7 +471,7 @@ const FocusedQueue = (props: {
 
   const sizes: Record<Priority, number> = s?.sizes ?? { high: 0, normal: 0, low: 0 };
   const view: View = {
-    name: tag.key,
+    name,
     status: statusOf(s?.phase ?? "running", s?.paused ?? false),
     sizes,
     pending: sizes.high + sizes.normal + sizes.low,
@@ -517,6 +536,7 @@ const FocusedQueue = (props: {
 };
 
 const FocusedDaemon = (props: {
+  readonly name: string;
   readonly tag: DaemonTag;
   readonly cols: number;
   readonly rows: number;
@@ -525,7 +545,7 @@ const FocusedDaemon = (props: {
   readonly bar: (hint: React.ReactElement) => React.ReactElement;
   readonly barRows: number;
 }): React.ReactElement => {
-  const { tag, cols, rows, editMode } = props;
+  const { name, tag, cols, rows, editMode } = props;
   const bundle = daemonBundle(useRuntime(), tag);
   const statusR = useAtomValue(bundle.status);
   const logsR = useAtomValue(bundle.logs);
@@ -584,7 +604,7 @@ const FocusedDaemon = (props: {
       >
         <Box justifyContent="space-between">
           <Text bold color="cyan">
-            ⚙ {displayName(tag.key)}
+            ⚙ {name}
             <NodeMark tag={tag} />
           </Text>
           <Text color={up ? "green" : "gray"}>{up ? "► running" : "■ stopped"}</Text>
@@ -617,10 +637,10 @@ const FocusedDaemon = (props: {
 
 const DashboardApp = (props: {
   readonly group: GroupNode;
-  readonly initialPath: ReadonlyArray<string>;
+  readonly path: ReadonlyArray<string>;
 }): React.ReactElement => {
   const { cols, rows } = useTerminalSize();
-  const route = useGroupRoute(props.group, props.initialPath);
+  const route = useGroupRoute(props.group, props.path);
   const [sel, setSel] = React.useState(0);
   const [editMode, setEditMode] = React.useState(false);
   const [cmd, setCmd] = React.useState<string | null>(null);
@@ -628,14 +648,13 @@ const DashboardApp = (props: {
   const [scroll, setScroll] = React.useState(0);
 
   const members = Object.entries(Group.members(route.group));
-  const memberValues = members.map(([, m]) => m);
   const allLeaves: ReadonlyArray<QueueTag | DaemonTag> = [
     ...queueLeaves(props.group),
     ...daemonLeaves(props.group),
   ];
 
-  const membersRef = React.useRef(memberValues);
-  membersRef.current = memberValues;
+  const membersRef = React.useRef(members);
+  membersRef.current = members;
   const layoutRef = React.useRef({
     perRow: 1,
     cellWidth: 16,
@@ -656,12 +675,12 @@ const DashboardApp = (props: {
   const avail = cols - 4;
   let perRow = Math.max(1, Math.floor(avail / 34));
   let cellWidth = Math.floor(avail / perRow) - 1;
-  while (cellWidth > 46 && perRow < memberValues.length) {
+  while (cellWidth > 46 && perRow < members.length) {
     perRow += 1;
     cellWidth = Math.floor(avail / perRow) - 1;
   }
   cellWidth = Math.max(16, cellWidth);
-  const totalRows = Math.ceil(memberValues.length / perRow);
+  const totalRows = Math.ceil(members.length / perRow);
   const gridH = Math.max(CELL_HEIGHT, rows - 6);
   const visibleRows = Math.max(1, Math.floor(gridH / (CELL_HEIGHT + 1)));
   const maxScroll = Math.max(0, totalRows - visibleRows);
@@ -729,8 +748,7 @@ const DashboardApp = (props: {
             continue;
           }
           if (idx === v.sel) {
-            const key = memberKey(route.group, entry);
-            if (key !== undefined) route.open(key);
+            route.open(entry[0]);
           } else {
             setSel(idx);
           }
@@ -786,11 +804,11 @@ const DashboardApp = (props: {
     if (input === "h" || key.leftArrow) {
       setSel((s) => Math.max(0, s - 1));
     } else if (input === "l" || key.rightArrow) {
-      setSel((s) => Math.min(memberValues.length - 1, s + 1));
+      setSel((s) => Math.min(members.length - 1, s + 1));
     } else if (input === "k" || key.upArrow) {
       setSel((s) => Math.max(0, s - perRow));
     } else if (input === "j" || key.downArrow) {
-      setSel((s) => Math.min(memberValues.length - 1, s + perRow));
+      setSel((s) => Math.min(members.length - 1, s + perRow));
     } else if (key.return || input === " ") {
       const entry = members[Math.min(sel, members.length - 1)];
       if (entry !== undefined) route.open(entry[0]);
@@ -803,11 +821,13 @@ const DashboardApp = (props: {
   );
 
   const focused = route.selected;
+  const focusName = route.keys[route.keys.length - 1] ?? displayName(idOf(focused));
   if (focused !== null) {
     if (isDaemonTag(focused)) {
       return (
         <FocusedDaemon
           key={focused.key}
+          name={focusName}
           tag={focused}
           cols={cols}
           rows={rows}
@@ -822,6 +842,7 @@ const DashboardApp = (props: {
       return (
         <FocusedQueue
           key={focused.key}
+          name={focusName}
           tag={focused}
           cols={cols}
           rows={rows}
@@ -835,7 +856,7 @@ const DashboardApp = (props: {
     return (
       <Box flexDirection="column" width={cols} height={rows}>
         <Box paddingX={1}>
-          <Text bold>{displayName(idOf(focused))}</Text>
+          <Text bold>{focusName}</Text>
           <Text dimColor> · Esc back</Text>
         </Box>
         <Box paddingX={1} marginTop={1}>
@@ -851,9 +872,10 @@ const DashboardApp = (props: {
   }
 
   const start = effScroll * perRow;
-  const visibleCells = memberValues.slice(start, start + visibleRows * perRow);
+  const visibleCells = members.slice(start, start + visibleRows * perRow);
   const more = totalRows - (effScroll + visibleRows);
-  const crumb = route.trail.map((g) => displayName(g.key)).join(" / ");
+  // Root uses the group's tag short name; deeper segments are member nicknames (`route.keys`).
+  const crumb = [displayName(props.group.key), ...route.keys].join(" / ");
 
   return (
     <Box
@@ -869,16 +891,17 @@ const DashboardApp = (props: {
         </Text>
         <Text dimColor>
           {" "}
-          {memberValues.length} items{route.trail.length > 1 ? " · Esc up" : ""}
+          {members.length} items{route.trail.length > 1 ? " · Esc up" : ""}
           {effScroll > 0 ? ` · ↑${effScroll}` : ""}
           {more > 0 ? ` · ↓${more}` : ""}
         </Text>
       </Box>
 
       <Box flexGrow={1} flexDirection="row" flexWrap="wrap" padding={1}>
-        {visibleCells.map((node, i) => (
+        {visibleCells.map(([name, node], i) => (
           <Cell
-            key={idOf(node)}
+            key={name}
+            name={name}
             member={node}
             width={cellWidth}
             selected={start + i === sel}
@@ -908,12 +931,12 @@ const DashboardApp = (props: {
 export const Dashboard = <R, ER>(props: {
   readonly runtime: DashboardRuntime<R, ER>;
   readonly group: GroupNode;
-  /** CLI / deep-link focus as member-key segments (`["Mail"]`, `["Mini", "KeyRotation"]`). */
-  readonly initialPath?: ReadonlyArray<string>;
+  /** CLI / deep-link focus as member-key nicknames (`["Inbox"]`, `["Mini", "KeyRotation"]`). */
+  readonly path?: ReadonlyArray<string>;
 }): React.ReactElement => (
   <RegistryProvider>
     <RuntimeContext.Provider value={props.runtime as AnyRuntime}>
-      <DashboardApp group={props.group} initialPath={props.initialPath ?? []} />
+      <DashboardApp group={props.group} path={props.path ?? []} />
     </RuntimeContext.Provider>
   </RegistryProvider>
 );
