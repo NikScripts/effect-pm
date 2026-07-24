@@ -14,7 +14,7 @@ class OkProc extends Daemon.Tag<OkProc>()("@test/daemon-run-rpc/Ok", {
   success: Schema.Number,
 }) {}
 
-class VoidProc extends Daemon.Tag<VoidProc>()("@test/daemon-run-rpc/Void") {}
+class VoidDaemon extends Daemon.Tag<VoidDaemon>()("@test/daemon-run-rpc/Void") {}
 
 describe("Daemon manual run RPC", () => {
   it.effect("Daemon.make run returns captured success via resultRef", () =>
@@ -87,13 +87,13 @@ describe("Daemon manual run RPC", () => {
   it("RpcTest round-trip completes void manual run", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const rpc = yield* RpcTest.makeClient(groupOf(VoidProc));
-        const svc = forwardClient(rpc, specOf(VoidProc), VoidProc.groupId, VoidProc.key) as {
+        const rpc = yield* RpcTest.makeClient(groupOf(VoidDaemon));
+        const svc = forwardClient(rpc, specOf(VoidDaemon), VoidDaemon.groupId, VoidDaemon.key) as {
           readonly run: Effect.Effect<void, never>;
         };
         yield* svc.run;
       }).pipe(
-        Effect.provide(Daemon.serveRemoteMemory(VoidProc, { effect: Effect.void })),
+        Effect.provide(Daemon.serveRemoteMemory(VoidDaemon, { effect: Effect.void })),
         Effect.scoped,
       ) as Effect.Effect<void, never, never>,
     ),

@@ -17,7 +17,7 @@ const maxLogQueryLimit = 10_000;
 export type LogSort = "asc" | "desc";
 
 /**
- * Storage-backed log history query (operator `pm logs`).
+ * Storage-backed log history query (operator `hyperlink logs`).
  *
  * Flags map to predicates like a database query: optional group filter, optional
  * resource **key**, date bounds, cursor bounds, limit, and sort. With no filters, all stored

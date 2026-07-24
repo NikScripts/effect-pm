@@ -9,10 +9,10 @@ class Probe extends Hyperlink.Tag<Probe>()("missing-protocol/Probe", {
   ping: Hyperlink.effect(Schema.String),
 }) {}
 
-const Proc = Hyperlink.tagFor("missing-protocol/proc", {
+const DaemonGroup = Hyperlink.tagFor("missing-protocol/daemon", {
   ping: Hyperlink.effect(Schema.String),
 });
-class P1 extends Proc<P1>("missing-protocol/p1") {}
+class P1 extends DaemonGroup<P1>("missing-protocol/p1") {}
 
 describe("Hyperlink.MissingClientProtocol", () => {
   it.effect("client(tag) without Protocol fails MissingClientProtocol", () =>
@@ -28,7 +28,7 @@ describe("Hyperlink.MissingClientProtocol", () => {
 
   it.effect("clientInstances without Protocol fails MissingClientProtocol", () =>
     Effect.gen(function* () {
-      const layer = Hyperlink.clientInstances(Proc, P1) as Layer.Layer<P1>;
+      const layer = Hyperlink.clientInstances(DaemonGroup, P1) as Layer.Layer<P1>;
       const exit = yield* Effect.exit(Layer.build(layer).pipe(Effect.scoped));
       expectTaggedFailure(exit, "MissingClientProtocol");
     }),

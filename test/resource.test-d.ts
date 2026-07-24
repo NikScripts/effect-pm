@@ -193,17 +193,17 @@ void _wireViaClient;
 
 // ── clientInstances: one shared client serves many instances of one control shape ──
 // (100 daemons that can only start/drop cost ONE client, not one each.)
-const Proc = Hyperlink.tagFor("proc", {
+const DaemonGroup = Hyperlink.tagFor("daemon", {
   start: Hyperlink.effect(Schema.Void),
   drop: Hyperlink.effect(Schema.Void),
 });
-class P1 extends Proc<P1>("@app/p1") {}
-class P2 extends Proc<P2>("@app/p2") {}
+class P1 extends DaemonGroup<P1>("@app/p1") {}
+class P2 extends DaemonGroup<P2>("@app/p2") {}
 
 // one layer provides BOTH instances; its only requirement is the transport Protocol.
-const _procClients: Layer.Layer<P1 | P2, never, RpcClient.Protocol> =
-  Hyperlink.clientInstances(Proc, P1, P2);
-void _procClients;
+const _daemonClients: Layer.Layer<P1 | P2, never, RpcClient.Protocol> =
+  Hyperlink.clientInstances(DaemonGroup, P1, P2);
+void _daemonClients;
 
 // ── node in the tag: ship only the tag; the client resolves where to connect ──
 // Bare bound node → client still requires the node (+ explicit protocol via connect).
@@ -251,18 +251,18 @@ void _nodelessClient;
 
 // ── tagFor with a node: the whole family ships only the tag ──
 // One node baked into the factory → every instance is a node-bearing tag.
-const NodeProc = Hyperlink.tagFor(
-  "nodeedProc",
+const NodeDaemon = Hyperlink.tagFor(
+  "nodeedDaemon",
   { start: Hyperlink.effect(Schema.Void) },
   { node: EdgeNode },
 );
-class HP1 extends NodeProc<HP1>("@app/hp1") {}
+class HP1 extends NodeDaemon<HP1>("@app/hp1") {}
 
 // each instance's client requires the family's node, not the ambient Protocol.
 const _hp1Client: Layer.Layer<HP1, never, EdgeNode> = Hyperlink.client(HP1);
 void _hp1Client;
 
-// a nodeless factory's instances keep the ambient-Protocol client (Proc, above).
+// a nodeless factory's instances keep the ambient-Protocol client (DaemonGroup, above).
 const _p1Client: Layer.Layer<P1, never, RpcClient.Protocol> =
   Hyperlink.client(P1);
 void _p1Client;

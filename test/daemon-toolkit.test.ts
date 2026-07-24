@@ -10,10 +10,10 @@ import * as Daemon from "../src/Daemon";
 const farFuture = DateTime.makeUnsafe(4_102_444_800_000);
 
 // base — observation + lifecycle only; always-armed by default so it runs immediately.
-class BaseProc extends Daemon.Tag<BaseProc>()("test/toolkit/Base") {}
+class BaseDaemon extends Daemon.Tag<BaseDaemon>()("test/toolkit/Base") {}
 
 // owns an inline schedule seeded empty (disarmed) — gains the `schedule` verb group.
-class SchedProc extends Daemon.Tag<SchedProc>()("test/toolkit/Sched").pipe(
+class SchedDaemon extends Daemon.Tag<SchedDaemon>()("test/toolkit/Sched").pipe(
   Daemon.schedule([]),
 ) {}
 
@@ -31,14 +31,14 @@ it("base daemon arms and runs its effect immediately (default schedule)", () =>
     Effect.gen(function* () {
       const ran = yield* Ref.make(0);
       yield* Effect.gen(function* () {
-        const daemon = yield* BaseProc;
+        const daemon = yield* BaseDaemon;
         yield* Effect.gen(function* () {
           while ((yield* Ref.get(ran)) < 1) yield* Effect.sleep(Duration.millis(5));
         }).pipe(Effect.timeout(Duration.seconds(1)));
         expect(yield* Ref.get(ran)).toBeGreaterThanOrEqual(1);
         expect((yield* daemon.status.get).armed).toBe(true);
       }).pipe(
-        Effect.provide(Daemon.layerMemory(BaseProc, { effect: Ref.update(ran, (n) => n + 1) })),
+        Effect.provide(Daemon.layerMemory(BaseDaemon, { effect: Ref.update(ran, (n) => n + 1) })),
       );
     }),
   ));
@@ -46,7 +46,7 @@ it("base daemon arms and runs its effect immediately (default schedule)", () =>
 it("stop/start toggles supervision (observable via status.supervising)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const daemon = yield* BaseProc;
+      const daemon = yield* BaseDaemon;
       expect((yield* daemon.status.get).supervising).toBe(true);
 
       yield* daemon.stop;
@@ -54,13 +54,13 @@ it("stop/start toggles supervision (observable via status.supervising)", () =>
 
       yield* daemon.start;
       expect((yield* daemon.status.get).supervising).toBe(true);
-    }).pipe(Effect.provide(Daemon.layerMemory(BaseProc, { effect: Effect.void }))),
+    }).pipe(Effect.provide(Daemon.layerMemory(BaseDaemon, { effect: Effect.void }))),
   ));
 
 it("inline schedule verb group round-trips through set/add/clear and the entries ref", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const daemon = yield* SchedProc;
+      const daemon = yield* SchedDaemon;
       // seeded empty ⇒ disarmed, no entries
       expect((yield* daemon.status.get).armed).toBe(false);
       expect(yield* daemon.schedule.entries.get).toEqual([]);
@@ -76,7 +76,7 @@ it("inline schedule verb group round-trips through set/add/clear and the entries
 
       yield* daemon.schedule.clear;
       expect(yield* daemon.schedule.entries.get).toEqual([]);
-    }).pipe(Effect.provide(Daemon.layerMemory(SchedProc, { effect: Effect.void }))),
+    }).pipe(Effect.provide(Daemon.layerMemory(SchedDaemon, { effect: Effect.void }))),
   ));
 
 it("result captures the latest success (absent before the first run)", () =>

@@ -18,13 +18,13 @@ class LogQueue extends WorkPool.Tag<LogQueue>()("test/logs-resource/Q", {
   payload: NumberItem,
 }) {}
 
-class LogProc extends Daemon.Tag<LogProc>()("test/logs-resource/Proc").pipe(Daemon.schedule([])) {}
+class LogDaemon extends Daemon.Tag<LogDaemon>()("test/logs-resource/Daemon").pipe(Daemon.schedule([])) {}
 
 class EnvNode extends Node.Tag<EnvNode>()(testBillingNodeKey) {}
 
 class AppStore extends Store.Service<AppStore>("@test/logs-resource/Store")(
   EnvNode.logs,
-  Daemon.store(LogProc),
+  Daemon.store(LogDaemon),
   WorkPool.store(LogQueue),
 ) {}
 
@@ -68,8 +68,8 @@ it("Hyperlink.logs surfaces queue worker lines on stream + query", () =>
 it("Hyperlink.logs surfaces process worker lines on query", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const daemon = yield* LogProc;
-      const { query } = yield* Hyperlink.logs(LogProc);
+      const daemon = yield* LogDaemon;
+      const { query } = yield* Hyperlink.logs(LogDaemon);
       yield* daemon.run;
       yield* Effect.gen(function* () {
         while ((yield* query({})).length === 0) {
@@ -80,7 +80,7 @@ it("Hyperlink.logs surfaces process worker lines on query", () =>
       expect(rows.some((r) => r.message.includes("daemon tick"))).toBe(true);
     }).pipe(
       Effect.provide(
-        Daemon.layer(LogProc, {
+        Daemon.layer(LogDaemon, {
           effect: Effect.logInfo("daemon tick"),
         }).pipe(Layer.provideMerge(AppStore.layerMemory)),
       ),
@@ -91,15 +91,15 @@ it("Hyperlink.logs surfaces process worker lines on query", () =>
 it("Hyperlink.logs query is empty without store registration (live relay only)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const daemon = yield* LogProc;
-      const { query } = yield* Hyperlink.logs(LogProc);
+      const daemon = yield* LogDaemon;
+      const { query } = yield* Hyperlink.logs(LogDaemon);
       expect(yield* query({})).toEqual([]);
       yield* daemon.run;
       yield* Effect.sleep(Duration.millis(50));
       expect(yield* query({})).toEqual([]);
     }).pipe(
       Effect.provide(
-        Daemon.layerMemory(LogProc, {
+        Daemon.layerMemory(LogDaemon, {
           effect: Effect.logInfo("daemon tick"),
         }).pipe(Layer.provide(Logs.layer)),
       ),

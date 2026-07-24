@@ -1,5 +1,5 @@
 /**
- * Operator log scope resolution for `pm watch` / `pm logs`.
+ * Operator log scope resolution for `hyperlink watch` / `hyperlink logs`.
  *
  * @module internal/manager/logScope
  * @internal
