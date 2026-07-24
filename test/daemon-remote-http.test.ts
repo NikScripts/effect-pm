@@ -15,6 +15,8 @@ import * as Node from "../src/Node";
 class RemoteProc extends Daemon.Tag<RemoteProc>()("proc-remote/P").pipe(
   Daemon.schedule([]),
 ) {}
+const RemoteProcEffect: Effect.Effect<Effect.Success<typeof RemoteProc>, never, RemoteProc> =
+  RemoteProc;
 
 // client transport: http + ndjson (matches the server's default serialization).
 const httpProtocol = (port: number) =>
@@ -50,7 +52,7 @@ it("status + start/stop round-trip over http against the real driver", () =>
   Effect.runPromise(
     withServer({ effect: Effect.void }, (_port) =>
       Effect.gen(function* () {
-        const proc = yield* RemoteProc;
+        const proc = yield* RemoteProcEffect;
         // `status` is a ref: over RPC `.get` reads a client cache fed by `.changes`, so control-plane
         // effects (start/stop) are observed by waiting on the `changes` stream (current snapshot first).
         const awaitSupervising = (want: boolean) =>
@@ -74,7 +76,7 @@ it("schedule set/add/clear + read round-trip over http (entries cross the wire)"
   Effect.runPromise(
     withServer({ effect: Effect.void }, (_port) =>
       Effect.gen(function* () {
-        const proc = yield* RemoteProc;
+        const proc = yield* RemoteProcEffect;
         const future = DateTime.makeUnsafe(4_102_444_800_000); // 2100-01-01
         // `entries` is a ref: over RPC, mutations land on the server and propagate back through the
         // `changes` stream, so observe the resulting entry set there rather than an immediate `.get`.
@@ -98,7 +100,7 @@ it("the status stream flows over http from the real driver", () =>
   Effect.runPromise(
     withServer({ effect: Effect.void }, (_port) =>
       Effect.gen(function* () {
-        const proc = yield* RemoteProc;
+        const proc = yield* RemoteProcEffect;
         const collected = yield* Stream.runCollect(Stream.take(proc.status.changes, 1));
         const snap = Array.from(collected)[0];
         expect(snap?.supervising).toBe(true);
@@ -112,7 +114,7 @@ it("effect crosses the wire and runs the server-side worker once", () =>
       let ran = 0;
       yield* withServer({ effect: Effect.sync(() => { ran += 1; }) }, (_port) =>
         Effect.gen(function* () {
-          const proc = yield* RemoteProc;
+          const proc = yield* RemoteProcEffect;
           yield* proc.run;
         }));
       expect(ran).toBe(1);

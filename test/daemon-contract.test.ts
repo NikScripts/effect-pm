@@ -1,6 +1,8 @@
-import { DateTime, Duration, Effect, Ref } from "effect";
+import { DateTime, Duration, Effect, Layer, Ref } from "effect";
 import { expect, it } from "vitest";
 import * as Daemon from "../src/Daemon";
+import * as Hyperlink from "../src/Hyperlink";
+import * as Store from "../src/Store";
 
 // A managed daemon as a toolkit resource — driven through the same `yield* Tag` surface a
 // remote consumer uses (only the provided layer differs). A base `Daemon.Tag` is armed and runs
@@ -11,6 +13,23 @@ class ArmedDaemon extends Daemon.Tag<ArmedDaemon>()("test/daemon-contract/Armed"
 class ScheduledDaemon extends Daemon.Tag<ScheduledDaemon>()(
   "test/daemon-contract/Scheduled",
 ).pipe(Daemon.schedule([])) {}
+
+type ScheduledDaemonService = Effect.Success<typeof ScheduledDaemon>;
+const ScheduledDaemonEffect: Effect.Effect<
+  ScheduledDaemonService,
+  never,
+  ScheduledDaemon
+> = ScheduledDaemon;
+const scheduledDaemonLayer = <A>(
+  effect: Effect.Effect<A, never, never>,
+): Layer.Layer<
+  | ScheduledDaemon
+  | ScheduledDaemonService
+  | Hyperlink.Local<ScheduledDaemonService>
+  | Store.Storage,
+  never,
+  never
+> => Daemon.layerMemory(ScheduledDaemon, { effect });
 
 it("with the default schedule a daemon arms and runs its effect immediately", () =>
   Effect.runPromise(
@@ -35,7 +54,7 @@ it("effect runs the worker once (disarmed via an empty inline schedule)", () =>
     Effect.gen(function* () {
       const ran = yield* Ref.make(0);
       yield* Effect.gen(function* () {
-        const daemon = yield* ScheduledDaemon;
+        const daemon = yield* ScheduledDaemonEffect;
         const before = yield* daemon.status.get;
         expect(before.supervising).toBe(true);
         expect(before.armed).toBe(false);
@@ -53,7 +72,7 @@ it("effect runs the worker once (disarmed via an empty inline schedule)", () =>
         expect(typeof after.lastRunDurationMillis).toBe("number");
       }).pipe(
         Effect.provide(
-          Daemon.layerMemory(ScheduledDaemon, { effect: Ref.update(ran, (n) => n + 1) }),
+          scheduledDaemonLayer(Ref.update(ran, (n) => n + 1)),
         ),
       );
     }),
@@ -62,7 +81,7 @@ it("effect runs the worker once (disarmed via an empty inline schedule)", () =>
 it("schedule round-trips through set/add/clear and the reactive read", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const daemon = yield* ScheduledDaemon;
+      const daemon = yield* ScheduledDaemonEffect;
       const future = DateTime.makeUnsafe(4_102_444_800_000); // 2100-01-01, fixed far-future
 
       yield* daemon.schedule.set([{ id: "e1", startAt: future }]);
@@ -76,7 +95,7 @@ it("schedule round-trips through set/add/clear and the reactive read", () =>
       yield* daemon.schedule.clear;
       entries = yield* daemon.schedule.entries.get;
       expect(entries).toEqual([]);
-    }).pipe(Effect.provide(Daemon.layerMemory(ScheduledDaemon, { effect: Effect.void }))),
+    }).pipe(Effect.provide(scheduledDaemonLayer(Effect.void))),
   ));
 
 it("stop/start toggles supervision (observable via status.supervising)", () =>

@@ -15,7 +15,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Layer, Schema } from "effect";
 import { Command } from "effect/unstable/cli";
 import * as Hyperlink from "../../src/Hyperlink";
-import { makeHyperlinkCli } from "../../src/cli";
+import { makeHyperlinkCli, type CliHyperlinkTag } from "../../src/cli";
 
 class Counter extends Hyperlink.Tag<Counter>()("Counter", {
   current: Hyperlink.effect(Schema.Number),
@@ -35,7 +35,7 @@ const counterLayer = Hyperlink.layer(Counter, {
     }),
 });
 
-const cli = makeHyperlinkCli({ counter: Counter }, "counter-cli");
+const cli = makeHyperlinkCli({ counter: Counter as never as CliHyperlinkTag }, "counter-cli");
 
 const program = Command.runWith(cli, { version: "0.0.0" })(
   process.argv.slice(2),
@@ -45,4 +45,4 @@ const program = Command.runWith(cli, { version: "0.0.0" })(
 
 // Boundary: the command's requirement is loose (it's built from a dynamic record
 // of tags); the resource + node layers above fully provide it at run time.
-NodeRuntime.runMain(program as Effect.Effect<void, unknown>);
+NodeRuntime.runMain(program as Effect.Effect<void, never>);

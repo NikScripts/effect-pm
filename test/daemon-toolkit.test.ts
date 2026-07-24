@@ -1,6 +1,8 @@
-import { DateTime, Duration, Effect, Option, Ref, Schema } from "effect";
+import { DateTime, Duration, Effect, Layer, Option, Ref, Schema } from "effect";
 import { expect, it } from "vitest";
 import * as Daemon from "../src/Daemon";
+import * as Hyperlink from "../src/Hyperlink";
+import * as Store from "../src/Store";
 
 // The revamped `Daemon` toolkit: one namespace whose light contract (`Tag` / `Schedule` / `schedule`
 // / `result`) is shaped by pipeable combinators and driven by the heavy layers (`layer` / `serve`).
@@ -16,12 +18,31 @@ class BaseDaemon extends Daemon.Tag<BaseDaemon>()("test/toolkit/Base") {}
 class SchedDaemon extends Daemon.Tag<SchedDaemon>()("test/toolkit/Sched").pipe(
   Daemon.schedule([]),
 ) {}
+type SchedDaemonService = Effect.Success<typeof SchedDaemon>;
+const SchedDaemonEffect: Effect.Effect<SchedDaemonService, never, SchedDaemon> =
+  SchedDaemon;
+const schedDaemonLayer = <A>(
+  effect: Effect.Effect<A, never, never>,
+): Layer.Layer<
+  SchedDaemon | SchedDaemonService | Hyperlink.Local<SchedDaemonService> | Store.Storage,
+  never,
+  never
+> => Daemon.layerMemory(SchedDaemon, { effect });
 
 // value-returning + disarmed inline schedule, so `result` is observable before/after a manual run.
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 class Priced extends Daemon.Tag<Priced>()("test/toolkit/Priced", { success: Price }).pipe(
   Daemon.schedule([]),
 ) {}
+type PricedService = Effect.Success<typeof Priced>;
+const PricedEffect: Effect.Effect<PricedService, never, Priced> = Priced;
+const pricedLayer = (
+  effect: Effect.Effect<typeof Price.Type, never, never>,
+): Layer.Layer<
+  Priced | PricedService | Hyperlink.Local<PricedService> | Store.Storage,
+  never,
+  never
+> => Daemon.layerMemory(Priced, { effect });
 
 // standalone reusable window manager.
 class Windows extends Daemon.Schedule<Windows>()("test/toolkit/Windows") {}
@@ -60,7 +81,7 @@ it("stop/start toggles supervision (observable via status.supervising)", () =>
 it("inline schedule verb group round-trips through set/add/clear and the entries ref", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const daemon = yield* SchedDaemon;
+      const daemon = yield* SchedDaemonEffect;
       // seeded empty ⇒ disarmed, no entries
       expect((yield* daemon.status.get).armed).toBe(false);
       expect(yield* daemon.schedule.entries.get).toEqual([]);
@@ -76,13 +97,13 @@ it("inline schedule verb group round-trips through set/add/clear and the entries
 
       yield* daemon.schedule.clear;
       expect(yield* daemon.schedule.entries.get).toEqual([]);
-    }).pipe(Effect.provide(Daemon.layerMemory(SchedDaemon, { effect: Effect.void }))),
+    }).pipe(Effect.provide(schedDaemonLayer(Effect.void))),
   ));
 
 it("result captures the latest success (absent before the first run)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const daemon = yield* Priced;
+      const daemon = yield* PricedEffect;
       // disarmed inline schedule ⇒ nothing has run yet ⇒ result is absent
       expect(Option.isNone(yield* daemon.result.get)).toBe(true);
 
@@ -95,9 +116,7 @@ it("result captures the latest success (absent before the first run)", () =>
       }
     }).pipe(
       Effect.provide(
-        Daemon.layerMemory(Priced, {
-          effect: Effect.succeed({ symbol: "AAPL", usd: 42 }),
-        }),
+        pricedLayer(Effect.succeed({ symbol: "AAPL", usd: 42 })),
       ),
     ),
   ));

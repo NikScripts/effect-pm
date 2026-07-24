@@ -21,7 +21,7 @@ class AppStore extends Store.Service<AppStore>("@examples/SqliteStore")(
 
 const filename = ".hyperlink-ts/examples-store.sqlite";
 
-const program = Effect.gen(function* () {
+const program: Effect.Effect<void, never, never> = Effect.gen(function* () {
   const handle = yield* AppStore;
   yield* handle.readings.append({ value: 21 });
   yield* handle.readings.append({ value: 70 });

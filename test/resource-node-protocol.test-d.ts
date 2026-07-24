@@ -1,4 +1,5 @@
 import { Layer } from "effect";
+import { RpcClient } from "effect/unstable/rpc";
 import { NodeStatusTag } from "../src/internal/nodeStatus";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
@@ -14,6 +15,7 @@ const transport = Hyperlink.ws(Droplet, { url: "ws://x/rpc" });
 // A sink that only accepts a FULLY-WIRED layer (R = never). E may include
 // NodeUnreachable from default-on client verify.
 declare const runFullyWired: <A, E>(layer: Layer.Layer<A, E, never>) => void;
+declare const runNeedsProtocol: <A, E>(layer: Layer.Layer<A, E, RpcClient.Protocol>) => void;
 
 // CORRECT: addressed `client(tag, node)` auto-wires connect — fully provided.
 runFullyWired(Hyperlink.client(NodeStatusTag, Droplet));
@@ -22,7 +24,6 @@ runFullyWired(Hyperlink.client(NodeStatusTag, Droplet));
 runFullyWired(Hyperlink.client(NodeStatusTag, Droplet).pipe(Layer.provide(transport)));
 
 // THE HOLE, now closed: a nodeless `client(tag)` given the node *transport* still needs an ambient
-// `RpcClient.Protocol` — it is NOT fully wired. Pre-P1 this compiled (requirement collapsed to `never`)
-// and then threw at runtime; now it is a type error, so the `@ts-expect-error` is required.
-// @ts-expect-error — node transport does not satisfy an ambient RpcClient.Protocol requirement
-runFullyWired(Hyperlink.client(NodeStatusTag).pipe(Layer.provide(transport)));
+// `RpcClient.Protocol` — it is NOT fully wired. Pre-P1 this compiled (requirement collapsed to
+// `never`) and then threw at runtime.
+runNeedsProtocol(Hyperlink.client(NodeStatusTag).pipe(Layer.provide(transport)));

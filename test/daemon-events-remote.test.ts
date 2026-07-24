@@ -28,6 +28,22 @@ class RemoteSuccessProc extends Daemon.Tag<RemoteSuccessProc>()(
   { success: Price },
 ).pipe(Daemon.schedule([])) {}
 
+const RemoteEventsProcEffect: Effect.Effect<
+  Effect.Success<typeof RemoteEventsProc>,
+  never,
+  RemoteEventsProc
+> = RemoteEventsProc;
+const RemoteFailProcEffect: Effect.Effect<
+  Effect.Success<typeof RemoteFailProc>,
+  never,
+  RemoteFailProc
+> = RemoteFailProc;
+const RemoteSuccessProcEffect: Effect.Effect<
+  Effect.Success<typeof RemoteSuccessProc>,
+  never,
+  RemoteSuccessProc
+> = RemoteSuccessProc;
+
 const httpProtocol = (port: number) =>
   RpcClient.layerProtocolHttp({ url: `http://127.0.0.1:${port}/rpc` }).pipe(
     Layer.provide(RpcSerialization.layerNdjson),
@@ -35,10 +51,10 @@ const httpProtocol = (port: number) =>
   );
 
 /** Test harness — concrete Tags are not assignable under Daemon.serve's overloaded erasure. */
-const withDaemonHttp = (
-  tag: any,
-  config: Daemon.DaemonLayerConfig<any, any, any>,
-  use: (port: number) => Effect.Effect<any, any, any>,
+const withDaemonHttp = <Self, S extends Hyperlink.Spec, A, E, B, E2>(
+  tag: Hyperlink.HyperlinkTag<Self, S>,
+  config: Daemon.DaemonLayerConfig<A, E, never>,
+  use: (port: number) => Effect.Effect<B, E2, Self>,
 ) => {
   const server = Node.httpServer([Daemon.serveMemory(tag, config)]).pipe(
     Layer.provideMerge(NodeHttpServer.layerTest),
@@ -59,7 +75,7 @@ describe("Daemon.events — remote HTTP", () => {
   it.live("Started → Completed over Hyperlink.client after remote run", () =>
     withDaemonHttp(RemoteEventsProc, { effect: Effect.void }, (_port) =>
       Effect.gen(function* () {
-        const proc = yield* RemoteEventsProc;
+        const proc = yield* RemoteEventsProcEffect;
         const collected = yield* Effect.forkChild(
           Stream.runCollect(Stream.take(proc.events, 2)),
         );
@@ -77,7 +93,7 @@ describe("Daemon.events — remote HTTP", () => {
       { effect: Effect.fail({ _tag: "FetchError" as const, status: 503 }) },
       (_port) =>
         Effect.gen(function* () {
-          const proc = yield* RemoteFailProc;
+          const proc = yield* RemoteFailProcEffect;
           const collected = yield* Effect.forkChild(
             Stream.runCollect(
               Stream.takeUntil(proc.events, (e) => e._tag === "Failed"),
@@ -107,7 +123,7 @@ describe("Daemon.events — remote HTTP", () => {
       { effect: Effect.succeed({ symbol: "AAPL", usd: 42 }) },
       (_port) =>
         Effect.gen(function* () {
-          const proc = yield* RemoteSuccessProc;
+          const proc = yield* RemoteSuccessProcEffect;
           const collected = yield* Effect.forkChild(
             Stream.runCollect(
               Stream.takeUntil(proc.events, (e) => e._tag === "Completed"),

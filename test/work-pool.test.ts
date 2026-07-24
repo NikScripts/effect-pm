@@ -64,6 +64,17 @@ const waitUntilCount = (
     }
   });
 
+type StringEnqueueContext = {
+  readonly add: (
+    items: string | ReadonlyArray<string>,
+  ) => Effect.Effect<void, never, never>;
+};
+
+const enqueueStrings = (
+  ctx: StringEnqueueContext,
+  items: ReadonlyArray<string>,
+) => ctx.add(items);
+
 // Counts `Drained` events off the queue's events stream — the replacement for the old
 // `onDrained` hook probe used by the autoStart cold-start tests.
 const forkDrainCounter = <T, E, EE, R>(
@@ -339,7 +350,7 @@ describe("WorkPool.make — basic processing", () => {
           ),
           // e.cause is Cause<Boom> — reconstruct the failed effect and catchTag on it, fully typed
           (e) =>
-            Effect.failCause(e.cause).pipe(
+            Effect.failCause<Boom>(e.cause).pipe(
               Effect.catchTag("Boom", (err) =>
                 Ref.update(caught, (a) => [...a, err.n]),
               ),
@@ -703,15 +714,17 @@ describe("WorkPool.make — self-enqueue guard", () => {
   it.live("warns and drops when effect tries to self-enqueue", () =>
     Effect.gen(function* () {
       const processed = yield* Ref.make<Array<string>>([]);
-      const queue = yield* WorkPool.make({
-        name: "test-self-enqueue",
-        effect: (item: string, ctx) =>
+      const queue = yield* WorkPool.make(
+        (item: string, ctx) =>
           Effect.gen(function* () {
-            yield* ctx.add([item]);
+            yield* enqueueStrings(ctx as never as StringEnqueueContext, [item]);
             yield* Ref.update(processed, (arr) => [...arr, item]);
           }),
-        ...fastConfig,
-      });
+        {
+          name: "test-self-enqueue",
+          ...fastConfig,
+        },
+      );
       yield* queue.add(["hello"]);
       yield* waitUntilCompleted(queue, 1);
       yield* Effect.sleep(Duration.millis(30));
@@ -725,17 +738,19 @@ describe("WorkPool.make — self-enqueue guard", () => {
   it.live("allows enqueue of different items from effect", () =>
     Effect.gen(function* () {
       const processed = yield* Ref.make<Array<string>>([]);
-      const queue = yield* WorkPool.make({
-        name: "test-derived-enqueue",
-        effect: (item: string, ctx) =>
+      const queue = yield* WorkPool.make(
+        (item: string, ctx) =>
           Effect.gen(function* () {
             yield* Ref.update(processed, (arr) => [...arr, item]);
             if (item === "parent") {
-              yield* ctx.add(["child-1", "child-2"]);
+              yield* enqueueStrings(ctx as never as StringEnqueueContext, ["child-1", "child-2"]);
             }
           }),
-        concurrency: 1,
-      });
+        {
+          name: "test-derived-enqueue",
+          concurrency: 1,
+        },
+      );
       yield* queue.add(["parent"]);
       yield* waitUntilCompleted(queue, 3);
       const result = yield* Ref.get(processed);
@@ -1237,7 +1252,7 @@ describe("WorkPool.make — Hyperlink.runForEachTag over .events", () => {
           Stream.take(3),
           Hyperlink.runForEachTag({
             Failed: (e) =>
-              Effect.failCause(e.cause).pipe(
+              Effect.failCause<Boom>(e.cause).pipe(
                 Effect.catchTag("Boom", (err) =>
                   Ref.update(caught, (a) => [...a, err.n]),
                 ),

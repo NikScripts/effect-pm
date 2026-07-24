@@ -10,6 +10,16 @@ import * as Store from "../src/Store";
 class LogDaemon extends Daemon.Tag<LogDaemon>()(
   "test/daemon-log-history/Daemon",
 ).pipe(Daemon.schedule([])) {}
+type LogDaemonService = Effect.Success<typeof LogDaemon>;
+const LogDaemonEffect: Effect.Effect<LogDaemonService, never, LogDaemon> =
+  LogDaemon;
+const logDaemonLayer = <A>(
+  effect: Effect.Effect<A, never, never>,
+): Layer.Layer<
+  LogDaemon | LogDaemonService | Hyperlink.Local<LogDaemonService> | Store.Storage,
+  never,
+  never
+> => Daemon.layerMemory(LogDaemon, { effect });
 
 const logDaemonRegistration = Daemon.store(LogDaemon);
 
@@ -20,7 +30,7 @@ class AppStore extends Store.Service<AppStore>("@test/daemon-log-history/Store")
 it("Hyperlink.logs reads back daemon worker logs", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const daemon = yield* LogDaemon;
+      const daemon = yield* LogDaemonEffect;
       const { query } = yield* Hyperlink.logs(LogDaemon);
       yield* daemon.run;
       yield* Effect.gen(function* () {
@@ -45,7 +55,7 @@ it("Hyperlink.logs reads back daemon worker logs", () =>
 it("Hyperlink.logs query is empty without store registration (live relay only)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const daemon = yield* LogDaemon;
+      const daemon = yield* LogDaemonEffect;
       const { query } = yield* Hyperlink.logs(LogDaemon);
       expect(yield* query({})).toEqual([]);
       yield* daemon.run;
@@ -53,9 +63,7 @@ it("Hyperlink.logs query is empty without store registration (live relay only)",
       expect(yield* query({})).toEqual([]);
     }).pipe(
       Effect.provide(
-        Daemon.layerMemory(LogDaemon, {
-          effect: Effect.logInfo("daemon tick"),
-        }).pipe(Layer.provide(Logs.layer)),
+        logDaemonLayer(Effect.logInfo("daemon tick")).pipe(Layer.provide(Logs.layer)),
       ),
       Effect.scoped,
     ),

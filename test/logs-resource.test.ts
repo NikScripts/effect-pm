@@ -19,6 +19,16 @@ class LogQueue extends WorkPool.Tag<LogQueue>()("test/logs-resource/Q", {
 }) {}
 
 class LogDaemon extends Daemon.Tag<LogDaemon>()("test/logs-resource/Daemon").pipe(Daemon.schedule([])) {}
+type LogDaemonService = Effect.Success<typeof LogDaemon>;
+const LogDaemonEffect: Effect.Effect<LogDaemonService, never, LogDaemon> =
+  LogDaemon;
+const logDaemonLayer = <A>(
+  effect: Effect.Effect<A, never, never>,
+): Layer.Layer<
+  LogDaemon | LogDaemonService | Hyperlink.Local<LogDaemonService> | Store.Storage,
+  never,
+  never
+> => Daemon.layerMemory(LogDaemon, { effect });
 
 class EnvNode extends Node.Tag<EnvNode>()(testBillingNodeKey) {}
 
@@ -68,7 +78,7 @@ it("Hyperlink.logs surfaces queue worker lines on stream + query", () =>
 it("Hyperlink.logs surfaces process worker lines on query", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const daemon = yield* LogDaemon;
+      const daemon = yield* LogDaemonEffect;
       const { query } = yield* Hyperlink.logs(LogDaemon);
       yield* daemon.run;
       yield* Effect.gen(function* () {
@@ -91,7 +101,7 @@ it("Hyperlink.logs surfaces process worker lines on query", () =>
 it("Hyperlink.logs query is empty without store registration (live relay only)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const daemon = yield* LogDaemon;
+      const daemon = yield* LogDaemonEffect;
       const { query } = yield* Hyperlink.logs(LogDaemon);
       expect(yield* query({})).toEqual([]);
       yield* daemon.run;
@@ -99,9 +109,7 @@ it("Hyperlink.logs query is empty without store registration (live relay only)",
       expect(yield* query({})).toEqual([]);
     }).pipe(
       Effect.provide(
-        Daemon.layerMemory(LogDaemon, {
-          effect: Effect.logInfo("daemon tick"),
-        }).pipe(Layer.provide(Logs.layer)),
+        logDaemonLayer(Effect.logInfo("daemon tick")).pipe(Layer.provide(Logs.layer)),
       ),
       Effect.scoped,
     ),

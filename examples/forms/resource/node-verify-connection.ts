@@ -41,4 +41,4 @@ const program = Effect.gen(function* () {
   yield* Effect.logInfo(`verify ok — ${url} serves Emails ready`)
 }).pipe(Effect.provide(Server), Effect.scoped)
 
-NodeRuntime.runMain(program)
+NodeRuntime.runMain(program as Effect.Effect<void, Effect.Error<typeof program>, never>)

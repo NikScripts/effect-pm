@@ -25,27 +25,32 @@ class Warming extends Hyperlink.Tag<Warming>()("verify/Warming", {
 ) {}
 
 // Run `check(port)` against a live test server (its layer is inlined per-`it` so its type infers).
-const onServer = (
-  server: Layer.Layer<VQueue | HttpServer.HttpServer, unknown, never>,
-  check: (port: number) => Effect.Effect<unknown, unknown, never>,
-) =>
+const onServer = <ROut, ES, RIn, A, E>(
+  server: Layer.Layer<ROut | HttpServer.HttpServer, ES, RIn>,
+  check: (port: number) => Effect.Effect<A, E, never>,
+): Effect.Effect<A, E | ES, RIn> =>
   Effect.gen(function* () {
     const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
     const port = address._tag === "TcpAddress" ? address.port : 0;
     return yield* check(port);
   }).pipe(Effect.provide(server), Effect.scoped);
 
-const onWarmingServer = (
-  check: (port: number) => Effect.Effect<unknown, unknown, never>,
-) => {
-  const server = Node.httpServer([
-    Hyperlink.serve(Warming, { ping: Effect.succeed("pong") }),
-  ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
+const warmingServer = Node.httpServer([
+  Hyperlink.serve(Warming, { ping: Effect.succeed("pong") }),
+]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
+
+const onWarmingServer = <A, E>(
+  check: (port: number) => Effect.Effect<A, E, never>,
+): Effect.Effect<
+  A,
+  E | Layer.Error<typeof warmingServer>,
+  Layer.Services<typeof warmingServer>
+> => {
   return Effect.gen(function* () {
     const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
     const port = address._tag === "TcpAddress" ? address.port : 0;
     return yield* check(port);
-  }).pipe(Effect.provide(server), Effect.scoped);
+  }).pipe(Effect.provide(warmingServer), Effect.scoped);
 };
 
 const wsSrv = Node.wsServer([
