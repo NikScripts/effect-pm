@@ -356,14 +356,13 @@ export const makeGateHandleEffect = <T, A, E>(
       ),
       storageContext,
     );
-    const gateStoreEffects: unknown = storeEffects;
     const store = yield* makeGateStoreContext({
       resourceId,
       scopeKey,
       tag: config.tag,
-      storeEffects: gateStoreEffects as {
-        readonly fact: { readonly append: (row: unknown) => Effect.Effect<void, never, never> };
-        readonly state: { readonly append: (change: GateStateChange) => Effect.Effect<void, never, never> };
+      storeEffects: storeEffects as {
+        readonly fact: { readonly append: (row: unknown) => Effect.Effect<void> };
+        readonly state: { readonly append: (change: GateStateChange) => Effect.Effect<void> };
       },
     });
     const runSeqRef = yield* Ref.make(0);

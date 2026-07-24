@@ -16,7 +16,6 @@ import type { Predicate } from "effect";
 import { LogAnnotationKeys } from "../../LogContext";
 import * as LogEntry from "../../LogEntry";
 import type { LogEntry as LogEntryT } from "../../LogEntry";
-import type { StoreJournalDecodeError, StoreWriteError } from "../store/errors";
 import type { NormalizedStoreRegistration } from "../store/registrationNormalize";
 import { hasImplicitLogShape, IMPLICIT_LOGS_SHAPE_KEY } from "../store/logShapes";
 import type { StoreLogLevel } from "../store/types";
@@ -56,10 +55,10 @@ export interface LogShapeHandle {
   readonly [IMPLICIT_LOGS_SHAPE_KEY]: {
     readonly append: (
       row: LogEntryT | ReadonlyArray<LogEntryT>,
-    ) => Effect.Effect<void, StoreWriteError>;
+    ) => Effect.Effect<void, unknown>;
     readonly read: (payload?: {
       readonly limit?: number;
-    }) => Effect.Effect<ReadonlyArray<LogEntryT>, StoreJournalDecodeError>;
+    }) => Effect.Effect<ReadonlyArray<LogEntryT>, unknown>;
   };
 }
 

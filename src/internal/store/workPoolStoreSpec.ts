@@ -268,28 +268,24 @@ export const makeEngineQueueStoreContract = <Item extends Schema.Top>(
     }),
   );
   return Store.extend(
-    ({ event }) => {
-      const appendEvent = (value: typeof eventSchema.Type): Effect.Effect<void, NonNullable<unknown>> =>
-        event.append(value) as Effect.Effect<void, NonNullable<unknown>>;
-      return {
+    ({ event }) => ({
       enqueued: (entries: ReadonlyArray<Entry>, priority: Priority, batchId?: string) =>
-        appendEvent({
+        event.append({
           _tag: "Enqueued",
           entries,
           priority,
           ...(batchId !== undefined ? { batchId } : {}),
         }),
-      started: (entry: Entry) => appendEvent({ _tag: "Started", entry }),
+      started: (entry: Entry) => event.append({ _tag: "Started", entry }),
       completed: (entry: Entry, success: SuccessValue, elapsed: Duration.Duration) =>
-        appendEvent({ _tag: "Completed", entry, success, elapsed }),
+        event.append({ _tag: "Completed", entry, success, elapsed }),
       failed: (entry: Entry, cause: FailCause, elapsed: Duration.Duration) =>
-        appendEvent({ _tag: "Failed", entry, cause, elapsed }),
+        event.append({ _tag: "Failed", entry, cause, elapsed }),
       retryScheduled: (entry: Entry, cause: FailCause, nextAttempt: number) =>
-        appendEvent({ _tag: "RetryScheduled", entry, cause, nextAttempt }),
+        event.append({ _tag: "RetryScheduled", entry, cause, nextAttempt }),
       retryExhausted: (entry: Entry, cause: FailCause) =>
-        appendEvent({ _tag: "RetryExhausted", entry, cause }),
-      };
-    },
+        event.append({ _tag: "RetryExhausted", entry, cause }),
+    }),
     base,
   );
 };

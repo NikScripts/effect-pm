@@ -141,8 +141,6 @@ export {
   QueueMissingItemSchemaError,
 } from "./workPoolSchema";
 
-type ErasedChannel = NonNullable<unknown>;
-
 // ============================================================================
 // Public Types
 // ============================================================================
@@ -1675,26 +1673,12 @@ const makeQueueEffectWithoutSchema = <
   never,
   Scope.Scope | InferQueueWorkerRequirements<C>
 > =>
-  buildQueueEngine<
-    InferQueueItem<C>,
-    InferQueueWorkerError<C>,
-    never,
-    InferQueueWorkerRequirements<C>
-  >({
+  buildQueueEngine({
     config,
     validateForEnqueue: (items, _operation) => Effect.succeed(items),
     encodeForRelease: undefined,
     persistCodec: undefined,
-  }) as Effect.Effect<
-    EngineQueueHandle<
-      InferQueueItem<C>,
-      InferQueueWorkerError<C>,
-      never,
-      InferQueueWorkerRequirements<C>
-    >,
-    never,
-    Scope.Scope | InferQueueWorkerRequirements<C>
-  >;
+  });
 
 const makeQueueEffectWithSchema = <
   const C extends WorkPoolConfigWithItemSchema<any, any, any, any>,
@@ -1749,45 +1733,29 @@ const makeQueueEffectWithSchema = <
         ),
     });
   };
-  return buildQueueEngine<
-    InferQueueItem<C>,
-    InferQueueWorkerError<C>,
-    QueueEnqueueErrors,
-    InferQueueWorkerRequirements<C>,
-    InferQueueWorkerSuccess<C>
-  >({
+  return buildQueueEngine({
     config,
     validateForEnqueue: (items, operation) =>
       validateItemsWithSchema(queueName, config.itemSchema, codecId, items, operation),
     encodeForRelease,
     persistCodec: { encode: encodeItem, decode: Schema.decodeUnknownExit(config.itemSchema) },
-  }) as Effect.Effect<
-    EngineQueueHandle<
-      InferQueueItem<C>,
-      InferQueueWorkerError<C>,
-      QueueEnqueueErrors,
-      InferQueueWorkerRequirements<C>,
-      InferQueueWorkerSuccess<C>
-    >,
-    never,
-    Scope.Scope | InferQueueWorkerRequirements<C>
-  >;
+  });
 };
 
 const makeQueueEffectFromConfig = (
   config: WorkPoolConfig<any, any, any, any>,
 ): Effect.Effect<
-  EngineQueueHandle<unknown, ErasedChannel, ErasedChannel, ErasedChannel, unknown>,
+  EngineQueueHandle<unknown, unknown, unknown, unknown, unknown>,
   never,
-  Scope.Scope | ErasedChannel
+  // Internal erased boundary: the worker's requirement is `any` here (the config is
+  // `any`-typed at this dispatch). `any` — not `unknown` — is the honest erasure: it stays
+  // assignable both ways, and the precise `R` is preserved on the public `makeQueueEffect`
+  // overloads. (`unknown` would assert an unprovidable service → `missingEffectContext`.)
+  Scope.Scope | any
 > =>
-  (hasItemSchema(config)
+  hasItemSchema(config)
     ? makeQueueEffectWithSchema(config)
-    : makeQueueEffectWithoutSchema(config)) as Effect.Effect<
-    EngineQueueHandle<unknown, ErasedChannel, ErasedChannel, ErasedChannel, unknown>,
-    never,
-    Scope.Scope | ErasedChannel
-  >;
+    : makeQueueEffectWithoutSchema(config);
 
 function makeQueueEffect<
   F extends QueueWorkerEffect<any, any, any, any>,
@@ -2193,23 +2161,21 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
       store: QueueStoreWriter<T, E, A>,
       event: QueueEvent<T, E, A>,
     ): Effect.Effect<void> => {
-      const write = (effect: Effect.Effect<void, ErasedChannel>): Effect.Effect<void> =>
-        Effect.orDie(effect);
       switch (event._tag) {
         case "Enqueued":
-          return write(store.enqueued(event.entries, event.priority, event.batchId) as Effect.Effect<void, ErasedChannel>);
+          return store.enqueued(event.entries, event.priority, event.batchId);
         case "Started":
-          return write(store.started(event.entry) as Effect.Effect<void, ErasedChannel>);
+          return store.started(event.entry);
         case "Completed":
-          return write(store.completed(event.entry, event.success, event.elapsed) as Effect.Effect<void, ErasedChannel>);
+          return store.completed(event.entry, event.success, event.elapsed);
         case "Failed":
-          return write(store.failed(event.entry, event.cause, event.elapsed) as Effect.Effect<void, ErasedChannel>);
+          return store.failed(event.entry, event.cause, event.elapsed);
         case "RetryScheduled":
-          return write(store.retryScheduled(event.entry, event.cause, event.nextAttempt) as Effect.Effect<void, ErasedChannel>);
+          return store.retryScheduled(event.entry, event.cause, event.nextAttempt);
         case "RetryExhausted":
-          return write(store.retryExhausted(event.entry, event.cause) as Effect.Effect<void, ErasedChannel>);
+          return store.retryExhausted(event.entry, event.cause);
         default:
-          return write(store.record(event) as Effect.Effect<void, ErasedChannel>);
+          return store.record(event);
       }
     };
 
@@ -3424,7 +3390,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
 const workPoolLayerFromConfig = (
   tag: Context.Key<any, EngineQueueHandle<any, any, any, any, any>>,
   config: WorkPoolConfig<any, any, any, any>,
-): Layer.Layer<ErasedChannel, never, ErasedChannel> => {
+): Layer.Layer<any, never, any> => {
   const resourceId = config.name ?? "anonymous";
   const defaultSpec = { ...config, name: resourceId };
   return layerWithQueueRateLimiterIfNeeded(
@@ -3434,7 +3400,7 @@ const workPoolLayerFromConfig = (
       ),
     ),
     defaultSpec,
-  ) as Layer.Layer<ErasedChannel, never, ErasedChannel>;
+  );
 };
 
 function workPoolLayer<
@@ -3465,7 +3431,7 @@ function workPoolLayer(
   tag: Context.Key<any, EngineQueueHandle<any, any, any, any>>,
   effectOrConfig: QueueWorkerEffect<any, any, any, any> | WorkPoolConfig<any, any, any>,
   options?: WorkPoolOptionsWithoutItemSchema<any, any, any> | WorkPoolOptionsWithItemSchema<any, any, any>,
-): Layer.Layer<ErasedChannel, never, ErasedChannel> {
+): Layer.Layer<any, never, any> {
   if (typeof effectOrConfig === "function") {
     return workPoolLayerFromConfig(tag, { ...(options ?? {}), effect: effectOrConfig });
   }

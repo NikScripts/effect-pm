@@ -77,16 +77,14 @@ export const CUSTOM_APPEND_ALIAS = "Store/customAppendAlias" as const;
 export const CUSTOM_EFFECT = "Store/customEffect" as const;
 export const CUSTOM_FN = "Store/customFn" as const;
 
-type ErasedChannel = NonNullable<unknown>;
-
 /** Compiled custom method entry. @internal */
 export type CustomMethodEntry =
   | { readonly _tag: typeof CUSTOM_READ_ALIAS; readonly shapeKey: string }
   | { readonly _tag: typeof CUSTOM_APPEND_ALIAS; readonly shapeKey: string }
-  | { readonly _tag: typeof CUSTOM_EFFECT; readonly effect: Effect.Effect<unknown, ErasedChannel, ErasedChannel> }
+  | { readonly _tag: typeof CUSTOM_EFFECT; readonly effect: Effect.Effect<unknown, unknown, unknown> }
   | {
       readonly _tag: typeof CUSTOM_FN;
-      readonly fn: (payload: unknown) => Effect.Effect<unknown, ErasedChannel, ErasedChannel>;
+      readonly fn: (payload: unknown) => Effect.Effect<unknown>;
     };
 
 /** @internal */
@@ -475,18 +473,14 @@ const classifyCustomMethod = (
   if (alias !== undefined) {
     return alias;
   }
-  if (typeof value === "object" && value !== null && Effect.TypeId in value) {
-    const effectValue: unknown = value;
+  if (Effect.isEffect(value)) {
     return {
       _tag: CUSTOM_EFFECT,
-      effect: effectValue as Effect.Effect<unknown, ErasedChannel, ErasedChannel>,
+      effect: value as Effect.Effect<unknown, unknown, unknown>,
     };
   }
   if (typeof value === "function") {
-    return {
-      _tag: CUSTOM_FN,
-      fn: value as (payload: unknown) => Effect.Effect<unknown, ErasedChannel, ErasedChannel>,
-    };
+    return { _tag: CUSTOM_FN, fn: value as (payload: unknown) => Effect.Effect<unknown> };
   }
   throw new Error(
     `Store.contract: custom method "${methodName}" must be an Effect, an effect function, or a shape append/read alias`,

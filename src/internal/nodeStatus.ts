@@ -215,8 +215,8 @@ export const nodeStatusAccessors = (
     new NodeUnreachable({ node: NODE_STATUS_KEY, url: "node handle", cause });
   // One-shot read: build the per-node status client into a Context (scoped) and provide THAT — never
   // `Effect.provide(effect, Layer)` in a library internal (breaks scope lifetimes; strictEffectProvide).
-  const oneShot = <A, E>(
-    read: Effect.Effect<A, E, NodeStatusTag>,
+  const oneShot = <A>(
+    read: Effect.Effect<A, unknown, NodeStatusTag>,
   ): Effect.Effect<A, NodeUnreachable> =>
     Effect.scoped(
       Effect.flatMap(Layer.build(clientLayer), (ctx) => Effect.provide(read, ctx)),

@@ -38,12 +38,10 @@ import type { AnyLocalMethod, AnyMethod, FlatSpec } from "../Hyperlink";
  *
  * @public
  */
-type CliSpecCarrier = Parameters<typeof specOf>[0];
-
-export interface CliHyperlinkTag extends Effect.Effect<unknown, never, CliHyperlinkTag>, CliSpecCarrier {
+export type CliHyperlinkTag = Effect.Effect<unknown, never, unknown> & {
   readonly key: string;
   readonly description: string | undefined;
-}
+} & Parameters<typeof specOf>[0];
 
 // A spec entry is a runnable CLI verb when it's a wire method (`kind`: query/mutate) that
 // isn't a streaming read. Streams have no run-and-exit form; local methods aren't on the wire.

@@ -66,37 +66,6 @@ type ServerProtocol = (
   path: HttpRouter.PathInput,
 ) => Layer.Layer<RpcServer.Protocol, never, RpcSerialization.RpcSerialization | HttpRouter.HttpRouter>
 
-type ErasedChannel = NonNullable<unknown>
-
-const toServeList = (
-  layers: ReadonlyArray<Layer.Layer<never, ErasedChannel, ErasedChannel>>,
-): ServerServeList | undefined => {
-  const [first, ...rest] = layers;
-  return first === undefined ? undefined : [first, ...rest];
-}
-
-const isServeArray = (
-  value: unknown,
-): value is ReadonlyArray<Layer.Layer<never, ErasedChannel, ErasedChannel>> =>
-  Array.isArray(value);
-
-const isServeLayer = (
-  value: unknown,
-): value is Layer.Layer<never, ErasedChannel, ErasedChannel> =>
-  Layer.isLayer(value) === true;
-
-type ServerArg = Layer.Layer<never, ErasedChannel, ErasedChannel> | ServerServeList | HttpServerOptions | undefined;
-
-type ServerResult<Arg> = Arg extends Layer.Layer<never, infer E, infer R>
-  ? Layer.Layer<Layer.Success<Arg>, E, R | HttpServer.HttpServer>
-  : Arg extends ServerServeList
-    ? Layer.Layer<
-        Layer.Success<Arg[number]>,
-        Layer.Error<Arg[number]>,
-        Layer.Services<Arg[number]> | HttpServer.HttpServer
-      >
-    : Layer.Layer<never, never, Hyperlink.ServedHyperlinks | HttpServer.HttpServer>;
-
 const httpServerBase = (
   serverProtocol: ServerProtocol,
   serverKind: ProtocolKind,
@@ -152,11 +121,9 @@ const httpServerBase = (
         ...(inferredNodeKey !== undefined ? { nodeLogKey: inferredNodeKey } : {}),
       });
       const nodeTag = nodeEntry.tag;
-      const rawNodeImpl: unknown = nodeEntry.impl;
-      const nodeImplEffect: Effect.Effect<unknown> = Effect.isEffect(rawNodeImpl)
-        ? Effect.orDie(rawNodeImpl as Effect.Effect<unknown, ErasedChannel, never>)
-        : Effect.succeed(rawNodeImpl);
-      const nodeImpl = (yield* nodeImplEffect) as Record<string, unknown>;
+      const nodeImpl = (yield* (Effect.isEffect(nodeEntry.impl)
+        ? nodeEntry.impl
+        : Effect.succeed(nodeEntry.impl))) as Record<string, unknown>;
       const nodeFlat = Hyperlink.flattenImpl(nodeImpl, nodeTag[Hyperlink.specSym]);
       const nodeHandlers: Record<string, (payload: unknown) => unknown> = {};
       for (const [key, member] of Object.entries(nodeFlat)) {
@@ -169,10 +136,14 @@ const httpServerBase = (
       // Transport-agnostic server: `RpcServer.layer` requires the `RpcServer.Protocol` dependency;
       // `serverProtocol` (http for {@link httpServer}, websocket for {@link wsServer}) provides it — an
       // http POST handler or a ws upgrade — on the same router (`HttpRouter.serve` below).
-      const rpcAppLayer = (RpcServer.layer(merged as never) as Layer.Layer<never>).pipe(
+      // Dynamic RpcServer group — assign through `any` so the diagnostic does not walk the graph.
+      const rpcRaw: any = RpcServer.layer(merged);
+      const rpcAppLayer = (rpcRaw as Layer.Layer<never, never, never>).pipe(
         Layer.provide(
           nodeTag[Hyperlink.groupSym].toLayer(
-            nodeHandlers as never,
+            nodeHandlers as unknown as Parameters<
+              (typeof nodeTag)[typeof Hyperlink.groupSym]["toLayer"]
+            >[0],
           ),
         ),
         Layer.provide(serverProtocol(options?.path ?? "/rpc")),
@@ -248,39 +219,66 @@ const httpServerBase = (
  * @category servers
  * @public
  */
-export function httpServer<Arg extends ServerArg = undefined>(
-  servesOrOptions?: Arg,
+export function httpServer<Serve extends Layer.Layer<never, any, any>>(
+  serve: Serve,
+  options?: HttpServerOptions,
+): Layer.Layer<
+  Layer.Success<Serve>,
+  Layer.Error<Serve>,
+  Layer.Services<Serve> | HttpServer.HttpServer
+>;
+export function httpServer(
+  options?: HttpServerOptions,
+): Layer.Layer<never, never, Hyperlink.ServedHyperlinks | HttpServer.HttpServer>;
+export function httpServer<Serves extends ServerServeList>(
+  serves: Serves,
+  options?: HttpServerOptions,
+): Layer.Layer<
+  Layer.Success<Serves[number]>,
+  Layer.Error<Serves[number]>,
+  Layer.Services<Serves[number]> | HttpServer.HttpServer
+>;
+export function httpServer(
+  servesOrOptions?:
+    | Layer.Layer<never, any, any>
+    | ServerServeList
+    | ReadonlyArray<Layer.Layer<never, any, any>>
+    | HttpServerOptions,
   maybeOptions?: HttpServerOptions,
-): ServerResult<Arg> {
-  return serverImpl(Hyperlink.serverProtocolHttp, "Http", servesOrOptions, maybeOptions) as never;
+): Layer.Layer<never, any, any> {
+  return serverImpl(Hyperlink.serverProtocolHttp, "Http", servesOrOptions, maybeOptions);
 }
 
 // Shared body for {@link httpServer} / {@link wsServer} — identical wiring, differing only in the
 // server RPC protocol. The serves form bundles the boilerplate: provideMerge the serve layers (kept,
 // not pruned) + the shared registry, so the caller lists resources and provides only the platform (+
 // any shared dep). One serve layer or many — a single `Layer` is treated as a one-element list.
-function serverImpl<A = never, E = never, R = never>(
+function serverImpl(
   serverProtocol: ServerProtocol,
   serverKind: ProtocolKind,
-  servesOrOptions?: unknown,
+  servesOrOptions?:
+    | Layer.Layer<never, any, any>
+    | ServerServeList
+    | ReadonlyArray<Layer.Layer<never, any, any>>
+    | HttpServerOptions,
   maybeOptions?: HttpServerOptions,
-): Layer.Layer<A, E, R> {
-  const serves: ServerServeList | undefined = isServeArray(servesOrOptions)
-    ? toServeList(servesOrOptions)
-    : isServeLayer(servesOrOptions)
-      ? [servesOrOptions]
+): Layer.Layer<never, any, any> {
+  const serves = Array.isArray(servesOrOptions)
+    ? (servesOrOptions as unknown as ServerServeList)
+    : Layer.isLayer(servesOrOptions)
+      ? ([servesOrOptions] as unknown as ServerServeList)
       : undefined;
   if (serves !== undefined) {
     return httpServerBase(serverProtocol, serverKind, maybeOptions).pipe(
       Layer.provideMerge(mergeServeList(serves)),
       Layer.provide(Layer.fresh(Hyperlink.servedHyperlinksLayer)),
-    ) as never;
+    ) as Layer.Layer<never, any, any>;
   }
   return httpServerBase(
     serverProtocol,
     serverKind,
     servesOrOptions as HttpServerOptions | undefined,
-  ) as never;
+  ) as Layer.Layer<never, any, any>;
 }
 
 /**
@@ -301,14 +299,37 @@ function serverImpl<A = never, E = never, R = never>(
  * @category servers
  * @public
  */
-export function wsServer<Arg extends ServerArg = undefined>(
-  servesOrOptions?: Arg,
+export function wsServer<Serve extends Layer.Layer<never, any, any>>(
+  serve: Serve,
+  options?: HttpServerOptions,
+): Layer.Layer<
+  Layer.Success<Serve>,
+  Layer.Error<Serve>,
+  Layer.Services<Serve> | HttpServer.HttpServer
+>;
+export function wsServer(
+  options?: HttpServerOptions,
+): Layer.Layer<never, never, Hyperlink.ServedHyperlinks | HttpServer.HttpServer>;
+export function wsServer<Serves extends ServerServeList>(
+  serves: Serves,
+  options?: HttpServerOptions,
+): Layer.Layer<
+  Layer.Success<Serves[number]>,
+  Layer.Error<Serves[number]>,
+  Layer.Services<Serves[number]> | HttpServer.HttpServer
+>;
+export function wsServer(
+  servesOrOptions?:
+    | Layer.Layer<never, any, any>
+    | ServerServeList
+    | ReadonlyArray<Layer.Layer<never, any, any>>
+    | HttpServerOptions,
   maybeOptions?: HttpServerOptions,
-): ServerResult<Arg> {
+): Layer.Layer<never, any, any> {
   return serverImpl(
     Hyperlink.serverProtocolWebsocket,
     "WebSocket",
     servesOrOptions,
     maybeOptions,
-  ) as never;
+  );
 }

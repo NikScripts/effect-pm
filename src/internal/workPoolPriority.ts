@@ -58,8 +58,6 @@ import {
   type QueueStoreWriter,
 } from "./workPool";
 
-type ErasedChannel = NonNullable<unknown>;
-
 export type { WorkPoolPriorityStatus } from "./workPoolProjection";
 
 // ============================================================================
@@ -385,12 +383,7 @@ const makePriorityEffectWithoutSchema = <
   Effect.gen(function* () {
     const levels = levelResolution(config);
     const projection = buildPriorityProjectionFromConfig(config);
-    const engine = yield* buildQueueEngine<
-      InferQueueItem<C>,
-      InferQueueWorkerError<C>,
-      never,
-      InferQueueWorkerRequirements<C>
-    >({
+    const engine = yield* buildQueueEngine({
       config: {
         ...config,
         laneCount: levels.laneCount,
@@ -403,16 +396,7 @@ const makePriorityEffectWithoutSchema = <
       persistCodec: undefined,
     });
     return wrapWorkPoolPriorityHandle(engine, levels, projection);
-  }) as Effect.Effect<
-    WorkPoolPriorityHandle<
-      InferQueueItem<C>,
-      InferQueueWorkerError<C>,
-      never,
-      InferQueueWorkerRequirements<C>
-    >,
-    never,
-    Scope.Scope | InferQueueWorkerRequirements<C>
-  >;
+  });
 
 const makePriorityEffectWithSchema = <
   const C extends WorkPoolPriorityConfigWithItemSchema<any, any, any>,
@@ -484,12 +468,7 @@ const makePriorityEffectWithSchema = <
   return Effect.gen(function* () {
     const levels = levelResolution(config);
     const projection = buildPriorityProjectionFromConfig(config);
-    const engine = yield* buildQueueEngine<
-      InferQueueItem<C>,
-      InferQueueWorkerError<C>,
-      QueueEnqueueErrors,
-      InferQueueWorkerRequirements<C>
-    >({
+    const engine = yield* buildQueueEngine({
       config: {
         ...config,
         laneCount: levels.laneCount,
@@ -506,16 +485,7 @@ const makePriorityEffectWithSchema = <
       },
     });
     return wrapWorkPoolPriorityHandle(engine, levels, projection);
-  }) as Effect.Effect<
-    WorkPoolPriorityHandle<
-      InferQueueItem<C>,
-      InferQueueWorkerError<C>,
-      QueueEnqueueErrors,
-      InferQueueWorkerRequirements<C>
-    >,
-    never,
-    Scope.Scope | InferQueueWorkerRequirements<C>
-  >;
+  });
 };
 
 const hasItemSchema = <T, E, R>(
@@ -525,18 +495,10 @@ const hasItemSchema = <T, E, R>(
 
 const makePriorityEffectFromConfig = (
   config: WorkPoolPriorityConfig<any, any, any>,
-): Effect.Effect<
-  WorkPoolPriorityHandle<unknown, ErasedChannel, ErasedChannel, ErasedChannel>,
-  never,
-  Scope.Scope | ErasedChannel
-> =>
-  (hasItemSchema(config)
+): Effect.Effect<WorkPoolPriorityHandle<unknown, unknown, unknown, unknown>, never, Scope.Scope | any> =>
+  hasItemSchema(config)
     ? makePriorityEffectWithSchema(config)
-    : makePriorityEffectWithoutSchema(config)) as Effect.Effect<
-    WorkPoolPriorityHandle<unknown, ErasedChannel, ErasedChannel, ErasedChannel>,
-    never,
-    Scope.Scope | ErasedChannel
-  >;
+    : makePriorityEffectWithoutSchema(config);
 
 type CustomConfigFromEffect<
   F extends QueueWorkerEffect<any, any, any, any>,
@@ -581,7 +543,7 @@ function makePriorityEffect(
   effectOrConfig: QueueWorkerEffect<any, any, any, any> | WorkPoolPriorityConfig<any, any, any>,
   options?: (WorkPoolPriorityOptionsWithoutItemSchema<any, any, any> &
     WorkPoolPriorityLaneConfig),
-): Effect.Effect<ErasedChannel, never, Scope.Scope | ErasedChannel> {
+): Effect.Effect<WorkPoolPriorityHandle<any, any, any, any>, never, Scope.Scope | any> {
   if (typeof effectOrConfig === "function") {
     if (options === undefined || options.laneCount === undefined) {
       return Effect.die(

@@ -12,19 +12,16 @@ import {
   ProtocolKindMismatch,
 } from "./nodeCore"
 
-type ErasedChannel = NonNullable<unknown>;
-
 /**
  * Non-empty serve list for {@link httpServer} / {@link wsServer} / {@link ipcServer}.
- * Element bounds use an erased non-null channel so heterogeneous serve layers remain accepted while
- * `anyUnknownInErrorContext` stays quiet;
+ * Element bounds stay `never`/`never`/`never` so `anyUnknownInErrorContext` stays quiet;
  * concrete call sites still infer Success/Error/Services through the generic overloads.
  *
  * @internal
  */
 export type ServerServeList = readonly [
-  Layer.Layer<never, ErasedChannel, ErasedChannel>,
-  ...ReadonlyArray<Layer.Layer<never, ErasedChannel, ErasedChannel>>,
+  Layer.Layer<never, any, any>,
+  ...ReadonlyArray<Layer.Layer<never, any, any>>,
 ];
 
 /** Merge a non-empty serve list — Effect's {@link Layer.mergeAll}, generic over the tuple. @internal */
@@ -34,12 +31,8 @@ export const mergeServeList = <Layers extends ServerServeList>(
   Layer.Success<Layers[number]>,
   Layer.Error<Layers[number]>,
   Layer.Services<Layers[number]>
-> =>
-  Layer.mergeAll(...layers) as Layer.Layer<
-    Layer.Success<Layers[number]>,
-    Layer.Error<Layers[number]>,
-    Layer.Services<Layers[number]>
-  >;
+  // `as any`: Effect's mergeAll bounds use `any`; keep the diagnostic off this shared helper.
+> => Layer.mergeAll(...layers) as any;
 
 /** Refuse to boot if any node-bound served resource declares a transport mismatch. @internal */
 export const assertProtocolKinds = (
