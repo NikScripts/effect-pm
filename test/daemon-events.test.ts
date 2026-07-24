@@ -87,7 +87,7 @@ describe("Daemon.events — live stream", () => {
     }).pipe(
       Effect.provide(Daemon.layerMemory(LiveEventsProc, { effect: Effect.void })),
       Effect.scoped,
-    ) as any,
+    ),
   );
 
   it.live("emits Failed when the run body fails (no error stamp → string)", () =>
@@ -114,7 +114,7 @@ describe("Daemon.events — live stream", () => {
         }),
       ),
       Effect.scoped,
-    ) as any,
+    ),
   );
 
   it.live("Failed carries the stamped typed error on events", () =>
@@ -147,7 +147,7 @@ describe("Daemon.events — live stream", () => {
         }),
       ),
       Effect.scoped,
-    ) as any,
+    ),
   );
 
   it.live("Completed.success carries the stamped success value on events", () =>
@@ -173,7 +173,7 @@ describe("Daemon.events — live stream", () => {
         }),
       ),
       Effect.scoped,
-    ) as any,
+    ),
   );
 
   it.live("live events match store rows for the same run (persist == stream)", () =>
@@ -195,7 +195,7 @@ describe("Daemon.events — live stream", () => {
         withStore(Daemon.layer(LiveEventsProc, { effect: Effect.void })),
       ),
       Effect.scoped,
-    ) as any,
+    ),
   );
 
   it.live("emits Interrupted when a manual run fiber is interrupted", () =>
@@ -226,7 +226,7 @@ describe("Daemon.events — live stream", () => {
         expect(events.some((e) => e._tag === "Interrupted")).toBe(true);
         expect(events.some((e) => e._tag === "Started")).toBe(true);
       }).pipe(Effect.provide(live), Effect.scoped);
-    }) as any,
+    }),
   );
 });
 

@@ -295,16 +295,6 @@ export interface NodeRef {
   readonly node: NodeKey<unknown>;
 }
 
-interface NodeHandleService {
-  readonly status: {
-    readonly changes: Stream.Stream<NodeStatusSnapshot>;
-  };
-  readonly logs: {
-    readonly stream: Stream.Stream<{ readonly level: string; readonly message: string }>;
-    readonly query: (options: { readonly limit: number }) => Effect.Effect<ReadonlyArray<{ readonly level: string; readonly message: string }>>;
-  };
-}
-
 /** Walk a group tree and collect the distinct nodes its resources are bound to. A nodeless
  *  (local/in-process) group yields `[]` — node dots appear only when resources name a node. */
 export const nodesOf = (group: unknown): ReadonlyArray<NodeRef> => {
@@ -447,26 +437,24 @@ const hyperlinkLogsAtom = <R, ER>(
   runtime: DashboardRuntime<R, ER>,
   resourceKey: string,
   node: NodeKey<unknown>,
-) => {
-  const handleNode = node as unknown as NodeKey<NodeHandleService>;
-  return runtime.atom(
+) =>
+  runtime.atom(
     cachedAccumulator({
       key: `${resourceKey}/logs`,
       cap: 300,
       // A dead node surfaces NodeUnreachable; the dashboard atoms have no error channel, so it
       // becomes a defect the atom's AsyncResult reports (same as before the node-handle move).
-      stream: Stream.unwrap(Effect.map(handleNode, (h) => h.logs.stream)).pipe(
+      stream: Stream.unwrap(Effect.map(node, (h) => h.logs.stream)).pipe(
         Stream.filter(LogEntry.hasKey(resourceKey)),
         Stream.map(toLogLine),
         Stream.orDie,
       ),
-      query: Effect.flatMap(handleNode, (h) => h.logs.query({ limit: 300 })).pipe(
+      query: Effect.flatMap(node, (h) => h.logs.query({ limit: 300 })).pipe(
         Effect.map((entries) => entries.filter(LogEntry.hasKey(resourceKey)).map(toLogLine)),
         Effect.orDie,
       ),
     }).pipe(Stream.provide(nodeConn(node))),
   );
-};
 
 /** Build (once per runtime+tag) the atom bundle for a queue tag. */
 export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueTag<R>): QueueBundle => {
@@ -834,7 +822,6 @@ export const nodeStatusBundle = <R, ER>(
   const cache = cacheFor(nodeBundleCache, runtime);
   const existing = cache.get(ref.id);
   if (existing !== undefined) return existing;
-  const handleNode = ref.node as unknown as NodeKey<NodeHandleService>;
   const logsKey = `${ref.id}/logs`;
   bumpLogIdFrom(logsKey);
   const bundle: NodeBundle = {
@@ -843,7 +830,7 @@ export const nodeStatusBundle = <R, ER>(
       // Provide the per-node client at the STREAM level so its scope spans the whole subscription.
       // (Providing it to the producing Effect tore the scoped RPC client down as soon as that effect
       // returned the stream, interrupting it — "all fibers interrupted".)
-      Stream.unwrap(Effect.map(handleNode, (h) => h.status.changes)).pipe(
+      Stream.unwrap(Effect.map(ref.node, (h) => h.status.changes)).pipe(
         Stream.provide(nodeConn(ref.node)),
         Stream.orDie,
       ),
@@ -854,11 +841,11 @@ export const nodeStatusBundle = <R, ER>(
       cachedAccumulator({
         key: logsKey,
         cap: 300,
-        stream: Stream.unwrap(Effect.map(handleNode, (h) => h.logs.stream)).pipe(
+        stream: Stream.unwrap(Effect.map(ref.node, (h) => h.logs.stream)).pipe(
           Stream.map(toLogLine),
           Stream.orDie,
         ),
-        query: Effect.flatMap(handleNode, (h) => h.logs.query({ limit: 300 })).pipe(
+        query: Effect.flatMap(ref.node, (h) => h.logs.query({ limit: 300 })).pipe(
           Effect.map((entries) => entries.map(toLogLine)),
           Effect.orDie,
         ),
@@ -870,7 +857,7 @@ export const nodeStatusBundle = <R, ER>(
       cachedAccumulator({
         key: `${ref.id}/health`,
         cap: 120,
-        stream: Stream.unwrap(Effect.map(handleNode, (h) => h.status.changes)).pipe(
+        stream: Stream.unwrap(Effect.map(ref.node, (h) => h.status.changes)).pipe(
           Stream.map((st) => st.resources.filter((x) => x.ready).length),
           Stream.orDie,
         ),

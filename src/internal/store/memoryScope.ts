@@ -127,9 +127,9 @@ export const makeScopeHandle = <S extends StoreSpec>(
             // a programming bug, not a runtime condition — so it `orDie`s as a defect (surfacing the
             // bug) rather than becoming a catchable failure. The `journal.write` below is left as a
             // normal failure: a journal/IO write error stays in the cause and remains catchable.
-            const wire = yield* (Effect.orDie(
-              Schema.encodeUnknownEffect(Schema.toCodecJson(entry.schema) as any)(one) as any,
-            ) as Effect.Effect<unknown, never, never>);
+            const wire = yield* Effect.orDie(
+              Schema.encodeUnknownEffect(Schema.toCodecJson(entry.schema))(one),
+            );
             const encoded = yield* Effect.orDie(encodeJournalPayload(wire));
             // The journal/IO write is the genuine catchable write failure — surface it as
             // `StoreWriteError` (the encode above already `orDie`s a schema mismatch as a defect).
@@ -168,7 +168,7 @@ export const makeScopeHandle = <S extends StoreSpec>(
       const sourceKeys = querySourceKeys(spec, entry);
       (handle as Record<string, unknown>)[name] = (payload: unknown) =>
         Effect.gen(function* () {
-          const decodedPayload = yield* (Schema.decodeUnknownEffect(entry.payload as any)(payload) as any as Effect.Effect<unknown, never, never>);
+          const decodedPayload = yield* Schema.decodeUnknownEffect(entry.payload)(payload);
           const entries = yield* sideEffects.journal.entries;
           const rows = yield* rowsForScope(entries, sideEffects.scopeKey, sourceKeys);
           const capped = capRetention(
@@ -192,7 +192,7 @@ export const makeScopeHandle = <S extends StoreSpec>(
             limitOpts(queryOpts),
             (row) => row.occurredAtMillis,
           ).map((row) => row.payload);
-          return yield* (Schema.decodeUnknownEffect(Schema.toCodecJson(entry.result) as any)(matched) as any as Effect.Effect<unknown, never, never>);
+          return yield* Schema.decodeUnknownEffect(Schema.toCodecJson(entry.result))(matched);
         });
     }
   }
