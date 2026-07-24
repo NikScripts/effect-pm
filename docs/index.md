@@ -39,8 +39,8 @@ class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob })
 class Digest extends Daemon.Tag<Digest>()("app/Digest") {}
 ```
 
-Same-machine, batteries included: `Node.unix` listens; `Hyperlink.unix` dials. One Node, no
-Lookup, no HTTP server to wire:
+Same-machine, nameless: `Node.unix` mints a Node when you don't pass one — no `Node.Tag`, no path,
+no port. The engine is mounted; discovery is built in:
 
 {.twoslash}
 ``` ts
@@ -49,32 +49,25 @@ import * as Node from "hyperlink-ts/Node"
 import { Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String })
 class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
-class Worker extends Node.Tag<Worker>()("app/Worker", {
-  path: "/tmp/app-emails.sock",
-}) {}
 declare const sendEmail: (job: typeof EmailJob.Type) => Effect.Effect<void>
 // ---cut---
-const worker = Node.unix(Worker, [
+const worker = Node.unix([
   WorkPool.serve(Emails, { effect: sendEmail }),
 ])
 ```
 
-The scheduler reaches `Emails` through that Node — still `yield* Emails`:
+The scheduler dials the same Tag — still `yield* Emails`:
 
 {.twoslash}
 ``` ts
 import * as Daemon from "hyperlink-ts/Daemon"
 import * as WorkPool from "hyperlink-ts/WorkPool"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
-import * as Node from "hyperlink-ts/Node"
 import * as Polling from "hyperlink-ts/Polling"
 import { Effect, Duration, Layer, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String })
 class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
 class Digest extends Daemon.Tag<Digest>()("app/Digest") {}
-class Worker extends Node.Tag<Worker>()("app/Worker", {
-  path: "/tmp/app-emails.sock",
-}) {}
 declare const nextEmail: Effect.Effect<typeof EmailJob.Type>
 // ---cut---
 const scheduler = Daemon.layer(Digest, {
@@ -84,14 +77,12 @@ const scheduler = Daemon.layer(Digest, {
     yield* emails.add(email)
   }),
   polling: Polling.spaced(Duration.hours(1)),
-}).pipe(
-  Layer.provide(Hyperlink.client(Emails)),
-  Layer.provide(Hyperlink.unix(Worker)),
-)
+}).pipe(Layer.provide(Hyperlink.discoverClient(Emails)))
 ```
 
 `Digest` runs on the scheduler, `Emails` on the worker — yet `emails.add(…)` looks like one process.
-**Two HyperServices, two runtimes, one program.**
+**Two HyperServices, two runtimes, one program.** (When you already have a named Node,
+`Node.unix(Worker, …)` pairs with `Hyperlink.unix(Worker)`.)
 
 When you need another machine (or a browser), step up to HTTP. `Node.httpServer` pairs with whatever
 HTTP server your runtime provides — extract that once; later examples use `nodeServer`:
