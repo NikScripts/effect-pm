@@ -47,7 +47,7 @@ const runCli = (args: ReadonlyArray<string>, layer: Layer.Layer<Counter, never, 
   Effect.exit(
     Command.runWith(cli(Bundle, "hyperlink"), { version: "0.0.0" })(args).pipe(
       Effect.provide(Layer.mergeAll(layer, NodeServices.layer)),
-    ) as Effect.Effect<void, TuiNotConfigured>,
+    ),
   );
 
 it("byName shortens unique suffixes", () => {
@@ -67,10 +67,7 @@ describe("Hyperlink.cli TUI default", () => {
       const exit = yield* Effect.exit(
         Command.runWith(Hyperlink.cli({ counter: Counter }, "app"), { version: "0.0.0" })([
           "counter",
-        ]).pipe(Effect.provide(Layer.mergeAll(counterLayer, NodeServices.layer))) as Effect.Effect<
-          void,
-          TuiNotConfigured
-        >,
+        ]).pipe(Effect.provide(Layer.mergeAll(counterLayer, NodeServices.layer))),
       );
       expectTuiNotConfigured(exit);
     }),
@@ -82,10 +79,7 @@ describe("Hyperlink.cli TUI default", () => {
         Command.runWith(cli({ counter: Counter }, "app"), { version: "0.0.0" })([
           "counter",
           "pause",
-        ]).pipe(Effect.provide(Layer.mergeAll(counterLayer, NodeServices.layer))) as Effect.Effect<
-          void,
-          TuiNotConfigured
-        >,
+        ]).pipe(Effect.provide(Layer.mergeAll(counterLayer, NodeServices.layer))),
       );
       expect(Exit.isSuccess(exit)).toBe(true);
     }),
@@ -106,7 +100,7 @@ describe("Hyperlink.cli TUI default", () => {
       const exit = yield* Effect.exit(
         Command.runWith(cli(Bundle, "hyperlink"), { version: "0.0.0" })([]).pipe(
           Effect.provide(Layer.mergeAll(counterLayer, tuiLayer, NodeServices.layer)),
-        ) as Effect.Effect<void, TuiNotConfigured>,
+        ),
       );
       expect(Exit.isSuccess(exit)).toBe(true);
       expect(opened).toEqual({ treeKey: Bundle.key, path: [] });
@@ -125,7 +119,7 @@ describe("Hyperlink.cli TUI default", () => {
       const exit = yield* Effect.exit(
         Command.runWith(cli(Bundle, "hyperlink"), { version: "0.0.0" })(["Counter"]).pipe(
           Effect.provide(Layer.mergeAll(counterLayer, tuiLayer, NodeServices.layer)),
-        ) as Effect.Effect<void, TuiNotConfigured>,
+        ),
       );
       expect(Exit.isSuccess(exit)).toBe(true);
       expect(opened).toEqual(["Counter"]);

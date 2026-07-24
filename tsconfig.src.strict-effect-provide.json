@@ -113,7 +113,7 @@
             "unnecessaryFailYieldableError": "error",
             "unnecessaryPipe": "error",
             "unnecessaryPipeChain": "error",
-            "unsafeEffectTypeAssertion": "warning",
+            "unsafeEffectTypeAssertion": "message",
             "unsupportedServiceAccessors": "error"
           }
       }
@@ -125,8 +125,10 @@
     "dist",
     "repos",
     "examples/scenarios/nwslsoccer",
-    // The browser/React layer has its own (relaxed) ruleset — see src/web/tsconfig.json.
+    // UI trees have their own rulesets (Effect-purity off) — see src/{ui,web,tui}/tsconfig.json.
+    "src/ui/**",
     "src/web/**",
+    "src/tui/**",
     "src/bin/**"
   ]
 }

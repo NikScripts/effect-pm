@@ -348,7 +348,7 @@ const remapProtocolMismatch = (
     ) as any;
   }
   if (Stream.isStream(value)) {
-    return Stream.mapError(value as Stream.Stream<unknown, unknown>, (err) =>
+    return Stream.mapError(value, (err) =>
       isHttpProtocolMismatchDefect(err)
         ? new ProtocolMismatch({ resource, method, cause: err })
         : err,

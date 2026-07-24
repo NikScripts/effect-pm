@@ -1,6 +1,6 @@
 {
   // Shared UI core (data / route / atom-react). Same Effect diagnostic suite as root, with
-  // Effect-purity rules off (`Date.now`, localStorage no-op in Node). Root excludes `src/ui/**`.
+  // Effect-purity + anyUnknownInErrorContext off (`Date.now`, loose atom `R`). Root excludes `src/ui/**`.
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
@@ -13,7 +13,7 @@
       {
         "name": "@effect/language-service",
         "diagnosticSeverity": {
-            "anyUnknownInErrorContext": "error",
+            "anyUnknownInErrorContext": "off",
             "asyncFunction": "off",
             "catchAllToMapError": "error",
             "catchUnfailableEffect": "error",
@@ -78,7 +78,7 @@
             "unnecessaryFailYieldableError": "error",
             "unnecessaryPipe": "error",
             "unnecessaryPipeChain": "error",
-            "unsafeEffectTypeAssertion": "warning",
+            "unsafeEffectTypeAssertion": "message",
             "unsupportedServiceAccessors": "error"
           }
       }

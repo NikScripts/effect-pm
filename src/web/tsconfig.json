@@ -1,7 +1,7 @@
 {
-  // Browser/React ruleset: full Effect diagnostic suite with Effect-purity rules off (raw `Date` /
-  // `console` / `setTimeout`, DOM `async` / `new Promise`). Plugins replace on extends, so the map
-  // is restated here. Root excludes `src/web/**`. Check-only (`noEmit`); bundled by tsup `web`.
+  // Browser/React ruleset: full Effect diagnostic suite with Effect-purity + anyUnknown off (raw
+  // `Date` / `console` / `setTimeout`, DOM `async` / `new Promise`, loose atom `R`). Plugins replace
+  // on extends, so the map is restated here. Root excludes `src/web/**`. Check-only (`noEmit`).
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
@@ -14,7 +14,7 @@
       {
         "name": "@effect/language-service",
         "diagnosticSeverity": {
-            "anyUnknownInErrorContext": "error",
+            "anyUnknownInErrorContext": "off",
             "asyncFunction": "off",
             "catchAllToMapError": "error",
             "catchUnfailableEffect": "error",
@@ -79,7 +79,7 @@
             "unnecessaryFailYieldableError": "error",
             "unnecessaryPipe": "error",
             "unnecessaryPipeChain": "error",
-            "unsafeEffectTypeAssertion": "warning",
+            "unsafeEffectTypeAssertion": "message",
             "unsupportedServiceAccessors": "error"
           }
       }

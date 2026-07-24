@@ -69,6 +69,7 @@ describe("Daemon manual run RPC", () => {
           }),
         ),
         Effect.scoped,
+        // RpcTest Handler stays in R from serveRemoteMemory; erase for runPromise.
       ) as Effect.Effect<void, never, never>,
     ),
   );
@@ -95,6 +96,7 @@ describe("Daemon manual run RPC", () => {
       }).pipe(
         Effect.provide(Daemon.serveRemoteMemory(VoidDaemon, { effect: Effect.void })),
         Effect.scoped,
+        // RpcTest Handler stays in R from serveRemoteMemory; erase for runPromise.
       ) as Effect.Effect<void, never, never>,
     ),
   );

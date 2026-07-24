@@ -48,5 +48,5 @@ it("drives a node-bearing resource over real http (ship only the tag)", () => {
       Effect.scoped,
     );
   }).pipe(Effect.provide(ServerLive), Effect.scoped);
-  return Effect.runPromise(program as Effect.Effect<void, never, never>);
+  return Effect.runPromise(program);
 });

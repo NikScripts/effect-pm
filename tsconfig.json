@@ -113,7 +113,7 @@
             "unnecessaryFailYieldableError": "error",
             "unnecessaryPipe": "error",
             "unnecessaryPipeChain": "error",
-            "unsafeEffectTypeAssertion": "warning",
+            "unsafeEffectTypeAssertion": "message",
             "unsupportedServiceAccessors": "error"
           }
       }

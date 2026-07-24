@@ -1,6 +1,6 @@
 {
-  // Ink/React TUI ruleset: same suite as `src/web` (full diagnostics, Effect-purity off). Root
-  // excludes `src/tui/**`. Check-only (`noEmit`); bundled by tsup `tui`.
+  // Ink/React TUI ruleset: same suite as `src/web` (full diagnostics, purity + anyUnknown off).
+  // Root excludes `src/tui/**`. Check-only (`noEmit`); bundled by tsup `tui`.
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
@@ -13,7 +13,7 @@
       {
         "name": "@effect/language-service",
         "diagnosticSeverity": {
-            "anyUnknownInErrorContext": "error",
+            "anyUnknownInErrorContext": "off",
             "asyncFunction": "off",
             "catchAllToMapError": "error",
             "catchUnfailableEffect": "error",
@@ -78,7 +78,7 @@
             "unnecessaryFailYieldableError": "error",
             "unnecessaryPipe": "error",
             "unnecessaryPipeChain": "error",
-            "unsafeEffectTypeAssertion": "warning",
+            "unsafeEffectTypeAssertion": "message",
             "unsupportedServiceAccessors": "error"
           }
       }

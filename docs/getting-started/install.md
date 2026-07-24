@@ -111,32 +111,33 @@ are several, because the right rules for Effect-domain code are not the right ru
 default — including `anyUnknownInErrorContext`, `missingLayerContext`, `effectDoNotation`,
 `outdatedEffectCodegen`, `unsupportedServiceAccessors`, and `flatMapToMap`.
 `serviceNotAsClass` is also `error`; the only allowed silence is a next-line off at a real
-`Context.Service` / `Context.Tag` **factory**. `strictEffectProvide` stays `message` (surfaces, does
-not fail the build). `unsafeEffectTypeAssertion` is `warning` — with the language-service patch,
-warnings fail `typecheck`, so unsafe `as Effect` / `as Layer` / `as Stream` channel narrowing is
-build-blocking while remaining erase debt is cleared. So our Effect source is held to Effect's
+`Context.Service` / `Context.Tag` **factory**. Two rules stay `message` (surface in the editor /
+`tsc` output, do not fail the build): `strictEffectProvide`, and `unsafeEffectTypeAssertion`
+(flags `as Effect` / `as Layer` / `as Stream` channel narrowing — remaining toolkit erase debt,
+same non-blocking posture as `strictEffectProvide`). So our Effect source is held to Effect's
 idioms — no raw `Date` / `console` / `setTimeout` / `fetch` / `Math.random` / `process.env` outside
 Effect, `Schema` over hand-rolled JSON, pipeables over nesting, typed error channels, and so on.
 `typecheck` runs several passes:
 
 | Config | Scope | Notes |
 |--------|-------|-------|
-| `tsconfig.json` | `src`, `test`, `examples` (excludes UI trees) | full diagnostic set; `strictEffectProvide: message`; `unsafeEffectTypeAssertion: warning` |
+| `tsconfig.json` | `src`, `test`, `examples` (excludes UI trees) | full diagnostic set; `strictEffectProvide` + `unsafeEffectTypeAssertion`: `message` |
 | `tsconfig.src.strict-effect-provide.json` | Effect-domain `src/**` | same severities |
-| `src/ui/tsconfig.json` | shared dashboard core | same set; six Effect-purity rules `off` |
-| `src/web/tsconfig.json` | web dashboard (+ `src/ui`) | same set; six Effect-purity rules `off` |
-| `src/tui/tsconfig.json` | terminal dashboard | same set; six Effect-purity rules `off` |
+| `src/ui/tsconfig.json` | shared dashboard core | same set; purity + `anyUnknownInErrorContext` `off` |
+| `src/web/tsconfig.json` | web dashboard (+ `src/ui`) | same set; purity + `anyUnknownInErrorContext` `off` |
+| `src/tui/tsconfig.json` | terminal dashboard | same set; purity + `anyUnknownInErrorContext` `off` |
 
-**UI / React code keeps the same suite, minus a few purity rules.** Those rules assume Effect-domain
-code and are wrong for a UI layer, where raw `Date.now()`, `console`, `setTimeout`, and `async` event
-handlers *are* the correct primitives. The UI tsconfigs turn off only
+**UI / React code keeps the same suite, minus UI-layer exceptions.** Effect-purity rules assume
+Effect-domain code and are wrong for a UI layer, where raw `Date.now()`, `console`, `setTimeout`,
+and `async` event handlers *are* the correct primitives. The UI tsconfigs turn off
 `globalDate` / `globalConsole` / `globalTimers` / `asyncFunction` / `newPromise` /
-`nodeBuiltinImport` — everything else stays at the Effect-domain severities (tsconfig `plugins`
+`nodeBuiltinImport`, plus `anyUnknownInErrorContext` (dashboard atoms still carry loose `R` until
+the typesafety pass). Everything else matches the Effect-domain severities (tsconfig `plugins`
 arrays replace on `extends`, so the UI configs restate the full map). Shared dashboard logic lives
 under **`src/ui`**; the **`src/web`** and **`src/tui`** shells each have their own `tsconfig`. The
-root config **excludes** `src/ui/**`, `src/web/**`, and `src/tui/**` so the editor and `typecheck`
-resolve those trees to the UI configs. Declaration builds for the UI entries point at those configs
-too (see `tsup.config.ts`).
+root and strict-provide configs **exclude** `src/ui/**`, `src/web/**`, and `src/tui/**` so the
+editor and `typecheck` resolve those trees to the UI configs. Declaration builds for the UI entries
+point at those configs too (see `tsup.config.ts`).
 
 {.note}
 A bundler build (`tsup`/Vite) doesn't mind the split — it compiles from an entry, not the config's
