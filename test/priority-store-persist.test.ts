@@ -2,7 +2,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Schema } from "effect";
 import * as WorkPool from "../src/WorkPool";
 import { Storage } from "../src/Store";
-import { builtInQueueStoreContract } from "../src/internal/store/queueStoreSpec";
+import { builtInQueueStoreContract } from "../src/internal/store/workPoolStoreSpec";
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 

@@ -1,6 +1,6 @@
 import { Effect, Schema } from "effect";
 import * as WorkPool from "../src/WorkPool";
-import type { QueueStoreCompleted } from "../src/internal/store/queueStoreSpec";
+import type { QueueStoreCompleted } from "../src/internal/store/workPoolStoreSpec";
 import type { StoreHandleAtKey } from "../src/internal/store/defineStore";
 import type { RegsOfStoreInput } from "../src/internal/store/registrationTypes";
 

@@ -22,7 +22,7 @@ const byTagOpts: Layer.Layer<Jobs, Hyperlink.LookupClientError> = Hyperlink.unix
 const byNode: Layer.Layer<Worker, Node.UnaddressedNode> = Hyperlink.unix(Worker);
 
 // @ts-expect-error discoverClient was folded into unix(tag)
-Hyperlink.discoverClient;
+void Hyperlink.discoverClient;
 
 void byTag;
 void byTagOpts;

@@ -24,8 +24,8 @@ import { levelToDefaultPriority } from "./priorityMapping";
 import {
   buildPriorityProjection,
   type WorkPoolPriorityStatus,
-} from "./queueProjection";
-import type { QueueRuntimeProjection } from "./queueProjection";
+} from "./workPoolProjection";
+import type { QueueRuntimeProjection } from "./workPoolProjection";
 import {
   buildQueueEngine,
   queueRateLimiterLayer,
@@ -58,7 +58,7 @@ import {
   type QueueStoreWriter,
 } from "./workPool";
 
-export type { WorkPoolPriorityStatus } from "./queueProjection";
+export type { WorkPoolPriorityStatus } from "./workPoolProjection";
 
 // ============================================================================
 // Public types

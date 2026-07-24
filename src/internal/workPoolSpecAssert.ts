@@ -7,7 +7,7 @@
  * (`queueSpec(payload)` / `prioritySpec(payload, laneConfig)`) — only the **`events`** stream
  * element schema may differ (tag `success` / `error` wire slots).
  *
- * @module internal/queueSpecAssert
+ * @module internal/workPoolSpecAssert
  * @internal
  */
 

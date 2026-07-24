@@ -3,7 +3,7 @@ import * as WorkPool from "../src/WorkPool";
 import * as Gate from "../src/Gate";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Store from "../src/Store";
-import { builtInQueueStoreContract, type QueueEventOf } from "../src/internal/store/queueStoreSpec";
+import { builtInQueueStoreContract, type QueueEventOf } from "../src/internal/store/workPoolStoreSpec";
 import {
   builtInGateStoreContract,
   gateFactSchemaForTag,

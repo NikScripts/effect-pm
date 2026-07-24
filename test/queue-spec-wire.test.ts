@@ -10,7 +10,7 @@ import type { AnyMethod } from "../src/Hyperlink";
 import {
   assertQueueInstanceSpec,
   QueueSpecShapeError,
-} from "../src/internal/queueSpecAssert";
+} from "../src/internal/workPoolSpecAssert";
 import * as Node from "../src/Node";
 
 const jobSchema = Schema.Struct({ id: Schema.String });

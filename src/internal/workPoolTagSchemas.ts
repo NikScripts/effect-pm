@@ -2,11 +2,11 @@
  * Wire schemas stamped on {@link WorkPool.Tag} factories — the `success` / `error` slots.
  *
  * The `payload` slot is NOT stamped here: it is the queue's item schema, recovered from the tag's
- * `add` verb spec (see `queueStoreSpec.queueItemSchemaFromTag`). `success` (worker return) and
+ * `add` verb spec (see `workPoolStoreSpec.queueItemSchemaFromTag`). `success` (worker return) and
  * `error` (worker failure channel) have no spec verb of their own yet, so they ride as symbol stamps
  * that the engine + store contract read as the tag SSOT.
  *
- * @module internal/queueTagSchemas
+ * @module internal/workPoolTagSchemas
  * @internal
  */
 

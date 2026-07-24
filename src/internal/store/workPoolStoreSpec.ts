@@ -8,7 +8,7 @@
  * them back) — no event model of its own, no object-literal construction against a schema-decoded
  * generic (which is what forced casts / collapsed hovers).
  *
- * @module internal/store/queueStoreSpec
+ * @module internal/store/workPoolStoreSpec
  * @internal
  */
 
@@ -17,7 +17,7 @@ import type { HyperlinkTag, Spec, SpecOf } from "../../Hyperlink";
 import { specSym } from "../../Hyperlink";
 import { buildQueueEvent, queueEntry, queueSpec } from "../../WorkPool";
 import type { QueueEventSchema, QueueSuccessSchemaOf } from "../../WorkPool";
-import { successOf, errorOf } from "../queueTagSchemas";
+import { successOf, errorOf } from "../workPoolTagSchemas";
 import type { Priority, QueueEvent } from "../workPool";
 import * as Store from "../../Store";
 import type {

@@ -11,6 +11,9 @@
  * `Hyperlink.client` + transport (drives a running server) when you run it — the command
  * tree is identical.
  *
+ * The product bin is **`hyperlink`** (alias **`hl`**). Pass that as `rootName` so argv matches
+ * the shipped command. The repo-dev gate CLI is a separate bin (**`hyp`**) — not this module.
+ *
  * ```ts
  * import { makeHyperlinkCli, resourcesByName } from "hyperlink-ts/cli";
  * import { Command } from "effect/unstable/cli";

@@ -2,7 +2,7 @@ import type { DateTime, Duration, Effect, Option, Stream } from "effect";
 import * as Schema from "effect/Schema";
 import * as WorkPool from "../src/WorkPool";
 import * as Store from "../src/Store";
-import { builtInQueueStoreContract } from "../src/internal/store/queueStoreSpec";
+import { builtInQueueStoreContract } from "../src/internal/store/workPoolStoreSpec";
 import type {
   EngineQueueStoreContract,
   QueueStoreCompleted,
@@ -12,7 +12,7 @@ import type {
   QueueStoreLatency,
   QueueStoreReads,
   QueueStoreStats,
-} from "../src/internal/store/queueStoreSpec";
+} from "../src/internal/store/workPoolStoreSpec";
 import type { StoreJournalDecodeError } from "../src/internal/store/errors";
 import type { StoreHandleAtKey } from "../src/internal/store/defineStore";
 import type { RegsOfStoreInput } from "../src/internal/store/registrationTypes";

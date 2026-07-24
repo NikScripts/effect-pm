@@ -1,5 +1,5 @@
 /**
- * @module internal/queueSchema
+ * @module internal/workPoolSchema
  *
  * The queue's **wire/error schemas** that both the engine (`WorkPool`) and the contract
  * (`QueueContract`) need — kept in their own light module (imports only `effect`) so the contract's

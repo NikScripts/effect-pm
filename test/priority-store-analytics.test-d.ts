@@ -10,7 +10,7 @@ import type {
   QueueStoreLatency,
   QueueStoreReads,
   QueueStoreStats,
-} from "../src/internal/store/queueStoreSpec";
+} from "../src/internal/store/workPoolStoreSpec";
 import type { StoreJournalDecodeError } from "../src/internal/store/errors";
 import type { StoreHandleAtKey } from "../src/internal/store/defineStore";
 import type { RegsOfStoreInput } from "../src/internal/store/registrationTypes";
