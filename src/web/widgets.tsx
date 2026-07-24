@@ -382,7 +382,7 @@ export const GroupCard = (props: {
   );
 };
 
-/** Dispatch a group member to its card (group / queue / process / api). */
+/** Dispatch a group member to its card (group / WorkPool / Daemon / api). */
 export const Cell = (props: {
   readonly member: unknown;
   /** Display name — the member key under which the current group holds this member. */
@@ -2957,7 +2957,7 @@ const runWidget: Widget = ({ tag, name, onOpen }) =>
   );
 
 /**
- * The built-in widget set: queue / process / API cards by kind, with {@link FallbackCard} for
+ * The built-in widget set: WorkPool / Daemon / API cards by kind, with {@link FallbackCard} for
  * everything else. The default for `<Dashboard>`; extend or override it with
  * `withEntries(base, [forKind(...), forKey(...)])`. @public
  */

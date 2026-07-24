@@ -3,8 +3,8 @@
  *
  * The batteries-included resource dashboard: point it at a reactive `runtime` (an
  * `Atom.runtime(layer)` over your tags — local engine or `Hyperlink.client` over http) and a
- * root `Group`, and it renders the responsive drill-down — a grid of queue / process /
- * subgroup cards, a detail view per resource (stats + chart + controls + logs), and a routed
+ * root `Group`, and it renders the responsive drill-down — a grid of WorkPool / Daemon /
+ * subgroup cards, a detail view per HyperService (stats + chart + controls + logs), and a routed
  * fullscreen log viewer (`/Group/Hyperlink/logs`). Navigation is URL-backed (deep links +
  * back/forward) and animated with view transitions.
  *
