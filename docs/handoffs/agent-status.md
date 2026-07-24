@@ -6,7 +6,7 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **4** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity | **syncing** — `hyperlink-ts/ui` SSOT + Group TUI; merging `integration` | eb5aecefe | merge + tests | Prior Agent-4 open-`R` work tip-synced idle on integration; kind parity still web-ahead | 2026-07-24 |
+| **4** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity | **in flight** — tip-synced; `ui` SSOT + `memberKind` + TUI priority cells | (push tip) | merge + `vitest test/resource-cli` | Remaining TUI kinds: gate/api/fleetHealth/telemetry/shardMap; good spin for Dashboard-kinds specialist | 2026-07-24 |
 | **1** | `cursor/docs-corpus-phase3-ce05` | [Examples book](./agent-01-examples-book.md) · [Phase 3](./agent-01-docs-corpus-phase3-plan.md) | **E1 in flight** — Examples hub + queue Twoslash pairs | branch tip | hub + 2 queue docs | **Next:** E2 forms/resource pairs | 2026-07-15 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
 | **3** | `cursor/logs-store-followers-plan-906e` | [identity-coordinator](./identity-coordinator.md) · [loud-failures](./loud-failures-design.md) | **idle** — Soft / default-on verify / F4 / lineId memo Eng’d | same tip as `integration` | typecheck + targeted suites green | Ready for next major | 2026-07-21 |
