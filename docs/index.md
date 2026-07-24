@@ -8,23 +8,22 @@
 
 **Define once. Run anywhere. `yield*` everywhere.**
 
-JavaScript has been multi-core for a decade. Hyperlink makes writing it feel single-threaded again.
+An Effect Service lives in one runtime. A *Hyperlink Service* is still a Service — same Tag,
+same `yield*` — but its Contract is schema-typed, so the seam can sit between processes, not just
+modules. You define it once; you decide later whether it runs in-process, on another core, or across
+the network. The call site does not change.
 
-`yield*` a Service and it answers — from a parallel process, a second machine, the far side of the
-network. Typed end to end, schema-validated at the wire. You never write the difference.
+What you `yield*` is a typed **Handle**: call methods, observe live state, steer the service at
+runtime. Local and remote are the same type. Change the Contract and TypeScript flags every caller —
+in every process that imports the Tag. One surface.
 
-Heavy work moves off the event loop and onto your other cores; the app spreads across machines; and
-not one call site changes: monolith in dev, fleet in prod, the same code either way. Change a
-contract and the compiler flags every caller, in every process, on every machine. One typed surface.
-
-That Service is a *Hyperlink Service*: define it once, run it on one runtime, call it from another
-over RPC — with the **same typed Handle**. The Handle can **call, observe, and steer** wherever the
-service runs. Inspired by and built on Effect RPC.
+The rest of this page is that idea under load: two runtimes sharing a queue, the same Handle
+operating it live, building your own HyperService, then peers across a fleet.
 
 ## Two runtimes, one program
 
-Here is that claim as a program. A worker drains a queue; a scheduler fills it — two runtimes, one
-Tag. No hand-rolled HTTP client on the scheduler side.
+A worker drains a queue; a scheduler fills it. Two runtimes, one Tag — no hand-rolled client on the
+scheduler side.
 
 Define two HyperServices once — a priority queue and a scheduled daemon (included tools, used here
 as the demo):
