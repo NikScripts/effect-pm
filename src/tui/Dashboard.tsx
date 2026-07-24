@@ -25,15 +25,19 @@ import {
   daemonBundle,
   daemonLeaves,
   isDaemonTag,
+  isPriorityTag,
   isQueueTag,
+  priorityBundle,
   queueBundle,
   queueLeaves,
   type CommandAtom,
   type DaemonTag,
   type DashboardRuntime,
   type GroupNode,
+  type PriorityTag,
   type QueueTag,
 } from "../ui/data";
+import { memberKindOf } from "../ui/memberKind";
 import { RegistryProvider, useAtomSet, useAtomValue } from "../ui/atom-react";
 
 // Same seam as `web/runtime`: React context can't be generic over the consumer's `R`.
@@ -46,6 +50,7 @@ const useRuntime = (): AnyRuntime => {
   }
   return runtime;
 };
+import { spark } from "./chrome";
 import {
   bar,
   BLANK_BORDER,
@@ -193,6 +198,64 @@ const QueueCell = (props: {
   );
 };
 
+const PriorityCell = (props: {
+  readonly name: string;
+  readonly tag: PriorityTag;
+  readonly width: number;
+  readonly selected: boolean;
+}): React.ReactElement => {
+  const { name, tag, width, selected } = props;
+  const r = useAtomValue(priorityBundle(useRuntime(), tag).status);
+  const opt = AsyncResult.isSuccess(r) ? r.value : Option.none();
+  const s = Option.isSome(opt) ? opt.value : undefined;
+  const lanes = s !== undefined ? Object.entries(s.sizes) : [];
+  const pending = lanes.reduce((sum, [, n]) => sum + n, 0);
+  const max = Math.max(1, ...lanes.map(([, n]) => n));
+  const status = statusOf(s?.phase ?? "running", s?.paused ?? false);
+  const barWidth = Math.max(4, width - 4 - 2 - 1 - 5);
+  return (
+    <Box
+      flexDirection="column"
+      borderStyle={selected ? "double" : "round"}
+      borderColor={selected ? "green" : COLOR[status]}
+      height={CELL_HEIGHT}
+      width={width}
+      marginRight={1}
+      marginBottom={1}
+      paddingX={1}
+    >
+      <Box>
+        <Box flexGrow={1}>
+          <Text bold wrap="truncate">
+            {name}
+          </Text>
+          <NodeMark tag={tag} />
+        </Box>
+        <Text color={COLOR[status]}>{STATUS_ICON[status]}</Text>
+      </Box>
+      <Box>
+        <Box flexGrow={1}>
+          <Text>pending {compact(pending)}</Text>
+        </Box>
+        <Text dimColor>{compact(s?.completed ?? 0)} ✓</Text>
+      </Box>
+      {lanes.slice(0, 3).map(([lane, count]) => (
+        <Box key={lane}>
+          <Box width={2}>
+            <Text dimColor>•</Text>
+          </Box>
+          <Box width={barWidth + 1}>
+            <Text>{bar(count, max, barWidth)}</Text>
+          </Box>
+          <Box width={5} justifyContent="flex-end">
+            <Text>{compact(count)}</Text>
+          </Box>
+        </Box>
+      ))}
+    </Box>
+  );
+};
+
 const DaemonCell = (props: {
   readonly name: string;
   readonly tag: DaemonTag;
@@ -305,37 +368,54 @@ const Cell = (props: {
   readonly width: number;
   readonly selected: boolean;
 }): React.ReactElement => {
-  if (Group.isGroup(props.member)) {
-    return (
-      <GroupCell
-        name={props.name}
-        node={props.member}
-        width={props.width}
-        selected={props.selected}
-      />
-    );
+  switch (memberKindOf(props.member)) {
+    case "group":
+      return Group.isGroup(props.member) ? (
+        <GroupCell
+          name={props.name}
+          node={props.member}
+          width={props.width}
+          selected={props.selected}
+        />
+      ) : (
+        <FallbackCell name={props.name} width={props.width} selected={props.selected} />
+      );
+    case "daemon":
+      return isDaemonTag(props.member) ? (
+        <DaemonCell
+          name={props.name}
+          tag={props.member}
+          width={props.width}
+          selected={props.selected}
+        />
+      ) : (
+        <FallbackCell name={props.name} width={props.width} selected={props.selected} />
+      );
+    case "queue":
+      return isQueueTag(props.member) ? (
+        <QueueCell
+          name={props.name}
+          tag={props.member}
+          width={props.width}
+          selected={props.selected}
+        />
+      ) : (
+        <FallbackCell name={props.name} width={props.width} selected={props.selected} />
+      );
+    case "priority":
+      return isPriorityTag(props.member) ? (
+        <PriorityCell
+          name={props.name}
+          tag={props.member}
+          width={props.width}
+          selected={props.selected}
+        />
+      ) : (
+        <FallbackCell name={props.name} width={props.width} selected={props.selected} />
+      );
+    default:
+      return <FallbackCell name={props.name} width={props.width} selected={props.selected} />;
   }
-  if (isDaemonTag(props.member)) {
-    return (
-      <DaemonCell
-        name={props.name}
-        tag={props.member}
-        width={props.width}
-        selected={props.selected}
-      />
-    );
-  }
-  if (isQueueTag(props.member)) {
-    return (
-      <QueueCell
-        name={props.name}
-        tag={props.member}
-        width={props.width}
-        selected={props.selected}
-      />
-    );
-  }
-  return <FallbackCell name={props.name} width={props.width} selected={props.selected} />;
 };
 
 const Bar = (props: {
@@ -527,6 +607,137 @@ const FocusedQueue = (props: {
             <NodeMark tag={tag} />
           </Box>
           <Text dimColor>phase {s?.phase ?? "?"}</Text>
+        </Box>
+        <LogTail logs={logs} visible={visible} />
+      </Box>
+      {props.bar(hint)}
+    </Box>
+  );
+};
+
+const FocusedPriority = (props: {
+  readonly name: string;
+  readonly tag: PriorityTag;
+  readonly cols: number;
+  readonly rows: number;
+  readonly editMode: boolean;
+  readonly cmd: string | null;
+  readonly bar: (hint: React.ReactElement) => React.ReactElement;
+  readonly barRows: number;
+}): React.ReactElement => {
+  const { name, tag, cols, rows, editMode } = props;
+  const bundle = priorityBundle(useRuntime(), tag);
+  const statusR = useAtomValue(bundle.status);
+  const metricsR = useAtomValue(bundle.metrics);
+  const logsR = useAtomValue(bundle.logs);
+  const trendR = useAtomValue(bundle.trend);
+
+  const start = useAtomSet(bundle.start);
+  const pause = useAtomSet(bundle.pause);
+  const resume = useAtomSet(bundle.resume);
+  const clear = useAtomSet(bundle.clear);
+  const shutdown = useAtomSet(bundle.shutdown);
+  useInput(
+    (input) => {
+      if (input === "s") start();
+      else if (input === "p") pause();
+      else if (input === "r") resume();
+      else if (input === "c") clear();
+      else if (input === "x") shutdown();
+    },
+    { isActive: editMode && props.cmd === null },
+  );
+
+  const statusOpt = AsyncResult.isSuccess(statusR) ? statusR.value : Option.none();
+  const s = Option.isSome(statusOpt) ? statusOpt.value : undefined;
+  const metricsOpt = AsyncResult.isSuccess(metricsR) ? metricsR.value : Option.none();
+  const m = Option.isSome(metricsOpt) ? metricsOpt.value : undefined;
+  const trend = AsyncResult.isSuccess(trendR) ? trendR.value : [];
+  const logs = AsyncResult.isSuccess(logsR) ? logsR.value : [];
+  const lanes = s !== undefined ? Object.entries(s.sizes) : [];
+  const pending = lanes.reduce((sum, [, n]) => sum + n, 0);
+  const max = Math.max(1, ...lanes.map(([, n]) => n));
+  const status = statusOf(s?.phase ?? "running", s?.paused ?? false);
+  const visible = Math.max(1, rows - 12 - props.barRows);
+  const barWidth = Math.max(8, cols - 30);
+
+  const hint = (
+    <Box paddingX={1} backgroundColor="gray">
+      <Text dimColor> Esc back · </Text>
+      <Text color="cyan">:</Text>
+      <Text dimColor> command · </Text>
+      <Text color={editMode ? "red" : "gray"}>{editMode ? "EDIT " : "view "}</Text>
+      {editMode ? (
+        <>
+          <ControlKey k="s" label="start" atom={bundle.start} />
+          <ControlKey k="p" label="pause" atom={bundle.pause} />
+          <ControlKey k="r" label="resume" atom={bundle.resume} />
+          <ControlKey k="c" label="clear" atom={bundle.clear} />
+          <ControlKey k="x" label="shutdown" atom={bundle.shutdown} />
+        </>
+      ) : (
+        <Text dimColor>Ctrl+E edit</Text>
+      )}
+    </Box>
+  );
+
+  return (
+    <Box
+      flexDirection="column"
+      width={cols}
+      height={rows}
+      borderStyle={editMode ? "double" : BLANK_BORDER}
+      borderColor="red"
+    >
+      <Box
+        flexDirection="column"
+        borderStyle="round"
+        borderColor={COLOR[status]}
+        paddingX={2}
+        paddingY={1}
+        marginX={1}
+        marginTop={1}
+      >
+        <Box justifyContent="space-between">
+          <Text bold color="cyan">
+            {name}
+            <NodeMark tag={tag} />
+          </Text>
+          <Text color={COLOR[status]}>
+            {STATUS_ICON[status]} {status}
+          </Text>
+        </Box>
+        <Box marginTop={1} justifyContent="space-between">
+          <Text bold>PENDING {pending}</Text>
+          <Text bold>COMPLETED {s?.completed ?? 0}</Text>
+          <Text dimColor>
+            {m?.throughputPerSec.toFixed(1) ?? "0.0"}/s · in-flight {s?.inFlight ?? 0}
+          </Text>
+        </Box>
+        <Box marginTop={1} flexDirection="column">
+          {lanes.slice(0, 8).map(([lane, count]) => (
+            <Box key={lane}>
+              <Box width={12}>
+                <Text wrap="truncate">{lane}</Text>
+              </Box>
+              <Box width={barWidth + 1}>
+                <Text>{bar(count, max, barWidth)}</Text>
+              </Box>
+              <Box width={6} justifyContent="flex-end">
+                <Text>{compact(count)}</Text>
+              </Box>
+            </Box>
+          ))}
+        </Box>
+        <Box marginTop={1}>
+          <Text color="green">{spark(trend)}</Text>
+          <Text dimColor> pending · last {trend.length}s</Text>
+        </Box>
+      </Box>
+      <Box flexGrow={1} flexDirection="column" paddingX={1}>
+        <Box>
+          <Text dimColor>LOGS </Text>
+          <Text color="green">live</Text>
         </Box>
         <LogTail logs={logs} visible={visible} />
       </Box>
@@ -841,6 +1052,21 @@ const DashboardApp = (props: {
     if (isQueueTag(focused)) {
       return (
         <FocusedQueue
+          key={focused.key}
+          name={focusName}
+          tag={focused}
+          cols={cols}
+          rows={rows}
+          editMode={editMode}
+          cmd={cmd}
+          barRows={barRows}
+          bar={renderBar}
+        />
+      );
+    }
+    if (isPriorityTag(focused)) {
+      return (
+        <FocusedPriority
           key={focused.key}
           name={focusName}
           tag={focused}

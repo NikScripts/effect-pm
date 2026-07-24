@@ -16,3 +16,4 @@ export * from "./groupRoute";
 export * from "./data";
 export * from "./cache";
 export * from "./now";
+export * from "./memberKind";
