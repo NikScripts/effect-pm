@@ -26,7 +26,7 @@ type ExpectedWriter = Store.StoreProvidedContext<
 >;
 expectExact<Equals<Writer, ExpectedWriter>>();
 
-// Schema-first path (CustomQueue / WorkPool.make) matches tag path for the same item schema.
+// Schema-first path (Priority / WorkPool.make) matches tag path for the same item schema.
 type SchemaContract = ReturnType<typeof makeEngineQueueStoreContract<ItemSchema>>;
 type SchemaWriter = MaterializedEngineQueueStore<ItemSchema>;
 type ExpectedSchemaWriter = Store.StoreProvidedContext<

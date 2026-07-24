@@ -259,16 +259,16 @@ export type {
 
 // Types - WorkPool (the leveled queue folded into WorkPool.priority)
 export type {
-  CustomQueueTagConfig,
+  PriorityTagConfig,
 } from "./WorkPool";
 
 export {
-  customQueueControlSpec,
-  customQueueEntry,
-  customQueueLane,
-  customQueueSizes,
-  customQueueSpec,
-  customQueueStatus,
+  priorityControlSpec,
+  priorityEntry,
+  priorityLane,
+  prioritySizes,
+  prioritySpec,
+  priorityStatus,
 } from "./WorkPool";
 
 export {

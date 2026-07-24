@@ -22,7 +22,9 @@ accumulated since 0.8.0-beta.28.
 - `QueueHyperlink` → **`WorkPool`** · `RunHyperlink` → **`Gate`** · `Process` → **`Daemon`**.
 - `CustomQueueHyperlink` folds into **`WorkPool.priority(...)`** (peer constructor beside
   `WorkPool.Tag`; `layer`/`serve`/`store`/`configure` dispatch on the tag; engine stays
-  tree-shakeable as `WorkPool.makePriority`). Subpath removed.
+  tree-shakeable as `WorkPool.makePriority`). Subpath removed. Public wire helpers rename
+  with it: `customQueueStatus` / `customQueueSpec` / `CustomQueueTagConfig` / … →
+  `priorityStatus` / `prioritySpec` / `PriorityTagConfig` / ….
 - `HttpApiHyperlink` folds into **`Gate.httpApiClient(...)`** (+ `httpApiClientService`,
   `httpApiClientLayer`, `acceptJson`, `instrumentEndpoints`). Subpath removed.
 - Priority-lane vocabulary unified to **lane**: `laneCount`, `namedLanes`, `add(item, lane?)`.

@@ -89,7 +89,7 @@ describe("WorkPool.makePriority", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.live("status stream emits CustomQueueStatus snapshots", () =>
+  it.live("status stream emits PriorityStatus snapshots", () =>
     Effect.gen(function* () {
       const queue = yield* WorkPool.makePriority({
         name: "custom-status",

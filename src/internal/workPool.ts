@@ -540,7 +540,7 @@ export type QueueHandle<
 > = EngineQueueHandle<T, E, EEnqueue, R, A>;
 
 /**
- * Engine handle — includes custom-queue hooks used by {@link WorkPoolPriority}.
+ * Engine handle — includes priority-queue hooks used by {@link WorkPoolPriority}.
  *
  * @internal
  */
@@ -551,7 +551,7 @@ export interface QueueEngineHandle<
   R = never,
   A = void,
 > extends EngineQueueHandle<T, E, EEnqueue, R, A> {
-  /** Enqueue at an explicit lane index (custom queues). */
+  /** Enqueue at an explicit lane index (priority queues). */
   readonly enqueueAtLane: (
     items: T | ReadonlyArray<T>,
     level: number,

@@ -383,7 +383,7 @@ export interface MethodAnnotations {
   readonly destructive?: boolean;
   /**
    * When `"pair"`, a 2-tuple payload is surfaced as two call arguments `(first, second?)`
-   * instead of a single tuple (used by custom-queue `add(item, lane?)`).
+   * instead of a single tuple (used by priority-queue `add(item, lane?)`).
    */
   readonly callStyle?: "pair";
 }
@@ -1503,7 +1503,7 @@ type PairMethodAnnotations = MethodAnnotations & { readonly callStyle: "pair" };
 
 /**
  * Like {@link effectFn}, but the payload must be a 2-tuple schema surfaced as two call
- * arguments `(first, second?)` — used by custom-queue `add(item, lane?)`.
+ * arguments `(first, second?)` — used by priority-queue `add(item, lane?)`.
  *
  * @category spec fields
  * @public

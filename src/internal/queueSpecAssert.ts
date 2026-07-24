@@ -1,10 +1,10 @@
 /**
  * Queue instance spec validation — single boundary cast site for {@link WorkPool.Tag}
- * and {@link WorkPoolPriority.Tag}.
+ * and {@link WorkPool.priority}.
  *
  * @remarks
  * **Invariant:** every method key and RPC kind on a wired spec must match the erased baseline
- * (`queueSpec(payload)` / `customQueueSpec(payload, laneConfig)`) — only the **`events`** stream
+ * (`queueSpec(payload)` / `prioritySpec(payload, laneConfig)`) — only the **`events`** stream
  * element schema may differ (tag `success` / `error` wire slots).
  *
  * @module internal/queueSpecAssert
@@ -15,7 +15,7 @@ import { Data, DateTime, Duration, Schema } from "effect";
 import type { AnyLocalMethod, AnyMethod, FlatSpec } from "../Hyperlink";
 import { flattenHyperlinkSpec } from "../Hyperlink";
 import { buildQueueEvent } from "../WorkPool";
-import type { CustomQueueInstanceSpec } from "../WorkPool";
+import type { PriorityInstanceSpec } from "../WorkPool";
 
 /** Structural mismatch between wired and baseline queue specs. @internal */
 export class QueueSpecShapeError extends Data.TaggedError("QueueSpecShapeError")<{
@@ -175,15 +175,15 @@ export const assertQueueInstanceSpec = <Spec extends Record<string, unknown>>(
 };
 
 /**
- * Validate a wired custom-queue spec against its erased baseline.
+ * Validate a wired priority-queue spec against its erased baseline.
  *
  * @internal
  */
-export const assertCustomQueueInstanceSpec = <F extends Schema.Struct.Fields>(
+export const assertPriorityInstanceSpec = <F extends Schema.Struct.Fields>(
   wired: unknown,
   baseline: unknown,
   wire?: QueueWire,
-): CustomQueueInstanceSpec<F> => {
+): PriorityInstanceSpec<F> => {
   assertStructuralMatch(
     flattenHyperlinkSpec(wired as Parameters<typeof flattenHyperlinkSpec>[0]),
     flattenHyperlinkSpec(baseline as Parameters<typeof flattenHyperlinkSpec>[0]),
@@ -192,5 +192,5 @@ export const assertCustomQueueInstanceSpec = <F extends Schema.Struct.Fields>(
     recoverItemSchema(wired as unknown as { readonly add: AnyMethod }),
     wire,
   );
-  return wired as CustomQueueInstanceSpec<F>;
+  return wired as PriorityInstanceSpec<F>;
 };

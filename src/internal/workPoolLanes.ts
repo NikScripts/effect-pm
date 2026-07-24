@@ -1,9 +1,9 @@
 /**
- * Resolve a public custom-queue level (number or configured name) to a lane index.
+ * Resolve a public priority-queue level (number or configured name) to a lane index.
  *
  * @internal
  */
-export const resolveCustomQueueLane = (options: {
+export const resolvePriorityLane = (options: {
   readonly laneCount: number;
   readonly namedLanes: Readonly<Record<string, number>>;
   readonly defaultLevel: number;
