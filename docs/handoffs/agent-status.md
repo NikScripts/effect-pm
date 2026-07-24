@@ -6,7 +6,7 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **cloud** | `cursor/hyperservice-open-deps-5679` | [anyUnknown plan](../plans/any-unknown-in-error-context.md) — HS open `R` | **batches 0–2 done** — serve/listen/`*Server` preserve Dep | `99f0ac5a` | type tests green; ~95 TS377030 remain (WP/store/daemon/tests) | Batches 3–5 still open | 2026-07-24 |
+| **cloud** | `cursor/hyperservice-open-deps-5679` | [anyUnknown plan](../plans/any-unknown-in-error-context.md) — HS open `R` | **batches 0–2 done** — serve/listen/`*Server` preserve Dep | `70abcd52` | type tests green; ~95 TS377030 remain (WP/store/daemon/tests) | Batches 3–5 still open | 2026-07-24 |
 | **4** | `cursor/beta0-release-prep-125f` | beta.0 polish (Gate shorts, workPool* internals; CLI framing fixed) | **ready** — Eng green; on `integration` tip | same tip as `integration` | typecheck+lint | Owner still: publish, `effect-hyperlink` keep/unpublish, docs domain; `hyp` = private repo-dev; public `hyperlink`/`hl` name reserved, no control surface yet | 2026-07-24 |
 | **1** | `cursor/docs-corpus-phase3-ce05` | [Examples book](./agent-01-examples-book.md) · [Phase 3](./agent-01-docs-corpus-phase3-plan.md) | **E1 in flight** — Examples hub + queue Twoslash pairs | branch tip | hub + 2 queue docs | **Next:** E2 forms/resource pairs | 2026-07-15 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
