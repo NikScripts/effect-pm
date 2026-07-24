@@ -26,7 +26,7 @@ accumulated since 0.8.0-beta.28.
   (subpath too). `DaemonDefinition.process` → **`daemon`**. Gate store
   state-change reasons are PascalCase discriminants (`Started`, `Waiting`,
   `WaitInterrupted`, …) — not kebab/`gate.run.*` prefixes. Daemon handle
-  discriminant `type: "managed"` → **`"daemon"`**.
+  Removed unused `Daemon.type` discriminant (Effect uses `_tag` for ADTs; the handle is already `Daemon`).
 - `CustomQueueHyperlink` folds into **`WorkPool.priority(...)`** (peer constructor beside
   `WorkPool.Tag`; `layer`/`serve`/`store`/`configure` dispatch on the tag; engine stays
   tree-shakeable as `WorkPool.makePriority`). Subpath removed. Public wire helpers rename

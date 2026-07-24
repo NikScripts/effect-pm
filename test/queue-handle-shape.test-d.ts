@@ -1,7 +1,7 @@
 import { Effect, Schema, Stream } from "effect";
 import type { QueueHandle } from "../src/internal/workPool";
 import type { queueStatus } from "../src/WorkPool";
-import type { PriorityHandle } from "../src/internal/workPoolPriority";
+import type { WorkPoolPriorityHandle } from "../src/internal/workPoolPriority";
 import type { priorityStatus } from "../src/WorkPool";
 import * as Hyperlink from "../src/Hyperlink";
 
@@ -26,8 +26,8 @@ true satisfies StatusChanges;
 type StatusNowAbsent = "statusNow" extends keyof Handle ? false : true;
 true satisfies StatusNowAbsent;
 
-// PriorityHandle mirrors the same ref shape.
-type CustomHandle = PriorityHandle<string>;
+// WorkPoolPriorityHandle mirrors the same ref shape.
+type CustomHandle = WorkPoolPriorityHandle<string>;
 type CustomStatusShape = CustomHandle["status"];
 
 type CustomStatusIsSubscribable = CustomStatusShape extends Hyperlink.Subscribable<CustomStatus>

@@ -172,7 +172,6 @@ export interface DaemonSnapshot {
  */
 export interface Daemon<out R> {
   readonly name: string;
-  readonly type: "daemon";
   /**
    * Long-running trigger driver that spawns run instances.
    * Execution history is recorded on the **`Daemon.layer`** path via the baked-in default store
@@ -1074,7 +1073,6 @@ function createDaemon<E, RUser>(state: AnyDaemonBuildState<E, RUser>) {
     );
   const base = {
     name,
-    type: "daemon" as const,
     run,
     snapshot,
     events,

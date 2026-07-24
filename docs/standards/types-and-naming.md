@@ -126,6 +126,31 @@ PascalCase names a class, a type, a namespace, or a namespace-member factory (`T
 `Schedule`). Nothing else. If it's a value you can pass around, it is not PascalCase — the sole
 exception is a factory that stands in for a namespace member.
 
+{#namespaced-short-vs-internal-full .must appliesTo="src examples"}
+## Namespaced types are short; internal types use the full module prefix
+
+Match Effect: under a public module namespace the member name is short; outside that namespace
+(especially `src/internal/`) the name carries the module prefix so it stays unambiguous.
+
+| Where | Form | Example |
+|-------|------|---------|
+| Public module (`src/WorkPool.ts`), consumed as `import * as WorkPool` | Short member | `WorkPool.PriorityConfig`, `WorkPool.Tag` |
+| `src/internal/*` (and any file that is **not** that namespace) | Full prefix | `WorkPoolPriorityConfig`, `WorkPoolPriorityHandle` |
+
+``` ts
+// ✅ public WorkPool.ts — short; consumers see WorkPool.PriorityConfig
+export type PriorityConfig<T, E, R> = WorkPoolPriorityConfig<T, E, R>
+
+// ✅ internal/workPoolPriority.ts — full name (no ambient WorkPool. namespace)
+export type WorkPoolPriorityConfig<T, E, R> = …
+
+// ❌ bad — short name orphaned in internal/
+export type PriorityConfig<T, E, R> = …  // in src/internal/workPoolPriority.ts
+```
+
+The public file may **re-export** the internal full type under the short name (or define the short
+alias there). Apps never import `src/internal/` directly.
+
 {#values-are-camelcase .must appliesTo="src examples"}
 ## Values are camelCase; UPPER_SNAKE only for magic constants
 
