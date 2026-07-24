@@ -90,11 +90,10 @@ const buildWidget = (
         name,
         atom: Atom.withReactivity(reactivityKey)(
           runtime.atom(
-            // Boundary: heterogeneous tags erase service requirements; the runtime layer provides them.
             Effect.gen(function* () {
               const service = yield* tag;
               return yield* (call(service, name) as Effect.Effect<unknown>);
-            }) as any as Effect.Effect<unknown, never, never>,
+            }),
           ),
         ),
       });
@@ -106,20 +105,21 @@ const buildWidget = (
       const fields = payloadFields.map(
         ([f, schema]) => [f, fieldKind((schema as { ast: { _tag: string } }).ast._tag)] as const,
       );
-      // Boundary: heterogeneous tags erase service requirements; the runtime layer provides them.
-      const runAction = (arg: unknown): Effect.Effect<unknown, never, never> =>
-        Effect.gen(function* () {
-          const service = yield* tag;
-          const target = call(service, name);
-          return yield* (hasPayload
-            ? (target as (p: unknown) => Effect.Effect<unknown>)(arg)
-            : (target as Effect.Effect<unknown>));
-        }) as any as Effect.Effect<unknown, never, never>;
       actions.push({
         name,
         destructive: meta.destructive,
         fields,
-        atom: runtime.fn(runAction, { reactivityKeys: reactivityKey }),
+        atom: runtime.fn(
+          (arg: unknown) =>
+            Effect.gen(function* () {
+              const service = yield* tag;
+              const target = call(service, name);
+              return yield* (hasPayload
+                ? (target as (p: unknown) => Effect.Effect<unknown>)(arg)
+                : (target as Effect.Effect<unknown>));
+            }),
+          { reactivityKeys: reactivityKey },
+        ),
       });
     }
   }

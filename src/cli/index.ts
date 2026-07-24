@@ -219,14 +219,14 @@ export type CliOptions = {
 };
 
 /**
- * Args runner from the options overload of {@link cli}. Requirements are erased at the
- * command-tree edge — provide resource + TUI layers when you run it.
+ * Args runner from the options overload of {@link cli}. Provide resource + TUI layers
+ * when you run it.
  *
  * @public
  */
 export type CliRun = (
   args: ReadonlyArray<string>,
-) => Effect.Effect<void, never, never>;
+) => Effect.Effect<void, unknown, unknown>;
 
 /**
  * Name a list of leaf tags by the **shortest unique slash-suffix** of each key —
@@ -267,12 +267,9 @@ export const cli: {
 } = ((tree: CliTree, second?: string | CliOptions) => {
   if (typeof second === "object" && second !== null) {
     const rootName = second.name ?? "cli";
-    const run = Command.runWith(buildCommand(tree, rootName), {
+    return Command.runWith(buildCommand(tree, rootName), {
       version: second.version,
-    });
-    // Boundary: heterogeneous tags + Effect CLI Environment erase to never at the app edge.
-    return ((args: ReadonlyArray<string>) =>
-      run(args) as Effect.Effect<void, never, never>) satisfies CliRun;
+    }) as CliRun;
   }
   return buildCommand(tree, second ?? "cli");
 }) as typeof cli;
