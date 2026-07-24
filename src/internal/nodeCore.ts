@@ -101,7 +101,7 @@ export interface Endpoints {
  * Directory advertise conflict policy when the same `nodeKey` already has a row.
  *
  * - `livenessReplace` — ping incumbent; alive → reject; dead → replace
- * - `askIncumbent` — if alive, Lookup asks `NodeStatus.yield`; refuse/timeout → reject
+ * - `askIncumbent` — if alive, Lookup asks the incumbent node-status `yield`; refuse/timeout → reject
  * - `reject` — alive → reject; dead → still replace
  * - `inherit` — continue up the resolve chain (call-site → node → Lookup → hard fallback)
  *

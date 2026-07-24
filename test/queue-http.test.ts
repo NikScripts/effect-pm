@@ -80,7 +80,7 @@ const HttpQueueServer = HttpRouter.serve(
   Layer.provideMerge(NodeHttpServer.layerTest),
 );
 
-const clientHttp = (port: number) =>
+const httpProtocol = (port: number) =>
   RpcClient.layerProtocolHttp({ url: `http://127.0.0.1:${port}/rpc` }).pipe(
     Layer.provide(RpcSerialization.layerNdjson),
     Layer.provide(FetchHttpClient.layer),
@@ -115,7 +115,7 @@ it("enqueue round-trips a full entry (item + metadata) over real http", () => {
       expect(DateTime.toEpochMillis(got!.timestamps.enqueuedAt)).toBe(0);
     }).pipe(
       Effect.provide(
-        Hyperlink.client(HttpQueue).pipe(Layer.provide(clientHttp(port))),
+        Hyperlink.client(HttpQueue).pipe(Layer.provide(httpProtocol(port))),
       ),
       Effect.scoped,
     );

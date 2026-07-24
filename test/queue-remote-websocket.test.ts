@@ -32,7 +32,7 @@ const clientWs = (port: number) =>
   );
 
 // http client transport — the WRONG protocol for the ws server below (used by the mismatch test).
-const clientHttp = (port: number) =>
+const httpProtocol = (port: number) =>
   RpcClient.layerProtocolHttp({ url: `http://127.0.0.1:${port}/rpc` }).pipe(
     Layer.provide(RpcSerialization.layerNdjson),
     Layer.provide(FetchHttpClient.layer),
@@ -101,7 +101,7 @@ it("events (Enqueued/Started/Completed) stream over WebSocket", () =>
 
 it("MISMATCH: an http client against a {protocol:websocket} server FAILS as ProtocolMismatch", () =>
   Effect.runPromise(
-    withServer({ effect: () => Effect.void }, clientHttp, (_port) =>
+    withServer({ effect: () => Effect.void }, httpProtocol, (_port) =>
       Effect.gen(function* () {
         const q = yield* WsQueue;
         // The bug: `q.add` over the wrong protocol used to fail and get `Effect.ignore`'d, so nothing

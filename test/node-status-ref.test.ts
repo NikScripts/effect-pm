@@ -4,7 +4,7 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
-import { NodeStatusTag, clientHttp as nodeStatusClientHttp } from "../src/internal/nodeStatus";
+import { NodeStatusTag, httpClient as nodeStatusHttpClient } from "../src/internal/nodeStatus";
 import { buildNodeStatusImpl } from "../src/internal/nodeStatus";
 import * as Node from "../src/Node";
 
@@ -38,7 +38,7 @@ describe("NodeStatus Subscribable", () => {
         expect(Option.isSome(head)).toBe(true);
         expect(yield* node.logs.query({ limit: 10 })).toEqual([]);
       }).pipe(
-        Effect.provide(nodeStatusClientHttp(`http://127.0.0.1:${port}/rpc`)),
+        Effect.provide(nodeStatusHttpClient(`http://127.0.0.1:${port}/rpc`)),
         Effect.scoped,
       );
     }).pipe(Effect.provide(Server), Effect.scoped),

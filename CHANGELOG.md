@@ -46,6 +46,9 @@ accumulated since 0.8.0-beta.28.
   own wire) and `Hyperlink.http` / `ws` / `unix` / `nPipe(node)` (batteries). **`clientHttp`
   removed** — migrate to `connect(tag, protocolHttp(target))`. Bare-port dials resolve via
   `Hyperlink.clientHost` (`HYPERLINK_CLIENT_HOST`, default `localhost`).
+- Reserved wire ids drop the old `@pm/…` prefix: node-status is
+  `hyperlink-ts/node-status` (was `@pm/node-status`); ephemeral verify/lookup probe node keys
+  use `hyperlink-ts/verify/…` and `hyperlink-ts/lookup-*/…`.
 - Transport wiring fails **loud and typed** (`ProtocolUnanswered`, `UnaddressedNode`,
   contract-hash verification, deep `verifyConnection`); silent-wiring paths removed.
 - Per-resource serving with isolated deps on one `/rpc`; listen/local catalogs; RPC transport is

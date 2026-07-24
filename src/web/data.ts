@@ -308,8 +308,8 @@ export const nodesOf = (group: unknown): ReadonlyArray<NodeRef> => {
   return [...seen.values()];
 };
 
-/** A tag's wire identity (its `groupId`, falling back to `key`) — what a node's `NodeStatus`
- *  reports for each served resource. */
+/** A tag's wire identity (its `groupId`, falling back to `key`) — what a node's status
+ *  snapshot reports for each served resource. */
 export const tagWireKey = (member: unknown): string | undefined => {
   if ((typeof member !== "object" && typeof member !== "function") || member === null) {
     return undefined;
@@ -320,7 +320,7 @@ export const tagWireKey = (member: unknown): string | undefined => {
 };
 
 /** The {@link NodeRef} a resource tag is bound to (its `Node.Tag`), or `undefined` for a nodeless
- *  tag — lets a resource page read its own readiness from its node's `NodeStatus`. */
+ *  tag — lets a resource page read its own readiness from its node's status handle. */
 export const resourceNodeRef = (tag: unknown): NodeRef | undefined => {
   const node = nodeOf(tag);
   return node === undefined ? undefined : { id: node.key, node };
@@ -799,7 +799,7 @@ export const apiBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: ApiTag<R
 // identity, and the runtime supplies its transport via `connect`, so we restate the resolved
 // requirement — the same contained boundary assertion `Hyperlink.client` makes for node-bearing tags.
 // The 2-arg `client(tag, node)` form reads the node's value and unwraps its transport — the sanctioned
-// way to point a nodeless tag (NodeStatus) at a specific node. (The node is exposed at runtime via
+// way to point a nodeless reserved tag at a specific node. (The node is exposed at runtime via
 // `connect`, so we erase its identity to `never` — the same contained boundary assertion Hyperlink.client
 // makes for node-bearing tags.)
 const nodeConn = (node: NodeKey<unknown>) =>
@@ -807,8 +807,8 @@ const nodeConn = (node: NodeKey<unknown>) =>
   // heterogeneous, so the node is erased; these are real addressed dashboard nodes.
   connect(node as AddressedNode<unknown>);
 
-/** Build (once per runtime+node) the atom bundle for a node's live status — read straight from the
- *  reserved `NodeStatus` resource over that node's transport. */
+/** Build (once per runtime+node) the atom bundle for a node's live status — read from the
+ *  connected node handle's status/logs accessors. */
 export const nodeStatusBundle = <R, ER>(
   runtime: DashboardRuntime<R, ER>,
   ref: NodeRef,

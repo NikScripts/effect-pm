@@ -33,7 +33,7 @@ import type { LogEntry } from "../LogEntry";
 import { queryDurableNode } from "./logs/durableRead";
 
 /** The reserved group id (wire prefix) for the node status resource. */
-const HOST_STATUS_KEY = "@pm/node-status";
+const NODE_STATUS_KEY = "hyperlink-ts/node-status";
 
 /** How often the live {@link NodeStatusTag} `status` stream re-emits a snapshot. */
 const STATUS_INTERVAL = Duration.seconds(2);
@@ -83,7 +83,7 @@ export type NodeStatus = typeof nodeStatus.Type;
  * @internal
  */
 export class NodeStatusTag extends Hyperlink.Tag<NodeStatusTag>()(
-  HOST_STATUS_KEY,
+  NODE_STATUS_KEY,
   {
   status: Hyperlink.ref(nodeStatus).annotate({
     description:
@@ -212,7 +212,7 @@ export const nodeStatusAccessors = (
     Layer.provide(Hyperlink.clientVerify(false)),
   );
   const toUnreachable = (cause: unknown) =>
-    new NodeUnreachable({ node: HOST_STATUS_KEY, url: "node handle", cause });
+    new NodeUnreachable({ node: NODE_STATUS_KEY, url: "node handle", cause });
   // One-shot read: build the per-node status client into a Context (scoped) and provide THAT — never
   // `Effect.provide(effect, Layer)` in a library internal (breaks scope lifetimes; strictEffectProvide).
   const oneShot = <A>(
@@ -242,7 +242,7 @@ export const nodeStatusAccessors = (
 };
 
 /** A status client for a node's `/rpc` url (ndjson/http) — internal dial helper (tests, url probes). @internal */
-export const clientHttp = (url: string): Layer.Layer<NodeStatusTag> =>
+export const httpClient = (url: string): Layer.Layer<NodeStatusTag> =>
   Hyperlink.client(NodeStatusTag).pipe(
     Layer.provide(
       RpcClient.layerProtocolHttp({ url }).pipe(

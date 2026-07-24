@@ -2125,12 +2125,12 @@ export const identitySym: unique symbol = Symbol.for(
   "hyperlink-ts/Hyperlink/identity",
 );
 
-// ── readiness: a derived view of a resource's status, aggregated into node /health + NodeStatus ──
+// ── readiness: a derived view of a resource's status, aggregated into node /health + handle status ──
 
 /**
  * A resource's readiness — derived from its own status (its single source of truth), aggregated
- * into a node's `/health` and `NodeStatus`. `ready: false` with a `detail` says *why* (surfaced in
- * the `/health` body and the dashboard health board).
+ * into a node's `/health` and `(yield* node).status`. `ready: false` with a `detail` says *why*
+ * (surfaced in the `/health` body and the dashboard health board).
  *
  * @category models
  * @public
@@ -2595,9 +2595,9 @@ export const nodeKindsOf = (tag: unknown): ReadonlyArray<ProtocolKind> => {
 export type PipeableTag = { readonly [specSym]: FlatSpec };
 
 /**
- * Attach a {@link Readiness} derivation to a tag — the seam the node's `/health` and `NodeStatus`
- * aggregate over. Each contract applies it from its own status (so readiness can't drift from
- * status); a bare {@link Hyperlink.Tag} can opt in the same way. Dual (data-first or `.pipe`):
+ * Attach a {@link Readiness} derivation to a tag — the seam the node's `/health` and handle
+ * `.status` aggregate over. Each contract applies it from its own status (so readiness can't drift
+ * from status); a bare {@link Hyperlink.Tag} can opt in the same way. Dual (data-first or `.pipe`):
  *
  * ```ts
  * class EdgeCache extends Hyperlink.Tag<EdgeCache>()("edge/Cache", {
@@ -4391,9 +4391,9 @@ const probeEndpointReachable = (
 };
 
 /**
- * Tier-2/3/4: after transport is up, dial {@link NodeStatus} over the endpoint's protocol. Failures
- * classify as {@link ProtocolUnanswered}; optional `resource` checks served-key / readiness;
- * optional `contractHash` compares the F4 wire fingerprint.
+ * Tier-2/3/4: after transport is up, dial the reserved node-status RPC over the endpoint's
+ * protocol. Failures classify as {@link ProtocolUnanswered}; optional `resource` checks
+ * served-key / readiness; optional `contractHash` compares the F4 wire fingerprint.
  *
  * Dynamic-imports the status tag so Hyperlink ⇄ nodeStatus stays acyclic.
  *
@@ -4419,13 +4419,16 @@ const probeEndpointDeep = (
   }
   const dialTarget =
     ep.kind === "IpcSocket"
-      ? makeNode()(`@pm/verify/${nodeKey}`, { path: address })
-      : makeNode()(`@pm/verify/${nodeKey}`, { url: address, kind: ep.kind });
+      ? makeNode()(`hyperlink-ts/verify/${nodeKey}`, { path: address })
+      : makeNode()(`hyperlink-ts/verify/${nodeKey}`, {
+          url: address,
+          kind: ep.kind,
+        });
   return Effect.gen(function* () {
     const { NodeStatusTag } = yield* Effect.promise(
       () => import("./internal/nodeStatus"),
     );
-    // Skip default-on verify on this nested NodeStatus client (we *are* the verify probe).
+    // Skip default-on verify on this nested status client (we *are* the verify probe).
     const ctx = yield* Layer.build(
       clientLayer(NodeStatusTag, dialTarget).pipe(
         Layer.provide(clientVerify(false)),
@@ -4513,15 +4516,15 @@ export type VerifyConnectionDeepOptions = VerifyConnectionOptions & {
  * dial (`selectEndpoint`, or every endpoint with `{ all: true }`). Fails
  * {@link NodeUnreachable} if nothing answers.
  *
- * With `{ deep: true }`, escalates after transport OK: dials the auto-served {@link NodeStatus}
- * over that endpoint. Transport up but RPC silent → {@link ProtocolUnanswered}; optional
+ * With `{ deep: true }`, escalates after transport OK: dials the node's auto-served status
+ * RPC over that endpoint. Transport up but RPC silent → {@link ProtocolUnanswered}; optional
  * `resource` key → {@link ServiceNotServed} / {@link ServiceNotReady}; optional
  * `contractHash` → {@link ContractMismatch} (F4).
  *
  * ```ts
  * yield* Hyperlink.verifyConnection(Droplet);                          // tier 1
  * yield* Hyperlink.verifyConnection(Droplet, { timeout: "1 second" });
- * yield* Hyperlink.verifyConnection(Droplet, { deep: true });          // + NodeStatus RPC
+ * yield* Hyperlink.verifyConnection(Droplet, { deep: true });          // + node status RPC
  * yield* Hyperlink.verifyConnection(Droplet, {
  *   deep: true,
  *   resource: Emails.groupId,
@@ -4826,7 +4829,6 @@ export const distributed = <T extends PipeableTag>(tag: T): T =>
  *
  * @category nodes & fleet
  * @public
- * @since 1.0.0
  */
 export const distributedOf = nodesOf;
 
@@ -5591,13 +5593,13 @@ function clientLayer<Self, S extends Spec>(
   // Dialable node (explicit 2nd arg *or* tag-bound): bake the canonical connect Layer
   // (WeakMap-memoized per Node class) so multiple clients share one MemoMap transport.
   // Default-on verify (reject): peer down / wrong-or-stale contract fails Layer build —
-  // opt out via {@link clientVerify}. Reserved NodeStatus is auto-served and absent from
+  // opt out via {@link clientVerify}. Reserved node-status is auto-served and absent from
   // `status.resources`, so it stays tier-1 (reachability only).
   if (isAddressedNode(nodeKey as AnyNode)) {
     const addressed = nodeKey as AddressedNode<unknown>;
     const connected: any = layer.pipe(Layer.provide(connectAddressed(addressed)));
     const deepResource =
-      tag.groupId === "@pm/node-status"
+      tag.groupId === "hyperlink-ts/node-status"
         ? undefined
         : {
             resource: tag.groupId,

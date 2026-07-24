@@ -22,7 +22,7 @@ class RemoteQueue extends WorkPool.Tag<RemoteQueue>()("queue-remote/Q", {
 }) {}
 
 // client transport: http + ndjson (matches the server's default serialization).
-const clientHttp = (port: number) =>
+const httpProtocol = (port: number) =>
   RpcClient.layerProtocolHttp({ url: `http://127.0.0.1:${port}/rpc` }).pipe(
     Layer.provide(RpcSerialization.layerNdjson),
     Layer.provide(FetchHttpClient.layer),
@@ -47,7 +47,7 @@ const withServer = <A, E>(
     const port = address._tag === "TcpAddress" ? address.port : 0;
     return yield* use(port).pipe(
       Effect.provide(
-        Hyperlink.client(RemoteQueue).pipe(Layer.provide(clientHttp(port))),
+        Hyperlink.client(RemoteQueue).pipe(Layer.provide(httpProtocol(port))),
       ),
       Effect.scoped,
     );
