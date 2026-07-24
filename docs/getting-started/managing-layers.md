@@ -1,4 +1,4 @@
-{#managing-layers title="Managing Layers" status="draft" appliesTo=all}
+{#managing-layers title="Managing Layers" status="draft" done="api previews types" appliesTo=all}
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
@@ -6,12 +6,15 @@
 <!-- docs-site-link:end -->
 # Managing Layers
 
-A Hyperlink Service is defined **once** — a Tag with a Contract, and an Implementation behind it.
-Where it runs and how you reach it is decided entirely by the **Layer** you provide. The code that
-uses it never changes: `yield* Tag` reads the same whether the HyperService runs in this process, is
-served over RPC, or is a client to one running on another machine. [Creating a Hyperlink
-Service](/docs/creating-a-hyperlink) ran one in-process; this page tours the layers that place it
-anywhere else — served, remote, or across a fleet.
+A [**Hyperlink Service**](/docs/glossary#hyperlink-service) is defined **once** — a Tag with a
+Contract, and an Implementation behind it. Where it runs and how you reach it is decided entirely by
+the [**Layer**](/docs/glossary#layer) you provide. The code that uses it never changes: `yield* Tag`
+reads the same whether the HyperService runs in this process, is served over RPC, or is a client to
+one running elsewhere.
+
+[Core Concepts](/docs/core-concepts) covered that idea. This page is the Layer vocabulary —
+in-process, served, remote, or across a fleet. [Creating a Hyperlink Service](/docs/creating-a-hyperlink)
+builds one Tag end to end when you're ready.
 
 {.note}
 The rule of thumb: **the Tag is fixed, the Layer varies.** Swapping a resource from in-process to
@@ -29,12 +32,12 @@ program.pipe(Effect.provide(JobsLive)) // `yield* Jobs` now runs jobsImpl locall
 
 ## Serving over the network
 
-To expose a Hyperlink over RPC, mount it on an HTTP server. `Hyperlink.serve(Tag, impl)` is one served
-entry; `Node.httpServer([...])` (or `Node.wsServer([...])`) hosts a list of them on one
-`/rpc`, alongside an auto-mounted `Node.status` and a `/health` route:
+To expose a HyperService over RPC, mount it on a server. `Hyperlink.serve(Tag, impl)` is one served
+entry; `Node.httpServer([...])` (or `Node.wsServer([...])`) hosts a list of them on one `/rpc`,
+alongside an auto-mounted `Node.status` and a `/health` route:
 
 ``` ts
-const Node = Node.httpServer([
+const server = Node.httpServer([
   Hyperlink.serve(Jobs, jobsImpl),
   Hyperlink.serve(Emails, emailsImpl),
 ]).pipe(
@@ -88,16 +91,16 @@ Engine tags use `WorkPool.serve` / `Daemon.serve` / `Gate.serve` (they also run 
 
 ## Connecting a client
 
-The client mirror of serving. A remote Hyperlink needs two things: the client handle for the Tag, and
-a **transport** to reach the node it runs on. A **Node** is a named endpoint — declared with
-`Node.Tag<Self>()("key", { url })` — that carries the address its Hyperlinks answer at, so a
-served tag is self-describing and a client knows where to dial.
+The client mirror of serving. A remote HyperService needs two things: the client handle for the Tag,
+and a **transport** to reach the node it runs on. A [**Node**](/docs/glossary#node) is a named
+endpoint — declared with `Node.Tag<Self>()("key", { url })` — that carries the address its
+HyperServices answer at, so a served tag is self-describing and a client knows where to dial.
 
 ``` ts
 // One resource by port or url — batteries included (transport + client in one call):
 program.pipe(Effect.provide(Hyperlink.connect(Jobs, Hyperlink.protocolHttp(3000))))
 
-// Or wire a Node's transport once and read any resource bound to it:
+// Or wire a Node's transport once and read any resource that rides it:
 const transport = Hyperlink.ws(JobsNode, { url: "/rpc" }) // WebSocket (browser)
 const appLayer = Layer.mergeAll(
   transport,
@@ -113,26 +116,33 @@ Per-node transport shortcuts, matching the two server entry points:
   `http(s)://` url (scheme swapped), or an absolute `ws(s)://` url. Both shortcuts resolve the `url`
   as: the option you pass → the Node's own url → `"/rpc"` (same-origin) as the final fallback.
 
-**The client and server must speak the same wire** — a `ws` cannot talk to an `httpServer`.
+**The client and server must speak the same wire** — a `ws` client cannot talk to an `httpServer`.
 
 ## The transport primitive
 
-The shortcuts above are sugar over one seam. A transport is a `RpcClient.Protocol` value, and
-`Hyperlink.layerProtocol(protocol)` makes it the ambient client wire — build the common ones with
+The shortcuts above are sugar over one seam. A transport is an `RpcClient.Protocol` layer;
+`Hyperlink.layerProtocol(protocol)` makes it the ambient client wire that nodeless
+`Hyperlink.client(Tag)` calls (and peer folds) read. Build the common ones with
 `Hyperlink.protocolHttp(url)` / `Hyperlink.protocolWebsocket(url)`:
 
 ``` ts
 Effect.provide(app, Hyperlink.layerProtocol(Hyperlink.protocolWebsocket())) // one wire, whole app
 ```
 
-`Hyperlink.connect(node, protocol)` is the per-node form (it re-keys a protocol under a node);
-`ws(node)` is exactly `connect(node, protocolWebsocket(node.url))`. You rarely reach for the
-primitive directly — the named shortcuts cover the common cases — but it's there when you need a
-custom serialization or a hand-rolled transport.
+Two shapes sit on that seam:
+
+- **`Hyperlink.connect(Tag, protocol)`** — client for one Tag over a protocol you pass (port,
+  url, or a custom layer). No Node required.
+- **`Hyperlink.http(node)` / `Hyperlink.ws(node)`** — dial a Node (wire its transport and put the
+  Node in context). Share that layer with every `Hyperlink.client(Tag)` that rides the same
+  connection.
+
+You rarely reach for `layerProtocol` directly — the named shortcuts cover the common cases — but
+it's there when you need a custom serialization or a hand-rolled transport.
 
 ## Fleets and peers
 
-When a Hyperlink runs across many nodes and its instances coordinate (see
+When a HyperService runs across many nodes and its instances coordinate (see
 [Fleets & Peers](/docs/fleets-and-peers)), the **server-to-server** peer calls have their own
 transport too. `Hyperlink.peersLayer(Tag, ThisNode)` discharges the mesh; those peer dials default to
 HTTP, so a fleet whose nodes serve WebSocket must move the peer mesh onto WebSocket to match — one
@@ -158,3 +168,8 @@ Without it, a websocket-served fleet's fold (`fleetActive`, `activeByNode`, …)
 
 Pick per **deployment**, not per call — every side of one wire must agree. In-process resources
 (`Hyperlink.layer`) have no transport at all.
+
+## Next
+
+Build one Tag end to end in **[Creating a Hyperlink Service](/docs/creating-a-hyperlink)**, or go
+deeper on multi-node coordination in **[Fleets & Peers](/docs/fleets-and-peers)**.
