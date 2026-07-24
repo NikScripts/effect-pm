@@ -1,7 +1,7 @@
 /**
- * @module examples/forms/resource/http-api-resource-layer-effect
+ * @module examples/forms/resource/gate-http-api-layer-effect
  *
- * Gate.httpApiClientLayer on an existing client Layer. Run: `pnpm run example:http-api-resource-layer-effect`
+ * Gate.httpApiClientLayer on an existing client Layer. Run: `pnpm run example:gate-http-api-layer-effect`
  */
 
 import { Context, Effect, Layer, Ref, Schema } from "effect";
@@ -39,7 +39,7 @@ class DecodeCapture extends Context.Service<
     readonly record: (label: string) => Effect.Effect<void>;
     readonly count: () => Effect.Effect<number>;
   }
->()("hyperlink-ts/examples/forms/resource/http-api-resource-layer-effect/DecodeCapture") {}
+>()("hyperlink-ts/examples/forms/resource/gate-http-api-layer-effect/DecodeCapture") {}
 
 const DecodeCaptureNoop = Layer.succeed(DecodeCapture, {
   record: (_label: string) => Effect.void,
@@ -66,7 +66,7 @@ const _make = Effect.gen(function* () {
 });
 
 export class DemoApiClient extends Context.Service<DemoApiClient>()(
-  "hyperlink-ts/examples/forms/resource/http-api-resource-layer-effect/DemoApiClient",
+  "hyperlink-ts/examples/forms/resource/gate-http-api-layer-effect/DemoApiClient",
   {
     make: _make,
   },
@@ -149,4 +149,4 @@ const mainLayer = Layer.provideMerge(
   DecodeCaptureLive,
 );
 
-runNodeProgramWithLayer(program, mainLayer, "form:http-api-resource-layer-effect finished OK");
+runNodeProgramWithLayer(program, mainLayer, "form:gate-http-api-layer-effect finished OK");

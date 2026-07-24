@@ -56,8 +56,8 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | [`forms/resource/gate-store-readback.ts`](./forms/resource/gate-store-readback.ts) | Engine auto-write + `Gate.store` + `Store.Service.at` readback |
 | [`forms/resource/gate-runtime-observer.ts`](./forms/resource/gate-runtime-observer.ts) | Observable handle (`status`, counters) via `Subscribable` |
 | [`forms/resource/http-client-gate.ts`](./forms/resource/http-client-gate.ts) | `HttpClientGate.transformClient` |
-| [`forms/resource/http-api-resource-tag-layer.ts`](./forms/resource/http-api-resource-tag-layer.ts) | `HttpApiClient.Service` + `ApiMetrics.Tag` |
-| [`forms/resource/http-api-resource-layer-effect.ts`](./forms/resource/http-api-resource-layer-effect.ts) | `HttpApiClient.layerEffect` + sidecar capture |
+| [`forms/resource/gate-http-api-client.ts`](./forms/resource/gate-http-api-client.ts) | `Gate.httpApiClientService` + `ApiMetrics.Tag` |
+| [`forms/resource/gate-http-api-layer-effect.ts`](./forms/resource/gate-http-api-layer-effect.ts) | `Gate.httpApiClientLayer` + sidecar capture |
 | [`forms/resource/telemetry-fleet-glass.ts`](./forms/resource/telemetry-fleet-glass.ts) | `Telemetry` leaf snapshot + fleet `inFlightByNode` / `fleetInFlight` |
 | [`forms/resource/fleet-health-glass.ts`](./forms/resource/fleet-health-glass.ts) | `FleetHealth` leaf `local` + fleet `byNode` / `status` (`Reachable` \| `Unreachable`) |
 | [`forms/resource/node-tag-addressed.ts`](./forms/resource/node-tag-addressed.ts) | `Node.Tag` with `{ path }` + `Node.unix` / `client` |
@@ -137,8 +137,8 @@ Storage:
 | `pnpm run example:gate` | Gate concurrency form |
 | `pnpm run example:gate-store-readback` | Gate store auto-write + readback |
 | `pnpm run example:http-client-gate` | HttpClient gate form |
-| `pnpm run example:http-api-resource` | HttpApiClient form |
-| `pnpm run example:http-api-resource-layer-effect` | `layerEffect` form |
+| `pnpm run example:gate-http-api-client` | Gate.httpApiClient form |
+| `pnpm run example:gate-http-api-layer-effect` | `layerEffect` form |
 | `pnpm run example:form:*` | Individual form scripts that are registered in `package.json` |
 
 Run any file directly:

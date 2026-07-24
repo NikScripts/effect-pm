@@ -1,8 +1,8 @@
 /**
- * @module examples/forms/resource/http-api-resource-service-layer
+ * @module examples/forms/resource/gate-http-api-client
  *
  * Gate.httpApiClientService + ApiMetrics — class client and observability tag.
- * Run: `pnpm run example:http-api-resource`
+ * Run: `pnpm run example:gate-http-api-client`
  */
 
 import { FetchHttpClient } from "effect/unstable/http";
@@ -65,5 +65,5 @@ runNodeProgramOrExit(
     Effect.scoped,
     Effect.orDie,
   ),
-  "http-api-resource + ApiMetrics demo complete",
+  "Gate.httpApiClient + ApiMetrics demo complete",
 );

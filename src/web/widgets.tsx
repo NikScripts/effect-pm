@@ -2523,7 +2523,7 @@ export const ShardMapCard = (props: {
 };
 
 /** One labelled counter for the gate card's outcome row. */
-const RunCounter = (props: {
+const GateCounter = (props: {
   readonly label: string;
   readonly value: number;
   readonly color: string;
@@ -2572,9 +2572,9 @@ export const GateCard = (props: {
         <Bar value={inFlight} max={Math.max(1, concurrency)} color="#3b82f6" />
       </div>
       <div className="flex items-center gap-6">
-        <RunCounter label="done" value={completed} color="#22c55e" />
-        <RunCounter label="failed" value={failed} color="#ef4444" />
-        <RunCounter label="interrupted" value={interrupted} color="#a1a1aa" />
+        <GateCounter label="done" value={completed} color="#22c55e" />
+        <GateCounter label="failed" value={failed} color="#ef4444" />
+        <GateCounter label="interrupted" value={interrupted} color="#a1a1aa" />
         {avgMs !== undefined ? (
           <div className="ml-auto text-[0.7rem] text-muted-foreground">avg {avgMs}ms</div>
         ) : null}

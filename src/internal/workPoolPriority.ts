@@ -1,8 +1,8 @@
 /**
  * WorkPool priority (N-level lane) engine — N-level managed queue engine (local `make` entry point).
  *
- * For toolkit tags, layers, and RPC use the public `WorkPoolPriority` namespace
- * (`src/WorkPoolPriority.ts`) / `WorkPool.priority` from the barrel.
+ * For toolkit tags, layers, and RPC use public `WorkPool.priority` /
+ * `WorkPool.makePriority` from the WorkPool module.
  *
  * @module internal/workPoolPriority
  * @internal
@@ -65,7 +65,7 @@ export type { PriorityStatus } from "./queueProjection";
 // ============================================================================
 
 /**
- * Named level registry and default lane for {@link WorkPoolPriority}.
+ * Named level registry and default lane for `WorkPool.priority`.
  *
  * @category models
  * @public
@@ -178,7 +178,7 @@ export type WorkPoolPriorityConfigWithItemSchema<T, E, R> = Omit<
     ) => Effect.Effect<void, E, R>;
     readonly onFailure?: QueueOnFailure<T, E, R>;
     readonly refill?: PriorityRefill<T, E, QueueEnqueueErrors, R>;
-    /** Internal store recorder — wired by {@link WorkPoolPriority.layer}. @internal */
+    /** Internal store recorder — wired by {@link WorkPool.layer (priority tag)}. @internal */
     readonly store?: QueueStoreWriter<T, E, void>;
   };
 
@@ -547,7 +547,7 @@ function makePriorityEffect(
   if (typeof effectOrConfig === "function") {
     if (options === undefined || options.laneCount === undefined) {
       return Effect.die(
-        new Error("WorkPoolPriority.make requires laneCount in config or options"),
+        new Error("WorkPool.makePriority requires laneCount in config or options"),
       );
     }
     return makePriorityEffectFromConfig({ ...(options ?? {}), effect: effectOrConfig });
@@ -555,8 +555,7 @@ function makePriorityEffect(
   return makePriorityEffectFromConfig(effectOrConfig);
 }
 
-// Flat engine surface. The public `WorkPoolPriority` namespace (`src/WorkPoolPriority.ts`)
-// re-exports `makePriorityEffect` as `make` and `queueRateLimiterLayer` as `rateLimiterLayer` —
+// Flat engine surface. Public `WorkPool` re-exports `makePriorityEffect` as `make` and `queueRateLimiterLayer` as `rateLimiterLayer` —
 // flat (not an object literal) so `import * as WorkPoolPriority` member access tree-shakes:
 // `WorkPool.priority` pulls no engine code. `queueRateLimiterLayer` re-exported here so the
 // public namespace can source both engine helpers from one module.
