@@ -65,6 +65,7 @@
  */
 
 import type { JsonSchema } from "effect";
+import { kind } from "./workPoolKind";
 import {
   Cause,
   Context,
@@ -838,7 +839,7 @@ export interface WorkPoolMetadata<
   R = never,
 > {
   readonly id: Id;
-  readonly kind: "queue";
+  readonly kind: typeof kind;
   readonly tag: Context.Service<Id, EngineQueueHandle<T, E, EEnqueue, R>>;
   /**
    * Serializable item codec metadata when {@link WorkPoolConfig.itemSchema}
@@ -1224,7 +1225,6 @@ export class QueueShutdownError extends Data.TaggedError(
 const isReadonlyArray = <A>(input: A | ReadonlyArray<A>): input is ReadonlyArray<A> =>
   Array.isArray(input);
 
-const workPoolKind = "queue" as const;
 
 type EnqueueErrOf<C> = C extends WorkPoolConfigWithItemSchema<
   infer _T,
@@ -3504,7 +3504,7 @@ const workPoolServiceWithoutSchema = <
   const wrapWorker: ServiceDef["wrapWorker"] = (fn) => queueServiceWrapWorker<Spec>(name, fn);
   return Object.assign(base, {
     id: name,
-    kind: workPoolKind,
+    kind: kind,
     tag: base,
     defaultSpec: named,
     configure: (patch: ConfigPatch<Spec>) => queueServiceConfigure(name, patch),
@@ -3563,7 +3563,7 @@ const workPoolServiceWithSchema = <
   const wrapWorker: ServiceDef["wrapWorker"] = (fn) => queueServiceWrapWorker<Spec>(name, fn);
   return Object.assign(base, {
     id: name,
-    kind: workPoolKind,
+    kind: kind,
     tag: base,
     defaultSpec: named,
     configure: (patch: ConfigPatch<Spec>) => queueServiceConfigure(name, patch),
@@ -3673,7 +3673,7 @@ export const Tag = <Self, T, E = never, R = never>() =>
   const base = Context.Service<Self, EngineQueueHandle<T, E, never, R>>()(name);
   return Object.assign(base, {
     id: name,
-    kind: workPoolKind,
+    kind: kind,
     tag: base,
   });
 };

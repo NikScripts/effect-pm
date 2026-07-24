@@ -56,6 +56,7 @@ import {
 } from "./internal/queueSchema";
 // The engine is used only by the runtime verbs (buildQueueImpl/layer/serve/serveRemote) below.
 import { makeQueueEffect } from "./internal/workPool";
+import { kind } from "./internal/workPoolKind";
 import {
   successOf,
   errorOf,
@@ -761,7 +762,7 @@ type QueueInstanceSpec<
  *
  * @category utils
  */
-export const kind = "hyperlink-ts/WorkPool";
+export { kind };
 
 /**
  * Config-object overload of {@link Tag}. `payload` is the item schema (required); `success` (worker

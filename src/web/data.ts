@@ -345,22 +345,13 @@ export const leafByKey = (group: unknown, key: string): unknown => {
   return walk(group);
 };
 
-/** Which kind of leaf a tag is — purely by its **stamped** kind (every tag carries one; a bare
- *  `Hyperlink.Tag` is `"resource"`). No spec-sniffing: the kind key is the single source of truth. */
-export const kindOf = (member: unknown): "queue" | "process" | "api" | "hyperlink" => {
-  const stamped = hyperlinkKindOf(member);
-  if (stamped === queueKind) return "queue";
-  if (stamped === daemonKind) return "process";
-  if (stamped === apiKind) return "api";
-  return "hyperlink";
-};
-
-/** Group-member type-guards, keyed off the same stamped `kind` as {@link kindOf}. @public */
-export const isQueueTag = (m: unknown): m is QueueTag => kindOf(m) === "queue";
+/** Group-member type-guards — each keyed directly off the tag's **stamped** kind, the single
+ *  source of truth (every tag carries one; no spec-sniffing, no second short vocabulary). @public */
+export const isQueueTag = (m: unknown): m is QueueTag => hyperlinkKindOf(m) === queueKind;
 /** @public */
-export const isDaemonTag = (m: unknown): m is DaemonTag => kindOf(m) === "process";
+export const isDaemonTag = (m: unknown): m is DaemonTag => hyperlinkKindOf(m) === daemonKind;
 /** @public */
-export const isApiTag = (m: unknown): m is ApiTag => kindOf(m) === "api";
+export const isApiTag = (m: unknown): m is ApiTag => hyperlinkKindOf(m) === apiKind;
 /** Custom-queue guard — its own stamped kind (not folded into {@link kindOf}, which stays the four
  *  primary kinds; a custom queue dispatches by its exact kind key). @public */
 export const isCustomQueueTag = (m: unknown): m is CustomQueueTag =>

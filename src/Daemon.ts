@@ -226,7 +226,7 @@ export interface Daemon<out R> {
 export interface DaemonDefinition<out Id extends string, out R>
 {
   readonly id: Id;
-  readonly kind: "process";
+  readonly kind: typeof kind;
   readonly process: Daemon<R>;
 }
 
@@ -1361,7 +1361,15 @@ function make<const Id extends string, E, RUser>(
  */
 export type DaemonMake = typeof make;
 
-const daemonDefinitionKind = "process" as const;
+/**
+ * The Daemon resource kind — the single source of truth (also the module's public `kind`).
+ * The definition carries it and the process manager / dashboard match on it; there is no
+ * second short discriminator.
+ *
+ * @category utils
+ * @public
+ */
+export const kind = "hyperlink-ts/Daemon" as const;
 
 const makeDaemonDefinition = <const Id extends string, E, RUser>(
   id: Id,
@@ -1370,7 +1378,7 @@ const makeDaemonDefinition = <const Id extends string, E, RUser>(
   const process = make(id, config);
   return {
     id,
-    kind: daemonDefinitionKind,
+    kind,
     process,
   };
 };
@@ -1570,15 +1578,6 @@ export type DaemonExecutionEvent = typeof daemonExecutionEventVoid.Type;
  * @public
  */
 export const daemonExecutionEventFor = makeDaemonExecutionEvent;
-
-/**
- * This contract's canonical **kind** — stamped on every process tag so consumers (e.g. the
- * dashboard) can classify it via {@link Hyperlink.kindOf} without sniffing the spec.
- *
- * @category wire schemas
- * @public
- */
-export const kind = "hyperlink-ts/Daemon";
 
 /**
  * This contract's canonical **kind** for a standalone {@link Schedule} resource.
