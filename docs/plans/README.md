@@ -35,5 +35,7 @@ Pre-1.0: breaking changes land as minor bumps.
 
 ## Hygiene
 
-- **`anyUnknownInErrorContext`** — restored to `"error"`; keep fixing residual Expression-level hits at Effect `any`-bounded boundaries without disabling the rule.
-  Inventory (counts + heaviest files, rule still off): [any-unknown-in-error-context.md](./any-unknown-in-error-context.md).
+- **`anyUnknownInErrorContext`** — **Eng’d** (rule `"error"`, tip clear). Open-`R` docs in
+  *Managing Layers* + *Hyperlink Factories* standards. Remaining `toLayer` / wire `provideContext` /
+  D1 factory retypes are **parked** erase debt — see
+  [any-unknown-in-error-context.md](./any-unknown-in-error-context.md).

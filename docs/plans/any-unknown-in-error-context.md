@@ -1,13 +1,11 @@
 # Inventory: `anyUnknownInErrorContext`
 
-**Status:** rule is **`error`** in both typecheck tsconfigs. **Cleared** on tip (Agent 4) —
+**Status:** **Eng’d + tip-synced.** Rule is `"error"` in both typecheck tsconfigs. Cleared on tip —
 no channel casts, no rule disables except `serviceNotAsClass` at Service/Tag factories.
 
-**Critique follow-through:** Gate / Daemon public `serve` / `serveRemote` no longer use `as any`;
-memory aliases are identity. **`Hyperlink.serveRemoteDriver`** is the typed Driver mount (preserves
-worker `R`); plain `serveRemote` keeps `ServeRequirements` inference — toolkit call sites call the
-Driver API directly (no factory retype). Remaining honest erase: shared `serveRemoteHandlers`
-(`RpcGroup.toLayer`), wire `provideContext`, D1 server factories.
+**Product docs:** open-`R` serve composition lives in
+[`docs/getting-started/managing-layers.md`](../getting-started/managing-layers.md) and the must-rules
+in [`docs/standards/hyperlinks.md`](../standards/hyperlinks.md) (`serve-preserves-requirements`).
 
 ## Locked product invariant
 
@@ -15,26 +13,24 @@ Driver API directly (no factory retype). Remaining honest erase: shared `serveRe
 `httpServer` / `wsServer` / `ipcServer` must **preserve `R`** (and `E`) from serve layers so callers
 `Layer.provide` dependencies outside. Closing `R` at the server boundary is rejected.
 
-**Typing approach (D1):** Effect-style open composition (like `Layer.mergeAll`), but **without**
-writing `any`/`unknown` into expression-level `E`/`R`. Prefer:
+## What shipped
 
-- Constraints use **`Layer.Any`** / `ServeLayerList = readonly [Layer.Any, …]` — not
-  `Layer.Layer<never, any, any>` (that alias still fires `anyUnknown` when used in `extends`)
-- Public overloads: open `<A, E, R>` for a single serve, or `Serves extends ServeLayerList` with
-  return `Layer.Success` / `Error` / `Services` extracted from the argument
-- Overload **implementation** returns `Layer.Any` (structural; no Effect channels)
-- Dynamic Effect/Rpc factories: **retype before call** via `retype<T>(value as never)` so the call
-  site never sees `any`/`unknown` channels; `unwrap` takes `never` the same way
-- Negative type tests: assert open `R` via `Layer.Services` / statement `@ts-expect-error` — do not
-  call sinks that expect `R = never` on intentionally incomplete layers (trips `missingLayerContext`)
-- **Forbidden:** `as any`, `as unknown as`, ErasedChannel=`unknown`, next-line off for this rule
-  (except `serviceNotAsClass` at true `Context.Service` / `Tag` factories)
+| Piece | Notes |
+|------|--------|
+| Open-`R` serve lists (D1) | `Layer.Any` constraints; public overloads reify channels |
+| Gate / Daemon | No public `as any` on serve; memory aliases are identity |
+| `Hyperlink.serveRemoteDriver` | Driver mount preserves worker `R`; toolkits call it directly |
+| Plain `serveRemote` | Still `ServeRequirements`-inferred for object impls |
+| Negative proofs | Bare `AddressedNode`, incomplete client `Layer.Services` |
 
-## Proven contracts
+## Parked erase debt (do **not** spin an agent)
 
-- `test/http-server-overload.test-d.ts` — `httpServer` / `wsServer` / `ipcServer` keep `"Dep"` in `R`
-  and propagate `E`
-- `test/node-nameless-listen.test-d.ts` — `Node.unix(serveWithDep)` keeps `"Dep"` / fallible `E`
+These are Effect/Rpc factory edges. Further chasing has low app-facing leverage; the language
+service tracks through most bridges. Leave until a concrete breakage or a package-wide erase audit:
+
+1. `serveRemoteHandlers` → `RpcGroup.toLayer` (`retype`)
+2. Wire `invokeWireMethodWithContext` → `Effect.provideContext` (`as any` on dynamic members)
+3. D1 `httpServer` / listen internal factory retypes
 
 ## How to reproduce
 
@@ -53,3 +49,4 @@ pnpm exec tsgo --noEmit -p tsconfig.json 2>&1 | rg 'anyUnknownInErrorContext|TS3
 | **3** | WorkPool / store / daemon / logs / cli expression hits | **Done** |
 | **4** | Tests + examples | **Done** |
 | **5** | `serviceNotAsClass` factories + `missingLayerContext` test-d | **Done** |
+| **6** | Critique follow-through + `serveRemoteDriver` + live docs | **Done** |

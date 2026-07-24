@@ -51,6 +51,41 @@ Two entry points, differing only in the RPC transport they speak:
   and the browser caps at **~6 connections per origin on HTTP/1.1**, starving the rest. A WebSocket
   sidesteps the cap entirely. Everything else — the serve list, the options, `/health` — is identical.
 
+## HyperServices may require other services
+
+A HyperService is allowed to depend on other Effect services — including other HyperServices.
+`Hyperlink.serve` / `serveRemote`, engine forms (`WorkPool.serve`, `Daemon.serve`, `Gate.serve`),
+and `Node.httpServer` / `wsServer` / `ipcServer` / listen **preserve that requirement `R`**. They do
+not close dependencies at the server boundary. Composition is the same as Effect's
+`Layer.mergeAll`: list the serve layers, then `Layer.provide` what they need **outside**.
+
+**Shared dep (usual case)** — provide once onto the whole server:
+
+``` ts
+Node.httpServer([
+  WorkPool.serve(Emails, { effect: sendEmail }),
+  Daemon.serve(Digest, { effect: fillQueue }),
+]).pipe(
+  Layer.provide(Db.layer),
+  Layer.provide(NodeHttpServer.layer(() => createServer(), { port: 3000 })),
+)
+```
+
+**Isolated deps (same tag, different impls)** — provide onto *each* serve layer. Use this when two
+resources on one `/rpc` need mutually exclusive implementations of one dependency (e.g. plain vs
+hooked handlers). Shared provide can only supply one:
+
+``` ts
+Node.httpServer([
+  Hyperlink.serveRemote(Matches, impl).pipe(Layer.provide(plainHandlers)),
+  Hyperlink.serveRemote(Import, impl).pipe(Layer.provide(hookedHandlers)),
+]).pipe(Layer.provide(NodeHttpServer.layer(() => createServer(), { port: 3000 })))
+```
+
+`Hyperlink.provide(dep, [serveA, serveB])` is sugar for "these resources, on this dependency."
+Engine tags use `WorkPool.serve` / `Daemon.serve` / `Gate.serve` (they also run the worker or tick);
+`Hyperlink.serve` / `serveRemote` only mount handlers. See `examples/serve-per-resource-deps.ts`.
+
 ## Connecting a client
 
 The client mirror of serving. A remote Hyperlink needs two things: the client handle for the Tag, and
