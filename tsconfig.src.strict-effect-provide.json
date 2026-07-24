@@ -1,5 +1,5 @@
 {
-  // Same options as tsconfig.json, but strictEffectProvide is enforced for src/**/*.ts only.
+  // Same Effect diagnostic severities as tsconfig.json; scoped to src/** for a second typecheck pass.
   "$schema": "https://raw.githubusercontent.com/Effect-TS/tsgo/refs/heads/main/schema.json",
   "compilerOptions": {
     // Language and Environment
