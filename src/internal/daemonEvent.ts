@@ -1,5 +1,5 @@
 /**
- * Wire schemas for process execution store events.
+ * Wire schemas for daemon execution store events.
  *
  * @module internal/daemonEvent
  * @internal
@@ -7,7 +7,7 @@
 
 import { Schema } from "effect";
 
-const gateFinishedBase = {
+const daemonFinishedBase = {
   key: Schema.String,
   scheduleKey: Schema.NullOr(Schema.String),
   startedAt: Schema.Number,
@@ -24,7 +24,7 @@ const runStartedFields = {
 } as const;
 
 /**
- * Build the execution event union for a process store contract.
+ * Build the execution event union for a daemon store contract.
  *
  * Includes `Started` at run begin and terminal variants at finish. When `success` is set,
  * `Completed` carries an optional `success` value. When `error` is set, `Failed.error` uses
@@ -41,11 +41,11 @@ export const makeDaemonExecutionEvent = <
 ) => {
   const completedFields =
     success === undefined
-      ? gateFinishedBase
-      : { ...gateFinishedBase, success: Schema.optional(success) };
+      ? daemonFinishedBase
+      : { ...daemonFinishedBase, success: Schema.optional(success) };
 
   const failedFields = {
-    ...gateFinishedBase,
+    ...daemonFinishedBase,
     error: error === undefined ? Schema.String : error,
   };
 
@@ -53,14 +53,14 @@ export const makeDaemonExecutionEvent = <
     Schema.TaggedStruct("Started", runStartedFields),
     Schema.TaggedStruct("Completed", completedFields),
     Schema.TaggedStruct("Failed", failedFields),
-    Schema.TaggedStruct("Interrupted", gateFinishedBase),
+    Schema.TaggedStruct("Interrupted", daemonFinishedBase),
   ]);
 };
 
-/** Void-process execution events (no `result` field). @internal */
+/** Void-daemon execution events (no `result` field). @internal */
 export const daemonExecutionEventVoid = makeDaemonExecutionEvent();
 
-/** Execution event type for a void process. @internal */
+/** Execution event type for a void daemon. @internal */
 export type DaemonExecutionEventVoid = typeof daemonExecutionEventVoid.Type;
 
 /** Execution event type parameterized by optional success / error schemas. @internal */

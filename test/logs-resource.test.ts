@@ -77,11 +77,11 @@ it("Hyperlink.logs surfaces process worker lines on query", () =>
         }
       }).pipe(Effect.timeout(Duration.seconds(3)));
       const rows = yield* query({ limit: 50 });
-      expect(rows.some((r) => r.message.includes("process tick"))).toBe(true);
+      expect(rows.some((r) => r.message.includes("daemon tick"))).toBe(true);
     }).pipe(
       Effect.provide(
         Daemon.layer(LogProc, {
-          effect: Effect.logInfo("process tick"),
+          effect: Effect.logInfo("daemon tick"),
         }).pipe(Layer.provideMerge(AppStore.layerMemory)),
       ),
       Effect.scoped,
@@ -100,7 +100,7 @@ it("Hyperlink.logs query is empty without store registration (live relay only)",
     }).pipe(
       Effect.provide(
         Daemon.layerMemory(LogProc, {
-          effect: Effect.logInfo("process tick"),
+          effect: Effect.logInfo("daemon tick"),
         }).pipe(Layer.provide(Logs.layer)),
       ),
       Effect.scoped,

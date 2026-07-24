@@ -54,6 +54,14 @@ export const WorkPool = { Tag, make, layer, serve }
 export * as WorkPool from "./WorkPool"
 ```
 
+{#namespaced-short-vs-internal-full .must appliesTo=src}
+## Namespaced types are short; internal types use the full module prefix
+
+Under `import * as WorkPool`, members stay short (`WorkPool.PriorityConfig`). In `src/internal/`
+(and anywhere outside that namespace file), use the full prefix (`WorkPoolPriorityConfig`) so the
+name is self-describing. The public module re-exports/aliases the short form. See
+[Types & Naming](./types-and-naming.md#namespaced-short-vs-internal-full).
+
 {#types-same-file .must appliesTo=src}
 ## Associated types attach in the same file
 

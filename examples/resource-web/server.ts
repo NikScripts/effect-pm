@@ -20,7 +20,7 @@ import * as FleetHealth from "../../src/FleetHealth";
 import * as Telemetry from "../../src/Telemetry";
 import * as ShardMap from "../../src/ShardMap";
 import * as Gate from "../../src/Gate";
-import { serve as processEntry } from "../../src/Daemon";
+import { serve as daemonEntry } from "../../src/Daemon";
 import { HistoryStore } from "../../src/HistoryStore";
 import * as Logs from "../../src/Logs";
 import { Polling } from "../../src/Polling";
@@ -303,7 +303,7 @@ const wnbaNode = Node.wsServer([
 );
 
 const liveNode = Node.wsServer([
-  processEntry(LiveScorePoller, {
+  daemonEntry(LiveScorePoller, {
     effect: Effect.logInfo("wnba: polling live scores"),
     polling: Polling.spaced(Duration.seconds(2)),
   }),

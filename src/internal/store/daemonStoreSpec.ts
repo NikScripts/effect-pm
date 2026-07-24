@@ -49,7 +49,7 @@ export type DaemonEventSchemaOf<_Tag extends StoreScopeTag> = ReturnType<
 >;
 
 /**
- * The persisted process event for a tag — the base `record` / `events` surface stays **erased**
+ * The persisted daemon event for a tag — the base `record` / `events` surface stays **erased**
  * (`success?: unknown`, `error: unknown`). @internal
  */
 export type DaemonEventOf<_Tag extends StoreScopeTag> =
@@ -62,7 +62,7 @@ export type DaemonEventOf<_Tag extends StoreScopeTag> =
   })
   | Extract<DaemonExecutionEventVoid, { readonly _tag: "Interrupted" }>;
 
-/** Event union schema for a process store contract. @internal */
+/** Event union schema for a daemon store contract. @internal */
 export const daemonStoreEventSchema = daemonEventSchema;
 
 /** Decoded persisted event for a tag. @internal */
@@ -155,7 +155,7 @@ const daemonStoreBaseMethods = ({ event }: DaemonEventHandles) => ({
     Effect.map(event.read({ limit: 1 }), (rows) => rows.length > 0),
 });
 
-/** Built-in process store contract for a tag — one `event` shape (mirrors {@link BuiltInQueueContract}). @internal */
+/** Built-in daemon store contract for a tag — one `event` shape (mirrors {@link BuiltInQueueContract}). @internal */
 export type BuiltInDaemonContract<Tag extends StoreScopeTag> = StoreContractValue<
   {
     readonly event: StoreShapeDef<DaemonEventSchemaOf<Tag>>;
@@ -189,7 +189,7 @@ export const makeDaemonStoreBaseContract = (
     daemonStoreBaseMethods,
   );
 
-/** Built-in process store contract for a tag (tier-1 / engine / tests / simple registration). @internal */
+/** Built-in daemon store contract for a tag (tier-1 / engine / tests / simple registration). @internal */
 export const builtInDaemonStoreContract = <const Tag extends StoreScopeTag>(
   tag: Tag,
 ): BuiltInDaemonContract<Tag> =>

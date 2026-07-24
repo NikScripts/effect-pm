@@ -76,7 +76,7 @@ describe("Daemon.layer — durable SQLite store", () => {
     }).pipe(Effect.provide(Layer.mergeAll(NodeServices.layer, clock)), Effect.scoped),
   );
 
-  it.effect("process store contract round-trips on SQLite across reconnects", () =>
+  it.effect("daemon store contract round-trips on SQLite across reconnects", () =>
     Effect.gen(function* () {
       const path = yield* Path.Path;
       const fs = yield* FileSystem.FileSystem;

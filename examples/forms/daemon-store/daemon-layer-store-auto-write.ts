@@ -57,4 +57,4 @@ const program = Effect.gen(function* () {
   Effect.orDie,
 );
 
-runNodeProgramOrExit(program, "process-layer-store-auto-write finished");
+runNodeProgramOrExit(program, "daemon-layer-store-auto-write finished");

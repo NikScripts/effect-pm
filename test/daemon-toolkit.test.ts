@@ -26,7 +26,7 @@ class Priced extends Daemon.Tag<Priced>()("test/toolkit/Priced", { success: Pric
 // standalone reusable window manager.
 class Windows extends Daemon.Schedule<Windows>()("test/toolkit/Windows") {}
 
-it("base process arms and runs its effect immediately (default schedule)", () =>
+it("base daemon arms and runs its effect immediately (default schedule)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const ran = yield* Ref.make(0);

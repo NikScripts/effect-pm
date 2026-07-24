@@ -2,7 +2,7 @@ import { DateTime, Duration, Effect, Ref } from "effect";
 import { expect, it } from "vitest";
 import * as Daemon from "../src/Daemon";
 
-// A managed process as a toolkit resource — driven through the same `yield* Tag` surface a
+// A managed daemon as a toolkit resource — driven through the same `yield* Tag` surface a
 // remote consumer uses (only the provided layer differs). A base `Daemon.Tag` is armed and runs
 // immediately (default always-armed); a `.pipe(Daemon.schedule([]))` tag owns an empty inline
 // schedule (disarmed, and gains the `schedule` verb group) so `run` / schedule CRUD can
@@ -12,7 +12,7 @@ class ScheduledProc extends Daemon.Tag<ScheduledProc>()(
   "test/daemon-contract/Scheduled",
 ).pipe(Daemon.schedule([])) {}
 
-it("with the default schedule a process arms and runs its effect immediately", () =>
+it("with the default schedule a daemon arms and runs its effect immediately", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const ran = yield* Ref.make(0);

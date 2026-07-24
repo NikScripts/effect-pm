@@ -31,6 +31,15 @@ Match it. When unsure, open the analogous Effect module and copy its shape.
   `import * as internal from "./internal/foo"` (Effect: `Cache.ts` ↔ `internal/cache.ts`).
 - Internal modules are camelCase, get **no subpath**, and are **never imported by apps**.
 
+## Namespaced short vs internal full type names
+
+- **Public namespace member** (flat export on `src/WorkPool.ts`, seen as `WorkPool.X`): use the
+  **short** name — `PriorityConfig`, `Tag`, `Handle`.
+- **`src/internal/*`** (no ambient module namespace): use the **full** prefix —
+  `WorkPoolPriorityConfig`, `WorkPoolPriorityHandle`.
+- Public modules re-export or alias internals under the short name; apps never import `internal/`.
+  Detail: `docs/standards/types-and-naming.md` (`namespaced-short-vs-internal-full`).
+
 ## Subpaths never point into `internal/`
 
 - `@nikscripts/effect-pm/Name` resolves to the public `src/Name.ts` (surfaced via the barrel

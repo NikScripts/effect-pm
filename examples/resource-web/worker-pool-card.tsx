@@ -9,7 +9,7 @@
  * kind card, and building **onto** `base` keeps every other widget.
  *
  * It also shows how to render a resource whose fields are plain `Hyperlink.effect`s (not reactive
- * refs): **poll** them on a tick, exactly as the shipped process card polls its schedule. One tick
+ * refs): **poll** them on a tick, exactly as the shipped daemon card polls its schedule. One tick
  * reads all three contract fields at once — `active` (this client's own instance), `fleetActive`
  * (the fold across every peer), and `activeByNode` (the per-node breakdown) — each surfaced
  * distinctly so the multi-node story is legible at a glance.

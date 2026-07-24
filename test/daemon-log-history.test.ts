@@ -5,7 +5,7 @@ import * as Daemon from "../src/Daemon";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Store from "../src/Store";
 
-// A process started disarmed (empty inline schedule) so it only runs on `run`; with the logs
+// A daemon started disarmed (empty inline schedule) so it only runs on `run`; with the logs
 // stack provided, worker lines are scoped by tag key and read back via Hyperlink.logs.
 class LogProc extends Daemon.Tag<LogProc>()(
   "test/daemon-log-history/Proc",
@@ -17,7 +17,7 @@ class AppStore extends Store.Service<AppStore>("@test/daemon-log-history/Store")
   logProcRegistration,
 ) {}
 
-it("Hyperlink.logs reads back process worker logs", () =>
+it("Hyperlink.logs reads back daemon worker logs", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const proc = yield* LogProc;
@@ -31,11 +31,11 @@ it("Hyperlink.logs reads back process worker logs", () =>
 
       const rows = yield* query({ limit: 50 });
       expect(rows.length).toBeGreaterThan(0);
-      expect(rows.some((r) => r.message.includes("process tick"))).toBe(true);
+      expect(rows.some((r) => r.message.includes("daemon tick"))).toBe(true);
     }).pipe(
       Effect.provide(
         Daemon.layer(LogProc, {
-          effect: Effect.logInfo("process tick"),
+          effect: Effect.logInfo("daemon tick"),
         }).pipe(Layer.provideMerge(AppStore.layerMemory)),
       ),
       Effect.scoped,
@@ -54,7 +54,7 @@ it("Hyperlink.logs query is empty without store registration (live relay only)",
     }).pipe(
       Effect.provide(
         Daemon.layerMemory(LogProc, {
-          effect: Effect.logInfo("process tick"),
+          effect: Effect.logInfo("daemon tick"),
         }).pipe(Layer.provide(Logs.layer)),
       ),
       Effect.scoped,

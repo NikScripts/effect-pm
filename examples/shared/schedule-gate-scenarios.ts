@@ -62,8 +62,8 @@ import { utcDateFromMillis } from "../../src/internal/utcDate";
  *
  * ## Automated tests (library behavior, not this file)
  *
- * - **`test/process-schedule.test.ts`** — schedule entry storage + mutation semantics.
- * - **`test/process.test.ts`** — schedule-driven instance behavior.
+ * - **`test/daemon-schedule.test.ts`** — schedule entry storage + mutation semantics.
+ * - **`test/daemon.test.ts`** — schedule-driven instance behavior.
  */
 
 import { Cron, Duration, Effect, Option, Ref } from "effect";
@@ -99,7 +99,7 @@ export const allocateMaintenanceGate = (): Effect.Effect<{
 
 /**
  * After **`delayMs`** simulated sleep: open the gate and clear the transition hint.
- * Fork alongside the process under the same **`TestClock`**.
+ * Fork alongside the daemon under the same **`TestClock`**.
  */
 export const maintenanceReopenFiber = (
   armed: Ref.Ref<boolean>,

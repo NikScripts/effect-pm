@@ -67,7 +67,7 @@ import { PollingTag, type PollingService } from "./internal/pollingTag";
 export type { PollingService as Service } from "./internal/pollingTag";
 
 /**
- * The polling service of the CURRENT process tick context — yield inside a process
+ * The polling service of the CURRENT daemon tick context — yield inside a daemon
  * effect to wake, reset, or peek the cadence. Provided by the supervisor.
  *
  * @category context

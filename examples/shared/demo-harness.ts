@@ -7,7 +7,7 @@
 import { Duration, Effect, Fiber, Layer, ManagedRuntime } from "effect";
 import { TestClock } from "effect/testing";
 
-/** Fork supervised process + side fiber, advance simulated time, interrupt process. */
+/** Fork supervised daemon + side fiber, advance simulated time, interrupt daemon. */
 export const forkSupervisedAndSideThenAdvanceTime = <R>(options: {
   /** Daemon (or other) effect; environment must be supplied by the caller’s scope. */
   readonly supervised: Effect.Effect<void, never, R>;

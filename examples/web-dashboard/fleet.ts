@@ -34,7 +34,7 @@ export class RegionEU extends WorkPool.Tag<RegionEU>()("@acme/queues/RegionEU", 
 export class Daily extends WorkPool.Tag<Daily>()("@acme/queues/Daily", { payload: Job, node: Droplet }) {}
 export class Weekly extends WorkPool.Tag<Weekly>()("@acme/queues/Weekly", { payload: Job, node: Droplet }) {}
 
-// a process bound to the Mini node — it runs there, not on the Droplet.
+// a daemon bound to the Mini node — it runs there, not on the Droplet.
 export class KeyRotation extends Daemon.Tag<KeyRotation>()("@wnba/Mini/KeyRotation", {
   node: MiniNode,
 }) {}

@@ -7,7 +7,7 @@ import { DaemonSchedule } from "../src/internal/daemonSchedule";
 import { utcDateFromMillis } from "../src/internal/utcDate";
 
 describe("engine schedule primitive (internal)", () => {
-  it.effect("lists initial entries by process", () =>
+  it.effect("lists initial entries by daemon", () =>
     Effect.gen(function* () {
       const schedule = yield* DaemonSchedule;
       const entries = yield* schedule.entries;
@@ -19,7 +19,7 @@ describe("engine schedule primitive (internal)", () => {
     ]))),
   );
 
-  it.effect("replace and get update process schedules", () =>
+  it.effect("replace and get update daemon schedules", () =>
     Effect.gen(function* () {
       const schedule = yield* DaemonSchedule;
       yield* schedule.set([

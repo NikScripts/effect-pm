@@ -60,7 +60,7 @@ import { priorityKind } from "../WorkPool";
 import { kind as fleetHealthKind, type NodeReport } from "../FleetHealth";
 import { kind as telemetryKind, type MetricDatum } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";
-import { kind as runKind } from "../Gate";
+import { kind as gateKind } from "../Gate";
 import { kind as daemonKind } from "../Daemon";
 import { kind as apiKind } from "../ApiMetrics";
 import {
@@ -135,7 +135,7 @@ export const StatusBadge = (props: { readonly phase: string; readonly paused: bo
   return <Badge color={s.color}>{s.label}</Badge>;
 };
 
-/** Running / stopped pill for a process — from its live `supervising` flag. Shared by the process
+/** Running / stopped pill for a daemon — from its live `supervising` flag. Shared by the daemon
  *  card and its detail header. @public */
 export const DaemonStatusBadge = (props: { readonly supervising: boolean | undefined }): React.ReactElement => (
   <Badge color={props.supervising === true ? "#22c55e" : "#94a3b8"}>
@@ -856,9 +856,9 @@ export const LogStream = (props: {
   );
 };
 
-// ── process widgets ──────────────────────────────────────────────────────────
+// ── daemon widgets ──────────────────────────────────────────────────────────
 
-/** A process as a grid card — supervision state + active instances. */
+/** A daemon as a grid card — supervision state + active instances. */
 export const DaemonCard = (props: {
   readonly tag: DaemonTag;
   /** Display name — the member key under which the parent group holds this tag. */
@@ -889,7 +889,7 @@ export const DaemonCard = (props: {
   );
 };
 
-/** Stat cards from a process's live status. */
+/** Stat cards from a daemon's live status. */
 export const DaemonStats = (props: { readonly bundle: DaemonBundle }): React.ReactElement => {
   const r = useAtomValue(props.bundle.status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
@@ -914,7 +914,7 @@ export const DaemonControls = (props: {
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const up = s?.supervising === true;
   const locked = props.locked;
-  // A process has no chart to sit beside, so its controls stay a horizontal row at every width
+  // A daemon has no chart to sit beside, so its controls stay a horizontal row at every width
   // (only the queue controls go vertical, to flank the graph).
   return (
     <div className="flex flex-wrap items-center justify-center gap-2">
@@ -992,7 +992,7 @@ export const WindowDialog = (props: {
       <DialogContent onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle>{editing ? "Edit run window" : "Add run window"}</DialogTitle>
-          <DialogDescription>The process is armed while now is inside a window.</DialogDescription>
+          <DialogDescription>The daemon is armed while now is inside a window.</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3 py-1">
           <label className="flex flex-col gap-1 text-xs text-muted-foreground">
@@ -1040,11 +1040,11 @@ export const WindowDialog = (props: {
   );
 };
 
-/** View + edit a process's schedule (the run windows that arm it). Reads the current entries, then
- *  `setSchedule`/`clearSchedule` to mutate — gated by the **shared** process lock (`locked`), so
+/** View + edit a daemon's schedule (the run windows that arm it). Reads the current entries, then
+ *  `setSchedule`/`clearSchedule` to mutate — gated by the **shared** daemon lock (`locked`), so
  *  one lock guards both the controls and the schedule. Edits apply optimistically (the schedule is
  *  read once on open); adding a window is a popup. */
-/** The shared edit state for a process schedule — the current entries plus add/remove/clear, applied
+/** The shared edit state for a daemon schedule — the current entries plus add/remove/clear, applied
  *  optimistically (the schedule reads once on open). Used by both the inline {@link ScheduleEditor}
  *  and the fullscreen week view. */
 export const useScheduleEdit = (
@@ -1160,7 +1160,7 @@ export const WeekSchedule = (props: {
   );
 };
 
-/** A read-only summary of a process's schedule (the run windows that arm it) — the count, the list,
+/** A read-only summary of a daemon's schedule (the run windows that arm it) — the count, the list,
  *  and an expand button to the fullscreen week view, which is where editing (add / remove / clear)
  *  happens. */
 export const ScheduleEditor = (props: {
@@ -1187,7 +1187,7 @@ export const ScheduleEditor = (props: {
       </div>
 
       {list.length === 0 ? (
-        <div className="text-xs text-muted-foreground">No run windows — the process is disarmed.</div>
+        <div className="text-xs text-muted-foreground">No run windows — the daemon is disarmed.</div>
       ) : (
         <ul className="flex flex-col gap-1">
           {list.map((entry, i) => (
@@ -2950,7 +2950,7 @@ const shardMapWidget: Widget = ({ tag, name, onOpen }) =>
   ) : (
     <FallbackCard tag={tag} name={name} onOpen={onOpen} />
   );
-const runWidget: Widget = ({ tag, name, onOpen }) =>
+const gateWidget: Widget = ({ tag, name, onOpen }) =>
   isGateTag(tag) ? (
     <GateCard tag={tag} name={name} onOpen={onOpen} />
   ) : (
@@ -2976,7 +2976,7 @@ export const base: WidgetRegistry = withEntries(
     forKind(fleetHealthKind, fleetHealthWidget),
     forKind(telemetryKind, telemetryWidget),
     forKind(shardMapKind, shardMapWidget),
-    forKind(runKind, runWidget),
+    forKind(gateKind, gateWidget),
     forKind(hyperlinkKind, HyperlinkCard),
   ],
 );

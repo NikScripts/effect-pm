@@ -76,7 +76,7 @@ const program = Effect.gen(function* () {
     }),
   });
 
-  // Fork process + feed simulator, advance TestClock, tear down process fiber.
+  // Fork daemon + feed simulator, advance TestClock, tear down daemon fiber.
   yield* forkSupervisedAndSideThenAdvanceTime({
     supervised: proc.effect,
     sideFiber: feed.runSimulator,

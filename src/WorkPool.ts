@@ -81,10 +81,57 @@ import {
 // The priority (N-level lane) engine — pulled in only by the priority runtime verbs below.
 import { makePriorityEffect } from "./internal/workPoolPriority";
 import type {
-  PriorityHandle,
-  PriorityLaneConfig,
-  PriorityConfigWithItemSchema,
+  WorkPoolPriorityHandle,
+  WorkPoolPriorityLaneConfig,
+  WorkPoolPriorityConfig,
+  WorkPoolPriorityConfigWithItemSchema,
+  WorkPoolPriorityConfigWithoutItemSchema,
+  WorkPoolPriorityOptionsWithItemSchema,
+  WorkPoolPriorityOptionsWithoutItemSchema,
+  WorkPoolPriorityStatus,
 } from "./internal/workPoolPriority";
+
+/**
+ * Priority-lane engine config — namespaced short form of
+ * {@link WorkPoolPriorityConfig} (`import * as WorkPool` → `WorkPool.PriorityConfig`).
+ *
+ * @category models
+ * @public
+ */
+export type PriorityConfig<T, E, R> = WorkPoolPriorityConfig<T, E, R>;
+/** @category models @public */
+export type PriorityConfigWithItemSchema<T, E, R> = WorkPoolPriorityConfigWithItemSchema<T, E, R>;
+/** @category models @public */
+export type PriorityConfigWithoutItemSchema<T, E, R> =
+  WorkPoolPriorityConfigWithoutItemSchema<T, E, R>;
+/** @category models @public */
+export type PriorityOptionsWithItemSchema<T, E, R> =
+  WorkPoolPriorityOptionsWithItemSchema<T, E, R>;
+/** @category models @public */
+export type PriorityOptionsWithoutItemSchema<T, E, R> =
+  WorkPoolPriorityOptionsWithoutItemSchema<T, E, R>;
+/**
+ * Priority-lane handle — namespaced short form of {@link WorkPoolPriorityHandle}.
+ *
+ * @category models
+ * @public
+ */
+export type PriorityHandle<T, E = never, EEnqueue = never, R = never> = WorkPoolPriorityHandle<
+  T,
+  E,
+  EEnqueue,
+  R
+>;
+/** @category models @public */
+export type PriorityLaneConfig = WorkPoolPriorityLaneConfig;
+/**
+ * Priority-lane live status snapshot — namespaced short form of {@link WorkPoolPriorityStatus}.
+ * Matches the wire shape of {@link priorityStatus}.
+ *
+ * @category models
+ * @public
+ */
+export type PriorityStatus = WorkPoolPriorityStatus;
 import type { StoreShapes } from "./internal/store/contractDef";
 import type {
   QueueEnqueue,
@@ -1524,7 +1571,7 @@ export const priorityControlSpec = {
 };
 
 /** Lane config for a priority queue tag. @internal */
-type PriorityTagLaneConfig = PriorityLaneConfig;
+type PriorityTagLaneConfig = WorkPoolPriorityLaneConfig;
 
 /**
  * Build a priority-queue **instance** spec: shared {@link priorityControlSpec} plus
@@ -1535,7 +1582,7 @@ type PriorityTagLaneConfig = PriorityLaneConfig;
  */
 export const prioritySpec = <F extends Schema.Struct.Fields>(
   itemSchema: Schema.Struct<F>,
-  laneConfig: PriorityLaneConfig,
+  laneConfig: WorkPoolPriorityLaneConfig,
   wire?: { readonly success?: Schema.Top; readonly error?: Schema.Top },
 ) => {
   const itemOrItems = Schema.Union([itemSchema, Schema.Array(itemSchema)]);
@@ -1726,14 +1773,14 @@ export const priority = <Self>() => {
  * @public
  */
 export type PriorityLayerConfig<A, E, R, RR = never> = Omit<
-  PriorityConfigWithItemSchema<A, E, R>,
+  WorkPoolPriorityConfigWithItemSchema<A, E, R>,
   "itemSchema" | "refill" | "name"
 > & {
   readonly refill?: {
     readonly onStart?: boolean;
     readonly onDrained?: boolean;
     readonly load: (
-      queue: PriorityHandle<A, E, QueueEnqueueErrors, never>,
+      queue: WorkPoolPriorityHandle<A, E, QueueEnqueueErrors, never>,
     ) => Effect.Effect<void, never, RR>;
   };
 };
@@ -1783,7 +1830,7 @@ const buildPriorityImpl = <Self, F extends PriorityItemFields, E, R, RR = never>
       ...effectiveConfig,
       itemSchema,
       store,
-    } as PriorityConfigWithItemSchema<Schema.Struct<F>["Type"], E, R | RR>);
+    } as WorkPoolPriorityConfigWithItemSchema<Schema.Struct<F>["Type"], E, R | RR>);
 
     const history = yield* Effect.serviceOption(HistoryStore);
     const decodeMetric = Schema.decodeUnknownEffect(queueMetrics);

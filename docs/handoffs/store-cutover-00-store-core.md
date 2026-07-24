@@ -91,7 +91,7 @@ Persisted store rows use the **same slot names as the tag factory** (`success`, 
 
 | Convention | Rule |
 |------------|------|
-| **`_tag`** | PascalCase only — `Started`, `Completed`, `Failed`, `Interrupted`, … Retire kebab `type` strings on **fact/event rows** (`run-resource.run.failed`, …). State-transition `reason` strings on RunResource may remain kebab (separate shape). |
+| **`_tag`** / state-transition **`reason`** | PascalCase only — `Started`, `Completed`, `Failed`, `Interrupted`, `Waiting`, `WaitInterrupted`, … Never kebab or dotted prefixes (`run-resource.run.failed`, `gate.run.started`). |
 | **`success`** | Present on terminal success rows **iff** the tag declares a `success` schema. Field name is `success` (not `result`). Value is the **decoded** worker/run return — journal encodes on append. |
 | **`error`** | Always on terminal failure rows. Presence-driven by the tag's `error` schema (see below). |
 

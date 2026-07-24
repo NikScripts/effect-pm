@@ -2,7 +2,7 @@
  * @module examples/resource-web/hub
  *
  * The review fixture for the shipped `hyperlink-ts/web` widgets — one of each **unique**
- * thing the dashboard renders: a nested group, a queue, a scheduled process (the WNBA live-score
+ * thing the dashboard renders: a nested group, a queue, a scheduled daemon (the WNBA live-score
  * poller), and an API-usage tap (`ScoresApi`). Every resource is **nodeed remotely** across three
  * nodes (served by `server.ts`); the browser reaches each via `Hyperlink.http` (vite proxies
  * `/rpc` / `/live` / `/stats`), which is what lights up the top-right **node die**. `ScoresApi` is an
@@ -125,7 +125,7 @@ export class PlayByPlayQueue extends WorkPool.Tag<PlayByPlayQueue>()(
   "wnba/PlayByPlayQueue",
   { payload: importJob, node: StatsNode },
 ) {}
-// A **custom queue** — named lanes (hot / warm / cold) rather than the fixed high/normal/low. Exercises
+// A **priority queue** — named lanes (hot / warm / cold) rather than the fixed high/normal/low. Exercises
 // the priority-lane widget: `status.sizes` is an arbitrary Record, rendered a bar per lane.
 export class ImportJobs extends WorkPool.priority<ImportJobs>()("wnba/ImportJobs", {
   payload: importJob,

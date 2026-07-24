@@ -18,7 +18,7 @@ const entry = (
 });
 
 describe("logContext", () => {
-  it("matches process scope by lineage key", () => {
+  it("matches daemon scope by lineage key", () => {
     const scope = {
       _tag: daemonKind,
       groupId: testBillingNodeKey,
@@ -44,7 +44,7 @@ describe("logContext", () => {
     );
   });
 
-  it("resolves a process target without a group flag", () =>
+  it("resolves a daemon target without a group flag", () =>
     Effect.gen(function* () {
       const scope = yield* resolveLogScope(
         [{ key: testBillingNodeKey }],

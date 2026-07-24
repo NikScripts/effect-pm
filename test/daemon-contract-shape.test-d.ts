@@ -36,7 +36,7 @@ class Matches extends Daemon.Tag<Matches>()("shape/Matches").pipe(
   ]),
 ) {}
 
-// standalone schedule resource + a process gated by it (no schedule verbs on the process)
+// standalone schedule resource + a daemon gated by it (no schedule verbs on the daemon)
 class SeasonSchedule extends Daemon.Schedule<SeasonSchedule>()("shape/SeasonSchedule") {}
 class Ingest extends Daemon.Tag<Ingest>()("shape/Ingest").pipe(
   Daemon.schedule(SeasonSchedule),
@@ -66,7 +66,7 @@ const _proof = Effect.gen(function* () {
 
   const i = yield* Ingest;
   yield* i.start;
-  // @ts-expect-error a process gated by an external schedule gains NO schedule verbs
+  // @ts-expect-error a daemon gated by an external schedule gains NO schedule verbs
   yield* i.schedule.entries.get;
 
   const pe = yield* PricedErr;

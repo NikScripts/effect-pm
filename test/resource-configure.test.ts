@@ -113,7 +113,7 @@ describe("HyperlinkConfigure", () => {
           effect: Effect.succeed("default"),
         }) {}
 
-        const process = yield* Worker.buildConfiguredDaemon.pipe(
+        const daemon = yield* Worker.buildConfiguredDaemon.pipe(
           Effect.provide(
             Worker.configure((spec) => ({
               ...spec,
@@ -122,8 +122,8 @@ describe("HyperlinkConfigure", () => {
           ),
         );
 
-        expect(process.name).toBe("@test/ConfigureDaemon");
-        expect(Worker.defaultSpec.effect).not.toBe(process.effect);
+        expect(daemon.name).toBe("@test/ConfigureDaemon");
+        expect(Worker.defaultSpec.effect).not.toBe(daemon.effect);
       }),
     ),
   );

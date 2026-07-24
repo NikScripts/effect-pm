@@ -37,7 +37,7 @@ describe("logQuery", () => {
       assert.instanceOf(result, LogQueryError);
     }));
 
-  it("builds a process-scoped query", () =>
+  it("builds a daemon-scoped query", () =>
     Effect.gen(function* () {
       const query = yield* buildLogQuery({
         scope: {

@@ -97,7 +97,7 @@ describe("transport conformance: streams/responds over BOTH transports", () => {
       expect(r).toBeGreaterThan(0),
     ),
   );
-  it.each(["ws", "http"] as const)("process over %s", (kind) =>
+  it.each(["ws", "http"] as const)("daemon over %s", (kind) =>
     remote(kind, kind, procServe, Hyperlink.client(ConfProc), procOp).then((r) =>
       expect(r).toBe(true),
     ),

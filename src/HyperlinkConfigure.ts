@@ -28,7 +28,7 @@ const isUnaryUpdater = <F>(
 ): patch is (previous: F) => F => isCallable(patch) && patch.length === 1;
 
 /**
- * Patch for a resource or process spec.
+ * Patch for a resource or daemon spec.
  *
  * - **Partial object** — shallow-merge fields; use a function value to replace a field.
  * - **`effect` field** — a **unary** function `(previous) => next` updates the prior worker /
@@ -183,7 +183,7 @@ export const configureWrapEffectField = <
     effect: fn(spec.effect),
   }));
 
-// Layer-composed configure patches for resource and process services. The module is the
+// Layer-composed configure patches for resource and daemon services. The module is the
 // namespace (`import * as HyperlinkConfigure`): `configureLayer` / `foldConfig` /
 // `foldConfiguredSpec` are the flat exports above; `tagKey` / `wrapEffectField` are aliased
 // below so the namespace members match. Root imports match these bindings.

@@ -68,9 +68,9 @@ export const buildLevelIndexLabels = (
  * Priority-queue status snapshot (Record sizes).
  *
  * @category models
- * @public
+ * @internal
  */
-export interface PriorityStatus {
+export interface WorkPoolPriorityStatus {
   readonly sizes: Record<string, number>;
   readonly paused: boolean;
   readonly inFlight: number;
@@ -86,7 +86,7 @@ export interface PriorityStatus {
 export const buildPriorityProjection = (options: {
   readonly laneCount: number;
   readonly namedLanes?: Readonly<Record<string, number>>;
-}): QueueRuntimeProjection<Record<string, number>, PriorityStatus> => {
+}): QueueRuntimeProjection<Record<string, number>, WorkPoolPriorityStatus> => {
   const laneCount = Math.max(1, Math.floor(options.laneCount));
   const labels = buildLevelIndexLabels(laneCount, options.namedLanes ?? {});
 

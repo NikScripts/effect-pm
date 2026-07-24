@@ -1,7 +1,7 @@
 /**
  * @module examples/forms/schedule/schedule-controls-external-fiber
  *
- * Drive a running process's schedule from an EXTERNAL controller fiber. The schedule initializer
+ * Drive a running daemon's schedule from an EXTERNAL controller fiber. The schedule initializer
  * seeds the first window and hands the live `Daemon.ScheduleControls` to a shared `Ref`; a separate
  * fiber then arms/replaces windows through those controls.
  * Run: `pnpm run example:form:schedule-controls-external-fiber`

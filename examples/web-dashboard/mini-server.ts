@@ -2,7 +2,7 @@
  * @module examples/web-dashboard/mini-server
  *
  * The **Mini** — a second machine (your home server). It nodes only `KeyRotation` (the
- * wnba key-rotation process), served over http on its own port. The dashboard reaches
+ * wnba key-rotation daemon), served over http on its own port. The dashboard reaches
  * it via `Hyperlink.http(MiniNode, …)` and shows it under the same group tree as
  * the Droplet's queues — proving nested groups across separate nodes (the wow topology).
  * Run: `pnpm run example:mini-server` (alongside `example:queue-server`).
@@ -11,7 +11,7 @@ import { Duration, Effect, Layer, Logger } from "effect";
 import { createServer } from "node:http";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { serve as processEntry } from "../../src/Daemon";
+import { serve as daemonEntry } from "../../src/Daemon";
 import * as Daemon from "../../src/Daemon";
 import * as Store from "../../src/Store";
 import { HistoryStore } from "../../src/HistoryStore";
@@ -27,7 +27,7 @@ class MiniStore extends Store.Service<MiniStore>("@examples/web-dashboard/MiniSt
 ) {}
 
 const serveLayer = Node.wsServer([
-  processEntry(KeyRotation, {
+  daemonEntry(KeyRotation, {
     effect: Effect.logInfo("wnba: key-rotation check"),
     polling: Polling.spaced(Duration.seconds(5)),
   }),
