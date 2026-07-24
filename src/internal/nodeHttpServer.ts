@@ -42,7 +42,7 @@ export interface HttpServerOptions {
   readonly serialization?: Layer.Layer<RpcSerialization.RpcSerialization>;
   readonly health?: { readonly path?: HttpRouter.PathInput };
   /**
-   * Node log key for auto-mounted {@link NodeStatus} durable `logs.query`
+   * Node log key for auto-mounted node-status durable `logs.query`
    * (`Hyperlink.store(Node)` / `Node.logs`). When omitted, inferred from served tags'
    * bound {@link Node} when all share one key.
    */

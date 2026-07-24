@@ -296,7 +296,7 @@ const MemberRow = (props: { readonly tag: QueueTag; readonly name: string }): Re
   );
 };
 
-/** Invisible: reads ONE node's `NodeStatus` and reports how many of the group's leaves **on that
+/** Invisible: reads ONE node's node status and reports how many of the group's leaves **on that
  *  node** are degraded, so {@link GroupCard} can sum them for its aggregate badge. A child-level hook
  *  (not a `.map` over the node list) keeps a constant hook order if a group ever gains/loses a node —
  *  the same Rules-of-Hooks pattern {@link HealthBoard} uses. */
@@ -441,7 +441,7 @@ const DegradedOverlayInner = (props: {
   );
 };
 
-/** The card **problem overlay**, read from the resource's node `NodeStatus` (SSOT): a slate dim +
+/** The card **problem overlay**, read from the resource's node node status (SSOT): a slate dim +
  *  "not responding" when the node's heartbeat stalls (its data is frozen), else an amber ring +
  *  "degraded — <cause>" when the resource isn't ready. Absolute (no layout shift), works for every
  *  card type; nothing while live-and-ready, loading, or nodeless. @public */
@@ -1772,17 +1772,17 @@ export const ApiEndpointTable = (props: { readonly bundle: ApiBundle }): React.R
 
 // ── Node widgets ─────────────────────────────────────────────────────────────
 // Nodes are read straight off the tags (`nodesOf`): a dot per node the group's resources are bound
-// to. Each dot's colour + popover come from that node's `NodeStatus` (over its own transport).
+// to. Each dot's colour + popover come from that node's node status (over its own transport).
 
 /** A node's overall colour: grey while connecting, red down, amber degraded, green ok. */
 const nodeColor = (s: NodeStatusValue | undefined): string =>
   s === undefined ? "#64748b" : !s.up ? "#ef4444" : s.status === "degraded" ? "#eab308" : "#22c55e";
 
-/** ~3× the 2s `NodeStatus` heartbeat: no fresh status in this long → the node's stream is dead and
+/** ~3× the 2s node status heartbeat: no fresh status in this long → the node's stream is dead and
  *  the shown values are frozen (last-known, not live). */
 const STALE_MS = 6000;
 
-/** True once a node's heartbeat has stopped. `NodeStatus.changes` re-emits every ~2s, so `beat` (its
+/** True once a node's heartbeat has stopped. `status.changes` re-emits every ~2s, so `beat` (its
  *  `uptimeMillis`) advances each tick; when it stops advancing the age climbs past {@link STALE_MS}
  *  and a frozen card can say so instead of looking live. Only a **genuine new heartbeat** (an advanced
  *  `uptimeMillis`) refreshes the timer — the drop-to-`undefined` + reconnect-retry churn a dying
@@ -1862,7 +1862,7 @@ const pipRows = <A,>(items: ReadonlyArray<A>, rows: ReadonlyArray<number>): Read
   });
 };
 
-/** One node's pip — a coloured dot, colour from its NodeStatus. */
+/** One node's pip — a coloured dot, colour from its status snapshot. */
 const NodePip = (props: {
   readonly node: NodeRef;
   readonly size: string;
@@ -2059,7 +2059,7 @@ export const NodeBar = (props: {
 /** The full-screen **health board** (opened from the die): a top stat strip, then degraded resources
  *  across **every** node first (with their root-cause detail — tap → that resource's detail), then a
  *  card per node (status · uptime · ready/total · resource count, tap → its full screen) with its full
- *  resource roster. Reads each node's `NodeStatus` once (the node list is stable for a group, so the
+ *  resource roster. Reads each node's node status once (the node list is stable for a group, so the
  *  per-node reads keep a constant hook order; bundles are cached per runtime+node). */
 export const HealthBoard = (props: {
   readonly group: GroupNode;
@@ -2180,7 +2180,7 @@ const NodeHealthRow = (props: {
   );
 };
 
-/** Reads one resource's readiness from its node's `NodeStatus` (the node computes it — SSOT). Always
+/** Reads one resource's readiness from its node's node status (the node computes it — SSOT). Always
  *  has a node (the public wrapper renders nothing for a nodeless tag). Shows **only when degraded** —
  *  nothing while ready/connecting, so the banner only takes space when there's a problem. */
 const ReadinessBannerInner = (props: {
@@ -2210,7 +2210,7 @@ const ReadinessBannerInner = (props: {
 };
 
 /** A resource's **degraded** banner for its detail page — an amber "degraded — &lt;root cause&gt;" line
- *  read from its node's `NodeStatus` (the same SSOT the health board uses). Renders nothing while the
+ *  read from its node's node status (the same SSOT the health board uses). Renders nothing while the
  *  resource is ready/connecting or nodeless, so it only appears (pushing content down) on a problem. */
 export const HyperlinkReadinessBanner = (props: { readonly tag: unknown }): React.ReactElement | null => {
   const node = resourceNodeRef(props.tag);
@@ -2276,7 +2276,7 @@ export const NodeDetail = (props: {
             <div className="shrink-0 border-b px-3 py-2 text-sm font-semibold">logs</div>
             <LogStream bundle={{ logs: bundle.logs }} className="flex-1 py-1" />
           </div>
-          {/* Pass 2: node metrics graphs (CPU / mem / throughput) land here with NodeStatus.metrics. */}
+          {/* Pass 2: node metrics graphs (CPU / mem / throughput) land here with status metrics. */}
         </>
       ) : (
         <div className="text-muted-foreground">connecting to node…</div>
@@ -2291,7 +2291,7 @@ export const NodeDetail = (props: {
 
 /** A resource's readiness as a small "badge dot": a border-only **green** circle when ready, a filled
  *  **amber** one when not — the UI's ready/degraded colours (`#22c55e` / `#eab308`, as the readiness
- *  pips). Reads its node's `NodeStatus` — the SSOT the overlay uses. */
+ *  pips). Reads its node's node status — the SSOT the overlay uses. */
 const ReadinessDotInner = (props: {
   readonly tag: unknown;
   readonly node: NodeRef;

@@ -51,7 +51,7 @@ import { fmtDayLabel, now, startOfWeekMillis } from "./now";
 import { DebugConsole } from "./debug-console";
 
 
-/** Invisible: reads one node's `NodeStatus` and reports the keys of its **not-ready** resources, so the
+/** Invisible: reads one node's node status and reports the keys of its **not-ready** resources, so the
  *  grid can float degraded members to the top. A child-level hook (not a `.map` over the node list)
  *  keeps a constant hook order even if a group gains/loses a node. */
 const DegradedKeysProbe = (props: {
