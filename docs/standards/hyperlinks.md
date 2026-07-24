@@ -150,9 +150,9 @@ Four verbs, one axis — how a resource is made available:
 - **`serveRemote`** — served only, not runnable in-process (plain impl; `R` via handler requirements).
 - **`client`** — a remote handle to a served resource.
 
-Toolkit engines that build a {@link Driver} mount with **`Hyperlink.serveRemoteDriver`** (preserves
-the driver's worker `R`). Apps call `Gate.serveRemote` / `Daemon.serveRemote` / `WorkPool.serveRemote`
-— not the Driver helper — unless they are assembling a custom engine.
+Toolkit engines that build a Hyperlink `Driver` mount with **`Hyperlink.serveRemoteDriver`**
+(preserves the driver's worker `R`). Apps call `Gate.serveRemote` / `Daemon.serveRemote` /
+`WorkPool.serveRemote` — not the Driver helper — unless they are assembling a custom engine.
 
 Transport is a **separate** line: `httpServer` / `http` / `connect`. `Http` appears **only**
 there — the core verbs stay transport-agnostic, so the same resource can be served over any protocol.
