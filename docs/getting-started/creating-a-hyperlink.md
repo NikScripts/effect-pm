@@ -1,4 +1,4 @@
-{#creating-a-hyperlink title="Creating a HyperService" status="draft" appliesTo=all}
+{#creating-a-hyperlink title="Creating a Hyperlink Service" status="draft" appliesTo=all}
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
@@ -9,23 +9,23 @@
 {.draft}
 **Draft.** Tip-check before treating as SSOT.
 
-Build one [**Hyperlink Service**](/docs/glossary#hyperlink-service) end to end: declare a
-[**Tag**](/docs/glossary#tag), write its [**Contract**](/docs/glossary#contract) with an
-[**Implementation**](/docs/glossary#implementation), place it with a
-[**Layer**](/docs/glossary#layer), and call it through a [**Handle**](/docs/glossary#handle).
+Build one [hyperlink service](/docs/glossary#hyperlink-service) end to end: declare a
+[tag](/docs/glossary#tag), write its [contract](/docs/glossary#contract) with an
+[implementation](/docs/glossary#implementation), place it with a [layer](/docs/glossary#layer), and
+call it through a [handle](/docs/glossary#handle).
 
-Each fence adds one piece. The Tag runs in-process when you finish. The same call site still works
+Each fence adds one piece. The tag runs in-process when you finish. The same call site still works
 when you later serve or client it.
 
 This page teaches the task. Contract method shapes live in
-[Core Concepts](/docs/core-concepts). Serve, client, and fleet Layers live in
-[Managing Layers](/docs/managing-layers). Prebuilt HyperServices
-([`WorkPool`](/docs/work-pools), [`Daemon`](/docs/daemons), and the rest) are optional tools —
+[Core Concepts](/docs/core-concepts). Serve, client, and fleet layers live in
+[Managing Layers](/docs/managing-layers). Prebuilt hyperservices
+([`WorkPool`](/docs/work-pools), [`Daemon`](/docs/daemons), and the rest) are optional tools,
 secondary to building your own.
 
-## Declare the Tag
+## Declare the tag
 
-Put the Contract on the Tag: methods and their schemas. Nothing runs yet. This is the typed name
+Put the contract on the tag: methods and their schemas. Nothing runs yet. This is the typed name
 everything else hangs from:
 
 {.twoslash}
@@ -40,9 +40,9 @@ class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
 }) {}
 ```
 
-## Fulfil It
+## Fulfil it
 
-Return those methods from an Implementation. A `SubscriptionRef` backs the observable `value`:
+Return those methods from an implementation. A `SubscriptionRef` backs the observable `value`:
 
 {.twoslash}
 ``` ts
@@ -67,9 +67,9 @@ const counterImpl = Effect.gen(function* () {
 })
 ```
 
-## Place It In-Process
+## Place it in-process
 
-Wire Tag and Implementation with `Hyperlink.layer`:
+Wire tag and implementation with `Hyperlink.layer`:
 
 {.twoslash}
 ``` ts
@@ -96,9 +96,9 @@ const counterImpl = Effect.gen(function* () {
 const inProcess = Hyperlink.layer(Counter, counterImpl)
 ```
 
-## Call the Handle
+## Call the handle
 
-`yield* Counter` returns the Handle. Increment, read `value`, reset. Same shapes later sit behind
+`yield* Counter` returns the handle. Increment, read `value`, reset. Same shapes later sit behind
 RPC:
 
 {.twoslash}
@@ -136,19 +136,20 @@ const program = Effect.gen(function* () {
 
 ## Try It Live
 
-This exact Counter — the same Tag, the same `Hyperlink.layer` — is running in this page right now.
-The buttons call `increment` / `reset` on the Handle; the count reads straight off `value.changes`.
-There is no extra API between the UI and the resource, the Handle *is* the surface:
+This exact Counter (the same tag, the same `Hyperlink.layer`) is running in this page right now.
+The buttons call `increment` / `reset` on the handle; the count reads straight off `value.changes`.
+There is no extra API between the UI and the resource: the handle *is* the surface.
 
 ``` resource
 docs/Counter
 ```
 
-## What Changes Next
+## What changes next
 
-Serve or client the same Tag without rewriting the program body. Only the Layer at the edge changes.
+Serve or client the same tag without rewriting the program body. Only the layer at the edge changes.
 That tour is [Managing Layers](/docs/managing-layers).
 
 **Sharp edge.** A browser dashboard that opens many live streams hits the browser HTTP connection
-cap if you pair `Node.http` with `connect(tag, protocolHttp(port))`. Serve with `Node.ws(…, port)`
-and connect with `Hyperlink.ws`. Same Tag, different wire. Details live on Managing Layers.
+cap if you pair `Node.http(…, 3000)` with `connect(tag, protocolHttp(3000))`. Serve with
+`Node.ws(…, 3000)` and connect with `Hyperlink.ws` (or `protocolWebsocket(3000)`). Same tag,
+different wire. Details live on Managing Layers.
