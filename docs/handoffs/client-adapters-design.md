@@ -85,9 +85,9 @@ Uses official **`effect/unstable/reactivity`** (not standalone `@effect-atom`). 
 | Runtime plumbing | **All three:** (A) explicit `Atom.AtomRuntime` as the core API; (B) handle / stream overloads when the caller already has a source; (C) React convenience helpers that read runtime from context — never the only API. |
 | Return type | **R1:** `Atom<AsyncResult<A, E>>` — same as Effect’s `runtime.atom(Stream)`. Preserve `E` (do not default to `unknown`). Bundle `ValueAtom<A> = AsyncResult<A, unknown>` erasure stays a dashboard/widget detail, not the public helper contract. No `Option` wrap on plain live fields. |
 | Cache / identity | **`Atom.family`** with a canonical channel key (Effect-native, same pattern as `AtomRpc`). Lambdas OK via path extraction so `status` and `status.changes` share one atom. |
-| Live vs siblings | **L1:** `Hyperlink.atom` = live Subscribable/Stream only. |
-| Commands | **`Hyperlink.fn`** — wraps `runtime.fn`; Effect-primitive name (owner OK with using it). |
-| One-shot read | Name still TBD — lean **`Hyperlink.query`** (`AtomRpc` precedent) if we refuse to overload `atom` with Effects. |
+| Live vs siblings | **L1 (confirmed):** `Hyperlink.atom` = live Subscribable/Stream only — not Effects. |
+| Commands | **`Hyperlink.fn`** — wraps `runtime.fn`; Effect-primitive name. |
+| One-shot read | **`Hyperlink.query`** — `runtime.atom(Effect)`; refresh / `withReactivity`. AtomRpc precedent; distinct from TanStack `Hyperlink.useQuery`. |
 
 #### Proposed call shapes (direction)
 
@@ -98,11 +98,11 @@ const rt = Atom.runtime(appLayer)
 const statusAtom = Hyperlink.atom(rt)(MyQueue, (q) => q.status)
 const metricsAtom = Hyperlink.atom(rt)(MyQueue, (q) => q.metrics.stream)
 
-// Command (Effect-primitive name)
+// Command
 const pause = Hyperlink.fn(rt)(MyQueue, (q) => q.pause)
 
-// One-shot read — name TBD (candidate: Hyperlink.query)
-// const seed = Hyperlink.query(rt)(MyQueue, (q) => q.metrics.query({ limit: 50 }))
+// One-shot read (L1 sibling — not atom)
+const seed = Hyperlink.query(rt)(MyQueue, (q) => q.metrics.query({ limit: 50 }))
 
 // B — already-resolved source
 Hyperlink.atom(handle.status)
@@ -115,14 +115,23 @@ const statusAtom = Hyperlink.useServiceAtom(MyQueue, (q) => q.status)
 | Handle field | Direction | Behavior |
 |--------------|-----------|----------|
 | `ref` / `subscribable` / `stream` | `Hyperlink.atom` | Push → `Atom<AsyncResult<A, E>>` |
-| `effect` (read) | sibling (name TBD; lean `query`) | `runtime.atom(Effect)`; refresh / `withReactivity` |
+| `effect` (read) | `Hyperlink.query` | `runtime.atom(Effect)`; refresh / `withReactivity` |
 | `effect` (command) | `Hyperlink.fn` | `runtime.fn` — same as today’s pause/resume |
 
-**Do not** name/shape this family as a TanStack clone. Native = `Atom`, `AsyncResult`, mount/subscribe, `fn`, optional `withReactivity` / `swr`.
+**Do not** name/shape this family as a TanStack clone. Native = `Atom`, `AsyncResult`, mount/subscribe, `fn`, optional `withReactivity` / `swr`.  
+(`query` here is the AtomRpc-shaped Effect-reactive helper — not TanStack; TanStack lane is `Hyperlink.useQuery`.)
+
+#### Effect-reactive surface (locked)
+
+```ts
+Hyperlink.atom   // live push (Subscribable | Stream)
+Hyperlink.query  // one-shot Effect read
+Hyperlink.fn     // command
+// + form B (handle/stream) and form C (React convenience) on atom / as needed
+```
 
 #### Still to lock
 
-- One-shot read helper name (`query` vs overload `atom` with Effects vs other).
 - Relation to hand-written bundles (`queueBundle`, …) vs Spec generation.
 - Shared Spec walker with Promise adapter vs separate.
 
@@ -148,4 +157,4 @@ const statusAtom = Hyperlink.useServiceAtom(MyQueue, (q) => q.status)
 
 ## Next conversation
 
-Lock cache identity + live-only vs siblings, then relation to bundles / Spec. TanStack-backed `Hyperlink.useQuery` surface + `queryOptions` escape hatch still on table. Promise adapter as shared boundary for TanStack `queryFn`.
+Relation to bundles / Spec generation; shared Spec walker with Promise adapter. TanStack-backed `Hyperlink.useQuery` + `queryOptions` escape hatch still on table. Promise adapter as shared boundary for TanStack `queryFn`.
