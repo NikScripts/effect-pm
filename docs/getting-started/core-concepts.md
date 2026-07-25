@@ -36,11 +36,11 @@ const program = Effect.gen(function* () {
 })
 
 // provide: supply an implementation once, at the edge, with a Layer
-const RandomLive = Layer.succeed(Random, {
+const random = Layer.succeed(Random, {
   next: Effect.succeed(0.5),
 })
 
-program.pipe(Effect.provide(RandomLive))
+program.pipe(Effect.provide(random))
 ```
 
 The Tag sits between the two sides: ask for a capability on one side, fulfil it on the other.

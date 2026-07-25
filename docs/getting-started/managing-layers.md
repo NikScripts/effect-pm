@@ -25,9 +25,9 @@ remote is a change at the composition root, not in the consuming code.
 The simplest layer runs the Implementation in the current runtime:
 
 ``` ts
-const JobsLive = Hyperlink.layer(Jobs, jobsImpl)
+const inProcess = Hyperlink.layer(Jobs, jobsImpl)
 
-program.pipe(Effect.provide(JobsLive)) // `yield* Jobs` now runs jobsImpl locally
+program.pipe(Effect.provide(inProcess)) // `yield* Jobs` now runs jobsImpl locally
 ```
 
 ## Serving over the network

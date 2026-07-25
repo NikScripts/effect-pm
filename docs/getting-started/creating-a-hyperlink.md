@@ -93,7 +93,7 @@ const counterImpl = Effect.gen(function* () {
 })
 
 // ---cut---
-const CounterLive = Hyperlink.layer(Counter, counterImpl)
+const inProcess = Hyperlink.layer(Counter, counterImpl)
 ```
 
 ## Call the Handle
@@ -122,7 +122,7 @@ const counterImpl = Effect.gen(function* () {
   }
 })
 
-const CounterLive = Hyperlink.layer(Counter, counterImpl)
+const inProcess = Hyperlink.layer(Counter, counterImpl)
 
 // ---cut---
 const program = Effect.gen(function* () {
@@ -131,10 +131,10 @@ const program = Effect.gen(function* () {
   const n = yield* counter.value.get // n: number
   yield* counter.reset
   return n
-}).pipe(Effect.provide(CounterLive))
+}).pipe(Effect.provide(inProcess))
 ```
 
-## Try It Live
+## Try It
 
 This exact Counter — the same Tag, the same `Hyperlink.layer` — is running in this page right now.
 The buttons call `increment` / `reset` on the Handle; the count reads straight off `value.changes`.
