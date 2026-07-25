@@ -16,6 +16,7 @@ import { QueueIsland } from "../islands/QueueIsland.js";
 import { RunHyperlinkIsland } from "../islands/RunHyperlinkIsland.js";
 import { CounterIsland } from "../islands/CounterIsland.js";
 import { PackageInstall } from "../islands/PackageInstall.js";
+import { ListenProtocol } from "../islands/ListenProtocol.js";
 import { CopyButton } from "../islands/CopyButton.js";
 import { type ChapterMeta, expandScopes, parseChapter } from "./standards-manifest.js";
 import { buildTermIndex, slugify } from "./glossary.js";
@@ -173,6 +174,10 @@ const toReact = (n: any): React.ReactNode => {
       if (n.lang === "gate" || n.lang === "run-resource") return h(RunHyperlinkIsland, { key: keySeq++ });
       if (n.lang === "hyperlink") return h(CounterIsland, { key: keySeq++ });
       if (n.lang === "install") return h(PackageInstall, { key: keySeq++, packages: n.text });
+      // protocol-listen overload family — tabs switch http / ws / unix / nPipe
+      if (n.lang === "listen") {
+        return h(ListenProtocol, { key: keySeq++, defaultProto: n.text.trim() || undefined });
+      }
       // everything else is Shiki-highlighted server-side (real React nodes). A `{.twoslash}`
       // attribute above the fence opts the block into TS-language-service hover types. Wrapped in a
       // `.code-block` container carrying the copy button; line numbers are pure CSS on `.line`.

@@ -999,6 +999,14 @@ h2[class~="draft"]::after {
   opacity: 1;
 }
 
+/* protocol-listen toggle — `​```listen` (ListenProtocol island). Same chrome as install; multi-line
+   overload family for the selected sibling (http / ws / unix / nPipe). */
+.listen-proto .pm-command code {
+  display: block;
+  line-height: 1.55;
+  white-space: pre;
+}
+
 /* tables — Djot pipe tables (docs-content renders table/row/cell). */
 table {
   width: 100%;

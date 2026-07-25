@@ -32,33 +32,11 @@ program.pipe(Effect.provide(inProcess)) // `yield* Jobs` now runs jobsImpl local
 
 ## Serving over the network
 
-To expose a HyperService over RPC, use a **protocol listen**. All four siblings share one overload
-family — `Node.http` / `Node.ws` / `Node.unix` / `Node.nPipe` — differing only in the wire.
+To expose a HyperService over RPC, pick a **protocol listen**. `Node.listen` is the neutral spine
+(no transport bind) — day to day you call one of the four siblings that share its overload family:
+`Node.http` / `Node.ws` / `Node.unix` / `Node.nPipe`. Toggle the wire; every form stays the same:
 
-**One HyperService** — pass Tag + impl (no `Hyperlink.serve`, no brackets). Omit the address for an
-ephemeral bind; nameless listens Soft-bake `Lookup.layer` when you don't provide one:
-
-``` ts
-Node.http(Jobs, jobsImpl)            // nameless, ephemeral port, Lookup Soft-baked
-Node.http(Jobs, jobsImpl, 3000)      // or ":3000" or "http://127.0.0.1:3000/rpc"
-Node.http(Jobs, jobsImpl, Worker)    // named Node (no andNode)
-Node.unix(Jobs, jobsImpl)            // same-machine ipc, ephemeral sock
-Node.unix(Jobs, jobsImpl, "/tmp/jobs.sock")
-```
-
-**Several on one `/rpc`** — list serve layers; brackets optional when there's only one:
-
-``` ts
-Node.http(
-  [
-    Hyperlink.serve(Jobs, jobsImpl),
-    Hyperlink.serve(Emails, emailsImpl),
-  ],
-  3000,
-)
-
-Node.http(Hyperlink.serve(Jobs, jobsImpl), 3000) // one serve, no array
-Node.http(Worker, Hyperlink.serve(Jobs, jobsImpl), 3000)
+``` listen
 ```
 
 Which listen:
@@ -66,11 +44,12 @@ Which listen:
 - **`Node.http`** — RPC over HTTP POST. Default for servers, CLIs, and a handful of streams.
 - **`Node.ws`** — one multiplexed WebSocket per client. Prefer for **browsers** (many live streams;
   HTTP/1.1's ~6 connections per origin starves the rest).
-- **`Node.unix`** / **`Node.nPipe`** — same-machine IPC (path string or omit for ephemeral).
+- **`Node.unix`** / **`Node.nPipe`** — same-machine IPC (Unix sock / Windows named pipe).
 
-Address shorthand matches `Node.Tag` / `protocolHttp`: port, `":port"`, or a full url (ipc: a path
-string). Object form (`{ port, url, unlink, … }`) remains when you need more than the address.
-Override Lookup with `Layer.provide(Lookup.layerOptions({ path }))` when Identity is already in env.
+Nameless listens Soft-bake `Lookup.layer` when you don't provide one. Address shorthand matches
+`Node.Tag` / `protocolHttp`: port, `":port"`, or a full url (ipc: a path string). Object form
+(`{ port, url, unlink, … }`) remains when you need more than the address. Override Lookup with
+`Layer.provide(Lookup.layerOptions({ path }))` when Identity is already in env.
 
 Every listen auto-mounts `Node.status` and `/health`. Clients dial the same address:
 
