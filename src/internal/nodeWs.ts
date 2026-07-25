@@ -30,6 +30,7 @@ import {
   isServeArg,
   resolveTagListenTarget,
   serveListFromTagImpl,
+  softBakeLookupLayer,
   stampListenUrl,
   withListenNode,
   wsListenUrlFromOptions,
@@ -41,8 +42,8 @@ import {
 import { retype } from "./nodeServerCommon"
 
 /**
- * Local WebSocket listen — localhost bind. Compose Lookup via
- * `Layer.provide(Lookup.layer)` / `Lookup.layerOptions` when claim / advertise needs it.
+ * Local WebSocket listen — localhost bind. **Nameless** forms Soft-bake {@link Lookup.layer} when
+ * Identity is absent (claim + advertise); override with `Layer.provide(Lookup.layerOptions(…))`.
  *
  * Overload family (keep aligned with {@link unix} / {@link http} / {@link nPipe}):
  * - `ws(tag, impl)` / `ws(tag, impl, address)` — unbound Tag → nameless; bound Tag → that Node
@@ -222,7 +223,10 @@ type ListenLayer = Layer.Layer<
   never
 >;
 
-/** Nameless anonymous WebSocket Node + bind (pipe Lookup when needed). @internal */
+/**
+ * Nameless anonymous WebSocket Node + bind. Soft-bakes {@link Lookup.layer} when Identity is
+ * absent (same as {@link unix} nameless). @internal
+ */
 const wsNameless = (
   list: ServeLayerList,
   options: ListenOptions | undefined,
@@ -231,7 +235,12 @@ const wsNameless = (
     Layer.unwrap(
       Effect.gen(function* () {
         const key = yield* anonymousNodeKey(list);
-        return wsListenOn(Tag()(key, { kind: "WebSocket" }), list, options);
+        const core = wsListenOn(
+          Tag()(key, { kind: "WebSocket" }),
+          list,
+          options,
+        );
+        return yield* softBakeLookupLayer(core);
       }),
     ) as never,
   );

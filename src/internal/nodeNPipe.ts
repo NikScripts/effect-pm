@@ -30,6 +30,7 @@ import {
   nPipeRequiresIpcLayer,
   resolveTagListenTarget,
   serveListFromTagImpl,
+  softBakeLookupLayer,
   stampListenPath,
   withListenNode,
   type CatalogROut,
@@ -55,8 +56,7 @@ const requireWindows = <A, E, R>(
 /**
  * Windows named-pipe IPC listen — same overload family as {@link unix}.
  * Same `IpcSocket` kind; paths are `\\.\pipe\…` (positional string or omit for ephemeral).
- * Prefer {@link unix} on POSIX. Compose Lookup via `Layer.provide(Lookup.layer)` /
- * `Lookup.layerOptions` when needed.
+ * **Nameless** Soft-bakes {@link Lookup.layer} when Identity is absent. Prefer {@link unix} on POSIX.
  *
  * @category listen
  * @public
@@ -216,7 +216,10 @@ export function nPipe(
  */
 type ListenLayer = Layer.Layer<never, AddressLessClaimLost | UnaddressedNode, never>;
 
-/** Nameless anonymous named-pipe Node + bind (pipe Lookup when needed). @internal */
+/**
+ * Nameless anonymous named-pipe Node + bind. Soft-bakes {@link Lookup.layer} when Identity is
+ * absent (same as {@link unix} nameless). @internal
+ */
 const nPipeNameless = (
   list: ServeLayerList,
   options: ListenOptions | undefined,
@@ -226,11 +229,12 @@ const nPipeNameless = (
     Layer.unwrap(
       Effect.gen(function* () {
         const key = yield* anonymousNodeKey(list);
-        return nPipeListenOn(
+        const core = nPipeListenOn(
           stampListenPath(Tag()(key), path),
           list,
           options,
         );
+        return yield* softBakeLookupLayer(core);
       }),
     ) as never,
   );

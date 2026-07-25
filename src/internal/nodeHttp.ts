@@ -32,6 +32,7 @@ import {
   isServeArg,
   resolveTagListenTarget,
   serveListFromTagImpl,
+  softBakeLookupLayer,
   stampListenUrl,
   withListenNode,
   type CatalogROut,
@@ -48,8 +49,8 @@ type ListenLayer = Layer.Layer<
 >
 
 /**
- * Local Http listen — localhost bind. Compose Lookup via
- * `Layer.provide(Lookup.layer)` / `Lookup.layerOptions` when claim / advertise needs it.
+ * Local Http listen — localhost bind. **Nameless** forms Soft-bake {@link Lookup.layer} when
+ * Identity is absent (claim + advertise); override with `Layer.provide(Lookup.layerOptions(…))`.
  *
  * Overload family (keep aligned with {@link unix} / {@link ws} / {@link nPipe}):
  * - `http(tag, impl)` / `http(tag, impl, address)` — unbound Tag → nameless; bound Tag → that Node
@@ -223,7 +224,10 @@ export function http(
   );
 }
 
-/** Nameless anonymous Http Node + bind (pipe Lookup when needed). @internal */
+/**
+ * Nameless anonymous Http Node + bind. Soft-bakes {@link Lookup.layer} when Identity is absent
+ * (same as {@link unix} nameless). @internal
+ */
 const httpNameless = (
   list: ServeLayerList,
   options: ListenOptions | undefined,
@@ -232,7 +236,8 @@ const httpNameless = (
     Layer.unwrap(
       Effect.gen(function* () {
         const key = yield* anonymousNodeKey(list);
-        return httpListenOn(Tag()(key, { kind: "Http" }), list, options);
+        const core = httpListenOn(Tag()(key, { kind: "Http" }), list, options);
+        return yield* softBakeLookupLayer(core);
       }),
     ) as never,
   );

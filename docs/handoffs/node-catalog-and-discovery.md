@@ -562,7 +562,7 @@ mailWorker("w2").pipe(Layer.provide(Lookup.layer))
 
 **Shared contract (LOCKED by practice — keep aligned):**
 
-1. **Lookup is pipe-only** — never `lookupPath` / `bootstrapLookup` listen opts. Apps compose `Layer.provide(Lookup.layer)` or `Lookup.layerOptions({ path, unlink })` / `Lookup.client` / `Lookup.layerNode`.
+1. **Lookup on nameless Soft-bakes** — all four protocol listens Soft-bake `Lookup.layer` when Identity is absent (claim + advertise). Never `lookupPath` / `bootstrapLookup` listen opts; override with `Layer.provide(Lookup.layerOptions({ path, unlink }))` / `Lookup.client` / `Lookup.layerNode` when Identity is already in env.
 2. **Same serve overload family** on protocol listens (`http` / `ws` / `unix` / `nPipe`):
    - `listen(tag, impl)` / `listen(tag, impl, address)` — unbound → nameless; sole-bound → that Node
    - `listen(tag, impl, node)` — named without `andNode`

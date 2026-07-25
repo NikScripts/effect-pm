@@ -3,7 +3,7 @@
  *
  * @internal
  */
-import { Effect, Layer, Random } from "effect"
+import { Effect, Layer, Option, Random } from "effect"
 import * as Hyperlink from "../Hyperlink"
 import {
   AnyNode,
@@ -152,6 +152,24 @@ export const serveListFromTagImpl = (
   >(Hyperlink.serve as never);
   return [serveErased(tag, impl)] as ServeLayerList;
 };
+
+/**
+ * Soft-bake {@link Lookup.layer} when {@link Lookup.Identity} is absent — nameless listens
+ * (http / ws / unix / nPipe) need claim + advertise with no caller Lookup pipe.
+ * `Layer.provide(Lookup.layerOptions(…))` still wins when Identity is already in env.
+ * @internal
+ */
+export const softBakeLookupLayer = <A, E, R>(
+  core: Layer.Layer<A, E, R>,
+): Effect.Effect<Layer.Layer<A, E, R>> =>
+  Effect.gen(function* () {
+    const Lookup = yield* Effect.promise(() => import("../Lookup"));
+    const identity = yield* Effect.serviceOption(Lookup.Identity);
+    if (Option.isSome(identity)) {
+      return core;
+    }
+    return core.pipe(Layer.provide(Lookup.layer)) as Layer.Layer<A, E, R>;
+  });
 
 /** Http / WebSocket (or url-only) Nodes are not Unix-domain IPC. @internal */
 export const isNonIpcNode = (node: AnyNode): boolean =>

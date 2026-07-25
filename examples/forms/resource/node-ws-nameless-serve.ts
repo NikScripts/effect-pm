@@ -2,7 +2,7 @@
  * @module examples/forms/resource/node-ws-nameless-serve
  *
  * **(8b) Nameless `Node.ws(serve)`** — localhost WebSocket sibling of unix nameless (#5).
- * Lookup **piped** (same contract as protocol listen siblings).
+ * Lookup Soft-baked when Identity is absent (same as unix / http / nPipe).
  *
  * ```bash
  * pnpm exec tsx examples/forms/resource/node-ws-nameless-serve.ts
@@ -11,7 +11,6 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
 import * as NodeServices from "@effect/platform-node/NodeServices"
 import { Effect, Layer, Schema } from "effect"
-import * as Lookup from "../../../src/Lookup"
 import * as Node from "../../../src/Node"
 import * as Hyperlink from "../../../src/Hyperlink"
 
@@ -21,7 +20,7 @@ class Jobs extends Hyperlink.Tag<Jobs>()("forms/ws/Jobs", {
 
 const live = Node.ws(
   Hyperlink.serve(Jobs, { jobs: Effect.succeed(7) }),
-).pipe(Layer.provide(Lookup.layer))
+)
 
 NodeRuntime.runMain(
   Layer.launch(live).pipe(Effect.provide(NodeServices.layer)),

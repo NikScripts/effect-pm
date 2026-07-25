@@ -28,6 +28,7 @@ import {
   isServeArg,
   resolveTagListenTarget,
   serveListFromTagImpl,
+  softBakeLookupLayer,
   stampListenPath,
   unixRequiresIpcLayer,
   withListenNode,
@@ -226,12 +227,7 @@ const ipcNameless = (
           list,
           options,
         );
-        const Lookup = yield* Effect.promise(() => import("../Lookup"));
-        const identity = yield* Effect.serviceOption(Lookup.Identity);
-        if (Option.isSome(identity)) {
-          return core;
-        }
-        return core.pipe(Layer.provide(Lookup.layer));
+        return yield* softBakeLookupLayer(core);
       }),
     ) as never,
   );

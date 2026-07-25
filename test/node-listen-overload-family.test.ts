@@ -16,13 +16,12 @@ class Jobs extends Hyperlink.Tag<Jobs>()("listen-family/Jobs", {
 }) {}
 
 describe("listen overload family (aligned siblings)", () => {
-  it.effect("http — unbound Tag+impl + port (nameless)", () =>
+  it.effect("http — unbound Tag+impl + port (nameless; Lookup Soft-baked)", () =>
     Effect.gen(function* () {
       const port = 19300 + (process.pid % 500);
+      // No Lookup.layer pipe — Soft-bake supplies default Identity / advertise.
       const serverCtx = yield* Layer.build(
-        Node.http(Jobs, { jobs: Effect.succeed(4) }, port).pipe(
-          Layer.provide(Lookup.layer),
-        ),
+        Node.http(Jobs, { jobs: Effect.succeed(4) }, port),
       );
       expect(Context.get(serverCtx, Node.ListenNode).url).toBe(
         `http://127.0.0.1:${String(port)}/rpc`,
@@ -35,6 +34,19 @@ describe("listen overload family (aligned siblings)", () => {
         return yield* jobs.jobs;
       }).pipe(Effect.provide(Context.merge(serverCtx, clientCtx)));
       expect(n).toBe(4);
+    }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
+  );
+
+  it.effect("http — no node, no address, no Lookup pipe (ephemeral Soft-bake)", () =>
+    Effect.gen(function* () {
+      const serverCtx = yield* Layer.build(
+        Node.http(Jobs, { jobs: Effect.succeed(11) }),
+      );
+      const listenNode = Context.get(serverCtx, Node.ListenNode);
+      expect(listenNode.key.startsWith("hyperlink-ts/anonymous-node/")).toBe(
+        true,
+      );
+      expect(listenNode.url?.startsWith("http://127.0.0.1:")).toBe(true);
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
   );
 
@@ -66,10 +78,7 @@ describe("listen overload family (aligned siblings)", () => {
     Effect.gen(function* () {
       const port = 19400 + (process.pid % 300);
       const serverCtx = yield* Layer.build(
-        Node.http(
-          Hyperlink.serve(Jobs, { jobs: Effect.succeed(6) }),
-          port,
-        ).pipe(Layer.provide(Lookup.layer)),
+        Node.http(Hyperlink.serve(Jobs, { jobs: Effect.succeed(6) }), port),
       );
       expect(Context.get(serverCtx, Node.ListenNode).url).toBe(
         `http://127.0.0.1:${String(port)}/rpc`,
@@ -129,13 +138,11 @@ describe("listen overload family (aligned siblings)", () => {
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
   );
 
-  it.effect("ws — unbound Tag+impl + port", () =>
+  it.effect("ws — unbound Tag+impl + port (Lookup Soft-baked)", () =>
     Effect.gen(function* () {
       const port = 19450 + (process.pid % 200);
       const serverCtx = yield* Layer.build(
-        Node.ws(Jobs, { jobs: Effect.succeed(9) }, port).pipe(
-          Layer.provide(Lookup.layer),
-        ),
+        Node.ws(Jobs, { jobs: Effect.succeed(9) }, port),
       );
       expect(Context.get(serverCtx, Node.ListenNode).url).toBe(
         `ws://127.0.0.1:${String(port)}/rpc`,

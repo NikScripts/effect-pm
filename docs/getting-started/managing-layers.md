@@ -68,8 +68,9 @@ Node.http(Worker, Hyperlink.serve(Jobs, jobsImpl), 3000)
 ```
 
 `unix` / `ws` / `nPipe` share that family (path string instead of port for ipc). Nameless listens
-mint an anonymous Node that still carries the address — clients dial
-`Hyperlink.connect(Tag, Hyperlink.protocolHttp(3000))` the same way. Object form
+mint an anonymous Node and Soft-bake `Lookup.layer` when none is provided (claim + advertise) —
+override with `Layer.provide(Lookup.layerOptions({ path }))` when you need a custom Lookup.
+Clients dial `Hyperlink.connect(Tag, Hyperlink.protocolHttp(3000))` the same way. Object form
 (`{ port, url, unlink, … }`) remains when you need more than the address.
 
 {.note}
