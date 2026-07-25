@@ -72,7 +72,7 @@ self-describing in source.
 program.pipe(Effect.provide(Hyperlink.connect(Jobs, Hyperlink.protocolHttp(3000))))
 
 // Or declare a node with that port and share the transport across clients
-class JobsNode extends Node.Tag()("jobs", 3000) {}
+class JobsNode extends Node.Tag<JobsNode>()("jobs", 3000) {}
 const transport = Hyperlink.http(JobsNode)
 const appLayer = Layer.mergeAll(
   transport,
