@@ -84,36 +84,45 @@ Uses official **`effect/unstable/reactivity`** (not standalone `@effect-atom`). 
 | Select shape | **Both** for Subscribables: `(q) => q.status` *or* `(q) => q.status.changes`. Non-Subscribable live sources must be selected directly, e.g. `(q) => q.metrics.stream` — not `(q) => q.metrics`. |
 | Runtime plumbing | **All three:** (A) explicit `Atom.AtomRuntime` as the core API; (B) handle / stream overloads when the caller already has a source; (C) React convenience helpers that read runtime from context — never the only API. |
 | Return type | **R1:** `Atom<AsyncResult<A, E>>` — same as Effect’s `runtime.atom(Stream)`. Preserve `E` (do not default to `unknown`). Bundle `ValueAtom<A> = AsyncResult<A, unknown>` erasure stays a dashboard/widget detail, not the public helper contract. No `Option` wrap on plain live fields. |
+| Cache / identity | **`Atom.family`** with a canonical channel key (Effect-native, same pattern as `AtomRpc`). Lambdas OK via path extraction so `status` and `status.changes` share one atom. |
+| Live vs siblings | **L1:** `Hyperlink.atom` = live Subscribable/Stream only. |
+| Commands | **`Hyperlink.fn`** — wraps `runtime.fn`; Effect-primitive name (owner OK with using it). |
+| One-shot read | Name still TBD — lean **`Hyperlink.query`** (`AtomRpc` precedent) if we refuse to overload `atom` with Effects. |
 
 #### Proposed call shapes (direction)
 
 ```ts
-// A — core (anywhere with Effect reactivity)
 const rt = Atom.runtime(appLayer)
+
+// Live push
 const statusAtom = Hyperlink.atom(rt)(MyQueue, (q) => q.status)
 const metricsAtom = Hyperlink.atom(rt)(MyQueue, (q) => q.metrics.stream)
 
+// Command (Effect-primitive name)
+const pause = Hyperlink.fn(rt)(MyQueue, (q) => q.pause)
+
+// One-shot read — name TBD (candidate: Hyperlink.query)
+// const seed = Hyperlink.query(rt)(MyQueue, (q) => q.metrics.query({ limit: 50 }))
+
 // B — already-resolved source
-Hyperlink.atom(handle.status)           // Subscribable
-Hyperlink.atom(handle.metrics.stream)   // Stream
+Hyperlink.atom(handle.status)
+Hyperlink.atom(handle.metrics.stream)
 
 // C — React convenience (provider holds Atom.AtomRuntime + registry)
 const statusAtom = Hyperlink.useServiceAtom(MyQueue, (q) => q.status)
-// consume with existing useAtomValue / useAtomSet
 ```
 
 | Handle field | Direction | Behavior |
 |--------------|-----------|----------|
 | `ref` / `subscribable` / `stream` | `Hyperlink.atom` | Push → `Atom<AsyncResult<A, E>>` |
-| `effect` (read) | sibling (name TBD) over `runtime.atom(Effect)` | One-shot; `refresh` / `Reactivity.invalidate` |
-| `effect` (command) | `Hyperlink.fn` / `runtime.fn` style | Same as today’s pause/resume |
+| `effect` (read) | sibling (name TBD; lean `query`) | `runtime.atom(Effect)`; refresh / `withReactivity` |
+| `effect` (command) | `Hyperlink.fn` | `runtime.fn` — same as today’s pause/resume |
 
 **Do not** name/shape this family as a TanStack clone. Native = `Atom`, `AsyncResult`, mount/subscribe, `fn`, optional `withReactivity` / `swr`.
 
 #### Still to lock
 
-- Cache / identity for tag+select atoms (dedupe wire subscriptions).
-- Live-only `atom` vs dispatcher across field kinds; sibling names for one-shot + `fn`.
+- One-shot read helper name (`query` vs overload `atom` with Effects vs other).
 - Relation to hand-written bundles (`queueBundle`, …) vs Spec generation.
 - Shared Spec walker with Promise adapter vs separate.
 
