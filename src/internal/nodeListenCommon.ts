@@ -18,6 +18,7 @@ import {
   UnixListenRequiresIpc,
   WsListenRequiresWs,
 } from "./nodeCore"
+import { retype } from "./nodeServerCommon"
 
 /**
  * Non-empty serve-layer list for {@link listen} / {@link unix} / {@link http} / {@link ws} /
@@ -56,6 +57,22 @@ export const isHyperlinkTagArg = (u: unknown): u is Hyperlink.PipeableTag =>
   u !== null &&
   Hyperlink.specSym in u;
 
+/**
+ * True when `u` is a {@link AnyNode} (listen Node / `Node.Tag`), not a Hyperlink tag, Layer, or
+ * {@link ListenOptions}. Nodes always expose top-level `key` plus `url`/`path`/`kind` fields.
+ * @internal
+ */
+export const isAnyNodeArg = (u: unknown): u is AnyNode => {
+  if ((typeof u !== "object" && typeof u !== "function") || u === null) {
+    return false;
+  }
+  if (Hyperlink.specSym in u) return false;
+  if (Layer.isLayer(u)) return false;
+  const key = (u as { readonly key?: unknown }).key;
+  if (typeof key !== "string" || key.length === 0) return false;
+  return "url" in u || "path" in u || "kind" in u;
+};
+
 /** True when the first arg is a serve layer or non-empty serve list. @internal */
 export const isServeArg = (
   u: unknown,
@@ -66,6 +83,74 @@ export const isServeArg = (
     u.length > 0 &&
     Layer.isLayer(u[0])
   );
+};
+
+/** Tag key for listen errors / anonymous mint labels. @internal */
+export const tagKeyOf = (tag: Hyperlink.PipeableTag): string => {
+  const key = (tag as { readonly key?: unknown }).key;
+  return typeof key === "string" ? key : "unknown";
+};
+
+/**
+ * Resolve Tag+impl listen target (shared by http / ws / unix / nPipe):
+ * - third arg is a Node → listen on that Node (no `andNode` required)
+ * - else tag is sole-bound → that Node (+ third as address options)
+ * - else multi-bound → ambiguous error
+ * - else unbound → nameless mint (+ third as address options)
+ * @internal
+ */
+export type ResolvedTagListenTarget =
+  | {
+      readonly _tag: "node";
+      readonly node: AnyNode;
+      readonly addressArg: unknown;
+    }
+  | { readonly _tag: "nameless"; readonly addressArg: unknown }
+  | {
+      readonly _tag: "tagNodeError";
+      readonly tag: string;
+      readonly reason: "missing" | "ambiguous";
+      readonly count: number;
+    };
+
+export const resolveTagListenTarget = (
+  tag: Hyperlink.PipeableTag,
+  third: unknown,
+): ResolvedTagListenTarget => {
+  if (isAnyNodeArg(third)) {
+    return { _tag: "node", node: third, addressArg: undefined };
+  }
+  const bound = Hyperlink.nodeOf(tag);
+  const fleet = Hyperlink.nodesOf(
+    tag as Hyperlink.HyperlinkTag<unknown, Hyperlink.Spec>,
+  );
+  if (bound !== undefined) {
+    return {
+      _tag: "node",
+      node: bound as AnyNode,
+      addressArg: third,
+    };
+  }
+  if (fleet.length > 1) {
+    return {
+      _tag: "tagNodeError",
+      tag: tagKeyOf(tag),
+      reason: "ambiguous",
+      count: fleet.length,
+    };
+  }
+  return { _tag: "nameless", addressArg: third };
+};
+
+/** One-serve list from Tag+impl (erased serve for listen dispatch). @internal */
+export const serveListFromTagImpl = (
+  tag: Hyperlink.PipeableTag,
+  impl: unknown,
+): ServeLayerList => {
+  const serveErased = retype<
+    (tag: Hyperlink.PipeableTag, impl: unknown) => Layer.Layer<never, never, never>
+  >(Hyperlink.serve as never);
+  return [serveErased(tag, impl)] as ServeLayerList;
 };
 
 /** Http / WebSocket (or url-only) Nodes are not Unix-domain IPC. @internal */

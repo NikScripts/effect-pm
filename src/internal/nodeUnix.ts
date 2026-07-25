@@ -18,16 +18,18 @@ import {
 import { unaddressedLayer } from "./nodeConnect"
 import { ipcServer } from "./nodeIpcServer"
 import {
-  failListenTagNode,
-  isDynamicInstanceNode,
-  isNonIpcNode,
-  isPrototypeNode,
-  isHyperlinkTagArg,
-  isServeArg,
-  unixRequiresIpcLayer,
   anonymousNodeKey,
   coerceIpcListenArg,
+  failListenTagNode,
+  isDynamicInstanceNode,
+  isHyperlinkTagArg,
+  isNonIpcNode,
+  isPrototypeNode,
+  isServeArg,
+  resolveTagListenTarget,
+  serveListFromTagImpl,
   stampListenPath,
+  unixRequiresIpcLayer,
   withListenNode,
   type CatalogROut,
   type ServeLayerList,
@@ -36,12 +38,16 @@ import {
 import { retype } from "./nodeServerCommon"
 
 /**
- * Unix-domain IPC listen — all ipc mint/bind. **Nameless** `unix([serve…])` / `unix(serve)` Soft-bakes
+ * Unix-domain IPC listen — all ipc mint/bind. **Nameless** forms Soft-bake
  * {@link Lookup.layer} (claim + advertise) — override with `Layer.provide(Lookup.layerOptions({ path }))`.
- * Pass a path string for a fixed socket (`Node.unix([serve], "/tmp/x.sock")`); omit for ephemeral.
- * Named / address-less `Node.Tag` listens still pipe Lookup when they claim. Protocol listen sibling of
- * {@link http} / {@link ws} / {@link nPipe} / {@link Prototype.listen} — keep in sync. Prefer this for
- * same-machine.
+ *
+ * Overload family (keep aligned with {@link http} / {@link ws} / {@link nPipe}):
+ * - `unix(tag, impl)` / `unix(tag, impl, path)` — unbound Tag → nameless; bound Tag → that Node
+ * - `unix(tag, impl, node)` — named listen without `andNode`
+ * - `unix(serve, path?)` / `unix([serve…], path?)` — nameless (brackets optional for one)
+ * - `unix(node, serve | [serve…], options?)` — named node + serves
+ *
+ * Path: `"/tmp/x.sock"` or `{ unlink, … }`; omit for ephemeral. Prefer this for same-machine.
  *
  * @category listen
  * @public
@@ -53,6 +59,35 @@ export function unix<
   R = never,
 >(
   tag: Hyperlink.NodeBoundTag<Self, S, HSelf>,
+  impl:
+    | Hyperlink.ImplOf<S>
+    | Hyperlink.Driver<S, R>
+    | Effect.Effect<
+        Hyperlink.ImplOf<S> | Hyperlink.Driver<S, R>,
+        never,
+        R
+      >,
+  options?: IpcListenArg,
+): Layer.Layer<Self | Hyperlink.Local<Self> | ListenNode, never, R>;
+export function unix<
+  Self,
+  S extends Hyperlink.Spec,
+  N extends AnyNode,
+  R = never,
+>(
+  tag: Hyperlink.HyperlinkTag<Self, S>,
+  impl:
+    | Hyperlink.ImplOf<S>
+    | Hyperlink.Driver<S, R>
+    | Effect.Effect<
+        Hyperlink.ImplOf<S> | Hyperlink.Driver<S, R>,
+        never,
+        R
+      >,
+  node: N,
+): Layer.Layer<Self | Hyperlink.Local<Self> | ListenNode, never, R>;
+export function unix<Self, S extends Hyperlink.Spec, R = never>(
+  tag: Hyperlink.HyperlinkTag<Self, S>,
   impl:
     | Hyperlink.ImplOf<S>
     | Hyperlink.Driver<S, R>
@@ -75,6 +110,11 @@ export function unix<const Serves extends ServeLayerList>(
   Layer.Error<Serves[number]>,
   Layer.Services<Serves[number]>
 >;
+export function unix<Node extends AnyNode, A, E, R>(
+  node: Node,
+  serve: Layer.Layer<A, E, R>,
+  options?: IpcListenArg,
+): Layer.Layer<A | ListenNode, E, R>;
 export function unix<
   Node extends AnyNode & { readonly [catalogSym]?: unknown },
   const Serves extends ServeLayerList,
@@ -97,15 +137,14 @@ export function unix(
     | Layer.Any
     | ServeLayerList
     | IpcListenArg
+    | AnyNode
     | object,
-  options?: IpcListenArg,
+  options?: IpcListenArg | AnyNode,
 ): Layer.Any {
-  const { options: listenOptions, path: listenPath } = coerceIpcListenArg(
-    (isServeArg(nodeOrServesOrTag) ? servesOrOptionsOrImpl : options) as
-      | IpcListenArg
-      | undefined,
-  );
   if (isServeArg(nodeOrServesOrTag)) {
+    const { options: listenOptions, path: listenPath } = coerceIpcListenArg(
+      servesOrOptionsOrImpl as IpcListenArg | undefined,
+    );
     const list = (
       Array.isArray(nodeOrServesOrTag)
         ? nodeOrServesOrTag
@@ -116,34 +155,31 @@ export function unix(
 
   if (isHyperlinkTagArg(nodeOrServesOrTag)) {
     const tag = nodeOrServesOrTag;
-    const tagKey = (() => {
-      const key = (tag as { readonly key?: unknown }).key;
-      return typeof key === "string" ? key : "unknown";
-    })();
-    const bound = Hyperlink.nodeOf(tag);
-    const fleet = Hyperlink.nodesOf(
-      tag as Hyperlink.HyperlinkTag<unknown, Hyperlink.Spec>,
-    );
-    if (bound === undefined) {
+    const resolved = resolveTagListenTarget(tag, options);
+    if (resolved._tag === "tagNodeError") {
       return failListenTagNode({
-        tag: tagKey,
-        reason: fleet.length > 1 ? "ambiguous" : "missing",
-        count: fleet.length,
+        tag: resolved.tag,
+        reason: resolved.reason,
+        count: resolved.count,
       });
     }
-    if (isNonIpcNode(bound as AnyNode)) {
-      const n = bound as AnyNode;
+    const list = serveListFromTagImpl(tag, servesOrOptionsOrImpl);
+    const { options: listenOptions, path: listenPath } = coerceIpcListenArg(
+      resolved.addressArg as IpcListenArg | undefined,
+    );
+    if (resolved._tag === "nameless") {
+      return ipcNameless(list, listenOptions, listenPath);
+    }
+    const node = resolved.node;
+    if (isNonIpcNode(node)) {
       return unixRequiresIpcLayer(
-        n.key,
-        n.kind ?? (typeof n.url === "string" ? "url" : "unknown"),
+        node.key,
+        node.kind ?? (typeof node.url === "string" ? "url" : "unknown"),
       );
     }
-    const serveErased = retype<
-      (tag: Hyperlink.PipeableTag, impl: unknown) => Layer.Layer<never, never, never>
-    >(Hyperlink.serve as never);
     return ipcListenOn(
-      stampListenPath(bound as AnyNode, listenPath),
-      [serveErased(tag, servesOrOptionsOrImpl)] as ServeLayerList,
+      stampListenPath(node, listenPath),
+      list,
       listenOptions,
     );
   }
@@ -156,6 +192,9 @@ export function unix(
     );
   }
 
+  const { options: listenOptions, path: listenPath } = coerceIpcListenArg(
+    options as IpcListenArg | undefined,
+  );
   const serves = servesOrOptionsOrImpl as Layer.Any | ServeLayerList;
   const list = (Array.isArray(serves) ? serves : [serves]) as ServeLayerList;
   return ipcListenOn(stampListenPath(node, listenPath), list, listenOptions);

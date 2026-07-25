@@ -58,9 +58,19 @@ Two protocol listens, differing only in the wire they speak:
 - **`Node.unix([...], "/tmp/x.sock")`** / **`Node.nPipe([...], "\\\\.\\pipe\\x")`** — same-machine
   IPC; path string or omit for ephemeral.
 
-Nameless listens mint an anonymous Node that still carries the address — clients dial
-`Hyperlink.connect(Tag, Hyperlink.protocolHttp(3000))` (or `protocolWebsocket`) the same way.
-Object form (`{ port, url, unlink, … }`) remains when you need more than the address.
+For a **single** HyperService, brackets are optional and Tag+impl skips `Hyperlink.serve`:
+
+``` ts
+Node.http(Hyperlink.serve(Jobs, jobsImpl), 3000)
+Node.http(Jobs, jobsImpl, 3000)                 // same, nameless
+Node.http(Jobs, jobsImpl, Worker)               // named Node (no andNode)
+Node.http(Worker, Hyperlink.serve(Jobs, jobsImpl), 3000)
+```
+
+`unix` / `ws` / `nPipe` share that family (path string instead of port for ipc). Nameless listens
+mint an anonymous Node that still carries the address — clients dial
+`Hyperlink.connect(Tag, Hyperlink.protocolHttp(3000))` the same way. Object form
+(`{ port, url, unlink, … }`) remains when you need more than the address.
 
 {.note}
 `Node.httpServer` / `Node.wsServer` remain as escape hatches when you need a custom platform bind

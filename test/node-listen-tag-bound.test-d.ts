@@ -20,5 +20,50 @@ class Nodeless extends Hyperlink.Tag<Nodeless>()("listen-tag-d/Nodeless", {
   jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
-// @ts-expect-error nodeless Tag — sole Node required
-Node.unix(Nodeless, { jobs: Effect.succeed(1) });
+// Unbound Tag+impl → nameless (aligned listen siblings).
+const nameless = Node.unix(Nodeless, { jobs: Effect.succeed(1) });
+expectTypeOf(nameless).toMatchTypeOf<
+  Layer.Layer<
+    Nodeless | Hyperlink.Local<Nodeless> | Node.ListenNode,
+    never,
+    never
+  >
+>();
+
+const namelessHttp = Node.http(Nodeless, { jobs: Effect.succeed(1) }, 3000);
+expectTypeOf(namelessHttp).toMatchTypeOf<
+  Layer.Layer<
+    Nodeless | Hyperlink.Local<Nodeless> | Node.ListenNode,
+    never,
+    never
+  >
+>();
+
+const withNode = Node.http(
+  Nodeless,
+  { jobs: Effect.succeed(1) },
+  Worker,
+);
+expectTypeOf(withNode).toMatchTypeOf<
+  Layer.Layer<
+    Nodeless | Hyperlink.Local<Nodeless> | Node.ListenNode,
+    never,
+    never
+  >
+>();
+
+const singleServe = Node.http(
+  Hyperlink.serve(Nodeless, { jobs: Effect.succeed(1) }),
+  3000,
+);
+expectTypeOf(singleServe).toMatchTypeOf<
+  Layer.Layer<Nodeless | Node.ListenNode, never, never>
+>();
+
+const nodePlusServe = Node.unix(
+  Worker,
+  Hyperlink.serve(Nodeless, { jobs: Effect.succeed(1) }),
+);
+expectTypeOf(nodePlusServe).toMatchTypeOf<
+  Layer.Layer<Nodeless | Node.ListenNode, never, never>
+>();

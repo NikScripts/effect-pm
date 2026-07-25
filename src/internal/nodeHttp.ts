@@ -20,16 +20,18 @@ import {
 import { unaddressedLayer } from "./nodeConnect"
 import { httpServer } from "./nodeHttpServer"
 import {
-  failListenTagNode,
-  httpRequiresHttpLayer,
-  isDynamicInstanceNode,
-  isNonHttpNode,
-  isPrototypeNode,
-  isHyperlinkTagArg,
-  isServeArg,
   anonymousNodeKey,
   coerceHttpListenOptions,
+  failListenTagNode,
   httpListenUrlFromOptions,
+  httpRequiresHttpLayer,
+  isDynamicInstanceNode,
+  isHyperlinkTagArg,
+  isNonHttpNode,
+  isPrototypeNode,
+  isServeArg,
+  resolveTagListenTarget,
+  serveListFromTagImpl,
   stampListenUrl,
   withListenNode,
   type CatalogROut,
@@ -48,11 +50,15 @@ type ListenLayer = Layer.Layer<
 /**
  * Local Http listen — localhost bind. Compose Lookup via
  * `Layer.provide(Lookup.layer)` / `Lookup.layerOptions` when claim / advertise needs it.
- * Nameless / address-less forms accept a positional address (`3000` / `":3000"` /
- * `"http://…"`, or `{ port | url }`); omit for an ephemeral port.
- * Protocol listen sibling of {@link unix} / {@link ws} / {@link nPipe} / {@link Prototype.listen}
- * — keep in sync (handoff § Protocol listen siblings). Prefer this over {@link httpServer} when
- * the battery localhost bind is enough.
+ *
+ * Overload family (keep aligned with {@link unix} / {@link ws} / {@link nPipe}):
+ * - `http(tag, impl)` / `http(tag, impl, address)` — unbound Tag → nameless; bound Tag → that Node
+ * - `http(tag, impl, node)` — named listen without `andNode`
+ * - `http(serve, address?)` / `http([serve…], address?)` — nameless (brackets optional for one)
+ * - `http(node, serve | [serve…], address?)` — named node + serves
+ *
+ * Address: `3000` / `":3000"` / `"http://…"` / `{ port | url | … }`. Prefer this over
+ * {@link httpServer} when the battery localhost bind is enough.
  *
  * @category listen
  * @public
@@ -64,6 +70,35 @@ export function http<
   R = never,
 >(
   tag: Hyperlink.NodeBoundTag<Self, S, HSelf>,
+  impl:
+    | Hyperlink.ImplOf<S>
+    | Hyperlink.Driver<S, R>
+    | Effect.Effect<
+        Hyperlink.ImplOf<S> | Hyperlink.Driver<S, R>,
+        never,
+        R
+      >,
+  options?: HttpListenArg,
+): Layer.Layer<Self | Hyperlink.Local<Self> | ListenNode, never, R>;
+export function http<
+  Self,
+  S extends Hyperlink.Spec,
+  N extends AnyNode,
+  R = never,
+>(
+  tag: Hyperlink.HyperlinkTag<Self, S>,
+  impl:
+    | Hyperlink.ImplOf<S>
+    | Hyperlink.Driver<S, R>
+    | Effect.Effect<
+        Hyperlink.ImplOf<S> | Hyperlink.Driver<S, R>,
+        never,
+        R
+      >,
+  node: N,
+): Layer.Layer<Self | Hyperlink.Local<Self> | ListenNode, never, R>;
+export function http<Self, S extends Hyperlink.Spec, R = never>(
+  tag: Hyperlink.HyperlinkTag<Self, S>,
   impl:
     | Hyperlink.ImplOf<S>
     | Hyperlink.Driver<S, R>
@@ -86,6 +121,11 @@ export function http<const Serves extends ServeLayerList>(
   Layer.Error<Serves[number]>,
   Layer.Services<Serves[number]>
 >;
+export function http<Node extends AnyNode, A, E, R>(
+  node: Node,
+  serve: Layer.Layer<A, E, R>,
+  options?: HttpListenArg,
+): Layer.Layer<A | ListenNode, E, R>;
 export function http<
   Node extends AnyNode & { readonly [catalogSym]?: unknown },
   const Serves extends ServeLayerList,
@@ -108,14 +148,10 @@ export function http(
     | Layer.Any
     | ServeLayerList
     | HttpListenArg
+    | AnyNode
     | object,
-  options?: HttpListenArg,
+  options?: HttpListenArg | AnyNode,
 ): Layer.Any {
-  const listenOptions = coerceHttpListenOptions(
-    (isServeArg(nodeOrServesOrTag) ? servesOrOptionsOrImpl : options) as
-      | HttpListenArg
-      | undefined,
-  );
   // Lookup is not baked in — pipe `Layer.provide(Lookup.layer)` (default) or
   // `Lookup.layerOptions({ path })` / `Lookup.client` when claim / advertise needs it.
 
@@ -125,46 +161,42 @@ export function http(
         ? nodeOrServesOrTag
         : [nodeOrServesOrTag]
     ) as ServeLayerList;
-    return httpNameless(list, listenOptions);
+    return httpNameless(
+      list,
+      coerceHttpListenOptions(servesOrOptionsOrImpl as HttpListenArg | undefined),
+    );
   }
 
   if (isHyperlinkTagArg(nodeOrServesOrTag)) {
     const tag = nodeOrServesOrTag;
-    const tagKey = (() => {
-      const key = (tag as unknown as { readonly key?: unknown }).key;
-      return typeof key === "string" ? key : "unknown";
-    })();
-    const bound = Hyperlink.nodeOf(tag);
-    const fleet = Hyperlink.nodesOf(
-      tag as unknown as Hyperlink.HyperlinkTag<unknown, Hyperlink.Spec>,
-    );
-    if (bound === undefined) {
+    const resolved = resolveTagListenTarget(tag, options);
+    if (resolved._tag === "tagNodeError") {
       return failListenTagNode({
-        tag: tagKey,
-        reason: fleet.length > 1 ? "ambiguous" : "missing",
-        count: fleet.length,
+        tag: resolved.tag,
+        reason: resolved.reason,
+        count: resolved.count,
       });
     }
-    if (isNonHttpNode(bound as AnyNode)) {
-      const n = bound as AnyNode;
+    const list = serveListFromTagImpl(tag, servesOrOptionsOrImpl);
+    const listenOptions = coerceHttpListenOptions(
+      resolved.addressArg as HttpListenArg | undefined,
+    );
+    if (resolved._tag === "nameless") {
+      return httpNameless(list, listenOptions);
+    }
+    const node = resolved.node;
+    if (isNonHttpNode(node)) {
       return httpRequiresHttpLayer(
-        n.key,
-        n.kind ??
-          (typeof n.path === "string"
+        node.key,
+        node.kind ??
+          (typeof node.path === "string"
             ? "IpcSocket"
-            : typeof n.url === "string"
+            : typeof node.url === "string"
               ? "url"
               : "unknown"),
       );
     }
-    const serveErased = retype<
-      (tag: Hyperlink.PipeableTag, impl: unknown) => Layer.Layer<never, never, never>
-    >(Hyperlink.serve as never);
-    return httpListenOn(
-      bound as AnyNode,
-      [serveErased(tag, servesOrOptionsOrImpl)] as ServeLayerList,
-      listenOptions,
-    );
+    return httpListenOn(node, list, listenOptions);
   }
 
   const node = nodeOrServesOrTag as AnyNode;
@@ -184,7 +216,11 @@ export function http(
     | Layer.Layer<never, never, never>
     | ServeLayerList;
   const list = (Array.isArray(serves) ? serves : [serves]) as ServeLayerList;
-  return httpListenOn(node, list, listenOptions);
+  return httpListenOn(
+    node,
+    list,
+    coerceHttpListenOptions(options as HttpListenArg | undefined),
+  );
 }
 
 /** Nameless anonymous Http Node + bind (pipe Lookup when needed). @internal */

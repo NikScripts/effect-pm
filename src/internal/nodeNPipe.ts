@@ -19,15 +19,17 @@ import {
 import { unaddressedLayer } from "./nodeConnect"
 import { ipcServer } from "./nodeIpcServer"
 import {
-  failListenTagNode,
-  isDynamicInstanceNode,
-  isNonIpcNode,
-  isPrototypeNode,
-  isHyperlinkTagArg,
-  isServeArg,
-  nPipeRequiresIpcLayer,
   anonymousNodeKey,
   coerceIpcListenArg,
+  failListenTagNode,
+  isDynamicInstanceNode,
+  isHyperlinkTagArg,
+  isNonIpcNode,
+  isPrototypeNode,
+  isServeArg,
+  nPipeRequiresIpcLayer,
+  resolveTagListenTarget,
+  serveListFromTagImpl,
   stampListenPath,
   withListenNode,
   type CatalogROut,
@@ -51,11 +53,10 @@ const requireWindows = <A, E, R>(
   ) as Layer.Layer<A, E | NPipeRequiresWindows, R>;
 
 /**
- * Windows named-pipe IPC listen — same overload shapes as {@link unix}.
+ * Windows named-pipe IPC listen — same overload family as {@link unix}.
  * Same `IpcSocket` kind; paths are `\\.\pipe\…` (positional string or omit for ephemeral).
  * Prefer {@link unix} on POSIX. Compose Lookup via `Layer.provide(Lookup.layer)` /
- * `Lookup.layerOptions` when needed. Protocol listen sibling of {@link unix} / {@link http} /
- * {@link ws} / {@link Prototype.listen} — keep in sync (handoff § Protocol listen siblings).
+ * `Lookup.layerOptions` when needed.
  *
  * @category listen
  * @public
@@ -67,6 +68,35 @@ export function nPipe<
   R = never,
 >(
   tag: Hyperlink.NodeBoundTag<Self, S, HSelf>,
+  impl:
+    | Hyperlink.ImplOf<S>
+    | Hyperlink.Driver<S, R>
+    | Effect.Effect<
+        Hyperlink.ImplOf<S> | Hyperlink.Driver<S, R>,
+        never,
+        R
+      >,
+  options?: IpcListenArg,
+): Layer.Layer<Self | Hyperlink.Local<Self> | ListenNode, never, R>;
+export function nPipe<
+  Self,
+  S extends Hyperlink.Spec,
+  N extends AnyNode,
+  R = never,
+>(
+  tag: Hyperlink.HyperlinkTag<Self, S>,
+  impl:
+    | Hyperlink.ImplOf<S>
+    | Hyperlink.Driver<S, R>
+    | Effect.Effect<
+        Hyperlink.ImplOf<S> | Hyperlink.Driver<S, R>,
+        never,
+        R
+      >,
+  node: N,
+): Layer.Layer<Self | Hyperlink.Local<Self> | ListenNode, never, R>;
+export function nPipe<Self, S extends Hyperlink.Spec, R = never>(
+  tag: Hyperlink.HyperlinkTag<Self, S>,
   impl:
     | Hyperlink.ImplOf<S>
     | Hyperlink.Driver<S, R>
@@ -89,6 +119,11 @@ export function nPipe<const Serves extends ServeLayerList>(
   Layer.Error<Serves[number]>,
   Layer.Services<Serves[number]>
 >;
+export function nPipe<Node extends AnyNode, A, E, R>(
+  node: Node,
+  serve: Layer.Layer<A, E, R>,
+  options?: IpcListenArg,
+): Layer.Layer<A | ListenNode, E, R>;
 export function nPipe<
   Node extends AnyNode & { readonly [catalogSym]?: unknown },
   const Serves extends ServeLayerList,
@@ -111,18 +146,14 @@ export function nPipe(
     | Layer.Any
     | ServeLayerList
     | IpcListenArg
+    | AnyNode
     | object,
-  options?: IpcListenArg,
+  options?: IpcListenArg | AnyNode,
 ): Layer.Any {
-  const { options: listenOptions, path: listenPath } = coerceIpcListenArg(
-    (isServeArg(nodeOrServesOrTag) ? servesOrOptionsOrImpl : options) as
-      | IpcListenArg
-      | undefined,
-  );
-  // Lookup is not baked in — pipe `Layer.provide(Lookup.layerOptions(…))`
-  // when claim / advertise needs it. Windows gate stays on every path.
-
   if (isServeArg(nodeOrServesOrTag)) {
+    const { options: listenOptions, path: listenPath } = coerceIpcListenArg(
+      servesOrOptionsOrImpl as IpcListenArg | undefined,
+    );
     const list = (
       Array.isArray(nodeOrServesOrTag)
         ? nodeOrServesOrTag
@@ -133,37 +164,30 @@ export function nPipe(
 
   if (isHyperlinkTagArg(nodeOrServesOrTag)) {
     const tag = nodeOrServesOrTag;
-    const tagKey = (() => {
-      const key = (tag as { readonly key?: unknown }).key;
-      return typeof key === "string" ? key : "unknown";
-    })();
-    const bound = Hyperlink.nodeOf(tag);
-    const fleet = Hyperlink.nodesOf(
-      tag as Hyperlink.HyperlinkTag<unknown, Hyperlink.Spec>,
-    );
-    if (bound === undefined) {
+    const resolved = resolveTagListenTarget(tag, options);
+    if (resolved._tag === "tagNodeError") {
       return failListenTagNode({
-        tag: tagKey,
-        reason: fleet.length > 1 ? "ambiguous" : "missing",
-        count: fleet.length,
+        tag: resolved.tag,
+        reason: resolved.reason,
+        count: resolved.count,
       });
     }
-    if (isNonIpcNode(bound as AnyNode)) {
-      const n = bound as AnyNode;
+    const list = serveListFromTagImpl(tag, servesOrOptionsOrImpl);
+    const { options: listenOptions, path: listenPath } = coerceIpcListenArg(
+      resolved.addressArg as IpcListenArg | undefined,
+    );
+    if (resolved._tag === "nameless") {
+      return requireWindows(nPipeNameless(list, listenOptions, listenPath));
+    }
+    const node = resolved.node;
+    if (isNonIpcNode(node)) {
       return nPipeRequiresIpcLayer(
-        n.key,
-        n.kind ?? (typeof n.url === "string" ? "url" : "unknown"),
+        node.key,
+        node.kind ?? (typeof node.url === "string" ? "url" : "unknown"),
       );
     }
-    const serveErased = retype<
-      (tag: Hyperlink.PipeableTag, impl: unknown) => Layer.Layer<never, never, never>
-    >(Hyperlink.serve as never);
     return requireWindows(
-      nPipeListenOn(
-        stampListenPath(bound as AnyNode, listenPath),
-        [serveErased(tag, servesOrOptionsOrImpl)] as ServeLayerList,
-        listenOptions,
-      ),
+      nPipeListenOn(stampListenPath(node, listenPath), list, listenOptions),
     );
   }
 
@@ -175,6 +199,9 @@ export function nPipe(
     );
   }
 
+  const { options: listenOptions, path: listenPath } = coerceIpcListenArg(
+    options as IpcListenArg | undefined,
+  );
   const serves = servesOrOptionsOrImpl as
     | Layer.Layer<never, never, never>
     | ServeLayerList;

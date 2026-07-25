@@ -11,12 +11,6 @@ const tmpSock = (label: string) =>
     return `/tmp/hyperlink-ts-listen-tag-${label}-${process.pid}-${now}.sock`;
   });
 
-const unixTagErased = Node.unix as unknown as (
-  tag: Hyperlink.PipeableTag,
-  impl: unknown,
-  options?: Node.NamelessListenOptions,
-) => Layer.Layer<never, Node.ListenTagNodeRequired | Node.UnixListenRequiresIpc>;
-
 describe("Node.unix(Tag, impl) sole-bound node", () => {
   it.live("listens on the Tag's node; client(Tag) dials", () =>
     Effect.gen(function* () {
@@ -40,19 +34,21 @@ describe("Node.unix(Tag, impl) sole-bound node", () => {
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
   );
 
-  it.effect("fails ListenTagNodeRequired when Tag has no Node", () =>
+  it.effect("unbound Tag+impl mints nameless node (aligned family)", () =>
     Effect.gen(function* () {
       class Jobs extends Hyperlink.Tag<Jobs>()("listen-tag/MissingJobs", {
         jobs: Hyperlink.effect(Schema.Number),
       }) {}
 
-      const exit = yield* Effect.exit(
-        Layer.build(
-          unixTagErased(Jobs, { jobs: Effect.succeed(1) }),
-        ).pipe(Effect.scoped),
+      const serverCtx = yield* Layer.build(
+        Node.unix(Jobs, { jobs: Effect.succeed(1) }),
       );
-      expectTaggedFailure(exit, "ListenTagNodeRequired");
-    }).pipe(Effect.timeout(Duration.seconds(10))),
+      const listenNode = Context.get(serverCtx, Node.ListenNode);
+      expect(listenNode.key.startsWith("hyperlink-ts/anonymous-node/")).toBe(
+        true,
+      );
+      expect(typeof listenNode.path).toBe("string");
+    }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
   );
 
   it.effect("Node.listen on ipc Node fails ListenUseProtocol", () =>

@@ -20,18 +20,20 @@ import {
 import { unaddressedLayer } from "./nodeConnect"
 import { wsServer } from "./nodeHttpServer"
 import {
-  failListenTagNode,
-  wsRequiresWsLayer,
-  isDynamicInstanceNode,
-  isNonWsNode,
-  isPrototypeNode,
-  isHyperlinkTagArg,
-  isServeArg,
   anonymousNodeKey,
   coerceWsListenOptions,
+  failListenTagNode,
+  isDynamicInstanceNode,
+  isHyperlinkTagArg,
+  isNonWsNode,
+  isPrototypeNode,
+  isServeArg,
+  resolveTagListenTarget,
+  serveListFromTagImpl,
   stampListenUrl,
   withListenNode,
   wsListenUrlFromOptions,
+  wsRequiresWsLayer,
   type CatalogROut,
   type ServeLayerList,
   type ServesForCatalog,
@@ -41,11 +43,15 @@ import { retype } from "./nodeServerCommon"
 /**
  * Local WebSocket listen — localhost bind. Compose Lookup via
  * `Layer.provide(Lookup.layer)` / `Lookup.layerOptions` when claim / advertise needs it.
- * Nameless / address-less forms accept a positional address (`3000` / `":3000"` /
- * `"ws://…"`, or `{ port | url }`); omit for an ephemeral port.
- * Protocol listen sibling of {@link unix} / {@link http} / {@link nPipe} / {@link Prototype.listen}
- * — keep in sync (handoff § Protocol listen siblings). Prefer this over {@link wsServer} when
- * the battery localhost bind is enough.
+ *
+ * Overload family (keep aligned with {@link unix} / {@link http} / {@link nPipe}):
+ * - `ws(tag, impl)` / `ws(tag, impl, address)` — unbound Tag → nameless; bound Tag → that Node
+ * - `ws(tag, impl, node)` — named listen without `andNode`
+ * - `ws(serve, address?)` / `ws([serve…], address?)` — nameless (brackets optional for one)
+ * - `ws(node, serve | [serve…], address?)` — named node + serves
+ *
+ * Address: `3000` / `":3000"` / `"ws://…"` / `{ port | url | … }`. Prefer this over
+ * {@link wsServer} when the battery localhost bind is enough.
  *
  * @category listen
  * @public
@@ -57,6 +63,35 @@ export function ws<
   R = never,
 >(
   tag: Hyperlink.NodeBoundTag<Self, S, HSelf>,
+  impl:
+    | Hyperlink.ImplOf<S>
+    | Hyperlink.Driver<S, R>
+    | Effect.Effect<
+        Hyperlink.ImplOf<S> | Hyperlink.Driver<S, R>,
+        never,
+        R
+      >,
+  options?: WsListenArg,
+): Layer.Layer<Self | Hyperlink.Local<Self> | ListenNode, never, R>;
+export function ws<
+  Self,
+  S extends Hyperlink.Spec,
+  N extends AnyNode,
+  R = never,
+>(
+  tag: Hyperlink.HyperlinkTag<Self, S>,
+  impl:
+    | Hyperlink.ImplOf<S>
+    | Hyperlink.Driver<S, R>
+    | Effect.Effect<
+        Hyperlink.ImplOf<S> | Hyperlink.Driver<S, R>,
+        never,
+        R
+      >,
+  node: N,
+): Layer.Layer<Self | Hyperlink.Local<Self> | ListenNode, never, R>;
+export function ws<Self, S extends Hyperlink.Spec, R = never>(
+  tag: Hyperlink.HyperlinkTag<Self, S>,
   impl:
     | Hyperlink.ImplOf<S>
     | Hyperlink.Driver<S, R>
@@ -79,6 +114,11 @@ export function ws<const Serves extends ServeLayerList>(
   Layer.Error<Serves[number]>,
   Layer.Services<Serves[number]>
 >;
+export function ws<Node extends AnyNode, A, E, R>(
+  node: Node,
+  serve: Layer.Layer<A, E, R>,
+  options?: WsListenArg,
+): Layer.Layer<A | ListenNode, E, R>;
 export function ws<
   Node extends AnyNode & { readonly [catalogSym]?: unknown },
   const Serves extends ServeLayerList,
@@ -101,63 +141,52 @@ export function ws(
     | Layer.Any
     | ServeLayerList
     | WsListenArg
+    | AnyNode
     | object,
-  options?: WsListenArg,
+  options?: WsListenArg | AnyNode,
 ): Layer.Any {
-  const listenOptions = coerceWsListenOptions(
-    (isServeArg(nodeOrServesOrTag) ? servesOrOptionsOrImpl : options) as
-      | WsListenArg
-      | undefined,
-  );
-  // Lookup is not baked in — pipe `Layer.provide(Lookup.layer)` (default) or
-  // `Lookup.layerOptions({ path })` / `Lookup.client` when claim / advertise needs it.
-
   if (isServeArg(nodeOrServesOrTag)) {
     const list = (
       Array.isArray(nodeOrServesOrTag)
         ? nodeOrServesOrTag
         : [nodeOrServesOrTag]
     ) as ServeLayerList;
-    return wsNameless(list, listenOptions);
+    return wsNameless(
+      list,
+      coerceWsListenOptions(servesOrOptionsOrImpl as WsListenArg | undefined),
+    );
   }
 
   if (isHyperlinkTagArg(nodeOrServesOrTag)) {
     const tag = nodeOrServesOrTag;
-    const tagKey = (() => {
-      const key = (tag as { readonly key?: unknown }).key;
-      return typeof key === "string" ? key : "unknown";
-    })();
-    const bound = Hyperlink.nodeOf(tag);
-    const fleet = Hyperlink.nodesOf(
-      tag as Hyperlink.HyperlinkTag<unknown, Hyperlink.Spec>,
-    );
-    if (bound === undefined) {
+    const resolved = resolveTagListenTarget(tag, options);
+    if (resolved._tag === "tagNodeError") {
       return failListenTagNode({
-        tag: tagKey,
-        reason: fleet.length > 1 ? "ambiguous" : "missing",
-        count: fleet.length,
+        tag: resolved.tag,
+        reason: resolved.reason,
+        count: resolved.count,
       });
     }
-    if (isNonWsNode(bound as AnyNode)) {
-      const n = bound as AnyNode;
+    const list = serveListFromTagImpl(tag, servesOrOptionsOrImpl);
+    const listenOptions = coerceWsListenOptions(
+      resolved.addressArg as WsListenArg | undefined,
+    );
+    if (resolved._tag === "nameless") {
+      return wsNameless(list, listenOptions);
+    }
+    const node = resolved.node;
+    if (isNonWsNode(node)) {
       return wsRequiresWsLayer(
-        n.key,
-        n.kind ??
-          (typeof n.path === "string"
+        node.key,
+        node.kind ??
+          (typeof node.path === "string"
             ? "IpcSocket"
-            : typeof n.url === "string"
+            : typeof node.url === "string"
               ? "url"
               : "unknown"),
       );
     }
-    const serveErased = retype<
-      (tag: Hyperlink.PipeableTag, impl: unknown) => Layer.Layer<never, never, never>
-    >(Hyperlink.serve as never);
-    return wsListenOn(
-      bound as AnyNode,
-      [serveErased(tag, servesOrOptionsOrImpl)] as ServeLayerList,
-      listenOptions,
-    );
+    return wsListenOn(node, list, listenOptions);
   }
 
   const node = nodeOrServesOrTag as AnyNode;
@@ -177,7 +206,11 @@ export function ws(
     | Layer.Layer<never, never, never>
     | ServeLayerList;
   const list = (Array.isArray(serves) ? serves : [serves]) as ServeLayerList;
-  return wsListenOn(node, list, listenOptions);
+  return wsListenOn(
+    node,
+    list,
+    coerceWsListenOptions(options as WsListenArg | undefined),
+  );
 }
 
 /**
