@@ -25,7 +25,7 @@
 0. **Agent E:** impossible-states plan ([`impossible-states-proposal.md`](./impossible-states-proposal.md)). **DONE + merged:** P1 (node↔protocol wiring bug → compile error, cast-free) + P5 (http transport dies in browser). **P2 SKIPPED** (cast). **P4 already-enforced** (loose-fields payload already rejected; proposal mis-scoped). **P3 deferred** (opaque serve layers). Clean wins complete. Reserved `src/Resource.ts` node/client surface until fully merged (done). **Tag-config reservation RELEASED — Agent D queue/run/process payload-config unblocked.**
 
 ### Active (owner approval required)
-1. **Agent 4:** Creating a Hyperlink polish in flight (Managing Layers Eng’d). Owner reviews.
+1. **Agent 4:** Service shapes plan ([`service-shapes.md`](../plans/service-shapes.md)) — owner discussion / S0 lock. Creating a Hyperlink polish paused.
 2. **Agent 1:** Examples book (`cursor/docs-corpus-phase3-ce05`) — hub in sidebar; Twoslash-paired `docs/examples/**` not in sidebar; forms first. Agent B: content glob + exclude example docs from More. Legacy Phase 3 leftovers background. Ignore effect β98 (Agent C).
 3. **Agent 3:** **idle** — Soft fail-loud, default-on verify, F4 `contractHash`, store-layer lineId memo Eng’d (owner “All of them”). Not handles/site.
 4. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
