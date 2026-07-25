@@ -62,7 +62,7 @@ export const codeFor = (proto: Proto): string => {
   const tagged = [
     { code: `${m}(Jobs, jobsImpl)`, comment: ephemeral },
     { code: `${m}(Jobs, jobsImpl, ${arg})`, comment: shorthand },
-    { code: `${m}(Jobs, jobsImpl, Worker)`, comment: "named Node (no andNode)" },
+    { code: `${m}(Jobs, jobsImpl, Worker)`, comment: "named Node Tag" },
     {
       code: `${m}(Hyperlink.serve(Jobs, jobsImpl), ${arg})`,
       comment: "one serve, no array",
@@ -74,12 +74,14 @@ export const codeFor = (proto: Proto): string => {
   ];
   const width = Math.max(...tagged.map((l) => l.code.length));
   return [
+    "// Tag + Implementation",
     withComment(tagged[0]!.code, tagged[0]!.comment, width),
     withComment(tagged[1]!.code, tagged[1]!.comment, width),
     withComment(tagged[2]!.code, tagged[2]!.comment, width),
     "",
+    "// Serve layers on one /rpc",
     withComment(tagged[3]!.code, tagged[3]!.comment, width),
-    withComment(`${m}(`, "several on one /rpc", width),
+    withComment(`${m}(`, "several HyperServices", width),
     `  [`,
     `    Hyperlink.serve(Jobs, jobsImpl),`,
     `    Hyperlink.serve(Emails, emailsImpl),`,
