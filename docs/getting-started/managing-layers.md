@@ -32,59 +32,64 @@ program.pipe(Effect.provide(JobsLive)) // `yield* Jobs` now runs jobsImpl locall
 
 ## Serving over the network
 
-To expose a HyperService over RPC, use a **protocol listen**. `Hyperlink.serve(Tag, impl)` is one
-served entry; `Node.http([...])` or `Node.ws([...])` hosts a list of them on one `/rpc` (with
-auto-mounted `Node.status` and `/health`). Pass a positional address — same shapes as `Node.Tag` /
-`protocolHttp` — or omit for an ephemeral port:
+To expose a HyperService over RPC, use a **protocol listen**. All four siblings share one overload
+family — `Node.http` / `Node.ws` / `Node.unix` / `Node.nPipe` — differing only in the wire.
+
+**One HyperService** — pass Tag + impl (no `Hyperlink.serve`, no brackets). Omit the address for an
+ephemeral bind; nameless listens Soft-bake `Lookup.layer` when you don't provide one:
 
 ``` ts
-const server = Node.http(
+Node.http(Jobs, jobsImpl)            // nameless, ephemeral port, Lookup Soft-baked
+Node.http(Jobs, jobsImpl, 3000)      // or ":3000" or "http://127.0.0.1:3000/rpc"
+Node.http(Jobs, jobsImpl, Worker)    // named Node (no andNode)
+Node.unix(Jobs, jobsImpl)            // same-machine ipc, ephemeral sock
+Node.unix(Jobs, jobsImpl, "/tmp/jobs.sock")
+```
+
+**Several on one `/rpc`** — list serve layers; brackets optional when there's only one:
+
+``` ts
+Node.http(
   [
     Hyperlink.serve(Jobs, jobsImpl),
     Hyperlink.serve(Emails, emailsImpl),
   ],
-  3000, // or ":3000" or "http://127.0.0.1:3000/rpc"
+  3000,
 )
-```
 
-Two protocol listens, differing only in the wire they speak:
-
-- **`Node.http([...], 3000 | ":3000" | "http://…")`** — RPC over HTTP POST. The default for servers,
-  CLIs, and a handful of concurrent streams.
-- **`Node.ws([...], 3000 | ":3000" | "ws://…")`** — RPC over **one multiplexed WebSocket per client**.
-  Use this when a **browser** connects: a dashboard opens many live streams (each resource's status +
-  metrics + logs) and the browser caps at **~6 connections per origin on HTTP/1.1**, starving the
-  rest. A WebSocket sidesteps the cap entirely.
-- **`Node.unix([...], "/tmp/x.sock")`** / **`Node.nPipe([...], "\\\\.\\pipe\\x")`** — same-machine
-  IPC; path string or omit for ephemeral.
-
-For a **single** HyperService, brackets are optional and Tag+impl skips `Hyperlink.serve`:
-
-``` ts
-Node.http(Hyperlink.serve(Jobs, jobsImpl), 3000)
-Node.http(Jobs, jobsImpl, 3000)                 // same, nameless
-Node.http(Jobs, jobsImpl, Worker)               // named Node (no andNode)
+Node.http(Hyperlink.serve(Jobs, jobsImpl), 3000) // one serve, no array
 Node.http(Worker, Hyperlink.serve(Jobs, jobsImpl), 3000)
 ```
 
-`unix` / `ws` / `nPipe` share that family (path string instead of port for ipc). Nameless listens
-mint an anonymous Node and Soft-bake `Lookup.layer` when none is provided (claim + advertise) —
-override with `Layer.provide(Lookup.layerOptions({ path }))` when you need a custom Lookup.
-Clients dial `Hyperlink.connect(Tag, Hyperlink.protocolHttp(3000))` the same way. Object form
-(`{ port, url, unlink, … }`) remains when you need more than the address.
+Which listen:
+
+- **`Node.http`** — RPC over HTTP POST. Default for servers, CLIs, and a handful of streams.
+- **`Node.ws`** — one multiplexed WebSocket per client. Prefer for **browsers** (many live streams;
+  HTTP/1.1's ~6 connections per origin starves the rest).
+- **`Node.unix`** / **`Node.nPipe`** — same-machine IPC (path string or omit for ephemeral).
+
+Address shorthand matches `Node.Tag` / `protocolHttp`: port, `":port"`, or a full url (ipc: a path
+string). Object form (`{ port, url, unlink, … }`) remains when you need more than the address.
+Override Lookup with `Layer.provide(Lookup.layerOptions({ path }))` when Identity is already in env.
+
+Every listen auto-mounts `Node.status` and `/health`. Clients dial the same address:
+
+``` ts
+program.pipe(Effect.provide(Hyperlink.connect(Jobs, Hyperlink.protocolHttp(3000))))
+```
 
 {.note}
-`Node.httpServer` / `Node.wsServer` remain as escape hatches when you need a custom platform bind
-(non-loopback host, your own `HttpServer` layer, dual-protocol on one process). Prefer
-`Node.http` / `Node.ws` for the common case.
+`Node.httpServer` / `Node.wsServer` remain as escape hatches for a custom platform bind (non-loopback
+host, your own `HttpServer` layer, dual-protocol on one process). Prefer `Node.http` / `Node.ws` for
+the common case.
 
 ## HyperServices may require other services
 
-A HyperService is allowed to depend on other Effect services — including other HyperServices.
+A HyperService may depend on other Effect services — including other HyperServices.
 `Hyperlink.serve` / `serveRemote`, engine forms (`WorkPool.serve`, `Daemon.serve`, `Gate.serve`),
-and `Node.http` / `ws` / `unix` / listen **preserve that requirement `R`**. They do not close
-dependencies at the server boundary. Composition is the same as Effect's `Layer.mergeAll`: list the
-serve layers, then `Layer.provide` what they need **outside**.
+and the protocol listens **preserve that requirement `R`**. They do not close dependencies at the
+server boundary. Composition matches Effect's `Layer.mergeAll`: list the serve layers, then
+`Layer.provide` what they need **outside**.
 
 **Shared dep (usual case)** — provide once onto the whole server:
 
@@ -98,9 +103,8 @@ Node.http(
 ).pipe(Layer.provide(Db.layer))
 ```
 
-**Isolated deps (same tag, different impls)** — provide onto *each* serve layer. Use this when two
-resources on one `/rpc` need mutually exclusive implementations of one dependency (e.g. plain vs
-hooked handlers). Shared provide can only supply one:
+**Isolated deps (same tag, different impls)** — provide onto *each* serve layer when two resources
+on one `/rpc` need mutually exclusive implementations of one dependency:
 
 ``` ts
 Node.http(
@@ -118,11 +122,10 @@ Engine tags use `WorkPool.serve` / `Daemon.serve` / `Gate.serve` (they also run 
 
 ## Connecting a client
 
-The client mirror of serving. A remote HyperService needs two things: the client handle for the Tag,
-and a **transport** to reach the node it runs on. A [**Node**](/docs/glossary#node) is a named
-endpoint — declared with `Node.Tag<Self>()("key", { url })` — that carries the address its
-HyperServices answer at. Nameless listens stamp that address for you; a `Node.Tag` makes it
-self-describing in source.
+The client mirror of serving. A remote HyperService needs the client handle for the Tag and a
+**transport** to the node it runs on. A [**Node**](/docs/glossary#node) is a named endpoint —
+`Node.Tag<Self>()("key", { url })` — that carries the address. Nameless listens stamp that address
+for you; a `Node.Tag` makes it self-describing in source.
 
 ``` ts
 // One resource by port or url — batteries included (transport + client in one call):
@@ -136,19 +139,19 @@ const appLayer = Layer.mergeAll(
 )
 ```
 
-Per-node transport shortcuts, matching the two server listens:
+Per-node shortcuts, matching the server listens:
 
-- **`Hyperlink.http(node, { url? })`** — HTTP. The server side is `Node.http`.
-- **`Hyperlink.ws(node, { url? })`** — WebSocket. The server side is `Node.ws`. The `url`
-  may be a same-origin path (`"/rpc"`, resolved against the page — `http→ws`, `https→wss`), an
-  `http(s)://` url (scheme swapped), or an absolute `ws(s)://` url. Both shortcuts resolve the `url`
-  as: the option you pass → the Node's own url → `"/rpc"` (same-origin) as the final fallback.
+- **`Hyperlink.http(node, { url? })`** — HTTP. Server side: `Node.http`.
+- **`Hyperlink.ws(node, { url? })`** — WebSocket. Server side: `Node.ws`. The `url` may be a
+  same-origin path (`"/rpc"`, resolved against the page — `http→ws` / `https→wss`), an `http(s)://`
+  url (scheme swapped), or an absolute `ws(s)://` url. Resolution order: option → Node url →
+  `"/rpc"`.
 
-**The client and server must speak the same wire** — a `ws` client cannot talk to an `http` server.
+**Client and server must speak the same wire** — a `ws` client cannot talk to an `http` server.
 
 ## The transport primitive
 
-The shortcuts above are sugar over one seam. A transport is an `RpcClient.Protocol` layer;
+Those shortcuts sit on one seam. A transport is an `RpcClient.Protocol` layer;
 `Hyperlink.layerProtocol(protocol)` makes it the ambient client wire that nodeless
 `Hyperlink.client(Tag)` calls (and peer folds) read. Build the common ones with
 `Hyperlink.protocolHttp(url)` / `Hyperlink.protocolWebsocket(url)`:
@@ -157,24 +160,23 @@ The shortcuts above are sugar over one seam. A transport is an `RpcClient.Protoc
 Effect.provide(app, Hyperlink.layerProtocol(Hyperlink.protocolWebsocket())) // one wire, whole app
 ```
 
-Two shapes sit on that seam:
+Two shapes on that seam:
 
-- **`Hyperlink.connect(Tag, protocol)`** — client for one Tag over a protocol you pass (port,
-  url, or a custom layer). No Node required.
+- **`Hyperlink.connect(Tag, protocol)`** — client for one Tag over a protocol you pass (port, url,
+  or a custom layer). No Node required.
 - **`Hyperlink.http(node)` / `Hyperlink.ws(node)`** — dial a Node (wire its transport and put the
   Node in context). Share that layer with every `Hyperlink.client(Tag)` that rides the same
   connection.
 
 You rarely reach for `layerProtocol` directly — the named shortcuts cover the common cases — but
-it's there when you need a custom serialization or a hand-rolled transport.
+it's there for custom serialization or a hand-rolled transport.
 
 ## Fleets and peers
 
 When a HyperService runs across many nodes and its instances coordinate (see
-[Fleets & Peers](/docs/fleets-and-peers)), the **server-to-server** peer calls have their own
-transport too. `Hyperlink.peersLayer(Tag, ThisNode)` discharges the mesh; those peer dials default to
-HTTP, so a fleet whose nodes serve WebSocket must move the peer mesh onto WebSocket to match — one
-knob per node:
+[Fleets & Peers](/docs/fleets-and-peers)), **server-to-server** peer calls have their own transport.
+`Hyperlink.peersLayer(Tag, ThisNode)` discharges the mesh; peer dials default to HTTP, so a fleet
+whose nodes serve WebSocket must move the peer mesh onto WebSocket too — one knob per node:
 
 ``` ts
 Node.ws([Hyperlink.serve(WorkerPool, poolImpl)], 3000).pipe(
@@ -184,15 +186,16 @@ Node.ws([Hyperlink.serve(WorkerPool, poolImpl)], 3000).pipe(
 ```
 
 Without it, a websocket-served fleet's fold (`fleetActive`, `activeByNode`, …) reaches a ws-only
-`/rpc` over HTTP and 404s, silently collapsing to own-node values. The peer urls stay on the Nodes;
+`/rpc` over HTTP and 404s, silently collapsing to own-node values. Peer urls stay on the Nodes;
 `layerPeerProtocol` only chooses *how* to dial them.
 
 ## Picking the wire
 
 | | Server | Client | Peers |
 |---|---|---|---|
-| **HTTP** (default) | `Node.http([...], 3000)` | `http(node)` / `connect(tag, protocolHttp(port))` | default |
-| **WebSocket** (browser, many streams) | `Node.ws([...], 3000)` | `ws(node)` | `layerPeerProtocol(protocolWebsocket)` |
+| **HTTP** (default) | `Node.http(Tag, impl, 3000)` | `connect(tag, protocolHttp(port))` / `http(node)` | default |
+| **WebSocket** (browser, many streams) | `Node.ws(Tag, impl, 3000)` | `ws(node)` / `protocolWebsocket` | `layerPeerProtocol(protocolWebsocket)` |
+| **IPC** (same machine) | `Node.unix(Tag, impl)` | `unix(tag)` / `protocolIpc(path)` | — |
 
 Pick per **deployment**, not per call — every side of one wire must agree. In-process resources
 (`Hyperlink.layer`) have no transport at all.
