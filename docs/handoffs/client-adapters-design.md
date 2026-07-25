@@ -1,6 +1,6 @@
 # Client adapters — design notes (draft)
 
-**Status:** design capture — not shipped. Owner + Agent G (TUI/dashboard) discussion 2026-07-24.  
+**Status:** design capture — not shipped. Owner + Agent G (TUI/dashboard) discussion 2026-07-24 → 2026-07-25.  
 **Related tip work:** TUI ↔ web Group dashboard parity (`cursor/tui-dashboard-parity-125f`); widget registry in `hyperlink-ts/ui`.
 
 Capture so nothing from the conversation is lost. Decisions below are **direction**, not Eng’d APIs.
@@ -70,23 +70,51 @@ Contract (Hyperlink Spec / handle)
 - Prefer sitting on the **TanStack-backed** Hyperlink hooks; Spec-generated procedure tree.
 - No `@trpc/*` dependency.
 
-### 4. Effect-reactive-native helpers — dashboard main path
+### 4. Effect-reactive-native helpers — public family (not dashboard-only)
 
-Uses official **`effect/unstable/reactivity`** (not standalone `@effect-atom`). API should feel like Effect reactivity, e.g.:
+Uses official **`effect/unstable/reactivity`** (not standalone `@effect-atom`). API should feel like Effect reactivity.
+
+`Atom.runtime(layer)` builds an `AtomRuntime`: an atom of `AsyncResult<Context<R>>` plus `.atom` / `.fn` / `.pull` / `.subscriptionRef` that run only once that context is `Success`. Not a Node runtime; not a dashboard type. (`DashboardRuntime` in `ui/data.ts` is just an alias for `Atom.AtomRuntime` — avoid that name on the public helper surface.)
+
+#### Locked (2026-07-25)
+
+| # | Decision |
+|---|----------|
+| Name / home | **`Hyperlink.atom`** on the public surface (tree-shaking keeps unused adapters out if exports are correct). |
+| Select shape | **Both** for Subscribables: `(q) => q.status` *or* `(q) => q.status.changes`. Non-Subscribable live sources must be selected directly, e.g. `(q) => q.metrics.stream` — not `(q) => q.metrics`. |
+| Runtime plumbing | **All three:** (A) explicit `Atom.AtomRuntime` as the core API; (B) handle / stream overloads when the caller already has a source; (C) React convenience helpers that read runtime from context — never the only API. |
+| Return type | **R1:** `Atom<AsyncResult<A, E>>` — same as Effect’s `runtime.atom(Stream)`. Preserve `E` (do not default to `unknown`). Bundle `ValueAtom<A> = AsyncResult<A, unknown>` erasure stays a dashboard/widget detail, not the public helper contract. No `Option` wrap on plain live fields. |
+
+#### Proposed call shapes (direction)
+
+```ts
+// A — core (anywhere with Effect reactivity)
+const rt = Atom.runtime(appLayer)
+const statusAtom = Hyperlink.atom(rt)(MyQueue, (q) => q.status)
+const metricsAtom = Hyperlink.atom(rt)(MyQueue, (q) => q.metrics.stream)
+
+// B — already-resolved source
+Hyperlink.atom(handle.status)           // Subscribable
+Hyperlink.atom(handle.metrics.stream)   // Stream
+
+// C — React convenience (provider holds Atom.AtomRuntime + registry)
+const statusAtom = Hyperlink.useServiceAtom(MyQueue, (q) => q.status)
+// consume with existing useAtomValue / useAtomSet
+```
 
 | Handle field | Direction | Behavior |
 |--------------|-----------|----------|
-| `ref` / `subscribable` / `stream` | subscribe helper (native naming TBD) | Push → `AsyncResult` atom |
-| `effect` (read) | atom/query over `runtime.atom(Effect)` | One-shot; `refresh` / `Reactivity.invalidate` |
-| `effect` (command) | `runtime.fn` style | Same as today’s pause/resume |
+| `ref` / `subscribable` / `stream` | `Hyperlink.atom` | Push → `Atom<AsyncResult<A, E>>` |
+| `effect` (read) | sibling (name TBD) over `runtime.atom(Effect)` | One-shot; `refresh` / `Reactivity.invalidate` |
+| `effect` (command) | `Hyperlink.fn` / `runtime.fn` style | Same as today’s pause/resume |
 
 **Do not** name/shape this family as a TanStack clone. Native = `Atom`, `AsyncResult`, mount/subscribe, `fn`, optional `withReactivity` / `swr`.
 
-Still to discuss for (4):
+#### Still to lock
 
-- Exact names and module home (`hyperlink-ts/ui` vs `/web` vs new subpath).
-- Subscribable selector vs Stream selector (`(g) => g.status` vs `(g) => g.status.changes`).
-- How Spec-driven generation relates to hand-written bundles (`queueBundle`, …).
+- Cache / identity for tag+select atoms (dedupe wire subscriptions).
+- Live-only `atom` vs dispatcher across field kinds; sibling names for one-shot + `fn`.
+- Relation to hand-written bundles (`queueBundle`, …) vs Spec generation.
 - Shared Spec walker with Promise adapter vs separate.
 
 ---
@@ -111,4 +139,4 @@ Still to discuss for (4):
 
 ## Next conversation
 
-Lock Effect-reactive-native hook names (dashboard), then TanStack-backed `Hyperlink.useQuery` surface + whether `queryOptions` escape hatch ships in v1. Promise adapter as shared boundary for TanStack `queryFn`.
+Lock cache identity + live-only vs siblings, then relation to bundles / Spec. TanStack-backed `Hyperlink.useQuery` surface + `queryOptions` escape hatch still on table. Promise adapter as shared boundary for TanStack `queryFn`.
