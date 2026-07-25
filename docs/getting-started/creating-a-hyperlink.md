@@ -134,7 +134,7 @@ const program = Effect.gen(function* () {
 }).pipe(Effect.provide(inProcess))
 ```
 
-## Try It
+## Try It Live
 
 This exact Counter — the same Tag, the same `Hyperlink.layer` — is running in this page right now.
 The buttons call `increment` / `reset` on the Handle; the count reads straight off `value.changes`.
