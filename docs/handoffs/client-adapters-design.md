@@ -11,7 +11,7 @@ Capture so nothing from the conversation is lost. Decisions below are **directio
 
 1. **Dashboard custom cards** need a clean way to bind HyperService handle fields to UI without hand-rolling `runtime.atom` / `Stream.tick`.
 2. **Consumers outside Effect** should still use a HyperService if they agree on the wire contract — Promise/async, TanStack Query, etc.
-3. **One contract, many runtimes** — Effect reactive is the first-class dashboard path; other adapters are projections of the same Spec/handle surface.
+3. **One contract, two first-class React query styles** — Hyperlink-shaped hooks backed by **TanStack**, and a separate Effect-reactive-native helper family. Plus Promise/async for non-React / non-Effect.
 
 ---
 
@@ -25,61 +25,69 @@ Capture so nothing from the conversation is lost. Decisions below are **directio
 
 ---
 
-## Adapter stack (layers)
-
-Ordered from “works anywhere” → “dashboard default.” Each layer sits on the **contract** (tag Spec / handle shape), not on a particular UI.
+## Adapter stack (corrected 2026-07-24)
 
 ```
 Contract (Hyperlink Spec / handle)
         │
-        ├─► Promise / async client     (“works anywhere”, any runtime that can speak the wire)
-        │         │
-        │         └─► TanStack Query helpers   (real @tanstack/react-query, not an API clone)
-        │                   │
-        │                   └─► tRPC-shaped facade   (looks like tRPC; no tRPC dependency)
+        ├─► Promise / async client          (“works anywhere”)
         │
-        └─► Effect reactivity helpers  (effect/unstable/reactivity)  ← main dashboard path
-                  │
-                  └─► Dashboard hooks / bundles (useSubscribable, useQuery, useMutation, …)
+        ├─► Hyperlink.useQuery / useMutation   ← OUR API, implemented WITH TanStack under the hood
+        │         (optional: also export queryOptions for people who wire TanStack themselves — keep on table)
+        │         └─► tRPC-shaped facade       (looks like tRPC; no tRPC dep; can sit on TanStack-backed hooks)
+        │
+        └─► Effect-reactive-native helpers     ← separate family; feels like effect/unstable/reactivity
+                  (atoms / AsyncResult / subscribe / fn — NOT a TanStack clone)
+                  └─► dashboard bundles / cards (main path for our dashboard)
 ```
+
+### Clarification (owner)
+
+- **`Hyperlink.useQuery(WorkerPool, (p) => p.active)`** is a **Hyperlink** hook. Callers don’t assemble TanStack. **Under the hood** it is built with `@tanstack/react-query` (real TanStack — cache, invalidate, etc.).
+- **Keep on the table:** also expose `queryOptions` / raw TanStack wiring for apps that already own a QueryClient and want to pass Hyperlink into TanStack themselves.
+- **Alternative helper family:** built on **Effect reactive** (`effect/unstable/reactivity`), designed to **feel native to Effect reactive** (Atom, `AsyncResult`, subscribe, `fn`, `Reactivity` keys) — not “TanStack names on atoms.”
+- Dashboard default = Effect-reactive family. TanStack-backed `Hyperlink.useQuery` = for TanStack/React ecosystems.
 
 ### 1. Promise / async handle adapter — “game changer”
 
 - Take a HyperService **client handle** (or tag + transport already connected) and expose every method as **Promise/async**.
 - Goal: use the service **completely outside** an Effect runtime (scripts, Next handlers, non-Effect apps).
 - Theoretically: generate clients for **any** runtime as long as the **contract is agreed** (same schemas / RPC).
+- Likely feeds the TanStack-backed hooks’ `queryFn` (Promise boundary).
 - Open design: how much of serve/client stack is required vs pure wire codecs; error channel → rejected Promise vs Result type; streaming methods → async iterables?
 
-### 2. TanStack helpers — use real TanStack
+### 2. TanStack-backed Hyperlink hooks
 
-- **Not** “copy TanStack’s API onto atoms.”
-- Depend on `@tanstack/react-query` (peer) and adapt Hyperlink Promise/Effect calls into `queryOptions` / `mutationOptions` / hooks that TanStack owns (cache, invalidate, staleTime, etc.).
-- Builds on (1) or on Effect→Promise at the boundary.
-- Invalidation keys should align with Spec method identity (tag key + method name), not ad-hoc strings where possible.
+- **Surface:** `Hyperlink.useQuery(tag, select)`, `Hyperlink.useMutation(tag, select)` (names/namespace TBD — may live under a React subpath, not necessarily the `Hyperlink` barrel).
+- **Implementation:** `@tanstack/react-query` peer — Hyperlink owns the hook; TanStack owns the cache.
+- **Not** “here are options, you call `useQuery` from TanStack” as the primary DX (that export can exist as an advanced escape hatch).
+- Invalidation keys from Spec identity (tag key + method) where possible.
+- Live push fields: either out of scope for this lane, or a separate subscribe path — don’t fake live with `refetchInterval`.
 
-### 3. tRPC-like facade — shape only
+### 3. tRPC-shaped facade — shape only
 
-- Ergonomics that **look like** tRPC (`api.WorkerPool.active.useQuery()`, `.useMutation()`) without shipping tRPC.
-- Implemented **on top of** the TanStack helpers (and/or Effect reactive helpers), not a second stack.
-- Driven by the Spec so new methods appear without hand-maintained procedure lists.
+- Ergonomics like `api.WorkerPool.active.useQuery()` without shipping tRPC.
+- Prefer sitting on the **TanStack-backed** Hyperlink hooks; Spec-generated procedure tree.
+- No `@trpc/*` dependency.
 
-### 4. Effect reactive helpers — main (dashboard)
+### 4. Effect-reactive-native helpers — dashboard main path
 
-Uses official **`effect/unstable/reactivity`** (not standalone `@effect-atom`):
+Uses official **`effect/unstable/reactivity`** (not standalone `@effect-atom`). API should feel like Effect reactivity, e.g.:
 
-| Handle field | Helper direction | Behavior |
-|--------------|------------------|----------|
-| `ref` / `subscribable` / `stream` | `useSubscribable` / `useStream` (names TBD) | Subscribe; push updates → `AsyncResult` |
-| `effect` (read) | `useQuery`-shaped over `runtime.atom(Effect)` | One-shot; `refresh` / `Reactivity.invalidate` — **no** `refetchInterval` as the live story |
-| `effect` (command) | `useMutation`-shaped over `runtime.fn` | Same as today’s pause/resume atoms |
+| Handle field | Direction | Behavior |
+|--------------|-----------|----------|
+| `ref` / `subscribable` / `stream` | subscribe helper (native naming TBD) | Push → `AsyncResult` atom |
+| `effect` (read) | atom/query over `runtime.atom(Effect)` | One-shot; `refresh` / `Reactivity.invalidate` |
+| `effect` (command) | `runtime.fn` style | Same as today’s pause/resume |
+
+**Do not** name/shape this family as a TanStack clone. Native = `Atom`, `AsyncResult`, mount/subscribe, `fn`, optional `withReactivity` / `swr`.
 
 Still to discuss for (4):
 
-- Exact hook names and module home (`hyperlink-ts/ui` vs `/web` vs a new `/client` or `/react` subpath).
+- Exact names and module home (`hyperlink-ts/ui` vs `/web` vs new subpath).
 - Subscribable selector vs Stream selector (`(g) => g.status` vs `(g) => g.status.changes`).
-- How Spec-driven generation relates to hand-written bundles (`queueBundle`, …) — replace, wrap, or coexist.
-- `Reactivity` keys + `Atom.swr` vs keeping bundles dumb.
-- Whether Promise adapter and Effect reactive share one Spec walker.
+- How Spec-driven generation relates to hand-written bundles (`queueBundle`, …).
+- Shared Spec walker with Promise adapter vs separate.
 
 ---
 
@@ -103,4 +111,4 @@ Still to discuss for (4):
 
 ## Next conversation
 
-Walk the helpers top-down or dashboard-first (owner preference): lock names, subpaths, and what “Promise client from handle” requires on the wire — then Eng the Effect reactive dashboard hooks first.
+Lock Effect-reactive-native hook names (dashboard), then TanStack-backed `Hyperlink.useQuery` surface + whether `queryOptions` escape hatch ships in v1. Promise adapter as shared boundary for TanStack `queryFn`.
