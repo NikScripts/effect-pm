@@ -41,10 +41,10 @@ To expose a HyperService over RPC, pick a **protocol listen**. `Node.listen` is 
 
 Pick the sibling that matches the deployment:
 
-- **`Node.http`** — RPC over HTTP POST. Default for servers, CLIs, and a handful of streams.
-- **`Node.ws`** — one multiplexed WebSocket per client. Prefer for browsers: many live streams
+- **`Node.http`**: RPC over HTTP POST. Default for servers, CLIs, and a handful of streams.
+- **`Node.ws`**: one multiplexed WebSocket per client. Prefer for browsers: many live streams
   starve under HTTP/1.1's ~6 connections per origin.
-- **`Node.unix`** / **`Node.nPipe`** — same-machine IPC (Unix socket / Windows named pipe).
+- **`Node.unix`** / **`Node.nPipe`**: same-machine IPC (Unix socket / Windows named pipe).
 
 Omit the address for an ephemeral bind. Pass a port, `":port"`, or url for HTTP/WebSocket; pass a
 path for IPC. Object form (`{ port, url, unlink, … }`) remains when you need more than the address.
@@ -68,10 +68,10 @@ the node that runs it. A [**Node**](/docs/glossary#node) is a named endpoint
 for you; a `Node.Tag` makes it self-describing in source.
 
 ``` ts
-// One resource by port or url — transport + client in one call:
+// One resource by port or url: transport + client in one call
 program.pipe(Effect.provide(Hyperlink.connect(Jobs, Hyperlink.protocolHttp(3000))))
 
-// Or wire a Node once and mount every client that rides it:
+// Or wire a Node once and mount every client that rides it
 const transport = Hyperlink.ws(JobsNode, { url: "/rpc" }) // browser WebSocket
 const appLayer = Layer.mergeAll(
   transport,
@@ -81,9 +81,9 @@ const appLayer = Layer.mergeAll(
 
 Two client families:
 
-- **`Hyperlink.connect(Tag, protocol)`** — you pass the wire (`protocolHttp` / `protocolWebsocket` /
+- **`Hyperlink.connect(Tag, protocol)`**: you pass the wire (`protocolHttp` / `protocolWebsocket` /
   `protocolIpc`). No Node required. Browser-safe: only the protocol you pass is bundled.
-- **`Hyperlink.http` / `ws` / `unix` / `nPipe(node)`** — batteries included. The wire is in the name;
+- **`Hyperlink.http` / `ws` / `unix` / `nPipe(node)`**: batteries included. The wire is in the name;
   the Node supplies the address. Share that layer with every `Hyperlink.client(Tag)` on the same
   connection.
 
@@ -163,7 +163,7 @@ Without it, a websocket-served fleet's fold (`fleetActive`, `activeByNode`, …)
 |---|---|---|---|
 | **HTTP** (default) | `Node.http(Tag, impl, 3000)` | `connect(tag, protocolHttp(port))` / `http(node)` | default |
 | **WebSocket** (browser, many streams) | `Node.ws(Tag, impl, 3000)` | `ws(node)` / `protocolWebsocket` | `layerPeerProtocol(protocolWebsocket)` |
-| **IPC** (same machine) | `Node.unix(Tag, impl)` / `nPipe` | `unix(node)` / `nPipe(node)` / `protocolIpc` | — |
+| **IPC** (same machine) | `Node.unix(Tag, impl)` / `nPipe` | `unix(node)` / `nPipe(node)` / `protocolIpc` | |
 
 Pick per **deployment**, not per call. Every side of one wire must agree. In-process resources
 (`Hyperlink.layer`) have no transport at all.
