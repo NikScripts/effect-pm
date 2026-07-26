@@ -91,21 +91,32 @@ const gateOp = Effect.gen(function* () {
 
 // Promise-returning (not `async`) test bodies — the codebase convention (the effect-LSP `asyncFunction`
 // rule steers async control flow to Effect; here the assertion just rides the promise `remote` returns).
+// Vitest default testTimeout is 5s; `remote` allows Effect.timeout(10s) — raise the suite ceiling so
+// vitest doesn't kill a still-running Effect under full-suite fork contention.
 describe("transport conformance: streams/responds over BOTH transports", () => {
-  it.each(["ws", "http"] as const)("queue over %s", (kind) =>
-    remote(kind, kind, queueServe, Hyperlink.client(ConfQueue), queueOp).then((r) =>
-      expect(r).toBeGreaterThan(0),
-    ),
+  it.each(["ws", "http"] as const)(
+    "queue over %s",
+    (kind) =>
+      remote(kind, kind, queueServe, Hyperlink.client(ConfQueue), queueOp).then((r) =>
+        expect(r).toBeGreaterThan(0),
+      ),
+    15_000,
   );
-  it.each(["ws", "http"] as const)("daemon over %s", (kind) =>
-    remote(kind, kind, daemonServe, Hyperlink.client(ConfDaemon), daemonOp).then((r) =>
-      expect(r).toBe(true),
-    ),
+  it.each(["ws", "http"] as const)(
+    "daemon over %s",
+    (kind) =>
+      remote(kind, kind, daemonServe, Hyperlink.client(ConfDaemon), daemonOp).then((r) =>
+        expect(r).toBe(true),
+      ),
+    15_000,
   );
-  it.each(["ws", "http"] as const)("run over %s", (kind) =>
-    remote(kind, kind, gateServe, Hyperlink.client(ConfGate), gateOp).then((r) =>
-      expect(r).toBe(42),
-    ),
+  it.each(["ws", "http"] as const)(
+    "run over %s",
+    (kind) =>
+      remote(kind, kind, gateServe, Hyperlink.client(ConfGate), gateOp).then((r) =>
+        expect(r).toBe(42),
+      ),
+    15_000,
   );
 });
 
@@ -135,12 +146,20 @@ describe("transport conformance: an http client against a ws server FAILS as Pro
   const queueAdd = Effect.flatMap(ConfQueue, (q) => q.add({ n: 1 }));
   const gateRun = Effect.flatMap(ConfGate, (g) => g.run(1));
 
-  it("queue mismatch → ProtocolMismatch", () =>
-    mismatchExit(queueServe, Hyperlink.client(ConfQueue), queueAdd).then((exit) =>
-      expectTaggedFailure(exit, "ProtocolMismatch"),
-    ));
-  it("run mismatch → ProtocolMismatch", () =>
-    mismatchExit(gateServe, Hyperlink.client(ConfGate), gateRun).then((exit) =>
-      expectTaggedFailure(exit, "ProtocolMismatch"),
-    ));
+  it(
+    "queue mismatch → ProtocolMismatch",
+    () =>
+      mismatchExit(queueServe, Hyperlink.client(ConfQueue), queueAdd).then((exit) =>
+        expectTaggedFailure(exit, "ProtocolMismatch"),
+      ),
+    15_000,
+  );
+  it(
+    "run mismatch → ProtocolMismatch",
+    () =>
+      mismatchExit(gateServe, Hyperlink.client(ConfGate), gateRun).then((exit) =>
+        expectTaggedFailure(exit, "ProtocolMismatch"),
+      ),
+    15_000,
+  );
 });

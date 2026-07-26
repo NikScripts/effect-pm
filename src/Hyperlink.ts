@@ -3273,7 +3273,8 @@ export interface NodeTagFactory<S extends Spec, HSelf> {
  * Build a **factory** tag-maker that bakes a shared {@link Spec} once under a `groupId`:
  * every instance shares the same contract + RPC group, and callers **never pass the spec**
  * — only an instance key. Use for resource families (many instances, one contract). The
- * `groupId` (e.g. `"queue"`) is the wire prefix for the family's procedures, so a shared
+ * `groupId` is the wire prefix for the family's procedures (prefer the stamped contract id,
+ * e.g. `"hyperlink-ts/WorkPool"` — never short costumes like `"queue"` / `"pool"`), so a shared
  * `RpcServer` can node this family next to other resource types without tag collisions;
  * instances are told apart by the per-call `key` header.
  *
@@ -3281,7 +3282,9 @@ export interface NodeTagFactory<S extends Spec, HSelf> {
  * node-bearing tag and ships only-the-tag (see {@link Hyperlink.client} / {@link Hyperlink.connect}).
  *
  * ```ts
- * const Queue = Hyperlink.tagFor("queue", { pause: Hyperlink.effect(Schema.Void) });
+ * const Queue = Hyperlink.tagFor("hyperlink-ts/WorkPool", {
+ *   pause: Hyperlink.effect(Schema.Void),
+ * }, { kind: "hyperlink-ts/WorkPool" });
  * class Jobs extends Queue<Jobs>("@app/Jobs") {}  // spec baked in; just the instance key
  * class Mail extends Queue<Mail>("@app/Mail") {}  // shares contract + group, routed by key
  * ```
@@ -4056,7 +4059,9 @@ const instance = <Self, S extends Spec>(
  * every instance is wired, and a duplicate key **throws at assembly**.
  *
  * ```ts
- * const Queue = Hyperlink.tagFor("queue", { pause: Hyperlink.effect(Schema.Void) });
+ * const Queue = Hyperlink.tagFor("hyperlink-ts/WorkPool", {
+ *   pause: Hyperlink.effect(Schema.Void),
+ * }, { kind: "hyperlink-ts/WorkPool" });
  * class Jobs extends Queue<Jobs>("@app/Jobs") {}
  * class Mail extends Queue<Mail>("@app/Mail") {}
  *

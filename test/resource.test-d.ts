@@ -2,6 +2,7 @@ import { Effect, Layer, Schema, Stream } from "effect";
 import { RpcClient } from "effect/unstable/rpc";
 import * as Hyperlink from "../src/Hyperlink";
 import type { ServiceOf } from "../src/Hyperlink";
+import * as Daemon from "../src/Daemon";
 import * as Node from "../src/Node";
 
 // ── Slice 1: spec → service-interface inference ──
@@ -193,10 +194,10 @@ void _wireViaClient;
 
 // ── clientInstances: one shared client serves many instances of one control shape ──
 // (100 daemons that can only start/drop cost ONE client, not one each.)
-const DaemonGroup = Hyperlink.tagFor("daemon", {
+const DaemonGroup = Hyperlink.tagFor(Daemon.kind, {
   start: Hyperlink.effect(Schema.Void),
   drop: Hyperlink.effect(Schema.Void),
-});
+}, { kind: Daemon.kind });
 class P1 extends DaemonGroup<P1>("@app/p1") {}
 class P2 extends DaemonGroup<P2>("@app/p2") {}
 

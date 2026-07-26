@@ -10,7 +10,6 @@ import {
   catalogSym,
   ListenNode,
   ListenOptions,
-  ListenUseProtocol,
 } from "./nodeCore"
 import { unaddressedLayer } from "./nodeConnect"
 import {

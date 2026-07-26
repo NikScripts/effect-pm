@@ -23,7 +23,7 @@ export default [
   },
   ...tseslint.configs.recommended.map((config) => ({
     ...config,
-    files: ["src/**/*.ts", "test/**/*.ts", "examples/**/*.ts"],
+    files: ["src/**/*.ts", "test/**/*.ts", "examples/**/*.ts", "dev/**/*.ts"],
     languageOptions: {
       ...config.languageOptions,
       parserOptions: {

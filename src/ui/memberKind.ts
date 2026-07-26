@@ -2,13 +2,11 @@
  * @module ui/memberKind
  *
  * Classify a Group member for dashboard dispatch — shared by `hyperlink-ts/web` and
- * `hyperlink-ts/tui` so kind coverage can't drift. Returns a discriminant string; renderers
- * map it to their own chrome. Leaf buckets align 1:1 with stamped Hyperlink kinds
- * (`wireKindOf`) that the web widget registry binds via `forKind`.
- *
+ * `hyperlink-ts/tui` so kind coverage can't drift. Leaf buckets are **stamped Hyperlink
+ * kinds** (`WorkPool.kind`, …) — never short costumes like `"queue"` / `"pool"`.
  */
 import * as Group from "../Group";
-import { kind as hyperlinkKind } from "../Hyperlink";
+import { kind as hyperlinkKind, kindOf } from "../Hyperlink";
 import { kind as queueKind, priorityKind } from "../WorkPool";
 import { kind as daemonKind } from "../Daemon";
 import { kind as apiKind } from "../ApiMetrics";
@@ -16,64 +14,56 @@ import { kind as fleetHealthKind } from "../FleetHealth";
 import { kind as telemetryKind } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";
 import { kind as gateKind } from "../Gate";
-import {
-  isApiTag,
-  isDaemonTag,
-  isFleetHealthTag,
-  isGateTag,
-  isPriorityTag,
-  isQueueTag,
-  isShardMapTag,
-  isTelemetryTag,
-} from "./data";
 
 /** Kind bucket for a group member (subgroup or HyperService leaf). @public */
 export type MemberKind =
   | "group"
-  | "queue"
-  | "priority"
-  | "daemon"
-  | "api"
-  | "fleetHealth"
-  | "telemetry"
-  | "shardMap"
-  | "gate"
+  | typeof queueKind
+  | typeof priorityKind
+  | typeof daemonKind
+  | typeof apiKind
+  | typeof fleetHealthKind
+  | typeof telemetryKind
+  | typeof shardMapKind
+  | typeof gateKind
   | "unknown";
 
 /** Leaf buckets that have dedicated dashboard chrome (excludes `group` / `unknown`). @public */
 export type LeafMemberKind = Exclude<MemberKind, "group" | "unknown">;
 
-/** Stable list of leaf {@link MemberKind}s — coverage checks iterate this. @public */
+/** Stable list of leaf stamped kinds — coverage checks iterate this. @public */
 export const leafMemberKinds = [
-  "queue",
-  "priority",
-  "daemon",
-  "api",
-  "fleetHealth",
-  "telemetry",
-  "shardMap",
-  "gate",
+  queueKind,
+  priorityKind,
+  daemonKind,
+  apiKind,
+  fleetHealthKind,
+  telemetryKind,
+  shardMapKind,
+  gateKind,
 ] as const satisfies ReadonlyArray<LeafMemberKind>;
 
 /**
- * Stamped Hyperlink kind string for each leaf {@link MemberKind}.
- * Same strings the web registry registers with `forKind(...)`.
+ * Identity map: leaf MemberKind **is** the stamped wire kind.
+ * Kept so coverage/tests can write `wireKindOf[leaf]` without a second table.
  *
  * @public
  */
-export const wireKindOf: { readonly [K in LeafMemberKind]: string } = {
-  queue: queueKind,
-  priority: priorityKind,
-  daemon: daemonKind,
-  api: apiKind,
-  fleetHealth: fleetHealthKind,
-  telemetry: telemetryKind,
-  shardMap: shardMapKind,
-  gate: gateKind,
+export const wireKindOf: { readonly [K in LeafMemberKind]: K } = {
+  [queueKind]: queueKind,
+  [priorityKind]: priorityKind,
+  [daemonKind]: daemonKind,
+  [apiKind]: apiKind,
+  [fleetHealthKind]: fleetHealthKind,
+  [telemetryKind]: telemetryKind,
+  [shardMapKind]: shardMapKind,
+  [gateKind]: gateKind,
 };
 
 /** Bare {@link Hyperlink.kind} — unknown leaves often stamp this. @public */
 export const unknownWireKind = hyperlinkKind;
+
+const leafSet: ReadonlySet<string> = new Set(leafMemberKinds);
 
 /**
  * Discriminate a Group member for widget/cell dispatch.
@@ -82,13 +72,9 @@ export const unknownWireKind = hyperlinkKind;
  */
 export const memberKindOf = (member: unknown): MemberKind => {
   if (Group.isGroup(member)) return "group";
-  if (isQueueTag(member)) return "queue";
-  if (isPriorityTag(member)) return "priority";
-  if (isDaemonTag(member)) return "daemon";
-  if (isApiTag(member)) return "api";
-  if (isFleetHealthTag(member)) return "fleetHealth";
-  if (isTelemetryTag(member)) return "telemetry";
-  if (isShardMapTag(member)) return "shardMap";
-  if (isGateTag(member)) return "gate";
+  const stamped = kindOf(member);
+  if (typeof stamped === "string" && leafSet.has(stamped)) {
+    return stamped as LeafMemberKind;
+  }
   return "unknown";
 };

@@ -23,8 +23,8 @@ import * as Hyperlink from "../src/Hyperlink";
 import { forwardClient, groupOf, isVoidCommand, methodMeta, specOf } from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
-// A queue family built from the control contract: many instances share the "queue" group.
-const Queue = Hyperlink.tagFor("queue", queueControlSpec);
+// A queue family built from the control contract: wire prefix = stamped WorkPool kind.
+const Queue = Hyperlink.tagFor(WorkPool.kind, queueControlSpec, { kind: WorkPool.kind });
 class Jobs extends Queue<Jobs>("@app/Jobs") {}
 class Mail extends Queue<Mail>("@app/Mail") {}
 

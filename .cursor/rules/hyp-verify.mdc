@@ -1,0 +1,28 @@
+---
+description: Repo green gate — use pnpm hyp / pnpm verify; do not grow package.json script soup
+alwaysApply: true
+---
+
+# Repo CLI (`hyp`)
+
+Developer gates live in the Effect CLI under `dev/cli/`. Prefer it over adding new
+`package.json` scripts.
+
+```sh
+pnpm hyp --help
+pnpm verify          # alias → hyp verify
+pnpm hyp check …     # individual gates
+pnpm hyp docs …      # docs-site commands
+```
+
+## Green before commit
+
+`pnpm verify` (or `pnpm hyp verify`) must pass:
+
+deps → typecheck → lint → test → build → markers
+
+- Do not add parallel one-off scripts for those gates — extend `dev/cli/` instead.
+- Examples (`example:*`) stay outside `hyp` until rewritten one by one.
+- Lifecycle (`prepare`, changesets, `version`, `release`) stays outside `hyp`.
+- Standards manifest check needs `pnpm hyp docs install` first; it is **not** in default verify
+  (`pnpm hyp check manifest` / `pnpm hyp docs manifest check`).
