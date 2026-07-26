@@ -2,6 +2,9 @@ import { Effect, Schema } from "effect";
 import { expectTypeOf } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
 
+// Proof that interface-driven tags are a **call-signature overload** on `Tag` itself
+// (`Tag<Self, I>()`), not a second factory. Schema path is `Tag<Self>()` — same value.
+
 interface CounterShape {
   readonly current: Effect.Effect<number>; // local effect
   readonly add: (by: number) => Effect.Effect<number>; // wired

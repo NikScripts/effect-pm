@@ -2968,16 +2968,59 @@ const buildInstanceTag = <Self, S extends Spec>(
   });
 };
 
-/**
- * Sentinel default for {@link Tag}'s optional service-interface type parameter — `Tag<Self>()` is the
- * schema-driven path; `Tag<Self, I>()` takes `I` as the source of truth for bare {@link local}s.
- * @internal
- */
-declare const NoInterface: unique symbol;
-type NoInterface = typeof NoInterface;
+/** Optional description / kind bag shared by every {@link Tag} builder overload. @internal */
+type TagOptions = {
+  readonly description?: string;
+  readonly kind?: string;
+};
+
+/** Schema-driven {@link Tag}`<Self>()` builder — bare {@link local} rejected ({@link RejectBareLocal}).
+ *  Node-bearing overloads first so `options.node` still infers `HSelf` when options are a variable.
+ *  @internal */
+type SchemaTagBuilder<Self> = {
+  <const S extends Spec, HSelf>(
+    key: string,
+    spec: S & RejectBareLocal<S>,
+    options: TagOptions & { readonly node: AddressedNode<HSelf> },
+  ): NodeBoundTag<Self, S, HSelf> & {
+    readonly [nodeSym]: AddressedNode<HSelf>;
+  };
+  <const S extends Spec, HSelf>(
+    key: string,
+    spec: S & RejectBareLocal<S>,
+    options: TagOptions & { readonly node: NodeKey<HSelf> },
+  ): NodeBoundTag<Self, S, HSelf>;
+  <const S extends Spec>(
+    key: string,
+    spec: S & RejectBareLocal<S>,
+    options?: TagOptions,
+  ): HyperlinkTag<Self, S>;
+};
+
+/** Interface-driven {@link Tag}`<Self, I>()` builder — bare {@link local} typed from `I`
+ *  ({@link Validate} / {@link ResolveLocals}). @internal */
+type InterfaceTagBuilder<Self, I> = {
+  <const S extends Spec, HSelf>(
+    key: string,
+    spec: S & Validate<S, I>,
+    options: TagOptions & { readonly node: AddressedNode<HSelf> },
+  ): NodeBoundTag<Self, ResolveLocals<S, I>, HSelf> & {
+    readonly [nodeSym]: AddressedNode<HSelf>;
+  };
+  <const S extends Spec, HSelf>(
+    key: string,
+    spec: S & Validate<S, I>,
+    options: TagOptions & { readonly node: NodeKey<HSelf> },
+  ): NodeBoundTag<Self, ResolveLocals<S, I>, HSelf>;
+  <const S extends Spec>(
+    key: string,
+    spec: S & Validate<S, I>,
+    options?: TagOptions,
+  ): HyperlinkTag<Self, ResolveLocals<S, I>>;
+};
 
 /**
- * Create a resource service tag. Two forms:
+ * Create a resource service tag. Two call signatures — same factory, no sentinel type param:
  *
  * **Schema-driven** — `Tag<Self>()(key, spec)`: the value type is **inferred from the spec**:
  *
@@ -3014,73 +3057,37 @@ type NoInterface = typeof NoInterface;
  * @category constructors
  * @public
  */
-const makeTag = <Self, I = NoInterface>() => {
-  // `Context.Service`-shaped: `Tag<Self>()(key, spec, options?)`. The spec (2nd arg) is the
-  // inferring call; `options.node` rides the inferring call so its identity `HSelf` infers from the
-  // argument, and the node-bearing overload narrows `[nodeSym]` to a concrete `NodeKey` — which is
-  // how `Hyperlink.client` discriminates the node-aware path. An {@link AddressedNode} narrows
-  // further so `client(Tag)` can auto-wire connect.
-  //
-  // With `Tag<Self, I>()`, the contract is validated against `I` and bare locals resolve via
-  // {@link ResolveLocals}. Plain `Tag<Self>()` rejects bare locals ({@link RejectBareLocal}).
-  // Bidirectional check so `I = never` does not collapse into the no-interface path.
-  type IsNoInterface = [I] extends [NoInterface]
-    ? [NoInterface] extends [I]
-      ? true
-      : false
-    : false;
-  type SpecArg<S extends Spec> = IsNoInterface extends true
-    ? S & RejectBareLocal<S>
-    : S & Validate<S, I>;
-  type Resolved<S extends Spec> = IsNoInterface extends true ? S : ResolveLocals<S, I>;
-
-  function build<const S extends Spec>(
+/**
+ * Schema vs interface is a **call-signature overload** on type arity (`Tag<Self>()` vs
+ * `Tag<Self, I>()`), not a second factory and not a sentinel default type param. Runtime is one
+ * builder; the overload surface is what callers see (Effect's `Context.Service` shape).
+ */
+const makeTag = retype<{
+  /** Schema-driven: infer the service from `spec`; bare {@link local} is a compile error. */
+  <Self>(): SchemaTagBuilder<Self>;
+  /** Interface-driven: `I` is SSOT; bare {@link local} takes its type from `I`. */
+  <Self, I>(): InterfaceTagBuilder<Self, I>;
+}>(function makeTag() {
+  // One runtime builder — the overload surface above is what discriminates schema vs interface.
+  // `options.node` rides the call so its identity `HSelf` infers; node-bearing overloads narrow
+  // `[nodeSym]` for {@link Hyperlink.client}. An {@link AddressedNode} further enables auto-connect.
+  // Self/S are phantom here: the public overloads restate them; pin `unknown`/`Spec` so this body
+  // does not chase a free type parameter into RpcGroupOf / ServiceOf.
+  function build(
     key: string,
-    spec: SpecArg<S>,
-    options?: { readonly description?: string; readonly kind?: string },
-  ): HyperlinkTag<Self, Resolved<S>>;
-  function build<const S extends Spec, HSelf>(
-    key: string,
-    spec: SpecArg<S>,
-    options: {
-      readonly description?: string;
-      readonly kind?: string;
-      readonly node: AddressedNode<HSelf>;
-    },
-  ): NodeBoundTag<Self, Resolved<S>, HSelf> & {
-    readonly [nodeSym]: AddressedNode<HSelf>;
-  };
-  function build<const S extends Spec, HSelf>(
-    key: string,
-    spec: SpecArg<S>,
-    options: {
-      readonly description?: string;
-      readonly kind?: string;
-      readonly node: NodeKey<HSelf>;
-    },
-  ): NodeBoundTag<Self, Resolved<S>, HSelf>;
-  function build<const S extends Spec>(
-    key: string,
-    spec: SpecArg<S>,
-    options?: {
-      readonly description?: string;
-      readonly kind?: string;
-      readonly node?: NodeKey<unknown>;
-    },
-  ): HyperlinkTag<Self, Resolved<S>> {
-    // single resource: key doubles as the group id (its wire prefix). The contract *value* is the
-    // runtime spec (bare `local`s carry the LocalMethod brand); with `I`, `S` is presented resolved
-    // at the type level so `ImplOf` / `ServiceOf` derive local types from the interface.
+    spec: Spec,
+    options?: TagOptions & { readonly node?: NodeKey<unknown> },
+  ) {
     claimGroupId(key);
     const flat = flattenSpec(spec);
     const interfaceLocals = Object.values(flat).some((m) =>
       Predicate.hasProperty(m, bareLocalSym),
     );
-    return buildInstanceTag<Self, Resolved<S>>(
+    return buildInstanceTag<unknown, Spec>(
       key,
       key,
       spec,
-      buildRpcGroup(key, flat),
+      retype<RpcGroupOf<Spec>>(buildRpcGroup(key, flat) as never),
       options?.description,
       options?.node,
       options?.kind,
@@ -3088,7 +3095,7 @@ const makeTag = <Self, I = NoInterface>() => {
     );
   }
   return build;
-};
+} as never);
 
 /**
  * A {@link tagFor} factory: `<Self>(key) => tag`, plus the shared family metadata
