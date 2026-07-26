@@ -177,10 +177,9 @@ Service key = tag.key            instance identity (already)
 View key    ≠ service key        different namespaces; don’t collide with tag keys
 ```
 
-**Annotation on Tag / `tagFor` options** (locked W2 — Spec-object annotate deferred):
+**Pin / restrict** (W2 — pipe on handle; Tag `.view` parked):
 
 ```ts
-// Pin via pipe on the service handle (W2) — not Tag.view, not groupId
 class SpecialQueue extends WorkPool.Tag<SpecialQueue>()("app/Special", …)
 SpecialQueue.pipe(View.card("hyperlink/view/special-card"))
 ```
