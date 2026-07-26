@@ -369,15 +369,28 @@ map ViewKey → skins.get → skip missing skins → Resolved[]
 
 **Note:** Tag `.view` annotation is **parked** (W2 = pipe). Do not use annotation as match step 1 in Eng. Never key View dispatch on RPC `groupId` or short strings `"queue"` / `"pool"`.
 
-**4. Pipe allowlist (identity on the service handle)**
+**4. Pipe allowlist (identity on the service handle)** — LOCKED (owner 2026-07-26)
 
 ```ts
+// Single — each call OVERRIDES the previous allowlist for that viewKind
 someTag.pipe(View.card("hyperlink/view/my-custom-card"))
+someTag.pipe(View.card(CustomCard)) // Handle | ViewKey
+
+// Multiple (paginate) — array overload sets the full list in one shot
+someTag.pipe(View.card([CustomCard, PoolCard]))
+// same for View.detail / View.page
 ```
 
-- Stores allowlist metadata on the **service tag** (not the View handle): e.g. `views?: { card?: ViewKey[], detail?: … }`.
-- When present for a kind: match returns **only** those keys (that still have skins), in pipe order — not the full multi-match list.
-- When absent: full multi-match list from binds.
+| Rule | Behavior |
+|------|----------|
+| `View.card(one)` | **Replace** card allowlist with `[one]` (overrides prior `View.card`) |
+| `View.card([...])` | **Replace** card allowlist with that array (order = pager order) |
+| No pipe for that viewKind | Full multi-match from `bindTag` → `bindKind` |
+| Pipe present | Match uses **only** allowlisted keys (replace binds for that viewKind) |
+| Missing skin for a key | Skip (W14); empty → fallback |
+
+- Stores allowlist on the **service tag** via symbol bag (like `kindSym` / readiness) — not a public `views` field, not registry-side pin Layers.
+- Detail/Page independently: piping only `View.card` leaves detail/page on normal binds.
 
 **5. React kit**
 
@@ -404,9 +417,9 @@ View.react(layer) → {
 
 `View.react(webLayer)` vs `View.react(tuiLayer)` is the only platform fork at the Dashboard edge.
 
-**Locked (grilling):** missing skin → skip at match (W14); no `groupId` / short `"queue"`\|`"pool"` in View (W15).
+**Locked (grilling):** W14 missing skin; W15 no groupId/short kinds; W16 pipe = override + array overload for multi; symbol bag on service tag.
 
-**Open (grilling):** handle brand (`make` vs `View.Tag`); multi-match host chrome; pipe storage shape; compile-time Spec gate timing; candidate order (`bindTag` → `bindKind`); eliminate `memberKind` short costumes + `View.bindFactory`.
+**Open (grilling):** Spec/type gate — where? (`View.card(Handle)` pipe vs `<Card tag />`); handle brand (`make` vs `View.Tag`); multi-match host chrome polish.
 
 #### Define + register (one entry = one kind)
 
@@ -508,6 +521,7 @@ Also: **`Atom.family`** / `AtomRegistry` for reactive memoized entries (differen
 | W13 | **No TSX on shared handle / service Tag** — `View.register(handle, Component)` is the skin seam |
 | W14 | Missing skin for a bound key → **skip at match**; never fail Layer build; fallback only if list empty |
 | W15 | **No `groupId` in View/UI dispatch** — RPC wire only. Family bind = stamped `kindOf` (`hyperlink-ts/WorkPool`, …). Kill `bindFactory` / short `"queue"`\|`"pool"` kinds |
+| W16 | Pipe allowlist: **`View.card(x)` overrides**; **`View.card([…])` sets multi/pager list**; same for detail/page; symbol bag on service tag; replace binds when present |
 
 ### Eng order (next)
 
