@@ -8,7 +8,7 @@
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **4** | `cursor/hyperservice-open-deps-5679` | [service shapes plan](../plans/service-shapes.md) | **Eng’d** — tip-synced | same tip as `integration` | typecheck + pure suites | `Tag`/`value`/`promise`/`pure` shipped; Creating a Hyperlink polish still paused | 2026-07-26 |
 | **G / TUI** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity | **design** — client adapters notes; tip-synced | same tip as `integration` | prior suites green | Notes: [`client-adapters-design.md`](./client-adapters-design.md) — Promise / TanStack / tRPC-shape / Effect-reactive helpers; Eng TBD | 2026-07-24 |
-| **Hygiene** | `cursor/branch-hygiene-929b` → `integration` | branch tidy + `hyp` land + landing polish | **in flight** | branch tip | targeted gates | Active agents: **4**, **G**, this agent only | 2026-07-26 |
+| **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **G**, this agent only | 2026-07-26 |
 | **1** | *(frozen)* | [Examples book](./agent-01-examples-book.md) · [Phase 3](./agent-01-docs-corpus-phase3-plan.md) | **frozen / superseded** — E1 examples on tip; intro voice [#68](https://github.com/nikolasstow/Hyperlink/pull/68) closed | — | — | Branch deleted (unique tip was pre-rebrand `docs/index.md`) | 2026-07-26 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
 | **3** | *(dead)* | [identity-coordinator](./identity-coordinator.md) · [loud-failures](./loud-failures-design.md) | **dead** — Soft / verify / F4 / lineId memo Eng’d on tip | — | — | Work branch deleted (was tip-contained in `integration`) | 2026-07-26 |
@@ -28,7 +28,7 @@
 ### Active (owner approval required)
 1. **Agent 4:** Service shapes — Eng’d `Tag<Self, I>()`, `value`, overload arity, `Hyperlink.promise`, `Hyperlink.pure`. Creating a Hyperlink polish still paused; next owner call (e.g. Tag-baked `constant(literal)` / polish).
 2. **Agent G / TUI:** Dashboard Group parity + client-adapters design (`cursor/tui-dashboard-parity-125f`).
-3. **This agent:** branch hygiene — land `hyp` CLI + landing polish; retire frozen Agent 1 / dead Agent 3 tips.
+3. **This agent:** branch hygiene **landed** on `integration` (`hyp` CLI + landing polish; Agent 1/3 tips retired). Ready for next owner prompt.
 
 ### Frozen / dead (do not assign)
 - **Agent 1:** frozen — Examples book E1 already on tip; stale intro PR #68 closed; branch deleted.
