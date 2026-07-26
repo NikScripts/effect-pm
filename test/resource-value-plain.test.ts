@@ -67,9 +67,7 @@ it("fallible value fails LOCAL acquire (all-or-nothing)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const exit = yield* Effect.exit(
-        Effect.gen(function* () {
-          yield* Fallible;
-        }).pipe(
+        Effect.asVoid(Fallible).pipe(
           Effect.provide(
             Hyperlink.layer(Fallible, {
               token: Effect.fail("nope"),

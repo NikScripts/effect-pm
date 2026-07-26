@@ -1760,18 +1760,21 @@ export type ServiceOf<S extends Spec, Self = unknown> = Simplify<{
 
 /**
  * Union of every {@link value} leaf's error type in `S` — fails **layer / client acquire**
- * (all-or-nothing). Empty/`never` when the spec has no fallible materialize fields.
+ * (all-or-nothing). Empty/`never` when the spec has no fallible materialize fields. An `any` /
+ * `unknown` spec (erased toolkit boundaries) contributes `never` so it cannot poison Layer `E`.
  *
  * @category models
  * @public
  */
-export type ValueErrorsOf<S extends Spec> = {
-  [K in keyof S]: S[K] extends { readonly _tag: "value" }
-    ? ErrorOf<AsMethod<S[K]>>
-    : S[K] extends Spec
-      ? ValueErrorsOf<S[K]>
-      : never;
-}[keyof S];
+export type ValueErrorsOf<S extends Spec> = unknown extends S
+  ? never
+  : {
+      [K in keyof S]: S[K] extends { readonly _tag: "value" }
+        ? ErrorOf<AsMethod<S[K]>>
+        : S[K] extends Spec
+          ? ValueErrorsOf<S[K]>
+          : never;
+    }[keyof S];
 
 // ── Tag<Self, I>(): an existing service interface as the source of truth ─────────────────────────
 
@@ -3020,10 +3023,16 @@ const makeTag = <Self, I = NoInterface>() => {
   //
   // With `Tag<Self, I>()`, the contract is validated against `I` and bare locals resolve via
   // {@link ResolveLocals}. Plain `Tag<Self>()` rejects bare locals ({@link RejectBareLocal}).
-  type SpecArg<S extends Spec> = [I] extends [NoInterface]
+  // Bidirectional check so `I = never` does not collapse into the no-interface path.
+  type IsNoInterface = [I] extends [NoInterface]
+    ? [NoInterface] extends [I]
+      ? true
+      : false
+    : false;
+  type SpecArg<S extends Spec> = IsNoInterface extends true
     ? S & RejectBareLocal<S>
     : S & Validate<S, I>;
-  type Resolved<S extends Spec> = [I] extends [NoInterface] ? S : ResolveLocals<S, I>;
+  type Resolved<S extends Spec> = IsNoInterface extends true ? S : ResolveLocals<S, I>;
 
   function build<const S extends Spec>(
     key: string,
@@ -3746,17 +3755,17 @@ const servePlain = <Self, S extends Spec, R = never>(
     | ImplOf<S>
     | Driver<S, R>
     | Effect.Effect<ImplOf<S> | Driver<S, R>, never, R>,
-): Layer.Layer<Self | Local<Self> | HandlerContextOf<S>, never, R> => {
+): Layer.Layer<Self | Local<Self> | HandlerContextOf<S>, ValueErrorsOf<S>, R> => {
   const unwrapServe = retype<
     (
       effect: never,
-    ) => Layer.Layer<Self | Local<Self> | HandlerContextOf<S>, never, R>
+    ) => Layer.Layer<Self | Local<Self> | HandlerContextOf<S>, ValueErrorsOf<S>, R>
   >(Layer.unwrap as never);
   const mergeServe = retype<
     (
-      left: Layer.Layer<Self | Local<Self>, never, never>,
+      left: Layer.Layer<Self | Local<Self>, ValueErrorsOf<S>, never>,
       right: Layer.Layer<HandlerContextOf<S>, never, R>,
-    ) => Layer.Layer<Self | Local<Self> | HandlerContextOf<S>, never, R>
+    ) => Layer.Layer<Self | Local<Self> | HandlerContextOf<S>, ValueErrorsOf<S>, R>
   >(Layer.merge as never);
   return unwrapServe(
     Effect.map(Effect.isEffect(impl) ? impl : Effect.succeed(impl), (built) => {
@@ -3807,7 +3816,7 @@ export const serve = <Self, S extends Spec, R = never>(
     | ImplOf<S>
     | Driver<S, R>
     | Effect.Effect<ImplOf<S> | Driver<S, R>, never, R>,
-): Layer.Layer<Self | Local<Self> | HandlerContextOf<S>, never, R> => {
+): Layer.Layer<Self | Local<Self> | HandlerContextOf<S>, ValueErrorsOf<S>, R> => {
   // Stamp the served tag's key so an anonymous `listen` can derive a legible node name from the first
   // resource it serves (see {@link servedKeyOf} / anonymousNodeKey). Stamped on the FINAL layer both
   // paths return (servePlain re-merges, which would drop an earlier stamp).
@@ -3821,7 +3830,7 @@ export const serve = <Self, S extends Spec, R = never>(
   // `R` channel so plain `serve` stays TS2589-free (HyperlinkTag & identity brand blows up).
   const claimed = identityClaimLayer(tag, plain) as Layer.Layer<
     Self | Local<Self> | HandlerContextOf<S>,
-    never,
+    ValueErrorsOf<S>,
     R
   >;
   return Object.assign(claimed, { [servedKeySym]: tag.groupId });
@@ -4263,7 +4272,8 @@ export const protocolWebsocket = (
 export const connect = <Self, S extends Spec, E = never>(
   tag: HyperlinkTag<Self, S>,
   protocol: Layer.Layer<RpcClient.Protocol, E>,
-): Layer.Layer<Self, E> => clientLayer(tag).pipe(Layer.provide(protocol));
+): Layer.Layer<Self, E | ValueErrorsOf<S>> =>
+  clientLayer(tag).pipe(Layer.provide(protocol));
 
 /** The **http** server `Protocol` (RPC over HTTP POST) mounted on the server router at `path` — what
  *  {@link httpServer} provides internally. `RpcSerialization` is supplied by the server. */

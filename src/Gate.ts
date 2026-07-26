@@ -781,13 +781,15 @@ export const layer = <
   tag: HyperlinkTag<Self, InstanceSpec<I, A, E>, any>,
   config: LayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
 ): Layer.Layer<Self | Local<Self> | Store.Storage, never, R> =>
+  // Gate specs have no materialize `value` leaves; `ValueErrorsOf` stays deferred under the
+  // generic `InstanceSpec` members, so restated as `never` at this toolkit boundary.
   withDefaultStoreBridge(
     Layer.unwrap(
       Effect.map(buildRunImpl(tag, config), (built) =>
         Hyperlink.layer(tag, Hyperlink.grantLocal(tag, built)),
       ),
     ),
-  );
+  ) as Layer.Layer<Self | Local<Self> | Store.Storage, never, R>;
 
 /**
  * Alias of {@link layer}.
@@ -863,11 +865,16 @@ export const serve = <
   never,
   R
 > =>
+  // Same deferred-`ValueErrorsOf` restatement as {@link layer} — Gate has no materialize leaves.
   withDefaultStoreBridge(
     Layer.unwrap(
       Effect.map(buildRunImpl(tag, config), (built) => Hyperlink.serve(tag, built)),
     ),
-  );
+  ) as Layer.Layer<
+    Self | Local<Self> | HandlerContextOf<InstanceSpec<I, A, E>> | Store.Storage,
+    never,
+    R
+  >;
 
 /**
  * Alias of {@link serve}.
