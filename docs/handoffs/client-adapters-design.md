@@ -417,47 +417,36 @@ View.react(layer) → {
 
 `View.react(webLayer)` vs `View.react(tuiLayer)` is the only platform fork at the Dashboard edge.
 
-**Locked (grilling):** W14 missing skin; W15 no groupId/short kinds; W16 pipe = override + array overload for multi; symbol bag on service tag; **W17 — HS handle carries View handle(s); Card/Detail/Page are typed off that brand (see below).**
+**Locked (grilling):** W14 missing skin; W15 no groupId/short kinds; W16 pipe = override + array overload for multi; symbol bag on service tag; **W17 — pipe-carried View handles are opt-in customization only (not defaults); when present, type-check hard.**
 
-**Open (grilling):** default views on unpiped family Tags (so Dashboard kind-binds stay typed); Group-level expansion of the same brand; handle brand (`make` vs `View.Tag`).
+**Open (grilling):** exact type errors when piped (Spec vs missing skin in Layer); Group expansion of piped brands; handle brand (`make` vs `View.Tag`).
 
-#### Spec / ViewKey type gate — HS carries View handles (W17) — LOCKED direction
+#### View handles on HS tags (W17) — LOCKED (clarified)
 
-Owner (2026-07-26): **Do type-check.** Not “matcher is `LeafTag` forever.” The Hyperlink **service handle** carries which View handle(s) it supports; React matchers are built against that narrow type so unsupported view keys / incompatible Specs fail at compile time. Same pattern should extend from one leaf → a **Group**.
+Owner (2026-07-26): HS handles **only** carry View handles/keys when you want to **replace** the automatically assigned components (customization / lock-down). **That is not the default.**
 
-**Idea:**
+| Mode | What’s on the HS handle | How chrome is chosen |
+|------|-------------------------|----------------------|
+| **Default (common)** | **No** View handles | Registry binds (`bindTag` / `bindKind`) + skins — automatic |
+| **Custom (opt-in)** | Pipe `View.card` / `detail` / `page` (Handle or Handle[]) | Allowlist **replaces** automatic list for that viewKind |
 
 ```ts
-const PoolCard = View.make({
-  key: "hyperlink/view/pool-card",
-  kind: "card",
-  spec: WorkPool.queueControlSpec,
-})
+// Default — nothing on the handle; Card matches via binds
+class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", { payload }) {}
+<Card tag={Jobs} />
 
-// Pipe stamps View handles onto the HS tag type + runtime symbol bag
-class MyQueue extends WorkPool.Tag<MyQueue>()("app/MyQueue", { payload }).pipe(
-  View.card(PoolCard),
+// Custom — lock which views this tag uses; type-check the pin
+class Special extends WorkPool.Tag<Special>()("app/Special", { payload }).pipe(
+  View.card(CustomCard),                    // override single
+  // View.card([CustomCard, PoolCard]),     // override multi / pager
 )
-// or multi / pager:
-.pipe(View.card([CustomCard, PoolCard]))
-
-// Card is generic over tags that carry card View handle(s)
-<Card tag={MyQueue} />           // OK — carries PoolCard
-<Card tag={SomeDaemon} />        // type error — no card View on handle
-MyQueue.pipe(View.card(Wrong))   // type error — ServiceOf<MyQueue> not assignable to Wrong.spec
 ```
 
-| Seam | Type job |
-|------|----------|
-| `View.card(Handle \| Handle[])` | Stamp allowlist **types** + runtime keys on the HS tag; gate each Handle’s `spec` vs `ServiceOf<Tag>` |
-| `View.card(ViewKey)` string | Weaker / untyped key — prefer Handle for the gate |
-| `<Card tag={T} />` | `T` must carry ≥1 card View handle in its type; props narrow from those handles’ Specs/keys |
-| Allowlisted keys union | Literal (or Handle) union of what `T` supports — APIs that pick a view key for `T` reject keys outside that union |
-| Group (expand) | Members carry their own View brands; Group grid/Card over `Group` types those members the same way |
+**When the handle carries View handle(s):** catch mistakes at the **type level** (incompatible Spec / view keys that don’t belong — “missing components” in the type sense). Runtime W14 (no skin in this platform Layer) stays a separate, last-resort skip.
 
-**Runtime still matches** via symbol bag + registry skins (W14). Types are not a second registry — they mirror what pipe (and later defaults) stamped on the handle.
+**When it carries none:** no View-brand requirement on `<Card tag />` — normal LeafTag + registry match.
 
-**Not open for debate:** “skip type errors on Card because match is runtime.” We want the errors.
+**Group later:** same rule — members usually unpiped; piped members get the narrow checks; Group APIs can require member pins only where customization was declared.
 
 #### Define + register (one entry = one kind)
 
@@ -560,7 +549,7 @@ Also: **`Atom.family`** / `AtomRegistry` for reactive memoized entries (differen
 | W14 | Missing skin for a bound key → **skip at match**; never fail Layer build; fallback only if list empty |
 | W15 | **No `groupId` in View/UI dispatch** — RPC wire only. Family bind = stamped `kindOf` (`hyperlink-ts/WorkPool`, …). Kill `bindFactory` / short `"queue"`\|`"pool"` kinds |
 | W16 | Pipe allowlist: **`View.card(x)` overrides**; **`View.card([…])` sets multi/pager list**; same for detail/page; symbol bag on service tag; replace binds when present |
-| W17 | **HS handle carries View handle(s)**; `Card`/`Detail`/`Page` typed from that brand (unsupported keys / Spec mismatch → type errors); expand same model to Group |
+| W17 | View handles on HS tag are **opt-in override only** (not defaults). Default chrome = registry binds. **When piped**, type-check pins (Spec / supported keys); expand same idea to Group later |
 
 ### Eng order (next)
 
