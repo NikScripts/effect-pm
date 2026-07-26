@@ -251,6 +251,55 @@ Widget.component(layer): (props: { tag: LeafTag; … }) => ReactElement
 
 Dashboard becomes a consumer of `Match` (or provides the same registry Layer once). Not “pass `widgets={HashMap}` into Dashboard” as the mental model — **build registry → build component → feed handles.**
 
+### Props on `Match` today vs redesign (notes 2026-07-25)
+
+**`name` (today):** not the wire `tag.key`. It’s the **group member label** — the key under which the parent `Group` holds that tag (fallback `displayName(tag.key)` = last path segment). So yes: **display-name override / label from the tree**, not handle identity. Redesign: optional `name?`; default from group context or `displayName(tag.key)`.
+
+**`onOpen` (today):** **not** a generic “opened” listener. Grid **cards** call it on click/activate so the **Dashboard router** can drill in (`route.open(name)`). The card doesn’t own navigation — parent does. Detail views use `onBack` / `onOpenLogs` instead.
+
+Redesign lean: **don’t bake dashboard navigation into the core Match props.** Core = `{ tag }` (+ optional `name`). Navigation/chrome size is a **surface** or parent concern (see card vs detail below).
+
+### Card vs detail (small vs full) — separate?
+
+**Today:** tied only by **convention + Dashboard wiring** — `QueueCard` + `onOpen` → `QueueDetail` switched in `Dashboard.tsx` by `isQueueTag`. Not one widget object with two sizes; two components, one kind switch in the shell.
+
+**Should they be separated?** **Yes.** Same family Spec / widget **key family**, different **surfaces**:
+
+| Surface | Job |
+|---------|-----|
+| `card` (compact) | Grid cell; may emit “activate” to parent |
+| `detail` (full) | Drill-in page; owns denser chrome |
+| (later) `cell` / TUI | Ink compact |
+
+```ts
+Widget.make({
+  key: "hyperlink/widget/pool",
+  spec: WorkPool.queueControlSpec,
+  surfaces: {
+    card: PoolCardView,
+    detail: PoolDetailView,
+  },
+})
+
+const CardMatch = Widget.component(widgets, { surface: "card" })
+const DetailMatch = Widget.component(widgets, { surface: "detail" })
+```
+
+Same registry + match rules; surface selects which View. Parent owns routing (`onActivate` / router), not the registry.
+
+### How Effect handles registries (precedent)
+
+Not a special “Registry” language feature. Pattern:
+
+1. **`Context.Service` for the registry API** — e.g. EventLog’s `Registry` (`Context.Service` with `register*` + lookup maps).
+2. **`Layer.effect(Registry, Effect.gen…)`** — allocate `Map`s / state, return `Registry.of({ … })`.
+3. **Contribution layers** — `Layer.effectDiscard` / small layers that `yield* Registry` and `register*(…)` at build time (handlers, compactors).
+4. **Consumers** — `yield* Registry` then look up by key.
+
+Also: **`Atom.family`** / `AtomRegistry` for reactive memoized entries (different job — atom identity, not plugin table).
+
+**Our lean for widgets:** same as EventLog — `WidgetRegistry` Context service + layers that `register(widget)` / `bind*(…)`, then `Widget.component` builds React that reads that service (from a provided Context / runtime). `Layer.mergeAll(base, user…)` = compose contributions.
+
 ### Composability / toolkit (parked detail, keep)
 
 - Slots / layout builder on top of Spec base (optional v1 vs thin `View`).
@@ -268,7 +317,10 @@ Dashboard becomes a consumer of `Match` (or provides the same registry Layer onc
 | W4 | Widgets Layer merged into `Atom.runtime` layer vs separate React provide? | Separate Layer fed to Dashboard/provider first; merge later if clean |
 | W5 | Slot DSL in v1 or `View` + helpers only? | View + helpers first; slots next |
 | W6 | Kind retained? | Yes for specialized UX only; not primary match |
-| W7 | TUI + web share Widget key + Spec; differ only `View`? | Yes |
+| W7 | TUI + web share Widget key + Spec; differ by surface `View`? | Yes |
+| W8 | Card vs detail: separate surfaces on one widget key? | **Yes** — `surfaces: { card, detail }`; `component(reg, { surface })` |
+| W9 | Core Match props | `{ tag, name? }` only; activation/nav is parent or surface-specific optional callback |
+| W10 | Registry implementation | Context.Service + Layer contributions (EventLog-style), not ad hoc React-only HashMap long-term |
 
 ### Non-goals (widget redesign)
 
