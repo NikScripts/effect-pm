@@ -537,20 +537,45 @@ export interface LocalMethod<T> {
  */
 export type AnyLocalMethod = LocalMethod<unknown>;
 
+/** Identity brand for a {@link PureMethod} — Tag-baked sync fn, both sides, no wire. */
+const PureMethodTypeId = "~hyperlink-ts/Hyperlink/PureMethod" as const;
+
 /**
- * A resource contract: method name → wire {@link Method} or off-wire {@link LocalMethod}.
- * The single source of truth.
+ * A **Tag-baked** sync function on a resource contract — built by {@link pure}. Lives on the Spec
+ * (both local and remote install the same `fn`); no impl, no RPC, no {@link Local} gate. Use for
+ * shared helpers that must be identical on every side (formatters, predicates, pure transforms).
+ *
+ * @category models
+ * @public
+ */
+export interface PureMethod<out F> {
+  readonly [PureMethodTypeId]: typeof PureMethodTypeId;
+  readonly fn: F;
+}
+
+/**
+ * Any {@link PureMethod}, erased. Params are `never` so every concrete sync fn is assignable
+ * (contravariance) while {@link PureMethod} stays covariant in `F`.
+ *
+ * @category models
+ * @public
+ */
+export type AnyPureMethod = PureMethod<(...args: never) => unknown>;
+
+/**
+ * A resource contract: method name → wire {@link Method}, off-wire {@link LocalMethod}, or
+ * Tag-baked {@link PureMethod}. The single source of truth.
  *
  * @category models
  * @public
  */
 export interface Spec {
-  readonly [k: string]: AnyMethod | AnyLocalMethod | Spec;
+  readonly [k: string]: AnyMethod | AnyLocalMethod | AnyPureMethod | Spec;
 }
 
 /** A **flat** spec — a path-keyed record of leaves (no nested groups). The wire machinery runs on this;
  *  a (possibly nested) {@link Spec} flattens to it via {@link flattenSpec}. @internal */
-export type FlatSpec = Record<string, AnyMethod | AnyLocalMethod>;
+export type FlatSpec = Record<string, AnyMethod | AnyLocalMethod | AnyPureMethod>;
 
 /** Union → intersection — folds the per-leaf records from {@link FlatSpecOf}. @internal */
 type UnionToIntersection<U> = (U extends unknown ? (k: U) => void : never) extends (
@@ -567,7 +592,7 @@ export type FlatSpecOf<S, Prefix extends string = ""> = UnionToIntersection<
   {
     [K in keyof S & string]: S[K] extends { readonly kind: MethodKind }
       ? { readonly [P in `${Prefix}${K}`]: AsMethod<S[K]> }
-      : S[K] extends AnyLocalMethod
+      : S[K] extends AnyLocalMethod | AnyPureMethod
         ? { readonly [P in `${Prefix}${K}`]: S[K] }
         : S[K] extends Spec
           ? FlatSpecOf<S[K], `${Prefix}${K}.`>
@@ -594,19 +619,25 @@ type AsMethod<T> = T extends {
 
 /** Runtime guard: is a spec entry a {@link LocalMethod} (vs a wire {@link Method})? */
 const isLocalMethod = (
-  m: AnyMethod | AnyLocalMethod | Spec,
+  m: AnyMethod | AnyLocalMethod | AnyPureMethod | Spec,
 ): m is AnyLocalMethod => Predicate.hasProperty(m, LocalMethodTypeId);
 
-/** Runtime guard: is a spec entry a **leaf** (wire/local method) vs a nested **group**? @internal */
+/** Runtime guard: is a spec entry a {@link PureMethod}? */
+const isPureMethod = (
+  m: AnyMethod | AnyLocalMethod | AnyPureMethod | Spec,
+): m is AnyPureMethod => Predicate.hasProperty(m, PureMethodTypeId);
+
+/** Runtime guard: is a spec entry a **leaf** (wire/local/pure method) vs a nested **group**? @internal */
 const isSpecLeaf = (
-  v: AnyMethod | AnyLocalMethod | Spec,
-): v is AnyMethod | AnyLocalMethod =>
+  v: AnyMethod | AnyLocalMethod | AnyPureMethod | Spec,
+): v is AnyMethod | AnyLocalMethod | AnyPureMethod =>
   Predicate.hasProperty(v, MethodTypeId) ||
-  Predicate.hasProperty(v, LocalMethodTypeId);
+  Predicate.hasProperty(v, LocalMethodTypeId) ||
+  Predicate.hasProperty(v, PureMethodTypeId);
 
 /** Flatten a nested spec to a flat path-keyed record (identity for a flat spec). @internal */
 const flattenSpec = (spec: Spec, prefix = ""): FlatSpec => {
-  const flat: Record<string, AnyMethod | AnyLocalMethod> = {};
+  const flat: Record<string, AnyMethod | AnyLocalMethod | AnyPureMethod> = {};
   for (const [k, v] of Object.entries(spec)) {
     if (isSpecLeaf(v)) flat[`${prefix}${k}`] = v;
     else Object.assign(flat, flattenSpec(v, `${prefix}${k}.`));
@@ -630,6 +661,9 @@ export const flattenImpl = (
 ): Record<string, unknown> => {
   const flat: Record<string, unknown> = {};
   for (const path of Object.keys(flatSpec)) {
+    // Tag-baked `pure` members have no impl slot — skip so callers aren't forced to pass placeholders.
+    const leaf = flatSpec[path];
+    if (leaf !== undefined && isPureMethod(leaf)) continue;
     let node: unknown = impl;
     for (const part of path.split(".")) {
       node = (node as Record<string, unknown>)[part];
@@ -723,6 +757,31 @@ export const local: typeof localFn & BareLocal = Object.assign(localFn, {
   [LocalMethodTypeId]: LocalMethodTypeId,
   [bareLocalSym]: true as const,
 });
+
+/**
+ * Declare a **Tag-baked sync function** — identical on local and remote, no wire, no impl.
+ * Rejects `Promise`-returning functions at the type level (async belongs in {@link effect} /
+ * {@link effectFn} or {@link promise}).
+ *
+ * ```ts
+ * class Counter extends Hyperlink.Tag<Counter>()("counter", {
+ *   current: Hyperlink.effect(Schema.Number),
+ *   label: Hyperlink.pure((n: number) => `count=${n}`),
+ * }) {}
+ * // both sides: (yield* Counter).label(7) === "count=7"
+ * ```
+ *
+ * @category spec fields
+ * @public
+ */
+export function pure<Args extends ReadonlyArray<unknown>, R>(
+  fn: (...args: Args) => [R] extends [Promise<unknown>] ? never : R,
+): PureMethod<(...args: Args) => R> {
+  return {
+    [PureMethodTypeId]: PureMethodTypeId,
+    fn: fn as (...args: Args) => R,
+  };
+}
 
 /**
  * The resolved tool metadata for one method — what CLI/TUI/dashboard read to render it.
@@ -1007,7 +1066,7 @@ export function unsafeEffect<Client = Derive>() {
 export type ValueField<M extends AnyMethod> = Marked<M, { readonly _tag: "value" }>;
 
 /** Runtime guard: is a spec entry a {@link value} field? */
-const isValueMethod = (m: AnyMethod | AnyLocalMethod): boolean =>
+const isValueMethod = (m: AnyMethod | AnyLocalMethod | AnyPureMethod): boolean =>
   Predicate.hasProperty(m, "_tag") && m._tag === "value";
 
 /**
@@ -1047,7 +1106,7 @@ export function value(
 export type RefField<M extends AnyMethod> = Marked<M, { readonly _tag: "ref" }>;
 
 /** Runtime guard: is a spec entry a {@link ref} field? */
-const isRefMethod = (m: AnyMethod | AnyLocalMethod): boolean =>
+const isRefMethod = (m: AnyMethod | AnyLocalMethod | AnyPureMethod): boolean =>
   Predicate.hasProperty(m, "_tag") && m._tag === "ref";
 
 /**
@@ -1356,6 +1415,7 @@ export const mapEffects = <Impl, const S extends Spec, Out = Impl>(
     if (
       leaf === undefined ||
       isLocalMethod(leaf) ||
+      isPureMethod(leaf) ||
       (Predicate.hasProperty(leaf, "stream") && leaf.stream === true)
     ) {
       mapped[path] = member;
@@ -1810,29 +1870,26 @@ type ClientMethod<M extends AnyMethod, Client> = [Client] extends [Derive] ? Ser
  * @category models
  * @public
  */
-// NOTE on the gates below: each entry is `AnyMethod | AnyLocalMethod`, so we branch **only** on
-// the `LocalMethod` brand — a symbol check independent of the method's schemas. The old
-// `: S[K] extends AnyMethod ? … : never` else-gate was always true (everything that isn't a
-// local method *is* a method), so its `never` branch was dead — but checking `extends AnyMethod`
-// drags the entry's payload schemas into the conditional, which makes TS **defer** the whole
-// type whenever those schemas contain a free type parameter (e.g. inside a factory generic over
-// the item schema). Dropping the dead gate and narrowing with `Exclude<…, AnyLocalMethod>`
-// keeps the result identical for every concrete spec while letting it reduce under a generic
-// spec too.
+// NOTE on the gates below: branch on brands (`LocalMethod` / `PureMethod` / `_tag`) before the
+// wire `kind` check — brand checks are schema-independent. An old `: S[K] extends AnyMethod`
+// else-gate dragged payload schemas into the conditional and deferred the whole type under a
+// free type parameter (e.g. a factory generic over the item schema).
 export type ServiceOf<S extends Spec, Self = unknown> = Simplify<{
   readonly [K in keyof S]: S[K] extends FromLocalMethod<infer M>
     ? InjectLocal<M, Self> // interface-Tag local: interface-shaped, gains `Local`
     : S[K] extends LocalMethod<infer T>
     ? LocalEffect<T, never, Self>
-    : S[K] extends { readonly _tag: "value" }
-      ? SuccessOf<AsMethod<S[K]>>
-      : S[K] extends { readonly _tag: "ref" }
-        ? Subscribable<SuccessOf<AsMethod<S[K]>>>
-        : S[K] extends { readonly kind: MethodKind } // leaf (F-independent; reconstruct via AsMethod)
-          ? ClientMethod<AsMethod<S[K]>, ClientOverrideOf<S[K]>> // client handle → override or derived
-          : S[K] extends Spec
-            ? ServiceOf<S[K], Self> // nested group → nested service
-            : never;
+    : S[K] extends PureMethod<infer F>
+      ? F // Tag-baked sync fn — identical local and remote
+      : S[K] extends { readonly _tag: "value" }
+        ? SuccessOf<AsMethod<S[K]>>
+        : S[K] extends { readonly _tag: "ref" }
+          ? Subscribable<SuccessOf<AsMethod<S[K]>>>
+          : S[K] extends { readonly kind: MethodKind } // leaf (F-independent; reconstruct via AsMethod)
+            ? ClientMethod<AsMethod<S[K]>, ClientOverrideOf<S[K]>> // client handle → override or derived
+            : S[K] extends Spec
+              ? ServiceOf<S[K], Self> // nested group → nested service
+              : never;
 }>;
 
 /**
@@ -1998,7 +2055,7 @@ export type ResolveLocals<C, I> = {
 
 /** The wire-only service: just the {@link Method}s (used by the server impl + forwarder). @internal */
 type WireServiceOf<S extends Spec> = {
-  readonly [K in keyof S as S[K] extends AnyLocalMethod ? never : K]: S[K] extends {
+  readonly [K in keyof S as S[K] extends AnyLocalMethod | AnyPureMethod ? never : K]: S[K] extends {
     readonly _tag: "ref";
   }
     ? Subscribable<SuccessOf<AsMethod<S[K]>>> // impl provides the Subscribable; wire serves its .changes
@@ -2023,7 +2080,7 @@ export type Wire<S extends Spec> = WireServiceOf<S>;
 type PeerServiceOf<S extends Spec> = {
   readonly [K in keyof S as S[K] extends { readonly fleet: true }
     ? never
-    : S[K] extends AnyLocalMethod
+    : S[K] extends AnyLocalMethod | AnyPureMethod
       ? never
       : K]: S[K] extends { readonly _tag: "ref" }
     ? // a peer reads a `ref` **one-shot** (its current value, lazily) — not a live subscription, so
@@ -2046,22 +2103,26 @@ type PeerServiceOf<S extends Spec> = {
  * A {@link value} field's impl is the `Effect<A, E>` resolved once at acquire — that differs from how
  * it *surfaces* in {@link ServiceOf} (a plain `A`), so annotate an impl with `ImplOf`, not
  * `ServiceOf`. A {@link ref}'s impl is the {@link Subscribable} (not the consumer shape alone).
+ * {@link pure} members are Tag-baked — omitted from the impl. A nested group that is *only*
+ * `pure` members still appears as `{}` (pass an empty object).
  *
  * @category models
  * @public
  */
 export type ImplOf<S extends Spec> = {
-  readonly [K in keyof S]: S[K] extends FromLocalMethod<infer M>
+  readonly [K in keyof S as S[K] extends AnyPureMethod ? never : K]: S[K] extends FromLocalMethod<
+    infer M
+  >
     ? M // interface-Tag local: the impl provides the interface member itself
     : S[K] extends LocalMethod<infer T>
-    ? T
-    : S[K] extends { readonly _tag: "ref" }
-      ? Subscribable<SuccessOf<AsMethod<S[K]>>> // impl owns the SubscriptionRef, provided via subscribable()
-      : S[K] extends { readonly kind: MethodKind }
-        ? ServiceMethod<AsMethod<S[K]>>
-        : S[K] extends Spec
-          ? ImplOf<S[K]> // nested group → nested impl
-          : never;
+      ? T
+      : S[K] extends { readonly _tag: "ref" }
+        ? Subscribable<SuccessOf<AsMethod<S[K]>>> // impl owns the SubscriptionRef, provided via subscribable()
+        : S[K] extends { readonly kind: MethodKind }
+          ? ServiceMethod<AsMethod<S[K]>>
+          : S[K] extends Spec
+            ? ImplOf<S[K]> // nested group → nested impl
+            : never;
 };
 
 /**
@@ -2131,7 +2192,7 @@ type RpcOf<K extends string, M extends AnyMethod> = M["stream"] extends true
 type RpcUnionOf<S extends Spec, Prefix extends string = ""> = {
   readonly [K in keyof S & string]: S[K] extends { readonly kind: MethodKind }
     ? RpcOf<`${Prefix}${K}`, AsMethod<S[K]>>
-    : S[K] extends AnyLocalMethod
+    : S[K] extends AnyLocalMethod | AnyPureMethod
       ? never
       : S[K] extends Spec
         ? RpcUnionOf<S[K], `${Prefix}${K}.`>
@@ -2182,8 +2243,8 @@ export const buildRpcGroup = (
   spec: FlatSpec,
 ): RpcGroup.RpcGroup<any> => {
   const rpcs = Object.entries(spec).flatMap(([method, m]) => {
-    // local-only members are off-wire — they get no rpc.
-    if (isLocalMethod(m)) return [];
+    // local / pure members are off-wire — they get no rpc.
+    if (isLocalMethod(m) || isPureMethod(m)) return [];
     const tag = wireTag(groupId, method);
     const options: {
       payload?: Schema.Struct.Fields | Schema.Top;
@@ -3358,8 +3419,8 @@ const buildLocalContext = <Self, E = never>(
     const service: Record<string, unknown> = {};
     for (const [key, m] of Object.entries(spec)) {
       // local members surface as `Effect<T, never, Local>` (require Local to obtain the
-      // value); value fields are resolved once here into a plain value; ref fields and other wire
-      // members (their `Subscribable` / `Effect` / `Stream` / function) pass through unchanged.
+      // value); pure members install the Tag-baked fn; value fields are resolved once here into a
+      // plain value; ref fields and other wire members pass through unchanged.
       if (isLocalMethod(m)) {
         const member = members[key];
         const interfaceShaped =
@@ -3372,6 +3433,8 @@ const buildLocalContext = <Self, E = never>(
           key,
           interfaceShaped ? member : Effect.as(cap, member),
         );
+      } else if (isPureMethod(m)) {
+        setPath(service, key, m.fn);
       } else if (isValueMethod(m)) {
         setPath(service, key, yield* (members[key] as Effect.Effect<unknown, E>));
       } else {
@@ -3658,7 +3721,7 @@ export type ServeMethod<M extends AnyMethod, R> = M["stream"] extends true
  * @public
  */
 export type ServeImplOf<S extends Spec, R> = {
-  readonly [K in keyof S as S[K] extends AnyLocalMethod ? never : K]: S[K] extends {
+  readonly [K in keyof S as S[K] extends AnyLocalMethod | AnyPureMethod ? never : K]: S[K] extends {
     readonly _tag: "ref";
   }
     ? Subscribable<SuccessOf<AsMethod<S[K]>>>
@@ -4108,8 +4171,8 @@ export const forwardClient = <S extends Spec>(
   // iterate the FLAT (path-keyed) spec so members are leaves; the built flat service is nested by the
   // caller (buildClientService) when needed. Precise `WireServiceOf<S>` is restored at the return.
   for (const [key, m] of Object.entries(flattenSpec(spec as unknown as Spec))) {
-    // local-only members aren't on the wire — the client stubs them (see clientLayer).
-    if (isLocalMethod(m)) continue;
+    // local / pure aren't on the wire — locals are stubbed in clientLayer; pures installed there.
+    if (isLocalMethod(m) || isPureMethod(m)) continue;
     // the wire tag is group-prefixed; the service surface keeps the bare method name
     const call = calls[wireTag(groupId, key)];
     // completeness + callability check — `typeof` narrows `call` to a callable, so the
@@ -5745,6 +5808,9 @@ const buildClientService = <Self, S extends Spec>(
           key,
           Effect.flatMap(cap, () => Effect.die(new LocalOnlyMethod({ method: key }))),
         );
+      } else if (isPureMethod(m)) {
+        // Tag-baked — same fn the local layer installs (no wire round-trip).
+        setPath(service, key, m.fn);
       } else if (isValueMethod(m)) {
         // resolve the value's query once at acquire → a plain value (fails acquire on E)
         setPath(

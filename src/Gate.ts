@@ -720,6 +720,8 @@ const buildRunImpl = <
     // The observation members pass straight through (additive-only adapter); `run` is the engine→
     // contract boundary — the deferred unit-vs-parameterized conditional TS can't reduce for generic
     // params — so the assembled impl is typed at the {@link ImplOf} contract once here.
+    // `ImplOf` also key-remaps `pure` members; under deferred `GateWireMember<I,A,E>` that remap
+    // loses overlap with this concrete object, so the boundary goes through `unknown`.
     const impl = {
       status: statusSub,
       waiting: handle.waiting,
@@ -728,7 +730,7 @@ const buildRunImpl = <
       failed: handle.failed,
       interrupted: handle.interrupted,
       run: runImpl,
-    } as Hyperlink.WithRequirement<ImplOf<InstanceSpec<I, A, E>>, R>;
+    } as unknown as Hyperlink.WithRequirement<ImplOf<InstanceSpec<I, A, E>>, R>;
     return Hyperlink.driver(tag, impl, context);
   });
 
