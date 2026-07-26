@@ -163,7 +163,7 @@ Hyperlink.fn     // command
 | Pattern | Example |
 |---------|---------|
 | Spread extend | `queueSpec` → `{ ...queueControlSpec, add, prioritize, … }` |
-| Shared family | `Hyperlink.tagFor(groupId, sharedSpec)` — one Spec, many instance keys |
+| Shared family | `Hyperlink.tagFor` / contract factory — many instance keys, one Spec; **identity for UI is `kind` + `key`, not RPC `groupId`** |
 | Type intersect | `BaseSpec & { schedule: … }` (daemon grafts) |
 | Store merge | `mergeSpecs` (`Object.assign`) — precedent for combining records |
 
@@ -180,33 +180,24 @@ View key    ≠ service key        different namespaces; don’t collide with ta
 **Annotation on Tag / `tagFor` options** (locked W2 — Spec-object annotate deferred):
 
 ```ts
-Hyperlink.tagFor("queue", queueControlSpec, { view: "hyperlink/view/pool" })
-WorkPool.Tag(…) // factory may carry view key; Tag stamp Eng is follow-up
-```
-
-**Instance override** when a specific service needs different chrome:
-
-```ts
+// Pin via pipe on the service handle (W2) — not Tag.view, not groupId
 class SpecialQueue extends WorkPool.Tag<SpecialQueue>()("app/Special", …)
-// stamp / annotate view key → "app/view/special-queue"
+SpecialQueue.pipe(View.card("hyperlink/view/special-card"))
 ```
 
-**Dispatch when annotation present:** use view key; missing match → **fallback** (no throw at render — W3).  
-**When absent:** explicit registry binding (factory→view / useSpec) or kind for specialized UX — never field-sniff.
+**Dispatch:** tag.key binds → stamped `kindOf(tag)` binds → fallback (W3). Never RPC `groupId`. Never short `"queue"` / `"pool"`.
 
 ### Match order (no accidents)
 
 ```
-1. resource/tag view annotation (if set)
-2. exact resource key → view override (forKey-style)
-3. explicit family / Spec / factory → view binding (registered)
-4. kind → view (specialized UX only — W6; not primary match)
-5. fallback
+1. exact resource key → view override (bindTag / forKey-style)
+2. stamped contract kind (kindOf(tag) === WorkPool.kind, …) → view (bindKind)
+3. fallback
 ```
 
-**Not in the list:** “first view whose Needs ⊆ tag Spec.”
+**Not in the list:** RPC `groupId`; short costume kinds (`"queue"` / `"pool"`); “first view whose Needs ⊆ tag Spec”; Tag `.view` annotation (parked).
 
-Type-level: `Compatible` / `BindTag` so `registry.use(Factory, View)` or `View.bind(Tag)` fails compile if handle isn’t assignable to family Spec.
+Type-level: `Compatible` / `BindTag` so `View.bindKind` / Spec gates fail compile if handle isn’t assignable to family Spec.
 
 ### Layer / DI API sketch (v4 — owner 2026-07-26)
 
@@ -287,10 +278,10 @@ const PoolDetail = View.make({
   spec: WorkPool.queueControlSpec,
 })
 
-// Same binds on both platforms
+// Same binds on both platforms — family = stamped kind, not groupId
 const poolBinds = Layer.mergeAll(
-  View.bindFactory(WorkPool.Tag, PoolCard),
-  View.bindFactory(WorkPool.Tag, PoolDetail),
+  View.bindKind(WorkPool.kind, PoolCard),
+  View.bindKind(WorkPool.kind, PoolDetail),
 )
 
 // Web chrome
@@ -349,14 +340,14 @@ type Handle = {
 |-------|-----|-------|------------|
 | `skins` | `ViewKey` | `{ handle, Component }` | `View.register(handle, Comp)` |
 | `byTagKey` | `tag.key` | `ViewKey[]` (ordered) | `View.bindTag` |
-| `byFactory` | `groupId` | `ViewKey[]` | `View.bindFactory` |
-| `byKind` | hyperlink kind | `ViewKey[]` | `View.bindKind` |
+| `byKind` | stamped contract kind (`WorkPool.kind`, …) | `ViewKey[]` | `View.bindKind` |
 
+- **No `groupId` in View.** RPC `groupId` is Effect wire-only; View match uses **`tag.key`** + **`kindOf(tag)`** (canonical ids like `hyperlink-ts/WorkPool`). **`View.bindFactory` / `byFactoryGroupId` are nonstandard — remove.**
 - **Duplicate `register` same key** in one Layer build → `DuplicateViewKey` (fail build).
 - Web vs TUI never share a Registry instance — each `View.react(layer)` builds its own snapshot.
 - Binds may list a key that has no skin → that candidate is **dropped at match** (skip missing skins). Do **not** fail `Layer.build`. Fallback only if the resolved list is empty after filtering (W3).
 
-**3. `match(tag, kind) → ReadonlyArray<Resolved>`**
+**3. `match(tag, viewKind) → ReadonlyArray<Resolved>`**
 
 ```ts
 type Resolved = {
@@ -365,20 +356,19 @@ type Resolved = {
 }
 ```
 
-Collect candidates **for that kind only**, in order, then filter by pipe allowlist if present:
+Collect candidates **for that view kind** (`card`/`detail`/`page`) only, in order, then filter by pipe allowlist if present:
 
 ```
 candidates = []
-// A. exact tag.key binds whose handle.kind === kind
-// B. factory groupId binds (tag.groupId) whose handle.kind === kind
-// C. intentional kind binds (kindOf(tag)) whose handle.kind === kind
-// D. (optional) fallback handle for that kind — never empty render
+// A. exact tag.key binds whose handle.kind === viewKind
+// B. stamped kindOf(tag) binds whose handle.kind === viewKind
+// C. (optional) fallback handle for that viewKind — never empty render
 dedupe by ViewKey, preserve first-seen order
-if tag has pipe allowlist for this kind → intersect / replace with allowlisted keys
+if tag has pipe allowlist for this viewKind → intersect / replace with allowlisted keys
 map ViewKey → skins.get → skip missing skins → Resolved[]
 ```
 
-**Note:** Tag `.view` annotation is **parked** (W2 = pipe). Do not use annotation as match step 1 in Eng.
+**Note:** Tag `.view` annotation is **parked** (W2 = pipe). Do not use annotation as match step 1 in Eng. Never key View dispatch on RPC `groupId` or short strings `"queue"` / `"pool"`.
 
 **4. Pipe allowlist (identity on the service handle)**
 
@@ -415,9 +405,9 @@ View.react(layer) → {
 
 `View.react(webLayer)` vs `View.react(tuiLayer)` is the only platform fork at the Dashboard edge.
 
-**Locked (grilling):** missing skin → skip at match (W14).
+**Locked (grilling):** missing skin → skip at match (W14); no `groupId` / short `"queue"`\|`"pool"` in View (W15).
 
-**Open (grilling):** handle brand (`make` vs `View.Tag`); multi-match host chrome; pipe storage shape; compile-time Spec gate timing; candidate order across bind tiers.
+**Open (grilling):** handle brand (`make` vs `View.Tag`); multi-match host chrome; pipe storage shape; compile-time Spec gate timing; candidate order (`bindTag` → `bindKind`); eliminate `memberKind` short costumes + `View.bindFactory`.
 
 #### Define + register (one entry = one kind)
 
@@ -442,10 +432,10 @@ const PoolPage = View.make({
 const viewLayer = Layer.mergeAll(
   View.register(PoolCard, PoolCardView),
   View.register(PoolDetail, PoolDetailView),
-  View.bindFactory(WorkPool.Tag, PoolCard),
-  View.bindFactory(WorkPool.Tag, PoolDetail),
+  View.bindKind(WorkPool.kind, PoolCard),
+  View.bindKind(WorkPool.kind, PoolDetail),
   View.register(CustomCard, CustomCardView),
-  View.bindFactory(WorkPool.Tag, CustomCard), // custom card first; PoolCard still second unless piped
+  View.bindKind(WorkPool.kind, CustomCard), // custom card first; PoolCard still second unless piped
 ).pipe(Layer.provideMerge(View.base))
 ```
 
@@ -462,7 +452,7 @@ const { Card, Detail, Page, Provider, useView, resolve } = View.react(viewLayer)
 </Provider>
 ```
 
-**Match inputs (no `.view` annotation):** tag-key bind → factory bind → kind bind → fallback. Multi-match = all entries for that **view kind**, ordered (TBD).
+**Match inputs (no `.view` annotation, no `groupId`):** tag-key bind → stamped `kindOf` bind → fallback. Multi-match = all entries for that **view kind**, ordered (TBD).
 
 **Skeleton note:** `src/ui/View.tsx` is pre-v4 (card/detail fields on one entry; component on `make`). Reshape to **kind + multi-match + register(handle, Component)**; Page can stub/no-op until prioritized.
 
@@ -518,6 +508,7 @@ Also: **`Atom.family`** / `AtomRegistry` for reactive memoized entries (differen
 | W12 | `View.react` → `{ Card, Detail, Page, Provider, useView, resolve }` (`View.Card` shortcut OK); **Page not v1 priority** |
 | W13 | **No TSX on shared handle / service Tag** — `View.register(handle, Component)` is the skin seam |
 | W14 | Missing skin for a bound key → **skip at match**; never fail Layer build; fallback only if list empty |
+| W15 | **No `groupId` in View/UI dispatch** — RPC wire only. Family bind = stamped `kindOf` (`hyperlink-ts/WorkPool`, …). Kill `bindFactory` / short `"queue"`\|`"pool"` kinds |
 
 ### Eng order (next)
 
