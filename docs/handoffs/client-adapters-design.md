@@ -211,45 +211,95 @@ class SpecialQueue extends WorkPool.Tag<SpecialQueue>()("app/Special", …)
 
 Type-level: `Compatible` / `BindTag` so `registry.use(Factory, Widget)` or `Widget.bind(Tag)` fails compile if handle isn’t assignable to family Spec.
 
-### Layer / DI API sketch (corrected — owner 2026-07-25)
+### Layer / DI API sketch (v3 — owner 2026-07-25)
 
-Three steps. `Widget.make` only defines. **Registry assembly** and **matcher component** are separate.
+**Split the two styles:**
+
+| Layer | Style | Job |
+|-------|--------|-----|
+| Registry / bind / Spec / keys | **Effect** — `Context.Service`, `Layer.mergeAll`, type gates | System of record |
+| Components / hooks returned to apps | **React** — named components + hooks | DX at the call site |
+
+Working name below: **`Ui`** (generic; not “Widget”). Alternatives still open: `Chrome`, `Face`, `Presentation`. Key namespace e.g. `hyperlink/ui/pool`.
+
+**No `surface: "card"`.** Defining an entry can attach several React views; **`Ui.react(layer)` returns multiple components (and tools)**, each already closed over the registry + match rules.
 
 ```ts
-// 1) Define (keyed, family Spec = Needs)
-const PoolWidget = Widget.make({
-  key: "hyperlink/widget/pool",
-  spec: WorkPool.queueControlSpec,
-  View: PoolCardView,
+// ── Effect side: define + register ──────────────────────────────────────────
+
+const Pool = Ui.make({
+  key: "hyperlink/ui/pool",
+  spec: WorkPool.queueControlSpec, // whole family Spec = Needs
+  // named React views — not a surface enum on component()
+  card: PoolCard,       // (props: { tag }) => JSX
+  detail: PoolDetail,
+  // optional later: cell, tools, …
 })
 
-// 2) Add to registry — Layer / Effect-native composition
-const widgets = Layer.mergeAll(
-  Widget.base,                              // shipped widgets
-  Widget.register(PoolWidget),
-  Widget.register(WorkerPoolWidget),
-  Widget.bindFactory(WorkPool.Tag, PoolWidget), // optional explicit family → key
-  Widget.bindTag(SpecialQueue, SpecialWidget),
+const uiLayer = Layer.mergeAll(
+  Ui.base, // shipped entries
+  Ui.register(Pool),
+  Ui.register(WorkerPoolUi),
+  Ui.bindFactory(WorkPool.Tag, Pool),     // type-gated
+  Ui.bindTag(SpecialQueue, SpecialUi),
 )
 
-// 3) Create the React component FROM the registry
-const Match = Widget.component(widgets)
-// Match is a component: given a handle (tag), resolve widget key / binds → render that View
+// ── React side: one call → components + helpers ─────────────────────────────
 
-// Use anywhere — dashboard grid, detail pane, custom layout
-<Match tag={someLeafTag} name={…} onOpen={…} />
-// or handle-shaped prop — TBD exact prop name; intent: pass the service identity, get the right chrome
+const {
+  Card,       // matcher → entry.card
+  Detail,     // matcher → entry.detail
+  Provider,   // provides registry Context (from layer)
+  useUi,      // hook: raw registry / resolve
+  resolve,    // (tag) => entry | fallback  (non-hook tool)
+} = Ui.react(uiLayer)
+
+// Call sites — pass the handle/tag only; matching inside
+<Provider>
+  <Card tag={leaf} name={label} />      {/* grid */}
+  <Detail tag={selected} />             {/* drill-in */}
+</Provider>
 ```
 
-**That’s the product surface:** registry in → matcher component out → **call site only passes the tag/handle**; matching is inside `Match`, not at every call site.
+**What `Ui.react` builds (conceptually):**
 
 ```ts
-// Pseudo
-Widget.component(layer): (props: { tag: LeafTag; … }) => ReactElement
-// inside: registry.get(tag) → Widget.View({ tag, … })
+function Card(props: { tag: LeafTag; name?: string }) {
+  const entry = registry.match(props.tag) // annotation → binds → kind → fallback
+  const View = entry.card ?? FallbackCard
+  return <View tag={props.tag} name={props.name} />
+}
 ```
 
-Dashboard becomes a consumer of `Match` (or provides the same registry Layer once). Not “pass `widgets={HashMap}` into Dashboard” as the mental model — **build registry → build component → feed handles.**
+Same match once; **each exported component picks a different view field** on the entry. Missing view on an entry → that component’s fallback (or null) — card-only entries don’t invent a detail.
+
+**Dashboard** becomes:
+
+```tsx
+const { Card, Detail, Provider } = Ui.react(appUiLayer)
+
+<Provider>
+  <Grid>{leaves.map((tag) => <Card key={tag.key} tag={tag} />)}</Grid>
+  {selected ? <Detail tag={selected} /> : null}
+</Provider>
+```
+
+Parent still owns routing (what’s selected). No `onOpen` on core Card unless the app wraps it.
+
+**Tools mixed in (optional bag):**
+
+```ts
+const ui = Ui.react(uiLayer)
+ui.Card
+ui.Detail
+ui.Provider
+ui.useUi()
+ui.resolve(tag)
+ui.keys()           // registered ui keys
+// later: ui.preload(tag), ui.has(tag, "detail")
+```
+
+Either destructured or `ui.*` — React-ergonomic either way; registry stays Effect underneath.
 
 ### Props on `Match` today vs redesign (notes 2026-07-25)
 
