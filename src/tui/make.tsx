@@ -25,6 +25,7 @@ import {
   isVoidCommand,
   type AnyMethod,
   type AnyLocalMethod,
+  type AnyPureMethod,
   type FlatSpec,
 } from "../Hyperlink";
 import {
@@ -38,7 +39,10 @@ import { retype } from "../internal/nodeServerCommon";
 /** @public */
 export type AnyTag = CliHyperlinkTag;
 
-const isWireMethod = (m: AnyMethod | AnyLocalMethod): m is AnyMethod => "kind" in m;
+// Wire RPC only — skip local + Tag-baked pure (neither carries `kind`).
+const isWireMethod = (
+  m: AnyMethod | AnyLocalMethod | AnyPureMethod,
+): m is AnyMethod => "kind" in m;
 
 interface QueryField {
   readonly name: string;

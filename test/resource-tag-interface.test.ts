@@ -5,12 +5,12 @@ import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
-// `fromService`: an existing service **interface** is the source of truth. The contract gives a schema
-// only for the wired member (`add`); every other interface member becomes a local, written **bare**
-// (`Hyperlink.local`, no `()`), its type taken from the interface. One merged handle: wired + local
-// members sit together; the locals just carry a `Local<CounterShape>` requirement that the local layer
-// grants (and a client can't). The interface is a standalone type — passing the class itself would be
-// a circular base reference.
+// `Tag<Self, I>()`: an existing service **interface** is the source of truth. The contract gives a
+// schema only for the wired member (`add`); every other interface member becomes a local, written
+// **bare** (`Hyperlink.local`, no `()`), its type taken from the interface. One merged handle: wired +
+// local members sit together; the locals just carry a `Local<CounterShape>` requirement that the local
+// layer grants (and a client can't). The interface is a standalone type — passing the class itself
+// would be a circular base reference.
 interface CounterShape {
   readonly current: Effect.Effect<number>; // local effect
   readonly add: (by: number) => Effect.Effect<number>; // wired
@@ -19,7 +19,7 @@ interface CounterShape {
   };
   readonly label: string; // local raw value → Effect<string, Local>
 }
-class Counter extends Hyperlink.fromService<Counter, CounterShape>()("from-svc/Counter", {
+class Counter extends Hyperlink.Tag<Counter, CounterShape>()("tag-iface/Counter", {
   current: Hyperlink.local,
   add: Hyperlink.effectFn(Schema.Number, Schema.Number),
   admin: {
@@ -28,7 +28,7 @@ class Counter extends Hyperlink.fromService<Counter, CounterShape>()("from-svc/C
   label: Hyperlink.local,
 }) {}
 
-it("fromService merged handle serves wired + local (effect / nested / raw value) via the local layer", () =>
+it("Tag<Self, I> merged handle serves wired + local (effect / nested / raw value) via the local layer", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       // The impl is the service itself — the wired handler plus each local's interface-shaped value.
@@ -54,10 +54,10 @@ it("fromService merged handle serves wired + local (effect / nested / raw value)
     }),
   ));
 
-it("fromService serves over RPC — the wired member crosses http; locals stay off the wire", () =>
+it("Tag<Self, I> serves over RPC — the wired member crosses http; locals stay off the wire", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      // A fromService resource serves exactly like any resource: only its wired members are mounted
+      // An interface Tag serves exactly like any resource: only its wired members are mounted
       // (locals are off-wire), and the impl provides the whole interface.
       const server = Node.httpServer([
         Hyperlink.serve(Counter, {

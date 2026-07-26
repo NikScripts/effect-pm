@@ -2,12 +2,15 @@ import { Effect, Schema } from "effect";
 import { expectTypeOf } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
 
+// Proof that interface-driven tags are a **call-signature overload** on `Tag` itself
+// (`Tag<Self, I>()`), not a second factory. Schema path is `Tag<Self>()` — same value.
+
 interface CounterShape {
   readonly current: Effect.Effect<number>; // local effect
   readonly add: (by: number) => Effect.Effect<number>; // wired
   readonly label: string; // local raw value
 }
-class Counter extends Hyperlink.fromService<Counter, CounterShape>()("from-svc-d/Counter", {
+class Counter extends Hyperlink.Tag<Counter, CounterShape>()("tag-iface-d/Counter", {
   current: Hyperlink.local,
   add: Hyperlink.effectFn(Schema.Number, Schema.Number),
   label: Hyperlink.local,
@@ -36,7 +39,7 @@ expectTypeOf<
 >().toEqualTypeOf<"add">();
 
 // ── reject: a bare local with no matching interface member is a compile error at the call ──
-export class _Bad extends Hyperlink.fromService<_Bad, CounterShape>()("from-svc-d/Bad", {
+export class _Bad extends Hyperlink.Tag<_Bad, CounterShape>()("tag-iface-d/Bad", {
   current: Hyperlink.local,
   add: Hyperlink.effectFn(Schema.Number, Schema.Number),
   // @ts-expect-error `bogus` is not a member of CounterShape — bare local has no type to resolve.
@@ -44,12 +47,15 @@ export class _Bad extends Hyperlink.fromService<_Bad, CounterShape>()("from-svc-
 }) {}
 
 // ── reject: a wired member whose success schema disagrees with the interface ──
-export class _BadWire extends Hyperlink.fromService<_BadWire, CounterShape>()(
-  "from-svc-d/BadWire",
-  {
-    current: Hyperlink.local,
-    // @ts-expect-error CounterShape.add returns Effect<number>, but the success schema is String.
-    add: Hyperlink.effectFn(Schema.Number, Schema.String),
-    label: Hyperlink.local,
-  },
-) {}
+export class _BadWire extends Hyperlink.Tag<_BadWire, CounterShape>()("tag-iface-d/BadWire", {
+  current: Hyperlink.local,
+  // @ts-expect-error CounterShape.add returns Effect<number>, but the success schema is String.
+  add: Hyperlink.effectFn(Schema.Number, Schema.String),
+  label: Hyperlink.local,
+}) {}
+
+// ── reject: bare local on plain Tag<Self>() (needs Tag<Self, I>()) ──
+export class _BareOnPlain extends Hyperlink.Tag<_BareOnPlain>()("tag-iface-d/BareOnPlain", {
+  // @ts-expect-error bare local requires Tag<Self, I>()
+  current: Hyperlink.local,
+}) {}

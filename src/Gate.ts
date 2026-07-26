@@ -720,6 +720,8 @@ const buildRunImpl = <
     // The observation members pass straight through (additive-only adapter); `run` is the engine→
     // contract boundary — the deferred unit-vs-parameterized conditional TS can't reduce for generic
     // params — so the assembled impl is typed at the {@link ImplOf} contract once here.
+    // `ImplOf` also key-remaps `pure` members; under deferred `GateWireMember<I,A,E>` that remap
+    // loses overlap with this concrete object, so the boundary goes through `unknown`.
     const impl = {
       status: statusSub,
       waiting: handle.waiting,
@@ -728,7 +730,7 @@ const buildRunImpl = <
       failed: handle.failed,
       interrupted: handle.interrupted,
       run: runImpl,
-    } as Hyperlink.WithRequirement<ImplOf<InstanceSpec<I, A, E>>, R>;
+    } as unknown as Hyperlink.WithRequirement<ImplOf<InstanceSpec<I, A, E>>, R>;
     return Hyperlink.driver(tag, impl, context);
   });
 
@@ -781,13 +783,15 @@ export const layer = <
   tag: HyperlinkTag<Self, InstanceSpec<I, A, E>, any>,
   config: LayerConfig<Schema.Schema.Type<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>, R>,
 ): Layer.Layer<Self | Local<Self> | Store.Storage, never, R> =>
+  // Gate specs have no materialize `value` leaves; `ValueErrorsOf` stays deferred under the
+  // generic `InstanceSpec` members, so restated as `never` at this toolkit boundary.
   withDefaultStoreBridge(
     Layer.unwrap(
       Effect.map(buildRunImpl(tag, config), (built) =>
         Hyperlink.layer(tag, Hyperlink.grantLocal(tag, built)),
       ),
     ),
-  );
+  ) as Layer.Layer<Self | Local<Self> | Store.Storage, never, R>;
 
 /**
  * Alias of {@link layer}.
@@ -863,11 +867,16 @@ export const serve = <
   never,
   R
 > =>
+  // Same deferred-`ValueErrorsOf` restatement as {@link layer} — Gate has no materialize leaves.
   withDefaultStoreBridge(
     Layer.unwrap(
       Effect.map(buildRunImpl(tag, config), (built) => Hyperlink.serve(tag, built)),
     ),
-  );
+  ) as Layer.Layer<
+    Self | Local<Self> | HandlerContextOf<InstanceSpec<I, A, E>> | Store.Storage,
+    never,
+    R
+  >;
 
 /**
  * Alias of {@link serve}.

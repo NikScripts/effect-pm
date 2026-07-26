@@ -1,4 +1,4 @@
-import { Effect, Layer, Schema } from "effect";
+import { Cause, Effect, Exit, Layer, Option, Schema } from "effect";
 import { FetchHttpClient, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { NodeHttpServer } from "@effect/platform-node";
@@ -6,11 +6,11 @@ import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
 import * as PmNode from "../src/Node";
 
-// `constant` fields are PLAIN values (no yield*), resolved once at acquire — identical local and remote.
+// `value` fields are PLAIN values (no yield*), resolved once at acquire — identical local and remote.
 
-class Cfg extends Hyperlink.Tag<Cfg>()("const-test/Cfg", {
-  maxSize: Hyperlink.constant(Schema.Number),
-  name: Hyperlink.constant(Schema.String),
+class Cfg extends Hyperlink.Tag<Cfg>()("value-plain/Cfg", {
+  maxSize: Hyperlink.value(Schema.Number),
+  name: Hyperlink.value(Schema.String),
   current: Hyperlink.effect(Schema.Number),
 }) {}
 
@@ -20,7 +20,7 @@ const impl = {
   current: Effect.succeed(7),
 };
 
-it("constant fields are plain, resolved once — LOCAL", () =>
+it("value fields are plain, resolved once — LOCAL", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const c = yield* Cfg;
@@ -40,7 +40,7 @@ const Node = PmNode.httpServer([Hyperlink.serve(Cfg, impl)]).pipe(
   Layer.provideMerge(NodeHttpServer.layerTest),
 );
 
-it("constant fields are plain, resolved once — REMOTE (same shape)", () =>
+it("value fields are plain, resolved once — REMOTE (same shape)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const addr = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
@@ -57,4 +57,28 @@ it("constant fields are plain, resolved once — REMOTE (same shape)", () =>
         Effect.scoped,
       );
     }).pipe(Effect.provide(Node), Effect.scoped),
+  ));
+
+class Fallible extends Hyperlink.Tag<Fallible>()("value-plain/Fallible", {
+  token: Hyperlink.value(Schema.String, Schema.String),
+}) {}
+
+it("fallible value fails LOCAL acquire (all-or-nothing)", () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const exit = yield* Effect.exit(
+        Effect.asVoid(Fallible).pipe(
+          Effect.provide(
+            Hyperlink.layer(Fallible, {
+              token: Effect.fail("nope"),
+            }),
+          ),
+          Effect.scoped,
+        ),
+      );
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        expect(Option.getOrThrow(Cause.findErrorOption(exit.cause))).toBe("nope");
+      }
+    }),
   ));
