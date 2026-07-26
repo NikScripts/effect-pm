@@ -19,5 +19,7 @@ export * from "./cache";
 export * from "./now";
 export * from "./memberKind";
 export * from "./widgetRegistry";
+/** Keyed Spec-based view registry (`View.make` / `View.react`) — prefer `import * as View`. */
+export * as View from "./View";
 /** Provider only — renderers expose a typed `useWidgets` (web cards vs TUI cells). */
 export { WidgetsProvider } from "./widgetsContext";
