@@ -417,9 +417,9 @@ View.react(layer) → {
 
 `View.react(webLayer)` vs `View.react(tuiLayer)` is the only platform fork at the Dashboard edge.
 
-**Locked (grilling):** W14–W18 as in table (missing skin #1 type gate via baked `View.react` skin keys; pins opt-in only).
+**Locked (grilling):** W14–W19 (components = single array; missing skin #1 via baked `View.react` skin keys; pins opt-in only; one skins builder per process — not web+TUI in one kit).
 
-**Open (grilling):** W19 pipe API (`Hyperlink.components` vs `View.card` siblings); Spec gate timing; Group expansion; `make` vs `View.Tag`.
+**Open (grilling):** Spec gate timing; Group expansion; `make` vs `View.Tag`; exact `View.skins` / `View.react` API surface.
 
 #### View handles on HS tags (W17) — LOCKED (clarified)
 
@@ -428,17 +428,16 @@ Owner (2026-07-26): HS handles **only** carry View handles/keys when you want to
 | Mode | What’s on the HS handle | How chrome is chosen |
 |------|-------------------------|----------------------|
 | **Default (common)** | **No** View handles | Registry binds (`bindTag` / `bindKind`) + skins — automatic |
-| **Custom (opt-in)** | Pipe `View.card` / `detail` / `page` (Handle or Handle[]) | Allowlist **replaces** automatic list for that viewKind |
+| **Custom (opt-in)** | Pipe `Hyperlink.components([…Handles])` | For each `handle.kind` present in the array, that kind’s allowlist **replaces** binds |
 
 ```ts
 // Default — nothing on the handle; Card matches via binds
 class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", { payload }) {}
 <Card tag={Jobs} />
 
-// Custom — lock which views this tag uses; type-check the pin
+// Custom — one array; partition by handle.kind; type-check skins in View.react kit
 class Special extends WorkPool.Tag<Special>()("app/Special", { payload }).pipe(
-  View.card(CustomCard),                    // override single
-  // View.card([CustomCard, PoolCard]),     // override multi / pager
+  Hyperlink.components([CustomCard, PoolCard, CustomDetail]),
 )
 ```
 
@@ -456,102 +455,87 @@ class Special extends WorkPool.Tag<Special>()("app/Special", { payload }).pipe(
 
 Runtime W14 (skip missing skin) remains a **last resort** for unpiped / dynamic paths — not the safety net for declared pins.
 
-#### Pipe API shape — OPEN: siblings vs one `Hyperlink.components`
+#### Pipe API — LOCKED: one `Hyperlink.components` + **single array** (owner 2026-07-26)
 
-Owner ask: replace `View.card` / `View.detail` / `View.page` with one combinator, e.g. **`Hyperlink.components`**.
+Not `View.card` / `View.detail` / `View.page` siblings. Not an object `{ card, detail, page }`.
 
-| | `View.card` + siblings | One `Hyperlink.components({ … })` |
-|--|------------------------|-----------------------------------|
-| Call site | `tag.pipe(View.card(X), View.detail(Y))` | `tag.pipe(Hyperlink.components({ card: X, detail: Y }))` |
-| Multi / pager | `View.card([A, B])` | `card: [A, B]` (same) |
-| Override | Each sibling call replaces that kind | Object keys present replace those kinds; omit key → leave automatic |
-| Module home | `View` (UI) | `Hyperlink` (handle identity — customization next to Tag) |
-| Kind gate | Per-function | Per-field (`card` only accepts card Handles) |
-
-**Lean (not locked):** prefer **one object combinator** for pins — name bakeable (`Hyperlink.components` vs `View.components`). Semantics unchanged from W16/W17: opt-in override only; arrays = pager list; omitted kinds stay on registry binds.
+**One combinator, one array** of View handles. Partition at match time by each handle’s `kind` (`"card" | "detail" | "page"`).
 
 ```ts
-// Proposed shape (name TBD)
 class Special extends WorkPool.Tag<Special>()("app/Special", { payload }).pipe(
-  Hyperlink.components({
-    card: CustomCard,                 // or [CustomCard, PoolCard]
-    detail: CustomDetail,             // omit page → automatic binds
-  }),
+  Hyperlink.components([CustomCard, PoolCard, CustomDetail]),
+  // CustomCard + PoolCard → card pager (override card binds)
+  // CustomDetail → detail allowlist (override detail binds)
+  // no page handles in the array → page stays on automatic binds
 )
 ```
+
+| Rule | Behavior |
+|------|----------|
+| Array present | For each viewKind that appears in the array, that kind’s allowlist **replaces** registry binds |
+| ViewKinds absent from array | Stay on automatic `bindTag` / `bindKind` |
+| Order within a kind | Pager / multi-match order for that kind |
+| Second `.pipe(Hyperlink.components([…]))` | **Replace** the whole pin list (override), not merge |
+| Home | `Hyperlink.components` — pin is handle identity; `View.*` stays registry/skins/react |
 
 #### `View.react` — bake skin names for missing-skin check (design)
 
-**Goal:** If a tag is pinned to View handles `A | B`, and the kit from `View.react(…)` does not include skins for both keys, **TypeScript errors** at the use site (or at kit construction when pins are known).
+**Goal:** If a tag is pinned to View handles whose keys are `K`, the kit from `View.react(…)` must have skinned every key in `K` or TypeScript errors.
 
-**Problem:** Opaque `Layer.Layer<Registry>` does not carry a type-level set of registered ViewKeys. `Layer.mergeAll(View.register(…), …)` erases which keys were contributed.
+**Problem:** Opaque `Layer.Layer<Registry>` does not carry a type-level set of registered ViewKeys.
 
-**Approach — accumulate skin keys on a typed builder / branded kit, then `react`:**
+**One process = one skins builder.** You are **not** registering “web + terminal” side by side. `PoolCard` and `PoolDetail` are two different View handles (card chrome vs detail chrome). The `Component` you pass is whatever this process uses (DOM in a web app, Ink in a TUI app). Platform swap = different program builds a different skins table over the **same** Handles — not two platforms in one `register` list.
 
 ```ts
-// 1) Register skins through a typed accumulator (not only opaque Layer)
-const webSkins = View.skins
-  .register(PoolCard, WebPoolCard)       // Adds PoolCard["key"] to the key union
-  .register(PoolDetail, WebPoolDetail)
-  .register(CustomCard, WebCustomCard)
+// This process (e.g. web app) — one skin per View handle
+const skins = View.skins
+  .register(PoolCard, PoolCardView)       // card handle → this process's card component
+  .register(PoolDetail, PoolDetailView)   // detail handle → this process's detail component
+  .register(CustomCard, CustomCardView)
 
-type WebSkinKeys = View.SkinKeysOf<typeof webSkins>
+type SkinKeys = View.SkinKeysOf<typeof skins>
 // "hyperlink/view/pool-card" | "hyperlink/view/pool-detail" | "hyperlink/view/custom-card"
 
-// 2) Binds stay Layer or same builder
-const webKit = View.react(
-  webSkins,
+const { Card, Detail, Provider } = View.react(
+  skins,
   Layer.mergeAll(
     View.bindKind(WorkPool.kind, PoolCard),
     View.bindKind(WorkPool.kind, PoolDetail),
-    // …
   ).pipe(Layer.provideMerge(View.base)),
 )
 
-// 3) Card/Detail from that kit know WebSkinKeys
-const { Card, Detail, Provider } = webKit
-
-// Unpiped — OK (registry match; missing skin still runtime W14)
+// Unpiped — no skin proof (registry path; W14 at runtime if needed)
 <Card tag={Jobs} />
 
-// Piped — every pinned key must extend WebSkinKeys
+// Piped — every key in the components array must be in SkinKeys
 class Special extends WorkPool.Tag<Special>()("app/Special", { payload }).pipe(
-  Hyperlink.components({ card: CustomCard }),
+  Hyperlink.components([CustomCard, PoolCard]),
 )
-<Card tag={Special} />  // OK — CustomCard.key ∈ WebSkinKeys
+<Card tag={Special} />  // OK — both keys skinned in this kit
 
 class Broken extends WorkPool.Tag<Broken>()("app/Broken", { payload }).pipe(
-  Hyperlink.components({ card: NotRegisteredCard }),
+  Hyperlink.components([NotRegisteredCard]),
 )
-<Card tag={Broken} />   // TYPE ERROR — key not in WebSkinKeys
+<Card tag={Broken} />   // TYPE ERROR — key not in SkinKeys
 ```
 
-**How the check is expressed (sketch):**
+**Props sketch:**
 
 ```ts
-type PinnedCardKeys<T> = /* ViewKeys from components brand on T, or never if unpiped */
+type PinnedKeys<T> = /* ViewKeys from Hyperlink.components brand on T, or never */
 
 type CardProps<T, SkinKeys extends ViewKey> = {
-  readonly tag: PinnedCardKeys<T> extends never
-    ? LeafTag                 // unpiped — no skin proof
-    : PinnedCardKeys<T> extends SkinKeys
-      ? T                     // all pinned keys skinned
+  readonly tag: PinnedKeys<T> extends never
+    ? LeafTag
+    : PinnedKeys<T> extends SkinKeys
+      ? T
       : "Missing skin in View.react kit for pinned view key(s)"
   readonly name?: string
 }
+// Card matcher still only renders handle.kind === "card" entries from the pin
 ```
 
-**Builder vs branded Layer:**
-
-| Option | How keys accumulate | Notes |
-|--------|---------------------|-------|
-| **A. `View.skins` builder** then `View.react(skins, bindLayer)` | Each `.register(H, Comp)` → `Skins<Keys \| H["key"]>` | Clearest inference; binds can stay Layer |
-| **B. Brand `Layer`** from `View.register` | `Layer & { readonly [skinKeys]: Keys }` + merge unions keys | Closer to current API; merge typing is fiddly |
-| **C. `as const` skin table** | `satisfies Record<ViewKey, Comp>` fed to react | Simple; less Effect-Layer-native |
-
-**Lean for Eng:** **A** — typed skin builder into `View.react`; bind contributions can remain Layers. Web and TUI each build their own `View.skins` (same Handles, different Comp) → different `SkinKeys` if one platform omits a Page skin (unpiped OK; piped Page would error on that kit).
-
-**TUI/web:** same pin on `Special` must pass **each** platform kit’s skin set when that kit’s `Card` is used — i.e. if you pin `CustomCard`, both `webSkins` and `tuiSkins` must `.register(CustomCard, …)` or that platform’s `<Card tag={Special} />` fails typecheck.
+**Builder lean:** `View.skins.register(Handle, Component)` accumulates `SkinKeys`; `View.react(skins, bindLayer)` bakes that union into `Card` / `Detail` / `Page`. A TUI binary has its own `View.skins` chain with Ink components — same Handle keys, different `Component` values — never mixed into the web kit.
 
 #### Define + register (one entry = one kind)
 
@@ -653,16 +637,16 @@ Also: **`Atom.family`** / `AtomRegistry` for reactive memoized entries (differen
 | W13 | **No TSX on shared handle / service Tag** — `View.register(handle, Component)` is the skin seam |
 | W14 | Missing skin for a bound key → **skip at match**; never fail Layer build; fallback only if list empty |
 | W15 | **No `groupId` in View/UI dispatch** — RPC wire only. Family bind = stamped `kindOf` (`hyperlink-ts/WorkPool`, …). Kill `bindFactory` / short `"queue"`\|`"pool"` kinds |
-| W16 | Pipe allowlist: **`View.card(x)` overrides**; **`View.card([…])` sets multi/pager list**; same for detail/page; symbol bag on service tag; replace binds when present |
+| W16 | Pipe allowlist on service tag (symbol bag); present kinds **replace** binds; order within a kind = pager |
 | W17 | View handles on HS tag are **opt-in override only** (not defaults). Default chrome = registry binds. **When piped**, type-check pins |
-| W18 | **Missing skin is the #1 type gate** for piped tags — bake registered ViewKeys into `View.react` kit types (`View.skins` builder lean) |
-| W19 | Pipe API name/shape **OPEN** — `View.card` siblings vs one `Hyperlink.components({ card, detail, page })` |
+| W18 | **Missing skin is the #1 type gate** for piped tags — bake registered ViewKeys into `View.react` kit types (`View.skins` builder) |
+| W19 | Pipe API = **`Hyperlink.components(Handle[])`** — single array, partition by `handle.kind`; not card/detail/page siblings; not `{ card, detail }` object |
 
 ### Eng order (next)
 
 1. Typed **`View.skins` + `View.react(skins, binds)`** so piped tags prove keys ⊆ kit skin set (W18)
-2. Pipe combinator (W19 bake) + Spec/kind gates secondary to missing-skin
-3. Web vs TUI each own a skins builder over the same Handles
+2. **`Hyperlink.components(Handle[])`** pipe (W19) — partition by kind; Spec gate secondary
+3. Platform apps each own **one** skins builder (same Handles, that process’s Components)
 4. Migrate queue defaults as separate Card + Detail entries
 5. `Hyperlink.atom` / `query` / `fn` in parallel
 6. Desktop tabs + real Page kind — later
