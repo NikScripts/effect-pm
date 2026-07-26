@@ -232,7 +232,7 @@ Owner (2026-07-26): not just card vs “page.” **Three kinds** (names bakeable
 - **Do not** hard-tie kinds together on one registry entry (no “this card owns that detail”).
 - Each registered entry = **one kind + one React component** (+ key + family Spec).
 - **Match is independent per kind.** Custom card does not drop default Detail/Page; etc.
-- Optional later: TUI **`cell`** as another kind or as Card variant — undecided.
+- TUI: prefer **same Card/Detail handles** with Ink components in a TUI Layer (W7/W13). Optional **`cell`** kind later only if Ink needs a distinct role.
 
 #### Multi-match presentation (document now, don’t design chrome yet)
 
