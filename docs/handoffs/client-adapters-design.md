@@ -386,7 +386,7 @@ One provide Layer per process — not web+TUI in the same merge.
 
 **Locked (grilling):** W14–W19; View services + Layer-provided TSX (not skins.register map); components = single array; missing skin = not provided.
 
-**Open (grilling):** Spec gate timing; Group expansion; exact `View.Tag` / `View.make` shape; how binds/pins introduce View services into Layer `R` (so react’s `R=never` check fires).
+**Open (grilling):** packaging subpaths; `kit.for(tag)` / Hyperlink.react flip; Dashboard on kit; Spec gate; Group expansion.
 
 #### View handles on HS tags (W17) — LOCKED (clarified)
 
@@ -582,7 +582,7 @@ Not a special “Registry” language feature. Pattern:
 
 Also: **`Atom.family`** / `AtomRegistry` for reactive memoized entries (different job — atom identity, not plugin table).
 
-**Our lean for views:** same as EventLog — `View` registry Context service + layers that `register(view)` / `bind*(…)`, then `View.react(layer)` builds React that reads that service (from a provided Context / Provider). `Layer.mergeAll(base, user…)` = compose contributions. View Layer is **separate** from `Atom.runtime` (W4).
+**Our lean for views:** EventLog-style registry + `bind*` layers that **require** View services; `Layer.succeed` provides TSX; `View.react(layer)` runs with `R = never`. View Layer **separate** from `Atom.runtime` (W4). Packaging: handles/binds shared; succeeds platform-local (see migration packaging).
 
 ### Composability / toolkit (parked detail, keep)
 
@@ -590,6 +590,110 @@ Also: **`Atom.family`** / `AtomRegistry` for reactive memoized entries (differen
 - `fromSpec` / `fromTag` / `fromFactory` helpers.
 - Recipes (`withTrend`, log pane) are UI folds — **not** a second service shape in `data.ts`.
 - Replace `QueueService` duplicates over time with `ServiceOf<FamilySpec>`.
+
+
+### Migration packaging, tree-shaking, and DX helpers (grilling 2026-07-26)
+
+This is a **fairly large migration**. Before moving dashboard widgets, lock packaging + helpers so we do not paint ourselves into a megabundle.
+
+#### Impact of Effect runtime + View registry (read carefully)
+
+| Concern | What happens today / with View.react | Risk if we get it wrong |
+|---------|--------------------------------------|-------------------------|
+| **When Layer runs** | `View.react(layer)` does `runSync(Layer.build)` **once** at kit construction — not per render | Calling `View.react` inside a component = rebuild registry every render |
+| **React tree** | Kit returns `Provider` + matchers; matchers read registry from React context | Must render under `Provider`; no ambient Effect runtime required in the browser for match |
+| **Atom.runtime** | Separate (W4) — live data atoms stay on Atom runtime | Do not merge View Layer into Atom.runtime |
+| **Tree-shaking** | If one `View.ts` / `base` Layer imports every default Card/Detail TSX, **any** `import { make } from View` pulls all chrome (DOM + Ink risk) | TUI ships web CSS; web ships Ink; huge bundles |
+| **Platform** | TSX is `Layer.succeed` in **web** or **tui** app layers | Shared package must export **handles + binds only**; platform owns succeeds |
+| **Registry size** | Built Context holds every provided View Svc | Providing unused views = dead weight in memory (usually fine); **importing** unused modules = bundle weight (bad) |
+
+**Rule:** shared modules export View **services** (`make` handles) + bind Layers. Platform modules export `Layer.succeed(Handle, Comp)`. Never put default DOM/Ink components in the shared `View` entry that apps import for `make` / `react`.
+
+#### Default chrome export shape — NOT `View.WorkPoolCard` object
+
+Module layout (Effect-true): **no object-as-namespace**. So not:
+
+```ts
+// ❌ pulls everything if on View barrel
+View.WorkPoolCard
+export const View = { WorkPoolCard, … }
+```
+
+**Lean — subpath per family (handles shared; chrome platform-split):**
+
+```ts
+// Shared identity + binds (no TSX)
+import * as WorkPoolView from "hyperlink-ts/ui/View/WorkPool"
+// WorkPoolView.Card, WorkPoolView.Detail, WorkPoolView.binds
+
+// Web succeeds
+import { layer as workPoolWeb } from "hyperlink-ts/web/View/WorkPool"
+// Layer.succeed(WorkPoolView.Card, WebCard) + …
+
+// TUI succeeds
+import { layer as workPoolTui } from "hyperlink-ts/tui/View/WorkPool"
+```
+
+Apps that only need the handle import the small subpath; Dashboard base merges platform layers explicitly.
+
+#### `View.react` → also `Dashboard`? — OPEN lean
+
+Returning `Dashboard` from the same kit is attractive for migration (`widgets={forKind…}` → View Layer).
+
+| Option | Shape | Note |
+|--------|--------|------|
+| **A** | `View.react(layer)` → `{ Card, Detail, Page, Dashboard, Provider, … }` | One kit; Dashboard closes over same registry |
+| **B** | `View.dashboard(layer)` separate from `View.react` | Clearer split; two runSync if both used carelessly |
+| **C** | Keep Dashboard in `web`/`tui`; only consume kit matchers | Least coupling; slower migration |
+
+**Lean:** **A** — `Dashboard` on the kit once `Card`/`Detail` parity exists; shell stays platform-specific (routing, Ink vs DOM) but **member chrome** goes through the kit. Do not block handle/bind Eng on Dashboard.
+
+#### Flipped helper: `Hyperlink.react(MyService)` — OPEN (strong DX)
+
+Owner idea: flip the matcher — given a **service**, get components already bound to it:
+
+```ts
+const { Card, Detail, Page } = Hyperlink.react(MyQueue)
+// <Card />  — no tag prop; always MyQueue
+// <Detail />
+```
+
+vs today:
+
+```ts
+const { Card, Provider } = View.react(viewLayer)
+<Card tag={MyQueue} />
+```
+
+**How it can work without a second registry:**
+
+```ts
+// Needs a kit / Provider in scope for skins (same Layer R=never story)
+const kit = View.react(viewLayer)
+
+const { Card, Detail, Page } = kit.for(MyQueue)
+// or Hyperlink.react(MyQueue, kit)
+// or Hyperlink.react(MyQueue) reading ambient View Provider (hooks)
+```
+
+| Piece | Job |
+|-------|-----|
+| `View.react(layer)` | Build registry once; `R = never`; return matchers + Provider (+ Dashboard later) |
+| `kit.for(tag)` / `Hyperlink.react(tag)` | Curry `tag` into Card/Detail/Page — props become `{ name? }` only |
+| Skins | Still from the same Layer / Provider — flipped helper does **not** invent provides |
+
+**Lean:** ship `kit.for(tag)` on the `View.react` result first (no Hyperlink↔ui cycle). Alias `Hyperlink.react(tag)` later only if it can live without importing UI (unlikely) — otherwise keep flipped helper on the View kit or `hyperlink-ts/ui` as `View.for(tag, kit)`.
+
+Name collision: `Hyperlink.react` vs `View.react` — different jobs (service-bound vs layer kit). Document clearly if both exist.
+
+#### Migration order (proposed)
+
+1. Keep Eng’d core (services, succeed, react R=never, components pin) — **done**
+2. Lock packaging: shared handles/binds subpaths; platform succeed layers — **now**
+3. Migrate WorkPool Card+Detail to View services + web/tui succeed layers
+4. `kit.for(tag)` flipped helper
+5. Kit `Dashboard` (or web/tui Dashboard consumes kit) 
+6. Delete `forKind` / `ui/data` QueueService duplicates over time
 
 ### LOCKED decisions (2026-07-26)
 
@@ -617,12 +721,13 @@ Also: **`Atom.family`** / `AtomRegistry` for reactive memoized entries (differen
 
 ### Eng order (next)
 
-1. View services + **`Layer.succeed(View, Comp)`**; **`View.react(layer)`** requires `R = never` (runs Layer → kit) (W18)
-2. **`Hyperlink.components(View[])`** pipe (W19) — partition by kind; Spec gate secondary
-3. Platform apps each provide the same View services with their Components
-4. Migrate queue defaults as separate Card + Detail entries
-5. `Hyperlink.atom` / `query` / `fn` in parallel
-6. Desktop tabs + real Page kind — later
+1. ~~View services + react R=never + Hyperlink.components~~ **done**
+2. **Lock packaging** — shared `ui/View/<Family>` handles+binds; platform `web|tui/View/<Family>` succeed layers (no default TSX on View barrel)
+3. Migrate WorkPool Card/Detail to that layout
+4. `kit.for(tag)` flipped bound components; consider kit `Dashboard`
+5. Retire `forKind` / hand-rolled `ui/data` services
+6. `Hyperlink.atom` / `query` / `fn` in parallel
+7. Desktop tabs + real Page kind — later
 
 ### Non-goals (view redesign)
 
