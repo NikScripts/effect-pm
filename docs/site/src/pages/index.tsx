@@ -10,15 +10,20 @@ export default function LandingPage() {
       />
       <section className="landing">
         <div className="landing-inner">
-          <h1 className="landing-title">Hyperlink</h1>
-          <h3 className="landing-sub">for Effect</h3>
-          <div className="landing-tagline">
-            <span>Define once</span>
-            <span>run anywhere</span>
-            <span>
-              <code>yield*</code> everywhere
-            </span>
+          <div className="landing-mark">
+            <h1 className="landing-title">
+              <a href="/docs/index">Hyperlink</a>
+            </h1>
+            <h3 className="landing-sub">for Effect</h3>
           </div>
+          <p className="landing-motto">
+            <span>Define once.</span> <span>Run anywhere.</span>{" "}
+            <span className="landing-motto-accent">
+              <code>yield*</code> everywhere.
+            </span>
+          </p>
+          <p className="landing-soon">Coming soon</p>
+          <div className="landing-content">
           <p className="landing-pitch">
             JavaScript has been multi-core for a decade. Hyperlink makes writing it feel
             single-threaded again.
@@ -38,10 +43,10 @@ export default function LandingPage() {
             machine. One typed surface.
           </p>
           <p className="landing-credit">Inspired by and built on Effect RPC.</p>
-          <p className="landing-soon">Coming soon</p>
           <a className="landing-preview" href="/docs/index">
             Preview the docs →
           </a>
+          </div>
         </div>
       </section>
     </>

@@ -124,18 +124,20 @@ rejected — **stop and raise it**. Don't silently ship the fallback. Document t
 {#green-before-commit .must appliesTo=test}
 ## Green before every commit
 
-Four checks pass before anything is committed or released — no exceptions, including docs-adjacent
-code changes:
+The repo green gate passes before anything is committed or released — no exceptions, including
+docs-adjacent code changes. Prefer the singular Effect CLI:
 
 ``` sh
-pnpm typecheck   # tsgo on BOTH projects; patched with the Effect language-service,
-                 # so it enforces the Effect rules plain tsc/tsgo would miss
+pnpm verify      # → hyp verify: deps → typecheck → lint → test → build → markers
+# equivalent pieces still work as aliases:
+pnpm typecheck   # tsgo (root + strict-provide + ui + web + tui) then tsc; Effect language-service patched
 pnpm lint        # eslint
-pnpm test        # vitest run — the full suite
+pnpm test        # vitest run
 pnpm build       # tsup
 ```
 
-Red on any of them means it isn't done. Never commit on a broken check "to fix later."
+Red on any of them means it isn't done. Never commit on a broken check "to fix later." Extend
+`dev/cli/` instead of adding parallel `package.json` gate scripts. (`pnpm hyp --help` for the tree.)
 
 {#effect-vitest .must appliesTo=test}
 ## Effect programs are tested with `@effect/vitest`

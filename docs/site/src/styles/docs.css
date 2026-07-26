@@ -85,7 +85,7 @@ body {
 .topbar-inner {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
   width: 100%;
   max-width: 66rem;
   margin: 0 auto;
@@ -997,14 +997,6 @@ h2[class~="draft"]::after {
 /* the install box is a discrete widget — always show its copy button (no hover reveal, works on touch) */
 .pm-command .copy-btn {
   opacity: 1;
-}
-
-/* protocol-listen toggle — `​```listen` (ListenProtocol island). Same chrome as install; multi-line
-   overload family for the selected sibling (http / ws / unix / nPipe). */
-.listen-proto .pm-command code {
-  display: block;
-  line-height: 1.55;
-  white-space: pre;
 }
 
 /* tables — Djot pipe tables (docs-content renders table/row/cell). */
@@ -2050,7 +2042,7 @@ pre:focus-within > .copy-btn {
   text-decoration: none;
 }
 .version-badge:hover { color: var(--primary); border-color: var(--primary); }
-.topbar-inner .brand:has(+ .version-badge) { margin-right: 0.6rem; }
+.topbar-inner .brand:has(+ .version-badge) { margin-right: 0; }
 .shortcuts-card { padding: 0.9rem 1.1rem; max-width: 26rem; }
 .shortcuts-list { display: grid; grid-template-columns: auto 1fr; gap: 0.45rem 0.9rem; margin: 0.6rem 0 0; font-size: 0.85rem; }
 .shortcuts-list dt kbd {
@@ -2074,50 +2066,140 @@ body:has(.landing) .layout {
 body:has(.landing) .sidebar {
   display: none;
 }
+/* the base main is capped at 46rem (and the >=900px media pins margin to 0, not auto) — on the
+   landing the section owns its own widths, so lift the cap entirely or landscape phones
+   (900-1099px) render the whole hero 46rem wide and hard-left */
+body:has(.landing) main {
+  max-width: none;
+  /* base main carries 1.25rem side + 5rem bottom padding — on phones that's why the card
+     couldn't reach the edges; the landing owns its own spacing */
+  padding: 0;
+}
 .landing {
+  /* main is a flex row — stretch to fill it, or the hero hugs its content off-center */
+  width: 100%;
   /* fill the viewport below the sticky topbar at every size (dvh: stable on iOS) */
   min-height: calc(100dvh - 3.2rem);
   display: flex;
-  align-items: center;
+  /* safe: when the hero is TALLER than the viewport (landscape phones), fall back to top
+     alignment instead of clipping the wordmark above the scroll origin */
+  align-items: safe center;
   justify-content: center;
-  text-align: center;
-  padding: 2.5rem 1.25rem calc(2.5rem + env(safe-area-inset-bottom));
+  text-align: left;
+  padding: 1.6rem 1.25rem calc(2rem + env(safe-area-inset-bottom));
 }
 .landing-inner {
   max-width: 70rem; /* ~1120px body cap */
   width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
 }
 .landing-title {
   margin: 0;
-  font-size: clamp(3.6rem, 13vw, 7.5rem);
+  font-size: 1em;
   line-height: 1;
   letter-spacing: -0.035em;
-  background: linear-gradient(135deg, var(--fg) 35%, var(--primary));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
 }
 .landing-sub {
   margin: 0.4rem 0 0;
-  font-size: clamp(1.25rem, 3.6vw, 2rem);
+  font-size: 0.27em;
   font-weight: 500;
   color: var(--muted-fg);
   letter-spacing: 0.01em;
 }
-.landing-tagline {
+/* the wordmark block: shrink-wraps to the heading and centers by MARGIN, not text-align —
+   "for Effect" keeps the heading's left edge. */
+.landing-mark {
+  width: fit-content;
+  margin-inline: auto;
+  /* ONE size drives the whole lockup: title and sub are em-fractions of this, so their ratio
+     (and the tuck offsets) hold constant across every viewport instead of drifting on
+     independent vw curves */
+  font-size: clamp(3.6rem, 13vw, 7.5rem);
+  margin-block: clamp(1.2rem, 3.5vh, 2.4rem) clamp(0.9rem, 2.5vh, 1.8rem);
+}
+.landing-mark .landing-sub {
+  /* tucked under the "Hy": left edge of the wordmark, pulled up into its descender space.
+     Offsets in the MARK's em (the sub's font-size is 0.27em of it) so the tuck scales with
+     the lockup as one object. */
+  text-align: left;
+  margin-top: -0.05em;
+  padding-left: 0.18em;
+}
+/* everything below the wordmark/motto rides in a readable-width, margin-centered column;
+   the text inside stays left-aligned */
+.landing-content {
+  width: 100%;
+  max-width: 44rem;
+  /* mx-auto centering: block margins do the centering at every viewport wider than the card;
+     the vertical breathing lives HERE as margin, outside the border — not as card padding */
+  margin: 1.1rem auto 1.75rem;
+  padding: clamp(1.2rem, 2.5vw, 1.9rem) clamp(1.1rem, 3.5vw, 2.4rem);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  align-self: stretch;
+}
+/* the title IS a hyperlink — the brand demonstrating itself. It navigates to the docs. */
+.landing-title a {
+  color: var(--primary);
+  text-decoration: none;
+}
+.landing-title a:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 0.04em;
+  text-underline-offset: 0.14em;
+  text-decoration-color: color-mix(in oklab, var(--primary) 45%, transparent);
+}
+/* one flowing motto line: a quiet crescendo ending on the orange yield* */
+.landing-motto {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  margin: clamp(2rem, 5vh, 3.2rem) 0;
-  font-family: var(--font-mono);
-  font-size: clamp(1.05rem, 2.6vw, 1.4rem);
-  color: var(--fg);
+  align-items: center;
+  text-align: center;
+  align-self: center;
+  gap: 0.5rem;
+  margin: clamp(1.4rem, 3.5vh, 2.2rem) 0 1.2rem;
+  font-family: var(--font-sans);
+  font-size: clamp(1.15rem, 2.6vw, 1.55rem);
+  letter-spacing: 0.005em;
+  color: var(--muted-fg);
 }
-.landing-tagline code {
-  color: var(--primary);
+.landing-motto span:nth-child(2) {
+  color: color-mix(in oklab, var(--fg) 70%, var(--muted-fg));
+}
+/* the staircase: definition steps in from the left, yield* steps out to the right */
+.landing-motto span:nth-child(1) {
+  transform: translateX(-3.5rem);
+}
+.landing-motto .landing-motto-accent {
+  transform: translateX(3.5rem);
+}
+/* narrow screens: shallower staircase so the outer lines keep clear of the edges */
+@media (max-width: 520px) {
+  .landing-motto span:nth-child(1) {
+    transform: translateX(-2rem);
+  }
+  .landing-motto .landing-motto-accent {
+    transform: translateX(2rem);
+  }
+}
+.landing-motto-accent {
+  color: var(--fg);
+  font-weight: 550;
+}
+.landing-motto code {
+  font-family: var(--font-mono);
+  color: oklch(0.62 0.17 55);
+  background: none;
+  padding: 0;
+  border: none;
+  font-size: 0.95em;
+}
+@media (prefers-color-scheme: dark) {
+  .landing-motto code {
+    color: oklch(0.75 0.16 60);
+  }
 }
 .landing-pitch {
   max-width: 44rem;
@@ -2127,7 +2209,8 @@ body:has(.landing) .sidebar {
   color: var(--muted-fg);
 }
 .landing-soon {
-  margin: clamp(2rem, 5vh, 3rem) 0 0;
+  align-self: center;
+  margin: 1.9rem 0 2.2rem;
   padding: 0.5rem 1.3rem;
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -2159,6 +2242,7 @@ body:has(.landing) .sidebar {
 .landing-body {
   max-width: 40rem;
   margin: 1.1rem 0 0;
+  margin-left: 0;
   font-size: clamp(0.95rem, 2vw, 1.05rem);
   line-height: 1.7;
   color: var(--muted-fg);
@@ -2169,6 +2253,7 @@ body:has(.landing) .sidebar {
   letter-spacing: -0.015em;
   color: var(--fg);
   max-width: 46rem;
+  margin-left: 0;
 }
 
 /* dev-only gen-hovers restamp toast (HoverGenProgress island) — Safari-download style,

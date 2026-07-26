@@ -8,9 +8,10 @@
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **4** | `cursor/hyperservice-open-deps-5679` | [service shapes plan](../plans/service-shapes.md) | **Eng’d** — tip-synced | same tip as `integration` | typecheck + pure suites | `Tag`/`value`/`promise`/`pure` shipped; Creating a Hyperlink polish still paused | 2026-07-26 |
 | **G / TUI** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity | **design** — client adapters notes; tip-synced | same tip as `integration` | prior suites green | Notes: [`client-adapters-design.md`](./client-adapters-design.md) — Promise / TanStack / tRPC-shape / Effect-reactive helpers; Eng TBD | 2026-07-24 |
-| **1** | `cursor/docs-corpus-phase3-ce05` | [Examples book](./agent-01-examples-book.md) · [Phase 3](./agent-01-docs-corpus-phase3-plan.md) | **E1 in flight** — Examples hub + queue Twoslash pairs | branch tip | hub + 2 queue docs | **Next:** E2 forms/resource pairs | 2026-07-15 |
+| **Hygiene** | `cursor/branch-hygiene-929b` → `integration` | branch tidy + `hyp` land + landing polish | **in flight** | branch tip | targeted gates | Active agents: **4**, **G**, this agent only | 2026-07-26 |
+| **1** | *(frozen)* | [Examples book](./agent-01-examples-book.md) · [Phase 3](./agent-01-docs-corpus-phase3-plan.md) | **frozen / superseded** — E1 examples on tip; intro voice [#68](https://github.com/nikolasstow/Hyperlink/pull/68) closed | — | — | Branch deleted (unique tip was pre-rebrand `docs/index.md`) | 2026-07-26 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
-| **3** | `cursor/logs-store-followers-plan-906e` | [identity-coordinator](./identity-coordinator.md) · [loud-failures](./loud-failures-design.md) | **idle** — Soft / default-on verify / F4 / lineId memo Eng’d | same tip as `integration` | typecheck + targeted suites green | Ready for next major | 2026-07-21 |
+| **3** | *(dead)* | [identity-coordinator](./identity-coordinator.md) · [loud-failures](./loud-failures-design.md) | **dead** — Soft / verify / F4 / lineId memo Eng’d on tip | — | — | Work branch deleted (was tip-contained in `integration`) | 2026-07-26 |
 | **B** | from `integration` | [dashboard typesafety](./agent-b-dashboard-typesafety.md) | **plan-first** | on line | — | Owner-gated; remote `fix/dashboard-typesafety` tip was already on line (deleted) | 2026-07-14 |
 | **A** | merged | [rules/docs](archive/2026-07/agents/agent-a-rules-and-documentation.md) | **merged** | on line | — | — | 2026-07-12 |
 | **C** | from `integration` | [standards audit](./agent-c-standards-audit.md) | **plan-first** | on line | manifest ✓ | Owner-gated; remote `chore/standards-audit` tip was already on line (deleted) | 2026-07-14 |
@@ -26,9 +27,13 @@
 
 ### Active (owner approval required)
 1. **Agent 4:** Service shapes — Eng’d `Tag<Self, I>()`, `value`, overload arity, `Hyperlink.promise`, `Hyperlink.pure`. Creating a Hyperlink polish still paused; next owner call (e.g. Tag-baked `constant(literal)` / polish).
-2. **Agent 1:** Examples book (`cursor/docs-corpus-phase3-ce05`) — hub in sidebar; Twoslash-paired `docs/examples/**` not in sidebar; forms first. Agent B: content glob + exclude example docs from More. Legacy Phase 3 leftovers background. Ignore effect β98 (Agent C).
-3. **Agent 3:** **idle** — Soft fail-loud, default-on verify, F4 `contractHash`, store-layer lineId memo Eng’d (owner “All of them”). Not handles/site.
-4. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
+2. **Agent G / TUI:** Dashboard Group parity + client-adapters design (`cursor/tui-dashboard-parity-125f`).
+3. **This agent:** branch hygiene — land `hyp` CLI + landing polish; retire frozen Agent 1 / dead Agent 3 tips.
+
+### Frozen / dead (do not assign)
+- **Agent 1:** frozen — Examples book E1 already on tip; stale intro PR #68 closed; branch deleted.
+- **Agent 3:** dead — Soft/verify/F4/memo Eng’d on tip; work branch deleted.
+- **Agent D (+ peers):** named handles — do not reassign (was: do not give to Agent 3).
 
 ### Ready / owner calls
 5. **Node catalog + identity lookup** — design [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md); Phase-2–3 catalog/directory/**D3**/**D4**/**D7**/`Node.Prototype` Eng on tip; **`askIncumbent` Eng’d**; **X1 Eng’d**; **managers → [`identity-coordinator.md`](./identity-coordinator.md) M4–M6 Eng’d** (v1 complete)
@@ -49,10 +54,19 @@
 - Agent B dashboard type-safety (plan-first) — **UI reserved for lettered agents**
 - Agent C standards audit (plan-first)
 
-### Branch hygiene (2026-07-14)
-Deleted 32 remotes fully contained in `integration` or abandoned closed-PR tips. DynamicConfig on `integration` (#42); still `0.8.0-beta.28`, changeset unconsumed.
+### Branch hygiene (2026-07-26)
+Owner: only **Agent 4**, **Agent G**, and this agent remain active.
 
-**Agent 3 Soft:** [#62](https://github.com/NikScripts/effect-pm/pull/62)/[#65](https://github.com/NikScripts/effect-pm/pull/65) on `integration`; follow-through brief **CLOSED**. Next Soft Eng only if owner unlocks fail-loud / outer-merge guard / memo.
+**Deleted (superseded / contained):** Agent 1 `cursor/docs-corpus-phase3-ce05` (+ closed [#68](https://github.com/nikolasstow/Hyperlink/pull/68)); Agent 3 `cursor/logs-store-followers-plan-906e` + `cursor/agent-03-byresource-full-key-a009`; plus earlier contained tips (`ask-incumbent`, catalog bake stack, `feat/*` tip-contained, etc.).
+
+**Merged onto tip (this hygiene branch):** repo `hyp` CLI (was [#78](https://github.com/nikolasstow/Hyperlink/pull/78) / `cursor/repo-dev-cli-125f`); landing polish from `docs/standards-corpus`.
+
+**Archived remotes (keep tip, do not land as-is):**
+- `archive/command-auth` — CommandAuth stack (legacy removed on tip)
+- `archive/dashboard-readiness` — was `feat/dashboard-readiness` (deck-pack / pollAtom era; needs G-era rebase)
+- `archive/resource-toolkit-web-widgets` — was `rewrite/resource-toolkit`; handoff copies under [`archive/2026-07/widgets/`](./archive/2026-07/widgets/)
+
+**Left active:** `cursor/hyperservice-open-deps-5679` (4), `cursor/tui-dashboard-parity-125f` (G), `main`, `integration`.
 
 ---
 
