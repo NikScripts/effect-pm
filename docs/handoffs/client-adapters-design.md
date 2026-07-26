@@ -220,15 +220,15 @@ Type-level: `Compatible` / `BindTag` so `registry.use(Factory, Widget)` or `Widg
 | Registry / bind / Spec / keys | **Effect** — `Context.Service`, `Layer.mergeAll`, type gates | System of record |
 | Components / hooks returned to apps | **React** — named components + hooks | DX at the call site |
 
-Working name below: **`Ui`** (generic; not “Widget”). Alternatives still open: `Chrome`, `Face`, `Presentation`. Key namespace e.g. `hyperlink/ui/pool`.
+**Name locked: `View`.** iOS-ish vibe; not “Widget” / `Ui`. Key namespace e.g. `hyperlink/view/pool`.
 
 **No `surface: "card"`.** Defining an entry can attach several React views; **`Ui.react(layer)` returns multiple components (and tools)**, each already closed over the registry + match rules.
 
 ```ts
 // ── Effect side: define + register ──────────────────────────────────────────
 
-const Pool = Ui.make({
-  key: "hyperlink/ui/pool",
+const Pool = View.make({
+  key: "hyperlink/view/pool",
   spec: WorkPool.queueControlSpec, // whole family Spec = Needs
   // named React views — not a surface enum on component()
   card: PoolCard,       // (props: { tag }) => JSX
@@ -236,12 +236,12 @@ const Pool = Ui.make({
   // optional later: cell, tools, …
 })
 
-const uiLayer = Layer.mergeAll(
-  Ui.base, // shipped entries
-  Ui.register(Pool),
-  Ui.register(WorkerPoolUi),
-  Ui.bindFactory(WorkPool.Tag, Pool),     // type-gated
-  Ui.bindTag(SpecialQueue, SpecialUi),
+const viewLayer = Layer.mergeAll(
+  View.base, // shipped entries
+  View.register(Pool),
+  View.register(WorkerPoolView),
+  View.bindFactory(WorkPool.Tag, Pool),     // type-gated
+  View.bindTag(SpecialQueue, SpecialView),
 )
 
 // ── React side: one call → components + helpers ─────────────────────────────
@@ -250,9 +250,9 @@ const {
   Card,       // matcher → entry.card
   Detail,     // matcher → entry.detail
   Provider,   // provides registry Context (from layer)
-  useUi,      // hook: raw registry / resolve
+  useView,    // hook: raw registry / resolve
   resolve,    // (tag) => entry | fallback  (non-hook tool)
-} = Ui.react(uiLayer)
+} = View.react(viewLayer)
 
 // Call sites — pass the handle/tag only; matching inside
 <Provider>
@@ -261,13 +261,13 @@ const {
 </Provider>
 ```
 
-**What `Ui.react` builds (conceptually):**
+**What `View.react` builds (conceptually):**
 
 ```ts
 function Card(props: { tag: LeafTag; name?: string }) {
   const entry = registry.match(props.tag) // annotation → binds → kind → fallback
-  const View = entry.card ?? FallbackCard
-  return <View tag={props.tag} name={props.name} />
+  const CardView = entry.card ?? FallbackCard
+  return <CardView tag={props.tag} name={props.name} />
 }
 ```
 
@@ -276,7 +276,7 @@ Same match once; **each exported component picks a different view field** on the
 **Dashboard** becomes:
 
 ```tsx
-const { Card, Detail, Provider } = Ui.react(appUiLayer)
+const { Card, Detail, Provider } = View.react(appViewLayer)
 
 <Provider>
   <Grid>{leaves.map((tag) => <Card key={tag.key} tag={tag} />)}</Grid>
@@ -289,17 +289,19 @@ Parent still owns routing (what’s selected). No `onOpen` on core Card unless t
 **Tools mixed in (optional bag):**
 
 ```ts
-const ui = Ui.react(uiLayer)
-ui.Card
-ui.Detail
-ui.Provider
-ui.useUi()
-ui.resolve(tag)
-ui.keys()           // registered ui keys
-// later: ui.preload(tag), ui.has(tag, "detail")
+const views = View.react(viewLayer)
+views.Card
+views.Detail
+views.Provider
+views.useView()
+views.resolve(tag)
+views.keys()           // registered view keys
+// later: views.preload(tag), views.has(tag, "detail")
 ```
 
-Either destructured or `ui.*` — React-ergonomic either way; registry stays Effect underneath.
+Either destructured or `views.*` — React-ergonomic either way; registry stays Effect underneath.
+
+**Naming collision note:** module `View` vs React “view” / local `CardView` variables — fine if the public API is `import * as View from "…/View"` (Effect module style). Avoid `import { View } from "react"` clashes by namespace import.
 
 ### Props on `Match` today vs redesign (notes 2026-07-25)
 
@@ -368,11 +370,11 @@ Also: **`Atom.family`** / `AtomRegistry` for reactive memoized entries (differen
 | W5 | Slot DSL in v1 or `View` + helpers only? | View + helpers first; slots next |
 | W6 | Kind retained? | Yes for specialized UX only; not primary match |
 | W7 | TUI + web share Widget key + Spec; differ by surface `View`? | Yes |
-| W8 | Card vs detail | **Multiple views on one entry**; `Ui.react` returns `Card` + `Detail` (not `surface:` arg) |
+| W8 | Card vs detail | **Multiple views on one entry**; `View.react` returns `Card` + `Detail` (not `surface:` arg) |
 | W9 | Core view props | `{ tag, name? }` only; activation/nav is parent |
 | W10 | Registry implementation | Context.Service + Layer contributions (EventLog-style) |
-| W11 | Module name | Not sold on `Ui`. Candidates: **Face**, **Chrome**, **View**, **Panel**, **Presentation** / `Present`, **Exhibit**, **Skin**, **Widget** (keep). Key prefix follows name (`hyperlink/face/pool`, …). |
-| W12 | `Ui.react` return | Destructurable `{ Card, Detail, Provider, useUi, resolve }` (tools bag OK) |
+| W11 | Module name | **`View` locked** (iOS vibes). Keys: `hyperlink/view/…`. Prefer `import * as View`. |
+| W12 | `View.react` return | Destructurable `{ Card, Detail, Provider, useView, resolve }` (tools bag OK) |
 
 ### Non-goals (widget redesign)
 
