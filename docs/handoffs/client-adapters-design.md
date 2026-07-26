@@ -219,19 +219,34 @@ Type-level: `Compatible` / `BindTag` so `registry.use(Factory, View)` or `View.b
 
 **Name locked: `View`.** Key namespace e.g. `hyperlink/view/pool-card`.
 
-#### Cards vs pages (not card↔detail pair)
+#### Three view kinds (roles) — Card / Detail / Page
 
-- **Do not** tie a grid card to a full-screen “detail” on the same entry.
-- Two **roles**: `card` (compact / grid) and `page` (full chrome). Optional later: `cell` (TUI).
-- Each registered entry is **one role + one React component** (plus key + family Spec).
-- **Match is independent per role.** Replacing a card does not remove pages; adding a page does not remove cards.
+Owner (2026-07-26): not just card vs “page.” **Three kinds** (names bakeable; intent locked):
 
-#### Multi-match → paginate
+| Kind | Intent | Typical host |
+|------|--------|----------------|
+| **Card** | Compact chrome (grid / dashboard tile) | Mobile + desktop grids |
+| **Detail** | Mid-size drill-in (today’s “detail” screens) | Stack / modal / split |
+| **Page** | Full desktop (or full-bleed) chrome | Desktop shell — **not v1 priority** |
 
-- For a given tag + role, match can return **several** entries (ordered list).
-- UI shows them **paginated** (swipe / tabs / pager — host chrome).
-- Example: register a custom card for a factory → it shows **first**; the default family card still matches → **second page** in the card pager. Pages (full chrome) unchanged unless you also register/bind pages.
-- To get **only** your card (no default as second page): restrict on the handle via pipe (below).
+- **Do not** hard-tie kinds together on one registry entry (no “this card owns that detail”).
+- Each registered entry = **one kind + one React component** (+ key + family Spec).
+- **Match is independent per kind.** Custom card does not drop default Detail/Page; etc.
+- Optional later: TUI **`cell`** as another kind or as Card variant — undecided.
+
+#### Multi-match presentation (document now, don’t design chrome yet)
+
+- For a given tag + kind, match can return **several** entries (ordered list).
+- **Mobile / small:** paginate (swipe / pager).
+- **Desktop:** prefer a **tabbed** interface over pagination for the same multi-match list — **keep in mind; do not design tabs now.**
+- Example: register a custom Card → shows first; default family Card still matches → second slot in the card pager/tabs. Detail/Page lists unchanged unless those kinds are also registered/bound.
+- **Only one Card:** `.pipe(View.card(key))` allowlist on the handle (same for `View.detail` / `View.page` when needed).
+
+#### Nesting (composition)
+
+- Larger views **may nest** smaller ones: e.g. a Page composed of a Detail plus several Cards (or matched Card/Detail lists).
+- Nesting is normal React composition + calling `View.Card` / `View.Detail` (or resolve) inside a Page component — not a separate registry feature.
+- **Desktop Page kind is not priority**; nest patterns can land when Page is real. Don’t block Card/Detail Eng on Page.
 
 #### Explicit pin / restrict — pipe on the handle
 
@@ -242,36 +257,43 @@ class MyQueue extends WorkPool.Tag<MyQueue>()("app/MyQueue", { payload }).pipe(
   View.card("hyperlink/view/my-custom-card"), // only this card for this tag
 )
 
-// pages similarly when needed
-.someTag.pipe(View.page("hyperlink/view/my-page"))
+// detail / page similarly when needed
+.someTag.pipe(View.detail("hyperlink/view/my-detail"))
 ```
 
-- `View.card(key)` / `View.page(key)` = allowlist (or pin) for that role on that tag.
-- Registry can still contribute many; pipe **narrows** what Match returns for that handle.
-- Exact semantics (replace list vs prepend-only vs allowlist): bake when Eng’ing pipe — lean **allowlist when pipe present**, else full multi-match list.
+- `View.card|detail|page(key)` = allowlist for that kind on that tag when present.
+- Lean: **allowlist when pipe present**, else full multi-match list. Exact pipe semantics bake at Eng.
 
-#### Define + register (one entry = one role)
+#### Define + register (one entry = one kind)
 
 ```ts
 const PoolCard = View.make({
   key: "hyperlink/view/pool-card",
   spec: WorkPool.queueControlSpec,
-  role: "card",
+  kind: "card",
   View: PoolCardView,
 })
 
+const PoolDetail = View.make({
+  key: "hyperlink/view/pool-detail",
+  spec: WorkPool.queueControlSpec,
+  kind: "detail",
+  View: PoolDetailView,
+})
+
+// Page — registered when we care about full desktop; not v1 priority
 const PoolPage = View.make({
   key: "hyperlink/view/pool-page",
   spec: WorkPool.queueControlSpec,
-  role: "page",
-  View: PoolPageView,
+  kind: "page",
+  View: PoolPageView, // may nest <Card/> + <Detail/> inside
 })
 
 const viewLayer = Layer.mergeAll(
   View.register(PoolCard),
-  View.register(PoolPage),
-  View.bindFactory(WorkPool.Tag, PoolCard), // contributes to card matches for that family
-  View.bindFactory(WorkPool.Tag, PoolPage),
+  View.register(PoolDetail),
+  View.bindFactory(WorkPool.Tag, PoolCard),
+  View.bindFactory(WorkPool.Tag, PoolDetail),
   View.register(CustomCard),
   View.bindFactory(WorkPool.Tag, CustomCard), // custom card first; PoolCard still second unless piped
 ).pipe(Layer.provideMerge(View.base))
@@ -280,26 +302,19 @@ const viewLayer = Layer.mergeAll(
 #### React kit
 
 ```ts
-const { Card, Page, Provider, useView, resolve } = View.react(viewLayer)
-// View.Card as shortcut alias for the Card matcher is fine
+const { Card, Detail, Page, Provider, useView, resolve } = View.react(viewLayer)
+// View.Card shortcut for the Card matcher is fine
 
 <Provider>
-  <Card tag={leaf} name={label} />   {/* pager over matched cards */}
-  <Page tag={selected} />            {/* pager over matched pages */}
+  <Card tag={leaf} name={label} />     {/* multi-match → pager (mobile) / tabs later (desktop) */}
+  <Detail tag={selected} />
+  {/* <Page tag={selected} /> — desktop full chrome; not priority */}
 </Provider>
 ```
 
-```ts
-// Card matcher (conceptually)
-function Card(props: { tag: LeafTag; name?: string }) {
-  const entries = registry.match(props.tag, "card") // ordered list, respects pipe allowlist
-  return <Pager>{entries.map((e) => <e.View tag={props.tag} name={props.name} />)}</Pager>
-}
-```
+**Match inputs (no `.view` annotation):** tag-key bind → factory bind → kind bind → fallback. Multi-match = all entries for that **view kind**, ordered (TBD).
 
-**Match inputs (no `.view` annotation):** tag-key bind → factory bind → kind bind → (fallback). Multi-match = all entries that hit for that **role**, ordered (custom/registry order TBD — lean: more specific binds first, then factory, then kind defaults).
-
-**Skeleton note:** current `src/ui/View.tsx` (single entry with optional `card`/`detail` fields, single match) is **pre-v4** — reshape to role + multi-match + pipe next Eng pass.
+**Skeleton note:** `src/ui/View.tsx` is pre-v4 (card/detail fields on one entry). Reshape to **kind + multi-match**; Page can stub/no-op until prioritized.
 
 ### Props on `Match` today vs redesign (notes 2026-07-25)
 
@@ -364,19 +379,20 @@ Also: **`Atom.family`** / `AtomRegistry` for reactive memoized entries (differen
 | W4 | View Layer separate from `Atom.runtime`; `View.react` → Provider |
 | W5 | v1 thin components — no slot DSL |
 | W6 | Kind match only as an intentional bind step |
-| W7 | Web + TUI share keys; TUI may use `cell` role later |
-| W8 | **Roles `card` \| `page`** (not card+detail on one entry); **multi-match → paginate** |
+| W7 | Web + TUI share keys; TUI may use `cell` later |
+| W8 | **Kinds: `card` \| `detail` \| `page`** (independent entries); **multi-match** → pager (mobile) / **tabs on desktop (later, don’t design now)**; nesting OK (Page may compose Detail + Cards) |
 | W9 | Core props `{ tag, name? }`; activation/nav is parent |
 | W10 | Registry = Context.Service + Layer contributions (EventLog-style) |
 | W11 | Module name **`View`**; keys `hyperlink/view/…` |
-| W12 | `View.react` → `{ Card, Page, Provider, useView, resolve }` (`View.Card` shortcut OK) |
+| W12 | `View.react` → `{ Card, Detail, Page, Provider, useView, resolve }` (`View.Card` shortcut OK); **Page not v1 priority** |
 
 ### Eng order (next)
 
-1. Reshape skeleton to **role + multi-match + pager** (`card` / `page`)
-2. Handle **pipe** `View.card` / `View.page` allowlist
-3. Migrate queue defaults as separate card + page entries
+1. Reshape skeleton to **kind + multi-match** (`card` / `detail`; Page stub OK)
+2. Handle **pipe** `View.card` / `View.detail` (/ `View.page`) allowlist
+3. Migrate queue defaults as separate Card + Detail entries
 4. `Hyperlink.atom` / `query` / `fn` in parallel
+5. Desktop tabs + real Page kind — later
 
 ### Non-goals (view redesign)
 
@@ -409,4 +425,4 @@ Also: **`Atom.family`** / `AtomRegistry` for reactive memoized entries (differen
 
 ## Next conversation
 
-v4: cards/pages as separate roles, multi-match pagination, handle `.pipe(View.card|page)`. Reshape Eng’d skeleton accordingly. Ordering rules for multi-match + exact pipe semantics still to bake. TanStack / Promise adapter still on table.
+v4: kinds Card / Detail / Page; multi-match (pager now, desktop tabs later); nesting; handle pipe. Page + tabs not priority. Reshape skeleton; bake match ordering + pipe semantics. TanStack / Promise adapter still on table.
