@@ -211,58 +211,45 @@ class SpecialQueue extends WorkPool.Tag<SpecialQueue>()("app/Special", …)
 
 Type-level: `Compatible` / `BindTag` so `registry.use(Factory, Widget)` or `Widget.bind(Tag)` fails compile if handle isn’t assignable to family Spec.
 
-### Layer / DI API sketch (direction — lock names next)
+### Layer / DI API sketch (corrected — owner 2026-07-25)
 
-Feel Effect-native; base widgets + user widgets compose like Layers.
+Three steps. `Widget.make` only defines. **Registry assembly** and **matcher component** are separate.
 
 ```ts
-// Widget definition — keyed, Spec-based
-export const PoolWidget = Widget.make({
+// 1) Define (keyed, family Spec = Needs)
+const PoolWidget = Widget.make({
   key: "hyperlink/widget/pool",
-  spec: WorkPool.queueControlSpec, // whole family Spec = Needs
-  View: PoolCardView,              // or slot builder later
+  spec: WorkPool.queueControlSpec,
+  View: PoolCardView,
 })
 
-// Context service for the registry (matcher reads this)
-class WidgetRegistry extends Context.Service<WidgetRegistry>()(
-  "hyperlink/WidgetRegistry",
-) {}
-
-// Built-ins
-const baseWidgets = Layer.mergeAll(
+// 2) Add to registry — Layer / Effect-native composition
+const widgets = Layer.mergeAll(
+  Widget.base,                              // shipped widgets
   Widget.register(PoolWidget),
-  Widget.register(DaemonWidget),
-  // …
-)
-
-// App extends
-const appWidgets = Layer.mergeAll(
-  baseWidgets,
   Widget.register(WorkerPoolWidget),
-  Widget.bindFactory(WorkPool.Tag, PoolWidget), // explicit family → widget; type-gated
-  Widget.bindTag(SpecialQueue, SpecialWidget),  // instance override + type-gated
+  Widget.bindFactory(WorkPool.Tag, PoolWidget), // optional explicit family → key
+  Widget.bindTag(SpecialQueue, SpecialWidget),
 )
 
-// Atom / app layer can merge widget registry with clients
-const dashboardLayer = Layer.mergeAll(appLayer, appWidgets)
+// 3) Create the React component FROM the registry
+const Match = Widget.component(widgets)
+// Match is a component: given a handle (tag), resolve widget key / binds → render that View
 
-// React edge: one provider from Layer/Context (or ManagedRuntime)
-// Matcher component: yield* WidgetRegistry → resolve(leaf) → View
-<Dashboard runtime={Atom.runtime(appLayer)} widgets={appWidgets} group={Hub} />
-// or widgets already inside runtime Context — TBD which seam
+// Use anywhere — dashboard grid, detail pane, custom layout
+<Match tag={someLeafTag} name={…} onOpen={…} />
+// or handle-shaped prop — TBD exact prop name; intent: pass the service identity, get the right chrome
 ```
 
-**Matcher as injected service** (not a closed-over HashMap prop forever):
+**That’s the product surface:** registry in → matcher component out → **call site only passes the tag/handle**; matching is inside `Match`, not at every call site.
 
 ```ts
-// Direction
-interface WidgetRegistry {
-  readonly get: (leaf: LeafTag) => WidgetView  // applies match order above
-  readonly has: (widgetKey: string) => boolean
-}
+// Pseudo
+Widget.component(layer): (props: { tag: LeafTag; … }) => ReactElement
+// inside: registry.get(tag) → Widget.View({ tag, … })
 ```
 
-React `WidgetsProvider` becomes “provide Context from Layer” (or read from AtomRuntime context if widgets live there). Prefer **one DI story** over a parallel ad hoc React registry type long-term.
+Dashboard becomes a consumer of `Match` (or provides the same registry Layer once). Not “pass `widgets={HashMap}` into Dashboard” as the mental model — **build registry → build component → feed handles.**
 
 ### Composability / toolkit (parked detail, keep)
 
