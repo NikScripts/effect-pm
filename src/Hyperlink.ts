@@ -119,6 +119,7 @@ import {
   selectEndpoint,
   unaddressedLayer,
 } from "./internal/nodeConnect";
+import { adaptPromiseHandle } from "./internal/promiseHandle";
 // Node listen/connect used only inside functions via dynamic import where needed;
 // clientLayerForEndpoint uses clientLayer auto-connect for dialable endpoints.
 
@@ -1158,6 +1159,82 @@ export const mapSubscribable = <A, B>(
   get: Effect.map(source.get, f),
   changes: Stream.map(source.changes, f),
 });
+
+// ============================================================================
+// Promise / async handle adapter (OS edge — not a Spec leaf)
+// ============================================================================
+
+/**
+ * Promise-shaped view of a {@link Subscribable}: lazy `get` (fresh Promise each access) plus
+ * `changes` as an `AsyncIterable`.
+ *
+ * @category models
+ * @public
+ */
+export interface PromiseSubscribable<A> {
+  readonly get: Promise<A>;
+  readonly changes: AsyncIterable<A>;
+}
+
+/**
+ * A Hyperlink service handle adapted to Promise / async — what {@link promise} returns. Every
+ * `Effect` becomes a `Promise` (failures reject), every `Stream` an `AsyncIterable`, {@link ref}
+ * fields become {@link PromiseSubscribable}, nested groups recurse, plain {@link value}s pass through.
+ *
+ * @category models
+ * @public
+ */
+export type PromiseOf<S> = {
+  readonly [K in keyof S]: S[K] extends Subscribable<infer A>
+    ? PromiseSubscribable<A>
+    : S[K] extends Stream.Stream<infer A, infer _E, infer _R>
+      ? AsyncIterable<A>
+      : S[K] extends Effect.Effect<infer A, infer _E, infer _R>
+        ? Promise<A>
+        : S[K] extends (...args: infer Args) => Effect.Effect<infer A, infer _E, infer _R>
+          ? (...args: Args) => Promise<A>
+          : S[K] extends (...args: infer Args) => Stream.Stream<infer A, infer _E, infer _R>
+            ? (...args: Args) => AsyncIterable<A>
+            : S[K] extends object
+              ? PromiseOf<S[K]>
+              : S[K];
+};
+
+/**
+ * Adapt a Hyperlink **service handle** to Promise / async — the OS edge for non-Effect consumers
+ * (scripts, Next handlers, TanStack `queryFn`). Not a Spec builder: wrap the handle you already
+ * hold from {@link layer} / {@link client} (typically via `ManagedRuntime.runPromise(Tag)`).
+ *
+ * ```ts
+ * const runtime = ManagedRuntime.make(Hyperlink.layer(Counter, impl))
+ * const handle = await runtime.runPromise(Counter)
+ * const api = Hyperlink.promise(handle)
+ * await api.add(1)
+ * console.log(await api.current)
+ * for await (const n of api.count.changes) { … }
+ * ```
+ *
+ * Optional `context` runs Effects / Streams that still need services (e.g. {@link Local} on a
+ * local-layer handle). Default is empty context — fine for wire clients whose methods are `R = never`.
+ * Failures **reject** the Promise / async iterator (no Result wrapper).
+ *
+ * @category adapters
+ * @public
+ */
+export function promise<S extends object>(service: S): PromiseOf<S>;
+export function promise<S extends object, R>(
+  service: S,
+  context: Context.Context<R>,
+): PromiseOf<S>;
+export function promise<S extends object, R = never>(
+  service: S,
+  context?: Context.Context<R>,
+): PromiseOf<S> {
+  return adaptPromiseHandle(
+    service,
+    context ?? (Context.empty() as Context.Context<R>),
+  ) as PromiseOf<S>;
+}
 
 // ============================================================================
 // Impl transform — walk an impl per its spec and map every Effect method
