@@ -5151,6 +5151,66 @@ export const isIdentity = (tag: unknown): boolean =>
   (tag as { readonly [identitySym]?: true })[identitySym] === true;
 
 /**
+ * Where opt-in View chrome pins (`Hyperlink.components`) are stowed on a resource tag.
+ * UI match reads this; absent ⇒ registry binds. @internal
+ */
+export const componentsSym: unique symbol = Symbol.for(
+  "hyperlink-ts/Hyperlink/components",
+);
+
+/**
+ * A View-service-shaped pin entry — `key` + `kind` (+ whatever else View attaches).
+ * Kept structural so {@link components} does not import `ui/View`.
+ *
+ * @public
+ */
+export type ComponentPin = {
+  readonly key: string;
+  readonly kind: string;
+};
+
+/**
+ * Opt-in chrome override: pin View services on a Hyperlink resource tag.
+ * Single array; UI partitions by `kind` (`card` / `detail` / `page`). Replaces registry
+ * binds for kinds that appear. A second pipe **replaces** the whole list.
+ *
+ * @example
+ * ```ts
+ * class Special extends WorkPool.Tag<Special>()("app/Special", { payload }).pipe(
+ *   Hyperlink.components([CustomCard, PoolCard, CustomDetail]),
+ * )
+ * ```
+ *
+ * @category ui
+ * @public
+ */
+export const components = <const V extends ComponentPin>(
+  views: ReadonlyArray<V>,
+) =>
+  <T extends object>(tag: T): T & { readonly [componentsSym]: ReadonlyArray<V> } =>
+    Object.assign(tag, { [componentsSym]: views });
+
+/**
+ * Read {@link components} pins on a tag, if any.
+ *
+ * @category ui
+ * @public
+ */
+export const componentsOf = (
+  tag: unknown,
+): ReadonlyArray<ComponentPin> | undefined => {
+  if (
+    (typeof tag === "object" || typeof tag === "function") &&
+    tag !== null &&
+    componentsSym in tag
+  ) {
+    const value = (tag as { readonly [componentsSym]: unknown })[componentsSym];
+    return Array.isArray(value) ? (value as ReadonlyArray<ComponentPin>) : undefined;
+  }
+  return undefined;
+};
+
+/**
  * **Lookup-resolved nodeless client** (D7/D4) — you do **not** pass a {@link Node}; Lookup
  * chooses the dial target. Contrast {@link client}`(Tag, node)`, where **you** name the Node.
  *

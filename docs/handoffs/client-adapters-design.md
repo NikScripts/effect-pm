@@ -181,7 +181,7 @@ View key    ≠ service key        different namespaces; don’t collide with ta
 
 ```ts
 class SpecialQueue extends WorkPool.Tag<SpecialQueue>()("app/Special", …)
-SpecialQueue.pipe(View.card("hyperlink/view/special-card"))
+SpecialQueue.pipe(Hyperlink.components([SpecialCard]))
 ```
 
 **Dispatch:** tag.key binds → stamped `kindOf(tag)` binds → fallback (W3). Never RPC `groupId`. Never short `"queue"` / `"pool"`.
@@ -230,7 +230,7 @@ Owner (2026-07-26): not just card vs “page.” **Three kinds** (names bakeable
 - **Mobile / small:** paginate (swipe / pager).
 - **Desktop:** prefer a **tabbed** interface over pagination for the same multi-match list — **keep in mind; do not design tabs now.**
 - Example: register a custom Card → shows first; default family Card still matches → second slot in the card pager/tabs. Detail/Page lists unchanged unless those kinds are also registered/bound.
-- **Only one Card:** `.pipe(View.card(key))` allowlist on the handle (same for `View.detail` / `View.page` when needed).
+- **Pin chrome:** `.pipe(Hyperlink.components([CustomCard]))` (array; partition by kind).
 
 #### Nesting (composition)
 
@@ -244,15 +244,9 @@ Not a Tag options `.view` field (parked). Owner: **pipe onto the handle/tag**:
 
 ```ts
 class MyQueue extends WorkPool.Tag<MyQueue>()("app/MyQueue", { payload }).pipe(
-  View.card("hyperlink/view/my-custom-card"), // only this card for this tag
+  Hyperlink.components([CustomCard, CustomDetail]), // kinds present replace binds
 )
-
-// detail / page similarly when needed
-.someTag.pipe(View.detail("hyperlink/view/my-detail"))
 ```
-
-- `View.card|detail|page(key)` = allowlist for that kind on that tag when present.
-- Lean: **allowlist when pipe present**, else full multi-match list. Exact pipe semantics bake at Eng.
 
 #### Same View handle, different TSX Layer (web ↔ TUI) — LOCKED
 
@@ -307,7 +301,7 @@ End-to-end at runtime (one process):
 ```
 View.make / View.Tag → View service (key, kind, spec; Svc = Component)
 View.bind* + Layer.succeed(ViewSvc, Comp)    // binds + provide implementations
-View.react(viewLayer)                        // build; kit typed by ProvidedViews
+View.react(viewLayer)                        // run Layer (R must be never) → kit
   └─ resolve Component from Context for matched View services
 <Card tag={leaf} />                          // match → Resolved[]; render provided Comp
 ```
@@ -331,14 +325,15 @@ type Handle = {
 
 | Table | Key | Value | Written by |
 |-------|-----|-------|------------|
-| `skins` | `ViewKey` | `{ handle, Component }` | `View.register(handle, Comp)` |
-| `byTagKey` | `tag.key` | `ViewKey[]` (ordered) | `View.bindTag` |
-| `byKind` | stamped contract kind (`WorkPool.kind`, …) | `ViewKey[]` | `View.bindKind` |
+| `byTagKey` | `tag.key` | `AnyView[]` (ordered) | `View.bindTag` |
+| `byKind` | stamped contract kind (`WorkPool.kind`, …) | `AnyView[]` | `View.bindKind` |
 
-- **No `groupId` in View.** RPC `groupId` is Effect wire-only; View match uses **`tag.key`** + **`kindOf(tag)`** (canonical ids like `hyperlink-ts/WorkPool`). **`View.bindFactory` / `byFactoryGroupId` are nonstandard — remove.**
-- **Duplicate `register` same key** in one Layer build → `DuplicateViewKey` (fail build).
-- Web vs TUI never share a Registry instance — each `View.react(layer)` builds its own snapshot.
-- Binds may list a key that has no skin → that candidate is **dropped at match** (skip missing skins). Do **not** fail `Layer.build`. Fallback only if the resolved list is empty after filtering (W3).
+- **View service** from `View.make` = `Context.Service` whose Svc is `ViewComponent`, plus `key` / `kind` / `spec`.
+- **Provide TSX** with `Layer.succeed(PoolCard, Comp)` (or `effect` / `sync`).
+- **Binds require** those View services (`yield*` at bind build) so they appear in Layer `R` until provided.
+- **No `groupId` in View.** Match: `tag.key` → `kindOf(tag)` → fallback; pins via `Hyperlink.components([…])` replace per kind.
+- **`View.react(layer)`** requires `R = never` (runs the Layer). Missing provide ⇒ type error.
+- Runtime W14 skip = last resort only (unpiped/dynamic), not for declared binds.
 
 **3. `match(tag, viewKind) → ReadonlyArray<Resolved>`**
 
@@ -363,28 +358,7 @@ map ViewKey → skins.get → skip missing skins → Resolved[]
 
 **Note:** Tag `.view` annotation is **parked** (W2 = pipe). Do not use annotation as match step 1 in Eng. Never key View dispatch on RPC `groupId` or short strings `"queue"` / `"pool"`.
 
-**4. Pipe allowlist (identity on the service handle)** — LOCKED (owner 2026-07-26)
-
-```ts
-// Single — each call OVERRIDES the previous allowlist for that viewKind
-someTag.pipe(View.card("hyperlink/view/my-custom-card"))
-someTag.pipe(View.card(CustomCard)) // Handle | ViewKey
-
-// Multiple (paginate) — array overload sets the full list in one shot
-someTag.pipe(View.card([CustomCard, PoolCard]))
-// same for View.detail / View.page
-```
-
-| Rule | Behavior |
-|------|----------|
-| `View.card(one)` | **Replace** card allowlist with `[one]` (overrides prior `View.card`) |
-| `View.card([...])` | **Replace** card allowlist with that array (order = pager order) |
-| No pipe for that viewKind | Full multi-match from `bindTag` → `bindKind` |
-| Pipe present | Match uses **only** allowlisted keys (replace binds for that viewKind) |
-| Missing skin for a key | Skip (W14); empty → fallback |
-
-- Stores allowlist on the **service tag** via symbol bag (like `kindSym` / readiness) — not a public `views` field, not registry-side pin Layers.
-- Detail/Page independently: piping only `View.card` leaves detail/page on normal binds.
+**4. Pipe allowlist** — see **Pipe API — `Hyperlink.components(Handle[])`** (W16/W19). Single array; partition by `kind`; replace binds per kind present; second pipe replaces whole list.
 
 **5. React kit**
 
@@ -405,11 +379,10 @@ View.react(layer) → {
 
 | Package / folder | Owns |
 |------------------|------|
-| Shared (`hyperlink-ts/ui` or `ui/views/*`) | Handles + bind Layers (`poolBinds`) |
-| Web app / `ui/web` | `View.register(handle, WebComp)` Layers + DOM components |
-| TUI app / `ui/tui` | `View.register(handle, TuiComp)` Layers + Ink components |
+| Shared | View services (`View.make`) + bind Layers |
+| App (web or TUI) | `Layer.succeed(View, Comp)` for that process + `View.react(fullyProvidedLayer)` |
 
-`View.react(webLayer)` vs `View.react(tuiLayer)` is the only platform fork at the Dashboard edge.
+One provide Layer per process — not web+TUI in the same merge.
 
 **Locked (grilling):** W14–W19; View services + Layer-provided TSX (not skins.register map); components = single array; missing skin = not provided.
 
@@ -515,6 +488,28 @@ View.react(Layer.mergeAll(binds, View.bindKind(WorkPool.kind, CustomCard), chrom
 
 **Web vs TUI:** each app merges binds + its own `Layer.succeed` chrome, then `View.react` — same View services, different Svc values.
 
+#### View.make / bind → Layer `R` — LOCKED lean (2026-07-26)
+
+```ts
+const PoolCard = View.make({
+  key: "hyperlink/view/pool-card",
+  kind: "card",
+  spec: WorkPool.queueControlSpec,
+})
+// PoolCard is a Context.Service<ViewComponent> + { key, kind, spec }
+
+View.bindKind(WorkPool.kind, PoolCard)
+// Layer.effectDiscard: yield* Registry; yield* PoolCard; record bind
+// ⇒ Layer<never, never, Registry | PoolCard>
+
+Layer.succeed(PoolCard, PoolCardView)  // discharges PoolCard from R
+
+View.react(layer)  // layer: Layer<Registry, E, never> — runs build (runSync/runPromise)
+```
+
+`Hyperlink.components([CustomCard, …])` stamps the array on the HS tag (symbol). Match: if pin present for a kind, use those View services (order preserved); else binds. Pinned services must still be `Layer.succeed`’d into the same layer so `R = never`.
+
+
 #### Define + register (one entry = one kind)
 
 ```ts
@@ -560,7 +555,7 @@ const { Card, Detail, Page, Provider, useView, resolve } = View.react(viewLayer)
 
 **Match inputs (no `.view` annotation, no `groupId`):** tag-key bind → stamped `kindOf` bind → fallback. Multi-match = all entries for that **view kind**, ordered (TBD).
 
-**Skeleton note:** `src/ui/View.tsx` is pre-v4 (card/detail fields on one entry; component on `make`). Reshape to **kind + multi-match + register(handle, Component)**; Page can stub/no-op until prioritized.
+**Eng:** View services + `Layer.succeed` + `View.react` (`R = never`); `Hyperlink.components` pin; Page stub OK.
 
 ### Props on `Match` today vs redesign (notes 2026-07-25)
 
@@ -601,7 +596,7 @@ Also: **`Atom.family`** / `AtomRegistry` for reactive memoized entries (differen
 | # | Decision |
 |---|----------|
 | W1 | Keys `hyperlink/view/<name>`; uniqueness enforced at `register` |
-| W2 | Explicit pin/restrict via **`.pipe(View.card(key))` / `View.page(key)` on the handle** — not Tag `.view` field (parked) |
+| W2 | Explicit pin via **`Hyperlink.components(View[])`** on the HS handle — not Tag `.view` field (parked) |
 | W3 | Missing match → fallback (no throw at render) |
 | W4 | View Layer separate from `Atom.runtime`; `View.react` → Provider |
 | W5 | v1 thin components — no slot DSL |
@@ -613,7 +608,7 @@ Also: **`Atom.family`** / `AtomRegistry` for reactive memoized entries (differen
 | W11 | Module name **`View`**; keys `hyperlink/view/…` |
 | W12 | `View.react` → `{ Card, Detail, Page, Provider, useView, resolve }` (`View.Card` shortcut OK); **Page not v1 priority** |
 | W13 | **View = Context service; TSX = Layer-provided Svc** — not `register(handle, Comp)` map; `Layer.succeed(View, Comp)` is the skin seam |
-| W14 | Missing skin for a bound key → **skip at match**; never fail Layer build; fallback only if list empty |
+| W14 | Runtime skip-at-match = **last resort** (unpiped/dynamic). Declared binds/pins → must be provided (`View.react` `R = never`) |
 | W15 | **No `groupId` in View/UI dispatch** — RPC wire only. Family bind = stamped `kindOf` (`hyperlink-ts/WorkPool`, …). Kill `bindFactory` / short `"queue"`\|`"pool"` kinds |
 | W16 | Pipe allowlist on service tag (symbol bag); present kinds **replace** binds; order within a kind = pager |
 | W17 | View handles on HS tag are **opt-in override only** (not defaults). Default chrome = registry binds. **When piped**, type-check pins |
@@ -660,4 +655,4 @@ Also: **`Atom.family`** / `AtomRegistry` for reactive memoized entries (differen
 
 ## Next conversation
 
-v4: kinds Card / Detail / Page; multi-match; **shared View handle + platform TSX Layers (web/TUI)**; handle pipe. Page + tabs not priority. Reshape skeleton (`register(handle, Component)`); bake match ordering + pipe. TanStack / Promise adapter still on table.
+View services + Layer-provided TSX; `Hyperlink.components([…])`; `View.react` `R = never`. Eng skeleton; Spec gate + Group later. TanStack / Promise adapter still on table.
