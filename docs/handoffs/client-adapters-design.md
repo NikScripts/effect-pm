@@ -264,6 +264,57 @@ class MyQueue extends WorkPool.Tag<MyQueue>()("app/MyQueue", { payload }).pipe(
 - `View.card|detail|page(key)` = allowlist for that kind on that tag when present.
 - Lean: **allowlist when pipe present**, else full multi-match list. Exact pipe semantics bake at Eng.
 
+#### Same View handle, different TSX Layer (web ↔ TUI) — LOCKED
+
+Owner (2026-07-26): **identity and matching are shared; the React/Ink component is Layer DI.**
+
+| Piece | Lives where | Shared? |
+|-------|-------------|---------|
+| View **handle** (key + kind + Spec / Needs) | `View.make` / `View.Tag` — no TSX | Yes — web + TUI + binds/pipe |
+| Match / bind / pipe allowlist | Effect registry Layer | Yes |
+| **TSX** (DOM React vs Ink / TUI) | `View.register(handle, Component)` in a **platform Layer** | No — swap Layer |
+
+```ts
+// Shared identity — no component baked in
+const PoolCard = View.make({
+  key: "hyperlink/view/pool-card",
+  kind: "card",
+  spec: WorkPool.queueControlSpec,
+})
+const PoolDetail = View.make({
+  key: "hyperlink/view/pool-detail",
+  kind: "detail",
+  spec: WorkPool.queueControlSpec,
+})
+
+// Same binds on both platforms
+const poolBinds = Layer.mergeAll(
+  View.bindFactory(WorkPool.Tag, PoolCard),
+  View.bindFactory(WorkPool.Tag, PoolDetail),
+)
+
+// Web chrome
+const webViews = Layer.mergeAll(
+  View.register(PoolCard, WebPoolCard),
+  View.register(PoolDetail, WebPoolDetail),
+  poolBinds,
+).pipe(Layer.provideMerge(View.base))
+
+// TUI chrome — same handles, Ink components
+const tuiViews = Layer.mergeAll(
+  View.register(PoolCard, TuiPoolCard),
+  View.register(PoolDetail, TuiPoolDetail),
+  poolBinds,
+).pipe(Layer.provideMerge(View.base))
+
+const { Card, Detail, Provider } = View.react(webViews) // or tuiViews
+```
+
+- **Do not** put React components on service Tags or on the shared handle definition.
+- Optional `View.Tag` (identity-only Context/Tag shape) is fine if it stays free of TSX; Eng may keep `View.make` as the handle factory.
+- TUI does **not** need a separate `cell` kind for v1 if Card/Detail Ink skins are enough — `cell` remains optional later (W7).
+- Precedent vibe: headless identity + skin Layer (MUI slots / theme overrides / Context), but **Effect `Layer` is the DI**, not a React-only theme object.
+
 #### Define + register (one entry = one kind)
 
 ```ts
@@ -271,30 +322,25 @@ const PoolCard = View.make({
   key: "hyperlink/view/pool-card",
   spec: WorkPool.queueControlSpec,
   kind: "card",
-  View: PoolCardView,
 })
-
 const PoolDetail = View.make({
   key: "hyperlink/view/pool-detail",
   spec: WorkPool.queueControlSpec,
   kind: "detail",
-  View: PoolDetailView,
 })
-
-// Page — registered when we care about full desktop; not v1 priority
+// Page — when we care about full desktop; not v1 priority
 const PoolPage = View.make({
   key: "hyperlink/view/pool-page",
   spec: WorkPool.queueControlSpec,
   kind: "page",
-  View: PoolPageView, // may nest <Card/> + <Detail/> inside
 })
 
 const viewLayer = Layer.mergeAll(
-  View.register(PoolCard),
-  View.register(PoolDetail),
+  View.register(PoolCard, PoolCardView),
+  View.register(PoolDetail, PoolDetailView),
   View.bindFactory(WorkPool.Tag, PoolCard),
   View.bindFactory(WorkPool.Tag, PoolDetail),
-  View.register(CustomCard),
+  View.register(CustomCard, CustomCardView),
   View.bindFactory(WorkPool.Tag, CustomCard), // custom card first; PoolCard still second unless piped
 ).pipe(Layer.provideMerge(View.base))
 ```
@@ -314,7 +360,7 @@ const { Card, Detail, Page, Provider, useView, resolve } = View.react(viewLayer)
 
 **Match inputs (no `.view` annotation):** tag-key bind → factory bind → kind bind → fallback. Multi-match = all entries for that **view kind**, ordered (TBD).
 
-**Skeleton note:** `src/ui/View.tsx` is pre-v4 (card/detail fields on one entry). Reshape to **kind + multi-match**; Page can stub/no-op until prioritized.
+**Skeleton note:** `src/ui/View.tsx` is pre-v4 (card/detail fields on one entry; component on `make`). Reshape to **kind + multi-match + register(handle, Component)**; Page can stub/no-op until prioritized.
 
 ### Props on `Match` today vs redesign (notes 2026-07-25)
 
@@ -322,32 +368,13 @@ const { Card, Detail, Page, Provider, useView, resolve } = View.react(viewLayer)
 
 **`onOpen` (today):** **not** a generic “opened” listener. Grid **cards** call it on click/activate so the **Dashboard router** can drill in (`route.open(name)`). The card doesn’t own navigation — parent does. Detail views use `onBack` / `onOpenLogs` instead.
 
-Redesign lean: **don’t bake dashboard navigation into the core Match props.** Core = `{ tag }` (+ optional `name`). Navigation/chrome size is a **surface** or parent concern (see card vs detail below).
+Redesign lean: **don’t bake dashboard navigation into the core Match props.** Core = `{ tag }` (+ optional `name`). Navigation is a parent/shell concern.
 
-### Card vs detail (small vs full) — separate?
+### Card vs detail vs page — separate kinds (supersedes one-entry multi-field)
 
-**Today:** tied only by **convention + Dashboard wiring** — `QueueCard` + `onOpen` → `QueueDetail` switched in `Dashboard.tsx` by `isQueueTag`. Not one widget object with two sizes; two components, one kind switch in the shell.
+**Today:** tied by **convention + Dashboard wiring** — `QueueCard` + `onOpen` → `QueueDetail` in `Dashboard.tsx`. Two components, one kind switch in the shell.
 
-**Should they be separated?** **Yes.** Same family Spec / view **key**, different **named view fields** on one entry (not a `surface:` arg — see W8):
-
-| View field | Job |
-|------------|-----|
-| `card` (compact) | Grid cell; may emit “activate” to parent |
-| `detail` (full) | Drill-in page; owns denser chrome |
-| (later) `cell` / TUI | Ink compact |
-
-```ts
-const Pool = View.make({
-  key: "hyperlink/view/pool",
-  spec: WorkPool.queueControlSpec,
-  card: PoolCardView,
-  detail: PoolDetailView,
-})
-
-const { Card, Detail, Provider } = View.react(viewLayer)
-```
-
-Same registry + match rules; each React component picks a different view field on the entry. Parent owns routing (`onActivate` / router), not the registry.
+**Locked (W8):** separate registry entries per kind (`card` / `detail` / `page`), not `card`+`detail` fields on one `make`. Parent owns routing; web vs TUI swaps TSX via Layer (above).
 
 ### How Effect handles registries (precedent)
 
@@ -379,20 +406,22 @@ Also: **`Atom.family`** / `AtomRegistry` for reactive memoized entries (differen
 | W4 | View Layer separate from `Atom.runtime`; `View.react` → Provider |
 | W5 | v1 thin components — no slot DSL |
 | W6 | Kind match only as an intentional bind step |
-| W7 | Web + TUI share keys; TUI may use `cell` later |
+| W7 | **Same View handle (key+kind+Spec), different TSX Layer** for web vs TUI; matching/binds shared; optional `cell` kind later if Ink needs it |
 | W8 | **Kinds: `card` \| `detail` \| `page`** (independent entries); **multi-match** → pager (mobile) / **tabs on desktop (later, don’t design now)**; nesting OK (Page may compose Detail + Cards) |
 | W9 | Core props `{ tag, name? }`; activation/nav is parent |
 | W10 | Registry = Context.Service + Layer contributions (EventLog-style) |
 | W11 | Module name **`View`**; keys `hyperlink/view/…` |
 | W12 | `View.react` → `{ Card, Detail, Page, Provider, useView, resolve }` (`View.Card` shortcut OK); **Page not v1 priority** |
+| W13 | **No TSX on shared handle / service Tag** — `View.register(handle, Component)` is the skin seam |
 
 ### Eng order (next)
 
-1. Reshape skeleton to **kind + multi-match** (`card` / `detail`; Page stub OK)
+1. Reshape skeleton to **kind + multi-match** + **`register(handle, Component)`** (`card` / `detail`; Page stub OK)
 2. Handle **pipe** `View.card` / `View.detail` (/ `View.page`) allowlist
-3. Migrate queue defaults as separate Card + Detail entries
-4. `Hyperlink.atom` / `query` / `fn` in parallel
-5. Desktop tabs + real Page kind — later
+3. Split web vs TUI contribution Layers over the same handles (even if TUI skins land after web)
+4. Migrate queue defaults as separate Card + Detail entries
+5. `Hyperlink.atom` / `query` / `fn` in parallel
+6. Desktop tabs + real Page kind — later
 
 ### Non-goals (view redesign)
 
@@ -425,4 +454,4 @@ Also: **`Atom.family`** / `AtomRegistry` for reactive memoized entries (differen
 
 ## Next conversation
 
-v4: kinds Card / Detail / Page; multi-match (pager now, desktop tabs later); nesting; handle pipe. Page + tabs not priority. Reshape skeleton; bake match ordering + pipe semantics. TanStack / Promise adapter still on table.
+v4: kinds Card / Detail / Page; multi-match; **shared View handle + platform TSX Layers (web/TUI)**; handle pipe. Page + tabs not priority. Reshape skeleton (`register(handle, Component)`); bake match ordering + pipe. TanStack / Promise adapter still on table.
