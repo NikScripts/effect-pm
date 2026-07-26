@@ -354,7 +354,7 @@ type Handle = {
 
 - **Duplicate `register` same key** in one Layer build → `DuplicateViewKey` (fail build).
 - Web vs TUI never share a Registry instance — each `View.react(layer)` builds its own snapshot.
-- Binds may list a key that has no skin yet → that candidate is **dropped at match** (or build-time check — open).
+- Binds may list a key that has no skin → that candidate is **dropped at match** (skip missing skins). Do **not** fail `Layer.build`. Fallback only if the resolved list is empty after filtering (W3).
 
 **3. `match(tag, kind) → ReadonlyArray<Resolved>`**
 
@@ -415,7 +415,9 @@ View.react(layer) → {
 
 `View.react(webLayer)` vs `View.react(tuiLayer)` is the only platform fork at the Dashboard edge.
 
-**Open (grilling):** handle brand (`make` vs `View.Tag`); missing-skin at bind vs match; multi-match host chrome; pipe storage shape; compile-time Spec gate timing.
+**Locked (grilling):** missing skin → skip at match (W14).
+
+**Open (grilling):** handle brand (`make` vs `View.Tag`); multi-match host chrome; pipe storage shape; compile-time Spec gate timing; candidate order across bind tiers.
 
 #### Define + register (one entry = one kind)
 
@@ -515,6 +517,7 @@ Also: **`Atom.family`** / `AtomRegistry` for reactive memoized entries (differen
 | W11 | Module name **`View`**; keys `hyperlink/view/…` |
 | W12 | `View.react` → `{ Card, Detail, Page, Provider, useView, resolve }` (`View.Card` shortcut OK); **Page not v1 priority** |
 | W13 | **No TSX on shared handle / service Tag** — `View.register(handle, Component)` is the skin seam |
+| W14 | Missing skin for a bound key → **skip at match**; never fail Layer build; fallback only if list empty |
 
 ### Eng order (next)
 
