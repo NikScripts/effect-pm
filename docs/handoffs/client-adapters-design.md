@@ -315,6 +315,108 @@ const { Card, Detail, Provider } = View.react(webViews) // or tuiViews
 - TUI does **not** need a separate `cell` kind for v1 if Card/Detail Ink skins are enough — `cell` remains optional later (W7).
 - Precedent vibe: headless identity + skin Layer (MUI slots / theme overrides / Context), but **Effect `Layer` is the DI**, not a React-only theme object.
 
+#### Mechanics (proposed — grilling 2026-07-26)
+
+End-to-end at runtime (one platform process):
+
+```
+View.make → Handle (key, kind, spec)          // module load, no Layer
+View.bind* / View.register(handle, Comp)     // contribution Layers
+View.react(platformLayer)                    // Layer.build once → Registry snapshot
+  └─ Provider value = RegistryService
+<Card tag={leaf} />                          // match(tag, "card") → Resolved[]
+  └─ pager/tabs host renders Resolved[i].Component({ tag, name? })
+```
+
+**1. Handle (identity only)**
+
+```ts
+type ViewKind = "card" | "detail" | "page"
+type Handle = {
+  readonly key: ViewKey           // "hyperlink/view/pool-card"
+  readonly kind: ViewKind
+  readonly spec: unknown          // family Spec / Needs SSOT (typed later)
+}
+```
+
+- `View.make({ key, kind, spec })` returns a Handle. **No Component field.**
+- Pipe targets and binds refer to Handles (or their keys).
+- Same Handle module can be imported by web and TUI packages.
+
+**2. Registry tables (built by Layers)**
+
+| Table | Key | Value | Written by |
+|-------|-----|-------|------------|
+| `skins` | `ViewKey` | `{ handle, Component }` | `View.register(handle, Comp)` |
+| `byTagKey` | `tag.key` | `ViewKey[]` (ordered) | `View.bindTag` |
+| `byFactory` | `groupId` | `ViewKey[]` | `View.bindFactory` |
+| `byKind` | hyperlink kind | `ViewKey[]` | `View.bindKind` |
+
+- **Duplicate `register` same key** in one Layer build → `DuplicateViewKey` (fail build).
+- Web vs TUI never share a Registry instance — each `View.react(layer)` builds its own snapshot.
+- Binds may list a key that has no skin yet → that candidate is **dropped at match** (or build-time check — open).
+
+**3. `match(tag, kind) → ReadonlyArray<Resolved>`**
+
+```ts
+type Resolved = {
+  readonly handle: Handle
+  readonly Component: ViewComponent
+}
+```
+
+Collect candidates **for that kind only**, in order, then filter by pipe allowlist if present:
+
+```
+candidates = []
+// A. exact tag.key binds whose handle.kind === kind
+// B. factory groupId binds (tag.groupId) whose handle.kind === kind
+// C. intentional kind binds (kindOf(tag)) whose handle.kind === kind
+// D. (optional) fallback handle for that kind — never empty render
+dedupe by ViewKey, preserve first-seen order
+if tag has pipe allowlist for this kind → intersect / replace with allowlisted keys
+map ViewKey → skins.get → skip missing skins → Resolved[]
+```
+
+**Note:** Tag `.view` annotation is **parked** (W2 = pipe). Do not use annotation as match step 1 in Eng.
+
+**4. Pipe allowlist (identity on the service handle)**
+
+```ts
+someTag.pipe(View.card("hyperlink/view/my-custom-card"))
+```
+
+- Stores allowlist metadata on the **service tag** (not the View handle): e.g. `views?: { card?: ViewKey[], detail?: … }`.
+- When present for a kind: match returns **only** those keys (that still have skins), in pipe order — not the full multi-match list.
+- When absent: full multi-match list from binds.
+
+**5. React kit**
+
+```ts
+View.react(layer) → {
+  Provider,          // React context = Registry snapshot
+  Card, Detail, Page,// match(tag, kind) + host (pager stub OK)
+  useView, resolve,  // resolve(tag, kind) → Resolved[]
+  registry,
+}
+```
+
+- `Card` / `Detail` are **matchers + hosts**, not the leaf chrome.
+- Leaf chrome = `Resolved.Component`.
+- Navigation (`onOpen` / route) stays outside core `ViewProps` (W9).
+
+**6. Platform split packaging (lean)**
+
+| Package / folder | Owns |
+|------------------|------|
+| Shared (`hyperlink-ts/ui` or `ui/views/*`) | Handles + bind Layers (`poolBinds`) |
+| Web app / `ui/web` | `View.register(handle, WebComp)` Layers + DOM components |
+| TUI app / `ui/tui` | `View.register(handle, TuiComp)` Layers + Ink components |
+
+`View.react(webLayer)` vs `View.react(tuiLayer)` is the only platform fork at the Dashboard edge.
+
+**Open (grilling):** handle brand (`make` vs `View.Tag`); missing-skin at bind vs match; multi-match host chrome; pipe storage shape; compile-time Spec gate timing.
+
 #### Define + register (one entry = one kind)
 
 ```ts
