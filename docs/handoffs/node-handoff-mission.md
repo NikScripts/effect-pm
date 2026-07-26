@@ -1,5 +1,9 @@
 # Mission: node handoff (zero-downtime updates, cross-version migration)
 
+> **2026-07-25:** Active agent entrypoint is [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md)
+> (launcher redesign may start from scratch; this mission doc remains the goal framing for handoff /
+> cross-version migration). Nothing here is an approved Eng plan.
+
 Owner directive, 2026-07-22. This is the next major goal for the library. This doc states the
 mission and its boundaries; the design itself is NOT done and must go through the normal
 decisions-doc bake with the owner before any implementation.

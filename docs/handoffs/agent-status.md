@@ -7,7 +7,7 @@
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **4** | `cursor/hyperservice-open-deps-5679` | Managing Layers polish | **Eng’d** — tip-synced | same tip as `integration` | docs | Listen family + Soft-bake in getting-started | 2026-07-25 |
-| **G / TUI** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity | **design** — client adapters notes; tip-synced | same tip as `integration` | prior suites green | Notes: [`client-adapters-design.md`](./client-adapters-design.md) — Promise / TanStack / tRPC-shape / Effect-reactive helpers; Eng TBD | 2026-07-24 |
+| **G / TUI** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity · `View` redesign | **design** — adapters + View registry; tip-synced | same tip as `integration` | prior suites green | Notes: [`client-adapters-design.md`](./client-adapters-design.md). Launcher handoff spun out: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md) | 2026-07-26 |
 | **1** | `cursor/docs-corpus-phase3-ce05` | [Examples book](./agent-01-examples-book.md) · [Phase 3](./agent-01-docs-corpus-phase3-plan.md) | **E1 in flight** — Examples hub + queue Twoslash pairs | branch tip | hub + 2 queue docs | **Next:** E2 forms/resource pairs | 2026-07-15 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
 | **3** | `cursor/logs-store-followers-plan-906e` | [identity-coordinator](./identity-coordinator.md) · [loud-failures](./loud-failures-design.md) | **idle** — Soft / default-on verify / F4 / lineId memo Eng’d | same tip as `integration` | typecheck + targeted suites green | Ready for next major | 2026-07-21 |
@@ -27,8 +27,9 @@
 ### Active (owner approval required)
 1. **Agent 4:** Managing Layers polished (listen family + Soft-bake). Next chapter (Creating a Hyperlink) on owner call.
 2. **Agent 1:** Examples book (`cursor/docs-corpus-phase3-ce05`) — hub in sidebar; Twoslash-paired `docs/examples/**` not in sidebar; forms first. Agent B: content glob + exclude example docs from More. Legacy Phase 3 leftovers background. Ignore effect β98 (Agent C).
-3. **Agent 3:** **idle** — Soft fail-loud, default-on verify, F4 `contractHash`, store-layer lineId memo Eng’d (owner “All of them”). Not handles/site.
+3. **Agent 3:** **idle** — Soft fail-loud, default-on verify, F4 `contractHash`, store-layer lineId memo Eng’d. Not handles/site. Next major may be launcher/handoff — see [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md) (**nothing launcher locked**; drift Eng is keep).
 4. **Agent D (+ peers):** named handles — do not reassign to Agent 3.
+4b. **Launcher / handoff (unassigned):** brief [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md) — dumb spawn-and-exit launcher; node owns process; Lookup directs; version upgrade → handoff. Prior [`launcher-decisions.md`](./launcher-decisions.md) = reference only.
 
 ### Ready / owner calls
 5. **Node catalog + identity lookup** — design [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md); Phase-2–3 catalog/directory/**D3**/**D4**/**D7**/`Node.Prototype` Eng on tip; **`askIncumbent` Eng’d**; **X1 Eng’d**; **managers → [`identity-coordinator.md`](./identity-coordinator.md) M4–M6 Eng’d** (v1 complete)
