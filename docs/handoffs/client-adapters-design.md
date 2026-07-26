@@ -150,7 +150,7 @@ Hyperlink.fn     // command
 
 ### Direction (aligned)
 
-1. **Family Spec = widget base** — whole Spec (e.g. `queueControlSpec`), not Pick-from-instance. Instance handles are wider; bind if `ServiceOf<Instance> extends ServiceOf<FamilySpec>`.
+1. **Family Spec = view Needs base** — whole Spec (e.g. `queueControlSpec`), not Pick-from-instance. Instance handles are wider; bind if `ServiceOf<Instance> extends ServiceOf<FamilySpec>`.
 2. **Specs are combinable** today via object spread / `&` / `tagFor(sharedSpec)` — no separate Spec algebra required. `queueSpec` = `{ ...queueControlSpec, add, … }`.
 3. **Views are keyed** — same culture as services/tags; uniqueness at `register` (W1). Keys: `hyperlink/view/<name>`.
 4. **Annotate tag with view key** — Tag / `tagFor` options `view?: string` (W2). Spec-object annotate deferred; Tag stamp Eng follow-up. Overridable on instance tag.
@@ -348,7 +348,7 @@ Also: **`Atom.family`** / `AtomRegistry` for reactive memoized entries (differen
 
 ### Composability / toolkit (parked detail, keep)
 
-- Slots / layout builder on top of Spec base (optional v1 vs thin `View`).
+- Slots / layout builder on top of Spec base (parked — not v1; W5).
 - `fromSpec` / `fromTag` / `fromFactory` helpers.
 - Recipes (`withTrend`, log pane) are UI folds — **not** a second service shape in `data.ts`.
 - Replace `QueueService` duplicates over time with `ServiceOf<FamilySpec>`.
