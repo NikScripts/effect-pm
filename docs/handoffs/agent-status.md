@@ -6,13 +6,8 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-<<<<<<< HEAD
-| **4** | `cursor/hyperservice-open-deps-5679` | Managing Layers polish | **Eng’d** — tip-synced | same tip as `integration` | docs | Listen family + Soft-bake in getting-started | 2026-07-25 |
-| **G / TUI** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity · `View` redesign | **design** — adapters + View registry; tip-synced | same tip as `integration` | prior suites green | Notes: [`client-adapters-design.md`](./client-adapters-design.md). Launcher handoff spun out: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md) | 2026-07-26 |
-=======
 | **4** | `cursor/hyperservice-open-deps-5679` | [service shapes plan](../plans/service-shapes.md) | **Eng’d** — tip-synced | same tip as `integration` | typecheck + pure suites | `Tag`/`value`/`promise`/`pure` shipped; Creating a Hyperlink polish still paused | 2026-07-26 |
-| **G / TUI** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity | **design** — client adapters notes; tip-synced | same tip as `integration` | prior suites green | Notes: [`client-adapters-design.md`](./client-adapters-design.md) — Promise / TanStack / tRPC-shape / Effect-reactive helpers; Eng TBD | 2026-07-24 |
->>>>>>> origin/integration
+| **G / TUI** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity · `View` redesign | **design** — W1–W12 locked; Eng skeleton next | same tip as `integration` | prior suites green | Notes: [`client-adapters-design.md`](./client-adapters-design.md) (ViewKey + Eng order). Launcher: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md) | 2026-07-26 |
 | **1** | `cursor/docs-corpus-phase3-ce05` | [Examples book](./agent-01-examples-book.md) · [Phase 3](./agent-01-docs-corpus-phase3-plan.md) | **E1 in flight** — Examples hub + queue Twoslash pairs | branch tip | hub + 2 queue docs | **Next:** E2 forms/resource pairs | 2026-07-15 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
 | **3** | `cursor/logs-store-followers-plan-906e` | [identity-coordinator](./identity-coordinator.md) · [loud-failures](./loud-failures-design.md) | **idle** — Soft / default-on verify / F4 / lineId memo Eng’d | same tip as `integration` | typecheck + targeted suites green | Ready for next major | 2026-07-21 |

@@ -19,7 +19,7 @@ Capture so nothing from the conversation is lost. Decisions below are **directio
 
 - **No polling** for live dashboard data. Live fields are push (`ref` / `subscribable` / `stream`). One-shot `effect` fields are queries/commands, not tick loops.
 - Today’s `Stream.tick` usage in fleet bundles / `WorkerPoolCard` / daemon schedule is the **anti-pattern** relative to this rule — fix by making watched fields reactive on the contract, or query+invalidate, not timers.
-- Widget **registry** today (`forKind` / `forKey` / `withEntries` onto `base`) is the current plug-in seam; **redesign in flight** (see [Widget system redesign](#widget-system-redesign-2026-07-25)) — keyed widgets, Spec/family base, Layer-native registration, no accidental structural match.
+- Widget **registry** today (`forKind` / `forKey` / `withEntries` onto `base`) is the current plug-in seam; **redesign in flight** (see [View system redesign](#widget-system-redesign-2026-07-25)) — keyed `View`s, Spec/family base, Layer-native registration, no accidental structural match.
 - `GroupNode` name kept (docs clarify: group-tree node ≠ transport `Node`).
 - Gate observe surface (`Pick<Gate.Handle, "status">`) was a small SSOT pilot; full handle-projected observe types parked until owner cares.
 
@@ -137,9 +137,9 @@ Hyperlink.fn     // command
 
 ---
 
-## Widget system redesign (2026-07-25)
+## View system redesign (2026-07-25)
 
-**Status:** design capture — not Eng’d. Continues owner + Agent G discussion after Effect-reactive helpers lock.
+**Status:** design capture — W1–W12 **locked** 2026-07-26; not Eng’d. Continues owner + Agent G discussion after Effect-reactive helpers lock. Anchor `#widget-system-redesign-2026-07-25` kept for existing links.
 
 ### Pain (why redesign)
 
@@ -152,11 +152,11 @@ Hyperlink.fn     // command
 
 1. **Family Spec = widget base** — whole Spec (e.g. `queueControlSpec`), not Pick-from-instance. Instance handles are wider; bind if `ServiceOf<Instance> extends ServiceOf<FamilySpec>`.
 2. **Specs are combinable** today via object spread / `&` / `tagFor(sharedSpec)` — no separate Spec algebra required. `queueSpec` = `{ ...queueControlSpec, add, … }`.
-3. **Widgets are keyed** — same culture as services/tags (`DuplicateHyperlinkKey`-style uniqueness for widget ids).
-4. **Annotate service / Spec / tag with widget key** — when present, dispatch uses that key (correct widget when available). Optional on Spec/family; overridable on instance tag.
+3. **Views are keyed** — same culture as services/tags; uniqueness at `register` (W1). Keys: `hyperlink/view/<name>`.
+4. **Annotate tag with view key** — Tag / `tagFor` options `view?: string` (W2). Spec-object annotate deferred; Tag stamp Eng follow-up. Overridable on instance tag.
 5. **No accidental structural match** — structural/`ServiceOf` assignability is a **compile-time bind gate**, not a runtime search over the registry.
-6. **Binding helpers** (locked above): slots use `Hyperlink.atom` / `query` / `fn`.
-7. **Registration feels Effect-native** — Layer / Context DI builds the matcher; React only consumes the resolved registry service.
+6. **Binding helpers** (locked above): thin views use `Hyperlink.atom` / `query` / `fn` (no slot DSL in v1 — W5).
+7. **Registration feels Effect-native** — View Layer / Context DI builds the matcher; `View.react` → Provider (separate from `Atom.runtime` — W4).
 
 ### Specs: extend / combine (notes)
 
@@ -167,49 +167,46 @@ Hyperlink.fn     // command
 | Type intersect | `BaseSpec & { schedule: … }` (daemon grafts) |
 | Store merge | `mergeSpecs` (`Object.assign`) — precedent for combining records |
 
-Widget `fromSpec(familyControlSpec)` uses the **family** Spec as Needs SSOT.
+`View.make({ spec: familyControlSpec, … })` uses the **family** Spec as Needs SSOT.
 
 ### Keys & annotation (notes)
 
 ```
-WidgetKey  ≈ stable string id   e.g. "hyperlink/widget/pool"
-Service key = tag.key           instance identity (already)
-Widget key  ≠ service key       different namespaces; don’t collide with tag keys
+ViewKey     ≈ stable string id   e.g. "hyperlink/view/pool"
+Service key = tag.key            instance identity (already)
+View key    ≠ service key        different namespaces; don’t collide with tag keys
 ```
 
-**Optional Spec / family annotation** (same idea as widget id on Spec):
+**Annotation on Tag / `tagFor` options** (locked W2 — Spec-object annotate deferred):
 
 ```ts
-// Direction — exact API TBD
-Hyperlink.spec(queueControlSpec, { widget: "hyperlink/widget/pool" })
-// or annotate on tagFor / Tag options:
-Hyperlink.tagFor("queue", queueControlSpec, { widget: "hyperlink/widget/pool" })
-WorkPool.Tag(…) // factory carries widget key from control Spec
+Hyperlink.tagFor("queue", queueControlSpec, { view: "hyperlink/view/pool" })
+WorkPool.Tag(…) // factory may carry view key; Tag stamp Eng is follow-up
 ```
 
 **Instance override** when a specific service needs different chrome:
 
 ```ts
 class SpecialQueue extends WorkPool.Tag<SpecialQueue>()("app/Special", …)
-// stamp / annotate widget key → "app/widget/special-queue"
+// stamp / annotate view key → "app/view/special-queue"
 ```
 
-**Dispatch when annotation present:** use widget key (must exist in registry or → fallback / error policy TBD).  
-**When absent:** explicit registry binding (factory→widget / useSpec) or kind for specialized UX — never field-sniff.
+**Dispatch when annotation present:** use view key; missing match → **fallback** (no throw at render — W3).  
+**When absent:** explicit registry binding (factory→view / useSpec) or kind for specialized UX — never field-sniff.
 
 ### Match order (no accidents)
 
 ```
-1. resource/tag widget annotation (if set)
-2. exact resource key → widget override (forKey-style)
-3. explicit family / Spec / factory → widget binding (registered)
-4. kind → widget (only for specialized UX; intentional)
+1. resource/tag view annotation (if set)
+2. exact resource key → view override (forKey-style)
+3. explicit family / Spec / factory → view binding (registered)
+4. kind → view (specialized UX only — W6; not primary match)
 5. fallback
 ```
 
-**Not in the list:** “first widget whose Needs ⊆ tag Spec.”
+**Not in the list:** “first view whose Needs ⊆ tag Spec.”
 
-Type-level: `Compatible` / `BindTag` so `registry.use(Factory, Widget)` or `Widget.bind(Tag)` fails compile if handle isn’t assignable to family Spec.
+Type-level: `Compatible` / `BindTag` so `registry.use(Factory, View)` or `View.bind(Tag)` fails compile if handle isn’t assignable to family Spec.
 
 ### Layer / DI API sketch (v3 — owner 2026-07-25)
 
@@ -222,7 +219,7 @@ Type-level: `Compatible` / `BindTag` so `registry.use(Factory, Widget)` or `Widg
 
 **Name locked: `View`.** iOS-ish vibe; not “Widget” / `Ui`. Key namespace e.g. `hyperlink/view/pool`.
 
-**No `surface: "card"`.** Defining an entry can attach several React views; **`Ui.react(layer)` returns multiple components (and tools)**, each already closed over the registry + match rules.
+**No `surface: "card"`.** Defining an entry can attach several React views; **`View.react(layer)` returns multiple components (and tools)**, each already closed over the registry + match rules.
 
 ```ts
 // ── Effect side: define + register ──────────────────────────────────────────
@@ -315,29 +312,26 @@ Redesign lean: **don’t bake dashboard navigation into the core Match props.** 
 
 **Today:** tied only by **convention + Dashboard wiring** — `QueueCard` + `onOpen` → `QueueDetail` switched in `Dashboard.tsx` by `isQueueTag`. Not one widget object with two sizes; two components, one kind switch in the shell.
 
-**Should they be separated?** **Yes.** Same family Spec / widget **key family**, different **surfaces**:
+**Should they be separated?** **Yes.** Same family Spec / view **key**, different **named view fields** on one entry (not a `surface:` arg — see W8):
 
-| Surface | Job |
-|---------|-----|
+| View field | Job |
+|------------|-----|
 | `card` (compact) | Grid cell; may emit “activate” to parent |
 | `detail` (full) | Drill-in page; owns denser chrome |
 | (later) `cell` / TUI | Ink compact |
 
 ```ts
-Widget.make({
-  key: "hyperlink/widget/pool",
+const Pool = View.make({
+  key: "hyperlink/view/pool",
   spec: WorkPool.queueControlSpec,
-  surfaces: {
-    card: PoolCardView,
-    detail: PoolDetailView,
-  },
+  card: PoolCardView,
+  detail: PoolDetailView,
 })
 
-const CardMatch = Widget.component(widgets, { surface: "card" })
-const DetailMatch = Widget.component(widgets, { surface: "detail" })
+const { Card, Detail, Provider } = View.react(viewLayer)
 ```
 
-Same registry + match rules; surface selects which View. Parent owns routing (`onActivate` / router), not the registry.
+Same registry + match rules; each React component picks a different view field on the entry. Parent owns routing (`onActivate` / router), not the registry.
 
 ### How Effect handles registries (precedent)
 
@@ -350,7 +344,7 @@ Not a special “Registry” language feature. Pattern:
 
 Also: **`Atom.family`** / `AtomRegistry` for reactive memoized entries (different job — atom identity, not plugin table).
 
-**Our lean for widgets:** same as EventLog — `WidgetRegistry` Context service + layers that `register(widget)` / `bind*(…)`, then `Widget.component` builds React that reads that service (from a provided Context / runtime). `Layer.mergeAll(base, user…)` = compose contributions.
+**Our lean for views:** same as EventLog — `View` registry Context service + layers that `register(view)` / `bind*(…)`, then `View.react(layer)` builds React that reads that service (from a provided Context / Provider). `Layer.mergeAll(base, user…)` = compose contributions. View Layer is **separate** from `Atom.runtime` (W4).
 
 ### Composability / toolkit (parked detail, keep)
 
@@ -359,38 +353,46 @@ Also: **`Atom.family`** / `AtomRegistry` for reactive memoized entries (differen
 - Recipes (`withTrend`, log pane) are UI folds — **not** a second service shape in `data.ts`.
 - Replace `QueueService` duplicates over time with `ServiceOf<FamilySpec>`.
 
-### Open decisions (widget redesign)
+### LOCKED decisions (2026-07-26)
 
-| # | Question | Lean |
-|---|----------|------|
-| W1 | Widget key format / global uniqueness (`claimedKeys`-like)? | Slash ids `@scope/widget/name` or `hyperlink/widget/…` |
-| W2 | Spec carries widget key how — Tag options, `tagFor` options, Spec wrapper, method-style annotate? | Tag/`tagFor` options + optional Spec-level default |
-| W3 | Missing widget key in registry: fallback vs fail loud? | Fail loud in dev; fallback in prod? TBD |
-| W4 | Widgets Layer merged into `Atom.runtime` layer vs separate React provide? | Separate Layer fed to Dashboard/provider first; merge later if clean |
-| W5 | Slot DSL in v1 or `View` + helpers only? | View + helpers first; slots next |
-| W6 | Kind retained? | Yes for specialized UX only; not primary match |
-| W7 | TUI + web share Widget key + Spec; differ by surface `View`? | Yes |
-| W8 | Card vs detail | **Multiple views on one entry**; `View.react` returns `Card` + `Detail` (not `surface:` arg) |
-| W9 | Core view props | `{ tag, name? }` only; activation/nav is parent |
-| W10 | Registry implementation | Context.Service + Layer contributions (EventLog-style) |
-| W11 | Module name | **`View` locked** (iOS vibes). Keys: `hyperlink/view/…`. Prefer `import * as View`. |
-| W12 | `View.react` return | Destructurable `{ Card, Detail, Provider, useView, resolve }` (tools bag OK) |
+| # | Decision |
+|---|----------|
+| W1 | Keys `hyperlink/view/<name>`; uniqueness enforced at `register` |
+| W2 | Annotate view key on Tag / `tagFor` options (`view?: string`); Spec-object annotate deferred; Tag stamp Eng is follow-up |
+| W3 | Missing match → fallback (no throw at render) |
+| W4 | View Layer separate from `Atom.runtime`; `View.react` → Provider |
+| W5 | v1 thin card/detail/cell — no slot DSL |
+| W6 | Kind match at step 4 only (specialized UX; not primary) |
+| W7 | Web + TUI share keys; differ by view fields |
+| W8 | Multiple views on one entry; not a `surface:` arg |
+| W9 | Core view props `{ tag, name? }` only; activation/nav is parent |
+| W10 | Registry = Context.Service + Layer contributions (EventLog-style) |
+| W11 | Module name **`View`**; keys `hyperlink/view/…`; prefer `import * as View` |
+| W12 | `View.react` returns `{ Card, Detail, Provider, useView, resolve }` (tools bag OK) |
 
-### Non-goals (widget redesign)
+### Eng order (next)
+
+1. Skeleton: `View.make` / `register` / `bind*` / `react`
+2. Tag `view?: string` option
+3. Migrate queue off `forKind`
+4. `Hyperlink.atom` / `query` / `fn` in parallel
+
+### Non-goals (view redesign)
 
 - Runtime structural auto-match by field paths.
-- Widget key namespace colliding with service `tag.key`.
-- Keeping `ui/data.ts` `*Service` as SSOT once Spec-based widgets land.
+- View key namespace colliding with service `tag.key`.
+- Keeping `ui/data.ts` `*Service` as SSOT once Spec-based views land.
+- Slot DSL in v1 (W5).
 
 ---
 
 ## Dashboard context (already shipped / in flight)
 
-- Shared `hyperlink-ts/ui`: data bundles, `groupRoute`, `memberKind` / `wireKindOf`, widget registry.
+- Shared `hyperlink-ts/ui`: data bundles, `groupRoute`, `memberKind` / `wireKindOf`, widget registry (`forKind` / `forKey` — migrate off).
 - Web + TUI: `<Dashboard runtime group path? widgets? />`; default `base` registry.
 - Custom example: `examples/resource-web` — `withEntries(base, [forKey(WorkerPool.key, WorkerPoolCard)])`.
 - TUI kind cells for gate/api/fleetHealth/telemetry/shardMap; unknown leaves show kind + node.
-- **Superseded over time** by keyed Spec/Layer widget system above.
+- **Superseded over time** by keyed Spec/Layer `View` system above.
 
 ---
 
@@ -400,10 +402,10 @@ Also: **`Atom.family`** / `AtomRegistry` for reactive memoized entries (differen
 - Selling `widgets={withEntries…}` as the primary Dashboard DX.
 - Full observe-surface `Pick` across every handle type (parked).
 - Actually depending on tRPC.
-- Accidental structural widget matching.
+- Accidental structural view matching.
 
 ---
 
 ## Next conversation
 
-Lock widget API names: `Widget.make` / `register` / `bindFactory` / annotation surface (W1–W4). Then Eng spike: keyed registry Layer + one Spec-based pool widget. TanStack `useQuery` / Promise adapter still on table for the client-adapter stack.
+W1–W12 locked. Eng follows order above — start with `View` skeleton (`make` / `register` / `bind*` / `react`); do **not** wait on Tag stamp or Hyperlink.atom for the registry skeleton. TanStack `useQuery` / Promise adapter still on table for the client-adapter stack.
