@@ -208,7 +208,7 @@ class SpecialQueue extends WorkPool.Tag<SpecialQueue>()("app/Special", …)
 
 Type-level: `Compatible` / `BindTag` so `registry.use(Factory, View)` or `View.bind(Tag)` fails compile if handle isn’t assignable to family Spec.
 
-### Layer / DI API sketch (v3 — owner 2026-07-25)
+### Layer / DI API sketch (v4 — owner 2026-07-26)
 
 **Split the two styles:**
 
@@ -217,88 +217,89 @@ Type-level: `Compatible` / `BindTag` so `registry.use(Factory, View)` or `View.b
 | Registry / bind / Spec / keys | **Effect** — `Context.Service`, `Layer.mergeAll`, type gates | System of record |
 | Components / hooks returned to apps | **React** — named components + hooks | DX at the call site |
 
-**Name locked: `View`.** iOS-ish vibe; not “Widget” / `Ui`. Key namespace e.g. `hyperlink/view/pool`.
+**Name locked: `View`.** Key namespace e.g. `hyperlink/view/pool-card`.
 
-**No `surface: "card"`.** Defining an entry can attach several React views; **`View.react(layer)` returns multiple components (and tools)**, each already closed over the registry + match rules.
+#### Cards vs pages (not card↔detail pair)
+
+- **Do not** tie a grid card to a full-screen “detail” on the same entry.
+- Two **roles**: `card` (compact / grid) and `page` (full chrome). Optional later: `cell` (TUI).
+- Each registered entry is **one role + one React component** (plus key + family Spec).
+- **Match is independent per role.** Replacing a card does not remove pages; adding a page does not remove cards.
+
+#### Multi-match → paginate
+
+- For a given tag + role, match can return **several** entries (ordered list).
+- UI shows them **paginated** (swipe / tabs / pager — host chrome).
+- Example: register a custom card for a factory → it shows **first**; the default family card still matches → **second page** in the card pager. Pages (full chrome) unchanged unless you also register/bind pages.
+- To get **only** your card (no default as second page): restrict on the handle via pipe (below).
+
+#### Explicit pin / restrict — pipe on the handle
+
+Not a Tag options `.view` field (parked). Owner: **pipe onto the handle/tag**:
 
 ```ts
-// ── Effect side: define + register ──────────────────────────────────────────
+class MyQueue extends WorkPool.Tag<MyQueue>()("app/MyQueue", { payload }).pipe(
+  View.card("hyperlink/view/my-custom-card"), // only this card for this tag
+)
 
-const Pool = View.make({
-  key: "hyperlink/view/pool",
-  spec: WorkPool.queueControlSpec, // whole family Spec = Needs
-  // named React views — not a surface enum on component()
-  card: PoolCard,       // (props: { tag }) => JSX
-  detail: PoolDetail,
-  // optional later: cell, tools, …
+// pages similarly when needed
+.someTag.pipe(View.page("hyperlink/view/my-page"))
+```
+
+- `View.card(key)` / `View.page(key)` = allowlist (or pin) for that role on that tag.
+- Registry can still contribute many; pipe **narrows** what Match returns for that handle.
+- Exact semantics (replace list vs prepend-only vs allowlist): bake when Eng’ing pipe — lean **allowlist when pipe present**, else full multi-match list.
+
+#### Define + register (one entry = one role)
+
+```ts
+const PoolCard = View.make({
+  key: "hyperlink/view/pool-card",
+  spec: WorkPool.queueControlSpec,
+  role: "card",
+  View: PoolCardView,
+})
+
+const PoolPage = View.make({
+  key: "hyperlink/view/pool-page",
+  spec: WorkPool.queueControlSpec,
+  role: "page",
+  View: PoolPageView,
 })
 
 const viewLayer = Layer.mergeAll(
-  View.base, // shipped entries
-  View.register(Pool),
-  View.register(WorkerPoolView),
-  View.bindFactory(WorkPool.Tag, Pool),     // type-gated
-  View.bindTag(SpecialQueue, SpecialView),
-)
+  View.register(PoolCard),
+  View.register(PoolPage),
+  View.bindFactory(WorkPool.Tag, PoolCard), // contributes to card matches for that family
+  View.bindFactory(WorkPool.Tag, PoolPage),
+  View.register(CustomCard),
+  View.bindFactory(WorkPool.Tag, CustomCard), // custom card first; PoolCard still second unless piped
+).pipe(Layer.provideMerge(View.base))
+```
 
-// ── React side: one call → components + helpers ─────────────────────────────
+#### React kit
 
-const {
-  Card,       // matcher → entry.card
-  Detail,     // matcher → entry.detail
-  Provider,   // provides registry Context (from layer)
-  useView,    // hook: raw registry / resolve
-  resolve,    // (tag) => entry | fallback  (non-hook tool)
-} = View.react(viewLayer)
+```ts
+const { Card, Page, Provider, useView, resolve } = View.react(viewLayer)
+// View.Card as shortcut alias for the Card matcher is fine
 
-// Call sites — pass the handle/tag only; matching inside
 <Provider>
-  <Card tag={leaf} name={label} />      {/* grid */}
-  <Detail tag={selected} />             {/* drill-in */}
+  <Card tag={leaf} name={label} />   {/* pager over matched cards */}
+  <Page tag={selected} />            {/* pager over matched pages */}
 </Provider>
 ```
 
-**What `View.react` builds (conceptually):**
-
 ```ts
+// Card matcher (conceptually)
 function Card(props: { tag: LeafTag; name?: string }) {
-  const entry = registry.match(props.tag) // annotation → binds → kind → fallback
-  const CardView = entry.card ?? FallbackCard
-  return <CardView tag={props.tag} name={props.name} />
+  const entries = registry.match(props.tag, "card") // ordered list, respects pipe allowlist
+  return <Pager>{entries.map((e) => <e.View tag={props.tag} name={props.name} />)}</Pager>
 }
 ```
 
-Same match once; **each exported component picks a different view field** on the entry. Missing view on an entry → that component’s fallback (or null) — card-only entries don’t invent a detail.
+**Match inputs (no `.view` annotation):** tag-key bind → factory bind → kind bind → (fallback). Multi-match = all entries that hit for that **role**, ordered (custom/registry order TBD — lean: more specific binds first, then factory, then kind defaults).
 
-**Dashboard** becomes:
-
-```tsx
-const { Card, Detail, Provider } = View.react(appViewLayer)
-
-<Provider>
-  <Grid>{leaves.map((tag) => <Card key={tag.key} tag={tag} />)}</Grid>
-  {selected ? <Detail tag={selected} /> : null}
-</Provider>
-```
-
-Parent still owns routing (what’s selected). No `onOpen` on core Card unless the app wraps it.
-
-**Tools mixed in (optional bag):**
-
-```ts
-const views = View.react(viewLayer)
-views.Card
-views.Detail
-views.Provider
-views.useView()
-views.resolve(tag)
-views.keys()           // registered view keys
-// later: views.preload(tag), views.has(tag, "detail")
-```
-
-Either destructured or `views.*` — React-ergonomic either way; registry stays Effect underneath.
-
-**Naming collision note:** module `View` vs React “view” / local `CardView` variables — fine if the public API is `import * as View from "…/View"` (Effect module style). Avoid `import { View } from "react"` clashes by namespace import.
+**Skeleton note:** current `src/ui/View.tsx` (single entry with optional `card`/`detail` fields, single match) is **pre-v4** — reshape to role + multi-match + pipe next Eng pass.
 
 ### Props on `Match` today vs redesign (notes 2026-07-25)
 
@@ -358,23 +359,23 @@ Also: **`Atom.family`** / `AtomRegistry` for reactive memoized entries (differen
 | # | Decision |
 |---|----------|
 | W1 | Keys `hyperlink/view/<name>`; uniqueness enforced at `register` |
-| W2 | Annotate view key on Tag / `tagFor` options (`view?: string`); Spec-object annotate deferred; Tag stamp Eng is follow-up |
+| W2 | Explicit pin/restrict via **`.pipe(View.card(key))` / `View.page(key)` on the handle** — not Tag `.view` field (parked) |
 | W3 | Missing match → fallback (no throw at render) |
 | W4 | View Layer separate from `Atom.runtime`; `View.react` → Provider |
-| W5 | v1 thin card/detail/cell — no slot DSL |
-| W6 | Kind match at step 4 only (specialized UX; not primary) |
-| W7 | Web + TUI share keys; differ by view fields |
-| W8 | Multiple views on one entry; not a `surface:` arg |
-| W9 | Core view props `{ tag, name? }` only; activation/nav is parent |
+| W5 | v1 thin components — no slot DSL |
+| W6 | Kind match only as an intentional bind step |
+| W7 | Web + TUI share keys; TUI may use `cell` role later |
+| W8 | **Roles `card` \| `page`** (not card+detail on one entry); **multi-match → paginate** |
+| W9 | Core props `{ tag, name? }`; activation/nav is parent |
 | W10 | Registry = Context.Service + Layer contributions (EventLog-style) |
-| W11 | Module name **`View`**; keys `hyperlink/view/…`; prefer `import * as View` |
-| W12 | `View.react` returns `{ Card, Detail, Provider, useView, resolve }` (tools bag OK) |
+| W11 | Module name **`View`**; keys `hyperlink/view/…` |
+| W12 | `View.react` → `{ Card, Page, Provider, useView, resolve }` (`View.Card` shortcut OK) |
 
 ### Eng order (next)
 
-1. Skeleton: `View.make` / `register` / `bind*` / `react`
-2. Tag `view?: string` option
-3. Migrate queue off `forKind`
+1. Reshape skeleton to **role + multi-match + pager** (`card` / `page`)
+2. Handle **pipe** `View.card` / `View.page` allowlist
+3. Migrate queue defaults as separate card + page entries
 4. `Hyperlink.atom` / `query` / `fn` in parallel
 
 ### Non-goals (view redesign)
