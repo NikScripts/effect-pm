@@ -368,9 +368,11 @@ Also: **`Atom.family`** / `AtomRegistry` for reactive memoized entries (differen
 | W5 | Slot DSL in v1 or `View` + helpers only? | View + helpers first; slots next |
 | W6 | Kind retained? | Yes for specialized UX only; not primary match |
 | W7 | TUI + web share Widget key + Spec; differ by surface `View`? | Yes |
-| W8 | Card vs detail: separate surfaces on one widget key? | **Yes** — `surfaces: { card, detail }`; `component(reg, { surface })` |
-| W9 | Core Match props | `{ tag, name? }` only; activation/nav is parent or surface-specific optional callback |
-| W10 | Registry implementation | Context.Service + Layer contributions (EventLog-style), not ad hoc React-only HashMap long-term |
+| W8 | Card vs detail | **Multiple views on one entry**; `Ui.react` returns `Card` + `Detail` (not `surface:` arg) |
+| W9 | Core view props | `{ tag, name? }` only; activation/nav is parent |
+| W10 | Registry implementation | Context.Service + Layer contributions (EventLog-style) |
+| W11 | Module name | Not sold on `Ui`. Candidates: **Face**, **Chrome**, **View**, **Panel**, **Presentation** / `Present`, **Exhibit**, **Skin**, **Widget** (keep). Key prefix follows name (`hyperlink/face/pool`, …). |
+| W12 | `Ui.react` return | Destructurable `{ Card, Detail, Provider, useUi, resolve }` (tools bag OK) |
 
 ### Non-goals (widget redesign)
 
