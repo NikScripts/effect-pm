@@ -6,7 +6,7 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **4** | `cursor/hyperservice-open-deps-5679` | [service shapes plan](../plans/service-shapes.md) | **design** — tip-synced | same tip as `integration` | plan | Creating/Managing Layers paused; taxonomy draft for owner | 2026-07-25 |
+| **4** | `cursor/hyperservice-open-deps-5679` | [service shapes plan](../plans/service-shapes.md) | **Eng** — `Tag<Self, I>()` + `value` rename | tip-syncing | typecheck + targeted suites | Folded `fromService` into Tag; `constant`→`value` (+ fallible acquire) | 2026-07-26 |
 | **G / TUI** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity | **design** — client adapters notes; tip-synced | same tip as `integration` | prior suites green | Notes: [`client-adapters-design.md`](./client-adapters-design.md) — Promise / TanStack / tRPC-shape / Effect-reactive helpers; Eng TBD | 2026-07-24 |
 | **1** | `cursor/docs-corpus-phase3-ce05` | [Examples book](./agent-01-examples-book.md) · [Phase 3](./agent-01-docs-corpus-phase3-plan.md) | **E1 in flight** — Examples hub + queue Twoslash pairs | branch tip | hub + 2 queue docs | **Next:** E2 forms/resource pairs | 2026-07-15 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
@@ -25,7 +25,7 @@
 0. **Agent E:** impossible-states plan ([`impossible-states-proposal.md`](./impossible-states-proposal.md)). **DONE + merged:** P1 (node↔protocol wiring bug → compile error, cast-free) + P5 (http transport dies in browser). **P2 SKIPPED** (cast). **P4 already-enforced** (loose-fields payload already rejected; proposal mis-scoped). **P3 deferred** (opaque serve layers). Clean wins complete. Reserved `src/Resource.ts` node/client surface until fully merged (done). **Tag-config reservation RELEASED — Agent D queue/run/process payload-config unblocked.**
 
 ### Active (owner approval required)
-1. **Agent 4:** Service shapes plan ([`service-shapes.md`](../plans/service-shapes.md)) — owner discussion / S0 lock. Creating a Hyperlink polish paused.
+1. **Agent 4:** Service shapes — Eng’d `Tag<Self, I>()` (kill `fromService`) + `constant`→`value` (fallible acquire). Next: `Hyperlink.promise`, then `pure`. Creating a Hyperlink polish still paused.
 2. **Agent 1:** Examples book (`cursor/docs-corpus-phase3-ce05`) — hub in sidebar; Twoslash-paired `docs/examples/**` not in sidebar; forms first. Agent B: content glob + exclude example docs from More. Legacy Phase 3 leftovers background. Ignore effect β98 (Agent C).
 3. **Agent 3:** **idle** — Soft fail-loud, default-on verify, F4 `contractHash`, store-layer lineId memo Eng’d (owner “All of them”). Not handles/site.
 4. **Agent D (+ peers):** named handles — do not reassign to Agent 3.

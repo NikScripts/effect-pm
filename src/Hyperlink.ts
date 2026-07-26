@@ -687,17 +687,17 @@ const localFn = <T>(defaultValue?: T): LocalMethod<T> => ({
 });
 
 /** Brand marking the **bare** {@link local} value (used without `()`): a valid {@link LocalMethod}
- *  whose element type is supplied by the service interface position in a {@link fromService} contract.
- *  Distinct from a called `local<T>()` so the contract can reject a bare local that has no interface
- *  type to resolve from. @internal */
+ *  whose element type is supplied by the service interface position in a {@link Tag}`<Self, I>()`
+ *  contract. Distinct from a called `local<T>()` so the contract can reject a bare local that has no
+ *  interface type to resolve from. @internal */
 const bareLocalSym: unique symbol = Symbol.for(
   "~hyperlink-ts/Hyperlink/bareLocal",
 );
 
 /**
  * The **bare** {@link local} marker — `Hyperlink.local` used *without* `()`. Valid only inside a
- * {@link fromService} contract, where the service interface at that key supplies its type. Using it
- * where no type can be resolved is a compile error (see {@link fromService}).
+ * {@link Tag}`<Self, I>()` contract, where the service interface at that key supplies its type. Using
+ * it where no type can be resolved is a compile error (see {@link Tag}).
  *
  * @category models
  * @public
@@ -710,9 +710,10 @@ export interface BareLocal {
 /**
  * Declare a **local-only** member (see {@link LocalMethod}). Two forms:
  *
- * - `Hyperlink.local<T>()` — the element type `T` given explicitly (for a plain {@link Tag} contract).
+ * - `Hyperlink.local<T>()` — the element type `T` given explicitly (for a plain {@link Tag}`<Self>()`
+ *   contract).
  * - `Hyperlink.local` — **bare**, no `()`; its type is taken from the service interface in a
- *   {@link fromService} contract. Rejected where no interface type is available.
+ *   {@link Tag}`<Self, I>()` contract. Rejected where no interface type is available.
  *
  * @category spec fields
  * @public
@@ -788,8 +789,8 @@ export const isEffect = (m: AnyMethod): boolean =>
   m.payload === undefined;
 
 /**
- * The single {@link Method} constructor — {@link effect}, {@link effectFn}, {@link constant},
- * {@link value}, and {@link stream} all go through it.
+ * The single {@link Method} constructor — {@link effect}, {@link effectFn}, {@link value}, and
+ * {@link stream} all go through it.
  */
 const makeMethod = <
   P extends Schema.Struct.Fields | Schema.Top | undefined,
@@ -908,7 +909,7 @@ const assertEffectFnPayload = (
  * Define an **`effect`** field — resolves to `Effect<Su, E>` in the service (inputless, lazy,
  * re-runnable read), named for what it resolves to. Members with per-invocation input use
  * {@link effectFn} instead. Attach help/metadata with `.annotate({ description, ... })`.
- * The other shapes are {@link value} / {@link constant} / {@link effectFn} / {@link stream}.
+ * The other shapes are {@link value} / {@link effectFn} / {@link stream} / {@link ref}.
  *
  * ```ts
  * size: Hyperlink.effect(Schema.Number).annotate({ description: "Total pending." }),
@@ -997,30 +998,45 @@ export function unsafeEffect<Client = Derive>() {
     );
 }
 
-/** A {@link Method} marked as a **constant** field (via {@link constant}) — resolved once at acquire,
- *  surfaced as a plain value. Tagged with a readable `_tag: "constant"`. @public
+/** A {@link Method} marked as a **value** field (via {@link value}) — resolved once at acquire,
+ *  surfaced as a plain value. Tagged with a readable `_tag: "value"`. @public
  *
  * @category models
  */
-export type ConstantField<M extends AnyMethod> = Marked<M, { readonly _tag: "constant" }>;
+export type ValueField<M extends AnyMethod> = Marked<M, { readonly _tag: "value" }>;
 
-/** Runtime guard: is a spec entry a {@link constant} field? */
-const isConstantMethod = (m: AnyMethod | AnyLocalMethod): boolean =>
-  Predicate.hasProperty(m, "_tag") && m._tag === "constant";
+/** Runtime guard: is a spec entry a {@link value} field? */
+const isValueMethod = (m: AnyMethod | AnyLocalMethod): boolean =>
+  Predicate.hasProperty(m, "_tag") && m._tag === "value";
 
 /**
- * Define a **`constant`** field — a value resolved **once** when the resource is acquired, surfaced as a
- * **plain** property (`p.x: A`, no `yield*`), identical local and remote. For values fixed after startup.
- * The impl supplies the value as an `Effect<A>` (run once at acquire; use `Effect.succeed` for a literal).
- * Live values are `value`; on-demand reads are `effect`. See `docs/handoffs/archive/2026-07/features/service-shape-redesign.md`.
+ * Define a **`value`** field — materialize a plain property (`p.x: A`, no `yield*`) **once** when the
+ * resource is acquired, identical local and remote. The impl supplies an `Effect<A, E>` (run once at
+ * acquire; use `Effect.succeed` for a literal). A non-`never` error schema fails **layer/client
+ * acquire** (all-or-nothing) — after a successful acquire every `value` leaf is plain `A`. Live state
+ * is {@link ref}; on-demand reads are {@link effect}.
+ *
+ * ```ts
+ * maxSize: Hyperlink.value(Schema.Number),
+ * name: Hyperlink.value(Schema.String, Schema.String), // fallible at acquire
+ * ```
  *
  * @category spec fields
  * @public
  */
-export const constant = <Su extends Schema.Top>(
+export function value<Su extends Schema.Top>(
   success: Su,
-): ConstantField<Method<undefined, Su, typeof Schema.Never>> =>
-  marked(effect(success), { _tag: "constant" as const });
+): ValueField<Method<undefined, Su, typeof Schema.Never>>;
+export function value<Su extends Schema.Top, E extends Schema.Top>(
+  success: Su,
+  error: E,
+): ValueField<Method<undefined, Su, E>>;
+export function value(
+  success: Schema.Top,
+  error: Schema.Top = Schema.Never,
+): ValueField<AnyMethod> {
+  return marked(effect(success, error), { _tag: "value" as const });
+}
 
 /** A {@link Method} marked as a **ref** field (via {@link ref}) — surfaces as a {@link Subscribable}.
  *  Tagged with a readable `_tag: "ref"`. @public
@@ -1037,8 +1053,8 @@ const isRefMethod = (m: AnyMethod | AnyLocalMethod): boolean =>
  * Define a **`ref`** field — reactive state surfaced as a {@link Subscribable}<A> (`get` + `changes`),
  * uniform local and remote. The impl **owns** a `SubscriptionRef` (writes it) and provides it via
  * {@link subscribable}; consumers **read** (`yield* svc.x.get`) and **observe** (`svc.x.changes`) — a read
- * is an honest `Effect`, not a synchronous peek. For values fixed at acquire use `constant`; for on-demand
- * calls use `effect`.
+ * is an honest `Effect`, not a synchronous peek. For values fixed at acquire use {@link value}; for
+ * on-demand calls use {@link effect}.
  *
  * @category spec fields
  * @public
@@ -1728,10 +1744,10 @@ type ClientMethod<M extends AnyMethod, Client> = [Client] extends [Derive] ? Ser
 // spec too.
 export type ServiceOf<S extends Spec, Self = unknown> = Simplify<{
   readonly [K in keyof S]: S[K] extends FromLocalMethod<infer M>
-    ? InjectLocal<M, Self> // fromService local: interface-shaped, gains `Local`
+    ? InjectLocal<M, Self> // interface-Tag local: interface-shaped, gains `Local`
     : S[K] extends LocalMethod<infer T>
     ? LocalEffect<T, never, Self>
-    : S[K] extends { readonly _tag: "constant" }
+    : S[K] extends { readonly _tag: "value" }
       ? SuccessOf<AsMethod<S[K]>>
       : S[K] extends { readonly _tag: "ref" }
         ? Subscribable<SuccessOf<AsMethod<S[K]>>>
@@ -1742,12 +1758,27 @@ export type ServiceOf<S extends Spec, Self = unknown> = Simplify<{
             : never;
 }>;
 
-// ── fromService: an existing service interface as the source of truth ────────────────────────────
+/**
+ * Union of every {@link value} leaf's error type in `S` — fails **layer / client acquire**
+ * (all-or-nothing). Empty/`never` when the spec has no fallible materialize fields.
+ *
+ * @category models
+ * @public
+ */
+export type ValueErrorsOf<S extends Spec> = {
+  [K in keyof S]: S[K] extends { readonly _tag: "value" }
+    ? ErrorOf<AsMethod<S[K]>>
+    : S[K] extends Spec
+      ? ValueErrorsOf<S[K]>
+      : never;
+}[keyof S];
+
+// ── Tag<Self, I>(): an existing service interface as the source of truth ─────────────────────────
 
 /**
  * Inject the {@link Local} capability into a service member's requirement channel — how a
- * {@link fromService} local member surfaces. An `Effect`/`Stream`-returning member (or a function to
- * one) keeps its shape and gains `Local<Self>` in its requirements; any other value is obtained via
+ * {@link Tag}`<Self, I>()` local member surfaces. An `Effect`/`Stream`-returning member (or a function
+ * to one) keeps its shape and gains `Local<Self>` in its requirements; any other value is obtained via
  * `Effect<T, never, Local<Self>>`. Regular (local) layers satisfy `Local`; a client layer can't, so
  * calling a local on a client is a compile error.
  *
@@ -1779,7 +1810,7 @@ export interface LocalNeedsType<K extends PropertyKey> {
 }
 
 /**
- * Validate a {@link fromService} contract `C` against its service interface `I`: a **bare**
+ * Validate a {@link Tag}`<Self, I>()` contract `C` against its service interface `I`: a **bare**
  * {@link local} at a key absent from `I` (or with no `I` at all) becomes a {@link LocalNeedsType}
  * error the user's value can't satisfy, so the contract argument is rejected **at the call site**.
  * Every other entry (a wired method, an explicit `local<T>()`, a nested group) passes through.
@@ -1828,21 +1859,36 @@ type WireHonors<W, I> = [W] extends [I] ? true : false;
 /** @internal */
 declare const wireMismatchSym: unique symbol;
 
-/** The error surface a wired {@link fromService} member resolves to when its success schema disagrees
- *  with the service interface at that key — rejected at the call, naming the key. @public
+/** The error surface a wired {@link Tag}`<Self, I>()` member resolves to when its success schema
+ *  disagrees with the service interface at that key — rejected at the call, naming the key. @public
  *
  * @category models
  */
 export interface WireMismatch<K extends PropertyKey> {
-  readonly [wireMismatchSym]: `Hyperlink.fromService: wired member '${K &
+  readonly [wireMismatchSym]: `Hyperlink.Tag: wired member '${K &
     string}' — its success type disagrees with the service interface`;
 }
+
+/**
+ * Reject **bare** {@link local} members in a plain {@link Tag}`<Self>()` contract — bare locals need
+ * {@link Tag}`<Self, I>()` so the interface can supply their type.
+ *
+ * @category models
+ * @public
+ */
+export type RejectBareLocal<C> = {
+  readonly [K in keyof C]: C[K] extends BareLocal
+    ? LocalNeedsType<K>
+    : C[K] extends Spec
+      ? RejectBareLocal<C[K]>
+      : C[K];
+};
 
 /** @internal */
 declare const fromLocalSym: unique symbol;
 
 /**
- * A {@link fromService} local member as it sits in the **resolved** spec: a {@link LocalMethod} that
+ * An interface-Tag local member as it sits in the **resolved** spec: a {@link LocalMethod} that
  * additionally carries the service interface's member type `M`, so {@link ServiceOf} surfaces it via
  * {@link InjectLocal} (its own `Effect`/function + `Local`) instead of the value-obtain
  * {@link LocalEffect} a plain `local<T>()` gets. Type-only; at runtime it's an ordinary bare
@@ -1854,10 +1900,10 @@ export interface FromLocalMethod<M> extends LocalMethod<M> {
 }
 
 /**
- * Resolve a {@link fromService} contract `C` into a runnable {@link Spec}: each **bare** {@link local}
- * becomes a {@link FromLocalMethod} carrying the service interface's type at that key, so the impl
- * ({@link ImplOf}) and service ({@link ServiceOf}) both derive from `I`. Wired methods and explicit
- * `local<T>()`s pass through unchanged. @public
+ * Resolve a {@link Tag}`<Self, I>()` contract `C` into a runnable {@link Spec}: each **bare**
+ * {@link local} becomes a {@link FromLocalMethod} carrying the service interface's type at that key, so
+ * the impl ({@link ImplOf}) and service ({@link ServiceOf}) both derive from `I`. Wired methods and
+ * explicit `local<T>()`s pass through unchanged. @public
  * @category models
  */
 export type ResolveLocals<C, I> = {
@@ -1917,16 +1963,16 @@ type PeerServiceOf<S extends Spec> = {
  * build, provide it via the **`Effect` form** of {@link Hyperlink.layer} / {@link Hyperlink.serve}
  * — resolve it once, and the members close over it.
  *
- * A `value` field's impl is the **`Stream`** that feeds it (typically a `SubscriptionRef`'s `.changes`),
- * and a `constant`'s is the `Effect<A>` resolved once — both differ from how they *surface* in
- * {@link ServiceOf} (a plain `A`), so annotate an impl with `ImplOf`, not `ServiceOf`.
+ * A {@link value} field's impl is the `Effect<A, E>` resolved once at acquire — that differs from how
+ * it *surfaces* in {@link ServiceOf} (a plain `A`), so annotate an impl with `ImplOf`, not
+ * `ServiceOf`. A {@link ref}'s impl is the {@link Subscribable} (not the consumer shape alone).
  *
  * @category models
  * @public
  */
 export type ImplOf<S extends Spec> = {
   readonly [K in keyof S]: S[K] extends FromLocalMethod<infer M>
-    ? M // fromService local: the impl provides the interface member itself
+    ? M // interface-Tag local: the impl provides the interface member itself
     : S[K] extends LocalMethod<infer T>
     ? T
     : S[K] extends { readonly _tag: "ref" }
@@ -2105,11 +2151,12 @@ export const groupSym: unique symbol = Symbol.for(
 export const localCapSym: unique symbol = Symbol.for(
   "hyperlink-ts/Hyperlink/localCap",
 );
-/** Marks a tag built by {@link fromService} — its local members are interface-shaped (the impl's own
- *  `Effect`/function, requiring {@link Local}), so {@link buildLocalContext} passes them through with
- *  the cap rather than wrapping a raw value. Absent on standard tags. @internal */
-export const fromServiceSym: unique symbol = Symbol.for(
-  "hyperlink-ts/Hyperlink/fromService",
+/** Marks a tag built by {@link Tag}`<Self, I>()` whose contract used bare {@link local} — its local
+ *  members are interface-shaped (the impl's own `Effect`/function, requiring {@link Local}), so
+ *  {@link buildLocalContext} passes them through with the cap rather than wrapping a raw value.
+ *  Absent on plain {@link Tag}`<Self>()` tags. @internal */
+export const interfaceLocalsSym: unique symbol = Symbol.for(
+  "hyperlink-ts/Hyperlink/interfaceLocals",
 );
 /** Where a contract's **kind** (its canonical id, e.g. `hyperlink-ts/WorkPool`) is
  *  stowed on a Tag — set by each contract's `.Tag` factory so consumers (the dashboard) can
@@ -2684,10 +2731,10 @@ export const readinessCheck = (
 };
 
 /**
- * Readiness for a **served** resource, where all we have is the wire `impl` (a `value` field is a `Stream`
- * there, a `constant` an `Effect`). Resolve those to plain values first — so the derivation sees the same
- * service shape {@link readinessOf} gives it (the materialized service), not the raw wire impl. The `value`
- * head is read in a short-lived scope so no `Scope` leaks into the result. @internal
+ * Readiness for a **served** resource, where all we have is the wire `impl` (a {@link value} field is
+ * an `Effect` resolved once). Resolve materialize fields to plain values first — so the derivation sees
+ * the same service shape {@link readinessOf} gives it (the materialized service), not the raw wire
+ * impl. @internal
  */
 const readinessCheckServed = (
   tag: { readonly [specSym]: FlatSpec },
@@ -2698,7 +2745,7 @@ const readinessCheckServed = (
     const flat = flattenImpl(impl as Record<string, unknown>, spec);
     const view: Record<string, unknown> = {};
     for (const [key, m] of Object.entries(spec)) {
-      if (isConstantMethod(m)) {
+      if (isValueMethod(m)) {
         setPath(view, key, yield* (flat[key] as Effect.Effect<unknown>));
       } else {
         // ref → its Subscribable (the readiness derivation reads `.get` itself); other wire members as-is
@@ -2867,7 +2914,7 @@ const claimGroupId = (groupId: string): void => {
 const buildInstanceTag = <Self, S extends Spec>(
   groupId: string,
   key: string,
-  // Runtime spec value — typed loosely as `Spec` so a caller (e.g. `fromService`) can present a
+  // Runtime spec value — typed loosely as `Spec` so a {@link Tag}`<Self, I>()` caller can present a
   // *resolved* `S` at the type level while passing the raw contract value; `S` still flows precisely
   // via `group` (`RpcGroupOf<S>`) and the explicit type args. Every caller passes `S` explicitly.
   spec: Spec,
@@ -2875,10 +2922,10 @@ const buildInstanceTag = <Self, S extends Spec>(
   description: string | undefined,
   node: NodeKey<unknown> | undefined,
   kindOverride: string | undefined,
-  // `fromService` marks its tags so `buildLocalContext` uses interface-shaped local semantics
-  // (pass the impl's own effect/function through, requiring `Local`) rather than the standard
-  // `local<T>()` obtain-a-value wrapping.
-  fromServiceMarker = false,
+  // Interface-Tag marks so `buildLocalContext` uses interface-shaped local semantics (pass the
+  // impl's own effect/function through, requiring `Local`) rather than the standard `local<T>()`
+  // obtain-a-value wrapping.
+  interfaceLocalsMarker = false,
 ) => {
   if (claimedKeys.has(key)) {
     throw new DuplicateHyperlinkKey({ key });
@@ -2914,13 +2961,22 @@ const buildInstanceTag = <Self, S extends Spec>(
     [readinessSym]: undefined,
     [peersSym]: peersKey,
     [selfNodeSym]: selfNodeKey,
-    ...(fromServiceMarker ? { [fromServiceSym]: true as const } : {}),
+    ...(interfaceLocalsMarker ? { [interfaceLocalsSym]: true as const } : {}),
   });
 };
 
 /**
- * Create a resource service tag from a {@link Spec}. Extend the result, like
- * `Context.Tag`, but the value type is **inferred from the spec**:
+ * Sentinel default for {@link Tag}'s optional service-interface type parameter — `Tag<Self>()` is the
+ * schema-driven path; `Tag<Self, I>()` takes `I` as the source of truth for bare {@link local}s.
+ * @internal
+ */
+declare const NoInterface: unique symbol;
+type NoInterface = typeof NoInterface;
+
+/**
+ * Create a resource service tag. Two forms:
+ *
+ * **Schema-driven** — `Tag<Self>()(key, spec)`: the value type is **inferred from the spec**:
  *
  * ```ts
  * class Counter extends Hyperlink.Tag<Counter>()("Counter", {
@@ -2931,6 +2987,22 @@ const buildInstanceTag = <Self, S extends Spec>(
  * const c = yield* Counter; // { increment: (p) => Effect<void>; current: Effect<number> }
  * ```
  *
+ * **Interface-driven** — `Tag<Self, I>()(key, contract)`: an existing **service interface** `I` is the
+ * source of truth. The contract gives a schema only for members on the wire; every other interface
+ * member becomes a **local** (via {@link InjectLocal}). Locals are written **bare** —
+ * `Hyperlink.local`, no `()` — and take their type from `I` (see {@link Validate}).
+ *
+ * ```ts
+ * interface CounterShape {
+ *   readonly current: Effect.Effect<number>;             // local (no schema)
+ *   readonly add: (by: number) => Effect.Effect<number>; // wired
+ * }
+ * class Counter extends Hyperlink.Tag<Counter, CounterShape>()("counter", {
+ *   current: Hyperlink.local,
+ *   add: Hyperlink.effectFn(Schema.Number, Schema.Number),
+ * }) {}
+ * ```
+ *
  * Keys must be unique: a duplicate **throws at declaration** — Effect's `Context` is
  * keyed by the key string and silently last-write-wins on collisions, so we guard it.
  * For a single resource the key is also its **group id** (the wire prefix for its
@@ -2939,109 +3011,71 @@ const buildInstanceTag = <Self, S extends Spec>(
  * @category constructors
  * @public
  */
-const makeTag = <Self>() => {
+const makeTag = <Self, I = NoInterface>() => {
   // `Context.Service`-shaped: `Tag<Self>()(key, spec, options?)`. The spec (2nd arg) is the
   // inferring call; `options.node` rides the inferring call so its identity `HSelf` infers from the
   // argument, and the node-bearing overload narrows `[nodeSym]` to a concrete `NodeKey` — which is
   // how `Hyperlink.client` discriminates the node-aware path. An {@link AddressedNode} narrows
   // further so `client(Tag)` can auto-wire connect.
+  //
+  // With `Tag<Self, I>()`, the contract is validated against `I` and bare locals resolve via
+  // {@link ResolveLocals}. Plain `Tag<Self>()` rejects bare locals ({@link RejectBareLocal}).
+  type SpecArg<S extends Spec> = [I] extends [NoInterface]
+    ? S & RejectBareLocal<S>
+    : S & Validate<S, I>;
+  type Resolved<S extends Spec> = [I] extends [NoInterface] ? S : ResolveLocals<S, I>;
+
   function build<const S extends Spec>(
     key: string,
-    spec: S,
+    spec: SpecArg<S>,
     options?: { readonly description?: string; readonly kind?: string },
-  ): HyperlinkTag<Self, S>;
+  ): HyperlinkTag<Self, Resolved<S>>;
   function build<const S extends Spec, HSelf>(
     key: string,
-    spec: S,
+    spec: SpecArg<S>,
     options: {
       readonly description?: string;
       readonly kind?: string;
       readonly node: AddressedNode<HSelf>;
     },
-  ): NodeBoundTag<Self, S, HSelf> & {
+  ): NodeBoundTag<Self, Resolved<S>, HSelf> & {
     readonly [nodeSym]: AddressedNode<HSelf>;
   };
   function build<const S extends Spec, HSelf>(
     key: string,
-    spec: S,
+    spec: SpecArg<S>,
     options: {
       readonly description?: string;
       readonly kind?: string;
       readonly node: NodeKey<HSelf>;
     },
-  ): NodeBoundTag<Self, S, HSelf>;
+  ): NodeBoundTag<Self, Resolved<S>, HSelf>;
   function build<const S extends Spec>(
     key: string,
-    spec: S,
+    spec: SpecArg<S>,
     options?: {
       readonly description?: string;
       readonly kind?: string;
       readonly node?: NodeKey<unknown>;
     },
-  ): HyperlinkTag<Self, S> {
-    // single resource: key doubles as the group id (its wire prefix)
+  ): HyperlinkTag<Self, Resolved<S>> {
+    // single resource: key doubles as the group id (its wire prefix). The contract *value* is the
+    // runtime spec (bare `local`s carry the LocalMethod brand); with `I`, `S` is presented resolved
+    // at the type level so `ImplOf` / `ServiceOf` derive local types from the interface.
     claimGroupId(key);
-    return buildInstanceTag<Self, S>(
+    const flat = flattenSpec(spec);
+    const interfaceLocals = Object.values(flat).some((m) =>
+      Predicate.hasProperty(m, bareLocalSym),
+    );
+    return buildInstanceTag<Self, Resolved<S>>(
       key,
       key,
       spec,
-      buildRpcGroup(key, flattenSpec(spec)),
+      buildRpcGroup(key, flat),
       options?.description,
       options?.node,
       options?.kind,
-    );
-  }
-  return build;
-};
-
-/**
- * Build a resource tag from an existing **service interface** as the single source of truth. The
- * type parameter `I` is the interface; the contract gives a schema only for the members you want on
- * the wire — every other interface member becomes a **local** (surfaced via {@link InjectLocal},
- * carrying `Local<I>`). One merged handle, identical whether you hold the local layer or a client;
- * the only difference is that a client can't call the locals (a compile error — unsatisfied
- * `Local`).
- *
- * Locals are written **bare** — `Hyperlink.local`, no `()` — and take their type from `I`. A bare
- * local with no matching interface member is rejected at the call (see {@link Validate}).
- *
- * Two type parameters, like {@link Tag}: `Self` (the class — the tag's nominal identity, `Local`
- * brand) and `I` (the service interface — a **standalone** type; passing the class itself as `I`
- * would be a circular base reference).
- *
- * ```ts
- * interface CounterShape {
- *   readonly current: Effect.Effect<number>;            // local (no schema)
- *   readonly add: (by: number) => Effect.Effect<number>; // wired
- * }
- * class Counter extends Hyperlink.fromService<Counter, CounterShape>()("counter", {
- *   current: Hyperlink.local,
- *   add: Hyperlink.effectFn(Schema.Number, Schema.Number),
- * }) {}
- * ```
- *
- * @category constructors
- * @public
- */
-export const fromService = <Self, I>() => {
-  function build<const C extends Spec>(
-    key: string,
-    contract: C & Validate<C, I>,
-    options?: { readonly description?: string; readonly kind?: string },
-  ): HyperlinkTag<Self, ResolveLocals<C, I>> {
-    // single resource: key doubles as the group id (its wire prefix). The contract *value* is the
-    // runtime spec (bare `local`s carry the LocalMethod brand); `S` is presented resolved at the type
-    // level so `ImplOf`/`FromServiceOf` derive local types from the interface `I`.
-    claimGroupId(key);
-    return buildInstanceTag<Self, ResolveLocals<C, I>>(
-      key,
-      key,
-      contract,
-      buildRpcGroup(key, flattenSpec(contract)),
-      options?.description,
-      undefined,
-      options?.kind,
-      true,
+      interfaceLocals,
     );
   }
   return build;
@@ -3209,34 +3243,34 @@ const clientSubscribable = <A>(
 // **already-built** impl record. Shared by `localLayer` and the local grant that `httpServer`
 // adds by default, so "serve + use locally" and "just local" produce the *identical* instance. The impl may be
 // nested (grouped) — flattened to path keys matching the flat spec.
-const buildLocalContext = <Self>(
+const buildLocalContext = <Self, E = never>(
   tag: {
     readonly [specSym]: FlatSpec;
     readonly [localCapSym]: Context.Key<
       Local<Self>,
       { readonly granted: true }
     >;
-    readonly [fromServiceSym]?: true;
+    readonly [interfaceLocalsSym]?: true;
   },
   builtImpl: Record<string, unknown>,
-): Effect.Effect<Context.Context<unknown>> =>
+): Effect.Effect<Context.Context<unknown>, E> =>
   Effect.gen(function* () {
     const cap = tag[localCapSym];
     const spec = tag[specSym];
-    // `fromService` locals are interface-shaped: the impl provides the member's own `Effect` /
+    // Interface-Tag locals are interface-shaped: the impl provides the member's own `Effect` /
     // `Stream` / function, which passes through (its `Local` requirement is satisfied by the granted
     // cap in context). A standard `local<T>()` always obtains a raw value, so it's wrapped.
-    const fromServiceTag = tag[fromServiceSym] === true;
+    const interfaceLocalsTag = tag[interfaceLocalsSym] === true;
     const members = flattenImpl(builtImpl, spec);
     const service: Record<string, unknown> = {};
     for (const [key, m] of Object.entries(spec)) {
       // local members surface as `Effect<T, never, Local>` (require Local to obtain the
-      // value); constant fields are resolved once here into a plain value; ref fields and other wire
+      // value); value fields are resolved once here into a plain value; ref fields and other wire
       // members (their `Subscribable` / `Effect` / `Stream` / function) pass through unchanged.
       if (isLocalMethod(m)) {
         const member = members[key];
         const interfaceShaped =
-          fromServiceTag &&
+          interfaceLocalsTag &&
           (Effect.isEffect(member) ||
             Stream.isStream(member) ||
             typeof member === "function");
@@ -3245,8 +3279,8 @@ const buildLocalContext = <Self>(
           key,
           interfaceShaped ? member : Effect.as(cap, member),
         );
-      } else if (isConstantMethod(m)) {
-        setPath(service, key, yield* (members[key] as Effect.Effect<unknown>));
+      } else if (isValueMethod(m)) {
+        setPath(service, key, yield* (members[key] as Effect.Effect<unknown, E>));
       } else {
         setPath(service, key, members[key]);
       }
@@ -3351,15 +3385,19 @@ const identityClaimLayer = <Self, S extends Spec, A, E, R>(
 const localLayerPlain = <Self, S extends Spec, R>(
   tag: HyperlinkTag<Self, S>,
   impl: ImplOf<S> | Effect.Effect<ImplOf<S>, never, R>,
-): Layer.Layer<Self | Local<Self>, never, Exclude<R, Scope.Scope>> => {
+): Layer.Layer<Self | Local<Self>, ValueErrorsOf<S>, Exclude<R, Scope.Scope>> => {
   // One `effectContext` layer, so any `Scope` the impl's construction needs is managed by the layer.
   const build = Effect.flatMap(
     Effect.isEffect(impl) ? impl : Effect.succeed(impl),
-    (builtImpl) => buildLocalContext(tag, builtImpl as Record<string, unknown>),
+    (builtImpl) =>
+      buildLocalContext<Self, ValueErrorsOf<S>>(
+        tag,
+        builtImpl as Record<string, unknown>,
+      ),
   );
   return Layer.effectContext(build) as Layer.Layer<
     Self | Local<Self>,
-    never,
+    ValueErrorsOf<S>,
     Exclude<R, Scope.Scope>
   >;
 };
@@ -3367,36 +3405,36 @@ const localLayerPlain = <Self, S extends Spec, R>(
 function localLayer<Self, S extends Spec>(
   tag: HyperlinkTag<Self, S> & { readonly [identitySym]: true },
   impl: ImplOf<S>,
-): Layer.Layer<Self | Local<Self>, IdentitySelfRequired, LookupIdentity>;
+): Layer.Layer<Self | Local<Self>, IdentitySelfRequired | ValueErrorsOf<S>, LookupIdentity>;
 function localLayer<Self, S extends Spec, R>(
   tag: HyperlinkTag<Self, S> & { readonly [identitySym]: true },
   impl: Effect.Effect<ImplOf<S>, never, R>,
 ): Layer.Layer<
   Self | Local<Self>,
-  IdentitySelfRequired,
+  IdentitySelfRequired | ValueErrorsOf<S>,
   Exclude<R, Scope.Scope> | LookupIdentity
 >;
 function localLayer<Self, S extends Spec>(
   tag: HyperlinkTag<Self, S>,
   impl: ImplOf<S>,
-): Layer.Layer<Self | Local<Self>>;
+): Layer.Layer<Self | Local<Self>, ValueErrorsOf<S>>;
 function localLayer<Self, S extends Spec, R>(
   tag: HyperlinkTag<Self, S>,
   impl: Effect.Effect<ImplOf<S>, never, R>,
-): Layer.Layer<Self | Local<Self>, never, Exclude<R, Scope.Scope>>;
+): Layer.Layer<Self | Local<Self>, ValueErrorsOf<S>, Exclude<R, Scope.Scope>>;
 function localLayer<Self, S extends Spec, R>(
   tag: HyperlinkTag<Self, S>,
   impl: ImplOf<S> | Effect.Effect<ImplOf<S>, never, R>,
 ): Layer.Layer<
   Self | Local<Self>,
-  IdentitySelfRequired,
+  IdentitySelfRequired | ValueErrorsOf<S>,
   Exclude<R, Scope.Scope> | LookupIdentity
 > {
   const plain = localLayerPlain(tag, impl);
   if (!isIdentity(tag)) {
     return plain as Layer.Layer<
       Self | Local<Self>,
-      IdentitySelfRequired,
+      IdentitySelfRequired | ValueErrorsOf<S>,
       Exclude<R, Scope.Scope> | LookupIdentity
     >;
   }
@@ -5220,7 +5258,7 @@ export function discoverClients(
 
 /**
  * Build a **peer** service — a fully **lazy** client for folding across nodes ({@link combineQuery} /
- * {@link combineStream}). Unlike {@link buildClientService} it never resolves `constant`s or subscribes
+ * {@link combineStream}). Unlike {@link buildClientService} it never resolves `value`s or subscribes
  * `value` fields at build: those open a connection and (for a `value`) block on the initial push, so a
  * co-booting or down peer would hang the whole serve. A `value` is read **one-shot** here (`Stream.runHead`
  * → its replayed current), so the network is touched only when a fold runs, and `combineQuery` drops an
@@ -5254,7 +5292,7 @@ const buildPeerService = <Self, S extends Spec>(
         ),
       );
     } else {
-      // effect / effectFn / stream / constant — already their lazy wire form (Effect/Stream); no eager
+      // effect / effectFn / stream / value — already their lazy wire form (Effect/Stream); no eager
       // resolve/subscribe. Locals aren't on the wire.
       setPath(service, key, wire[key]);
     }
@@ -5596,15 +5634,15 @@ export const fleetHealth = <Self, S extends Spec, A, EPick, EOwn, ROwn>(
 const buildClientService = <Self, S extends Spec>(
   tag: HyperlinkTag<Self, S>,
   rpc: unknown,
-): Effect.Effect<ServiceOf<S, Self>, never, Scope.Scope> =>
+): Effect.Effect<ServiceOf<S, Self>, ValueErrorsOf<S>, Scope.Scope> =>
   Effect.gen(function* () {
     const wire = forwardClient(rpc, tag[specSym], tag.groupId, tag.key) as Record<
       string,
       unknown
     >;
     const cap = tag[localCapSym];
-    // build directly into the nested shape (via setPath) so `value` setters write the object the consumer
-    // holds; `wire` + `tag[specSym]` are flat path keys.
+    // build directly into the nested shape (via setPath) so materialize `value`s write the object the
+    // consumer holds; `wire` + `tag[specSym]` are flat path keys.
     const service: Record<string, unknown> = {};
     for (const [key, m] of Object.entries(tag[specSym])) {
       if (isLocalMethod(m)) {
@@ -5613,9 +5651,13 @@ const buildClientService = <Self, S extends Spec>(
           key,
           Effect.flatMap(cap, () => Effect.die(new LocalOnlyMethod({ method: key }))),
         );
-      } else if (isConstantMethod(m)) {
-        // resolve the constant's query once at acquire → a plain value
-        setPath(service, key, yield* (wire[key] as Effect.Effect<unknown>));
+      } else if (isValueMethod(m)) {
+        // resolve the value's query once at acquire → a plain value (fails acquire on E)
+        setPath(
+          service,
+          key,
+          yield* (wire[key] as Effect.Effect<unknown, ValueErrorsOf<S>>),
+        );
       } else if (isRefMethod(m)) {
         // a Subscribable over the RPC changes stream (one kept-open subscription → local cache)
         setPath(service, key, yield* clientSubscribable(wire[key] as Stream.Stream<unknown>));
@@ -5647,25 +5689,25 @@ function clientLayer<Self, S extends Spec, HSelf>(
   tag: NodeBoundTag<Self, S, HSelf> & {
     readonly [nodeSym]: AddressedNode<HSelf>;
   },
-): Layer.Layer<Self, ClientVerifyError>;
+): Layer.Layer<Self, ClientVerifyError | ValueErrorsOf<S>>;
 function clientLayer<Self, S extends Spec, HSelf>(
   tag: NodeBoundTag<Self, S, HSelf>,
-): Layer.Layer<Self, never, HSelf>;
+): Layer.Layer<Self, ValueErrorsOf<S>, HSelf>;
 function clientLayer<Self, S extends Spec, HSelf>(
   tag: HyperlinkTag<Self, S>,
   node: AddressedNode<HSelf>,
-): Layer.Layer<Self, ClientVerifyError>;
+): Layer.Layer<Self, ClientVerifyError | ValueErrorsOf<S>>;
 function clientLayer<Self, S extends Spec, HSelf>(
   tag: HyperlinkTag<Self, S>,
   node: NodeKey<HSelf>,
-): Layer.Layer<Self, never, HSelf>;
+): Layer.Layer<Self, ValueErrorsOf<S>, HSelf>;
 function clientLayer<Self, S extends Spec>(
   tag: HyperlinkTag<Self, S>,
-): Layer.Layer<Self, never, RpcClient.Protocol>;
+): Layer.Layer<Self, ValueErrorsOf<S>, RpcClient.Protocol>;
 function clientLayer<Self, S extends Spec>(
   tag: HyperlinkTag<Self, S>,
   node?: NodeKey<unknown>,
-): Layer.Layer<Self, ClientVerifyError, RpcClient.Protocol> {
+): Layer.Layer<Self, ClientVerifyError | ValueErrorsOf<S>, RpcClient.Protocol> {
   const group = tag[groupSym];
   // an explicit `node` (for a nodeless tag) wins; otherwise the tag's own node, if any.
   const nodeKey = node ?? tag[nodeSym];
