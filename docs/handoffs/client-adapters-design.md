@@ -413,7 +413,7 @@ View.react(layer) → {
 
 **Locked (grilling):** W14–W19; View services + Layer-provided TSX (not skins.register map); components = single array; missing skin = not provided.
 
-**Open (grilling):** Spec gate timing; Group expansion; exact `View.Tag` / `View.make` shape; how `View.react` infers `ProvidedViews` from Layer.
+**Open (grilling):** Spec gate timing; Group expansion; exact `View.Tag` / `View.make` shape; how binds/pins introduce View services into Layer `R` (so react’s `R=never` check fires).
 
 #### View handles on HS tags (W17) — LOCKED (clarified)
 
@@ -472,43 +472,48 @@ class Special extends WorkPool.Tag<Special>()("app/Special", { payload }).pipe(
 | Second `.pipe(Hyperlink.components([…]))` | **Replace** the whole pin list (override), not merge |
 | Home | `Hyperlink.components` — pin is handle identity; `View.*` stays registry/skins/react |
 
-#### `View.react` — missing-skin check = provided View services (design)
+#### `View.react` — missing skin = Layer `R` is not `never` (owner 2026-07-26)
 
-**Goal:** If `Hyperlink.components([CustomCard, PoolCard])` pins those View **services**, the Layer passed to `View.react` must **provide** each of them (Component as Svc). Otherwise TypeScript errors — same idea as using a Tag whose Layer wasn’t provided.
+**Goal:** `View.react(layer)` builds a **usable** React kit (`Card`, `Detail`, `Provider`, …). To do that it must **run** the Layer (e.g. `Effect.runSync` / `runPromise` + `Layer.build`) and read View services from the resulting Context. That only typechecks when the Layer’s remaining requirements are **`never`**.
 
-**Mistake corrected:** `View.skins.register(Handle, Comp)` reinvented DI. Wrong.  
-**Right:** `Layer.succeed(PoolCard, PoolCardView)` (or `Layer.effect` / `Layer.sync`) — Component is the dependency.
+So the missing-skin error is not a bespoke `ProvidedViews` brand on `<Card tag />` first — it is the normal Effect error:
 
 ```ts
+View.react(layer)  // layer: Layer<Out, E, R>
+// requires R = never (fully provided), or View.react’s signature won’t accept it
+```
+
+**How View services show up in `R`:** bind (and pin) contributions **require** the View services they name; chrome Layers **provide** them.
+
+```ts
+// Introduces requirements: PoolCard | PoolDetail
+const binds = Layer.mergeAll(
+  View.bindKind(WorkPool.kind, PoolCard),
+  View.bindKind(WorkPool.kind, PoolDetail),
+)
+
+// Discharges those requirements (Component = Svc)
 const chrome = Layer.mergeAll(
   Layer.succeed(PoolCard, PoolCardView),
   Layer.succeed(PoolDetail, PoolDetailView),
-  Layer.succeed(CustomCard, CustomCardView),
 )
 
-const viewLayer = Layer.mergeAll(
-  chrome,
-  View.bindKind(WorkPool.kind, PoolCard),
-  View.bindKind(WorkPool.kind, PoolDetail),
-).pipe(Layer.provideMerge(View.base))
+const viewLayer = Layer.mergeAll(binds, chrome).pipe(Layer.provideMerge(View.base))
+// R = never  ✓
 
-// View.react infers ProvidedViews from what chrome/viewLayer provides
 const { Card, Detail, Provider } = View.react(viewLayer)
 
-// Unpiped — registry match; no pin-level provide proof
-<Card tag={Jobs} />
-
-// Piped — every pinned View service must be in ProvidedViews
-Special.pipe(Hyperlink.components([CustomCard, PoolCard]))
-<Card tag={Special} />  // OK if CustomCard + PoolCard provided
-
-Broken.pipe(Hyperlink.components([NotProvidedCard]))
-<Card tag={Broken} />   // TYPE ERROR — NotProvidedCard not provided to this kit
+// Forgot CustomCard provide but bound/pinned it → R still has CustomCard
+View.react(Layer.mergeAll(binds, View.bindKind(WorkPool.kind, CustomCard), chrome))
+// TYPE ERROR — R is not never (missing Layer.succeed(CustomCard, …))
 ```
 
-**How types bake in (lean):** `View.react` is generic over the Layer’s provided View services (or an explicit `View.provide` helper that brands the Layer with `ProvidedViews = PoolCard | PoolDetail | …`). Piped tags require `PinnedViews<T> extends ProvidedViews`. Matcher still filters by `kind` when rendering Card vs Detail.
+**`Hyperlink.components([…])` pins:** same story — using a pin that names `CustomCard` means that service must be provided before `View.react` (or the compose path that builds the kit) can see `R = never`. Exact wiring (pin → Layer requirement vs pin checked when composing app Layer) bakes at Eng; the **user-facing failure mode** is “can’t `View.react` / run this Layer until every named View service is provided.”
 
-**Web vs TUI:** not two registers in one list — two apps (or two compose sites), each `Layer.succeed`s the same View services with different Components, then `View.react` that Layer.
+**Mistake corrected:** `View.skins.register(Handle, Comp)` reinvented DI.  
+**Right:** `Layer.succeed(PoolCard, Comp)` + `View.react` only on a fully provided Layer.
+
+**Web vs TUI:** each app merges binds + its own `Layer.succeed` chrome, then `View.react` — same View services, different Svc values.
 
 #### Define + register (one entry = one kind)
 
@@ -612,12 +617,12 @@ Also: **`Atom.family`** / `AtomRegistry` for reactive memoized entries (differen
 | W15 | **No `groupId` in View/UI dispatch** — RPC wire only. Family bind = stamped `kindOf` (`hyperlink-ts/WorkPool`, …). Kill `bindFactory` / short `"queue"`\|`"pool"` kinds |
 | W16 | Pipe allowlist on service tag (symbol bag); present kinds **replace** binds; order within a kind = pager |
 | W17 | View handles on HS tag are **opt-in override only** (not defaults). Default chrome = registry binds. **When piped**, type-check pins |
-| W18 | **Missing skin is the #1 type gate** for piped tags — bake **provided View services** into `View.react` kit types (Layer provide set) |
+| W18 | **Missing skin = `View.react(layer)` requires Layer `R = never`** — binds/pins require View services; `Layer.succeed(View, Comp)` provides them; react runs the Layer to emit components |
 | W19 | Pipe API = **`Hyperlink.components(Handle[])`** — single array, partition by `handle.kind`; not card/detail/page siblings; not `{ card, detail }` object |
 
 ### Eng order (next)
 
-1. View services + **`Layer.succeed(View, Comp)`**; **`View.react(layer)`** types `ProvidedViews` for pin checks (W18)
+1. View services + **`Layer.succeed(View, Comp)`**; **`View.react(layer)`** requires `R = never` (runs Layer → kit) (W18)
 2. **`Hyperlink.components(View[])`** pipe (W19) — partition by kind; Spec gate secondary
 3. Platform apps each provide the same View services with their Components
 4. Migrate queue defaults as separate Card + Detail entries
