@@ -409,4 +409,4 @@ Also: **`Atom.family`** / `AtomRegistry` for reactive memoized entries (differen
 
 ## Next conversation
 
-W1–W12 locked. Eng follows order above — start with `View` skeleton (`make` / `register` / `bind*` / `react`); do **not** wait on Tag stamp or Hyperlink.atom for the registry skeleton. TanStack `useQuery` / Promise adapter still on table for the client-adapter stack.
+v4: cards/pages as separate roles, multi-match pagination, handle `.pipe(View.card|page)`. Reshape Eng’d skeleton accordingly. Ordering rules for multi-match + exact pipe semantics still to bake. TanStack / Promise adapter still on table.
