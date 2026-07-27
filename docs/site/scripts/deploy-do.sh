@@ -40,6 +40,30 @@ SHA="$(git rev-parse --short HEAD)"
 echo "==> building site @ ${SHA} (origin: ${DOCS_SITE_ORIGIN})"
 pnpm build
 
+# Guard: a waku-only rebuild without api-data/index.json yields ~90 HTML files and ships
+# 404s for every /api/<pkg> and /api/<pkg>/<module> URL (symbols can still SSR). A healthy
+# hyperlink-ts prerender is hundreds of pages; refuse to push a truncated artifact.
+if [ ! -f api-data/index.json ]; then
+  echo "refusing to deploy: api-data/index.json missing after build" >&2
+  exit 1
+fi
+API_HTML=$(find dist/public/api -name '*.html' 2>/dev/null | wc -l | tr -d ' ')
+if [ "${API_HTML}" -lt 200 ]; then
+  echo "refusing to deploy: only ${API_HTML} api HTML page(s) under dist/public/api (need ≥200)" >&2
+  echo "  tip: ensure gen-api wrote api-data/index.json, then re-run a full \`pnpm build\`" >&2
+  exit 1
+fi
+for must in \
+  dist/public/api/hyperlink-ts/index.html \
+  dist/public/api/hyperlink-ts/WorkPool/index.html
+do
+  if [ ! -f "${must}" ]; then
+    echo "refusing to deploy: missing ${must}" >&2
+    exit 1
+  fi
+done
+echo "==> api SSG ok (${API_HTML} html pages; WorkPool module present)"
+
 echo "==> docker build"
 BASE="registry.digitalocean.com/${REGISTRY}/hyperlink-docs"
 (cd .. && docker buildx build --platform linux/amd64 --push -f site/Dockerfile -t "${BASE}:${SHA}" -t "${BASE}:latest" .)
