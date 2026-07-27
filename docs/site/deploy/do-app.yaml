@@ -20,7 +20,8 @@ services:
       repository: hyperlink-docs
       tag: latest
     http_port: 8080
-    instance_size_slug: apps-s-1vcpu-1gb-fixed
+    # 1GB OOMs under Effect API SSR (hover sidecars) — heap ~538MB then crash loop / CF 504.
+    instance_size_slug: basic-s
     instance_count: 1
     health_check:
       http_path: /healthz
