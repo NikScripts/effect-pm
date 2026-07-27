@@ -329,6 +329,14 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Chose:** `Logs.byResource(tag | key)` hard-break; remove log annotation `processId`/`queueId` + helpers; CLI match via `LogEntry.hasKey`; Process/Queue event + durable-queue resource identity fields → `key`; keep `groupId`.
 - **Rejected / deferred:** store memo; Agent D handles; `docs/site`; Process.events further Eng.
 - **Supervisor impact:** Agent 3 Eng on `cursor/logs-byresource-full-key-a009`.
+- **Superseded (2026-07-27):** the “keep `groupId`” RPC exception — see next row.
+
+## 2026-07-27 — Wire groups: tag key vs kind key; drop public `groupId`
+
+- **Owner said:** Don’t conflate regular RPC groups with shared-Spec families. Regular group = tag key. Shared Spec family = kind key (hide via factory, Effect-style). Remove unused/redundant `groupId`. Never teach `"queue"` as a wire key. Only share Specs that are actually identical (control fragments / ApiMetrics / Schedule — not full WorkPool item plane).
+- **Chose:** Plan [`wire-groups-and-identity.md`](../plans/wire-groups-and-identity.md) — W0 locked; Eng W1+ (solo drop `groupId`, demote unused `tagFor`/`serveInstances`, then real family factory).
+- **Rejected:** Kind as RpcGroup prefix for regular Tags; spec-hash as group name; public `wireMode` on every tag; forcing full WorkPool/Daemon/Gate Specs onto one kind-group without a control/data split.
+- **Supervisor impact:** Agent 4 owns W1+ on `cursor/hyperservice-open-deps-5679`.
 
 ---
 
