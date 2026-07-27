@@ -262,7 +262,7 @@ Fleet rate limiting is **first-class Gate substrate**. HttpApiClient update **us
 3. **Distributed + memory Soft:** docs-only vs fail-loud? — lean docs  
 4. ~~**Default `onExceeded` for Gates:**~~ **LOCKED (R1 lean):** `"delay"`  
 5. ~~**Nest name / shape / collision:**~~ **LOCKED (bake 2026-07-27):** nest default **`metrics`**, **flat siblings**. Escape = const **`metricsKey`** rename (typed); fail-loud if Api group id equals chosen key.  
-6. ~~**Per-route keys** in v1 or whole-client key only?~~ **LOCKED (bake 2026-07-27):** whole-client v1; optional `rateLimit.key` (default Tag id). **Resolved key lives on the handle** under `metrics` for widget/dashboard binding. Per-route later.
+6. ~~**Per-route keys** in v1 or whole-client key only?~~ **LOCKED (bake 2026-07-27):** whole-client v1; optional `rateLimit.key` (default Tag id). Widget discovery = **stable Tag/handle metadata** (bucket key + `metricsKey`), not a path under the renameable nest. Nest = live data only. Per-route later.
 
 ---
 
