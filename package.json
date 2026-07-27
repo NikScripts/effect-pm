@@ -202,6 +202,7 @@
     "example:web-dashboard": "vite --config examples/web-dashboard/vite.config.ts examples/web-dashboard",
     "example:hyperlink-web": "vite --config examples/hyperlink-web/vite.config.ts examples/hyperlink-web",
     "example:hyperlink-web-server": "tsx examples/hyperlink-web/server.ts",
+    "example:view-compose-proto": "vite --config examples/view-compose-proto/vite.config.ts",
     "docs:serve": "tsx dev/cli/main.ts docs serve",
     "docs:build": "tsx dev/cli/main.ts docs build",
     "docs:preview": "tsx dev/cli/main.ts docs preview",
