@@ -31,6 +31,33 @@ export interface ViewProps {
   readonly name?: string;
 }
 
+/**
+ * Optional layout hints from parent chrome (grid cell width, selection highlight).
+ * Not navigation — shells own `onOpen` / routing; skins may read this via {@link useChrome}.
+ *
+ * @public
+ */
+export interface Chrome {
+  readonly width?: number;
+  readonly selected?: boolean;
+}
+
+const ChromeContext = React.createContext<Chrome>({});
+
+/**
+ * Provide layout chrome for descendant View skins (e.g. TUI Cell → card width/selection).
+ *
+ * @public
+ */
+export const ChromeProvider = (props: {
+  readonly value: Chrome;
+  readonly children: React.ReactNode;
+}): React.ReactElement =>
+  React.createElement(ChromeContext.Provider, { value: props.value }, props.children);
+
+/** Read parent {@link Chrome} (empty object when none). @public */
+export const useChrome = (): Chrome => React.useContext(ChromeContext);
+
 /** A React/Ink view for one chrome role — the View service’s Svc. @public */
 export type ViewComponent = (props: ViewProps) => React.ReactElement | null;
 
@@ -422,6 +449,56 @@ export interface BoundViewProps {
   readonly name?: string;
 }
 
+const useKit = (): KitContext => {
+  const value = React.useContext(RegistryReactContext);
+  if (value === null) {
+    throw new Error("View: render inside View.react(…).Provider");
+  }
+  return value;
+};
+
+/**
+ * Whether the mounted View Provider has a match for this tag + kind.
+ * `false` when no Provider or `tag` is null (safe before leaf narrowing).
+ *
+ * @public
+ */
+export const useHasMatch = (
+  tag: LeafTag | null,
+  viewKind: ViewKind,
+): boolean => {
+  const kit = React.useContext(RegistryReactContext);
+  if (kit === null || tag === null) return false;
+  return kit.resolve(tag, viewKind).length > 0;
+};
+
+/** Matcher card — requires {@link react} Provider. @public */
+export const Card = (props: ViewProps): React.ReactElement | null =>
+  React.createElement(MatchHost, {
+    viewKind: "card",
+    resolved: useKit().resolve(props.tag, "card"),
+    tag: props.tag,
+    name: props.name,
+  });
+
+/** Matcher detail — requires {@link react} Provider. @public */
+export const Detail = (props: ViewProps): React.ReactElement | null =>
+  React.createElement(MatchHost, {
+    viewKind: "detail",
+    resolved: useKit().resolve(props.tag, "detail"),
+    tag: props.tag,
+    name: props.name,
+  });
+
+/** Matcher page — requires {@link react} Provider. @public */
+export const Page = (props: ViewProps): React.ReactElement | null =>
+  React.createElement(MatchHost, {
+    viewKind: "page",
+    resolved: useKit().resolve(props.tag, "page"),
+    tag: props.tag,
+    name: props.name,
+  });
+
 /**
  * Build registry resolver from a **fully provided** view Layer (`R = never`).
  * Runs the Layer (`Effect.runSync` + `Layer.build`) so usable components can be returned.
@@ -446,6 +523,7 @@ const buildKit = <ROut, E,>(viewLayer: Layer.Layer<ROut, E, never>): KitContext 
 
 /**
  * React kit from a fully provided view Layer (`R` must be `never`).
+ * `Card` / `Detail` / `Page` are module-level and read the Provider context.
  *
  * @public
  */
@@ -457,40 +535,8 @@ export const react = <ROut, E,>(viewLayer: Layer.Layer<ROut, E, never>) => {
   }): React.ReactElement =>
     React.createElement(RegistryReactContext.Provider, { value: kit }, props.children);
 
-  const useKit = (): KitContext => {
-    const value = React.useContext(RegistryReactContext);
-    if (value === null) {
-      throw new Error("View.useView: render inside View.react(…).Provider");
-    }
-    return value;
-  };
-
   const resolve = (tag: LeafTag, viewKind: ViewKind): ReadonlyArray<Resolved> =>
     kit.resolve(tag, viewKind);
-
-  const Card = (props: ViewProps): React.ReactElement | null =>
-    React.createElement(MatchHost, {
-      viewKind: "card",
-      resolved: useKit().resolve(props.tag, "card"),
-      tag: props.tag,
-      name: props.name,
-    });
-
-  const Detail = (props: ViewProps): React.ReactElement | null =>
-    React.createElement(MatchHost, {
-      viewKind: "detail",
-      resolved: useKit().resolve(props.tag, "detail"),
-      tag: props.tag,
-      name: props.name,
-    });
-
-  const Page = (props: ViewProps): React.ReactElement | null =>
-    React.createElement(MatchHost, {
-      viewKind: "page",
-      resolved: useKit().resolve(props.tag, "page"),
-      tag: props.tag,
-      name: props.name,
-    });
 
   /**
    * Flip: bind Card/Detail/Page to one resource tag (no `tag` prop).

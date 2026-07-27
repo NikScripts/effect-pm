@@ -47,7 +47,6 @@ import {
   isShardMapTag,
   isGateTag,
   isDaemonTag,
-  isQueueTag,
   nodesOf,
   leafTags,
   queueLeaves,
@@ -57,8 +56,8 @@ import {
 import { dateFromMillis, fmtClock, fmtDayLabel, millisFromLocalInput, now, startOfDayMillis, toLocalInput } from "../ui/now";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
 import { memberKindOf } from "../ui/memberKind";
+import * as View from "../ui/View";
 import { kindOf as hyperlinkKindOf, kind as hyperlinkKind } from "../Hyperlink";
-import { kind as queueKind } from "../WorkPool";
 import { priorityKind } from "../WorkPool";
 import { kind as fleetHealthKind, type NodeReport } from "../FleetHealth";
 import { kind as telemetryKind, type MetricDatum } from "../Telemetry";
@@ -430,15 +429,28 @@ export const Cell = (props: {
   readonly onOpenGroup: (g: GroupNode) => void;
 }): React.ReactElement => {
   const registry = useWidgets();
+  const leaf = isLeafTag(props.member) ? props.member : null;
+  const hasViewCard = View.useHasMatch(leaf, "card");
   // Same bucket as TUI (`memberKindOf`); leaves still resolve via the key→kind registry.
   if (memberKindOf(props.member) === "group" && Group.isGroup(props.member)) {
     return <GroupCard node={props.member} name={props.name} onOpen={props.onOpenGroup} />;
   }
   // A non-group member is a resource tag; resolve its widget by key → kind → fallback.
-  if (!isLeafTag(props.member)) return <></>;
-  const tag = props.member;
-  const Widget = widgetFor(registry, tag.key, hyperlinkKindOf(tag) ?? hyperlinkKind);
-  return <Widget tag={tag} name={props.name} onOpen={props.onOpenLeaf} />;
+  if (leaf === null) return <></>;
+  // View kit first (WorkPool, …) when Dashboard mounted a View.react Provider; parent owns onOpen.
+  if (hasViewCard) {
+    return (
+      <button
+        type="button"
+        className="contents text-left"
+        onClick={() => props.onOpenLeaf(leaf)}
+      >
+        <View.Card tag={leaf} name={props.name} />
+      </button>
+    );
+  }
+  const Widget = widgetFor(registry, leaf.key, hyperlinkKindOf(leaf) ?? hyperlinkKind);
+  return <Widget tag={leaf} name={props.name} onOpen={props.onOpenLeaf} />;
 };
 
 const DegradedOverlayInner = (props: {
@@ -2948,12 +2960,6 @@ export const GateDetail = (props: {
   );
 };
 
-const queueWidget: Widget = ({ tag, name, onOpen }) =>
-  isQueueTag(tag) ? (
-    <QueueCard tag={tag} name={name} onOpen={onOpen} />
-  ) : (
-    <FallbackCard tag={tag} name={name} onOpen={onOpen} />
-  );
 const daemonWidget: Widget = ({ tag, name, onOpen }) =>
   isDaemonTag(tag) ? (
     <DaemonCard tag={tag} name={name} onOpen={onOpen} />
@@ -3009,7 +3015,7 @@ export const base: WidgetRegistry<Widget> = withEntries(
     fallback: FallbackCard,
   },
   [
-    forKind(queueKind, queueWidget),
+    // WorkPool queue cards: View.react(web/WorkPoolView.layer) — not forKind.
     forKind(priorityKind, priorityWidget),
     forKind(daemonKind, daemonWidget),
     forKind(apiKind, apiWidget),

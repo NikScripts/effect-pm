@@ -46,11 +46,15 @@ import { RuntimeProvider, useApiBundle, useNodeBundle, useDaemonBundle, useQueue
 import { ViewTransitionProvider, useViewTransition, useViewTransitionStyle } from "./useViewTransition";
 import { useGroupRoute } from "./useGroupRoute";
 import { Button } from "./components/ui/button";
-import { ApiEndpointTable, ApiMetricChart, ApiStats, ApiStatusBadge, base, Cell, ConfirmDialog, PriorityDetail, FleetHealthDetail, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, DaemonControls, DaemonStats, DaemonStatusBadge, QueueDetailPanel, HyperlinkReadinessBanner, GateDetail, ScheduleEditor, ShardMapDetail, StatusBadge, TelemetryDetail, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
+import { ApiEndpointTable, ApiMetricChart, ApiStats, ApiStatusBadge, base, Cell, ConfirmDialog, PriorityDetail, FleetHealthDetail, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, DaemonControls, DaemonStats, DaemonStatusBadge, HyperlinkReadinessBanner, GateDetail, ScheduleEditor, ShardMapDetail, StatusBadge, TelemetryDetail, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
 import { isLeafTag, type WidgetRegistry } from "../ui/widgetRegistry";
+import * as View from "../ui/View";
 import { WidgetsProvider } from "../ui/widgetsContext";
 import type { Widget } from "./widget-registry";
 import { DebugConsole } from "./debug-console";
+import * as WebWorkPoolView from "./WorkPoolView";
+
+const workPoolViews = View.react(WebWorkPoolView.layer);
 
 
 /** Invisible: reads one node's node status and reports the keys of its **not-ready** resources, so the
@@ -205,7 +209,7 @@ const QueueDetail = (props: {
         <strong className="flex-1 truncate text-base">{displayName(props.tag.key)}</strong>
         <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
       </div>
-      <QueueDetailPanel tag={props.tag} />
+      <View.Detail tag={props.tag} />
       <LogBox bundle={bundle} full={false} onToggle={props.onOpenLogs} meta={<> · phase {s?.phase ?? "?"}</>} />
     </div>
   );
@@ -476,24 +480,26 @@ export const DashboardView = <R, ER>(props: {
   // monospace regardless of the consumer's `body`/`#root` font (a value set directly on this
   // element wins over an inherited one), and it still honours a consumer-defined `--font-mono`.
   return (
-    <RuntimeProvider runtime={props.runtime}>
-      <div className="font-mono">
-        {nodeTag !== null ? (
-          <NodeResourceView tag={nodeTag} onBack={() => setNodeTag(null)} />
-        ) : node !== null ? (
-          <NodeDetail node={node} onBack={() => setNode(null)} onOpenHyperlink={openHyperlink} />
-        ) : health ? (
-          <HealthBoard
-            group={props.group}
-            onBack={() => setHealth(false)}
-            onOpenNode={setNode}
-            onOpenHyperlink={openHyperlink}
-          />
-        ) : (
-          <DashboardInner group={props.group} onOpenHealth={() => setHealth(true)} />
-        )}
-      </div>
-    </RuntimeProvider>
+    <workPoolViews.Provider>
+      <RuntimeProvider runtime={props.runtime}>
+        <div className="font-mono">
+          {nodeTag !== null ? (
+            <NodeResourceView tag={nodeTag} onBack={() => setNodeTag(null)} />
+          ) : node !== null ? (
+            <NodeDetail node={node} onBack={() => setNode(null)} onOpenHyperlink={openHyperlink} />
+          ) : health ? (
+            <HealthBoard
+              group={props.group}
+              onBack={() => setHealth(false)}
+              onOpenNode={setNode}
+              onOpenHyperlink={openHyperlink}
+            />
+          ) : (
+            <DashboardInner group={props.group} onOpenHealth={() => setHealth(true)} />
+          )}
+        </div>
+      </RuntimeProvider>
+    </workPoolViews.Provider>
   );
 };
 
@@ -503,7 +509,8 @@ export const Dashboard = <R, ER>(props: {
   readonly runtime: DashboardRuntime<R, ER>;
   readonly group: GroupNode;
   /** The widget set (defaults to the built-in {@link base}); extend/override with
-   *  `withEntries(base, [forKind(...), forKey(...)])`. */
+   *  `withEntries(base, [forKind(...), forKey(...)])`. WorkPool queue cards use
+   *  {@link WebWorkPoolView.layer} via View (not `forKind`). */
   readonly widgets?: WidgetRegistry<Widget>;
 }): React.ReactElement => (
   <RegistryProvider>

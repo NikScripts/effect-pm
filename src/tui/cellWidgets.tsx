@@ -11,7 +11,7 @@ import { Option } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import * as Group from "../Group";
 import { kind as hyperlinkKind, kindOf as hyperlinkKindOf, nodeOf } from "../Hyperlink";
-import { kind as queueKind, priorityKind } from "../WorkPool";
+import { priorityKind } from "../WorkPool";
 import { kind as daemonKind } from "../Daemon";
 import { kind as apiKind } from "../ApiMetrics";
 import { kind as fleetHealthKind } from "../FleetHealth";
@@ -25,7 +25,6 @@ import {
   isFleetHealthTag,
   isGateTag,
   isPriorityTag,
-  isQueueTag,
   isShardMapTag,
   isTelemetryTag,
   priorityBundle,
@@ -36,6 +35,7 @@ import {
   type QueueTag,
 } from "../ui/data";
 import { memberKindOf } from "../ui/memberKind";
+import * as View from "../ui/View";
 import { useAtomValue } from "../ui/atom-react";
 import {
   emptyRegistry,
@@ -356,13 +356,6 @@ const fallbackWidget: TuiCellWidget = ({ name, member, width, selected }) => (
   <FallbackCell name={name} member={member} width={width} selected={selected} />
 );
 
-const queueWidget: TuiCellWidget = ({ name, member, width, selected }) =>
-  isQueueTag(member) ? (
-    <QueueCell name={name} tag={member} width={width} selected={selected} />
-  ) : (
-    <FallbackCell name={name} member={member} width={width} selected={selected} />
-  );
-
 const priorityWidget: TuiCellWidget = ({ name, member, width, selected }) =>
   isPriorityTag(member) ? (
     <PriorityCell name={name} tag={member} width={width} selected={selected} />
@@ -419,7 +412,7 @@ const shardMapWidget: TuiCellWidget = ({ runtime, name, member, width, selected 
  * @public
  */
 export const base: TuiWidgetRegistry = withEntries(emptyRegistry(fallbackWidget), [
-  forKind(queueKind, queueWidget),
+  // WorkPool queue cells: View.react(tui/WorkPoolView.layer) — not forKind.
   forKind(priorityKind, priorityWidget),
   forKind(daemonKind, daemonWidget),
   forKind(apiKind, apiWidget),
@@ -439,6 +432,8 @@ export const Cell = (props: {
 }): React.ReactElement => {
   const registry = useWidgets<TuiCellWidget>();
   const runtime = useRuntime();
+  const leaf = isLeafTag(props.member) ? props.member : null;
+  const hasViewCard = View.useHasMatch(leaf, "card");
   if (memberKindOf(props.member) === "group" && Group.isGroup(props.member)) {
     return (
       <GroupCell
@@ -449,7 +444,7 @@ export const Cell = (props: {
       />
     );
   }
-  if (!isLeafTag(props.member)) {
+  if (leaf === null) {
     return (
       <FallbackCell
         name={props.name}
@@ -459,16 +454,23 @@ export const Cell = (props: {
       />
     );
   }
+  if (hasViewCard) {
+    return (
+      <View.ChromeProvider value={{ width: props.width, selected: props.selected }}>
+        <View.Card tag={leaf} name={props.name} />
+      </View.ChromeProvider>
+    );
+  }
   const Widget = widgetFor(
     registry,
-    props.member.key,
-    hyperlinkKindOf(props.member) ?? hyperlinkKind,
+    leaf.key,
+    hyperlinkKindOf(leaf) ?? hyperlinkKind,
   );
   return (
     <Widget
       runtime={runtime}
       name={props.name}
-      member={props.member}
+      member={leaf}
       width={props.width}
       selected={props.selected}
     />

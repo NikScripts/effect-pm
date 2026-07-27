@@ -26,10 +26,13 @@ const statusOf = (phase: string, paused: boolean): Status =>
 
 const PoolCardView: View.ViewComponent = (props) => {
   if (!isQueueTag(props.tag)) return null;
+  const chrome = View.useChrome();
   return (
     <QueueCell
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
+      width={chrome.width}
+      selected={chrome.selected}
     />
   );
 };
@@ -75,10 +78,12 @@ const QueueDetailPanel = (props: {
 
 const PoolDetailView: View.ViewComponent = (props) => {
   if (!isQueueTag(props.tag)) return null;
+  const chrome = View.useChrome();
   return (
     <QueueDetailPanel
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
+      width={chrome.width}
     />
   );
 };

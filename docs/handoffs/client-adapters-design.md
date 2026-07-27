@@ -386,7 +386,7 @@ One provide Layer per process — not web+TUI in the same merge.
 
 **Locked (grilling):** W14–W19; View services + Layer-provided TSX (not skins.register map); components = single array; missing skin = not provided.
 
-**Locked (grilling):** W20 `View.group` + `kit.for(tag)`; **W21** chrome = `View.kind` / `tag` / `only` Layers + `Layer.mergeAll` (no Policy module; no tag-pipe SSOT). Packaging Eng’d (`ui/web/tui` WorkPoolView). **Open:** Dashboard on kit; Spec gate; full Dashboard←View wire.
+**Locked (grilling):** W20 `View.group` + `kit.for(tag)`; **W21** chrome = `View.kind` / `tag` / `only` Layers + `Layer.mergeAll` (no Policy module; no tag-pipe SSOT). Packaging Eng’d (`ui/web/tui` WorkPoolView). **Now:** migrate widgets onto existing Dashboard shells (C). **Hold:** kit `Dashboard` + larger component library until after widget migration. **Open:** Spec gate.
 
 #### View handles on HS tags (W17) — LOCKED (clarified)
 
@@ -670,17 +670,17 @@ Pins on a member add those services to R even if not in the global bind set. Unp
 
 Migrate widgets can start on (1); (2) is the “bring your own chrome, Group drives requirements” product.
 
-#### `View.react` → also `Dashboard`? — OPEN lean
+#### `View.react` → also `Dashboard`? — HOLD (owner 2026-07-27)
 
-Returning `Dashboard` from the same kit is attractive for migration (`widgets={forKind…}` → View Layer).
+**Hold kit/`Dashboard` work** until widgets are migrated onto the **existing** web/TUI Dashboard shells. Then revisit Dashboard + a larger component library.
 
 | Option | Shape | Note |
 |--------|--------|------|
-| **A** | `View.react(layer)` → `{ Card, Detail, Page, Dashboard, Provider, … }` | One kit; Dashboard closes over same registry |
-| **B** | `View.dashboard(layer)` separate from `View.react` | Clearer split; two runSync if both used carelessly |
-| **C** | Keep Dashboard in `web`/`tui`; only consume kit matchers | Least coupling; slower migration |
+| **A** | `View.react(layer)` → `{ Card, Detail, Page, Dashboard, Provider, … }` | Later candidate |
+| **B** | `View.dashboard(layer)` separate from `View.react` | Later candidate |
+| **C** | Keep Dashboard in `web`/`tui`; only consume kit matchers | **Now** — migrate widgets here first |
 
-**Lean:** **A** — `Dashboard` on the kit once `Card`/`Detail` parity exists; shell stays platform-specific (routing, Ink vs DOM) but **member chrome** goes through the kit. Do not block handle/bind Eng on Dashboard.
+**Now:** **C** — existing shells keep routing/logs/edit; member card/detail chrome goes through `View.react` + platform `WorkPoolView.layer` (then other widget families). **Do not** put `Dashboard` on the kit yet.
 
 #### Flipped helper: `Hyperlink.react(MyService)` — OPEN (strong DX)
 
@@ -762,10 +762,10 @@ Name collision: `Hyperlink.react` vs `View.react` — different jobs (service-bo
 1. ~~View services + react R=never~~ **done**
 2. ~~W20 `View.group` + `kit.for(tag)`~~ **done**
 3. ~~W21 `View.kind` / `tag` / `only` as Layers~~ **done**
-4. ~~Packaging + WorkPool handles/skins~~ **Eng’d** — `ui/WorkPoolView` + `web|tui/WorkPoolView` subpaths; Dashboard still uses `forKind` for grid (onOpen) and shell+`QueueDetailPanel` for detail
-5. Wire Dashboard grid/detail through `View.react(WorkPoolView.layer)` (parent owns nav)
-6. Kit `Dashboard` optional (open)
-7. Retire `forKind` / `ui/data` service dupes
+4. ~~Packaging + WorkPool handles/skins~~ **Eng’d** — `ui/WorkPoolView` + `web|tui/WorkPoolView` subpaths
+5. **Migrate widgets onto existing Dashboard** — ~~WorkPool first~~ **Eng’d** via `View.react(web|tui WorkPoolView.layer)` in current shells (parent owns nav; `View.Chrome` for TUI width/selected); WorkPool dropped from default `forKind` `base`. Next: other families (priority, daemon, api, …)
+6. ~~Kit `Dashboard`~~ **HOLD** until widget migration; then Dashboard + larger component library
+7. Retire remaining `forKind` / `ui/data` service dupes
 8. `Hyperlink.atom` / `query` / `fn` in parallel
 9. Desktop tabs + real Page kind — later
 

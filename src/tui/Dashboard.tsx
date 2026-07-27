@@ -43,9 +43,13 @@ import {
   type QueueTag,
 } from "../ui/data";
 import { RegistryProvider, useAtomSet, useAtomValue } from "../ui/atom-react";
+import * as View from "../ui/View";
 import { WidgetsProvider } from "../ui/widgetsContext";
 import { spark } from "./chrome";
 import { base, Cell, type TuiWidgetRegistry } from "./cellWidgets";
+import * as TuiWorkPoolView from "./WorkPoolView";
+
+const workPoolViews = View.react(TuiWorkPoolView.layer);
 import {
   FocusedApi,
   FocusedFleetHealth,
@@ -60,12 +64,9 @@ import {
   COLOR,
   compact,
   displayName,
-  PageXL,
   PAGE_HEIGHT,
   STATUS_ICON,
-  type Priority,
   type Status,
-  type View,
 } from "./queueWidget";
 import { useGroupRoute } from "./useGroupRoute";
 
@@ -226,9 +227,7 @@ const FocusedQueue = (props: {
   const { name, tag, cols, rows, editMode } = props;
   const bundle = queueBundle(useRuntime(), tag);
   const statusR = useAtomValue(bundle.status);
-  const metricsR = useAtomValue(bundle.metrics);
   const logsR = useAtomValue(bundle.logs);
-  const trendR = useAtomValue(bundle.trend);
 
   const pause = useAtomSet(bundle.pause);
   const resume = useAtomSet(bundle.resume);
@@ -246,28 +245,7 @@ const FocusedQueue = (props: {
 
   const statusOpt = AsyncResult.isSuccess(statusR) ? statusR.value : Option.none();
   const s = Option.isSome(statusOpt) ? statusOpt.value : undefined;
-  const metricsOpt = AsyncResult.isSuccess(metricsR) ? metricsR.value : Option.none();
-  const m = Option.isSome(metricsOpt) ? metricsOpt.value : undefined;
-  const trend = AsyncResult.isSuccess(trendR) ? trendR.value : [];
   const logs = AsyncResult.isSuccess(logsR) ? logsR.value : [];
-
-  const sizes: Record<Priority, number> = s?.sizes ?? { high: 0, normal: 0, low: 0 };
-  const view: View = {
-    name,
-    status: statusOf(s?.phase ?? "running", s?.paused ?? false),
-    sizes,
-    pending: sizes.high + sizes.normal + sizes.low,
-    completed: s?.completed ?? 0,
-    wait: {
-      high: m?.avgWaitMillis.high ?? 0,
-      normal: m?.avgWaitMillis.normal ?? 0,
-      low: m?.avgWaitMillis.low ?? 0,
-    },
-    execution: m?.avgExecutionMillis ?? 0,
-    total: m?.avgTotalMillis ?? 0,
-    throughput: m?.throughputPerSec ?? 0,
-    trend,
-  };
   const visible = Math.max(1, rows - PAGE_HEIGHT - 3 - props.barRows);
 
   const hint = (
@@ -298,7 +276,9 @@ const FocusedQueue = (props: {
       borderColor="red"
     >
       <Box flexShrink={0}>
-        <PageXL v={view} width={cols - 2} />
+        <View.ChromeProvider value={{ width: cols - 2 }}>
+          <View.Detail tag={tag} name={name} />
+        </View.ChromeProvider>
       </Box>
       <Box flexGrow={1} flexDirection="column" paddingX={1}>
         <Box>
@@ -936,14 +916,17 @@ export const Dashboard = <R, ER>(props: {
   readonly group: GroupNode;
   /** CLI / deep-link focus as member-key nicknames (`["Inbox"]`, `["Mini", "KeyRotation"]`). */
   readonly path?: ReadonlyArray<string>;
-  /** Cell set (defaults to {@link base}); extend with `withEntries(base, [forKind(...), forKey(...)])`. */
+  /** Cell set (defaults to {@link base}); extend with `withEntries(base, [forKind(...), forKey(...)])`.
+   *  WorkPool queue cells use {@link TuiWorkPoolView.layer} via View (not `forKind`). */
   readonly widgets?: TuiWidgetRegistry;
 }): React.ReactElement => (
   <RegistryProvider>
-    <WidgetsProvider registry={props.widgets ?? base}>
-      <RuntimeProvider runtime={props.runtime}>
-        <DashboardApp group={props.group} path={props.path ?? []} />
-      </RuntimeProvider>
-    </WidgetsProvider>
+    <workPoolViews.Provider>
+      <WidgetsProvider registry={props.widgets ?? base}>
+        <RuntimeProvider runtime={props.runtime}>
+          <DashboardApp group={props.group} path={props.path ?? []} />
+        </RuntimeProvider>
+      </WidgetsProvider>
+    </workPoolViews.Provider>
   </RegistryProvider>
 );
