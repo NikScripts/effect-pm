@@ -370,8 +370,10 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Chose (LOCKED — store wiring):** Presence-driven like WorkPool durability — `serviceOption(RateLimiterStore)` (layer is the switch). Soft **memory** when absent (single-node OK). Provide Redis (or later SQL) at the root for fleet; no config flag for “which store.”
 - **Chose (R1 Eng lean):** Gate default `onExceeded: "delay"`; whole-gate key = resource id; nest name lean `observe` (R2).
 - **Chose (R3 Eng):** WorkPool matches Gate presence-driven store (no auto Soft layer merge that blocked Redis). Fleet verified with shared memory store in CI; Redis recipe in guides. Soft + multi-node = docs warning (N× limit), not fail-loud.
-- **Chose (bake 2026-07-27 — nest name):** Wire nest is **`metrics`** (not `observe` / `limit`). Covers absorbed ApiMetrics usage + rate-limit remaining/exceeded. WorkPool parity. Collision: fail-loud if HttpApi defines a group named `metrics`. Factory lean: `Gate.HttpApiClient` Tag + app-owned `static layer = Gate.httpApiClientLayer(Tag)` (no baked Service layer).
-- **Still open:** Redis vs SQL backend for fleet v1; per-route keys; adaptive 429 in R4; R2 ordinary-Gate `metrics` depth; R4 Eng.
+- **Chose (bake 2026-07-27 — nest name):** Wire nest is **`metrics`** (not `observe` / `limit`). Covers absorbed ApiMetrics usage + rate-limit remaining/exceeded. WorkPool parity. Factory lean: `Gate.HttpApiClient` Tag + app-owned `static layer = Gate.httpApiClientLayer(Tag)` (no baked Service layer).
+- **Chose (bake 2026-07-27 — nest shape):** v1 **flat siblings** under `metrics` (`usage`, window stream, `remaining`, `resetAfter`, `exceeded`, …). Limiter fields only when `rateLimit` is set. Optional static sugar (`Github.metrics…`) always available.
+- **Chose (bake 2026-07-27 — collision escape):** Default: nest on the handle at `metrics` + **fail-loud** if HttpApi already has a group named `metrics`. Offer a config escape to **hide / static-only** (or rename) so apps that need the group id `metrics` can keep it — exact knob TBD in bake.
+- **Still open:** Escape-knob shape (`static` vs rename vs off); Redis vs SQL; per-route keys; adaptive 429; R2 ordinary-Gate depth; R4 Eng.
 
 ## 2026-07-27 — Retire `Hyperlink.pure`; Eng `default` / `defaults`
 
