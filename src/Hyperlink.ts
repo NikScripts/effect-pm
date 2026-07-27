@@ -21,14 +21,15 @@
  * const c = yield* Counter;        // { current: Effect<number>; add: (p) => Effect<void>; reset: Effect<void> }
  * ```
  *
- * Define a tag with {@link Hyperlink.Tag} (one resource) or {@link Hyperlink.tagFor} (a
- * factory: many instances sharing one contract). The same `yield* Tag` code runs
- * anywhere; only the layer changes:
+ * Define a tag with {@link Hyperlink.Tag} (one resource, own RpcGroup keyed by `.key`).
+ * The same `yield* Tag` code runs anywhere; only the layer changes:
  * - {@link Hyperlink.layer} — run it locally with a real implementation;
  * - {@link Hyperlink.client} — drive it remotely over RPC, as if local;
- * - {@link Hyperlink.server} — expose one local impl over RPC (transport-agnostic handlers);
- * - {@link Hyperlink.serveInstances} — serve many factory instances behind one group,
- *   routed by the per-call instance-key header.
+ * - {@link Hyperlink.serve} / {@link Hyperlink.serveRemote} — expose an impl over RPC.
+ *
+ * Shared-Spec families (`tagFor` / `serveInstances` / `clientInstances`) are
+ * **package-internal** until a kind-keyed family factory lands (wire-groups plan W3).
+ * Prefer solo {@link Tag}.
  *
  * Over **http**, pair {@link Hyperlink.serve} with {@link Node.httpServer} (ndjson by default so
  * client/server can't disagree on the codec). Dial with {@link Hyperlink.connect}`(tag,
@@ -148,10 +149,10 @@ export class DuplicateWireKey extends Data.TaggedError("DuplicateWireKey")<{
 }> {}
 
 /**
- * An instance was passed to {@link Hyperlink.serveInstances} more than once.
+ * An instance was passed to {@link serveInstances} more than once.
  *
  * @category errors
- * @public
+ * @internal
  */
 export class DuplicateInstance extends Data.TaggedError("DuplicateInstance")<{
   readonly key: string;
@@ -162,7 +163,7 @@ export class DuplicateInstance extends Data.TaggedError("DuplicateInstance")<{
  * protocol-level fault (the contract was satisfied), surfaced as a defect.
  *
  * @category errors
- * @public
+ * @internal
  */
 export class InstanceRoutingError extends Data.TaggedError(
   "InstanceRoutingError",
@@ -2290,7 +2291,7 @@ export const groupSym: unique symbol = Symbol.for(
 );
 /**
  * Where the **wire key** (RpcGroup prefix) is stowed on a Tag. Solo {@link Tag}s use the
- * same string as {@link Context.Key.key}; {@link tagFor} families stamp the shared family
+ * same string as {@link Context.Key.key}; internal shared-Spec families stamp a shared
  * wire key. Read with {@link wireKeyOf}.
  *
  * @internal
@@ -2389,8 +2390,8 @@ const peersSym: unique symbol = Symbol.for("hyperlink-ts/Hyperlink/peers");
 const selfNodeSym: unique symbol = Symbol.for("hyperlink-ts/Hyperlink/selfNode");
 
 /**
- * The type of a resource tag carrying spec `S` — what {@link Hyperlink.Tag} / a
- * {@link Hyperlink.tagFor} factory produce (and what you extend). Lets a consumer write
+ * The type of a resource tag carrying spec `S` — what {@link Hyperlink.Tag} produces
+ * (and what you extend). Lets a consumer write
  * `<S extends Spec>(tag: HyperlinkTag<Self, S>)` and read the spec through named types
  * ({@link specOf} / {@link groupOf}) instead of a `Parameters<typeof specOf>` workaround.
  *
@@ -2732,8 +2733,8 @@ export const contractHash = <Self, S extends Spec>(
 /**
  * A tag's **wire key** — the RpcGroup / procedure prefix on a shared server.
  *
- * Solo {@link Tag}s: same as {@link Context.Key.key}. Shared-Spec {@link tagFor} instances:
- * the family's wire key (routing still uses the instance `key` header).
+ * Solo {@link Tag}s: same as {@link Context.Key.key}. Internal shared-Spec family
+ * instances: the family's wire key (routing still uses the instance `key` header).
  *
  * @category introspection
  * @public
@@ -3263,7 +3264,7 @@ const makeTag = retype<{
  * instance.
  *
  * @category models
- * @public
+ * @internal
  */
 export interface TagFactory<S extends Spec> {
   <Self>(key: string): HyperlinkTag<Self, S>;
@@ -3280,7 +3281,7 @@ export interface TagFactory<S extends Spec> {
  * from it). Otherwise identical to {@link TagFactory}.
  *
  * @category models
- * @public
+ * @internal
  */
 export interface NodeTagFactory<S extends Spec, HSelf> {
   <Self>(key: string): NodeBoundTag<Self, S, HSelf>;
@@ -3292,12 +3293,11 @@ export interface NodeTagFactory<S extends Spec, HSelf> {
 }
 
 /**
- * Build a **factory** tag-maker that bakes a shared {@link Spec} once under a `wireKey`:
- * every instance shares the same contract + RPC group, and callers **never pass the spec**
- * — only an instance key. Use for resource families (many instances, one identical Spec).
- * The `wireKey` is the RpcGroup prefix (prefer a kind key such as `hyperlink-ts/ApiMetrics`);
- * instances are told apart by the per-call `key` header. Prefer {@link Tag} when each
- * instance has its own Spec (WorkPool / Daemon data plane).
+ * **Internal** shared-Spec family factory (pending kind-keyed W3). Prefer solo {@link Tag}.
+ *
+ * Bakes a shared {@link Spec} once under a `wireKey`: every instance shares the same
+ * contract + RPC group; callers pass only an instance key. Instances are told apart by
+ * the per-call `key` header.
  *
  * Pass `options.node` to bind the whole family to a {@link Node}: every instance becomes a
  * node-bearing tag and ships only-the-tag (see {@link Hyperlink.client} / {@link Hyperlink.connect}).
@@ -3311,7 +3311,7 @@ export interface NodeTagFactory<S extends Spec, HSelf> {
  * ```
  *
  * @category constructors
- * @public
+ * @internal
  */
 function tagFor<const S extends Spec, HSelf>(
   wireKey: string,
@@ -4042,10 +4042,10 @@ const INSTANCE_KEY_HEADER = "key";
 
 /**
  * One instance of a factory paired with its implementation — the element of
- * {@link Hyperlink.serveInstances}. Built by {@link Hyperlink.instance}.
+ * {@link serveInstances}. Built by {@link instance}.
  *
  * @category models
- * @public
+ * @internal
  */
 export interface HyperlinkInstance<S extends Spec> {
   readonly key: string;
@@ -4053,15 +4053,11 @@ export interface HyperlinkInstance<S extends Spec> {
 }
 
 /**
- * Pair a factory instance tag with its implementation, for {@link Hyperlink.serveInstances}.
- *
- * **Not** how you serve a single custom resource on a shared node: this returns a
- * {@link HyperlinkInstance} for the {@link serveInstances} family. To serve a custom `Hyperlink.Tag`
- * alongside queues/daemons, pass its {@link Hyperlink.serve} layer to {@link Node.httpServer},
- * then reach it with {@link Hyperlink.client}.
+ * **Internal** — pair a factory instance tag with its implementation for {@link serveInstances}.
+ * To serve a custom {@link Tag} on a node, pass {@link serve} to {@link Node.httpServer}.
  *
  * @category constructors
- * @public
+ * @internal
  */
 const instance = <Self, S extends Spec>(
   tag: HyperlinkTag<Self, S>,
@@ -4069,10 +4065,11 @@ const instance = <Self, S extends Spec>(
 ): HyperlinkInstance<S> => ({ key: tag.key, impl });
 
 /**
- * The **family server** layer: serve **many instances of one factory** behind a
- * single contract group, dispatching each request to the right instance by the
- * per-call `key` header. Instances share one {@link tagFor} factory (one spec, one
- * RPC group); each is passed once via {@link Hyperlink.instance}.
+ * **Internal** family server (pending kind-keyed W3). Prefer per-tag {@link serve}.
+ *
+ * Serve many instances of one factory behind a single contract group, dispatching
+ * each request by the per-call `key` header. Instances share one {@link tagFor}
+ * factory; each is passed once via {@link instance}.
  *
  * Why one variadic call rather than one-layer-per-instance: composing instances as
  * sibling layers would silently keep only the last (Effect's `Context` is a map —
@@ -4094,7 +4091,7 @@ const instance = <Self, S extends Spec>(
  * ```
  *
  * @category serving
- * @public
+ * @internal
  */
 const serveInstances = <S extends Spec>(
   factory: {
@@ -5974,17 +5971,17 @@ type InstanceIdentifiers<
 > = Tags[number] extends Context.Key<infer Self, WireServiceOf<S>> ? Self : never;
 
 /**
- * The **client** layer for **many instances of one factory**, sharing a single RPC client —
- * the client mirror of {@link Hyperlink.serveInstances}. Builds **one** `RpcClient` for the
- * family's group and provides every instance's handle from it, each pinned to its own instance-key
- * header. So 100 instances of one control shape cost **one** client (and one shared
- * connection), not one client each — the contract/group/schemas are already shared.
+ * **Internal** family client (pending kind-keyed W3). Prefer per-tag {@link client}.
+ *
+ * Many instances of one factory sharing a single RPC client — mirror of
+ * {@link serveInstances}. One `RpcClient` for the family's group; each handle pinned
+ * to its instance-key header.
  *
  * Wire-only: instances declaring {@link Hyperlink.local} members aren't accepted (their service
- * type is wider than the wire) — use {@link Hyperlink.client} per instance for those.
+ * type is wider than the wire) — use {@link client} per instance for those.
  *
  * @category clients
- * @public
+ * @internal
  */
 const clientInstances = <
   S extends Spec,

@@ -338,6 +338,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Rejected:** Kind as RpcGroup prefix for regular Tags; spec-hash as group name; public `wireMode` on every tag; forcing full WorkPool/Daemon/Gate Specs onto one kind-group without a control/data split.
 - **Supervisor impact:** Agent 4 owns W1+ on `cursor/hyperservice-open-deps-5679`.
 - **Eng note (2026-07-27):** W1 landed — public `HyperlinkTag.groupId` removed; `wireKeySym` / `wireKeyOf`; solo wire = `.key`; `DuplicateWireKey`; `ServedHyperlink.wireKey`; contract descriptor field `wireKey`.
+- **Eng note (2026-07-27, W2):** `tagFor` / `serveInstances` / `clientInstances` / `instance` (+ factory types / family errors) marked `@internal` and removed from the root barrel; README / PACKAGE-GUIDE no longer advertise them. Runtime still exported on the `Hyperlink` namespace for tests until W3.
 
 ---
 

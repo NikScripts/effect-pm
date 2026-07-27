@@ -2,9 +2,10 @@
  * @module examples/resource-tui/grid-app
  *
  * A full-screen terminal dashboard: a scrollable grid of resource "widgets", a
- * command bar, and a status/shortcuts bar. Each widget is an instance of one
- * `Hyperlink.tagFor` family, rendered via the same `makeHyperlinkAtoms` +
- * `atom-react` the web widget uses.
+ * command bar, and a status/shortcuts bar. Widgets are minted from the
+ * **internal** shared-Spec `Hyperlink.tagFor` helper (not the public front door —
+ * prefer solo `Hyperlink.Tag`; kind-keyed family factory is wire-groups W3),
+ * rendered via the same `makeHyperlinkAtoms` + `atom-react` the web widget uses.
  *
  * - Keys: arrows / hjkl move selection (auto-scrolls to keep it visible); i / d / r
  *   act on it; `:` opens the command bar; q quits.

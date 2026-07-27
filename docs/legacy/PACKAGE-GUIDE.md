@@ -10,7 +10,7 @@ This document is the **narrative companion** to the API tables in [PROCESS-API.m
 
 1. **Managed processes** — `Process`: a driver watches the schedule's run windows, spawns instances, and each instance repeats a user `Effect` on a **`Polling`** cadence until its window closes. Define one with `Process.Tag`, gate it with `Process.schedule` / `Process.window` / `Process.at` (or a reusable `Process.Schedule` resource).
 2. **Queue resources** — `QueueHyperlink`: priority queues with concurrency, throttling, retry, self-refill, and optional durability.
-3. **Location transparency** — every resource is a `Hyperlink` tag. `.layer` runs it local, `.serve` / `.serveRemote` host it over RPC (composed with `Hyperlink.httpServer`), `Hyperlink.client` reaches it remotely — the **same `yield* Tag` code either way**. `Hyperlink.serveInstances` runs many instances behind one transport; `Group` organizes tags (nestable, multi-host).
+3. **Location transparency** — every resource is a `Hyperlink` tag. `.layer` runs it local, `.serve` / `.serveRemote` host it over RPC (composed with `Node.httpServer`), `Hyperlink.client` reaches it remotely — the **same `yield* Tag` code either way**. `Group` organizes tags (nestable, multi-host).
 4. **Persistence** — opt-in durability (`DurableQueueStore`) and observability history (`HistoryStore`), in-memory or SQLite; process/run analytics via `ProcessStore` / `RuntimeStorage`.
 
 ---
@@ -25,7 +25,7 @@ This document is the **narrative companion** to the API tables in [PROCESS-API.m
 └───────────────────────────────────────────────────────────────────┘
          │ provided by a layer
          ├─ .layer               → local engine in this runtime
-         ├─ .serve / .serveRemote → host over RPC (serveInstances = many)
+         ├─ .serve / .serveRemote → host over RPC
          └─ Hyperlink.client      → remote handle (dashboard)
          ▼
 ┌───────────────────────────────────────────────────────────────────┐
@@ -83,7 +83,7 @@ For durable adapter work, start with
 
 | Export area | Role |
 |-------------|------|
-| `Hyperlink` | Toolkit foundation: `Tag` / `layer` / `serve` / `serveRemote` / `httpServer` / `client` / `Host` / `serveInstances` + `specOf` / `methodMeta`. |
+| `Hyperlink` | Toolkit foundation: `Tag` / `layer` / `serve` / `serveRemote` / `client` + `specOf` / `methodMeta` (compose with `Node.httpServer`). |
 | `QueueHyperlink`, `Process` | Batteries-included resource kinds (queue / managed process). `Process.Schedule` is a standalone run-windows resource. |
 | `Group` | Organize member tags (nestable; same or different hosts). |
 | `Process`, `Polling` | The managed-process toolkit + engine (`Process.Tag` / `make`) and the poll-cadence gate (`Polling`). The run-window schedule primitive is internal. |
