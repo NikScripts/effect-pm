@@ -21,14 +21,14 @@ class Counter extends Hyperlink.Tag<Counter>()("forms/default/Counter", {
   label: Hyperlink.default((n: number) => `count=${n}`),
   unit: Hyperlink.default("count" as const),
 }).pipe(
-  /** Piped bag — runtime on every handle; type with `WithDefaults`. */
+  /** Piped bag — widens `Service` so `yield* Counter` sees `tags`. */
   Hyperlink.defaults({
     tags: ["demo", "defaults"] as const,
   }),
 ) {}
 
 const program = Effect.gen(function* () {
-  const c = (yield* Counter) as Hyperlink.WithDefaults<typeof Counter>;
+  const c = yield* Counter;
   const n = yield* c.add(41);
   yield* Effect.log(`current after add: ${n}`);
   yield* Effect.log(`label: ${c.label(n)}`);

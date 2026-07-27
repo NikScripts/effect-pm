@@ -171,12 +171,12 @@ Placeholder name was `Hyperlink.handle`. **Rejected** as the public noun. Short-
 | API | Shape | Role |
 |-----|--------|------|
 | **`Hyperlink.default(…)`** | Spec leaf (singular) | One default field **in the contract** — literal or sync fn (Promise-returning fn → type error) |
-| **`Hyperlink.defaults({…})`** | Piped bag (plural) | Add **multiple** defaults: `Tag(…).pipe(Hyperlink.defaults({…}))` — bag on Tag (`DefaultsOf`); **`Svc` remapped** so `yield* Tag` includes bag keys |
+| **`Hyperlink.defaults({…})`** | Piped bag (plural) | Add **multiple** defaults: `Tag(…).pipe(Hyperlink.defaults({…}))` — bag on Tag (`DefaultsOf`); **`Service` / `yield* Tag` widened** with bag keys |
 
 Shipped rules:
 
 - Spec stays branded builders; `defaults` bag merges onto the service (local + client).
-- Spec `default` leaves are fully typed on `Service`. Piped bag keys widen `Service` at construction via licensed `remapTagService` (`test/defaults-handle.test-d.ts`); `WithDefaults` kept as escape/migration.
+- Spec `default` leaves are fully typed on `Service`. Piped bag keys widen `Service` / `yield* Tag` at construction via licensed `remapTagService` (`test/defaults-handle.test-d.ts`); `WithDefaults` kept as escape/migration.
 - Spec∩bag key collision → `DuplicateDefaultKey` (also duplicate bag keys across pipes).
 - Layer/serve: wire `ImplOf` required; default/bag keys optional overrides (`ImplWithDefaultOverrides`).
 - Post-hoc overrides also via `Layer.updateService`.
@@ -204,7 +204,7 @@ Same pattern must compose with existing pipes (`withReadiness`, node bind, …) 
 
 ### Why the bag needed a cast (fixed)
 
-Previously `defaults` stamped runtime keys on `defaultsSym` but **did not remap** `HyperlinkTag`’s `Svc`. `yield* Tag` stayed Spec-only; `WithDefaults` papered over it at use sites. Spec `default` leaves were already fine (in Spec → in `ServiceOf`). **A1 Eng’d:** `defaults` remaps `Svc → Svc & Bag` via `remapTagService`.
+Previously `defaults` stamped runtime keys on `defaultsSym` but **did not widen** `Service` / `yield* Tag`. `WithDefaults` papered over it at use sites. Spec `default` leaves were already fine (in Spec → in `ServiceOf`). **A1 Eng’d:** `defaults` widens via `remapTagService` + `Service`/`Effect` intersection (a direct `HyperlinkTag` `Svc` rebuild through `.pipe` recurses on class `Self`).
 
 ### Constraint (class Self)
 
@@ -220,8 +220,8 @@ Previously `defaults` stamped runtime keys on `defaultsSym` but **did not remap*
 |------|--------|
 | Shape | One-shot: `class X extends Factory<X>()(…).pipe(adorners…) {}` |
 | No separate const | Rejected two-step Prototype mint as the product API |
-| Type safety | Pipe return type is `HyperlinkTag<Self, S, Svc & Bag>` (etc.), not `T & { [defaultsSym]: Bag }` alone |
-| Soundness | One cast at adornment apply; `.test-d.ts` proves `ServiceOf<S> & Bag` ⇄ widened `Svc` for representatives |
+| Type safety | Pipe keeps `T` (no `HyperlinkTag<Self,…>` rebuild — that recurses on class `Self`) and widens via `Service` + covariant `Effect<Svc & Bag>` intersection |
+| Soundness | One cast at adornment apply (`remapTagService`); `.test-d.ts` proves `ServiceOf & Bag` ⇄ `Shape` / yield for representatives |
 | Spec vs bag | Spec `default` stays for contract fields; piped `defaults` for extras — both end on `Svc` after adorn |
 | Compose | Adorners chain: each widens/stamps; order defined (defaults → readiness → …) or commutative where possible |
 | Toolkit Tags | `WorkPool.Tag` / `Gate.Tag` / `Daemon.Tag` already return remapped `Svc`; further `.pipe(defaults)` must widen **that** `Svc`, not erase the named handle |
@@ -239,10 +239,10 @@ class Jobs extends WorkPool.Tag<Jobs>()("@app/Jobs", jobSpec).pipe(
 `Hyperlink.defaults` implementation (Eng’d):
 
 1. Keep runtime stamp on `defaultsSym` + collision checks.
-2. Return type: remap `Svc` to `Svc & D` (NodeBoundTag / HyperlinkTag branches).
+2. Return type: keep `T` (PipeableTag-safe) + widened `Service` + `Effect<Svc & Bag>` (rebuild of `HyperlinkTag<Self,S,Svc&Bag>` through `.pipe` hits class-`Self` recursion).
 3. Licensed cast via internal `remapTagService` (`as unknown as`).
-4. `test/defaults-handle.test-d.ts`: bidirectional `yield* Tag` ⇄ `ServiceOf & Bag`; toolkit keeps `WorkPool` / `Gate` ∧ bag.
-5. `WithDefaults` kept as escape / migration (identity once Svc is remapped).
+4. `test/defaults-handle.test-d.ts`: bidirectional `Shape` ⇄ `ServiceOf & Bag`; toolkit keeps `WorkPool` / `Gate` ∧ bag.
+5. `WithDefaults` kept as escape / migration (identity once Service is widened).
 
 ### Optional sugar (same semantics, still one-shot)
 

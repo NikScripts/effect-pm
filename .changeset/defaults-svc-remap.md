@@ -2,4 +2,4 @@
 "hyperlink-ts": minor
 ---
 
-`Hyperlink.defaults` remaps Tag `Service` to include the piped bag (`remapTagService`), so `yield* Tag` types bag keys without a `WithDefaults` cast. Toolkit Tags keep named handles (`WorkPool` / `Gate`) under further `.pipe(defaults)`.
+`Hyperlink.defaults` widens Tag `Service` / `yield* Tag` to include the piped bag (`remapTagService`), so bag keys type without a `WithDefaults` cast. Toolkit Tags keep named handles (`WorkPool` / `Gate`) under further `.pipe(defaults)`.

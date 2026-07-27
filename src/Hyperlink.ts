@@ -775,7 +775,7 @@ type MergedDefaultsBag<T, D extends DefaultsBag> = PriorDefaults<T> & D;
 /**
  * Remap a resource Tag's handle (`Svc`) — the licensed cast for construction
  * adornments ({@link defaults}, …). Runtime identity is unchanged; only the
- * type-level `Svc` (and any stamps on {@link Result}) are claimed.
+ * type-level claim on {@link Result} changes.
  *
  * Generics + class-`Self` + invariant `Shape` block a proved remap, so this is
  * one `as unknown as` (same pattern as Gate `nameRunService` / WorkPool
@@ -784,32 +784,32 @@ type MergedDefaultsBag<T, D extends DefaultsBag> = PriorDefaults<T> & D;
  *
  * @internal
  */
-export const remapTagService = <Result>(tag: PipeableTag): Result =>
-  tag as unknown as Result;
+export const remapTagService = <Result>(tag: {
+  readonly [specSym]: FlatSpec;
+}): Result => tag as unknown as Result;
 
 /**
- * Tag after {@link defaults}: `Svc` widened with the merged bag (via
- * {@link remapTagService}), plus the precise bag on {@link defaultsSym}.
- * Soundness guard: `test/defaults-handle.test-d.ts`.
+ * Service shape of a piped Tag before bag widen (from `Service`, else `never`).
  *
  * @internal
  */
-type TagWithDefaults<T, D extends DefaultsBag> = T extends NodeBoundTag<
-  infer Self,
-  infer S extends Spec,
-  infer HSelf,
-  infer Svc
->
-  ? NodeBoundTag<Self, S, HSelf, Svc & MergedDefaultsBag<T, D>> & {
-      readonly [defaultsSym]: MergedDefaultsBag<T, D>;
-    }
-  : T extends HyperlinkTag<infer Self, infer S extends Spec, infer Svc>
-    ? HyperlinkTag<Self, S, Svc & MergedDefaultsBag<T, D>> & {
-        readonly [defaultsSym]: MergedDefaultsBag<T, D>;
-      }
-    : T & {
-        readonly [defaultsSym]: MergedDefaultsBag<T, D>;
-      };
+type ServiceOfTag<T> = T extends { readonly Service: infer Svc } ? Svc : never;
+
+/**
+ * Tag after {@link defaults}.
+ *
+ * Keeps `T` (shallow {@link PipeableTag} pipe — no `HyperlinkTag<Self,…>` rebuild,
+ * so `class X extends Tag<X>().pipe(defaults)` does not recurse on `X`). Widens
+ * what `yield* Tag` / {@link Shape} see by intersecting a covariant
+ * `Effect<Svc & Bag>` and a widened `Service` property. Soundness:
+ * `test/defaults-handle.test-d.ts`.
+ *
+ * @internal
+ */
+type TagWithDefaults<T, D extends DefaultsBag> = T & {
+  readonly [defaultsSym]: MergedDefaultsBag<T, D>;
+  readonly Service: ServiceOfTag<T> & MergedDefaultsBag<T, D>;
+} & Effect.Effect<ServiceOfTag<T> & MergedDefaultsBag<T, D>, never, never>;
 
 /**
  * Piped {@link defaults} bag on a Tag, or `{}` when absent.
@@ -824,15 +824,13 @@ export type DefaultsOf<T> = T extends { readonly [defaultsSym]: infer D extends 
 /**
  * Handle shape including a piped {@link defaults} bag.
  *
- * Prefer construction-time {@link defaults} (remaps `Service` so `yield* Tag`
- * already includes bag keys). Kept as an escape / migration alias when a Tag
- * was built without the Svc remap.
+ * Prefer construction-time {@link defaults} (widens `Service` / `yield* Tag`).
+ * Kept as an escape / migration alias when a Tag was built without the widen.
  *
  * @category models
  * @public
  */
-export type WithDefaults<T> = (T extends { readonly Service: infer Svc } ? Svc : never) &
-  DefaultsOf<T>;
+export type WithDefaults<T> = ServiceOfTag<T> & DefaultsOf<T>;
 
 /** True when a defaults bag key collides with a flat Spec path. @internal */
 const defaultsCollidesWithSpec = (flat: FlatSpec, key: string): boolean => {
@@ -849,10 +847,10 @@ const defaultsCollidesWithSpec = (flat: FlatSpec, key: string): boolean => {
  * Spec stays branded builders; this bag is the extras surface.
  *
  * Singular fields belong in the contract via {@link default} (fully typed on `Service`).
- * Piped bag keys are merged onto `Service` at construction (via {@link remapTagService})
- * so `yield* Tag` sees them — same licensed-cast pattern as named Gate / WorkPool
- * handles. Same key as a Spec path (or a prior bag key) → {@link DuplicateDefaultKey}
- * at pipe time.
+ * Piped bag keys widen `Service` / `yield* Tag` at construction (via {@link remapTagService})
+ * so bag keys are typed without a use-site cast — same licensed-cast pattern as named
+ * Gate / WorkPool handles. Same key as a Spec path (or a prior bag key) →
+ * {@link DuplicateDefaultKey} at pipe time.
  *
  * Layer/serve may override bag keys at the **provide site only** — overrides do not travel
  * over the wire; clients always see the Tag-baked bag. Prefer {@link Layer.updateService}
