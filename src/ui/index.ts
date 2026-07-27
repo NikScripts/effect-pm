@@ -23,5 +23,7 @@ export * from "./widgetRegistry";
 export * as View from "./View";
 /** Shared WorkPool View handles + contribution Layer (no platform TSX). */
 export * as WorkPoolView from "./WorkPoolView";
+/** Merged Dashboard View contribution Layers (no platform TSX). */
+export * as DashboardViews from "./DashboardViews";
 /** Provider only — renderers expose a typed `useWidgets` (web cards vs TUI cells). */
 export { WidgetsProvider } from "./widgetsContext";

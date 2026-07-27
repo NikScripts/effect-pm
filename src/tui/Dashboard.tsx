@@ -22,7 +22,6 @@ import { AsyncResult } from "effect/unstable/reactivity";
 import * as Group from "../Group";
 import { kindOf as hyperlinkKindOf, nodeOf } from "../Hyperlink";
 import {
-  daemonBundle,
   daemonLeaves,
   isApiTag,
   isDaemonTag,
@@ -32,24 +31,25 @@ import {
   isQueueTag,
   isShardMapTag,
   isTelemetryTag,
-  priorityBundle,
   queueBundle,
   queueLeaves,
-  type CommandAtom,
   type DaemonTag,
   type DashboardRuntime,
   type GroupNode,
-  type PriorityTag,
   type QueueTag,
 } from "../ui/data";
 import { RegistryProvider, useAtomSet, useAtomValue } from "../ui/atom-react";
 import * as View from "../ui/View";
 import { WidgetsProvider } from "../ui/widgetsContext";
-import { spark } from "./chrome";
 import { base, Cell, type TuiWidgetRegistry } from "./cellWidgets";
 import * as TuiWorkPoolView from "./WorkPoolView";
-
-const workPoolViews = View.react(TuiWorkPoolView.layer);
+import {
+  ControlKey,
+  FocusedDaemon,
+  FocusedPriority,
+  LogTail,
+  NodeMark,
+} from "./focusWidgets";
 import {
   FocusedApi,
   FocusedFleetHealth,
@@ -59,29 +59,15 @@ import {
 } from "./kindCells";
 import { RuntimeProvider, useRuntime } from "./runtime";
 import {
-  bar,
   BLANK_BORDER,
-  COLOR,
-  compact,
   displayName,
   PAGE_HEIGHT,
-  STATUS_ICON,
-  type Status,
 } from "./queueWidget";
 import { useGroupRoute } from "./useGroupRoute";
 
-const CELL_HEIGHT = 7;
-const LEVEL_COLOR: Record<string, string> = {
-  Trace: "gray",
-  Debug: "gray",
-  Info: "white",
-  Warning: "yellow",
-  Error: "red",
-  Fatal: "red",
-};
+const workPoolViews = View.react(TuiWorkPoolView.layer);
 
-const statusOf = (phase: string, paused: boolean): Status =>
-  phase === "off" ? "off" : phase === "draining" ? "draining" : paused ? "paused" : "running";
+const CELL_HEIGHT = 7;
 
 const useTerminalSize = (): { cols: number; rows: number } => {
   const { stdout } = useStdout();
@@ -113,12 +99,6 @@ const idOf = (m: unknown): string => {
     return m.key;
   }
   return "";
-};
-
-const NodeMark = (props: { readonly tag: unknown }): React.ReactElement | null => {
-  const node = nodeOf(props.tag);
-  if (node === undefined) return null;
-  return <Text color="cyan"> ⬡ {displayName(node.key)}</Text>;
 };
 
 const Bar = (props: {
@@ -154,65 +134,6 @@ const Bar = (props: {
     </Box>
   );
 };
-
-const ControlKey = (props: {
-  readonly k: string;
-  readonly label: string;
-  readonly atom: CommandAtom;
-}): React.ReactElement => {
-  const r = useAtomValue(props.atom);
-  const pending = AsyncResult.isWaiting(r);
-  const failed = AsyncResult.isFailure(r) && !pending;
-  const [flash, setFlash] = React.useState(false);
-  const wasPending = React.useRef(false);
-  React.useEffect(() => {
-    if (pending) {
-      wasPending.current = true;
-      return;
-    }
-    if (wasPending.current && AsyncResult.isSuccess(r)) {
-      wasPending.current = false;
-      setFlash(true);
-      const t = setTimeout(() => setFlash(false), 1500);
-      return () => clearTimeout(t);
-    }
-    return;
-  }, [pending, r]);
-  const sym = pending ? " …" : flash ? " ✓" : failed ? " ✗" : "";
-  const color = failed ? "red" : flash ? "green" : pending ? "yellow" : "gray";
-  return (
-    <Text color={color}>
-      [{props.k}]{props.label}
-      {sym}{" "}
-    </Text>
-  );
-};
-
-const LogTail = (props: {
-  readonly logs: ReadonlyArray<{
-    readonly id: number;
-    readonly t: number;
-    readonly level: string;
-    readonly message: string;
-  }>;
-  readonly visible: number;
-}): React.ReactElement => (
-  <Box flexGrow={1} flexDirection="column" justifyContent="flex-end">
-    {props.logs.slice(-props.visible).map((l) => (
-      <Box key={l.id}>
-        <Box width={11}>
-          <Text dimColor>{new Date(l.t).toLocaleTimeString()}</Text>
-        </Box>
-        <Box width={6}>
-          <Text color={LEVEL_COLOR[l.level] ?? "white"}>{l.level}</Text>
-        </Box>
-        <Box flexGrow={1}>
-          <Text>{l.message}</Text>
-        </Box>
-      </Box>
-    ))}
-  </Box>
-);
 
 const FocusedQueue = (props: {
   readonly name: string;
@@ -289,237 +210,6 @@ const FocusedQueue = (props: {
             <NodeMark tag={tag} />
           </Box>
           <Text dimColor>phase {s?.phase ?? "?"}</Text>
-        </Box>
-        <LogTail logs={logs} visible={visible} />
-      </Box>
-      {props.bar(hint)}
-    </Box>
-  );
-};
-
-const FocusedPriority = (props: {
-  readonly name: string;
-  readonly tag: PriorityTag;
-  readonly cols: number;
-  readonly rows: number;
-  readonly editMode: boolean;
-  readonly cmd: string | null;
-  readonly bar: (hint: React.ReactElement) => React.ReactElement;
-  readonly barRows: number;
-}): React.ReactElement => {
-  const { name, tag, cols, rows, editMode } = props;
-  const bundle = priorityBundle(useRuntime(), tag);
-  const statusR = useAtomValue(bundle.status);
-  const metricsR = useAtomValue(bundle.metrics);
-  const logsR = useAtomValue(bundle.logs);
-  const trendR = useAtomValue(bundle.trend);
-
-  const start = useAtomSet(bundle.start);
-  const pause = useAtomSet(bundle.pause);
-  const resume = useAtomSet(bundle.resume);
-  const clear = useAtomSet(bundle.clear);
-  const shutdown = useAtomSet(bundle.shutdown);
-  useInput(
-    (input) => {
-      if (input === "s") start();
-      else if (input === "p") pause();
-      else if (input === "r") resume();
-      else if (input === "c") clear();
-      else if (input === "x") shutdown();
-    },
-    { isActive: editMode && props.cmd === null },
-  );
-
-  const statusOpt = AsyncResult.isSuccess(statusR) ? statusR.value : Option.none();
-  const s = Option.isSome(statusOpt) ? statusOpt.value : undefined;
-  const metricsOpt = AsyncResult.isSuccess(metricsR) ? metricsR.value : Option.none();
-  const m = Option.isSome(metricsOpt) ? metricsOpt.value : undefined;
-  const trend = AsyncResult.isSuccess(trendR) ? trendR.value : [];
-  const logs = AsyncResult.isSuccess(logsR) ? logsR.value : [];
-  const lanes = s !== undefined ? Object.entries(s.sizes) : [];
-  const pending = lanes.reduce((sum, [, n]) => sum + n, 0);
-  const max = Math.max(1, ...lanes.map(([, n]) => n));
-  const status = statusOf(s?.phase ?? "running", s?.paused ?? false);
-  const visible = Math.max(1, rows - 12 - props.barRows);
-  const barWidth = Math.max(8, cols - 30);
-
-  const hint = (
-    <Box paddingX={1} backgroundColor="gray">
-      <Text dimColor> Esc back · </Text>
-      <Text color="cyan">:</Text>
-      <Text dimColor> command · </Text>
-      <Text color={editMode ? "red" : "gray"}>{editMode ? "EDIT " : "view "}</Text>
-      {editMode ? (
-        <>
-          <ControlKey k="s" label="start" atom={bundle.start} />
-          <ControlKey k="p" label="pause" atom={bundle.pause} />
-          <ControlKey k="r" label="resume" atom={bundle.resume} />
-          <ControlKey k="c" label="clear" atom={bundle.clear} />
-          <ControlKey k="x" label="shutdown" atom={bundle.shutdown} />
-        </>
-      ) : (
-        <Text dimColor>Ctrl+E edit</Text>
-      )}
-    </Box>
-  );
-
-  return (
-    <Box
-      flexDirection="column"
-      width={cols}
-      height={rows}
-      borderStyle={editMode ? "double" : BLANK_BORDER}
-      borderColor="red"
-    >
-      <Box
-        flexDirection="column"
-        borderStyle="round"
-        borderColor={COLOR[status]}
-        paddingX={2}
-        paddingY={1}
-        marginX={1}
-        marginTop={1}
-      >
-        <Box justifyContent="space-between">
-          <Text bold color="cyan">
-            {name}
-            <NodeMark tag={tag} />
-          </Text>
-          <Text color={COLOR[status]}>
-            {STATUS_ICON[status]} {status}
-          </Text>
-        </Box>
-        <Box marginTop={1} justifyContent="space-between">
-          <Text bold>PENDING {pending}</Text>
-          <Text bold>COMPLETED {s?.completed ?? 0}</Text>
-          <Text dimColor>
-            {m?.throughputPerSec.toFixed(1) ?? "0.0"}/s · in-flight {s?.inFlight ?? 0}
-          </Text>
-        </Box>
-        <Box marginTop={1} flexDirection="column">
-          {lanes.slice(0, 8).map(([lane, count]) => (
-            <Box key={lane}>
-              <Box width={12}>
-                <Text wrap="truncate">{lane}</Text>
-              </Box>
-              <Box width={barWidth + 1}>
-                <Text>{bar(count, max, barWidth)}</Text>
-              </Box>
-              <Box width={6} justifyContent="flex-end">
-                <Text>{compact(count)}</Text>
-              </Box>
-            </Box>
-          ))}
-        </Box>
-        <Box marginTop={1}>
-          <Text color="green">{spark(trend)}</Text>
-          <Text dimColor> pending · last {trend.length}s</Text>
-        </Box>
-      </Box>
-      <Box flexGrow={1} flexDirection="column" paddingX={1}>
-        <Box>
-          <Text dimColor>LOGS </Text>
-          <Text color="green">live</Text>
-        </Box>
-        <LogTail logs={logs} visible={visible} />
-      </Box>
-      {props.bar(hint)}
-    </Box>
-  );
-};
-
-const FocusedDaemon = (props: {
-  readonly name: string;
-  readonly tag: DaemonTag;
-  readonly cols: number;
-  readonly rows: number;
-  readonly editMode: boolean;
-  readonly cmd: string | null;
-  readonly bar: (hint: React.ReactElement) => React.ReactElement;
-  readonly barRows: number;
-}): React.ReactElement => {
-  const { name, tag, cols, rows, editMode } = props;
-  const bundle = daemonBundle(useRuntime(), tag);
-  const statusR = useAtomValue(bundle.status);
-  const logsR = useAtomValue(bundle.logs);
-
-  const start = useAtomSet(bundle.start);
-  const stop = useAtomSet(bundle.stop);
-  const runNow = useAtomSet(bundle.run);
-  useInput(
-    (input) => {
-      if (input === "s") start();
-      else if (input === "x") stop();
-      else if (input === "n") runNow();
-    },
-    { isActive: editMode && props.cmd === null },
-  );
-
-  const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
-  const logs = AsyncResult.isSuccess(logsR) ? logsR.value : [];
-  const up = s?.supervising === true;
-  const visible = Math.max(1, rows - 8 - props.barRows);
-
-  const hint = (
-    <Box paddingX={1} backgroundColor="gray">
-      <Text dimColor> Esc back · </Text>
-      <Text color="cyan">:</Text>
-      <Text dimColor> command · </Text>
-      <Text color={editMode ? "red" : "gray"}>{editMode ? "EDIT " : "view "}</Text>
-      {editMode ? (
-        <>
-          <ControlKey k="s" label="start" atom={bundle.start} />
-          <ControlKey k="x" label="stop" atom={bundle.stop} />
-          <ControlKey k="n" label="run now" atom={bundle.run} />
-        </>
-      ) : (
-        <Text dimColor>Ctrl+E edit</Text>
-      )}
-    </Box>
-  );
-
-  return (
-    <Box
-      flexDirection="column"
-      width={cols}
-      height={rows}
-      borderStyle={editMode ? "double" : BLANK_BORDER}
-      borderColor="red"
-    >
-      <Box
-        flexDirection="column"
-        borderStyle="round"
-        borderColor={up ? "green" : "gray"}
-        paddingX={2}
-        paddingY={1}
-        marginX={1}
-        marginTop={1}
-      >
-        <Box justifyContent="space-between">
-          <Text bold color="cyan">
-            ⚙ {name}
-            <NodeMark tag={tag} />
-          </Text>
-          <Text color={up ? "green" : "gray"}>{up ? "► running" : "■ stopped"}</Text>
-        </Box>
-        <Box marginTop={1}>
-          <Box width={24}>
-            <Text>supervising {up ? "yes" : "no"}</Text>
-          </Box>
-          <Box width={20}>
-            <Text>armed {s?.armed === true ? "yes" : "no"}</Text>
-          </Box>
-          <Box flexGrow={1}>
-            <Text>active {s?.activeInstances ?? 0}</Text>
-          </Box>
-        </Box>
-      </Box>
-      <Box flexGrow={1} flexDirection="column" paddingX={1}>
-        <Box>
-          <Box flexGrow={1}>
-            <Text dimColor>LOGS </Text>
-            <Text color="green">live</Text>
-          </Box>
         </Box>
         <LogTail logs={logs} visible={visible} />
       </Box>

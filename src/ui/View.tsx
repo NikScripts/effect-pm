@@ -32,14 +32,22 @@ export interface ViewProps {
 }
 
 /**
- * Optional layout hints from parent chrome (grid cell width, selection highlight).
- * Not navigation — shells own `onOpen` / routing; skins may read this via {@link useChrome}.
+ * Optional layout / shell hints for View skins. Navigation still belongs to the parent —
+ * skins may read callbacks here (e.g. DetailScreen `onBack`) via {@link useChrome}.
  *
  * @public
  */
 export interface Chrome {
   readonly width?: number;
   readonly selected?: boolean;
+  /** Web DetailScreen / drill-back. */
+  readonly onBack?: () => void;
+  /** Daemon schedule fullscreen (shell route). */
+  readonly onOpenSchedule?: () => void;
+  /** TUI focused panes (Ink). */
+  readonly cols?: number;
+  readonly rows?: number;
+  readonly editMode?: boolean;
 }
 
 const ChromeContext = React.createContext<Chrome>({});

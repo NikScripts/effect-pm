@@ -175,7 +175,8 @@ export const QueueCell = (props: {
   );
 };
 
-const PriorityCell = (props: {
+/** `WorkPool.priority` grid cell. @public */
+export const PriorityCell = (props: {
   readonly name: string;
   readonly tag: PriorityTag;
   readonly width: number;
@@ -233,7 +234,8 @@ const PriorityCell = (props: {
   );
 };
 
-const DaemonCell = (props: {
+/** Daemon grid cell. @public */
+export const DaemonCell = (props: {
   readonly name: string;
   readonly tag: DaemonTag;
   readonly width: number;
@@ -318,7 +320,8 @@ export const GroupCell = (props: {
   );
 };
 
-const FallbackCell = (props: {
+/** Bare Hyperlink / unknown-kind grid cell. @public */
+export const FallbackCell = (props: {
   readonly name: string;
   readonly member?: unknown;
   readonly width: number;

@@ -33,4 +33,5 @@ export * from "./Dashboard";
 export * from "./debug-console";
 export { cn } from "./cn";
 // Platform skins: `import * as WorkPoolView from "hyperlink-ts/web/WorkPoolView"`
-// (not re-exported here — would clash with `hyperlink-ts/ui` WorkPoolView handles).
+// / `import * as DashboardViews from "hyperlink-ts/web/DashboardViews"`
+// (not re-exported here — would clash with `hyperlink-ts/ui` handles).

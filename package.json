@@ -132,6 +132,10 @@
       "types": "./dist/ui/WorkPoolView.d.ts",
       "default": "./dist/ui/WorkPoolView.js"
     },
+    "./ui/DashboardViews": {
+      "types": "./dist/ui/DashboardViews.d.ts",
+      "default": "./dist/ui/DashboardViews.js"
+    },
     "./web": {
       "types": "./dist/web.d.ts",
       "default": "./dist/web.js"
@@ -139,6 +143,10 @@
     "./web/WorkPoolView": {
       "types": "./dist/web/WorkPoolView.d.ts",
       "default": "./dist/web/WorkPoolView.js"
+    },
+    "./web/DashboardViews": {
+      "types": "./dist/web/DashboardViews.d.ts",
+      "default": "./dist/web/DashboardViews.js"
     },
     "./cli": {
       "types": "./dist/cli.d.ts",
@@ -151,6 +159,10 @@
     "./tui/WorkPoolView": {
       "types": "./dist/tui/WorkPoolView.d.ts",
       "default": "./dist/tui/WorkPoolView.js"
+    },
+    "./tui/DashboardViews": {
+      "types": "./dist/tui/DashboardViews.d.ts",
+      "default": "./dist/tui/DashboardViews.js"
     },
     "./storage/sqlite": {
       "types": "./dist/storage/sqlite.d.ts",

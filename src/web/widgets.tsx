@@ -168,6 +168,31 @@ const PrioRow = (props: { readonly p: keyof typeof PRIO; readonly count: number;
   </div>
 );
 
+/** Shared class for a drillable card — button when activatable, div when View parent owns open. */
+const DRILL_CARD =
+  "relative flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring focus-visible:border-ring focus-visible:outline-none";
+
+/** Button when `onOpen` is set; presentational `div` when parent (View Cell) owns activation. */
+const DrillRoot = (props: {
+  readonly onOpen?: () => void;
+  readonly className: string;
+  readonly style?: React.CSSProperties;
+  readonly children: React.ReactNode;
+}): React.ReactElement => {
+  if (props.onOpen === undefined) {
+    return (
+      <div style={props.style} className={props.className}>
+        {props.children}
+      </div>
+    );
+  }
+  return (
+    <button type="button" onClick={props.onOpen} style={props.style} className={props.className}>
+      {props.children}
+    </button>
+  );
+};
+
 /** A queue as a grid card. Reads its own status straight from the tag. */
 export const QueueCard = (props: {
   readonly tag: QueueTag;
@@ -279,7 +304,8 @@ export const PriorityCard = (props: {
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
   readonly selected?: boolean;
-  readonly onOpen: (tag: PriorityTag) => void;
+  /** When omitted, presentational (View kit / parent owns activation). */
+  readonly onOpen?: (tag: PriorityTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   const r = useAtomValue(usePriorityBundle(props.tag).status);
@@ -289,12 +315,11 @@ export const PriorityCard = (props: {
   const max = Math.max(1, ...lanes.map(([, n]) => n));
   const paused = s?.paused === true;
   return (
-    <button
-      type="button"
-      onClick={() => props.onOpen(props.tag)}
+    <DrillRoot
+      onOpen={props.onOpen === undefined ? undefined : () => props.onOpen?.(props.tag)}
       style={vt}
       className={cn(
-        "relative flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring",
+        DRILL_CARD,
         props.selected === true && "border-primary",
       )}
     >
@@ -316,7 +341,7 @@ export const PriorityCard = (props: {
         )}
       </div>
       <DegradedOverlay tag={props.tag} />
-    </button>
+    </DrillRoot>
   );
 };
 
@@ -915,17 +940,17 @@ export const DaemonCard = (props: {
   readonly tag: DaemonTag;
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
-  readonly onOpen: (t: DaemonTag) => void;
+  /** When omitted, presentational (View kit / parent owns activation). */
+  readonly onOpen?: (t: DaemonTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   const r = useAtomValue(useDaemonBundle(props.tag).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   return (
-    <button
-      type="button"
-      onClick={() => props.onOpen(props.tag)}
+    <DrillRoot
+      onOpen={props.onOpen === undefined ? undefined : () => props.onOpen?.(props.tag)}
       style={vt}
-      className="relative flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring"
+      className={DRILL_CARD}
     >
       <div className="mb-2 flex items-center gap-2">
         <span>⚙</span>
@@ -937,7 +962,7 @@ export const DaemonCard = (props: {
         <span><strong className="text-foreground">{s?.activeInstances ?? 0}</strong> active</span>
       </div>
       <DegradedOverlay tag={props.tag} />
-    </button>
+    </DrillRoot>
   );
 };
 
@@ -1577,7 +1602,8 @@ export const ApiCard = (props: {
   readonly tag: ApiTag;
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
-  readonly onOpen: (t: ApiTag) => void;
+  /** When omitted, presentational (View kit / parent owns activation). */
+  readonly onOpen?: (t: ApiTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   const bundle = useApiBundle(props.tag);
@@ -1624,7 +1650,7 @@ export const ApiCard = (props: {
     );
   return (
     <Deck
-      onOpen={() => props.onOpen(props.tag)}
+      onOpen={props.onOpen === undefined ? undefined : () => props.onOpen?.(props.tag)}
       style={vt}
       pages={[page1, page2]}
       overlay={<DegradedOverlay tag={props.tag} />}
@@ -2415,9 +2441,6 @@ export const HyperlinkCard = (props: WidgetProps): React.ReactElement => {
 // the matching guard recovers the tag's type at render — runtime-discriminated, cast-free.
 /** One node's row in a fleet-health card: a coloured pip (reachable ok/degraded, or unreachable) +
  *  the node name + its state. */
-/** Shared class for a drillable read-only card — a `<button>` root that opens the fullscreen detail. */
-const DRILL_CARD = "relative flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring focus-visible:border-ring focus-visible:outline-none";
-
 const FleetNodeRow = (props: { readonly node: string; readonly report: NodeReport }): React.ReactElement => {
   const color =
     props.report._tag === "Unreachable"
@@ -2447,7 +2470,8 @@ export const FleetHealthCard = (props: {
   readonly tag: FleetHealthTag;
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
-  readonly onOpen: (tag: FleetHealthTag) => void;
+  /** When omitted, presentational (View kit / parent owns activation). */
+  readonly onOpen?: (tag: FleetHealthTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   const bundle = useFleetHealthBundle(props.tag);
@@ -2457,7 +2481,11 @@ export const FleetHealthCard = (props: {
   const byNode = AsyncResult.isSuccess(byNodeR) ? byNodeR.value : {};
   const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
   return (
-    <button type="button" onClick={() => props.onOpen(props.tag)} className={DRILL_CARD} style={vt}>
+    <DrillRoot
+      onOpen={props.onOpen === undefined ? undefined : () => props.onOpen?.(props.tag)}
+      className={DRILL_CARD}
+      style={vt}
+    >
       <div className="mb-2 flex items-center gap-2">
         <strong className="flex-1 truncate">{props.name}</strong>
         <Badge color={FLEET_STATUS[status ?? "ok"] ?? "#94a3b8"}>{status ?? "…"}</Badge>
@@ -2470,7 +2498,7 @@ export const FleetHealthCard = (props: {
         )}
       </div>
       <DegradedOverlay tag={props.tag} />
-    </button>
+    </DrillRoot>
   );
 };
 
@@ -2496,7 +2524,8 @@ export const TelemetryCard = (props: {
   readonly tag: TelemetryTag;
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
-  readonly onOpen: (tag: TelemetryTag) => void;
+  /** When omitted, presentational (View kit / parent owns activation). */
+  readonly onOpen?: (tag: TelemetryTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   const bundle = useTelemetryBundle(props.tag);
@@ -2509,7 +2538,11 @@ export const TelemetryCard = (props: {
   const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
   const max = Math.max(1, ...rows.map(([, n]) => n));
   return (
-    <button type="button" onClick={() => props.onOpen(props.tag)} className={DRILL_CARD} style={vt}>
+    <DrillRoot
+      onOpen={props.onOpen === undefined ? undefined : () => props.onOpen?.(props.tag)}
+      className={DRILL_CARD}
+      style={vt}
+    >
       <div className="mb-2 flex items-center gap-2">
         <strong className="flex-1 truncate">{props.name}</strong>
         {count !== undefined ? (
@@ -2526,7 +2559,7 @@ export const TelemetryCard = (props: {
         {rows.map(([node, n]) => <NodeCountRow key={node} node={node} count={n} max={max} />)}
       </div>
       <DegradedOverlay tag={props.tag} />
-    </button>
+    </DrillRoot>
   );
 };
 
@@ -2539,7 +2572,8 @@ export const ShardMapCard = (props: {
   readonly tag: ShardMapTag;
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
-  readonly onOpen: (tag: ShardMapTag) => void;
+  /** When omitted, presentational (View kit / parent owns activation). */
+  readonly onOpen?: (tag: ShardMapTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   const bundle = useShardMapBundle(props.tag);
@@ -2552,7 +2586,11 @@ export const ShardMapCard = (props: {
   const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
   const max = Math.max(1, ...rows.map(([, n]) => n));
   return (
-    <button type="button" onClick={() => props.onOpen(props.tag)} className={DRILL_CARD} style={vt}>
+    <DrillRoot
+      onOpen={props.onOpen === undefined ? undefined : () => props.onOpen?.(props.tag)}
+      className={DRILL_CARD}
+      style={vt}
+    >
       <div className="mb-2 flex items-center gap-2">
         <strong className="flex-1 truncate">{props.name}</strong>
         <span className="shrink-0 rounded-full border px-2 py-0.5 text-[0.7rem] text-muted-foreground">
@@ -2570,7 +2608,7 @@ export const ShardMapCard = (props: {
         <div className="mt-2 text-[0.7rem] text-muted-foreground">this node holds {local}</div>
       ) : null}
       <DegradedOverlay tag={props.tag} />
-    </button>
+    </DrillRoot>
   );
 };
 
@@ -2595,7 +2633,8 @@ export const GateCard = (props: {
   readonly tag: GateTag;
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
-  readonly onOpen: (tag: GateTag) => void;
+  /** When omitted, presentational (View kit / parent owns activation). */
+  readonly onOpen?: (tag: GateTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   const bundle = useGateBundle(props.tag);
@@ -2609,7 +2648,11 @@ export const GateCard = (props: {
   const interrupted = s !== undefined ? s.interrupted : 0;
   const avgMs = completed > 0 && s !== undefined ? Math.round(s.totalDurationMs / completed) : undefined;
   return (
-    <button type="button" onClick={() => props.onOpen(props.tag)} className={DRILL_CARD} style={vt}>
+    <DrillRoot
+      onOpen={props.onOpen === undefined ? undefined : () => props.onOpen?.(props.tag)}
+      className={DRILL_CARD}
+      style={vt}
+    >
       <div className="mb-2 flex items-center gap-2">
         <strong className="flex-1 truncate">{props.name}</strong>
         <span className="shrink-0 rounded-full border px-2 py-0.5 text-[0.7rem] text-muted-foreground">
@@ -2632,7 +2675,7 @@ export const GateCard = (props: {
         ) : null}
       </div>
       <DegradedOverlay tag={props.tag} />
-    </button>
+    </DrillRoot>
   );
 };
 
