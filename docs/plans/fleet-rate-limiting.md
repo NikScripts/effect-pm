@@ -272,7 +272,7 @@ Fleet rate limiting is **first-class Gate substrate**. HttpApiClient update **us
 |-------|--------|
 | **R0** | This proposal + owner locks above |
 | **R1** | ~~Gate config `rateLimit` + consume before Semaphore; Soft memory / presence store; tests with `TestClock`~~ **Eng’d** |
-| **R2** | Wire **`metrics` nest** on Gate (remaining / exceeded ± usage); HttpApiClient still old shape but can share limiter |
+| **R2** | Light **`metrics` nest** on ordinary Gate when `rateLimit` set (limiter fields + key metadata); HttpApi still old shape until R4 |
 | **R3** | ~~Fleet recipe + shared-store tests (Gate + WorkPool presence-driven); Soft vs shared contrast; demo/docs~~ **Eng’d** (Redis recipe documented; CI uses shared memory store as stand-in) |
 | **R4** | `Gate.HttpApiClient` Tag (local routes + `metrics` nest); `static layer` pattern; **opt-in adaptive 429**; retire ApiMetrics public story |
 | **R5** | (Optional) Hyperlink-backed `RateLimiterStore` without Redis |
