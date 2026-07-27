@@ -172,7 +172,7 @@ export type RunHandle<T, A, E> = internal.GateRunHandle<T, A, E>;
 export type Handle<T, A, E> = internal.GateHandle<T, A, E>;
 
 /**
- * A gate handle — the value `yield* MyRun` produces. The **named** compact form of a gate's
+ * A gate handle — the value `yield* MyGate` produces. The **named** compact form of a gate's
  * service (both the light `Tag` path and the engine-included `Service` path yield this one type), so it
  * hovers as `Gate<Ticket, Price>` instead of the expanded `ServiceOf<…>` member wall; the docs
  * popover / prettify-ts expand it to the full shape on demand.
@@ -268,7 +268,7 @@ export interface ServiceDefinition<
 
 /**
  * Tag + static `.run` shortcut, whose service value is the **named** {@link Gate} handle (via the
- * `Svc` seam on {@link HyperlinkTag}), so `yield* MyRun` hovers as `Gate<Ticket, Price>` rather
+ * `Svc` seam on {@link HyperlinkTag}), so `yield* MyGate` hovers as `Gate<Ticket, Price>` rather
  * than the expanded `ServiceOf<…>` wall. @internal
  */
 type GateTagWithStaticRun<
@@ -448,7 +448,7 @@ export type Runner = internal.GateRunner;
 
 /**
  * Effect `RateLimiter.consume` / `makeWithRateLimiter` options for a gate
- * (`key` optional — defaults to the gate resource id). Policy only; the
+ * (`key` optional — defaults to the gate hyperlink / tag id). Policy only; the
  * `RateLimiter` / `RateLimiterStore` services are presence-driven in Context.
  *
  * @category models
