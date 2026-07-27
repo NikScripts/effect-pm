@@ -93,7 +93,7 @@ it("defaults pipe merges bag onto local service", () =>
     ),
   ));
 
-it("defaults key can be overridden in the layer impl", () =>
+it("defaults key can be overridden in the layer impl (provide-site only)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const a = (yield* Adorned) as Hyperlink.WithDefaults<typeof Adorned>;
@@ -119,6 +119,53 @@ it("defaults pipe rejects Spec key collision", () => {
   );
 });
 
+it("defaults pipe rejects nested group prefix collision", () => {
+  const tag = Hyperlink.Tag()("default-test/PrefixCollide", {
+    admin: {
+      banner: Hyperlink.default("x"),
+    },
+  });
+  expect(() => Hyperlink.defaults(tag, { admin: 1 })).toThrow(
+    Hyperlink.DuplicateDefaultKey,
+  );
+});
+
+it("defaults empty bag is a no-op", () => {
+  const tag = Hyperlink.Tag()("default-test/EmptyBag", {
+    current: Hyperlink.effect(Schema.Number),
+  }).pipe(Hyperlink.defaults({}));
+  expect(tag[Hyperlink.defaultsSym]).toEqual({});
+});
+
+it("defaults double-pipe merges bags; duplicate key is loud", () => {
+  const once = Hyperlink.Tag()("default-test/Double", {
+    current: Hyperlink.effect(Schema.Number),
+  }).pipe(Hyperlink.defaults({ a: 1 }));
+  const twice = once.pipe(Hyperlink.defaults({ b: 2 }));
+  expect(twice[Hyperlink.defaultsSym]).toEqual({ a: 1, b: 2 });
+  expect(() => twice.pipe(Hyperlink.defaults({ a: 9 }))).toThrow(
+    Hyperlink.DuplicateDefaultKey,
+  );
+});
+
+class Mixed extends Hyperlink.Tag<Mixed>()("default-test/Mixed", {
+  current: Hyperlink.effect(Schema.Number),
+  unit: Hyperlink.default("count" as const),
+}).pipe(Hyperlink.defaults({ label: (n: number) => `n=${n}` })) {}
+
+it("Spec default + piped defaults coexist", () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const m = (yield* Mixed) as Hyperlink.WithDefaults<typeof Mixed>;
+      expect(yield* m.current).toBe(3);
+      expect(m.unit).toBe("count");
+      expect(m.label(3)).toBe("n=3");
+    }).pipe(
+      Effect.provide(Hyperlink.layer(Mixed, { current: Effect.succeed(3) })),
+      Effect.scoped,
+    ),
+  ));
+
 it("Spec default leaf can be overridden in the layer impl", () =>
   Effect.runPromise(
     Effect.gen(function* () {
@@ -135,6 +182,33 @@ it("Spec default leaf can be overridden in the layer impl", () =>
       ),
       Effect.scoped,
     ),
+  ));
+
+it("client still sees Tag-baked default when server layer overrode locally", () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const server = PmNode.httpServer([
+        Hyperlink.serve(Counter, {
+          ...impl,
+          label: (n: number) => `server-over=${n}`,
+        }),
+      ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
+
+      yield* Effect.gen(function* () {
+        const addr = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
+        const port = addr._tag === "TcpAddress" ? addr.port : 0;
+        const base = `http://127.0.0.1:${port}`;
+
+        yield* Effect.gen(function* () {
+          const c = yield* Counter;
+          // Override is provide-site only — remote installs the Spec leaf.
+          expect(c.label(1)).toBe("count=1");
+        }).pipe(
+          Effect.provide(Hyperlink.client(Counter).pipe(Layer.provide(protocol(`${base}/rpc`)))),
+          Effect.scoped,
+        );
+      }).pipe(Effect.provide(server), Effect.scoped);
+    }),
   ));
 
 it("defaults bag is on the REMOTE client too", () =>

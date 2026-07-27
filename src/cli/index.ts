@@ -40,7 +40,8 @@ export type { CliGroup, CliHyperlinkTag, CliNode, CliTree } from "./types";
 export { openTui, Tui, TuiNotConfigured, type TuiOpenInput } from "./Tui";
 
 // A spec entry is a runnable CLI verb when it's a wire method (`kind`: query/mutate) that
-// isn't a streaming read. Streams have no run-and-exit form; local methods aren't on the wire.
+// isn't a streaming read. Streams have no run-and-exit form; local / Tag-baked default
+// members aren't CLI verbs.
 const isCliMethod = (m: AnyMethod | AnyLocalMethod | AnyDefaultMethod): m is AnyMethod =>
   "kind" in m && m.stream !== true;
 

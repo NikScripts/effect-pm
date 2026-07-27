@@ -156,6 +156,7 @@ export * as Node from "./Node";
 export * as MultiNode from "./MultiNode";
 export * as Lookup from "./Lookup";
 export type {
+  AnyDefaultMethod,
   AnyLocalMethod,
   AnyMethod,
   Local,

@@ -218,7 +218,8 @@ Shipped rules:
 
 ## References
 
-- Eng’d builders: `src/Hyperlink.ts` (`effect`, `effectFn`, `stream`, `ref`, `value`, `local`, `pure`, `promise`).
-- Materialize resolve: `buildLocalContext` / `buildClientService` (`isValueMethod` branches).
-- Tests: `test/resource-value-plain.test.ts`, `resource-pure*`, `resource-promise*`, nesting / stream suites.
+- Eng’d builders: `src/Hyperlink.ts` (`effect`, `effectFn`, `stream`, `ref`, `value`, `local`, `default`, `defaults`, `promise`).
+- Materialize resolve: `buildLocalContext` / `buildClientService` (`isValueMethod` / `isDefaultMethod` branches).
+- Tests: `test/resource-value-plain.test.ts`, `resource-default*`, `resource-promise*`, nesting / stream suites.
+- Demo: `examples/forms/resource/default-defaults.ts`.
 - Adapters: [`client-adapters-design.md`](../handoffs/client-adapters-design.md); wire identity: [`wire-groups-and-identity.md`](./wire-groups-and-identity.md).

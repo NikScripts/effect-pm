@@ -564,6 +564,11 @@ const DefaultMethodTypeId = "~hyperlink-ts/Hyperlink/DefaultMethod" as const;
  */
 export interface DefaultMethod<out V> {
   readonly [DefaultMethodTypeId]: typeof DefaultMethodTypeId;
+  /**
+   * The Tag-baked payload — literal or sync function. Installed identically on local and
+   * client handles. Layer/serve may override at the **provide site only** (does not travel
+   * over the wire); see {@link ImplWithDefaultOverrides}.
+   */
   readonly value: V;
 }
 
@@ -753,14 +758,26 @@ export const defaultsSym: unique symbol = Symbol.for(
 export type DefaultsBag = { readonly [key: string]: unknown };
 
 /**
- * Tag after {@link defaults} — precise bag `D` on {@link defaultsSym}.
+ * Reject Promise-returning functions in a defaults bag value (same rule as {@link default}).
+ *
+ * @internal
+ */
+type SyncDefault<V> = [V] extends [(...args: never) => Promise<unknown>] ? never : V;
+
+/** Prior piped bag on a Tag, or `{}`. @internal */
+type PriorDefaults<T> = T extends { readonly [defaultsSym]: infer P extends DefaultsBag }
+  ? P
+  : {};
+
+/**
+ * Tag after {@link defaults} — precise merged bag on {@link defaultsSym}.
  * (`class X extends Tag<X>().pipe(defaults)` cannot remap {@link HyperlinkTag}'s
  * `Service` without a self-heritage cycle; use {@link WithDefaults} at the use site.)
  *
  * @internal
  */
 type TagWithDefaults<T, D extends DefaultsBag> = T & {
-  readonly [defaultsSym]: D;
+  readonly [defaultsSym]: PriorDefaults<T> & D;
 };
 
 /**
@@ -794,13 +811,18 @@ const defaultsCollidesWithSpec = (flat: FlatSpec, key: string): boolean => {
 };
 
 /**
- * Pipe **multiple** Tag-baked defaults onto a Tag — batteries on every local/client handle,
- * overridable at layer. Spec stays branded builders; this bag is the extras surface.
+ * Pipe **multiple** Tag-baked defaults onto a Tag — batteries on every local/client handle.
+ * Spec stays branded builders; this bag is the extras surface.
  *
  * Singular fields belong in the contract via {@link default} (fully typed on `Service`).
  * Piped bag keys are on every local/client handle at runtime; type them with
  * {@link WithDefaults}`<typeof Tag>` (class-extends cannot widen `Service` without a
- * self-heritage cycle). Same key as a Spec path → {@link DuplicateDefaultKey} at pipe time.
+ * self-heritage cycle). Same key as a Spec path (or a prior bag key) →
+ * {@link DuplicateDefaultKey} at pipe time.
+ *
+ * Layer/serve may override bag keys at the **provide site only** — overrides do not travel
+ * over the wire; clients always see the Tag-baked bag. Prefer {@link Layer.updateService}
+ * for post-hoc local patches.
  *
  * ```ts
  * class Jobs extends WorkPool.Tag<Jobs>()("@app/Jobs", jobSpec).pipe(
@@ -812,22 +834,20 @@ const defaultsCollidesWithSpec = (flat: FlatSpec, key: string): boolean => {
  * const jobs = (yield* Jobs) as Hyperlink.WithDefaults<typeof Jobs>
  * ```
  *
- * @category constructors
+ * @category spec fields
  * @public
  */
 export const defaults: {
   <const D extends DefaultsBag>(
-    bag: D,
-  ): <T extends { readonly [specSym]: FlatSpec }>(
+    bag: { readonly [K in keyof D]: SyncDefault<D[K]> },
+  ): <T extends PipeableTag>(tag: T) => TagWithDefaults<T, D>;
+  <T extends PipeableTag, const D extends DefaultsBag>(
     tag: T,
-  ) => TagWithDefaults<T, D>;
-  <T extends { readonly [specSym]: FlatSpec }, const D extends DefaultsBag>(
-    tag: T,
-    bag: D,
+    bag: { readonly [K in keyof D]: SyncDefault<D[K]> },
   ): TagWithDefaults<T, D>;
 } = Fn.dual(
   2,
-  <T extends { readonly [specSym]: FlatSpec }, D extends DefaultsBag>(
+  <T extends PipeableTag, D extends DefaultsBag>(
     tag: T,
     bag: D,
   ): TagWithDefaults<T, D> => {
@@ -916,6 +936,9 @@ export const local: typeof localFn & BareLocal = Object.assign(localFn, {
  *
  * For **multiple** defaults, pipe {@link defaults} onto the Tag instead (bag keys are
  * on the runtime handle; type them with {@link WithDefaults}`<typeof Tag>` at use sites).
+ *
+ * Layer/serve may override a Spec default at the **provide site only** (see
+ * {@link ImplWithDefaultOverrides}); the remote client always installs the Tag-baked value.
  *
  * ```ts
  * class Counter extends Hyperlink.Tag<Counter>()("counter", {
@@ -2282,14 +2305,18 @@ export type ImplOf<S extends Spec> = {
 
 /**
  * Impl for {@link layer} / {@link serve}: wire {@link ImplOf} plus optional overrides for
- * Spec {@link default} leaves and piped {@link defaults} bag keys (bag values are
- * structurally checked at the call site).
+ * Spec {@link default} leaves and piped {@link defaults} bag keys (extra keys are
+ * structural — Spec leaf values stay precise via excess-property checks on known keys
+ * when inlined at the call site).
+ *
+ * Overrides apply at the **provide site only** (local handle / co-located serve grant).
+ * Clients always install Tag-baked Spec defaults + the piped bag — they do not see the
+ * server's override. Use {@link Layer.updateService} for post-hoc local patches.
  *
  * @category models
  * @public
  */
-export type ImplWithDefaultOverrides<S extends Spec> = ImplOf<S> &
-  Partial<DefaultsBag>;
+export type ImplWithDefaultOverrides<S extends Spec> = ImplOf<S> & Partial<DefaultsBag>;
 
 /**
  * Recover the (possibly nested) {@link Spec} a tag was built from — for annotating an extracted impl
@@ -2306,7 +2333,8 @@ export type SpecOf<T> = T extends { readonly [specTypeSym]?: infer S extends Spe
  * `layer` / `serve`; but the moment you hoist one to a `const` (to share it across the
  * local layer and a served entry, or across several serves) it loses that typing — the mistake then
  * surfaces far away at the serve call, with no autocomplete as you write it. `Hyperlink.make(tag, impl)`
- * infers the tag's spec and constrains `impl` to its {@link ImplOf}, returning it typed. Runtime identity.
+ * infers the tag's spec and constrains `impl` to {@link ImplWithDefaultOverrides}, returning it typed.
+ * Runtime identity.
  *
  * ```ts
  * const scoresImpl = Hyperlink.make(ScoresDb, { read: … }); // typed here — autocomplete + errors at the def
@@ -2319,12 +2347,12 @@ export type SpecOf<T> = T extends { readonly [specTypeSym]?: infer S extends Spe
  */
 export function make<Self, S extends Spec>(
   tag: HyperlinkTag<Self, S>,
-  impl: ImplOf<S>,
-): ImplOf<S>;
+  impl: ImplWithDefaultOverrides<S>,
+): ImplWithDefaultOverrides<S>;
 export function make<Self, S extends Spec, R>(
   tag: HyperlinkTag<Self, S>,
-  impl: Effect.Effect<ImplOf<S>, never, R>,
-): Effect.Effect<ImplOf<S>, never, R>;
+  impl: Effect.Effect<ImplWithDefaultOverrides<S>, never, R>,
+): Effect.Effect<ImplWithDefaultOverrides<S>, never, R>;
 export function make(_tag: unknown, impl: unknown): unknown {
   return impl;
 }
