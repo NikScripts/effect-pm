@@ -44,6 +44,11 @@
     - You *can* group layers via Group, but that is not exclusive or load-bearing for launch.
     - Launcher must **not** treat `Group` as “the set of OS processes to spawn” or as SSOT for placement/process topology (Lookup/Node remain that).
     - CLI path sugar from group paths (if any) is addressing ergonomics only — not ownership of lifecycle.
+13. **Product = library launcher (spine α), not blank-worker/Lookup-day-one, not “no launcher package.”**
+    - Ship `hyperlink-ts/Launcher` + `Node.assume` / Ready handshake; optional thin `hl up` later.
+    - **v1 grain:** 1 node ↔ 1 OS process; parent **probes** Ready (`verifyConnection` / status); child is an **autonomous entry** (app owns serve/listen in its `main`).
+    - Track **B** (Lookup-directed / blank worker) later — keep assume/ready on Node so it can plug in.
+    - Rejected for Track A: host-only bring-up with Hyperlink as handshake docs alone; collapsed process|fiber (`hl dev`) deferred.
 
 Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.md) remain **reference only** unless re-locked here.
 
@@ -63,9 +68,10 @@ Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.m
 
 ### Track A — baking (not locked)
 
-- **Spawn input (grounded):** unit = node dial target (`Node.Tag` / addressed node) + `ChildProcess` (how to start) + optional ready scope (`resources?: tag keys`, `timeout?`) — **not** Group. Multi-node = `ReadonlyArray` of that unit. Confirm with owner.
-- Failure / timeout: reuse `ServiceNotReady` / `NodeUnreachable` / … + bounded poll (not invent a parallel health stack).
+- **Spawn input (lean, confirm):** `{ node, process: ChildProcess, ready?: { resources?, timeout? } }` with optional `entry` sugar that builds `ChildProcess`; multi = `ReadonlyArray`. Not Group.
+- Failure / timeout: reuse `ServiceNotReady` / `NodeUnreachable` / … + bounded poll.
 - `Node.assume` wire shape (new RPC; status may mirror).
+- Custody-handle API sugar (`spawn` returns handle with `.awaitReady` / `.handoff`) vs flat `Launcher.*` functions — pick before Eng.
 
 ---
 
