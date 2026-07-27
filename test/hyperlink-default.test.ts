@@ -83,7 +83,7 @@ class Adorned extends Hyperlink.Tag<Adorned>()(
 it("defaults pipe merges bag onto local service", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const a = (yield* Adorned) as Hyperlink.WithDefaults<typeof Adorned>;
+      const a = yield* Adorned;
       expect(yield* a.current).toBe(1);
       expect(a.label(3)).toBe("n=3");
       expect(a.tags).toEqual(["admin", "beta"]);
@@ -96,7 +96,7 @@ it("defaults pipe merges bag onto local service", () =>
 it("defaults key can be overridden in the layer impl (provide-site only)", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const a = (yield* Adorned) as Hyperlink.WithDefaults<typeof Adorned>;
+      const a = yield* Adorned;
       expect(a.label(9)).toBe("over=9");
       expect(a.tags).toEqual(["admin", "beta"]);
     }).pipe(
@@ -156,7 +156,7 @@ class Mixed extends Hyperlink.Tag<Mixed>()("default-test/Mixed", {
 it("Spec default + piped defaults coexist", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const m = (yield* Mixed) as Hyperlink.WithDefaults<typeof Mixed>;
+      const m = yield* Mixed;
       expect(yield* m.current).toBe(3);
       expect(m.unit).toBe("count");
       expect(m.label(3)).toBe("n=3");
@@ -224,7 +224,7 @@ it("defaults bag is on the REMOTE client too", () =>
         const base = `http://127.0.0.1:${port}`;
 
         yield* Effect.gen(function* () {
-          const a = (yield* Adorned) as Hyperlink.WithDefaults<typeof Adorned>;
+          const a = yield* Adorned;
           expect(yield* a.current).toBe(5);
           expect(a.label(2)).toBe("n=2");
           expect(a.tags).toEqual(["admin", "beta"]);

@@ -164,10 +164,9 @@ class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
 ) {}
 ```
 
-`label` is on `Service` (Spec leaf). Piped `unit` is on every handle at runtime; type it with
-`Hyperlink.WithDefaults<typeof Counter>` when you need the bag keys in TypeScript. Layer
-overrides are **provide-site only** (local handle) — clients always see the Tag-baked value.
-Post-hoc local patches: `Layer.updateService`.
+`label` is on `Service` (Spec leaf). Piped `unit` widens `Service` at construction too —
+`yield* Counter` sees both. Layer overrides are **provide-site only** (local handle) —
+clients always see the Tag-baked value. Post-hoc local patches: `Layer.updateService`.
 
 ## What changes next
 

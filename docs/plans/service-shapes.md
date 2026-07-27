@@ -1,6 +1,6 @@
 # Plan: service / contract shapes
 
-**Status:** `default` / `defaults` Eng’d (2026-07-27); **construction adornments** (safe `defaults` / handle widen) baking; `cell` parked lean.  
+**Status:** `default` / `defaults` Eng’d (2026-07-27); **construction adornments A1–A2 Eng’d** (`defaults` remaps `Svc` via `remapTagService`); `cell` parked lean.  
 **Agent:** 4 (`cursor/hyperservice-open-deps-5679`).  
 **Prior art:** [`service-shape-redesign.md`](../handoffs/archive/2026-07/features/service-shape-redesign.md) (2026-07-01/02), [`client-adapters-design.md`](../handoffs/client-adapters-design.md).  
 **Orthogonal:** wire RpcGroup identity — [`wire-groups-and-identity.md`](./wire-groups-and-identity.md) (W1–W3 Eng’d; do not conflate with handle taxonomy).
@@ -171,12 +171,12 @@ Placeholder name was `Hyperlink.handle`. **Rejected** as the public noun. Short-
 | API | Shape | Role |
 |-----|--------|------|
 | **`Hyperlink.default(…)`** | Spec leaf (singular) | One default field **in the contract** — literal or sync fn (Promise-returning fn → type error) |
-| **`Hyperlink.defaults({…})`** | Piped bag (plural) | Add **multiple** defaults: `Tag(…).pipe(Hyperlink.defaults({…}))` — bag on Tag (`DefaultsOf`); handle widen via `WithDefaults` |
+| **`Hyperlink.defaults({…})`** | Piped bag (plural) | Add **multiple** defaults: `Tag(…).pipe(Hyperlink.defaults({…}))` — bag on Tag (`DefaultsOf`); **`Svc` remapped** so `yield* Tag` includes bag keys |
 
 Shipped rules:
 
 - Spec stays branded builders; `defaults` bag merges onto the service (local + client).
-- Spec `default` leaves are fully typed on `Service`. Piped bag keys are runtime-present; type with `WithDefaults<typeof Tag>` (`class X extends Tag<X>().pipe(defaults)` cannot remap `Service` without a self-heritage cycle).
+- Spec `default` leaves are fully typed on `Service`. Piped bag keys widen `Service` at construction via licensed `remapTagService` (`test/defaults-handle.test-d.ts`); `WithDefaults` kept as escape/migration.
 - Spec∩bag key collision → `DuplicateDefaultKey` (also duplicate bag keys across pipes).
 - Layer/serve: wire `ImplOf` required; default/bag keys optional overrides (`ImplWithDefaultOverrides`).
 - Post-hoc overrides also via `Layer.updateService`.
@@ -185,7 +185,7 @@ Shipped rules:
 
 ---
 
-## Construction adornments (bake — safe handle widen, one-shot)
+## Construction adornments (A1–A2 Eng’d — safe handle widen, one-shot)
 
 ### Goal
 
@@ -202,9 +202,9 @@ jobs.label(1) // on Service — no WithDefaults cast
 
 Same pattern must compose with existing pipes (`withReadiness`, node bind, …) without a second mint stage.
 
-### Why today’s bag is unsafe
+### Why the bag needed a cast (fixed)
 
-`defaults` stamps runtime keys on `defaultsSym` but **does not remap** `HyperlinkTag`’s `Svc`. `yield* Tag` stays Spec-only; `WithDefaults` is a use-site lie-papering. Spec `default` leaves are fine (in Spec → in `ServiceOf`).
+Previously `defaults` stamped runtime keys on `defaultsSym` but **did not remap** `HyperlinkTag`’s `Svc`. `yield* Tag` stayed Spec-only; `WithDefaults` papered over it at use sites. Spec `default` leaves were already fine (in Spec → in `ServiceOf`). **A1 Eng’d:** `defaults` remaps `Svc → Svc & Bag` via `remapTagService`.
 
 ### Constraint (class Self)
 
@@ -212,7 +212,7 @@ Same pattern must compose with existing pipes (`withReadiness`, node bind, …) 
 
 **Precedent that works:** `nameRunService` / `nameQueueService` — mint builds the Tag, then **one licensed cast** remaps `Svc` (`ServiceOf ⇄ Gate<…>` / `WorkPool<…>`), guarded by `.test-d.ts` bidirectional equality. Construction finishes **before** the class body closes; no separate const.
 
-### Design lock (proposed)
+### Design lock (Eng’d A1–A2)
 
 **Adornments are construction pipes that remap `Svc` via the same licensed-cast pattern — not a Prototype noun, not use-site casts.**
 
@@ -236,13 +236,13 @@ class Jobs extends WorkPool.Tag<Jobs>()("@app/Jobs", jobSpec).pipe(
 ) {}
 ```
 
-`Hyperlink.defaults` implementation change:
+`Hyperlink.defaults` implementation (Eng’d):
 
 1. Keep runtime stamp on `defaultsSym` + collision checks.
-2. Return type: remap `Svc` to `Svc & D` (and preserve Spec/`kind`/node stamps).
-3. Licensed `as unknown as HyperlinkTag<Self, S, Svc & D>` (mirror `nameRunService`).
-4. `test/defaults-handle.test-d.ts`: bidirectional `yield* Jobs` ⇄ `ServiceOf<Spec> & Bag`; toolkit Tag + defaults keeps `WorkPool<Item> & Bag`.
-5. Retire recommended `WithDefaults` use-site cast (keep type as escape / migration).
+2. Return type: remap `Svc` to `Svc & D` (NodeBoundTag / HyperlinkTag branches).
+3. Licensed cast via internal `remapTagService` (`as unknown as`).
+4. `test/defaults-handle.test-d.ts`: bidirectional `yield* Tag` ⇄ `ServiceOf & Bag`; toolkit keeps `WorkPool` / `Gate` ∧ bag.
+5. `WithDefaults` kept as escape / migration (identity once Svc is remapped).
 
 ### Optional sugar (same semantics, still one-shot)
 
@@ -279,11 +279,11 @@ Today’s candidates under this umbrella:
 
 | Slice | Scope |
 |-------|--------|
-| **A1** | Remap `Svc` in `defaults` pipe + licensed cast + `.test-d.ts`; drop need for use-site `WithDefaults` |
-| **A2** | Prove toolkit Tags: `WorkPool.Tag().pipe(defaults)` keeps named handle ∧ bag |
+| **A1** | ~~Remap `Svc` in `defaults` + licensed cast + `.test-d.ts`~~ **done** (`remapTagService`) |
+| **A2** | ~~Toolkit Tags keep named handle ∧ bag~~ **done** (`test/defaults-handle.test-d.ts`) |
 | **A3** | Optional factory `{ defaults }` sugar (desugars to A1) |
-| **A4** | Docs: construction adornments chapter; migrate demo off `WithDefaults` cast |
-| **A5** | (Later) generalize adorner helper used by defaults + future stamps |
+| **A4** | Docs polish / getting-started migrate (partial — demo off `WithDefaults`) |
+| **A5** | Further adorners share `remapTagService` |
 
 ### Non-goals
 
@@ -301,7 +301,7 @@ Today’s candidates under this umbrella:
 5. ~~Promise adapter~~ **done** (`Hyperlink.promise`).
 6. Getting-started / Core Concepts polish for the taxonomy (optional).
 7. ~~`default` payload + `pure` fate~~ **done** — literals + sync fns; `pure` removed.
-8. **Construction adornments (this section):** lock A1–A2 as the safe `defaults` fix? Optional A3 sugar?
+8. ~~**Construction adornments A1–A2**~~ **Eng’d** — optional A3 sugar still open.
 
 ---
 

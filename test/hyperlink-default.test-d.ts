@@ -59,9 +59,12 @@ Hyperlink.layer(Adorned, {
   label: (n: number) => `x=${n}`,
 });
 
-// precise bag on the Tag; handle widen via WithDefaults
+// precise bag on the Tag; Svc remap so yield* sees bag keys (see defaults-handle.test-d.ts)
 type AdornedBag = Hyperlink.DefaultsOf<typeof Adorned>;
 expectTypeOf<AdornedBag["label"]>().toEqualTypeOf<(n: number) => string>();
+expectTypeOf<Hyperlink.Shape<typeof Adorned>["label"]>().toEqualTypeOf<
+  (n: number) => string
+>();
 expectTypeOf<WithDefaults<typeof Adorned>["label"]>().toEqualTypeOf<
   (n: number) => string
 >();
