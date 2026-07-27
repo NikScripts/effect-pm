@@ -138,10 +138,10 @@ breaking notes into one coherent changeset when possible (see
 **Rules:**
 
 - **One work branch per agent** (e.g. `cursor/<desc>-….` / `feature/<desc>`). Do not scatter work across many agent branches.
-- **One integration branch:** `integration`. Agents **sync** with it: after a sync, the work branch and `integration` are **merged and share the same tip**.
+- **One integration branch:** `integration`. When the owner authorizes a sync, work branch and `integration` end **merged and share the same tip**.
 - Branch agent work from **`integration`**, not `main`, for platform work.
 - **Do not open PRs** unless the owner asks.
-- **Push to `integration`** when syncing (or when the owner directs) so the shared tip is published.
+- **Never push `integration` unless the owner explicitly authorizes that push.** Tip-sync / “keep tips aligned” is not blanket permission (2026-07-27 — see [`../handoffs/agent-04-w3-incident-2026-07-27.md`](../handoffs/agent-04-w3-incident-2026-07-27.md)). Default: push the **work branch** only.
 - Do **not** push to `main`, `develop`, release branches, or owner-owned branches without explicit approval.
 
 ---
