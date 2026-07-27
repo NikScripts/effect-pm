@@ -261,7 +261,7 @@ Fleet rate limiting is **first-class Gate substrate**. HttpApiClient update **us
 2. **Fleet store v1 backend:** Effect **Redis** only, or also Eng SQL `RateLimiterStore`? — lean Redis  
 3. **Distributed + memory Soft:** docs-only vs fail-loud? — lean docs  
 4. ~~**Default `onExceeded` for Gates:**~~ **LOCKED (R1 lean):** `"delay"`  
-5. **Nest name:** `observe` / `limit` / `metrics`? — lean `observe`  
+5. ~~**Nest name:**~~ **LOCKED (bake 2026-07-27):** `metrics` (WorkPool parity; covers usage + limiter state). Fail-loud if HttpApi already has a group named `metrics`.  
 6. **Per-route keys** in v1 or whole-client key only? — lean whole-client (Gate key = resource id today)
 
 ---
@@ -272,9 +272,9 @@ Fleet rate limiting is **first-class Gate substrate**. HttpApiClient update **us
 |-------|--------|
 | **R0** | This proposal + owner locks above |
 | **R1** | ~~Gate config `rateLimit` + consume before Semaphore; Soft memory / presence store; tests with `TestClock`~~ **Eng’d** |
-| **R2** | Wire observe nest on Gate (remaining / exceeded); HttpApiClient still old shape but can share limiter |
+| **R2** | Wire **`metrics` nest** on Gate (remaining / exceeded ± usage); HttpApiClient still old shape but can share limiter |
 | **R3** | ~~Fleet recipe + shared-store tests (Gate + WorkPool presence-driven); Soft vs shared contrast; demo/docs~~ **Eng’d** (Redis recipe documented; CI uses shared memory store as stand-in) |
-| **R4** | HttpApiClient → Tag (local routes + nest); adaptive 429; retire ApiMetrics public story |
+| **R4** | `Gate.HttpApiClient` Tag (local routes + `metrics` nest); `static layer` pattern; adaptive 429 TBD; retire ApiMetrics public story |
 | **R5** | (Optional) Hyperlink-backed `RateLimiterStore` without Redis |
 
 ---

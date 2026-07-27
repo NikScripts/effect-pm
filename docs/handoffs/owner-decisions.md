@@ -370,7 +370,8 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Chose (LOCKED — store wiring):** Presence-driven like WorkPool durability — `serviceOption(RateLimiterStore)` (layer is the switch). Soft **memory** when absent (single-node OK). Provide Redis (or later SQL) at the root for fleet; no config flag for “which store.”
 - **Chose (R1 Eng lean):** Gate default `onExceeded: "delay"`; whole-gate key = resource id; nest name lean `observe` (R2).
 - **Chose (R3 Eng):** WorkPool matches Gate presence-driven store (no auto Soft layer merge that blocked Redis). Fleet verified with shared memory store in CI; Redis recipe in guides. Soft + multi-node = docs warning (N× limit), not fail-loud.
-- **Still open:** Redis vs SQL backend for fleet v1; nest name final; R2 observe nest; R4 HttpApiClient.
+- **Chose (bake 2026-07-27 — nest name):** Wire nest is **`metrics`** (not `observe` / `limit`). Covers absorbed ApiMetrics usage + rate-limit remaining/exceeded. WorkPool parity. Collision: fail-loud if HttpApi defines a group named `metrics`. Factory lean: `Gate.HttpApiClient` Tag + app-owned `static layer = Gate.httpApiClientLayer(Tag)` (no baked Service layer).
+- **Still open:** Redis vs SQL backend for fleet v1; per-route keys; adaptive 429 in R4; R2 ordinary-Gate `metrics` depth; R4 Eng.
 
 ## 2026-07-27 — Retire `Hyperlink.pure`; Eng `default` / `defaults`
 
