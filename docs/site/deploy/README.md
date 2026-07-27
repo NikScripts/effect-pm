@@ -20,27 +20,30 @@ DO never builds** — a fresh builder has no hover cache (that's a 1.5 h gen-hov
    DOCS_SITE_ORIGIN=https://your.domain npx tsx scripts/gen-doc-banners.ts   # commit the result
    ```
 
-## Secrets (dotenvx)
+## Secrets (dotenvx + 1Password)
 
 Deploy / edge secrets live in encrypted `docs/site/.env` (committed). The private key is
-`docs/site/.env.keys` — **gitignored; back it up to 1Password**. `doctl` auth stays in doctl
-(`doctl --context hyperlink`); do not put the DO API token in dotenvx unless CI needs it.
+`docs/site/.env.keys` (gitignored). **1Password** holds the backup + optional CF token under
+item `Hyperlink docs deploy` (vault `Personal` by default). `doctl` auth stays in doctl
+(`doctl --context hyperlink`).
 
 ```sh
 cd docs/site
 pnpm install
 
-# set a secret (encrypts in place; re-commit `.env` after)
-pnpm exec dotenvx set CLOUDFLARE_API_TOKEN '…'   # Zone Read + Cache Rules Edit + Cache Purge
+# one-time: unlock 1Password app → Settings → Developer → Integrate with 1Password CLI
+pnpm run op:bootstrap
+# optional: CLOUDFLARE_API_TOKEN='…' pnpm run op:bootstrap
 
-# run any command with secrets injected
-pnpm run env:run -- printenv DOCS_SITE_ORIGIN
-pnpm run cf:ensure
-pnpm run cf:status
+# set CF token into encrypted .env (from 1Password or paste once locally)
+pnpm exec dotenvx set CLOUDFLARE_API_TOKEN "$(op read 'op://Personal/Hyperlink docs deploy/CLOUDFLARE_API_TOKEN')"
+git add .env && git commit -m "chore(docs-site): encrypt Cloudflare API token"
+
+pnpm run cf:ensure && pnpm run cf:status
 pnpm run deploy:do -- hyperlink-docs
 ```
 
-On a new machine: restore `.env.keys` from 1Password into `docs/site/`, then `pnpm install`.
+New machine: `pnpm run op:restore-keys` (writes `.env.keys` from 1Password), then `pnpm install`.
 
 ## Every deploy
 

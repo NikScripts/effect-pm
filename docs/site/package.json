@@ -25,7 +25,9 @@
     "cf:ensure": "dotenvx run -- ./scripts/cf-edge-cache.sh ensure",
     "cf:purge": "dotenvx run -- ./scripts/cf-edge-cache.sh purge",
     "cf:status": "dotenvx run -- ./scripts/cf-edge-cache.sh status",
-    "deploy:do": "dotenvx run -- ./scripts/deploy-do.sh"
+    "deploy:do": "dotenvx run -- ./scripts/deploy-do.sh",
+    "op:bootstrap": "./scripts/op-bootstrap-docs-secrets.sh",
+    "op:restore-keys": "./scripts/op-restore-env-keys.sh"
   },
   "dependencies": {
     "@djot/djot": "^0.3.2",
