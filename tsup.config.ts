@@ -56,6 +56,8 @@ export default defineConfig([
     entry: {
       ui: "src/ui/index.ts",
       "ui/WorkPoolView": "src/ui/WorkPoolView.ts",
+      "ui/Navigator": "src/ui/Navigator.ts",
+      "ui/GroupView": "src/ui/GroupView.ts",
       "ui/DashboardViews": "src/ui/DashboardViews.ts",
     },
     tsconfig: "src/ui/tsconfig.json",

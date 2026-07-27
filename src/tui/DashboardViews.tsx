@@ -8,6 +8,7 @@ import { Box } from "ink";
 import * as React from "react";
 import { Option, Layer } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
+import * as Group from "../Group";
 import { useAtomValue } from "../ui/atom-react";
 import {
   isApiTag,
@@ -27,6 +28,7 @@ import * as DaemonView from "../ui/DaemonView";
 import * as DashboardViews from "../ui/DashboardViews";
 import * as FleetHealthView from "../ui/FleetHealthView";
 import * as GateView from "../ui/GateView";
+import * as GroupView from "../ui/GroupView";
 import * as HyperlinkView from "../ui/HyperlinkView";
 import * as PriorityView from "../ui/PriorityView";
 import * as ShardMapView from "../ui/ShardMapView";
@@ -35,6 +37,7 @@ import * as WorkPoolView from "../ui/WorkPoolView";
 import {
   DaemonCell,
   FallbackCell,
+  GroupCell,
   PriorityCell,
   QueueCell,
 } from "./cellWidgets";
@@ -64,6 +67,19 @@ const statusOf = (phase: string, paused: boolean): Status =>
   phase === "off" ? "off" : phase === "draining" ? "draining" : paused ? "paused" : "running";
 
 // ── cards ───────────────────────────────────────────────────────────────────
+
+const GroupCardView: View.ViewComponent = (props) => {
+  if (!Group.isGroup(props.tag)) return null;
+  const chrome = View.useChrome();
+  return (
+    <GroupCell
+      name={props.name ?? displayName(props.tag.key)}
+      node={props.tag}
+      width={chrome.width ?? 24}
+      selected={chrome.selected === true}
+    />
+  );
+};
 
 const PoolCardView: View.ViewComponent = (props) => {
   if (!isQueueTag(props.tag)) return null;
@@ -353,6 +369,7 @@ const GateDetailView: View.ViewComponent = (props) => {
  * @public
  */
 export const skins = Layer.mergeAll(
+  Layer.succeed(GroupView.GroupCard, GroupCardView),
   Layer.succeed(WorkPoolView.PoolCard, PoolCardView),
   Layer.succeed(WorkPoolView.PoolDetail, PoolDetailView),
   Layer.succeed(PriorityView.PriorityCard, PriorityCardView),

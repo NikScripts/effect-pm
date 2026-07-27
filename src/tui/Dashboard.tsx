@@ -39,6 +39,7 @@ import {
   type QueueTag,
 } from "../ui/data";
 import { RegistryProvider, useAtomSet, useAtomValue } from "../ui/atom-react";
+import * as Navigator from "../ui/Navigator";
 import * as View from "../ui/View";
 import { WidgetsProvider } from "../ui/widgetsContext";
 import { base, Cell, type TuiWidgetRegistry } from "./cellWidgets";
@@ -56,9 +57,6 @@ import {
   displayName,
   PAGE_HEIGHT,
 } from "./queueWidget";
-import { useGroupRoute } from "./useGroupRoute";
-
-const dashboardViews = View.react(TuiDashboardViews.layer);
 
 const CELL_HEIGHT = 7;
 
@@ -213,17 +211,16 @@ const FocusedQueue = (props: {
 
 const DashboardApp = (props: {
   readonly group: GroupNode;
-  readonly path: ReadonlyArray<string>;
 }): React.ReactElement => {
   const { cols, rows } = useTerminalSize();
-  const route = useGroupRoute(props.group, props.path);
+  const nav = Navigator.useNavigator();
   const [sel, setSel] = React.useState(0);
   const [editMode, setEditMode] = React.useState(false);
   const [cmd, setCmd] = React.useState<string | null>(null);
   const [cmdSel, setCmdSel] = React.useState(0);
   const [scroll, setScroll] = React.useState(0);
 
-  const members = Object.entries(Group.members(route.group));
+  const members = Object.entries(Group.members(nav.group));
   const allLeaves: ReadonlyArray<QueueTag | DaemonTag> = [
     ...queueLeaves(props.group),
     ...daemonLeaves(props.group),
@@ -234,7 +231,7 @@ const DashboardApp = (props: {
   const layoutRef = React.useRef({
     perRow: 1,
     cellWidth: 16,
-    selected: route.selected,
+    selected: nav.selected,
     cmd,
     sel,
     scroll: 0,
@@ -265,7 +262,7 @@ const DashboardApp = (props: {
   layoutRef.current = {
     perRow,
     cellWidth,
-    selected: route.selected,
+    selected: nav.selected,
     cmd,
     sel,
     scroll: effScroll,
@@ -275,7 +272,7 @@ const DashboardApp = (props: {
   React.useEffect(() => {
     setSel(0);
     setScroll(0);
-  }, [route.group.key, route.keys.join("/")]);
+  }, [nav.group.key, nav.path.join("/")]);
 
   React.useEffect(() => {
     setScroll((sc) => {
@@ -324,7 +321,7 @@ const DashboardApp = (props: {
             continue;
           }
           if (idx === v.sel) {
-            route.open(entry[0]);
+            nav.openKey(entry[0]);
           } else {
             setSel(idx);
           }
@@ -336,7 +333,7 @@ const DashboardApp = (props: {
       stdout.write("\x1b[?1000l\x1b[?1006l");
       stdin.off("data", onData);
     };
-  }, [route]);
+  }, [nav]);
 
   useInput((input, key) => {
     if (cmd !== null) {
@@ -344,7 +341,7 @@ const DashboardApp = (props: {
         const pick = suggestions[cmdSel] ?? suggestions[0];
         setCmd(null);
         if (pick !== undefined) {
-          route.goToLeaf(pick.key);
+          nav.open(pick);
         }
       } else if (key.escape) {
         setCmd(null);
@@ -371,10 +368,10 @@ const DashboardApp = (props: {
       return;
     }
     if (key.escape || key.backspace || key.delete) {
-      route.back();
+      nav.back();
       return;
     }
-    if (route.selected !== null) {
+    if (nav.selected !== null) {
       return;
     }
     if (input === "h" || key.leftArrow) {
@@ -387,7 +384,7 @@ const DashboardApp = (props: {
       setSel((s) => Math.min(members.length - 1, s + perRow));
     } else if (key.return || input === " ") {
       const entry = members[Math.min(sel, members.length - 1)];
-      if (entry !== undefined) route.open(entry[0]);
+      if (entry !== undefined) nav.openKey(entry[0]);
     }
   });
 
@@ -396,8 +393,8 @@ const DashboardApp = (props: {
     <Bar cmd={cmd} suggestions={suggestions} cmdSel={cmdSel} hint={hint} />
   );
 
-  const focused = route.selected;
-  const focusName = route.keys[route.keys.length - 1] ?? displayName(idOf(focused));
+  const focused = nav.selected;
+  const focusName = nav.path[nav.path.length - 1] ?? displayName(idOf(focused));
   if (focused !== null) {
     if (isDaemonTag(focused)) {
       return (
@@ -496,8 +493,8 @@ const DashboardApp = (props: {
   const start = effScroll * perRow;
   const visibleCells = members.slice(start, start + visibleRows * perRow);
   const more = totalRows - (effScroll + visibleRows);
-  // Root uses the group's tag short name; deeper segments are member nicknames (`route.keys`).
-  const crumb = [displayName(props.group.key), ...route.keys].join(" / ");
+  // Root uses the group's tag short name; deeper segments are member nicknames (`nav.path`).
+  const crumb = [displayName(props.group.key), ...nav.path].join(" / ");
 
   return (
     <Box
@@ -513,7 +510,7 @@ const DashboardApp = (props: {
         </Text>
         <Text dimColor>
           {" "}
-          {members.length} items{route.trail.length > 1 ? " · Esc up" : ""}
+          {members.length} items{nav.trail.length > 1 ? " · Esc up" : ""}
           {effScroll > 0 ? ` · ↑${effScroll}` : ""}
           {more > 0 ? ` · ↓${more}` : ""}
         </Text>
@@ -557,14 +554,28 @@ export const Dashboard = <R, ER>(props: {
   readonly path?: ReadonlyArray<string>;
   /** Optional key overrides; default cells come from {@link TuiDashboardViews.layer}. */
   readonly widgets?: TuiWidgetRegistry;
-}): React.ReactElement => (
-  <RegistryProvider>
-    <dashboardViews.Provider>
-      <WidgetsProvider registry={props.widgets ?? base}>
-        <RuntimeProvider runtime={props.runtime}>
-          <DashboardApp group={props.group} path={props.path ?? []} />
-        </RuntimeProvider>
-      </WidgetsProvider>
-    </dashboardViews.Provider>
-  </RegistryProvider>
-);
+}): React.ReactElement => {
+  // compose = View.react(skins) + Navigator.memory — short-name paths (CLI `path` seeds once).
+  const ui = React.useMemo(() => {
+    const composed = View.compose({
+      views: TuiDashboardViews.layer,
+      navigator: Navigator.memory(props.group),
+    });
+    for (const key of props.path ?? []) {
+      composed.navigator.openKey(key);
+    }
+    return composed;
+  }, [props.group]);
+
+  return (
+    <RegistryProvider>
+      <ui.Provider>
+        <WidgetsProvider registry={props.widgets ?? base}>
+          <RuntimeProvider runtime={props.runtime}>
+            <DashboardApp group={props.group} />
+          </RuntimeProvider>
+        </WidgetsProvider>
+      </ui.Provider>
+    </RegistryProvider>
+  );
+};

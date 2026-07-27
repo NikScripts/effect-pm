@@ -21,7 +21,6 @@ import {
   type PriorityTag,
   type QueueTag,
 } from "../ui/data";
-import { memberKindOf } from "../ui/memberKind";
 import * as View from "../ui/View";
 import { useAtomValue } from "../ui/atom-react";
 import {
@@ -354,9 +353,19 @@ export const Cell = (props: {
 }): React.ReactElement => {
   const registry = useWidgets<TuiCellWidget>();
   const runtime = useRuntime();
+  const isGroup = Group.isGroup(props.member);
   const leaf = isLeafTag(props.member) ? props.member : null;
-  const hasViewCard = View.useHasMatch(leaf, "card");
-  if (memberKindOf(props.member) === "group" && Group.isGroup(props.member)) {
+  const viewTag = isGroup ? props.member : leaf;
+  const hasViewCard = View.useHasMatch(viewTag, "card");
+  // Group + leaf share View.Card when a family skin is on the layer (open stays parent / TUI focus).
+  if (hasViewCard && viewTag !== null) {
+    return (
+      <View.ChromeProvider value={{ width: props.width, selected: props.selected }}>
+        <View.Card tag={viewTag} name={props.name} />
+      </View.ChromeProvider>
+    );
+  }
+  if (isGroup) {
     return (
       <GroupCell
         name={props.name}
@@ -374,13 +383,6 @@ export const Cell = (props: {
         width={props.width}
         selected={props.selected}
       />
-    );
-  }
-  if (hasViewCard) {
-    return (
-      <View.ChromeProvider value={{ width: props.width, selected: props.selected }}>
-        <View.Card tag={leaf} name={props.name} />
-      </View.ChromeProvider>
     );
   }
   const Widget = widgetFor(

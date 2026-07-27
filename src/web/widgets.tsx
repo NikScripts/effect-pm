@@ -48,7 +48,7 @@ import {
 } from "../ui/data";
 import { dateFromMillis, fmtClock, fmtDayLabel, millisFromLocalInput, now, startOfDayMillis, toLocalInput } from "../ui/now";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
-import { memberKindOf } from "../ui/memberKind";
+import * as Navigator from "../ui/Navigator";
 import * as View from "../ui/View";
 import { kindOf as hyperlinkKindOf, kind as hyperlinkKind } from "../Hyperlink";
 import type { NodeReport } from "../FleetHealth";
@@ -367,9 +367,14 @@ export const GroupCard = (props: {
   readonly node: GroupNode;
   /** Display name — the member key under which the parent group holds this subgroup. */
   readonly name: string;
-  readonly onOpen: (g: GroupNode) => void;
+  /**
+   * Optional — prefer {@link Navigator} (`useNavigator().open`). Kept for shells that
+   * have not mounted a Navigator Provider yet.
+   */
+  readonly onOpen?: (g: GroupNode) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`grp-${props.node.key}`);
+  const nav = Navigator.useNavigatorOption();
   const members = Object.values(Group.members(props.node));
   const leaves = queueLeaves(props.node).slice(0, 4);
   const subs = members.filter((m): m is GroupNode => Group.isGroup(m));
@@ -392,10 +397,17 @@ export const GroupCard = (props: {
     });
   }, []);
   const degraded = nodes.reduce((sum, node) => sum + (counts.get(node.id) ?? 0), 0);
+  const open = (): void => {
+    if (nav !== null) {
+      nav.open(props.node);
+      return;
+    }
+    props.onOpen?.(props.node);
+  };
   return (
     <button
       type="button"
-      onClick={() => props.onOpen(props.node)}
+      onClick={open}
       style={vt}
       className="relative flex flex-col rounded-xl border border-[#06b6d455] bg-card p-3 text-left transition-colors hover:border-ring"
     >
@@ -440,26 +452,34 @@ export const Cell = (props: {
   readonly onOpenGroup: (g: GroupNode) => void;
 }): React.ReactElement => {
   const registry = useWidgets();
+  const nav = Navigator.useNavigatorOption();
+  const isGroup = Group.isGroup(props.member);
   const leaf = isLeafTag(props.member) ? props.member : null;
-  const hasViewCard = View.useHasMatch(leaf, "card");
-  // Same bucket as TUI (`memberKindOf`); leaves still resolve via the key→kind registry.
-  if (memberKindOf(props.member) === "group" && Group.isGroup(props.member)) {
-    return <GroupCard node={props.member} name={props.name} onOpen={props.onOpenGroup} />;
-  }
-  // A non-group member is a resource tag; resolve its widget by key → kind → fallback.
-  if (leaf === null) return <></>;
-  // View kit first (WorkPool, …) when Dashboard mounted a View.react Provider; parent owns onOpen.
-  if (hasViewCard) {
+  const viewTag = isGroup ? props.member : leaf;
+  const hasViewCard = View.useHasMatch(viewTag, "card");
+  // Group + leaf share View.Card when a Group family skin is on the layer (lock B).
+  if (hasViewCard && viewTag !== null) {
     return (
       <button
         type="button"
         className="contents text-left"
-        onClick={() => props.onOpenLeaf(leaf)}
+        onClick={() => {
+          if (nav !== null) {
+            nav.open(viewTag);
+            return;
+          }
+          if (isGroup) props.onOpenGroup(props.member);
+          else if (leaf !== null) props.onOpenLeaf(leaf);
+        }}
       >
-        <View.Card tag={leaf} name={props.name} />
+        <View.Card tag={viewTag} name={props.name} />
       </button>
     );
   }
+  if (isGroup) {
+    return <GroupCard node={props.member} name={props.name} onOpen={props.onOpenGroup} />;
+  }
+  if (leaf === null) return <></>;
   const Widget = widgetFor(registry, leaf.key, hyperlinkKindOf(leaf) ?? hyperlinkKind);
   return <Widget tag={leaf} name={props.name} onOpen={props.onOpenLeaf} />;
 };
@@ -1547,7 +1567,13 @@ export const Deck = (props: {
  */
 export const DetailScreen = (props: {
   readonly title: string;
-  readonly onBack: () => void;
+  /** Omit when the shell Outlet owns back (View compose / Navigator). */
+  readonly onBack?: () => void;
+  /**
+   * When `false`, render body only (Deck + readiness) — shell owns title/back.
+   * Default `true` for standalone Dashboard detail routes.
+   */
+  readonly chrome?: boolean;
   /** View-transition key — pass `res-${tag.key}` so the card↔detail morph matches the grid. */
   readonly vtKey: string;
   readonly icon?: React.ReactNode;
@@ -1560,15 +1586,22 @@ export const DetailScreen = (props: {
   readonly pages?: ReadonlyArray<React.ReactNode>;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(props.vtKey);
+  const showChrome = props.chrome !== false;
   return (
     <div className="flex h-[100dvh] flex-col gap-3 overflow-hidden safe-area landscape:h-auto landscape:min-h-[100dvh] landscape:overflow-visible" style={vt}>
-      <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
-        <strong className="flex-1 truncate text-base">
-          {props.icon !== undefined ? <>{props.icon} </> : null}{props.title}
-        </strong>
-        {props.badge}
-      </div>
+      {showChrome ? (
+        <div className="flex items-center gap-2">
+          {props.onBack !== undefined ? (
+            <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
+          ) : null}
+          <strong className="flex-1 truncate text-base">
+            {props.icon !== undefined ? <>{props.icon} </> : null}{props.title}
+          </strong>
+          {props.badge}
+        </div>
+      ) : props.badge !== undefined ? (
+        <div className="flex justify-end">{props.badge}</div>
+      ) : null}
       {props.readinessTag !== undefined ? <HyperlinkReadinessBanner tag={props.readinessTag} /> : null}
       <Deck fill sections={props.sections} pages={props.pages} />
     </div>
@@ -2782,7 +2815,8 @@ export const GateCard = (props: {
 export const PriorityDetail = (props: {
   readonly tag: PriorityTag;
   readonly name?: string;
-  readonly onBack: () => void;
+  readonly onBack?: () => void;
+  readonly chrome?: boolean;
 }): React.ReactElement => {
   const bundle = usePriorityBundle(props.tag);
   const statusR = useAtomValue(bundle.status);
@@ -2851,6 +2885,7 @@ export const PriorityDetail = (props: {
     <DetailScreen
       title={props.name ?? displayName(props.tag.key)}
       onBack={props.onBack}
+      chrome={props.chrome}
       vtKey={`res-${props.tag.key}`}
       readinessTag={props.tag}
       badge={<Badge color={paused ? "#eab308" : PRIORITY_PHASE[s?.phase ?? "running"] ?? "#22c55e"}>{paused ? "paused" : s?.phase ?? "running"}</Badge>}
@@ -2879,7 +2914,8 @@ const MetricRow = (props: { readonly datum: MetricDatum }): React.ReactElement =
 export const TelemetryDetail = (props: {
   readonly tag: TelemetryTag;
   readonly name?: string;
-  readonly onBack: () => void;
+  readonly onBack?: () => void;
+  readonly chrome?: boolean;
 }): React.ReactElement => {
   const bundle = useTelemetryBundle(props.tag);
   const fleetR = useAtomValue(bundle.fleetInFlight);
@@ -2930,6 +2966,7 @@ export const TelemetryDetail = (props: {
     <DetailScreen
       title={props.name ?? displayName(props.tag.key)}
       onBack={props.onBack}
+      chrome={props.chrome}
       vtKey={`res-${props.tag.key}`}
       badge={count !== undefined ? <Badge color="#94a3b8">{count} metrics</Badge> : undefined}
       sections={sections}
@@ -2945,7 +2982,8 @@ export const TelemetryDetail = (props: {
 export const ShardMapDetail = (props: {
   readonly tag: ShardMapTag;
   readonly name?: string;
-  readonly onBack: () => void;
+  readonly onBack?: () => void;
+  readonly chrome?: boolean;
 }): React.ReactElement => {
   const bundle = useShardMapBundle(props.tag);
   const sizeR = useAtomValue(bundle.size);
@@ -2980,6 +3018,7 @@ export const ShardMapDetail = (props: {
     <DetailScreen
       title={props.name ?? displayName(props.tag.key)}
       onBack={props.onBack}
+      chrome={props.chrome}
       vtKey={`res-${props.tag.key}`}
       badge={<Badge color="#94a3b8">{rows.length} shard{rows.length === 1 ? "" : "s"}</Badge>}
       sections={sections}
@@ -2994,7 +3033,8 @@ export const ShardMapDetail = (props: {
 export const FleetHealthDetail = (props: {
   readonly tag: FleetHealthTag;
   readonly name?: string;
-  readonly onBack: () => void;
+  readonly onBack?: () => void;
+  readonly chrome?: boolean;
 }): React.ReactElement => {
   const bundle = useFleetHealthBundle(props.tag);
   const statusR = useAtomValue(bundle.status);
@@ -3023,6 +3063,7 @@ export const FleetHealthDetail = (props: {
     <DetailScreen
       title={props.name ?? displayName(props.tag.key)}
       onBack={props.onBack}
+      chrome={props.chrome}
       vtKey={`res-${props.tag.key}`}
       badge={<Badge color={FLEET_STATUS[status ?? "ok"] ?? "#94a3b8"}>{status ?? "…"}</Badge>}
       sections={sections}
@@ -3038,7 +3079,8 @@ export const FleetHealthDetail = (props: {
 export const GateDetail = (props: {
   readonly tag: GateTag;
   readonly name?: string;
-  readonly onBack: () => void;
+  readonly onBack?: () => void;
+  readonly chrome?: boolean;
 }): React.ReactElement => {
   const bundle = useGateBundle(props.tag);
   const statusR = useAtomValue(bundle.status);
@@ -3085,6 +3127,7 @@ export const GateDetail = (props: {
     <DetailScreen
       title={props.name ?? displayName(props.tag.key)}
       onBack={props.onBack}
+      chrome={props.chrome}
       vtKey={`res-${props.tag.key}`}
       readinessTag={props.tag}
       badge={<Badge color="#94a3b8">limit {concurrency}</Badge>}

@@ -9,6 +9,7 @@ import * as ApiMetricsView from "./ApiMetricsView";
 import * as DaemonView from "./DaemonView";
 import * as FleetHealthView from "./FleetHealthView";
 import * as GateView from "./GateView";
+import * as GroupView from "./GroupView";
 import * as HyperlinkView from "./HyperlinkView";
 import * as PriorityView from "./PriorityView";
 import * as ShardMapView from "./ShardMapView";
@@ -21,6 +22,7 @@ import * as WorkPoolView from "./WorkPoolView";
  * @public
  */
 export const layer = Layer.mergeAll(
+  GroupView.layer,
   WorkPoolView.layer,
   PriorityView.layer,
   DaemonView.layer,

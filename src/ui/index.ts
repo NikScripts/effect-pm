@@ -21,6 +21,10 @@ export * from "./memberKind";
 export * from "./widgetRegistry";
 /** Keyed Spec-based view registry (`View.make` / `View.react`) — prefer `import * as View`. */
 export * as View from "./View";
+/** Parent-owned Group navigation (memory / history) for View compose. */
+export * as Navigator from "./Navigator";
+/** Shared Group card View handle + contribution Layer (no platform TSX). */
+export * as GroupView from "./GroupView";
 /** Shared WorkPool View handles + contribution Layer (no platform TSX). */
 export * as WorkPoolView from "./WorkPoolView";
 /** Merged Dashboard View contribution Layers (no platform TSX). */

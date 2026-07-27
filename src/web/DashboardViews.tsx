@@ -16,13 +16,16 @@ import {
   isShardMapTag,
   isTelemetryTag,
 } from "../ui/data";
+import * as Group from "../Group";
 import * as View from "../ui/View";
 import * as ApiMetricsView from "../ui/ApiMetricsView";
 import * as DaemonView from "../ui/DaemonView";
 import * as DashboardViews from "../ui/DashboardViews";
 import * as FleetHealthView from "../ui/FleetHealthView";
 import * as GateView from "../ui/GateView";
+import * as GroupView from "../ui/GroupView";
 import * as HyperlinkView from "../ui/HyperlinkView";
+import * as Navigator from "../ui/Navigator";
 import * as PriorityView from "../ui/PriorityView";
 import * as ShardMapView from "../ui/ShardMapView";
 import * as TelemetryView from "../ui/TelemetryView";
@@ -41,6 +44,7 @@ import {
   FleetHealthDetail as FleetHealthDetailWidget,
   GateCard,
   GateDetail as GateDetailWidget,
+  GroupCard,
   HyperlinkCard,
   HyperlinkReadinessBanner,
   PriorityCard,
@@ -55,6 +59,11 @@ import {
 } from "./widgets";
 
 // ── cards (presentational — Cell wraps with button) ─────────────────────────
+
+const GroupCardView: View.ViewComponent = (props) => {
+  if (!Group.isGroup(props.tag)) return null;
+  return <GroupCard node={props.tag} name={props.name ?? displayName(props.tag.key)} />;
+};
 
 const PoolCardView: View.ViewComponent = (props) => {
   if (!isQueueTag(props.tag)) return null;
@@ -152,20 +161,21 @@ const PoolDetailView: View.ViewComponent = (props) => {
 
 const PriorityDetailView: View.ViewComponent = (props) => {
   if (!isPriorityTag(props.tag)) return null;
-  const onBack = View.useChrome().onBack;
-  if (onBack === undefined) return null;
+  // Shell Outlet owns back/title; body-only when Navigator is present (lock J).
+  const nav = Navigator.useNavigatorOption();
   return (
     <PriorityDetailWidget
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
-      onBack={onBack}
+      onBack={nav?.back}
+      chrome={nav === null}
     />
   );
 };
 
 const DaemonDetailView: View.ViewComponent = (props) => {
   if (!isDaemonTag(props.tag)) return null;
-  const chrome = View.useChrome();
+  const nav = Navigator.useNavigatorOption();
   const bundle = useDaemonBundle(props.tag);
   const [locked, setLocked] = React.useState(true);
   return (
@@ -177,7 +187,14 @@ const DaemonDetailView: View.ViewComponent = (props) => {
         locked={locked}
         onToggleLock={() => setLocked((l) => !l)}
       />
-      <ScheduleEditor bundle={bundle} onOpenFull={chrome.onOpenSchedule} />
+      <ScheduleEditor
+        bundle={bundle}
+        onOpenFull={
+          nav !== null && isDaemonTag(props.tag)
+            ? () => nav.openSchedule(props.tag)
+            : undefined
+        }
+      />
     </>
   );
 };
@@ -199,52 +216,52 @@ const ApiDetailView: View.ViewComponent = (props) => {
 
 const FleetDetailView: View.ViewComponent = (props) => {
   if (!isFleetHealthTag(props.tag)) return null;
-  const onBack = View.useChrome().onBack;
-  if (onBack === undefined) return null;
+  const nav = Navigator.useNavigatorOption();
   return (
     <FleetHealthDetailWidget
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
-      onBack={onBack}
+      onBack={nav?.back}
+      chrome={nav === null}
     />
   );
 };
 
 const TelemetryDetailView: View.ViewComponent = (props) => {
   if (!isTelemetryTag(props.tag)) return null;
-  const onBack = View.useChrome().onBack;
-  if (onBack === undefined) return null;
+  const nav = Navigator.useNavigatorOption();
   return (
     <TelemetryDetailWidget
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
-      onBack={onBack}
+      onBack={nav?.back}
+      chrome={nav === null}
     />
   );
 };
 
 const ShardMapDetailView: View.ViewComponent = (props) => {
   if (!isShardMapTag(props.tag)) return null;
-  const onBack = View.useChrome().onBack;
-  if (onBack === undefined) return null;
+  const nav = Navigator.useNavigatorOption();
   return (
     <ShardMapDetailWidget
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
-      onBack={onBack}
+      onBack={nav?.back}
+      chrome={nav === null}
     />
   );
 };
 
 const GateDetailView: View.ViewComponent = (props) => {
   if (!isGateTag(props.tag)) return null;
-  const onBack = View.useChrome().onBack;
-  if (onBack === undefined) return null;
+  const nav = Navigator.useNavigatorOption();
   return (
     <GateDetailWidget
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
-      onBack={onBack}
+      onBack={nav?.back}
+      chrome={nav === null}
     />
   );
 };
@@ -255,6 +272,7 @@ const GateDetailView: View.ViewComponent = (props) => {
  * @public
  */
 export const skins = Layer.mergeAll(
+  Layer.succeed(GroupView.GroupCard, GroupCardView),
   Layer.succeed(WorkPoolView.PoolCard, PoolCardView),
   Layer.succeed(WorkPoolView.PoolDetail, PoolDetailView),
   Layer.succeed(PriorityView.PriorityCard, PriorityCardView),

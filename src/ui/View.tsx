@@ -13,6 +13,7 @@ import * as React from "react";
 import { Context, Effect, Layer, Option } from "effect";
 import * as Group from "../Group";
 import { kindOf } from "../Hyperlink";
+import * as Navigator from "./Navigator";
 import type { LeafTag } from "./widgetRegistry";
 
 // =============================================================================
@@ -22,28 +23,35 @@ import type { LeafTag } from "./widgetRegistry";
 /** Stable view id — prefer `hyperlink/view/<name>`. @public */
 export type ViewKey = string;
 
-/** Chrome role — independent View services per kind (W8). @public */
+/**
+ * Building-block **sizes** (W8 / lock F1). Content (queue, schedule, logs, Group…)
+ * fills these — not separate kinds named after content.
+ *
+ * @public
+ */
 export type ViewKind = "card" | "detail" | "page";
+
+/**
+ * Tag a View skin may receive — leaf HyperService **or** Group (Group family card).
+ *
+ * @public
+ */
+export type ViewTag = LeafTag | Navigator.MemberTag;
 
 /** Props every matched card/detail/page receives. Navigation stays with the parent. @public */
 export interface ViewProps {
-  readonly tag: LeafTag;
+  readonly tag: ViewTag;
   readonly name?: string;
 }
 
 /**
- * Optional layout / shell hints for View skins. Navigation still belongs to the parent —
- * skins may read callbacks here (e.g. DetailScreen `onBack`) via {@link useChrome}.
+ * Layout / shell hints for View skins. **Navigation is {@link Navigator}** — not here.
  *
  * @public
  */
 export interface Chrome {
   readonly width?: number;
   readonly selected?: boolean;
-  /** Web DetailScreen / drill-back. */
-  readonly onBack?: () => void;
-  /** Daemon schedule fullscreen (shell route). */
-  readonly onOpenSchedule?: () => void;
   /** TUI focused panes (Ink). */
   readonly cols?: number;
   readonly rows?: number;
@@ -136,7 +144,7 @@ export interface RegistryService {
    * At match time, kinds present in the list are exclusive; other kinds still use add tables.
    */
   readonly setOnly: (tagKey: string, bounds: ReadonlyArray<Bound>) => void;
-  readonly match: (tag: LeafTag, viewKind: ViewKind) => ReadonlyArray<Resolved>;
+  readonly match: (tag: ViewTag, viewKind: ViewKind) => ReadonlyArray<Resolved>;
   readonly keys: () => ReadonlyArray<ViewKey>;
 }
 
@@ -204,9 +212,14 @@ const makeRegistryService = (): RegistryService => {
         }
       };
       add(fromBounds(byTagKey.get(tag.key), viewKind));
-      const stamped = kindOf(tag as never);
-      if (typeof stamped === "string") {
-        add(fromBounds(byKind.get(stamped), viewKind));
+      // Group tags stamp `Group.kind` as a data prop (not Hyperlink kindSym).
+      if (Group.isGroup(tag)) {
+        add(fromBounds(byKind.get(Group.kind), viewKind));
+      } else {
+        const stamped = kindOf(tag as never);
+        if (typeof stamped === "string") {
+          add(fromBounds(byKind.get(stamped), viewKind));
+        }
       }
       return out;
     },
@@ -406,7 +419,7 @@ const fallbackFor = (viewKind: ViewKind): ViewComponent => {
 
 type KitContext = {
   readonly registry: RegistryService;
-  readonly resolve: (tag: LeafTag, viewKind: ViewKind) => ReadonlyArray<Resolved>;
+  readonly resolve: (tag: ViewTag, viewKind: ViewKind) => ReadonlyArray<Resolved>;
   readonly groupDash: Option.Option<{
     readonly group: GroupLike;
     readonly leaves: ReadonlyArray<GroupLeaf>;
@@ -419,7 +432,7 @@ const RegistryReactContext = React.createContext<KitContext | null>(null);
 const MatchHost = (props: {
   readonly viewKind: ViewKind;
   readonly resolved: ReadonlyArray<Resolved>;
-  readonly tag: LeafTag;
+  readonly tag: ViewTag;
   readonly name?: string;
 }): React.ReactElement | null => {
   const list =
@@ -472,12 +485,12 @@ const useKit = (): KitContext => {
  * @public
  */
 export const useHasMatch = (
-  tag: LeafTag | null,
+  tag: ViewTag | null,
   viewKind: ViewKind,
 ): boolean => {
   const kit = React.useContext(RegistryReactContext);
   if (kit === null || tag === null) return false;
-  return kit.resolve(tag, viewKind).length > 0;
+  return kit.resolve(tag as LeafTag, viewKind).length > 0;
 };
 
 /** Matcher card — requires {@link react} Provider. @public */
@@ -522,7 +535,7 @@ const buildKit = <ROut, E,>(viewLayer: Layer.Layer<ROut, E, never>): KitContext 
         const groupDash = Context.getOption(ctx, GroupDash);
         return {
           registry,
-          resolve: (tag: LeafTag, viewKind: ViewKind) => registry.match(tag, viewKind),
+          resolve: (tag: ViewTag, viewKind: ViewKind) => registry.match(tag, viewKind),
           groupDash,
         };
       }),
@@ -543,14 +556,14 @@ export const react = <ROut, E,>(viewLayer: Layer.Layer<ROut, E, never>) => {
   }): React.ReactElement =>
     React.createElement(RegistryReactContext.Provider, { value: kit }, props.children);
 
-  const resolve = (tag: LeafTag, viewKind: ViewKind): ReadonlyArray<Resolved> =>
+  const resolve = (tag: ViewTag, viewKind: ViewKind): ReadonlyArray<Resolved> =>
     kit.resolve(tag, viewKind);
 
   /**
    * Flip: bind Card/Detail/Page to one resource tag (no `tag` prop).
    * Still render inside {@link Provider}.
    */
-  const forTag = (tag: LeafTag) => ({
+  const forTag = (tag: ViewTag) => ({
     Card: (props: BoundViewProps): React.ReactElement | null =>
       React.createElement(MatchHost, {
         viewKind: "card",
@@ -587,5 +600,144 @@ export const react = <ROut, E,>(viewLayer: Layer.Layer<ROut, E, never>) => {
     resolve,
     keys: () => kit.registry.keys(),
     registry: kit.registry,
+  };
+};
+
+// =============================================================================
+// compose — thin sugar over react + Navigator (lock C)
+// =============================================================================
+
+const displayNameOf = (tag: ViewTag, fallback: string): string => {
+  if (typeof tag === "object" || typeof tag === "function") {
+    if (tag !== null && "key" in tag && typeof (tag as { key: unknown }).key === "string") {
+      const key = (tag as { key: string }).key;
+      const slash = key.lastIndexOf("/");
+      return slash >= 0 ? key.slice(slash + 1) : key;
+    }
+  }
+  return fallback;
+};
+
+/**
+ * Members of the current {@link Navigator} group — shells (esp. TUI) render their own grid.
+ *
+ * @public
+ */
+export const useGridMembers = (): ReadonlyArray<{
+  readonly name: string;
+  readonly tag: ViewTag;
+}> => {
+  const nav = Navigator.useNavigator();
+  return Object.entries(Group.members(nav.group)).map(([name, tag]) => ({
+    name,
+    tag: tag as ViewTag,
+  }));
+};
+
+/**
+ * Thin Dashboard sugar: {@link react} + {@link Navigator} Layer. No second registry;
+ * no `Atom.runtime` inside (provide {@link RuntimeProvider} outside).
+ *
+ * @example
+ * ```ts
+ * const ui = View.compose({
+ *   views: Layer.mergeAll(View.kind(Group.kind, GroupCard), WebDashboardViews.layer),
+ *   navigator: Navigator.history(ServicesHub),
+ * })
+ * <ui.Provider><ui.Grid /><ui.Outlet /></ui.Provider>
+ * ```
+ *
+ * @public
+ */
+export const compose = <VR, VE,>(options: {
+  readonly views: Layer.Layer<VR, VE, never>;
+  readonly navigator: Layer.Layer<Navigator.Navigator>;
+}) => {
+  const viewKit = react(options.views);
+  const nav = Effect.runSync(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const ctx = yield* Layer.build(options.navigator);
+        return Context.get(ctx, Navigator.Navigator);
+      }),
+    ),
+  );
+
+  const Provider = (props: {
+    readonly children: React.ReactNode;
+  }): React.ReactElement =>
+    React.createElement(
+      viewKit.Provider,
+      null,
+      React.createElement(
+        Navigator.Provider,
+        { value: nav, children: props.children },
+      ),
+    );
+
+  /** DOM grid — Card per member; click opens via Navigator. TUI: use {@link useGridMembers}. */
+  const Grid = (): React.ReactElement => {
+    const members = useGridMembers();
+    const navigation = Navigator.useNavigator();
+    return React.createElement(
+      React.Fragment,
+      null,
+      ...members.map(({ name, tag }) =>
+        React.createElement(
+          "button",
+          {
+            key: name,
+            type: "button",
+            className: "contents",
+            onClick: () => navigation.open(tag as Navigator.MemberTag),
+          },
+          React.createElement(Card, { tag, name }),
+        ),
+      ),
+    );
+  };
+
+  /** Shell outlet — back/title + Detail, or page-sized logs/schedule content. */
+  const Outlet = (): React.ReactElement | null => {
+    const navigation = Navigator.useNavigator();
+    const selected = navigation.selected;
+    if (selected === null) return null;
+    const tag = selected as ViewTag;
+    const title = displayNameOf(tag, "detail");
+
+    if (navigation.view === "logs" || navigation.view === "schedule") {
+      return React.createElement(
+        "div",
+        { "data-hyperlink-outlet": navigation.view },
+        React.createElement(
+          "div",
+          { style: { display: "flex", gap: 8, alignItems: "center", marginBottom: 12 } },
+          React.createElement("button", { type: "button", onClick: () => navigation.back() }, "← back"),
+          React.createElement("strong", null, `${title} · ${navigation.view}`),
+        ),
+        React.createElement(Page, { tag, name: title }),
+      );
+    }
+
+    return React.createElement(
+      "div",
+      { "data-hyperlink-outlet": "detail" },
+      React.createElement(
+        "div",
+        { style: { display: "flex", gap: 8, alignItems: "center", marginBottom: 12 } },
+        React.createElement("button", { type: "button", onClick: () => navigation.back() }, "← back"),
+        React.createElement("strong", null, title),
+      ),
+      React.createElement(Detail, { tag, name: title }),
+    );
+  };
+
+  return {
+    ...viewKit,
+    Provider,
+    Grid,
+    Outlet,
+    useGridMembers,
+    navigator: nav,
   };
 };

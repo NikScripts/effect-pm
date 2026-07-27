@@ -33,6 +33,14 @@
 import { Context } from "effect";
 
 /**
+ * Stamped family kind for Group tags — View skins bind with `View.kind(Group.kind, …)`.
+ *
+ * @category constructors
+ * @public
+ */
+export const kind = "hyperlink-ts/Group" as const;
+
+/**
  * Create a group tag holding the given named member tags.
  *
  * @category constructors
@@ -42,7 +50,7 @@ export const Tag =
   <Self>(key: string) =>
   <const Members extends Record<string, unknown>>(members: Members) => {
     const base = Context.Service<Self, { readonly members: Members }>()(key);
-    return Object.assign(base, { members }, members);
+    return Object.assign(base, { members, kind }, members);
   };
 
 /**

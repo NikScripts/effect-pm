@@ -132,6 +132,14 @@
       "types": "./dist/ui/WorkPoolView.d.ts",
       "default": "./dist/ui/WorkPoolView.js"
     },
+    "./ui/Navigator": {
+      "types": "./dist/ui/Navigator.d.ts",
+      "default": "./dist/ui/Navigator.js"
+    },
+    "./ui/GroupView": {
+      "types": "./dist/ui/GroupView.d.ts",
+      "default": "./dist/ui/GroupView.js"
+    },
     "./ui/DashboardViews": {
       "types": "./dist/ui/DashboardViews.d.ts",
       "default": "./dist/ui/DashboardViews.js"

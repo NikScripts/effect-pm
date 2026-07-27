@@ -121,3 +121,41 @@ export const pathToLeafKey = (
   };
   return walk(root, []);
 };
+
+const memberKeyOf = (member: unknown): string | undefined =>
+  (typeof member === "object" || typeof member === "function") &&
+  member !== null &&
+  "key" in member &&
+  typeof (member as { readonly key: unknown }).key === "string"
+    ? (member as { readonly key: string }).key
+    : undefined;
+
+/**
+ * Depth-first path of **short member names** from `root` to `target` (Group or leaf),
+ * matched by wire `key`. Used by {@link ../Navigator} so `/Nwsl/HttpApi` stays name-based.
+ *
+ * @public
+ */
+export const pathToMember = (
+  root: RouteGroup,
+  target: unknown,
+): ReadonlyArray<string> | undefined => {
+  const targetKey = memberKeyOf(target);
+  if (targetKey === undefined) return undefined;
+  if (isGroupNode(root) && root.key === targetKey) return [];
+  const walk = (
+    node: RouteGroup,
+    path: ReadonlyArray<string>,
+  ): ReadonlyArray<string> | undefined => {
+    for (const [name, member] of Object.entries(Group.members(node))) {
+      const next = [...path, name];
+      if (memberKeyOf(member) === targetKey) return next;
+      if (isGroupNode(member)) {
+        const found = walk(member, next);
+        if (found !== undefined) return found;
+      }
+    }
+    return undefined;
+  };
+  return walk(root, []);
+};

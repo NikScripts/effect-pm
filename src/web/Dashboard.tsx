@@ -44,28 +44,21 @@ import { RegistryProvider, useAtomValue } from "../ui/atom-react";
 import * as Group from "../Group";
 import { RuntimeProvider, useApiBundle, useNodeBundle, useDaemonBundle, useQueueBundle, useRuntime } from "./runtime";
 import { ViewTransitionProvider, useViewTransition, useViewTransitionStyle } from "./useViewTransition";
-import { useGroupRoute } from "./useGroupRoute";
 import { Button } from "./components/ui/button";
 import { ApiStatusBadge, base, Cell, ConfirmDialog, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, DaemonStatusBadge, StatusBadge, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
 import { isLeafTag, type LeafTag, type WidgetRegistry } from "../ui/widgetRegistry";
+import * as Navigator from "../ui/Navigator";
 import * as View from "../ui/View";
 import { WidgetsProvider } from "../ui/widgetsContext";
 import type { Widget } from "./widget-registry";
 import { DebugConsole } from "./debug-console";
 import * as WebDashboardViews from "./DashboardViews";
 
-const dashboardViews = View.react(WebDashboardViews.layer);
-
-/** DetailScreen families — shell supplies `onBack` via View chrome. */
+/** Detail body — shell / Navigator owns back (lock J). */
 const ViewDetailScreen = (props: {
   readonly tag: LeafTag;
   readonly name?: string;
-  readonly onBack: () => void;
-}): React.ReactElement => (
-  <View.ChromeProvider value={{ onBack: props.onBack }}>
-    <View.Detail tag={props.tag} name={props.name} />
-  </View.ChromeProvider>
-);
+}): React.ReactElement => <View.Detail tag={props.tag} name={props.name} />;
 
 
 /** Invisible: reads one node's node status and reports the keys of its **not-ready** resources, so the
@@ -230,7 +223,6 @@ const DaemonDetail = (props: {
   readonly tag: DaemonTag;
   readonly onBack: () => void;
   readonly onOpenLogs: () => void;
-  readonly onOpenSchedule: () => void;
 }): React.ReactElement => {
   const bundle = useDaemonBundle(props.tag);
   const statusR = useAtomValue(bundle.status);
@@ -243,9 +235,7 @@ const DaemonDetail = (props: {
         <strong className="flex-1 truncate text-base">⚙ {displayName(props.tag.key)}</strong>
         <DaemonStatusBadge supervising={s?.supervising} />
       </div>
-      <View.ChromeProvider value={{ onOpenSchedule: props.onOpenSchedule }}>
-        <View.Detail tag={props.tag} />
-      </View.ChromeProvider>
+      <View.Detail tag={props.tag} />
       <LogBox bundle={bundle} full={false} onToggle={props.onOpenLogs} />
     </div>
   );
@@ -274,8 +264,11 @@ const DashboardInner = (props: {
   readonly group: GroupNode;
   readonly onOpenHealth: () => void;
 }): React.ReactElement => {
-  const route = useGroupRoute(props.group);
-  const { group, selected, trail, keys } = route;
+  const nav = Navigator.useNavigator();
+  const group = nav.group as GroupNode;
+  const selected = nav.selected;
+  const trail = nav.trail;
+  const keys = nav.path;
   const transition = useViewTransition();
   const pageVt = useViewTransitionStyle(`grp-${group.key}`);
   // ── degraded-first sort state (hoisted above the detail early-return so hook order is constant
@@ -300,21 +293,20 @@ const DashboardInner = (props: {
     // the member key the selected leaf sits under — the display name the grid card used (mesh factory
     // tags share a generic key like "telemetry", so title off the member name, not the tag key).
     const selectedName = keys[trail.length - 1];
-    const toGrid = (id: string) => () => transition(`res-${id}`, () => route.back());
-    const openLogs = (): void => transition("log-panel", () => route.open("logs"));
-    const closeLogs = (): void => transition("log-panel", () => route.back());
-    const openSchedule = (): void => transition("schedule-panel", () => route.open("schedule"));
-    const closeSchedule = (): void => transition("schedule-panel", () => route.back());
-    if (route.view === "logs") {
+    const toGrid = (id: string) => () => transition(`res-${id}`, () => nav.back());
+    const openLogs = (): void => transition("log-panel", () => nav.openKey("logs"));
+    const closeLogs = (): void => transition("log-panel", () => nav.back());
+    const closeSchedule = (): void => transition("schedule-panel", () => nav.back());
+    if (nav.view === "logs") {
       if (isDaemonTag(selected) || isQueueTag(selected)) return <LogsPage tag={selected} onClose={closeLogs} />;
       return <></>;
     }
-    if (route.view === "schedule") {
+    if (nav.view === "schedule") {
       if (isDaemonTag(selected)) return <SchedulePage tag={selected} onClose={closeSchedule} />;
       return <></>;
     }
     if (isApiTag(selected)) return <ApiDetail tag={selected} onBack={toGrid(selected.key)} />;
-    if (isDaemonTag(selected)) return <DaemonDetail tag={selected} onBack={toGrid(selected.key)} onOpenLogs={openLogs} onOpenSchedule={openSchedule} />;
+    if (isDaemonTag(selected)) return <DaemonDetail tag={selected} onBack={toGrid(selected.key)} onOpenLogs={openLogs} />;
     if (isQueueTag(selected)) return <QueueDetail tag={selected} onBack={toGrid(selected.key)} onOpenLogs={openLogs} />;
     if (
       isPriorityTag(selected) ||
@@ -324,11 +316,15 @@ const DashboardInner = (props: {
       isGateTag(selected)
     ) {
       return (
-        <ViewDetailScreen
-          tag={selected}
-          name={selectedName}
-          onBack={toGrid(selected.key)}
-        />
+        <div className="safe-area">
+          <div className="mb-3 flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={toGrid(selected.key)}>
+              ← back
+            </Button>
+            <strong className="flex-1 truncate text-base">{selectedName}</strong>
+          </div>
+          <ViewDetailScreen tag={selected} name={selectedName} />
+        </div>
       );
     }
     return <></>;
@@ -381,7 +377,7 @@ const DashboardInner = (props: {
       <div className="relative mb-4 flex items-center gap-2">
         {canBack ? (
           <>
-            <Button variant="outline" size="sm" onClick={() => transition(`grp-${group.key}`, () => route.back())}>← back</Button>
+            <Button variant="outline" size="sm" onClick={() => transition(`grp-${group.key}`, () => nav.back())}>← back</Button>
             {/* centered to the row (≈ the screen), not the flex remainder — absolutely overlaid, taps
                 pass through to the back/count/die around it. The ⬢ is dropped on drilled-in pages. */}
             <h1 className="pointer-events-none absolute inset-0 m-0 flex items-center justify-center truncate px-24 text-lg font-semibold">
@@ -419,8 +415,8 @@ const DashboardInner = (props: {
             key={name}
             name={name}
             member={member}
-            onOpenLeaf={(tag) => transition(`res-${tag.key}`, () => route.open(name))}
-            onOpenGroup={(g) => transition(`grp-${g.key}`, () => route.open(name))}
+            onOpenLeaf={(tag) => transition(`res-${tag.key}`, () => nav.openKey(name))}
+            onOpenGroup={() => transition(`grp-${name}`, () => nav.openKey(name))}
           />
         ))}
       </div>
@@ -454,7 +450,6 @@ const NodeHyperlinkView = (props: {
         tag={tag}
         onBack={props.onBack}
         onOpenLogs={() => setView("logs")}
-        onOpenSchedule={() => setView("schedule")}
       />
     );
   }
@@ -468,7 +463,14 @@ const NodeHyperlinkView = (props: {
     isShardMapTag(tag) ||
     isGateTag(tag)
   ) {
-    return <ViewDetailScreen tag={tag} onBack={props.onBack} />;
+    return (
+      <>
+        <div className="mb-3 flex items-center gap-2 px-1">
+          <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
+        </div>
+        <ViewDetailScreen tag={tag} />
+      </>
+    );
   }
   return <></>;
 };
@@ -494,11 +496,20 @@ export const DashboardView = <R, ER>(props: {
     },
     [props.group],
   );
+  // compose = View.react(skins) + Navigator.history — short-name paths (/Nwsl/HttpApi).
+  const ui = React.useMemo(
+    () =>
+      View.compose({
+        views: WebDashboardViews.layer,
+        navigator: Navigator.history(props.group),
+      }),
+    [props.group],
+  );
   // The dashboard owns its font: declaring `font-mono` on its own root means the widgets render
   // monospace regardless of the consumer's `body`/`#root` font (a value set directly on this
   // element wins over an inherited one), and it still honours a consumer-defined `--font-mono`.
   return (
-    <dashboardViews.Provider>
+    <ui.Provider>
       <RuntimeProvider runtime={props.runtime}>
         <div className="font-mono">
           {nodeTag !== null ? (
@@ -517,7 +528,7 @@ export const DashboardView = <R, ER>(props: {
           )}
         </div>
       </RuntimeProvider>
-    </dashboardViews.Provider>
+    </ui.Provider>
   );
 };
 

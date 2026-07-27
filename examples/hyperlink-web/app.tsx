@@ -7,14 +7,16 @@
  * built-in card: a custom {@link WorkerPoolCard} is bound to its key and layered **onto** the
  * shipped `base` set via `withEntries` — so that one resource gets a bespoke card and every other
  * widget stays exactly as shipped.
+ *
+ * Prefer `View.only(WorkerPool, CustomCard)` on a compose Layer when Dashboard accepts an extra
+ * view Layer; until then `forKey` / `widgets` remains the working fallback.
  */
 import * as React from "react";
 import { Dashboard, base, forKey, withEntries } from "../../src/web";
 import { ServicesHub, WorkerPool, runtime } from "./hub";
 import { WorkerPoolCard } from "./worker-pool-card";
 
-// Extend the shipped widget set with one per-key card. Key beats kind, so `WorkerPool` renders as
-// `WorkerPoolCard` instead of the generic resource fallback; nothing else changes.
+// Fallback until View.only can merge into Dashboard’s compose layer — key beats kind.
 const widgets = withEntries(base, [forKey(WorkerPool.key, WorkerPoolCard)]);
 
 export const App = (): React.ReactElement => (

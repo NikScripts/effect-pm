@@ -7,7 +7,7 @@
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **4** | `cursor/hyperservice-open-deps-5679` | [fleet rate limiting](../plans/fleet-rate-limiting.md) · [wire groups](../plans/wire-groups-and-identity.md) · [service shapes](../plans/service-shapes.md) | **tip-synced** — R1+R2+R3+R3b on `integration` | same tip as `integration` | typecheck 0 / gate 30 | R4 HttpApiClient+ApiMetrics | 2026-07-27 |
-| **G / TUI** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity · `View` redesign · **F5 split-dial** | **Eng** — Dashboards on `DashboardViews.layer`; F5 Eng'd; relative `Hyperlink.ws` verify fixed; tip-synced with `integration` | `e0e0118f7` | verify-connection + ui-node-status-bundle; demo `:5177` | Next: peel DetailScreen; **hold** kit Dashboard. F5: [`loud-failures-design.md`](./loud-failures-design.md) §10. | 2026-07-27 |
+| **G / TUI** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity · **View compose** · F5 | **Eng** — `Navigator` + `View.compose`; Group `View.Card`; Chrome layout-only; short-name paths | tip after push | ui-navigator + ui-node-status-bundle | Lock: [`view-compose-lock.md`](./view-compose-lock.md). **hold** kit Dashboard. Next: `View.only` WorkerPool; `ui.data`; page-sized logs/schedule content. | 2026-07-27 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **G**, Launcher | 2026-07-26 |
 | **Launcher** | `cursor/launcher-handoff-design-929b` | [launcher + handoff brief](./launcher-and-handoff-brief.md) | **bake** — spine α locked; Track A API | branch tip | docs only | Dumb spawn-and-exit; **no Eng until owner locks API**. Tracks B–D after A | 2026-07-27 |
 | **Docs site** | `cursor/docs-site-edge-cache-dbdc` (ε) | [origin down](./docs-site-origin-down.md) · edge cache | **tip-synced** — OOM fix + CF dep-API edge cache (`HIT`) + dotenvx | same tip as `integration` (`fdd920a77`) | `/healthz` ok; `cf:status` MISS→HIT | 1Password desktop CLI backup deferred (phone SSH) | 2026-07-27 |
@@ -29,7 +29,7 @@
 
 ### Active (owner approval required)
 1. **Agent 4:** W1–W3 + `default`/`defaults` + **R1+R2+R3+R3b tip-synced** ([`../plans/fleet-rate-limiting.md`](../plans/fleet-rate-limiting.md)). Next: R4 HttpApiClient Tag + absorb ApiMetrics. Incident: [`agent-04-w3-incident-2026-07-27.md`](./agent-04-w3-incident-2026-07-27.md).
-2. **Agent G / TUI:** Dashboard Group parity + View redesign + F5 split-dial (`cursor/tui-dashboard-parity-125f`) — tip-synced; hold kit Dashboard; next DetailScreen peel when owner says.
+2. **Agent G / TUI:** View compose Eng'd (`Navigator` / Group card / short-name paths) on `cursor/tui-dashboard-parity-125f` — lock [`view-compose-lock.md`](./view-compose-lock.md); hold kit Dashboard.
 3. **Launcher:** spine **α** locked (dumb spawn-and-exit). Baking Track **A** API with owner before any Eng. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
 4. **Docs site:** tip-synced on `integration`. Outage cleared (2GB); Cloudflare Cache Rule for `/api/effect*|platform-node*|sql-sqlite-node*` live (`override_origin`, HIT verified); dotenvx secrets in `docs/site/.env`.
 
