@@ -6,7 +6,7 @@
  *
  * - `View.Tag` → class Context.Service handle (Svc = React/Ink component + key/kind/spec).
  * - Provide TSX with `Layer.succeed(PoolCard, Comp)`.
- * - Chrome policy = Layers: `View.kind` / `View.key` / `View.only` (merge with `Layer.mergeAll`; last wins).
+ * - Chrome policy = Layers: `View.bind` / `View.only` (merge with `Layer.mergeAll`; last wins).
  * - `View.react(layer)` runs the Layer and requires `R = never` (missing skin = type error).
  */
 import * as React from "react";
@@ -137,7 +137,7 @@ type Bound = {
 
 /** @public */
 export interface RegistryService {
-  /** Append a view for one Hyperlink tag key (multi-match). */
+  /** Append a view for one Hyperlink tag `.key` (multi-match). */
   readonly addTag: (tagKey: string, bound: Bound) => void;
   /** Append a view for a stamped Hyperlink kind (multi-match). */
   readonly addKind: (kind: string, bound: Bound) => void;
@@ -259,40 +259,37 @@ type ViewService<Id> = Context.Service<Id, ViewComponent> & {
 type ContribLayer<R> = Layer.Layer<never, never, Registry | R>;
 
 /**
- * Append one View for a stamped Hyperlink kind (multi-match / pager).
- * Add more with `Layer.mergeAll(View.kind(…), View.kind(…))`.
+ * Append one View for a stamped Hyperlink **kind** string or a concrete **tag**
+ * (matched by `.key`). Multi-match / pager — merge with `Layer.mergeAll`.
+ *
+ * @example
+ * ```ts
+ * View.bind(WorkPool.kind, PoolCard) // family kind
+ * View.bind(Special, PoolCard)       // one tag key
+ * ```
  *
  * @public
  */
-export const kind = <Id,>(
-  stampedKind: string,
+export const bind: {
+  <Id>(stampedKind: string, view: ViewService<Id>): ContribLayer<Id>;
+  <Id>(
+    target: { readonly key: string },
+    view: ViewService<Id>,
+  ): ContribLayer<Id>;
+} = <Id,>(
+  targetOrKind: string | { readonly key: string },
   view: ViewService<Id>,
 ): ContribLayer<Id> =>
   Layer.effectDiscard(
     Effect.gen(function* () {
       const reg = yield* Registry;
       const Component = yield* view;
-      reg.addKind(stampedKind, { key: view.key, kind: view.kind, Component });
-    }),
-  );
-
-/**
- * Append one View for a concrete Hyperlink tag key (multi-match / pager).
- * Add more with `Layer.mergeAll(View.key(…), View.key(…))`.
- *
- * Named {@link key} (not `tag`) so it does not collide with {@link Tag} class handles.
- *
- * @public
- */
-export const key = <Id,>(
-  target: { readonly key: string },
-  view: ViewService<Id>,
-): ContribLayer<Id> =>
-  Layer.effectDiscard(
-    Effect.gen(function* () {
-      const reg = yield* Registry;
-      const Component = yield* view;
-      reg.addTag(target.key, { key: view.key, kind: view.kind, Component });
+      const bound = { key: view.key, kind: view.kind, Component };
+      if (typeof targetOrKind === "string") {
+        reg.addKind(targetOrKind, bound);
+      } else {
+        reg.addTag(targetOrKind.key, bound);
+      }
     }),
   );
 
@@ -370,13 +367,13 @@ export class GroupDash extends Context.Service<
 
 /**
  * BYO-chrome Group kit contribution (W20). Records the Group + leaves for the react kit.
- * Chrome `R` comes from `View.kind` / `View.key` / `View.only` layers you merge.
+ * Chrome `R` comes from `View.bind` / `View.only` layers you merge.
  *
  * @example
  * ```ts
  * const ready = Layer.mergeAll(
  *   View.group(AppGroup),
- *   View.kind(WorkPool.kind, PoolCard),
+ *   View.bind(WorkPool.kind, PoolCard),
  *   View.only(Special, CustomCard),
  * ).pipe(Layer.provideMerge(chrome), Layer.provideMerge(View.base))
  * const { for: bound, Provider } = View.react(ready)
@@ -645,7 +642,7 @@ export const useGridMembers = (): ReadonlyArray<{
  * @example
  * ```ts
  * const ui = View.compose({
- *   views: Layer.mergeAll(View.kind(Group.kind, GroupCard), WebDashboardViews.layer),
+ *   views: Layer.mergeAll(View.bind(Group.kind, GroupCard), WebDashboardViews.layer),
  *   navigator: Navigator.history(ServicesHub),
  * })
  * <ui.Provider><ui.Grid /><ui.Outlet /></ui.Provider>

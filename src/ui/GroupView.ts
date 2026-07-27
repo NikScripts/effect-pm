@@ -18,4 +18,4 @@ export class GroupCard extends View.Tag<GroupCard>()(
 ) {}
 
 /** @public */
-export const layer = View.kind(Group.kind, GroupCard);
+export const layer = View.bind(Group.kind, GroupCard);

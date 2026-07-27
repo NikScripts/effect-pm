@@ -18,4 +18,4 @@ export class HyperlinkCard extends View.Tag<HyperlinkCard>()(
 ) {}
 
 /** @public */
-export const layer = View.kind(Hyperlink.kind, HyperlinkCard);
+export const layer = View.bind(Hyperlink.kind, HyperlinkCard);

@@ -23,6 +23,6 @@ export class PriorityDetail extends View.Tag<PriorityDetail>()(
 
 /** @public */
 export const layer = Layer.mergeAll(
-  View.kind(WorkPool.priorityKind, PriorityCard),
-  View.kind(WorkPool.priorityKind, PriorityDetail),
+  View.bind(WorkPool.priorityKind, PriorityCard),
+  View.bind(WorkPool.priorityKind, PriorityDetail),
 );

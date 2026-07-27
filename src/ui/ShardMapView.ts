@@ -26,6 +26,6 @@ export class ShardMapDetail extends View.Tag<ShardMapDetail>()(
 
 /** @public */
 export const layer = Layer.mergeAll(
-  View.kind(ShardMap.kind, ShardMapCard),
-  View.kind(ShardMap.kind, ShardMapDetail),
+  View.bind(ShardMap.kind, ShardMapCard),
+  View.bind(ShardMap.kind, ShardMapDetail),
 );

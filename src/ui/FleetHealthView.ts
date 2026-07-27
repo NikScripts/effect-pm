@@ -26,6 +26,6 @@ export class FleetDetail extends View.Tag<FleetDetail>()(
 
 /** @public */
 export const layer = Layer.mergeAll(
-  View.kind(FleetHealth.kind, FleetCard),
-  View.kind(FleetHealth.kind, FleetDetail),
+  View.bind(FleetHealth.kind, FleetCard),
+  View.bind(FleetHealth.kind, FleetDetail),
 );

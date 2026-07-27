@@ -49,6 +49,6 @@ export class PoolDetail extends View.Tag<PoolDetail>()(
  * @public
  */
 export const layer = Layer.mergeAll(
-  View.kind(WorkPool.kind, PoolCard),
-  View.kind(WorkPool.kind, PoolDetail),
+  View.bind(WorkPool.kind, PoolCard),
+  View.bind(WorkPool.kind, PoolDetail),
 );

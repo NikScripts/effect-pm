@@ -1,5 +1,5 @@
 /**
- * View chrome Layers — kind/key/only; react requires Layer R = never.
+ * View chrome Layers — bind / only; react requires Layer R = never.
  */
 import { describe, expect, it } from "@effect/vitest";
 import { Layer, Schema } from "effect";
@@ -39,11 +39,11 @@ const withChrome = <A, E, R>(contrib: Layer.Layer<A, E, R>) =>
   contrib.pipe(Layer.provideMerge(chrome), Layer.provideMerge(View.base));
 
 describe("View registry", () => {
-  it("matches tag over stamped kind", () => {
+  it("bind(tag) matches over bind(kind)", () => {
     const viewLayer = withChrome(
       Layer.mergeAll(
-        View.key(Special, PoolCard),
-        View.kind(WorkPool.kind, CustomCard),
+        View.bind(Special, PoolCard),
+        View.bind(WorkPool.kind, CustomCard),
       ),
     );
 
@@ -58,7 +58,7 @@ describe("View registry", () => {
   });
 
   it("matches stamped WorkPool.kind (never groupId)", () => {
-    const viewLayer = withChrome(View.kind(WorkPool.kind, PoolCard));
+    const viewLayer = withChrome(View.bind(WorkPool.kind, PoolCard));
     const { resolve } = View.react(viewLayer);
     expect(resolve(Jobs, "card").map((r) => r.key)).toEqual([
       "hyperlink/view/pool-card",
@@ -68,8 +68,8 @@ describe("View registry", () => {
   it("kind appends preserve order (multi-match)", () => {
     const viewLayer = withChrome(
       Layer.mergeAll(
-        View.kind(WorkPool.kind, CustomCard),
-        View.kind(WorkPool.kind, PoolCard),
+        View.bind(WorkPool.kind, CustomCard),
+        View.bind(WorkPool.kind, PoolCard),
       ),
     );
     expect(
@@ -79,11 +79,11 @@ describe("View registry", () => {
     ).toEqual(["hyperlink/view/custom-card", "hyperlink/view/pool-card"]);
   });
 
-  it("only allowlists kinds present; other kinds still use kind/key", () => {
+  it("only allowlists kinds present; other sizes still use family bind", () => {
     const viewLayer = withChrome(
       Layer.mergeAll(
-        View.kind(WorkPool.kind, PoolCard),
-        View.kind(WorkPool.kind, PoolDetail),
+        View.bind(WorkPool.kind, PoolCard),
+        View.bind(WorkPool.kind, PoolDetail),
         View.only(Special, CustomCard),
       ),
     );
@@ -103,7 +103,7 @@ describe("View registry", () => {
   it("later only for the same tag wins (Layer.mergeAll order)", () => {
     const viewLayer = withChrome(
       Layer.mergeAll(
-        View.kind(WorkPool.kind, PoolCard),
+        View.bind(WorkPool.kind, PoolCard),
         View.only(Special, PoolCard),
         View.only(Special, CustomCard),
       ),
@@ -118,7 +118,7 @@ describe("View registry", () => {
   it("only can list card + detail together", () => {
     const viewLayer = withChrome(
       Layer.mergeAll(
-        View.kind(WorkPool.kind, PoolCard),
+        View.bind(WorkPool.kind, PoolCard),
         View.only(Special, CustomCard, PoolDetail),
       ),
     );
@@ -135,7 +135,7 @@ describe("View registry", () => {
 describe("View.group + kit.for", () => {
   it("collects nested leaves and exposes groupDash", () => {
     const viewLayer = withChrome(
-      Layer.mergeAll(View.group(AppGroup), View.kind(WorkPool.kind, PoolCard)),
+      Layer.mergeAll(View.group(AppGroup), View.bind(WorkPool.kind, PoolCard)),
     );
     const kit = View.react(viewLayer);
     expect(kit.groupDash?.group.key).toBe("app/AppGroup");
@@ -146,7 +146,7 @@ describe("View.group + kit.for", () => {
   });
 
   it("kit.for(tag) curries resolve path", () => {
-    const viewLayer = withChrome(View.kind(WorkPool.kind, PoolCard));
+    const viewLayer = withChrome(View.bind(WorkPool.kind, PoolCard));
     const kit = View.react(viewLayer);
     expect(kit.resolve(Jobs, "card").map((r) => r.key)).toEqual([
       "hyperlink/view/pool-card",

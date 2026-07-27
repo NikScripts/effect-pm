@@ -23,6 +23,6 @@ export class DaemonDetail extends View.Tag<DaemonDetail>()(
 
 /** @public */
 export const layer = Layer.mergeAll(
-  View.kind(Daemon.kind, DaemonCard),
-  View.kind(Daemon.kind, DaemonDetail),
+  View.bind(Daemon.kind, DaemonCard),
+  View.bind(Daemon.kind, DaemonDetail),
 );

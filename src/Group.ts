@@ -33,7 +33,7 @@
 import { Context } from "effect";
 
 /**
- * Stamped family kind for Group tags — View skins bind with `View.kind(Group.kind, …)`.
+ * Stamped family kind for Group tags — View skins bind with `View.bind(Group.kind, …)`.
  *
  * @category constructors
  * @public

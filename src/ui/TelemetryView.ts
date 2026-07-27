@@ -26,6 +26,6 @@ export class TelemetryDetail extends View.Tag<TelemetryDetail>()(
 
 /** @public */
 export const layer = Layer.mergeAll(
-  View.kind(Telemetry.kind, TelemetryCard),
-  View.kind(Telemetry.kind, TelemetryDetail),
+  View.bind(Telemetry.kind, TelemetryCard),
+  View.bind(Telemetry.kind, TelemetryDetail),
 );

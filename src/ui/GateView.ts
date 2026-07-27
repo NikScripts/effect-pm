@@ -26,6 +26,6 @@ export class GateDetail extends View.Tag<GateDetail>()(
 
 /** @public */
 export const layer = Layer.mergeAll(
-  View.kind(Gate.kind, GateCard),
-  View.kind(Gate.kind, GateDetail),
+  View.bind(Gate.kind, GateCard),
+  View.bind(Gate.kind, GateDetail),
 );

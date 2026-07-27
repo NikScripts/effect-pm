@@ -17,7 +17,7 @@ Owner overrides on lineage URL + F1 sizes-vs-content; everything else = prior re
 
 ### B. Matcher — **`View.Card` for Group + leaf**
 
-- Group = family skin (`View.kind(Group.kind, WebGroupCard)`)
+- Group = family skin (`View.bind(Group.kind, WebGroupCard)`)
 - No `View.Member`; no `Cell` group fork
 - `Navigator.open(member: GroupTag | LeafTag)`
 
@@ -89,12 +89,12 @@ type ViewKind = "card" | "detail" | "page"
 
 ```ts
 // Daemon schedule content → all three sizes
-View.kind(Daemon.kind, ScheduleCard)    // card
-View.kind(Daemon.kind, ScheduleDetail)  // detail
-View.kind(Daemon.kind, SchedulePage)    // page
+View.bind(Daemon.kind, ScheduleCard)    // card
+View.bind(Daemon.kind, ScheduleDetail)  // detail
+View.bind(Daemon.kind, SchedulePage)    // page
 
 // or a pack that provides all three + resize host
-View.kind(Daemon.kind, SchedulePack) // Pack.Card / .Detail / .Page internally
+View.bind(Daemon.kind, SchedulePack) // Pack.Card / .Detail / .Page internally
 ```
 
 **Not** new ViewKinds named `logs` / `schedule`.  
@@ -157,7 +157,7 @@ First peel = header/body split; page-sized logs/schedule content follows.
 const ui = View.compose({
   views: Layer.mergeAll(
     View.group(ServicesHub),
-    View.kind(Group.kind, WebGroupCard),
+    View.bind(Group.kind, WebGroupCard),
     WebDashboardViews.layer,
     View.only(WorkerPool, WorkerPoolCard),
   ),

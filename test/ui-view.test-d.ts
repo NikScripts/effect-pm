@@ -22,7 +22,7 @@ class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", { payload: Item }) {}
 
 declare const runFullyWired: <A, E>(layer: Layer.Layer<A, E, never>) => void;
 
-const provided = View.kind(WorkPool.kind, PoolCard).pipe(
+const provided = View.bind(WorkPool.kind, PoolCard).pipe(
   Layer.provideMerge(Layer.succeed(PoolCard, () => null)),
   Layer.provideMerge(View.base),
 );
@@ -30,7 +30,7 @@ const provided = View.kind(WorkPool.kind, PoolCard).pipe(
 runFullyWired(provided);
 View.react(provided);
 
-const missingProvide = View.kind(WorkPool.kind, PoolCard).pipe(
+const missingProvide = View.bind(WorkPool.kind, PoolCard).pipe(
   Layer.provideMerge(View.base),
 );
 
@@ -40,7 +40,7 @@ expectTypeOf<MissingR>().toEqualTypeOf<PoolCard>();
 
 // only + kind → both Views in R
 const withOnly = Layer.mergeAll(
-  View.kind(WorkPool.kind, PoolCard),
+  View.bind(WorkPool.kind, PoolCard),
   View.only(Jobs, CustomCard),
 ).pipe(Layer.provideMerge(View.base));
 

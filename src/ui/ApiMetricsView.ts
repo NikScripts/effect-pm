@@ -26,6 +26,6 @@ export class ApiDetail extends View.Tag<ApiDetail>()(
 
 /** @public */
 export const layer = Layer.mergeAll(
-  View.kind(ApiMetrics.kind, ApiCard),
-  View.kind(ApiMetrics.kind, ApiDetail),
+  View.bind(ApiMetrics.kind, ApiCard),
+  View.bind(ApiMetrics.kind, ApiDetail),
 );
