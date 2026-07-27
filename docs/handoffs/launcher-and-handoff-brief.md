@@ -47,11 +47,25 @@
 
 Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.md) remain **reference only** unless re-locked here.
 
+### Track A — research note (2026-07-27): what already exists
+
+**Build on (shipped):**
+- OS child pattern: Effect `ChildProcess` / `ChildProcessSpawner` (see `examples/forms/hyperlink/node-nameless-listen-demo.ts`) — no package Launcher yet; demos `spawn` + sleep.
+- Child entry: `Layer.launch(Node.unix|http|ws(…, [Hyperlink.serve…]))` forms.
+- Ready substrate: `withReadiness` / `Readiness` / `allReady` / `Node.status` (`resources[].ready`) / `Hyperlink.verifyConnection` (deep + optional `resource` → `ServiceNotReady`).
+- Identity/placement: `Lookup.Identity` / `Directory` / `Advice`, `Hyperlink.identity` — child’s job after Ready.
+- Ops CLI: `Hyperlink.cli` + TUI — **control surface on running services**, not bring-up.
+- `Group.Tag` / `members` / `isGroup` — handle hierarchy only (`src/Group.ts`).
+
+**Gone / do not resurrect:** `ProcessManager`, `ProcessGroup`, legacy `effect-pm-group-child`, `Fleet.launch` (spine β).
+
+**Gaps vs locked bake:** no `hyperlink-ts/Launcher`; no `Node.assume`; no poll-until-allReady on the parent (deep verify without `resource` only proves status RPC answers); no detached spawn→ready→assume→exit kit.
+
 ### Track A — baking (not locked)
 
-- **Spawn input:** declaration shape for `Launcher.spawn` / `up` (node identity + entry / how to start) — **not** “pass a Group.”
-- Failure / timeout channels for `awaitReady` and `handoff` (tagged errors; bounded wait).
-- Multi-node bring-up: how to express a list of spawn declarations (array / dedicated fleet decl) without overloading Group.
+- **Spawn input (grounded):** unit = node dial target (`Node.Tag` / addressed node) + `ChildProcess` (how to start) + optional ready scope (`resources?: tag keys`, `timeout?`) — **not** Group. Multi-node = `ReadonlyArray` of that unit. Confirm with owner.
+- Failure / timeout: reuse `ServiceNotReady` / `NodeUnreachable` / … + bounded poll (not invent a parallel health stack).
+- `Node.assume` wire shape (new RPC; status may mirror).
 
 ---
 
