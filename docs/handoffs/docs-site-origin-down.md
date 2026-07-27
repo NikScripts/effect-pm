@@ -1,9 +1,10 @@
 # Handoff — docs site origin down (`hyperlink.cool` Cloudflare 504)
 
-**Status:** **live outage** — origin not answering; Cloudflare returns `error code: 504`.  
+**Status:** **cleared** 2026-07-27T15:42Z UTC — origin healthy; smokes green.  
 **Opened:** 2026-07-27 (cloud agent probe).  
-**Audience:** local agent with DigitalOcean / Cloudflare access.  
-**Branch:** land recovery on `integration` tip; deploy from a clean tree.
+**Cleared by:** local agent with `doctl` (`cursor/docs-site-origin-recovery-dbdc`).  
+**Root cause:** Node.js heap OOM on `apps-s-1vcpu-1gb-fixed` (~538MB) under Effect API SSR → container exit 134 → DO `no_healthy_upstream` / `x-do-failure-code: UH` → Cloudflare 504. Image `:latest` was fine (no rebuild).  
+**Fix:** `doctl apps create-deployment` (redeploy `:latest`) + bump instance to `basic-s` (2GB) via `docs/site/deploy/do-app.yaml` + `doctl apps update`. Active deploy `6e1150bd`.
 
 ---
 
@@ -123,11 +124,11 @@ Do **not** chase Twoslash / gen-api content bugs until `/healthz` is green.
 
 ## Success criteria
 
-1. `GET https://hyperlink.cool/healthz` → `ok` (200).
-2. Landing + a docs chapter render (e.g. `/docs/index`, `/docs/work-pools`).
-3. Static API: `/api/hyperlink-ts/Polling` (or another shipped module) 200.
-4. SSR API: `/api/effect/Effect/retry` 200 with hover sidecars present.
-5. Update [`agent-status.md`](./agent-status.md) — note outage cleared + deploy SHA / time.
+1. `GET https://hyperlink.cool/healthz` → `ok` (200). ✅
+2. Landing + a docs chapter render (e.g. `/docs/index`, `/docs/work-pools`). ✅
+3. Static API: `/api/hyperlink-ts/Polling` (or another shipped module) 200. ✅
+4. SSR API: `/api/effect/Effect/retry` 200 with hover sidecars present. ✅
+5. Update [`agent-status.md`](./agent-status.md) — note outage cleared + deploy SHA / time. ✅ (`6e1150bd` @ 2026-07-27T15:42Z; instance `basic-s`)
 
 ---
 
