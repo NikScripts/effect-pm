@@ -161,28 +161,43 @@ describe("search-core", () => {
   });
 });
 
-// Pinned ranking cases over the REAL corpus — skipped when the generated index is absent
-// (fresh clone before docs:api). These are the spike's findings as regression tests.
+// Pinned ranking cases over the REAL corpus — skipped when the generated API index is absent
+// or empty (fresh clone / fast-dev stub before docs:api). Spike findings as regression tests.
 const chunkPaths = ["api.json", "pages.json", "glossary.json"].map((f) =>
   fileURLToPath(new URL(`../public/search/${f}`, import.meta.url))
 );
-describe.skipIf(chunkPaths.some((p) => !existsSync(p)))("search ranking (real corpus)", () => {
-  const docs: ReadonlyArray<SearchDoc> = chunkPaths.flatMap(
-    (p) => JSON.parse(readFileSync(p, "utf8")).docs
-  );
-  const index = buildIndex(docs);
-  const top = (q: string): string => searchType(index, q, "api", 1)[0]?.doc.title ?? "";
+const apiChunkPath = chunkPaths[0] ?? "";
+const apiDocsLength = (path: string): number => {
+  if (path === "" || !existsSync(path)) return 0;
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
+    if (typeof parsed !== "object" || parsed === null || !("docs" in parsed)) return 0;
+    const docs = Reflect.get(parsed, "docs");
+    return Array.isArray(docs) ? docs.length : 0;
+  } catch {
+    return 0;
+  }
+};
+describe.skipIf(apiDocsLength(apiChunkPath) === 0 || chunkPaths.some((p) => !existsSync(p)))(
+  "search ranking (real corpus)",
+  () => {
+    const docs: ReadonlyArray<SearchDoc> = chunkPaths.flatMap(
+      (p) => JSON.parse(readFileSync(p, "utf8")).docs
+    );
+    const index = buildIndex(docs);
+    const top = (q: string): string => searchType(index, q, "api", 1)[0]?.doc.title ?? "";
 
-  it("ref → Hyperlink.ref (hyperlink-ts tier + popularity beat RefField)", () => {
-    expect(top("ref")).toBe("Hyperlink.ref");
-  });
-  it("retry → Effect.retry (exact match beats txRetry's popularity)", () => {
-    expect(top("retry")).toBe("Effect.retry");
-  });
-  it("subscribable → Hyperlink.Subscribable", () => {
-    expect(top("subscribable")).toBe("Hyperlink.Subscribable");
-  });
-  it("queue → a Queue module/type, not an internal schema const", () => {
-    expect(/^Queue/.test(top("queue"))).toBe(true);
-  });
-});
+    it("ref → Hyperlink.ref (hyperlink-ts tier + popularity beat RefField)", () => {
+      expect(top("ref")).toBe("Hyperlink.ref");
+    });
+    it("retry → Effect.retry (exact match beats txRetry's popularity)", () => {
+      expect(top("retry")).toBe("Effect.retry");
+    });
+    it("subscribable → Hyperlink.Subscribable", () => {
+      expect(top("subscribable")).toBe("Hyperlink.Subscribable");
+    });
+    it("queue → a Queue module/type, not an internal schema const", () => {
+      expect(/^Queue/.test(top("queue"))).toBe(true);
+    });
+  }
+);
