@@ -395,7 +395,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Chose / LOCKED:** No Spec builder for live plain `A` (`cell` / `live` / `state`). Dashboards use `ref` (Subscribable) + host adapters. Construction adornments A1–A2 tip-synced to `integration`.
 - **Rejected:** Eng’ing a push-cell Spec leaf; keeping `cell` as an open bake item.
 - **Still open:** optional fleet R5.
-- **Supervisor impact:** Agent 4 — A3 Eng follow-up when Go’d.
+- **Supervisor impact:** A3 tip-synced; Agent 4 idle (optional R5).
 
 ## 2026-07-27 — A3 factory `{ defaults }` sugar
 
