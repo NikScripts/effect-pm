@@ -361,7 +361,14 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Owner said (bake):** `default` = single fields in contracts; `defaults` = piped bag to add multiple. (Batteries/Effect-defaults vibe; reject `handle` as the noun.)
 - **Chose / LOCKED:** `Hyperlink.default(…)` Spec leaf; `Hyperlink.defaults({…})` pipe adornment. Prior Jul 26 design (Spec builders-only, bag merge, Effect overrides, new key after construction, Prototype lean) still holds; only the public names change from placeholder `handle`.
 - **Rejected:** Public `Hyperlink.handle` for this API.
-- **Still open:** `default` payload shape vs shipped `pure`; Eng slice order; Prototype mint.
+- **Still open (at bake):** `default` payload shape vs shipped `pure`; Eng slice order; Prototype mint.
+
+## 2026-07-27 — Retire `Hyperlink.pure`; Eng `default` / `defaults`
+
+- **Owner said:** Pure was never supposed to be the long-term API; if `default`/`defaults` exist that is the same job — retire `pure`, build it right (refinement + docs), ask only when blocked.
+- **Chose / Eng’d:** `Hyperlink.default(value)` (literal or sync fn; Promise-returning fn type-errors) + `Hyperlink.defaults({…})` pipe (bag on Tag via `DefaultsOf`; handle widen via `WithDefaults` — class-extends cannot remap `Service`). Spec∩bag → `DuplicateDefaultKey`. Layer/serve accept `ImplWithDefaultOverrides`. `Hyperlink.pure` / `PureMethod` removed (major).
+- **Rejected:** Keeping `pure` as an alias or shim.
+- **Still open:** live `cell`; Prototype `.pipe(defaults)` mint.
 - **Supervisor impact:** Record in [`service-shapes.md`](../plans/service-shapes.md); Eng only after remaining bake locks.
 
 ---

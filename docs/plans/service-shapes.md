@@ -1,10 +1,9 @@
 # Plan: service / contract shapes
 
-**Status:** partial Eng (2026-07-26); remainder owner-gated.  
+**Status:** `default` / `defaults` Eng’d (2026-07-27); `cell` still owner-gated.  
 **Agent:** 4 (`cursor/hyperservice-open-deps-5679`).  
 **Prior art:** [`service-shape-redesign.md`](../handoffs/archive/2026-07/features/service-shape-redesign.md) (2026-07-01/02), [`client-adapters-design.md`](../handoffs/client-adapters-design.md).  
-**Orthogonal:** wire RpcGroup identity — [`wire-groups-and-identity.md`](./wire-groups-and-identity.md) (W1–W3 Eng’d; do not conflate with handle taxonomy).  
-**Paused Eng:** `default` / `defaults` adornments (named **LOCKED** 2026-07-27; not coded). Creating polish after Eng.
+**Orthogonal:** wire RpcGroup identity — [`wire-groups-and-identity.md`](./wire-groups-and-identity.md) (W1–W3 Eng’d; do not conflate with handle taxonomy).
 
 Goal: support the **widest useful variety** of service shapes without silent local↔remote divergence, and without turning the Spec into every host-language return type (Promise, sync fn, …).
 
@@ -44,7 +43,8 @@ Today’s `constant(Schema)` is **materialize**, not Tag-baked and not push. Tha
 | `Stream<A>` | `stream` |
 | `Subscribable<A>` (`.get` Effect + `.changes` Stream) | `ref` |
 | `Effect<T, …, Local>` / interface locals | `local` / `fromService` |
-| `Promise<A>`, sync `(In) => A`, live plain `A` cell | **not Spec** (adapters or parked) |
+| Tag-baked plain / sync fn | `default` (Spec) / `defaults` (pipe) |
+| `Promise<A>`, live plain `A` cell | **not Spec** (adapters or parked) |
 
 ### 3. Wire role
 
@@ -158,30 +158,30 @@ ref (Eng’d)
 
 ---
 
-## Eng’d (2026-07-26)
+## Eng’d (2026-07-26 / 27)
 
-- `Tag<Self, I>()` + overload arity; `value(Schema)` (materialize, fallible OK); `Hyperlink.promise`; `Hyperlink.pure`.
+- `Tag<Self, I>()` + overload arity; `value(Schema)` (materialize, fallible OK); `Hyperlink.promise`.
 - Wire identity W1–W3 Eng’d (orthogonal) — [`wire-groups-and-identity.md`](./wire-groups-and-identity.md).
+- **`Hyperlink.default` / `Hyperlink.defaults`** — Tag-baked defaults; **`Hyperlink.pure` retired** (same job; never the long-term noun).
 
-## LOCKED — `default` / `defaults` (2026-07-27 bake)
+## LOCKED + Eng’d — `default` / `defaults` (2026-07-27)
 
-Placeholder name was `Hyperlink.handle`. **Rejected** as the public noun.
+Placeholder name was `Hyperlink.handle`. **Rejected** as the public noun. Short-lived `Hyperlink.pure` **retired**.
 
 | API | Shape | Role |
 |-----|--------|------|
-| **`Hyperlink.default(…)`** | Spec leaf (singular) | One default field **in the contract** |
-| **`Hyperlink.defaults({…})`** | Piped bag (plural) | Add **multiple** defaults: `Tag(…).pipe(Hyperlink.defaults({…}))` |
+| **`Hyperlink.default(…)`** | Spec leaf (singular) | One default field **in the contract** — literal or sync fn (Promise-returning fn → type error) |
+| **`Hyperlink.defaults({…})`** | Piped bag (plural) | Add **multiple** defaults: `Tag(…).pipe(Hyperlink.defaults({…}))` — bag on Tag (`DefaultsOf`); handle widen via `WithDefaults` |
 
-Design substance (Jul 26 chat — not Eng’d yet):
+Shipped rules:
 
 - Spec stays branded builders; `defaults` bag merges onto the service (local + client).
-- Overrides via Effect / `Layer.updateService` (not `client(Tag, { handle })`).
-- `layer(Tag, ImplOf<Spec> & Partial<Defaults>)` — wire required; default keys optional.
-- Construction-time adorn OK; post-construction adorn → **new** named Context key.
-- Hard lean: also a Prototype pipe feature (`Prototype({spec}).pipe(defaults({…}))` then mint).
-- Name bikeshed discarded: `handle` / `with` / `adorn` / `features` / `aspect` / `stock`.
-
-**Still open before Eng:** what `default` accepts (literals only vs fns/`Effect` too); fate of shipped `Hyperlink.pure`; deep-merge / same-key loudness details; Prototype-only vs Tag.pipe first slice.
+- Spec `default` leaves are fully typed on `Service`. Piped bag keys are runtime-present; type with `WithDefaults<typeof Tag>` (`class X extends Tag<X>().pipe(defaults)` cannot remap `Service` without a self-heritage cycle).
+- Spec∩bag key collision → `DuplicateDefaultKey` (also duplicate bag keys across pipes).
+- Layer/serve: wire `ImplOf` required; default/bag keys optional overrides (`ImplWithDefaultOverrides`).
+- Post-hoc overrides also via `Layer.updateService`.
+- Construction-time adorn OK; post-construction adorn → **new** named Context key (not yet a sugar API).
+- Hard lean (not Eng’d): Prototype pipe (`Prototype({spec}).pipe(defaults({…}))` then mint) — may also clear the `WithDefaults` cast.
 
 ## Open decisions (owner)
 
@@ -190,8 +190,8 @@ Design substance (Jul 26 chat — not Eng’d yet):
 3. Live plain cell (`cell`): Eng, park, or reject in favor of `ref`?
 4. ~~Fallible materialize~~ **done** (`value` + `E`).
 5. ~~Promise adapter~~ **done** (`Hyperlink.promise`).
-6. Getting-started polish — after `default`/`defaults` Eng + names settle.
-7. **`default` payload + `pure` fate** — baking now.
+6. Getting-started / Core Concepts polish for the taxonomy (optional).
+7. ~~`default` payload + `pure` fate~~ **done** — literals + sync fns; `pure` removed.
 
 ---
 
@@ -199,10 +199,11 @@ Design substance (Jul 26 chat — not Eng’d yet):
 
 | Slice | Scope |
 |-------|--------|
-| **S2** | Eng `default` / `defaults` (+ `pure` migrate or keep) |
-| **S3** | Docs: Creating / Core Concepts taxonomy |
+| **S2** | ~~Eng `default` / `defaults`~~ **done** (`pure` retired) |
+| **S3** | Docs: Creating / Core Concepts taxonomy (light polish) |
 | **S5** | Live plain `cell` (only if decision 3 = Eng) |
 | **S6** | Upload / sink (transport-gated) |
+| **S7** | Prototype `.pipe(defaults)` mint (lean) |
 
 ---
 

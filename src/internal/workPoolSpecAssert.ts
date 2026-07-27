@@ -12,7 +12,7 @@
  */
 
 import { Data, DateTime, Duration, Schema } from "effect";
-import type { AnyLocalMethod, AnyMethod, AnyPureMethod, FlatSpec } from "../Hyperlink";
+import type { AnyLocalMethod, AnyMethod, AnyDefaultMethod, FlatSpec } from "../Hyperlink";
 import { flattenHyperlinkSpec } from "../Hyperlink";
 import { buildQueueEvent } from "../WorkPool";
 import type { PriorityInstanceSpec } from "../WorkPool";
@@ -34,7 +34,7 @@ type QueueWire = {
 };
 
 const asRpcMethod = (
-  m: AnyMethod | AnyLocalMethod | AnyPureMethod | undefined,
+  m: AnyMethod | AnyLocalMethod | AnyDefaultMethod | undefined,
 ): AnyMethod | undefined =>
   m !== undefined && "kind" in m ? (m as AnyMethod) : undefined;
 

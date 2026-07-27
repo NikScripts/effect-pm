@@ -30,7 +30,7 @@ import { Console, Effect, type Schema } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
 import * as Group from "../Group";
 import { methodMeta, specOf } from "../Hyperlink";
-import type { AnyLocalMethod, AnyMethod, AnyPureMethod, FlatSpec } from "../Hyperlink";
+import type { AnyLocalMethod, AnyMethod, AnyDefaultMethod, FlatSpec } from "../Hyperlink";
 import { openTui } from "./Tui";
 import type { TuiNotConfigured } from "./Tui";
 import type { CliHyperlinkTag, CliNode, CliTree } from "./types";
@@ -41,7 +41,7 @@ export { openTui, Tui, TuiNotConfigured, type TuiOpenInput } from "./Tui";
 
 // A spec entry is a runnable CLI verb when it's a wire method (`kind`: query/mutate) that
 // isn't a streaming read. Streams have no run-and-exit form; local methods aren't on the wire.
-const isCliMethod = (m: AnyMethod | AnyLocalMethod | AnyPureMethod): m is AnyMethod =>
+const isCliMethod = (m: AnyMethod | AnyLocalMethod | AnyDefaultMethod): m is AnyMethod =>
   "kind" in m && m.stream !== true;
 
 const isSchema = (x: unknown): x is Schema.Top =>

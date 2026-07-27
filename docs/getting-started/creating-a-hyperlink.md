@@ -144,6 +144,30 @@ There is no extra API between the UI and the resource: the handle *is* the surfa
 docs/Counter
 ```
 
+## Tag-baked defaults (optional)
+
+Same value on local and remote, no impl slot, no RPC. One field in the contract with
+`Hyperlink.default`; several extras with `Hyperlink.defaults` on the Tag:
+
+{.twoslash}
+``` ts
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
+import { Schema } from "effect"
+
+class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
+  value: Hyperlink.ref(Schema.Number),
+  label: Hyperlink.default((n: number) => `count=${n}`),
+}).pipe(
+  Hyperlink.defaults({
+    unit: "count" as const,
+  }),
+) {}
+```
+
+`label` is on `Service` (Spec leaf). Piped `unit` is on every handle at runtime; type it with
+`Hyperlink.WithDefaults<typeof Counter>` when you need the bag keys in TypeScript. Override at
+layer with a matching impl key, or later with `Layer.updateService`.
+
 ## What changes next
 
 Serve or client the same tag without rewriting the program body. Only the layer at the edge changes.
