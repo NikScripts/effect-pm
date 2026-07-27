@@ -29,6 +29,9 @@ importers:
       effect:
         specifier: 4.0.0-beta.98
         version: 4.0.0-beta.98
+      hono:
+        specifier: ^4.12.14
+        version: 4.12.28
       lucide-react:
         specifier: ^1.24.0
         version: 1.24.0(react@19.2.7)
@@ -75,6 +78,9 @@ importers:
         specifier: 1.0.0-beta.3
         version: 1.0.0-beta.3(@types/node@22.20.1)(esbuild@0.28.1)(jiti@2.7.0)(react-dom@19.2.7(react@19.2.7))(react-server-dom-webpack@19.2.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(webpack@5.108.4(esbuild@0.28.1)))(react@19.2.7)(terser@5.49.0)(tsx@4.23.0)(yaml@2.9.0)
     devDependencies:
+      '@dotenvx/dotenvx':
+        specifier: ^2.19.0
+        version: 2.19.0
       '@effect/language-service':
         specifier: ^0.86.2
         version: 0.86.6
@@ -121,6 +127,16 @@ packages:
     resolution: {integrity: sha512-joMKR24B8rxueyFiJbpZAqEiypjvOyzTxzkhyr0q5mM/sUBaOD3unna/9IxtOotFugViyYlkIRaiXg3xM//zxg==}
     engines: {node: '>=17.0.0'}
     hasBin: true
+
+  '@dotenvx/dotenvx@2.19.0':
+    resolution: {integrity: sha512-DPy8Xbe+wV8gDRAC9Kr324dkgH4aQS7tPGh1YLkBSBICFvAQNe5umnpRT7IZ0yJ3VlsfWVFJ6+2s9dcZjtQOAw==}
+    hasBin: true
+
+  '@dotenvx/primitives@2.1.1':
+    resolution: {integrity: sha512-FvG4D0x5nELUxGjeGviXJnVHluK4jIeB3ebOTObgCMbc0/hc7byzUsl3nURTSyBcSCy9dQdOZ12zOIknircMkA==}
+
+  '@dotenvx/tooling@1.0.3':
+    resolution: {integrity: sha512-Gd6qQol/ICb4MPRWpiIH56y+pR9AVB7kPBkbhrLSGLtAiF4Qgy+k651/f2pze0Xbm3H5XewbPfIm4y9K+ic30Q==}
 
   '@effect/language-service@0.86.6':
     resolution: {integrity: sha512-uwXbp+lWzt60bZnm6lG6S5DWy0m6TthUzV2hcQoiS6NzieEDm07tuBakscxOXoO+AU9+yTH+0TSIa9mEDt9dFA==}
@@ -2638,12 +2654,30 @@ packages:
     engines: {node: '>= 14.6'}
     hasBin: true
 
+  yocto-spinner@1.2.2:
+    resolution: {integrity: sha512-DODGl1wJjA/s5pnJFKau9lIYHT81lnhob1i3e1TjxZRxEhWRKl74nTbWE6H5KlkViQQTo/Z29YFdxzTZAMY3ng==}
+    engines: {node: '>=18.19'}
+
+  yoctocolors@2.2.0:
+    resolution: {integrity: sha512-xYqdZFUK/VYazNl/oCDYN+3WloWQwMfZxBoiNt6qNyk+xfOdi598muWE42rNZFp1kNOiqW936q5RhUdnpqElSg==}
+    engines: {node: '>=18'}
+
   zwitch@2.0.4:
     resolution: {integrity: sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A==}
 
 snapshots:
 
   '@djot/djot@0.3.2': {}
+
+  '@dotenvx/dotenvx@2.19.0':
+    dependencies:
+      '@dotenvx/primitives': 2.1.1
+      '@dotenvx/tooling': 1.0.3
+      yocto-spinner: 1.2.2
+
+  '@dotenvx/primitives@2.1.1': {}
+
+  '@dotenvx/tooling@1.0.3': {}
 
   '@effect/language-service@0.86.6': {}
 
@@ -5187,5 +5221,11 @@ snapshots:
   ws@8.21.1: {}
 
   yaml@2.9.0: {}
+
+  yocto-spinner@1.2.2:
+    dependencies:
+      yoctocolors: 2.2.0
+
+  yoctocolors@2.2.0: {}
 
   zwitch@2.0.4: {}
