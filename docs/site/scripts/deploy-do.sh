@@ -8,9 +8,16 @@
 # :latest on the next `doctl apps update` (or auto-deploy if enabled on the app).
 set -euo pipefail
 
-# `pnpm run deploy:do -- <registry>` forwards a literal `--` through dotenvx; skip it.
-if [ "${1:-}" = "--" ]; then shift; fi
+# `pnpm run deploy:do -- <registry>` can forward a literal `--` through dotenvx; skip all of them.
+while [ "${1:-}" = "--" ]; do shift; done
 REGISTRY="${1:?usage: deploy-do.sh <docr-registry-name>}"
+case "${REGISTRY}" in
+  "" | -* | *[!a-zA-Z0-9._-]*)
+    echo "refusing to deploy: invalid DOCR registry name (got: ${REGISTRY:-<empty>})" >&2
+    echo "  tip: pnpm run deploy:do -- <registry>   e.g. hyperlink-docs" >&2
+    exit 1
+    ;;
+esac
 : "${DOCS_SITE_ORIGIN:?set DOCS_SITE_ORIGIN so sitemap/llms links go absolute}"
 
 # Guard against baking dotenvx ciphertext (or any non-URL) into canonical/og tags.
