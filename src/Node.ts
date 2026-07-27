@@ -14,6 +14,7 @@
  * - {@link httpServer} / {@link wsServer} / {@link ipcServer} — low-level transport escape hatches
  * - {@link connect} / {@link connectHttp} / {@link connectSocket} / {@link connectIpc} — dial
  * - {@link clients} — bundle clients for a catalog node's `ROut`
+ * - {@link assume} — launcher ownership ack (`{ token }`) on a running node
  *
  * @module Node
  */
@@ -78,6 +79,17 @@ export {
   connectSocket,
   connectIpc,
 } from "./internal/node"
+export {
+  AssumeTokenMismatch,
+  AssumeTokenReused,
+  AssumeNotReady,
+} from "./internal/nodeAssume"
+export type { NodeOwnership as Ownership } from "./internal/nodeAssume"
+export {
+  assume,
+  assumeTokenConfig,
+  ASSUME_TOKEN_ENV as assumeTokenEnv,
+} from "./internal/nodeAssumeClient"
 
 import { Layer } from "effect"
 import { unix } from "./internal/nodeUnix"

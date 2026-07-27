@@ -1,6 +1,6 @@
 # Brief — Launcher + node handoff (new agent)
 
-**Status:** plan-first / design bake — **Track A API locked (#1–21); awaiting owner Eng go.**  
+**Status:** Track A Eng'd — `hyperlink-ts/Launcher` + `Node.assume` on tip; Tracks B/C/D still bake.  
 **Opened:** 2026-07-25 (owner via Agent G).  
 **Audience:** next agent picking up launcher + handoff / migration discussion.
 
@@ -116,23 +116,21 @@ Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.m
 
 **Gone / do not resurrect:** `ProcessManager`, `ProcessGroup`, legacy `effect-pm-group-child`, `Fleet.launch` (spine β).
 
-**Gaps vs locked bake:** no `hyperlink-ts/Launcher`; no `Node.assume`; no poll-until-allReady on the parent (deep verify without `resource` only proves status RPC answers); no detached spawn→ready→assume→exit kit.
+**Gaps vs Track A (closed):** `hyperlink-ts/Launcher` + `Node.assume` + Ready poll + spawn→ready→assume→unref kit are on tip. Remaining product gaps are Tracks B/C/D.
 
-### Track A — Eng go checklist (owner)
+### Track A — Eng'd (2026-07-27)
 
-Track A bake surface is locked (#1–21). **No Eng until owner says go.** Remaining items are Eng detail (not bake blockers):
+Shipped on tip (owner Eng go):
 
-| Area | Locked | Eng may decide without re-bake |
-|------|--------|--------------------------------|
-| Spine / product / modules | #1, #10, #13, #21 | thin CLI later |
-| Phases / names / `Handle` | #6, #11, #15, #16 | internal helpers |
-| Spawn unit / multi / not Group | #12, #14 | entry→`ChildProcess` sugar shape |
-| Ready / allReady / verify | #4, #7, #8 | poll schedule internals |
-| `Node.assume` + token | #9, #18, #20 | token byte length; brand thickness |
-| Errors / timeout | #19 | exact Schema fields on assume errors |
-| Effect everywhere / Node-only Launcher | #17, #21 | `@effect/platform-node` peer wiring |
+- `hyperlink-ts/Launcher` — `spawn` / `Handle.awaitReady` / `Handle.handoff` / `up` / `mintToken`
+- `Node.assume({ token })` + `AssumeTokenMismatch` / `AssumeTokenReused` / `AssumeNotReady`
+- `ListenOptions.assumeToken` / `Node.assumeTokenConfig` (`HYPERLINK_ASSUME_TOKEN`)
+- Status mirror `ownership?: "launcher" | "self"` when assume is armed
+- Tests: `test/node-assume.test.ts`, `test/launcher.test.ts` (+ `.test-d.ts`)
 
-**Owner action:** reply **Eng go** (or name any # to reopen) before implementation starts.
+Eng defaults: 32-byte hex token; Ready poll `100 millis` with per-dial `2 seconds` bound; outer default `"30 seconds"`.
+
+**Next bake:** Track B (Lookup-directed startup), then C (version handoff), D (clients during handoff).
 
 ---
 

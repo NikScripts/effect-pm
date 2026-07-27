@@ -50,7 +50,7 @@ it("every served node auto-serves its node status over http", () =>
 it("node status logs stream reflects the Logs relay when provided", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const impl = buildNodeStatusImpl({ startedAt: 0, resourceCount: 0 });
+      const impl = yield* buildNodeStatusImpl({ startedAt: 0, resourceCount: 0 });
       yield* Effect.logInfo("hello-node"); // captured by Logs.layer's merged logger
       const head = yield* Stream.runHead(
         impl.logs.stream.pipe(Stream.filter((e) => e.message.includes("hello-node"))),

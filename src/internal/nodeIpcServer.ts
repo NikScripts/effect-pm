@@ -7,6 +7,7 @@ import {
   Clock,
   Effect,
   Layer,
+  type Redacted,
 } from "effect"
 import {
   RpcSerialization,
@@ -63,6 +64,11 @@ export interface IpcServerOptions {
    * @internal
    */
   readonly onConflict?: OnConflict;
+  /**
+   * Expected launcher ownership-ack token for {@link Node.assume} on the auto-mounted
+   * node-status Hyperlink.
+   */
+  readonly assumeToken?: string | Redacted.Redacted<string>;
 }
 
 /**
@@ -166,6 +172,10 @@ const ipcServerBase = (options: IpcServerOptions): IpcServed => {
         resourceCount: entries.length,
         readiness,
         ...(inferredNodeKey !== undefined ? { nodeLogKey: inferredNodeKey } : {}),
+        ...(options.assumeToken !== undefined
+          ? { assumeToken: options.assumeToken }
+          : {}),
+        ...(inferredNodeKey !== undefined ? { assumeNodeKey: inferredNodeKey } : {}),
       });
       const nodeTag = nodeEntry.tag;
       // nodeStatus impl Effect is Effect-bounded with open channels — retype before yield*.

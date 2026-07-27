@@ -46,7 +46,7 @@ describe("NodeStatus Subscribable", () => {
 
   it.effect("buildNodeStatusImpl status ref shape matches the contract", () =>
     Effect.gen(function* () {
-      const impl = buildNodeStatusImpl({ startedAt: 0, resourceCount: 2 });
+      const impl = yield* buildNodeStatusImpl({ startedAt: 0, resourceCount: 2 });
       const snap = yield* impl.status.get;
       expect(snap.resourceCount).toBe(2);
       const head = yield* Stream.runHead(Stream.take(impl.status.changes, 1));

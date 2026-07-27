@@ -21,6 +21,7 @@ export default defineConfig([
       WorkPool: "src/WorkPool.ts",
       Hyperlink: "src/Hyperlink.ts",
       Node: "src/Node.ts",
+      Launcher: "src/Launcher.ts",
       MultiNode: "src/MultiNode.ts",
       HyperlinkConfigure: "src/HyperlinkConfigure.ts",
       Logs: "src/Logs.ts",
