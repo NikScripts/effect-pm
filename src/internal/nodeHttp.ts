@@ -400,6 +400,7 @@ const httpBind = (
       ...(options?.assumeToken !== undefined
         ? { assumeToken: options.assumeToken }
         : {}),
+      ...(options?.onYield !== undefined ? { onYield: options.onYield } : {}),
       advertiseNode,
     }) as never,
   );

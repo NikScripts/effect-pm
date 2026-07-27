@@ -1,6 +1,6 @@
 # Brief — Launcher + node handoff (new agent)
 
-**Status:** Track A Eng'd on tip; **Track B bake open** (Lookup-directed startup). C/D not started.  
+**Status:** Track A + **Track B Eng'd** on tip (custody / membership). C/D bake next.  
 **Opened:** 2026-07-25 (owner via Agent G).  
 **Audience:** next agent picking up launcher + handoff / migration discussion.
 
@@ -101,6 +101,14 @@
     - Barrel / `package.json` `exports` entry for `hyperlink-ts/Launcher` — **not** nested under `Node`.
     - **Node-platform only** (mirror other OS-spawn entrypoints); `Node.assume` / Ready stay on `hyperlink-ts/Node` and remain wire-portable.
     - Eng may choose exact packaging nuance (e.g. peer `@effect/platform-node`) without reopening the subpath decision.
+22. **Track B = membership plane (Lookup), not a second launcher.** Three planes:
+    - **Custody** — Launcher (Track A): spawn → Ready → `Node.assume` → exit.
+    - **Membership** — Lookup (Track B): Identity / Directory / Advice after assume.
+    - **Migration** — Track C later; **Clients** — Track D later.
+23. **Directive = membership arbitration, not code-loading.** Child entry chooses capabilities (autonomous Hyperlinks). Lookup decides who wins / where clients dial. **No** blank worker, **no** `Lookup.assign`, **no** assign-before-serve in B.
+24. **Topology day one = local-first IPC Lookup** (`Lookup.layer` / `layerOptions` / `client`). Soft-bake OK for demos; prod pipes explicit Lookup. Cross-network Lookup deferred.
+25. **Launcher rendezvous unchanged** — stable addressed `SpawnSpec.node`; Lookup is child-after-assume (#4). No nameless discovery via Launcher in B.
+26. **Takeover in B = directory row only** — `askIncumbent` + node-status `yield`. Public `ListenOptions.onYield` configures refuse/accept. Drain / state / old shutdown = Track C.
 
 Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.md) remain **reference only** unless re-locked here.
 
@@ -149,81 +157,15 @@ Eng defaults: 32-byte hex token; Ready poll `100 millis` with per-dial `2 second
 
 **Historical opinion only** (`launcher-decisions.md`): spawn → ready → `Advice.advise` → drain old → unregister → clearAdvice. Useful shape to discuss; **not locked**.
 
-### Track B — baking (not locked)
+### Track B — Eng'd (2026-07-27)
 
-Raw forks (superseded by proposed package below unless owner reopens):
+Owner locked #22–26; Eng on tip:
 
-1. Topology — local-first IPC vs cross-network day one  
-2. Blank worker vs autonomous child  
-3. Infer Directory/Advice vs node-facing assignment  
-4. Claim/advertise after serve vs assign-before-serve  
-5. `askIncumbent`/`yield` only vs real handoff in B  
-6. Stable `SpawnSpec.node` vs Launcher discovers nameless via Lookup  
+- Public **`ListenOptions.onYield`** → node-status `yield` (refuse/accept for `askIncumbent`).
+- Recipe + example: custody (`Launcher.up`) then membership (`Lookup.client` + advertise/identity).
+- Guide: [`identity-coordinator.md`](../guides/identity-coordinator.md) planes section.
 
-### Track B — proposed package (safer / unified — **not locked**)
-
-One mental model — **three planes, one story** (no new control brain):
-
-```text
-Custody   →  Launcher (Track A)     spawn → Ready → Node.assume → exit
-Membership→  Lookup (Track B)       Identity / Directory / Advice after assume
-Migration →  Handoff (Track C)      drain / state / old shutdown — later
-Clients   →  Track D                retry / dual-serve — later
-```
-
-**Directive = membership, not code-loading.** Lookup never remote-loads layers into a blank process. The child’s entry already knows what it *can* be (Router / Worker / …). Lookup decides *who wins* and *where clients dial*.
-
-| Fork | Proposed (safer) | Rejected for B |
-|------|------------------|----------------|
-| 1 Topology | **Local-first** `Lookup.layer` / IPC; soft-bake OK for demos; prod pipes explicit `Lookup.client` / `layerOptions` | Cross-network Lookup server day one |
-| 2 Blank | **Autonomous child** (Track A) — ≥1 app Hyperlink in entry | Status-only blank awaiting remote assign |
-| 3 Direction | **Reuse** Identity + Directory + Advice; thin compose helpers only | New `Lookup.assign` / node-facing role stream |
-| 4 Roles | **As today** — `Hyperlink.identity` claim on serve; Directory advertise from listen registry | Assign-before-serve |
-| 5 Takeover | **B = directory row** (`askIncumbent` + `yield`); optional public `onYield` later | Drain / state / shutdown in B |
-| 6 Launcher | **Stable addressed `SpawnSpec.node`**; Lookup is **child-after-assume** (#4 locked) | Launcher discovers nameless via Lookup before Ready |
-
-**Unified child recipe (illustrative — not Eng’d API):**
-
-```ts
-// parent — Track A unchanged
-yield* Launcher.up({
-  node: WorkerNode,           // addressed; Ready/assume dial target
-  process: (token) => ChildProcess.make("node", ["worker.js", token]),
-})
-
-// child worker.js — custody then membership
-const token = … // argv / Config
-const live = Node.unix(WorkerNode, [
-  Hyperlink.serve(Worker, impl),           // capability chosen by entry
-]).pipe(
-  Layer.provide(Lookup.clientOptions({ path: lookupSock })), // membership brain
-)
-// listen auto-advertises; identity Tags claim; assumeToken for Launcher handoff
-NodeRuntime.runMain(
-  Layer.launch(
-    live.pipe(/* assumeToken on listen options */),
-  ).pipe(Effect.provide(NodeServices.layer)),
-)
-```
-
-**What “Lookup directs startup” means under this package:**
-
-- Exclusive brain: `Hyperlink.identity` → claim; loser becomes client of winner (already shipped).  
-- Hands: Directory advertise; coordinator may `Lookup.prefer(Worker, nodeKey)` (already shipped).  
-- Clients: `Hyperlink.lookupClient` (Identity → Directory → Advice).  
-- Same `nodeKey` replace: `askIncumbent` / `yield` (row only).  
-- Launcher does **not** become a Lookup client; it stays custody-only.
-
-**Optional Eng sugar later (still not new brain):** `Lookup.join` / docs recipe that is just `Layer.provide(lookup)` + listen — no assign protocol.
-
-**Deferred (cleaner than doing them in B):**
-
-- Blank worker + assignment protocol (new noun, Ready semantics, hot-mount serves).  
-- HTTP/WS Lookup.  
-- Nameless Launcher discovery.  
-- Real migration (Track C).
-
-**Owner action:** lock this package (or name deltas) before any Track B Eng.
+**Still deferred:** blank worker / assign protocol; HTTP/WS Lookup; nameless Launcher discovery; Track C migration; Track D clients.
 
 ---
 

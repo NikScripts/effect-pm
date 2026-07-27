@@ -70,6 +70,10 @@ export interface HttpServerOptions {
    * node-status Hyperlink.
    */
   readonly assumeToken?: string | Redacted.Redacted<string>;
+  /**
+   * Cooperative `askIncumbent` handler — node-status `yield` (`true` = accept replace).
+   */
+  readonly onYield?: Effect.Effect<boolean>;
 }
 
 /** A server RPC-protocol builder — {@link Hyperlink.serverProtocolHttp} or {@link Hyperlink.serverProtocolWebsocket}. */
@@ -160,6 +164,7 @@ const httpServerBase = (
           ? { assumeToken: options.assumeToken }
           : {}),
         ...(inferredNodeKey !== undefined ? { assumeNodeKey: inferredNodeKey } : {}),
+        ...(options?.onYield !== undefined ? { onYield: options.onYield } : {}),
       });
       const nodeTag = nodeEntry.tag;
       // nodeStatus impl Effect is Effect-bounded with open channels — retype before yield*.

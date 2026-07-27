@@ -74,6 +74,7 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | [`forms/hyperlink/node-prototype.ts`](./forms/hyperlink/node-prototype.ts) | `Node.Prototype.make` + `.listen(serves)` |
 | [`forms/hyperlink/node-lookup.ts`](./forms/hyperlink/node-lookup.ts) | **(7)** `Node.asLookup` + `Lookup.layerNode` / `client` |
 | [`forms/hyperlink/node-identity-coordinator.ts`](./forms/hyperlink/node-identity-coordinator.ts) | **One brain, many hands** — identity Router + Advice + N Workers ([guide](../docs/guides/identity-coordinator.md)) |
+| [`forms/hyperlink/launcher-lookup-membership.ts`](./forms/hyperlink/launcher-lookup-membership.ts) | **Custody → membership** — `Launcher.up` then Lookup Directory advertise (`onYield` / assume) |
 | [`forms/hyperlink/node-verify-connection.ts`](./forms/hyperlink/node-verify-connection.ts) | `Hyperlink.verifyConnection` tier-1 + `{ deep: true, resource }` |
 | [`forms/hyperlink/shardmap-sessions.ts`](./forms/hyperlink/shardmap-sessions.ts) | `ShardMap` routed ops across distributed nodes |
 

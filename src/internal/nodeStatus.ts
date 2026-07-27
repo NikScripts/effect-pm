@@ -280,6 +280,7 @@ export const nodeStatusServeEntry = (options: {
   readonly nodeLogKey?: string;
   readonly assumeToken?: string | Redacted.Redacted<string>;
   readonly assumeNodeKey?: string;
+  readonly onYield?: Effect.Effect<boolean>;
 }): {
   readonly tag: typeof NodeStatusTag;
   readonly impl: ReturnType<typeof buildNodeStatusImpl>;

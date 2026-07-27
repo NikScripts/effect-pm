@@ -76,7 +76,25 @@ Hyperlink.lookupClient(Worker, { pick: "first" })
 2. Give the Tag a dialable endpoint — `Node.unix` / `http` / `ws` listen (ListenNode) or
    `Hyperlink.nodes([SomeNode])` / Tag-bound `{ path }` Node.
 
+## Custody vs membership (Launcher + Lookup)
+
+Bring-up has two planes — do not collapse them:
+
+```text
+Custody    Launcher.up / Node.assume   OS process Ready → self-owned
+Membership Lookup Identity/Directory/Advice   who wins / where clients dial
+```
+
+- **Launcher** stays custody-only (stable addressed node; exits after assume).
+- **Child** pipes `Lookup.client` / `layerOptions` on listen — advertise + identity claim.
+- Directory-row replace: `onConflict: "askIncumbent"` + optional `ListenOptions.onYield`
+  (`false` refuses). Drain / state / old shutdown are a later handoff track — not Lookup.
+
+Runnable: [`examples/forms/hyperlink/launcher-lookup-membership.ts`](../../examples/forms/hyperlink/launcher-lookup-membership.ts).
+
 ## What not to build
 
 - Do **not** invent `Hyperlink.Manager` — identity + directory + advice is the pattern.
 - Do **not** put Lookup bootstrap inside protocol listen options — pipe `Layer.provide`.
+- Do **not** blank-worker / remote-assign layers from Lookup — entry chooses capabilities;
+  Lookup arbitrates membership.
