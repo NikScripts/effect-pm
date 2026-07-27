@@ -91,7 +91,6 @@ Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.m
 
 - Failure / timeout: reuse `ServiceNotReady` / `NodeUnreachable` / … + bounded poll (exact tagged errors for “ready timed out”).
 - `Node.assume` wire shape (new RPC; status may mirror).
-- Custody handle type name (`Launcher.Handle` / …).
 
 ---
 
