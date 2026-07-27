@@ -5,10 +5,11 @@
  * thing the dashboard renders: a nested group, a queue, a scheduled daemon (the WNBA live-score
  * poller), and an API-usage tap (`ScoresApi`). Every resource is **nodeed remotely** across three
  * nodes (served by `server.ts`); the browser reaches each via `Hyperlink.http` (vite proxies
- * `/rpc` / `/live` / `/stats`), which is what lights up the top-right **node die**. `ScoresApi` is an
- * `ApiMetrics` resource served on `WnbaNode` via `ApiMetrics.serve`. `ScoresDb` is a dependency
- * resource the box-score queue's readiness depends on (`readinessOf`) — when its (simulated)
- * connection blips, the queue cascades to degraded, dogfooding dependency-aware readiness.
+ * `/rpc` / `/live` / `/stats`), which is what lights up the top-right **node die**. `ScoresApi` is a
+ * nest-shaped API metrics fixture (`Gate.httpApiClientKind` + `metrics` nest) served on
+ * `WnbaNode`. `ScoresDb` is a dependency resource the box-score queue's readiness depends on
+ * (`readinessOf`) — when its (simulated) connection blips, the queue cascades to degraded,
+ * dogfooding dependency-aware readiness.
  */
 import { Effect, Layer, Schema } from "effect";
 import { Atom } from "effect/unstable/reactivity";
@@ -16,7 +17,6 @@ import * as Hyperlink from "../../src/Hyperlink";
 import * as WorkPool from "../../src/WorkPool";
 import * as Daemon from "../../src/Daemon";
 import * as Group from "../../src/Group";
-import * as ApiMetrics from "../../src/ApiMetrics";
 import * as FleetHealth from "../../src/FleetHealth";
 import * as Telemetry from "../../src/Telemetry";
 import * as ShardMap from "../../src/ShardMap";
@@ -133,9 +133,12 @@ export class ImportJobs extends WorkPool.priority<ImportJobs>()("wnba/ImportJobs
   namedLanes: { hot: 0, warm: 1, cold: 2 },
   node: StatsNode,
 }) {}
-export class ScoresApi extends ApiMetrics.Tag<ScoresApi>()("@wnba/ScoresApi", {
-  node: WnbaNode,
-}) {}
+/** Observe-only fixture: same `metrics` nest as {@link Gate.HttpApiClient} (no outbound client). */
+export class ScoresApi extends Hyperlink.Tag<ScoresApi>()(
+  "@wnba/ScoresApi",
+  { metrics: Gate.httpApiMetricsNestSpec },
+  { kind: Gate.httpApiClientKind, node: WnbaNode },
+) {}
 
 /** WNBA league group — a nested group the dashboard drills into. */
 export class Wnba extends Group.Tag<Wnba>("hub/Wnba")({

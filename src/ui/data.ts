@@ -30,9 +30,13 @@ import {
 import { kind as fleetHealthKind, type FleetStatus, type NodeReport } from "../FleetHealth";
 import { kind as telemetryKind, MetricsSnapshot, type MetricDatum } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";
-import { kind as gateKind, type Handle as GateHandle, type Status as GateStatus } from "../Gate";
+import {
+  httpApiClientKind as apiKind,
+  kind as gateKind,
+  type Handle as GateHandle,
+  type Status as GateStatus,
+} from "../Gate";
 import { kind as daemonKind, daemonScheduleEntry, daemonStatus } from "../Daemon";
-import { kind as apiKind } from "../ApiMetrics";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../ApiUsageSchema";
 import { FRESH_MS, readCache, writeCache } from "./cache";
 import { now } from "./now";
@@ -115,9 +119,12 @@ interface DaemonService {
   };
 }
 /** The structural shape of an API-metrics resource's live service (read-only). */
+/** HttpApiClient (and dashboard fixtures) expose usage under the `metrics` nest. */
 interface ApiService {
-  readonly metrics: Stream.Stream<ApiUsageMetrics>;
-  readonly usage: Subscribable<ApiUsageSnapshot>;
+  readonly metrics: {
+    readonly usage: Subscribable<ApiUsageSnapshot>;
+    readonly windows: Stream.Stream<ApiUsageMetrics>;
+  };
 }
 
 /** The structural shape of a `WorkPool.priority` queue's live service — like {@link QueueService}
@@ -790,7 +797,7 @@ export const apiBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: ApiTag<R
   // One metrics stream feeds the latest window + the accumulated chart history (no server backfill
   // for API — there's no history query — so seed from the localStorage cache and accumulate live).
   const metricsHistory = runtime.atom(
-    Stream.unwrap(Effect.map(tag, (a) => a.metrics)).pipe(
+    Stream.unwrap(Effect.map(tag, (a) => a.metrics.windows)).pipe(
       Stream.scan(
         {
           latest: Option.none<ApiUsageMetrics>(),
@@ -804,7 +811,7 @@ export const apiBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: ApiTag<R
     ),
   );
   const bundle: ApiBundle = {
-    status: runtime.atom(Stream.unwrap(Effect.map(tag, (a) => a.usage.changes))),
+    status: runtime.atom(Stream.unwrap(Effect.map(tag, (a) => a.metrics.usage.changes))),
     metrics: Atom.mapResult(metricsHistory, (a) => a.latest),
     history: Atom.mapResult(metricsHistory, (a) => a.history),
   };

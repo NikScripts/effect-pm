@@ -11,7 +11,7 @@ import * as Group from "../Group";
 import { kind as hyperlinkKind } from "../Hyperlink";
 import { kind as queueKind, priorityKind } from "../WorkPool";
 import { kind as daemonKind } from "../Daemon";
-import { kind as apiKind } from "../ApiMetrics";
+import { httpApiClientKind as apiKind } from "../Gate";
 import { kind as fleetHealthKind } from "../FleetHealth";
 import { kind as telemetryKind } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";

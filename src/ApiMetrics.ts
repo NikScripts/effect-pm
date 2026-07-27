@@ -1,34 +1,21 @@
 /**
- * **ApiMetrics** — observability contract for outbound API clients (HttpApi and future transports).
- *
- * Each metrics tag is its own solo {@link Hyperlink.Tag} (wire key = instance key). Link each
- * metrics tag to an outbound client via a shared **`clientId` string** (the
- * {@link Gate.httpApiClientService} Context key).
- *
- * Kind-keyed shared Spec is available on Hyperlink as
- * `Hyperlink.Tag(wireKey, spec)` → `Factory<Self>()(instanceKey)` (see
- * `examples/forms/hyperlink/shared-tag-wire.ts`). ApiMetrics has **not** migrated yet — metrics
- * product shape (handle nest vs sibling tag) is still open.
- *
- * @remarks
- * Browser-safe: import from `hyperlink-ts/ApiMetrics` only in tag files — never the
- * Service class. Declare tags with {@link ApiMetrics.Tag}:
+ * **ApiMetrics** — **deprecated.** Absorbed into {@link Gate.HttpApiClient}'s `metrics` nest
+ * (`usage` + `windows` + limiter fields). Prefer:
  *
  * ```ts
- * export const NwslClientId = "@app/Nwsl" as const;
- *
- * class NwslMetrics extends ApiMetrics.Tag<NwslMetrics>()(NwslClientId) {}
+ * class Client extends Gate.HttpApiClient<Client>()("@app/Client", MyApi, {
+ *   concurrency: 2,
+ *   rateLimit: { limit: 100, window: "1 second" },
+ * }) {
+ *   static readonly layer = Gate.httpApiClientLayer(Client, { baseUrl });
+ * }
+ * const client = yield* Client
+ * yield* client.metrics.usage.get
  * ```
  *
- * Runtime wiring (server):
+ * This module remains exported for one release for brown-field sibling tags; do not start new work here.
  *
- * ```ts
- * Layer.mergeAll(
- *   NwslClient.layer.pipe(Layer.provide(FetchHttpClient.layer)),
- *   ApiMetrics.layer(NwslMetrics),
- * )
- * ```
- *
+ * @deprecated Use {@link Gate.HttpApiClient} + nest metrics.
  * @module ApiMetrics
  */
 import { Context, Duration, Effect, Layer, Scope } from "effect";
