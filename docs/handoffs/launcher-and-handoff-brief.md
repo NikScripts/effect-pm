@@ -91,6 +91,11 @@
     - **New (assume):** `AssumeTokenMismatch` / `AssumeTokenReused` / `AssumeNotReady` — Schema/TaggedError.
     - Poll with Effect `Schedule` + `Duration` from `ready.timeout` (default **`"30 seconds"`** unless Eng finds a better house default).
     - No native `Error`, no message-string matching; tests use `TestClock`.
+20. **Assume token = opaque high-entropy string (Effect mint + Redacted).**
+    - Mint with Effect `Random` (sufficient bytes → hex or base64url) — **no** raw `crypto.randomUUID` / Node crypto in app code.
+    - Wire: `Schema.String` (optional brand `Launcher.Token` if it stays thin).
+    - Hold and log as **`Redacted`** — never cleartext in logs.
+    - Reject UUID-as-the-story if it implies non-Effect globals; brand OK as sugar over the same mint.
 
 Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.md) remain **reference only** unless re-locked here.
 
@@ -110,8 +115,8 @@ Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.m
 
 ### Track A — baking (not locked)
 
-- Token entropy / format (Effect `Random` / UUID — opaque string, redacted in logs).
-- Whether `Launcher` lives under `hyperlink-ts/Launcher` with Node-only export (like other platform entrypoints).
+- Package export: `hyperlink-ts/Launcher` Node-only (mirror other platform entrypoints) — confirm.
+- Track A bake complete enough for owner “API locked → Eng” go? (checklist vs #1–20).
 
 ---
 
