@@ -1,6 +1,6 @@
 # Plan: fleet rate limiting (Gates + HttpApiClient)
 
-**Status:** Eng in progress — **R1 + R2 + R3 + R3b + R4 Eng’d** (incl. opt-in adaptive 429).  
+**Status:** **Eng’d + tip-synced** — R1–R4 (incl. opt-in adaptive 429). Optional R5 only.  
 **Agent:** 4 (`cursor/hyperservice-open-deps-5679`).  
 **Depends on:** Effect `4.0.0-beta.98` `effect/unstable/persistence/RateLimiter`; WorkPool `rateLimit` precedent; optional peer `ioredis` + `@effect/platform-node` `NodeRedis`.  
 **Product context:** HttpApiClient Gate = local routes + wire observe/limit nest; ApiMetrics absorbed (not a migrate track). Fleet rate limiting is the substrate that nest uses.
