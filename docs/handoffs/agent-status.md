@@ -30,7 +30,7 @@
 ### Active (owner approval required)
 1. **Agent 4:** W1–W3 + `default`/`defaults` + **R1–R4+adaptive tip-synced** ([`../plans/fleet-rate-limiting.md`](../plans/fleet-rate-limiting.md)). Fleet plan closed except optional R5. Next bake candidates: live `cell` ([`../plans/service-shapes.md`](../plans/service-shapes.md)) or park. Incident: [`agent-04-w3-incident-2026-07-27.md`](./agent-04-w3-incident-2026-07-27.md).
 2. **Agent G / TUI:** Dashboard Group parity + client-adapters design (`cursor/tui-dashboard-parity-125f`).
-3. **This agent (Launcher):** spine **α** locked (dumb spawn-and-exit). Baking Track **A** API with owner before any Eng. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
+3. **This agent (Launcher):** product 1 + custody handle/`up` locked. Baking assume wire + timeouts before Eng. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
 4. **Docs site:** tip-synced. Live: SEO chrome (not landing UI), process-cached API JSON, CF edge HIT, processSlot Shiki latch. **Landing UI reverted** to Coming soon / Preview — no landing chrome changes without owner OK. 1Password CLI backup deferred.
 
 ### Frozen / dead (do not assign)
