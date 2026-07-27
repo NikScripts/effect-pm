@@ -150,7 +150,19 @@ const toReact = (n: any): React.ReactNode => {
     case "soft_break": case "softbreak": return " ";
     case "hard_break": case "hardbreak": return h("br", { key: keySeq++ });
     case "verbatim": return h("code", { key: keySeq++ }, n.text);
-    case "strong": return h("strong", { key: keySeq++ }, kids(n));
+    case "strong": {
+      // Djot encodes `**text**` as strong→strong→text (`*` is one strong). Collapse the
+      // wrappers so SSR emits a single <strong> (nested strong is valid but noisy).
+      let node = n;
+      while (
+        Array.isArray(node.children) &&
+        node.children.length === 1 &&
+        node.children[0]?.tag === "strong"
+      ) {
+        node = node.children[0];
+      }
+      return h("strong", { key: keySeq++ }, kids(node));
+    }
     case "emph": return h("em", { key: keySeq++ }, kids(n));
     case "link": {
       suppress++;
@@ -161,7 +173,27 @@ const toReact = (n: any): React.ReactNode => {
     case "bullet_list": return h("ul", { key: keySeq++ }, kids(n));
     case "ordered_list": return h("ol", { key: keySeq++ }, kids(n));
     case "list_item": return h("li", { key: keySeq++ }, kids(n));
-    case "table": return h("table", { key: keySeq++ }, kids(n));
+    case "table": {
+      // Browsers insert an implicit <tbody> around bare <tr>s when parsing SSR HTML. React's
+      // client tree still expects the bare rows → hydration #418 on every guide page with a
+      // pipe table. Emit thead/tbody explicitly; skip Djot's always-present empty caption.
+      const children: ReadonlyArray<any> = n.children ?? [];
+      const caption = children.find((c) => c.tag === "caption");
+      const rows = children.filter((c) => c.tag === "row");
+      const headRows = rows.filter((c) => c.head === true);
+      const bodyRows = rows.filter((c) => c.head !== true);
+      const out: Array<React.ReactNode> = [];
+      if (caption !== undefined && plainText(caption).trim() !== "") {
+        out.push(h("caption", { key: keySeq++ }, kids(caption)));
+      }
+      if (headRows.length > 0) {
+        out.push(h("thead", { key: keySeq++ }, headRows.map(toReact)));
+      }
+      if (bodyRows.length > 0) {
+        out.push(h("tbody", { key: keySeq++ }, bodyRows.map(toReact)));
+      }
+      return h("table", { key: keySeq++ }, out);
+    }
     case "caption": return h("caption", { key: keySeq++ }, kids(n));
     case "row": return h("tr", { key: keySeq++ }, kids(n));
     case "cell": {
