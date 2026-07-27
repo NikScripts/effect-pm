@@ -4,7 +4,7 @@
 **Agent:** 4 (`cursor/hyperservice-open-deps-5679`).  
 **Prior art:** [`service-shape-redesign.md`](../handoffs/archive/2026-07/features/service-shape-redesign.md) (2026-07-01/02), [`client-adapters-design.md`](../handoffs/client-adapters-design.md).  
 **Orthogonal:** wire RpcGroup identity — [`wire-groups-and-identity.md`](./wire-groups-and-identity.md) (W1–W3 Eng’d; do not conflate with handle taxonomy).  
-**Paused here:** Creating polish + `Hyperlink.handle` adornments / rename — owner returns after shared-Tag W3.
+**Paused Eng:** `default` / `defaults` adornments (named **LOCKED** 2026-07-27; not coded). Creating polish after Eng.
 
 Goal: support the **widest useful variety** of service shapes without silent local↔remote divergence, and without turning the Spec into every host-language return type (Promise, sync fn, …).
 
@@ -161,16 +161,37 @@ ref (Eng’d)
 ## Eng’d (2026-07-26)
 
 - `Tag<Self, I>()` + overload arity; `value(Schema)` (materialize, fallible OK); `Hyperlink.promise`; `Hyperlink.pure`.
-- Bare-in-Spec / `Hyperlink.handle` adornments / Prototype minting — **not** locked here; wire identity is [`wire-groups-and-identity.md`](./wire-groups-and-identity.md).
+- Wire identity W1–W3 Eng’d (orthogonal) — [`wire-groups-and-identity.md`](./wire-groups-and-identity.md).
+
+## LOCKED — `default` / `defaults` (2026-07-27 bake)
+
+Placeholder name was `Hyperlink.handle`. **Rejected** as the public noun.
+
+| API | Shape | Role |
+|-----|--------|------|
+| **`Hyperlink.default(…)`** | Spec leaf (singular) | One default field **in the contract** |
+| **`Hyperlink.defaults({…})`** | Piped bag (plural) | Add **multiple** defaults: `Tag(…).pipe(Hyperlink.defaults({…}))` |
+
+Design substance (Jul 26 chat — not Eng’d yet):
+
+- Spec stays branded builders; `defaults` bag merges onto the service (local + client).
+- Overrides via Effect / `Layer.updateService` (not `client(Tag, { handle })`).
+- `layer(Tag, ImplOf<Spec> & Partial<Defaults>)` — wire required; default keys optional.
+- Construction-time adorn OK; post-construction adorn → **new** named Context key.
+- Hard lean: also a Prototype pipe feature (`Prototype({spec}).pipe(defaults({…}))` then mint).
+- Name bikeshed discarded: `handle` / `with` / `adorn` / `features` / `aspect` / `stock`.
+
+**Still open before Eng:** what `default` accepts (literals only vs fns/`Effect` too); fate of shipped `Hyperlink.pure`; deep-merge / same-key loudness details; Prototype-only vs Tag.pipe first slice.
 
 ## Open decisions (owner)
 
 1. ~~Rename `constant` → `value`~~ **done**.
-2. Tag-baked `constant(literal)` vs bare / handle bag — later or never?
+2. ~~Tag-baked / handle bag naming~~ **done** — `default` (Spec) / `defaults` (pipe).
 3. Live plain cell (`cell`): Eng, park, or reject in favor of `ref`?
 4. ~~Fallible materialize~~ **done** (`value` + `E`).
 5. ~~Promise adapter~~ **done** (`Hyperlink.promise`).
-6. Getting-started polish — pause until wire W1 and names follow.
+6. Getting-started polish — after `default`/`defaults` Eng + names settle.
+7. **`default` payload + `pure` fate** — baking now.
 
 ---
 
@@ -178,7 +199,7 @@ ref (Eng’d)
 
 | Slice | Scope |
 |-------|--------|
-| **S2** | Tag-baked plain / handle composition (if locked) — after wire W1 |
+| **S2** | Eng `default` / `defaults` (+ `pure` migrate or keep) |
 | **S3** | Docs: Creating / Core Concepts taxonomy |
 | **S5** | Live plain `cell` (only if decision 3 = Eng) |
 | **S6** | Upload / sink (transport-gated) |

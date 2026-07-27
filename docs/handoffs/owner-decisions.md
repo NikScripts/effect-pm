@@ -356,6 +356,14 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Paused next:** ApiMetrics/Gate product shape; `.handle` adornments rename ([`service-shapes.md`](../plans/service-shapes.md)).
 - **Supervisor impact:** Agent 4 on `cursor/hyperservice-open-deps-5679` only — wait for owner before metrics / handle / `integration`.
 
+## 2026-07-27 — Service shapes: `default` / `defaults` names LOCKED
+
+- **Owner said (bake):** `default` = single fields in contracts; `defaults` = piped bag to add multiple. (Batteries/Effect-defaults vibe; reject `handle` as the noun.)
+- **Chose / LOCKED:** `Hyperlink.default(…)` Spec leaf; `Hyperlink.defaults({…})` pipe adornment. Prior Jul 26 design (Spec builders-only, bag merge, Effect overrides, new key after construction, Prototype lean) still holds; only the public names change from placeholder `handle`.
+- **Rejected:** Public `Hyperlink.handle` for this API.
+- **Still open:** `default` payload shape vs shipped `pure`; Eng slice order; Prototype mint.
+- **Supervisor impact:** Record in [`service-shapes.md`](../plans/service-shapes.md); Eng only after remaining bake locks.
+
 ---
 
 ## 2026-07-14 — Phase 2 execute (P1–P4) + roadmap locks
