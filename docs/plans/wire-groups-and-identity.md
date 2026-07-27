@@ -111,7 +111,7 @@ Spec-hash stays **`contractHash` / verify**, not the RpcGroup name.
 | **W4** | Prototype story (compose Spec + features) — later | open |
 | **W5** | Optional WorkPool/Daemon control vs data-plane split | open |
 
-**Paused / next (not this slice):** ApiMetrics migration; Gate handle + reserved features nest; rename {@link Hyperlink.handle} adornments ([`service-shapes.md`](./service-shapes.md)).
+**Paused / next (not this slice):** ApiMetrics migration; Gate reserved features nest. Tag-baked adornments Eng’d as `default` / `defaults` ([`service-shapes.md`](./service-shapes.md)).
 
 ---
 

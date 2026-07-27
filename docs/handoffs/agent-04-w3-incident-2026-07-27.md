@@ -63,7 +63,7 @@ Owner and Agent 4 walked alternatives. Current leanings (unlocked unless noted):
 | ApiMetrics vs Gate | Metrics collection already in Gate instrumentation + registry; separate ApiMetrics tag may be wrong long-term |
 | Handle model | Prefer **one Tag handle** = real API (`effect` / nested groups) + **one reserved nest** for extras (e.g. usage/metrics) — like WorkPool nested `metrics` |
 | `httpApiClientService` | Export/engine name, **not** owner-picked product name |
-| Service shapes (Agent 4) | Eng’d: `Tag` arity, `value`, `promise`, `pure`. **Paused:** bare-in-Spec / `Hyperlink.handle` adornments, Creating polish |
+| Service shapes (Agent 4) | Eng’d: `Tag` arity, `value`, `promise`, `default` / `defaults` (`pure` retired). Creating polish shipped with that slice |
 | ClientId linking | Still open if metrics stay a sibling tag; largely moot if metrics nest under the API handle |
 
 ---
@@ -72,14 +72,15 @@ Owner and Agent 4 walked alternatives. Current leanings (unlocked unless noted):
 
 Owner later ordered: skip metrics; Eng the shared Spec mint as
 `Hyperlink.Tag(wireKey, spec)` → `Factory<Self>()(instanceKey)`; demo + tests + docs;
-**no** `*Family*` verbs; do not push `integration`. That work is on the Agent 4 work
-branch (see plan W3). ApiMetrics migration and `.handle` rename remain paused.
+**no** `*Family*` verbs. That work landed on the Agent 4 work branch (plan W3), then
+`default` / `defaults` Eng’d (`pure` retired). ApiMetrics migration and Gate reserved nest
+remain paused. Live `cell` still owner-gated.
 
 ## What Agent 4 is doing now
 
 1. Incident documented (this file + owner-decisions + agent-status + plan).
-2. **W3 Eng’d** as Tag overload (not Family) — waiting on owner for metrics / handle / `integration`.
-3. Stay on work branch; **do not touch `integration`** unless owner says so.
+2. **W3 + `default`/`defaults` Eng’d** — sync to `integration` when owner says so.
+3. Next unlock candidates: ApiMetrics migrate, Gate nest, `cell`, Prototype `.pipe(defaults)`.
 
 ---
 
