@@ -22,15 +22,24 @@ import * as SymbolIndex from "@nikscripts/docgen/SymbolIndex";
 import * as TsProgram from "@nikscripts/docgen/TsProgram";
 import * as TypePrinter from "@nikscripts/docgen/TypePrinter";
 import { symbolLocations } from "./api-data.js";
+import { processSlot } from "./processSlot.js";
 import { runServer } from "./runtime.js";
 
 const siteRoot = process.cwd(); // stable in dev and build, unlike import.meta.url (see api-data.ts)
 const repoRoot = nodePath.resolve(siteRoot, "../..");
 const effectPackagesDir = nodePath.join(repoRoot, "repos/effect/packages");
 
-let locationEntries: ReadonlyArray<SymbolIndex.Entry> = [];
-let pathsMap: Record<string, Array<string>> = {};
-let loaded = false;
+type SourceLinksSlot = {
+  locationEntries: ReadonlyArray<SymbolIndex.Entry>;
+  pathsMap: Record<string, Array<string>>;
+  loaded: boolean;
+};
+const slot = (): SourceLinksSlot =>
+  processSlot("sourceLinks", () => ({
+    locationEntries: [],
+    pathsMap: {},
+    loaded: false,
+  }));
 
 const PkgNameS = Schema.Struct({ name: Schema.optional(Schema.String) });
 
@@ -79,14 +88,15 @@ const effectPathsMap = (): Effect.Effect<
 
 /** Load the location index + package path map (idempotent). Await before rendering. */
 export const loadSourceLinks = async (): Promise<void> => {
-  if (loaded) return;
-  locationEntries = await runServer(symbolLocations());
-  pathsMap = await runServer(effectPathsMap());
-  loaded = true;
+  const s = slot();
+  if (s.loaded) return;
+  s.locationEntries = await runServer(symbolLocations());
+  s.pathsMap = await runServer(effectPathsMap());
+  s.loaded = true;
 };
 
 /** The loaded location entries ([] before {@link loadSourceLinks}) — the shared SymbolIndex feed. */
-export const symbolIndexEntries = (): ReadonlyArray<SymbolIndex.Entry> => locationEntries;
+export const symbolIndexEntries = (): ReadonlyArray<SymbolIndex.Entry> => slot().locationEntries;
 
 /**
  * The loaded package→source `paths` map (empty before {@link loadSourceLinks}) — resolves
@@ -94,7 +104,7 @@ export const symbolIndexEntries = (): ReadonlyArray<SymbolIndex.Entry> => locati
  * this in so GUIDE example hovers resolve to documented declarations; version skew between the
  * runtime dep and the repos source is guarded downstream by realign (mismatch = no link).
  */
-export const packageSourcePaths = (): Readonly<Record<string, Array<string>>> => pathsMap;
+export const packageSourcePaths = (): Readonly<Record<string, Array<string>>> => slot().pathsMap;
 
 // The package a repo-relative source file belongs to (its dir, repo-relative; "." = hyperlink-ts).
 // Undefined for files outside the documented trees — no links rather than a wrong program.

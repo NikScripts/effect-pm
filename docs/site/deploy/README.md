@@ -74,6 +74,10 @@ Rule match: `/api/effect*`, `/api/platform-node*`, `/api/sql-sqlite-node*` on
 `hyperlink.cool` / `www`. Edge TTL 1 day with `override_origin` (DO often emits
 `Cache-Control: private`). Purge on every image deploy (`pnpm run deploy:do` / `pnpm run cf:purge`).
 
+**robots.txt:** origin serves `docs/site/public/robots.txt` (Allow + Sitemap). Cloudflare’s
+AI crawl / content-signals feature can replace `/robots.txt` on the proxied hostname — check the
+origin host (`*.ondigitalocean.app`) if the public URL doesn’t match.
+
 Origin also stamps `Cache-Control: public, s-maxage=86400, …` via
 `src/middleware/cacheHeaders.ts` for those paths — documentation of intent; the Cache Rule is
 what actually forces eligibility when DO wraps responses as `private`.
