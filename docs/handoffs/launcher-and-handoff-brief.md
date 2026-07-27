@@ -39,14 +39,19 @@
     - Parent: `Launcher.spawn` → `Launcher.awaitReady` → `Launcher.handoff`; convenience `Launcher.up` = compose of those then exit.
     - Node ownership RPC: **`Node.assume`** (child assumes ownership; launcher may exit).
     - Rejected names: `launch` (reads as long-lived / spine β), `release` (collides with WorkPool.release), `fork` (OS/Effect ambiguity).
+12. **`Group` is not a process / launch cohort.**
+    - Group = **hierarchy of handles** for organization in general (same handle may appear in **many** groups).
+    - You *can* group layers via Group, but that is not exclusive or load-bearing for launch.
+    - Launcher must **not** treat `Group` as “the set of OS processes to spawn” or as SSOT for placement/process topology (Lookup/Node remain that).
+    - CLI path sugar from group paths (if any) is addressing ergonomics only — not ownership of lifecycle.
 
 Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.md) remain **reference only** unless re-locked here.
 
 ### Track A — baking (not locked)
 
-- **Spawn input:** what you pass to `Launcher.spawn` / `up` (Group tree, single `Node.Tag`, entry module + identity, …).
+- **Spawn input:** declaration shape for `Launcher.spawn` / `up` (node identity + entry / how to start) — **not** “pass a Group.”
 - Failure / timeout channels for `awaitReady` and `handoff` (tagged errors; bounded wait).
-- Multi-node `up`: one process vs fan-out spawn of a Group’s nodes.
+- Multi-node bring-up: how to express a list of spawn declarations (array / dedicated fleet decl) without overloading Group.
 
 ---
 
