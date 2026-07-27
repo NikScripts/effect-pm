@@ -6,32 +6,32 @@ unique API. Code the way the downstream repo (e.g. `services-hub`) would actuall
 > **Style:** PascalCase is for classes, types, and namespaces only (tags, hosts, groups).
 > Everything else — layers, schemas, effects — is camelCase. Layer values use a `Layer` suffix.
 
-> **Imports:** everything is on the barrel (`hyperlink-ts`). `QueueHyperlink` is a single
+> **Imports:** everything is on the barrel (`hyperlink-ts`). `WorkPool` is a single
 > unified namespace — the toolkit `Tag` / `layer` / `serve` / `serveRemote` / `configure` plus the
 > engine helpers (`make` / `Service` / `Schema` / `Errors`) — one import.
 >
 > **Browser/dashboard bundles:** for the smallest bundle, import the **light** queue surface from
-> the subpath — `import { queueTag, queueStatus, configure } from "hyperlink-ts/QueueHyperlink"`
+> the subpath — `import { queueTag, queueStatus, configure } from "hyperlink-ts/WorkPool"`
 > — which is **proven engine-free** (≈23kb, zero engine code) and tree-shakes in any bundler. The
-> barrel `QueueHyperlink.Tag` is functionally identical but may include the queue engine code
+> barrel `WorkPool.Tag` is functionally identical but may include the queue engine code
 > depending on your bundler (it's pure-Effect with **no native deps**, so it never *breaks* a build —
 > just larger). Guaranteed barrel-namespace tree-shaking is a tracked follow-up
 > (`docs/plans/18-unbundled-build-treeshaking.md`).
 >
 > **Browser-safe tags — `import * as` from the subpath (proven engine-free):** for any module a
 > browser bundle pulls (your shared tag definitions), import the namespace from the resource's
-> subpath. You get the same `QueueHyperlink.Tag` ergonomics, and it **tree-shakes** — zero engine code:
+> subpath. You get the same `WorkPool.Tag` ergonomics, and it **tree-shakes** — zero engine code:
 >
 > ```ts
-> import * as QueueHyperlink from "hyperlink-ts/QueueHyperlink";
-> import * as Process from "hyperlink-ts/Process";
+> import * as WorkPool from "hyperlink-ts/WorkPool";
+> import * as Daemon from "hyperlink-ts/Daemon";
 >
-> class RosterQueue extends QueueHyperlink.Tag<RosterQueue>()("nwsl/RosterQueue", rosterJob) {}
-> // QueueHyperlink.Tag / Process.Tag bundle with ZERO engine symbols (proven by the tree-shake check).
+> class RosterQueue extends WorkPool.Tag<RosterQueue>()("nwsl/RosterQueue", rosterJob) {}
+> // WorkPool.Tag / Daemon.Tag bundle with ZERO engine symbols (proven by the tree-shake check).
 > ```
 >
-> The **barrel** `import { QueueHyperlink }` is the same API but its namespace is materialized, so
-> `QueueHyperlink.Tag` from the barrel may include engine code (pure-Effect — never *breaks* a build,
+> The **barrel** `import { WorkPool }` is the same API but its namespace is materialized, so
+> `WorkPool.Tag` from the barrel may include engine code (pure-Effect — never *breaks* a build,
 > just larger). Use the barrel on the Node side (where you also call `.layer` / `.make` / `.serve`);
 > use the `import * as … from "<subpath>"` form anywhere a browser bundles. Making the barrel
 > namespace tree-shake too is the remaining follow-up (`docs/plans/18`).
@@ -45,15 +45,15 @@ worker `effect` — lives in the **layer**, not the tag.
 
 ```ts
 import { Effect, Schema } from "effect";
-import { QueueHyperlink } from "hyperlink-ts";
+import { WorkPool } from "hyperlink-ts";
 import { NwslsoccerClient } from "@services/api/nwslsoccer";
 
 const rosterJob = Schema.Struct({ teamId: Schema.String, seasonId: Schema.String });
 
-class RosterQueue extends QueueHyperlink.Tag<RosterQueue>()("nwsl/RosterQueue", rosterJob) {}
+class RosterQueue extends WorkPool.Tag<RosterQueue>()("nwsl/RosterQueue", rosterJob) {}
 
 // the worker effect's requirements (NwslsoccerClient) flow into the layer's R; job is inferred
-const rosterQueueLayer = QueueHyperlink.layer(RosterQueue, {
+const rosterQueueLayer = WorkPool.layer(RosterQueue, {
   effect: (job) =>
     Effect.gen(function* () {
       const client = yield* NwslsoccerClient;
@@ -74,7 +74,7 @@ Merge it with the base layer; the patch folds onto the config at build.
 ```ts
 import { Duration, Layer } from "effect";
 
-const rosterQueueProd = QueueHyperlink.configure(RosterQueue, {
+const rosterQueueProd = WorkPool.configure(RosterQueue, {
   concurrency: 3,
   rateLimit: { window: Duration.seconds(1), limit: 10 },
 });
@@ -117,17 +117,17 @@ const refillOnDrain = Effect.gen(function* () {
 
 ## 5. Define a process (polling)
 
-A base `Process.Tag` is **always-armed** — it **runs immediately** with its layer. Add a schedule at
-definition time with `.pipe(Process.schedule([…]))`; seed it empty (`Process.schedule([])`) to start
+A base `Daemon.Tag` is **always-armed** — it **runs immediately** with its layer. Add a schedule at
+definition time with `.pipe(Daemon.schedule([…]))`; seed it empty (`Daemon.schedule([])`) to start
 disarmed.
 
 ```ts
 import { Duration, Effect } from "effect";
-import { Polling, Process } from "hyperlink-ts";
+import { Polling, Daemon } from "hyperlink-ts";
 
-class SeasonMatches extends Process.Tag<SeasonMatches>()("nwsl/SeasonMatches") {}
+class SeasonMatches extends Daemon.Tag<SeasonMatches>()("nwsl/SeasonMatches") {}
 
-const seasonMatchesLayer = Process.layer(SeasonMatches, {
+const seasonMatchesLayer = Daemon.layer(SeasonMatches, {
   effect: Effect.gen(function* () {
     const client = yield* NwslsoccerClient;
     yield* client.season.getSeasonMatches({ params: { seasonId } });
@@ -139,11 +139,11 @@ const seasonMatchesLayer = Process.layer(SeasonMatches, {
 ## 6. Schedule context from inside a process effect
 
 ```ts
-import { Process } from "hyperlink-ts";
+import { Daemon } from "hyperlink-ts";
 
 const tick = Effect.gen(function* () {
-  const id = yield* Process.currentScheduleId; // Option<string> — which window triggered this run
-  const controls = yield* Process.scheduleControls; // { entries, set, add, clear }
+  const id = yield* Daemon.currentScheduleId; // Option<string> — which window triggered this run
+  const controls = yield* Daemon.scheduleControls; // { entries, set, add, clear }
   yield* doWork;
 });
 ```
@@ -163,11 +163,11 @@ const driveProcess = Effect.gen(function* () {
 });
 ```
 
-A process defined with an inline schedule (`.pipe(Process.schedule([…]))`) additionally exposes a
+A process defined with an inline schedule (`.pipe(Daemon.schedule([…]))`) additionally exposes a
 `schedule` verb group — `schedule.entries` (a reactive `ref`), `schedule.set` / `add` / `clear`:
 
 ```ts
-class Ingest extends Process.Tag<Ingest>()("nwsl/Ingest").pipe(Process.schedule([])) {}
+class Ingest extends Daemon.Tag<Ingest>()("nwsl/Ingest").pipe(Daemon.schedule([])) {}
 
 const armWindows = Effect.gen(function* () {
   const proc = yield* Ingest;
@@ -176,27 +176,27 @@ const armWindows = Effect.gen(function* () {
 });
 ```
 
-## 7b. Process execution store (auto-write on `Process.layer`)
+## 7b. Daemon execution store (auto-write on `Daemon.layer`)
 
-**`Process.layer`** includes a baked-in default in-memory store. Override with an app
+**`Daemon.layer`** includes a baked-in default in-memory store. Override with an app
 **`Store.Service`** when you need durable storage or registered query handles:
 
 ```ts
 import { Duration, Effect, Layer, Schema } from "effect";
-import { Polling, Process } from "hyperlink-ts";
+import { Polling, Daemon } from "hyperlink-ts";
 import * as Store from "hyperlink-ts/Store";
 
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 
-class Prices extends Process.Tag<Prices>()("app/Prices", Price) {}
+class Prices extends Daemon.Tag<Prices>()("app/Prices", Price) {}
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
-  Process.store(Prices),
+  Daemon.store(Prices),
 ) {}
 
 const pricesLayer = Layer.provideMerge(
   AppStore.layerMemory,
-  Process.layer(Prices, {
+  Daemon.layer(Prices, {
     effect: Effect.succeed({ symbol: "AAPL", usd: 42 }),
     polling: Polling.spaced(Duration.seconds(30)),
   }),
@@ -212,20 +212,20 @@ const readRuns = Effect.gen(function* () {
 
 See [process.md](./process.md) and `examples/forms/process-store/process-layer-store-auto-write.ts`.
 
-## 8. A schedule as its own resource (reusable window manager)
+## 8. A schedule as its own hyperlink (reusable window manager)
 
-`Process.Schedule` is a standalone schedule `Hyperlink` — full CRUD (`set` / `add` / `upsert` /
+`Daemon.Schedule` is a standalone schedule `Hyperlink` — full CRUD (`set` / `add` / `upsert` /
 `remove` / `removeMany` / `clear`), lookups (`get` / `has`), and a reactive `entries` ref. Gate any
-number of processes with `Process.schedule(TheSchedule)`.
+number of processes with `Daemon.schedule(TheSchedule)`.
 
 ```ts
 import { Effect, Stream } from "effect";
-import { Process } from "hyperlink-ts";
+import { Daemon } from "hyperlink-ts";
 
-class NwslCron extends Process.Schedule<NwslCron>()("nwsl/Cron") {}
+class NwslCron extends Daemon.Schedule<NwslCron>()("nwsl/Cron") {}
 
-const nwslCronLayer = Process.scheduleLayer(NwslCron, {
-  initial: [Process.at("sdp-tick", startAt)],
+const nwslCronLayer = Daemon.scheduleLayer(NwslCron, {
+  initial: [Daemon.at("sdp-tick", startAt)],
 });
 
 const syncFromDb = Effect.gen(function* () {
@@ -268,7 +268,7 @@ import { Hyperlink } from "hyperlink-ts";
 
 class MiniHost extends Hyperlink.Host<MiniHost>("hosts/mini") {}
 
-class LiveScorePoller extends Process.Tag<LiveScorePoller>()(
+class LiveScorePoller extends Daemon.Tag<LiveScorePoller>()(
   "wnba/LiveScorePoller",
   { host: MiniHost },
 ) {}
@@ -309,7 +309,7 @@ import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 
 const miniLayer = Hyperlink.httpServer([
-  Process.serve(LiveScorePoller, {
+  Daemon.serve(LiveScorePoller, {
     effect: pollLiveScores,
     polling: Polling.spaced(Duration.seconds(5)),
   }),
@@ -322,15 +322,15 @@ NodeRuntime.runMain(Layer.launch(miniLayer));
 
 A host usually runs **several** resources on **one** port. `Hyperlink.httpServer([...serve-layers])` mounts
 them all behind one `/rpc` (+ an auto `/health` + `HostStatus`); each layer is built with a **spec-checked**
-`serve` — `QueueHyperlink.serve` / `Process.serve` (they carry the engine) or
+`serve` — `WorkPool.serve` / `Daemon.serve` (they carry the engine) or
 `Hyperlink.serve(tag, impl)` for a raw resource. It **unions** each layer's requirement (a queue's
 worker `R`, an `ApiMetrics` `Scope`, …) into the layer's `R | HttpServer` — no per-entry cast. Use
 `serveRemote` in place of `serve` for a served-only (gateway) node.
 
 ```ts
 const dropletLayer = Hyperlink.httpServer([
-  QueueHyperlink.serve(RosterImportQueue, { effect: importRoster }),
-  Process.serve(SeasonMatches, { effect: fetchSeason, polling: Polling.spaced(hour) }),
+  WorkPool.serve(RosterImportQueue, { effect: importRoster }),
+  Daemon.serve(SeasonMatches, { effect: fetchSeason, polling: Polling.spaced(hour) }),
   Hyperlink.serve(Database, { status: pingStatus }),
 ]).pipe(Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: 3001 })));
 ```
@@ -355,25 +355,25 @@ const program = Effect.gen(function* () {
 // provided with: Hyperlink.client(LiveScorePoller).pipe(Layer.provide(connectHttp(MiniHost, ...)))
 ```
 
-## 14. CustomQueueHyperlink — N-level queues
+## 14. WorkPool.Service (untyped) — N-level queues
 
-Use when you need more than high/normal/low. Same toolkit pattern as `QueueHyperlink`, but the tag
+Use when you need more than high/normal/low. Same toolkit pattern as `WorkPool`, but the tag
 takes **lane config positionally** and `add` is **`add(item, level?)`**:
 
 ```ts
-import { CustomQueueHyperlink } from "hyperlink-ts";
+import { WorkPool } from "hyperlink-ts";
 import { Schema } from "effect";
 
 const Job = Schema.Struct({ id: Schema.String });
 
-class ImportJobs extends CustomQueueHyperlink.Tag<ImportJobs>()(
+class ImportJobs extends WorkPool.Tag /* untyped .Service */<ImportJobs>()(
   "nwsl/ImportJobs",
   Job,
   5,
   { live: 0, roster: 4 },
 ) {}
 
-const importJobsLayer = CustomQueueHyperlink.layer(ImportJobs, {
+const importJobsLayer = WorkPool.layer /* untyped .Service */(ImportJobs, {
   levelCount: 5,
   namedLevels: { live: 0, roster: 4 },
   takeAlgorithm: "weighted",
@@ -391,18 +391,18 @@ const program = Effect.gen(function* () {
 Contract-only import (tree-shake engine):
 
 ```ts
-import * as CustomQueueHyperlink from "hyperlink-ts/CustomQueueHyperlink";
+import * as WorkPool from "hyperlink-ts/WorkPool";
 ```
 
 See [`docs/HYPERLINK-API.md`](../HYPERLINK-API.md#customqueueresource) and
 [`examples/forms/queue/custom-queue-hyperlink-n-level.ts`](../../examples/forms/queue/custom-queue-hyperlink-n-level.ts).
 
-## 15. HttpApiHyperlink — a concurrency-gated client (compat helper)
+## 15. HttpApiClient — a concurrency-gated client (compat helper)
 
 ```ts
-import { HttpApiHyperlink } from "hyperlink-ts";
+import { HttpApiClient } from "hyperlink-ts";
 
-const nwslClientLayer = HttpApiHyperlink.layerEffect(
+const nwslClientLayer = HttpApiClient.layerEffect(
   NwslsoccerClient,
   buildNwslClient, // your Effect that builds the client
   { concurrency: 8 }, // gate the transport
@@ -482,7 +482,7 @@ Droplet**; **one or two processes** (most likely a live-score poller) are peeled
    "live" in live dashboard.
 4. **Queue throughput** — the three NWSL import queues: render `sizes` (depth) + `completed` +
    `metrics` (windowed throughput/latency) as progress/rate widgets.
-5. **Logs drill-in** — per-resource `logs` stream for debugging a misbehaving poller/queue.
+5. **Logs drill-in** — per-hyperlink `logs` stream for debugging a misbehaving poller/queue.
 6. **Controls** — actuate from the UI: process `start`/`stop`/`run`/`schedule.set`;
    queue `pause`/`resume`/`add`/`clear`. Use `methodMeta` (`destructive`) to gate confirm dialogs.
 

@@ -1,8 +1,9 @@
 # Named WorkPool handle — convergence decisions
 
+> **Naming:** read as WorkPool / Daemon / Gate / Hyperlink / hyperlink-ts (pre-rebrand names purged from this file).
+
 **Status (2026-07-27):** historical bake + **living naming refresh**. Design still governs residuals;
-**M3 shipped on tip** as named hover **`WorkPool<Payload, Success?, Error?, Requirements?>`** (not
-`QueueHandle` / not `QueueResource`). Residual track: [`agent-d-named-handles.md`](./agent-d-named-handles.md).
+**M3 shipped on tip** as named hover **`WorkPool<Payload, Success?, Error?, Requirements?>`** (not `QueueHandle` / not `QueueResource`). Residual track: [`agent-d-named-handles.md`](./agent-d-named-handles.md).
 
 **Originally approved:** 2026-07-13 (owner: "go for best outcome"). Branch at bake: `feat/named-handles`.
 
@@ -16,7 +17,7 @@
 | `Resource` / `ResourceTag` | **`Hyperlink` / `HyperlinkTag`** |
 | `@nikscripts/effect-pm` | **`hyperlink-ts`** |
 
-Prose below uses **current** names. Where a milestone says “define `QueueHandle`”, read **`WorkPool`**.
+Prose below uses **current** names. Where a milestone says “define `WorkPool`”, read **`WorkPool`**.
 
 > Supersedes the additive-only framing in `agent-d-named-handles.md` at bake time; that file is now the
 > living status board. The mechanism is not a queue-local alias — the target is **the spec as single
@@ -207,7 +208,7 @@ Any drift fails the build.
 
 ## Blast radius
 
-- `src/internal/workPool.ts` — `QueueHandleApi` / `WorkPool` reshape (members + params); many
+- `src/internal/workPool.ts` — `QueueHandleApi` / TEMP `QueueHandle` reshape (members + params); many
   internal references (`Context.Service<Id, WorkPool<…>>`, worker build, refill `load`).
 - `src/WorkPool.ts` — `Tag` return type points at the named handle; `layer`/`serve` signatures.
 - Untyped / schema-less `.Service` (`workPoolServiceWithoutSchema`) and `WorkPool.priority` — stay on

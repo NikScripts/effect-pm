@@ -41,11 +41,11 @@ Codified in [`docs/standards/documentation.md`](../standards/documentation.md).
 | `STORAGE.md` | Agent persistence SSOT | standards `storage` + Stores guide | **Keep** until agents no longer cite; add consumer pointer to `/docs/stores` |
 | `guides/history-and-persistence.md` | metrics+logs history narrative | Logs + Stores | **Defer** — pull leftovers after Stores/Logs tip-check |
 | `guides/toolkit-by-example.md` | Pattern catalog | none | **Port next** (`guides/toolkit-by-example.md`) |
-| `guides/process.md` | Process how-to | `guides/processes.md` (placeholder) | **Defer** — replace processes placeholder carefully |
+| `guides/process.md` | Daemon how-to | `guides/processes.md` (placeholder) | **Defer** — replace processes placeholder carefully |
 | `guides/queue-resource.md` | Queue how-to | `guides/queues.md` (strong) | **Shrink** → pointer (live already ahead) |
 | `guides/telemetry.md` | Telemetry | `guides/telemetry.md` | **Shrink** → pointer |
 | `guides/resource-configure.md` | ResourceConfigure | `resources/configuration.md` (DynamicConfig) | **Review** — may be different surface; keep legacy until audited |
-| `guides/per-resource-dependencies.md` | Per-resource deps | standards Resources | **Shrink** → pointer if covered |
+| `guides/per-hyperlink-dependencies.md` | Per-hyperlink deps | standards Resources | **Shrink** → pointer if covered |
 | `guides/service-tags-and-runtime-split.md` | Tags / runtime split | getting-started / contracts | **Defer** |
 | `guides/setup.md` | Setup | install + creating-a-resource | **Shrink** → pointer |
 | `guides/beta-15-to-17.md` | Ancient migration | — | **Archive** |

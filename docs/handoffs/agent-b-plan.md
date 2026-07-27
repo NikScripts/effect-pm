@@ -9,7 +9,7 @@
 
 ## How we got here (owner decisions, this session)
 
-1. **Option 6 stands** — bespoke Vite + React + Waku RSC app that becomes the official `@nikscripts/effect-pm` website. Not Next, not Foldkit, not the `<Dashboard>`.
+1. **Option 6 stands** — bespoke Vite + React + Waku RSC app that becomes the official `hyperlink-ts` website. Not Next, not Foldkit, not the `<Dashboard>`.
 2. **Content is Djot, not Markdown or HTML+Tailwind.** Markdown fails the owner's bar (no real AST, no attribute escape hatch). Djot: clean raw source, a defined AST, and a *sparing* `{…}` attribute syntax used only at rule boundaries.
 3. **Styling is classless.** No utility-class soup in content. Element-selector CSS on `src/web/theme.css` tokens; the only classes are functional metadata Djot emits (`.must/.should/.may`, `.note`).
 4. **Auto HMR on content edits is mandatory**, and **no `node:fs`** — content loads through Vite's module graph. **Effect packages everywhere, including `effect/unstable/*`.**
@@ -98,7 +98,7 @@ docs/site/
 
 ### Slice 3 — Manifest-driven nav + island seam + content contract
 - Nav generated from the derived manifest (chapters), on `_layout` + docs index — adding a `.dj` updates nav with no shell edit.
-- Island seam wired: ` ```queue ` → `islands/QueueWidget.tsx` (`'use client'`) via `HydrationBoundary`. A stub island is acceptable in v1; real `QueueResource` wiring is a stretch goal.
+- Island seam wired: ` ```queue ` → `islands/QueueWidget.tsx` (`'use client'`) via `HydrationBoundary`. A stub island is acceptable in v1; real `WorkPool` wiring is a stretch goal.
 - Write the **content contract** into `content/standards/meta.dj` (see Agent A handoff below).
 - **Verify:** new chapter appears in nav; island hydrates (or stub renders) in SSR + client.
 

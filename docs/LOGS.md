@@ -292,7 +292,7 @@ Server must provide an app `Store.Service` with `Node.logs` (and desired toolkit
 |-----|-----|
 | `Logs.persistLayer` + `hyperlink-ts/store/Log` | **Removed** — `Node.logs` + toolkit `.store` on `Store.Service` |
 | `NodeLogs.*` / `/NodeLogs` | **Removed** — use `Logs.*` / `hyperlink-ts/Logs` |
-| Process-store log facet | private `_logs` shape on toolkit store registrations (hidden from handle types) |
+| Daemon-store log facet | private `_logs` shape on toolkit store registrations (hidden from handle types) |
 | `captureLogs` on engines | **Removed** — `Logs.layer` (baked into Store) + `Logs.withScope(tag)` |
 | `queue.logs` / `proc.logs` on handle | `Hyperlink.logs(tag)` (local Storage / remote node-handle logs) |
 | `HistoryStore` `${tag.key}/logs` | **Removed** — durable logs via registration `_logs` + `Hyperlink.logs` / `Logs.by*` |

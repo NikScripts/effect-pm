@@ -4,7 +4,7 @@ Two opt-in planes share the same `yield* Tag` surface, local or over RPC:
 
 1. **Metrics history** — `HistoryStore` backs `metrics.query` (windowed backfill).
 2. **Logs** — the **`Logs`** platform (`Logs.layer` + `Logs.persistLayer(node)` → `LogStore`) plus
-   per-resource read via **`Hyperlink.logs(tag)`** (local) or **`NodeStatus.logs`** +
+   per-hyperlink read via **`Hyperlink.logs(tag)`** (local) or **`NodeStatus.logs`** +
    **`LogEntry.hasKey`** (remote). See [`docs/LOGS.md`](../../LOGS.md) for the SSOT.
 
 > **Removed (Phase 5):** `captureLogs`, built-in `queue.logs` / `proc.logs` on handles, and
@@ -24,9 +24,9 @@ query.
 ```ts
 import { Layer } from "effect";
 import { HistoryStore } from "hyperlink-ts";
-import { QueueHyperlink } from "hyperlink-ts/QueueHyperlink";
+import { WorkPool } from "hyperlink-ts/WorkPool";
 
-const rosterQueueLayer = QueueHyperlink.layer(RosterQueue, {
+const rosterQueueLayer = WorkPool.layer(RosterQueue, {
   effect,
 }).pipe(Layer.provide(HistoryStore.layerMemory()));
 ```
@@ -50,25 +50,25 @@ yield* queue.metrics.query({ limit: 200 }); // past windows (decoded queueMetric
 
 ## Logs platform (`Logs` + `Hyperlink.logs`)
 
-Runtime-wide capture is **node-scoped**, not per-resource:
+Runtime-wide capture is **node-scoped**, not per-hyperlink:
 
 ```ts
 import * as Logs from "hyperlink-ts/Logs";
 import * as Hyperlink from "hyperlink-ts/Hyperlink";
 import { LogStore } from "hyperlink-ts/store/Log";
-import * as ProcessStorage from "hyperlink-ts/ProcessStorage";
+import * as DaemonStorage from "hyperlink-ts/DaemonStorage";
 
 class Droplet extends Hyperlink.Node<Droplet>("hub/droplet") {}
 
 const logStack = Logs.persistLayer(Droplet).pipe(
-  Layer.provideMerge(Layer.mergeAll(Logs.layer, ProcessStorage.layer)),
+  Layer.provideMerge(Layer.mergeAll(Logs.layer, DaemonStorage.layer)),
   // or: LogStore.layerMemory / LogStore.layer({ filename })
 );
 
-// provide logStack alongside QueueHyperlink.layer / Process.layer / httpServer
+// provide logStack alongside WorkPool.layer / Daemon.layer / httpServer
 ```
 
-Engines stamp **lineage** via `Logs.withScope(tag)` at materialize. Read per-resource:
+Engines stamp **lineage** via `Logs.withScope(tag)` at materialize. Read per-hyperlink:
 
 ```ts
 import * as LogEntry from "hyperlink-ts/LogEntry";
@@ -93,7 +93,7 @@ Authoritative key catalog and wiring: [`docs/LOGS.md`](../../LOGS.md).
 Same logs stack as queues — no `captureLogs` on the process layer:
 
 ```ts
-const procLayer = Process.layer(NwslSync, { effect }).pipe(
+const procLayer = Daemon.layer(NwslSync, { effect }).pipe(
   Layer.provideMerge(logStack),
 );
 
@@ -101,25 +101,25 @@ const { stream, query } = yield* Hyperlink.logs(NwslSync);
 yield* query({ limit: 100 });
 ```
 
-### Execution analytics (`Process.store`)
+### Execution analytics (`Daemon.store`)
 
-**Toolkit layers only** — `Process.layer` / `serve` / `serveRemote` auto-append terminal runs.
-**`Process.make`** does not; use `layer` or manual `store.record`.
+**Toolkit layers only** — `Daemon.layer` / `serve` / `serveRemote` auto-append terminal runs.
+**`Daemon.make`** does not; use `layer` or manual `store.record`.
 
 Override the default in-memory store when you register the tag on an app **`Store.Service`**:
 
 ```ts
 import { Layer } from "effect";
-import { Process } from "hyperlink-ts";
+import { Daemon } from "hyperlink-ts";
 import * as Store from "hyperlink-ts/Store";
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
-  Process.store(NwslSync),
+  Daemon.store(NwslSync),
 ) {}
 
 const procLayer = Layer.provideMerge(
   AppStore.layerMemory,
-  Process.layer(NwslSync, { effect, polling }),
+  Daemon.layer(NwslSync, { effect, polling }),
 );
 
 const store = yield* NwslSync.store;
@@ -131,14 +131,14 @@ const events = yield* store.events({ limit: 50 });
 History is the *observability* plane. The *durability* plane is `DurableQueueStore` — a
 priority-native store so no enqueued work is lost across a restart (**at-least-once** + dedup key).
 Turn it on with `persist` on the layer config + a `DurableQueueStore` backend. The tag's **`payload`**
-schema must be set (config object on `QueueHyperlink.Tag`) so items serialize:
+schema must be set (config object on `WorkPool.Tag`) so items serialize:
 
 ```ts
 import { SQLiteDurableQueueStore } from "hyperlink-ts/storage/sqlite";
 
-class RosterQueue extends QueueHyperlink.Tag<RosterQueue>()("app/Roster", { payload: RosterItem }) {}
+class RosterQueue extends WorkPool.Tag<RosterQueue>()("app/Roster", { payload: RosterItem }) {}
 
-const queueLayer = QueueHyperlink.layer(RosterQueue, {
+const queueLayer = WorkPool.layer(RosterQueue, {
   effect,
   persist: { maxAttempts: 3 },      // or `true` for defaults
 }).pipe(Layer.provide(SQLiteDurableQueueStore.layer({ filename: "queue.db" })));
@@ -164,11 +164,11 @@ import * as NodeStatus from "hyperlink-ts/NodeStatus";
 import * as LogEntry from "hyperlink-ts/LogEntry";
 
 // Host — logs stack + metrics HistoryStore
-Hyperlink.httpServer([QueueHyperlink.serve(RosterQueue, { effect })]).pipe(
+Hyperlink.httpServer([WorkPool.serve(RosterQueue, { effect })]).pipe(
   Layer.provide(HistoryStore.layerMemory()),
   Layer.provide(Logs.layer),
   Layer.provide(Logs.persistLayer(Droplet)),
-  Layer.provide(ProcessStorage.layer),
+  Layer.provide(DaemonStorage.layer),
 );
 
 // Dashboard — metrics on the queue Tag; logs via NodeStatus + lineage
@@ -198,7 +198,7 @@ Example wiring: `src/web/data.ts`, `examples/web-dashboard/queue-server.ts`.
 | Runtime-wide | `Logs.stream` | `Logs.byNode` / `Logs.byHyperlink` | [`docs/LOGS.md`](../../LOGS.md) |
 
 Backends: `HistoryStore.layerMemory` / `SQLiteHistoryStore.layer` for metrics; `LogStore` (memory /
-SQLite via `ProcessStorage` / `layerProcessStore`) for logs.
+SQLite via `DaemonStorage` / `layerDaemonStore`) for logs.
 
 ## Custom use
 

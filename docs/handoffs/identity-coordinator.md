@@ -27,7 +27,7 @@ You never think “Manager” as a special library noun. You think **one brain, 
 
 Same `yield* Router` / `yield* Worker` everywhere. Winner serves; losers dial the winner; workers come and go; Lookup stays the truth.
 
-**One-line pitch:** Identity becomes the exclusive brain (alive, teachable, handoff-capable). Lookup becomes the referee + phone book + placement board. Workers stay many. We never ship a second claim system named `Resource.Manager` — we finish this one until it feels like the dream.
+**One-line pitch:** Identity becomes the exclusive brain (alive, teachable, handoff-capable). Lookup becomes the referee + phone book + placement board. Workers stay many. We never ship a second claim system named `Hyperlink.Manager` — we finish this one until it feels like the dream.
 
 ---
 
@@ -35,7 +35,7 @@ Same `yield* Router` / `yield* Worker` everywhere. Winner serves; losers dial th
 
 | # | Decision | Lock |
 |---|----------|------|
-| **M1** | **Collapse** | No `Resource.Manager` ctor / product surface. Exclusive resources = `Resource.identity` (S1, already Eng’d). |
+| **M1** | **Collapse** | No `Hyperlink.Manager` ctor / product surface. Exclusive resources = `Hyperlink.identity` (S1, already Eng’d). |
 | **M2** | **Dedupe** | Key-only (already S1). No required value-level `manages[]` Tag list. |
 | **M3** | **Pattern** | One brain (identity) + many hands (directory / nameless / `Prototype` / `distributed`). Taught as the fleet recipe. |
 | **M4** | **v1 Eng spine** | **Identity liveness** (dead winner → claim releasable / replaceable) + **coordinator+workers example**. |
@@ -44,7 +44,7 @@ Same `yield* Router` / `yield* Worker` everywhere. Winner serves; losers dial th
 
 **Rejected / deferred:**
 
-- Inventing `Resource.Manager` as a second first-wins system.
+- Inventing `Hyperlink.Manager` as a second first-wins system.
 - Mandatory ctor bag of managed Tags (package-edge / import-type tax).
 - Seamless cross-network elect for Lookup (L1 already: same-machine OS bind; remote = explicit).
 - `contractHash` / default-on verify (loud-failures later track).
@@ -55,7 +55,7 @@ Same `yield* Router` / `yield* Worker` everywhere. Winner serves; losers dial th
 
 | Piece | Status |
 |-------|--------|
-| `Resource.identity` pipe; `layer` / `serve` claim → serve-or-client | **Eng’d** (S1) |
+| `Hyperlink.identity` pipe; `layer` / `serve` claim → serve-or-client | **Eng’d** (S1) |
 | Lookup `Identity.claim` first-wins / `DuplicateIdentity` + original endpoint | **Eng’d** |
 | Directory advertise / `nodesServing` / `livenessReplace` / `askIncumbent` | **Eng’d** |
 | `lookupClient` + D4 `{ pick }` | **Eng’d** |
@@ -108,7 +108,7 @@ Shipped:
 
 ```ts
 yield* Lookup.advise({ resourceKey: Worker.key, prefer: "fleet/Worker#w2" })
-Resource.lookupClient(Worker) // honors advice; pick only if absent/stale
+Hyperlink.lookupClient(Worker) // honors advice; pick only if absent/stale
 ```
 
 ### Slice 4 — Sugar (**M6**, last) — **Eng’d**
@@ -123,12 +123,12 @@ Resource.lookupClient(Worker) // honors advice; pick only if absent/stale
 ## Dream app shape (illustrative)
 
 ```ts
-class Router extends Resource.Tag<Router>()("fleet/Router", {
-  enqueue: Resource.effectFn({ job: Job }, Schema.Void),
-}).pipe(Resource.identity) {}
+class Router extends Hyperlink.Tag<Router>()("fleet/Router", {
+  enqueue: Hyperlink.effectFn({ job: Job }, Schema.Void),
+}).pipe(Hyperlink.identity) {}
 
-class Worker extends Resource.Tag<Worker>()("fleet/Worker", {
-  run: Resource.effectFn({ job: Job }, Schema.Void),
+class Worker extends Hyperlink.Tag<Worker>()("fleet/Worker", {
+  run: Hyperlink.effectFn({ job: Job }, Schema.Void),
 }) {}
 
 // Boot A: Lookup + identity Router (listen + claim)
@@ -156,7 +156,7 @@ class Worker extends Resource.Tag<Worker>()("fleet/Worker", {
 - Kill winner process → next claimant can win the identity key without restarting Lookup by hand.
 - Example runs: one Router, two Workers, enqueue reaches the **advised** worker.
 - `Lookup.prefer` / `advise` + bare `lookupClient` dials prefer when live.
-- Recipe guide + IdentitySelfRequired remediation; no `Resource.Manager`.
+- Recipe guide + IdentitySelfRequired remediation; no `Hyperlink.Manager`.
 - Typecheck + identity / lookup / advice tests green; changesets on tip.
 
 ---

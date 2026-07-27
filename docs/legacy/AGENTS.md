@@ -9,18 +9,18 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 | Path | Purpose |
 |------|---------|
 | `src/index.ts` | Public exports + package-level TSDoc. **Start here for imports.** |
-| `src/Process.ts` | **Process** toolkit **and** engine in one module — `Process.Tag` / `Process.Schedule`, the `schedule` / `result` combinators, `window` / `at` builders, `make` / `layer` / `serve` / `serveRemote`, and the supervisor loop → `hyperlink-ts/Process`. |
-| `src/Polling.ts` | Poll-cadence gate service + preset `Layer`s. (The run-window schedule primitive is internal: `src/internal/processSchedule.ts`, surfaced via the `Process` namespace.) |
-| `src/QueueHyperlink.ts` | Priority queue **engine** (`Tag`/`make`/`layer`/`serve`/`serveRemote`; `persist`/`refill`). |
+| `src/Daemon.ts` | **Daemon** toolkit **and** engine in one module — `Daemon.Tag` / `Daemon.Schedule`, the `schedule` / `result` combinators, `window` / `at` builders, `make` / `layer` / `serve` / `serveRemote`, and the supervisor loop → `hyperlink-ts/Daemon`. |
+| `src/Polling.ts` | Poll-cadence gate service + preset `Layer`s. (The run-window schedule primitive is internal: `src/internal/processSchedule.ts`, surfaced via the `Daemon` namespace.) |
+| `src/WorkPool.ts` | Priority queue **engine** (`Tag`/`make`/`layer`/`serve`/`serveRemote`; `persist`/`refill`). |
 | `src/HyperlinkConfigure.ts` | Layer-composed `.configure` patches for queue/process/run resources. |
 | `src/HistoryStore.ts`, `src/DurableQueueStore.ts` | Observability history + durable queue ports (SQLite backends in `storage/sqlite`). |
 | **Toolkit (location-transparent)** | |
 | `src/Hyperlink.ts` | Foundation — tags (`Tag`/`client`/`serve`/`serveRemote`/`httpServer`/`Host`/`connect`), `specOf`/`methodMeta` introspection. `httpServer([...serve-layers])` = many resources on one port (group behind one `Host`). |
-| `src/CustomQueueHyperlink.ts` | Custom queue **engine** (`make`, `rateLimiterLayer`) — shares `QueueHyperlink` runtime via `buildQueueEngine`. |
+| `src/WorkPool.Service (untyped).ts` | Custom queue **engine** (`make`, `rateLimiterLayer`) — shares `WorkPool` runtime via `buildQueueEngine`. |
 | `src/Group.ts` | `Group.Tag` — organize member tags (nestable; `members`/`isGroup`). |
 | `src/Logs.ts` | Logs platform (`layer`, `stream`, `byNode`, `Hyperlink.logs`) — [`docs/LOGS.md`](../LOGS.md). Durable journals via `Node.logs` / toolkit `.store` on `Store.Service`. |
 | `src/Store.ts` | Shape-first store contracts; `EventJournal`-backed `layerMemory` / `SqlEventJournal` `layer` — see `docs/guides/store-backing.md`. |
-| `src/store/*.ts` | Public storage facets (none currently — `store/Log` removed). Facet substrate (`ProcessStorage` / `RuntimeStorage`) retired. |
+| `src/store/*.ts` | Public storage facets (none currently — `store/Log` removed). Facet substrate (`DaemonStorage` / `RuntimeStorage`) retired. |
 | `src/LogContext.ts`, `src/LogEntry.ts` | Log annotations (`LogAnnotationKeys`) + NDJSON log entries (`LogEntry` / `LogEntrySchema`) — the structured-logging core. |
 | `src/internal/store/*` | Shared Store helpers (e.g. process store specs) — **internal**. |
 | `src/internal/manager/*` | Log capture / relay / query / scope (used by `Logs` + `store/log`) — **internal**. |
@@ -38,13 +38,13 @@ Use this file **together with** [STORAGE.md](./STORAGE.md) (**read before any pe
 
 ## Invariants (do not break casually)
 
-1. **Supervisor semantics** — One fiber per started process; outer loop waits for **armed** schedule; inner loop runs **polling** ticks while armed. See `Process.ts` module doc.
-2. **`Process.effect` typing** — `Process<R>`: `effect` needs the user environment; storage is via
-   the Store bridge (`Process.store(tag)` / `Store.effects`), not the retired `ProcessStorage` layers.
-   Inlined `polling` / `schedule` on `Process.make` are merged into the supervisor so **`R` excludes those services** when present (overload-resolved in `Process.ts`).
+1. **Supervisor semantics** — One fiber per started process; outer loop waits for **armed** schedule; inner loop runs **polling** ticks while armed. See `Daemon.ts` module doc.
+2. **`Daemon.effect` typing** — `Daemon<R>`: `effect` needs the user environment; storage is via
+   the Store bridge (`Daemon.store(tag)` / `Store.effects`), not the retired `DaemonStorage` layers.
+   Inlined `polling` / `schedule` on `Daemon.make` are merged into the supervisor so **`R` excludes those services** when present (overload-resolved in `Daemon.ts`).
 3. **Location transparency** — a `Hyperlink` tag is driven by the same `yield* Tag` code local or remote; only the provided layer differs (`.layer` vs `.client`/`.serve`). Don't special-case local vs remote in Hyperlink consumers.
 4. **Storage** — See [STORAGE.md](./STORAGE.md) and [`docs/LOGS.md`](../LOGS.md). Facet substrate
-   (`RuntimeStorage` / `ProcessStorage`) is retired. Toolkit persistence ports: `HistoryStore` /
+   (`RuntimeStorage` / `DaemonStorage`) is retired. Toolkit persistence ports: `HistoryStore` /
    `DurableQueueStore` (SQLite backends in `storage/sqlite`); logs via `Node.logs` / toolkit store registrations + `Logs`.
 
 ---
@@ -151,7 +151,7 @@ breaking notes into one coherent changeset when possible (see
 | Task | Approach |
 |------|----------|
 | Add a public export | Add the symbol to the module **namespace** object, export the same binding at the module top level (short name), then re-export namespace + short name from `src/index.ts`. Add a `tsup` entry and `package.json` `exports` subpath when the module is a standalone import surface. |
-| Change process semantics | Update `src/Process.ts`, tests in `test/process*.ts`, and the relevant regular docs if behavior is contractual. |
+| Change process semantics | Update `src/Daemon.ts`, tests in `test/process*.ts`, and the relevant regular docs if behavior is contractual. |
 | Add an example | Add a **form** under `examples/forms/<area>/` or a **scenario** under `examples/scenarios/`; document in `examples/README.md`; add `package.json` script if runnable. Put heavy mock / scenario prose in `examples/shared/` when it would drown the entry script. |
 | Verify types (strict Effect rules) | `pnpm run typecheck` (uses `tsgo`). Do **not** turn diagnostics off. `anyUnknownInErrorContext` / `missingLayerContext` / `effectDoNotation` / `serviceNotAsClass` / `flatMapToMap` / `outdatedEffectCodegen` / `unsupportedServiceAccessors` are `"error"` (`serviceNotAsClass` next-line off only at Service/Tag factories). `strictEffectProvide` and `unsafeEffectTypeAssertion` are `"message"` (non-blocking). |
 | Run tests | `pnpm test` |
@@ -172,7 +172,7 @@ breaking notes into one coherent changeset when possible (see
 ## Documentation conventions
 
 - Use **`@public`** / **`@internal`** on exported symbols as appropriate.
-- Prefer **module-level** `@module` / overview blocks for large files (`Process.ts`, `QueueHyperlink.ts`).
+- Prefer **module-level** `@module` / overview blocks for large files (`Daemon.ts`, `WorkPool.ts`).
 - Link cross-doc with **relative** paths from `docs/` or repo root as in README.
 
 ---

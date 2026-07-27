@@ -1,11 +1,13 @@
 # Agent 3 — `Logs.byResource` full scope-tag key
 
+> **Naming:** read as WorkPool / Daemon / Gate / Hyperlink / hyperlink-ts (pre-rebrand names purged from this file).
+
 **Status:** **IN FLIGHT** — Eng on `cursor/logs-byresource-full-key-a009` (owner go 2026-07-14).  
 **Agent:** **3**  
 **Branch from:** **`integration`** tip (after [#57](https://github.com/NikScripts/effect-pm/pull/57) — private `_logs`).  
 **Working branch:** `cursor/logs-byresource-full-key-a009`
 
-**Owner locks (confirmed):** full key / tag; hard-break bag; kill resource-identity `processId`/`queueId` names (keep RPC `groupId`); no legacy storage fallback; classify via `Resource.kindOf`.
+**Owner locks (confirmed):** full key / tag; hard-break bag; kill resource-identity `processId`/`queueId` names (keep RPC `groupId`); no legacy storage fallback; classify via `Hyperlink.kindOf`.
 
 **Docs bus:** [`agent-status.md`](./agent-status.md) · [`owner-decisions.md`](./owner-decisions.md) · [`docs/LOGS.md`](../LOGS.md) · [`docs/guides/logs.md`](../guides/logs.md)
 
@@ -13,8 +15,8 @@
 
 ## Why this job
 
-Product durable/live export already takes a **scope tag** (`Resource.logs(Tag)` → `Tag.key`).  
-`Logs.byResource` still takes a fake Process/Queue bag:
+Product durable/live export already takes a **scope tag** (`Hyperlink.logs(Tag)` → `Tag.key`).  
+`Logs.byResource` still takes a fake Daemon/Queue bag:
 
 ```ts
 Logs.byResource({ processId?: string; queueId?: string }, opts?)
@@ -23,7 +25,7 @@ Logs.byResource({ processId?: string; queueId?: string }, opts?)
 
 Owner lock: **scope identity = full key** (the registration / `Tag.key`, e.g. `wnba/LiveScorePoller`) — pass the **scope tag** (or its `.key`), not `processId` vs `queueId` costumes.
 
-**Related (already shipping / shipped in #57):** the platform journal shape is private `_logs` (Effect-style underscore). Apps may own a shape named `log`. Do **not** document `handle.log` / `handle._logs` as product API. Reads = `Resource.logs` / `Logs.byNode` / `Logs.byResource`.
+**Related (already shipping / shipped in #57):** the platform journal shape is private `_logs` (Effect-style underscore). Apps may own a shape named `log`. Do **not** document `handle.log` / `handle._logs` as product API. Reads = `Hyperlink.logs` / `Logs.byNode` / `Logs.byResource`.
 
 ---
 
@@ -32,7 +34,7 @@ Owner lock: **scope identity = full key** (the registration / `Tag.key`, e.g. `w
 | Decision | Lock |
 |----------|------|
 | Scope identity | **Full key** = scope tag’s `.key` (same string as store registration / lineage segment) |
-| Preferred product export | `Resource.logs(tag)` stays canonical for live + durable |
+| Preferred product export | `Hyperlink.logs(tag)` stays canonical for live + durable |
 | Platform journal name | `_logs` private (#57) — apps free to use shape name `log` |
 | Store-layer `(scopeKey, lineId)` memo | Still **deferred** |
 | Named handles / docs-site | Out of scope (D / lettered) |
@@ -54,7 +56,7 @@ Owner lock: **scope identity = full key** (the registration / `Tag.key`, e.g. `w
 
 ## Plan-first (FIRST REPLY — tell the owner everything, then STOP)
 
-1. Restate: bag vs tag/full-key; how `byResource` relates to `Resource.logs().query` and private `_logs`.  
+1. Restate: bag vs tag/full-key; how `byResource` relates to `Hyperlink.logs().query` and private `_logs`.  
 2. Proposed public signatures + migration of call sites (`docs/LOGS.md`, `docs/guides/logs.md`, `examples/resource-web`, tests).  
 3. CLI/`LogQuery` slice: in or out this PR.  
 4. Tests + changeset (+ `.test-d.ts` for public type).  
@@ -80,7 +82,7 @@ Do **not** implement until unlocked.
 
 ## Out of scope
 
-- Store-layer memo · Agent D handles · `docs/site` · Logs followers redesign · renaming `_logs` again · Process.events further Eng · `layerNoop`
+- Store-layer memo · Agent D handles · `docs/site` · Logs followers redesign · renaming `_logs` again · Daemon.events further Eng · `layerNoop`
 
 ---
 
@@ -100,12 +102,12 @@ Read docs/handoffs/agent-03-byresource-full-key.md.
 You are Agent 3. Prior tracks done (events, lineage, ready-perfection). Do not reopen memo / handles / site.
 
 New job: reshape Logs.byResource so scope identity is a full key / scope tag
-(same as Resource.logs(Tag).key) — drop the processId|queueId bag.
+(same as Hyperlink.logs(Tag).key) — drop the processId|queueId bag.
 
 Owner lock: full key. Platform journal is private `_logs` (#57).
 
 FIRST REPLY — tell the owner everything before any code:
-  1. Restate job + how byResource vs Resource.logs vs `_logs` fit
+  1. Restate job + how byResource vs Hyperlink.logs vs `_logs` fit
   2. Proposed signatures + hard-break vs deprecate
   3. Whether CLI/LogQuery is in this PR
   4. Tests, docs, changeset, risks, out of scope

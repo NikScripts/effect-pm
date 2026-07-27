@@ -4,7 +4,7 @@
 
 ## The gap
 Queue items today are effectively serializable-or-nothing. There are two config variants —
-`QueueHyperlinkConfigWithItemSchema` (has `itemSchema`, persistable + wire-able) and
+`WorkPoolConfigWithItemSchema` (has `itemSchema`, persistable + wire-able) and
 `...WithoutItemSchema` (`itemSchema?: undefined`) — but the "without" path isn't a first-class
 **"items are non-serializable (functions, `Effect`s, class instances) — run local, no persistence"**
 feature. And there are **no tests** for a queue whose item type is non-serializable (only

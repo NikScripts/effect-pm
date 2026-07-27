@@ -1,4 +1,4 @@
-// Browser stub for @effect/platform-node (Node-only platform). Resource.ts reaches it only
+// Browser stub for @effect/platform-node (Node-only platform). Hyperlink.ts reaches it only
 // through DYNAMIC import() on node-transport paths that a browser can never take (the http
 // transport DIES in a browser by design, and demo islands use in-memory resources) — but
 // bundlers chase dynamic imports, so without this stub the client build tries to bundle

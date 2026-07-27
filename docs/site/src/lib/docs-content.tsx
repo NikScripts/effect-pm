@@ -13,7 +13,7 @@ import { chapters, chapterBySlug } from "./content.js";
 import { nav } from "../../../nav.js";
 import { highlightToReact, loadHighlighter } from "./highlight.js";
 import { QueueIsland } from "../islands/QueueIsland.js";
-import { RunHyperlinkIsland } from "../islands/RunHyperlinkIsland.js";
+import { GateIsland } from "../islands/GateIsland.js";
 import { CounterIsland } from "../islands/CounterIsland.js";
 import { PackageInstall } from "../islands/PackageInstall.js";
 import { ListenProtocol } from "../islands/ListenProtocol.js";
@@ -171,7 +171,7 @@ const toReact = (n: any): React.ReactNode => {
     case "code_block":
       // island seam: a ```queue block becomes a live client component (RSC boundary)
       if (n.lang === "queue") return h(QueueIsland, { key: keySeq++ });
-      if (n.lang === "gate" || n.lang === "run-resource") return h(RunHyperlinkIsland, { key: keySeq++ });
+      if (n.lang === "gate" || n.lang === "run-resource") return h(GateIsland, { key: keySeq++ });
       if (n.lang === "hyperlink") return h(CounterIsland, { key: keySeq++ });
       if (n.lang === "install") return h(PackageInstall, { key: keySeq++, packages: n.text });
       // protocol-listen overload family — tabs switch http / ws / unix / nPipe

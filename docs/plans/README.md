@@ -8,7 +8,7 @@ Pre-1.0: breaking changes land as minor bumps.
 
 - **Service / contract shapes** — taxonomy for materialize vs pull vs Tag-baked / adapters. Draft: [service-shapes.md](./service-shapes.md). Eng’d: `Tag`/`value`/`promise`/`default`/`defaults` (`pure` retired); `cell` still owner-gated.
 - **Wire groups & identity** — regular RpcGroup = tag key; shared Spec = `Tag(wireKey, spec)` → `Factory<Self>()(instanceKey)` (kind-keyed wire, ordinary serve/client). W1–W3 Eng’d: [wire-groups-and-identity.md](./wire-groups-and-identity.md).
-- **Guaranteed barrel-namespace tree-shaking** — make `import { QueueHyperlink } from "hyperlink-ts"` + `QueueHyperlink.Tag` tree-shake the engine in *every* bundler (subpath imports already do). Detailed plan: [18-unbundled-build-treeshaking.md](./18-unbundled-build-treeshaking.md).
+- **Guaranteed barrel-namespace tree-shaking** — make `import { WorkPool } from "hyperlink-ts"` + `WorkPool.Tag` tree-shake the engine in *every* bundler (subpath imports already do). Detailed plan: [18-unbundled-build-treeshaking.md](./18-unbundled-build-treeshaking.md).
 - **Fleet health** — **shipped** as [`FleetHealth`](../guides/fleet-health.md) (`hyperlink-ts/FleetHealth`). Per-node readiness + `/health` stay local; the glass folds peers with `Reachable` / `Unreachable` (Effect `Exit` kept). See that guide.
 - **Hyperlink-RPC auth** — a first-class authentication/authorization story for served resources (deployments use an edge gateway / Cloudflare Zero Trust short-term). Spec TBD when scope is locked; stays a roadmap bullet until then.
 
@@ -17,13 +17,13 @@ Pre-1.0: breaking changes land as minor bumps.
 - **Fleet rate limiting (Gates + HttpApiClient)** — Effect `RateLimiter` + shared store across Nodes; Gate substrate before HttpApiClient reshape / ApiMetrics absorb. Proposal: [fleet-rate-limiting.md](./fleet-rate-limiting.md).
 - **Weighted middle scheduling** — diversify the queue's middle priority into many weighted numeric/named groups pulled by a non-starving algorithm (DRR / strict), fixing strict-priority starvation. Design spec: [weighted-middle-scheduling.md](./weighted-middle-scheduling.md).
 - **Non-serializable queue items** — local-only enqueue for function/`Effect` items; wire control + observability stay served. [queue-nonserializable-items.md](./queue-nonserializable-items.md).
-- **Standalone spawns** — `Process.spawn` / `QueueHyperlink.open`: multi-instance ergonomics where spawned handles are plain caller-scoped Effects (alongside `Group`).
+- **Standalone spawns** — `Daemon.spawn` / `WorkPool.open`: multi-instance ergonomics where spawned handles are plain caller-scoped Effects (alongside `Group`).
 - **Runtime identity & singleton runs** — in-process registry + a durable cross-runtime lease to prevent duplicate runs of the same logical process across hosts.
 - **Lifecycle kernel (exploratory)** — typed transitions / eligibility for queues, items, processes, and schedule rows; projection-friendly events (not an external statechart engine).
 
 ## Persistence & storage
 
-- **Storage correctness Soft stack** — **shipped** [#62](https://github.com/NikScripts/effect-pm/pull/62)/[#65](https://github.com/NikScripts/effect-pm/pull/65) (bake+override + CustomQueue Soft parity). Living plan: [storage-correctness.md](./storage-correctness.md). Remaining: fail-loud Soft / Phase C–D / Postgres (owner-gated).
+- **Storage correctness Soft stack** — **shipped** [#62](https://github.com/NikScripts/effect-pm/pull/62)/[#65](https://github.com/NikScripts/effect-pm/pull/65) (bake+override + untyped WorkPool Soft parity). Living plan: [storage-correctness.md](./storage-correctness.md). Remaining: fail-loud Soft / Phase C–D / Postgres (owner-gated).
 - **Postgres backends** for `HistoryStore` and `DurableQueueStore` (same interfaces; today: in-memory + SQLite).
 - **Storage-adapter integration testing** — real-DB integration suites beyond the in-memory conformance tests.
 - **Richer history vocabulary + listener/stream hooks** — for domains that need more than append-only facts, layered *beside* the store (never a process-store monolith).

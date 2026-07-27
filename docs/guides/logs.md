@@ -28,7 +28,7 @@ Your Node (key: billing/scores)
     └── Logs.layer          — one capture Logger + Logs.Relay bus
     └── BillingNode.logs    — match-all durable tail → node journal
     └── Daemon.store(Daily)— lineage durable tail → resource journal
-  Process / Queue layers
+  Daemon / WorkPool layers
     └── Logs.withScope(tag) — appends tag.key onto the fiber lineage path
 ```
 
@@ -171,7 +171,7 @@ journals, lineage filters, and `Hyperlink.logs` all key off that string.
 
 Each log line may carry a **lineage path**: an ordered list of segment keys under
 `LogAnnotationKeys.lineage`. Engines stamp it with `Logs.withScope(tag)` when they materialize work —
-Process and Queue do this for you.
+Daemon and WorkPool do this for you.
 
 `withScope` is **append-only**. Nested scopes combine:
 
@@ -199,7 +199,7 @@ LogEntry.atLeaf(resourceKey)(entry)     // last segment === resourceKey
 Legacy `processId` / `queueId` annotations are gone — writers stamp lineage only via `Logs.withScope`.
 Hyperlink kind is `Hyperlink.kindOf(tag)`, not an annotation field.
 
-## Per-resource export
+## Per-hyperlink export
 
 Prefer `Hyperlink.logs(tag)` for Handle-shaped access — live Stream plus durable query:
 
@@ -263,7 +263,7 @@ class QuietProc extends Daemon.Tag<QuietProc>()("app/Quiet").pipe(
 
 ## Remote clients
 
-When the dashboard (or any client) reaches a Node over RPC, durable per-resource rows come from that
+When the dashboard (or any client) reaches a Node over RPC, durable per-hyperlink rows come from that
 node’s journal — `(yield* MyNode).logs` — filtered by **resource key**. Locally,
 `Hyperlink.logs(tag).query` prefers registration Storage and falls back to the node-handle logs path
 when Storage isn’t there.

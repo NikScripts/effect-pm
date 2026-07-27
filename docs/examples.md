@@ -31,7 +31,7 @@ Run: `pnpm run example:workpool-priority`
 
 ## Hyperlink
 
-Coming next (forms/resource — Gate, HttpApi, Telemetry, FleetHealth, ShardMap).
+Coming next (forms/hyperlink — Gate, HttpApi, Telemetry, FleetHealth, ShardMap).
 
 ---
 
@@ -47,7 +47,7 @@ Coming next (`examples/forms/polling`).
 
 ---
 
-## Process Store
+## Daemon Store
 
 Coming next (`examples/forms/daemon-store`).
 

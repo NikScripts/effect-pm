@@ -92,7 +92,7 @@ resurrect" section keeps dead ideas dead.
 - Tag carries `payload`/`success`/`error`; layer config never overrides them. (locked 07-03)
 
 ## Do not resurrect
-- Positional-only lane config on CQR — rejected 07-04, breaks named lanes.
+- Positional-only lane config on untyped WorkPool — rejected 07-04, breaks named lanes.
 ```
 
 {#approve-before-lock .must appliesTo=process}

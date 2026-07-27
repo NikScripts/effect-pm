@@ -1,5 +1,7 @@
 # Agent 1 — Phase 1 plan: handoffs cleanup inventory
 
+> **Naming:** read as WorkPool / Daemon / Gate / Hyperlink / hyperlink-ts (pre-rebrand names purged from this file).
+
 **Status:** **BATCHES A–D EXECUTED** (2026-07-14) — owner unlock “do it all” / archive-first.  
 **Owner steer:** thorough · precautionary · **defer edge cases / deletes / ambiguous moves to owner**.  
 **Assignment:** [`agent-01-docs-corpus.md`](./agent-01-docs-corpus.md) Phase 1.  
@@ -110,14 +112,14 @@ Default bias: **archive over delete** for anything that might explain a past PR.
 | `store-shape-streams-decisions.md` | Nested shapes / streams | **historical SSOT** | Stated approved; shape model still relevant |
 | `store-and-logs-design.md` | Early Store + logs design | **historical SSOT** | Linked from `docs/legacy/guides/store*.md` |
 | `store-cutover-00-store-core.md` | Cutover shared decisions | **historical SSOT** | Linked heavily from `docs/legacy/STORAGE.md` |
-| `store-cutover-process.md` | Process cutover | **historical SSOT** | Linked STORAGE + process guide; status done |
+| `store-cutover-daemon.md` | Daemon cutover | **historical SSOT** | Linked STORAGE + process guide; status done |
 | `store-cutover-queue.md` | Queue cutover | **historical SSOT** | Linked STORAGE |
-| `store-cutover-runresource.md` | RunResource cutover | **historical SSOT** | Linked STORAGE |
-| `store-cutover-customqueue.md` | CQR cutover | **archive** (or SSOT if still unique) | Mostly handoff-internal refs |
+| `store-cutover-gate.md` | Gate cutover | **historical SSOT** | Linked STORAGE |
+| `store-cutover-workpool-untyped.md` | untyped WorkPool cutover | **archive** (or SSOT if still unique) | Mostly handoff-internal refs |
 | `result-schema-and-rpc-validation.md` | Tag wire schema names | **historical SSOT** | Linked STORAGE |
 | `docs-platform-architecture-decision.md` | Docs platform Option 6 | **historical SSOT** / lettered | Linked `docs/site/README.md` |
 | `queue-persistence-design.md` | Queue persistence design | **archive** or **historical SSOT** | Partially superseded by presence-driven durability — owner call |
-| `per-resource-dependency-serve-design.md` | Serve dependency design | **archive** | Shipped era; beta.18 context |
+| `per-hyperlink-dependency-serve-design.md` | Serve dependency design | **archive** | Shipped era; beta.18 context |
 | `service-shape-redesign.md` | Service shape redesign | **archive** | Shipped |
 | `telemetry-design.md` / `telemetry-resource.md` | Telemetry design / handoff | **archive** | Telemetry shipped (#32) |
 | `dynamic-config-surface.md` / `dynamic-config-requirements.md` | DynamicConfig shipped notes | **archive** or thin stub → guide later (Phase 3) | Module on integration; no external links today |
@@ -135,10 +137,10 @@ Default bias: **archive over delete** for anything that might explain a past PR.
 | `agent-01-session-2-storage-docs.md` | Storage docs sweep | **archive** | Session done |
 | `agent-01-store-cutover-closeout.md` | Store close-out | **archive** | Checkboxes done |
 | `agent-02-logs-platform-plan.md` | Logs platform plan | **archive** | Agent 2 retired; #33 |
-| `agent-02-process-closeout.md` | Process close-out | **archive** | Merged era |
-| `agent-02-process-run-rpc.md` | Process `run` RPC | **archive** | #26 MERGED |
+| `agent-02-process-closeout.md` | Daemon close-out | **archive** | Merged era |
+| `agent-02-process-run-rpc.md` | Daemon `run` RPC | **archive** | #26 MERGED |
 | `agent-02-queue-wire-phase-1a.md` | Queue wire 1a | **archive** | #21 |
-| `agent-02-session-2-process-platform.md` | Process platform session | **archive** | Done |
+| `agent-02-session-2-process-platform.md` | Daemon platform session | **archive** | Done |
 | `agent-02-branch-cleanup.md` | Branch cleanup notes | **archive** | Done |
 | `agent-cursor-shardmap-typesafety.md` | ShardMap type-safety | **archive** | #39/#41 merged |
 | `agent-cursor-logs-store-cutover.md` | Logs store cutover (Cursor) | **archive** or **delete** | Superseded by Agent 3 followers / #40/#43 — prefer archive + “superseded by …” |
@@ -147,8 +149,8 @@ Default bias: **archive over delete** for anything that might explain a past PR.
 | `branch-cleanup-manifest.md` | 2026-07-09 cleanup | **archive** | Historical hygiene |
 | `integration-sync-2026-07-07.md` | Sync note | **archive** | Point-in-time |
 | `phase5-logs-migration-review.md` | PR #30 review | **archive** | Absorbed into LOGS / whats-changed |
-| `process-store-cutover-review.md` | Process cutover review | **archive** | Done |
-| `run-resource-hardening-review.md` | RunResource review | **archive** | Done |
+| `process-store-cutover-review.md` | Daemon cutover review | **archive** | Done |
+| `run-resource-hardening-review.md` | Gate review | **archive** | Done |
 
 ### E. Date-stamped findings / wow-sports / beta audits — **first stack**
 
@@ -164,7 +166,7 @@ Owner rule (2026-07-14): one stack at a time; **complete → delete**, unfinishe
 | Path | Role | Notes |
 |------|------|-------|
 | `api-resource-metrics.md` | ApiMetrics | Shipped |
-| `custom-queue-resource.md` | CQR | Shipped |
+| `custom-queue-resource.md` | untyped WorkPool | Shipped |
 | `docs-twoslash-hover-types.md` | Twoslash types | Lettered/site; archive — **do not edit site** |
 | `docs-updates.md` | Misc docs agent | Archive |
 | `resource-host-health.md` | Host health | Host→Node rename era; archive |
@@ -265,7 +267,7 @@ Everything else is eligible for archive once:
 | `docs/legacy/AGENTS.md` | reports README + docs-release report |
 | `docs/legacy/PACKAGE-GUIDE.md`, `README.md`, `PROCESS-API.md`, `STORAGE.md` | reports README; store-cutover-\*; result-schema |
 | `docs/legacy/guides/store.md`, `store-backing.md` | `store-and-logs-design.md` |
-| `docs/legacy/guides/process.md` | process agent report; store-cutover-process |
+| `docs/legacy/guides/process.md` | process agent report; store-cutover-daemon |
 | `docs/legacy/guides/setup.md` | `ui-serve-all-http.md` |
 | `docs/site/README.md` | `agent-b-plan.md`, `docs-platform-architecture-decision.md` (**lettered agents own site** — Agent 1 only fixes the markdown link text/path, does not change site chrome) |
 
@@ -280,7 +282,7 @@ Everything else is eligible for archive once:
 - Many date-stamped `2026-07-01-*` files have **zero** inbound links → cheapest archive class.
 - DynamicConfig handoffs currently unlinked from legacy → archive without ripple.
 
-### Process for execution PR(s)
+### Daemon for execution PR(s)
 
 1. Owner approves fate table (maybe with edits).  
 2. One PR: create `archive/…`, `git mv` only **archive** rows, fix ripples, update `reports/README` + `agent-status`.  

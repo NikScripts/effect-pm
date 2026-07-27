@@ -282,7 +282,7 @@ types.
 ## A config carries a named type in its namespace
 
 Every config, options, or input shape a consumer authors has a named type **exported from the
-namespace it belongs to** — `WorkPool.Config`, `Process.Options` — a hand-written
+namespace it belongs to** — `WorkPool.Config`, `Daemon.Options` — a hand-written
 `interface` (*Public API shapes are hand-written `export interface`*) attached in the same file with
 `export declare namespace` (*Associated types attach in the same file*). The consumer builds the
 value against it with `satisfies`: the named type is the contract, the shape is checked, and the
@@ -352,7 +352,7 @@ class DurableQueueStore extends Context.Service<DurableQueueStore, DurableQueueS
 class Prices extends Daemon.Tag<Prices>()("app/Prices", { success: priceSchema }) {}
 
 // storage facet — X.Store.Service
-class LogStore extends ProcessStore.Service<LogStore>()(id, record, read) {}
+class LogStore extends DaemonStore.Service<LogStore>()(id, record, read) {}
 ```
 
 ``` ts

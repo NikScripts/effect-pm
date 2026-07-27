@@ -10,7 +10,7 @@
 | Question | Answer |
 |----------|--------|
 | Phone use | **Read only** on Tailscale — not editing on phone |
-| End state | This application becomes the **official website** for `@nikscripts/effect-pm` |
+| End state | This application becomes the **official website** for `hyperlink-ts` |
 | Content model | **Written in code by agents** — like Markdown today, but **HTML + Tailwind** (machine- and human-readable) |
 | Throwaway work | Minimize — docs will be a **bespoke docs application**, not a disposable static site |
 | Dashboard (`/web`) | **Separate** ops dashboard short term; docs app may share **Tailwind tokens / visual language**, not `<Dashboard>` widgets |
@@ -47,7 +47,7 @@ docs/site/
 ### Long term (architecture hooks only — no implementation now)
 
 - Effect **`Hydration.dehydrate` / `hydrate`** + `HydrationBoundary` when bespoke app needs SSR/RSC-style delivery — **not Next**
-- Marketing + docs + package site = **one bespoke app**; ops dashboard may remain `@nikscripts/effect-pm/web` or converge later
+- Marketing + docs + package site = **one bespoke app**; ops dashboard may remain `hyperlink-ts/web` or converge later
 
 ---
 
@@ -90,7 +90,7 @@ Update [`agent-status.md`](./agent-status.md) when B starts.
 
 ## Reference: shipped dashboard (separate product)
 
-`@nikscripts/effect-pm/web` — `examples/resource-web/app.tsx` — remains the **ops** dashboard. Docs app reuses **tooling and theme**, not `Dashboard.tsx`.
+`hyperlink-ts/web` — `examples/resource-web/app.tsx` — remains the **ops** dashboard. Docs app reuses **tooling and theme**, not `Dashboard.tsx`.
 
 ## Reference: Effect RSC (future)
 
