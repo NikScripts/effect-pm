@@ -1,8 +1,9 @@
 # Plan: service / contract shapes
 
-**Status:** draft for owner discussion (2026-07-25). Not Eng’d.  
+**Status:** partial Eng (2026-07-26); remainder owner-gated.  
 **Agent:** 4 (`cursor/hyperservice-open-deps-5679`).  
-**Prior art:** [`service-shape-redesign.md`](../handoffs/archive/2026-07/features/service-shape-redesign.md) (2026-07-01/02), [`client-adapters-design.md`](../handoffs/client-adapters-design.md).
+**Prior art:** [`service-shape-redesign.md`](../handoffs/archive/2026-07/features/service-shape-redesign.md) (2026-07-01/02), [`client-adapters-design.md`](../handoffs/client-adapters-design.md).  
+**Orthogonal / active:** wire RpcGroup identity — [`wire-groups-and-identity.md`](./wire-groups-and-identity.md) (do not conflate with handle taxonomy).
 
 Goal: support the **widest useful variety** of service shapes without silent local↔remote divergence, and without turning the Spec into every host-language return type (Promise, sync fn, …).
 
@@ -156,30 +157,30 @@ ref (Eng’d)
 
 ---
 
+## Eng’d (2026-07-26)
+
+- `Tag<Self, I>()` + overload arity; `value(Schema)` (materialize, fallible OK); `Hyperlink.promise`; `Hyperlink.pure`.
+- Bare-in-Spec / `Hyperlink.handle` adornments / Prototype minting — **not** locked here; wire identity is [`wire-groups-and-identity.md`](./wire-groups-and-identity.md).
+
 ## Open decisions (owner)
 
-1. **Rename** today’s `constant` → `value` (materialize plain)? Migration: find/replace + changeset; tests `resource-constant.test.ts` → `resource-value-materialize` or similar.
-2. **Ship Tag-baked `constant(literal)`** in the same slice, later, or never?
-3. **Live plain cell** (`cell` / old lock `value`): Eng, park, or reject in favor of `ref` only?
-4. **Fallible materialize** (`value` with `E` at acquire): v1 stay `never`, or schedule?
-5. **Promise adapter**: first Eng slice after taxonomy lock, or wait for TanStack lane (Agent G)?
-6. **Getting-started**: teach full taxonomy (including materialize plain) once names lock — Creating / Core Concepts / glossary.
+1. ~~Rename `constant` → `value`~~ **done**.
+2. Tag-baked `constant(literal)` vs bare / handle bag — later or never?
+3. Live plain cell (`cell`): Eng, park, or reject in favor of `ref`?
+4. ~~Fallible materialize~~ **done** (`value` + `E`).
+5. ~~Promise adapter~~ **done** (`Hyperlink.promise`).
+6. Getting-started polish — pause until wire W1 and names follow.
 
 ---
 
-## Suggested Eng slices (after lock; order TBD)
+## Suggested remaining slices
 
 | Slice | Scope |
 |-------|--------|
-| **S0** | Lock names in this plan + owner-decisions row |
-| **S1** | Rename `constant` → `value` (materialize); docs + tests + changeset |
-| **S2** | Tag-baked `constant(literal)` (if locked) |
-| **S3** | Docs: Core Concepts + Creating teach materialize vs pull vs ref |
-| **S4** | Promise/async handle adapter (client-adapters) |
+| **S2** | Tag-baked plain / handle composition (if locked) — after wire W1 |
+| **S3** | Docs: Creating / Core Concepts taxonomy |
 | **S5** | Live plain `cell` (only if decision 3 = Eng) |
 | **S6** | Upload / sink (transport-gated) |
-
-No Eng before S0.
 
 ---
 
@@ -194,7 +195,7 @@ No Eng before S0.
 
 ## References
 
-- Eng’d builders: `src/Hyperlink.ts` (`effect`, `effectFn`, `stream`, `ref`, `constant`, `local`).
-- Materialize resolve: `buildLocalContext` / `buildClientService` (`isConstantMethod` branches).
-- Tests: `test/resource-constant.test.ts`, `test/resource-value.test.ts` (ref), nesting / stream suites.
-- Adapters direction: [`client-adapters-design.md`](../handoffs/client-adapters-design.md).
+- Eng’d builders: `src/Hyperlink.ts` (`effect`, `effectFn`, `stream`, `ref`, `value`, `local`, `pure`, `promise`).
+- Materialize resolve: `buildLocalContext` / `buildClientService` (`isValueMethod` branches).
+- Tests: `test/resource-value-plain.test.ts`, `resource-pure*`, `resource-promise*`, nesting / stream suites.
+- Adapters: [`client-adapters-design.md`](../handoffs/client-adapters-design.md); wire identity: [`wire-groups-and-identity.md`](./wire-groups-and-identity.md).
