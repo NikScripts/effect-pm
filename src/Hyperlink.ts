@@ -5170,16 +5170,7 @@ export type ComponentPin = {
 };
 
 /**
- * Opt-in chrome override: pin View services on a Hyperlink resource tag.
- * Single array; UI partitions by `kind` (`card` / `detail` / `page`). Replaces registry
- * binds for kinds that appear. A second pipe **replaces** the whole list.
- *
- * @example
- * ```ts
- * class Special extends WorkPool.Tag<Special>()("app/Special", { payload }).pipe(
- *   Hyperlink.components([CustomCard, PoolCard, CustomDetail]),
- * )
- * ```
+ * Tag-pipe View chrome metadata — **not** the View match SSOT (use `View.only` Layers, W21).
  *
  * @category ui
  * @public

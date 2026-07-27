@@ -7,7 +7,7 @@
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **4** | `cursor/hyperservice-open-deps-5679` | [wire groups & identity](../plans/wire-groups-and-identity.md) · [service shapes](../plans/service-shapes.md) | **plan locked** — W0 | tip-sync after push | plan docs | Next Eng **W1**: drop public `groupId`, wire=`.key`; demote unused family APIs | 2026-07-27 |
-| **G / TUI** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity · `View` redesign | **Eng** — W20 `View.group` + `kit.for(tag)` + requireView/pinnedViewsOf | `0396b13ec` (tip-synced) | ui-view tests + typecheck | Next: packaging / WorkPool migrate / Dashboard on kit. Notes: [`client-adapters-design.md`](./client-adapters-design.md) (W1–W20). | 2026-07-27 |
+| **G / TUI** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity · `View` redesign | **Eng** — W21 `View.kind`/`tag`/`only` Layers + `Layer.mergeAll` | tip-sync after push | ui-view + typecheck | Next: packaging / WorkPool migrate. Notes: [`client-adapters-design.md`](./client-adapters-design.md) (W21). | 2026-07-27 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **G** | 2026-07-26 |
 | **1** | *(frozen)* | [Examples book](./agent-01-examples-book.md) · [Phase 3](./agent-01-docs-corpus-phase3-plan.md) | **frozen / superseded** — E1 examples on tip; intro voice [#68](https://github.com/nikolasstow/Hyperlink/pull/68) closed | — | — | Branch deleted (unique tip was pre-rebrand `docs/index.md`) | 2026-07-26 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
@@ -27,7 +27,7 @@
 
 ### Active (owner approval required)
 1. **Agent 4:** Wire identity plan **locked** ([`wire-groups-and-identity.md`](../plans/wire-groups-and-identity.md)). Next Eng **W1** (drop `groupId`, wire=tag key). Service shapes: `Tag`/`value`/`promise`/`pure` Eng’d; Creating polish + handle adornments paused.
-2. **Agent G / TUI:** Dashboard Group parity + View redesign (`cursor/tui-dashboard-parity-125f`) — Eng’d through W20 (`View.group` / `kit.for`); next packaging + WorkPool chrome migrate.
+2. **Agent G / TUI:** Dashboard Group parity + View redesign (`cursor/tui-dashboard-parity-125f`) — Eng’d W21 (`View.kind` / `tag` / `only` as Layers); next packaging + WorkPool chrome migrate.
 3. **Launcher / handoff (unassigned):** brief [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md) — dumb spawn-and-exit; node owns process; Lookup directs; version upgrade → handoff. Prior [`launcher-decisions.md`](./launcher-decisions.md) = reference only.
 
 ### Frozen / dead (do not assign)

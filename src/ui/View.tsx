@@ -1,19 +1,18 @@
 /**
  * @module ui/View
  *
- * View **services** (Context) + registry binds + React matchers.
+ * View **services** (Context) + chrome contribution Layers + React matchers.
  * Design: `docs/handoffs/client-adapters-design.md`.
  *
  * - `View.make` → Context.Service whose Svc is the React/Ink component (+ key/kind/spec).
  * - Provide TSX with `Layer.succeed(PoolCard, Comp)`.
- * - `View.bind*` **requires** those services (Layer `R`) until provided.
+ * - Chrome policy = Layers: `View.kind` / `View.tag` / `View.only` (merge with `Layer.mergeAll`; last wins).
  * - `View.react(layer)` runs the Layer and requires `R = never` (missing skin = type error).
- * - Pins: `Hyperlink.components([…])` on the resource tag (opt-in override).
  */
 import * as React from "react";
 import { Context, Effect, Layer, Option } from "effect";
 import * as Group from "../Group";
-import { componentsOf, kindOf, type ComponentPin } from "../Hyperlink";
+import { kindOf } from "../Hyperlink";
 import type { LeafTag } from "./widgetRegistry";
 
 // =============================================================================
@@ -84,7 +83,7 @@ export const make = <const K extends string,>(options: {
 // Registry service
 // =============================================================================
 
-/** Bound chrome captured when the bind Layer built (View service was provided). @internal */
+/** Bound chrome captured when a contribution Layer built (View service was provided). @internal */
 type Bound = {
   readonly key: ViewKey;
   readonly kind: ViewKind;
@@ -93,14 +92,21 @@ type Bound = {
 
 /** @public */
 export interface RegistryService {
-  readonly bindTagKey: (tagKey: string, bound: Bound) => void;
-  readonly bindKind: (kind: string, bound: Bound) => void;
+  /** Append a view for one resource tag key (multi-match). */
+  readonly addTag: (tagKey: string, bound: Bound) => void;
+  /** Append a view for a stamped Hyperlink kind (multi-match). */
+  readonly addKind: (kind: string, bound: Bound) => void;
+  /**
+   * Allowlist for one tag — **replaces** any prior `only` for that tag (last wins).
+   * At match time, kinds present in the list are exclusive; other kinds still use add tables.
+   */
+  readonly setOnly: (tagKey: string, bounds: ReadonlyArray<Bound>) => void;
   readonly match: (tag: LeafTag, viewKind: ViewKind) => ReadonlyArray<Resolved>;
   readonly keys: () => ReadonlyArray<ViewKey>;
 }
 
 /**
- * View registry — bind tables + match (tag key / stamped kind).
+ * View registry — contribution tables + match.
  *
  * @public
  */
@@ -120,6 +126,8 @@ const pushBound = (map: Map<string, Bound[]>, key: string, bound: Bound): void =
 const makeRegistryService = (): RegistryService => {
   const byTagKey = new Map<string, Bound[]>();
   const byKind = new Map<string, Bound[]>();
+  /** tag.key → full allowlist from last `View.only` for that tag */
+  const onlyByTagKey = new Map<string, Bound[]>();
 
   const fromBounds = (bounds: ReadonlyArray<Bound> | undefined, viewKind: ViewKind): Resolved[] => {
     if (bounds === undefined) return [];
@@ -133,13 +141,24 @@ const makeRegistryService = (): RegistryService => {
   };
 
   return {
-    bindTagKey(tagKey, bound) {
+    addTag(tagKey, bound) {
       pushBound(byTagKey, tagKey, bound);
     },
-    bindKind(kind, bound) {
+    addKind(kind, bound) {
       pushBound(byKind, kind, bound);
     },
+    setOnly(tagKey, bounds) {
+      onlyByTagKey.set(tagKey, [...bounds]);
+    },
     match(tag, viewKind) {
+      const allowlist = onlyByTagKey.get(tag.key);
+      if (allowlist !== undefined) {
+        const kindsPresent = new Set(allowlist.map((b) => b.kind));
+        if (kindsPresent.has(viewKind)) {
+          return fromBounds(allowlist, viewKind);
+        }
+      }
+
       const out: Resolved[] = [];
       const seen = new Set<ViewKey>();
       const add = (list: ReadonlyArray<Resolved>) => {
@@ -160,6 +179,7 @@ const makeRegistryService = (): RegistryService => {
       const keys = new Set<ViewKey>();
       for (const list of byTagKey.values()) for (const b of list) keys.add(b.key);
       for (const list of byKind.values()) for (const b of list) keys.add(b.key);
+      for (const list of onlyByTagKey.values()) for (const b of list) keys.add(b.key);
       return [...keys];
     },
   };
@@ -185,52 +205,75 @@ type ViewService<Id> = Context.Service<Id, ViewComponent> & {
   readonly spec: unknown;
 };
 
-/**
- * Bind one resource tag key → View service. **Requires** that View in Layer `R`.
- *
- * @public
- */
-type BindRequirements<Id> = Registry | Id;
 /** Avoid `Foo<Id>>` in .tsx return positions (parsed as JSX). */
-type BindLayer<Id> = Layer.Layer<never, never, BindRequirements<Id>>;
+type ContribLayer<R> = Layer.Layer<never, never, Registry | R>;
 
-export const bindTag = <Id,>(
-  tag: { readonly key: string },
+/**
+ * Append one View for a stamped Hyperlink kind (multi-match / pager).
+ * Add more with `Layer.mergeAll(View.kind(…), View.kind(…))`.
+ *
+ * @public
+ */
+export const kind = <Id,>(
+  stampedKind: string,
   view: ViewService<Id>,
-): BindLayer<Id> =>
+): ContribLayer<Id> =>
   Layer.effectDiscard(
     Effect.gen(function* () {
       const reg = yield* Registry;
       const Component = yield* view;
-      reg.bindTagKey(tag.key, { key: view.key, kind: view.kind, Component });
+      reg.addKind(stampedKind, { key: view.key, kind: view.kind, Component });
     }),
   );
 
 /**
- * Bind a stamped Hyperlink kind → View service. **Requires** that View in Layer `R`.
+ * Append one View for a resource tag key (multi-match / pager).
+ * Add more with `Layer.mergeAll(View.tag(…), View.tag(…))`.
  *
  * @public
  */
-export const bindKind = <Id,>(
-  kind: string,
+export const tag = <Id,>(
+  resource: { readonly key: string },
   view: ViewService<Id>,
-): BindLayer<Id> =>
+): ContribLayer<Id> =>
   Layer.effectDiscard(
     Effect.gen(function* () {
       const reg = yield* Registry;
       const Component = yield* view;
-      reg.bindKind(kind, { key: view.key, kind: view.kind, Component });
+      reg.addTag(resource.key, { key: view.key, kind: view.kind, Component });
     }),
   );
 
 /**
- * Require a View service in Layer `R` without binding it (e.g. pin-only chrome for
- * {@link group}). Compose with `Layer.mergeAll(View.requireView(A), View.requireView(B), …)`.
+ * Allowlist for one resource tag. Kinds present are exclusive (defaults do not apply for
+ * those kinds). Optional extra views share one allowlist (precise `R`). A later `only` for
+ * the same tag **replaces** the whole allowlist (`Layer.mergeAll` → last wins).
  *
  * @public
  */
-export const requireView = <Id,>(view: ViewService<Id>): Layer.Layer<never, never, Id> =>
-  Layer.effectDiscard(Effect.asVoid(view));
+export const only = <Id1, Id2 = never, Id3 = never>(
+  resource: { readonly key: string },
+  v1: ViewService<Id1>,
+  v2?: ViewService<Id2>,
+  v3?: ViewService<Id3>,
+): ContribLayer<Id1 | Id2 | Id3> =>
+  Layer.effectDiscard(
+    Effect.gen(function* () {
+      const reg = yield* Registry;
+      const bounds: Bound[] = [];
+      const c1 = yield* v1;
+      bounds.push({ key: v1.key, kind: v1.kind, Component: c1 });
+      if (v2 !== undefined) {
+        const c2 = yield* v2;
+        bounds.push({ key: v2.key, kind: v2.kind, Component: c2 });
+      }
+      if (v3 !== undefined) {
+        const c3 = yield* v3;
+        bounds.push({ key: v3.key, kind: v3.kind, Component: c3 });
+      }
+      reg.setOnly(resource.key, bounds);
+    }),
+  );
 
 // =============================================================================
 // Lightweight Group dash (W20)
@@ -261,25 +304,6 @@ const collectLeaves = (node: unknown): ReadonlyArray<GroupLeaf> => {
 };
 
 /**
- * Pin View services found on Group leaves (`Hyperlink.components`). Use with
- * {@link requireView} / `Layer.succeed` so `View.react` sees `R = never`.
- *
- * @public
- */
-export const pinnedViewsOf = (appGroup: GroupLike): ReadonlyArray<ComponentPin> => {
-  const out: ComponentPin[] = [];
-  const seen = new Set<string>();
-  for (const leaf of collectLeaves(appGroup)) {
-    for (const pin of componentsOf(leaf) ?? []) {
-      if (seen.has(pin.key)) continue;
-      seen.add(pin.key);
-      out.push(pin);
-    }
-  }
-  return out;
-};
-
-/**
  * Lightweight Group dash handle — stashed by {@link group} for {@link react}.
  *
  * @public
@@ -294,16 +318,14 @@ export class GroupDash extends Context.Service<
 
 /**
  * BYO-chrome Group kit contribution (W20). Records the Group + leaves for the react kit.
- * Default View `R` still comes from {@link bindKind} / {@link bindTag} layers you merge.
- * Pin-only views: merge {@link requireView} for each of {@link pinnedViewsOf}`(group)` (or
- * `Layer.succeed` them in chrome).
+ * Chrome `R` comes from `View.kind` / `View.tag` / `View.only` layers you merge.
  *
  * @example
  * ```ts
  * const ready = Layer.mergeAll(
  *   View.group(AppGroup),
- *   View.bindKind(WorkPool.kind, PoolCard),
- *   View.requireView(CustomCard), // if a member pins CustomCard
+ *   View.kind(WorkPool.kind, PoolCard),
+ *   View.only(Special, CustomCard),
  * ).pipe(Layer.provideMerge(chrome), Layer.provideMerge(View.base))
  * const { for: bound, Provider } = View.react(ready)
  * ```
@@ -349,10 +371,7 @@ const fallbackFor = (viewKind: ViewKind): ViewComponent => {
 
 type KitContext = {
   readonly registry: RegistryService;
-  readonly resolvePins: (
-    tag: LeafTag,
-    viewKind: ViewKind,
-  ) => ReadonlyArray<Resolved>;
+  readonly resolve: (tag: LeafTag, viewKind: ViewKind) => ReadonlyArray<Resolved>;
   readonly groupDash: Option.Option<{
     readonly group: GroupLike;
     readonly leaves: ReadonlyArray<GroupLeaf>;
@@ -398,16 +417,13 @@ const MatchHost = (props: {
   );
 };
 
-/** Pin entry that is also a Context service (from {@link make}). @internal */
-type PinService = ComponentPin & Context.Service<unknown, ViewComponent>;
-
 /** Props for {@link react}`.for(tag)` bound matchers — tag is curated. @public */
 export interface BoundViewProps {
   readonly name?: string;
 }
 
 /**
- * Build registry + pin resolver from a **fully provided** view Layer (`R = never`).
+ * Build registry resolver from a **fully provided** view Layer (`R = never`).
  * Runs the Layer (`Effect.runSync` + `Layer.build`) so usable components can be returned.
  *
  * @internal
@@ -419,24 +435,11 @@ const buildKit = <ROut, E,>(viewLayer: Layer.Layer<ROut, E, never>): KitContext 
         const ctx = yield* Layer.build(viewLayer);
         const registry = Option.getOrThrow(Context.getOption(ctx, Registry));
         const groupDash = Context.getOption(ctx, GroupDash);
-        const resolvePins = (tag: LeafTag, viewKind: ViewKind): ReadonlyArray<Resolved> => {
-          const pins = componentsOf(tag)?.filter((p) => p.kind === viewKind);
-          if (pins !== undefined && pins.length > 0) {
-            const out: Resolved[] = [];
-            for (const pin of pins) {
-              const comp = Context.getOption(ctx, pin as PinService);
-              if (Option.isNone(comp)) continue; // W14 last resort
-              out.push({
-                key: pin.key,
-                kind: pin.kind as ViewKind,
-                Component: comp.value,
-              });
-            }
-            return out;
-          }
-          return registry.match(tag, viewKind);
+        return {
+          registry,
+          resolve: (tag: LeafTag, viewKind: ViewKind) => registry.match(tag, viewKind),
+          groupDash,
         };
-        return { registry, resolvePins, groupDash };
       }),
     ),
   );
@@ -463,12 +466,12 @@ export const react = <ROut, E,>(viewLayer: Layer.Layer<ROut, E, never>) => {
   };
 
   const resolve = (tag: LeafTag, viewKind: ViewKind): ReadonlyArray<Resolved> =>
-    kit.resolvePins(tag, viewKind);
+    kit.resolve(tag, viewKind);
 
   const Card = (props: ViewProps): React.ReactElement | null =>
     React.createElement(MatchHost, {
       viewKind: "card",
-      resolved: useKit().resolvePins(props.tag, "card"),
+      resolved: useKit().resolve(props.tag, "card"),
       tag: props.tag,
       name: props.name,
     });
@@ -476,7 +479,7 @@ export const react = <ROut, E,>(viewLayer: Layer.Layer<ROut, E, never>) => {
   const Detail = (props: ViewProps): React.ReactElement | null =>
     React.createElement(MatchHost, {
       viewKind: "detail",
-      resolved: useKit().resolvePins(props.tag, "detail"),
+      resolved: useKit().resolve(props.tag, "detail"),
       tag: props.tag,
       name: props.name,
     });
@@ -484,7 +487,7 @@ export const react = <ROut, E,>(viewLayer: Layer.Layer<ROut, E, never>) => {
   const Page = (props: ViewProps): React.ReactElement | null =>
     React.createElement(MatchHost, {
       viewKind: "page",
-      resolved: useKit().resolvePins(props.tag, "page"),
+      resolved: useKit().resolve(props.tag, "page"),
       tag: props.tag,
       name: props.name,
     });
@@ -497,21 +500,21 @@ export const react = <ROut, E,>(viewLayer: Layer.Layer<ROut, E, never>) => {
     Card: (props: BoundViewProps): React.ReactElement | null =>
       React.createElement(MatchHost, {
         viewKind: "card",
-        resolved: useKit().resolvePins(tag, "card"),
+        resolved: useKit().resolve(tag, "card"),
         tag,
         name: props.name,
       }),
     Detail: (props: BoundViewProps): React.ReactElement | null =>
       React.createElement(MatchHost, {
         viewKind: "detail",
-        resolved: useKit().resolvePins(tag, "detail"),
+        resolved: useKit().resolve(tag, "detail"),
         tag,
         name: props.name,
       }),
     Page: (props: BoundViewProps): React.ReactElement | null =>
       React.createElement(MatchHost, {
         viewKind: "page",
-        resolved: useKit().resolvePins(tag, "page"),
+        resolved: useKit().resolve(tag, "page"),
         tag,
         name: props.name,
       }),

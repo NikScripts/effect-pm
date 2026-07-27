@@ -1,10 +1,9 @@
 /**
- * View services — bind requires provide; react requires Layer R = never.
+ * View chrome Layers — kind/tag/only; react requires Layer R = never.
  */
 import { describe, expect, it } from "@effect/vitest";
 import { Layer, Schema } from "effect";
 import * as Group from "../src/Group";
-import * as Hyperlink from "../src/Hyperlink";
 import * as View from "../src/ui/View";
 import * as WorkPool from "../src/WorkPool";
 
@@ -30,31 +29,25 @@ const PoolDetail = View.make({
   spec: {},
 });
 
-const PoolCardView = () => null;
-const CustomCardView = () => null;
-const PoolDetailView = () => null;
-
 const chrome = Layer.mergeAll(
-  Layer.succeed(PoolCard, PoolCardView),
-  Layer.succeed(CustomCard, CustomCardView),
-  Layer.succeed(PoolDetail, PoolDetailView),
+  Layer.succeed(PoolCard, () => null),
+  Layer.succeed(CustomCard, () => null),
+  Layer.succeed(PoolDetail, () => null),
 );
 
-/** Binds require View services — discharge with provideMerge(chrome). */
-const withChrome = <A, E, R>(binds: Layer.Layer<A, E, R>) =>
-  binds.pipe(Layer.provideMerge(chrome), Layer.provideMerge(View.base));
+const withChrome = <A, E, R>(contrib: Layer.Layer<A, E, R>) =>
+  contrib.pipe(Layer.provideMerge(chrome), Layer.provideMerge(View.base));
 
 describe("View registry", () => {
-  it("matches bindTag over stamped kind", () => {
+  it("matches tag over stamped kind", () => {
     const viewLayer = withChrome(
       Layer.mergeAll(
-        View.bindTag(Special, PoolCard),
-        View.bindKind(WorkPool.kind, CustomCard), // Jobs would get this; Special has bindTag first
+        View.tag(Special, PoolCard),
+        View.kind(WorkPool.kind, CustomCard),
       ),
     );
 
     const { resolve } = View.react(viewLayer);
-    // bindTag first, then kind bind (Special is also a WorkPool)
     expect(resolve(Special, "card").map((r) => r.key)).toEqual([
       "hyperlink/view/pool-card",
       "hyperlink/view/custom-card",
@@ -64,66 +57,85 @@ describe("View registry", () => {
     ]);
   });
 
-  it("matches stamped WorkPool.kind binds (never groupId)", () => {
-    const viewLayer = withChrome(View.bindKind(WorkPool.kind, PoolCard));
-
+  it("matches stamped WorkPool.kind (never groupId)", () => {
+    const viewLayer = withChrome(View.kind(WorkPool.kind, PoolCard));
     const { resolve } = View.react(viewLayer);
     expect(resolve(Jobs, "card").map((r) => r.key)).toEqual([
       "hyperlink/view/pool-card",
     ]);
   });
 
-  it("multi-match preserves bind order", () => {
+  it("kind appends preserve order (multi-match)", () => {
     const viewLayer = withChrome(
       Layer.mergeAll(
-        View.bindKind(WorkPool.kind, CustomCard),
-        View.bindKind(WorkPool.kind, PoolCard),
+        View.kind(WorkPool.kind, CustomCard),
+        View.kind(WorkPool.kind, PoolCard),
       ),
     );
-
-    const keys = View.react(viewLayer)
-      .resolve(Jobs, "card")
-      .map((r) => r.key);
-    expect(keys).toEqual(["hyperlink/view/custom-card", "hyperlink/view/pool-card"]);
+    expect(
+      View.react(viewLayer)
+        .resolve(Jobs, "card")
+        .map((r) => r.key),
+    ).toEqual(["hyperlink/view/custom-card", "hyperlink/view/pool-card"]);
   });
 
-  it("Hyperlink.components pin replaces binds for that kind", () => {
-    // Own tag — components() Object.assigns; never mutate shared Jobs/Special fixtures
-    class PinnedJobs extends WorkPool.Tag<PinnedJobs>()("app/PinnedJobs", {
-      payload: Item,
-    }) {}
-    const Pinned = PinnedJobs.pipe(Hyperlink.components([CustomCard]));
-    const viewLayer = withChrome(View.bindKind(WorkPool.kind, PoolCard));
-
+  it("only allowlists kinds present; other kinds still use kind/tag", () => {
+    const viewLayer = withChrome(
+      Layer.mergeAll(
+        View.kind(WorkPool.kind, PoolCard),
+        View.kind(WorkPool.kind, PoolDetail),
+        View.only(Special, CustomCard),
+      ),
+    );
     const { resolve } = View.react(viewLayer);
-    expect(resolve(Pinned, "card").map((r) => r.key)).toEqual([
+    expect(resolve(Special, "card").map((r) => r.key)).toEqual([
       "hyperlink/view/custom-card",
     ]);
-    // detail not in pin array → still automatic binds (none here → empty → fallback at render)
-    expect(resolve(Pinned, "detail")).toEqual([]);
+    // detail not in only → still kind defaults
+    expect(resolve(Special, "detail").map((r) => r.key)).toEqual([
+      "hyperlink/view/pool-detail",
+    ]);
+    expect(resolve(Jobs, "card").map((r) => r.key)).toEqual([
+      "hyperlink/view/pool-card",
+    ]);
   });
 
-  it("pin can include card + detail in one array", () => {
-    class DualPin extends WorkPool.Tag<DualPin>()("app/DualPin", { payload: Item }) {}
-    const Pinned = DualPin.pipe(Hyperlink.components([CustomCard, PoolDetail]));
-    const viewLayer = withChrome(View.bindKind(WorkPool.kind, PoolCard));
+  it("later only for the same tag wins (Layer.mergeAll order)", () => {
+    const viewLayer = withChrome(
+      Layer.mergeAll(
+        View.kind(WorkPool.kind, PoolCard),
+        View.only(Special, PoolCard),
+        View.only(Special, CustomCard),
+      ),
+    );
+    expect(
+      View.react(viewLayer)
+        .resolve(Special, "card")
+        .map((r) => r.key),
+    ).toEqual(["hyperlink/view/custom-card"]);
+  });
+
+  it("only can list card + detail together", () => {
+    const viewLayer = withChrome(
+      Layer.mergeAll(
+        View.kind(WorkPool.kind, PoolCard),
+        View.only(Special, CustomCard, PoolDetail),
+      ),
+    );
     const { resolve } = View.react(viewLayer);
-    expect(resolve(Pinned, "card").map((r) => r.key)).toEqual([
+    expect(resolve(Special, "card").map((r) => r.key)).toEqual([
       "hyperlink/view/custom-card",
     ]);
-    expect(resolve(Pinned, "detail").map((r) => r.key)).toEqual([
+    expect(resolve(Special, "detail").map((r) => r.key)).toEqual([
       "hyperlink/view/pool-detail",
     ]);
   });
 });
 
-describe("View.group + kit.for (W20)", () => {
-  it("collects nested leaves and exposes groupDash on react kit", () => {
+describe("View.group + kit.for", () => {
+  it("collects nested leaves and exposes groupDash", () => {
     const viewLayer = withChrome(
-      Layer.mergeAll(
-        View.group(AppGroup),
-        View.bindKind(WorkPool.kind, PoolCard),
-      ),
+      Layer.mergeAll(View.group(AppGroup), View.kind(WorkPool.kind, PoolCard)),
     );
     const kit = View.react(viewLayer);
     expect(kit.groupDash?.group.key).toBe("app/AppGroup");
@@ -133,53 +145,14 @@ describe("View.group + kit.for (W20)", () => {
     ]);
   });
 
-  it("pinnedViewsOf walks Group leaves for Hyperlink.components pins", () => {
-    class PinLeaf extends WorkPool.Tag<PinLeaf>()("app/PinLeaf", { payload: Item }) {}
-    const PinnedLeaf = PinLeaf.pipe(Hyperlink.components([CustomCard, PoolDetail]));
-    class PinnedNested extends Group.Tag<PinnedNested>("app/PinnedNested")({
-      Special: PinnedLeaf,
-    }) {}
-    class PinnedApp extends Group.Tag<PinnedApp>("app/PinnedApp")({
-      Jobs,
-      Nested: PinnedNested,
-    }) {}
-
-    expect(View.pinnedViewsOf(PinnedApp).map((p) => p.key)).toEqual([
-      "hyperlink/view/custom-card",
-      "hyperlink/view/pool-detail",
-    ]);
-  });
-
-  it("requireView + group wires pin-only chrome for react", () => {
-    class PinOnly extends WorkPool.Tag<PinOnly>()("app/PinOnly", { payload: Item }) {}
-    const Pinned = PinOnly.pipe(Hyperlink.components([CustomCard]));
-    class PinGroup extends Group.Tag<PinGroup>("app/PinGroup")({ Jobs: Pinned }) {}
-
-    const ready = Layer.mergeAll(
-      View.group(PinGroup),
-      View.bindKind(WorkPool.kind, PoolCard),
-      View.requireView(CustomCard),
-    ).pipe(Layer.provideMerge(chrome), Layer.provideMerge(View.base));
-
-    const { resolve, for: bound, groupDash } = View.react(ready);
-    expect(groupDash?.leaves.map((l) => l.key)).toEqual(["app/PinOnly"]);
-    expect(resolve(Pinned, "card").map((r) => r.key)).toEqual([
-      "hyperlink/view/custom-card",
-    ]);
-    expect(typeof bound(Pinned).Card).toBe("function");
-    expect(typeof bound(Pinned).Detail).toBe("function");
-    expect(typeof bound(Pinned).Page).toBe("function");
-  });
-
-  it("kit.for(tag) curries the same resolve path as Card tag={…}", () => {
-    const viewLayer = withChrome(View.bindKind(WorkPool.kind, PoolCard));
+  it("kit.for(tag) curries resolve path", () => {
+    const viewLayer = withChrome(View.kind(WorkPool.kind, PoolCard));
     const kit = View.react(viewLayer);
     expect(kit.resolve(Jobs, "card").map((r) => r.key)).toEqual([
       "hyperlink/view/pool-card",
     ]);
-    // Bound matchers exist and close over Jobs (render still needs Provider)
     const { Card, Detail, Page } = kit.for(Jobs);
-    expect(Card.length).toBe(1); // props arg
+    expect(Card.length).toBe(1);
     expect(Detail.length).toBe(1);
     expect(Page.length).toBe(1);
   });

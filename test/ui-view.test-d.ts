@@ -1,6 +1,5 @@
 /**
- * View.react requires Layer R = never — assert open R via Layer.Services
- * (do not call react on an incomplete layer — that trips missingLayerContext).
+ * View.react requires Layer R = never — assert open R via Layer.Services.
  */
 import { Layer, Schema } from "effect";
 import { expectTypeOf } from "vitest";
@@ -23,7 +22,7 @@ class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", { payload: Item }) {}
 
 declare const runFullyWired: <A, E>(layer: Layer.Layer<A, E, never>) => void;
 
-const provided = View.bindKind(WorkPool.kind, PoolCard).pipe(
+const provided = View.kind(WorkPool.kind, PoolCard).pipe(
   Layer.provideMerge(Layer.succeed(PoolCard, () => null)),
   Layer.provideMerge(View.base),
 );
@@ -31,7 +30,7 @@ const provided = View.bindKind(WorkPool.kind, PoolCard).pipe(
 runFullyWired(provided);
 View.react(provided);
 
-const missingProvide = View.bindKind(WorkPool.kind, PoolCard).pipe(
+const missingProvide = View.kind(WorkPool.kind, PoolCard).pipe(
   Layer.provideMerge(View.base),
 );
 
@@ -39,14 +38,14 @@ type MissingR = Layer.Services<typeof missingProvide>;
 expectTypeOf<[MissingR] extends [never] ? true : false>().toEqualTypeOf<false>();
 expectTypeOf<MissingR>().toEqualTypeOf<View.ViewId<"hyperlink/view/pool-card">>();
 
-// requireView adds pin-only Views to R (W20)
-const withPinRequire = Layer.mergeAll(
-  View.bindKind(WorkPool.kind, PoolCard),
-  View.requireView(CustomCard),
+// only + kind → both Views in R
+const withOnly = Layer.mergeAll(
+  View.kind(WorkPool.kind, PoolCard),
+  View.only(Jobs, CustomCard),
 ).pipe(Layer.provideMerge(View.base));
 
-type PinMissingR = Layer.Services<typeof withPinRequire>;
-expectTypeOf<PinMissingR>().toEqualTypeOf<
+type OnlyMissingR = Layer.Services<typeof withOnly>;
+expectTypeOf<OnlyMissingR>().toEqualTypeOf<
   View.ViewId<"hyperlink/view/pool-card"> | View.ViewId<"hyperlink/view/custom-card">
 >();
 

@@ -386,7 +386,7 @@ One provide Layer per process — not web+TUI in the same merge.
 
 **Locked (grilling):** W14–W19; View services + Layer-provided TSX (not skins.register map); components = single array; missing skin = not provided.
 
-**Locked (grilling):** W20 `View.group` + lean `kit.for(tag)`. **Open:** Dashboard on kit; Spec gate; default chrome module layout (fat namespace OK if no platform TSX in shared).
+**Locked (grilling):** W20 `View.group` + `kit.for(tag)`; **W21** chrome = `View.kind` / `tag` / `only` Layers + `Layer.mergeAll` (no Policy module; no tag-pipe SSOT). **Open:** Dashboard on kit; Spec gate; packaging.
 
 #### View handles on HS tags (W17) — LOCKED (clarified)
 
@@ -750,22 +750,24 @@ Name collision: `Hyperlink.react` vs `View.react` — different jobs (service-bo
 | W13 | **View = Context service; TSX = Layer-provided Svc** — not `register(handle, Comp)` map; `Layer.succeed(View, Comp)` is the skin seam |
 | W14 | Runtime skip-at-match = **last resort** (unpiped/dynamic). Declared binds/pins → must be provided (`View.react` `R = never`) |
 | W15 | **No `groupId` in View/UI dispatch** — RPC wire only. Family bind = stamped `kindOf` (`hyperlink-ts/WorkPool`, …). Kill `bindFactory` / short `"queue"`\|`"pool"` kinds |
-| W16 | Pipe allowlist on service tag (symbol bag); present kinds **replace** binds; order within a kind = pager |
-| W17 | View handles on HS tag are **opt-in override only** (not defaults). Default chrome = registry binds. **When piped**, type-check pins |
-| W18 | **Missing skin = `View.react(layer)` requires Layer `R = never`** — binds/pins require View services; `Layer.succeed(View, Comp)` provides them; react runs the Layer to emit components |
-| W19 | Pipe API = **`Hyperlink.components(Handle[])`** — single array, partition by `handle.kind`; not card/detail/page siblings; not `{ card, detail }` object |
-| W20 | **`View.group(AppGroup)`** — lightweight BYO-chrome dash: Group at kit build → Layer `R` = View services for leaves (binds + pins); no built-in components; provide chrome then `View.react`. Keep open kit (`react(layer)` + `tag={leaf}`) alongside |
+| W16 | ~~Pipe allowlist on HS tag~~ → **superseded by W21** (`View.only`) |
+| W17 | ~~View handles on HS tag~~ → **superseded by W21** (no tag-pipe chrome SSOT) |
+| W18 | **Missing skin = `View.react(layer)` requires Layer `R = never`** — contributions require View services; `Layer.succeed(View, Comp)` provides them |
+| W19 | ~~`Hyperlink.components`~~ → **superseded by W21** (demoted; not match SSOT) |
+| W20 | **`View.group(AppGroup)`** — stash Group + leaves on kit; chrome `R` from merged `View.kind` / `tag` / `only` layers |
+| W21 | **Chrome policy = Layers on `View`** (no separate Policy module/type). `View.kind` / `View.tag` (append) + `View.only` (per-kind allowlist). Compose with **`Layer.mergeAll`** (last `only` for a tag wins). Variadic views → `R`. Kill `requireView` / bind\* / tag-pin match |
 
 ### Eng order (next)
 
-1. ~~View services + react R=never + Hyperlink.components~~ **done**
-2. ~~W20 `View.group` + `kit.for(tag)`~~ **Eng’d** — `View.group(AppGroup)` stashes GroupDash; merge `bind*` for default `R`; pin-only → `View.requireView` / `pinnedViewsOf`; `react(…).for(tag)` → bound Card/Detail/Page
-3. Packaging — shared handles/binds; platform succeed layers (no TSX in shared imports); fat namespace OK
-4. Migrate WorkPool Card/Detail
-5. Kit `Dashboard` optional (open)
-6. Retire `forKind` / `ui/data` service dupes
-7. `Hyperlink.atom` / `query` / `fn` in parallel
-8. Desktop tabs + real Page kind — later
+1. ~~View services + react R=never~~ **done**
+2. ~~W20 `View.group` + `kit.for(tag)`~~ **done**
+3. ~~W21 `View.kind` / `tag` / `only` as Layers~~ **Eng’d**
+4. Packaging — shared handles; platform succeed layers (no TSX in shared imports)
+5. Migrate WorkPool Card/Detail
+6. Kit `Dashboard` optional (open)
+7. Retire `forKind` / `ui/data` service dupes
+8. `Hyperlink.atom` / `query` / `fn` in parallel
+9. Desktop tabs + real Page kind — later
 
 ### Non-goals (view redesign)
 

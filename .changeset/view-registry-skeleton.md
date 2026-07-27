@@ -2,4 +2,4 @@
 "hyperlink-ts": minor
 ---
 
-View registry: View services (`View.make`) with TSX via `Layer.succeed`; binds require those services; `View.react` runs a Layer with `R = never`. Opt-in chrome pins via `Hyperlink.components(View[])`. W20: `View.group(AppGroup)` + `pinnedViewsOf` / `requireView` for pin-only chrome; `kit.for(tag)` returns bound `{ Card, Detail, Page }` without `tag` props.
+View chrome contributions are Layers on `View`: `View.kind` / `View.tag` (append) and `View.only` (per-kind allowlist), composed with `Layer.mergeAll` (last `only` wins). `View.react` still requires Layer `R = never`. Removed `bindKind` / `bindTag` / `requireView` and tag-pin match via `Hyperlink.components`.
