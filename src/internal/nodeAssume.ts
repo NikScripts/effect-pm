@@ -32,7 +32,11 @@ export class AssumeTokenMismatch extends Schema.TaggedErrorClass<AssumeTokenMism
   {
     node: Schema.String,
   },
-) {}
+) {
+  override get message() {
+    return `Node.assume token mismatch for "${this.node}" (wrong token or assume not configured).`;
+  }
+}
 
 /**
  * `Node.assume` succeeded once already — tokens are single-use for Track A handoff.
@@ -45,7 +49,11 @@ export class AssumeTokenReused extends Schema.TaggedErrorClass<AssumeTokenReused
   {
     node: Schema.String,
   },
-) {}
+) {
+  override get message() {
+    return `Node.assume token already used for "${this.node}" — handoff is single-use.`;
+  }
+}
 
 /**
  * `Node.assume` rejected because the node is not Ready yet (served resources not all ready,
@@ -61,7 +69,15 @@ export class AssumeNotReady extends Schema.TaggedErrorClass<AssumeNotReady>()(
     resource: Schema.optionalKey(Schema.String),
     detail: Schema.optionalKey(Schema.String),
   },
-) {}
+) {
+  override get message() {
+    const resource =
+      this.resource === undefined ? "served resources" : `resource "${this.resource}"`;
+    const detail =
+      this.detail === undefined ? "" : ` (${this.detail})`;
+    return `Node.assume rejected for "${this.node}" — not Ready yet (${resource})${detail}.`;
+  }
+}
 
 /** Wire error union for {@link NodeStatusTag}.`assume`. @internal */
 export const assumeError = Schema.Union([

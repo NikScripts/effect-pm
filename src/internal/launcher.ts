@@ -9,7 +9,6 @@ import {
   Duration,
   Effect,
   Layer,
-  Random,
   Redacted,
   Ref,
   Schedule,
@@ -36,19 +35,20 @@ import {
   UnaddressedNode,
   type AnyNode,
 } from "./nodeCore";
+import { mintAssumeToken } from "./launcherToken";
 
 /** Opaque assume-token brand (thin sugar over a redacted string). @public */
 export type Token = string & { readonly [LauncherTokenBrand]: unique symbol };
 declare const LauncherTokenBrand: unique symbol;
-
-/** Bytes minted into a hex assume token (Eng default — high-entropy opaque string). */
-const TOKEN_BYTES = 32;
 
 /** Default Ready poll bound when `ready.timeout` is omitted. */
 const DEFAULT_READY_TIMEOUT = "30 seconds" as const;
 
 /** How often `awaitReady` re-probes node status while waiting. */
 const READY_POLL = "100 millis" as const;
+
+/** Per-dial bound so a hung connect cannot stall the outer Ready timeout. */
+const READY_PROBE_TIMEOUT = "2 seconds" as const;
 
 /**
  * Ready-wait options on a spawn unit — omit `resources` for allReady-shaped; omit `timeout`
@@ -87,7 +87,15 @@ export class ReadyTimedOut extends Data.TaggedError("ReadyTimedOut")<{
   readonly node: string;
   readonly resources?: ReadonlyArray<string>;
   readonly timeout: Duration.Input;
-}> {}
+}> {
+  override get message() {
+    const scope =
+      this.resources === undefined
+        ? "all served resources"
+        : `resources [${this.resources.join(", ")}]`;
+    return `Launcher ReadyTimedOut for "${this.node}" waiting on ${scope} (timeout ${String(this.timeout)}).`;
+  }
+}
 
 /**
  * Child OS process exited while the launcher was waiting for Ready.
@@ -98,7 +106,13 @@ export class ReadyTimedOut extends Data.TaggedError("ReadyTimedOut")<{
 export class ChildExited extends Data.TaggedError("ChildExited")<{
   readonly node: string;
   readonly code?: number;
-}> {}
+}> {
+  override get message() {
+    const code =
+      this.code === undefined ? "unknown" : String(this.code);
+    return `Launcher child for "${this.node}" exited during awaitReady (code ${code}).`;
+  }
+}
 
 /**
  * Custody handle used after handoff — `.awaitReady` / `.handoff` must not be called again.
@@ -109,7 +123,25 @@ export class ChildExited extends Data.TaggedError("ChildExited")<{
 export class HandleSpent extends Data.TaggedError("HandleSpent")<{
   readonly node: string;
   readonly phase: "awaitReady" | "handoff";
-}> {}
+}> {
+  override get message() {
+    return `Launcher.Handle for "${this.node}" is spent — cannot ${this.phase} after handoff.`;
+  }
+}
+
+/**
+ * {@link Handle.handoff} called before {@link Handle.awaitReady} succeeded.
+ *
+ * @category errors
+ * @public
+ */
+export class HandleNotReady extends Data.TaggedError("HandleNotReady")<{
+  readonly node: string;
+}> {
+  override get message() {
+    return `Launcher.Handle for "${this.node}" is not Ready — call awaitReady() before handoff().`;
+  }
+}
 
 type LauncherChildHandle = ChildProcessSpawner.ChildProcessHandle;
 
@@ -141,6 +173,7 @@ export interface Handle {
   /** Call {@link Node.assume}, then unref the child so the launcher scope may close. */
   readonly handoff: () => Effect.Effect<
     void,
+    | HandleNotReady
     | AssumeTokenMismatch
     | AssumeTokenReused
     | AssumeNotReady
@@ -158,22 +191,13 @@ const isSpawnSpec = (value: unknown): value is SpawnSpec =>
   "process" in value;
 
 /**
- * Mint an opaque high-entropy assume token via Effect {@link Random} (hex) and wrap in
- * {@link Redacted}. No raw `crypto.randomUUID`.
+ * Mint an opaque high-entropy assume token (CSPRNG hex) and wrap in {@link Redacted}.
  *
  * @category constructors
  * @public
  */
-export const mintToken: Effect.Effect<Redacted.Redacted<string>> = Effect.gen(
-  function* () {
-    const hex: Array<string> = [];
-    for (let i = 0; i < TOKEN_BYTES; i++) {
-      const byte = yield* Random.nextIntBetween(0, 256, { halfOpen: true });
-      hex.push(byte.toString(16).padStart(2, "0"));
-    }
-    return Redacted.make(hex.join(""));
-  },
-);
+export const mintToken: Effect.Effect<Redacted.Redacted<string>> =
+  mintAssumeToken;
 
 const nodeAddress = (node: AnyNode): string =>
   typeof node.url === "string"
@@ -181,6 +205,19 @@ const nodeAddress = (node: AnyNode): string =>
     : typeof node.path === "string"
       ? node.path
       : node.key;
+
+const withLauncherLogs = <A, E, R>(
+  nodeKey: string,
+  phase: string,
+  effect: Effect.Effect<A, E, R>,
+): Effect.Effect<A, E, R> =>
+  effect.pipe(
+    Effect.annotateLogs({
+      "launcher.node": nodeKey,
+      "launcher.phase": phase,
+    }),
+    Effect.withLogSpan(`launcher.${phase}`),
+  );
 
 const probeReady = (
   node: AnyNode,
@@ -249,8 +286,7 @@ const probeReady = (
     }
   }).pipe(
     Effect.scoped,
-    // Bound each dial — a hung connect must not stall the Ready poll until the outer timeout.
-    Effect.timeout("2 seconds"),
+    Effect.timeout(READY_PROBE_TIMEOUT),
     Effect.mapError((cause) => {
       if (
         cause instanceof ServiceNotReady ||
@@ -295,53 +331,60 @@ const makeHandle = (options: {
     | ServiceNotServed
     | PlatformError
   > =>
-    Effect.gen(function* () {
-      const phase = yield* Ref.get(options.phase);
-      if (phase === "handedOff") {
-        return yield* new HandleSpent({
-          node: options.node.key,
-          phase: "awaitReady",
-        });
-      }
-      if (phase === "ready") {
-        return makeHandle(options);
-      }
-      const timeout = options.ready?.timeout ?? DEFAULT_READY_TIMEOUT;
-      const resources = options.ready?.resources;
-      const wait = probeReady(options.node, resources).pipe(
-        Effect.retry({
-          while: isTransientReadyFailure,
-          schedule: Schedule.spaced(READY_POLL),
-        }),
-        Effect.timeoutOrElse({
-          duration: timeout,
-          orElse: () =>
+    withLauncherLogs(
+      options.node.key,
+      "awaitReady",
+      Effect.gen(function* () {
+        const phase = yield* Ref.get(options.phase);
+        if (phase === "handedOff") {
+          return yield* new HandleSpent({
+            node: options.node.key,
+            phase: "awaitReady",
+          });
+        }
+        if (phase === "ready") {
+          return makeHandle(options);
+        }
+        yield* Effect.logDebug("polling child Ready");
+        const timeout = options.ready?.timeout ?? DEFAULT_READY_TIMEOUT;
+        const resources = options.ready?.resources;
+        const wait = probeReady(options.node, resources).pipe(
+          Effect.retry({
+            while: isTransientReadyFailure,
+            schedule: Schedule.spaced(READY_POLL),
+          }),
+          Effect.timeoutOrElse({
+            duration: timeout,
+            orElse: () =>
+              Effect.fail(
+                new ReadyTimedOut({
+                  node: options.node.key,
+                  ...(resources !== undefined ? { resources } : {}),
+                  timeout,
+                }),
+              ),
+          }),
+        );
+        const childDied = options.child.exitCode.pipe(
+          Effect.flatMap((code) =>
             Effect.fail(
-              new ReadyTimedOut({
+              new ChildExited({
                 node: options.node.key,
-                ...(resources !== undefined ? { resources } : {}),
-                timeout,
+                code: Number(code),
               }),
             ),
-        }),
-      );
-      const childDied = options.child.exitCode.pipe(
-        Effect.flatMap((code) =>
-          Effect.fail(
-            new ChildExited({
-              node: options.node.key,
-              code: Number(code),
-            }),
           ),
-        ),
-      );
-      yield* Effect.raceFirst(wait, childDied);
-      yield* Ref.set(options.phase, "ready");
-      return makeHandle(options);
-    });
+        );
+        yield* Effect.raceFirst(wait, childDied);
+        yield* Ref.set(options.phase, "ready");
+        yield* Effect.logInfo("child Ready");
+        return makeHandle(options);
+      }),
+    );
 
   const handoff = (): Effect.Effect<
     void,
+    | HandleNotReady
     | AssumeTokenMismatch
     | AssumeTokenReused
     | AssumeNotReady
@@ -350,22 +393,30 @@ const makeHandle = (options: {
     | HandleSpent
     | PlatformError
   > =>
-    Effect.gen(function* () {
-      const phase = yield* Ref.get(options.phase);
-      if (phase === "handedOff") {
-        return yield* new HandleSpent({
-          node: options.node.key,
-          phase: "handoff",
+    withLauncherLogs(
+      options.node.key,
+      "handoff",
+      Effect.gen(function* () {
+        const phase = yield* Ref.get(options.phase);
+        if (phase === "handedOff") {
+          return yield* new HandleSpent({
+            node: options.node.key,
+            phase: "handoff",
+          });
+        }
+        if (phase !== "ready") {
+          return yield* new HandleNotReady({ node: options.node.key });
+        }
+        yield* Effect.logDebug("calling Node.assume");
+        yield* nodeAssume(options.node, {
+          token: Redacted.value(options.token),
         });
-      }
-      yield* nodeAssume(options.node, {
-        token: Redacted.value(options.token),
-      });
-      // Drop reref — launcher exits; child keeps running under its own custody.
-      const _reref = yield* options.child.unref;
-      void _reref;
-      yield* Ref.set(options.phase, "handedOff");
-    });
+        // Drop reref — launcher exits; child keeps running under its own custody.
+        yield* options.child.unref;
+        yield* Ref.set(options.phase, "handedOff");
+        yield* Effect.logInfo("handoff complete; child unref'd");
+      }),
+    );
 
   return {
     token: options.token,
@@ -390,21 +441,30 @@ export const spawn = (
   PlatformError,
   ChildProcessSpawner.ChildProcessSpawner | Scope.Scope
 > =>
-  Effect.gen(function* () {
-    const token = yield* mintToken;
-    const clear = Redacted.value(token);
-    const command =
-      typeof spec.process === "function" ? spec.process(clear) : spec.process;
-    const child = yield* command;
-    const phase = yield* Ref.make<"spawned" | "ready" | "handedOff">("spawned");
-    return makeHandle({
-      node: spec.node,
-      token,
-      child,
-      ready: spec.ready,
-      phase,
-    });
-  });
+  withLauncherLogs(
+    spec.node.key,
+    "spawn",
+    Effect.gen(function* () {
+      const token = yield* mintToken;
+      const clear = Redacted.value(token);
+      const command =
+        typeof spec.process === "function" ? spec.process(clear) : spec.process;
+      const child = yield* command;
+      const phase = yield* Ref.make<"spawned" | "ready" | "handedOff">(
+        "spawned",
+      );
+      yield* Effect.logInfo("child spawned under launcher custody").pipe(
+        Effect.annotateLogs({ "launcher.pid": String(child.pid) }),
+      );
+      return makeHandle({
+        node: spec.node,
+        token,
+        child,
+        ready: spec.ready,
+        phase,
+      });
+    }),
+  );
 
 /**
  * One-shot bring-up: spawn → awaitReady → handoff per unit, then the launcher may exit.
@@ -420,6 +480,7 @@ export const up = (
   | ReadyTimedOut
   | ChildExited
   | HandleSpent
+  | HandleNotReady
   | AssumeTokenMismatch
   | AssumeTokenReused
   | AssumeNotReady
@@ -433,9 +494,13 @@ export const up = (
 > =>
   Effect.gen(function* () {
     const units = isSpawnSpec(spec) ? [spec] : spec;
+    yield* Effect.logInfo("Launcher.up starting").pipe(
+      Effect.annotateLogs({ "launcher.units": String(units.length) }),
+    );
     for (const unit of units) {
       const handle = yield* spawn(unit);
       yield* handle.awaitReady();
       yield* handle.handoff();
     }
+    yield* Effect.logInfo("Launcher.up complete");
   });

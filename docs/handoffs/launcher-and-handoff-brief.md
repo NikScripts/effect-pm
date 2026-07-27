@@ -131,6 +131,7 @@ Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.m
 Shipped on tip (owner Eng go):
 
 - `hyperlink-ts/Launcher` — `spawn` / `Handle.awaitReady` / `Handle.handoff` / `up` / `mintToken`
+- Guide: [`docs/guides/launcher.md`](../guides/launcher.md)
 - `Node.assume({ token })` + `AssumeTokenMismatch` / `AssumeTokenReused` / `AssumeNotReady`
 - `ListenOptions.assumeToken` / `Node.assumeTokenConfig` (`HYPERLINK_ASSUME_TOKEN`)
 - Status mirror `ownership?: "launcher" | "self"` when assume is armed

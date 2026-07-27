@@ -91,6 +91,7 @@ Membership Lookup Identity/Directory/Advice   who wins / where clients dial
   (`false` refuses). Drain / state / old shutdown are a later handoff track — not Lookup.
 
 Runnable: [`examples/forms/hyperlink/launcher-lookup-membership.ts`](../../examples/forms/hyperlink/launcher-lookup-membership.ts).
+Custody API: [`docs/guides/launcher.md`](./launcher.md).
 
 ## What not to build
 

@@ -36,6 +36,7 @@ export const nav: ReadonlyArray<NavGroup> = [
       "contracts",
       "fleets-and-peers",
       "readiness",
+      "launcher",
       "configuration",
     ],
   },
@@ -53,7 +54,7 @@ export const nav: ReadonlyArray<NavGroup> = [
   },
   {
     label: "Guides",
-    slugs: ["stores", "logs", "metrics"],
+    slugs: ["stores", "logs", "metrics", "identity-coordinator"],
   },
   {
     // Tentative group name — "Observe and Control" per the outline, may change.
