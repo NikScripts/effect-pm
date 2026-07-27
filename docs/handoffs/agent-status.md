@@ -31,6 +31,7 @@
 1. **Agent 4:** Wire identity **W1–W2 Eng** ([`wire-groups-and-identity.md`](../plans/wire-groups-and-identity.md)) — drop public `groupId`; unused family path deleted (solo `Tag` only). Service shapes: `Tag`/`value`/`promise`/`pure` Eng’d; Creating polish + handle adornments paused. Next: W3 kind-keyed family factory when needed.
 2. **Agent G / TUI:** Dashboard Group parity + client-adapters design (`cursor/tui-dashboard-parity-125f`).
 3. **This agent (Launcher):** launcher + node handoff design — plan-first on `cursor/launcher-handoff-design-929b`. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md). Nothing locked; framing before APIs. (Hygiene previously landed on `integration`.)
+4. **Docs site (local):** [`docs-site-origin-down.md`](./docs-site-origin-down.md) — `hyperlink.cool` Cloudflare 504; whole origin down. Restart/redeploy DO App `hyperlink-docs`.
 
 ### Frozen / dead (do not assign)
 - **Agent 1:** frozen — Examples book E1 already on tip; stale intro PR #68 closed; branch deleted.
