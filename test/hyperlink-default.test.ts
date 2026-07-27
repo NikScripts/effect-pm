@@ -211,6 +211,32 @@ it("client still sees Tag-baked default when server layer overrode locally", () 
     }),
   ));
 
+class FactoryAdorned extends Hyperlink.Tag<FactoryAdorned>()(
+  "default-test/FactoryAdorned",
+  counterSpec,
+  {
+    defaults: {
+      label: (n: number) => `n=${n}`,
+      tags: ["admin", "beta"] as const,
+    },
+  },
+) {}
+
+it("factory { defaults } sugar merges bag onto local service", () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const a = yield* FactoryAdorned;
+      expect(yield* a.current).toBe(1);
+      expect(a.label(3)).toBe("n=3");
+      expect(a.tags).toEqual(["admin", "beta"]);
+    }).pipe(
+      Effect.provide(
+        Hyperlink.layer(FactoryAdorned, { current: Effect.succeed(1) }),
+      ),
+      Effect.scoped,
+    ),
+  ));
+
 it("defaults bag is on the REMOTE client too", () =>
   Effect.runPromise(
     Effect.gen(function* () {

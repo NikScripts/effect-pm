@@ -122,3 +122,63 @@ expectTypeOf<DoubleSvc["b"]>().toEqualTypeOf<2>();
 expectTypeOf<DoubleSvc["current"]>().toEqualTypeOf<
   Hyperlink.ShapeOf<Hyperlink.SpecOf<typeof Double>, Double>["current"]
 >();
+
+// ── A3 factory `{ defaults }` sugar ≡ pipe (bare Tag) ─────────────────────────
+class FactoryAdorned extends Hyperlink.Tag<FactoryAdorned>()(
+  "defaults-handle/FactoryAdorned",
+  { current: Hyperlink.effect(Schema.Number) },
+  {
+    defaults: {
+      label: (n: number) => `n=${n}`,
+      tags: ["admin", "beta"] as const,
+    },
+  },
+) {}
+
+type FactorySvc = Hyperlink.Shape<typeof FactoryAdorned>;
+expectTypeOf<FactorySvc["label"]>().toEqualTypeOf<(n: number) => string>();
+expectTypeOf<FactorySvc["tags"]>().toEqualTypeOf<readonly ["admin", "beta"]>();
+
+declare const factorySvc: FactorySvc;
+const _factoryToWidened: AdornedWidened = factorySvc;
+const _widenedToFactory: FactorySvc = adornedWidened;
+void [_factoryToWidened, _widenedToFactory];
+
+// ── A3 WorkPool.Tag config `{ defaults }` keeps WorkPool ∧ bag ────────────────
+class FactoryJobs extends WorkPool.Tag<FactoryJobs>()("defaults-handle/FactoryJobs", {
+  payload: Job,
+  defaults: { label: (n: number) => `job=${n}` },
+}) {}
+
+type FactoryJobsSvc = Hyperlink.Shape<typeof FactoryJobs>;
+declare const factoryJobsSvc: FactoryJobsSvc;
+const _fjToWidened: JobsWidened = factoryJobsSvc;
+const _fjFromWidened: FactoryJobsSvc = jobsWidened;
+void [_fjToWidened, _fjFromWidened];
+expectTypeOf(factoryJobsSvc.label).toEqualTypeOf<(n: number) => string>();
+expectTypeOf(factoryJobsSvc.add).toEqualTypeOf<JobsHandle["add"]>();
+
+// ── A3 Gate.Tag config `{ defaults }` keeps Gate ∧ bag ────────────────────────
+class FactoryFetch extends Gate.Tag<FactoryFetch>()("defaults-handle/FactoryFetch", {
+  payload: Schema.Number,
+  success: Schema.String,
+  error: Schema.Boolean,
+  defaults: { label: (n: number) => `fetch=${n}` },
+}) {}
+
+type FactoryFetchSvc = Hyperlink.Shape<typeof FactoryFetch>;
+declare const factoryFetchSvc: FactoryFetchSvc;
+const _ffToWidened: FetchWidened = factoryFetchSvc;
+const _ffFromWidened: FactoryFetchSvc = fetchWidened;
+void [_ffToWidened, _ffFromWidened];
+expectTypeOf(factoryFetchSvc.label).toEqualTypeOf<(n: number) => string>();
+expectTypeOf(factoryFetchSvc.run).toEqualTypeOf<FetchHandle["run"]>();
+
+declare const asyncFactoryBag: { readonly bad: () => Promise<string> };
+const _asyncFactoryRejected = Hyperlink.Tag()(
+  "defaults-handle/AsyncBag",
+  { current: Hyperlink.effect(Schema.Number) },
+  // @ts-expect-error Promise-returning fn rejected in factory defaults too
+  { defaults: asyncFactoryBag },
+);
+void _asyncFactoryRejected;

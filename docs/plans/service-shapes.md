@@ -1,6 +1,6 @@
 # Plan: service / contract shapes
 
-**Status:** `default` / `defaults` Eng’d (2026-07-27); **construction adornments A1–A2 Eng’d** (`defaults` Service widen via `remapTagService`); **`cell` parked/rejected** (ref + adapters enough).  
+**Status:** `default` / `defaults` Eng’d (2026-07-27); **construction adornments A1–A3 Eng’d** (pipe + factory `{ defaults }`); **`cell` parked/rejected** (ref + adapters enough).  
 **Agent:** 4 (`cursor/hyperservice-open-deps-5679`).  
 **Prior art:** [`service-shape-redesign.md`](../handoffs/archive/2026-07/features/service-shape-redesign.md) (2026-07-01/02), [`client-adapters-design.md`](../handoffs/client-adapters-design.md).  
 **Orthogonal:** wire RpcGroup identity — [`wire-groups-and-identity.md`](./wire-groups-and-identity.md) (W1–W3 Eng’d; do not conflate with handle taxonomy).
@@ -281,8 +281,8 @@ Today’s candidates under this umbrella:
 |-------|--------|
 | **A1** | ~~Remap `Svc` in `defaults` + licensed cast + `.test-d.ts`~~ **done** (`remapTagService`) |
 | **A2** | ~~Toolkit Tags keep named handle ∧ bag~~ **done** (`test/defaults-handle.test-d.ts`) |
-| **A3** | Optional factory `{ defaults }` sugar (desugars to A1) |
-| **A4** | Docs polish / getting-started migrate (partial — demo off `WithDefaults`) |
+| **A3** | ~~Factory `{ defaults }` sugar~~ **done** (Hyperlink / WorkPool / Gate / Daemon; after naming casts) |
+| **A4** | Docs polish / getting-started migrate (partial — demo + Creating use factory sugar) |
 | **A5** | Further adorners share `remapTagService` |
 
 ### Non-goals
@@ -301,7 +301,7 @@ Today’s candidates under this umbrella:
 5. ~~Promise adapter~~ **done** (`Hyperlink.promise`).
 6. Getting-started / Core Concepts polish for the taxonomy (optional).
 7. ~~`default` payload + `pure` fate~~ **done** — literals + sync fns; `pure` removed.
-8. ~~**Construction adornments A1–A2**~~ **Eng’d** — optional A3 sugar still open.
+8. ~~**Construction adornments A1–A3**~~ **Eng’d** (pipe + factory `{ defaults }`).
 
 ---
 

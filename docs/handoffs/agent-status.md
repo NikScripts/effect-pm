@@ -6,7 +6,7 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **4** | `cursor/hyperservice-open-deps-5679` | [fleet rate limiting](../plans/fleet-rate-limiting.md) · [wire groups](../plans/wire-groups-and-identity.md) · [service shapes](../plans/service-shapes.md) | **tip-synced** — A1–A2 + `cell` parked/rejected | same tip as `integration` | typecheck 0 / hyperlink-default 12/12 | idle; optional A3 / R5 | 2026-07-27 |
+| **4** | `cursor/hyperservice-open-deps-5679` | [fleet rate limiting](../plans/fleet-rate-limiting.md) · [wire groups](../plans/wire-groups-and-identity.md) · [service shapes](../plans/service-shapes.md) | **Eng** — A3 factory `{ defaults }` sugar | work branch tip | typecheck pending | A3 in flight; tip-sync when green | 2026-07-27 |
 | **G / TUI** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity | **design** — client adapters notes; tip-synced | same tip as `integration` | prior suites green | Notes: [`client-adapters-design.md`](./client-adapters-design.md) — Promise / TanStack / tRPC-shape / Effect-reactive helpers; Eng TBD | 2026-07-24 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **G**, this agent only | 2026-07-26 |
 | **Launcher** | `cursor/launcher-handoff-design-929b` | [launcher + handoff brief](./launcher-and-handoff-brief.md) | **bake** — Track A API locked (#1–21) | branch tip | docs only | Awaiting owner **Eng go**. Open: Tracks B/C/D | 2026-07-27 |
