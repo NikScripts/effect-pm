@@ -70,9 +70,20 @@ pnpm run cf:ensure   # once (idempotent upsert)
 pnpm run cf:status   # expect cf-cache-status: HIT on the 2nd probe
 ```
 
-Rule match: `/api/effect*`, `/api/platform-node*`, `/api/sql-sqlite-node*` on
-`hyperlink.cool` / `www`. Edge TTL 1 day with `override_origin` (DO often emits
-`Cache-Control: private`). Purge on every image deploy (`pnpm run deploy:do` / `pnpm run cf:purge`).
+Rules (both `override_origin` — DO often emits `Cache-Control: private`):
+
+| Rule | Match | Edge TTL |
+|------|--------|----------|
+| dep API SSR | `/api/effect*`, `/api/platform-node*`, `/api/sql-sqlite-node*` | 1 day |
+| static corpus | `/assets/*`, `/search/*`, favicon/og/robots/llms/sitemap/healthz | 1 year (assets) |
+
+Purge on every image deploy (`pnpm run deploy:do` / `pnpm run cf:purge`).
+
+**DOCS_SITE_ORIGIN:** must decrypt to a real `https://…` URL at build time. Bare `waku build`
+without dotenvx once baked `encrypted:…` into every canonical/og tag — `deploy-do.sh` now refuses
+non-http(s) origins, and `siteOrigin()` falls back to `https://hyperlink.cool`.
+
+**robots.txt:** origin serves `docs/site/public/robots.txt` (Allow + Sitemap).
 
 Origin also stamps `Cache-Control: public, s-maxage=86400, …` via
 `src/middleware/cacheHeaders.ts` for those paths — documentation of intent; the Cache Rule is

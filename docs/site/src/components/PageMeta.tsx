@@ -19,8 +19,17 @@ export const PageMeta = ({
   /** Soft-404 and similar pages that must not enter the index. */
   readonly noIndex?: boolean;
 }) => {
-  // summaries arrive as markdown-ish text — a meta tag wants none of the markers
-  const desc = clamp(description.replace(/[`*_]/g, "").trim(), 200);
+  // Summaries arrive as markdown-ish text. Unwrap markers without eating postfix `*`
+  // (e.g. `yield*` must stay `yield*` in the meta description — a char-class strip made it `yield`).
+  const desc = clamp(
+    description
+      .replace(/`([^`]*)`/g, "$1")
+      .replace(/\*\*([^*]+)\*\*/g, "$1")
+      .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1$2")
+      .replace(/(^|[^_])_([^_\n]+)_(?!_)/g, "$1$2")
+      .trim(),
+    200
+  );
   const url = path !== undefined ? absoluteUrl(path) : undefined;
   const ogImage = absoluteUrl("/og.svg");
   return (

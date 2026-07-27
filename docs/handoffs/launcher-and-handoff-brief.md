@@ -1,6 +1,6 @@
 # Brief — Launcher + node handoff (new agent)
 
-**Status:** plan-first / design bake — **spine locked; APIs not locked.**  
+**Status:** plan-first / design bake — **Track A API locked (#1–21); awaiting owner Eng go.**  
 **Opened:** 2026-07-25 (owner via Agent G).  
 **Audience:** next agent picking up launcher + handoff / migration discussion.
 
@@ -44,6 +44,63 @@
     - You *can* group layers via Group, but that is not exclusive or load-bearing for launch.
     - Launcher must **not** treat `Group` as “the set of OS processes to spawn” or as SSOT for placement/process topology (Lookup/Node remain that).
     - CLI path sugar from group paths (if any) is addressing ergonomics only — not ownership of lifecycle.
+13. **Product = library launcher (spine α), not blank-worker/Lookup-day-one, not “no launcher package.”**
+    - Ship `hyperlink-ts/Launcher` + `Node.assume` / Ready handshake; optional thin `hl up` later.
+    - **v1 grain:** 1 node ↔ 1 OS process; parent **probes** Ready (`verifyConnection` / status); child is an **autonomous entry** (app owns serve/listen in its `main`).
+    - Track **B** (Lookup-directed / blank worker) later — keep assume/ready on Node so it can plug in.
+    - Rejected for Track A: host-only bring-up with Hyperlink as handshake docs alone; collapsed process|fiber (`hl dev`) deferred.
+14. **Spawn input (unit) locked:**
+    ```ts
+    {
+      node: AnyNode  // dial / verify / handoff target
+      process: ChildProcess  // Effect ChildProcess.make(…)
+      // optional sugar: entry (+ cwd/env/exec) that builds ChildProcess
+      ready?: {
+        resources?: ReadonlyArray<string>  // tag keys; omit ⇒ allReady-shaped
+        timeout?: Duration.Input
+      }
+    }
+    ```
+    - Multi-node: `ReadonlyArray` of that unit (thin alias OK later). **Not** `Group`.
+    - Grounded in nameless-listen demo + `verifyConnection` / `Node.status` keys.
+15. **Parent API = custody handle + `Launcher.up`.**
+    - `Launcher.spawn(spec)` → **`Launcher.Handle`** (custody; launcher still holds the child) with `.awaitReady()` / `.handoff()`.
+    - `.handoff()` performs `Node.assume` on the wire; custody ends; do not use the handle for control afterward; launcher may exit.
+    - `Launcher.up(spec | ReadonlyArray<spec>)` = spawn → awaitReady → handoff (per unit) then exit — one-shot (`Handle` only internal to `up`).
+    - **Only** `spawn` / `up` construct a `Handle` — no public constructors.
+    - Primary surface is the handle, not flat `Launcher.awaitReady(child)` free functions.
+16. **Custody type name = `Launcher.Handle`** (docs may say “custody”; reject `Custody` / `Child` as the type name).
+17. **Effect for everything (hard — owner).** Launcher / assume / Ready path follows package Effect platform policy end-to-end:
+    - **Process:** Effect `ChildProcess` / `ChildProcessSpawner` (+ `@effect/platform-node` layers) — **no** raw `node:child_process` / `spawn`.
+    - **Time / wait:** Effect `Schedule` / `Duration` / `TestClock` in tests — **no** ad-hoc `sleep` as the Ready gate (demos may; library must poll with Effect).
+    - **Config / token inject sugar:** Effect `Config` (or typed spawn options), **not** bare `process.env` as API or protocol.
+    - **Errors:** `Data.TaggedError` / `Schema.TaggedError` — **never** extend native `Error`; no message-string matching.
+    - **Wire:** Schema-first RPC for `Node.assume`; verify/Ready reuse existing Effect `verifyConnection` / status.
+    - **Composition:** `Effect` / `Layer` / `Scope` — no Promise/`async` in Launcher internals.
+    - Browser doesn’t OS-spawn; `Launcher` is a Node-platform module. **`Node.assume` / Ready stay wire-portable** (http/ws/ipc).
+18. **`Node.assume` wire = token payload (open injection).**
+    - RPC: `assume({ token: string })` — Schema’d; loud tagged failures (`AssumeTokenMismatch` / reuse / not-ready).
+    - Launcher **mints** token at `spawn`, holds on `Launcher.Handle`; `.handoff()` calls `assume({ token })`.
+    - **Injection is not the protocol** — app chooses how the child learns the token (`ChildProcess` env/argv/etc. via Effect process options, or later bootstrap). Optional **Effect `Config`** helper for local Node; not required.
+    - Child **rejects** `assume` until Ready. Status may mirror `ownership: "launcher" | "self"`.
+    - Rejected as default: nullary `assume()`; env-as-wire-contract; bidirectional launcher server for v1.
+19. **Ready / handoff failure channels (tagged only).**
+    - Reuse verify stack where it fits: `NodeUnreachable` (and kin), `ServiceNotReady` as **transient** while polling.
+    - **New:** `Launcher.ReadyTimedOut` `{ node, resources?, timeout }` — bound wait expired.
+    - **New:** `Launcher.ChildExited` `{ node, code? }` — child dies during `awaitReady`.
+    - **New (assume):** `AssumeTokenMismatch` / `AssumeTokenReused` / `AssumeNotReady` — Schema/TaggedError.
+    - Poll with Effect `Schedule` + `Duration` from `ready.timeout` (default **`"30 seconds"`** unless Eng finds a better house default).
+    - No native `Error`, no message-string matching; tests use `TestClock`.
+20. **Assume token = opaque high-entropy string (Effect mint + Redacted).**
+    - Mint with Effect `Random` (sufficient bytes → hex or base64url) — **no** raw `crypto.randomUUID` / Node crypto in app code.
+    - Wire: `Schema.String` (optional brand `Launcher.Token` if it stays thin).
+    - Hold and log as **`Redacted`** — never cleartext in logs.
+    - Reject UUID-as-the-story if it implies non-Effect globals; brand OK as sugar over the same mint.
+21. **Package export = own subpath `hyperlink-ts/Launcher`.**
+    - Public module: `src/Launcher.ts` (flat Effect-true namespace) + `src/internal/launcher.ts` engine as needed.
+    - Barrel / `package.json` `exports` entry for `hyperlink-ts/Launcher` — **not** nested under `Node`.
+    - **Node-platform only** (mirror other OS-spawn entrypoints); `Node.assume` / Ready stay on `hyperlink-ts/Node` and remain wire-portable.
+    - Eng may choose exact packaging nuance (e.g. peer `@effect/platform-node`) without reopening the subpath decision.
 
 Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.md) remain **reference only** unless re-locked here.
 
@@ -61,11 +118,21 @@ Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.m
 
 **Gaps vs locked bake:** no `hyperlink-ts/Launcher`; no `Node.assume`; no poll-until-allReady on the parent (deep verify without `resource` only proves status RPC answers); no detached spawn→ready→assume→exit kit.
 
-### Track A — baking (not locked)
+### Track A — Eng go checklist (owner)
 
-- **Spawn input (grounded):** unit = node dial target (`Node.Tag` / addressed node) + `ChildProcess` (how to start) + optional ready scope (`resources?: tag keys`, `timeout?`) — **not** Group. Multi-node = `ReadonlyArray` of that unit. Confirm with owner.
-- Failure / timeout: reuse `ServiceNotReady` / `NodeUnreachable` / … + bounded poll (not invent a parallel health stack).
-- `Node.assume` wire shape (new RPC; status may mirror).
+Track A bake surface is locked (#1–21). **No Eng until owner says go.** Remaining items are Eng detail (not bake blockers):
+
+| Area | Locked | Eng may decide without re-bake |
+|------|--------|--------------------------------|
+| Spine / product / modules | #1, #10, #13, #21 | thin CLI later |
+| Phases / names / `Handle` | #6, #11, #15, #16 | internal helpers |
+| Spawn unit / multi / not Group | #12, #14 | entry→`ChildProcess` sugar shape |
+| Ready / allReady / verify | #4, #7, #8 | poll schedule internals |
+| `Node.assume` + token | #9, #18, #20 | token byte length; brand thickness |
+| Errors / timeout | #19 | exact Schema fields on assume errors |
+| Effect everywhere / Node-only Launcher | #17, #21 | `@effect/platform-node` peer wiring |
+
+**Owner action:** reply **Eng go** (or name any # to reopen) before implementation starts.
 
 ---
 

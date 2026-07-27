@@ -7,6 +7,7 @@ import * as nodePath from "node:path";
 import { Effect, Schema } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import { slugForEntry, symbolFileKey } from "./api-slugs.js";
+import { processSlot } from "./processSlot.js";
 
 // Resolve the data dirs from the working directory (docs/site in both `waku dev` and `waku build`),
 // NOT import.meta.url: in a production build the bundled module's URL points into dist/, so a
@@ -100,15 +101,26 @@ const readJson = <S extends Schema.Top>(
     return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(schema))(text);
   }).pipe(Effect.orElseSucceed(() => undefined));
 
-// Process-lifetime memo for shared index files. API SSR hits the same handful of JSON blobs on
-// every symbol page (references, packages, locations, doclinks); re-reading them from disk per
+// Process-lifetime memo for shared index files (survives Vite SSR module re-eval via processSlot).
+// API SSR hits the same handful of JSON blobs on every symbol page; re-reading them from disk per
 // request was a measurable slice of the OOM-era cost. Per-symbol files stay uncached.
-let packagesCache: ReadonlyArray<PackageInfo> | undefined;
-let pathsCache: ReadonlyArray<readonly [string, string, string]> | undefined;
-let locationsCache: ReadonlyArray<SymbolLocation> | undefined;
-let referencesCache: Readonly<Record<string, ReadonlyArray<string>>> | undefined;
-let docLinksCache: Readonly<Record<string, Record<string, string>>> | undefined;
-let repoBaseUrlCache: string | undefined;
+type ApiDataSlot = {
+  packages: ReadonlyArray<PackageInfo> | undefined;
+  paths: ReadonlyArray<readonly [string, string, string]> | undefined;
+  locations: ReadonlyArray<SymbolLocation> | undefined;
+  references: Readonly<Record<string, ReadonlyArray<string>>> | undefined;
+  docLinks: Readonly<Record<string, Record<string, string>>> | undefined;
+  repoBaseUrl: string | undefined;
+};
+const cache = (): ApiDataSlot =>
+  processSlot("apiData", () => ({
+    packages: undefined,
+    paths: undefined,
+    locations: undefined,
+    references: undefined,
+    docLinks: undefined,
+    repoBaseUrl: undefined,
+  }));
 
 // Re-exported (one shared copy in ./api-slugs — writer gen-api and reader here must agree).
 export { slugForEntry, symbolFileKey };
@@ -119,10 +131,11 @@ export const packages = (): Effect.Effect<
   FileSystem.FileSystem
 > =>
   Effect.gen(function* () {
-    if (packagesCache !== undefined) return packagesCache;
+    const c = cache();
+    if (c.packages !== undefined) return c.packages;
     const i = yield* readJson("index.json", IndexS);
-    packagesCache = i?.packages ?? [];
-    return packagesCache;
+    c.packages = i?.packages ?? [];
+    return c.packages;
   });
 
 export const packageBySlug = (
@@ -150,10 +163,11 @@ export const symbolPaths = (): Effect.Effect<
   FileSystem.FileSystem
 > =>
   Effect.gen(function* () {
-    if (pathsCache !== undefined) return pathsCache;
+    const c = cache();
+    if (c.paths !== undefined) return c.paths;
     const p = yield* readJson("paths.json", PathsS);
-    pathsCache = p?.symbols ?? [];
-    return pathsCache;
+    c.paths = p?.symbols ?? [];
+    return c.paths;
   });
 
 // Every documented declaration's location → its doc URL (deduped per line by the writer) — the
@@ -164,10 +178,11 @@ export const symbolLocations = (): Effect.Effect<
   FileSystem.FileSystem
 > =>
   Effect.gen(function* () {
-    if (locationsCache !== undefined) return locationsCache;
+    const c = cache();
+    if (c.locations !== undefined) return c.locations;
     const l = yield* readJson("locations.json", LocationsS);
-    locationsCache = l?.locations ?? [];
-    return locationsCache;
+    c.locations = l?.locations ?? [];
+    return c.locations;
   });
 
 // The documented symbols whose declarations REFERENCE this page (compiler-resolved inversion,
@@ -176,11 +191,12 @@ export const referencedBy = (
   url: string
 ): Effect.Effect<ReadonlyArray<string>, never, FileSystem.FileSystem> =>
   Effect.gen(function* () {
-    if (referencesCache === undefined) {
+    const c = cache();
+    if (c.references === undefined) {
       const r = yield* readJson("references.json", ReferencesS);
-      referencesCache = r?.references ?? {};
+      c.references = r?.references ?? {};
     }
-    return referencesCache[url] ?? [];
+    return c.references[url] ?? [];
   });
 
 // Resolved {@link} maps keyed by a symbol's declaration `file:line` — for hover link resolution.
@@ -190,18 +206,20 @@ export const docLinksByLocation = (): Effect.Effect<
   FileSystem.FileSystem
 > =>
   Effect.gen(function* () {
-    if (docLinksCache !== undefined) return docLinksCache;
+    const c = cache();
+    if (c.docLinks !== undefined) return c.docLinks;
     const d = yield* readJson("doclinks.json", DocLinksS);
-    docLinksCache = d ?? {};
-    return docLinksCache;
+    c.docLinks = d ?? {};
+    return c.docLinks;
   });
 
 export const repoBaseUrl = (): Effect.Effect<string, never, FileSystem.FileSystem> =>
   Effect.gen(function* () {
-    if (repoBaseUrlCache !== undefined) return repoBaseUrlCache;
+    const c = cache();
+    if (c.repoBaseUrl !== undefined) return c.repoBaseUrl;
     const m = yield* readJson("meta.json", MetaS);
-    repoBaseUrlCache = m?.repoBaseUrl ?? "";
-    return repoBaseUrlCache;
+    c.repoBaseUrl = m?.repoBaseUrl ?? "";
+    return c.repoBaseUrl;
   });
 
 // The full text of a symbol's source file (repo-relative), for the twoslash source panel. Read
