@@ -1,8 +1,8 @@
 # Plan: fleet rate limiting (Gates + HttpApiClient)
 
-**Status:** Eng in progress — **R1 + R3 (fleet verify) Eng’d**. R2 observe nest + R4 HttpApiClient open.  
+**Status:** Eng in progress — **R1 + R2 + R3 + R3b Eng’d**. R4 HttpApiClient open.  
 **Agent:** 4 (`cursor/hyperservice-open-deps-5679`).  
-**Depends on:** Effect `4.0.0-beta.98` `effect/unstable/persistence/RateLimiter`; WorkPool `rateLimit` precedent.  
+**Depends on:** Effect `4.0.0-beta.98` `effect/unstable/persistence/RateLimiter`; WorkPool `rateLimit` precedent; optional peer `ioredis` + `@effect/platform-node` `NodeRedis`.  
 **Product context:** HttpApiClient Gate = local routes + wire observe/limit nest; ApiMetrics absorbed (not a migrate track). Fleet rate limiting is the substrate that nest uses.
 
 ---
@@ -225,8 +225,8 @@ Layer.mergeAll(
   Gate.layer(Github, …),
   Gate.layer(Slack, …),
 ).pipe(
-  Layer.provide(RateLimiter.layerStoreRedis()), // one store → all Gates see it via serviceOption
-  Layer.provide(Redis.layer…),
+  Layer.provide(RateLimiter.layerStoreRedis({ prefix: "fleet:" })), // one store → all Gates see it via serviceOption
+  Layer.provide(NodeRedis.layer({ host, port })),
 )
 ```
 
@@ -258,11 +258,11 @@ Fleet rate limiting is **first-class Gate substrate**. HttpApiClient update **us
 ## Open decisions (owner)
 
 1. ~~How is the store selected?~~ **LOCKED (owner):** presence-driven `serviceOption(RateLimiterStore)` like `DurableQueueStore`; Soft memory when absent.  
-2. **Fleet store v1 backend:** Effect **Redis** only, or also Eng SQL `RateLimiterStore`? — lean Redis  
+2. ~~**Fleet store v1 backend:**~~ **LOCKED:** Effect **Redis** only for fleet v1 (`NodeRedis` + `layerStoreRedis`). SQL `RateLimiterStore` later if needed.  
 3. **Distributed + memory Soft:** docs-only vs fail-loud? — lean docs  
 4. ~~**Default `onExceeded` for Gates:**~~ **LOCKED (R1 lean):** `"delay"`  
-5. ~~**Nest name / shape:**~~ **LOCKED (bake 2026-07-27):** nest **`metrics`**, **flat siblings** (usage + limiter fields). Default on-handle + fail-loud if Api group is named `metrics`. Escape: hide / static-only (or rename) so apps can keep a `metrics` HttpApi group — knob TBD.  
-6. **Per-route keys** in v1 or whole-client key only? — lean whole-client (Gate key = resource id today)
+5. ~~**Nest name / shape / collision:**~~ **LOCKED (bake 2026-07-27):** nest default **`metrics`**, **flat siblings**. Escape = const **`metricsKey`** rename (typed); fail-loud if Api group id equals chosen key.  
+6. ~~**Per-route keys / key identity:**~~ **LOCKED (bake 2026-07-27):** whole-client v1. Service key ≠ bucket key (separate fields). **`rateLimit.key` optional — omit inherits service key.** Metadata exposes both + `metricsKey`. Nest = live data only. Per-route later.
 
 ---
 
@@ -272,9 +272,10 @@ Fleet rate limiting is **first-class Gate substrate**. HttpApiClient update **us
 |-------|--------|
 | **R0** | This proposal + owner locks above |
 | **R1** | ~~Gate config `rateLimit` + consume before Semaphore; Soft memory / presence store; tests with `TestClock`~~ **Eng’d** |
-| **R2** | Wire **`metrics` nest** on Gate (remaining / exceeded ± usage); HttpApiClient still old shape but can share limiter |
-| **R3** | ~~Fleet recipe + shared-store tests (Gate + WorkPool presence-driven); Soft vs shared contrast; demo/docs~~ **Eng’d** (Redis recipe documented; CI uses shared memory store as stand-in) |
-| **R4** | `Gate.HttpApiClient` Tag (local routes + `metrics` nest); `static layer` pattern; adaptive 429 TBD; retire ApiMetrics public story |
+| **R2** | ~~Light **`metrics` nest** on ordinary Gate~~ **Eng’d** — wire nest `remaining` / `resetAfter` / `exceeded`; Tag metadata `rateLimitKeyOf` / `metricsKeyOf`; live updates when `rateLimit` set |
+| **R3** | ~~Fleet recipe + shared-store tests (Gate + WorkPool presence-driven); Soft vs shared contrast; demo/docs~~ **Eng’d** (shared memory CI stand-in) |
+| **R3b** | ~~Live Redis proof~~ **Eng’d** — `NodeRedis.layer` + `RateLimiter.layerStoreRedis`; Gate/WorkPool live suites + child-process peer; `Persistence.layerRedis` / `PersistedQueue.layerStoreRedis` smoke; `docker-compose.redis.yml`; demo auto-detects Redis |
+| **R4** | `Gate.HttpApiClient` Tag (local routes + `metrics` nest); `static layer` pattern; **opt-in adaptive 429**; retire ApiMetrics public story |
 | **R5** | (Optional) Hyperlink-backed `RateLimiterStore` without Redis |
 
 ---

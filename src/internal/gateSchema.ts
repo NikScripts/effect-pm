@@ -69,6 +69,30 @@ const gateObservationRefs = () => ({
   }),
 });
 
+/**
+ * Limiter live fields under the wire nest (default key {@link DEFAULT_METRICS_KEY}).
+ * Updated when `rateLimit` is set; otherwise idle zeros.
+ *
+ * @internal
+ */
+export const gateMetricsNestSpec = {
+  remaining: Hyperlink.ref(Schema.Number).annotate({
+    description:
+      "Tokens remaining in the current rate-limit window after the last consume.",
+  }),
+  resetAfter: Hyperlink.ref(Schema.Number).annotate({
+    description:
+      "Milliseconds until the rate-limit window fully resets (last consume).",
+  }),
+  exceeded: Hyperlink.ref(Schema.Number).annotate({
+    description:
+      "Count of rate-limit exceed events (delay or reject) since the gate built.",
+  }),
+} as const;
+
+/** Default nest path for limiter observation (rename via Tag/Service `metricsKey` later). @internal */
+export const DEFAULT_METRICS_KEY = "metrics" as const;
+
 /** Instance spec for a gate typed by its wire schemas. @internal */
 export type GateInstanceSpec<
   I extends Schema.Top,
@@ -81,31 +105,39 @@ export type GateInstanceSpec<
   readonly completed: GateCountRef;
   readonly failed: GateCountRef;
   readonly interrupted: GateCountRef;
+  readonly metrics: typeof gateMetricsNestSpec;
   readonly run: GateWireMember<I, A, E>;
 };
 
+const withMetricsNest = <T extends object>(spec: T) => ({
+  ...spec,
+  metrics: gateMetricsNestSpec,
+});
+
 const gateSpecVoid = <A extends Schema.Top>(
   success: A,
-): GateInstanceSpec<Void, A, typeof Schema.Never> => ({
-  ...gateObservationRefs(),
-  run: Hyperlink.effect(success).annotate({ description: RUN_DESCRIPTION }) as GateWireMember<
-    Void,
-    A,
-    typeof Schema.Never
-  >,
-});
+): GateInstanceSpec<Void, A, typeof Schema.Never> =>
+  withMetricsNest({
+    ...gateObservationRefs(),
+    run: Hyperlink.effect(success).annotate({ description: RUN_DESCRIPTION }) as GateWireMember<
+      Void,
+      A,
+      typeof Schema.Never
+    >,
+  });
 
 const gateSpecVoidWithError = <A extends Schema.Top, E extends Schema.Top>(
   success: A,
   error: E,
-): GateInstanceSpec<Void, A, E> => ({
-  ...gateObservationRefs(),
-  run: Hyperlink.effect(success, error).annotate({ description: RUN_DESCRIPTION }) as GateWireMember<
-    Void,
-    A,
-    E
-  >,
-});
+): GateInstanceSpec<Void, A, E> =>
+  withMetricsNest({
+    ...gateObservationRefs(),
+    run: Hyperlink.effect(success, error).annotate({ description: RUN_DESCRIPTION }) as GateWireMember<
+      Void,
+      A,
+      E
+    >,
+  });
 
 const gateSpecWithPayload = <
   I extends Exclude<Schema.Top, Void>,
@@ -115,12 +147,13 @@ const gateSpecWithPayload = <
   payload: I,
   success: A,
   error: E,
-): GateInstanceSpec<I, A, E> => ({
-  ...gateObservationRefs(),
-  run: Hyperlink.effectFn({ payload, success, error }).annotate({
-    description: RUN_DESCRIPTION,
-  }) as unknown as GateWireMember<I, A, E>,
-});
+): GateInstanceSpec<I, A, E> =>
+  withMetricsNest({
+    ...gateObservationRefs(),
+    run: Hyperlink.effectFn({ payload, success, error }).annotate({
+      description: RUN_DESCRIPTION,
+    }) as unknown as GateWireMember<I, A, E>,
+  });
 
 /**
  * Build a gate **instance** spec: observation refs plus the gated `run` mutation.

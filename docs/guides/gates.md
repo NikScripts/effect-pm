@@ -34,10 +34,37 @@ class Double extends Gate.Service<Double>()("app/Double", {
 }) {}
 ```
 
-`rateLimit` is Effect’s `RateLimiter.consume` / `makeWithRateLimiter` options
+`rateLimit` is Effect’s `RateLimiter.consume` options
 (`limit`, `window`, `algorithm`, `onExceeded`, `tokens`, `key`, …) — not a
 `RateLimiter` service handle. New upstream fields flow through. Omitted `key`
 defaults to the gate id; omitted `onExceeded` defaults to `"delay"`.
+
+## Metrics nest (limiter observation)
+
+Every Gate Tag/Service handle exposes a flat **`metrics`** nest with live
+limiter fields. Values update when `rateLimit` is set; otherwise they stay idle
+zeros.
+
+| Field | Meaning |
+|-------|---------|
+| `metrics.remaining` | Tokens left after the last consume |
+| `metrics.resetAfter` | Milliseconds until the window fully resets |
+| `metrics.exceeded` | Count of delay/reject events since the gate built |
+
+Stable discovery metadata is on the **Tag**, not under the nest path:
+
+```ts
+Gate.metricsKeyOf(Double)    // "metrics" (v1 nest path)
+Gate.rateLimitKeyOf(Double)  // bucket key when rateLimit was declared at mint
+```
+
+```ts
+const gate = yield* Double
+const remaining = yield* gate.metrics.remaining.get
+```
+
+HttpApi usage windows land on the same nest in R4; ordinary Gates stay
+limiter-only.
 
 ## Fleet rate limiting
 
@@ -51,22 +78,29 @@ defaults to the gate id; omitted `onExceeded` defaults to `"delay"`.
 | Provide `RateLimiter.layerStoreMemory` in tests | Same presence-driven path; simulates Redis |
 
 ``` ts
-import { RateLimiter } from "effect/unstable/persistence/RateLimiter"
+import * as NodeRedis from "@effect/platform-node/NodeRedis"
 import { Layer } from "effect"
+import { RateLimiter } from "effect/unstable/persistence/RateLimiter"
 
 // Fleet root — one Redis store for every Gate / WorkPool with rateLimit
 const FleetLive = Layer.mergeAll(
   EastGate.layer,
   WestGate.layer,
 ).pipe(
-  Layer.provide(RateLimiter.layerStoreRedis()),
-  // Layer.provide(yourRedisLayer),
+  Layer.provide(RateLimiter.layerStoreRedis({ prefix: "fleet:" })),
+  Layer.provide(NodeRedis.layer({ host: "127.0.0.1", port: 6379 })),
 )
 ```
 
 Use the **same** `rateLimit.key` (or default resource ids that you intend to
 share) on every peer. Soft memory + distributed deploy = N× the limit (docs
-warn; not fail-loud in v1). Runnable form:
+warn; not fail-loud in v1).
+
+**Local Redis:** `docker compose -f docker-compose.redis.yml up -d` (or
+`redis-server`), then `REDIS_URL=redis://127.0.0.1:6379`. Live suites:
+`test/rate-limit-redis.test.ts` (Gate + WorkPool + child-process peer) and
+`test/effect-redis-stores.test.ts` (`Persistence.layerRedis` /
+`PersistedQueue.layerStoreRedis`). Runnable form auto-detects Redis:
 `pnpm exec tsx examples/forms/hyperlink/gate-rate-limit-fleet.ts`.
 
 ## Call it
