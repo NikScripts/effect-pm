@@ -17,13 +17,19 @@
    - **Parent API** exposes composeable phases (not a buried `launch`): roughly `spawn → awaitReady → handoff → exit`.
    - **Child** must **ack** ownership (“I am ready; I own myself”) so the transfer is a real handshake on the wire, not an assumption from readiness alone.
    - Prefer reusing existing node / verify substrate for the ack; **no new control plane**. Exact verb names TBD.
+7. **Ready is first-class and high-bar** (owner: “first class and top notch”) — not “port open / process alive.”
+   - **Child** declares readiness through the existing **`withReadiness` / `Readiness` / node status** surface (served Hyperlinks participate; defaults ready when unset).
+   - **Launcher `awaitReady`** is a **named phase** that waits until that readiness is true **and** proven cross-process (reuse `verifyConnection` / deep classify — loud failures, typed errors). No ad-hoc health hacks.
+   - **Ready ≠ ownership.** Ready means “fit to serve”; **handoff ack** (locked #6) is the separate “I own myself; launcher may exit” step.
+   - Quality bar: Effect-shaped API, Schema/tagged errors, no silent timeouts-as-success; composeable with Track A phases.
 
 Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.md) remain **reference only** unless re-locked here.
 
 ### Track A — baking (not locked)
 
 - Concrete API names for the parent phases and the child ack verb.
-- What “Ready” means precisely (serve up vs `verifyConnection` vs node status).
+- Ready aggregation: **all** served Hyperlinks on the node (`allReady`-shaped) vs a single node-level Ready declaration.
+- Whether the ownership ack is a new node RPC verb or an extension of the readiness/status surface (still distinct semantically).
 
 ---
 
