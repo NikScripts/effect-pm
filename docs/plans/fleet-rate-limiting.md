@@ -163,12 +163,42 @@ Wire (clientable), e.g.:
 
 No sibling `ApiMetrics.Tag`. Dashboard dials the Gate Tag’s nest only.
 
-### Soft-default layers (mirror WorkPool Soft)
+### Effect `RateLimiter` layers (what actually ships)
 
-| Environment | Default store |
-|-------------|----------------|
-| Single Node / tests | `layerStoreMemory` (auto when `rateLimit` set) |
-| Fleet | App provides `layerStoreRedis` (or future Hyperlink store) **once** at root |
+| Layer | Provides | Needs | Notes |
+|-------|----------|-------|--------|
+| **`RateLimiter.layer`** | `RateLimiter` | `RateLimiterStore` | Service only |
+| **`RateLimiter.layerStoreMemory`** | `RateLimiterStore` | — | Process-local |
+| **`RateLimiter.layerStoreRedis(opts?)`** | `RateLimiterStore` | `Redis.Redis` | Lua atomic; fleet-capable |
+| **`RateLimiter.layerStoreRedisConfig`** | `RateLimiterStore` | `Config` + `Redis` | Config-wrapped Redis |
+
+**There is no SQL `RateLimiterStore` in Effect today.**  
+(Contrast: `PersistedQueue` / `Persistence` have `layerStoreSql` / `layerSql` — RateLimiter does not.)
+
+WorkPool composition today:
+
+```ts
+// auto when rateLimit is set — memory only
+queueRateLimiterLayer = Layer.provide(RateLimiter.layer, RateLimiter.layerStoreMemory)
+// app override for cross-process:
+Layer.provide(…, RateLimiter.layerStoreRedis())
+```
+
+### Soft / SQL — same *recipe* as WorkPool durability, different *port*
+
+WorkPool’s durability story is **not** the RateLimiter store:
+
+| Concern | Soft-default | Durable override (HL) |
+|---------|--------------|------------------------|
+| Engine journal / observe | `Store.layerDefaultMemory` | AppStore + SQLite (`Store.Service`) |
+| Queue pending items | (ephemeral) | `DurableQueueStore` + `storage/sqlite` |
+| **Worker rate limit** | **`RateLimiter.layerStoreMemory`** | **`RateLimiter.layerStoreRedis`** (Effect) |
+
+So “follow WorkPool durability” for Gates means:
+
+1. **Soft-default memory** when `rateLimit` is set (R fulfilled) — same Soft pattern as Store.  
+2. **Override by providing a durable store into the layer** so Soft sees it — for RateLimiter that durable path Effect ships is **Redis**, not SQLite.  
+3. If we want **SQL** parity with AppStore/DurableQueue, that is **our** adapter: implement `RateLimiterStore` over `@effect/sql` (not upstream yet). Call that R5 / optional.
 
 Fail loud if `distributed` / multi-node identity is on and store is still memory-only? **Lean: warn in docs first; optional Soft die later.**
 
