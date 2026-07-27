@@ -52,6 +52,7 @@ export async function ApiSymbolPage({
         description={
           s.summary !== "" ? s.summary : `API reference for ${s.qualifiedName} (${s.kind}).`
         }
+        path={s.url}
       />
       <article className="prose">
         <p className="api-back">

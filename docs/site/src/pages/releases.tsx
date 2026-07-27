@@ -45,6 +45,7 @@ export default async function ReleasesPage() {
       <PageMeta
         title="Releases — Hyperlink"
         description="Release history for Hyperlink — every version's changes, from the changelog."
+        path="/releases"
       />
       <article className="prose">
         <h1>Releases</h1>

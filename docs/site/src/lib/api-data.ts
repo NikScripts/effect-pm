@@ -100,6 +100,16 @@ const readJson = <S extends Schema.Top>(
     return yield* Schema.decodeUnknownEffect(Schema.fromJsonString(schema))(text);
   }).pipe(Effect.orElseSucceed(() => undefined));
 
+// Process-lifetime memo for shared index files. API SSR hits the same handful of JSON blobs on
+// every symbol page (references, packages, locations, doclinks); re-reading them from disk per
+// request was a measurable slice of the OOM-era cost. Per-symbol files stay uncached.
+let packagesCache: ReadonlyArray<PackageInfo> | undefined;
+let pathsCache: ReadonlyArray<readonly [string, string, string]> | undefined;
+let locationsCache: ReadonlyArray<SymbolLocation> | undefined;
+let referencesCache: Readonly<Record<string, ReadonlyArray<string>>> | undefined;
+let docLinksCache: Readonly<Record<string, Record<string, string>>> | undefined;
+let repoBaseUrlCache: string | undefined;
+
 // Re-exported (one shared copy in ./api-slugs — writer gen-api and reader here must agree).
 export { slugForEntry, symbolFileKey };
 
@@ -107,7 +117,13 @@ export const packages = (): Effect.Effect<
   ReadonlyArray<PackageInfo>,
   never,
   FileSystem.FileSystem
-> => readJson("index.json", IndexS).pipe(Effect.map((i) => i?.packages ?? []));
+> =>
+  Effect.gen(function* () {
+    if (packagesCache !== undefined) return packagesCache;
+    const i = yield* readJson("index.json", IndexS);
+    packagesCache = i?.packages ?? [];
+    return packagesCache;
+  });
 
 export const packageBySlug = (
   slug: string
@@ -132,7 +148,13 @@ export const symbolPaths = (): Effect.Effect<
   ReadonlyArray<readonly [string, string, string]>,
   never,
   FileSystem.FileSystem
-> => readJson("paths.json", PathsS).pipe(Effect.map((p) => p?.symbols ?? []));
+> =>
+  Effect.gen(function* () {
+    if (pathsCache !== undefined) return pathsCache;
+    const p = yield* readJson("paths.json", PathsS);
+    pathsCache = p?.symbols ?? [];
+    return pathsCache;
+  });
 
 // Every documented declaration's location → its doc URL (deduped per line by the writer) — the
 // render-time SymbolIndex for compiler source links (src/lib/api-source-links.ts).
@@ -140,24 +162,47 @@ export const symbolLocations = (): Effect.Effect<
   ReadonlyArray<SymbolLocation>,
   never,
   FileSystem.FileSystem
-> => readJson("locations.json", LocationsS).pipe(Effect.map((l) => l?.locations ?? []));
+> =>
+  Effect.gen(function* () {
+    if (locationsCache !== undefined) return locationsCache;
+    const l = yield* readJson("locations.json", LocationsS);
+    locationsCache = l?.locations ?? [];
+    return locationsCache;
+  });
 
 // The documented symbols whose declarations REFERENCE this page (compiler-resolved inversion,
 // scripts/gen-api.ts cross-reference pass) — the "Referenced by" section.
 export const referencedBy = (
   url: string
 ): Effect.Effect<ReadonlyArray<string>, never, FileSystem.FileSystem> =>
-  readJson("references.json", ReferencesS).pipe(Effect.map((r) => r?.references[url] ?? []));
+  Effect.gen(function* () {
+    if (referencesCache === undefined) {
+      const r = yield* readJson("references.json", ReferencesS);
+      referencesCache = r?.references ?? {};
+    }
+    return referencesCache[url] ?? [];
+  });
 
 // Resolved {@link} maps keyed by a symbol's declaration `file:line` — for hover link resolution.
 export const docLinksByLocation = (): Effect.Effect<
   Readonly<Record<string, Record<string, string>>>,
   never,
   FileSystem.FileSystem
-> => readJson("doclinks.json", DocLinksS).pipe(Effect.map((d) => d ?? {}));
+> =>
+  Effect.gen(function* () {
+    if (docLinksCache !== undefined) return docLinksCache;
+    const d = yield* readJson("doclinks.json", DocLinksS);
+    docLinksCache = d ?? {};
+    return docLinksCache;
+  });
 
 export const repoBaseUrl = (): Effect.Effect<string, never, FileSystem.FileSystem> =>
-  readJson("meta.json", MetaS).pipe(Effect.map((m) => m?.repoBaseUrl ?? ""));
+  Effect.gen(function* () {
+    if (repoBaseUrlCache !== undefined) return repoBaseUrlCache;
+    const m = yield* readJson("meta.json", MetaS);
+    repoBaseUrlCache = m?.repoBaseUrl ?? "";
+    return repoBaseUrlCache;
+  });
 
 // The full text of a symbol's source file (repo-relative), for the twoslash source panel. Read
 // through effect/FileSystem so the sync render pipeline never touches node:fs; undefined if missing.
