@@ -11,13 +11,24 @@ import * as WebDashboardViews from "../src/web/DashboardViews";
 import * as TuiDashboardViews from "../src/tui/DashboardViews";
 import * as WorkPool from "../src/WorkPool";
 import * as Daemon from "../src/Daemon";
+import * as Gate from "../src/Gate";
+import * as ApiMetrics from "../src/ApiMetrics";
 
 const Item = Schema.Struct({ n: Schema.Number });
 class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", { payload: Item }) {}
+class Lanes extends WorkPool.priority<Lanes>()("app/Lanes", {
+  payload: Item,
+  laneCount: 2,
+}) {}
 class Nightly extends Daemon.Tag<Nightly>()("app/Nightly") {}
+class Limit extends Gate.Tag<Limit>()("app/Limit", {
+  payload: Schema.String,
+  success: Schema.String,
+}) {}
+class HttpTap extends ApiMetrics.Tag<HttpTap>()("app/HttpTap") {}
 
 describe("DashboardViews packaging", () => {
-  it("web ready layer resolves WorkPool + Priority + Daemon cards", () => {
+  it("web ready layer resolves default family cards + details", () => {
     const { resolve } = View.react(WebDashboardViews.layer);
     expect(resolve(Jobs, "card").map((r) => r.key)).toEqual([
       "hyperlink/view/pool-card",
@@ -25,11 +36,20 @@ describe("DashboardViews packaging", () => {
     expect(resolve(Jobs, "detail").map((r) => r.key)).toEqual([
       "hyperlink/view/pool-detail",
     ]);
+    expect(resolve(Lanes, "card").map((r) => r.key)).toEqual([
+      "hyperlink/view/priority-card",
+    ]);
     expect(resolve(Nightly, "card").map((r) => r.key)).toEqual([
       "hyperlink/view/daemon-card",
     ]);
     expect(resolve(Nightly, "detail").map((r) => r.key)).toEqual([
       "hyperlink/view/daemon-detail",
+    ]);
+    expect(resolve(Limit, "detail").map((r) => r.key)).toEqual([
+      "hyperlink/view/gate-detail",
+    ]);
+    expect(resolve(HttpTap, "card").map((r) => r.key)).toEqual([
+      "hyperlink/view/api-card",
     ]);
   });
 

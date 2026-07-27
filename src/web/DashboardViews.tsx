@@ -140,7 +140,6 @@ const HyperlinkCardView: View.ViewComponent = (props) => (
   <HyperlinkCard
     tag={props.tag}
     name={props.name ?? displayName(props.tag.key)}
-    onOpen={() => {}}
   />
 );
 

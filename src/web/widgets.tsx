@@ -2405,7 +2405,12 @@ export const FallbackCard = (props: WidgetProps): React.ReactElement => (
  * DB connection, a health gate). There's little beyond identity to show, so it's the readiness LED
  * (its degraded reason on hover, like every card) + name + kind + the node it runs on. @public
  */
-export const HyperlinkCard = (props: WidgetProps): React.ReactElement => {
+export const HyperlinkCard = (props: {
+  readonly tag: LeafTag;
+  readonly name: string;
+  /** Unused — parent View Cell owns activation when present. */
+  readonly onOpen?: (tag: LeafTag) => void;
+}): React.ReactElement => {
   const node = resourceNodeRef(props.tag);
   return (
     <Card className="relative">
