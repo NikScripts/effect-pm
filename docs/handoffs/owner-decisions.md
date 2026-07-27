@@ -377,7 +377,8 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Chose (bake 2026-07-27 — adaptive 429):** **Opt-in in R4** (Effect `adaptiveConsume` / feedback). Default off / absent — fixed `rateLimit` policy alone is enough to ship the Tag reshape.
 - **Chose (bake 2026-07-27 — R2 ordinary Gate):** Light **`metrics` nest on ordinary Gates when `rateLimit` is set** — limiter live fields (`remaining` / `resetAfter` / `exceeded`) + stable metadata (`rateLimitKey`, `metricsKey`). No HTTP usage registry on ordinary Gates. HttpApi R4 adds usage/windows on the same nest.
 - **Chose (LOCKED + Eng’d — R3b live Redis):** Fleet store v1 = Effect **Redis only** (`NodeRedis.layer` + `RateLimiter.layerStoreRedis`). Live proof: Gate + WorkPool shared Redis budget, **child-process peer** consume, plus Effect `Persistence.layerRedis` / `PersistedQueue.layerStoreRedis` smokes (`test/rate-limit-redis.test.ts`, `test/effect-redis-stores.test.ts`). Optional peer `ioredis`. Compose: `docker-compose.redis.yml`. SQL RateLimiterStore deferred.
-- **Still open:** R2 Eng (`metrics` nest) → R4 HttpApiClient reshape.
+- **Chose (Eng’d — R2 ordinary Gate metrics):** Wire nest always present as **`metrics`** with limiter live fields (`remaining` / `resetAfter` / `exceeded`); updates when `rateLimit` set. Stable Tag metadata via `Gate.rateLimitKeyOf` / `Gate.metricsKeyOf` (not under nest path). No HTTP usage registry on ordinary Gates.
+- **Still open:** R4 HttpApiClient reshape + absorb ApiMetrics (usage on same nest; `metricsKey` rename / group-id collision).
 
 ## 2026-07-27 — Retire `Hyperlink.pure`; Eng `default` / `defaults`
 

@@ -66,6 +66,16 @@ assertExact<
   Exact<Hyperlink.Shape<typeof Tick>, Gate.Gate<void, number, never, never>>
 >();
 
+// ── DoD: metrics nest is on the named Gate handle (R2) ───────────────────────
+declare const tickHandle: Hyperlink.Shape<typeof Tick>;
+const _metricsRemaining: Hyperlink.Subscribable<number> =
+  tickHandle.metrics.remaining;
+const _metricsResetAfter: Hyperlink.Subscribable<number> =
+  tickHandle.metrics.resetAfter;
+const _metricsExceeded: Hyperlink.Subscribable<number> =
+  tickHandle.metrics.exceeded;
+void [_metricsRemaining, _metricsResetAfter, _metricsExceeded];
+
 // ── DoD: the static `.run` shortcut is Effect (unit) vs a call (parameterized) ───────────────────────
 // (mirrors gate.test-d.ts; ensures the naming cast keeps the static run's shape.)
 // @ts-expect-error — void gates reject positional input

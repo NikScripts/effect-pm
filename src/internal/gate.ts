@@ -20,15 +20,18 @@ import {
   SubscriptionRef,
 } from "effect";
 import {
+  RateLimitExceeded,
   RateLimiter as RateLimiterTag,
   RateLimiterError,
   RateLimiterStore,
   layer as rateLimiterLayer,
   layerStoreMemory,
   make as makeRateLimiter,
-  makeWithRateLimiter,
 } from "effect/unstable/persistence/RateLimiter";
-import type { RateLimiter as EffectRateLimiter } from "effect/unstable/persistence/RateLimiter";
+import type {
+  ConsumeResult,
+  RateLimiter as EffectRateLimiter,
+} from "effect/unstable/persistence/RateLimiter";
 import {
   builtInGateStoreContract,
   type GateStateChangeReason,
@@ -75,7 +78,14 @@ export type GateRateLimitOptions = Omit<RateLimiterConsumeOptions, "key"> & {
 };
 
 /** @public Re-export of Effect rate-limiter consume metadata. */
-export type { ConsumeResult } from "effect/unstable/persistence/RateLimiter";
+export type { ConsumeResult };
+
+/** Live limiter observation under the wire `metrics` nest. @internal */
+export interface GateMetrics {
+  readonly remaining: number;
+  readonly resetAfterMs: number;
+  readonly exceeded: number;
+}
 
 /** Live counters for a gated resource handle. @internal */
 export interface GateStatus {
@@ -108,6 +118,15 @@ export type GateHandle<T, A, E> = GateRunHandle<T, A, E> & {
   readonly completed: Subscribable<number>;
   readonly failed: Subscribable<number>;
   readonly interrupted: Subscribable<number>;
+  readonly metrics: {
+    readonly remaining: Subscribable<number>;
+    readonly resetAfter: Subscribable<number>;
+    readonly exceeded: Subscribable<number>;
+  };
+  /** Resolved rate-limit bucket key when `rateLimit` is set; otherwise absent. */
+  readonly rateLimitKey: string | undefined;
+  /** Wire nest path for limiter fields (v1 always `"metrics"`). */
+  readonly metricsKey: "metrics";
 };
 
 /** @internal */
@@ -315,22 +334,92 @@ const resolveGateRateLimiter = (): Effect.Effect<
 
 type RateLimitAwait = Effect.Effect<void, RateLimiterError>;
 
+const isRateLimitExceededReason = (
+  reason: RateLimiterError["reason"],
+): reason is RateLimitExceeded => reason._tag === "RateLimitExceeded";
+
+type MetricsPublisher = {
+  readonly publishConsume: (result: ConsumeResult) => Effect.Effect<void>;
+  readonly publishExceeded: (
+    remaining: number,
+    resetAfterMs: number,
+  ) => Effect.Effect<void>;
+};
+
 /**
- * Build a pre-consume effect via Effect's {@link makeWithRateLimiter} so Gate
- * tracks upstream delay/fail behavior (and any future consume options).
+ * Build a pre-consume effect that keeps full {@link ConsumeResult} metadata for
+ * the `metrics` nest (WorkPool-style — not `makeWithRateLimiter`, which drops it).
  */
 const acquireGateRateLimitAwait = (
   resourceId: string,
   rateLimit: GateRateLimitOptions,
   limiter: EffectRateLimiter,
-): Effect.Effect<RateLimitAwait> => {
+  metrics: MetricsPublisher,
+): RateLimitAwait => {
   assertValidRateLimit(rateLimit);
   const options = toConsumeOptions(resourceId, rateLimit);
-  return makeWithRateLimiter.pipe(
-    Effect.provideService(RateLimiterTag, limiter),
-    Effect.map((withLimiter) => withLimiter(options)(Effect.void)),
-  );
+  const onExceeded = options.onExceeded ?? "delay";
+
+  if (onExceeded === "fail") {
+    return limiter.consume(options).pipe(
+      Effect.flatMap((result) => metrics.publishConsume(result)),
+      Effect.catchTag("RateLimiterError", (error) =>
+        Effect.gen(function* () {
+          if (isRateLimitExceededReason(error.reason)) {
+            yield* metrics.publishExceeded(
+              error.reason.remaining,
+              Duration.toMillis(error.reason.retryAfter),
+            );
+          }
+          return yield* error;
+        }),
+      ),
+    );
+  }
+
+  return Effect.gen(function* () {
+    const result = yield* limiter.consume(options);
+    yield* metrics.publishConsume(result);
+    if (!Duration.isZero(result.delay)) {
+      yield* metrics.publishExceeded(
+        result.remaining,
+        Duration.toMillis(result.resetAfter),
+      );
+      yield* Effect.sleep(result.delay);
+    }
+  });
 };
+
+const makeMetricsPublisher = (
+  remainingRef: SubscriptionRef.SubscriptionRef<number>,
+  resetAfterRef: SubscriptionRef.SubscriptionRef<number>,
+  exceededRef: SubscriptionRef.SubscriptionRef<number>,
+): MetricsPublisher => ({
+  publishConsume: (result) =>
+    Effect.gen(function* () {
+      yield* SubscriptionRef.set(remainingRef, result.remaining);
+      yield* SubscriptionRef.set(
+        resetAfterRef,
+        Duration.toMillis(result.resetAfter),
+      );
+    }),
+  publishExceeded: (remaining, resetAfterMs) =>
+    Effect.gen(function* () {
+      yield* SubscriptionRef.set(remainingRef, remaining);
+      yield* SubscriptionRef.set(resetAfterRef, resetAfterMs);
+      yield* SubscriptionRef.update(exceededRef, (n) => n + 1);
+    }),
+});
+
+const makeMetricsSubscribables = (
+  remainingRef: SubscriptionRef.SubscriptionRef<number>,
+  resetAfterRef: SubscriptionRef.SubscriptionRef<number>,
+  exceededRef: SubscriptionRef.SubscriptionRef<number>,
+) => ({
+  remaining: subscribable(remainingRef),
+  resetAfter: subscribable(resetAfterRef),
+  exceeded: subscribable(exceededRef),
+});
 
 const makeObservedRun =
   <T, A, E>(
@@ -503,6 +592,16 @@ export const makeGateHandleEffect = <T, A, E>(
     const statusRef = yield* SubscriptionRef.make(
       makeInitialStatus(resourceId, concurrency, initializedAt),
     );
+    const initialRemaining =
+      config.rateLimit === undefined ? 0 : config.rateLimit.limit;
+    const remainingRef = yield* SubscriptionRef.make(initialRemaining);
+    const resetAfterRef = yield* SubscriptionRef.make(0);
+    const exceededRef = yield* SubscriptionRef.make(0);
+    const metricsPublisher = makeMetricsPublisher(
+      remainingRef,
+      resetAfterRef,
+      exceededRef,
+    );
     // Fail-loud Soft: AppStore missing this Gate registration dies at layer build.
     yield* Store.resolveOrDie(
       scopeKey,
@@ -526,13 +625,19 @@ export const makeGateHandleEffect = <T, A, E>(
     });
     const runSeqRef = yield* Ref.make(0);
 
+    const rateLimitKey =
+      config.rateLimit === undefined
+        ? undefined
+        : (config.rateLimit.key ?? resourceId);
+
     const rateLimitAwait: RateLimitAwait | undefined =
       config.rateLimit === undefined
         ? undefined
-        : yield* acquireGateRateLimitAwait(
+        : acquireGateRateLimitAwait(
             resourceId,
             config.rateLimit,
             yield* resolveGateRateLimiter(),
+            metricsPublisher,
           );
 
     yield* Effect.logDebug(
@@ -551,6 +656,13 @@ export const makeGateHandleEffect = <T, A, E>(
         rateLimitAwait,
       ),
       ...makeStatusSubscribables(statusRef),
+      metrics: makeMetricsSubscribables(
+        remainingRef,
+        resetAfterRef,
+        exceededRef,
+      ),
+      rateLimitKey,
+      metricsKey: "metrics" as const,
     };
   });
 };

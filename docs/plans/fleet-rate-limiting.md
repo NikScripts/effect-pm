@@ -1,6 +1,6 @@
 # Plan: fleet rate limiting (Gates + HttpApiClient)
 
-**Status:** Eng in progress — **R1 + R3 + R3b (live Redis) Eng’d**. R2 `metrics` nest + R4 HttpApiClient open.  
+**Status:** Eng in progress — **R1 + R2 + R3 + R3b Eng’d**. R4 HttpApiClient open.  
 **Agent:** 4 (`cursor/hyperservice-open-deps-5679`).  
 **Depends on:** Effect `4.0.0-beta.98` `effect/unstable/persistence/RateLimiter`; WorkPool `rateLimit` precedent; optional peer `ioredis` + `@effect/platform-node` `NodeRedis`.  
 **Product context:** HttpApiClient Gate = local routes + wire observe/limit nest; ApiMetrics absorbed (not a migrate track). Fleet rate limiting is the substrate that nest uses.
@@ -272,7 +272,7 @@ Fleet rate limiting is **first-class Gate substrate**. HttpApiClient update **us
 |-------|--------|
 | **R0** | This proposal + owner locks above |
 | **R1** | ~~Gate config `rateLimit` + consume before Semaphore; Soft memory / presence store; tests with `TestClock`~~ **Eng’d** |
-| **R2** | Light **`metrics` nest** on ordinary Gate when `rateLimit` set (limiter fields + key metadata); HttpApi still old shape until R4 |
+| **R2** | ~~Light **`metrics` nest** on ordinary Gate~~ **Eng’d** — wire nest `remaining` / `resetAfter` / `exceeded`; Tag metadata `rateLimitKeyOf` / `metricsKeyOf`; live updates when `rateLimit` set |
 | **R3** | ~~Fleet recipe + shared-store tests (Gate + WorkPool presence-driven); Soft vs shared contrast; demo/docs~~ **Eng’d** (shared memory CI stand-in) |
 | **R3b** | ~~Live Redis proof~~ **Eng’d** — `NodeRedis.layer` + `RateLimiter.layerStoreRedis`; Gate/WorkPool live suites + child-process peer; `Persistence.layerRedis` / `PersistedQueue.layerStoreRedis` smoke; `docker-compose.redis.yml`; demo auto-detects Redis |
 | **R4** | `Gate.HttpApiClient` Tag (local routes + `metrics` nest); `static layer` pattern; **opt-in adaptive 429**; retire ApiMetrics public story |
