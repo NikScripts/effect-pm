@@ -143,6 +143,87 @@ it("two solo tags with the same Spec coexist; each has its own wire key", () => 
   return Effect.runPromise(program);
 });
 
+// ── shared Spec Tag(wireKey, spec) → Factory<Self>()(instanceKey) ──
+const SharedCounter = Hyperlink.Tag("test/shared-counter", counterSpec, {
+  description: "A shared-Spec counter factory.",
+});
+class SharedAlpha extends SharedCounter<SharedAlpha>()("test/SharedAlpha") {}
+class SharedBeta extends SharedCounter<SharedBeta>()("test/SharedBeta") {}
+
+it("shared Tag factory stamps one wire key on every instance", () => {
+  expect(Hyperlink.wireKeyOf(SharedAlpha)).toBe(SharedCounter.wireKey);
+  expect(Hyperlink.wireKeyOf(SharedBeta)).toBe(SharedCounter.wireKey);
+  expect(SharedAlpha.key).toBe("test/SharedAlpha");
+  expect(SharedBeta.key).toBe("test/SharedBeta");
+  expect(SharedAlpha.description).toBe("A shared-Spec counter factory.");
+  expect(Hyperlink.kindOf(SharedAlpha)).toBe(SharedCounter.kind);
+});
+
+it("shared Tag serve merges under one RpcGroup and routes by key header", () => {
+  let alphaTotal = 0;
+  let betaTotal = 0;
+  const program = Effect.gen(function* () {
+    const rpc = yield* RpcTest.makeClient(groupOf(SharedAlpha));
+    const a = forwardClient(
+      rpc,
+      specOf(SharedAlpha),
+      SharedCounter.wireKey,
+      SharedAlpha.key,
+    );
+    const b = forwardClient(
+      rpc,
+      specOf(SharedBeta),
+      SharedCounter.wireKey,
+      SharedBeta.key,
+    );
+
+    expect(yield* a.label).toBe("alpha");
+    expect(yield* b.label).toBe("beta");
+    expect(yield* a.bump({ by: 3 })).toBe(3);
+    expect(yield* b.bump({ by: 10 })).toBe(10);
+    expect(yield* a.bump({ by: 4 })).toBe(7);
+    expect(yield* b.bump({ by: 1 })).toBe(11);
+  }).pipe(
+    Effect.provide(
+      Layer.mergeAll(
+        Hyperlink.serveRemote(SharedAlpha, {
+          bump: ({ by }: { by: number }) =>
+            Effect.sync(() => (alphaTotal += by)),
+          label: Effect.succeed("alpha"),
+        }),
+        Hyperlink.serveRemote(SharedBeta, {
+          bump: ({ by }: { by: number }) =>
+            Effect.sync(() => (betaTotal += by)),
+          label: Effect.succeed("beta"),
+        }),
+      ),
+    ),
+    Effect.scoped,
+  );
+  return Effect.runPromise(program);
+});
+
+it("shared Tag serve rejects a duplicate instance key", async () => {
+  const program = Effect.void.pipe(
+    Effect.provide(
+      Layer.mergeAll(
+        Hyperlink.serveRemote(SharedAlpha, {
+          bump: ({ by }: { by: number }) => Effect.succeed(by),
+          label: Effect.succeed("a"),
+        }),
+        Hyperlink.serveRemote(SharedAlpha, {
+          bump: ({ by }: { by: number }) => Effect.succeed(by),
+          label: Effect.succeed("dup"),
+        }),
+      ),
+    ),
+    Effect.scoped,
+  );
+  await expect(Effect.runPromise(program)).rejects.toThrow(
+    Hyperlink.DuplicateSharedInstance,
+  );
+});
+
 // ── resource-level description (tools: section help / panel title) ──
 class Described extends Hyperlink.Tag<Described>()("described", {
   ping: Hyperlink.effect(Schema.String),
@@ -152,7 +233,7 @@ class Described extends Hyperlink.Tag<Described>()("described", {
 class FamA extends Hyperlink.Tag<FamA>()(
   "describedFamily/A",
   { tick: Hyperlink.effect(Schema.Void) },
-  { description: "A described family." },
+  { description: "A described family.", },
 ) {}
 
 it("carries a resource-level description on tags", () => {

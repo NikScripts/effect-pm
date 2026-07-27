@@ -348,6 +348,14 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Standing rule:** Agent 4 (and all agents) push **work branch only** unless owner explicitly authorizes an `integration` push.
 - **Design (unlocked, discussion only):** Prefer shared Spec via `Hyperlink.Tag(wireKey, spec)` → `Factory<Self>()(instanceKey)` (class-only), not a new noun; no new serve/client verbs; explore API handle + reserved features nest (metrics) instead of sibling ApiMetrics tag / `httpApiClientService` product name. See incident handoff.
 
+## 2026-07-27 — W3 Eng: shared Spec via `Tag(wireKey, spec)` (not Family)
+
+- **Owner said:** Skip metrics for now. Document everything. Build the shared-Spec feature (the one metrics would use), demo it, tests/examples/docs — then stop and wait. Return to `.handle` rename later.
+- **Chose / Eng’d:** `Hyperlink.Tag(wireKey, spec)` → `Factory<Self>()(instanceKey)` (class-only, Effect-shaped `()`). Internal `sharedTagSym`; ordinary `serve` / `serveRemote` / `client` merge by wire key and route on header `key`. Errors: `DuplicateSharedInstance`, `SharedRoutingError`. Demo: `examples/forms/resource/shared-tag-wire.ts`. **ApiMetrics not migrated.**
+- **Rejected (still):** `Family` / `serveFamily` / `clientFamily` / `member`; pushing `integration` without explicit OK.
+- **Paused next:** ApiMetrics/Gate product shape; `.handle` adornments rename ([`service-shapes.md`](../plans/service-shapes.md)).
+- **Supervisor impact:** Agent 4 on `cursor/hyperservice-open-deps-5679` only — wait for owner before metrics / handle / `integration`.
+
 ---
 
 ## 2026-07-14 — Phase 2 execute (P1–P4) + roadmap locks

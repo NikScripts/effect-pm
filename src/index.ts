@@ -130,8 +130,10 @@ export type {
 } from "./DynamicConfig";
 export {
   DuplicateWireKey,
+  DuplicateSharedInstance,
   DuplicateHyperlinkKey,
   EffectFnMissingPayload,
+  SharedRoutingError,
   IdentityMultiNode,
   IdentitySelfRequired,
   LocalOnlyMethod,
@@ -169,6 +171,7 @@ export type {
   ServiceOf,
   Shape,
   ShapeOf,
+  SharedTagFactory,
   Spec,
   TagHandlers,
   Wire,

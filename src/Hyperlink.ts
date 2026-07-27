@@ -21,7 +21,13 @@
  * const c = yield* Counter;        // { current: Effect<number>; add: (p) => Effect<void>; reset: Effect<void> }
  * ```
  *
- * Define a tag with {@link Hyperlink.Tag} (one resource, own RpcGroup keyed by `.key`).
+ * Define a tag with {@link Hyperlink.Tag}:
+ * - **Solo** — `Tag<Self>()(key, spec)`: one resource, RpcGroup prefix = `.key`.
+ * - **Shared Spec** — `Tag(wireKey, spec)` then `Factory<Self>()(instanceKey)`: many
+ *   instances, one Spec / RpcGroup (prefix = `wireKey`), routed by header `key`.
+ *   Same {@link Hyperlink.serve} / {@link Hyperlink.client} — merge several `serve`s
+ *   that share a wire key; no separate serve/client verb.
+ *
  * The same `yield* Tag` code runs anywhere; only the layer changes:
  * - {@link Hyperlink.layer} — run it locally with a real implementation;
  * - {@link Hyperlink.client} — drive it remotely over RPC, as if local;
@@ -62,6 +68,7 @@ import {
 } from "effect";
 import {
   FetchHttpClient,
+  Headers,
   HttpClient,
   HttpRouter,
 } from "effect/unstable/http";
@@ -141,6 +148,31 @@ export class DuplicateHyperlinkKey extends Data.TaggedError(
  */
 export class DuplicateWireKey extends Data.TaggedError("DuplicateWireKey")<{
   readonly wireKey: string;
+}> {}
+
+/**
+ * Two shared-Spec instances were {@link serve}d with the same Context key under one wire key.
+ *
+ * @category errors
+ * @public
+ */
+export class DuplicateSharedInstance extends Data.TaggedError(
+  "DuplicateSharedInstance",
+)<{
+  readonly wireKey: string;
+  readonly key: string;
+}> {}
+
+/**
+ * A shared-Spec RPC call could not be routed — missing or unknown instance `key` header.
+ *
+ * @category errors
+ * @public
+ */
+export class SharedRoutingError extends Data.TaggedError("SharedRoutingError")<{
+  readonly method: string;
+  readonly reason: "missing-key" | "unknown-key";
+  readonly key?: string;
 }> {}
 
 /**
@@ -2261,12 +2293,22 @@ export const groupSym: unique symbol = Symbol.for(
 );
 /**
  * Where the **wire key** (RpcGroup prefix) is stowed on a Tag. Solo {@link Tag}s use the
- * same string as {@link Context.Key.key} for solo tags. Read with {@link wireKeyOf}.
+ * same string as {@link Context.Key.key}; shared-Spec instances use the factory wire key.
+ * Read with {@link wireKeyOf}.
  *
  * @internal
  */
 export const wireKeySym: unique symbol = Symbol.for(
   "hyperlink-ts/Hyperlink/wireKey",
+);
+/**
+ * Marks a tag minted by {@link Tag}`(wireKey, spec)` — wire prefix is the shared key;
+ * {@link serve} / {@link client} route by the instance `.key` header.
+ *
+ * @internal
+ */
+export const sharedTagSym: unique symbol = Symbol.for(
+  "hyperlink-ts/Hyperlink/sharedTag",
 );
 /** Where the per-resource local-capability key is stowed on a Tag. @internal */
 export const localCapSym: unique symbol = Symbol.for(
@@ -2702,13 +2744,25 @@ export const contractHash = <Self, S extends Spec>(
 /**
  * A tag's **wire key** — the RpcGroup / procedure prefix on a shared server.
  *
- * For solo {@link Tag}s this is the same string as {@link Context.Key.key}.
+ * Solo {@link Tag}: same as {@link Context.Key.key}. Shared-Spec instance
+ * (`Tag(wireKey, spec)` factory): the factory wire key (kind key).
  *
  * @category introspection
  * @public
  */
 export const wireKeyOf = (tag: { readonly [wireKeySym]: string }): string =>
   tag[wireKeySym];
+
+/**
+ * True when `tag` was minted by a shared-Spec {@link Tag}`(wireKey, spec)` factory.
+ *
+ * @category introspection
+ * @internal
+ */
+export const isSharedTag = (tag: unknown): boolean =>
+  (typeof tag === "object" || typeof tag === "function") &&
+  tag !== null &&
+  sharedTagSym in tag;
 
 /** The {@link Node} a tag is bound to (its transport key), or `undefined` for a nodeless/bare tag
  *  or any non-tag. Accepts `unknown` so a `Group` member passes straight in — walk a group tree and
@@ -3058,6 +3112,8 @@ const buildInstanceTag = <Self, S extends Spec>(
   // impl's own effect/function through, requiring `Local`) rather than the standard `local<T>()`
   // obtain-a-value wrapping.
   interfaceLocalsMarker = false,
+  /** When true, stamp {@link sharedTagSym} — kind-keyed wire, route by instance key. */
+  sharedMarker = false,
 ) => {
   if (claimedKeys.has(key)) {
     throw new DuplicateHyperlinkKey({ key });
@@ -3088,12 +3144,13 @@ const buildInstanceTag = <Self, S extends Spec>(
     ...(node !== undefined
       ? { [nodesSym]: [node as AnyNode] as ReadonlyArray<AnyNode> }
       : {}),
-    // Every tag carries a kind: the typed factories pass their own; a bare tag defaults to `kind`.
-    [kindSym]: kindOverride ?? kind,
+    // Solo bare tags default to `kind`; shared-Spec instances default kind to the wire key.
+    [kindSym]: kindOverride ?? (sharedMarker ? wireKey : kind),
     [readinessSym]: undefined,
     [peersSym]: peersKey,
     [selfNodeSym]: selfNodeKey,
     ...(interfaceLocalsMarker ? { [interfaceLocalsSym]: true as const } : {}),
+    ...(sharedMarker ? { [sharedTagSym]: true as const } : {}),
   });
 };
 
@@ -3149,55 +3206,126 @@ type InterfaceTagBuilder<Self, I> = {
 };
 
 /**
- * Create a resource service tag. Two call signatures — same factory, no sentinel type param:
+ * Shared-Spec factory from {@link Tag}`(wireKey, spec)`. Mint instances with the Effect-shaped
+ * double call: `Factory<Self>()(instanceKey)`.
  *
- * **Schema-driven** — `Tag<Self>()(key, spec)`: the value type is **inferred from the spec**:
+ * @category models
+ * @public
+ */
+export interface SharedTagFactory<S extends Spec> {
+  <Self>(): {
+    (
+      key: string,
+      options?: {
+        readonly description?: string;
+        readonly node?: NodeKey<unknown>;
+      },
+    ): HyperlinkTag<Self, S>;
+  };
+  /** Wire / kind key — RpcGroup prefix for every instance. */
+  readonly wireKey: string;
+  readonly kind: string;
+  readonly description: string | undefined;
+  readonly [specSym]: FlatSpec;
+  readonly [specTypeSym]?: S;
+  readonly [groupSym]: RpcGroupOf<S>;
+}
+
+/**
+ * Create a resource service tag.
+ *
+ * **Solo (schema)** — `Tag<Self>()(key, spec)`: value type inferred from the spec; wire key = `.key`.
  *
  * ```ts
  * class Counter extends Hyperlink.Tag<Counter>()("Counter", {
  *   increment: Hyperlink.effectFn({ by: Schema.Number }),
  *   current: Hyperlink.effect(Schema.Number),
  * }) {}
- *
- * const c = yield* Counter; // { increment: (p) => Effect<void>; current: Effect<number> }
  * ```
  *
- * **Interface-driven** — `Tag<Self, I>()(key, contract)`: an existing **service interface** `I` is the
- * source of truth. The contract gives a schema only for members on the wire; every other interface
- * member becomes a **local** (via {@link InjectLocal}). Locals are written **bare** —
- * `Hyperlink.local`, no `()` — and take their type from `I` (see {@link Validate}).
+ * **Solo (interface)** — `Tag<Self, I>()(key, contract)`: interface `I` is SSOT; bare
+ * {@link local} takes its type from `I`.
+ *
+ * **Shared Spec** — `Tag(wireKey, spec)` then `Factory<Self>()(instanceKey)`: one RpcGroup
+ * prefixed by `wireKey`, many Context identities routed by header `key`. Use only when every
+ * instance has the same procedure names and schemas. Serve with ordinary {@link serve} /
+ * {@link serveRemote} (merge layers); dial with ordinary {@link client}.
  *
  * ```ts
- * interface CounterShape {
- *   readonly current: Effect.Effect<number>;             // local (no schema)
- *   readonly add: (by: number) => Effect.Effect<number>; // wired
- * }
- * class Counter extends Hyperlink.Tag<Counter, CounterShape>()("counter", {
- *   current: Hyperlink.local,
- *   add: Hyperlink.effectFn(Schema.Number, Schema.Number),
- * }) {}
+ * const Metrics = Hyperlink.Tag("demo/ApiMetrics", {
+ *   snapshot: Hyperlink.effect(Schema.Number),
+ * });
+ * class Nwsl extends Metrics<Nwsl>()("@app/Nwsl/metrics") {}
+ * class Mls extends Metrics<Mls>()("@app/Mls/metrics") {}
+ *
+ * Layer.mergeAll(
+ *   Hyperlink.serve(Nwsl, { snapshot: Effect.succeed(1) }),
+ *   Hyperlink.serve(Mls, { snapshot: Effect.succeed(2) }),
+ * );
  * ```
  *
- * Keys must be unique: a duplicate **throws at declaration** — Effect's `Context` is
- * keyed by the key string and silently last-write-wins on collisions, so we guard it.
- * For a single resource the key is also its **wire key** (the RpcGroup prefix for its
- * procedures), so a shared `RpcServer` can host it alongside other resource types.
+ * Keys must be unique: a duplicate **throws at declaration**. Solo tags also claim their key as
+ * the wire prefix; shared factories claim `wireKey` once for the whole family of instances.
  *
  * @category constructors
  * @public
  */
-/**
- * Schema vs interface is a **call-signature overload** on type arity (`Tag<Self>()` vs
- * `Tag<Self, I>()`), not a second factory and not a sentinel default type param. Runtime is one
- * builder; the overload surface is what callers see (Effect's `Context.Service` shape).
- */
 const makeTag = retype<{
-  /** Schema-driven: infer the service from `spec`; bare {@link local} is a compile error. */
+  /** Schema-driven solo: infer the service from `spec`; bare {@link local} is a compile error. */
   <Self>(): SchemaTagBuilder<Self>;
-  /** Interface-driven: `I` is SSOT; bare {@link local} takes its type from `I`. */
+  /** Interface-driven solo: `I` is SSOT; bare {@link local} takes its type from `I`. */
   <Self, I>(): InterfaceTagBuilder<Self, I>;
-}>(function makeTag() {
-  // One runtime builder — the overload surface above is what discriminates schema vs interface.
+  /** Shared Spec: one wire key, many instance tags (`Factory<Self>()(instanceKey)`). */
+  <const S extends Spec>(
+    wireKey: string,
+    spec: S & RejectBareLocal<S>,
+    options?: TagOptions & { readonly node?: NodeKey<unknown> },
+  ): SharedTagFactory<S>;
+}>(function makeTag(
+  wireKeyOrNever?: string,
+  sharedSpec?: Spec,
+  sharedOptions?: TagOptions & { readonly node?: NodeKey<unknown> },
+) {
+  // Shared-Spec factory: Tag(wireKey, spec) → Factory<Self>()(instanceKey).
+  if (typeof wireKeyOrNever === "string" && sharedSpec !== undefined) {
+    const wireKey = wireKeyOrNever;
+    claimWireKey(wireKey);
+    const flat = flattenSpec(sharedSpec);
+    const group = retype<RpcGroupOf<Spec>>(
+      buildRpcGroup(wireKey, flat) as never,
+    );
+    const factoryKind = sharedOptions?.kind ?? wireKey;
+    const factoryNode = sharedOptions?.node;
+    const mint =
+      () =>
+      (
+        key: string,
+        instanceOptions?: {
+          readonly description?: string;
+          readonly node?: NodeKey<unknown>;
+        },
+      ) =>
+        buildInstanceTag<unknown, Spec>(
+          wireKey,
+          key,
+          sharedSpec,
+          group,
+          instanceOptions?.description ?? sharedOptions?.description,
+          instanceOptions?.node ?? factoryNode,
+          factoryKind,
+          false,
+          true,
+        );
+    return Object.assign(mint, {
+      wireKey,
+      kind: factoryKind,
+      description: sharedOptions?.description,
+      [specSym]: flat,
+      [groupSym]: group,
+    });
+  }
+
+  // Solo builder — overload surface discriminates schema vs interface.
   // `options.node` rides the call so its identity `HSelf` infers; node-bearing overloads narrow
   // `[nodeSym]` for {@link Hyperlink.client}. An {@link AddressedNode} further enables auto-connect.
   // Self/S are phantom here: the public overloads restate them; pin `unknown`/`Spec` so this body
@@ -3635,20 +3763,196 @@ export type ServeRequirements<Impl> = {
 
 /** Shallow tag shape for serve-remote mounts — avoids open `RpcGroupOf<S>` walks (TS2589). */
 type ServeRemoteTag = {
+  readonly key?: string;
   readonly [wireKeySym]: string;
   readonly [specSym]: FlatSpec;
   readonly [groupSym]: { readonly toLayer: (handlers: never) => Layer.Any };
 };
 
+/** Header carrying the shared-Spec instance key, set per-call by {@link forwardClient}. */
+const INSTANCE_KEY_HEADER = "key";
+
+/**
+ * Per wire-key runtime for shared-Spec serve: instance table + readiness parts.
+ * Handler layers are memoized by reference so `Layer.mergeAll(serve(A), serve(B))` mounts
+ * one RpcGroup and appends instances.
+ */
+type SharedWireState = {
+  readonly table: Map<string, Record<string, unknown>>;
+  readonly readiness: Array<Effect.Effect<Readiness>>;
+};
+
+const sharedWireStates = new Map<string, SharedWireState>();
+const sharedHandlerLayers = new Map<string, Layer.Any>();
+
+const getSharedWireState = (wireKey: string): SharedWireState => {
+  let state = sharedWireStates.get(wireKey);
+  if (state === undefined) {
+    state = { table: new Map(), readiness: [] };
+    sharedWireStates.set(wireKey, state);
+  }
+  return state;
+};
+
+const mergeAnyLayer = retype<(left: Layer.Any, right: Layer.Any) => Layer.Any>(
+  Layer.merge as never,
+);
+
+/**
+ * One memoized handler+registry layer per shared wire key. Closed over the live instance table
+ * so later `serve`s of the same factory only register instances.
+ */
+const getOrCreateSharedHandlerLayer = (
+  tag: ServeRemoteTag,
+  workerContext: Context.Context<unknown> | undefined,
+): Layer.Any => {
+  const wireKey = tag[wireKeySym];
+  const existing = sharedHandlerLayers.get(wireKey);
+  if (existing !== undefined) return existing;
+
+  const state = getSharedWireState(wireKey);
+  const group = tag[groupSym];
+  const spec = tag[specSym];
+  const handlers: Record<
+    string,
+    (
+      payload: unknown,
+      options: { readonly headers: Headers.Headers },
+    ) => unknown
+  > = {};
+  for (const method of Object.keys(spec)) {
+    handlers[wireTag(wireKey, method)] = (payload, options) => {
+      const instanceKey = Option.getOrUndefined(
+        Headers.get(options.headers, INSTANCE_KEY_HEADER),
+      );
+      if (instanceKey === undefined) {
+        return Effect.die(
+          new SharedRoutingError({ method, reason: "missing-key" }),
+        );
+      }
+      const flatImpl = state.table.get(instanceKey);
+      if (flatImpl === undefined) {
+        return Effect.die(
+          new SharedRoutingError({
+            method,
+            reason: "unknown-key",
+            key: instanceKey,
+          }),
+        );
+      }
+      const member = flatImpl[method];
+      return workerContext === undefined
+        ? invokeWireMethod(member, spec[method] as AnyMethod, payload)
+        : invokeWireMethodWithContext(
+            member,
+            spec[method] as AnyMethod,
+            payload,
+            workerContext,
+          );
+    };
+  }
+  const toHandlerLayer = retype<(handlers: never) => Layer.Any>(
+    group.toLayer.bind(group) as never,
+  );
+  const handlerLayer = toHandlerLayer(handlers as never);
+  const kind = kindOf(tag) ?? wireKey;
+  const registration = Layer.effectDiscard(
+    Effect.serviceOption(ServedHyperlinks).pipe(
+      Effect.flatMap(
+        Option.match({
+          onNone: () => Effect.void,
+          onSome: (registry) => {
+            const bound = nodeOf(tag);
+            const boundKinds = nodeKindsOf(tag);
+            return registry.register({
+              wireKey,
+              group: retype(group as never),
+              kind,
+              contractHash: hashContract(wireKey, kind, spec),
+              readiness: Effect.suspend(() => allReady(state.readiness)),
+              ...(bound !== undefined ? { nodeLogKey: bound.key } : {}),
+              ...(boundKinds.length > 0 ? { nodeKinds: boundKinds } : {}),
+            });
+          },
+        }),
+      ),
+    ),
+  );
+  // Drop the memoized layer when its scope closes so a later test/run can remount cleanly.
+  const cleanup = Layer.effectDiscard(
+    Effect.acquireRelease(Effect.void, () =>
+      Effect.sync(() => {
+        sharedHandlerLayers.delete(wireKey);
+      }),
+    ),
+  );
+  const layer = mergeAnyLayer(
+    mergeAnyLayer(handlerLayer, registration),
+    cleanup,
+  );
+  sharedHandlerLayers.set(wireKey, layer);
+  return layer;
+};
+
+/**
+ * Register one shared-Spec instance into the wire table for the lifetime of the layer scope.
+ */
+const sharedInstanceLayer = (
+  tag: ServeRemoteTag & { readonly key: string },
+  wireImpl: unknown,
+): Layer.Any => {
+  const wireKey = tag[wireKeySym];
+  const instanceKey = tag.key;
+  const flatImpl = flattenImpl(
+    wireImpl as Record<string, unknown>,
+    tag[specSym],
+  );
+  const readiness = readinessCheckServed(tag, wireImpl);
+  return Layer.effectDiscard(
+    Effect.acquireRelease(
+      Effect.sync(() => {
+        const state = getSharedWireState(wireKey);
+        if (state.table.has(instanceKey)) {
+          throw new DuplicateSharedInstance({ wireKey, key: instanceKey });
+        }
+        state.table.set(instanceKey, flatImpl);
+        state.readiness.push(readiness);
+      }),
+      () =>
+        Effect.sync(() => {
+          const state = sharedWireStates.get(wireKey);
+          if (state === undefined) return;
+          state.table.delete(instanceKey);
+          const idx = state.readiness.indexOf(readiness);
+          if (idx >= 0) state.readiness.splice(idx, 1);
+          if (state.table.size === 0) {
+            sharedWireStates.delete(wireKey);
+          }
+        }),
+    ),
+  );
+};
+
 /**
  * Shared handler mount + registry registration for {@link serveRemote} / {@link serveRemoteDriver}.
  * Returns {@link Layer.Any}; public wrappers reify `R` / {@link HandlerContextOf}.
+ *
+ * Shared-Spec tags ({@link Tag}`(wireKey, spec)` instances) merge under one RpcGroup: the first
+ * `serve` mounts handlers; later `serve`s of the same wire key only append instances.
  */
 const serveRemoteHandlers = (
   tag: ServeRemoteTag,
   wireImpl: unknown,
   workerContext: Context.Context<unknown> | undefined,
 ): Layer.Any => {
+  if (isSharedTag(tag)) {
+    // Context.Service always carries `.key`; shared mint uses it as the routing header.
+    return mergeAnyLayer(
+      sharedInstanceLayer(tag as ServeRemoteTag & { readonly key: string }, wireImpl),
+      getOrCreateSharedHandlerLayer(tag, workerContext),
+    );
+  }
+
   const group = tag[groupSym];
   const handlers: Record<string, (payload: unknown) => unknown> = {};
   // flatten a (possibly nested) impl to path keys matching the flat spec + path-keyed group procedures.
@@ -3696,10 +4000,7 @@ const serveRemoteHandlers = (
       ),
     ),
   );
-  const mergeAny = retype<(left: Layer.Any, right: Layer.Any) => Layer.Any>(
-    Layer.merge as never,
-  );
-  return mergeAny(handlerLayer, registration);
+  return mergeAnyLayer(handlerLayer, registration);
 };
 
 /**
@@ -3835,6 +4136,11 @@ export const servedKeyOf = (layer: unknown): string | undefined => {
  * Expose a {@link Tag}'s implementation as an RPC **server** layer — the served counterpart of
  * {@link layer}. Pair it with {@link Node.httpServer} / {@link Node.wsServer} (or {@link listen}) to
  * put it on a transport, and dial it with {@link client} / {@link connect}.
+ *
+ * Shared-Spec instances (`Tag(wireKey, spec)` → `Factory<Self>()(instanceKey)`) share one
+ * RpcGroup: `Layer.mergeAll(serve(A, …), serve(B, …))` mounts handlers once and routes by
+ * the per-call `key` header.
+ *
  * @category serving
  * @public
  */

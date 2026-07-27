@@ -68,12 +68,18 @@ Owner and Agent 4 walked alternatives. Current leanings (unlocked unless noted):
 
 ---
 
+## Aftermath (owner-directed Eng)
+
+Owner later ordered: skip metrics; Eng the shared Spec mint as
+`Hyperlink.Tag(wireKey, spec)` → `Factory<Self>()(instanceKey)`; demo + tests + docs;
+**no** `*Family*` verbs; do not push `integration`. That work is on the Agent 4 work
+branch (see plan W3). ApiMetrics migration and `.handle` rename remain paused.
+
 ## What Agent 4 is doing now
 
-1. Document this incident (this file + owner-decisions + agent-status + plan status).
-2. **Not Eng’ing** W3 / Family / Gate HttpApi rename / handle reserved-key until owner locks.
-3. Stay on work branch; push docs here only; **do not touch `integration`** unless owner says so.
-4. Continue design conversation when owner directs (Tag overload, reserved features nest, Gate naming).
+1. Incident documented (this file + owner-decisions + agent-status + plan).
+2. **W3 Eng’d** as Tag overload (not Family) — waiting on owner for metrics / handle / `integration`.
+3. Stay on work branch; **do not touch `integration`** unless owner says so.
 
 ---
 
