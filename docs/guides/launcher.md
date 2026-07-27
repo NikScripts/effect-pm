@@ -104,7 +104,8 @@ Provide an Effect log layer / sink at the app edge if you want these in stdout o
 ## Custody vs membership
 
 After handoff, registration is the **child’s** job (`Lookup.client` / advertise). Launcher
-does not call Lookup. See the membership example:
+does not call Lookup. Parent checks membership with `Lookup.nodesServing(Jobs)` (Tag or
+wire key) — sugar over Directory’s schema’d request. See:
 [`examples/forms/hyperlink/launcher-lookup-membership.ts`](../../examples/forms/hyperlink/launcher-lookup-membership.ts).
 
 ## Deferred (not beta Launcher)

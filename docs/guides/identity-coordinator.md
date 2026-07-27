@@ -57,7 +57,9 @@ const listen = Context.get(workerBCtx, Node.ListenNode)
 yield* Lookup.prefer(Worker, listen.key) // sugar over Lookup.advise
 ```
 
-Last write wins. Stale prefer (node not in `nodesServing`) is ignored.
+Last write wins. Stale prefer (node not in `Lookup.nodesServing(Worker)`) is ignored.
+Directory queries use the same sugar style: `yield* Lookup.nodesServing(Jobs)` (Tag or
+wire key) — wire payload stays `NodesServingRequest`.
 
 ### 4. Dial hands
 

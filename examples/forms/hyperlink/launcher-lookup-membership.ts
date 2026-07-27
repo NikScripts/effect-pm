@@ -52,14 +52,9 @@ const program = Effect.gen(function* () {
     ready: { timeout: "25 seconds" },
   });
 
-  const rows = yield* Effect.gen(function* () {
-    const dir = yield* Lookup.Directory;
-    return yield* dir.nodesServing(
-      new Lookup.NodesServingRequest({
-        resourceKey: "forms/launcher-membership/Jobs",
-      }),
-    );
-  }).pipe(Effect.provide(lookupCtx));
+  const rows = yield* Lookup.nodesServing(
+    "forms/launcher-membership/Jobs",
+  ).pipe(Effect.provide(lookupCtx));
 
   yield* Effect.logInfo(
     `membership ok: ${String(rows.length)} row(s) serving Jobs (nodeKey=${rows[0]?.nodeKey ?? "?"})`,

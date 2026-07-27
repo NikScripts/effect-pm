@@ -65,6 +65,11 @@ describe("Lookup directory advertise / nodesServing", () => {
           expect(hit).toHaveLength(1);
           expect(hit[0]?.nodeKey).toBe("worker-a");
 
+          // Module sugar — Tag or wire key (same Directory query).
+          const viaSugar = yield* Lookup.nodesServing(Jobs);
+          expect(viaSugar).toHaveLength(1);
+          expect(viaSugar[0]?.nodeKey).toBe("worker-a");
+
           const miss = yield* dir.nodesServing(
             new Lookup.NodesServingRequest({
               resourceKey: "lookup-dir/Other",
