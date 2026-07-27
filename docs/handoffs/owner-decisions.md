@@ -363,6 +363,12 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Rejected:** Public `Hyperlink.handle` for this API.
 - **Still open (at bake):** `default` payload shape vs shipped `pure`; Eng slice order; Prototype mint.
 
+## 2026-07-27 — Fleet rate limiting before ApiMetrics / HttpApiClient reshape
+
+- **Owner said:** Getting rid of ApiMetrics by combining into HttpApi Gate; all Gates should use rate limiting; fleet rate limiting is more important than an ApiMetrics migrate slice — bake limiter into the updated HttpApiClient.
+- **Chose (direction):** Research Effect `RateLimiter` + proposal [`../plans/fleet-rate-limiting.md`](../plans/fleet-rate-limiting.md). Eng order lean: Gate `rateLimit` substrate (shared store) → observe nest → HttpApiClient Tag (local routes) → absorb ApiMetrics. Not a standalone ApiMetrics migration.
+- **Still open:** Redis vs Hyperlink store for fleet v1; Soft vs docs when distributed+memory; nest name; default `onExceeded`.
+
 ## 2026-07-27 — Retire `Hyperlink.pure`; Eng `default` / `defaults`
 
 - **Owner said:** Pure was never supposed to be the long-term API; if `default`/`defaults` exist that is the same job — retire `pure`, build it right (refinement + docs), ask only when blocked.
