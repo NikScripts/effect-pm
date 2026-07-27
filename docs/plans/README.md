@@ -14,6 +14,7 @@ Pre-1.0: breaking changes land as minor bumps.
 
 ## Orchestration
 
+- **Fleet rate limiting (Gates + HttpApiClient)** — Effect `RateLimiter` + shared store across Nodes; Gate substrate before HttpApiClient reshape / ApiMetrics absorb. Proposal: [fleet-rate-limiting.md](./fleet-rate-limiting.md).
 - **Weighted middle scheduling** — diversify the queue's middle priority into many weighted numeric/named groups pulled by a non-starving algorithm (DRR / strict), fixing strict-priority starvation. Design spec: [weighted-middle-scheduling.md](./weighted-middle-scheduling.md).
 - **Non-serializable queue items** — local-only enqueue for function/`Effect` items; wire control + observability stay served. [queue-nonserializable-items.md](./queue-nonserializable-items.md).
 - **Standalone spawns** — `Process.spawn` / `QueueHyperlink.open`: multi-instance ergonomics where spawned handles are plain caller-scoped Effects (alongside `Group`).
