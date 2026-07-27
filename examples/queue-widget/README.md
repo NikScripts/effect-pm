@@ -9,9 +9,9 @@ Built entirely on **Effect 4's native reactive layer** (`effect/unstable/reactiv
 pnpm run example:queue-widget   # → http://localhost:5174
 ```
 
-A **real `WorkPool` runs client-side** (no server, no RPC, no mock) — "Effect
-PM runs on the client." Everything the queue service exposes is driven from the
-browser:
+A **real `WorkPool` runs client-side** (no server, no RPC, no mock) — Hyperlink
+/ hyperlink-ts on the client. Everything the queue service exposes is driven from
+the browser:
 
 - **Enqueue** — text box + **priority** (high / normal / low → `add` /
   `prioritize` / `defer`), Enter or **Add**;
@@ -30,8 +30,8 @@ browser:
 Live counts: the worker (concurrency 1, 1.2 s/item) invalidates the reactivity
 key on each completion, so they move as items drain — event-driven, **no polling**.
 
-So every `QueueHandle` method is now driven from the browser. The one genuine gap
-is a real **status** read; that's for the resource rewrite.
+So every `WorkPool` method is now driven from the browser. The one genuine gap
+is wiring the live **status** Subscribable into the badge (today it tracks controls).
 
 The queue **starts paused**, so add a few items first and watch `pending` climb,
 then press **Start** to drain them (an auto-started queue would grab each item
@@ -77,4 +77,4 @@ The widget and atoms don't change.
 - `handle.changes` snapshot stream → swap `stats` to a stream atom (true live).
 - Server components (RSC) via `effect/unstable/reactivity/Hydration` — render the
   shell, hydrate to live atoms on the client.
-- More widget types (process, run resource) — same shape: build atoms from a tag.
+- More widget types (daemon, gate) — same shape: build atoms from a tag.

@@ -24,7 +24,7 @@
  *
  * | Function | Purpose |
  * |----------|---------|
- * | `WorkPool.make` | Scoped Effect producing a {@link QueueHandle} |
+ * | `WorkPool.make` | Scoped Effect producing a {@link EngineQueueHandle} |
  * | `WorkPool.layer` | Builds a `Layer` from tag + config |
  * | `WorkPool.Service` | Class factory: tag + baked-in `.layer` |
  * | `WorkPool.Tag` | Class factory: pure identity tag (no layer) |
@@ -530,9 +530,12 @@ export type EngineQueueHandle<
 > = QueueHandleApi<T, E, EEnqueue, R, A> & QueueHandlePhantomWorkerFailures<E>;
 
 /**
- * TEMP (M1a): keep the public `QueueHandle` name resolving to the engine handle so the rename lands
- * green. M1b replaces this with the canonical contract handle `QueueHandle<Payload, Success, Error,
- * Requirements>` (the named projection of `ServiceOf<QueueInstanceSpec<F>>`). @internal
+ * TEMP (M1b): internal-only alias of {@link EngineQueueHandle}. Author-facing contract
+ * hover is `WorkPool<>` on the public WorkPool module — do not re-export this name
+ * from `src/WorkPool.ts` / the barrel. Keep `EngineQueueHandle` / `QueueHandleApi` as the
+ * engine names; this alias exists only for transitional internal call sites.
+ *
+ * @internal
  */
 export type QueueHandle<
   T,

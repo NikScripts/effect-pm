@@ -1,16 +1,15 @@
 /**
  * @module examples/queue-widget/QueueWidget
  *
- * Interactive presentation of (almost) the whole `QueueHandle` surface: every
+ * Interactive presentation of (almost) the whole `WorkPool` surface: every
  * read (`size` / `sizes` / `completed` / `isEmpty`), every lifecycle control
  * (`start` / `pause` / `resume` / `clear` / `shutdown` / `release`), and enqueue
  * by priority (`add` / `prioritize` / `defer`). It knows nothing about atoms —
  * the demo wires these callbacks.
  *
- * Not yet shown: `deadLetter` / `drop` (they need a per-entry selector, and the
- * handle has no "list pending" read to pick from) and a real `status` (no status
- * read yet — `status` here is tracked client-side from the controls). Both land
- * in the next resource iteration.
+ * Not yet shown: a live `status` Subscribable read (the badge here is tracked
+ * client-side from the controls). `deadLetter` / `drop` are wired via a
+ * target-by-text selector.
  */
 
 import * as React from "react";
