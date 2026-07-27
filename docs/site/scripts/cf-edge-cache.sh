@@ -178,8 +178,12 @@ for r in rules:
     echo "no http_request_cache_settings ruleset yet (run: ensure)"
   fi
   echo "==> probe https://${ZONE_NAME}/api/effect/Effect/retry"
+  # grep not rg — login shells on this host may lack ripgrep on PATH
   curl -sS -D- -o /dev/null --max-time 45 "https://${ZONE_NAME}/api/effect/Effect/retry" \
-    | rg -i '^(HTTP/|cf-cache-status:|cache-control:|age:)' || true
+    | grep -iE '^(HTTP/|cf-cache-status:|cache-control:|age:)' || true
+  echo "==> second probe (expect HIT after first populate)"
+  curl -sS -D- -o /dev/null --max-time 45 "https://${ZONE_NAME}/api/effect/Effect/retry" \
+    | grep -iE '^(HTTP/|cf-cache-status:|cache-control:|age:)' || true
 }
 
 CMD="${1:-}"
