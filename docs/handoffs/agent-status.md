@@ -27,7 +27,7 @@
 
 ### Active (owner approval required)
 1. **Agent 4:** Wire identity **W1–W2 Eng** ([`wire-groups-and-identity.md`](../plans/wire-groups-and-identity.md)) — drop public `groupId`; unused family path deleted (solo `Tag` only). Service shapes: `Tag`/`value`/`promise`/`pure` Eng’d; Creating polish + handle adornments paused. Next: W3 kind-keyed family factory when needed.
-2. **Agent G / TUI:** Dashboard Group parity + View redesign (`cursor/tui-dashboard-parity-125f`) — Eng’d W21 (`View.kind` / `tag` / `only` as Layers); next packaging + WorkPool chrome migrate.
+2. **Agent G / TUI:** Dashboard Group parity + View redesign (`cursor/tui-dashboard-parity-125f`) — Eng’d W21 + WorkPoolView packaging; next Dashboard kit wire / retire WorkPool `forKind`.
 3. **Launcher / handoff (unassigned):** brief [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md) — dumb spawn-and-exit; node owns process; Lookup directs; version upgrade → handoff. Prior [`launcher-decisions.md`](./launcher-decisions.md) = reference only.
 
 ### Frozen / dead (do not assign)

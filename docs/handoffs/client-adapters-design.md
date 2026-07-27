@@ -386,7 +386,7 @@ One provide Layer per process — not web+TUI in the same merge.
 
 **Locked (grilling):** W14–W19; View services + Layer-provided TSX (not skins.register map); components = single array; missing skin = not provided.
 
-**Locked (grilling):** W20 `View.group` + `kit.for(tag)`; **W21** chrome = `View.kind` / `tag` / `only` Layers + `Layer.mergeAll` (no Policy module; no tag-pipe SSOT). **Open:** Dashboard on kit; Spec gate; packaging.
+**Locked (grilling):** W20 `View.group` + `kit.for(tag)`; **W21** chrome = `View.kind` / `tag` / `only` Layers + `Layer.mergeAll` (no Policy module; no tag-pipe SSOT). Packaging Eng’d (`ui/web/tui` WorkPoolView). **Open:** Dashboard on kit; Spec gate; full Dashboard←View wire.
 
 #### View handles on HS tags (W17) — LOCKED (clarified)
 
