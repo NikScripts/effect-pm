@@ -6205,20 +6205,27 @@ export const runForEachTagScoped: {
  * layer changes: {@link Hyperlink.layer} runs it locally, {@link Hyperlink.client} drives it
  * remotely, {@link Hyperlink.serve} / {@link Hyperlink.serveRemote} expose an impl over RPC.
  *
+ * `tagFor` / `instance` / `serveInstances` / `clientInstances` remain on the namespace as
+ * **@internal** (pending kind-keyed W3) — prefer solo {@link Tag}.
+ *
  * @public
  */
 export {
   makeTag as Tag,
+  /** @internal */
   tagFor,
   // Node module: import * as Node from "hyperlink-ts/Node"
   http,
   ws,
   unix,
   nPipe,
+  /** @internal */
   instance,
   localLayer as layer,
+  /** @internal */
   serveInstances,
   clientLayer as client,
+  /** @internal */
   clientInstances,
 };
 // `query`, `mutate`, `stream`, `local`, `runForEachTag`, `runForEachTagScoped` are already
