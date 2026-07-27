@@ -23,17 +23,7 @@ export default function LandingPage() {
               <code>yield*</code> everywhere.
             </span>
           </p>
-          <nav className="landing-ctas" aria-label="Get started">
-            <a className="landing-cta landing-cta-primary" href="/docs/index">
-              Read the docs
-            </a>
-            <a className="landing-cta" href="/docs/install">
-              Install
-            </a>
-            <a className="landing-cta" href="/api">
-              API reference
-            </a>
-          </nav>
+          <p className="landing-soon">Coming soon</p>
           <div className="landing-content">
             <p className="landing-pitch">
               JavaScript has been multi-core for a decade. Hyperlink makes writing it feel
@@ -54,6 +44,9 @@ export default function LandingPage() {
               machine. One typed surface.
             </p>
             <p className="landing-credit">Inspired by and built on Effect RPC.</p>
+            <a className="landing-preview" href="/docs/index">
+              Preview the docs →
+            </a>
           </div>
         </div>
       </section>

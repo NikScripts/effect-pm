@@ -2208,48 +2208,27 @@ body:has(.landing) main {
   line-height: 1.7;
   color: var(--muted-fg);
 }
-.landing-ctas {
+.landing-soon {
   align-self: center;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.65rem 0.75rem;
   margin: 1.9rem 0 2.2rem;
-}
-.landing-cta {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 2.4rem;
-  padding: 0.45rem 1.1rem;
+  padding: 0.5rem 1.3rem;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: 999px;
+  font-family: var(--font-mono);
   font-size: 0.95rem;
-  font-weight: 550;
-  color: var(--fg);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-fg);
   background: var(--panel);
+}
+.landing-preview {
+  margin-top: 1.1rem;
+  font-size: 0.95rem;
+  color: var(--muted-fg);
   text-decoration: none;
-  transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
 }
-.landing-cta:hover {
-  border-color: var(--primary);
+.landing-preview:hover {
   color: var(--primary);
-}
-.landing-cta-primary {
-  border-color: transparent;
-  color: #fff;
-  background: var(--primary);
-}
-.landing-cta-primary:hover {
-  color: #fff;
-  filter: brightness(1.06);
-}
-@media (prefers-color-scheme: dark) {
-  /* --primary lightens in dark mode; ink on the chip keeps contrast. */
-  .landing-cta-primary,
-  .landing-cta-primary:hover {
-    color: #0f1419;
-  }
 }
 .landing-credit {
   margin: 0.9rem 0 0;
