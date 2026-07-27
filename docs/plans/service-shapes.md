@@ -1,6 +1,6 @@
 # Plan: service / contract shapes
 
-**Status:** `default` / `defaults` Eng’d (2026-07-27); `cell` still owner-gated.  
+**Status:** `default` / `defaults` Eng’d (2026-07-27); **construction adornments** (safe `defaults` / handle widen) baking; `cell` parked lean.  
 **Agent:** 4 (`cursor/hyperservice-open-deps-5679`).  
 **Prior art:** [`service-shape-redesign.md`](../handoffs/archive/2026-07/features/service-shape-redesign.md) (2026-07-01/02), [`client-adapters-design.md`](../handoffs/client-adapters-design.md).  
 **Orthogonal:** wire RpcGroup identity — [`wire-groups-and-identity.md`](./wire-groups-and-identity.md) (W1–W3 Eng’d; do not conflate with handle taxonomy).
@@ -181,17 +181,127 @@ Shipped rules:
 - Layer/serve: wire `ImplOf` required; default/bag keys optional overrides (`ImplWithDefaultOverrides`).
 - Post-hoc overrides also via `Layer.updateService`.
 - Construction-time adorn OK; post-construction adorn → **new** named Context key (not yet a sugar API).
-- Hard lean (not Eng’d): Prototype pipe (`Prototype({spec}).pipe(defaults({…}))` then mint) — may also clear the `WithDefaults` cast.
+- Hard lean (superseded): two-step Prototype mint — **rejected for product** (owner: no separate const; one-shot class mint).
+
+---
+
+## Construction adornments (bake — safe handle widen, one-shot)
+
+### Goal
+
+Modify the **handle** during Tag construction so `yield* Tag` is typed correctly — **one expression**, no intermediate `const Proto = …`.
+
+```ts
+class Jobs extends WorkPool.Tag<Jobs>()("@app/Jobs", jobSpec).pipe(
+  Hyperlink.defaults({ label: (n: number) => `job=${n}` }),
+) {}
+
+const jobs = yield* Jobs
+jobs.label(1) // on Service — no WithDefaults cast
+```
+
+Same pattern must compose with existing pipes (`withReadiness`, node bind, …) without a second mint stage.
+
+### Why today’s bag is unsafe
+
+`defaults` stamps runtime keys on `defaultsSym` but **does not remap** `HyperlinkTag`’s `Svc`. `yield* Tag` stays Spec-only; `WithDefaults` is a use-site lie-papering. Spec `default` leaves are fine (in Spec → in `ServiceOf`).
+
+### Constraint (class Self)
+
+`class X extends Tag<X>()(…).pipe(…)` always mentions `X` in the heritage. Remapping `Svc` cannot be *proved* through that cycle for arbitrary bags — same wall as Gate/WorkPool named handles.
+
+**Precedent that works:** `nameRunService` / `nameQueueService` — mint builds the Tag, then **one licensed cast** remaps `Svc` (`ServiceOf ⇄ Gate<…>` / `WorkPool<…>`), guarded by `.test-d.ts` bidirectional equality. Construction finishes **before** the class body closes; no separate const.
+
+### Design lock (proposed)
+
+**Adornments are construction pipes that remap `Svc` via the same licensed-cast pattern — not a Prototype noun, not use-site casts.**
+
+| Rule | Choice |
+|------|--------|
+| Shape | One-shot: `class X extends Factory<X>()(…).pipe(adorners…) {}` |
+| No separate const | Rejected two-step Prototype mint as the product API |
+| Type safety | Pipe return type is `HyperlinkTag<Self, S, Svc & Bag>` (etc.), not `T & { [defaultsSym]: Bag }` alone |
+| Soundness | One cast at adornment apply; `.test-d.ts` proves `ServiceOf<S> & Bag` ⇄ widened `Svc` for representatives |
+| Spec vs bag | Spec `default` stays for contract fields; piped `defaults` for extras — both end on `Svc` after adorn |
+| Compose | Adorners chain: each widens/stamps; order defined (defaults → readiness → …) or commutative where possible |
+| Toolkit Tags | `WorkPool.Tag` / `Gate.Tag` / `Daemon.Tag` already return remapped `Svc`; further `.pipe(defaults)` must widen **that** `Svc`, not erase the named handle |
+| Post-construction | Still: new Context key / `Layer.updateService` — not silent mutate of an existing Tag class |
+
+### Primary API (one-shot pipe)
+
+```ts
+class Jobs extends WorkPool.Tag<Jobs>()("@app/Jobs", jobSpec).pipe(
+  Hyperlink.defaults({ label: (n: number) => `job=${n}` }),
+  // future adorners: same Svc-remap contract
+) {}
+```
+
+`Hyperlink.defaults` implementation change:
+
+1. Keep runtime stamp on `defaultsSym` + collision checks.
+2. Return type: remap `Svc` to `Svc & D` (and preserve Spec/`kind`/node stamps).
+3. Licensed `as unknown as HyperlinkTag<Self, S, Svc & D>` (mirror `nameRunService`).
+4. `test/defaults-handle.test-d.ts`: bidirectional `yield* Jobs` ⇄ `ServiceOf<Spec> & Bag`; toolkit Tag + defaults keeps `WorkPool<Item> & Bag`.
+5. Retire recommended `WithDefaults` use-site cast (keep type as escape / migration).
+
+### Optional sugar (same semantics, still one-shot)
+
+Third-arg / config nest — equivalent to piping `defaults` inside the factory (no second const):
+
+```ts
+class Jobs extends WorkPool.Tag<Jobs>()("@app/Jobs", jobSpec, {
+  defaults: { label: (n: number) => `job=${n}` },
+}) {}
+```
+
+Desugar: factory applies the same adornment before return. Pipe remains the composable core; options are sugar for the common case.
+
+### What is an “adorner”
+
+A construction-time combinator with this contract:
+
+- **In:** `PipeableTag` (or toolkit Tag) + adornment payload  
+- **Out:** same Tag identity (`Self`, wire key, Spec) with **updated `Svc` and/or stamps**  
+- **Runtime:** install extras onto every local/client handle (like today’s defaults bag)  
+- **Fail-loud:** collisions / illegal adorn → TaggedError at construction  
+- **Not:** post-hoc mutate of a live Context service; not Spec wire leaves (those stay Spec builders)
+
+Today’s candidates under this umbrella:
+
+| Adorner | Remaps `Svc`? | Stamp |
+|---------|---------------|--------|
+| `defaults(bag)` | **yes** — `Svc & Bag` | `defaultsSym` |
+| `withReadiness` | no (keep shallow `PipeableTag`) | `readinessSym` |
+| `default` Spec leaf | n/a — in Spec | — |
+| future: more handle extras | yes if surface changes | TBD |
+
+### Eng slices
+
+| Slice | Scope |
+|-------|--------|
+| **A1** | Remap `Svc` in `defaults` pipe + licensed cast + `.test-d.ts`; drop need for use-site `WithDefaults` |
+| **A2** | Prove toolkit Tags: `WorkPool.Tag().pipe(defaults)` keeps named handle ∧ bag |
+| **A3** | Optional factory `{ defaults }` sugar (desugars to A1) |
+| **A4** | Docs: construction adornments chapter; migrate demo off `WithDefaults` cast |
+| **A5** | (Later) generalize adorner helper used by defaults + future stamps |
+
+### Non-goals
+
+- Separate `const Proto = Prototype(…).pipe(…)` then mint  
+- Use-site `as WithDefaults` as the long-term safe story  
+- Putting wire RPC fields into the defaults bag  
+- Silent local/remote divergence  
 
 ## Open decisions (owner)
 
 1. ~~Rename `constant` → `value`~~ **done**.
 2. ~~Tag-baked / handle bag naming~~ **done** — `default` (Spec) / `defaults` (pipe).
-3. Live plain cell (`cell`): Eng, park, or reject in favor of `ref`?
+3. Live plain cell (`cell`): **lean park/reject** (ref + adapters enough) — confirm lock.
 4. ~~Fallible materialize~~ **done** (`value` + `E`).
 5. ~~Promise adapter~~ **done** (`Hyperlink.promise`).
 6. Getting-started / Core Concepts polish for the taxonomy (optional).
 7. ~~`default` payload + `pure` fate~~ **done** — literals + sync fns; `pure` removed.
+8. **Construction adornments (this section):** lock A1–A2 as the safe `defaults` fix? Optional A3 sugar?
 
 ---
 
@@ -201,9 +311,9 @@ Shipped rules:
 |-------|--------|
 | **S2** | ~~Eng `default` / `defaults`~~ **done** (`pure` retired) |
 | **S3** | ~~Docs: Creating / Core Concepts taxonomy~~ **done** (light polish with `default`/`defaults`) |
-| **S5** | Live plain `cell` (only if decision 3 = Eng) |
+| **S5** | Live plain `cell` — lean park/reject pending owner lock |
 | **S6** | Upload / sink (transport-gated) |
-| **S7** | Prototype `.pipe(defaults)` mint (lean) |
+| **S7** | ~~Prototype mint~~ **replaced** by construction adornments A1–A4 above |
 
 ---
 
