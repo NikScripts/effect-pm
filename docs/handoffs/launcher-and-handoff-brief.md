@@ -31,16 +31,22 @@
    - Node status may **mirror** ownership for dashboards; the handshake is the verb.
    - Exact verb name TBD (`assume` / `acceptOwnership` / …).
 10. **Module split (parent vs node):**
-    - **`hyperlink-ts/Launcher`** — short-lived bring-up toolkit: `spawn` / `awaitReady` / `handoff` (+ convenience compose, e.g. `up`).
+    - **`hyperlink-ts/Launcher`** — short-lived bring-up toolkit: `spawn` / `awaitReady` / `handoff` (+ convenience `up`).
     - **`Node`** — owns readiness surface + ownership **ack RPC** (steady-state control plane after launcher exits).
     - **CLI** (`hl` / `hyperlink` later) — thin over Launcher; not a second control plane.
     - Do **not** put OS spawn into `Node` (already transport/catalog-heavy).
+11. **API names (locked):**
+    - Parent: `Launcher.spawn` → `Launcher.awaitReady` → `Launcher.handoff`; convenience `Launcher.up` = compose of those then exit.
+    - Node ownership RPC: **`Node.assume`** (child assumes ownership; launcher may exit).
+    - Rejected names: `launch` (reads as long-lived / spine β), `release` (collides with WorkPool.release), `fork` (OS/Effect ambiguity).
 
 Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.md) remain **reference only** unless re-locked here.
 
 ### Track A — baking (not locked)
 
-- Concrete API names for parent phases + ownership verb.
+- **Spawn input:** what you pass to `Launcher.spawn` / `up` (Group tree, single `Node.Tag`, entry module + identity, …).
+- Failure / timeout channels for `awaitReady` and `handoff` (tagged errors; bounded wait).
+- Multi-node `up`: one process vs fan-out spawn of a Group’s nodes.
 
 ---
 
