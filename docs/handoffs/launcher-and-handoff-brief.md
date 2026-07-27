@@ -16,7 +16,7 @@
 6. **Track A handoff shape = both (parent steps + child ack):**
    - **Parent API** exposes composeable phases (not a buried `launch`): roughly `spawn → awaitReady → handoff → exit`.
    - **Child** must **ack** ownership (“I am ready; I own myself”) so the transfer is a real handshake on the wire, not an assumption from readiness alone.
-   - Prefer reusing existing node / verify substrate for the ack; **no new control plane**. Exact verb names TBD.
+   - Prefer reusing existing node / verify substrate for the ack; **no new control plane**. Verb locked in #11 (`Node.assume`).
 7. **Ready is first-class and high-bar** (owner: “first class and top notch”) — not “port open / process alive.”
    - **Child** declares readiness through the existing **`withReadiness` / `Readiness` / node status** surface (served Hyperlinks participate; defaults ready when unset).
    - **Launcher `awaitReady`** is a **named phase** that waits until that readiness is true **and** proven cross-process (reuse `verifyConnection` / deep classify — loud failures, typed errors). No ad-hoc health hacks.
@@ -29,7 +29,7 @@
    - Launcher calls it **after** Ready; child acks “I own myself; launcher may exit.”
    - Effect/Schema, loud typed failures.
    - Node status may **mirror** ownership for dashboards; the handshake is the verb.
-   - Exact verb name TBD (`assume` / `acceptOwnership` / …).
+   - Verb: **`Node.assume`** (see #11).
 10. **Module split (parent vs node):**
     - **`hyperlink-ts/Launcher`** — short-lived bring-up toolkit: `spawn` / `awaitReady` / `handoff` (+ convenience `up`).
     - **`Node`** — owns readiness surface + ownership **ack RPC** (steady-state control plane after launcher exits).
