@@ -17,19 +17,26 @@ once.
 ## Define a gate
 
 `payload` and `success` are schemas for the input and output. `concurrency`
-caps how many bodies run in parallel; extra callers queue.
+caps how many bodies run in parallel; extra callers queue. Optional `rateLimit`
+caps how many runs **start** per window (Effect `RateLimiter`) — orthogonal to
+concurrency, same split as WorkPool.
 
 ``` ts
 import { Gate } from "hyperlink-ts"
-import { Effect, Schema } from "effect"
+import { Duration, Effect, Schema } from "effect"
 
 class Double extends Gate.Service<Double>()("app/Double", {
   payload: Schema.Number,
   success: Schema.Number,
   concurrency: 2,
+  rateLimit: { limit: 100, window: Duration.seconds(1) },
   effect: (n) => Effect.succeed(n * 2),
 }) {}
 ```
+
+`rateLimit` is **policy only**. Provide `RateLimiter.layerStoreRedis` at the app
+root for a fleet-wide budget; omit the store and the gate Soft-falls back to
+in-memory (single-node). Default `onExceeded` is `"delay"`.
 
 ## Call it
 

@@ -1,10 +1,20 @@
 /**
  * Gate — concurrency gate for effects.
  *
- * Wraps any effect with bounded concurrency via `Semaphore`. Unlike
- * {@link WorkPool}, there are no queues, priorities, or background workers —
- * the gate is applied inline at the call site. Each `run` acquires a permit,
- * executes the effect, and releases the permit on completion.
+ * Wraps any effect with bounded concurrency via `Semaphore`, and optionally an
+ * Effect {@link RateLimiter} (`rateLimit`) that consumes **before** the
+ * semaphore — same orthogonal split as {@link WorkPool}. Unlike WorkPool, there
+ * are no queues, priorities, or background workers — the gate is applied inline
+ * at the call site. Each `run` acquires a permit, executes the effect, and
+ * releases the permit on completion.
+ *
+ * ## Rate limiting
+ *
+ * `rateLimit: { limit, window, … }` configures the **policy** only. The backing
+ * {@link RateLimiterStore} is presence-driven: provide
+ * `RateLimiter.layerStoreRedis` (or another store) at the app root for
+ * fleet-wide budgets; omit it and the gate Soft-falls back to in-memory
+ * (single-node). Default `onExceeded` is `"delay"`.
  *
  * ## Entry points
  *
@@ -370,6 +380,11 @@ export interface ServiceConfig<
    * @default 1
    */
   readonly concurrency?: number;
+  /**
+   * Optional Effect `RateLimiter` on each `run` (before the concurrency semaphore).
+   * Omitted = no rate limit (only {@link concurrency}).
+   */
+  readonly rateLimit?: RateLimitOptions;
 }
 
 /**
@@ -388,6 +403,11 @@ export interface LayerConfig<I, A, E, R> {
    * @default 1
    */
   readonly concurrency?: number;
+  /**
+   * Optional Effect `RateLimiter` on each `run` (before the concurrency semaphore).
+   * Omitted = no rate limit (only {@link concurrency}).
+   */
+  readonly rateLimit?: RateLimitOptions;
 }
 
 /**
@@ -400,6 +420,11 @@ export interface Config<T, A, E> {
   readonly name?: string;
   readonly effect: (input: T) => Effect.Effect<A, E>;
   readonly concurrency?: number;
+  /**
+   * Optional Effect `RateLimiter` on each `run` (before the concurrency semaphore).
+   * Omitted = no rate limit (only {@link concurrency}).
+   */
+  readonly rateLimit?: RateLimitOptions;
 }
 
 /**
@@ -420,6 +445,25 @@ export interface RunnerConfig {
  * @public
  */
 export type Runner = internal.GateRunner;
+
+/**
+ * Effect {@link RateLimiter.consume} options for a gate — policy only; store is
+ * presence-driven (`RateLimiterStore` in context, else Soft memory).
+ *
+ * @category models
+ * @public
+ */
+export type RateLimitOptions = internal.GateRateLimitOptions;
+
+/**
+ * Soft in-memory rate-limiter layer (built automatically when `rateLimit` is set
+ * and no ambient `RateLimiterStore` is present). Prefer composing
+ * `RateLimiter.layerStoreRedis` at the app root for fleet budgets.
+ *
+ * @category layers & serving
+ * @public
+ */
+export const rateLimiterLayer = internal.gateRateLimiterLayer;
 
 // ============================================================================
 // Internal helpers
@@ -700,6 +744,7 @@ const buildRunImpl = <
       effect: (input: Schema.Schema.Type<I>) =>
         provideR(toRunFn(effectiveConfig.effect)(input)),
       concurrency: effectiveConfig.concurrency,
+      rateLimit: effectiveConfig.rateLimit,
     });
 
     const statusSub = {
@@ -915,6 +960,7 @@ export const Service = <Self>() => {
     > = {
       effect: config.effect,
       concurrency: config.concurrency,
+      rateLimit: config.rateLimit,
       name,
     };
     return Object.assign(tag, {

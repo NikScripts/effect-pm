@@ -1,8 +1,8 @@
 # Plan: fleet rate limiting (Gates + HttpApiClient)
 
-**Status:** proposal (research) — not Eng’d.  
+**Status:** Eng in progress — **R1 Eng’d** (Gate `rateLimit` + presence-driven Soft memory). R2–R4 open.  
 **Agent:** 4 (`cursor/hyperservice-open-deps-5679`).  
-**Depends on:** Effect `4.0.0-beta.98` `effect/unstable/persistence/RateLimiter`; WorkPool `rateLimit` precedent; Gate Semaphore (concurrency only today).  
+**Depends on:** Effect `4.0.0-beta.98` `effect/unstable/persistence/RateLimiter`; WorkPool `rateLimit` precedent.  
 **Product context:** HttpApiClient Gate = local routes + wire observe/limit nest; ApiMetrics absorbed (not a migrate track). Fleet rate limiting is the substrate that nest uses.
 
 ---
@@ -63,21 +63,23 @@ Effect already solved cross-process limiting **when the store is shared**. We do
 - Apps can swap in Redis: compose `RateLimiter.layerStoreRedis` at the root
 - Docs: concurrency = in-flight; rateLimit = starts per window (orthogonal)
 
-### Gate / HttpApiClient — Semaphore only
+### Gate — Semaphore + `rateLimit` (R1 Eng’d)
 
 - `Gate` `concurrency` = in-process Semaphore (permits in flight)
-- `Gate.httpApiClient` uses the same idea over HttpApi calls
-- **No** Effect `RateLimiter` on Gate today
-- ApiMetrics = sibling Tag reading a usage registry (observe, not enforce)
+- `Gate` `rateLimit?: { limit, window, … }` = Effect `RateLimiter` **before** the Semaphore
+- Store = presence-driven `serviceOption(RateLimiterStore)`; Soft `layerStoreMemory` when absent
+- Defaults: `onExceeded: "delay"`, `algorithm: "fixed-window"`, key = gate name / resource id
+- `Gate.httpApiClient` still concurrency-only (R4)
+- ApiMetrics = sibling Tag reading a usage registry (observe, not enforce) — absorbed in R2/R4
 
-### Gap
+### Gap (remaining)
 
 | Need | Today |
 |------|--------|
-| Rate (tokens / window) on Gate run / HttpApi routes | Missing (only concurrency) |
-| Same budget across fleet Nodes | Missing for Gates; WorkPool can do it via Redis store if composed |
-| Observe remaining / reject / delay on a Hyperlink nest | Missing (ApiMetrics is usage stats, not limiter state) |
-| Adaptive upstream 429 learning on HttpApiClient | Effect has API; we don’t wire it |
+| Rate (tokens / window) on Gate run | **Eng’d (R1)** |
+| Same budget across fleet Nodes | Compose `RateLimiter.layerStoreRedis` at root (R3 recipe/docs) |
+| Observe remaining / reject / delay on a Hyperlink nest | Missing (ApiMetrics is usage stats, not limiter state) — R2 |
+| Adaptive upstream 429 learning on HttpApiClient | Effect has API; we don’t wire it — R4 |
 
 ---
 
@@ -256,13 +258,11 @@ Fleet rate limiting is **first-class Gate substrate**. HttpApiClient update **us
 ## Open decisions (owner)
 
 1. ~~How is the store selected?~~ **LOCKED (owner):** presence-driven `serviceOption(RateLimiterStore)` like `DurableQueueStore`; Soft memory when absent.  
-2. **Fleet store v1 backend:** Effect **Redis** only, or also Eng SQL `RateLimiterStore`?  
-3. **Distributed + memory Soft:** docs-only vs fail-loud?  
-4. **Default `onExceeded` for Gates:** `delay` vs `fail`?  
-5. **Nest name:** `observe` / `limit` / `metrics`?  
-6. **Per-route keys** in v1 or whole-client key only?
-
-**Recommended leans:** Redis fleet backend v1; docs for distributed+memory; `onExceeded: "delay"`; nest `observe`; whole-client key v1.
+2. **Fleet store v1 backend:** Effect **Redis** only, or also Eng SQL `RateLimiterStore`? — lean Redis  
+3. **Distributed + memory Soft:** docs-only vs fail-loud? — lean docs  
+4. ~~**Default `onExceeded` for Gates:**~~ **LOCKED (R1 lean):** `"delay"`  
+5. **Nest name:** `observe` / `limit` / `metrics`? — lean `observe`  
+6. **Per-route keys** in v1 or whole-client key only? — lean whole-client (Gate key = resource id today)
 
 ---
 
@@ -271,7 +271,7 @@ Fleet rate limiting is **first-class Gate substrate**. HttpApiClient update **us
 | Slice | Scope |
 |-------|--------|
 | **R0** | This proposal + owner locks above |
-| **R1** | Gate config `rateLimit` + consume before Semaphore; auto memory layer; tests with `TestClock` |
+| **R1** | ~~Gate config `rateLimit` + consume before Semaphore; Soft memory / presence store; tests with `TestClock`~~ **Eng’d** |
 | **R2** | Wire observe nest on Gate (remaining / exceeded); HttpApiClient still old shape but can share limiter |
 | **R3** | Fleet recipe: `RateLimiter.layerStoreRedis` + distributed Gate demo; docs |
 | **R4** | HttpApiClient → Tag (local routes + nest); adaptive 429; retire ApiMetrics public story |
