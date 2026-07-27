@@ -20,17 +20,40 @@ DO never builds** — a fresh builder has no hover cache (that's a 1.5 h gen-hov
    DOCS_SITE_ORIGIN=https://your.domain npx tsx scripts/gen-doc-banners.ts   # commit the result
    ```
 
+## Secrets (dotenvx)
+
+Deploy / edge secrets live in encrypted `docs/site/.env` (committed). The private key is
+`docs/site/.env.keys` — **gitignored; back it up to 1Password**. `doctl` auth stays in doctl
+(`doctl --context hyperlink`); do not put the DO API token in dotenvx unless CI needs it.
+
+```sh
+cd docs/site
+pnpm install
+
+# set a secret (encrypts in place; re-commit `.env` after)
+pnpm exec dotenvx set CLOUDFLARE_API_TOKEN '…'   # Zone Read + Cache Rules Edit + Cache Purge
+
+# run any command with secrets injected
+pnpm run env:run -- printenv DOCS_SITE_ORIGIN
+pnpm run cf:ensure
+pnpm run cf:status
+pnpm run deploy:do -- hyperlink-docs
+```
+
+On a new machine: restore `.env.keys` from 1Password into `docs/site/`, then `pnpm install`.
+
 ## Every deploy
 
 ```sh
 cd docs/site
-DOCS_SITE_ORIGIN=https://your.domain ./scripts/deploy-do.sh <registry-name>
-doctl apps update <app-id> --spec deploy/do-app.yaml
+pnpm run deploy:do -- hyperlink-docs          # dotenvx → build → DOCR push → CF purge
+doctl --context hyperlink apps update "$DO_DOCS_APP_ID" --spec deploy/do-app.yaml
+# or: doctl --context hyperlink apps update ed0a18b6-946a-4219-a427-af456d181755 --spec deploy/do-app.yaml
 ```
 
 The script: full `pnpm build` (regens api-data / search / llms / sitemap with absolute URLs,
 link-check gates the build) → docker image from `docs/` context → push `:latest` to DOCR.
-When `CLOUDFLARE_API_TOKEN` is set it also purges the dep-API edge cache (see below).
+When `CLOUDFLARE_API_TOKEN` is present (via dotenvx) it also purges the dep-API edge cache.
 
 ## Cloudflare — edge-cache SSR'd dependency API pages
 
@@ -39,17 +62,14 @@ overflows Waku). Those responses are heavy and used to OOM a 1GB origin under cr
 them on the free Cloudflare plan (no Workers):
 
 ```sh
-# Token needs: Zone.Zone Read + Zone.Cache Rules Edit + Zone.Cache Purge
-export CLOUDFLARE_API_TOKEN=...
 cd docs/site
-./scripts/cf-edge-cache.sh ensure   # once (idempotent upsert)
-./scripts/cf-edge-cache.sh status   # expect cf-cache-status: HIT on the 2nd probe
+pnpm run cf:ensure   # once (idempotent upsert)
+pnpm run cf:status   # expect cf-cache-status: HIT on the 2nd probe
 ```
 
 Rule match: `/api/effect*`, `/api/platform-node*`, `/api/sql-sqlite-node*` on
 `hyperlink.cool` / `www`. Edge TTL 1 day with `override_origin` (DO often emits
-`Cache-Control: private`). Purge on every image deploy (`deploy-do.sh` calls `purge` when the
-token is set; or run `./scripts/cf-edge-cache.sh purge` by hand).
+`Cache-Control: private`). Purge on every image deploy (`pnpm run deploy:do` / `pnpm run cf:purge`).
 
 Origin also stamps `Cache-Control: public, s-maxage=86400, …` via
 `src/middleware/cacheHeaders.ts` for those paths — documentation of intent; the Cache Rule is
