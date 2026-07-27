@@ -404,10 +404,12 @@ rate limit bounds *start rate*. Use both — a pool of 8 workers that collective
 start no faster than 100/sec.
 
 `rateLimit` is Effect’s `RateLimiter.consume` options (same shape as Gate). The
-backing store is **presence-driven**: provide `RateLimiter.layerStoreRedis` at
-the app root for a fleet-wide budget; omit it and the queue Soft-builds
-in-memory. Do **not** rely on Soft memory across multiple Nodes — that yields
-N× the limit.
+backing store is **presence-driven**: provide `RateLimiter.layerStoreRedis` +
+`NodeRedis.layer` at the app root for a fleet-wide budget; omit it and the
+queue Soft-builds in-memory. Do **not** rely on Soft memory across multiple
+Nodes — that yields N× the limit. Live Redis proof:
+`test/rate-limit-redis.test.ts` (shared store across two queues + Gate
+child-process peer). Local Redis: `docker compose -f docker-compose.redis.yml up -d`.
 
 ## Bootstrapping: start paused
 

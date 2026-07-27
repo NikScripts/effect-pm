@@ -208,6 +208,7 @@
     "example:schedule-control-db-sync": "tsx examples/scenarios/schedule-sync-from-external-db.ts",
     "example:gate": "tsx examples/forms/hyperlink/gate-unit-and-input.ts",
     "example:gate-rate-limit-fleet": "tsx examples/forms/hyperlink/gate-rate-limit-fleet.ts",
+    "test:redis": "vitest run test/rate-limit-redis.test.ts test/effect-redis-stores.test.ts",
     "example:telemetry-fleet-glass": "tsx examples/forms/hyperlink/telemetry-fleet-glass.ts",
     "example:fleet-health-glass": "tsx examples/forms/hyperlink/fleet-health-glass.ts",
     "example:shardmap-sessions": "tsx examples/forms/hyperlink/shardmap-sessions.ts",
@@ -252,6 +253,7 @@
     "@trpc/client": ">=11",
     "effect": "^4.0.0-beta.98",
     "ink": "^7.1.0",
+    "ioredis": "^5.7.0",
     "react": ">=18",
     "react-dom": ">=18",
     "recharts": ">=2"
@@ -273,6 +275,9 @@
       "optional": true
     },
     "ink": {
+      "optional": true
+    },
+    "ioredis": {
       "optional": true
     }
   },
@@ -301,6 +306,7 @@
     "globals": "^17.7.0",
     "ink": "^7.1.0",
     "ink-testing-library": "^4.0.0",
+    "ioredis": "^5.11.1",
     "lucide-react": "^1.17.0",
     "react": "^19.2.0",
     "react-devtools-core": "^7.0.1",

@@ -376,7 +376,8 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Chose (bake 2026-07-27 — rateLimit keying):** v1 **whole-client only**. Service key (Tag id) and **rate-limit bucket key are separate fields**. `rateLimit.key` **optional — omit inherits service key**; set explicitly to share/split fleet budgets. Stable metadata exposes both (`key` / Tag id + resolved `rateLimitKey`) plus `metricsKey`. Nest holds live data only. Per-route keys later.
 - **Chose (bake 2026-07-27 — adaptive 429):** **Opt-in in R4** (Effect `adaptiveConsume` / feedback). Default off / absent — fixed `rateLimit` policy alone is enough to ship the Tag reshape.
 - **Chose (bake 2026-07-27 — R2 ordinary Gate):** Light **`metrics` nest on ordinary Gates when `rateLimit` is set** — limiter live fields (`remaining` / `resetAfter` / `exceeded`) + stable metadata (`rateLimitKey`, `metricsKey`). No HTTP usage registry on ordinary Gates. HttpApi R4 adds usage/windows on the same nest.
-- **Still open:** Redis vs SQL fleet store v1; R4 Eng start.
+- **Chose (LOCKED + Eng’d — R3b live Redis):** Fleet store v1 = Effect **Redis only** (`NodeRedis.layer` + `RateLimiter.layerStoreRedis`). Live proof: Gate + WorkPool shared Redis budget, **child-process peer** consume, plus Effect `Persistence.layerRedis` / `PersistedQueue.layerStoreRedis` smokes (`test/rate-limit-redis.test.ts`, `test/effect-redis-stores.test.ts`). Optional peer `ioredis`. Compose: `docker-compose.redis.yml`. SQL RateLimiterStore deferred.
+- **Still open:** R2 Eng (`metrics` nest) → R4 HttpApiClient reshape.
 
 ## 2026-07-27 — Retire `Hyperlink.pure`; Eng `default` / `defaults`
 

@@ -51,22 +51,29 @@ defaults to the gate id; omitted `onExceeded` defaults to `"delay"`.
 | Provide `RateLimiter.layerStoreMemory` in tests | Same presence-driven path; simulates Redis |
 
 ``` ts
-import { RateLimiter } from "effect/unstable/persistence/RateLimiter"
+import * as NodeRedis from "@effect/platform-node/NodeRedis"
 import { Layer } from "effect"
+import { RateLimiter } from "effect/unstable/persistence/RateLimiter"
 
 // Fleet root — one Redis store for every Gate / WorkPool with rateLimit
 const FleetLive = Layer.mergeAll(
   EastGate.layer,
   WestGate.layer,
 ).pipe(
-  Layer.provide(RateLimiter.layerStoreRedis()),
-  // Layer.provide(yourRedisLayer),
+  Layer.provide(RateLimiter.layerStoreRedis({ prefix: "fleet:" })),
+  Layer.provide(NodeRedis.layer({ host: "127.0.0.1", port: 6379 })),
 )
 ```
 
 Use the **same** `rateLimit.key` (or default resource ids that you intend to
 share) on every peer. Soft memory + distributed deploy = N× the limit (docs
-warn; not fail-loud in v1). Runnable form:
+warn; not fail-loud in v1).
+
+**Local Redis:** `docker compose -f docker-compose.redis.yml up -d` (or
+`redis-server`), then `REDIS_URL=redis://127.0.0.1:6379`. Live suites:
+`test/rate-limit-redis.test.ts` (Gate + WorkPool + child-process peer) and
+`test/effect-redis-stores.test.ts` (`Persistence.layerRedis` /
+`PersistedQueue.layerStoreRedis`). Runnable form auto-detects Redis:
 `pnpm exec tsx examples/forms/hyperlink/gate-rate-limit-fleet.ts`.
 
 ## Call it
