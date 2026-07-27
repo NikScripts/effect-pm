@@ -6,7 +6,7 @@
  * @internal
  */
 import { Context, Data, Predicate, Result } from "effect"
-import type { Effect, Layer, Stream } from "effect"
+import type { Effect, Layer, Redacted, Stream } from "effect"
 import type { HttpRouter } from "effect/unstable/http"
 import type { RpcClient } from "effect/unstable/rpc"
 import type { RpcSerialization } from "effect/unstable/rpc"
@@ -305,6 +305,12 @@ export type ListenOptions = {
    */
   readonly port?: number;
   readonly url?: string;
+  /**
+   * Expected launcher ownership-ack token for {@link Node.assume}. When set, node status
+   * mirrors `ownership: "launcher" | "self"`. Injection into the child is open (env / argv /
+   * {@link Config}); this option only arms the handshake on the listening node.
+   */
+  readonly assumeToken?: string | Redacted.Redacted<string>;
 };
 
 /**

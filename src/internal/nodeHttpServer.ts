@@ -8,6 +8,7 @@ import {
   Clock,
   Effect,
   Layer,
+  type Redacted,
 } from "effect"
 import {
   HttpRouter,
@@ -64,6 +65,11 @@ export interface HttpServerOptions {
    * @internal
    */
   readonly onConflict?: OnConflict;
+  /**
+   * Expected launcher ownership-ack token for {@link Node.assume} on the auto-mounted
+   * node-status Hyperlink.
+   */
+  readonly assumeToken?: string | Redacted.Redacted<string>;
 }
 
 /** A server RPC-protocol builder — {@link Hyperlink.serverProtocolHttp} or {@link Hyperlink.serverProtocolWebsocket}. */
@@ -150,6 +156,10 @@ const httpServerBase = (
         resourceCount: entries.length,
         readiness,
         ...(inferredNodeKey !== undefined ? { nodeLogKey: inferredNodeKey } : {}),
+        ...(options?.assumeToken !== undefined
+          ? { assumeToken: options.assumeToken }
+          : {}),
+        ...(inferredNodeKey !== undefined ? { assumeNodeKey: inferredNodeKey } : {}),
       });
       const nodeTag = nodeEntry.tag;
       // nodeStatus impl Effect is Effect-bounded with open channels — retype before yield*.

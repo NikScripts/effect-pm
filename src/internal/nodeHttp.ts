@@ -397,6 +397,9 @@ const httpBind = (
       ...(options?.onConflict !== undefined
         ? { onConflict: options.onConflict }
         : {}),
+      ...(options?.assumeToken !== undefined
+        ? { assumeToken: options.assumeToken }
+        : {}),
       advertiseNode,
     }) as never,
   );

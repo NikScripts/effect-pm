@@ -153,6 +153,7 @@ export {
 // `Node.Tag` pull only what's used. Import `* as Hyperlink` / `* as Node` from the subpath.
 export * as Hyperlink from "./Hyperlink";
 export * as Node from "./Node";
+export * as Launcher from "./Launcher";
 export * as MultiNode from "./MultiNode";
 export * as Lookup from "./Lookup";
 export type {

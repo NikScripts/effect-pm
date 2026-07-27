@@ -341,6 +341,9 @@ const ipcBind = (
     ...(options?.onConflict !== undefined
       ? { onConflict: options.onConflict }
       : {}),
+    ...(options?.assumeToken !== undefined
+      ? { assumeToken: options.assumeToken }
+      : {}),
     advertiseNode,
   });
 };
