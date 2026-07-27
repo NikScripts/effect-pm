@@ -6,7 +6,7 @@
  *
  * - `View.Tag` → class Context.Service handle (Svc = React/Ink component + key/kind/spec).
  * - Provide TSX with `Layer.succeed(PoolCard, Comp)`.
- * - Chrome policy = Layers: `View.kind` / `View.resource` / `View.only` (merge with `Layer.mergeAll`; last wins).
+ * - Chrome policy = Layers: `View.kind` / `View.key` / `View.only` (merge with `Layer.mergeAll`; last wins).
  * - `View.react(layer)` runs the Layer and requires `R = never` (missing skin = type error).
  */
 import * as React from "react";
@@ -137,7 +137,7 @@ type Bound = {
 
 /** @public */
 export interface RegistryService {
-  /** Append a view for one resource tag key (multi-match). */
+  /** Append a view for one Hyperlink tag key (multi-match). */
   readonly addTag: (tagKey: string, bound: Bound) => void;
   /** Append a view for a stamped Hyperlink kind (multi-match). */
   readonly addKind: (kind: string, bound: Bound) => void;
@@ -277,34 +277,34 @@ export const kind = <Id,>(
   );
 
 /**
- * Append one View for a concrete resource tag key (multi-match / pager).
- * Add more with `Layer.mergeAll(View.resource(…), View.resource(…))`.
+ * Append one View for a concrete Hyperlink tag key (multi-match / pager).
+ * Add more with `Layer.mergeAll(View.key(…), View.key(…))`.
  *
- * Named {@link resource} (not `tag`) so it does not collide with {@link Tag} class handles.
+ * Named {@link key} (not `tag`) so it does not collide with {@link Tag} class handles.
  *
  * @public
  */
-export const resource = <Id,>(
-  resourceTag: { readonly key: string },
+export const key = <Id,>(
+  target: { readonly key: string },
   view: ViewService<Id>,
 ): ContribLayer<Id> =>
   Layer.effectDiscard(
     Effect.gen(function* () {
       const reg = yield* Registry;
       const Component = yield* view;
-      reg.addTag(resourceTag.key, { key: view.key, kind: view.kind, Component });
+      reg.addTag(target.key, { key: view.key, kind: view.kind, Component });
     }),
   );
 
 /**
- * Allowlist for one resource tag. Kinds present are exclusive (defaults do not apply for
+ * Allowlist for one Hyperlink tag. Kinds present are exclusive (defaults do not apply for
  * those kinds). Optional extra views share one allowlist (precise `R`). A later `only` for
  * the same tag **replaces** the whole allowlist (`Layer.mergeAll` → last wins).
  *
  * @public
  */
 export const only = <Id1, Id2 = never, Id3 = never>(
-  resource: { readonly key: string },
+  target: { readonly key: string },
   v1: ViewService<Id1>,
   v2?: ViewService<Id2>,
   v3?: ViewService<Id3>,
@@ -323,7 +323,7 @@ export const only = <Id1, Id2 = never, Id3 = never>(
         const c3 = yield* v3;
         bounds.push({ key: v3.key, kind: v3.kind, Component: c3 });
       }
-      reg.setOnly(resource.key, bounds);
+      reg.setOnly(target.key, bounds);
     }),
   );
 
@@ -370,7 +370,7 @@ export class GroupDash extends Context.Service<
 
 /**
  * BYO-chrome Group kit contribution (W20). Records the Group + leaves for the react kit.
- * Chrome `R` comes from `View.kind` / `View.resource` / `View.only` layers you merge.
+ * Chrome `R` comes from `View.kind` / `View.key` / `View.only` layers you merge.
  *
  * @example
  * ```ts
@@ -564,7 +564,7 @@ export const react = <ROut, E,>(viewLayer: Layer.Layer<ROut, E, never>) => {
     kit.resolve(tag, viewKind);
 
   /**
-   * Flip: bind Card/Detail/Page to one resource tag (no `tag` prop).
+   * Flip: bind Card/Detail/Page to one Hyperlink tag (no `tag` prop).
    * Still render inside {@link Provider}.
    */
   const forTag = (tag: ViewTag) => ({

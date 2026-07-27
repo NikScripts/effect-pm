@@ -189,7 +189,7 @@ SpecialQueue.pipe(Hyperlink.components([SpecialCard]))
 ### Match order (no accidents)
 
 ```
-1. exact resource key → view override (bindTag / forKey-style)
+1. exact tag key → view override (bindTag / forKey-style)
 2. stamped contract kind (kindOf(tag) === WorkPool.kind, …) → view (bindKind)
 3. fallback
 ```
@@ -386,7 +386,7 @@ One provide Layer per process — not web+TUI in the same merge.
 
 **Locked (grilling):** W14–W19; View services + Layer-provided TSX (not skins.register map); components = single array; missing skin = not provided.
 
-**Locked (grilling):** W20 `View.group` + `kit.for(tag)`; **W21** chrome = `View.kind` / `resource` / `only` Layers + `Layer.mergeAll` (no Policy module; no tag-pipe SSOT). Packaging Eng’d (`ui/web/tui` WorkPoolView). **Now:** migrate widgets onto existing Dashboard shells (C). **Hold:** kit `Dashboard` + larger component library until after widget migration. **Open:** Spec gate.
+**Locked (grilling):** W20 `View.group` + `kit.for(tag)`; **W21** chrome = `View.kind` / `key` / `only` Layers + `Layer.mergeAll` (no Policy module; no tag-pipe SSOT). Packaging Eng’d (`ui/web/tui` WorkPoolView). **Now:** migrate widgets onto existing Dashboard shells (C). **Hold:** kit `Dashboard` + larger component library until after widget migration. **Open:** Spec gate.
 
 #### View handles on HS tags (W17) — LOCKED (clarified)
 
@@ -754,14 +754,14 @@ Name collision: `Hyperlink.react` vs `View.react` — different jobs (service-bo
 | W17 | ~~View handles on HS tag~~ → **superseded by W21** (no tag-pipe chrome SSOT) |
 | W18 | **Missing skin = `View.react(layer)` requires Layer `R = never`** — contributions require View services; `Layer.succeed(View, Comp)` provides them |
 | W19 | ~~`Hyperlink.components`~~ → **superseded by W21** (removed from match path; use `View.only`) |
-| W20 | **`View.group(AppGroup)`** — stash Group + leaves on kit; chrome `R` from merged `View.kind` / `resource` / `only` layers |
-| W21 | **Chrome policy = Layers on `View`** (no separate Policy module/type). `View.kind` / `View.resource` (append) + `View.only` (per-kind allowlist). Compose with **`Layer.mergeAll`** (last `only` for a tag wins). Variadic views → `R`. Kill `requireView` / bind\* / tag-pin match |
+| W20 | **`View.group(AppGroup)`** — stash Group + leaves on kit; chrome `R` from merged `View.kind` / `key` / `only` layers |
+| W21 | **Chrome policy = Layers on `View`** (no separate Policy module/type). `View.kind` / `View.key` (append) + `View.only` (per-kind allowlist). Compose with **`Layer.mergeAll`** (last `only` for a tag wins). Variadic views → `R`. Kill `requireView` / bind\* / tag-pin match |
 
 ### Eng order (next)
 
 1. ~~View services + react R=never~~ **done**
 2. ~~W20 `View.group` + `kit.for(tag)`~~ **done**
-3. ~~W21 `View.kind` / `resource` / `only` as Layers~~ **done**
+3. ~~W21 `View.kind` / `key` / `only` as Layers~~ **done**
 4. ~~Packaging + WorkPool handles/skins~~ **Eng’d** — `ui/WorkPoolView` + `web|tui/WorkPoolView` subpaths
 5. **Migrate widgets onto existing Dashboard** — **Eng’d** for all default families via `View.react(web|tui DashboardViews.layer)` (WorkPool, priority, daemon, api, fleet, telemetry, shardmap, gate, hyperlink card). `base` registries are fallback-only; parent owns nav/logs/edit. `View.Chrome` carries width/selected/onBack/cols/rows.
 6. ~~Kit `Dashboard`~~ **HOLD** until owner revisits; then Dashboard + larger component library

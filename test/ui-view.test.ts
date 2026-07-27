@@ -1,5 +1,5 @@
 /**
- * View chrome Layers — kind/resource/only; react requires Layer R = never.
+ * View chrome Layers — kind/key/only; react requires Layer R = never.
  */
 import { describe, expect, it } from "@effect/vitest";
 import { Layer, Schema } from "effect";
@@ -42,7 +42,7 @@ describe("View registry", () => {
   it("matches tag over stamped kind", () => {
     const viewLayer = withChrome(
       Layer.mergeAll(
-        View.resource(Special, PoolCard),
+        View.key(Special, PoolCard),
         View.kind(WorkPool.kind, CustomCard),
       ),
     );
@@ -79,7 +79,7 @@ describe("View registry", () => {
     ).toEqual(["hyperlink/view/custom-card", "hyperlink/view/pool-card"]);
   });
 
-  it("only allowlists kinds present; other kinds still use kind/resource", () => {
+  it("only allowlists kinds present; other kinds still use kind/key", () => {
     const viewLayer = withChrome(
       Layer.mergeAll(
         View.kind(WorkPool.kind, PoolCard),
