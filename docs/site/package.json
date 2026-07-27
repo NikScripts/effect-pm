@@ -18,7 +18,16 @@
     "docs:check-links": "tsx scripts/check-links.ts",
     "docs:smoke": "node scripts/browser-smoke.mjs",
     "docs:smoke:search": "node scripts/search-smoke.mjs",
-    "docs:verify": "vitest run && tsx scripts/check-links.ts && node scripts/browser-smoke.mjs && node scripts/search-smoke.mjs"
+    "docs:verify": "vitest run && tsx scripts/check-links.ts && node scripts/browser-smoke.mjs && node scripts/search-smoke.mjs",
+    "env:run": "dotenvx run --",
+    "env:set": "dotenvx set",
+    "env:get": "dotenvx get",
+    "cf:ensure": "dotenvx run -- ./scripts/cf-edge-cache.sh ensure",
+    "cf:purge": "dotenvx run -- ./scripts/cf-edge-cache.sh purge",
+    "cf:status": "dotenvx run -- ./scripts/cf-edge-cache.sh status",
+    "deploy:do": "dotenvx run -- ./scripts/deploy-do.sh",
+    "op:bootstrap": "./scripts/op-bootstrap-docs-secrets.sh",
+    "op:restore-keys": "./scripts/op-restore-env-keys.sh"
   },
   "dependencies": {
     "@djot/djot": "^0.3.2",
@@ -28,6 +37,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "effect": "4.0.0-beta.98",
+    "hono": "^4.12.14",
     "lucide-react": "^1.24.0",
     "mdast-util-from-markdown": "^2.0.3",
     "mdast-util-to-hast": "^13.2.1",
@@ -45,6 +55,7 @@
     "waku": "1.0.0-beta.3"
   },
   "devDependencies": {
+    "@dotenvx/dotenvx": "^2.19.0",
     "@effect/language-service": "^0.86.2",
     "@effect/vitest": "4.0.0-beta.98",
     "@tailwindcss/vite": "^4.3.2",

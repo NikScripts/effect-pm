@@ -11,3 +11,8 @@ public/sitemap.xml
 public/llms.txt
 public/llms-full.txt
 public/hover-progress.json
+
+# dotenvx — encrypted `.env` is committed; private key is not
+.env.keys
+.env.local
+.env.*.local
