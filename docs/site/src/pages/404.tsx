@@ -9,6 +9,7 @@ export default function NotFound() {
       <PageMeta
         title="Page not found — Hyperlink"
         description="This page does not exist; search the docs instead."
+        noIndex
       />
       <h1>Page not found</h1>
       <p className="search-note">

@@ -27,6 +27,7 @@ export default async function ApiModulePage({ pkg, module }: { pkg: string; modu
         } exported symbols${
           groups.length > 1 ? ` across ${groups.map((g) => g.label).join(", ")}` : ""
         }.`}
+        path={`/api/${pkg}/${module}`}
       />
       <article className="prose">
         <p className="api-back">

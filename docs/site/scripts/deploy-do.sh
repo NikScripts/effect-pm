@@ -8,6 +8,8 @@
 # :latest on the next `doctl apps update` (or auto-deploy if enabled on the app).
 set -euo pipefail
 
+# `pnpm run deploy:do -- <registry>` forwards a literal `--` through dotenvx; skip it.
+if [ "${1:-}" = "--" ]; then shift; fi
 REGISTRY="${1:?usage: deploy-do.sh <docr-registry-name>}"
 : "${DOCS_SITE_ORIGIN:?set DOCS_SITE_ORIGIN so sitemap/llms links go absolute}"
 

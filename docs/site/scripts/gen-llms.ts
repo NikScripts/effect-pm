@@ -12,14 +12,12 @@ import { Console, Data, Effect, Exit, Schema } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import { NodeServices } from "@effect/platform-node";
 import { stripDocBanner } from "../src/lib/doc-banner.js";
+import { listDocsChapterFiles } from "./docsContentWalk.js";
 
 const repoRoot = nodePath.resolve(fileURLToPath(new URL("../../../", import.meta.url)));
 const docsDir = nodePath.join(repoRoot, "docs");
 const dataDir = nodePath.join(repoRoot, "docs/site/api-data");
 const outDir = nodePath.join(repoRoot, "docs/site/public");
-
-// reading order for the index: the book first, root-level extras last
-const contentDirs = ["getting-started", "guides", "standards", "examples", ""];
 
 class FileError extends Data.TaggedError("FileError")<{
   readonly path: string;
@@ -42,37 +40,31 @@ const program = Effect.gen(function* () {
   const link = (path: string): string => `${origin}${path}`;
 
   // ---- chapters: raw markdown, title from the first H1, summary = first prose paragraph ----
+  // Order follows DOCS_CONTENT_ROOTS (book first, top-level last) via listDocsChapterFiles sort.
   const chapters: Array<Chapter> = [];
-  for (const dir of contentDirs) {
-    const abs = nodePath.join(docsDir, dir);
-    const files = (yield* fs.readDirectory(abs).pipe(Effect.orElseSucceed(() => []))).filter((f) =>
-      f.endsWith(".md")
+  for (const file of yield* listDocsChapterFiles(docsDir)) {
+    const raw = stripDocBanner(
+      yield* fs.readFileString(file.absPath).pipe(Effect.orElseSucceed(() => ""))
     );
-    for (const file of files.sort()) {
-      const slug = file.replace(/\.md$/, "");
-      if (slug === "README") continue;
-      const raw = stripDocBanner(
-        yield* fs.readFileString(nodePath.join(abs, file)).pipe(Effect.orElseSucceed(() => ""))
-      );
-      if (raw === "") continue;
-      const lines = raw.split("\n");
-      const title =
-        stripMarkers(lines.find((l) => l.startsWith("# "))?.slice(2) ?? slug).trim() || slug;
-      const prose = lines.find(
-        (l) =>
-          l.trim() !== "" &&
-          !l.startsWith("#") &&
-          !l.startsWith("{") &&
-          !l.startsWith("```") &&
-          !l.startsWith(">")
-      );
-      chapters.push({
-        slug,
-        title,
-        summary: stripMarkers(prose ?? "").trim(),
-        raw,
-      });
-    }
+    if (raw === "") continue;
+    const lines = raw.split("\n");
+    const title =
+      stripMarkers(lines.find((l) => l.startsWith("# "))?.slice(2) ?? file.slug).trim() ||
+      file.slug;
+    const prose = lines.find(
+      (l) =>
+        l.trim() !== "" &&
+        !l.startsWith("#") &&
+        !l.startsWith("{") &&
+        !l.startsWith("```") &&
+        !l.startsWith(">")
+    );
+    chapters.push({
+      slug: file.slug,
+      title,
+      summary: stripMarkers(prose ?? "").trim(),
+      raw,
+    });
   }
 
   // ---- API surface from the generated model (Schema-decoded — no casts) ----

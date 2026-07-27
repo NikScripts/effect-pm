@@ -721,6 +721,7 @@ const renderer = {
 const twoslash = createTransformerFactory(twoslasher, renderer as never)({});
 
 let hl: Highlighter | undefined;
+let linksReady = false;
 
 /** Load the shared highlighter + the link data once, before the (sync) render walk. */
 export const loadHighlighter = async (): Promise<void> => {
@@ -730,8 +731,13 @@ export const loadHighlighter = async (): Promise<void> => {
       langs: [...LOAD_LANGS],
     });
   }
-  hoverDocLinks = await runServer(docLinksByLocation());
-  await loadSourceLinks();
+  // Doclinks + source location index are process-cached in api-data / api-source-links; skip the
+  // runServer round-trip after the first successful load (every API symbol page used to re-hit both).
+  if (!linksReady) {
+    hoverDocLinks = await runServer(docLinksByLocation());
+    await loadSourceLinks();
+    linksReady = true;
+  }
 };
 
 // HTML attribute → React prop name for the few twoslash emits that React is strict about.

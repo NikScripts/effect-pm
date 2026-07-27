@@ -20,6 +20,8 @@ export function Footer(): React.ReactElement {
         <nav className="site-footer-cols" aria-label="Footer">
           <div className="site-footer-col">
             <span className="site-footer-heading">Docs</span>
+            <a href="/docs/index">Guide</a>
+            <a href="/docs/install">Install</a>
             <a href="/api">API Reference</a>
             <a href="/docs/glossary">Glossary</a>
             <a href="/releases">Releases</a>

@@ -16,14 +16,42 @@
 6. **Track A handoff shape = both (parent steps + child ack):**
    - **Parent API** exposes composeable phases (not a buried `launch`): roughly `spawn → awaitReady → handoff → exit`.
    - **Child** must **ack** ownership (“I am ready; I own myself”) so the transfer is a real handshake on the wire, not an assumption from readiness alone.
-   - Prefer reusing existing node / verify substrate for the ack; **no new control plane**. Exact verb names TBD.
+   - Prefer reusing existing node / verify substrate for the ack; **no new control plane**. Verb locked in #11 (`Node.assume`).
+7. **Ready is first-class and high-bar** (owner: “first class and top notch”) — not “port open / process alive.”
+   - **Child** declares readiness through the existing **`withReadiness` / `Readiness` / node status** surface (served Hyperlinks participate; defaults ready when unset).
+   - **Launcher `awaitReady`** is a **named phase** that waits until that readiness is true **and** proven cross-process (reuse `verifyConnection` / deep classify — loud failures, typed errors). No ad-hoc health hacks.
+   - **Ready ≠ ownership.** Ready means “fit to serve”; **handoff ack** (locked #6) is the separate “I own myself; launcher may exit” step.
+   - Quality bar: Effect-shaped API, Schema/tagged errors, no silent timeouts-as-success; composeable with Track A phases.
+8. **`awaitReady` aggregation = allReady by default, configurable escape hatch.**
+   - **Default:** every served Hyperlink on the node must be ready (`allReady`-shaped).
+   - **Escape hatch:** caller may narrow (critical subset / Lookup-first / staged bring-up) without a second readiness system — same `withReadiness` substrate, scoped set.
+9. **Ownership ack = first-class node RPC verb** (not a status-poll side effect, not a bring-up-only side channel).
+   - Launcher calls it **after** Ready; child acks “I own myself; launcher may exit.”
+   - Effect/Schema, loud typed failures.
+   - Node status may **mirror** ownership for dashboards; the handshake is the verb.
+   - Verb: **`Node.assume`** (see #11).
+10. **Module split (parent vs node):**
+    - **`hyperlink-ts/Launcher`** — short-lived bring-up toolkit: `spawn` / `awaitReady` / `handoff` (+ convenience `up`).
+    - **`Node`** — owns readiness surface + ownership **ack RPC** (steady-state control plane after launcher exits).
+    - **CLI** (`hl` / `hyperlink` later) — thin over Launcher; not a second control plane.
+    - Do **not** put OS spawn into `Node` (already transport/catalog-heavy).
+11. **API names (locked):**
+    - Parent: `Launcher.spawn` → `Launcher.awaitReady` → `Launcher.handoff`; convenience `Launcher.up` = compose of those then exit.
+    - Node ownership RPC: **`Node.assume`** (child assumes ownership; launcher may exit).
+    - Rejected names: `launch` (reads as long-lived / spine β), `release` (collides with WorkPool.release), `fork` (OS/Effect ambiguity).
+12. **`Group` is not a process / launch cohort.**
+    - Group = **hierarchy of handles** for organization in general (same handle may appear in **many** groups).
+    - You *can* group layers via Group, but that is not exclusive or load-bearing for launch.
+    - Launcher must **not** treat `Group` as “the set of OS processes to spawn” or as SSOT for placement/process topology (Lookup/Node remain that).
+    - CLI path sugar from group paths (if any) is addressing ergonomics only — not ownership of lifecycle.
 
 Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.md) remain **reference only** unless re-locked here.
 
 ### Track A — baking (not locked)
 
-- Concrete API names for the parent phases and the child ack verb.
-- What “Ready” means precisely (serve up vs `verifyConnection` vs node status).
+- **Spawn input:** declaration shape for `Launcher.spawn` / `up` (node identity + entry / how to start) — **not** “pass a Group.”
+- Failure / timeout channels for `awaitReady` and `handoff` (tagged errors; bounded wait).
+- Multi-node bring-up: how to express a list of spawn declarations (array / dedicated fleet decl) without overloading Group.
 
 ---
 

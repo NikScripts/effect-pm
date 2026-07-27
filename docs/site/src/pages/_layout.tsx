@@ -77,6 +77,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       {/* Tint the mobile browser chrome (status bar / notch) to match the page in each mode. */}
       <meta name="theme-color" content="#fafbfc" media="(prefers-color-scheme: light)" />
       <meta name="theme-color" content="#141619" media="(prefers-color-scheme: dark)" />
+      <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
       <NavBar groups={groups} version={version} />
       <div className="layout">
         <aside className="sidebar">

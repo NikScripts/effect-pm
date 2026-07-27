@@ -15,7 +15,11 @@ export default async function ChapterPage({ chapter }: { chapter: string }) {
   const { element, meta, toc } = await renderChapter(c.raw);
   return (
     <>
-      <PageMeta title={`${meta.title} — Hyperlink`} description={firstParagraphs(c.raw)} />
+      <PageMeta
+        title={`${meta.title} — Hyperlink`}
+        description={firstParagraphs(c.raw)}
+        path={`/docs/${chapter}`}
+      />
       <DraftBanner meta={meta} />
       <article className="prose">
         {element}
