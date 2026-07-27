@@ -10,7 +10,7 @@ those named shortcuts: **`httpServer([...])`** (http) and **`wsServer([...])`** 
 `protocol` option (an earlier draft had one; the owner rightly called it out as clunky/asymmetric).
 Peers read an injected builder via **`layerPeerProtocol(builder)`** (a Context.Reference
 defaulting to `protocolHttp`, so http fleets are unchanged). No `Transport` service, no per-protocol
-layers. Verified: full gate green, `WorkerPool` folds to 12 over ws in `examples/resource-web`, new
+layers. Verified: full gate green, `WorkerPool` folds to 12 over ws in `examples/hyperlink-web`, new
 `test/multi-host-peers-protocol.test.ts`. The sections below are the design history that led here.
 
 ## The problem this fixes

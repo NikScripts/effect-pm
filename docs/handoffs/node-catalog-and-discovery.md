@@ -16,7 +16,7 @@
 | `Node.connect*` / `clients` | Dial helpers |
 | Types | `AnyNode`, `ProtocolKind`, `ListenNode`, `UnaddressedNode`, … |
 
-No shims on Resource/Lookup. Forms: `examples/forms/resource/node-*.ts` (path includes `node-clients`).
+No shims on Hyperlink/Lookup. Forms: `examples/forms/hyperlink/node-*.ts` (path includes `node-clients`).
 
 ### How to read locks in this file
 
@@ -271,7 +271,7 @@ Hyperlink.protocolIpc(path)
 Hyperlink.ipcClient(Worker)
 ```
 
-Tests: `test/resource-ipc.test.ts`.
+Tests: `test/hyperlink-ipc.test.ts`.
 
 ### Block Phase 2 (catalog)
 
@@ -860,6 +860,6 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-21** — **X1 multi-protocol Eng’d** on `integration`: `{ http, ws, ipc }` Tag shorthand, `Node.withProtocol`, `connect`/`selectEndpoint`, P3 set-membership, dual-serve proof. Catalog row flipped OPEN → LOCKED + Eng’d.
 - **2026-07-21** — Owner “Do it” → **`verifyConnection` deep classification Eng’d:** `{ deep: true }` dials `NodeStatus` over `selectEndpoint` (or `{ all: true }`); `ProtocolUnanswered` / `ServiceNotServed` / `ServiceNotReady`. Tier-1 default unchanged.
 - **2026-07-21** — Owner “Let’s build it” → **managers collapse LOCKED** ([`identity-coordinator.md`](./identity-coordinator.md)): no `Hyperlink.Manager`; v1 Eng = identity liveness + coordinator+workers example; placement advice later.
-- **2026-07-21** — **M4 Eng’d:** identity claim liveness (dead winner replaceable) + `examples/forms/resource/node-identity-coordinator.ts`.
+- **2026-07-21** — **M4 Eng’d:** identity claim liveness (dead winner replaceable) + `examples/forms/hyperlink/node-identity-coordinator.ts`.
 - **2026-07-21** — **M5 Eng’d:** `Lookup.Advice` (`advise` / `clear` / `preferred`); `lookupClient` honors live prefer before D4 `pick`.
 - **2026-07-21** — **M6 Eng’d:** recipe guide + `Lookup.prefer` / `preferEntry`; clearer `IdentitySelfRequired`.

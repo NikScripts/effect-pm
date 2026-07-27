@@ -10,7 +10,7 @@ import * as Hyperlink from "../src/Hyperlink";
 // discharges it — and the layers still merge onto one shared RpcServer.
 
 class Dep extends Context.Service<Dep, number>()(
-  "hyperlink-ts/test/multi-resource-isolated-deps.test/Dep",
+  "hyperlink-ts/test/multi-hyperlink-isolated-deps.test/Dep",
 ) {}
 
 class A extends Hyperlink.Tag<A>()("proto/A", { read: Hyperlink.effect(Schema.Number) }) {}

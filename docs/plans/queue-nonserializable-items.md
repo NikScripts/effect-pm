@@ -8,7 +8,7 @@ Queue items today are effectively serializable-or-nothing. There are two config 
 `...WithoutItemSchema` (`itemSchema?: undefined`) — but the "without" path isn't a first-class
 **"items are non-serializable (functions, `Effect`s, class instances) — run local, no persistence"**
 feature. And there are **no tests** for a queue whose item type is non-serializable (only
-`test/resource.test-d.ts` touches the type level; 17 tests reference `itemSchema`, none for
+`test/hyperlink.test-d.ts` touches the type level; 17 tests reference `itemSchema`, none for
 function/Effect items).
 
 ## The feature

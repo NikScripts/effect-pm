@@ -26,7 +26,7 @@
 ```
 docs/site/
 ├── app/                    # Bespoke docs application shell
-│   ├── main.tsx            # Vite entry (pattern: examples/resource-web)
+│   ├── main.tsx            # Vite entry (pattern: examples/hyperlink-web)
 │   ├── DocsApp.tsx         # Layout, nav, mobile-readable chrome
 │   └── vite.config.ts      # host: true, port 5190 — Tailscale read
 ├── content/                # Agent-authored pages (HTML + Tailwind classes)
@@ -90,7 +90,7 @@ Update [`agent-status.md`](./agent-status.md) when B starts.
 
 ## Reference: shipped dashboard (separate product)
 
-`hyperlink-ts/web` — `examples/resource-web/app.tsx` — remains the **ops** dashboard. Docs app reuses **tooling and theme**, not `Dashboard.tsx`.
+`hyperlink-ts/web` — `examples/hyperlink-web/app.tsx` — remains the **ops** dashboard. Docs app reuses **tooling and theme**, not `Dashboard.tsx`.
 
 ## Reference: Effect RSC (future)
 

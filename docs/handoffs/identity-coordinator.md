@@ -79,7 +79,7 @@ Shipped:
 1. Lookup identity `claim` pings incumbent via `NodeStatus` (same primitive as directory).
 2. Dead / unreachable → claim released; newcomer wins. Alive → `DuplicateIdentity`.
 3. Same dial refreshes without error. Cooperative `askIncumbent` for identity keys left optional/later.
-4. Tests: `test/lookup-identity.test.ts`, `test/resource-identity.test.ts` (dead winner reclaim).
+4. Tests: `test/lookup-identity.test.ts`, `test/hyperlink-identity.test.ts` (dead winner reclaim).
 
 **Not in slice 1:** placement advice wire, Manager naming, changing S1 fail-closed-when-Lookup-down.
 
@@ -87,7 +87,7 @@ Shipped:
 
 **Goal:** One copy-paste fleet story.
 
-- Form: [`examples/forms/resource/node-identity-coordinator.ts`](../../examples/forms/resource/node-identity-coordinator.ts) — identity **Router** + N **Worker**s + Lookup.
+- Form: [`examples/forms/hyperlink/node-identity-coordinator.ts`](../../examples/forms/hyperlink/node-identity-coordinator.ts) — identity **Router** + N **Worker**s + Lookup.
 - README / catalog cross-link: “one brain, many hands.”
 - Clearer `IdentitySelfRequired` message (Lookup + dialable self).
 

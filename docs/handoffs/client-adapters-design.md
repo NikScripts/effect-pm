@@ -95,7 +95,7 @@ Still to discuss for (4):
 
 - Shared `hyperlink-ts/ui`: data bundles, `groupRoute`, `memberKind` / `wireKindOf`, widget registry.
 - Web + TUI: `<Dashboard runtime group path? widgets? />`; default `base` registry.
-- Custom example: `examples/resource-web` — `withEntries(base, [forKey(WorkerPool.key, WorkerPoolCard)])`.
+- Custom example: `examples/hyperlink-web` — `withEntries(base, [forKey(WorkerPool.key, WorkerPoolCard)])`.
 - TUI kind cells for gate/api/fleetHealth/telemetry/shardMap; unknown leaves show kind + node.
 
 ---

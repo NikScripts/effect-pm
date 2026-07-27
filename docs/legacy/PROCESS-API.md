@@ -224,7 +224,7 @@ The gate engine writes automatically when **`Store.Storage`** is in context (via
 
 For live in-process observation (no durability), read toolkit handle
 **`Subscribable`** views (`status`, `waiting`, `inFlight`, …) or subscribe via
-`.changes` — see `examples/forms/resource/run-resource-runtime-observer.ts`.
+`.changes` — see `examples/forms/hyperlink/gate-runtime-observer.ts`.
 
 ---
 
@@ -237,7 +237,7 @@ Examples are split into **forms** (one API shape) and **scenarios** (composition
 | [examples/forms/schedule/](../examples/forms/schedule/) | Schedule entries (`at`, `window`, `define`) and control surfaces. |
 | [examples/forms/polling/](../examples/forms/polling/) | **`TestClock`**: accelerating polling, `resetCadence`, `peekCadence`, delayed start. |
 | [examples/scenarios/schedule-sync-from-external-db.ts](../examples/scenarios/schedule-sync-from-external-db.ts) | Simulated DB-sync pattern. |
-| [examples/forms/resource/](../examples/forms/resource/) | `Gate`, `HttpClientRunGate`, `HttpApiClient`. |
+| [examples/forms/hyperlink/](../examples/forms/hyperlink/) | `Gate`, `HttpClientRunGate`, `HttpApiClient`. |
 
 See [examples/README.md](../examples/README.md) for **`pnpm run example:*`** commands and a guided reading order.
 

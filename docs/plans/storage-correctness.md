@@ -30,7 +30,7 @@ Goal: happy path is **one recipe** (`stores.md`); intentional multi-node / two-c
 **Intentionally allowed**
 
 - One `Store.Service` per Node: many registrations, one journal/file.  
-- Multi-node: N stores / N runtimes (`resource-web`).  
+- Multi-node: N stores / N runtimes (`hyperlink-web`).  
 - Node journal + resource `_logs` copies of the same live line.  
 - `Store.layerDefaultMemory` for engine event observability **without** the Logs platform.  
 - `DurableQueueStore` / `ShardMap` / `HistoryStore(metrics)` as separate planes.
@@ -103,7 +103,7 @@ Optional warn when key is not in the registration set; Agent 1 can own archive d
 ## Agent 3 follow-through · **DONE (#65)**
 
 1. **S1** — Living prose: kill “require Storage” / later-wins Soft / dual-AppStore teaching; point at bake+override.  
-2. **S2** — Examples teach Soft override clearly (`resource-web`, TUI, forms).  
+2. **S2** — Examples teach Soft override clearly (`hyperlink-web`, TUI, forms).  
 3. **S3** — untyped WorkPool Soft SQLite provideMerge + sibling-merge empty-file guards.
 
 Out of scope (still): reopen #62 API; memo; handles; docs-site; Postgres; fail-loud Soft die.

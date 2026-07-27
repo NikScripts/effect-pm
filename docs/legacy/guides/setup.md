@@ -230,7 +230,7 @@ Both render off the **same** reactive binding (Ink is React). Provide an `AtomRe
 `clients`, and read them with `useAtomValue` / drive controls with `useAtomSet`. Compose web
 widgets from `hyperlink-ts/web`, or terminal widgets from `hyperlink-ts/tui`
 (`bar`, `spark`, `compact`, `statusColor`, …). The `examples/web-dashboard` and
-`examples/resource-tui` trees (shipped in the package) are the working reference — copy their
+`examples/hyperlink-tui` trees (shipped in the package) are the working reference — copy their
 `queue-data` data layer and widgets as a starting point.
 
 The batteries-included `<Dashboard runtime={Atom.runtime(layer)} group={Root} />` renders the
@@ -239,7 +239,7 @@ type** — queue (cards + chart + controls + logs), scheduled process (controls 
 with a fullscreen weekly view), and API-metrics (a paged card + usage chart + sortable endpoint
 table). It classifies each leaf by the contract's **stamped kind** (`Hyperlink.kindOf` — see the
 [Hyperlink API](../HYPERLINK-API.md#resource-kinds)), not by sniffing the spec, so a new contract in
-the tree renders as itself rather than a mis-typed cell. The `examples/resource-web` tree (one of
+the tree renders as itself rather than a mis-typed cell. The `examples/hyperlink-web` tree (one of
 each unique thing) is the working reference.
 
 > Keep concurrent live streams per view ≤ ~5: a browser caps an origin at ~6 HTTP/1.1

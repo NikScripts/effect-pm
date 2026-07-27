@@ -221,7 +221,7 @@ const httpServerBase = (
 
 
 /**
- * The shared http server for resources composed with {@link serve} — the multi-resource,
+ * The shared http server for resources composed with {@link serve} — the multi-hyperlink,
  * heterogeneous-dependency counterpart to a single {@link serve} layer. Reads the
  * {@link ServedHyperlinks} registry, merges every registered group onto **one** `RpcServer` at `path`
  * (default `/rpc`), and mounts a `/health` route aggregating each resource's readiness. Because each

@@ -57,7 +57,7 @@ Owner lock: **scope identity = full key** (the registration / `Tag.key`, e.g. `w
 ## Plan-first (FIRST REPLY — tell the owner everything, then STOP)
 
 1. Restate: bag vs tag/full-key; how `byResource` relates to `Hyperlink.logs().query` and private `_logs`.  
-2. Proposed public signatures + migration of call sites (`docs/LOGS.md`, `docs/guides/logs.md`, `examples/resource-web`, tests).  
+2. Proposed public signatures + migration of call sites (`docs/LOGS.md`, `docs/guides/logs.md`, `examples/hyperlink-web`, tests).  
 3. CLI/`LogQuery` slice: in or out this PR.  
 4. Tests + changeset (+ `.test-d.ts` for public type).  
 5. Out of scope list.  
@@ -97,7 +97,7 @@ Do **not** implement until unlocked.
 ```
 Checkout integration and pull (merge/ff #57 private `_logs` if not on tip yet).
 
-Read docs/handoffs/agent-03-byresource-full-key.md.
+Read docs/handoffs/agent-03-byhyperlink-full-key.md.
 
 You are Agent 3. Prior tracks done (events, lineage, ready-perfection). Do not reopen memo / handles / site.
 

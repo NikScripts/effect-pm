@@ -33,7 +33,7 @@ Not a redesign. Not store memo. Not handles. Not docs-site. **Do not reopen #62 
 | Slice | Outcome |
 |-------|---------|
 | **S1** | Living prose / TSDoc / plan ripple → bake+override (no “require Storage” / later-wins Soft) |
-| **S2** | Example Soft teach headers (`resource-web`, TUI, custom-queue form) match `stores.md` |
+| **S2** | Example Soft teach headers (`hyperlink-web`, TUI, custom-queue form) match `stores.md` |
 | **S3** | untyped WorkPool Soft SQLite `provideMerge` + sibling-merge empty-file guards |
 
 ---

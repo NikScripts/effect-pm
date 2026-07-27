@@ -11,7 +11,7 @@ import * as PmNode from "../src/Node";
 // listing both (which only works if the registry was populated before httpServer read it).
 
 class Dep extends Context.Service<Dep, number>()(
-  "hyperlink-ts/test/multi-resource-http-server.test/Dep",
+  "hyperlink-ts/test/multi-hyperlink-http-server.test/Dep",
 ) {}
 
 class A extends Hyperlink.Tag<A>()("httpserver/A", { read: Hyperlink.effect(Schema.Number) }) {}

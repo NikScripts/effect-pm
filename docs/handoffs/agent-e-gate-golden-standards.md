@@ -16,7 +16,7 @@ use it or recreate it). Merge to `integration` when green.
 - **`effect` is now `4.0.0-beta.98`** (upgraded from beta.92; on integration as of
   the merge that landed this handoff update). `pnpm install` before you start.
 - **Green baseline on integration:** full `tsc` **0 errors** (ignore only
-  `scratchpad/*` and `test/resource-readiness.test.ts` TS2589); **470/470** tests;
+  `scratchpad/*` and `test/hyperlink-readiness.test.ts` TS2589); **470/470** tests;
   effect LSP 0/0/0 on every file *except* `Gate.ts` (which has the 3 below).
 - **beta.98 gotcha you inherit — `any`-poisoned upstream types hide runtime breaks.**
   The beta.92→.98 bump renamed `HttpApiEndpoint.name`→`.identifier`, but because
@@ -133,7 +133,7 @@ to enumerate. Known patterns and where to copy the fix:
 
 ## Verification bar (ALL must pass before merge)
 - `npx tsc --noEmit -p tsconfig.json` → 0 non-preexisting errors (ignore only
-  `scratchpad/*` and `test/resource-readiness.test.ts` TS2589).
+  `scratchpad/*` and `test/hyperlink-readiness.test.ts` TS2589).
 - `npx effect-language-service diagnostics --file src/Gate.ts` → 0/0/0.
 - `npx vitest run` → all green (baseline is **470 tests / 108 files** on beta.98).
 - `node docs/site/scripts/treeshake-check.mjs` → Gate case green (needs

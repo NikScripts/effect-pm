@@ -5,7 +5,7 @@ import * as Hyperlink from "../src/Hyperlink";
 // is R-free and assignable to `Hyperlink.ImplOf` — while Stream / Subscribable members are left untouched.
 
 class Dep extends Context.Service<Dep, number>()(
-  "hyperlink-ts/test/resource-provide-context.test-d/Dep",
+  "hyperlink-ts/test/hyperlink-provide-context.test-d/Dep",
 ) {}
 
 class T extends Hyperlink.Tag<T>()("provide-context-d/T", {
@@ -61,7 +61,7 @@ void ({} as typeof provided.group.stream satisfies Stream.Stream<number>);
 // `never`. A method needing a service the provided context does NOT cover keeps a residual requirement,
 // so the mistake surfaces at the `ImplOf` assignment instead of crashing at runtime. ---
 class Dep2 extends Context.Service<Dep2, string>()(
-  "hyperlink-ts/test/resource-provide-context.test-d/Dep2",
+  "hyperlink-ts/test/hyperlink-provide-context.test-d/Dep2",
 ) {}
 
 const implPartial: Hyperlink.WithRequirement<Hyperlink.ImplOf<Spec>, Dep | Dep2> = {

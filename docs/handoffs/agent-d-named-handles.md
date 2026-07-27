@@ -68,8 +68,8 @@
 1. **M2 — unify typed `WorkPool.Service` with `WorkPool.Tag`**  
    Typed `.Service` should build through the same contract `layer` / handle as `.Tag` so both yield **`WorkPool<…>`** by construction. Engine-only / untyped `.Service` stays a separate path. Surface deltas historically included `size` Effect vs Subscribable, metrics nesting, `logs`.
 
-2. **`WorkPool` M1b cleanup**  
-   Public/internal `WorkPool` still aliases **engine** handle. Either retire the name to `EngineQueueHandle` only, or make `WorkPool` mean the contract (today that name is **`WorkPool`** — prefer not to resurrect `WorkPool` as the author-facing hover).
+2. **`QueueHandle` M1b cleanup** — ✅ **public export removed**  
+   Internal-only TEMP alias → `EngineQueueHandle` in `src/internal/workPool.ts`. Tag hover remains **`WorkPool<>`**. Optional: delete the TEMP alias name entirely (engine tests import `EngineQueueHandle`).
 
 3. **Per-Tag success/error carriers**  
    Keep handle `Success`/`Error` tied to Tag wire / effect carriers so hovers show real failure/success types.

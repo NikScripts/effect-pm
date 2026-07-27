@@ -1,11 +1,11 @@
 /**
- * @module examples/serve-per-resource-deps
+ * @module examples/serve-per-hyperlink-deps
  *
  * Dogfoods `Hyperlink.serve` / `PmNode.httpServer`: two resources that need **different implementations
  * of the same dependency tag**, served on one `/rpc`, isolated. `Matches` gets a "plain" `ImportHandlers`;
  * `Import` gets a "hooked" one — proven by each reading back its own label, plus `/health` listing both.
  *
- * Run: `npx tsx examples/serve-per-resource-deps.ts`
+ * Run: `npx tsx examples/serve-per-hyperlink-deps.ts`
  */
 import { Console, Context, Duration, Effect, Layer, Schema } from "effect";
 // @effect-diagnostics-next-line nodeBuiltinImport:off
@@ -21,7 +21,7 @@ const PORT = 7790;
 
 // one dependency tag, two mutually-exclusive implementations
 class ImportHandlers extends Context.Service<ImportHandlers, { readonly label: string }>()(
-  "hyperlink-ts/examples/serve-per-resource-deps/ImportHandlers",
+  "hyperlink-ts/examples/serve-per-hyperlink-deps/ImportHandlers",
 ) {}
 const plainHandlers = Layer.succeed(ImportHandlers, { label: "plain" });
 const hookedHandlers = Layer.succeed(ImportHandlers, { label: "hooked" });

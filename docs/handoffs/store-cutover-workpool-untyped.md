@@ -37,4 +37,4 @@ persists), untyped WorkPool inherits event persistence with no separate engine w
 - [x] Cast check: no `... as` identity cast in any untyped WorkPool store contract (mirror `builtInQueueStoreContract`).
 
 ## Verify
-`pnpm typecheck` (both) + `test/custom-queue-contract.test.ts` + untyped WorkPool suites.
+`pnpm typecheck` (both) + `test/custom-work-pool-contract.test.ts` + untyped WorkPool suites.

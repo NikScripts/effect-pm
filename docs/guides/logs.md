@@ -137,7 +137,7 @@ Say the identifier kind out loud. Mixing them is the common failure mode.
 | Kind | Identifies | Declared as | Used for |
 |------|------------|-------------|----------|
 | **Node log key** | One OS process / runtime host | `Node.Tag(…)` → `.key` | `Node.logs`, `Logs.byNode`, `annotations.node` |
-| **Hyperlink key** | One Queue, Daemon, or custom Tag | `Tag(…)` → `.key` | store scope, lineage segments, `byHyperlink` |
+| **Hyperlink key** | One WorkPool, Daemon, Gate, or custom Tag | `Tag(…)` → `.key` | store scope, lineage segments, `byHyperlink` |
 | **Lineage segment** | One hop in ancestry | element of the lineage JSON array | `LogEntry.hasKey` / `atRoot` / `atLeaf` |
 | **Annotation key** | Field name on `LogEntry.annotations` | `LogAnnotationKeys.*` | metadata keys, not buckets |
 

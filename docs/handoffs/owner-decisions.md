@@ -351,7 +351,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 ## 2026-07-27 — W3 Eng: shared Spec via `Tag(wireKey, spec)` (not Family)
 
 - **Owner said:** Skip metrics for now. Document everything. Build the shared-Spec feature (the one metrics would use), demo it, tests/examples/docs — then stop and wait. Return to `.handle` rename later.
-- **Chose / Eng’d:** `Hyperlink.Tag(wireKey, spec)` → `Factory<Self>()(instanceKey)` (class-only, Effect-shaped `()`). Internal `sharedTagSym`; ordinary `serve` / `serveRemote` / `client` merge by wire key and route on header `key`. Errors: `DuplicateSharedInstance`, `SharedRoutingError`. Demo: `examples/forms/resource/shared-tag-wire.ts`. **ApiMetrics not migrated.**
+- **Chose / Eng’d:** `Hyperlink.Tag(wireKey, spec)` → `Factory<Self>()(instanceKey)` (class-only, Effect-shaped `()`). Internal `sharedTagSym`; ordinary `serve` / `serveRemote` / `client` merge by wire key and route on header `key`. Errors: `DuplicateSharedInstance`, `SharedRoutingError`. Demo: `examples/forms/hyperlink/shared-tag-wire.ts`. **ApiMetrics not migrated.**
 - **Rejected (still):** `Family` / `serveFamily` / `clientFamily` / `member`; pushing `integration` without explicit OK.
 - **Paused next:** ApiMetrics/Gate product shape. (`.handle` rename → Eng’d as `default`/`defaults`; see below.)
 - **Supervisor impact:** Agent 4 on `cursor/hyperservice-open-deps-5679` only — wait for owner before metrics / `integration`.

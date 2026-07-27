@@ -27,7 +27,7 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | Track | Read / run in this order |
 |-------|--------------------------|
 | **Start here** | [`forms/queue/workpool-priority-retry.ts`](./forms/queue/workpool-priority-retry.ts) → [Examples (docs)](../docs/examples.md#queue) |
-| **Dashboard / TUI** | [`resource-tui/`](./hyperlink-tui/) — terminal dashboards over hyperlink tags |
+| **Dashboard / TUI** | [`hyperlink-tui/`](./hyperlink-tui/) — terminal dashboards over hyperlink tags |
 | **Queues** | [`forms/queue/workpool-priority-retry.ts`](./forms/queue/workpool-priority-retry.ts) → [`forms/queue/workpool-priority-lanes.ts`](./forms/queue/workpool-priority-lanes.ts) |
 | **Schedule controls** | `pnpm run example:schedule-control-basics` → `example:schedule-control-surfaces` → [`scenarios/schedule-sync-from-external-db.ts`](./scenarios/schedule-sync-from-external-db.ts) |
 | **Daemon runtime** | `pnpm run example:daemon-supervisor-patterns` |

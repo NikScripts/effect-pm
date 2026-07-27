@@ -7,7 +7,7 @@ import * as Hyperlink from "../src/Hyperlink";
 // queue builder. Streams and Subscribables (ref fields) pass through by reference; a nested group recurses.
 
 class Dep extends Context.Service<Dep, number>()(
-  "hyperlink-ts/test/resource-provide-context.test/Dep",
+  "hyperlink-ts/test/hyperlink-provide-context.test/Dep",
 ) {}
 
 class T extends Hyperlink.Tag<T>()("provide-context/T", {

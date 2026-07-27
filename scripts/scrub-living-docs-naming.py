@@ -28,7 +28,7 @@ BAKE_HANDOFF_GLOBS = [
     "docs/handoffs/agent-03-storage-cutover-followthrough.md",
     "docs/handoffs/agent-03-storage-correctness.md",
     "docs/handoffs/agent-03-logs-p1.md",
-    "docs/handoffs/agent-03-byresource-full-key.md",
+    "docs/handoffs/agent-03-byhyperlink-full-key.md",
     "docs/handoffs/agent-01-docs-corpus-phase1-plan.md",
     "docs/handoffs/rename-hyperlink-handoff.md",
 ]
@@ -467,7 +467,7 @@ def ensure_banner(text: str, rel: str) -> str:
         "docs/handoffs/agent-03-storage-cutover-followthrough.md",
         "docs/handoffs/agent-03-storage-correctness.md",
         "docs/handoffs/agent-03-logs-p1.md",
-        "docs/handoffs/agent-03-byresource-full-key.md",
+        "docs/handoffs/agent-03-byhyperlink-full-key.md",
         "docs/handoffs/agent-01-docs-corpus-phase1-plan.md",
         "docs/handoffs/rename-hyperlink-handoff.md",
         "docs/handoffs/queue-handle-convergence-decisions.md",

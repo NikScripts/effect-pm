@@ -8,7 +8,7 @@
  * | `testSyncDaemonKey` | resource key | `billing/SyncWorker` | `test/log-pipeline.test.ts`, `test/logs-resource.test.ts`, … |
  * | `testTuiNodeKey` | node log key | `acme/tui` | `examples/hyperlink-tui/live-queues.ts`, `examples/hyperlink-tui/queue-live.tsx` |
  *
- * Production equivalents: `resource-web/hub.ts` (`WnbaNode.key`, `LiveScorePoller.key`, …).
+ * Production equivalents: `hyperlink-web/hub.ts` (`WnbaNode.key`, `LiveScorePoller.key`, …).
  * Full catalog: `docs/LOGS.md`.
  *
  * @internal test fixture only
