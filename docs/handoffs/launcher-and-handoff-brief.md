@@ -1,6 +1,6 @@
 # Brief — Launcher + node handoff (new agent)
 
-**Status:** Track A Eng'd — `hyperlink-ts/Launcher` + `Node.assume` on tip; Tracks B/C/D still bake.  
+**Status:** Track A Eng'd on tip; **Track B bake open** (Lookup-directed startup). C/D not started.  
 **Opened:** 2026-07-25 (owner via Agent G).  
 **Audience:** next agent picking up launcher + handoff / migration discussion.
 
@@ -130,7 +130,35 @@ Shipped on tip (owner Eng go):
 
 Eng defaults: 32-byte hex token; Ready poll `100 millis` with per-dial `2 seconds` bound; outer default `"30 seconds"`.
 
-**Next bake:** Track B (Lookup-directed startup), then C (version handoff), D (clients during handoff).
+**Next bake:** Track B (below), then C (version handoff), D (clients during handoff).
+
+### Track B — research note (2026-07-27): what already exists
+
+**Owner framing (locked spine, not Track B API):** dumb launcher exits; **nodes own processes**; **Lookup directs startup** (placement / role / takeover — verbs TBD); prefer reuse over new nouns.
+
+**Build on (shipped Lookup):**
+- **`Identity.claim` / `resolve`** — exclusive “who implements K?” (winner serves; loser → client via `Hyperlink.identity`, or `AddressLessClaimLost` on address-less listen).
+- **`Directory.advertise` / `unregister` / `nodesServing`** — presence catalog derived from listen serve list (not a second app-maintained catalog).
+- **`Advice.advise` / `preferred` / `clear`** — `resourceKey → preferred nodeKey` for **clients** when Identity missed and multiple directory rows exist (`Hyperlink.lookupClient`). Does **not** answer “what roles are assigned to *this* node.”
+- **`OnConflict` / `askIncumbent` + node-status `yield`** — cooperative **directory-row** replacement on duplicate `nodeKey`. Default `yield` = accept; **not** drain / shutdown / state transfer (Track C territory).
+- **Soft-bake `Lookup.layer`** — nameless `unix`/`http` compete for `/tmp/hyperlink-ts-lookup.sock` (same-machine); no Launcher required. Cross-network Lookup server/client **not** implemented (`layerNode` / `client` are IPC-path today).
+
+**Track A vs Lookup (gap):** Launcher never calls Lookup. `SpawnSpec.node` must be addressed; Ready / assume only. Registration is the child’s job after assume (#4). No blank-worker / startup-directive / role-assignment API exists. Server serve lists are **non-empty**; Launcher allReady treats zero resources as not ready.
+
+**Gone / do not resurrect:** launcher-owned parallel directory; ProcessManager / Fleet.launch as control brain.
+
+**Historical opinion only** (`launcher-decisions.md`): spawn → ready → `Advice.advise` → drain old → unregister → clearAdvice. Useful shape to discuss; **not locked**.
+
+### Track B — baking (not locked)
+
+Owner: answer these forks (reuse Lookup nouns; high bar for new concepts). **No Eng until locked.**
+
+1. **Day-one topology** — Track B local-first over existing `Lookup.layer` IPC (same-machine soft-bake), **or** must directed startup work cross-network day one (needs HTTP/WS Lookup path)?
+2. **Blank worker** — may a process start serving **only** node-status (await direction), **or** must it boot with ≥1 app Hyperlink already chosen by the entry (Track A autonomous child)?
+3. **Direction model** — new node **infers** work by reading `Directory` + `Advice` as today, **or** Lookup gains a **node-facing** assignment (read/stream: “roles for `nodeKey`”) — new surface needs bar?
+4. **Role arbitration** — exclusive roles = existing `Identity.claim` (losers become clients); replicas = `Directory.advertise` only — **or** Lookup assigns both **before** any app serve layer starts?
+5. **“Take over” in Track B** — exactly duplicate-`nodeKey` advertise + `askIncumbent` / `yield` (directory row only; promote `onYield`?), **or** keep that lightweight and leave real service handoff to Track C?
+6. **Launcher rendezvous** — Launcher still gets a **stable bootstrap Node** (Track A unchanged) and Lookup runs entirely in the child after assume, **or** Launcher may spawn nameless and **discover** the child’s endpoint via Identity/Directory before Ready/handoff?
 
 ---
 
