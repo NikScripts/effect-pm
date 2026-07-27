@@ -7,7 +7,7 @@
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **4** | `cursor/hyperservice-open-deps-5679` | [service shapes plan](../plans/service-shapes.md) | **Eng’d** — tip-synced | same tip as `integration` | typecheck + pure suites | `Tag`/`value`/`promise`/`pure` shipped; Creating a Hyperlink polish still paused | 2026-07-26 |
-| **G / TUI** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity · `View` redesign | **Eng** — View services + Layer.succeed + react R=never; Hyperlink.components | same tip as `integration` | ui-view tests green | Notes: [`client-adapters-design.md`](./client-adapters-design.md) (W1–W19). | 2026-07-26 |
+| **G / TUI** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity · `View` redesign | **Eng** — W20 `View.group` + `kit.for(tag)` + requireView/pinnedViewsOf | tip-sync after push | ui-view tests | Next: packaging / WorkPool migrate / Dashboard on kit. Notes: [`client-adapters-design.md`](./client-adapters-design.md) (W1–W20). | 2026-07-27 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **G** | 2026-07-26 |
 | **1** | *(frozen)* | [Examples book](./agent-01-examples-book.md) · [Phase 3](./agent-01-docs-corpus-phase3-plan.md) | **frozen / superseded** — E1 examples on tip; intro voice [#68](https://github.com/nikolasstow/Hyperlink/pull/68) closed | — | — | Branch deleted (unique tip was pre-rebrand `docs/index.md`) | 2026-07-26 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
@@ -27,7 +27,7 @@
 
 ### Active (owner approval required)
 1. **Agent 4:** Service shapes — Eng’d `Tag<Self, I>()`, `value`, overload arity, `Hyperlink.promise`, `Hyperlink.pure`. Creating a Hyperlink polish still paused; next owner call (e.g. Tag-baked `constant(literal)` / polish).
-2. **Agent G / TUI:** Dashboard Group parity + View redesign (`cursor/tui-dashboard-parity-125f`) — Eng: no `groupId`/short kinds in View; handle+skin Layers.
+2. **Agent G / TUI:** Dashboard Group parity + View redesign (`cursor/tui-dashboard-parity-125f`) — Eng’d through W20 (`View.group` / `kit.for`); next packaging + WorkPool chrome migrate.
 3. **Launcher / handoff (unassigned):** brief [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md) — dumb spawn-and-exit; node owns process; Lookup directs; version upgrade → handoff. Prior [`launcher-decisions.md`](./launcher-decisions.md) = reference only.
 
 ### Frozen / dead (do not assign)

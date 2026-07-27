@@ -386,7 +386,7 @@ One provide Layer per process — not web+TUI in the same merge.
 
 **Locked (grilling):** W14–W19; View services + Layer-provided TSX (not skins.register map); components = single array; missing skin = not provided.
 
-**Locked (grilling):** W20 `View.group`. **Open:** `kit.for(tag)`; Dashboard on kit; Spec gate; default chrome module layout (fat namespace OK if no platform TSX in shared).
+**Locked (grilling):** W20 `View.group` + lean `kit.for(tag)`. **Open:** Dashboard on kit; Spec gate; default chrome module layout (fat namespace OK if no platform TSX in shared).
 
 #### View handles on HS tags (W17) — LOCKED (clarified)
 
@@ -716,17 +716,19 @@ const { Card, Detail, Page } = kit.for(MyQueue)
 | `kit.for(tag)` / `Hyperlink.react(tag)` | Curry `tag` into Card/Detail/Page — props become `{ name? }` only |
 | Skins | Still from the same Layer / Provider — flipped helper does **not** invent provides |
 
-**Lean:** ship `kit.for(tag)` on the `View.react` result first (no Hyperlink↔ui cycle). Alias `Hyperlink.react(tag)` later only if it can live without importing UI (unlikely) — otherwise keep flipped helper on the View kit or `hyperlink-ts/ui` as `View.for(tag, kit)`.
+**LOCKED (lean):** `kit.for(tag)` on the `View.react` result (no Hyperlink↔ui cycle). Alias `Hyperlink.react(tag)` later only if it can live without importing UI (unlikely) — otherwise keep flipped helper on the View kit or `hyperlink-ts/ui` as `View.for(tag, kit)`.
 
 Name collision: `Hyperlink.react` vs `View.react` — different jobs (service-bound vs layer kit). Document clearly if both exist.
+
+**Eng note (W20 R):** `View.group` alone does not invent bind tables — merge `View.bindKind` / `View.bindTag` for default chrome `R`. Pin-only Views (on leaves, not in binds) → merge `View.requireView(Pin)` (discover with `View.pinnedViewsOf(group)`). Runtime walk cannot auto-union pin types into Layer `R`.
 
 #### Migration order (proposed)
 
 1. Keep Eng’d core (services, succeed, react R=never, components pin) — **done**
-2. Lock packaging: shared handles/binds subpaths; platform succeed layers — **now**
-3. Migrate WorkPool Card+Detail to View services + web/tui succeed layers
-4. `kit.for(tag)` flipped helper
-5. Kit `Dashboard` (or web/tui Dashboard consumes kit) 
+2. ~~W20 `View.group` + `kit.for(tag)`~~ **done**
+3. Lock packaging: shared handles/binds subpaths; platform succeed layers — **now**
+4. Migrate WorkPool Card+Detail to View services + web/tui succeed layers
+5. Kit `Dashboard` (or web/tui Dashboard consumes kit)
 6. Delete `forKind` / `ui/data` QueueService duplicates over time
 
 ### LOCKED decisions (2026-07-26)
@@ -757,10 +759,10 @@ Name collision: `Hyperlink.react` vs `View.react` — different jobs (service-bo
 ### Eng order (next)
 
 1. ~~View services + react R=never + Hyperlink.components~~ **done**
-2. ~~W20 `View.group` design~~ **locked** — Eng `View.group(AppGroup)` Layer (`R` = leaf views from binds+pins)
+2. ~~W20 `View.group` + `kit.for(tag)`~~ **Eng’d** — `View.group(AppGroup)` stashes GroupDash; merge `bind*` for default `R`; pin-only → `View.requireView` / `pinnedViewsOf`; `react(…).for(tag)` → bound Card/Detail/Page
 3. Packaging — shared handles/binds; platform succeed layers (no TSX in shared imports); fat namespace OK
 4. Migrate WorkPool Card/Detail
-5. `kit.for(tag)`; kit `Dashboard` optional
+5. Kit `Dashboard` optional (open)
 6. Retire `forKind` / `ui/data` service dupes
 7. `Hyperlink.atom` / `query` / `fn` in parallel
 8. Desktop tabs + real Page kind — later

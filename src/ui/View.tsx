@@ -12,6 +12,7 @@
  */
 import * as React from "react";
 import { Context, Effect, Layer, Option } from "effect";
+import * as Group from "../Group";
 import { componentsOf, kindOf, type ComponentPin } from "../Hyperlink";
 import type { LeafTag } from "./widgetRegistry";
 
@@ -222,6 +223,99 @@ export const bindKind = <Id,>(
     }),
   );
 
+/**
+ * Require a View service in Layer `R` without binding it (e.g. pin-only chrome for
+ * {@link group}). Compose with `Layer.mergeAll(View.requireView(A), View.requireView(B), …)`.
+ *
+ * @public
+ */
+export const requireView = <Id,>(view: ViewService<Id>): Layer.Layer<never, never, Id> =>
+  Layer.effectDiscard(Effect.asVoid(view));
+
+// =============================================================================
+// Lightweight Group dash (W20)
+// =============================================================================
+
+/** Group-shaped root for {@link group}. @public */
+export type GroupLike = {
+  readonly key: string;
+  readonly members: Record<string, unknown>;
+};
+
+/** Leaf tags collected from a Group tree. @public */
+export type GroupLeaf = LeafTag;
+
+const collectLeaves = (node: unknown): ReadonlyArray<GroupLeaf> => {
+  if (!Group.isGroup(node)) {
+    if (
+      (typeof node === "object" || typeof node === "function") &&
+      node !== null &&
+      "key" in node &&
+      typeof (node as { readonly key: unknown }).key === "string"
+    ) {
+      return [node as GroupLeaf];
+    }
+    return [];
+  }
+  return Object.values(Group.members(node)).flatMap(collectLeaves);
+};
+
+/**
+ * Pin View services found on Group leaves (`Hyperlink.components`). Use with
+ * {@link requireView} / `Layer.succeed` so `View.react` sees `R = never`.
+ *
+ * @public
+ */
+export const pinnedViewsOf = (appGroup: GroupLike): ReadonlyArray<ComponentPin> => {
+  const out: ComponentPin[] = [];
+  const seen = new Set<string>();
+  for (const leaf of collectLeaves(appGroup)) {
+    for (const pin of componentsOf(leaf) ?? []) {
+      if (seen.has(pin.key)) continue;
+      seen.add(pin.key);
+      out.push(pin);
+    }
+  }
+  return out;
+};
+
+/**
+ * Lightweight Group dash handle — stashed by {@link group} for {@link react}.
+ *
+ * @public
+ */
+export class GroupDash extends Context.Service<
+  GroupDash,
+  {
+    readonly group: GroupLike;
+    readonly leaves: ReadonlyArray<GroupLeaf>;
+  }
+>()("hyperlink-ts/ui/View/GroupDash") {}
+
+/**
+ * BYO-chrome Group kit contribution (W20). Records the Group + leaves for the react kit.
+ * Default View `R` still comes from {@link bindKind} / {@link bindTag} layers you merge.
+ * Pin-only views: merge {@link requireView} for each of {@link pinnedViewsOf}`(group)` (or
+ * `Layer.succeed` them in chrome).
+ *
+ * @example
+ * ```ts
+ * const ready = Layer.mergeAll(
+ *   View.group(AppGroup),
+ *   View.bindKind(WorkPool.kind, PoolCard),
+ *   View.requireView(CustomCard), // if a member pins CustomCard
+ * ).pipe(Layer.provideMerge(chrome), Layer.provideMerge(View.base))
+ * const { for: bound, Provider } = View.react(ready)
+ * ```
+ *
+ * @public
+ */
+export const group = (appGroup: GroupLike): Layer.Layer<GroupDash> =>
+  Layer.sync(GroupDash, () => ({
+    group: appGroup,
+    leaves: collectLeaves(appGroup),
+  }));
+
 // =============================================================================
 // Fallbacks + react kit
 // =============================================================================
@@ -253,13 +347,19 @@ const fallbackFor = (viewKind: ViewKind): ViewComponent => {
   return FallbackPage;
 };
 
-const RegistryReactContext = React.createContext<{
+type KitContext = {
   readonly registry: RegistryService;
   readonly resolvePins: (
     tag: LeafTag,
     viewKind: ViewKind,
   ) => ReadonlyArray<Resolved>;
-} | null>(null);
+  readonly groupDash: Option.Option<{
+    readonly group: GroupLike;
+    readonly leaves: ReadonlyArray<GroupLeaf>;
+  }>;
+};
+
+const RegistryReactContext = React.createContext<KitContext | null>(null);
 
 /** Multi-match host — pager stub (first page); desktop tabs later (W8). @internal */
 const MatchHost = (props: {
@@ -298,16 +398,13 @@ const MatchHost = (props: {
   );
 };
 
-type KitContext = {
-  readonly registry: RegistryService;
-  readonly resolvePins: (
-    tag: LeafTag,
-    viewKind: ViewKind,
-  ) => ReadonlyArray<Resolved>;
-};
-
 /** Pin entry that is also a Context service (from {@link make}). @internal */
 type PinService = ComponentPin & Context.Service<unknown, ViewComponent>;
+
+/** Props for {@link react}`.for(tag)` bound matchers — tag is curated. @public */
+export interface BoundViewProps {
+  readonly name?: string;
+}
 
 /**
  * Build registry + pin resolver from a **fully provided** view Layer (`R = never`).
@@ -321,6 +418,7 @@ const buildKit = <ROut, E,>(viewLayer: Layer.Layer<ROut, E, never>): KitContext 
       Effect.gen(function* () {
         const ctx = yield* Layer.build(viewLayer);
         const registry = Option.getOrThrow(Context.getOption(ctx, Registry));
+        const groupDash = Context.getOption(ctx, GroupDash);
         const resolvePins = (tag: LeafTag, viewKind: ViewKind): ReadonlyArray<Resolved> => {
           const pins = componentsOf(tag)?.filter((p) => p.kind === viewKind);
           if (pins !== undefined && pins.length > 0) {
@@ -338,7 +436,7 @@ const buildKit = <ROut, E,>(viewLayer: Layer.Layer<ROut, E, never>): KitContext 
           }
           return registry.match(tag, viewKind);
         };
-        return { registry, resolvePins };
+        return { registry, resolvePins, groupDash };
       }),
     ),
   );
@@ -391,11 +489,43 @@ export const react = <ROut, E,>(viewLayer: Layer.Layer<ROut, E, never>) => {
       name: props.name,
     });
 
+  /**
+   * Flip: bind Card/Detail/Page to one resource tag (no `tag` prop).
+   * Still render inside {@link Provider}.
+   */
+  const forTag = (tag: LeafTag) => ({
+    Card: (props: BoundViewProps): React.ReactElement | null =>
+      React.createElement(MatchHost, {
+        viewKind: "card",
+        resolved: useKit().resolvePins(tag, "card"),
+        tag,
+        name: props.name,
+      }),
+    Detail: (props: BoundViewProps): React.ReactElement | null =>
+      React.createElement(MatchHost, {
+        viewKind: "detail",
+        resolved: useKit().resolvePins(tag, "detail"),
+        tag,
+        name: props.name,
+      }),
+    Page: (props: BoundViewProps): React.ReactElement | null =>
+      React.createElement(MatchHost, {
+        viewKind: "page",
+        resolved: useKit().resolvePins(tag, "page"),
+        tag,
+        name: props.name,
+      }),
+  });
+
   return {
     Card,
     Detail,
     Page,
     Provider,
+    /** Bound matchers for one service — `{ Card, Detail, Page }` without `tag` props. */
+    for: forTag,
+    /** Present when the layer included {@link group}. */
+    groupDash: Option.getOrUndefined(kit.groupDash),
     useView: () => useKit().registry,
     resolve,
     keys: () => kit.registry.keys(),
