@@ -22,13 +22,15 @@
    - **Launcher `awaitReady`** is a **named phase** that waits until that readiness is true **and** proven cross-process (reuse `verifyConnection` / deep classify — loud failures, typed errors). No ad-hoc health hacks.
    - **Ready ≠ ownership.** Ready means “fit to serve”; **handoff ack** (locked #6) is the separate “I own myself; launcher may exit” step.
    - Quality bar: Effect-shaped API, Schema/tagged errors, no silent timeouts-as-success; composeable with Track A phases.
+8. **`awaitReady` aggregation = allReady by default, configurable escape hatch.**
+   - **Default:** every served Hyperlink on the node must be ready (`allReady`-shaped).
+   - **Escape hatch:** caller may narrow (critical subset / Lookup-first / staged bring-up) without a second readiness system — same `withReadiness` substrate, scoped set.
 
 Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.md) remain **reference only** unless re-locked here.
 
 ### Track A — baking (not locked)
 
 - Concrete API names for the parent phases and the child ack verb.
-- Ready aggregation: **all** served Hyperlinks on the node (`allReady`-shaped) vs a single node-level Ready declaration.
 - Whether the ownership ack is a new node RPC verb or an extension of the readiness/status surface (still distinct semantically).
 
 ---
