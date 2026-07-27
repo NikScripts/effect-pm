@@ -15,7 +15,8 @@ export default function LandingPage() {
             <h1 className="landing-title">
               <a href="/docs/index">Hyperlink</a>
             </h1>
-            <h3 className="landing-sub">for Effect</h3>
+            {/* `p` not `h3`: keeps the lockup look (class-driven) without skipping heading levels. */}
+            <p className="landing-sub">for Effect</p>
           </div>
           <p className="landing-motto">
             <span>Define once.</span> <span>Run anywhere.</span>{" "}

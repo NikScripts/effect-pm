@@ -13,6 +13,16 @@ if [ "${1:-}" = "--" ]; then shift; fi
 REGISTRY="${1:?usage: deploy-do.sh <docr-registry-name>}"
 : "${DOCS_SITE_ORIGIN:?set DOCS_SITE_ORIGIN so sitemap/llms links go absolute}"
 
+# Guard against baking dotenvx ciphertext (or any non-URL) into canonical/og tags.
+case "${DOCS_SITE_ORIGIN}" in
+  https://* | http://*) ;;
+  *)
+    echo "refusing to deploy: DOCS_SITE_ORIGIN must be an http(s) URL (got: ${DOCS_SITE_ORIGIN})" >&2
+    echo "  tip: use \`pnpm run deploy:do\` so dotenvx decrypts docs/site/.env" >&2
+    exit 1
+    ;;
+esac
+
 # a deploy is a statement about a COMMIT — refuse a dirty tree
 if [ -n "$(git status --porcelain)" ]; then
   echo "refusing to deploy: working tree is dirty" >&2

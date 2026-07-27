@@ -2233,8 +2233,8 @@ body:has(.landing) main {
 .landing-credit {
   margin: 0.9rem 0 0;
   font-size: 0.9rem;
+  /* No opacity fade — Lighthouse color-contrast failed at 0.8 over the landing panel. */
   color: var(--muted-fg);
-  opacity: 0.8;
 }
 .landing-pitch strong {
   color: var(--fg);
