@@ -2,10 +2,9 @@
  * @module examples/resource-tui/grid-app
  *
  * A full-screen terminal dashboard: a scrollable grid of resource "widgets", a
- * command bar, and a status/shortcuts bar. Widgets are minted from the
- * **internal** shared-Spec `Hyperlink.tagFor` helper (not the public front door —
- * prefer solo `Hyperlink.Tag`; kind-keyed family factory is wire-groups W3),
- * rendered via the same `makeHyperlinkAtoms` + `atom-react` the web widget uses.
+ * command bar, and a status/shortcuts bar. Each widget is a solo `Hyperlink.Tag`
+ * (wire key = widget name), rendered via the same `makeHyperlinkAtoms` +
+ * `atom-react` the web widget uses.
  *
  * - Keys: arrows / hjkl move selection (auto-scrolls to keep it visible); i / d / r
  *   act on it; `:` opens the command bar; q quits.
@@ -28,12 +27,12 @@ import {
   useAtomValue,
 } from "../../src/ui/atom-react";
 
-const Counter = Hyperlink.tagFor("grid-counter", {
+const counterSpec = {
   value: Hyperlink.effect(Schema.Number),
   inc: Hyperlink.effect(Schema.Void),
   dec: Hyperlink.effect(Schema.Void),
   reset: Hyperlink.effect(Schema.Void).annotate({ destructive: true }),
-});
+};
 
 const impl = (start: number) => {
   let v = start;
@@ -62,14 +61,15 @@ const PALETTE = [
   "magentaBright",
 ];
 
-// Enough instances to overflow the screen so paging is visible. Each is built
-// from the family once (Counter(id)) and reused for its layer + atoms.
+// Enough widgets to overflow the screen so paging is visible. Each is its own
+// solo Tag (distinct Self + key) reused for its layer + atoms.
 const SPECS = Array.from({ length: 24 }, (_, i) => {
   const name = `w${i + 1}`;
+  class Widget extends Hyperlink.Tag<Widget>()(name, counterSpec) {}
   return {
     name,
     color: PALETTE[i % PALETTE.length] ?? "white",
-    tag: Counter(name),
+    tag: Widget,
     start: i * 3,
   };
 });

@@ -1,6 +1,6 @@
 # Plan: wire groups, identity, and shared Spec families
 
-**Status:** W1–W2 Eng’d (2026-07-27); W3+ not Eng’d.  
+**Status:** W1 Eng’d; unused family path **deleted** (2026-07-27); W3+ not Eng’d.  
 **Agent:** 4 (`cursor/hyperservice-open-deps-5679`).  
 **Supersedes:** casual use of public `groupId` as a second identity; doc/examples that teach `tagFor("queue", …)` as the WorkPool model; the 2026-07-14 “keep `groupId`” exception for RPC naming (see owner-decisions).
 
@@ -78,7 +78,7 @@ Optional helper (internal or public): `Hyperlink.wireKey(tag)` → tag key or ki
 | Today | Target |
 |-------|--------|
 | `.groupId` === `.key` on toolkit Tags | Drop `.groupId`; wire uses `.key` |
-| `tagFor` / `serveInstances` / `clientInstances` unused in `src/` toolkits; incomplete health registration | Demote or remove from front door until family factory is real; fix ApiMetrics/WorkPool docs that lie |
+| `tagFor` / `serveInstances` / `clientInstances` unused in `src/` toolkits | **Deleted** after migrating tests/examples to solo `Tag`; W3 adds a real kind-keyed factory when needed |
 | Examples `tagFor("queue", …)` | Gone — never use `"queue"` as a wire/contract key |
 | `forwardClient` always sends header `key` | Instance mode: omit or ignore; shared mode: required |
 | `ServedHyperlinks` keyed by `groupId` | Keyed by wire key (`.key` or kind key) |
@@ -94,7 +94,7 @@ Spec-hash stays **`contractHash` / verify**, not the RpcGroup name.
 |-------|--------|
 | **W0** | This plan + owner-decisions row (supersede “keep groupId”); agent-status — **done** |
 | **W1** | Solo path: remove public `groupId`; wire/serve/client/verify/registry use `.key` / `wireKeyOf`; changeset major; fix doc lies — **Eng’d** |
-| **W2** | Demote unused `tagFor` / `serveInstances` / `clientInstances` / `instance` to `@internal`; drop from barrel + README — **Eng’d** |
+| **W2** | Migrate callers → solo `Tag`; **delete** `tagFor` / `serveInstances` / `clientInstances` / `instance` (+ factory types / family errors) — **Eng’d** |
 | **W3** | Family factory (Effect-hidden): shared Spec + kind-keyed wire; start with ApiMetrics and/or Schedule and/or control-only surfaces |
 | **W4** | Prototype story (compose Spec + features, mint named keys) — align `Node.Prototype` later; no service-extends-service |
 | **W5** | Optional: WorkPool/Daemon control vs data-plane wire split if product wants kind-keyed control family |
@@ -114,7 +114,7 @@ Spec-hash stays **`contractHash` / verify**, not the RpcGroup name.
 
 ## References
 
-- Claim / build: `src/Hyperlink.ts` (`Tag`, `tagFor`, `buildInstanceTag`, `wireTag`, `forwardClient`, `serveInstances`).  
+- Claim / build: `src/Hyperlink.ts` (`Tag`, `buildInstanceTag`, `wireTag`, `forwardClient`).  
 - Shareable fragments: `queueControlSpec` / `priorityControlSpec` (`WorkPool.ts`), `daemonControlSpec` / `scheduleHyperlinkSpec` (`Daemon.ts`), `apiMetricsSpec` (`ApiMetrics.ts`), Gate observation in `internal/gateSchema.ts`.  
 - UI: `tagWireKey` in `src/ui/data.ts`.  
 - Related: [`service-shapes.md`](./service-shapes.md) (handle taxonomy; orthogonal).

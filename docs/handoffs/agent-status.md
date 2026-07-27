@@ -6,7 +6,7 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **4** | `cursor/hyperservice-open-deps-5679` | [wire groups & identity](../plans/wire-groups-and-identity.md) · [service shapes](../plans/service-shapes.md) | **Eng W1–W2** | tip-sync after push | typecheck + targeted tests | Next Eng **W3**: kind-keyed family factory | 2026-07-27 |
+| **4** | `cursor/hyperservice-open-deps-5679` | [wire groups & identity](../plans/wire-groups-and-identity.md) · [service shapes](../plans/service-shapes.md) | **Eng W1–W2** (family path deleted) | tip-sync after push | typecheck + targeted tests | Next Eng **W3**: kind-keyed family factory when needed | 2026-07-27 |
 | **G / TUI** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity | **design** — client adapters notes; tip-synced | same tip as `integration` | prior suites green | Notes: [`client-adapters-design.md`](./client-adapters-design.md) — Promise / TanStack / tRPC-shape / Effect-reactive helpers; Eng TBD | 2026-07-24 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **G**, this agent only | 2026-07-26 |
 | **1** | *(frozen)* | [Examples book](./agent-01-examples-book.md) · [Phase 3](./agent-01-docs-corpus-phase3-plan.md) | **frozen / superseded** — E1 examples on tip; intro voice [#68](https://github.com/nikolasstow/Hyperlink/pull/68) closed | — | — | Branch deleted (unique tip was pre-rebrand `docs/index.md`) | 2026-07-26 |
@@ -26,7 +26,7 @@
 0. **Agent E:** impossible-states plan ([`impossible-states-proposal.md`](./impossible-states-proposal.md)). **DONE + merged:** P1 (node↔protocol wiring bug → compile error, cast-free) + P5 (http transport dies in browser). **P2 SKIPPED** (cast). **P4 already-enforced** (loose-fields payload already rejected; proposal mis-scoped). **P3 deferred** (opaque serve layers). Clean wins complete. Reserved `src/Resource.ts` node/client surface until fully merged (done). **Tag-config reservation RELEASED — Agent D queue/run/process payload-config unblocked.**
 
 ### Active (owner approval required)
-1. **Agent 4:** Wire identity **W1–W2 Eng** ([`wire-groups-and-identity.md`](../plans/wire-groups-and-identity.md)) — drop public `groupId`; family APIs `@internal`. Service shapes: `Tag`/`value`/`promise`/`pure` Eng’d; Creating polish + handle adornments paused. Next: W3 kind-keyed family factory.
+1. **Agent 4:** Wire identity **W1–W2 Eng** ([`wire-groups-and-identity.md`](../plans/wire-groups-and-identity.md)) — drop public `groupId`; unused family path deleted (solo `Tag` only). Service shapes: `Tag`/`value`/`promise`/`pure` Eng’d; Creating polish + handle adornments paused. Next: W3 kind-keyed family factory when needed.
 2. **Agent G / TUI:** Dashboard Group parity + client-adapters design (`cursor/tui-dashboard-parity-125f`).
 3. **Hygiene:** branch tidy **landed** on `integration` (`hyp` CLI + landing polish; Agent 1/3 tips retired).
 

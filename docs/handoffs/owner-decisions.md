@@ -334,11 +334,11 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 ## 2026-07-27 — Wire groups: tag key vs kind key; drop public `groupId`
 
 - **Owner said:** Don’t conflate regular RPC groups with shared-Spec families. Regular group = tag key. Shared Spec family = kind key (hide via factory, Effect-style). Remove unused/redundant `groupId`. Never teach `"queue"` as a wire key. Only share Specs that are actually identical (control fragments / ApiMetrics / Schedule — not full WorkPool item plane).
-- **Chose:** Plan [`wire-groups-and-identity.md`](../plans/wire-groups-and-identity.md) — W0 locked; Eng W1+ (solo drop `groupId`, demote unused `tagFor`/`serveInstances`, then real family factory).
+- **Chose:** Plan [`wire-groups-and-identity.md`](../plans/wire-groups-and-identity.md) — W0 locked; Eng W1+ (solo drop `groupId`, delete unused family path after migrate, then real kind-keyed factory when needed).
 - **Rejected:** Kind as RpcGroup prefix for regular Tags; spec-hash as group name; public `wireMode` on every tag; forcing full WorkPool/Daemon/Gate Specs onto one kind-group without a control/data split.
 - **Supervisor impact:** Agent 4 owns W1+ on `cursor/hyperservice-open-deps-5679`.
 - **Eng note (2026-07-27):** W1 landed — public `HyperlinkTag.groupId` removed; `wireKeySym` / `wireKeyOf`; solo wire = `.key`; `DuplicateWireKey`; `ServedHyperlink.wireKey`; contract descriptor field `wireKey`.
-- **Eng note (2026-07-27, W2):** `tagFor` / `serveInstances` / `clientInstances` / `instance` (+ factory types / family errors) marked `@internal` and removed from the root barrel; README / PACKAGE-GUIDE no longer advertise them. Runtime still exported on the `Hyperlink` namespace for tests until W3.
+- **Eng note (2026-07-27, W2):** Unused shared-Spec family path **deleted** (`tagFor` / `serveInstances` / `clientInstances` / `instance` + factory types / family errors) after migrating tests/examples to solo `Tag`. No demotion/shim — migrate then delete. W3 adds a real kind-keyed factory when product needs it.
 
 ---
 

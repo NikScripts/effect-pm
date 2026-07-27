@@ -27,7 +27,7 @@ Hyperlink.kindOf(SomePlainTag);   // undefined  (a bare Hyperlink.Tag carries no
 | `CustomQueueHyperlink` (`…/CustomQueueContract`) | `hyperlink-ts/CustomQueueHyperlink` |
 | `ApiMetrics` | `hyperlink-ts/ApiMetrics` |
 
-This is how the web/TUI dashboards pick the right widget for each `Group` leaf. A bare `Hyperlink.Tag` has no stamped kind; pass `{ kind }` to `Hyperlink.Tag(key, { kind })` to give a custom contract its own. Solo tags use `.key` as the RpcGroup wire prefix (`Hyperlink.wireKeyOf`); there is no public `groupId`. Shared-Spec `tagFor` / `serveInstances` are package-internal pending the kind-keyed family factory.
+This is how the web/TUI dashboards pick the right widget for each `Group` leaf. A bare `Hyperlink.Tag` has no stamped kind; pass `{ kind }` to `Hyperlink.Tag(key, { kind })` to give a custom contract its own. Solo tags use `.key` as the RpcGroup wire prefix (`Hyperlink.wireKeyOf`); there is no public `groupId`.
 
 ---
 
@@ -644,8 +644,6 @@ Hyperlink.httpServer([
   Hyperlink.serve(Database, { status: pingStatus }),    // raw, spec-checked
 ]).pipe(Layer.provideMerge(NodeHttpServer.layer({ port: 3001 })));
 ```
-
-> `Hyperlink.instance` is **not** for this — it builds a `HyperlinkInstance` for the `serveInstances` family (one factory, many keyed instances). To serve one custom resource, pass its `serve` layer to `httpServer`.
 
 ### Per-resource dependencies
 

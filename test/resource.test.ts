@@ -98,16 +98,15 @@ it("client ↔ server round-trips in-memory", () => {
   return Effect.runPromise(program);
 });
 
-// ── multi-instance: many instances of one factory, one server, routed by id ──
-const Counter = Hyperlink.tagFor("counter", {
+// ── two solo tags with the same Spec shape on one server (wire prefix = each .key) ──
+const counterSpec = {
   bump: Hyperlink.effectFn({ by: Schema.Number }, Schema.Number),
   label: Hyperlink.effect(Schema.String),
-});
-class Alpha extends Counter<Alpha>("test/Alpha") {}
-class Beta extends Counter<Beta>("test/Beta") {}
+};
+class Alpha extends Hyperlink.Tag<Alpha>()("test/Alpha", counterSpec) {}
+class Beta extends Hyperlink.Tag<Beta>()("test/Beta", counterSpec) {}
 
-it("server family routes calls to the right instance by key header", () => {
-  // Two independent instance impls behind ONE shared contract group.
+it("two solo tags with the same Spec coexist; each has its own wire key", () => {
   let alphaTotal = 0;
   let betaTotal = 0;
   const alphaImpl = {
@@ -120,12 +119,12 @@ it("server family routes calls to the right instance by key header", () => {
     label: Effect.succeed("beta"),
   };
 
+  const root = groupOf(Alpha).merge(groupOf(Beta));
   const program = Effect.gen(function* () {
-    const rpc = yield* RpcTest.makeClient(groupOf(Counter));
-    const a = forwardClient(rpc, specOf(Counter), Counter.wireKey, Alpha.key);
-    const b = forwardClient(rpc, specOf(Counter), Counter.wireKey, Beta.key);
+    const rpc = yield* RpcTest.makeClient(root);
+    const a = forwardClient(rpc, specOf(Alpha), Alpha.key, Alpha.key);
+    const b = forwardClient(rpc, specOf(Beta), Beta.key, Beta.key);
 
-    // routed by key: each forwarder pins its own instance key as a header
     expect(yield* a.label).toBe("alpha");
     expect(yield* b.label).toBe("beta");
     expect(yield* a.bump({ by: 3 })).toBe(3);
@@ -134,10 +133,9 @@ it("server family routes calls to the right instance by key header", () => {
     expect(yield* b.bump({ by: 1 })).toBe(11);
   }).pipe(
     Effect.provide(
-      Hyperlink.serveInstances(
-        Counter,
-        Hyperlink.instance(Alpha, alphaImpl),
-        Hyperlink.instance(Beta, betaImpl),
+      Layer.mergeAll(
+        Hyperlink.serveRemote(Alpha, alphaImpl),
+        Hyperlink.serveRemote(Beta, betaImpl),
       ),
     ),
     Effect.scoped,
@@ -151,14 +149,13 @@ class Described extends Hyperlink.Tag<Described>()("described", {
 }, {
   description: "A described resource.",
 }) {}
-const DescribedFamily = Hyperlink.tagFor(
-  "describedFamily",
+class FamA extends Hyperlink.Tag<FamA>()(
+  "describedFamily/A",
   { tick: Hyperlink.effect(Schema.Void) },
   { description: "A described family." },
-);
-class FamA extends DescribedFamily<FamA>("describedFamily/A") {}
+) {}
 
-it("carries a resource-level description on tags and factory instances", () => {
+it("carries a resource-level description on tags", () => {
   expect(Described.description).toBe("A described resource.");
   expect(FamA.description).toBe("A described family.");
 });

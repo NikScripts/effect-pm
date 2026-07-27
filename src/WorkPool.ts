@@ -19,8 +19,7 @@
  * whose payload/result schema **is** the instance's `itemSchema`, so Effect RPC validates
  * items natively on both sides (no codec descriptor, no manual encode/decode). Solo
  * {@link Hyperlink.Tag} path: wire prefix = tag `.key`. A future kind-keyed family factory
- * (wire-groups W3) may share identical control-only Specs; do not teach internal
- * `tagFor` / `serveInstances` as the WorkPool model.
+ * (wire-groups W3) may share identical control-only Specs across instances.
  *
  * This module is the **public `WorkPool` namespace** — the `hyperlink-ts/WorkPool`
  * subpath and the barrel `export * as WorkPool` both resolve here. The light `Tag` / spec /
