@@ -1,6 +1,6 @@
 # Plan: service / contract shapes
 
-**Status:** `default` / `defaults` Eng’d (2026-07-27); **construction adornments A1–A2 Eng’d** (`defaults` remaps `Svc` via `remapTagService`); `cell` parked lean.  
+**Status:** `default` / `defaults` Eng’d (2026-07-27); **construction adornments A1–A2 Eng’d** (`defaults` Service widen via `remapTagService`); **`cell` parked/rejected** (ref + adapters enough).  
 **Agent:** 4 (`cursor/hyperservice-open-deps-5679`).  
 **Prior art:** [`service-shape-redesign.md`](../handoffs/archive/2026-07/features/service-shape-redesign.md) (2026-07-01/02), [`client-adapters-design.md`](../handoffs/client-adapters-design.md).  
 **Orthogonal:** wire RpcGroup identity — [`wire-groups-and-identity.md`](./wire-groups-and-identity.md) (W1–W3 Eng’d; do not conflate with handle taxonomy).
@@ -296,7 +296,7 @@ Today’s candidates under this umbrella:
 
 1. ~~Rename `constant` → `value`~~ **done**.
 2. ~~Tag-baked / handle bag naming~~ **done** — `default` (Spec) / `defaults` (pipe).
-3. Live plain cell (`cell`): **lean park/reject** (ref + adapters enough) — confirm lock.
+3. ~~Live plain cell (`cell`)~~ **LOCKED park/reject** (2026-07-27) — `ref` + adapters enough; no Spec `cell` / live plain `A`.
 4. ~~Fallible materialize~~ **done** (`value` + `E`).
 5. ~~Promise adapter~~ **done** (`Hyperlink.promise`).
 6. Getting-started / Core Concepts polish for the taxonomy (optional).
@@ -311,7 +311,7 @@ Today’s candidates under this umbrella:
 |-------|--------|
 | **S2** | ~~Eng `default` / `defaults`~~ **done** (`pure` retired) |
 | **S3** | ~~Docs: Creating / Core Concepts taxonomy~~ **done** (light polish with `default`/`defaults`) |
-| **S5** | Live plain `cell` — lean park/reject pending owner lock |
+| **S5** | ~~Live plain `cell`~~ **parked/rejected** — `ref` + adapters |
 | **S6** | Upload / sink (transport-gated) |
 | **S7** | ~~Prototype mint~~ **replaced** by construction adornments A1–A4 above |
 
@@ -322,7 +322,7 @@ Today’s candidates under this umbrella:
 - Spec builders that return `Promise` or sync `(In) => A` as the native handle shape.
 - Silent divergence (local plain vs remote Effect for the “same” field).
 - Polling adapters for “live” dashboard data.
-- Replacing `ref` with plain cells for TUI/web unless decision 3 says so.
+- Replacing `ref` with plain cells for TUI/web (`cell` parked/rejected).
 
 ---
 

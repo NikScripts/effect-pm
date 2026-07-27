@@ -386,8 +386,16 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Owner said:** Pure was never supposed to be the long-term API; if `default`/`defaults` exist that is the same job — retire `pure`, build it right (refinement + docs), ask only when blocked.
 - **Chose / Eng’d:** `Hyperlink.default(value)` (literal or sync fn; Promise-returning fn type-errors) + `Hyperlink.defaults({…})` pipe (bag on Tag via `DefaultsOf`). **Follow-up Eng’d (construction adornments A1–A2):** `defaults` widens `Service` / `yield* Tag` with the bag via internal `remapTagService` (`as unknown as` + `Service`/`Effect` intersection — not a `HyperlinkTag` `Svc` rebuild through `.pipe`, which recurses on class `Self`); guarded by `test/defaults-handle.test-d.ts`; `WithDefaults` kept as escape/migration. Spec∩bag → `DuplicateDefaultKey`. Layer/serve accept `ImplWithDefaultOverrides`. `Hyperlink.pure` / `PureMethod` removed (major).
 - **Rejected:** Keeping `pure` as an alias or shim; two-step Prototype mint as the product API.
-- **Still open:** live `cell` (park lean); optional A3 `{ defaults }` factory sugar.
+- **Still open:** optional A3 `{ defaults }` factory sugar.
 - **Supervisor impact:** Record in [`service-shapes.md`](../plans/service-shapes.md).
+
+## 2026-07-27 — Park/reject live plain `cell`; tip-sync construction adornments
+
+- **Owner said:** “Go” on tip-sync A1–A2 + park `cell` (lean: tip-sync → park `cell` → idle).
+- **Chose / LOCKED:** No Spec builder for live plain `A` (`cell` / `live` / `state`). Dashboards use `ref` (Subscribable) + host adapters. Construction adornments A1–A2 tip-synced to `integration`.
+- **Rejected:** Eng’ing a push-cell Spec leaf; keeping `cell` as an open bake item.
+- **Still open:** optional A3 factory `{ defaults }` sugar; optional fleet R5.
+- **Supervisor impact:** Agent 4 idle pending owner pick (A3 / R5 / new track).
 
 ---
 
