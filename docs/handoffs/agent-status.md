@@ -31,7 +31,7 @@
 1. **Agent 4:** W1–W3 + `default`/`defaults` + R1–R4+adaptive + **construction adornments A1–A2 tip-synced**; **`cell` parked/rejected**. Idle; optional A3 / R5. Incident: [`agent-04-w3-incident-2026-07-27.md`](./agent-04-w3-incident-2026-07-27.md).
 2. **Agent G / TUI:** Dashboard Group parity + client-adapters design (`cursor/tui-dashboard-parity-125f`).
 3. **This agent (Launcher):** Track A API locked (#1–21) in [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md). **No Eng until owner go.**
-4. **Docs site:** tip-synced. Live: SEO chrome (not landing UI), process-cached API JSON, CF edge HIT, processSlot Shiki latch. **Landing UI reverted** to Coming soon / Preview — no landing chrome changes without owner OK. 1Password CLI backup deferred.
+4. **Docs site:** tip-synced + redeployed. Lighthouse **home/api 100/100/100/100**; install a11y/seo 100 (perf 98 / BP 96 — React #418 hydration). Static `/assets`+`/search` CF edge HIT. Landing UI unchanged (Coming soon). 1Password CLI deferred.
 
 ### Frozen / dead (do not assign)
 - **Agent 1:** frozen — Examples book E1 already on tip; stale intro PR #68 closed; branch deleted.
