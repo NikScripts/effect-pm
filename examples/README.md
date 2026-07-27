@@ -27,12 +27,12 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | Track | Read / run in this order |
 |-------|--------------------------|
 | **Start here** | [`forms/queue/workpool-priority-retry.ts`](./forms/queue/workpool-priority-retry.ts) → [Examples (docs)](../docs/examples.md#queue) |
-| **Dashboard / TUI** | [`resource-tui/`](./resource-tui/) — terminal dashboards over the resource tags |
+| **Dashboard / TUI** | [`resource-tui/`](./hyperlink-tui/) — terminal dashboards over hyperlink tags |
 | **Queues** | [`forms/queue/workpool-priority-retry.ts`](./forms/queue/workpool-priority-retry.ts) → [`forms/queue/workpool-priority-lanes.ts`](./forms/queue/workpool-priority-lanes.ts) |
 | **Schedule controls** | `pnpm run example:schedule-control-basics` → `example:schedule-control-surfaces` → [`scenarios/schedule-sync-from-external-db.ts`](./scenarios/schedule-sync-from-external-db.ts) |
 | **Daemon runtime** | `pnpm run example:daemon-supervisor-patterns` |
 | **Polling patterns** | `pnpm run example:sports-polling-accelerating` |
-| **Hyperlink gating** | [`forms/resource/gate-unit-and-input.ts`](./forms/resource/gate-unit-and-input.ts) → [`gate-store-readback.ts`](./forms/resource/gate-store-readback.ts) → [`gate-runtime-observer.ts`](./forms/resource/gate-runtime-observer.ts) → http-client → http-api forms |
+| **Hyperlink gating** | [`forms/hyperlink/gate-unit-and-input.ts`](./forms/hyperlink/gate-unit-and-input.ts) → [`gate-store-readback.ts`](./forms/hyperlink/gate-store-readback.ts) → [`gate-runtime-observer.ts`](./forms/hyperlink/gate-runtime-observer.ts) → http-client → http-api forms |
 | **Fleet glass** | `pnpm run example:telemetry-fleet-glass` → `example:fleet-health-glass` → `example:shardmap-sessions` |
 | **Node module** | (1) `node-tag-addressed` → (2) `node-tag-bound` → (3) `node-clients` → (4) addressless → (5) nameless unix → (6) `node-prototype` → (7) `node-lookup` → (8) nameless `http`/`ws` siblings → identity coordinator (`node-identity-coordinator`). Keep protocol listens in sync — [§ Protocol listen siblings](../docs/handoffs/node-catalog-and-discovery.md#protocol-listen-siblings-keep-in-sync). |
 | **Storage** | [`forms/daemon-store/daemon-layer-store-auto-write.ts`](./forms/daemon-store/daemon-layer-store-auto-write.ts) (execution events) → [`daemon-layer-typed-error-store.ts`](./forms/daemon-store/daemon-layer-typed-error-store.ts) |
@@ -52,30 +52,30 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 
 | File | Teaches |
 |------|---------|
-| [`forms/resource/gate-unit-and-input.ts`](./forms/resource/gate-unit-and-input.ts) | `Gate.Service` unit/input forms + concurrency + `Store.layerDefaultMemory` |
-| [`forms/resource/gate-store-readback.ts`](./forms/resource/gate-store-readback.ts) | Engine auto-write + `Gate.store` + `Store.Service.at` readback |
-| [`forms/resource/gate-runtime-observer.ts`](./forms/resource/gate-runtime-observer.ts) | Observable handle (`status`, counters) via `Subscribable` |
-| [`forms/resource/http-client-gate.ts`](./forms/resource/http-client-gate.ts) | `HttpClientGate.transformClient` |
-| [`forms/resource/gate-http-api-client.ts`](./forms/resource/gate-http-api-client.ts) | `Gate.httpApiClientService` + `ApiMetrics.Tag` |
-| [`forms/resource/gate-http-api-layer-effect.ts`](./forms/resource/gate-http-api-layer-effect.ts) | `Gate.httpApiClientLayer` + sidecar capture |
-| [`forms/resource/telemetry-fleet-glass.ts`](./forms/resource/telemetry-fleet-glass.ts) | `Telemetry` leaf snapshot + fleet `inFlightByNode` / `fleetInFlight` |
-| [`forms/resource/fleet-health-glass.ts`](./forms/resource/fleet-health-glass.ts) | `FleetHealth` leaf `local` + fleet `byNode` / `status` (`Reachable` \| `Unreachable`) |
-| [`forms/resource/node-tag-addressed.ts`](./forms/resource/node-tag-addressed.ts) | `Node.Tag` with `{ path }` + `Node.unix` / `client` |
-| [`forms/resource/node-http-nameless-serve.ts`](./forms/resource/node-http-nameless-serve.ts) | **(8a)** Nameless `Node.http(serve)` — Lookup **piped** |
-| [`forms/resource/node-ws-nameless-serve.ts`](./forms/resource/node-ws-nameless-serve.ts) | **(8b)** Nameless `Node.ws(serve)` — Lookup **piped** |
+| [`forms/hyperlink/gate-unit-and-input.ts`](./forms/hyperlink/gate-unit-and-input.ts) | `Gate.Service` unit/input forms + concurrency + `Store.layerDefaultMemory` |
+| [`forms/hyperlink/gate-store-readback.ts`](./forms/hyperlink/gate-store-readback.ts) | Engine auto-write + `Gate.store` + `Store.Service.at` readback |
+| [`forms/hyperlink/gate-runtime-observer.ts`](./forms/hyperlink/gate-runtime-observer.ts) | Observable handle (`status`, counters) via `Subscribable` |
+| [`forms/hyperlink/http-client-gate.ts`](./forms/hyperlink/http-client-gate.ts) | `HttpClientGate.transformClient` |
+| [`forms/hyperlink/gate-http-api-client.ts`](./forms/hyperlink/gate-http-api-client.ts) | `Gate.httpApiClientService` + `ApiMetrics.Tag` |
+| [`forms/hyperlink/gate-http-api-layer-effect.ts`](./forms/hyperlink/gate-http-api-layer-effect.ts) | `Gate.httpApiClientLayer` + sidecar capture |
+| [`forms/hyperlink/telemetry-fleet-glass.ts`](./forms/hyperlink/telemetry-fleet-glass.ts) | `Telemetry` leaf snapshot + fleet `inFlightByNode` / `fleetInFlight` |
+| [`forms/hyperlink/fleet-health-glass.ts`](./forms/hyperlink/fleet-health-glass.ts) | `FleetHealth` leaf `local` + fleet `byNode` / `status` (`Reachable` \| `Unreachable`) |
+| [`forms/hyperlink/node-tag-addressed.ts`](./forms/hyperlink/node-tag-addressed.ts) | `Node.Tag` with `{ path }` + `Node.unix` / `client` |
+| [`forms/hyperlink/node-http-nameless-serve.ts`](./forms/hyperlink/node-http-nameless-serve.ts) | **(8a)** Nameless `Node.http(serve)` — Lookup **piped** |
+| [`forms/hyperlink/node-ws-nameless-serve.ts`](./forms/hyperlink/node-ws-nameless-serve.ts) | **(8b)** Nameless `Node.ws(serve)` — Lookup **piped** |
 | — | `Node.nPipe` — Windows named-pipe sibling of `unix` (same `IpcSocket` kind; see `test/node-npipe.test.ts`) |
-| [`forms/resource/node-tag-bound.ts`](./forms/resource/node-tag-bound.ts) | Tag carries node — `Node.unix(Jobs, impl)` + `Hyperlink.client(Jobs)` |
-| [`forms/resource/node-clients.ts`](./forms/resource/node-clients.ts) | Catalog `ROut` + `Node.clients(Worker, [Jobs, Emails])` |
-| [`forms/resource/node-tag-addressless-serve.ts`](./forms/resource/node-tag-addressless-serve.ts) | Address-less serve — Lookup **piped** (`Lookup.layerOptions({ path })`; default is bare `Lookup.layer`) — terminal A |
-| [`forms/resource/node-tag-addressless-call.ts`](./forms/resource/node-tag-addressless-call.ts) | Address-less call — `lookupClient` + Lookup **piped** — terminal B |
-| [`forms/resource/node-nameless-listen-serve.ts`](./forms/resource/node-nameless-listen-serve.ts) | **(5)** Nameless `Node.unix([serve…])` — Lookup **piped**, terminal A |
-| [`forms/resource/node-nameless-listen-call.ts`](./forms/resource/node-nameless-listen-call.ts) | Nameless call (`discoverClients(Jobs, Emails)`) — terminal B |
-| [`forms/resource/node-nameless-listen-demo.ts`](./forms/resource/node-nameless-listen-demo.ts) | One-command proof — forks serve, then call |
-| [`forms/resource/node-prototype.ts`](./forms/resource/node-prototype.ts) | `Node.Prototype.make` + `.listen(serves)` |
-| [`forms/resource/node-lookup.ts`](./forms/resource/node-lookup.ts) | **(7)** `Node.asLookup` + `Lookup.layerNode` / `client` |
-| [`forms/resource/node-identity-coordinator.ts`](./forms/resource/node-identity-coordinator.ts) | **One brain, many hands** — identity Router + Advice + N Workers ([guide](../docs/guides/identity-coordinator.md)) |
-| [`forms/resource/node-verify-connection.ts`](./forms/resource/node-verify-connection.ts) | `Hyperlink.verifyConnection` tier-1 + `{ deep: true, resource }` |
-| [`forms/resource/shardmap-sessions.ts`](./forms/resource/shardmap-sessions.ts) | `ShardMap` routed ops across distributed nodes |
+| [`forms/hyperlink/node-tag-bound.ts`](./forms/hyperlink/node-tag-bound.ts) | Tag carries node — `Node.unix(Jobs, impl)` + `Hyperlink.client(Jobs)` |
+| [`forms/hyperlink/node-clients.ts`](./forms/hyperlink/node-clients.ts) | Catalog `ROut` + `Node.clients(Worker, [Jobs, Emails])` |
+| [`forms/hyperlink/node-tag-addressless-serve.ts`](./forms/hyperlink/node-tag-addressless-serve.ts) | Address-less serve — Lookup **piped** (`Lookup.layerOptions({ path })`; default is bare `Lookup.layer`) — terminal A |
+| [`forms/hyperlink/node-tag-addressless-call.ts`](./forms/hyperlink/node-tag-addressless-call.ts) | Address-less call — `lookupClient` + Lookup **piped** — terminal B |
+| [`forms/hyperlink/node-nameless-listen-serve.ts`](./forms/hyperlink/node-nameless-listen-serve.ts) | **(5)** Nameless `Node.unix([serve…])` — Lookup **piped**, terminal A |
+| [`forms/hyperlink/node-nameless-listen-call.ts`](./forms/hyperlink/node-nameless-listen-call.ts) | Nameless call (`discoverClients(Jobs, Emails)`) — terminal B |
+| [`forms/hyperlink/node-nameless-listen-demo.ts`](./forms/hyperlink/node-nameless-listen-demo.ts) | One-command proof — forks serve, then call |
+| [`forms/hyperlink/node-prototype.ts`](./forms/hyperlink/node-prototype.ts) | `Node.Prototype.make` + `.listen(serves)` |
+| [`forms/hyperlink/node-lookup.ts`](./forms/hyperlink/node-lookup.ts) | **(7)** `Node.asLookup` + `Lookup.layerNode` / `client` |
+| [`forms/hyperlink/node-identity-coordinator.ts`](./forms/hyperlink/node-identity-coordinator.ts) | **One brain, many hands** — identity Router + Advice + N Workers ([guide](../docs/guides/identity-coordinator.md)) |
+| [`forms/hyperlink/node-verify-connection.ts`](./forms/hyperlink/node-verify-connection.ts) | `Hyperlink.verifyConnection` tier-1 + `{ deep: true, resource }` |
+| [`forms/hyperlink/shardmap-sessions.ts`](./forms/hyperlink/shardmap-sessions.ts) | `ShardMap` routed ops across distributed nodes |
 
 ### Daemon store (EventJournal)
 
