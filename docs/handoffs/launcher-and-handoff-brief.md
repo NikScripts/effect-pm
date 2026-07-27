@@ -12,13 +12,18 @@
 2. **No Eng until API is locked with the owner.** Design → owner go on concrete API surface → then build. No APIs from `launcher-decisions.md` memory.
 3. **Bake order:** Track **A** (spawn+exit launcher API) first; then B (Lookup-directed startup), C (handoff), D (clients). Do not tangle tracks.
 4. **Track A exit gate = Ready** (not merely spawned, not Lookup-registered). Launcher waits until the child is ready, then exits. Registration / Lookup remains the child’s (node’s) job after that.
-5. **Launcher → node ownership transfer should be explicit** (owner lean) — not only “process is up, launcher walks away.” Exact API shape TBD in Track A bake (see open below).
+5. **Launcher → node ownership transfer is explicit** — not only “process is up, launcher walks away.”
+6. **Track A handoff shape = both (parent steps + child ack):**
+   - **Parent API** exposes composeable phases (not a buried `launch`): roughly `spawn → awaitReady → handoff → exit`.
+   - **Child** must **ack** ownership (“I am ready; I own myself”) so the transfer is a real handshake on the wire, not an assumption from readiness alone.
+   - Prefer reusing existing node / verify substrate for the ack; **no new control plane**. Exact verb names TBD.
 
 Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.md) remain **reference only** unless re-locked here.
 
 ### Track A — baking (not locked)
 
-- **Explicit handoff moment:** owner wants the transfer of ownership from launcher to node to be a named/clear step, not an implicit side effect of readiness. Options under discussion.
+- Concrete API names for the parent phases and the child ack verb.
+- What “Ready” means precisely (serve up vs `verifyConnection` vs node status).
 
 ---
 
