@@ -49,6 +49,20 @@
     - **v1 grain:** 1 node ↔ 1 OS process; parent **probes** Ready (`verifyConnection` / status); child is an **autonomous entry** (app owns serve/listen in its `main`).
     - Track **B** (Lookup-directed / blank worker) later — keep assume/ready on Node so it can plug in.
     - Rejected for Track A: host-only bring-up with Hyperlink as handshake docs alone; collapsed process|fiber (`hl dev`) deferred.
+14. **Spawn input (unit) locked:**
+    ```ts
+    {
+      node: AnyNode  // dial / verify / handoff target
+      process: ChildProcess  // Effect ChildProcess.make(…)
+      // optional sugar: entry (+ cwd/env/exec) that builds ChildProcess
+      ready?: {
+        resources?: ReadonlyArray<string>  // tag keys; omit ⇒ allReady-shaped
+        timeout?: Duration.Input
+      }
+    }
+    ```
+    - Multi-node: `ReadonlyArray` of that unit (thin alias OK later). **Not** `Group`.
+    - Grounded in nameless-listen demo + `verifyConnection` / `Node.status` keys.
 
 Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.md) remain **reference only** unless re-locked here.
 
