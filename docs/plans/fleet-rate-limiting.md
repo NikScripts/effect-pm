@@ -261,7 +261,7 @@ Fleet rate limiting is **first-class Gate substrate**. HttpApiClient update **us
 2. **Fleet store v1 backend:** Effect **Redis** only, or also Eng SQL `RateLimiterStore`? — lean Redis  
 3. **Distributed + memory Soft:** docs-only vs fail-loud? — lean docs  
 4. ~~**Default `onExceeded` for Gates:**~~ **LOCKED (R1 lean):** `"delay"`  
-5. ~~**Nest name / shape:**~~ **LOCKED (bake 2026-07-27):** nest **`metrics`**, **flat siblings** (usage + limiter fields). Default on-handle + fail-loud if Api group is named `metrics`. Escape: hide / static-only (or rename) so apps can keep a `metrics` HttpApi group — knob TBD.  
+5. ~~**Nest name / shape / collision:**~~ **LOCKED (bake 2026-07-27):** nest default **`metrics`**, **flat siblings**. Escape = const **`metricsKey`** rename (typed); fail-loud if Api group id equals chosen key.  
 6. **Per-route keys** in v1 or whole-client key only? — lean whole-client (Gate key = resource id today)
 
 ---

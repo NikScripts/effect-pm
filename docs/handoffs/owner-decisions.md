@@ -372,8 +372,8 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Chose (R3 Eng):** WorkPool matches Gate presence-driven store (no auto Soft layer merge that blocked Redis). Fleet verified with shared memory store in CI; Redis recipe in guides. Soft + multi-node = docs warning (N× limit), not fail-loud.
 - **Chose (bake 2026-07-27 — nest name):** Wire nest is **`metrics`** (not `observe` / `limit`). Covers absorbed ApiMetrics usage + rate-limit remaining/exceeded. WorkPool parity. Factory lean: `Gate.HttpApiClient` Tag + app-owned `static layer = Gate.httpApiClientLayer(Tag)` (no baked Service layer).
 - **Chose (bake 2026-07-27 — nest shape):** v1 **flat siblings** under `metrics` (`usage`, window stream, `remaining`, `resetAfter`, `exceeded`, …). Limiter fields only when `rateLimit` is set. Optional static sugar (`Github.metrics…`) always available.
-- **Chose (bake 2026-07-27 — collision escape):** Default: nest on the handle at `metrics` + **fail-loud** if HttpApi already has a group named `metrics`. Offer a config escape to **hide / static-only** (or rename) so apps that need the group id `metrics` can keep it — exact knob TBD in bake.
-- **Still open:** Escape-knob shape (`static` vs rename vs off); Redis vs SQL; per-route keys; adaptive 429; R2 ordinary-Gate depth; R4 Eng.
+- **Chose (bake 2026-07-27 — collision escape):** **Rename** via const `metricsKey` (default `"metrics"`). Fail-loud if an HttpApi group id equals the chosen key. Cost is low when `metricsKey` is a const generic / const config literal (typed nest path); avoid free `string`. Static sugar optional and can follow the same key. No separate `metricsSurface: "static"` in v1.
+- **Still open:** Redis vs SQL; per-route keys; adaptive 429; R2 ordinary-Gate depth; R4 Eng.
 
 ## 2026-07-27 — Retire `Hyperlink.pure`; Eng `default` / `defaults`
 
