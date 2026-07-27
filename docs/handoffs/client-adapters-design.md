@@ -386,7 +386,7 @@ One provide Layer per process — not web+TUI in the same merge.
 
 **Locked (grilling):** W14–W19; View services + Layer-provided TSX (not skins.register map); components = single array; missing skin = not provided.
 
-**Open (grilling):** packaging subpaths; `kit.for(tag)` / Hyperlink.react flip; Dashboard on kit; Spec gate; Group expansion.
+**Open (grilling):** lock lightweight `View.group(G)` → R; fat namespace vs subpaths for defaults; `kit.for` / Dashboard on kit; Spec gate.
 
 #### View handles on HS tags (W17) — LOCKED (clarified)
 
@@ -609,32 +609,66 @@ This is a **fairly large migration**. Before moving dashboard widgets, lock pack
 
 **Rule:** shared modules export View **services** (`make` handles) + bind Layers. Platform modules export `Layer.succeed(Handle, Comp)`. Never put default DOM/Ink components in the shared `View` entry that apps import for `make` / `react`.
 
-#### Default chrome export shape — NOT `View.WorkPoolCard` object
+#### Namespace vs subpaths (tree-shaking — owner 2026-07-26)
 
-Module layout (Effect-true): **no object-as-namespace**. So not:
+Effect modules are **large namespaces** and still tree-shake when exports are side-effect-free and unused bindings drop. So we **can** share a lot on `View` / family modules — not every symbol needs its own subpath.
+
+| Approach | When |
+|----------|------|
+| **Fat namespace** (`import * as View` / `View/WorkPool` with many flat exports) | Fine if TSX/platform code is not eagerly imported by shared handle modules |
+| **Separate export paths** | Still useful for **platform chrome** (`web/View/WorkPool` vs `tui/…`) and for apps that want a minimal import surface |
+
+**Still banned:** `export const View = { WorkPoolCard }` object-as-namespace (module-layout rule). Prefer flat `export const workPoolCard = View.make(…)` on a module, or `import * as WorkPoolView from "…/View/WorkPool"`.
+
+**Hard rule that remains:** shared handle/bind modules must **not** import DOM/Ink default components. Platform `Layer.succeed` lives in web/tui entry points (subpath or app-local). That — not namespace size — is what keeps TUI from pulling web TSX.
+
+
+#### Lightweight Group dash — build-time Group → Layer `R` (owner idea 2026-07-26)
+
+**Idea:** a dash with **no built-in components**. You pass the **Group** when **building** the kit (not `tag={…}` on every Card). From the Group’s members, derive every View service required (binds by `kindOf(member)` + any `Hyperlink.components` pins). Those View services appear in Layer **`R`** until you `Layer.succeed` them all — same missing-skin gate as W18, but **scoped to this Group**.
 
 ```ts
-// ❌ pulls everything if on View barrel
-View.WorkPoolCard
-export const View = { WorkPoolCard, … }
+// No default chrome in the kit — only what this Group needs
+const dashLayer = View.group(AppGroup)
+// Layer that: knows AppGroup members; requires e.g. PoolCard | PoolDetail | DaemonCard | …
+// R = View services for every leaf (from binds + pins)
+
+const ready = dashLayer.pipe(
+  Layer.provideMerge(myChrome), // succeed every required View
+  Layer.provideMerge(View.base),
+)
+
+const { Dashboard, Card, Detail, Provider } = View.react(ready)
+// Members already known — Card/Detail are bound to the Group tree
+// e.g. <Card name="jobs" /> or Dashboard iterates members without tag={}
 ```
 
-**Lean — subpath per family (handles shared; chrome platform-split):**
+| | Full `View.react(binds + all chrome)` | Lightweight `View.group(AppGroup)` |
+|--|--------------------------------------|-------------------------------------|
+| Built-in components | Optional platform “base” succeeds | **None** — you provide what R asks |
+| When Group is known | At render (`tag={leaf}`) | **At kit build** |
+| Layer `R` | Whatever you bound globally | **Exactly** views needed by this Group’s leaves |
+| DX | Generic matchers | Curry Group; smaller provide surface |
 
-```ts
-// Shared identity + binds (no TSX)
-import * as WorkPoolView from "hyperlink-ts/ui/View/WorkPool"
-// WorkPoolView.Card, WorkPoolView.Detail, WorkPoolView.binds
+**How R is computed (sketch):**
 
-// Web succeeds
-import { layer as workPoolWeb } from "hyperlink-ts/web/View/WorkPool"
-// Layer.succeed(WorkPoolView.Card, WebCard) + …
-
-// TUI succeeds
-import { layer as workPoolTui } from "hyperlink-ts/tui/View/WorkPool"
+```
+for each leaf in Group (recursive):
+  if Hyperlink.componentsOf(leaf) → those View services (per kind present)
+  else → View services from bindKind(kindOf(leaf)) / bindTag(leaf.key)
+  union into R
 ```
 
-Apps that only need the handle import the small subpath; Dashboard base merges platform layers explicitly.
+Pins on a member add those services to R even if not in the global bind set. Unpiped members use bind tables — so `View.group(G)` still **requires** the bind contribution layers (or embeds bind lookup) so it knows which View services default chrome needs.
+
+**Flipped helper fits here:** after `View.react(ready)`, `kit.for(member)` or Dashboard-internal curry — tag not passed at each JSX site.
+
+**Lean (not locked):** offer **both** paths —
+
+1. **Open kit** — `View.react(layer)` + `<Card tag={leaf} />` (current)
+2. **Lightweight Group kit** — `View.group(AppGroup)` → Layer with precise `R` → provide chrome → `react` → Dashboard/Cards closed over that Group
+
+Migrate widgets can start on (1); (2) is the “bring your own chrome, Group drives requirements” product.
 
 #### `View.react` → also `Dashboard`? — OPEN lean
 
