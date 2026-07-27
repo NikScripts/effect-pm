@@ -509,6 +509,49 @@ describe("Gate.Service — rateLimit", () => {
       expect(elapsed).toBeGreaterThanOrEqual(140);
     }).pipe(Effect.provide(Limited.layer), Effect.scoped),
   );
+
+  it.live("metrics nest tracks remaining / exceeded; Tag metadata is stable", () =>
+    Effect.gen(function* () {
+      expect(Gate.metricsKeyOf(Limited)).toBe("metrics");
+      expect(Gate.rateLimitKeyOf(Limited)).toBe("@test/LimitedGate");
+
+      const gate = yield* Limited;
+      expect(yield* gate.metrics.remaining.get).toBe(1);
+      expect(yield* gate.metrics.exceeded.get).toBe(0);
+
+      yield* gate.run;
+      expect(yield* gate.metrics.remaining.get).toBe(0);
+
+      // Second run delays — exceeded increments when delay > 0.
+      yield* gate.run;
+      expect(yield* gate.metrics.exceeded.get).toBeGreaterThanOrEqual(1);
+    }).pipe(Effect.provide(Limited.layer), Effect.scoped),
+  );
+});
+
+describe("Gate metrics nest — onExceeded fail", () => {
+  class StrictLimit extends Gate.Service<StrictLimit>()("@test/StrictLimitGate", {
+    concurrency: 4,
+    rateLimit: {
+      key: "strict/bucket",
+      limit: 1,
+      window: Duration.minutes(5),
+      onExceeded: "fail",
+    },
+    effect: () => Effect.void,
+  }) {}
+
+  it.live("exceeded increments and remaining updates on reject", () =>
+    Effect.gen(function* () {
+      expect(Gate.rateLimitKeyOf(StrictLimit)).toBe("strict/bucket");
+      const gate = yield* StrictLimit;
+      yield* gate.run;
+      const exit = yield* Effect.exit(gate.run);
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(yield* gate.metrics.exceeded.get).toBe(1);
+      expect(yield* gate.metrics.remaining.get).toBe(0);
+    }).pipe(Effect.provide(StrictLimit.layer), Effect.scoped),
+  );
 });
 
 describe("Gate.makeRunner", () => {

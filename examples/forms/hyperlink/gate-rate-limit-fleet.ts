@@ -91,6 +91,7 @@ const program = (
       { concurrency: "unbounded" },
     );
     const elapsed = (yield* Effect.clockWith((c) => c.currentTimeMillis)) - t0;
+    // Note: Gate.make is run-only — metrics nest lives on Tag/Service handles.
     yield* Effect.log(
       `done: starts=${yield* Ref.get(starts)} elapsedMs≈${elapsed} (expect ≥1000 with shared store)`,
     );

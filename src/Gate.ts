@@ -93,7 +93,12 @@ import {
   type ConfigPatch,
 } from "./HyperlinkConfigure";
 import * as internal from "./internal/gate";
-import { stampGateWireSchemas } from "./internal/gateTagSchemas";
+import {
+  metricsKeyOf as metricsKeyOfInternal,
+  rateLimitKeyOf as rateLimitKeyOfInternal,
+  stampGateMetricsMetadata,
+  stampGateWireSchemas,
+} from "./internal/gateTagSchemas";
 import * as Store from "./Store";
 import {
   gateStatus,
@@ -186,6 +191,15 @@ export type Handle<T, A, E> = internal.GateHandle<T, A, E>;
  * @category models
  * @public
  */
+export interface GateMetrics {
+  /** Tokens remaining after the last rate-limit consume (idle `0` without `rateLimit`). */
+  readonly remaining: Hyperlink.Subscribable<number>;
+  /** Milliseconds until the window fully resets (last consume). */
+  readonly resetAfter: Hyperlink.Subscribable<number>;
+  /** Count of delay/reject exceed events since the gate built. */
+  readonly exceeded: Hyperlink.Subscribable<number>;
+}
+
 export interface Gate<
   Payload,
   Success = void,
@@ -204,6 +218,12 @@ export interface Gate<
   readonly failed: Hyperlink.Subscribable<number>;
   /** Count of runs interrupted while waiting or executing. */
   readonly interrupted: Hyperlink.Subscribable<number>;
+  /**
+   * Limiter live fields (flat under nest key `"metrics"`). Updates when `rateLimit` is set;
+   * otherwise idle zeros. Stable key metadata lives on the Tag (`rateLimitKeyOf` /
+   * `metricsKeyOf`), not under this nest.
+   */
+  readonly metrics: GateMetrics;
   /**
    * Acquire a permit, run the gated effect, release the permit on completion. A unit gate (`void`
    * input) is a bare {@link Effect}; a parameterized gate is `(input) => Effect`.
@@ -328,6 +348,12 @@ export interface TagSchemas<
   E extends Schema.Top = typeof Schema.Never,
 > extends WireSchemas<I, A, E> {
   readonly description?: string;
+  /**
+   * Optional rate-limit policy declaration on the Tag — stamps `rateLimitKey`
+   * metadata for widgets. Engine still needs `rateLimit` on {@link layer} /
+   * {@link Service} config to enforce.
+   */
+  readonly rateLimit?: RateLimitOptions;
 }
 
 /**
@@ -618,8 +644,16 @@ const materializeGateTag = <Self>() =>
       success: config.success,
       error: config.error,
     });
+    // Nest path is always `"metrics"` in v1; bucket key stamped when Tag declares rateLimit.
+    const withMeta = stampGateMetricsMetadata(stamped, {
+      metricsKey: "metrics",
+      rateLimitKey:
+        config.rateLimit === undefined
+          ? undefined
+          : (config.rateLimit.key ?? key),
+    });
     return nameRunService(
-      Object.assign(stamped, { run: makeStaticRun(stamped, resolved.payload) }),
+      Object.assign(withMeta, { run: makeStaticRun(withMeta, resolved.payload) }),
     );
   };
 
@@ -784,6 +818,7 @@ const buildRunImpl = <
       completed: handle.completed,
       failed: handle.failed,
       interrupted: handle.interrupted,
+      metrics: handle.metrics,
       run: runImpl,
     } as unknown as Hyperlink.WithRequirement<ImplOf<InstanceSpec<I, A, E>>, R>;
     return Hyperlink.driver(tag, impl, context);
@@ -959,7 +994,11 @@ export const Service = <Self>() => {
     config: ServiceConfig<I, A, E, R>,
   ) {
     const wire = resolveRunWireSchemas(config);
-    const tag = runTag<Self>()(name, config);
+    // Pass rateLimit onto TagSchemas so `rateLimitKey` metadata stamps at mint.
+    const tag = runTag<Self>()(name, {
+      ...config,
+      rateLimit: config.rateLimit,
+    });
     const error = wire.error;
     const defaultSpec = { name, ...config, ...wire, error };
     const layerConfig: LayerConfig<
@@ -1014,6 +1053,24 @@ export const Service = <Self>() => {
  * @public
  */
 export { runTag as Tag };
+
+/**
+ * Resolved rate-limit bucket key stamped on a Gate Tag/Service (absent when no
+ * `rateLimit` was declared at mint). Stable metadata — not under the nest path.
+ *
+ * @category utils
+ * @public
+ */
+export const rateLimitKeyOf = rateLimitKeyOfInternal;
+
+/**
+ * Wire nest path for limiter fields (v1 always `"metrics"`). Stable metadata —
+ * widgets should discover via this helper, not by hard-coding the nest name.
+ *
+ * @category utils
+ * @public
+ */
+export const metricsKeyOf = metricsKeyOfInternal;
 
 /**
  * Register this gate on an app {@link Store.Service} — built-in analytics reads over run facts

@@ -34,10 +34,37 @@ class Double extends Gate.Service<Double>()("app/Double", {
 }) {}
 ```
 
-`rateLimit` is Effect’s `RateLimiter.consume` / `makeWithRateLimiter` options
+`rateLimit` is Effect’s `RateLimiter.consume` options
 (`limit`, `window`, `algorithm`, `onExceeded`, `tokens`, `key`, …) — not a
 `RateLimiter` service handle. New upstream fields flow through. Omitted `key`
 defaults to the gate id; omitted `onExceeded` defaults to `"delay"`.
+
+## Metrics nest (limiter observation)
+
+Every Gate Tag/Service handle exposes a flat **`metrics`** nest with live
+limiter fields. Values update when `rateLimit` is set; otherwise they stay idle
+zeros.
+
+| Field | Meaning |
+|-------|---------|
+| `metrics.remaining` | Tokens left after the last consume |
+| `metrics.resetAfter` | Milliseconds until the window fully resets |
+| `metrics.exceeded` | Count of delay/reject events since the gate built |
+
+Stable discovery metadata is on the **Tag**, not under the nest path:
+
+```ts
+Gate.metricsKeyOf(Double)    // "metrics" (v1 nest path)
+Gate.rateLimitKeyOf(Double)  // bucket key when rateLimit was declared at mint
+```
+
+```ts
+const gate = yield* Double
+const remaining = yield* gate.metrics.remaining.get
+```
+
+HttpApi usage windows land on the same nest in R4; ordinary Gates stay
+limiter-only.
 
 ## Fleet rate limiting
 
