@@ -35,9 +35,19 @@ const session = Schema.Struct({ id: Schema.String, user: Schema.String });
 export const HOST_PORTS = { wnba: 7780, live: 7781, stats: 7782 } as const;
 const rpcUrl = (port: number) => `http://127.0.0.1:${port}/rpc`;
 
-export class WnbaNode extends Node.Tag<WnbaNode>()("wnba/scores", { url: rpcUrl(HOST_PORTS.wnba) }) {}
-export class LiveNode extends Node.Tag<LiveNode>()("wnba/live", { url: rpcUrl(HOST_PORTS.live) }) {}
-export class StatsNode extends Node.Tag<StatsNode>()("wnba/stats", { url: rpcUrl(HOST_PORTS.stats) }) {}
+// Served via `Node.wsServer` — declare WebSocket so ProtocolKindMismatch does not fire.
+export class WnbaNode extends Node.Tag<WnbaNode>()("wnba/scores", {
+  url: rpcUrl(HOST_PORTS.wnba),
+  kind: "WebSocket",
+}) {}
+export class LiveNode extends Node.Tag<LiveNode>()("wnba/live", {
+  url: rpcUrl(HOST_PORTS.live),
+  kind: "WebSocket",
+}) {}
+export class StatsNode extends Node.Tag<StatsNode>()("wnba/stats", {
+  url: rpcUrl(HOST_PORTS.stats),
+  kind: "WebSocket",
+}) {}
 
 // A **multi-node** resource: the SAME WorkerPool served on all three nodes — one class, three
 // instances. `active` is this instance's own count (a leaf field peers can read); `fleetActive` is the
