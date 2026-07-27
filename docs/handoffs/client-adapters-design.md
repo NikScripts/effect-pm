@@ -386,7 +386,7 @@ One provide Layer per process — not web+TUI in the same merge.
 
 **Locked (grilling):** W14–W19; View services + Layer-provided TSX (not skins.register map); components = single array; missing skin = not provided.
 
-**Open (grilling):** lock lightweight `View.group(G)` → R; fat namespace vs subpaths for defaults; `kit.for` / Dashboard on kit; Spec gate.
+**Locked (grilling):** W20 `View.group`. **Open:** `kit.for(tag)`; Dashboard on kit; Spec gate; default chrome module layout (fat namespace OK if no platform TSX in shared).
 
 #### View handles on HS tags (W17) — LOCKED (clarified)
 
@@ -663,7 +663,7 @@ Pins on a member add those services to R even if not in the global bind set. Unp
 
 **Flipped helper fits here:** after `View.react(ready)`, `kit.for(member)` or Dashboard-internal curry — tag not passed at each JSX site.
 
-**Lean (not locked):** offer **both** paths —
+**LOCKED (W20):** offer **both** paths —
 
 1. **Open kit** — `View.react(layer)` + `<Card tag={leaf} />` (current)
 2. **Lightweight Group kit** — `View.group(AppGroup)` → Layer with precise `R` → provide chrome → `react` → Dashboard/Cards closed over that Group
@@ -752,16 +752,18 @@ Name collision: `Hyperlink.react` vs `View.react` — different jobs (service-bo
 | W17 | View handles on HS tag are **opt-in override only** (not defaults). Default chrome = registry binds. **When piped**, type-check pins |
 | W18 | **Missing skin = `View.react(layer)` requires Layer `R = never`** — binds/pins require View services; `Layer.succeed(View, Comp)` provides them; react runs the Layer to emit components |
 | W19 | Pipe API = **`Hyperlink.components(Handle[])`** — single array, partition by `handle.kind`; not card/detail/page siblings; not `{ card, detail }` object |
+| W20 | **`View.group(AppGroup)`** — lightweight BYO-chrome dash: Group at kit build → Layer `R` = View services for leaves (binds + pins); no built-in components; provide chrome then `View.react`. Keep open kit (`react(layer)` + `tag={leaf}`) alongside |
 
 ### Eng order (next)
 
 1. ~~View services + react R=never + Hyperlink.components~~ **done**
-2. **Lock packaging** — shared `ui/View/<Family>` handles+binds; platform `web|tui/View/<Family>` succeed layers (no default TSX on View barrel)
-3. Migrate WorkPool Card/Detail to that layout
-4. `kit.for(tag)` flipped bound components; consider kit `Dashboard`
-5. Retire `forKind` / hand-rolled `ui/data` services
-6. `Hyperlink.atom` / `query` / `fn` in parallel
-7. Desktop tabs + real Page kind — later
+2. ~~W20 `View.group` design~~ **locked** — Eng `View.group(AppGroup)` Layer (`R` = leaf views from binds+pins)
+3. Packaging — shared handles/binds; platform succeed layers (no TSX in shared imports); fat namespace OK
+4. Migrate WorkPool Card/Detail
+5. `kit.for(tag)`; kit `Dashboard` optional
+6. Retire `forKind` / `ui/data` service dupes
+7. `Hyperlink.atom` / `query` / `fn` in parallel
+8. Desktop tabs + real Page kind — later
 
 ### Non-goals (view redesign)
 
