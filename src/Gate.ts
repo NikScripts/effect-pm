@@ -1128,6 +1128,7 @@ export {
   httpApiClientKind,
   httpApiMetricsNestSpec,
   MetricsKeyCollision,
+  AdaptiveRequiresRateLimit,
   make as httpApiClient,
   Service as httpApiClientService,
   layerEffect as httpApiClientLayerEffect,
@@ -1139,5 +1140,6 @@ export type {
   HttpApiClientLayerEffectConfig,
   HttpApiClientTagConfig,
   HttpApiClientRuntimeConfig,
+  HttpApiClientAdaptiveOptions,
   HttpApiClientMetrics,
 } from "./internal/httpApiClient";

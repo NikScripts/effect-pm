@@ -26,7 +26,7 @@
  * @module HttpApiClient
  */
 
-import { HttpClient, HttpClientRequest } from "effect/unstable/http";
+import { Headers, HttpClient, HttpClientRequest } from "effect/unstable/http";
 import {
   HttpApi,
   HttpApiClient as EffectHttpApiClient,
@@ -36,6 +36,7 @@ import {
   Cause,
   Clock,
   Context,
+  Data,
   Duration,
   Effect,
   Exit,
@@ -312,13 +313,22 @@ const applyTransportMiddleware = (
   options: {
     readonly runner: GateRunner;
     readonly withInFlight: InFlightTransform;
+    readonly withAdaptive?:
+      | (<E, R>(
+          client: HttpClient.HttpClient.With<E, R>,
+        ) => HttpClient.HttpClient.With<E, R>)
+      | undefined;
     readonly transformClient?: HttpApiClientConfig<string, HttpApiGroup.Top, string>["transformClient"];
   },
 ): HttpClient.HttpClient => {
   const userTransformed =
     options.transformClient !== undefined ? options.transformClient(client) : client;
+  // rateLimit + concurrency gate the round-trip; adaptive wraps that so cooldown
+  // delay does not hold a semaphore permit.
   const gated = HttpClientGate.withRunner(options.runner)(userTransformed);
-  return options.withInFlight(gated);
+  const adaptive =
+    options.withAdaptive !== undefined ? options.withAdaptive(gated) : gated;
+  return options.withInFlight(adaptive);
 };
 
 const maybeInstrumentEndpoints = <
@@ -484,6 +494,22 @@ export { layerEffect };
 export const httpApiClientKind = "hyperlink-ts/Gate/HttpApiClient";
 
 /**
+ * Opt-in upstream adaptive 429 options for {@link HttpApiClient}.
+ *
+ * @remarks
+ * Requires {@link HttpApiClientTagConfig.rateLimit} (fallback limit/window).
+ * Omit `key` to default to `upstream:{host}` from the layer `baseUrl`, else
+ * `upstream:{tagKey}`.
+ *
+ * @category models
+ * @public
+ */
+export interface HttpApiClientAdaptiveOptions {
+  /** Adaptive bucket key (default: `upstream:{host}` from `baseUrl`). */
+  readonly key?: string;
+}
+
+/**
  * Mint-time options for {@link HttpApiClient} (policy + nest key). Runtime URL /
  * transforms go on {@link httpApiClientLayer}.
  *
@@ -493,11 +519,35 @@ export const httpApiClientKind = "hyperlink-ts/Gate/HttpApiClient";
 export interface HttpApiClientTagConfig {
   readonly concurrency?: number;
   readonly rateLimit?: GateRateLimitOptions;
+  /**
+   * Opt-in Effect `adaptiveConsume` / `adaptiveFeedback` on 429 + Retry-After.
+   * Default off. Requires `rateLimit`.
+   */
+  readonly adaptive?: boolean | HttpApiClientAdaptiveOptions;
   /** Const nest path — default `"metrics"`. Must not collide with an HttpApi group id. */
   readonly metricsKey?: string;
   readonly description?: string;
   /** Usage window cadence (absorbed ApiMetrics). @default 5 seconds */
   readonly windowMs?: Duration.Input;
+}
+
+/**
+ * Thrown when {@link HttpApiClientTagConfig.adaptive} is set without `rateLimit`.
+ *
+ * @category errors
+ * @public
+ */
+export class AdaptiveRequiresRateLimit extends Data.TaggedError(
+  "AdaptiveRequiresRateLimit",
+)<{
+  readonly tagKey: string;
+}> {
+  override get message(): string {
+    return (
+      `Gate.HttpApiClient "${this.tagKey}" set adaptive without rateLimit. ` +
+      `Adaptive 429 learning needs rateLimit for fallbackLimit / fallbackWindow.`
+    );
+  }
 }
 
 /**
@@ -534,6 +584,10 @@ const tagConfigSym: unique symbol = Symbol.for(
   "hyperlink-ts/Gate/HttpApiClient/tagConfig",
 );
 
+type NormalizedAdaptive =
+  | { readonly enabled: false }
+  | { readonly enabled: true; readonly key: string | undefined };
+
 type StampedHttpApiClientTag<
   Self,
   Groups extends HttpApiGroup.Constraint,
@@ -543,9 +597,48 @@ type StampedHttpApiClientTag<
     readonly api: HttpApiType.HttpApi<string, Groups>;
     readonly concurrency: number | undefined;
     readonly rateLimit: GateRateLimitOptions | undefined;
+    readonly adaptive: NormalizedAdaptive;
     readonly metricsKey: MK;
     readonly windowMs: Duration.Input | undefined;
   };
+};
+
+const normalizeAdaptive = (
+  adaptive: boolean | HttpApiClientAdaptiveOptions | undefined,
+): NormalizedAdaptive => {
+  if (adaptive === undefined || adaptive === false) {
+    return { enabled: false };
+  }
+  if (adaptive === true) return { enabled: true, key: undefined };
+  return { enabled: true, key: adaptive.key };
+};
+
+const resolveAdaptiveKey = (
+  configured: string | undefined,
+  baseUrl: URL | string | undefined,
+  resourceId: string,
+): string => {
+  if (configured !== undefined) return configured;
+  if (baseUrl !== undefined) {
+    try {
+      const host = new URL(String(baseUrl)).host;
+      if (host.length > 0) return `upstream:${host}`;
+    } catch {
+      // fall through — invalid URL → tag-key default
+    }
+  }
+  return `upstream:${resourceId}`;
+};
+
+/** Parse `Retry-After` delta-seconds (v1 — HTTP-date ignored). @internal */
+const parseRetryAfter = (
+  headers: Headers.Headers,
+): Duration.Duration | undefined => {
+  const raw = Option.getOrUndefined(Headers.get(headers, "retry-after"));
+  if (raw === undefined) return undefined;
+  const asSeconds = Number(raw);
+  if (!Number.isFinite(asSeconds) || asSeconds < 0) return undefined;
+  return Duration.seconds(asSeconds);
 };
 
 const isRateLimitExceededReason = (
@@ -600,50 +693,98 @@ const withRateLimitRunner = (
   rateLimit: GateRateLimitOptions | undefined,
   resourceId: string,
   publisher: ReturnType<typeof makeLimiterPublisher>,
-): Effect.Effect<GateRunner, never, Scope.Scope> => {
-  if (rateLimit === undefined) return Effect.succeed(runner);
-  return Effect.gen(function* () {
-    const limiter = yield* resolveLimiter();
-    const options = {
-      ...rateLimit,
-      key: rateLimit.key ?? resourceId,
-      onExceeded: rateLimit.onExceeded ?? ("delay" as const),
-    };
-    // GateRunner erases RateLimiterError; it still surfaces on the HTTP execute channel.
-    const gated = (<A, E, R>(
-      effect: Effect.Effect<A, E, R>,
-    ): Effect.Effect<A, E | RateLimiterError, R> => {
-      const consume =
-        options.onExceeded === "fail"
-          ? limiter.consume(options).pipe(
-              Effect.flatMap((result) => publisher.publishConsume(result)),
-              Effect.catchTag("RateLimiterError", (error) =>
-                Effect.gen(function* () {
-                  if (isRateLimitExceededReason(error.reason)) {
-                    yield* publisher.publishExceeded(
-                      error.reason.remaining,
-                      Duration.toMillis(error.reason.retryAfter),
-                    );
-                  }
-                  return yield* error;
-                }),
-              ),
-            )
-          : Effect.gen(function* () {
-              const result = yield* limiter.consume(options);
-              yield* publisher.publishConsume(result);
-              if (!Duration.isZero(result.delay)) {
-                yield* publisher.publishExceeded(
-                  result.remaining,
-                  Duration.toMillis(result.resetAfter),
-                );
-                yield* Effect.sleep(result.delay);
-              }
-            });
-      return consume.pipe(Effect.andThen(runner(effect)));
-    }) as GateRunner;
-    return gated;
-  });
+  limiter: EffectRateLimiter,
+): GateRunner => {
+  if (rateLimit === undefined) return runner;
+  const options = {
+    ...rateLimit,
+    key: rateLimit.key ?? resourceId,
+    onExceeded: rateLimit.onExceeded ?? ("delay" as const),
+  };
+  // GateRunner erases RateLimiterError; it still surfaces on the HTTP execute channel.
+  return (<A, E, R>(
+    effect: Effect.Effect<A, E, R>,
+  ): Effect.Effect<A, E | RateLimiterError, R> => {
+    const consume =
+      options.onExceeded === "fail"
+        ? limiter.consume(options).pipe(
+            Effect.flatMap((result) => publisher.publishConsume(result)),
+            Effect.catchTag("RateLimiterError", (error) =>
+              Effect.gen(function* () {
+                if (isRateLimitExceededReason(error.reason)) {
+                  yield* publisher.publishExceeded(
+                    error.reason.remaining,
+                    Duration.toMillis(error.reason.retryAfter),
+                  );
+                }
+                return yield* error;
+              }),
+            ),
+          )
+        : Effect.gen(function* () {
+            const result = yield* limiter.consume(options);
+            yield* publisher.publishConsume(result);
+            if (!Duration.isZero(result.delay)) {
+              yield* publisher.publishExceeded(
+                result.remaining,
+                Duration.toMillis(result.resetAfter),
+              );
+              yield* Effect.sleep(result.delay);
+            }
+          });
+    return consume.pipe(Effect.andThen(runner(effect)));
+  }) as GateRunner;
+};
+
+type AdaptiveTransform = <E, R>(
+  client: HttpClient.HttpClient.With<E, R>,
+) => HttpClient.HttpClient.With<E, R>;
+
+/**
+ * Opt-in upstream adaptive limiter: `adaptiveConsume` before the round-trip,
+ * `adaptiveFeedback` on the response (429 + Retry-After).
+ */
+const makeAdaptiveTransform = (
+  limiter: EffectRateLimiter,
+  rateLimit: GateRateLimitOptions,
+  adaptiveKey: string,
+): AdaptiveTransform => {
+  const fallbackWindow = Duration.fromInputUnsafe(rateLimit.window);
+  const tokens = rateLimit.tokens ?? 1;
+  const wrap: AdaptiveTransform = <E, R>(
+    client: HttpClient.HttpClient.With<E, R>,
+  ) =>
+    HttpClient.transform(client, (effect, _request) =>
+      Effect.gen(function* () {
+        const consumed = yield* limiter.adaptiveConsume({
+          key: adaptiveKey,
+          tokens,
+          fallbackLimit: rateLimit.limit,
+          fallbackWindow,
+        });
+        if (!Duration.isZero(consumed.delay)) {
+          yield* Effect.sleep(consumed.delay);
+        }
+        const exit = yield* Effect.exit(effect);
+        if (Exit.isSuccess(exit)) {
+          const response = exit.value;
+          yield* limiter
+            .adaptiveFeedback({
+              key: adaptiveKey,
+              epoch: consumed.epoch,
+              tokens,
+              status: response.status,
+              retryAfter: parseRetryAfter(response.headers),
+            })
+            .pipe(Effect.ignore);
+        }
+        return yield* Exit.match(exit, {
+          onFailure: Effect.failCause,
+          onSuccess: Effect.succeed,
+        });
+      }),
+    ) as HttpClient.HttpClient.With<E, R>;
+  return wrap;
 };
 
 /**
@@ -664,6 +805,10 @@ export const HttpApiClient = <Self>() =>
     api: HttpApiType.HttpApi<ApiId, Groups>,
     config: HttpApiClientTagConfig & { readonly metricsKey?: MK } = {},
   ): StampedHttpApiClientTag<Self, Groups, MK> => {
+    const adaptive = normalizeAdaptive(config.adaptive);
+    if (adaptive.enabled && config.rateLimit === undefined) {
+      throw new AdaptiveRequiresRateLimit({ tagKey: key });
+    }
     const metricsKey = (config.metricsKey ?? "metrics") as MK;
     assertNoMetricsKeyCollision(api, metricsKey);
     const spec = buildHttpApiClientSpec(api, metricsKey);
@@ -686,6 +831,7 @@ export const HttpApiClient = <Self>() =>
         api,
         concurrency: config.concurrency,
         rateLimit: config.rateLimit,
+        adaptive,
         metricsKey,
         windowMs: config.windowMs,
       },
@@ -732,14 +878,35 @@ export const httpApiClientLayerForTag = <
         exceededRef,
       );
 
+      const needsLimiter =
+        mint.rateLimit !== undefined || mint.adaptive.enabled;
+      const limiter = needsLimiter ? yield* resolveLimiter() : undefined;
       const baseRunner = yield* makeRunnerFromConcurrency(mint.concurrency);
-      const runner = yield* withRateLimitRunner(
-        baseRunner,
-        mint.rateLimit,
-        clientId,
-        publisher,
-      );
+      const runner =
+        limiter === undefined
+          ? baseRunner
+          : withRateLimitRunner(
+              baseRunner,
+              mint.rateLimit,
+              clientId,
+              publisher,
+              limiter,
+            );
       const withInFlight = yield* makeInFlightTransform(clientId);
+      const withAdaptive =
+        mint.adaptive.enabled &&
+        mint.rateLimit !== undefined &&
+        limiter !== undefined
+          ? makeAdaptiveTransform(
+              limiter,
+              mint.rateLimit,
+              resolveAdaptiveKey(
+                mint.adaptive.key,
+                runtime.baseUrl,
+                clientId,
+              ),
+            )
+          : undefined;
 
       const client = yield* EffectHttpApiClient.make(mint.api, {
         baseUrl: runtime.baseUrl,
@@ -747,6 +914,7 @@ export const httpApiClientLayerForTag = <
           applyTransportMiddleware(c, {
             runner,
             withInFlight,
+            withAdaptive,
             transformClient: runtime.transformClient,
           }),
         transformResponse: runtime.transformResponse,

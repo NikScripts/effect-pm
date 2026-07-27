@@ -100,6 +100,25 @@ If an HttpApi **group id** equals the nest key, mint fails with
 nest path). Whole-client `rateLimit` only in v1; omit `rateLimit.key` to inherit
 the Tag id.
 
+### Adaptive upstream 429 (opt-in)
+
+Set `adaptive: true` (or `{ key }`) **with** `rateLimit`. Uses Effect
+`adaptiveConsume` / `adaptiveFeedback` so 429 + `Retry-After` (delta-seconds)
+trains a cooldown → learning → learned budget. Default off. Missing `rateLimit`
+fails mint with `AdaptiveRequiresRateLimit`. Bucket key defaults to
+`upstream:{host}` from the layer `baseUrl`.
+
+```ts
+class Demo extends Gate.HttpApiClient<Demo>()("@app/Demo", DemoApi, {
+  rateLimit: { limit: 100, window: "1 hour" },
+  adaptive: true,
+}) {
+  static readonly layer = Gate.httpApiClientLayer(Demo, {
+    baseUrl: "https://api.example.com",
+  })
+}
+```
+
 ## Fleet rate limiting
 
 `concurrency` is always **in-process** (Semaphore). Fleet-wide budgets need a

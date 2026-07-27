@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "@effect/vitest";
-import { Duration, Effect, Layer, Ref, Schema, Stream } from "effect";
+import { Duration, Effect, Fiber, Layer, Ref, Schema, Stream } from "effect";
+import { TestClock } from "effect/testing";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import type { HttpClientError } from "effect/unstable/http";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
@@ -104,5 +105,83 @@ describe("Gate.HttpApiClient metrics nest", () => {
       yield* client.g.ping();
       expect(yield* client.metrics.remaining.get).toBe(4);
     }).pipe(Effect.provide(limitedLayers), Effect.scoped),
+  );
+
+  it("adaptive without rateLimit fails loud at mint", () => {
+    expect(() =>
+      Gate.HttpApiClient()("test/adaptive-no-rl", demoApi, { adaptive: true }),
+    ).toThrow(Gate.AdaptiveRequiresRateLimit);
+  });
+});
+
+class AdaptiveClient extends Gate.HttpApiClient<AdaptiveClient>()(
+  "test/api-metrics/adaptive",
+  demoApi,
+  {
+    concurrency: 1,
+    rateLimit: { limit: 1_000, window: Duration.minutes(1) },
+    adaptive: { key: "upstream:test-adaptive" },
+  },
+) {
+  static readonly layer = Gate.httpApiClientLayer(AdaptiveClient, {
+    baseUrl: "https://api.example.com",
+  });
+}
+
+describe("Gate.HttpApiClient adaptive 429", () => {
+  it.effect("429 + Retry-After cools down the next round-trip", () =>
+    Effect.gen(function* () {
+      const hits = yield* Ref.make(0);
+      const httpLayer = Layer.succeed(
+        HttpClient.HttpClient,
+        HttpClient.makeWith<never, never, HttpClientError.HttpClientError, never>(
+          (reqEff) =>
+            Effect.flatMap(reqEff, (req) =>
+              Effect.gen(function* () {
+                const n = yield* Ref.updateAndGet(hits, (x) => x + 1);
+                if (n === 1) {
+                  return HttpClientResponse.fromWeb(
+                    req,
+                    new Response("{}", {
+                      status: 429,
+                      headers: { "retry-after": "60" },
+                    }),
+                  );
+                }
+                return HttpClientResponse.fromWeb(
+                  req,
+                  new Response(json200, {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                  }),
+                );
+              }),
+            ),
+          (request) => Effect.succeed(request),
+        ),
+      );
+
+      yield* Effect.gen(function* () {
+        const client = yield* AdaptiveClient;
+        // First call hits 429 — decode fails; adaptiveFeedback still records cooldown.
+        yield* client.g.ping().pipe(Effect.exit);
+        expect(yield* Ref.get(hits)).toBe(1);
+
+        const fiber = yield* Effect.forkChild(client.g.ping().pipe(Effect.exit));
+        yield* TestClock.adjust(Duration.seconds(30));
+        expect(yield* Ref.get(hits)).toBe(1);
+        yield* TestClock.adjust(Duration.seconds(30));
+        yield* Fiber.join(fiber);
+        expect(yield* Ref.get(hits)).toBe(2);
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            AdaptiveClient.layer.pipe(Layer.provide(httpLayer)),
+            TestClock.layer(),
+          ),
+        ),
+        Effect.scoped,
+      );
+    }),
   );
 });
