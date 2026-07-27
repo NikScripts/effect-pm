@@ -25,22 +25,22 @@ import * as View from "./View";
  *
  * @public
  */
-export const PoolCard = View.make({
-  key: "hyperlink/view/pool-card",
-  kind: "card",
-  spec: WorkPool.queueControlSpec,
-});
+export class PoolCard extends View.Tag<PoolCard>()(
+  "hyperlink/view/pool-card",
+  "card",
+  WorkPool.queueControlSpec,
+) {}
 
 /**
  * Default WorkPool detail View service.
  *
  * @public
  */
-export const PoolDetail = View.make({
-  key: "hyperlink/view/pool-detail",
-  kind: "detail",
-  spec: WorkPool.queueControlSpec,
-});
+export class PoolDetail extends View.Tag<PoolDetail>()(
+  "hyperlink/view/pool-detail",
+  "detail",
+  WorkPool.queueControlSpec,
+) {}
 
 /**
  * Contribution Layer: stamped {@link WorkPool.kind} → card + detail (append).

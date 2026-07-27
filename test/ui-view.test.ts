@@ -1,5 +1,5 @@
 /**
- * View chrome Layers — kind/tag/only; react requires Layer R = never.
+ * View chrome Layers — kind/resource/only; react requires Layer R = never.
  */
 import { describe, expect, it } from "@effect/vitest";
 import { Layer, Schema } from "effect";
@@ -13,21 +13,21 @@ class Special extends WorkPool.Tag<Special>()("app/Special", { payload: Item }) 
 class Nested extends Group.Tag<Nested>("app/Nested")({ Special }) {}
 class AppGroup extends Group.Tag<AppGroup>("app/AppGroup")({ Jobs, Nested }) {}
 
-const PoolCard = View.make({
-  key: "hyperlink/view/pool-card",
-  kind: "card",
-  spec: { pause: true },
-});
-const CustomCard = View.make({
-  key: "hyperlink/view/custom-card",
-  kind: "card",
-  spec: {},
-});
-const PoolDetail = View.make({
-  key: "hyperlink/view/pool-detail",
-  kind: "detail",
-  spec: {},
-});
+class PoolCard extends View.Tag<PoolCard>()(
+  "hyperlink/view/pool-card",
+  "card",
+  { pause: true },
+) {}
+class CustomCard extends View.Tag<CustomCard>()(
+  "hyperlink/view/custom-card",
+  "card",
+  {},
+) {}
+class PoolDetail extends View.Tag<PoolDetail>()(
+  "hyperlink/view/pool-detail",
+  "detail",
+  {},
+) {}
 
 const chrome = Layer.mergeAll(
   Layer.succeed(PoolCard, () => null),
@@ -42,7 +42,7 @@ describe("View registry", () => {
   it("matches tag over stamped kind", () => {
     const viewLayer = withChrome(
       Layer.mergeAll(
-        View.tag(Special, PoolCard),
+        View.resource(Special, PoolCard),
         View.kind(WorkPool.kind, CustomCard),
       ),
     );
@@ -79,7 +79,7 @@ describe("View registry", () => {
     ).toEqual(["hyperlink/view/custom-card", "hyperlink/view/pool-card"]);
   });
 
-  it("only allowlists kinds present; other kinds still use kind/tag", () => {
+  it("only allowlists kinds present; other kinds still use kind/resource", () => {
     const viewLayer = withChrome(
       Layer.mergeAll(
         View.kind(WorkPool.kind, PoolCard),

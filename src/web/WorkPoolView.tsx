@@ -30,7 +30,7 @@ const PoolDetailView: View.ViewComponent = (props) => {
  * @public
  */
 export const skins: Layer.Layer<
-  View.ViewId<"hyperlink/view/pool-card"> | View.ViewId<"hyperlink/view/pool-detail">
+  WorkPoolView.PoolCard | WorkPoolView.PoolDetail
 > = Layer.mergeAll(
   Layer.succeed(WorkPoolView.PoolCard, PoolCardView),
   Layer.succeed(WorkPoolView.PoolDetail, PoolDetailView),

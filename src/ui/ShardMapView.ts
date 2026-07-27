@@ -11,18 +11,18 @@ import * as View from "./View";
 export const shardMapViewSpec = { kind: ShardMap.kind } as const;
 
 /** @public */
-export const ShardMapCard = View.make({
-  key: "hyperlink/view/shardmap-card",
-  kind: "card",
-  spec: shardMapViewSpec,
-});
+export class ShardMapCard extends View.Tag<ShardMapCard>()(
+  "hyperlink/view/shardmap-card",
+  "card",
+  shardMapViewSpec,
+) {}
 
 /** @public */
-export const ShardMapDetail = View.make({
-  key: "hyperlink/view/shardmap-detail",
-  kind: "detail",
-  spec: shardMapViewSpec,
-});
+export class ShardMapDetail extends View.Tag<ShardMapDetail>()(
+  "hyperlink/view/shardmap-detail",
+  "detail",
+  shardMapViewSpec,
+) {}
 
 /** @public */
 export const layer = Layer.mergeAll(

@@ -8,18 +8,18 @@ import * as WorkPool from "../WorkPool";
 import * as View from "./View";
 
 /** @public */
-export const PriorityCard = View.make({
-  key: "hyperlink/view/priority-card",
-  kind: "card",
-  spec: WorkPool.priorityControlSpec,
-});
+export class PriorityCard extends View.Tag<PriorityCard>()(
+  "hyperlink/view/priority-card",
+  "card",
+  WorkPool.priorityControlSpec,
+) {}
 
 /** @public */
-export const PriorityDetail = View.make({
-  key: "hyperlink/view/priority-detail",
-  kind: "detail",
-  spec: WorkPool.priorityControlSpec,
-});
+export class PriorityDetail extends View.Tag<PriorityDetail>()(
+  "hyperlink/view/priority-detail",
+  "detail",
+  WorkPool.priorityControlSpec,
+) {}
 
 /** @public */
 export const layer = Layer.mergeAll(

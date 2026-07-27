@@ -11,18 +11,18 @@ import * as View from "./View";
 export const telemetryViewSpec = { kind: Telemetry.kind } as const;
 
 /** @public */
-export const TelemetryCard = View.make({
-  key: "hyperlink/view/telemetry-card",
-  kind: "card",
-  spec: telemetryViewSpec,
-});
+export class TelemetryCard extends View.Tag<TelemetryCard>()(
+  "hyperlink/view/telemetry-card",
+  "card",
+  telemetryViewSpec,
+) {}
 
 /** @public */
-export const TelemetryDetail = View.make({
-  key: "hyperlink/view/telemetry-detail",
-  kind: "detail",
-  spec: telemetryViewSpec,
-});
+export class TelemetryDetail extends View.Tag<TelemetryDetail>()(
+  "hyperlink/view/telemetry-detail",
+  "detail",
+  telemetryViewSpec,
+) {}
 
 /** @public */
 export const layer = Layer.mergeAll(

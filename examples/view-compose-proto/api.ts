@@ -45,7 +45,7 @@ export interface ChromeV1 {
  * // proposed (thin Eng on existing View.match path)
  * Layer.mergeAll(
  *   View.group(ServicesHub),
- *   View.kind(Group.kind, WebGroupCard), // or View.tag(ServicesHub, …) / only
+ *   View.kind(Group.kind, WebGroupCard), // or View.resource(ServicesHub, …) / only
  *   WebDashboardViews.layer,
  * )
  * // then: <View.Card tag={Wnba} name="Wnba" />  // parent supplies onOpen via chrome

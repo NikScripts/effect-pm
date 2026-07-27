@@ -167,7 +167,7 @@ Hyperlink.fn     // command
 | Type intersect | `BaseSpec & { schedule: … }` (daemon grafts) |
 | Store merge | `mergeSpecs` (`Object.assign`) — precedent for combining records |
 
-`View.make({ spec: familyControlSpec, … })` uses the **family** Spec as Needs SSOT.
+`View.Tag` `spec` uses the **family** Spec as Needs SSOT.
 
 ### Keys & annotation (notes)
 
@@ -254,7 +254,7 @@ Owner (2026-07-26): **identity and matching are shared; the React/Ink component 
 
 | Piece | Lives where | Shared? |
 |-------|-------------|---------|
-| View **service** (key + kind + Spec) | `View.Tag` / `View.make` — Context service whose **Svc = Component** | Yes — identity + binds/pipe |
+| View **service** (key + kind + Spec) | `View.Tag` — Context service whose **Svc = Component** | Yes — identity + binds/pipe |
 | Match / bind / `Hyperlink.components` | Registry + HS pin (Effect) | Yes |
 | **TSX implementation** | **`Layer.succeed(PoolCard, Comp)`** (or equiv) — provide the service | No — swap provide Layer |
 
@@ -262,16 +262,16 @@ Owner (2026-07-26): **identity and matching are shared; the React/Ink component 
 
 ```ts
 // Shared — View services (no TSX baked into the tag definition)
-const PoolCard = View.make({
-  key: "hyperlink/view/pool-card",
-  kind: "card",
-  spec: WorkPool.queueControlSpec,
-})
-const PoolDetail = View.make({
-  key: "hyperlink/view/pool-detail",
-  kind: "detail",
-  spec: WorkPool.queueControlSpec,
-})
+class PoolCard extends View.Tag<PoolCard>()(
+  "hyperlink/view/pool-card",
+  "card",
+  WorkPool.queueControlSpec,
+) {}
+class PoolDetail extends View.Tag<PoolDetail>()(
+  "hyperlink/view/pool-detail",
+  "detail",
+  WorkPool.queueControlSpec,
+) {}
 
 const poolBinds = Layer.mergeAll(
   View.bindKind(WorkPool.kind, PoolCard),
@@ -299,7 +299,7 @@ const { Card, Detail, Provider } = View.react(
 End-to-end at runtime (one process):
 
 ```
-View.make / View.Tag → View service (key, kind, spec; Svc = Component)
+View.Tag → View service (key, kind, spec; Svc = Component)
 View.bind* + Layer.succeed(ViewSvc, Comp)    // binds + provide implementations
 View.react(viewLayer)                        // run Layer (R must be never) → kit
   └─ resolve Component from Context for matched View services
@@ -317,7 +317,7 @@ type Handle = {
 }
 ```
 
-- `View.make({ key, kind, spec })` returns a Handle. **No Component field.**
+- `class X extends View.Tag<X>()(key, kind, spec) {}` — class handle. **No Component field.**
 - Pipe targets and binds refer to Handles (or their keys).
 - Same Handle module can be imported by web and TUI packages.
 
@@ -328,7 +328,7 @@ type Handle = {
 | `byTagKey` | `tag.key` | `AnyView[]` (ordered) | `View.bindTag` |
 | `byKind` | stamped contract kind (`WorkPool.kind`, …) | `AnyView[]` | `View.bindKind` |
 
-- **View service** from `View.make` = `Context.Service` whose Svc is `ViewComponent`, plus `key` / `kind` / `spec`.
+- **View service** from `View.Tag` = class `Context.Service` whose Svc is `ViewComponent`, plus `key` / `kind` / `spec`.
 - **Provide TSX** with `Layer.succeed(PoolCard, Comp)` (or `effect` / `sync`).
 - **Binds require** those View services (`yield*` at bind build) so they appear in Layer `R` until provided.
 - **No `groupId` in View.** Match: `tag.key` → `kindOf(tag)` → fallback; pins via `Hyperlink.components([…])` replace per kind.
@@ -379,14 +379,14 @@ View.react(layer) → {
 
 | Package / folder | Owns |
 |------------------|------|
-| Shared | View services (`View.make`) + bind Layers |
+| Shared | View services (`View.Tag`) + bind Layers |
 | App (web or TUI) | `Layer.succeed(View, Comp)` for that process + `View.react(fullyProvidedLayer)` |
 
 One provide Layer per process — not web+TUI in the same merge.
 
 **Locked (grilling):** W14–W19; View services + Layer-provided TSX (not skins.register map); components = single array; missing skin = not provided.
 
-**Locked (grilling):** W20 `View.group` + `kit.for(tag)`; **W21** chrome = `View.kind` / `tag` / `only` Layers + `Layer.mergeAll` (no Policy module; no tag-pipe SSOT). Packaging Eng’d (`ui/web/tui` WorkPoolView). **Now:** migrate widgets onto existing Dashboard shells (C). **Hold:** kit `Dashboard` + larger component library until after widget migration. **Open:** Spec gate.
+**Locked (grilling):** W20 `View.group` + `kit.for(tag)`; **W21** chrome = `View.kind` / `resource` / `only` Layers + `Layer.mergeAll` (no Policy module; no tag-pipe SSOT). Packaging Eng’d (`ui/web/tui` WorkPoolView). **Now:** migrate widgets onto existing Dashboard shells (C). **Hold:** kit `Dashboard` + larger component library until after widget migration. **Open:** Spec gate.
 
 #### View handles on HS tags (W17) — LOCKED (clarified)
 
@@ -488,14 +488,14 @@ View.react(Layer.mergeAll(binds, View.bindKind(WorkPool.kind, CustomCard), chrom
 
 **Web vs TUI:** each app merges binds + its own `Layer.succeed` chrome, then `View.react` — same View services, different Svc values.
 
-#### View.make / bind → Layer `R` — LOCKED lean (2026-07-26)
+#### View.Tag / bind → Layer `R` — LOCKED lean (2026-07-26)
 
 ```ts
-const PoolCard = View.make({
-  key: "hyperlink/view/pool-card",
-  kind: "card",
-  spec: WorkPool.queueControlSpec,
-})
+class PoolCard extends View.Tag<PoolCard>()(
+  "hyperlink/view/pool-card",
+  "card",
+  WorkPool.queueControlSpec,
+) {}
 // PoolCard is a Context.Service<ViewComponent> + { key, kind, spec }
 
 View.bindKind(WorkPool.kind, PoolCard)
@@ -513,22 +513,22 @@ View.react(layer)  // layer: Layer<Registry, E, never> — runs build (runSync/r
 #### Define + register (one entry = one kind)
 
 ```ts
-const PoolCard = View.make({
-  key: "hyperlink/view/pool-card",
-  spec: WorkPool.queueControlSpec,
-  kind: "card",
-})
-const PoolDetail = View.make({
-  key: "hyperlink/view/pool-detail",
-  spec: WorkPool.queueControlSpec,
-  kind: "detail",
-})
+class PoolCard extends View.Tag<PoolCard>()(
+  "hyperlink/view/pool-card",
+  "card",
+  WorkPool.queueControlSpec,
+) {}
+class PoolDetail extends View.Tag<PoolDetail>()(
+  "hyperlink/view/pool-detail",
+  "detail",
+  WorkPool.queueControlSpec,
+) {}
 // Page — when we care about full desktop; not v1 priority
-const PoolPage = View.make({
-  key: "hyperlink/view/pool-page",
-  spec: WorkPool.queueControlSpec,
-  kind: "page",
-})
+class PoolPage extends View.Tag<PoolPage>()(
+  "hyperlink/view/pool-page",
+  "page",
+  WorkPool.queueControlSpec,
+) {}
 
 const viewLayer = Layer.mergeAll(
   Layer.succeed(PoolCard, PoolCardView),
@@ -618,7 +618,7 @@ Effect modules are **large namespaces** and still tree-shake when exports are si
 | **Fat namespace** (`import * as View` / `View/WorkPool` with many flat exports) | Fine if TSX/platform code is not eagerly imported by shared handle modules |
 | **Separate export paths** | Still useful for **platform chrome** (`web/View/WorkPool` vs `tui/…`) and for apps that want a minimal import surface |
 
-**Still banned:** `export const View = { WorkPoolCard }` object-as-namespace (module-layout rule). Prefer flat `export const workPoolCard = View.make(…)` on a module, or `import * as WorkPoolView from "…/View/WorkPool"`.
+**Still banned:** `export const View = { WorkPoolCard }` object-as-namespace (module-layout rule). Prefer flat `export class WorkPoolCard extends View.Tag<WorkPoolCard>()(…)` on a module, or `import * as WorkPoolView from "…/View/WorkPool"`.
 
 **Hard rule that remains:** shared handle/bind modules must **not** import DOM/Ink default components. Platform `Layer.succeed` lives in web/tui entry points (subpath or app-local). That — not namespace size — is what keeps TUI from pulling web TSX.
 
@@ -754,14 +754,14 @@ Name collision: `Hyperlink.react` vs `View.react` — different jobs (service-bo
 | W17 | ~~View handles on HS tag~~ → **superseded by W21** (no tag-pipe chrome SSOT) |
 | W18 | **Missing skin = `View.react(layer)` requires Layer `R = never`** — contributions require View services; `Layer.succeed(View, Comp)` provides them |
 | W19 | ~~`Hyperlink.components`~~ → **superseded by W21** (removed from match path; use `View.only`) |
-| W20 | **`View.group(AppGroup)`** — stash Group + leaves on kit; chrome `R` from merged `View.kind` / `tag` / `only` layers |
-| W21 | **Chrome policy = Layers on `View`** (no separate Policy module/type). `View.kind` / `View.tag` (append) + `View.only` (per-kind allowlist). Compose with **`Layer.mergeAll`** (last `only` for a tag wins). Variadic views → `R`. Kill `requireView` / bind\* / tag-pin match |
+| W20 | **`View.group(AppGroup)`** — stash Group + leaves on kit; chrome `R` from merged `View.kind` / `resource` / `only` layers |
+| W21 | **Chrome policy = Layers on `View`** (no separate Policy module/type). `View.kind` / `View.resource` (append) + `View.only` (per-kind allowlist). Compose with **`Layer.mergeAll`** (last `only` for a tag wins). Variadic views → `R`. Kill `requireView` / bind\* / tag-pin match |
 
 ### Eng order (next)
 
 1. ~~View services + react R=never~~ **done**
 2. ~~W20 `View.group` + `kit.for(tag)`~~ **done**
-3. ~~W21 `View.kind` / `tag` / `only` as Layers~~ **done**
+3. ~~W21 `View.kind` / `resource` / `only` as Layers~~ **done**
 4. ~~Packaging + WorkPool handles/skins~~ **Eng’d** — `ui/WorkPoolView` + `web|tui/WorkPoolView` subpaths
 5. **Migrate widgets onto existing Dashboard** — **Eng’d** for all default families via `View.react(web|tui DashboardViews.layer)` (WorkPool, priority, daemon, api, fleet, telemetry, shardmap, gate, hyperlink card). `base` registries are fallback-only; parent owns nav/logs/edit. `View.Chrome` carries width/selected/onBack/cols/rows.
 6. ~~Kit `Dashboard`~~ **HOLD** until owner revisits; then Dashboard + larger component library

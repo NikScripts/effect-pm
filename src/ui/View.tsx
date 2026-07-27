@@ -4,9 +4,9 @@
  * View **services** (Context) + chrome contribution Layers + React matchers.
  * Design: `docs/handoffs/client-adapters-design.md`.
  *
- * - `View.make` → Context.Service whose Svc is the React/Ink component (+ key/kind/spec).
+ * - `View.Tag` → class Context.Service handle (Svc = React/Ink component + key/kind/spec).
  * - Provide TSX with `Layer.succeed(PoolCard, Comp)`.
- * - Chrome policy = Layers: `View.kind` / `View.tag` / `View.only` (merge with `Layer.mergeAll`; last wins).
+ * - Chrome policy = Layers: `View.kind` / `View.resource` / `View.only` (merge with `Layer.mergeAll`; last wins).
  * - `View.react(layer)` runs the Layer and requires `R = never` (missing skin = type error).
  */
 import * as React from "react";
@@ -77,17 +77,12 @@ export const useChrome = (): Chrome => React.useContext(ChromeContext);
 /** A React/Ink view for one chrome role — the View service’s Svc. @public */
 export type ViewComponent = (props: ViewProps) => React.ReactElement | null;
 
-/** Phantom id so each {@link make} key is a distinct Context service. @public */
-export interface ViewId<K extends string> {
-  readonly _ViewKey: K;
-}
-
 /**
  * A View service: Context tag for {@link ViewComponent}, plus identity metadata.
  *
  * @public
  */
-export type AnyView<Id> = Context.Service<Id, ViewComponent> & {
+export type AnyView<Self = unknown> = Context.Service<Self, ViewComponent> & {
   readonly key: ViewKey;
   readonly kind: ViewKind;
   readonly spec: unknown;
@@ -105,22 +100,29 @@ export interface Resolved {
 }
 
 /**
- * Define a View service. Provide the component with `Layer.succeed(view, Comp)`.
+ * Declare a View service as a **class handle** (same seam as `Daemon.Tag` / `Group.Tag`).
+ * Svc = the React/Ink component — provide with `Layer.succeed(PoolCard, Comp)`.
+ *
+ * In `.tsx` files the Self type-parameter needs a trailing comma:
+ * `View.Tag<PoolCard,>()(…)` (JSX parse). Handle modules stay `.ts`.
+ *
+ * @example
+ * ```ts
+ * class PoolCard extends View.Tag<PoolCard>()(
+ *   "hyperlink/view/pool-card",
+ *   "card",
+ *   WorkPool.queueControlSpec,
+ * ) {}
+ * ```
  *
  * @public
  */
-export const make = <const K extends string,>(options: {
-  readonly key: K;
-  readonly kind: ViewKind;
-  readonly spec: unknown;
-}): AnyView<ViewId<K>> => {
-  const service = Context.Service<ViewId<K>, ViewComponent>()(options.key);
-  return Object.assign(service, {
-    key: options.key,
-    kind: options.kind,
-    spec: options.spec,
-  });
-};
+export const Tag =
+  <Self,>() =>
+  <const K extends string>(key: K, kind: ViewKind, spec: unknown = {}) => {
+    const base = Context.Service<Self, ViewComponent>()(key);
+    return Object.assign(base, { key, kind, spec });
+  };
 
 // =============================================================================
 // Registry service
@@ -275,20 +277,22 @@ export const kind = <Id,>(
   );
 
 /**
- * Append one View for a resource tag key (multi-match / pager).
- * Add more with `Layer.mergeAll(View.tag(…), View.tag(…))`.
+ * Append one View for a concrete resource tag key (multi-match / pager).
+ * Add more with `Layer.mergeAll(View.resource(…), View.resource(…))`.
+ *
+ * Named {@link resource} (not `tag`) so it does not collide with {@link Tag} class handles.
  *
  * @public
  */
-export const tag = <Id,>(
-  resource: { readonly key: string },
+export const resource = <Id,>(
+  resourceTag: { readonly key: string },
   view: ViewService<Id>,
 ): ContribLayer<Id> =>
   Layer.effectDiscard(
     Effect.gen(function* () {
       const reg = yield* Registry;
       const Component = yield* view;
-      reg.addTag(resource.key, { key: view.key, kind: view.kind, Component });
+      reg.addTag(resourceTag.key, { key: view.key, kind: view.kind, Component });
     }),
   );
 
@@ -366,7 +370,7 @@ export class GroupDash extends Context.Service<
 
 /**
  * BYO-chrome Group kit contribution (W20). Records the Group + leaves for the react kit.
- * Chrome `R` comes from `View.kind` / `View.tag` / `View.only` layers you merge.
+ * Chrome `R` comes from `View.kind` / `View.resource` / `View.only` layers you merge.
  *
  * @example
  * ```ts

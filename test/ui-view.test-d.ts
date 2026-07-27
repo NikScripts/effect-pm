@@ -6,16 +6,16 @@ import { expectTypeOf } from "vitest";
 import * as View from "../src/ui/View";
 import * as WorkPool from "../src/WorkPool";
 
-const PoolCard = View.make({
-  key: "hyperlink/view/pool-card",
-  kind: "card",
-  spec: {},
-});
-const CustomCard = View.make({
-  key: "hyperlink/view/custom-card",
-  kind: "card",
-  spec: {},
-});
+class PoolCard extends View.Tag<PoolCard>()(
+  "hyperlink/view/pool-card",
+  "card",
+  {},
+) {}
+class CustomCard extends View.Tag<CustomCard>()(
+  "hyperlink/view/custom-card",
+  "card",
+  {},
+) {}
 
 const Item = Schema.Struct({ n: Schema.Number });
 class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", { payload: Item }) {}
@@ -36,7 +36,7 @@ const missingProvide = View.kind(WorkPool.kind, PoolCard).pipe(
 
 type MissingR = Layer.Services<typeof missingProvide>;
 expectTypeOf<[MissingR] extends [never] ? true : false>().toEqualTypeOf<false>();
-expectTypeOf<MissingR>().toEqualTypeOf<View.ViewId<"hyperlink/view/pool-card">>();
+expectTypeOf<MissingR>().toEqualTypeOf<PoolCard>();
 
 // only + kind → both Views in R
 const withOnly = Layer.mergeAll(
@@ -45,9 +45,7 @@ const withOnly = Layer.mergeAll(
 ).pipe(Layer.provideMerge(View.base));
 
 type OnlyMissingR = Layer.Services<typeof withOnly>;
-expectTypeOf<OnlyMissingR>().toEqualTypeOf<
-  View.ViewId<"hyperlink/view/pool-card"> | View.ViewId<"hyperlink/view/custom-card">
->();
+expectTypeOf<OnlyMissingR>().toEqualTypeOf<PoolCard | CustomCard>();
 
 const kit = View.react(provided);
 const bound = kit.for(Jobs);

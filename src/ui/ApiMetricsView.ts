@@ -11,18 +11,18 @@ import * as View from "./View";
 export const apiMetricsViewSpec = { kind: ApiMetrics.kind } as const;
 
 /** @public */
-export const ApiCard = View.make({
-  key: "hyperlink/view/api-card",
-  kind: "card",
-  spec: apiMetricsViewSpec,
-});
+export class ApiCard extends View.Tag<ApiCard>()(
+  "hyperlink/view/api-card",
+  "card",
+  apiMetricsViewSpec,
+) {}
 
 /** @public */
-export const ApiDetail = View.make({
-  key: "hyperlink/view/api-detail",
-  kind: "detail",
-  spec: apiMetricsViewSpec,
-});
+export class ApiDetail extends View.Tag<ApiDetail>()(
+  "hyperlink/view/api-detail",
+  "detail",
+  apiMetricsViewSpec,
+) {}
 
 /** @public */
 export const layer = Layer.mergeAll(

@@ -11,11 +11,11 @@ import * as View from "./View";
 export const hyperlinkViewSpec = { kind: Hyperlink.kind } as const;
 
 /** @public */
-export const HyperlinkCard = View.make({
-  key: "hyperlink/view/hyperlink-card",
-  kind: "card",
-  spec: hyperlinkViewSpec,
-});
+export class HyperlinkCard extends View.Tag<HyperlinkCard>()(
+  "hyperlink/view/hyperlink-card",
+  "card",
+  hyperlinkViewSpec,
+) {}
 
 /** @public */
 export const layer = View.kind(Hyperlink.kind, HyperlinkCard);

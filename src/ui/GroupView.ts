@@ -11,11 +11,11 @@ import * as View from "./View";
 export const groupViewSpec = { kind: Group.kind } as const;
 
 /** Group grid card — open via {@link ./Navigator}. @public */
-export const GroupCard = View.make({
-  key: "hyperlink/view/group-card",
-  kind: "card",
-  spec: groupViewSpec,
-});
+export class GroupCard extends View.Tag<GroupCard>()(
+  "hyperlink/view/group-card",
+  "card",
+  groupViewSpec,
+) {}
 
 /** @public */
 export const layer = View.kind(Group.kind, GroupCard);

@@ -11,18 +11,18 @@ import * as View from "./View";
 export const gateViewSpec = { kind: Gate.kind } as const;
 
 /** @public */
-export const GateCard = View.make({
-  key: "hyperlink/view/gate-card",
-  kind: "card",
-  spec: gateViewSpec,
-});
+export class GateCard extends View.Tag<GateCard>()(
+  "hyperlink/view/gate-card",
+  "card",
+  gateViewSpec,
+) {}
 
 /** @public */
-export const GateDetail = View.make({
-  key: "hyperlink/view/gate-detail",
-  kind: "detail",
-  spec: gateViewSpec,
-});
+export class GateDetail extends View.Tag<GateDetail>()(
+  "hyperlink/view/gate-detail",
+  "detail",
+  gateViewSpec,
+) {}
 
 /** @public */
 export const layer = Layer.mergeAll(

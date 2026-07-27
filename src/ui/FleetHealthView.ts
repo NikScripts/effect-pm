@@ -11,18 +11,18 @@ import * as View from "./View";
 export const fleetHealthViewSpec = { kind: FleetHealth.kind } as const;
 
 /** @public */
-export const FleetCard = View.make({
-  key: "hyperlink/view/fleet-card",
-  kind: "card",
-  spec: fleetHealthViewSpec,
-});
+export class FleetCard extends View.Tag<FleetCard>()(
+  "hyperlink/view/fleet-card",
+  "card",
+  fleetHealthViewSpec,
+) {}
 
 /** @public */
-export const FleetDetail = View.make({
-  key: "hyperlink/view/fleet-detail",
-  kind: "detail",
-  spec: fleetHealthViewSpec,
-});
+export class FleetDetail extends View.Tag<FleetDetail>()(
+  "hyperlink/view/fleet-detail",
+  "detail",
+  fleetHealthViewSpec,
+) {}
 
 /** @public */
 export const layer = Layer.mergeAll(

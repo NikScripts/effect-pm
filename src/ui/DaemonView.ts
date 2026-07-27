@@ -8,18 +8,18 @@ import * as Daemon from "../Daemon";
 import * as View from "./View";
 
 /** @public */
-export const DaemonCard = View.make({
-  key: "hyperlink/view/daemon-card",
-  kind: "card",
-  spec: Daemon.daemonControlSpec,
-});
+export class DaemonCard extends View.Tag<DaemonCard>()(
+  "hyperlink/view/daemon-card",
+  "card",
+  Daemon.daemonControlSpec,
+) {}
 
 /** @public */
-export const DaemonDetail = View.make({
-  key: "hyperlink/view/daemon-detail",
-  kind: "detail",
-  spec: Daemon.daemonControlSpec,
-});
+export class DaemonDetail extends View.Tag<DaemonDetail>()(
+  "hyperlink/view/daemon-detail",
+  "detail",
+  Daemon.daemonControlSpec,
+) {}
 
 /** @public */
 export const layer = Layer.mergeAll(
