@@ -1,5 +1,7 @@
 # Named Hyperlink handles — status (Agent D track)
 
+> **Naming:** read as WorkPool / Daemon / Gate / Hyperlink / hyperlink-ts (pre-rebrand names purged from this file).
+
 **Status (2026-07-27):** **partial Eng on tip** — WorkPool + Gate Tag paths hover as named handles.  
 **Agent:** D (merged / idle). **Do not** assign to dead Agent 3.  
 **Design SSOT (historical bake, names updated):** [`queue-handle-convergence-decisions.md`](./queue-handle-convergence-decisions.md).  
@@ -27,12 +29,12 @@
 
 **Do not** teach `QueueResource`, `RunResource`, or `Process.Tag` in new prose.
 
-### Two “QueueHandle” stories (do not conflate)
+### Two handle stories (do not conflate)
 
 | Name | Where | Meaning today |
 |------|--------|----------------|
 | **`WorkPool<…>`** | `src/WorkPool.ts` interface | **Contract** named handle — what `WorkPool.Tag` / `yield*` uses |
-| **`QueueHandle`** | `src/internal/workPool.ts` | Still a **TEMP alias → `EngineQueueHandle`** (engine path). Comment marks M1b: should become the contract projection or stay internal-only. **Not** what Tag hovers as. |
+| **`QueueHandle`** | `src/internal/workPool.ts` | **Internal-only** TEMP alias → `EngineQueueHandle` (engine path). No longer re-exported from `WorkPool`. **Not** what Tag hovers as. |
 | **`PriorityHandle`** | WorkPool priority | Still engine-shaped (`EEnqueue` param) — not on the `WorkPool<>` contract naming path yet |
 
 ---
@@ -66,8 +68,8 @@
 1. **M2 — unify typed `WorkPool.Service` with `WorkPool.Tag`**  
    Typed `.Service` should build through the same contract `layer` / handle as `.Tag` so both yield **`WorkPool<…>`** by construction. Engine-only / untyped `.Service` stays a separate path. Surface deltas historically included `size` Effect vs Subscribable, metrics nesting, `logs`.
 
-2. **`QueueHandle` M1b cleanup**  
-   Public/internal `QueueHandle` still aliases **engine** handle. Either retire the name to `EngineQueueHandle` only, or make `QueueHandle` mean the contract (today that name is **`WorkPool`** — prefer not to resurrect `QueueHandle` as the author-facing hover).
+2. **`QueueHandle` M1b cleanup** — ✅ **public export removed**  
+   Internal-only TEMP alias → `EngineQueueHandle` in `src/internal/workPool.ts`. Tag hover remains **`WorkPool<>`**. Optional: delete the TEMP alias name entirely (engine tests import `EngineQueueHandle`).
 
 3. **Per-Tag success/error carriers**  
    Keep handle `Success`/`Error` tied to Tag wire / effect carriers so hovers show real failure/success types.

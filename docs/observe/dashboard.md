@@ -84,7 +84,7 @@ server: {
 }
 ```
 
-A worked end-to-end setup is in `examples/resource-web` (three nodes, one WebSocket each).
+A worked end-to-end setup is in `examples/hyperlink-web` (three nodes, one WebSocket each).
 
 ### Fleets — peers dial the same wire
 

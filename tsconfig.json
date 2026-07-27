@@ -140,8 +140,8 @@
     "test/widget-registry.test.ts",
     "examples/scenarios/nwslsoccer",
     "examples/queue-widget/**",
-    "examples/resource-tui/**",
-    "examples/resource-web/**",
+    "examples/hyperlink-tui/**",
+    "examples/hyperlink-web/**",
     "examples/web-dashboard/**"
   ]
 }

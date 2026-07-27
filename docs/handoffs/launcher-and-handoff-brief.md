@@ -25,7 +25,7 @@ It does **not** answer cross-version state migration or zero-downtime handoff.
 
 ### Prefer existing concepts
 
-**Do not invent new concepts unless they are really, really good.** Prefer `Group`, `Node`, Lookup (`Identity` / `Directory` / `Advice`), `Layer` / `Scope` / `Schedule`, Daemon/Process machinery, existing serve/client surfaces. New nouns need a high bar and owner approval.
+**Do not invent new concepts unless they are really, really good.** Prefer `Group`, `Node`, Lookup (`Identity` / `Directory` / `Advice`), `Layer` / `Scope` / `Schedule`, Daemon machinery, existing serve/client surfaces. New nouns need a high bar and owner approval.
 
 ---
 
@@ -37,7 +37,7 @@ It does **not** answer cross-version state migration or zero-downtime handoff.
 - It is **relatively dumb** — not a long-lived supervisor owning the fleet forever.
 - Ongoing control lives on **nodes**, especially the **Lookup node**.
 
-### 2. Process ownership = the Node
+### 2. Daemon ownership = the Node
 
 - **As soon as a process starts, it is owned and controlled by the nodes.**
 - All process controls (shutdown, drain, restart signals that matter, etc.) go **through the node** — not through a lingering launcher daemon.

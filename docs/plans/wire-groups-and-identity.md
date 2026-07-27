@@ -43,7 +43,7 @@ Layer.mergeAll(
 // one RpcGroup prefixed by hyperlink-ts/ApiMetrics; route by header key
 ```
 
-Demo (metrics-shaped, ApiMetrics **not** migrated): [`../../examples/forms/resource/shared-tag-wire.ts`](../../examples/forms/resource/shared-tag-wire.ts).
+Demo (metrics-shaped, ApiMetrics **not** migrated): [`../../examples/forms/hyperlink/shared-tag-wire.ts`](../../examples/forms/hyperlink/shared-tag-wire.ts).
 
 ---
 
@@ -129,6 +129,6 @@ Spec-hash stays **`contractHash` / verify**, not the RpcGroup name.
 
 - Claim / build: `src/Hyperlink.ts` (`Tag`, `buildInstanceTag`, `wireTag`, `forwardClient`, `sharedTagSym`).  
 - Shareable fragments: `queueControlSpec` / `priorityControlSpec` (`WorkPool.ts`), `daemonControlSpec` / `scheduleHyperlinkSpec` (`Daemon.ts`), `apiMetricsSpec` (`ApiMetrics.ts`), Gate observation in `internal/gateSchema.ts`.  
-- Demo: `examples/forms/resource/shared-tag-wire.ts`.  
+- Demo: `examples/forms/hyperlink/shared-tag-wire.ts`.  
 - UI: `tagWireKey` in `src/ui/data.ts`.  
 - Related: [`service-shapes.md`](./service-shapes.md) (handle taxonomy; orthogonal).

@@ -1,7 +1,7 @@
 # Proposal: reactive observation (stream-to-observe folds)
 
 **Status:** proposal for review. **No code written.** Requires owner sign-off **and** coordination
-with the `Resource.ts` `peers`/`fleet` surface (Agent E's adjacent zone) before any implementation.
+with the `Hyperlink.ts` `peers`/`fleet` surface (Agent E's adjacent zone) before any implementation.
 **Principle:** *observe by subscribing, not by asking on a timer.* Every observable resource value —
 including cross-node `fleet` folds — should be a **stream the dashboard rides**, not an `effect` the
 dashboard polls.
@@ -15,7 +15,7 @@ The resource contracts are observed in two incompatible ways:
 - **Reactive (good).** queue / process / run expose `status` as a `ref` / `Subscribable`; the
   dashboard rides `.changes` (`src/web/data.ts`). Live, event-exact, no timer.
 - **Poll (the gap).** The mesh factories — **FleetHealth**, **Telemetry**, **ShardMap** — expose
-  their observable and `fleet`-folded fields as `Resource.effect` (one-shot). There is nothing to
+  their observable and `fleet`-folded fields as `Hyperlink.effect` (one-shot). There is nothing to
   subscribe to, so the dashboard polls every 2 s via `pollAtom`.
 
 `fleet` folds are the crux. A fold today is `combineQuery(peers, (p) => p.field, combine)` — it
@@ -44,7 +44,7 @@ Move folds — and the observable locals they read — from *query* to *stream*:
 3. **Peer streaming — the gating unknown.** Reactive folds require the **server↔server peer transport
    to carry `.changes` subscriptions**, not just request/response queries. The `peers` mechanism is
    query-oriented today. This is the single piece that **must be designed with the owner and the
-   `Resource.ts` peers/transport owner (Agent E)** — it is shared foundation and overlaps the
+   `Hyperlink.ts` peers/transport owner (Agent E)** — it is shared foundation and overlaps the
    in-flight transport rework (topology / connect / protocol).
 4. **The dashboard unifies on streams.** `pollAtom` is deleted; every bundle field becomes `.changes`.
    One model, one failure mode.
@@ -80,7 +80,7 @@ Move folds — and the observable locals they read — from *query* to *stream*:
 
 ## Cost & coordination (read before approving)
 
-- **Cross-cutting.** The fold primitive + peer streaming live in `Resource.ts` (`peers` / `fleet` /
+- **Cross-cutting.** The fold primitive + peer streaming live in `Hyperlink.ts` (`peers` / `fleet` /
   `combineQuery`), which is adjacent to Agent E's **owner-reserved** node/client typing surface. The
   fold/peers surface must be coordinated with E even though it is not the exact reserved set.
 - Plus a `ref`-ification of each engine's local state (ShardMap, FleetHealth, Telemetry).

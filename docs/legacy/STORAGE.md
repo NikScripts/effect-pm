@@ -13,11 +13,11 @@ Verify: `pnpm run typecheck && pnpm test && pnpm run lint && pnpm build`
 
 | Plane | API | Backing | Who writes |
 |-------|-----|---------|------------|
-| **Store bridge (golden)** | `Store.Service`, `Storage`, `Tag.store(tag)` | `EventJournal` / `SqlEventJournal` via `layerDefaultMemory` or app `Store.layer` | **Toolkit engines** — Process, Queue, CustomQueue, RunHyperlink |
-| **RuntimeStorage facets (legacy observability)** | `ProcessStorage`, `LogStore`, `ProcessLifecycleStore` | `RuntimeStorage` rows (`layerProcessStore`, in-memory adapter) | Log relay, lifecycle hooks — **not** toolkit execution history |
+| **Store bridge (golden)** | `Store.Service`, `Storage`, `Tag.store(tag)` | `EventJournal` / `SqlEventJournal` via `layerDefaultMemory` or app `Store.layer` | **Toolkit engines** — Daemon, WorkPool, untyped WorkPool, Gate |
+| **RuntimeStorage facets (legacy observability)** | `DaemonStorage`, `LogStore`, `ProcessLifecycleStore` | `RuntimeStorage` rows (`layerDaemonStore`, in-memory adapter) | Log relay, lifecycle hooks — **not** toolkit execution history |
 
 Execution history for processes, queues, and run gates lives on the **Store bridge only**. The old
-`ProcessExecutionStore`, `QueueHyperlinkStore`, and `RunHyperlinkStore` **facet classes are deleted**
+`ProcessExecutionStore`, `WorkPoolStore`, and `GateStore` **facet classes are deleted**
 from `src/` — engines no longer dual-write to facet emitters.
 
 Deep design: [`handoffs/store-cutover-00-store-core.md`](../handoffs/store-cutover-00-store-core.md) ·
@@ -33,16 +33,16 @@ Apps declare an aggregate store and register toolkit scopes:
 
 ```ts
 import * as Store from "hyperlink-ts/Store";
-import * as Process from "hyperlink-ts/Process";
+import * as Daemon from "hyperlink-ts/Daemon";
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
-  Process.store(MyProcess),
-  QueueHyperlink.store(MyQueue),
+  Daemon.store(MyProcess),
+  WorkPool.store(MyQueue),
 ) {}
 ```
 
 Each toolkit exposes `Hyperlink.store(tag)` (and optional analytics extensions). Registration attaches
-a **built-in contract** (`builtInProcessStoreContract`, `builtInQueueStoreContract`, …) derived from
+a **built-in contract** (`builtInDaemonStoreContract`, `builtInQueueStoreContract`, …) derived from
 the tag's wire slots (`payload` / `success` / `error` where applicable).
 
 Resolve handles:
@@ -58,7 +58,7 @@ Resolve handles:
 materialize handles — **no** `Effect.serviceOption(Storage)`, **no** forked-fiber store sniffing.
 
 ```ts
-// Engine pattern (QueueHyperlink.buildQueueImpl — representative)
+// Engine pattern (WorkPool.buildQueueImpl — representative)
 const store = yield* materializeEngineQueueStoreForTag(tag);
 // publishEvent → store.record / narrow writes (enqueued, completed, …)
 ```
@@ -78,15 +78,15 @@ override.
 |------|------|---------|
 | **1 — lean base** | One `event` shape → `record` + `events` | `builtInQueueStoreContract(tag)` |
 | **2 — engine writes** | Narrow semantic methods (`completed`, `failed`, …) funnel to `event.append` | `makeEngineQueueStoreContract` / materialized writer |
-| **3 — analytics** | `*.store(tag, extensions?)` read derivations over `event.read` | `QueueHyperlink.store`, `Process.store` |
+| **3 — analytics** | `*.store(tag, extensions?)` read derivations over `event.read` | `WorkPool.store`, `Daemon.store` |
 
 Tag wire is SSOT — layer config must not override `payload` / `success` / `error`
 ([`result-schema-and-rpc-validation.md`](../handoffs/result-schema-and-rpc-validation.md)).
 
 ### Toolkit layers
 
-`layer` / `serve` / `serveRemote` on Process, QueueHyperlink, CustomQueueHyperlink, and RunHyperlink all
-merge `Store.layerDefaultMemory` (Process via `withDefaultMemory`). Worker resources use
+`layer` / `serve` / `serveRemote` on Daemon, WorkPool, WorkPool.Service (untyped), and Gate all
+merge `Store.layerDefaultMemory` (Daemon via `withDefaultMemory`). Worker hyperlinks use
 `Hyperlink.driver` + `grantLocal` where applicable.
 
 **ShardMap** does **not** use the Store bridge for shard state. Local keys are SQLite SSOT
@@ -100,23 +100,23 @@ Boot `SELECT`s live rows; mutations `UPSERT` / `DELETE` — no event replay, no 
 
 ## What remains on `RuntimeStorage` facets
 
-`ProcessStorage.layer` / `layerRuntimeStorage` composes **two** built-in facets only:
+`DaemonStorage.layer` / `layerRuntimeStorage` composes **two** built-in facets only:
 
 | Facet | Subpath | File | Purpose |
 |-------|---------|------|---------|
 | `LogStore` | `store/Log` | `src/store/log.ts` | Durable `log.entry` rows (relay / capture) |
 | `ProcessLifecycleStore` | `store/ProcessLifecycle` | `src/store/processLifecycle.ts` | `process.lifecycle.changed` |
 
-Aliases: `ProcessStorage.Log`, `ProcessStorage.ProcessLifecycle`.
+Aliases: `DaemonStorage.Log`, `DaemonStorage.ProcessLifecycle`.
 
 **Removed from engine paths** (do not document as writers):
 
-- `QueueHyperlinkStore` — deleted; queue engine uses Store bridge
-- `ProcessExecutionStore` — deleted; process engine uses `Process.store(tag)`
-- `RunHyperlinkStore` facet — deleted; run engine uses `RunHyperlink.store(tag)`
+- `WorkPoolStore` — deleted; queue engine uses Store bridge
+- `ProcessExecutionStore` — deleted; process engine uses `Daemon.store(tag)`
+- `GateStore` facet — deleted; run engine uses `Gate.store(tag)`
 
-The `hyperlink-ts/store/QueueHyperlink` subpath was **removed** — there is no
-`src/store/queueHyperlink.ts`. Import queue history via `QueueHyperlink.store(tag)` on the Store bridge,
+The `hyperlink-ts/store/WorkPool` subpath was **removed** — there is no
+`src/store/queueHyperlink.ts`. Import queue history via `WorkPool.store(tag)` on the Store bridge,
 not a RuntimeStorage facet class.
 
 Internal plumbing only: `src/internal/store/{spine,service,helpers,bridge,scopeBridge,memoryScope}.ts`.
@@ -125,33 +125,33 @@ Internal plumbing only: `src/internal/store/{spine,service,helpers,bridge,scopeB
 
 ## Per-toolkit store
 
-### QueueHyperlink + CustomQueueHyperlink
+### WorkPool + untyped WorkPool
 
 - **Contract:** `builtInQueueStoreContract(tag)` — cast-free; full `QueueEvent<T>` lifecycle union
   (persisted == streamed). See [`handoffs/store-cutover-queue.md`](../handoffs/store-cutover-queue.md).
 - **Engine:** `materializeEngineQueueStoreForTag` / `materializeEngineQueueStoreForItem` in
-  `buildQueueImpl` / `buildCustomQueueImpl`; `publishEvent` → `recordToStore` at source
+  `buildQueueImpl` / `buildUntypedWorkPoolImpl`; `publishEvent` → `recordToStore` at source
   (`src/internal/queueHyperlink.ts`).
-- **Registration:** `QueueHyperlink.store(tag)` / `CustomQueueHyperlink.store(tag)` for Tier 3 analytics.
-- **Tag:** config object `{ payload, success?, error? }` (+ lane fields on CQR).
+- **Registration:** `WorkPool.store(tag)` / `WorkPool.store /* untyped .Service */(tag)` for Tier 3 analytics.
+- **Tag:** config object `{ payload, success?, error? }` (+ lane fields on untyped WorkPool).
 
-### Process
+### Daemon
 
-- **Contract:** `builtInProcessStoreContract(tag)` — execution union (`Started` / `Completed` / …).
-- **Engine:** `Store.effects` + contract in `buildProcessImpl` (`src/Process.ts`).
-- **Registration:** `Process.store(tag)`.
+- **Contract:** `builtInDaemonStoreContract(tag)` — execution union (`Started` / `Completed` / …).
+- **Engine:** `Store.effects` + contract in `buildProcessImpl` (`src/Daemon.ts`).
+- **Registration:** `Daemon.store(tag)`.
 - **Typed errors:** When the tag stamps an **`error`** schema, `Failed.error` is the typed value;
   otherwise the engine stringifies the cause (store-core §5). Manual **`effect`** RPC uses the same
   schemas when stamped (`buildProcessSpec`); scheduled/polling ticks still record failures to the store
   without failing the supervisor loop.
-- **Handoff:** [`handoffs/store-cutover-process.md`](../handoffs/store-cutover-process.md).
+- **Handoff:** [`handoffs/store-cutover-daemon.md`](../handoffs/store-cutover-daemon.md).
 
-### RunHyperlink
+### Gate
 
-- **Contract:** `builtInRunHyperlinkStoreContract(tag)` — fact/state union.
+- **Contract:** `builtInGateStoreContract(tag)` — fact/state union.
 - **Engine:** declared `Storage` + contract in `src/internal/runHyperlink.ts`.
-- **Registration:** `RunHyperlink.store(tag)`.
-- **Handoff:** [`handoffs/store-cutover-runresource.md`](../handoffs/store-cutover-runresource.md).
+- **Registration:** `Gate.store(tag)`.
+- **Handoff:** [`handoffs/store-cutover-gate.md`](../handoffs/store-cutover-gate.md).
 
 ### ShardMap
 
@@ -166,11 +166,11 @@ Internal plumbing only: `src/internal/store/{spine,service,helpers,bridge,scopeB
 
 ## Wire events (Store bridge)
 
-### Queue / CustomQueue
+### Queue / untyped WorkPool
 
 One `event` shape per queue scope. Rows are the **`QueueEvent<T>`** tagged union the live `.events`
 stream carries (`Enqueued`, `Started`, `Completed`, `Failed`, lifecycle, `RateLimitExceeded`, …).
-Lane is on the entry, not a separate event union (CQR shares the same union).
+Lane is on the entry, not a separate event union (untyped WorkPool shares the same union).
 
 Optional `success` / `error` on persisted terminal rows follow tag presence
 ([`store-cutover-00-store-core.md`](../handoffs/store-cutover-00-store-core.md) §5).
@@ -178,14 +178,14 @@ Optional `success` / `error` on persisted terminal rows follow tag presence
 **Not written anymore:** legacy `queue.entry.*`, `queue.lifecycle.*`, `queue.dedupe-key.*`,
 `queue.ratelimit.exceeded` **RuntimeStorage** facet types — those were the old facet plane.
 
-### Process
+### Daemon
 
-`Started` / `Completed` / `Failed` / `Interrupted` rows on `Process.store(tag)`; auto-append from
-`Process.layer` / `serve` / `serveRemote` via baked-in default memory store.
+`Started` / `Completed` / `Failed` / `Interrupted` rows on `Daemon.store(tag)`; auto-append from
+`Daemon.layer` / `serve` / `serveRemote` via baked-in default memory store.
 
-### RunHyperlink
+### Gate
 
-Gate run facts appended to `RunHyperlink.store(tag)` when a gate executes.
+Gate run facts appended to `Gate.store(tag)` when a gate executes.
 
 **Not on the Store bridge:** ShardMap local keys — SQLite table `effect_pm_shard_map` (see
 ShardMap section above).
@@ -200,60 +200,60 @@ From `examples/forms/process-store/process-layer-store-auto-write.ts`:
 
 ```ts
 import * as Store from "hyperlink-ts/Store";
-import * as Process from "hyperlink-ts/Process";
+import * as Daemon from "hyperlink-ts/Daemon";
 
 class DemoStore extends Store.Service<DemoStore>("@examples/DemoStore")(
-  Process.store(PricesProcess),
+  Daemon.store(PricesProcess),
 ) {}
 
 const live = Layer.provideMerge(
   DemoStore.layerMemory,
-  Process.layer(PricesProcess, { effect, polling }),
+  Daemon.layer(PricesProcess, { effect, polling }),
 );
 
 const store = yield* DemoStore.at(PricesProcess);
 const events = yield* store.events();
 ```
 
-`Process.layer` merges `layerDefaultMemory` — events land even without a custom `AppStore` until you
+`Daemon.layer` merges `layerDefaultMemory` — events land even without a custom `AppStore` until you
 override with `Layer.provideMerge(AppStore.layer(...), ...)`.
 
 ### Queue persist + read back
 
 ```ts
-import * as QueueHyperlink from "hyperlink-ts/QueueHyperlink";
+import * as WorkPool from "hyperlink-ts/WorkPool";
 import * as Store from "hyperlink-ts/Store";
 
-class Mail extends QueueHyperlink.Tag<Mail>()("@app/Mail", { payload: JobSchema }) {}
+class Mail extends WorkPool.Tag<Mail>()("@app/Mail", { payload: JobSchema }) {}
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
-  QueueHyperlink.store(Mail),
+  WorkPool.store(Mail),
 ) {}
 
 // Layer includes materialized engine store + layerDefaultMemory
-Effect.provide(program, QueueHyperlink.layer(Mail, { effect, autoStart: true }));
+Effect.provide(program, WorkPool.layer(Mail, { effect, autoStart: true }));
 
 const store = yield* AppStore.at(Mail);
 const events = yield* store.events();
 ```
 
 Or register on an app aggregate: `class AppStore extends Store.Service(...)(
-  QueueHyperlink.store(Mail),
+  WorkPool.store(Mail),
 ) {}` then `yield* AppStore.at(Mail)`.
 
 ### Legacy facets (log + lifecycle only)
 
 ```ts
-import { ProcessStorage } from "hyperlink-ts";
-import { layerProcessStore } from "hyperlink-ts/storage/sqlite";
+import { DaemonStorage } from "hyperlink-ts";
+import { layerDaemonStore } from "hyperlink-ts/storage/sqlite";
 
 // In-memory (tests)
-Effect.provide(program, ProcessStorage.layer);
+Effect.provide(program, DaemonStorage.layer);
 
 // Durable RuntimeStorage + facets
 Effect.provide(
   program,
-  Layer.provide(ProcessStorage.layerRuntimeStorage, layerProcessStore({ filename: ".hyperlink-ts/data.sqlite" })),
+  Layer.provide(DaemonStorage.layerRuntimeStorage, layerDaemonStore({ filename: ".hyperlink-ts/data.sqlite" })),
 );
 ```
 
@@ -264,14 +264,14 @@ facet is optional observability — **distinct** from `Storage` on the Store bri
 
 ```ts
 class AppStore extends Store.Service<AppStore>("@app/Store")(
-  Process.store(MyProcess),
-  QueueHyperlink.store(MyQueue),
+  Daemon.store(MyProcess),
+  WorkPool.store(MyQueue),
 ) {}
 
 const live = Layer.provideMerge(
   AppStore.layer({ filename: ".hyperlink-ts/process.db" }),
-  Process.layer(MyProcess, { effect }),
-  QueueHyperlink.layer(MyQueue, { effect }),
+  Daemon.layer(MyProcess, { effect }),
+  WorkPool.layer(MyQueue, { effect }),
 );
 ```
 
@@ -283,7 +283,7 @@ const live = Layer.provideMerge(
 |------|------|
 | `HistoryStore` | Metrics/logs history sidecar (optional `serviceOption` in toolkit impls) |
 | `DurableQueueStore` | Durability plane for queue refill (`serviceOption` — correct here) |
-| `layerProcessStore` | SQLite adapter for **RuntimeStorage** facets |
+| `layerDaemonStore` | SQLite adapter for **RuntimeStorage** facets |
 
 ---
 

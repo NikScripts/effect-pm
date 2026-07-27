@@ -45,7 +45,7 @@ class Mail extends WorkPool.Tag<Mail>()("@acme/Mail", Job) {}
 // config object — more than one wire slot
 class Ingest extends Daemon.Tag<Ingest>()("app/Ingest", { success: Report, error: PullFailed }) {}
 
-// CQR — always the object; lane config rides on the tag
+// untyped WorkPool — always the object; lane config rides on the tag
 class Jobs extends WorkPool.priority<Jobs>()("@acme/Jobs", {
   payload: Job,
   laneCount: 4,
@@ -64,7 +64,7 @@ and you add only what you need (this is *Principles → Don't fight the framewor
 // base tag runs immediately; add behaviour by piping
 class Ingest extends Daemon.Tag<Ingest>()("app/Ingest", { success: Report })
   .pipe(
-    Process.schedule([Process.window(openAt, closeAt)]),  // when it may run
+    Daemon.schedule([Daemon.window(openAt, closeAt)]),  // when it may run
     Hyperlink.withReadiness(isWarm),                        // when it counts as ready
   ) {}
 ```
@@ -90,13 +90,13 @@ still inferred as the concrete tag, so `(tag: T) => T` preserves it.
 {#polling-vs-schedule .must appliesTo="src examples"}
 ## Polling and schedule are different questions — never conflate
 
-Two independent axes govern a running Process:
+Two independent axes govern a running Daemon:
 
 - **The schedule** answers *whether* an instance should be running at all — it arms and disarms.
 - **Polling** answers *how often* an already-armed instance repeats its tick.
 
-A base `Daemon.Tag` is always armed and runs immediately; `.pipe(Process.schedule([...]))` gates it
-to windows, and seeding `Process.schedule([])` starts it disarmed. Polling (`Polling.spaced`, …) is
+A base `Daemon.Tag` is always armed and runs immediately; `.pipe(Daemon.schedule([...]))` gates it
+to windows, and seeding `Daemon.schedule([])` starts it disarmed. Polling (`Polling.spaced`, …) is
 set separately in the layer. Don't reach for one to do the other's job.
 
 ``` ts

@@ -58,7 +58,7 @@ export type RateLimiterConsumeOptions = Parameters<
 
 /**
  * Gate `rateLimit` config — Effect's {@link RateLimiterConsumeOptions} with
- * optional `key` (defaults to the gate `name` / resource id).
+ * optional `key` (defaults to the gate `name` / hyperlink tag id).
  *
  * @remarks
  * This is not a parallel Hyperlink schema: it is Effect's consume options.

@@ -67,7 +67,7 @@ const FleetLive = Layer.mergeAll(
 Use the **same** `rateLimit.key` (or default resource ids that you intend to
 share) on every peer. Soft memory + distributed deploy = N× the limit (docs
 warn; not fail-loud in v1). Runnable form:
-`pnpm exec tsx examples/forms/resource/gate-rate-limit-fleet.ts`.
+`pnpm exec tsx examples/forms/hyperlink/gate-rate-limit-fleet.ts`.
 
 ## Call it
 

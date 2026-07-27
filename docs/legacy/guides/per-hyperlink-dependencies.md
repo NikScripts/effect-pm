@@ -1,9 +1,9 @@
-# Per-resource dependencies at the serve
+# Per-hyperlink dependencies at the serve
 
 > **Live book:** the current recipe is
 > [Managing Layers → HyperServices may require other services](../../getting-started/managing-layers.md)
 > (and the must-rule *Serve / listen / `*Server` preserve open `R`* in standards). This legacy page
-> keeps the long-form example; APIs below may say `Hyperlink.httpServer` / `Process` where today's
+> keeps the long-form example; APIs below may say `Hyperlink.httpServer` / `Daemon` where today's
 > surface is `Node.httpServer` / `Daemon`.
 
 When several resources run on one host, they usually **share** their dependencies — one database, one
@@ -35,14 +35,14 @@ layer memoization, not by data.
 | Primitive | Role |
 |-----------|------|
 | `Hyperlink.serve(tag, impl)` | A **raw resource's** layer (impl is the query record) that grants the local instance **and** mounts the wire handlers, **preserving** the handlers' requirement `R`, so you can `Layer.provide` each resource's dependency onto *it*. Self-registers for `/health`. (`serveRemote` is the served-only variant — same isolation, no local grant.) |
-| `QueueHyperlink.serve(tag, config)` / `Process.serve(tag, config)` | The **engine** forms — same isolation, but the served layer also **runs the engine** (worker/refill/persist for queues, tick schedule for processes). Use these for queue/process resources; `Hyperlink.serve` only mounts handlers and would leave the worker/tick dead. |
+| `WorkPool.serve(tag, config)` / `Daemon.serve(tag, config)` | The **engine** forms — same isolation, but the served layer also **runs the engine** (worker/refill/persist for queues, tick schedule for processes). Use these for queue/process resources; `Hyperlink.serve` only mounts handlers and would leave the worker/tick dead. |
 | `Hyperlink.httpServer(options?)` | Reads the registry, merges every served group onto **one** `RpcServer` (`/rpc`), and mounts a `/health` route. |
 | `Hyperlink.servedHyperlinksLayer` | The registry the `serve` forms write to and `httpServer` reads. |
 | `Hyperlink.provide(dependency, [resources])` | Sugar for `Layer.mergeAll(resources).pipe(Layer.provide(dependency))` — "these resources, on this dependency." |
 
 > **Query resource vs. engine resource.** A bare `Hyperlink.Tag` (status queries, streams) uses
-> `Hyperlink.serve(tag, recordImpl)`. A `QueueHyperlink` / `Process` is an **engine** — its worker
-> or tick must actually run — so use `QueueHyperlink.serve(tag, config)` / `Process.serve(tag,
+> `Hyperlink.serve(tag, recordImpl)`. A `WorkPool` / `Daemon` is an **engine** — its worker
+> or tick must actually run — so use `WorkPool.serve(tag, config)` / `Daemon.serve(tag,
 > config)`. Both are `serve`-style layers (preserve `R`, register for `/health`); the engine forms just
 > also start the engine. Composing an engine tag with `Hyperlink.serve` would mount its RPC surface but
 > never run the worker.
@@ -52,7 +52,7 @@ layer memoization, not by data.
 ```ts
 import { Layer } from "effect";
 import * as Hyperlink from "hyperlink-ts/Hyperlink";
-import * as Process from "hyperlink-ts/Process";
+import * as Daemon from "hyperlink-ts/Daemon";
 import { NodeHttpServer } from "@effect/platform-node";
 import { createServer } from "node:http";
 
@@ -65,11 +65,11 @@ const Host = Hyperlink.httpServer(
   [
     // processes that share the plain handler → state it once with `provide`
     Hyperlink.provide(plainImportHandlers, [
-      Process.serve(SeasonMatches,   seasonMatchesCfg),
-      Process.serve(LiveScorePoller, pollerCfg),
+      Daemon.serve(SeasonMatches,   seasonMatchesCfg),
+      Daemon.serve(LiveScorePoller, pollerCfg),
     ]),
     // a process that needs the hooked handler → its own Layer.provide, isolated
-    Process.serve(SeasonImport, importCfg).pipe(Layer.provide(hookedImportHandlers)),
+    Daemon.serve(SeasonImport, importCfg).pipe(Layer.provide(hookedImportHandlers)),
   ],
   { health: { path: "/health" } },
 ).pipe(Layer.provide(NodeHttpServer.layer(() => createServer(), { port: 3001 })));

@@ -51,7 +51,7 @@ Build the **official package website shell** — a bespoke docs application, not
 | Agent pages = **HTML in repo** under `content/` | Same app grows into full public site |
 | `pnpm run docs:serve` — Tailscale **read** on phone | |
 
-**Pattern reference (not a commitment):** `examples/resource-web/` (Vite, `host: true`, React entry) — **not** its Dashboard import.
+**Pattern reference (not a commitment):** `examples/hyperlink-web/` (Vite, `host: true`, React entry) — **not** its Dashboard import.
 
 ---
 
@@ -124,7 +124,7 @@ Migrate or replace the old root `index.html` / minimal `site.css` scaffold — d
 ### 1 — Vite React app + Tailscale serve
 
 Per **`agent-b-plan.md`**. Typical deliverables:
-- `docs/site/app/` per approved stack (e.g. `resource-web` pattern: React, styling per plan, `theme.css` if chosen)
+- `docs/site/app/` per approved stack (e.g. `hyperlink-web` pattern: React, styling per plan, `theme.css` if chosen)
 - `pnpm run docs:serve` → `0.0.0.0:5190`
 - README: Tailscale **read** URL for phone
 

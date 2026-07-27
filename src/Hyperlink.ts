@@ -3048,7 +3048,7 @@ export const withReadiness: {
   // Data-last: `T extends PipeableTag` (shallow) — do not constrain against HyperlinkTag|NodeBoundTag
   // or stock tsc TS2589s on node-bound `class extends Tag()(…).pipe(withReadiness(…))` (expands Svc).
   // Readiness `svc` is still `ServiceOf<S, any>` from the inferred tag; Self is widened so class
-  // `extends` does not recurse on the declaring type — see test/resource-withreadiness-pipe.test-d.ts.
+  // `extends` does not recurse on the declaring type — see test/hyperlink-withreadiness-pipe.test-d.ts.
   //
   // data-last (pipe): `tag.pipe(Hyperlink.withReadiness(fn))` — service type derived from the piped tag.
   <T extends PipeableTag>(

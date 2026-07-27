@@ -64,7 +64,7 @@ After any create/edit, paste the **full changeset file** in owner chat:
 
 ```markdown
 ---
-"@nikscripts/effect-pm": minor
+"hyperlink-ts": minor
 ---
 
 Full release note body…

@@ -28,20 +28,20 @@ of React/Ink/recharts.
 | Import | Purpose |
 | --- | --- |
 | `…/Hyperlink` | `Hyperlink.Tag` / `Host` / `client` / `connect` / `connectHttp` / **`serve`** / **`serveRemote`** / **`httpServer`** + readiness (**`withReadiness`** / **`readinessOf`** / **`allReady`**) |
-| `…/QueueContract` | `queueTag` (light tag), `serve`, `serveRemote`, `layer` for a managed queue |
-| `…/Process` | `Process.Tag` (light tag), `schedule` / `window` / `at`, `serve`, `serveRemote`, `layer` for a managed/polling process — plus `Process.Schedule`, a run-windows manager as its own resource |
-| `…/ApiMetrics`, `…/ApiUsageSchema`, `…/HttpApiHyperlink` | outbound-API usage observability — an `ApiMetrics.Tag` tap over an `HttpApiHyperlink.Service` client |
+| `…/WorkPool` | `queueTag` (light tag), `serve`, `serveRemote`, `layer` for a managed queue |
+| `…/Daemon` | `Daemon.Tag` (light tag), `schedule` / `window` / `at`, `serve`, `serveRemote`, `layer` for a managed/polling daemon — plus `Daemon.Schedule`, a run-windows manager as its own hyperlink |
+| `…/ApiMetrics`, `…/ApiUsageSchema`, `…/HttpApiClient` | outbound-API usage observability — an `ApiMetrics.Tag` tap over an `HttpApiClient.Service` client |
 | `…/HostStatus` | the reserved host status resource (auto-served by `httpServer`): `status` / `ping` / `logs` |
 | `…/Group` | `Group.Tag` — the nestable navigation tree |
 | `…/MultiHost` | combine a field across N instances of one resource (`combineQuery` / `combineStream` / `Combine`) — isomorphic |
 | `…/HistoryStore`, `…/DurableQueueStore` | history backfill + durable queue |
-| `…/ProcessStore`, `…/ProcessStorage`, `…/RuntimeStorage`, `…/Logs` | storage facets + structured logs |
+| `…/DaemonStore`, `…/DaemonStorage`, `…/RuntimeStorage`, `…/Logs` | storage facets + structured logs |
 | `…/storage/sqlite` · `/redis` | durable storage backends |
 | **`…/cli`** | `Hyperlink.cli` — CLI + default TUI from a Group or tag record |
 | **`…/tui`** | the reactive binding + terminal primitives for Ink dashboards |
 | **`…/web`** | React widgets + the reactive binding for browser dashboards — incl. the host **`HealthBoard`** (die → degraded resources + per-host cards) and `HyperlinkReadinessBanner` |
 
-> **Browser bundles:** import the **light** tags from `…/QueueContract` / `…/Process`
+> **Browser bundles:** import the **light** tags from `…/WorkPool` / `…/Daemon`
 > (not the engine layers) so the worker engine + node deps stay out of the browser build.
 
 ## 2a. Browser safety & tree-shaking
@@ -52,8 +52,8 @@ an ESM tree-shaking bundler (Vite, esbuild, Rollup, webpack 5) a browser build p
 it imports.
 
 - **Browser-safe (no node built-ins):** `…/web`, `…/Group`, `…/Hyperlink`
-  (`client`/`connect`/`connectHttp`/`Host`), `…/MultiHost`, `…/QueueContract` (`queueTag` + contract),
-  `…/Process` (`Process.Tag`), `…/cli`, `…/tui`.
+  (`client`/`connect`/`connectHttp`/`Host`), `…/MultiHost`, `…/WorkPool` (`queueTag` + contract),
+  `…/Daemon` (`Daemon.Tag`), `…/cli`, `…/tui`.
 - **Node-only — never reach these from browser code:** `…/storage/sqlite` (pulls
   `@effect/sql-sqlite-node`), `…/storage/redis`, and the HTTP
   server itself (`NodeHttpServer`) plus any worker/storage layers. (`httpServer` / `serve`
@@ -61,7 +61,7 @@ it imports.
 
 **The rule that actually bites:** keep the **contract** (light tags) in a different module from
 the **implementation** (engine layers, storage, worker `effect`s, the server). A module that
-defines a tag *and* imports its `QueueHyperlink.layer` / `Hyperlink.httpServer` / a storage layer is
+defines a tag *and* imports its `WorkPool.layer` / `Hyperlink.httpServer` / a storage layer is
 node-coupled — importing it in the browser just to get the tag drags the whole server in.
 
 ```ts
@@ -127,15 +127,15 @@ A `Host` lets a group of resources be served on one port (§4) and reached over 
 ```ts
 import { Schema } from "effect";
 import { Hyperlink } from "hyperlink-ts/Hyperlink";
-import { queueTag } from "hyperlink-ts/QueueHyperlink";
-import * as Process from "hyperlink-ts/Process";
+import { queueTag } from "hyperlink-ts/WorkPool";
+import * as Daemon from "hyperlink-ts/Daemon";
 import { Group } from "hyperlink-ts/Group";
 
 export class LeagueHost extends Hyperlink.Host<LeagueHost>("nwsl/host") {}
 
 const Job = Schema.Struct({ id: Schema.String });
 export class RosterQueue extends queueTag<RosterQueue>()("nwsl/Roster", Job, { host: LeagueHost }) {}
-export class SeasonMatches extends Process.Tag<SeasonMatches>()("nwsl/Season", { host: LeagueHost }) {}
+export class SeasonMatches extends Daemon.Tag<SeasonMatches>()("nwsl/Season", { host: LeagueHost }) {}
 
 // the navigation tree — members may be nested groups or live on different hosts
 export class Nwsl extends Group.Tag<Nwsl>("nwsl")({ RosterQueue, SeasonMatches }) {}
@@ -151,20 +151,20 @@ import { Effect, Layer } from "effect";
 import { createServer } from "node:http";
 import { NodeHttpServer, NodeRuntime } from "@effect/platform-node";
 import { Hyperlink } from "hyperlink-ts/Hyperlink";
-import { serve as queueServe } from "hyperlink-ts/QueueHyperlink";
-import { serve as processServe } from "hyperlink-ts/Process";
+import { serve as queueServe } from "hyperlink-ts/WorkPool";
+import { serve as daemonServe } from "hyperlink-ts/Daemon";
 import { HistoryStore } from "hyperlink-ts/HistoryStore";
 import * as Logs from "hyperlink-ts/Logs";
-import * as ProcessStorage from "hyperlink-ts/ProcessStorage";
+import * as DaemonStorage from "hyperlink-ts/DaemonStorage";
 
 const LeagueServer = Hyperlink.httpServer([
   queueServe(RosterQueue, { effect: (job) => loadRoster(job) }),
-  processServe(SeasonMatches, { effect: pollSeason }),
+  daemonServe(SeasonMatches, { effect: pollSeason }),
 ]).pipe(
   Layer.provide(HistoryStore.layerMemory()), // metrics.query backfill (or SQLiteHistoryStore)
   Layer.provide(Logs.layer),
   Layer.provide(Logs.persistLayer(LeagueHost)),
-  Layer.provide(ProcessStorage.layer),       // LogStore backend for durable logs
+  Layer.provide(DaemonStorage.layer),       // LogStore backend for durable logs
   Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port: 3001 })),
 );
 
@@ -194,8 +194,8 @@ const clients = Layer.mergeAll(
 //   const p = yield* SeasonMatches; yield* p.start;
 ```
 
-To run a resource **in-process** instead, provide its `.layer` (from `…/QueueContract` /
-`…/Process`) rather than a client — the call sites don't change.
+To run a resource **in-process** instead, provide its `.layer` (from `…/WorkPool` /
+`…/Daemon`) rather than a client — the call sites don't change.
 
 ## 6. Drive them
 
@@ -219,7 +219,7 @@ NodeRuntime.runMain(
 ```
 
 Each contract query/mutate becomes a verb (flags from the payload schema); streams are
-skipped — use their one-shot peers (`status.get`, `metrics.query`). Per-resource logs are
+skipped — use their one-shot peers (`status.get`, `metrics.query`). Per-hyperlink logs are
 read via `Hyperlink.logs` / `NodeStatus.logs` (see [`docs/LOGS.md`](../../LOGS.md)), not as
 CLI stream verbs on the resource contract.
 
@@ -230,7 +230,7 @@ Both render off the **same** reactive binding (Ink is React). Provide an `AtomRe
 `clients`, and read them with `useAtomValue` / drive controls with `useAtomSet`. Compose web
 widgets from `hyperlink-ts/web`, or terminal widgets from `hyperlink-ts/tui`
 (`bar`, `spark`, `compact`, `statusColor`, …). The `examples/web-dashboard` and
-`examples/resource-tui` trees (shipped in the package) are the working reference — copy their
+`examples/hyperlink-tui` trees (shipped in the package) are the working reference — copy their
 `queue-data` data layer and widgets as a starting point.
 
 The batteries-included `<Dashboard runtime={Atom.runtime(layer)} group={Root} />` renders the
@@ -239,7 +239,7 @@ type** — queue (cards + chart + controls + logs), scheduled process (controls 
 with a fullscreen weekly view), and API-metrics (a paged card + usage chart + sortable endpoint
 table). It classifies each leaf by the contract's **stamped kind** (`Hyperlink.kindOf` — see the
 [Hyperlink API](../HYPERLINK-API.md#resource-kinds)), not by sniffing the spec, so a new contract in
-the tree renders as itself rather than a mis-typed cell. The `examples/resource-web` tree (one of
+the tree renders as itself rather than a mis-typed cell. The `examples/hyperlink-web` tree (one of
 each unique thing) is the working reference.
 
 > Keep concurrent live streams per view ≤ ~5: a browser caps an origin at ~6 HTTP/1.1

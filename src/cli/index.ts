@@ -5,7 +5,7 @@
  * control surface counterpart to `<Dashboard group={Fleet} />`.
  *
  * - `hyperlink` → open the TUI at the root
- * - `hyperlink my-queue` → open the TUI focused on that resource (or group subtree)
+ * - `hyperlink my-queue` → open the TUI focused on that hyperlink (or group subtree)
  * - `hyperlink my-queue pause` → run-and-exit CLI verb
  *
  * The TUI is optional: handlers call {@link openTui}, which reads {@link Tui} via
@@ -202,7 +202,7 @@ const buildCommand = (tree: CliTree, rootName: string) => {
       );
   const width = Object.keys(rootFocus).reduce((max, name) => Math.max(max, name.length), 0);
   const ls = Command.make("ls").pipe(
-    Command.withDescription("List resources (command name → id)."),
+    Command.withDescription("List hyperlinks (command name → id)."),
     Command.withHandler(() =>
       Console.log(
         Object.entries(rootFocus)
@@ -212,7 +212,7 @@ const buildCommand = (tree: CliTree, rootName: string) => {
     ),
   );
   return Command.make(rootName).pipe(
-    Command.withDescription("Resource CLI — bare path opens the TUI when configured."),
+    Command.withDescription("Hyperlink CLI — bare path opens the TUI when configured."),
     Command.withHandler(() => openTui({ tree, path: [] })),
     Command.withSubcommands([...namespaces, ls]),
   );
@@ -224,7 +224,7 @@ export type CliOptions = {
 };
 
 /**
- * Args runner from the options overload of {@link cli}. Provide resource + TUI layers
+ * Args runner from the options overload of {@link cli}. Provide hyperlink + TUI layers
  * when you run it.
  *
  * @public

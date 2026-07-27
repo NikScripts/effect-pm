@@ -1,37 +1,39 @@
 # API changes you should know — 2026-07-16
 
+> **Naming:** read as WorkPool / Daemon / Gate / Hyperlink / hyperlink-ts (pre-rebrand names purged from this file).
+
 Everything below is on `integration`. **★ = breaking.** Grouped by what you'd actually change in your code.
 
 ## Transport is now derived from the node — you can't dial the wrong protocol
 
-A `Resource.Node` carries **how** to reach it, not just where:
+A `Hyperlink.Node` carries **how** to reach it, not just where:
 
 ```ts
 type ProtocolKind = "http" | "socket";
 
-class Droplet extends Resource.Node<Droplet>("droplet", 7777) {}                   // kind "http" (port)
-class Live    extends Resource.Node<Live>("live", { url: "wss://live/rpc" }) {}     // kind "socket" (inferred)
-class Push    extends Resource.Node<Push>("push", { url: "/rpc", kind: "socket" }) {} // explicit for a path
+class Droplet extends Hyperlink.Node<Droplet>("droplet", 7777) {}                   // kind "http" (port)
+class Live    extends Hyperlink.Node<Live>("live", { url: "wss://live/rpc" }) {}     // kind "socket" (inferred)
+class Push    extends Hyperlink.Node<Push>("push", { url: "/rpc", kind: "socket" }) {} // explicit for a path
 ```
 
-`Resource.connect` is now **dual** and derives the transport from the node's `kind`:
+`Hyperlink.connect` is now **dual** and derives the transport from the node's `kind`:
 
 ```ts
-Droplet.pipe(Resource.connect)              // derives http/socket from the node — mismatch is impossible
-Droplet.pipe(Resource.connect(protocol))    // data-last: an explicit RpcClient.Protocol
-Droplet.pipe(Resource.connectHttp)          // kind shortcuts (Effect's Http / Socket vocab)
-Droplet.pipe(Resource.connectSocket)
-Resource.connect(Droplet) / connect(node, protocol)   // data-first
+Droplet.pipe(Hyperlink.connect)              // derives http/socket from the node — mismatch is impossible
+Droplet.pipe(Hyperlink.connect(protocol))    // data-last: an explicit RpcClient.Protocol
+Droplet.pipe(Hyperlink.connectHttp)          // kind shortcuts (Effect's Http / Socket vocab)
+Droplet.pipe(Hyperlink.connectSocket)
+Hyperlink.connect(Droplet) / connect(node, protocol)   // data-first
 ```
 A node with **no** declared address throws `UnaddressedNode` at connect (was silent). The names follow Effect exactly (`connectHttp`/`connectSocket`, matching `layerProtocolHttp`/`layerProtocolSocket`).
 
 ## New: eager reachability check (+ deep classification)
 
 ```ts
-yield* Resource.verifyConnection(Droplet)                       // NodeUnreachable if the peer is down
-yield* Resource.verifyConnection(Droplet, { url: "/rpc", timeout: "1 second" })
-yield* Resource.verifyConnection(Droplet, { deep: true })       // + NodeStatus RPC
-yield* Resource.verifyConnection(Droplet, { deep: true, resource: "app/Emails" })
+yield* Hyperlink.verifyConnection(Droplet)                       // NodeUnreachable if the peer is down
+yield* Hyperlink.verifyConnection(Droplet, { url: "/rpc", timeout: "1 second" })
+yield* Hyperlink.verifyConnection(Droplet, { deep: true })       // + NodeStatus RPC
+yield* Hyperlink.verifyConnection(Droplet, { deep: true, resource: "app/Emails" })
 // → ProtocolUnanswered | ServiceNotServed | ServiceNotReady
 ```
 Tier-1 is a cheap transport probe (`selectEndpoint`, or `{ all: true }`). `{ deep: true }` dials auto-served `NodeStatus`. Escape-hatch http→ws calls also remap to tagged `ProtocolMismatch` (not an opaque `RpcClientDefect`). Nodeless `client(tag)` without ambient Protocol fails as tagged `MissingClientProtocol`.
@@ -41,25 +43,25 @@ Tier-1 is a cheap transport probe (`selectEndpoint`, or `{ all: true }`). `{ dee
 The dashboard's "connecting… forever" bug (`client(nodelessTag).pipe(provide(node))`) used to type-check and then throw at runtime. A node's value is now a wrapper, so:
 
 ```ts
-Resource.client(NodeStatus.Tag).pipe(Layer.provide(node))   // ★ now a COMPILE ERROR
-Resource.client(NodeStatus.Tag, node)                       // ✅ the correct form (reads + unwraps the node)
+Hyperlink.client(NodeStatus.Tag).pipe(Layer.provide(node))   // ★ now a COMPILE ERROR
+Hyperlink.client(NodeStatus.Tag, node)                       // ✅ the correct form (reads + unwraps the node)
 ```
-**If you read a node's value as a protocol directly** — `Layer.effect(RpcClient.Protocol, node)` — that no longer compiles. Use `Resource.client(tag, node)`.
+**If you read a node's value as a protocol directly** — `Layer.effect(RpcClient.Protocol, node)` — that no longer compiles. Use `Hyperlink.client(tag, node)`.
 
 ## ★ The http transport dies in a browser (was a warning)
 
 ```ts
-Resource.httpClient(node) / clientHttp / connectHttp / protocolHttp   // in a browser → dies (HttpClientInBrowser)
-Resource.socketClient(node)                                          // ✅ the browser transport
+Hyperlink.httpClient(node) / clientHttp / connectHttp / protocolHttp   // in a browser → dies (HttpClientInBrowser)
+Hyperlink.socketClient(node)                                          // ✅ the browser transport
 ```
 The http transport starves at the browser's ~6-connection cap and shipped a blank dashboard; that's now a loud death, not an ignorable warning. **No-op in Node** (servers/tests/CLI unaffected).
 
 ## Reminder (landed slightly earlier, in case you missed it)
 
-- `Resource.wsServer([...])` is the WebSocket server — replaced `httpServer(..., { protocol: "websocket" })`.
-- Client protocols: `Resource.protocolHttp(url)` / `Resource.protocolWebsocket(url)`.
+- `Hyperlink.wsServer([...])` is the WebSocket server — replaced `httpServer(..., { protocol: "websocket" })`.
+- Client protocols: `Hyperlink.protocolHttp(url)` / `Hyperlink.protocolWebsocket(url)`.
 
 ## Not changing (so you don't wonder)
 
-- **Loose-fields payloads were already rejected** — `QueueResource.Tag(...)({ payload: Schema.Struct({...}) })` is required; `{ payload: { …fields } }` and bare `{ …fields }` don't compile. (No change this cycle; noting it because it was on the "impossible" list and turned out already-enforced.)
+- **Loose-fields payloads were already rejected** — `WorkPool.Tag(...)({ payload: Schema.Struct({...}) })` is required; `{ payload: { …fields } }` and bare `{ …fields }` don't compile. (No change this cycle; noting it because it was on the "impossible" list and turned out already-enforced.)
 - `connectFleet` was **not** shipped (a cast-free version wasn't reachable; the manual `Layer.mergeAll(transport, client(A).pipe(provide(transport)), …)` stays the blessed, type-safe pattern).

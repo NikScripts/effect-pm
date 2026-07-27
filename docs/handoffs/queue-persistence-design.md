@@ -1,5 +1,7 @@
 # Queue persistence — design
 
+> **Naming:** read as WorkPool / Daemon / Gate / Hyperlink / hyperlink-ts (pre-rebrand names purged from this file).
+
 ---
 
 ## Decisions locked (2026-07-05) — optionality model
@@ -39,7 +41,7 @@ an in-memory form is *coherent* for observability but a *contradiction* for dura
 ---
 
 
-The optimal-from-first-principles design for persisting a `QueueResource` (durability +
+The optimal-from-first-principles design for persisting a `WorkPool` (durability +
 observability), and the decision on whether to build on Effect's `PersistedQueue` or
 take it as inspiration.
 

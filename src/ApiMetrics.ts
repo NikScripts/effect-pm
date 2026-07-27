@@ -7,7 +7,7 @@
  *
  * Kind-keyed shared Spec is available on Hyperlink as
  * `Hyperlink.Tag(wireKey, spec)` → `Factory<Self>()(instanceKey)` (see
- * `examples/forms/resource/shared-tag-wire.ts`). ApiMetrics has **not** migrated yet — metrics
+ * `examples/forms/hyperlink/shared-tag-wire.ts`). ApiMetrics has **not** migrated yet — metrics
  * product shape (handle nest vs sibling tag) is still open.
  *
  * @remarks

@@ -18,7 +18,7 @@ Module: `effect/unstable/persistence/RateLimiter` (pinned with our `effect` dep;
 | **`RateLimiter`** | `consume` / `adaptiveConsume` / `adaptiveFeedback` |
 | **`RateLimiterStore`** | Backing counters (pluggable) |
 | **`layer`** | `RateLimiter` from current store |
-| **`layerStoreMemory`** | Process-local store |
+| **`layerStoreMemory`** | Daemon-local store |
 | **`layerStoreRedis` / `makeStoreRedis`** | Shared store via Lua (true multi-process) |
 | **`makeWithRateLimiter`** | Wrap an effect: consume then run (delay if needed) |
 | **`makeSleep`** | Sleep until permitted (`onExceeded: "delay"`) |
@@ -170,7 +170,7 @@ No sibling `ApiMetrics.Tag`. Dashboard dials the Gate Tag’s nest only.
 | Layer | Provides | Needs | Notes |
 |-------|----------|-------|--------|
 | **`RateLimiter.layer`** | `RateLimiter` | `RateLimiterStore` | Service only |
-| **`RateLimiter.layerStoreMemory`** | `RateLimiterStore` | — | Process-local |
+| **`RateLimiter.layerStoreMemory`** | `RateLimiterStore` | — | Daemon-local |
 | **`RateLimiter.layerStoreRedis(opts?)`** | `RateLimiterStore` | `Redis.Redis` | Lua atomic; fleet-capable |
 | **`RateLimiter.layerStoreRedisConfig`** | `RateLimiterStore` | `Config` + `Redis` | Config-wrapped Redis |
 

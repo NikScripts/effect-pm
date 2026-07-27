@@ -28,7 +28,7 @@ All persistence is one of these shapes:
   value; pass a filename for crash-surviving durability. **Model: `ShardMap`**
   (`effect_pm_shard_map` in `src/internal/shardMapSql.ts`).
 
-New persistence uses one of these three — nothing else. Do not event-source a Map "because Process
+New persistence uses one of these three — nothing else. Do not event-source a Map "because Daemon
 does history."
 
 {#default-or-serviceoption .must appliesTo=src}

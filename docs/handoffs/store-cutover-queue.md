@@ -1,4 +1,6 @@
-# Store cutover — Queue (my target)
+# Store cutover — WorkPool (typed queue) (my target)
+
+> **Naming:** read as WorkPool / Daemon / Gate / Hyperlink / hyperlink-ts (pre-rebrand names purged from this file).
 
 Prereq: `store-cutover-00-store-core.md` (shared decisions — **the store is a defaulted service; resolve it
 as a declared dependency; NEVER `serviceOption`**).
@@ -14,8 +16,8 @@ as a declared dependency; NEVER `serviceOption`**).
    No `success` schema → `Completed { entry, elapsed }` only. No `error` schema → `Failed.error: string`
    (`String` of `findErrorOption` / `squash`), not a separate `cause` field on the store row. Mirrors
    `makeProcessExecutionEvent(success, error)` — optional typed fields appear iff the schema is present.
-3. **CustomQueue** shares optional `success` / `error` on the config object (no positional schemas) — see
-   `store-cutover-customqueue.md`.
+3. **untyped WorkPool** shares optional `success` / `error` on the config object (no positional schemas) — see
+   `store-cutover-workpool-untyped.md`.
 4. **Always write thorough tests** — no approval needed for tests, ever.
 
 ## Done
@@ -25,11 +27,11 @@ as a declared dependency; NEVER `serviceOption`**).
 - Store tightening + `layerDefaultMemory` (shipped; see store-core report).
 - [x] `buildQueueImpl` resolves the store via `materializeEngineQueueStoreForItem` (declared `Storage`
       dependency — **no `serviceOption`**). `layer` / `serve` / `serveRemote` merge `Store.layerDefaultMemory`.
-- [x] `Resource.builtResource` + `grantLocal` on `layer` / `serve` / `serveRemote` (worker `R` discharged
+- [x] `Hyperlink.builtHyperlink` + `grantLocal` on `layer` / `serve` / `serveRemote` (worker `R` discharged
       at grant; remote path defers via wire invoke).
 - [x] Config-object-only `Tag` with optional `success` / `error` on the config object.
 - [x] `publishEvent` persists via materialized engine store (`config.store` / `recordToStore` at source).
-- [x] Legacy `QueueResourceStore` facet deleted from `src/` (engine no longer dual-writes).
+- [x] Legacy `WorkPoolStore` facet deleted from `src/` (engine no longer dual-writes).
 
 ## Future (not this cutover — no code changes in Agent 01)
 
