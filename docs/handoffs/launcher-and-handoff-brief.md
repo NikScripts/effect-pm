@@ -84,6 +84,13 @@
     - **Injection is not the protocol** — app chooses how the child learns the token (`ChildProcess` env/argv/etc. via Effect process options, or later bootstrap). Optional **Effect `Config`** helper for local Node; not required.
     - Child **rejects** `assume` until Ready. Status may mirror `ownership: "launcher" | "self"`.
     - Rejected as default: nullary `assume()`; env-as-wire-contract; bidirectional launcher server for v1.
+19. **Ready / handoff failure channels (tagged only).**
+    - Reuse verify stack where it fits: `NodeUnreachable` (and kin), `ServiceNotReady` as **transient** while polling.
+    - **New:** `Launcher.ReadyTimedOut` `{ node, resources?, timeout }` — bound wait expired.
+    - **New:** `Launcher.ChildExited` `{ node, code? }` — child dies during `awaitReady`.
+    - **New (assume):** `AssumeTokenMismatch` / `AssumeTokenReused` / `AssumeNotReady` — Schema/TaggedError.
+    - Poll with Effect `Schedule` + `Duration` from `ready.timeout` (default **`"30 seconds"`** unless Eng finds a better house default).
+    - No native `Error`, no message-string matching; tests use `TestClock`.
 
 Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.md) remain **reference only** unless re-locked here.
 
@@ -103,8 +110,7 @@ Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.m
 
 ### Track A — baking (not locked)
 
-- Failure / timeout: reuse `ServiceNotReady` / `NodeUnreachable` / … + Effect bounded poll / `Schedule` (exact tagged error for “ready timed out”).
-- Assume error schema field list; token entropy / format.
+- Token entropy / format (Effect `Random` / UUID — opaque string, redacted in logs).
 - Whether `Launcher` lives under `hyperlink-ts/Launcher` with Node-only export (like other platform entrypoints).
 
 ---
