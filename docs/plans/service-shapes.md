@@ -154,7 +154,7 @@ ref (Eng’d)
   like push, but surface is Subscribable, not plain A
 ```
 
-**Product question for owner:** is “plain `A` that stays live” required, or is `ref` + adapters enough for dashboards? That single answer decides whether `cell`/`live` is in scope or parked forever.
+**Product question for owner:** ~~is “plain `A` that stays live” required?~~ **Answered (2026-07-27):** `ref` + adapters enough — `cell` parked/rejected.
 
 ---
 
