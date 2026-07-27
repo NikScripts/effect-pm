@@ -25,13 +25,18 @@
 8. **`awaitReady` aggregation = allReady by default, configurable escape hatch.**
    - **Default:** every served Hyperlink on the node must be ready (`allReady`-shaped).
    - **Escape hatch:** caller may narrow (critical subset / Lookup-first / staged bring-up) without a second readiness system — same `withReadiness` substrate, scoped set.
+9. **Ownership ack = first-class node RPC verb** (not a status-poll side effect, not a bring-up-only side channel).
+   - Launcher calls it **after** Ready; child acks “I own myself; launcher may exit.”
+   - Effect/Schema, loud typed failures.
+   - Node status may **mirror** ownership for dashboards; the handshake is the verb.
+   - Exact verb name TBD (`assume` / `acceptOwnership` / …).
 
 Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.md) remain **reference only** unless re-locked here.
 
 ### Track A — baking (not locked)
 
-- Concrete API names for the parent phases and the child ack verb.
-- Whether the ownership ack is a new node RPC verb or an extension of the readiness/status surface (still distinct semantically).
+- Concrete API names for parent phases + ownership verb.
+- Module home for the parent API (`Launcher` vs `Node` helpers vs CLI-only).
 
 ---
 
