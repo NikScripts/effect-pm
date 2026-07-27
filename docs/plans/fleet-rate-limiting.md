@@ -255,13 +255,14 @@ Fleet rate limiting is **first-class Gate substrate**. HttpApiClient update **us
 
 ## Open decisions (owner)
 
-1. **Fleet store v1:** Effect **Redis** only (what ships), or also Eng a **SQL `RateLimiterStore`** to match AppStore/DurableQueue SQLite story?  
-2. **Distributed + memory:** docs-only vs Soft fail-loud?  
-3. **Default `onExceeded` for Gates:** `delay` (WorkPool-like) vs `fail` (Effect default)?  
-4. **Nest name:** `observe` vs `limit` vs `metrics`?  
-5. **Per-route keys** in v1 or whole-client key only?
+1. ~~How is the store selected?~~ **LOCKED (owner):** presence-driven `serviceOption(RateLimiterStore)` like `DurableQueueStore`; Soft memory when absent.  
+2. **Fleet store v1 backend:** Effect **Redis** only, or also Eng SQL `RateLimiterStore`?  
+3. **Distributed + memory Soft:** docs-only vs fail-loud?  
+4. **Default `onExceeded` for Gates:** `delay` vs `fail`?  
+5. **Nest name:** `observe` / `limit` / `metrics`?  
+6. **Per-route keys** in v1 or whole-client key only?
 
-**Recommended leans:** Soft-default **memory** (WorkPool Soft recipe); fleet override = Effect **`layerStoreRedis`** v1; SQL RateLimiterStore only if you want one durable dialect for everything (extra Eng — not upstream). Docs for distributed+memory; Gate `onExceeded: "delay"`; nest `observe`; whole-client key v1.
+**Recommended leans:** Redis fleet backend v1; docs for distributed+memory; `onExceeded: "delay"`; nest `observe`; whole-client key v1.
 
 ---
 
