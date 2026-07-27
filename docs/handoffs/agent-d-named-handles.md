@@ -34,7 +34,7 @@
 | Name | Where | Meaning today |
 |------|--------|----------------|
 | **`WorkPool<…>`** | `src/WorkPool.ts` interface | **Contract** named handle — what `WorkPool.Tag` / `yield*` uses |
-| **`QueueHandle`** | `src/internal/workPool.ts` | Still a **TEMP alias → `EngineQueueHandle`** (engine path). Comment marks M1b: should become the contract projection or stay internal-only. **Not** what Tag hovers as. |
+| **`QueueHandle`** | `src/internal/workPool.ts` | **Internal-only** TEMP alias → `EngineQueueHandle` (engine path). No longer re-exported from `WorkPool`. **Not** what Tag hovers as. |
 | **`PriorityHandle`** | WorkPool priority | Still engine-shaped (`EEnqueue` param) — not on the `WorkPool<>` contract naming path yet |
 
 ---
