@@ -17,8 +17,7 @@ import {
   wireKeySym,
   type Subscribable,
 } from "../Hyperlink";
-import { connect } from "../Node";
-import type { NodeKey, AddressedNode, Status as NodeStatusSnapshot } from "../Node";
+import type { NodeKey, Status as NodeStatusSnapshot } from "../Node";
 import * as LogEntry from "../LogEntry";
 import {
   kind as queueKind,
@@ -465,7 +464,7 @@ const hyperlinkLogsAtom = <R, ER>(
         Effect.map((entries) => entries.filter(LogEntry.hasKey(resourceKey)).map(toLogLine)),
         Effect.orDie,
       ),
-    }).pipe(Stream.provide(nodeConn(node))),
+    }),
   );
 
 /** Build (once per runtime+tag) the atom bundle for a queue tag. */
@@ -812,21 +811,15 @@ export const apiBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: ApiTag<R
   return bundle;
 };
 
-// (comment removed)
-// so provide it as the ambient `RpcClient.Protocol`. The tag-walk (`nodesOf`) erases the node's
-// identity, and the runtime supplies its transport via `connect`, so we restate the resolved
-// requirement — the same contained boundary assertion `Hyperlink.client` makes for node-bearing tags.
-// The 2-arg `client(tag, node)` form reads the node's value and unwraps its transport — the sanctioned
-// way to point a nodeless reserved tag at a specific node. (The node is exposed at runtime via
-// `connect`, so we erase its identity to `never` — the same contained boundary assertion Hyperlink.client
-// makes for node-bearing tags.)
-const nodeConn = (node: NodeKey<unknown>) =>
-  // Connect the node so `yield* node` yields its handle (protocol + status/logs/ping). The list is
-  // heterogeneous, so the node is erased; these are real addressed dashboard nodes.
-  connect(node as AddressedNode<unknown>);
-
 /** Build (once per runtime+node) the atom bundle for a node's live status — read from the
- *  connected node handle's status/logs accessors. */
+ *  node handle already in the Atom.runtime (typically `Hyperlink.ws(Node, { url })` /
+ *  `Node.connect*` with the browser's same-origin override).
+ *
+ *  Do **not** auto-`Node.connect` from the tag's stamped url here: that ignores the runtime's
+ *  URL override (e.g. vite-proxied `"/rpc"`) and dials the tag's server-side address
+ *  (`http://127.0.0.1:…`), which hangs the HealthBoard on "connecting…" while resource cards
+ *  (which use the overridden transport) still look fine — and HealthBoard used to report
+ *  "all healthy" for that undefined-status state. */
 export const nodeStatusBundle = <R, ER>(
   runtime: DashboardRuntime<R, ER>,
   ref: NodeRef,
@@ -839,17 +832,9 @@ export const nodeStatusBundle = <R, ER>(
   const bundle: NodeBundle = {
     id: ref.id,
     status: runtime.atom(
-      // Provide the per-node client at the STREAM level so its scope spans the whole subscription.
-      // (Providing it to the producing Effect tore the scoped RPC client down as soon as that effect
-      // returned the stream, interrupting it — "all fibers interrupted".)
-      Stream.unwrap(Effect.map(ref.node, (h) => h.status.changes)).pipe(
-        Stream.provide(nodeConn(ref.node)),
-        Stream.orDie,
-      ),
+      Stream.unwrap(Effect.map(ref.node, (h) => h.status.changes)).pipe(Stream.orDie),
     ),
     logs: runtime.atom(
-      // `cachedAccumulator`'s live + history both read the node's status; provide the per-node
-      // connection once over the combined stream (stream-scoped so it spans the subscription).
       cachedAccumulator({
         key: logsKey,
         cap: 300,
@@ -861,7 +846,7 @@ export const nodeStatusBundle = <R, ER>(
           Effect.map((entries) => entries.map(toLogLine)),
           Effect.orDie,
         ),
-      }).pipe(Stream.provide(nodeConn(ref.node))),
+      }),
     ),
     // Ready-count over time, accumulated client-side from the status stream — a compact readiness
     // sparkline (no server change). Dips when a resource degrades (e.g. a dependency blips).
@@ -873,7 +858,7 @@ export const nodeStatusBundle = <R, ER>(
           Stream.map((st) => st.resources.filter((x) => x.ready).length),
           Stream.orDie,
         ),
-      }).pipe(Stream.provide(nodeConn(ref.node))),
+      }),
     ),
   };
   cache.set(ref.id, bundle);

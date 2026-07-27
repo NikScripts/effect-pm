@@ -2156,8 +2156,16 @@ export const HealthBoard = (props: {
   );
   const total = statuses.reduce((n, { s }) => n + (s?.resources.length ?? 0), 0);
   const ready = statuses.reduce((n, { s }) => n + (s?.resources.filter((x) => x.ready).length ?? 0), 0);
+  const connected = statuses.filter(({ s }) => s !== undefined).length;
+  const pending = connected < nodes.length;
   const degradedNodes = statuses.filter(({ s }) => s !== undefined && (!s.up || s.status === "degraded")).length;
-  const healthy = degradedNodes === 0;
+  const healthy = !pending && degradedNodes === 0;
+  const headline = pending
+    ? `connecting… ${connected}/${nodes.length}`
+    : healthy
+      ? "all healthy"
+      : `⚠ ${degradedNodes}/${nodes.length} degraded`;
+  const headlineColor = pending ? "#64748b" : healthy ? "#22c55e" : "#eab308";
   return (
     <div className="flex h-[100dvh] flex-col gap-3 overflow-y-auto safe-area landscape:h-auto landscape:min-h-[100dvh]">
       <header className="flex items-center gap-2">
@@ -2165,12 +2173,15 @@ export const HealthBoard = (props: {
           ← back
         </Button>
         <strong className="flex-1 truncate text-base">⬢ Health</strong>
-        <span className="text-sm font-medium" style={{ color: healthy ? "#22c55e" : "#eab308" }}>
-          {healthy ? "all healthy" : `⚠ ${degradedNodes}/${nodes.length} degraded`}
+        <span className="text-sm font-medium" style={{ color: headlineColor }}>
+          {headline}
         </span>
       </header>
       <div className="grid grid-cols-3 gap-2 text-center">
-        <HealthStat label="nodes ok" value={`${nodes.length - degradedNodes}/${nodes.length}`} />
+        <HealthStat
+          label="nodes ok"
+          value={pending ? `${connected}/${nodes.length}` : `${nodes.length - degradedNodes}/${nodes.length}`}
+        />
         <HealthStat label="resources ready" value={`${ready}/${total}`} />
         <HealthStat
           label="needs attention"
