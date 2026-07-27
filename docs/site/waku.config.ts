@@ -45,8 +45,18 @@ const devCompression = {
 const watchDocsContent = {
   name: "watch-docs-content",
   configureServer(server: { watcher: { add: (paths: ReadonlyArray<string>) => void } }) {
+    // Keep in sync with src/lib/content.ts globs / scripts/docsContentWalk.ts roots.
     server.watcher.add(
-      ["../standards", "../guides", "../index.md"].map((p) => fileURLToPath(new URL(p, import.meta.url))),
+      [
+        "../index.md",
+        "../examples.md",
+        "../examples",
+        "../getting-started",
+        "../resources",
+        "../guides",
+        "../observe",
+        "../standards",
+      ].map((p) => fileURLToPath(new URL(p, import.meta.url))),
     );
   },
 };
