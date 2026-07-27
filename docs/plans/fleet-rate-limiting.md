@@ -184,23 +184,55 @@ queueRateLimiterLayer = Layer.provide(RateLimiter.layer, RateLimiter.layerStoreM
 Layer.provide(…, RateLimiter.layerStoreRedis())
 ```
 
-### Soft / SQL — same *recipe* as WorkPool durability, different *port*
+### Presence-driven store — same switch as WorkPool durability
 
-WorkPool’s durability story is **not** the RateLimiter store:
+WorkPool queue durability (**LOCKED pattern** — keep for Gate rate limit):
 
-| Concern | Soft-default | Durable override (HL) |
-|---------|--------------|------------------------|
-| Engine journal / observe | `Store.layerDefaultMemory` | AppStore + SQLite (`Store.Service`) |
-| Queue pending items | (ephemeral) | `DurableQueueStore` + `storage/sqlite` |
-| **Worker rate limit** | **`RateLimiter.layerStoreMemory`** | **`RateLimiter.layerStoreRedis`** (Effect) |
+```ts
+// The layer is the switch — no config flag.
+const durableStoreOption = yield* Effect.serviceOption(DurableQueueStore)
+// Some → store is source of truth
+// None → ephemeral in-memory lanes
+```
 
-So “follow WorkPool durability” for Gates means:
+Gate / HttpApi **rate limit store** follows that, not a config enum:
 
-1. **Soft-default memory** when `rateLimit` is set (R fulfilled) — same Soft pattern as Store.  
-2. **Override by providing a durable store into the layer** so Soft sees it — for RateLimiter that durable path Effect ships is **Redis**, not SQLite.  
-3. If we want **SQL** parity with AppStore/DurableQueue, that is **our** adapter: implement `RateLimiterStore` over `@effect/sql` (not upstream yet). Call that R5 / optional.
+```ts
+// Conceptual Eng
+const storeOpt = yield* Effect.serviceOption(RateLimiterStore)
+const store = Option.getOrElse(storeOpt, () => memoryStore) // Soft fallback — see below
+```
 
-Fail loud if `distributed` / multi-node identity is on and store is still memory-only? **Lean: warn in docs first; optional Soft die later.**
+| | WorkPool `DurableQueueStore` | Gate `RateLimiterStore` |
+|--|------------------------------|-------------------------|
+| Switch | **presence** (`serviceOption`) | **presence** (`serviceOption`) |
+| Config flag? | No | No (`rateLimit: { limit, window, … }` only configures the *policy*) |
+| Absent | Ephemeral queue (no durable default — memory durability is a contradiction) | **Soft memory** `layerStoreMemory` (single-node rate limit is valid) |
+| Present | SQLite / backend layer at root | Redis (Effect) or future SQL adapter at root |
+| Scope escape | Don’t provide the store layer to queues that must stay ephemeral | Same — omit store from that Gate’s provide tree |
+
+**Policy vs store stay separate:**
+
+- `rateLimit?: { limit, window, algorithm?, onExceeded?, key? }` — “this Gate is rate-limited” (like today on WorkPool).  
+- Ambient **`RateLimiterStore`** — where tokens live (memory Soft / Redis fleet / SQL later).
+
+App composition (fleet):
+
+```ts
+Layer.mergeAll(
+  Gate.layer(Github, …),
+  Gate.layer(Slack, …),
+).pipe(
+  Layer.provide(RateLimiter.layerStoreRedis()), // one store → all Gates see it via serviceOption
+  Layer.provide(Redis.layer…),
+)
+```
+
+Single-node / tests: omit store layer → Soft memory (R fulfilled), same Soft spirit as `Store.withDefaultStorage`.
+
+**Not** the AppStore Soft path (`Storage` is never `serviceOption` — cutover law). This is the **durability-plane** pattern (`DurableQueueStore`), which *is* `serviceOption`.
+
+Fail loud if `distributed` + memory Soft only? **Lean: docs first; optional Soft die later.**
 
 ### What we do **not** do in v1
 
@@ -223,13 +255,13 @@ Fleet rate limiting is **first-class Gate substrate**. HttpApiClient update **us
 
 ## Open decisions (owner)
 
-1. **Fleet store v1:** Redis-only (Effect path), or also a Hyperlink `Store` / SQLite adapter for RateLimiterStore?  
+1. **Fleet store v1:** Effect **Redis** only (what ships), or also Eng a **SQL `RateLimiterStore`** to match AppStore/DurableQueue SQLite story?  
 2. **Distributed + memory:** docs-only vs Soft fail-loud?  
 3. **Default `onExceeded` for Gates:** `delay` (WorkPool-like) vs `fail` (Effect default)?  
 4. **Nest name:** `observe` vs `limit` vs `metrics`?  
 5. **Per-route keys** in v1 or whole-client key only?
 
-**Recommended leans:** Redis for fleet v1 (don’t block on HL store adapter); docs + example for distributed+memory; Gate default `onExceeded: "delay"`; nest `observe`; whole-client key v1, per-group later.
+**Recommended leans:** Soft-default **memory** (WorkPool Soft recipe); fleet override = Effect **`layerStoreRedis`** v1; SQL RateLimiterStore only if you want one durable dialect for everything (extra Eng — not upstream). Docs for distributed+memory; Gate `onExceeded: "delay"`; nest `observe`; whole-client key v1.
 
 ---
 
