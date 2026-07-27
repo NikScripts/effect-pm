@@ -133,6 +133,7 @@ const stacks = new Map<string, Stack>();
 // Building a program is seconds-heavy; done at most once per package (plus a rebuild when a file
 // outside the barrel's import graph — e.g. a node-only subpath — shows up, keeping prior roots).
 const buildStack = (pkgDir: string, roots: ReadonlySet<string>): Stack => {
+  const s = slot();
   const compilerOptions: ts.CompilerOptions = {
     module: ts.ModuleKind.ESNext,
     target: ts.ScriptTarget.ESNext,
@@ -143,7 +144,7 @@ const buildStack = (pkgDir: string, roots: ReadonlySet<string>): Stack => {
     allowImportingTsExtensions: true, // effect-smol source imports with explicit `.ts`
     noEmit: true,
     baseUrl: repoRoot,
-    paths: pathsMap,
+    paths: s.pathsMap,
   };
   return Effect.runSync(
     Effect.gen(function* () {
@@ -167,7 +168,7 @@ const buildStack = (pkgDir: string, roots: ReadonlySet<string>): Stack => {
           Layer.provideMerge(
             Layer.mergeAll(
               TsProgram.layer({ entries: [...roots], compilerOptions }),
-              SymbolIndex.layer(locationEntries)
+              SymbolIndex.layer(s.locationEntries)
             )
           )
         )
@@ -179,7 +180,7 @@ const buildStack = (pkgDir: string, roots: ReadonlySet<string>): Stack => {
 // The package stack for a repo-relative file (built/extended lazily); undefined outside the
 // documented trees or before load.
 const stackFor = (relFile: string): Stack | undefined => {
-  if (!loaded) return undefined;
+  if (!slot().loaded) return undefined;
   const pkgDir = packageDirOf(relFile);
   if (pkgDir === undefined) return undefined;
   const abs = nodePath.join(repoRoot, relFile);
