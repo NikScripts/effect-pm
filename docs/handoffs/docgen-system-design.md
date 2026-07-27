@@ -224,7 +224,7 @@ services, writes `api-data-next/`. Any writer change must land in BOTH scripts u
 cd docs/site
 npx tsx scripts/gen-api.ts && npx tsx scripts/gen-api-next.ts && diff -r api-data api-data-next
 ```
-Byte-identical across the FULL corpus (effect-pm + effect + platform-node + sql-sqlite-node, ~24 MB).
+Byte-identical across the FULL corpus (hyperlink-ts + effect + platform-node + sql-sqlite-node, ~24 MB).
 Re-run this whenever the Extractor/LinkResolver/SymbolIndex change.
 
 ### The gate ritual — run ALL before every commit (this is non-negotiable)
@@ -366,7 +366,7 @@ Then commit + push to `docs/standards-corpus` (never integration/main without ex
   split — popups leave the page entirely as content-addressed per-block bundles, island
   background-fetches viewport-first; prod-mode purity + parse win; dev keeps inline templates.
 - ⚠ FOR THE PACKAGE AGENTS (found by the docs-site client build, 2026-07-20 sync): the Node
-  auto-connect work added DYNAMIC `import("@effect/platform-node")` in `src/Resource.ts` (×2) and
+  auto-connect work added DYNAMIC `import("@effect/platform-node")` in `src/Hyperlink.ts` (×2) and
   `src/internal/node.ts` — bundlers chase dynamic imports, so any browser bundle of the package
   now tries to pull node:fs/http/worker_threads (61 rolldown errors). The docs site contains it
   with a client-environment subtree stub (waku.config.ts `clientPlatformNodeStub` +
@@ -376,7 +376,7 @@ Then commit + push to `docs/standards-corpus` (never integration/main without ex
 Gate: model files unchanged (links.json sidecar removed) + the site build still green. NOTE the
 deploy constraints: data paths
 resolve from `process.cwd()` (docs/site), NOT `import.meta.url`; symbol pages are SSR (static-all
-overflows Waku's ~512 MB serializer); effect-pm is static via the literal `/api/effect-pm/…` route.
+overflows Waku's ~512 MB serializer); hyperlink-ts is static via the literal `/api/hyperlink-ts/…` route.
 See `[[api-reference-docs]]`.
 
 ## Decisions log

@@ -782,7 +782,7 @@ Name collision: `Hyperlink.react` vs `View.react` — different jobs (service-bo
 
 - Shared `hyperlink-ts/ui`: data bundles, `groupRoute`, `memberKind` / `wireKindOf`, widget registry (`forKind` / `forKey` — migrate off).
 - Web + TUI: `<Dashboard runtime group path? widgets? />`; default `base` registry.
-- Custom example: `examples/resource-web` — `withEntries(base, [forKey(WorkerPool.key, WorkerPoolCard)])`.
+- Custom example: `examples/hyperlink-web` — `withEntries(base, [forKey(WorkerPool.key, WorkerPoolCard)])`.
 - TUI kind cells for gate/api/fleetHealth/telemetry/shardMap; unknown leaves show kind + node.
 - **Superseded over time** by keyed Spec/Layer `View` system above.
 

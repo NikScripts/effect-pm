@@ -138,7 +138,7 @@ import type {
   QueueEntry,
   QueueEntrySelector,
   QueueEvent,
-  QueueHandle,
+  EngineQueueHandle,
   QueueMetrics,
   QueueReleaseEncodingError,
   QueueReleaseOptions,
@@ -570,7 +570,7 @@ export const historyQuery = {
 /**
  * The queue **control + observation** contract: the fixed-schema verbs of a queue handle,
  * shared by every queue instance. The data-plane (item-typed) verbs are added in a later
- * slice. Mirrors the matching members of `WorkPool`'s `QueueHandleApi`.
+ * slice. Mirrors the matching members of the engine handle API (`QueueHandleApi`).
  *
  * @category wire schemas
  * @public
@@ -1156,7 +1156,7 @@ export type QueueLayerConfig<Item, A, E, R, RR = never> = Omit<
     readonly onDrained?: boolean;
     /** Load + enqueue work from a source. Handle its own errors (best-effort). */
     readonly load: (
-      queue: QueueHandle<Item, E, QueueEnqueueErrors, never, A>,
+      queue: EngineQueueHandle<Item, E, QueueEnqueueErrors, never, A>,
     ) => Effect.Effect<void, never, RR>;
   };
 };
@@ -2249,7 +2249,7 @@ export {
   schemaVersionOf,
   withSchemaVersion,
 } from "./internal/workPool";
-export type { EffectContext, QueueEntry, QueueHandle } from "./internal/workPool";
+export type { EffectContext, QueueEntry } from "./internal/workPool";
 // The queue type surface lives HERE, namespace-style (`WorkPool.QueueStatus`) — the barrel
 // no longer re-exports these bare (effect has no top-level; neither do we).
 export type {

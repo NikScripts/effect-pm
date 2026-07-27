@@ -3,8 +3,12 @@
  *
  * Each metrics tag is its own solo {@link Hyperlink.Tag} (wire key = instance key). Link each
  * metrics tag to an outbound client via a shared **`clientId` string** (the
- * {@link Gate.httpApiClientService} Context key). A future kind-keyed family factory may share
- * one Spec across instances; today's path is per-instance groups.
+ * {@link Gate.httpApiClientService} Context key).
+ *
+ * Kind-keyed shared Spec is available on Hyperlink as
+ * `Hyperlink.Tag(wireKey, spec)` → `Factory<Self>()(instanceKey)` (see
+ * `examples/forms/hyperlink/shared-tag-wire.ts`). ApiMetrics has **not** migrated yet — metrics
+ * product shape (handle nest vs sibling tag) is still open.
  *
  * @remarks
  * Browser-safe: import from `hyperlink-ts/ApiMetrics` only in tag files — never the

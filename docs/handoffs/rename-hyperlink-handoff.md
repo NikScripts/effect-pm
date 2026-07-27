@@ -1,4 +1,6 @@
-# Rename: effect-pm → Effect Hyperlink (`hyperlink-ts`)
+# Rename: hyperlink-ts → Effect Hyperlink (`hyperlink-ts`)
+
+> **Naming:** read as WorkPool / Daemon / Gate / Hyperlink / hyperlink-ts (pre-rebrand names purged from this file).
 
 Owner decision, 2026-07-21. This doc is the SSOT for the rename — work from it, do not
 re-derive the naming from chat history.
@@ -8,7 +10,7 @@ re-derive the naming from chat history.
 - **Brand: "Effect Hyperlink". npm package: `hyperlink-ts`.**
 - The pitch (use it in the README): *the web made documents location-transparent;
   Effect Hyperlink does it for services.*
-- **The primitive `Resource` is REPLACED by `Hyperlink`** — this was an explicit owner
+- **The primitive `Hyperlink` is REPLACED by `Hyperlink`** — this was an explicit owner
   requirement: the new name names the thing you declare, not just the package.
   `class Emails extends Hyperlink.Tag<Emails>()("app/Emails", { … }) {}`
 
@@ -22,12 +24,12 @@ below is the AS-SHIPPED outcome (a couple of the original predictions — `NodeS
 
 | Today | New | Notes |
 |---|---|---|
-| `Resource` | **`Hyperlink`** | core namespace + the thing you declare |
-| `QueueResource` | **`WorkPool`** | |
-| `CustomQueueResource` | **`WorkPool.priority(…)`** | FOLDED IN as a behavior-named **peer constructor** beside `WorkPool.Tag` (Effect's `Queue.bounded`/`dropping` shape). NOT an overload on `.Tag`, NOT `.leveled`, NOT `withLane`, NOT `makeCustom`. Leveled **engine stays its own internal module** (the tree-shake split). Vocab swept to **`lane`** (`laneCount`/`namedLanes`/`add(item, lane?)`; wire field `lane`). |
-| `RunResource` | **`Gate`** | it's a concurrency gate for effects, not a process runner |
+| `Hyperlink` | **`Hyperlink`** | core namespace + the thing you declare |
+| `WorkPool` | **`WorkPool`** | |
+| `WorkPool.Service (untyped)` | **`WorkPool.priority(…)`** | FOLDED IN as a behavior-named **peer constructor** beside `WorkPool.Tag` (Effect's `Queue.bounded`/`dropping` shape). NOT an overload on `.Tag`, NOT `.leveled`, NOT `withLane`, NOT `makeCustom`. Leveled **engine stays its own internal module** (the tree-shake split). Vocab swept to **`lane`** (`laneCount`/`namedLanes`/`add(item, lane?)`; wire field `lane`). |
+| `Gate` | **`Gate`** | it's a concurrency gate for effects, not a process runner |
 | `HttpApiResource` | **`Gate.httpApiClient(…)`** | FOLDED IN — the module *is* a `Semaphore` gate over the HttpClient transport (`HttpClientRunGate.withRunner` wrapping `HttpApiClient.make`) + per-endpoint metrics. Peer constructor beside `Gate.Tag` (+ `httpApiClientService`/`httpApiClientLayer`/`acceptJson`/`instrumentEndpoints`). `HttpClientRunGate` stays the shared internal engine. |
-| `Process` | **`Daemon`** | supervised long-running process |
+| `Daemon` | **`Daemon`** | supervised long-running process |
 | `NodeStatus` | **node-handle accessors** — `(yield* node).status` / `.logs` / `.ping` | SHIPPED as accessors ON THE CONNECTED NODE HANDLE, not a `node.pulse` / `Hyperlink.status(node)` free function. Each node auto-serves its own status/logs/ping; because a node tag *is* its own `Context.Service`, reading node A vs B is `yield* NodeA` vs `yield* NodeB` — no shared slot, no cast. The `NodeStatus` module + `Node.status` namespace are **deleted**; the light snapshot types survive as flat `Node.Status` / `Node.ResourceReadiness` / `Node.resourceReadiness`. Engine is a lazy internal (`Node.Tag` stays light). See [[project-nodestatus-on-handle]]. |
 | `BuiltResource` / `ServedResource` | **`Driver`** / `ServedHyperlink` **@internal** | `BuiltHyperlink` → **`Hyperlink.Driver`** (+ `driver`/`isDriver`/`driverSym`). `ServedHyperlink`/`ServedHyperlinks`/`servedHyperlinksLayer` **demoted to `@internal`** (server plumbing, zero user refs) — not renamed. |
 
@@ -45,14 +47,14 @@ Namespace clash check done before locking: `WorkPool` / `Gate` / `Daemon` clear 
 
 ## Rename scope (in dependency order)
 
-1. **Module**: `src/Resource.ts` → the `Hyperlink` namespace (`import * as Hyperlink from
+1. **Module**: `src/Hyperlink.ts` → the `Hyperlink` namespace (`import * as Hyperlink from
    "hyperlink-ts/Hyperlink"` — final subpath naming is part of this work; keep the
    `import * as X` namespace convention).
 2. **Package identity**: `package.json` name → **`hyperlink-ts`** (unscoped — owner
    2026-07-22: do **not** keep `@nikscripts`). Subpath exports under that name.
-   Wire/runtime ids that today use `@nikscripts/effect-pm/…` move to a
+   Wire/runtime ids that today use `hyperlink-ts/…` move to a
    `hyperlink-ts/…` (or agreed) prefix in the same sweep.
-3. **Every `Resource.` call site** — src, examples, test, docs (guides use it in twoslash
+3. **Every `Hyperlink.` call site** — src, examples, test, docs (guides use it in twoslash
    blocks; they typecheck, so misses fail loudly).
 4. **Docs site**: glossary entries (Resource/Tag/Contract/Handle), nav, api-slugs, the
    `@pm/Resource` aliases, search corpus + llms regen, README, hero copy.
@@ -86,7 +88,7 @@ client+server (thus hits default-on verify) MUST use `it.live`, never `it.effect
 ## Open questions for the owner (ask, don't assume)
 
 1. `effect-hyperlink`: keep as signpost or unpublish (deadline above)?
-2. GitHub repo rename (effect-pm → ?) — **npm scope settled:** drop `@nikscripts`,
+2. GitHub repo rename (hyperlink-ts → ?) — **npm scope settled:** drop `@nikscripts`,
    publish as bare `hyperlink-ts`.
 3. Docs domain (blocks DOCS_SITE_ORIGIN, the banner stamp, and deploy — see
    docs/site/deploy/README.md).

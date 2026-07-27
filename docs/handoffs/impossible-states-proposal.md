@@ -13,7 +13,7 @@ Each item below shows **the wrong code that compiles today**, the change that ma
 ```ts
 // NodeStatus is nodeless → its client needs an ambient RpcClient.Protocol.
 // Providing a *node transport* instead type-checks as fully wired (requires `never`)…
-Resource.client(NodeStatus.Tag).pipe(Layer.provide(dropletTransport))
+Hyperlink.client(NodeStatus.Tag).pipe(Layer.provide(dropletTransport))
 // …then throws at runtime: "Service not found: RpcClient/Protocol". The dashboard's
 // "connecting… forever" bug, twice.
 ```
@@ -29,29 +29,29 @@ Resource.client(NodeStatus.Tag).pipe(Layer.provide(dropletTransport))
 
 **Breaking impact:** `NodeKey`'s value type changes; `connect` / `client` / `socketClient` internals adjust to wrap/unwrap. Consumers who wired the *correct* way are unaffected; the *wrong* way now errors (the point). **First implementation step:** pin the exact `Layer.provide` collapse (narrowed to the node/protocol structural identity) and confirm the brand severs it.
 
-**Owner:** `src/Resource.ts` node/client core — **C's zone**; breaking-OK makes it doable, but it's the one piece that needs coordination.
+**Owner:** `src/Hyperlink.ts` node/client core — **C's zone**; breaking-OK makes it doable, but it's the one piece that needs coordination.
 
 ## P2 — `connect(unaddressedNode)` → compile error ★ foundation, fully mine
 
 **Wrong code that compiles today:**
 ```ts
-class Bare extends Resource.Node<Bare>("bare") {}   // no url/kind
-Bare.pipe(Resource.connect)                          // compiles; throws UnaddressedNode at runtime
+class Bare extends Hyperlink.Node<Bare>("bare") {}   // no url/kind
+Bare.pipe(Hyperlink.connect)                          // compiles; throws UnaddressedNode at runtime
 ```
 
 **The fix:** overload `makeNode` so it returns `AddressedNode<Self>` (precise `url: string; kind: ProtocolKind`) when given an address, and a bare node otherwise; `connect`'s derived overload already wants `AddressedNode`. Then the derived form on an addressless node **doesn't compile**. (The `connectSocket(node, url)` runtime-url path — used by the browser dashboard — stays legal.)
 
 **Breaking impact:** additive precision; only the genuinely-broken `connect(bareNode)` starts erroring. This also builds the **precise node-typing machinery** P1/P4 reuse.
 
-**Owner:** `src/Resource.ts` `makeNode` — **mine**, self-contained. Deferred earlier only because of `store`/`logs` return-type entanglement; tractable with overloads.
+**Owner:** `src/Hyperlink.ts` `makeNode` — **mine**, self-contained. Deferred earlier only because of `store`/`logs` return-type entanglement; tractable with overloads.
 
 ## P3 — Serve-time protocol mismatch → compile-or-boot error
 
 **Wrong code that compiles today:**
 ```ts
-class Live extends Resource.Node<Live>("live", { kind: "socket" }) {}
+class Live extends Hyperlink.Node<Live>("live", { kind: "socket" }) {}
 // serving a socket-declared node's resource over an http server — no error anywhere:
-Resource.httpServer([QueueResource.serve(LiveQueue, cfg)])
+Hyperlink.httpServer([WorkPool.serve(LiveQueue, cfg)])
 ```
 
 **The fix:** with nodes carrying `kind` (shipped) and branded (P1), `wsServer`/`httpServer` assert each served tag's node `kind` matches — a boot-time `ProtocolKindMismatch`, or (if the served-tag type surfaces the kind) a **compile** error.
@@ -63,7 +63,7 @@ Resource.httpServer([QueueResource.serve(LiveQueue, cfg)])
 **Wrong code that compiles today:**
 ```ts
 // loose-fields shorthand for a payload/input — already bit the queues (silent shape drift):
-QueueResource.Tag<Q>()("q", { a: Schema.String, b: Schema.Number })   // vs { payload: Struct }
+WorkPool.Tag<Q>()("q", { a: Schema.String, b: Schema.Number })   // vs { payload: Struct }
 ```
 
 **The fix:** require a single `Struct` schema for payloads/inputs; drop the loose-fields form. The illegal state (ambiguous loose fields) becomes unrepresentable.
@@ -75,7 +75,7 @@ QueueResource.Tag<Q>()("q", { a: Schema.String, b: Schema.Number })   // vs { pa
 **Wrong code that compiles today:**
 ```ts
 // in a browser: httpClient starves at ~6 HTTP/1.1 connections — blank dashboard, only a runtime warn:
-Resource.httpClient(node, { url })   // in a browser build
+Hyperlink.httpClient(node, { url })   // in a browser build
 ```
 
 **The fix (breaking):** remove `httpClient`/`clientHttp` from the **browser-safe** surface (they stay on the node/CLI barrel), or hard-fail them in browser context. A browser build can only reach `socketClient`. The starving transport is not importable where it starves.

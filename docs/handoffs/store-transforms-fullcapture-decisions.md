@@ -1,5 +1,7 @@
 # Store transforms + full-capture + golden queue — locked decisions
 
+> **Naming:** read as WorkPool / Daemon / Gate / Hyperlink / hyperlink-ts (pre-rebrand names purged from this file).
+
 Status: **SHIPPED and merged to integration.** All phases landed on `store-storage-refactor` and merged in.
 Each phase: no `as`/`any` beyond the existing tree-walk/rebuild idioms, no lazy imports, one field per line;
 both tsconfig projects + Effect LSP + full suite green.
@@ -14,14 +16,14 @@ both tsconfig projects + Effect LSP + full suite green.
 - **Worker-A** (beyond the original §3): the tag's **`success` schema drives the worker `effect` return
   type** — declaring `success: S` requires the worker to return `Effect<S, …>` and types `Completed.success`,
   `store.completed`, and the analytics; no `success` schema → `void` (unchanged). Cast-free. One TS limit:
-  the RPC-facing `events` **stream** types `Completed.success` as `unknown` (`ResourceTag` spec-invariance +
+  the RPC-facing `events` **stream** types `Completed.success` as `unknown` (`HyperlinkTag` spec-invariance +
   Effect can't reduce a union's `.Type` through a generic field); the typed `A` lands everywhere else.
-- **Golden example** = `QueueResource` three-tier + analytics + typed success.
-- **Merge to integration:** conflicts resolved (facets removed, `store/queueResource.ts` deleted, `store.md`
-  = the rewrite). Process/run **contract write types aligned to `StoreWriteError`** and `withDefault` →
-  `resolveOrDie` (minimal port). **Process/run taps still hand-roll their swallow** (`catchCause` /
+- **Golden example** = `WorkPool` three-tier + analytics + typed success.
+- **Merge to integration:** conflicts resolved (facets removed, `store/workPool.ts` deleted, `store.md`
+  = the rewrite). Daemon/run **contract write types aligned to `StoreWriteError`** and `withDefault` →
+  `resolveOrDie` (minimal port). **Daemon/run taps still hand-roll their swallow** (`catchCause` /
   `recordWrite`) — converting them to `catchWriteErrors` is the agents' adoption follow-up; see
-  `store-cutover-process.md` / `store-cutover-runresource.md`.
+  `store-cutover-daemon.md` / `store-cutover-gate.md`.
 
 ## Naming (locked)
 `mapEffects`, `catchWriteErrors`, `StoreWriteError`, `resolve` / `resolveOrDie`. Reads keep `StoreJournalDecodeError`.
@@ -64,7 +66,7 @@ The worker's typed result is recorded exactly once (SSOT), no duplication.
   `Failed`). No separate Exit handling.
 - Threads the `success`/`error` schemas via `queueEvent(itemSchema, { success: successOf(tag), error: errorOf(tag) })`,
   `makeQueueStoreContract` gains the wire schemas, `builtInQueueStoreContract`/engine/consumer feed them from the tag.
-  `CustomQueueResource` (no triplet) falls back to `Void`/`Unknown`.
+  `WorkPool.Service (untyped)` (no triplet) falls back to `Void`/`Unknown`.
 
 ## 4. Nesting demo (honest, not contorted into the queue)
 The queue event log is genuinely flat — do NOT nest it. Demonstrate nesting where natural: a
@@ -80,8 +82,8 @@ types (already covered by `test/store-shape-streams.test-d.ts`; extend/reference
   + three-tier, with the queue as the worked golden example the other agents copy for process/run.
 - Changesets for the whole stack.
 
-## Golden example = QueueResource (already three-tier; this run finishes it)
+## Golden example = WorkPool (already three-tier; this run finishes it)
 Lean base (`record`/`events`) + engine write-extension (narrow typed writes via `Store.effects` + `catchWriteErrors`)
-+ consumer read-extension (12 analytics reads on `QueueResource.store`). After this run it demonstrates: contracts,
++ consumer read-extension (12 analytics reads on `WorkPool.store`). After this run it demonstrates: contracts,
 `Store.effects`, the transform layer, categorized errors, full-capture, and the read analytics — the reference.
 </content>

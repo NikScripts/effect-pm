@@ -11,15 +11,15 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Owner said:** “@nikscripts we don’t need to keep”
 - **Chose (LOCKED):** npm package is bare **`hyperlink-ts`** — no `@nikscripts/` scope.
   Brand/module rename SSOT remains [`rename-hyperlink-handoff.md`](./rename-hyperlink-handoff.md)
-  (`Resource` → `Hyperlink`, brand “Effect Hyperlink”).
+  (`Hyperlink` → `Hyperlink`, brand “Effect Hyperlink”).
 - **Still open:** `effect-hyperlink` signpost vs unpublish; GitHub repo rename; docs domain.
 - **Supervisor impact:** Eng must retarget `package.json` name + imports + wire ids off
-  `@nikscripts/effect-pm`.
+  `hyperlink-ts`.
 
 ## 2026-07-21 — Identity coordinator (managers collapse) LOCKED
 
 - **Owner said:** Sell the dream; “Oooh yes. Let’s build it.” Handoff first as the major goal.
-- **Chose (LOCKED — M1–M6):** No `Resource.Manager`. Exclusive brain = `Resource.identity` (S1). Pattern = one brain + many hands (directory / nameless / Prototype). v1 Eng = **identity liveness** (dead winner → claim replaceable) + **coordinator+workers example**. Placement advice streams into Lookup = later slice (still no Manager type). Sugar last.
+- **Chose (LOCKED — M1–M6):** No `Hyperlink.Manager`. Exclusive brain = `Hyperlink.identity` (S1). Pattern = one brain + many hands (directory / nameless / Prototype). v1 Eng = **identity liveness** (dead winner → claim replaceable) + **coordinator+workers example**. Placement advice streams into Lookup = later slice (still no Manager type). Sugar last.
 - **Rejected / deferred:** Second first-wins product surface; required `manages[]` value list; advice wire before liveness.
 - **Supervisor impact:** SSOT [`identity-coordinator.md`](./identity-coordinator.md). Work branch `cursor/logs-store-followers-plan-906e` synced with `integration`.
 
@@ -48,7 +48,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 ## 2026-07-21 — F4 contractHash Eng’d
 
 - **Owner said:** “All of them” (unlock wave).
-- **Chose (LOCKED + Eng’d):** `contractHash` on `NodeStatus.resources[]`; `Resource.contractHash(tag)`; deep verify + tag-aware default-on client compare → `ContractMismatch`. Nested verify opted out for Lookup.client / identity ping / `clientLayerForEndpoint` (Layer.unwrap deadlock).
+- **Chose (LOCKED + Eng’d):** `contractHash` on `NodeStatus.resources[]`; `Hyperlink.contractHash(tag)`; deep verify + tag-aware default-on client compare → `ContractMismatch`. Nested verify opted out for Lookup.client / identity ping / `clientLayerForEndpoint` (Layer.unwrap deadlock).
 - **Supervisor impact:** loud-failures F4 closed; memo remains.
 
 ## 2026-07-21 — Store-layer `(scopeKey, lineId)` memo Eng’d
@@ -79,8 +79,8 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 - **Owner said:** Extract Node from Resource/Lookup on tip (`cursor/bake-catalog-thoughts-906e`); Effect-true `import * as Node`; no shims; forms replace spawn demo.
 - **Chose (LOCKED):**
-  - Public module **`@nikscripts/effect-pm/Node`** — flat `Tag` / `Prototype` / `Lookup` / `listen` / `connect*` / `*Server` / `clients` + catalog types.
-  - **Removed:** `Resource.Node`, `Lookup.LookupNode`, `Resource.listen` / `connect*` / `httpServer` / `wsServer` / `ipcServer` / `clientsFor` (no shims).
+  - Public module **`hyperlink-ts/Node`** — flat `Tag` / `Prototype` / `Lookup` / `listen` / `connect*` / `*Server` / `clients` + catalog types.
+  - **Removed:** `Hyperlink.Node`, `Lookup.LookupNode`, `Hyperlink.listen` / `connect*` / `httpServer` / `wsServer` / `ipcServer` / `clientsFor` (no shims).
   - **Stays Resource:** Tag/serve/layer/client, `lookupClient`, identity, nodes/andNode/distributed, peers, Spec builders; Tag Lookup dial is `Hyperlink.unix(tag)` (was `discoverClient`).
   - **Stays Lookup:** Identity, Directory, layer, client, `layerOptions`; sugar `Node.listenLocal`.
 - **Supervisor impact:** Eng on tip. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
@@ -89,7 +89,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 - **Owner said:** “Good” (to lean A after D4 bake).
 - **Chose (LOCKED):**
-  - Opt-in **`Resource.lookupClient(Tag, { pick })`** — `"first"` or sync `(rows) => DirectoryEntry`.
+  - Opt-in **`Hyperlink.lookupClient(Tag, { pick })`** — `"first"` or sync `(rows) => DirectoryEntry`.
   - Bare `lookupClient(Tag)` stays **fail-closed** on 0 / >1.
   - Identity resolve hit ignores `pick`; `client(Tag)` stays set-of-one.
   - Out of v1: `"random"`, Effect picker, sticky affinity, manager LB.
@@ -97,23 +97,23 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ## 2026-07-19 — `Prototype.listen(serves)` factory LOCKED
 
-- **Owner said:** Rewrite `Resource.listen(Proto.instance(…), serves)` into curried `Proto.listen(serves)` → `(suffix?) => Layer`; agreed lean (Layer-only, keep `instance()`, no named-clone `.listen`) — “Good.”
+- **Owner said:** Rewrite `Hyperlink.listen(Proto.instance(…), serves)` into curried `Proto.listen(serves)` → `(suffix?) => Layer`; agreed lean (Layer-only, keep `instance()`, no named-clone `.listen`) — “Good.”
 - **Chose (LOCKED):**
-  - `Node.Prototype.listen(serves[, options])` → `(suffix?: string) => Layer` — sugar over `Resource.listen(instance(suffix), serves)`.
+  - `Node.Prototype.listen(serves[, options])` → `(suffix?: string) => Layer` — sugar over `Hyperlink.listen(instance(suffix), serves)`.
   - Return **Layer only**; minted Node available as `ListenNode` after `Layer.build`.
-  - **`instance()` stays public**; named clones keep `Resource.listen(East, serves)`.
+  - **`instance()` stays public**; named clones keep `Hyperlink.listen(East, serves)`.
 - **Supervisor impact:** Eng on tip. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
 
 ## 2026-07-19 — `lookupClient` name (= bake `unsafeLookupClient`)
 
 - **Owner said:** The Lookup-or-die nodeless client was sketched as `unsafeLookupClient`; keep without `unsafe` if docs are clear — agent’s call.
-- **Chose (LOCKED):** Keep **`Resource.lookupClient`**. Same contract as the sketch: Lookup resolves the dial target; missing/ambiguous → fail (`LookupClientError`); not a silent N&gt;1 pick. TSDoc + handoff state the rename from `unsafeLookupClient`. Soft multi-replica pick remains **D4 OPEN**.
+- **Chose (LOCKED):** Keep **`Hyperlink.lookupClient`**. Same contract as the sketch: Lookup resolves the dial target; missing/ambiguous → fail (`LookupClientError`); not a silent N&gt;1 pick. TSDoc + handoff state the rename from `unsafeLookupClient`. Soft multi-replica pick remains **D4 OPEN**.
 - **Supervisor impact:** Docs/TSDoc clarify on tip. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
 
-## 2026-07-19 — `Resource.Node.Prototype` (nest under Node)
+## 2026-07-19 — `Hyperlink.Node.Prototype` (nest under Node)
 
-- **Owner said:** Top-level `Resource.Prototype` is wrong if it’s a Node — expected `Resource.Node.Prototype`.
-- **Chose:** Prototype is a **Node kind** — `Resource.Node.Prototype` (+ `.make` / `.instance`). Top-level `Resource.Prototype` removed (no shim).
+- **Owner said:** Top-level `Hyperlink.Prototype` is wrong if it’s a Node — expected `Hyperlink.Node.Prototype`.
+- **Chose:** Prototype is a **Node kind** — `Hyperlink.Node.Prototype` (+ `.make` / `.instance`). Top-level `Hyperlink.Prototype` removed (no shim).
 - **Supervisor impact:** Rename on tip. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
 
 ## 2026-07-19 — Dynamic `Node.Prototype.instance` LOCKED
@@ -131,8 +131,8 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 - **Owner said:** “Okay” (proceed with recommended next slice after D7).
 - **Chose (LOCKED — D3):**
-  - Bare `.pipe(Resource.distributed)` ≡ `nodes([])` (discoverable empty membership); identity-shaped pipe (not a list dual).
-  - Fixed fleets stay on `Resource.nodes([…])` (former `distributed([…])` call sites migrated).
+  - Bare `.pipe(Hyperlink.distributed)` ≡ `nodes([])` (discoverable empty membership); identity-shaped pipe (not a list dual).
+  - Fixed fleets stay on `Hyperlink.nodes([…])` (former `distributed([…])` call sites migrated).
   - `peersLayer` with a **stamped empty** Node set reads Lookup `Directory.nodesServing(tag.key)` at build; exclude self; dial by directory entry kind (ipc path / url).
   - Undeclared tags (no `nodesSym`) stay empty static peers — not directory.
   - Directory absent → soft empty peer map (provide Lookup client for a real mesh).
@@ -146,7 +146,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
   - Address-less `Node(key)` at `listen` → mint ephemeral **ipc** path; **claim `node.key`**; win → bind+advertise; lose → fail Layer (winner endpoint in error); no silent double-serve.
   - Identity claim endpoint = **Tag’s bound Node** (`nodes` / `{ node }`) or **listen’s Node** (minted) — **remove `{ self }` bag**.
   - `Lookup.layerOptions` — bind-or-dial default ipc (OS exclusivity).
-  - `Resource.lookupClient(Tag)` — fail-closed; `Identity.resolve` then `Directory.nodesServing`; 0 or >1 → typed error.
+  - `Hyperlink.lookupClient(Tag)` — fail-closed; `Identity.resolve` then `Directory.nodesServing`; 0 or >1 → typed error.
   - `Node.Prototype.make(name, addr)` returns a **constructible** (`class East extends Proto.make(...) {}`); wire key `prototypeKey#name`.
 - **Still LEAN / later:** ~~bare `distributed` / D3~~ → **LOCKED** (see D3 entry); `askIncumbent`; ~~dynamic `instance`~~ → **LOCKED**; D4 picker/LB.
 - **Supervisor impact:** Eng unlocked on tip for this vertical. SSOT: [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md).
@@ -178,7 +178,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 ## 2026-07-19 — Serve-list naming C5 (one name: `serve`)
 
 - **Owner said:** Want one name — `server`, `expose`, or something else; choose well; follow v4 and standards.
-- **Chose (C5 LOCKED):** **`serve`** only (`Resource.serve` / engine `*.serve`). Reject `expose` (alias or rename). Reject using `server` as the verb (collides with `httpServer` / `wsServer` / `ipcServer` / Effect `RpcServer`). `serveRemote` remains the served-only sibling on the four-verb axis.
+- **Chose (C5 LOCKED):** **`serve`** only (`Hyperlink.serve` / engine `*.serve`). Reject `expose` (alias or rename). Reject using `server` as the verb (collides with `httpServer` / `wsServer` / `ipcServer` / Effect `RpcServer`). `serveRemote` remains the served-only sibling on the four-verb axis.
 - **Rejected / deferred:** `expose`; dual spellings; renaming transport `*Server` helpers.
 - **Supervisor impact:** Catalog/`listen` sketches use `serve` layers only; no rename Eng.
 
@@ -192,9 +192,9 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 ## 2026-07-18 — Identity pipe S1 (“good enough for now”)
 
 - **Owner said:** Pipe on any resource/process constructor (don’t need Singleton ctor); maybe better name; layer vs handle footgun; agent recs; “Good enough for now.”
-- **Chose (S1 LOCKED):** `Resource.identity` pipe on toolkit Tags; stamp on handle; `layer`/`serve` honor claim→serve-or-client; no layer-only primary; fail-closed if Lookup down; self endpoint at layer v1; optional Singleton sugar only. See [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md) S1.
+- **Chose (S1 LOCKED):** `Hyperlink.identity` pipe on toolkit Tags; stamp on handle; `layer`/`serve` honor claim→serve-or-client; no layer-only primary; fail-closed if Lookup down; self endpoint at layer v1; optional Singleton sugar only. See [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md) S1.
 - **Rejected / deferred:** Layer-only identity flag as main API; always-lookup on every non-identity serve; Manager Eng before identity pipe; orphan-serve default.
-- **Supervisor impact:** Identity Eng shipped on tip (`Resource.identity` + layer/serve claim-or-client + `IdentityMultiNode` one-Node rule). Next bake: **C1**.
+- **Supervisor impact:** Identity Eng shipped on tip (`Hyperlink.identity` + layer/serve claim-or-client + `IdentityMultiNode` one-Node rule). Next bake: **C1**.
 
 ## 2026-07-21 — X1 multi-protocol Eng’d + verifyConnection deep classification
 
@@ -243,7 +243,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 - **Owner said:** "Make it impossible to do the wrong thing." Breaking changes are fine. "I want you working on it, keep the other agents away." (Later: unlock P4 + expand the reservation to the tag-config schema-input surface.)
 - **Progress:** **P1 DONE** (node value wrapped → node↔protocol wiring bug is a compile error, cast-free — merged). **P5 DONE** (http client transport dies in a browser, not just warns — merged). **P2 SKIPPED** (a clean version needs a documented cast — the `makeNode` logs/address-type complexity, same wall as the reverted `connectFleet` — for a narrow win the runtime `UnaddressedNode` throw already covers). **P4 ALREADY ENFORCED** (loose-fields payload shorthand is already rejected — `{ payload: Schema.Struct }` required; proposal mis-scoped it as new work). **P3 friction** (serve-time mismatch): `serverImpl` sees opaque serve layers → coupled, deferred. **Program's achievable clean items = COMPLETE (P1 + P5).**
-- **Reserved — hands off (all other agents, incl. C):** `src/Resource.ts` node/client typing — `NodeKey`/`AnyNode`/`AddressedNode`/`makeNode`/`connect*`/`clientLayer`/`socketClient`/`verifyConnection`/`protocolHttp` + `NodeStatus` wiring, until the branches are all merged (done). **Tag-config reservation RELEASED** — P4 was already enforced, so Agent D's queue/run/process payload-config is unblocked again.
+- **Reserved — hands off (all other agents, incl. C):** `src/Hyperlink.ts` node/client typing — `NodeKey`/`AnyNode`/`AddressedNode`/`makeNode`/`connect*`/`clientLayer`/`socketClient`/`verifyConnection`/`protocolHttp` + `NodeStatus` wiring, until the branches are all merged (done). **Tag-config reservation RELEASED** — P4 was already enforced, so Agent D's queue/run/process payload-config is unblocked again.
 - **Rejected / deferred:** `connectFleet` (reverted — cast-free version not reachable given node-type complexity; not worth casts for sugar). P2 (cast). P3 (opaque serve layers). P4 (already done).
 - **Supervisor impact:** impossible-states clean wins (P1, P5) merged. Agent D queue payload-config UNBLOCKED (P4 was moot).
 
@@ -271,7 +271,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 ## 2026-07-15 — Task Agent 3: storage cutover follow-through
 
 - **Owner said:** Task Agent 3 (after Soft edge-case pass on #62).
-- **Chose:** Unlock [`agent-03-storage-cutover-followthrough.md`](./agent-03-storage-cutover-followthrough.md) slices **S1→S3** — inventory/TSDoc+plan ripple, example teachability, **CustomQueue Soft SQLite/sibling parity**. Queue/Run Soft guards already on #62 tip — do not redo. Plan-first first reply still required.
+- **Chose:** Unlock [`agent-03-storage-cutover-followthrough.md`](./agent-03-storage-cutover-followthrough.md) slices **S1→S3** — inventory/TSDoc+plan ripple, example teachability, **untyped WorkPool Soft SQLite/sibling parity**. Queue/Run Soft guards already on #62 tip — do not redo. Plan-first first reply still required.
 - **Rejected / deferred for Agent 3:** fail-loud Soft die on Node-logs-only / unregistered engine; reopen #62 API; memo; handles; docs-site.
 - **Supervisor impact:** Agent 3 active; Manager/keeps #62 Eng.
 
@@ -315,19 +315,19 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Owner said:** Add any final improvements and sync with integration.
 - **Chose:** Merge `cursor/fleet-health-ce05` (#60) onto `integration` (incl. type-shape tests, api-model regen after `api.json` → `api-model.json` rename, guide/example polish).
 - **Rejected / deferred:** Phase 3 start until explicit unlock; Batch Z deletes; `layerNoop` until a concrete package ambient needs it; `docs/site` chrome.
-- **Supervisor impact:** Agent 1 next = Phase 3 (owner unlock). FleetHealth guide + `@nikscripts/effect-pm/FleetHealth` are living SSOT.
+- **Supervisor impact:** Agent 1 next = Phase 3 (owner unlock). FleetHealth guide + `hyperlink-ts/FleetHealth` are living SSOT.
 
 ## 2026-07-14 — FleetHealth (meshed stadium-board readiness)
 
 - **Owner said:** Cost worth it if it fits Effect; then build. Fleet health product locked earlier (fleet board, not Host; auth stays README-only).
-- **Chose:** `@nikscripts/effect-pm/FleetHealth` as Telemetry twin — leaf `local`, fleet `byNode` / `status`, Schema `Reachable` | `Unreachable` via `Exit.match`, `MultiNode.combineByNodeExit` keeps peer failures. Local `/health` / `withReadiness` unchanged (standards).
+- **Chose:** `hyperlink-ts/FleetHealth` as Telemetry twin — leaf `local`, fleet `byNode` / `status`, Schema `Reachable` | `Unreachable` via `Exit.match`, `MultiNode.combineByNodeExit` keeps peer failures. Local `/health` / `withReadiness` unchanged (standards).
 - **Rejected:** Folding peers inside `withReadiness`; silent omit of down peers (metric-style `fleetHealth` helper).
 - **Supervisor impact:** Branch `cursor/fleet-health-ce05`; roadmap bullet marked shipped.
 ## 2026-07-14 — `Logs.byResource` full key; kill resource-identity `*Id`
 
-- **Owner said:** Scope identity is **key** + **kind** (`Resource.kindOf`); get rid of `processId`/`queueId` costumes; exception only for Effect RPC naming (`groupId`); no legacy storage to keep; do it now.
-- **Chose:** `Logs.byResource(tag | key)` hard-break; remove log annotation `processId`/`queueId` + helpers; CLI match via `LogEntry.hasKey`; Process/Queue event + durable-queue resource identity fields → `key`; keep `groupId`.
-- **Rejected / deferred:** store memo; Agent D handles; `docs/site`; Process.events further Eng.
+- **Owner said:** Scope identity is **key** + **kind** (`Hyperlink.kindOf`); get rid of `processId`/`queueId` costumes; exception only for Effect RPC naming (`groupId`); no legacy storage to keep; do it now.
+- **Chose:** `Logs.byResource(tag | key)` hard-break; remove log annotation `processId`/`queueId` + helpers; CLI match via `LogEntry.hasKey`; Daemon/Queue event + durable-queue resource identity fields → `key`; keep `groupId`.
+- **Rejected / deferred:** store memo; Agent D handles; `docs/site`; Daemon.events further Eng.
 - **Supervisor impact:** Agent 3 Eng on `cursor/logs-byresource-full-key-a009`.
 - **Superseded (2026-07-27):** the “keep `groupId`” RPC exception — see next row.
 
@@ -338,7 +338,50 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Rejected:** Kind as RpcGroup prefix for regular Tags; spec-hash as group name; public `wireMode` on every tag; forcing full WorkPool/Daemon/Gate Specs onto one kind-group without a control/data split.
 - **Supervisor impact:** Agent 4 owns W1+ on `cursor/hyperservice-open-deps-5679`.
 - **Eng note (2026-07-27):** W1 landed — public `HyperlinkTag.groupId` removed; `wireKeySym` / `wireKeyOf`; solo wire = `.key`; `DuplicateWireKey`; `ServedHyperlink.wireKey`; contract descriptor field `wireKey`.
-- **Eng note (2026-07-27, W2):** Unused shared-Spec family path **deleted** (`tagFor` / `serveInstances` / `clientInstances` / `instance` + factory types / family errors) after migrating tests/examples to solo `Tag`. No demotion/shim — migrate then delete. W3 adds a real kind-keyed factory when product needs it.
+- **Eng note (2026-07-27, W2):** Unused shared-Spec family path **deleted** (`tagFor` / `serveInstances` / `clientInstances` / `instance` + factory types / family errors) after migrating tests/examples to solo `Tag`. No demotion/shim — migrate then delete.
+
+## 2026-07-27 — W3 Family surface REJECTED; never push `integration` without authorization
+
+- **Owner said:** Do not ship `Hyperlink.Family` / `serveFamily` / `serveFamilyRemote` / `clientFamily` / `member` (or any new serve/client surface invented for kind-keyed wire). Plan said factory **name TBD**. Never push `integration` without explicit owner authorization. Force-reset tip to pre-incident state.
+- **Chose / done:** Agent 4 had Eng’d that surface (`90479552`) and tip-synced it to `integration` without authorization — **process failure**. Owner ordered full reverse: force-reset `cursor/hyperservice-open-deps-5679` and `integration` to **`5a0b42d5`** (W2 tip; Family never on tip). Incident write-up: [`agent-04-w3-incident-2026-07-27.md`](./agent-04-w3-incident-2026-07-27.md).
+- **Rejected:** Public `*Family*` APIs; treating tip-sync language as blanket `integration` push rights; Eng’ing W3 before locking mint shape / ApiMetrics–Gate relationship.
+- **Standing rule:** Agent 4 (and all agents) push **work branch only** unless owner explicitly authorizes an `integration` push.
+- **Design (unlocked, discussion only):** Prefer shared Spec via `Hyperlink.Tag(wireKey, spec)` → `Factory<Self>()(instanceKey)` (class-only), not a new noun; no new serve/client verbs; explore API handle + reserved features nest (metrics) instead of sibling ApiMetrics tag / `httpApiClientService` product name. See incident handoff.
+
+## 2026-07-27 — W3 Eng: shared Spec via `Tag(wireKey, spec)` (not Family)
+
+- **Owner said:** Skip metrics for now. Document everything. Build the shared-Spec feature (the one metrics would use), demo it, tests/examples/docs — then stop and wait. Return to `.handle` rename later.
+- **Chose / Eng’d:** `Hyperlink.Tag(wireKey, spec)` → `Factory<Self>()(instanceKey)` (class-only, Effect-shaped `()`). Internal `sharedTagSym`; ordinary `serve` / `serveRemote` / `client` merge by wire key and route on header `key`. Errors: `DuplicateSharedInstance`, `SharedRoutingError`. Demo: `examples/forms/hyperlink/shared-tag-wire.ts`. **ApiMetrics not migrated.**
+- **Rejected (still):** `Family` / `serveFamily` / `clientFamily` / `member`; pushing `integration` without explicit OK.
+- **Paused next:** ApiMetrics/Gate product shape. (`.handle` rename → Eng’d as `default`/`defaults`; see below.)
+- **Supervisor impact:** Agent 4 on `cursor/hyperservice-open-deps-5679` only — wait for owner before metrics / `integration`.
+
+## 2026-07-27 — Service shapes: `default` / `defaults` names LOCKED
+
+- **Owner said (bake):** `default` = single fields in contracts; `defaults` = piped bag to add multiple. (Batteries/Effect-defaults vibe; reject `handle` as the noun.)
+- **Chose / LOCKED:** `Hyperlink.default(…)` Spec leaf; `Hyperlink.defaults({…})` pipe adornment. Prior Jul 26 design (Spec builders-only, bag merge, Effect overrides, new key after construction, Prototype lean) still holds; only the public names change from placeholder `handle`.
+- **Rejected:** Public `Hyperlink.handle` for this API.
+- **Still open (at bake):** `default` payload shape vs shipped `pure`; Eng slice order; Prototype mint.
+
+## 2026-07-27 — Fleet rate limiting before ApiMetrics / HttpApiClient reshape
+
+- **Owner said:** Getting rid of ApiMetrics by combining into HttpApi Gate; all Gates should use rate limiting; fleet rate limiting is more important than an ApiMetrics migrate slice — bake limiter into the updated HttpApiClient.
+- **Chose (direction):** Research Effect `RateLimiter` + proposal [`../plans/fleet-rate-limiting.md`](../plans/fleet-rate-limiting.md). Eng order lean: Gate `rateLimit` substrate (shared store) → observe nest → HttpApiClient Tag (local routes) → absorb ApiMetrics. Not a standalone ApiMetrics migration.
+- **Chose (LOCKED — store wiring):** Presence-driven like WorkPool durability — `serviceOption(RateLimiterStore)` (layer is the switch). Soft **memory** when absent (single-node OK). Provide Redis (or later SQL) at the root for fleet; no config flag for “which store.”
+- **Chose (R1 Eng lean):** Gate default `onExceeded: "delay"`; whole-gate key = resource id; nest name lean `observe` (R2).
+- **Chose (R3 Eng):** WorkPool matches Gate presence-driven store (no auto Soft layer merge that blocked Redis). Fleet verified with shared memory store in CI; Redis recipe in guides. Soft + multi-node = docs warning (N× limit), not fail-loud.
+- **Chose (bake 2026-07-27 — nest name):** Wire nest is **`metrics`** (not `observe` / `limit`). Covers absorbed ApiMetrics usage + rate-limit remaining/exceeded. WorkPool parity. Factory lean: `Gate.HttpApiClient` Tag + app-owned `static layer = Gate.httpApiClientLayer(Tag)` (no baked Service layer).
+- **Chose (bake 2026-07-27 — nest shape):** v1 **flat siblings** under `metrics` (`usage`, window stream, `remaining`, `resetAfter`, `exceeded`, …). Limiter fields only when `rateLimit` is set. Optional static sugar (`Github.metrics…`) always available.
+- **Chose (bake 2026-07-27 — collision escape):** Default: nest on the handle at `metrics` + **fail-loud** if HttpApi already has a group named `metrics`. Offer a config escape to **hide / static-only** (or rename) so apps that need the group id `metrics` can keep it — exact knob TBD in bake.
+- **Still open:** Escape-knob shape (`static` vs rename vs off); Redis vs SQL; per-route keys; adaptive 429; R2 ordinary-Gate depth; R4 Eng.
+
+## 2026-07-27 — Retire `Hyperlink.pure`; Eng `default` / `defaults`
+
+- **Owner said:** Pure was never supposed to be the long-term API; if `default`/`defaults` exist that is the same job — retire `pure`, build it right (refinement + docs), ask only when blocked.
+- **Chose / Eng’d:** `Hyperlink.default(value)` (literal or sync fn; Promise-returning fn type-errors) + `Hyperlink.defaults({…})` pipe (bag on Tag via `DefaultsOf`; handle widen via `WithDefaults` — class-extends cannot remap `Service`). Spec∩bag → `DuplicateDefaultKey`. Layer/serve accept `ImplWithDefaultOverrides`. `Hyperlink.pure` / `PureMethod` removed (major).
+- **Rejected:** Keeping `pure` as an alias or shim.
+- **Still open:** live `cell`; Prototype `.pipe(defaults)` mint.
+- **Supervisor impact:** Record in [`service-shapes.md`](../plans/service-shapes.md); Eng only after remaining bake locks.
 
 ---
 
@@ -373,27 +416,27 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 ## 2026-07-14 — Phase 1 handoffs archive batches A–D (“do it all”)
 
 - **Owner said:** Unlock Phase 1 execution — do the archive batches (archive-first). Close what we can from open-asks in the same pass.
-- **Chose:** `git mv` batches **B/C/D** → `docs/handoffs/archive/2026-07/{agents,features,reports}/`; keep `reports/README` as index; rewrite legacy/AGENTS/status ripples. Date stack **A** already closed (complete→delete); leftover beta22 handoff deleted. Type hygiene [#54](https://github.com/NikScripts/effect-pm/pull/54) landed with archive [#55](https://github.com/NikScripts/effect-pm/pull/55). Open-asks: widget seam closed (Agent C registry on `integration`); hoist docs shipped in `per-resource-dependencies` + standards; `layerNoop` stays parked until a concrete package-owned ambient needs it.
+- **Chose:** `git mv` batches **B/C/D** → `docs/handoffs/archive/2026-07/{agents,features,reports}/`; keep `reports/README` as index; rewrite legacy/AGENTS/status ripples. Date stack **A** already closed (complete→delete); leftover beta22 handoff deleted. Type hygiene [#54](https://github.com/NikScripts/effect-pm/pull/54) landed with archive [#55](https://github.com/NikScripts/effect-pm/pull/55). Open-asks: widget seam closed (Agent C registry on `integration`); hoist docs shipped in `per-hyperlink-dependencies` + standards; `layerNoop` stays parked until a concrete package-owned ambient needs it.
 - **Rejected / deferred:** Batch **E** (`decisions/` / moving store-cutover SSOTs); batch **Z** deletes; Phases 2–3.
 - **Supervisor impact:** Both PRs on `integration`. Root handoffs ≈ live bus + SSOTs + deferred edge cases only.
 
 ---
 
-## 2026-07-14 — Process live `events` + Agent 3 ready perfection (close-out)
+## 2026-07-14 — Daemon live `events` + Agent 3 ready perfection (close-out)
 
-- **Owner said:** Ship Process live `events` (persist == stream); then Logs lineage append; then remote proof; then “go once ready perfection.”
-- **Chose:** Failure surface = store union on the live stream (`Started` | `Completed` | `Failed` | `Interrupted`); PubSub-then-store publish order; remote HTTP proof (#51) over lazy-PubSub / Effect-returning `Process.make`; close superseded plan/brief PRs (#35/#46).
-- **Rejected / deferred:** named handles (Agent D); `docs/site` UI; store-layer `(scopeKey, lineId)` memo; wire-level persist==stream dual-reader tests; further Process.events Eng this track.
+- **Owner said:** Ship Daemon live `events` (persist == stream); then Logs lineage append; then remote proof; then “go once ready perfection.”
+- **Chose:** Failure surface = store union on the live stream (`Started` | `Completed` | `Failed` | `Interrupted`); PubSub-then-store publish order; remote HTTP proof (#51) over lazy-PubSub / Effect-returning `Daemon.make`; close superseded plan/brief PRs (#35/#46).
+- **Rejected / deferred:** named handles (Agent D); `docs/site` UI; store-layer `(scopeKey, lineId)` memo; wire-level persist==stream dual-reader tests; further Daemon.events Eng this track.
 - **Supervisor impact:** Agent 3 Eng tracks closed on `integration` (#47/#48/#51). Optional docs merge: Logs guide #50. Handoff status: [`agent-status.md`](./agent-status.md).
 
 ---
 
-## 2026-07-11 — Queue wire erase + Process live `events` (retroactive — from PR #19/#20 handoff)
+## 2026-07-11 — Queue wire erase + Daemon live `events` (retroactive — from PR #19/#20 handoff)
 
 *Logged by supervisor from Agent 2 session-4 handoff + owner relay. Agent should have written this before PRs opened.*
 
-- **Owner said:** Fix Queue `events` stream typing (agent was copying Queue pattern for Process); align Process failure visibility with Queue's live stream model.
-- **Chose (initial):** Phase 1 — type the **RPC wire** (`queueSpec` / `buildProcessSpec` pass tag `success`/`error`); add Process **`events`** PubSub stream; failures on **`events` + store**, not void lifecycle RPC `error`.
+- **Owner said:** Fix Queue `events` stream typing (agent was copying Queue pattern for Daemon); align Daemon failure visibility with Queue's live stream model.
+- **Chose (initial):** Phase 1 — type the **RPC wire** (`queueSpec` / `buildDaemonSpec` pass tag `success`/`error`); add Daemon **`events`** PubSub stream; failures on **`events` + store**, not void lifecycle RPC `error`.
 - **Rejected:** Per-tag `processSpec` rebuild for `start`/`stop`/`runImmediately` RPC error channel (Session 2 stretch).
 - **Supervisor impact (initial):** Merge **#19 → #20** — **withdrawn** see below.
 
@@ -402,9 +445,9 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 ## 2026-07-11 — Queue Phase 1a middle ground (owner + supervisor)
 
 - **Owner said:** PR #19 approach **not OK** — seek safe middle ground; add validation to make boundary cast defensible.
-- **Chose:** **Phase 1a** — mirror **CustomQueueResource**: `queueSpec(payload, { success?, error? })`, runtime-correct `buildQueueEvent`, single **`assertQueueInstanceSpec`** boundary cast (not inner `as unknown as Success`). **Validation:** structural `flattenSpec` key/kind match + wire schema smoke; contract RPC round-trip test.
+- **Chose:** **Phase 1a** — mirror **WorkPool.Service (untyped)**: `queueSpec(payload, { success?, error? })`, runtime-correct `buildQueueEvent`, single **`assertQueueInstanceSpec`** boundary cast (not inner `as unknown as Success`). **Validation:** structural `flattenSpec` key/kind match + wire schema smoke; contract RPC round-trip test.
 - **Rejected:** PR **#19** (generic `queueSpec` + inner casts), PR **#20** merge until Phase 1a lands; claiming `StreamElement<events>` typing in Phase 1a.
-- **Deferred:** Process live `events` — separate session after Queue Phase 1a; owner still picks failure surface (`events` vs store-only vs RPC rebuild).
+- **Deferred:** Daemon live `events` — separate session after Queue Phase 1a; owner still picks failure surface (`events` vs store-only vs RPC rebuild).
 - **Supervisor impact:** Do **not** merge #19/#20. Agent 2 → [`agent-02-queue-wire-phase-1a.md`](archive/2026-07/agents/agent-02-queue-wire-phase-1a.md). #17 rebase after Queue wire settled.
 
 ---
@@ -424,10 +467,10 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
-## 2026-07-14 — Build `Resource.monitoredDependency`
+## 2026-07-14 — Build `Hyperlink.monitoredDependency`
 
 - **Owner said:** Show the idea → agreed to build it; first merge with `integration` to get latest.
-- **Chose:** Merge `origin/integration` into `cursor/docs-corpus-date-stack-ce05`, then add `Resource.monitoredDependency` (`status` + `changes` + `readyWhen`/`detail` readiness). Still a plain Tag shape. Delete the emptied widgets date handoff.
+- **Chose:** Merge `origin/integration` into `cursor/docs-corpus-date-stack-ce05`, then add `Hyperlink.monitoredDependency` (`status` + `changes` + `readyWhen`/`detail` readiness). Still a plain Tag shape. Delete the emptied widgets date handoff.
 - **Rejected:** Pre-abstracting a new resource kind; shipping without merge.
 - **Supervisor impact:** Public API + changeset on Agent 1 branch; walk next unfinished handoff after green.
 
@@ -475,7 +518,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ## 2026-07-14 — Logs P1 → Agent 3 (Agent 2 retired)
 
-- **Owner said:** Handles are owned by other agents for now. Focus next engine work on **Logs P1** (former “option 2”): level pipes / store followers / remote per-resource logs. Expand and clarify that brief for a **new Agent 3**.
+- **Owner said:** Handles are owned by other agents for now. Focus next engine work on **Logs P1** (former “option 2”): level pipes / store followers / remote per-hyperlink logs. Expand and clarify that brief for a **new Agent 3**.
 - **Chose:** [`agent-03-logs-p1.md`](./agent-03-logs-p1.md) — **superseded by the correction entry above** (registration followers are the locked write model; repeat-back first).
 - **Rejected:** Assigning named-handles work to Agent 3; treating Logs as closed without an explicit P1 park/unlock.
 - **Supervisor impact:** Agent 2 retired after #33; Agent 3 owns Logs P1.
@@ -484,17 +527,17 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ## 2026-07-13 — Next headlining resource research (Agent 1)
 
-- **Owner said:** Agent 1 is free. Process + QueueResource are the top two; RunResource is lackluster as a product headline. Explore leaning into **fleet / peer** features — ideally first resource with mesh from day one.
+- **Owner said:** Agent 1 is free. Daemon + WorkPool are the top two; Gate is lackluster as a product headline. Explore leaning into **fleet / peer** features — ideally first resource with mesh from day one.
 - **Chose:** Plan-first research only — [`agent-01-next-headlining-resource.md`](archive/2026-07/agents/agent-01-next-headlining-resource.md). Options: upgrade Run, productize WorkerPool, FleetStatus, Telemetry, or new work router. Owner picks direction before any implementation. **Base branch:** Agent 2’s `cursor/phase5-logs-migration-a3ad` (not bare `integration/storage`).
-- **Rejected:** Immediate RunResource polish without research; treating Run store cutover as “headlining done.”
+- **Rejected:** Immediate Gate polish without research; treating Run store cutover as “headlining done.”
 - **Supervisor impact:** Agent 1 research session on Agent 2 tip; Agent 2 continues Logs PR #30.
 
 ---
 
 ## 2026-07-12 — Integration fold complete (`integration/storage` @ `4c543c8`)
 
-- **Owner said:** Integration line is consolidated — merge docs group (A corpus, B intro, C manifest), Process run RPC (#26), queue ref fixes (#23–#25).
-- **Chose:** `integration/storage` is the single go-forward branch; **`run`** verb locked for Process manual RPC; effect/effectFn vocabulary shipped.
+- **Owner said:** Integration line is consolidated — merge docs group (A corpus, B intro, C manifest), Daemon run RPC (#26), queue ref fixes (#23–#25).
+- **Chose:** `integration/storage` is the single go-forward branch; **`run`** verb locked for Daemon manual RPC; effect/effectFn vocabulary shipped.
 - **Rejected:** Further integration branch sprawl; `integration/web-ui-refresh` (brief retracted).
 - **Supervisor impact:** Next = Cursor Logs cutover; **`main` release deferred** until Logs lands.
 
@@ -509,29 +552,29 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 ---
 
-## 2026-07-12 — Process manual run RPC vocabulary (owner correction)
+## 2026-07-12 — Daemon manual run RPC vocabulary (owner correction)
 
-- **Owner said:** Toolkit member stays **`run`**. `Resource.effect` is **inputless** (`yield* proc.run`); `Resource.effectFn` takes per-invocation input (`logs.query`, schedule `get`/`has`, …). No `payload` on `Resource.effect`.
-- **Chose:** `run: Resource.effect(success, error)` with **no payload**; migrate all payload members to `effectFn`; remove `payload` from `Resource.effect` API.
-- **Rejected:** `payload` on `Resource.effect`; renaming toolkit verb to `effect`; `yield* proc.run()` on stamped tags.
+- **Owner said:** Toolkit member stays **`run`**. `Hyperlink.effect` is **inputless** (`yield* proc.run`); `Hyperlink.effectFn` takes per-invocation input (`logs.query`, schedule `get`/`has`, …). No `payload` on `Hyperlink.effect`.
+- **Chose:** `run: Hyperlink.effect(success, error)` with **no payload**; migrate all payload members to `effectFn`; remove `payload` from `Hyperlink.effect` API.
+- **Rejected:** `payload` on `Hyperlink.effect`; renaming toolkit verb to `effect`; `yield* proc.run()` on stamped tags.
 - **Supersedes:** conflicting 2026-07-11 entry below that chose `effect` as verb name.
 
 ---
 
-## 2026-07-11 — Process manual run RPC (owner Slice 0 locked)
+## 2026-07-11 — Daemon manual run RPC (owner Slice 0 locked)
 
-- **Owner said:** Remote Process clients need typed `error` (and `success` when stamped) on manual run — not store-only.
-- **Chose:** Verb **`run`** (RunResource parity); **no `payload`** on Process tag — worker stays nullary; manual RPC via inputless `Resource.effect(success, error)` (not `effectFn`). Per-tag `buildProcessSpec`; engine propagates failure on manual `run` RPC while still writing store rows.
+- **Owner said:** Remote Daemon clients need typed `error` (and `success` when stamped) on manual run — not store-only.
+- **Chose:** Verb **`run`** (Gate parity); **no `payload`** on Daemon tag — worker stays nullary; manual RPC via inputless `Hyperlink.effect(success, error)` (not `effectFn`). Per-tag `buildDaemonSpec`; engine propagates failure on manual `run` RPC while still writing store rows.
 - **Rejected:** `effect` verb name; optional tag `payload`; Session 3 RPC defer language; `runImmediately` void RPC.
 - **Supervisor impact:** Branch `cursor/process-run-rpc-a009`; revoke defer text in legacy PROCESS-API / STORAGE docs.
 
 ---
 
-## 2026-07-11 — Process manual run RPC vocabulary (superseded)
+## 2026-07-11 — Daemon manual run RPC vocabulary (superseded)
 
 *Superseded by 2026-07-12 entries — verb is **`run`**, not `effect`.*
 
-- **Owner said:** Remote Process RPC must use tag **`error`** / **`success`** on the manual run path. Replace **`runImmediately`** with spec member **`effect`** = **`Resource.effect(success, { error })`** — **no input** (`Effect`, not `effectFn`). Failures must fail the RPC, not store-only.
-- **Rejected:** Equating **`effect`** with **`query`**; putting **payload** on `Resource.effect` (input → **`effectFn`** only). Session 3 RPC defer. `runImmediately` as void `effectFn`.
-- **Toolkit rule (owner):** `Resource.effect` → `Effect<S,E>` no args; `Resource.effectFn` → `(In) => Effect<S,E>`; `query`/`mutate` = `MethodKind` for tools only — see [`agent-a-phase1-inventory.md`](archive/2026-07/agents/agent-a-phase1-inventory.md) C5.
-- **Chose (withdrawn):** [`agent-02-process-run-rpc.md`](archive/2026-07/agents/agent-02-process-run-rpc.md) — member name **`effect`**, not `run` (RunResource `run` is `effectFn`+payload).
+- **Owner said:** Remote Daemon RPC must use tag **`error`** / **`success`** on the manual run path. Replace **`runImmediately`** with spec member **`effect`** = **`Hyperlink.effect(success, { error })`** — **no input** (`Effect`, not `effectFn`). Failures must fail the RPC, not store-only.
+- **Rejected:** Equating **`effect`** with **`query`**; putting **payload** on `Hyperlink.effect` (input → **`effectFn`** only). Session 3 RPC defer. `runImmediately` as void `effectFn`.
+- **Toolkit rule (owner):** `Hyperlink.effect` → `Effect<S,E>` no args; `Hyperlink.effectFn` → `(In) => Effect<S,E>`; `query`/`mutate` = `MethodKind` for tools only — see [`agent-a-phase1-inventory.md`](archive/2026-07/agents/agent-a-phase1-inventory.md) C5.
+- **Chose (withdrawn):** [`agent-02-process-run-rpc.md`](archive/2026-07/agents/agent-02-process-run-rpc.md) — member name **`effect`**, not `run` (Gate `run` is `effectFn`+payload).

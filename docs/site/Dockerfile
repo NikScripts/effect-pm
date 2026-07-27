@@ -1,7 +1,7 @@
 # Runtime image for the docs site — the ARTIFACT deploys, the image never builds docs.
 # Build context is docs/ (the file: docgen dep lives beside site/):
 #
-#   cd docs && docker build -f site/Dockerfile -t effect-pm-docs .
+#   cd docs && docker build -f site/Dockerfile -t hyperlink-docs .
 #
 # Expects these to exist locally BEFORE the docker build (produced by `pnpm build` in site/,
 # which chains gen-api → gen-hovers → gen-search → gen-llms → check-links):

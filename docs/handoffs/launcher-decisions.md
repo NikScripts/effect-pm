@@ -58,7 +58,7 @@ Epsilon is the intended worktree for this once the design locks.
 - **Deploy sequence** (later, with delta's handoff): spawn new → readiness → `Advice.advise`
   steer → drain old → `unregister` → `clearAdvice`. The routing half already exists as Lookup
   verbs; delta supplies in-flight cutover.
-- **Spawn machinery**: reuse the Daemon/Process resource machinery (spawn, restart, status,
+- **Spawn machinery**: reuse the Daemon hyperlink machinery (spawn, restart, status,
   log streaming) rather than new infra.
 
 ## Open questions (bring to the table, don't solve silently)

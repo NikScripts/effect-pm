@@ -1,6 +1,6 @@
 # Hyperlink configure (layer patches)
 
-Override **defaults** on `Process.Service`, `QueueHyperlink.Service`, and `RunHyperlink.Service` with **`Layer` patches** — not hot reload. Patches fold **once** when the resource `.layer` is built.
+Override **defaults** on `Daemon.Service`, `WorkPool.Service`, and `Gate.Service` with **`Layer` patches** — not hot reload. Patches fold **once** when the resource `.layer` is built.
 
 **API:** `configureLayer`, `foldConfig`, `ConfigPatch` from `hyperlink-ts`. Per-service: `.configure`, `.wrapWorker` / `.wrapEffect` / `.wrapGate`, `.defaultSpec`.
 
@@ -45,9 +45,9 @@ const effective = foldConfig(
 
 ```typescript
 import { Duration, Effect, Layer } from "effect";
-import { QueueHyperlink } from "hyperlink-ts";
+import { WorkPool } from "hyperlink-ts";
 
-class EmailQueue extends QueueHyperlink.Service<EmailQueue, Email, SmtpError>()(
+class EmailQueue extends WorkPool.Service<EmailQueue, Email, SmtpError>()(
   "@app/EmailQueue",
   (email) => send(email).pipe(Effect.asVoid),
   { concurrency: 10 },
@@ -72,13 +72,13 @@ Patches apply **before** `makeQueueRuntime` (workers, hooks, enqueue validation)
 
 ---
 
-## Process
+## Daemon
 
 ```typescript
 import { Effect, Layer } from "effect";
-import { Process } from "hyperlink-ts";
+import { Daemon } from "hyperlink-ts";
 
-class Sync extends Process.Service<Sync>()("@app/Sync", {
+class Sync extends Daemon.Service<Sync>()("@app/Sync", {
   effect: Effect.log("default"),
 }) {}
 
@@ -102,7 +102,7 @@ const SyncConfigured = Sync.buildConfiguredProcess.pipe(
 ```typescript
 import * as Store from "hyperlink-ts/Store";
 
-const SendSms = RunHyperlink.Service<SendSms>()("@app/Sms", {
+const SendSms = Gate.Service<SendSms>()("@app/Sms", {
   payload: PhoneSchema,
   success: Schema.Void,
   error: SmsErrorSchema,
@@ -115,9 +115,9 @@ const SendSmsLive = SendSms.layer.pipe(
 );
 ```
 
-`RunHyperlink.layer` / `Service.layer` merge {@link Store.layerDefaultMemory} automatically. Override with
+`Gate.layer` / `Service.layer` merge {@link Store.layerDefaultMemory} automatically. Override with
 `Layer.provideMerge(AppStore.layerMemory)` (or SQLite `AppStore.layer({ filename })`) at the app root.
-{@link RunHyperlink.make} still requires {@link Store.layerDefaultMemory} on the effect. See
+{@link Gate.make} still requires {@link Store.layerDefaultMemory} on the effect. See
 [store.md](./store.md#default-store-layerdefaultmemory).
 
 ---

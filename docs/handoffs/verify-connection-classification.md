@@ -7,7 +7,7 @@
 
 ## The gap (closed)
 
-`Resource.verifyConnection(node, opts?)` shipped as the **F3 reachability backstop**: one bounded
+`Hyperlink.verifyConnection(node, opts?)` shipped as the **F3 reachability backstop**: one bounded
 transport connection, fail `NodeUnreachable | UnaddressedNode`. Every failure collapsed to
 `NodeUnreachable`. Deep mode now escalates via `NodeStatus`:
 
@@ -42,5 +42,5 @@ declared endpoint. Tag-aware default-on client verify escalates to deep + F4 (ex
 - **D1 — Shape.** In-place `verifyConnection(node, { deep })`.
 - **D2 — Error model.** Distinct tagged errors: `ProtocolUnanswered`, `ServiceNotServed`, `ServiceNotReady`, `ContractMismatch`.
 - **D3 — Multi-protocol.** `selectEndpoint` by default; `{ all: true }` for every transport.
-- **D4 — contractHash.** **Eng’d** — optional field on `NodeStatus.resources[]`; `Resource.contractHash(tag)`; compare via deep options / default-on addressed client.
-- **D5 — Default.** Explicit `verifyConnection` keeps `deep` off; addressed `Resource.client` / `clientHttp` default-on escalate to deep+F4 (§8.6).
+- **D4 — contractHash.** **Eng’d** — optional field on `NodeStatus.resources[]`; `Hyperlink.contractHash(tag)`; compare via deep options / default-on addressed client.
+- **D5 — Default.** Explicit `verifyConnection` keeps `deep` off; addressed `Hyperlink.client` / `clientHttp` default-on escalate to deep+F4 (§8.6).

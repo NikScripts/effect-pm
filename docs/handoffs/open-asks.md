@@ -14,7 +14,7 @@
 
 Once deps are explicit in `R` (`serve` / edge provide), unit tests must supply a `Layer` for every ambient tag. Live layers are too heavy; consumers invent noops (they already have `ImportFlush.layerNoop` for *their* services).
 
-**Ask:** where **effect-pm** owns the service, ship a matching `layerNoop` (or equivalent inert layer) so consumers don’t hand-stub package deps.
+**Ask:** where **hyperlink-ts** owns the service, ship a matching `layerNoop` (or equivalent inert layer) so consumers don’t hand-stub package deps.
 
 **Rule:** a `layerNoop` lands **beside the service it stubs** when that service exists — not a generic “noop any Tag” helper. Consumer-owned tags stay consumer-owned stubs. Optional later: a fatter “test serve” kit is out of scope until a concrete owned service needs it.
 

@@ -4,8 +4,8 @@
  *
  * @remarks
  * - **Defaults** live on the service factory (`defaultSpec` / factory config).
- * - **`configureLayer`** appends a {@link ConfigPatch} under a resource id (Context tag).
- * - The resource **`layer`** calls {@link foldConfiguredSpec} once at acquisition, then builds
+ * - **`configureLayer`** appends a {@link ConfigPatch} under a hyperlink / tag id (Context tag).
+ * - The hyperlink **`layer`** calls {@link foldConfiguredSpec} once at acquisition, then builds
  *   runtime state (for example {@link WorkPool}'s `makeQueueRuntime`).
  * - Patches are **not** hot-reloaded after the layer is built.
  * - **`Layer.provide` / `Layer.provideMerge` order** is ordinary Effect layering for patch/service
@@ -28,7 +28,7 @@ const isUnaryUpdater = <F>(
 ): patch is (previous: F) => F => isCallable(patch) && patch.length === 1;
 
 /**
- * Patch for a resource or daemon spec.
+ * Patch for a hyperlink or daemon spec.
  *
  * - **Partial object** — shallow-merge fields; use a function value to replace a field.
  * - **`effect` field** — a **unary** function `(previous) => next` updates the prior worker /
@@ -108,7 +108,7 @@ export const foldConfig = <T extends object>(
 const emptyPatches = <T extends object>(): ReadonlyArray<ConfigPatch<T>> => [];
 
 /**
- * Context tag key for configure patches scoped to one resource id.
+ * Context tag key for configure patches scoped to one hyperlink / tag id.
  *
  * @internal
  */
@@ -189,7 +189,7 @@ export const configureWrapEffectField = <
 // below so the namespace members match. Root imports match these bindings.
 
 /**
- * Deterministic configure tag key for a resource id, aliased as `HyperlinkConfigure.tagKey`.
+ * Deterministic configure tag key for a hyperlink / tag id, aliased as `HyperlinkConfigure.tagKey`.
  *
  * @public
  */

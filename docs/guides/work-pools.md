@@ -403,6 +403,12 @@ const EmailsLive = WorkPool.layer(Emails, {
 rate limit bounds *start rate*. Use both — a pool of 8 workers that collectively
 start no faster than 100/sec.
 
+`rateLimit` is Effect’s `RateLimiter.consume` options (same shape as Gate). The
+backing store is **presence-driven**: provide `RateLimiter.layerStoreRedis` at
+the app root for a fleet-wide budget; omit it and the queue Soft-builds
+in-memory. Do **not** rely on Soft memory across multiple Nodes — that yields
+N× the limit.
+
 ## Bootstrapping: start paused
 
 Sometimes you want to load a queue *before* it drains — seed a backlog, wire up a

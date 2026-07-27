@@ -2,20 +2,22 @@
 
 **Supervisor reads this file + git.** Agents update their row on every push. Owner does not relay unless overriding.
 
-**Integration branch:** **`integration`** (formerly `integration/storage`). Type-display cleanup + `Client<T>` override + `Kind` drop + logs Phase 5 + ProcessStorage retirement + `NodeLogs` removal all folded. See [`whats-changed-2026-07-13.md`](archive/2026-07/features/whats-changed-2026-07-13.md).
+**Integration branch:** **`integration`** (formerly `integration/storage`). Type-display cleanup + `Client<T>` override + `Kind` drop + logs Phase 5 + DaemonStorage retirement + `NodeLogs` removal all folded. See [`whats-changed-2026-07-13.md`](archive/2026-07/features/whats-changed-2026-07-13.md).
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **4** | `cursor/hyperservice-open-deps-5679` | [wire groups & identity](../plans/wire-groups-and-identity.md) · [service shapes](../plans/service-shapes.md) | **Eng W1–W2** (family path deleted) | tip-sync after push | typecheck + targeted tests | Next Eng **W3**: kind-keyed family factory when needed | 2026-07-27 |
-| **G / TUI** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity · `View` redesign · **F5 split-dial** | **Eng** — Dashboards on `DashboardViews.layer`; F5 Eng'd (runtime dial + connect memo + HealthBoard pending/failed) | tip-sync after push | ui-node-status-bundle + ui-dashboard-views + ui-view | Next: peel DetailScreen; **hold** kit Dashboard. F5: [`loud-failures-design.md`](./loud-failures-design.md) §10. | 2026-07-27 |
-| **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **G** | 2026-07-26 |
+| **4** | `cursor/hyperservice-open-deps-5679` | [fleet rate limiting](../plans/fleet-rate-limiting.md) · [wire groups](../plans/wire-groups-and-identity.md) · [service shapes](../plans/service-shapes.md) | **baked** — R1+R3 fleet rateLimit on `integration`; W1–W3 + `default`/`defaults` | `970f2cf5` | typecheck 0 / gate+fleet+work-pool 92 | R2 observe nest · R4 HttpApiClient+ApiMetrics | 2026-07-27 |
+| **G / TUI** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity · `View` redesign · **F5 split-dial** | **Eng** — Dashboards on `DashboardViews.layer`; F5 Eng'd; tip-synced with `integration` | tip-sync after push | ui-node-status-bundle + ui-dashboard-views + ui-view | Next: peel DetailScreen; **hold** kit Dashboard. F5: [`loud-failures-design.md`](./loud-failures-design.md) §10. | 2026-07-27 |
+| **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **G**, Launcher | 2026-07-26 |
+| **Launcher** | `cursor/launcher-handoff-design-929b` | [launcher + handoff brief](./launcher-and-handoff-brief.md) · named-handles doc refresh | **plan-first** + docs hygiene | branch tip | docs only | Living-docs naming scrub (WorkPool/Daemon/Gate/Hyperlink/hyperlink-ts); handoff file renames | 2026-07-27 |
+| **Docs site** | `cursor/docs-site-origin-recovery-dbdc` | [origin down / CF 504](./docs-site-origin-down.md) | **cleared** — OOM on 1GB; redeployed `:latest` + bumped `basic-s` (2GB) | deploy `6e1150bd` @ 2026-07-27T15:42Z | `/healthz` + docs + `/api/hyperlink-ts/Polling` + `/api/effect/Effect/retry` 200 | No image rebuild; watch for residual leak under load | 2026-07-27 |
 | **1** | *(frozen)* | [Examples book](./agent-01-examples-book.md) · [Phase 3](./agent-01-docs-corpus-phase3-plan.md) | **frozen / superseded** — E1 examples on tip; intro voice [#68](https://github.com/nikolasstow/Hyperlink/pull/68) closed | — | — | Branch deleted (unique tip was pre-rebrand `docs/index.md`) | 2026-07-26 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
 | **3** | *(dead)* | [identity-coordinator](./identity-coordinator.md) · [loud-failures](./loud-failures-design.md) | **dead** — Soft / verify / F4 / lineId memo Eng’d on tip | — | — | Work branch deleted (was tip-contained in `integration`) | 2026-07-26 |
 | **B** | from `integration` | [dashboard typesafety](./agent-b-dashboard-typesafety.md) | **plan-first** | on line | — | Owner-gated; remote `fix/dashboard-typesafety` tip was already on line (deleted) | 2026-07-14 |
 | **A** | merged | [rules/docs](archive/2026-07/agents/agent-a-rules-and-documentation.md) | **merged** | on line | — | — | 2026-07-12 |
 | **C** | from `integration` | [standards audit](./agent-c-standards-audit.md) | **plan-first** | on line | manifest ✓ | Owner-gated; remote `chore/standards-audit` tip was already on line (deleted) | 2026-07-14 |
-| **D** | **merged to `integration`** | [named handles](./agent-d-named-handles.md) · [convergence decisions](./queue-handle-convergence-decisions.md) | **M3 shipped** | `d2d340b4b` | typecheck 0 (both) / lint 0 / 418 tests | **M3 done:** `yield* MyQueue` hovers as named `QueueResource<Item>` (Svc seam on ResourceTag + 1 harness-guarded cast in nameQueueService; `events` success now `void`). Follow-ups: M2 `.Service` unify, per-Tag success/error carriers, elide trailing default args. Agent 3 must not touch handles | 2026-07-14 |
+| **D** | **merged to `integration`** | [named handles](./agent-d-named-handles.md) · [convergence decisions](./queue-handle-convergence-decisions.md) | **M3 + M1b on tip** | `integration` tip | typecheck / lint / tests green (at land) | **Hover:** `yield* Emails` → **`WorkPool<EmailJob>`**; Gate → **`Gate<…>`** (`Svc` on `HyperlinkTag` + `nameQueueService` / `nameRunService`). **Not** `QueueResource` / public `QueueHandle`. Follow-ups: M2 `.Service` unify, carriers, trailing defaults, prettify asymmetry, Daemon naming, M4–M6. Public `QueueHandle` export removed (internal TEMP only). Do not reassign to Agent 3 | 2026-07-27 |
 | **E** | folded into Agent 3 work branch | [impossible-states](./impossible-states-proposal.md) · [loud-failures](./loud-failures-design.md) | **merged to tip** | `integration` | F1–F4 + default-on verify Eng’d | — | 2026-07-21 |
 
 ---
@@ -23,12 +25,13 @@
 ## Supervisor queue
 
 ### Reserved — hands off (2026-07-16, owner-assigned)
-0. **Agent E:** impossible-states plan ([`impossible-states-proposal.md`](./impossible-states-proposal.md)). **DONE + merged:** P1 (node↔protocol wiring bug → compile error, cast-free) + P5 (http transport dies in browser). **P2 SKIPPED** (cast). **P4 already-enforced** (loose-fields payload already rejected; proposal mis-scoped). **P3 deferred** (opaque serve layers). Clean wins complete. Reserved `src/Resource.ts` node/client surface until fully merged (done). **Tag-config reservation RELEASED — Agent D queue/run/process payload-config unblocked.**
+0. **Agent E:** impossible-states plan ([`impossible-states-proposal.md`](./impossible-states-proposal.md)). **DONE + merged:** P1 (node↔protocol wiring bug → compile error, cast-free) + P5 (http transport dies in browser). **P2 SKIPPED** (cast). **P4 already-enforced** (loose-fields payload already rejected; proposal mis-scoped). **P3 deferred** (opaque serve layers). Clean wins complete. Reserved `src/Hyperlink.ts` node/client surface until fully merged (done). **Tag-config reservation RELEASED — Agent D WorkPool/Gate/Daemon payload-config unblocked.**
 
 ### Active (owner approval required)
-1. **Agent 4:** Wire identity **W1–W2 Eng** ([`wire-groups-and-identity.md`](../plans/wire-groups-and-identity.md)) — drop public `groupId`; unused family path deleted (solo `Tag` only). Service shapes: `Tag`/`value`/`promise`/`pure` Eng’d; Creating polish + handle adornments paused. Next: W3 kind-keyed family factory when needed.
-2. **Agent G / TUI:** Dashboard Group parity + View redesign (`cursor/tui-dashboard-parity-125f`) — all default families on `DashboardViews`; hold kit Dashboard; next DetailScreen peel / component library when owner says.
-3. **Launcher / handoff (unassigned):** brief [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md) — dumb spawn-and-exit; node owns process; Lookup directs; version upgrade → handoff. Prior [`launcher-decisions.md`](./launcher-decisions.md) = reference only.
+1. **Agent 4:** W1–W3 + `default`/`defaults` + **R1+R3 fleet rateLimit baked** on `integration` ([`../plans/fleet-rate-limiting.md`](../plans/fleet-rate-limiting.md)). Next: R2 observe nest → R4 HttpApiClient Tag + absorb ApiMetrics. Incident: [`agent-04-w3-incident-2026-07-27.md`](./agent-04-w3-incident-2026-07-27.md).
+2. **Agent G / TUI:** Dashboard Group parity + View redesign + F5 split-dial (`cursor/tui-dashboard-parity-125f`) — tip-synced; hold kit Dashboard; next DetailScreen peel when owner says.
+3. **Launcher:** launcher + node handoff design — plan-first on `cursor/launcher-handoff-design-929b`. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
+4. **Docs site:** [`docs-site-origin-down.md`](./docs-site-origin-down.md) — **cleared** 2026-07-27. Cause: Node heap OOM on `apps-s-1vcpu-1gb-fixed` → DO `no_healthy_upstream` → CF 504. Fix: redeploy `:latest` + instance → `basic-s` (2GB).
 
 ### Frozen / dead (do not assign)
 - **Agent 1:** frozen — Examples book E1 already on tip; stale intro PR #68 closed; branch deleted.
@@ -44,10 +47,10 @@
 
 ### Done prior (Agent 3)
 - [#62](https://github.com/NikScripts/effect-pm/pull/62) Soft bake+override (`withDefaultStorage`) — **merged**
-- [#65](https://github.com/NikScripts/effect-pm/pull/65) cutover follow-through (CustomQueue Soft + Soft prose) — **merged**
+- [#65](https://github.com/NikScripts/effect-pm/pull/65) cutover follow-through (untyped WorkPool Soft + Soft prose) — **merged**
 - [#59](https://github.com/NikScripts/effect-pm/pull/59) `byResource` full key + kill resource-identity `processId`/`queueId`
 - [#57](https://github.com/NikScripts/effect-pm/pull/57) private `_logs`
-- Process.events [#47](https://github.com/NikScripts/effect-pm/pull/47)/[#51](https://github.com/NikScripts/effect-pm/pull/51) · lineage [#48](https://github.com/NikScripts/effect-pm/pull/48) · ready-perfection [#52](https://github.com/NikScripts/effect-pm/pull/52)
+- Daemon.events [#47](https://github.com/NikScripts/effect-pm/pull/47)/[#51](https://github.com/NikScripts/effect-pm/pull/51) · lineage [#48](https://github.com/NikScripts/effect-pm/pull/48) · ready-perfection [#52](https://github.com/NikScripts/effect-pm/pull/52)
 
 ### Deferred / parked
 - **ShardMap author (Cursor):** type-safety + corpus sweep **merged** to `integration` (`f269a9ce`; was [#39](https://github.com/NikScripts/effect-pm/pull/39) / [#41](https://github.com/NikScripts/effect-pm/pull/41)). Branches deleted. Corpus-complete for Agent C remit.
@@ -58,7 +61,7 @@
 ### Branch hygiene (2026-07-26)
 Owner: only **Agent 4**, **Agent G**, and this agent remain active.
 
-**Deleted (superseded / contained):** Agent 1 `cursor/docs-corpus-phase3-ce05` (+ closed [#68](https://github.com/nikolasstow/Hyperlink/pull/68)); Agent 3 `cursor/logs-store-followers-plan-906e` + `cursor/agent-03-byresource-full-key-a009`; plus earlier contained tips (`ask-incumbent`, catalog bake stack, `feat/*` tip-contained, etc.).
+**Deleted (superseded / contained):** Agent 1 `cursor/docs-corpus-phase3-ce05` (+ closed [#68](https://github.com/nikolasstow/Hyperlink/pull/68)); Agent 3 `cursor/logs-store-followers-plan-906e` + `cursor/agent-03-byhyperlink-full-key-a009`; plus earlier contained tips (`ask-incumbent`, catalog bake stack, `feat/*` tip-contained, etc.).
 
 **Merged onto tip (this hygiene branch):** repo `hyp` CLI (was [#78](https://github.com/nikolasstow/Hyperlink/pull/78) / `cursor/repo-dev-cli-125f`); landing polish from `docs/standards-corpus`.
 
@@ -73,21 +76,21 @@ Owner: only **Agent 4**, **Agent G**, and this agent remain active.
 
 ## Completed
 
-- [#65](https://github.com/NikScripts/effect-pm/pull/65) Soft cutover follow-through (CustomQueue Soft + Soft prose)
+- [#65](https://github.com/NikScripts/effect-pm/pull/65) Soft cutover follow-through (untyped WorkPool Soft + Soft prose)
 - [#62](https://github.com/NikScripts/effect-pm/pull/62) Soft bake+override Memory (`withDefaultStorage`)
 - [#60](https://github.com/NikScripts/effect-pm/pull/60) FleetHealth — meshed stadium-board readiness (`Reachable` / `Unreachable`)
 - [#55](https://github.com/NikScripts/effect-pm/pull/55) Phase 1 handoffs archive A–D + open-asks closeout
 - [#54](https://github.com/NikScripts/effect-pm/pull/54) withReadiness pipe type hygiene (P0–P3)
 - [#52](https://github.com/NikScripts/effect-pm/pull/52) Agent 3 ready-perfection handoff close-out
 - [#50](https://github.com/NikScripts/effect-pm/pull/50) Logs guide (narrative chapter after Stores)
-- [#51](https://github.com/NikScripts/effect-pm/pull/51) Process.events remote proof (A+B+C1) + Completed.success coverage
+- [#51](https://github.com/NikScripts/effect-pm/pull/51) Daemon.events remote proof (A+B+C1) + Completed.success coverage
 - [#48](https://github.com/NikScripts/effect-pm/pull/48) Logs lineage append in `withScope` (idempotent leaf)
 - [#47](https://github.com/NikScripts/effect-pm/pull/47) Process live `events` stream (persist == stream)
 - [#43](https://github.com/NikScripts/effect-pm/pull/43) Remove interim `Logs.persistLayer` + standalone `LogStore` / `store/Log` subpath
 - [#40](https://github.com/NikScripts/effect-pm/pull/40) Durable store tails — `Node.logs`, registration followers, Storage-first reads, stream levels, remote NodeStatus path
 - [#33](https://github.com/NikScripts/effect-pm/pull/33) Logs closeout — `NodeLogs` shim removed; Agent 2 retired
 - [#30](https://github.com/NikScripts/effect-pm/pull/30) Phase 5 Logs — `captureLogs` / handle `logs` removed
-- ProcessStorage / RuntimeStorage / ProcessLifecycleStore facet substrate **retired**
+- DaemonStorage / RuntimeStorage / ProcessLifecycleStore facet substrate **retired**
 - [#26](https://github.com/NikScripts/effect-pm/pull/26) Process `run` RPC + effect/effectFn
 - [#23–#25](https://github.com/NikScripts/effect-pm/pull/23) queue ref + node status + tag schemas
 

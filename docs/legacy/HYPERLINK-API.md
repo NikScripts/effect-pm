@@ -1,6 +1,6 @@
 # Hyperlink API Reference
 
-Complete guide to `QueueHyperlink`, `CustomQueueHyperlink`, `RunHyperlink`, and `HttpApiHyperlink` — the managed resource modules in `hyperlink-ts`.
+Complete guide to `WorkPool`, `WorkPool.Service` (untyped), `Gate`, and `HttpApiClient` — the managed toolkit modules in `hyperlink-ts`.
 
 ---
 
@@ -10,10 +10,10 @@ Every contract's `.Tag` factory stamps a canonical **kind** id on the tag it bui
 
 ```ts
 import * as Hyperlink from "hyperlink-ts/Hyperlink";
-import * as QueueHyperlink from "hyperlink-ts/QueueHyperlink";
+import * as WorkPool from "hyperlink-ts/WorkPool";
 
-Hyperlink.kindOf(MyQueue);        // "hyperlink-ts/QueueHyperlink"
-Hyperlink.kindOf(MyQueue) === QueueHyperlink.kind; // true
+Hyperlink.kindOf(MyQueue);        // "hyperlink-ts/WorkPool"
+Hyperlink.kindOf(MyQueue) === WorkPool.kind; // true
 Hyperlink.kindOf(SomePlainTag);   // undefined  (a bare Hyperlink.Tag carries no kind)
 ```
 
@@ -21,17 +21,17 @@ Hyperlink.kindOf(SomePlainTag);   // undefined  (a bare Hyperlink.Tag carries no
 
 | Contract | `kind` |
 | --- | --- |
-| `QueueHyperlink` (`…/QueueContract`) | `hyperlink-ts/QueueHyperlink` |
-| `Process` (`Process.Tag`) | `hyperlink-ts/Process` |
-| `Process.Schedule` (standalone schedule) | `hyperlink-ts/Process/Schedule` |
-| `CustomQueueHyperlink` (`…/CustomQueueContract`) | `hyperlink-ts/CustomQueueHyperlink` |
+| `WorkPool` (`…/WorkPool`) | `hyperlink-ts/WorkPool` |
+| `Daemon` (`Daemon.Tag`) | `hyperlink-ts/Daemon` |
+| `Daemon.Schedule` (standalone schedule) | `hyperlink-ts/Daemon/Schedule` |
+| `WorkPool.Service` (untyped) (`…/WorkPool` (untyped `.Service`)) | `hyperlink-ts/WorkPool` |
 | `ApiMetrics` | `hyperlink-ts/ApiMetrics` |
 
 This is how the web/TUI dashboards pick the right widget for each `Group` leaf. A bare `Hyperlink.Tag` has no stamped kind; pass `{ kind }` to `Hyperlink.Tag(key, { kind })` to give a custom contract its own. Solo tags use `.key` as the RpcGroup wire prefix (`Hyperlink.wireKeyOf`); there is no public `groupId`.
 
 ---
 
-## QueueHyperlink
+## WorkPool
 
 Priority queue with managed workers, deduplication, retry, and lifecycle hooks.
 
@@ -41,9 +41,9 @@ Priority queue with managed workers, deduplication, retry, and lifecycle hooks.
 
 ```typescript
 import { Effect, Exit } from "effect"
-import { QueueHyperlink } from "hyperlink-ts"
+import { WorkPool } from "hyperlink-ts"
 
-class EmailQueue extends QueueHyperlink.Service<EmailQueue, Email, SmtpError>()(
+class EmailQueue extends WorkPool.Service<EmailQueue, Email, SmtpError>()(
   "@app/EmailQueue",
   {
     effect: (email, ctx) => smtpClient.send(email).pipe(Effect.asVoid),
@@ -69,17 +69,17 @@ Effect.provide(EmailQueue.layer)
 #### Tag (pure identity — implementation provided separately)
 
 ```typescript
-class NotificationQueue extends QueueHyperlink.Tag<NotificationQueue, Notification, never, never>()(
+class NotificationQueue extends WorkPool.Tag<NotificationQueue, Notification, never, never>()(
   "@app/NotificationQueue",
 ) {}
 
 // Provide implementation in different environments:
-const NotificationQueueDev = QueueHyperlink.layer(NotificationQueue, {
+const NotificationQueueDev = WorkPool.layer(NotificationQueue, {
   effect: (n) => Effect.logInfo(`[DEV] Would send: ${n.message}`),
   concurrency: 1,
 })
 
-const NotificationQueueProd = QueueHyperlink.layer(NotificationQueue, {
+const NotificationQueueProd = WorkPool.layer(NotificationQueue, {
   effect: (n) => pushService.send(n).pipe(Effect.asVoid),
   concurrency: 20,
 })
@@ -90,7 +90,7 @@ const NotificationQueueProd = QueueHyperlink.layer(NotificationQueue, {
 ```typescript
 const program = Effect.scoped(
   Effect.gen(function*() {
-    const queue = yield* QueueHyperlink.make({
+    const queue = yield* WorkPool.make({
       name: "temp-work-queue",
       effect: (item: string) => Effect.logInfo(String(item.length)),
       concurrency: 5,
@@ -101,7 +101,7 @@ const program = Effect.scoped(
 )
 ```
 
-### Service shape (`QueueHandle<T, E, EEnqueue, R>`) — **`R`** is last: ambient services workers need
+### Service shape (`WorkPool<T, E, EEnqueue, R>`) — **`R`** is last: ambient services workers need
 
 ```typescript
 const queue = yield* MyQueue
@@ -132,7 +132,7 @@ yield* queue.deadLetter({ key: "poison" }, { reason: "max retries" })
 ### Configuration reference
 
 ```typescript
-QueueHyperlink.Service<Self, T, E>()("name", {
+WorkPool.Service<Self, T, E>()("name", {
   // ─── Required ───
   effect: (item: T, ctx: EffectContext<T>) => Effect<R, E>,
 
@@ -201,7 +201,7 @@ onExit: ({ entry, exit, elapsed, retry }, queue) => Effect.gen(function*() {
 #### Error handling with retry + dead letter
 
 ```typescript
-class OrderQueue extends QueueHyperlink.Service<OrderQueue, Order, OrderError>()(
+class OrderQueue extends WorkPool.Service<OrderQueue, Order, OrderError>()(
   "@app/OrderQueue",
   {
     effect: (order) => processOrder(order),
@@ -223,7 +223,7 @@ class OrderQueue extends QueueHyperlink.Service<OrderQueue, Order, OrderError>()
 #### Deduplication (by item key)
 
 ```typescript
-class WebhookQueue extends QueueHyperlink.Service<WebhookQueue, WebhookEvent, never>()(
+class WebhookQueue extends WorkPool.Service<WebhookQueue, WebhookEvent, never>()(
   "@app/WebhookQueue",
   {
     effect: (event) => deliverWebhook(event),
@@ -236,7 +236,7 @@ class WebhookQueue extends QueueHyperlink.Service<WebhookQueue, WebhookEvent, ne
 #### Spawning derived work from effect
 
 ```typescript
-class CrawlQueue extends QueueHyperlink.Service<CrawlQueue, URL, CrawlError>()(
+class CrawlQueue extends WorkPool.Service<CrawlQueue, URL, CrawlError>()(
   "@app/CrawlQueue",
   {
     effect: (url, ctx) => Effect.gen(function*() {
@@ -253,7 +253,7 @@ class CrawlQueue extends QueueHyperlink.Service<CrawlQueue, URL, CrawlError>()(
 #### Start paused, load items, then resume
 
 ```typescript
-class BatchQueue extends QueueHyperlink.Service<BatchQueue, Job, never>()(
+class BatchQueue extends WorkPool.Service<BatchQueue, Job, never>()(
   "@app/BatchQueue",
   {
     effect: (job) => processJob(job),
@@ -270,13 +270,13 @@ yield* queue.resume  // now workers start in priority order
 
 ---
 
-## CustomQueueHyperlink
+## WorkPool.Service (untyped)
 
-N-level priority queues sharing the same worker engine as `QueueHyperlink`, with a numeric lane store and
+N-level priority queues sharing the same worker engine as `WorkPool`, with a numeric lane store and
 pluggable take algorithm (`priority`, `strict-descending`, `weighted`, or custom pick). Use when the
 fixed high/normal/low trio is not enough.
 
-**Default `QueueHyperlink` is unchanged** — custom lanes live in a separate type and subpath so the
+**Default `WorkPool` is unchanged** — custom lanes live in a separate type and subpath so the
 default import graph stays lightweight (scheduled lane code is dynamically imported only when
 `takeAlgorithm: "weighted"` or similar is selected).
 
@@ -284,21 +284,21 @@ default import graph stays lightweight (scheduled lane code is dynamically impor
 
 | Need | Use |
 |------|-----|
-| Three priorities (`add` / `prioritize` / `defer`) | `QueueHyperlink` |
-| Many lanes, named levels, WFQ / strict ordering | `CustomQueueHyperlink` |
+| Three priorities (`add` / `prioritize` / `defer`) | `WorkPool` |
+| Many lanes, named levels, WFQ / strict ordering | `WorkPool.Service` (untyped) |
 
 ### Toolkit tag (recommended)
 
 Tag factory arity mirrors positional lane config:
 
 ```typescript
-import { CustomQueueHyperlink } from "hyperlink-ts"
+import { WorkPool } from "hyperlink-ts"
 import { Schema } from "effect"
 
 const Job = Schema.Struct({ id: Schema.String })
 
 // (id, schema, levelCount, namedLevels?)
-class Jobs extends CustomQueueHyperlink.Tag<Jobs>()(
+class Jobs extends WorkPool.Tag /* untyped .Service */<Jobs>()(
   "@app/Jobs",
   Job,
   8,
@@ -306,7 +306,7 @@ class Jobs extends CustomQueueHyperlink.Tag<Jobs>()(
 ) {}
 
 // or: (id, schema, levelNames[]) — indices assigned 0…n−1
-class Lanes extends CustomQueueHyperlink.Tag<Lanes>()(
+class Lanes extends WorkPool.Tag /* untyped .Service */<Lanes>()(
   "@app/Lanes",
   Job,
   ["urgent", "normal", "batch"],
@@ -323,13 +323,13 @@ const numeric = yield* queue.levelSizes // number[] indexed by lane
 Tree-shake the contract only (no engine on the tag import path):
 
 ```typescript
-import * as CustomQueueHyperlink from "hyperlink-ts/CustomQueueHyperlink"
+import * as WorkPool from "hyperlink-ts/WorkPool"
 ```
 
 ### Layer / engine
 
 ```typescript
-CustomQueueHyperlink.layer(Jobs, {
+WorkPool.layer /* untyped .Service */(Jobs, {
   levelCount: 8,
   namedLevels: { urgent: 0, batch: 7 },
   takeAlgorithm: "weighted", // or "priority" | "strict-descending" | CustomTakeAlgorithm
@@ -338,29 +338,29 @@ CustomQueueHyperlink.layer(Jobs, {
 })
 
 // Local engine without toolkit tag:
-import { CustomQueueHyperlink as CustomQueueEngine } from "hyperlink-ts/CustomQueueHyperlink"
+import { WorkPool as UntypedEngine } from "hyperlink-ts/WorkPool"
 
-const queue = yield* CustomQueueEngine.make({
+const queue = yield* UntypedEngine.make({
   levelCount: 4,
   namedLevels: { fast: 2 },
   effect: (item) => Effect.log(String(item)),
 })
 ```
 
-### Service shape differences from `QueueHyperlink`
+### Service shape differences from `WorkPool`
 
 - **`add(item, level?)`** — optional lane as numeric index or configured name (not `{ item, level }`).
 - **`sizes`** — `Record<string, number>` keyed by name (unnamed lanes appear as `"0"`, `"1"`, …).
 - **`levelSizes`** — `number[]` parallel to lane indices.
 - No `prioritize` / `defer` — pick the lane explicitly on `add`.
 
-Subpaths: `hyperlink-ts/CustomQueueHyperlink` (namespace + engine), `hyperlink-ts/CustomQueueHyperlink` (tag/layer/server only).
+Subpaths: `hyperlink-ts/WorkPool` (namespace + engine), `hyperlink-ts/WorkPool` (tag/layer/server only).
 
 Example: [`examples/forms/queue/custom-queue-hyperlink-n-level.ts`](../examples/forms/queue/custom-queue-hyperlink-n-level.ts) (`pnpm run example:custom-queue-hyperlink`).
 
 ---
 
-## RunHyperlink
+## Gate
 
 Concurrency gate (semaphore) around any effect. No queues, no workers — just bounded parallelism.
 
@@ -369,7 +369,7 @@ Concurrency gate (semaphore) around any effect. No queues, no workers — just b
 #### Class declaration (parameterized gate)
 
 ```typescript
-class SendSms extends RunHyperlink.Service<SendSms>()("@app/SendSms", {
+class SendSms extends Gate.Service<SendSms>()("@app/SendSms", {
   payload: PhoneNumberSchema,
   success: SmsResultSchema,
   error: SmsErrorSchema,
@@ -385,7 +385,7 @@ const result = yield* send.run("+1234567890")
 #### Class declaration (unit gate — no input)
 
 ```typescript
-class RefreshPrices extends RunHyperlink.Service<RefreshPrices>()("@app/RefreshPrices", {
+class RefreshPrices extends Gate.Service<RefreshPrices>()("@app/RefreshPrices", {
   payload: Schema.Void,
   success: PriceDataSchema,
   error: FetchErrorSchema,
@@ -400,7 +400,7 @@ const prices = yield* refresh.run()
 #### Generic runner (wraps any effect)
 
 ```typescript
-const DbPool = RunHyperlink.makeRunner({
+const DbPool = Gate.makeRunner({
   name: "@app/DbPool",
   concurrency: 20,  // max 20 concurrent DB queries
 })
@@ -413,7 +413,7 @@ const orders = yield* runner(db.query("SELECT * FROM orders"))
 #### Tag + layer (dependency inversion)
 
 ```typescript
-const ApiGate = RunHyperlink.Tag<ApiGate>()(
+const ApiGate = Gate.Tag<ApiGate>()(
   "@app/ApiGate",
   RequestSchema,
   ResponseSchema,
@@ -421,13 +421,13 @@ const ApiGate = RunHyperlink.Tag<ApiGate>()(
 )
 
 // Dev: no limit
-const ApiGateDev = RunHyperlink.layer(ApiGate, {
+const ApiGateDev = Gate.layer(ApiGate, {
   effect: (req) => httpFetch(req),
   concurrency: 100,
 })
 
 // Prod: strict limit
-const ApiGateProd = RunHyperlink.layer(ApiGate, {
+const ApiGateProd = Gate.layer(ApiGate, {
   effect: (req) => httpFetch(req),
   concurrency: 10,
 })
@@ -436,17 +436,17 @@ const gate = yield* ApiGate
 yield* gate.run(request)
 ```
 
-When `RunHyperlink.store(tag)` or the default store bridge is composed, the engine automatically
+When `Gate.store(tag)` or the default store bridge is composed, the engine automatically
 persists run facts and state transitions to **Store**.
 
-**Store provision:** `RunHyperlink.layer`, `RunHyperlink.serve`, and `RunHyperlink.Service.layer` merge
+**Store provision:** `Gate.layer`, `Gate.serve`, and `Gate.Service.layer` merge
 {@link Store.layerDefaultMemory} automatically. Override with `Layer.provideMerge(AppStore.layerMemory)`.
-{@link RunHyperlink.make} still requires {@link Store.layerDefaultMemory} on the effect (see tests).
+{@link Gate.make} still requires {@link Store.layerDefaultMemory} on the effect (see tests).
 
 #### Raw make (no tag)
 
 ```typescript
-const gate = yield* RunHyperlink.make({
+const gate = yield* Gate.make({
   name: "@app/Multiplier",
   effect: (n: number) => Effect.succeed(n * 2),
   concurrency: 3,
@@ -472,26 +472,26 @@ Static shortcuts: `yield* ApiGate.run(request)` (requires the tag in `R`).
 
 ### Remote (RPC)
 
-Same tag + config as {@link layer}; serve over HTTP like Queue/Process:
+Same tag + config as {@link layer}; serve over HTTP like WorkPool/Daemon:
 
 ```typescript
-const remoteHandlers = RunHyperlink.serveRemote(ApiGate, {
+const remoteHandlers = Gate.serveRemote(ApiGate, {
   effect: (req) => httpFetch(req),
   concurrency: 10,
 })
 
-const localAndRemote = RunHyperlink.serve(ApiGate, { effect: (req) => httpFetch(req) })
+const localAndRemote = Gate.serve(ApiGate, { effect: (req) => httpFetch(req) })
 ```
 
 Wire schemas on the tag: `runGateStatus`, `runSpec(payload, success, error?)`.
 
-### Store registration (`RunHyperlink.store`)
+### Store registration (`Gate.store`)
 
 Register built-in run facts + state history on an app {@link Store.Service}:
 
 ```typescript
 class AppStore extends Store.Service<AppStore>("@app/Store")(
-  RunHyperlink.store(ApiGate),
+  Gate.store(ApiGate),
 ) {}
 
 // Engine auto-writes when AppStore.layerMemory (or .layer) is composed with ApiGate.layer
@@ -499,11 +499,11 @@ const store = yield* AppStore.at(ApiGate)
 const facts = yield* store.facts()
 ```
 
-Legacy **`ProcessStorage.layer`** still composes other facets (execution, queue, log); run-gate history is on **Store**.
+Legacy **`DaemonStorage.layer`** still composes other facets (execution, queue, log); run-gate history is on **Store**.
 
 ---
 
-## HttpApiHyperlink
+## HttpApiClient
 
 Typed HTTP API client with transport-level concurrency gating.
 
@@ -514,7 +514,7 @@ Typed HTTP API client with transport-level concurrency gating.
 ```typescript
 import { HttpApi, HttpApiGroup, HttpApiEndpoint } from "effect/unstable/httpapi"
 import { Schema } from "effect"
-import { HttpApiHyperlink } from "hyperlink-ts"
+import { HttpApiClient } from "hyperlink-ts"
 
 // Define your API schema
 const getUser = HttpApiEndpoint.get("getUser", "/users/:id", {
@@ -524,7 +524,7 @@ const UsersApi = HttpApi.make("users-api")
   .add(HttpApiGroup.make("users").add(getUser))
 
 // Create gated client
-const UsersClient = HttpApiHyperlink.make(UsersApi, {
+const UsersClient = HttpApiClient.make(UsersApi, {
   name: "@app/UsersClient",
   baseUrl: "https://api.example.com",
   concurrency: 5,
@@ -538,7 +538,7 @@ const user = yield* client.users.getUser({ path: { id: "123" } })
 #### With auth header (transformClient)
 
 ```typescript
-const AuthClient = HttpApiHyperlink.make(MyApi, {
+const AuthClient = HttpApiClient.make(MyApi, {
   name: "@app/AuthClient",
   baseUrl: "https://api.example.com",
   concurrency: 10,
@@ -554,7 +554,7 @@ const AuthClient = HttpApiHyperlink.make(MyApi, {
 ```typescript
 import { acceptJson } from "hyperlink-ts"
 
-const JsonClient = HttpApiHyperlink.make(MyApi, {
+const JsonClient = HttpApiClient.make(MyApi, {
   name: "@app/JsonClient",
   baseUrl: "https://api.example.com",
   transformClient: acceptJson,  // adds Accept: application/json to all requests
@@ -564,7 +564,7 @@ const JsonClient = HttpApiHyperlink.make(MyApi, {
 #### No concurrency limit (pass-through)
 
 ```typescript
-const UnlimitedClient = HttpApiHyperlink.make(MyApi, {
+const UnlimitedClient = HttpApiClient.make(MyApi, {
   name: "@app/UnlimitedClient",
   baseUrl: "https://api.example.com",
   // no concurrency field — requests are not gated
@@ -585,7 +585,7 @@ type ClientShape = Effect.Success<typeof myCustomMake>
 class MyClient extends Context.Service<MyClient, ClientShape>()("@app/MyClient") {}
 
 // Wrap with concurrency gate
-const MyClientLive = HttpApiHyperlink.layerEffect(MyClient, myCustomMake, {
+const MyClientLive = HttpApiClient.layerEffect(MyClient, myCustomMake, {
   concurrency: 10,
 })
 ```
@@ -613,7 +613,7 @@ Derivations **stack**: a later `withReadiness` receives the previous one as a se
 **Depend on another resource.** `Hyperlink.readinessOf(tag)` yields a resource's service and runs *its* derivation; `Hyperlink.allReady([...])` combines checks with AND (first not-ready wins). So a queue can report degraded when a dependency (e.g. a `Database` resource) is down — compile-time-checked (the dependency lands in the readiness Effect's requirements), and it works whether the dependency is local or reached over RPC:
 
 ```ts
-class Jobs extends QueueHyperlink.Tag<Jobs>()("app/Jobs", Item, { host: AppHost }).pipe(
+class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", Item, { host: AppHost }).pipe(
   Hyperlink.withReadiness((_svc, base) =>
     Hyperlink.allReady([base, Hyperlink.readinessOf(Database)]),
   ),
@@ -635,17 +635,17 @@ On the dashboard, the host **health board** (tap the host die) lists degraded re
 Build each layer with **`serve`** (local **and** served — the default) or **`serveRemote`** (served-only, a pure gateway):
 
 - **`Hyperlink.serve(tag, impl)`** / **`Hyperlink.serveRemote(tag, impl)`** — for a **raw** `Hyperlink.Tag`. Both **spec-check** the impl against the tag's spec (a bare `{ tag, impl }` literal is typed `Record<string, unknown>` and silently accepts typos). `serve` additionally grants `Self | LocalCapability<Self>` from the **same** materialization, so the serving node also `yield*`s the resource in-process; `serveRemote` mounts wire handlers only. Two impl forms: a plain **record** (`R = never`) or an **`Effect`** that builds it carrying a requirement `R`.
-- **`QueueHyperlink.serve(tag, config)`** / **`Process.serve(tag, config)`** / **`ApiMetrics.serve(tag)`** — the **engine** forms: same grant + registration, but the served layer also **runs the engine** (worker / refill / `persist` for queues, tick schedule for processes) with the worker/tick `R` preserved. Use these for queue/process tags — `Hyperlink.serve` only mounts handlers and would leave the worker/tick dead. Each has a matching `serveRemote` for served-only nodes.
+- **`WorkPool.serve(tag, config)`** / **`Daemon.serve(tag, config)`** / **`ApiMetrics.serve(tag)`** — the **engine** forms: same grant + registration, but the served layer also **runs the engine** (worker / refill / `persist` for queues, tick schedule for processes) with the worker/tick `R` preserved. Use these for queue/process tags — `Hyperlink.serve` only mounts handlers and would leave the worker/tick dead. Each has a matching `serveRemote` for served-only nodes.
 
 ```ts
 Hyperlink.httpServer([
-  QueueHyperlink.serve(RosterQueue, { effect }),        // worker R
+  WorkPool.serve(RosterQueue, { effect }),        // worker R
   ApiMetrics.serve(SdpApi),                            // Scope
   Hyperlink.serve(Database, { status: pingStatus }),    // raw, spec-checked
 ]).pipe(Layer.provideMerge(NodeHttpServer.layer({ port: 3001 })));
 ```
 
-### Per-resource dependencies
+### Per-hyperlink dependencies
 
 Because each `serve` layer carries **its own** `Layer.provide`, resources on one host that need **different implementations of the same tag** (mutually exclusive — e.g. one worker fires post-persist hooks, another must not) stay isolated — no shared union-provide can confuse them. Resources that **share** a dependency memoize one instance (same `dependency` value → one build; `Layer.fresh(dependency)` to isolate).
 
@@ -717,35 +717,35 @@ The **combine primitives** (`hyperlink-ts/MultiHost`) are isomorphic (browser + 
 
 ---
 
-## ProcessStorage Integration
+## DaemonStorage Integration
 
-Hyperlink modules automatically record runtime facts when the relevant storage facet is available in the environment. No configuration is needed beyond composing `ProcessStorage.layer` or a durable storage layer.
+Hyperlink modules automatically record runtime facts when the relevant storage facet is available in the environment. No configuration is needed beyond composing `DaemonStorage.layer` or a durable storage layer.
 
 ```typescript
-import { ProcessStorage } from "hyperlink-ts"
+import { DaemonStorage } from "hyperlink-ts"
 
 // Without storage — resources work fine, no analytics
 program.pipe(Effect.provide(EmailQueue.layer))
 
-// With storage — toolkit engines auto-write to Store bridge; optional ProcessStorage adds log/lifecycle facets
+// With storage — toolkit engines auto-write to Store bridge; optional DaemonStorage adds log/lifecycle facets
 program.pipe(
   Effect.provide(Layer.mergeAll(
     EmailQueue.layer,
-    ProcessStorage.layer,  // Log + ProcessLifecycle facets (not execution history)
+    DaemonStorage.layer,  // Log + ProcessLifecycle facets (not execution history)
   ))
 )
 ```
 
 **Queue execution history** (Store bridge) — persisted `QueueEvent<T>` rows via the engine store tap.
-Register `QueueHyperlink.store(EmailQueue)` on an app `Store.Service` for durable analytics, or read
+Register `WorkPool.store(EmailQueue)` on an app `Store.Service` for durable analytics, or read
 the baked-in default:
 
 ```typescript
 import * as Store from "hyperlink-ts/Store";
-import * as QueueHyperlink from "hyperlink-ts/QueueHyperlink";
+import * as WorkPool from "hyperlink-ts/WorkPool";
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
-  QueueHyperlink.store(EmailQueue),
+  WorkPool.store(EmailQueue),
 ) {}
 
 const store = yield* AppStore.at(EmailQueue);

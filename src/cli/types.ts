@@ -7,7 +7,7 @@ import type { Effect } from "effect";
 import { specOf } from "../Hyperlink";
 
 /**
- * The structural shape the CLI reads from a resource tag: yieldable (→ its service), with
+ * The structural shape the CLI reads from a hyperlink tag: yieldable (→ its service), with
  * `key` / `description` and the stowed contract spec. A `Hyperlink.Tag` / `WorkPool.Tag`
  * / `Daemon.Tag` class satisfies this — pass the classes directly.
  *
@@ -19,7 +19,7 @@ export type CliHyperlinkTag = Effect.Effect<unknown, never, unknown> & {
 } & Parameters<typeof specOf>[0];
 
 /**
- * A tree node: a leaf resource tag, or a group (named members, possibly nested).
+ * A tree node: a leaf hyperlink tag, or a group (named members, possibly nested).
  *
  * @public
  */

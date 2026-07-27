@@ -130,8 +130,11 @@ export type {
 } from "./DynamicConfig";
 export {
   DuplicateWireKey,
+  DuplicateSharedInstance,
+  DuplicateDefaultKey,
   DuplicateHyperlinkKey,
   EffectFnMissingPayload,
+  SharedRoutingError,
   IdentityMultiNode,
   IdentitySelfRequired,
   LocalOnlyMethod,
@@ -140,7 +143,7 @@ export {
   MissingContractMethod,
   ProtocolMismatch,
   // Contract introspection — the basis for generic UIs (walk a tag's spec, render a widget
-  // per method from its kind/description/destructive/streaming). See examples/resource-tui.
+  // per method from its kind/description/destructive/streaming). See examples/hyperlink-tui.
   methodMeta,
   isVoidCommand,
   isEffect,
@@ -153,6 +156,7 @@ export * as Node from "./Node";
 export * as MultiNode from "./MultiNode";
 export * as Lookup from "./Lookup";
 export type {
+  AnyDefaultMethod,
   AnyLocalMethod,
   AnyMethod,
   Local,
@@ -169,7 +173,13 @@ export type {
   ServiceOf,
   Shape,
   ShapeOf,
+  SharedTagFactory,
   Spec,
+  DefaultMethod,
+  DefaultsBag,
+  DefaultsOf,
+  WithDefaults,
+  ImplWithDefaultOverrides,
   TagHandlers,
   Wire,
   WireOf,

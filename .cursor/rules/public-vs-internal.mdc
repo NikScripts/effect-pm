@@ -7,21 +7,21 @@ alwaysApply: true
 
 ## Rule
 
-- **Public:** Symbols apps import — `@nikscripts/effect-pm`, a documented subpath, or a bin entry.
+- **Public:** Symbols apps import — `hyperlink-ts`, a documented subpath, or a bin entry.
 - **Internal (`src/internal/`):** Package-only wiring — not composed by apps, not exported.
 
 ## Storage facets → `src/store/`
 
 Storage facets (when present) are **public** under **`src/store/`** with
-**`@nikscripts/effect-pm/store/<Domain>`** subpaths.
+**`hyperlink-ts/store/<Domain>`** subpaths.
 
 | Status | Notes |
 |--------|-------|
 | **Removed** | `store/Log` (`LogStore`) — durable logs use `Node.logs` / toolkit `*.store(tag)` on `Store.Service` |
-| **Removed** | `store/QueueResource` facet — queue history uses `QueueResource.store(tag)` |
-| **Removed** | `store/ProcessLifecycle` facet substrate (retired with ProcessStorage) |
+| **Removed** | `store/WorkPool` facet — queue history uses `WorkPool.store(tag)` |
+| **Removed** | `store/ProcessLifecycle` facet substrate (retired with DaemonStorage) |
 
-**Not the worker module:** `@nikscripts/effect-pm/QueueResource` is the queue worker; `@nikscripts/effect-pm/QueueResource` + `*.store(tag)` is queue store registration.
+**Not the worker module:** `hyperlink-ts/WorkPool` is the queue worker; `WorkPool.store(tag)` (and siblings) register durable history on the Store bridge.
 
 **`internal/store/`** — type-agnostic Store plumbing. No per-facet codecs, no facet tags.
 
@@ -30,7 +30,7 @@ Storage facets (when present) are **public** under **`src/store/`** with
 | Location | Meaning |
 |----------|---------|
 | `src/store/*.ts` | Public storage facets (when any ship) |
-| `src/Process.ts`, `src/Logs.ts`, … | Other app-facing modules |
+| `src/Daemon.ts`, `src/WorkPool.ts`, `src/Gate.ts`, `src/Logs.ts`, … | Other app-facing modules |
 | `src/internal/store/*` | Package-private store plumbing |
 | `src/storage/*` | Durable adapters (`storage/sqlite`, …) |
 

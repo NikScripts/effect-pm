@@ -5,7 +5,7 @@ namespace standard. Work from THIS doc; do not regenerate shapes from memory.
 
 ## Locked decisions
 
-1. **Own module namespace, not Resource/Process.** `export * as Polling from "./Polling"` in the
+1. **Own module namespace, not Hyperlink/Daemon.** `export * as Polling from "./Polling"` in the
    barrel. Polling is cadence policy FOR processes, but it is neither a resource nor a process —
    it gets no `Tag` factory and never will.
 2. **The Context tag is INTERNAL.** `PollingTag` moves to `src/internal/pollingTag.ts`. The
@@ -48,5 +48,5 @@ doc remains open.
 ## Verification bar
 
 Root tsc + full tests + LSP clean on touched files; the 2 `yield* Polling` examples and
-`Layer.succeed(Polling, …)` tests migrated; docs regen shows NO top-level module for effect-pm;
+`Layer.succeed(Polling, …)` tests migrated; docs regen shows NO top-level module for hyperlink-ts;
 check-links 0 dead; docs suite green.

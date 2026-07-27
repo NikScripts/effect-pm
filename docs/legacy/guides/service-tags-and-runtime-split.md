@@ -15,35 +15,35 @@ and safe (proven: tag-only subpath imports bundle to a few kb with **zero** engi
 
 ```ts
 // tags.ts — browser-safe. Import the tag namespace from its subpath (tree-shakes per member).
-import * as QueueHyperlink from "hyperlink-ts/QueueHyperlink";
-import * as Process from "hyperlink-ts/Process";
+import * as WorkPool from "hyperlink-ts/WorkPool";
+import * as Daemon from "hyperlink-ts/Daemon";
 import * as Hyperlink from "hyperlink-ts/Hyperlink";
 
 export class Droplet extends Hyperlink.Node<Droplet>("hub/droplet") {}
-export class RosterQueue extends QueueHyperlink.Tag<RosterQueue>()("nwsl/RosterQueue", {
+export class RosterQueue extends WorkPool.Tag<RosterQueue>()("nwsl/RosterQueue", {
   payload: Job,
   node: Droplet,
 }) {}
-export class LiveScores extends Process.Tag<LiveScores>()("nwsl/LiveScores") {}
+export class LiveScores extends Daemon.Tag<LiveScores>()("nwsl/LiveScores") {}
 ```
 
 ```ts
 // runtime.ts — Node OS edge only. Layers, serve / httpServer, storage, persistence.
 import { Layer } from "effect";
 import { Hyperlink } from "hyperlink-ts/Hyperlink";
-import { QueueHyperlink } from "hyperlink-ts/QueueHyperlink";
+import { WorkPool } from "hyperlink-ts/WorkPool";
 import * as Logs from "hyperlink-ts/Logs";
-import * as ProcessStorage from "hyperlink-ts/ProcessStorage";
+import * as DaemonStorage from "hyperlink-ts/DaemonStorage";
 import { SQLiteHistoryStore } from "hyperlink-ts/storage/sqlite";
 import { Droplet, RosterQueue } from "./tags";
 
 export const RosterQueueLive = Hyperlink.httpServer([
-  QueueHyperlink.serve(RosterQueue, { effect }),
+  WorkPool.serve(RosterQueue, { effect }),
 ]).pipe(
   Layer.provide(SQLiteHistoryStore.layer({ filename: "history.db" })), // metrics.query
   Layer.provide(Logs.layer),
   Layer.provide(Logs.persistLayer(Droplet)),
-  Layer.provide(ProcessStorage.layer),
+  Layer.provide(DaemonStorage.layer),
 );
 ```
 
@@ -65,7 +65,7 @@ const scoped = rows.filter(LogEntry.hasKey(RosterQueue.key));
 
 If a file calls `Layer.provide` / `serve` / `httpServer` / `SQLiteRuntimeStorage` / a storage adapter,
 it belongs in **runtime**, not beside your client/widget imports. Import tag namespaces from their
-**subpaths** (`hyperlink-ts/QueueHyperlink`, `/Process`, `/Group`, …) so member
+**subpaths** (`hyperlink-ts/WorkPool`, `/Daemon`, `/Group`, …) so member
 access tree-shakes.
 
 See [history-and-persistence.md](./history-and-persistence.md) for the dashboard data layer

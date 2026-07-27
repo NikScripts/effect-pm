@@ -1,6 +1,8 @@
 # Store cutover — Store core (shared decisions for all resource agents)
 
-**Read this first.** The Process / Queue / RunResource / CustomQueue cutover reports all depend on
+> **Naming:** read as WorkPool / Daemon / Gate / Hyperlink / hyperlink-ts (pre-rebrand names purged from this file).
+
+**Read this first.** The Daemon / WorkPool / Gate / untyped WorkPool cutover reports all depend on
 the decisions here. Companion to `result-schema-and-rpc-validation.md` (naming) and
 `queue-persistence-design.md` (two-plane model).
 
@@ -11,7 +13,7 @@ the decisions here. Companion to `result-schema-and-rpc-validation.md` (naming) 
   any scope on demand. `store-default.test.ts` proves it. **This is the always-present default** — see the
   resolution decision below.
 - **Precise handle resolution (tightening).** `bridge.at` is generic (`at<Input>(scopeKey, input)` →
-  `StoreHandleOf<Input>`); `Tag.store` / `Resource.store` / `AppStore.at(tag)` return the **precise**
+  `StoreHandleOf<Input>`); `Tag.store` / `Hyperlink.store` / `AppStore.at(tag)` return the **precise**
   `Store.HandleOf<contract>`. Removes the consumer casts (see "Action for every module").
 - **`Storage` public API** — {@link Storage}, {@link StorageApi}, and {@link layerDefaultMemory} are
   `@public` so third-party engines declare the bridge as a dependency (`withDefault` / `withStorage`).
@@ -42,8 +44,8 @@ Toolkit `layer` / `serve` / `serveRemote` soft-default {@link Store.layerDefault
 Override by feeding an app `Store.Service` **into** the toolkit layer so Soft unwrap captures it:
 
 ```ts
-Process.layer(Tag, config).pipe(Layer.provideMerge(AppStore.layer({ filename })))
-Resource.httpServer([…]).pipe(Layer.provide(AppStore.layerMemory))
+Daemon.layer(Tag, config).pipe(Layer.provideMerge(AppStore.layer({ filename })))
+Hyperlink.httpServer([…]).pipe(Layer.provide(AppStore.layerMemory))
 ```
 
 Sibling `Layer.merge(engine, AppStore)` does **not** override. Live recipe SSOT:
@@ -64,22 +66,22 @@ fact/state union).
 
 - **Cast removal.** With the tightening, `... as BuiltInXContract` is unnecessary. Mirror
   `builtInQueueStoreContract` (cast-free). ~~`processStoreSpec.ts` still has `... as BuiltInProcessContract`~~
-  **Process:** factory cast removed — `record` accepts `ProcessStoreEventRow` via a narrow `event.append`
-  bridge; journal encodes on append. RunResource's contract likewise.
+  **Daemon:** factory cast removed — `record` accepts `DaemonStoreEventRow` via a narrow `event.append`
+  bridge; journal encodes on append. Gate's contract likewise.
 - **No `serviceOption` on `Storage`.** Resolve it as a declared dependency (§1). (`serviceOption`
   is still correct for the **durability** plane — `DurableQueueStore` — and irrelevant for the legacy facets
   being deleted.)
 
 ## Who is currently wrong (2026-07-07)
 
-- ~~**RunResource** — `internal/runResourceStoreTap.ts` resolves with `serviceOption` + handle cast~~ **Fixed**
-  on run-resource branch: declared `Storage` dependency, cast-free contract, **`RunResourceStore` facet deleted**,
+- ~~**Gate** — `internal/gateStoreTap.ts` resolves with `serviceOption` + handle cast~~ **Fixed**
+  on run-resource branch: declared `Storage` dependency, cast-free contract, **`GateStore` facet deleted**,
   `layerDefaultMemory` merged into layer entry points.
-- ~~**Process** — still on `ProcessExecutionStore` only~~ **Fixed** on integration branch: `processStoreTap.ts`
+- ~~**Daemon** — still on `ProcessExecutionStore` only~~ **Fixed** on integration branch: `processStoreTap.ts`
   deleted, **`ProcessExecutionStore` facet deleted**, `withDefaultMemory` on toolkit layers.
-- ~~**Queue** — engine still writes legacy `QueueResourceStore` facet~~ **Fixed** on `integration/storage`:
+- ~~**Queue** — engine still writes legacy `WorkPoolStore` facet~~ **Fixed** on `integration/storage`:
   `materializeEngineQueueStore*` + `publishEvent` → Store bridge; facet class deleted from `src/`.
-- Legacy-facet `serviceOption` calls (`HistoryStore` / `QueueResourceStore` /
+- Legacy-facet `serviceOption` calls (`HistoryStore` / `WorkPoolStore` /
   `LogStore`) are being **deleted** in the cutover — not this rule's concern.
 - Durability `serviceOption(DurableQueueStore)` is **correct** — leave it.
 
@@ -95,7 +97,7 @@ Persisted store rows use the **same slot names as the tag factory** (`success`, 
 | **`success`** | Present on terminal success rows **iff** the tag declares a `success` schema. Field name is `success` (not `result`). Value is the **decoded** worker/run return — journal encodes on append. |
 | **`error`** | Always on terminal failure rows. Presence-driven by the tag's `error` schema (see below). |
 
-#### `error` encoding (locked — Process, Queue, RunResource store rows)
+#### `error` encoding (locked — Daemon, WorkPool, Gate store rows)
 
 One rule for all worker resources:
 
@@ -112,7 +114,7 @@ Queue `Failed` without an `error` schema uses the same `error: string` field (no
 `cause` column on the persisted row). Live `.events` streams may still carry rich `Cause`/`Exit`
 for subscribers; the **store row** follows the rule above.
 
-**Not the live-handle `result` ref:** Process's reactive `result` Subscribable (latest success
+**Not the live-handle `result` ref:** Daemon's reactive `result` Subscribable (latest success
 `Option`) is unrelated — only the persisted `Completed.success` field follows this table.
 
 ## Store-core TODO

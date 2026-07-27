@@ -3,20 +3,20 @@
 **Status:** **DESIGN** — living bake notes. Phase 1 IPC **LOCKED + SHIPPED**. Catalog / discovery / managers / lookup = mostly **thoughts** until explicitly locked in a bake row.  
 **Thesis:** Make cross-runtime **seamless, easier, safer** — Node address + typed service catalog; optional discovery for same-machine (esp. Unix sockets).  
 **Related:** [`transport-dependency-decisions.md`](./transport-dependency-decisions.md) · [`loud-failures-design.md`](./loud-failures-design.md) · [`docs/resources/fleets-and-peers.md`](../resources/fleets-and-peers.md)  
-**Naming note:** Shipped surface is split: **`@nikscripts/effect-pm/Node`** (Tag / protocol listen / connect / *Server) + **`Resource`** (Tag / serve / client / identity / nodes). Product rename (e.g. Unbounded services) is **parked**.
+**Naming note:** Shipped surface is split: **`hyperlink-ts/Node`** (Tag / protocol listen / connect / *Server) + **`Hyperlink`** (Tag / serve / client / identity / nodes). Product rename (e.g. Unbounded services) is **parked**.
 
 ### Node module — **LOCKED + Eng** (2026-07-20; protocol split 2026-07-21)
 
 | Export | Role |
 |--------|------|
-| `Node.Tag` / `Node.Prototype` / `Node.asLookup` | Node constructors (was `Resource.Node` / `.Prototype` / `Lookup.LookupNode`) |
+| `Node.Tag` / `Node.Prototype` / `Node.asLookup` | Node constructors (was `Hyperlink.Node` / `.Prototype` / `Lookup.LookupNode`) |
 | `Node.unix` / `Node.http` / `Node.ws` / `Node.nPipe` | Protocol listen siblings — see [§ Protocol listen siblings](#protocol-listen-siblings-keep-in-sync) |
 | `Node.listen` | Neutral spine — **no transport bind** (`ListenUseProtocol` → use protocol entry) |
 | `httpServer` / `wsServer` / `ipcServer` | Low-level escape hatches (caller provides platform) |
 | `Node.connect*` / `clients` | Dial helpers |
 | Types | `AnyNode`, `ProtocolKind`, `ListenNode`, `UnaddressedNode`, … |
 
-No shims on Resource/Lookup. Forms: `examples/forms/resource/node-*.ts` (path includes `node-clients`).
+No shims on Hyperlink/Lookup. Forms: `examples/forms/hyperlink/node-*.ts` (path includes `node-clients`).
 
 ### How to read locks in this file
 
@@ -53,7 +53,7 @@ There was **no** shipped `Node<Self, ROut>` catalog API that got removed.
 
 | Concern | Today |
 |--------|--------|
-| Address / kind | `Resource.Node("key", port \| url \| { url, kind })` |
+| Address / kind | `Hyperlink.Node("key", port \| url \| { url, kind })` |
 | What a process exposes | `httpServer` / `wsServer([serve…])` list (value-level) |
 | Tag → Node | optional `{ node }` on Tag, or `client(tag, node)`, or `distributed([...])` |
 | Peers | static `distributed` set → `peersLayer` builds per-node clients |
@@ -70,13 +70,13 @@ Two *uses*, one constructor:
 
 ```ts
 // Address-only
-class Worker extends Resource.Node<Worker>("app/Worker", { path: "/tmp/w.sock" }) {}
+class Worker extends Hyperlink.Node<Worker>("app/Worker", { path: "/tmp/w.sock" }) {}
 
 // Catalog (type-only imports — avoid bundling contract *impls* into the node module)
 import type { Jobs } from "@app/jobs"
 import type { Emails } from "@app/emails"
 
-class Worker extends Resource.Node<Worker, Jobs | Emails>(
+class Worker extends Hyperlink.Node<Worker, Jobs | Emails>(
   "app/Worker",
   { path: "/tmp/w.sock" },
 ) {}
@@ -98,9 +98,9 @@ class Worker extends Resource.Node<Worker, Jobs | Emails>(
 ### 3. `listen` proves the catalog
 
 ```ts
-const WorkerLive = Resource.listen(Worker, [
-  Resource.serve(Jobs, jobsImpl),
-  Resource.serve(Emails, emailsImpl),
+const WorkerLive = Hyperlink.listen(Worker, [
+  Hyperlink.serve(Jobs, jobsImpl),
+  Hyperlink.serve(Emails, emailsImpl),
 ])
 // Layer must provide Jobs | Emails (Worker’s ROut) — compile-time
 ```
@@ -144,7 +144,7 @@ With catalog + discovery, peers become a **two-layer** story:
 | **Topology** | Which other runtimes exist? (static `distributed` **or** discovery registry) |
 | **Catalog** | What Services does each runtime expose? (`ROut` / `serves[]`) |
 | **Clients** | For each peer Node, `connect` + client layers for catalog ∩ what *this* Tag needs |
-| **Folds** | Unchanged idea: `Resource.peers` / `fleet` / `MultiNode.*` over leaf shapes |
+| **Folds** | Unchanged idea: `Hyperlink.peers` / `fleet` / `MultiNode.*` over leaf shapes |
 
 ### Peers + nodeless Tags
 
@@ -153,7 +153,7 @@ Blessed same-machine path:
 1. Each process: `listen(SelfNode, [serve…])` (+ publish to registry).  
 2. Mesh: `discover` → map of peer Nodes (+ catalogs).  
 3. `peersLayer` (evolved): build peer clients from **discovered Nodes**, not only from `distributed([...])` on each Tag.  
-4. A Tag that needs a sibling leaf still marks `Resource.fleet` fields; membership comes from topology, not from stamping every Tag with every Node.
+4. A Tag that needs a sibling leaf still marks `Hyperlink.fleet` fields; membership comes from topology, not from stamping every Tag with every Node.
 
 Static `distributed([A,B,C])` remains for **fixed fleets** (browser, known URLs, ShardMap v1 fixed membership). Discovery is the ergonomic default for **local multi-process**.
 
@@ -214,13 +214,13 @@ Phase 4  Docs polish + serve rename (if not done earlier)
 
 ```ts
 // conceptual — names TBD in Phase-0 locks for IPC only
-class Worker extends Resource.Node<Worker>("app/Worker", {
+class Worker extends Hyperlink.Node<Worker>("app/Worker", {
   path: "/tmp/worker.sock",  // or path string overload
 }) {}
 
-Resource.ipcServer([Resource.serve(Jobs, jobsImpl)])  // listen on node path / options.path
-Resource.connect(Worker)  // kind "ipc" → NodeSocket.layerNet({ path })
-// or Resource.connectIpc(Worker) / connectIpc(path)
+Hyperlink.ipcServer([Hyperlink.serve(Jobs, jobsImpl)])  // listen on node path / options.path
+Hyperlink.connect(Worker)  // kind "ipc" → NodeSocket.layerNet({ path })
+// or Hyperlink.connectIpc(Worker) / connectIpc(path)
 ```
 
 **Implementation sketch (Effect already has the bits):**
@@ -232,7 +232,7 @@ Resource.connect(Worker)  // kind "ipc" → NodeSocket.layerNet({ path })
 
 **Out of Phase 1:** `ROut`, discovery, peersLayer changes, multi-protocol Node.
 
-**Touches:** `ProtocolKind`, `makeNode` address parsing, `protocolForNode` / `connect*`, new `ipcServer` (or shared raw-socket server helper), tests. Coordinate with whoever owns `src/Resource.ts` node/client surface (Agent E reservation history).
+**Touches:** `ProtocolKind`, `makeNode` address parsing, `protocolForNode` / `connect*`, new `ipcServer` (or shared raw-socket server helper), tests. Coordinate with whoever owns `src/Hyperlink.ts` node/client surface (Agent E reservation history).
 
 ### Phase 2 — Node catalog (`ROut`)
 
@@ -256,22 +256,22 @@ Managing Layers + Fleets & Peers; optional serve-family neutral names if locked.
 |---|----------|--------|
 | **I1** | Kind name | **`"ipc"`** — `"socket"` stays WebSocket only |
 | **I2** | Address shape on Node | **`{ path }`** → infers `kind: "ipc"`; `url` left undefined |
-| **I3** | Server helper | **`Resource.ipcServer(serves, { path })`** |
+| **I3** | Server helper | **`Hyperlink.ipcServer(serves, { path })`** |
 | **I4** | Path lifecycle | **no unlink by default** (anti unlink-steal; matches Lookup / nPipe). Opt in with `unlink: true` for stale-sock recovery before bind + on scope close |
 | **I5** | Windows named pipes | **Unix-only v1**; same `ipc` kind later |
 
 Shipped API:
 
 ```ts
-class Worker extends Resource.Node<Worker>("worker", { path: "/tmp/worker.sock" }) {}
-Resource.ipcServer([Resource.serve(Jobs, jobsImpl)], { path: Worker.path! })
-Resource.connect(Worker)       // derives ipc
-Resource.connectIpc(Worker)    // explicit
-Resource.protocolIpc(path)
-Resource.ipcClient(Worker)
+class Worker extends Hyperlink.Node<Worker>("worker", { path: "/tmp/worker.sock" }) {}
+Hyperlink.ipcServer([Hyperlink.serve(Jobs, jobsImpl)], { path: Worker.path! })
+Hyperlink.connect(Worker)       // derives ipc
+Hyperlink.connectIpc(Worker)    // explicit
+Hyperlink.protocolIpc(path)
+Hyperlink.ipcClient(Worker)
 ```
 
-Tests: `test/resource-ipc.test.ts`.
+Tests: `test/hyperlink-ipc.test.ts`.
 
 ### Block Phase 2 (catalog)
 
@@ -287,10 +287,10 @@ Tests: `test/resource-ipc.test.ts`.
 
 | Decision | Lock |
 |----------|------|
-| Blessed catalog entry | **`Resource.listen(node, serveLayers)`** — proves `ROut`, then dispatches to `ipcServer` / `wsServer` / `httpServer` from `node.kind` |
+| Blessed catalog entry | **`Hyperlink.listen(node, serveLayers)`** — proves `ROut`, then dispatches to `ipcServer` / `wsServer` / `httpServer` from `node.kind` |
 | Transport servers | **Keep** `httpServer` / `wsServer` / `ipcServer` public (escape hatch; what `listen` calls) |
 | Http / WebSocket bind | **Not** inferred from `node.url` alone — caller still provides `NodeHttpServer.layer` (bind ≠ dial). Ipc: `node.path` is bind+dial |
-| Serve list | `Resource.serve` / engine `*.serve` layers only (C5) |
+| Serve list | `Hyperlink.serve` / engine `*.serve` layers only (C5) |
 | Clients | **`Node.clients(node, tags)`** — one bundled `connect`; tags must cover `ROut` (array or rest; bound-tag overloads) |
 
 **Eng (2026-07-19):** shipped — `Node<Self, ROut>`, `listen`, `clients` (was `clientsFor`); tests `resource-listen.test.ts` / `.test-d.ts`.
@@ -309,7 +309,7 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 
 | Decision | Lock |
 |----------|------|
-| Blessed name | **`serve`** — `Resource.serve` / `QueueResource.serve` / `Process.serve` / … |
+| Blessed name | **`serve`** — `Hyperlink.serve` / `WorkPool.serve` / `Daemon.serve` / … |
 | Rejected | **`expose`** (alias or rename); inventing a third synonym |
 | Why not `server` | Collides with transport `httpServer` / `wsServer` / `ipcServer` and Effect `RpcServer` |
 | Why `serve` | Already the standards four-verb axis (`layer` / `serve` / `serveRemote` / `client`); list slots on `*Server` / future `listen` are those layers — one word, one job |
@@ -323,9 +323,9 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 |----------|------|
 | Model | **One set** on the handle (`nodesSym`). No privileged “home” Node. |
 | `client(Tag)` | When set size is **exactly 1** (sync `nodeSym` to that Node). Size ≠ 1 → need `client(Tag, node)` or ambient Protocol. |
-| API | `Resource.nodes([...])` **overwrites**; `Resource.andNode(node)` **appends one**. |
+| API | `Hyperlink.nodes([...])` **overwrites**; `Hyperlink.andNode(node)` **appends one**. |
 | Ctor sugar | `{ node: X }` ≡ `nodes([X])` (keep). |
-| Alias | `distributedOf` ≡ `nodesOf`. **`distributed`** is the **discoverable** stamp only: bare `.pipe(Resource.distributed)` ≡ `nodes([])`. Fixed fleets use `Resource.nodes([…])` (list form is not on `distributed` — keeps `class extends … .pipe(Resource.distributed)` identity-shaped). |
+| Alias | `distributedOf` ≡ `nodesOf`. **`distributed`** is the **discoverable** stamp only: bare `.pipe(Hyperlink.distributed)` ≡ `nodes([])`. Fixed fleets use `Hyperlink.nodes([…])` (list form is not on `distributed` — keeps `class extends … .pipe(Hyperlink.distributed)` identity-shaped). |
 | Identity | Multi-set **disabled** (`IdentityMultiNode`); overwrite to size ≤ 1 OK; `andNode` that would exceed 1 fails. |
 | Dial-fail | Identity does **not** fall back across a node list (identity has no multi set). Multi-node try-next / LB = later bake. |
 | Pipe | Mutate in place (same as today’s `distributed` / `withReadiness`). Copy-on-pipe deferred. |
@@ -359,16 +359,16 @@ Prefer `import type` for contract handles in `Node<Self, ROut>`. Value-importing
 
 #### Phase-3 bake — node directory, prototypes, handoff (2026-07-19)
 
-> **LOCKED for Eng:** D2/D5/D6 (directory) + **D7 vertical** + **D3** + **D4** + **`Resource.Node.Prototype`** + **`askIncumbent`**.  
+> **LOCKED for Eng:** D2/D5/D6 (directory) + **D7 vertical** + **D3** + **D4** + **`Hyperlink.Node.Prototype`** + **`askIncumbent`**.  
 > **Managers → identity coordinator LOCKED** — see [`identity-coordinator.md`](./identity-coordinator.md). **X1 multi-protocol Eng’d**.  
-> App composition: **data-first** `Resource.listen(node, serves)` then `.pipe(Layer.provide…)` on Layers.
+> App composition: **data-first** `Hyperlink.listen(node, serves)` then `.pipe(Layer.provide…)` on Layers.
 
 #### D3 — directory-backed peers (**LOCKED** 2026-07-19)
 
 | Decision | Lock |
 |----------|------|
-| Bare stamp | `.pipe(Resource.distributed)` ≡ `nodes([])` — declares an **empty** Node set (discoverable). |
-| List stamp | `Resource.nodes([A,B])` — fixed membership (**who**). |
+| Bare stamp | `.pipe(Hyperlink.distributed)` ≡ `nodes([])` — declares an **empty** Node set (discoverable). |
+| List stamp | `Hyperlink.nodes([A,B])` — fixed membership (**who**). |
 | Undeclared | `nodesSym` absent → `peersLayer` keeps today’s empty static peers (not directory). |
 | `peersLayer` empty set | Membership from Lookup **`Directory.nodesServing(tag.key)`** at layer build; exclude `self`; dial by entry `kind` (`IpcSocket`→path, else url + `peerProtocolRef`). |
 | Directory absent | Soft empty peer map (same soft pattern as advertise) — provide `Lookup.client` / bootstrap for a real mesh. |
@@ -443,7 +443,7 @@ class Sticky extends Node.Tag<Sticky>()("app/Sticky", {
 }) {}
 
 // 3) Call-site option still wins when provided
-Node.unix(Worker, [Resource.serve(Mail, impl)], {
+Node.unix(Worker, [Hyperlink.serve(Mail, impl)], {
   onConflict: "livenessReplace",
 })
 ```
@@ -481,7 +481,7 @@ So: set Lookup → `askIncumbent`, leave workers at default `inherit`, and the w
 ```ts
 // Goal sketch after lock:
 // NodeStatus gains (AI.3 LOCKED — name is `yield`, not askYield/concede):
-yield: Resource.effect(Schema.Boolean) // true = accepted yield
+yield: Hyperlink.effect(Schema.Boolean) // true = accepted yield
 // Mental note: wire/API `status.yield` ≠ Effect `yield*`; docs should call that out once.
 
 // Lookup advertise when effective onConflict: "askIncumbent":
@@ -503,33 +503,33 @@ yield: Resource.effect(Schema.Boolean) // true = accepted yield
 | **Dynamic instance** `Proto.instance(suffix?)` | Minted at `listen` (ipc) | **Many** `prototypeKey#suffix` — **no claim**; advertise only | Directory for mesh / peers |
 
 ```ts
-class MailWorker extends Resource.Node.Prototype<MailWorker, Mail>("app/MailWorker") {}
+class MailWorker extends Hyperlink.Node.Prototype<MailWorker, Mail>("app/MailWorker") {}
 class East extends MailWorker.make("East", { path: "/tmp/east.sock" }) {}
 
 // Dynamic — curry serves once; factory takes suffix (auto when omitted)
-const mailWorker = MailWorker.listen([Resource.serve(Mail, impl)])
+const mailWorker = MailWorker.listen([Hyperlink.serve(Mail, impl)])
 mailWorker().pipe(Layer.provide(Lookup.layer))
 mailWorker("w1").pipe(Layer.provide(Lookup.layer))
 
-class Worker extends Resource.Node<Worker, Mail>("app/Worker") {} // address-less (claim)
-Resource.listen(Worker, [Resource.serve(Mail, impl)]).pipe(
+class Worker extends Hyperlink.Node<Worker, Mail>("app/Worker") {} // address-less (claim)
+Hyperlink.listen(Worker, [Hyperlink.serve(Mail, impl)]).pipe(
   Layer.provide(Lookup.layer),
 )
-Resource.lookupClient(Mail).pipe(Layer.provide(Lookup.layer))
+Hyperlink.lookupClient(Mail).pipe(Layer.provide(Lookup.layer))
 ```
 
 #### Dynamic `Node.Prototype.instance` (**LOCKED** 2026-07-19)
 
 | Decision | Lock |
 |----------|------|
-| Nesting | Prototype is a **Node kind** — `Resource.Node.Prototype` (not a top-level `Resource.Prototype`). |
+| Nesting | Prototype is a **Node kind** — `Hyperlink.Node.Prototype` (not a top-level `Hyperlink.Prototype`). |
 | API | `Proto.instance()` / `Proto.instance(suffix)` on a `Node.Prototype` — returns a Node value for `listen` (not a class ctor; unlike `make`). |
 | Wire key | `prototypeKey#suffix`. Omitted suffix → minted at `listen` (`<millis>-<seq>`). |
 | Address | Always ephemeral ipc path at `listen` (no address arg — fixed addresses stay on `make`). |
 | Claim | **None** — many instances may run; directory `livenessReplace` still applies on duplicate `nodeKey`. |
 | Catalog | Same `ROut` brand as the Prototype. |
 | Clients | `lookupClient` stays fail-closed on 0/>1; multi-instance discovery → `peersLayer` + bare `distributed` / explicit Node; soft pick via D4 `{ pick }` (**LOCKED**). |
-| Spawn ergonomics | **`Proto.listen(serves) → (suffix?) => Layer`** — curry serve list; sugar over `Resource.listen(instance(suffix), serves)`. Returns **Layer only** (`ListenNode` in built context). Keep **`instance()`** public. Named clones stay `Resource.listen(East, serves)` — no `East.listen`. |
+| Spawn ergonomics | **`Proto.listen(serves) → (suffix?) => Layer`** — curry serve list; sugar over `Hyperlink.listen(instance(suffix), serves)`. Returns **Layer only** (`ListenNode` in built context). Keep **`instance()`** public. Named clones stay `Hyperlink.listen(East, serves)` — no `East.listen`. |
 
 #### `Prototype.listen` factory (**LOCKED** 2026-07-19)
 
@@ -543,7 +543,7 @@ Resource.lookupClient(Mail).pipe(Layer.provide(Lookup.layer))
 | Lookup | **Not baked** — same pipe as siblings (`Lookup.layer` / `layerOptions` / `client`) |
 
 ```ts
-const mailWorker = MailWorker.listen([Resource.serve(Mail, impl)])
+const mailWorker = MailWorker.listen([Hyperlink.serve(Mail, impl)])
 mailWorker().pipe(Layer.provide(Lookup.layer))
 mailWorker("w2").pipe(Layer.provide(Lookup.layer))
 ```
@@ -581,7 +581,7 @@ mailWorker("w2").pipe(Layer.provide(Lookup.layer))
 | Job | Nodeless client: **Lookup** picks the dial target (Identity resolve → directory `nodesServing`). |
 | vs `client(Tag, node)` | Explicit Node — caller names where to dial. |
 | Fail-closed | 0 or &gt;1 directory rows → `LookupClientError` — **no** silent multi-replica pick. |
-| Name | Shipped **`Resource.lookupClient`**. Bake sketch `unsafeLookupClient` (“trust Lookup or die”) is the **same** contract — keep the non-`unsafe` name; TSDoc/handoff must say so. |
+| Name | Shipped **`Hyperlink.lookupClient`**. Bake sketch `unsafeLookupClient` (“trust Lookup or die”) is the **same** contract — keep the non-`unsafe` name; TSDoc/handoff must say so. |
 | Not D4 | Soft pick when N&gt;1 is a **separate** OPEN bake (not this API). |
 
 - Identity: **no `{ self }`** — bound Node on Tag and/or listen Node.
@@ -604,9 +604,9 @@ mailWorker("w2").pipe(Layer.provide(Lookup.layer))
 | Out | Sticky affinity; manager/LB streams (later). |
 
 ```ts
-Resource.lookupClient(Mail) // fail-closed
-Resource.lookupClient(Mail, { pick: "first" })
-Resource.lookupClient(Mail, {
+Hyperlink.lookupClient(Mail) // fail-closed
+Hyperlink.lookupClient(Mail, { pick: "first" })
+Hyperlink.lookupClient(Mail, {
   pick: (rows) => rows.find((r) => r.nodeKey.endsWith("#w2")) ?? rows[0]!,
 })
 ```
@@ -626,15 +626,15 @@ Resource.lookupClient(Mail, {
 
 | Decision | Lock |
 |----------|------|
-| Surface | **`Resource.identity` pipe** on any Resource / Process / Queue Tag (same pattern as `withReadiness` / `distributed`). Optional `Resource.Singleton` sugar = Tag+pipe only — not required. |
+| Surface | **`Hyperlink.identity` pipe** on any Resource / Daemon / WorkPool Tag (same pattern as `withReadiness` / `distributed`). Optional `Hyperlink.Singleton` sugar = Tag+pipe only — not required. |
 | Name | Blessed: **`identity`**. (“singleton” avoided as primary — overloaded.) |
 | Where stamped | **On the handle**, not layer-only. |
-| Layer / serve | **`Resource.layer` / `serve` / `*Server` honor the stamp** — claim then local serve **or** client-of-winner. No separate `singletonLayer` as main API. |
+| Layer / serve | **`Hyperlink.layer` / `serve` / `*Server` honor the stamp** — claim then local serve **or** client-of-winner. No separate `singletonLayer` as main API. |
 | Self address | Dialable **bound Node** on Tag (`nodes` / `{ node }`) and/or **listen Node** (incl. minted address-less). **No `{ self }` bag.** |
 | Lookup down | **Fail-closed** — do not serve locally; orphan-serve opt-in later if ever. |
 | Node set | At most **one** Node on an identity handle; overwrite OK; **`andNode` disabled**. |
 
-**Eng:** shipped — `Resource.identity` pipe; `layer` / `serve` claim then local or client-of-winner.
+**Eng:** shipped — `Hyperlink.identity` pipe; `layer` / `serve` claim then local or client-of-winner.
 
 ### Protocol tags (X5 — **LOCKED** 2026-07-18)
 
@@ -659,7 +659,7 @@ Multi-protocol Node (endpoint set) is **X1 LOCKED + Eng’d** — see [`multi-pr
 **Shipped today (fact, not a new lock):**
 
 - Optional single Node on Tag via `{ node }` (`nodeSym`) for `client(Tag)`.
-- Multi-node **without** that stamp: `.pipe(Resource.distributed([...]))` — nodeless handle, equal peers; `peersLayer(Tag, self)` gets **self at runtime**.
+- Multi-node **without** that stamp: `.pipe(Hyperlink.distributed([...]))` — nodeless handle, equal peers; `peersLayer(Tag, self)` gets **self at runtime**.
 - Examples already call this out (e.g. hub: “nodeless, every instance an equal peer”).
 
 **Owner direction in chat (THOUGHTS — not stamped LOCKED):**
@@ -667,9 +667,9 @@ Multi-protocol Node (endpoint set) is **X1 LOCKED + Eng’d** — see [`multi-pr
 - When creating a Resource you **can** bake Node(s) into the tag; support multi-node; overwrite and add.
 - Tag carrying nodes is valuable: handle has what you need for a client layer.
 - Pristine base via pipe, preferring **class** handles for consistency:
-  - `export class MyQueue extends MyQueueBase.pipe(Resource.nodes([...])) {}`
+  - `export class MyQueue extends MyQueueBase.pipe(Hyperlink.nodes([...])) {}`
   - const camelCase pipe also works; same Context key / service — derived tag is extra metadata, not a different handle.
-- API shape sketched: `Resource.nodes(...)` **overwrites** node-set metadata; separate **add** helper (name sketch `Resource.andNode`). Per-slot overrides later, not now.
+- API shape sketched: `Hyperlink.nodes(...)` **overwrites** node-set metadata; separate **add** helper (name sketch `Hyperlink.andNode`). Per-slot overrides later, not now.
 - **No “home” Node** on the Tag. Agent briefly invented home vs fleet; owner rejected. Peers only know self / dial target **at runtime**. A Tag carries a **set** (or none) — not a privileged home.
 
 **Still OPEN for C1:** exact API names (`nodes` vs keep `distributed`), copy-on-pipe vs today’s mutate-in-place `distributed`, whether definition `{ node }` is just set-of-one sugar, and the formal lock sentence.
@@ -689,7 +689,7 @@ Owner direction consolidating (still **not locked**):
 Lookup is not only “DNS for addresses” — it can be the **identity server**: register resource instances by **key**, reject duplicates, point losers at the winner.
 
 ```text
-Process starts Resource with key K on Node A
+Daemon starts Resource with key K on Node A
   → claims at Lookup: "I am K at A"
   → first claim wins; Lookup records { key: K, node: A, address }
 
@@ -700,7 +700,7 @@ Later process starts same key K on Node B
 
 **Who is the lookup node (THOUGHT — expanded 2026-07-18):**
 
-Owner push: maybe `Resource.LookupNode` (own constructor). Address-less / “nodeless” clients check in with lookup only; serving Nodes register into a map; managers stream LB data into that map. Defaults only where protocol/topology allows (localhost port / well-known `IpcSocket`); **explicit required where defaults are impossible** (cross-network).
+Owner push: maybe `Hyperlink.LookupNode` (own constructor). Address-less / “nodeless” clients check in with lookup only; serving Nodes register into a map; managers stream LB data into that map. Defaults only where protocol/topology allows (localhost port / well-known `IpcSocket`); **explicit required where defaults are impossible** (cross-network).
 
 ##### Split brain — safest race handling (agent analysis, not locked)
 
@@ -720,7 +720,7 @@ Detecting “two lookups both reachable” (misconfig: two explicit addresses, o
 **Yes.** Encode as layers/types roughly:
 
 - `Lookup.layer` / `Lookup.layerOptions` — same-machine default (`IpcSocket` path); bind-or-dial that slot. Exclusive serve on a path remains `layerIpc` / `layerNode`.
-- `LookupNode("…", { url | path })` / `Resource.LookupNode` — **address required** for non-default topologies.
+- `LookupNode("…", { url | path })` / `Hyperlink.LookupNode` — **address required** for non-default topologies.
 - Starting a graph that needs lookup with **neither** a local default applicable **nor** an explicit LookupNode → **compile or layer-build error**, not silent elect across the LAN.
 
 Protocol matters: http localhost port and `IpcSocket` path are defaultable; arbitrary remote http/ws is not.
@@ -755,13 +755,13 @@ Nodeless client
 
 **Identity-claiming Resources (THOUGHT — evolving):**
 
-- Not only a separate `Resource.Singleton` ctor — prefer **`Resource.<pipe>` on any Resource/Process/Queue Tag** (like `withReadiness` / `distributed`), so identity applies to the whole toolkit surface.
-- Optional `Resource.Singleton` sugar can remain as Tag+pipe if useful; not required.
+- Not only a separate `Hyperlink.Singleton` ctor — prefer **`Hyperlink.<pipe>` on any Hyperlink/Daemon/WorkPool Tag** (like `withReadiness` / `distributed`), so identity applies to the whole toolkit surface.
+- Optional `Hyperlink.Singleton` sugar can remain as Tag+pipe if useful; not required.
 - Name: “singleton” is overloaded — candidates `identity` / `unique` / `exclusive` (see bake recommendations below).
 - If dupe at claim → layer becomes **client** of winner.
 - Build/test identity-claim path **before** managers (managers may collapse into the same mechanism).
 
-**Identity × node set (THOUGHT — owner):** Identity-stamped handles are **one Node at a time**. `Resource.nodes` (or equivalent) may **override** that single Node; **`andNode` is disabled** (compile and/or runtime). Multi-node fleets stay on ordinary Tags + `distributed` / `nodes` / `andNode`.
+**Identity × node set (THOUGHT — owner):** Identity-stamped handles are **one Node at a time**. `Hyperlink.nodes` (or equivalent) may **override** that single Node; **`andNode` is disabled** (compile and/or runtime). Multi-node fleets stay on ordinary Tags + `distributed` / `nodes` / `andNode`.
 
 **Dedupe key (THOUGHT — owner):** dedupe by **resource key** only. Do **not** dedupe by “what you manage.” Multiple different manager Resources for the same fleet resource can coexist if they have **different keys**.
 
@@ -792,7 +792,7 @@ Owner rethink: maybe **singletons and managers are the same thing** — identity
 
 Lean (agent, not lock): ctor = identity key (+ optional Node / lookup wiring); managed `R`s = **type params** (+ optional enforce at impl). Drop required value-level manages list unless a later Eng need appears.
 
-**Superseded (2026-07-21):** collapse **LOCKED** — no `Resource.Manager`; Eng via [`identity-coordinator.md`](./identity-coordinator.md). **M4–M6 Eng’d** (v1 complete); guide [`docs/guides/identity-coordinator.md`](../guides/identity-coordinator.md).
+**Superseded (2026-07-21):** collapse **LOCKED** — no `Hyperlink.Manager`; Eng via [`identity-coordinator.md`](./identity-coordinator.md). **M4–M6 Eng’d** (v1 complete); guide [`docs/guides/identity-coordinator.md`](../guides/identity-coordinator.md).
 
 ### `serve` naming (C5 — **LOCKED**)
 
@@ -822,26 +822,26 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-18** — Owner: Node `ROut` catalog, type-only imports to avoid bundling contracts, serve validates Node handle, discovery + UDS for seamless same-machine mesh; peers must be thought through; document ideas; “obviously the next step.” Clarified: shipped Node never had definition-time resource list — catalog is new. `import type` breaks Node→contract cycle only one way.
 - **2026-07-18** — Owner: ignore Host history; make a plan/order; **Unix socket tested first** before complex catalog/discovery; many API decisions still to make. Eng order rewritten Phase 1 IPC → 2 catalog → 3 discovery → 4 docs; decisions split by what they block.
 - **2026-07-18** — Owner: **build IPC**, then lock plan/API; bring back bake sessions. Phase 1 Eng shipped (`ipc` kind, `{ path }`, `ipcServer` / `connectIpc` / `protocolIpc` / `ipcClient`, tests). I1–I5 locked. Bake sessions noted for C*/D*.
-- **2026-07-18 (bake)** — Owner: one idea at a time (related Qs OK). C1 discussion: Tags may carry node sets; class-extends-pipe pristine base; `nodes` overwrite + `andNode` add; reject agent’s “home” framing; multi-node nodeless already shipped via `distributed`. Placement / LB → manager sketches → owner: managers = Resources (`Resource.Manager` sketch), algorithm is yours not a fixed `leastWork`; no Protocol type param on Node; multi-manager compile limits across runtimes hurt; possible mix-up of **lookup/DNS** vs managers; self-electing lookup node so no mandatory separate DNS process; ask about `serve`→`expose`. Owner: **note as thoughts; careful what is locked.** Doc marks updated: C*/D* OPEN; only I1–I5 LOCKED.
+- **2026-07-18 (bake)** — Owner: one idea at a time (related Qs OK). C1 discussion: Tags may carry node sets; class-extends-pipe pristine base; `nodes` overwrite + `andNode` add; reject agent’s “home” framing; multi-node nodeless already shipped via `distributed`. Placement / LB → manager sketches → owner: managers = Resources (`Hyperlink.Manager` sketch), algorithm is yours not a fixed `leastWork`; no Protocol type param on Node; multi-manager compile limits across runtimes hurt; possible mix-up of **lookup/DNS** vs managers; self-electing lookup node so no mandatory separate DNS process; ask about `serve`→`expose`. Owner: **note as thoughts; careful what is locked.** Doc marks updated: C*/D* OPEN; only I1–I5 LOCKED.
 - **2026-07-18 (bake)** — Owner THOUGHT: managers **stream** to the lookup which node should get work; lookup does load balancing for clients. Still not locked.
-- **2026-07-18 (bake)** — Owner THOUGHTS: lookup catches duplicate managers (first wins, error + original address); Manager ctor = single node + resources it manages; Node ctor `lookup` param (self or point at lookup node); layer swap dupe→client for original; generalize lookup as **identity server**; `Resource.Singleton` first (build/test before managers); maybe Singleton ≡ Manager; **dedupe by key only** (not by what you manage — multiple manager kinds OK). Still not locked.
+- **2026-07-18 (bake)** — Owner THOUGHTS: lookup catches duplicate managers (first wins, error + original address); Manager ctor = single node + resources it manages; Node ctor `lookup` param (self or point at lookup node); layer swap dupe→client for original; generalize lookup as **identity server**; `Hyperlink.Singleton` first (build/test before managers); maybe Singleton ≡ Manager; **dedupe by key only** (not by what you manage — multiple manager kinds OK). Still not locked.
 - **2026-07-18 (bake)** — Owner ask: need value-level “resources it manages”, or type info only? THOUGHT lean: **types (+ optional impl enforce)**; identity stays key-only; no mandatory ctor Tag list. Still not locked.
 - **2026-07-18 (bake)** — Owner: prefer `_tag`-style protocol names (e.g. `"WebSocket"`); follow Effect layer names as best we can; noted nobody types `ProtocolKind` out. X5 thought added — not locked / not Eng’d.
 - **2026-07-18 (bake)** — Owner: UDS tag **`IpcSocket`** for clarity; Singleton: **`andNode` disabled**, override OK but **only one Node** at a time. Still not formal LOCKED rows / not Eng’d.
 - **2026-07-18 (bake)** — Lookup race/bootstrap: owner asks safest split-brain handling; explicit required where defaults impossible; failover = race again; dial-fail serve policy needs thought; `LookupNode` ctor; address-less nodes check in; nodeless clients only need lookup (+ local defaults). Agent note: same-machine = OS bind exclusivity; cross-network = no elect. Still not locked.
 - **2026-07-18** — Owner: “Let’s go.” **L1 LOCKED** (tiered bootstrap). Eng slice 1: `src/Lookup.ts` — LookupNode, layerIpc / layerIpc, Identity claim/resolve, DuplicateIdentity. Singleton swap / nodeless / managers still open.
 - **2026-07-18** — Owner: fix kind strings; multi-protocol later. **X5 LOCKED + Eng:** `"Http" | "WebSocket" | "IpcSocket"`.
-- **2026-07-18 (bake)** — Owner: don’t need `Resource.Singleton` ctor — pipe on any resource/process constructor; maybe better name; ask layer vs handle (footgun if layer-only). Agent lean; owner “good enough for now.” **S1 LOCKED.**
-- **2026-07-18** — **S1 Eng shipped:** `Resource.identity` pipe; `layer`/`serve` claim→local-or-client; `IdentitySelfRequired` / `IdentityMultiNode`; tests over ipc Lookup. Next bake: **C1**.
+- **2026-07-18 (bake)** — Owner: don’t need `Hyperlink.Singleton` ctor — pipe on any resource/process constructor; maybe better name; ask layer vs handle (footgun if layer-only). Agent lean; owner “good enough for now.” **S1 LOCKED.**
+- **2026-07-18** — **S1 Eng shipped:** `Hyperlink.identity` pipe; `layer`/`serve` claim→local-or-client; `IdentitySelfRequired` / `IdentityMultiNode`; tests over ipc Lookup. Next bake: **C1**.
 - **2026-07-19 (bake)** — Owner lean B; questions on distributed purpose, identity failover, `andNode`; **“Locked.” C1 LOCKED** (one set, nodes/andNode, client set-of-one, no identity→fleet failover).
-- **2026-07-19** — **C1 Eng shipped:** `Resource.nodes` / `andNode` / `nodesOf`; `{ node }` ≡ set-of-one; `distributed` alias; identity multi still `IdentityMultiNode`.
+- **2026-07-19** — **C1 Eng shipped:** `Hyperlink.nodes` / `andNode` / `nodesOf`; `{ node }` ≡ set-of-one; `distributed` alias; identity multi still `IdentityMultiNode`.
 - **2026-07-19 (bake)** — Owner: one name for serve/expose/server — choose well. **C5 LOCKED:** keep **`serve`**; reject `expose` and verb-`server`.
 - **2026-07-19 (bake)** — Owner: “Continue.” **C2/C3/C4 LOCKED** — `listen`+keep `*Server`; full `ROut`; `import type` for `ROut`. Eng next.
-- **2026-07-19** — **C2–C4 Eng shipped:** `Node<Self, ROut>`, `Resource.listen`, `Resource.clientsFor`; ipc runtime + type tests.
+- **2026-07-19** — **C2–C4 Eng shipped:** `Node<Self, ROut>`, `Hyperlink.listen`, `Hyperlink.clientsFor`; ipc runtime + type tests.
 - **2026-07-19 (bake)** — Phase-3 discovery/prototype/directory leans (owner agreed): same Lookup server + separate advertise RPCs; `livenessReplace` + NodeStatus ping; unregister on close; `serves[]` from listen; Prototype / `make(name,addr)` / `NodeServer<N>`; bare `distributed` ≡ `nodes([])`. Written as **LEAN** (not Eng’d). See Phase-3 bake section.
-- **2026-07-19** — Owner “Okay” → **D3 LOCKED + Eng:** bare `Resource.distributed` ≡ `nodes([])`; empty stamped set → `peersLayer` reads `Directory.nodesServing`; fixed `nodes([…])` unchanged.
+- **2026-07-19** — Owner “Okay” → **D3 LOCKED + Eng:** bare `Hyperlink.distributed` ≡ `nodes([])`; empty stamped set → `peersLayer` reads `Directory.nodesServing`; fixed `nodes([…])` unchanged.
 - **2026-07-19** — Owner “Continue” → **dynamic `Node.Prototype.instance` LOCKED + Eng:** ephemeral ipc + `#suffix`, no claim; `askIncumbent` / D4 still later.
-- **2026-07-19** — Owner: Prototype must nest as `Resource.Node.Prototype` (not top-level). Rename Eng’d; top-level removed.
+- **2026-07-19** — Owner: Prototype must nest as `Hyperlink.Node.Prototype` (not top-level). Rename Eng’d; top-level removed.
 - **2026-07-19** — Owner: bake sketch `unsafeLookupClient` = shipped `lookupClient` (fail-closed); keep name without `unsafe` if docs are clear. Locked in handoff + TSDoc. D4 soft pick still separate/OPEN.
 - **2026-07-19** — Owner “Good” → **`Prototype.listen(serves) → (suffix?) => Layer` LOCKED:** Layer-only return; keep `instance()`; no named-clone `.listen`.
 - **2026-07-19** — Owner “Next” → **D4 bake opened** (soft pick when N>1). Lean **A:** opt-in `{ pick }` on `lookupClient`; bare stays fail-closed.
@@ -854,12 +854,12 @@ Owner: lock API design in **bake sessions** — short owner↔agent passes; writ
 - **2026-07-21** — Owner “Continue” → **`askIncumbent` LOCKED** (inheritance chain + `NodeStatus.yield` + AI.1–8). Eng next.
 - **2026-07-21** — **`askIncumbent` Eng’d:** `OnConflict` stamps + listen opts; Lookup resolves + `NodeStatus.yield`; dial-matched unregister; tests + changeset.
 - **2026-07-21** — Owner: rename **`clientsFor` → `Node.clients`**; array + rest; bound-tag overloads (`clients([Jobs, Emails])` / `clients(Jobs, Emails)`). No shim.
-- **2026-07-21** — Owner: rename **`clientLocal` → `Resource.discoverClient`** (avoid Effect “local”); no shim.
-- **2026-07-21** — Owner: **`Resource.discoverClients`** (array/rest) — mergeAll of discover clients, one Lookup bootstrap.
+- **2026-07-21** — Owner: rename **`clientLocal` → `Hyperlink.discoverClient`** (avoid Effect “local”); no shim.
+- **2026-07-21** — Owner: **`Hyperlink.discoverClients`** (array/rest) — mergeAll of discover clients, one Lookup bootstrap.
 - **2026-07-24** — Owner: fold **`discoverClient` into `Hyperlink.unix(tag)`** (nameless Lookup dial); `unix(node)` path dial unchanged; remove `discoverClient`; `discoverClients` kept.
 - **2026-07-21** — **X1 multi-protocol Eng’d** on `integration`: `{ http, ws, ipc }` Tag shorthand, `Node.withProtocol`, `connect`/`selectEndpoint`, P3 set-membership, dual-serve proof. Catalog row flipped OPEN → LOCKED + Eng’d.
 - **2026-07-21** — Owner “Do it” → **`verifyConnection` deep classification Eng’d:** `{ deep: true }` dials `NodeStatus` over `selectEndpoint` (or `{ all: true }`); `ProtocolUnanswered` / `ServiceNotServed` / `ServiceNotReady`. Tier-1 default unchanged.
-- **2026-07-21** — Owner “Let’s build it” → **managers collapse LOCKED** ([`identity-coordinator.md`](./identity-coordinator.md)): no `Resource.Manager`; v1 Eng = identity liveness + coordinator+workers example; placement advice later.
-- **2026-07-21** — **M4 Eng’d:** identity claim liveness (dead winner replaceable) + `examples/forms/resource/node-identity-coordinator.ts`.
+- **2026-07-21** — Owner “Let’s build it” → **managers collapse LOCKED** ([`identity-coordinator.md`](./identity-coordinator.md)): no `Hyperlink.Manager`; v1 Eng = identity liveness + coordinator+workers example; placement advice later.
+- **2026-07-21** — **M4 Eng’d:** identity claim liveness (dead winner replaceable) + `examples/forms/hyperlink/node-identity-coordinator.ts`.
 - **2026-07-21** — **M5 Eng’d:** `Lookup.Advice` (`advise` / `clear` / `preferred`); `lookupClient` honors live prefer before D4 `pick`.
 - **2026-07-21** — **M6 Eng’d:** recipe guide + `Lookup.prefer` / `preferEntry`; clearer `IdentitySelfRequired`.

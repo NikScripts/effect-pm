@@ -1,5 +1,12 @@
 import { it, describe, expect } from "@effect/vitest";
-import { Deferred, Effect, Fiber, Layer, Ref, Schema } from "effect";
+import { Cause, Deferred, Duration, Effect, Exit, Fiber, Layer, Option, Ref, Schema } from "effect";
+import { TestClock } from "effect/testing";
+import {
+  RateLimiter,
+  RateLimiterError,
+  RateLimiterStore,
+  layerStoreMemory as rateLimiterStoreMemory,
+} from "effect/unstable/persistence/RateLimiter";
 import * as Gate from "../src/Gate";
 import * as Store from "../src/Store";
 import { Storage, type StorageApi } from "../src/Store";
@@ -367,6 +374,140 @@ describe("Gate.store — persistence fidelity", () => {
       expect(completed).toMatchObject({ success: 21 });
       expect(failed).toMatchObject({ error: "bad:-2" });
     }).pipe(Effect.provide(live), Effect.scoped),
+  );
+});
+
+describe("Gate.make — rateLimit", () => {
+  it.effect("delays excess runs until the window allows (TestClock)", () =>
+    Effect.gen(function* () {
+      const starts = yield* Ref.make(0);
+      const gate = yield* Gate.make({
+        name: "@test/rate-limit-delay",
+        concurrency: 10,
+        rateLimit: { limit: 1, window: Duration.seconds(1) },
+        effect: (_: void) => Ref.update(starts, (n) => n + 1),
+      });
+      const f1 = yield* Effect.forkChild(gate.run());
+      const f2 = yield* Effect.forkChild(gate.run());
+      yield* Effect.yieldNow;
+      expect(yield* Ref.get(starts)).toBe(1);
+      yield* TestClock.adjust(Duration.seconds(1));
+      yield* Fiber.join(f1);
+      yield* Fiber.join(f2);
+      expect(yield* Ref.get(starts)).toBe(2);
+    }).pipe(
+      Effect.provide(Layer.mergeAll(Store.layerDefaultMemory, TestClock.layer())),
+      Effect.scoped,
+    ),
+  );
+
+  it.effect("onExceeded fail rejects the second run in-window", () =>
+    Effect.gen(function* () {
+      const gate = yield* Gate.make({
+        name: "@test/rate-limit-fail",
+        concurrency: 10,
+        rateLimit: {
+          limit: 1,
+          window: Duration.seconds(60),
+          onExceeded: "fail",
+        },
+        effect: (_: void) => Effect.void,
+      });
+      yield* gate.run();
+      const exit = yield* Effect.exit(gate.run());
+      expect(Exit.isFailure(exit)).toBe(true);
+      if (Exit.isFailure(exit)) {
+        const err = Option.getOrThrow(Cause.findErrorOption(exit.cause));
+        expect(err).toBeInstanceOf(RateLimiterError);
+      }
+    }).pipe(
+      Effect.provide(Layer.mergeAll(Store.layerDefaultMemory, TestClock.layer())),
+      Effect.scoped,
+    ),
+  );
+
+  it.effect("uses ambient RateLimiterStore when present (presence-driven)", () =>
+    Effect.gen(function* () {
+      const starts = yield* Ref.make(0);
+      // Ambient store is in context via layer below — Soft memory path is skipped.
+      const storeOpt = yield* Effect.serviceOption(RateLimiterStore);
+      expect(storeOpt._tag).toBe("Some");
+      const gate = yield* Gate.make({
+        name: "@test/rate-limit-ambient-store",
+        concurrency: 10,
+        rateLimit: { limit: 1, window: Duration.seconds(1) },
+        effect: (_: void) => Ref.update(starts, (n) => n + 1),
+      });
+      const f1 = yield* Effect.forkChild(gate.run());
+      const f2 = yield* Effect.forkChild(gate.run());
+      yield* Effect.yieldNow;
+      expect(yield* Ref.get(starts)).toBe(1);
+      yield* TestClock.adjust(Duration.seconds(1));
+      yield* Fiber.join(f1);
+      yield* Fiber.join(f2);
+      expect(yield* Ref.get(starts)).toBe(2);
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          Store.layerDefaultMemory,
+          rateLimiterStoreMemory,
+          TestClock.layer(),
+        ),
+      ),
+      Effect.scoped,
+    ),
+  );
+
+  it.effect("reuses ambient RateLimiter service when present", () =>
+    Effect.gen(function* () {
+      const starts = yield* Ref.make(0);
+      const limiterOpt = yield* Effect.serviceOption(RateLimiter);
+      expect(limiterOpt._tag).toBe("Some");
+      const gate = yield* Gate.make({
+        name: "@test/rate-limit-ambient-limiter",
+        concurrency: 10,
+        rateLimit: { limit: 1, window: Duration.seconds(1) },
+        effect: (_: void) => Ref.update(starts, (n) => n + 1),
+      });
+      const f1 = yield* Effect.forkChild(gate.run());
+      const f2 = yield* Effect.forkChild(gate.run());
+      yield* Effect.yieldNow;
+      expect(yield* Ref.get(starts)).toBe(1);
+      yield* TestClock.adjust(Duration.seconds(1));
+      yield* Fiber.join(f1);
+      yield* Fiber.join(f2);
+      expect(yield* Ref.get(starts)).toBe(2);
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          Store.layerDefaultMemory,
+          Gate.rateLimiterLayer,
+          TestClock.layer(),
+        ),
+      ),
+      Effect.scoped,
+    ),
+  );
+});
+
+describe("Gate.Service — rateLimit", () => {
+  class Limited extends Gate.Service<Limited>()("@test/LimitedGate", {
+    payload: Schema.Void,
+    success: Schema.Void,
+    concurrency: 4,
+    rateLimit: { limit: 1, window: Duration.millis(80) },
+    effect: () => Effect.void,
+  }) {}
+
+  it.live("bakes rateLimit policy on Service.layer", () =>
+    Effect.gen(function* () {
+      const t0 = yield* Effect.clockWith((c) => c.currentTimeMillis);
+      yield* Effect.all([Limited.run, Limited.run, Limited.run], {
+        concurrency: "unbounded",
+      });
+      const elapsed = (yield* Effect.clockWith((c) => c.currentTimeMillis)) - t0;
+      expect(elapsed).toBeGreaterThanOrEqual(140);
+    }).pipe(Effect.provide(Limited.layer), Effect.scoped),
   );
 });
 

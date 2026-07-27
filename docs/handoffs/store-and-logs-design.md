@@ -1,9 +1,11 @@
 # Design: Store, platform logs, and live vs durable observability
 
+> **Naming:** read as WorkPool / Daemon / Gate / Hyperlink / hyperlink-ts (pre-rebrand names purged from this file).
+
 **Status:** Store contract API shipped. **Backing:** `effect/unstable/eventlog` (`EventJournal` +
 `SqlEventJournal`) — see `docs/guides/store-backing.md`. Platform logs remain future work.
 
-Companion to the Store API consensus (Thermometer, `Store.append` / `Store.query`, `Resource.store`,
+Companion to the Store API consensus (Thermometer, `Store.append` / `Store.query`, `Hyperlink.store`,
 `Store.Service` backing). This doc covers **platform logs**, **naming**, **tag accessors**, **log-level
 pipe API**, and the **still-open** pattern for domain refs/streams vs storage.
 
@@ -34,13 +36,13 @@ const thermometerStore = {
 } as const satisfies StoreSpec;
 ```
 
-Use **`Resource.contract({ … })`** / **`Store.contract({ … })`** instead — the builder owns
-narrowing (same role as `Resource.local`, `Resource.effect`, `Store.append`):
+Use **`Hyperlink.contract({ … })`** / **`Store.contract({ … })`** instead — the builder owns
+narrowing (same role as `Hyperlink.local`, `Hyperlink.effect`, `Store.append`):
 
 ```ts
 // ✅
-const thermometerContract = Resource.contract({
-  temperature: Resource.ref(Schema.Number),
+const thermometerContract = Hyperlink.contract({
+  temperature: Hyperlink.ref(Schema.Number),
 });
 const thermometerStore = Store.contract({
   readings: Store.append(readingSchema),
@@ -53,21 +55,21 @@ definitions should go through **`contract`**.
 ### `Store.Service` — app aggregate (class factory)
 
 **Naming:** sketched early as `Store.Tag`; locked name is **`Store.Service`** (Effect-style
-double-call factory — same family as `Resource.Tag`, legacy `ProcessStore.Service`).
+double-call factory — same family as `Hyperlink.Tag`, legacy `DaemonStore.Service`).
 
 Apps declare **one store class per deployment / DB file**. That class is the **shared backing**:
 SqlClient (or memory), registration table, migrations, retention — **not** a grab-bag of domain
-methods. Domain read/write surfaces come from **per-resource registrations** piped onto the class.
+methods. Domain read/write surfaces come from **per-hyperlink registrations** piped onto the class.
 
 ```ts
 export class DropletStore extends Store.Service<DropletStore>()("@repo/app/Store").pipe(
-  QueueResource.store(Mail),
-  Process.store(Daily),
+  WorkPool.store(Mail),
+  Daemon.store(Daily),
   LabThermometer.store,
-  Resource.store(OtherGauge, privateStoreSpec), // merges with tag public store spec (see below)
+  Hyperlink.store(OtherGauge, privateStoreSpec), // merges with tag public store spec (see below)
 ) {}
 
-Effect.provide(app, DropletStore.layer({ filename: ".effect-pm/data.sqlite" }));
+Effect.provide(app, DropletStore.layer({ filename: ".hyperlink-ts/data.sqlite" }));
 ```
 
 **Node-scoped store** (runtime-wide logs + future node-only facets) — separate registration, not
@@ -94,7 +96,7 @@ When the resource tag has **no** embedded store spec, register private facets on
 
 ```ts
 export class AppStore extends Store.Service<AppStore>()("@app/Store").pipe(
-  Resource.store(LabThermometer, privateStoreSpec), // appended to any public store spec on tag
+  Hyperlink.store(LabThermometer, privateStoreSpec), // appended to any public store spec on tag
 ) {}
 ```
 
@@ -102,10 +104,10 @@ export class AppStore extends Store.Service<AppStore>()("@app/Store").pipe(
 
 | Pipe arg | When |
 |----------|------|
-| `Tag.store` | Tag materialized with `.pipe(Resource.store(publicStoreSpec))` — **public** store; always on `Tag.store` |
-| `Resource.store(Tag, storeSpec)` | **Private** (or extra) facets — **merged** onto the tag's public store spec at registration |
-| `QueueResource.store(Tag)` | Built-in queue storage registration |
-| `Process.store(Tag)` | Built-in process storage registration |
+| `Tag.store` | Tag materialized with `.pipe(Hyperlink.store(publicStoreSpec))` — **public** store; always on `Tag.store` |
+| `Hyperlink.store(Tag, storeSpec)` | **Private** (or extra) facets — **merged** onto the tag's public store spec at registration |
+| `WorkPool.store(Tag)` | Built-in queue storage registration |
+| `Daemon.store(Tag)` | Built-in process storage registration |
 | `Node.logs` | **Node runtime-wide** logs (entire process), not a separate `Logs.store()` |
 
 **There is no `Logs.store()` on `Store.Service`.** Platform log **storage** is built into each
@@ -118,8 +120,8 @@ Store specs are **extendable**. Keys become method names on the merged handle.
 
 | Layer | Declaration | On `yield* Tag.store` |
 |-------|-------------|------------------------|
-| **Public** | `.pipe(Resource.store(publicStoreSpec))` on the tag | Always included |
-| **Private** | `Resource.store(Tag, privateStoreSpec)` on `AppStore` | Appended at registration |
+| **Public** | `.pipe(Hyperlink.store(publicStoreSpec))` on the tag | Always included |
+| **Private** | `Hyperlink.store(Tag, privateStoreSpec)` on `AppStore` | Appended at registration |
 
 You may put the entire store spec on the tag (fully public). Private facets are for app-only
 persistence (executions, audit) without exposing methods on the shared tag type.
@@ -128,37 +130,37 @@ persistence (executions, audit) without exposing methods on the shared tag type.
 const publicStoreSpec = Store.contract({ readings: Store.append(readingSchema) });
 const privateStoreSpec = Store.contract({ audit: Store.append(auditSchema) });
 
-class LabThermometer extends Resource.Tag<LabThermometer>()(key, contract).pipe(
-  Resource.store(publicStoreSpec),
+class LabThermometer extends Hyperlink.Tag<LabThermometer>()(key, contract).pipe(
+  Hyperlink.store(publicStoreSpec),
 ) {}
 
 export class AppStore extends Store.Service<AppStore>()("@app/Store").pipe(
-  Resource.store(LabThermometer, privateStoreSpec),
+  Hyperlink.store(LabThermometer, privateStoreSpec),
 ) {}
 // handle = public ∪ private at runtime; Tag.store type reflects public only unless typed otherwise
 ```
 
 #### Standalone contract / store definitions (shipped)
 
-Use **`Resource.contract({ … })`** / **`Store.contract({ … })`** — the builder owns narrowing:
+Use **`Hyperlink.contract({ … })`** / **`Store.contract({ … })`** — the builder owns narrowing:
 
 ```ts
-const thermometerContract = Resource.contract({ … });
+const thermometerContract = Hyperlink.contract({ … });
 const thermometerStore = Store.contract({
   readings: Store.shape(readingSchema, listReadingsPayload),
 });
-class LabThermometer extends Resource.Tag<LabThermometer>()(key, thermometerContract).pipe(
-  Resource.store(thermometerStore),
+class LabThermometer extends Hyperlink.Tag<LabThermometer>()(key, thermometerContract).pipe(
+  Hyperlink.store(thermometerStore),
 ) {}
 ```
 
-**Name:** `Resource.contract` / `Store.contract` — locked.
+**Name:** `Hyperlink.contract` / `Store.contract` — locked.
 
 **Do not confuse with the gutted multi-host DSL** (same name, different feature — see
 `docs/handoffs/multi-host-instances-decisions.md` § "Gutted"): that was
-`Resource.contract(…).pipe(Resource.multi((m) => ({ … m.query … })))`, a special **field kind** for
+`Hyperlink.contract(…).pipe(Hyperlink.multi((m) => ({ … m.query … })))`, a special **field kind** for
 combined fleet queries. It was removed because fleet fields are plain methods tagged
-`Resource.fleet`, folded in the layer via `Resource.peers` + `@nikscripts/effect-pm/MultiHost`
+`Hyperlink.fleet`, folded in the layer via `Hyperlink.peers` + `hyperlink-ts/MultiHost`
 primitives — not because standalone contract builders were rejected.
 
 Providing `AppStore.layer` / `DropletStore.layer` wires every registration in the pipe to the same
@@ -174,7 +176,7 @@ Registration is declared on `AppStore`; **handles are acquired from the resource
 const store = yield* LabThermometer.store; // Path A — spec on tag
 yield* store.readings(payload);
 
-const store = yield* Resource.store(LabThermometer, thermometerStoreSpec); // Path B — external spec
+const store = yield* Hyperlink.store(LabThermometer, thermometerStoreSpec); // Path B — external spec
 ```
 
 ### Resource attachment (tag-side)
@@ -182,16 +184,16 @@ const store = yield* Resource.store(LabThermometer, thermometerStoreSpec); // Pa
 **Path A — store spec on tag:**
 
 ```ts
-class LabThermometer extends Resource.Tag<LabThermometer>()(
+class LabThermometer extends Hyperlink.Tag<LabThermometer>()(
   "@app/LabThermometer",
   thermometerSpec,
-).pipe(Resource.store(thermometerStoreSpec)) {}
+).pipe(Hyperlink.store(thermometerStoreSpec)) {}
 
 const store = yield* LabThermometer.store;
 ```
 
-**Path B — store spec external** (register on `AppStore` via `Resource.store(Tag, spec)`; acquire with
-`yield* Resource.store(Tag, spec)` or equivalent).
+**Path B — store spec external** (register on `AppStore` via `Hyperlink.store(Tag, spec)`; acquire with
+`yield* Hyperlink.store(Tag, spec)` or equivalent).
 
 - Scope column from `tag.key` — not repeated in every payload.
 
@@ -220,7 +222,7 @@ Logs are **not domain**. Remove `logs: { … }` from `queueControlSpec`, `proces
 Canonical:
 
 ```ts
-const handle = yield* Resource.logs(MyQueue);
+const handle = yield* Hyperlink.logs(MyQueue);
 handle.tail;                              // live watch
 yield* handle.query({ limit: 100 });      // durable read
 ```
@@ -240,13 +242,13 @@ yield* MyQueue.logs;   // Effect<LogsHandle, …, MyQueue> — when logs enabled
 yield* MyQueue.store;  // Effect<StoreHandle, …, MyQueue> — when store registered
 ```
 
-Both `Resource.logs(tag)` and `Tag.logs` exist; different call sites (CLI/routing vs handle sugar).
+Both `Hyperlink.logs(tag)` and `Tag.logs` exist; different call sites (CLI/routing vs handle sugar).
 
 ### Visibility when disabled
 
 - **Type level:** if the tag was not piped with log export (or explicitly `logExportLevel("none")`),
   `Tag.logs` is **absent from the type** (same pattern as optional `.store`).
-- **Runtime:** `Resource.logs(tag)` on a tag without logs → empty tail stream, `query` returns `[]`
+- **Runtime:** `Hyperlink.logs(tag)` on a tag without logs → empty tail stream, `query` returns `[]`
   (or `Effect.fail` with a tagged `LogsNotEnabled` — pick one at implement time; prefer empty/no-op
   for dashboard simplicity unless explicitly silenced vs never configured need different UX).
 
@@ -256,25 +258,25 @@ Every **resource** store registration implicitly includes platform log facets (n
 user store object):
 
 ```ts
-// implicit on each Tag.store / Resource.store(Tag, …) registration
+// implicit on each Tag.store / Hyperlink.store(Tag, …) registration
 appendLog: Store.append(LogEntrySchema);
 logQuery:  Store.query({ payload: logQuery, result: Schema.Array(LogEntrySchema) });
 ```
 
-**Per-resource configuration** is on the **tag** (same place as store attachment):
+**Per-hyperlink configuration** is on the **tag** (same place as store attachment):
 
 ```ts
-class MyQueue extends QueueResource.Tag<MyQueue>()("…", JobSchema).pipe(
-  Resource.logStoreLevel("info"),   // durable append via this tag's registration
-  Resource.logStreamLevel("warn"),  // tail relay for this resource only
-  Resource.logOutputLevel("debug"), // merged Logger on resource fibers
-  Resource.logExportLevel("info"),  // stream + store together
+class MyQueue extends WorkPool.Tag<MyQueue>()("…", JobSchema).pipe(
+  Hyperlink.logStoreLevel("info"),   // durable append via this tag's registration
+  Hyperlink.logStreamLevel("warn"),  // tail relay for this resource only
+  Hyperlink.logOutputLevel("debug"), // merged Logger on resource fibers
+  Hyperlink.logExportLevel("info"),  // stream + store together
 ) {}
 ```
 
 ### Single capture, single store write (design rule)
 
-Multiple **tails** (per-resource + node) are fine; **durable storage must not duplicate the same
+Multiple **tails** (per-hyperlink + node) are fine; **durable storage must not duplicate the same
 line** across registrations.
 
 ```
@@ -296,8 +298,8 @@ line** across registrations.
 
 1. **Capture** — one merged capture logger at the node runtime root (today's `NodeLogs.layer`
    direction); resource fibers carry `resourceId` / legacy `queueId` / `processId` annotations.
-2. **Tail** — per-resource relay filtered by annotation + `logStreamLevel`; node relay sees all
-   lines (`Resource.logs` / `Node.logs` read API).
+2. **Tail** — per-hyperlink relay filtered by annotation + `logStreamLevel`; node relay sees all
+   lines (`Hyperlink.logs` / `Node.logs` read API).
 3. **Store** — one durable append per log line. **`logStoreLevel` on the tag** gates whether a line
    is appended to **that resource's** registration `appendLog`. Node durable export uses
    **`Node.logs`** registration (and node-level level config — TBD mirror of pipe API). Avoid
@@ -316,10 +318,10 @@ Write path at resource materialize:
 
 ### Node-wide logs
 
-**Node logs = entire runtime** on that node (complement to per-resource `Resource.logs(tag)`).
+**Node logs = entire runtime** on that node (complement to per-hyperlink `Hyperlink.logs(tag)`).
 
 ```ts
-const handle = yield* WnbaNode.logs;           // or Resource.nodeLogs(WnbaNode)
+const handle = yield* WnbaNode.logs;           // or Hyperlink.nodeLogs(WnbaNode)
 handle.tail;
 yield* handle.query({ limit: 500 });           // all resources on this node
 
@@ -337,7 +339,7 @@ Legacy `NodeLogs.persistLayer` + `LogStore` → folds into this model.
 
 ## Naming: alternatives to `live` / `history`
 
-### Platform logs (`Resource.logs`)
+### Platform logs (`Hyperlink.logs`)
 
 | Option | Tail (was `live`) | Durable (was `history`) | Notes |
 |--------|-------------------|-------------------------|-------|
@@ -361,7 +363,7 @@ Do **not** reuse log names on domain groups. Recommended pair for nested contrac
 
 | Option | Ephemeral SSOT | Durable read |
 |--------|----------------|--------------|
-| **A (recommended)** | `stream` (leaf: `Resource.stream`) | `query` (leaf: `Resource.effect` + store) |
+| **A (recommended)** | `stream` (leaf: `Hyperlink.stream`) | `query` (leaf: `Hyperlink.effect` + store) |
 | B | `live` | `history` | Current queue/process naming (migrate later) |
 | C | `watch` | `read` | |
 
@@ -369,8 +371,8 @@ Example (Thermometer metrics — domain, not logs):
 
 ```ts
 readings: {
-  stream: Resource.stream(reading),           // discrete events / windows
-  query:  Resource.effectFn(readingQuery, Schema.Array(reading)),
+  stream: Hyperlink.stream(reading),           // discrete events / windows
+  query:  Hyperlink.effectFn(readingQuery, Schema.Array(reading)),
 }
 ```
 
@@ -390,11 +392,11 @@ Three independent channels + one umbrella:
 
 | Channel | Controls | Pipe combinator |
 |---------|----------|-----------------|
-| **Output** | Effect `Logger` merged into resource fibers (console/etc. via existing loggers) | `Resource.logOutputLevel(level)` |
-| **Stream** | Live tail relay (`LogsHandle.tail`) | `Resource.logStreamLevel(level)` |
-| **Store** | Durable append (`appendLog`) | `Resource.logStoreLevel(level)` |
-| **Export** | Stream + store together | `Resource.logExportLevel(level)` |
-| **All** | Output + stream + store | `Resource.logLevel(level)` |
+| **Output** | Effect `Logger` merged into resource fibers (console/etc. via existing loggers) | `Hyperlink.logOutputLevel(level)` |
+| **Stream** | Live tail relay (`LogsHandle.tail`) | `Hyperlink.logStreamLevel(level)` |
+| **Store** | Durable append (`appendLog`) | `Hyperlink.logStoreLevel(level)` |
+| **Export** | Stream + store together | `Hyperlink.logExportLevel(level)` |
+| **All** | Output + stream + store | `Hyperlink.logLevel(level)` |
 
 Levels: `"all" | "debug" | "info" | "warn" | "error" | "none"` (align with Effect `LogLevel`; `"all"`
 = capture everything including trace).
@@ -405,26 +407,26 @@ Levels: `"all" | "debug" | "info" | "warn" | "error" | "none"` (align with Effec
 **Shorthand sugar** (set all three to the same level):
 
 ```ts
-Resource.logLevelNone
-Resource.logLevelError
-Resource.logLevelWarn
-Resource.logLevelInfo
-Resource.logLevelDebug
-// equivalent to Resource.logLevel("none" | "error" | …)
+Hyperlink.logLevelNone
+Hyperlink.logLevelError
+Hyperlink.logLevelWarn
+Hyperlink.logLevelInfo
+Hyperlink.logLevelDebug
+// equivalent to Hyperlink.logLevel("none" | "error" | …)
 ```
 
 **Examples:**
 
 ```ts
-class MyQueue extends QueueResource.Tag<MyQueue>()("…", JobSchema).pipe(
-  Resource.logStoreLevel("none"),      // tail only, no SQLite rows
-  Resource.logStreamLevel("warn"),     // tail warns+
-  Resource.logExportLevel("info"),     // tail + store info+
-  Resource.logLevel("debug"),          // output + stream + store all debug+
+class MyQueue extends WorkPool.Tag<MyQueue>()("…", JobSchema).pipe(
+  Hyperlink.logStoreLevel("none"),      // tail only, no SQLite rows
+  Hyperlink.logStreamLevel("warn"),     // tail warns+
+  Hyperlink.logExportLevel("info"),     // tail + store info+
+  Hyperlink.logLevel("debug"),          // output + stream + store all debug+
 ) {}
 ```
 
-Avoid bare `Resource.logLevelNone` without docs — name makes clear it silences **resource log
+Avoid bare `Hyperlink.logLevelNone` without docs — name makes clear it silences **resource log
 export** (all channels when used as shorthand; prefer `logExportLevel("none")` when only disabling
 persistence).
 
@@ -439,7 +441,7 @@ Low-level append tail for one registration. Not the dashboard primary.
 - Tests asserting append order
 - Read-model materialization
 
-Dashboard prefers `Resource.changes(tag, refField)` or domain `*.stream` / `LogsHandle.tail`.
+Dashboard prefers `Hyperlink.changes(tag, refField)` or domain `*.stream` / `LogsHandle.tail`.
 
 ---
 
@@ -447,7 +449,7 @@ Dashboard prefers `Resource.changes(tag, refField)` or domain `*.stream` / `Logs
 
 **Delete / replace**
 
-- Public `RuntimeStorage`, `Query`, `ProcessStorage`
+- Public `RuntimeStorage`, `Query`, `DaemonStorage`
 - Public `src/store/*` facet tags + static emitters
 - `logs: { stream, query }` on resource specs
 - `captureLogs` on queue/process layer config
@@ -455,8 +457,8 @@ Dashboard prefers `Resource.changes(tag, refField)` or domain `*.stream` / `Logs
 
 **Add**
 
-- `Store.ts` module + `Resource.store` + `Store.Service`
-- `Resource.logs` + `Tag.logs` + implicit log store facets
+- `Store.ts` module + `Hyperlink.store` + `Store.Service`
+- `Hyperlink.logs` + `Tag.logs` + implicit log store facets
 - Log level pipe combinators
 - Thermometer reference resource
 - Conformance + `.test-d.ts` for new surfaces
@@ -467,7 +469,7 @@ Dashboard prefers `Resource.changes(tag, refField)` or domain `*.stream` / `Logs
 
 1. **Domain naming migration:** `stream`/`query` → `stream`/`query` on queue/process metrics/logs
    groups in same changeset as store, or logs-only first?
-2. **Node log store levels:** mirror tag pipe API on `Resource.Node` vs node-only config on
+2. **Node log store levels:** mirror tag pipe API on `Hyperlink.Node` vs node-only config on
    `Node.logs` registration?
 3. **Single-write policy:** node registration owns all durable lines vs resource registration only
    when `logStoreLevel` ≠ `none` — exact routing when both node and resource export are enabled.

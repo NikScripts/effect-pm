@@ -2016,7 +2016,7 @@ const HealthStat = (props: {
 
 /** One resource's readiness row — pip (green ready / amber degraded) + name + (kind or node) + the
  *  root-cause detail when degraded. Tap to open that resource's detail page. */
-const ResourceReadinessRow = (props: {
+const HyperlinkReadinessRow = (props: {
   readonly res: NodeStatusValue["resources"][number];
   readonly node: NodeRef;
   /** Show the node id on the right (cross-node "needs attention" list) instead of the kind. */
@@ -2112,7 +2112,7 @@ const NodeHealthCard = (props: {
       {s !== undefined && s.resources.length > 0 ? (
         <ul className="space-y-0.5 border-t px-1 py-1">
           {s.resources.map((res) => (
-            <ResourceReadinessRow
+            <HyperlinkReadinessRow
               key={res.key}
               res={res}
               node={props.node}
@@ -2261,7 +2261,7 @@ export const HealthBoard = (props: {
           </h2>
           <ul className="space-y-0.5">
             {degraded.map(({ node, res }) => (
-              <ResourceReadinessRow
+              <HyperlinkReadinessRow
                 key={`${node.id}:${res.key}`}
                 res={res}
                 node={node}

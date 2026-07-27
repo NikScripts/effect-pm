@@ -1,18 +1,34 @@
 /**
- * Gate engine — semaphore gate handles with optional live observation.
+ * Gate engine — semaphore gate handles with optional live observation and
+ * presence-driven Effect {@link RateLimiter} (Soft memory when no store).
  *
  * @internal
  */
 
+import * as Context from "effect/Context";
 import {
   Cause,
   Clock,
+  Duration,
   Effect,
   Exit,
+  Layer,
+  Option,
   Ref,
+  Scope,
   Semaphore,
   SubscriptionRef,
 } from "effect";
+import {
+  RateLimiter as RateLimiterTag,
+  RateLimiterError,
+  RateLimiterStore,
+  layer as rateLimiterLayer,
+  layerStoreMemory,
+  make as makeRateLimiter,
+  makeWithRateLimiter,
+} from "effect/unstable/persistence/RateLimiter";
+import type { RateLimiter as EffectRateLimiter } from "effect/unstable/persistence/RateLimiter";
 import {
   builtInGateStoreContract,
   type GateStateChangeReason,
@@ -28,6 +44,38 @@ import { runStatusTransitions } from "./gateStatus";
 // ============================================================================
 // Engine types
 // ============================================================================
+
+/**
+ * Effect `RateLimiter.consume` / {@link makeWithRateLimiter} options — the
+ * upstream config shape. New consume fields from Effect flow through here.
+ *
+ * @category models
+ * @public
+ */
+export type RateLimiterConsumeOptions = Parameters<
+  EffectRateLimiter["consume"]
+>[0];
+
+/**
+ * Gate `rateLimit` config — Effect's {@link RateLimiterConsumeOptions} with
+ * optional `key` (defaults to the gate `name` / hyperlink tag id).
+ *
+ * @remarks
+ * This is not a parallel Hyperlink schema: it is Effect's consume options.
+ * Hyperlink only defaults omitted `key` and omitted `onExceeded` (`"delay"`;
+ * Effect's own consume default is `"fail"`). Store selection is ambient
+ * {@link RateLimiterStore} / {@link RateLimiterTag} (Soft memory when absent).
+ *
+ * @category models
+ * @public
+ */
+export type GateRateLimitOptions = Omit<RateLimiterConsumeOptions, "key"> & {
+  /** Shared limit bucket (default: gate `name` / service id). */
+  readonly key?: RateLimiterConsumeOptions["key"];
+};
+
+/** @public Re-export of Effect rate-limiter consume metadata. */
+export type { ConsumeResult } from "effect/unstable/persistence/RateLimiter";
 
 /** Live counters for a gated resource handle. @internal */
 export interface GateStatus {
@@ -69,6 +117,11 @@ export interface GateConfig<T, A, E> {
   readonly tag?: StoreScopeTag;
   readonly effect: (input: T) => Effect.Effect<A, E>;
   readonly concurrency?: number;
+  /**
+   * Optional Effect `RateLimiter` on each `run` (before the concurrency semaphore).
+   * Omitted = no rate limit (only `concurrency`).
+   */
+  readonly rateLimit?: GateRateLimitOptions;
 }
 
 /** @internal */
@@ -187,6 +240,98 @@ const makeGateStoreContext = (options: {
     };
   });
 
+// ============================================================================
+// Rate limit (presence-driven RateLimiterStore)
+// ============================================================================
+
+/**
+ * Soft in-memory {@link RateLimiterTag} + store — used when `rateLimit` is set
+ * and no ambient {@link RateLimiterStore} is in context. Compose
+ * `RateLimiter.layerStoreRedis` at the app root for fleet-wide limiting.
+ *
+ * @category layers & serving
+ * @public
+ */
+export const gateRateLimiterLayer = Layer.provide(rateLimiterLayer, layerStoreMemory);
+
+/** Fill Gate defaults onto Effect's consume options — passthrough otherwise. */
+const toConsumeOptions = (
+  resourceId: string,
+  rateLimit: GateRateLimitOptions,
+): RateLimiterConsumeOptions => ({
+  ...rateLimit,
+  key: rateLimit.key ?? resourceId,
+  onExceeded: rateLimit.onExceeded ?? "delay",
+});
+
+const assertValidRateLimit = (rateLimit: GateRateLimitOptions): void => {
+  if (!(rateLimit.limit > 0) || !Number.isFinite(rateLimit.limit)) {
+    throw new Error(
+      `Gate rateLimit.limit must be a positive number, got ${String(rateLimit.limit)}`,
+    );
+  }
+  const windowMs = Duration.toMillis(Duration.fromInputUnsafe(rateLimit.window));
+  if (!(windowMs > 0) || !Number.isFinite(windowMs)) {
+    throw new Error(
+      `Gate rateLimit.window must be positive, got ${String(rateLimit.window)}`,
+    );
+  }
+  if (rateLimit.tokens !== undefined) {
+    if (!(rateLimit.tokens > 0) || !Number.isFinite(rateLimit.tokens)) {
+      throw new Error(
+        `Gate rateLimit.tokens must be a positive number, got ${String(rateLimit.tokens)}`,
+      );
+    }
+  }
+};
+
+/**
+ * Resolve {@link RateLimiterTag} once into the gate scope.
+ *
+ * Order (Effect services via Context — never passed in the `rateLimit` config bag):
+ * 1. Ambient {@link RateLimiterTag} if already provided
+ * 2. Else ambient {@link RateLimiterStore} → {@link makeRateLimiter} (fleet Redis / later SQL)
+ * 3. Else Soft {@link gateRateLimiterLayer} (memory store + limiter)
+ */
+const resolveGateRateLimiter = (): Effect.Effect<
+  EffectRateLimiter,
+  never,
+  Scope.Scope
+> =>
+  Effect.gen(function* () {
+    const limiterOpt = yield* Effect.serviceOption(RateLimiterTag);
+    if (Option.isSome(limiterOpt)) {
+      return limiterOpt.value;
+    }
+    const storeOpt = yield* Effect.serviceOption(RateLimiterStore);
+    if (Option.isSome(storeOpt)) {
+      return yield* makeRateLimiter.pipe(
+        Effect.provideService(RateLimiterStore, storeOpt.value),
+      );
+    }
+    const ctx = yield* Layer.build(gateRateLimiterLayer);
+    return Context.get(ctx, RateLimiterTag);
+  });
+
+type RateLimitAwait = Effect.Effect<void, RateLimiterError>;
+
+/**
+ * Build a pre-consume effect via Effect's {@link makeWithRateLimiter} so Gate
+ * tracks upstream delay/fail behavior (and any future consume options).
+ */
+const acquireGateRateLimitAwait = (
+  resourceId: string,
+  rateLimit: GateRateLimitOptions,
+  limiter: EffectRateLimiter,
+): Effect.Effect<RateLimitAwait> => {
+  assertValidRateLimit(rateLimit);
+  const options = toConsumeOptions(resourceId, rateLimit);
+  return makeWithRateLimiter.pipe(
+    Effect.provideService(RateLimiterTag, limiter),
+    Effect.map((withLimiter) => withLimiter(options)(Effect.void)),
+  );
+};
+
 const makeObservedRun =
   <T, A, E>(
     sem: Semaphore.Semaphore,
@@ -195,7 +340,8 @@ const makeObservedRun =
     store: GateStoreContext,
     runSeqRef: Ref.Ref<number>,
     concurrency: number,
-  ): GateRunFn<T, A, E> => {
+    rateLimitAwait: RateLimitAwait | undefined,
+  ): GateRunFn<T, A, E | RateLimiterError> => {
   const publishStatus = (
     update: (typeof runStatusTransitions)[keyof typeof runStatusTransitions]["update"],
     reason: GateStateChangeReason,
@@ -227,7 +373,7 @@ const makeObservedRun =
       );
     });
 
-    return Effect.acquireUseRelease(
+    const gatedBody = Effect.acquireUseRelease(
       acquirePermit,
       () =>
         Effect.gen(function* () {
@@ -308,9 +454,14 @@ const makeObservedRun =
         }),
       () => Effect.asVoid(sem.release(1)),
     );
+
+    // Rate limit before the concurrency semaphore (same order as WorkPool workers).
+    return rateLimitAwait === undefined
+      ? gatedBody
+      : rateLimitAwait.pipe(Effect.andThen(gatedBody));
   };
 
-  return ((input?: T) => runBody(input as T)) as GateRunFn<T, A, E>;
+  return ((input?: T) => runBody(input as T)) as GateRunFn<T, A, E | RateLimiterError>;
 };
 
 /**
@@ -320,7 +471,11 @@ const makeObservedRun =
  */
 export const makeGateRunHandleEffect = <T, A, E>(
   config: GateConfig<T, A, E>,
-): Effect.Effect<GateRunHandle<T, A, E>, never, Store.Storage> =>
+): Effect.Effect<
+  GateRunHandle<T, A, E | RateLimiterError>,
+  never,
+  Store.Storage | Scope.Scope
+> =>
   Effect.map(makeGateHandleEffect(config), (handle) => ({
     run: handle.run,
   }));
@@ -332,7 +487,11 @@ export const makeGateRunHandleEffect = <T, A, E>(
  */
 export const makeGateHandleEffect = <T, A, E>(
   config: GateConfig<T, A, E>,
-): Effect.Effect<GateHandle<T, A, E>, never, Store.Storage> => {
+): Effect.Effect<
+  GateHandle<T, A, E | RateLimiterError>,
+  never,
+  Store.Storage | Scope.Scope
+> => {
   const concurrency = config.concurrency ?? 1;
   const resourceId = config.name ?? "anonymous";
   const scopeKey = config.scopeKey ?? resourceId;
@@ -366,8 +525,20 @@ export const makeGateHandleEffect = <T, A, E>(
       },
     });
     const runSeqRef = yield* Ref.make(0);
+
+    const rateLimitAwait: RateLimitAwait | undefined =
+      config.rateLimit === undefined
+        ? undefined
+        : yield* acquireGateRateLimitAwait(
+            resourceId,
+            config.rateLimit,
+            yield* resolveGateRateLimiter(),
+          );
+
     yield* Effect.logDebug(
-      `Gate "${resourceId}" initialized: concurrency=${String(concurrency)}`,
+      config.rateLimit === undefined
+        ? `Gate "${resourceId}" initialized: concurrency=${String(concurrency)}`
+        : `Gate "${resourceId}" initialized: concurrency=${String(concurrency)} rateLimit.limit=${String(config.rateLimit.limit)}`,
     );
     return {
       run: makeObservedRun(
@@ -377,6 +548,7 @@ export const makeGateHandleEffect = <T, A, E>(
         store,
         runSeqRef,
         concurrency,
+        rateLimitAwait,
       ),
       ...makeStatusSubscribables(statusRef),
     };

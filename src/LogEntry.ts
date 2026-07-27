@@ -146,7 +146,7 @@ export const lineage = (entry: LogEntry): ReadonlyArray<string> =>
 /**
  * `true` when the **lineage segment key** appears anywhere in {@link lineage}.
  *
- * @param key - Usually a **resource key** (`Tag.key`, e.g. `wnba/LiveScorePoller` in `resource-web/hub.ts`).
+ * @param key - Usually a **hyperlink key** (`Tag.key`, e.g. `wnba/LiveScorePoller` in `hyperlink-web/hub.ts`).
  *
  * @category guards
  * @public
@@ -166,7 +166,7 @@ export const atRoot = (key: string): Predicate.Predicate<LogEntry> => (entry) =>
   lineage(entry)[0] === key;
 
 /**
- * `true` when the last lineage segment equals the **lineage segment key** (usually the **resource key**).
+ * `true` when the last lineage segment equals the **lineage segment key** (usually the **hyperlink key**).
  *
  * @param key - **Hyperlink key** (`Tag.key`, e.g. `wnba/LiveScorePoller`).
  *

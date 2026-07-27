@@ -10,7 +10,7 @@ import { Hash, Predicate, Schema } from "effect";
 import type { AnyMethod, FlatSpec } from "../Hyperlink";
 
 const LocalMethodTypeId = "~hyperlink-ts/Hyperlink/LocalMethod";
-const PureMethodTypeId = "~hyperlink-ts/Hyperlink/PureMethod";
+const DefaultMethodTypeId = "~hyperlink-ts/Hyperlink/DefaultMethod";
 const MethodTypeId = "~hyperlink-ts/Hyperlink/Method";
 
 /** Strip annotation / encoding noise so two equivalent schemas fingerprint the same. */
@@ -73,7 +73,7 @@ const fingerprintPayload = (
 const isWireMethod = (m: FlatSpec[string]): m is AnyMethod =>
   Predicate.hasProperty(m, MethodTypeId) &&
   !Predicate.hasProperty(m, LocalMethodTypeId) &&
-  !Predicate.hasProperty(m, PureMethodTypeId);
+  !Predicate.hasProperty(m, DefaultMethodTypeId);
 
 /**
  * Canonical wire descriptor for a flat Spec — sorted method keys, wire-only members.
