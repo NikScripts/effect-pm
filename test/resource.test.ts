@@ -1,4 +1,4 @@
-import { Effect, Fiber, Layer, Schema, Stream } from "effect";
+import { Cause, Effect, Exit, Fiber, Layer, Schema, Stream } from "effect";
 import { RpcTest } from "effect/unstable/rpc";
 import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
@@ -203,25 +203,32 @@ it("shared Tag serve merges under one RpcGroup and routes by key header", () => 
   return Effect.runPromise(program);
 });
 
-it("shared Tag serve rejects a duplicate instance key", async () => {
-  const program = Effect.void.pipe(
-    Effect.provide(
-      Layer.mergeAll(
-        Hyperlink.serveRemote(SharedAlpha, {
-          bump: ({ by }: { by: number }) => Effect.succeed(by),
-          label: Effect.succeed("a"),
-        }),
-        Hyperlink.serveRemote(SharedAlpha, {
-          bump: ({ by }: { by: number }) => Effect.succeed(by),
-          label: Effect.succeed("dup"),
-        }),
+it("shared Tag serve rejects a duplicate instance key", () => {
+  const program = Effect.gen(function* () {
+    const exit = yield* Effect.void.pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          Hyperlink.serveRemote(SharedAlpha, {
+            bump: ({ by }: { by: number }) => Effect.succeed(by),
+            label: Effect.succeed("a"),
+          }),
+          Hyperlink.serveRemote(SharedAlpha, {
+            bump: ({ by }: { by: number }) => Effect.succeed(by),
+            label: Effect.succeed("dup"),
+          }),
+        ),
       ),
-    ),
-    Effect.scoped,
-  );
-  await expect(Effect.runPromise(program)).rejects.toThrow(
-    Hyperlink.DuplicateSharedInstance,
-  );
+      Effect.scoped,
+      Effect.exit,
+    );
+    expect(Exit.isFailure(exit)).toBe(true);
+    if (Exit.isFailure(exit)) {
+      expect(Cause.hasDies(exit.cause)).toBe(true);
+      const defect = Cause.squash(exit.cause);
+      expect(defect).toBeInstanceOf(Hyperlink.DuplicateSharedInstance);
+    }
+  });
+  return Effect.runPromise(program);
 });
 
 // ── resource-level description (tools: section help / panel title) ──
