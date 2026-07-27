@@ -42,7 +42,7 @@ import { RegistryProvider, useAtomSet, useAtomValue } from "../ui/atom-react";
 import * as View from "../ui/View";
 import { WidgetsProvider } from "../ui/widgetsContext";
 import { base, Cell, type TuiWidgetRegistry } from "./cellWidgets";
-import * as TuiWorkPoolView from "./WorkPoolView";
+import * as TuiDashboardViews from "./DashboardViews";
 import {
   ControlKey,
   FocusedDaemon,
@@ -50,13 +50,6 @@ import {
   LogTail,
   NodeMark,
 } from "./focusWidgets";
-import {
-  FocusedApi,
-  FocusedFleetHealth,
-  FocusedGate,
-  FocusedShardMap,
-  FocusedTelemetry,
-} from "./kindCells";
 import { RuntimeProvider, useRuntime } from "./runtime";
 import {
   BLANK_BORDER,
@@ -65,7 +58,7 @@ import {
 } from "./queueWidget";
 import { useGroupRoute } from "./useGroupRoute";
 
-const workPoolViews = View.react(TuiWorkPoolView.layer);
+const dashboardViews = View.react(TuiDashboardViews.layer);
 
 const CELL_HEIGHT = 7;
 
@@ -405,7 +398,6 @@ const DashboardApp = (props: {
 
   const focused = route.selected;
   const focusName = route.keys[route.keys.length - 1] ?? displayName(idOf(focused));
-  const runtime = useRuntime();
   if (focused !== null) {
     if (isDaemonTag(focused)) {
       return (
@@ -452,66 +444,23 @@ const DashboardApp = (props: {
         />
       );
     }
-    if (isGateTag(focused)) {
+    if (
+      isGateTag(focused) ||
+      isApiTag(focused) ||
+      isFleetHealthTag(focused) ||
+      isTelemetryTag(focused) ||
+      isShardMapTag(focused)
+    ) {
       return (
-        <FocusedGate
+        <View.ChromeProvider
           key={focused.key}
-          runtime={runtime}
-          name={focusName}
-          tag={focused}
-          cols={cols}
-          rows={rows}
-        />
+          value={{ cols, rows, width: cols - 2 }}
+        >
+          <View.Detail tag={focused} name={focusName} />
+        </View.ChromeProvider>
       );
     }
-    if (isApiTag(focused)) {
-      return (
-        <FocusedApi
-          key={focused.key}
-          runtime={runtime}
-          name={focusName}
-          tag={focused}
-          cols={cols}
-          rows={rows}
-        />
-      );
-    }
-    if (isFleetHealthTag(focused)) {
-      return (
-        <FocusedFleetHealth
-          key={focused.key}
-          runtime={runtime}
-          name={focusName}
-          tag={focused}
-          cols={cols}
-          rows={rows}
-        />
-      );
-    }
-    if (isTelemetryTag(focused)) {
-      return (
-        <FocusedTelemetry
-          key={focused.key}
-          runtime={runtime}
-          name={focusName}
-          tag={focused}
-          cols={cols}
-          rows={rows}
-        />
-      );
-    }
-    if (isShardMapTag(focused)) {
-      return (
-        <FocusedShardMap
-          key={focused.key}
-          runtime={runtime}
-          name={focusName}
-          tag={focused}
-          cols={cols}
-          rows={rows}
-        />
-      );
-    }
+    // Unknown / Hyperlink leaf — View card exists; no detail skin yet.
     const kind = hyperlinkKindOf(focused) ?? "unknown";
     const node = nodeOf(focused);
     return (
@@ -606,17 +555,16 @@ export const Dashboard = <R, ER>(props: {
   readonly group: GroupNode;
   /** CLI / deep-link focus as member-key nicknames (`["Inbox"]`, `["Mini", "KeyRotation"]`). */
   readonly path?: ReadonlyArray<string>;
-  /** Cell set (defaults to {@link base}); extend with `withEntries(base, [forKind(...), forKey(...)])`.
-   *  WorkPool queue cells use {@link TuiWorkPoolView.layer} via View (not `forKind`). */
+  /** Optional key overrides; default cells come from {@link TuiDashboardViews.layer}. */
   readonly widgets?: TuiWidgetRegistry;
 }): React.ReactElement => (
   <RegistryProvider>
-    <workPoolViews.Provider>
+    <dashboardViews.Provider>
       <WidgetsProvider registry={props.widgets ?? base}>
         <RuntimeProvider runtime={props.runtime}>
           <DashboardApp group={props.group} path={props.path ?? []} />
         </RuntimeProvider>
       </WidgetsProvider>
-    </workPoolViews.Provider>
+    </dashboardViews.Provider>
   </RegistryProvider>
 );

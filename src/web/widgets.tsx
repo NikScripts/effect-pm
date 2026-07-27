@@ -40,13 +40,6 @@ import {
   type QueueTag,
   type ScheduleEntry,
   type NodeRef,
-  isApiTag,
-  isPriorityTag,
-  isFleetHealthTag,
-  isTelemetryTag,
-  isShardMapTag,
-  isGateTag,
-  isDaemonTag,
   nodesOf,
   leafTags,
   queueLeaves,
@@ -58,18 +51,11 @@ import { useAtomSet, useAtomValue } from "../ui/atom-react";
 import { memberKindOf } from "../ui/memberKind";
 import * as View from "../ui/View";
 import { kindOf as hyperlinkKindOf, kind as hyperlinkKind } from "../Hyperlink";
-import { priorityKind } from "../WorkPool";
-import { kind as fleetHealthKind, type NodeReport } from "../FleetHealth";
-import { kind as telemetryKind, type MetricDatum } from "../Telemetry";
-import { kind as shardMapKind } from "../ShardMap";
-import { kind as gateKind } from "../Gate";
-import { kind as daemonKind } from "../Daemon";
-import { kind as apiKind } from "../ApiMetrics";
+import type { NodeReport } from "../FleetHealth";
+import type { MetricDatum } from "../Telemetry";
 import {
-  forKind,
   isLeafTag,
   widgetFor,
-  withEntries,
   type LeafTag,
   type WidgetRegistry,
 } from "../ui/widgetRegistry";
@@ -3003,69 +2989,15 @@ export const GateDetail = (props: {
   );
 };
 
-const daemonWidget: Widget = ({ tag, name, onOpen }) =>
-  isDaemonTag(tag) ? (
-    <DaemonCard tag={tag} name={name} onOpen={onOpen} />
-  ) : (
-    <FallbackCard tag={tag} name={name} onOpen={onOpen} />
-  );
-const apiWidget: Widget = ({ tag, name, onOpen }) =>
-  isApiTag(tag) ? (
-    <ApiCard tag={tag} name={name} onOpen={onOpen} />
-  ) : (
-    <FallbackCard tag={tag} name={name} onOpen={onOpen} />
-  );
-const priorityWidget: Widget = ({ tag, name, onOpen }) =>
-  isPriorityTag(tag) ? (
-    <PriorityCard tag={tag} name={name} onOpen={onOpen} />
-  ) : (
-    <FallbackCard tag={tag} name={name} onOpen={onOpen} />
-  );
-const fleetHealthWidget: Widget = ({ tag, name, onOpen }) =>
-  isFleetHealthTag(tag) ? (
-    <FleetHealthCard tag={tag} name={name} onOpen={onOpen} />
-  ) : (
-    <FallbackCard tag={tag} name={name} onOpen={onOpen} />
-  );
-const telemetryWidget: Widget = ({ tag, name, onOpen }) =>
-  isTelemetryTag(tag) ? (
-    <TelemetryCard tag={tag} name={name} onOpen={onOpen} />
-  ) : (
-    <FallbackCard tag={tag} name={name} onOpen={onOpen} />
-  );
-const shardMapWidget: Widget = ({ tag, name, onOpen }) =>
-  isShardMapTag(tag) ? (
-    <ShardMapCard tag={tag} name={name} onOpen={onOpen} />
-  ) : (
-    <FallbackCard tag={tag} name={name} onOpen={onOpen} />
-  );
-const gateWidget: Widget = ({ tag, name, onOpen }) =>
-  isGateTag(tag) ? (
-    <GateCard tag={tag} name={name} onOpen={onOpen} />
-  ) : (
-    <FallbackCard tag={tag} name={name} onOpen={onOpen} />
-  );
-
 /**
- * The built-in widget set: WorkPool / Daemon / API cards by kind, with {@link FallbackCard} for
- * everything else. The default for `<Dashboard>`; extend or override it with
- * `withEntries(base, [forKind(...), forKey(...)])`. @public
+ * Fallback-only widget registry for `<Dashboard>`. Default card/detail chrome comes from
+ * `View.react(web/DashboardViews.layer)`. Override specific keys with
+ * `withEntries(base, [forKey(...)])` when needed.
+ *
+ * @public
  */
-export const base: WidgetRegistry<Widget> = withEntries(
-  {
-    byKey: HashMap.empty<string, Widget>(),
-    byKind: HashMap.empty<string, Widget>(),
-    fallback: FallbackCard,
-  },
-  [
-    // WorkPool queue cards: View.react(web/WorkPoolView.layer) — not forKind.
-    forKind(priorityKind, priorityWidget),
-    forKind(daemonKind, daemonWidget),
-    forKind(apiKind, apiWidget),
-    forKind(fleetHealthKind, fleetHealthWidget),
-    forKind(telemetryKind, telemetryWidget),
-    forKind(shardMapKind, shardMapWidget),
-    forKind(gateKind, gateWidget),
-    forKind(hyperlinkKind, HyperlinkCard),
-  ],
-);
+export const base: WidgetRegistry<Widget> = {
+  byKey: HashMap.empty<string, Widget>(),
+  byKind: HashMap.empty<string, Widget>(),
+  fallback: FallbackCard,
+};

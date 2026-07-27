@@ -1,8 +1,8 @@
 /**
  * @module tui/cellWidgets
  *
- * Ink grid cells + the built-in {@link base} widget registry. Same key→kind→fallback
- * resolution as `hyperlink-ts/web` (`forKind` / `forKey` / `withEntries` from `hyperlink-ts/ui`).
+ * Ink grid cells + fallback-only {@link base} registry. Default cells come from
+ * `View.react(tui/DashboardViews.layer)`; override keys with `forKey` / `withEntries`.
  *
  */
 import { Box, Text } from "ink";
@@ -11,22 +11,9 @@ import { Option } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import * as Group from "../Group";
 import { kind as hyperlinkKind, kindOf as hyperlinkKindOf, nodeOf } from "../Hyperlink";
-import { priorityKind } from "../WorkPool";
-import { kind as daemonKind } from "../Daemon";
-import { kind as apiKind } from "../ApiMetrics";
-import { kind as fleetHealthKind } from "../FleetHealth";
-import { kind as telemetryKind } from "../Telemetry";
-import { kind as shardMapKind } from "../ShardMap";
-import { kind as gateKind } from "../Gate";
 import {
   daemonBundle,
-  isApiTag,
   isDaemonTag,
-  isFleetHealthTag,
-  isGateTag,
-  isPriorityTag,
-  isShardMapTag,
-  isTelemetryTag,
   priorityBundle,
   queueBundle,
   type DaemonTag,
@@ -39,20 +26,11 @@ import * as View from "../ui/View";
 import { useAtomValue } from "../ui/atom-react";
 import {
   emptyRegistry,
-  forKind,
   isLeafTag,
   widgetFor,
-  withEntries,
   type WidgetRegistry,
 } from "../ui/widgetRegistry";
 import { useWidgets } from "../ui/widgetsContext";
-import {
-  ApiCell,
-  FleetHealthCell,
-  GateCell,
-  ShardMapCell,
-  TelemetryCell,
-} from "./kindCells";
 import { useRuntime, type AnyRuntime } from "./runtime";
 import {
   bar,
@@ -359,72 +337,13 @@ const fallbackWidget: TuiCellWidget = ({ name, member, width, selected }) => (
   <FallbackCell name={name} member={member} width={width} selected={selected} />
 );
 
-const priorityWidget: TuiCellWidget = ({ name, member, width, selected }) =>
-  isPriorityTag(member) ? (
-    <PriorityCell name={name} tag={member} width={width} selected={selected} />
-  ) : (
-    <FallbackCell name={name} member={member} width={width} selected={selected} />
-  );
-
-const daemonWidget: TuiCellWidget = ({ name, member, width, selected }) =>
-  isDaemonTag(member) ? (
-    <DaemonCell name={name} tag={member} width={width} selected={selected} />
-  ) : (
-    <FallbackCell name={name} member={member} width={width} selected={selected} />
-  );
-
-const gateWidget: TuiCellWidget = ({ runtime, name, member, width, selected }) =>
-  isGateTag(member) ? (
-    <GateCell runtime={runtime} name={name} tag={member} width={width} selected={selected} />
-  ) : (
-    <FallbackCell name={name} member={member} width={width} selected={selected} />
-  );
-
-const apiWidget: TuiCellWidget = ({ runtime, name, member, width, selected }) =>
-  isApiTag(member) ? (
-    <ApiCell runtime={runtime} name={name} tag={member} width={width} selected={selected} />
-  ) : (
-    <FallbackCell name={name} member={member} width={width} selected={selected} />
-  );
-
-const fleetHealthWidget: TuiCellWidget = ({ runtime, name, member, width, selected }) =>
-  isFleetHealthTag(member) ? (
-    <FleetHealthCell runtime={runtime} name={name} tag={member} width={width} selected={selected} />
-  ) : (
-    <FallbackCell name={name} member={member} width={width} selected={selected} />
-  );
-
-const telemetryWidget: TuiCellWidget = ({ runtime, name, member, width, selected }) =>
-  isTelemetryTag(member) ? (
-    <TelemetryCell runtime={runtime} name={name} tag={member} width={width} selected={selected} />
-  ) : (
-    <FallbackCell name={name} member={member} width={width} selected={selected} />
-  );
-
-const shardMapWidget: TuiCellWidget = ({ runtime, name, member, width, selected }) =>
-  isShardMapTag(member) ? (
-    <ShardMapCell runtime={runtime} name={name} tag={member} width={width} selected={selected} />
-  ) : (
-    <FallbackCell name={name} member={member} width={width} selected={selected} />
-  );
-
 /**
- * Built-in TUI cell set. Default for `<Dashboard>`; extend with
- * `withEntries(base, [forKind(...), forKey(...)])`.
+ * Fallback-only TUI cell registry. Default cells come from
+ * `View.react(tui/DashboardViews.layer)`. Override keys with `withEntries(base, [forKey(...)])`.
  *
  * @public
  */
-export const base: TuiWidgetRegistry = withEntries(emptyRegistry(fallbackWidget), [
-  // WorkPool queue cells: View.react(tui/WorkPoolView.layer) — not forKind.
-  forKind(priorityKind, priorityWidget),
-  forKind(daemonKind, daemonWidget),
-  forKind(apiKind, apiWidget),
-  forKind(fleetHealthKind, fleetHealthWidget),
-  forKind(telemetryKind, telemetryWidget),
-  forKind(shardMapKind, shardMapWidget),
-  forKind(gateKind, gateWidget),
-  forKind(hyperlinkKind, fallbackWidget),
-]);
+export const base: TuiWidgetRegistry = emptyRegistry(fallbackWidget);
 
 /** Dispatch a group member to its Ink cell (group, or registry leaf). @public */
 export const Cell = (props: {

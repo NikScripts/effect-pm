@@ -46,15 +46,26 @@ import { RuntimeProvider, useApiBundle, useNodeBundle, useDaemonBundle, useQueue
 import { ViewTransitionProvider, useViewTransition, useViewTransitionStyle } from "./useViewTransition";
 import { useGroupRoute } from "./useGroupRoute";
 import { Button } from "./components/ui/button";
-import { ApiEndpointTable, ApiMetricChart, ApiStats, ApiStatusBadge, base, Cell, ConfirmDialog, PriorityDetail, FleetHealthDetail, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, DaemonControls, DaemonStats, DaemonStatusBadge, HyperlinkReadinessBanner, GateDetail, ScheduleEditor, ShardMapDetail, StatusBadge, TelemetryDetail, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
-import { isLeafTag, type WidgetRegistry } from "../ui/widgetRegistry";
+import { ApiStatusBadge, base, Cell, ConfirmDialog, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, DaemonStatusBadge, StatusBadge, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
+import { isLeafTag, type LeafTag, type WidgetRegistry } from "../ui/widgetRegistry";
 import * as View from "../ui/View";
 import { WidgetsProvider } from "../ui/widgetsContext";
 import type { Widget } from "./widget-registry";
 import { DebugConsole } from "./debug-console";
-import * as WebWorkPoolView from "./WorkPoolView";
+import * as WebDashboardViews from "./DashboardViews";
 
-const workPoolViews = View.react(WebWorkPoolView.layer);
+const dashboardViews = View.react(WebDashboardViews.layer);
+
+/** DetailScreen families — shell supplies `onBack` via View chrome. */
+const ViewDetailScreen = (props: {
+  readonly tag: LeafTag;
+  readonly name?: string;
+  readonly onBack: () => void;
+}): React.ReactElement => (
+  <View.ChromeProvider value={{ onBack: props.onBack }}>
+    <View.Detail tag={props.tag} name={props.name} />
+  </View.ChromeProvider>
+);
 
 
 /** Invisible: reads one node's node status and reports the keys of its **not-ready** resources, so the
@@ -225,8 +236,6 @@ const DaemonDetail = (props: {
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
-  // One lock for the whole daemon detail — guards both the controls and the schedule editor.
-  const [locked, setLocked] = React.useState(true);
   return (
     <div className="flex h-[100dvh] flex-col gap-3 overflow-hidden safe-area landscape:h-auto landscape:min-h-[100dvh] landscape:overflow-visible" style={vt}>
       <div className="flex items-center gap-2">
@@ -234,17 +243,15 @@ const DaemonDetail = (props: {
         <strong className="flex-1 truncate text-base">⚙ {displayName(props.tag.key)}</strong>
         <DaemonStatusBadge supervising={s?.supervising} />
       </div>
-      <HyperlinkReadinessBanner tag={props.tag} />
-      <DaemonStats bundle={bundle} />
-      <DaemonControls bundle={bundle} locked={locked} onToggleLock={() => setLocked((l) => !l)} />
-      <ScheduleEditor bundle={bundle} onOpenFull={props.onOpenSchedule} />
+      <View.ChromeProvider value={{ onOpenSchedule: props.onOpenSchedule }}>
+        <View.Detail tag={props.tag} />
+      </View.ChromeProvider>
       <LogBox bundle={bundle} full={false} onToggle={props.onOpenLogs} />
     </div>
   );
 };
 
-/** Detail view for an API-metrics resource — stats + usage chart + endpoint table. Read-only: no
- *  controls, no logs (an `ApiMetrics` tap has neither). */
+/** API-metrics shell — header + View detail body (stats / chart / endpoints). */
 const ApiDetail = (props: { readonly tag: ApiTag; readonly onBack: () => void }): React.ReactElement => {
   const bundle = useApiBundle(props.tag);
   const statusR = useAtomValue(bundle.status);
@@ -257,10 +264,7 @@ const ApiDetail = (props: { readonly tag: ApiTag; readonly onBack: () => void })
         <strong className="flex-1 truncate text-base">🌐 {displayName(props.tag.key)}</strong>
         <ApiStatusBadge requests={s?.requestsTotal ?? 0} errors={s?.errorsTotal ?? 0} />
       </div>
-      <HyperlinkReadinessBanner tag={props.tag} />
-      <ApiStats bundle={bundle} />
-      <div className="overflow-hidden rounded-xl border bg-card p-3"><ApiMetricChart bundle={bundle} /></div>
-      <ApiEndpointTable bundle={bundle} />
+      <View.Detail tag={props.tag} />
     </div>
   );
 };
@@ -312,11 +316,21 @@ const DashboardInner = (props: {
     if (isApiTag(selected)) return <ApiDetail tag={selected} onBack={toGrid(selected.key)} />;
     if (isDaemonTag(selected)) return <DaemonDetail tag={selected} onBack={toGrid(selected.key)} onOpenLogs={openLogs} onOpenSchedule={openSchedule} />;
     if (isQueueTag(selected)) return <QueueDetail tag={selected} onBack={toGrid(selected.key)} onOpenLogs={openLogs} />;
-    if (isPriorityTag(selected)) return <PriorityDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
-    if (isFleetHealthTag(selected)) return <FleetHealthDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
-    if (isTelemetryTag(selected)) return <TelemetryDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
-    if (isShardMapTag(selected)) return <ShardMapDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
-    if (isGateTag(selected)) return <GateDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
+    if (
+      isPriorityTag(selected) ||
+      isFleetHealthTag(selected) ||
+      isTelemetryTag(selected) ||
+      isShardMapTag(selected) ||
+      isGateTag(selected)
+    ) {
+      return (
+        <ViewDetailScreen
+          tag={selected}
+          name={selectedName}
+          onBack={toGrid(selected.key)}
+        />
+      );
+    }
     return <></>;
   }
 
@@ -447,11 +461,15 @@ const NodeResourceView = (props: {
   if (isQueueTag(tag)) {
     return <QueueDetail tag={tag} onBack={props.onBack} onOpenLogs={() => setView("logs")} />;
   }
-  if (isPriorityTag(tag)) return <PriorityDetail tag={tag} onBack={props.onBack} />;
-  if (isFleetHealthTag(tag)) return <FleetHealthDetail tag={tag} onBack={props.onBack} />;
-  if (isTelemetryTag(tag)) return <TelemetryDetail tag={tag} onBack={props.onBack} />;
-  if (isShardMapTag(tag)) return <ShardMapDetail tag={tag} onBack={props.onBack} />;
-  if (isGateTag(tag)) return <GateDetail tag={tag} onBack={props.onBack} />;
+  if (
+    isPriorityTag(tag) ||
+    isFleetHealthTag(tag) ||
+    isTelemetryTag(tag) ||
+    isShardMapTag(tag) ||
+    isGateTag(tag)
+  ) {
+    return <ViewDetailScreen tag={tag} onBack={props.onBack} />;
+  }
   return <></>;
 };
 
@@ -480,7 +498,7 @@ export const DashboardView = <R, ER>(props: {
   // monospace regardless of the consumer's `body`/`#root` font (a value set directly on this
   // element wins over an inherited one), and it still honours a consumer-defined `--font-mono`.
   return (
-    <workPoolViews.Provider>
+    <dashboardViews.Provider>
       <RuntimeProvider runtime={props.runtime}>
         <div className="font-mono">
           {nodeTag !== null ? (
@@ -499,7 +517,7 @@ export const DashboardView = <R, ER>(props: {
           )}
         </div>
       </RuntimeProvider>
-    </workPoolViews.Provider>
+    </dashboardViews.Provider>
   );
 };
 
@@ -508,9 +526,7 @@ export const DashboardView = <R, ER>(props: {
 export const Dashboard = <R, ER>(props: {
   readonly runtime: DashboardRuntime<R, ER>;
   readonly group: GroupNode;
-  /** The widget set (defaults to the built-in {@link base}); extend/override with
-   *  `withEntries(base, [forKind(...), forKey(...)])`. WorkPool queue cards use
-   *  {@link WebWorkPoolView.layer} via View (not `forKind`). */
+  /** Optional key overrides on top of View kit + fallback ({@link base} is fallback-only). */
   readonly widgets?: WidgetRegistry<Widget>;
 }): React.ReactElement => (
   <RegistryProvider>
