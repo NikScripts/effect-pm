@@ -6,7 +6,7 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **4** | `cursor/hyperservice-open-deps-5679` | [fleet rate limiting](../plans/fleet-rate-limiting.md) · [wire groups](../plans/wire-groups-and-identity.md) · [service shapes](../plans/service-shapes.md) | **tip-synced** — A1–A2 + `cell` parked/rejected | same tip as `integration` | typecheck 0 / hyperlink-default 12/12 | idle; optional A3 / R5 | 2026-07-27 |
+| **4** | `cursor/hyperservice-open-deps-5679` | [fleet rate limiting](../plans/fleet-rate-limiting.md) · [wire groups](../plans/wire-groups-and-identity.md) · [service shapes](../plans/service-shapes.md) | **tip-synced** — A1–A3 + `cell` parked/rejected | same tip as `integration` | typecheck 0 / hyperlink-default 13/13 | idle; optional R5 | 2026-07-27 |
 | **G / TUI** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity | **design** — client adapters notes; tip-synced | same tip as `integration` | prior suites green | Notes: [`client-adapters-design.md`](./client-adapters-design.md) — Promise / TanStack / tRPC-shape / Effect-reactive helpers; Eng TBD | 2026-07-24 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **G**, this agent only | 2026-07-26 |
 | **Launcher** | `cursor/launcher-handoff-design-929b` | [launcher + handoff brief](./launcher-and-handoff-brief.md) | **bake** — Track B (Lookup-directed) | branch tip | Track A tests green | Open: B forks #1–6 in brief; then C/D | 2026-07-27 |
@@ -28,7 +28,7 @@
 0. **Agent E:** impossible-states plan ([`impossible-states-proposal.md`](./impossible-states-proposal.md)). **DONE + merged:** P1 (node↔protocol wiring bug → compile error, cast-free) + P5 (http transport dies in browser). **P2 SKIPPED** (cast). **P4 already-enforced** (loose-fields payload already rejected; proposal mis-scoped). **P3 deferred** (opaque serve layers). Clean wins complete. Reserved `src/Hyperlink.ts` node/client surface until fully merged (done). **Tag-config reservation RELEASED — Agent D WorkPool/Gate/Daemon payload-config unblocked.**
 
 ### Active (owner approval required)
-1. **Agent 4:** W1–W3 + `default`/`defaults` + R1–R4+adaptive + **construction adornments A1–A2 tip-synced**; **`cell` parked/rejected**. Idle; optional A3 / R5. Incident: [`agent-04-w3-incident-2026-07-27.md`](./agent-04-w3-incident-2026-07-27.md).
+1. **Agent 4:** W1–W3 + `default`/`defaults` + R1–R4+adaptive + **construction adornments A1–A3 tip-synced**; **`cell` parked/rejected**. Idle; optional R5. Incident: [`agent-04-w3-incident-2026-07-27.md`](./agent-04-w3-incident-2026-07-27.md).
 2. **Agent G / TUI:** Dashboard Group parity + client-adapters design (`cursor/tui-dashboard-parity-125f`).
 3. **This agent (Launcher):** Track A on tip. **Baking Track B** — Lookup-directed startup forks in [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md). No Eng until owner locks.
 4. **Docs site:** tip-synced + redeployed. Lighthouse **home/api 100/100/100/100**; install a11y/seo 100 (perf 98 / BP 96 — React #418 hydration). Static `/assets`+`/search` CF edge HIT. Landing UI unchanged (Coming soon). 1Password CLI deferred.

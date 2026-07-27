@@ -394,8 +394,14 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Owner said:** “Go” on tip-sync A1–A2 + park `cell` (lean: tip-sync → park `cell` → idle).
 - **Chose / LOCKED:** No Spec builder for live plain `A` (`cell` / `live` / `state`). Dashboards use `ref` (Subscribable) + host adapters. Construction adornments A1–A2 tip-synced to `integration`.
 - **Rejected:** Eng’ing a push-cell Spec leaf; keeping `cell` as an open bake item.
-- **Still open:** optional A3 factory `{ defaults }` sugar; optional fleet R5.
-- **Supervisor impact:** Agent 4 idle pending owner pick (A3 / R5 / new track).
+- **Still open:** optional fleet R5.
+- **Supervisor impact:** A3 tip-synced; Agent 4 idle (optional R5).
+
+## 2026-07-27 — A3 factory `{ defaults }` sugar
+
+- **Owner said:** “Okay fine we can do it if it’s clean and typed nice.”
+- **Chose / Eng’d:** Tag options `{ defaults: bag }` on Hyperlink / WorkPool / Gate / Daemon — desugars to `Hyperlink.defaults` **after** named-handle casts (`nameQueueService` / `nameRunService`) so bags are not wiped. Same `TagWithDefaults` / `DefaultsInput` typing as the pipe. Pipe remains the composable core.
+- **Rejected:** Passing defaults through `Hyperlink.Tag` inside toolkit materialize (naming remap would erase Svc widen).
 
 ---
 
