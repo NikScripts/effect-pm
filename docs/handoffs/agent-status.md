@@ -31,7 +31,7 @@
 1. **Agent 4:** W1–W3 + `default`/`defaults` + **R1–R4+adaptive tip-synced** ([`../plans/fleet-rate-limiting.md`](../plans/fleet-rate-limiting.md)). Fleet plan closed except optional R5. Next bake candidates: live `cell` ([`../plans/service-shapes.md`](../plans/service-shapes.md)) or park. Incident: [`agent-04-w3-incident-2026-07-27.md`](./agent-04-w3-incident-2026-07-27.md).
 2. **Agent G / TUI:** Dashboard Group parity + client-adapters design (`cursor/tui-dashboard-parity-125f`).
 3. **This agent (Launcher):** spine **α** locked (dumb spawn-and-exit). Baking Track **A** API with owner before any Eng. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
-4. **Docs site:** tip-synced; **redeployed** (`32a0e594`, image `c7c6ba0b2`). Live: SEO chrome, landing CTAs, favicon/og/canonical, process-cached API JSON, CF edge HIT. Follow-up on tip: `processSlot` so Shiki survives Vite SSR re-eval (build no longer allocates 500 highlighters). 1Password CLI backup deferred; CF may replace public `/robots.txt` with content-signals (origin still correct).
+4. **Docs site:** tip-synced; **redeployed** (`d8511a33`, image `1e748e415`). Live: SEO chrome, landing CTAs, `yield*` in meta, favicon/og/canonical, process-cached API JSON, CF edge HIT, processSlot Shiki latch (build: 0 singleton warnings). 1Password CLI backup deferred (desktop Integrate with CLI).
 
 ### Frozen / dead (do not assign)
 - **Agent 1:** frozen — Examples book E1 already on tip; stale intro PR #68 closed; branch deleted.
