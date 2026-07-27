@@ -1,6 +1,6 @@
 # Brief — Launcher + node handoff (new agent)
 
-**Status:** plan-first / design bake — **spine locked; APIs not locked.**  
+**Status:** plan-first / design bake — **Track A API locked (#1–21); awaiting owner Eng go.**  
 **Opened:** 2026-07-25 (owner via Agent G).  
 **Audience:** next agent picking up launcher + handoff / migration discussion.
 
@@ -96,6 +96,11 @@
     - Wire: `Schema.String` (optional brand `Launcher.Token` if it stays thin).
     - Hold and log as **`Redacted`** — never cleartext in logs.
     - Reject UUID-as-the-story if it implies non-Effect globals; brand OK as sugar over the same mint.
+21. **Package export = own subpath `hyperlink-ts/Launcher`.**
+    - Public module: `src/Launcher.ts` (flat Effect-true namespace) + `src/internal/launcher.ts` engine as needed.
+    - Barrel / `package.json` `exports` entry for `@nikscripts/…/Launcher` (package name per tip) — **not** nested under `Node`.
+    - **Node-platform only** (mirror other OS-spawn entrypoints); `Node.assume` / Ready stay on `hyperlink-ts/Node` and remain wire-portable.
+    - Eng may choose exact packaging nuance (e.g. peer `@effect/platform-node`) without reopening the subpath decision.
 
 Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.md) remain **reference only** unless re-locked here.
 
@@ -113,10 +118,21 @@ Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.m
 
 **Gaps vs locked bake:** no `hyperlink-ts/Launcher`; no `Node.assume`; no poll-until-allReady on the parent (deep verify without `resource` only proves status RPC answers); no detached spawn→ready→assume→exit kit.
 
-### Track A — baking (not locked)
+### Track A — Eng go checklist (owner)
 
-- Package export: `hyperlink-ts/Launcher` Node-only (mirror other platform entrypoints) — confirm.
-- Track A bake complete enough for owner “API locked → Eng” go? (checklist vs #1–20).
+Track A bake surface is locked (#1–21). **No Eng until owner says go.** Remaining items are Eng detail (not bake blockers):
+
+| Area | Locked | Eng may decide without re-bake |
+|------|--------|--------------------------------|
+| Spine / product / modules | #1, #10, #13, #21 | thin CLI later |
+| Phases / names / `Handle` | #6, #11, #15, #16 | internal helpers |
+| Spawn unit / multi / not Group | #12, #14 | entry→`ChildProcess` sugar shape |
+| Ready / allReady / verify | #4, #7, #8 | poll schedule internals |
+| `Node.assume` + token | #9, #18, #20 | token byte length; brand thickness |
+| Errors / timeout | #19 | exact Schema fields on assume errors |
+| Effect everywhere / Node-only Launcher | #17, #21 | `@effect/platform-node` peer wiring |
+
+**Owner action:** reply **Eng go** (or name any # to reopen) before implementation starts.
 
 ---
 
