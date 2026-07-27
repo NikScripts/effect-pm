@@ -32,13 +32,18 @@ import { runServer } from "./runtime";
 
 type HighlightSlot = {
   hl: Highlighter | undefined;
+  /** In-flight createHighlighter — SSG fans out loadHighlighter concurrently. */
+  hlPromise: Promise<Highlighter> | undefined;
   linksReady: boolean;
+  linksPromise: Promise<void> | undefined;
   hoverDocLinks: Readonly<Record<string, Record<string, string>>>;
 };
 const slot = (): HighlightSlot =>
   processSlot("highlight", () => ({
     hl: undefined,
+    hlPromise: undefined,
     linksReady: false,
+    linksPromise: undefined,
     hoverDocLinks: {},
   }));
 
@@ -738,20 +743,28 @@ const twoslash = createTransformerFactory(twoslasher, renderer as never)({});
 /** Load the shared highlighter + the link data once, before the (sync) render walk. */
 export const loadHighlighter = async (): Promise<void> => {
   const s = slot();
+  // Process slot (not module `let`) — Vite SSR re-evaluates this module per SSG page; a module
+  // `let` would allocate hundreds of Shiki instances and OOM the build. The promise latch collapses
+  // concurrent first loads (SSG fans out pages) onto a single createHighlighter.
   if (s.hl === undefined) {
-    // Process slot (not module `let`) — Vite SSR re-evaluates this module per SSG page; a module
-    // `let` would allocate hundreds of Shiki instances and OOM the build.
-    s.hl = await createHighlighter({
+    s.hlPromise ??= createHighlighter({
       themes: [THEMES.light, THEMES.dark],
       langs: [...LOAD_LANGS],
+    }).then((h) => {
+      s.hl = h;
+      return h;
     });
+    await s.hlPromise;
   }
   // Doclinks + source location index are process-cached in api-data / api-source-links; skip the
   // runServer round-trip after the first successful load (every API symbol page used to re-hit both).
   if (!s.linksReady) {
-    s.hoverDocLinks = await runServer(docLinksByLocation());
-    await loadSourceLinks();
-    s.linksReady = true;
+    s.linksPromise ??= (async () => {
+      s.hoverDocLinks = await runServer(docLinksByLocation());
+      await loadSourceLinks();
+      s.linksReady = true;
+    })();
+    await s.linksPromise;
   }
 };
 

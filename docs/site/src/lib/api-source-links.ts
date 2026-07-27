@@ -33,12 +33,14 @@ type SourceLinksSlot = {
   locationEntries: ReadonlyArray<SymbolIndex.Entry>;
   pathsMap: Record<string, Array<string>>;
   loaded: boolean;
+  loadPromise: Promise<void> | undefined;
 };
 const slot = (): SourceLinksSlot =>
   processSlot("sourceLinks", () => ({
     locationEntries: [],
     pathsMap: {},
     loaded: false,
+    loadPromise: undefined,
   }));
 
 const PkgNameS = Schema.Struct({ name: Schema.optional(Schema.String) });
@@ -90,9 +92,12 @@ const effectPathsMap = (): Effect.Effect<
 export const loadSourceLinks = async (): Promise<void> => {
   const s = slot();
   if (s.loaded) return;
-  s.locationEntries = await runServer(symbolLocations());
-  s.pathsMap = await runServer(effectPathsMap());
-  s.loaded = true;
+  s.loadPromise ??= (async () => {
+    s.locationEntries = await runServer(symbolLocations());
+    s.pathsMap = await runServer(effectPathsMap());
+    s.loaded = true;
+  })();
+  await s.loadPromise;
 };
 
 /** The loaded location entries ([] before {@link loadSourceLinks}) — the shared SymbolIndex feed. */
