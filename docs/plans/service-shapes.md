@@ -3,7 +3,8 @@
 **Status:** partial Eng (2026-07-26); remainder owner-gated.  
 **Agent:** 4 (`cursor/hyperservice-open-deps-5679`).  
 **Prior art:** [`service-shape-redesign.md`](../handoffs/archive/2026-07/features/service-shape-redesign.md) (2026-07-01/02), [`client-adapters-design.md`](../handoffs/client-adapters-design.md).  
-**Orthogonal / active:** wire RpcGroup identity — [`wire-groups-and-identity.md`](./wire-groups-and-identity.md) (do not conflate with handle taxonomy).
+**Orthogonal:** wire RpcGroup identity — [`wire-groups-and-identity.md`](./wire-groups-and-identity.md) (W1–W3 Eng’d; do not conflate with handle taxonomy).  
+**Paused here:** Creating polish + `Hyperlink.handle` adornments / rename — owner returns after shared-Tag W3.
 
 Goal: support the **widest useful variety** of service shapes without silent local↔remote divergence, and without turning the Spec into every host-language return type (Promise, sync fn, …).
 
