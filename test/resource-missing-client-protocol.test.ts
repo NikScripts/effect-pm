@@ -9,11 +9,6 @@ class Probe extends Hyperlink.Tag<Probe>()("missing-protocol/Probe", {
   ping: Hyperlink.effect(Schema.String),
 }) {}
 
-const DaemonGroup = Hyperlink.tagFor("missing-protocol/daemon", {
-  ping: Hyperlink.effect(Schema.String),
-});
-class P1 extends DaemonGroup<P1>("missing-protocol/p1") {}
-
 describe("Hyperlink.MissingClientProtocol", () => {
   it.effect("client(tag) without Protocol fails MissingClientProtocol", () =>
     Effect.gen(function* () {
@@ -21,14 +16,6 @@ describe("Hyperlink.MissingClientProtocol", () => {
       // exercise the runtime serviceOption backstop (compile-time still requires Protocol).
       // E stays `never` on the public type (replaces a die); runtime Exit carries the tagged error.
       const layer = Hyperlink.client(Probe) as Layer.Layer<Probe>;
-      const exit = yield* Effect.exit(Layer.build(layer).pipe(Effect.scoped));
-      expectTaggedFailure(exit, "MissingClientProtocol");
-    }),
-  );
-
-  it.effect("clientInstances without Protocol fails MissingClientProtocol", () =>
-    Effect.gen(function* () {
-      const layer = Hyperlink.clientInstances(DaemonGroup, P1) as Layer.Layer<P1>;
       const exit = yield* Effect.exit(Layer.build(layer).pipe(Effect.scoped));
       expectTaggedFailure(exit, "MissingClientProtocol");
     }),

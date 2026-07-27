@@ -1,9 +1,10 @@
 /**
  * **ApiMetrics** — observability contract for outbound API clients (HttpApi and future transports).
  *
- * Uses {@link Hyperlink.tagFor} so many client instances share **one RPC group** on the wire;
- * instances are routed by their Hyperlink `key` header. Link each metrics tag to an outbound
- * client via a shared **`clientId` string** (the {@link Gate.httpApiClientService} Context key).
+ * Each metrics tag is its own solo {@link Hyperlink.Tag} (wire key = instance key). Link each
+ * metrics tag to an outbound client via a shared **`clientId` string** (the
+ * {@link Gate.httpApiClientService} Context key). A future kind-keyed family factory may share
+ * one Spec across instances; today's path is per-instance groups.
  *
  * @remarks
  * Browser-safe: import from `hyperlink-ts/ApiMetrics` only in tag files — never the

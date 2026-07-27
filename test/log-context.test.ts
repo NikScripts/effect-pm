@@ -21,7 +21,7 @@ describe("logContext", () => {
   it("matches daemon scope by lineage key", () => {
     const scope = {
       _tag: daemonKind,
-      groupId: testBillingNodeKey,
+      wireKey: testBillingNodeKey,
       key: testSyncDaemonKey,
     };
     assert.strictEqual(
@@ -53,14 +53,14 @@ describe("logContext", () => {
           {
             key: testSyncDaemonKey,
             kind: daemonKind,
-            groupId: testBillingNodeKey,
+            wireKey: testBillingNodeKey,
             controls: [],
           },
         ],
       );
       assert.strictEqual(scope._tag, daemonKind);
       if (scope._tag === daemonKind) {
-        assert.strictEqual(scope.groupId, testBillingNodeKey);
+        assert.strictEqual(scope.wireKey, testBillingNodeKey);
         assert.strictEqual(scope.key, testSyncDaemonKey);
       }
     }));

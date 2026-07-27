@@ -100,7 +100,7 @@ import type {
 } from "./internal/daemonSchedule";
 // ── toolkit (Hyperlink) surface — the light contract + heavy layers assembled into `Daemon` ──
 import * as Hyperlink from "./Hyperlink";
-import { buildRpcGroup, groupSym, specSym } from "./Hyperlink";
+import { buildRpcGroup, groupSym, specSym, wireKeySym } from "./Hyperlink";
 import type {
   FlatSpec,
   HandlerContextOf,
@@ -2076,7 +2076,7 @@ const scheduleModeOf = (tag: unknown): ScheduleMode | undefined => {
 
 /**
  * Graft path-keyed leaves onto a tag's flat spec and rebuild its RPC group in place, optionally
- * stamping combinator metadata. Reuses the tag's already-claimed `groupId` (no re-claim). Returns
+ * stamping combinator metadata. Reuses the tag's already-claimed wire key (no re-claim). Returns
  * the same (mutated) tag — so `class X extends Tag()(...).pipe(combinator) {}` extends it. @internal
  */
 const augmentTag = (
@@ -2087,7 +2087,7 @@ const augmentTag = (
   const nextFlat: FlatSpec = { ...tag[specSym], ...flatAddition };
   return Object.assign(
     tag,
-    { [specSym]: nextFlat, [groupSym]: buildRpcGroup(tag.groupId, nextFlat) },
+    { [specSym]: nextFlat, [groupSym]: buildRpcGroup(tag[wireKeySym], nextFlat) },
     stamp,
   );
 };

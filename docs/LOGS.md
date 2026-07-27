@@ -38,7 +38,7 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 | **Annotation key** | Name of a field on `LogEntry.annotations` | `LogAnnotationKeys.*` | Not a bucket — metadata field name |
 | **Store scope key** | Journal partition for a registration | Same as node or resource key | Durable `_logs` journal (private); read via `Hyperlink.logs` / `Logs.by*` |
 | **Lineage segment key** | One hop in resource ancestry | Each element in lineage JSON array | `LogEntry.hasKey` / `atRoot` / `atLeaf` |
-| **RPC `groupId`** | Wire routing prefix for multi-host RPC | Tag `groupId` when set | **Not** a log key |
+| **RPC wire key** | Wire routing prefix for multi-host RPC | Solo tag `.key` / `Hyperlink.wireKeyOf(tag)` | **Not** a log key |
 | **Group catalog key** | Dashboard / CLI grouping | `Group.Tag` constructor arg | **Not** a log key — e.g. `hub/Wnba` |
 
 ## Key catalog

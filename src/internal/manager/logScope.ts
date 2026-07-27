@@ -20,19 +20,19 @@ import {
  * Resolved operator log filter from a single user-entered target string.
  *
  * Hyperlink scopes carry the registration **key** (same as `Tag.key`). Kind is in `_tag`
- * (`hyperlink-ts/Daemon` | `hyperlink-ts/WorkPool`); RPC wire prefix stays `groupId`.
+ * (`hyperlink-ts/Daemon` | `hyperlink-ts/WorkPool`); RPC wire prefix is `wireKey`.
  *
  * @internal
  */
 export type LogScope =
   | { readonly _tag: "all" }
-  | { readonly _tag: "group"; readonly groupId: string }
-  | { readonly _tag: typeof daemonKind; readonly groupId: string; readonly key: string }
-  | { readonly _tag: typeof workPoolKind; readonly groupId: string; readonly key: string };
+  | { readonly _tag: "group"; readonly wireKey: string }
+  | { readonly _tag: typeof daemonKind; readonly wireKey: string; readonly key: string }
+  | { readonly _tag: typeof workPoolKind; readonly wireKey: string; readonly key: string };
 
 /** @internal */
-export const logScopeGroupId = (scope: LogScope): string | undefined =>
-  scope._tag === "all" ? undefined : scope.groupId;
+export const logScopeWireKey = (scope: LogScope): string | undefined =>
+  scope._tag === "all" ? undefined : scope.wireKey;
 
 /** @internal */
 export const logEntryMatchesScope = (
@@ -86,7 +86,7 @@ export const resolveLogScope = <G extends GroupCatalogEntry>(
       Effect.gen(function* () {
         const asGroup = resolveGroupFromInput(groups, value);
         if (Option.isSome(asGroup)) {
-          return { _tag: "group", groupId: asGroup.value.key };
+          return { _tag: "group", wireKey: asGroup.value.key };
         }
         const resolution = resolveDaemonManagerTarget(value, candidates);
         if (resolution._tag === "Resolved") {
@@ -94,13 +94,13 @@ export const resolveLogScope = <G extends GroupCatalogEntry>(
           if (candidate.kind === daemonKind) {
             return {
               _tag: daemonKind,
-              groupId: candidate.groupId,
+              wireKey: candidate.wireKey,
               key: candidate.key,
             };
           }
           return {
             _tag: workPoolKind,
-            groupId: candidate.groupId,
+            wireKey: candidate.wireKey,
             key: candidate.key,
           };
         }

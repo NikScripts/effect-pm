@@ -16,7 +16,7 @@ Pre-1.0: breaking changes land as minor bumps.
 
 - **Weighted middle scheduling** — diversify the queue's middle priority into many weighted numeric/named groups pulled by a non-starving algorithm (DRR / strict), fixing strict-priority starvation. Design spec: [weighted-middle-scheduling.md](./weighted-middle-scheduling.md).
 - **Non-serializable queue items** — local-only enqueue for function/`Effect` items; wire control + observability stay served. [queue-nonserializable-items.md](./queue-nonserializable-items.md).
-- **Standalone spawns** — `Process.spawn` / `QueueHyperlink.open`: multi-instance ergonomics where spawned handles are plain caller-scoped Effects (alongside `Group` + `Hyperlink.serveInstances`).
+- **Standalone spawns** — `Process.spawn` / `QueueHyperlink.open`: multi-instance ergonomics where spawned handles are plain caller-scoped Effects (alongside `Group`).
 - **Runtime identity & singleton runs** — in-process registry + a durable cross-runtime lease to prevent duplicate runs of the same logical process across hosts.
 - **Lifecycle kernel (exploratory)** — typed transitions / eligibility for queues, items, processes, and schedule rows; projection-friendly events (not an external statechart engine).
 

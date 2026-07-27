@@ -60,8 +60,8 @@ describe("ApiMetrics.Tag", () => {
   it("auto-suffixes the Hyperlink key and stores clientIdSym", () => {
     expect(DemoMetrics.key).toBe(ApiMetrics.metricsKeyFor(ClientId));
     expect(ApiMetrics.clientIdOf(DemoMetrics)).toBe(ClientId);
-    // per-instance group: the groupId is the metrics key (its own wire prefix), not a shared family
-    expect(DemoMetrics.groupId).toBe(ApiMetrics.metricsKeyFor(ClientId));
+    // per-instance group: the wire key is the metrics key (its own RpcGroup prefix), not a shared family
+    expect(DemoMetrics.key).toBe(ApiMetrics.metricsKeyFor(ClientId));
   });
 });
 
@@ -119,9 +119,9 @@ describe("ApiMetrics per-instance groups + httpServer", () => {
   const OtherClientId = "test/api-metrics/other" as const;
   class OtherMetrics extends ApiMetrics.Tag<OtherMetrics>()(OtherClientId) {}
 
-  it("each tag is its own group with a distinct, key-prefixed wire id", () => {
-    expect(DemoMetrics.groupId).not.toBe(OtherMetrics.groupId);
-    expect(OtherMetrics.groupId).toBe(ApiMetrics.metricsKeyFor(OtherClientId));
+  it("each tag is its own wire key (distinct, key-prefixed)", () => {
+    expect(DemoMetrics.key).not.toBe(OtherMetrics.key);
+    expect(OtherMetrics.key).toBe(ApiMetrics.metricsKeyFor(OtherClientId));
   });
 
   // Two metrics tags served on one node via `httpServer`; each reached over http with its own

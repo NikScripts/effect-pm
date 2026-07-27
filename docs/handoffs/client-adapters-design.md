@@ -753,7 +753,7 @@ Name collision: `Hyperlink.react` vs `View.react` — different jobs (service-bo
 | W16 | ~~Pipe allowlist on HS tag~~ → **superseded by W21** (`View.only`) |
 | W17 | ~~View handles on HS tag~~ → **superseded by W21** (no tag-pipe chrome SSOT) |
 | W18 | **Missing skin = `View.react(layer)` requires Layer `R = never`** — contributions require View services; `Layer.succeed(View, Comp)` provides them |
-| W19 | ~~`Hyperlink.components`~~ → **superseded by W21** (demoted; not match SSOT) |
+| W19 | ~~`Hyperlink.components`~~ → **superseded by W21** (removed from match path; use `View.only`) |
 | W20 | **`View.group(AppGroup)`** — stash Group + leaves on kit; chrome `R` from merged `View.kind` / `tag` / `only` layers |
 | W21 | **Chrome policy = Layers on `View`** (no separate Policy module/type). `View.kind` / `View.tag` (append) + `View.only` (per-kind allowlist). Compose with **`Layer.mergeAll`** (last `only` for a tag wins). Variadic views → `R`. Kill `requireView` / bind\* / tag-pin match |
 

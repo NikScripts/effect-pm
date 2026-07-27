@@ -2,7 +2,6 @@ import { Effect, Layer, Schema, Stream } from "effect";
 import { RpcClient } from "effect/unstable/rpc";
 import * as Hyperlink from "../src/Hyperlink";
 import type { ServiceOf } from "../src/Hyperlink";
-import * as Daemon from "../src/Daemon";
 import * as Node from "../src/Node";
 
 // ── Slice 1: spec → service-interface inference ──
@@ -102,15 +101,14 @@ const _layer: Layer.Layer<Counter> = Hyperlink.layer(Counter, {
 });
 void _layer;
 
-// ── factory: tagFor bakes a shared spec; instances pass only an id ──
-const Counter2 = Hyperlink.tagFor("test/counter", {
+// ── two solo tags with the same Spec shape ──
+const tickSpec = {
   tick: Hyperlink.effect(Schema.Void),
   count: Hyperlink.effect(Schema.Number),
-});
-class TickA extends Counter2<TickA>("test/TickA") {}
-class TickB extends Counter2<TickB>("test/TickB") {}
+};
+class TickA extends Hyperlink.Tag<TickA>()("test/TickA", tickSpec) {}
+class TickB extends Hyperlink.Tag<TickB>()("test/TickB", tickSpec) {}
 
-// both instances share the same inferred service (spec baked into the factory)
 const _factoryA: Effect.Effect<number, never, TickA> = Effect.gen(function* () {
   const a = yield* TickA;
   yield* a.tick;
@@ -192,18 +190,16 @@ const _wireViaClient: Promise<number> = Effect.runPromise(
 );
 void _wireViaClient;
 
-// ── clientInstances: one shared client serves many instances of one control shape ──
-// (100 daemons that can only start/drop cost ONE client, not one each.)
-const DaemonGroup = Hyperlink.tagFor(Daemon.kind, {
+// ── solo clients: each tag is its own RpcGroup; client requires ambient Protocol ──
+const daemonControlSpec = {
   start: Hyperlink.effect(Schema.Void),
   drop: Hyperlink.effect(Schema.Void),
-}, { kind: Daemon.kind });
-class P1 extends DaemonGroup<P1>("@app/p1") {}
-class P2 extends DaemonGroup<P2>("@app/p2") {}
+};
+class P1 extends Hyperlink.Tag<P1>()("@app/p1", daemonControlSpec) {}
+class P2 extends Hyperlink.Tag<P2>()("@app/p2", daemonControlSpec) {}
 
-// one layer provides BOTH instances; its only requirement is the transport Protocol.
 const _daemonClients: Layer.Layer<P1 | P2, never, RpcClient.Protocol> =
-  Hyperlink.clientInstances(DaemonGroup, P1, P2);
+  Layer.mergeAll(Hyperlink.client(P1), Hyperlink.client(P2));
 void _daemonClients;
 
 // ── node in the tag: ship only the tag; the client resolves where to connect ──
@@ -250,20 +246,16 @@ const _nodelessClient: Layer.Layer<Counter, never, RpcClient.Protocol> =
   Hyperlink.client(Counter);
 void _nodelessClient;
 
-// ── tagFor with a node: the whole family ships only the tag ──
-// One node baked into the factory → every instance is a node-bearing tag.
-const NodeDaemon = Hyperlink.tagFor(
-  "nodeedDaemon",
+// ── solo tag with a node: client resolves transport from the tag ──
+class HP1 extends Hyperlink.Tag<HP1>()(
+  "@app/hp1",
   { start: Hyperlink.effect(Schema.Void) },
   { node: EdgeNode },
-);
-class HP1 extends NodeDaemon<HP1>("@app/hp1") {}
+) {}
 
-// each instance's client requires the family's node, not the ambient Protocol.
 const _hp1Client: Layer.Layer<HP1, never, EdgeNode> = Hyperlink.client(HP1);
 void _hp1Client;
 
-// a nodeless factory's instances keep the ambient-Protocol client (DaemonGroup, above).
 const _p1Client: Layer.Layer<P1, never, RpcClient.Protocol> =
   Hyperlink.client(P1);
 void _p1Client;
