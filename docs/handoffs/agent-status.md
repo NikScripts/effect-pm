@@ -9,7 +9,7 @@
 | **4** | `cursor/hyperservice-open-deps-5679` | [fleet rate limiting](../plans/fleet-rate-limiting.md) · [wire groups](../plans/wire-groups-and-identity.md) · [service shapes](../plans/service-shapes.md) | **tip-synced** — A1–A3 + `cell` parked/rejected | same tip as `integration` | typecheck 0 / hyperlink-default 13/13 | idle; optional R5 | 2026-07-27 |
 | **G / TUI** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity | **design** — client adapters notes; tip-synced | same tip as `integration` | prior suites green | Notes: [`client-adapters-design.md`](./client-adapters-design.md) — Promise / TanStack / tRPC-shape / Effect-reactive helpers; Eng TBD | 2026-07-24 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **G**, this agent only | 2026-07-26 |
-| **Launcher** | `cursor/launcher-handoff-design-929b` | [launcher + handoff brief](./launcher-and-handoff-brief.md) | **bake** — Track B (Lookup-directed) | branch tip | Track A tests green | Open: B forks #1–6 in brief; then C/D | 2026-07-27 |
+| **Launcher** | `cursor/launcher-handoff-design-929b` | [launcher + handoff brief](./launcher-and-handoff-brief.md) | **bake** — Track B proposed package | branch tip | Track A tests green | Await owner lock on B package (custody/membership/migration split) | 2026-07-27 |
 | **Docs site** | `cursor/docs-site-edge-cache-dbdc` (ε) | [origin down](./docs-site-origin-down.md) · edge cache · SEO · Lighthouse | **tip-synced** — LH home/api 100s; static edge cache; safe origin | same tip as `integration` | home/api 100/100/100/100; install a11y/seo 100 (perf 98 / BP 96 — React #418) | 1Password CLI deferred; **no landing UI without owner OK** | 2026-07-27 |
 | **1** | *(frozen)* | [Examples book](./agent-01-examples-book.md) · [Phase 3](./agent-01-docs-corpus-phase3-plan.md) | **frozen / superseded** — E1 examples on tip; intro voice [#68](https://github.com/nikolasstow/Hyperlink/pull/68) closed | — | — | Branch deleted (unique tip was pre-rebrand `docs/index.md`) | 2026-07-26 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
@@ -30,7 +30,7 @@
 ### Active (owner approval required)
 1. **Agent 4:** W1–W3 + `default`/`defaults` + R1–R4+adaptive + **construction adornments A1–A3 tip-synced**; **`cell` parked/rejected**. Idle; optional R5. Incident: [`agent-04-w3-incident-2026-07-27.md`](./agent-04-w3-incident-2026-07-27.md).
 2. **Agent G / TUI:** Dashboard Group parity + client-adapters design (`cursor/tui-dashboard-parity-125f`).
-3. **This agent (Launcher):** Track A on tip. **Baking Track B** — Lookup-directed startup forks in [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md). No Eng until owner locks.
+3. **This agent (Launcher):** Track A on tip. Track B **proposed package** in brief (safer unified: custody vs membership vs migration). Await owner lock.
 4. **Docs site:** tip-synced + redeployed. Lighthouse **home/api 100/100/100/100**; install a11y/seo 100 (perf 98 / BP 96 — React #418 hydration). Static `/assets`+`/search` CF edge HIT. Landing UI unchanged (Coming soon). 1Password CLI deferred.
 
 ### Frozen / dead (do not assign)
