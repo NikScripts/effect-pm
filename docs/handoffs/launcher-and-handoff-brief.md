@@ -151,14 +151,79 @@ Eng defaults: 32-byte hex token; Ready poll `100 millis` with per-dial `2 second
 
 ### Track B — baking (not locked)
 
-Owner: answer these forks (reuse Lookup nouns; high bar for new concepts). **No Eng until locked.**
+Raw forks (superseded by proposed package below unless owner reopens):
 
-1. **Day-one topology** — Track B local-first over existing `Lookup.layer` IPC (same-machine soft-bake), **or** must directed startup work cross-network day one (needs HTTP/WS Lookup path)?
-2. **Blank worker** — may a process start serving **only** node-status (await direction), **or** must it boot with ≥1 app Hyperlink already chosen by the entry (Track A autonomous child)?
-3. **Direction model** — new node **infers** work by reading `Directory` + `Advice` as today, **or** Lookup gains a **node-facing** assignment (read/stream: “roles for `nodeKey`”) — new surface needs bar?
-4. **Role arbitration** — exclusive roles = existing `Identity.claim` (losers become clients); replicas = `Directory.advertise` only — **or** Lookup assigns both **before** any app serve layer starts?
-5. **“Take over” in Track B** — exactly duplicate-`nodeKey` advertise + `askIncumbent` / `yield` (directory row only; promote `onYield`?), **or** keep that lightweight and leave real service handoff to Track C?
-6. **Launcher rendezvous** — Launcher still gets a **stable bootstrap Node** (Track A unchanged) and Lookup runs entirely in the child after assume, **or** Launcher may spawn nameless and **discover** the child’s endpoint via Identity/Directory before Ready/handoff?
+1. Topology — local-first IPC vs cross-network day one  
+2. Blank worker vs autonomous child  
+3. Infer Directory/Advice vs node-facing assignment  
+4. Claim/advertise after serve vs assign-before-serve  
+5. `askIncumbent`/`yield` only vs real handoff in B  
+6. Stable `SpawnSpec.node` vs Launcher discovers nameless via Lookup  
+
+### Track B — proposed package (safer / unified — **not locked**)
+
+One mental model — **three planes, one story** (no new control brain):
+
+```text
+Custody   →  Launcher (Track A)     spawn → Ready → Node.assume → exit
+Membership→  Lookup (Track B)       Identity / Directory / Advice after assume
+Migration →  Handoff (Track C)      drain / state / old shutdown — later
+Clients   →  Track D                retry / dual-serve — later
+```
+
+**Directive = membership, not code-loading.** Lookup never remote-loads layers into a blank process. The child’s entry already knows what it *can* be (Router / Worker / …). Lookup decides *who wins* and *where clients dial*.
+
+| Fork | Proposed (safer) | Rejected for B |
+|------|------------------|----------------|
+| 1 Topology | **Local-first** `Lookup.layer` / IPC; soft-bake OK for demos; prod pipes explicit `Lookup.client` / `layerOptions` | Cross-network Lookup server day one |
+| 2 Blank | **Autonomous child** (Track A) — ≥1 app Hyperlink in entry | Status-only blank awaiting remote assign |
+| 3 Direction | **Reuse** Identity + Directory + Advice; thin compose helpers only | New `Lookup.assign` / node-facing role stream |
+| 4 Roles | **As today** — `Hyperlink.identity` claim on serve; Directory advertise from listen registry | Assign-before-serve |
+| 5 Takeover | **B = directory row** (`askIncumbent` + `yield`); optional public `onYield` later | Drain / state / shutdown in B |
+| 6 Launcher | **Stable addressed `SpawnSpec.node`**; Lookup is **child-after-assume** (#4 locked) | Launcher discovers nameless via Lookup before Ready |
+
+**Unified child recipe (illustrative — not Eng’d API):**
+
+```ts
+// parent — Track A unchanged
+yield* Launcher.up({
+  node: WorkerNode,           // addressed; Ready/assume dial target
+  process: (token) => ChildProcess.make("node", ["worker.js", token]),
+})
+
+// child worker.js — custody then membership
+const token = … // argv / Config
+const live = Node.unix(WorkerNode, [
+  Hyperlink.serve(Worker, impl),           // capability chosen by entry
+]).pipe(
+  Layer.provide(Lookup.clientOptions({ path: lookupSock })), // membership brain
+)
+// listen auto-advertises; identity Tags claim; assumeToken for Launcher handoff
+NodeRuntime.runMain(
+  Layer.launch(
+    live.pipe(/* assumeToken on listen options */),
+  ).pipe(Effect.provide(NodeServices.layer)),
+)
+```
+
+**What “Lookup directs startup” means under this package:**
+
+- Exclusive brain: `Hyperlink.identity` → claim; loser becomes client of winner (already shipped).  
+- Hands: Directory advertise; coordinator may `Lookup.prefer(Worker, nodeKey)` (already shipped).  
+- Clients: `Hyperlink.lookupClient` (Identity → Directory → Advice).  
+- Same `nodeKey` replace: `askIncumbent` / `yield` (row only).  
+- Launcher does **not** become a Lookup client; it stays custody-only.
+
+**Optional Eng sugar later (still not new brain):** `Lookup.join` / docs recipe that is just `Layer.provide(lookup)` + listen — no assign protocol.
+
+**Deferred (cleaner than doing them in B):**
+
+- Blank worker + assignment protocol (new noun, Ready semantics, hot-mount serves).  
+- HTTP/WS Lookup.  
+- Nameless Launcher discovery.  
+- Real migration (Track C).
+
+**Owner action:** lock this package (or name deltas) before any Track B Eng.
 
 ---
 

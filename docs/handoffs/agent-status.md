@@ -30,7 +30,7 @@
 ### Active (owner approval required)
 1. **Agent 4:** W1–W3 + `default`/`defaults` + R1–R4+adaptive + **construction adornments A1–A2 tip-synced**; **`cell` parked/rejected**. Idle; optional A3 / R5. Incident: [`agent-04-w3-incident-2026-07-27.md`](./agent-04-w3-incident-2026-07-27.md).
 2. **Agent G / TUI:** Dashboard Group parity + client-adapters design (`cursor/tui-dashboard-parity-125f`).
-3. **This agent (Launcher):** Track A on tip. **Baking Track B** — Lookup-directed startup forks in [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md). No Eng until owner locks.
+3. **This agent (Launcher):** Track A on tip. Track B **proposed package** in brief (safer unified: custody vs membership vs migration). Await owner lock.
 4. **Docs site:** tip-synced + redeployed. Lighthouse **home/api 100/100/100/100**; install a11y/seo 100 (perf 98 / BP 96 — React #418 hydration). Static `/assets`+`/search` CF edge HIT. Landing UI unchanged (Coming soon). 1Password CLI deferred.
 
 ### Frozen / dead (do not assign)
