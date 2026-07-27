@@ -38,17 +38,41 @@ if [ -z "$PRIVATE_KEY" ]; then
   exit 1
 fi
 
+# `op` blocks indefinitely when the desktop app hasn't authorized CLI yet — never
+# wait on a bare `op` call. Race a background `op` against a 3s killer.
+op_ok() {
+  local pid killer
+  op whoami >/dev/null 2>&1 &
+  pid=$!
+  ( sleep 3; kill "$pid" >/dev/null 2>&1 ) &
+  killer=$!
+  if wait "$pid" >/dev/null 2>&1; then
+    kill "$killer" >/dev/null 2>&1 || true
+    wait "$killer" >/dev/null 2>&1 || true
+    return 0
+  fi
+  kill "$killer" >/dev/null 2>&1 || true
+  wait "$killer" >/dev/null 2>&1 || true
+  return 1
+}
+
 echo "==> waiting for 1Password CLI (unlock app + enable Developer → CLI integration)"
-for i in $(seq 1 60); do
-  if op whoami >/dev/null 2>&1; then
+echo "    tmux attach -t onepassword-setup   # if you need to watch"
+for i in $(seq 1 120); do
+  if op_ok; then
+    echo "==> CLI ready (attempt ${i})"
     break
   fi
-  if [ "$i" -eq 60 ]; then
-    echo "timed out waiting for op whoami" >&2
-    echo "Attach tmux: tmux attach -t onepassword-setup" >&2
+  if [ "$i" -eq 120 ]; then
+    echo "timed out waiting for op whoami (~6 min)" >&2
+    echo "Enable: 1Password → Settings → Developer → Integrate with 1Password CLI" >&2
     exit 1
   fi
-  sleep 2
+  # progress every ~30s
+  if [ $((i % 10)) -eq 0 ]; then
+    echo "    still waiting… (${i}/120) unlock 1Password + enable CLI integration"
+  fi
+  sleep 3
 done
 op whoami
 echo "==> vaults:"
