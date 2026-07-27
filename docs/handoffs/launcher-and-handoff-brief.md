@@ -82,10 +82,9 @@ Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.m
 
 ### Track A — baking (not locked)
 
-- **Spawn input (lean, confirm):** `{ node, process: ChildProcess, ready?: { resources?, timeout? } }` with optional `entry` sugar that builds `ChildProcess`; multi = `ReadonlyArray`. Not Group.
-- Failure / timeout: reuse `ServiceNotReady` / `NodeUnreachable` / … + bounded poll.
+- Failure / timeout: reuse `ServiceNotReady` / `NodeUnreachable` / … + bounded poll (exact tagged errors for “ready timed out”).
 - `Node.assume` wire shape (new RPC; status may mirror).
-- Custody-handle API sugar (`spawn` returns handle with `.awaitReady` / `.handoff`) vs flat `Launcher.*` functions — pick before Eng.
+- Custody-handle API (`spawn` → handle with `.awaitReady` / `.handoff`) vs flat `Launcher.*` functions — pick before Eng.
 
 ---
 
