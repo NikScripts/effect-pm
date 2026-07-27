@@ -7,6 +7,11 @@
  * live service over the consumer's reactive `runtime` (an `Atom.runtime(layer)` that provides
  * the tags — local engine or `Hyperlink.client` over http; the widgets don't care which).
  *
+ * **F5 split-dial invariant:** never `Node.connect*` from a tag's stamped url here. Node status /
+ * logs `yield*` the Node already in the Atom.runtime (typically `Hyperlink.ws` with a
+ * same-origin override). Re-dialing ignores that override and hangs the HealthBoard while
+ * resource cards still look fine — see `docs/handoffs/loud-failures-design.md` §10.
+ *
  */
 import { DateTime, Duration, Effect, Option, Predicate, type Schema, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";

@@ -1838,9 +1838,34 @@ export const ApiEndpointTable = (props: { readonly bundle: ApiBundle }): React.R
 // Nodes are read straight off the tags (`nodesOf`): a dot per node the group's resources are bound
 // to. Each dot's colour + popover come from that node's node status (over its own transport).
 
-/** A node's overall colour: grey while connecting, red down, amber degraded, green ok. */
+/**
+ * F5 — how a node-status atom is reading right now. Pending must never be painted as healthy;
+ * Failed must never look like "still connecting…" (that hid the split-dial bug for weeks).
+ */
+type NodeConnState =
+  | { readonly _tag: "Connecting" }
+  | { readonly _tag: "Failed" }
+  | { readonly _tag: "Ready"; readonly status: NodeStatusValue };
+
+const nodeConnState = (
+  r: AsyncResult.AsyncResult<NodeStatusValue, unknown>,
+): NodeConnState =>
+  AsyncResult.isSuccess(r)
+    ? { _tag: "Ready", status: r.value }
+    : AsyncResult.isFailure(r)
+      ? { _tag: "Failed" }
+      : { _tag: "Connecting" };
+
+/** A node's overall colour: grey while connecting, red failed/down, amber degraded, green ok. */
 const nodeColor = (s: NodeStatusValue | undefined): string =>
   s === undefined ? "#64748b" : !s.up ? "#ef4444" : s.status === "degraded" ? "#eab308" : "#22c55e";
+
+const nodeConnColor = (state: NodeConnState): string =>
+  state._tag === "Connecting"
+    ? "#64748b"
+    : state._tag === "Failed"
+      ? "#ef4444"
+      : nodeColor(state.status);
 
 /** ~3× the 2s node status heartbeat: no fresh status in this long → the node's stream is dead and
  *  the shown values are frozen (last-known, not live). */
@@ -1926,23 +1951,26 @@ const pipRows = <A,>(items: ReadonlyArray<A>, rows: ReadonlyArray<number>): Read
   });
 };
 
-/** One node's pip — a coloured dot, colour from its status snapshot. */
+/** One node's pip — a coloured dot, colour from its status snapshot (or failed/connecting). */
 const NodePip = (props: {
   readonly node: NodeRef;
   readonly size: string;
 }): React.ReactElement => {
   const r = useAtomValue(useNodeBundle(props.node).status);
-  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const state = nodeConnState(r);
+  const s = state._tag === "Ready" ? state.status : undefined;
   const stale = useStale(s?.uptimeMillis);
   React.useEffect(() => {
     if (AsyncResult.isFailure(r)) dlog("node", props.node.id, "FAILURE", Cause.pretty(r.cause));
     else dlog("node", props.node.id, asyncTag(r));
   }, [r, props.node.id]);
   // stale → a pulsing grey pip, so a lost node reads as "not responding" instead of its frozen colour.
+  // Failed stays red (not grey) so a broken dial is visible on the die.
+  const color = state._tag === "Failed" ? "#ef4444" : stale ? "#64748b" : nodeConnColor(state);
   return (
     <span
-      className={cn("rounded-full", stale && "animate-pulse")}
-      style={{ width: props.size, height: props.size, backgroundColor: stale ? "#64748b" : nodeColor(s) }}
+      className={cn("rounded-full", (stale || state._tag === "Connecting") && "animate-pulse")}
+      style={{ width: props.size, height: props.size, backgroundColor: color }}
     />
   );
 };
@@ -2029,17 +2057,23 @@ const ResourceReadinessRow = (props: {
 
 /** One node's card on the health board — status dot + name + stats (uptime · ready/total · resource
  *  count), then its full resource roster (each tappable). Tap the header for the node's full screen.
- *  Pure: the status value is read once by {@link HealthBoard} and passed in. */
+ *  Pure: the connection state is read once by {@link HealthBoard} and passed in. */
 const NodeHealthCard = (props: {
   readonly node: NodeRef;
-  readonly s: NodeStatusValue | undefined;
+  readonly state: NodeConnState;
   readonly history: ReadonlyArray<number>;
   readonly onOpen: () => void;
   readonly onOpenHyperlink: (resourceKey: string) => void;
 }): React.ReactElement => {
-  const s = props.s;
+  const s = props.state._tag === "Ready" ? props.state.status : undefined;
   const ready = s !== undefined ? s.resources.filter((x) => x.ready).length : 0;
   const total = s !== undefined ? s.resources.length : 0;
+  const subtitle =
+    s !== undefined
+      ? `${s.up ? s.status : "down"} · up ${fmtUptime(s.uptimeMillis)} · ${ready}/${total} ready · ${s.resourceCount} resource${s.resourceCount === 1 ? "" : "s"}`
+      : props.state._tag === "Failed"
+        ? "unreachable — check runtime transport (not the tag url)"
+        : "connecting…";
   return (
     <div className="rounded-lg border bg-card">
       <button
@@ -2047,13 +2081,19 @@ const NodeHealthCard = (props: {
         onClick={props.onOpen}
         className="flex w-full items-center gap-2.5 rounded-t-lg px-2 py-2 text-left hover:bg-muted"
       >
-        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: nodeColor(s) }} />
+        <span
+          className="h-2.5 w-2.5 shrink-0 rounded-full"
+          style={{ backgroundColor: nodeConnColor(props.state) }}
+        />
         <span className="min-w-0 flex-1">
           <span className="block truncate font-medium">{displayName(props.node.id)}</span>
-          <span className="mt-0.5 block text-[0.7rem] leading-tight text-muted-foreground">
-            {s !== undefined
-              ? `${s.up ? s.status : "down"} · up ${fmtUptime(s.uptimeMillis)} · ${ready}/${total} ready · ${s.resourceCount} resource${s.resourceCount === 1 ? "" : "s"}`
-              : "connecting…"}
+          <span
+            className="mt-0.5 block text-[0.7rem] leading-tight"
+            style={{ color: props.state._tag === "Failed" ? "#ef4444" : undefined }}
+          >
+            <span className={props.state._tag === "Failed" ? undefined : "text-muted-foreground"}>
+              {subtitle}
+            </span>
           </span>
         </span>
         <span className="shrink-0 text-muted-foreground">›</span>
@@ -2066,7 +2106,7 @@ const NodeHealthCard = (props: {
               {ready}/{total}
             </span>
           </div>
-          <Sparkline points={props.history} color={nodeColor(s)} />
+          <Sparkline points={props.history} color={nodeConnColor(props.state)} />
         </div>
       ) : null}
       {s !== undefined && s.resources.length > 0 ? (
@@ -2137,35 +2177,56 @@ export const HealthBoard = (props: {
   // group ever gained/lost a node). The children report their status up so this board can compute the
   // cross-node aggregates (ready/total, degraded resources, degraded nodes). Statuses arrive async
   // (the underlying atoms start "connecting"), so this reporting adds no flash the direct reads didn't.
-  const [statusMap, setStatusMap] = React.useState<
-    ReadonlyMap<string, NodeStatusValue | undefined>
-  >(() => new Map());
-  const reportStatus = React.useCallback(
-    (id: string, s: NodeStatusValue | undefined): void => {
-      setStatusMap((prev) => {
-        const next = new Map(prev);
-        next.set(id, s);
-        return next;
-      });
-    },
-    [],
+  const [stateMap, setStateMap] = React.useState<ReadonlyMap<string, NodeConnState>>(
+    () => new Map(),
   );
-  const statuses = nodes.map((node) => ({ node, s: statusMap.get(node.id) }));
-  const degraded = statuses.flatMap(({ node, s }) =>
-    (s?.resources ?? []).filter((x) => !x.ready).map((res) => ({ node, res })),
+  const reportState = React.useCallback((id: string, state: NodeConnState): void => {
+    setStateMap((prev) => {
+      const next = new Map(prev);
+      next.set(id, state);
+      return next;
+    });
+  }, []);
+  const statuses = nodes.map((node) => ({
+    node,
+    state: stateMap.get(node.id) ?? ({ _tag: "Connecting" } satisfies NodeConnState),
+  }));
+  const degraded = statuses.flatMap(({ node, state }) =>
+    (state._tag === "Ready" ? state.status.resources : [])
+      .filter((x) => !x.ready)
+      .map((res) => ({ node, res })),
   );
-  const total = statuses.reduce((n, { s }) => n + (s?.resources.length ?? 0), 0);
-  const ready = statuses.reduce((n, { s }) => n + (s?.resources.filter((x) => x.ready).length ?? 0), 0);
-  const connected = statuses.filter(({ s }) => s !== undefined).length;
-  const pending = connected < nodes.length;
-  const degradedNodes = statuses.filter(({ s }) => s !== undefined && (!s.up || s.status === "degraded")).length;
-  const healthy = !pending && degradedNodes === 0;
+  const total = statuses.reduce(
+    (n, { state }) => n + (state._tag === "Ready" ? state.status.resources.length : 0),
+    0,
+  );
+  const ready = statuses.reduce(
+    (n, { state }) =>
+      n + (state._tag === "Ready" ? state.status.resources.filter((x) => x.ready).length : 0),
+    0,
+  );
+  const live = statuses.filter(({ state }) => state._tag === "Ready").length;
+  const failed = statuses.filter(({ state }) => state._tag === "Failed").length;
+  const pending = statuses.some(({ state }) => state._tag === "Connecting");
+  const degradedNodes = statuses.filter(
+    ({ state }) =>
+      state._tag === "Ready" && (!state.status.up || state.status.status === "degraded"),
+  ).length;
+  const healthy = !pending && failed === 0 && degradedNodes === 0;
   const headline = pending
-    ? `connecting… ${connected}/${nodes.length}`
-    : healthy
-      ? "all healthy"
-      : `⚠ ${degradedNodes}/${nodes.length} degraded`;
-  const headlineColor = pending ? "#64748b" : healthy ? "#22c55e" : "#eab308";
+    ? `connecting… ${live}/${nodes.length}`
+    : failed > 0
+      ? `⚠ ${failed}/${nodes.length} unreachable`
+      : healthy
+        ? "all healthy"
+        : `⚠ ${degradedNodes}/${nodes.length} degraded`;
+  const headlineColor = pending
+    ? "#64748b"
+    : failed > 0
+      ? "#ef4444"
+      : healthy
+        ? "#22c55e"
+        : "#eab308";
   return (
     <div className="flex h-[100dvh] flex-col gap-3 overflow-y-auto safe-area landscape:h-auto landscape:min-h-[100dvh]">
       <header className="flex items-center gap-2">
@@ -2180,13 +2241,17 @@ export const HealthBoard = (props: {
       <div className="grid grid-cols-3 gap-2 text-center">
         <HealthStat
           label="nodes ok"
-          value={pending ? `${connected}/${nodes.length}` : `${nodes.length - degradedNodes}/${nodes.length}`}
+          value={
+            pending || failed > 0
+              ? `${live}/${nodes.length}`
+              : `${nodes.length - degradedNodes}/${nodes.length}`
+          }
         />
         <HealthStat label="resources ready" value={`${ready}/${total}`} />
         <HealthStat
           label="needs attention"
-          value={`${degraded.length}`}
-          tone={degraded.length > 0 ? "#eab308" : undefined}
+          value={`${degraded.length + failed}`}
+          tone={degraded.length + failed > 0 ? (failed > 0 ? "#ef4444" : "#eab308") : undefined}
         />
       </div>
       {degraded.length > 0 ? (
@@ -2216,7 +2281,7 @@ export const HealthBoard = (props: {
             <NodeHealthRow
               key={node.id}
               node={node}
-              onStatus={reportStatus}
+              onState={reportState}
               onOpen={() => props.onOpenNode(node)}
               onOpenHyperlink={props.onOpenHyperlink}
             />
@@ -2228,26 +2293,28 @@ export const HealthBoard = (props: {
 };
 
 /** One node's health card for {@link HealthBoard}. Calls the per-node status/health hooks at its own
- *  top level (Rules-of-Hooks safe) and reports the status up so the board can aggregate across nodes. */
+ *  top level (Rules-of-Hooks safe) and reports the connection state up so the board can aggregate. */
 const NodeHealthRow = (props: {
   readonly node: NodeRef;
-  readonly onStatus: (id: string, s: NodeStatusValue | undefined) => void;
+  readonly onState: (id: string, state: NodeConnState) => void;
   readonly onOpen: () => void;
   readonly onOpenHyperlink: (resourceKey: string) => void;
 }): React.ReactElement => {
   const bundle = useNodeBundle(props.node);
   const r = useAtomValue(bundle.status);
   const h = useAtomValue(bundle.health);
-  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const state = nodeConnState(r);
   const history = AsyncResult.isSuccess(h) ? h.value : [];
-  const { onStatus, node } = props;
+  const { onState, node } = props;
+  // Depend on `r` (atom result identity), not the derived `state` object — a fresh `{ _tag }` each
+  // render would re-fire the effect and loop setState.
   React.useEffect(() => {
-    onStatus(node.id, s);
-  }, [onStatus, node.id, s]);
+    onState(node.id, nodeConnState(r));
+  }, [onState, node.id, r]);
   return (
     <NodeHealthCard
       node={node}
-      s={s}
+      state={state}
       history={history}
       onOpen={props.onOpen}
       onOpenHyperlink={props.onOpenHyperlink}
@@ -2303,8 +2370,9 @@ export const NodeDetail = (props: {
 }): React.ReactElement => {
   const bundle = useNodeBundle(props.node);
   const r = useAtomValue(bundle.status);
-  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
-  const color = nodeColor(s);
+  const state = nodeConnState(r);
+  const s = state._tag === "Ready" ? state.status : undefined;
+  const color = nodeConnColor(state);
   return (
     <div className="flex h-[100dvh] flex-col gap-3 overflow-hidden safe-area landscape:h-auto landscape:min-h-[100dvh] landscape:overflow-visible">
       <div className="flex items-center gap-2">
@@ -2313,7 +2381,20 @@ export const NodeDetail = (props: {
         </Button>
         <span className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
         <strong className="flex-1 truncate text-base">{displayName(props.node.id)}</strong>
-        <span className="text-sm text-muted-foreground">{s !== undefined ? (s.up ? s.status : "down") : "…"}</span>
+        <span
+          className="text-sm"
+          style={{ color: state._tag === "Failed" ? "#ef4444" : undefined }}
+        >
+          <span className={state._tag === "Failed" ? undefined : "text-muted-foreground"}>
+            {s !== undefined
+              ? s.up
+                ? s.status
+                : "down"
+              : state._tag === "Failed"
+                ? "unreachable"
+                : "…"}
+          </span>
+        </span>
       </div>
       {s !== undefined ? (
         <>
@@ -2353,6 +2434,12 @@ export const NodeDetail = (props: {
           </div>
           {/* Pass 2: node metrics graphs (CPU / mem / throughput) land here with status metrics. */}
         </>
+      ) : state._tag === "Failed" ? (
+        <div className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: "#ef4444", color: "#ef4444" }}>
+          unreachable — the runtime must provide this node&apos;s transport (e.g.{" "}
+          <code className="text-xs">Hyperlink.ws(Node, {"{ url }"})</code>). Do not dial the tag&apos;s
+          stamped url from the dashboard.
+        </div>
       ) : (
         <div className="text-muted-foreground">connecting to node…</div>
       )}

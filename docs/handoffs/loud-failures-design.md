@@ -168,3 +168,21 @@ The core addition is **not** `{ verify }` on `connect`. It is:
 
 ### 8.8 New open question
 **`kind`: explicit vs inferred.** Do you write `Resource.Node(..., { kind: "websocket" })` (simplest, explicit SSOT), or does binding a served group to `wsServer([...])` *infer* and stamp the node's kind (less to type, but needs the server and node co-declared, and the client — a separate deploy — must still read it explicitly)? Explicit-on-the-node is my lean: it's the one place both a remote client and the server can read the same fact without sharing server code.
+
+---
+
+## 10. F5 — Split dial (url override mismatch) — Eng'd 2026-07-27
+
+**Proven bug:** HealthBoard stayed on "connecting…" (and falsely said "all healthy") while resource cards were live. Cause: `ui/data` `nodeStatusBundle` auto-`Node.connect(tag)` dialed the tag's stamped server url (`http://127.0.0.1:…`) while `Hyperlink.client` used the runtime's `Hyperlink.ws(Node, { url: "/rpc" })` vite override. Same node, two dial targets — late, quiet, swallowable (atom stays Initial / undefined → UI treats as healthy).
+
+| # | Misconfiguration | Today (before Eng) | Should surface | Guard |
+|---|---|---|---|---|
+| **F5** | Dashboard re-dials a Node from its stamped url while the runtime already provided an overridden transport | HealthBoard "connecting…" + "all healthy"; resource cards fine | Never expressible in `ui/data`; UI distinguishes pending vs failed vs live | (a) no auto-connect in `nodeStatusBundle` / resource logs (b) eslint ban of `Node.connect*` inside `src/ui` (c) conformance: override works for **both** resource + node status; tag-url dial alone fails (d) HealthBoard never says healthy while pending/failed |
+
+**Invariant (dashboard):** *If `Atom.runtime` provides a Node (via `Hyperlink.ws` / `Node.connect*`), every dashboard reader of that Node — status, logs, die, HealthBoard — must `yield*` that handle. Never `Node.connect(tag)` from the stamped url as a second dial.*
+
+**Invariant (client bake):** *Construct explicit dials (`Hyperlink.ws` / `connectSocket(url)`) before `Hyperlink.client(tag)`. `connectLayer` registers the override in the per-Node connect memo; `connectAddressed` (baked into addressed `Hyperlink.client`) reuses it — so resource cards and the die share one dial target.*
+
+**Apps:** merge node transports into the runtime (see `examples/resource-web/hub.ts`) — resource clients alone do not expose the Node service for the die.
+
+**Verification:** `test/ui-node-status-bundle.test.ts` (override path + same-transport resource/node + tag-url dial fails).

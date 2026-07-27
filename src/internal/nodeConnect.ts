@@ -71,18 +71,38 @@ const lazyStatusAccessors = (
   }
 }
 
-/** Provide a node handle for `node` over `protocol` — its `{ protocol }` plus lazy status accessors. @internal */
+/**
+ * Canonical derived-connect Layer per Node class — WeakMap so
+ * `client(A, W)` + `client(B, W)` + `Node.connect(W)` share one MemoMap entry
+ * (and one socket / HTTP client), not one per call site.
+ *
+ * **F5:** explicit dials (`Hyperlink.ws` / `connectSocket(url)` / …) register here too, so a
+ * later `connectAddressed` / baked `Hyperlink.client` reuses the override instead of silently
+ * re-dialing the tag's stamped url (HealthBoard vs resource-card split-brain).
+ *
+ * @internal
+ */
+const addressedConnectMemo = new WeakMap<object, Layer.Layer<never>>()
+
+/** Provide a node handle for `node` over `protocol` — its `{ protocol }` plus lazy status accessors.
+ *  Registers as the canonical Layer for this Node class (see {@link addressedConnectMemo}). @internal */
 export const connectLayer = <Self, E, RIn>(
   node: NodeKey<Self>,
   protocol: Layer.Layer<RpcClient.Protocol, E, RIn>,
-): Layer.Layer<Self, E, RIn> =>
-  Layer.effect(
+): Layer.Layer<Self, E, RIn> => {
+  const layer = Layer.effect(
     node,
     Effect.map(RpcClient.Protocol, (protocol) => ({
       protocol,
       ...lazyStatusAccessors(protocol),
     })),
   ).pipe(Layer.provide(protocol))
+  // Last explicit dial wins at module-init / construction time. Apps must construct overrides
+  // (`Hyperlink.ws`, `connectSocket(url)`) *before* `Hyperlink.client(tag)` so the client bake
+  // picks up the override (hub.ts does this).
+  addressedConnectMemo.set(node, layer as Layer.Layer<never>)
+  return layer
+}
 
 /** Fail a Layer build with {@link UnaddressedNode}. @internal */
 export const unaddressedLayer = <A = never>(
@@ -193,16 +213,8 @@ export const protocolForDialable = (
     : protocolHttp(portOf(node) ?? node.url)
 }
 
-/**
- * Canonical derived-connect Layer per Node class — WeakMap so
- * `client(A, W)` + `client(B, W)` + `Node.connect(W)` share one MemoMap entry
- * (and one socket / HTTP client), not one per call site.
- *
- * @internal
- */
-const addressedConnectMemo = new WeakMap<object, Layer.Layer<never>>()
-
-/** Derive (and memoize) the connect Layer for an {@link AddressedNode}. @internal */
+/** Derive (and memoize) the connect Layer for an {@link AddressedNode}.
+ *  Reuses an explicit dial already registered via {@link connectLayer} (F5). @internal */
 export const connectAddressed = <Self>(
   node: AddressedNode<Self>,
 ): Layer.Layer<Self> => {
@@ -210,9 +222,8 @@ export const connectAddressed = <Self>(
   if (cached !== undefined) {
     return cached as unknown as Layer.Layer<Self>
   }
-  const layer = connectLayer(node, protocolForDialable(node))
-  addressedConnectMemo.set(node, layer as Layer.Layer<never>)
-  return layer
+  // connectLayer registers the tag-url dial in the memo.
+  return connectLayer(node, protocolForDialable(node))
 }
 
 /** @internal */

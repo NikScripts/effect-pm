@@ -177,13 +177,15 @@ export class ServicesHub extends Group.Tag<ServicesHub>("hub/ServicesHub")({
 // WebSocket per node instead — vite proxies these same-origin ws paths to each server (ws: true).
 // A `"/path"` url resolves against the page origin (browser host + http/https→ws/wss), lazily — so
 // `hub.ts` is safe to import from the Node server too (nothing reads `location` at load).
+// Construct overrides *before* Hyperlink.client below — connectLayer registers each dial in the
+// per-Node memo so addressed `Hyperlink.client` reuses `/rpc` instead of the tag's 127.0.0.1 (F5).
 const wnbaTransport = Hyperlink.ws(WnbaNode, { url: "/rpc" });
 const liveTransport = Hyperlink.ws(LiveNode, { url: "/live/rpc" });
 const statsTransport = Hyperlink.ws(StatsNode, { url: "/stats/rpc" });
 
-// Expose each node itself in the runtime (not only the resource clients): the node-status die reads
-// `node.status` over each node's transport, so it needs the node in context. Each transport is one
-// const (shared by reference), so the client + the die reuse a single connection per node.
+// Expose each node itself in the runtime (not only the resource clients): the node-status die /
+// HealthBoard `yield*` these handles. `Layer.provide(transport)` on a client does **not** re-export
+// the Node into the merged layer — transports must sit in `mergeAll` for the die.
 const appLayer = Layer.mergeAll(
   wnbaTransport,
   liveTransport,
