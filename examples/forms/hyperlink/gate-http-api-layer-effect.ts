@@ -81,7 +81,7 @@ export class DemoApiClient extends Context.Service<DemoApiClient>()(
   );
 
   // Brown-field path: wrap existing _make with hyperlink-ts transport limits.
-  static readonly resourceLayerCapture = Gate.httpApiClientLayer(
+  static readonly resourceLayerCapture = Gate.httpApiClientLayerEffect(
     DemoApiClient,
     _make,
     { concurrency: 2 },

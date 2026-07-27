@@ -224,7 +224,47 @@ describe("Gate.httpApiClient", () => {
   )
 })
 
-describe("Gate.httpApiClientLayer", () => {
+describe("Gate.HttpApiClient", () => {
+  it.live("Hyperlink Tag layer yields client + metrics nest", () => {
+    const api = HttpApi.make("vitest-tag-api").add(
+      HttpApiGroup.make("g").add(pingEndpoint),
+    )
+    class Tag extends Gate.HttpApiClient<Tag>()("test/http-api-tag", api, {
+      concurrency: 1,
+    }) {
+      static readonly layer = Gate.httpApiClientLayer(Tag)
+    }
+    const httpLayer = Layer.succeed(
+      HttpClient.HttpClient,
+      HttpClient.makeWith<never, never, HttpClientError.HttpClientError, never>(
+        (reqEff) =>
+          Effect.flatMap(reqEff, (req) =>
+            Effect.succeed(
+              HttpClientResponse.fromWeb(
+                req,
+                new Response(json200, {
+                  status: 200,
+                  headers: { "content-type": "application/json" },
+                }),
+              ),
+            ),
+          ),
+        (request) => Effect.succeed(request),
+      ),
+    )
+    return Effect.gen(function* () {
+      const client = yield* Tag
+      expect(typeof client.g.ping).toBe("function")
+      expect(yield* client.metrics.remaining.get).toBe(0)
+      expect(yield* client.metrics.exceeded.get).toBe(0)
+      yield* client.g.ping()
+      const snap = yield* client.metrics.usage.get
+      expect(snap.requestsTotal).toBe(1)
+    }).pipe(Effect.provide(Tag.layer.pipe(Layer.provide(httpLayer))))
+  })
+})
+
+describe("Gate.httpApiClientLayerEffect", () => {
   it.live("wraps an existing client effect with one shared gated instance", () =>
     Effect.gen(function* () {
       const active = yield* Ref.make(0)
@@ -241,7 +281,7 @@ describe("Gate.httpApiClientLayer", () => {
       class Tag extends Context.Service<Tag, ClientShape>()(
         "hyperlink-ts/test/gate-http-api.test/Tag",
       ) {}
-      const layerCapture = Gate.httpApiClientLayer(Tag, makeClient, {
+      const layerCapture = Gate.httpApiClientLayerEffect(Tag, makeClient, {
         concurrency: 1,
       })
       const httpLayer = Layer.succeed(

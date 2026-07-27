@@ -1,9 +1,8 @@
 /**
- * NWSL SDP client via {@link Gate.httpApiClient} (same API as {@link NwslsoccerClient}, plus optional `limits`).
+ * NWSL SDP client via {@link Gate.HttpApiClient}.
  *
  * Compare `client.ts`: that uses `Context.Tag` + `HttpApiClient.make`. Here the factory returns a
- * **tag + `layer`** from this package — concurrency / throttle apply on the transport like
- * `Gate` + `HttpClientGate`.
+ * **Hyperlink Tag** — concurrency / rateLimit apply on the transport like Gate + HttpClientGate.
  *
  * Run (from repo root):
  *   `npm run example:nwsl-gate-http-api`
@@ -31,16 +30,20 @@ const DEFAULT_SEASON =
 
 const program = Effect.gen(function* () {
   const baseUrl = yield* NwslSoccerApiBaseUrl;
-  const NwslTag = Gate.httpApiClient(NwslsoccerApi, {
-    name: "examples/nwslsoccer/NwslHttpApiClient",
-    client: {
+
+  class NwslClient extends Gate.HttpApiClient<NwslClient>()(
+    "examples/nwslsoccer/NwslHttpApiClient",
+    NwslsoccerApi,
+    { concurrency: 2 },
+  ) {
+    static readonly layer = Gate.httpApiClientLayer(NwslClient, {
       baseUrl,
       transformClient: Gate.acceptJson,
-    },
-    limits: { concurrency: 2 },
-  });
+    });
+  }
+
   yield* Effect.gen(function* () {
-    const client = yield* NwslTag;
+    const client = yield* NwslClient;
     const res = yield* client.season.getSeasonMatches({
       params: new SeasonIdPath({ seasonId: DEFAULT_SEASON }),
       query: new LocaleQuery({ locale: NWSL_SDP_DEFAULT_LOCALE }),
@@ -56,7 +59,11 @@ const program = Effect.gen(function* () {
         Array.isArray(parsed.matches) ? parsed.matches.length : "?"
       } matches`,
     );
-  }).pipe(Effect.provide(Layer.mergeAll(NwslTag.layer, FetchHttpClient.layer)));
+  }).pipe(
+    Effect.provide(
+      NwslClient.layer.pipe(Layer.provide(FetchHttpClient.layer)),
+    ),
+  );
 }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv())));
 
 Effect.runPromise(program).then(

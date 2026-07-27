@@ -1,44 +1,65 @@
 /**
- * HttpApiClient — typed HTTP API client with transport-level concurrency gating.
+ * HttpApiClient — gated typed HTTP API client (R4 Hyperlink Tag + legacy Service).
  *
- * Wraps Effect's `HttpApiClient.make` with a `Semaphore`-based concurrency gate
- * on the `HttpClient` transport layer (via `HttpClientGate.withRunner` applied to
- * `HttpClient.transform`).
+ * Wraps Effect's `HttpApiClient.make` with a concurrency Semaphore (and optional
+ * whole-client `rateLimit`) on the `HttpClient` transport via
+ * `HttpClientGate.withRunner`.
  *
- * ## Node usage metrics
- *
- * Each schema endpoint is wrapped via `HttpApi.reflect` after the client is built.
- * Labels use stable schema names (not raw URLs):
- *
- * | Metric | Type | Labels | What it measures |
- * |--------|------|--------|------------------|
- * | `httpapi_endpoint_requests_total` | counter | `client`, `group`, `endpoint`, `outcome` | Invocations (`outcome`: `success` \| `error`) |
- * | `httpapi_endpoint_errors_total` | counter | `client`, `group`, `endpoint`, `error` | Failures by tagged error (`_tag` or `Failure`) |
- * | `httpapi_endpoint_duration_ms` | histogram (ms) | `client`, `group`, `endpoint` | Wall time per endpoint call |
- *
- * Usage windows for {@link ApiMetrics} are fed from the same dispatch hook.
- *
- * ### Transport (secondary)
- *
- * `httpapi_in_flight` (gauge, label `client`) — concurrent HTTP round-trips.
- *
- * ## Entry points
+ * ## Preferred entry (R4)
  *
  * | Function | Purpose |
  * |----------|---------|
- * | `HttpApiClient.Service` | Class factory: tag + baked-in `.layer` |
- * | `HttpApiClient.make` | Functional tag + `.layer` from an HttpApi schema |
- * | `HttpApiClient.layerEffect` | Gate an existing client-building effect |
- * | `HttpApiClient.instrumentEndpoints` | Wrap client after custom build |
- * | `HttpApiClient.acceptJson` | `Accept: application/json` header helper |
+ * | {@link HttpApiClient} | Hyperlink Tag factory (no baked `.layer`) |
+ * | {@link httpApiClientLayer} | App-owned layer — client + `metrics` nest |
+ *
+ * Nest fields: limiter `remaining` / `resetAfter` / `exceeded` plus absorbed
+ * usage `usage` / `windows` (former ApiMetrics).
+ *
+ * ## Legacy Context.Service entry
+ *
+ * | Function | Purpose |
+ * |----------|---------|
+ * | `Service` / `make` | Tag + baked `.layer` (no nest) |
+ * | `layerEffect` | Gate an existing client-building effect |
+ * | `instrumentEndpoints` / `acceptJson` | Shared helpers |
  *
  * @module HttpApiClient
  */
 
 import { HttpClient, HttpClientRequest } from "effect/unstable/http";
-import { HttpApi, HttpApiClient } from "effect/unstable/httpapi";
+import {
+  HttpApi,
+  HttpApiClient as EffectHttpApiClient,
+} from "effect/unstable/httpapi";
 import type { HttpApi as HttpApiType, HttpApiGroup } from "effect/unstable/httpapi";
-import { Cause, Clock, Context, Effect, Exit, Layer, Metric, Predicate, Ref, Scope } from "effect";
+import {
+  Cause,
+  Clock,
+  Context,
+  Duration,
+  Effect,
+  Exit,
+  Layer,
+  Metric,
+  Option,
+  Predicate,
+  Ref,
+  Scope,
+  SubscriptionRef,
+} from "effect";
+import {
+  RateLimitExceeded,
+  RateLimiter as RateLimiterTag,
+  RateLimiterError,
+  RateLimiterStore,
+  make as makeRateLimiter,
+} from "effect/unstable/persistence/RateLimiter";
+import type {
+  ConsumeResult,
+  RateLimiter as EffectRateLimiter,
+} from "effect/unstable/persistence/RateLimiter";
+import type { ApiUsageMetrics, ApiUsageSnapshot } from "../ApiUsageSchema";
+import * as Hyperlink from "../Hyperlink";
 import * as HttpClientGate from "../HttpClientGate";
 import {
   ensureClientUsage,
@@ -46,8 +67,19 @@ import {
   usageEnter,
   usageExit,
 } from "./apiUsageRegistry";
-import type { Runner } from "../Gate";
-import { makeRunnerFromConcurrency } from "./gate";
+import {
+  gateRateLimiterLayer,
+  makeRunnerFromConcurrency,
+  type GateRateLimitOptions,
+  type GateRunner,
+} from "./gate";
+import {
+  assertNoMetricsKeyCollision,
+  buildHttpApiClientSpec,
+  httpApiMetricsNestSpec,
+  MetricsKeyCollision,
+} from "./httpApiClientSpec";
+import { stampGateMetricsMetadata } from "./gateTagSchemas";
 
 // ============================================================================
 // Public Types
@@ -211,7 +243,7 @@ export const instrumentEndpoints = <
   Groups extends HttpApiGroup.Constraint,
 >(
   api: HttpApiType.HttpApi<ApiId, Groups>,
-  client: HttpApiClient.Client<Groups>,
+  client: EffectHttpApiClient.Client<Groups>,
   clientId: string,
 ): void => {
   const metrics = makeEndpointMetrics(clientId);
@@ -278,7 +310,7 @@ const makeInFlightTransform = (
 const applyTransportMiddleware = (
   client: HttpClient.HttpClient,
   options: {
-    readonly runner: Runner;
+    readonly runner: GateRunner;
     readonly withInFlight: InFlightTransform;
     readonly transformClient?: HttpApiClientConfig<string, HttpApiGroup.Top, string>["transformClient"];
   },
@@ -299,7 +331,7 @@ const maybeInstrumentEndpoints = <
   api: HttpApiType.HttpApi<ApiId, Groups> | undefined,
 ): Service => {
   if (api !== undefined) {
-    instrumentEndpoints(api, service as HttpApiClient.Client<Groups>, clientId);
+    instrumentEndpoints(api, service as EffectHttpApiClient.Client<Groups>, clientId);
   }
   return service;
 };
@@ -310,7 +342,7 @@ const buildLayer = <
   Name extends string,
   Self,
 >(
-  tag: Context.Key<Self, HttpApiClient.Client<Groups>>,
+  tag: Context.Key<Self, EffectHttpApiClient.Client<Groups>>,
   api: HttpApiType.HttpApi<ApiId, Groups>,
   config: HttpApiClientConfig<ApiId, Groups, Name>,
 ) =>
@@ -321,7 +353,7 @@ const buildLayer = <
       const runner = yield* makeRunnerFromConcurrency(config.concurrency);
       const withInFlight = yield* makeInFlightTransform(clientId);
 
-      const client = yield* HttpApiClient.make(api, {
+      const client = yield* EffectHttpApiClient.make(api, {
         baseUrl: config.baseUrl,
         transformClient: (c) =>
           applyTransportMiddleware(c, {
@@ -345,7 +377,7 @@ function makeHttpApiClient<
   api: HttpApiType.HttpApi<ApiId, Groups>,
   config: HttpApiClientConfig<ApiId, Groups, Name>,
 ) {
-  type ClientShape = HttpApiClient.Client<Groups>;
+  type ClientShape = EffectHttpApiClient.Client<Groups>;
 
   // @effect-diagnostics-next-line serviceNotAsClass:off
   const tag = Context.Service<ClientShape>(config.name);
@@ -363,10 +395,10 @@ const httpApiResourceService = <Self>() =>
     name: Name,
     api: HttpApiType.HttpApi<ApiId, Groups>,
     config?: Omit<HttpApiClientConfig<ApiId, Groups, Name>, "name">,
-  ): Context.ServiceClass<Self, Name, HttpApiClient.Client<Groups>> & {
+  ): Context.ServiceClass<Self, Name, EffectHttpApiClient.Client<Groups>> & {
     readonly layer: Layer.Layer<Self, never, HttpClient.HttpClient | Scope.Scope>;
   } => {
-    type ClientShape = HttpApiClient.Client<Groups>;
+    type ClientShape = EffectHttpApiClient.Client<Groups>;
     const fullConfig = { ...config, name } as HttpApiClientConfig<ApiId, Groups, Name>;
     const Base = Context.Service<Self, ClientShape>()(name);
     const layer = buildLayer(Base, api, fullConfig);
@@ -443,3 +475,301 @@ export const Service = httpApiResourceService;
 export const make = makeHttpApiClient;
 
 export { layerEffect };
+
+// ============================================================================
+// R4 — Gate.HttpApiClient Tag (Hyperlink) + app-owned layer
+// ============================================================================
+
+/** Kind stamped on {@link HttpApiClient} Tags for dashboard classification. @public */
+export const httpApiClientKind = "hyperlink-ts/Gate/HttpApiClient";
+
+/**
+ * Mint-time options for {@link HttpApiClient} (policy + nest key). Runtime URL /
+ * transforms go on {@link httpApiClientLayer}.
+ *
+ * @category models
+ * @public
+ */
+export interface HttpApiClientTagConfig {
+  readonly concurrency?: number;
+  readonly rateLimit?: GateRateLimitOptions;
+  /** Const nest path — default `"metrics"`. Must not collide with an HttpApi group id. */
+  readonly metricsKey?: string;
+  readonly description?: string;
+  /** Usage window cadence (absorbed ApiMetrics). @default 5 seconds */
+  readonly windowMs?: Duration.Input;
+}
+
+/**
+ * Runtime options for {@link httpApiClientLayer}.
+ *
+ * @category models
+ * @public
+ */
+export interface HttpApiClientRuntimeConfig {
+  readonly baseUrl?: URL | string | undefined;
+  readonly transformClient?:
+    | ((client: HttpClient.HttpClient) => HttpClient.HttpClient)
+    | undefined;
+  readonly transformResponse?:
+    | ((effect: Effect.Effect<unknown, unknown, unknown>) => Effect.Effect<unknown, unknown, unknown>)
+    | undefined;
+  readonly windowMs?: Duration.Input;
+}
+
+/** Limiter + usage nest on an HttpApiClient handle. @public */
+export interface HttpApiClientMetrics {
+  readonly remaining: Hyperlink.Subscribable<number>;
+  readonly resetAfter: Hyperlink.Subscribable<number>;
+  readonly exceeded: Hyperlink.Subscribable<number>;
+  readonly usage: Hyperlink.Subscribable<ApiUsageSnapshot>;
+  readonly windows: import("effect").Stream.Stream<ApiUsageMetrics>;
+}
+
+type HttpApiClientShape<Groups extends HttpApiGroup.Constraint, MK extends string> =
+  EffectHttpApiClient.Client<Groups> & { readonly [K in MK]: HttpApiClientMetrics };
+
+/** Stamped mint config on an {@link HttpApiClient} Tag. @internal */
+const tagConfigSym: unique symbol = Symbol.for(
+  "hyperlink-ts/Gate/HttpApiClient/tagConfig",
+);
+
+type StampedHttpApiClientTag<
+  Self,
+  Groups extends HttpApiGroup.Constraint,
+  MK extends string,
+> = Hyperlink.HyperlinkTag<Self, Hyperlink.Spec, HttpApiClientShape<Groups, MK>> & {
+  readonly [tagConfigSym]: {
+    readonly api: HttpApiType.HttpApi<string, Groups>;
+    readonly concurrency: number | undefined;
+    readonly rateLimit: GateRateLimitOptions | undefined;
+    readonly metricsKey: MK;
+    readonly windowMs: Duration.Input | undefined;
+  };
+};
+
+const isRateLimitExceededReason = (
+  reason: RateLimiterError["reason"],
+): reason is RateLimitExceeded => reason._tag === "RateLimitExceeded";
+
+const resolveLimiter = (): Effect.Effect<
+  EffectRateLimiter,
+  never,
+  Scope.Scope
+> =>
+  Effect.gen(function* () {
+    const limiterOpt = yield* Effect.serviceOption(RateLimiterTag);
+    if (Option.isSome(limiterOpt)) return limiterOpt.value;
+    const storeOpt = yield* Effect.serviceOption(RateLimiterStore);
+    if (Option.isSome(storeOpt)) {
+      return yield* makeRateLimiter.pipe(
+        Effect.provideService(RateLimiterStore, storeOpt.value),
+      );
+    }
+    const ctx = yield* Layer.build(gateRateLimiterLayer);
+    return Context.get(ctx, RateLimiterTag);
+  });
+
+const makeLimiterPublisher = (
+  remainingRef: SubscriptionRef.SubscriptionRef<number>,
+  resetAfterRef: SubscriptionRef.SubscriptionRef<number>,
+  exceededRef: SubscriptionRef.SubscriptionRef<number>,
+) => ({
+  publishConsume: (result: ConsumeResult) =>
+    Effect.gen(function* () {
+      yield* SubscriptionRef.set(remainingRef, result.remaining);
+      yield* SubscriptionRef.set(
+        resetAfterRef,
+        Duration.toMillis(result.resetAfter),
+      );
+    }),
+  publishExceeded: (remaining: number, resetAfterMs: number) =>
+    Effect.gen(function* () {
+      yield* SubscriptionRef.set(remainingRef, remaining);
+      yield* SubscriptionRef.set(resetAfterRef, resetAfterMs);
+      yield* SubscriptionRef.update(exceededRef, (n) => n + 1);
+    }),
+});
+
+/**
+ * Wrap a transport runner so each HTTP round-trip consumes the whole-client
+ * rateLimit budget before the concurrency semaphore.
+ */
+const withRateLimitRunner = (
+  runner: GateRunner,
+  rateLimit: GateRateLimitOptions | undefined,
+  resourceId: string,
+  publisher: ReturnType<typeof makeLimiterPublisher>,
+): Effect.Effect<GateRunner, never, Scope.Scope> => {
+  if (rateLimit === undefined) return Effect.succeed(runner);
+  return Effect.gen(function* () {
+    const limiter = yield* resolveLimiter();
+    const options = {
+      ...rateLimit,
+      key: rateLimit.key ?? resourceId,
+      onExceeded: rateLimit.onExceeded ?? ("delay" as const),
+    };
+    // GateRunner erases RateLimiterError; it still surfaces on the HTTP execute channel.
+    const gated = (<A, E, R>(
+      effect: Effect.Effect<A, E, R>,
+    ): Effect.Effect<A, E | RateLimiterError, R> => {
+      const consume =
+        options.onExceeded === "fail"
+          ? limiter.consume(options).pipe(
+              Effect.flatMap((result) => publisher.publishConsume(result)),
+              Effect.catchTag("RateLimiterError", (error) =>
+                Effect.gen(function* () {
+                  if (isRateLimitExceededReason(error.reason)) {
+                    yield* publisher.publishExceeded(
+                      error.reason.remaining,
+                      Duration.toMillis(error.reason.retryAfter),
+                    );
+                  }
+                  return yield* error;
+                }),
+              ),
+            )
+          : Effect.gen(function* () {
+              const result = yield* limiter.consume(options);
+              yield* publisher.publishConsume(result);
+              if (!Duration.isZero(result.delay)) {
+                yield* publisher.publishExceeded(
+                  result.remaining,
+                  Duration.toMillis(result.resetAfter),
+                );
+                yield* Effect.sleep(result.delay);
+              }
+            });
+      return consume.pipe(Effect.andThen(runner(effect)));
+    }) as GateRunner;
+    return gated;
+  });
+};
+
+/**
+ * Class factory: Hyperlink Tag for an HttpApi client — **no baked `.layer`**.
+ * Pair with {@link httpApiClientLayer}.
+ *
+ * @category constructors
+ * @public
+ */
+export const HttpApiClient = <Self>() =>
+  <
+    ApiId extends string,
+    Groups extends HttpApiGroup.Constraint,
+    const Name extends string,
+    const MK extends string = "metrics",
+  >(
+    key: Name,
+    api: HttpApiType.HttpApi<ApiId, Groups>,
+    config: HttpApiClientTagConfig & { readonly metricsKey?: MK } = {},
+  ): StampedHttpApiClientTag<Self, Groups, MK> => {
+    const metricsKey = (config.metricsKey ?? "metrics") as MK;
+    assertNoMetricsKeyCollision(api, metricsKey);
+    const spec = buildHttpApiClientSpec(api, metricsKey);
+    // Licensed boundary: reflect-built Spec matches Client locals + nest — see
+    // test/gate-http-api-client.test-d.ts.
+    const tag = Hyperlink.Tag<Self, HttpApiClientShape<Groups, MK>>()(
+      key,
+      spec as never,
+      { kind: httpApiClientKind, description: config.description },
+    );
+    const stamped = stampGateMetricsMetadata(tag, {
+      metricsKey,
+      rateLimitKey:
+        config.rateLimit === undefined
+          ? undefined
+          : (config.rateLimit.key ?? key),
+    });
+    return Object.assign(stamped, {
+      [tagConfigSym]: {
+        api,
+        concurrency: config.concurrency,
+        rateLimit: config.rateLimit,
+        metricsKey,
+        windowMs: config.windowMs,
+      },
+    }) as unknown as StampedHttpApiClientTag<Self, Groups, MK>;
+  };
+
+/**
+ * App-owned layer for a {@link HttpApiClient} Tag — builds the gated client and
+ * fills the metrics nest (limiter + absorbed usage).
+ *
+ * @category layers & serving
+ * @public
+ */
+export const httpApiClientLayerForTag = <
+  Self,
+  Groups extends HttpApiGroup.Constraint,
+  MK extends string,
+>(
+  tag: StampedHttpApiClientTag<Self, Groups, MK>,
+  runtime: HttpApiClientRuntimeConfig = {},
+): Layer.Layer<Self, never, HttpClient.HttpClient> => {
+  const mint = tag[tagConfigSym];
+  const clientId = String(tag.key);
+  const metricsKey = mint.metricsKey;
+  // Licensed boundary: reflect Spec + Client shape — see test/gate-http-api-client.test-d.ts.
+  return Hyperlink.layer(
+    tag as unknown as Hyperlink.HyperlinkTag<Self, Hyperlink.Spec>,
+    Effect.gen(function* () {
+      const windowMs = runtime.windowMs ?? mint.windowMs;
+      const sink = yield* ensureClientUsage(
+        clientId,
+        windowMs === undefined
+          ? undefined
+          : { windowMs: Duration.fromInputUnsafe(windowMs) },
+      );
+      const initialRemaining =
+        mint.rateLimit === undefined ? 0 : mint.rateLimit.limit;
+      const remainingRef = yield* SubscriptionRef.make(initialRemaining);
+      const resetAfterRef = yield* SubscriptionRef.make(0);
+      const exceededRef = yield* SubscriptionRef.make(0);
+      const publisher = makeLimiterPublisher(
+        remainingRef,
+        resetAfterRef,
+        exceededRef,
+      );
+
+      const baseRunner = yield* makeRunnerFromConcurrency(mint.concurrency);
+      const runner = yield* withRateLimitRunner(
+        baseRunner,
+        mint.rateLimit,
+        clientId,
+        publisher,
+      );
+      const withInFlight = yield* makeInFlightTransform(clientId);
+
+      const client = yield* EffectHttpApiClient.make(mint.api, {
+        baseUrl: runtime.baseUrl,
+        transformClient: (c) =>
+          applyTransportMiddleware(c, {
+            runner,
+            withInFlight,
+            transformClient: runtime.transformClient,
+          }),
+        transformResponse: runtime.transformResponse,
+      });
+      instrumentEndpoints(mint.api, client, clientId);
+
+      const metricsNest: HttpApiClientMetrics = {
+        remaining: Hyperlink.subscribable(remainingRef),
+        resetAfter: Hyperlink.subscribable(resetAfterRef),
+        exceeded: Hyperlink.subscribable(exceededRef),
+        usage: sink.usage,
+        windows: sink.metrics,
+      };
+
+      return {
+        ...(client as object),
+        [metricsKey]: metricsNest,
+      } as never;
+    }),
+  ) as unknown as Layer.Layer<Self, never, HttpClient.HttpClient>;
+};
+
+/** @alias {@link httpApiClientLayerForTag} — public Gate name. */
+export const httpApiClientLayer = httpApiClientLayerForTag;
+
+export { MetricsKeyCollision, httpApiMetricsNestSpec };

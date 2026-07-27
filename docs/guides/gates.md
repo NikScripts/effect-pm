@@ -63,8 +63,42 @@ const gate = yield* Double
 const remaining = yield* gate.metrics.remaining.get
 ```
 
-HttpApi usage windows land on the same nest in R4; ordinary Gates stay
-limiter-only.
+Ordinary Gates stay limiter-only. HttpApi clients use the same nest name with
+extra fields — see **HttpApiClient** below.
+
+## HttpApiClient
+
+`Gate.HttpApiClient` is a Hyperlink Tag: local HttpApi routes plus a wire
+`metrics` nest (limiter fields + absorbed usage). Pair with an app-owned layer
+— no baked `.layer` on the Tag.
+
+```ts
+class Demo extends Gate.HttpApiClient<Demo>()("@app/Demo", DemoApi, {
+  concurrency: 2,
+  rateLimit: { limit: 100, window: "1 second" },
+}) {
+  static readonly layer = Gate.httpApiClientLayer(Demo, {
+    baseUrl: "https://api.example.com",
+    transformClient: Gate.acceptJson,
+  })
+}
+
+const client = yield* Demo
+yield* client.posts.getPost({ params: { id: "1" } })
+const snap = yield* client.metrics.usage.get
+// client.metrics.windows — windowed usage stream (was ApiMetrics.metrics)
+```
+
+| Nest field | Meaning |
+|------------|---------|
+| `remaining` / `resetAfter` / `exceeded` | Same limiter observation as ordinary Gates |
+| `usage` | Cumulative snapshot (`usage.get` / `usage.changes`) |
+| `windows` | Windowed usage stream (absorbed former ApiMetrics stream) |
+
+If an HttpApi **group id** equals the nest key, mint fails with
+`Gate.MetricsKeyCollision`. Escape with const `metricsKey: "observe"` (typed
+nest path). Whole-client `rateLimit` only in v1; omit `rateLimit.key` to inherit
+the Tag id.
 
 ## Fleet rate limiting
 

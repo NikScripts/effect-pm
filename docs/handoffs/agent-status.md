@@ -6,7 +6,7 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **4** | `cursor/hyperservice-open-deps-5679` | [fleet rate limiting](../plans/fleet-rate-limiting.md) · [wire groups](../plans/wire-groups-and-identity.md) · [service shapes](../plans/service-shapes.md) | **tip-synced** — R1+R2+R3+R3b on `integration` | same tip as `integration` | typecheck 0 / gate 30 | R4 HttpApiClient+ApiMetrics | 2026-07-27 |
+| **4** | `cursor/hyperservice-open-deps-5679` | [fleet rate limiting](../plans/fleet-rate-limiting.md) · [wire groups](../plans/wire-groups-and-identity.md) · [service shapes](../plans/service-shapes.md) | **Eng’d R4** — awaiting tip-sync OK | work branch ahead of `integration` | typecheck 0 / api-metrics+http-api green | adaptive 429 deferred | 2026-07-27 |
 | **G / TUI** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity | **design** — client adapters notes; tip-synced | same tip as `integration` | prior suites green | Notes: [`client-adapters-design.md`](./client-adapters-design.md) — Promise / TanStack / tRPC-shape / Effect-reactive helpers; Eng TBD | 2026-07-24 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **G**, this agent only | 2026-07-26 |
 | **Launcher** | `cursor/launcher-handoff-design-929b` | [launcher + handoff brief](./launcher-and-handoff-brief.md) | **bake** — spine α locked; Track A API | branch tip | docs only | Dumb spawn-and-exit; **no Eng until owner locks API**. Tracks B–D after A | 2026-07-27 |
@@ -28,7 +28,7 @@
 0. **Agent E:** impossible-states plan ([`impossible-states-proposal.md`](./impossible-states-proposal.md)). **DONE + merged:** P1 (node↔protocol wiring bug → compile error, cast-free) + P5 (http transport dies in browser). **P2 SKIPPED** (cast). **P4 already-enforced** (loose-fields payload already rejected; proposal mis-scoped). **P3 deferred** (opaque serve layers). Clean wins complete. Reserved `src/Hyperlink.ts` node/client surface until fully merged (done). **Tag-config reservation RELEASED — Agent D WorkPool/Gate/Daemon payload-config unblocked.**
 
 ### Active (owner approval required)
-1. **Agent 4:** W1–W3 + `default`/`defaults` + **R1+R2+R3+R3b tip-synced** ([`../plans/fleet-rate-limiting.md`](../plans/fleet-rate-limiting.md)). Next: R4 HttpApiClient Tag + absorb ApiMetrics. Incident: [`agent-04-w3-incident-2026-07-27.md`](./agent-04-w3-incident-2026-07-27.md).
+1. **Agent 4:** W1–W3 + `default`/`defaults` + **R1–R3b tip-synced**; **R4 Eng’d** on work branch ([`../plans/fleet-rate-limiting.md`](../plans/fleet-rate-limiting.md)) — awaiting owner tip-sync OK. Adaptive 429 still open. Incident: [`agent-04-w3-incident-2026-07-27.md`](./agent-04-w3-incident-2026-07-27.md).
 2. **Agent G / TUI:** Dashboard Group parity + client-adapters design (`cursor/tui-dashboard-parity-125f`).
 3. **This agent (Launcher):** spine **α** locked (dumb spawn-and-exit). Baking Track **A** API with owner before any Eng. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
 4. **Docs site:** tip-synced on `integration`. Outage cleared (2GB); Cloudflare Cache Rule for `/api/effect*|platform-node*|sql-sqlite-node*` live (`override_origin`, HIT verified); dotenvx secrets in `docs/site/.env`.

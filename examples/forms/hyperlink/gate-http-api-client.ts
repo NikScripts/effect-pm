@@ -1,14 +1,13 @@
 /**
  * @module examples/forms/hyperlink/gate-http-api-client
  *
- * Gate.httpApiClientService + ApiMetrics — class client and observability tag.
+ * Gate.HttpApiClient Tag + nest metrics (usage absorbed; no sibling ApiMetrics).
  * Run: `pnpm run example:gate-http-api-client`
  */
 
 import { FetchHttpClient } from "effect/unstable/http";
 import { Effect, Layer, Schema } from "effect";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
-import * as ApiMetrics from "../../../src/ApiMetrics";
 import * as Gate from "../../../src/Gate";
 import { runNodeProgramOrExit } from "../../shared/demo-harness";
 
@@ -30,40 +29,30 @@ const DemoApi = HttpApi.make("jsonplaceholder-demo").add(
   ),
 );
 
-class DemoApiClient extends Gate.httpApiClientService<DemoApiClient>()(
+class DemoApiClient extends Gate.HttpApiClient<DemoApiClient>()(
   DemoClientId,
   DemoApi,
-  {
+  { concurrency: 2 },
+) {
+  static readonly layer = Gate.httpApiClientLayer(DemoApiClient, {
     baseUrl: "https://jsonplaceholder.typicode.com",
     transformClient: Gate.acceptJson,
-    concurrency: 2,
-  },
-) {}
-
-class DemoApiMetrics extends ApiMetrics.Tag<DemoApiMetrics>()(DemoClientId) {}
+  });
+}
 
 const program = Effect.gen(function* () {
   const client = yield* DemoApiClient;
   const post = yield* client.posts.getPost({ params: { id: "1" } });
-  const metrics = yield* DemoApiMetrics;
-  const snap = yield* metrics.usage.get;
+  const snap = yield* client.metrics.usage.get;
   yield* Effect.log(`post ${post.id}: ${post.title}`);
   yield* Effect.log(`usage requests=${snap.requestsTotal} inFlight=${snap.inFlight}`);
 });
 
 runNodeProgramOrExit(
-  // `.layer` is scoped (the client's concurrency semaphore), so discharge Scope at the effect
-  // with `Effect.scoped` — the same pattern the tests use — and turn request errors into defects
-  // for this demo, leaving a fully-provided `Effect<void, never, never>`.
   program.pipe(
-    Effect.provide(
-      Layer.mergeAll(
-        DemoApiClient.layer.pipe(Layer.provide(FetchHttpClient.layer)),
-        ApiMetrics.layer(DemoApiMetrics),
-      ),
-    ),
+    Effect.provide(DemoApiClient.layer.pipe(Layer.provide(FetchHttpClient.layer))),
     Effect.scoped,
     Effect.orDie,
   ),
-  "Gate.httpApiClient + ApiMetrics demo complete",
+  "Gate.HttpApiClient demo complete",
 );
