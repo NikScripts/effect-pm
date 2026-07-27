@@ -56,7 +56,7 @@ export const openTui = (
               path: input.path,
               message:
                 `No command/action ${where}, and the TUI is not configured. ` +
-                `Pass a full command (e.g. \`<resource> <action>\`), or provide ` +
+                `Pass a full command (e.g. \`<hyperlink> <action>\`), or provide ` +
                 `\`layer\` from \`hyperlink-ts/tui\`.`,
             }),
           );

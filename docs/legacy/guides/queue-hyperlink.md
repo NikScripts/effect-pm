@@ -1,4 +1,4 @@
-# QueueHyperlink
+# WorkPool
 
 A **queue** is a managed three-level priority worker pool (`high`, `normal`, `low`). You provide an
 **`effect`** that processes one item; the runtime handles concurrency, dedup, retry, pause/resume,
@@ -14,15 +14,15 @@ contract (lean base → engine write-extension → consumer analytics read-exten
 
 ```ts
 import { Effect, Schema } from "effect";
-import { QueueHyperlink } from "hyperlink-ts/QueueHyperlink";
+import { WorkPool } from "hyperlink-ts/WorkPool";
 
 const Job = Schema.Struct({ id: Schema.String });
-class RosterQueue extends QueueHyperlink.Tag<RosterQueue>()("nwsl/RosterQueue", { payload: Job }) {}
+class RosterQueue extends WorkPool.Tag<RosterQueue>()("nwsl/RosterQueue", { payload: Job }) {}
 ```
 
-- **`QueueHyperlink.layer(Tag, config)`** — local layer (auto-starts workers).
-- **`QueueHyperlink.serve(Tag, config)`** / **`serveRemote`** — host it over RPC.
-- **`QueueHyperlink.make(config)`** — scoped engine handle, for tests / low-level composition.
+- **`WorkPool.layer(Tag, config)`** — local layer (auto-starts workers).
+- **`WorkPool.serve(Tag, config)`** / **`serveRemote`** — host it over RPC.
+- **`WorkPool.make(config)`** — scoped engine handle, for tests / low-level composition.
 - **`Hyperlink.client(Tag)`** — remote handle (dashboard).
 
 ### Typed outcome slots (`success` / `error`)
@@ -31,7 +31,7 @@ The config-object form of the tag declares the worker's **outcome wire schemas**
 worker's return, the lifecycle event log, and (in turn) the store analytics:
 
 ```ts
-class RosterQueue extends QueueHyperlink.Tag<RosterQueue>()("nwsl/RosterQueue", {
+class RosterQueue extends WorkPool.Tag<RosterQueue>()("nwsl/RosterQueue", {
   payload: Job,
   error: RosterError,       // → Failed.cause is Cause<RosterError>, not Cause<unknown>
   success: RosterResult,    // → worker MUST return Effect<RosterResult, …>; Completed.success is RosterResult
@@ -47,7 +47,7 @@ the tag's `success` carrier, not `StreamElement<events>` precision.
 
 | Field | Purpose |
 |---|---|
-| `effect: (item, ctx) => Effect<A, E, R>` | Process one item (required). `A` is the tag's `success` schema type, or **`void`** when no `success` is declared (see Full-capture). |
+| `effect: (item, ctx) => Effect<A, E, R>` | Daemon one item (required). `A` is the tag's `success` schema type, or **`void`** when no `success` is declared (see Full-capture). |
 | `payload` (on **Tag** config object) | Item schema SSOT — validates enqueue, wire, store, and durability. Not repeated on `layer()` config. |
 | `concurrency` | Max items processing at once (default 5). |
 | `rateLimit` | Effect `RateLimiter` options applied before the concurrency gate. |
@@ -67,13 +67,13 @@ the tag's `success` carrier, not `StreamElement<events>` precision.
 - **State:** `size` / `sizes` / `isEmpty` / `completed`.
 - **Lifecycle:** `start` / `pause` / `resume` / `shutdown` / `clear`.
 - **Observe:** `status` (`status.get` / `status.changes`), `metrics.stream` / `metrics.query`, `events`.
-  Per-resource logs are **not** on the handle — use `Hyperlink.logs(Tag)` (local) or
+  Per-hyperlink logs are **not** on the handle — use `Hyperlink.logs(Tag)` (local) or
   `NodeStatus.logs` + `LogEntry.hasKey` (remote).
 
 ## Self-refill
 
 ```ts
-QueueHyperlink.layer(RosterQueue, {
+WorkPool.layer(RosterQueue, {
   effect,
   refill: { onStart: true, onDrained: true, load: (queue) => loadFromDb(queue) },
 });
@@ -90,9 +90,9 @@ tag — the queue's *work* becomes durable:
 ```ts
 import { SQLiteDurableQueueStore } from "hyperlink-ts/storage/sqlite";
 
-class RosterQueue extends QueueHyperlink.Tag<RosterQueue>()("nwsl/RosterQueue", { payload: Job }) {}
+class RosterQueue extends WorkPool.Tag<RosterQueue>()("nwsl/RosterQueue", { payload: Job }) {}
 
-QueueHyperlink.layer(RosterQueue, { effect })
+WorkPool.layer(RosterQueue, { effect })
   .pipe(Layer.provide(SQLiteDurableQueueStore.layer({ filename: "queue.db" })));
 ```
 
@@ -106,7 +106,7 @@ below (the observability plane).
 
 Every queue records its **lifecycle events** into a `Store`. The contract is built in three tiers, each
 for a different audience. The observability store is **baked in** (in-memory default), so it works with
-zero configuration; register `QueueHyperlink.store(tag)` on an app `Store.Service` to get durable,
+zero configuration; register `WorkPool.store(tag)` on an app `Store.Service` to get durable,
 queryable analytics.
 
 ## Full-capture — the merged single-outcome event (be precise here)
@@ -132,7 +132,7 @@ declare `error` on the tag.
 One type-system caveat: the **RPC / consumer-facing `events` stream** types `Completed.success` as `unknown`
 (the runtime value is the real `A`) — `HyperlinkTag` is spec-invariant and Effect can't reduce a union's `.Type`
 through a generic field. The typed `A` lands everywhere else: the worker return, the engine event,
-`store.completed`, and the `QueueHyperlink.store` analytics (`slowest` / `lastFailure` / …).
+`store.completed`, and the `WorkPool.store` analytics (`slowest` / `lastFailure` / …).
 
 ## Tier 1 — lean base (`record` / `events`)
 
@@ -184,7 +184,7 @@ const engineContract = Store.extend(
 The engine builds its recorder over that contract with the transform layer — this is the pattern to copy:
 
 ```ts
-// Inside QueueHyperlink.layer, conceptually:
+// Inside WorkPool.layer, conceptually:
 const storeEffects = Store.catchWriteErrors(
   Store.effects(tag.key, engineQueueStoreContract(tag)),
 );
@@ -198,16 +198,16 @@ the queue** — an encode/wiring **defect** still propagates. Queue-level facts 
 
 ## Tier 3 — consumer analytics read-extension
 
-`QueueHyperlink.store(queue)` is the registration app code puts on a `Store.Service`. It is the lean
+`WorkPool.store(queue)` is the registration app code puts on a `Store.Service`. It is the lean
 base **plus** advanced analytics reads — pure derivations over the persisted event log. Internally it is
 the same lean base `Store.extend`-ed with the analytics reads, so the concrete read signatures are
 preserved exactly like Tier 2 (base = `Store.contract`, every tier = `Store.extend`):
 
 ```ts
-class Jobs extends QueueHyperlink.Tag<Jobs>()("@app/Jobs", jobSchema) {}
+class Jobs extends WorkPool.Tag<Jobs>()("@app/Jobs", jobSchema) {}
 
 class JobsStore extends Store.Service<JobsStore>("@app/JobsStore")(
-  QueueHyperlink.store(Jobs),
+  WorkPool.store(Jobs),
 ) {}
 
 const program = Effect.gen(function* () {
@@ -217,11 +217,11 @@ const program = Effect.gen(function* () {
 });
 ```
 
-`QueueHyperlink.store(queue, additions)` adds app-specific shapes on top of base + analytics (each
+`WorkPool.store(queue, additions)` adds app-specific shapes on top of base + analytics (each
 addition gets its own `.append` / `.read`):
 
 ```ts
-QueueHyperlink.store(Jobs, {
+WorkPool.store(Jobs, {
   campaignAudit: Schema.Struct({ campaignId: Schema.String, note: Schema.String }),
 });
 // → yield* store.campaignAudit.append({ campaignId, note })  alongside all analytics reads

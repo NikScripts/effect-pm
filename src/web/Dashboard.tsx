@@ -424,7 +424,7 @@ const DashboardInner = (props: {
 /** A resource's detail opened **from a node** — rendered on the node axis (so "back" returns to the
  *  node, not the group), with logs/schedule as local sub-views. Reuses the same detail widgets the
  *  group route uses. */
-const NodeResourceView = (props: {
+const NodeHyperlinkView = (props: {
   readonly tag: unknown;
   readonly onBack: () => void;
 }): React.ReactElement => {
@@ -486,7 +486,7 @@ export const DashboardView = <R, ER>(props: {
     <RuntimeProvider runtime={props.runtime}>
       <div className="font-mono">
         {nodeTag !== null ? (
-          <NodeResourceView tag={nodeTag} onBack={() => setNodeTag(null)} />
+          <NodeHyperlinkView tag={nodeTag} onBack={() => setNodeTag(null)} />
         ) : node !== null ? (
           <NodeDetail node={node} onBack={() => setNode(null)} onOpenHyperlink={openHyperlink} />
         ) : health ? (

@@ -11,11 +11,11 @@ Match it. When unsure, open the analogous Effect module and copy its shape.
 ## The module is the file is the namespace
 
 - One public module = **one `PascalCase.ts` in a role folder** (usually `src/`). The file **is** the
-  namespace, consumed as `import * as Name from "@nikscripts/effect-pm/Name"`.
+  namespace, consumed as `import * as Name from "hyperlink-ts/Name"`.
 - Members are **flat top-level** `export const` / `export function` / `export type`.
-- **Never an object-as-namespace for the public surface** — no `export const Name = { ... }`.
+- **Never an object-as-namespace for the public surface** — no `export const Name = { … }`.
   (Effect has no `export const Effect = {}`; `Effect.ts` is flat `export const succeed`, etc.)
-- Associated types attach **in the same file** via `export declare namespace Name { ... }`
+- Associated types attach **in the same file** via `export declare namespace Name { … }`
   (see `repos/effect/packages/effect/src/Layer.ts`).
 
 ## Filenames match their module
@@ -35,24 +35,24 @@ Match it. When unsure, open the analogous Effect module and copy its shape.
 
 - **Public namespace member** (flat export on `src/WorkPool.ts`, seen as `WorkPool.X`): use the
   **short** name — `PriorityConfig`, `Tag`, `Handle`.
-- **`src/internal/*`** (no ambient module namespace): use the **full** prefix —
-  `WorkPoolPriorityConfig`, `WorkPoolPriorityHandle`.
+- **`src/internal/*`** (no ambient module namespace): use the
+  **full** prefix — `WorkPoolPriorityConfig`, `WorkPoolPriorityHandle`.
 - Public modules re-export or alias internals under the short name; apps never import `internal/`.
   Detail: `docs/standards/types-and-naming.md` (`namespaced-short-vs-internal-full`).
 
 ## Subpaths never point into `internal/`
 
-- `@nikscripts/effect-pm/Name` resolves to the public `src/Name.ts` (surfaced via the barrel
+- `hyperlink-ts/Name` resolves to the public `src/Name.ts` (surfaced via the barrel
   `export * as Name from "./Name"`). It must **not** resolve to `src/internal/*Namespace.ts`.
 - Barrel `src/index.ts`: one `export * as Name from "./Name"` per module.
 
 ## Exceptions (already ruled — do not "fix")
 
 - **Storage facets** (if any) keep their own convention (see `public-vs-internal.mdc`): a camelCase
-  file under a PascalCase `store/<Domain>` subpath. Queue/process/run/log durable history uses
+  file under a PascalCase `store/<Domain>` subpath. WorkPool / Daemon / Gate / log durable history uses
   `*.store(tag)` / `Node.logs` on the Store bridge — not a `store/*` facet subpath.
 
 ## Concrete
 
-- ✅ `src/QueueResource.ts` (flat namespace: `Tag`, `layer`, `serve`, `make`, …) + `src/internal/queueResource.ts` (engine impl).
-- ❌ `src/QueueContract.ts` (orphan name) **+** `src/QueueResource.ts` exporting `export const QueueResource = { … }` (object engine) **+** the `./QueueResource` subpath resolving to `src/internal/queueResourceNamespace.ts`.
+- ✅ `src/WorkPool.ts` (flat namespace: `Tag`, `layer`, `serve`, `make`, …) + `src/internal/workPool.ts` (engine impl).
+- ❌ `src/WorkPool.ts` (orphan name) **+** `src/WorkPool.ts` exporting `export const WorkPool = { … }` (object engine) **+** the `./WorkPool` subpath resolving to `src/internal/workPoolNamespace.ts`.

@@ -1,5 +1,7 @@
 # Agent 3 — Logs store followers (owner intent — REPEAT BACK FIRST)
 
+> **Naming:** read as WorkPool / Daemon / Gate / Hyperlink / hyperlink-ts (pre-rebrand names purged from this file).
+
 **Status:** **CLOSED** — Eng track complete on `integration`.  
 **Shipped:** followers [#40](https://github.com/NikScripts/effect-pm/pull/40) · `persistLayer`/`LogStore` hard-remove [#43](https://github.com/NikScripts/effect-pm/pull/43) · lineage append [#48](https://github.com/NikScripts/effect-pm/pull/48).  
 **Also shipped (same Agent 3 session):** Process live `events` [#47](https://github.com/NikScripts/effect-pm/pull/47) + remote proof [#51](https://github.com/NikScripts/effect-pm/pull/51).  
@@ -43,7 +45,7 @@ This is **not** optional, and it is **not** “keep `Logs.persistLayer` + standa
         │                                           │
         └──────────────► LogRelay (PubSub + tail) ◄─┘
                               │
-                              ├─ live tails (NodeStatus.logs / Resource.logs.stream + hasKey)
+                              ├─ live tails (NodeStatus.logs / Hyperlink.logs.stream + hasKey)
                               │
                               └─ STORE FOLLOWERS (this is the product job)
                                     │
@@ -61,7 +63,7 @@ This is **not** optional, and it is **not** “keep `Logs.persistLayer` + standa
 1. **Capture once** at the node — `Logs.layer`. Never a second logger for durability.
 2. **Live** and **durable** are different channels. Levels gate them separately (`logStreamLevel` vs `logStoreLevel`).
 3. **Durable storage follows the bus** — subscribers (“followers”) on `LogRelay`, owned by **store registrations**, not by a one-off `persistLayer` side channel forever.
-4. **Implicit store shapes** on registrations: `appendLog` + `logQuery` (see Agent 2 plan). Toolkit `QueueResource.store(tag)` / `Process.store(tag)` / node registration gain these; engines do not invent their own log tables.
+4. **Implicit store shapes** on registrations: `appendLog` + `logQuery` (see Agent 2 plan). Toolkit `WorkPool.store(tag)` / `Daemon.store(tag)` / node registration gain these; engines do not invent their own log tables.
 5. **Node-wide bucket** is also a registration — sketch `Node.logs` / `Logs.registerNode` on a `Store.Service` — same follower factory as resource scopes. `groupId` / bucket = node key.
 6. **Single durable append per (scope, line)** via memo. Do not invent two writers that both persist the same scoped line. Prefer clear primary: registrations that are active followers write for their scope; do not stack a separate global `LogStore` *and* every resource registration writing duplicates.
 
@@ -72,7 +74,7 @@ Canonical sources:
 
 ### What “`LogStore`” was doing in the interim
 
-`LogStore` (`@nikscripts/effect-pm/store/Log`) is the **interim node journal sink** Agent 2 left behind after migrating the old facet off `ProcessStore`. It is **not** the end-state product API the owner asked for.
+`LogStore` (`hyperlink-ts/store/Log`) is the **interim node journal sink** Agent 2 left behind after migrating the old facet off `DaemonStore`. It is **not** the end-state product API the owner asked for.
 
 End state: durability hangs off **`Store.Service` registrations** (node + resources) with a shared follower factory — not “apps must remember `Logs.persistLayer(node)` + compose a special `LogStore` class forever” as the story.
 
@@ -94,7 +96,7 @@ Agent 2’s `internal/logs/storeFollower.ts` is the **seed** of that factory (su
 | `Node.logs` registration replacing special-case `LogStore` story | **No** | |
 | Level pipes (`logStoreLevel` / `logStreamLevel` / …) | **No** | |
 | Follower memo conformance tests | **No** | |
-| Remote first-class `Resource.logs` | **No** | Dashboard filters `NodeStatus.logs` today |
+| Remote first-class `Hyperlink.logs` | **No** | Dashboard filters `NodeStatus.logs` today |
 
 **Do not** “re-do Phase 5.” **Do** finish store followers + the registration shape. Levels and remote can be ordered by the owner **after** you correctly restate the store model — but do not invent a “B1 keep node-primary forever” escape that abandons registration followers unless the owner explicitly says so in this session.
 
@@ -124,7 +126,7 @@ If the owner later picks “node-journal only, query filters for resources,” t
 
 - Branch from **`integration`**.  
 - No named-handles work (Agent D).  
-- No resurrecting `captureLogs`, spec `logs`, `NodeLogs`, or ProcessStorage.  
+- No resurrecting `captureLogs`, spec `logs`, `NodeLogs`, or DaemonStorage.  
 - No `as any` / `as unknown as`.  
 - `pnpm typecheck && pnpm test && pnpm lint` before claiming done.  
 - Changeset for public API / behavior.

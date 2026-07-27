@@ -76,7 +76,7 @@ Now Soft unwrap peeks at ambient `Storage` at build time:
 ## One store per Node (intentional multi-node = N stores)
 
 - One `Store.Service` per Node ManagedRuntime: many registrations, one journal/file, one `Logs.layer`.
-- Multi-node demos (`examples/resource-web`) use **N** stores / **N** runtimes — each node its own
+- Multi-node demos (`examples/hyperlink-web`) use **N** stores / **N** runtimes — each node its own
   `AppStore.layer*`.
 - Do **not** install a second `Logs.layer` or second `Store.Service` in the same runtime.
 
@@ -90,7 +90,7 @@ Node journal + resource `_logs` copies of the same live line are intentional —
 
 ## Reading back
 
-- Process / queue execution rows: toolkit store handles (`store.events()`, …) or `Store.resolveOrDie`.
+- Daemon / WorkPool execution rows: toolkit store handles (`store.events()`, …) or `Store.resolveOrDie`.
 - App-facing queries after override: `yield* AppStore` / registration helpers.
 
 ## Related

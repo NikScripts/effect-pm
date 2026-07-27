@@ -1,164 +1,103 @@
-# Agent D — Named resource handles (compact hover + expand-on-demand)
+# Named Hyperlink handles — status (Agent D track)
 
-**Branch:** cut `action/named-handles` from `integration/storage`; advance by merge.
-**Role:** make each resource's handle hover as a **compact named type** (`QueueHandle<EmailJob>`)
-while the **full member shape stays recoverable** — in the editor via the owner's prettify-ts
-extension, and in the docs via the D3 popover port (below).
-**Docs bus:** update [`agent-status.md`](./agent-status.md) on every push.
+> **Naming:** read as WorkPool / Daemon / Gate / Hyperlink / hyperlink-ts (pre-rebrand names purged from this file).
 
----
-
-## Start here — PLAN FIRST, nothing without approval
-
-Your first reply is your **plan for Phase 1 only**, and nothing else. Then you stop and wait for
-the owner's explicit go. A "sounds good" or your own certainty is not approval. No branch, no code,
-no PR until the owner says go. One step at a time.
-
-**Hard constraints (the owner will hold you to these):**
-- **No `as` casts anywhere.** Fix the root cause structurally.
-- **Additive / structural-identity only.** A named handle is `interface XHandle … extends ServiceOf<…> {}`
-  — the *same shape*, aliased. Every existing consumer (`src/web/data.ts`, the widgets, tests) must
-  still typecheck unchanged. Do **not** rename exported types.
-- **Commit AND push every step** (a local commit isn't done until it's on origin).
-- Tests need no permission — write them thoroughly.
+**Status (2026-07-27):** **partial Eng on tip** — WorkPool + Gate Tag paths hover as named handles.  
+**Agent:** D (merged / idle). **Do not** assign to dead Agent 3.  
+**Design SSOT (historical bake, names updated):** [`queue-handle-convergence-decisions.md`](./queue-handle-convergence-decisions.md).  
+**Docs bus:** [`agent-status.md`](./agent-status.md).
 
 ---
 
-## The goal, precisely
+## Goal
 
-`yield* Emails` today hovers as the fully-expanded `ServiceOf<…>` object (clean members — see
-"What already shipped"). The owner wants the **default** hover to read as a compact name —
-`QueueHandle<EmailJob>` — with the members one expand away. This is not cosmetic: it lets the API
-name types cleanly *without* hiding the shape, because the shape is always recoverable two ways:
-
-1. **Editor:** the owner runs **prettify-ts** (`mylesmurphy.prettify-ts`), which expands any type
-   under the cursor via the TS compiler API — regardless of aliases. So *named handle + prettify-ts
-   = compact name AND full shape*, for free, the moment the handle is named.
-2. **Docs:** the D3 popover port (separate track below) reproduces that expansion for readers who
-   don't have the extension.
-
-**Verified already** (owner watched it render on mobile): the dual view works. A named `interface`
-hovers as its name; the same type expanded shows all members. Proof page: `docs/guides/type-previews.md`
-(reachable at `/docs/type-previews`, not in nav — delete or fold once D3 lands).
-
-**The one rule that shapes everything:** a type only *expands* in a hover when it arrives by
-**inference** or through a compiler-API walk. A **written** annotation is echoed as-written:
-`declare const x: Prettify<Handle>` shows `Prettify` (alias preserved), and
-`declare const x: { [K in keyof Handle]: Handle[K] }` shows the mapped-type *expression*. Only
-`const x = expand(handle)` (return-type inferred) resolves to concrete members. This is why the
-docs expansion (D3) must be a compiler-API port, not a type alias.
+`yield* MyTag` should hover as a **compact named type** (e.g. `WorkPool<EmailJob>`, `Gate<Ticket, Price>`), with the full member shape one expand away (prettify-ts / docs compiler walk). Spec remains SSOT; `.Tag` is canonical.
 
 ---
 
-## What already shipped (context — do not redo)
+## Naming (post-rebrand — use these only)
 
-On `integration/storage`, cast-free, gate green:
-- **`Simplify` on `ServiceOf`** — members resolve from `Method<…>` spec descriptors to real effects
-  (`add: (payload) => Effect<void>`, `size: Subscribable<number>`).
-- **`PrettifyPayload`** — decoded payloads read `{ to: string }` (no `Schema.Struct.ReadonlySide<…>`,
-  no `readonly`) at the payload position. `Resource.Decoded<S>` exposes a schema's prettified `.Type`.
-- **`Client<T>` override API** — `effectFn<T>()(schema)` / `effect<Effect<T>>()(success)` (narrowing),
-  `unsafeEffectFn<T>()(schema)` / `unsafeEffect<…>()(success)` (free). The queue's `add`/`prioritize`/
-  `defer` use this and read as real `(item)` / `(items[])` overloads.
-- **`Kind` type param dropped** — `Method<P, Su, E, Str, Ann, Client>`; `kind` is runtime-only now.
+| Old (gone) | Current |
+|------------|---------|
+| `QueueResource` (module / hover name) | **`WorkPool`** (`hyperlink-ts/WorkPool`) |
+| `Process` / `ScheduledProcess` | **`Daemon`** |
+| `RunResource` | **`Gate`** |
+| `Resource` / `ResourceTag` | **`Hyperlink`** / **`HyperlinkTag`** |
+| `@nikscripts/effect-pm` | **`hyperlink-ts`** |
+| Named handle `QueueResource<…>` | Named handle **`WorkPool<Payload, Success?, Error?, Requirements?>`** |
+| Named handle `RunResourceHandle` / similar | Named handle **`Gate<Input, Success?, Error?>`** |
 
-See [`agent-a-type-display-cleanup.md`](archive/2026-07/agents/agent-a-type-display-cleanup.md) for the full record and the
-**payload-prettify backlog** (nested entry `item`, other resources' overloads, verbose-type sweep) —
-that backlog pairs naturally with each resource's handle work below.
+**Do not** teach `QueueResource`, `RunResource`, or `Process.Tag` in new prose.
 
----
+### Two handle stories (do not conflate)
 
-## Phase 1 — foundation (ONE agent, serial). This unblocks the fan-out.
-
-Prove the pattern on the **queue** (the golden model), and land any shared seam **once** so the
-fan-out never touches `Resource.ts`.
-
-1. **The seam.** The Tag's value type is `ServiceOf<S, Self>` at
-   `src/Resource.ts:1727` (`ResourceTag … extends Context.ServiceClass<Self, string, ServiceOf<S, Self>>`).
-   Because that's a raw mapped type, `yield* Tag` expands. To get a name, the queue's service type
-   must resolve to a **named interface** — e.g.:
-   ```ts
-   export interface QueueHandle<T> extends ServiceOf<QueueSpec<T>> {}
-   ```
-   (Confirm the exact spec expression in `src/QueueResource.ts` — the per-instance spec built from
-   `itemSchema`.) Thread it so `QueueResource.Tag<Emails>()(...)` surfaces `QueueHandle<EmailJob>`.
-   Decide in your plan **where** the naming is applied: a queue-specific Tag return type, or a general
-   opt-in seam on `ResourceTag` that a resource passes its named view into. Prefer the smallest change
-   that keeps `Resource.ts` generic; if a shared seam is needed, land it here and freeze `Resource.ts`.
-2. **Additive.** `QueueHandle<T>` must be structurally identical to today's service type. Confirm
-   `src/web/data.ts` and the widgets still typecheck with zero edits.
-3. **Verify the hover** — headless probe (mirrors the editor; resolves to `dist`):
-   ```
-   paths: { "@nikscripts/effect-pm": ["dist/index.d.ts"], "@nikscripts/effect-pm/*": ["dist/*.d.ts"] }
-   ls.getQuickInfoAtPosition(<the `const emails = yield* Emails` name>)  // expect: QueueHandle<EmailJob>
-   ```
-   Then the owner confirms in prettify-ts (name + expanded).
-4. **Write the template.** Add a "Fan-out template" section to this file (or a sibling) with the exact
-   pattern the Phase-2 agents copy. Commit + push.
-
-**Done when:** `yield* Emails` hovers as `QueueHandle<EmailJob>`; prettify-ts expands it to the clean
-members; `typecheck 0 / lint 0 / test` green; consumers untouched.
+| Name | Where | Meaning today |
+|------|--------|----------------|
+| **`WorkPool<…>`** | `src/WorkPool.ts` interface | **Contract** named handle — what `WorkPool.Tag` / `yield*` uses |
+| **`QueueHandle`** | `src/internal/workPool.ts` | **Internal-only** TEMP alias → `EngineQueueHandle` (engine path). No longer re-exported from `WorkPool`. **Not** what Tag hovers as. |
+| **`PriorityHandle`** | WorkPool priority | Still engine-shaped (`EEnqueue` param) — not on the `WorkPool<>` contract naming path yet |
 
 ---
 
-## Phase 2 — fan-out (ONE agent per resource, parallel, isolated files)
+## Shipped on tip
 
-`Resource.ts` is frozen after Phase 1. Each agent copies the queue template into **one** resource file
-and its test — nothing else:
+### WorkPool (queue)
 
-| Handle | File |
-|--------|------|
-| `ProcessHandle` | `src/Process.ts` |
-| `RunResourceHandle` | `src/RunResource.ts` |
-| `StoreHandle` | `src/Store.ts` |
-| `MetricsHandle` (ApiMetrics) | its module |
+- Interface **`WorkPool<Payload, Success = void, Error = never, Requirements = never>`** — contract member table (Subscribable `size`/`status`, nested `metrics`, no `EEnqueue` on enqueue).
+- **`QueueTag`** = `HyperlinkTag<…, WorkPool<…>>` via `Svc` seam on `HyperlinkTag`.
+- **`nameQueueService`** — one harness-guarded cast; soundness in `test/queue-handle.test-d.ts` (`WorkPool.WorkPool<Decoded<F>>` ⇄ `ServiceOf<queueSpec>`).
+- **Hover:** `yield* Emails` → **`WorkPool<EmailJob>`** (not a `ServiceOf<…>` wall).
 
-Each agent: define the named interface over the resource's `ServiceOf<…>`, thread it, verify the hover
-(probe + prettify-ts), add a test, keep it additive (no export renames), commit + push. **Collision
-rule:** touch only your resource's file + test; never `Resource.ts`; never another resource's file.
+### Gate
 
-While in each file, optionally fold in that resource's slice of the payload-prettify backlog (enqueue
-overloads via `unsafeEffectFn`, verbose status/config structs) — see the type-display handoff.
+- Interface **`Gate<Input, Success, Error>`** + `nameRunService` + `test/gate-handle.test-d.ts`.
+- **Hover:** `yield* MyGate` → **`Gate<…>`**.
 
----
+### Not named yet (fan-out)
 
-## Doc-UI track — the dual view (D3 + D4). Separate agent; depends on nothing above except the demo.
-
-- **D3 — dual preview in the twoslash popover.** Port prettify-ts's compiler-API expansion into the
-  docs twoslash transformer (`docs/site/src/lib/highlight.ts`) so one popover shows the **compact name
-  and the expanded shape together** (prettify-ts merges them into a single hover; the demo page shows
-  them as two stacked popups — D3 merges them). Because a written `Prettify<Handle>` won't expand (see
-  "the one rule"), this must be a compiler-API walk, not a type. This is the owner's **top-priority**
-  doc-UI item.
-- **D4 — hover types on module mentions in prose** (depends on D3). Build a symbol→type index at build
-  time (compile a module importing the public surface, harvest each export's `{alias, expanded, docs}`
-  with the checker) and a rehype pass that wraps prose mentions with the same popover. **Open decision
-  for the owner:** how a mention is matched — auto-match every inline `` `code` `` (false positives),
-  explicit `[[Module.member]]` marker (no false hits, manual), or auto-match only qualified
-  `Module.member` spans (recommended).
+| Toolkit | Tag hover today | Notes |
+|---------|-----------------|--------|
+| **Daemon** | Expanded `ServiceOf` / un-named Svc | `Daemon` engine interface exists; Tag path has **no** `nameDaemonService`-style seam yet |
+| **Store / ApiMetrics / …** | — | Never started |
+| **WorkPool.priority** | Engine `PriorityHandle` | Still `EEnqueue`-era engine shape |
 
 ---
 
-## Verification gotchas (these cost real hours)
+## Follow-ups (accurate residual)
 
-- **Editor reads `dist/*.d.ts`**, not `src` (via `package.json` exports). After every `src` change:
-  `pnpm build` **and** restart the TS server. Beware stale copies (`short-box/node_modules/@nikscripts/effect-pm`, `effect-pm-alt`).
-- **Docs twoslash reads `src`** but the dev server caches per-process — restart 5190; the dev server
-  sends no cache headers, so load `/<path>?v=N` on the phone to bypass the browser cache.
-- **Named vs inline vs written vs inferred:** a named alias hovers by name; an inline structural type
-  expands; a **written** annotation is echoed verbatim; only an **inferred** type resolves a mapped
-  type to members. (This is the whole game.)
+1. **M2 — unify typed `WorkPool.Service` with `WorkPool.Tag`**  
+   Typed `.Service` should build through the same contract `layer` / handle as `.Tag` so both yield **`WorkPool<…>`** by construction. Engine-only / untyped `.Service` stays a separate path. Surface deltas historically included `size` Effect vs Subscribable, metrics nesting, `logs`.
+
+2. **`QueueHandle` M1b cleanup** — ✅ **public export removed**  
+   Internal-only TEMP alias → `EngineQueueHandle` in `src/internal/workPool.ts`. Tag hover remains **`WorkPool<>`**. Optional: delete the TEMP alias name entirely (engine tests import `EngineQueueHandle`).
+
+3. **Per-Tag success/error carriers**  
+   Keep handle `Success`/`Error` tied to Tag wire / effect carriers so hovers show real failure/success types.
+
+4. **Elide trailing defaults**  
+   Money case: `WorkPool<EmailJob>` not `WorkPool<EmailJob, void, never, never>`.
+
+5. **Prettify asymmetry (entry.item)**  
+   Nested entry `item` vs `add` payload prettify — still the shallow-`PrettifyPayload` fork from the bake (deepen vs mirror).
+
+6. **M4–M6 engine SSOT** (later)  
+   Derive engine handle from spec; push Subscribable/metrics natives; optional drift cleanup.
+
+7. **Fan-out**  
+   Daemon Tag naming → then Store / ApiMetrics / priority as needed. Pattern: named interface + `Svc` on `HyperlinkTag` + `.test-d.ts` bidirectional guard + one factory cast.
 
 ---
 
-## Kickoff prompt
+## Hard constraints (still apply)
 
-> You are **Agent D**. Read `docs/handoffs/agent-d-named-handles.md` in full. Goal: make resource
-> handles hover as a compact named type (`QueueHandle<EmailJob>`) while keeping the full member shape
-> recoverable (prettify-ts in the editor, D3 in docs). Do **Phase 1 on the queue only** — define the
-> named `QueueHandle<T>` over the queue's `ServiceOf`, thread the `ResourceTag` seam
-> (`src/Resource.ts:1727`) so `yield* Emails` hovers as `QueueHandle<EmailJob>`, keep it additive
-> (consumers must typecheck unchanged, no export renames, no `as` casts), verify with the headless
-> quick-info probe, then write the fan-out template. **PLAN FIRST:** your first reply is the Phase-1
-> plan and nothing else — wait for the owner's explicit go before any code. Branch `action/named-handles`
-> from `integration/storage`. Commit and push every step.
+- No drive-by `as` casts — structural equality + `.test-d.ts` guard (the one `name*Service` cast is licensed by that guard).
+- Additive / structural identity for named handles vs `ServiceOf<spec>`.
+- Spec is SSOT; `.Tag` is canonical.
+
+---
+
+## References
+
+- Implementation: `src/WorkPool.ts` (`WorkPool` interface, `QueueTag`, `nameQueueService`), `src/Gate.ts` (`Gate`, `nameRunService`), `src/internal/workPool.ts` (`QueueHandle` TEMP → engine).
+- Tests: `test/queue-handle.test-d.ts`, `test/gate-handle.test-d.ts`.
+- Bake history (names refreshed 2026-07-27): [`queue-handle-convergence-decisions.md`](./queue-handle-convergence-decisions.md).

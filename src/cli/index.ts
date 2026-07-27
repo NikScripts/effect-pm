@@ -5,7 +5,7 @@
  * control surface counterpart to `<Dashboard group={Fleet} />`.
  *
  * - `hyperlink` → open the TUI at the root
- * - `hyperlink my-queue` → open the TUI focused on that resource (or group subtree)
+ * - `hyperlink my-queue` → open the TUI focused on that hyperlink (or group subtree)
  * - `hyperlink my-queue pause` → run-and-exit CLI verb
  *
  * The TUI is optional: handlers call {@link openTui}, which reads {@link Tui} via
@@ -30,7 +30,7 @@ import { Console, Effect, type Schema } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
 import * as Group from "../Group";
 import { methodMeta, specOf } from "../Hyperlink";
-import type { AnyLocalMethod, AnyMethod, AnyPureMethod, FlatSpec } from "../Hyperlink";
+import type { AnyLocalMethod, AnyMethod, AnyDefaultMethod, FlatSpec } from "../Hyperlink";
 import { openTui } from "./Tui";
 import type { TuiNotConfigured } from "./Tui";
 import type { CliHyperlinkTag, CliNode, CliTree } from "./types";
@@ -40,8 +40,9 @@ export type { CliGroup, CliHyperlinkTag, CliNode, CliTree } from "./types";
 export { openTui, Tui, TuiNotConfigured, type TuiOpenInput } from "./Tui";
 
 // A spec entry is a runnable CLI verb when it's a wire method (`kind`: query/mutate) that
-// isn't a streaming read. Streams have no run-and-exit form; local methods aren't on the wire.
-const isCliMethod = (m: AnyMethod | AnyLocalMethod | AnyPureMethod): m is AnyMethod =>
+// isn't a streaming read. Streams have no run-and-exit form; local / Tag-baked default
+// members aren't CLI verbs.
+const isCliMethod = (m: AnyMethod | AnyLocalMethod | AnyDefaultMethod): m is AnyMethod =>
   "kind" in m && m.stream !== true;
 
 const isSchema = (x: unknown): x is Schema.Top =>
@@ -201,7 +202,7 @@ const buildCommand = (tree: CliTree, rootName: string) => {
       );
   const width = Object.keys(rootFocus).reduce((max, name) => Math.max(max, name.length), 0);
   const ls = Command.make("ls").pipe(
-    Command.withDescription("List resources (command name → id)."),
+    Command.withDescription("List hyperlinks (command name → id)."),
     Command.withHandler(() =>
       Console.log(
         Object.entries(rootFocus)
@@ -211,7 +212,7 @@ const buildCommand = (tree: CliTree, rootName: string) => {
     ),
   );
   return Command.make(rootName).pipe(
-    Command.withDescription("Resource CLI — bare path opens the TUI when configured."),
+    Command.withDescription("Hyperlink CLI — bare path opens the TUI when configured."),
     Command.withHandler(() => openTui({ tree, path: [] })),
     Command.withSubcommands([...namespaces, ls]),
   );
@@ -223,7 +224,7 @@ export type CliOptions = {
 };
 
 /**
- * Args runner from the options overload of {@link cli}. Provide resource + TUI layers
+ * Args runner from the options overload of {@link cli}. Provide hyperlink + TUI layers
  * when you run it.
  *
  * @public

@@ -34,7 +34,7 @@ After approval: branch action/html-doc-platform from integration/storage and exe
 | 4 | `docs:build` / `docs:preview` |
 | 5 | README handoff to Agent A; Hydration hook note; PR |
 
-**Pattern:** `examples/resource-web/` tooling — **not** `<Dashboard>`.
+**Pattern:** `examples/hyperlink-web/` tooling — **not** `<Dashboard>`.
 
 ---
 

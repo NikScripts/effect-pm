@@ -10,7 +10,7 @@ Exclusive resources claim at Lookup. Workers advertise. The winning brain can pu
 placement advice. Clients dial through Lookup — no `Hyperlink.Manager`.
 
 Handoff SSOT: [`docs/handoffs/identity-coordinator.md`](../handoffs/identity-coordinator.md).
-Runnable form: [`examples/forms/resource/node-identity-coordinator.ts`](../../examples/forms/resource/node-identity-coordinator.ts).
+Runnable form: [`examples/forms/hyperlink/node-identity-coordinator.ts`](../../examples/forms/hyperlink/node-identity-coordinator.ts).
 
 ## The picture
 

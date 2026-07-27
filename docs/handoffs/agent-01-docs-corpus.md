@@ -48,7 +48,7 @@ Make `docs/handoffs/` legible again: what is **active**, what is **historical SS
 |------|------|
 | `agent-status.md` | Supervisor dashboard |
 | `owner-decisions.md` | Locked steers |
-| `supervisor-protocol.md` (if present) | Process |
+| `supervisor-protocol.md` (if present) | Daemon |
 | Active agent briefs with open work | e.g. Agent 3 logs follow-ups, Agent D handle follow-ups, Agent B/C plan-first |
 | **Decision SSOTs still cited by code/docs** | e.g. `multi-host-instances-decisions.md`, `queue-handle-convergence-decisions.md`, store transform decisions |
 

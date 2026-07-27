@@ -21,7 +21,13 @@
  * const c = yield* Counter;        // { current: Effect<number>; add: (p) => Effect<void>; reset: Effect<void> }
  * ```
  *
- * Define a tag with {@link Hyperlink.Tag} (one resource, own RpcGroup keyed by `.key`).
+ * Define a tag with {@link Hyperlink.Tag}:
+ * - **Solo** — `Tag<Self>()(key, spec)`: one resource, RpcGroup prefix = `.key`.
+ * - **Shared Spec** — `Tag(wireKey, spec)` then `Factory<Self>()(instanceKey)`: many
+ *   instances, one Spec / RpcGroup (prefix = `wireKey`), routed by header `key`.
+ *   Same {@link Hyperlink.serve} / {@link Hyperlink.client} — merge several `serve`s
+ *   that share a wire key; no separate serve/client verb.
+ *
  * The same `yield* Tag` code runs anywhere; only the layer changes:
  * - {@link Hyperlink.layer} — run it locally with a real implementation;
  * - {@link Hyperlink.client} — drive it remotely over RPC, as if local;
@@ -33,7 +39,8 @@
  * {@link Hyperlink.ws} / …).
  *
  * A method is {@link effect} (one-shot read), {@link effectFn} (mutation), or
- * {@link Hyperlink.stream} (a live `Stream` source, e.g. `changes`).
+ * {@link Hyperlink.stream} (a live `Stream` source, e.g. `changes`). Tag-baked
+ * defaults use {@link default} (one Spec leaf) or piped {@link defaults} (a bag).
  *
  * For a repeated dependency-monitor shape (`status` + `changes` + readiness from
  * status), {@link monitoredDependency} builds the spec and readiness together —
@@ -62,6 +69,7 @@ import {
 } from "effect";
 import {
   FetchHttpClient,
+  Headers,
   HttpClient,
   HttpRouter,
 } from "effect/unstable/http";
@@ -141,6 +149,41 @@ export class DuplicateHyperlinkKey extends Data.TaggedError(
  */
 export class DuplicateWireKey extends Data.TaggedError("DuplicateWireKey")<{
   readonly wireKey: string;
+}> {}
+
+/**
+ * Two shared-Spec instances were {@link serve}d with the same Context key under one wire key.
+ *
+ * @category errors
+ * @public
+ */
+export class DuplicateSharedInstance extends Data.TaggedError(
+  "DuplicateSharedInstance",
+)<{
+  readonly wireKey: string;
+  readonly key: string;
+}> {}
+
+/**
+ * A shared-Spec RPC call could not be routed — missing or unknown instance `key` header.
+ *
+ * @category errors
+ * @public
+ */
+export class SharedRoutingError extends Data.TaggedError("SharedRoutingError")<{
+  readonly method: string;
+  readonly reason: "missing-key" | "unknown-key";
+  readonly key?: string;
+}> {}
+
+/**
+ * A {@link defaults} bag key collides with a Spec path (or another defaults key).
+ *
+ * @category errors
+ * @public
+ */
+export class DuplicateDefaultKey extends Data.TaggedError("DuplicateDefaultKey")<{
+  readonly key: string;
 }> {}
 
 /**
@@ -508,45 +551,49 @@ export interface LocalMethod<T> {
  */
 export type AnyLocalMethod = LocalMethod<unknown>;
 
-/** Identity brand for a {@link PureMethod} — Tag-baked sync fn, both sides, no wire. */
-const PureMethodTypeId = "~hyperlink-ts/Hyperlink/PureMethod" as const;
+/** Identity brand for a {@link DefaultMethod} — Tag-baked default value/fn, both sides, no wire. */
+const DefaultMethodTypeId = "~hyperlink-ts/Hyperlink/DefaultMethod" as const;
 
 /**
- * A **Tag-baked** sync function on a resource contract — built by {@link pure}. Lives on the Spec
- * (both local and remote install the same `fn`); no impl, no RPC, no {@link Local} gate. Use for
- * shared helpers that must be identical on every side (formatters, predicates, pure transforms).
+ * A **Tag-baked default** on a resource contract — built by {@link default}. Lives on the Spec
+ * (both local and remote install the same `value`); no impl, no RPC, no {@link Local} gate.
+ * Literals or sync functions. For a bag of many defaults, see {@link defaults}.
  *
  * @category models
  * @public
  */
-export interface PureMethod<out F> {
-  readonly [PureMethodTypeId]: typeof PureMethodTypeId;
-  readonly fn: F;
+export interface DefaultMethod<out V> {
+  readonly [DefaultMethodTypeId]: typeof DefaultMethodTypeId;
+  /**
+   * The Tag-baked payload — literal or sync function. Installed identically on local and
+   * client handles. Layer/serve may override at the **provide site only** (does not travel
+   * over the wire); see {@link ImplWithDefaultOverrides}.
+   */
+  readonly value: V;
 }
 
 /**
- * Any {@link PureMethod}, erased. Params are `never` so every concrete sync fn is assignable
- * (contravariance) while {@link PureMethod} stays covariant in `F`.
+ * Any {@link DefaultMethod}, erased.
  *
  * @category models
  * @public
  */
-export type AnyPureMethod = PureMethod<(...args: never) => unknown>;
+export type AnyDefaultMethod = DefaultMethod<unknown>;
 
 /**
  * A resource contract: method name → wire {@link Method}, off-wire {@link LocalMethod}, or
- * Tag-baked {@link PureMethod}. The single source of truth.
+ * Tag-baked {@link DefaultMethod}. The single source of truth.
  *
  * @category models
  * @public
  */
 export interface Spec {
-  readonly [k: string]: AnyMethod | AnyLocalMethod | AnyPureMethod | Spec;
+  readonly [k: string]: AnyMethod | AnyLocalMethod | AnyDefaultMethod | Spec;
 }
 
 /** A **flat** spec — a path-keyed record of leaves (no nested groups). The wire machinery runs on this;
  *  a (possibly nested) {@link Spec} flattens to it via {@link flattenSpec}. @internal */
-export type FlatSpec = Record<string, AnyMethod | AnyLocalMethod | AnyPureMethod>;
+export type FlatSpec = Record<string, AnyMethod | AnyLocalMethod | AnyDefaultMethod>;
 
 /** Union → intersection — folds the per-leaf records from {@link FlatSpecOf}. @internal */
 type UnionToIntersection<U> = (U extends unknown ? (k: U) => void : never) extends (
@@ -563,7 +610,7 @@ export type FlatSpecOf<S, Prefix extends string = ""> = UnionToIntersection<
   {
     [K in keyof S & string]: S[K] extends { readonly kind: MethodKind }
       ? { readonly [P in `${Prefix}${K}`]: AsMethod<S[K]> }
-      : S[K] extends AnyLocalMethod | AnyPureMethod
+      : S[K] extends AnyLocalMethod | AnyDefaultMethod
         ? { readonly [P in `${Prefix}${K}`]: S[K] }
         : S[K] extends Spec
           ? FlatSpecOf<S[K], `${Prefix}${K}.`>
@@ -590,25 +637,25 @@ type AsMethod<T> = T extends {
 
 /** Runtime guard: is a spec entry a {@link LocalMethod} (vs a wire {@link Method})? */
 const isLocalMethod = (
-  m: AnyMethod | AnyLocalMethod | AnyPureMethod | Spec,
+  m: AnyMethod | AnyLocalMethod | AnyDefaultMethod | Spec,
 ): m is AnyLocalMethod => Predicate.hasProperty(m, LocalMethodTypeId);
 
-/** Runtime guard: is a spec entry a {@link PureMethod}? */
-const isPureMethod = (
-  m: AnyMethod | AnyLocalMethod | AnyPureMethod | Spec,
-): m is AnyPureMethod => Predicate.hasProperty(m, PureMethodTypeId);
+/** Runtime guard: is a spec entry a {@link DefaultMethod}? */
+const isDefaultMethod = (
+  m: AnyMethod | AnyLocalMethod | AnyDefaultMethod | Spec,
+): m is AnyDefaultMethod => Predicate.hasProperty(m, DefaultMethodTypeId);
 
-/** Runtime guard: is a spec entry a **leaf** (wire/local/pure method) vs a nested **group**? @internal */
+/** Runtime guard: is a spec entry a **leaf** (wire/local/default method) vs a nested **group**? @internal */
 const isSpecLeaf = (
-  v: AnyMethod | AnyLocalMethod | AnyPureMethod | Spec,
-): v is AnyMethod | AnyLocalMethod | AnyPureMethod =>
+  v: AnyMethod | AnyLocalMethod | AnyDefaultMethod | Spec,
+): v is AnyMethod | AnyLocalMethod | AnyDefaultMethod =>
   Predicate.hasProperty(v, MethodTypeId) ||
   Predicate.hasProperty(v, LocalMethodTypeId) ||
-  Predicate.hasProperty(v, PureMethodTypeId);
+  Predicate.hasProperty(v, DefaultMethodTypeId);
 
 /** Flatten a nested spec to a flat path-keyed record (identity for a flat spec). @internal */
 const flattenSpec = (spec: Spec, prefix = ""): FlatSpec => {
-  const flat: Record<string, AnyMethod | AnyLocalMethod | AnyPureMethod> = {};
+  const flat: Record<string, AnyMethod | AnyLocalMethod | AnyDefaultMethod> = {};
   for (const [k, v] of Object.entries(spec)) {
     if (isSpecLeaf(v)) flat[`${prefix}${k}`] = v;
     else Object.assign(flat, flattenSpec(v, `${prefix}${k}.`));
@@ -632,9 +679,9 @@ export const flattenImpl = (
 ): Record<string, unknown> => {
   const flat: Record<string, unknown> = {};
   for (const path of Object.keys(flatSpec)) {
-    // Tag-baked `pure` members have no impl slot — skip so callers aren't forced to pass placeholders.
+    // Tag-baked {@link default} members have no impl slot — skip so callers aren't forced to pass placeholders.
     const leaf = flatSpec[path];
-    if (leaf !== undefined && isPureMethod(leaf)) continue;
+    if (leaf !== undefined && isDefaultMethod(leaf)) continue;
     let node: unknown = impl;
     for (const part of path.split(".")) {
       node = (node as Record<string, unknown>)[part];
@@ -685,6 +732,159 @@ const setPath = (
   node[last] = val;
 };
 
+/** Read a (possibly dotted) path from an impl/service tree; `undefined` if missing. @internal */
+const getPath = (obj: unknown, path: string): unknown => {
+  let node: unknown = obj;
+  for (const part of path.split(".")) {
+    if (node === null || typeof node !== "object" || !(part in node)) {
+      return undefined;
+    }
+    node = (node as Record<string, unknown>)[part];
+  }
+  return node;
+};
+
+/**
+ * Where piped {@link defaults} are stowed on a Tag — merged onto the service at local/client
+ * acquire (overridable via matching impl keys / {@link Layer.updateService}).
+ *
+ * @internal
+ */
+export const defaultsSym: unique symbol = Symbol.for(
+  "hyperlink-ts/Hyperlink/defaults",
+);
+
+/** A bag of Tag-baked defaults for {@link defaults}. @public */
+export type DefaultsBag = { readonly [key: string]: unknown };
+
+/**
+ * Reject Promise-returning functions in a defaults bag value (same rule as {@link default}).
+ *
+ * @internal
+ */
+type SyncDefault<V> = [V] extends [(...args: never) => Promise<unknown>] ? never : V;
+
+/** Prior piped bag on a Tag, or `{}`. @internal */
+type PriorDefaults<T> = T extends { readonly [defaultsSym]: infer P extends DefaultsBag }
+  ? P
+  : {};
+
+/**
+ * Tag after {@link defaults} — precise merged bag on {@link defaultsSym}.
+ * (`class X extends Tag<X>().pipe(defaults)` cannot remap {@link HyperlinkTag}'s
+ * `Service` without a self-heritage cycle; use {@link WithDefaults} at the use site.)
+ *
+ * @internal
+ */
+type TagWithDefaults<T, D extends DefaultsBag> = T & {
+  readonly [defaultsSym]: PriorDefaults<T> & D;
+};
+
+/**
+ * Piped {@link defaults} bag on a Tag, or `{}` when absent.
+ *
+ * @category models
+ * @public
+ */
+export type DefaultsOf<T> = T extends { readonly [defaultsSym]: infer D extends DefaultsBag }
+  ? D
+  : {};
+
+/**
+ * Handle shape including a piped {@link defaults} bag — for `yield* Tag` sites that need
+ * bag keys typed (`class X extends Tag.pipe(defaults)` cannot widen `Service` itself).
+ *
+ * @category models
+ * @public
+ */
+export type WithDefaults<T> = (T extends { readonly Service: infer Svc } ? Svc : never) &
+  DefaultsOf<T>;
+
+/** True when a defaults bag key collides with a flat Spec path. @internal */
+const defaultsCollidesWithSpec = (flat: FlatSpec, key: string): boolean => {
+  if (Object.hasOwn(flat, key)) return true;
+  const prefix = `${key}.`;
+  for (const path of Object.keys(flat)) {
+    if (path.startsWith(prefix)) return true;
+  }
+  return false;
+};
+
+/**
+ * Pipe **multiple** Tag-baked defaults onto a Tag — batteries on every local/client handle.
+ * Spec stays branded builders; this bag is the extras surface.
+ *
+ * Singular fields belong in the contract via {@link default} (fully typed on `Service`).
+ * Piped bag keys are on every local/client handle at runtime; type them with
+ * {@link WithDefaults}`<typeof Tag>` (class-extends cannot widen `Service` without a
+ * self-heritage cycle). Same key as a Spec path (or a prior bag key) →
+ * {@link DuplicateDefaultKey} at pipe time.
+ *
+ * Layer/serve may override bag keys at the **provide site only** — overrides do not travel
+ * over the wire; clients always see the Tag-baked bag. Prefer {@link Layer.updateService}
+ * for post-hoc local patches.
+ *
+ * ```ts
+ * class Jobs extends WorkPool.Tag<Jobs>()("@app/Jobs", jobSpec).pipe(
+ *   Hyperlink.defaults({
+ *     label: (n: number) => `job=${n}`,
+ *     tags: ["admin", "beta"],
+ *   }),
+ * ) {}
+ * const jobs = (yield* Jobs) as Hyperlink.WithDefaults<typeof Jobs>
+ * ```
+ *
+ * @category spec fields
+ * @public
+ */
+export const defaults: {
+  <const D extends DefaultsBag>(
+    bag: { readonly [K in keyof D]: SyncDefault<D[K]> },
+  ): <T extends PipeableTag>(tag: T) => TagWithDefaults<T, D>;
+  <T extends PipeableTag, const D extends DefaultsBag>(
+    tag: T,
+    bag: { readonly [K in keyof D]: SyncDefault<D[K]> },
+  ): TagWithDefaults<T, D>;
+} = Fn.dual(
+  2,
+  <T extends PipeableTag, D extends DefaultsBag>(
+    tag: T,
+    bag: D,
+  ): TagWithDefaults<T, D> => {
+    const flat = tag[specSym];
+    for (const key of Object.keys(bag)) {
+      if (defaultsCollidesWithSpec(flat, key)) {
+        throw new DuplicateDefaultKey({ key });
+      }
+    }
+    const prior =
+      defaultsSym in tag
+        ? ((tag as { readonly [defaultsSym]?: DefaultsBag })[defaultsSym] ?? {})
+        : {};
+    for (const key of Object.keys(bag)) {
+      if (Object.hasOwn(prior, key)) {
+        throw new DuplicateDefaultKey({ key });
+      }
+    }
+    return Object.assign(tag, {
+      [defaultsSym]: { ...prior, ...bag },
+    }) as TagWithDefaults<T, D>;
+  },
+);
+
+/** Install piped {@link defaults} onto a service, with optional impl overrides. @internal */
+const applyDefaultsBag = (
+  service: Record<string, unknown>,
+  bag: DefaultsBag | undefined,
+  impl: Record<string, unknown> | undefined,
+): void => {
+  if (bag === undefined) return;
+  for (const [key, value] of Object.entries(bag)) {
+    const override = impl === undefined ? undefined : getPath(impl, key);
+    setPath(service, key, override !== undefined ? override : value);
+  }
+};
+
 /** Implementation of {@link local}'s callable form (`local<T>()`); the public value is the branded
  *  {@link local} below (also usable **bare**). @internal */
 const localFn = <T>(defaultValue?: T): LocalMethod<T> => ({
@@ -730,29 +930,35 @@ export const local: typeof localFn & BareLocal = Object.assign(localFn, {
 });
 
 /**
- * Declare a **Tag-baked sync function** — identical on local and remote, no wire, no impl.
- * Rejects `Promise`-returning functions at the type level (async belongs in {@link effect} /
- * {@link effectFn} or {@link promise}).
+ * Declare a **single Tag-baked default** in the contract — identical local and remote, no wire,
+ * no impl slot. Accepts a literal or a sync function (Promise-returning fns are a type error —
+ * async belongs in {@link effect} / {@link effectFn} or {@link promise}).
+ *
+ * For **multiple** defaults, pipe {@link defaults} onto the Tag instead (bag keys are
+ * on the runtime handle; type them with {@link WithDefaults}`<typeof Tag>` at use sites).
+ *
+ * Layer/serve may override a Spec default at the **provide site only** (see
+ * {@link ImplWithDefaultOverrides}); the remote client always installs the Tag-baked value.
  *
  * ```ts
  * class Counter extends Hyperlink.Tag<Counter>()("counter", {
  *   current: Hyperlink.effect(Schema.Number),
- *   label: Hyperlink.pure((n: number) => `count=${n}`),
+ *   label: Hyperlink.default((n: number) => `count=${n}`),
+ *   unit: Hyperlink.default("count"),
  * }) {}
- * // both sides: (yield* Counter).label(7) === "count=7"
  * ```
  *
  * @category spec fields
  * @public
  */
-export function pure<Args extends ReadonlyArray<unknown>, R>(
-  fn: (...args: Args) => [R] extends [Promise<unknown>] ? never : R,
-): PureMethod<(...args: Args) => R> {
-  return {
-    [PureMethodTypeId]: PureMethodTypeId,
-    fn: fn as (...args: Args) => R,
-  };
-}
+const default_ = <const V>(
+  value: [V] extends [(...args: never) => Promise<unknown>] ? never : V,
+): DefaultMethod<V> => ({
+  [DefaultMethodTypeId]: DefaultMethodTypeId,
+  value: value as V,
+});
+
+export { default_ as default };
 
 /**
  * The resolved tool metadata for one method — what CLI/TUI/dashboard read to render it.
@@ -1037,7 +1243,7 @@ export function unsafeEffect<Client = Derive>() {
 export type ValueField<M extends AnyMethod> = Marked<M, { readonly _tag: "value" }>;
 
 /** Runtime guard: is a spec entry a {@link value} field? */
-const isValueMethod = (m: AnyMethod | AnyLocalMethod | AnyPureMethod): boolean =>
+const isValueMethod = (m: AnyMethod | AnyLocalMethod | AnyDefaultMethod): boolean =>
   Predicate.hasProperty(m, "_tag") && m._tag === "value";
 
 /**
@@ -1077,7 +1283,7 @@ export function value(
 export type RefField<M extends AnyMethod> = Marked<M, { readonly _tag: "ref" }>;
 
 /** Runtime guard: is a spec entry a {@link ref} field? */
-const isRefMethod = (m: AnyMethod | AnyLocalMethod | AnyPureMethod): boolean =>
+const isRefMethod = (m: AnyMethod | AnyLocalMethod | AnyDefaultMethod): boolean =>
   Predicate.hasProperty(m, "_tag") && m._tag === "ref";
 
 /**
@@ -1386,7 +1592,7 @@ export const mapEffects = <Impl, const S extends Spec, Out = Impl>(
     if (
       leaf === undefined ||
       isLocalMethod(leaf) ||
-      isPureMethod(leaf) ||
+      isDefaultMethod(leaf) ||
       (Predicate.hasProperty(leaf, "stream") && leaf.stream === true)
     ) {
       mapped[path] = member;
@@ -1841,7 +2047,7 @@ type ClientMethod<M extends AnyMethod, Client> = [Client] extends [Derive] ? Ser
  * @category models
  * @public
  */
-// NOTE on the gates below: branch on brands (`LocalMethod` / `PureMethod` / `_tag`) before the
+// NOTE on the gates below: branch on brands (`LocalMethod` / `DefaultMethod` / `_tag`) before the
 // wire `kind` check — brand checks are schema-independent. An old `: S[K] extends AnyMethod`
 // else-gate dragged payload schemas into the conditional and deferred the whole type under a
 // free type parameter (e.g. a factory generic over the item schema).
@@ -1850,8 +2056,8 @@ export type ServiceOf<S extends Spec, Self = unknown> = Simplify<{
     ? InjectLocal<M, Self> // interface-Tag local: interface-shaped, gains `Local`
     : S[K] extends LocalMethod<infer T>
     ? LocalEffect<T, never, Self>
-    : S[K] extends PureMethod<infer F>
-      ? F // Tag-baked sync fn — identical local and remote
+    : S[K] extends DefaultMethod<infer F>
+      ? F // Tag-baked default — identical local and remote
       : S[K] extends { readonly _tag: "value" }
         ? SuccessOf<AsMethod<S[K]>>
         : S[K] extends { readonly _tag: "ref" }
@@ -2026,7 +2232,7 @@ export type ResolveLocals<C, I> = {
 
 /** The wire-only service: just the {@link Method}s (used by the server impl + forwarder). @internal */
 type WireServiceOf<S extends Spec> = {
-  readonly [K in keyof S as S[K] extends AnyLocalMethod | AnyPureMethod ? never : K]: S[K] extends {
+  readonly [K in keyof S as S[K] extends AnyLocalMethod | AnyDefaultMethod ? never : K]: S[K] extends {
     readonly _tag: "ref";
   }
     ? Subscribable<SuccessOf<AsMethod<S[K]>>> // impl provides the Subscribable; wire serves its .changes
@@ -2051,7 +2257,7 @@ export type Wire<S extends Spec> = WireServiceOf<S>;
 type PeerServiceOf<S extends Spec> = {
   readonly [K in keyof S as S[K] extends { readonly fleet: true }
     ? never
-    : S[K] extends AnyLocalMethod | AnyPureMethod
+    : S[K] extends AnyLocalMethod | AnyDefaultMethod
       ? never
       : K]: S[K] extends { readonly _tag: "ref" }
     ? // a peer reads a `ref` **one-shot** (its current value, lazily) — not a live subscription, so
@@ -2074,14 +2280,15 @@ type PeerServiceOf<S extends Spec> = {
  * A {@link value} field's impl is the `Effect<A, E>` resolved once at acquire — that differs from how
  * it *surfaces* in {@link ServiceOf} (a plain `A`), so annotate an impl with `ImplOf`, not
  * `ServiceOf`. A {@link ref}'s impl is the {@link Subscribable} (not the consumer shape alone).
- * {@link pure} members are Tag-baked — omitted from the impl. A nested group that is *only*
- * `pure` members still appears as `{}` (pass an empty object).
+ * {@link default} members are Tag-baked — omitted from the impl. A nested group that is *only*
+ * `default` members still appears as `{}` (pass an empty object). Piped {@link defaults} keys may
+ * be overridden via {@link ImplWithDefaultOverrides}.
  *
  * @category models
  * @public
  */
 export type ImplOf<S extends Spec> = {
-  readonly [K in keyof S as S[K] extends AnyPureMethod ? never : K]: S[K] extends FromLocalMethod<
+  readonly [K in keyof S as S[K] extends AnyDefaultMethod ? never : K]: S[K] extends FromLocalMethod<
     infer M
   >
     ? M // interface-Tag local: the impl provides the interface member itself
@@ -2095,6 +2302,21 @@ export type ImplOf<S extends Spec> = {
             ? ImplOf<S[K]> // nested group → nested impl
             : never;
 };
+
+/**
+ * Impl for {@link layer} / {@link serve}: wire {@link ImplOf} plus optional overrides for
+ * Spec {@link default} leaves and piped {@link defaults} bag keys (extra keys are
+ * structural — Spec leaf values stay precise via excess-property checks on known keys
+ * when inlined at the call site).
+ *
+ * Overrides apply at the **provide site only** (local handle / co-located serve grant).
+ * Clients always install Tag-baked Spec defaults + the piped bag — they do not see the
+ * server's override. Use {@link Layer.updateService} for post-hoc local patches.
+ *
+ * @category models
+ * @public
+ */
+export type ImplWithDefaultOverrides<S extends Spec> = ImplOf<S> & Partial<DefaultsBag>;
 
 /**
  * Recover the (possibly nested) {@link Spec} a tag was built from — for annotating an extracted impl
@@ -2111,7 +2333,8 @@ export type SpecOf<T> = T extends { readonly [specTypeSym]?: infer S extends Spe
  * `layer` / `serve`; but the moment you hoist one to a `const` (to share it across the
  * local layer and a served entry, or across several serves) it loses that typing — the mistake then
  * surfaces far away at the serve call, with no autocomplete as you write it. `Hyperlink.make(tag, impl)`
- * infers the tag's spec and constrains `impl` to its {@link ImplOf}, returning it typed. Runtime identity.
+ * infers the tag's spec and constrains `impl` to {@link ImplWithDefaultOverrides}, returning it typed.
+ * Runtime identity.
  *
  * ```ts
  * const scoresImpl = Hyperlink.make(ScoresDb, { read: … }); // typed here — autocomplete + errors at the def
@@ -2124,12 +2347,12 @@ export type SpecOf<T> = T extends { readonly [specTypeSym]?: infer S extends Spe
  */
 export function make<Self, S extends Spec>(
   tag: HyperlinkTag<Self, S>,
-  impl: ImplOf<S>,
-): ImplOf<S>;
+  impl: ImplWithDefaultOverrides<S>,
+): ImplWithDefaultOverrides<S>;
 export function make<Self, S extends Spec, R>(
   tag: HyperlinkTag<Self, S>,
-  impl: Effect.Effect<ImplOf<S>, never, R>,
-): Effect.Effect<ImplOf<S>, never, R>;
+  impl: Effect.Effect<ImplWithDefaultOverrides<S>, never, R>,
+): Effect.Effect<ImplWithDefaultOverrides<S>, never, R>;
 export function make(_tag: unknown, impl: unknown): unknown {
   return impl;
 }
@@ -2163,7 +2386,7 @@ type RpcOf<K extends string, M extends AnyMethod> = M["stream"] extends true
 type RpcUnionOf<S extends Spec, Prefix extends string = ""> = {
   readonly [K in keyof S & string]: S[K] extends { readonly kind: MethodKind }
     ? RpcOf<`${Prefix}${K}`, AsMethod<S[K]>>
-    : S[K] extends AnyLocalMethod | AnyPureMethod
+    : S[K] extends AnyLocalMethod | AnyDefaultMethod
       ? never
       : S[K] extends Spec
         ? RpcUnionOf<S[K], `${Prefix}${K}.`>
@@ -2214,8 +2437,8 @@ export const buildRpcGroup = (
   spec: FlatSpec,
 ): RpcGroup.RpcGroup<any> => {
   const rpcs = Object.entries(spec).flatMap(([method, m]) => {
-    // local / pure members are off-wire — they get no rpc.
-    if (isLocalMethod(m) || isPureMethod(m)) return [];
+    // local / default members are off-wire — they get no rpc.
+    if (isLocalMethod(m) || isDefaultMethod(m)) return [];
     const tag = wireTag(wireKey, method);
     const options: {
       payload?: Schema.Struct.Fields | Schema.Top;
@@ -2261,12 +2484,22 @@ export const groupSym: unique symbol = Symbol.for(
 );
 /**
  * Where the **wire key** (RpcGroup prefix) is stowed on a Tag. Solo {@link Tag}s use the
- * same string as {@link Context.Key.key} for solo tags. Read with {@link wireKeyOf}.
+ * same string as {@link Context.Key.key}; shared-Spec instances use the factory wire key.
+ * Read with {@link wireKeyOf}.
  *
  * @internal
  */
 export const wireKeySym: unique symbol = Symbol.for(
   "hyperlink-ts/Hyperlink/wireKey",
+);
+/**
+ * Marks a tag minted by {@link Tag}`(wireKey, spec)` — wire prefix is the shared key;
+ * {@link serve} / {@link client} route by the instance `.key` header.
+ *
+ * @internal
+ */
+export const sharedTagSym: unique symbol = Symbol.for(
+  "hyperlink-ts/Hyperlink/sharedTag",
 );
 /** Where the per-resource local-capability key is stowed on a Tag. @internal */
 export const localCapSym: unique symbol = Symbol.for(
@@ -2702,13 +2935,25 @@ export const contractHash = <Self, S extends Spec>(
 /**
  * A tag's **wire key** — the RpcGroup / procedure prefix on a shared server.
  *
- * For solo {@link Tag}s this is the same string as {@link Context.Key.key}.
+ * Solo {@link Tag}: same as {@link Context.Key.key}. Shared-Spec instance
+ * (`Tag(wireKey, spec)` factory): the factory wire key (kind key).
  *
  * @category introspection
  * @public
  */
 export const wireKeyOf = (tag: { readonly [wireKeySym]: string }): string =>
   tag[wireKeySym];
+
+/**
+ * True when `tag` was minted by a shared-Spec {@link Tag}`(wireKey, spec)` factory.
+ *
+ * @category introspection
+ * @internal
+ */
+export const isSharedTag = (tag: unknown): boolean =>
+  (typeof tag === "object" || typeof tag === "function") &&
+  tag !== null &&
+  sharedTagSym in tag;
 
 /** The {@link Node} a tag is bound to (its transport key), or `undefined` for a nodeless/bare tag
  *  or any non-tag. Accepts `unknown` so a `Group` member passes straight in — walk a group tree and
@@ -2803,7 +3048,7 @@ export const withReadiness: {
   // Data-last: `T extends PipeableTag` (shallow) — do not constrain against HyperlinkTag|NodeBoundTag
   // or stock tsc TS2589s on node-bound `class extends Tag()(…).pipe(withReadiness(…))` (expands Svc).
   // Readiness `svc` is still `ServiceOf<S, any>` from the inferred tag; Self is widened so class
-  // `extends` does not recurse on the declaring type — see test/resource-withreadiness-pipe.test-d.ts.
+  // `extends` does not recurse on the declaring type — see test/hyperlink-withreadiness-pipe.test-d.ts.
   //
   // data-last (pipe): `tag.pipe(Hyperlink.withReadiness(fn))` — service type derived from the piped tag.
   <T extends PipeableTag>(
@@ -3058,6 +3303,8 @@ const buildInstanceTag = <Self, S extends Spec>(
   // impl's own effect/function through, requiring `Local`) rather than the standard `local<T>()`
   // obtain-a-value wrapping.
   interfaceLocalsMarker = false,
+  /** When true, stamp {@link sharedTagSym} — kind-keyed wire, route by instance key. */
+  sharedMarker = false,
 ) => {
   if (claimedKeys.has(key)) {
     throw new DuplicateHyperlinkKey({ key });
@@ -3088,12 +3335,13 @@ const buildInstanceTag = <Self, S extends Spec>(
     ...(node !== undefined
       ? { [nodesSym]: [node as AnyNode] as ReadonlyArray<AnyNode> }
       : {}),
-    // Every tag carries a kind: the typed factories pass their own; a bare tag defaults to `kind`.
-    [kindSym]: kindOverride ?? kind,
+    // Solo bare tags default to `kind`; shared-Spec instances default kind to the wire key.
+    [kindSym]: kindOverride ?? (sharedMarker ? wireKey : kind),
     [readinessSym]: undefined,
     [peersSym]: peersKey,
     [selfNodeSym]: selfNodeKey,
     ...(interfaceLocalsMarker ? { [interfaceLocalsSym]: true as const } : {}),
+    ...(sharedMarker ? { [sharedTagSym]: true as const } : {}),
   });
 };
 
@@ -3149,55 +3397,126 @@ type InterfaceTagBuilder<Self, I> = {
 };
 
 /**
- * Create a resource service tag. Two call signatures — same factory, no sentinel type param:
+ * Shared-Spec factory from {@link Tag}`(wireKey, spec)`. Mint instances with the Effect-shaped
+ * double call: `Factory<Self>()(instanceKey)`.
  *
- * **Schema-driven** — `Tag<Self>()(key, spec)`: the value type is **inferred from the spec**:
+ * @category models
+ * @public
+ */
+export interface SharedTagFactory<S extends Spec> {
+  <Self>(): {
+    (
+      key: string,
+      options?: {
+        readonly description?: string;
+        readonly node?: NodeKey<unknown>;
+      },
+    ): HyperlinkTag<Self, S>;
+  };
+  /** Wire / kind key — RpcGroup prefix for every instance. */
+  readonly wireKey: string;
+  readonly kind: string;
+  readonly description: string | undefined;
+  readonly [specSym]: FlatSpec;
+  readonly [specTypeSym]?: S;
+  readonly [groupSym]: RpcGroupOf<S>;
+}
+
+/**
+ * Create a resource service tag.
+ *
+ * **Solo (schema)** — `Tag<Self>()(key, spec)`: value type inferred from the spec; wire key = `.key`.
  *
  * ```ts
  * class Counter extends Hyperlink.Tag<Counter>()("Counter", {
  *   increment: Hyperlink.effectFn({ by: Schema.Number }),
  *   current: Hyperlink.effect(Schema.Number),
  * }) {}
- *
- * const c = yield* Counter; // { increment: (p) => Effect<void>; current: Effect<number> }
  * ```
  *
- * **Interface-driven** — `Tag<Self, I>()(key, contract)`: an existing **service interface** `I` is the
- * source of truth. The contract gives a schema only for members on the wire; every other interface
- * member becomes a **local** (via {@link InjectLocal}). Locals are written **bare** —
- * `Hyperlink.local`, no `()` — and take their type from `I` (see {@link Validate}).
+ * **Solo (interface)** — `Tag<Self, I>()(key, contract)`: interface `I` is SSOT; bare
+ * {@link local} takes its type from `I`.
+ *
+ * **Shared Spec** — `Tag(wireKey, spec)` then `Factory<Self>()(instanceKey)`: one RpcGroup
+ * prefixed by `wireKey`, many Context identities routed by header `key`. Use only when every
+ * instance has the same procedure names and schemas. Serve with ordinary {@link serve} /
+ * {@link serveRemote} (merge layers); dial with ordinary {@link client}.
  *
  * ```ts
- * interface CounterShape {
- *   readonly current: Effect.Effect<number>;             // local (no schema)
- *   readonly add: (by: number) => Effect.Effect<number>; // wired
- * }
- * class Counter extends Hyperlink.Tag<Counter, CounterShape>()("counter", {
- *   current: Hyperlink.local,
- *   add: Hyperlink.effectFn(Schema.Number, Schema.Number),
- * }) {}
+ * const Metrics = Hyperlink.Tag("demo/ApiMetrics", {
+ *   snapshot: Hyperlink.effect(Schema.Number),
+ * });
+ * class Nwsl extends Metrics<Nwsl>()("@app/Nwsl/metrics") {}
+ * class Mls extends Metrics<Mls>()("@app/Mls/metrics") {}
+ *
+ * Layer.mergeAll(
+ *   Hyperlink.serve(Nwsl, { snapshot: Effect.succeed(1) }),
+ *   Hyperlink.serve(Mls, { snapshot: Effect.succeed(2) }),
+ * );
  * ```
  *
- * Keys must be unique: a duplicate **throws at declaration** — Effect's `Context` is
- * keyed by the key string and silently last-write-wins on collisions, so we guard it.
- * For a single resource the key is also its **wire key** (the RpcGroup prefix for its
- * procedures), so a shared `RpcServer` can host it alongside other resource types.
+ * Keys must be unique: a duplicate **throws at declaration**. Solo tags also claim their key as
+ * the wire prefix; shared factories claim `wireKey` once for the whole family of instances.
  *
  * @category constructors
  * @public
  */
-/**
- * Schema vs interface is a **call-signature overload** on type arity (`Tag<Self>()` vs
- * `Tag<Self, I>()`), not a second factory and not a sentinel default type param. Runtime is one
- * builder; the overload surface is what callers see (Effect's `Context.Service` shape).
- */
 const makeTag = retype<{
-  /** Schema-driven: infer the service from `spec`; bare {@link local} is a compile error. */
+  /** Schema-driven solo: infer the service from `spec`; bare {@link local} is a compile error. */
   <Self>(): SchemaTagBuilder<Self>;
-  /** Interface-driven: `I` is SSOT; bare {@link local} takes its type from `I`. */
+  /** Interface-driven solo: `I` is SSOT; bare {@link local} takes its type from `I`. */
   <Self, I>(): InterfaceTagBuilder<Self, I>;
-}>(function makeTag() {
-  // One runtime builder — the overload surface above is what discriminates schema vs interface.
+  /** Shared Spec: one wire key, many instance tags (`Factory<Self>()(instanceKey)`). */
+  <const S extends Spec>(
+    wireKey: string,
+    spec: S & RejectBareLocal<S>,
+    options?: TagOptions & { readonly node?: NodeKey<unknown> },
+  ): SharedTagFactory<S>;
+}>(function makeTag(
+  wireKeyOrNever?: string,
+  sharedSpec?: Spec,
+  sharedOptions?: TagOptions & { readonly node?: NodeKey<unknown> },
+) {
+  // Shared-Spec factory: Tag(wireKey, spec) → Factory<Self>()(instanceKey).
+  if (typeof wireKeyOrNever === "string" && sharedSpec !== undefined) {
+    const wireKey = wireKeyOrNever;
+    claimWireKey(wireKey);
+    const flat = flattenSpec(sharedSpec);
+    const group = retype<RpcGroupOf<Spec>>(
+      buildRpcGroup(wireKey, flat) as never,
+    );
+    const factoryKind = sharedOptions?.kind ?? wireKey;
+    const factoryNode = sharedOptions?.node;
+    const mint =
+      () =>
+      (
+        key: string,
+        instanceOptions?: {
+          readonly description?: string;
+          readonly node?: NodeKey<unknown>;
+        },
+      ) =>
+        buildInstanceTag<unknown, Spec>(
+          wireKey,
+          key,
+          sharedSpec,
+          group,
+          instanceOptions?.description ?? sharedOptions?.description,
+          instanceOptions?.node ?? factoryNode,
+          factoryKind,
+          false,
+          true,
+        );
+    return Object.assign(mint, {
+      wireKey,
+      kind: factoryKind,
+      description: sharedOptions?.description,
+      [specSym]: flat,
+      [groupSym]: group,
+    });
+  }
+
+  // Solo builder — overload surface discriminates schema vs interface.
   // `options.node` rides the call so its identity `HSelf` infers; node-bearing overloads narrow
   // `[nodeSym]` for {@link Hyperlink.client}. An {@link AddressedNode} further enables auto-connect.
   // Self/S are phantom here: the public overloads restate them; pin `unknown`/`Spec` so this body
@@ -3286,6 +3605,7 @@ const buildLocalContext = <Self, E = never>(
       { readonly granted: true }
     >;
     readonly [interfaceLocalsSym]?: true;
+    readonly [defaultsSym]?: DefaultsBag;
   },
   builtImpl: Record<string, unknown>,
 ): Effect.Effect<Context.Context<unknown>, E> =>
@@ -3300,7 +3620,7 @@ const buildLocalContext = <Self, E = never>(
     const service: Record<string, unknown> = {};
     for (const [key, m] of Object.entries(spec)) {
       // local members surface as `Effect<T, never, Local>` (require Local to obtain the
-      // value); pure members install the Tag-baked fn; value fields are resolved once here into a
+      // value); default members install the Tag-baked value; value fields are resolved once here into a
       // plain value; ref fields and other wire members pass through unchanged.
       if (isLocalMethod(m)) {
         const member = members[key];
@@ -3314,14 +3634,17 @@ const buildLocalContext = <Self, E = never>(
           key,
           interfaceShaped ? member : Effect.as(cap, member),
         );
-      } else if (isPureMethod(m)) {
-        setPath(service, key, m.fn);
+      } else if (isDefaultMethod(m)) {
+        // Tag-baked default; layer impl may override (same key / nested path).
+        const override = getPath(builtImpl, key);
+        setPath(service, key, override !== undefined ? override : m.value);
       } else if (isValueMethod(m)) {
         setPath(service, key, yield* (members[key] as Effect.Effect<unknown, E>));
       } else {
         setPath(service, key, members[key]);
       }
     }
+    applyDefaultsBag(service, tag[defaultsSym], builtImpl);
     return Context.make(
       tag as unknown as Context.Key<unknown, unknown>,
       service,
@@ -3421,7 +3744,7 @@ const identityClaimLayer = <Self, S extends Spec, A, E, R>(
 /** Plain local layer — no identity claim. @internal */
 const localLayerPlain = <Self, S extends Spec, R>(
   tag: HyperlinkTag<Self, S>,
-  impl: ImplOf<S> | Effect.Effect<ImplOf<S>, never, R>,
+  impl: ImplWithDefaultOverrides<S> | Effect.Effect<ImplWithDefaultOverrides<S>, never, R>,
 ): Layer.Layer<Self | Local<Self>, ValueErrorsOf<S>, Exclude<R, Scope.Scope>> => {
   // One `effectContext` layer, so any `Scope` the impl's construction needs is managed by the layer.
   const build = Effect.flatMap(
@@ -3441,11 +3764,11 @@ const localLayerPlain = <Self, S extends Spec, R>(
 
 function localLayer<Self, S extends Spec>(
   tag: HyperlinkTag<Self, S> & { readonly [identitySym]: true },
-  impl: ImplOf<S>,
+  impl: ImplWithDefaultOverrides<S>,
 ): Layer.Layer<Self | Local<Self>, IdentitySelfRequired | ValueErrorsOf<S>, LookupIdentity>;
 function localLayer<Self, S extends Spec, R>(
   tag: HyperlinkTag<Self, S> & { readonly [identitySym]: true },
-  impl: Effect.Effect<ImplOf<S>, never, R>,
+  impl: Effect.Effect<ImplWithDefaultOverrides<S>, never, R>,
 ): Layer.Layer<
   Self | Local<Self>,
   IdentitySelfRequired | ValueErrorsOf<S>,
@@ -3453,15 +3776,15 @@ function localLayer<Self, S extends Spec, R>(
 >;
 function localLayer<Self, S extends Spec>(
   tag: HyperlinkTag<Self, S>,
-  impl: ImplOf<S>,
+  impl: ImplWithDefaultOverrides<S>,
 ): Layer.Layer<Self | Local<Self>, ValueErrorsOf<S>>;
 function localLayer<Self, S extends Spec, R>(
   tag: HyperlinkTag<Self, S>,
-  impl: Effect.Effect<ImplOf<S>, never, R>,
+  impl: Effect.Effect<ImplWithDefaultOverrides<S>, never, R>,
 ): Layer.Layer<Self | Local<Self>, ValueErrorsOf<S>, Exclude<R, Scope.Scope>>;
 function localLayer<Self, S extends Spec, R>(
   tag: HyperlinkTag<Self, S>,
-  impl: ImplOf<S> | Effect.Effect<ImplOf<S>, never, R>,
+  impl: ImplWithDefaultOverrides<S> | Effect.Effect<ImplWithDefaultOverrides<S>, never, R>,
 ): Layer.Layer<
   Self | Local<Self>,
   IdentitySelfRequired | ValueErrorsOf<S>,
@@ -3602,7 +3925,7 @@ export type ServeMethod<M extends AnyMethod, R> = M["stream"] extends true
  * @public
  */
 export type ServeImplOf<S extends Spec, R> = {
-  readonly [K in keyof S as S[K] extends AnyLocalMethod | AnyPureMethod ? never : K]: S[K] extends {
+  readonly [K in keyof S as S[K] extends AnyLocalMethod | AnyDefaultMethod ? never : K]: S[K] extends {
     readonly _tag: "ref";
   }
     ? Subscribable<SuccessOf<AsMethod<S[K]>>>
@@ -3635,20 +3958,196 @@ export type ServeRequirements<Impl> = {
 
 /** Shallow tag shape for serve-remote mounts — avoids open `RpcGroupOf<S>` walks (TS2589). */
 type ServeRemoteTag = {
+  readonly key?: string;
   readonly [wireKeySym]: string;
   readonly [specSym]: FlatSpec;
   readonly [groupSym]: { readonly toLayer: (handlers: never) => Layer.Any };
 };
 
+/** Header carrying the shared-Spec instance key, set per-call by {@link forwardClient}. */
+const INSTANCE_KEY_HEADER = "key";
+
+/**
+ * Per wire-key runtime for shared-Spec serve: instance table + readiness parts.
+ * Handler layers are memoized by reference so `Layer.mergeAll(serve(A), serve(B))` mounts
+ * one RpcGroup and appends instances.
+ */
+type SharedWireState = {
+  readonly table: Map<string, Record<string, unknown>>;
+  readonly readiness: Array<Effect.Effect<Readiness>>;
+};
+
+const sharedWireStates = new Map<string, SharedWireState>();
+const sharedHandlerLayers = new Map<string, Layer.Any>();
+
+const getSharedWireState = (wireKey: string): SharedWireState => {
+  let state = sharedWireStates.get(wireKey);
+  if (state === undefined) {
+    state = { table: new Map(), readiness: [] };
+    sharedWireStates.set(wireKey, state);
+  }
+  return state;
+};
+
+const mergeAnyLayer = retype<(left: Layer.Any, right: Layer.Any) => Layer.Any>(
+  Layer.merge as never,
+);
+
+/**
+ * One memoized handler+registry layer per shared wire key. Closed over the live instance table
+ * so later `serve`s of the same factory only register instances.
+ */
+const getOrCreateSharedHandlerLayer = (
+  tag: ServeRemoteTag,
+  workerContext: Context.Context<unknown> | undefined,
+): Layer.Any => {
+  const wireKey = tag[wireKeySym];
+  const existing = sharedHandlerLayers.get(wireKey);
+  if (existing !== undefined) return existing;
+
+  const state = getSharedWireState(wireKey);
+  const group = tag[groupSym];
+  const spec = tag[specSym];
+  const handlers: Record<
+    string,
+    (
+      payload: unknown,
+      options: { readonly headers: Headers.Headers },
+    ) => unknown
+  > = {};
+  for (const method of Object.keys(spec)) {
+    handlers[wireTag(wireKey, method)] = (payload, options) => {
+      const instanceKey = Option.getOrUndefined(
+        Headers.get(options.headers, INSTANCE_KEY_HEADER),
+      );
+      if (instanceKey === undefined) {
+        return Effect.die(
+          new SharedRoutingError({ method, reason: "missing-key" }),
+        );
+      }
+      const flatImpl = state.table.get(instanceKey);
+      if (flatImpl === undefined) {
+        return Effect.die(
+          new SharedRoutingError({
+            method,
+            reason: "unknown-key",
+            key: instanceKey,
+          }),
+        );
+      }
+      const member = flatImpl[method];
+      return workerContext === undefined
+        ? invokeWireMethod(member, spec[method] as AnyMethod, payload)
+        : invokeWireMethodWithContext(
+            member,
+            spec[method] as AnyMethod,
+            payload,
+            workerContext,
+          );
+    };
+  }
+  const toHandlerLayer = retype<(handlers: never) => Layer.Any>(
+    group.toLayer.bind(group) as never,
+  );
+  const handlerLayer = toHandlerLayer(handlers as never);
+  const kind = kindOf(tag) ?? wireKey;
+  const registration = Layer.effectDiscard(
+    Effect.serviceOption(ServedHyperlinks).pipe(
+      Effect.flatMap(
+        Option.match({
+          onNone: () => Effect.void,
+          onSome: (registry) => {
+            const bound = nodeOf(tag);
+            const boundKinds = nodeKindsOf(tag);
+            return registry.register({
+              wireKey,
+              group: retype(group as never),
+              kind,
+              contractHash: hashContract(wireKey, kind, spec),
+              readiness: Effect.suspend(() => allReady(state.readiness)),
+              ...(bound !== undefined ? { nodeLogKey: bound.key } : {}),
+              ...(boundKinds.length > 0 ? { nodeKinds: boundKinds } : {}),
+            });
+          },
+        }),
+      ),
+    ),
+  );
+  // Drop the memoized layer when its scope closes so a later test/run can remount cleanly.
+  const cleanup = Layer.effectDiscard(
+    Effect.acquireRelease(Effect.void, () =>
+      Effect.sync(() => {
+        sharedHandlerLayers.delete(wireKey);
+      }),
+    ),
+  );
+  const layer = mergeAnyLayer(
+    mergeAnyLayer(handlerLayer, registration),
+    cleanup,
+  );
+  sharedHandlerLayers.set(wireKey, layer);
+  return layer;
+};
+
+/**
+ * Register one shared-Spec instance into the wire table for the lifetime of the layer scope.
+ */
+const sharedInstanceLayer = (
+  tag: ServeRemoteTag & { readonly key: string },
+  wireImpl: unknown,
+): Layer.Any => {
+  const wireKey = tag[wireKeySym];
+  const instanceKey = tag.key;
+  const flatImpl = flattenImpl(
+    wireImpl as Record<string, unknown>,
+    tag[specSym],
+  );
+  const readiness = readinessCheckServed(tag, wireImpl);
+  return Layer.effectDiscard(
+    Effect.acquireRelease(
+      Effect.sync(() => {
+        const state = getSharedWireState(wireKey);
+        if (state.table.has(instanceKey)) {
+          throw new DuplicateSharedInstance({ wireKey, key: instanceKey });
+        }
+        state.table.set(instanceKey, flatImpl);
+        state.readiness.push(readiness);
+      }),
+      () =>
+        Effect.sync(() => {
+          const state = sharedWireStates.get(wireKey);
+          if (state === undefined) return;
+          state.table.delete(instanceKey);
+          const idx = state.readiness.indexOf(readiness);
+          if (idx >= 0) state.readiness.splice(idx, 1);
+          if (state.table.size === 0) {
+            sharedWireStates.delete(wireKey);
+          }
+        }),
+    ),
+  );
+};
+
 /**
  * Shared handler mount + registry registration for {@link serveRemote} / {@link serveRemoteDriver}.
  * Returns {@link Layer.Any}; public wrappers reify `R` / {@link HandlerContextOf}.
+ *
+ * Shared-Spec tags ({@link Tag}`(wireKey, spec)` instances) merge under one RpcGroup: the first
+ * `serve` mounts handlers; later `serve`s of the same wire key only append instances.
  */
 const serveRemoteHandlers = (
   tag: ServeRemoteTag,
   wireImpl: unknown,
   workerContext: Context.Context<unknown> | undefined,
 ): Layer.Any => {
+  if (isSharedTag(tag)) {
+    // Context.Service always carries `.key`; shared mint uses it as the routing header.
+    return mergeAnyLayer(
+      sharedInstanceLayer(tag as ServeRemoteTag & { readonly key: string }, wireImpl),
+      getOrCreateSharedHandlerLayer(tag, workerContext),
+    );
+  }
+
   const group = tag[groupSym];
   const handlers: Record<string, (payload: unknown) => unknown> = {};
   // flatten a (possibly nested) impl to path keys matching the flat spec + path-keyed group procedures.
@@ -3696,10 +4195,7 @@ const serveRemoteHandlers = (
       ),
     ),
   );
-  const mergeAny = retype<(left: Layer.Any, right: Layer.Any) => Layer.Any>(
-    Layer.merge as never,
-  );
-  return mergeAny(handlerLayer, registration);
+  return mergeAnyLayer(handlerLayer, registration);
 };
 
 /**
@@ -3780,9 +4276,9 @@ export const serveRemoteDriver = <S extends Spec, R>(
 const servePlain = <Self, S extends Spec, R = never>(
   tag: HyperlinkTag<Self, S>,
   impl:
-    | ImplOf<S>
+    | ImplWithDefaultOverrides<S>
     | Driver<S, R>
-    | Effect.Effect<ImplOf<S> | Driver<S, R>, never, R>,
+    | Effect.Effect<ImplWithDefaultOverrides<S> | Driver<S, R>, never, R>,
 ): Layer.Layer<Self | Local<Self> | HandlerContextOf<S>, ValueErrorsOf<S>, R> => {
   const unwrapServe = retype<
     (
@@ -3835,15 +4331,20 @@ export const servedKeyOf = (layer: unknown): string | undefined => {
  * Expose a {@link Tag}'s implementation as an RPC **server** layer — the served counterpart of
  * {@link layer}. Pair it with {@link Node.httpServer} / {@link Node.wsServer} (or {@link listen}) to
  * put it on a transport, and dial it with {@link client} / {@link connect}.
+ *
+ * Shared-Spec instances (`Tag(wireKey, spec)` → `Factory<Self>()(instanceKey)`) share one
+ * RpcGroup: `Layer.mergeAll(serve(A, …), serve(B, …))` mounts handlers once and routes by
+ * the per-call `key` header.
+ *
  * @category serving
  * @public
  */
 export const serve = <Self, S extends Spec, R = never>(
   tag: HyperlinkTag<Self, S>,
   impl:
-    | ImplOf<S>
+    | ImplWithDefaultOverrides<S>
     | Driver<S, R>
-    | Effect.Effect<ImplOf<S> | Driver<S, R>, never, R>,
+    | Effect.Effect<ImplWithDefaultOverrides<S> | Driver<S, R>, never, R>,
 ): Layer.Layer<Self | Local<Self> | HandlerContextOf<S>, ValueErrorsOf<S>, R> => {
   // Stamp the served tag's key so an anonymous `listen` can derive a legible node name from the first
   // resource it serves (see {@link servedKeyOf} / anonymousNodeKey). Stamped on the FINAL layer both
@@ -3938,8 +4439,8 @@ export const forwardClient = <S extends Spec>(
   // iterate the FLAT (path-keyed) spec so members are leaves; the built flat service is nested by the
   // caller (buildClientService) when needed. Precise `WireServiceOf<S>` is restored at the return.
   for (const [key, m] of Object.entries(flattenSpec(spec as unknown as Spec))) {
-    // local / pure aren't on the wire — locals are stubbed in clientLayer; pures installed there.
-    if (isLocalMethod(m) || isPureMethod(m)) continue;
+    // local / default aren't on the wire — locals are stubbed in clientLayer; defaults installed there.
+    if (isLocalMethod(m) || isDefaultMethod(m)) continue;
     // the wire tag is wireKey-prefixed; the service surface keeps the bare method name
     const call = calls[wireTag(wireKey, key)];
     // completeness + callability check — `typeof` narrows `call` to a callable, so the
@@ -5575,9 +6076,9 @@ const buildClientService = <Self, S extends Spec>(
           key,
           Effect.flatMap(cap, () => Effect.die(new LocalOnlyMethod({ method: key }))),
         );
-      } else if (isPureMethod(m)) {
-        // Tag-baked — same fn the local layer installs (no wire round-trip).
-        setPath(service, key, m.fn);
+      } else if (isDefaultMethod(m)) {
+        // Tag-baked — same value the local layer installs (no wire round-trip).
+        setPath(service, key, m.value);
       } else if (isValueMethod(m)) {
         // resolve the value's query once at acquire → a plain value (fails acquire on E)
         setPath(
@@ -5592,6 +6093,12 @@ const buildClientService = <Self, S extends Spec>(
         setPath(service, key, wire[key]);
       }
     }
+    // Piped defaults — same bag on the client (no wire). No impl overrides on the client path.
+    applyDefaultsBag(
+      service,
+      (tag as { readonly [defaultsSym]?: DefaultsBag })[defaultsSym],
+      undefined,
+    );
     // Boundary assertion (runtime-safe): built from the spec, key-for-key.
     return service as ServiceOf<S, Self>;
   });

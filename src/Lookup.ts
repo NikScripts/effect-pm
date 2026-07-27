@@ -52,7 +52,7 @@ export class Endpoint extends Schema.Class<Endpoint>("LookupEndpoint")({
 }) {}
 
 /**
- * Claim payload — resource identity key plus the claimant's endpoint.
+ * Claim payload — hyperlink identity key plus the claimant's endpoint.
  *
  * @category wire schemas
  * @public

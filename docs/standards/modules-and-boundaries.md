@@ -33,8 +33,8 @@ finds zero `*Contract` files. Name by role/noun, like Effect's `RpcServer` / `Rp
 `RpcGroup`.
 
 ``` ts
-// ❌ bad — orphan name; exports nothing called QueueContract
-// src/QueueContract.ts
+// ❌ bad — orphan name; exports nothing called WorkPool
+// src/WorkPool.ts
 
 // ✅ good — named for its export
 // src/WorkPool.ts   (exports the WorkPool namespace)
@@ -207,7 +207,7 @@ the HTTP server layers. Those pull `node:*` and native deps that have no place i
 
 ``` ts
 // ❌ bad — a browser-reachable module importing a node backend
-import { layerProcessStore } from "hyperlink-ts/storage/sqlite"
+import { layerDaemonStore } from "hyperlink-ts/storage/sqlite"
 
 // ✅ good — that import lives in the server entry, which the browser bundle never touches
 ```

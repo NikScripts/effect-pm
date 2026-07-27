@@ -8,10 +8,10 @@ This document is the **narrative companion** to the API tables in [PROCESS-API.m
 
 **hyperlink-ts** (`hyperlink-ts`) is an [Effect](https://effect.website/)-first library for:
 
-1. **Managed processes** — `Process`: a driver watches the schedule's run windows, spawns instances, and each instance repeats a user `Effect` on a **`Polling`** cadence until its window closes. Define one with `Process.Tag`, gate it with `Process.schedule` / `Process.window` / `Process.at` (or a reusable `Process.Schedule` resource).
-2. **Queue resources** — `QueueHyperlink`: priority queues with concurrency, throttling, retry, self-refill, and optional durability.
+1. **Managed processes** — `Daemon`: a driver watches the schedule's run windows, spawns instances, and each instance repeats a user `Effect` on a **`Polling`** cadence until its window closes. Define one with `Daemon.Tag`, gate it with `Daemon.schedule` / `Daemon.window` / `Daemon.at` (or a reusable `Daemon.Schedule` resource).
+2. **Queue resources** — `WorkPool`: priority queues with concurrency, throttling, retry, self-refill, and optional durability.
 3. **Location transparency** — every resource is a `Hyperlink` tag. `.layer` runs it local, `.serve` / `.serveRemote` host it over RPC (composed with `Node.httpServer`), `Hyperlink.client` reaches it remotely — the **same `yield* Tag` code either way**. `Group` organizes tags (nestable, multi-host).
-4. **Persistence** — opt-in durability (`DurableQueueStore`) and observability history (`HistoryStore`), in-memory or SQLite; process/run analytics via `ProcessStore` / `RuntimeStorage`.
+4. **Persistence** — opt-in durability (`DurableQueueStore`) and observability history (`HistoryStore`), in-memory or SQLite; process/run analytics via `DaemonStore` / `RuntimeStorage`.
 
 ---
 
@@ -19,7 +19,7 @@ This document is the **narrative companion** to the API tables in [PROCESS-API.m
 
 ```
 ┌───────────────────────────────────────────────────────────────────┐
-│ Hyperlink tag  (QueueHyperlink / Process / …)                       │
+│ Hyperlink tag  (WorkPool / Daemon / …)                       │
 │  • identity + contract (spec)                                     │
 │  • `yield* Tag` — the SAME code local or remote                   │
 └───────────────────────────────────────────────────────────────────┘
@@ -29,7 +29,7 @@ This document is the **narrative companion** to the API tables in [PROCESS-API.m
          └─ Hyperlink.client      → remote handle (dashboard)
          ▼
 ┌───────────────────────────────────────────────────────────────────┐
-│ engine  (queue worker pool  /  Process schedule driver)           │
+│ engine  (queue worker pool  /  Daemon schedule driver)           │
 │  • runs your `effect`; emits status / metrics / logs + *History   │
 │  • optional persistence: DurableQueueStore / HistoryStore         │
 └───────────────────────────────────────────────────────────────────┘
@@ -48,9 +48,9 @@ This document is the **narrative companion** to the API tables in [PROCESS-API.m
 | History, durable queue, the dashboard data layer | [guides/history-and-persistence.md](./guides/history-and-persistence.md) |
 | Queue / run / HTTP resource APIs | [HYPERLINK-API.md](./HYPERLINK-API.md) |
 | Schedule composition + runtime updates | [examples/forms/schedule/](../examples/forms/schedule/) |
-| Understand process runtime semantics | [PROCESS-API.md](./PROCESS-API.md) + `src/Process.ts` TSDoc |
+| Understand process runtime semantics | [PROCESS-API.md](./PROCESS-API.md) + `src/Daemon.ts` TSDoc |
 | API tables (make, Polling, Schedule) | [PROCESS-API.md](./PROCESS-API.md) |
-| Process storage facets (`ProcessStorage`, SQLite, Redis) | [STORAGE.md](./STORAGE.md) |
+| Daemon storage facets (`DaemonStorage`, SQLite, Redis) | [STORAGE.md](./STORAGE.md) |
 | UI / bundlers importing service tags | [guides/service-tags-and-runtime-split.md](./guides/service-tags-and-runtime-split.md) |
 | AI / agent onboarding (repo map, conventions) | [AGENTS.md](./AGENTS.md) |
 
@@ -62,8 +62,8 @@ Root imports from `hyperlink-ts` remain backwards compatible. Prefer
 dedicated subpaths for focused imports:
 
 - `hyperlink-ts/Hyperlink`
-- `hyperlink-ts/Process` — `Process.Tag` / `Process.Schedule` + `make` / `layer` / `serve`
-- `hyperlink-ts/QueueHyperlink`
+- `hyperlink-ts/Daemon` — `Daemon.Tag` / `Daemon.Schedule` + `make` / `layer` / `serve`
+- `hyperlink-ts/WorkPool`
 - `hyperlink-ts/Group`
 - `hyperlink-ts/Logs` — runtime capture, relay, `persistLayer`, `byNode` / `byHyperlink`
 - `hyperlink-ts/HistoryStore`, `hyperlink-ts/DurableQueueStore`
@@ -72,7 +72,7 @@ dedicated subpaths for focused imports:
 
 Structured logs use `LogStore` + `hyperlink-ts/Logs` (`layer`, `persistLayer`, `stream`,
 `Hyperlink.logs`) — see [`docs/LOGS.md`](../LOGS.md). (`NodeLogs` / `HostLogs` and the
-`ProcessStorage` / `RuntimeStorage` facet substrate are removed.)
+`DaemonStorage` / `RuntimeStorage` facet substrate are removed.)
 
 For durable adapter work, start with
 [STORAGE.md](./STORAGE.md).
@@ -84,18 +84,18 @@ For durable adapter work, start with
 | Export area | Role |
 |-------------|------|
 | `Hyperlink` | Toolkit foundation: `Tag` / `layer` / `serve` / `serveRemote` / `client` + `specOf` / `methodMeta` (compose with `Node.httpServer`). |
-| `QueueHyperlink`, `Process` | Batteries-included resource kinds (queue / managed process). `Process.Schedule` is a standalone run-windows resource. |
+| `WorkPool`, `Daemon` | Batteries-included resource kinds (queue / managed process). `Daemon.Schedule` is a standalone run-windows resource. |
 | `Group` | Organize member tags (nestable; same or different hosts). |
-| `Process`, `Polling` | The managed-process toolkit + engine (`Process.Tag` / `make`) and the poll-cadence gate (`Polling`). The run-window schedule primitive is internal. |
+| `Daemon`, `Polling` | The managed-process toolkit + engine (`Daemon.Tag` / `make`) and the poll-cadence gate (`Polling`). The run-window schedule primitive is internal. |
 | `Logs`, `HistoryStore`, `DurableQueueStore` | Runtime-wide logs ([`docs/LOGS.md`](../LOGS.md)); metrics history; durable queue (in-memory or SQLite). |
 | `Store` / `store/*` | Shape-first store contracts and public facets (e.g. `LogStore`). Hyperlink execution history uses `*.store(tag)` / `Store.effects`. |
-| `RunHyperlink`, `HttpClientRunGate`, `HttpApiHyperlink` | Concurrency/throttle gates and typed HttpApi client building blocks. |
+| `Gate`, `HttpClientRunGate`, `HttpApiClient` | Concurrency/throttle gates and typed HttpApi client building blocks. |
 | `disarmedIdleSleep` exports | Helpers for custom schedule logic. |
 
 TSDoc on each module repeats details; this guide stays **concept-shaped**.
 
-`RunHyperlink` publishes run lifecycle facts and gate state transitions through the engine when
-**`RunHyperlink.store(tag)`** on an app **`Store.Service`** (or **`Store.layerDefaultMemory`**) is composed.
+`Gate` publishes run lifecycle facts and gate state transitions through the engine when
+**`Gate.store(tag)`** on an app **`Store.Service`** (or **`Store.layerDefaultMemory`**) is composed.
 For live counters without durability, read toolkit handle **`Subscribable`** views (`run-resource-runtime-observer`
 example).
 
@@ -107,7 +107,7 @@ example).
 2. **Forking** a process driver needs **`R` plus any storage facets you compose**, where `R` is whatever remains after optional inlined `polling` / `schedule` layers. Use **`ProcessSupervisorRequirements<C>`** (exported type) if you build configs generically.
 3. Prefer **`Layer.mergeAll(...)`** + **one** `Effect.provide` at the app root for many independent layers (clearer dependency graph; matches Effect lint guidance).
 4. **Hosting (`httpServer`) is over RPC.** Auth/transport security is the deployment's responsibility (e.g. a private network or an edge gateway); a first-class auth story for `Hyperlink` RPC is a future feature. Don't expose a host on the public internet without it.
-5. **Browser / widget bundles** import only the **tag** (from its subpath, e.g. `hyperlink-ts/QueueHyperlink`) — keep it **separate** from `Layer` / `serve` / storage wiring so client builds never resolve native adapters. See [guides/service-tags-and-runtime-split.md](./guides/service-tags-and-runtime-split.md).
+5. **Browser / widget bundles** import only the **tag** (from its subpath, e.g. `hyperlink-ts/WorkPool`) — keep it **separate** from `Layer` / `serve` / storage wiring so client builds never resolve native adapters. See [guides/service-tags-and-runtime-split.md](./guides/service-tags-and-runtime-split.md).
 
 ---
 

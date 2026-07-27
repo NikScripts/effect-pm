@@ -113,6 +113,10 @@ A Contract's methods take a small number of forms:
 - **`Hyperlink.effectFn(input, output?)`** — a call that takes an argument.
 - **`Hyperlink.ref(schema)`** — observable state: read it with `.get`, follow it through `.changes`.
 - **`Hyperlink.stream(schema)`** — a continuous stream of values.
+- **`Hyperlink.value(schema)`** — materialize once at acquire into a plain value on the handle.
+- **`Hyperlink.local`** — local-only (needs the local Layer; uncallable through a client).
+- **`Hyperlink.default(…)`** — Tag-baked literal or sync fn; identical local and remote, no wire.
+  Several extras: `Tag(…).pipe(Hyperlink.defaults({…}))` (see Creating).
 
 Building your own Contract end to end is **[Creating a Hyperlink Service](/docs/creating-a-hyperlink)**.
 The package also ships a few **included** HyperServices ([`WorkPool`](/docs/work-pools),

@@ -7,7 +7,7 @@ find the full documentation for it [in our repository](https://github.com/change
 We have a quick list of common questions to get you started engaging with this project in
 [our documentation](https://github.com/changesets/changesets/blob/main/docs/common-questions.md)
 
-## effect-pm maintainers
+## Hyperlink maintainers
 
 - **Agents:** add a changeset when public API, behavior, or release notes change. **Creating** `.changeset/*.md` does **not** require owner approval; **`npm run version` and publish do.** After creating, paste the **full file contents** in owner chat (see [`docs/AGENTS.md`](../docs/AGENTS.md#changeset-policy) and [`docs/handoffs/supervisor-protocol.md`](../docs/handoffs/supervisor-protocol.md)).
 - Add a changeset (`npm run changeset`), then run **`npm run version`** (`changeset version`) so `package.json` and `CHANGELOG.md` update together — **owner approval before version/publish**. In **pre** mode (`beta`), that bumps **`0.6.0-beta.n`** for the same prerelease line—do not hand-edit versions for releases.

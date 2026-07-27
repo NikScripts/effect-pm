@@ -3,19 +3,19 @@
 Layers stay transport-agnostic; the protocol is an injected dependency.
 
 **Status:** IMPLEMENTED on `feat/protocol-dependency`. Final shape (owner-directed, differs from the
-early drafts below): the standard seam is **`Resource.layerProtocol(protocol)`** where `protocol` is
+early drafts below): the standard seam is **`Hyperlink.layerProtocol(protocol)`** where `protocol` is
 effect's own `RpcClient.Protocol`; helpers **`protocolHttp(url)` / `protocolWebsocket(url)`** build the
 common ones, and **`socketClient` / `httpClient`** are per-node shortcuts over it. The server mirrors
 those named shortcuts: **`httpServer([...])`** (http) and **`wsServer([...])`** (websocket) — no
 `protocol` option (an earlier draft had one; the owner rightly called it out as clunky/asymmetric).
 Peers read an injected builder via **`layerPeerProtocol(builder)`** (a Context.Reference
 defaulting to `protocolHttp`, so http fleets are unchanged). No `Transport` service, no per-protocol
-layers. Verified: full gate green, `WorkerPool` folds to 12 over ws in `examples/resource-web`, new
+layers. Verified: full gate green, `WorkerPool` folds to 12 over ws in `examples/hyperlink-web`, new
 `test/multi-host-peers-protocol.test.ts`. The sections below are the design history that led here.
 
 ## The problem this fixes
 
-`buildPeerClient` (`src/Resource.ts:3597`) hardcodes `RpcClient.layerProtocolHttp`. The server
+`buildPeerClient` (`src/Hyperlink.ts:3597`) hardcodes `RpcClient.layerProtocolHttp`. The server
 (`httpServer({ protocol })`) and the client (`socketClient` vs `httpClient`) each bake their own
 protocol separately. **No single place** says "this deployment speaks WebSocket." So when the example
 servers moved to `protocol: "websocket"` (the browser streaming fix — HTTP/1.1's ~6-connection cap
@@ -36,8 +36,8 @@ been baking over it:
   `RpcServer.layerProtocolHttp({ path })` / `layerProtocolWebsocket({ path })` (register on the
   ambient `HttpRouter`).
 - **The node tag is already the client-protocol dependency:** `connect(node, proto)`
-  (`Resource.ts:3333`) stores an `RpcClient.Protocol` as the node's value; `client(tag, node)` reads
-  it via `yield* node` (`Resource.ts:3871`). Direct clients are already agnostic-with-a-dependency.
+  (`Hyperlink.ts:3333`) stores an `RpcClient.Protocol` as the node's value; `client(tag, node)` reads
+  it via `yield* node` (`Hyperlink.ts:3871`). Direct clients are already agnostic-with-a-dependency.
 
 The gap: **peers** don't use that mechanism, the **server** bakes an enum, and there's **no single
 knob** — the effect `Protocol` is per-endpoint (one url / one path), so one ambient value can't cover
@@ -50,7 +50,7 @@ One deployment-level service, holding two provider functions over effect's own c
 it yields effect's `Protocol`.
 
 ```ts
-// src/Resource.ts (public)
+// src/Hyperlink.ts (public)
 export interface Protocol {
   /** effect's client Protocol for one endpoint url — peers/clients call this per node. */
   readonly client: (url: string) => Layer.Layer<RpcClient.Protocol>
@@ -61,7 +61,7 @@ export interface Protocol {
 // A process-global default via Context.Reference (the registry pattern) — defaults to HTTP, so an
 // existing http deployment that provides nothing keeps working unchanged.
 export class ProtocolTag extends Context.Reference<ProtocolTag>()(
-  "@nikscripts/effect-pm/Protocol",
+  "hyperlink-ts/Protocol",
   { defaultValue: (): Protocol => httpProtocol },
 ) {}
 
@@ -119,7 +119,7 @@ protocol goes.
 ## Open decisions (need owner input)
 
 1. **Name.** `Protocol` collides with effect's `RpcClient.Protocol` / `RpcServer.Protocol`. Options:
-   `Resource.Protocol` (ours, qualified) · `Resource.Transport` · `Resource.Wire`. Lean **`Transport`**
+   `Hyperlink.Protocol` (ours, qualified) · `Hyperlink.Transport` · `Hyperlink.Wire`. Lean **`Transport`**
    to avoid the collision. Your call.
 
 2. **Migration of the shipped baked forms.**
@@ -144,5 +144,5 @@ protocol goes.
 - New test: multi-node peer fold over **websocket** (the gap `multi-node-peers-http.test.ts` never
   covered) → `fleetActive` = 12, `activeByNode` = 3 rows. Plus: default (no provide) still http.
 - Screenshot: `WorkerPool` card shows "3 nodes · fleet 12".
-- Docs sweep: dashboard/transport guidance becomes "provide `Resource.layerWebsocket` at the root,"
+- Docs sweep: dashboard/transport guidance becomes "provide `Hyperlink.layerWebsocket` at the root,"
   not "use `socketClient` in the browser."

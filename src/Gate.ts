@@ -1,10 +1,20 @@
 /**
  * Gate — concurrency gate for effects.
  *
- * Wraps any effect with bounded concurrency via `Semaphore`. Unlike
- * {@link WorkPool}, there are no queues, priorities, or background workers —
- * the gate is applied inline at the call site. Each `run` acquires a permit,
- * executes the effect, and releases the permit on completion.
+ * Wraps any effect with bounded concurrency via `Semaphore`, and optionally an
+ * Effect {@link RateLimiter} (`rateLimit`) that consumes **before** the
+ * semaphore — same orthogonal split as {@link WorkPool}. Unlike WorkPool, there
+ * are no queues, priorities, or background workers — the gate is applied inline
+ * at the call site. Each `run` acquires a permit, executes the effect, and
+ * releases the permit on completion.
+ *
+ * ## Rate limiting
+ *
+ * `rateLimit: { limit, window, … }` is **consume policy only** — you do **not**
+ * pass an Effect `RateLimiter` instance there. `RateLimiter` / `RateLimiterStore`
+ * are Context services: provide them with layers at the app root (e.g.
+ * `RateLimiter.layerStoreRedis` + `RateLimiter.layer`), or omit them and the
+ * gate Soft-builds an in-memory limiter. Default `onExceeded` is `"delay"`.
  *
  * ## Entry points
  *
@@ -162,7 +172,7 @@ export type RunHandle<T, A, E> = internal.GateRunHandle<T, A, E>;
 export type Handle<T, A, E> = internal.GateHandle<T, A, E>;
 
 /**
- * A gate handle — the value `yield* MyRun` produces. The **named** compact form of a gate's
+ * A gate handle — the value `yield* MyGate` produces. The **named** compact form of a gate's
  * service (both the light `Tag` path and the engine-included `Service` path yield this one type), so it
  * hovers as `Gate<Ticket, Price>` instead of the expanded `ServiceOf<…>` member wall; the docs
  * popover / prettify-ts expand it to the full shape on demand.
@@ -258,7 +268,7 @@ export interface ServiceDefinition<
 
 /**
  * Tag + static `.run` shortcut, whose service value is the **named** {@link Gate} handle (via the
- * `Svc` seam on {@link HyperlinkTag}), so `yield* MyRun` hovers as `Gate<Ticket, Price>` rather
+ * `Svc` seam on {@link HyperlinkTag}), so `yield* MyGate` hovers as `Gate<Ticket, Price>` rather
  * than the expanded `ServiceOf<…>` wall. @internal
  */
 type GateTagWithStaticRun<
@@ -370,6 +380,11 @@ export interface ServiceConfig<
    * @default 1
    */
   readonly concurrency?: number;
+  /**
+   * Optional Effect `RateLimiter` on each `run` (before the concurrency semaphore).
+   * Omitted = no rate limit (only {@link concurrency}).
+   */
+  readonly rateLimit?: RateLimitOptions;
 }
 
 /**
@@ -388,6 +403,11 @@ export interface LayerConfig<I, A, E, R> {
    * @default 1
    */
   readonly concurrency?: number;
+  /**
+   * Optional Effect `RateLimiter` on each `run` (before the concurrency semaphore).
+   * Omitted = no rate limit (only {@link concurrency}).
+   */
+  readonly rateLimit?: RateLimitOptions;
 }
 
 /**
@@ -400,6 +420,11 @@ export interface Config<T, A, E> {
   readonly name?: string;
   readonly effect: (input: T) => Effect.Effect<A, E>;
   readonly concurrency?: number;
+  /**
+   * Optional Effect `RateLimiter` on each `run` (before the concurrency semaphore).
+   * Omitted = no rate limit (only {@link concurrency}).
+   */
+  readonly rateLimit?: RateLimitOptions;
 }
 
 /**
@@ -420,6 +445,35 @@ export interface RunnerConfig {
  * @public
  */
 export type Runner = internal.GateRunner;
+
+/**
+ * Effect `RateLimiter.consume` / `makeWithRateLimiter` options for a gate
+ * (`key` optional — defaults to the gate hyperlink / tag id). Policy only; the
+ * `RateLimiter` / `RateLimiterStore` services are presence-driven in Context.
+ *
+ * @category models
+ * @public
+ */
+export type RateLimitOptions = internal.GateRateLimitOptions;
+
+/**
+ * Effect's `RateLimiter.consume` options shape (key required). Prefer
+ * {@link RateLimitOptions} on Gate configs.
+ *
+ * @category models
+ * @public
+ */
+export type RateLimiterConsumeOptions = internal.RateLimiterConsumeOptions;
+
+/**
+ * Soft in-memory rate-limiter layer (built automatically when `rateLimit` is set
+ * and no ambient `RateLimiterStore` is present). Prefer composing
+ * `RateLimiter.layerStoreRedis` at the app root for fleet budgets.
+ *
+ * @category layers & serving
+ * @public
+ */
+export const rateLimiterLayer = internal.gateRateLimiterLayer;
 
 // ============================================================================
 // Internal helpers
@@ -700,6 +754,7 @@ const buildRunImpl = <
       effect: (input: Schema.Schema.Type<I>) =>
         provideR(toRunFn(effectiveConfig.effect)(input)),
       concurrency: effectiveConfig.concurrency,
+      rateLimit: effectiveConfig.rateLimit,
     });
 
     const statusSub = {
@@ -720,7 +775,7 @@ const buildRunImpl = <
     // The observation members pass straight through (additive-only adapter); `run` is the engine→
     // contract boundary — the deferred unit-vs-parameterized conditional TS can't reduce for generic
     // params — so the assembled impl is typed at the {@link ImplOf} contract once here.
-    // `ImplOf` also key-remaps `pure` members; under deferred `GateWireMember<I,A,E>` that remap
+    // `ImplOf` also key-remaps `default` members; under deferred `GateWireMember<I,A,E>` that remap
     // loses overlap with this concrete object, so the boundary goes through `unknown`.
     const impl = {
       status: statusSub,
@@ -915,6 +970,7 @@ export const Service = <Self>() => {
     > = {
       effect: config.effect,
       concurrency: config.concurrency,
+      rateLimit: config.rateLimit,
       name,
     };
     return Object.assign(tag, {

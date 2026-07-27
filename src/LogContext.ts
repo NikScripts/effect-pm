@@ -38,7 +38,7 @@ export const LogAnnotationKeys = {
 
 /**
  * Annotate every log line with a **node log key** value under annotation key {@link LogAnnotationKeys.node}.
- * Applied by node durable tails (`Node.logs` / `Hyperlink.store(Node)` in `resource-web/server.ts`).
+ * Applied by node durable tails (`Node.logs` / `Hyperlink.store(Node)` in `hyperlink-web/server.ts`).
  *
  * @param node - **Node log key** value (`Node.Tag.key`).
  *

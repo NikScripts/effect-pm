@@ -4,14 +4,14 @@
  * A **real `WorkPool` running client-side** (no server, no RPC, no mock),
  * wired to the widget through Effect 4's native Atom layer. Everything the queue
  * service exposes — enqueue by priority, pause/resume, clear, live sizes — is
- * driven straight from the browser.
+ * driven straight from the browser. Hyperlink / hyperlink-ts on the client.
  *
- * `Atom.runtime(layer)` is the seam: today the local `DemoQueue.layer`; swap it
+ * `Atom.runtime(layer)` is the seam: today the local `WorkPool.layer`; swap it
  * for an RPC-backed client layer (same tag) later and nothing else changes.
  */
 
 import * as React from "react";
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { AsyncResult, Atom, Reactivity } from "effect/unstable/reactivity";
 // Import the module directly (not the package barrel) so the browser bundle
 // doesn't drag in Node-only manager code.
@@ -29,39 +29,47 @@ import { makeQueueAtoms } from "./queue-atoms";
 // `stats` read atom listens on it.
 const QueueKey = ["queue-widget-demo"] as const;
 
-// A real priority queue. concurrency 1 + a visible delay so you can watch items
+const Job = Schema.Struct({
+  text: Schema.String,
+});
+
+// A real WorkPool tag. concurrency 1 + a visible delay so you can watch items
 // queue and drain. The worker invalidates QueueKey on each completion — a demo
 // shim for live stats until the handle exposes `changes` (event-driven, no poll).
-class DemoQueue extends WorkPool.Service<DemoQueue, string, never>()(
-  "queue-widget-demo",
-  {
-    effect: (item: string) =>
-      Effect.gen(function* () {
-        yield* Effect.sleep("1200 millis");
-        yield* Effect.logInfo(`processed: ${item}`);
-        yield* Reactivity.invalidate(QueueKey);
-      }),
-    concurrency: 1,
-    // Start paused so enqueued items visibly accumulate (size grows); press
-    // Start to drain them. Otherwise the worker grabs each item immediately and
-    // `pending` never climbs above 0.
-    paused: true,
-  },
-) {}
+class DemoQueue extends WorkPool.Tag<DemoQueue>()("queue-widget-demo", {
+  payload: Job,
+}) {}
 
-const runtime = Atom.runtime(DemoQueue.layer);
+const DemoQueueLive = WorkPool.layer(DemoQueue, {
+  effect: (job: { readonly text: string }) =>
+    Effect.gen(function* () {
+      yield* Effect.sleep("1200 millis");
+      yield* Effect.logInfo(`processed: ${job.text}`);
+      yield* Reactivity.invalidate(QueueKey);
+    }),
+  concurrency: 1,
+  // Start paused so enqueued items visibly accumulate (size grows); press
+  // Start to drain them. Otherwise the worker grabs each item immediately and
+  // `pending` never climbs above 0.
+  paused: true,
+  // Stable key so the widget can drop / dead-letter by the typed text.
+  key: (job) => job.text,
+});
+
+const runtime = Atom.runtime(DemoQueueLive);
 const atoms = makeQueueAtoms(runtime, DemoQueue, QueueKey);
 
 const enqueue = runtime.fn(
   (arg: { readonly text: string; readonly priority: "normal" | "high" | "low" }) =>
     Effect.flatMap(DemoQueue, (queue) => {
+      const job = { text: arg.text };
       const add =
         arg.priority === "high"
           ? queue.prioritize
           : arg.priority === "low"
             ? queue.defer
             : queue.add;
-      return add(arg.text);
+      return add(job);
     }),
   { reactivityKeys: QueueKey },
 );
@@ -85,7 +93,7 @@ const ConnectedWidget = (): React.ReactElement => {
   const deadLetter = useAtomSet(atoms.deadLetter);
   const refresh = useAtomRefresh(atoms.stats);
 
-  // No status read on the handle yet — track it from the controls (next iteration).
+  // Prefer a live `status` read next; for now track lifecycle from the controls.
   const [status, setStatus] = React.useState<QueueStatus>("paused");
 
   // Show the most recent clear/release return value.
@@ -112,7 +120,7 @@ const ConnectedWidget = (): React.ReactElement => {
 
   return (
     <main style={{ padding: 24, display: "grid", gap: 16, justifyItems: "start" }}>
-      <h1>Queue widget — a real queue running on the client</h1>
+      <h1>Queue widget — a real WorkPool on the client</h1>
       <QueueWidget
         title="queue-widget-demo"
         stats={stats}

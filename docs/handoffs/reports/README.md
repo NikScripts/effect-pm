@@ -10,9 +10,9 @@ Historical review reports and session closeouts from the 2026-07 store cutover l
 
 | Report | Scope |
 |--------|-------|
-| [RunResource](../archive/2026-07/reports/2026-07-07-agent-report-run-resource.md) | Gate handle, RPC, store tap, docs sweep |
-| [Process](../archive/2026-07/reports/2026-07-07-agent-report-process.md) | Tag wire slots, store contract, docs |
-| [QueueResource + CustomQueueResource](../archive/2026-07/reports/2026-07-07-agent-report-queue-resource.md) | Engine cutover, triplet |
+| [Gate](../archive/2026-07/reports/2026-07-07-agent-report-run-resource.md) | Gate handle, RPC, store tap, docs sweep |
+| [Daemon](../archive/2026-07/reports/2026-07-07-agent-report-process.md) | Tag wire slots, store contract, docs |
+| [WorkPool + WorkPool.Service (untyped)](../archive/2026-07/reports/2026-07-07-agent-report-queue-resource.md) | Engine cutover, triplet |
 | [Store](../archive/2026-07/reports/2026-07-07-agent-report-store.md) | Bridge typing, engine wiring |
 | [Docs + release](../archive/2026-07/reports/2026-07-07-agent-report-docs-release.md) | Changesets, stale docs, examples |
 
@@ -28,10 +28,10 @@ Historical review reports and session closeouts from the 2026-07 store cutover l
 | Doc | Owner |
 |-----|-------|
 | [Store core](../store-cutover-00-store-core.md) | Shared decisions — **read first** |
-| [Process](../store-cutover-process.md) | Process engine → `tag.store` |
-| [Queue](../store-cutover-queue.md) | Queue engine |
-| [RunResource](../store-cutover-runresource.md) | RunResource cutover |
-| [CustomQueue](../store-cutover-customqueue.md) | CQR cutover |
+| [Daemon](../store-cutover-daemon.md) | Daemon engine → `tag.store` |
+| [WorkPool](../store-cutover-queue.md) | WorkPool engine |
+| [Gate](../store-cutover-gate.md) | Gate cutover |
+| [untyped WorkPool](../store-cutover-workpool-untyped.md) | untyped WorkPool cutover |
 
 ## Naming & RPC policy
 

@@ -1,15 +1,17 @@
 # Tag wire schemas (`payload` / `success` / `error`) + RPC validation
 
+> **Naming:** read as WorkPool / Daemon / Gate / Hyperlink / hyperlink-ts (pre-rebrand names purged from this file).
+
 > **Per-module agent reports:** [`reports/README.md`](./reports/README.md)
 
-**Status:** Design locked (2026-07-07). Tag factories use **Effect `Resource.Method` slot names** —
+**Status:** Design locked (2026-07-07). Tag factories use **Effect `Hyperlink.Method` slot names** —
 `payload`, `success`, `error` — with **no `Schema` suffix**.
 
-**Integration branch (merge target):** `cursor/integration-result-schema-a3ad` — Process tag +
-store contract, RunResource handle/RPC/store, wire-slot naming, Store bridge typing (`4597ee1`).
+**Integration branch (merge target):** `cursor/integration-result-schema-a3ad` — Daemon tag +
+store contract, Gate handle/RPC/store, wire-slot naming, Store bridge typing (`4597ee1`).
 
-**Shipped:** Process (`success`/`error`), RunResource (`payload`/`success`/`error`). **Pending:**
-Queue/CQR full triplet on tag, Process `error` wiring + engine store tap, Store Stage 1 default
+**Shipped:** Daemon (`success`/`error`), Gate (`payload`/`success`/`error`). **Pending:**
+Queue/untyped WorkPool full triplet on tag, Daemon `error` wiring + engine store tap, Store Stage 1 default
 backing, engine cutover off legacy facets, docs/changesets sweep.
 
 Companion to [`store-and-logs-design.md`](./store-and-logs-design.md),
@@ -21,9 +23,9 @@ Companion to [`store-and-logs-design.md`](./store-and-logs-design.md),
 
 ### 0. Wire slot names — `payload`, `success`, `error` (no `Schema` suffix)
 
-Tag factories and config objects use the **same names as `Resource.Method`**:
+Tag factories and config objects use the **same names as `Hyperlink.Method`**:
 
-| Slot | RPC meaning | Process | Queue | RunResource |
+| Slot | RPC meaning | Daemon | Queue | Gate |
 |------|-------------|---------|-------|-------------|
 | **`payload`** | Request / enqueue / run input | — (effect in layer) | `add` payload (= work item) | `run` payload |
 | **`success`** | Return / worker output / last value | `result` ref (live handle) + **`RunCompleted.success`** (store) | **`Completed.success`** (store) | `run` success |
@@ -34,59 +36,59 @@ Tag factories and config objects use the **same names as `Resource.Method`**:
 
 ### 1. No pipe combinators — positional wire schemas on `Tag` only
 
-**Retired:** `.pipe(Process.result(schema))`, planned `QueueResource.result`, etc.
+**Retired:** `.pipe(Daemon.result(schema))`, planned `WorkPool.result`, etc.
 
 **SSOT:** schemas are declared on the **tag factory** only (positional args or config-object
 overload). Layer config must not override them (see §3).
 
 | Resource | Required | Optional 2nd | Optional 3rd | Config-object overload |
 |----------|----------|--------------|--------------|------------------------|
-| **Process** | `key` | `success` | `error` | `Tag(key, { success?, error?, description?, node? })` |
-| **QueueResource** | `key` + **`payload`** | `success` | `error` | `Tag(key, { payload, success?, error?, description?, node? })` |
-| **RunResource** | `key` + **`payload`** | `success` | `error` | `Tag(key, { payload, success, error?, description? })` |
-| **CustomQueueResource** | `key` + config object | `payload`, `levelCount`, optional `namedLevels`, optional `success` / `error` | `Tag(key, { payload, levelCount, namedLevels?, success?, error?, description?, node? })` |
+| **Daemon** | `key` | `success` | `error` | `Tag(key, { success?, error?, description?, node? })` |
+| **WorkPool** | `key` + **`payload`** | `success` | `error` | `Tag(key, { payload, success?, error?, description?, node? })` |
+| **Gate** | `key` + **`payload`** | `success` | `error` | `Tag(key, { payload, success, error?, description? })` |
+| **WorkPool.Service (untyped)** | `key` + config object | `payload`, `levelCount`, optional `namedLevels`, optional `success` / `error` | `Tag(key, { payload, levelCount, namedLevels?, success?, error?, description?, node? })` |
 
 Disambiguation: when the 2nd argument is a **plain object** with `description` / `node` / wire-slot
 keys, it is the **config overload**, not a schema value.
 
-**Migration:** deprecate `Process.result`; graft `result` ref + `successSym` / `errorSym` from tag
+**Migration:** deprecate `Daemon.result`; graft `result` ref + `successSym` / `errorSym` from tag
 factory args. Queue: rename tag arg `itemSchema` → `payload`.
 
 ### 2. Tag factory forms (canonical)
 
 See conversation summary in repo; full examples in §“Tag factory forms” below.
 
-**Process:**
+**Daemon:**
 
 ```ts
-Process.Tag()(key)
-Process.Tag()(key, success)
-Process.Tag()(key, success, error)
-Process.Tag()(key, { success?, error?, description?, node? })
+Daemon.Tag()(key)
+Daemon.Tag()(key, success)
+Daemon.Tag()(key, success, error)
+Daemon.Tag()(key, { success?, error?, description?, node? })
 ```
 
-**QueueResource:**
+**WorkPool:**
 
 ```ts
-QueueResource.Tag()(key, payload)
-QueueResource.Tag()(key, payload, success)
-QueueResource.Tag()(key, payload, success, error)
-QueueResource.Tag()(key, { payload, success?, error?, description?, node? })
+WorkPool.Tag()(key, payload)
+WorkPool.Tag()(key, payload, success)
+WorkPool.Tag()(key, payload, success, error)
+WorkPool.Tag()(key, { payload, success?, error?, description?, node? })
 ```
 
-**RunResource:**
+**Gate:**
 
 ```ts
-RunResource.Tag()(key, payload, success)
-RunResource.Tag()(key, payload, success, error)
-RunResource.Tag()(key, { payload, success, error?, description? })
+Gate.Tag()(key, payload, success)
+Gate.Tag()(key, payload, success, error)
+Gate.Tag()(key, { payload, success, error?, description? })
 ```
 
-**CustomQueueResource** — config object only; same optional `success` / `error` wire slots as QueueResource
+**WorkPool.Service (untyped)** — config object only; same optional `success` / `error` wire slots as WorkPool
 after required lane fields:
 
 ```ts
-CustomQueueResource.Tag()(key, { payload, levelCount, namedLevels?, success?, error?, description?, node? })
+WorkPool.Tag /* untyped .Service */()(key, { payload, levelCount, namedLevels?, success?, error?, description?, node? })
 ```
 
 ### 3. Layer-level schema overrides — internal only, strongly discouraged publicly
@@ -94,13 +96,13 @@ CustomQueueResource.Tag()(key, { payload, levelCount, namedLevels?, success?, er
 **Policy:**
 
 - **Tag / registration** is the **SSOT** for `payload` and `success` on toolkit resources.
-- **`QueueLayerConfig` / `ProcessLayerConfig` / `RunResourceConfig`** should **not** advertise
+- **`WorkPoolLayerConfig` / `DaemonLayerConfig` / `GateConfig`** should **not** advertise
   schema override fields in public TSDoc or guides.
 - **Internal** code paths may accept schemas for engine bootstrapping (`makeQueueRuntime` without a
   tag, tests, legacy `Service` factories) — but overriding a tag’s schemas at `layer()` time is
   **unsafe for RPC**: client and server can disagree on wire shape while sharing the same tag key.
 
-**Risk:** remote `Resource.client(Tag)` validates RPC against the tag’s published spec. If the
+**Risk:** remote `Hyperlink.client(Tag)` validates RPC against the tag’s published spec. If the
 server `layer()` silently substitutes a different schema, payloads decode wrong or pass validation
 with the wrong shape → silent data corruption.
 
@@ -117,7 +119,7 @@ Authoritative detail: [`store-cutover-00-store-core.md`](./store-cutover-00-stor
 - **`error`:** always on terminal failure rows. Tag stamps `error` → decoded typed value (journal encodes
   on append). No tag `error` → `Schema.String` via `String(findErrorOption ?? squash)`.
 
-**RunResource:** store handle (`record` / `facts` / `stateHistory`) is correct; migrate facts from kebab
+**Gate:** store handle (`record` / `facts` / `stateHistory`) is correct; migrate facts from kebab
 `type` strings to PascalCase `_tag` and adopt the same `error` rule on `RunFailed` rows.
 
 ### 6. RPC schema validation — deferred subsystem, feasible via fingerprints
@@ -127,10 +129,10 @@ Skip re-validation when nothing material has changed.
 
 #### What already exists
 
-- `schemaVersionOf` / `withSchemaVersion` on queue item schemas (`internal/queueResource.ts`).
+- `schemaVersionOf` / `withSchemaVersion` on queue item schemas (`internal/workPool.ts`).
 - `makeQueueItemCodecDescriptor` — publishes `id: ${queueId}/item@vN` + JSON Schema draft-07
   snapshot for discovery / drift checks.
-- `Resource.Node` / `NodeKey` — transport binding; readiness + `/health` patterns.
+- `Hyperlink.Node` / `NodeKey` — transport binding; readiness + `/health` patterns.
 
 #### Proposed model
 
@@ -140,7 +142,7 @@ Skip re-validation when nothing material has changed.
    - Fingerprint = hash of **canonical JSON Schema** export (or stable AST canonicalization), not
      raw `Schema` reference identity.
 
-2. **Node build identifier** (new metadata on `Resource.Node` or handshake):
+2. **Node build identifier** (new metadata on `Hyperlink.Node` or handshake):
    - `buildId` — changes each deploy / artifact build (CI git sha, content hash, user-supplied).
    - Optional `runId` — changes each process start (stricter invalidation).
    - Exposed on connect handshake alongside codec fingerprints.
@@ -154,7 +156,7 @@ Skip re-validation when nothing material has changed.
    If both build IDs unchanged since last successful validate → skip JSON Schema / fingerprint
    compare for that codec.
 
-4. **Handshake** (on `Resource.client` / `connect` — design TBD):
+4. **Handshake** (on `Hyperlink.client` / `connect` — design TBD):
 
    - Client sends: `{ buildId, codecs: [{ role: "payload", id, fingerprint }, { role: "success", … }] }`
    - Server compares to tag-stamped descriptors.
@@ -193,10 +195,10 @@ fingerprints or version stamps.
 | Step | Scope | Agent now? |
 |------|-------|------------|
 | **A** | This handoff + align queue branch agents on config-object overload | Done (doc) |
-| **B** | Process tag positional `success` / `error` + config overload; remove `Process.result` | **Done** |
+| **B** | Daemon tag positional `success` / `error` + config overload; remove `Daemon.result` | **Done** |
 | **B2** | `processStoreSpec` queue-aligned (`event` + `record` / `events`) | **Done** |
 | **B3** | Engine: `createProcess` writes via `tag.store` not `ProcessExecutionStore` | **Done** — facet deleted |
-| **C** | QR / CQR `payload` / `success` / `error` on Tag (coordinate queue branches) | **In progress** |
+| **C** | WorkPool / untyped WorkPool `payload` / `success` / `error` on Tag (coordinate queue branches) | **In progress** |
 | **D** | RR `payload` / `success` / `error` on Tag | **Done** (run-resource branch) |
 | **E** | `success` on store contracts (`processStoreSpec`, `queueStoreSpec`) | After Store Stage 1 |
 | **F** | RPC fingerprint handshake + buildId on Node | **Defer** — cross-cutting; ~1 dedicated agent after C stabilizes |
@@ -206,7 +208,7 @@ fingerprints or version stamps.
 | Task | Verdict |
 |------|---------|
 | Queue tag config-object + dual API | **No** — other agents on queue branches; point them at this doc |
-| Process tag `{ resultSchema }` only | **Optional** — low conflict, small PR |
+| Daemon tag `{ resultSchema }` only | **Optional** — low conflict, small PR |
 | RPC validation / buildId / fingerprint cache | **Defer** — design is here; implement after tag API lands |
 | “Can’t work without schema compare?” | **Unblocked** — fingerprint path is sufficient for v1 |
 
@@ -214,9 +216,9 @@ fingerprints or version stamps.
 
 ## Open questions (resolve at implement time)
 
-1. **CQR arity** — where does `{ payload, success }` sit relative to lane count / named levels?
-2. **Observation field name** — `result` (Process parity) vs `lastResult` (queue worker semantics)?
-3. **`Process.result` removal** — **done** on `cursor/process-store-cutover-a3ad`; consolidate changeset at release.
+1. **untyped WorkPool arity** — where does `{ payload, success }` sit relative to lane count / named levels?
+2. **Observation field name** — `result` (Daemon parity) vs `lastResult` (queue worker semantics)?
+3. **`Daemon.result` removal** — **done** on `cursor/process-store-cutover-a3ad`; consolidate changeset at release.
 4. **buildId source** — CI env var vs `package.json` version vs explicit `Node({ buildId })`?
 5. **Internal layer override** — remove from types entirely vs `@internal` + runtime `Effect.die` if
    tag vs config mismatch?
@@ -225,30 +227,30 @@ fingerprints or version stamps.
 
 ## Tag factory forms (full examples)
 
-### Process
+### Daemon
 
 ```ts
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
 
 // void — key only
-class Health extends Process.Tag<Health>()("app/Health") {}
+class Health extends Daemon.Tag<Health>()("app/Health") {}
 
 // value + typed failure
-class PricesPos extends Process.Tag<PricesPos>()("app/Prices", Price, FetchErr) {}
+class PricesPos extends Daemon.Tag<PricesPos>()("app/Prices", Price, FetchErr) {}
 
 // value only (error channel stays unknown / generic)
-class PricesValue extends Process.Tag<PricesValue>()("app/Prices", Price) {}
+class PricesValue extends Daemon.Tag<PricesValue>()("app/Prices", Price) {}
 
 // config object (2nd arg) — same semantics
-class PricesCfg extends Process.Tag<PricesCfg>()("app/Prices", {
+class PricesCfg extends Daemon.Tag<PricesCfg>()("app/Prices", {
   success: Price,
   error: FetchErr,
   description: "Spot quotes",
 }) {}
 ```
 
-### QueueResource
+### WorkPool
 
 ```ts
 const Job = Schema.Struct({ id: Schema.String, text: Schema.String });
@@ -256,34 +258,34 @@ const Summary = Schema.Struct({ wordCount: Schema.Number });
 const WorkerErr = Schema.TaggedStruct("WorkerError", { reason: Schema.String });
 
 // payload only (required) — void worker return
-class Mail extends QueueResource.Tag<Mail>()("@app/Mail", Job) {}
+class Mail extends WorkPool.Tag<Mail>()("@app/Mail", Job) {}
 
 // payload + success
-class Summarize extends QueueResource.Tag<Summarize>()("@app/Summarize", Job, Summary) {}
+class Summarize extends WorkPool.Tag<Summarize>()("@app/Summarize", Job, Summary) {}
 
 // payload + success + error
-class SummarizeE extends QueueResource.Tag<SummarizeE>()("@app/Summarize", Job, Summary, WorkerErr) {}
+class SummarizeE extends WorkPool.Tag<SummarizeE>()("@app/Summarize", Job, Summary, WorkerErr) {}
 
 // config object (2nd arg)
-class SummarizeCfg extends QueueResource.Tag<SummarizeCfg>()("@app/Summarize", {
+class SummarizeCfg extends WorkPool.Tag<SummarizeCfg>()("@app/Summarize", {
   payload: Job,
   success: Summary,
   error: WorkerErr,
 }) {}
 ```
 
-### RunResource
+### Gate
 
 ```ts
-class FetchGate extends RunResource.Tag<FetchGate>()("@app/FetchGate", Symbol, Price, FetchErr) {}
+class FetchGate extends Gate.Tag<FetchGate>()("@app/FetchGate", Symbol, Price, FetchErr) {}
 ```
 
-### CustomQueueResource (sketch)
+### WorkPool.Service (untyped) (sketch)
 
 Lane arity unchanged; wire slots trail `payload` or sit in options:
 
 ```ts
-class Jobs extends CustomQueueResource.Tag<Jobs>()(
+class Jobs extends WorkPool.Tag /* untyped .Service */<Jobs>()(
   "@app/Jobs",
   Job,
   3,
@@ -296,7 +298,7 @@ class Jobs extends CustomQueueResource.Tag<Jobs>()(
 
 ## References
 
-- `Process.result` — **removed** (use positional `success` on `Tag`)
-- `schemaVersionOf` / `makeQueueItemCodecDescriptor` — `src/internal/queueResource.ts`
-- `Resource.Node` / `NodeKey` — `src/Resource.ts`
+- `Daemon.result` — **removed** (use positional `success` on `Tag`)
+- `schemaVersionOf` / `makeQueueItemCodecDescriptor` — `src/internal/workPool.ts`
+- `Hyperlink.Node` / `NodeKey` — `src/Hyperlink.ts`
 - Queue store contract — `src/internal/store/queueStoreSpec.ts` (`queueEvent(itemSchema)`)
