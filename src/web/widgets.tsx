@@ -2072,7 +2072,7 @@ const NodeHealthCard = (props: {
     s !== undefined
       ? `${s.up ? s.status : "down"} · up ${fmtUptime(s.uptimeMillis)} · ${ready}/${total} ready · ${s.resourceCount} resource${s.resourceCount === 1 ? "" : "s"}`
       : props.state._tag === "Failed"
-        ? "unreachable — check runtime transport (not the tag url)"
+        ? "unreachable — missing same-origin runtime transport"
         : "connecting…";
   return (
     <div className="rounded-lg border bg-card">
@@ -2436,9 +2436,10 @@ export const NodeDetail = (props: {
         </>
       ) : state._tag === "Failed" ? (
         <div className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: "#ef4444", color: "#ef4444" }}>
-          unreachable — the runtime must provide this node&apos;s transport (e.g.{" "}
-          <code className="text-xs">Hyperlink.ws(Node, {"{ url }"})</code>). Do not dial the tag&apos;s
-          stamped url from the dashboard.
+          unreachable — provide this node in the dashboard runtime (e.g.{" "}
+          <code className="text-xs">Hyperlink.ws(Node, {"{ url: \"/rpc\" }"})</code> for a
+          same-origin browser path). The node&apos;s host endpoints are for peers/servers, not for
+          the page to open directly.
         </div>
       ) : (
         <div className="text-muted-foreground">connecting to node…</div>
