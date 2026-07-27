@@ -2,6 +2,7 @@ import { it, describe, expect } from "@effect/vitest";
 import { Cause, Deferred, Duration, Effect, Exit, Fiber, Layer, Option, Ref, Schema } from "effect";
 import { TestClock } from "effect/testing";
 import {
+  RateLimiter,
   RateLimiterError,
   RateLimiterStore,
   layerStoreMemory as rateLimiterStoreMemory,
@@ -450,6 +451,37 @@ describe("Gate.make — rateLimit", () => {
         Layer.mergeAll(
           Store.layerDefaultMemory,
           rateLimiterStoreMemory,
+          TestClock.layer(),
+        ),
+      ),
+      Effect.scoped,
+    ),
+  );
+
+  it.effect("reuses ambient RateLimiter service when present", () =>
+    Effect.gen(function* () {
+      const starts = yield* Ref.make(0);
+      const limiterOpt = yield* Effect.serviceOption(RateLimiter);
+      expect(limiterOpt._tag).toBe("Some");
+      const gate = yield* Gate.make({
+        name: "@test/rate-limit-ambient-limiter",
+        concurrency: 10,
+        rateLimit: { limit: 1, window: Duration.seconds(1) },
+        effect: (_: void) => Ref.update(starts, (n) => n + 1),
+      });
+      const f1 = yield* Effect.forkChild(gate.run());
+      const f2 = yield* Effect.forkChild(gate.run());
+      yield* Effect.yieldNow;
+      expect(yield* Ref.get(starts)).toBe(1);
+      yield* TestClock.adjust(Duration.seconds(1));
+      yield* Fiber.join(f1);
+      yield* Fiber.join(f2);
+      expect(yield* Ref.get(starts)).toBe(2);
+    }).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          Store.layerDefaultMemory,
+          Gate.rateLimiterLayer,
           TestClock.layer(),
         ),
       ),

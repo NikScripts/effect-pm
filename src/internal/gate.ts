@@ -283,8 +283,10 @@ const assertValidRateLimit = (rateLimit: GateRateLimitOptions): void => {
 /**
  * Resolve {@link RateLimiterTag} once into the gate scope.
  *
- * Presence-driven like WorkPool `DurableQueueStore`: ambient {@link RateLimiterStore}
- * wins (fleet Redis / later SQL); absent → Soft {@link layerStoreMemory}.
+ * Order (Effect services via Context — never passed in the `rateLimit` config bag):
+ * 1. Ambient {@link RateLimiterTag} if already provided
+ * 2. Else ambient {@link RateLimiterStore} → {@link makeRateLimiter} (fleet Redis / later SQL)
+ * 3. Else Soft {@link gateRateLimiterLayer} (memory store + limiter)
  */
 const resolveGateRateLimiter = (): Effect.Effect<
   EffectRateLimiter,
@@ -292,6 +294,10 @@ const resolveGateRateLimiter = (): Effect.Effect<
   Scope.Scope
 > =>
   Effect.gen(function* () {
+    const limiterOpt = yield* Effect.serviceOption(RateLimiterTag);
+    if (Option.isSome(limiterOpt)) {
+      return limiterOpt.value;
+    }
     const storeOpt = yield* Effect.serviceOption(RateLimiterStore);
     if (Option.isSome(storeOpt)) {
       return yield* makeRateLimiter.pipe(

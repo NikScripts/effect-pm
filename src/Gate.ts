@@ -10,11 +10,11 @@
  *
  * ## Rate limiting
  *
- * `rateLimit: { limit, window, … }` configures the **policy** only. The backing
- * {@link RateLimiterStore} is presence-driven: provide
- * `RateLimiter.layerStoreRedis` (or another store) at the app root for
- * fleet-wide budgets; omit it and the gate Soft-falls back to in-memory
- * (single-node). Default `onExceeded` is `"delay"`.
+ * `rateLimit: { limit, window, … }` is **consume policy only** — you do **not**
+ * pass an Effect `RateLimiter` instance there. `RateLimiter` / `RateLimiterStore`
+ * are Context services: provide them with layers at the app root (e.g.
+ * `RateLimiter.layerStoreRedis` + `RateLimiter.layer`), or omit them and the
+ * gate Soft-builds an in-memory limiter. Default `onExceeded` is `"delay"`.
  *
  * ## Entry points
  *

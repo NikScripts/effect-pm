@@ -34,9 +34,10 @@ class Double extends Gate.Service<Double>()("app/Double", {
 }) {}
 ```
 
-`rateLimit` is **policy only**. Provide `RateLimiter.layerStoreRedis` at the app
-root for a fleet-wide budget; omit the store and the gate Soft-falls back to
-in-memory (single-node). Default `onExceeded` is `"delay"`.
+`rateLimit` is **policy only** (`limit` / `window` / …) — not a `RateLimiter`
+service handle. Provide `RateLimiter.layerStoreRedis` (and optionally
+`RateLimiter.layer`) at the app root for a fleet-wide budget; omit them and the
+gate Soft-builds an in-memory limiter. Default `onExceeded` is `"delay"`.
 
 ## Call it
 
