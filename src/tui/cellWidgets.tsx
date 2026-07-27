@@ -123,13 +123,17 @@ export type TuiCellWidget = (props: TuiCellProps) => React.ReactElement;
 /** TUI cell registry. @public */
 export type TuiWidgetRegistry = WidgetRegistry<TuiCellWidget>;
 
-const QueueCell = (props: {
+/** WorkPool grid cell — also the TUI {@link View} card skin body. @public */
+export const QueueCell = (props: {
   readonly name: string;
   readonly tag: QueueTag;
-  readonly width: number;
-  readonly selected: boolean;
+  /** Ink cell width; View kit omits this (uses a readable default). */
+  readonly width?: number;
+  readonly selected?: boolean;
 }): React.ReactElement => {
-  const { name, tag, width, selected } = props;
+  const { name, tag } = props;
+  const width = props.width ?? 24;
+  const selected = props.selected === true;
   const r = useAtomValue(queueBundle(useRuntime(), tag).status);
   const opt = AsyncResult.isSuccess(r) ? r.value : Option.none();
   const s = Option.isSome(opt) ? opt.value : undefined;

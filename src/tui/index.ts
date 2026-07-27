@@ -25,8 +25,10 @@ export * from "./chrome";
 export { make, type AnyTag } from "./make";
 export { layer } from "./layer";
 export { Dashboard } from "./Dashboard";
-export { base, Cell, GroupCell, type TuiCellProps, type TuiCellWidget, type TuiWidgetRegistry } from "./cellWidgets";
+export { base, Cell, GroupCell, QueueCell, type TuiCellProps, type TuiCellWidget, type TuiWidgetRegistry } from "./cellWidgets";
 export { RuntimeProvider, useRuntime } from "./runtime";
 export { useGroupRoute } from "./useGroupRoute";
 export { Tui, TuiNotConfigured } from "../cli/index";
 export type { TuiOpenInput } from "../cli/Tui";
+// Platform skins: `import * as WorkPoolView from "hyperlink-ts/tui/WorkPoolView"`
+// (not re-exported here — would clash with `hyperlink-ts/ui` WorkPoolView handles).

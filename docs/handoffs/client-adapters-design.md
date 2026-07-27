@@ -761,9 +761,9 @@ Name collision: `Hyperlink.react` vs `View.react` — different jobs (service-bo
 
 1. ~~View services + react R=never~~ **done**
 2. ~~W20 `View.group` + `kit.for(tag)`~~ **done**
-3. ~~W21 `View.kind` / `tag` / `only` as Layers~~ **Eng’d**
-4. Packaging — shared handles; platform succeed layers (no TSX in shared imports)
-5. Migrate WorkPool Card/Detail
+3. ~~W21 `View.kind` / `tag` / `only` as Layers~~ **done**
+4. ~~Packaging + WorkPool handles/skins~~ **Eng’d** — `ui/WorkPoolView` + `web|tui/WorkPoolView` subpaths; Dashboard still uses `forKind` for grid (onOpen) and shell+`QueueDetailPanel` for detail
+5. Wire Dashboard grid/detail through `View.react(WorkPoolView.layer)` (parent owns nav)
 6. Kit `Dashboard` optional (open)
 7. Retire `forKind` / `ui/data` service dupes
 8. `Hyperlink.atom` / `query` / `fn` in parallel

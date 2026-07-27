@@ -175,7 +175,8 @@ export const QueueCard = (props: {
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
   readonly selected?: boolean;
-  readonly onOpen: (tag: QueueTag) => void;
+  /** When omitted, renders presentational chrome (View kit / parent owns activation). */
+  readonly onOpen?: (tag: QueueTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   const r = useAtomValue(useQueueBundle(props.tag).status);
@@ -183,18 +184,14 @@ export const QueueCard = (props: {
   const sizes = s?.sizes ?? { high: 0, normal: 0, low: 0 };
   const pending = sizes.high + sizes.normal + sizes.low;
   const max = Math.max(sizes.high, sizes.normal, sizes.low, 1);
-  return (
-    <button
-      type="button"
-      onClick={() => props.onOpen(props.tag)}
-      style={vt}
-      className={cn(
-        // flex-col so the content stays top-aligned when the grid stretches the card to the row
-        // height — a bare <button> vertically centres its content in the slack.
-        "relative flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring",
-        props.selected === true && "border-primary",
-      )}
-    >
+  const className = cn(
+    // flex-col so the content stays top-aligned when the grid stretches the card to the row
+    // height — a bare <button> vertically centres its content in the slack.
+    "relative flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring",
+    props.selected === true && "border-primary",
+  );
+  const body = (
+    <>
       <div className="mb-2 flex items-center gap-2">
         <strong className="flex-1 truncate">{props.name}</strong>
         <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
@@ -209,7 +206,50 @@ export const QueueCard = (props: {
         <PrioRow p="low" count={sizes.low} max={max} />
       </div>
       <DegradedOverlay tag={props.tag} />
+    </>
+  );
+  if (props.onOpen === undefined) {
+    return (
+      <div style={vt} className={className}>
+        {body}
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => props.onOpen?.(props.tag)}
+      style={vt}
+      className={className}
+    >
+      {body}
     </button>
+  );
+};
+
+/**
+ * WorkPool detail panel (stats / chart / controls) — nav chrome stays with the parent
+ * (View W9 / Dashboard shell).
+ *
+ * @public
+ */
+export const QueueDetailPanel = (props: {
+  readonly tag: QueueTag;
+}): React.ReactElement => {
+  const bundle = useQueueBundle(props.tag);
+  return (
+    <>
+      <HyperlinkReadinessBanner tag={props.tag} />
+      <QueueStats bundle={bundle} />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="min-w-0 sm:flex-1">
+          <div className="overflow-hidden rounded-xl border bg-card p-3">
+            <MetricChart bundle={bundle} />
+          </div>
+        </div>
+        <QueueControls bundle={bundle} />
+      </div>
+    </>
   );
 };
 

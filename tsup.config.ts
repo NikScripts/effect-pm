@@ -55,6 +55,7 @@ export default defineConfig([
     ...shared,
     entry: {
       ui: "src/ui/index.ts",
+      "ui/WorkPoolView": "src/ui/WorkPoolView.ts",
     },
     tsconfig: "src/ui/tsconfig.json",
     dts: true,
@@ -67,6 +68,7 @@ export default defineConfig([
     ...shared,
     entry: {
       web: "src/web/index.ts",
+      "web/WorkPoolView": "src/web/WorkPoolView.tsx",
     },
     tsconfig: "src/web/tsconfig.json",
     dts: true,
@@ -79,6 +81,7 @@ export default defineConfig([
     ...shared,
     entry: {
       tui: "src/tui/index.ts",
+      "tui/WorkPoolView": "src/tui/WorkPoolView.tsx",
     },
     tsconfig: "src/tui/tsconfig.json",
     dts: true,
