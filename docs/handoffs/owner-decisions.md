@@ -374,7 +374,8 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Chose (bake 2026-07-27 — nest shape):** v1 **flat siblings** under `metrics` (`usage`, window stream, `remaining`, `resetAfter`, `exceeded`, …). Limiter fields only when `rateLimit` is set. Optional static sugar (`Github.metrics…`) always available.
 - **Chose (bake 2026-07-27 — collision escape):** **Rename** via const `metricsKey` (default `"metrics"`). Fail-loud if an HttpApi group id equals the chosen key. Cost is low when `metricsKey` is a const generic / const config literal (typed nest path); avoid free `string`. Static sugar optional and can follow the same key. No separate `metricsSurface: "static"` in v1.
 - **Chose (bake 2026-07-27 — rateLimit keying):** v1 **whole-client only**. Service key (Tag id) and **rate-limit bucket key are separate fields**. `rateLimit.key` **optional — omit inherits service key**; set explicitly to share/split fleet budgets. Stable metadata exposes both (`key` / Tag id + resolved `rateLimitKey`) plus `metricsKey`. Nest holds live data only. Per-route keys later.
-- **Still open:** Redis vs SQL; adaptive 429; R2 ordinary-Gate depth; R4 Eng.
+- **Chose (bake 2026-07-27 — adaptive 429):** **Opt-in in R4** (Effect `adaptiveConsume` / feedback). Default off / absent — fixed `rateLimit` policy alone is enough to ship the Tag reshape.
+- **Still open:** Redis vs SQL; R2 ordinary-Gate `metrics` depth; R4 Eng start.
 
 ## 2026-07-27 — Retire `Hyperlink.pure`; Eng `default` / `defaults`
 
