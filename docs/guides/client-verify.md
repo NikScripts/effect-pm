@@ -52,7 +52,7 @@ yield* Hyperlink.verifyConnection(WorkerNode, { timeout: "1 second" })
 yield* Hyperlink.verifyConnection(WorkerNode, { deep: true }) // + node status RPC
 yield* Hyperlink.verifyConnection(WorkerNode, {
   deep: true,
-  resource: Emails.groupId,
+  resource: Emails.key,
   contractHash: Hyperlink.contractHash(Emails),
 })
 yield* Hyperlink.verifyConnection(WorkerNode, { all: true }) // every declared endpoint

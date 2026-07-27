@@ -23,8 +23,8 @@ import * as Hyperlink from "../src/Hyperlink";
 import { forwardClient, groupOf, isVoidCommand, methodMeta, specOf } from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
-// A queue family built from the control contract: many instances share the "queue" group.
-const Queue = Hyperlink.tagFor("queue", queueControlSpec);
+// A queue family built from the control contract: many instances share one wire key.
+const Queue = Hyperlink.tagFor("test/queue-control", queueControlSpec);
 class Jobs extends Queue<Jobs>("@app/Jobs") {}
 class Mail extends Queue<Mail>("@app/Mail") {}
 
@@ -91,8 +91,8 @@ it("drives a queue's control surface remotely, routed by instance id", () => {
 
   const program = Effect.gen(function* () {
     const rpc = yield* RpcTest.makeClient(groupOf(Queue));
-    const jobs = forwardClient(rpc, specOf(Queue), Jobs.groupId, Jobs.key);
-    const mail = forwardClient(rpc, specOf(Queue), Mail.groupId, Mail.key);
+    const jobs = forwardClient(rpc, specOf(Queue), Jobs[Hyperlink.wireKeySym], Jobs.key);
+    const mail = forwardClient(rpc, specOf(Queue), Mail[Hyperlink.wireKeySym], Mail.key);
 
     // observation verbs round-trip — `size`/`isEmpty`/`status` are live `value`s; on the raw wire
     // (forwardClient) they surface as their backing streams, so read the current value off the head
@@ -213,7 +213,7 @@ it("queue add round-trips with a per-instance item schema (native validation)", 
   };
   const program = Effect.gen(function* () {
     const rpc = yield* RpcTest.makeClient(groupOf(Numbers));
-    const svc = forwardClient(rpc, specOf(Numbers), Numbers.groupId, Numbers.key);
+    const svc = forwardClient(rpc, specOf(Numbers), Numbers.key, Numbers.key);
     // `add` is typed by the instance's itemSchema; RPC validates the item on the wire.
     yield* svc.add({ n: 5 });
     yield* svc.add({ n: 7 });
@@ -249,7 +249,7 @@ it("prioritize / defer / enqueue round-trip over the per-instance group", () => 
   };
   const program = Effect.gen(function* () {
     const rpc = yield* RpcTest.makeClient(groupOf(Numbers));
-    const svc = forwardClient(rpc, specOf(Numbers), Numbers.groupId, Numbers.key);
+    const svc = forwardClient(rpc, specOf(Numbers), Numbers.key, Numbers.key);
     yield* svc.prioritize({ n: 1 });
     yield* svc.defer({ n: 2 });
     yield* svc.enqueue([
@@ -292,7 +292,7 @@ it("release returns entries; releaseEncoded surfaces a typed wire error", () => 
   };
   const program = Effect.gen(function* () {
     const rpc = yield* RpcTest.makeClient(groupOf(Numbers));
-    const svc = forwardClient(rpc, specOf(Numbers), Numbers.groupId, Numbers.key);
+    const svc = forwardClient(rpc, specOf(Numbers), Numbers.key, Numbers.key);
     const released = yield* svc.release({});
     expect(released.map((e) => e.item.n)).toEqual([3]);
 

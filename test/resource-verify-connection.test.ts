@@ -189,7 +189,7 @@ describe("Hyperlink.verifyConnection", () => {
       Hyperlink.verifyConnection(VNode, {
         url: `http://127.0.0.1:${port}/rpc`,
         deep: true,
-        resource: VQueue.groupId,
+        resource: VQueue.key,
         contractHash: Hyperlink.contractHash(VQueue),
       }),
     ).pipe(Effect.timeout(Duration.seconds(10))),
@@ -202,7 +202,7 @@ describe("Hyperlink.verifyConnection", () => {
           Hyperlink.verifyConnection(VNode, {
             url: `http://127.0.0.1:${port}/rpc`,
             deep: true,
-            resource: VQueue.groupId,
+            resource: VQueue.key,
             contractHash: "00000000",
           }),
         );

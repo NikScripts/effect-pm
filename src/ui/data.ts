@@ -8,10 +8,15 @@
  * the tags — local engine or `Hyperlink.client` over http; the widgets don't care which).
  *
  */
-import { DateTime, Duration, Effect, Option, type Schema, Stream } from "effect";
+import { DateTime, Duration, Effect, Option, Predicate, type Schema, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
 import * as Group from "../Group";
-import { nodeOf, kindOf as hyperlinkKindOf, type Subscribable } from "../Hyperlink";
+import {
+  nodeOf,
+  kindOf as hyperlinkKindOf,
+  wireKeySym,
+  type Subscribable,
+} from "../Hyperlink";
 import { connect } from "../Node";
 import type { NodeKey, AddressedNode, Status as NodeStatusSnapshot } from "../Node";
 import * as LogEntry from "../LogEntry";
@@ -317,13 +322,16 @@ export const nodesOf = (group: unknown): ReadonlyArray<NodeRef> => {
   return [...seen.values()];
 };
 
-/** A tag's wire identity (its `groupId`, falling back to `key`) — what a node's status
+/** A tag's wire identity ({@link wireKeyOf}, falling back to `key`) — what a node's status
  *  snapshot reports for each served resource. */
 export const tagWireKey = (member: unknown): string | undefined => {
   if ((typeof member !== "object" && typeof member !== "function") || member === null) {
     return undefined;
   }
-  if ("groupId" in member && typeof member.groupId === "string") return member.groupId;
+  if (Predicate.hasProperty(member, wireKeySym)) {
+    const wk = member[wireKeySym];
+    if (typeof wk === "string") return wk;
+  }
   if ("key" in member && typeof member.key === "string") return member.key;
   return undefined;
 };

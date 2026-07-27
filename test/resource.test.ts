@@ -80,7 +80,7 @@ class Echo extends Hyperlink.Tag<Echo>()("test/Echo", {
 it("client ↔ server round-trips in-memory", () => {
   const program = Effect.gen(function* () {
     const rpc = yield* RpcTest.makeClient(groupOf(Echo));
-    const svc = forwardClient(rpc, specOf(Echo), Echo.groupId, Echo.key);
+    const svc = forwardClient(rpc, specOf(Echo), Echo.key, Echo.key);
 
     expect(yield* svc.ping).toBe("pong");
     expect(yield* svc.shout({ msg: "hi" })).toBe("HI");
@@ -122,8 +122,8 @@ it("server family routes calls to the right instance by key header", () => {
 
   const program = Effect.gen(function* () {
     const rpc = yield* RpcTest.makeClient(groupOf(Counter));
-    const a = forwardClient(rpc, specOf(Counter), Alpha.groupId, Alpha.key);
-    const b = forwardClient(rpc, specOf(Counter), Beta.groupId, Beta.key);
+    const a = forwardClient(rpc, specOf(Counter), Counter.wireKey, Alpha.key);
+    const b = forwardClient(rpc, specOf(Counter), Counter.wireKey, Beta.key);
 
     // routed by key: each forwarder pins its own instance key as a header
     expect(yield* a.label).toBe("alpha");
@@ -176,8 +176,8 @@ it("two resource types sharing a method name coexist on one server (group prefix
   const root = groupOf(Widgets).merge(groupOf(Crates));
   const program = Effect.gen(function* () {
     const rpc = yield* RpcTest.makeClient(root);
-    const widgets = forwardClient(rpc, specOf(Widgets), Widgets.groupId, Widgets.key);
-    const crates = forwardClient(rpc, specOf(Crates), Crates.groupId, Crates.key);
+    const widgets = forwardClient(rpc, specOf(Widgets), Widgets.key, Widgets.key);
+    const crates = forwardClient(rpc, specOf(Crates), Crates.key, Crates.key);
 
     // each `size` resolves to its own resource despite the shared method name
     expect(yield* widgets.size).toBe(42);

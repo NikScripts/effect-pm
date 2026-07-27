@@ -337,6 +337,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Chose:** Plan [`wire-groups-and-identity.md`](../plans/wire-groups-and-identity.md) — W0 locked; Eng W1+ (solo drop `groupId`, demote unused `tagFor`/`serveInstances`, then real family factory).
 - **Rejected:** Kind as RpcGroup prefix for regular Tags; spec-hash as group name; public `wireMode` on every tag; forcing full WorkPool/Daemon/Gate Specs onto one kind-group without a control/data split.
 - **Supervisor impact:** Agent 4 owns W1+ on `cursor/hyperservice-open-deps-5679`.
+- **Eng note (2026-07-27):** W1 landed — public `HyperlinkTag.groupId` removed; `wireKeySym` / `wireKeyOf`; solo wire = `.key`; `DuplicateWireKey`; `ServedHyperlink.wireKey`; contract descriptor field `wireKey`.
 
 ---
 

@@ -1,6 +1,6 @@
 # Plan: wire groups, identity, and shared Spec families
 
-**Status:** owner-locked direction (2026-07-27). Not Eng’d.  
+**Status:** W1 Eng’d (2026-07-27); W2+ not Eng’d.  
 **Agent:** 4 (`cursor/hyperservice-open-deps-5679`).  
 **Supersedes:** casual use of public `groupId` as a second identity; doc/examples that teach `tagFor("queue", …)` as the WorkPool model; the 2026-07-14 “keep `groupId`” exception for RPC naming (see owner-decisions).
 
@@ -92,8 +92,8 @@ Spec-hash stays **`contractHash` / verify**, not the RpcGroup name.
 
 | Slice | Scope |
 |-------|--------|
-| **W0** | This plan + owner-decisions row (supersede “keep groupId”); agent-status |
-| **W1** | Solo path: remove public `groupId`; wire/serve/client/verify/registry use `.key`; changeset major; fix doc lies |
+| **W0** | This plan + owner-decisions row (supersede “keep groupId”); agent-status — **done** |
+| **W1** | Solo path: remove public `groupId`; wire/serve/client/verify/registry use `.key` / `wireKeyOf`; changeset major; fix doc lies — **Eng’d** |
 | **W2** | Demote/remove unused `tagFor` / `serveInstances` / `clientInstances` from public narrative (or `@internal` until W3) |
 | **W3** | Family factory (Effect-hidden): shared Spec + kind-keyed wire; start with ApiMetrics and/or Schedule and/or control-only surfaces |
 | **W4** | Prototype story (compose Spec + features, mint named keys) — align `Node.Prototype` later; no service-extends-service |

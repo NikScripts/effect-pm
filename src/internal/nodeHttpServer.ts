@@ -117,7 +117,7 @@ const httpServerBase = (
       const startedAt = yield* Clock.currentTimeMillis;
       const readiness = Effect.forEach(entries, (entry) =>
         Effect.map(entry.readiness, (result) => ({
-          key: entry.groupId,
+          key: entry.wireKey,
           kind: entry.kind,
           ready: result.ready,
           contractHash: entry.contractHash,
@@ -162,7 +162,7 @@ const httpServerBase = (
       const nodeFlat = Hyperlink.flattenImpl(nodeImpl, nodeTag[Hyperlink.specSym]);
       const nodeHandlers: Record<string, (payload: unknown) => unknown> = {};
       for (const [key, member] of Object.entries(nodeFlat)) {
-        nodeHandlers[Hyperlink.wireTag(nodeTag.groupId, key)] = (payload) =>
+        nodeHandlers[Hyperlink.wireTag(nodeTag[Hyperlink.wireKeySym], key)] = (payload) =>
           Hyperlink.invokeWireMethod(member, nodeTag[Hyperlink.specSym][key] as Hyperlink.AnyMethod, payload);
       }
       const merged = [...entries.map((entry) => entry.group), nodeTag[Hyperlink.groupSym]].reduce(

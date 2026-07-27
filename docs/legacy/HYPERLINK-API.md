@@ -27,7 +27,7 @@ Hyperlink.kindOf(SomePlainTag);   // undefined  (a bare Hyperlink.Tag carries no
 | `CustomQueueHyperlink` (`…/CustomQueueContract`) | `hyperlink-ts/CustomQueueHyperlink` |
 | `ApiMetrics` | `hyperlink-ts/ApiMetrics` |
 
-This is how the web/TUI dashboards pick the right widget for each `Group` leaf. A bare `Hyperlink.Tag` has no stamped kind; pass `{ kind }` to `Hyperlink.Tag(key, { kind })` / `Hyperlink.tagFor(groupId, spec, { kind })` to give a custom contract its own.
+This is how the web/TUI dashboards pick the right widget for each `Group` leaf. A bare `Hyperlink.Tag` has no stamped kind; pass `{ kind }` to `Hyperlink.Tag(key, { kind })` / `Hyperlink.tagFor(wireKey, spec, { kind })` to give a custom contract its own. Solo tags use `.key` as the RpcGroup wire prefix (`Hyperlink.wireKeyOf`); there is no public `groupId`.
 
 ---
 

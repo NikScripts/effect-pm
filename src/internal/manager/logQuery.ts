@@ -26,8 +26,8 @@ export type LogSort = "asc" | "desc";
  * @public
  */
 export interface LogQuery {
-  /** When set, restrict to this RPC group id (`groupId` wire prefix). */
-  readonly groupId?: string;
+  /** When set, restrict to this RpcGroup wire key (solo = tag key; family = shared prefix). */
+  readonly wireKey?: string;
   /** When set, restrict to logs whose lineage contains this resource **key** (`Tag.key`). */
   readonly key?: string;
   readonly from?: Date;
@@ -102,15 +102,15 @@ const validateRange = (
  */
 const scopeToQueryFields = (
   scope: LogScope,
-): Pick<LogQuery, "groupId" | "key"> => {
+): Pick<LogQuery, "wireKey" | "key"> => {
   switch (scope._tag) {
     case "all":
       return {};
     case "group":
-      return { groupId: scope.groupId };
+      return { wireKey: scope.wireKey };
     case daemonKind:
     case workPoolKind:
-      return { groupId: scope.groupId, key: scope.key };
+      return { wireKey: scope.wireKey, key: scope.key };
   }
 };
 

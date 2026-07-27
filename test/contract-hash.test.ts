@@ -21,7 +21,7 @@ describe("contractHash / hashContract", () => {
   it("matches hashContract on the tag Spec", () => {
     const kind = Hyperlink.kindOf(Probe) ?? "hyperlink";
     expect(Hyperlink.contractHash(Probe)).toBe(
-      hashContract(Probe.groupId, kind, Probe[Hyperlink.specSym]),
+      hashContract(Probe.key, kind, Probe[Hyperlink.specSym]),
     );
   });
 
@@ -32,8 +32,8 @@ describe("contractHash / hashContract", () => {
       ...base,
       ping: Hyperlink.effectFn({ n: Schema.String }, Schema.Number),
     };
-    expect(hashContract(Probe.groupId, kind, base)).not.toBe(
-      hashContract(Probe.groupId, kind, drifted),
+    expect(hashContract(Probe.key, kind, base)).not.toBe(
+      hashContract(Probe.key, kind, drifted),
     );
   });
 
@@ -44,18 +44,18 @@ describe("contractHash / hashContract", () => {
       ...base,
       pong: Hyperlink.effect(Schema.Void),
     };
-    expect(hashContract(Probe.groupId, kind, base)).not.toBe(
-      hashContract(Probe.groupId, kind, extra),
+    expect(hashContract(Probe.key, kind, base)).not.toBe(
+      hashContract(Probe.key, kind, extra),
     );
   });
 
   it("contractDescriptor is JSON-stable (sorted keys)", () => {
     const kind = Hyperlink.kindOf(Probe) ?? "hyperlink";
     const d1 = JSON.stringify(
-      contractDescriptor(Probe.groupId, kind, Probe[Hyperlink.specSym]),
+      contractDescriptor(Probe.key, kind, Probe[Hyperlink.specSym]),
     );
     const d2 = JSON.stringify(
-      contractDescriptor(Probe.groupId, kind, Probe[Hyperlink.specSym]),
+      contractDescriptor(Probe.key, kind, Probe[Hyperlink.specSym]),
     );
     expect(d1).toBe(d2);
     expect(d1).toContain('"ping"');

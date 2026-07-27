@@ -137,14 +137,14 @@ export class DuplicateHyperlinkKey extends Data.TaggedError(
 )<{ readonly key: string }> {}
 
 /**
- * Two resources declared the same **group id** (the wire prefix) — they'd collide on a
+ * Two resources declared the same **wire key** (RpcGroup prefix) — they'd collide on a
  * shared `RpcServer`.
  *
  * @category errors
  * @public
  */
-export class DuplicateGroupId extends Data.TaggedError("DuplicateGroupId")<{
-  readonly groupId: string;
+export class DuplicateWireKey extends Data.TaggedError("DuplicateWireKey")<{
+  readonly wireKey: string;
 }> {}
 
 /**
@@ -2222,30 +2222,30 @@ export type HandlerContextOf<S extends Spec> = Rpc.ToHandler<RpcUnionOf<S>>;
 // ── runtime: one Spec → the shared RPC contract group ──
 
 /**
- * The wire tag of a method on the shared transport: the resource's **group id** prefixes
- * the bare method name (`queue/pause`, `daemon/stop`). The prefix namespaces a resource's
- * procedures so unrelated resource types sharing one `RpcServer` can't collide on a common
- * method name — it's a transport detail, never part of the logical contract (the type-level
- * tag and the `yield* Tag` service surface stay the bare method name).
+ * The wire tag of a method on the shared transport: the resource's **wire key** prefixes
+ * the bare method name (`@app/Mail/pause`, `hyperlink-ts/WorkPool/sizes`). Solo tags use
+ * {@link HyperlinkTag.key}; shared-Spec families use the family's wire key. The prefix
+ * namespaces procedures on one `RpcServer` — a transport detail, never part of the logical
+ * contract (`yield* Tag` stays the bare method name).
  */
 /** @internal */
-export const wireTag = (groupId: string, method: string): string => `${groupId}/${method}`;
+export const wireTag = (wireKey: string, method: string): string => `${wireKey}/${method}`;
 
 /**
- * Build the shared RPC contract group from a {@link Spec}, namespaced by `groupId`. A bare
+ * Build the shared RPC contract group from a {@link Spec}, namespaced by `wireKey`. A bare
  * `Schema` becomes a payload-free rpc returning that schema; a descriptor maps straight to
- * its parts. Every procedure's wire tag is {@link wireTag}-prefixed by `groupId`.
+ * its parts. Every procedure's wire tag is {@link wireTag}-prefixed by `wireKey`.
  *
  * @internal
  */
 export const buildRpcGroup = (
-  groupId: string,
+  wireKey: string,
   spec: FlatSpec,
 ): RpcGroup.RpcGroup<any> => {
   const rpcs = Object.entries(spec).flatMap(([method, m]) => {
     // local / pure members are off-wire — they get no rpc.
     if (isLocalMethod(m) || isPureMethod(m)) return [];
-    const tag = wireTag(groupId, method);
+    const tag = wireTag(wireKey, method);
     const options: {
       payload?: Schema.Struct.Fields | Schema.Top;
       success: Schema.Top;
@@ -2287,6 +2287,16 @@ declare const specTypeSym: unique symbol;
 /** Where the built RPC group is stowed on a Tag. @internal */
 export const groupSym: unique symbol = Symbol.for(
   "hyperlink-ts/Hyperlink/group",
+);
+/**
+ * Where the **wire key** (RpcGroup prefix) is stowed on a Tag. Solo {@link Tag}s use the
+ * same string as {@link Context.Key.key}; {@link tagFor} families stamp the shared family
+ * wire key. Read with {@link wireKeyOf}.
+ *
+ * @internal
+ */
+export const wireKeySym: unique symbol = Symbol.for(
+  "hyperlink-ts/Hyperlink/wireKey",
 );
 /** Where the per-resource local-capability key is stowed on a Tag. @internal */
 export const localCapSym: unique symbol = Symbol.for(
@@ -2390,7 +2400,7 @@ const selfNodeSym: unique symbol = Symbol.for("hyperlink-ts/Hyperlink/selfNode")
 export interface HyperlinkTag<Self, S extends Spec, Svc = ServiceOf<S, Self>>
   extends Context.ServiceClass<Self, string, Svc> {
   /** Wire prefix — namespaces this resource's procedures on a shared `RpcServer`. */
-  readonly groupId: string;
+  readonly [wireKeySym]: string;
   /** Hyperlink-level help text (CLI/TUI section help, dashboard panel title) — if declared. */
   readonly description: string | undefined;
   readonly [specSym]: FlatSpec;
@@ -2717,7 +2727,19 @@ export const kindOf = (tag: unknown): string | undefined => {
  */
 export const contractHash = <Self, S extends Spec>(
   tag: HyperlinkTag<Self, S>,
-): string => hashContract(tag.groupId, kindOf(tag) ?? "hyperlink", tag[specSym]);
+): string => hashContract(tag[wireKeySym], kindOf(tag) ?? "hyperlink", tag[specSym]);
+
+/**
+ * A tag's **wire key** — the RpcGroup / procedure prefix on a shared server.
+ *
+ * Solo {@link Tag}s: same as {@link Context.Key.key}. Shared-Spec {@link tagFor} instances:
+ * the family's wire key (routing still uses the instance `key` header).
+ *
+ * @category introspection
+ * @public
+ */
+export const wireKeyOf = (tag: { readonly [wireKeySym]: string }): string =>
+  tag[wireKeySym];
 
 /** The {@link Node} a tag is bound to (its transport key), or `undefined` for a nodeless/bare tag
  *  or any non-tag. Accepts `unknown` so a `Group` member passes straight in — walk a group tree and
@@ -3036,24 +3058,24 @@ export const monitoredDependency = <
 
 /** Claimed instance keys — duplicate declarations fail fast (Effect won't catch same-key Tags). */
 const claimedKeys = new Set<string>();
-/** Claimed group ids — the wire prefixes; duplicates would collide on a shared `RpcServer`. */
-const claimedGroupIds = new Set<string>();
+/** Claimed wire keys — RpcGroup prefixes; duplicates would collide on a shared `RpcServer`. */
+const claimedWireKeys = new Set<string>();
 
-/** Reserve a group id (wire prefix); a duplicate **throws** — two resources can't share a prefix. */
-const claimGroupId = (groupId: string): void => {
-  if (claimedGroupIds.has(groupId)) {
-    throw new DuplicateGroupId({ groupId });
+/** Reserve a wire key (RpcGroup prefix); a duplicate **throws** — two resources can't share a prefix. */
+const claimWireKey = (wireKey: string): void => {
+  if (claimedWireKeys.has(wireKey)) {
+    throw new DuplicateWireKey({ wireKey });
   }
-  claimedGroupIds.add(groupId);
+  claimedWireKeys.add(wireKey);
 };
 
 /**
- * The single tag-creation primitive: dup-key guard + `Context.Service` + stow groupId/spec/group.
+ * The single tag-creation primitive: dup-key guard + `Context.Service` + stow wireKey/spec/group.
  * Both {@link makeTag} (per-tag spec) and {@link tagFor} (shared spec) go through it. `key` is the
- * instance identity (Context key + routing header); `groupId` is the wire prefix.
+ * instance identity (Context key + routing header); `wireKey` is the RpcGroup prefix.
  */
 const buildInstanceTag = <Self, S extends Spec>(
-  groupId: string,
+  wireKey: string,
   key: string,
   // Runtime spec value — typed loosely as `Spec` so a {@link Tag}`<Self, I>()` caller can present a
   // *resolved* `S` at the type level while passing the raw contract value; `S` still flows precisely
@@ -3087,7 +3109,7 @@ const buildInstanceTag = <Self, S extends Spec>(
   const selfNodeKey: Context.Key<SelfNodeId<Self>, string> =
     Context.Service<SelfNodeId<Self>, string>()(`${key}/__selfNode`);
   return Object.assign(base, {
-    groupId,
+    [wireKeySym]: wireKey,
     description,
     [specSym]: flattenSpec(spec),
     [groupSym]: group,
@@ -3189,8 +3211,8 @@ type InterfaceTagBuilder<Self, I> = {
  *
  * Keys must be unique: a duplicate **throws at declaration** — Effect's `Context` is
  * keyed by the key string and silently last-write-wins on collisions, so we guard it.
- * For a single resource the key is also its **group id** (the wire prefix for its
- * procedures), so a shared `RpcServer` can node it alongside other resource types.
+ * For a single resource the key is also its **wire key** (the RpcGroup prefix for its
+ * procedures), so a shared `RpcServer` can host it alongside other resource types.
  *
  * @category constructors
  * @public
@@ -3216,7 +3238,7 @@ const makeTag = retype<{
     spec: Spec,
     options?: TagOptions & { readonly node?: NodeKey<unknown> },
   ) {
-    claimGroupId(key);
+    claimWireKey(key);
     const flat = flattenSpec(spec);
     const interfaceLocals = Object.values(flat).some((m) =>
       Predicate.hasProperty(m, bareLocalSym),
@@ -3237,7 +3259,7 @@ const makeTag = retype<{
 
 /**
  * A {@link tagFor} factory: `<Self>(key) => tag`, plus the shared family metadata
- * (`groupId` / `description` / spec / group) that {@link serveInstances} reads without an
+ * (`wireKey` / `description` / spec / group) that {@link serveInstances} reads without an
  * instance.
  *
  * @category models
@@ -3245,7 +3267,7 @@ const makeTag = retype<{
  */
 export interface TagFactory<S extends Spec> {
   <Self>(key: string): HyperlinkTag<Self, S>;
-  readonly groupId: string;
+  readonly wireKey: string;
   readonly description: string | undefined;
   readonly [specSym]: FlatSpec;
   readonly [specTypeSym]?: S;
@@ -3262,7 +3284,7 @@ export interface TagFactory<S extends Spec> {
  */
 export interface NodeTagFactory<S extends Spec, HSelf> {
   <Self>(key: string): NodeBoundTag<Self, S, HSelf>;
-  readonly groupId: string;
+  readonly wireKey: string;
   readonly description: string | undefined;
   readonly [specSym]: FlatSpec;
   readonly [specTypeSym]?: S;
@@ -3270,27 +3292,29 @@ export interface NodeTagFactory<S extends Spec, HSelf> {
 }
 
 /**
- * Build a **factory** tag-maker that bakes a shared {@link Spec} once under a `groupId`:
+ * Build a **factory** tag-maker that bakes a shared {@link Spec} once under a `wireKey`:
  * every instance shares the same contract + RPC group, and callers **never pass the spec**
- * — only an instance key. Use for resource families (many instances, one contract). The
- * `groupId` (e.g. `"queue"`) is the wire prefix for the family's procedures, so a shared
- * `RpcServer` can node this family next to other resource types without tag collisions;
- * instances are told apart by the per-call `key` header.
+ * — only an instance key. Use for resource families (many instances, one identical Spec).
+ * The `wireKey` is the RpcGroup prefix (prefer a kind key such as `hyperlink-ts/ApiMetrics`);
+ * instances are told apart by the per-call `key` header. Prefer {@link Tag} when each
+ * instance has its own Spec (WorkPool / Daemon data plane).
  *
  * Pass `options.node` to bind the whole family to a {@link Node}: every instance becomes a
  * node-bearing tag and ships only-the-tag (see {@link Hyperlink.client} / {@link Hyperlink.connect}).
  *
  * ```ts
- * const Queue = Hyperlink.tagFor("queue", { pause: Hyperlink.effect(Schema.Void) });
- * class Jobs extends Queue<Jobs>("@app/Jobs") {}  // spec baked in; just the instance key
- * class Mail extends Queue<Mail>("@app/Mail") {}  // shares contract + group, routed by key
+ * const Control = Hyperlink.tagFor("test/queue-control", {
+ *   pause: Hyperlink.effect(Schema.Void),
+ * });
+ * class Jobs extends Control<Jobs>("@app/Jobs") {}  // spec baked in; just the instance key
+ * class Mail extends Control<Mail>("@app/Mail") {}  // shares contract + wire key; routed by key
  * ```
  *
  * @category constructors
  * @public
  */
 function tagFor<const S extends Spec, HSelf>(
-  groupId: string,
+  wireKey: string,
   spec: S,
   options: {
     readonly description?: string;
@@ -3301,33 +3325,33 @@ function tagFor<const S extends Spec, HSelf>(
   <Self>(key: string): NodeBoundTag<Self, S, HSelf> & {
     readonly [nodeSym]: AddressedNode<HSelf>;
   };
-  readonly groupId: string;
+  readonly wireKey: string;
   readonly description: string | undefined;
   readonly [specSym]: FlatSpec;
   readonly [specTypeSym]?: S;
   readonly [groupSym]: RpcGroupOf<S>;
 };
 function tagFor<const S extends Spec, HSelf>(
-  groupId: string,
+  wireKey: string,
   spec: S,
   options: { readonly description?: string; readonly kind?: string; readonly node: NodeKey<HSelf> },
 ): NodeTagFactory<S, HSelf>;
 function tagFor<const S extends Spec>(
-  groupId: string,
+  wireKey: string,
   spec: S,
   options?: { readonly description?: string; readonly kind?: string },
 ): TagFactory<S>;
 function tagFor<const S extends Spec>(
-  groupId: string,
+  wireKey: string,
   spec: S,
   options?: { readonly description?: string; readonly kind?: string; readonly node?: NodeKey<unknown> },
 ): TagFactory<S> {
-  claimGroupId(groupId);
-  const group = buildRpcGroup(groupId, flattenSpec(spec));
+  claimWireKey(wireKey);
+  const group = buildRpcGroup(wireKey, flattenSpec(spec));
   const node = options?.node;
   const factory = <Self>(key: string) =>
     buildInstanceTag<Self, S>(
-      groupId,
+      wireKey,
       key,
       spec,
       group,
@@ -3335,10 +3359,10 @@ function tagFor<const S extends Spec>(
       node,
       options?.kind,
     );
-  // Stow the shared groupId/description/spec/group on the factory too, so the family
+  // Stow the shared wireKey/description/spec/group on the factory too, so the family
   // server ({@link serveInstances}) can read the contract + prefix without an instance.
   return Object.assign(factory, {
-    groupId,
+    wireKey,
     description: options?.description,
     [specSym]: flattenSpec(spec),
     [groupSym]: group,
@@ -3644,7 +3668,7 @@ const invokeWireMethodWithContext = (
  * @internal
  */
 export interface ServedHyperlink {
-  readonly groupId: string;
+  readonly wireKey: string;
   readonly group: RpcGroup.RpcGroup<any>;
   readonly kind: string;
   readonly readiness: Effect.Effect<Readiness>;
@@ -3754,7 +3778,7 @@ export type ServeRequirements<Impl> = {
 
 /** Shallow tag shape for serve-remote mounts — avoids open `RpcGroupOf<S>` walks (TS2589). */
 type ServeRemoteTag = {
-  readonly groupId: string;
+  readonly [wireKeySym]: string;
   readonly [specSym]: FlatSpec;
   readonly [groupSym]: { readonly toLayer: (handlers: never) => Layer.Any };
 };
@@ -3773,7 +3797,7 @@ const serveRemoteHandlers = (
   // flatten a (possibly nested) impl to path keys matching the flat spec + path-keyed group procedures.
   const flatImpl = flattenImpl(wireImpl as Record<string, unknown>, tag[specSym]);
   for (const [key, member] of Object.entries(flatImpl)) {
-    handlers[wireTag(tag.groupId, key)] = (payload) =>
+    handlers[wireTag(tag[wireKeySym], key)] = (payload) =>
       workerContext === undefined
         ? invokeWireMethod(member, tag[specSym][key] as AnyMethod, payload)
         : invokeWireMethodWithContext(
@@ -3802,10 +3826,10 @@ const serveRemoteHandlers = (
             const boundKinds = nodeKindsOf(tag);
             const kind = kindOf(tag) ?? "hyperlink";
             return registry.register({
-              groupId: tag.groupId,
+              wireKey: tag[wireKeySym],
               group: retype(group as never),
               kind,
-              contractHash: hashContract(tag.groupId, kind, tag[specSym]),
+              contractHash: hashContract(tag[wireKeySym], kind, tag[specSym]),
               readiness: readinessCheckServed(tag, wireImpl),
               ...(bound !== undefined ? { nodeLogKey: bound.key } : {}),
               ...(boundKinds.length > 0 ? { nodeKinds: boundKinds } : {}),
@@ -3844,7 +3868,7 @@ const serveRemoteHandlers = (
  */
 export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
   tag: {
-    readonly groupId: string;
+    readonly [wireKeySym]: string;
     readonly [specSym]: FlatSpec;
     readonly [specTypeSym]?: S;
     readonly [groupSym]: RpcGroupOf<S>;
@@ -3868,7 +3892,7 @@ export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
  */
 export const serveRemoteDriver = <S extends Spec, R>(
   tag: {
-    readonly groupId: string;
+    readonly [wireKeySym]: string;
     readonly [specSym]: FlatSpec;
     readonly [specTypeSym]?: S;
     readonly [groupSym]: ServeRemoteTag[typeof groupSym];
@@ -3968,7 +3992,7 @@ export const serve = <Self, S extends Spec, R = never>(
   // resource it serves (see {@link servedKeyOf} / anonymousNodeKey). Stamped on the FINAL layer both
   // paths return (servePlain re-merges, which would drop an earlier stamp).
   const plain = Object.assign(servePlain(tag, impl), {
-    [servedKeySym]: tag.groupId,
+    [servedKeySym]: tag.key,
   });
   if (!isIdentity(tag)) {
     return plain;
@@ -3980,7 +4004,7 @@ export const serve = <Self, S extends Spec, R = never>(
     ValueErrorsOf<S>,
     R
   >;
-  return Object.assign(claimed, { [servedKeySym]: tag.groupId });
+  return Object.assign(claimed, { [servedKeySym]: tag.key });
 };
 
 // [extracted to Node module — was Hyperlink.ts:3193-3978]
@@ -4056,12 +4080,14 @@ const instance = <Self, S extends Spec>(
  * every instance is wired, and a duplicate key **throws at assembly**.
  *
  * ```ts
- * const Queue = Hyperlink.tagFor("queue", { pause: Hyperlink.effect(Schema.Void) });
- * class Jobs extends Queue<Jobs>("@app/Jobs") {}
- * class Mail extends Queue<Mail>("@app/Mail") {}
+ * const Control = Hyperlink.tagFor("test/queue-control", {
+ *   pause: Hyperlink.effect(Schema.Void),
+ * });
+ * class Jobs extends Control<Jobs>("@app/Jobs") {}
+ * class Mail extends Control<Mail>("@app/Mail") {}
  *
  * const serveAll = Hyperlink.serveInstances(
- *   Queue,
+ *   Control,
  *   Hyperlink.instance(Jobs, jobsImpl),
  *   Hyperlink.instance(Mail, mailImpl),
  * );
@@ -4072,7 +4098,7 @@ const instance = <Self, S extends Spec>(
  */
 const serveInstances = <S extends Spec>(
   factory: {
-    readonly groupId: string;
+    readonly wireKey: string;
     readonly [specSym]: FlatSpec;
     readonly [specTypeSym]?: S;
     readonly [groupSym]: RpcGroupOf<S>;
@@ -4102,7 +4128,7 @@ const serveInstances = <S extends Spec>(
   > = {};
   for (const key of Object.keys(spec)) {
     // handlers are keyed by the wire tag (group-prefixed), matching the group's procedures.
-    handlers[wireTag(factory.groupId, key)] = (payload, options) => {
+    handlers[wireTag(factory.wireKey, key)] = (payload, options) => {
       const instanceKey = Option.getOrUndefined(Headers.get(options.headers, INSTANCE_KEY_HEADER));
       if (instanceKey === undefined) {
         return Effect.die(
@@ -4159,7 +4185,7 @@ export const specOf = <S extends Spec>(tag: {
 export const forwardClient = <S extends Spec>(
   rpc: unknown,
   spec: S,
-  groupId: string,
+  wireKey: string,
   instanceKey: string,
 ): WireServiceOf<S> => {
   const headers = { key: instanceKey };
@@ -4173,8 +4199,8 @@ export const forwardClient = <S extends Spec>(
   for (const [key, m] of Object.entries(flattenSpec(spec as unknown as Spec))) {
     // local / pure aren't on the wire — locals are stubbed in clientLayer; pures installed there.
     if (isLocalMethod(m) || isPureMethod(m)) continue;
-    // the wire tag is group-prefixed; the service surface keeps the bare method name
-    const call = calls[wireTag(groupId, key)];
+    // the wire tag is wireKey-prefixed; the service surface keeps the bare method name
+    const call = calls[wireTag(wireKey, key)];
     // completeness + callability check — `typeof` narrows `call` to a callable, so the
     // invocations below need no further assertion.
     if (typeof call !== "function") {
@@ -4792,7 +4818,7 @@ export type VerifyConnectionDeepOptions = VerifyConnectionOptions & {
  * yield* Hyperlink.verifyConnection(Droplet, { deep: true });          // + node status RPC
  * yield* Hyperlink.verifyConnection(Droplet, {
  *   deep: true,
- *   resource: Emails.groupId,
+ *   resource: Emails.key,
  *   contractHash: Hyperlink.contractHash(Emails),
  * });
  * yield* Hyperlink.verifyConnection(Droplet, { all: true });           // every endpoint
@@ -5425,7 +5451,7 @@ const buildPeerService = <Self, S extends Spec>(
   tag: HyperlinkTag<Self, S>,
   rpc: unknown,
 ): PeerServiceOf<S> => {
-  const wire = forwardClient(rpc, tag[specSym], tag.groupId, tag.key) as Record<
+  const wire = forwardClient(rpc, tag[specSym], tag[wireKeySym], tag.key) as Record<
     string,
     unknown
   >;
@@ -5793,7 +5819,7 @@ const buildClientService = <Self, S extends Spec>(
   rpc: unknown,
 ): Effect.Effect<ServiceOf<S, Self>, ValueErrorsOf<S>, Scope.Scope> =>
   Effect.gen(function* () {
-    const wire = forwardClient(rpc, tag[specSym], tag.groupId, tag.key) as Record<
+    const wire = forwardClient(rpc, tag[specSym], tag[wireKeySym], tag.key) as Record<
       string,
       unknown
     >;
@@ -5919,10 +5945,10 @@ function clientLayer<Self, S extends Spec>(
     const addressed = nodeKey as AddressedNode<unknown>;
     const connected: any = layer.pipe(Layer.provide(connectAddressed(addressed)));
     const deepResource =
-      tag.groupId === "hyperlink-ts/node-status"
+      tag[wireKeySym] === "hyperlink-ts/node-status"
         ? undefined
         : {
-            resource: tag.groupId,
+            resource: tag[wireKeySym],
             contractHash: contractHash(tag),
           };
     return Layer.unwrap(
@@ -5965,7 +5991,7 @@ const clientInstances = <
   const Tags extends ReadonlyArray<WireInstanceTag<S>>,
 >(
   factory: {
-    readonly groupId: string;
+    readonly wireKey: string;
     readonly [specSym]: FlatSpec;
     readonly [specTypeSym]?: S;
     readonly [groupSym]: RpcGroupOf<S>;
@@ -5977,7 +6003,7 @@ const clientInstances = <
       const protocol = yield* Effect.serviceOption(RpcClient.Protocol);
       if (Option.isNone(protocol)) {
         return yield* new MissingClientProtocol({
-          resource: factory.groupId,
+          resource: factory.wireKey,
         });
       }
       const rpc = yield* Effect.provideService(
@@ -5988,7 +6014,7 @@ const clientInstances = <
       let context = Context.empty();
       for (const tag of tags) {
         const service = nestService(
-          forwardClient(rpc, factory[specSym], factory.groupId, tag.key),
+          forwardClient(rpc, factory[specSym], factory.wireKey, tag.key),
         ) as WireServiceOf<S>;
         context = Context.add(context, tag, service);
       }

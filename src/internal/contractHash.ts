@@ -1,6 +1,6 @@
 /**
  * Stable wire-contract fingerprint for F4 {@link ContractMismatch} — derived from a tag's
- * groupId, kind, and flat wire Spec (schemas via AST structure). Same Spec ⇒ same hash on
+ * wireKey, kind, and flat wire Spec (schemas via AST structure). Same Spec ⇒ same hash on
  * client and server; schema / method drift ⇒ mismatch.
  *
  * @module internal/contractHash
@@ -81,7 +81,7 @@ const isWireMethod = (m: FlatSpec[string]): m is AnyMethod =>
  * @internal
  */
 export const contractDescriptor = (
-  groupId: string,
+  wireKey: string,
   kind: string,
   spec: FlatSpec,
 ): unknown => {
@@ -99,7 +99,7 @@ export const contractDescriptor = (
       error: fingerprintSchema(m.error),
     };
   }
-  return { v: 1, groupId, kind, methods };
+  return { v: 1, wireKey, kind, methods };
 };
 
 /**
@@ -108,10 +108,10 @@ export const contractDescriptor = (
  * @internal
  */
 export const hashContract = (
-  groupId: string,
+  wireKey: string,
   kind: string,
   spec: FlatSpec,
 ): string => {
-  const canonical = JSON.stringify(contractDescriptor(groupId, kind, spec));
+  const canonical = JSON.stringify(contractDescriptor(wireKey, kind, spec));
   return (Hash.hash(canonical) >>> 0).toString(16).padStart(8, "0");
 };

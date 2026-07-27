@@ -129,7 +129,7 @@ export type {
   SwappableField,
 } from "./DynamicConfig";
 export {
-  DuplicateGroupId,
+  DuplicateWireKey,
   DuplicateInstance,
   DuplicateHyperlinkKey,
   EffectFnMissingPayload,
