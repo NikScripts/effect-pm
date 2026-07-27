@@ -258,7 +258,7 @@ Fleet rate limiting is **first-class Gate substrate**. HttpApiClient update **us
 ## Open decisions (owner)
 
 1. ~~How is the store selected?~~ **LOCKED (owner):** presence-driven `serviceOption(RateLimiterStore)` like `DurableQueueStore`; Soft memory when absent.  
-2. ~~**Fleet store v1 backend:**~~ **LOCKED:** Effect **Redis** only for fleet v1 (`NodeRedis` + `layerStoreRedis`). SQL `RateLimiterStore` later if needed.  
+2. ~~**Fleet store backend:**~~ **LOCKED:** Effect store layers only — Soft memory / Redis today (`NodeRedis` + `layerStoreRedis`). No Hyperlink-backed store; adopt further Effect stores if/when they ship.  
 3. **Distributed + memory Soft:** docs-only vs fail-loud? — lean docs  
 4. ~~**Default `onExceeded` for Gates:**~~ **LOCKED (R1 lean):** `"delay"`  
 5. ~~**Nest name / shape / collision:**~~ **LOCKED (bake 2026-07-27):** nest default **`metrics`**, **flat siblings**. Escape = const **`metricsKey`** rename (typed); fail-loud if Api group id equals chosen key.  
