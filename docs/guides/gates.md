@@ -36,11 +36,38 @@ class Double extends Gate.Service<Double>()("app/Double", {
 
 `rateLimit` is Effect’s `RateLimiter.consume` / `makeWithRateLimiter` options
 (`limit`, `window`, `algorithm`, `onExceeded`, `tokens`, `key`, …) — not a
-`RateLimiter` service handle. New upstream fields flow through. Provide
-`RateLimiter.layerStoreRedis` (and optionally `RateLimiter.layer`) at the app
-root for a fleet-wide budget; omit them and the gate Soft-builds an in-memory
-limiter. Omitted `key` defaults to the gate id; omitted `onExceeded` defaults
-to `"delay"`.
+`RateLimiter` service handle. New upstream fields flow through. Omitted `key`
+defaults to the gate id; omitted `onExceeded` defaults to `"delay"`.
+
+## Fleet rate limiting
+
+`concurrency` is always **in-process** (Semaphore). Fleet-wide budgets need a
+**shared** `RateLimiterStore`:
+
+| Composition | Budget |
+|-------------|--------|
+| Omit store (Soft memory) | Per Node / per Gate scope — fine for single-node |
+| Provide `RateLimiter.layerStoreRedis` at the app root | Shared across every Gate that sees that store |
+| Provide `RateLimiter.layerStoreMemory` in tests | Same presence-driven path; simulates Redis |
+
+``` ts
+import { RateLimiter } from "effect/unstable/persistence/RateLimiter"
+import { Layer } from "effect"
+
+// Fleet root — one Redis store for every Gate / WorkPool with rateLimit
+const FleetLive = Layer.mergeAll(
+  EastGate.layer,
+  WestGate.layer,
+).pipe(
+  Layer.provide(RateLimiter.layerStoreRedis()),
+  // Layer.provide(yourRedisLayer),
+)
+```
+
+Use the **same** `rateLimit.key` (or default resource ids that you intend to
+share) on every peer. Soft memory + distributed deploy = N× the limit (docs
+warn; not fail-loud in v1). Runnable form:
+`pnpm exec tsx examples/forms/resource/gate-rate-limit-fleet.ts`.
 
 ## Call it
 

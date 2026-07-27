@@ -94,9 +94,11 @@ import {
   RateLimiter as RateLimiterTag,
   RateLimiterError,
   RateLimitExceeded,
+  RateLimiterStore,
   type ConsumeResult,
   layer as rateLimiterLayer,
   layerStoreMemory,
+  make as makeRateLimiter,
 } from "effect/unstable/persistence/RateLimiter";
 import type { RateLimiter as EffectRateLimiter } from "effect/unstable/persistence/RateLimiter";
 import { withLogScope } from "./logs/scope";
@@ -940,12 +942,13 @@ export interface EffectContext<T, EEnqueue = never, R = never> {
  * @public
  */
 /**
- * Effect {@link RateLimiter.consume} options for queue workers, with optional
- * `key` (defaults to queue name) and telemetry controls.
+ * Effect `RateLimiter.consume` options for queue workers — upstream shape with
+ * optional `key` (defaults to queue name).
  *
  * @remarks
- * Field names match `effect/unstable/persistence` `RateLimiter` (`window`, not
- * `duration`). New upstream consume fields flow through when Effect adds them.
+ * Not a parallel Hyperlink schema. New consume fields from Effect flow through.
+ * Store selection is presence-driven ({@link RateLimiterStore} / {@link RateLimiterTag}
+ * in Context; Soft {@link queueRateLimiterLayer} when absent).
  *
  * @category models
  * @public
@@ -955,7 +958,7 @@ export type WorkPoolRateLimitOptions = Omit<
   "key"
 > & {
   /** Shared limit bucket (default: queue `name` / service id). */
-  readonly key?: string;
+  readonly key?: Parameters<EffectRateLimiter["consume"]>[0]["key"];
 };
 
 /** @public Re-export of Effect rate-limiter consume metadata. */
@@ -1418,37 +1421,49 @@ interface RateLimitExceededEmit<T> {
 }
 
 /**
- * In-memory {@link RateLimiterTag} + store layers for queues with `rateLimit` set.
- * Merged automatically on {@link WorkPool.Service} `.layer` when `rateLimit` is
- * present; compose at the app root for Redis via `RateLimiter.layerStoreRedis`.
+ * Soft in-memory {@link RateLimiterTag} + store — used when `rateLimit` is set
+ * and no ambient {@link RateLimiterStore} / {@link RateLimiterTag} is in context.
+ * For fleet budgets, provide `RateLimiter.layerStoreRedis` at the app root
+ * instead (presence-driven; this layer is not auto-merged onto queue layers).
  *
  * @category layers & serving
  * @public
  */
 export const queueRateLimiterLayer = Layer.provide(rateLimiterLayer, layerStoreMemory);
 
-/** @internal */
-const layerWithQueueRateLimiterIfNeeded = <A, E, R>(
-  layer: Layer.Layer<A, E, R>,
-  config: Pick<WorkPoolConfigBase<unknown>, "rateLimit">,
-): Layer.Layer<A, E, R> =>
-  config.rateLimit === undefined
-    ? layer
-    : Layer.provide(layer, queueRateLimiterLayer);
+/**
+ * Resolve {@link RateLimiterTag} once into the queue scope.
+ *
+ * Order: ambient {@link RateLimiterTag} → ambient {@link RateLimiterStore} → Soft memory.
+ */
+const resolveQueueRateLimiterContext = (): Effect.Effect<
+  Context.Context<RateLimiterTag>,
+  never,
+  Scope.Scope
+> =>
+  Effect.gen(function* () {
+    const limiterOpt = yield* Effect.serviceOption(RateLimiterTag);
+    if (Option.isSome(limiterOpt)) {
+      return Context.make(RateLimiterTag, limiterOpt.value);
+    }
+    const storeOpt = yield* Effect.serviceOption(RateLimiterStore);
+    if (Option.isSome(storeOpt)) {
+      const limiter = yield* makeRateLimiter.pipe(
+        Effect.provideService(RateLimiterStore, storeOpt.value),
+      );
+      return Context.make(RateLimiterTag, limiter);
+    }
+    return yield* Layer.build(queueRateLimiterLayer);
+  });
 
 const resolveRateLimitConsumeOptions = (
   queueName: string,
   rateLimit: WorkPoolRateLimitOptions,
-): Parameters<EffectRateLimiter["consume"]>[0] => {
-  const { key: limitKey, ...rest } = rateLimit;
-  return {
-    ...rest,
-    key: limitKey ?? queueName,
-    algorithm: rateLimit.algorithm ?? "fixed-window",
-    onExceeded: rateLimit.onExceeded ?? "delay",
-    tokens: rateLimit.tokens,
-  };
-};
+): Parameters<EffectRateLimiter["consume"]>[0] => ({
+  ...rateLimit,
+  key: rateLimit.key ?? queueName,
+  onExceeded: rateLimit.onExceeded ?? "delay",
+});
 
 const assertValidRateLimit = (rateLimit: WorkPoolRateLimitOptions): void => {
   if (!(rateLimit.limit > 0) || !Number.isFinite(rateLimit.limit)) {
@@ -2872,12 +2887,13 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
     const autoStart = config.autoStart ?? true;
     const workersStartedRef = yield* Ref.make(false);
 
-    // Build the rate-limiter layer ONCE into the queue scope (a Context, not a per-call Layer
-    // provide) so every item shares the same limiter — and so strictEffectProvide is satisfied.
+    // Resolve RateLimiter once into the queue scope (Context, not a per-call Layer
+    // provide) so every item shares the same limiter — and so strictEffectProvide is
+    // satisfied. Presence-driven: ambient RateLimiter / RateLimiterStore wins; else Soft.
     const rateLimitContext =
       config.rateLimit === undefined
         ? undefined
-        : yield* Layer.build(queueRateLimiterLayer);
+        : yield* resolveQueueRateLimiterContext();
     const rateLimitAwait: RateLimitAwait<T, R> | undefined =
       config.rateLimit === undefined || rateLimitContext === undefined
         ? undefined
@@ -3428,18 +3444,15 @@ const workPoolLayerFromConfig = (
     Layer.effect as never,
   );
   return retype<Layer.Any>(
-    layerWithQueueRateLimiterIfNeeded(
-      retype<Layer.Layer<never, never, never>>(
-        layerEffect(
-          tag,
-          retype(
-            foldConfiguredSpec(resourceId, defaultSpec).pipe(
-              Effect.flatMap(makeQueueEffectFromConfig),
-            ) as never,
-          ),
-        ) as never,
-      ),
-      defaultSpec,
+    retype<Layer.Layer<never, never, never>>(
+      layerEffect(
+        tag,
+        retype(
+          foldConfiguredSpec(resourceId, defaultSpec).pipe(
+            Effect.flatMap(makeQueueEffectFromConfig),
+          ) as never,
+        ),
+      ) as never,
     ) as never,
   );
 };
@@ -3550,14 +3563,11 @@ const workPoolServiceWithoutSchema = <
     defaultSpec: named,
     configure: (patch: ConfigPatch<Spec>) => queueServiceConfigure(name, patch),
     wrapWorker,
-    layer: layerWithQueueRateLimiterIfNeeded(
-      queueServiceLayerFromDefaultSpec(
-        base,
-        name,
-        named,
-        makeQueueEffectWithoutSchema,
-      ),
+    layer: queueServiceLayerFromDefaultSpec(
+      base,
+      name,
       named,
+      makeQueueEffectWithoutSchema,
     ),
   }) satisfies ServiceDef;
 };
@@ -3609,14 +3619,11 @@ const workPoolServiceWithSchema = <
     defaultSpec: named,
     configure: (patch: ConfigPatch<Spec>) => queueServiceConfigure(name, patch),
     wrapWorker,
-    layer: layerWithQueueRateLimiterIfNeeded(
-      queueServiceLayerFromDefaultSpec(
-        base,
-        name,
-        named,
-        makeQueueEffectWithSchema,
-      ),
+    layer: queueServiceLayerFromDefaultSpec(
+      base,
+      name,
       named,
+      makeQueueEffectWithSchema,
     ),
     item,
   }) satisfies ServiceDef;

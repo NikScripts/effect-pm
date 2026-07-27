@@ -1,6 +1,6 @@
 # Plan: fleet rate limiting (Gates + HttpApiClient)
 
-**Status:** Eng in progress — **R1 Eng’d** (Gate `rateLimit` + presence-driven Soft memory). R2–R4 open.  
+**Status:** Eng in progress — **R1 + R3 (fleet verify) Eng’d**. R2 observe nest + R4 HttpApiClient open.  
 **Agent:** 4 (`cursor/hyperservice-open-deps-5679`).  
 **Depends on:** Effect `4.0.0-beta.98` `effect/unstable/persistence/RateLimiter`; WorkPool `rateLimit` precedent.  
 **Product context:** HttpApiClient Gate = local routes + wire observe/limit nest; ApiMetrics absorbed (not a migrate track). Fleet rate limiting is the substrate that nest uses.
@@ -273,7 +273,7 @@ Fleet rate limiting is **first-class Gate substrate**. HttpApiClient update **us
 | **R0** | This proposal + owner locks above |
 | **R1** | ~~Gate config `rateLimit` + consume before Semaphore; Soft memory / presence store; tests with `TestClock`~~ **Eng’d** |
 | **R2** | Wire observe nest on Gate (remaining / exceeded); HttpApiClient still old shape but can share limiter |
-| **R3** | Fleet recipe: `RateLimiter.layerStoreRedis` + distributed Gate demo; docs |
+| **R3** | ~~Fleet recipe + shared-store tests (Gate + WorkPool presence-driven); Soft vs shared contrast; demo/docs~~ **Eng’d** (Redis recipe documented; CI uses shared memory store as stand-in) |
 | **R4** | HttpApiClient → Tag (local routes + nest); adaptive 429; retire ApiMetrics public story |
 | **R5** | (Optional) Hyperlink-backed `RateLimiterStore` without Redis |
 
