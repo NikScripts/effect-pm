@@ -23,7 +23,7 @@ import * as Gate from "../../src/Gate";
 import { serve as daemonEntry } from "../../src/Daemon";
 import { HistoryStore } from "../../src/HistoryStore";
 import * as Logs from "../../src/Logs";
-import { Polling } from "../../src/Polling";
+import * as Polling from "../../src/Polling";
 import * as Store from "../../src/Store";
 import * as WorkPool from "../../src/WorkPool";
 import * as Daemon from "../../src/Daemon";
