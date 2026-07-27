@@ -206,5 +206,10 @@ const appLayer = Layer.mergeAll(
   Hyperlink.client(FetchGate, LiveNode).pipe(Layer.provide(liveTransport)),
 );
 
-/** One reactive runtime providing every resource in the hub. */
-export const runtime = Atom.runtime(appLayer);
+/** One reactive runtime providing every resource in the hub.
+ *  Soft verify (`"status"`): ScoresDb intentionally blips readiness; deep `"reject"` would
+ *  fail Layer build during those windows and take the whole dashboard down. Reachability still
+ *  runs; failures are ignored so degraded cards stay mountable. */
+export const runtime = Atom.runtime(
+  appLayer.pipe(Layer.provide(Hyperlink.clientVerify("status"))),
+);

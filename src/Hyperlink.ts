@@ -4743,7 +4743,14 @@ const ws = <Self>(
   );
   return Layer.unwrap(
     Effect.gen(function* () {
-      yield* applyClientVerify(node as AnyNode, { url });
+      // Relative same-origin paths (`"/rpc"`) are the browser dial target. Resolve to `ws(s)://`
+      // when `location` exists so verify probes WebSocket (not Http GET). Elsewhere skip — do
+      // **not** fall through to the addressed node's stamped `127.0.0.1` (that reintroduces F5).
+      if (isProbeableAddress({ url })) {
+        yield* applyClientVerify(node as AnyNode, { url });
+      } else if (typeof location !== "undefined") {
+        yield* applyClientVerify(node as AnyNode, { url: toWebSocketUrl(url) });
+      }
       return wired;
     }),
   ) as Layer.Layer<Self, NodeUnreachable | UnaddressedNode>;
@@ -4863,8 +4870,15 @@ const verifyEndpointsOf = (
     if (url === undefined) {
       return new UnaddressedNode({ node: node.key });
     }
+    // Absolute `ws(s)://` → WebSocket; absolute `http(s)://` → Http; relative same-origin
+    // paths (`"/rpc"`, Hyperlink.ws browser override) → WebSocket (never Http GET — that
+    // mis-classifies the dial and trips InvalidUrl / a bare GET that isn't the RPC transport).
     const kind: ProtocolKind =
-      url.startsWith("ws://") || url.startsWith("wss://") ? "WebSocket" : "Http";
+      url.startsWith("ws://") || url.startsWith("wss://")
+        ? "WebSocket"
+        : url.startsWith("http://") || url.startsWith("https://")
+          ? "Http"
+          : "WebSocket";
     return [{ kind, url, path: options.path }];
   }
   if (options?.all === true && node.endpoints !== undefined) {
@@ -5142,12 +5156,11 @@ const applyClientVerify = (
     if (mode === false) {
       return;
     }
-    // Relative browser same-origin URLs are not probeable from Node — skip.
-    if (
-      options !== undefined &&
-      !isProbeableAddress(options) &&
-      !isAddressedNode(node)
-    ) {
+    // Relative same-origin URL overrides (`"/rpc"`) are the dial target but not absolute
+    // probe addresses. Skip even when the node is addressed — otherwise verify keeps the
+    // relative url, classifies it as Http, and/or falls through to probing the stamp
+    // (`127.0.0.1`) while the runtime dials the vite proxy (F5).
+    if (options?.url !== undefined && !isProbeableAddress({ url: options.url })) {
       return;
     }
     if (
