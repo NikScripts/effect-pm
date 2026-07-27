@@ -764,6 +764,17 @@ export type DefaultsBag = { readonly [key: string]: unknown };
  */
 type SyncDefault<V> = [V] extends [(...args: never) => Promise<unknown>] ? never : V;
 
+/**
+ * Input bag for {@link defaults} / Tag `{ defaults }` — sync values only (Promise-returning
+ * fns are a type error).
+ *
+ * @category models
+ * @public
+ */
+export type DefaultsInput<D extends DefaultsBag> = {
+  readonly [K in keyof D]: SyncDefault<D[K]>;
+};
+
 /** Prior piped bag on a Tag, or `{}`. @internal */
 type PriorDefaults<T> = T extends { readonly [defaultsSym]: infer P extends DefaultsBag }
   ? P
@@ -796,7 +807,7 @@ export const remapTagService = <Result>(tag: {
 type ServiceOfTag<T> = T extends { readonly Service: infer Svc } ? Svc : never;
 
 /**
- * Tag after {@link defaults}.
+ * Tag after {@link defaults} (pipe or factory `{ defaults }` sugar).
  *
  * Keeps `T` (shallow {@link PipeableTag} pipe — no `HyperlinkTag<Self,…>` rebuild,
  * so `class X extends Tag<X>().pipe(defaults)` does not recurse on `X`). Widens
@@ -804,9 +815,10 @@ type ServiceOfTag<T> = T extends { readonly Service: infer Svc } ? Svc : never;
  * `Effect<Svc & Bag>` and a widened `Service` property. Soundness:
  * `test/defaults-handle.test-d.ts`.
  *
- * @internal
+ * @category models
+ * @public
  */
-type TagWithDefaults<T, D extends DefaultsBag> = T & {
+export type TagWithDefaults<T, D extends DefaultsBag> = T & {
   readonly [defaultsSym]: MergedDefaultsBag<T, D>;
   readonly Service: ServiceOfTag<T> & MergedDefaultsBag<T, D>;
 } & Effect.Effect<ServiceOfTag<T> & MergedDefaultsBag<T, D>, never, never>;
@@ -863,6 +875,11 @@ const defaultsCollidesWithSpec = (flat: FlatSpec, key: string): boolean => {
  *     tags: ["admin", "beta"],
  *   }),
  * ) {}
+ * // equivalent factory sugar:
+ * class Jobs2 extends WorkPool.Tag<Jobs2>()("@app/Jobs2", {
+ *   payload: JobSchema,
+ *   defaults: { label: (n: number) => `job=${n}` },
+ * }) {}
  * const jobs = yield* Jobs
  * jobs.label(1) // typed on Service — no WithDefaults cast
  * ```
@@ -872,11 +889,11 @@ const defaultsCollidesWithSpec = (flat: FlatSpec, key: string): boolean => {
  */
 export const defaults: {
   <const D extends DefaultsBag>(
-    bag: { readonly [K in keyof D]: SyncDefault<D[K]> },
+    bag: DefaultsInput<D>,
   ): <T extends PipeableTag>(tag: T) => TagWithDefaults<T, D>;
   <T extends PipeableTag, const D extends DefaultsBag>(
     tag: T,
-    bag: { readonly [K in keyof D]: SyncDefault<D[K]> },
+    bag: DefaultsInput<D>,
   ): TagWithDefaults<T, D>;
 } = Fn.dual(
   2,
@@ -907,6 +924,16 @@ export const defaults: {
     );
   },
 );
+
+/**
+ * Apply {@link defaults} when a bag is present — factory `{ defaults }` sugar helper.
+ *
+ * @internal
+ */
+export const applyTagDefaults = <T extends PipeableTag, D extends DefaultsBag>(
+  tag: T,
+  bag: D | undefined,
+): T | TagWithDefaults<T, D> => (bag === undefined ? tag : defaults(tag, bag));
 
 /** Install piped {@link defaults} onto a service, with optional impl overrides. @internal */
 const applyDefaultsBag = (
@@ -3381,7 +3408,13 @@ const buildInstanceTag = <Self, S extends Spec>(
   });
 };
 
-/** Optional description / kind bag shared by every {@link Tag} builder overload. @internal */
+/**
+ * Optional description / kind bag shared by every {@link Tag} builder overload.
+ * `defaults` is **not** on this type — only on overloads that use {@link DefaultsInput}
+ * so Promise-returning fns stay rejected (a loose `DefaultsBag` would accept them).
+ *
+ * @internal
+ */
 type TagOptions = {
   readonly description?: string;
   readonly kind?: string;
@@ -3389,8 +3422,33 @@ type TagOptions = {
 
 /** Schema-driven {@link Tag}`<Self>()` builder — bare {@link local} rejected ({@link RejectBareLocal}).
  *  Node-bearing overloads first so `options.node` still infers `HSelf` when options are a variable.
+ *  `{ defaults }` overloads (required key) before optional-options so bag keys stay precise.
  *  @internal */
 type SchemaTagBuilder<Self> = {
+  <const S extends Spec, const D extends DefaultsBag, HSelf>(
+    key: string,
+    spec: S & RejectBareLocal<S>,
+    options: TagOptions & {
+      readonly node: AddressedNode<HSelf>;
+      readonly defaults: DefaultsInput<D>;
+    },
+  ): TagWithDefaults<
+    NodeBoundTag<Self, S, HSelf> & { readonly [nodeSym]: AddressedNode<HSelf> },
+    D
+  >;
+  <const S extends Spec, const D extends DefaultsBag, HSelf>(
+    key: string,
+    spec: S & RejectBareLocal<S>,
+    options: TagOptions & {
+      readonly node: NodeKey<HSelf>;
+      readonly defaults: DefaultsInput<D>;
+    },
+  ): TagWithDefaults<NodeBoundTag<Self, S, HSelf>, D>;
+  <const S extends Spec, const D extends DefaultsBag>(
+    key: string,
+    spec: S & RejectBareLocal<S>,
+    options: TagOptions & { readonly defaults: DefaultsInput<D> },
+  ): TagWithDefaults<HyperlinkTag<Self, S>, D>;
   <const S extends Spec, HSelf>(
     key: string,
     spec: S & RejectBareLocal<S>,
@@ -3413,6 +3471,32 @@ type SchemaTagBuilder<Self> = {
 /** Interface-driven {@link Tag}`<Self, I>()` builder — bare {@link local} typed from `I`
  *  ({@link Validate} / {@link ResolveLocals}). @internal */
 type InterfaceTagBuilder<Self, I> = {
+  <const S extends Spec, const D extends DefaultsBag, HSelf>(
+    key: string,
+    spec: S & Validate<S, I>,
+    options: TagOptions & {
+      readonly node: AddressedNode<HSelf>;
+      readonly defaults: DefaultsInput<D>;
+    },
+  ): TagWithDefaults<
+    NodeBoundTag<Self, ResolveLocals<S, I>, HSelf> & {
+      readonly [nodeSym]: AddressedNode<HSelf>;
+    },
+    D
+  >;
+  <const S extends Spec, const D extends DefaultsBag, HSelf>(
+    key: string,
+    spec: S & Validate<S, I>,
+    options: TagOptions & {
+      readonly node: NodeKey<HSelf>;
+      readonly defaults: DefaultsInput<D>;
+    },
+  ): TagWithDefaults<NodeBoundTag<Self, ResolveLocals<S, I>, HSelf>, D>;
+  <const S extends Spec, const D extends DefaultsBag>(
+    key: string,
+    spec: S & Validate<S, I>,
+    options: TagOptions & { readonly defaults: DefaultsInput<D> },
+  ): TagWithDefaults<HyperlinkTag<Self, ResolveLocals<S, I>>, D>;
   <const S extends Spec, HSelf>(
     key: string,
     spec: S & Validate<S, I>,
@@ -3441,6 +3525,14 @@ type InterfaceTagBuilder<Self, I> = {
  */
 export interface SharedTagFactory<S extends Spec> {
   <Self>(): {
+    <const D extends DefaultsBag>(
+      key: string,
+      options: {
+        readonly description?: string;
+        readonly node?: NodeKey<unknown>;
+        readonly defaults: DefaultsInput<D>;
+      },
+    ): TagWithDefaults<HyperlinkTag<Self, S>, D>;
     (
       key: string,
       options?: {
@@ -3469,6 +3561,9 @@ export interface SharedTagFactory<S extends Spec> {
  *   current: Hyperlink.effect(Schema.Number),
  * }) {}
  * ```
+ *
+ * Optional `{ defaults }` on the options bag is sugar for `.pipe(Hyperlink.defaults(…))` —
+ * bag keys widen `Service` / `yield* Tag` the same way.
  *
  * **Solo (interface)** — `Tag<Self, I>()(key, contract)`: interface `I` is SSOT; bare
  * {@link local} takes its type from `I`.
@@ -3530,9 +3625,10 @@ const makeTag = retype<{
         instanceOptions?: {
           readonly description?: string;
           readonly node?: NodeKey<unknown>;
+          readonly defaults?: DefaultsBag;
         },
-      ) =>
-        buildInstanceTag<unknown, Spec>(
+      ) => {
+        const tag = buildInstanceTag<unknown, Spec>(
           wireKey,
           key,
           sharedSpec,
@@ -3543,6 +3639,8 @@ const makeTag = retype<{
           false,
           true,
         );
+        return applyTagDefaults(tag, instanceOptions?.defaults);
+      };
     return Object.assign(mint, {
       wireKey,
       kind: factoryKind,
@@ -3560,14 +3658,17 @@ const makeTag = retype<{
   function build(
     key: string,
     spec: Spec,
-    options?: TagOptions & { readonly node?: NodeKey<unknown> },
+    options?: TagOptions & {
+      readonly node?: NodeKey<unknown>;
+      readonly defaults?: DefaultsBag;
+    },
   ) {
     claimWireKey(key);
     const flat = flattenSpec(spec);
     const interfaceLocals = Object.values(flat).some((m) =>
       Predicate.hasProperty(m, bareLocalSym),
     );
-    return buildInstanceTag<unknown, Spec>(
+    const tag = buildInstanceTag<unknown, Spec>(
       key,
       key,
       spec,
@@ -3577,6 +3678,7 @@ const makeTag = retype<{
       options?.kind,
       interfaceLocals,
     );
+    return applyTagDefaults(tag, options?.defaults);
   }
   return build;
 } as never);

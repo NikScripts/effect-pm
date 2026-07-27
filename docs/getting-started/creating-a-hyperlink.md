@@ -157,16 +157,15 @@ import { Schema } from "effect"
 class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
   value: Hyperlink.ref(Schema.Number),
   label: Hyperlink.default((n: number) => `count=${n}`),
-}).pipe(
-  Hyperlink.defaults({
-    unit: "count" as const,
-  }),
-) {}
+}, {
+  defaults: { unit: "count" as const },
+}) {}
 ```
 
-`label` is on `Service` (Spec leaf). Piped `unit` widens `Service` at construction too —
-`yield* Counter` sees both. Layer overrides are **provide-site only** (local handle) —
-clients always see the Tag-baked value. Post-hoc local patches: `Layer.updateService`.
+`label` is on `Service` (Spec leaf). Factory `{ defaults }` (or `.pipe(Hyperlink.defaults(…))`)
+widens `Service` the same way — `yield* Counter` sees both. Layer overrides are
+**provide-site only** (local handle) — clients always see the Tag-baked value. Post-hoc
+local patches: `Layer.updateService`.
 
 ## What changes next
 
