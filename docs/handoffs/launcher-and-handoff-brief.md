@@ -70,6 +70,20 @@
     - **Only** `spawn` / `up` construct a `Handle` — no public constructors.
     - Primary surface is the handle, not flat `Launcher.awaitReady(child)` free functions.
 16. **Custody type name = `Launcher.Handle`** (docs may say “custody”; reject `Custody` / `Child` as the type name).
+17. **Effect for everything (hard — owner).** Launcher / assume / Ready path follows package Effect platform policy end-to-end:
+    - **Process:** Effect `ChildProcess` / `ChildProcessSpawner` (+ `@effect/platform-node` layers) — **no** raw `node:child_process` / `spawn`.
+    - **Time / wait:** Effect `Schedule` / `Duration` / `TestClock` in tests — **no** ad-hoc `sleep` as the Ready gate (demos may; library must poll with Effect).
+    - **Config / token inject sugar:** Effect `Config` (or typed spawn options), **not** bare `process.env` as API or protocol.
+    - **Errors:** `Data.TaggedError` / `Schema.TaggedError` — **never** extend native `Error`; no message-string matching.
+    - **Wire:** Schema-first RPC for `Node.assume`; verify/Ready reuse existing Effect `verifyConnection` / status.
+    - **Composition:** `Effect` / `Layer` / `Scope` — no Promise/`async` in Launcher internals.
+    - Browser doesn’t OS-spawn; `Launcher` is a Node-platform module. **`Node.assume` / Ready stay wire-portable** (http/ws/ipc).
+18. **`Node.assume` wire = token payload (open injection).**
+    - RPC: `assume({ token: string })` — Schema’d; loud tagged failures (`AssumeTokenMismatch` / reuse / not-ready).
+    - Launcher **mints** token at `spawn`, holds on `Launcher.Handle`; `.handoff()` calls `assume({ token })`.
+    - **Injection is not the protocol** — app chooses how the child learns the token (`ChildProcess` env/argv/etc. via Effect process options, or later bootstrap). Optional **Effect `Config`** helper for local Node; not required.
+    - Child **rejects** `assume` until Ready. Status may mirror `ownership: "launcher" | "self"`.
+    - Rejected as default: nullary `assume()`; env-as-wire-contract; bidirectional launcher server for v1.
 
 Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.md) remain **reference only** unless re-locked here.
 
@@ -89,8 +103,9 @@ Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.m
 
 ### Track A — baking (not locked)
 
-- Failure / timeout: reuse `ServiceNotReady` / `NodeUnreachable` / … + bounded poll (exact tagged errors for “ready timed out”).
-- `Node.assume` wire shape (new RPC; status may mirror).
+- Failure / timeout: reuse `ServiceNotReady` / `NodeUnreachable` / … + Effect bounded poll / `Schedule` (exact tagged error for “ready timed out”).
+- Assume error schema field list; token entropy / format.
+- Whether `Launcher` lives under `hyperlink-ts/Launcher` with Node-only export (like other platform entrypoints).
 
 ---
 
