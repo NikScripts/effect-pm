@@ -56,7 +56,7 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | [`forms/hyperlink/gate-store-readback.ts`](./forms/hyperlink/gate-store-readback.ts) | Engine auto-write + `Gate.store` + `Store.Service.at` readback |
 | [`forms/hyperlink/gate-runtime-observer.ts`](./forms/hyperlink/gate-runtime-observer.ts) | Observable handle (`status`, counters) via `Subscribable` |
 | [`forms/hyperlink/http-client-gate.ts`](./forms/hyperlink/http-client-gate.ts) | `HttpClientGate.transformClient` |
-| [`forms/hyperlink/gate-http-api-client.ts`](./forms/hyperlink/gate-http-api-client.ts) | `Gate.httpApiClientService` + `ApiMetrics.Tag` |
+| [`forms/hyperlink/gate-http-api-client.ts`](./forms/hyperlink/gate-http-api-client.ts) | `Gate.HttpApiClient` Tag + nest metrics |
 | [`forms/hyperlink/gate-http-api-layer-effect.ts`](./forms/hyperlink/gate-http-api-layer-effect.ts) | `Gate.httpApiClientLayer` + sidecar capture |
 | [`forms/hyperlink/telemetry-fleet-glass.ts`](./forms/hyperlink/telemetry-fleet-glass.ts) | `Telemetry` leaf snapshot + fleet `inFlightByNode` / `fleetInFlight` |
 | [`forms/hyperlink/fleet-health-glass.ts`](./forms/hyperlink/fleet-health-glass.ts) | `FleetHealth` leaf `local` + fleet `byNode` / `status` (`Reachable` \| `Unreachable`) |
@@ -137,7 +137,7 @@ Storage:
 | `pnpm run example:gate` | Gate concurrency form |
 | `pnpm run example:gate-store-readback` | Gate store auto-write + readback |
 | `pnpm run example:http-client-gate` | HttpClient gate form |
-| `pnpm run example:gate-http-api-client` | Gate.httpApiClient form |
+| `pnpm run example:gate-http-api-client` | Gate.HttpApiClient form |
 | `pnpm run example:gate-http-api-layer-effect` | `layerEffect` form |
 | `pnpm run example:form:*` | Individual form scripts that are registered in `package.json` |
 

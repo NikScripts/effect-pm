@@ -107,10 +107,9 @@ const pollerWindows = wnbaGames.map((g) => ({
 }));
 
 // ── ScoresApi — synthetic API-usage windows (served on WnbaNode) ─────────────
-// A real consumer instruments its outbound client (`Gate.instrumentEndpoints`) and serves
-// `ApiMetrics.serve(tag)` (fed from the Metric registry). For the fixture there's no real
-// client, so we hand the served tag a mock `{ metrics, usage }` with synthetic windows — a
-// realistic-ish WNBA stats surface (HttpApi groups × endpoints), accumulated for `topEndpoints`.
+// A real app uses `Gate.HttpApiClient` + `Gate.httpApiClientLayer` (usage nest filled from
+// `instrumentEndpoints`). For the fixture there's no outbound client, so we hand the served
+// tag a mock `metrics` nest with synthetic windows — a realistic-ish WNBA stats surface.
 interface EndpointSpec {
   readonly group: string;
   readonly endpoint: string;
@@ -174,44 +173,47 @@ const fakeWindow: Effect.Effect<ApiUsageMetrics> = Effect.gen(function* () {
     byEndpoint,
   };
 });
+const scoresUsageSnapshot = (
+  inFlight: number,
+): ApiUsageSnapshot => ({
+  clientId: "@wnba/ScoresApi",
+  inFlight,
+  requestsTotal: apiTotal,
+  errorsTotal: apiErrors,
+  topEndpoints: apiCatalog
+    .map((spec) => {
+      const c = apiCumulative.get(spec.endpoint) ?? { requests: 0, errors: 0 };
+      return {
+        group: spec.group,
+        endpoint: spec.endpoint,
+        requests: c.requests,
+        errors: c.errors,
+      };
+    })
+    .sort((a, b) => b.requests - a.requests)
+    .slice(0, 5),
+});
+
+const idleLimiter = (n: number): Hyperlink.Subscribable<number> => ({
+  get: Effect.succeed(n),
+  changes: Stream.succeed(n),
+});
+
 const scoresApiMock = {
-  metrics: Stream.tick(Duration.seconds(2)).pipe(Stream.mapEffect(() => fakeWindow)),
-  usage: {
-    get: Effect.map(
-      Random.nextIntBetween(0, 6),
-      (inFlight): ApiUsageSnapshot => ({
-        clientId: "@wnba/ScoresApi",
-        inFlight,
-        requestsTotal: apiTotal,
-        errorsTotal: apiErrors,
-        topEndpoints: apiCatalog
-          .map((spec) => {
-            const c = apiCumulative.get(spec.endpoint) ?? { requests: 0, errors: 0 };
-            return { group: spec.group, endpoint: spec.endpoint, requests: c.requests, errors: c.errors };
-          })
-          .sort((a, b) => b.requests - a.requests)
-          .slice(0, 5),
-      }),
-    ),
-    changes: Stream.tick(Duration.seconds(2)).pipe(
-      Stream.mapEffect(() =>
-        Effect.map(
-          Random.nextIntBetween(0, 6),
-          (inFlight): ApiUsageSnapshot => ({
-            clientId: "@wnba/ScoresApi",
-            inFlight,
-            requestsTotal: apiTotal,
-            errorsTotal: apiErrors,
-            topEndpoints: apiCatalog
-              .map((spec) => {
-                const c = apiCumulative.get(spec.endpoint) ?? { requests: 0, errors: 0 };
-                return { group: spec.group, endpoint: spec.endpoint, requests: c.requests, errors: c.errors };
-              })
-              .sort((a, b) => b.requests - a.requests)
-              .slice(0, 5),
-          }),
+  metrics: {
+    remaining: idleLimiter(0),
+    resetAfter: idleLimiter(0),
+    exceeded: idleLimiter(0),
+    usage: {
+      get: Effect.map(Random.nextIntBetween(0, 6), scoresUsageSnapshot),
+      changes: Stream.tick(Duration.seconds(2)).pipe(
+        Stream.mapEffect(() =>
+          Effect.map(Random.nextIntBetween(0, 6), scoresUsageSnapshot),
         ),
       ),
+    },
+    windows: Stream.tick(Duration.seconds(2)).pipe(
+      Stream.mapEffect(() => fakeWindow),
     ),
   },
 };
@@ -269,9 +271,7 @@ const wnbaNode = Node.wsServer([
     effect: importWorker,
     concurrency: 3,
   }),
-  // ApiMetrics serves like any resource; the fixture hands it the mock impl via `Hyperlink.serve`
-  // (spec-checked against the tag) — a real app would use `ApiMetrics.serve(ScoresApi)`, fed from
-  // the instrumented client's registry.
+  // Nest-shaped API metrics fixture (same wire nest as Gate.HttpApiClient).
   Hyperlink.serve(ScoresApi, scoresApiMock),
   // Serve the scores DB from its own provided service (below) — the same instance the box-score
   // queue's readiness depends on via `readinessOf(ScoresDb)`, so the cascade is consistent. The

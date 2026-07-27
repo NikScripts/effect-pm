@@ -65,7 +65,7 @@ import { kind as telemetryKind, type MetricDatum } from "../Telemetry";
 import { kind as shardMapKind } from "../ShardMap";
 import { kind as gateKind } from "../Gate";
 import { kind as daemonKind } from "../Daemon";
-import { kind as apiKind } from "../ApiMetrics";
+import { httpApiClientKind as apiKind } from "../Gate";
 import {
   forKind,
   isLeafTag,

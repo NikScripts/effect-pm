@@ -1118,19 +1118,28 @@ export const makeRunner = <const Name extends string>(
 };
 
 // ── HTTP API client ─────────────────────────────────────────────────────────
-// A concurrency-gated typed HttpApiClient — the former HttpApiClient module folded into Gate.
-// `httpApiClient` builds + gates the client from an HttpApi schema (a Semaphore gate over the
-// HttpClient transport via HttpClientGate); the engine lives in ./internal/httpApiClient and is
-// pulled in only when these are referenced.
+// R4: `HttpApiClient` Hyperlink Tag + app-owned `httpApiClientLayer(Tag, runtime)`.
+// Legacy Context.Service builders (`httpApiClient` / `httpApiClientService` /
+// `httpApiClientLayerEffect`) remain for migration; prefer the Tag path.
 
 export {
+  HttpApiClient,
+  httpApiClientLayer,
+  httpApiClientKind,
+  httpApiMetricsNestSpec,
+  MetricsKeyCollision,
+  AdaptiveRequiresRateLimit,
   make as httpApiClient,
   Service as httpApiClientService,
-  layerEffect as httpApiClientLayer,
+  layerEffect as httpApiClientLayerEffect,
   acceptJson,
   instrumentEndpoints,
 } from "./internal/httpApiClient";
 export type {
-  HttpApiClientConfig as HttpApiClientConfig,
-  HttpApiClientLayerEffectConfig as HttpApiClientLayerEffectConfig,
+  HttpApiClientConfig,
+  HttpApiClientLayerEffectConfig,
+  HttpApiClientTagConfig,
+  HttpApiClientRuntimeConfig,
+  HttpApiClientAdaptiveOptions,
+  HttpApiClientMetrics,
 } from "./internal/httpApiClient";

@@ -1,24 +1,13 @@
 import { beforeEach, describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Fiber, Layer, Ref, Schema, Stream } from "effect";
-import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
-import {
-  FetchHttpClient,
-  HttpClient,
-  HttpClientResponse,
-  HttpServer,
-} from "effect/unstable/http";
+import { TestClock } from "effect/testing";
+import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import type { HttpClientError } from "effect/unstable/http";
-import { NodeHttpServer } from "@effect/platform-node";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
-import * as ApiMetrics from "../src/ApiMetrics";
 import * as Gate from "../src/Gate";
 import { resetClientUsageForTest } from "../src/internal/apiUsageRegistry";
-import * as Hyperlink from "../src/Hyperlink";
-import * as Node from "../src/Node";
 
 const ClientId = "test/api-metrics/client" as const;
-
-class DemoMetrics extends ApiMetrics.Tag<DemoMetrics>()(ClientId) {}
 
 const pingEndpoint = HttpApiEndpoint.get("ping", "/ping", {
   success: Schema.Struct({ pong: Schema.Boolean }),
@@ -28,9 +17,23 @@ const demoApi = HttpApi.make("api-metrics-demo").add(
   HttpApiGroup.make("g").add(pingEndpoint),
 );
 
-class DemoClient extends Gate.httpApiClientService<DemoClient>()(ClientId, demoApi, {
+class DemoClient extends Gate.HttpApiClient<DemoClient>()(ClientId, demoApi, {
   concurrency: 2,
-}) {}
+  windowMs: Duration.seconds(1),
+}) {
+  static readonly layer = Gate.httpApiClientLayer(DemoClient);
+}
+
+class LimitedClient extends Gate.HttpApiClient<LimitedClient>()(
+  "test/api-metrics/limited",
+  demoApi,
+  {
+    concurrency: 2,
+    rateLimit: { limit: 5, window: Duration.seconds(60) },
+  },
+) {
+  static readonly layer = Gate.httpApiClientLayer(LimitedClient);
+}
 
 const json200 = JSON.stringify({ pong: true });
 
@@ -47,32 +50,25 @@ const fakeHttpClientLayer = Layer.succeed(
   ),
 );
 
-const liveLayers = Layer.mergeAll(
-  DemoClient.layer.pipe(Layer.provide(fakeHttpClientLayer)),
-  ApiMetrics.layer(DemoMetrics, { windowMs: Duration.seconds(1) }),
-);
+const liveLayers = DemoClient.layer.pipe(Layer.provide(fakeHttpClientLayer));
+const limitedLayers = LimitedClient.layer.pipe(Layer.provide(fakeHttpClientLayer));
 
 beforeEach(() => {
   Effect.runSync(resetClientUsageForTest());
 });
 
-describe("ApiMetrics.Tag", () => {
-  it("auto-suffixes the Hyperlink key and stores clientIdSym", () => {
-    expect(DemoMetrics.key).toBe(ApiMetrics.metricsKeyFor(ClientId));
-    expect(ApiMetrics.clientIdOf(DemoMetrics)).toBe(ClientId);
-    // per-instance group: the wire key is the metrics key (its own RpcGroup prefix), not a shared family
-    expect(DemoMetrics.key).toBe(ApiMetrics.metricsKeyFor(ClientId));
+describe("Gate.HttpApiClient metrics nest", () => {
+  it("stamps kind + default metricsKey metadata", () => {
+    expect(DemoClient.key).toBe(ClientId);
+    expect(Gate.metricsKeyOf(DemoClient)).toBe("metrics");
   });
-});
 
-describe("ApiMetrics.layer", () => {
-  it.effect("usage.get reflects HttpApiClient endpoint calls", () =>
+  it.effect("usage.get reflects endpoint calls", () =>
     Effect.gen(function* () {
       const client = yield* DemoClient;
-      const metrics = yield* DemoMetrics;
       yield* client.g.ping();
       yield* client.g.ping();
-      const snap = yield* metrics.usage.get;
+      const snap = yield* client.metrics.usage.get;
       expect(snap.clientId).toBe(ClientId);
       expect(snap.requestsTotal).toBe(2);
       expect(snap.errorsTotal).toBe(0);
@@ -80,13 +76,14 @@ describe("ApiMetrics.layer", () => {
     }).pipe(Effect.provide(liveLayers), Effect.scoped),
   );
 
-  it.effect("metrics stream emits on endpoint usage", () =>
+  it.effect("windows stream emits after traffic", () =>
     Effect.gen(function* () {
       const client = yield* DemoClient;
-      const metrics = yield* DemoMetrics;
       const samples = yield* Ref.make(0);
       yield* Effect.forkScoped(
-        Stream.runForEach(metrics.metrics, () => Ref.update(samples, (n) => n + 1)),
+        Stream.runForEach(client.metrics.windows, () =>
+          Ref.update(samples, (n) => n + 1),
+        ),
       );
       yield* Effect.yieldNow;
       yield* client.g.ping();
@@ -95,104 +92,96 @@ describe("ApiMetrics.layer", () => {
     }).pipe(Effect.provide(liveLayers), Effect.scoped),
   );
 
-  it.effect("usage.changes emits when endpoint usage is recorded", () =>
+  it("fail-loud when metricsKey collides with an HttpApi group id", () => {
+    expect(() =>
+      Gate.HttpApiClient()("test/collide", demoApi, { metricsKey: "g" }),
+    ).toThrow(Gate.MetricsKeyCollision);
+  });
+
+  it.effect("rateLimit publishes remaining on the nest", () =>
     Effect.gen(function* () {
-      const client = yield* DemoClient;
-      const metrics = yield* DemoMetrics;
-      const collected = yield* Effect.forkChild(
-        Stream.runHead(
-          Stream.filter(metrics.usage.changes, (s) => s.requestsTotal >= 1),
+      const client = yield* LimitedClient;
+      expect(yield* client.metrics.remaining.get).toBe(5);
+      yield* client.g.ping();
+      expect(yield* client.metrics.remaining.get).toBe(4);
+    }).pipe(Effect.provide(limitedLayers), Effect.scoped),
+  );
+
+  it("adaptive without rateLimit fails loud at mint", () => {
+    expect(() =>
+      Gate.HttpApiClient()("test/adaptive-no-rl", demoApi, { adaptive: true }),
+    ).toThrow(Gate.AdaptiveRequiresRateLimit);
+  });
+});
+
+class AdaptiveClient extends Gate.HttpApiClient<AdaptiveClient>()(
+  "test/api-metrics/adaptive",
+  demoApi,
+  {
+    concurrency: 1,
+    rateLimit: { limit: 1_000, window: Duration.minutes(1) },
+    adaptive: { key: "upstream:test-adaptive" },
+  },
+) {
+  static readonly layer = Gate.httpApiClientLayer(AdaptiveClient, {
+    baseUrl: "https://api.example.com",
+  });
+}
+
+describe("Gate.HttpApiClient adaptive 429", () => {
+  it.effect("429 + Retry-After cools down the next round-trip", () =>
+    Effect.gen(function* () {
+      const hits = yield* Ref.make(0);
+      const httpLayer = Layer.succeed(
+        HttpClient.HttpClient,
+        HttpClient.makeWith<never, never, HttpClientError.HttpClientError, never>(
+          (reqEff) =>
+            Effect.flatMap(reqEff, (req) =>
+              Effect.gen(function* () {
+                const n = yield* Ref.updateAndGet(hits, (x) => x + 1);
+                if (n === 1) {
+                  return HttpClientResponse.fromWeb(
+                    req,
+                    new Response("{}", {
+                      status: 429,
+                      headers: { "retry-after": "60" },
+                    }),
+                  );
+                }
+                return HttpClientResponse.fromWeb(
+                  req,
+                  new Response(json200, {
+                    status: 200,
+                    headers: { "content-type": "application/json" },
+                  }),
+                );
+              }),
+            ),
+          (request) => Effect.succeed(request),
         ),
       );
-      yield* Effect.yieldNow;
-      yield* client.g.ping();
-      const head = yield* Fiber.join(collected);
-      expect(head._tag).toBe("Some");
-      if (head._tag === "Some") {
-        expect(head.value.requestsTotal).toBeGreaterThanOrEqual(1);
-      }
-    }).pipe(Effect.provide(liveLayers), Effect.scoped),
-  );
-});
 
-describe("ApiMetrics per-instance groups + httpServer", () => {
-  const OtherClientId = "test/api-metrics/other" as const;
-  class OtherMetrics extends ApiMetrics.Tag<OtherMetrics>()(OtherClientId) {}
+      yield* Effect.gen(function* () {
+        const client = yield* AdaptiveClient;
+        // First call hits 429 — decode fails; adaptiveFeedback still records cooldown.
+        yield* client.g.ping().pipe(Effect.exit);
+        expect(yield* Ref.get(hits)).toBe(1);
 
-  it("each tag is its own wire key (distinct, key-prefixed)", () => {
-    expect(DemoMetrics.key).not.toBe(OtherMetrics.key);
-    expect(OtherMetrics.key).toBe(ApiMetrics.metricsKeyFor(OtherClientId));
-  });
-
-  // Two metrics tags served on one node via `httpServer`; each reached over http with its own
-  // per-instance group — `Hyperlink.client` routes to the right one (no shared key header).
-  const alphaSnap = {
-    clientId: ClientId,
-    inFlight: 0,
-    requestsTotal: 1,
-    errorsTotal: 0,
-    topEndpoints: [{ group: "g", endpoint: "alpha", requests: 1, errors: 0 }],
-  };
-  const betaSnap = {
-    clientId: OtherClientId,
-    inFlight: 0,
-    requestsTotal: 2,
-    errorsTotal: 0,
-    topEndpoints: [{ group: "g", endpoint: "beta", requests: 2, errors: 0 }],
-  };
-  const alphaImpl = {
-    usage: {
-      get: Effect.succeed(alphaSnap),
-      changes: Stream.fromIterable([alphaSnap]),
-    },
-    metrics: Stream.empty,
-  };
-  const betaImpl = {
-    usage: {
-      get: Effect.succeed(betaSnap),
-      changes: Stream.fromIterable([betaSnap]),
-    },
-    metrics: Stream.empty,
-  };
-  const Server = Node.httpServer([
-    Hyperlink.serve(DemoMetrics, alphaImpl),
-    Hyperlink.serve(OtherMetrics, betaImpl),
-  ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
-
-  it("httpServer serves both; clients read the right one", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const addr = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
-        const port = addr._tag === "TcpAddress" ? addr.port : 0;
-        const protocol = RpcClient.layerProtocolHttp({
-          url: `http://127.0.0.1:${port}/rpc`,
-        }).pipe(
-          Layer.provide(RpcSerialization.layerNdjson),
-          Layer.provide(FetchHttpClient.layer),
-        );
-        yield* Effect.gen(function* () {
-          const demo = yield* DemoMetrics;
-          const other = yield* OtherMetrics;
-          const alpha = yield* demo.usage.get;
-          const beta = yield* other.usage.get;
-          expect(alpha.topEndpoints[0]?.endpoint).toBe("alpha");
-          expect(beta.topEndpoints[0]?.endpoint).toBe("beta");
-        }).pipe(
-          Effect.provide(
-            Layer.mergeAll(
-              Hyperlink.client(DemoMetrics),
-              Hyperlink.client(OtherMetrics),
-            ).pipe(Layer.provide(protocol)),
+        const fiber = yield* Effect.forkChild(client.g.ping().pipe(Effect.exit));
+        yield* TestClock.adjust(Duration.seconds(30));
+        expect(yield* Ref.get(hits)).toBe(1);
+        yield* TestClock.adjust(Duration.seconds(30));
+        yield* Fiber.join(fiber);
+        expect(yield* Ref.get(hits)).toBe(2);
+      }).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            AdaptiveClient.layer.pipe(Layer.provide(httpLayer)),
+            TestClock.layer(),
           ),
-          Effect.scoped,
-        );
-      }).pipe(Effect.provide(Server), Effect.scoped),
-    ));
-});
-
-describe("ApiMetrics.layerFor", () => {
-  it("links metrics tag to Gate.httpApiClientService key", () => {
-    const layer = ApiMetrics.layerFor(DemoMetrics, DemoClient);
-    expect(layer).toBeDefined();
-  });
+        ),
+        Effect.scoped,
+      );
+    }),
+  );
 });

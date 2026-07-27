@@ -27,7 +27,7 @@
  *   (nestable; members may be on the same or different nodes). Contracts are introspectable via
  *   `specOf` + `methodMeta` (build generic UIs). See the live book under `docs/resources/` and
  *   `docs/guides/`.
- * - **`Gate`**, **`HttpClientGate`**, **`Gate.httpApiClient`** —
+ * - **`Gate`**, **`HttpClientGate`**, **`Gate.HttpApiClient`** —
  *   Optional building blocks for **gated** HTTP and reusable service patterns.
  * - **Persistence** — `DurableQueueStore` (durable priority queue) + `HistoryStore`
  *   (metrics/logs history); in-memory or SQLite (`hyperlink-ts/storage/sqlite`).
