@@ -12,7 +12,7 @@ Start with [`docs/handoffs/agent-status.md`](./docs/handoffs/agent-status.md) fo
 
 **Roadmap (future only):** [`docs/plans/README.md`](./docs/plans/README.md).
 
-**Branches:** one **work branch per agent** + one **`integration`** tip. Sync so work branch and `integration` are merged and share the same tip. Do **not** open PRs unless the owner asks. Do not commit or push on `main` / `develop` / release / user-owned branches without approval. Detail: [`docs/legacy/AGENTS.md`](./docs/legacy/AGENTS.md#branch-policy).
+**Branches:** one **work branch per agent** + one **`integration`** tip. Do **not** open PRs unless the owner asks. Do not commit or push on `main` / `develop` / release / user-owned branches without approval. **Never push `integration` unless the owner explicitly authorizes that push** (tip-sync language is not blanket permission — 2026-07-27). Detail: [`docs/legacy/AGENTS.md`](./docs/legacy/AGENTS.md#branch-policy); incident: [`docs/handoffs/agent-04-w3-incident-2026-07-27.md`](./docs/handoffs/agent-04-w3-incident-2026-07-27.md).
 
 **Changesets:** agents may create `.changeset/*.md` without approval; **`pnpm run version` and publish require owner approval**. After creating a changeset, paste the **full file** in owner chat.
 

@@ -1,6 +1,6 @@
 # Plan: wire groups, identity, and shared Spec families
 
-**Status:** W1 Eng’d; unused family path **deleted** (2026-07-27); W3+ not Eng’d.  
+**Status:** W1–W2 Eng’d; W3 **not Eng’d**. A premature public `Family` / `serveFamily` attempt was **rejected and removed from tip** (restored to `5a0b42d5`) — see [`../handoffs/agent-04-w3-incident-2026-07-27.md`](../handoffs/agent-04-w3-incident-2026-07-27.md).  
 **Agent:** 4 (`cursor/hyperservice-open-deps-5679`).  
 **Supersedes:** casual use of public `groupId` as a second identity; doc/examples that teach `tagFor("queue", …)` as the WorkPool model; the 2026-07-14 “keep `groupId`” exception for RPC naming (see owner-decisions).
 
@@ -64,10 +64,10 @@ Never merge different kinds into one group (`WorkPool` ≠ `WorkPool/priority`, 
 | Entry point | Meaning | Wire (internal) |
 |-------------|---------|-----------------|
 | `Hyperlink.Tag(key, spec)` / toolkit `.Tag` | One resource | prefix = **tag key** |
-| Family / Prototype factory (name TBD) minting instances under a kind + shared Spec | Related instances | prefix = **kind key**; route by instance key |
+| Shared-Spec mint (**name TBD** — not `Family`; lean: `Hyperlink.Tag(wireKey, spec)` → `Factory<Self>()(instanceKey)`) | Related instances | prefix = **kind / wire key**; route by instance key |
 
-No public `groupId`. No author-facing `wireMode`.  
-Internal discriminant allowed (private symbol) so `serve` / `client` pick the right path.
+No public `groupId`. No author-facing `wireMode`. **No new public serve/client verbs** (`serveFamily` / `clientFamily` rejected).  
+Internal discriminant allowed (private symbol) so existing `serve` / `client` pick the right path.
 
 Optional helper (internal or public): `Hyperlink.wireKey(tag)` → tag key or kind key from that discriminant. UI `tagWireKey` should call the same rule.
 
@@ -78,7 +78,7 @@ Optional helper (internal or public): `Hyperlink.wireKey(tag)` → tag key or ki
 | Today | Target |
 |-------|--------|
 | `.groupId` === `.key` on toolkit Tags | Drop `.groupId`; wire uses `.key` |
-| `tagFor` / `serveInstances` / `clientInstances` unused in `src/` toolkits | **Deleted** after migrating tests/examples to solo `Tag`; W3 adds a real kind-keyed factory when needed |
+| `tagFor` / `serveInstances` / `clientInstances` unused in `src/` toolkits | **Deleted** (W2). Do **not** revive those names or invent `*Family` serve/client APIs; W3 mint shape owner-gated |
 | Examples `tagFor("queue", …)` | Gone — never use `"queue"` as a wire/contract key |
 | `forwardClient` always sends header `key` | Instance mode: omit or ignore; shared mode: required |
 | `ServedHyperlinks` keyed by `groupId` | Keyed by wire key (`.key` or kind key) |
@@ -95,7 +95,7 @@ Spec-hash stays **`contractHash` / verify**, not the RpcGroup name.
 | **W0** | This plan + owner-decisions row (supersede “keep groupId”); agent-status — **done** |
 | **W1** | Solo path: remove public `groupId`; wire/serve/client/verify/registry use `.key` / `wireKeyOf`; changeset major; fix doc lies — **Eng’d** |
 | **W2** | Migrate callers → solo `Tag`; **delete** `tagFor` / `serveInstances` / `clientInstances` / `instance` (+ factory types / family errors) — **Eng’d** |
-| **W3** | Family factory (Effect-hidden): shared Spec + kind-keyed wire; start with ApiMetrics and/or Schedule and/or control-only surfaces |
+| **W3** | Shared-Spec mint + kind-keyed wire — **design only** until owner locks. Rejected: public `Family` / `serveFamily` / `clientFamily`. Under discussion: `Tag(wireKey, spec)` factory arity; ApiMetrics vs Gate handle + reserved features nest |
 | **W4** | Prototype story (compose Spec + features, mint named keys) — align `Node.Prototype` later; no service-extends-service |
 | **W5** | Optional: WorkPool/Daemon control vs data-plane wire split if product wants kind-keyed control family |
 

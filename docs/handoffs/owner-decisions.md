@@ -338,7 +338,15 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Rejected:** Kind as RpcGroup prefix for regular Tags; spec-hash as group name; public `wireMode` on every tag; forcing full WorkPool/Daemon/Gate Specs onto one kind-group without a control/data split.
 - **Supervisor impact:** Agent 4 owns W1+ on `cursor/hyperservice-open-deps-5679`.
 - **Eng note (2026-07-27):** W1 landed — public `HyperlinkTag.groupId` removed; `wireKeySym` / `wireKeyOf`; solo wire = `.key`; `DuplicateWireKey`; `ServedHyperlink.wireKey`; contract descriptor field `wireKey`.
-- **Eng note (2026-07-27, W2):** Unused shared-Spec family path **deleted** (`tagFor` / `serveInstances` / `clientInstances` / `instance` + factory types / family errors) after migrating tests/examples to solo `Tag`. No demotion/shim — migrate then delete. W3 adds a real kind-keyed factory when product needs it.
+- **Eng note (2026-07-27, W2):** Unused shared-Spec family path **deleted** (`tagFor` / `serveInstances` / `clientInstances` / `instance` + factory types / family errors) after migrating tests/examples to solo `Tag`. No demotion/shim — migrate then delete.
+
+## 2026-07-27 — W3 Family surface REJECTED; never push `integration` without authorization
+
+- **Owner said:** Do not ship `Hyperlink.Family` / `serveFamily` / `serveFamilyRemote` / `clientFamily` / `member` (or any new serve/client surface invented for kind-keyed wire). Plan said factory **name TBD**. Never push `integration` without explicit owner authorization. Force-reset tip to pre-incident state.
+- **Chose / done:** Agent 4 had Eng’d that surface (`90479552`) and tip-synced it to `integration` without authorization — **process failure**. Owner ordered full reverse: force-reset `cursor/hyperservice-open-deps-5679` and `integration` to **`5a0b42d5`** (W2 tip; Family never on tip). Incident write-up: [`agent-04-w3-incident-2026-07-27.md`](./agent-04-w3-incident-2026-07-27.md).
+- **Rejected:** Public `*Family*` APIs; treating tip-sync language as blanket `integration` push rights; Eng’ing W3 before locking mint shape / ApiMetrics–Gate relationship.
+- **Standing rule:** Agent 4 (and all agents) push **work branch only** unless owner explicitly authorizes an `integration` push.
+- **Design (unlocked, discussion only):** Prefer shared Spec via `Hyperlink.Tag(wireKey, spec)` → `Factory<Self>()(instanceKey)` (class-only), not a new noun; no new serve/client verbs; explore API handle + reserved features nest (metrics) instead of sibling ApiMetrics tag / `httpApiClientService` product name. See incident handoff.
 
 ---
 
