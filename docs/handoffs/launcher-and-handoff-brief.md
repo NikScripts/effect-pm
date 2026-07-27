@@ -98,7 +98,7 @@
     - Reject UUID-as-the-story if it implies non-Effect globals; brand OK as sugar over the same mint.
 21. **Package export = own subpath `hyperlink-ts/Launcher`.**
     - Public module: `src/Launcher.ts` (flat Effect-true namespace) + `src/internal/launcher.ts` engine as needed.
-    - Barrel / `package.json` `exports` entry for `@nikscripts/…/Launcher` (package name per tip) — **not** nested under `Node`.
+    - Barrel / `package.json` `exports` entry for `hyperlink-ts/Launcher` — **not** nested under `Node`.
     - **Node-platform only** (mirror other OS-spawn entrypoints); `Node.assume` / Ready stay on `hyperlink-ts/Node` and remain wire-portable.
     - Eng may choose exact packaging nuance (e.g. peer `@effect/platform-node`) without reopening the subpath decision.
 
