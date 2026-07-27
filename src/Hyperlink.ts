@@ -769,16 +769,47 @@ type PriorDefaults<T> = T extends { readonly [defaultsSym]: infer P extends Defa
   ? P
   : {};
 
+/** Merged piped bag after applying `D` onto `T`'s prior defaults. @internal */
+type MergedDefaultsBag<T, D extends DefaultsBag> = PriorDefaults<T> & D;
+
 /**
- * Tag after {@link defaults} — precise merged bag on {@link defaultsSym}.
- * (`class X extends Tag<X>().pipe(defaults)` cannot remap {@link HyperlinkTag}'s
- * `Service` without a self-heritage cycle; use {@link WithDefaults} at the use site.)
+ * Remap a resource Tag's handle (`Svc`) — the licensed cast for construction
+ * adornments ({@link defaults}, …). Runtime identity is unchanged; only the
+ * type-level claim on {@link Result} changes.
+ *
+ * Generics + class-`Self` + invariant `Shape` block a proved remap, so this is
+ * one `as unknown as` (same pattern as Gate `nameRunService` / WorkPool
+ * `nameQueueService`). **Caller owes** a bidirectional assignability guard in a
+ * `.test-d.ts` for the `Result` claim — cite that file at each call site.
+ *
+ * @internal
+ */
+export const remapTagService = <Result>(tag: {
+  readonly [specSym]: FlatSpec;
+}): Result => tag as unknown as Result;
+
+/**
+ * Service shape of a piped Tag before bag widen (from `Service`, else `never`).
+ *
+ * @internal
+ */
+type ServiceOfTag<T> = T extends { readonly Service: infer Svc } ? Svc : never;
+
+/**
+ * Tag after {@link defaults}.
+ *
+ * Keeps `T` (shallow {@link PipeableTag} pipe — no `HyperlinkTag<Self,…>` rebuild,
+ * so `class X extends Tag<X>().pipe(defaults)` does not recurse on `X`). Widens
+ * what `yield* Tag` / {@link Shape} see by intersecting a covariant
+ * `Effect<Svc & Bag>` and a widened `Service` property. Soundness:
+ * `test/defaults-handle.test-d.ts`.
  *
  * @internal
  */
 type TagWithDefaults<T, D extends DefaultsBag> = T & {
-  readonly [defaultsSym]: PriorDefaults<T> & D;
-};
+  readonly [defaultsSym]: MergedDefaultsBag<T, D>;
+  readonly Service: ServiceOfTag<T> & MergedDefaultsBag<T, D>;
+} & Effect.Effect<ServiceOfTag<T> & MergedDefaultsBag<T, D>, never, never>;
 
 /**
  * Piped {@link defaults} bag on a Tag, or `{}` when absent.
@@ -791,14 +822,15 @@ export type DefaultsOf<T> = T extends { readonly [defaultsSym]: infer D extends 
   : {};
 
 /**
- * Handle shape including a piped {@link defaults} bag — for `yield* Tag` sites that need
- * bag keys typed (`class X extends Tag.pipe(defaults)` cannot widen `Service` itself).
+ * Handle shape including a piped {@link defaults} bag.
+ *
+ * Prefer construction-time {@link defaults} (widens `Service` / `yield* Tag`).
+ * Kept as an escape / migration alias when a Tag was built without the widen.
  *
  * @category models
  * @public
  */
-export type WithDefaults<T> = (T extends { readonly Service: infer Svc } ? Svc : never) &
-  DefaultsOf<T>;
+export type WithDefaults<T> = ServiceOfTag<T> & DefaultsOf<T>;
 
 /** True when a defaults bag key collides with a flat Spec path. @internal */
 const defaultsCollidesWithSpec = (flat: FlatSpec, key: string): boolean => {
@@ -815,9 +847,9 @@ const defaultsCollidesWithSpec = (flat: FlatSpec, key: string): boolean => {
  * Spec stays branded builders; this bag is the extras surface.
  *
  * Singular fields belong in the contract via {@link default} (fully typed on `Service`).
- * Piped bag keys are on every local/client handle at runtime; type them with
- * {@link WithDefaults}`<typeof Tag>` (class-extends cannot widen `Service` without a
- * self-heritage cycle). Same key as a Spec path (or a prior bag key) →
+ * Piped bag keys widen `Service` / `yield* Tag` at construction (via {@link remapTagService})
+ * so bag keys are typed without a use-site cast — same licensed-cast pattern as named
+ * Gate / WorkPool handles. Same key as a Spec path (or a prior bag key) →
  * {@link DuplicateDefaultKey} at pipe time.
  *
  * Layer/serve may override bag keys at the **provide site only** — overrides do not travel
@@ -831,7 +863,8 @@ const defaultsCollidesWithSpec = (flat: FlatSpec, key: string): boolean => {
  *     tags: ["admin", "beta"],
  *   }),
  * ) {}
- * const jobs = (yield* Jobs) as Hyperlink.WithDefaults<typeof Jobs>
+ * const jobs = yield* Jobs
+ * jobs.label(1) // typed on Service — no WithDefaults cast
  * ```
  *
  * @category spec fields
@@ -866,9 +899,12 @@ export const defaults: {
         throw new DuplicateDefaultKey({ key });
       }
     }
-    return Object.assign(tag, {
-      [defaultsSym]: { ...prior, ...bag },
-    }) as TagWithDefaults<T, D>;
+    // Soundness: test/defaults-handle.test-d.ts (Svc ⇄ Svc & bag; toolkit keeps named handle).
+    return remapTagService<TagWithDefaults<T, D>>(
+      Object.assign(tag, {
+        [defaultsSym]: { ...prior, ...bag },
+      }),
+    );
   },
 );
 
@@ -934,8 +970,8 @@ export const local: typeof localFn & BareLocal = Object.assign(localFn, {
  * no impl slot. Accepts a literal or a sync function (Promise-returning fns are a type error —
  * async belongs in {@link effect} / {@link effectFn} or {@link promise}).
  *
- * For **multiple** defaults, pipe {@link defaults} onto the Tag instead (bag keys are
- * on the runtime handle; type them with {@link WithDefaults}`<typeof Tag>` at use sites).
+ * For **multiple** defaults, pipe {@link defaults} onto the Tag instead (bag keys
+ * widen `Service` at construction — `yield* Tag` sees them).
  *
  * Layer/serve may override a Spec default at the **provide site only** (see
  * {@link ImplWithDefaultOverrides}); the remote client always installs the Tag-baked value.
