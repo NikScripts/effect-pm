@@ -6,7 +6,7 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **4** | `cursor/hyperservice-open-deps-5679` | [service shapes plan](../plans/service-shapes.md) | **Eng’d** — tip-synced | same tip as `integration` | typecheck + pure suites | `Tag`/`value`/`promise`/`pure` shipped; Creating a Hyperlink polish still paused | 2026-07-26 |
+| **4** | `cursor/hyperservice-open-deps-5679` | [wire groups & identity](../plans/wire-groups-and-identity.md) · [service shapes](../plans/service-shapes.md) | **Eng W1–W2** (family path deleted) | tip-sync after push | typecheck + targeted tests | Next Eng **W3**: kind-keyed family factory when needed | 2026-07-27 |
 | **G / TUI** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity | **design** — client adapters notes; tip-synced | same tip as `integration` | prior suites green | Notes: [`client-adapters-design.md`](./client-adapters-design.md) — Promise / TanStack / tRPC-shape / Effect-reactive helpers; Eng TBD | 2026-07-24 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **G**, this agent only | 2026-07-26 |
 | **Launcher** | `cursor/launcher-handoff-design-929b` | [launcher + handoff brief](./launcher-and-handoff-brief.md) | **plan-first** — framing repeat; nothing locked | branch tip | docs only | `launcher-decisions.md` reference only; reuse contractHash/verify; no Eng until bake | 2026-07-26 |
@@ -27,14 +27,14 @@
 0. **Agent E:** impossible-states plan ([`impossible-states-proposal.md`](./impossible-states-proposal.md)). **DONE + merged:** P1 (node↔protocol wiring bug → compile error, cast-free) + P5 (http transport dies in browser). **P2 SKIPPED** (cast). **P4 already-enforced** (loose-fields payload already rejected; proposal mis-scoped). **P3 deferred** (opaque serve layers). Clean wins complete. Reserved `src/Resource.ts` node/client surface until fully merged (done). **Tag-config reservation RELEASED — Agent D queue/run/process payload-config unblocked.**
 
 ### Active (owner approval required)
-1. **Agent 4:** Service shapes — Eng’d `Tag<Self, I>()`, `value`, overload arity, `Hyperlink.promise`, `Hyperlink.pure`. Creating a Hyperlink polish still paused; next owner call (e.g. Tag-baked `constant(literal)` / polish).
+1. **Agent 4:** Wire identity **W1–W2 Eng** ([`wire-groups-and-identity.md`](../plans/wire-groups-and-identity.md)) — drop public `groupId`; unused family path deleted (solo `Tag` only). Service shapes: `Tag`/`value`/`promise`/`pure` Eng’d; Creating polish + handle adornments paused. Next: W3 kind-keyed family factory when needed.
 2. **Agent G / TUI:** Dashboard Group parity + client-adapters design (`cursor/tui-dashboard-parity-125f`).
-3. **This agent (Launcher):** launcher + node handoff design — plan-first on `cursor/launcher-handoff-design-929b`. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md). Nothing locked; framing before APIs.
+3. **This agent (Launcher):** launcher + node handoff design — plan-first on `cursor/launcher-handoff-design-929b`. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md). Nothing locked; framing before APIs. (Hygiene previously landed on `integration`.)
 
 ### Frozen / dead (do not assign)
 - **Agent 1:** frozen — Examples book E1 already on tip; stale intro PR #68 closed; branch deleted.
 - **Agent 3:** dead — Soft/verify/F4/memo Eng’d on tip; work branch deleted.
-- **Agent D (+ peers):** named handles — do not reassign (was: do not give to Agent 3).
+- **Agent D (+ peers):** named handles — do not reassign to Agent 3.
 
 ### Ready / owner calls
 5. **Node catalog + identity lookup** — design [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md); Phase-2–3 catalog/directory/**D3**/**D4**/**D7**/`Node.Prototype` Eng on tip; **`askIncumbent` Eng’d**; **X1 Eng’d**; **managers → [`identity-coordinator.md`](./identity-coordinator.md) M4–M6 Eng’d** (v1 complete)

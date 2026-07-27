@@ -24,8 +24,8 @@ yield* queue.status.get;
 ```
 
 - **`Hyperlink`** — the foundation: `Tag` + `layer` (local), `serve` (host, composed with
-  `Node.httpServer` / `wsServer`), `client` / `connect` (remote), `serveInstances` (many instances
-  behind one transport). Contracts are introspectable via `specOf` / `methodMeta` (build generic UIs).
+  `Node.httpServer` / `wsServer`), `client` / `connect` (remote). Contracts are introspectable
+  via `specOf` / `methodMeta` (build generic UIs).
 - **`WorkPool`** — priority **work pools** with concurrency, optional `rateLimit`, `attempts` retry,
   **`refill`** (self-feeding from a source), and durable history via `WorkPool.store` on a
   `Store.Service`. Per-resource logs use the **`Logs`** platform + **`Hyperlink.logs`**.

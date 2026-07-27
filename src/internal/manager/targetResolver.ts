@@ -13,7 +13,7 @@
 export interface DaemonManagerTargetCandidate {
   readonly key: string;
   readonly kind: string;
-  readonly groupId: string;
+  readonly wireKey: string;
   readonly controls: ReadonlyArray<string>;
 }
 

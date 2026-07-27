@@ -57,7 +57,7 @@ describe("Daemon manual run RPC", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const rpc = yield* RpcTest.makeClient(groupOf(FailingProc));
-        const svc = forwardClient(rpc, specOf(FailingProc), FailingProc.groupId, FailingProc.key) as {
+        const svc = forwardClient(rpc, specOf(FailingProc), FailingProc.key, FailingProc.key) as {
           readonly run: Effect.Effect<unknown, { readonly _tag: "FetchError"; readonly status: number }>;
         };
         const exit = yield* svc.run.pipe(Effect.exit);
@@ -89,7 +89,7 @@ describe("Daemon manual run RPC", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const rpc = yield* RpcTest.makeClient(groupOf(VoidDaemon));
-        const svc = forwardClient(rpc, specOf(VoidDaemon), VoidDaemon.groupId, VoidDaemon.key) as {
+        const svc = forwardClient(rpc, specOf(VoidDaemon), VoidDaemon.key, VoidDaemon.key) as {
           readonly run: Effect.Effect<void, never>;
         };
         yield* svc.run;

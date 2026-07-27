@@ -21,7 +21,7 @@
 
 **SHIPPED — §4.2a `ProtocolMismatch` remap** — `Resource.client` / `forwardClient` maps Effect's "empty HTTP response" `RpcClientDefect` (http client → ws server) to tagged `ProtocolMismatch`.
 
-**SHIPPED — §4.1 `MissingClientProtocol`** — nodeless `client(tag)` / `clientInstances` use `serviceOption(RpcClient.Protocol)`; absent ambient protocol → tagged `MissingClientProtocol` with remediation (Layer still requires Protocol in `R`).
+**SHIPPED — §4.1 `MissingClientProtocol`** — nodeless `client(tag)` uses `serviceOption(RpcClient.Protocol)`; absent ambient protocol → tagged `MissingClientProtocol` with remediation (Layer still requires Protocol in `R`).
 
 **REMAINING (owner-gated):**
 - **F4 `contractHash`** — **Eng’d:** stamped on `NodeStatus.resources[]` at serve; deep verify compares; tag-aware default-on client escalates to deep+hash.

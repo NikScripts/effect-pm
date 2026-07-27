@@ -98,7 +98,7 @@ export const assertProtocolKinds = (
       entry.nodeKinds !== undefined && !entry.nodeKinds.includes(serverKind)
         ? Effect.die(
             new ProtocolKindMismatch({
-              resource: entry.groupId,
+              resource: entry.wireKey,
               declared: entry.nodeKinds,
               servedOver: serverKind,
             }),
@@ -120,7 +120,7 @@ export const directoryAdvertiseMerge = (
   if (advertiseNode === undefined) {
     return Effect.succeed(Layer.empty);
   }
-  const serves = entries.map((entry) => entry.groupId);
+  const serves = entries.map((entry) => entry.wireKey);
   return Effect.map(
     Effect.promise(() => import("../Lookup")),
     (Lookup) => {

@@ -18,7 +18,7 @@ describe("logQuery", () => {
       });
       assert.strictEqual(query.limit, 100);
       assert.strictEqual(query.sort, "desc");
-      assert.strictEqual(query.groupId, undefined);
+      assert.strictEqual(query.wireKey, undefined);
       assert.strictEqual(query.from, undefined);
       assert.strictEqual(query.to, undefined);
     }));
@@ -42,7 +42,7 @@ describe("logQuery", () => {
       const query = yield* buildLogQuery({
         scope: {
           _tag: daemonKind,
-          groupId: testBillingNodeKey,
+          wireKey: testBillingNodeKey,
           key: testSyncDaemonKey,
         },
         from: Option.none(),
@@ -53,6 +53,6 @@ describe("logQuery", () => {
         sort: "desc",
       });
       assert.strictEqual(query.key, testSyncDaemonKey);
-      assert.strictEqual(query.groupId, testBillingNodeKey);
+      assert.strictEqual(query.wireKey, testBillingNodeKey);
     }));
 });

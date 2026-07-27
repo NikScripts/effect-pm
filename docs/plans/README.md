@@ -6,7 +6,8 @@ Pre-1.0: breaking changes land as minor bumps.
 
 ## Toolkit
 
-- **Service / contract shapes** — taxonomy for materialize vs pull vs push vs Tag-baked plains, rename of today’s `constant`, adapters outside Spec. Draft: [service-shapes.md](./service-shapes.md). Owner discussion; no Eng before S0 lock.
+- **Service / contract shapes** — taxonomy for materialize vs pull vs Tag-baked / adapters. Draft: [service-shapes.md](./service-shapes.md). Partial Eng (`Tag`/`value`/`promise`/`pure`); remaining owner-gated.
+- **Wire groups & identity** — regular RpcGroup = tag key; shared Spec family = kind key (factory-hidden); drop public `groupId`. Locked direction: [wire-groups-and-identity.md](./wire-groups-and-identity.md).
 - **Guaranteed barrel-namespace tree-shaking** — make `import { QueueHyperlink } from "hyperlink-ts"` + `QueueHyperlink.Tag` tree-shake the engine in *every* bundler (subpath imports already do). Detailed plan: [18-unbundled-build-treeshaking.md](./18-unbundled-build-treeshaking.md).
 - **Fleet health** — **shipped** as [`FleetHealth`](../guides/fleet-health.md) (`hyperlink-ts/FleetHealth`). Per-node readiness + `/health` stay local; the glass folds peers with `Reachable` / `Unreachable` (Effect `Exit` kept). See that guide.
 - **Hyperlink-RPC auth** — a first-class authentication/authorization story for served resources (deployments use an edge gateway / Cloudflare Zero Trust short-term). Spec TBD when scope is locked; stays a roadmap bullet until then.
@@ -15,7 +16,7 @@ Pre-1.0: breaking changes land as minor bumps.
 
 - **Weighted middle scheduling** — diversify the queue's middle priority into many weighted numeric/named groups pulled by a non-starving algorithm (DRR / strict), fixing strict-priority starvation. Design spec: [weighted-middle-scheduling.md](./weighted-middle-scheduling.md).
 - **Non-serializable queue items** — local-only enqueue for function/`Effect` items; wire control + observability stay served. [queue-nonserializable-items.md](./queue-nonserializable-items.md).
-- **Standalone spawns** — `Process.spawn` / `QueueHyperlink.open`: multi-instance ergonomics where spawned handles are plain caller-scoped Effects (alongside `Group` + `Hyperlink.serveInstances`).
+- **Standalone spawns** — `Process.spawn` / `QueueHyperlink.open`: multi-instance ergonomics where spawned handles are plain caller-scoped Effects (alongside `Group`).
 - **Runtime identity & singleton runs** — in-process registry + a durable cross-runtime lease to prevent duplicate runs of the same logical process across hosts.
 - **Lifecycle kernel (exploratory)** — typed transitions / eligibility for queues, items, processes, and schedule rows; projection-friendly events (not an external statechart engine).
 

@@ -23,10 +23,9 @@ import * as Hyperlink from "../src/Hyperlink";
 import { forwardClient, groupOf, isVoidCommand, methodMeta, specOf } from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
-// A queue family built from the control contract: many instances share the "queue" group.
-const Queue = Hyperlink.tagFor("queue", queueControlSpec);
-class Jobs extends Queue<Jobs>("@app/Jobs") {}
-class Mail extends Queue<Mail>("@app/Mail") {}
+// Solo tags sharing the control Spec shape — each has its own wire key (= `.key`).
+class Jobs extends Hyperlink.Tag<Jobs>()("@app/Jobs", queueControlSpec) {}
+class Mail extends Hyperlink.Tag<Mail>()("@app/Mail", queueControlSpec) {}
 
 // Minimal in-memory queue control impl (just enough state to assert the verbs round-trip).
 // `status` is the SSOT live snapshot (a SubscriptionRef); `size`/`isEmpty` are `value`s derived
@@ -89,10 +88,11 @@ it("drives a queue's control surface remotely, routed by instance id", () => {
   const jobsImpl = makeImpl();
   const mailImpl = makeImpl();
 
+  const root = groupOf(Jobs).merge(groupOf(Mail));
   const program = Effect.gen(function* () {
-    const rpc = yield* RpcTest.makeClient(groupOf(Queue));
-    const jobs = forwardClient(rpc, specOf(Queue), Jobs.groupId, Jobs.key);
-    const mail = forwardClient(rpc, specOf(Queue), Mail.groupId, Mail.key);
+    const rpc = yield* RpcTest.makeClient(root);
+    const jobs = forwardClient(rpc, specOf(Jobs), Jobs.key, Jobs.key);
+    const mail = forwardClient(rpc, specOf(Mail), Mail.key, Mail.key);
 
     // observation verbs round-trip — `size`/`isEmpty`/`status` are live `value`s; on the raw wire
     // (forwardClient) they surface as their backing streams, so read the current value off the head
@@ -115,18 +115,17 @@ it("drives a queue's control surface remotely, routed by instance id", () => {
       phase: "running",
     });
 
-    // control verbs route to the right instance
+    // control verbs hit the right solo tag (own RpcGroup)
     yield* jobs.pause;
     yield* jobs.resume;
     expect(yield* jobs.clear).toBe(3); // Jobs drained
     expect(yield* head(jobs.size)).toBe(0);
-    expect(yield* head(mail.size)).toBe(3); // Mail untouched — routing is per-instance
+    expect(yield* head(mail.size)).toBe(3); // Mail untouched
   }).pipe(
     Effect.provide(
-      Hyperlink.serveInstances(
-        Queue,
-        Hyperlink.instance(Jobs, jobsImpl),
-        Hyperlink.instance(Mail, mailImpl),
+      Layer.mergeAll(
+        Hyperlink.serveRemote(Jobs, jobsImpl),
+        Hyperlink.serveRemote(Mail, mailImpl),
       ),
     ),
     Effect.scoped,
@@ -213,7 +212,7 @@ it("queue add round-trips with a per-instance item schema (native validation)", 
   };
   const program = Effect.gen(function* () {
     const rpc = yield* RpcTest.makeClient(groupOf(Numbers));
-    const svc = forwardClient(rpc, specOf(Numbers), Numbers.groupId, Numbers.key);
+    const svc = forwardClient(rpc, specOf(Numbers), Numbers.key, Numbers.key);
     // `add` is typed by the instance's itemSchema; RPC validates the item on the wire.
     yield* svc.add({ n: 5 });
     yield* svc.add({ n: 7 });
@@ -249,7 +248,7 @@ it("prioritize / defer / enqueue round-trip over the per-instance group", () => 
   };
   const program = Effect.gen(function* () {
     const rpc = yield* RpcTest.makeClient(groupOf(Numbers));
-    const svc = forwardClient(rpc, specOf(Numbers), Numbers.groupId, Numbers.key);
+    const svc = forwardClient(rpc, specOf(Numbers), Numbers.key, Numbers.key);
     yield* svc.prioritize({ n: 1 });
     yield* svc.defer({ n: 2 });
     yield* svc.enqueue([
@@ -292,7 +291,7 @@ it("release returns entries; releaseEncoded surfaces a typed wire error", () => 
   };
   const program = Effect.gen(function* () {
     const rpc = yield* RpcTest.makeClient(groupOf(Numbers));
-    const svc = forwardClient(rpc, specOf(Numbers), Numbers.groupId, Numbers.key);
+    const svc = forwardClient(rpc, specOf(Numbers), Numbers.key, Numbers.key);
     const released = yield* svc.release({});
     expect(released.map((e) => e.item.n)).toEqual([3]);
 
