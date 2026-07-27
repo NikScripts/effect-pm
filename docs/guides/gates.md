@@ -34,10 +34,13 @@ class Double extends Gate.Service<Double>()("app/Double", {
 }) {}
 ```
 
-`rateLimit` is **policy only** (`limit` / `window` / …) — not a `RateLimiter`
-service handle. Provide `RateLimiter.layerStoreRedis` (and optionally
-`RateLimiter.layer`) at the app root for a fleet-wide budget; omit them and the
-gate Soft-builds an in-memory limiter. Default `onExceeded` is `"delay"`.
+`rateLimit` is Effect’s `RateLimiter.consume` / `makeWithRateLimiter` options
+(`limit`, `window`, `algorithm`, `onExceeded`, `tokens`, `key`, …) — not a
+`RateLimiter` service handle. New upstream fields flow through. Provide
+`RateLimiter.layerStoreRedis` (and optionally `RateLimiter.layer`) at the app
+root for a fleet-wide budget; omit them and the gate Soft-builds an in-memory
+limiter. Omitted `key` defaults to the gate id; omitted `onExceeded` defaults
+to `"delay"`.
 
 ## Call it
 

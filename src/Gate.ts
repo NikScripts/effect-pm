@@ -447,13 +447,23 @@ export interface RunnerConfig {
 export type Runner = internal.GateRunner;
 
 /**
- * Effect {@link RateLimiter.consume} options for a gate — policy only; store is
- * presence-driven (`RateLimiterStore` in context, else Soft memory).
+ * Effect `RateLimiter.consume` / `makeWithRateLimiter` options for a gate
+ * (`key` optional — defaults to the gate resource id). Policy only; the
+ * `RateLimiter` / `RateLimiterStore` services are presence-driven in Context.
  *
  * @category models
  * @public
  */
 export type RateLimitOptions = internal.GateRateLimitOptions;
+
+/**
+ * Effect's `RateLimiter.consume` options shape (key required). Prefer
+ * {@link RateLimitOptions} on Gate configs.
+ *
+ * @category models
+ * @public
+ */
+export type RateLimiterConsumeOptions = internal.RateLimiterConsumeOptions;
 
 /**
  * Soft in-memory rate-limiter layer (built automatically when `rateLimit` is set

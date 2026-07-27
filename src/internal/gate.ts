@@ -26,6 +26,7 @@ import {
   layer as rateLimiterLayer,
   layerStoreMemory,
   make as makeRateLimiter,
+  makeWithRateLimiter,
 } from "effect/unstable/persistence/RateLimiter";
 import type { RateLimiter as EffectRateLimiter } from "effect/unstable/persistence/RateLimiter";
 import {
@@ -45,24 +46,32 @@ import { runStatusTransitions } from "./gateStatus";
 // ============================================================================
 
 /**
- * Effect {@link RateLimiter.consume} options for a gate, with optional `key`
- * (defaults to the gate `name` / resource id).
- *
- * @remarks
- * Field names match `effect/unstable/persistence` `RateLimiter` (`window`, not
- * `duration`). Defaults: `algorithm: "fixed-window"`, `onExceeded: "delay"`.
- * Store selection is **not** here — ambient {@link RateLimiterStore} via
- * `serviceOption` (Soft {@link layerStoreMemory} when absent).
+ * Effect `RateLimiter.consume` / {@link makeWithRateLimiter} options — the
+ * upstream config shape. New consume fields from Effect flow through here.
  *
  * @category models
  * @public
  */
-export type GateRateLimitOptions = Omit<
-  Parameters<EffectRateLimiter["consume"]>[0],
-  "key"
-> & {
+export type RateLimiterConsumeOptions = Parameters<
+  EffectRateLimiter["consume"]
+>[0];
+
+/**
+ * Gate `rateLimit` config — Effect's {@link RateLimiterConsumeOptions} with
+ * optional `key` (defaults to the gate `name` / resource id).
+ *
+ * @remarks
+ * This is not a parallel Hyperlink schema: it is Effect's consume options.
+ * Hyperlink only defaults omitted `key` and omitted `onExceeded` (`"delay"`;
+ * Effect's own consume default is `"fail"`). Store selection is ambient
+ * {@link RateLimiterStore} / {@link RateLimiterTag} (Soft memory when absent).
+ *
+ * @category models
+ * @public
+ */
+export type GateRateLimitOptions = Omit<RateLimiterConsumeOptions, "key"> & {
   /** Shared limit bucket (default: gate `name` / service id). */
-  readonly key?: string;
+  readonly key?: RateLimiterConsumeOptions["key"];
 };
 
 /** @public Re-export of Effect rate-limiter consume metadata. */
@@ -245,19 +254,15 @@ const makeGateStoreContext = (options: {
  */
 export const gateRateLimiterLayer = Layer.provide(rateLimiterLayer, layerStoreMemory);
 
-const resolveRateLimitConsumeOptions = (
+/** Fill Gate defaults onto Effect's consume options — passthrough otherwise. */
+const toConsumeOptions = (
   resourceId: string,
   rateLimit: GateRateLimitOptions,
-): Parameters<EffectRateLimiter["consume"]>[0] => {
-  const { key: limitKey, ...rest } = rateLimit;
-  return {
-    ...rest,
-    key: limitKey ?? resourceId,
-    algorithm: rateLimit.algorithm ?? "fixed-window",
-    onExceeded: rateLimit.onExceeded ?? "delay",
-    tokens: rateLimit.tokens,
-  };
-};
+): RateLimiterConsumeOptions => ({
+  ...rateLimit,
+  key: rateLimit.key ?? resourceId,
+  onExceeded: rateLimit.onExceeded ?? "delay",
+});
 
 const assertValidRateLimit = (rateLimit: GateRateLimitOptions): void => {
   if (!(rateLimit.limit > 0) || !Number.isFinite(rateLimit.limit)) {
@@ -310,23 +315,21 @@ const resolveGateRateLimiter = (): Effect.Effect<
 
 type RateLimitAwait = Effect.Effect<void, RateLimiterError>;
 
+/**
+ * Build a pre-consume effect via Effect's {@link makeWithRateLimiter} so Gate
+ * tracks upstream delay/fail behavior (and any future consume options).
+ */
 const acquireGateRateLimitAwait = (
   resourceId: string,
   rateLimit: GateRateLimitOptions,
   limiter: EffectRateLimiter,
-): RateLimitAwait => {
+): Effect.Effect<RateLimitAwait> => {
   assertValidRateLimit(rateLimit);
-  const consumeOptions = resolveRateLimitConsumeOptions(resourceId, rateLimit);
-  const onExceeded = consumeOptions.onExceeded ?? "delay";
-
-  return onExceeded === "fail"
-    ? limiter.consume(consumeOptions).pipe(Effect.asVoid)
-    : Effect.gen(function* () {
-        const result = yield* limiter.consume(consumeOptions);
-        if (!Duration.isZero(result.delay)) {
-          yield* Effect.sleep(result.delay);
-        }
-      });
+  const options = toConsumeOptions(resourceId, rateLimit);
+  return makeWithRateLimiter.pipe(
+    Effect.provideService(RateLimiterTag, limiter),
+    Effect.map((withLimiter) => withLimiter(options)(Effect.void)),
+  );
 };
 
 const makeObservedRun =
@@ -526,7 +529,7 @@ export const makeGateHandleEffect = <T, A, E>(
     const rateLimitAwait: RateLimitAwait | undefined =
       config.rateLimit === undefined
         ? undefined
-        : acquireGateRateLimitAwait(
+        : yield* acquireGateRateLimitAwait(
             resourceId,
             config.rateLimit,
             yield* resolveGateRateLimiter(),
