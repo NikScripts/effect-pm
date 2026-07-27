@@ -337,7 +337,8 @@ const ipcBind = (
     ...(options?.serialization !== undefined
       ? { serialization: options.serialization }
       : {}),
-    ...(options?.node !== undefined ? { node: options.node } : {}),
+    // Listen node key stamps assume errors / durable node logs (not the reserved status key).
+    node: options?.node ?? node.key,
     ...(options?.onConflict !== undefined
       ? { onConflict: options.onConflict }
       : {}),

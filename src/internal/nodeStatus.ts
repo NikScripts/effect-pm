@@ -232,25 +232,18 @@ export const buildNodeStatusImpl = (options: {
     > =>
       Effect.gen(function* () {
         if (expectedToken === undefined || payload.token !== expectedToken) {
-          yield* Effect.logWarning("assume rejected: token mismatch").pipe(
-            Effect.annotateLogs({ "assume.node": assumeNodeKey }),
-          );
+          yield* Effect.logWarning("assume rejected: token mismatch");
           return yield* new AssumeTokenMismatch({ node: assumeNodeKey });
         }
         if (yield* Ref.get(assumed)) {
-          yield* Effect.logWarning("assume rejected: token already used").pipe(
-            Effect.annotateLogs({ "assume.node": assumeNodeKey }),
-          );
+          yield* Effect.logWarning("assume rejected: token already used");
           return yield* new AssumeTokenReused({ node: assumeNodeKey });
         }
         const resources = yield* readiness;
         const blocked = resources.find((r) => !r.ready);
         if (blocked !== undefined) {
           yield* Effect.logWarning("assume rejected: not Ready").pipe(
-            Effect.annotateLogs({
-              "assume.node": assumeNodeKey,
-              "assume.resource": blocked.key,
-            }),
+            Effect.annotateLogs({ "assume.resource": blocked.key }),
           );
           return yield* new AssumeNotReady({
             node: assumeNodeKey,
@@ -261,12 +254,12 @@ export const buildNodeStatusImpl = (options: {
         yield* Ref.set(assumed, true);
         yield* Ref.set(ownership, "self");
         yield* Effect.logInfo("ownership assumed (self)").pipe(
-          Effect.annotateLogs({
-            "assume.node": assumeNodeKey,
-            "assume.ownership": "self",
-          }),
+          Effect.annotateLogs({ "assume.ownership": "self" }),
         );
-      }).pipe(Effect.withLogSpan("node.assume.handle"));
+      }).pipe(
+        Effect.annotateLogs({ "assume.node": assumeNodeKey }),
+        Effect.withLogSpan("node.assume.handle"),
+      );
     return {
       status: statusSub,
       ping: Clock.currentTimeMillis,

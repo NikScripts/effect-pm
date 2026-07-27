@@ -95,8 +95,9 @@ Assert on `_tag`, not message strings. Messages exist for operators / logs.
 
 Phases log under spans `launcher.spawn`, `launcher.awaitReady`, `launcher.handoff` with
 annotations `launcher.node`, `launcher.phase`, and (on spawn) `launcher.pid`. Assume dial /
-server paths use `node.assume` / `node.assume.handle` and `assume.node` — **never** the token
-(tokens are `Redacted` / cleartext only on the wire and in your injection channel).
+server paths use `node.assume` / `node.assume.handle` and `assume.node` (the listen
+`Node.Tag` key) — **never** the token (tokens are `Redacted` / cleartext only on the wire
+and in your injection channel).
 
 Provide an Effect log layer / sink at the app edge if you want these in stdout or a collector.
 

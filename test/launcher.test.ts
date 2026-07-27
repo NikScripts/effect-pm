@@ -28,15 +28,13 @@ const childEntry = () => {
 const ephemeralPort = (tokenHex: string): number =>
   20_000 + (Number.parseInt(tokenHex.slice(0, 4), 16) % 10_000);
 
-const reapLauncherChildren = Effect.gen(function* () {
-  yield* ChildProcess.make("pkill", [
-    "-f",
-    "test/fixtures/launcher-child-serve.ts",
-  ]).pipe(
-    Effect.flatMap((h) => h.exitCode),
-    Effect.ignore,
-  );
-});
+const reapLauncherChildren = ChildProcess.make("pkill", [
+  "-f",
+  "test/fixtures/launcher-child-serve.ts",
+]).pipe(
+  Effect.flatMap((h) => h.exitCode),
+  Effect.ignore,
+);
 
 describe("Launcher.mintToken", () => {
   it.effect("mints a redacted 32-byte hex token (CSPRNG)", () =>

@@ -411,8 +411,10 @@ const makeHandle = (options: {
         yield* nodeAssume(options.node, {
           token: Redacted.value(options.token),
         });
-        // Drop reref — launcher exits; child keeps running under its own custody.
-        yield* options.child.unref;
+        // Unref the child so Scope close does not kill it. Discard reref — the
+        // launcher exits; custody is the child's after assume.
+        const _reref = yield* options.child.unref;
+        void _reref;
         yield* Ref.set(options.phase, "handedOff");
         yield* Effect.logInfo("handoff complete; child unref'd");
       }),
