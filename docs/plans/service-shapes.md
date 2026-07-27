@@ -200,7 +200,7 @@ Shipped rules:
 | Slice | Scope |
 |-------|--------|
 | **S2** | ~~Eng `default` / `defaults`~~ **done** (`pure` retired) |
-| **S3** | Docs: Creating / Core Concepts taxonomy (light polish) |
+| **S3** | ~~Docs: Creating / Core Concepts taxonomy~~ **done** (light polish with `default`/`defaults`) |
 | **S5** | Live plain `cell` (only if decision 3 = Eng) |
 | **S6** | Upload / sink (transport-gated) |
 | **S7** | Prototype `.pipe(defaults)` mint (lean) |
