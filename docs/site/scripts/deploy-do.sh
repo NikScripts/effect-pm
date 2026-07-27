@@ -25,7 +25,14 @@ echo "==> docker build"
 BASE="registry.digitalocean.com/${REGISTRY}/hyperlink-docs"
 (cd .. && docker buildx build --platform linux/amd64 --push -f site/Dockerfile -t "${BASE}:${SHA}" -t "${BASE}:latest" .)
 
-
 echo "==> done — deploy: doctl apps update <app-id> --spec deploy/do-app.yaml"
 echo "    rollback: retag a previous sha as latest and update again"
 echo "    (banners: DOCS_SITE_ORIGIN=${DOCS_SITE_ORIGIN} npx tsx scripts/gen-doc-banners.ts)"
+
+# Edge-cached dep API HTML must not outlive the new image.
+if [ -n "${CLOUDFLARE_API_TOKEN:-}" ]; then
+  echo "==> purging Cloudflare dep-API edge cache"
+  ./scripts/cf-edge-cache.sh purge
+else
+  echo "==> skip CF purge (set CLOUDFLARE_API_TOKEN to purge /api/effect|platform-node|sql-sqlite-node)"
+fi

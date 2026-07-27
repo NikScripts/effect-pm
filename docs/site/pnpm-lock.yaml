@@ -29,6 +29,9 @@ importers:
       effect:
         specifier: 4.0.0-beta.98
         version: 4.0.0-beta.98
+      hono:
+        specifier: ^4.12.14
+        version: 4.12.28
       lucide-react:
         specifier: ^1.24.0
         version: 1.24.0(react@19.2.7)
