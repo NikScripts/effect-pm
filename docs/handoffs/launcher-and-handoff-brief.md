@@ -30,13 +30,17 @@
    - Effect/Schema, loud typed failures.
    - Node status may **mirror** ownership for dashboards; the handshake is the verb.
    - Exact verb name TBD (`assume` / `acceptOwnership` / …).
+10. **Module split (parent vs node):**
+    - **`hyperlink-ts/Launcher`** — short-lived bring-up toolkit: `spawn` / `awaitReady` / `handoff` (+ convenience compose, e.g. `up`).
+    - **`Node`** — owns readiness surface + ownership **ack RPC** (steady-state control plane after launcher exits).
+    - **CLI** (`hl` / `hyperlink` later) — thin over Launcher; not a second control plane.
+    - Do **not** put OS spawn into `Node` (already transport/catalog-heavy).
 
 Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.md) remain **reference only** unless re-locked here.
 
 ### Track A — baking (not locked)
 
 - Concrete API names for parent phases + ownership verb.
-- Module home for the parent API (`Launcher` vs `Node` helpers vs CLI-only).
 
 ---
 
