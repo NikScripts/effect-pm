@@ -63,6 +63,11 @@
     ```
     - Multi-node: `ReadonlyArray` of that unit (thin alias OK later). **Not** `Group`.
     - Grounded in nameless-listen demo + `verifyConnection` / `Node.status` keys.
+15. **Parent API = custody handle + `Launcher.up`.**
+    - `Launcher.spawn(spec)` → **custody handle** (launcher still holds the child) with `.awaitReady()` / `.handoff()`.
+    - `.handoff()` performs `Node.assume` on the wire; custody ends; launcher may exit.
+    - `Launcher.up(spec | ReadonlyArray<spec>)` = spawn → awaitReady → handoff (per unit) then exit — one-shot.
+    - Primary surface is the handle, not flat `Launcher.awaitReady(child)` free functions.
 
 Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.md) remain **reference only** unless re-locked here.
 
@@ -84,7 +89,7 @@ Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.m
 
 - Failure / timeout: reuse `ServiceNotReady` / `NodeUnreachable` / … + bounded poll (exact tagged errors for “ready timed out”).
 - `Node.assume` wire shape (new RPC; status may mirror).
-- Custody-handle API (`spawn` → handle with `.awaitReady` / `.handoff`) vs flat `Launcher.*` functions — pick before Eng.
+- Custody handle type name (`Launcher.Handle` / …).
 
 ---
 
