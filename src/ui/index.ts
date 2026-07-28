@@ -40,6 +40,8 @@ export {
 export * as View from "./View";
 /** Parent-owned Group navigation (memory / history) for View compose. */
 export * as Navigator from "./Navigator";
+/** Family observe door — `Bundle.observe(tag)` under RuntimeProvider. */
+export * as Bundle from "./Bundle";
 /** Shared Group card View handle + contribution Layer (no platform TSX). */
 export * as GroupView from "./GroupView";
 /** Shared WorkPool View handles + contribution Layer (no platform TSX). */

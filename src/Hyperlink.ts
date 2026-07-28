@@ -123,6 +123,7 @@ import {
   selectEndpoint,
   unaddressedLayer,
 } from "./internal/nodeConnect";
+import * as atomHandle from "./internal/atomHandle";
 import { adaptPromiseHandle } from "./internal/promiseHandle";
 // Node listen/connect used only inside functions via dynamic import where needed;
 // clientLayerForEndpoint uses clientLayer auto-connect for dialable endpoints.
@@ -1534,6 +1535,53 @@ export function promise<S extends object, R = never>(
     context ?? (Context.empty() as Context.Context<R>),
   ) as PromiseOf<S>;
 }
+
+/**
+ * Bind Effect-reactive **live** helpers to an `Atom.AtomRuntime`.
+ *
+ * Returns a function: tag+select, or an already-resolved Subscribable / Stream.
+ * Live only (`ref` / `stream`) — not Effects ({@link query} / {@link fn}).
+ *
+ * @example
+ * ```ts
+ * const status = Hyperlink.atom(rt)(Jobs, (q) => q.status)
+ * const metrics = Hyperlink.atom(rt)(Jobs, (q) => q.metrics.stream)
+ * const fromHandle = Hyperlink.atom(rt)(handle.status)
+ * ```
+ *
+ * @category adapters
+ * @public
+ */
+export const atom = atomHandle.atom;
+
+/**
+ * Bind Effect-reactive **one-shot Effect** reads to an `Atom.AtomRuntime`.
+ *
+ * @example
+ * ```ts
+ * const seed = Hyperlink.query(rt)(Jobs, (q) => q.metrics.query({ limit: 50 }))
+ * ```
+ *
+ * @category adapters
+ * @public
+ */
+export const query = atomHandle.query;
+
+/**
+ * Bind Effect-reactive **commands** to an `Atom.AtomRuntime` (`AtomResultFn`).
+ *
+ * Select a bare Effect (no-arg) or `(arg) => Effect`.
+ *
+ * @example
+ * ```ts
+ * const pause = Hyperlink.fn(rt)(Jobs, (q) => q.pause)
+ * const setSchedule = Hyperlink.fn(rt)(Nightly, (d) => d.setSchedule)
+ * ```
+ *
+ * @category adapters
+ * @public
+ */
+export const fn = atomHandle.fn;
 
 // ============================================================================
 // Impl transform — walk an impl per its spec and map every Effect method

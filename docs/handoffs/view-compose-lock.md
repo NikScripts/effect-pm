@@ -103,11 +103,12 @@ Navigator may still say `openLogs(tag)` / `openSchedule(tag)` — that means “
 
 **F2:** HealthBoard / NodeDetail stay **shell-owned** for v1.
 
-### G. Observe door (**superseded shape**)
+### G. Observe door
 
-- Interim Eng’d: `ui.data.queue` / `.daemon` / … on compose
-- **Preferred (standard):** `Bundle.observe(tag)` ([`../standards/principles.md#handles-stay-thin`](../standards/principles.md#handles-stay-thin); guide [`../guides/bundles.md`](../guides/bundles.md)). No methods on Tag; no noun menu on the kit.
-- Same `*Bundle(runtime, tag)` internals; RuntimeProvider stays shared `ui/runtime`
+- **Eng’d:** `Bundle.observe(tag)` ([`../guides/bundles.md`](../guides/bundles.md)) + `Hyperlink.atom` / `.query` / `.fn` ([`../guides/hyperlink-atom.md`](../guides/hyperlink-atom.md))
+- Thin handles ([`../standards/principles.md#handles-stay-thin`](../standards/principles.md#handles-stay-thin)): no Tag methods; no kit noun menu
+- Interim alias: `ui.data.*` / `use*Bundle` (same builders)
+- RuntimeProvider stays shared `ui/runtime`
 
 ### H. Migration
 
@@ -135,7 +136,7 @@ First peel = header/body split; page-sized logs/schedule content follows.
 ### K. Non-goals (this arc)
 
 - Kit batteries `Dashboard` = compose — **HOLD**
-- Client adapters (`Hyperlink.atom` / TanStack / Promise) — parallel
+- Client adapters: Promise + atom/query/fn Eng’d; TanStack hooks — parallel
 - Desktop tabs / real multi-match pager — later
 - Wild UI (⌘K, PiP, scrubber) — out of library scope
 

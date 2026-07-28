@@ -1,7 +1,7 @@
 # Client adapters — design notes (draft)
 
-**Status:** design capture — not shipped. Owner + Agent G (TUI/dashboard) discussion 2026-07-24 → 2026-07-25.  
-**Related tip work:** TUI ↔ web Group dashboard parity (`cursor/tui-dashboard-parity-125f`); widget registry in `hyperlink-ts/ui`.
+**Status:** Promise Eng’d; Effect-reactive `Hyperlink.atom` / `.query` / `.fn` Eng’d (2026-07-28); TanStack hooks still design. Owner + Agent G (TUI/dashboard) discussion 2026-07-24 → 2026-07-25.  
+**Related tip work:** View compose + Bundle.observe (`cursor/view-withsize-types-125f`).
 
 Capture so nothing from the conversation is lost. Decisions below are **direction**, not Eng’d APIs.
 

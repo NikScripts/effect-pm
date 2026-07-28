@@ -58,6 +58,7 @@ export const RuntimeProvider = <R, E = never>(props: {
 }): React.ReactElement =>
   React.createElement(
     RuntimeContext.Provider,
+    // Context is erased to {@link AnyRuntime}; keep the call-site runtime typed.
     { value: props.runtime as AnyRuntime },
     props.children,
   );
