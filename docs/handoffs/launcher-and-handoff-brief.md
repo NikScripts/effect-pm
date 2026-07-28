@@ -56,7 +56,7 @@
       process: ChildProcess  // Effect ChildProcess.make(…)
       // optional sugar: entry (+ cwd/env/exec) that builds ChildProcess
       ready?: {
-        resources?: ReadonlyArray<string>  // tag keys; omit ⇒ allReady-shaped
+        services?: ReadonlyArray<string>  // HyperService wire keys; omit ⇒ allReady-shaped
         timeout?: Duration.Input
       }
     }
@@ -86,7 +86,7 @@
     - Rejected as default: nullary `assume()`; env-as-wire-contract; bidirectional launcher server for v1.
 19. **Ready / handoff failure channels (tagged only).**
     - Reuse verify stack where it fits: `NodeUnreachable` (and kin), `ServiceNotReady` as **transient** while polling.
-    - **New:** `Launcher.ReadyTimedOut` `{ node, resources?, timeout }` — bound wait expired.
+    - **New:** `Launcher.ReadyTimedOut` `{ node, services?, timeout }` — bound wait expired.
     - **New:** `Launcher.ChildExited` `{ node, code? }` — child dies during `awaitReady`.
     - **New (assume):** `AssumeTokenMismatch` / `AssumeTokenReused` / `AssumeNotReady` — Schema/TaggedError.
     - Poll with Effect `Schedule` + `Duration` from `ready.timeout` (default **`"30 seconds"`** unless Eng finds a better house default).
@@ -117,7 +117,7 @@ Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.m
 **Build on (shipped):**
 - OS child pattern: Effect `ChildProcess` / `ChildProcessSpawner` (see `examples/forms/hyperlink/node-nameless-listen-demo.ts`) — no package Launcher yet; demos `spawn` + sleep.
 - Child entry: `Layer.launch(Node.unix|http|ws(…, [Hyperlink.serve…]))` forms.
-- Ready substrate: `withReadiness` / `Readiness` / `allReady` / `Node.status` (`resources[].ready`) / `Hyperlink.verifyConnection` (deep + optional `resource` → `ServiceNotReady`).
+- Ready substrate: `withReadiness` / `Readiness` / `allReady` / `Node.status` (per-HyperService readiness rollup) / `Hyperlink.verifyConnection` (deep → `ServiceNotReady`).
 - Identity/placement: `Lookup.Identity` / `Directory` / `Advice`, `Hyperlink.identity` — child’s job after Ready.
 - Ops CLI: `Hyperlink.cli` + TUI — **control surface on running services**, not bring-up.
 - `Group.Tag` / `members` / `isGroup` — handle hierarchy only (`src/Group.ts`).
@@ -148,11 +148,11 @@ Eng defaults: 32-byte hex token; Ready poll `100 millis` with per-dial `2 second
 **Build on (shipped Lookup):**
 - **`Identity.claim` / `resolve`** — exclusive “who implements K?” (winner serves; loser → client via `Hyperlink.identity`, or `AddressLessClaimLost` on address-less listen).
 - **`Directory.advertise` / `unregister` / `nodesServing`** — presence catalog derived from listen serve list (not a second app-maintained catalog).
-- **`Advice.advise` / `preferred` / `clear`** — `resourceKey → preferred nodeKey` for **clients** when Identity missed and multiple directory rows exist (`Hyperlink.lookupClient`). Does **not** answer “what roles are assigned to *this* node.”
+- **`Advice.advise` / `preferred` / `clear`** — `serviceKey → preferred nodeKey` for **clients** when Identity missed and multiple directory rows exist (`Hyperlink.lookupClient`). Does **not** answer “what roles are assigned to *this* node.”
 - **`OnConflict` / `askIncumbent` + node-status `yield`** — cooperative **directory-row** replacement on duplicate `nodeKey`. Default `yield` = accept; **not** drain / shutdown / state transfer (Track C territory).
 - **Soft-bake `Lookup.layer`** — nameless `unix`/`http` compete for `/tmp/hyperlink-ts-lookup.sock` (same-machine); no Launcher required. Cross-network Lookup server/client **not** implemented (`layerNode` / `client` are IPC-path today).
 
-**Track A vs Lookup (gap):** Launcher never calls Lookup. `SpawnSpec.node` must be addressed; Ready / assume only. Registration is the child’s job after assume (#4). No blank-worker / startup-directive / role-assignment API exists. Server serve lists are **non-empty**; Launcher allReady treats zero resources as not ready.
+**Track A vs Lookup (gap):** Launcher never calls Lookup. `SpawnSpec.node` must be addressed; Ready / assume only. Registration is the child’s job after assume (#4). No blank-worker / startup-directive / role-assignment API exists. Server serve lists are **non-empty**; Launcher allReady treats zero served HyperServices as not ready.
 
 **Gone / do not resurrect:** launcher-owned parallel directory; ProcessManager / Fleet.launch as control brain.
 
@@ -168,6 +168,34 @@ Owner locked #22–26; Eng on tip:
 
 **Still deferred:** blank worker / assign protocol; HTTP/WS Lookup; nameless Launcher discovery; Track C migration; Track D clients.
 
+### Track C — bake (proposed, not locked)
+
+**Mission:** a served HyperService moves from one node to another without callers noticing — including **zero-downtime version updates** and **cross-version skew as the normal case**. Framing: [`node-handoff-mission.md`](./node-handoff-mission.md). **No Eng until items lock here with the owner** (same gate as A/B: #2). Do **not** treat [`launcher-decisions.md`](./launcher-decisions.md) rows as binding.
+
+| Plane | Owner | In / out |
+|-------|--------|----------|
+| **Custody** (A) | `Launcher` | spawn → Ready → `Node.assume` → exit. **Not** migration. |
+| **Membership** (B) | Lookup | Identity / Directory / Advice; `askIncumbent` + status `yield` = **directory-row** only. |
+| **Migration** (C) | **this track** | Cutover, drain / dual-serve / redirect, state story, old-node shutdown via **node** control plane, version/contract negotiation. |
+| **Clients** (D) | later | Dialer behavior during swap — open; `contractHash` / verify is substrate, not the client story. |
+
+B’s `onYield` answers “may this Directory row be replaced?” — **not** drain, state transfer, or old shutdown. Prefer reuse: Lookup `yield` / Directory / Identity / Advice, Launcher custody, `contractHash` / verify, `withReadiness` / `Node.status`. **No new nouns** unless they clear the high bar.
+
+**Proposed questions (continue from #26):**
+
+27. **Trigger:** version-upgrade only, explicit migrate verb, and/or Directory conflict after B `yield` accept? Who initiates?
+28. **Grain:** per HyperService vs whole-node cutover? Opt-in vs default?
+29. **Cutover** for in-flight calls / open streams: drain, dual-serve, redirect, or mix?
+30. **Stateful services** (queues / stores): transfer, share durability, or **non-transferable in v1**?
+31. **Version / contract:** reuse `contractHash` + verify as the gate? Mismatch = which tagged failures?
+32. **Discovery during swap:** Directory / Identity / Advice vs an intentionally draining node (no false dead-incumbent replace).
+33. **Old-node shutdown:** node control plane (not Launcher) — verb / sequence; compose with B unregister / Advice clear?
+34. **Layer shape:** handoff options on the HyperService, listen options, or extend-in-place elsewhere?
+35. **Lookup-node handoff:** in scope or explicitly deferred?
+36. **Track D boundary:** C ships cutover + old shutdown with **no** client redirect API; what minimal signals must C emit?
+
+**Exit for Eng:** owner locks a contiguous subset of #27–36 in this brief’s Locked list.
+
 ---
 
 ## Owner framing (read this first)
@@ -182,7 +210,7 @@ F4 / `contractHash` / default-on verify / loud-failures taxonomy **shipped** (Ag
 
 - [`loud-failures-design.md`](./loud-failures-design.md)
 - [`verify-connection-classification.md`](./verify-connection-classification.md)
-- `Hyperlink.contractHash`, `ContractMismatch`, `NodeStatus.resources[].contractHash`
+- `Hyperlink.contractHash`, `ContractMismatch`, per-HyperService `contractHash` on node status readiness rows
 
 That stack answers: *“client and server disagree on the wire contract → fail loud.”*  
 It does **not** answer cross-version state migration or zero-downtime handoff.

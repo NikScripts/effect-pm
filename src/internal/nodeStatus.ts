@@ -243,7 +243,7 @@ export const buildNodeStatusImpl = (options: {
         const blocked = resources.find((r) => !r.ready);
         if (blocked !== undefined) {
           yield* Effect.logWarning("assume rejected: not Ready").pipe(
-            Effect.annotateLogs({ "assume.resource": blocked.key }),
+            Effect.annotateLogs({ "assume.service": blocked.key }),
           );
           return yield* new AssumeNotReady({
             node: assumeNodeKey,

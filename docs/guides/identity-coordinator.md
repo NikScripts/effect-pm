@@ -6,7 +6,7 @@
 <!-- docs-site-link:end -->
 # Identity coordinator — one brain, many hands
 
-Exclusive resources claim at Lookup. Workers advertise. The winning brain can publish
+Exclusive HyperServices claim at Lookup. Workers advertise. The winning brain can publish
 placement advice. Clients dial through Lookup — no `Hyperlink.Manager`.
 
 Handoff SSOT: [`docs/handoffs/identity-coordinator.md`](../handoffs/identity-coordinator.md).
@@ -59,7 +59,7 @@ yield* Lookup.prefer(Worker, listen.key) // sugar over Lookup.advise
 
 Last write wins. Stale prefer (node not in `Lookup.nodesServing(Worker)`) is ignored.
 Directory queries use the same sugar style: `yield* Lookup.nodesServing(Jobs)` (Tag or
-wire key) — wire payload stays `NodesServingRequest`.
+wire key) — wire payload stays `NodesServingRequest` (`serviceKey`).
 
 ### 4. Dial hands
 

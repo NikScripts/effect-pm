@@ -51,14 +51,15 @@ const READY_POLL = "100 millis" as const;
 const READY_PROBE_TIMEOUT = "2 seconds" as const;
 
 /**
- * Ready-wait options on a spawn unit — omit `resources` for allReady-shaped; omit `timeout`
+ * Ready-wait options on a spawn unit — omit `services` for allReady-shaped; omit `timeout`
  * for the house default (`"30 seconds"`).
  *
  * @category models
  * @public
  */
 export interface ReadyOptions {
-  readonly resources?: ReadonlyArray<string>;
+  /** HyperService wire keys to wait on; omit ⇒ all served services Ready. */
+  readonly services?: ReadonlyArray<string>;
   readonly timeout?: Duration.Input;
 }
 
@@ -85,14 +86,14 @@ export interface SpawnSpec {
  */
 export class ReadyTimedOut extends Data.TaggedError("ReadyTimedOut")<{
   readonly node: string;
-  readonly resources?: ReadonlyArray<string>;
+  readonly services?: ReadonlyArray<string>;
   readonly timeout: Duration.Input;
 }> {
   override get message() {
     const scope =
-      this.resources === undefined
-        ? "all served resources"
-        : `resources [${this.resources.join(", ")}]`;
+      this.services === undefined
+        ? "all served HyperServices"
+        : `services [${this.services.join(", ")}]`;
     return `Launcher ReadyTimedOut for "${this.node}" waiting on ${scope} (timeout ${String(this.timeout)}).`;
   }
 }
@@ -157,7 +158,7 @@ export interface Handle {
   readonly token: Redacted.Redacted<string>;
   /** Dial / verify / handoff target. */
   readonly node: AnyNode;
-  /** Wait until Ready (allReady or `ready.resources`) is proven cross-process. */
+  /** Wait until Ready (allReady or `ready.services`) is proven cross-process. */
   readonly awaitReady: () => Effect.Effect<
     Handle,
     | ReadyTimedOut
@@ -221,7 +222,7 @@ const withLauncherLogs = <A, E, R>(
 
 const probeReady = (
   node: AnyNode,
-  resources: ReadonlyArray<string> | undefined,
+  services: ReadonlyArray<string> | undefined,
 ): Effect.Effect<
   void,
   | ServiceNotReady
@@ -245,8 +246,10 @@ const probeReady = (
       const status = yield* NodeStatusTag;
       return yield* status.status.get;
     }).pipe(Effect.provide(ctx));
-    if (resources !== undefined) {
-      for (const key of resources) {
+    // Node status still exposes the readiness rollup as `.resources` (status schema);
+    // Launcher call sites use `ready.services` / HyperService keys.
+    if (services !== undefined) {
+      for (const key of services) {
         const row = snap.resources.find((r) => r.key === key);
         if (row === undefined) {
           return yield* new ServiceNotServed({
@@ -272,7 +275,7 @@ const probeReady = (
         node: node.key,
         url: address,
         resource: "*",
-        detail: "no served resources yet",
+        detail: "no served HyperServices yet",
       });
     }
     const blocked = snap.resources.find((r) => !r.ready);
@@ -347,8 +350,8 @@ const makeHandle = (options: {
         }
         yield* Effect.logDebug("polling child Ready");
         const timeout = options.ready?.timeout ?? DEFAULT_READY_TIMEOUT;
-        const resources = options.ready?.resources;
-        const wait = probeReady(options.node, resources).pipe(
+        const services = options.ready?.services;
+        const wait = probeReady(options.node, services).pipe(
           Effect.retry({
             while: isTransientReadyFailure,
             schedule: Schedule.spaced(READY_POLL),
@@ -359,7 +362,7 @@ const makeHandle = (options: {
               Effect.fail(
                 new ReadyTimedOut({
                   node: options.node.key,
-                  ...(resources !== undefined ? { resources } : {}),
+                  ...(services !== undefined ? { services } : {}),
                   timeout,
                 }),
               ),

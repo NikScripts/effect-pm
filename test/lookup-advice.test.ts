@@ -79,7 +79,7 @@ describe("Lookup Advice", () => {
       const dir = Context.get(lookup, Lookup.Directory);
       const rows = yield* dir
         .nodesServing(
-          new Lookup.NodesServingRequest({ resourceKey: Jobs.key }),
+          new Lookup.NodesServingRequest({ serviceKey: Jobs.key }),
         )
         .pipe(Effect.provide(lookup));
       expect(rows.length).toBe(2);
@@ -99,7 +99,7 @@ describe("Lookup Advice", () => {
       expectTaggedFailure(bareExit, "LookupClientError");
 
       yield* Lookup.advise({
-        resourceKey: Jobs.key,
+        serviceKey: Jobs.key,
         prefer: preferB!.nodeKey,
       }).pipe(Effect.provide(lookup));
 
@@ -142,7 +142,7 @@ describe("Lookup Advice", () => {
       );
 
       yield* Lookup.advise({
-        resourceKey: Jobs.key,
+        serviceKey: Jobs.key,
         prefer: "lookup-adv/Jobs#does-not-exist",
       }).pipe(Effect.provide(lookup));
 

@@ -5572,7 +5572,7 @@ export const isIdentity = (tag: unknown): boolean =>
  * Hyperlink.lookupClient(Mail).pipe(Layer.provide(Lookup.layer))
  *
  * // Coordinator published advice — bare client honors prefer:
- * yield* Lookup.advise({ resourceKey: Mail.key, prefer: "fleet/Mail#w2" })
+ * yield* Lookup.advise({ serviceKey: Mail.key, prefer: "fleet/Mail#w2" })
  * Hyperlink.lookupClient(Mail)
  *
  * // N>1 replicas — opt-in pick when no advice (still fail on 0):
