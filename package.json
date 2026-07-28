@@ -80,9 +80,9 @@
       "types": "./dist/HistoryStore.d.ts",
       "default": "./dist/HistoryStore.js"
     },
-    "./DurableQueueStore": {
-      "types": "./dist/DurableQueueStore.d.ts",
-      "default": "./dist/DurableQueueStore.js"
+    "./DurableWorkPoolStore": {
+      "types": "./dist/DurableWorkPoolStore.d.ts",
+      "default": "./dist/DurableWorkPoolStore.js"
     },
     "./Group": {
       "types": "./dist/Group.d.ts",

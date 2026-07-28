@@ -2,7 +2,7 @@
  * Live proof for Effect Redis-backed stores apps compose alongside Hyperlink:
  * `Persistence.layerRedis` and `PersistedQueue.layerStoreRedis`.
  *
- * Hyperlink's own DurableQueueStore remains SQLite-only — these suites cover
+ * Hyperlink's own DurableWorkPoolStore remains SQLite-only — these suites cover
  * the Effect layers fleet apps may share with RateLimiter Redis.
  *
  * Skipped when Redis is unreachable (`REDIS_URL` or localhost:6379).

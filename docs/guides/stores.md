@@ -125,10 +125,10 @@ When an in-memory “durable” store would be pointless, the backend is **prese
 `Effect.serviceOption(Port)` inside the engine. Provide the layer → on. Omit it → off.
 This is **not** the Soft/`Storage` path and **not** a Tag config field.
 
-### WorkPool durability — `DurableQueueStore` (SQL)
+### WorkPool durability — `DurableWorkPoolStore` (SQL)
 
 Pending + in-flight work that must survive a restart (at-least-once + dedup). Port:
-`hyperlink-ts/DurableQueueStore`. SQLite backend: `SQLiteDurableQueueStore` from
+`hyperlink-ts/DurableWorkPoolStore`. SQLite backend: `SQLiteDurableWorkPoolStore` from
 `hyperlink-ts/storage/sqlite`.
 
 Requires a `payload` / `itemSchema` on the WorkPool tag so entries can serialize. Compose the
@@ -136,10 +136,10 @@ backend onto the WorkPool layer — the layer *is* the switch:
 
 ```ts
 import * as WorkPool from "hyperlink-ts/WorkPool"
-import { SQLiteDurableQueueStore } from "hyperlink-ts/storage/sqlite"
+import { SQLiteDurableWorkPoolStore } from "hyperlink-ts/storage/sqlite"
 
 const live = WorkPool.layer(Mail, { /* … */ }).pipe(
-  Layer.provide(SQLiteDurableQueueStore.layer({ filename: "queue.db" })),
+  Layer.provide(SQLiteDurableWorkPoolStore.layer({ filename: "queue.db" })),
 )
 ```
 
@@ -179,19 +179,19 @@ crash-surviving durability. No `Store.Service`, no separate store port. See [Sha
 
 ## 4. Effect Redis peers (compose, not Hyperlink ports)
 
-Hyperlink WorkPool durability remains **SQLite `DurableQueueStore`** today. Effect’s own
+Hyperlink WorkPool durability remains **SQLite `DurableWorkPoolStore`** today. Effect’s own
 `Persistence.layerRedis` / `PersistedQueue.layerStoreRedis` are available for apps that want those
 Effect surfaces — covered by `test/effect-redis-stores.test.ts`. They are not Hyperlink storage
-ports and do not replace `DurableQueueStore` or `Store.Service`.
+ports and do not replace `DurableWorkPoolStore` or `Store.Service`.
 
 ## Exports
 
 | Subpath | Role |
 |---------|------|
 | `hyperlink-ts/Store` | Soft journals — `Store.Service`, Soft default, registrations |
-| `hyperlink-ts/DurableQueueStore` | WorkPool durability port |
+| `hyperlink-ts/DurableWorkPoolStore` | WorkPool durability port |
 | `hyperlink-ts/HistoryStore` | Stream history port (`layerMemory`) |
-| `hyperlink-ts/storage/sqlite` | `SQLiteDurableQueueStore`, `SQLiteHistoryStore` |
+| `hyperlink-ts/storage/sqlite` | `SQLiteDurableWorkPoolStore`, `SQLiteHistoryStore` |
 | Effect `RateLimiter` + `@effect/platform-node` Redis | Fleet rate-limit store |
 
 ## Related

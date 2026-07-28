@@ -59,7 +59,7 @@ Each area is a tree-shakeable subpath under `hyperlink-ts/*` — import only wha
 - **`/Hyperlink`** — build your own Hyperlink Service
 - **`/WorkPool`**, **`/Daemon`**, **`/Gate`**, **`/ShardMap`** — included Hyperlink Services
 - **`/Store`** — Soft journals (`Store.Service`, `Daemon.store` / `WorkPool.store` / …)
-- **`/DurableQueueStore`**, **`/HistoryStore`**, **`/storage/sqlite`** — WorkPool durability + history backfill (SQL)
+- **`/DurableWorkPoolStore`**, **`/HistoryStore`**, **`/storage/sqlite`** — WorkPool durability + history backfill (SQL)
 - **`/ui`** — shared dashboard core (data, routing, atoms) used by web and TUI
 - **`/web`**, **`/tui`**, **`/cli`** — web dashboard, terminal dashboard, CLI
 - **`hyperlink-ts`** — the barrel: everything under short names

@@ -18,7 +18,7 @@ All persistence is one of these shapes:
   an event journal (in-memory or SQLite). This is the event-log form: record history, replay it,
   stream changes. Reach for it whenever the data is a log of things that happened.
 - **Custom store** — a bespoke store service with its own domain API and backend, for when append/read
-  cannot express the semantics (leasing, at-least-once, priority). `DurableQueueStore` is the model:
+  cannot express the semantics (leasing, at-least-once, priority). `DurableWorkPoolStore` is the model:
   `offer` / `take` / `complete` / `fail` / `recover` / `drain` over its own SQLite table.
   Use a `Context.Service` port when durability is presence-driven (`serviceOption`) or a second
   backend is likely.

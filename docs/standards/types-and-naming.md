@@ -343,9 +343,9 @@ the class names itself as its own type.
 
 ``` ts
 // core service — Context.Service<Self, Shape>, the Shape usually its own interface
-export interface DurableQueueStoreShape { /* … */ }
-class DurableQueueStore extends Context.Service<DurableQueueStore, DurableQueueStoreShape>()(
-  "hyperlink-ts/DurableQueueStore",
+export interface DurableWorkPoolStoreShape { /* … */ }
+class DurableWorkPoolStore extends Context.Service<DurableWorkPoolStore, DurableWorkPoolStoreShape>()(
+  "hyperlink-ts/DurableWorkPoolStore",
 ) {}
 
 // HyperService tag — X.Tag
@@ -359,7 +359,7 @@ class AppStore extends Store.Service<AppStore>("@app/Store")(
 
 ``` ts
 // ❌ bad — bare factory bound to a const: no self-type, no nominal identity
-const durableQueueStore = Context.Service(id, shape)
+const durableWorkPoolStore = Context.Service(id, shape)
 ```
 
 {.note}

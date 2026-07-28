@@ -1,5 +1,5 @@
 /**
- * **DurableQueueStore** — the *durability plane* of a `WorkPool`: a priority-native store of
+ * **DurableWorkPoolStore** — the *durability plane* of a `WorkPool`: a priority-native store of
  * pending + in-flight work, so no enqueued item is lost across a restart (**at-least-once** +
  * dedup key). This is the abstract port; backends live behind it (SQLite today —
  * `hyperlink-ts/storage/sqlite`). Inspired by Effect's `PersistedQueue` (we lift its
@@ -13,7 +13,7 @@
  * Semantics — **at-least-once + dedup key**: on crash, in-flight (lease-expired) entries are
  * redelivered; supply a `dedupKey` (or write an idempotent effect) to avoid double work.
  *
- * @module DurableQueueStore
+ * @module DurableWorkPoolStore
  */
 import { Context, Data, type Effect, type Option } from "effect";
 
@@ -58,7 +58,7 @@ export interface DurableEntryInput {
 }
 
 /**
- * A leased entry returned by {@link DurableQueueStoreShape.take}.
+ * A leased entry returned by {@link DurableWorkPoolStoreShape.take}.
  *
  * @category models
  * @public
@@ -76,7 +76,7 @@ export interface DurableEntry {
 }
 
 /**
- * Outcome of {@link DurableQueueStoreShape.offer}.
+ * Outcome of {@link DurableWorkPoolStoreShape.offer}.
  *
  * @category models
  * @public
@@ -84,7 +84,7 @@ export interface DurableEntry {
 export type OfferResult = "inserted" | "escalated" | "deduplicated";
 
 /**
- * Outcome of {@link DurableQueueStoreShape.fail}.
+ * Outcome of {@link DurableWorkPoolStoreShape.fail}.
  *
  * @category models
  * @public
@@ -109,8 +109,8 @@ export interface DurableSizes {
  * @category errors
  * @public
  */
-export class DurableQueueError extends Data.TaggedError(
-  "hyperlink-ts/DurableQueueError",
+export class DurableWorkPoolError extends Data.TaggedError(
+  "hyperlink-ts/DurableWorkPoolError",
 )<{
   readonly operation: string;
   readonly cause: unknown;
@@ -123,7 +123,7 @@ export class DurableQueueError extends Data.TaggedError(
  * @category models
  * @public
  */
-export interface DurableQueueStoreShape {
+export interface DurableWorkPoolStoreShape {
   /**
    * Persist a pending entry. Dedups on `dedupKey` among live entries (`inserted` vs
    * `deduplicated`); if a live entry with that key exists at a *lower* priority, raises it
@@ -131,7 +131,7 @@ export interface DurableQueueStoreShape {
    */
   readonly offer: (
     entry: DurableEntryInput,
-  ) => Effect.Effect<OfferResult, DurableQueueError>;
+  ) => Effect.Effect<OfferResult, DurableWorkPoolError>;
   /**
    * Atomically lease the top-priority available entry (FIFO within a priority), bumping
    * `attempts` and setting a lease (`leaseMillis`). `None` if nothing is available.
@@ -139,9 +139,9 @@ export interface DurableQueueStoreShape {
   readonly take: (options: {
     readonly key: string;
     readonly leaseMillis: number;
-  }) => Effect.Effect<Option.Option<DurableEntry>, DurableQueueError>;
+  }) => Effect.Effect<Option.Option<DurableEntry>, DurableWorkPoolError>;
   /** Acknowledge success — remove the entry. */
-  readonly complete: (id: string) => Effect.Effect<void, DurableQueueError>;
+  readonly complete: (id: string) => Effect.Effect<void, DurableWorkPoolError>;
   /**
    * Negative-ack — requeue (clear the lease) for retry, or dead-letter once `attempts` reaches
    * `maxAttempts`.
@@ -149,18 +149,18 @@ export interface DurableQueueStoreShape {
   readonly fail: (
     id: string,
     options: { readonly maxAttempts: number },
-  ) => Effect.Effect<FailResult, DurableQueueError>;
+  ) => Effect.Effect<FailResult, DurableWorkPoolError>;
   /** Pending counts per priority (in-flight included). */
   readonly sizes: (
     key: string,
-  ) => Effect.Effect<DurableSizes, DurableQueueError>;
+  ) => Effect.Effect<DurableSizes, DurableWorkPoolError>;
   /**
    * Reclaim work whose lease has expired (`locked_until < now`) — the at-least-once recovery used
    * on boot/restart. Returns the count reclaimed.
    */
-  readonly recover: (key: string) => Effect.Effect<number, DurableQueueError>;
+  readonly recover: (key: string) => Effect.Effect<number, DurableWorkPoolError>;
   /** Delete all pending (incl. in-flight) entries for a queue. Returns the count removed. */
-  readonly clear: (key: string) => Effect.Effect<number, DurableQueueError>;
+  readonly clear: (key: string) => Effect.Effect<number, DurableWorkPoolError>;
   /**
    * Remove and return **available** (not in-flight) backlog entries matching `id` or `key` (all if
    * neither given). Powers the durable `release` / `deadLetter` / `drop` control verbs. In-flight
@@ -169,18 +169,18 @@ export interface DurableQueueStoreShape {
   readonly drain: (
     key: string,
     match: { readonly id?: string; readonly key?: string },
-  ) => Effect.Effect<ReadonlyArray<DurableEntry>, DurableQueueError>;
+  ) => Effect.Effect<ReadonlyArray<DurableEntry>, DurableWorkPoolError>;
 }
 
 /**
- * Durable queue store — the priority-native durability plane. `yield* DurableQueueStore` for the
- * service; provide a backend (e.g. `SQLiteDurableQueueStore.layer` from
+ * Durable WorkPool store — the priority-native durability plane. `yield* DurableWorkPoolStore` for the
+ * service; provide a backend (e.g. `SQLiteDurableWorkPoolStore.layer` from
  * `hyperlink-ts/storage/sqlite`).
  *
  * @category context
  * @public
  */
-export class DurableQueueStore extends Context.Service<
-  DurableQueueStore,
-  DurableQueueStoreShape
->()("hyperlink-ts/DurableQueueStore") {}
+export class DurableWorkPoolStore extends Context.Service<
+  DurableWorkPoolStore,
+  DurableWorkPoolStoreShape
+>()("hyperlink-ts/DurableWorkPoolStore") {}

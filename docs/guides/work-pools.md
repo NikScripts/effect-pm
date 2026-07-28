@@ -498,8 +498,8 @@ Three separate planes — do not collapse them into one “SQLite store”:
    journal. Lifecycle events and analytics live there for the process lifetime. Override with
    an app `Store.Service` that registers `WorkPool.store(tag)` (SQLite or memory + Logs).
    Reach analytics with `WorkPool.store(tag)` / `yield* AppStore.at(tag)`.
-2. **Durability (`DurableQueueStore`)** — pending + in-flight work that must survive a
-   restart. Presence-driven: provide `SQLiteDurableQueueStore.layer({ filename })` from
+2. **Durability (`DurableWorkPoolStore`)** — pending + in-flight work that must survive a
+   restart. Presence-driven: provide `SQLiteDurableWorkPoolStore.layer({ filename })` from
    `hyperlink-ts/storage/sqlite` (needs a `payload` / `itemSchema` on the tag). No Soft
    default — omit the layer and the queue is not durable.
 3. **History backfill (`HistoryStore`)** — optional keyed append-log for windowed
