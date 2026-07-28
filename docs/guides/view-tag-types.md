@@ -16,7 +16,7 @@ Mint with `View.Card.Tag` (etc.), write the skin, export `layer`.
 
 {.twoslash}
 ``` ts
-import { Layer, Match } from "effect"
+import { Layer } from "effect"
 import { View } from "hyperlink-ts/ui"
 
 class PoolCard extends View.Card.Tag<PoolCard>()(
@@ -52,17 +52,17 @@ export const layer = Layer.mergeAll(
 )
 
 const kind: View.ViewKind = View.ViewKind.Card()
-const label = Match.value(kind).pipe(
-  Match.tag("Card", () => "card chrome"),
-  Match.tag("Detail", () => "detail chrome"),
-  Match.tag("Page", () => "page chrome"),
-  Match.exhaustive,
-)
+const label = View.ViewKind.$match(kind, {
+  Card: () => "card chrome",
+  Detail: () => "detail chrome",
+  Page: () => "page chrome",
+})
 void label
 ```
 
 Annotate skins with **`PoolCard["Service"]`** (no `typeof`).
-Sizes are `Data.TaggedEnum` — match with `Match.tag`.
+Sizes are `Data.TaggedEnum` — match with `ViewKind.$match` (or `Match.tag` on a
+`View.ViewKind`-typed value).
 
 ## Extra props
 
