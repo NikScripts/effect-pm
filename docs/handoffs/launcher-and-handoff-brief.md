@@ -168,7 +168,7 @@ Owner locked #22–26; Eng on tip:
 - Recipe + example: custody (`Launcher.up`) then membership (`Lookup.client` + advertise/identity).
 - Guide: [`identity-coordinator.md`](../guides/identity-coordinator.md) planes section.
 
-**Still deferred:** blank worker / assign protocol; HTTP/WS Lookup; nameless Launcher discovery; Track C migration; Track D clients.
+**Still deferred:** blank worker / assign protocol; HTTP/WS Lookup; nameless Launcher discovery; Track D clients. Track C bake proposed below (not locked).
 
 ### Track C — research note (2026-07-28): what already exists
 
@@ -327,11 +327,10 @@ How **clients** handle node handoff (redirect, dual-serve, drain, retry, discove
 
 ## Suggested first moves
 
-1. Repeat back owner framing (dumb launcher → exit; node owns process; Lookup directs; handoff on version upgrade; no new concepts without bar).
-2. Inventory what Lookup already exposes that can drive “tell the new node what to do” without new control planes.
-3. List handoff options for **stateless vs stateful** services and what “configured in layers” might mean — design only.
-4. Separate tracks in writing: **(A) spawn+exit launcher**, **(B) Lookup-directed startup**, **(C) service handoff + old node shutdown**, **(D) client behavior during handoff**.
-5. Bring open questions to owner; **no Eng** on launcher until a fresh bake says go.
+1. ~~Repeat framing / inventory / separate tracks~~ — done (A+B Eng’d; C bake #27–36 proposed above).
+2. **Owner:** lock a contiguous subset of Track C #27–36 into Locked (or reject/amend).
+3. After lock: Eng Node draining status + drain/shutdown control plane + per-service handoff layer option (order in C exit note).
+4. Keep Track D open until C signals (#36) are real.
 
 ---
 
