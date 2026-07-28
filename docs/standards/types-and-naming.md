@@ -2,7 +2,7 @@
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
-> and live type previews — is at <https://hyperlink.cool/docs/types-and-naming>.
+> and live type previews — is at <https://dev.hyperlink.cool/docs/types-and-naming>.
 <!-- docs-site-link:end -->
 # Types & Naming
 

@@ -1,4 +1,9 @@
 {#readiness title="Readiness & Health" status="draft" done="api" appliesTo=all}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://dev.hyperlink.cool/docs/readiness>.
+<!-- docs-site-link:end -->
 # Readiness & Health
 
 Whether a served HyperService is actually able to do its job — beyond “the process is up.” A node folds every served service’s readiness into one aggregate with two faces (same SSOT):

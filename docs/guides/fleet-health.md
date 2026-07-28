@@ -2,7 +2,7 @@
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
-> and live type previews — is at <https://hyperlink.cool/docs/fleet-health>.
+> and live type previews — is at <https://dev.hyperlink.cool/docs/fleet-health>.
 <!-- docs-site-link:end -->
 # Fleet Health
 
