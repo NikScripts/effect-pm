@@ -98,7 +98,32 @@ Statics are for things we used to jam into Tag args (`size`, later `spec`, etc.)
 ## Open (ask before baking)
 
 - Whether `spec` stays an opaque static on family protos vs typed Spec gate  
-- Can we get closer to “props named after the class” without fighting `ServiceClass` instance brands?  
+- Adopt Effect-faithful Tag POC into shipped `View`? (see below)
+
+## Effect-faithful Tag POC (2026-07-28)
+
+**Files:** `examples/forms/view/effect-service-poc.ts` + `test/view-effect-service-poc.test-d.ts` (green).
+
+Replicate `Context.Service<Self, Shape>()("Key")` instead of Prototype + phantom `Type`:
+
+```ts
+class DenseCard extends Card<DenseCard, ViewProps & { dense?: boolean }>()("…") {}
+
+const skin: DenseCard["Service"] = (props) => …  // no typeof
+type P = PropsOf<DenseCard>                       // peel Props from Service
+Layer.succeed(DenseCard, (props) => …)            // infers
+```
+
+| Finding | Detail |
+|---------|--------|
+| **Win** | Instance type carries Effect `ServiceClass.Shape.Service` → `PoolCard["Service"]` is `View<Props>` **without `typeof`** |
+| **Win** | `PropsOf<PoolCard>` peels Props from that Shape |
+| **Same as Effect** | Self = identity; Shape = `View<Props>`; class value = Context key |
+| **vs shipped** | Today: `View.View<View.Type<typeof PoolCard>>` + Prototype chain |
+
+**Not “props named after the class”** — still Self ≠ Props (ServiceClass brands). Annotation target is `DenseCard["Service"]` (the fn), which is short enough.
+
+**Next (if baking):** replace `View.Prototype` / `View.Type` minting with this Tag/Card/Detail form; keep matchers / bind / only / Registry.
 
 ## Checkpoint notes (2026-07-27)
 
