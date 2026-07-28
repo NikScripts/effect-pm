@@ -725,6 +725,15 @@
           "title": "Composition over inheritance"
         },
         {
+          "id": "principles.handles-stay-thin",
+          "severity": "must",
+          "appliesTo": [
+            "src",
+            "examples"
+          ],
+          "title": "Handles stay thin; ship helpers separately"
+        },
+        {
           "id": "principles.single-source-of-truth",
           "severity": "must",
           "appliesTo": [
@@ -1189,5 +1198,5 @@
       ]
     }
   ],
-  "ruleCount": 131
+  "ruleCount": 132
 }

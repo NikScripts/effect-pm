@@ -15,7 +15,8 @@ A HyperService splits cleanly in two. The **tag** carries the wire contract — 
 `error` schemas — and nothing else; it is the wire SSOT and the thing a client (even a browser)
 imports. The **layer** carries the runtime — the `effect` worker, `polling`, `autoStart`. Never cross
 them: schemas never move into layer config (that breaks the wire SSOT and RPC safety), and the worker
-never moves onto the tag (that drags the engine into the light contract).
+never moves onto the tag (that drags the engine into the light contract). Derived UI or observe
+surfaces are helpers that take the tag (*Principles → Handles stay thin*), not methods on it.
 
 ``` ts
 // contract — the wire schema, passed positionally
