@@ -649,8 +649,8 @@ Hyperlink.httpServer([
 
 Because each `serve` layer carries **its own** `Layer.provide`, resources on one host that need **different implementations of the same tag** (mutually exclusive — e.g. one worker fires post-persist hooks, another must not) stay isolated — no shared union-provide can confuse them. Resources that **share** a dependency memoize one instance (same `dependency` value → one build; `Layer.fresh(dependency)` to isolate).
 
-- **`Hyperlink.httpServer(serves, options?)`** — reads the `ServedHyperlinks` registry, merges every `serve`d group onto **one** `RpcServer` (`/rpc`) + a `/health` route aggregating readiness. Pass the `serve` layers as the first arg (recommended) and it **bundles** the `provideMerge` + `servedHyperlinksLayer` — you provide only the platform (+ any shared dependency). The low-level `httpServer(options)` form still exists (then you `provideMerge` the `serve` layers, not `provide`, + `servedHyperlinksLayer` yourself).
-- **`Hyperlink.servedHyperlinksLayer`** / **`Hyperlink.ServedHyperlinks`** — the `Ref`-backed registry `serve` appends to and `httpServer` reads.
+- **`Hyperlink.httpServer(serves, options?)`** — reads the `ServedHyperServices` registry, merges every `serve`d group onto **one** `RpcServer` (`/rpc`) + a `/health` route aggregating readiness. Pass the `serve` layers as the first arg (recommended) and it **bundles** the `provideMerge` + `servedHyperServicesLayer` — you provide only the platform (+ any shared dependency). The low-level `httpServer(options)` form still exists (then you `provideMerge` the `serve` layers, not `provide`, + `servedHyperServicesLayer` yourself).
+- **`Hyperlink.servedHyperServicesLayer`** / **`Hyperlink.ServedHyperServices`** — the `Ref`-backed registry `serve` appends to and `httpServer` reads.
 - **`Hyperlink.provide(dependency, [resources])`** — sugar for `Layer.mergeAll(resources).pipe(Layer.provide(dependency))` — "these resources, on this dependency."
 
 ```ts

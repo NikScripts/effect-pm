@@ -4003,22 +4003,22 @@ export interface ServedHyperlink {
 /**
  * The served-HyperServices registry — an accumulator {@link serve} appends to and {@link httpServer} reads.
  * A plain `Ref`-backed list (not type-level state), so many `serve` layers compose under `Layer.mergeAll`
- * and the server sees every one. Provided by {@link httpServer} (or {@link servedHyperlinksLayer}); `serve`
+ * and the server sees every one. Provided by {@link httpServer} (or {@link servedHyperServicesLayer}); `serve`
  * registers **only if it's present** (so `serve` also works standalone).
  *
  * @category models
  * @internal
  */
-export class ServedHyperlinks extends Context.Service<
-  ServedHyperlinks,
+export class ServedHyperServices extends Context.Service<
+  ServedHyperServices,
   {
     readonly register: (entry: ServedHyperlink) => Effect.Effect<void>;
     readonly all: Effect.Effect<ReadonlyArray<ServedHyperlink>>;
   }
->()("hyperlink-ts/Hyperlink/ServedHyperlinks") {}
+>()("hyperlink-ts/Hyperlink/ServedHyperServices") {}
 
 /**
- * A fresh {@link ServedHyperlinks} registry. {@link httpServer} / {@link ipcServer} /
+ * A fresh {@link ServedHyperServices} registry. {@link httpServer} / {@link ipcServer} /
  * {@link wsServer} each provide {@link Layer.fresh} of this so two servers in one
  * process (e.g. Lookup + a Worker) do not share registrations via Layer memoization.
  * Provide this standalone only to collect `serve` registrations without a server.
@@ -4026,8 +4026,8 @@ export class ServedHyperlinks extends Context.Service<
  * @category serving
  * @internal
  */
-export const servedHyperlinksLayer: Layer.Layer<ServedHyperlinks> = Layer.effect(
-  ServedHyperlinks,
+export const servedHyperServicesLayer: Layer.Layer<ServedHyperServices> = Layer.effect(
+  ServedHyperServices,
   Effect.gen(function* () {
     const ref = yield* Ref.make<ReadonlyArray<ServedHyperlink>>([]);
     return {
@@ -4190,7 +4190,7 @@ const getOrCreateSharedHandlerLayer = (
   const handlerLayer = toHandlerLayer(handlers as never);
   const kind = kindOf(tag) ?? wireKey;
   const registration = Layer.effectDiscard(
-    Effect.serviceOption(ServedHyperlinks).pipe(
+    Effect.serviceOption(ServedHyperServices).pipe(
       Effect.flatMap(
         Option.match({
           onNone: () => Effect.void,
@@ -4311,7 +4311,7 @@ const serveRemoteHandlers = (
   // shared server + `/health` discover this HyperService without the caller listing it twice. Merged (not
   // provided) so it isn't pruned as unused; a no-op when no registry is in context (standalone `serve`).
   const registration = Layer.effectDiscard(
-    Effect.serviceOption(ServedHyperlinks).pipe(
+    Effect.serviceOption(ServedHyperServices).pipe(
       Effect.flatMap(
         Option.match({
           onNone: () => Effect.void,

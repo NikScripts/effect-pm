@@ -202,7 +202,7 @@ const buildCommand = (tree: CliTree, rootName: string) => {
       );
   const width = Object.keys(rootFocus).reduce((max, name) => Math.max(max, name.length), 0);
   const ls = Command.make("ls").pipe(
-    Command.withDescription("List hyperlinks (command name → id)."),
+    Command.withDescription("List HyperServices (command name → id)."),
     Command.withHandler(() =>
       Console.log(
         Object.entries(rootFocus)

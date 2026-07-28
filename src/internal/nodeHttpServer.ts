@@ -86,7 +86,7 @@ type ClosedLayer = Layer.Layer<never, never, never>;
 type HttpServed = Layer.Layer<
   never,
   never,
-  Hyperlink.ServedHyperlinks | HttpServer.HttpServer
+  Hyperlink.ServedHyperServices | HttpServer.HttpServer
 >;
 
 const httpServerBase = (
@@ -114,7 +114,7 @@ const httpServerBase = (
   const unwrapServed = retype<(effect: never) => HttpServed>(Layer.unwrap as never);
   return unwrapServed(
     Effect.gen(function* () {
-      const registry = yield* Hyperlink.ServedHyperlinks;
+      const registry = yield* Hyperlink.ServedHyperServices;
       const entries = yield* registry.all;
       if (entries.length === 0) {
         return yield* Effect.die(
@@ -238,13 +238,13 @@ const httpServerBase = (
 /**
  * The shared http server for HyperServices composed with {@link serve} — the multi-hyperlink,
  * heterogeneous-dependency counterpart to a single {@link serve} layer. Reads the
- * {@link ServedHyperlinks} registry, merges every registered group onto **one** `RpcServer` at `path`
+ * {@link ServedHyperServices} registry, merges every registered group onto **one** `RpcServer` at `path`
  * (default `/rpc`), and mounts a `/health` route aggregating each HyperService's readiness. Because each
  * `serve` layer carries **its own** `Layer.provide`d dependency, HyperServices needing different
  * implementations of the same tag stay isolated — no shared union-provide.
  *
  * Pass the `serve` layers as the first argument (recommended) — it bundles the `provideMerge` +
- * {@link Hyperlink.servedHyperlinksLayer}, so you list HyperServices and provide only the platform (and any shared
+ * {@link Hyperlink.servedHyperServicesLayer}, so you list HyperServices and provide only the platform (and any shared
  * dependency):
  *
  * ```ts
@@ -265,7 +265,7 @@ const httpServerBase = (
  * shared + isolated deps, no second port.
  *
  * The low-level `httpServer(options)` form requires you to `Layer.provideMerge` the `serve` layers (kept,
- * not pruned) + {@link Hyperlink.servedHyperlinksLayer} yourself. Either way the handlers ride the context the
+ * not pruned) + {@link Hyperlink.servedHyperServicesLayer} yourself. Either way the handlers ride the context the
  * `serve` layers provide; if one is missing the `RpcServer` fails at **build** (a clear boot error), never
  * a silent runtime gap.
  *
@@ -278,7 +278,7 @@ export function httpServer<A, E, R>(
 ): Layer.Layer<A, E, R | HttpServer.HttpServer>;
 export function httpServer(
   options?: HttpServerOptions,
-): Layer.Layer<never, never, Hyperlink.ServedHyperlinks | HttpServer.HttpServer>;
+): Layer.Layer<never, never, Hyperlink.ServedHyperServices | HttpServer.HttpServer>;
 export function httpServer<const Serves extends ServerServeList>(
   serves: Serves,
   options?: HttpServerOptions,
@@ -318,7 +318,7 @@ function serverImpl(
   if (serves !== undefined) {
     return httpServerBase(serverProtocol, serverKind, maybeOptions).pipe(
       Layer.provideMerge(closedLayer(mergeServeList(serves))),
-      Layer.provide(Layer.fresh(Hyperlink.servedHyperlinksLayer)),
+      Layer.provide(Layer.fresh(Hyperlink.servedHyperServicesLayer)),
     );
   }
   return httpServerBase(
@@ -352,7 +352,7 @@ export function wsServer<A, E, R>(
 ): Layer.Layer<A, E, R | HttpServer.HttpServer>;
 export function wsServer(
   options?: HttpServerOptions,
-): Layer.Layer<never, never, Hyperlink.ServedHyperlinks | HttpServer.HttpServer>;
+): Layer.Layer<never, never, Hyperlink.ServedHyperServices | HttpServer.HttpServer>;
 export function wsServer<const Serves extends ServerServeList>(
   serves: Serves,
   options?: HttpServerOptions,

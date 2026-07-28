@@ -43,7 +43,7 @@ const Node = PmNode.httpServer().pipe(
     ),
   ),
   Layer.provide(recorderLayer), // Dep discharged per resource; Recorder shared
-  Layer.provide(Hyperlink.servedHyperlinksLayer),
+  Layer.provide(Hyperlink.servedHyperServicesLayer),
   Layer.provide(NodeHttpServer.layerTest),
 );
 

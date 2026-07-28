@@ -94,7 +94,7 @@ Internal discriminant: `sharedTagSym`. Existing `serve` / `client` pick the path
 | Shared Spec mint via `Tag(wireKey, spec)` | **Eng’d** (W3) |
 | ApiMetrics on shared Spec | **Deferred** — demo only; metrics vs Gate handle nest still open |
 | `forwardClient` sends header `key` | Solo: instance key (= wire key); shared: required for routing |
-| `ServedHyperlinks` keyed by wire key | One registry entry per shared wire key |
+| `ServedHyperServices` keyed by wire key | One registry entry per shared wire key |
 
 Spec-hash stays **`contractHash` / verify**, not the RpcGroup name.
 

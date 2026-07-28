@@ -31,7 +31,7 @@ below is the AS-SHIPPED outcome (a couple of the original predictions — `NodeS
 | `HttpApiClient` | **`Gate.httpApiClient(…)`** | FOLDED IN — the module *is* a `Semaphore` gate over the HttpClient transport (`HttpClientRunGate.withRunner` wrapping `HttpApiClient.make`) + per-endpoint metrics. Peer constructor beside `Gate.Tag` (+ `httpApiClientService`/`httpApiClientLayer`/`acceptJson`/`instrumentEndpoints`). `HttpClientRunGate` stays the shared internal engine. |
 | `Daemon` | **`Daemon`** | supervised long-running process |
 | `NodeStatus` | **node-handle accessors** — `(yield* node).status` / `.logs` / `.ping` | SHIPPED as accessors ON THE CONNECTED NODE HANDLE, not a `node.pulse` / `Hyperlink.status(node)` free function. Each node auto-serves its own status/logs/ping; because a node tag *is* its own `Context.Service`, reading node A vs B is `yield* NodeA` vs `yield* NodeB` — no shared slot, no cast. The `NodeStatus` module + `Node.status` namespace are **deleted**; the light snapshot types survive as flat `Node.Status` / `Node.ServiceReadiness` / `Node.serviceReadiness`. Engine is a lazy internal (`Node.Tag` stays light). See [[project-nodestatus-on-handle]]. |
-| `Driver` / `ServedHyperlink` | **`Driver`** / `ServedHyperlink` **@internal** | `BuiltHyperlink` → **`Hyperlink.Driver`** (+ `driver`/`isDriver`/`driverSym`). `ServedHyperlink`/`ServedHyperlinks`/`servedHyperlinksLayer` **demoted to `@internal`** (server plumbing, zero user refs) — not renamed. |
+| `Driver` / `ServedHyperlink` | **`Driver`** / `ServedHyperlink` **@internal** | `BuiltHyperlink` → **`Hyperlink.Driver`** (+ `driver`/`isDriver`/`driverSym`). Registry was `ServedHyperlinks` → **`ServedHyperServices`** / `servedHyperServicesLayer` (**@internal**; no “Hyperlinks” plural). |
 
 Namespace clash check done before locking: `WorkPool` / `Gate` / `Daemon` clear of Effect's namespace
 
@@ -109,4 +109,4 @@ Owner: purge remaining product “resource” names. Shipped in the same tip:
 | Launcher `ready.resources` | `ready.services` |
 
 Internal engine may still say `NodeStatusTag` / wire key `hyperlink-ts/node-status` (not a public module).
-Folder renamed: `docs/resources/` → `docs/services/` (site URLs stay basename: `/docs/contracts`, …). Standards chapter slug/URL `resources` → `hyperlinks` (`/docs/hyperlinks`); `/docs/resources` redirect page kept. Manifest rule ids `resources.*` → `hyperlinks.*`.
+Folder renamed: `docs/resources/` → `docs/services/` (site URLs stay basename: `/docs/contracts`, …). Standards chapter slug/URL → `hyperlink-services` (`/docs/hyperlink-services`); redirects kept for `/docs/resources` and `/docs/hyperlinks`. Manifest rule ids → `hyperlink-services.*`. Internal registry: `ServedHyperlinks` → `ServedHyperServices` / `servedHyperServicesLayer`.

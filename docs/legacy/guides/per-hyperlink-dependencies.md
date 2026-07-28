@@ -37,7 +37,7 @@ layer memoization, not by data.
 | `Hyperlink.serve(tag, impl)` | A **raw resource's** layer (impl is the query record) that grants the local instance **and** mounts the wire handlers, **preserving** the handlers' requirement `R`, so you can `Layer.provide` each resource's dependency onto *it*. Self-registers for `/health`. (`serveRemote` is the served-only variant — same isolation, no local grant.) |
 | `WorkPool.serve(tag, config)` / `Daemon.serve(tag, config)` | The **engine** forms — same isolation, but the served layer also **runs the engine** (worker/refill/persist for queues, tick schedule for processes). Use these for queue/process resources; `Hyperlink.serve` only mounts handlers and would leave the worker/tick dead. |
 | `Hyperlink.httpServer(options?)` | Reads the registry, merges every served group onto **one** `RpcServer` (`/rpc`), and mounts a `/health` route. |
-| `Hyperlink.servedHyperlinksLayer` | The registry the `serve` forms write to and `httpServer` reads. |
+| `Hyperlink.servedHyperServicesLayer` | The registry the `serve` forms write to and `httpServer` reads. |
 | `Hyperlink.provide(dependency, [resources])` | Sugar for `Layer.mergeAll(resources).pipe(Layer.provide(dependency))` — "these resources, on this dependency." |
 
 > **Query resource vs. engine resource.** A bare `Hyperlink.Tag` (status queries, streams) uses
@@ -76,7 +76,7 @@ const Host = Hyperlink.httpServer(
 ```
 
 > The low-level form `httpServer(options)` still exists — then you `Layer.provideMerge` the `serve` layers
-> (kept, not pruned) + `Hyperlink.servedHyperlinksLayer` yourself. The `serves` form removes that boilerplate
+> (kept, not pruned) + `Hyperlink.servedHyperServicesLayer` yourself. The `serves` form removes that boilerplate
 > and the `provideMerge`-vs-`provide` footgun.
 
 `SeasonImport` gets the hooked handler; `SeasonMatches` and `LiveScorePoller` get the plain one — on one
@@ -90,7 +90,7 @@ const Host = Hyperlink.httpServer(
 - **One server.** RPC groups are namespaced by the resource's wire id, so many served groups merge onto a
   single `RpcServer` with no clash. `httpServer` does that merge from the registry.
 - **The registry + ordering.** Each `serve` layer appends its `{ group, kind, readiness }` to a
-  `Ref`-backed `ServedHyperlinks`; `httpServer` reads it to build the server and `/health`. Because you
+  `Ref`-backed `ServedHyperServices`; `httpServer` reads it to build the server and `/health`. Because you
   `provideMerge` the `serve` layers **onto** `httpServer`, they build (and register) **before**
   `httpServer` reads — the dependency chain guarantees it.
 - **Sharing by memoization.** Provide the *same* dependency `Layer` value to two resources and they share

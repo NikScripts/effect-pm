@@ -2046,7 +2046,7 @@ export const layerMemory = layer;
 
 /**
  * Serve this queue **remotely (served-only)** — run the worker / refill / `persist`
- * engine behind the tag, mount its RPC handlers, and register into {@link Hyperlink.servedHyperlinksLayer},
+ * engine behind the tag, mount its RPC handlers, and register into {@link Hyperlink.servedHyperServicesLayer},
  * **without** granting the local instance (no `yield* Tag` in the serving process). The engine's worker
  * requirement `R` is **preserved**, so a per-HyperService `Layer.provide` discharges it in isolation — the
  * queue's counterpart to {@link Hyperlink.serveRemote}.
@@ -2119,7 +2119,7 @@ export const serveRemoteMemory = serveRemote;
 /**
  * Serve this queue **and** grant its local instance from **one** materialization — run the worker /
  * refill / `persist` engine behind the tag, mount its RPC handlers, register into
- * {@link Hyperlink.servedHyperlinksLayer}, **and** grant `Self | Local<Self>` so co-located code
+ * {@link Hyperlink.servedHyperServicesLayer}, **and** grant `Self | Local<Self>` so co-located code
  * can `yield* Tag`. The served cells *are* the in-process instance (one engine, one `peersLayer`); the
  * worker requirement `R` is preserved for per-HyperService `Layer.provide`. This is the queue's counterpart
  * to {@link Hyperlink.serve}; a served-**only** gateway uses {@link serveRemote}.

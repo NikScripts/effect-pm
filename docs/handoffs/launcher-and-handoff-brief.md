@@ -18,7 +18,7 @@
    - **Child** must **ack** ownership (“I am ready; I own myself”) so the transfer is a real handshake on the wire, not an assumption from readiness alone.
    - Prefer reusing existing node / verify substrate for the ack; **no new control plane**. Verb locked in #11 (`Node.assume`).
 7. **Ready is first-class and high-bar** (owner: “first class and top notch”) — not “port open / process alive.”
-   - **Child** declares readiness through the existing **`withReadiness` / `Readiness` / node status** surface (served Hyperlinks participate; defaults ready when unset).
+   - **Child** declares readiness through the existing **`withReadiness` / `Readiness` / node status** surface (served HyperServices participate; defaults ready when unset).
    - **Launcher `awaitReady`** is a **named phase** that waits until that readiness is true **and** proven cross-process (reuse `verifyConnection` / deep classify — loud failures, typed errors). No ad-hoc health hacks.
    - **Ready ≠ ownership.** Ready means “fit to serve”; **handoff ack** (locked #6) is the separate “I own myself; launcher may exit” step.
    - Quality bar: Effect-shaped API, Schema/tagged errors, no silent timeouts-as-success; composeable with Track A phases.
@@ -105,7 +105,7 @@
     - **Custody** — Launcher (Track A): spawn → Ready → `Node.assume` → exit.
     - **Membership** — Lookup (Track B): Identity / Directory / Advice after assume.
     - **Migration** — Track C later; **Clients** — Track D later.
-23. **Directive = membership arbitration, not code-loading.** Child entry chooses capabilities (autonomous Hyperlinks). Lookup decides who wins / where clients dial. **No** blank worker, **no** `Lookup.assign`, **no** assign-before-serve in B.
+23. **Directive = membership arbitration, not code-loading.** Child entry chooses capabilities (autonomous HyperServices). Lookup decides who wins / where clients dial. **No** blank worker, **no** `Lookup.assign`, **no** assign-before-serve in B.
 24. **Topology day one = local-first IPC Lookup** (`Lookup.layer` / `layerOptions` / `client`). Soft-bake OK for demos; prod pipes explicit Lookup. Cross-network Lookup deferred.
 25. **Launcher rendezvous unchanged** — stable addressed `SpawnSpec.node`; Lookup is child-after-assume (#4). No nameless discovery via Launcher in B.
 26. **Takeover in B = directory row only** — `askIncumbent` + node-status `yield`. Public `ListenOptions.onYield` configures refuse/accept. Drain / state / old shutdown = Track C.

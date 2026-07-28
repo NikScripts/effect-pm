@@ -345,12 +345,12 @@
       ]
     },
     {
-      "chapter": "hyperlinks",
+      "chapter": "hyperlink-services",
       "title": "Hyperlink Factories",
-      "slug": "hyperlinks",
+      "slug": "hyperlink-services",
       "rules": [
         {
-          "id": "hyperlinks.tag-is-contract-layer-is-runtime",
+          "id": "hyperlink-services.tag-is-contract-layer-is-runtime",
           "severity": "must",
           "appliesTo": [
             "src",
@@ -359,7 +359,7 @@
           "title": "The tag is the contract; the layer is the runtime"
         },
         {
-          "id": "hyperlinks.positional-schema-args",
+          "id": "hyperlink-services.positional-schema-args",
           "severity": "must",
           "appliesTo": [
             "src",
@@ -368,7 +368,7 @@
           "title": "Pass tag schemas positionally when you can"
         },
         {
-          "id": "hyperlinks.behaviour-via-piped-combinators",
+          "id": "hyperlink-services.behaviour-via-piped-combinators",
           "severity": "must",
           "appliesTo": [
             "src",
@@ -377,7 +377,7 @@
           "title": "Compose behaviour with piped combinators, not constructor flags"
         },
         {
-          "id": "hyperlinks.data-last-tag-duals-shallow",
+          "id": "hyperlink-services.data-last-tag-duals-shallow",
           "severity": "must",
           "appliesTo": [
             "src"
@@ -385,7 +385,7 @@
           "title": "Data-last tag duals must not constrain `Svc`-bearing tag unions"
         },
         {
-          "id": "hyperlinks.polling-vs-schedule",
+          "id": "hyperlink-services.polling-vs-schedule",
           "severity": "must",
           "appliesTo": [
             "src",
@@ -394,7 +394,7 @@
           "title": "Polling and schedule are different questions — never conflate"
         },
         {
-          "id": "hyperlinks.default-queue-lean",
+          "id": "hyperlink-services.default-queue-lean",
           "severity": "must",
           "appliesTo": [
             "src",
@@ -403,7 +403,7 @@
           "title": "The default queue stays lean; custom lanes are a separate type"
         },
         {
-          "id": "hyperlinks.same-code-local-or-remote",
+          "id": "hyperlink-services.same-code-local-or-remote",
           "severity": "must",
           "appliesTo": [
             "src",
@@ -412,7 +412,7 @@
           "title": "The same code runs local or remote"
         },
         {
-          "id": "hyperlinks.serve-vocabulary",
+          "id": "hyperlink-services.serve-vocabulary",
           "severity": "must",
           "appliesTo": [
             "src",
@@ -421,7 +421,7 @@
           "title": "Use the locked serve vocabulary"
         },
         {
-          "id": "hyperlinks.serve-preserves-requirements",
+          "id": "hyperlink-services.serve-preserves-requirements",
           "severity": "must",
           "appliesTo": [
             "src",
@@ -430,7 +430,7 @@
           "title": "Serve / listen / `*Server` preserve open `R` (and `E`)"
         },
         {
-          "id": "hyperlinks.serve-through-spec-checked-forms",
+          "id": "hyperlink-services.serve-through-spec-checked-forms",
           "severity": "must",
           "appliesTo": [
             "src",
@@ -439,7 +439,7 @@
           "title": "Serve through the engine's spec-checked form, never a bare literal"
         },
         {
-          "id": "hyperlinks.provide-merge-serve-layers",
+          "id": "hyperlink-services.provide-merge-serve-layers",
           "severity": "must",
           "appliesTo": [
             "src",
@@ -448,7 +448,7 @@
           "title": "Put serve layers in the listen / `*Server` list; provide deps outside"
         },
         {
-          "id": "hyperlinks.declare-dont-provide-in-workers",
+          "id": "hyperlink-services.declare-dont-provide-in-workers",
           "severity": "must",
           "appliesTo": [
             "src",
@@ -457,7 +457,7 @@
           "title": "Declare dependencies in the worker; provide at the serve boundary"
         },
         {
-          "id": "hyperlinks.one-instance-one-materialization",
+          "id": "hyperlink-services.one-instance-one-materialization",
           "severity": "must",
           "appliesTo": [
             "src",
@@ -466,7 +466,7 @@
           "title": "One instance, one materialization"
         },
         {
-          "id": "hyperlinks.one-service-n-instances",
+          "id": "hyperlink-services.one-service-n-instances",
           "severity": "must",
           "appliesTo": [
             "src",
@@ -475,7 +475,7 @@
           "title": "One HyperService = N node-local instances"
         },
         {
-          "id": "hyperlinks.readiness-per-node-local",
+          "id": "hyperlink-services.readiness-per-node-local",
           "severity": "must",
           "appliesTo": [
             "src",
@@ -484,7 +484,7 @@
           "title": "Readiness is per-node and local — never a cross-node hop"
         },
         {
-          "id": "hyperlinks.fold-over-leaf-fields",
+          "id": "hyperlink-services.fold-over-leaf-fields",
           "severity": "must",
           "appliesTo": [
             "src",
@@ -493,7 +493,7 @@
           "title": "Fold over leaf fields; fleet views stay out of the fan-out"
         },
         {
-          "id": "hyperlinks.peers-are-lazy",
+          "id": "hyperlink-services.peers-are-lazy",
           "severity": "must",
           "appliesTo": [
             "src",
