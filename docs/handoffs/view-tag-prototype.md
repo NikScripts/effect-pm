@@ -100,9 +100,10 @@ Statics are for things we used to jam into Tag args (`size`, later `spec`, etc.)
 - Whether `spec` stays an opaque static on family protos vs typed Spec gate  
 - Adopt Effect-faithful Tag POC into shipped `View`? (see below)
 
-## Hover types (inspect in IDE)
+## Type previews (served docs)
 
-**[`view-hover-types.md`](./view-hover-types.md)** → open [`examples/forms/view/hover-types.ts`](../../examples/forms/view/hover-types.ts) and hover the exported aliases (`Shipped_PoolCard_Service`, etc.).
+**Guide:** [`../guides/view-tag-types.md`](../guides/view-tag-types.md) — `pnpm run docs:serve` → `/docs/view-tag-types`  
+(Index: [`view-hover-types.md`](./view-hover-types.md).)
 
 ## Effect-faithful Tag POC (2026-07-28)
 
