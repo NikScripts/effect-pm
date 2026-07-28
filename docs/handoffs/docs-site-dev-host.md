@@ -18,9 +18,10 @@ production. Edge redirects do:
 
 Ruleset `90c650374e5d4ce0adc5f4be936ddf46` (`http_request_dynamic_redirect`):
 
-1. **Brand host** — anything except `/`, `/favicon.svg`, `/og.svg`, `/robots.txt`,
-   `/healthz`, **`/assets/*`** → `302 https://hyperlink.cool/`
-   (Missing `/assets/*` shipped unstyled HTML with the docs nav visible — fixed.)
+1. **Brand host** — `/docs*`, `/api*`, `/search*`, `/releases*`, `/llms*.txt`,
+   `/sitemap.xml` → `302 https://hyperlink.cool/`  
+   (Do **not** block `/assets/*` — that shipped unstyled HTML with the full docs nav
+   visible on mobile.)
 2. **Dev host** — `/` → `302 https://dev.hyperlink.cool/docs/index`
 
 Coming-soon `/` uses a root layout **without** docs chrome; book routes live under
