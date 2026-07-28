@@ -6,38 +6,94 @@
 <!-- docs-site-link:end -->
 # View Tag types
 
-A View Tag is a class. Mint it, write the skin, provide it. Same shape as Effect’s
-`Context.Service` — the class is the handle; `Layer.succeed` installs the component.
+A View Tag is a class. Mint it from size chrome (`Card` / `Detail` / `Page`), write the
+skin, export `layer`. Same shape as Effect’s `Context.Service`.
 
-## Card Tag + skin + layer
+## How `Card` / `Detail` / `Page` are created
+
+Size chrome is a `View.Prototype` with a `size` static — this is exactly how
+`View.Card`, `View.Detail`, and `View.Page` are built in `View.tsx`:
+
+{.twoslash}
+``` ts
+import { View } from "hyperlink-ts/ui"
+
+// Same construction as the shipped add-ons:
+const Card = View.Prototype<View.ViewProps>()({
+  size: "card" as const,
+})
+const Detail = View.Prototype<View.ViewProps>()({
+  size: "detail" as const,
+})
+const Page = View.Prototype<View.ViewProps>()({
+  size: "page" as const,
+})
+
+// Prefer View.Card / View.Detail / View.Page — then mint Tags:
+class MyCard extends View.Card.Tag<MyCard>()("app/view/my-card") {}
+class MyDetail extends View.Detail.Tag<MyDetail>()("app/view/my-detail") {}
+class MyPage extends View.Page.Tag<MyPage>()("app/view/my-page") {}
+
+MyCard.size
+//         ^?
+MyDetail.size
+//           ^?
+MyPage.size
+//         ^?
+```
+
+## Card + Detail + Page + `layer`
+
+Shipped modules stamp a `spec` on each sized Prototype, mint classes, provide skins,
+export `layer` (not `*Live`) — same pattern as
+[`WorkPoolView.ts`](../../src/ui/WorkPoolView.ts):
 
 {.twoslash}
 ``` ts
 import { Layer } from "effect"
 import { View } from "hyperlink-ts/ui"
 
-// The tag: sized chrome handle (`size: "card"` from View.Card).
-class PoolCard extends View.Card.Tag<PoolCard>()(
+const CardProto = View.Card.Prototype()({
+  spec: { kind: "app/queue" } as const,
+})
+const DetailProto = View.Detail.Prototype()({
+  spec: { kind: "app/queue" } as const,
+})
+const PageProto = View.Page.Prototype()({
+  spec: { kind: "app/queue" } as const,
+})
+
+class PoolCard extends CardProto.Tag<PoolCard>()(
   "app/view/pool-card",
 ) {}
+class PoolDetail extends DetailProto.Tag<PoolDetail>()(
+  "app/view/pool-detail",
+) {}
+class PoolPage extends PageProto.Tag<PoolPage>()(
+  "app/view/pool-page",
+) {}
 
-// The skin: annotate with instance Shape — no typeof.
 const PoolCardView: PoolCard["Service"] = (props) => {
   props
   // ^?
   return null
 }
+const PoolDetailView: PoolDetail["Service"] = (_props) => null
+const PoolPageView: PoolPage["Service"] = (_props) => null
 
-// The layer: install the skin on the tag.
-const PoolCardLive = Layer.succeed(PoolCard, PoolCardView)
+export const layer = Layer.mergeAll(
+  Layer.succeed(PoolCard, PoolCardView),
+  Layer.succeed(PoolDetail, PoolDetailView),
+  Layer.succeed(PoolPage, PoolPageView),
+)
 ```
 
-`props` is `View.ViewProps` (`tag`, optional `name`). Prefer
-`PoolCard["Service"]` over `View.View<View.Type<typeof PoolCard>>` — same Shape.
+Annotate skins with **`PoolCard["Service"]`** (no `typeof`).
+`props` is `View.ViewProps` (`tag`, optional `name`).
 
-## Extra props (Prototype)
+## Extra props on a sized Prototype
 
-Accumulate props on a sized Prototype, then mint the class — same pattern as
+Accumulate props, then mint the class — same as
 [`worker-pool-card.tsx`](../../examples/hyperlink-web/worker-pool-card.tsx):
 
 {.twoslash}
@@ -61,14 +117,14 @@ const DenseCardView: DenseCard["Service"] = (props) => {
   return null
 }
 
-const DenseLive = Layer.succeed(DenseCard, DenseCardView)
+export const layer = Layer.succeed(DenseCard, DenseCardView)
 ```
 
 `props` is `View.ViewProps & { dense?: boolean }`.
 
 ## Wire into Dashboard
 
-Allowlist + skin contribution (`R = View.Registry`; Dashboard closes with `View.base`):
+Allowlist + skin (`R = View.Registry`; Dashboard closes with `View.base`):
 
 ```ts
 import { Layer } from "effect"
@@ -83,10 +139,7 @@ export class WorkerPoolCard extends Proto.Tag<WorkerPoolCard>()(
   "examples/hyperlink-web/worker-pool-card",
 ) {}
 
-const WorkerPoolCardView: WorkerPoolCard["Service"] = (props) => {
-  // …render using props.tag / props.name / props.dense
-  return null
-}
+const WorkerPoolCardView: WorkerPoolCard["Service"] = (props) => null
 
 export const layer = View.only(WorkerPool, WorkerPoolCard).pipe(
   Layer.provide(Layer.succeed(WorkerPoolCard, WorkerPoolCardView)),
