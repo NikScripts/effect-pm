@@ -51,7 +51,8 @@ export const layer = Layer.mergeAll(
   Layer.succeed(PoolPage, PoolPageView),
 )
 
-const label = Match.value(View.ViewKind.Card()).pipe(
+const kind: View.ViewKind = View.ViewKind.Card()
+const label = Match.value(kind).pipe(
   Match.tag("Card", () => "card chrome"),
   Match.tag("Detail", () => "detail chrome"),
   Match.tag("Page", () => "page chrome"),
