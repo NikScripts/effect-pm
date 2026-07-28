@@ -8,10 +8,12 @@ expectTypeOf(Handle.size).toEqualTypeOf<View.CardKind>();
 class PoolCard extends View.Card.Tag<PoolCard>()("hyperlink/view/pool-card") {}
 expectTypeOf(PoolCard.size).toEqualTypeOf<View.CardKind>();
 expectTypeOf<View.Type<typeof PoolCard>>().toEqualTypeOf<View.ViewProps>();
+expectTypeOf<View.PropsOf<PoolCard>>().toEqualTypeOf<View.ViewProps>();
+expectTypeOf<PoolCard["Service"]>().toEqualTypeOf<View.View<View.ViewProps>>();
 
 // Svc type is View.View (defaults to ViewProps)
 type ChromeSkin = View.View;
-type TypedSkin = View.View<View.Type<typeof PoolCard>>;
+type TypedSkin = PoolCard["Service"];
 expectTypeOf<ChromeSkin>().toEqualTypeOf<
   (props: View.ViewProps) => React.ReactElement | null
 >();

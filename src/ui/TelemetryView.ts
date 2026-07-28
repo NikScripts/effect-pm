@@ -10,21 +10,16 @@ import * as View from "./View";
 /** @public */
 export const telemetryViewSpec = { kind: Telemetry.kind } as const;
 
-const CardProto = View.Card.Prototype()({
-  spec: telemetryViewSpec,
-});
-const DetailProto = View.Detail.Prototype()({
-  spec: telemetryViewSpec,
-});
-
 /** @public */
-export class TelemetryCard extends CardProto.Tag<TelemetryCard>()(
+export class TelemetryCard extends View.Card.Tag<TelemetryCard>()(
   "hyperlink/view/telemetry-card",
+  { spec: telemetryViewSpec },
 ) {}
 
 /** @public */
-export class TelemetryDetail extends DetailProto.Tag<TelemetryDetail>()(
+export class TelemetryDetail extends View.Detail.Tag<TelemetryDetail>()(
   "hyperlink/view/telemetry-detail",
+  { spec: telemetryViewSpec },
 ) {}
 
 /** @public */

@@ -4,11 +4,9 @@
  * View **DI** (Context) + optional size chrome (card/detail/page) + React matchers.
  * Notes: `docs/handoffs/view-tag-prototype.md`. Design: `docs/handoffs/client-adapters-design.md`.
  *
- * - `View.Tag` / `View.Prototype` → component DI. Self = DI identity; props from Prototype.
+ * - Mint: `View.Card.Tag<Self, Props?>()(key, statics?)` — Effect-shaped; skins use `Tag["Service"]`.
+ * - Open debt: {@link SizeChrome} / {@link Prototype}`<Props, Requirement>` then fulfill size.
  * - Svc type is {@link View}`<Props>` (props in → element out). Defaults to {@link ViewProps}.
- * - Size chrome: `Prototype<Props, Requirement>` — Requirement is an R-style debt
- *   (e.g. {@link WithSize}); declare without fulfilling; discharge via `.Prototype()({…})`.
- *   {@link SizeChrome} declares `WithSize`; {@link Card} / {@link Detail} / {@link Page} fulfill it.
  * - Matchers on {@link react} / {@link compose} kits (`ui.Card`) and {@link useMatch}.
  * - `View.bind` / `View.only` register sized handles; `View.react` needs Layer `R = never`.
  */
@@ -129,7 +127,7 @@ export const useChrome = (): Chrome => React.useContext(ChromeContext);
  *
  * @example
  * ```ts
- * const skin: View.View<View.Type<typeof PoolCard>> = (props) => …
+ * const skin: PoolCard["Service"] = (props) => …
  * const chrome: View.View = (props) => … // ViewProps
  * ```
  *
@@ -166,13 +164,18 @@ type NextRequirement<
 > = Statics extends Requirement ? {} : Requirement;
 
 /**
- * Accumulated props type for a {@link Prototype}.
+ * Props bag — from a {@link Prototype}, a handle’s {@link Type} phantom, or
+ * instance `Service` (`PoolCard["Service"]`) without `typeof`.
  *
  * @public
  */
-export type PropsOf<P> = P extends Prototype<infer Props, infer _R, infer _S>
+export type PropsOf<T> = T extends Prototype<infer Props, infer _R, infer _S>
   ? Props
-  : never;
+  : T extends { readonly Service: View<infer P> }
+    ? P
+    : T extends { readonly Type: infer P extends object }
+      ? P
+      : never;
 
 /**
  * Accumulated statics type for a {@link Prototype}.
@@ -226,8 +229,8 @@ export type FulfilledPrototype<
  * - **Props** — component input (reversed service shape) from the Prototype chain
  * - **Svc** — {@link View}`<Props>` (provide with `Layer.succeed`)
  *
- * `ServiceClass` instance typing cannot be the props bag (it carries key/Service brands),
- * so props live on the Prototype; read them with {@link Type} / {@link PropsOf}.
+ * Prefer annotating skins with `PoolCard["Service"]` (Effect Shape — no `typeof`).
+ * Phantom {@link Type} remains for `View.Type<typeof PoolCard>` / {@link PropsOf}.
  *
  * @public
  */
@@ -238,12 +241,13 @@ export type ViewHandle<
   Statics extends AnyStatics = {},
 > = Context.ServiceClass<Self, K, View<Props>> &
   Flat<Statics> & {
-    /** Phantom — component props for this handle (`View.Type<typeof PoolCard>`). */
+    /** Phantom — component props (`View.Type<typeof PoolCard>`). Prefer `PoolCard["Service"]`. */
     readonly Type: Props
   };
 
 /**
- * Component props for a View handle class.
+ * Component props via the Tag phantom (`typeof` path). Prefer {@link PropsOf}`<PoolCard>`
+ * or peel from `PoolCard["Service"]`.
  *
  * @public
  */
@@ -257,13 +261,18 @@ export type Type<T> = T extends { readonly Type: infer P } ? P : never;
  * - `Statics` — runtime statics (additive); when `Statics extends Requirement`, Requirement
  *   becomes `{}` (fulfilled), like Effect `R → never`
  *
- * Fulfill with a later `.Prototype()({ … })` — not on {@link Tag}.
+ * Fulfill size via `.Prototype()({ size })` while open, or one-shot
+ * `View.Card.Tag()(key, { spec })` on an already-fulfilled size chrome.
  *
  * @example
  * ```ts
- * const Open = View.Prototype<View.ViewProps, View.WithSize>()() // open
- * const Card = Open.Prototype()({ size: View.ViewKind.Card() }) // fulfilled
- * class ScheduleCard extends Card.Tag<ScheduleCard>()("…") {}
+ * // One-shot (common) — Effect-shaped mint
+ * class PoolCard extends View.Card.Tag<PoolCard>()("…", { spec }) {}
+ * class Dense extends View.Card.Tag<Dense, ViewProps & { dense?: boolean }>()("…") {}
+ *
+ * // Open Requirement chain
+ * const Open = View.SizeChrome.Prototype<{ dense?: boolean }>()({ spec })
+ * class X extends Open.Prototype()({ size: View.ViewKind.Card() }).Tag<X>()("…") {}
  * ```
  *
  * @public
@@ -288,15 +297,26 @@ export interface Prototype<
     Flat<Statics & NewStatics>
   >;
   /**
-   * Mint a Context.Service **class** handle.
-   * `Layer.succeed(Tag, (props) => …)` types `props` as this prototype’s Props.
-   * Does not fulfill Requirement — use `.Prototype()({ … })` first for `bind`.
+   * Mint a Context.Service **class** handle (Effect `Service<Self, View<Props>>()("key")`).
+   *
+   * - `NewProps` — extra component props (additive)
+   * - `statics` — optional runtime statics (`spec`, …); merged onto the class
+   * - Annotate skins with `PoolCard["Service"]` (no `typeof`)
+   *
+   * Does **not** change this Prototype’s Requirement type — returns a class.
+   * For `bind`, the class still needs `.size` (use {@link Card} / {@link Detail} /
+   * {@link Page}, or pass `size` in statics / fulfill via `.Prototype()` first).
    */
-  readonly Tag: <Self,>() => <const K extends string>(
+  readonly Tag: <Self, NewProps extends object = {}>() => <
+    const K extends string,
+    const NewStatics extends AnyStatics = {},
+  >(
     key: K,
-  ) => Context.ServiceClass<Self, K, View<Props>> & Flat<Statics> & {
-    readonly Type: Props
-  };
+    statics?: NewStatics,
+  ) => Context.ServiceClass<Self, K, View<Flat<Props & NewProps>>> &
+    Flat<Statics & NewStatics> & {
+      readonly Type: Flat<Props & NewProps>
+    };
 }
 
 const makePrototype = <
@@ -319,12 +339,21 @@ const makePrototype = <
       });
     },
   Tag:
-    <Self,>() =>
-    <const K extends string>(key: K) => {
+    <Self, NewProps extends object = {}>() =>
+    <const K extends string, const NewStatics extends AnyStatics = {}>(
+      key: K,
+      next?: NewStatics,
+    ) => {
+      type NextProps = Flat<Props & NewProps>;
+      type NextStatics = Flat<Statics & NewStatics>;
+      const merged = {
+        ...statics,
+        ...(next ?? ({} as NewStatics)),
+      } as NextStatics;
       // Infer Object.assign like Group.Tag so class-extends keeps static accessors.
-      const base = Context.Service<Self, View<Props>>()(key);
-      return Object.assign(base, statics, {
-        Type: undefined as unknown as Props,
+      const base = Context.Service<Self, View<NextProps>>()(key);
+      return Object.assign(base, merged, {
+        Type: undefined as unknown as NextProps,
       });
     },
 });
@@ -359,15 +388,15 @@ export const Prototype =
 
 /**
  * Naked View Tag — DI component handle with **no** size chrome.
- * Self = props shape. Prefer sized add-ons (`View.Card.Tag`, …) for dashboard skins.
- *
- * In `.tsx`: `View.Tag<PoolCard,>()(…)`.
+ * Prefer sized add-ons (`View.Card.Tag`, …) for dashboard skins.
  *
  * @example
  * ```ts
- * const GreeterProto = View.Prototype<{ readonly name: string }>()()
- * class Greeter extends GreeterProto.Tag<Greeter>()("app/view/greeter") {}
- * Layer.succeed(Greeter, (props) => React.createElement("span", null, props.name))
+ * class Greeter extends View.Tag<Greeter, { readonly name: string }>()(
+ *   "app/view/greeter",
+ * ) {}
+ * const skin: Greeter["Service"] = (props) => …
+ * Layer.succeed(Greeter, skin)
  * ```
  *
  * @public
@@ -395,10 +424,17 @@ export type AnyView<Self extends object = object> = Context.Service<
  *
  * @example
  * ```ts
+ * // Prefer one-shot on Card / Detail / Page
+ * class X extends View.Card.Tag<X, { readonly dense?: boolean }>()(
+ *   "app/view/x",
+ *   { spec: { kind: "app/x" } as const },
+ * ) {}
+ *
+ * // Or chain while SizeChrome is still open
  * const Proto = View.SizeChrome
  *   .Prototype<{ readonly dense?: boolean }>()({ spec: { kind: "app/x" } as const })
  *   .Prototype()({ size: View.ViewKind.Card() })
- * class X extends Proto.Tag<X>()("app/view/x") {}
+ * class Y extends Proto.Tag<Y>()("app/view/y") {}
  * ```
  *
  * @public
@@ -410,6 +446,7 @@ export const SizeChrome: OpenPrototype<ViewProps, WithSize> = Prototype<
 
 /**
  * Size-chrome add-ons — {@link SizeChrome} with size fulfilled.
+ * Mint with `View.Card.Tag<Self, Props?>()(key, statics?)`.
  * Matcher components are **not** these — use `View.react(…).Card` or {@link useMatch}.
  *
  * @public

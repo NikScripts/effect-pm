@@ -10,13 +10,10 @@ import * as View from "./View";
 /** @public */
 export const hyperlinkViewSpec = { kind: Hyperlink.kind } as const;
 
-const HyperlinkCardProto = View.Card.Prototype()({
-  spec: hyperlinkViewSpec,
-});
-
 /** @public */
-export class HyperlinkCard extends HyperlinkCardProto.Tag<HyperlinkCard>()(
+export class HyperlinkCard extends View.Card.Tag<HyperlinkCard>()(
   "hyperlink/view/hyperlink-card",
+  { spec: hyperlinkViewSpec },
 ) {}
 
 /** @public */

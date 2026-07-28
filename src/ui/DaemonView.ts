@@ -7,21 +7,16 @@ import { Layer } from "effect";
 import * as Daemon from "../Daemon";
 import * as View from "./View";
 
-const CardProto = View.Card.Prototype()({
-  spec: Daemon.daemonControlSpec,
-});
-const DetailProto = View.Detail.Prototype()({
-  spec: Daemon.daemonControlSpec,
-});
-
 /** @public */
-export class DaemonCard extends CardProto.Tag<DaemonCard>()(
+export class DaemonCard extends View.Card.Tag<DaemonCard>()(
   "hyperlink/view/daemon-card",
+  { spec: Daemon.daemonControlSpec },
 ) {}
 
 /** @public */
-export class DaemonDetail extends DetailProto.Tag<DaemonDetail>()(
+export class DaemonDetail extends View.Detail.Tag<DaemonDetail>()(
   "hyperlink/view/daemon-detail",
+  { spec: Daemon.daemonControlSpec },
 ) {}
 
 /** @public */

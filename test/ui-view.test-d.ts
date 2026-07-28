@@ -16,7 +16,7 @@ declare const runFullyWired: <A, E>(layer: Layer.Layer<A, E, never>) => void;
 
 const provided = View.bind(WorkPool.kind, PoolCard).pipe(
   Layer.provideMerge(
-    Layer.succeed(PoolCard, (_props: View.Type<typeof PoolCard>) => null),
+    Layer.succeed(PoolCard, (_props) => null),
   ),
   Layer.provideMerge(View.base),
 );

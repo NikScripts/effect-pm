@@ -53,15 +53,28 @@ expectTypeOf(View.Page).toEqualTypeOf<
   View.FulfilledPrototype<View.ViewProps, View.WithSize<View.PageKind>>
 >();
 
-const PageProto = View.Page.Prototype()({
+class PoolPage extends View.Page.Tag<PoolPage>()("app/view/pool-page", {
   spec: { kind: "app/queue" } as const,
-});
-expectTypeOf(PageProto.statics.size).toEqualTypeOf<View.PageKind>();
-
-class PoolPage extends PageProto.Tag<PoolPage>()("app/view/pool-page") {}
+}) {}
 expectTypeOf(PoolPage.size).toEqualTypeOf<View.PageKind>();
+expectTypeOf(PoolPage.spec).toEqualTypeOf<{ readonly kind: "app/queue" }>();
 const _bound = View.bind("app/queue", PoolPage);
 void _bound;
+
+// One-shot Tag with extra props (no Prototype step)
+class OneShot extends View.Card.Tag<
+  OneShot,
+  { readonly dense?: boolean }
+>()("app/view/one-shot", { spec: { kind: "app/queue" } as const }) {}
+expectTypeOf<View.PropsOf<OneShot>["dense"]>().toEqualTypeOf<
+  boolean | undefined
+>();
+expectTypeOf<View.PropsOf<OneShot>["tag"]>().toEqualTypeOf<View.ViewTag>();
+const oneShotSkin: OneShot["Service"] = (props) => {
+  expectTypeOf(props.dense).toEqualTypeOf<boolean | undefined>();
+  return null;
+};
+void oneShotSkin;
 
 // ── Narrowed Requirement stays open if wrong size ───────────────────────────
 
@@ -82,7 +95,8 @@ class OpenCard extends Open.Tag<OpenCard>()("app/view/open-card") {}
 // @ts-expect-error fulfill WithSize before bind
 View.bind("app/queue", OpenCard);
 
-const GreeterProto = View.Prototype<{ readonly name: string }>()();
-class Greeter extends GreeterProto.Tag<Greeter>()("app/view/greeter") {}
+class Greeter extends View.Tag<Greeter, { readonly name: string }>()(
+  "app/view/greeter",
+) {}
 // @ts-expect-error no size
 View.bind("app/queue", Greeter);

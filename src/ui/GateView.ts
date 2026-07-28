@@ -10,21 +10,16 @@ import * as View from "./View";
 /** @public */
 export const gateViewSpec = { kind: Gate.kind } as const;
 
-const CardProto = View.Card.Prototype()({
-  spec: gateViewSpec,
-});
-const DetailProto = View.Detail.Prototype()({
-  spec: gateViewSpec,
-});
-
 /** @public */
-export class GateCard extends CardProto.Tag<GateCard>()(
+export class GateCard extends View.Card.Tag<GateCard>()(
   "hyperlink/view/gate-card",
+  { spec: gateViewSpec },
 ) {}
 
 /** @public */
-export class GateDetail extends DetailProto.Tag<GateDetail>()(
+export class GateDetail extends View.Detail.Tag<GateDetail>()(
   "hyperlink/view/gate-detail",
+  { spec: gateViewSpec },
 ) {}
 
 /** @public */
