@@ -102,8 +102,8 @@ Statics are for things we used to jam into Tag args (`size`, later `spec`, etc.)
 
 ## Type previews (served docs)
 
-**Guide:** [`../guides/view-tag-types.md`](../guides/view-tag-types.md) — `pnpm run docs:serve` → `/docs/view-tag-types`  
-(Index: [`view-hover-types.md`](./view-hover-types.md).)
+**Guide:** [`../guides/view-tag-types.md`](../guides/view-tag-types.md) — `pnpm run docs:serve` →  
+<http://100.67.32.32:5190/docs/view-tag-types> (Tailscale). Index: [`view-hover-types.md`](./view-hover-types.md).
 
 ## Effect-faithful Tag POC (2026-07-28)
 
