@@ -6,7 +6,7 @@
  *
  * - `View.Tag` / `View.Prototype` → component DI. Self = DI identity; props from Prototype.
  * - Svc type is {@link View}`<Props>` (props in → element out). Defaults to {@link ViewProps}.
- * - Size chrome: `View.Card` / `Detail` / `Page` prototypes stamp `size`.
+ * - Size chrome: {@link WithSize} type requirement; `View.Card` / `Detail` / `Page` narrow it.
  * - Matchers on {@link react} / {@link compose} kits (`ui.Card`) and {@link useMatch}.
  * - `View.bind` / `View.only` register sized handles; `View.react` needs Layer `R = never`.
  */
@@ -21,6 +21,9 @@ import type { LeafTag } from "./widgetRegistry";
 // Keys / kinds / props
 // =============================================================================
 
+/** Flatten `&` nests so Prototype / Tag hovers stay readable. @internal */
+type Flat<T extends object> = { readonly [K in keyof T]: T[K] } & {};
+
 /** Stable view id — prefer `hyperlink/view/<name>`. @public */
 export type ViewKey = string;
 
@@ -31,6 +34,28 @@ export type ViewKey = string;
  * @public
  */
 export type ViewKind = "card" | "detail" | "page";
+
+/**
+ * Size requirement on chrome statics (type restriction, not a value stamp).
+ *
+ * - Default `S = ViewKind` — shared base: `size` must be `"card" | "detail" | "page"`.
+ * - Narrow with `WithSize<"card">` (etc.) for {@link Card} / {@link Detail} / {@link Page}.
+ *
+ * @public
+ */
+export type WithSize<S extends ViewKind = ViewKind> = {
+  readonly size: S;
+};
+
+/**
+ * Prototype whose statics satisfy {@link WithSize} — eligible for bind / matchers.
+ *
+ * @public
+ */
+export type SizedPrototype<
+  Props extends object = ViewProps,
+  Statics extends WithSize = WithSize,
+> = Prototype<Props, Statics>;
 
 /**
  * Tag a View skin may receive — leaf HyperService **or** Group (Group family card).
@@ -137,7 +162,7 @@ export type ViewHandle<
   Props extends object,
   Statics extends AnyStatics = {},
 > = Context.ServiceClass<Self, K, View<Props>> &
-  Statics & {
+  Flat<Statics> & {
     /** Phantom — component props for this handle (`View.Type<typeof PoolCard>`). */
     readonly Type: Props
   };
@@ -169,19 +194,21 @@ export interface Prototype<
    * Extend props (type arg) then merge static accessors (value).
    * In `.tsx` use a trailing comma / type alias so `<…>` is not JSX:
    * `proto.Prototype<{ sel?: boolean }>()({ … })`.
+   *
+   * Merged Props/Statics are flattened so hovers stay readable (no `&` nests).
    */
   readonly Prototype: <NewProps extends object = {},>() => <
     const NewStatics extends AnyStatics = {},
   >(
     statics?: NewStatics,
-  ) => Prototype<Props & NewProps, Statics & NewStatics>;
+  ) => Prototype<Flat<Props & NewProps>, Flat<Statics & NewStatics>>;
   /**
    * Mint a Context.Service **class** handle.
    * `Layer.succeed(Tag, (props) => …)` types `props` as this prototype’s Props.
    */
   readonly Tag: <Self,>() => <const K extends string>(
     key: K,
-  ) => Context.ServiceClass<Self, K, View<Props>> & Statics & {
+  ) => Context.ServiceClass<Self, K, View<Props>> & Flat<Statics> & {
     readonly Type: Props
   };
 }
@@ -196,7 +223,7 @@ const makePrototype = <
   Prototype:
     <NewProps extends object = {},>() =>
     <const NewStatics extends AnyStatics = {},>(next?: NewStatics) =>
-      makePrototype<Props & NewProps, Statics & NewStatics>({
+      makePrototype<Flat<Props & NewProps>, Flat<Statics & NewStatics>>({
         ...statics,
         ...(next ?? ({} as NewStatics)),
       }),
@@ -261,23 +288,24 @@ export type AnyView<Self extends object = object> = Context.Service<
 };
 
 /**
- * Size-chrome add-on prototypes — stamp `size` for {@link bind} / kit matchers.
+ * Size-chrome add-ons — each narrows {@link WithSize} to one literal.
+ * Shared base type: `SizedPrototype<ViewProps, WithSize>` (`size: ViewKind`).
  * Matcher components are **not** these — use `View.react(…).Card` or {@link useMatch}.
  *
  * @public
  */
-export const Card = Prototype<ViewProps>()({
-  size: "card" as const satisfies ViewKind,
+export const Card: SizedPrototype<ViewProps, WithSize<"card">> = Prototype<ViewProps>()({
+  size: "card",
 });
 
 /** @public */
-export const Detail = Prototype<ViewProps>()({
-  size: "detail" as const satisfies ViewKind,
+export const Detail: SizedPrototype<ViewProps, WithSize<"detail">> = Prototype<ViewProps>()({
+  size: "detail",
 });
 
 /** @public */
-export const Page = Prototype<ViewProps>()({
-  size: "page" as const satisfies ViewKind,
+export const Page: SizedPrototype<ViewProps, WithSize<"page">> = Prototype<ViewProps>()({
+  size: "page",
 });
 
 // =============================================================================

@@ -11,8 +11,9 @@ skin, export `layer`. Same shape as Effect’s `Context.Service`.
 
 ## How `Card` / `Detail` / `Page` are created
 
-Size chrome is a `View.Prototype` with a `size` static — this is exactly how
-`View.Card`, `View.Detail`, and `View.Page` are built in `View.tsx`:
+Size is a type requirement — `WithSize` / `WithSize<"card">` — then a Prototype
+carries the narrowed literal. Shared base: `SizedPrototype<ViewProps, WithSize>`
+(`size: "card" | "detail" | "page"`). Shipped add-ons narrow that:
 
 {.twoslash}
 ``` ts

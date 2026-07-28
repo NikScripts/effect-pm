@@ -100,6 +100,27 @@ Statics are for things we used to jam into Tag args (`size`, later `spec`, etc.)
 - Whether `spec` stays an opaque static on family protos vs typed Spec gate  
 - Adopt Effect-faithful Tag POC into shipped `View`? (see below)
 
+## WithSize (type-first, 2026-07-28)
+
+**Branch:** `cursor/view-withsize-types-125f`
+
+Size is a **type requirement**, not only a value stamp:
+
+```ts
+type WithSize<S extends ViewKind = ViewKind> = { readonly size: S }
+type SizedPrototype<Props, Statics extends WithSize> = Prototype<Props, Statics>
+
+// Shared base (union):  WithSize          → size: "card" | "detail" | "page"
+// Narrowings:           WithSize<"card">  → View.Card, etc.
+```
+
+`View.Card` / `Detail` / `Page` are `SizedPrototype<ViewProps, WithSize<"…">>`.
+Prototype merges flatten statics (`Flat`) so `Page.Prototype()({ spec })` hovers as one
+object, not `{ size } & { spec }`.
+
+**Open (discuss):** runtime shared proto vs type-only base; whether `Tag` should *require*
+`WithSize` (reject naked size-less tags at `bind`); docs twoslash vs named aliases.
+
 ## Type previews (served docs)
 
 **Guide:** [`../guides/view-tag-types.md`](../guides/view-tag-types.md) — `pnpm run docs:serve` →  
