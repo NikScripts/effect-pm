@@ -14,11 +14,20 @@
  * @see docs/handoffs/view-tag-prototype.md
  */
 import type * as React from "react";
-import { Context, Layer } from "effect";
+import { Context, Data, Layer } from "effect";
 
 // ── minimal chrome (mirror View.ViewProps / ViewKind) ───────────────────────
 
-export type ViewKind = "card" | "detail" | "page";
+export type ViewKind = Data.TaggedEnum<{
+  Card: {};
+  Detail: {};
+  Page: {};
+}>;
+
+export const ViewKind = Data.taggedEnum<ViewKind>();
+
+export type CardKind = ReturnType<typeof ViewKind.Card>;
+export type DetailKind = ReturnType<typeof ViewKind.Detail>;
 
 export interface ViewProps {
   readonly tag: { readonly key: string };
@@ -61,27 +70,27 @@ export const Tag =
     }) as TagClass<Self, K, Props, ViewKind | undefined>;
   };
 
-/** Sized Card — `size: "card"` literal stamped. */
+/** Sized Card — `size: ViewKind.Card()` stamped. */
 export const Card =
   <Self, Props extends object = ViewProps>() =>
   <const K extends string>(
     key: K,
     statics?: { readonly spec?: unknown },
-  ): TagClass<Self, K, Props, "card"> =>
-    Object.assign(Tag<Self, Props>()(key, { ...statics, size: "card" }), {
-      size: "card" as const,
-    }) as TagClass<Self, K, Props, "card">;
+  ): TagClass<Self, K, Props, CardKind> =>
+    Object.assign(Tag<Self, Props>()(key, { ...statics, size: ViewKind.Card() }), {
+      size: ViewKind.Card(),
+    }) as TagClass<Self, K, Props, CardKind>;
 
-/** Sized Detail — `size: "detail"` literal stamped. */
+/** Sized Detail — `size: ViewKind.Detail()` stamped. */
 export const Detail =
   <Self, Props extends object = ViewProps>() =>
   <const K extends string>(
     key: K,
     statics?: { readonly spec?: unknown },
-  ): TagClass<Self, K, Props, "detail"> =>
-    Object.assign(Tag<Self, Props>()(key, { ...statics, size: "detail" }), {
-      size: "detail" as const,
-    }) as TagClass<Self, K, Props, "detail">;
+  ): TagClass<Self, K, Props, DetailKind> =>
+    Object.assign(Tag<Self, Props>()(key, { ...statics, size: ViewKind.Detail() }), {
+      size: ViewKind.Detail(),
+    }) as TagClass<Self, K, Props, DetailKind>;
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -108,6 +117,9 @@ export class DenseCard extends Card<
   ViewProps & { readonly dense?: boolean }
 >()("poc/view/dense-card", { spec: { kind: "dense" } as const }) {}
 
+/** Convenience alias — props of {@link DenseCard}. */
+export type DenseProps = PropsOf<DenseCard>;
+
 export class Greeter extends Tag<Greeter, { readonly name: string }>()(
   "poc/view/greeter",
 ) {}
@@ -121,28 +133,18 @@ export const poolSkin: PoolCard["Service"] = (props) => {
   return null;
 };
 
-export const poolSkin2: ServiceOf<PoolCard> = poolSkin;
-
 export const denseSkin: DenseCard["Service"] = (props) => {
   void props.dense;
-  void props.tag;
   return null;
 };
 
-/** Props from instance Service — no typeof. */
-export type DenseProps = PropsOf<DenseCard>;
-
-export const poolLayer = Layer.succeed(PoolCard, (props) => {
-  void props.tag;
-  return null;
-});
-
-export const denseLayer = Layer.succeed(DenseCard, (props) => {
-  void props.dense;
-  return null;
-});
-
-export const greeterLayer = Layer.succeed(Greeter, (props) => {
+export const greeterSkin: Greeter["Service"] = (props) => {
   void props.name;
   return null;
-});
+};
+
+export const layer = Layer.mergeAll(
+  Layer.succeed(PoolCard, poolSkin),
+  Layer.succeed(DenseCard, denseSkin),
+  Layer.succeed(Greeter, greeterSkin),
+);

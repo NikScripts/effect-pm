@@ -38,11 +38,11 @@ describe("View registry", () => {
     );
 
     const { resolve } = View.react(viewLayer);
-    expect(resolve(Special, "card").map((r) => r.key)).toEqual([
+    expect(resolve(Special, View.ViewKind.Card()).map((r) => r.key)).toEqual([
       "hyperlink/view/pool-card",
       "hyperlink/view/custom-card",
     ]);
-    expect(resolve(Jobs, "card").map((r) => r.key)).toEqual([
+    expect(resolve(Jobs, View.ViewKind.Card()).map((r) => r.key)).toEqual([
       "hyperlink/view/custom-card",
     ]);
   });
@@ -50,7 +50,7 @@ describe("View registry", () => {
   it("matches stamped WorkPool.kind (never groupId)", () => {
     const viewLayer = withChrome(View.bind(WorkPool.kind, PoolCard));
     const { resolve } = View.react(viewLayer);
-    expect(resolve(Jobs, "card").map((r) => r.key)).toEqual([
+    expect(resolve(Jobs, View.ViewKind.Card()).map((r) => r.key)).toEqual([
       "hyperlink/view/pool-card",
     ]);
   });
@@ -64,7 +64,7 @@ describe("View registry", () => {
     );
     expect(
       View.react(viewLayer)
-        .resolve(Jobs, "card")
+        .resolve(Jobs, View.ViewKind.Card())
         .map((r) => r.key),
     ).toEqual(["hyperlink/view/custom-card", "hyperlink/view/pool-card"]);
   });
@@ -78,14 +78,14 @@ describe("View registry", () => {
       ),
     );
     const { resolve } = View.react(viewLayer);
-    expect(resolve(Special, "card").map((r) => r.key)).toEqual([
+    expect(resolve(Special, View.ViewKind.Card()).map((r) => r.key)).toEqual([
       "hyperlink/view/custom-card",
     ]);
     // detail not in only → still family bind
-    expect(resolve(Special, "detail").map((r) => r.key)).toEqual([
+    expect(resolve(Special, View.ViewKind.Detail()).map((r) => r.key)).toEqual([
       "hyperlink/view/pool-detail",
     ]);
-    expect(resolve(Jobs, "card").map((r) => r.key)).toEqual([
+    expect(resolve(Jobs, View.ViewKind.Card()).map((r) => r.key)).toEqual([
       "hyperlink/view/pool-card",
     ]);
   });
@@ -100,7 +100,7 @@ describe("View registry", () => {
     );
     expect(
       View.react(viewLayer)
-        .resolve(Special, "card")
+        .resolve(Special, View.ViewKind.Card())
         .map((r) => r.key),
     ).toEqual(["hyperlink/view/custom-card"]);
   });
@@ -113,10 +113,10 @@ describe("View registry", () => {
       ),
     );
     const { resolve } = View.react(viewLayer);
-    expect(resolve(Special, "card").map((r) => r.key)).toEqual([
+    expect(resolve(Special, View.ViewKind.Card()).map((r) => r.key)).toEqual([
       "hyperlink/view/custom-card",
     ]);
-    expect(resolve(Special, "detail").map((r) => r.key)).toEqual([
+    expect(resolve(Special, View.ViewKind.Detail()).map((r) => r.key)).toEqual([
       "hyperlink/view/pool-detail",
     ]);
   });
@@ -138,7 +138,7 @@ describe("View.group + kit.for", () => {
   it("kit.for(tag) curries resolve path", () => {
     const viewLayer = withChrome(View.bind(WorkPool.kind, PoolCard));
     const kit = View.react(viewLayer);
-    expect(kit.resolve(Jobs, "card").map((r) => r.key)).toEqual([
+    expect(kit.resolve(Jobs, View.ViewKind.Card()).map((r) => r.key)).toEqual([
       "hyperlink/view/pool-card",
     ]);
     const { Card, Detail, Page } = kit.for(Jobs);
@@ -150,17 +150,17 @@ describe("View.group + kit.for", () => {
 
 describe("View.Tag / Prototype", () => {
   it("card prototype stamps size static", () => {
-    expect(PoolCard.size).toBe("card");
-    expect(PoolDetail.size).toBe("detail");
+    expect(PoolCard.size).toEqual(View.ViewKind.Card());
+    expect(PoolDetail.size).toEqual(View.ViewKind.Detail());
     expect(PoolCard.key).toBe("hyperlink/view/pool-card");
   });
 
   it("Prototype chain merges statics", () => {
     const Base = View.Prototype<{ readonly label: string }>()({ base: true as const });
-    const Child = Base.Prototype()({ size: "page" as const });
+    const Child = Base.Prototype()({ size: View.ViewKind.Page() });
     class PageView extends Child.Tag<PageView>()("test/page-view") {}
     expect(PageView.base).toBe(true);
-    expect(PageView.size).toBe("page");
+    expect(PageView.size).toEqual(View.ViewKind.Page());
     expect(PageView.key).toBe("test/page-view");
   });
 });

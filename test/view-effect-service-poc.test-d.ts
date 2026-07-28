@@ -4,6 +4,7 @@
 import { expectTypeOf } from "vitest";
 import type * as React from "react";
 import {
+  type CardKind,
   type DenseProps,
   type PropsOf,
   type ServiceOf,
@@ -45,8 +46,8 @@ expectTypeOf<PropsOf<PoolCard>>().toEqualTypeOf<ViewProps>();
 
 // ── constructor statics ─────────────────────────────────────────────────────
 
-expectTypeOf(PoolCard.size).toEqualTypeOf<"card">();
-expectTypeOf(DenseCard.size).toEqualTypeOf<"card">();
+expectTypeOf(PoolCard.size).toEqualTypeOf<CardKind>();
+expectTypeOf(DenseCard.size).toEqualTypeOf<CardKind>();
 expectTypeOf(PoolCard.key).toBeString();
 expectTypeOf<(typeof PoolCard)["Service"]>().toEqualTypeOf<PoolCard["Service"]>();
 

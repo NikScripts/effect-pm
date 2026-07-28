@@ -13,7 +13,7 @@
  * - `View.bind` / `View.only` register sized handles; `View.react` needs Layer `R = never`.
  */
 import * as React from "react";
-import { Context, Effect, Layer, Option } from "effect";
+import { Context, Data, Effect, Layer, Match, Option } from "effect";
 import * as Group from "../Group";
 import { kindOf } from "../Hyperlink";
 import * as Navigator from "./Navigator";
@@ -30,22 +30,51 @@ type Flat<T extends object> = { readonly [K in keyof T]: T[K] } & {};
 export type ViewKey = string;
 
 /**
- * Building-block **sizes** (W8 / lock F1). Content (queue, schedule, logs, Group…)
- * fills these — not separate kinds named after content.
+ * Building-block **sizes** (W8 / lock F1) as Effect tagged variants.
+ * Content fills these — not separate kinds named after content.
+ *
+ * Construct with {@link ViewKind}.Card() / `.Detail()` / `.Page()`; match with
+ * `Match.tag` (same `_tag` style as {@link WidgetEntry}).
  *
  * @public
  */
-export type ViewKind = "card" | "detail" | "page";
+export type ViewKind = Data.TaggedEnum<{
+  Card: {};
+  Detail: {};
+  Page: {};
+}>;
 
 /**
- * Size {@link Prototype} requirement — declare on chrome, fulfill with a `size` static.
- * Default `S = ViewKind`; narrow with `WithSize<"card">`.
+ * Constructors / `$is` / `$match` for {@link ViewKind}.
+ *
+ * @public
+ */
+export const ViewKind = Data.taggedEnum<ViewKind>();
+
+/** `_tag` string of a {@link ViewKind} — `"Card" | "Detail" | "Page"`. @public */
+export type ViewKindTag = ViewKind["_tag"];
+
+/** Card size variant — `{ readonly _tag: "Card" }`. @public */
+export type CardKind = ReturnType<typeof ViewKind.Card>;
+
+/** Detail size variant — `{ readonly _tag: "Detail" }`. @public */
+export type DetailKind = ReturnType<typeof ViewKind.Detail>;
+
+/** Page size variant — `{ readonly _tag: "Page" }`. @public */
+export type PageKind = ReturnType<typeof ViewKind.Page>;
+
+/**
+ * Size {@link Prototype} requirement — declare on chrome, fulfill with
+ * `size: ViewKind.Card()` (etc.).
  *
  * @public
  */
 export type WithSize<S extends ViewKind = ViewKind> = {
   readonly size: S;
 };
+
+/** Structural equality for tagged sizes. @internal */
+const sameViewKind = (a: ViewKind, b: ViewKind): boolean => a._tag === b._tag;
 
 /**
  * Tag a View skin may receive — leaf HyperService **or** Group (Group family card).
@@ -233,7 +262,7 @@ export type Type<T> = T extends { readonly Type: infer P } ? P : never;
  * @example
  * ```ts
  * const Open = View.Prototype<View.ViewProps, View.WithSize>()() // open
- * const Card = Open.Prototype()({ size: "card" as const })     // fulfilled
+ * const Card = Open.Prototype()({ size: View.ViewKind.Card() }) // fulfilled
  * class ScheduleCard extends Card.Tag<ScheduleCard>()("…") {}
  * ```
  *
@@ -304,13 +333,13 @@ const makePrototype = <
  * Start a prototype chain: `View.Prototype<Props, Requirement>()(statics?)`.
  *
  * **Requirement** may be declared without fulfilling — pass empty statics, then
- * `.Prototype()({ size: "card" })` later. Discharges to `{}` when statics satisfy it.
+ * `.Prototype()({ size: ViewKind.Card() })` later. Discharges to `{}` when statics satisfy it.
  *
  * @example
  * ```ts
  * View.Prototype<{ name: string }>()()
  * View.Prototype<ViewProps, WithSize>()()                      // open
- * View.Prototype<ViewProps, WithSize>()().Prototype()({ size: "card" as const })
+ * View.Prototype<ViewProps, WithSize>()().Prototype()({ size: ViewKind.Card() })
  * ```
  *
  * @public
@@ -361,14 +390,14 @@ export type AnyView<Self extends object = object> = Context.Service<
 
 /**
  * Shared size-chrome shell — {@link WithSize} Requirement open (not fulfilled).
- * Chain `.Prototype()` for props/statics, then fulfill with `{ size: "card" | … }`.
+ * Chain `.Prototype()` for props/statics, then fulfill with `{ size: ViewKind.Card() }`.
  * (Named `SizeChrome` — layout hints stay {@link Chrome}.)
  *
  * @example
  * ```ts
  * const Proto = View.SizeChrome
  *   .Prototype<{ readonly dense?: boolean }>()({ spec: { kind: "app/x" } as const })
- *   .Prototype()({ size: "card" as const })
+ *   .Prototype()({ size: View.ViewKind.Card() })
  * class X extends Proto.Tag<X>()("app/view/x") {}
  * ```
  *
@@ -385,16 +414,22 @@ export const SizeChrome: OpenPrototype<ViewProps, WithSize> = Prototype<
  *
  * @public
  */
-export const Card: FulfilledPrototype<ViewProps, WithSize<"card">> =
-  SizeChrome.Prototype()({ size: "card" as const });
+export const Card: FulfilledPrototype<
+  ViewProps,
+  WithSize<CardKind>
+> = SizeChrome.Prototype()({ size: ViewKind.Card() });
 
 /** @public */
-export const Detail: FulfilledPrototype<ViewProps, WithSize<"detail">> =
-  SizeChrome.Prototype()({ size: "detail" as const });
+export const Detail: FulfilledPrototype<
+  ViewProps,
+  WithSize<DetailKind>
+> = SizeChrome.Prototype()({ size: ViewKind.Detail() });
 
 /** @public */
-export const Page: FulfilledPrototype<ViewProps, WithSize<"page">> =
-  SizeChrome.Prototype()({ size: "page" as const });
+export const Page: FulfilledPrototype<
+  ViewProps,
+  WithSize<PageKind>
+> = SizeChrome.Prototype()({ size: ViewKind.Page() });
 
 // =============================================================================
 // Registry service
@@ -450,7 +485,7 @@ const makeRegistryService = (): RegistryService => {
     if (bounds === undefined) return [];
     const out: Resolved[] = [];
     for (const bound of bounds) {
-      if (bound.kind !== viewKind) continue;
+      if (!sameViewKind(bound.kind, viewKind)) continue;
       if (out.some((r) => r.key === bound.key)) continue;
       out.push({ key: bound.key, kind: bound.kind, Component: bound.Component });
     }
@@ -470,8 +505,8 @@ const makeRegistryService = (): RegistryService => {
     match(tag, viewKind) {
       const allowlist = onlyByTagKey.get(tag.key);
       if (allowlist !== undefined) {
-        const kindsPresent = new Set(allowlist.map((b) => b.kind));
-        if (kindsPresent.has(viewKind)) {
+        const kindsPresent = new Set(allowlist.map((b) => b.kind._tag));
+        if (kindsPresent.has(viewKind._tag)) {
           return fromBounds(allowlist, viewKind);
         }
       }
@@ -684,11 +719,13 @@ const FallbackPage: View = (props) =>
     props.name ?? props.tag.key,
   );
 
-const fallbackFor = (viewKind: ViewKind): View => {
-  if (viewKind === "card") return FallbackCard;
-  if (viewKind === "detail") return FallbackDetail;
-  return FallbackPage;
-};
+const fallbackFor = (viewKind: ViewKind): View =>
+  Match.value(viewKind).pipe(
+    Match.tag("Card", () => FallbackCard),
+    Match.tag("Detail", () => FallbackDetail),
+    Match.tag("Page", () => FallbackPage),
+    Match.exhaustive,
+  );
 
 type KitContext = {
   readonly registry: RegistryService;
@@ -712,7 +749,7 @@ const MatchHost = (props: {
     props.resolved.length === 0
       ? [
           {
-            key: `fallback/${props.viewKind}`,
+            key: `fallback/${props.viewKind._tag}`,
             kind: props.viewKind,
             Component: fallbackFor(props.viewKind),
           },
@@ -725,7 +762,7 @@ const MatchHost = (props: {
     "div",
     {
       "data-hyperlink-view": "pager",
-      "data-view-kind": props.viewKind,
+      "data-view-kind": props.viewKind._tag,
       "data-page-count": list.length,
     },
     ...list.map((item, index) =>
@@ -769,8 +806,8 @@ export const useHasMatch = (
 /** Kit matcher — card size. @internal */
 const MatchCard = (props: ViewProps): React.ReactElement | null =>
   React.createElement(MatchHost, {
-    viewKind: "card",
-    resolved: useKit().resolve(props.tag, "card"),
+    viewKind: ViewKind.Card(),
+    resolved: useKit().resolve(props.tag, ViewKind.Card()),
     tag: props.tag,
     name: props.name,
   });
@@ -778,8 +815,8 @@ const MatchCard = (props: ViewProps): React.ReactElement | null =>
 /** Kit matcher — detail size. @internal */
 const MatchDetail = (props: ViewProps): React.ReactElement | null =>
   React.createElement(MatchHost, {
-    viewKind: "detail",
-    resolved: useKit().resolve(props.tag, "detail"),
+    viewKind: ViewKind.Detail(),
+    resolved: useKit().resolve(props.tag, ViewKind.Detail()),
     tag: props.tag,
     name: props.name,
   });
@@ -787,8 +824,8 @@ const MatchDetail = (props: ViewProps): React.ReactElement | null =>
 /** Kit matcher — page size. @internal */
 const MatchPage = (props: ViewProps): React.ReactElement | null =>
   React.createElement(MatchHost, {
-    viewKind: "page",
-    resolved: useKit().resolve(props.tag, "page"),
+    viewKind: ViewKind.Page(),
+    resolved: useKit().resolve(props.tag, ViewKind.Page()),
     tag: props.tag,
     name: props.name,
   });
@@ -853,22 +890,22 @@ export const react = <ROut, E,>(viewLayer: Layer.Layer<ROut, E, never>) => {
   const forTag = (tag: ViewTag) => ({
     Card: (props: BoundViewProps): React.ReactElement | null =>
       React.createElement(MatchHost, {
-        viewKind: "card",
-        resolved: useKit().resolve(tag, "card"),
+        viewKind: ViewKind.Card(),
+        resolved: useKit().resolve(tag, ViewKind.Card()),
         tag,
         name: props.name,
       }),
     Detail: (props: BoundViewProps): React.ReactElement | null =>
       React.createElement(MatchHost, {
-        viewKind: "detail",
-        resolved: useKit().resolve(tag, "detail"),
+        viewKind: ViewKind.Detail(),
+        resolved: useKit().resolve(tag, ViewKind.Detail()),
         tag,
         name: props.name,
       }),
     Page: (props: BoundViewProps): React.ReactElement | null =>
       React.createElement(MatchHost, {
-        viewKind: "page",
-        resolved: useKit().resolve(tag, "page"),
+        viewKind: ViewKind.Page(),
+        resolved: useKit().resolve(tag, ViewKind.Page()),
         tag,
         name: props.name,
       }),

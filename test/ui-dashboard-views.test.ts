@@ -3,6 +3,7 @@
  */
 import { describe, expect, it } from "@effect/vitest";
 import { Schema } from "effect";
+import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
 import * as View from "../src/ui/View";
 import * as DashboardViews from "../src/ui/DashboardViews";
 import * as PriorityView from "../src/ui/PriorityView";
@@ -12,7 +13,6 @@ import * as TuiDashboardViews from "../src/tui/DashboardViews";
 import * as WorkPool from "../src/WorkPool";
 import * as Daemon from "../src/Daemon";
 import * as Gate from "../src/Gate";
-import * as ApiMetrics from "../src/ApiMetrics";
 
 const Item = Schema.Struct({ n: Schema.Number });
 class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", { payload: Item }) {}
@@ -25,40 +25,48 @@ class Limit extends Gate.Tag<Limit>()("app/Limit", {
   payload: Schema.String,
   success: Schema.String,
 }) {}
-class HttpTap extends ApiMetrics.Tag<HttpTap>()("app/HttpTap") {}
+
+const TapApi = HttpApi.make("tap").add(
+  HttpApiGroup.make("x").add(
+    HttpApiEndpoint.get("get", "/", {
+      success: Schema.Void,
+    }),
+  ),
+);
+class HttpTap extends Gate.HttpApiClient<HttpTap>()("app/HttpTap", TapApi) {}
 
 describe("DashboardViews packaging", () => {
   it("web ready layer resolves default family cards + details", () => {
     const { resolve } = View.react(WebDashboardViews.layer);
-    expect(resolve(Jobs, "card").map((r) => r.key)).toEqual([
+    expect(resolve(Jobs, View.ViewKind.Card()).map((r) => r.key)).toEqual([
       "hyperlink/view/pool-card",
     ]);
-    expect(resolve(Jobs, "detail").map((r) => r.key)).toEqual([
+    expect(resolve(Jobs, View.ViewKind.Detail()).map((r) => r.key)).toEqual([
       "hyperlink/view/pool-detail",
     ]);
-    expect(resolve(Lanes, "card").map((r) => r.key)).toEqual([
+    expect(resolve(Lanes, View.ViewKind.Card()).map((r) => r.key)).toEqual([
       "hyperlink/view/priority-card",
     ]);
-    expect(resolve(Nightly, "card").map((r) => r.key)).toEqual([
+    expect(resolve(Nightly, View.ViewKind.Card()).map((r) => r.key)).toEqual([
       "hyperlink/view/daemon-card",
     ]);
-    expect(resolve(Nightly, "detail").map((r) => r.key)).toEqual([
+    expect(resolve(Nightly, View.ViewKind.Detail()).map((r) => r.key)).toEqual([
       "hyperlink/view/daemon-detail",
     ]);
-    expect(resolve(Limit, "detail").map((r) => r.key)).toEqual([
+    expect(resolve(Limit, View.ViewKind.Detail()).map((r) => r.key)).toEqual([
       "hyperlink/view/gate-detail",
     ]);
-    expect(resolve(HttpTap, "card").map((r) => r.key)).toEqual([
+    expect(resolve(HttpTap, View.ViewKind.Card()).map((r) => r.key)).toEqual([
       "hyperlink/view/api-card",
     ]);
   });
 
   it("tui ready layer resolves the same handles", () => {
     const { resolve } = View.react(TuiDashboardViews.layer);
-    expect(resolve(Jobs, "card").map((r) => r.key)).toEqual([
+    expect(resolve(Jobs, View.ViewKind.Card()).map((r) => r.key)).toEqual([
       "hyperlink/view/pool-card",
     ]);
-    expect(resolve(Nightly, "detail").map((r) => r.key)).toEqual([
+    expect(resolve(Nightly, View.ViewKind.Detail()).map((r) => r.key)).toEqual([
       "hyperlink/view/daemon-detail",
     ]);
   });

@@ -39,7 +39,7 @@ Layer.succeed(PoolCard, (props) => {
   return null;
 });
 
-expectTypeOf(PoolCard.size).toEqualTypeOf<"card">();
+expectTypeOf(PoolCard.size).toEqualTypeOf<View.CardKind>();
 
 const withOnly = Layer.mergeAll(
   View.bind(WorkPool.kind, PoolCard),

@@ -48,12 +48,14 @@ Layer.succeed(PoolCard, (props) => { … })  // props: ViewProps
 ```ts
 const Base = View.Prototype<{ readonly tag: ViewTag; readonly name?: string }>()
 
-const Card = Base.Prototype()({ size: "card" as const })
+const Card = Base.Prototype()({ size: View.ViewKind.Card() })
 // or more props:
-const CardSel = Base.Prototype<{ readonly selected?: boolean }>({ size: "card" as const })
+const CardSel = Base.Prototype<{ readonly selected?: boolean }>()({
+  size: View.ViewKind.Card(),
+})
 
 class ScheduleCard extends Card.Tag<ScheduleCard>()("hyperlink/view/schedule-card") {}
-ScheduleCard.size  // "card" — static from prototype
+ScheduleCard.size  // ViewKind.Card() — `{ _tag: "Card" }`
 ScheduleCard.key   // "hyperlink/view/schedule-card"
 ```
 
@@ -90,7 +92,7 @@ Statics are for things we used to jam into Tag args (`size`, later `spec`, etc.)
 
 1. `View.Tag` / `Prototype` have no required `card|detail|page` arg  
 2. `Layer.succeed(PoolCard, fn)` types `fn` props as `PoolCard`  
-3. `View.Card.Tag` stamps `size: "card"`; matchers still work via bind  
+3. `View.Card.Tag` stamps `size: ViewKind.Card()`; matchers still work via bind  
 4. Notes kept here; sync (commit/push) at green checkpoints  
 
 ---
@@ -109,10 +111,12 @@ Statics are for things we used to jam into Tag args (`size`, later `spec`, etc.)
 ```ts
 View.SizeChrome                                      // open WithSize
   .Prototype<{ dense?: boolean }>()({ spec: … })     // chain while open
-  .Prototype()({ size: "card" as const })            // fulfill → Requirement {}
+  .Prototype()({ size: View.ViewKind.Card() })       // fulfill → Requirement {}
 
 View.Card / Detail / Page   // SizeChrome already fulfilled
 ```
+
+`ViewKind` is `Data.TaggedEnum` (`Card` / `Detail` / `Page`) — match with `Match.tag`.
 
 Helpers: `RequirementOf` / `IsFulfilled` / `PropsOf` / `StaticsOf` / `OpenPrototype` /
 `FulfilledPrototype`. Tag does not fulfill — `bind` needs `.size` on the class.

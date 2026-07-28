@@ -14,10 +14,10 @@ class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", { payload: Item }) {}
 describe("WorkPoolView packaging", () => {
   it("web ready layer resolves WorkPool card + detail", () => {
     const { resolve } = View.react(WebWorkPoolView.layer);
-    expect(resolve(Jobs, "card").map((r) => r.key)).toEqual([
+    expect(resolve(Jobs, View.ViewKind.Card()).map((r) => r.key)).toEqual([
       "hyperlink/view/pool-card",
     ]);
-    expect(resolve(Jobs, "detail").map((r) => r.key)).toEqual([
+    expect(resolve(Jobs, View.ViewKind.Detail()).map((r) => r.key)).toEqual([
       "hyperlink/view/pool-detail",
     ]);
   });
@@ -25,7 +25,7 @@ describe("WorkPoolView packaging", () => {
   it("shared handles match WorkPoolView keys", () => {
     expect(WorkPoolView.PoolCard.key).toBe("hyperlink/view/pool-card");
     expect(WorkPoolView.PoolDetail.key).toBe("hyperlink/view/pool-detail");
-    expect(WorkPoolView.PoolCard.size).toBe("card");
-    expect(WorkPoolView.PoolDetail.size).toBe("detail");
+    expect(WorkPoolView.PoolCard.size).toEqual(View.ViewKind.Card());
+    expect(WorkPoolView.PoolDetail.size).toEqual(View.ViewKind.Detail());
   });
 });

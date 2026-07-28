@@ -1,14 +1,15 @@
 /**
  * @module ui/ApiMetricsView
  *
- * Shared View handles + contribution Layer — no platform TSX.
+ * Shared View handles + contribution Layer for {@link Gate.HttpApiClient}
+ * (former sibling ApiMetrics absorbed into the Gate nest).
  */
 import { Layer } from "effect";
-import * as ApiMetrics from "../ApiMetrics";
+import * as Gate from "../Gate";
 import * as View from "./View";
 
-/** Placeholder until ApiMetrics exports a control Spec SSOT. @public */
-export const apiMetricsViewSpec = { kind: ApiMetrics.kind } as const;
+/** Spec stamp for HttpApiClient View handles. @public */
+export const apiMetricsViewSpec = { kind: Gate.httpApiClientKind } as const;
 
 const CardProto = View.Card.Prototype()({
   spec: apiMetricsViewSpec,
@@ -29,6 +30,6 @@ export class ApiDetail extends DetailProto.Tag<ApiDetail>()(
 
 /** @public */
 export const layer = Layer.mergeAll(
-  View.bind(ApiMetrics.kind, ApiCard),
-  View.bind(ApiMetrics.kind, ApiDetail),
+  View.bind(Gate.httpApiClientKind, ApiCard),
+  View.bind(Gate.httpApiClientKind, ApiDetail),
 );

@@ -357,7 +357,7 @@ export const Cell = (props: {
   const isGroup = Group.isGroup(props.member);
   const leaf = isLeafTag(props.member) ? props.member : null;
   const viewTag = isGroup ? props.member : leaf;
-  const hasViewCard = View.useHasMatch(viewTag, "card");
+  const hasViewCard = View.useHasMatch(viewTag, View.ViewKind.Card());
   const Match = View.useMatch();
   // Group + leaf share kit Card when a family skin is on the layer (open stays parent / TUI focus).
   if (hasViewCard && viewTag !== null) {

@@ -28,19 +28,25 @@ const Mid = Open.Prototype<{ readonly dense?: boolean }>()({
   spec: { kind: "app/queue" } as const,
 })
 
-// Fulfill last
-const Proto = Mid.Prototype()({ size: "card" as const })
+// Fulfill last — PascalCase tagged size (`Data.TaggedEnum`)
+const Proto = Mid.Prototype()({ size: View.ViewKind.Card() })
 
 class PoolCard extends Proto.Tag<PoolCard>()("app/view/pool-card") {}
 
 PoolCard.size
 //         ^?
+PoolCard.size._tag
+//              ^?
 ```
+
+Sizes are Effect tagged variants (`_tag: "Card" | "Detail" | "Page"`). Match with
+`Match.tag` the same way as elsewhere in the library.
 
 Shipped shortcuts: `View.Card` / `Detail` / `Page` are `SizeChrome` already fulfilled.
 
 {.twoslash}
 ``` ts
+import { Match } from "effect"
 import { View } from "hyperlink-ts/ui"
 
 View.Card.statics.size
@@ -49,6 +55,14 @@ View.Detail.statics.size
 //                ^?
 View.Page.statics.size
 //              ^?
+
+const label = Match.value(View.ViewKind.Card()).pipe(
+  Match.tag("Card", () => "card chrome"),
+  Match.tag("Detail", () => "detail chrome"),
+  Match.tag("Page", () => "page chrome"),
+  Match.exhaustive,
+)
+void label
 ```
 
 ## Card + Detail + Page + `layer`

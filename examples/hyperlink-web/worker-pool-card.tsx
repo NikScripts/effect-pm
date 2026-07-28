@@ -26,7 +26,7 @@ const Proto = View.Card.Prototype<WorkerPoolCardProps>()({
   spec: workerPoolCardSpec,
 });
 
-/** Sized View handle (`size: "card"` from `View.Card`). */
+/** Sized View handle (`size: ViewKind.Card()` from `View.Card`). */
 export class WorkerPoolCard extends Proto.Tag<WorkerPoolCard>()(
   "examples/hyperlink-web/worker-pool-card",
 ) {}

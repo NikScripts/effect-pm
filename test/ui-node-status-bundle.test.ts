@@ -63,9 +63,9 @@ describe("F5 split-dial: runtime transport override", () => {
         // Construct override *before* Hyperlink.client so connectAddressed reuses it (F5 memo).
         const transport = OverrideNode.pipe(Node.connectSocket(`ws://127.0.0.1:${port}/rpc`));
         // Verify still probes the tag's stamped url (:1) — opt out; this test is the dial target.
-        const layer = Layer.mergeAll(
-          transport,
-          Hyperlink.client(OverrideQ).pipe(Layer.provide(Hyperlink.clientVerify(false))),
+        const layer = Hyperlink.client(OverrideQ).pipe(
+          Layer.provide(Hyperlink.clientVerify(false)),
+          Layer.provideMerge(transport),
         );
         const [queueHead, nodeHead] = yield* Effect.all(
           [
@@ -83,7 +83,7 @@ describe("F5 split-dial: runtime transport override", () => {
         expect(Option.isSome(queueHead)).toBe(true);
         expect(Option.isSome(nodeHead)).toBe(true);
         if (Option.isSome(nodeHead)) {
-          expect(nodeHead.value.resources.some((r) => r.key === OverrideQ.key)).toBe(true);
+          expect(nodeHead.value.services.some((r) => r.key === OverrideQ.key)).toBe(true);
         }
       }).pipe(Effect.provide(overrideServer), Effect.scoped, Effect.timeout(Duration.seconds(12))),
     { timeout: 15_000 },
