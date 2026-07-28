@@ -127,7 +127,7 @@ yield* emails.events.pipe(Stream.runForEach(onChange))
 })
 ```
 
-Dashboards ride the same Tag — a **`pm` CLI**, a **TUI**, and a **web** dashboard — without touching
+Dashboards ride the same Tag — a **CLI**, a **TUI**, and a **web** dashboard — without touching
 the Implementation.
 
 ## Build your own

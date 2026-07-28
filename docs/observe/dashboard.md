@@ -1,8 +1,8 @@
 {#dashboard title="Dashboard" status="draft" appliesTo=all}
 # Dashboard
 
-The web dashboard renders a live view over your HyperServices — a drill-down of queue / process /
-API / group cards, each with stats, charts, controls, and streaming logs. You point it at a
+The web dashboard renders a live view over your HyperServices — a drill-down of WorkPool / Daemon /
+Gate / group cards, each with stats, charts, controls, and streaming logs. You point it at a
 reactive runtime and a root `Group`:
 
 ``` tsx

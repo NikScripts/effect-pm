@@ -148,14 +148,14 @@ Four verbs, one axis — how a HyperService is made available:
 - **`layer`** — local only.
 - **`serve`** — local **and** served over RPC (the default for a node).
 - **`serveRemote`** — served only, not runnable in-process (plain impl; `R` via handler requirements).
-- **`client`** — a remote handle to a served resource.
+- **`client`** — a remote handle to a served HyperService.
 
 Toolkit engines that build a Hyperlink `Driver` mount with **`Hyperlink.serveRemoteDriver`**
 (preserves the driver's worker `R`). Apps call `Gate.serveRemote` / `Daemon.serveRemote` /
 `WorkPool.serveRemote` — not the Driver helper — unless they are assembling a custom engine.
 
 Transport is a **separate** line: `httpServer` / `http` / `connect`. `Http` appears **only**
-there — the core verbs stay transport-agnostic, so the same resource can be served over any protocol.
+there — the core verbs stay transport-agnostic, so the same HyperService can be served over any protocol.
 
 {#serve-preserves-requirements .must appliesTo="src examples"}
 ## Serve / listen / `*Server` preserve open `R` (and `E`)
@@ -171,7 +171,7 @@ same tag: `Layer.provide` onto each serve layer (see *Managing Layers*).
 
 Serve a HyperService through its engine form (`WorkPool.serve`, `Daemon.serve`) — these mount the
 handlers **and** keep the worker or tick alive. `Hyperlink.serve` only mounts handlers; using it for a
-queue leaves the worker dead. Never hand-write a `{ tag, impl }` literal: it types as
+WorkPool leaves the worker dead. Never hand-write a `{ tag, impl }` literal: it types as
 `Record<string, unknown>` and silently swallows typos — the engine form spec-checks the impl against
 the tag.
 
@@ -200,7 +200,7 @@ program.pipe(Layer.provide(Hyperlink.serve(Counter, counterImpl)))
 ## Declare dependencies in the worker; provide at the serve boundary
 
 A worker or tick body **declares** its dependencies with `yield* Tag` — it never `Effect.provide`s
-them inline. Provide **whole-resource** deps once, at the serve/layer boundary, so
+them inline. Provide **whole-service** deps once, at the serve/layer boundary, so
 `strictEffectProvide` stays clean and the same body works local or served. Do **not** hoist a
 **sub-effect-scoped** dep to `serve` — that widens `R` for the whole body; keep an app-local
 scoping combinator beside the handler service — do not look for a package `locally` helper.

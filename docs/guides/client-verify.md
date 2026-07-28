@@ -39,7 +39,7 @@ Hyperlink.client(Emails, WorkerNode).pipe(
 )
 ```
 
-Tag-aware addressed clients escalate to **deep** verify (node-handle status RPC + resource readiness +
+Tag-aware addressed clients escalate to **deep** verify (node-handle status RPC + service readiness +
 F4 `contractHash`). Nodeless / bootstrap paths that would deadlock keep verify off.
 
 ## Explicit probe

@@ -1,7 +1,7 @@
 "use client";
 
-// The base building block: a custom resource via `Hyperlink.Tag`, driven from buttons.
-// The resource itself (contract + layer + atoms) lives in ./counter-hyperlink — declared
+// The base building block: a custom HyperService via `Hyperlink.Tag`, driven from buttons.
+// The HyperService itself (contract + layer + atoms) lives in ./counter-hyperlink — declared
 // once, so a content hot-edit that re-imports this entry can't re-register it. This file
 // is just the UI. Tailwind scoped to .pm-dashboard.
 

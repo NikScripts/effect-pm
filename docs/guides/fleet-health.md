@@ -61,7 +61,7 @@ FleetHealth.serve(MeshHealth, { readiness }).pipe(
 
 | Field | Scope | Meaning |
 |-------|--------|---------|
-| `local` | leaf | This node's `ok` / `degraded` + resource rows |
+| `local` | leaf | This node's `ok` / `degraded` + service rows |
 | `byNode` | fleet | `Reachable` (peer's local) or `Unreachable` (Exit failure) |
 | `status` | fleet | `ok` · `degraded` · `partial` (any unreachable) |
 

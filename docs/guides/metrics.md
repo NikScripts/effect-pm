@@ -6,13 +6,13 @@
 <!-- docs-site-link:end -->
 # Metrics
 
-HyperServices already emit into Effect's per-process `Metric` registry (queues, processes, HTTP
+HyperServices already emit into Effect's per-process `Metric` registry (WorkPools, Daemons, HTTP
 clients, runtime metrics). Two sinks read that registry:
 
 | Sink | When |
 |------|------|
 | **OTEL export** | Professional stack — Sentry, Grafana, Honeycomb, alerting, retention |
-| **[Telemetry](/docs/telemetry)** | Custom in-app glass — fleet page, TUI, `pm metrics` — no sidecar |
+| **[Telemetry](/docs/telemetry)** | Custom in-app glass — fleet page, TUI, CLI — no sidecar |
 
 Telemetry is the Hyperlink path: leaf `snapshot` / `live`, plus fleet `inFlightByNode` /
 `fleetInFlight` when the tag is meshed. Cardinality stays cheap (`node` / `client` /

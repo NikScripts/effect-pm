@@ -86,7 +86,7 @@ Now Soft unwrap peeks at ambient `Storage` at build time:
 It does **not** install `Logs.Relay` / durable `_logs` tails. Durable logs need
 `Store.Service.layer*` (bakes `Logs.layer`) or an explicit `Logs.layer`.
 
-Node journal + resource `_logs` copies of the same live line are intentional — see the logs guide.
+Node journal + per-service `_logs` copies of the same live line are intentional — see the logs guide.
 
 ## Reading back
 

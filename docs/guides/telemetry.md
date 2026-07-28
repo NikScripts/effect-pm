@@ -6,7 +6,7 @@
 <!-- docs-site-link:end -->
 # Telemetry
 
-Every hyperlink-ts node already writes into Effect's `Metric` registry — queues, processes, HTTP
+Every hyperlink-ts node already writes into Effect's `Metric` registry — WorkPools, Daemons, HTTP
 clients, runtime gauges. **Telemetry** serves that registry as a Hyperlink: leaf fields for this
 node, fleet folds when the tag is meshed. OTEL stays the professional sink; Telemetry is for custom
 glass (CLI, TUI, web) over the same tags.

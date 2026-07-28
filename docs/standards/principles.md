@@ -211,8 +211,8 @@ served HyperServices. A hand-kept parallel list is drift waiting to happen — t
 truth applied to structure.
 
 ``` ts
-// ❌ bad — a hand-kept list that forgets the next resource
-const widgets = [QueueWidget, ProcessWidget]
+// ❌ bad — a hand-kept list that forgets the next HyperService
+const widgets = [WorkPoolWidget, DaemonWidget]
 
 // ✅ good — derived from the contract, so new HyperServices appear automatically
 const widgets = methodsOf(specOf(tag)).map(widgetFor)
