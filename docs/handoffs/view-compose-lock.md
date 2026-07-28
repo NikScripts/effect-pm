@@ -103,7 +103,7 @@ Navigator may still say `openLogs(tag)` / `openSchedule(tag)` — that means “
 
 **F2:** HealthBoard / NodeDetail stay **shell-owned** for v1.
 
-### G. Observe door — **superseded shape**
+### G. Observe door (**superseded shape**)
 
 - Interim Eng’d: `ui.data.queue` / `.daemon` / … on compose (guide [`../guides/view-data.md`](../guides/view-data.md))
 - **Preferred (standard):** thin handles + free helper `observe(tag)` ([`../standards/principles.md#handles-stay-thin`](../standards/principles.md#handles-stay-thin)). No methods on Tag; no noun menu on the kit.
