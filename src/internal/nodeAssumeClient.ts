@@ -4,7 +4,7 @@
  * Public {@link Node.assume} dial — calls the reserved node-status `assume` RPC on an
  * addressed peer (verify off; this *is* the handoff probe).
  */
-import { Config, Effect, Layer, Schema } from "effect";
+import { Config, Effect, Layer, Predicate, Schema } from "effect";
 import * as Hyperlink from "../Hyperlink";
 import {
   AssumeNotReady,
@@ -79,11 +79,14 @@ export const assume = (
   }).pipe(
     Effect.scoped,
     Effect.withLogSpan("node.assume"),
+    Effect.withSpan("node.assume", {
+      attributes: { "assume.node": node.key },
+    }),
     Effect.mapError((cause) => {
       if (Schema.is(AssumeTokenMismatch)(cause)) return cause;
       if (Schema.is(AssumeTokenReused)(cause)) return cause;
       if (Schema.is(AssumeNotReady)(cause)) return cause;
-      if (cause instanceof UnaddressedNode) return cause;
+      if (Predicate.isTagged(cause, "UnaddressedNode")) return cause;
       return new NodeUnreachable({
         node: node.key,
         url: address,
