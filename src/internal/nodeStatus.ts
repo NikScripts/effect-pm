@@ -144,7 +144,7 @@ export class NodeStatusTag extends Hyperlink.Tag<NodeStatusTag>()(
 }) {}
 
 /** Build the node status service implementation for a node that started at `startedAt` and serves
- *  `serviceCount` resources. Logs/history are optional (read via `serviceOption`), so this adds no
+ *  `serviceCount` services. Logs/history are optional (read via `serviceOption`), so this adds no
  *  requirement to the server layer. When `assumeToken` is set, `assume` / ownership mirror are live.
  *  @internal */
 export const buildNodeStatusImpl = (options: {
@@ -198,8 +198,8 @@ export const buildNodeStatusImpl = (options: {
     const assumed = yield* Ref.make(false);
     const computeStatus: Effect.Effect<NodeStatus> = Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis;
-      const resources = yield* readiness;
-      const ok = resources.every((r) => r.ready);
+      const services = yield* readiness;
+      const ok = services.every((r) => r.ready);
       const status: "ok" | "degraded" = ok ? "ok" : "degraded";
       const ownershipValue = yield* Ref.get(ownership);
       return {
@@ -208,7 +208,7 @@ export const buildNodeStatusImpl = (options: {
         startedAt: DateTime.makeUnsafe(options.startedAt),
         uptimeMillis: now - options.startedAt,
         serviceCount: options.serviceCount,
-        services: resources,
+        services,
         ...(expectedToken !== undefined ? { ownership: ownershipValue } : {}),
       };
     });
@@ -239,8 +239,8 @@ export const buildNodeStatusImpl = (options: {
           yield* Effect.logWarning("assume rejected: token already used");
           return yield* new AssumeTokenReused({ node: assumeNodeKey });
         }
-        const resources = yield* readiness;
-        const blocked = resources.find((r) => !r.ready);
+        const services = yield* readiness;
+        const blocked = services.find((r) => !r.ready);
         if (blocked !== undefined) {
           yield* Effect.logWarning("assume rejected: not Ready").pipe(
             Effect.annotateLogs({ "assume.service": blocked.key }),

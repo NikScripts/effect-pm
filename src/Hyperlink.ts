@@ -3020,7 +3020,7 @@ export const isSharedTag = (tag: unknown): boolean =>
 
 /** The {@link Node} a tag is bound to (its transport key), or `undefined` for a nodeless/bare tag
  *  or any non-tag. Accepts `unknown` so a `Group` member passes straight in — walk a group tree and
- *  collect the distinct nodes to know which nodes back its resources. */
+ *  collect the distinct nodes to know which nodes back its services. */
 export const nodeOf = (tag: unknown): NodeKey<unknown> | undefined => {
   if ((typeof tag === "object" || typeof tag === "function") && tag !== null && nodeSym in tag) {
     const value = tag[nodeSym];

@@ -109,4 +109,4 @@ Owner: purge remaining product “resource” names. Shipped in the same tip:
 | Launcher `ready.resources` | `ready.services` |
 
 Internal engine may still say `NodeStatusTag` / wire key `hyperlink-ts/node-status` (not a public module).
-Folder slug `docs/resources/` is book layout — separate site-path bake if renamed.
+Folder renamed: `docs/resources/` → `docs/services/` (site URLs stay basename: `/docs/contracts`, …). Standards chapter slug/URL `resources` → `hyperlinks` (`/docs/hyperlinks`); `/docs/resources` redirect page kept. Manifest rule ids `resources.*` → `hyperlinks.*`.

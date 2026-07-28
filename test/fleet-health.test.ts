@@ -60,7 +60,7 @@ describe("FleetHealth", () => {
     ),
   });
 
-  it.effect("default readiness ⇒ empty resources / ok", () => {
+  it.effect("default readiness ⇒ empty services / ok", () => {
     const live = FleetHealth.layer(MeshHealth).pipe(
       Layer.provide(FleetHealth.alone(MeshHealth)),
     );

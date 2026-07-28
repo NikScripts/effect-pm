@@ -345,6 +345,165 @@
       ]
     },
     {
+      "chapter": "hyperlinks",
+      "title": "Hyperlink Factories",
+      "slug": "hyperlinks",
+      "rules": [
+        {
+          "id": "hyperlinks.tag-is-contract-layer-is-runtime",
+          "severity": "must",
+          "appliesTo": [
+            "src",
+            "examples"
+          ],
+          "title": "The tag is the contract; the layer is the runtime"
+        },
+        {
+          "id": "hyperlinks.positional-schema-args",
+          "severity": "must",
+          "appliesTo": [
+            "src",
+            "examples"
+          ],
+          "title": "Pass tag schemas positionally when you can"
+        },
+        {
+          "id": "hyperlinks.behaviour-via-piped-combinators",
+          "severity": "must",
+          "appliesTo": [
+            "src",
+            "examples"
+          ],
+          "title": "Compose behaviour with piped combinators, not constructor flags"
+        },
+        {
+          "id": "hyperlinks.data-last-tag-duals-shallow",
+          "severity": "must",
+          "appliesTo": [
+            "src"
+          ],
+          "title": "Data-last tag duals must not constrain `Svc`-bearing tag unions"
+        },
+        {
+          "id": "hyperlinks.polling-vs-schedule",
+          "severity": "must",
+          "appliesTo": [
+            "src",
+            "examples"
+          ],
+          "title": "Polling and schedule are different questions — never conflate"
+        },
+        {
+          "id": "hyperlinks.default-queue-lean",
+          "severity": "must",
+          "appliesTo": [
+            "src",
+            "examples"
+          ],
+          "title": "The default queue stays lean; custom lanes are a separate type"
+        },
+        {
+          "id": "hyperlinks.same-code-local-or-remote",
+          "severity": "must",
+          "appliesTo": [
+            "src",
+            "examples"
+          ],
+          "title": "The same code runs local or remote"
+        },
+        {
+          "id": "hyperlinks.serve-vocabulary",
+          "severity": "must",
+          "appliesTo": [
+            "src",
+            "examples"
+          ],
+          "title": "Use the locked serve vocabulary"
+        },
+        {
+          "id": "hyperlinks.serve-preserves-requirements",
+          "severity": "must",
+          "appliesTo": [
+            "src",
+            "examples"
+          ],
+          "title": "Serve / listen / `*Server` preserve open `R` (and `E`)"
+        },
+        {
+          "id": "hyperlinks.serve-through-spec-checked-forms",
+          "severity": "must",
+          "appliesTo": [
+            "src",
+            "examples"
+          ],
+          "title": "Serve through the engine's spec-checked form, never a bare literal"
+        },
+        {
+          "id": "hyperlinks.provide-merge-serve-layers",
+          "severity": "must",
+          "appliesTo": [
+            "src",
+            "examples"
+          ],
+          "title": "Put serve layers in the listen / `*Server` list; provide deps outside"
+        },
+        {
+          "id": "hyperlinks.declare-dont-provide-in-workers",
+          "severity": "must",
+          "appliesTo": [
+            "src",
+            "examples"
+          ],
+          "title": "Declare dependencies in the worker; provide at the serve boundary"
+        },
+        {
+          "id": "hyperlinks.one-instance-one-materialization",
+          "severity": "must",
+          "appliesTo": [
+            "src",
+            "examples"
+          ],
+          "title": "One instance, one materialization"
+        },
+        {
+          "id": "hyperlinks.one-service-n-instances",
+          "severity": "must",
+          "appliesTo": [
+            "src",
+            "examples"
+          ],
+          "title": "One HyperService = N node-local instances"
+        },
+        {
+          "id": "hyperlinks.readiness-per-node-local",
+          "severity": "must",
+          "appliesTo": [
+            "src",
+            "examples"
+          ],
+          "title": "Readiness is per-node and local — never a cross-node hop"
+        },
+        {
+          "id": "hyperlinks.fold-over-leaf-fields",
+          "severity": "must",
+          "appliesTo": [
+            "src",
+            "examples"
+          ],
+          "title": "Fold over leaf fields; fleet views stay out of the fan-out"
+        },
+        {
+          "id": "hyperlinks.peers-are-lazy",
+          "severity": "must",
+          "appliesTo": [
+            "src",
+            "examples"
+          ],
+          "title": "Peers are lazy and degrade to a partial mesh"
+        }
+      ]
+    },
+    {
       "chapter": "modules-and-boundaries",
       "title": "Modules & Boundaries",
       "slug": "modules-and-boundaries",
@@ -372,6 +531,14 @@
             "src"
           ],
           "title": "Never an object-as-namespace for the public surface"
+        },
+        {
+          "id": "modules-and-boundaries.namespaced-short-vs-internal-full",
+          "severity": "must",
+          "appliesTo": [
+            "src"
+          ],
+          "title": "Namespaced types are short; internal types use the full module prefix"
         },
         {
           "id": "modules-and-boundaries.types-same-file",
@@ -672,156 +839,6 @@
       ]
     },
     {
-      "chapter": "resources",
-      "title": "Hyperlink Factories",
-      "slug": "resources",
-      "rules": [
-        {
-          "id": "resources.tag-is-contract-layer-is-runtime",
-          "severity": "must",
-          "appliesTo": [
-            "src",
-            "examples"
-          ],
-          "title": "The tag is the contract; the layer is the runtime"
-        },
-        {
-          "id": "resources.positional-schema-args",
-          "severity": "must",
-          "appliesTo": [
-            "src",
-            "examples"
-          ],
-          "title": "Pass tag schemas positionally when you can"
-        },
-        {
-          "id": "resources.behaviour-via-piped-combinators",
-          "severity": "must",
-          "appliesTo": [
-            "src",
-            "examples"
-          ],
-          "title": "Compose behaviour with piped combinators, not constructor flags"
-        },
-        {
-          "id": "resources.data-last-tag-duals-shallow",
-          "severity": "must",
-          "appliesTo": [
-            "src"
-          ],
-          "title": "Data-last tag duals must not constrain `Svc`-bearing tag unions"
-        },
-        {
-          "id": "resources.polling-vs-schedule",
-          "severity": "must",
-          "appliesTo": [
-            "src",
-            "examples"
-          ],
-          "title": "Polling and schedule are different questions — never conflate"
-        },
-        {
-          "id": "resources.default-queue-lean",
-          "severity": "must",
-          "appliesTo": [
-            "src",
-            "examples"
-          ],
-          "title": "The default queue stays lean; custom lanes are a separate type"
-        },
-        {
-          "id": "resources.same-code-local-or-remote",
-          "severity": "must",
-          "appliesTo": [
-            "src",
-            "examples"
-          ],
-          "title": "The same code runs local or remote"
-        },
-        {
-          "id": "resources.serve-vocabulary",
-          "severity": "must",
-          "appliesTo": [
-            "src",
-            "examples"
-          ],
-          "title": "Use the locked serve vocabulary"
-        },
-        {
-          "id": "resources.serve-through-spec-checked-forms",
-          "severity": "must",
-          "appliesTo": [
-            "src",
-            "examples"
-          ],
-          "title": "Serve through the engine's spec-checked form, never a bare literal"
-        },
-        {
-          "id": "resources.provide-merge-serve-layers",
-          "severity": "must",
-          "appliesTo": [
-            "src",
-            "examples"
-          ],
-          "title": "`provideMerge` serve layers onto `httpServer`, never `provide`"
-        },
-        {
-          "id": "resources.declare-dont-provide-in-workers",
-          "severity": "must",
-          "appliesTo": [
-            "src",
-            "examples"
-          ],
-          "title": "Declare dependencies in the worker; provide at the serve boundary"
-        },
-        {
-          "id": "resources.one-instance-one-materialization",
-          "severity": "must",
-          "appliesTo": [
-            "src",
-            "examples"
-          ],
-          "title": "One instance, one materialization"
-        },
-        {
-          "id": "resources.one-resource-n-instances",
-          "severity": "must",
-          "appliesTo": [
-            "src",
-            "examples"
-          ],
-          "title": "One resource = N node-local instances"
-        },
-        {
-          "id": "resources.readiness-per-node-local",
-          "severity": "must",
-          "appliesTo": [
-            "src",
-            "examples"
-          ],
-          "title": "Readiness is per-node and local — never a cross-node hop"
-        },
-        {
-          "id": "resources.fold-over-leaf-fields",
-          "severity": "must",
-          "appliesTo": [
-            "src",
-            "examples"
-          ],
-          "title": "Fold over leaf fields; fleet views stay out of the fan-out"
-        },
-        {
-          "id": "resources.peers-are-lazy",
-          "severity": "must",
-          "appliesTo": [
-            "src",
-            "examples"
-          ],
-          "title": "Peers are lazy and degrade to a partial mesh"
-        }
-      ]
-    },
-    {
       "chapter": "storage",
       "title": "Storage & Persistence",
       "slug": "storage",
@@ -926,6 +943,15 @@
             "examples"
           ],
           "title": "PascalCase only for types, classes, and namespaces"
+        },
+        {
+          "id": "types-and-naming.namespaced-short-vs-internal-full",
+          "severity": "must",
+          "appliesTo": [
+            "src",
+            "examples"
+          ],
+          "title": "Namespaced types are short; internal types use the full module prefix"
         },
         {
           "id": "types-and-naming.values-are-camelcase",
@@ -1163,5 +1189,5 @@
       ]
     }
   ],
-  "ruleCount": 128
+  "ruleCount": 131
 }

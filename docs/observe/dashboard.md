@@ -1,7 +1,7 @@
 {#dashboard title="Dashboard" status="draft" appliesTo=all}
 # Dashboard
 
-The web dashboard renders a live view over your resources — a drill-down of queue / process /
+The web dashboard renders a live view over your HyperServices — a drill-down of queue / process /
 API / group cards, each with stats, charts, controls, and streaming logs. You point it at a
 reactive runtime and a root `Group`:
 
@@ -9,7 +9,7 @@ reactive runtime and a root `Group`:
 import { Dashboard } from "hyperlink-ts/web"
 import { Atom } from "effect/unstable/reactivity"
 
-const runtime = Atom.runtime(appLayer) // appLayer: your resource clients over a transport
+const runtime = Atom.runtime(appLayer) // appLayer: your service clients over a transport
 <Dashboard runtime={runtime} group={ServicesHub} />
 ```
 
@@ -27,8 +27,8 @@ A HyperService client reaches its node over an RPC **transport**. The library sh
 
 ### Why the browser needs the WebSocket
 
-The dashboard is stream-heavy: every visible resource holds **several** live streams open at once
-— its `status`, its `metrics`, its `logs` — and the grid shows many resources. That is easily
+The dashboard is stream-heavy: every visible HyperService holds **several** live streams open at once
+— its `status`, its `metrics`, its `logs` — and the grid shows many services. That is easily
 15–20 concurrent streams.
 
 Over the HTTP transport, **each stream is its own browser connection**, and a browser allows only
@@ -88,7 +88,7 @@ A worked end-to-end setup is in `examples/hyperlink-web` (three nodes, one WebSo
 
 ### Fleets — peers dial the same wire
 
-When a node's resource folds across **peers** (a `fleet` field like `fleetActive` — see
+When a node's service folds across **peers** (a `fleet` field like `fleetActive` — see
 [multi-node](../guides/multi-node)), those server-to-server calls have their own transport. They
 default to HTTP, so a fleet whose nodes serve WebSocket must move the peer mesh onto WebSocket too,
 or the fold 404s against the ws-only `/rpc`. One knob per node, alongside `peersLayer`:
@@ -106,5 +106,5 @@ client wire from an `RpcClient.Protocol` (build one with `Hyperlink.protocolHttp
 
 ## Widgets
 
-Each resource kind renders a hand-crafted card, chosen by the tag's **kind** and extensible per
-kind or per exact resource — see [React components](react-components).
+Each HyperService kind renders a hand-crafted card, chosen by the tag's **kind** and extensible per
+kind or per exact service — see [React components](react-components).

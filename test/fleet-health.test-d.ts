@@ -62,13 +62,13 @@ void _localStatus;
 declare const row: FleetHealth.NodeReport;
 if (row._tag === "Reachable") {
   const _s: "ok" | "degraded" = row.status;
-  const _resources: ReadonlyArray<{
+  const _services: ReadonlyArray<{
     readonly key: string;
     readonly kind: string;
     readonly ready: boolean;
   }> = row.services;
   void _s;
-  void _resources;
+  void _services;
 } else {
   const _u: "Unreachable" = row._tag;
   void _u;
