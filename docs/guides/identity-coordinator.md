@@ -90,7 +90,8 @@ Membership Lookup Identity/Directory/Advice   who wins / where clients dial
 - **Launcher** stays custody-only (stable addressed node; exits after assume).
 - **Child** pipes `Lookup.client` / `layerOptions` on listen — advertise + identity claim.
 - Directory-row replace: `onConflict: "askIncumbent"` + optional `ListenOptions.onYield`
-  (`false` refuses). Drain / state / old shutdown are a later handoff track — not Lookup.
+  (`false` refuses). Drain / state / old shutdown = Track C (bake proposed in
+  [`launcher-and-handoff-brief.md`](../handoffs/launcher-and-handoff-brief.md) #27–36) — not Lookup.
 
 Runnable: [`examples/forms/hyperlink/launcher-lookup-membership.ts`](../../examples/forms/hyperlink/launcher-lookup-membership.ts).
 Custody API: [`docs/guides/launcher.md`](./launcher.md).

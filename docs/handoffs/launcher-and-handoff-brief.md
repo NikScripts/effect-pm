@@ -1,6 +1,6 @@
 # Brief — Launcher + node handoff (Agent 5)
 
-**Status:** Track A + **Track B Eng'd** on tip (custody / membership). C/D bake next.  
+**Status:** Track A + **Track B Eng'd** on tip. **Track C bake proposed** (#27–36 below) — awaiting owner lock. Track D open.  
 **Opened:** 2026-07-25 (owner via Agent G).  
 **Audience:** next agent picking up launcher + handoff / migration discussion.
 
@@ -170,33 +170,90 @@ Owner locked #22–26; Eng on tip:
 
 **Still deferred:** blank worker / assign protocol; HTTP/WS Lookup; nameless Launcher discovery; Track C migration; Track D clients.
 
-### Track C — bake (proposed, not locked)
+### Track C — research note (2026-07-28): what already exists
 
-**Mission:** a served HyperService moves from one node to another without callers noticing — including **zero-downtime version updates** and **cross-version skew as the normal case**. Framing: [`node-handoff-mission.md`](./node-handoff-mission.md). **No Eng until items lock here with the owner** (same gate as A/B: #2). Do **not** treat [`launcher-decisions.md`](./launcher-decisions.md) rows as binding.
+**Mission:** a served HyperService moves from one node to another without callers noticing — including **zero-downtime version updates** and **cross-version skew as the normal case**. Framing: [`node-handoff-mission.md`](./node-handoff-mission.md).
 
 | Plane | Owner | In / out |
 |-------|--------|----------|
 | **Custody** (A) | `Launcher` | spawn → Ready → `Node.assume` → exit. **Not** migration. |
 | **Membership** (B) | Lookup | Identity / Directory / Advice; `askIncumbent` + status `yield` = **directory-row** only. |
-| **Migration** (C) | **this track** | Cutover, drain / dual-serve / redirect, state story, old-node shutdown via **node** control plane, version/contract negotiation. |
-| **Clients** (D) | later | Dialer behavior during swap — open; `contractHash` / verify is substrate, not the client story. |
+| **Migration** (C) | **this track** | Cutover, drain, state story, old-node shutdown via **node** control plane, contract gate. |
+| **Clients** (D) | later | Dialer reconnect / redirect — open; `contractHash` / verify is substrate, not the client story. |
 
-B’s `onYield` answers “may this Directory row be replaced?” — **not** drain, state transfer, or old shutdown. Prefer reuse: Lookup `yield` / Directory / Identity / Advice, Launcher custody, `contractHash` / verify, `withReadiness` / `Node.status`. **No new nouns** unless they clear the high bar.
+**Build on (shipped):**
+- B Directory `askIncumbent` + NodeStatus `yield` / `ListenOptions.onYield` — **directory-row** replace only (AI.4: no in-flight drain).
+- A Launcher custody + `Node.assume` + Ready / `withReadiness` / `Node.status`.
+- F4 `contractHash` + deep `verifyConnection` → `ContractMismatch` (binary; redeploy stale side).
+- WorkPool local `shutdown` / `phase: "draining"` + `release` / `enqueue` / `releaseEncoded` (app-level queue transfer primitives).
+- Stores: **one store per Node** (not shared cross-node durability) — [`stores.md`](../guides/stores.md).
 
-**Proposed questions (continue from #26):**
+**Gone / do not invent lightly:** `HandoffManager`, parallel Directory, launcher-owned migration, Lookup.assign / blank-worker migrate.
 
-27. **Trigger:** version-upgrade only, explicit migrate verb, and/or Directory conflict after B `yield` accept? Who initiates?
-28. **Grain:** per HyperService vs whole-node cutover? Opt-in vs default?
-29. **Cutover** for in-flight calls / open streams: drain, dual-serve, redirect, or mix?
-30. **Stateful services** (queues / stores): transfer, share durability, or **non-transferable in v1**?
-31. **Version / contract:** reuse `contractHash` + verify as the gate? Mismatch = which tagged failures?
-32. **Discovery during swap:** Directory / Identity / Advice vs an intentionally draining node (no false dead-incumbent replace).
-33. **Old-node shutdown:** node control plane (not Launcher) — verb / sequence; compose with B unregister / Advice clear?
-34. **Layer shape:** handoff options on the HyperService, listen options, or extend-in-place elsewhere?
-35. **Lookup-node handoff:** in scope or explicitly deferred?
-36. **Track D boundary:** C ships cutover + old shutdown with **no** client redirect API; what minimal signals must C emit?
+**Gaps vs Track C (open until lock):** no Node drain/shutdown migrate RPC; no draining membership signal (draining ≠ dead); no per-service handoff layer options; no dual-serve / client redirect; no contract compatibility ranges.
 
-**Exit for Eng:** owner locks a contiguous subset of #27–36 in this brief’s Locked list.
+### Track C — bake (proposed for owner lock, 2026-07-28)
+
+**No Eng until a contiguous subset of #27–36 is copied into this brief’s Locked list** (same gate as A/B: #2). Do **not** treat [`launcher-decisions.md`](./launcher-decisions.md) rows as binding. Prefer reuse; **no new nouns** unless they clear the high bar (owner).
+
+**Proposed locks (agent bake — owner must confirm):**
+
+27. **Trigger = version-upgrade product story; initiation = incoming node after A+B, not Directory yield alone.**
+    - Headline: stand up a newer process (Launcher A → Ready → `assume`), win membership as needed (B), then run migration (C).
+    - **Who initiates:** the **incoming node** (or thin CLI over Node) after `Node.assume` — never Launcher, never a Lookup `assign`.
+    - B `askIncumbent` / `yield` may run first when the Directory `nodeKey` collides; that only swaps the **row**. C does not start from yield alone.
+    - Rejected as sole trigger: silent Directory conflict; Launcher-driven migrate; auto-migrate without per-service opt-in (#28).
+
+28. **Grain = per HyperService, opt-in (default off).**
+    - Whole-node cutover = compose opted-in per-service handoffs, then old-node shutdown (#33).
+    - A HyperService that does **not** configure handoff is **not** migrated by C (redeploy / fail loud — not silent skip of callers’ expectations).
+    - Matches owner framing: “each service that **supports** handoff must have handoff **configured in its layers**.”
+
+29. **Cutover v1 = drain-then-cut on the old node; no dual-serve; no client redirect in C.**
+    - Old node enters **draining** (status signal — #32): refuse new work; finish in-flight RPC / local queue drain.
+    - Cut when drain complete (and any opted-in state move — #30); new node already Ready and serving.
+    - **Dual-serve** and **client redirect** deferred to Track D (or a later C revision with explicit re-lock).
+    - Reuse WorkPool’s existing local `draining` phase as the queue precedent; generalize the *status signal* on Node, not a second queue engine.
+
+30. **Stateful v1 = non-transferable by default; WorkPool may opt into app-level `release` → `enqueue`; Stores stay per-node.**
+    - **Default:** queues / stores / Gate / Daemon journals are **not** auto-moved across nodes.
+    - **WorkPool escape hatch (opt-in handoff config):** use shipped `release` / `releaseEncoded` + `enqueue` as the transfer primitive (attempts preserved); app owns schema/`@vN` upcast.
+    - **Rejected for v1:** shared cross-node Store durability; library-magic state shipping; Gate/Daemon live migrate.
+
+31. **Version / contract gate = reuse `contractHash` + `ContractMismatch` (binary); no negotiation ranges in C v1.**
+    - Drift detect stays the loud-failures ladder (`ContractMismatch` — redeploy the stale side).
+    - C does **not** invent compatibility windows or multi-hash negotiation.
+    - Cross-version skew as “normal” means fleets roll with A+B+C while clients hit `ContractMismatch` until both sides match — Track D may soften client UX later; C does not hide mismatch.
+
+32. **Discovery during swap = draining ≠ dead; Directory row held; yield fail-closed while draining.**
+    - Extend **NodeStatus** (prefer over new Lookup nouns) so an intentionally draining node is not treated as a dead incumbent for `livenessReplace` / careless replace.
+    - While draining: default `onYield` path should **refuse** (or Lookups must not treat draining as free replace); Directory row stays until post-cutover unregister (#33).
+    - Advice may stay pointed at old or be cleared/updated — exact Advice policy at Eng; principle: no false “incumbent dead → steal” mid-drain.
+
+33. **Old-node shutdown = Node control-plane sequence after migrate; compose B unregister + Advice clear.**
+    - **Not** `Launcher.kill` (custody only). **Not** Lookup-owned process kill.
+    - Sequence (principle): drain → optional WorkPool transfer → Directory `unregister` → Advice `clear` (as needed) → process exit via **Node** shutdown/drain verb.
+    - Exact public verb name (`Node.shutdown` / drain-then-exit) chosen at Eng; **module home = `Node`** (locked principle).
+    - This clears the high bar for a **small** new Node control surface — owner framing already requires process controls through the node.
+
+34. **Layer shape = opt-in handoff config on the HyperService (serve / tag layer), not ListenOptions.**
+    - Keep `ListenOptions` for A/B (`assumeToken`, `onConflict`, `onYield`).
+    - Per-service handoff attach sits with serve / `withReadiness`-adjacent layer config (name TBD at Eng): e.g. strategy `drain-only` | `workPool-release`.
+    - Rejected: stuffing migrate into `ListenOptions`; a free-floating `Handoff` package noun without serve attachment.
+
+35. **Lookup-node handoff = explicitly deferred (not special-cased in C v1).**
+    - Soft-bake / IPC Lookup topology stays B.
+    - Migrating the Lookup node itself is out of C v1; treat later as “any node” once C verbs exist.
+
+36. **Track D boundary — C emits signals only; no client redirect API in C.**
+    - **C ships:** draining status, drain-then-cut, optional WorkPool transfer, Node shutdown sequence, Directory/Advice composition.
+    - **C does not ship:** client redirect, dual-serve dial sticky, reconnect SDKs.
+    - **Minimal C→D signals (reuse):** `Directory.nodesServing`, Advice prefer/clear, `Node.status` (ready / draining / ownership), per-service `contractHash` on readiness rows.
+    - Track D owns how dialers react to those signals.
+
+**Rejected for C v1 (record):** dual-serve cutover; client redirect; shared Store; contract compatibility ranges; Lookup.assign / blank-worker migrate; Launcher as migration owner; `HandoffManager` noun.
+
+**Exit for Eng:** owner locks a contiguous subset of #27–36 into this brief’s Locked list (renumber as #27+ under Locked). Then Eng on Node drain/shutdown + status draining + per-service handoff layer option — in that order unless owner reorders.
 
 ---
 
