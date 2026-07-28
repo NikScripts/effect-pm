@@ -6,7 +6,8 @@
  *
  * - `View.Tag` / `View.Prototype` → component DI. Self = DI identity; props from Prototype.
  * - Svc type is {@link View}`<Props>` (props in → element out). Defaults to {@link ViewProps}.
- * - Size chrome: {@link WithSize} type requirement; `View.Card` / `Detail` / `Page` narrow it.
+ * - Size chrome: `Prototype<Props, Constraint>` — Constraint is a type param (`WithSize`);
+ *   `View.Card` / `Detail` / `Page` pass `WithSize<"card">` etc.
  * - Matchers on {@link react} / {@link compose} kits (`ui.Card`) and {@link useMatch}.
  * - `View.bind` / `View.only` register sized handles; `View.react` needs Layer `R = never`.
  */
@@ -126,15 +127,13 @@ export interface Resolved {
 type AnyStatics = Record<string, unknown>;
 
 /**
- * Accumulated props type for a {@link Prototype} / {@link SizedPrototype}.
+ * Accumulated props type for a {@link Prototype}.
  *
  * @public
  */
-export type PropsOf<P> = P extends SizedPrototype<infer Props, WithSize>
+export type PropsOf<P> = P extends Prototype<infer Props, AnyStatics, infer _Statics>
   ? Props
-  : P extends Prototype<infer Props, AnyStatics>
-    ? Props
-    : never;
+  : never;
 
 /**
  * Constructable View handle from {@link Prototype.Tag}.
@@ -167,11 +166,18 @@ export type ViewHandle<
 export type Type<T> = T extends { readonly Type: infer P } ? P : never;
 
 /**
- * Props (type) + static accessors (runtime) before minting a {@link Tag}.
+ * Props + statics + a **Constraint type param** that statics must satisfy.
+ *
+ * - `Props` — component props (accumulated)
+ * - `Constraint` — type param for the static requirement (e.g. {@link WithSize}); default `{}`
+ * - `Statics` — runtime statics; must extend `Constraint`
  *
  * @example
  * ```ts
- * const Card = View.Prototype<{ readonly tag: ViewTag }>()({ size: "card" as const })
+ * // Constraint type param = WithSize<"card">
+ * const Card = View.Prototype<View.ViewProps, View.WithSize<"card">>()({
+ *   size: "card" as const,
+ * })
  * class ScheduleCard extends Card.Tag<ScheduleCard>()("hyperlink/view/schedule-card") {}
  * ```
  *
@@ -179,24 +185,21 @@ export type Type<T> = T extends { readonly Type: infer P } ? P : never;
  */
 export interface Prototype<
   in out Props extends object,
-  out Statics extends AnyStatics = {},
+  out Constraint extends AnyStatics = {},
+  out Statics extends Constraint = Constraint,
 > {
   readonly statics: Statics;
   /**
    * Extend props (type arg) then merge static accessors (value).
-   * In `.tsx` use a trailing comma / type alias so `<…>` is not JSX:
-   * `proto.Prototype<{ sel?: boolean }>()({ … })`.
-   *
-   * Merged Props/Statics are flattened so hovers stay readable (no `&` nests).
-   * If the merge satisfies {@link WithSize}, the result is a {@link SizedPrototype}.
+   * Constraint is preserved; merge must still satisfy it.
    */
   readonly Prototype: <NewProps extends object = {},>() => <
     const NewStatics extends AnyStatics = {},
   >(
     statics?: NewStatics,
-  ) => Flat<Statics & NewStatics> extends WithSize
-    ? SizedPrototype<Flat<Props & NewProps>, Flat<Statics & NewStatics>>
-    : Prototype<Flat<Props & NewProps>, Flat<Statics & NewStatics>>;
+  ) => Flat<Statics & NewStatics> extends Constraint
+    ? Prototype<Flat<Props & NewProps>, Constraint, Flat<Statics & NewStatics>>
+    : never;
   /**
    * Mint a Context.Service **class** handle.
    * `Layer.succeed(Tag, (props) => …)` types `props` as this prototype’s Props.
@@ -208,37 +211,13 @@ export interface Prototype<
   };
 }
 
-/**
- * Prototype whose statics **must** satisfy {@link WithSize}.
- * Extending keeps the restriction; {@link Tag} always carries `size` for {@link bind}.
- *
- * @public
- */
-export interface SizedPrototype<
-  in out Props extends object,
-  out Statics extends WithSize,
-> {
-  readonly statics: Statics;
-  readonly Prototype: <NewProps extends object = {},>() => <
-    const NewStatics extends AnyStatics = {},
-  >(
-    statics?: NewStatics,
-  ) => Flat<Statics & NewStatics> extends infer S extends WithSize
-    ? SizedPrototype<Flat<Props & NewProps>, S>
-    : never;
-  readonly Tag: <Self,>() => <const K extends string>(
-    key: K,
-  ) => Context.ServiceClass<Self, K, View<Props>> & Flat<Statics> & {
-    readonly Type: Props
-  };
-}
-
 const makePrototype = <
   Props extends object,
-  Statics extends AnyStatics,
+  Constraint extends AnyStatics,
+  Statics extends Constraint,
 >(
   statics: Statics,
-): Prototype<Props, Statics> => ({
+): Prototype<Props, Constraint, Statics> => ({
   statics,
   Prototype:
     <NewProps extends object = {},>() =>
@@ -246,9 +225,9 @@ const makePrototype = <
       makePrototype({
         ...statics,
         ...(next ?? ({} as NewStatics)),
-      }) as Flat<Statics & NewStatics> extends WithSize
-        ? SizedPrototype<Flat<Props & NewProps>, Flat<Statics & NewStatics>>
-        : Prototype<Flat<Props & NewProps>, Flat<Statics & NewStatics>>,
+      }) as Flat<Statics & NewStatics> extends Constraint
+        ? Prototype<Flat<Props & NewProps>, Constraint, Flat<Statics & NewStatics>>
+        : never,
   Tag:
     <Self,>() =>
     <const K extends string>(key: K) => {
@@ -261,30 +240,25 @@ const makePrototype = <
 });
 
 /**
- * Start a prototype chain — props via type arg, statics via value:
- * `View.Prototype<Props>()(statics?)`.
+ * Start a prototype chain:
+ * `View.Prototype<Props, Constraint>()(statics)`.
  *
- * If `statics` satisfies {@link WithSize}, the result is a {@link SizedPrototype}
- * (size required; safe for {@link bind}).
+ * **Constraint** is a type parameter — statics must extend it (default `{}` = none).
  *
  * @example
  * ```ts
- * const Base = View.Prototype<{ readonly tag: ViewTag }>()({ version: 1 as const })
- * const Card = Base.Prototype()({ size: "card" as const }) // SizedPrototype
+ * View.Prototype<{ name: string }>()()  // no constraint
+ * View.Prototype<ViewProps, WithSize<"card">>()({ size: "card" as const })
  * ```
  *
  * @public
  */
 export const Prototype =
-  <Props extends object = {},>() =>
-  <const Statics extends AnyStatics = {},>(
+  <Props extends object = {}, Constraint extends AnyStatics = {}>() =>
+  <const Statics extends Constraint = Constraint>(
     statics?: Statics,
-  ): Statics extends WithSize
-    ? SizedPrototype<Props, Statics>
-    : Prototype<Props, Statics> =>
-    makePrototype<Props, Statics>((statics ?? {}) as Statics) as Statics extends WithSize
-      ? SizedPrototype<Props, Statics>
-      : Prototype<Props, Statics>;
+  ): Prototype<Props, Constraint, Statics> =>
+    makePrototype<Props, Constraint, Statics>((statics ?? {}) as Statics);
 
 /**
  * Naked View Tag — DI component handle with **no** size chrome.
@@ -318,18 +292,24 @@ export type AnyView<Self extends object = object> = Context.Service<
 };
 
 /**
- * Size-chrome add-ons — {@link SizedPrototype} narrowings (`Statics extends WithSize`).
+ * Size-chrome add-ons — `Prototype<ViewProps, WithSize<"…">>`.
  * Matcher components are **not** these — use `View.react(…).Card` or {@link useMatch}.
  *
  * @public
  */
-export const Card = Prototype<ViewProps>()({ size: "card" as const });
+export const Card = Prototype<ViewProps, WithSize<"card">>()({
+  size: "card" as const,
+});
 
 /** @public */
-export const Detail = Prototype<ViewProps>()({ size: "detail" as const });
+export const Detail = Prototype<ViewProps, WithSize<"detail">>()({
+  size: "detail" as const,
+});
 
 /** @public */
-export const Page = Prototype<ViewProps>()({ size: "page" as const });
+export const Page = Prototype<ViewProps, WithSize<"page">>()({
+  size: "page" as const,
+});
 
 // =============================================================================
 // Registry service

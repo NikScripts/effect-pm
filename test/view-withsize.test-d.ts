@@ -1,37 +1,50 @@
 /**
- * WithSize is a real restriction: SizedPrototype + bind require size.
+ * Constraint is a type param: Prototype<Props, Constraint>()(statics).
  */
 import { expectTypeOf } from "vitest";
 import * as View from "../src/ui/View";
 
-// Stamping size on Prototype → SizedPrototype (constraint applied)
-const CardProto = View.Prototype<View.ViewProps>()({ size: "card" as const });
+// TYPE PARAM = the constraint
+const CardProto = View.Prototype<View.ViewProps, View.WithSize<"card">>()({
+  size: "card" as const,
+});
 expectTypeOf(CardProto).toEqualTypeOf<
-  View.SizedPrototype<View.ViewProps, { readonly size: "card" }>
+  View.Prototype<View.ViewProps, View.WithSize<"card">, { readonly size: "card" }>
 >();
 
-// No size → open Prototype (not SizedPrototype)
+// No constraint type param (defaults {})
 const Naked = View.Prototype<{ readonly name: string }>()();
-expectTypeOf(Naked).toEqualTypeOf<View.Prototype<{ readonly name: string }, {}>>();
+expectTypeOf(Naked).toEqualTypeOf<
+  View.Prototype<{ readonly name: string }, {}, {}>
+>();
 
-// Shipped add-ons
+// Missing size while Constraint = WithSize → error
+// @ts-expect-error statics must extend WithSize<"card">
+View.Prototype<View.ViewProps, View.WithSize<"card">>()({});
+
+// Shipped add-ons use the Constraint type param
 expectTypeOf(View.Card).toEqualTypeOf<
-  View.SizedPrototype<View.ViewProps, { readonly size: "card" }>
+  View.Prototype<View.ViewProps, View.WithSize<"card">, { readonly size: "card" }>
 >();
 expectTypeOf(View.Detail).toEqualTypeOf<
-  View.SizedPrototype<View.ViewProps, { readonly size: "detail" }>
+  View.Prototype<
+    View.ViewProps,
+    View.WithSize<"detail">,
+    { readonly size: "detail" }
+  >
 >();
 expectTypeOf(View.Page).toEqualTypeOf<
-  View.SizedPrototype<View.ViewProps, { readonly size: "page" }>
+  View.Prototype<View.ViewProps, View.WithSize<"page">, { readonly size: "page" }>
 >();
 
-// Extending keeps SizedPrototype + flat statics
+// Extend keeps Constraint type param
 const PageProto = View.Page.Prototype()({
   spec: { kind: "app/queue" } as const,
 });
 expectTypeOf(PageProto).toEqualTypeOf<
-  View.SizedPrototype<
+  View.Prototype<
     View.ViewProps,
+    View.WithSize<"page">,
     {
       readonly size: "page";
       readonly spec: { readonly kind: "app/queue" };
@@ -42,12 +55,10 @@ expectTypeOf(PageProto).toEqualTypeOf<
 class PoolPage extends PageProto.Tag<PoolPage>()("app/view/pool-page") {}
 expectTypeOf(PoolPage.size).toEqualTypeOf<"page">();
 
-// bind accepts sized Tag
 const _ok = View.bind("app/queue", PoolPage);
 void _ok;
 
-// bind rejects Tag with no size
 const GreeterProto = View.Prototype<{ readonly name: string }>()();
 class Greeter extends GreeterProto.Tag<Greeter>()("app/view/greeter") {}
-// @ts-expect-error Greeter has no size — WithSize required
+// @ts-expect-error Greeter has no size — bind requires WithSize
 View.bind("app/queue", Greeter);
