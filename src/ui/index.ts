@@ -19,5 +19,15 @@ export * from "./cache";
 export * from "./now";
 export * from "./memberKind";
 export * from "./widgetRegistry";
+/** Keyed Spec-based view registry (`View.Tag` / `View.react`) — prefer `import * as View`. */
+export * as View from "./View";
+/** Parent-owned Group navigation (memory / history) for View compose. */
+export * as Navigator from "./Navigator";
+/** Shared Group card View handle + contribution Layer (no platform TSX). */
+export * as GroupView from "./GroupView";
+/** Shared WorkPool View handles + contribution Layer (no platform TSX). */
+export * as WorkPoolView from "./WorkPoolView";
+/** Merged Dashboard View contribution Layers (no platform TSX). */
+export * as DashboardViews from "./DashboardViews";
 /** Provider only — renderers expose a typed `useWidgets` (web cards vs TUI cells). */
 export { WidgetsProvider } from "./widgetsContext";

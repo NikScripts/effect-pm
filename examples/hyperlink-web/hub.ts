@@ -4,8 +4,8 @@
  * The review fixture for the shipped `hyperlink-ts/web` widgets — one of each **unique**
  * thing the dashboard renders: a nested group, a queue, a scheduled daemon (the WNBA live-score
  * poller), and an HttpApiClient nest fixture (`ScoresApi`). Every resource is **nodeed remotely** across three
- * nodes (served by `server.ts`); the browser reaches each via `Hyperlink.http` (vite proxies
- * `/rpc` / `/live` / `/stats`), which is what lights up the top-right **node die**. `ScoresApi` is a
+ * nodes (served by `server.ts`); the browser reaches each via `Hyperlink.ws` (vite proxies
+ * `/rpc` / `/live` / `/stats` with `ws: true`), which is what lights up the top-right **node die**. `ScoresApi` is a
  * nest-shaped fixture (`Gate.httpApiClientKind` + full `metrics` nest) served on
  * `WnbaNode`. `ScoresDb` is a dependency resource the box-score queue's readiness depends on
  * (`readinessOf`) — when its (simulated) connection blips, the queue cascades to degraded,
@@ -29,15 +29,24 @@ const session = Schema.Struct({ id: Schema.String, user: Schema.String });
 // Three remote machines (see `server.ts`): the box-score queue on `WnbaNode`, the live-score poller
 // on `LiveNode`, the play-by-play queue on `StatsNode` — so the dashboard's node die shows three
 // pips (a pyramid).
-/** The three nodes' ports (one process, three servers — see `server.ts`). Exported so the node urls
- *  here and the servers stay in sync. Each node carries its server-side url so `Hyperlink.peersLayer`
- *  can reach its peers; the browser overrides it with a vite-proxied path (below). */
+/** The three nodes' ports (one process, three servers — see `server.ts`). Exported so the node
+ *  endpoints here and the servers stay in sync. */
 export const HOST_PORTS = { wnba: 7780, live: 7781, stats: 7782 } as const;
-const rpcUrl = (port: number) => `http://127.0.0.1:${port}/rpc`;
 
-export class WnbaNode extends Node.Tag<WnbaNode>()("wnba/scores", { url: rpcUrl(HOST_PORTS.wnba) }) {}
-export class LiveNode extends Node.Tag<LiveNode>()("wnba/live", { url: rpcUrl(HOST_PORTS.live) }) {}
-export class StatsNode extends Node.Tag<StatsNode>()("wnba/stats", { url: rpcUrl(HOST_PORTS.stats) }) {}
+/** Absolute `{ http, ws }` endpoints for one host port — the multi-protocol Node shorthand.
+ *  Peers dial these; the browser still uses same-origin `Hyperlink.ws({ url: "/rpc" | … })`
+ *  overrides below (vite proxy) so it never opens `127.0.0.1` from the page origin. */
+const hostEndpoints = (port: number) =>
+  ({
+    http: `http://127.0.0.1:${port}/rpc`,
+    ws: `ws://127.0.0.1:${port}/rpc`,
+  }) as const;
+
+// One identity each, both wire protocols declared (P3 set-membership). Served today via
+// `Node.wsServer`; peers use `layerPeerProtocol(protocolWebsocket)`.
+export class WnbaNode extends Node.Tag<WnbaNode>()("wnba/scores", hostEndpoints(HOST_PORTS.wnba)) {}
+export class LiveNode extends Node.Tag<LiveNode>()("wnba/live", hostEndpoints(HOST_PORTS.live)) {}
+export class StatsNode extends Node.Tag<StatsNode>()("wnba/stats", hostEndpoints(HOST_PORTS.stats)) {}
 
 // A **multi-node** serviceKey: the SAME WorkerPool served on all three nodes — one class, three
 // instances. `active` is this instance's own count (a leaf field peers can read); `fleetActive` is the
@@ -170,13 +179,16 @@ export class ServicesHub extends Group.Tag<ServicesHub>("hub/ServicesHub")({
 // WebSocket per node instead — vite proxies these same-origin ws paths to each server (ws: true).
 // A `"/path"` url resolves against the page origin (browser host + http/https→ws/wss), lazily — so
 // `hub.ts` is safe to import from the Node server too (nothing reads `location` at load).
+// Construct overrides *before* Hyperlink.client below — connectLayer registers each dial in the
+// per-Node memo so addressed `Hyperlink.client` reuses `/rpc` instead of the tag's 127.0.0.1 (F5).
 const wnbaTransport = Hyperlink.ws(WnbaNode, { url: "/rpc" });
 const liveTransport = Hyperlink.ws(LiveNode, { url: "/live/rpc" });
 const statsTransport = Hyperlink.ws(StatsNode, { url: "/stats/rpc" });
 
-// Expose each node itself in the runtime (not only the HyperService clients): the node-status die reads
-// `node.status` over each node's transport, so it needs the node in context. Each transport is one
-// const (shared by reference), so the client + the die reuse a single connection per node.
+// Expose each node itself in the runtime (not only the HyperService clients): the node-status die /
+// HealthBoard `yield*` these handles. `Layer.provide(transport)` on a client does **not** re-export
+// the Node into the merged layer — transports must sit in `mergeAll` for the die. Each transport is
+// one const (shared by reference), so the client + the die reuse a single connection per node.
 const appLayer = Layer.mergeAll(
   wnbaTransport,
   liveTransport,
@@ -198,5 +210,10 @@ const appLayer = Layer.mergeAll(
   Hyperlink.client(FetchGate, LiveNode).pipe(Layer.provide(liveTransport)),
 );
 
-/** One reactive runtime providing every HyperService in the hub. */
-export const runtime = Atom.runtime(appLayer);
+/** One reactive runtime providing every HyperService in the hub.
+ *  Soft verify (`"status"`): ScoresDb intentionally blips readiness; deep `"reject"` would
+ *  fail Layer build during those windows and take the whole dashboard down. Reachability still
+ *  runs; failures are ignored so degraded cards stay mountable. */
+export const runtime = Atom.runtime(
+  appLayer.pipe(Layer.provide(Hyperlink.clientVerify("status"))),
+);

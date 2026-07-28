@@ -23,7 +23,7 @@ import * as Gate from "../../src/Gate";
 import { serve as daemonEntry } from "../../src/Daemon";
 import { HistoryStore } from "../../src/HistoryStore";
 import * as Logs from "../../src/Logs";
-import { Polling } from "../../src/Polling";
+import * as Polling from "../../src/Polling";
 import * as Store from "../../src/Store";
 import * as WorkPool from "../../src/WorkPool";
 import * as Daemon from "../../src/Daemon";
@@ -471,18 +471,20 @@ const statsNodeProgram = Effect.gen(function* () {
 }).pipe(Effect.provide(statsNode));
 
 const program = Effect.gen(function* () {
-  yield* Effect.forkScoped(wnbaNodeProgram);
-  yield* Effect.forkScoped(liveNodeProgram);
-  yield* Effect.forkScoped(statsNodeProgram);
   yield* Effect.logInfo(
     `wnba :${WNBA_PORT} (BoxScoreQueue) · live :${LIVE_PORT} (LiveScorePoller) · stats :${STATS_PORT} (PlayByPlayQueue)`,
   );
   // WorkerPool (nodeless, `distributed` set) is served on all three nodes with `peersLayer`, so a client
   // hitting any node gets `fleetActive` = that node's `active` + its peers' (5 + 3 + 4 = 12); the peer
-  // connections are established when each `peersLayer` builds above. (The fold is proven end-to-end in
+  // connections are established when each `peersLayer` builds. (The fold is proven end-to-end in
   // `test/multi-node-peers-http.test.ts`.)
   yield* Effect.logInfo("WorkerPool: multi-node, served on wnba/live/stats (fleetActive folds active)");
-  return yield* Effect.never;
+  // Run the three node programs concurrently (each already `Effect.provide`s its own
+  // `Node.wsServer` + `NodeHttpServer`). Prefer `Effect.all` over `forkScoped` here so each
+  // node's Layer scope stays open for the process lifetime (forkScoped was exiting without bind).
+  yield* Effect.all([wnbaNodeProgram, liveNodeProgram, statsNodeProgram], {
+    concurrency: "unbounded",
+  });
 });
 
 NodeRuntime.runMain(program.pipe(Effect.scoped));

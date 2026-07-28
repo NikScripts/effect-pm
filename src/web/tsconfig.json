@@ -92,7 +92,18 @@
     "../ui/**/*.tsx",
     // Covers ui + web + tui base registries; kept out of root tsconfig (strict Effect rules).
     "../../test/widget-registry.test.ts",
-    "../tui/cellWidgets.tsx"
+    "../../test/ui-view.test.ts",
+    "../../test/ui-view.test-d.ts",
+    "../../test/ui-dashboard-views.test.ts",
+    "../../test/ui-workpool-view.test.ts",
+    "../../test/view-requirement.test-d.ts",
+    "../../test/view-proto-infer.test-d.ts",
+    "../../test/view-effect-service-poc.test-d.ts",
+    "../../examples/forms/view/**/*.ts",
+    "../tui/cellWidgets.tsx",
+    // DashboardViews skins (imported by ui-dashboard-views tests).
+    "../tui/DashboardViews.tsx",
+    "../tui/focusWidgets.tsx"
   ],
   "exclude": ["../../node_modules", "../../dist"]
 }

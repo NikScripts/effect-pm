@@ -90,5 +90,36 @@ export default [
       // The new JSX transform makes `import React` unnecessary in scope.
       "react/react-in-jsx-scope": "off"
     }
+  },
+  // F5 split-dial: dashboard data must not re-dial Nodes from stamped tag urls (loud-failures §10).
+  {
+    files: ["src/ui/**/*.{ts,tsx}", "src/web/**/*.{ts,tsx}", "src/tui/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "../Node",
+              importNames: ["connect", "connectHttp", "connectSocket", "connectIpc"],
+              message:
+                "F5 split-dial: provide Hyperlink.ws / Node.connect* in Atom.runtime and yield* the Node — do not re-dial from the tag url (docs/handoffs/loud-failures-design.md §10)."
+            },
+            {
+              name: "../../Node",
+              importNames: ["connect", "connectHttp", "connectSocket", "connectIpc"],
+              message:
+                "F5 split-dial: provide Hyperlink.ws / Node.connect* in Atom.runtime and yield* the Node — do not re-dial from the tag url (docs/handoffs/loud-failures-design.md §10)."
+            },
+            {
+              name: "hyperlink-ts/Node",
+              importNames: ["connect", "connectHttp", "connectSocket", "connectIpc"],
+              message:
+                "F5 split-dial: provide Hyperlink.ws / Node.connect* in Atom.runtime and yield* the Node — do not re-dial from the tag url (docs/handoffs/loud-failures-design.md §10)."
+            }
+          ]
+        }
+      ]
+    }
   }
 ];

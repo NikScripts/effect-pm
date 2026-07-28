@@ -40,14 +40,6 @@ import {
   type QueueTag,
   type ScheduleEntry,
   type NodeRef,
-  isApiTag,
-  isPriorityTag,
-  isFleetHealthTag,
-  isTelemetryTag,
-  isShardMapTag,
-  isGateTag,
-  isDaemonTag,
-  isQueueTag,
   nodesOf,
   leafTags,
   queueLeaves,
@@ -56,21 +48,14 @@ import {
 } from "../ui/data";
 import { dateFromMillis, fmtClock, fmtDayLabel, millisFromLocalInput, now, startOfDayMillis, toLocalInput } from "../ui/now";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
-import { memberKindOf } from "../ui/memberKind";
+import * as Navigator from "../ui/Navigator";
+import * as View from "../ui/View";
 import { kindOf as hyperlinkKindOf, kind as hyperlinkKind } from "../Hyperlink";
-import { kind as queueKind } from "../WorkPool";
-import { priorityKind } from "../WorkPool";
-import { kind as fleetHealthKind, type NodeReport } from "../FleetHealth";
-import { kind as telemetryKind, type MetricDatum } from "../Telemetry";
-import { kind as shardMapKind } from "../ShardMap";
-import { kind as gateKind } from "../Gate";
-import { kind as daemonKind } from "../Daemon";
-import { httpApiClientKind as apiKind } from "../Gate";
+import type { NodeReport } from "../FleetHealth";
+import type { MetricDatum } from "../Telemetry";
 import {
-  forKind,
   isLeafTag,
   widgetFor,
-  withEntries,
   type LeafTag,
   type WidgetRegistry,
 } from "../ui/widgetRegistry";
@@ -169,13 +154,39 @@ const PrioRow = (props: { readonly p: keyof typeof PRIO; readonly count: number;
   </div>
 );
 
+/** Shared class for a drillable card — button when activatable, div when View parent owns open. */
+const DRILL_CARD =
+  "relative flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring focus-visible:border-ring focus-visible:outline-none";
+
+/** Button when `onOpen` is set; presentational `div` when parent (View Cell) owns activation. */
+const DrillRoot = (props: {
+  readonly onOpen?: () => void;
+  readonly className: string;
+  readonly style?: React.CSSProperties;
+  readonly children: React.ReactNode;
+}): React.ReactElement => {
+  if (props.onOpen === undefined) {
+    return (
+      <div style={props.style} className={props.className}>
+        {props.children}
+      </div>
+    );
+  }
+  return (
+    <button type="button" onClick={props.onOpen} style={props.style} className={props.className}>
+      {props.children}
+    </button>
+  );
+};
+
 /** A queue as a grid card. Reads its own status straight from the tag. */
 export const QueueCard = (props: {
   readonly tag: QueueTag;
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
   readonly selected?: boolean;
-  readonly onOpen: (tag: QueueTag) => void;
+  /** When omitted, renders presentational chrome (View kit / parent owns activation). */
+  readonly onOpen?: (tag: QueueTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   const r = useAtomValue(useQueueBundle(props.tag).status);
@@ -183,18 +194,14 @@ export const QueueCard = (props: {
   const sizes = s?.sizes ?? { high: 0, normal: 0, low: 0 };
   const pending = sizes.high + sizes.normal + sizes.low;
   const max = Math.max(sizes.high, sizes.normal, sizes.low, 1);
-  return (
-    <button
-      type="button"
-      onClick={() => props.onOpen(props.tag)}
-      style={vt}
-      className={cn(
-        // flex-col so the content stays top-aligned when the grid stretches the card to the row
-        // height — a bare <button> vertically centres its content in the slack.
-        "relative flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring",
-        props.selected === true && "border-primary",
-      )}
-    >
+  const className = cn(
+    // flex-col so the content stays top-aligned when the grid stretches the card to the row
+    // height — a bare <button> vertically centres its content in the slack.
+    "relative flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring",
+    props.selected === true && "border-primary",
+  );
+  const body = (
+    <>
       <div className="mb-2 flex items-center gap-2">
         <strong className="flex-1 truncate">{props.name}</strong>
         <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
@@ -209,7 +216,50 @@ export const QueueCard = (props: {
         <PrioRow p="low" count={sizes.low} max={max} />
       </div>
       <DegradedOverlay tag={props.tag} />
+    </>
+  );
+  if (props.onOpen === undefined) {
+    return (
+      <div style={vt} className={className}>
+        {body}
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => props.onOpen?.(props.tag)}
+      style={vt}
+      className={className}
+    >
+      {body}
     </button>
+  );
+};
+
+/**
+ * WorkPool detail panel (stats / chart / controls) — nav chrome stays with the parent
+ * (View W9 / Dashboard shell).
+ *
+ * @public
+ */
+export const QueueDetailPanel = (props: {
+  readonly tag: QueueTag;
+}): React.ReactElement => {
+  const bundle = useQueueBundle(props.tag);
+  return (
+    <>
+      <HyperlinkReadinessBanner tag={props.tag} />
+      <QueueStats bundle={bundle} />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="min-w-0 sm:flex-1">
+          <div className="overflow-hidden rounded-xl border bg-card p-3">
+            <MetricChart bundle={bundle} />
+          </div>
+        </div>
+        <QueueControls bundle={bundle} />
+      </div>
+    </>
   );
 };
 
@@ -240,7 +290,8 @@ export const PriorityCard = (props: {
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
   readonly selected?: boolean;
-  readonly onOpen: (tag: PriorityTag) => void;
+  /** When omitted, presentational (View kit / parent owns activation). */
+  readonly onOpen?: (tag: PriorityTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   const r = useAtomValue(usePriorityBundle(props.tag).status);
@@ -250,12 +301,11 @@ export const PriorityCard = (props: {
   const max = Math.max(1, ...lanes.map(([, n]) => n));
   const paused = s?.paused === true;
   return (
-    <button
-      type="button"
-      onClick={() => props.onOpen(props.tag)}
+    <DrillRoot
+      onOpen={props.onOpen === undefined ? undefined : () => props.onOpen?.(props.tag)}
       style={vt}
       className={cn(
-        "relative flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring",
+        DRILL_CARD,
         props.selected === true && "border-primary",
       )}
     >
@@ -277,7 +327,7 @@ export const PriorityCard = (props: {
         )}
       </div>
       <DegradedOverlay tag={props.tag} />
-    </button>
+    </DrillRoot>
   );
 };
 
@@ -317,9 +367,14 @@ export const GroupCard = (props: {
   readonly node: GroupNode;
   /** Display name — the member key under which the parent group holds this subgroup. */
   readonly name: string;
-  readonly onOpen: (g: GroupNode) => void;
+  /**
+   * Optional — prefer {@link Navigator} (`useNavigator().open`). Kept for shells that
+   * have not mounted a Navigator Provider yet.
+   */
+  readonly onOpen?: (g: GroupNode) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`grp-${props.node.key}`);
+  const nav = Navigator.useNavigatorOption();
   const members = Object.values(Group.members(props.node));
   const leaves = queueLeaves(props.node).slice(0, 4);
   const subs = members.filter((m): m is GroupNode => Group.isGroup(m));
@@ -342,10 +397,17 @@ export const GroupCard = (props: {
     });
   }, []);
   const degraded = nodes.reduce((sum, node) => sum + (counts.get(node.id) ?? 0), 0);
+  const open = (): void => {
+    if (nav !== null) {
+      nav.open(props.node);
+      return;
+    }
+    props.onOpen?.(props.node);
+  };
   return (
     <button
       type="button"
-      onClick={() => props.onOpen(props.node)}
+      onClick={open}
       style={vt}
       className="relative flex flex-col rounded-xl border border-[#06b6d455] bg-card p-3 text-left transition-colors hover:border-ring"
     >
@@ -390,15 +452,38 @@ export const Cell = (props: {
   readonly onOpenGroup: (g: GroupNode) => void;
 }): React.ReactElement => {
   const registry = useWidgets();
-  // Same bucket as TUI (`memberKindOf`); leaves still resolve via the key→kind registry.
-  if (memberKindOf(props.member) === "group" && Group.isGroup(props.member)) {
+  const nav = Navigator.useNavigatorOption();
+  const isGroup = Group.isGroup(props.member);
+  const leaf = isLeafTag(props.member) ? props.member : null;
+  const viewTag = isGroup ? props.member : leaf;
+  const hasViewCard = View.useHasMatch(viewTag, View.ViewKind.Card());
+  const Match = View.useMatch();
+  // Group + leaf share kit Card when a Group family skin is on the layer (lock B).
+  if (hasViewCard && viewTag !== null) {
+    return (
+      <button
+        type="button"
+        className="contents text-left"
+        onClick={() => {
+          if (nav !== null) {
+            nav.open(viewTag);
+            return;
+          }
+          if (isGroup) props.onOpenGroup(props.member);
+          else if (leaf !== null) props.onOpenLeaf(leaf);
+        }}
+      >
+        <Match.Card tag={viewTag} name={props.name} />
+      </button>
+    );
+  }
+  if (isGroup) {
     return <GroupCard node={props.member} name={props.name} onOpen={props.onOpenGroup} />;
   }
   // A non-group member is a HyperService tag; resolve its widget by key → kind → fallback.
-  if (!isLeafTag(props.member)) return <></>;
-  const tag = props.member;
-  const Widget = widgetFor(registry, tag.key, hyperlinkKindOf(tag) ?? hyperlinkKind);
-  return <Widget tag={tag} name={props.name} onOpen={props.onOpenLeaf} />;
+  if (leaf === null) return <></>;
+  const Widget = widgetFor(registry, leaf.key, hyperlinkKindOf(leaf) ?? hyperlinkKind);
+  return <Widget tag={leaf} name={props.name} onOpen={props.onOpenLeaf} />;
 };
 
 const DegradedOverlayInner = (props: {
@@ -863,17 +948,17 @@ export const DaemonCard = (props: {
   readonly tag: DaemonTag;
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
-  readonly onOpen: (t: DaemonTag) => void;
+  /** When omitted, presentational (View kit / parent owns activation). */
+  readonly onOpen?: (t: DaemonTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   const r = useAtomValue(useDaemonBundle(props.tag).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   return (
-    <button
-      type="button"
-      onClick={() => props.onOpen(props.tag)}
+    <DrillRoot
+      onOpen={props.onOpen === undefined ? undefined : () => props.onOpen?.(props.tag)}
       style={vt}
-      className="relative flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring"
+      className={DRILL_CARD}
     >
       <div className="mb-2 flex items-center gap-2">
         <span>⚙</span>
@@ -885,7 +970,7 @@ export const DaemonCard = (props: {
         <span><strong className="text-foreground">{s?.activeInstances ?? 0}</strong> active</span>
       </div>
       <DegradedOverlay tag={props.tag} />
-    </button>
+    </DrillRoot>
   );
 };
 
@@ -1484,7 +1569,13 @@ export const Deck = (props: {
  */
 export const DetailScreen = (props: {
   readonly title: string;
-  readonly onBack: () => void;
+  /** Omit when the shell Outlet owns back (View compose / Navigator). */
+  readonly onBack?: () => void;
+  /**
+   * When `false`, render body only (Deck + readiness) — shell owns title/back.
+   * Default `true` for standalone Dashboard detail routes.
+   */
+  readonly chrome?: boolean;
   /** View-transition key — pass `res-${tag.key}` so the card↔detail morph matches the grid. */
   readonly vtKey: string;
   readonly icon?: React.ReactNode;
@@ -1497,15 +1588,22 @@ export const DetailScreen = (props: {
   readonly pages?: ReadonlyArray<React.ReactNode>;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(props.vtKey);
+  const showChrome = props.chrome !== false;
   return (
     <div className="flex h-[100dvh] flex-col gap-3 overflow-hidden safe-area landscape:h-auto landscape:min-h-[100dvh] landscape:overflow-visible" style={vt}>
-      <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
-        <strong className="flex-1 truncate text-base">
-          {props.icon !== undefined ? <>{props.icon} </> : null}{props.title}
-        </strong>
-        {props.badge}
-      </div>
+      {showChrome ? (
+        <div className="flex items-center gap-2">
+          {props.onBack !== undefined ? (
+            <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
+          ) : null}
+          <strong className="flex-1 truncate text-base">
+            {props.icon !== undefined ? <>{props.icon} </> : null}{props.title}
+          </strong>
+          {props.badge}
+        </div>
+      ) : props.badge !== undefined ? (
+        <div className="flex justify-end">{props.badge}</div>
+      ) : null}
       {props.readinessTag !== undefined ? <HyperlinkReadinessBanner tag={props.readinessTag} /> : null}
       <Deck fill sections={props.sections} pages={props.pages} />
     </div>
@@ -1525,7 +1623,8 @@ export const ApiCard = (props: {
   readonly tag: ApiTag;
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
-  readonly onOpen: (t: ApiTag) => void;
+  /** When omitted, presentational (View kit / parent owns activation). */
+  readonly onOpen?: (t: ApiTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   const bundle = useApiBundle(props.tag);
@@ -1582,7 +1681,7 @@ export const ApiCard = (props: {
     );
   return (
     <Deck
-      onOpen={() => props.onOpen(props.tag)}
+      onOpen={props.onOpen === undefined ? undefined : () => props.onOpen?.(props.tag)}
       style={vt}
       pages={[page1, page2]}
       overlay={<DegradedOverlay tag={props.tag} />}
@@ -1800,9 +1899,34 @@ export const ApiEndpointTable = (props: { readonly bundle: ApiBundle }): React.R
 // Nodes are read straight off the tags (`nodesOf`): a dot per node the group's HyperServices are bound
 // to. Each dot's colour + popover come from that node's node status (over its own transport).
 
-/** A node's overall colour: grey while connecting, red down, amber degraded, green ok. */
+/**
+ * F5 — how a node-status atom is reading right now. Pending must never be painted as healthy;
+ * Failed must never look like "still connecting…" (that hid the split-dial bug for weeks).
+ */
+type NodeConnState =
+  | { readonly _tag: "Connecting" }
+  | { readonly _tag: "Failed" }
+  | { readonly _tag: "Ready"; readonly status: NodeStatusValue };
+
+const nodeConnState = (
+  r: AsyncResult.AsyncResult<NodeStatusValue, unknown>,
+): NodeConnState =>
+  AsyncResult.isSuccess(r)
+    ? { _tag: "Ready", status: r.value }
+    : AsyncResult.isFailure(r)
+      ? { _tag: "Failed" }
+      : { _tag: "Connecting" };
+
+/** A node's overall colour: grey while connecting, red failed/down, amber degraded, green ok. */
 const nodeColor = (s: NodeStatusValue | undefined): string =>
   s === undefined ? "#64748b" : !s.up ? "#ef4444" : s.status === "degraded" ? "#eab308" : "#22c55e";
+
+const nodeConnColor = (state: NodeConnState): string =>
+  state._tag === "Connecting"
+    ? "#64748b"
+    : state._tag === "Failed"
+      ? "#ef4444"
+      : nodeColor(state.status);
 
 /** ~3× the 2s node status heartbeat: no fresh status in this long → the node's stream is dead and
  *  the shown values are frozen (last-known, not live). */
@@ -1888,23 +2012,26 @@ const pipRows = <A,>(items: ReadonlyArray<A>, rows: ReadonlyArray<number>): Read
   });
 };
 
-/** One node's pip — a coloured dot, colour from its status snapshot. */
+/** One node's pip — a coloured dot, colour from its status snapshot (or failed/connecting). */
 const NodePip = (props: {
   readonly node: NodeRef;
   readonly size: string;
 }): React.ReactElement => {
   const r = useAtomValue(useNodeBundle(props.node).status);
-  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const state = nodeConnState(r);
+  const s = state._tag === "Ready" ? state.status : undefined;
   const stale = useStale(s?.uptimeMillis);
   React.useEffect(() => {
     if (AsyncResult.isFailure(r)) dlog("node", props.node.id, "FAILURE", Cause.pretty(r.cause));
     else dlog("node", props.node.id, asyncTag(r));
   }, [r, props.node.id]);
   // stale → a pulsing grey pip, so a lost node reads as "not responding" instead of its frozen colour.
+  // Failed stays red (not grey) so a broken dial is visible on the die.
+  const color = state._tag === "Failed" ? "#ef4444" : stale ? "#64748b" : nodeConnColor(state);
   return (
     <span
-      className={cn("rounded-full", stale && "animate-pulse")}
-      style={{ width: props.size, height: props.size, backgroundColor: stale ? "#64748b" : nodeColor(s) }}
+      className={cn("rounded-full", (stale || state._tag === "Connecting") && "animate-pulse")}
+      style={{ width: props.size, height: props.size, backgroundColor: color }}
     />
   );
 };
@@ -1989,19 +2116,25 @@ const HyperlinkReadinessRow = (props: {
   );
 };
 
-/** One node's card on the health board — status dot + name + stats (uptime · ready/total · resource
+/** One node's card on the health board — status dot + name + stats (uptime · ready/total · service
  *  count), then its full service roster (each tappable). Tap the header for the node's full screen.
- *  Pure: the status value is read once by {@link HealthBoard} and passed in. */
+ *  Pure: the connection state is read once by {@link HealthBoard} and passed in. */
 const NodeHealthCard = (props: {
   readonly node: NodeRef;
-  readonly s: NodeStatusValue | undefined;
+  readonly state: NodeConnState;
   readonly history: ReadonlyArray<number>;
   readonly onOpen: () => void;
   readonly onOpenHyperlink: (serviceKey: string) => void;
 }): React.ReactElement => {
-  const s = props.s;
+  const s = props.state._tag === "Ready" ? props.state.status : undefined;
   const ready = s !== undefined ? s.services.filter((x) => x.ready).length : 0;
   const total = s !== undefined ? s.services.length : 0;
+  const subtitle =
+    s !== undefined
+      ? `${s.up ? s.status : "down"} · up ${fmtUptime(s.uptimeMillis)} · ${ready}/${total} ready · ${s.serviceCount} service${s.serviceCount === 1 ? "" : "s"}`
+      : props.state._tag === "Failed"
+        ? "unreachable — missing same-origin runtime transport"
+        : "connecting…";
   return (
     <div className="rounded-lg border bg-card">
       <button
@@ -2009,13 +2142,19 @@ const NodeHealthCard = (props: {
         onClick={props.onOpen}
         className="flex w-full items-center gap-2.5 rounded-t-lg px-2 py-2 text-left hover:bg-muted"
       >
-        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: nodeColor(s) }} />
+        <span
+          className="h-2.5 w-2.5 shrink-0 rounded-full"
+          style={{ backgroundColor: nodeConnColor(props.state) }}
+        />
         <span className="min-w-0 flex-1">
           <span className="block truncate font-medium">{displayName(props.node.id)}</span>
-          <span className="mt-0.5 block text-[0.7rem] leading-tight text-muted-foreground">
-            {s !== undefined
-              ? `${s.up ? s.status : "down"} · up ${fmtUptime(s.uptimeMillis)} · ${ready}/${total} ready · ${s.serviceCount} service${s.serviceCount === 1 ? "" : "s"}`
-              : "connecting…"}
+          <span
+            className="mt-0.5 block text-[0.7rem] leading-tight"
+            style={{ color: props.state._tag === "Failed" ? "#ef4444" : undefined }}
+          >
+            <span className={props.state._tag === "Failed" ? undefined : "text-muted-foreground"}>
+              {subtitle}
+            </span>
           </span>
         </span>
         <span className="shrink-0 text-muted-foreground">›</span>
@@ -2028,7 +2167,7 @@ const NodeHealthCard = (props: {
               {ready}/{total}
             </span>
           </div>
-          <Sparkline points={props.history} color={nodeColor(s)} />
+          <Sparkline points={props.history} color={nodeConnColor(props.state)} />
         </div>
       ) : null}
       {s !== undefined && s.services.length > 0 ? (
@@ -2099,27 +2238,56 @@ export const HealthBoard = (props: {
   // group ever gained/lost a node). The children report their status up so this board can compute the
   // cross-node aggregates (ready/total, degraded HyperServices, degraded nodes). Statuses arrive async
   // (the underlying atoms start "connecting"), so this reporting adds no flash the direct reads didn't.
-  const [statusMap, setStatusMap] = React.useState<
-    ReadonlyMap<string, NodeStatusValue | undefined>
-  >(() => new Map());
-  const reportStatus = React.useCallback(
-    (id: string, s: NodeStatusValue | undefined): void => {
-      setStatusMap((prev) => {
-        const next = new Map(prev);
-        next.set(id, s);
-        return next;
-      });
-    },
-    [],
+  const [stateMap, setStateMap] = React.useState<ReadonlyMap<string, NodeConnState>>(
+    () => new Map(),
   );
-  const statuses = nodes.map((node) => ({ node, s: statusMap.get(node.id) }));
-  const degraded = statuses.flatMap(({ node, s }) =>
-    (s?.services ?? []).filter((x) => !x.ready).map((res) => ({ node, res })),
+  const reportState = React.useCallback((id: string, state: NodeConnState): void => {
+    setStateMap((prev) => {
+      const next = new Map(prev);
+      next.set(id, state);
+      return next;
+    });
+  }, []);
+  const statuses = nodes.map((node) => ({
+    node,
+    state: stateMap.get(node.id) ?? ({ _tag: "Connecting" } satisfies NodeConnState),
+  }));
+  const degraded = statuses.flatMap(({ node, state }) =>
+    (state._tag === "Ready" ? state.status.services : [])
+      .filter((x) => !x.ready)
+      .map((res) => ({ node, res })),
   );
-  const total = statuses.reduce((n, { s }) => n + (s?.services.length ?? 0), 0);
-  const ready = statuses.reduce((n, { s }) => n + (s?.services.filter((x) => x.ready).length ?? 0), 0);
-  const degradedNodes = statuses.filter(({ s }) => s !== undefined && (!s.up || s.status === "degraded")).length;
-  const healthy = degradedNodes === 0;
+  const total = statuses.reduce(
+    (n, { state }) => n + (state._tag === "Ready" ? state.status.services.length : 0),
+    0,
+  );
+  const ready = statuses.reduce(
+    (n, { state }) =>
+      n + (state._tag === "Ready" ? state.status.services.filter((x) => x.ready).length : 0),
+    0,
+  );
+  const live = statuses.filter(({ state }) => state._tag === "Ready").length;
+  const failed = statuses.filter(({ state }) => state._tag === "Failed").length;
+  const pending = statuses.some(({ state }) => state._tag === "Connecting");
+  const degradedNodes = statuses.filter(
+    ({ state }) =>
+      state._tag === "Ready" && (!state.status.up || state.status.status === "degraded"),
+  ).length;
+  const healthy = !pending && failed === 0 && degradedNodes === 0;
+  const headline = pending
+    ? `connecting… ${live}/${nodes.length}`
+    : failed > 0
+      ? `⚠ ${failed}/${nodes.length} unreachable`
+      : healthy
+        ? "all healthy"
+        : `⚠ ${degradedNodes}/${nodes.length} degraded`;
+  const headlineColor = pending
+    ? "#64748b"
+    : failed > 0
+      ? "#ef4444"
+      : healthy
+        ? "#22c55e"
+        : "#eab308";
   return (
     <div className="flex h-[100dvh] flex-col gap-3 overflow-y-auto safe-area landscape:h-auto landscape:min-h-[100dvh]">
       <header className="flex items-center gap-2">
@@ -2127,17 +2295,24 @@ export const HealthBoard = (props: {
           ← back
         </Button>
         <strong className="flex-1 truncate text-base">⬢ Health</strong>
-        <span className="text-sm font-medium" style={{ color: healthy ? "#22c55e" : "#eab308" }}>
-          {healthy ? "all healthy" : `⚠ ${degradedNodes}/${nodes.length} degraded`}
+        <span className="text-sm font-medium" style={{ color: headlineColor }}>
+          {headline}
         </span>
       </header>
       <div className="grid grid-cols-3 gap-2 text-center">
-        <HealthStat label="nodes ok" value={`${nodes.length - degradedNodes}/${nodes.length}`} />
+        <HealthStat
+          label="nodes ok"
+          value={
+            pending || failed > 0
+              ? `${live}/${nodes.length}`
+              : `${nodes.length - degradedNodes}/${nodes.length}`
+          }
+        />
         <HealthStat label="HyperServices ready" value={`${ready}/${total}`} />
         <HealthStat
           label="needs attention"
-          value={`${degraded.length}`}
-          tone={degraded.length > 0 ? "#eab308" : undefined}
+          value={`${degraded.length + failed}`}
+          tone={degraded.length + failed > 0 ? (failed > 0 ? "#ef4444" : "#eab308") : undefined}
         />
       </div>
       {degraded.length > 0 ? (
@@ -2167,7 +2342,7 @@ export const HealthBoard = (props: {
             <NodeHealthRow
               key={node.id}
               node={node}
-              onStatus={reportStatus}
+              onState={reportState}
               onOpen={() => props.onOpenNode(node)}
               onOpenHyperlink={props.onOpenHyperlink}
             />
@@ -2179,26 +2354,28 @@ export const HealthBoard = (props: {
 };
 
 /** One node's health card for {@link HealthBoard}. Calls the per-node status/health hooks at its own
- *  top level (Rules-of-Hooks safe) and reports the status up so the board can aggregate across nodes. */
+ *  top level (Rules-of-Hooks safe) and reports the connection state up so the board can aggregate. */
 const NodeHealthRow = (props: {
   readonly node: NodeRef;
-  readonly onStatus: (id: string, s: NodeStatusValue | undefined) => void;
+  readonly onState: (id: string, state: NodeConnState) => void;
   readonly onOpen: () => void;
   readonly onOpenHyperlink: (serviceKey: string) => void;
 }): React.ReactElement => {
   const bundle = useNodeBundle(props.node);
   const r = useAtomValue(bundle.status);
   const h = useAtomValue(bundle.health);
-  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
+  const state = nodeConnState(r);
   const history = AsyncResult.isSuccess(h) ? h.value : [];
-  const { onStatus, node } = props;
+  const { onState, node } = props;
+  // Depend on `r` (atom result identity), not the derived `state` object — a fresh `{ _tag }` each
+  // render would re-fire the effect and loop setState.
   React.useEffect(() => {
-    onStatus(node.id, s);
-  }, [onStatus, node.id, s]);
+    onState(node.id, nodeConnState(r));
+  }, [onState, node.id, r]);
   return (
     <NodeHealthCard
       node={node}
-      s={s}
+      state={state}
       history={history}
       onOpen={props.onOpen}
       onOpenHyperlink={props.onOpenHyperlink}
@@ -2254,8 +2431,9 @@ export const NodeDetail = (props: {
 }): React.ReactElement => {
   const bundle = useNodeBundle(props.node);
   const r = useAtomValue(bundle.status);
-  const s = AsyncResult.isSuccess(r) ? r.value : undefined;
-  const color = nodeColor(s);
+  const state = nodeConnState(r);
+  const s = state._tag === "Ready" ? state.status : undefined;
+  const color = nodeConnColor(state);
   return (
     <div className="flex h-[100dvh] flex-col gap-3 overflow-hidden safe-area landscape:h-auto landscape:min-h-[100dvh] landscape:overflow-visible">
       <div className="flex items-center gap-2">
@@ -2264,7 +2442,20 @@ export const NodeDetail = (props: {
         </Button>
         <span className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
         <strong className="flex-1 truncate text-base">{displayName(props.node.id)}</strong>
-        <span className="text-sm text-muted-foreground">{s !== undefined ? (s.up ? s.status : "down") : "…"}</span>
+        <span
+          className="text-sm"
+          style={{ color: state._tag === "Failed" ? "#ef4444" : undefined }}
+        >
+          <span className={state._tag === "Failed" ? undefined : "text-muted-foreground"}>
+            {s !== undefined
+              ? s.up
+                ? s.status
+                : "down"
+              : state._tag === "Failed"
+                ? "unreachable"
+                : "…"}
+          </span>
+        </span>
       </div>
       {s !== undefined ? (
         <>
@@ -2304,6 +2495,13 @@ export const NodeDetail = (props: {
           </div>
           {/* Pass 2: node metrics graphs (CPU / mem / throughput) land here with status metrics. */}
         </>
+      ) : state._tag === "Failed" ? (
+        <div className="rounded-md border px-3 py-2 text-sm" style={{ borderColor: "#ef4444", color: "#ef4444" }}>
+          unreachable — provide this node in the dashboard runtime (e.g.{" "}
+          <code className="text-xs">Hyperlink.ws(Node, {"{ url: \"/rpc\" }"})</code> for a
+          same-origin browser path). The node&apos;s host endpoints are for peers/servers, not for
+          the page to open directly.
+        </div>
       ) : (
         <div className="text-muted-foreground">connecting to node…</div>
       )}
@@ -2367,7 +2565,12 @@ export const FallbackCard = (props: WidgetProps): React.ReactElement => (
  * DB connection, a health gate). There's little beyond identity to show, so it's the readiness LED
  * (its degraded reason on hover, like every card) + name + kind + the node it runs on. @public
  */
-export const HyperlinkCard = (props: WidgetProps): React.ReactElement => {
+export const HyperlinkCard = (props: {
+  readonly tag: LeafTag;
+  readonly name: string;
+  /** Unused — parent View Cell owns activation when present. */
+  readonly onOpen?: (tag: LeafTag) => void;
+}): React.ReactElement => {
   const node = serviceNodeRef(props.tag);
   return (
     <Card className="relative">
@@ -2389,9 +2592,6 @@ export const HyperlinkCard = (props: WidgetProps): React.ReactElement => {
 // the matching guard recovers the tag's type at render — runtime-discriminated, cast-free.
 /** One node's row in a fleet-health card: a coloured pip (reachable ok/degraded, or unreachable) +
  *  the node name + its state. */
-/** Shared class for a drillable read-only card — a `<button>` root that opens the fullscreen detail. */
-const DRILL_CARD = "relative flex flex-col rounded-xl border bg-card p-3 text-left transition-colors hover:border-ring focus-visible:border-ring focus-visible:outline-none";
-
 const FleetNodeRow = (props: { readonly node: string; readonly report: NodeReport }): React.ReactElement => {
   const color =
     props.report._tag === "Unreachable"
@@ -2421,7 +2621,8 @@ export const FleetHealthCard = (props: {
   readonly tag: FleetHealthTag;
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
-  readonly onOpen: (tag: FleetHealthTag) => void;
+  /** When omitted, presentational (View kit / parent owns activation). */
+  readonly onOpen?: (tag: FleetHealthTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   const bundle = useFleetHealthBundle(props.tag);
@@ -2431,7 +2632,11 @@ export const FleetHealthCard = (props: {
   const byNode = AsyncResult.isSuccess(byNodeR) ? byNodeR.value : {};
   const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
   return (
-    <button type="button" onClick={() => props.onOpen(props.tag)} className={DRILL_CARD} style={vt}>
+    <DrillRoot
+      onOpen={props.onOpen === undefined ? undefined : () => props.onOpen?.(props.tag)}
+      className={DRILL_CARD}
+      style={vt}
+    >
       <div className="mb-2 flex items-center gap-2">
         <strong className="flex-1 truncate">{props.name}</strong>
         <Badge color={FLEET_STATUS[status ?? "ok"] ?? "#94a3b8"}>{status ?? "…"}</Badge>
@@ -2444,7 +2649,7 @@ export const FleetHealthCard = (props: {
         )}
       </div>
       <DegradedOverlay tag={props.tag} />
-    </button>
+    </DrillRoot>
   );
 };
 
@@ -2470,7 +2675,8 @@ export const TelemetryCard = (props: {
   readonly tag: TelemetryTag;
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
-  readonly onOpen: (tag: TelemetryTag) => void;
+  /** When omitted, presentational (View kit / parent owns activation). */
+  readonly onOpen?: (tag: TelemetryTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   const bundle = useTelemetryBundle(props.tag);
@@ -2483,7 +2689,11 @@ export const TelemetryCard = (props: {
   const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
   const max = Math.max(1, ...rows.map(([, n]) => n));
   return (
-    <button type="button" onClick={() => props.onOpen(props.tag)} className={DRILL_CARD} style={vt}>
+    <DrillRoot
+      onOpen={props.onOpen === undefined ? undefined : () => props.onOpen?.(props.tag)}
+      className={DRILL_CARD}
+      style={vt}
+    >
       <div className="mb-2 flex items-center gap-2">
         <strong className="flex-1 truncate">{props.name}</strong>
         {count !== undefined ? (
@@ -2500,7 +2710,7 @@ export const TelemetryCard = (props: {
         {rows.map(([node, n]) => <NodeCountRow key={node} node={node} count={n} max={max} />)}
       </div>
       <DegradedOverlay tag={props.tag} />
-    </button>
+    </DrillRoot>
   );
 };
 
@@ -2513,7 +2723,8 @@ export const ShardMapCard = (props: {
   readonly tag: ShardMapTag;
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
-  readonly onOpen: (tag: ShardMapTag) => void;
+  /** When omitted, presentational (View kit / parent owns activation). */
+  readonly onOpen?: (tag: ShardMapTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   const bundle = useShardMapBundle(props.tag);
@@ -2526,7 +2737,11 @@ export const ShardMapCard = (props: {
   const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
   const max = Math.max(1, ...rows.map(([, n]) => n));
   return (
-    <button type="button" onClick={() => props.onOpen(props.tag)} className={DRILL_CARD} style={vt}>
+    <DrillRoot
+      onOpen={props.onOpen === undefined ? undefined : () => props.onOpen?.(props.tag)}
+      className={DRILL_CARD}
+      style={vt}
+    >
       <div className="mb-2 flex items-center gap-2">
         <strong className="flex-1 truncate">{props.name}</strong>
         <span className="shrink-0 rounded-full border px-2 py-0.5 text-[0.7rem] text-muted-foreground">
@@ -2544,7 +2759,7 @@ export const ShardMapCard = (props: {
         <div className="mt-2 text-[0.7rem] text-muted-foreground">this node holds {local}</div>
       ) : null}
       <DegradedOverlay tag={props.tag} />
-    </button>
+    </DrillRoot>
   );
 };
 
@@ -2569,7 +2784,8 @@ export const GateCard = (props: {
   readonly tag: GateTag;
   /** Display name — the member key under which the parent group holds this tag. */
   readonly name: string;
-  readonly onOpen: (tag: GateTag) => void;
+  /** When omitted, presentational (View kit / parent owns activation). */
+  readonly onOpen?: (tag: GateTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   const bundle = useGateBundle(props.tag);
@@ -2583,7 +2799,11 @@ export const GateCard = (props: {
   const interrupted = s !== undefined ? s.interrupted : 0;
   const avgMs = completed > 0 && s !== undefined ? Math.round(s.totalDurationMs / completed) : undefined;
   return (
-    <button type="button" onClick={() => props.onOpen(props.tag)} className={DRILL_CARD} style={vt}>
+    <DrillRoot
+      onOpen={props.onOpen === undefined ? undefined : () => props.onOpen?.(props.tag)}
+      className={DRILL_CARD}
+      style={vt}
+    >
       <div className="mb-2 flex items-center gap-2">
         <strong className="flex-1 truncate">{props.name}</strong>
         <span className="shrink-0 rounded-full border px-2 py-0.5 text-[0.7rem] text-muted-foreground">
@@ -2606,7 +2826,7 @@ export const GateCard = (props: {
         ) : null}
       </div>
       <DegradedOverlay tag={props.tag} />
-    </button>
+    </DrillRoot>
   );
 };
 
@@ -2623,7 +2843,8 @@ export const GateCard = (props: {
 export const PriorityDetail = (props: {
   readonly tag: PriorityTag;
   readonly name?: string;
-  readonly onBack: () => void;
+  readonly onBack?: () => void;
+  readonly chrome?: boolean;
 }): React.ReactElement => {
   const bundle = usePriorityBundle(props.tag);
   const statusR = useAtomValue(bundle.status);
@@ -2692,6 +2913,7 @@ export const PriorityDetail = (props: {
     <DetailScreen
       title={props.name ?? displayName(props.tag.key)}
       onBack={props.onBack}
+      chrome={props.chrome}
       vtKey={`res-${props.tag.key}`}
       readinessTag={props.tag}
       badge={<Badge color={paused ? "#eab308" : PRIORITY_PHASE[s?.phase ?? "running"] ?? "#22c55e"}>{paused ? "paused" : s?.phase ?? "running"}</Badge>}
@@ -2720,7 +2942,8 @@ const MetricRow = (props: { readonly datum: MetricDatum }): React.ReactElement =
 export const TelemetryDetail = (props: {
   readonly tag: TelemetryTag;
   readonly name?: string;
-  readonly onBack: () => void;
+  readonly onBack?: () => void;
+  readonly chrome?: boolean;
 }): React.ReactElement => {
   const bundle = useTelemetryBundle(props.tag);
   const fleetR = useAtomValue(bundle.fleetInFlight);
@@ -2771,6 +2994,7 @@ export const TelemetryDetail = (props: {
     <DetailScreen
       title={props.name ?? displayName(props.tag.key)}
       onBack={props.onBack}
+      chrome={props.chrome}
       vtKey={`res-${props.tag.key}`}
       badge={count !== undefined ? <Badge color="#94a3b8">{count} metrics</Badge> : undefined}
       sections={sections}
@@ -2786,7 +3010,8 @@ export const TelemetryDetail = (props: {
 export const ShardMapDetail = (props: {
   readonly tag: ShardMapTag;
   readonly name?: string;
-  readonly onBack: () => void;
+  readonly onBack?: () => void;
+  readonly chrome?: boolean;
 }): React.ReactElement => {
   const bundle = useShardMapBundle(props.tag);
   const sizeR = useAtomValue(bundle.size);
@@ -2821,6 +3046,7 @@ export const ShardMapDetail = (props: {
     <DetailScreen
       title={props.name ?? displayName(props.tag.key)}
       onBack={props.onBack}
+      chrome={props.chrome}
       vtKey={`res-${props.tag.key}`}
       badge={<Badge color="#94a3b8">{rows.length} shard{rows.length === 1 ? "" : "s"}</Badge>}
       sections={sections}
@@ -2835,7 +3061,8 @@ export const ShardMapDetail = (props: {
 export const FleetHealthDetail = (props: {
   readonly tag: FleetHealthTag;
   readonly name?: string;
-  readonly onBack: () => void;
+  readonly onBack?: () => void;
+  readonly chrome?: boolean;
 }): React.ReactElement => {
   const bundle = useFleetHealthBundle(props.tag);
   const statusR = useAtomValue(bundle.status);
@@ -2864,6 +3091,7 @@ export const FleetHealthDetail = (props: {
     <DetailScreen
       title={props.name ?? displayName(props.tag.key)}
       onBack={props.onBack}
+      chrome={props.chrome}
       vtKey={`res-${props.tag.key}`}
       badge={<Badge color={FLEET_STATUS[status ?? "ok"] ?? "#94a3b8"}>{status ?? "…"}</Badge>}
       sections={sections}
@@ -2879,7 +3107,8 @@ export const FleetHealthDetail = (props: {
 export const GateDetail = (props: {
   readonly tag: GateTag;
   readonly name?: string;
-  readonly onBack: () => void;
+  readonly onBack?: () => void;
+  readonly chrome?: boolean;
 }): React.ReactElement => {
   const bundle = useGateBundle(props.tag);
   const statusR = useAtomValue(bundle.status);
@@ -2926,6 +3155,7 @@ export const GateDetail = (props: {
     <DetailScreen
       title={props.name ?? displayName(props.tag.key)}
       onBack={props.onBack}
+      chrome={props.chrome}
       vtKey={`res-${props.tag.key}`}
       readinessTag={props.tag}
       badge={<Badge color="#94a3b8">limit {concurrency}</Badge>}
@@ -2934,75 +3164,15 @@ export const GateDetail = (props: {
   );
 };
 
-const queueWidget: Widget = ({ tag, name, onOpen }) =>
-  isQueueTag(tag) ? (
-    <QueueCard tag={tag} name={name} onOpen={onOpen} />
-  ) : (
-    <FallbackCard tag={tag} name={name} onOpen={onOpen} />
-  );
-const daemonWidget: Widget = ({ tag, name, onOpen }) =>
-  isDaemonTag(tag) ? (
-    <DaemonCard tag={tag} name={name} onOpen={onOpen} />
-  ) : (
-    <FallbackCard tag={tag} name={name} onOpen={onOpen} />
-  );
-const apiWidget: Widget = ({ tag, name, onOpen }) =>
-  isApiTag(tag) ? (
-    <ApiCard tag={tag} name={name} onOpen={onOpen} />
-  ) : (
-    <FallbackCard tag={tag} name={name} onOpen={onOpen} />
-  );
-const priorityWidget: Widget = ({ tag, name, onOpen }) =>
-  isPriorityTag(tag) ? (
-    <PriorityCard tag={tag} name={name} onOpen={onOpen} />
-  ) : (
-    <FallbackCard tag={tag} name={name} onOpen={onOpen} />
-  );
-const fleetHealthWidget: Widget = ({ tag, name, onOpen }) =>
-  isFleetHealthTag(tag) ? (
-    <FleetHealthCard tag={tag} name={name} onOpen={onOpen} />
-  ) : (
-    <FallbackCard tag={tag} name={name} onOpen={onOpen} />
-  );
-const telemetryWidget: Widget = ({ tag, name, onOpen }) =>
-  isTelemetryTag(tag) ? (
-    <TelemetryCard tag={tag} name={name} onOpen={onOpen} />
-  ) : (
-    <FallbackCard tag={tag} name={name} onOpen={onOpen} />
-  );
-const shardMapWidget: Widget = ({ tag, name, onOpen }) =>
-  isShardMapTag(tag) ? (
-    <ShardMapCard tag={tag} name={name} onOpen={onOpen} />
-  ) : (
-    <FallbackCard tag={tag} name={name} onOpen={onOpen} />
-  );
-const gateWidget: Widget = ({ tag, name, onOpen }) =>
-  isGateTag(tag) ? (
-    <GateCard tag={tag} name={name} onOpen={onOpen} />
-  ) : (
-    <FallbackCard tag={tag} name={name} onOpen={onOpen} />
-  );
-
 /**
- * The built-in widget set: WorkPool / Daemon / API cards by kind, with {@link FallbackCard} for
- * everything else. The default for `<Dashboard>`; extend or override it with
- * `withEntries(base, [forKind(...), forKey(...)])`. @public
+ * Fallback-only widget registry for `<Dashboard>`. Default card/detail chrome comes from
+ * `View.react(web/DashboardViews.layer)`. Prefer Dashboard `views` / `View.only` for
+ * app cards; `forKey` / `withEntries` remain as a legacy escape hatch.
+ *
+ * @public
  */
-export const base: WidgetRegistry<Widget> = withEntries(
-  {
-    byKey: HashMap.empty<string, Widget>(),
-    byKind: HashMap.empty<string, Widget>(),
-    fallback: FallbackCard,
-  },
-  [
-    forKind(queueKind, queueWidget),
-    forKind(priorityKind, priorityWidget),
-    forKind(daemonKind, daemonWidget),
-    forKind(apiKind, apiWidget),
-    forKind(fleetHealthKind, fleetHealthWidget),
-    forKind(telemetryKind, telemetryWidget),
-    forKind(shardMapKind, shardMapWidget),
-    forKind(gateKind, gateWidget),
-    forKind(hyperlinkKind, HyperlinkCard),
-  ],
-);
+export const base: WidgetRegistry<Widget> = {
+  byKey: HashMap.empty<string, Widget>(),
+  byKind: HashMap.empty<string, Widget>(),
+  fallback: FallbackCard,
+};

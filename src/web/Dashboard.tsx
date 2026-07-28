@@ -13,7 +13,7 @@
  *
  */
 import * as React from "react";
-import { Option } from "effect";
+import { Layer, Option } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Plus, Trash2 } from "lucide-react";
 import {
@@ -44,13 +44,25 @@ import { RegistryProvider, useAtomValue } from "../ui/atom-react";
 import * as Group from "../Group";
 import { RuntimeProvider, useApiBundle, useNodeBundle, useDaemonBundle, useQueueBundle, useRuntime } from "./runtime";
 import { ViewTransitionProvider, useViewTransition, useViewTransitionStyle } from "./useViewTransition";
-import { useGroupRoute } from "./useGroupRoute";
 import { Button } from "./components/ui/button";
-import { ApiEndpointTable, ApiMetricChart, ApiStats, ApiStatusBadge, base, Cell, ConfirmDialog, PriorityDetail, FleetHealthDetail, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, MetricChart, DaemonControls, DaemonStats, DaemonStatusBadge, QueueControls, QueueStats, HyperlinkReadinessBanner, GateDetail, ScheduleEditor, ShardMapDetail, StatusBadge, TelemetryDetail, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
-import { isLeafTag, type WidgetRegistry } from "../ui/widgetRegistry";
+import { ApiStatusBadge, base, Cell, ConfirmDialog, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, DaemonStatusBadge, StatusBadge, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
+import { isLeafTag, type LeafTag, type WidgetRegistry } from "../ui/widgetRegistry";
+import * as Navigator from "../ui/Navigator";
+import * as View from "../ui/View";
 import { WidgetsProvider } from "../ui/widgetsContext";
 import type { Widget } from "./widget-registry";
 import { DebugConsole } from "./debug-console";
+import * as UiDashboardViews from "../ui/DashboardViews";
+import * as WebDashboardViews from "./DashboardViews";
+
+/** Detail body — shell / Navigator owns back (lock J). */
+const ViewDetailScreen = (props: {
+  readonly tag: LeafTag;
+  readonly name?: string;
+}): React.ReactElement => {
+  const Match = View.useMatch();
+  return <Match.Detail tag={props.tag} name={props.name} />;
+};
 
 
 /** Invisible: reads one node's node status and reports the keys of its **not-ready** resources, so the
@@ -194,6 +206,7 @@ const QueueDetail = (props: {
   readonly onBack: () => void;
   readonly onOpenLogs: () => void;
 }): React.ReactElement => {
+  const Match = View.useMatch();
   const bundle = useQueueBundle(props.tag);
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? Option.getOrUndefined(statusR.value) : undefined;
@@ -205,14 +218,7 @@ const QueueDetail = (props: {
         <strong className="flex-1 truncate text-base">{displayName(props.tag.key)}</strong>
         <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
       </div>
-      <HyperlinkReadinessBanner tag={props.tag} />
-      <QueueStats bundle={bundle} />
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="min-w-0 sm:flex-1">
-          <div className="overflow-hidden rounded-xl border bg-card p-3"><MetricChart bundle={bundle} /></div>
-        </div>
-        <QueueControls bundle={bundle} />
-      </div>
+      <Match.Detail tag={props.tag} />
       <LogBox bundle={bundle} full={false} onToggle={props.onOpenLogs} meta={<> · phase {s?.phase ?? "?"}</>} />
     </div>
   );
@@ -222,14 +228,12 @@ const DaemonDetail = (props: {
   readonly tag: DaemonTag;
   readonly onBack: () => void;
   readonly onOpenLogs: () => void;
-  readonly onOpenSchedule: () => void;
 }): React.ReactElement => {
+  const Match = View.useMatch();
   const bundle = useDaemonBundle(props.tag);
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
-  // One lock for the whole daemon detail — guards both the controls and the schedule editor.
-  const [locked, setLocked] = React.useState(true);
   return (
     <div className="flex h-[100dvh] flex-col gap-3 overflow-hidden safe-area landscape:h-auto landscape:min-h-[100dvh] landscape:overflow-visible" style={vt}>
       <div className="flex items-center gap-2">
@@ -237,18 +241,16 @@ const DaemonDetail = (props: {
         <strong className="flex-1 truncate text-base">⚙ {displayName(props.tag.key)}</strong>
         <DaemonStatusBadge supervising={s?.supervising} />
       </div>
-      <HyperlinkReadinessBanner tag={props.tag} />
-      <DaemonStats bundle={bundle} />
-      <DaemonControls bundle={bundle} locked={locked} onToggleLock={() => setLocked((l) => !l)} />
-      <ScheduleEditor bundle={bundle} onOpenFull={props.onOpenSchedule} />
+      <Match.Detail tag={props.tag} />
       <LogBox bundle={bundle} full={false} onToggle={props.onOpenLogs} />
     </div>
   );
 };
 
-/** Detail view for a {@link Gate.HttpApiClient} (or nest fixture) — usage stats, rate-limit
- *  counters, chart, and endpoint table. Read-only: no controls, no logs. */
+/** Detail shell for a {@link Gate.HttpApiClient} (or nest fixture) — header + View detail body
+ *  (usage stats, rate-limit counters, chart, endpoints). Read-only: no controls, no logs. */
 const ApiDetail = (props: { readonly tag: ApiTag; readonly onBack: () => void }): React.ReactElement => {
+  const Match = View.useMatch();
   const bundle = useApiBundle(props.tag);
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
@@ -260,10 +262,7 @@ const ApiDetail = (props: { readonly tag: ApiTag; readonly onBack: () => void })
         <strong className="flex-1 truncate text-base">🌐 {displayName(props.tag.key)}</strong>
         <ApiStatusBadge requests={s?.requestsTotal ?? 0} errors={s?.errorsTotal ?? 0} />
       </div>
-      <HyperlinkReadinessBanner tag={props.tag} />
-      <ApiStats bundle={bundle} />
-      <div className="overflow-hidden rounded-xl border bg-card p-3"><ApiMetricChart bundle={bundle} /></div>
-      <ApiEndpointTable bundle={bundle} />
+      <Match.Detail tag={props.tag} />
     </div>
   );
 };
@@ -273,8 +272,11 @@ const DashboardInner = (props: {
   readonly group: GroupNode;
   readonly onOpenHealth: () => void;
 }): React.ReactElement => {
-  const route = useGroupRoute(props.group);
-  const { group, selected, trail, keys } = route;
+  const nav = Navigator.useNavigator();
+  const group = nav.group as GroupNode;
+  const selected = nav.selected;
+  const trail = nav.trail;
+  const keys = nav.path;
   const transition = useViewTransition();
   const pageVt = useViewTransitionStyle(`grp-${group.key}`);
   // ── degraded-first sort state (hoisted above the detail early-return so hook order is constant
@@ -299,27 +301,40 @@ const DashboardInner = (props: {
     // the member key the selected leaf sits under — the display name the grid card used (mesh factory
     // tags share a generic key like "telemetry", so title off the member name, not the tag key).
     const selectedName = keys[trail.length - 1];
-    const toGrid = (id: string) => () => transition(`res-${id}`, () => route.back());
-    const openLogs = (): void => transition("log-panel", () => route.open("logs"));
-    const closeLogs = (): void => transition("log-panel", () => route.back());
-    const openSchedule = (): void => transition("schedule-panel", () => route.open("schedule"));
-    const closeSchedule = (): void => transition("schedule-panel", () => route.back());
-    if (route.view === "logs") {
+    const toGrid = (id: string) => () => transition(`res-${id}`, () => nav.back());
+    const openLogs = (): void => transition("log-panel", () => nav.openKey("logs"));
+    const closeLogs = (): void => transition("log-panel", () => nav.back());
+    const closeSchedule = (): void => transition("schedule-panel", () => nav.back());
+    if (nav.view === "logs") {
       if (isDaemonTag(selected) || isQueueTag(selected)) return <LogsPage tag={selected} onClose={closeLogs} />;
       return <></>;
     }
-    if (route.view === "schedule") {
+    if (nav.view === "schedule") {
       if (isDaemonTag(selected)) return <SchedulePage tag={selected} onClose={closeSchedule} />;
       return <></>;
     }
     if (isApiTag(selected)) return <ApiDetail tag={selected} onBack={toGrid(selected.key)} />;
-    if (isDaemonTag(selected)) return <DaemonDetail tag={selected} onBack={toGrid(selected.key)} onOpenLogs={openLogs} onOpenSchedule={openSchedule} />;
+    if (isDaemonTag(selected)) return <DaemonDetail tag={selected} onBack={toGrid(selected.key)} onOpenLogs={openLogs} />;
     if (isQueueTag(selected)) return <QueueDetail tag={selected} onBack={toGrid(selected.key)} onOpenLogs={openLogs} />;
-    if (isPriorityTag(selected)) return <PriorityDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
-    if (isFleetHealthTag(selected)) return <FleetHealthDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
-    if (isTelemetryTag(selected)) return <TelemetryDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
-    if (isShardMapTag(selected)) return <ShardMapDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
-    if (isGateTag(selected)) return <GateDetail tag={selected} name={selectedName} onBack={toGrid(selected.key)} />;
+    if (
+      isPriorityTag(selected) ||
+      isFleetHealthTag(selected) ||
+      isTelemetryTag(selected) ||
+      isShardMapTag(selected) ||
+      isGateTag(selected)
+    ) {
+      return (
+        <div className="safe-area">
+          <div className="mb-3 flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={toGrid(selected.key)}>
+              ← back
+            </Button>
+            <strong className="flex-1 truncate text-base">{selectedName}</strong>
+          </div>
+          <ViewDetailScreen tag={selected} name={selectedName} />
+        </div>
+      );
+    }
     return <></>;
   }
 
@@ -370,7 +385,7 @@ const DashboardInner = (props: {
       <div className="relative mb-4 flex items-center gap-2">
         {canBack ? (
           <>
-            <Button variant="outline" size="sm" onClick={() => transition(`grp-${group.key}`, () => route.back())}>← back</Button>
+            <Button variant="outline" size="sm" onClick={() => transition(`grp-${group.key}`, () => nav.back())}>← back</Button>
             {/* centered to the row (≈ the screen), not the flex remainder — absolutely overlaid, taps
                 pass through to the back/count/die around it. The ⬢ is dropped on drilled-in pages. */}
             <h1 className="pointer-events-none absolute inset-0 m-0 flex items-center justify-center truncate px-24 text-lg font-semibold">
@@ -408,8 +423,8 @@ const DashboardInner = (props: {
             key={name}
             name={name}
             member={member}
-            onOpenLeaf={(tag) => transition(`res-${tag.key}`, () => route.open(name))}
-            onOpenGroup={(g) => transition(`grp-${g.key}`, () => route.open(name))}
+            onOpenLeaf={(tag) => transition(`res-${tag.key}`, () => nav.openKey(name))}
+            onOpenGroup={() => transition(`grp-${name}`, () => nav.openKey(name))}
           />
         ))}
       </div>
@@ -443,18 +458,28 @@ const NodeHyperlinkView = (props: {
         tag={tag}
         onBack={props.onBack}
         onOpenLogs={() => setView("logs")}
-        onOpenSchedule={() => setView("schedule")}
       />
     );
   }
   if (isQueueTag(tag)) {
     return <QueueDetail tag={tag} onBack={props.onBack} onOpenLogs={() => setView("logs")} />;
   }
-  if (isPriorityTag(tag)) return <PriorityDetail tag={tag} onBack={props.onBack} />;
-  if (isFleetHealthTag(tag)) return <FleetHealthDetail tag={tag} onBack={props.onBack} />;
-  if (isTelemetryTag(tag)) return <TelemetryDetail tag={tag} onBack={props.onBack} />;
-  if (isShardMapTag(tag)) return <ShardMapDetail tag={tag} onBack={props.onBack} />;
-  if (isGateTag(tag)) return <GateDetail tag={tag} onBack={props.onBack} />;
+  if (
+    isPriorityTag(tag) ||
+    isFleetHealthTag(tag) ||
+    isTelemetryTag(tag) ||
+    isShardMapTag(tag) ||
+    isGateTag(tag)
+  ) {
+    return (
+      <>
+        <div className="mb-3 flex items-center gap-2 px-1">
+          <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
+        </div>
+        <ViewDetailScreen tag={tag} />
+      </>
+    );
+  }
   return <></>;
 };
 
@@ -465,6 +490,12 @@ const NodeHyperlinkView = (props: {
 export const DashboardView = <R, ER>(props: {
   readonly runtime: DashboardRuntime<R, ER>;
   readonly group: GroupNode;
+  /**
+   * App View contributions (`R = View.Registry`). Prefer
+   * `View.only(Tag, Card).pipe(Layer.provide(Layer.succeed(Card, Comp)))`.
+   * Merged with shipped family contributions, then skins + {@link View.base}.
+   */
+  readonly views?: Layer.Layer<never, never, View.Registry>;
 }): React.ReactElement => {
   // Three stacked overlays over the group view, in back-pop order: a HyperService opened from a node/board
   // (`nodeTag`) sits over a node's full screen (`node`), which sits over the health board (`health`).
@@ -479,44 +510,66 @@ export const DashboardView = <R, ER>(props: {
     },
     [props.group],
   );
+  // compose = contributions (+ app views) → skins → View.base; Navigator.history for short-name paths.
+  const ui = React.useMemo(
+    () =>
+      View.compose({
+        views: Layer.mergeAll(
+          UiDashboardViews.layer,
+          props.views ?? Layer.empty,
+        ).pipe(
+          Layer.provideMerge(WebDashboardViews.skins),
+          Layer.provideMerge(View.base),
+        ),
+        navigator: Navigator.history(props.group),
+      }),
+    [props.group, props.views],
+  );
   // The dashboard owns its font: declaring `font-mono` on its own root means the widgets render
   // monospace regardless of the consumer's `body`/`#root` font (a value set directly on this
   // element wins over an inherited one), and it still honours a consumer-defined `--font-mono`.
   return (
-    <RuntimeProvider runtime={props.runtime}>
-      <div className="font-mono">
-        {nodeTag !== null ? (
-          <NodeHyperlinkView tag={nodeTag} onBack={() => setNodeTag(null)} />
-        ) : node !== null ? (
-          <NodeDetail node={node} onBack={() => setNode(null)} onOpenHyperlink={openHyperlink} />
-        ) : health ? (
-          <HealthBoard
-            group={props.group}
-            onBack={() => setHealth(false)}
-            onOpenNode={setNode}
-            onOpenHyperlink={openHyperlink}
-          />
-        ) : (
-          <DashboardInner group={props.group} onOpenHealth={() => setHealth(true)} />
-        )}
-      </div>
-    </RuntimeProvider>
+    <ui.Provider>
+      <RuntimeProvider runtime={props.runtime}>
+        <div className="font-mono">
+          {nodeTag !== null ? (
+            <NodeHyperlinkView tag={nodeTag} onBack={() => setNodeTag(null)} />
+          ) : node !== null ? (
+            <NodeDetail node={node} onBack={() => setNode(null)} onOpenHyperlink={openHyperlink} />
+          ) : health ? (
+            <HealthBoard
+              group={props.group}
+              onBack={() => setHealth(false)}
+              onOpenNode={setNode}
+              onOpenHyperlink={openHyperlink}
+            />
+          ) : (
+            <DashboardInner group={props.group} onOpenHealth={() => setHealth(true)} />
+          )}
+        </div>
+      </RuntimeProvider>
+    </ui.Provider>
   );
 };
 
 /** Batteries-included dashboard: providers + the responsive view + the (opt-in) debug console.
- *  `<Dashboard runtime={Atom.runtime(layer)} group={ServicesHub} />`. */
+ *  `<Dashboard runtime={Atom.runtime(layer)} group={ServicesHub} views={appViews} />`. */
 export const Dashboard = <R, ER>(props: {
   readonly runtime: DashboardRuntime<R, ER>;
   readonly group: GroupNode;
-  /** The widget set (defaults to the built-in {@link base}); extend/override with
-   *  `withEntries(base, [forKind(...), forKey(...)])`. */
+  /** App View contributions — see {@link DashboardView} `views`. */
+  readonly views?: Layer.Layer<never, never, View.Registry>;
+  /** Legacy widget registry fallback only. Prefer {@link views}. */
   readonly widgets?: WidgetRegistry<Widget>;
 }): React.ReactElement => (
   <RegistryProvider>
     <WidgetsProvider registry={props.widgets ?? base}>
       <ViewTransitionProvider>
-        <DashboardView runtime={props.runtime} group={props.group} />
+        <DashboardView
+          runtime={props.runtime}
+          group={props.group}
+          views={props.views}
+        />
         <DebugConsole />
       </ViewTransitionProvider>
     </WidgetsProvider>

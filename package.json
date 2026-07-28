@@ -128,9 +128,33 @@
       "types": "./dist/ui.d.ts",
       "default": "./dist/ui.js"
     },
+    "./ui/WorkPoolView": {
+      "types": "./dist/ui/WorkPoolView.d.ts",
+      "default": "./dist/ui/WorkPoolView.js"
+    },
+    "./ui/Navigator": {
+      "types": "./dist/ui/Navigator.d.ts",
+      "default": "./dist/ui/Navigator.js"
+    },
+    "./ui/GroupView": {
+      "types": "./dist/ui/GroupView.d.ts",
+      "default": "./dist/ui/GroupView.js"
+    },
+    "./ui/DashboardViews": {
+      "types": "./dist/ui/DashboardViews.d.ts",
+      "default": "./dist/ui/DashboardViews.js"
+    },
     "./web": {
       "types": "./dist/web.d.ts",
       "default": "./dist/web.js"
+    },
+    "./web/WorkPoolView": {
+      "types": "./dist/web/WorkPoolView.d.ts",
+      "default": "./dist/web/WorkPoolView.js"
+    },
+    "./web/DashboardViews": {
+      "types": "./dist/web/DashboardViews.d.ts",
+      "default": "./dist/web/DashboardViews.js"
     },
     "./cli": {
       "types": "./dist/cli.d.ts",
@@ -139,6 +163,14 @@
     "./tui": {
       "types": "./dist/tui.d.ts",
       "default": "./dist/tui.js"
+    },
+    "./tui/WorkPoolView": {
+      "types": "./dist/tui/WorkPoolView.d.ts",
+      "default": "./dist/tui/WorkPoolView.js"
+    },
+    "./tui/DashboardViews": {
+      "types": "./dist/tui/DashboardViews.d.ts",
+      "default": "./dist/tui/DashboardViews.js"
     },
     "./storage/sqlite": {
       "types": "./dist/storage/sqlite.d.ts",
@@ -178,6 +210,7 @@
     "example:web-dashboard": "vite --config examples/web-dashboard/vite.config.ts examples/web-dashboard",
     "example:hyperlink-web": "vite --config examples/hyperlink-web/vite.config.ts examples/hyperlink-web",
     "example:hyperlink-web-server": "tsx examples/hyperlink-web/server.ts",
+    "example:view-compose-proto": "vite --config examples/view-compose-proto/vite.config.ts",
     "docs:serve": "tsx dev/cli/main.ts docs serve",
     "docs:build": "tsx dev/cli/main.ts docs build",
     "docs:preview": "tsx dev/cli/main.ts docs preview",
