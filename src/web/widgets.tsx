@@ -3139,8 +3139,8 @@ export const GateDetail = (props: {
 
 /**
  * Fallback-only widget registry for `<Dashboard>`. Default card/detail chrome comes from
- * `View.react(web/DashboardViews.layer)`. Override specific keys with
- * `withEntries(base, [forKey(...)])` when needed.
+ * `View.react(web/DashboardViews.layer)`. Prefer Dashboard `views` / `View.only` for
+ * app cards; `forKey` / `withEntries` remain as a legacy escape hatch.
  *
  * @public
  */

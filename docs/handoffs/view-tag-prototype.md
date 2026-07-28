@@ -1,7 +1,7 @@
 # View.Tag + Prototype — notes (2026-07-27)
 
 **Branch:** `cursor/tui-dashboard-parity-125f`  
-**Status:** Eng’d (checkpoint) — Tag + Prototype types green; size add-on prototypes live.
+**Status:** Eng’d — Tag/Prototype + size add-ons + Dashboard `views` + WorkerPool `View.only` e2e.
 
 ---
 

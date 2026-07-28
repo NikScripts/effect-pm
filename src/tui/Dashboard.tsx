@@ -555,13 +555,15 @@ export const Dashboard = <R, ER>(props: {
   readonly group: GroupNode;
   /** CLI / deep-link focus as member-key nicknames (`["Inbox"]`, `["Mini", "KeyRotation"]`). */
   readonly path?: ReadonlyArray<string>;
-  /** Extra View contributions — Prototype handles via `View.only` / `bind`. */
+  /**
+   * App View contributions (`R = View.Registry`). Prefer
+   * `View.only(Tag, Card).pipe(Layer.provide(Layer.succeed(Card, Comp)))`.
+   */
   readonly views?: Layer.Layer<never, never, View.Registry>;
-  /** Optional legacy key overrides; prefer {@link views}. */
+  /** Legacy widget registry fallback only. Prefer {@link views}. */
   readonly widgets?: TuiWidgetRegistry;
 }): React.ReactElement => {
-  // compose = View.react(skins) + Navigator.memory — short-name paths (CLI `path` seeds once).
-  // Contributions + optional app views, then skins + View.base (siblings cannot provide).
+  // compose = contributions (+ app views) → skins → View.base; CLI `path` seeds Navigator once.
   const ui = React.useMemo(() => {
     const composed = View.compose({
       views: Layer.mergeAll(
@@ -577,7 +579,7 @@ export const Dashboard = <R, ER>(props: {
       composed.navigator.openKey(key);
     }
     return composed;
-  }, [props.group, props.views]);
+  }, [props.group, props.views, props.path]);
 
   return (
     <RegistryProvider>

@@ -490,9 +490,9 @@ export const DashboardView = <R, ER>(props: {
   readonly runtime: DashboardRuntime<R, ER>;
   readonly group: GroupNode;
   /**
-   * Extra View contributions (e.g. `View.only(Tag, Card)` + `Layer.succeed`).
-   * Merged under shipped Dashboard skins; still needs {@link View.Registry} until
-   * compose closes with {@link View.base}.
+   * App View contributions (`R = View.Registry`). Prefer
+   * `View.only(Tag, Card).pipe(Layer.provide(Layer.succeed(Card, Comp)))`.
+   * Merged with shipped family contributions, then skins + {@link View.base}.
    */
   readonly views?: Layer.Layer<never, never, View.Registry>;
 }): React.ReactElement => {
@@ -509,8 +509,7 @@ export const DashboardView = <R, ER>(props: {
     },
     [props.group],
   );
-  // compose = View.react(skins) + Navigator.history — short-name paths (/Nwsl/HttpApi).
-  // Contributions + optional app views, then skins + View.base (siblings cannot provide).
+  // compose = contributions (+ app views) → skins → View.base; Navigator.history for short-name paths.
   const ui = React.useMemo(
     () =>
       View.compose({
@@ -553,13 +552,13 @@ export const DashboardView = <R, ER>(props: {
 };
 
 /** Batteries-included dashboard: providers + the responsive view + the (opt-in) debug console.
- *  `<Dashboard runtime={Atom.runtime(layer)} group={ServicesHub} />`. */
+ *  `<Dashboard runtime={Atom.runtime(layer)} group={ServicesHub} views={appViews} />`. */
 export const Dashboard = <R, ER>(props: {
   readonly runtime: DashboardRuntime<R, ER>;
   readonly group: GroupNode;
-  /** Extra View contributions — Prototype handles via `View.only` / `bind` (see hyperlink-web). */
+  /** App View contributions — see {@link DashboardView} `views`. */
   readonly views?: Layer.Layer<never, never, View.Registry>;
-  /** Optional legacy key overrides ({@link base} is fallback-only). Prefer {@link views}. */
+  /** Legacy widget registry fallback only. Prefer {@link views}. */
   readonly widgets?: WidgetRegistry<Widget>;
 }): React.ReactElement => (
   <RegistryProvider>

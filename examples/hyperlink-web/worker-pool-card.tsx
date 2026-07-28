@@ -1,12 +1,11 @@
 /**
  * @module examples/hyperlink-web/worker-pool-card
  *
- * Bring-your-own **View** for `WorkerPool` — a consumer-defined multi-node Hyperlink with no
- * shipped card. Uses {@link View.Card.Prototype} + {@link View.only} (not the legacy widget
- * `forKey` path): mint a sized handle, provide the React skin, allowlist it for that tag.
+ * Bring-your-own View for `WorkerPool` — a consumer-defined multi-node Hyperlink with no shipped
+ * card. Pattern: sized `View.Card.Prototype` → Tag → skin → `View.only` Layer → Dashboard `views`.
  *
- * Fields are plain `Hyperlink.effect`s (not reactive refs): **poll** them on a tick, same pattern
- * as the shipped daemon card. One tick reads `active` / `fleetActive` / `activeByNode`.
+ * Fields are plain `Hyperlink.effect`s (not reactive refs): poll on a tick, same idea as the shipped
+ * daemon card. One tick reads `active` / `fleetActive` / `activeByNode`.
  */
 import * as React from "react";
 import { Duration, Effect, Layer, Stream } from "effect";
@@ -14,10 +13,10 @@ import { AsyncResult } from "effect/unstable/reactivity";
 import { View, displayName, useAtomValue, useRuntime } from "../../src/web";
 import { WorkerPool } from "./hub";
 
-/** UI Needs placeholder — opaque static on the Prototype (not a Hyperlink wire Spec). */
+/** UI Needs placeholder — opaque Prototype static (not a Hyperlink wire Spec). */
 export const workerPoolCardSpec = { kind: "examples/worker-pool-card" } as const;
 
-/** Extra card props beyond {@link View.ViewProps}. */
+/** Extra card props beyond `View.ViewProps` (shows Prototype prop accumulation). */
 type WorkerPoolCardProps = {
   readonly dense?: boolean;
 };
@@ -27,14 +26,19 @@ const Proto = View.Card.Prototype<WorkerPoolCardProps>()({
   spec: workerPoolCardSpec,
 });
 
-/**
- * Sized View handle for the WorkerPool card (`size: "card"` from {@link View.Card}).
- *
- * @public
- */
+/** Sized View handle (`size: "card"` from `View.Card`). */
 export class WorkerPoolCard extends Proto.Tag<WorkerPoolCard>()(
   "examples/hyperlink-web/worker-pool-card",
 ) {}
+
+// Module-level so the polled stream is a stable value (atom memoized per runtime).
+const readFleet = Effect.flatMap(WorkerPool, (pool) =>
+  Effect.all({
+    active: pool.active,
+    fleet: pool.fleetActive,
+    byNode: pool.activeByNode,
+  }),
+);
 
 /** One node's worker count as a labelled bar. `self` marks this client's instance. */
 const NodeRow = (props: {
@@ -47,7 +51,11 @@ const NodeRow = (props: {
     <span className="w-16 shrink-0 truncate text-muted-foreground">{displayName(props.id)}</span>
     <span className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
       <span
-        className={props.self ? "absolute inset-y-0 left-0 rounded-full bg-primary" : "absolute inset-y-0 left-0 rounded-full bg-primary/50"}
+        className={
+          props.self
+            ? "absolute inset-y-0 left-0 rounded-full bg-primary"
+            : "absolute inset-y-0 left-0 rounded-full bg-primary/50"
+        }
         style={{ width: `${(props.count / props.max) * 100}%` }}
       />
     </span>
@@ -96,20 +104,9 @@ const WorkerPoolCardView: View.ViewFn<View.Type<typeof WorkerPoolCard>> = (props
   );
 };
 
-// Read all three contract fields in one effect — module-level so the polled stream is stable.
-const readFleet = Effect.flatMap(WorkerPool, (pool) =>
-  Effect.all({
-    active: pool.active,
-    fleet: pool.fleetActive,
-    byNode: pool.activeByNode,
-  }),
-);
-
 /**
- * Contribution Layer: allowlist {@link WorkerPoolCard} for {@link WorkerPool}, skin provided.
- * `R = View.Registry` — Dashboard closes with {@link View.base}.
- *
- * @public
+ * Contribution Layer for Dashboard `views` — allowlist + skin.
+ * `R = View.Registry`; Dashboard closes with `View.base`.
  */
 export const layer = View.only(WorkerPool, WorkerPoolCard).pipe(
   Layer.provide(Layer.succeed(WorkerPoolCard, WorkerPoolCardView)),

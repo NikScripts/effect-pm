@@ -2,7 +2,8 @@
  * @module tui/cellWidgets
  *
  * Ink grid cells + fallback-only {@link base} registry. Default cells come from
- * `View.react(tui/DashboardViews.layer)`; override keys with `forKey` / `withEntries`.
+ * `View.react(tui/DashboardViews.layer)`. App overrides: Dashboard `views` /
+ * `View.only` (not `forKey`).
  *
  */
 import { Box, Text } from "ink";
@@ -338,7 +339,7 @@ const fallbackWidget: TuiCellWidget = ({ name, member, width, selected }) => (
 
 /**
  * Fallback-only TUI cell registry. Default cells come from
- * `View.react(tui/DashboardViews.layer)`. Override keys with `withEntries(base, [forKey(...)])`.
+ * `View.react(tui/DashboardViews.layer)`. Prefer Dashboard `views` / `View.only`.
  *
  * @public
  */

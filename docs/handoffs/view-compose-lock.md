@@ -143,7 +143,7 @@ First peel = header/body split; page-sized logs/schedule content follows.
 2. URL path = short member names (`/Nwsl/HttpApi`)  
 3. Default family Details body-only; shell owns back/title  
 4. `View.compose` runs hyperlink-web + TUI dashboard  
-5. WorkerPool example → `View.only`  
+5. WorkerPool example → `View.only` — **done** (`Dashboard views=` / hyperlink-web)  
 6. ViewKind stays `card | detail | page`; schedule/logs are **content** that fills sizes  
 7. Tests: `Navigator.memory` + Group card + short-name path + missing skin `R=never`
 
@@ -151,25 +151,31 @@ First peel = header/body split; page-sized logs/schedule content follows.
 
 ---
 
-## Target app shape
+## App shape (batteries Dashboard)
+
+```tsx
+// worker-pool-card.tsx
+export const layer = View.only(WorkerPool, WorkerPoolCard).pipe(
+  Layer.provide(Layer.succeed(WorkerPoolCard, WorkerPoolCardView)),
+)
+
+// app.tsx — Dashboard merges views under shipped skins + View.base
+<Dashboard runtime={runtime} group={ServicesHub} views={layer} />
+```
+
+Compose-only (no batteries shell) still looks like:
 
 ```tsx
 const ui = View.compose({
   views: Layer.mergeAll(
-    View.group(ServicesHub),
-    View.bind(Group.kind, WebGroupCard),
-    WebDashboardViews.layer,
+    UiDashboardViews.layer,
     View.only(WorkerPool, WorkerPoolCard),
+  ).pipe(
+    Layer.provideMerge(WebDashboardViews.skins),
+    Layer.provideMerge(View.base),
   ),
   navigator: Navigator.history(ServicesHub),
 })
-
-<RuntimeProvider runtime={runtime}>
-  <ui.Provider>
-    <ui.Grid />
-    <ui.Outlet />
-  </ui.Provider>
-</RuntimeProvider>
 ```
 
 Open Nwsl → HttpApi → browser shows `/Nwsl/HttpApi`.
