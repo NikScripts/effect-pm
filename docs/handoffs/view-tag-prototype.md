@@ -107,18 +107,16 @@ Statics are for things we used to jam into Tag args (`size`, later `spec`, etc.)
 `Prototype<Props, Requirement, Statics>` — Requirement is R-style debt:
 
 ```ts
-// Declare open (not fulfilled)
-const Open = View.Prototype<ViewProps, View.WithSize>()()
+View.SizeChrome                                      // open WithSize
+  .Prototype<{ dense?: boolean }>()({ spec: … })     // chain while open
+  .Prototype()({ size: "card" as const })            // fulfill → Requirement {}
 
-// Fulfill later (statics only)
-const Card = Open.Prototype()({ size: "card" as const })
-// Requirement → {} (discharged)
-
-View.SizeChrome                         // open WithSize
-View.Card / Detail / Page               // SizeChrome fulfilled
+View.Card / Detail / Page   // SizeChrome already fulfilled
 ```
 
-`bind` still needs `size` on the Tag. Tag does not fulfill — use `.Prototype()({…})`.
+Helpers: `RequirementOf` / `IsFulfilled` / `PropsOf` / `StaticsOf` / `OpenPrototype` /
+`FulfilledPrototype`. Tag does not fulfill — `bind` needs `.size` on the class.
+Guide: [`../guides/view-tag-types.md`](../guides/view-tag-types.md).
 
 ## Type previews (served docs)
 

@@ -141,8 +141,17 @@ type NextRequirement<
  *
  * @public
  */
-export type PropsOf<P> = P extends Prototype<infer Props, AnyStatics, infer _Statics>
+export type PropsOf<P> = P extends Prototype<infer Props, infer _R, infer _S>
   ? Props
+  : never;
+
+/**
+ * Accumulated statics type for a {@link Prototype}.
+ *
+ * @public
+ */
+export type StaticsOf<P> = P extends Prototype<infer _P, infer _R, infer Statics>
+  ? Statics
   : never;
 
 /**
@@ -150,7 +159,7 @@ export type PropsOf<P> = P extends Prototype<infer Props, AnyStatics, infer _Sta
  *
  * @public
  */
-export type RequirementOf<P> = P extends Prototype<infer _Props, infer Requirement, infer _Statics>
+export type RequirementOf<P> = P extends Prototype<infer _P, infer Requirement, infer _S>
   ? Requirement
   : never;
 
@@ -160,6 +169,26 @@ export type RequirementOf<P> = P extends Prototype<infer _Props, infer Requireme
  * @public
  */
 export type IsFulfilled<P> = [keyof RequirementOf<P>] extends [never] ? true : false;
+
+/**
+ * Prototype with an open Requirement (statics may still be empty).
+ *
+ * @public
+ */
+export type OpenPrototype<
+  Props extends object = ViewProps,
+  Requirement extends AnyStatics = WithSize,
+> = Prototype<Props, Requirement, {}>;
+
+/**
+ * Prototype whose Requirement is discharged (`{}`).
+ *
+ * @public
+ */
+export type FulfilledPrototype<
+  Props extends object = ViewProps,
+  Statics extends AnyStatics = {},
+> = Prototype<Props, {}, Statics>;
 
 /**
  * Constructable View handle from {@link Prototype.Tag}.
@@ -251,15 +280,15 @@ const makePrototype = <
   statics,
   Prototype:
     <NewProps extends object = {},>() =>
-    <const NewStatics extends AnyStatics = {},>(next?: NewStatics) =>
-      makePrototype({
+    <const NewStatics extends AnyStatics = {},>(next?: NewStatics) => {
+      type NextProps = Flat<Props & NewProps>;
+      type NextStatics = Flat<Statics & NewStatics>;
+      type NextReq = NextRequirement<Requirement, NextStatics>;
+      return makePrototype<NextProps, NextReq, NextStatics>({
         ...statics,
         ...(next ?? ({} as NewStatics)),
-      }) as Prototype<
-        Flat<Props & NewProps>,
-        NextRequirement<Requirement, Flat<Statics & NewStatics>>,
-        Flat<Statics & NewStatics>
-      >,
+      });
+    },
   Tag:
     <Self,>() =>
     <const K extends string>(key: K) => {
@@ -331,13 +360,24 @@ export type AnyView<Self extends object = object> = Context.Service<
 };
 
 /**
- * Shared size-chrome shell — Requirement {@link WithSize} open (not fulfilled).
- * Fulfill with `.Prototype()({ size: "card" | "detail" | "page" })`.
+ * Shared size-chrome shell — {@link WithSize} Requirement open (not fulfilled).
+ * Chain `.Prototype()` for props/statics, then fulfill with `{ size: "card" | … }`.
  * (Named `SizeChrome` — layout hints stay {@link Chrome}.)
+ *
+ * @example
+ * ```ts
+ * const Proto = View.SizeChrome
+ *   .Prototype<{ readonly dense?: boolean }>()({ spec: { kind: "app/x" } as const })
+ *   .Prototype()({ size: "card" as const })
+ * class X extends Proto.Tag<X>()("app/view/x") {}
+ * ```
  *
  * @public
  */
-export const SizeChrome = Prototype<ViewProps, WithSize>()();
+export const SizeChrome: OpenPrototype<ViewProps, WithSize> = Prototype<
+  ViewProps,
+  WithSize
+>()();
 
 /**
  * Size-chrome add-ons — {@link SizeChrome} with size fulfilled.
@@ -345,13 +385,16 @@ export const SizeChrome = Prototype<ViewProps, WithSize>()();
  *
  * @public
  */
-export const Card = SizeChrome.Prototype()({ size: "card" as const });
+export const Card: FulfilledPrototype<ViewProps, WithSize<"card">> =
+  SizeChrome.Prototype()({ size: "card" as const });
 
 /** @public */
-export const Detail = SizeChrome.Prototype()({ size: "detail" as const });
+export const Detail: FulfilledPrototype<ViewProps, WithSize<"detail">> =
+  SizeChrome.Prototype()({ size: "detail" as const });
 
 /** @public */
-export const Page = SizeChrome.Prototype()({ size: "page" as const });
+export const Page: FulfilledPrototype<ViewProps, WithSize<"page">> =
+  SizeChrome.Prototype()({ size: "page" as const });
 
 // =============================================================================
 // Registry service

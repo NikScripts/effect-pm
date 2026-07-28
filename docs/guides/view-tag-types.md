@@ -6,47 +6,54 @@
 <!-- docs-site-link:end -->
 # View Tag types
 
-A View Tag is a class. Mint it from size chrome (`Card` / `Detail` / `Page`), write the
-skin, export `layer`. Same shape as Effect’s `Context.Service`.
+A View Tag is a class. Mint it from size chrome, write the skin, export `layer`.
+Same shape as Effect’s `Context.Service`.
 
-## How `Card` / `Detail` / `Page` are created
+## Requirement (R-style)
 
-Size is an R-style **Requirement** (`WithSize`). Declare open on `SizeChrome`,
-fulfill later with `.Prototype()({ size: "card" })` — Requirement discharges to
-`{}`. Shipped `Card` / `Detail` / `Page` are those fulfillments:
+`Prototype<Props, Requirement>` carries a **debt**. Declare it open, chain steps,
+then fulfill — Requirement discharges to `{}` (like Effect `R → never`).
 
 {.twoslash}
 ``` ts
 import { View } from "hyperlink-ts/ui"
 
-// Same construction as the shipped add-ons:
-const Card = View.Prototype<View.ViewProps>()({
-  size: "card" as const,
-})
-const Detail = View.Prototype<View.ViewProps>()({
-  size: "detail" as const,
-})
-const Page = View.Prototype<View.ViewProps>()({
-  size: "page" as const,
+// Open — WithSize unpaid
+const Open = View.SizeChrome
+// Prefer View.SizeChrome, or:
+// View.Prototype<View.ViewProps, View.WithSize>()()
+
+// Chain while open (props + statics, additive)
+const Mid = Open.Prototype<{ readonly dense?: boolean }>()({
+  spec: { kind: "app/queue" } as const,
 })
 
-// Prefer View.Card / View.Detail / View.Page — then mint Tags:
-class MyCard extends View.Card.Tag<MyCard>()("app/view/my-card") {}
-class MyDetail extends View.Detail.Tag<MyDetail>()("app/view/my-detail") {}
-class MyPage extends View.Page.Tag<MyPage>()("app/view/my-page") {}
+// Fulfill last
+const Proto = Mid.Prototype()({ size: "card" as const })
 
-MyCard.size
+class PoolCard extends Proto.Tag<PoolCard>()("app/view/pool-card") {}
+
+PoolCard.size
 //         ^?
-MyDetail.size
-//           ^?
-MyPage.size
-//         ^?
+```
+
+Shipped shortcuts: `View.Card` / `Detail` / `Page` are `SizeChrome` already fulfilled.
+
+{.twoslash}
+``` ts
+import { View } from "hyperlink-ts/ui"
+
+View.Card.statics.size
+//              ^?
+View.Detail.statics.size
+//                ^?
+View.Page.statics.size
+//              ^?
 ```
 
 ## Card + Detail + Page + `layer`
 
-Shipped modules stamp a `spec` on each sized Prototype, mint classes, provide skins,
-export `layer` (not `*Live`) — same pattern as
+Stamp `spec`, mint classes, provide skins, export `layer` — same pattern as
 [`WorkPoolView.ts`](../../src/ui/WorkPoolView.ts):
 
 {.twoslash}
@@ -90,12 +97,8 @@ export const layer = Layer.mergeAll(
 ```
 
 Annotate skins with **`PoolCard["Service"]`** (no `typeof`).
-`props` is `View.ViewProps` (`tag`, optional `name`).
 
-## Extra props on a sized Prototype
-
-Accumulate props, then mint the class — same as
-[`worker-pool-card.tsx`](../../examples/hyperlink-web/worker-pool-card.tsx):
+## Extra props
 
 {.twoslash}
 ``` ts
@@ -121,11 +124,7 @@ const DenseCardView: DenseCard["Service"] = (props) => {
 export const layer = Layer.succeed(DenseCard, DenseCardView)
 ```
 
-`props` is `View.ViewProps & { dense?: boolean }`.
-
 ## Wire into Dashboard
-
-Allowlist + skin (`R = View.Registry`; Dashboard closes with `View.base`):
 
 ```ts
 import { Layer } from "effect"
