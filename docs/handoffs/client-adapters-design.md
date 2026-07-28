@@ -328,7 +328,7 @@ type Handle = {
 | `byTagKey` | `tag.key` | `AnyView[]` (ordered) | `View.bindTag` |
 | `byKind` | stamped contract kind (`WorkPool.kind`, …) | `AnyView[]` | `View.bindKind` |
 
-- **View service** from `View.Tag` = class `Context.Service` whose Svc is `ViewComponent`, plus `key` / `kind` / `spec`.
+- **View service** from `View.Tag` = class `Context.Service` whose Svc is `View.View`, plus `key` / `size` / `spec`.
 - **Provide TSX** with `Layer.succeed(PoolCard, Comp)` (or `effect` / `sync`).
 - **Binds require** those View services (`yield*` at bind build) so they appear in Layer `R` until provided.
 - **No `groupId` in View.** Match: `tag.key` → `kindOf(tag)` → fallback; pins via `Hyperlink.components([…])` replace per kind.
@@ -340,7 +340,7 @@ type Handle = {
 ```ts
 type Resolved = {
   readonly handle: Handle
-  readonly Component: ViewComponent
+  readonly Component: View.View
 }
 ```
 
@@ -496,7 +496,7 @@ class PoolCard extends View.Tag<PoolCard>()(
   "card",
   WorkPool.queueControlSpec,
 ) {}
-// PoolCard is a Context.Service<ViewComponent> + { key, kind, spec }
+// PoolCard is a Context.Service<View.View> + { key, size, spec }
 
 View.bindKind(WorkPool.kind, PoolCard)
 // Layer.effectDiscard: yield* Registry; yield* PoolCard; record bind

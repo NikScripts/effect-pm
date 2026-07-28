@@ -64,7 +64,7 @@ const NodeRow = (props: {
   </div>
 );
 
-const WorkerPoolCardView: View.ViewFn<View.Type<typeof WorkerPoolCard>> = (props) => {
+const WorkerPoolCardView: View.View<View.Type<typeof WorkerPoolCard>> = (props) => {
   const runtime = useRuntime();
   const poll = React.useMemo(
     () =>

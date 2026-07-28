@@ -4,9 +4,10 @@
  * View **DI** (Context) + optional size chrome (card/detail/page) + React matchers.
  * Notes: `docs/handoffs/view-tag-prototype.md`. Design: `docs/handoffs/client-adapters-design.md`.
  *
- * - `View.Tag` / `View.Prototype` → component DI. Self = **props** (reversed service shape).
- * - Size chrome add-on: `View.Card` / `View.Detail` / `View.Page` **prototypes** stamp `size`.
- * - Matchers live on {@link react} / {@link compose} kits (`ui.Card`) and {@link useMatch}.
+ * - `View.Tag` / `View.Prototype` → component DI. Self = DI identity; props from Prototype.
+ * - Svc type is {@link View}`<Props>` (props in → element out). Defaults to {@link ViewProps}.
+ * - Size chrome: `View.Card` / `Detail` / `Page` prototypes stamp `size`.
+ * - Matchers on {@link react} / {@link compose} kits (`ui.Card`) and {@link useMatch}.
  * - `View.bind` / `View.only` register sized handles; `View.react` needs Layer `R = never`.
  */
 import * as React from "react";
@@ -80,16 +81,19 @@ export const useChrome = (): Chrome => React.useContext(ChromeContext);
 
 /**
  * Component Svc for a View tag — **props in, element out** (reversed vs Hyperlink service APIs).
+ * Defaults to {@link ViewProps} (card/detail/page chrome); pass a props bag for custom Prototypes.
+ *
+ * @example
+ * ```ts
+ * const skin: View.View<View.Type<typeof PoolCard>> = (props) => …
+ * const chrome: View.View = (props) => … // ViewProps
+ * ```
  *
  * @public
  */
-export type ViewFn<Props> = (props: Props) => React.ReactElement | null;
-
-/**
- * @deprecated Prefer {@link ViewFn}`<ViewProps>` — kept for matcher call sites.
- * @public
- */
-export type ViewComponent = ViewFn<ViewProps>;
+export type View<Props extends object = ViewProps> = (
+  props: Props,
+) => React.ReactElement | null;
 
 /**
  * A matched view ready to render (size chrome).
@@ -99,7 +103,7 @@ export type ViewComponent = ViewFn<ViewProps>;
 export interface Resolved {
   readonly key: ViewKey;
   readonly kind: ViewKind;
-  readonly Component: ViewComponent;
+  readonly Component: View;
 }
 
 // =============================================================================
@@ -116,24 +120,11 @@ type AnyStatics = Record<string, unknown>;
 export type PropsOf<P> = P extends Prototype<infer Props, AnyStatics> ? Props : never;
 
 /**
- * A View prototype — props (type) + static accessors (runtime) before minting a {@link Tag}.
- *
- * @example
- * ```ts
- * const Base = View.Prototype<{ readonly tag: ViewTag; readonly name?: string }>()()
- * const Card = Base.Prototype()({ size: "card" as const })
- * interface ScheduleCard extends View.PropsOf<typeof Card> {}
- * class ScheduleCard extends Card.Tag<ScheduleCard>()("hyperlink/view/schedule-card") {}
- * ```
- *
- * @public
- */
-/**
  * Constructable View handle from {@link Prototype.Tag}.
  *
  * - **Self** — Context identity (the class)
  * - **Props** — component input (reversed service shape) from the Prototype chain
- * - **Svc** — {@link ViewFn}`<Props>` (provide with `Layer.succeed`)
+ * - **Svc** — {@link View}`<Props>` (provide with `Layer.succeed`)
  *
  * `ServiceClass` instance typing cannot be the props bag (it carries key/Service brands),
  * so props live on the Prototype; read them with {@link Type} / {@link PropsOf}.
@@ -145,7 +136,7 @@ export type ViewHandle<
   K extends string,
   Props extends object,
   Statics extends AnyStatics = {},
-> = Context.ServiceClass<Self, K, ViewFn<Props>> &
+> = Context.ServiceClass<Self, K, View<Props>> &
   Statics & {
     /** Phantom — component props for this handle (`View.Type<typeof PoolCard>`). */
     readonly Type: Props
@@ -158,18 +149,26 @@ export type ViewHandle<
  */
 export type Type<T> = T extends { readonly Type: infer P } ? P : never;
 
+/**
+ * Props (type) + static accessors (runtime) before minting a {@link Tag}.
+ *
+ * @example
+ * ```ts
+ * const Card = View.Prototype<{ readonly tag: ViewTag }>()({ size: "card" as const })
+ * class ScheduleCard extends Card.Tag<ScheduleCard>()("hyperlink/view/schedule-card") {}
+ * ```
+ *
+ * @public
+ */
 export interface Prototype<
   in out Props extends object,
   out Statics extends AnyStatics = {},
 > {
   readonly statics: Statics;
   /**
-   * Extend props (type parameter) and/or merge more static accessors.
-   * In `.tsx` use a trailing comma on type args: `proto.Prototype<NewProps,>()`.
-   */
-  /**
    * Extend props (type arg) then merge static accessors (value).
-   * `proto.Prototype()({ size: "card" })` or `proto.Prototype<{ sel?: boolean }>()({ … })`.
+   * In `.tsx` use a trailing comma / type alias so `<…>` is not JSX:
+   * `proto.Prototype<{ sel?: boolean }>()({ … })`.
    */
   readonly Prototype: <NewProps extends object = {},>() => <
     const NewStatics extends AnyStatics = {},
@@ -182,7 +181,7 @@ export interface Prototype<
    */
   readonly Tag: <Self,>() => <const K extends string>(
     key: K,
-  ) => Context.ServiceClass<Self, K, ViewFn<Props>> & Statics & {
+  ) => Context.ServiceClass<Self, K, View<Props>> & Statics & {
     readonly Type: Props
   };
 }
@@ -205,7 +204,7 @@ const makePrototype = <
     <Self,>() =>
     <const K extends string>(key: K) => {
       // Infer Object.assign like Group.Tag so class-extends keeps static accessors.
-      const base = Context.Service<Self, ViewFn<Props>>()(key);
+      const base = Context.Service<Self, View<Props>>()(key);
       return Object.assign(base, statics, {
         Type: undefined as unknown as Props,
       });
@@ -213,7 +212,9 @@ const makePrototype = <
 });
 
 /**
- * Start a prototype chain — props via type arg, optional static accessors via value.
+ * Start a prototype chain — props via type arg, statics via value:
+ * `View.Prototype<Props>()(statics?)`.
+ * (Non-curried `Prototype<Props>(statics)` defaults Statics to `{}` and drops `size`.)
  *
  * @example
  * ```ts
@@ -222,10 +223,6 @@ const makePrototype = <
  * ```
  *
  * @public
- */
-/**
- * Props via type arg, statics via value: `View.Prototype<Props>()(statics?)`.
- * (Explicit `Prototype<Props>(statics)` would default Statics to `{}` and drop inference.)
  */
 export const Prototype =
   <Props extends object = {},>() =>
@@ -256,19 +253,13 @@ export const Tag = Prototype()().Tag;
  */
 export type AnyView<Self extends object = object> = Context.Service<
   Self,
-  ViewFn<Self>
+  View<Self>
 > & {
   readonly key: ViewKey;
   readonly size?: ViewKind;
   readonly spec?: unknown;
 };
 
-/**
- * Size-chrome add-on prototypes — stamp `size` for {@link bind} / matchers.
- * Matcher components remain {@link Card} / {@link Detail} / {@link Page} (PascalCase).
- *
- * @public
- */
 /**
  * Size-chrome add-on prototypes — stamp `size` for {@link bind} / kit matchers.
  * Matcher components are **not** these — use `View.react(…).Card` or {@link useMatch}.
@@ -297,7 +288,7 @@ export const Page = Prototype<ViewProps>()({
 type Bound = {
   readonly key: ViewKey;
   readonly kind: ViewKind;
-  readonly Component: ViewComponent;
+  readonly Component: View;
 };
 
 /** @public */
@@ -419,7 +410,7 @@ type ViewService<Id> = {
   readonly key: ViewKey;
   readonly size: ViewKind;
   readonly spec?: unknown;
-} & Context.Key<Id, ViewFn<ViewProps>>;
+} & Context.Key<Id, View>;
 
 /** Avoid `Foo<Id>>` in .tsx return positions (parsed as JSX). */
 type ContribLayer<R> = Layer.Layer<never, never, Registry | R>;
@@ -557,28 +548,28 @@ export const group = (appGroup: GroupLike): Layer.Layer<GroupDash> =>
 // Fallbacks + react kit
 // =============================================================================
 
-const FallbackCard: ViewComponent = (props) =>
+const FallbackCard: View = (props) =>
   React.createElement(
     "div",
     { "data-hyperlink-view": "fallback-card" },
     props.name ?? props.tag.key,
   );
 
-const FallbackDetail: ViewComponent = (props) =>
+const FallbackDetail: View = (props) =>
   React.createElement(
     "div",
     { "data-hyperlink-view": "fallback-detail" },
     props.name ?? props.tag.key,
   );
 
-const FallbackPage: ViewComponent = (props) =>
+const FallbackPage: View = (props) =>
   React.createElement(
     "div",
     { "data-hyperlink-view": "fallback-page" },
     props.name ?? props.tag.key,
   );
 
-const fallbackFor = (viewKind: ViewKind): ViewComponent => {
+const fallbackFor = (viewKind: ViewKind): View => {
   if (viewKind === "card") return FallbackCard;
   if (viewKind === "detail") return FallbackDetail;
   return FallbackPage;
@@ -694,9 +685,9 @@ const MatchPage = (props: ViewProps): React.ReactElement | null =>
  * @public
  */
 export const useMatch = (): {
-  readonly Card: ViewComponent;
-  readonly Detail: ViewComponent;
-  readonly Page: ViewComponent;
+  readonly Card: View;
+  readonly Detail: View;
+  readonly Page: View;
 } =>
   // Stable matcher components — they require Provider when *rendered* (via useKit).
   ({ Card: MatchCard, Detail: MatchDetail, Page: MatchPage });

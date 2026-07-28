@@ -68,7 +68,7 @@ const statusOf = (phase: string, paused: boolean): Status =>
 
 // ── cards ───────────────────────────────────────────────────────────────────
 
-const GroupCardView: View.ViewComponent = (props) => {
+const GroupCardView: View.View = (props) => {
   if (!Group.isGroup(props.tag)) return null;
   const chrome = View.useChrome();
   return (
@@ -81,7 +81,7 @@ const GroupCardView: View.ViewComponent = (props) => {
   );
 };
 
-const PoolCardView: View.ViewComponent = (props) => {
+const PoolCardView: View.View = (props) => {
   if (!isQueueTag(props.tag)) return null;
   const chrome = View.useChrome();
   return (
@@ -94,7 +94,7 @@ const PoolCardView: View.ViewComponent = (props) => {
   );
 };
 
-const PriorityCardView: View.ViewComponent = (props) => {
+const PriorityCardView: View.View = (props) => {
   if (!isPriorityTag(props.tag)) return null;
   const chrome = View.useChrome();
   return (
@@ -107,7 +107,7 @@ const PriorityCardView: View.ViewComponent = (props) => {
   );
 };
 
-const DaemonCardView: View.ViewComponent = (props) => {
+const DaemonCardView: View.View = (props) => {
   if (!isDaemonTag(props.tag)) return null;
   const chrome = View.useChrome();
   return (
@@ -120,7 +120,7 @@ const DaemonCardView: View.ViewComponent = (props) => {
   );
 };
 
-const ApiCardView: View.ViewComponent = (props) => {
+const ApiCardView: View.View = (props) => {
   if (!isApiTag(props.tag)) return null;
   const chrome = View.useChrome();
   const runtime = useRuntime();
@@ -135,7 +135,7 @@ const ApiCardView: View.ViewComponent = (props) => {
   );
 };
 
-const FleetCardView: View.ViewComponent = (props) => {
+const FleetCardView: View.View = (props) => {
   if (!isFleetHealthTag(props.tag)) return null;
   const chrome = View.useChrome();
   const runtime = useRuntime();
@@ -150,7 +150,7 @@ const FleetCardView: View.ViewComponent = (props) => {
   );
 };
 
-const TelemetryCardView: View.ViewComponent = (props) => {
+const TelemetryCardView: View.View = (props) => {
   if (!isTelemetryTag(props.tag)) return null;
   const chrome = View.useChrome();
   const runtime = useRuntime();
@@ -165,7 +165,7 @@ const TelemetryCardView: View.ViewComponent = (props) => {
   );
 };
 
-const ShardMapCardView: View.ViewComponent = (props) => {
+const ShardMapCardView: View.View = (props) => {
   if (!isShardMapTag(props.tag)) return null;
   const chrome = View.useChrome();
   const runtime = useRuntime();
@@ -180,7 +180,7 @@ const ShardMapCardView: View.ViewComponent = (props) => {
   );
 };
 
-const GateCardView: View.ViewComponent = (props) => {
+const GateCardView: View.View = (props) => {
   if (!isGateTag(props.tag)) return null;
   const chrome = View.useChrome();
   const runtime = useRuntime();
@@ -195,7 +195,7 @@ const GateCardView: View.ViewComponent = (props) => {
   );
 };
 
-const HyperlinkCardView: View.ViewComponent = (props) => {
+const HyperlinkCardView: View.View = (props) => {
   const chrome = View.useChrome();
   return (
     <FallbackCell
@@ -248,7 +248,7 @@ const QueueDetailPanel = (props: {
   );
 };
 
-const PoolDetailView: View.ViewComponent = (props) => {
+const PoolDetailView: View.View = (props) => {
   if (!isQueueTag(props.tag)) return null;
   const chrome = View.useChrome();
   return (
@@ -260,7 +260,7 @@ const PoolDetailView: View.ViewComponent = (props) => {
   );
 };
 
-const PriorityDetailView: View.ViewComponent = (props) => {
+const PriorityDetailView: View.View = (props) => {
   if (!isPriorityTag(props.tag)) return null;
   const chrome = View.useChrome();
   return (
@@ -274,7 +274,7 @@ const PriorityDetailView: View.ViewComponent = (props) => {
   );
 };
 
-const DaemonDetailView: View.ViewComponent = (props) => {
+const DaemonDetailView: View.View = (props) => {
   if (!isDaemonTag(props.tag)) return null;
   const chrome = View.useChrome();
   return (
@@ -288,7 +288,7 @@ const DaemonDetailView: View.ViewComponent = (props) => {
   );
 };
 
-const ApiDetailView: View.ViewComponent = (props) => {
+const ApiDetailView: View.View = (props) => {
   if (!isApiTag(props.tag)) return null;
   const chrome = View.useChrome();
   const runtime = useRuntime();
@@ -303,7 +303,7 @@ const ApiDetailView: View.ViewComponent = (props) => {
   );
 };
 
-const FleetDetailView: View.ViewComponent = (props) => {
+const FleetDetailView: View.View = (props) => {
   if (!isFleetHealthTag(props.tag)) return null;
   const chrome = View.useChrome();
   const runtime = useRuntime();
@@ -318,7 +318,7 @@ const FleetDetailView: View.ViewComponent = (props) => {
   );
 };
 
-const TelemetryDetailView: View.ViewComponent = (props) => {
+const TelemetryDetailView: View.View = (props) => {
   if (!isTelemetryTag(props.tag)) return null;
   const chrome = View.useChrome();
   const runtime = useRuntime();
@@ -333,7 +333,7 @@ const TelemetryDetailView: View.ViewComponent = (props) => {
   );
 };
 
-const ShardMapDetailView: View.ViewComponent = (props) => {
+const ShardMapDetailView: View.View = (props) => {
   if (!isShardMapTag(props.tag)) return null;
   const chrome = View.useChrome();
   const runtime = useRuntime();
@@ -348,7 +348,7 @@ const ShardMapDetailView: View.ViewComponent = (props) => {
   );
 };
 
-const GateDetailView: View.ViewComponent = (props) => {
+const GateDetailView: View.View = (props) => {
   if (!isGateTag(props.tag)) return null;
   const chrome = View.useChrome();
   const runtime = useRuntime();

@@ -24,7 +24,7 @@ import {
 const statusOf = (phase: string, paused: boolean): Status =>
   phase === "off" ? "off" : phase === "draining" ? "draining" : paused ? "paused" : "running";
 
-const PoolCardView: View.ViewComponent = (props) => {
+const PoolCardView: View.View = (props) => {
   if (!isQueueTag(props.tag)) return null;
   const chrome = View.useChrome();
   return (
@@ -76,7 +76,7 @@ const QueueDetailPanel = (props: {
   );
 };
 
-const PoolDetailView: View.ViewComponent = (props) => {
+const PoolDetailView: View.View = (props) => {
   if (!isQueueTag(props.tag)) return null;
   const chrome = View.useChrome();
   return (

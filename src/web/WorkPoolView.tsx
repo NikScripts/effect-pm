@@ -9,7 +9,7 @@ import * as View from "../ui/View";
 import * as WorkPoolView from "../ui/WorkPoolView";
 import { displayName, QueueCard, QueueDetailPanel } from "./widgets";
 
-const PoolCardView: View.ViewComponent = (props) => {
+const PoolCardView: View.View = (props) => {
   if (!isQueueTag(props.tag)) return null;
   return (
     <QueueCard
@@ -19,7 +19,7 @@ const PoolCardView: View.ViewComponent = (props) => {
   );
 };
 
-const PoolDetailView: View.ViewComponent = (props) => {
+const PoolDetailView: View.View = (props) => {
   if (!isQueueTag(props.tag)) return null;
   return <QueueDetailPanel tag={props.tag} />;
 };

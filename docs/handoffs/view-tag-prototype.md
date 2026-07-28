@@ -103,8 +103,9 @@ Statics are for things we used to jam into Tag args (`size`, later `spec`, etc.)
 ## Checkpoint notes (2026-07-27)
 
 - `View.Prototype<Props>()(statics)` **must** be curried — `Prototype<Props>(statics)` defaults Statics to `{}` and drops `size`.
-- Reversed shape = `ViewFn<Props>` from Prototype; Self = DI identity. Phantom `Type` + `View.Type<typeof Tag>`.
+- Reversed shape = `View.View<Props>` from Prototype; Self = DI identity. Phantom `Type` + `View.Type<typeof Tag>`.
 - Matchers moved to kit / `useMatch`; size protos are PascalCase `View.Card`/`Detail`/`Page`.
+- Svc type renamed: `ViewFn` / `ViewComponent` → **`View.View`** (defaults to `ViewProps`).
 
 ## WorkerPool end-to-end (2026-07-28)
 

@@ -60,12 +60,12 @@ import {
 
 // ── cards (presentational — Cell wraps with button) ─────────────────────────
 
-const GroupCardView: View.ViewComponent = (props) => {
+const GroupCardView: View.View = (props) => {
   if (!Group.isGroup(props.tag)) return null;
   return <GroupCard node={props.tag} name={props.name ?? displayName(props.tag.key)} />;
 };
 
-const PoolCardView: View.ViewComponent = (props) => {
+const PoolCardView: View.View = (props) => {
   if (!isQueueTag(props.tag)) return null;
   return (
     <QueueCard
@@ -75,7 +75,7 @@ const PoolCardView: View.ViewComponent = (props) => {
   );
 };
 
-const PriorityCardView: View.ViewComponent = (props) => {
+const PriorityCardView: View.View = (props) => {
   if (!isPriorityTag(props.tag)) return null;
   return (
     <PriorityCard
@@ -85,7 +85,7 @@ const PriorityCardView: View.ViewComponent = (props) => {
   );
 };
 
-const DaemonCardView: View.ViewComponent = (props) => {
+const DaemonCardView: View.View = (props) => {
   if (!isDaemonTag(props.tag)) return null;
   return (
     <DaemonCard
@@ -95,7 +95,7 @@ const DaemonCardView: View.ViewComponent = (props) => {
   );
 };
 
-const ApiCardView: View.ViewComponent = (props) => {
+const ApiCardView: View.View = (props) => {
   if (!isApiTag(props.tag)) return null;
   return (
     <ApiCard
@@ -105,7 +105,7 @@ const ApiCardView: View.ViewComponent = (props) => {
   );
 };
 
-const FleetCardView: View.ViewComponent = (props) => {
+const FleetCardView: View.View = (props) => {
   if (!isFleetHealthTag(props.tag)) return null;
   return (
     <FleetHealthCard
@@ -115,7 +115,7 @@ const FleetCardView: View.ViewComponent = (props) => {
   );
 };
 
-const TelemetryCardView: View.ViewComponent = (props) => {
+const TelemetryCardView: View.View = (props) => {
   if (!isTelemetryTag(props.tag)) return null;
   return (
     <TelemetryCard
@@ -125,7 +125,7 @@ const TelemetryCardView: View.ViewComponent = (props) => {
   );
 };
 
-const ShardMapCardView: View.ViewComponent = (props) => {
+const ShardMapCardView: View.View = (props) => {
   if (!isShardMapTag(props.tag)) return null;
   return (
     <ShardMapCard
@@ -135,7 +135,7 @@ const ShardMapCardView: View.ViewComponent = (props) => {
   );
 };
 
-const GateCardView: View.ViewComponent = (props) => {
+const GateCardView: View.View = (props) => {
   if (!isGateTag(props.tag)) return null;
   return (
     <GateCard
@@ -145,7 +145,7 @@ const GateCardView: View.ViewComponent = (props) => {
   );
 };
 
-const HyperlinkCardView: View.ViewComponent = (props) => (
+const HyperlinkCardView: View.View = (props) => (
   <HyperlinkCard
     tag={props.tag}
     name={props.name ?? displayName(props.tag.key)}
@@ -154,12 +154,12 @@ const HyperlinkCardView: View.ViewComponent = (props) => (
 
 // ── details ─────────────────────────────────────────────────────────────────
 
-const PoolDetailView: View.ViewComponent = (props) => {
+const PoolDetailView: View.View = (props) => {
   if (!isQueueTag(props.tag)) return null;
   return <QueueDetailPanel tag={props.tag} />;
 };
 
-const PriorityDetailView: View.ViewComponent = (props) => {
+const PriorityDetailView: View.View = (props) => {
   if (!isPriorityTag(props.tag)) return null;
   // Shell Outlet owns back/title; body-only when Navigator is present (lock J).
   const nav = Navigator.useNavigatorOption();
@@ -173,7 +173,7 @@ const PriorityDetailView: View.ViewComponent = (props) => {
   );
 };
 
-const DaemonDetailView: View.ViewComponent = (props) => {
+const DaemonDetailView: View.View = (props) => {
   if (!isDaemonTag(props.tag)) return null;
   const nav = Navigator.useNavigatorOption();
   const bundle = useDaemonBundle(props.tag);
@@ -199,7 +199,7 @@ const DaemonDetailView: View.ViewComponent = (props) => {
   );
 };
 
-const ApiDetailView: View.ViewComponent = (props) => {
+const ApiDetailView: View.View = (props) => {
   if (!isApiTag(props.tag)) return null;
   const bundle = useApiBundle(props.tag);
   return (
@@ -214,7 +214,7 @@ const ApiDetailView: View.ViewComponent = (props) => {
   );
 };
 
-const FleetDetailView: View.ViewComponent = (props) => {
+const FleetDetailView: View.View = (props) => {
   if (!isFleetHealthTag(props.tag)) return null;
   const nav = Navigator.useNavigatorOption();
   return (
@@ -227,7 +227,7 @@ const FleetDetailView: View.ViewComponent = (props) => {
   );
 };
 
-const TelemetryDetailView: View.ViewComponent = (props) => {
+const TelemetryDetailView: View.View = (props) => {
   if (!isTelemetryTag(props.tag)) return null;
   const nav = Navigator.useNavigatorOption();
   return (
@@ -240,7 +240,7 @@ const TelemetryDetailView: View.ViewComponent = (props) => {
   );
 };
 
-const ShardMapDetailView: View.ViewComponent = (props) => {
+const ShardMapDetailView: View.View = (props) => {
   if (!isShardMapTag(props.tag)) return null;
   const nav = Navigator.useNavigatorOption();
   return (
@@ -253,7 +253,7 @@ const ShardMapDetailView: View.ViewComponent = (props) => {
   );
 };
 
-const GateDetailView: View.ViewComponent = (props) => {
+const GateDetailView: View.View = (props) => {
   if (!isGateTag(props.tag)) return null;
   const nav = Navigator.useNavigatorOption();
   return (
