@@ -65,12 +65,22 @@ describe("Node.assume", () => {
           expect(after.ownership).toBe("self");
 
           const reuse = yield* Effect.exit(Node.assume(node, { token }));
-          expectTaggedFailure(reuse, "AssumeTokenReused");
+          const reuseErr = expectTaggedFailure(reuse, "AssumeTokenReused");
+          expect(
+            "node" in reuseErr && reuseErr.node === "assume/ready-node",
+          ).toBe(true);
 
           const mismatch = yield* Effect.exit(
             Node.assume(node, { token: "wrong-token" }),
           );
-          expectTaggedFailure(mismatch, "AssumeTokenMismatch");
+          const mismatchErr = expectTaggedFailure(
+            mismatch,
+            "AssumeTokenMismatch",
+          );
+          expect(
+            "node" in mismatchErr &&
+              mismatchErr.node === "assume/ready-node",
+          ).toBe(true);
         }),
       ).pipe(Effect.provide(server), Effect.scoped);
     }),

@@ -367,7 +367,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 - **Owner said:** Getting rid of ApiMetrics by combining into HttpApi Gate; all Gates should use rate limiting; fleet rate limiting is more important than an ApiMetrics migrate slice — bake limiter into the updated HttpApiClient.
 - **Chose (direction):** Research Effect `RateLimiter` + proposal [`../plans/fleet-rate-limiting.md`](../plans/fleet-rate-limiting.md). Eng order lean: Gate `rateLimit` substrate (shared store) → observe nest → HttpApiClient Tag (local routes) → absorb ApiMetrics. Not a standalone ApiMetrics migration.
-- **Chose (LOCKED — store wiring):** Presence-driven like WorkPool durability — `serviceOption(RateLimiterStore)` (layer is the switch). Soft **memory** when absent (single-node OK). Provide Redis (or later SQL) at the root for fleet; no config flag for “which store.”
+- **Chose (LOCKED — store wiring):** Presence-driven like WorkPool durability — `serviceOption(RateLimiterStore)` (layer is the switch). Soft **memory** when absent (single-node OK). Provide Effect’s fleet store at the root (today Redis); no config flag for “which store.”
 - **Chose (R1 Eng lean):** Gate default `onExceeded: "delay"`; whole-gate key = resource id; nest name lean `observe` (R2).
 - **Chose (R3 Eng):** WorkPool matches Gate presence-driven store (no auto Soft layer merge that blocked Redis). Fleet verified with shared memory store in CI; Redis recipe in guides. Soft + multi-node = docs warning (N× limit), not fail-loud.
 - **Chose (bake 2026-07-27 — nest name):** Wire nest is **`metrics`** (not `observe` / `limit`). Covers absorbed ApiMetrics usage + rate-limit remaining/exceeded. WorkPool parity. Factory lean: `Gate.HttpApiClient` Tag + app-owned `static layer = Gate.httpApiClientLayer(Tag)` (no baked Service layer).
@@ -376,7 +376,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Chose (bake 2026-07-27 — rateLimit keying):** v1 **whole-client only**. Service key (Tag id) and **rate-limit bucket key are separate fields**. `rateLimit.key` **optional — omit inherits service key**; set explicitly to share/split fleet budgets. Stable metadata exposes both (`key` / Tag id + resolved `rateLimitKey`) plus `metricsKey`. Nest holds live data only. Per-route keys later.
 - **Chose (bake 2026-07-27 — adaptive 429):** **Opt-in in R4** (Effect `adaptiveConsume` / feedback). Default off / absent — fixed `rateLimit` policy alone is enough to ship the Tag reshape.
 - **Chose (bake 2026-07-27 — R2 ordinary Gate):** Light **`metrics` nest on ordinary Gates when `rateLimit` is set** — limiter live fields (`remaining` / `resetAfter` / `exceeded`) + stable metadata (`rateLimitKey`, `metricsKey`). No HTTP usage registry on ordinary Gates. HttpApi R4 adds usage/windows on the same nest.
-- **Chose (LOCKED + Eng’d — R3b live Redis):** Fleet store v1 = Effect **Redis only** (`NodeRedis.layer` + `RateLimiter.layerStoreRedis`). Live proof: Gate + WorkPool shared Redis budget, **child-process peer** consume, plus Effect `Persistence.layerRedis` / `PersistedQueue.layerStoreRedis` smokes (`test/rate-limit-redis.test.ts`, `test/effect-redis-stores.test.ts`). Optional peer `ioredis`. Compose: `docker-compose.redis.yml`. SQL RateLimiterStore deferred.
+- **Chose (LOCKED + Eng’d — R3b live Redis):** Fleet store v1 = Effect **Redis** (`NodeRedis.layer` + `RateLimiter.layerStoreRedis`). Live proof: Gate + WorkPool shared Redis budget, **child-process peer** consume, plus Effect `Persistence.layerRedis` / `PersistedQueue.layerStoreRedis` smokes (`test/rate-limit-redis.test.ts`, `test/effect-redis-stores.test.ts`). Optional peer `ioredis`. Compose: `docker-compose.redis.yml`.
 - **Chose (Eng’d — R2 ordinary Gate metrics):** Wire nest always present as **`metrics`** with limiter live fields (`remaining` / `resetAfter` / `exceeded`); updates when `rateLimit` set. Stable Tag metadata via `Gate.rateLimitKeyOf` / `Gate.metricsKeyOf` (not under nest path). No HTTP usage registry on ordinary Gates.
 - **Chose (Eng’d — R4 HttpApiClient):** `Gate.HttpApiClient` Tag + app-owned `Gate.httpApiClientLayer(Tag, runtime)`; nest `metrics` with limiter fields + `usage` / `windows`; const `metricsKey` escape + `MetricsKeyCollision`; whole-client `rateLimit` (key inherits Tag id). Sibling `ApiMetrics` deprecated. Legacy `httpApiClient` / `httpApiClientService` / `httpApiClientLayerEffect` kept for migration (`httpApiClientLayer` now = Tag layer).
 - **Chose (Eng’d — R4 adaptive 429):** Opt-in `adaptive: true | { key? }` on HttpApiClient mint; requires `rateLimit` (`AdaptiveRequiresRateLimit` otherwise). `adaptiveConsume` before round-trip + `adaptiveFeedback` on response; key default `upstream:{host}` from layer `baseUrl`; `Retry-After` delta-seconds only in v1.
@@ -394,14 +394,20 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Owner said:** “Go” on tip-sync A1–A2 + park `cell` (lean: tip-sync → park `cell` → idle).
 - **Chose / LOCKED:** No Spec builder for live plain `A` (`cell` / `live` / `state`). Dashboards use `ref` (Subscribable) + host adapters. Construction adornments A1–A2 tip-synced to `integration`.
 - **Rejected:** Eng’ing a push-cell Spec leaf; keeping `cell` as an open bake item.
-- **Still open:** optional fleet R5.
-- **Supervisor impact:** A3 tip-synced; Agent 4 idle (optional R5).
+- **Supervisor impact:** A3 tip-synced; Agent 4 idle.
 
 ## 2026-07-27 — A3 factory `{ defaults }` sugar
 
 - **Owner said:** “Okay fine we can do it if it’s clean and typed nice.”
 - **Chose / Eng’d:** Tag options `{ defaults: bag }` on Hyperlink / WorkPool / Gate / Daemon — desugars to `Hyperlink.defaults` **after** named-handle casts (`nameQueueService` / `nameRunService`) so bags are not wiped. Same `TagWithDefaults` / `DefaultsInput` typing as the pipe. Pipe remains the composable core.
 - **Rejected:** Passing defaults through `Hyperlink.Tag` inside toolkit materialize (naming remap would erase Svc widen).
+
+## 2026-07-27 — Reject Hyperlink-backed `RateLimiterStore` (R5)
+
+- **Owner said:** Delete the R5 idea entirely; only use layers built for rate limiting — whatever Effect offers.
+- **Chose / LOCKED:** No Hyperlink-backed `RateLimiterStore`. Fleet / shared budgets use **Effect `RateLimiter` store layers only** (today Soft `layerStoreMemory`, fleet `layerStoreRedis` / `layerStoreRedisConfig`). If Effect adds more stores later, adopt those — do not invent a Hyperlink persistence adapter for counters.
+- **Rejected:** R5; SQLite/AppStore/Tag-backed rate-limit stores as a Hyperlink product surface.
+- **Supervisor impact:** Fleet plan closed; Agent 4 idle with no optional R5.
 
 ---
 

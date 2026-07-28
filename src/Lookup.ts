@@ -352,6 +352,31 @@ export class Advice extends Hyperlink.Tag<Advice>()(
  */
 export type Services = Identity | Directory | Advice;
 
+/** Tag or wire key → `resourceKey` string. @internal */
+const resourceKeyOf = (resource: string | { readonly key: string }): string =>
+  typeof resource === "string" ? resource : resource.key;
+
+/**
+ * List directory rows that advertise `resource` (Tag or wire key).
+ * Sugar over {@link Directory}.`nodesServing` — wire stays {@link NodesServingRequest}.
+ *
+ * ```ts
+ * const rows = yield* Lookup.nodesServing(Jobs)
+ * // or Lookup.nodesServing("fleet/Jobs")
+ * ```
+ *
+ * @category constructors
+ * @public
+ */
+export const nodesServing = (
+  resource: string | { readonly key: string },
+): Effect.Effect<ReadonlyArray<DirectoryEntry>, never, Directory> =>
+  Effect.flatMap(Directory, (svc) =>
+    svc.nodesServing(
+      new NodesServingRequest({ resourceKey: resourceKeyOf(resource) }),
+    ),
+  );
+
 /**
  * Publish placement advice (requires {@link Advice} in context).
  *
@@ -391,51 +416,54 @@ export const prefer = (
   nodeKey: string,
 ): Effect.Effect<string, never, Advice> =>
   advise({
-    resourceKey: typeof resource === "string" ? resource : resource.key,
+    resourceKey: resourceKeyOf(resource),
     prefer: nodeKey,
   });
 
 /**
- * Prefer a directory row's `nodeKey` for `resourceKey`.
+ * Prefer a directory row's `nodeKey` for `resource`.
  *
  * ```ts
- * const rows = yield* directory.nodesServing(...)
- * yield* Lookup.preferEntry(Worker.key, rows[0]!)
+ * const rows = yield* Lookup.nodesServing(Worker)
+ * yield* Lookup.preferEntry(Worker, rows[0]!)
  * ```
  *
  * @category constructors
  * @public
  */
 export const preferEntry = (
-  resourceKey: string,
+  resource: string | { readonly key: string },
   entry: { readonly nodeKey: string },
 ): Effect.Effect<string, never, Advice> =>
-  advise({ resourceKey, prefer: entry.nodeKey });
+  advise({ resourceKey: resourceKeyOf(resource), prefer: entry.nodeKey });
 
 /**
- * Clear placement advice for a resource key (requires {@link Advice} in context).
+ * Clear placement advice for a resource (Tag or wire key).
  *
  * @category constructors
  * @public
  */
-export const clearAdvice = (resourceKey: string): Effect.Effect<boolean, never, Advice> =>
+export const clearAdvice = (
+  resource: string | { readonly key: string },
+): Effect.Effect<boolean, never, Advice> =>
   Effect.flatMap(Advice, (svc) =>
-    svc.clear(new ClearAdviceRequest({ resourceKey })),
+    svc.clear(new ClearAdviceRequest({ resourceKey: resourceKeyOf(resource) })),
   );
 
 /**
- * Read preferred directory `nodeKey` for a resource (requires {@link Advice} in context).
+ * Read preferred directory `nodeKey` for a resource (Tag or wire key).
  *
  * @category constructors
  * @public
  */
 export const preferred = (
-  resourceKey: string,
+  resource: string | { readonly key: string },
 ): Effect.Effect<Option.Option<string>, never, Advice> =>
   Effect.flatMap(Advice, (svc) =>
-    svc.preferred(new PreferredRequest({ resourceKey })),
+    svc.preferred(
+      new PreferredRequest({ resourceKey: resourceKeyOf(resource) }),
+    ),
   );
-
 // ============================================================================
 // Defaults (L1) — Lookup node = Tag node branded with {@link Node.asLookup}
 // ============================================================================

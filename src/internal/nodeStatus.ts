@@ -232,14 +232,19 @@ export const buildNodeStatusImpl = (options: {
     > =>
       Effect.gen(function* () {
         if (expectedToken === undefined || payload.token !== expectedToken) {
+          yield* Effect.logWarning("assume rejected: token mismatch");
           return yield* new AssumeTokenMismatch({ node: assumeNodeKey });
         }
         if (yield* Ref.get(assumed)) {
+          yield* Effect.logWarning("assume rejected: token already used");
           return yield* new AssumeTokenReused({ node: assumeNodeKey });
         }
         const resources = yield* readiness;
         const blocked = resources.find((r) => !r.ready);
         if (blocked !== undefined) {
+          yield* Effect.logWarning("assume rejected: not Ready").pipe(
+            Effect.annotateLogs({ "assume.resource": blocked.key }),
+          );
           return yield* new AssumeNotReady({
             node: assumeNodeKey,
             resource: blocked.key,
@@ -248,7 +253,13 @@ export const buildNodeStatusImpl = (options: {
         }
         yield* Ref.set(assumed, true);
         yield* Ref.set(ownership, "self");
-      });
+        yield* Effect.logInfo("ownership assumed (self)").pipe(
+          Effect.annotateLogs({ "assume.ownership": "self" }),
+        );
+      }).pipe(
+        Effect.annotateLogs({ "assume.node": assumeNodeKey }),
+        Effect.withLogSpan("node.assume.handle"),
+      );
     return {
       status: statusSub,
       ping: Clock.currentTimeMillis,
@@ -280,6 +291,7 @@ export const nodeStatusServeEntry = (options: {
   readonly nodeLogKey?: string;
   readonly assumeToken?: string | Redacted.Redacted<string>;
   readonly assumeNodeKey?: string;
+  readonly onYield?: Effect.Effect<boolean>;
 }): {
   readonly tag: typeof NodeStatusTag;
   readonly impl: ReturnType<typeof buildNodeStatusImpl>;

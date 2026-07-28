@@ -69,6 +69,10 @@ export interface IpcServerOptions {
    * node-status Hyperlink.
    */
   readonly assumeToken?: string | Redacted.Redacted<string>;
+  /**
+   * Cooperative `askIncumbent` handler — node-status `yield` (`true` = accept replace).
+   */
+  readonly onYield?: Effect.Effect<boolean>;
 }
 
 /**
@@ -176,6 +180,7 @@ const ipcServerBase = (options: IpcServerOptions): IpcServed => {
           ? { assumeToken: options.assumeToken }
           : {}),
         ...(inferredNodeKey !== undefined ? { assumeNodeKey: inferredNodeKey } : {}),
+        ...(options.onYield !== undefined ? { onYield: options.onYield } : {}),
       });
       const nodeTag = nodeEntry.tag;
       // nodeStatus impl Effect is Effect-bounded with open channels — retype before yield*.

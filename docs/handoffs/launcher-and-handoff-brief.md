@@ -1,6 +1,6 @@
 # Brief — Launcher + node handoff (new agent)
 
-**Status:** Track A Eng'd on tip; **Track B bake open** (Lookup-directed startup). C/D not started.  
+**Status:** Track A + **Track B Eng'd** on tip (custody / membership). C/D bake next.  
 **Opened:** 2026-07-25 (owner via Agent G).  
 **Audience:** next agent picking up launcher + handoff / migration discussion.
 
@@ -101,6 +101,14 @@
     - Barrel / `package.json` `exports` entry for `hyperlink-ts/Launcher` — **not** nested under `Node`.
     - **Node-platform only** (mirror other OS-spawn entrypoints); `Node.assume` / Ready stay on `hyperlink-ts/Node` and remain wire-portable.
     - Eng may choose exact packaging nuance (e.g. peer `@effect/platform-node`) without reopening the subpath decision.
+22. **Track B = membership plane (Lookup), not a second launcher.** Three planes:
+    - **Custody** — Launcher (Track A): spawn → Ready → `Node.assume` → exit.
+    - **Membership** — Lookup (Track B): Identity / Directory / Advice after assume.
+    - **Migration** — Track C later; **Clients** — Track D later.
+23. **Directive = membership arbitration, not code-loading.** Child entry chooses capabilities (autonomous Hyperlinks). Lookup decides who wins / where clients dial. **No** blank worker, **no** `Lookup.assign`, **no** assign-before-serve in B.
+24. **Topology day one = local-first IPC Lookup** (`Lookup.layer` / `layerOptions` / `client`). Soft-bake OK for demos; prod pipes explicit Lookup. Cross-network Lookup deferred.
+25. **Launcher rendezvous unchanged** — stable addressed `SpawnSpec.node`; Lookup is child-after-assume (#4). No nameless discovery via Launcher in B.
+26. **Takeover in B = directory row only** — `askIncumbent` + node-status `yield`. Public `ListenOptions.onYield` configures refuse/accept. Drain / state / old shutdown = Track C.
 
 Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.md) remain **reference only** unless re-locked here.
 
@@ -123,6 +131,7 @@ Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.m
 Shipped on tip (owner Eng go):
 
 - `hyperlink-ts/Launcher` — `spawn` / `Handle.awaitReady` / `Handle.handoff` / `up` / `mintToken`
+- Guide: [`docs/guides/launcher.md`](../guides/launcher.md)
 - `Node.assume({ token })` + `AssumeTokenMismatch` / `AssumeTokenReused` / `AssumeNotReady`
 - `ListenOptions.assumeToken` / `Node.assumeTokenConfig` (`HYPERLINK_ASSUME_TOKEN`)
 - Status mirror `ownership?: "launcher" | "self"` when assume is armed
@@ -149,16 +158,15 @@ Eng defaults: 32-byte hex token; Ready poll `100 millis` with per-dial `2 second
 
 **Historical opinion only** (`launcher-decisions.md`): spawn → ready → `Advice.advise` → drain old → unregister → clearAdvice. Useful shape to discuss; **not locked**.
 
-### Track B — baking (not locked)
+### Track B — Eng'd (2026-07-27)
 
-Owner: answer these forks (reuse Lookup nouns; high bar for new concepts). **No Eng until locked.**
+Owner locked #22–26; Eng on tip:
 
-1. **Day-one topology** — Track B local-first over existing `Lookup.layer` IPC (same-machine soft-bake), **or** must directed startup work cross-network day one (needs HTTP/WS Lookup path)?
-2. **Blank worker** — may a process start serving **only** node-status (await direction), **or** must it boot with ≥1 app Hyperlink already chosen by the entry (Track A autonomous child)?
-3. **Direction model** — new node **infers** work by reading `Directory` + `Advice` as today, **or** Lookup gains a **node-facing** assignment (read/stream: “roles for `nodeKey`”) — new surface needs bar?
-4. **Role arbitration** — exclusive roles = existing `Identity.claim` (losers become clients); replicas = `Directory.advertise` only — **or** Lookup assigns both **before** any app serve layer starts?
-5. **“Take over” in Track B** — exactly duplicate-`nodeKey` advertise + `askIncumbent` / `yield` (directory row only; promote `onYield`?), **or** keep that lightweight and leave real service handoff to Track C?
-6. **Launcher rendezvous** — Launcher still gets a **stable bootstrap Node** (Track A unchanged) and Lookup runs entirely in the child after assume, **or** Launcher may spawn nameless and **discover** the child’s endpoint via Identity/Directory before Ready/handoff?
+- Public **`ListenOptions.onYield`** → node-status `yield` (refuse/accept for `askIncumbent`).
+- Recipe + example: custody (`Launcher.up`) then membership (`Lookup.client` + advertise/identity).
+- Guide: [`identity-coordinator.md`](../guides/identity-coordinator.md) planes section.
+
+**Still deferred:** blank worker / assign protocol; HTTP/WS Lookup; nameless Launcher discovery; Track C migration; Track D clients.
 
 ---
 

@@ -48,6 +48,9 @@ function typeLock(
   const _upHasReadyTimedOut: AssertExtends<Launcher.ReadyTimedOut, UpErr> =
     true;
   const _upHasChildExited: AssertExtends<Launcher.ChildExited, UpErr> = true;
+  const _upHasHandleNotReady: AssertExtends<Launcher.HandleNotReady, UpErr> =
+    true;
+  const _upHasHandleSpent: AssertExtends<Launcher.HandleSpent, UpErr> = true;
   const _upHasAssume: AssertExtends<AssumeTokenMismatch, UpErr> = true;
 
   const assumed = assume(node, { token: "x" });
@@ -63,6 +66,8 @@ function typeLock(
   void _spawnNeedsScope;
   void _upHasReadyTimedOut;
   void _upHasChildExited;
+  void _upHasHandleNotReady;
+  void _upHasHandleSpent;
   void _upHasAssume;
   void _assumeMismatch;
   void _assumeReuse;

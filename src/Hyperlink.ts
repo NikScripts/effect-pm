@@ -5603,10 +5603,7 @@ export const lookupClient = <Self, S extends Spec>(
       if (Option.isSome(resolved)) {
         return clientLayerForEndpoint(tag, resolved.value);
       }
-      const directory = yield* Lookup.Directory;
-      const entries = yield* directory.nodesServing(
-        new Lookup.NodesServingRequest({ resourceKey: tag.key }),
-      );
+      const entries = yield* Lookup.nodesServing(tag);
       if (entries.length === 0) {
         return yield* new LookupClientError({
           tag: tag.key,
@@ -6057,8 +6054,8 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
           if (Option.isNone(dirOpt)) {
             return {} as Record<string, PeerServiceOf<S>>;
           }
-          const rows = yield* dirOpt.value.nodesServing(
-            new Lookup.NodesServingRequest({ resourceKey: tag.key }),
+          const rows = yield* Lookup.nodesServing(tag).pipe(
+            Effect.provideService(Lookup.Directory, dirOpt.value),
           );
           type DialTarget = {
             readonly key: string;

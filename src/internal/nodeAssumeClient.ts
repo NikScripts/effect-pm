@@ -57,6 +57,12 @@ export const assume = (
         ? node.path
         : node.key;
   return Effect.gen(function* () {
+    yield* Effect.logDebug("Node.assume dialing peer").pipe(
+      Effect.annotateLogs({
+        "assume.node": node.key,
+        "assume.address": address,
+      }),
+    );
     const { NodeStatusTag } = yield* Effect.promise(() => import("./nodeStatus"));
     const ctx = yield* Layer.build(
       Hyperlink.client(NodeStatusTag, node).pipe(
@@ -67,8 +73,12 @@ export const assume = (
       const status = yield* NodeStatusTag;
       return yield* status.assume(payload);
     }).pipe(Effect.provide(ctx));
+    yield* Effect.logInfo("Node.assume acknowledged").pipe(
+      Effect.annotateLogs({ "assume.node": node.key }),
+    );
   }).pipe(
     Effect.scoped,
+    Effect.withLogSpan("node.assume"),
     Effect.mapError((cause) => {
       if (Schema.is(AssumeTokenMismatch)(cause)) return cause;
       if (Schema.is(AssumeTokenReused)(cause)) return cause;

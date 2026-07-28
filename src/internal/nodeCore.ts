@@ -311,6 +311,13 @@ export type ListenOptions = {
    * {@link Config}); this option only arms the handshake on the listening node.
    */
   readonly assumeToken?: string | Redacted.Redacted<string>;
+  /**
+   * Cooperative directory handoff handler for Lookup {@link OnConflict} `"askIncumbent"` —
+   * wired to the auto-mounted node-status `yield` RPC. `true` = step aside (row may replace);
+   * `false` / timeout → newcomer sees Lookup `IncumbentAlive`. Default when omitted: accept.
+   * Does **not** drain work or shut down the process (Track C).
+   */
+  readonly onYield?: Effect.Effect<boolean>;
 };
 
 /**

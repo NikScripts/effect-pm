@@ -393,13 +393,15 @@ const httpBind = (
         ? { serialization: options.serialization }
         : {}),
       ...(options?.health !== undefined ? { health: options.health } : {}),
-      ...(options?.node !== undefined ? { node: options.node } : {}),
+      // Listen node key stamps assume errors / durable node logs (not the reserved status key).
+      node: options?.node ?? node.key,
       ...(options?.onConflict !== undefined
         ? { onConflict: options.onConflict }
         : {}),
       ...(options?.assumeToken !== undefined
         ? { assumeToken: options.assumeToken }
         : {}),
+      ...(options?.onYield !== undefined ? { onYield: options.onYield } : {}),
       advertiseNode,
     }) as never,
   );
