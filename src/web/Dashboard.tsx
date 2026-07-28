@@ -13,7 +13,7 @@
  *
  */
 import * as React from "react";
-import { Option } from "effect";
+import { Layer, Option } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Plus, Trash2 } from "lucide-react";
 import {
@@ -52,6 +52,7 @@ import * as View from "../ui/View";
 import { WidgetsProvider } from "../ui/widgetsContext";
 import type { Widget } from "./widget-registry";
 import { DebugConsole } from "./debug-console";
+import * as UiDashboardViews from "../ui/DashboardViews";
 import * as WebDashboardViews from "./DashboardViews";
 
 /** Detail body — shell / Navigator owns back (lock J). */
@@ -488,6 +489,12 @@ const NodeHyperlinkView = (props: {
 export const DashboardView = <R, ER>(props: {
   readonly runtime: DashboardRuntime<R, ER>;
   readonly group: GroupNode;
+  /**
+   * Extra View contributions (e.g. `View.only(Tag, Card)` + `Layer.succeed`).
+   * Merged under shipped Dashboard skins; still needs {@link View.Registry} until
+   * compose closes with {@link View.base}.
+   */
+  readonly views?: Layer.Layer<never, never, View.Registry>;
 }): React.ReactElement => {
   // Three stacked overlays over the group view, in back-pop order: a resource opened from a node/board
   // (`nodeTag`) sits over a node's full screen (`node`), which sits over the health board (`health`).
@@ -503,13 +510,20 @@ export const DashboardView = <R, ER>(props: {
     [props.group],
   );
   // compose = View.react(skins) + Navigator.history — short-name paths (/Nwsl/HttpApi).
+  // Contributions + optional app views, then skins + View.base (siblings cannot provide).
   const ui = React.useMemo(
     () =>
       View.compose({
-        views: WebDashboardViews.layer,
+        views: Layer.mergeAll(
+          UiDashboardViews.layer,
+          props.views ?? Layer.empty,
+        ).pipe(
+          Layer.provideMerge(WebDashboardViews.skins),
+          Layer.provideMerge(View.base),
+        ),
         navigator: Navigator.history(props.group),
       }),
-    [props.group],
+    [props.group, props.views],
   );
   // The dashboard owns its font: declaring `font-mono` on its own root means the widgets render
   // monospace regardless of the consumer's `body`/`#root` font (a value set directly on this
@@ -543,13 +557,19 @@ export const DashboardView = <R, ER>(props: {
 export const Dashboard = <R, ER>(props: {
   readonly runtime: DashboardRuntime<R, ER>;
   readonly group: GroupNode;
-  /** Optional key overrides on top of View kit + fallback ({@link base} is fallback-only). */
+  /** Extra View contributions — Prototype handles via `View.only` / `bind` (see hyperlink-web). */
+  readonly views?: Layer.Layer<never, never, View.Registry>;
+  /** Optional legacy key overrides ({@link base} is fallback-only). Prefer {@link views}. */
   readonly widgets?: WidgetRegistry<Widget>;
 }): React.ReactElement => (
   <RegistryProvider>
     <WidgetsProvider registry={props.widgets ?? base}>
       <ViewTransitionProvider>
-        <DashboardView runtime={props.runtime} group={props.group} />
+        <DashboardView
+          runtime={props.runtime}
+          group={props.group}
+          views={props.views}
+        />
         <DebugConsole />
       </ViewTransitionProvider>
     </WidgetsProvider>

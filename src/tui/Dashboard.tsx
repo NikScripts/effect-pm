@@ -17,7 +17,7 @@
  */
 import { Box, Text, useInput, useStdout } from "ink";
 import * as React from "react";
-import { Option } from "effect";
+import { Layer, Option } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import * as Group from "../Group";
 import { kindOf as hyperlinkKindOf, nodeOf } from "../Hyperlink";
@@ -43,6 +43,7 @@ import * as Navigator from "../ui/Navigator";
 import * as View from "../ui/View";
 import { WidgetsProvider } from "../ui/widgetsContext";
 import { base, Cell, type TuiWidgetRegistry } from "./cellWidgets";
+import * as UiDashboardViews from "../ui/DashboardViews";
 import * as TuiDashboardViews from "./DashboardViews";
 import {
   ControlKey,
@@ -554,20 +555,29 @@ export const Dashboard = <R, ER>(props: {
   readonly group: GroupNode;
   /** CLI / deep-link focus as member-key nicknames (`["Inbox"]`, `["Mini", "KeyRotation"]`). */
   readonly path?: ReadonlyArray<string>;
-  /** Optional key overrides; default cells come from {@link TuiDashboardViews.layer}. */
+  /** Extra View contributions — Prototype handles via `View.only` / `bind`. */
+  readonly views?: Layer.Layer<never, never, View.Registry>;
+  /** Optional legacy key overrides; prefer {@link views}. */
   readonly widgets?: TuiWidgetRegistry;
 }): React.ReactElement => {
   // compose = View.react(skins) + Navigator.memory — short-name paths (CLI `path` seeds once).
+  // Contributions + optional app views, then skins + View.base (siblings cannot provide).
   const ui = React.useMemo(() => {
     const composed = View.compose({
-      views: TuiDashboardViews.layer,
+      views: Layer.mergeAll(
+        UiDashboardViews.layer,
+        props.views ?? Layer.empty,
+      ).pipe(
+        Layer.provideMerge(TuiDashboardViews.skins),
+        Layer.provideMerge(View.base),
+      ),
       navigator: Navigator.memory(props.group),
     });
     for (const key of props.path ?? []) {
       composed.navigator.openKey(key);
     }
     return composed;
-  }, [props.group]);
+  }, [props.group, props.views]);
 
   return (
     <RegistryProvider>

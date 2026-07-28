@@ -1,27 +1,42 @@
 /**
  * @module examples/hyperlink-web/worker-pool-card
  *
- * A **bring-your-own widget**, registered by *key* — the extension path the widget registry exists
- * for. `WorkerPool` (see `hub.ts`) is a consumer-defined, multi-node resource: nothing in the
- * shipped `base` set knows how to render it (it'd fall through to the plain `HyperlinkCard`). So the
- * consumer writes this card and binds it to the resource's exact key with
- * `forKey(WorkerPool.key, WorkerPoolCard)` (see `app.tsx`) — a per-key widget beats the generic
- * kind card, and building **onto** `base` keeps every other widget.
+ * Bring-your-own **View** for `WorkerPool` — a consumer-defined multi-node Hyperlink with no
+ * shipped card. Uses {@link View.Card.Prototype} + {@link View.only} (not the legacy widget
+ * `forKey` path): mint a sized handle, provide the React skin, allowlist it for that tag.
  *
- * It also shows how to render a resource whose fields are plain `Hyperlink.effect`s (not reactive
- * refs): **poll** them on a tick, exactly as the shipped daemon card polls its schedule. One tick
- * reads all three contract fields at once — `active` (this client's own instance), `fleetActive`
- * (the fold across every peer), and `activeByNode` (the per-node breakdown) — each surfaced
- * distinctly so the multi-node story is legible at a glance.
+ * Fields are plain `Hyperlink.effect`s (not reactive refs): **poll** them on a tick, same pattern
+ * as the shipped daemon card. One tick reads `active` / `fleetActive` / `activeByNode`.
  */
 import * as React from "react";
-import { Duration, Effect, Stream } from "effect";
+import { Duration, Effect, Layer, Stream } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
-import { type Widget, displayName, useAtomValue, useRuntime } from "../../src/web";
+import { View, displayName, useAtomValue, useRuntime } from "../../src/web";
 import { WorkerPool } from "./hub";
 
-/** One node's worker count as a labelled bar — the node's short name, a fill proportional to the
- *  busiest node, and the count. `self` marks the instance this client reads (its `active`). */
+/** UI Needs placeholder — opaque static on the Prototype (not a Hyperlink wire Spec). */
+export const workerPoolCardSpec = { kind: "examples/worker-pool-card" } as const;
+
+/** Extra card props beyond {@link View.ViewProps}. */
+type WorkerPoolCardProps = {
+  readonly dense?: boolean;
+};
+
+// Type alias (not inline) so TSX does not parse `<…>` as JSX.
+const Proto = View.Card.Prototype<WorkerPoolCardProps>()({
+  spec: workerPoolCardSpec,
+});
+
+/**
+ * Sized View handle for the WorkerPool card (`size: "card"` from {@link View.Card}).
+ *
+ * @public
+ */
+export class WorkerPoolCard extends Proto.Tag<WorkerPoolCard>()(
+  "examples/hyperlink-web/worker-pool-card",
+) {}
+
+/** One node's worker count as a labelled bar. `self` marks this client's instance. */
 const NodeRow = (props: {
   readonly id: string;
   readonly count: number;
@@ -41,16 +56,8 @@ const NodeRow = (props: {
   </div>
 );
 
-/**
- * The custom card for the `WorkerPool` resource — registered under its key in `app.tsx`. Polls the
- * resource's three fields every 2s over the runtime's (one, multiplexed) transport and lays out the
- * fleet total, a per-node breakdown, and this client's own instance.
- */
-export const WorkerPoolCard: Widget = ({ name }) => {
+const WorkerPoolCardView: View.ViewFn<View.Type<typeof WorkerPoolCard>> = (props) => {
   const runtime = useRuntime();
-  // Poll the three effect fields together on a 2s tick — one read cycle, three values. `fromEffect`
-  // paints the first frame immediately; `tick` refreshes it. The `WorkerPool` client lives in the
-  // runtime (see `hub.ts`), so the runtime discharges the requirement — no `Stream.provide` here.
   const poll = React.useMemo(
     () =>
       runtime.atom(
@@ -66,11 +73,12 @@ export const WorkerPoolCard: Widget = ({ name }) => {
   const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
   const max = Math.max(1, ...rows.map(([, c]) => c));
   const own = data?.active ?? 0;
+  const title = props.name ?? displayName(props.tag.key);
 
   return (
-    <div className="flex flex-col rounded-xl border bg-card p-3">
+    <div className={`flex flex-col rounded-xl border bg-card ${props.dense === true ? "p-2" : "p-3"}`}>
       <div className="mb-2 flex items-center gap-2">
-        <strong className="flex-1 truncate">{name}</strong>
+        <strong className="flex-1 truncate">{title}</strong>
         <span className="rounded-full border px-2 py-0.5 text-[0.7rem] text-muted-foreground">
           {rows.length} {rows.length === 1 ? "node" : "nodes"}
         </span>
@@ -88,13 +96,21 @@ export const WorkerPoolCard: Widget = ({ name }) => {
   );
 };
 
-// Read all three contract fields in one effect — kept module-level so the polled stream is a stable
-// value (the atom is memoized per runtime). `active` = this client's own instance; `fleetActive` =
-// the server-side fold across every peer; `activeByNode` = one row per node.
+// Read all three contract fields in one effect — module-level so the polled stream is stable.
 const readFleet = Effect.flatMap(WorkerPool, (pool) =>
   Effect.all({
     active: pool.active,
     fleet: pool.fleetActive,
     byNode: pool.activeByNode,
   }),
+);
+
+/**
+ * Contribution Layer: allowlist {@link WorkerPoolCard} for {@link WorkerPool}, skin provided.
+ * `R = View.Registry` — Dashboard closes with {@link View.base}.
+ *
+ * @public
+ */
+export const layer = View.only(WorkerPool, WorkerPoolCard).pipe(
+  Layer.provide(Layer.succeed(WorkerPoolCard, WorkerPoolCardView)),
 );

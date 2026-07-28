@@ -105,3 +105,23 @@ Statics are for things we used to jam into Tag args (`size`, later `spec`, etc.)
 - `View.Prototype<Props>()(statics)` **must** be curried — `Prototype<Props>(statics)` defaults Statics to `{}` and drops `size`.
 - Reversed shape = `ViewFn<Props>` from Prototype; Self = DI identity. Phantom `Type` + `View.Type<typeof Tag>`.
 - Matchers moved to kit / `useMatch`; size protos are PascalCase `View.Card`/`Detail`/`Page`.
+
+## WorkerPool end-to-end (2026-07-28)
+
+`examples/hyperlink-web` uses Prototypes + `View.only` (legacy `forKey` / `widgets` dropped):
+
+```ts
+const Proto = View.Card.Prototype<{ readonly dense?: boolean },>()({
+  spec: workerPoolCardSpec,
+})
+export class WorkerPoolCard extends Proto.Tag<WorkerPoolCard>()(
+  "examples/hyperlink-web/worker-pool-card",
+) {}
+
+export const layer = View.only(WorkerPool, WorkerPoolCard).pipe(
+  Layer.provide(Layer.succeed(WorkerPoolCard, WorkerPoolCardView)),
+)
+// App: <Dashboard views={layer} … />
+```
+
+Dashboard merges `UiDashboardViews.layer` + `views?`, then `provideMerge(skins)` + `provideMerge(View.base)`.
