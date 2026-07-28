@@ -6,149 +6,129 @@
 <!-- docs-site-link:end -->
 # View Tag types
 
-Full shapes for View Tag / `Service` — persistent `// ^?` popups in the browser (no IDE).
-Same dual-view trick as [type previews](/docs/type-previews): compact name, then expanded
-members.
+Real shipped API. Persistent `// ^?` popups show the compiler’s types — no fake stand-ins.
 
 {.note}
-Shipped tags mint `Context.ServiceClass`. **`PoolCard["Service"]` is already the component fn** —
-you do not need `View.View<View.Type<typeof PoolCard>>`.
+Shipped tags mint `Context.ServiceClass`. Prefer **`PoolCard["Service"]`** (no `typeof`).
+The long form `View.View<View.Type<typeof PoolCard>>` is the same Shape.
 
-## Effect baseline — instance `.Service` is Shape
-
-For `class Config extends Context.Service<Config, Shape>()("…")`, `Config["Service"]` is Shape:
+## Mint a card Tag
 
 {.twoslash}
 ``` ts
-// Config["Service"] after Context.Service<Config, { port: number }>
-interface ConfigService {
-  readonly port: number
-}
+import { View } from "hyperlink-ts/ui"
 
-declare function expand<T>(x: T): { [K in keyof T]: T[K] }
-
-declare const shape: ConfigService
+class PoolCard extends View.Card.Tag<PoolCard>()(
+  "docs/view-tag-types/PoolCard",
+) {}
 // ---cut---
-shape
-// ^?
-
-const full = expand(shape)
-full
-// ^?
-```
-
-## `PoolCard["Service"]` — the component fn
-
-What `class PoolCard extends View.Card.Tag<PoolCard>()("…") {}` stores as Shape
-(`View.View` / props → element). Twoslash shows the alias; annotate skins with this name:
-
-{.twoslash}
-``` ts
-interface ViewProps {
-  readonly tag: { readonly key: string }
-  readonly name?: string
-}
-
-// PoolCard["Service"] === View.View<ViewProps>
-type PoolCardService = (props: ViewProps) => null
-// ---cut---
-type Shown = PoolCardService
-//   ^?
-```
-
-## Props bag — `ViewProps`
-
-What `Layer.succeed(PoolCard, (props) => …)` infers for `props`:
-
-{.twoslash}
-``` ts
-interface ViewProps {
-  readonly tag: { readonly key: string }
-  readonly name?: string
-}
-
-declare function expand<T>(x: T): { [K in keyof T]: T[K] }
-
-declare const props: ViewProps
-// ---cut---
-props
-// ^?
-
-const full = expand(props)
-full
-// ^?
-```
-
-## Extra Prototype props — `DenseCard`
-
-`View.Card.Prototype<{ dense?: boolean }>()({…}).Tag` merges into props.
-`DenseCard["Service"]` is still a component fn; the interesting shape is the props bag:
-
-{.twoslash}
-``` ts
-interface ViewProps {
-  readonly tag: { readonly key: string }
-  readonly name?: string
-}
-
-interface DenseCardProps extends ViewProps {
-  readonly dense?: boolean
-}
-
-// DenseCard["Service"]
-type DenseCardService = (props: DenseCardProps) => null
-
-declare function expand<T>(x: T): { [K in keyof T]: T[K] }
-
-declare const props: DenseCardProps
-// ---cut---
-type Shown = DenseCardService
+type Service = PoolCard["Service"]
 //   ^?
 
-props
-// ^?
+type Props = View.Type<typeof PoolCard>
+//   ^?
 
-const full = expand(props)
-full
-// ^?
+const size = PoolCard.size
+//    ^?
 ```
 
-## Annotate a skin (no `typeof`)
+## Annotate a skin (prefer instance `.Service`)
 
-```ts
+{.twoslash}
+``` ts
+import { View } from "hyperlink-ts/ui"
+
+class PoolCard extends View.Card.Tag<PoolCard>()(
+  "docs/view-tag-types/PoolCard",
+) {}
+// ---cut---
 const skin: PoolCard["Service"] = (props) => null
+//    ^?
+
+// Same Shape, longer:
+const long: View.View<View.Type<typeof PoolCard>> = (props) => null
+//    ^?
 ```
 
-Rendered equivalent — compact `PoolCardService` on the binding:
+## Props inferred by `Layer.succeed`
 
 {.twoslash}
 ``` ts
-interface ViewProps {
-  readonly tag: { readonly key: string }
-  readonly name?: string
-}
+import { Layer } from "effect"
+import { View } from "hyperlink-ts/ui"
 
-type PoolCardService = (props: ViewProps) => null
+class PoolCard extends View.Card.Tag<PoolCard>()(
+  "docs/view-tag-types/PoolCard",
+) {}
 // ---cut---
-const skin: PoolCardService = (props) => null
+const layer = Layer.succeed(PoolCard, (props) => {
+  props
+  // ^?
+  return null
+})
+```
 
-skin
+## Extra Prototype props
+
+Same pattern as the WorkerPool example card — accumulate props on a sized Prototype,
+then mint the Tag:
+
+{.twoslash}
+``` ts
+import { View } from "hyperlink-ts/ui"
+
+type Extra = { readonly dense?: boolean }
+
+const Proto = View.Card.Prototype<Extra>()({
+  spec: { kind: "docs/dense-card" } as const,
+})
+
+class DenseCard extends Proto.Tag<DenseCard>()(
+  "docs/view-tag-types/DenseCard",
+) {}
+
+declare function expand<T>(x: T): { [K in keyof T]: T[K] }
+// ---cut---
+type Service = DenseCard["Service"]
+//   ^?
+
+type Props = View.Type<typeof DenseCard>
+//   ^?
+
+declare const props: View.Type<typeof DenseCard>
+props
+// ^?
+
+const full = expand(props)
+full
 // ^?
 ```
 
-## Short vs long annotation (same Shape)
+## Short vs long (same Shape)
 
-| Prefer | Equivalent long form |
-|--------|----------------------|
-| `PoolCard["Service"]` | `View.View<View.Type<typeof PoolCard>>` |
-| `DenseCard["Service"]` | `View.View<View.Type<typeof DenseCard>>` |
+{.twoslash}
+``` ts
+import { View } from "hyperlink-ts/ui"
+
+class PoolCard extends View.Card.Tag<PoolCard>()(
+  "docs/view-tag-types/PoolCard",
+) {}
+// ---cut---
+type Prefer = PoolCard["Service"]
+//   ^?
+
+type Long = View.View<View.Type<typeof PoolCard>>
+//   ^?
+```
 
 ## Cheat sheet
 
 | Want | Write |
 |------|--------|
-| Component fn type | `PoolCard["Service"]` |
+| Component fn | `PoolCard["Service"]` |
 | Annotate a skin | `const skin: PoolCard["Service"] = …` |
 | Provide | `Layer.succeed(PoolCard, (props) => …)` |
-| Props bag (optional) | peel from Service, or `View.Type<typeof PoolCard>` |
+| Props bag | `View.Type<typeof PoolCard>` |
 | Size static | `PoolCard.size` → `"card"` |
+
+Dogfood: [`examples/hyperlink-web/worker-pool-card.tsx`](../../examples/hyperlink-web/worker-pool-card.tsx).
