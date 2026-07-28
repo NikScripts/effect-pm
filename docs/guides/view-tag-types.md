@@ -11,9 +11,9 @@ skin, export `layer`. Same shape as Effect’s `Context.Service`.
 
 ## How `Card` / `Detail` / `Page` are created
 
-Size is a type requirement — `WithSize` / `WithSize<"card">` — then a Prototype
-carries the narrowed literal. Shared base: `SizedPrototype<ViewProps, WithSize>`
-(`size: "card" | "detail" | "page"`). Shipped add-ons narrow that:
+Size is an R-style **Requirement** (`WithSize`). Declare open on `SizeChrome`,
+fulfill later with `.Prototype()({ size: "card" })` — Requirement discharges to
+`{}`. Shipped `Card` / `Detail` / `Page` are those fulfillments:
 
 {.twoslash}
 ``` ts
