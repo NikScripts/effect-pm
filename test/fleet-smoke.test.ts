@@ -11,7 +11,7 @@ import * as Node from "../src/Node";
 // actually uses. A node serves two queues; a producer (a client, the sanctioned way) enqueues over the
 // wire; and we assert the three things that were each silently broken at some point:
 //   1. the queue actually drains (producer → server → processing crosses the ws), and
-//   2. NodeStatus reports the node up with the right resource count, and
+//   2. NodeStatus reports the node up with the right service count, and
 //   3. the NodeStatus change stream delivers a live snapshot.
 // A protocol/wiring regression on any of these turns this red instead of shipping a blank dashboard.
 // (Single node: two in-process servers collide on the shared HttpServer tag; multi-node peer
@@ -55,7 +55,7 @@ it("fleet data-path smoke (ws): a producer feeds queues and NodeStatus reports r
         // 2. NodeStatus reports the node up with both queues.
         const snap = yield* node.status.get;
         expect(snap.up).toBe(true);
-        expect(snap.resourceCount).toBe(2);
+        expect(snap.serviceCount).toBe(2);
 
         // 3. the live NodeStatus stream delivers a snapshot.
         const head = yield* Stream.runHead(node.status.changes);

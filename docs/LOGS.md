@@ -7,7 +7,7 @@
 
 **Narrative guide (start here):** [`docs/guides/logs.md`](./guides/logs.md) — architecture, live bus, durable journals, lineage, remote clients, migration.
 
-This file remains the **lookup SSOT**: every identifier below is labeled by **key kind** and mapped to a **package import path**, **source file**, and **example file** (short path under `examples/` or `test/`). Per-resource export uses `Hyperlink.logs` / `Hyperlink.withLogExport`.
+This file remains the **lookup SSOT**: every identifier below is labeled by **key kind** and mapped to a **package import path**, **source file**, and **example file** (short path under `examples/` or `test/`). Per-HyperService export uses `Hyperlink.logs` / `Hyperlink.withLogExport`.
 
 ## Module paths
 
@@ -23,7 +23,7 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 
 | Example | Short path | Role |
 |---------|------------|------|
-| WNBA hub fixture | `hyperlink-web/hub.ts` | Node + resource tag definitions |
+| WNBA hub fixture | `hyperlink-web/hub.ts` | Node + HyperService tag definitions |
 | WNBA servers | `hyperlink-web/server.ts` | `Store.Service` + `Node.logs` / toolkit `.store` per node |
 | Test key constants | `test/fixtures/logKeys.ts` | Canonical keys for unit tests |
 | Logs env helper | `test/fixtures/logsEnv.ts` | `EnvNode.logs` on `Store.Service.layerMemory` for tests |
@@ -36,7 +36,7 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 | **Node log key** | One OS process / runtime host (durable bucket) | `Node.Tag` constructor arg → `.key` | `Node.logs` scope; `annotations.node` |
 | **Hyperlink key** | One work pool, daemon, or custom tag | `Hyperlink.Tag` / `Daemon.Tag` / `WorkPool.Tag` constructor arg → `.key` | registration scope; lineage JSON |
 | **Annotation key** | Name of a field on `LogEntry.annotations` | `LogAnnotationKeys.*` | Not a bucket — metadata field name |
-| **Store scope key** | Journal partition for a registration | Same as node or resource key | Durable `_logs` journal (private); read via `Hyperlink.logs` / `Logs.by*` |
+| **Store scope key** | Journal partition for a registration | Same as node or service key | Durable `_logs` journal (private); read via `Hyperlink.logs` / `Logs.by*` |
 | **Lineage segment key** | One hop in resource ancestry | Each element in lineage JSON array | `LogEntry.hasKey` / `atRoot` / `atLeaf` |
 | **RPC wire key** | Wire routing prefix for multi-host RPC | Solo tag `.key` / `Hyperlink.wireKeyOf(tag)` | **Not** a log key |
 | **Group catalog key** | Dashboard / CLI grouping | `Group.Tag` constructor arg | **Not** a log key — e.g. `hub/Wnba` |
@@ -61,14 +61,14 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 
 | Symbol | Key kind | Key value | Package import | Source | Example |
 |--------|----------|-----------|----------------|--------|---------|
-| `BoxScoreQueue.key` | resource key | `wnba/BoxScoreQueue` | `hyperlink-ts/WorkPool` | `src/WorkPool.ts` | `hyperlink-web/hub.ts` |
-| `LiveScorePoller.key` | resource key | `wnba/LiveScorePoller` | `hyperlink-ts/Daemon` | `src/Daemon.ts` | `hyperlink-web/hub.ts` |
-| `PlayByPlayQueue.key` | resource key | `wnba/PlayByPlayQueue` | `hyperlink-ts/WorkPool` | `src/WorkPool.ts` | `hyperlink-web/hub.ts` |
-| `ScoresDb.key` | resource key | `wnba/ScoresDb` | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` | `hyperlink-web/hub.ts` |
-| `ScoresApi.key` | resource key | `@wnba/ScoresApi` | `hyperlink-ts/ApiMetrics` | `src/ApiMetrics.ts` | `hyperlink-web/hub.ts` |
-| `WorkerPool.key` | resource key | `wnba/WorkerPool` | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` | `hyperlink-web/hub.ts` |
-| `testSyncProcessKey` | resource key (test) | `billing/SyncWorker` | — (test fixture) | `test/fixtures/logKeys.ts` | `test/log-pipeline.test.ts` |
-| `Logs.HyperlinkLogKey` | resource key (type) | `string` constrained to `Tag.key` | `hyperlink-ts/Logs` | `src/Logs.ts` | — |
+| `BoxScoreQueue.key` | service key | `wnba/BoxScoreQueue` | `hyperlink-ts/WorkPool` | `src/WorkPool.ts` | `hyperlink-web/hub.ts` |
+| `LiveScorePoller.key` | service key | `wnba/LiveScorePoller` | `hyperlink-ts/Daemon` | `src/Daemon.ts` | `hyperlink-web/hub.ts` |
+| `PlayByPlayQueue.key` | service key | `wnba/PlayByPlayQueue` | `hyperlink-ts/WorkPool` | `src/WorkPool.ts` | `hyperlink-web/hub.ts` |
+| `ScoresDb.key` | service key | `wnba/ScoresDb` | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` | `hyperlink-web/hub.ts` |
+| `ScoresApi.key` | service key | `@wnba/ScoresApi` | `hyperlink-ts/ApiMetrics` | `src/ApiMetrics.ts` | `hyperlink-web/hub.ts` |
+| `WorkerPool.key` | service key | `wnba/WorkerPool` | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` | `hyperlink-web/hub.ts` |
+| `testSyncProcessKey` | service key (test) | `billing/SyncWorker` | — (test fixture) | `test/fixtures/logKeys.ts` | `test/log-pipeline.test.ts` |
+| `Logs.HyperlinkLogKey` | service key (type) | `string` constrained to `Tag.key` | `hyperlink-ts/Logs` | `src/Logs.ts` | — |
 
 ### Annotation keys (`LogAnnotationKeys`)
 
@@ -83,11 +83,11 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 |-----------|----------|---------|-----|--------|
 | `Node.logs` / `Hyperlink.store(Node)` | node log key | `Node.key` | store registration | `src/Hyperlink.ts` |
 | `byNode(node)` | node log key | `Node.key` | `Logs.byNode` | `src/Logs.ts` |
-| `byHyperlink(tag \| key)` | resource key / scope tag | `Tag.key` | `Logs.byHyperlink` | `src/Logs.ts` |
-| `Logs.byHyperlink` / `Hyperlink.logs().query` | resource key / scope tag | `Tag.key` | durable helpers | registration `_logs` journal (private) |
+| `byHyperlink(tag \| key)` | service key / scope tag | `Tag.key` | `Logs.byHyperlink` | `src/Logs.ts` |
+| `Logs.byHyperlink` / `Hyperlink.logs().query` | service key / scope tag | `Tag.key` | durable helpers | registration `_logs` journal (private) |
 | `LogEntry.hasKey(key)` | lineage segment key | `Tag.key` | `LogEntry.hasKey` | `src/LogEntry.ts` |
 | `LogEntry.atRoot(key)` | lineage segment key | usually **node log key** | `LogEntry.atRoot` | `src/LogEntry.ts` |
-| `LogEntry.atLeaf(key)` | lineage segment key | usually **resource key** | `LogEntry.atLeaf` | `src/LogEntry.ts` |
+| `LogEntry.atLeaf(key)` | lineage segment key | usually **service key** | `LogEntry.atLeaf` | `src/LogEntry.ts` |
 
 ## Node log key rules
 
@@ -122,7 +122,7 @@ Logs.byNode("my-node")
 Logs.byNode("wnba") // WnbaNode.key is "wnba/scores", not "wnba"
 ```
 
-## Hyperlink keys (per-resource logs)
+## Hyperlink keys (per-HyperService logs)
 
 Hyperlink identity uses **`tag.key`** (may contain `/`; metrics tags may use `@` prefix).
 
@@ -134,12 +134,12 @@ import * as LogEntry from "hyperlink-ts/LogEntry";
 // example: hyperlink-web/hub.ts
 import { LiveNode, LiveScorePoller } from "./hub";
 
-// resource key — LiveScorePoller.key === "wnba/LiveScorePoller"
-const resourceKey = LiveScorePoller.key;
+// service key — LiveScorePoller.key === "wnba/LiveScorePoller"
+const serviceKey = LiveScorePoller.key;
 
-Logs.stream.pipe(Stream.filter(LogEntry.hasKey(resourceKey)));
+Logs.stream.pipe(Stream.filter(LogEntry.hasKey(serviceKey)));
 
-yield* Logs.byHyperlink(resourceKey);
+yield* Logs.byHyperlink(serviceKey);
 
 const { stream, query } = yield* Hyperlink.logs(LiveScorePoller);
 ```
@@ -151,7 +151,7 @@ BillingNode process (node log key: billing/scores)
   AppStore.layerMemory          → Logs.layer (baked in) + Storage + durable tails
   BillingNode.logs              → match-all follower → private `_logs` journal (node)
   Daemon.store(Daily)          → lineage follower → private `_logs` journal (resource)
-  Logs.withScope(tag)           → appends resource key onto fiber lineage path
+  Logs.withScope(tag)           → appends service key onto fiber lineage path
   Hyperlink.logs(tag)            → { stream, query } (live + durable)
 ```
 
@@ -186,7 +186,7 @@ class AppStore extends Store.Service<AppStore>("@app/Store")(
   Daemon.store(LiveScorePoller),
 ) {}
 
-// Provide the store *into* the resource layer so Logs.layer is installed before
+// Provide the store *into* the HyperService layer so Logs.layer is installed before
 // auto-started WorkPool workers fork (Daemon can use either order — workers start on `run`).
 Effect.provide(
   program,
@@ -209,7 +209,7 @@ const { query } = yield* Hyperlink.logs(LiveScorePoller);
 yield* query({ limit: 100 });
 ```
 
-## Per-resource export
+## Per-HyperService export
 
 ```ts
 import * as Hyperlink from "hyperlink-ts/Hyperlink";
@@ -220,29 +220,29 @@ class MailQueue extends WorkPool.Tag<MailQueue>()("app/Mail", spec).pipe(
   Hyperlink.withLogExport,
 ) {}
 
-const resourceKey = MailQueue.key; // "app/Mail"
+const serviceKey = MailQueue.key; // "app/Mail"
 
 const { stream, query } = yield* Hyperlink.logs(MailQueue);
 
-stream.pipe(Stream.filter(LogEntry.hasKey(resourceKey)));
+stream.pipe(Stream.filter(LogEntry.hasKey(serviceKey)));
 const history = yield* query({ limit: 50 });
 ```
 
 ## LogEntry predicates
 
-All predicate arguments are **lineage segment keys** (usually a **resource key** or **node log key**).
+All predicate arguments are **lineage segment keys** (usually a **service key** or **node log key**).
 
 ```ts
 import * as LogEntry from "hyperlink-ts/LogEntry";
 import { LiveNode, LiveScorePoller } from "hyperlink-web/hub";
 
 const nodeLogKey = LiveNode.key;           // "wnba/live"
-const resourceKey = LiveScorePoller.key;   // "wnba/LiveScorePoller"
+const serviceKey = LiveScorePoller.key;   // "wnba/LiveScorePoller"
 
 LogEntry.lineage(entry);                         // lineage segment keys[]
-LogEntry.hasKey(resourceKey)(entry);
+LogEntry.hasKey(serviceKey)(entry);
 LogEntry.atRoot(nodeLogKey)(entry);              // lineage[0]
-LogEntry.atLeaf(resourceKey)(entry);             // last segment
+LogEntry.atLeaf(serviceKey)(entry);             // last segment
 ```
 
 Lineage JSON uses annotation key `LogAnnotationKeys.lineage`. Hyperlink kind is `Hyperlink.kindOf(tag)` — there are no `processId` / `queueId` log annotations.
@@ -254,32 +254,32 @@ Lineage JSON uses annotation key `LogAnnotationKeys.lineage`. Hyperlink kind is 
 | `WnbaNode` | node log key | `wnba/scores` | `hyperlink-web/hub.ts` |
 | `LiveNode` | node log key | `wnba/live` | `hyperlink-web/hub.ts` |
 | `StatsNode` | node log key | `wnba/stats` | `hyperlink-web/hub.ts` |
-| `BoxScoreQueue` | resource key | `wnba/BoxScoreQueue` | `hyperlink-web/hub.ts` |
-| `ScoresDb` | resource key | `wnba/ScoresDb` | `hyperlink-web/hub.ts` |
-| `ScoresApi` | resource key | `@wnba/ScoresApi` | `hyperlink-web/hub.ts` |
-| `LiveScorePoller` | resource key | `wnba/LiveScorePoller` | `hyperlink-web/hub.ts` |
-| `PlayByPlayQueue` | resource key | `wnba/PlayByPlayQueue` | `hyperlink-web/hub.ts` |
-| `WorkerPool` | resource key | `wnba/WorkerPool` | `hyperlink-web/hub.ts` |
+| `BoxScoreQueue` | service key | `wnba/BoxScoreQueue` | `hyperlink-web/hub.ts` |
+| `ScoresDb` | service key | `wnba/ScoresDb` | `hyperlink-web/hub.ts` |
+| `ScoresApi` | service key | `@wnba/ScoresApi` | `hyperlink-web/hub.ts` |
+| `LiveScorePoller` | service key | `wnba/LiveScorePoller` | `hyperlink-web/hub.ts` |
+| `PlayByPlayQueue` | service key | `wnba/PlayByPlayQueue` | `hyperlink-web/hub.ts` |
+| `WorkerPool` | service key | `wnba/WorkerPool` | `hyperlink-web/hub.ts` |
 
 `hyperlink-web/server.ts` registers `WnbaNode.logs` / `LiveNode.logs` / `StatsNode.logs` on per-node `Store.Service` classes (plus toolkit `.store` registrations).
 
 ## Remote dashboard (browser → node)
 
-When the dashboard reaches resources over RPC, durable per-resource rows come from the node's journal
-(`(yield* MyNode).logs.query`) filtered by **resource key**. Locally, `Hyperlink.logs(tag).query`
+When the dashboard reaches HyperServices over RPC, durable per-HyperService rows come from the node's journal
+(`(yield* MyNode).logs.query`) filtered by **service key**. Locally, `Hyperlink.logs(tag).query`
 prefers registration Storage and falls back to the node-handle logs path when remote.
 
 ```ts
 import * as LogEntry from "hyperlink-ts/LogEntry";
 import { Stream } from "effect";
 
-const resourceKey = LiveScorePoller.key;
+const serviceKey = LiveScorePoller.key;
 const n = yield* LiveNode; // connected node handle
 
-n.logs.stream.pipe(Stream.filter(LogEntry.hasKey(resourceKey)));
+n.logs.stream.pipe(Stream.filter(LogEntry.hasKey(serviceKey)));
 
 const rows = yield* n.logs.query({ limit: 300 });
-const scoped = rows.filter(LogEntry.hasKey(resourceKey));
+const scoped = rows.filter(LogEntry.hasKey(serviceKey));
 ```
 
 Example: `src/web/data.ts` (`hyperlinkLogsAtom`), `examples/web-dashboard/queue-data.ts` (`hyperlinkLogsAccumulator`).

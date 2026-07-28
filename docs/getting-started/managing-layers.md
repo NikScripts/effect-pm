@@ -124,7 +124,7 @@ Node.http(
 ).pipe(Layer.provide(Db.layer))
 ```
 
-When two resources on one `/rpc` need mutually exclusive implementations of the same dependency,
+When two HyperServices on one `/rpc` need mutually exclusive implementations of the same dependency,
 provide onto each serve layer:
 
 ``` ts
@@ -137,7 +137,7 @@ Node.http(
 )
 ```
 
-`Hyperlink.provide(dep, [serveA, serveB])` is sugar for "these resources, on this dependency."
+`Hyperlink.provide(dep, [serveA, serveB])` is sugar for "these HyperServices, on this dependency."
 Engine tags use `WorkPool.serve` / `Daemon.serve` / `Gate.serve` (they also run the worker or tick);
 `Hyperlink.serve` / `serveRemote` only mount handlers. See `examples/serve-per-hyperlink-deps.ts`.
 
@@ -167,7 +167,7 @@ Without it, a websocket-served fleet's fold (`fleetActive`, `activeByNode`, …)
 | **WebSocket** (browser, many streams) | `Node.ws(tag, impl, 3000)` | `ws(node)` / `protocolWebsocket(port)` | `layerPeerProtocol(protocolWebsocket)` |
 | **IPC** (same machine) | `Node.unix(tag, impl)` / `nPipe` | `unix(node)` / `nPipe(node)` / `protocolIpc` | |
 
-Pick per **deployment**, not per call. Every side of one wire must agree. In-process resources
+Pick per **deployment**, not per call. Every side of one wire must agree. In-process HyperServices
 (`Hyperlink.layer`) have no transport at all.
 
 ## Next

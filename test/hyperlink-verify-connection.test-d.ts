@@ -22,7 +22,7 @@ function typeLock(node: AnyNode): void {
   const tier1 = verifyConnection(node);
   const deep = verifyConnection(node, {
     deep: true,
-    resource: "app/X",
+    serviceKey: "app/X",
     contractHash: "deadbeef",
   });
 

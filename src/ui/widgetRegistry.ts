@@ -1,7 +1,7 @@
 /**
  * @module ui/widgetRegistry
  *
- * How a dashboard grid picks chrome for each resource. A widget is bound to a resource **kind**
+ * How a dashboard grid picks chrome for each HyperService. A widget is bound to a HyperService **kind**
  * (stamped on every tag — see {@link Hyperlink.kindOf}) or to an exact **key**. Resolution is
  * **key → kind → fallback**, so a custom card for one queue wins over the generic queue card,
  * which wins over "unknown".
@@ -13,7 +13,7 @@
  */
 import { HashMap, Match, Option } from "effect";
 
-/** A resource tag as the registry sees it — wire {@link key} is enough to look one up. @public */
+/** A HyperService tag as the registry sees it — wire {@link key} is enough to look one up. @public */
 export interface LeafTag {
   readonly key: string;
 }
@@ -38,14 +38,14 @@ export type WidgetEntry<W> =
   | { readonly _tag: "kind"; readonly kind: string; readonly widget: W }
   | { readonly _tag: "key"; readonly key: string; readonly widget: W };
 
-/** Bind a widget to every resource of a kind — e.g. `forKind(WorkPool.kind, MyQueueCard)`. @public */
+/** Bind a widget to every HyperService of a kind — e.g. `forKind(WorkPool.kind, MyQueueCard)`. @public */
 export const forKind = <W>(kind: string, widget: W): WidgetEntry<W> => ({
   _tag: "kind",
   kind,
   widget,
 });
 
-/** Bind a widget to one exact resource key — overrides that resource's kind widget. @public */
+/** Bind a widget to one exact resource key — overrides that HyperService's kind widget. @public */
 export const forKey = <W>(key: string, widget: W): WidgetEntry<W> => ({
   _tag: "key",
   key,
@@ -73,7 +73,7 @@ export const withEntries = <W>(
     base,
   );
 
-/** Resolve the widget for a resource: exact `key`, else `kind`, else the fallback. @public */
+/** Resolve the widget for a serviceKey: exact `key`, else `kind`, else the fallback. @public */
 export const widgetFor = <W>(reg: WidgetRegistry<W>, key: string, kind: string): W =>
   HashMap.get(reg.byKey, key).pipe(
     Option.orElse(() => HashMap.get(reg.byKind, kind)),

@@ -65,4 +65,4 @@ const readonly = DynamicConfig.freeze(cfg)   // .set won't compile against a fro
 ```
 
 {.note}
-Hot-swappable config is the first piece of this page — more configuration guidance lands here as the Resources chapters firm up.
+Hot-swappable config is the first piece of this page — more configuration guidance lands here as the HyperServices chapters firm up.

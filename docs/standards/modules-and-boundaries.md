@@ -164,7 +164,7 @@ Persistence primitives shared across engines stand alone (as the `persistence` a
 domains do); an engine's private wiring lives in its own `internal/`.
 
 This decides where persistence code lives: the shared, type-agnostic spine is substrate (its own
-home, today `src/internal/store/`); a facet only one resource uses co-locates with that resource.
+home, today `src/internal/store/`); a facet only one HyperService uses co-locates with that resource.
 Group facets under a `store/` family only when they're a reusable surface in their own right.
 
 

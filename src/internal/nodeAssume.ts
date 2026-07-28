@@ -67,15 +67,15 @@ export class AssumeNotReady extends Schema.TaggedErrorClass<AssumeNotReady>()(
   {
     node: Schema.String,
     /** Blocking HyperService wire key when known. */
-    resource: Schema.optionalKey(Schema.String),
+    serviceKey: Schema.optionalKey(Schema.String),
     detail: Schema.optionalKey(Schema.String),
   },
 ) {
   override get message() {
     const service =
-      this.resource === undefined
+      this.serviceKey === undefined
         ? "served HyperServices"
-        : `service "${this.resource}"`;
+        : `service "${this.serviceKey}"`;
     const detail =
       this.detail === undefined ? "" : ` (${this.detail})`;
     return `Node.assume rejected for "${this.node}" — not Ready yet (${service})${detail}.`;

@@ -60,7 +60,7 @@ import {
 // ============================================================================
 
 // The Service interface + Context tag live in internal/pollingTag — the tag is not part of
-// the public namespace (polling is not a resource; a `Tag` member would suggest the contract
+// the public namespace (polling is not a HyperService; a `Tag` member would suggest the contract
 // factory it isn't). `layer` and `current` below are the public verbs over it.
 import { PollingTag, type PollingService } from "./internal/pollingTag";
 

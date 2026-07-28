@@ -32,7 +32,7 @@ describe("NodeStatus Subscribable", () => {
 
         const snap = yield* node.status.get;
         expect(snap.up).toBe(true);
-        expect(snap.resourceCount).toBe(1);
+        expect(snap.serviceCount).toBe(1);
 
         const head = yield* Stream.runHead(node.status.changes);
         expect(Option.isSome(head)).toBe(true);
@@ -46,9 +46,9 @@ describe("NodeStatus Subscribable", () => {
 
   it.effect("buildNodeStatusImpl status ref shape matches the contract", () =>
     Effect.gen(function* () {
-      const impl = yield* buildNodeStatusImpl({ startedAt: 0, resourceCount: 2 });
+      const impl = yield* buildNodeStatusImpl({ startedAt: 0, serviceCount: 2 });
       const snap = yield* impl.status.get;
-      expect(snap.resourceCount).toBe(2);
+      expect(snap.serviceCount).toBe(2);
       const head = yield* Stream.runHead(Stream.take(impl.status.changes, 1));
       expect(Option.isSome(head)).toBe(true);
     }),

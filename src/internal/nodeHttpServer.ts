@@ -86,7 +86,7 @@ type ClosedLayer = Layer.Layer<never, never, never>;
 type HttpServed = Layer.Layer<
   never,
   never,
-  Hyperlink.ServedHyperlinks | HttpServer.HttpServer
+  Hyperlink.ServedHyperServices | HttpServer.HttpServer
 >;
 
 const httpServerBase = (
@@ -114,12 +114,12 @@ const httpServerBase = (
   const unwrapServed = retype<(effect: never) => HttpServed>(Layer.unwrap as never);
   return unwrapServed(
     Effect.gen(function* () {
-      const registry = yield* Hyperlink.ServedHyperlinks;
+      const registry = yield* Hyperlink.ServedHyperServices;
       const entries = yield* registry.all;
       if (entries.length === 0) {
         return yield* Effect.die(
           new Error(
-            "Node.httpServer: no resources registered — provideMerge at least one Hyperlink.serve(...) layer",
+            "Node.httpServer: no HyperServices registered — provideMerge at least one Hyperlink.serve(...) layer",
           ),
         );
       }
@@ -150,14 +150,14 @@ const httpServerBase = (
       const inferredNodeKey =
         optionNodeKey ?? (boundKeys.length === 1 ? boundKeys[0] : undefined);
       // Every node auto-serves the reserved node-status resource (status / logs / ping) alongside the
-      // registered resources, so a client can inspect any node without the author wiring it. Built here
-      // (not a registered `serve` layer) so it reports the user resources without counting itself.
+      // registered HyperServices, so a client can inspect any node without the author wiring it. Built here
+      // (not a registered `serve` layer) so it reports the user HyperServices without counting itself.
       const { nodeStatusServeEntry } = yield* Effect.promise(
         () => import("./nodeStatus"),
       );
       const nodeEntry = nodeStatusServeEntry({
         startedAt,
-        resourceCount: entries.length,
+        serviceCount: entries.length,
         readiness,
         ...(inferredNodeKey !== undefined ? { nodeLogKey: inferredNodeKey } : {}),
         ...(options?.assumeToken !== undefined
@@ -201,12 +201,12 @@ const httpServerBase = (
         options?.health?.path ?? "/health",
         Effect.gen(function* () {
           const ts = yield* Clock.currentTimeMillis;
-          const resources = yield* readiness;
-          const ok = resources.every((resource) => resource.ready);
+          const services = yield* readiness;
+          const ok = services.every((service) => service.ready);
           return yield* HttpServerResponse.json({
             status: ok ? "ok" : "degraded",
             listening: true,
-            resources,
+            services,
             uptimeMillis: ts - startedAt,
             ts,
           }).pipe(
@@ -236,15 +236,15 @@ const httpServerBase = (
 
 
 /**
- * The shared http server for resources composed with {@link serve} — the multi-hyperlink,
+ * The shared http server for HyperServices composed with {@link serve} — the multi-hyperlink,
  * heterogeneous-dependency counterpart to a single {@link serve} layer. Reads the
- * {@link ServedHyperlinks} registry, merges every registered group onto **one** `RpcServer` at `path`
- * (default `/rpc`), and mounts a `/health` route aggregating each resource's readiness. Because each
- * `serve` layer carries **its own** `Layer.provide`d dependency, resources needing different
+ * {@link ServedHyperServices} registry, merges every registered group onto **one** `RpcServer` at `path`
+ * (default `/rpc`), and mounts a `/health` route aggregating each HyperService's readiness. Because each
+ * `serve` layer carries **its own** `Layer.provide`d dependency, HyperServices needing different
  * implementations of the same tag stay isolated — no shared union-provide.
  *
  * Pass the `serve` layers as the first argument (recommended) — it bundles the `provideMerge` +
- * {@link Hyperlink.servedHyperlinksLayer}, so you list resources and provide only the platform (and any shared
+ * {@link Hyperlink.servedHyperServicesLayer}, so you list HyperServices and provide only the platform (and any shared
  * dependency):
  *
  * ```ts
@@ -265,7 +265,7 @@ const httpServerBase = (
  * shared + isolated deps, no second port.
  *
  * The low-level `httpServer(options)` form requires you to `Layer.provideMerge` the `serve` layers (kept,
- * not pruned) + {@link Hyperlink.servedHyperlinksLayer} yourself. Either way the handlers ride the context the
+ * not pruned) + {@link Hyperlink.servedHyperServicesLayer} yourself. Either way the handlers ride the context the
  * `serve` layers provide; if one is missing the `RpcServer` fails at **build** (a clear boot error), never
  * a silent runtime gap.
  *
@@ -278,7 +278,7 @@ export function httpServer<A, E, R>(
 ): Layer.Layer<A, E, R | HttpServer.HttpServer>;
 export function httpServer(
   options?: HttpServerOptions,
-): Layer.Layer<never, never, Hyperlink.ServedHyperlinks | HttpServer.HttpServer>;
+): Layer.Layer<never, never, Hyperlink.ServedHyperServices | HttpServer.HttpServer>;
 export function httpServer<const Serves extends ServerServeList>(
   serves: Serves,
   options?: HttpServerOptions,
@@ -296,7 +296,7 @@ export function httpServer(
 
 // Shared body for {@link httpServer} / {@link wsServer} — identical wiring, differing only in the
 // server RPC protocol. The serves form bundles the boilerplate: provideMerge the serve layers (kept,
-// not pruned) + the shared registry, so the caller lists resources and provides only the platform (+
+// not pruned) + the shared registry, so the caller lists HyperServices and provides only the platform (+
 // any shared dep). One serve layer or many — a single `Layer` is treated as a one-element list.
 // Overload impl returns {@link Layer.Any}; public overloads reify serve-list Success/Error/Services.
 function serverImpl(
@@ -318,7 +318,7 @@ function serverImpl(
   if (serves !== undefined) {
     return httpServerBase(serverProtocol, serverKind, maybeOptions).pipe(
       Layer.provideMerge(closedLayer(mergeServeList(serves))),
-      Layer.provide(Layer.fresh(Hyperlink.servedHyperlinksLayer)),
+      Layer.provide(Layer.fresh(Hyperlink.servedHyperServicesLayer)),
     );
   }
   return httpServerBase(
@@ -330,7 +330,7 @@ function serverImpl(
 
 /**
  * A **WebSocket** RPC server — the {@link httpServer} sibling for the browser. Everything a client
- * subscribes to (each resource's `status` + `metrics` + `logs`) rides **one multiplexed WebSocket per
+ * subscribes to (each HyperService's `status` + `metrics` + `logs`) rides **one multiplexed WebSocket per
  * client**, so a dashboard never trips the browser's ~6-connection-per-origin HTTP/1.1 cap that
  * starves streams over plain HTTP. Identical to {@link httpServer} in every other way — same serve
  * list, same options, same `/health` — it just speaks WebSocket instead of HTTP POST. Clients connect
@@ -352,7 +352,7 @@ export function wsServer<A, E, R>(
 ): Layer.Layer<A, E, R | HttpServer.HttpServer>;
 export function wsServer(
   options?: HttpServerOptions,
-): Layer.Layer<never, never, Hyperlink.ServedHyperlinks | HttpServer.HttpServer>;
+): Layer.Layer<never, never, Hyperlink.ServedHyperServices | HttpServer.HttpServer>;
 export function wsServer<const Serves extends ServerServeList>(
   serves: Serves,
   options?: HttpServerOptions,

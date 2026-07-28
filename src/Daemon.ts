@@ -566,7 +566,7 @@ function createDaemon<E, RUser>(state: AnyDaemonBuildState<E, RUser>) {
   ): Effect.Effect<void> =>
     store === undefined ? Effect.void : write(store).pipe(Effect.asVoid);
 
-  const resourceKey = storeScopeTag?.key ?? name;
+  const serviceKey = storeScopeTag?.key ?? name;
 
   // Sliding PubSub: publishing never blocks the driver (drops oldest when a subscriber lags).
   // Guaranteed delivery stays on the durable store — persist == stream at the source (Queue pattern).
@@ -578,7 +578,7 @@ function createDaemon<E, RUser>(state: AnyDaemonBuildState<E, RUser>) {
   const eventsHub = Effect.runSync(PubSub.sliding<DaemonLiveEvent>(1024));
 
   const terminalRow = (input: DaemonStoreTerminalInput) => ({
-    key: resourceKey,
+    key: serviceKey,
     scheduleKey: input.scheduleKey,
     startedAt: input.startedAt,
     completedAt: input.completedAt,
@@ -596,7 +596,7 @@ function createDaemon<E, RUser>(state: AnyDaemonBuildState<E, RUser>) {
   const recordStoreStarted = (args: DaemonStoreStartedInput): Effect.Effect<void> =>
     publishExecutionEvent({
       _tag: "Started",
-      key: resourceKey,
+      key: serviceKey,
       scheduleKey: args.scheduleKey,
       startedAt: args.startedAt,
       isStartupRun: args.isStartupRun,
@@ -1547,7 +1547,7 @@ export const daemonStatus = Schema.Struct({
 });
 
 /**
- * Log entry wire schema — alias of {@link LogEntrySchema}. Per-resource logs use {@link Hyperlink.logs}.
+ * Log entry wire schema — alias of {@link LogEntrySchema}. Per-HyperService logs use {@link Hyperlink.logs}.
  *
  * @category wire schemas
  * @public
@@ -1781,7 +1781,7 @@ export const scheduleHyperlinkSpec = {
 // The spec is validated (without widening) at the `Hyperlink.Tag` call site.
 
 /**
- * The standalone {@link Schedule} resource's spec.
+ * The standalone {@link Schedule} HyperService's spec.
  *
  * @category models
  * @public
@@ -2118,7 +2118,7 @@ const scheduleGroupFlat: FlatSpec = Object.fromEntries(
  * ```
  *
  * - **an external {@link Schedule}** — the daemon is **gated by** a shared schedule resource and
- *   gains **no** schedule verbs (they live on the resource, which can arm many daemons at once):
+ *   gains **no** schedule verbs (they live on the HyperService, which can arm many daemons at once):
  *
  * ```ts
  * class IngestScores extends Daemon.Tag<IngestScores>()("app/IngestScores").pipe(
@@ -2241,7 +2241,7 @@ export type DaemonTagBuild<Self> = {
 };
 
 /**
- * Define a managed daemon as a toolkit resource. `Self` is given explicitly (Effect's `()`
+ * Define a managed daemon as a toolkit HyperService. `Self` is given explicitly (Effect's `()`
  * two-stage form). The base tag carries observation + lifecycle; add a schedule with
  * `.pipe(`{@link schedule}`(…))`. Declare value/error wire schemas on the tag:
  *
@@ -2661,7 +2661,7 @@ export const serveMemory = serve;
 
 /**
  * Serve a daemon **remotely (served-only)** — mounts its RPC handlers without granting the local
- * instance, preserving the requirement `R` for a per-resource `Layer.provide`.
+ * instance, preserving the requirement `R` for a per-HyperService `Layer.provide`.
  *
  * Soft-defaults {@link Store.Storage}. Override with `Layer.provide` / `provideMerge(AppStore)`.
  *

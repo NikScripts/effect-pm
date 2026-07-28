@@ -152,7 +152,7 @@ import { configureLayer, foldConfiguredSpec } from "./HyperlinkConfigure";
 import type { ConfigPatch } from "./HyperlinkConfigure";
 
 /**
- * Log entry wire schema — alias of {@link LogEntrySchema}. Per-resource logs use {@link Hyperlink.logs}.
+ * Log entry wire schema — alias of {@link LogEntrySchema}. Per-HyperService logs use {@link Hyperlink.logs}.
  *
  * @category wire schemas
  * @public
@@ -2046,9 +2046,9 @@ export const layerMemory = layer;
 
 /**
  * Serve this queue **remotely (served-only)** — run the worker / refill / `persist`
- * engine behind the tag, mount its RPC handlers, and register into {@link Hyperlink.servedHyperlinksLayer},
+ * engine behind the tag, mount its RPC handlers, and register into {@link Hyperlink.servedHyperServicesLayer},
  * **without** granting the local instance (no `yield* Tag` in the serving process). The engine's worker
- * requirement `R` is **preserved**, so a per-resource `Layer.provide` discharges it in isolation — the
+ * requirement `R` is **preserved**, so a per-HyperService `Layer.provide` discharges it in isolation — the
  * queue's counterpart to {@link Hyperlink.serveRemote}.
  *
  * Reach for this (with {@link Node.httpServer}) for a pure gateway/edge that exposes the queue for
@@ -2119,9 +2119,9 @@ export const serveRemoteMemory = serveRemote;
 /**
  * Serve this queue **and** grant its local instance from **one** materialization — run the worker /
  * refill / `persist` engine behind the tag, mount its RPC handlers, register into
- * {@link Hyperlink.servedHyperlinksLayer}, **and** grant `Self | Local<Self>` so co-located code
+ * {@link Hyperlink.servedHyperServicesLayer}, **and** grant `Self | Local<Self>` so co-located code
  * can `yield* Tag`. The served cells *are* the in-process instance (one engine, one `peersLayer`); the
- * worker requirement `R` is preserved for per-resource `Layer.provide`. This is the queue's counterpart
+ * worker requirement `R` is preserved for per-HyperService `Layer.provide`. This is the queue's counterpart
  * to {@link Hyperlink.serve}; a served-**only** gateway uses {@link serveRemote}.
  *
  * ```ts

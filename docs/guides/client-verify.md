@@ -52,7 +52,7 @@ yield* Hyperlink.verifyConnection(WorkerNode, { timeout: "1 second" })
 yield* Hyperlink.verifyConnection(WorkerNode, { deep: true }) // + node status RPC
 yield* Hyperlink.verifyConnection(WorkerNode, {
   deep: true,
-  resource: Emails.key,
+  serviceKey: Emails.key,
   contractHash: Hyperlink.contractHash(Emails),
 })
 yield* Hyperlink.verifyConnection(WorkerNode, { all: true }) // every declared endpoint
@@ -64,7 +64,7 @@ yield* Hyperlink.verifyConnection(WorkerNode, { all: true }) // every declared e
 |---------|------|
 | `NodeUnreachable` | Transport probe fails (tier 1) |
 | `ProtocolUnanswered` | Transport up, node status RPC silent |
-| `ServiceNotServed` / `ServiceNotReady` | Deep + `resource` key missing / not ready |
+| `ServiceNotServed` / `ServiceNotReady` | Deep + `serviceKey` key missing / not ready |
 | `ContractMismatch` | Deep + `contractHash` disagrees with the peer (F4) |
 | `ProtocolMismatch` | Wrong transport (e.g. http client → ws server) on a call |
 | `MissingClientProtocol` | Nodeless `client(tag)` with no ambient protocol |

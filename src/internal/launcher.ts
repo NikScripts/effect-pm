@@ -246,44 +246,44 @@ const probeReady = (
       const status = yield* NodeStatusTag;
       return yield* status.status.get;
     }).pipe(Effect.provide(ctx));
-    // Node status still exposes the readiness rollup as `.resources` (status schema);
+    // Node status still exposes the readiness rollup as `.services` (status schema);
     // Launcher call sites use `ready.services` / HyperService keys.
     if (services !== undefined) {
       for (const key of services) {
-        const row = snap.resources.find((r) => r.key === key);
+        const row = snap.services.find((r) => r.key === key);
         if (row === undefined) {
           return yield* new ServiceNotServed({
             node: node.key,
             url: address,
-            resource: key,
-            served: snap.resources.map((r) => r.key),
+            serviceKey: key,
+            served: snap.services.map((r) => r.key),
           });
         }
         if (!row.ready) {
           return yield* new ServiceNotReady({
             node: node.key,
             url: address,
-            resource: key,
+            serviceKey: key,
             ...(row.detail !== undefined ? { detail: row.detail } : {}),
           });
         }
       }
       return;
     }
-    if (snap.resources.length === 0) {
+    if (snap.services.length === 0) {
       return yield* new ServiceNotReady({
         node: node.key,
         url: address,
-        resource: "*",
+        serviceKey: "*",
         detail: "no served HyperServices yet",
       });
     }
-    const blocked = snap.resources.find((r) => !r.ready);
+    const blocked = snap.services.find((r) => !r.ready);
     if (blocked !== undefined) {
       return yield* new ServiceNotReady({
         node: node.key,
         url: address,
-        resource: blocked.key,
+        serviceKey: blocked.key,
         ...(blocked.detail !== undefined ? { detail: blocked.detail } : {}),
       });
     }

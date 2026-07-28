@@ -12,14 +12,42 @@ import { runServer } from "./runtime.js";
 import { chapters, chapterBySlug } from "./content.js";
 import { nav } from "../../../nav.js";
 import { highlightToReact, loadHighlighter } from "./highlight.js";
-import { QueueIsland } from "../islands/QueueIsland.js";
-import { GateIsland } from "../islands/GateIsland.js";
-import { CounterIsland } from "../islands/CounterIsland.js";
+// Lightweight islands only — PackageInstall / ListenProtocol / CopyButton stay static so every
+// code block can copy. Heavy demo islands (Queue/Gate/Counter) pull Hyperlink+Ref+Store+widgets.css
+// into the client graph; import those ONLY when the chapter actually contains their fence lang,
+// otherwise /docs/install and peers modulepreload ~80 KiB of unused JS (Lighthouse unused-js).
 import { PackageInstall } from "../islands/PackageInstall.js";
 import { ListenProtocol } from "../islands/ListenProtocol.js";
 import { CopyButton } from "../islands/CopyButton.js";
 import { type ChapterMeta, expandScopes, parseChapter } from "./standards-manifest.js";
 import { buildTermIndex, slugify } from "./glossary.js";
+
+/** Per-chapter demo island slots — filled by `loadDemoIslands` before `toReact`. */
+let demoIslands: {
+  queue?: React.ComponentType;
+  gate?: React.ComponentType;
+  hyperlink?: React.ComponentType;
+} = {};
+
+const collectFenceLangs = (n: any, out: Set<string> = new Set()): Set<string> => {
+  if (n?.tag === "code_block" && typeof n.lang === "string" && n.lang !== "") out.add(n.lang);
+  for (const c of n?.children ?? []) collectFenceLangs(c, out);
+  return out;
+};
+
+const loadDemoIslands = async (doc: any): Promise<void> => {
+  demoIslands = {};
+  const langs = collectFenceLangs(doc);
+  if (langs.has("queue")) {
+    demoIslands.queue = (await import("../islands/QueueIsland.js")).QueueIsland;
+  }
+  if (langs.has("gate") || langs.has("run-resource")) {
+    demoIslands.gate = (await import("../islands/GateIsland.js")).GateIsland;
+  }
+  if (langs.has("hyperlink")) {
+    demoIslands.hyperlink = (await import("../islands/CounterIsland.js")).CounterIsland;
+  }
+};
 
 // Re-exported for back-compat: the glossary data now lives in ./glossary (shared with highlight.ts).
 export { glossaryEntries, type GlossaryEntry } from "./glossary.js";
@@ -201,10 +229,22 @@ const toReact = (n: any): React.ReactNode => {
       return h(n.head ? "th" : "td", { key: keySeq++, style: align }, kids(n));
     }
     case "code_block":
-      // island seam: a ```queue block becomes a live client component (RSC boundary)
-      if (n.lang === "queue") return h(QueueIsland, { key: keySeq++ });
-      if (n.lang === "gate" || n.lang === "run-resource") return h(GateIsland, { key: keySeq++ });
-      if (n.lang === "hyperlink") return h(CounterIsland, { key: keySeq++ });
+      // island seam: ```queue/gate/hyperlink → live client islands (loaded only when present)
+      if (n.lang === "queue") {
+        return demoIslands.queue !== undefined
+          ? h(demoIslands.queue, { key: keySeq++ })
+          : null;
+      }
+      if (n.lang === "gate" || n.lang === "run-resource") {
+        return demoIslands.gate !== undefined
+          ? h(demoIslands.gate, { key: keySeq++ })
+          : null;
+      }
+      if (n.lang === "hyperlink") {
+        return demoIslands.hyperlink !== undefined
+          ? h(demoIslands.hyperlink, { key: keySeq++ })
+          : null;
+      }
       if (n.lang === "install") return h(PackageInstall, { key: keySeq++, packages: n.text });
       // protocol-listen overload family — tabs switch http / ws / unix / nPipe
       if (n.lang === "listen") {
@@ -236,6 +276,7 @@ export interface RenderedChapter {
 export const renderChapter = async (raw: string): Promise<RenderedChapter> => {
   const { doc, meta } = await runServer(parseChapter(raw));
   await loadHighlighter(); // ready the (sync) highlighter before the walk
+  await loadDemoIslands(doc); // dynamic-import heavy demos only when this chapter needs them
   keySeq = 0;
   suppress = 0;
   linkedSlugs = new Set();

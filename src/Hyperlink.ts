@@ -3,7 +3,7 @@
  *
  * @remarks
  * Lightweight by construction: imports only `Schema` and `effect/unstable/rpc`, never a
- * heavy implementation. A {@link Spec} is the single source for a resource's wire
+ * heavy implementation. A {@link Spec} is the single source for a HyperService's wire
  * contract — the inferred service interface, the client forwarder, and the server
  * handlers all derive from it.
  *
@@ -22,7 +22,7 @@
  * ```
  *
  * Define a tag with {@link Hyperlink.Tag}:
- * - **Solo** — `Tag<Self>()(key, spec)`: one resource, RpcGroup prefix = `.key`.
+ * - **Solo** — `Tag<Self>()(key, spec)`: one HyperService, RpcGroup prefix = `.key`.
  * - **Shared Spec** — `Tag(wireKey, spec)` then `Factory<Self>()(instanceKey)`: many
  *   instances, one Spec / RpcGroup (prefix = `wireKey`), routed by header `key`.
  *   Same {@link Hyperlink.serve} / {@link Hyperlink.client} — merge several `serve`s
@@ -130,7 +130,7 @@ import { adaptPromiseHandle } from "./internal/promiseHandle";
 // ── typed errors (Data.TaggedError — never raw `Error`) ──
 
 /**
- * Two resources declared the same **instance key**. Effect's `Context` is keyed by the key
+ * Two HyperServices declared the same **instance key**. Effect's `Context` is keyed by the key
  * string and silently last-write-wins, so we fail fast at declaration.
  *
  * @category errors
@@ -141,7 +141,7 @@ export class DuplicateHyperlinkKey extends Data.TaggedError(
 )<{ readonly key: string }> {}
 
 /**
- * Two resources declared the same **wire key** (RpcGroup prefix) — they'd collide on a
+ * Two HyperServices declared the same **wire key** (RpcGroup prefix) — they'd collide on a
  * shared `RpcServer`.
  *
  * @category errors
@@ -230,13 +230,13 @@ export class EffectFnMissingPayload extends Data.TaggedError("EffectFnMissingPay
  * @public
  */
 export class ProtocolMismatch extends Data.TaggedError("ProtocolMismatch")<{
-  readonly resource: string;
+  readonly serviceKey: string;
   readonly method: string;
   readonly cause: unknown;
 }> {
   override get message() {
     return (
-      `Hyperlink "${this.resource}" method "${this.method}" hit a transport/protocol mismatch ` +
+      `Hyperlink "${this.serviceKey}" method "${this.method}" hit a transport/protocol mismatch ` +
       `(often an http client dialing a WebSocket server). Use Node.connect / the node's declared ` +
       `kind (protocolWebsocket / Hyperlink.ws), not a guessed transport.`
     );
@@ -254,11 +254,11 @@ export class ProtocolMismatch extends Data.TaggedError("ProtocolMismatch")<{
  * @public
  */
 export class MissingClientProtocol extends Data.TaggedError("MissingClientProtocol")<{
-  readonly resource: string;
+  readonly serviceKey: string;
 }> {
   override get message() {
     return (
-      `Hyperlink.client("${this.resource}") has no ambient RpcClient.Protocol. ` +
+      `Hyperlink.client("${this.serviceKey}") has no ambient RpcClient.Protocol. ` +
       `Connect it with Hyperlink.connect(tag, protocolHttp|protocolWebsocket|protocolIpc(target)), ` +
       `Hyperlink.client(tag, node), Hyperlink.http|ws|unix|nPipe(node), or Node.connect(node).`
     );
@@ -268,7 +268,7 @@ export class MissingClientProtocol extends Data.TaggedError("MissingClientProtoc
 /**
  * Default-on verify mode for addressed {@link client} Layers (and {@link ws}).
  * - `"reject"` (default) — layer build runs {@link verifyConnection}; peer down → {@link NodeUnreachable}
- *   (tag-aware clients also deep-check the resource + F4 {@link contractHash})
+ *   (tag-aware clients also deep-check the HyperService + F4 {@link contractHash})
  * - `"status"` — probe runs but failure is ignored (connect proceeds)
  * - `false` — skip verify
  *
@@ -351,21 +351,21 @@ const isHttpProtocolMismatchDefect = (err: unknown): boolean => {
  * @internal
  */
 const remapProtocolMismatch = (
-  resource: string,
+  serviceKey: string,
   method: string,
   value: unknown,
 ): unknown => {
   if (Effect.isEffect(value)) {
     return Effect.catch(value as any, (err: any) =>
       isHttpProtocolMismatchDefect(err)
-        ? new ProtocolMismatch({ resource, method, cause: err })
+        ? new ProtocolMismatch({ serviceKey, method, cause: err })
         : Effect.fail(err),
     ) as any;
   }
   if (Stream.isStream(value)) {
     return Stream.mapError(value, (err) =>
       isHttpProtocolMismatchDefect(err)
-        ? new ProtocolMismatch({ resource, method, cause: err })
+        ? new ProtocolMismatch({ serviceKey, method, cause: err })
         : err,
     );
   }
@@ -386,7 +386,7 @@ export type MethodKind = "query" | "mutate";
 /**
  * Tool metadata attached to a method via {@link Method.annotate} — the Effect annotation
  * idiom. Inert to the type inference and the wire contract; it only feeds the tools that
- * render this resource.
+ * render this HyperService.
  *
  * @category models
  * @public
@@ -418,7 +418,7 @@ export interface Derive {
 declare const clientSym: unique symbol;
 
 /**
- * One method of a resource contract — built by {@link effect} /
+ * One method of a HyperService contract — built by {@link effect} /
  * {@link effectFn} / {@link Hyperlink.stream}. Carries its `kind`, schemas
  * (`payload` / `success` / `error`), whether it's a `stream` (a push source vs a one-shot
  * read), and tool annotations. `.annotate({...})` returns a copy with merged annotations,
@@ -499,11 +499,11 @@ export const fleet = <M extends AnyMethod>(method: M): FleetField<M> =>
 declare const localTypeId: unique symbol;
 
 /**
- * Granted *only* by a resource's local layer ({@link Hyperlink.layer} / {@link serve}) — never by
+ * Granted *only* by a HyperService's local layer ({@link Hyperlink.layer} / {@link serve}) — never by
  * {@link Hyperlink.client}. Local to **this runtime's materialized impl** for the tag (not a remote
  * client, not a peer). A {@link LocalMethod} carries it in its requirement channel, so calling a
  * non-serializable method against a client is a **compile error** (unsatisfied requirement); the
- * same call resolves when the local layer is provided. Branded by `Self` so one resource's local
+ * same call resolves when the local layer is provided. Branded by `Self` so one HyperService's local
  * layer can't unlock another's.
  *
  * @category models
@@ -527,7 +527,7 @@ export type LocalEffect<A, E = never, Self = unknown> = Effect.Effect<A, E, Loca
 const LocalMethodTypeId = "~hyperlink-ts/Hyperlink/LocalMethod" as const;
 
 /**
- * A **local-only** member of a resource contract — built by {@link Hyperlink.local}. It is
+ * A **local-only** member of a HyperService contract — built by {@link Hyperlink.local}. It is
  * *not* part of the wire contract (no schema, no rpc): use it for things that can't cross
  * RPC simply (a returned function, a raw `Fiber`/`Scope`/`Ref`, a callback). Its declared
  * type `T` is given directly. In the service it surfaces as
@@ -555,7 +555,7 @@ export type AnyLocalMethod = LocalMethod<unknown>;
 const DefaultMethodTypeId = "~hyperlink-ts/Hyperlink/DefaultMethod" as const;
 
 /**
- * A **Tag-baked default** on a resource contract — built by {@link default}. Lives on the Spec
+ * A **Tag-baked default** on a HyperService contract — built by {@link default}. Lives on the Spec
  * (both local and remote install the same `value`); no impl, no RPC, no {@link Local} gate.
  * Literals or sync functions. For a bag of many defaults, see {@link defaults}.
  *
@@ -581,7 +581,7 @@ export interface DefaultMethod<out V> {
 export type AnyDefaultMethod = DefaultMethod<unknown>;
 
 /**
- * A resource contract: method name → wire {@link Method}, off-wire {@link LocalMethod}, or
+ * A HyperService contract: method name → wire {@link Method}, off-wire {@link LocalMethod}, or
  * Tag-baked {@link DefaultMethod}. The single source of truth.
  *
  * @category models
@@ -664,7 +664,7 @@ const flattenSpec = (spec: Spec, prefix = ""): FlatSpec => {
 };
 
 /**
- * Flatten a resource {@link Spec} for structural validation (queue wire assert, etc.).
+ * Flatten a HyperService {@link Spec} for structural validation (queue wire assert, etc.).
  *
  * @internal
  */
@@ -784,7 +784,7 @@ type PriorDefaults<T> = T extends { readonly [defaultsSym]: infer P extends Defa
 type MergedDefaultsBag<T, D extends DefaultsBag> = PriorDefaults<T> & D;
 
 /**
- * Remap a resource Tag's handle (`Svc`) — the licensed cast for construction
+ * Remap a HyperService Tag's handle (`Svc`) — the licensed cast for construction
  * adornments ({@link defaults}, …). Runtime identity is unchanged; only the
  * type-level claim on {@link Result} changes.
  *
@@ -1365,7 +1365,7 @@ export const ref = <Su extends Schema.Top>(
   marked(stream(success), { _tag: "ref" as const });
 
 /**
- * Narrow a resource contract object through the builder (prefer over `as const satisfies`).
+ * Narrow a HyperService contract object through the builder (prefer over `as const satisfies`).
  *
  * @category constructors
  * @public
@@ -1627,7 +1627,7 @@ export type WithRequirement<T, Req> = T extends Subscribable<infer A>
  * - **Type-changing** transforms (stripping `R`, like {@link provideContext}) supply an explicit `Out`
  *   computed per method by a mapped type (e.g. {@link ProvidedContext}).
  *
- * @example Type-preserving — trace every resource method
+ * @example Type-preserving — trace every HyperService method
  * ```ts
  * const traced = Hyperlink.mapEffects(impl, MyTag[Hyperlink.specSym], (e) => Effect.withSpan(e, "hyperlink"));
  * ```
@@ -1703,9 +1703,9 @@ export const driverSym: unique symbol = Symbol.for(
 );
 
 /**
- * A resource impl **before** worker-context discharge — the impl still carries requirement `R` on its
+ * A HyperService impl **before** worker-context discharge — the impl still carries requirement `R` on its
  * Effect methods, paired with the {@link Context.Context} captured at build time. Used by
- * {@link WorkPool}, {@link Gate}, and {@link Daemon} (any toolkit resource that builds
+ * {@link WorkPool}, {@link Gate}, and {@link Daemon} (any toolkit HyperService that builds
  * its driver under ambient `R`). {@link layer} / {@link serve} grant locally via {@link grantLocal};
  * {@link serveRemote} defers discharge to each wire call via {@link invokeWireMethodWithContext} so
  * one materialization backs both paths.
@@ -1945,7 +1945,7 @@ export function mutatePair(
  * Define a **stream** (a live, idempotent push source) whose elements are `success`. The
  * service member surfaces as a `Stream<Success, Error>` (a property, or `(payload) => Stream`
  * when a `payload` is declared) rather than an `Effect` — drive dashboard atoms, a CLI
- * `--watch`, or a TUI from it. Conventionally named `changes` when it carries a resource's
+ * `--watch`, or a TUI from it. Conventionally named `changes` when it carries a HyperService's
  * whole observable state (a snapshot stream); back it with a `SubscriptionRef`'s `.changes`.
  *
  * Counts as a `query` for tools (an idempotent read). `success` is the **element** schema and
@@ -2479,7 +2479,7 @@ export type HandlerContextOf<S extends Spec> = Rpc.ToHandler<RpcUnionOf<S>>;
 // ── runtime: one Spec → the shared RPC contract group ──
 
 /**
- * The wire tag of a method on the shared transport: the resource's **wire key** prefixes
+ * The wire tag of a method on the shared transport: the HyperService's **wire key** prefixes
  * the bare method name (`@app/Mail/pause`, `hyperlink-ts/WorkPool/sizes`). Solo tags use
  * {@link HyperlinkTag.key}; shared-Spec families use the family's wire key. The prefix
  * namespaces procedures on one `RpcServer` — a transport detail, never part of the logical
@@ -2564,7 +2564,7 @@ export const wireKeySym: unique symbol = Symbol.for(
 export const sharedTagSym: unique symbol = Symbol.for(
   "hyperlink-ts/Hyperlink/sharedTag",
 );
-/** Where the per-resource local-capability key is stowed on a Tag. @internal */
+/** Where the per-HyperService local-capability key is stowed on a Tag. @internal */
 export const localCapSym: unique symbol = Symbol.for(
   "hyperlink-ts/Hyperlink/localCap",
 );
@@ -2581,13 +2581,13 @@ export const interfaceLocalsSym: unique symbol = Symbol.for(
 export const kindSym: unique symbol = Symbol.for(
   "hyperlink-ts/Hyperlink/kind",
 );
-/** Where a resource's **readiness derivation** (status → ready) is stowed on a Tag — a sibling of
- *  {@link kindSym}, applied by {@link withReadiness}. Absent ⇒ the resource is ready by default.
+/** Where a HyperService's **readiness derivation** (status → ready) is stowed on a Tag — a sibling of
+ *  {@link kindSym}, applied by {@link withReadiness}. Absent ⇒ the HyperService is ready by default.
  *  @internal */
 export const readinessSym: unique symbol = Symbol.for(
   "hyperlink-ts/Hyperlink/readiness",
 );
-/** Where the resource's {@link Node} (if any) is stowed on a Tag. @internal */
+/** Where the HyperService's {@link Node} (if any) is stowed on a Tag. @internal */
 export const nodeSym: unique symbol = Symbol.for(
   "hyperlink-ts/Hyperlink/node",
 );
@@ -2597,10 +2597,10 @@ export const identitySym: unique symbol = Symbol.for(
   "hyperlink-ts/Hyperlink/identity",
 );
 
-// ── readiness: a derived view of a resource's status, aggregated into node /health + handle status ──
+// ── readiness: a derived view of a HyperService's status, aggregated into node /health + handle status ──
 
 /**
- * A resource's readiness — derived from its own status (its single source of truth), aggregated
+ * A HyperService's readiness — derived from its own status (its single source of truth), aggregated
  * into a node's `/health` and `(yield* node).status`. `ready: false` with a `detail` says *why*
  * (surfaced in the `/health` body and the dashboard health board).
  *
@@ -2613,7 +2613,7 @@ export interface Readiness {
 }
 
 /**
- * Derive {@link Readiness} from a resource's materialized service — read its status, don't store new
+ * Derive {@link Readiness} from a HyperService's materialized service — read its status, don't store new
  * state. The second argument, `base`, is the readiness **already** on the tag (e.g. a contract
  * factory's own check) — `yield* base` to extend it (a queue's `phase === "running"` **and** your
  * dependency checks), or ignore it to replace it. Stacks: each {@link withReadiness} wraps the prior.
@@ -2629,18 +2629,18 @@ export type ReadinessOf<Service> = (
   // is satisfied by the serve context the node runs readiness in, and erased at this storage seam.
 ) => Effect.Effect<Readiness, never, any>;
 
-// ── node: the transport for a resource, carried in the Tag ──
+// ── node: the transport for a HyperService, carried in the Tag ──
 
 // [extracted to Node module — was Hyperlink.ts:1764-1845]
 
-/** Phantom brand for the per-resource {@link peers} capability, so distinct resources' peer sets
+/** Phantom brand for the per-HyperService {@link peers} capability, so distinct HyperServices' peer sets
  *  don't collide in one context. @internal */
 export interface PeersId<Self> {
   readonly _peers: Self;
 }
 
-/** Phantom brand for the per-resource {@link selfNode} capability (which node this instance runs as),
- *  so distinct resources' self-node identities don't collide in one context. @internal */
+/** Phantom brand for the per-HyperService {@link selfNode} capability (which node this instance runs as),
+ *  so distinct HyperServices' self-node identities don't collide in one context. @internal */
 export interface SelfNodeId<Self> {
   readonly _selfNode: Self;
 }
@@ -2648,14 +2648,14 @@ export interface SelfNodeId<Self> {
 /** Holds a tag's `distributed` set (the fleet). @internal */
 const nodesSym: unique symbol = Symbol.for("hyperlink-ts/Hyperlink/distributed");
 
-/** Holds a tag's per-resource {@link peers} capability key. @internal */
+/** Holds a tag's per-HyperService {@link peers} capability key. @internal */
 const peersSym: unique symbol = Symbol.for("hyperlink-ts/Hyperlink/peers");
 
-/** Holds a tag's per-resource {@link selfNode} capability key. @internal */
+/** Holds a tag's per-HyperService {@link selfNode} capability key. @internal */
 const selfNodeSym: unique symbol = Symbol.for("hyperlink-ts/Hyperlink/selfNode");
 
 /**
- * The type of a resource tag carrying spec `S` — what {@link Hyperlink.Tag} produces
+ * The type of a HyperService tag carrying spec `S` — what {@link Hyperlink.Tag} produces
  * (and what you extend). Lets a consumer write
  * `<S extends Spec>(tag: HyperlinkTag<Self, S>)` and read the spec through named types
  * ({@link specOf} / {@link groupOf}) instead of a `Parameters<typeof specOf>` workaround.
@@ -2665,7 +2665,7 @@ const selfNodeSym: unique symbol = Symbol.for("hyperlink-ts/Hyperlink/selfNode")
  */
 export interface HyperlinkTag<Self, S extends Spec, Svc = ServiceOf<S, Self>>
   extends Context.ServiceClass<Self, string, Svc> {
-  /** Wire prefix — namespaces this resource's procedures on a shared `RpcServer`. */
+  /** Wire prefix — namespaces this HyperService's procedures on a shared `RpcServer`. */
   readonly [wireKeySym]: string;
   /** Hyperlink-level help text (CLI/TUI section help, dashboard panel title) — if declared. */
   readonly description: string | undefined;
@@ -2677,7 +2677,7 @@ export interface HyperlinkTag<Self, S extends Spec, Svc = ServiceOf<S, Self>>
     { readonly granted: true }
   >;
   /**
-   * The resource's {@link Node} (its transport), or `undefined` for a nodeless tag. Uniform
+   * The HyperService's {@link Node} (its transport), or `undefined` for a nodeless tag. Uniform
    * across all tags (always present) so a node-bearing tag stays assignable wherever a plain
    * {@link HyperlinkTag} is expected; the node-bearing tag constructors **narrow** this to a
    * concrete {@link NodeKey} in their return type, which is how {@link Hyperlink.client}
@@ -2687,13 +2687,13 @@ export interface HyperlinkTag<Self, S extends Spec, Svc = ServiceOf<S, Self>>
   /** The contract's kind (canonical id) — set by a contract `.Tag` factory, `undefined` for a bare
    *  {@link Hyperlink.Tag}. Read it with {@link kindOf}. */
   readonly [kindSym]: string | undefined;
-  /** The resource's readiness derivation, if any (applied by {@link withReadiness}); `undefined`
+  /** The HyperService's readiness derivation, if any (applied by {@link withReadiness}); `undefined`
    *  ⇒ ready by default. Read it via {@link readinessCheck}. */
   readonly [readinessSym]: ReadinessOf<ServiceOf<S, Self>> | undefined;
-  /** The per-resource {@link peers} capability key — its value is this resource's peer clients
+  /** The per-HyperService {@link peers} capability key — its value is this HyperService's peer clients
    *  (the other nodes' leaf services), keyed by node. Provided by {@link peersLayer}, read via {@link peers}. */
   readonly [peersSym]: Context.Key<PeersId<Self>, Record<string, PeerServiceOf<S>>>;
-  /** The per-resource {@link selfNode} capability key — its value is the node key this instance runs
+  /** The per-HyperService {@link selfNode} capability key — its value is the node key this instance runs
    *  as (the same key its peers are keyed by). Provided by {@link peersLayer} / {@link selfNodeLayer},
    *  read via {@link selfNode}. */
   readonly [selfNodeSym]: Context.Key<SelfNodeId<Self>, string>;
@@ -2704,7 +2704,7 @@ export interface HyperlinkTag<Self, S extends Spec, Svc = ServiceOf<S, Self>>
 }
 
 /**
- * Identity-claiming resources need Lookup's Identity client **and** a dialable Node —
+ * Identity-claiming HyperServices need Lookup's Identity client **and** a dialable Node —
  * Tag-bound (`nodes` / `{ node }`) and/or the {@link ListenNode} from {@link Node.unix} /
  * {@link Node.http} / {@link Node.ws} (including minted address-less Nodes).
  *
@@ -2791,7 +2791,7 @@ const assertIdentityNodeCount = (
   }
 };
 
-/** A resource tag identifier — {@link Context.Service} tags carry `Service` and `Spec`. @internal */
+/** A HyperService tag identifier — {@link Context.Service} tags carry `Service` and `Spec`. @internal */
 type TagIdentifier = { readonly Service: unknown };
 
 /** Spec carried by tag identifier `T`. @internal */
@@ -2962,8 +2962,8 @@ export interface NodeBoundTag<Self, S extends Spec, HSelf, Svc = ServiceOf<S, Se
   readonly [nodeSym]: NodeKey<HSelf>;
 }
 
-/** The kind stamped on a bare {@link Hyperlink.Tag} that declares none — every resource tag carries a
- *  kind, and a plain resource's is this. The typed factories stamp their own (e.g.
+/** The kind stamped on a bare {@link Hyperlink.Tag} that declares none — every HyperService tag carries a
+ *  kind, and a plain HyperService's is this. The typed factories stamp their own (e.g.
  *  `hyperlink-ts/WorkPool`); a bare tag defaults to this so nothing is ever kind-less.
  *
  * @category nodes & fleet
@@ -2975,7 +2975,7 @@ export const kind = "hyperlink-ts/Hyperlink";
  *  for a bare {@link Hyperlink.Tag}); `undefined` only for a non-tag. The robust replacement for
  *  sniffing a tag's spec; accepts `unknown` so a `Group` member can be passed straight in. */
 export const kindOf = (tag: unknown): string | undefined => {
-  // A resource tag is a class (so `typeof` is "function"), with the kind stamped as a static.
+  // A HyperService tag is a class (so `typeof` is "function"), with the kind stamped as a static.
   if ((typeof tag === "object" || typeof tag === "function") && tag !== null && kindSym in tag) {
     const value = tag[kindSym];
     return typeof value === "string" ? value : undefined;
@@ -2984,9 +2984,9 @@ export const kindOf = (tag: unknown): string | undefined => {
 };
 
 /**
- * F4 wire-contract fingerprint for a resource tag — same value the server stamps on
- * `Node.Status.resources[].contractHash` at serve. Compare via
- * {@link verifyConnection}`({ deep: true, resource, contractHash })`.
+ * F4 wire-contract fingerprint for a HyperService tag — same value the server stamps on
+ * `Node.Status.services[].contractHash` at serve. Compare via
+ * {@link verifyConnection}`({ deep: true, serviceKey, contractHash })`.
  *
  * @category introspection
  * @public
@@ -3020,7 +3020,7 @@ export const isSharedTag = (tag: unknown): boolean =>
 
 /** The {@link Node} a tag is bound to (its transport key), or `undefined` for a nodeless/bare tag
  *  or any non-tag. Accepts `unknown` so a `Group` member passes straight in — walk a group tree and
- *  collect the distinct nodes to know which nodes back its resources. */
+ *  collect the distinct nodes to know which nodes back its services. */
 export const nodeOf = (tag: unknown): NodeKey<unknown> | undefined => {
   if ((typeof tag === "object" || typeof tag === "function") && tag !== null && nodeSym in tag) {
     const value = tag[nodeSym];
@@ -3032,7 +3032,7 @@ export const nodeOf = (tag: unknown): NodeKey<unknown> | undefined => {
 /**
  * The declared {@link ProtocolKind} of the {@link Node} a tag is bound to (how a client reaches it —
  * `Http`/`WebSocket`/`IpcSocket`), or `undefined` for a nodeless/bare tag or a node with no declared
- * kind. A structural read (like {@link kindOf}) — the server uses it to reject a node-bound resource
+ * kind. A structural read (like {@link kindOf}) — the server uses it to reject a node-bound HyperService
  * served over a mismatched transport ({@link ProtocolKindMismatch}).
  *
  * @category nodes & fleet
@@ -3074,14 +3074,14 @@ export const nodeKindsOf = (tag: unknown): ReadonlyArray<ProtocolKind> => {
   return single !== undefined ? [single] : [];
 };
 
-/** A structural bound matching any resource tag (bare or node-bound) by its spec brand — deliberately
+/** A structural bound matching any HyperService tag (bare or node-bound) by its spec brand — deliberately
  *  WITHOUT the tag's `Svc` type param. A data-last combinator (`.pipe(withReadiness(...))`,
  *  `.pipe(distributed(...))`) uses it so unifying/constraining the piped tag never expands a
  *  node-bound self-referential class's service default (`ServiceOf<S, Self>`), which stock tsc caps
  *  out on as "excessively deep" (tsgo tolerates it). `T` is still inferred as the full concrete tag,
  *  so the `(tag: T) => T` return preserves it exactly.
  *
- *  **Rule:** any new `Fn.dual` data-last combinator that accepts a resource tag in a class
+ *  **Rule:** any new `Fn.dual` data-last combinator that accepts a HyperService tag in a class
  *  `extends … .pipe(…)` position must constrain `T` with this brand (or an equivalent non-`Svc`
  *  shape) — never `HyperlinkTag | NodeBoundTag`, which reopens TS2589 under stock tsc.
  *
@@ -3146,7 +3146,7 @@ export const withReadiness: {
 
 /**
  * Run a tag's readiness derivation against its built service. A tag that declares none is **ready by
- * default**, so an unaware or bare resource never falsely fails a node's readiness gate. Accepts
+ * default**, so an unaware or bare HyperService never falsely fails a node's readiness gate. Accepts
  * `unknown` so a served entry's tag + impl pass straight in.
  */
 export const readinessCheck = (
@@ -3196,8 +3196,8 @@ const readinessCheckServed = (
   });
 
 /**
- * Pull a resource's readiness **by tag** — yields its service and runs its derivation. Use it inside
- * another resource's {@link withReadiness} to make readiness *depend on* a resource it depends on:
+ * Pull a HyperService's readiness **by tag** — yields its service and runs its derivation. Use it inside
+ * another HyperService's {@link withReadiness} to make readiness *depend on* a HyperService it depends on:
  * `yield* Hyperlink.readinessOf(Database)`. The dependency lands in the readiness Effect's
  * requirements, so it's **compile-time checked**, and it works local *or* remote (it re-derives from
  * the dependency's served status).
@@ -3338,7 +3338,7 @@ const claimedKeys = new Set<string>();
 /** Claimed wire keys — RpcGroup prefixes; duplicates would collide on a shared `RpcServer`. */
 const claimedWireKeys = new Set<string>();
 
-/** Reserve a wire key (RpcGroup prefix); a duplicate **throws** — two resources can't share a prefix. */
+/** Reserve a wire key (RpcGroup prefix); a duplicate **throws** — two HyperServices can't share a prefix. */
 const claimWireKey = (wireKey: string): void => {
   if (claimedWireKeys.has(wireKey)) {
     throw new DuplicateWireKey({ wireKey });
@@ -3374,16 +3374,16 @@ const buildInstanceTag = <Self, S extends Spec>(
   }
   claimedKeys.add(key);
   const base = Context.Service<Self, ServiceOf<S, Self>>()(key);
-  // per-resource local capability — granted only by localLayer, never the client.
+  // per-HyperService local capability — granted only by localLayer, never the client.
   const localCap: Context.Key<Local<Self>, { readonly granted: true }> =
     Context.Service<Local<Self>, { readonly granted: true }>()(
       `${key}/__local`,
     );
-  // per-resource peer capability — its value is this resource's other-node clients, provided
+  // per-HyperService peer capability — its value is this HyperService's other-node clients, provided
   // only by peersLayer (the opt-in mesh), never by default.
   const peersKey: Context.Key<PeersId<Self>, Record<string, PeerServiceOf<S>>> =
     Context.Service<PeersId<Self>, Record<string, PeerServiceOf<S>>>()(`${key}/__peers`);
-  // per-resource self-node capability — its value is the node key this instance runs as, provided
+  // per-HyperService self-node capability — its value is the node key this instance runs as, provided
   // by peersLayer / selfNodeLayer, never by default.
   const selfNodeKey: Context.Key<SelfNodeId<Self>, string> =
     Context.Service<SelfNodeId<Self>, string>()(`${key}/__selfNode`);
@@ -3551,7 +3551,7 @@ export interface SharedTagFactory<S extends Spec> {
 }
 
 /**
- * Create a resource service tag.
+ * Create a HyperService service tag.
  *
  * **Solo (schema)** — `Tag<Self>()(key, spec)`: value type inferred from the spec; wire key = `.key`.
  *
@@ -3720,8 +3720,8 @@ const clientSubscribable = <A>(
   });
 
 /**
- * The **local** layer for a resource: provide a real implementation of its service. Grants
- * the resource's {@link Local}, so any {@link Hyperlink.local} (local-only) members
+ * The **local** layer for a serviceKey: provide a real implementation of its service. Grants
+ * the HyperService's {@link Local}, so any {@link Hyperlink.local} (local-only) members
  * become callable here — they're a compile error under {@link Hyperlink.client}.
  *
  * Two forms, mirroring {@link serve}: a **record** impl, or an **`Effect`** that builds the impl
@@ -3978,7 +3978,7 @@ const invokeWireMethodWithContext = (
 };
 
 /**
- * One served resource's registry entry — its group (folded into the shared server), wire id, kind, and
+ * One served HyperService's registry entry — its group (folded into the shared server), wire id, kind, and
  * readiness derivation. {@link serve} appends it; {@link httpServer} reads them for the merged server +
  * `/health` + node-status.
  *
@@ -4001,24 +4001,24 @@ export interface ServedHyperlink {
 }
 
 /**
- * The served-resources registry — an accumulator {@link serve} appends to and {@link httpServer} reads.
+ * The served-HyperServices registry — an accumulator {@link serve} appends to and {@link httpServer} reads.
  * A plain `Ref`-backed list (not type-level state), so many `serve` layers compose under `Layer.mergeAll`
- * and the server sees every one. Provided by {@link httpServer} (or {@link servedHyperlinksLayer}); `serve`
+ * and the server sees every one. Provided by {@link httpServer} (or {@link servedHyperServicesLayer}); `serve`
  * registers **only if it's present** (so `serve` also works standalone).
  *
  * @category models
  * @internal
  */
-export class ServedHyperlinks extends Context.Service<
-  ServedHyperlinks,
+export class ServedHyperServices extends Context.Service<
+  ServedHyperServices,
   {
     readonly register: (entry: ServedHyperlink) => Effect.Effect<void>;
     readonly all: Effect.Effect<ReadonlyArray<ServedHyperlink>>;
   }
->()("hyperlink-ts/Hyperlink/ServedHyperlinks") {}
+>()("hyperlink-ts/Hyperlink/ServedHyperServices") {}
 
 /**
- * A fresh {@link ServedHyperlinks} registry. {@link httpServer} / {@link ipcServer} /
+ * A fresh {@link ServedHyperServices} registry. {@link httpServer} / {@link ipcServer} /
  * {@link wsServer} each provide {@link Layer.fresh} of this so two servers in one
  * process (e.g. Lookup + a Worker) do not share registrations via Layer memoization.
  * Provide this standalone only to collect `serve` registrations without a server.
@@ -4026,8 +4026,8 @@ export class ServedHyperlinks extends Context.Service<
  * @category serving
  * @internal
  */
-export const servedHyperlinksLayer: Layer.Layer<ServedHyperlinks> = Layer.effect(
-  ServedHyperlinks,
+export const servedHyperServicesLayer: Layer.Layer<ServedHyperServices> = Layer.effect(
+  ServedHyperServices,
   Effect.gen(function* () {
     const ref = yield* Ref.make<ReadonlyArray<ServedHyperlink>>([]);
     return {
@@ -4040,7 +4040,7 @@ export const servedHyperlinksLayer: Layer.Layer<ServedHyperlinks> = Layer.effect
 /**
  * A {@link serve} handler for one wire method — like {@link ServiceMethod}, but the handler may carry a
  * **run-time requirement `R`** (a dependency it `yield*`s), which {@link serve} preserves so a
- * per-resource `Layer.provide` can discharge it in isolation.
+ * per-HyperService `Layer.provide` can discharge it in isolation.
  *
  * @category models
  * @public
@@ -4190,7 +4190,7 @@ const getOrCreateSharedHandlerLayer = (
   const handlerLayer = toHandlerLayer(handlers as never);
   const kind = kindOf(tag) ?? wireKey;
   const registration = Layer.effectDiscard(
-    Effect.serviceOption(ServedHyperlinks).pipe(
+    Effect.serviceOption(ServedHyperServices).pipe(
       Effect.flatMap(
         Option.match({
           onNone: () => Effect.void,
@@ -4307,11 +4307,11 @@ const serveRemoteHandlers = (
     group.toLayer.bind(group) as never,
   );
   const handlerLayer = toHandlerLayer(handlers as never);
-  // register into the served-resources registry when one is present (`httpServer` provides it), so the
-  // shared server + `/health` discover this resource without the caller listing it twice. Merged (not
+  // register into the served-HyperServices registry when one is present (`httpServer` provides it), so the
+  // shared server + `/health` discover this HyperService without the caller listing it twice. Merged (not
   // provided) so it isn't pruned as unused; a no-op when no registry is in context (standalone `serve`).
   const registration = Layer.effectDiscard(
-    Effect.serviceOption(ServedHyperlinks).pipe(
+    Effect.serviceOption(ServedHyperServices).pipe(
       Effect.flatMap(
         Option.match({
           onNone: () => Effect.void,
@@ -4337,17 +4337,17 @@ const serveRemoteHandlers = (
 };
 
 /**
- * A resource's **served-only handler layer** — mounts the tag's group handlers (wire members only,
+ * A HyperService's **served-only handler layer** — mounts the tag's group handlers (wire members only,
  * **no** local grant), with the handlers' requirement `R` **preserved** (not erased). This is the
  * served-only counterpart to {@link serve}, which additionally grants {@link Local} so
  * members stay callable in-process. `serveRemote`'s `R` rides the layer's requirement channel, so a
- * per-resource `Layer.provide` discharges *this* resource's dependency in isolation:
+ * per-HyperService `Layer.provide` discharges *this* HyperService's dependency in isolation:
  *
  * ```ts
  * Hyperlink.serveRemote(SeasonMatches, seasonMatchesImpl).pipe(Layer.provide(importHandlersLayer))
  * ```
  *
- * The point of `serveRemote` is the run-time-requirement case: N resources needing different
+ * The point of `serveRemote` is the run-time-requirement case: N HyperServices needing different
  * implementations of the same tag, each isolated — merge the layers onto one `RpcServer` (groups are
  * prefix-keyed).
  *
@@ -4395,8 +4395,8 @@ export const serveRemoteDriver = <S extends Spec, R>(
   );
 
 /**
- * Serve a resource **and** grant its local instance from **one** materialization — the co-located "expose
- * it over RPC AND consume it in-process" case (a node that serves its resources and also `yield*`s them,
+ * Serve a HyperService **and** grant its local instance from **one** materialization — the co-located "expose
+ * it over RPC AND consume it in-process" case (a node that serves its HyperServices and also `yield*`s them,
  * e.g. to read a {@link Hyperlink.local} member). The impl runs **once**, so its cells / pollers / resolved
  * {@link peers} are shared: the served view and the in-process view are the **same instance** — no double
  * materialization, no second `peersLayer`. Register onto a node with {@link httpServer} like any
@@ -4507,7 +4507,7 @@ export const serve = <Self, S extends Spec, R = never>(
 
 /**
  * Provide one dependency `Layer` to several {@link serve} layers at once — sugar for
- * `Layer.mergeAll(resources).pipe(Layer.provide(dependency))`. Reads as "these resources, on this
+ * `Layer.mergeAll(resources).pipe(Layer.provide(dependency))`. Reads as "these HyperServices, on this
  * dependency," so a group that shares an implementation states it once:
  *
  * ```ts
@@ -4529,9 +4529,9 @@ export const serve = <Self, S extends Spec, R = never>(
  */
 export const provide = <ROut, EL, RL, A, E, R>(
   dependency: Layer.Layer<ROut, EL, RL>,
-  resources: readonly [Layer.Layer<A, E, R>, ...ReadonlyArray<Layer.Layer<A, E, R>>],
+  services: readonly [Layer.Layer<A, E, R>, ...ReadonlyArray<Layer.Layer<A, E, R>>],
 ): Layer.Layer<A, E | EL, Exclude<R, ROut> | RL> =>
-  Layer.mergeAll(...resources).pipe(Layer.provide(dependency));
+  Layer.mergeAll(...services).pipe(Layer.provide(dependency));
 
 /**
  * The RPC group built from a tag's spec — used to wire the client/server and tests.
@@ -4611,7 +4611,7 @@ export const defaultSerialization: Layer.Layer<RpcSerialization.RpcSerialization
 
 const httpClientInBrowserMessage =
   "Hyperlink.protocolHttp / http cannot run in a browser: a dashboard opens many concurrent " +
-  "streams (each resource's status + metrics + logs) and the browser caps at ~6 HTTP/1.1 " +
+  "streams (each HyperService's status + metrics + logs) and the browser caps at ~6 HTTP/1.1 " +
   "connections per origin, so the rest are starved (no graphs, no logs, frozen cards). Use " +
   "Hyperlink.ws / a socket-kind node for the browser. See docs/observe/dashboard.md.";
 
@@ -4804,7 +4804,7 @@ export const protocolWebsocket = (
 };
 
 /**
- * Dial a resource `tag` over a transport **you provide** — the no-batteries client. `connect` bakes in
+ * Dial a HyperService `tag` over a transport **you provide** — the no-batteries client. `connect` bakes in
  * **no** transport of its own (unlike {@link http} / {@link ws} / {@link unix} / {@link nPipe}, whose
  * wire is in the name and bundled): you hand it a {@link protocolHttp} / {@link protocolWebsocket} /
  * {@link protocolIpc} layer, so a browser build pulls in only the one wire it passes.
@@ -4846,7 +4846,7 @@ export const serverProtocolWebsocket = (
 
 /**
  * Wire a {@link Node}'s transport over a **WebSocket** — the browser counterpart to
- * {@link http}. Every stream (each resource's `status` + `metrics` + `logs`) rides **one
+ * {@link http}. Every stream (each HyperService's `status` + `metrics` + `logs`) rides **one
  * multiplexed connection**, so a dashboard never trips the browser's ~6-connection-per-origin
  * HTTP/1.1 limit that starves streams over {@link http} (in a browser {@link http} now
  * fails hard — see its note). The server must be a {@link wsServer}.
@@ -5063,7 +5063,7 @@ const probeEndpointReachable = (
 
 /**
  * Tier-2/3/4: after transport is up, dial the reserved node-status RPC over the endpoint's
- * protocol. Failures classify as {@link ProtocolUnanswered}; optional `resource` checks
+ * protocol. Failures classify as {@link ProtocolUnanswered}; optional `serviceKey` checks
  * served-key / readiness; optional `contractHash` compares the F4 wire fingerprint.
  *
  * Dynamic-imports the status tag so Hyperlink ⇄ nodeStatus stays acyclic.
@@ -5074,7 +5074,7 @@ const probeEndpointDeep = (
   nodeKey: string,
   ep: VerifyEndpoint,
   timeout: Duration.Input,
-  resource: string | undefined,
+  serviceKey: string | undefined,
   expectedHash: string | undefined,
 ): Effect.Effect<
   void,
@@ -5109,23 +5109,23 @@ const probeEndpointDeep = (
       const status = yield* NodeStatusTag;
       return yield* status.status.get;
     }).pipe(Effect.provide(ctx));
-    if (resource === undefined) {
+    if (serviceKey === undefined) {
       return;
     }
-    const row = snap.resources.find((r) => r.key === resource);
+    const row = snap.services.find((r) => r.key === serviceKey);
     if (row === undefined) {
       return yield* new ServiceNotServed({
         node: nodeKey,
         url: address,
-        resource,
-        served: snap.resources.map((r) => r.key),
+        serviceKey,
+        served: snap.services.map((r) => r.key),
       });
     }
     if (!row.ready) {
       return yield* new ServiceNotReady({
         node: nodeKey,
         url: address,
-        resource,
+        serviceKey,
         ...(row.detail !== undefined ? { detail: row.detail } : {}),
       });
     }
@@ -5133,7 +5133,7 @@ const probeEndpointDeep = (
       return yield* new ContractMismatch({
         node: nodeKey,
         url: address,
-        resource,
+        serviceKey,
         expected: expectedHash,
         actual: row.contractHash,
       });
@@ -5172,10 +5172,10 @@ export type VerifyConnectionOptions = {
 /** Options for deep (tier-2/3/4) {@link verifyConnection} — RPC + optional resource / F4 hash. @public */
 export type VerifyConnectionDeepOptions = VerifyConnectionOptions & {
   readonly deep: true;
-  /** When set, require this resource key in `Node.Status.resources` and `ready: true`. */
-  readonly resource?: string;
+  /** When set, require this HyperService key in `Node.Status.services` and `ready: true`. */
+  readonly serviceKey?: string;
   /**
-   * Expected F4 {@link contractHash} for `resource`. When set (requires `resource`), mismatch
+   * Expected F4 {@link contractHash} for `serviceKey`. When set (requires `serviceKey`), mismatch
    * → {@link ContractMismatch}.
    */
   readonly contractHash?: string;
@@ -5189,7 +5189,7 @@ export type VerifyConnectionDeepOptions = VerifyConnectionOptions & {
  *
  * With `{ deep: true }`, escalates after transport OK: dials the node's auto-served status
  * RPC over that endpoint. Transport up but RPC silent → {@link ProtocolUnanswered}; optional
- * `resource` key → {@link ServiceNotServed} / {@link ServiceNotReady}; optional
+ * `serviceKey` key → {@link ServiceNotServed} / {@link ServiceNotReady}; optional
  * `contractHash` → {@link ContractMismatch} (F4).
  *
  * ```ts
@@ -5198,7 +5198,7 @@ export type VerifyConnectionDeepOptions = VerifyConnectionOptions & {
  * yield* Hyperlink.verifyConnection(Droplet, { deep: true });          // + node status RPC
  * yield* Hyperlink.verifyConnection(Droplet, {
  *   deep: true,
- *   resource: Emails.key,
+ *   serviceKey: Emails.key,
  *   contractHash: Hyperlink.contractHash(Emails),
  * });
  * yield* Hyperlink.verifyConnection(Droplet, { all: true });           // every endpoint
@@ -5206,7 +5206,7 @@ export type VerifyConnectionDeepOptions = VerifyConnectionOptions & {
  *
  * Complements {@link connect}: `connect` prevents mis-wiring the client transport;
  * `verifyConnection` catches a peer that isn't there (or, with `deep`, isn't speaking RPC /
- * isn't serving the resource you need / has a stale contract).
+ * isn't serving the HyperService you need / has a stale contract).
  *
  * @category serving
  * @public
@@ -5223,7 +5223,7 @@ export function verifyConnection(
   node: AnyNode,
   options?: VerifyConnectionOptions & {
     readonly deep?: boolean;
-    readonly resource?: string;
+    readonly serviceKey?: string;
     readonly contractHash?: string;
   },
 ): Effect.Effect<void, ClientVerifyError> {
@@ -5233,7 +5233,7 @@ export function verifyConnection(
   }
   const timeout = options?.timeout ?? "3 seconds";
   const deep = options?.deep === true;
-  const resource = options?.resource;
+  const serviceKey = options?.serviceKey;
   const expectedHash = options?.contractHash;
   return Effect.forEach(
     endpoints,
@@ -5241,7 +5241,7 @@ export function verifyConnection(
       Effect.gen(function* () {
         yield* probeEndpointReachable(node.key, ep, timeout);
         if (deep) {
-          yield* probeEndpointDeep(node.key, ep, timeout, resource, expectedHash);
+          yield* probeEndpointDeep(node.key, ep, timeout, serviceKey, expectedHash);
         }
       }),
     { discard: true },
@@ -5260,15 +5260,15 @@ const isProbeableAddress = (options?: {
       options.url.startsWith("ws://") ||
       options.url.startsWith("wss://")));
 
-/** Tag-aware default-on verify options — deep + resource + F4 hash. @internal */
+/** Tag-aware default-on verify options — deep + serviceKey + F4 hash. @internal */
 type ClientVerifyProbeOptions = VerifyConnectionOptions & {
-  readonly resource?: string;
+  readonly serviceKey?: string;
   readonly contractHash?: string;
 };
 
 /**
  * Default-on client verify (§8.6) — `"reject"` unless {@link ClientVerify} overrides.
- * When `resource` + `contractHash` are set (tag-aware clients), escalates to deep F3/F4.
+ * When `serviceKey` + `contractHash` are set (tag-aware clients), escalates to deep F3/F4.
  * @internal
  */
 const applyClientVerify = (
@@ -5296,12 +5296,12 @@ const applyClientVerify = (
       return;
     }
     const deep =
-      options?.resource !== undefined && options.contractHash !== undefined;
+      options?.serviceKey !== undefined && options.contractHash !== undefined;
     const probe = deep
       ? verifyConnection(node, {
           ...options,
           deep: true,
-          resource: options.resource,
+          serviceKey: options.serviceKey,
           contractHash: options.contractHash,
         })
       : verifyConnection(node, options);
@@ -5504,7 +5504,7 @@ export const distributed = <T extends PipeableTag>(tag: T): T =>
 export const distributedOf = nodesOf;
 
 /**
- * Mark a Tag as **identity-claiming** (S1): {@link layer} / {@link serve} claim the resource key at
+ * Mark a Tag as **identity-claiming** (S1): {@link layer} / {@link serve} claim the HyperService key at
  * Lookup first — winner runs the local impl; loser becomes a client of the winner's endpoint.
  * Requires {@link LookupIdentity} in the layer graph (fail-closed if Lookup is down).
  *
@@ -5949,7 +5949,7 @@ const buildPeerClientAt = <Self, S extends Spec>(
 };
 
 /**
- * The resource's **peer clients** — the OTHER nodes' full services, keyed by node — for a resource's
+ * The HyperService's **peer clients** — the OTHER nodes' full services, keyed by node — for a HyperService's
  * *own* cross-node logic. Requires the {@link peersLayer} capability. Fold them with `/MultiNode`'s
  * `combineQuery`/`combineStream` (or iterate) and add your own value:
  *
@@ -5973,7 +5973,7 @@ export const peers = <Self, S extends Spec>(
 
 /**
  * The node key this instance runs as — the **same key** its {@link peers} are keyed by. For folds that
- * key per node (`combineByNode`), so a resource's own logic can name its **own** row without
+ * key per node (`combineByNode`), so a HyperService's own logic can name its **own** row without
  * hand-threading the node key. Requires the {@link selfNodeLayer} / {@link peersLayer} capability:
  *
  * ```ts
@@ -5994,7 +5994,7 @@ export const selfNode = <Self, S extends Spec>(
 
 /**
  * Provide the {@link selfNode} capability on **this** node — the node key this instance runs as. Bundled
- * into {@link peersLayer} (so a mesh resource gets it for free); use this standalone when a resource
+ * into {@link peersLayer} (so a mesh resource gets it for free); use this standalone when a HyperService
  * keys per node but doesn't gather peers, or alongside {@link peersFrom} in a test. No transport, no
  * failure path — just the identity.
  *
@@ -6010,7 +6010,7 @@ export const selfNodeLayer = <Self, S extends Spec>(
  * Provide the {@link peers} capability on **this** node: connect every OTHER node in the tag's
  * {@link distributed} / {@link nodes} set and expose them as the peer clients. Also provides the
  * {@link selfNode} capability (this node's key) for `byNode`-style folds. The **opt-in mesh** — add
- * it to a node's serve only where the resource's own logic reaches across nodes. `self` is the node
+ * it to a node's serve only where the HyperService's own logic reaches across nodes. `self` is the node
  * you are, so you're excluded from your own peer set.
  *
  * **Membership (D3):**
@@ -6239,9 +6239,9 @@ const buildClientService = <Self, S extends Spec>(
   });
 
 /**
- * The **client** layer for a resource: drive it over RPC **as if it were local** — the exact
+ * The **client** layer for a serviceKey: drive it over RPC **as if it were local** — the exact
  * same `yield* Tag` code as the local layer, only the provided layer differs, so it doesn't
- * matter where the resource actually runs.
+ * matter where the HyperService actually runs.
  *
  * Paths, by whether — and where — the tag names a {@link Node}:
  * - **node-bearing + {@link AddressedNode}** — `client(Hosted)` when the tag's `{ node }` is
@@ -6290,7 +6290,7 @@ function clientLayer<Self, S extends Spec>(
       Effect.gen(function* () {
         const protocol = yield* Effect.serviceOption(RpcClient.Protocol);
         if (Option.isNone(protocol)) {
-          return yield* new MissingClientProtocol({ resource: tag.key });
+          return yield* new MissingClientProtocol({ serviceKey: tag.key });
         }
         const client = yield* Effect.provideService(
           RpcClient.make(group),
@@ -6323,7 +6323,7 @@ function clientLayer<Self, S extends Spec>(
   // (WeakMap-memoized per Node class) so multiple clients share one MemoMap transport.
   // Default-on verify (reject): peer down / wrong-or-stale contract fails Layer build —
   // opt out via {@link clientVerify}. Reserved node-status is auto-served and absent from
-  // `status.resources`, so it stays tier-1 (reachability only).
+  // `status.services`, so it stays tier-1 (reachability only).
   if (isAddressedNode(nodeKey as AnyNode)) {
     const addressed = nodeKey as AddressedNode<unknown>;
     const connected: any = layer.pipe(Layer.provide(connectAddressed(addressed)));
@@ -6331,7 +6331,7 @@ function clientLayer<Self, S extends Spec>(
       tag[wireKeySym] === "hyperlink-ts/node-status"
         ? undefined
         : {
-            resource: tag[wireKeySym],
+            serviceKey: tag[wireKeySym],
             contractHash: contractHash(tag),
           };
     return Layer.unwrap(

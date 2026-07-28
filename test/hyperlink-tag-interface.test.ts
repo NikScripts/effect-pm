@@ -57,7 +57,7 @@ it("Tag<Self, I> merged handle serves wired + local (effect / nested / raw value
 it("Tag<Self, I> serves over RPC — the wired member crosses http; locals stay off the wire", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      // An interface Tag serves exactly like any resource: only its wired members are mounted
+      // An interface Tag serves exactly like any serviceKey: only its wired members are mounted
       // (locals are off-wire), and the impl provides the whole interface.
       const server = Node.httpServer([
         Hyperlink.serve(Counter, {

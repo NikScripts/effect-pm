@@ -49,7 +49,7 @@ class DropletCentral extends Node.Tag<DropletCentral>()("app/DropletCentral") {}
 class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
   Hyperlink.nodes([DropletEast, DropletWest, DropletCentral]),
 ) {}
-const nodeServer = (port: number) => <A, E, R>(resource: Layer.Layer<A, E, R>) =>
+const nodeServer = (port: number) => <A, E, R>(serviceKey: Layer.Layer<A, E, R>) =>
   Node.httpServer(resource).pipe(
     Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
   )

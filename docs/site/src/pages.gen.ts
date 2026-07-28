@@ -18,6 +18,10 @@ import type { getConfig as File_ApiIndex_getConfig } from './pages/api/index';
 // prettier-ignore
 import type { getConfig as File_DocsChapter_getConfig } from './pages/docs/[chapter]';
 // prettier-ignore
+import type { getConfig as File_DocsHyperlinks_getConfig } from './pages/docs/hyperlinks';
+// prettier-ignore
+import type { getConfig as File_DocsResources_getConfig } from './pages/docs/resources';
+// prettier-ignore
 import type { getConfig as File_Index_getConfig } from './pages/index';
 // prettier-ignore
 import type { getConfig as File_Releases_getConfig } from './pages/releases';
@@ -31,6 +35,8 @@ type Page =
 | ({ path: '/api/hyperlink-ts/[module]/[symbol]' } & GetConfigResponse<typeof File_ApiHyperlinkTsModuleSymbol_getConfig>)
 | ({ path: '/api' } & GetConfigResponse<typeof File_ApiIndex_getConfig>)
 | ({ path: '/docs/[chapter]' } & GetConfigResponse<typeof File_DocsChapter_getConfig>)
+| ({ path: '/docs/hyperlinks' } & GetConfigResponse<typeof File_DocsHyperlinks_getConfig>)
+| ({ path: '/docs/resources' } & GetConfigResponse<typeof File_DocsResources_getConfig>)
 | ({ path: '/' } & GetConfigResponse<typeof File_Index_getConfig>)
 | ({ path: '/releases' } & GetConfigResponse<typeof File_Releases_getConfig>)
 | { path: '/search'; render: 'static' };

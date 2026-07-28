@@ -1126,7 +1126,7 @@ export const resolve = <const C extends StoreContractValue>(
 /**
  * Like {@link resolve}, but **guarantees** a handle (`resolve` hardened with `orDie`). With the baked-in
  * default store in context (it materializes any scope on demand), this never fails — the always-on
- * observability path, where a resource's engine records unconditionally with no service-sniffing. If a
+ * observability path, where a HyperService's engine records unconditionally with no service-sniffing. If a
  * *custom* store is in context and lacks this scope, that's a wiring error and it dies with a clear
  * message (bake the default so it can materialize the scope).
  *
@@ -1576,7 +1576,7 @@ export const scoped = <
 };
 
 /**
- * Attach a public store spec to a resource tag (pipe combinator).
+ * Attach a public store spec to a HyperService tag (pipe combinator).
  *
  * Adds `yield* Tag.store` resolved through the {@link Storage} bridge.
  *

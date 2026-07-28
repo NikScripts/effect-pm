@@ -1,8 +1,8 @@
 /**
  * @module examples/hyperlink-tui/manager-tui
  *
- * The TUI projection of the *same* record the CLI uses (`manager-resources.ts`) —
- * `make(resources, runtime)` from `hyperlink-ts/tui`. One widget per resource, live
+ * The TUI projection of the *same* record the CLI uses (`manager-services.ts`) —
+ * `make(services, runtime)` from `hyperlink-ts/tui`. One widget per HyperService, live
  * `query` fields, numbered actions. Runs in the alternate screen.
  *
  *   pnpm run example:hyperlink-tui-manager
@@ -12,11 +12,11 @@
 import { render } from "ink";
 import * as React from "react";
 import { Atom } from "effect/unstable/reactivity";
-import { resources, resourcesLayer } from "../hyperlink-cli/manager-resources";
+import { services, servicesLayer } from "../hyperlink-cli/manager-services";
 import { make } from "../../src/tui";
 
-const runtime = Atom.runtime(resourcesLayer);
-const { App } = make(resources, runtime);
+const runtime = Atom.runtime(servicesLayer);
+const { App } = make(services, runtime);
 
 const out = process.stdout;
 const tty = out.isTTY === true;

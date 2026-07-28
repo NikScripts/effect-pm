@@ -93,7 +93,7 @@ export const nav: ReadonlyArray<NavGroup> = [
       "effect-style",
       "documentation",
       "error-handling",
-      "resources",
+      "hyperlink-services",
       "storage",
       "no-backward-compat",
       "working-agreement",

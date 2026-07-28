@@ -14,9 +14,9 @@ import {
 
 type AssertExact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 
-const missing = new MissingClientProtocol({ resource: "app/Probe" });
+const missing = new MissingClientProtocol({ serviceKey: "app/Probe" });
 const mismatch = new ProtocolMismatch({
-  resource: "app/Probe",
+  serviceKey: "app/Probe",
   method: "ping",
   cause: undefined,
 });
@@ -40,8 +40,8 @@ true satisfies AssertExact<typeof identityMulti._tag, "IdentityMultiNode">;
 true satisfies AssertExact<typeof lookupMissing._tag, "LookupClientError">;
 true satisfies AssertExact<typeof lookupAmbiguous._tag, "LookupClientError">;
 
-void (missing.resource satisfies string);
-void (mismatch.resource satisfies string);
+void (missing.serviceKey satisfies string);
+void (mismatch.serviceKey satisfies string);
 void (mismatch.method satisfies string);
 void (mismatch.cause satisfies unknown);
 void (identitySelf.tag satisfies string);
@@ -52,17 +52,17 @@ void (lookupMissing.reason satisfies "missing" | "ambiguous");
 void (lookupMissing.count satisfies number);
 
 // Constructor arg shapes — forbid silent field renames / drops.
-new MissingClientProtocol({ resource: "x" });
-new ProtocolMismatch({ resource: "x", method: "y", cause: "z" });
+new MissingClientProtocol({ serviceKey: "x" });
+new ProtocolMismatch({ serviceKey: "x", method: "y", cause: "z" });
 new IdentitySelfRequired({ tag: "x" });
 new IdentityMultiNode({ tag: "x", nodeCount: 2 });
 new LookupClientError({ tag: "x", reason: "missing", count: 0 });
 
-// @ts-expect-error - resource is required
+// @ts-expect-error - serviceKey is required
 new MissingClientProtocol({});
 
 // @ts-expect-error - method is required
-new ProtocolMismatch({ resource: "x", cause: undefined });
+new ProtocolMismatch({ serviceKey: "x", cause: undefined });
 
 // @ts-expect-error - tag is required
 new IdentitySelfRequired({});

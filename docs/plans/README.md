@@ -1,7 +1,7 @@
 # Roadmap (future work)
 
 Reviewed, **not-yet-shipped** features worth holding onto. Shipped behavior lives in the live
-book (`docs/`), guides under `docs/guides/` / `docs/resources/`, and source TSDoc — not here.
+book (`docs/`), guides under `docs/guides/` / `docs/services/`, and source TSDoc — not here.
 Pre-1.0: breaking changes land as minor bumps.
 
 ## Toolkit

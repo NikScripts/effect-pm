@@ -13,7 +13,7 @@ import * as FileSystem from "effect/FileSystem";
 export const DOCS_CONTENT_ROOTS: ReadonlyArray<string> = [
   "",
   "getting-started",
-  "resources",
+  "services",
   "guides",
   "observe",
   "standards",

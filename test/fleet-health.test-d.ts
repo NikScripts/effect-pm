@@ -62,13 +62,13 @@ void _localStatus;
 declare const row: FleetHealth.NodeReport;
 if (row._tag === "Reachable") {
   const _s: "ok" | "degraded" = row.status;
-  const _resources: ReadonlyArray<{
+  const _services: ReadonlyArray<{
     readonly key: string;
     readonly kind: string;
     readonly ready: boolean;
-  }> = row.resources;
+  }> = row.services;
   void _s;
-  void _resources;
+  void _services;
 } else {
   const _u: "Unreachable" = row._tag;
   void _u;
@@ -82,7 +82,7 @@ void _fleet;
 
 // rollup returns FleetStatus
 const _rollup: FleetHealth.FleetStatus = FleetHealth.rollup({
-  a: FleetHealth.Reachable.make({ status: "ok", resources: [] }),
+  a: FleetHealth.Reachable.make({ status: "ok", services: [] }),
   b: FleetHealth.Unreachable.make({}),
 });
 void _rollup;

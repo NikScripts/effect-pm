@@ -189,7 +189,7 @@ const encodeSnapshot = (
 
 /**
  * The current registry snapshot, encoded — the **single source** of "take a snapshot" (the served
- * `snapshot` query and the `live` sampler both use it). Usable locally, without the resource.
+ * `snapshot` query and the `live` sampler both use it). Usable locally, without the HyperService.
  *
  * @category getters
  * @public

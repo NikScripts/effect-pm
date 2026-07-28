@@ -27,7 +27,7 @@ const peerOk = {
   local: Effect.succeed(
     FleetHealth.LocalHealth.make({
       status: "ok",
-      resources: [{ key: "app/Jobs", kind: "hyperlink-ts/WorkPool", ready: true }],
+      services: [{ key: "app/Jobs", kind: "hyperlink-ts/WorkPool", ready: true }],
     }),
   ),
 };
@@ -76,7 +76,7 @@ const program = Effect.gen(function* () {
   yield* Effect.log('=== "Local /health stays local. Show the fleet." ===');
   yield* Effect.log("");
   yield* Effect.log(`  you are:     ${DropletEast.key}`);
-  yield* Effect.log(`  local:       ${local.status} (${String(local.resources.length)} resources)`);
+  yield* Effect.log(`  local:       ${local.status} (${String(local.services.length)} resources)`);
   yield* Effect.log(`  columns:     ${columns}`);
   yield* Effect.log(`  fleet:       ${status}`);
   yield* Effect.log("");

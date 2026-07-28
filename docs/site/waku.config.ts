@@ -52,7 +52,7 @@ const watchDocsContent = {
         "../examples.md",
         "../examples",
         "../getting-started",
-        "../resources",
+        "../services",
         "../guides",
         "../observe",
         "../standards",

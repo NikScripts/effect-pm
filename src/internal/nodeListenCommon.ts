@@ -409,7 +409,7 @@ export const stampListenPath = (
 
 /**
  * The key an anonymous `unix` / `http` / `ws` / `nPipe` listen mints for its address-less node: a
- * **legible name** from the first served resource's key (`@app/Emails` → `Emails` — last segment only)
+ * **legible name** from the first served HyperService's key (`@app/Emails` → `Emails` — last segment only)
  * plus a random tail, under the full package prefix — e.g.
  * `hyperlink-ts/anonymous-node/Emails#k3f9q`. `Random` (a default Reference, no service to
  * provide) gives the tail; the random keeps it unique per materialization (a generated key is a local,

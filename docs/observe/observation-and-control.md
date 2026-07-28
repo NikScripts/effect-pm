@@ -4,4 +4,4 @@
 {.note}
 **Placeholder — outline only.** Full content to come; this page exists now so other pages can link to it.
 
-Advanced use of the control and observability surface every resource exposes — steering and inspecting a running service across runtimes. Assumes the Resources chapters; this is the deeper follow-on.
+Advanced use of the control and observability surface every HyperService exposes — steering and inspecting a running service across runtimes. Assumes the HyperServices chapters; this is the deeper follow-on.

@@ -29,7 +29,7 @@ it("every served node auto-serves its node status over http", () =>
         const snap = yield* node.status.get;
         expect(snap.up).toBe(true);
         // the one user resource (Echo) — the node status itself is not counted
-        expect(snap.resourceCount).toBe(1);
+        expect(snap.serviceCount).toBe(1);
         expect(snap.uptimeMillis).toBeGreaterThanOrEqual(0);
 
         expect(typeof (yield* node.ping)).toBe("number");
@@ -50,7 +50,7 @@ it("every served node auto-serves its node status over http", () =>
 it("node status logs stream reflects the Logs relay when provided", () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const impl = yield* buildNodeStatusImpl({ startedAt: 0, resourceCount: 0 });
+      const impl = yield* buildNodeStatusImpl({ startedAt: 0, serviceCount: 0 });
       yield* Effect.logInfo("hello-node"); // captured by Logs.layer's merged logger
       const head = yield* Stream.runHead(
         impl.logs.stream.pipe(Stream.filter((e) => e.message.includes("hello-node"))),

@@ -28,7 +28,7 @@ verifyConnection(node)                         // reachability (default, unchang
 verifyConnection(node, { deep: true })         // escalate through the tiers
   ├─ transport connects, protocol handshake fails ... ProtocolUnanswered   (tier 2)
   └─ transport + protocol OK → dial NodeStatus.status
-       ├─ target key ∉ status.resources ......... ServiceNotServed  (tier 3a)
+       ├─ target key ∉ status.services ......... ServiceNotServed  (tier 3a)
        ├─ target key present but ready === false . ServiceNotReady  (tier 3b)
        └─ contractHash ≠ expected ................ ContractMismatch (tier 4 / F4)
 ```
@@ -42,5 +42,5 @@ declared endpoint. Tag-aware default-on client verify escalates to deep + F4 (ex
 - **D1 — Shape.** In-place `verifyConnection(node, { deep })`.
 - **D2 — Error model.** Distinct tagged errors: `ProtocolUnanswered`, `ServiceNotServed`, `ServiceNotReady`, `ContractMismatch`.
 - **D3 — Multi-protocol.** `selectEndpoint` by default; `{ all: true }` for every transport.
-- **D4 — contractHash.** **Eng’d** — optional field on `NodeStatus.resources[]`; `Hyperlink.contractHash(tag)`; compare via deep options / default-on addressed client.
+- **D4 — contractHash.** **Eng’d** — optional field on `NodeStatus.services[]`; `Hyperlink.contractHash(tag)`; compare via deep options / default-on addressed client.
 - **D5 — Default.** Explicit `verifyConnection` keeps `deep` off; addressed `Hyperlink.client` / `clientHttp` default-on escalate to deep+F4 (§8.6).

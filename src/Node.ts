@@ -150,7 +150,7 @@ export function listenLocal(
 
 /** A node's live status snapshot — what `(yield* MyNode).status.get` resolves to. @category services @public */
 export type { NodeStatus as Status } from "./internal/nodeStatus"
-/** One served resource's readiness — an element of {@link Status}`.resources`. @category services @public */
-export type { ResourceReadiness } from "./internal/nodeStatus"
-/** The {@link ResourceReadiness} wire schema (for composing your own health surfaces). @category services @public */
-export { resourceReadiness } from "./internal/nodeStatus"
+/** One served HyperService's readiness — an element of {@link Status}`.services`. @category services @public */
+export type { ServiceReadiness } from "./internal/nodeStatus"
+/** The {@link ServiceReadiness} wire schema (for composing your own health surfaces). @category services @public */
+export { serviceReadiness } from "./internal/nodeStatus"

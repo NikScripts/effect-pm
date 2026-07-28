@@ -208,7 +208,7 @@ export interface ApiMetricsConstructOptions<HSelf = never> {
 /**
  * Serve this metrics resource **remotely (served-only)** — the counterpart to
  * {@link Hyperlink.serveRemote}. Mounts the metrics RPC handlers and registers into
- * {@link Hyperlink.servedHyperlinksLayer} **without** granting the local instance. For a pure
+ * {@link Hyperlink.servedHyperServicesLayer} **without** granting the local instance. For a pure
  * gateway/edge; use {@link serve} when the serving node also reads the metrics in-process.
  *
  * @category layers & serving

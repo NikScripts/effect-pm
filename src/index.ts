@@ -25,7 +25,7 @@
  *   `Daemon.Tag` / `Daemon.Schedule` and `WorkPool.Tag` / `WorkPool.priority` — each with
  *   `Tag` / `layer` / `configure` / `serve` / `serveRemote`. **`Group`** organizes member tags
  *   (nestable; members may be on the same or different nodes). Contracts are introspectable via
- *   `specOf` + `methodMeta` (build generic UIs). See the live book under `docs/resources/` and
+ *   `specOf` + `methodMeta` (build generic UIs). See the live book under `docs/services/` and
  *   `docs/guides/`.
  * - **`Gate`**, **`HttpClientGate`**, **`Gate.HttpApiClient`** —
  *   Optional building blocks for **gated** HTTP and reusable service patterns.
@@ -34,7 +34,7 @@
  *
  * ## Where to read next
  *
- * - Live book: `docs/index.md`, `docs/resources/`, `docs/guides/`, `docs/standards/`
+ * - Live book: `docs/index.md`, `docs/services/`, `docs/guides/`, `docs/standards/`
  * - Logs: `docs/guides/logs.md` (and `docs/LOGS.md` while the guide absorbs it)
  * - Runnable teaching scripts: `examples/README.md`
  * - Future roadmap (priority order, **not** shipped API truth): `docs/plans/README.md`

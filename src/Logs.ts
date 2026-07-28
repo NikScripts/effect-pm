@@ -22,7 +22,7 @@
  * - **`withScope`** — lineage annotation at resource materialize.
  * - **`byNode`** / **`byHyperlink`** — durable reads from registration Storage.
  *
- * Per-resource live + durable export: {@link Hyperlink.logs} / {@link Hyperlink.withLogExport}.
+ * Per-HyperService live + durable export: {@link Hyperlink.logs} / {@link Hyperlink.withLogExport}.
  *
  * @example Node journal via `Store.Service`
  * ```ts
@@ -170,7 +170,7 @@ export interface LogReadOptions {
 }
 
 /**
- * Read durable logs for a **whole node** (every resource on that node).
+ * Read durable logs for a **whole node** (every HyperService on that node).
  *
  * Needs `Node.logs` / `Hyperlink.store(Node)` on an app {@link Store.Service} (Soft-override the
  * toolkit layer — see `docs/guides/stores.md`). Soft-default Memory alone is engine observability
@@ -188,7 +188,7 @@ export const byNode = (
   });
 
 /**
- * Source carrying a **resource key** (`Hyperlink.Tag.key` / store registration key).
+ * Source carrying a **HyperService key** (`Hyperlink.Tag.key` / store registration key).
  *
  * @category models
  * @public
@@ -196,17 +196,18 @@ export const byNode = (
 export type HyperlinkLogKeySource = { readonly key: HyperlinkLogKey };
 
 const resolveHyperlinkLogKey = (
-  resource: HyperlinkLogKey | HyperlinkLogKeySource,
-): HyperlinkLogKey => (typeof resource === "string" ? resource : resource.key);
+  serviceKey: HyperlinkLogKey | HyperlinkLogKeySource,
+): HyperlinkLogKey =>
+  typeof serviceKey === "string" ? serviceKey : serviceKey.key;
 
 /**
- * Read durable logs for a **specific resource** by **full key** (same string as
+ * Read durable logs for a **specific HyperService** by **full key** (same string as
  * {@link Hyperlink.logs}`(tag)` / store registration / lineage segment).
  *
  * Pass a scope tag (`Daemon.Tag` / `WorkPool.Tag` / …) or its `.key` string.
  * Hyperlink kind is {@link Hyperlink.kindOf} on the tag — not a separate query argument.
  *
- * Requires that resource's store registration (`Daemon.store` / `WorkPool.store`, …) on the
+ * Requires that HyperService's store registration (`Daemon.store` / `WorkPool.store`, …) on the
  * ambient {@link Store.Storage}. Missing registration fails via {@link Store.resolveOrDie}
  * (`StoreScopeNotRegistered`) — empty success is not used as a silent signal for “wrong key.”
  *
@@ -217,9 +218,9 @@ const resolveHyperlinkLogKey = (
  * @public
  */
 export const byHyperlink = (
-  resource: HyperlinkLogKey | HyperlinkLogKeySource,
+  serviceKey: HyperlinkLogKey | HyperlinkLogKeySource,
   options?: LogReadOptions,
 ): Effect.Effect<ReadonlyArray<LogEntry>> =>
-  queryDurableScope(resolveHyperlinkLogKey(resource), {
+  queryDurableScope(resolveHyperlinkLogKey(serviceKey), {
     limit: options?.limit ?? queryLimitDefault,
   });

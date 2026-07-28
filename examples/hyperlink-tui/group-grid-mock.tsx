@@ -5,8 +5,8 @@
  * queue widgets that scales up to big terminals. A subgroup is its own widget that
  * packs XS member rows, collapsing to just the name when the cell is too small.
  *
- * Controls are **locked by default** (so stray keys can't touch resources). Ctrl+E
- * enters edit mode (red border) for the resource controls (pause/resume all); TUI
+ * Controls are **locked by default** (so stray keys can't touch services). Ctrl+E
+ * enters edit mode (red border) for the HyperService controls (pause/resume all); TUI
  * controls (resize) are always available. Quit with Ctrl+C.
  *
  *   pnpm run example:group-grid
