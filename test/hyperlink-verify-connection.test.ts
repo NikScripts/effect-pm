@@ -151,7 +151,7 @@ describe("Hyperlink.verifyConnection", () => {
           Hyperlink.verifyConnection(VNode, {
             url: `http://127.0.0.1:${port}/rpc`,
             deep: true,
-            resource: "verify/Missing",
+            serviceKey: "verify/Missing",
           }),
         );
         expectTaggedFailure(exit, "ServiceNotServed");
@@ -166,7 +166,7 @@ describe("Hyperlink.verifyConnection", () => {
           Hyperlink.verifyConnection(VNode, {
             url: `http://127.0.0.1:${port}/rpc`,
             deep: true,
-            resource: "verify/Warming",
+            serviceKey: "verify/Warming",
           }),
         );
         expectTaggedFailure(exit, "ServiceNotReady");
@@ -179,7 +179,7 @@ describe("Hyperlink.verifyConnection", () => {
       Hyperlink.verifyConnection(VNode, {
         url: `http://127.0.0.1:${port}/rpc`,
         deep: true,
-        resource: "verify/Q",
+        serviceKey: "verify/Q",
       }),
     ).pipe(Effect.timeout(Duration.seconds(10))),
   );
@@ -189,7 +189,7 @@ describe("Hyperlink.verifyConnection", () => {
       Hyperlink.verifyConnection(VNode, {
         url: `http://127.0.0.1:${port}/rpc`,
         deep: true,
-        resource: VQueue.key,
+        serviceKey: VQueue.key,
         contractHash: Hyperlink.contractHash(VQueue),
       }),
     ).pipe(Effect.timeout(Duration.seconds(10))),
@@ -202,7 +202,7 @@ describe("Hyperlink.verifyConnection", () => {
           Hyperlink.verifyConnection(VNode, {
             url: `http://127.0.0.1:${port}/rpc`,
             deep: true,
-            resource: VQueue.key,
+            serviceKey: VQueue.key,
             contractHash: "00000000",
           }),
         );

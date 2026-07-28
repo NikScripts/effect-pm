@@ -1,6 +1,6 @@
 /**
  * The Polling service interface + its Context tag. INTERNAL on purpose: polling is cadence
- * policy for daemons — neither a resource nor a daemon — so the public `Polling` namespace
+ * policy for daemons — neither a HyperService nor a daemon — so the public `Polling` namespace
  * exposes verbs (`layer`, `current`) and presets instead of a tag. The tag type still appears
  * in R positions of public signatures (the supervisor is the only provider).
  *

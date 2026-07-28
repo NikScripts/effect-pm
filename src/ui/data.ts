@@ -118,7 +118,7 @@ interface DaemonService {
     readonly clear: Effect.Effect<void>;
   };
 }
-/** The structural shape of an API-metrics resource's live service (read-only). */
+/** The structural shape of an API-metrics HyperService's live service (read-only). */
 /** HttpApiClient (and dashboard fixtures) expose usage under the `metrics` nest. */
 interface ApiService {
   readonly metrics: {
@@ -157,7 +157,7 @@ export type QueueTag<R = never> = Effect.Effect<QueueService, never, R> & { read
 /** A `WorkPool.priority` tag — yieldable for its live service. @public */
 export type PriorityTag<R = never> = Effect.Effect<PriorityService, never, R> & { readonly key: string };
 
-/** The structural shape of a **fleet-health** resource's live service — a per-node health map + a
+/** The structural shape of a **fleet-health** HyperService's live service — a per-node health map + a
  *  rollup status, both `fleet` effect fields (read-once, polled — no reactive ref). */
 interface FleetHealthService {
   readonly byNode: Effect.Effect<Record<string, NodeReport>>;
@@ -166,7 +166,7 @@ interface FleetHealthService {
 /** A fleet-health tag — yieldable for its live service. @public */
 export type FleetHealthTag<R = never> = Effect.Effect<FleetHealthService, never, R> & { readonly key: string };
 
-/** The structural shape of a **telemetry** resource's live service — this node's metric `snapshot`
+/** The structural shape of a **telemetry** HyperService's live service — this node's metric `snapshot`
  *  (leaf) plus the fleet folds `inFlightByNode` / `fleetInFlight`. All effect fields (polled). */
 interface TelemetryService {
   readonly snapshot: Effect.Effect<typeof MetricsSnapshot.Type>;
@@ -176,7 +176,7 @@ interface TelemetryService {
 /** A telemetry tag — yieldable for its live service. @public */
 export type TelemetryTag<R = never> = Effect.Effect<TelemetryService, never, R> & { readonly key: string };
 
-/** The structural shape of a **shard-map** resource's live service — `sizeLocal` (this node's entry
+/** The structural shape of a **shard-map** HyperService's live service — `sizeLocal` (this node's entry
  *  count, leaf) plus the fleet folds `sizeByNode` / `size`. All effect fields (polled). */
 interface ShardMapService {
   readonly sizeLocal: Effect.Effect<number>;
@@ -282,7 +282,7 @@ export interface DaemonBundle {
   /** Remove all schedule entries. */
   readonly clearSchedule: CommandAtom;
 }
-/** The atoms one node dot/detail needs — its live status (up, readiness rollup, per-resource).
+/** The atoms one node dot/detail needs — its live status (up, readiness rollup, per-HyperService).
  *  Read-only. */
 export interface NodeBundle {
   readonly id: string;
@@ -290,7 +290,7 @@ export interface NodeBundle {
   /** The node's runtime-wide log stream (recent tail, then live). */
   readonly logs: ValueAtom<ReadonlyArray<LogLine>>;
   /** Ready-resource count over time (one point per status tick) — a readiness sparkline that dips
-   *  when a resource (or its dependency) degrades. */
+   *  when a HyperService (or its dependency) degrades. */
   readonly health: ValueAtom<ReadonlyArray<number>>;
 }
 /** The atoms one API-metrics card needs — read-only (no commands). */
@@ -305,14 +305,14 @@ export interface ApiBundle {
 
 /** A node that backs one or more of a group's resources — its id (the `Node.Tag` key) plus the
  *  transport key itself. Read straight off the tags (`nodeOf`), so the dashboard's node list is the
- *  distinct nodes its resources are bound to — no separate registry. */
+ *  distinct nodes its HyperServices are bound to — no separate registry. */
 export interface NodeRef {
   readonly id: string;
   readonly node: NodeKey<unknown>;
 }
 
-/** Walk a group tree and collect the distinct nodes its resources are bound to. A nodeless
- *  (local/in-process) group yields `[]` — node dots appear only when resources name a node. */
+/** Walk a group tree and collect the distinct nodes its HyperServices are bound to. A nodeless
+ *  (local/in-process) group yields `[]` — node dots appear only when HyperServices name a node. */
 export const nodesOf = (group: unknown): ReadonlyArray<NodeRef> => {
   const seen = new Map<string, NodeRef>();
   const walk = (member: unknown): void => {
@@ -343,16 +343,16 @@ export const tagWireKey = (member: unknown): string | undefined => {
   return undefined;
 };
 
-/** The {@link NodeRef} a resource tag is bound to (its `Node.Tag`), or `undefined` for a nodeless
- *  tag — lets a resource page read its own readiness from its node's status handle. */
-export const resourceNodeRef = (tag: unknown): NodeRef | undefined => {
+/** The {@link NodeRef} a HyperService tag is bound to (its `Node.Tag`), or `undefined` for a nodeless
+ *  tag — lets a HyperService page read its own readiness from its node's status handle. */
+export const serviceNodeRef = (tag: unknown): NodeRef | undefined => {
   const node = nodeOf(tag);
   return node === undefined ? undefined : { id: node.key, node };
 };
 
-/** The leaf resource tag in a group tree whose wire key is `key` (as reported by a node's
- *  `Node.Status.resources[].key`), or `undefined` if not found. Lets the node page open a served
- *  resource's detail directly (without round-tripping through the group route). */
+/** The leaf HyperService tag in a group tree whose wire key is `key` (as reported by a node's
+ *  `Node.Status.services[].key`), or `undefined` if not found. Lets the node page open a served
+ *  HyperService's detail directly (without round-tripping through the group route). */
 export const leafByKey = (group: unknown, key: string): unknown => {
   const walk = (node: unknown): unknown => {
     if (!Group.isGroup(node)) return undefined;
@@ -454,22 +454,22 @@ const cacheFor = <V>(map: WeakMap<object, Map<string, V>>, runtime: object): Map
 
 const hyperlinkLogsAtom = <R, ER>(
   runtime: DashboardRuntime<R, ER>,
-  resourceKey: string,
+  serviceKey: string,
   node: NodeKey<unknown>,
 ) =>
   runtime.atom(
     cachedAccumulator({
-      key: `${resourceKey}/logs`,
+      key: `${serviceKey}/logs`,
       cap: 300,
       // A dead node surfaces NodeUnreachable; the dashboard atoms have no error channel, so it
       // becomes a defect the atom's AsyncResult reports (same as before the node-handle move).
       stream: Stream.unwrap(Effect.map(node, (h) => h.logs.stream)).pipe(
-        Stream.filter(LogEntry.hasKey(resourceKey)),
+        Stream.filter(LogEntry.hasKey(serviceKey)),
         Stream.map(toLogLine),
         Stream.orDie,
       ),
       query: Effect.flatMap(node, (h) => h.logs.query({ limit: 300 })).pipe(
-        Effect.map((entries) => entries.filter(LogEntry.hasKey(resourceKey)).map(toLogLine)),
+        Effect.map((entries) => entries.filter(LogEntry.hasKey(serviceKey)).map(toLogLine)),
         Effect.orDie,
       ),
     }).pipe(Stream.provide(nodeConn(node))),
@@ -871,13 +871,13 @@ export const nodeStatusBundle = <R, ER>(
       }).pipe(Stream.provide(nodeConn(ref.node))),
     ),
     // Ready-count over time, accumulated client-side from the status stream — a compact readiness
-    // sparkline (no server change). Dips when a resource degrades (e.g. a dependency blips).
+    // sparkline (no server change). Dips when a HyperService degrades (e.g. a dependency blips).
     health: runtime.atom(
       cachedAccumulator({
         key: `${ref.id}/health`,
         cap: 120,
         stream: Stream.unwrap(Effect.map(ref.node, (h) => h.status.changes)).pipe(
-          Stream.map((st) => st.resources.filter((x) => x.ready).length),
+          Stream.map((st) => st.services.filter((x) => x.ready).length),
           Stream.orDie,
         ),
       }).pipe(Stream.provide(nodeConn(ref.node))),

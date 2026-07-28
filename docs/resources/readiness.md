@@ -3,7 +3,7 @@
 
 Whether a served resource is actually able to do its job — beyond “the process is up.” A node folds every served resource’s readiness into one aggregate with two faces (same SSOT):
 
-- **`GET /health`** — `200` when all ready, `503` when any is not (`status: "degraded"`), body lists each resource’s `{ key, kind, ready, detail? }`
+- **`GET /health`** — `200` when all ready, `503` when any is not (`status: "degraded"`), body lists each HyperService’s `{ key, kind, ready, detail? }`
 - **`(yield* MyNode).status`** — the same aggregate on the connected node handle (dashboard health board)
 
 Readiness is **per-node and local**. It never hops to peers; a down neighbour must not cascade through `/health`. Fleet-wide health is a separate monitor — see [Fleet Health](/docs/fleet-health) (`FleetHealth` folds peer `local` with Reachable / Unreachable).
@@ -18,7 +18,7 @@ Acquisition vs readiness: get hard dependencies ready by acquiring them eagerly 
 program); prefer whichever reads cleaner. The derivation reads the **materialized service** and
 returns `{ ready, detail? }`. Prefer an **inferred** `svc` (or a minimal structural type of the
 fields you read) over annotating `Hyperlink.ServiceOf<typeof spec>` — the tag already carries the
-spec. A tag with no derivation is **ready by default**, so unaware resources never falsely fail a
+spec. A tag with no derivation is **ready by default**, so unaware HyperServices never falsely fail a
 gate.
 
 ``` ts
@@ -89,7 +89,7 @@ Options field names match the produced spec (`status` / `changes`). `changes` is
 
 ## Shared majority + one outlier on one port
 
-`serveAllHttp` is retired — every host is `Node.httpServer([...serve layers])`. When **most** resources share a dependency but **one** needs a private implementation of the same tag, do **not** provide the shared layer around the whole server (that would also feed the outlier). Group the majority with `Hyperlink.provide`, isolate the outlier on its own `serve`:
+`serveAllHttp` is retired — every host is `Node.httpServer([...serve layers])`. When **most** HyperServices share a dependency but **one** needs a private implementation of the same tag, do **not** provide the shared layer around the whole server (that would also feed the outlier). Group the majority with `Hyperlink.provide`, isolate the outlier on its own `serve`:
 
 ``` ts
 import { Layer } from "effect"

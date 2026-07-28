@@ -28,7 +28,7 @@ export type LogSort = "asc" | "desc";
 export interface LogQuery {
   /** When set, restrict to this RpcGroup wire key (solo = tag key; family = shared prefix). */
   readonly wireKey?: string;
-  /** When set, restrict to logs whose lineage contains this resource **key** (`Tag.key`). */
+  /** When set, restrict to logs whose lineage contains this HyperService **key** (`Tag.key`). */
   readonly key?: string;
   readonly from?: Date;
   readonly to?: Date;

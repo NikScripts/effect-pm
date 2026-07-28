@@ -1,7 +1,7 @@
 /**
  * @module MultiNode
  *
- * Combine a field across **N instances of one resource** — the isomorphic core for multi-node
+ * Combine a field across **N instances of one HyperService** — the isomorphic core for multi-node
  * resources (one shape, one instance per node). Pure gather + fold over a **caller-supplied** keyed
  * peer map (`node → service`), so it runs unchanged in the browser (a dashboard), in node/bun (an
  * aggregator), or a CLI. Each node's outcome is captured, so the combine decides how to treat a node

@@ -6,7 +6,7 @@
 <!-- docs-site-link:end -->
 # Metrics
 
-Resources already emit into Effect's per-process `Metric` registry (queues, processes, HTTP
+HyperServices already emit into Effect's per-process `Metric` registry (queues, processes, HTTP
 clients, runtime metrics). Two sinks read that registry:
 
 | Sink | When |

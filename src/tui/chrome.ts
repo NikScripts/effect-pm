@@ -6,7 +6,7 @@
  *
  */
 
-/** A resource's folded lifecycle state — the key of the default status theme. */
+/** A HyperService's folded lifecycle state — the key of the default status theme. */
 export type Status = "running" | "paused" | "draining" | "off";
 
 /** Terminal color per {@link Status} (Ink color names). */

@@ -64,9 +64,9 @@ it("httpServer serves serve layers on one /rpc, isolated, with /health listing b
       }).pipe(Effect.provide(FetchHttpClient.layer), Effect.orDie);
       const body = health as {
         readonly status: string;
-        readonly resources: ReadonlyArray<{ readonly key: string }>;
+        readonly services: ReadonlyArray<{ readonly key: string }>;
       };
       expect(body.status).toBe("ok");
-      expect(body.resources.map((r) => r.key).sort()).toEqual(["httpserver/A", "httpserver/B"]);
+      expect(body.services.map((r) => r.key).sort()).toEqual(["httpserver/A", "httpserver/B"]);
     }).pipe(Effect.provide(Node), Effect.scoped),
   ));

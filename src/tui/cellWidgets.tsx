@@ -117,7 +117,7 @@ export interface TuiCellProps {
   readonly selected: boolean;
 }
 
-/** An Ink grid cell for one resource (or fallback). @public */
+/** An Ink grid cell for one HyperService (or fallback). @public */
 export type TuiCellWidget = (props: TuiCellProps) => React.ReactElement;
 
 /** TUI cell registry. @public */

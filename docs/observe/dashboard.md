@@ -18,7 +18,7 @@ const runtime = Atom.runtime(appLayer) // appLayer: your resource clients over a
 This is the one setup decision you must get right, and the default is **not** what a browser
 wants.
 
-A resource client reaches its node over an RPC **transport**. The library ships two:
+A HyperService client reaches its node over an RPC **transport**. The library ships two:
 
 - **`Hyperlink.http(node, { url })`** — HTTP. The default, and correct for a **server, CLI,
   or backend-to-backend** caller, or any client that opens only a handful of streams.

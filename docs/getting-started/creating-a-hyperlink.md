@@ -138,9 +138,9 @@ const program = Effect.gen(function* () {
 
 This exact Counter (the same tag, the same `Hyperlink.layer`) is running in this page right now.
 The buttons call `increment` / `reset` on the handle; the count reads straight off `value.changes`.
-There is no extra API between the UI and the resource: the handle *is* the surface.
+There is no extra API between the UI and the serviceKey: the handle *is* the surface.
 
-``` resource
+``` ts
 docs/Counter
 ```
 

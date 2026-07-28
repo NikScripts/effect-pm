@@ -396,7 +396,7 @@ function makeHttpApiClient<
   return Object.assign(tag, { layer });
 }
 
-const httpApiResourceService = <Self>() =>
+const httpApiClientService = <Self>() =>
   <
     ApiId extends string,
     Groups extends HttpApiGroup.Constraint,
@@ -474,7 +474,7 @@ function layerEffect<
  * @category constructors
  * @public
  */
-export const Service = httpApiResourceService;
+export const Service = httpApiClientService;
 
 /**
  * Functional equivalent of {@link Service} — returns a tag value with `.layer`.

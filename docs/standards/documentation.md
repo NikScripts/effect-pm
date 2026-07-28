@@ -25,7 +25,7 @@ codebase does not use `@param` / `@returns`; they duplicate the types and rot as
 
 ``` ts
 /**
- * Dial a resource `tag` over a transport you provide — no batteries. Pass
+ * Dial a HyperService `tag` over a transport you provide — no batteries. Pass
  * {@link protocolHttp} / {@link protocolWebsocket} / {@link protocolIpc}.
  *
  * @example
@@ -59,7 +59,7 @@ error it throws — wrap it in `{@link name}` so a reader can navigate the surfa
 for it. A doc comment is a node in a graph, not an island.
 
 ``` ts
-/** The resource's peer clients, for its own cross-node logic. Requires {@link peersLayer}; fold them
+/** The HyperService's peer clients, for its own cross-node logic. Requires {@link peersLayer}; fold them
  *  with {@link combineQuery} / {@link combineStream}. */
 ```
 

@@ -18,8 +18,8 @@ import { layer as tuiLayer } from "../../src/tui";
 import {
   Counter,
   QueueManager,
-  resourcesLayer,
-} from "../hyperlink-cli/manager-resources";
+  servicesLayer,
+} from "../hyperlink-cli/manager-services";
 
 class MyGroup extends Group.Tag<MyGroup>("hyperlink-ts/MyGroup")({
   Counter,
@@ -38,7 +38,7 @@ const program = Hyperlink.cli(MyGroup, {
   name: "my-group",
   version: "0.0.0",
 })(args).pipe(
-  Effect.provide(Layer.mergeAll(resourcesLayer, tuiLayer, NodeServices.layer)),
+  Effect.provide(Layer.mergeAll(servicesLayer, tuiLayer, NodeServices.layer)),
 );
 
 // Boundary: loose requirement from the dynamic tags; the layer provides it.

@@ -83,11 +83,11 @@ const program = Effect.gen(function* () {
 const glass = yield* MeshHealth
 
 const local = yield* glass.local
-// local: FleetHealth.LocalHealth — { status: "ok" | "degraded", resources: … }
+// local: FleetHealth.LocalHealth — { status: "ok" | "degraded", services: … }
 
 const byNode = yield* glass.byNode
 // byNode: Record<string, FleetHealth.NodeReport>
-//   Reachable  → { _tag: "Reachable", status, resources }
+//   Reachable  → { _tag: "Reachable", status, services }
 //   Unreachable → { _tag: "Unreachable" }
 
 const status = yield* glass.status

@@ -66,7 +66,7 @@ if (row._tag === "Reachable") {
     readonly key: string;
     readonly kind: string;
     readonly ready: boolean;
-  }> = row.resources;
+  }> = row.services;
   void _s;
   void _resources;
 } else {
@@ -82,7 +82,7 @@ void _fleet;
 
 // rollup returns FleetStatus
 const _rollup: FleetHealth.FleetStatus = FleetHealth.rollup({
-  a: FleetHealth.Reachable.make({ status: "ok", resources: [] }),
+  a: FleetHealth.Reachable.make({ status: "ok", services: [] }),
   b: FleetHealth.Unreachable.make({}),
 });
 void _rollup;

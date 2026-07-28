@@ -1,9 +1,9 @@
 /**
  * @module examples/hyperlink-cli/manager-cli
  *
- * Two resources, one CLI — the `Record` composition. The resources live in
- * `manager-resources.ts` (shared with the TUI); here we just project them to a CLI.
- * `Counter` is a plain resource; `QueueManager` is a **manager tag**: one resource
+ * Two HyperServices, one CLI — the `Record` composition. The HyperServices live in
+ * `manager-services.ts` (shared with the TUI); here we just project them to a CLI.
+ * `Counter` is a plain HyperService; `QueueManager` is a **manager tag**: one HyperService
  * whose contract owns many instances (`list`, `status({ id })`, `pause({ id })`, …) —
  * how "control many queues" works without dynamic-instance machinery.
  *
@@ -17,15 +17,15 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Layer } from "effect";
 import { cli, type CliRun, TuiNotConfigured } from "../../src/cli";
-import { resources, resourcesLayer } from "./manager-resources";
+import { services, servicesLayer } from "./manager-services";
 
-const runCli = cli(resources, {
+const runCli = cli(services, {
   name: "hyperlink",
   version: "0.0.0",
 }) as CliRun;
 
 const program = runCli(process.argv.slice(2)).pipe(
-  Effect.provide(Layer.mergeAll(resourcesLayer, NodeServices.layer)),
+  Effect.provide(Layer.mergeAll(servicesLayer, NodeServices.layer)),
 );
 
 // Boundary: loose requirement from the dynamic record of tags; the layer above

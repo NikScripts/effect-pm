@@ -98,7 +98,7 @@ export const assertProtocolKinds = (
       entry.nodeKinds !== undefined && !entry.nodeKinds.includes(serverKind)
         ? Effect.die(
             new ProtocolKindMismatch({
-              resource: entry.wireKey,
+              serviceKey: entry.wireKey,
               declared: entry.nodeKinds,
               servedOver: serverKind,
             }),

@@ -28,10 +28,10 @@ below is the AS-SHIPPED outcome (a couple of the original predictions — `NodeS
 | `WorkPool` | **`WorkPool`** | |
 | `WorkPool.Service (untyped)` | **`WorkPool.priority(…)`** | FOLDED IN as a behavior-named **peer constructor** beside `WorkPool.Tag` (Effect's `Queue.bounded`/`dropping` shape). NOT an overload on `.Tag`, NOT `.leveled`, NOT `withLane`, NOT `makeCustom`. Leveled **engine stays its own internal module** (the tree-shake split). Vocab swept to **`lane`** (`laneCount`/`namedLanes`/`add(item, lane?)`; wire field `lane`). |
 | `Gate` | **`Gate`** | it's a concurrency gate for effects, not a process runner |
-| `HttpApiResource` | **`Gate.httpApiClient(…)`** | FOLDED IN — the module *is* a `Semaphore` gate over the HttpClient transport (`HttpClientRunGate.withRunner` wrapping `HttpApiClient.make`) + per-endpoint metrics. Peer constructor beside `Gate.Tag` (+ `httpApiClientService`/`httpApiClientLayer`/`acceptJson`/`instrumentEndpoints`). `HttpClientRunGate` stays the shared internal engine. |
+| `HttpApiClient` | **`Gate.httpApiClient(…)`** | FOLDED IN — the module *is* a `Semaphore` gate over the HttpClient transport (`HttpClientRunGate.withRunner` wrapping `HttpApiClient.make`) + per-endpoint metrics. Peer constructor beside `Gate.Tag` (+ `httpApiClientService`/`httpApiClientLayer`/`acceptJson`/`instrumentEndpoints`). `HttpClientRunGate` stays the shared internal engine. |
 | `Daemon` | **`Daemon`** | supervised long-running process |
-| `NodeStatus` | **node-handle accessors** — `(yield* node).status` / `.logs` / `.ping` | SHIPPED as accessors ON THE CONNECTED NODE HANDLE, not a `node.pulse` / `Hyperlink.status(node)` free function. Each node auto-serves its own status/logs/ping; because a node tag *is* its own `Context.Service`, reading node A vs B is `yield* NodeA` vs `yield* NodeB` — no shared slot, no cast. The `NodeStatus` module + `Node.status` namespace are **deleted**; the light snapshot types survive as flat `Node.Status` / `Node.ResourceReadiness` / `Node.resourceReadiness`. Engine is a lazy internal (`Node.Tag` stays light). See [[project-nodestatus-on-handle]]. |
-| `BuiltResource` / `ServedResource` | **`Driver`** / `ServedHyperlink` **@internal** | `BuiltHyperlink` → **`Hyperlink.Driver`** (+ `driver`/`isDriver`/`driverSym`). `ServedHyperlink`/`ServedHyperlinks`/`servedHyperlinksLayer` **demoted to `@internal`** (server plumbing, zero user refs) — not renamed. |
+| `NodeStatus` | **node-handle accessors** — `(yield* node).status` / `.logs` / `.ping` | SHIPPED as accessors ON THE CONNECTED NODE HANDLE, not a `node.pulse` / `Hyperlink.status(node)` free function. Each node auto-serves its own status/logs/ping; because a node tag *is* its own `Context.Service`, reading node A vs B is `yield* NodeA` vs `yield* NodeB` — no shared slot, no cast. The `NodeStatus` module + `Node.status` namespace are **deleted**; the light snapshot types survive as flat `Node.Status` / `Node.ServiceReadiness` / `Node.serviceReadiness`. Engine is a lazy internal (`Node.Tag` stays light). See [[project-nodestatus-on-handle]]. |
+| `Driver` / `ServedHyperlink` | **`Driver`** / `ServedHyperlink` **@internal** | `BuiltHyperlink` → **`Hyperlink.Driver`** (+ `driver`/`isDriver`/`driverSym`). `ServedHyperlink`/`ServedHyperlinks`/`servedHyperlinksLayer` **demoted to `@internal`** (server plumbing, zero user refs) — not renamed. |
 
 Namespace clash check done before locking: `WorkPool` / `Gate` / `Daemon` clear of Effect's namespace
 
@@ -92,3 +92,21 @@ client+server (thus hits default-on verify) MUST use `it.live`, never `it.effect
    publish as bare `hyperlink-ts`.
 3. Docs domain (blocks DOCS_SITE_ORIGIN, the banner stamp, and deploy — see
    docs/site/deploy/README.md).
+
+## Follow-up vocab (2026-07-28) — HyperService, not “resource”
+
+Owner: purge remaining product “resource” names. Shipped in the same tip:
+
+| Was (AS-SHIPPED snapshot) | Now |
+|---|---|
+| `Node.ResourceReadiness` / `resourceReadiness` | `Node.ServiceReadiness` / `serviceReadiness` |
+| `Node.Status.resources` / `resourceCount` | `services` / `serviceCount` |
+| `/health` JSON `resources` | `services` |
+| `FleetHealth.*.resources` | `services` |
+| Error / verify field `resource` | `serviceKey` |
+| `VerifyConnectionDeepOptions.resource` | `serviceKey` |
+| Lookup `resourceKey` | `serviceKey` |
+| Launcher `ready.resources` | `ready.services` |
+
+Internal engine may still say `NodeStatusTag` / wire key `hyperlink-ts/node-status` (not a public module).
+Folder slug `docs/resources/` is book layout — separate site-path bake if renamed.

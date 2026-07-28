@@ -39,7 +39,7 @@ export class WnbaNode extends Node.Tag<WnbaNode>()("wnba/scores", { url: rpcUrl(
 export class LiveNode extends Node.Tag<LiveNode>()("wnba/live", { url: rpcUrl(HOST_PORTS.live) }) {}
 export class StatsNode extends Node.Tag<StatsNode>()("wnba/stats", { url: rpcUrl(HOST_PORTS.stats) }) {}
 
-// A **multi-node** resource: the SAME WorkerPool served on all three nodes — one class, three
+// A **multi-node** serviceKey: the SAME WorkerPool served on all three nodes — one class, three
 // instances. `active` is this instance's own count (a leaf field peers can read); `fleetActive` is the
 // total across the fleet — a `fleet`-tagged query the layer folds from `Hyperlink.peers` + its own
 // value (see `server.ts`). Dogfoods `fleet` + `peers` + layer-from-effect end to end across three real
@@ -174,7 +174,7 @@ const wnbaTransport = Hyperlink.ws(WnbaNode, { url: "/rpc" });
 const liveTransport = Hyperlink.ws(LiveNode, { url: "/live/rpc" });
 const statsTransport = Hyperlink.ws(StatsNode, { url: "/stats/rpc" });
 
-// Expose each node itself in the runtime (not only the resource clients): the node-status die reads
+// Expose each node itself in the runtime (not only the HyperService clients): the node-status die reads
 // `node.status` over each node's transport, so it needs the node in context. Each transport is one
 // const (shared by reference), so the client + the die reuse a single connection per node.
 const appLayer = Layer.mergeAll(
@@ -198,5 +198,5 @@ const appLayer = Layer.mergeAll(
   Hyperlink.client(FetchGate, LiveNode).pipe(Layer.provide(liveTransport)),
 );
 
-/** One reactive runtime providing every resource in the hub. */
+/** One reactive runtime providing every HyperService in the hub. */
 export const runtime = Atom.runtime(appLayer);

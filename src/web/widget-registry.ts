@@ -17,7 +17,7 @@ export interface WidgetProps {
   readonly onOpen: (tag: LeafTag) => void;
 }
 
-/** A DOM card component for one resource. @public */
+/** A DOM card component for one HyperService. @public */
 export interface Widget {
   (props: WidgetProps): React.ReactElement;
 }

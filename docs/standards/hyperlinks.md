@@ -1,4 +1,4 @@
-{#resources title="Hyperlink Factories" order=60 appliesTo=src}
+{#hyperlinks title="Hyperlink Factories" order=60 appliesTo=src}
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
@@ -6,12 +6,12 @@
 <!-- docs-site-link:end -->
 # Hyperlink Factories
 
-How a resource is defined, served, and meshed across nodes. Covers the tag/layer split, the serve vocabulary, and multi-node meshing.
+How a HyperService is defined, served, and meshed across nodes. Covers the tag/layer split, the serve vocabulary, and multi-node meshing.
 
 {#tag-is-contract-layer-is-runtime .must appliesTo="src examples"}
 ## The tag is the contract; the layer is the runtime
 
-A resource splits cleanly in two. The **tag** carries the wire contract — the `payload` / `success` /
+A HyperService splits cleanly in two. The **tag** carries the wire contract — the `payload` / `success` /
 `error` schemas — and nothing else; it is the wire SSOT and the thing a client (even a browser)
 imports. The **layer** carries the runtime — the `effect` worker, `polling`, `autoStart`. Never cross
 them: schemas never move into layer config (that breaks the wire SSOT and RPC safety), and the worker
@@ -56,7 +56,7 @@ class Jobs extends WorkPool.priority<Jobs>()("@acme/Jobs", {
 {#behaviour-via-piped-combinators .must appliesTo="src examples"}
 ## Compose behaviour with piped combinators, not constructor flags
 
-Optional behaviour — scheduling, readiness, distribution — is **piped onto** the resource, never
+Optional behaviour — scheduling, readiness, distribution — is **piped onto** the HyperService, never
 passed as a constructor flag. Each combinator is composable and independent, so the base stays small
 and you add only what you need (this is *Principles → Don't fight the framework* in the concrete).
 
@@ -135,7 +135,7 @@ presence-driven (`serviceOption`) → *Storage*.
 {#same-code-local-or-remote .must appliesTo="src examples"}
 ## The same code runs local or remote
 
-A resource is driven by the same `yield* Tag` whether it is in-process or served over RPC — only the
+A HyperService is driven by the same `yield* Tag` whether it is in-process or served over RPC — only the
 layer you provide differs. Never branch on local-vs-remote in a consumer. A field either behaves
 identically in both, or its divergence surfaces as a type or dependency error — never a silent
 same-looking-but-different (see *Principles → Fail loudly*).
@@ -143,7 +143,7 @@ same-looking-but-different (see *Principles → Fail loudly*).
 {#serve-vocabulary .must appliesTo="src examples"}
 ## Use the locked serve vocabulary
 
-Four verbs, one axis — how a resource is made available:
+Four verbs, one axis — how a HyperService is made available:
 
 - **`layer`** — local only.
 - **`serve`** — local **and** served over RPC (the default for a node).
@@ -169,7 +169,7 @@ same tag: `Layer.provide` onto each serve layer (see *Managing Layers*).
 {#serve-through-spec-checked-forms .must appliesTo="src examples"}
 ## Serve through the engine's spec-checked form, never a bare literal
 
-Serve a resource through its engine form (`WorkPool.serve`, `Daemon.serve`) — these mount the
+Serve a HyperService through its engine form (`WorkPool.serve`, `Daemon.serve`) — these mount the
 handlers **and** keep the worker or tick alive. `Hyperlink.serve` only mounts handlers; using it for a
 queue leaves the worker dead. Never hand-write a `{ tag, impl }` literal: it types as
 `Record<string, unknown>` and silently swallows typos — the engine form spec-checks the impl against
@@ -208,14 +208,14 @@ scoping combinator beside the handler service — do not look for a package `loc
 {#one-instance-one-materialization .must appliesTo="src examples"}
 ## One instance, one materialization
 
-A resource is a single instance. Its local use and its served handlers share **one** materialization
+A HyperService is a single instance. Its local use and its served handlers share **one** materialization
 — serving must not re-run the impl generator. Compose extra behaviour as post-construction
-combinators (`withReadiness`, `distributed`) piped onto the resource, not as re-materializations or
+combinators (`withReadiness`, `distributed`) piped onto the HyperService, not as re-materializations or
 baked constructor options (see *Principles → Don't fight the framework*).
 
 
-{#one-resource-n-instances .must appliesTo="src examples"}
-## One resource = N node-local instances
+{#one-service-n-instances .must appliesTo="src examples"}
+## One HyperService = N node-local instances
 
 One class. Each node runs its own instance; `peers` gives you the per-node handles.
 
@@ -230,7 +230,7 @@ const perNode = yield* Hyperlink.peers(Prices)
 {#readiness-per-node-local .must appliesTo="src examples"}
 ## Readiness is per-node and local — never a cross-node hop
 
-Readiness derives from a resource's **own** status and rolls up into that node's `/health`. Reaching
+Readiness derives from a HyperService's **own** status and rolls up into that node's `/health`. Reaching
 into a peer to decide your own readiness cascades one node's failure into its neighbours.
 
 ``` ts

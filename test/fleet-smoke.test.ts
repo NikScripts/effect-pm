@@ -55,7 +55,7 @@ it("fleet data-path smoke (ws): a producer feeds queues and NodeStatus reports r
         // 2. NodeStatus reports the node up with both queues.
         const snap = yield* node.status.get;
         expect(snap.up).toBe(true);
-        expect(snap.resourceCount).toBe(2);
+        expect(snap.serviceCount).toBe(2);
 
         // 3. the live NodeStatus stream delivers a snapshot.
         const head = yield* Stream.runHead(node.status.changes);

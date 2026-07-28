@@ -28,8 +28,8 @@ describe("MultiNode.combineByNode vs combineByNodeExit", () => {
 });
 
 describe("FleetHealth.rollup", () => {
-  const ok = FleetHealth.Reachable.make({ status: "ok", resources: [] });
-  const degraded = FleetHealth.Reachable.make({ status: "degraded", resources: [] });
+  const ok = FleetHealth.Reachable.make({ status: "ok", services: [] });
+  const degraded = FleetHealth.Reachable.make({ status: "degraded", services: [] });
   const down = FleetHealth.Unreachable.make({});
 
   it("ok when every row is Reachable + ok", () => {
@@ -55,7 +55,7 @@ describe("FleetHealth", () => {
     local: Effect.succeed(
       FleetHealth.LocalHealth.make({
         status,
-        resources: [{ key: "app/Jobs", kind: "hyperlink-ts/WorkPool", ready }],
+        services: [{ key: "app/Jobs", kind: "hyperlink-ts/WorkPool", ready }],
       }),
     ),
   });
@@ -68,7 +68,7 @@ describe("FleetHealth", () => {
       const glass = yield* MeshHealth;
       const local = yield* glass.local;
       expect(local.status).toBe("ok");
-      expect(local.resources).toEqual([]);
+      expect(local.services).toEqual([]);
       expect(yield* glass.status).toBe("ok");
     }).pipe(Effect.provide(live));
   });
@@ -84,7 +84,7 @@ describe("FleetHealth", () => {
       const glass = yield* MeshHealth;
       const local = yield* glass.local;
       expect(local.status).toBe("ok");
-      expect(local.resources).toHaveLength(1);
+      expect(local.services).toHaveLength(1);
       expect(yield* glass.status).toBe("ok");
       const byNode = yield* glass.byNode;
       expect(Object.keys(byNode)).toEqual(["hyperlink-ts/FleetHealth/alone"]);
@@ -104,7 +104,7 @@ describe("FleetHealth", () => {
       const glass = yield* MeshHealth;
       const local = yield* glass.local;
       expect(local.status).toBe("degraded");
-      expect(local.resources.map((r) => r.key)).toEqual(["app/Cache", "app/Jobs"]);
+      expect(local.services.map((r) => r.key)).toEqual(["app/Cache", "app/Jobs"]);
       // alone ⇒ only self, so fleet status mirrors leaf degraded
       expect(yield* glass.status).toBe("degraded");
     }).pipe(Effect.provide(live));

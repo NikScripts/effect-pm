@@ -1,7 +1,7 @@
 /**
  * @module examples/hyperlink-tui/counter-tui
  *
- * Runnable entrypoint — renders the resource panel in your terminal.
+ * Runnable entrypoint — renders the HyperService panel in your terminal.
  *
  *   tsx examples/hyperlink-tui/counter-tui.tsx
  *   # then press i / d / r / q

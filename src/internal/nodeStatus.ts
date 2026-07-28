@@ -3,7 +3,7 @@
  *
  * The reserved **node status** resource — every node that serves a group over
  * {@link Node.httpServer} automatically also serves this, so a client can ask any node
- * "are you up, how long, how many resources, and what are your logs?" without the node author
+ * "are you up, how long, how many HyperServices, and what are your logs?" without the node author
  * wiring anything. It's a nodeless {@link Hyperlink.Tag} (one reserved group id); a client reaches
  * a specific node by pointing the ambient transport at that node's url.
  *
@@ -50,13 +50,13 @@ const NODE_STATUS_KEY = "hyperlink-ts/node-status";
 const STATUS_INTERVAL = Duration.seconds(2);
 
 /**
- * One served resource's readiness, as the node reports it — its wire key, {@link Hyperlink.kindOf}
+ * One served HyperService's readiness, as the node reports it — its wire key, {@link Hyperlink.kindOf}
  * kind, optional F4 {@link contractHash}, whether it's ready, and (when not) why. The element of
- * {@link nodeStatus}'s `resources`.
+ * {@link nodeStatus}'s `services`.
  *
  * @internal
  */
-export const resourceReadiness = Schema.Struct({
+export const serviceReadiness = Schema.Struct({
   key: Schema.String,
   kind: Schema.String,
   ready: Schema.Boolean,
@@ -65,12 +65,12 @@ export const resourceReadiness = Schema.Struct({
   contractHash: Schema.optionalKey(Schema.String),
 });
 
-/** A served resource's readiness as reported by its node. @internal */
-export type ResourceReadiness = typeof resourceReadiness.Type;
+/** A served HyperService's readiness as reported by its node. @internal */
+export type ServiceReadiness = typeof serviceReadiness.Type;
 
 /**
  * A node's live status — whether it's up, its overall readiness rollup, when it started, how long
- * it's been up, how many resources it serves, and each resource's readiness. `status` is `degraded`
+ * it's been up, how many HyperServices it serves, and each HyperService's readiness. `status` is `degraded`
  * (and `/health` returns 503) when any served resource is not ready.
  *
  * @internal
@@ -80,8 +80,8 @@ export const nodeStatus = Schema.Struct({
   status: Schema.Literals(["ok", "degraded"]),
   startedAt: Schema.DateTimeUtc,
   uptimeMillis: Schema.Number,
-  resourceCount: Schema.Number,
-  resources: Schema.Array(resourceReadiness),
+  serviceCount: Schema.Number,
+  services: Schema.Array(serviceReadiness),
   /**
    * Custody mirror when the node was started with an assume token (`"launcher"` until
    * {@link NodeStatusTag}.`assume` succeeds, then `"self"`). Omitted when no assume token.
@@ -93,7 +93,7 @@ export const nodeStatus = Schema.Struct({
 export type NodeStatus = typeof nodeStatus.Type;
 
 /**
- * The reserved node status resource tag — nodeless, so a client queries it over whichever node
+ * The reserved node status HyperService tag — nodeless, so a client queries it over whichever node
  * transport it points the ambient `RpcClient.Protocol` at.
  *
  * @internal
@@ -103,7 +103,7 @@ export class NodeStatusTag extends Hyperlink.Tag<NodeStatusTag>()(
   {
   status: Hyperlink.ref(nodeStatus).annotate({
     description:
-      "Live node status (up / uptime / resource count / per-resource readiness) — " +
+      "Live node status (up / uptime / resource count / per-HyperService readiness) — " +
       "`status.get` for one-shot, `status.changes` re-emitted periodically.",
   }),
   ping: Hyperlink.effect(Schema.Number).annotate({
@@ -144,14 +144,14 @@ export class NodeStatusTag extends Hyperlink.Tag<NodeStatusTag>()(
 }) {}
 
 /** Build the node status service implementation for a node that started at `startedAt` and serves
- *  `resourceCount` resources. Logs/history are optional (read via `serviceOption`), so this adds no
+ *  `serviceCount` resources. Logs/history are optional (read via `serviceOption`), so this adds no
  *  requirement to the server layer. When `assumeToken` is set, `assume` / ownership mirror are live.
  *  @internal */
 export const buildNodeStatusImpl = (options: {
   readonly startedAt: number;
-  readonly resourceCount: number;
-  /** Per-resource readiness aggregate (same one `/health` reads); absent ⇒ no resources, `ok`. */
-  readonly readiness?: Effect.Effect<ReadonlyArray<ResourceReadiness>>;
+  readonly serviceCount: number;
+  /** Per-HyperService readiness aggregate (same one `/health` reads); absent ⇒ no HyperServices, `ok`. */
+  readonly readiness?: Effect.Effect<ReadonlyArray<ServiceReadiness>>;
   /**
    * Node log key for durable `logs.query` via registration Storage (`Node.logs`).
    * When omitted, query returns `[]`.
@@ -207,8 +207,8 @@ export const buildNodeStatusImpl = (options: {
         status,
         startedAt: DateTime.makeUnsafe(options.startedAt),
         uptimeMillis: now - options.startedAt,
-        resourceCount: options.resourceCount,
-        resources,
+        serviceCount: options.serviceCount,
+        services: resources,
         ...(expectedToken !== undefined ? { ownership: ownershipValue } : {}),
       };
     });
@@ -247,7 +247,7 @@ export const buildNodeStatusImpl = (options: {
           );
           return yield* new AssumeNotReady({
             node: assumeNodeKey,
-            resource: blocked.key,
+            serviceKey: blocked.key,
             ...(blocked.detail !== undefined ? { detail: blocked.detail } : {}),
           });
         }
@@ -286,8 +286,8 @@ export const buildNodeStatusImpl = (options: {
  */
 export const nodeStatusServeEntry = (options: {
   readonly startedAt: number;
-  readonly resourceCount: number;
-  readonly readiness?: Effect.Effect<ReadonlyArray<ResourceReadiness>>;
+  readonly serviceCount: number;
+  readonly readiness?: Effect.Effect<ReadonlyArray<ServiceReadiness>>;
   readonly nodeLogKey?: string;
   readonly assumeToken?: string | Redacted.Redacted<string>;
   readonly assumeNodeKey?: string;

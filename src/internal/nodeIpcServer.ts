@@ -138,7 +138,7 @@ const ipcServerBase = (options: IpcServerOptions): IpcServed => {
       if (entries.length === 0) {
         return yield* Effect.die(
           new Error(
-            "Node.ipcServer: no resources registered — provideMerge at least one Hyperlink.serve(...) layer",
+            "Node.ipcServer: no HyperServices registered — provideMerge at least one Hyperlink.serve(...) layer",
           ),
         );
       }
@@ -173,7 +173,7 @@ const ipcServerBase = (options: IpcServerOptions): IpcServed => {
       );
       const nodeEntry = nodeStatusServeEntry({
         startedAt,
-        resourceCount: entries.length,
+        serviceCount: entries.length,
         readiness,
         ...(inferredNodeKey !== undefined ? { nodeLogKey: inferredNodeKey } : {}),
         ...(options.assumeToken !== undefined

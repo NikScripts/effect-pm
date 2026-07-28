@@ -2,7 +2,7 @@
  * **HistoryStore** — a tiny, backend-agnostic append-log for stream history (metrics, logs, …).
  *
  * The toolkit's resource Tags expose **live** streams (`logs`, `metrics`, …). To read back what
- * *was* in those streams, a resource appends each element here (keyed by `${tag.key}/<stream>`), and
+ * *was* in those streams, a HyperService appends each element here (keyed by `${tag.key}/<stream>`), and
  * the matching `*History` query reads it back. Deliberately simpler than the Store bridge
  * (`Daemon.store` / `WorkPool.store` / …): one keyed append-log with `append` + `read`,
  * holding already-encoded JSON values so a backend just persists/returns them.
@@ -11,7 +11,7 @@
  * - SQLite / Postgres backends land later behind the same interface (one append-only
  *   `(stream_id, ts, json)` table). See `docs/plans/README.md` (Postgres backends).
  *
- * **Optional**: resources read it via `Effect.serviceOption(HistoryStore)`, so with no layer
+ * **Optional**: HyperServices read it via `Effect.serviceOption(HistoryStore)`, so with no layer
  * provided, `append` is a no-op and `*History` returns empty — you only pay for it when you opt in.
  *
  * @module HistoryStore

@@ -103,7 +103,7 @@ export const contractDescriptor = (
 };
 
 /**
- * Compact hex fingerprint of a resource wire contract.
+ * Compact hex fingerprint of a HyperService wire contract.
  *
  * @internal
  */
