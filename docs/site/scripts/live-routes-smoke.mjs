@@ -72,6 +72,16 @@ for (const route of canaries) {
     });
     const body = await res.text();
     if (res.status >= 300 && res.status < 400) {
+      // Docs demo host (`dev.hyperlink.cool`): CF sends `/` → `/docs/index`.
+      // Brand host keeps `/` as the coming-soon page (200). Either is fine.
+      const loc = res.headers.get("location") ?? "";
+      const docsRoot =
+        route === "/" &&
+        (loc === `${base}/docs/index` || loc.endsWith("/docs/index"));
+      if (docsRoot) {
+        results.push({ path: route, ok: true, detail: `redirect ${res.status} → /docs/index` });
+        continue;
+      }
       results.push({ path: route, ok: false, detail: `redirect ${res.status}` });
       continue;
     }
