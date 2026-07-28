@@ -1,49 +1,53 @@
 /**
- * WithSize / SizedPrototype — size as a type requirement; Simplify flattens merges.
+ * WithSize is a real restriction: SizedPrototype + bind require size.
  */
 import { expectTypeOf } from "vitest";
 import * as View from "../src/ui/View";
 
-// Shared base: size must be the ViewKind union (not yet narrowed).
-type Shared = View.SizedPrototype<View.ViewProps, View.WithSize>;
-expectTypeOf<View.WithSize["size"]>().toEqualTypeOf<View.ViewKind>();
-expectTypeOf<Shared["statics"]["size"]>().toEqualTypeOf<View.ViewKind>();
-
-// Narrowings
-expectTypeOf<View.WithSize<"card">["size"]>().toEqualTypeOf<"card">();
-expectTypeOf<View.WithSize<"detail">["size"]>().toEqualTypeOf<"detail">();
-expectTypeOf<View.WithSize<"page">["size"]>().toEqualTypeOf<"page">();
-
-// Shipped add-ons are SizedPrototype narrowings
-expectTypeOf(View.Card).toEqualTypeOf<View.SizedPrototype<View.ViewProps, View.WithSize<"card">>>();
-expectTypeOf(View.Detail).toEqualTypeOf<
-  View.SizedPrototype<View.ViewProps, View.WithSize<"detail">>
+// Stamping size on Prototype → SizedPrototype (constraint applied)
+const CardProto = View.Prototype<View.ViewProps>()({ size: "card" as const });
+expectTypeOf(CardProto).toEqualTypeOf<
+  View.SizedPrototype<View.ViewProps, { readonly size: "card" }>
 >();
-expectTypeOf(View.Page).toEqualTypeOf<View.SizedPrototype<View.ViewProps, View.WithSize<"page">>>();
 
-expectTypeOf(View.Card.statics.size).toEqualTypeOf<"card">();
-expectTypeOf(View.Detail.statics.size).toEqualTypeOf<"detail">();
-expectTypeOf(View.Page.statics.size).toEqualTypeOf<"page">();
+// No size → open Prototype (not SizedPrototype)
+const Naked = View.Prototype<{ readonly name: string }>()();
+expectTypeOf(Naked).toEqualTypeOf<View.Prototype<{ readonly name: string }, {}>>();
 
-// Extending a sized proto merges statics flat (Simplify) — not `{ size } & { spec }`
+// Shipped add-ons
+expectTypeOf(View.Card).toEqualTypeOf<
+  View.SizedPrototype<View.ViewProps, { readonly size: "card" }>
+>();
+expectTypeOf(View.Detail).toEqualTypeOf<
+  View.SizedPrototype<View.ViewProps, { readonly size: "detail" }>
+>();
+expectTypeOf(View.Page).toEqualTypeOf<
+  View.SizedPrototype<View.ViewProps, { readonly size: "page" }>
+>();
+
+// Extending keeps SizedPrototype + flat statics
 const PageProto = View.Page.Prototype()({
   spec: { kind: "app/queue" } as const,
 });
+expectTypeOf(PageProto).toEqualTypeOf<
+  View.SizedPrototype<
+    View.ViewProps,
+    {
+      readonly size: "page";
+      readonly spec: { readonly kind: "app/queue" };
+    }
+  >
+>();
 
-type PageStatics = (typeof PageProto)["statics"];
-type Expected = {
-  readonly size: "page";
-  readonly spec: { readonly kind: "app/queue" };
-};
-
-expectTypeOf<PageStatics>().toEqualTypeOf<Expected>();
-
-// Tag keeps narrowed size
 class PoolPage extends PageProto.Tag<PoolPage>()("app/view/pool-page") {}
 expectTypeOf(PoolPage.size).toEqualTypeOf<"page">();
 
-// Assignability: narrowed WithSize satisfies shared WithSize
-const _cardOk: View.WithSize = View.Card.statics;
-const _pageOk: View.WithSize = { size: "page" };
-void _cardOk;
-void _pageOk;
+// bind accepts sized Tag
+const _ok = View.bind("app/queue", PoolPage);
+void _ok;
+
+// bind rejects Tag with no size
+const GreeterProto = View.Prototype<{ readonly name: string }>()();
+class Greeter extends GreeterProto.Tag<Greeter>()("app/view/greeter") {}
+// @ts-expect-error Greeter has no size — WithSize required
+View.bind("app/queue", Greeter);
