@@ -1,11 +1,11 @@
 /**
  * @module internal/launcherToken
  *
- * Opaque assume-token mint — Effect-wrapped CSPRNG (`globalThis.crypto.getRandomValues`),
- * never cleartext in logs ({@link Redacted}). Isolates the Web Crypto primitive behind an
- * Effect boundary (no raw `crypto.randomUUID` in app/Launcher call sites).
+ * Opaque assume-token mint — Effect-wrapped CSPRNG (`globalThis.crypto.getRandomValues`)
+ * + {@link Encoding.encodeHex}, never cleartext in logs ({@link Redacted}). Isolates the
+ * Web Crypto primitive behind an Effect boundary (Effect's `Random` is seeded PRNG, not CSPRNG).
  */
-import { Effect, Redacted } from "effect";
+import { Effect, Encoding, Redacted } from "effect";
 
 /** Bytes minted into a hex assume token. @internal */
 export const LAUNCHER_TOKEN_BYTES = 32;
@@ -28,11 +28,6 @@ export const randomTokenBytes = (
  * @internal
  */
 export const mintAssumeToken: Effect.Effect<Redacted.Redacted<string>> =
-  Effect.gen(function* () {
-    const bytes = yield* randomTokenBytes(LAUNCHER_TOKEN_BYTES);
-    let hex = "";
-    for (let i = 0; i < bytes.length; i++) {
-      hex += bytes[i]!.toString(16).padStart(2, "0");
-    }
-    return Redacted.make(hex);
-  });
+  randomTokenBytes(LAUNCHER_TOKEN_BYTES).pipe(
+    Effect.map((bytes) => Redacted.make(Encoding.encodeHex(bytes))),
+  );

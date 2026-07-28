@@ -221,7 +221,7 @@ tag names the case; it reads like the variant it is.
 ## Canonical ids are slash-scoped
 
 A service or contract id is a slash-separated, package-scoped string with PascalCase segments:
-`hyperlink-ts/WorkPool`, `hyperlink-ts/ApiMetrics/clientId`. (CLI and remote
+`hyperlink-ts/WorkPool`, `hyperlink-ts/Gate/HttpApiClient`. (CLI and remote
 surfaces additionally accept normalized kebab suffix aliases; an ambiguous suffix errors with the
 candidate list.)
 

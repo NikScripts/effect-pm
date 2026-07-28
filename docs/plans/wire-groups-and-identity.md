@@ -32,18 +32,19 @@ Several instances, **one identical wire Spec**, one RpcGroup, instances distingu
 - Authors never set a `wireMode` flag — Effect style: **overload of `Tag`** stamps the behavior.
 
 ```ts
-const Metrics = Hyperlink.Tag("hyperlink-ts/ApiMetrics", { /* shared Spec */ })
-class Nwsl extends Metrics<Nwsl>()("@app/Nwsl/metrics") {}
-class Mls extends Metrics<Mls>()("@app/Mls/metrics") {}
+const Counters = Hyperlink.Tag("demo/SharedCounters", { /* shared Spec */ })
+class Nwsl extends Counters<Nwsl>()("@app/Nwsl/counters") {}
+class Mls extends Counters<Mls>()("@app/Mls/counters") {}
 
 Layer.mergeAll(
   Hyperlink.serve(Nwsl, nwslImpl),
   Hyperlink.serve(Mls, mlsImpl),
 )
-// one RpcGroup prefixed by hyperlink-ts/ApiMetrics; route by header key
+// one RpcGroup prefixed by demo/SharedCounters; route by header key
 ```
 
-Demo (metrics-shaped, ApiMetrics **not** migrated): [`../../examples/forms/hyperlink/shared-tag-wire.ts`](../../examples/forms/hyperlink/shared-tag-wire.ts).
+Demo: [`../../examples/forms/hyperlink/shared-tag-wire.ts`](../../examples/forms/hyperlink/shared-tag-wire.ts).
+API usage + limiter observation: `Gate.HttpApiClient` nest `metrics` (sibling `ApiMetrics` removed).
 
 ---
 
@@ -53,7 +54,6 @@ Share only when every instance has the **same** procedure names and schemas.
 
 | Can share (fixed Spec) | Kind / wire key | Notes |
 |------------------------|-----------------|--------|
-| ApiMetrics full Spec | `hyperlink-ts/ApiMetrics` | Candidate — **not migrated yet** (product shape open) |
 | Daemon.Schedule full Spec | `hyperlink-ts/Daemon/Schedule` | Clean candidate |
 | WorkPool **control only** | `hyperlink-ts/WorkPool` | `queueControlSpec` — no item type |
 | Priority **control only** | `hyperlink-ts/WorkPool/priority` | `priorityControlSpec` |
@@ -92,7 +92,7 @@ Internal discriminant: `sharedTagSym`. Existing `serve` / `client` pick the path
 | `.groupId` === `.key` on toolkit Tags | **Removed** (W1) |
 | `tagFor` / `serveInstances` / `clientInstances` / `instance` | **Deleted** (W2) |
 | Shared Spec mint via `Tag(wireKey, spec)` | **Eng’d** (W3) |
-| ApiMetrics on shared Spec | **Deferred** — demo only; metrics vs Gate handle nest still open |
+| ApiMetrics → HttpApiClient nest | **Done** — sibling module removed; nest owns usage + limiter |
 | `forwardClient` sends header `key` | Solo: instance key (= wire key); shared: required for routing |
 | `ServedHyperServices` keyed by wire key | One registry entry per shared wire key |
 
@@ -111,7 +111,7 @@ Spec-hash stays **`contractHash` / verify**, not the RpcGroup name.
 | **W4** | Prototype story (compose Spec + features) — later | open |
 | **W5** | Optional WorkPool/Daemon control vs data-plane split | open |
 
-**Paused / next (not this slice):** ApiMetrics migration; Gate reserved features nest. Tag-baked adornments Eng’d as `default` / `defaults` ([`service-shapes.md`](./service-shapes.md)).
+**Paused / next (not this slice):** W4 Prototype story; W5 control vs data-plane split. Tag-baked adornments Eng’d as `default` / `defaults` ([`service-shapes.md`](./service-shapes.md)). ApiMetrics absorb + nest Eng’d ([`fleet-rate-limiting.md`](./fleet-rate-limiting.md) R4/R4b).
 
 ---
 
@@ -128,7 +128,7 @@ Spec-hash stays **`contractHash` / verify**, not the RpcGroup name.
 ## References
 
 - Claim / build: `src/Hyperlink.ts` (`Tag`, `buildInstanceTag`, `wireTag`, `forwardClient`, `sharedTagSym`).  
-- Shareable fragments: `queueControlSpec` / `priorityControlSpec` (`WorkPool.ts`), `daemonControlSpec` / `scheduleHyperlinkSpec` (`Daemon.ts`), `apiMetricsSpec` (`ApiMetrics.ts`), Gate observation in `internal/gateSchema.ts`.  
+- Shareable fragments: `queueControlSpec` / `priorityControlSpec` (`WorkPool.ts`), `daemonControlSpec` / `scheduleHyperlinkSpec` (`Daemon.ts`), `httpApiMetricsNestSpec` (`internal/httpApiClientSpec.ts`), Gate observation in `internal/gateSchema.ts`.  
 - Demo: `examples/forms/hyperlink/shared-tag-wire.ts`.  
 - UI: `tagWireKey` in `src/ui/data.ts`.  
 - Related: [`service-shapes.md`](./service-shapes.md) (handle taxonomy; orthogonal).

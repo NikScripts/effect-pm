@@ -4,7 +4,8 @@
  * Child for {@link launcher-lookup-membership}: Track A custody (`assumeToken`) then
  * Track B membership (`Lookup.client` + Directory advertise).
  *
- * argv: `<port> <assume-token> <lookup-sock>`
+ * argv: `<port> <lookup-sock>` — assume token from `Node.assumeTokenConfig`
+ * (`HYPERLINK_ASSUME_TOKEN`, injected by `Launcher.command`).
  */
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -18,21 +19,19 @@ class Jobs extends Hyperlink.Tag<Jobs>()("forms/launcher-membership/Jobs", {
 }) {}
 
 const portArg = process.argv[2];
-const tokenArg = process.argv[3];
-const lookupArg = process.argv[4];
+const lookupArg = process.argv[3];
 const port = portArg !== undefined ? Number(portArg) : Number.NaN;
 
 const program =
   !Number.isInteger(port) ||
   port <= 0 ||
-  tokenArg === undefined ||
-  tokenArg.length === 0 ||
   lookupArg === undefined ||
   lookupArg.length === 0
     ? Effect.die(
-        "launcher-lookup-membership-child: need <port> <assume-token> <lookup-sock>",
+        "launcher-lookup-membership-child: need <port> <lookup-sock>",
       )
     : Effect.gen(function* () {
+        const token = yield* Node.assumeTokenConfig;
         const node = Node.Tag()("forms/launcher-membership/Worker", {
           url: `http://127.0.0.1:${String(port)}/rpc`,
           kind: "Http",
@@ -45,7 +44,7 @@ const program =
             }),
           ],
           {
-            assumeToken: Redacted.make(tokenArg),
+            assumeToken: token,
             // Membership plane: refuse directory-row steal while this demo holds the key.
             onConflict: "askIncumbent",
             onYield: Effect.succeed(false),

@@ -3,10 +3,10 @@
  *
  * The review fixture for the shipped `hyperlink-ts/web` widgets — one of each **unique**
  * thing the dashboard renders: a nested group, a queue, a scheduled daemon (the WNBA live-score
- * poller), and an API-usage tap (`ScoresApi`). Every resource is **nodeed remotely** across three
+ * poller), and an HttpApiClient nest fixture (`ScoresApi`). Every resource is **nodeed remotely** across three
  * nodes (served by `server.ts`); the browser reaches each via `Hyperlink.http` (vite proxies
  * `/rpc` / `/live` / `/stats`), which is what lights up the top-right **node die**. `ScoresApi` is a
- * nest-shaped API metrics fixture (`Gate.httpApiClientKind` + `metrics` nest) served on
+ * nest-shaped fixture (`Gate.httpApiClientKind` + full `metrics` nest) served on
  * `WnbaNode`. `ScoresDb` is a dependency resource the box-score queue's readiness depends on
  * (`readinessOf`) — when its (simulated) connection blips, the queue cascades to degraded,
  * dogfooding dependency-aware readiness.

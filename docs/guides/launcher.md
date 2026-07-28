@@ -33,7 +33,6 @@ Membership after assume: [Identity coordinator — custody vs membership](./iden
 ```ts
 import * as Launcher from "hyperlink-ts/Launcher"
 import * as Node from "hyperlink-ts/Node"
-import { ChildProcess } from "effect/unstable/process"
 import { Effect, Layer } from "effect"
 import * as NodeChildProcessSpawner from "@effect/platform-node/NodeChildProcessSpawner"
 import * as NodeServices from "@effect/platform-node/NodeServices"
@@ -45,11 +44,7 @@ const worker = Node.Tag()("app/Worker", {
 
 const program = Launcher.up({
   node: worker,
-  process: (token) =>
-    ChildProcess.make("node", ["./worker.js", token], {
-      env: { HYPERLINK_ASSUME_TOKEN: token },
-    }),
-  ready: { timeout: "30 seconds" },
+  process: Launcher.command("node", ["./worker.js"]), // injects HYPERLINK_ASSUME_TOKEN
 }).pipe(
   Effect.scoped,
   Effect.provide(
@@ -59,24 +54,40 @@ const program = Launcher.up({
 ```
 
 Child listen must arm assume with the same token (`ListenOptions.assumeToken`, or
-`Node.assumeTokenConfig` / `HYPERLINK_ASSUME_TOKEN`). Injection channel (env / argv) is open —
-Launcher only mints and passes the cleartext into your `process` factory.
+`Node.assumeTokenConfig` / `HYPERLINK_ASSUME_TOKEN`). `Launcher.command` defaults to
+`token: "env"`; use `"argv"` / `"both"` when the child reads the token from argv.
 
 ## Handle phases
 
 | Phase | API | Notes |
 |-------|-----|-------|
-| Spawned | `Launcher.spawn(spec)` | Mints CSPRNG token (`Redacted` on the handle); starts the OS child |
-| Ready | `handle.awaitReady()` | Polls node status (100ms spaced; 2s per dial; default outer `"30 seconds"`) |
+| Spawned | `Launcher.spawn(spec)` | Mints CSPRNG token (`Redacted` + `Encoding.encodeHex`); starts the OS child |
+| Ready | `handle.awaitReady()` | `Schedule.spaced` poll (Config/`ready.poll`) + 2s per dial; outer bound Config/`ready.timeout` |
 | Handed off | `handle.handoff()` | `Node.assume({ token })`, then `unref` so the launcher scope may close |
 
+- `awaitReady` / `handoff` are **single-flight** (`Semaphore`) — concurrent calls serialize.
 - `awaitReady` is idempotent once Ready.
 - `handoff` before Ready → `HandleNotReady`.
 - Second `handoff` / `awaitReady` after handoff → `HandleSpent`.
-- Child dies during Ready wait → `ChildExited`.
+- Child dies during Ready wait → `ChildExited` (`Effect.raceFirst` vs poll).
 - Outer wait expires → `ReadyTimedOut`.
 
 Optional `ready.services` waits on a named HyperService subset instead of all served services.
+
+**Config (auto-read when omitted on the spec):**
+
+| Config | Env | Default |
+|--------|-----|---------|
+| `Launcher.readyTimeoutConfig` | `HYPERLINK_LAUNCHER_READY_TIMEOUT` | `30 seconds` |
+| `Launcher.readyPollConfig` | `HYPERLINK_LAUNCHER_READY_POLL` | `100 millis` |
+
+**Token injection helper:**
+
+```ts
+process: Launcher.command("node", ["./worker.js"])                 // env (default)
+process: Launcher.command("node", ["./worker.js"], { token: "argv" })
+process: Launcher.command("pnpm", ["exec", "tsx", entry], { cwd, token: "both" })
+```
 
 ## Errors (typed)
 
@@ -93,13 +104,14 @@ Assert on `_tag`, not message strings. Messages exist for operators / logs.
 
 ## Observability
 
-Phases log under spans `launcher.spawn`, `launcher.awaitReady`, `launcher.handoff` with
-annotations `launcher.node`, `launcher.phase`, and (on spawn) `launcher.pid`. Assume dial /
-server paths use `node.assume` / `node.assume.handle` and `assume.node` (the listen
-`Node.Tag` key) — **never** the token (tokens are `Redacted` / cleartext only on the wire
-and in your injection channel).
+Phases use Effect **log spans** and **OTEL spans** (`launcher.spawn` / `launcher.awaitReady` /
+`launcher.handoff`) with annotations `launcher.node`, `launcher.phase`, (on spawn)
+`launcher.pid`, and (on Ready) `launcher.ready_ms`. Effect **metrics**:
+`launcher_ready_duration_ms`, `launcher_ready_timeout_total`, `launcher_child_exited_total`,
+`launcher_handoff_total{launcher.outcome}`. Assume dial / server paths use `node.assume` —
+**never** the token.
 
-Provide an Effect log layer / sink at the app edge if you want these in stdout or a collector.
+Provide an Effect log / tracer / metric reader at the app edge if you want these collected.
 
 ## Custody vs membership
 

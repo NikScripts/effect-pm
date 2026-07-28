@@ -31,7 +31,6 @@ export default defineConfig([
       DurableQueueStore: "src/DurableQueueStore.ts",
       Group: "src/Group.ts",
       Store: "src/Store.ts",
-      ApiMetrics: "src/ApiMetrics.ts",
       Telemetry: "src/Telemetry.ts",
       FleetHealth: "src/FleetHealth.ts",
       ShardMap: "src/ShardMap.ts",

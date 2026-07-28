@@ -24,3 +24,18 @@ true satisfies UsageNowAbsent;
 
 type WindowsPresent = "windows" extends keyof Service["metrics"] ? true : false;
 true satisfies WindowsPresent;
+
+type RemainingIsSubscribable = Service["metrics"]["remaining"] extends Hyperlink.Subscribable<number>
+  ? true
+  : false;
+true satisfies RemainingIsSubscribable;
+
+type ResetAfterIsSubscribable = Service["metrics"]["resetAfter"] extends Hyperlink.Subscribable<number>
+  ? true
+  : false;
+true satisfies ResetAfterIsSubscribable;
+
+type ExceededIsSubscribable = Service["metrics"]["exceeded"] extends Hyperlink.Subscribable<number>
+  ? true
+  : false;
+true satisfies ExceededIsSubscribable;

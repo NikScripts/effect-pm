@@ -30,7 +30,7 @@ of React/Ink/recharts.
 | `…/Hyperlink` | `Hyperlink.Tag` / `Host` / `client` / `connect` / `connectHttp` / **`serve`** / **`serveRemote`** / **`httpServer`** + readiness (**`withReadiness`** / **`readinessOf`** / **`allReady`**) |
 | `…/WorkPool` | `queueTag` (light tag), `serve`, `serveRemote`, `layer` for a managed queue |
 | `…/Daemon` | `Daemon.Tag` (light tag), `schedule` / `window` / `at`, `serve`, `serveRemote`, `layer` for a managed/polling daemon — plus `Daemon.Schedule`, a run-windows manager as its own hyperlink |
-| `…/ApiMetrics`, `…/ApiUsageSchema`, `…/HttpApiClient` | outbound-API usage observability — an `ApiMetrics.Tag` tap over an `HttpApiClient.Service` client |
+| `…/ApiUsageSchema`, `…/Gate` (`HttpApiClient`) | outbound-API usage + limiter observation on the `metrics` nest |
 | `…/HostStatus` | the reserved host status resource (auto-served by `httpServer`): `status` / `ping` / `logs` |
 | `…/Group` | `Group.Tag` — the nestable navigation tree |
 | `…/MultiHost` | combine a field across N instances of one resource (`combineQuery` / `combineStream` / `Combine`) — isomorphic |

@@ -6,11 +6,11 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **4** | `cursor/hyperservice-open-deps-5679` | [fleet rate limiting](../plans/fleet-rate-limiting.md) · [wire groups](../plans/wire-groups-and-identity.md) · [service shapes](../plans/service-shapes.md) | **tip-synced** — A1–A3; fleet closed; `cell` parked | same tip as `integration` | typecheck 0 / hyperlink-default 13/13 | idle | 2026-07-27 |
+| **4** | `cursor/hyperservice-open-deps-5679` | [fleet rate limiting](../plans/fleet-rate-limiting.md) · [wire groups](../plans/wire-groups-and-identity.md) · [service shapes](../plans/service-shapes.md) | **tip-synced** — R4b ApiMetrics deleted; dashboard nest parity | same tip as `integration` | typecheck 0 / api-metrics 7/7 | idle | 2026-07-28 |
 | **G / TUI** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity | **design** — client adapters notes; tip-synced | same tip as `integration` | prior suites green | Notes: [`client-adapters-design.md`](./client-adapters-design.md) — Promise / TanStack / tRPC-shape / Effect-reactive helpers; Eng TBD | 2026-07-24 |
-| **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **G**, this agent only | 2026-07-26 |
-| **Launcher** | `cursor/launcher-handoff-design-929b` | [launcher + handoff brief](./launcher-and-handoff-brief.md) · [rename](./rename-hyperlink-handoff.md) | **URLs + vocab** — on `integration` tip | same tip as `integration` | typecheck + docs:manifest | Owner: lock C #27–36 | 2026-07-28 |
-| **Docs site** | `cursor/docs-site-edge-cache-dbdc` (ε) | [origin down](./docs-site-origin-down.md) · edge cache · SEO · Lighthouse | **ready** — lang-gated demo islands; install drops Hyperlink/Ref/Store preloads | ahead of `integration` | `check-ssg` 1879 pages; install modulepreload no Hyperlink (~212 KiB avoided) | tip-sync/`integration` push needs owner OK; **no landing UI without owner OK** | 2026-07-28 |
+| **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **5**, **G** | 2026-07-26 |
+| **5** | `cursor/launcher-handoff-design-929b` | [launcher + handoff brief](./launcher-and-handoff-brief.md) · [rename](./rename-hyperlink-handoff.md) | **Launcher refinements** — Config/`command`/metrics | same tip as `integration` | typecheck + launcher suites | Owner: lock C #27–36 | 2026-07-28 |
+| **Docs site** | `cursor/docs-site-edge-cache-dbdc` (ε) | [origin down](./docs-site-origin-down.md) · edge cache · SEO · Lighthouse | **tip-synced** — lang-gated demo islands; redeploying | same tip as `integration` | `check-ssg` 1879; install drops Hyperlink/Ref/Store preloads (~212 KiB) | Keychain backup local; **no landing UI without owner OK** | 2026-07-28 |
 | **1** | *(frozen)* | [Examples book](./agent-01-examples-book.md) · [Phase 3](./agent-01-docs-corpus-phase3-plan.md) | **frozen / superseded** — E1 examples on tip; intro voice [#68](https://github.com/nikolasstow/Hyperlink/pull/68) closed | — | — | Branch deleted (unique tip was pre-rebrand `docs/index.md`) | 2026-07-26 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
 | **3** | *(dead)* | [identity-coordinator](./identity-coordinator.md) · [loud-failures](./loud-failures-design.md) | **dead** — Soft / verify / F4 / lineId memo Eng’d on tip | — | — | Work branch deleted (was tip-contained in `integration`) | 2026-07-26 |
@@ -28,10 +28,10 @@
 0. **Agent E:** impossible-states plan ([`impossible-states-proposal.md`](./impossible-states-proposal.md)). **DONE + merged:** P1 (node↔protocol wiring bug → compile error, cast-free) + P5 (http transport dies in browser). **P2 SKIPPED** (cast). **P4 already-enforced** (loose-fields payload already rejected; proposal mis-scoped). **P3 deferred** (opaque serve layers). Clean wins complete. Reserved `src/Hyperlink.ts` node/client surface until fully merged (done). **Tag-config reservation RELEASED — Agent D WorkPool/Gate/Daemon payload-config unblocked.**
 
 ### Active (owner approval required)
-1. **Agent 4:** W1–W3 + `default`/`defaults` + R1–R4+adaptive + **construction adornments A1–A3 tip-synced**; **`cell` parked/rejected**; **R5 rejected** (Effect store layers only). Idle. Incident: [`agent-04-w3-incident-2026-07-27.md`](./agent-04-w3-incident-2026-07-27.md).
+1. **Agent 4:** W1–W3 + `default`/`defaults` + R1–R4+adaptive + A1–A3; **`cell` parked/rejected**; **R5 rejected**; **R4b tip-synced** — sibling `ApiMetrics` deleted; dashboard/TUI surface limiter nest. Idle. Incident: [`agent-04-w3-incident-2026-07-27.md`](./agent-04-w3-incident-2026-07-27.md).
 2. **Agent G / TUI:** Dashboard Group parity + client-adapters design (`cursor/tui-dashboard-parity-125f`).
-3. **This agent (Launcher):** Track A+B Eng'd; **HyperService vocab + URL purge** on tip (`ServiceReadiness`, `services`/`serviceKey`, `docs/services/`, `/docs/hyperlink-services` + old-slug redirects, `ServedHyperServices`, manifest `hyperlink-services.*`); Track C bake #27–36 proposed. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md). Rename SSOT: [`rename-hyperlink-handoff.md`](./rename-hyperlink-handoff.md).
-4. **Docs site:** fail-fast deploy gates live; React **#418** fixed. Lang-gated Queue/Gate/Counter/Listen islands — `/docs/install` no longer modulepreloads Hyperlink/Ref/Store/widgets (~212 KiB avoided). Remaining LH audits: render-blocking `_layout` CSS. Landing UI unchanged. Redeploy + tip-sync need owner OK.
+3. **Agent 5 (Launcher + handoff):** Track A+B Eng'd; HyperService vocab/URL purge + Effect-fullest Launcher + **refinements** (Config auto-read, `Launcher.command`, metrics) on tip; Track C bake #27–36 proposed. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md). Rename SSOT: [`rename-hyperlink-handoff.md`](./rename-hyperlink-handoff.md).
+4. **Docs site:** tip-synced. Fail-fast deploy gates; React **#418** fixed; lang-gated Queue/Gate/Counter/Listen islands (~212 KiB off `/docs/install` critical path). Redeploying. Remaining LH: render-blocking `_layout` CSS. Landing UI unchanged. Keychain backup local (no 1Password).
 
 ### Frozen / dead (do not assign)
 - **Agent 1:** frozen — Examples book E1 already on tip; stale intro PR #68 closed; branch deleted.
@@ -58,7 +58,7 @@
 - Agent C standards audit (plan-first)
 
 ### Branch hygiene (2026-07-26)
-Owner: only **Agent 4**, **Agent G**, and this agent remain active.
+Owner: only **Agent 4**, **Agent 5**, and **Agent G** remain active.
 
 **Deleted (superseded / contained):** Agent 1 `cursor/docs-corpus-phase3-ce05` (+ closed [#68](https://github.com/nikolasstow/Hyperlink/pull/68)); Agent 3 `cursor/logs-store-followers-plan-906e` + `cursor/agent-03-byhyperlink-full-key-a009`; plus earlier contained tips (`ask-incumbent`, catalog bake stack, `feat/*` tip-contained, etc.).
 

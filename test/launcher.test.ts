@@ -120,16 +120,16 @@ describe("Launcher.Handle.awaitReady", () => {
 
         const handle = yield* Launcher.spawn({
           node,
-          process: (token) =>
-            ChildProcess.make(
-              "pnpm",
-              ["exec", "tsx", entry, String(port), token],
-              {
-                cwd: root,
-                stdout: "inherit",
-                stderr: "inherit",
-              },
-            ),
+          process: Launcher.command(
+            "pnpm",
+            ["exec", "tsx", entry, String(port)],
+            {
+              cwd: root,
+              stdout: "inherit",
+              stderr: "inherit",
+              token: "argv",
+            },
+          ),
           ready: {
             timeout: "25 seconds",
             services: ["launcher-child/Jobs"],
@@ -180,16 +180,16 @@ describe("Launcher.Handle.handoff", () => {
 
         const handle = yield* Launcher.spawn({
           node,
-          process: (token) =>
-            ChildProcess.make(
-              "pnpm",
-              ["exec", "tsx", entry, String(port), token],
-              {
-                cwd: root,
-                stdout: "inherit",
-                stderr: "inherit",
-              },
-            ),
+          process: Launcher.command(
+            "pnpm",
+            ["exec", "tsx", entry, String(port)],
+            {
+              cwd: root,
+              stdout: "inherit",
+              stderr: "inherit",
+              token: "argv",
+            },
+          ),
           ready: { timeout: "25 seconds" },
         });
 
@@ -203,6 +203,41 @@ describe("Launcher.Handle.handoff", () => {
       }).pipe(Effect.scoped, Effect.provide(platform)),
     { timeout: 45_000 },
   );
+});
+
+describe("Launcher.command", () => {
+  it("injects HYPERLINK_ASSUME_TOKEN into env by default", () => {
+    const factory = Launcher.command("node", ["./worker.js"], {
+      cwd: "/tmp",
+    });
+    const built = factory("secret-token");
+    // StandardCommand carries options.env
+    expect(
+      typeof built === "object" &&
+        built !== null &&
+        "options" in built &&
+        typeof built.options === "object" &&
+        built.options !== null &&
+        "env" in built.options &&
+        (built.options as { env?: Record<string, string> }).env?.[
+          "HYPERLINK_ASSUME_TOKEN"
+        ] === "secret-token",
+    ).toBe(true);
+  });
+
+  it("appends token to argv when token: \"argv\"", () => {
+    const factory = Launcher.command("node", ["./worker.js"], {
+      token: "argv",
+    });
+    const built = factory("secret-token");
+    expect(
+      typeof built === "object" &&
+        built !== null &&
+        "args" in built &&
+        Array.isArray(built.args) &&
+        built.args.at(-1) === "secret-token",
+    ).toBe(true);
+  });
 });
 
 describe("Launcher.up", () => {
@@ -220,16 +255,16 @@ describe("Launcher.up", () => {
 
         yield* Launcher.up({
           node,
-          process: (token) =>
-            ChildProcess.make(
-              "pnpm",
-              ["exec", "tsx", entry, String(port), token],
-              {
-                cwd: root,
-                stdout: "inherit",
-                stderr: "inherit",
-              },
-            ),
+          process: Launcher.command(
+            "pnpm",
+            ["exec", "tsx", entry, String(port)],
+            {
+              cwd: root,
+              stdout: "inherit",
+              stderr: "inherit",
+              token: "argv",
+            },
+          ),
           ready: { timeout: "25 seconds" },
         });
         yield* reapLauncherChildren;

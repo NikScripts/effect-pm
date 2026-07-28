@@ -86,14 +86,14 @@ class Demo extends Gate.HttpApiClient<Demo>()("@app/Demo", DemoApi, {
 const client = yield* Demo
 yield* client.posts.getPost({ params: { id: "1" } })
 const snap = yield* client.metrics.usage.get
-// client.metrics.windows — windowed usage stream (was ApiMetrics.metrics)
+// client.metrics.windows — windowed usage stream
 ```
 
 | Nest field | Meaning |
 |------------|---------|
-| `remaining` / `resetAfter` / `exceeded` | Same limiter observation as ordinary Gates |
+| `remaining` / `resetAfter` / `exceeded` | Same limiter observation as ordinary Gates (dashboard/TUI surface these) |
 | `usage` | Cumulative snapshot (`usage.get` / `usage.changes`) |
-| `windows` | Windowed usage stream (absorbed former ApiMetrics stream) |
+| `windows` | Windowed usage stream |
 
 If an HttpApi **group id** equals the nest key, mint fails with
 `Gate.MetricsKeyCollision`. Escape with const `metricsKey: "observe"` (typed

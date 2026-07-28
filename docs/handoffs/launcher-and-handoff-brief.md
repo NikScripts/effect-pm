@@ -1,4 +1,4 @@
-# Brief — Launcher + node handoff (new agent)
+# Brief — Launcher + node handoff (Agent 5)
 
 **Status:** Track A + **Track B Eng'd** on tip (custody / membership). C/D bake next.  
 **Opened:** 2026-07-25 (owner via Agent G).  

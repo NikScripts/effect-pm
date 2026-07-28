@@ -194,16 +194,53 @@ const scoresUsageSnapshot = (
     .slice(0, 5),
 });
 
-const idleLimiter = (n: number): Hyperlink.Subscribable<number> => ({
-  get: Effect.succeed(n),
-  changes: Stream.succeed(n),
+/** Synthetic whole-client rate-limit budget so the dashboard nest (remaining / resetAfter /
+ *  exceeded) isn't stuck at idle zeros — mirrors what `Gate.httpApiClientLayer` publishes.
+ *  Wall-clock gated so the three nest subscribers don't triple-consume on the same tick. */
+const RATE_LIMIT = 100;
+const RATE_WINDOW_MS = 10_000;
+let rateRemaining = RATE_LIMIT;
+let rateResetAt = 0;
+let rateExceeded = 0;
+let rateLastAdvanceMs = 0;
+
+const snapshotRateLimit = Effect.gen(function* () {
+  const nowMs = yield* Clock.currentTimeMillis;
+  if (rateResetAt === 0 || nowMs >= rateResetAt) {
+    rateRemaining = RATE_LIMIT;
+    rateResetAt = nowMs + RATE_WINDOW_MS;
+  }
+  if (nowMs - rateLastAdvanceMs >= 1_900) {
+    rateLastAdvanceMs = nowMs;
+    const consume = yield* Random.nextIntBetween(1, 8);
+    if (consume > rateRemaining) {
+      rateExceeded += 1;
+      rateRemaining = 0;
+    } else {
+      rateRemaining -= consume;
+    }
+  }
+  return {
+    remaining: rateRemaining,
+    resetAfter: Math.max(0, rateResetAt - nowMs),
+    exceeded: rateExceeded,
+  };
+});
+
+const limiterRef = (
+  pick: (s: { remaining: number; resetAfter: number; exceeded: number }) => number,
+): Hyperlink.Subscribable<number> => ({
+  get: Effect.map(snapshotRateLimit, pick),
+  changes: Stream.tick(Duration.seconds(2)).pipe(
+    Stream.mapEffect(() => Effect.map(snapshotRateLimit, pick)),
+  ),
 });
 
 const scoresApiMock = {
   metrics: {
-    remaining: idleLimiter(0),
-    resetAfter: idleLimiter(0),
-    exceeded: idleLimiter(0),
+    remaining: limiterRef((s) => s.remaining),
+    resetAfter: limiterRef((s) => s.resetAfter),
+    exceeded: limiterRef((s) => s.exceeded),
     usage: {
       get: Effect.map(Random.nextIntBetween(0, 6), scoresUsageSnapshot),
       changes: Stream.tick(Duration.seconds(2)).pipe(

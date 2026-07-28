@@ -351,9 +351,9 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 ## 2026-07-27 — W3 Eng: shared Spec via `Tag(wireKey, spec)` (not Family)
 
 - **Owner said:** Skip metrics for now. Document everything. Build the shared-Spec feature (the one metrics would use), demo it, tests/examples/docs — then stop and wait. Return to `.handle` rename later.
-- **Chose / Eng’d:** `Hyperlink.Tag(wireKey, spec)` → `Factory<Self>()(instanceKey)` (class-only, Effect-shaped `()`). Internal `sharedTagSym`; ordinary `serve` / `serveRemote` / `client` merge by wire key and route on header `key`. Errors: `DuplicateSharedInstance`, `SharedRoutingError`. Demo: `examples/forms/hyperlink/shared-tag-wire.ts`. **ApiMetrics not migrated.**
+- **Chose / Eng’d:** `Hyperlink.Tag(wireKey, spec)` → `Factory<Self>()(instanceKey)` (class-only, Effect-shaped `()`). Internal `sharedTagSym`; ordinary `serve` / `serveRemote` / `client` merge by wire key and route on header `key`. Errors: `DuplicateSharedInstance`, `SharedRoutingError`. Demo: `examples/forms/hyperlink/shared-tag-wire.ts`. *(ApiMetrics migrate → R4/R4b.)*
 - **Rejected (still):** `Family` / `serveFamily` / `clientFamily` / `member`; pushing `integration` without explicit OK.
-- **Paused next:** ApiMetrics/Gate product shape. (`.handle` rename → Eng’d as `default`/`defaults`; see below.)
+- **Paused next (then):** ApiMetrics/Gate product shape — closed by R4/R4b. (`.handle` rename → Eng’d as `default`/`defaults`; see below.)
 - **Supervisor impact:** Agent 4 on `cursor/hyperservice-open-deps-5679` only — wait for owner before metrics / `integration`.
 
 ## 2026-07-27 — Service shapes: `default` / `defaults` names LOCKED
@@ -380,6 +380,12 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Chose (Eng’d — R2 ordinary Gate metrics):** Wire nest always present as **`metrics`** with limiter live fields (`remaining` / `resetAfter` / `exceeded`); updates when `rateLimit` set. Stable Tag metadata via `Gate.rateLimitKeyOf` / `Gate.metricsKeyOf` (not under nest path). No HTTP usage registry on ordinary Gates.
 - **Chose (Eng’d — R4 HttpApiClient):** `Gate.HttpApiClient` Tag + app-owned `Gate.httpApiClientLayer(Tag, runtime)`; nest `metrics` with limiter fields + `usage` / `windows`; const `metricsKey` escape + `MetricsKeyCollision`; whole-client `rateLimit` (key inherits Tag id). Sibling `ApiMetrics` deprecated. Legacy `httpApiClient` / `httpApiClientService` / `httpApiClientLayerEffect` kept for migration (`httpApiClientLayer` now = Tag layer).
 - **Chose (Eng’d — R4 adaptive 429):** Opt-in `adaptive: true | { key? }` on HttpApiClient mint; requires `rateLimit` (`AdaptiveRequiresRateLimit` otherwise). `adaptiveConsume` before round-trip + `adaptiveFeedback` on response; key default `upstream:{host}` from layer `baseUrl`; `Retry-After` delta-seconds only in v1.
+
+## 2026-07-28 — Delete sibling ApiMetrics (full absorb)
+
+- **Owner said:** Full tip-sync, then migrate fully so HttpApiClient has all capabilities including dashboard.
+- **Chose / Eng’d (R4b):** Remove `src/ApiMetrics.ts`, barrel export, and `hyperlink-ts/ApiMetrics` subpath (major). Nest on `Gate.HttpApiClient` is SSOT (`usage` / `windows` + limiter fields). Web/TUI `apiBundle` + API widgets surface `remaining` / `resetAfter` / `exceeded`. Shared-Spec demo renamed off the old ApiMetrics wire key.
+- **Rejected:** Keeping a deprecated sibling module for one more release.
 
 ## 2026-07-27 — Retire `Hyperlink.pure`; Eng `default` / `defaults`
 

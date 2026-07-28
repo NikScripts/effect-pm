@@ -9,8 +9,12 @@
  * (`ChildProcessSpawner` + `Scope` at the app edge).
  *
  * Observability: phases log under spans `launcher.spawn` / `launcher.awaitReady` /
- * `launcher.handoff` with annotations `launcher.node`, `launcher.phase`, and
- * (on spawn) `launcher.pid`. Assume tokens are `Redacted` and never logged.
+ * `launcher.handoff` (both Effect log spans and OTEL `withSpan`) with annotations
+ * `launcher.node`, `launcher.phase`, and (on spawn) `launcher.pid`. Effect `Metric`s:
+ * `launcher_ready_duration_ms`, `launcher_ready_timeout_total`,
+ * `launcher_child_exited_total`, `launcher_handoff_total{outcome}`. Assume tokens are
+ * `Redacted` and never logged. Ready timeout/poll read {@link readyTimeoutConfig} /
+ * {@link readyPollConfig} when omitted on the spec.
  *
  * Errors: {@link ReadyTimedOut}, {@link ChildExited}, {@link HandleSpent},
  * {@link HandleNotReady}, plus assume / reachability failures from `Node.assume`.
@@ -22,6 +26,9 @@ export {
   mintToken,
   spawn,
   up,
+  command,
+  readyTimeoutConfig,
+  readyPollConfig,
   ReadyTimedOut,
   ChildExited,
   HandleSpent,
@@ -32,4 +39,6 @@ export type {
   SpawnSpec,
   ReadyOptions,
   Token,
+  TokenInjection,
+  CommandOptions,
 } from "./internal/launcher";

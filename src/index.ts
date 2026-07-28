@@ -105,7 +105,6 @@ export {
   type HttpApiClientConfig,
   type HttpApiClientLayerEffectConfig,
 } from "./Gate";
-export * as ApiMetrics from "./ApiMetrics";
 export {
   apiUsageEndpointMetrics,
   apiUsageMetrics,

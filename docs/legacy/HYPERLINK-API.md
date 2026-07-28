@@ -25,7 +25,7 @@ Hyperlink.kindOf(SomePlainTag);   // undefined  (a bare Hyperlink.Tag carries no
 | `Daemon` (`Daemon.Tag`) | `hyperlink-ts/Daemon` |
 | `Daemon.Schedule` (standalone schedule) | `hyperlink-ts/Daemon/Schedule` |
 | `WorkPool.Service` (untyped) (`…/WorkPool` (untyped `.Service`)) | `hyperlink-ts/WorkPool` |
-| `ApiMetrics` | `hyperlink-ts/ApiMetrics` |
+| `Gate.HttpApiClient` | `hyperlink-ts/Gate/HttpApiClient` |
 
 This is how the web/TUI dashboards pick the right widget for each `Group` leaf. A bare `Hyperlink.Tag` has no stamped kind; pass `{ kind }` to `Hyperlink.Tag(key, { kind })` to give a custom contract its own. Solo tags use `.key` as the RpcGroup wire prefix (`Hyperlink.wireKeyOf`); there is no public `groupId`.
 

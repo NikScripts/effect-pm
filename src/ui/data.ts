@@ -118,10 +118,12 @@ interface DaemonService {
     readonly clear: Effect.Effect<void>;
   };
 }
-/** The structural shape of an API-metrics HyperService's live service (read-only). */
-/** HttpApiClient (and dashboard fixtures) expose usage under the `metrics` nest. */
+/** HttpApiClient (and nest fixtures) expose limiter + usage under the `metrics` nest. */
 interface ApiService {
   readonly metrics: {
+    readonly remaining: Subscribable<number>;
+    readonly resetAfter: Subscribable<number>;
+    readonly exceeded: Subscribable<number>;
     readonly usage: Subscribable<ApiUsageSnapshot>;
     readonly windows: Stream.Stream<ApiUsageMetrics>;
   };
@@ -293,7 +295,7 @@ export interface NodeBundle {
    *  when a HyperService (or its dependency) degrades. */
   readonly health: ValueAtom<ReadonlyArray<number>>;
 }
-/** The atoms one API-metrics card needs — read-only (no commands). */
+/** The atoms one HttpApiClient (API) card needs — read-only (no commands). */
 export interface ApiBundle {
   /** Cumulative usage snapshot (totals + top endpoints), via `usage.changes`. */
   readonly status: ValueAtom<ApiUsageSnapshot>;
@@ -301,6 +303,12 @@ export interface ApiBundle {
   readonly metrics: ValueAtom<Option.Option<ApiUsageMetrics>>;
   /** Accumulated chart points (throughput / errors / in-flight per window). */
   readonly history: ValueAtom<ReadonlyArray<ApiPoint>>;
+  /** Tokens remaining in the rate-limit window (`metrics.remaining`). */
+  readonly remaining: ValueAtom<number>;
+  /** Ms until the rate-limit window resets (`metrics.resetAfter`). */
+  readonly resetAfter: ValueAtom<number>;
+  /** Count of rate-limit exceed events (`metrics.exceeded`). */
+  readonly exceeded: ValueAtom<number>;
 }
 
 /** A node that backs one or more of a group's resources — its id (the `Node.Tag` key) plus the
@@ -814,6 +822,15 @@ export const apiBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: ApiTag<R
     status: runtime.atom(Stream.unwrap(Effect.map(tag, (a) => a.metrics.usage.changes))),
     metrics: Atom.mapResult(metricsHistory, (a) => a.latest),
     history: Atom.mapResult(metricsHistory, (a) => a.history),
+    remaining: runtime.atom(
+      Stream.unwrap(Effect.map(tag, (a) => a.metrics.remaining.changes)),
+    ),
+    resetAfter: runtime.atom(
+      Stream.unwrap(Effect.map(tag, (a) => a.metrics.resetAfter.changes)),
+    ),
+    exceeded: runtime.atom(
+      Stream.unwrap(Effect.map(tag, (a) => a.metrics.exceeded.changes)),
+    ),
   };
   cache.set(tag.key, bundle);
   return bundle;

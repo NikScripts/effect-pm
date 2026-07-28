@@ -65,7 +65,7 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 | `LiveScorePoller.key` | service key | `wnba/LiveScorePoller` | `hyperlink-ts/Daemon` | `src/Daemon.ts` | `hyperlink-web/hub.ts` |
 | `PlayByPlayQueue.key` | service key | `wnba/PlayByPlayQueue` | `hyperlink-ts/WorkPool` | `src/WorkPool.ts` | `hyperlink-web/hub.ts` |
 | `ScoresDb.key` | service key | `wnba/ScoresDb` | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` | `hyperlink-web/hub.ts` |
-| `ScoresApi.key` | service key | `@wnba/ScoresApi` | `hyperlink-ts/ApiMetrics` | `src/ApiMetrics.ts` | `hyperlink-web/hub.ts` |
+| `ScoresApi.key` | service key | `@wnba/ScoresApi` | `hyperlink-ts/Gate` (`httpApiClientKind`) | `src/Gate.ts` | `hyperlink-web/hub.ts` |
 | `WorkerPool.key` | service key | `wnba/WorkerPool` | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` | `hyperlink-web/hub.ts` |
 | `testSyncProcessKey` | service key (test) | `billing/SyncWorker` | — (test fixture) | `test/fixtures/logKeys.ts` | `test/log-pipeline.test.ts` |
 | `Logs.HyperlinkLogKey` | service key (type) | `string` constrained to `Tag.key` | `hyperlink-ts/Logs` | `src/Logs.ts` | — |
