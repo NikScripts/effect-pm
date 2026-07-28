@@ -12,21 +12,21 @@ import { runServer } from "./runtime.js";
 import { chapters, chapterBySlug } from "./content.js";
 import { nav } from "../../../nav.js";
 import { highlightToReact, loadHighlighter } from "./highlight.js";
-// Lightweight islands only — PackageInstall / ListenProtocol / CopyButton stay static so every
-// code block can copy. Heavy demo islands (Queue/Gate/Counter) pull Hyperlink+Ref+Store+widgets.css
-// into the client graph; import those ONLY when the chapter actually contains their fence lang,
-// otherwise /docs/install and peers modulepreload ~80 KiB of unused JS (Lighthouse unused-js).
+// Lightweight islands only — PackageInstall / CopyButton stay static so every code block can copy.
+// Demo / protocol islands pull heavier client graphs (Hyperlink+Ref+Store+widgets.css, or the
+// listen-protocol tabber); import those ONLY when the chapter contains their fence lang, otherwise
+// /docs/install and peers modulepreload unused JS (Lighthouse unused-js).
 import { PackageInstall } from "../islands/PackageInstall.js";
-import { ListenProtocol } from "../islands/ListenProtocol.js";
 import { CopyButton } from "../islands/CopyButton.js";
 import { type ChapterMeta, expandScopes, parseChapter } from "./standards-manifest.js";
 import { buildTermIndex, slugify } from "./glossary.js";
 
-/** Per-chapter demo island slots — filled by `loadDemoIslands` before `toReact`. */
+/** Per-chapter island slots — filled by `loadDemoIslands` before `toReact`. */
 let demoIslands: {
   queue?: React.ComponentType;
   gate?: React.ComponentType;
   hyperlink?: React.ComponentType;
+  listen?: React.ComponentType<{ defaultProto?: string }>;
 } = {};
 
 const collectFenceLangs = (n: any, out: Set<string> = new Set()): Set<string> => {
@@ -47,7 +47,10 @@ const loadDemoIslands = async (doc: any): Promise<void> => {
   if (langs.has("hyperlink")) {
     demoIslands.hyperlink = (await import("../islands/CounterIsland.js")).CounterIsland;
   }
-};
+  if (langs.has("listen")) {
+    demoIslands.listen = (await import("../islands/ListenProtocol.js")).ListenProtocol;
+  }
+}
 
 // Re-exported for back-compat: the glossary data now lives in ./glossary (shared with highlight.ts).
 export { glossaryEntries, type GlossaryEntry } from "./glossary.js";
@@ -248,7 +251,12 @@ const toReact = (n: any): React.ReactNode => {
       if (n.lang === "install") return h(PackageInstall, { key: keySeq++, packages: n.text });
       // protocol-listen overload family — tabs switch http / ws / unix / nPipe
       if (n.lang === "listen") {
-        return h(ListenProtocol, { key: keySeq++, defaultProto: n.text.trim() || undefined });
+        return demoIslands.listen !== undefined
+          ? h(demoIslands.listen, {
+              key: keySeq++,
+              defaultProto: n.text.trim() || undefined,
+            })
+          : null;
       }
       // everything else is Shiki-highlighted server-side (real React nodes). A `{.twoslash}`
       // attribute above the fence opts the block into TS-language-service hover types. Wrapped in a
