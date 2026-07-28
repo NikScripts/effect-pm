@@ -94,6 +94,8 @@
     "../../test/widget-registry.test.ts",
     "../../test/ui-view.test.ts",
     "../../test/ui-view.test-d.ts",
+    "../../test/ui-view-data.test.ts",
+    "../../test/ui-view-data.test-d.ts",
     "../../test/ui-dashboard-views.test.ts",
     "../../test/ui-workpool-view.test.ts",
     "../../test/view-requirement.test-d.ts",

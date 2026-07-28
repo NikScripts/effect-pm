@@ -2,7 +2,7 @@
  * @module examples/hyperlink-web/app
  *
  * Point the shipped Dashboard at the hub. Family skins come from Dashboard Views;
- * `WorkerPool` brings its own card via `views={workerPoolViews}` (`View.Card.Prototype` +
+ * `WorkerPool` brings its own card via `views={workerPoolViews}` (`View.Card.Tag` +
  * `View.only` — see `worker-pool-card.tsx`).
  */
 import * as React from "react";

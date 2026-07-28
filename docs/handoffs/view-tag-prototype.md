@@ -99,8 +99,29 @@ Statics are for things we used to jam into Tag args (`size`, later `spec`, etc.)
 
 ## Open (ask before baking)
 
-- Whether `spec` stays an opaque static on family protos vs typed Spec gate  
-- Adopt Effect-faithful Tag POC into shipped `View`? (see below)
+- Whether `spec` stays an opaque static on family protos vs typed Spec gate
+
+## `ui.data` on compose (Eng’d 2026-07-28)
+
+```ts
+const ui = View.compose({ views, navigator })
+// under RuntimeProvider:
+const bundle = ui.data.queue(Jobs)   // QueueBundle
+const d = ui.data.daemon(Nightly)
+```
+
+Shared `src/ui/runtime.tsx` (`RuntimeProvider` + door). Guide: [`../guides/view-data.md`](../guides/view-data.md).
+
+## Effect-faithful Tag mint (Eng’d 2026-07-28)
+
+One-shot mint on shipped size chrome (POC folded in; keep Prototype for open Requirement):
+
+```ts
+class PoolCard extends View.Card.Tag<PoolCard>()("…", { spec }) {}
+class Dense extends View.Card.Tag<Dense, ViewProps & { dense?: boolean }>()("…") {}
+const skin: PoolCard["Service"] = (props) => …  // no typeof
+type P = View.PropsOf<PoolCard>
+```
 
 ## Requirement / WithSize (2026-07-28)
 
@@ -127,31 +148,10 @@ Guide: [`../guides/view-tag-types.md`](../guides/view-tag-types.md).
 **Guide:** [`../guides/view-tag-types.md`](../guides/view-tag-types.md) — `pnpm run docs:serve` →  
 <http://100.67.32.32:5190/docs/view-tag-types> (Tailscale). Index: [`view-hover-types.md`](./view-hover-types.md).
 
-## Effect-faithful Tag POC (2026-07-28)
+## Effect-faithful Tag POC (archived — baked)
 
-**Files:** `examples/forms/view/effect-service-poc.ts` + `test/view-effect-service-poc.test-d.ts` (green).
-
-
-Replicate `Context.Service<Self, Shape>()("Key")` instead of Prototype + phantom `Type`:
-
-```ts
-class DenseCard extends Card<DenseCard, ViewProps & { dense?: boolean }>()("…") {}
-
-const skin: DenseCard["Service"] = (props) => …  // no typeof
-type P = PropsOf<DenseCard>                       // peel Props from Service
-Layer.succeed(DenseCard, (props) => …)            // infers
-```
-
-| Finding | Detail |
-|---------|--------|
-| **Win** | Instance type carries Effect `ServiceClass.Shape.Service` → `PoolCard["Service"]` is `View<Props>` **without `typeof`** |
-| **Win** | `PropsOf<PoolCard>` peels Props from that Shape |
-| **Same as Effect** | Self = identity; Shape = `View<Props>`; class value = Context key |
-| **vs shipped** | Today: `View.View<View.Type<typeof PoolCard>>` + Prototype chain |
-
-**Not “props named after the class”** — still Self ≠ Props (ServiceClass brands). Annotation target is `DenseCard["Service"]` (the fn), which is short enough.
-
-**Next (if baking):** replace `View.Prototype` / `View.Type` minting with this Tag/Card/Detail form; keep matchers / bind / only / Registry.
+Historical POC: `examples/forms/view/effect-service-poc.ts`. Behavior now on
+shipped `View.Card.Tag` / `PropsOf` / `["Service"]` (see above).
 
 ## Checkpoint notes (2026-07-27)
 
@@ -165,12 +165,12 @@ Layer.succeed(DenseCard, (props) => …)            // infers
 `examples/hyperlink-web` uses Prototypes + `View.only` (legacy `forKey` / `widgets` dropped):
 
 ```ts
-const Proto = View.Card.Prototype<{ readonly dense?: boolean },>()({
+export class WorkerPoolCard extends View.Card.Tag<
+  WorkerPoolCard,
+  { readonly dense?: boolean }
+>()("examples/hyperlink-web/worker-pool-card", {
   spec: workerPoolCardSpec,
-})
-export class WorkerPoolCard extends Proto.Tag<WorkerPoolCard>()(
-  "examples/hyperlink-web/worker-pool-card",
-) {}
+}) {}
 
 export const layer = View.only(WorkerPool, WorkerPoolCard).pipe(
   Layer.provide(Layer.succeed(WorkerPoolCard, WorkerPoolCardView)),

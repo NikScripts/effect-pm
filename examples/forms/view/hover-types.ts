@@ -116,12 +116,9 @@ export const shipped_poolLayer = Layer.succeed(PoolCard, (props) => {
 
 type DenseExtra = { readonly dense?: boolean };
 
-const DenseProto = View.Card.Prototype<DenseExtra>()({
-  spec: { kind: "hover-dense" } as const,
-});
-
-export class DenseCard extends DenseProto.Tag<DenseCard>()(
+export class DenseCard extends View.Card.Tag<DenseCard, DenseExtra>()(
   "hyperlink-ts/examples/forms/view/hover-types/DenseCard",
+  { spec: { kind: "hover-dense" } as const },
 ) {}
 
 /**
@@ -130,18 +127,17 @@ export class DenseCard extends DenseProto.Tag<DenseCard>()(
  */
 export type Shipped_DenseCard_Service = DenseCard["Service"];
 
-/** Peel props from Shape (manual — shipped has no PropsOf helper yet). */
-export type Shipped_DenseCard_Props = DenseCard["Service"] extends View.View<
-  infer P
->
-  ? P
-  : never;
+/** Peel props via {@link View.PropsOf} (Service path — no typeof). */
+export type Shipped_DenseCard_Props = View.PropsOf<DenseCard>;
 
 /** Phantom path (typeof). Hover: same props bag. */
 export type Shipped_DenseCard_TypeOf = View.Type<typeof DenseCard>;
 
-/** Prototype props without minting a Tag. */
-export type Shipped_DenseProto_PropsOf = View.PropsOf<typeof DenseProto>;
+/** Open-chain Prototype still available for Requirement debt. */
+const DenseOpen = View.SizeChrome.Prototype<DenseExtra>()({
+  spec: { kind: "hover-dense-open" } as const,
+});
+export type Shipped_DenseOpen_PropsOf = View.PropsOf<typeof DenseOpen>;
 
 export const shipped_denseSkin: DenseCard["Service"] = (props) => {
   void props.dense;
@@ -158,13 +154,14 @@ export const shipped_denseLayer = Layer.succeed(DenseCard, (props) => {
 // 4. Shipped View — naked Tag + Detail / Page sizes
 // =============================================================================
 
-export class Greeter extends View.Tag<Greeter>()(
-  "hyperlink-ts/examples/forms/view/hover-types/Greeter",
-) {}
+export class Greeter extends View.Tag<
+  Greeter,
+  { readonly name: string }
+>()("hyperlink-ts/examples/forms/view/hover-types/Greeter") {}
 
 /**
- * Naked Tag — empty Prototype props `{}` unless you use Prototype first.
- * Hover carefully: may be `View.View<{}>` not ViewProps.
+ * Naked Tag with Props type arg — no Prototype step.
+ * Hover: `View.View<{ readonly name: string }>`
  */
 export type Shipped_Greeter_Service = Greeter["Service"];
 

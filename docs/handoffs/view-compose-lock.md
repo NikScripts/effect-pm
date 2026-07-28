@@ -76,7 +76,8 @@ Cards never touch History.
 **ViewKind = building-block sizes** (unchanged):
 
 ```ts
-type ViewKind = "card" | "detail" | "page"
+type ViewKind = Data.TaggedEnum<{ Card: {}; Detail: {}; Page: {} }>
+// ViewKind.Card() / .Detail() / .Page()
 ```
 
 **Content** fills those sizes — schedule, logs, queue body, Group card, etc. can each ship:
@@ -102,10 +103,11 @@ Navigator may still say `openLogs(tag)` / `openSchedule(tag)` — that means “
 
 **F2:** HealthBoard / NodeDetail stay **shell-owned** for v1.
 
-### G. `ui.data`
+### G. `ui.data` — **Eng’d**
 
 - Door to existing `*Bundle(runtime, tag)` — no parallel atoms
-- On `compose` result; reads `RuntimeProvider`
+- On `compose` result (`ui.data.queue` / `.daemon` / …); reads shared `ui/runtime` `RuntimeProvider`
+- Guide: [`../guides/view-data.md`](../guides/view-data.md)
 
 ### H. Migration
 

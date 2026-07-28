@@ -6,94 +6,36 @@
 <!-- docs-site-link:end -->
 # View Tag types
 
-A View Tag is a class. Mint it from size chrome, write the skin, export `layer`.
-Same shape as Effect’s `Context.Service`.
+A View Tag is a class — same shape as Effect’s `Context.Service`.
+Mint with `View.Card.Tag` (etc.), write the skin, export `layer`.
 
-## Requirement (R-style)
+## One-shot mint (common path)
 
-`Prototype<Props, Requirement>` carries a **debt**. Declare it open, chain steps,
-then fulfill — Requirement discharges to `{}` (like Effect `R → never`).
+`View.Card` / `Detail` / `Page` are size chrome already fulfilled
+(`size: ViewKind.Card()` …). Stamp `spec`, optional extra props, mint:
 
 {.twoslash}
 ``` ts
+import { Layer, Match } from "effect"
 import { View } from "hyperlink-ts/ui"
 
-// Open — WithSize unpaid
-const Open = View.SizeChrome
-// Prefer View.SizeChrome, or:
-// View.Prototype<View.ViewProps, View.WithSize>()()
-
-// Chain while open (props + statics, additive)
-const Mid = Open.Prototype<{ readonly dense?: boolean }>()({
-  spec: { kind: "app/queue" } as const,
-})
-
-// Fulfill last — PascalCase tagged size (`Data.TaggedEnum`)
-const Proto = Mid.Prototype()({ size: View.ViewKind.Card() })
-
-class PoolCard extends Proto.Tag<PoolCard>()("app/view/pool-card") {}
+class PoolCard extends View.Card.Tag<PoolCard>()(
+  "app/view/pool-card",
+  { spec: { kind: "app/queue" } as const },
+) {}
+class PoolDetail extends View.Detail.Tag<PoolDetail>()(
+  "app/view/pool-detail",
+  { spec: { kind: "app/queue" } as const },
+) {}
+class PoolPage extends View.Page.Tag<PoolPage>()(
+  "app/view/pool-page",
+  { spec: { kind: "app/queue" } as const },
+) {}
 
 PoolCard.size
 //         ^?
 PoolCard.size._tag
 //              ^?
-```
-
-Sizes are Effect tagged variants (`_tag: "Card" | "Detail" | "Page"`). Match with
-`Match.tag` the same way as elsewhere in the library.
-
-Shipped shortcuts: `View.Card` / `Detail` / `Page` are `SizeChrome` already fulfilled.
-
-{.twoslash}
-``` ts
-import { Match } from "effect"
-import { View } from "hyperlink-ts/ui"
-
-View.Card.statics.size
-//              ^?
-View.Detail.statics.size
-//                ^?
-View.Page.statics.size
-//              ^?
-
-const label = Match.value(View.ViewKind.Card()).pipe(
-  Match.tag("Card", () => "card chrome"),
-  Match.tag("Detail", () => "detail chrome"),
-  Match.tag("Page", () => "page chrome"),
-  Match.exhaustive,
-)
-void label
-```
-
-## Card + Detail + Page + `layer`
-
-Stamp `spec`, mint classes, provide skins, export `layer` — same pattern as
-[`WorkPoolView.ts`](../../src/ui/WorkPoolView.ts):
-
-{.twoslash}
-``` ts
-import { Layer } from "effect"
-import { View } from "hyperlink-ts/ui"
-
-const CardProto = View.Card.Prototype()({
-  spec: { kind: "app/queue" } as const,
-})
-const DetailProto = View.Detail.Prototype()({
-  spec: { kind: "app/queue" } as const,
-})
-const PageProto = View.Page.Prototype()({
-  spec: { kind: "app/queue" } as const,
-})
-
-class PoolCard extends CardProto.Tag<PoolCard>()(
-  "app/view/pool-card",
-) {}
-class PoolDetail extends DetailProto.Tag<PoolDetail>()(
-  "app/view/pool-detail",
-) {}
-class PoolPage extends PageProto.Tag<PoolPage>()(
-  "app/view/pool-page",
-) {}
 
 const PoolCardView: PoolCard["Service"] = (props) => {
   props
@@ -108,26 +50,34 @@ export const layer = Layer.mergeAll(
   Layer.succeed(PoolDetail, PoolDetailView),
   Layer.succeed(PoolPage, PoolPageView),
 )
+
+const label = Match.value(View.ViewKind.Card()).pipe(
+  Match.tag("Card", () => "card chrome"),
+  Match.tag("Detail", () => "detail chrome"),
+  Match.tag("Page", () => "page chrome"),
+  Match.exhaustive,
+)
+void label
 ```
 
 Annotate skins with **`PoolCard["Service"]`** (no `typeof`).
+Sizes are `Data.TaggedEnum` — match with `Match.tag`.
 
 ## Extra props
+
+Second type arg on `Tag` — additive props; statics as the value arg:
 
 {.twoslash}
 ``` ts
 import { Layer } from "effect"
 import { View } from "hyperlink-ts/ui"
 
-type Extra = { readonly dense?: boolean }
-
-const Proto = View.Card.Prototype<Extra>()({
+class DenseCard extends View.Card.Tag<
+  DenseCard,
+  { readonly dense?: boolean }
+>()("app/view/dense-card", {
   spec: { kind: "app/dense-card" } as const,
-})
-
-class DenseCard extends Proto.Tag<DenseCard>()(
-  "app/view/dense-card",
-) {}
+}) {}
 
 const DenseCardView: DenseCard["Service"] = (props) => {
   props
@@ -138,6 +88,27 @@ const DenseCardView: DenseCard["Service"] = (props) => {
 export const layer = Layer.succeed(DenseCard, DenseCardView)
 ```
 
+Naked (no size): `View.Tag<Greeter, { name: string }>()("…")`.
+
+## Requirement (open chain)
+
+When you need to declare debt before fulfilling — `SizeChrome` + `.Prototype()`:
+
+{.twoslash}
+``` ts
+import { View } from "hyperlink-ts/ui"
+
+const Mid = View.SizeChrome.Prototype<{ readonly dense?: boolean }>()({
+  spec: { kind: "app/queue" } as const,
+})
+// WithSize still open — fulfill last
+const Proto = Mid.Prototype()({ size: View.ViewKind.Card() })
+class PoolCard extends Proto.Tag<PoolCard>()("app/view/pool-card") {}
+
+PoolCard.size
+//         ^?
+```
+
 ## Wire into Dashboard
 
 ```ts
@@ -145,15 +116,14 @@ import { Layer } from "effect"
 import { View } from "hyperlink-ts/ui"
 import { WorkerPool } from "./hub"
 
-const Proto = View.Card.Prototype<{ readonly dense?: boolean }>()({
+export class WorkerPoolCard extends View.Card.Tag<
+  WorkerPoolCard,
+  { readonly dense?: boolean }
+>()("examples/hyperlink-web/worker-pool-card", {
   spec: { kind: "examples/worker-pool-card" } as const,
-})
+}) {}
 
-export class WorkerPoolCard extends Proto.Tag<WorkerPoolCard>()(
-  "examples/hyperlink-web/worker-pool-card",
-) {}
-
-const WorkerPoolCardView: WorkerPoolCard["Service"] = (props) => null
+const WorkerPoolCardView: WorkerPoolCard["Service"] = (_props) => null
 
 export const layer = View.only(WorkerPool, WorkerPoolCard).pipe(
   Layer.provide(Layer.succeed(WorkerPoolCard, WorkerPoolCardView)),

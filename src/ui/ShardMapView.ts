@@ -10,21 +10,16 @@ import * as View from "./View";
 /** @public */
 export const shardMapViewSpec = { kind: ShardMap.kind } as const;
 
-const CardProto = View.Card.Prototype()({
-  spec: shardMapViewSpec,
-});
-const DetailProto = View.Detail.Prototype()({
-  spec: shardMapViewSpec,
-});
-
 /** @public */
-export class ShardMapCard extends CardProto.Tag<ShardMapCard>()(
+export class ShardMapCard extends View.Card.Tag<ShardMapCard>()(
   "hyperlink/view/shardmap-card",
+  { spec: shardMapViewSpec },
 ) {}
 
 /** @public */
-export class ShardMapDetail extends DetailProto.Tag<ShardMapDetail>()(
+export class ShardMapDetail extends View.Detail.Tag<ShardMapDetail>()(
   "hyperlink/view/shardmap-detail",
+  { spec: shardMapViewSpec },
 ) {}
 
 /** @public */

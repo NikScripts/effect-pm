@@ -11,21 +11,16 @@ import * as View from "./View";
 /** Spec stamp for HttpApiClient View handles. @public */
 export const apiMetricsViewSpec = { kind: Gate.httpApiClientKind } as const;
 
-const CardProto = View.Card.Prototype()({
-  spec: apiMetricsViewSpec,
-});
-const DetailProto = View.Detail.Prototype()({
-  spec: apiMetricsViewSpec,
-});
-
 /** @public */
-export class ApiCard extends CardProto.Tag<ApiCard>()(
+export class ApiCard extends View.Card.Tag<ApiCard>()(
   "hyperlink/view/api-card",
+  { spec: apiMetricsViewSpec },
 ) {}
 
 /** @public */
-export class ApiDetail extends DetailProto.Tag<ApiDetail>()(
+export class ApiDetail extends View.Detail.Tag<ApiDetail>()(
   "hyperlink/view/api-detail",
+  { spec: apiMetricsViewSpec },
 ) {}
 
 /** @public */

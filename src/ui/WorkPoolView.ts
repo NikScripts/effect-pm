@@ -20,20 +20,14 @@ import { Layer } from "effect";
 import * as WorkPool from "../WorkPool";
 import * as View from "./View";
 
-const PoolCardProto = View.Card.Prototype()({
-  spec: WorkPool.queueControlSpec,
-});
-const PoolDetailProto = View.Detail.Prototype()({
-  spec: WorkPool.queueControlSpec,
-});
-
 /**
  * Default WorkPool card View service.
  *
  * @public
  */
-export class PoolCard extends PoolCardProto.Tag<PoolCard>()(
+export class PoolCard extends View.Card.Tag<PoolCard>()(
   "hyperlink/view/pool-card",
+  { spec: WorkPool.queueControlSpec },
 ) {}
 
 /**
@@ -41,8 +35,9 @@ export class PoolCard extends PoolCardProto.Tag<PoolCard>()(
  *
  * @public
  */
-export class PoolDetail extends PoolDetailProto.Tag<PoolDetail>()(
+export class PoolDetail extends View.Detail.Tag<PoolDetail>()(
   "hyperlink/view/pool-detail",
+  { spec: WorkPool.queueControlSpec },
 ) {}
 
 /**

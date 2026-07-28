@@ -2,7 +2,7 @@
  * @module examples/hyperlink-web/worker-pool-card
  *
  * Bring-your-own View for `WorkerPool` — a consumer-defined multi-node Hyperlink with no shipped
- * card. Pattern: sized `View.Card.Prototype` → Tag → skin → `View.only` Layer → Dashboard `views`.
+ * card. Pattern: `View.Card.Tag` → skin → `View.only` Layer → Dashboard `views`.
  *
  * Fields are plain `Hyperlink.effect`s (not reactive refs): poll on a tick, same idea as the shipped
  * daemon card. One tick reads `active` / `fleetActive` / `activeByNode`.
@@ -13,23 +13,16 @@ import { AsyncResult } from "effect/unstable/reactivity";
 import { View, displayName, useAtomValue, useRuntime } from "../../src/web";
 import { WorkerPool } from "./hub";
 
-/** UI Needs placeholder — opaque Prototype static (not a Hyperlink wire Spec). */
+/** UI Needs placeholder — opaque Tag static (not a Hyperlink wire Spec). */
 export const workerPoolCardSpec = { kind: "examples/worker-pool-card" } as const;
 
-/** Extra card props beyond `View.ViewProps` (shows Prototype prop accumulation). */
-type WorkerPoolCardProps = {
-  readonly dense?: boolean;
-};
-
-// Type alias (not inline) so TSX does not parse `<…>` as JSX.
-const Proto = View.Card.Prototype<WorkerPoolCardProps>()({
-  spec: workerPoolCardSpec,
-});
-
 /** Sized View handle (`size: ViewKind.Card()` from `View.Card`). */
-export class WorkerPoolCard extends Proto.Tag<WorkerPoolCard>()(
-  "examples/hyperlink-web/worker-pool-card",
-) {}
+export class WorkerPoolCard extends View.Card.Tag<
+  WorkerPoolCard,
+  { readonly dense?: boolean }
+>()("examples/hyperlink-web/worker-pool-card", {
+  spec: workerPoolCardSpec,
+}) {}
 
 // Module-level so the polled stream is a stable value (atom memoized per runtime).
 const readFleet = Effect.flatMap(WorkerPool, (pool) =>
@@ -64,7 +57,7 @@ const NodeRow = (props: {
   </div>
 );
 
-const WorkerPoolCardView: View.View<View.Type<typeof WorkerPoolCard>> = (props) => {
+const WorkerPoolCardView: WorkerPoolCard["Service"] = (props) => {
   const runtime = useRuntime();
   const poll = React.useMemo(
     () =>

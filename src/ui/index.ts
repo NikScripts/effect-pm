@@ -19,6 +19,23 @@ export * from "./cache";
 export * from "./now";
 export * from "./memberKind";
 export * from "./widgetRegistry";
+export {
+  type AnyRuntime,
+  type DataDoor,
+  type DataTag,
+  RuntimeProvider,
+  data,
+  useApiBundle,
+  useDaemonBundle,
+  useFleetHealthBundle,
+  useGateBundle,
+  useNodeBundle,
+  usePriorityBundle,
+  useQueueBundle,
+  useRuntime,
+  useShardMapBundle,
+  useTelemetryBundle,
+} from "./runtime";
 /** Keyed Spec-based view registry (`View.Tag` / `View.react`) — prefer `import * as View`. */
 export * as View from "./View";
 /** Parent-owned Group navigation (memory / history) for View compose. */

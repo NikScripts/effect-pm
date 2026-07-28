@@ -7,21 +7,16 @@ import { Layer } from "effect";
 import * as WorkPool from "../WorkPool";
 import * as View from "./View";
 
-const CardProto = View.Card.Prototype()({
-  spec: WorkPool.priorityControlSpec,
-});
-const DetailProto = View.Detail.Prototype()({
-  spec: WorkPool.priorityControlSpec,
-});
-
 /** @public */
-export class PriorityCard extends CardProto.Tag<PriorityCard>()(
+export class PriorityCard extends View.Card.Tag<PriorityCard>()(
   "hyperlink/view/priority-card",
+  { spec: WorkPool.priorityControlSpec },
 ) {}
 
 /** @public */
-export class PriorityDetail extends DetailProto.Tag<PriorityDetail>()(
+export class PriorityDetail extends View.Detail.Tag<PriorityDetail>()(
   "hyperlink/view/priority-detail",
+  { spec: WorkPool.priorityControlSpec },
 ) {}
 
 /** @public */
