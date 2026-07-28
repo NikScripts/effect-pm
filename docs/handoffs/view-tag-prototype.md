@@ -99,7 +99,18 @@ Statics are for things we used to jam into Tag args (`size`, later `spec`, etc.)
 
 ## Open (ask before baking)
 
-- Whether `spec` stays an opaque static on family protos vs typed Spec gate  
+- Whether `spec` stays an opaque static on family protos vs typed Spec gate
+
+## `ui.data` on compose (Eng’d 2026-07-28)
+
+```ts
+const ui = View.compose({ views, navigator })
+// under RuntimeProvider:
+const bundle = ui.data.queue(Jobs)   // QueueBundle
+const d = ui.data.daemon(Nightly)
+```
+
+Shared `src/ui/runtime.tsx` (`RuntimeProvider` + door). Guide: [`../guides/view-data.md`](../guides/view-data.md).
 
 ## Effect-faithful Tag mint (Eng’d 2026-07-28)
 

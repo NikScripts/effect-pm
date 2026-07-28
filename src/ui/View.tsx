@@ -15,6 +15,7 @@ import { Context, Data, Effect, Layer, Match, Option } from "effect";
 import * as Group from "../Group";
 import { kindOf } from "../Hyperlink";
 import * as Navigator from "./Navigator";
+import { data, type DataDoor } from "./runtime";
 import type { LeafTag } from "./widgetRegistry";
 
 // =============================================================================
@@ -997,15 +998,26 @@ export const useGridMembers = (): ReadonlyArray<{
 
 /**
  * Thin Dashboard sugar: {@link react} + {@link Navigator} Layer. No second registry;
- * no `Atom.runtime` inside (provide {@link RuntimeProvider} outside).
+ * no `Atom.runtime` inside — wrap with {@link ./runtime.RuntimeProvider} outside.
+ *
+ * {@link data} is the compose **data door** (same `*Bundle` builders as Dashboard).
  *
  * @example
- * ```ts
+ * ```tsx
  * const ui = View.compose({
  *   views: Layer.mergeAll(View.bind(Group.kind, GroupCard), WebDashboardViews.layer),
  *   navigator: Navigator.history(ServicesHub),
  * })
- * <ui.Provider><ui.Grid /><ui.Outlet /></ui.Provider>
+ * <RuntimeProvider runtime={runtime}>
+ *   <ui.Provider>
+ *     <ui.Grid />
+ *     <ui.Outlet />
+ *   </ui.Provider>
+ * </RuntimeProvider>
+ *
+ * // in a skin / shell component:
+ * const bundle = ui.data.queue(Jobs)
+ * const logs = ui.data.daemon(Nightly)
  * ```
  *
  * @public
@@ -1013,7 +1025,17 @@ export const useGridMembers = (): ReadonlyArray<{
 export const compose = <VR, VE,>(options: {
   readonly views: Layer.Layer<VR, VE, never>;
   readonly navigator: Layer.Layer<Navigator.Navigator>;
-}) => {
+}): ReturnType<typeof react<VR, VE>> & {
+  readonly Provider: (props: {
+    readonly children: React.ReactNode;
+  }) => React.ReactElement;
+  readonly Grid: () => React.ReactElement;
+  readonly Outlet: () => React.ReactElement | null;
+  readonly useGridMembers: typeof useGridMembers;
+  readonly navigator: Navigator.Service;
+  /** Same `*Bundle(runtime, tag)` door — reads {@link ./runtime.RuntimeProvider}. */
+  readonly data: DataDoor;
+} => {
   const viewKit = react(options.views);
   const nav = Effect.runSync(
     Effect.scoped(
@@ -1100,5 +1122,6 @@ export const compose = <VR, VE,>(options: {
     Outlet,
     useGridMembers,
     navigator: nav,
+    data,
   };
 };
