@@ -9,8 +9,9 @@
 | `https://dev.hyperlink.cool` | Full docs demo (feedback) — `DOCS_SITE_ORIGIN` |
 
 DNS (Cloudflare, proxied): apex/`www` as today; **`dev` CNAME →** the App Platform
-ingress (`*.ondigitalocean.app`). The deploy CF token can manage Cache Rules but not DNS —
-add the `dev` record in the dashboard once.
+ingress (`*.ondigitalocean.app`). Host split is enforced by **Cloudflare Single Redirects**
+(see [`docs/handoffs/docs-site-dev-host.md`](../../handoffs/docs-site-dev-host.md)) — Waku
+static HTML bypasses origin middleware.
 
 The site is a Node service (Waku `start`): hyperlink-ts pages are pre-rendered static; effect dep
 API pages SSR on demand reading `api-data/` + `api-hovers/` from disk. **The artifact deploys;
