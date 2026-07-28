@@ -32,7 +32,7 @@ program.pipe(Effect.provide(inProcess)) // `yield* Jobs` runs jobsImpl locally
 
 ## Serving over the network
 
-To expose a hyperservice over RPC, pick a **protocol listen**. `Node.listen` is the neutral spine
+To expose a HyperService over RPC, pick a **protocol listen**. `Node.listen` is the neutral spine
 (no transport bind). Day to day you call one of four siblings that share its overload family:
 `Node.http`, `Node.ws`, `Node.unix`, `Node.nPipe`. Toggle the wire; every form stays the same:
 
