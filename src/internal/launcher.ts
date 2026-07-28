@@ -48,13 +48,13 @@ import {
   type AnyNode,
 } from "./nodeCore";
 import type { NodeStatus } from "./nodeStatus";
-import { mintAssumeToken } from "./launcherToken";
+import { mintAssumeToken, type Token } from "./launcherToken";
 
-/** Opaque assume-token brand (thin sugar over a redacted string). @public */
-export type Token = string & { readonly [LauncherTokenBrand]: unique symbol };
-declare const LauncherTokenBrand: unique symbol;
+export type { Token } from "./launcherToken";
 
-const brandToken = (clear: string): Token => clear as Token;
+// =============================================================================
+// Config + platform layer
+// =============================================================================
 
 /** Default Ready outer bound when `ready.timeout` is omitted and Config is unset. */
 const DEFAULT_READY_TIMEOUT = Duration.seconds(30);
@@ -99,6 +99,10 @@ export const readyPollConfig: Config.Config<Duration.Duration> =
 export const layer: Layer.Layer<NodeServices.NodeServices> =
   NodeServices.layer;
 
+// =============================================================================
+// Models
+// =============================================================================
+
 /** How the assume token is injected into the child process. @public */
 export type TokenInjection = "env" | "argv" | "both";
 
@@ -110,20 +114,6 @@ export type TokenInjection = "env" | "argv" | "both";
  * @public
  */
 export type ServiceRef = string | { readonly key: string };
-
-/** Tag or wire key → status service key string. @internal */
-const serviceKeyOf = (service: ServiceRef): string => {
-  if (typeof service === "string") {
-    return service;
-  }
-  if (Predicate.hasProperty(service, Hyperlink.wireKeySym)) {
-    const wk = service[Hyperlink.wireKeySym];
-    if (typeof wk === "string") {
-      return wk;
-    }
-  }
-  return service.key;
-};
 
 /**
  * Options for {@link command} — Effect `ChildProcess` options plus token injection mode.
@@ -205,109 +195,13 @@ export interface UpOptions {
   readonly concurrency?: number | "unbounded";
 }
 
-/**
- * Build a `SpawnSpec.process` factory that injects the assume token into env and/or argv.
- *
- * @example
- * ```ts
- * Launcher.up({
- *   node: worker,
- *   process: Launcher.command("node", ["./worker.js"], { token: "env" }),
- * })
- * ```
- *
- * @category constructors
- * @public
- */
-export const command = (
-  cmd: string,
-  args: ReadonlyArray<string> = [],
-  options?: CommandOptions,
-): ((token: string) => ChildProcess.Command) => {
-  const injection: TokenInjection = options?.token ?? "env";
-  const tokenArgvAt = options?.tokenArgvAt;
-  const {
-    token: _tokenMode,
-    tokenArgvAt: _tokenArgvAt,
-    env: baseEnv,
-    extendEnv,
-    ...rest
-  } = options ?? {};
-  return (clearToken: string) => {
-    const argv =
-      injection === "argv" || injection === "both"
-        ? (() => {
-            const next = [...args];
-            const at =
-              tokenArgvAt === undefined ? next.length : tokenArgvAt;
-            next.splice(at, 0, clearToken);
-            return next;
-          })()
-        : [...args];
-    const env =
-      injection === "env" || injection === "both"
-        ? { ...(baseEnv ?? {}), [ASSUME_TOKEN_ENV]: clearToken }
-        : baseEnv;
-    return ChildProcess.make(cmd, argv, {
-      ...rest,
-      ...(env !== undefined ? { env } : {}),
-      // Default merge with process env so PATH / etc. survive token injection.
-      extendEnv: extendEnv ?? true,
-    });
-  };
-};
+// =============================================================================
+// Errors
+// =============================================================================
 
 /**
- * Entry-path sugar over {@link command} — `exec` + `execArgs` + path, with the same token injection.
- *
- * @example
- * ```ts
- * Launcher.entry("./worker.js")
- * Launcher.entry("./worker.ts", { exec: "pnpm", execArgs: ["exec", "tsx"], token: "argv" })
- * ```
- *
- * @category constructors
- * @public
- */
-export const entry = (
-  path: string,
-  options?: EntryOptions,
-): ((token: string) => ChildProcess.Command) => {
-  const exec = options?.exec ?? "node";
-  const execArgs = options?.execArgs ?? [];
-  const {
-    exec: _exec,
-    execArgs: _execArgs,
-    ...commandOpts
-  } = options ?? {};
-  return command(exec, [...execArgs, path], commandOpts);
-};
-
-// ─── OTEL metrics (Effect Metric → runtime metric reader) ───────────────────
-const readyLatencyBoundaries = Metric.exponentialBoundaries({
-  start: 1,
-  factor: 2,
-  count: 16,
-});
-const readyDurationMs = Metric.histogram("launcher_ready_duration_ms", {
-  description: "Launcher awaitReady elapsed time in milliseconds",
-  boundaries: readyLatencyBoundaries,
-});
-const readyTimeoutTotal = Metric.counter("launcher_ready_timeout_total", {
-  incremental: true,
-  description: "Launcher ReadyTimedOut count",
-});
-const childExitedTotal = Metric.counter("launcher_child_exited_total", {
-  incremental: true,
-  description: "Launcher ChildExited count during awaitReady",
-});
-const handoffTotal = Metric.counter("launcher_handoff_total", {
-  incremental: true,
-  description: "Launcher handoff attempts by outcome",
-});
-
-/**
- * Ready poll expired before the child reported Ready.
+ * Ready poll expired before the child reported Ready. The OS child is kill-reaped
+ * (fail-closed) before this error surfaces.
  *
  * @category errors
  * @public
@@ -372,8 +266,144 @@ export class HandleNotReady extends Data.TaggedError("HandleNotReady")<{
   }
 }
 
+// =============================================================================
+// Token injection helpers
+// =============================================================================
+
+/** Tag or wire key → status service key string. @internal */
+const serviceKeyOf = (service: ServiceRef): string => {
+  if (typeof service === "string") {
+    return service;
+  }
+  if (Predicate.hasProperty(service, Hyperlink.wireKeySym)) {
+    const wk = service[Hyperlink.wireKeySym];
+    if (typeof wk === "string") {
+      return wk;
+    }
+  }
+  return service.key;
+};
+
+/** Insert `token` into a copy of `args` at `at` (default: append). @internal */
+const insertTokenArgv = (
+  args: ReadonlyArray<string>,
+  token: string,
+  at: number | undefined,
+): Array<string> => {
+  const next = [...args];
+  next.splice(at === undefined ? next.length : at, 0, token);
+  return next;
+};
+
+/**
+ * Build a `SpawnSpec.process` factory that injects the assume token into env and/or argv.
+ *
+ * @example
+ * ```ts
+ * Launcher.up({
+ *   node: worker,
+ *   process: Launcher.command("node", ["./worker.js"], { token: "env" }),
+ * })
+ * ```
+ *
+ * @category constructors
+ * @public
+ */
+export const command = (
+  cmd: string,
+  args: ReadonlyArray<string> = [],
+  options?: CommandOptions,
+): ((token: string) => ChildProcess.Command) => {
+  const injection: TokenInjection = options?.token ?? "env";
+  const tokenArgvAt = options?.tokenArgvAt;
+  const {
+    token: _tokenMode,
+    tokenArgvAt: _tokenArgvAt,
+    env: baseEnv,
+    extendEnv,
+    ...rest
+  } = options ?? {};
+  return (clearToken: string) => {
+    const argv =
+      injection === "argv" || injection === "both"
+        ? insertTokenArgv(args, clearToken, tokenArgvAt)
+        : [...args];
+    const env =
+      injection === "env" || injection === "both"
+        ? { ...(baseEnv ?? {}), [ASSUME_TOKEN_ENV]: clearToken }
+        : baseEnv;
+    return ChildProcess.make(cmd, argv, {
+      ...rest,
+      ...(env !== undefined ? { env } : {}),
+      // Default merge with process env so PATH / etc. survive token injection.
+      extendEnv: extendEnv ?? true,
+    });
+  };
+};
+
+/**
+ * Entry-path sugar over {@link command} — `exec` + `execArgs` + path, with the same token injection.
+ *
+ * @example
+ * ```ts
+ * Launcher.entry("./worker.js")
+ * Launcher.entry("./worker.ts", { exec: "pnpm", execArgs: ["exec", "tsx"], token: "argv" })
+ * ```
+ *
+ * @category constructors
+ * @public
+ */
+export const entry = (
+  path: string,
+  options?: EntryOptions,
+): ((token: string) => ChildProcess.Command) => {
+  const exec = options?.exec ?? "node";
+  const execArgs = options?.execArgs ?? [];
+  const {
+    exec: _exec,
+    execArgs: _execArgs,
+    ...commandOpts
+  } = options ?? {};
+  return command(exec, [...execArgs, path], commandOpts);
+};
+
+// =============================================================================
+// Metrics
+// =============================================================================
+
+const readyLatencyBoundaries = Metric.exponentialBoundaries({
+  start: 1,
+  factor: 2,
+  count: 16,
+});
+const readyDurationMs = Metric.histogram("launcher_ready_duration_ms", {
+  description: "Launcher awaitReady elapsed time in milliseconds",
+  boundaries: readyLatencyBoundaries,
+});
+const readyTimeoutTotal = Metric.counter("launcher_ready_timeout_total", {
+  incremental: true,
+  description: "Launcher ReadyTimedOut count",
+});
+const childExitedTotal = Metric.counter("launcher_child_exited_total", {
+  incremental: true,
+  description: "Launcher ChildExited count during awaitReady",
+});
+const handoffTotal = Metric.counter("launcher_handoff_total", {
+  incremental: true,
+  description: "Launcher handoff attempts by outcome",
+});
+
+// =============================================================================
+// Handle
+// =============================================================================
+
 type LauncherChildHandle = ChildProcessSpawner.ChildProcessHandle;
 type HandlePhase = "spawned" | "ready" | "handedOff" | "killed";
+
+const isSpentPhase = (
+  phase: HandlePhase,
+): phase is "handedOff" | "killed" =>
+  phase === "handedOff" || phase === "killed";
 
 /**
  * Custody handle — only {@link spawn} / {@link up} construct these. After {@link Handle.handoff}
@@ -432,11 +462,11 @@ const isSpawnSpec = (value: unknown): value is SpawnSpec =>
  * @public
  */
 export const mintToken: Effect.Effect<Redacted.Redacted<Token>> =
-  mintAssumeToken.pipe(
-    Effect.map((redacted) =>
-      Redacted.make(brandToken(Redacted.value(redacted))),
-    ),
-  );
+  mintAssumeToken;
+
+// =============================================================================
+// Internals — Ready probe
+// =============================================================================
 
 const nodeAddress = (node: AnyNode): string =>
   typeof node.url === "string"
@@ -464,16 +494,11 @@ const withLauncherPhase = <A, E, R>(
     }),
   );
 
-const isTransientReadyFailure = Predicate.or(
-  Predicate.isTagged("ServiceNotReady"),
-  Predicate.or(
-    Predicate.isTagged("ServiceNotServed"),
-    Predicate.or(
-      Predicate.isTagged("NodeUnreachable"),
-      Predicate.isTagged("ProtocolUnanswered"),
-    ),
-  ),
-);
+const isTransientReadyFailure = (err: unknown): boolean =>
+  Predicate.isTagged(err, "ServiceNotReady") ||
+  Predicate.isTagged(err, "ServiceNotServed") ||
+  Predicate.isTagged(err, "NodeUnreachable") ||
+  Predicate.isTagged(err, "ProtocolUnanswered");
 
 /** Best-effort SIGTERM — ignore fail/defect if the child is already gone. */
 const reapChild = (
@@ -600,29 +625,19 @@ const probeReady = (
   );
 };
 
-/** Explicit `ready.timeout`, else {@link readyTimeoutConfig}. */
-const resolveReadyTimeout = (
-  ready: ReadyOptions | undefined,
-): Effect.Effect<Duration.Duration, ConfigError> =>
-  ready?.timeout !== undefined
-    ? Effect.succeed(Duration.fromInputUnsafe(ready.timeout))
-    : readyTimeoutConfig;
-
-/** Explicit `ready.poll`, else {@link readyPollConfig}. */
-const resolveReadyPoll = (
-  ready: ReadyOptions | undefined,
-): Effect.Effect<Duration.Duration, ConfigError> =>
-  ready?.poll !== undefined
-    ? Effect.succeed(Duration.fromInputUnsafe(ready.poll))
-    : readyPollConfig;
-
 /** Resolve Ready options once at spawn — Handle phases do not re-read Config. */
 const resolveReady = (
   ready: ReadyOptions | undefined,
 ): Effect.Effect<ResolvedReady, ConfigError> =>
   Effect.gen(function* () {
-    const timeout = yield* resolveReadyTimeout(ready);
-    const poll = yield* resolveReadyPoll(ready);
+    const timeout =
+      ready?.timeout !== undefined
+        ? Duration.fromInputUnsafe(ready.timeout)
+        : yield* readyTimeoutConfig;
+    const poll =
+      ready?.poll !== undefined
+        ? Duration.fromInputUnsafe(ready.poll)
+        : yield* readyPollConfig;
     const services =
       ready?.services === undefined
         ? undefined
@@ -639,6 +654,8 @@ const makeHandle = (options: {
   readonly gate: Semaphore.Semaphore;
 }): Handle => {
   const self = (): Handle => makeHandle(options);
+  const nodeKey = options.node.key;
+  const nodeAttrs = { "launcher.node": nodeKey };
 
   const awaitReady = (): Effect.Effect<
     Handle,
@@ -653,14 +670,14 @@ const makeHandle = (options: {
     | PlatformError
   > =>
     withLauncherPhase(
-      options.node.key,
+      nodeKey,
       "awaitReady",
       options.gate.withPermits(1)(
         Effect.gen(function* () {
           const phase = yield* Ref.get(options.phase);
-          if (phase === "handedOff" || phase === "killed") {
+          if (isSpentPhase(phase)) {
             return yield* new HandleSpent({
-              node: options.node.key,
+              node: nodeKey,
               phase: "awaitReady",
             });
           }
@@ -669,7 +686,6 @@ const makeHandle = (options: {
           }
           yield* Effect.logDebug("polling child Ready");
           const { timeout, poll, services } = options.ready;
-          const nodeAttrs = { "launcher.node": options.node.key };
           const wait = probeReady(options.node, services).pipe(
             Effect.retry({
               while: isTransientReadyFailure,
@@ -680,7 +696,7 @@ const makeHandle = (options: {
               orElse: () =>
                 Effect.fail(
                   new ReadyTimedOut({
-                    node: options.node.key,
+                    node: nodeKey,
                     ...(services !== undefined ? { services } : {}),
                     timeout,
                   }),
@@ -691,7 +707,7 @@ const makeHandle = (options: {
             Effect.flatMap((code) =>
               Effect.fail(
                 new ChildExited({
-                  node: options.node.key,
+                  node: nodeKey,
                   code: Number(code),
                 }),
               ),
@@ -750,22 +766,21 @@ const makeHandle = (options: {
     | PlatformError
   > =>
     withLauncherPhase(
-      options.node.key,
+      nodeKey,
       "handoff",
       options.gate.withPermits(1)(
         Effect.gen(function* () {
           const phase = yield* Ref.get(options.phase);
-          if (phase === "handedOff" || phase === "killed") {
+          if (isSpentPhase(phase)) {
             return yield* new HandleSpent({
-              node: options.node.key,
+              node: nodeKey,
               phase: "handoff",
             });
           }
           if (phase !== "ready") {
-            return yield* new HandleNotReady({ node: options.node.key });
+            return yield* new HandleNotReady({ node: nodeKey });
           }
           yield* Effect.logDebug("calling Node.assume");
-          const nodeAttrs = { "launcher.node": options.node.key };
           yield* nodeAssume(options.node, {
             token: Redacted.value(options.token),
           }).pipe(
@@ -798,14 +813,14 @@ const makeHandle = (options: {
 
   const kill = (): Effect.Effect<void, HandleSpent | PlatformError> =>
     withLauncherPhase(
-      options.node.key,
+      nodeKey,
       "kill",
       options.gate.withPermits(1)(
         Effect.gen(function* () {
           const phase = yield* Ref.get(options.phase);
-          if (phase === "handedOff" || phase === "killed") {
+          if (isSpentPhase(phase)) {
             return yield* new HandleSpent({
-              node: options.node.key,
+              node: nodeKey,
               phase: "kill",
             });
           }
@@ -824,6 +839,10 @@ const makeHandle = (options: {
     kill,
   };
 };
+
+// =============================================================================
+// Public constructors
+// =============================================================================
 
 /**
  * Spawn one OS child under launcher custody — mints an assume token, resolves Ready Config,
@@ -846,10 +865,10 @@ export const spawn = (
     Effect.gen(function* () {
       const token = yield* mintToken;
       const clear = Redacted.value(token);
-      const command =
+      const processCommand =
         typeof spec.process === "function" ? spec.process(clear) : spec.process;
       const ready = yield* resolveReady(spec.ready);
-      const child = yield* command;
+      const child = yield* processCommand;
       const phase = yield* Ref.make<HandlePhase>("spawned");
       const gate = yield* Semaphore.make(1);
       yield* Effect.logInfo("child spawned under launcher custody").pipe(

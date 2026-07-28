@@ -126,20 +126,22 @@ Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.m
 
 **Gaps vs Track A (closed):** `hyperlink-ts/Launcher` + `Node.assume` + Ready poll + spawn→ready→assume→unref kit are on tip. Remaining product gaps are Tracks B/C/D.
 
-### Track A — Eng'd (2026-07-27)
+### Track A — Eng'd (2026-07-27; refinements 2026-07-28)
 
-Shipped on tip (owner Eng go):
+Shipped on tip (owner Eng go + refinements):
 
-- `hyperlink-ts/Launcher` — `spawn` / `Handle.awaitReady` / `Handle.handoff` / `up` / `mintToken`
+- `hyperlink-ts/Launcher` — `spawn` / `Handle.awaitReady` / `Handle.handoff` / `Handle.kill` / `up` / `mintToken` / `command` / `entry` / `layer`
+- Branded `Token` + `Redacted`; Ready Config (`readyTimeoutConfig` / `readyPollConfig`) resolved at `spawn`
+- Tag-typed `ready.services`; fail-closed kill on `ReadyTimedOut`; `up` concurrency option
 - Guide: [`docs/guides/launcher.md`](../guides/launcher.md)
 - `Node.assume({ token })` + `AssumeTokenMismatch` / `AssumeTokenReused` / `AssumeNotReady`
 - `ListenOptions.assumeToken` / `Node.assumeTokenConfig` (`HYPERLINK_ASSUME_TOKEN`)
 - Status mirror `ownership?: "launcher" | "self"` when assume is armed
-- Tests: `test/node-assume.test.ts`, `test/launcher.test.ts` (+ `.test-d.ts`)
+- Tests: `test/node-assume.test.ts`, `test/launcher.test.ts` (+ `.test-d.ts`, harness)
 
 Eng defaults: 32-byte hex token; Ready poll `100 millis` with per-dial `2 seconds` bound; outer default `"30 seconds"`.
 
-**Next bake:** Track B (below), then C (version handoff), D (clients during handoff).
+**Next bake:** Track C (version handoff) — owner lock #27–36; Track D (clients during handoff).
 
 ### Track B — research note (2026-07-27): what already exists
 

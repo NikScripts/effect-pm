@@ -1,7 +1,7 @@
 /**
- * Type-level lock: Launcher.spawn / up and Node.assume error channels.
+ * Type-level lock: Launcher.spawn / up / Handle channels, Token brand, Config split.
  */
-import type { Config, Duration, Effect, Redacted, Scope } from "effect";
+import type { Config, Duration, Effect, Layer, Redacted, Scope } from "effect";
 import type { ConfigError } from "effect/Config";
 import type { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import type * as Launcher from "../src/Launcher";
@@ -32,6 +32,7 @@ function typeLock(
   entryFactory: typeof Launcher.entry,
   layer: typeof Launcher.layer,
   handle: Launcher.Handle,
+  jobs: { readonly key: string },
 ): void {
   type MintSuccess = typeof mintToken extends Effect.Effect<
     infer A,
@@ -42,6 +43,10 @@ function typeLock(
     : never;
   const _mintIsRedactedToken: AssertExtends<
     MintSuccess,
+    Redacted.Redacted<Launcher.Token>
+  > = true;
+  const _handleTokenBrand: AssertExtends<
+    typeof handle.token,
     Redacted.Redacted<Launcher.Token>
   > = true;
 
@@ -66,7 +71,24 @@ function typeLock(
     (token: string) => ChildProcess.Command
   > = true;
 
-  const spawned = spawn({ node, process: command });
+  type LayerServices = typeof layer extends Layer.Layer<infer R> ? R : never;
+  const _layerHasSpawner: AssertExtends<
+    ChildProcessSpawner.ChildProcessSpawner,
+    LayerServices
+  > = true;
+
+  const _serviceRefTag: AssertExtends<
+    typeof jobs,
+    Launcher.ServiceRef
+  > = true;
+  const _serviceRefString: AssertExtends<"wire/Key", Launcher.ServiceRef> =
+    true;
+
+  const spawned = spawn({
+    node,
+    process: command,
+    ready: { services: [jobs, "wire/Key"], poll: "50 millis" },
+  });
   type SpawnReq = ReqOf<typeof spawned>;
   type SpawnErr = ErrOf<typeof spawned>;
   const _spawnNeedsSpawner: AssertExtends<
@@ -83,11 +105,20 @@ function typeLock(
     Launcher.ReadyTimedOut,
     AwaitReadyErr
   > = true;
+  const _awaitReadyHasUnaddressed: AssertExtends<
+    UnaddressedNode,
+    AwaitReadyErr
+  > = true;
 
   type KillErr = ErrOf<ReturnType<typeof handle.kill>>;
   const _killHasSpent: AssertExtends<Launcher.HandleSpent, KillErr> = true;
 
-  const upped = up({ node, process: command }, { concurrency: 2 });
+  type HandoffErr = ErrOf<ReturnType<typeof handle.handoff>>;
+  const _handoffHasAssume: AssertExtends<AssumeTokenMismatch, HandoffErr> =
+    true;
+  const _handoffNoConfig: AssertNotExtends<ConfigError, HandoffErr> = true;
+
+  const upped = up({ node, process: command }, { concurrency: "unbounded" });
   type UpErr = ErrOf<typeof upped>;
   const _upHasReadyTimedOut: AssertExtends<Launcher.ReadyTimedOut, UpErr> =
     true;
@@ -107,16 +138,23 @@ function typeLock(
   const _assumeUnaddressed: AssertExtends<UnaddressedNode, AssumeErr> = true;
 
   void _mintIsRedactedToken;
+  void _handleTokenBrand;
   void _readyTimeoutIsConfig;
   void _readyPollIsConfig;
   void _processIsFactory;
   void _entryIsFactory;
+  void _layerHasSpawner;
+  void _serviceRefTag;
+  void _serviceRefString;
   void _spawnNeedsSpawner;
   void _spawnNeedsScope;
   void _spawnHasConfigError;
   void _awaitReadyNoConfig;
   void _awaitReadyHasTimedOut;
+  void _awaitReadyHasUnaddressed;
   void _killHasSpent;
+  void _handoffHasAssume;
+  void _handoffNoConfig;
   void _upHasReadyTimedOut;
   void _upHasChildExited;
   void _upHasHandleNotReady;
