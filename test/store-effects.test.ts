@@ -46,7 +46,7 @@ describe("Store.effects", () => {
 
   it.effect("custom methods resolve through the effects object too", () =>
     Effect.gen(function* () {
-      const store = Store.effects("queue", queueContract);
+      const store = Store.effects("test/events-store", queueContract);
 
       yield* store.record({ id: "a" });
       yield* store.event.append({ id: "b" });

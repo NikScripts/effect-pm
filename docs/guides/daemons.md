@@ -2,7 +2,7 @@
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
-> and live type previews — is at <https://hyperlink.cool/docs/daemons>.
+> and live type previews — is at <https://dev.hyperlink.cool/docs/daemons>.
 <!-- docs-site-link:end -->
 # Daemon
 
@@ -186,6 +186,14 @@ Polling.accelerating({
   slow: Duration.minutes(5),
 })
 ```
+
+## Reconfiguring (layer patches)
+
+`Daemon.configure(Tag, patch)` folds a config patch onto the daemon layer **once at
+build** — same Layer-patch model as WorkPool / Gate. Merge with
+`Layer.provideMerge`. Not hot reload of a running supervisor; for live retunes see
+[DynamicConfig](/docs/configuration) or rebuild the stack. Details:
+[WorkPool → Reconfiguring](/docs/work-pools#reconfiguring-layer-patches).
 
 ## Examples in this repo
 

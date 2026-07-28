@@ -2,7 +2,7 @@
 
 // A no-widget prototype: a real WorkPool running in the browser, with a hand-wired
 // control panel — live stats read straight off the current `status` stream, buttons that
-// call the handle. The resource itself lives in ./demo-queue (declared once); this file is
+// call the handle. The HyperService itself lives in ./demo-queue (declared once); this file is
 // just the UI. No dashboard widgets (those wait on the web-ui-refresh fix). Scoped to .pm-dashboard.
 
 import * as React from "react";

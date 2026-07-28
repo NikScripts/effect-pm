@@ -1,5 +1,7 @@
 import { HashMap } from "effect";
 import { expect, it } from "vitest";
+import { kind as queueKind } from "../src/WorkPool";
+import { kind as daemonKind } from "../src/Daemon";
 import { leafMemberKinds, wireKindOf } from "../src/ui/memberKind";
 import {
   emptyRegistry,
@@ -14,31 +16,31 @@ import { base as tuiBase } from "../src/tui/cellWidgets";
 import { base as webBase } from "../src/web/widgets";
 
 // Distinct widgets, compared by reference identity (widgetFor returns the stored one).
-const mk = (label: string): string => label;
+const Box = (label: string): string => label;
 
 const empty = (fallback: string): WidgetRegistry<string> => emptyRegistry(fallback);
 
-it("resolves key → kind → fallback, in that order", () => {
-  const q = mk("queue");
-  const special = mk("special");
-  const fb = mk("fallback");
-  const reg = withEntries(empty(fb), [forKind("queue", q), forKey("app/One", special)]);
+it("resolves key → stamped kind → fallback, in that order", () => {
+  const q = Box("queue-widget");
+  const special = Box("special");
+  const fb = Box("fallback");
+  const reg = withEntries(empty(fb), [forKind(queueKind, q), forKey("app/One", special)]);
 
-  expect(widgetFor(reg, "app/One", "queue")).toBe(special); // exact key beats its kind
-  expect(widgetFor(reg, "app/Two", "queue")).toBe(q); // no key → kind
+  expect(widgetFor(reg, "app/One", queueKind)).toBe(special); // exact key beats its kind
+  expect(widgetFor(reg, "app/Two", queueKind)).toBe(q); // no key → kind
   expect(widgetFor(reg, "app/Two", "mystery")).toBe(fb); // neither → fallback
 });
 
 it("withEntries extends the base and overrides only the matching entry", () => {
-  const q = mk("queue");
-  const p = mk("daemon");
-  const base = withEntries(empty(mk("fb")), [forKind("queue", q), forKind("daemon", p)]);
+  const q = Box("queue-widget");
+  const p = Box("daemon-widget");
+  const base = withEntries(empty(Box("fb")), [forKind(queueKind, q), forKind(daemonKind, p)]);
 
-  const q2 = mk("queue-v2");
-  const extended = withEntries(base, [forKind("queue", q2)]);
+  const q2 = Box("queue-v2");
+  const extended = withEntries(base, [forKind(queueKind, q2)]);
 
-  expect(widgetFor(extended, "x", "queue")).toBe(q2); // overridden
-  expect(widgetFor(extended, "x", "daemon")).toBe(p); // base entry intact
+  expect(widgetFor(extended, "x", queueKind)).toBe(q2); // overridden
+  expect(widgetFor(extended, "x", daemonKind)).toBe(p); // base entry intact
 });
 
 it("isLeafTag accepts a keyed tag, rejects groups and non-tags", () => {

@@ -1,30 +1,30 @@
 /**
- * **SQLite backend for {@link DurableQueueStore}** — the priority-native durability plane over a
+ * **SQLite backend for {@link DurableWorkPoolStore}** — the priority-native durability plane over a
  * single table. Single-writer SQLite serializes, so `take` leases inside a transaction (no
  * `SKIP LOCKED` needed). Lifts `PersistedQueue`'s lease / `attempts` / expiry-recovery blueprint
  * onto a priority-native schema (dedup, escalation, sizes are first-class).
  *
  * Off the core entry — import from `hyperlink-ts/storage/sqlite`.
  *
- * @module storage/sqlite/durableQueue
+ * @module storage/sqlite/durableWorkPool
  */
 import { Clock, Context, Effect, Layer, Option, Schema, Scope } from "effect";
 import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import type { SqliteClientConfig } from "@effect/sql-sqlite-node/SqliteClient";
 import { SqlClient } from "effect/unstable/sql/SqlClient";
 import {
-  DurableQueueError,
-  DurableQueueStore,
+  DurableWorkPoolError,
+  DurableWorkPoolStore,
   durablePriorityRank,
-} from "../../DurableQueueStore";
+} from "../../DurableWorkPoolStore";
 import type {
   DurableEntry,
   DurablePriority,
-  DurableQueueStoreShape,
+  DurableWorkPoolStoreShape,
   DurableSizes,
-} from "../../DurableQueueStore";
+} from "../../DurableWorkPoolStore";
 
-const TABLE = "durable_queue";
+const TABLE = "durable_work_pool";
 
 // Opaque payload ⇄ JSON column (Schema-based, not raw JSON.parse/stringify). The payload is
 // already-encoded JSON owned by the caller, so the sync round-trip can't fail on our own data.
@@ -82,16 +82,16 @@ const rowToEntry = (row: unknown): DurableEntry => {
   };
 };
 
-const install = (sql: SqlClient): Effect.Effect<void, DurableQueueError> =>
+const install = (sql: SqlClient): Effect.Effect<void, DurableWorkPoolError> =>
   Effect.forEach(ddl, (stmt) => Effect.asVoid(sql.unsafe(stmt).unprepared), {
     discard: true,
   }).pipe(
-    Effect.mapError((cause) => new DurableQueueError({ operation: "install", cause })),
+    Effect.mapError((cause) => new DurableWorkPoolError({ operation: "install", cause })),
   );
 
-const makeService = (sql: SqlClient): DurableQueueStoreShape => {
+const makeService = (sql: SqlClient): DurableWorkPoolStoreShape => {
   const fail = (operation: string) => (cause: unknown) =>
-    new DurableQueueError({ operation, cause });
+    new DurableWorkPoolError({ operation, cause });
 
   return {
     offer: (entry) =>
@@ -237,32 +237,32 @@ const makeService = (sql: SqlClient): DurableQueueStoreShape => {
 };
 
 /**
- * Install the schema on an existing {@link SqlClient} and return the {@link DurableQueueStore} port
+ * Install the schema on an existing {@link SqlClient} and return the {@link DurableWorkPoolStore} port
  * — for tests (`:memory:`) or a shared client.
  *
  * @public
  */
 export const fromSqlClient = (
   sql: SqlClient,
-): Effect.Effect<DurableQueueStoreShape, DurableQueueError> =>
+): Effect.Effect<DurableWorkPoolStoreShape, DurableWorkPoolError> =>
   Effect.map(install(sql), () => makeService(sql));
 
 /**
- * `Layer` providing {@link DurableQueueStore} backed by SQLite (scoped `SqliteClient` lifecycle).
+ * `Layer` providing {@link DurableWorkPoolStore} backed by SQLite (scoped `SqliteClient` lifecycle).
  *
  * @public
  */
 export const layer = (
   config: SqliteClientConfig,
-): Layer.Layer<DurableQueueStore, DurableQueueError, Scope.Scope> =>
+): Layer.Layer<DurableWorkPoolStore, DurableWorkPoolError, Scope.Scope> =>
   Layer.effect(
-    DurableQueueStore,
+    DurableWorkPoolStore,
     Effect.gen(function* () {
       const scope = yield* Scope.Scope;
       const context = yield* Layer.buildWithScope(
         SqliteClient.layer(config),
         scope,
-      ).pipe(Effect.mapError((cause) => new DurableQueueError({ operation: "connect", cause })));
+      ).pipe(Effect.mapError((cause) => new DurableWorkPoolError({ operation: "connect", cause })));
       const sql = Context.get(context, SqlClient);
       yield* install(sql);
       return makeService(sql);
@@ -270,11 +270,11 @@ export const layer = (
   );
 
 /**
- * SQLite {@link DurableQueueStore} backend.
+ * SQLite {@link DurableWorkPoolStore} backend.
  *
  * @public
  */
-export const SQLiteDurableQueueStore = {
+export const SQLiteDurableWorkPoolStore = {
   layer,
   fromSqlClient,
 } as const;

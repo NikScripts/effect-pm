@@ -6,11 +6,11 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **4** | `cursor/hyperservice-open-deps-5679` | [legacy docs migration](./legacy-docs-migration.md) · fleet / wire / shapes closed | **Eng** — `docs/legacy/` removed; Daemon draft ported | work branch ahead of `integration` | docs ports + cite scrub | tip-check drafts; owner tip-sync | 2026-07-28 |
-| **G / TUI** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity | **design** — client adapters notes; tip-synced | same tip as `integration` | prior suites green | Notes: [`client-adapters-design.md`](./client-adapters-design.md) — Promise / TanStack / tRPC-shape / Effect-reactive helpers; Eng TBD | 2026-07-24 |
+| **4** | `cursor/hyperservice-open-deps-5679` | [legacy docs migration](./legacy-docs-migration.md) | **Eng** — gap recovery after legacy delete | work branch (merged tip) | docs recovery | org discussion + tip-sync | 2026-07-28 |
+| **G / TUI** | `cursor/view-withsize-types-125f` | TUI ↔ web Dashboard Group parity · **View compose** · `ui.data` | **tip-synced** — compose `data` door + shared RuntimeProvider | same tip as `integration` | typecheck 0; view suites + data 18/18 | Hold kit Dashboard | 2026-07-28 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **5**, **G** | 2026-07-26 |
 | **5** | `cursor/launcher-handoff-design-929b` | [launcher + handoff brief](./launcher-and-handoff-brief.md) · [rename](./rename-hyperlink-handoff.md) | **Launcher refinements** — Config/`command`/metrics | same tip as `integration` | typecheck + launcher suites | Owner: lock C #27–36 | 2026-07-28 |
-| **Docs site** | `cursor/docs-site-edge-cache-dbdc` (ε) | [origin down](./docs-site-origin-down.md) · edge cache · SEO · Lighthouse | **tip-synced** — LH home/api 100s; static edge cache; safe origin | same tip as `integration` | home/api 100/100/100/100; install a11y/seo 100 (perf 98 / BP 96 — React #418) | 1Password CLI deferred; **no landing UI without owner OK** | 2026-07-27 |
+| **Docs site** | `cursor/docs-site-edge-cache-dbdc` (ε) | [dev host](./docs-site-dev-host.md) · edge cache · SEO | **tip-synced** — apex coming-soon / docs on `dev` | same tip as `integration` (`d271020f2`) | host-gate Eng'd; DO ALIAS added | **owner: CF CNAME `dev`**; then redeploy + `cf:ensure` | 2026-07-28 |
 | **1** | *(frozen)* | [Examples book](./agent-01-examples-book.md) · [Phase 3](./agent-01-docs-corpus-phase3-plan.md) | **frozen / superseded** — E1 examples on tip; intro voice [#68](https://github.com/nikolasstow/Hyperlink/pull/68) closed | — | — | Branch deleted (unique tip was pre-rebrand `docs/index.md`) | 2026-07-26 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
 | **3** | *(dead)* | [identity-coordinator](./identity-coordinator.md) · [loud-failures](./loud-failures-design.md) | **dead** — Soft / verify / F4 / lineId memo Eng’d on tip | — | — | Work branch deleted (was tip-contained in `integration`) | 2026-07-26 |
@@ -28,15 +28,16 @@
 0. **Agent E:** impossible-states plan ([`impossible-states-proposal.md`](./impossible-states-proposal.md)). **DONE + merged:** P1 (node↔protocol wiring bug → compile error, cast-free) + P5 (http transport dies in browser). **P2 SKIPPED** (cast). **P4 already-enforced** (loose-fields payload already rejected; proposal mis-scoped). **P3 deferred** (opaque serve layers). Clean wins complete. Reserved `src/Hyperlink.ts` node/client surface until fully merged (done). **Tag-config reservation RELEASED — Agent D WorkPool/Gate/Daemon payload-config unblocked.**
 
 ### Active (owner approval required)
-1. **Agent 4:** Fleet/ApiMetrics/adornments closed. **Legacy docs migration** — deleted `docs/legacy/**`; ported Daemon draft; folded agent SSOTs into root `AGENTS.md` + stores/install. Handoff: [`legacy-docs-migration.md`](./legacy-docs-migration.md). Next: tip-check drafts / owner tip-sync.
-2. **Agent G / TUI:** Dashboard Group parity + client-adapters design (`cursor/tui-dashboard-parity-125f`).
+1. **Agent 4:** Fleet/ApiMetrics closed. **Legacy docs** — tree deleted; recovering gap content into living book; IA still owner-open. Handoff: [`legacy-docs-migration.md`](./legacy-docs-migration.md).
+2. **Agent G / TUI:** View compose + Tag mint + **`ui.data`** on `cursor/view-withsize-types-125f` — lock [`view-compose-lock.md`](./view-compose-lock.md); guides [`../guides/view-tag-types.md`](../guides/view-tag-types.md) · [`../guides/view-data.md`](../guides/view-data.md). Hold kit Dashboard.
 3. **Agent 5 (Launcher + handoff):** Track A+B Eng'd; HyperService vocab/URL purge + Effect-fullest Launcher + **refinements** (Config auto-read, `Launcher.command`, metrics) on tip; Track C bake #27–36 proposed. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md). Rename SSOT: [`rename-hyperlink-handoff.md`](./rename-hyperlink-handoff.md).
-4. **Docs site:** tip-synced + redeployed. Lighthouse **home/api 100/100/100/100**; install a11y/seo 100 (perf 98 / BP 96 — React #418 hydration). Static `/assets`+`/search` CF edge HIT. Landing UI unchanged (Coming soon). 1Password CLI deferred.
+4. **Docs site:** Split hosts — `hyperlink.cool` coming-soon only; docs demo on `dev.hyperlink.cool`. DO domain ALIAS added; **owner: Cloudflare CNAME `dev` → `hyperlink-docs-ekhme.ondigitalocean.app` (proxied)** — CF token lacks DNS write. Then redeploy + `cf:ensure`. `@pm` alias still open.
 
 ### Frozen / dead (do not assign)
 - **Agent 1:** frozen — Examples book E1 already on tip; stale intro PR #68 closed; branch deleted.
 - **Agent 3:** dead — Soft/verify/F4/memo Eng’d on tip; work branch deleted.
-- **Agent D (+ peers):** named handles — do not reassign to Agent 3.
+- **Agent D (+ peers):** named handles — do not reassign (was: do not give to Agent 3).
+- **Hygiene:** landed on `integration` (`hyp` CLI + landing polish).
 
 ### Ready / owner calls
 5. **Node catalog + identity lookup** — design [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md); Phase-2–3 catalog/directory/**D3**/**D4**/**D7**/`Node.Prototype` Eng on tip; **`askIncumbent` Eng’d**; **X1 Eng’d**; **managers → [`identity-coordinator.md`](./identity-coordinator.md) M4–M6 Eng’d** (v1 complete)

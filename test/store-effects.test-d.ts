@@ -22,7 +22,7 @@ const flatContract = Store.contract(
 );
 
 const sensorEffects = Store.effects("sensors", nestedContract);
-const queueEffects = Store.effects("queue", flatContract);
+const queueEffects = Store.effects("test/events-store", flatContract);
 
 // ============================================================================
 // Nested leaf effects — append/read carry `Storage` in their requirement channel.

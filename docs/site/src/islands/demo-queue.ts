@@ -1,4 +1,4 @@
-// The `docs/DemoQueue` resource — declared here in a plain (non-"use client") module so a
+// The `docs/DemoQueue` HyperService — declared here in a plain (non-"use client") module so a
 // content hot-edit that re-imports the QueueIsland entry doesn't re-declare it (the registry
 // rejects a duplicate group id). Declared once; the island imports these prebuilt atoms.
 

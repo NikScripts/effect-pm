@@ -1,11 +1,18 @@
 {
-  "extends": "../../tsconfig.json",
+  "extends": "../../src/web/tsconfig.json",
   "compilerOptions": {
     "rootDir": "../..",
-    "jsx": "react-jsx",
     "noEmit": true,
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["react", "react-dom"]
+    "declaration": false,
+    "declarationMap": false
   },
-  "include": ["."]
+  "include": [
+    "./**/*.ts",
+    "./**/*.tsx",
+    "../../src/web/**/*.ts",
+    "../../src/web/**/*.tsx",
+    "../../src/ui/**/*.ts",
+    "../../src/ui/**/*.tsx"
+  ],
+  "exclude": ["../../node_modules", "../../dist"]
 }

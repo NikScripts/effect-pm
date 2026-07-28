@@ -2,7 +2,7 @@ import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { describe, expect, it } from "@effect/vitest";
 import { Context, Effect, Layer, Option, Scope } from "effect";
 import { SqlClient } from "effect/unstable/sql/SqlClient";
-import { SQLiteDurableQueueStore } from "../src/storage/sqlite";
+import { SQLiteDurableWorkPoolStore } from "../src/storage/sqlite";
 
 // A fresh in-memory SQLite store per test — real SQL semantics, no shared state.
 const makeStore = Effect.gen(function* () {
@@ -12,10 +12,10 @@ const makeStore = Effect.gen(function* () {
     scope,
   );
   const sql = Context.get(context, SqlClient);
-  return yield* SQLiteDurableQueueStore.fromSqlClient(sql).pipe(Effect.orDie);
+  return yield* SQLiteDurableWorkPoolStore.fromSqlClient(sql).pipe(Effect.orDie);
 });
 
-describe("SQLiteDurableQueueStore", () => {
+describe("SQLiteDurableWorkPoolStore", () => {
   it.live("offer → take → complete preserves payload; sizes track pending", () =>
     Effect.gen(function* () {
       const store = yield* makeStore;

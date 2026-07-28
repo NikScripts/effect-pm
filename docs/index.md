@@ -2,7 +2,7 @@
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
-> and live type previews — is at <https://hyperlink.cool/docs/index>.
+> and live type previews — is at <https://dev.hyperlink.cool/docs/index>.
 <!-- docs-site-link:end -->
 # Hyperlink for Effect
 
@@ -84,25 +84,28 @@ const scheduler = Daemon.layer(Digest, {
 **Two HyperServices, two runtimes, one program.** (Named Node: `Node.unix(Worker, …)` pairs with
 `Hyperlink.unix(Worker)`; nameless: `Node.unix([serve…])` pairs with `Hyperlink.unix(Tag)`.)
 
-When you need another machine (or a browser), step up to HTTP. `Node.httpServer` pairs with whatever
-HTTP server your runtime provides — extract that once; later examples use `nodeServer`:
+When you need another machine (or a browser), step up to HTTP. Same worker, same Tag — only the
+listen changes:
 
 {.twoslash}
 ``` ts
+import * as WorkPool from "hyperlink-ts/WorkPool"
 import * as Node from "hyperlink-ts/Node"
-import { Layer } from "effect"
-import { NodeHttpServer } from "@effect/platform-node"
-import { createServer } from "node:http"
+import { Effect, Schema } from "effect"
+const EmailJob = Schema.Struct({ to: Schema.String })
+class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+declare const sendEmail: (job: typeof EmailJob.Type) => Effect.Effect<void>
 // ---cut---
-const nodeServer = (port: number) => <A, E, R>(layer: Layer.Layer<A, E, R>) =>
-  Node.httpServer(layer).pipe(
-    Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
-  )
+const worker = Node.http(
+  WorkPool.serve(Emails, { effect: sendEmail }),
+  3001,
+)
 ```
 
-Same worker over HTTP is `WorkPool.serve(Emails, { effect: sendEmail }).pipe(nodeServer(3001))`,
-and the scheduler dials with `Hyperlink.connect(Emails, Hyperlink.protocolHttp(3001))`. Move a
-runtime to another machine and only the address changes.
+The scheduler dials with `Hyperlink.connect(Emails, Hyperlink.protocolHttp(3001))`. Move a runtime to
+another machine and only the address changes. (`Node.httpServer` is the escape hatch when you need a
+custom platform bind — prefer `Node.http` / `Node.ws` day to day; see
+[Managing Layers](/docs/managing-layers).)
 
 ## The same Handle steers it
 
@@ -127,7 +130,7 @@ yield* emails.events.pipe(Stream.runForEach(onChange))
 })
 ```
 
-Dashboards ride the same Tag — a **`pm` CLI**, a **TUI**, and a **web** dashboard — without touching
+Dashboards ride the same Tag — a **CLI**, a **TUI**, and a **web** dashboard — without touching
 the Implementation.
 
 ## Build your own
@@ -173,9 +176,7 @@ Same Tag, three placements — in-process, served, or connected:
 ``` ts
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import * as Node from "hyperlink-ts/Node"
-import { Effect, Schema, SubscriptionRef, Layer } from "effect"
-import { NodeHttpServer } from "@effect/platform-node"
-import { createServer } from "node:http"
+import { Effect, Schema, SubscriptionRef } from "effect"
 class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
   value: Hyperlink.ref(Schema.Number),
   increment: Hyperlink.effectFn({ by: Schema.Number }),
@@ -189,14 +190,10 @@ const counterImpl = Effect.gen(function* () {
     reset: SubscriptionRef.set(ref, 0),
   }
 })
-const nodeServer = (port: number) => <A, E, R>(layer: Layer.Layer<A, E, R>) =>
-  Node.httpServer(layer).pipe(
-    Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
-  )
 // ---cut---
-Hyperlink.layer(Counter, counterImpl)                                         // in-process
-Hyperlink.serve(Counter, counterImpl).pipe(nodeServer(4000))                  // served over RPC
-Hyperlink.connect(Counter, Hyperlink.protocolHttp(4000))                      // from another runtime
+Hyperlink.layer(Counter, counterImpl)                            // in-process
+Node.http(Hyperlink.serve(Counter, counterImpl), 4000)           // served over RPC
+Hyperlink.connect(Counter, Hyperlink.protocolHttp(4000))         // from another runtime
 ```
 
 It gets operability and dashboard slots for free — because it is the same kind of thing `Emails` is.
@@ -237,8 +234,6 @@ import * as ShardMap from "hyperlink-ts/ShardMap"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import * as Node from "hyperlink-ts/Node"
 import { Layer, Schema } from "effect"
-import { NodeHttpServer } from "@effect/platform-node"
-import { createServer } from "node:http"
 class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
 class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
 class DropletCentral extends Node.Tag<DropletCentral>()("app/DropletCentral") {}
@@ -251,14 +246,9 @@ class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
 }).pipe(
   Hyperlink.nodes([DropletEast, DropletWest, DropletCentral]),
 ) {}
-const nodeServer = (port: number) => <A, E, R>(layer: Layer.Layer<A, E, R>) =>
-  Node.httpServer(layer).pipe(
-    Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
-  )
 // ---cut---
-const east = ShardMap.serve(Sessions).pipe(
+const east = Node.http([ShardMap.serve(Sessions)], 3001).pipe(
   Layer.provide(Hyperlink.peersLayer(Sessions, DropletEast)),
-  nodeServer(3001),
 )
 ```
 

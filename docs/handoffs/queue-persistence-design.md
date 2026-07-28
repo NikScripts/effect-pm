@@ -20,21 +20,21 @@ an in-memory form is *coherent* for observability but a *contradiction* for dura
 
 **Durability plane → serviceOption (presence-driven).**
 - Durability can't have a meaningful in-memory default (the whole point is surviving restart), so
-  it is **not** baked in. A `DurableQueueStore` in context **+ an `itemSchema`** ⇒ durable; nothing
+  it is **not** baked in. A `DurableWorkPoolStore` in context **+ an `itemSchema`** ⇒ durable; nothing
   in context ⇒ the normal ephemeral in-memory queue. **Providing the layer is the switch** — no
   `persist: true`.
 - The retained `persist` field is now escape-hatch/tuning only: `false` = opt this queue out even
   when a store is in context; `{ … }` = lease/maxAttempts/poll tuning; `true` = legacy no-op enabler.
 
 **Status:**
-- ✅ *Shipped in the engine:* durability is presence-driven via `serviceOption(DurableQueueStore)`.
+- ✅ *Shipped in the engine:* durability is presence-driven via `serviceOption(DurableWorkPoolStore)`.
   The **public `persist` field and `QueuePersistOptions` are removed** — the layer is the only
   switch; opting a queue out = scope the layer so it doesn't receive it; the dead-letter budget
   derives from the queue's `attempts` (SSOT). Typecheck (both projects) + Effect LS clean;
   `queue-durable.sqlite` + `queue-resource` green (81 tests, durable test uses the layer alone).
   **Breaking — needs a changeset.**
 - ⏳ *Follow-ups (reviewed, not built):* the SQL priority-native durable table (below) replacing the
-  current `DurableQueueStore` impl (also fixes the sync-codec-defect that wedges a queue on one bad
+  current `DurableWorkPoolStore` impl (also fixes the sync-codec-defect that wedges a queue on one bad
   row); lease/poll tuning onto the backend layer (engine defaults for now); the baked-in in-memory
   observability store (waits on the new `Store`/EventJournal landing).
 

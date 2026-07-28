@@ -2,7 +2,7 @@
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
-> and live type previews — is at <https://hyperlink.cool/docs/gates>.
+> and live type previews — is at <https://dev.hyperlink.cool/docs/gates>.
 <!-- docs-site-link:end -->
 # Gate
 
@@ -145,7 +145,7 @@ const FleetLive = Layer.mergeAll(
 )
 ```
 
-Use the **same** `rateLimit.key` (or default resource ids that you intend to
+Use the **same** `rateLimit.key` (or default service keys that you intend to
 share) on every peer. Soft memory + distributed deploy = N× the limit (docs
 warn; not fail-loud in v1).
 
@@ -155,6 +155,12 @@ warn; not fail-loud in v1).
 `test/effect-redis-stores.test.ts` (`Persistence.layerRedis` /
 `PersistedQueue.layerStoreRedis`). Runnable form auto-detects Redis:
 `pnpm exec tsx examples/forms/hyperlink/gate-rate-limit-fleet.ts`.
+
+## Reconfiguring (layer patches)
+
+`Gate.configure(Tag, patch)` folds a config patch onto the gate layer **once at build**
+— same model as WorkPool / Daemon (`Layer.provideMerge`). Not hot reload. See
+[WorkPool → Reconfiguring](/docs/work-pools#reconfiguring-layer-patches).
 
 ## Call it
 
@@ -199,6 +205,6 @@ concurrency 2). Hit **Run** to invoke it and watch `in-flight`; hit **Run ×5** 
 you'll see only two run at once while the rest wait behind the gate. The live
 values read straight off the service's `inFlight` subscribable — no dashboard widget.
 
-``` run-resource
+``` gate
 docs/Double
 ```

@@ -2,11 +2,11 @@ import * as SqliteClient from "@effect/sql-sqlite-node/SqliteClient";
 import { describe, expect, it } from "@effect/vitest";
 import { Context, Duration, Effect, Layer, Ref, Schema, Scope } from "effect";
 import { SqlClient } from "effect/unstable/sql/SqlClient";
-import { DurableQueueStore } from "../src/DurableQueueStore";
+import { DurableWorkPoolStore } from "../src/DurableWorkPoolStore";
 import * as WorkPool from "../src/WorkPool";
-import { SQLiteDurableQueueStore } from "../src/storage/sqlite";
+import { SQLiteDurableWorkPoolStore } from "../src/storage/sqlite";
 
-// A DurableQueueStore over a shared in-memory SQLite client — the same store can back two queue
+// A DurableWorkPoolStore over a shared in-memory SQLite client — the same store can back two queue
 // instances (to simulate a restart).
 const makeStoreLayer = Effect.gen(function* () {
   const scope = yield* Scope.Scope;
@@ -15,8 +15,8 @@ const makeStoreLayer = Effect.gen(function* () {
     scope,
   );
   const sql = Context.get(context, SqlClient);
-  const shape = yield* SQLiteDurableQueueStore.fromSqlClient(sql).pipe(Effect.orDie);
-  return Layer.succeed(DurableQueueStore, shape);
+  const shape = yield* SQLiteDurableWorkPoolStore.fromSqlClient(sql).pipe(Effect.orDie);
+  return Layer.succeed(DurableWorkPoolStore, shape);
 });
 
 const waitUntil = (predicate: Effect.Effect<boolean>) =>

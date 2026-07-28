@@ -6,6 +6,8 @@ import type { PathsForPages, GetConfigResponse } from 'waku/router';
 // prettier-ignore
 import type { getConfig as File_404_getConfig } from './pages/404';
 // prettier-ignore
+import type { getConfig as File_Root_getConfig } from './pages/_root';
+// prettier-ignore
 import type { getConfig as File_ApiPkgModuleSymbol_getConfig } from './pages/api/[pkg]/[module]/[symbol]';
 // prettier-ignore
 import type { getConfig as File_ApiPkgModuleIndex_getConfig } from './pages/api/[pkg]/[module]/index';
@@ -29,6 +31,7 @@ import type { getConfig as File_Releases_getConfig } from './pages/releases';
 // prettier-ignore
 type Page =
 | ({ path: '/404' } & GetConfigResponse<typeof File_404_getConfig>)
+| ({ path: '/_root' } & GetConfigResponse<typeof File_Root_getConfig>)
 | ({ path: '/api/[pkg]/[module]/[symbol]' } & GetConfigResponse<typeof File_ApiPkgModuleSymbol_getConfig>)
 | ({ path: '/api/[pkg]/[module]' } & GetConfigResponse<typeof File_ApiPkgModuleIndex_getConfig>)
 | ({ path: '/api/[pkg]' } & GetConfigResponse<typeof File_ApiPkgIndex_getConfig>)

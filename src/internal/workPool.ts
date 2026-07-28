@@ -104,7 +104,7 @@ import type { RateLimiter as EffectRateLimiter } from "effect/unstable/persisten
 import { withLogScope } from "./logs/scope";
 import { isJsonValue } from "./json";
 import type { JsonValue } from "./json";
-import { DurableQueueStore } from "../DurableQueueStore";
+import { DurableWorkPoolStore } from "../DurableWorkPoolStore";
 import type { LaneStore } from "./laneStore";
 import { laneStoreFactoryFromConfig } from "./laneStoreFactory";
 import { levelToDefaultPriority } from "./priorityMapping";
@@ -122,7 +122,7 @@ import type {
 import type {
   DurableEntry,
   OfferResult,
-} from "../DurableQueueStore";
+} from "../DurableWorkPoolStore";
 import * as Hyperlink from "../Hyperlink";
 import {
   configureLayer,
@@ -1042,7 +1042,7 @@ export interface WorkPoolConfigBase<T> {
   readonly shutdownMode?: "drain" | "finishActive";
 }
 
-// Durability is **presence-driven**, with no config field: provide a `DurableQueueStore` layer
+// Durability is **presence-driven**, with no config field: provide a `DurableWorkPoolStore` layer
 // and, with an `itemSchema` present, the store becomes the source of truth — enqueue persists, a
 // feeder leases work into the workers, completion/failure update the store, a restart recovers
 // in-flight work (at-least-once + dedup key). Absence of the layer = the normal ephemeral in-memory
@@ -1886,17 +1886,17 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
     // rest of the engine drives it lane-agnostically through the `LaneStore` interface.
     const laneStore = yield* makeLaneStore(capacity);
 
-    // ─── Durability (presence-driven: a DurableQueueStore in context) ───
-    // The layer is the switch — no config flag. A `DurableQueueStore` in context makes the store
+    // ─── Durability (presence-driven: a DurableWorkPoolStore in context) ───
+    // The layer is the switch — no config flag. A `DurableWorkPoolStore` in context makes the store
     // the source of truth (enqueue persists, a feeder leases work into the lanes, completion/failure
     // update the store, boot recovers in-flight work). It requires an `itemSchema` so the payload
     // can serialize; a store in context without a codec is a misconfiguration we surface. No store
     // → the in-memory lanes are the queue, exactly as before. In-memory durability is a
     // contradiction, so this stays serviceOption rather than a baked-in default.
-    const durableStoreOption = yield* Effect.serviceOption(DurableQueueStore);
+    const durableStoreOption = yield* Effect.serviceOption(DurableWorkPoolStore);
     if (Option.isSome(durableStoreOption) && persistCodec === undefined) {
       yield* Effect.logWarning(
-        `Queue "${queueName}" not durable: a DurableQueueStore is in context but the queue has no itemSchema (the payload must serialize)`,
+        `Queue "${queueName}" not durable: a DurableWorkPoolStore is in context but the queue has no itemSchema (the payload must serialize)`,
       );
     }
     const persist =

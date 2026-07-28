@@ -75,7 +75,7 @@ DOMAIN_KEEP = [
     "QueueEvent",
     "QueueMetrics",
     "QueueTag",
-    "DurableQueueStore",
+    "DurableWorkPoolStore",
 ]
 
 # Link / filename renames (old basename → new).

@@ -7,7 +7,7 @@
  *
  * ```ts
  * import {
- *   SQLiteDurableQueueStore,
+ *   SQLiteDurableWorkPoolStore,
  *   SQLiteHistoryStore,
  * } from "hyperlink-ts/storage/sqlite";
  * ```
@@ -18,5 +18,5 @@
  * @module storage/sqlite
  */
 
-export { SQLiteDurableQueueStore } from "./durableQueue";
+export { SQLiteDurableWorkPoolStore } from "./durableWorkPool";
 export { SQLiteHistoryStore } from "./historyStore";

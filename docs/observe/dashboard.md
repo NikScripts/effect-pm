@@ -1,8 +1,13 @@
 {#dashboard title="Dashboard" status="draft" appliesTo=all}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://dev.hyperlink.cool/docs/dashboard>.
+<!-- docs-site-link:end -->
 # Dashboard
 
-The web dashboard renders a live view over your HyperServices — a drill-down of queue / process /
-API / group cards, each with stats, charts, controls, and streaming logs. You point it at a
+The web dashboard renders a live view over your HyperServices — a drill-down of WorkPool / Daemon /
+Gate / group cards, each with stats, charts, controls, and streaming logs. You point it at a
 reactive runtime and a root `Group`:
 
 ``` tsx
@@ -85,6 +90,41 @@ server: {
 ```
 
 A worked end-to-end setup is in `examples/hyperlink-web` (three nodes, one WebSocket each).
+
+## Styling the web widgets (Tailwind)
+
+The `hyperlink-ts/web` widgets are shadcn-style — Tailwind utility classes plus CSS-variable
+theme tokens. Tailwind **does not scan `node_modules` by default**, so two things must be
+wired up in the consumer or the widgets render unstyled:
+
+1. **Scan the package** so the utilities used inside the widgets get generated.
+
+   Tailwind v4 (in your CSS):
+
+   ```css
+   @import "tailwindcss";
+   @source "../node_modules/hyperlink-ts/dist";
+   ```
+
+   Tailwind v3 (`tailwind.config`):
+
+   ```js
+   content: ["./src/**/*.{ts,tsx}", "./node_modules/hyperlink-ts/dist/**/*.js"],
+   ```
+
+2. **Define the theme tokens** the widgets reference (`--card`, `--muted-foreground`,
+   `--border`, `--primary`, `--accent`, `--destructive`, `--ring`, `--radius`, …) plus the
+   `.safe-area` class (device-inset padding) and the view-transition keyframes the drill-down
+   uses. The shipped `src/web/theme.css` carries all of these — import it, or copy its
+   `@theme inline` + `:root` + `.safe-area` + `::view-transition-*` blocks. Without
+   `.safe-area` the dashboard renders edge-to-edge with no margins.
+
+3. **Install the optional peer deps** the widgets use: `react` / `react-dom`, `recharts`
+   (metric charts), and `@tanstack/react-table` (API endpoint table). See
+   [Install](/docs/install).
+
+Symptom map: widgets render **unstyled** → #1; wrong / missing colours / no margins → #2;
+**module-not-found** at runtime → #3.
 
 ### Fleets — peers dial the same wire
 

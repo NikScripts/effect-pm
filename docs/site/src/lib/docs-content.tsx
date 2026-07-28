@@ -12,14 +12,45 @@ import { runServer } from "./runtime.js";
 import { chapters, chapterBySlug } from "./content.js";
 import { nav } from "../../../nav.js";
 import { highlightToReact, loadHighlighter } from "./highlight.js";
-import { QueueIsland } from "../islands/QueueIsland.js";
-import { GateIsland } from "../islands/GateIsland.js";
-import { CounterIsland } from "../islands/CounterIsland.js";
+// Lightweight islands only — PackageInstall / CopyButton stay static so every code block can copy.
+// Demo / protocol islands pull heavier client graphs (Hyperlink+Ref+Store+widgets.css, or the
+// listen-protocol tabber); import those ONLY when the chapter contains their fence lang, otherwise
+// /docs/install and peers modulepreload unused JS (Lighthouse unused-js).
 import { PackageInstall } from "../islands/PackageInstall.js";
-import { ListenProtocol } from "../islands/ListenProtocol.js";
 import { CopyButton } from "../islands/CopyButton.js";
 import { type ChapterMeta, expandScopes, parseChapter } from "./standards-manifest.js";
 import { buildTermIndex, slugify } from "./glossary.js";
+
+/** Per-chapter island slots — filled by `loadDemoIslands` before `toReact`. */
+let demoIslands: {
+  queue?: React.ComponentType;
+  gate?: React.ComponentType;
+  hyperlink?: React.ComponentType;
+  listen?: React.ComponentType<{ defaultProto?: string }>;
+} = {};
+
+const collectFenceLangs = (n: any, out: Set<string> = new Set()): Set<string> => {
+  if (n?.tag === "code_block" && typeof n.lang === "string" && n.lang !== "") out.add(n.lang);
+  for (const c of n?.children ?? []) collectFenceLangs(c, out);
+  return out;
+};
+
+const loadDemoIslands = async (doc: any): Promise<void> => {
+  demoIslands = {};
+  const langs = collectFenceLangs(doc);
+  if (langs.has("queue")) {
+    demoIslands.queue = (await import("../islands/QueueIsland.js")).QueueIsland;
+  }
+  if (langs.has("gate") || langs.has("run-resource")) {
+    demoIslands.gate = (await import("../islands/GateIsland.js")).GateIsland;
+  }
+  if (langs.has("hyperlink")) {
+    demoIslands.hyperlink = (await import("../islands/CounterIsland.js")).CounterIsland;
+  }
+  if (langs.has("listen")) {
+    demoIslands.listen = (await import("../islands/ListenProtocol.js")).ListenProtocol;
+  }
+}
 
 // Re-exported for back-compat: the glossary data now lives in ./glossary (shared with highlight.ts).
 export { glossaryEntries, type GlossaryEntry } from "./glossary.js";
@@ -150,7 +181,19 @@ const toReact = (n: any): React.ReactNode => {
     case "soft_break": case "softbreak": return " ";
     case "hard_break": case "hardbreak": return h("br", { key: keySeq++ });
     case "verbatim": return h("code", { key: keySeq++ }, n.text);
-    case "strong": return h("strong", { key: keySeq++ }, kids(n));
+    case "strong": {
+      // Djot encodes `**text**` as strong→strong→text (`*` is one strong). Collapse the
+      // wrappers so SSR emits a single <strong> (nested strong is valid but noisy).
+      let node = n;
+      while (
+        Array.isArray(node.children) &&
+        node.children.length === 1 &&
+        node.children[0]?.tag === "strong"
+      ) {
+        node = node.children[0];
+      }
+      return h("strong", { key: keySeq++ }, kids(node));
+    }
     case "emph": return h("em", { key: keySeq++ }, kids(n));
     case "link": {
       suppress++;
@@ -161,7 +204,27 @@ const toReact = (n: any): React.ReactNode => {
     case "bullet_list": return h("ul", { key: keySeq++ }, kids(n));
     case "ordered_list": return h("ol", { key: keySeq++ }, kids(n));
     case "list_item": return h("li", { key: keySeq++ }, kids(n));
-    case "table": return h("table", { key: keySeq++ }, kids(n));
+    case "table": {
+      // Browsers insert an implicit <tbody> around bare <tr>s when parsing SSR HTML. React's
+      // client tree still expects the bare rows → hydration #418 on every guide page with a
+      // pipe table. Emit thead/tbody explicitly; skip Djot's always-present empty caption.
+      const children: ReadonlyArray<any> = n.children ?? [];
+      const caption = children.find((c) => c.tag === "caption");
+      const rows = children.filter((c) => c.tag === "row");
+      const headRows = rows.filter((c) => c.head === true);
+      const bodyRows = rows.filter((c) => c.head !== true);
+      const out: Array<React.ReactNode> = [];
+      if (caption !== undefined && plainText(caption).trim() !== "") {
+        out.push(h("caption", { key: keySeq++ }, kids(caption)));
+      }
+      if (headRows.length > 0) {
+        out.push(h("thead", { key: keySeq++ }, headRows.map(toReact)));
+      }
+      if (bodyRows.length > 0) {
+        out.push(h("tbody", { key: keySeq++ }, bodyRows.map(toReact)));
+      }
+      return h("table", { key: keySeq++ }, out);
+    }
     case "caption": return h("caption", { key: keySeq++ }, kids(n));
     case "row": return h("tr", { key: keySeq++ }, kids(n));
     case "cell": {
@@ -169,14 +232,31 @@ const toReact = (n: any): React.ReactNode => {
       return h(n.head ? "th" : "td", { key: keySeq++, style: align }, kids(n));
     }
     case "code_block":
-      // island seam: a ```queue block becomes a live client component (RSC boundary)
-      if (n.lang === "queue") return h(QueueIsland, { key: keySeq++ });
-      if (n.lang === "gate" || n.lang === "run-resource") return h(GateIsland, { key: keySeq++ });
-      if (n.lang === "hyperlink") return h(CounterIsland, { key: keySeq++ });
+      // island seam: ```queue/gate/hyperlink → live client islands (loaded only when present)
+      if (n.lang === "queue") {
+        return demoIslands.queue !== undefined
+          ? h(demoIslands.queue, { key: keySeq++ })
+          : null;
+      }
+      if (n.lang === "gate" || n.lang === "run-resource") {
+        return demoIslands.gate !== undefined
+          ? h(demoIslands.gate, { key: keySeq++ })
+          : null;
+      }
+      if (n.lang === "hyperlink") {
+        return demoIslands.hyperlink !== undefined
+          ? h(demoIslands.hyperlink, { key: keySeq++ })
+          : null;
+      }
       if (n.lang === "install") return h(PackageInstall, { key: keySeq++, packages: n.text });
       // protocol-listen overload family — tabs switch http / ws / unix / nPipe
       if (n.lang === "listen") {
-        return h(ListenProtocol, { key: keySeq++, defaultProto: n.text.trim() || undefined });
+        return demoIslands.listen !== undefined
+          ? h(demoIslands.listen, {
+              key: keySeq++,
+              defaultProto: n.text.trim() || undefined,
+            })
+          : null;
       }
       // everything else is Shiki-highlighted server-side (real React nodes). A `{.twoslash}`
       // attribute above the fence opts the block into TS-language-service hover types. Wrapped in a
@@ -204,6 +284,7 @@ export interface RenderedChapter {
 export const renderChapter = async (raw: string): Promise<RenderedChapter> => {
   const { doc, meta } = await runServer(parseChapter(raw));
   await loadHighlighter(); // ready the (sync) highlighter before the walk
+  await loadDemoIslands(doc); // dynamic-import heavy demos only when this chapter needs them
   keySeq = 0;
   suppress = 0;
   linkedSlugs = new Set();

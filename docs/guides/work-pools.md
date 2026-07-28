@@ -2,7 +2,7 @@
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
-> and live type previews — is at <https://hyperlink.cool/docs/work-pools>.
+> and live type previews — is at <https://dev.hyperlink.cool/docs/work-pools>.
 <!-- docs-site-link:end -->
 # WorkPool
 
@@ -492,16 +492,97 @@ don't overlap.
 
 ## Persistence and analytics
 
-Every queue comes with an **observability store** already wired in. By default it's
-in-memory: lifecycle events and metric windows are recorded, and `metrics.query`
-reads them back — for the life of the process. Provide a **durable** store instead
-(the toolkit ships a SQLite-backed one) and that history survives restarts: a
-dashboard reconnecting after a redeploy still sees yesterday's throughput.
+Three separate planes — do not collapse them into one “SQLite store”. Full wiring SSOT:
+[Stores](/docs/stores).
 
-The store is also an analytics surface in its own right — beyond `metrics.query` it
-answers questions like "the *slowest* completions" and "how many have completed",
-computed over the recorded history rather than the live queue. You reach it with
-`WorkPool.store(tag)`.
+### Soft observability (`Store.Service`)
+
+Every WorkPool soft-defaults an in-memory journal. Lifecycle events and analytics live there
+for the process lifetime. Override with an app `Store.Service` that registers
+`WorkPool.store(tag)` (SQLite or memory + Logs).
+
+```ts
+import * as Store from "hyperlink-ts/Store"
+import * as WorkPool from "hyperlink-ts/WorkPool"
+import { Effect, Schema } from "effect"
+
+const Job = Schema.Struct({ id: Schema.String })
+class Jobs extends WorkPool.Tag<Jobs>()("@app/Jobs", { payload: Job }) {}
+
+class JobsStore extends Store.Service<JobsStore>("@app/JobsStore")(
+  WorkPool.store(Jobs),
+) {}
+
+const program = Effect.gen(function* () {
+  const store = yield* JobsStore.at(Jobs)
+  const rate = yield* store.failureRate()
+  const worst = yield* store.slowest(5)
+  return { rate, worst }
+})
+```
+
+`WorkPool.store(tag, additions)` adds app-specific shapes on top of base + analytics.
+
+Given `const store = yield* JobsStore.at(Jobs)`:
+
+| Read | Result |
+|------|--------|
+| `failures()` | Failed rows |
+| `deadLettered()` | Entries from `RetryExhausted` |
+| `inFlight()` | Started with no terminal yet |
+| `history(entryId)` | All events for one entry |
+| `lastFailure()` | `Option` of latest Failed |
+| `slowest(n)` | Completions by `elapsed` desc |
+| `recent(n)` | Last `n` events |
+| `since(when)` | Events enqueued at/after `when` |
+| `stats()` | Counts (`enqueued`, `started`, `completed`, `failed`, `retried`, `deadLettered`) |
+| `failureRate()` | `failed / (completed + failed)` |
+| `latency()` | `{ mean, p50, p95, p99, max }` over `Completed.elapsed` |
+| `changes()` | Live stream of events |
+
+Exercised in `test/queue-store-analytics.test.ts`.
+
+### Durability (`DurableWorkPoolStore`)
+
+Pending + in-flight work that must survive a restart (at-least-once + dedup).
+Presence-driven: provide the backend layer (needs `payload` / `itemSchema` on the tag).
+Omit the layer and the queue is not durable.
+
+```ts
+import * as WorkPool from "hyperlink-ts/WorkPool"
+import { SQLiteDurableWorkPoolStore } from "hyperlink-ts/storage/sqlite"
+import { Effect, Layer, Schema } from "effect"
+
+const Job = Schema.Struct({ id: Schema.String })
+class Jobs extends WorkPool.Tag<Jobs>()("@app/Jobs", { payload: Job }) {}
+declare const effect: (job: typeof Job.Type) => Effect.Effect<void>
+
+const live = WorkPool.layer(Jobs, { effect }).pipe(
+  Layer.provide(SQLiteDurableWorkPoolStore.layer({ filename: "queue.db" })),
+)
+```
+
+The durable store is then the **source of truth** for the backlog: enqueue persists, a feeder
+leases work into workers, and a restart recovers in-flight work. Distinct from the Soft
+event-log / analytics plane above.
+
+### History backfill (`HistoryStore`)
+
+Optional keyed append-log for windowed `metrics.query`. Without a `HistoryStore` layer,
+capture is skipped and history reads stay empty.
+
+```ts
+import { HistoryStore } from "hyperlink-ts"
+import { Layer, Effect } from "effect"
+
+declare const effect: (job: typeof Job.Type) => Effect.Effect<void>
+
+const withHistory = WorkPool.layer(Jobs, { effect }).pipe(
+  Layer.provide(HistoryStore.layerMemory()),
+)
+```
+
+Fleet rate limits use Effect `RateLimiterStore` (Soft memory, or Redis — see [Stores](/docs/stores)).
 
 ## Running it across the network
 
@@ -520,11 +601,11 @@ For moving *pending work* between runtimes, `release` exports entries decoded an
 `releaseEncoded` exports them in wire form (no item schema needed on the receiver);
 the other side `enqueue`s them, attempt budgets intact.
 
-## Reconfiguring at runtime
+## Reconfiguring (layer patches)
 
-A queue's `concurrency`, `rateLimit`, or `paused` state isn't frozen at definition.
-`WorkPool.configure(Tag, patch)` is a layer that overlays a config patch on top
-of the base — `Layer.provideMerge` it, and the queue drains under the merged config:
+`WorkPool.configure(Tag, patch)` (and the same shape on `Daemon.configure` /
+`Gate.configure`) is a **Layer** that folds a config patch onto the resource layer
+**once at build** — not hot reload of a running engine. Merge it with the base layer:
 
 {.twoslash}
 ``` ts
@@ -539,8 +620,9 @@ const Tuned = EmailsLive.pipe(
 )
 ```
 
-Because it's just a layer, the patch can come from anywhere a layer can — an env
-flag, or a live `DynamicConfig` swap that re-tunes the queue while it runs.
+Patches are partials (`{ concurrency: 3 }`), effect updaters, or full reducers — later
+patches win. For **live** retunes after the engine is up, use [DynamicConfig](/docs/configuration)
+(or rebuild the layer stack). Same configure verb on Daemon and Gate.
 
 ## Custom priority lanes
 

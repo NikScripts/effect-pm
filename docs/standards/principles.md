@@ -2,7 +2,7 @@
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
-> and live type previews — is at <https://hyperlink.cool/docs/principles>.
+> and live type previews — is at <https://dev.hyperlink.cool/docs/principles>.
 <!-- docs-site-link:end -->
 # Principles
 
@@ -211,8 +211,8 @@ served HyperServices. A hand-kept parallel list is drift waiting to happen — t
 truth applied to structure.
 
 ``` ts
-// ❌ bad — a hand-kept list that forgets the next resource
-const widgets = [QueueWidget, ProcessWidget]
+// ❌ bad — a hand-kept list that forgets the next HyperService
+const widgets = [WorkPoolWidget, DaemonWidget]
 
 // ✅ good — derived from the contract, so new HyperServices appear automatically
 const widgets = methodsOf(specOf(tag)).map(widgetFor)

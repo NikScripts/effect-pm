@@ -1,14 +1,14 @@
 # Legacy docs → living book (Agent 4)
 
-**Status:** Eng in progress (owner unlock 2026-07-28).  
+**Status:** Gap recovery Eng’d (2026-07-28); IA / sidebar still owner-open.  
 **Branch:** `cursor/hyperservice-open-deps-5679`.  
 **Supersedes:** leftover Phase 3 batches in [`agent-01-docs-corpus-phase3-plan.md`](./agent-01-docs-corpus-phase3-plan.md).
 
 ## Goal
 
-Eliminate `docs/legacy/**`. Port or fold useful prose into the living book as **drafts**
-(`status="draft"` + `{.draft}` when freshly ported). Organize nav around live chapters; polish to
-tip-SSOT later.
+Eliminate `docs/legacy/**`. Port or fold useful prose into the living book as **drafts**.
+Organize nav around live chapters; polish to tip-SSOT later. **Sidebar / folder IA still
+needs an owner design pass** (agent jumped ahead once — do not restructure further without lock).
 
 ## Draft convention (unchanged)
 
@@ -20,24 +20,40 @@ See [`docs/standards/documentation.md`](../standards/documentation.md): ported p
 | Batch | Work | Status |
 |-------|------|--------|
 | **L0** | Cite scrub (README, examples, PUBLISHING, root AGENTS) | **done** |
-| **L1** | Delete covered guides + stub pointers (`store*`, setup, queue, telemetry, per-deps, …) | **done** (whole `docs/legacy/` removed) |
-| **L2** | Fold tags-split → install; agent cutover map → stores; branch policy → root AGENTS | **done** |
+| **L1** | Delete `docs/legacy/**` | **done** |
+| **L2** | Fold tags-split → install; branch policy → root AGENTS | **done** |
 | **L3** | Port `process.md` → `docs/guides/daemons.md` draft | **done** |
-| **L4** | Spec tables → API site cites (PROCESS/HYPERLINK API deleted with tree) | **done** |
-| **L5** | Tip-check Daemon / install / stores drafts; thicken gates if needed | open |
-| **L6** | Optional: mine `toolkit-by-example` / history leftovers into examples hub | open (source deleted — recover from git if needed) |
+| **L4** | Spec tables → API site cites | **done** |
+| **L4b** | Gap recovery after audit | **done** — see below |
+| **L5** | Tip-check Daemon / install / stores / work-pools drafts | open |
+| **L6** | Owner IA lock (sidebar + folder tree) before more moves | **open** |
+| **L7** | Optional: mine toolkit-by-example from git history | open |
 
-## Living destinations
+## Gap recovery (L4b) — what landed where
+
+| Lost unique content | Living destination |
+|---------------------|--------------------|
+| WorkPool analytics table + Soft store recipe | `docs/guides/work-pools.md` § Persistence and analytics |
+| `DurableWorkPoolStore` recipe | `work-pools.md` + tip `stores.md` §2 (renamed from DurableQueueStore) |
+| `HistoryStore` enable for `metrics.query` | `stores.md` § History + `work-pools.md` |
+| Tailwind `@source` / `theme.css` / symptom map | `docs/observe/dashboard.md` § Styling |
+| Configure = layer patch once at build (not hot reload) | `work-pools.md` Reconfiguring; cross-links on Daemon / Gate |
+| Agent cutover pointer | `stores.md` § Cutover history |
+| Branch policy / repo map | root `AGENTS.md` |
+
+Recover further leftovers from `git show 5fef620e^:docs/legacy/…` if needed.
+
+## Living destinations (original map)
 
 | Former legacy | Live home |
 |---------------|-----------|
 | `guides/process.md` | `guides/daemons.md` |
 | `guides/queue-hyperlink.md` | `guides/work-pools.md` |
-| `guides/setup.md` | `getting-started/install.md` + creating / managing-layers |
+| `guides/setup.md` | `getting-started/install.md` + creating / managing-layers + **dashboard Tailwind** |
 | `guides/telemetry.md` | `guides/telemetry.md` |
 | `guides/store*.md` / `STORAGE.md` | `guides/stores.md` + `standards/storage.md` + cutover handoffs |
 | `guides/service-tags-and-runtime-split.md` | `getting-started/install.md` (Tags vs runtime) |
-| `guides/hyperlink-configure.md` | `work-pools.md` “Reconfiguring” (+ Daemon/Gate later) |
+| `guides/hyperlink-configure.md` | work-pools / daemons / gates configure sections |
 | `guides/per-hyperlink-dependencies.md` | `managing-layers.md` |
 | `PACKAGE-GUIDE.md` / toolkit-by-example | `docs/index.md` + `docs/examples.md` |
 | `PROCESS-API.md` / `HYPERLINK-API.md` | `/api/hyperlink-ts` + live guides |
@@ -47,4 +63,3 @@ See [`docs/standards/documentation.md`](../standards/documentation.md): ported p
 
 - No living cites of `docs/legacy/**` (except historical handoffs / archive).
 - `pnpm run docs:manifest:check` if standards change.
-- Docs-only: no full typecheck required for content ports; run if Twoslash fences added later.

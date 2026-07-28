@@ -2,11 +2,11 @@
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
-> and live type previews — is at <https://hyperlink.cool/docs/telemetry>.
+> and live type previews — is at <https://dev.hyperlink.cool/docs/telemetry>.
 <!-- docs-site-link:end -->
 # Telemetry
 
-Every hyperlink-ts node already writes into Effect's `Metric` registry — queues, processes, HTTP
+Every hyperlink-ts node already writes into Effect's `Metric` registry — WorkPools, Daemons, HTTP
 clients, runtime gauges. **Telemetry** serves that registry as a Hyperlink: leaf fields for this
 node, fleet folds when the tag is meshed. OTEL stays the professional sink; Telemetry is for custom
 glass (CLI, TUI, web) over the same tags.
@@ -50,7 +50,7 @@ class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
   Hyperlink.nodes([DropletEast, DropletWest, DropletCentral]),
 ) {}
 const nodeServer = (port: number) => <A, E, R>(serviceKey: Layer.Layer<A, E, R>) =>
-  Node.httpServer(resource).pipe(
+  Node.httpServer(serviceKey).pipe(
     Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
   )
 // ---cut---
