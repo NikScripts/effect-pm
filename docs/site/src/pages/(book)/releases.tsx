@@ -1,10 +1,10 @@
 import { Effect } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import * as nodePath from "node:path";
-import { PageMeta } from "../components/PageMeta.js";
-import { loadHighlighter, renderJsdocToReact } from "../lib/highlight.js";
-import { runServer } from "../lib/runtime.js";
-import { slugify } from "../lib/slug-text.js";
+import { PageMeta } from "../../components/PageMeta.js";
+import { loadHighlighter, renderJsdocToReact } from "../../lib/highlight.js";
+import { runServer } from "../../lib/runtime.js";
+import { slugify } from "../../lib/slug-text.js";
 
 // /releases — the CHANGELOG rendered as a page (the release ritual maintains it; this gives the
 // changesets a public face). One section per `## version` heading, anchored, with a version rail.

@@ -1,5 +1,5 @@
-import { NotFoundSearch } from "../islands/NotFoundSearch.js";
-import { PageMeta } from "../components/PageMeta.js";
+import { NotFoundSearch } from "../../islands/NotFoundSearch.js";
+import { PageMeta } from "../../components/PageMeta.js";
 
 // Custom 404 — the dead URL's last segment seeds a live search, so mistyped or moved links land
 // next to what they meant instead of on a blank wall.

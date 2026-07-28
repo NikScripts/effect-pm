@@ -19,8 +19,12 @@ production. Edge redirects do:
 Ruleset `90c650374e5d4ce0adc5f4be936ddf46` (`http_request_dynamic_redirect`):
 
 1. **Brand host** — anything except `/`, `/favicon.svg`, `/og.svg`, `/robots.txt`,
-   `/healthz` → `302 https://hyperlink.cool/`
+   `/healthz`, **`/assets/*`** → `302 https://hyperlink.cool/`
+   (Missing `/assets/*` shipped unstyled HTML with the docs nav visible — fixed.)
 2. **Dev host** — `/` → `302 https://dev.hyperlink.cool/docs/index`
+
+Coming-soon `/` uses a root layout **without** docs chrome; book routes live under
+`pages/(book)/` so nav HTML is never on the brand page.
 
 DNS: `dev` CNAME → `hyperlink-docs-ekhme.ondigitalocean.app` (proxied).  
 Cache Rules host expr → `dev.hyperlink.cool` (`pnpm run cf:ensure`).

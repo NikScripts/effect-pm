@@ -1,4 +1,4 @@
-import { ApiSymbolPage } from "../../../../components/ApiSymbolPage.js";
+import { ApiSymbolPage } from "../../../../../components/ApiSymbolPage.js";
 
 // The effect DEPENDENCIES (effect, @effect/platform-node, @effect/sql-sqlite-node): rendered on
 // demand (SSR), never pre-rendered — effect core alone is ~3900 heavy twoslash pages and statically

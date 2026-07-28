@@ -1,6 +1,6 @@
-import { PageMeta } from "../../components/PageMeta.js";
-import { packages } from "../../lib/api-data.js";
-import { runServer } from "../../lib/runtime.js";
+import { PageMeta } from "../../../components/PageMeta.js";
+import { packages } from "../../../lib/api-data.js";
+import { runServer } from "../../../lib/runtime.js";
 
 // The API landing — the list of documented packages. Loads only the tiny top index.
 export default async function ApiIndex() {

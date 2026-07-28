@@ -1,10 +1,10 @@
-import { PageMeta } from "../../components/PageMeta.js";
+import { PageMeta } from "../../../components/PageMeta.js";
 
 /**
- * Permanent redirect for the pre-rename standards URL `/docs/resources`
- * (file was `resources.md`; now `hyperlink-services.md` → `/docs/hyperlink-services`).
+ * Redirect for the short-lived `/docs/hyperlinks` slug (renamed to
+ * `/docs/hyperlink-services` — never “Hyperlinks” plural).
  */
-export default function ResourcesRedirect() {
+export default function HyperlinksRedirect() {
   return (
     <>
       <PageMeta

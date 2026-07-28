@@ -1,6 +1,6 @@
-import { PageMeta } from "../../../components/PageMeta.js";
-import { moduleSummary, packageBySlug, packages, type ModuleInfo } from "../../../lib/api-data.js";
-import { runServer } from "../../../lib/runtime.js";
+import { PageMeta } from "../../../../components/PageMeta.js";
+import { moduleSummary, packageBySlug, packages, type ModuleInfo } from "../../../../lib/api-data.js";
+import { runServer } from "../../../../lib/runtime.js";
 
 // JSDoc emphasis markers don't belong in chrome text.
 const plain = (s: string): string =>

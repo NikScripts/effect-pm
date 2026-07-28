@@ -1,10 +1,10 @@
-import { chapters, chapterBySlug } from "../../lib/content.js";
-import { renderChapter } from "../../lib/docs-content.js";
-import { PrevNext } from "../../components/PrevNext.js";
-import { DraftBanner, PageAside } from "../../components/PageAside.js";
-import { PageMeta } from "../../components/PageMeta.js";
-import { firstParagraphs } from "../../lib/page-desc.js";
-import { EditThisPage } from "../../components/EditThisPage.js";
+import { chapters, chapterBySlug } from "../../../lib/content.js";
+import { renderChapter } from "../../../lib/docs-content.js";
+import { PrevNext } from "../../../components/PrevNext.js";
+import { DraftBanner, PageAside } from "../../../components/PageAside.js";
+import { PageMeta } from "../../../components/PageMeta.js";
+import { firstParagraphs } from "../../../lib/page-desc.js";
+import { EditThisPage } from "../../../components/EditThisPage.js";
 import * as nodePath from "node:path";
 
 // One route for every standards chapter. Server component: parse + render through
