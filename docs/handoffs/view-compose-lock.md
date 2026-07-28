@@ -15,9 +15,9 @@ Owner overrides on lineage URL + F1 sizes-vs-content; everything else = prior re
 - **`Navigator`** — `Context.Service` + Layer: `open` / `back` / path / overlays
 - Skins read nav via `useNavigator()`, not callback props
 
-### B. Matcher — **`View.Card` for Group + leaf**
+### B. Matcher — **kit `Card` for Group + leaf**
 
-- Group = family skin (`View.bind(Group.kind, WebGroupCard)`)
+- Group = family skin (`View.bind(Group.kind, WebGroupCard)`); matcher is `ui.Card` / `useMatch().Card`
 - No `View.Member`; no `Cell` group fork
 - `Navigator.open(member: GroupTag | LeafTag)`
 
@@ -30,7 +30,7 @@ Owner overrides on lineage URL + F1 sizes-vs-content; everything else = prior re
 ### D. Types
 
 - Member = what `Group.isGroup` narrows (`Group | LeafTag`)
-- `View.Card` accepts Group tags once Group skin is provided
+- Kit `Card` accepts Group tags once Group skin is provided
 
 ### E. Path = **member short names** (owner override)
 
@@ -139,7 +139,7 @@ First peel = header/body split; page-sized logs/schedule content follows.
 
 ### L. Acceptance
 
-1. Group opens via `View.Card` + Navigator — no `Cell` group fork  
+1. Group opens via kit `Card` + Navigator — no `Cell` group fork  
 2. URL path = short member names (`/Nwsl/HttpApi`)  
 3. Default family Details body-only; shell owns back/title  
 4. `View.compose` runs hyperlink-web + TUI dashboard  

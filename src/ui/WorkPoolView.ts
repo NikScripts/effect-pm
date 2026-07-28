@@ -20,10 +20,10 @@ import { Layer } from "effect";
 import * as WorkPool from "../WorkPool";
 import * as View from "./View";
 
-const PoolCardProto = View.card.Prototype()({
+const PoolCardProto = View.Card.Prototype()({
   spec: WorkPool.queueControlSpec,
 });
-const PoolDetailProto = View.detail.Prototype()({
+const PoolDetailProto = View.Detail.Prototype()({
   spec: WorkPool.queueControlSpec,
 });
 

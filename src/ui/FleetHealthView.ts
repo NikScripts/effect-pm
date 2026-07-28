@@ -10,10 +10,10 @@ import * as View from "./View";
 /** @public */
 export const fleetHealthViewSpec = { kind: FleetHealth.kind } as const;
 
-const CardProto = View.card.Prototype()({
+const CardProto = View.Card.Prototype()({
   spec: fleetHealthViewSpec,
 });
-const DetailProto = View.detail.Prototype()({
+const DetailProto = View.Detail.Prototype()({
   spec: fleetHealthViewSpec,
 });
 

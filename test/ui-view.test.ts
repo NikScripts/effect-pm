@@ -13,11 +13,11 @@ class Special extends WorkPool.Tag<Special>()("app/Special", { payload: Item }) 
 class Nested extends Group.Tag<Nested>("app/Nested")({ Special }) {}
 class AppGroup extends Group.Tag<AppGroup>("app/AppGroup")({ Jobs, Nested }) {}
 
-class PoolCard extends View.card.Tag<PoolCard>()("hyperlink/view/pool-card") {}
+class PoolCard extends View.Card.Tag<PoolCard>()("hyperlink/view/pool-card") {}
 
-class CustomCard extends View.card.Tag<CustomCard>()("hyperlink/view/custom-card") {}
+class CustomCard extends View.Card.Tag<CustomCard>()("hyperlink/view/custom-card") {}
 
-class PoolDetail extends View.detail.Tag<PoolDetail>()("hyperlink/view/pool-detail") {}
+class PoolDetail extends View.Detail.Tag<PoolDetail>()("hyperlink/view/pool-detail") {}
 
 const chrome = Layer.mergeAll(
   Layer.succeed(PoolCard, () => null),

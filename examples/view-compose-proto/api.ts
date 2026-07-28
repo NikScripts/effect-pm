@@ -48,7 +48,7 @@ export interface ChromeV1 {
  *   View.bind(Group.kind, WebGroupCard), // or View.bind(ServicesHub, …) / only
  *   WebDashboardViews.layer,
  * )
- * // then: <View.Card tag={Wnba} name="Wnba" />  // parent supplies onOpen via chrome
+ * // then: <ui.Card tag={Wnba} name="Wnba" />  // parent supplies onOpen via chrome
  * ```
  */
 
@@ -88,7 +88,7 @@ export interface Navigator {
  * })
  *
  * <ui.Provider>
- *   <ui.Grid />           // View.Card per member — Group included
+ *   <ui.Grid />           // ui.Card per member — Group included
  *   <ui.Outlet />         // Detail | overlays from navigator
  * </ui.Provider>
  * ```
@@ -151,7 +151,7 @@ export type LineagePath = ReadonlyArray<string>;
  *
  * Steal W8 (`card` | `detail` | `page`). Today logs / schedule / health are
  * Dashboard-private screens. Register them as View kinds (or `page` skins)
- * so `<View.Page tag={BoxScoreQueue} />` can be “logs” when chrome says so —
+ * so `<ui.Page tag={BoxScoreQueue} />` can be “logs” when chrome says so —
  * or a dedicated `ViewKind = "logs" | "schedule"` if page stays overloaded.
  *
  * Extra value: retire `Dashboard.tsx` special routes without inventing a
@@ -159,7 +159,7 @@ export type LineagePath = ReadonlyArray<string>;
  *
  * ```ts
  * View.bind(WorkPool.kind, QueueLogsPage, { as: "page" })
- * // navigator.openLogs(tag) → Outlet renders View.Page
+ * // navigator.openLogs(tag) → Outlet renders ui.Page
  * ```
  */
 export type WildOverlayKind = "page"; // or extend ViewKind later — owner call
@@ -168,7 +168,7 @@ export type WildOverlayKind = "page"; // or extend ViewKind later — owner call
  * **WILD 4 — `View.member` matcher (Group ∪ leaf)**
  *
  * One render path for Grid cells. Group card is just the Group family’s Card
- * skin. Kill `Cell`’s `if (group) GroupCard else View.Card`.
+ * skin. Kill `Cell`’s `if (group) GroupCard else ui.Card`.
  *
  * ```ts
  * <View.Member tag={member} name={name} />

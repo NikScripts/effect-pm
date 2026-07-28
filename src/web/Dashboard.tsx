@@ -58,7 +58,10 @@ import * as WebDashboardViews from "./DashboardViews";
 const ViewDetailScreen = (props: {
   readonly tag: LeafTag;
   readonly name?: string;
-}): React.ReactElement => <View.Detail tag={props.tag} name={props.name} />;
+}): React.ReactElement => {
+  const Match = View.useMatch();
+  return <Match.Detail tag={props.tag} name={props.name} />;
+};
 
 
 /** Invisible: reads one node's node status and reports the keys of its **not-ready** resources, so the
@@ -202,6 +205,7 @@ const QueueDetail = (props: {
   readonly onBack: () => void;
   readonly onOpenLogs: () => void;
 }): React.ReactElement => {
+  const Match = View.useMatch();
   const bundle = useQueueBundle(props.tag);
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? Option.getOrUndefined(statusR.value) : undefined;
@@ -213,7 +217,7 @@ const QueueDetail = (props: {
         <strong className="flex-1 truncate text-base">{displayName(props.tag.key)}</strong>
         <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
       </div>
-      <View.Detail tag={props.tag} />
+      <Match.Detail tag={props.tag} />
       <LogBox bundle={bundle} full={false} onToggle={props.onOpenLogs} meta={<> · phase {s?.phase ?? "?"}</>} />
     </div>
   );
@@ -224,6 +228,7 @@ const DaemonDetail = (props: {
   readonly onBack: () => void;
   readonly onOpenLogs: () => void;
 }): React.ReactElement => {
+  const Match = View.useMatch();
   const bundle = useDaemonBundle(props.tag);
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
@@ -235,7 +240,7 @@ const DaemonDetail = (props: {
         <strong className="flex-1 truncate text-base">⚙ {displayName(props.tag.key)}</strong>
         <DaemonStatusBadge supervising={s?.supervising} />
       </div>
-      <View.Detail tag={props.tag} />
+      <Match.Detail tag={props.tag} />
       <LogBox bundle={bundle} full={false} onToggle={props.onOpenLogs} />
     </div>
   );
@@ -243,6 +248,7 @@ const DaemonDetail = (props: {
 
 /** API-metrics shell — header + View detail body (stats / chart / endpoints). */
 const ApiDetail = (props: { readonly tag: ApiTag; readonly onBack: () => void }): React.ReactElement => {
+  const Match = View.useMatch();
   const bundle = useApiBundle(props.tag);
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
@@ -254,7 +260,7 @@ const ApiDetail = (props: { readonly tag: ApiTag; readonly onBack: () => void })
         <strong className="flex-1 truncate text-base">🌐 {displayName(props.tag.key)}</strong>
         <ApiStatusBadge requests={s?.requestsTotal ?? 0} errors={s?.errorsTotal ?? 0} />
       </div>
-      <View.Detail tag={props.tag} />
+      <Match.Detail tag={props.tag} />
     </div>
   );
 };

@@ -5,8 +5,8 @@
  * Notes: `docs/handoffs/view-tag-prototype.md`. Design: `docs/handoffs/client-adapters-design.md`.
  *
  * - `View.Tag` / `View.Prototype` → component DI. Self = **props** (reversed service shape).
- * - Size chrome is an add-on: `View.card` / `View.detail` / `View.page` prototypes stamp `size`.
- * - Matchers `View.Card` / `Detail` / `Page` are taken (resolve + render).
+ * - Size chrome add-on: `View.Card` / `View.Detail` / `View.Page` **prototypes** stamp `size`.
+ * - Matchers live on {@link react} / {@link compose} kits (`ui.Card`) and {@link useMatch}.
  * - `View.bind` / `View.only` register sized handles; `View.react` needs Layer `R = never`.
  */
 import * as React from "react";
@@ -234,7 +234,7 @@ export const Prototype =
 
 /**
  * Naked View Tag — DI component handle with **no** size chrome.
- * Self = props shape. Prefer sized add-ons (`View.card.Tag`, …) for dashboard skins.
+ * Self = props shape. Prefer sized add-ons (`View.Card.Tag`, …) for dashboard skins.
  *
  * In `.tsx`: `View.Tag<PoolCard,>()(…)`.
  *
@@ -269,17 +269,23 @@ export type AnyView<Self extends object = object> = Context.Service<
  *
  * @public
  */
-export const card = Prototype<ViewProps>()({
+/**
+ * Size-chrome add-on prototypes — stamp `size` for {@link bind} / kit matchers.
+ * Matcher components are **not** these — use `View.react(…).Card` or {@link useMatch}.
+ *
+ * @public
+ */
+export const Card = Prototype<ViewProps>()({
   size: "card" as const satisfies ViewKind,
 });
 
 /** @public */
-export const detail = Prototype<ViewProps>()({
+export const Detail = Prototype<ViewProps>()({
   size: "detail" as const satisfies ViewKind,
 });
 
 /** @public */
-export const page = Prototype<ViewProps>()({
+export const Page = Prototype<ViewProps>()({
   size: "page" as const satisfies ViewKind,
 });
 
@@ -654,8 +660,8 @@ export const useHasMatch = (
   return kit.resolve(tag as LeafTag, viewKind).length > 0;
 };
 
-/** Matcher card — requires {@link react} Provider. @public */
-export const Card = (props: ViewProps): React.ReactElement | null =>
+/** Kit matcher — card size. @internal */
+const MatchCard = (props: ViewProps): React.ReactElement | null =>
   React.createElement(MatchHost, {
     viewKind: "card",
     resolved: useKit().resolve(props.tag, "card"),
@@ -663,8 +669,8 @@ export const Card = (props: ViewProps): React.ReactElement | null =>
     name: props.name,
   });
 
-/** Matcher detail — requires {@link react} Provider. @public */
-export const Detail = (props: ViewProps): React.ReactElement | null =>
+/** Kit matcher — detail size. @internal */
+const MatchDetail = (props: ViewProps): React.ReactElement | null =>
   React.createElement(MatchHost, {
     viewKind: "detail",
     resolved: useKit().resolve(props.tag, "detail"),
@@ -672,14 +678,28 @@ export const Detail = (props: ViewProps): React.ReactElement | null =>
     name: props.name,
   });
 
-/** Matcher page — requires {@link react} Provider. @public */
-export const Page = (props: ViewProps): React.ReactElement | null =>
+/** Kit matcher — page size. @internal */
+const MatchPage = (props: ViewProps): React.ReactElement | null =>
   React.createElement(MatchHost, {
     viewKind: "page",
     resolved: useKit().resolve(props.tag, "page"),
     tag: props.tag,
     name: props.name,
   });
+
+/**
+ * Size matchers for descendants of {@link react}`(…).Provider` / {@link compose}`(…).Provider`.
+ * Prefer `const ui = View.react(…); <ui.Card …/>` at the shell; use this in deep widgets.
+ *
+ * @public
+ */
+export const useMatch = (): {
+  readonly Card: ViewComponent;
+  readonly Detail: ViewComponent;
+  readonly Page: ViewComponent;
+} =>
+  // Stable matcher components — they require Provider when *rendered* (via useKit).
+  ({ Card: MatchCard, Detail: MatchDetail, Page: MatchPage });
 
 /**
  * Build registry resolver from a **fully provided** view Layer (`R = never`).
@@ -705,7 +725,7 @@ const buildKit = <ROut, E,>(viewLayer: Layer.Layer<ROut, E, never>): KitContext 
 
 /**
  * React kit from a fully provided view Layer (`R` must be `never`).
- * `Card` / `Detail` / `Page` are module-level and read the Provider context.
+ * Matchers `Card` / `Detail` / `Page` are **on this kit** (not on the `View` namespace).
  *
  * @public
  */
@@ -749,9 +769,9 @@ export const react = <ROut, E,>(viewLayer: Layer.Layer<ROut, E, never>) => {
   });
 
   return {
-    Card,
-    Detail,
-    Page,
+    Card: MatchCard,
+    Detail: MatchDetail,
+    Page: MatchPage,
     Provider,
     /** Bound matchers for one service — `{ Card, Detail, Page }` without `tag` props. */
     for: forTag,
@@ -852,7 +872,7 @@ export const compose = <VR, VE,>(options: {
             className: "contents",
             onClick: () => navigation.open(tag as Navigator.MemberTag),
           },
-          React.createElement(Card, { tag, name }),
+          React.createElement(MatchCard, { tag, name }),
         ),
       ),
     );
@@ -876,7 +896,7 @@ export const compose = <VR, VE,>(options: {
           React.createElement("button", { type: "button", onClick: () => navigation.back() }, "← back"),
           React.createElement("strong", null, `${title} · ${navigation.view}`),
         ),
-        React.createElement(Page, { tag, name: title }),
+        React.createElement(MatchPage, { tag, name: title }),
       );
     }
 
@@ -889,7 +909,7 @@ export const compose = <VR, VE,>(options: {
         React.createElement("button", { type: "button", onClick: () => navigation.back() }, "← back"),
         React.createElement("strong", null, title),
       ),
-      React.createElement(Detail, { tag, name: title }),
+      React.createElement(MatchDetail, { tag, name: title }),
     );
   };
 

@@ -7,10 +7,10 @@ import { Layer } from "effect";
 import * as WorkPool from "../WorkPool";
 import * as View from "./View";
 
-const CardProto = View.card.Prototype()({
+const CardProto = View.Card.Prototype()({
   spec: WorkPool.priorityControlSpec,
 });
-const DetailProto = View.detail.Prototype()({
+const DetailProto = View.Detail.Prototype()({
   spec: WorkPool.priorityControlSpec,
 });
 

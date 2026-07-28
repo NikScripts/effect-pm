@@ -10,10 +10,10 @@ import * as View from "./View";
 /** Placeholder until ApiMetrics exports a control Spec SSOT. @public */
 export const apiMetricsViewSpec = { kind: ApiMetrics.kind } as const;
 
-const CardProto = View.card.Prototype()({
+const CardProto = View.Card.Prototype()({
   spec: apiMetricsViewSpec,
 });
-const DetailProto = View.detail.Prototype()({
+const DetailProto = View.Detail.Prototype()({
   spec: apiMetricsViewSpec,
 });
 

@@ -6,8 +6,8 @@ import { expectTypeOf } from "vitest";
 import * as View from "../src/ui/View";
 import * as WorkPool from "../src/WorkPool";
 
-class PoolCard extends View.card.Tag<PoolCard>()("hyperlink/view/pool-card") {}
-class CustomCard extends View.card.Tag<CustomCard>()("hyperlink/view/custom-card") {}
+class PoolCard extends View.Card.Tag<PoolCard>()("hyperlink/view/pool-card") {}
+class CustomCard extends View.Card.Tag<CustomCard>()("hyperlink/view/custom-card") {}
 
 const Item = Schema.Struct({ n: Schema.Number });
 class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", { payload: Item }) {}

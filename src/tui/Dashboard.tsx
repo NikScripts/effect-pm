@@ -136,6 +136,7 @@ const FocusedQueue = (props: {
   readonly bar: (hint: React.ReactElement) => React.ReactElement;
   readonly barRows: number;
 }): React.ReactElement => {
+  const Match = View.useMatch();
   const { name, tag, cols, rows, editMode } = props;
   const bundle = queueBundle(useRuntime(), tag);
   const statusR = useAtomValue(bundle.status);
@@ -189,7 +190,7 @@ const FocusedQueue = (props: {
     >
       <Box flexShrink={0}>
         <View.ChromeProvider value={{ width: cols - 2 }}>
-          <View.Detail tag={tag} name={name} />
+          <Match.Detail tag={tag} name={name} />
         </View.ChromeProvider>
       </Box>
       <Box flexGrow={1} flexDirection="column" paddingX={1}>
@@ -393,6 +394,7 @@ const DashboardApp = (props: {
     <Bar cmd={cmd} suggestions={suggestions} cmdSel={cmdSel} hint={hint} />
   );
 
+  const Match = View.useMatch();
   const focused = nav.selected;
   const focusName = nav.path[nav.path.length - 1] ?? displayName(idOf(focused));
   if (focused !== null) {
@@ -453,7 +455,7 @@ const DashboardApp = (props: {
           key={focused.key}
           value={{ cols, rows, width: cols - 2 }}
         >
-          <View.Detail tag={focused} name={focusName} />
+          <Match.Detail tag={focused} name={focusName} />
         </View.ChromeProvider>
       );
     }

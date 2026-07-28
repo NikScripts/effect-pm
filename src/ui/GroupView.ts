@@ -10,7 +10,7 @@ import * as View from "./View";
 /** @public */
 export const groupViewSpec = { kind: Group.kind } as const;
 
-const GroupCardProto = View.card.Prototype()({
+const GroupCardProto = View.Card.Prototype()({
   spec: groupViewSpec,
 });
 

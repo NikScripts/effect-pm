@@ -357,11 +357,12 @@ export const Cell = (props: {
   const leaf = isLeafTag(props.member) ? props.member : null;
   const viewTag = isGroup ? props.member : leaf;
   const hasViewCard = View.useHasMatch(viewTag, "card");
-  // Group + leaf share View.Card when a family skin is on the layer (open stays parent / TUI focus).
+  const Match = View.useMatch();
+  // Group + leaf share kit Card when a family skin is on the layer (open stays parent / TUI focus).
   if (hasViewCard && viewTag !== null) {
     return (
       <View.ChromeProvider value={{ width: props.width, selected: props.selected }}>
-        <View.Card tag={viewTag} name={props.name} />
+        <Match.Card tag={viewTag} name={props.name} />
       </View.ChromeProvider>
     );
   }

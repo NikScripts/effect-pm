@@ -235,7 +235,7 @@ Owner (2026-07-26): not just card vs “page.” **Three kinds** (names bakeable
 #### Nesting (composition)
 
 - Larger views **may nest** smaller ones: e.g. a Page composed of a Detail plus several Cards (or matched Card/Detail lists).
-- Nesting is normal React composition + calling `View.Card` / `View.Detail` (or resolve) inside a Page component — not a separate registry feature.
+- Nesting is normal React composition + calling kit `Card` / `Detail` (or resolve) inside a Page component — not a separate registry feature.
 - **Desktop Page kind is not priority**; nest patterns can land when Page is real. Don’t block Card/Detail Eng on Page.
 
 #### Explicit pin / restrict — pipe on the handle
@@ -544,7 +544,7 @@ const viewLayer = Layer.mergeAll(
 
 ```ts
 const { Card, Detail, Page, Provider, useView, resolve } = View.react(viewLayer)
-// View.Card shortcut for the Card matcher is fine
+// Matchers on kit only: const ui = View.react(layer); <ui.Card …/>
 
 <Provider>
   <Card tag={leaf} name={label} />     {/* multi-match → pager (mobile) / tabs later (desktop) */}
@@ -746,7 +746,7 @@ Name collision: `Hyperlink.react` vs `View.react` — different jobs (service-bo
 | W9 | Core props `{ tag, name? }`; activation/nav is parent |
 | W10 | Registry = Context.Service + Layer contributions (EventLog-style) |
 | W11 | Module name **`View`**; keys `hyperlink/view/…` |
-| W12 | `View.react` → `{ Card, Detail, Page, Provider, useView, resolve }` (`View.Card` shortcut OK); **Page not v1 priority** |
+| W12 | `View.react` → `{ Card, Detail, Page, Provider, useView, resolve }` — matchers **on kit only** (root `View.Card` = size Prototype); **Page not v1 priority** |
 | W13 | **View = Context service; TSX = Layer-provided Svc** — not `register(handle, Comp)` map; `Layer.succeed(View, Comp)` is the skin seam |
 | W14 | Runtime skip-at-match = **last resort** (unpiped/dynamic). Declared binds/pins → must be provided (`View.react` `R = never`) |
 | W15 | **No `groupId` in View/UI dispatch** — RPC wire only. Family bind = stamped `kindOf` (`hyperlink-ts/WorkPool`, …). Kill `bindFactory` / short `"queue"`\|`"pool"` kinds |

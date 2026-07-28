@@ -457,7 +457,8 @@ export const Cell = (props: {
   const leaf = isLeafTag(props.member) ? props.member : null;
   const viewTag = isGroup ? props.member : leaf;
   const hasViewCard = View.useHasMatch(viewTag, "card");
-  // Group + leaf share View.Card when a Group family skin is on the layer (lock B).
+  const Match = View.useMatch();
+  // Group + leaf share kit Card when a Group family skin is on the layer (lock B).
   if (hasViewCard && viewTag !== null) {
     return (
       <button
@@ -472,7 +473,7 @@ export const Cell = (props: {
           else if (leaf !== null) props.onOpenLeaf(leaf);
         }}
       >
-        <View.Card tag={viewTag} name={props.name} />
+        <Match.Card tag={viewTag} name={props.name} />
       </button>
     );
   }

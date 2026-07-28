@@ -10,10 +10,10 @@ import * as View from "./View";
 /** @public */
 export const shardMapViewSpec = { kind: ShardMap.kind } as const;
 
-const CardProto = View.card.Prototype()({
+const CardProto = View.Card.Prototype()({
   spec: shardMapViewSpec,
 });
-const DetailProto = View.detail.Prototype()({
+const DetailProto = View.Detail.Prototype()({
   spec: shardMapViewSpec,
 });
 

@@ -7,10 +7,10 @@ import { Layer } from "effect";
 import * as Daemon from "../Daemon";
 import * as View from "./View";
 
-const CardProto = View.card.Prototype()({
+const CardProto = View.Card.Prototype()({
   spec: Daemon.daemonControlSpec,
 });
-const DetailProto = View.detail.Prototype()({
+const DetailProto = View.Detail.Prototype()({
   spec: Daemon.daemonControlSpec,
 });
 
