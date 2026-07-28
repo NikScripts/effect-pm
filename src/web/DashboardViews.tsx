@@ -1,7 +1,7 @@
 /**
  * @module web/DashboardViews
  *
- * Web (DOM) skins for all default Dashboard View families — `Layer.succeed` only.
+ * Web (DOM) skins for all default Dashboard View families — `View.provide` only.
  * Ready {@link layer} for {@link View.react}.
  */
 import * as React from "react";
@@ -272,24 +272,24 @@ const GateDetailView: View.View = (props) => {
  * @public
  */
 export const skins = Layer.mergeAll(
-  Layer.succeed(GroupView.GroupCard, GroupCardView),
-  Layer.succeed(WorkPoolView.PoolCard, PoolCardView),
-  Layer.succeed(WorkPoolView.PoolDetail, PoolDetailView),
-  Layer.succeed(PriorityView.PriorityCard, PriorityCardView),
-  Layer.succeed(PriorityView.PriorityDetail, PriorityDetailView),
-  Layer.succeed(DaemonView.DaemonCard, DaemonCardView),
-  Layer.succeed(DaemonView.DaemonDetail, DaemonDetailView),
-  Layer.succeed(ApiMetricsView.ApiCard, ApiCardView),
-  Layer.succeed(ApiMetricsView.ApiDetail, ApiDetailView),
-  Layer.succeed(FleetHealthView.FleetCard, FleetCardView),
-  Layer.succeed(FleetHealthView.FleetDetail, FleetDetailView),
-  Layer.succeed(TelemetryView.TelemetryCard, TelemetryCardView),
-  Layer.succeed(TelemetryView.TelemetryDetail, TelemetryDetailView),
-  Layer.succeed(ShardMapView.ShardMapCard, ShardMapCardView),
-  Layer.succeed(ShardMapView.ShardMapDetail, ShardMapDetailView),
-  Layer.succeed(GateView.GateCard, GateCardView),
-  Layer.succeed(GateView.GateDetail, GateDetailView),
-  Layer.succeed(HyperlinkView.HyperlinkCard, HyperlinkCardView),
+  View.provide(GroupView.GroupCard, GroupCardView),
+  View.provide(WorkPoolView.PoolCard, PoolCardView),
+  View.provide(WorkPoolView.PoolDetail, PoolDetailView),
+  View.provide(PriorityView.PriorityCard, PriorityCardView),
+  View.provide(PriorityView.PriorityDetail, PriorityDetailView),
+  View.provide(DaemonView.DaemonCard, DaemonCardView),
+  View.provide(DaemonView.DaemonDetail, DaemonDetailView),
+  View.provide(ApiMetricsView.ApiCard, ApiCardView),
+  View.provide(ApiMetricsView.ApiDetail, ApiDetailView),
+  View.provide(FleetHealthView.FleetCard, FleetCardView),
+  View.provide(FleetHealthView.FleetDetail, FleetDetailView),
+  View.provide(TelemetryView.TelemetryCard, TelemetryCardView),
+  View.provide(TelemetryView.TelemetryDetail, TelemetryDetailView),
+  View.provide(ShardMapView.ShardMapCard, ShardMapCardView),
+  View.provide(ShardMapView.ShardMapDetail, ShardMapDetailView),
+  View.provide(GateView.GateCard, GateCardView),
+  View.provide(GateView.GateDetail, GateDetailView),
+  View.provide(HyperlinkView.HyperlinkCard, HyperlinkCardView),
 );
 
 /**

@@ -492,7 +492,7 @@ export const DashboardView = <R, ER>(props: {
   readonly group: GroupNode;
   /**
    * App View contributions (`R = View.Registry`). Prefer
-   * `View.only(Tag, Card).pipe(Layer.provide(Layer.succeed(Card, Comp)))`.
+   * `View.only(Tag, Card).pipe(Layer.provide(View.provide(Card, Comp)))`.
    * Merged with shipped family contributions, then skins + {@link View.base}.
    */
   readonly views?: Layer.Layer<never, never, View.Registry>;

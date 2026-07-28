@@ -36,11 +36,10 @@ expectTypeOf(Done.statics).toEqualTypeOf<{
 }>();
 
 class DenseCard extends Done.Tag<DenseCard>()("app/view/dense-card") {}
-const denseSkin: DenseCard["Service"] = (props) => {
+void DenseCard.provide((props) => {
   expectTypeOf(props.dense).toEqualTypeOf<boolean | undefined>();
   return null;
-};
-void denseSkin;
+});
 // ── Shipped fulfillments ────────────────────────────────────────────────────
 
 expectTypeOf(View.Card).toEqualTypeOf<
@@ -70,11 +69,10 @@ expectTypeOf<View.PropsOf<OneShot>["dense"]>().toEqualTypeOf<
   boolean | undefined
 >();
 expectTypeOf<View.PropsOf<OneShot>["tag"]>().toEqualTypeOf<View.ViewTag>();
-const oneShotSkin: OneShot["Service"] = (props) => {
+void View.provide(OneShot, (props) => {
   expectTypeOf(props.dense).toEqualTypeOf<boolean | undefined>();
   return null;
-};
-void oneShotSkin;
+});
 
 // ── Narrowed Requirement stays open if wrong size ───────────────────────────
 

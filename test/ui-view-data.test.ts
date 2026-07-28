@@ -30,7 +30,7 @@ class Hub extends Group.Tag<Hub>("app/data/Hub")({ Jobs, Nightly }) {}
 
 class PoolCard extends View.Card.Tag<PoolCard>()("hyperlink/view/data-pool-card") {}
 
-const chrome = Layer.succeed(PoolCard, () => null);
+const chrome = View.provide(PoolCard, () => null);
 const views = View.bind(WorkPool.kind, PoolCard).pipe(
   Layer.provideMerge(chrome),
   Layer.provideMerge(View.base),

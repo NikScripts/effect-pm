@@ -2,7 +2,7 @@
  * @module ui/WorkPoolView
  *
  * Shared WorkPool View **handles** + contribution Layer — no platform TSX.
- * Provide skins with `Layer.succeed` in `web/WorkPoolView` / `tui/WorkPoolView`.
+ * Provide skins with `View.provide` in `web/WorkPoolView` / `tui/WorkPoolView`.
  *
  * @example
  * ```ts

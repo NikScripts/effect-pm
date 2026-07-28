@@ -7,7 +7,7 @@
 # View Tag types
 
 A View Tag is a class — same shape as Effect’s `Context.Service`.
-Mint with `View.Card.Tag` (etc.), write the skin, export `layer`.
+Mint with `View.Card.Tag` (etc.), provide a skin with `View.provide` (props infer), export `layer`.
 
 ## One-shot mint (common path)
 
@@ -37,18 +37,14 @@ PoolCard.size
 PoolCard.size._tag
 //              ^?
 
-const PoolCardView: PoolCard["Service"] = (props) => {
-  props
-  // ^?
-  return null
-}
-const PoolDetailView: PoolDetail["Service"] = (_props) => null
-const PoolPageView: PoolPage["Service"] = (_props) => null
-
 export const layer = Layer.mergeAll(
-  Layer.succeed(PoolCard, PoolCardView),
-  Layer.succeed(PoolDetail, PoolDetailView),
-  Layer.succeed(PoolPage, PoolPageView),
+  View.provide(PoolCard, (props) => {
+    props
+    // ^?
+    return null
+  }),
+  View.provide(PoolDetail, (_props) => null),
+  PoolPage.provide((_props) => null),
 )
 
 const label = Match.value(View.ViewKind.Card()).pipe(
@@ -60,8 +56,8 @@ const label = Match.value(View.ViewKind.Card()).pipe(
 void label
 ```
 
-Annotate skins with **`PoolCard["Service"]`** (no `typeof`).
-Sizes are `Data.TaggedEnum` — match with `Match.tag`.
+Provide skins with **`View.provide(Tag, impl)`** or **`Tag.provide(impl)`**. Props infer from the
+Tag. Sizes are `Data.TaggedEnum` — match with `Match.tag`.
 
 ## Extra props
 
@@ -69,7 +65,6 @@ Second type arg on `Tag` — additive props; statics as the value arg:
 
 {.twoslash}
 ``` ts
-import { Layer } from "effect"
 import { View } from "hyperlink-ts/ui"
 
 class DenseCard extends View.Card.Tag<
@@ -79,13 +74,11 @@ class DenseCard extends View.Card.Tag<
   spec: { kind: "app/dense-card" } as const,
 }) {}
 
-const DenseCardView: DenseCard["Service"] = (props) => {
+export const layer = View.provide(DenseCard, (props) => {
   props
   // ^?
   return null
-}
-
-export const layer = Layer.succeed(DenseCard, DenseCardView)
+})
 ```
 
 Naked (no size): `View.Tag<Greeter, { name: string }>()("…")`.
@@ -123,10 +116,13 @@ export class WorkerPoolCard extends View.Card.Tag<
   spec: { kind: "examples/worker-pool-card" } as const,
 }) {}
 
-const WorkerPoolCardView: WorkerPoolCard["Service"] = (_props) => null
-
 export const layer = View.only(WorkerPool, WorkerPoolCard).pipe(
-  Layer.provide(Layer.succeed(WorkerPoolCard, WorkerPoolCardView)),
+  Layer.provide(
+    View.provide(WorkerPoolCard, (props) => {
+      void props.dense
+      return null
+    }),
+  ),
 )
 ```
 

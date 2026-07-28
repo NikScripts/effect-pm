@@ -226,10 +226,9 @@ export const assert_dense_props_eq_typeof =
  *
  * | Want | Prefer |
  * |------|--------|
- * | Component fn type | `PoolCard["Service"]` |
- * | Props bag | peel from Service, or `View.Type<typeof PoolCard>` |
- * | Annotate skin | `const skin: PoolCard["Service"] = …` |
- * | Provide | `Layer.succeed(PoolCard, (props) => …)` — infer |
+ * | Component fn type | `PoolCard["Service"]` (escape hatch) |
+ * | Props bag | `View.PropsOf<PoolCard>` / peel from Service |
+ * | Provide skin | `View.provide(PoolCard, (props) => …)` / `PoolCard.provide(…)` |
  */
 export type HoverCheatSheet = {
   effectShape: Effect_Config_InstanceService;

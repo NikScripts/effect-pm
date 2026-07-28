@@ -57,50 +57,56 @@ const NodeRow = (props: {
   </div>
 );
 
-const WorkerPoolCardView: WorkerPoolCard["Service"] = (props) => {
-  const runtime = useRuntime();
-  const poll = React.useMemo(
-    () =>
-      runtime.atom(
-        Stream.fromEffect(readFleet).pipe(
-          Stream.concat(Stream.tick(Duration.seconds(2)).pipe(Stream.mapEffect(() => readFleet))),
-        ),
-      ),
-    [runtime],
-  );
-  const r = useAtomValue(poll);
-  const data = AsyncResult.isSuccess(r) ? r.value : undefined;
-  const byNode = data?.byNode ?? {};
-  const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
-  const max = Math.max(1, ...rows.map(([, c]) => c));
-  const own = data?.active ?? 0;
-  const title = props.name ?? displayName(props.tag.key);
-
-  return (
-    <div className={`flex flex-col rounded-xl border bg-card ${props.dense === true ? "p-2" : "p-3"}`}>
-      <div className="mb-2 flex items-center gap-2">
-        <strong className="flex-1 truncate">{title}</strong>
-        <span className="rounded-full border px-2 py-0.5 text-[0.7rem] text-muted-foreground">
-          {rows.length} {rows.length === 1 ? "node" : "nodes"}
-        </span>
-      </div>
-      <div className="mb-3 flex items-baseline gap-1.5">
-        <span className="text-2xl font-semibold tabular-nums text-foreground">{data?.fleet ?? 0}</span>
-        <span className="text-xs text-muted-foreground">active · fleet total</span>
-      </div>
-      <div className="flex flex-col gap-1.5">
-        {rows.map(([id, count]) => (
-          <NodeRow key={id} id={id} count={count} max={max} self={count === own} />
-        ))}
-      </div>
-    </div>
-  );
-};
-
 /**
  * Contribution Layer for Dashboard `views` — allowlist + skin.
  * `R = View.Registry`; Dashboard closes with `View.base`.
  */
 export const layer = View.only(WorkerPool, WorkerPoolCard).pipe(
-  Layer.provide(Layer.succeed(WorkerPoolCard, WorkerPoolCardView)),
+  Layer.provide(
+    WorkerPoolCard.provide((props) => {
+      const runtime = useRuntime();
+      const poll = React.useMemo(
+        () =>
+          runtime.atom(
+            Stream.fromEffect(readFleet).pipe(
+              Stream.concat(
+                Stream.tick(Duration.seconds(2)).pipe(Stream.mapEffect(() => readFleet)),
+              ),
+            ),
+          ),
+        [runtime],
+      );
+      const r = useAtomValue(poll);
+      const data = AsyncResult.isSuccess(r) ? r.value : undefined;
+      const byNode = data?.byNode ?? {};
+      const rows = Object.entries(byNode).sort(([a], [b]) => a.localeCompare(b));
+      const max = Math.max(1, ...rows.map(([, c]) => c));
+      const own = data?.active ?? 0;
+      const title = props.name ?? displayName(props.tag.key);
+
+      return (
+        <div
+          className={`flex flex-col rounded-xl border bg-card ${props.dense === true ? "p-2" : "p-3"}`}
+        >
+          <div className="mb-2 flex items-center gap-2">
+            <strong className="flex-1 truncate">{title}</strong>
+            <span className="rounded-full border px-2 py-0.5 text-[0.7rem] text-muted-foreground">
+              {rows.length} {rows.length === 1 ? "node" : "nodes"}
+            </span>
+          </div>
+          <div className="mb-3 flex items-baseline gap-1.5">
+            <span className="text-2xl font-semibold tabular-nums text-foreground">
+              {data?.fleet ?? 0}
+            </span>
+            <span className="text-xs text-muted-foreground">active · fleet total</span>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {rows.map(([id, count]) => (
+              <NodeRow key={id} id={id} count={count} max={max} self={count === own} />
+            ))}
+          </div>
+        </div>
+      );
+    }),
+  ),
 );
