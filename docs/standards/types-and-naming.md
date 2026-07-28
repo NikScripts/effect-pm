@@ -333,9 +333,9 @@ rather than proliferating standalone aliases — derive where you need it, don't
 shape.
 
 {#services-use-class-extends .must appliesTo="src examples"}
-## Services, tags, and facets use the class-extends form
+## Services, tags, and stores use the class-extends form
 
-A service, HyperService tag, or storage facet is declared by extending the framework factory *in a
+A service, HyperService tag, or app store is declared by extending the framework factory *in a
 class* — never a bare factory call bound to a const. This is the **only** sanctioned `class extends`
 in the codebase (see *Principles → Composition over inheritance*): you are not inheriting behaviour,
 you are giving the service a **nominal identity**. The `<Self>` self-reference is what supplies it —
@@ -351,8 +351,10 @@ class DurableQueueStore extends Context.Service<DurableQueueStore, DurableQueueS
 // HyperService tag — X.Tag
 class Prices extends Daemon.Tag<Prices>()("app/Prices", { success: priceSchema }) {}
 
-// storage facet — X.Store.Service
-class LogStore extends DaemonStore.Service<LogStore>()(id, record, read) {}
+// app journal — Store.Service + registrations (not a retired ProcessStore / LogStore facet)
+class AppStore extends Store.Service<AppStore>("@app/Store")(
+  Daemon.store(Prices),
+) {}
 ```
 
 ``` ts

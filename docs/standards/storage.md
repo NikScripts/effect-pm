@@ -26,7 +26,8 @@ All persistence is one of these shapes:
   engine owns a SQLite table directly (`SELECT` / `UPSERT` / `DELETE`). No Store bridge, no separate
   store port, no event replay. Default the client to `:memory:` when an in-process default carries
   value; pass a filename for crash-surviving durability. **Model: `ShardMap`**
-  (`effect_pm_shard_map` in `src/internal/shardMapSql.ts`).
+  (`hyperlink_ts_shard_map` in `src/internal/shardMapSql.ts`). Wiring recipes:
+  [`docs/guides/stores.md`](../guides/stores.md).
 
 New persistence uses one of these three — nothing else. Do not event-source a Map "because Daemon
 does history."

@@ -31,7 +31,7 @@
 1. **Agent 4:** W1–W3 + `default`/`defaults` + R1–R4+adaptive + A1–A3; **`cell` parked/rejected**; **R5 rejected**; **R4b tip-synced** — sibling `ApiMetrics` deleted; dashboard/TUI surface limiter nest. Idle. Incident: [`agent-04-w3-incident-2026-07-27.md`](./agent-04-w3-incident-2026-07-27.md).
 2. **Agent G / TUI:** View compose + Tag mint + **`ui.data`** on `cursor/view-withsize-types-125f` — lock [`view-compose-lock.md`](./view-compose-lock.md); guides [`../guides/view-tag-types.md`](../guides/view-tag-types.md) · [`../guides/view-data.md`](../guides/view-data.md). Hold kit Dashboard.
 3. **Agent 5 (Launcher + handoff):** Track A+B Eng'd; HyperService vocab/URL purge + Effect-fullest Launcher + **refinements** (Config auto-read, `Launcher.command`, metrics) on tip; Track C bake #27–36 proposed. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md). Rename SSOT: [`rename-hyperlink-handoff.md`](./rename-hyperlink-handoff.md).
-4. **Docs site:** tip-synced + redeployed (`fd988b1f5` ACTIVE). Fail-fast deploy gates; React **#418** fixed; lang-gated Queue/Gate/Counter/Listen islands — live `/docs/install` no Hyperlink preload. Remaining LH: render-blocking `_layout` CSS. Landing UI unchanged. Keychain backup local (no 1Password).
+4. **Docs site:** tip-synced. Noun scrub (`pm`/resource/queue-process) on live book; Getting Started refine in flight. Owner Qs: rename `@pm`/`.pm-dashboard`?; replace stale `LogStore` / `DaemonStore.Service` example in types-and-naming. Redeploy scrub when ready. Landing UI unchanged.
 
 ### Frozen / dead (do not assign)
 - **Agent 1:** frozen — Examples book E1 already on tip; stale intro PR #68 closed; branch deleted.

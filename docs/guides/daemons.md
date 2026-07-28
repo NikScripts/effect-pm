@@ -35,20 +35,26 @@ const live = Daemon.layer(Prices, {
 
 ## Execution history
 
-Run under `Daemon.layer` and each terminal tick is auto-appended to the
-process store as a typed event — `Started`, `Completed`, `Failed`, or
-`Interrupted` — which the dashboards read back as a timeline.
+Run under `Daemon.layer` and each terminal tick is auto-appended to the Soft journal as a
+typed event — `Started`, `Completed`, `Failed`, or `Interrupted` — which the dashboards read
+back as a timeline. Default is in-memory; override with an app `Store.Service` that
+registers `Daemon.store(Prices)` (see [Stores](/docs/stores)).
 
 ``` ts
 import * as Store from "hyperlink-ts/Store"
+import * as Daemon from "hyperlink-ts/Daemon"
 
-const store = yield* MyStore.at(Prices)
+class AppStore extends Store.Service<AppStore>("@app/Store")(
+  Daemon.store(Prices),
+) {}
+
+const store = yield* AppStore.at(Prices)
 const events = yield* store.events()       // [{ _tag: "Completed", success, … }, …]
 ```
 
 {.note}
 `Daemon.layer` auto-writes history; a bare engine make without the layer does not.
-Reach for the layer form when you want the run timeline recorded.
+Reach for the layer form when you want the run timeline recorded. There is no `ProcessStore`.
 
 ## Polling cadences
 

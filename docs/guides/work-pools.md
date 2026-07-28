@@ -492,16 +492,21 @@ don't overlap.
 
 ## Persistence and analytics
 
-Every queue comes with an **observability store** already wired in. By default it's
-in-memory: lifecycle events and metric windows are recorded, and `metrics.query`
-reads them back — for the life of the process. Provide a **durable** store instead
-(the toolkit ships a SQLite-backed one) and that history survives restarts: a
-dashboard reconnecting after a redeploy still sees yesterday's throughput.
+Three separate planes — do not collapse them into one “SQLite store”:
 
-The store is also an analytics surface in its own right — beyond `metrics.query` it
-answers questions like "the *slowest* completions" and "how many have completed",
-computed over the recorded history rather than the live queue. You reach it with
-`WorkPool.store(tag)`.
+1. **Soft observability (`Store.Service`)** — every WorkPool soft-defaults an in-memory
+   journal. Lifecycle events and analytics live there for the process lifetime. Override with
+   an app `Store.Service` that registers `WorkPool.store(tag)` (SQLite or memory + Logs).
+   Reach analytics with `WorkPool.store(tag)` / `yield* AppStore.at(tag)`.
+2. **Durability (`DurableQueueStore`)** — pending + in-flight work that must survive a
+   restart. Presence-driven: provide `SQLiteDurableQueueStore.layer({ filename })` from
+   `hyperlink-ts/storage/sqlite` (needs a `payload` / `itemSchema` on the tag). No Soft
+   default — omit the layer and the queue is not durable.
+3. **History backfill (`HistoryStore`)** — optional keyed append-log for windowed
+   `metrics.query` / `*History` (memory or `SQLiteHistoryStore`).
+
+Fleet rate limits use Effect `RateLimiterStore` (Soft memory, or Redis — see above). Full
+wiring SSOT: [Stores](/docs/stores).
 
 ## Running it across the network
 
