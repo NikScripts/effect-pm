@@ -381,6 +381,12 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Chose (Eng’d — R4 HttpApiClient):** `Gate.HttpApiClient` Tag + app-owned `Gate.httpApiClientLayer(Tag, runtime)`; nest `metrics` with limiter fields + `usage` / `windows`; const `metricsKey` escape + `MetricsKeyCollision`; whole-client `rateLimit` (key inherits Tag id). Sibling `ApiMetrics` deprecated. Legacy `httpApiClient` / `httpApiClientService` / `httpApiClientLayerEffect` kept for migration (`httpApiClientLayer` now = Tag layer).
 - **Chose (Eng’d — R4 adaptive 429):** Opt-in `adaptive: true | { key? }` on HttpApiClient mint; requires `rateLimit` (`AdaptiveRequiresRateLimit` otherwise). `adaptiveConsume` before round-trip + `adaptiveFeedback` on response; key default `upstream:{host}` from layer `baseUrl`; `Retry-After` delta-seconds only in v1.
 
+## 2026-07-28 — Migrate / delete `docs/legacy/**`
+
+- **Owner said:** Work the backlog of migrating legacy docs — fix and convert as needed; drafts OK for structure; get rid of legacy so polish can focus on the living book.
+- **Chose / Eng’d:** Delete entire `docs/legacy/` tree. Port Daemon guide into `docs/guides/daemons.md` (draft). Fold branch policy + repo map into root `AGENTS.md`; agent persistence map into `guides/stores.md`; tags-vs-runtime into `install.md`. Retarget README / examples / PUBLISHING to live book + API site. Handoff: [`legacy-docs-migration.md`](./legacy-docs-migration.md).
+- **Rejected:** Keeping pointer stubs under `docs/legacy/` after ports.
+
 ## 2026-07-28 — Delete sibling ApiMetrics (full absorb)
 
 - **Owner said:** Full tip-sync, then migrate fully so HttpApiClient has all capabilities including dashboard.

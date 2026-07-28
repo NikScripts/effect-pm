@@ -14,7 +14,6 @@ TOUCH_PREFIXES = (
     "docs/plans/",
     "docs/getting-started/",
     "docs/handoffs/",
-    "docs/legacy/",
     "docs/site/",
     "docs/index.md",
     "docs/README.md",

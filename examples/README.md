@@ -8,7 +8,7 @@ Runnable teaching scripts organized in two layers:
 | **Scenarios** | [`scenarios/`](./scenarios/) | Descriptive compositions showing subsystems working together |
 | **Shared** | [`shared/`](./shared/) | Test doubles, harness helpers, small shared utilities |
 
-Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-GUIDE.md). API tables: [docs/legacy/PROCESS-API.md](../docs/legacy/PROCESS-API.md), [docs/legacy/HYPERLINK-API.md](../docs/legacy/HYPERLINK-API.md).
+Living book: [docs/index.md](../docs/index.md) · [Examples hub](../docs/examples.md) · [API Reference](https://hyperlink.cool/api/hyperlink-ts).
 
 **Conventions:** Each file has a one-line module header (what + how to run). Teaching notes live **inline next to the code** they describe. Imports omit `.js` extensions — examples run via `tsx` on `.ts` sources directly.
 
@@ -161,8 +161,7 @@ Examples and the CLI default to port **3001** unless **`HOME_SERVER_PORT`** is s
 When answering questions about **behavior**, prefer **source of truth** in this order:
 
 1. `src/*.ts` implementation + TSDoc
-2. `docs/legacy/PROCESS-API.md` / `docs/legacy/HYPERLINK-API.md` for tables
-3. `docs/legacy/guides/toolkit-by-example.md` / `docs/legacy/guides/history-and-persistence.md` for patterns
-4. **`forms/`** for a single API shape; **`scenarios/`** for composition patterns
+2. Living book (`docs/guides/`, `docs/getting-started/`, …) + [API Reference](https://hyperlink.cool/api/hyperlink-ts)
+3. **`forms/`** for a single API shape; **`scenarios/`** for composition patterns
 
-Committed agent map: [docs/legacy/AGENTS.md](../docs/legacy/AGENTS.md).
+Committed agent map: [AGENTS.md](../AGENTS.md).

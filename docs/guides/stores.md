@@ -93,6 +93,20 @@ Node journal + resource `_logs` copies of the same live line are intentional —
 - Daemon / WorkPool execution rows: toolkit store handles (`store.events()`, …) or `Store.resolveOrDie`.
 - App-facing queries after override: `yield* AppStore` / registration helpers.
 
+## Agent / cutover map
+
+This page is the **wiring SSOT**. Persistence *shapes* live in
+[`docs/standards/storage.md`](../standards/storage.md). Historical cutover decisions (Store bridge,
+facet retirement, per-engine migrations) remain under
+[`docs/handoffs/store-cutover-00-store-core.md`](../handoffs/store-cutover-00-store-core.md) and
+sibling `store-cutover-*.md` files — prefer this guide when they disagree.
+
+| Plane | Today |
+|-------|--------|
+| Store bridge | `Store.Service` + toolkit `*.store(tag)` — Daemon / WorkPool / Gate execution history |
+| Logs journals | `Node.logs` / toolkit store registrations on the same `Store.Service` — see [Logs](/docs/logs) |
+| Retired | `DaemonStorage` / `LogStore` / `ProcessLifecycleStore` facet substrate — do not revive |
+
 ## Related
 
 - [`docs/guides/logs.md`](./logs.md) — fans, `_logs`, `Hyperlink.logs`

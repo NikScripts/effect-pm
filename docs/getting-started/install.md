@@ -157,6 +157,39 @@ the React ESLint plugins.
 **Prettify TS** — the editor extension `mylesmurphy.prettify-ts`, so type hovers expand into readable
 shapes instead of a collapsed `…`. Nearly every type in hyperlink-ts reads better through it.
 
+## Tags vs runtime (bundler-safe split)
+
+Keep the **tag** (identity + contract) separate from the **runtime** (layers, `serve` /
+`httpServer`, storage, native adapters). A browser or dashboard bundle imports only the tag; the
+engine, SQL adapters, and Node bits never get pulled in.
+
+``` ts
+// tags.ts — browser-safe. Import namespaces from their subpaths.
+import * as WorkPool from "hyperlink-ts/WorkPool"
+import * as Daemon from "hyperlink-ts/Daemon"
+import { Schema } from "effect"
+
+const EmailJob = Schema.Struct({ to: Schema.String })
+
+export class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+export class Digest extends Daemon.Tag<Digest>()("app/Digest") {}
+```
+
+``` ts
+// runtime.ts — Node OS edge only. Layers, serve, storage.
+import { Effect } from "effect"
+import * as WorkPool from "hyperlink-ts/WorkPool"
+import { Emails } from "./tags"
+
+declare const sendEmail: (job: { readonly to: string }) => Effect.Effect<void>
+
+export const EmailsLive = WorkPool.layer(Emails, { effect: sendEmail })
+```
+
+If a file calls `Layer.provide` / `serve` / `httpServer` / a storage adapter, it belongs in
+**runtime**, not beside client/widget imports. Subpath imports (`hyperlink-ts/WorkPool`,
+`/Daemon`, …) tree-shake per member.
+
 ## Next
 
 Head to **[Core Concepts](/docs/core-concepts)** for the mental model, or jump straight into
