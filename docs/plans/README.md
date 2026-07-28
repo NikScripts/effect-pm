@@ -1,12 +1,12 @@
 # Roadmap (future work)
 
 Reviewed, **not-yet-shipped** features worth holding onto. Shipped behavior lives in the live
-book (`docs/`), guides under `docs/guides/` / `docs/resources/`, and source TSDoc — not here.
+book (`docs/`), guides under `docs/guides/` / `docs/services/`, and source TSDoc — not here.
 Pre-1.0: breaking changes land as minor bumps.
 
 ## Toolkit
 
-- **Service / contract shapes** — taxonomy for materialize vs pull vs Tag-baked / adapters. Draft: [service-shapes.md](./service-shapes.md). Eng’d: `Tag`/`value`/`promise`/`default`/`defaults` (`pure` retired); `cell` still owner-gated.
+- **Service / contract shapes** — taxonomy for materialize vs pull vs Tag-baked / adapters. Draft: [service-shapes.md](./service-shapes.md). Eng’d: `Tag`/`value`/`promise`/`default`/`defaults` + factory `{ defaults }` (`pure` retired); `cell` parked/rejected.
 - **Wire groups & identity** — regular RpcGroup = tag key; shared Spec = `Tag(wireKey, spec)` → `Factory<Self>()(instanceKey)` (kind-keyed wire, ordinary serve/client). W1–W3 Eng’d: [wire-groups-and-identity.md](./wire-groups-and-identity.md).
 - **Guaranteed barrel-namespace tree-shaking** — make `import { WorkPool } from "hyperlink-ts"` + `WorkPool.Tag` tree-shake the engine in *every* bundler (subpath imports already do). Detailed plan: [18-unbundled-build-treeshaking.md](./18-unbundled-build-treeshaking.md).
 - **Fleet health** — **shipped** as [`FleetHealth`](../guides/fleet-health.md) (`hyperlink-ts/FleetHealth`). Per-node readiness + `/health` stay local; the glass folds peers with `Reachable` / `Unreachable` (Effect `Exit` kept). See that guide.
@@ -14,7 +14,7 @@ Pre-1.0: breaking changes land as minor bumps.
 
 ## Orchestration
 
-- **Fleet rate limiting (Gates + HttpApiClient)** — Effect `RateLimiter` + shared store across Nodes; Gate substrate before HttpApiClient reshape / ApiMetrics absorb. Proposal: [fleet-rate-limiting.md](./fleet-rate-limiting.md).
+- **Fleet rate limiting (Gates + HttpApiClient)** — **Eng’d** (R1–R4). Effect `RateLimiter` + Effect store layers only (Soft memory / Redis). No Hyperlink-backed store. Plan: [fleet-rate-limiting.md](./fleet-rate-limiting.md).
 - **Weighted middle scheduling** — diversify the queue's middle priority into many weighted numeric/named groups pulled by a non-starving algorithm (DRR / strict), fixing strict-priority starvation. Design spec: [weighted-middle-scheduling.md](./weighted-middle-scheduling.md).
 - **Non-serializable queue items** — local-only enqueue for function/`Effect` items; wire control + observability stay served. [queue-nonserializable-items.md](./queue-nonserializable-items.md).
 - **Standalone spawns** — `Daemon.spawn` / `WorkPool.open`: multi-instance ergonomics where spawned handles are plain caller-scoped Effects (alongside `Group`).

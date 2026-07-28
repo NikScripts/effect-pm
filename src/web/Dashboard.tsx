@@ -74,7 +74,7 @@ const DegradedKeysProbe = (props: {
 }): null => {
   const r = useAtomValue(useNodeBundle(props.node).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
-  const keys = (s?.resources ?? []).filter((x) => !x.ready).map((x) => x.key);
+  const keys = (s?.services ?? []).filter((x) => !x.ready).map((x) => x.key);
   const { onKeys, node } = props;
   const joined = keys.join("|");
   React.useEffect(() => {
@@ -121,7 +121,7 @@ const LogBox = (props: {
   );
 };
 
-/** Fullscreen logs page for a resource — its own route (`/…/Hyperlink/logs`). */
+/** Fullscreen logs page for a HyperService — its own route (`/…/Hyperlink/logs`). */
 const LogsPage = (props: { readonly tag: QueueTag | DaemonTag; readonly onClose: () => void }): React.ReactElement => {
   const runtime = useRuntime();
   const bundle = isDaemonTag(props.tag) ? daemonBundle(runtime, props.tag) : queueBundle(runtime, props.tag);
@@ -247,7 +247,8 @@ const DaemonDetail = (props: {
   );
 };
 
-/** API-metrics shell — header + View detail body (stats / chart / endpoints). */
+/** Detail shell for a {@link Gate.HttpApiClient} (or nest fixture) — header + View detail body
+ *  (usage stats, rate-limit counters, chart, endpoints). Read-only: no controls, no logs. */
 const ApiDetail = (props: { readonly tag: ApiTag; readonly onBack: () => void }): React.ReactElement => {
   const Match = View.useMatch();
   const bundle = useApiBundle(props.tag);
@@ -279,7 +280,7 @@ const DashboardInner = (props: {
   const transition = useViewTransition();
   const pageVt = useViewTransitionStyle(`grp-${group.key}`);
   // ── degraded-first sort state (hoisted above the detail early-return so hook order is constant
-  //    whether a resource is selected or not — rules-of-hooks). Only read on the grid path below.
+  //    whether a HyperService is selected or not — rules-of-hooks). Only read on the grid path below.
   const [degradedKeysByNode, setDegradedKeysByNode] = React.useState<
     ReadonlyMap<string, ReadonlyArray<string>>
   >(() => new Map());
@@ -395,13 +396,13 @@ const DashboardInner = (props: {
         ) : (
           <h1 className="m-0 flex-1 text-lg font-semibold">⬢ {title}</h1>
         )}
-        {/* float degraded resources up — offered only when something's actually degraded. */}
+        {/* float degraded HyperServices up — offered only when something's actually degraded. */}
         {degradedKeys.size > 0 ? (
           <button
             type="button"
             onClick={() => transition("res-sort", () => setDegradedFirst((v) => !v))}
             aria-pressed={degradedFirst}
-            title="float degraded resources to the top"
+            title="float degraded HyperServices to the top"
             className={`shrink-0 rounded-full border px-2 py-0.5 text-[0.7rem] transition-colors ${
               degradedFirst ? "border-amber-500 text-amber-400" : "border-border text-muted-foreground hover:text-foreground"
             }`}
@@ -410,7 +411,7 @@ const DashboardInner = (props: {
           </button>
         ) : null}
         {countCircle}
-        {/* node-status die — all nodes the dashboard's resources are bound to (the root group). */}
+        {/* node-status die — all nodes the dashboard's HyperServices are bound to (the root group). */}
         <NodeBar group={props.group} onOpen={props.onOpenHealth} />
       </div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
@@ -429,13 +430,13 @@ const DashboardInner = (props: {
       </div>
       {/* the tap hint sits at the bottom, out of the way */}
       <div className="mt-6 pb-3 text-center text-sm text-muted-foreground">
-        tap a resource for its detail · tap a group to open it
+        tap a HyperService for its detail · tap a group to open it
       </div>
     </div>
   );
 };
 
-/** A resource's detail opened **from a node** — rendered on the node axis (so "back" returns to the
+/** A HyperService's detail opened **from a node** — rendered on the node axis (so "back" returns to the
  *  node, not the group), with logs/schedule as local sub-views. Reuses the same detail widgets the
  *  group route uses. */
 const NodeHyperlinkView = (props: {
@@ -484,7 +485,7 @@ const NodeHyperlinkView = (props: {
 
 /** The drill-down view + its runtime — compose with `RegistryProvider` + `ViewTransitionProvider`
  *  yourself, or use `<Dashboard>` which wires all three. The node-status die lives in the header
- *  (see `DashboardInner`); opening a node swaps in its full screen, and opening a resource from a
+ *  (see `DashboardInner`); opening a node swaps in its full screen, and opening a HyperService from a
  *  node stays on the node axis so "back" returns there. */
 export const DashboardView = <R, ER>(props: {
   readonly runtime: DashboardRuntime<R, ER>;
@@ -496,15 +497,15 @@ export const DashboardView = <R, ER>(props: {
    */
   readonly views?: Layer.Layer<never, never, View.Registry>;
 }): React.ReactElement => {
-  // Three stacked overlays over the group view, in back-pop order: a resource opened from a node/board
+  // Three stacked overlays over the group view, in back-pop order: a HyperService opened from a node/board
   // (`nodeTag`) sits over a node's full screen (`node`), which sits over the health board (`health`).
   // Keeping them separate means "back" pops one layer at a time — resource → node → board → dashboard.
   const [health, setHealth] = React.useState(false);
   const [node, setNode] = React.useState<NodeRef | null>(null);
   const [nodeTag, setNodeTag] = React.useState<unknown>(null);
   const openHyperlink = React.useCallback(
-    (resourceKey: string): void => {
-      const found = leafByKey(props.group, resourceKey);
+    (serviceKey: string): void => {
+      const found = leafByKey(props.group, serviceKey);
       if (found !== undefined) setNodeTag(found);
     },
     [props.group],

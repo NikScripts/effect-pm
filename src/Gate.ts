@@ -629,10 +629,11 @@ const materializeGateTag = <Self>() =>
     E extends Schema.Top = typeof Schema.Never,
   >(
     key: string,
-    config: TagSchemas<I, A, E>,
+    config: TagSchemas<I, A, E> & { readonly defaults?: Hyperlink.DefaultsBag },
   ): GateTagWithStaticRun<Self, I, A, E> => {
     const resolved = resolveRunWireSchemas(config);
     const spec = gateSpec(resolved.payload, resolved.success, resolved.error);
+    // Do not pass `defaults` into Hyperlink.Tag — nameRunService remaps Svc and would wipe them.
     const tag = Hyperlink.Tag<Self>()(key, spec, {
       description: config.description,
       kind,
@@ -652,9 +653,15 @@ const materializeGateTag = <Self>() =>
           ? undefined
           : (config.rateLimit.key ?? key),
     });
-    return nameRunService(
+    const named = nameRunService(
       Object.assign(withMeta, { run: makeStaticRun(withMeta, resolved.payload) }),
     );
+    return Hyperlink.applyTagDefaults(named, config.defaults) as GateTagWithStaticRun<
+      Self,
+      I,
+      A,
+      E
+    >;
   };
 
 /**
@@ -668,8 +675,21 @@ const materializeGateTag = <Self>() =>
  * @public
  * @category constructors
  */
+type GateTagPositionalOptions = {
+  readonly description?: string;
+};
+
 const runTag = <Self>() => {
   function build(key: string): GateTagWithStaticRun<Self, typeof Schema.Void, typeof Schema.Void, typeof Schema.Never>;
+  function build<
+    I extends Schema.Top,
+    A extends Schema.Top,
+    E extends Schema.Top,
+    const D extends Hyperlink.DefaultsBag,
+  >(
+    key: string,
+    config: TagSchemas<I, A, E> & { readonly defaults: Hyperlink.DefaultsInput<D> },
+  ): Hyperlink.TagWithDefaults<GateTagWithStaticRun<Self, I, A, E>, D>;
   function build<
     I extends Schema.Top,
     A extends Schema.Top,
@@ -678,12 +698,37 @@ const runTag = <Self>() => {
     key: string,
     config: TagSchemas<I, A, E>,
   ): GateTagWithStaticRun<Self, I, A, E>;
+  function build<
+    I extends Schema.Top,
+    A extends Schema.Top,
+    const D extends Hyperlink.DefaultsBag,
+  >(
+    key: string,
+    payload: I,
+    success: A,
+    options: { readonly description?: string; readonly defaults: Hyperlink.DefaultsInput<D> },
+  ): Hyperlink.TagWithDefaults<
+    GateTagWithStaticRun<Self, I, A, typeof Schema.Never>,
+    D
+  >;
   function build<I extends Schema.Top, A extends Schema.Top>(
     key: string,
     payload: I,
     success: A,
-    options?: { readonly description?: string },
+    options?: GateTagPositionalOptions,
   ): GateTagWithStaticRun<Self, I, A, typeof Schema.Never>;
+  function build<
+    I extends Schema.Top,
+    A extends Schema.Top,
+    E extends Schema.Top,
+    const D extends Hyperlink.DefaultsBag,
+  >(
+    key: string,
+    payload: I,
+    success: A,
+    error: E,
+    options: { readonly description?: string; readonly defaults: Hyperlink.DefaultsInput<D> },
+  ): Hyperlink.TagWithDefaults<GateTagWithStaticRun<Self, I, A, E>, D>;
   function build<
     I extends Schema.Top,
     A extends Schema.Top,
@@ -693,20 +738,27 @@ const runTag = <Self>() => {
     payload: I,
     success: A,
     error: E,
-    options?: { readonly description?: string },
+    options?: GateTagPositionalOptions,
   ): GateTagWithStaticRun<Self, I, A, E>;
   function build(
     key: string,
     inputOrSchemas?: Schema.Top | TagSchemas,
     success?: Schema.Top,
-    errorOrOptions?: Schema.Top | { readonly description?: string },
-    maybeOptions?: { readonly description?: string },
+    errorOrOptions?:
+      | Schema.Top
+      | (GateTagPositionalOptions & { readonly defaults?: Hyperlink.DefaultsBag }),
+    maybeOptions?: GateTagPositionalOptions & {
+      readonly defaults?: Hyperlink.DefaultsBag;
+    },
   ): any {
     if (inputOrSchemas === undefined) {
       return materializeGateTag<Self>()(key, {});
     }
     if (isGateTagSchemaConfig(inputOrSchemas)) {
-      return materializeGateTag<Self>()(key, inputOrSchemas);
+      return materializeGateTag<Self>()(
+        key,
+        inputOrSchemas as TagSchemas & { readonly defaults?: Hyperlink.DefaultsBag },
+      );
     }
     const payload = inputOrSchemas;
     // `Schema.isSchema` is a type guard, so the 4th positional arg narrows cleanly into either the
@@ -724,6 +776,7 @@ const runTag = <Self>() => {
       success: success!,
       ...(error !== undefined ? { error } : {}),
       description: options?.description,
+      defaults: options?.defaults,
     });
   }
   return build;
@@ -1118,19 +1171,28 @@ export const makeRunner = <const Name extends string>(
 };
 
 // ── HTTP API client ─────────────────────────────────────────────────────────
-// A concurrency-gated typed HttpApiClient — the former HttpApiClient module folded into Gate.
-// `httpApiClient` builds + gates the client from an HttpApi schema (a Semaphore gate over the
-// HttpClient transport via HttpClientGate); the engine lives in ./internal/httpApiClient and is
-// pulled in only when these are referenced.
+// R4: `HttpApiClient` Hyperlink Tag + app-owned `httpApiClientLayer(Tag, runtime)`.
+// Legacy Context.Service builders (`httpApiClient` / `httpApiClientService` /
+// `httpApiClientLayerEffect`) remain for migration; prefer the Tag path.
 
 export {
+  HttpApiClient,
+  httpApiClientLayer,
+  httpApiClientKind,
+  httpApiMetricsNestSpec,
+  MetricsKeyCollision,
+  AdaptiveRequiresRateLimit,
   make as httpApiClient,
   Service as httpApiClientService,
-  layerEffect as httpApiClientLayer,
+  layerEffect as httpApiClientLayerEffect,
   acceptJson,
   instrumentEndpoints,
 } from "./internal/httpApiClient";
 export type {
-  HttpApiClientConfig as HttpApiClientConfig,
-  HttpApiClientLayerEffectConfig as HttpApiClientLayerEffectConfig,
+  HttpApiClientConfig,
+  HttpApiClientLayerEffectConfig,
+  HttpApiClientTagConfig,
+  HttpApiClientRuntimeConfig,
+  HttpApiClientAdaptiveOptions,
+  HttpApiClientMetrics,
 } from "./internal/httpApiClient";

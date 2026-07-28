@@ -190,6 +190,8 @@ export const ApiCell = (props: {
   const statusR = useAtomValue(bundle.status);
   const metricsR = useAtomValue(bundle.metrics);
   const historyR = useAtomValue(bundle.history);
+  const remainingR = useAtomValue(bundle.remaining);
+  const exceededR = useAtomValue(bundle.exceeded);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const m = AsyncResult.isSuccess(metricsR)
     ? Option.isSome(metricsR.value)
@@ -197,6 +199,8 @@ export const ApiCell = (props: {
       : undefined
     : undefined;
   const history = AsyncResult.isSuccess(historyR) ? historyR.value : [];
+  const remaining = AsyncResult.isSuccess(remainingR) ? remainingR.value : 0;
+  const exceeded = AsyncResult.isSuccess(exceededR) ? exceededR.value : 0;
   return (
     <CellShell selected={props.selected} width={props.width} borderColor="magenta">
       <Box>
@@ -213,7 +217,8 @@ export const ApiCell = (props: {
         <Text dimColor>in-flight {s?.inFlight ?? 0}</Text>
       </Box>
       <Text>
-        req {compact(s?.requestsTotal ?? 0)} · err {compact(s?.errorsTotal ?? 0)}
+        req {compact(s?.requestsTotal ?? 0)} · err {compact(s?.errorsTotal ?? 0)} · rem{" "}
+        {compact(remaining)} · xcd {compact(exceeded)}
       </Text>
       <Text color="green">{spark(history.map((p) => p.throughput))}</Text>
     </CellShell>
@@ -231,6 +236,9 @@ export const FocusedApi = (props: {
   const statusR = useAtomValue(bundle.status);
   const metricsR = useAtomValue(bundle.metrics);
   const historyR = useAtomValue(bundle.history);
+  const remainingR = useAtomValue(bundle.remaining);
+  const resetAfterR = useAtomValue(bundle.resetAfter);
+  const exceededR = useAtomValue(bundle.exceeded);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const m = AsyncResult.isSuccess(metricsR)
     ? Option.isSome(metricsR.value)
@@ -238,13 +246,18 @@ export const FocusedApi = (props: {
       : undefined
     : undefined;
   const history = AsyncResult.isSuccess(historyR) ? historyR.value : [];
+  const remaining = AsyncResult.isSuccess(remainingR) ? remainingR.value : 0;
+  const resetAfter = AsyncResult.isSuccess(resetAfterR) ? resetAfterR.value : 0;
+  const exceeded = AsyncResult.isSuccess(exceededR) ? exceededR.value : 0;
   const endpoints = [...(m?.byEndpoint ?? [])].slice(0, 12);
   const maxReq = Math.max(1, ...endpoints.map((e) => e.requests));
   return (
     <FocusChrome cols={props.cols} rows={props.rows} title={props.name} borderColor="magenta">
       <Text>
         {(m?.throughputPerSec ?? 0).toFixed(1)} req/s · in-flight {s?.inFlight ?? 0} · total{" "}
-        {compact(s?.requestsTotal ?? 0)} · errors {compact(s?.errorsTotal ?? 0)}
+        {compact(s?.requestsTotal ?? 0)} · errors {compact(s?.errorsTotal ?? 0)} · rem{" "}
+        {compact(remaining)} · reset {resetAfter > 0 ? `${Math.round(resetAfter)}ms` : "—"} · xcd{" "}
+        {compact(exceeded)}
       </Text>
       <Text color="green">{spark(history.map((p) => p.throughput))}</Text>
       <Box marginTop={1} flexDirection="column">

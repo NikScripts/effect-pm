@@ -86,7 +86,7 @@ Tag wire is SSOT — layer config must not override `payload` / `success` / `err
 ### Toolkit layers
 
 `layer` / `serve` / `serveRemote` on Daemon, WorkPool, WorkPool.Service (untyped), and Gate all
-merge `Store.layerDefaultMemory` (Daemon via `withDefaultMemory`). Worker hyperlinks use
+merge `Store.layerDefaultMemory` (Daemon via `withDefaultMemory`). Worker HyperServices use
 `Hyperlink.driver` + `grantLocal` where applicable.
 
 **ShardMap** does **not** use the Store bridge for shard state. Local keys are SQLite SSOT

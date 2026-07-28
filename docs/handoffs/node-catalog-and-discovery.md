@@ -2,7 +2,7 @@
 
 **Status:** **DESIGN** — living bake notes. Phase 1 IPC **LOCKED + SHIPPED**. Catalog / discovery / managers / lookup = mostly **thoughts** until explicitly locked in a bake row.  
 **Thesis:** Make cross-runtime **seamless, easier, safer** — Node address + typed service catalog; optional discovery for same-machine (esp. Unix sockets).  
-**Related:** [`transport-dependency-decisions.md`](./transport-dependency-decisions.md) · [`loud-failures-design.md`](./loud-failures-design.md) · [`docs/resources/fleets-and-peers.md`](../resources/fleets-and-peers.md)  
+**Related:** [`transport-dependency-decisions.md`](./transport-dependency-decisions.md) · [`loud-failures-design.md`](./loud-failures-design.md) · [`docs/services/fleets-and-peers.md`](../services/fleets-and-peers.md)
 **Naming note:** Shipped surface is split: **`hyperlink-ts/Node`** (Tag / protocol listen / connect / *Server) + **`Hyperlink`** (Tag / serve / client / identity / nodes). Product rename (e.g. Unbounded services) is **parked**.
 
 ### Node module — **LOCKED + Eng** (2026-07-20; protocol split 2026-07-21)

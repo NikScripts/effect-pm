@@ -56,7 +56,7 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | [`forms/hyperlink/gate-store-readback.ts`](./forms/hyperlink/gate-store-readback.ts) | Engine auto-write + `Gate.store` + `Store.Service.at` readback |
 | [`forms/hyperlink/gate-runtime-observer.ts`](./forms/hyperlink/gate-runtime-observer.ts) | Observable handle (`status`, counters) via `Subscribable` |
 | [`forms/hyperlink/http-client-gate.ts`](./forms/hyperlink/http-client-gate.ts) | `HttpClientGate.transformClient` |
-| [`forms/hyperlink/gate-http-api-client.ts`](./forms/hyperlink/gate-http-api-client.ts) | `Gate.httpApiClientService` + `ApiMetrics.Tag` |
+| [`forms/hyperlink/gate-http-api-client.ts`](./forms/hyperlink/gate-http-api-client.ts) | `Gate.HttpApiClient` Tag + nest metrics |
 | [`forms/hyperlink/gate-http-api-layer-effect.ts`](./forms/hyperlink/gate-http-api-layer-effect.ts) | `Gate.httpApiClientLayer` + sidecar capture |
 | [`forms/hyperlink/telemetry-fleet-glass.ts`](./forms/hyperlink/telemetry-fleet-glass.ts) | `Telemetry` leaf snapshot + fleet `inFlightByNode` / `fleetInFlight` |
 | [`forms/hyperlink/fleet-health-glass.ts`](./forms/hyperlink/fleet-health-glass.ts) | `FleetHealth` leaf `local` + fleet `byNode` / `status` (`Reachable` \| `Unreachable`) |
@@ -74,6 +74,7 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 | [`forms/hyperlink/node-prototype.ts`](./forms/hyperlink/node-prototype.ts) | `Node.Prototype.make` + `.listen(serves)` |
 | [`forms/hyperlink/node-lookup.ts`](./forms/hyperlink/node-lookup.ts) | **(7)** `Node.asLookup` + `Lookup.layerNode` / `client` |
 | [`forms/hyperlink/node-identity-coordinator.ts`](./forms/hyperlink/node-identity-coordinator.ts) | **One brain, many hands** — identity Router + Advice + N Workers ([guide](../docs/guides/identity-coordinator.md)) |
+| [`forms/hyperlink/launcher-lookup-membership.ts`](./forms/hyperlink/launcher-lookup-membership.ts) | **Custody → membership** — `Launcher.up` then Lookup Directory advertise (`onYield` / assume) |
 | [`forms/hyperlink/node-verify-connection.ts`](./forms/hyperlink/node-verify-connection.ts) | `Hyperlink.verifyConnection` tier-1 + `{ deep: true, resource }` |
 | [`forms/hyperlink/shardmap-sessions.ts`](./forms/hyperlink/shardmap-sessions.ts) | `ShardMap` routed ops across distributed nodes |
 
@@ -137,7 +138,7 @@ Storage:
 | `pnpm run example:gate` | Gate concurrency form |
 | `pnpm run example:gate-store-readback` | Gate store auto-write + readback |
 | `pnpm run example:http-client-gate` | HttpClient gate form |
-| `pnpm run example:gate-http-api-client` | Gate.httpApiClient form |
+| `pnpm run example:gate-http-api-client` | Gate.HttpApiClient form |
 | `pnpm run example:gate-http-api-layer-effect` | `layerEffect` form |
 | `pnpm run example:form:*` | Individual form scripts that are registered in `package.json` |
 

@@ -3,12 +3,13 @@
  *
  * The review fixture for the shipped `hyperlink-ts/web` widgets — one of each **unique**
  * thing the dashboard renders: a nested group, a queue, a scheduled daemon (the WNBA live-score
- * poller), and an API-usage tap (`ScoresApi`). Every resource is **nodeed remotely** across three
+ * poller), and an HttpApiClient nest fixture (`ScoresApi`). Every resource is **nodeed remotely** across three
  * nodes (served by `server.ts`); the browser reaches each via `Hyperlink.ws` (vite proxies
- * `/rpc` / `/live` / `/stats` with `ws: true`), which is what lights up the top-right **node die**. `ScoresApi` is an
- * `ApiMetrics` resource served on `WnbaNode` via `ApiMetrics.serve`. `ScoresDb` is a dependency
- * resource the box-score queue's readiness depends on (`readinessOf`) — when its (simulated)
- * connection blips, the queue cascades to degraded, dogfooding dependency-aware readiness.
+ * `/rpc` / `/live` / `/stats` with `ws: true`), which is what lights up the top-right **node die**. `ScoresApi` is a
+ * nest-shaped fixture (`Gate.httpApiClientKind` + full `metrics` nest) served on
+ * `WnbaNode`. `ScoresDb` is a dependency resource the box-score queue's readiness depends on
+ * (`readinessOf`) — when its (simulated) connection blips, the queue cascades to degraded,
+ * dogfooding dependency-aware readiness.
  */
 import { Effect, Layer, Schema } from "effect";
 import { Atom } from "effect/unstable/reactivity";
@@ -16,7 +17,6 @@ import * as Hyperlink from "../../src/Hyperlink";
 import * as WorkPool from "../../src/WorkPool";
 import * as Daemon from "../../src/Daemon";
 import * as Group from "../../src/Group";
-import * as ApiMetrics from "../../src/ApiMetrics";
 import * as FleetHealth from "../../src/FleetHealth";
 import * as Telemetry from "../../src/Telemetry";
 import * as ShardMap from "../../src/ShardMap";
@@ -48,7 +48,7 @@ export class WnbaNode extends Node.Tag<WnbaNode>()("wnba/scores", hostEndpoints(
 export class LiveNode extends Node.Tag<LiveNode>()("wnba/live", hostEndpoints(HOST_PORTS.live)) {}
 export class StatsNode extends Node.Tag<StatsNode>()("wnba/stats", hostEndpoints(HOST_PORTS.stats)) {}
 
-// A **multi-node** resource: the SAME WorkerPool served on all three nodes — one class, three
+// A **multi-node** serviceKey: the SAME WorkerPool served on all three nodes — one class, three
 // instances. `active` is this instance's own count (a leaf field peers can read); `fleetActive` is the
 // total across the fleet — a `fleet`-tagged query the layer folds from `Hyperlink.peers` + its own
 // value (see `server.ts`). Dogfoods `fleet` + `peers` + layer-from-effect end to end across three real
@@ -142,9 +142,12 @@ export class ImportJobs extends WorkPool.priority<ImportJobs>()("wnba/ImportJobs
   namedLanes: { hot: 0, warm: 1, cold: 2 },
   node: StatsNode,
 }) {}
-export class ScoresApi extends ApiMetrics.Tag<ScoresApi>()("@wnba/ScoresApi", {
-  node: WnbaNode,
-}) {}
+/** Observe-only fixture: same `metrics` nest as {@link Gate.HttpApiClient} (no outbound client). */
+export class ScoresApi extends Hyperlink.Tag<ScoresApi>()(
+  "@wnba/ScoresApi",
+  { metrics: Gate.httpApiMetricsNestSpec },
+  { kind: Gate.httpApiClientKind, node: WnbaNode },
+) {}
 
 /** WNBA league group — a nested group the dashboard drills into. */
 export class Wnba extends Group.Tag<Wnba>("hub/Wnba")({
@@ -182,9 +185,10 @@ const wnbaTransport = Hyperlink.ws(WnbaNode, { url: "/rpc" });
 const liveTransport = Hyperlink.ws(LiveNode, { url: "/live/rpc" });
 const statsTransport = Hyperlink.ws(StatsNode, { url: "/stats/rpc" });
 
-// Expose each node itself in the runtime (not only the resource clients): the node-status die /
+// Expose each node itself in the runtime (not only the HyperService clients): the node-status die /
 // HealthBoard `yield*` these handles. `Layer.provide(transport)` on a client does **not** re-export
-// the Node into the merged layer — transports must sit in `mergeAll` for the die.
+// the Node into the merged layer — transports must sit in `mergeAll` for the die. Each transport is
+// one const (shared by reference), so the client + the die reuse a single connection per node.
 const appLayer = Layer.mergeAll(
   wnbaTransport,
   liveTransport,
@@ -206,7 +210,7 @@ const appLayer = Layer.mergeAll(
   Hyperlink.client(FetchGate, LiveNode).pipe(Layer.provide(liveTransport)),
 );
 
-/** One reactive runtime providing every resource in the hub.
+/** One reactive runtime providing every HyperService in the hub.
  *  Soft verify (`"status"`): ScoresDb intentionally blips readiness; deep `"reject"` would
  *  fail Layer build during those windows and take the whole dashboard down. Reachability still
  *  runs; failures are ignored so degraded cards stay mountable. */

@@ -25,16 +25,16 @@
  *   `Daemon.Tag` / `Daemon.Schedule` and `WorkPool.Tag` / `WorkPool.priority` — each with
  *   `Tag` / `layer` / `configure` / `serve` / `serveRemote`. **`Group`** organizes member tags
  *   (nestable; members may be on the same or different nodes). Contracts are introspectable via
- *   `specOf` + `methodMeta` (build generic UIs). See the live book under `docs/resources/` and
+ *   `specOf` + `methodMeta` (build generic UIs). See the live book under `docs/services/` and
  *   `docs/guides/`.
- * - **`Gate`**, **`HttpClientGate`**, **`Gate.httpApiClient`** —
+ * - **`Gate`**, **`HttpClientGate`**, **`Gate.HttpApiClient`** —
  *   Optional building blocks for **gated** HTTP and reusable service patterns.
  * - **Persistence** — `DurableQueueStore` (durable priority queue) + `HistoryStore`
  *   (metrics/logs history); in-memory or SQLite (`hyperlink-ts/storage/sqlite`).
  *
  * ## Where to read next
  *
- * - Live book: `docs/index.md`, `docs/resources/`, `docs/guides/`, `docs/standards/`
+ * - Live book: `docs/index.md`, `docs/services/`, `docs/guides/`, `docs/standards/`
  * - Logs: `docs/guides/logs.md` (and `docs/LOGS.md` while the guide absorbs it)
  * - Runnable teaching scripts: `examples/README.md`
  * - Future roadmap (priority order, **not** shipped API truth): `docs/plans/README.md`
@@ -105,7 +105,6 @@ export {
   type HttpApiClientConfig,
   type HttpApiClientLayerEffectConfig,
 } from "./Gate";
-export * as ApiMetrics from "./ApiMetrics";
 export {
   apiUsageEndpointMetrics,
   apiUsageMetrics,
@@ -153,6 +152,7 @@ export {
 // `Node.Tag` pull only what's used. Import `* as Hyperlink` / `* as Node` from the subpath.
 export * as Hyperlink from "./Hyperlink";
 export * as Node from "./Node";
+export * as Launcher from "./Launcher";
 export * as MultiNode from "./MultiNode";
 export * as Lookup from "./Lookup";
 export type {
@@ -177,7 +177,9 @@ export type {
   Spec,
   DefaultMethod,
   DefaultsBag,
+  DefaultsInput,
   DefaultsOf,
+  TagWithDefaults,
   WithDefaults,
   ImplWithDefaultOverrides,
   TagHandlers,

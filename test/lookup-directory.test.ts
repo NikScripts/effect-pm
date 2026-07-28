@@ -59,15 +59,20 @@ describe("Lookup directory advertise / nodesServing", () => {
 
           const hit = yield* dir.nodesServing(
             new Lookup.NodesServingRequest({
-              resourceKey: "lookup-dir/Jobs",
+              serviceKey: "lookup-dir/Jobs",
             }),
           );
           expect(hit).toHaveLength(1);
           expect(hit[0]?.nodeKey).toBe("worker-a");
 
+          // Module sugar — Tag or wire key (same Directory query).
+          const viaSugar = yield* Lookup.nodesServing(Jobs);
+          expect(viaSugar).toHaveLength(1);
+          expect(viaSugar[0]?.nodeKey).toBe("worker-a");
+
           const miss = yield* dir.nodesServing(
             new Lookup.NodesServingRequest({
-              resourceKey: "lookup-dir/Other",
+              serviceKey: "lookup-dir/Other",
             }),
           );
           expect(miss).toHaveLength(0);
@@ -104,7 +109,7 @@ describe("Lookup directory advertise / nodesServing", () => {
           expect(again).toBe(false);
           const hit = yield* dir.nodesServing(
             new Lookup.NodesServingRequest({
-              resourceKey: "lookup-dir/Jobs",
+              serviceKey: "lookup-dir/Jobs",
             }),
           );
           expect(hit).toHaveLength(0);
@@ -175,7 +180,7 @@ describe("Lookup directory livenessReplace", () => {
       const listed = yield* dir
         .nodesServing(
           new Lookup.NodesServingRequest({
-            resourceKey: "lookup-dir/Jobs",
+            serviceKey: "lookup-dir/Jobs",
           }),
         )
         .pipe(Effect.provide(lookupCtx));
@@ -272,7 +277,7 @@ describe("Node.unix directory wire", () => {
         const during = yield* dir
           .nodesServing(
             new Lookup.NodesServingRequest({
-              resourceKey: "lookup-dir/Jobs",
+              serviceKey: "lookup-dir/Jobs",
             }),
           )
           .pipe(Effect.provide(lookupCtx));
@@ -283,7 +288,7 @@ describe("Node.unix directory wire", () => {
       const after = yield* dir
         .nodesServing(
           new Lookup.NodesServingRequest({
-            resourceKey: "lookup-dir/Jobs",
+            serviceKey: "lookup-dir/Jobs",
           }),
         )
         .pipe(Effect.provide(lookupCtx));
@@ -378,7 +383,7 @@ describe("Lookup directory askIncumbent", () => {
       const listed = yield* dir
         .nodesServing(
           new Lookup.NodesServingRequest({
-            resourceKey: "lookup-dir/Jobs",
+            serviceKey: "lookup-dir/Jobs",
           }),
         )
         .pipe(Effect.provide(lookupCtx));
@@ -420,6 +425,54 @@ describe("Lookup directory askIncumbent", () => {
             path: "/tmp/ask-blocked.sock",
             serves: ["lookup-dir/Jobs"],
             onConflict: "livenessReplace",
+          }),
+        )
+        .pipe(
+          Effect.map((entry) => ({ _tag: "ok" as const, entry })),
+          Effect.catchTag("IncumbentAlive", (error) =>
+            Effect.succeed({ _tag: "alive" as const, error }),
+          ),
+          Effect.provide(lookupCtx),
+        );
+
+      expect(conflict._tag).toBe("alive");
+      yield* Effect.sync(() => workerCtx);
+    }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
+  );
+
+  it.effect("ListenOptions.onYield false → askIncumbent newcomer gets IncumbentAlive", () =>
+    Effect.gen(function* () {
+      const lookupPath = yield* tmpSock("ask-refuse-lookup");
+      const workerPath = yield* tmpSock("ask-refuse-worker");
+      const lookupNode = Node.Tag()("lookup/dir-ask-refuse", {
+        path: lookupPath,
+        onConflict: "askIncumbent",
+      }).pipe(Node.asLookup);
+
+      class Worker extends Node.Tag<Worker, Jobs>()(
+        "lookup-dir/AskRefuseWorker",
+        { path: workerPath },
+      ) {}
+
+      const lookupServer = yield* Layer.build(Lookup.layerNode(lookupNode));
+      const lookupClient = yield* Layer.build(Lookup.client(lookupNode));
+      const lookupCtx = Context.merge(lookupServer, lookupClient);
+
+      const workerCtx = yield* Layer.build(
+        Node.unix(Worker, [Hyperlink.serve(Jobs, jobsImpl)], {
+          onYield: Effect.succeed(false),
+        }).pipe(Layer.provide(Lookup.client(lookupNode))),
+      );
+
+      const dir = Context.get(lookupCtx, Lookup.Directory);
+      const conflict = yield* dir
+        .advertise(
+          new Lookup.AdvertiseRequest({
+            nodeKey: Worker.key,
+            kind: "IpcSocket",
+            path: "/tmp/ask-refused.sock",
+            serves: ["lookup-dir/Jobs"],
+            onConflict: "inherit",
           }),
         )
         .pipe(

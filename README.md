@@ -28,7 +28,7 @@ yield* queue.status.get;
   via `specOf` / `methodMeta` (build generic UIs).
 - **`WorkPool`** — priority **work pools** with concurrency, optional `rateLimit`, `attempts` retry,
   **`refill`** (self-feeding from a source), and durable history via `WorkPool.store` on a
-  `Store.Service`. Per-resource logs use the **`Logs`** platform + **`Hyperlink.logs`**.
+  `Store.Service`. Per-HyperService logs use the **`Logs`** platform + **`Hyperlink.logs`**.
 - **`Daemon`** — a supervised long-running process: lifecycle (`start`/`stop`/`run`), reactive
   `status`, schedule control, optional reactive `result`. Logs via **`Hyperlink.logs`**.
 - **`Group`** — organize member tags (nestable; members may live on the same or different nodes).

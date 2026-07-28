@@ -1,6 +1,6 @@
 "use client";
 
-// The most basic resource: a Gate (a concurrency-gated effect you call on demand).
+// The most basic serviceKey: a Gate (a concurrency-gated effect you call on demand).
 // Create it → run it from a button → watch the live in-flight count. No dashboard widget;
 // live values read straight off the service's Subscribables. Tailwind scoped to .pm-dashboard.
 

@@ -15,14 +15,12 @@ import * as FileSystem from "effect/FileSystem";
 import { NodeServices } from "@effect/platform-node";
 import { slugify } from "../src/lib/slug-text.js";
 import { stripDocBanner } from "../src/lib/doc-banner.js";
+import { listDocsChapterFiles } from "./docsContentWalk.js";
 
 const repoRoot = nodePath.resolve(fileURLToPath(new URL("../../../", import.meta.url)));
 const dataDir = nodePath.join(repoRoot, "docs/site/api-data");
 const docsDir = nodePath.join(repoRoot, "docs");
 const outDir = nodePath.join(repoRoot, "docs/site/public/search");
-
-// Content dirs that are chapters (url = /docs/<basename>). legacy/handoffs/site never index.
-const contentDirs = ["", "getting-started", "guides", "standards", "examples"];
 
 class FileError extends Data.TaggedError("FileError")<{
   readonly path: string;
@@ -134,59 +132,55 @@ const program = Effect.gen(function* () {
   }
 
   // --- Pages: every chapter, plus one document per ## / ### section (deep anchors) ---
-  for (const dir of contentDirs) {
-    const abs = nodePath.join(docsDir, dir);
-    const files = (yield* fs.readDirectory(abs).pipe(Effect.orElseSucceed(() => []))).filter((f) =>
-      f.endsWith(".md")
+  const chapterFiles = yield* listDocsChapterFiles(docsDir, {
+    skipSlugs: ["README", "glossary"],
+  });
+  for (const chapter of chapterFiles) {
+    const slug = chapter.slug;
+    const text = stripDocBanner(
+      yield* fs.readFileString(chapter.absPath).pipe(Effect.orElseSucceed(() => ""))
     );
-    for (const file of files) {
-      const slug = file.replace(/\.md$/, "");
-      if (slug === "glossary" || slug === "README") continue;
-      const text = stripDocBanner(
-        yield* fs.readFileString(nodePath.join(abs, file)).pipe(Effect.orElseSucceed(() => ""))
-      );
-      if (text === "") continue;
-      const lines = text.split("\n");
-      const pageTitle = plainText(lines.find((l) => l.startsWith("# ")) ?? slug).trim() || slug;
-      const url = `/docs/${slug}`;
-      // section split: heading → its prose until the next heading
-      let heading = "";
-      let buffer: Array<string> = [];
-      const flush = (): void => {
-        const body = plainText(buffer.join("\n"));
-        if (heading === "") {
-          docs.push({
-            id: url,
-            type: "page",
-            title: pageTitle,
-            url,
-            summary: body.slice(0, 220),
-            text: body.slice(0, 600),
-          });
-        } else if (body.length > 0 || heading.length > 0) {
-          docs.push({
-            id: `${url}#${slugify(heading)}`,
-            type: "page",
-            title: heading,
-            url: `${url}#${slugify(heading)}`,
-            summary: body.slice(0, 220),
-            context: pageTitle,
-            text: body.slice(0, 600),
-          });
-        }
-        buffer = [];
-      };
-      for (const line of lines) {
-        const m = /^#{2,3}\s+(.*)$/.exec(line);
-        if (m !== null) {
-          flush();
-          heading = plainText(m[1]);
-        } else if (!line.startsWith("# ")) {
-          buffer.push(line);
-        }
+    if (text === "") continue;
+    const lines = text.split("\n");
+    const pageTitle = plainText(lines.find((l) => l.startsWith("# ")) ?? slug).trim() || slug;
+    const url = `/docs/${slug}`;
+    // section split: heading → its prose until the next heading
+    let heading = "";
+    let buffer: Array<string> = [];
+    const flush = (): void => {
+      const body = plainText(buffer.join("\n"));
+      if (heading === "") {
+        docs.push({
+          id: url,
+          type: "page",
+          title: pageTitle,
+          url,
+          summary: body.slice(0, 220),
+          text: body.slice(0, 600),
+        });
+      } else if (body.length > 0 || heading.length > 0) {
+        docs.push({
+          id: `${url}#${slugify(heading)}`,
+          type: "page",
+          title: heading,
+          url: `${url}#${slugify(heading)}`,
+          summary: body.slice(0, 220),
+          context: pageTitle,
+          text: body.slice(0, 600),
+        });
       }
-      flush();
+      buffer = [];
+    };
+    for (const line of lines) {
+      const m = /^#{2,3}\s+(.*)$/.exec(line);
+      if (m !== null) {
+        flush();
+        heading = plainText(m[1]);
+      } else if (!line.startsWith("# ")) {
+        buffer.push(line);
+      }
     }
+    flush();
   }
 
   // --- Glossary: one document per term ---

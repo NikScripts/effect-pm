@@ -77,10 +77,10 @@ const program = Effect.gen(function* () {
   }).pipe(Effect.provide(FetchHttpClient.layer), Effect.orDie);
   const body = health as {
     readonly status: string;
-    readonly resources: ReadonlyArray<{ readonly key: string }>;
+    readonly services: ReadonlyArray<{ readonly key: string }>;
   };
   yield* Console.log(
-    `/health: ${body.status} — resources: ${body.resources.map((r) => r.key).join(", ")}`,
+    `/health: ${body.status} — services: ${body.services.map((r) => r.key).join(", ")}`,
   );
 }).pipe(Effect.scoped);
 

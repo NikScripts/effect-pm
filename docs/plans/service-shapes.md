@@ -1,6 +1,6 @@
 # Plan: service / contract shapes
 
-**Status:** `default` / `defaults` Eng’d (2026-07-27); `cell` still owner-gated.  
+**Status:** `default` / `defaults` Eng’d (2026-07-27); **construction adornments A1–A3 Eng’d** (pipe + factory `{ defaults }`); **`cell` parked/rejected** (ref + adapters enough).  
 **Agent:** 4 (`cursor/hyperservice-open-deps-5679`).  
 **Prior art:** [`service-shape-redesign.md`](../handoffs/archive/2026-07/features/service-shape-redesign.md) (2026-07-01/02), [`client-adapters-design.md`](../handoffs/client-adapters-design.md).  
 **Orthogonal:** wire RpcGroup identity — [`wire-groups-and-identity.md`](./wire-groups-and-identity.md) (W1–W3 Eng’d; do not conflate with handle taxonomy).
@@ -154,7 +154,7 @@ ref (Eng’d)
   like push, but surface is Subscribable, not plain A
 ```
 
-**Product question for owner:** is “plain `A` that stays live” required, or is `ref` + adapters enough for dashboards? That single answer decides whether `cell`/`live` is in scope or parked forever.
+**Product question for owner:** ~~is “plain `A` that stays live” required?~~ **Answered (2026-07-27):** `ref` + adapters enough — `cell` parked/rejected.
 
 ---
 
@@ -171,27 +171,137 @@ Placeholder name was `Hyperlink.handle`. **Rejected** as the public noun. Short-
 | API | Shape | Role |
 |-----|--------|------|
 | **`Hyperlink.default(…)`** | Spec leaf (singular) | One default field **in the contract** — literal or sync fn (Promise-returning fn → type error) |
-| **`Hyperlink.defaults({…})`** | Piped bag (plural) | Add **multiple** defaults: `Tag(…).pipe(Hyperlink.defaults({…}))` — bag on Tag (`DefaultsOf`); handle widen via `WithDefaults` |
+| **`Hyperlink.defaults({…})`** | Piped bag (plural) | Add **multiple** defaults: `Tag(…).pipe(Hyperlink.defaults({…}))` — bag on Tag (`DefaultsOf`); **`Service` / `yield* Tag` widened** with bag keys |
 
 Shipped rules:
 
 - Spec stays branded builders; `defaults` bag merges onto the service (local + client).
-- Spec `default` leaves are fully typed on `Service`. Piped bag keys are runtime-present; type with `WithDefaults<typeof Tag>` (`class X extends Tag<X>().pipe(defaults)` cannot remap `Service` without a self-heritage cycle).
+- Spec `default` leaves are fully typed on `Service`. Piped bag keys widen `Service` / `yield* Tag` at construction via licensed `remapTagService` (`test/defaults-handle.test-d.ts`); `WithDefaults` kept as escape/migration.
 - Spec∩bag key collision → `DuplicateDefaultKey` (also duplicate bag keys across pipes).
 - Layer/serve: wire `ImplOf` required; default/bag keys optional overrides (`ImplWithDefaultOverrides`).
 - Post-hoc overrides also via `Layer.updateService`.
 - Construction-time adorn OK; post-construction adorn → **new** named Context key (not yet a sugar API).
-- Hard lean (not Eng’d): Prototype pipe (`Prototype({spec}).pipe(defaults({…}))` then mint) — may also clear the `WithDefaults` cast.
+- Hard lean (superseded): two-step Prototype mint — **rejected for product** (owner: no separate const; one-shot class mint).
+
+---
+
+## Construction adornments (A1–A2 Eng’d — safe handle widen, one-shot)
+
+### Goal
+
+Modify the **handle** during Tag construction so `yield* Tag` is typed correctly — **one expression**, no intermediate `const Proto = …`.
+
+```ts
+class Jobs extends WorkPool.Tag<Jobs>()("@app/Jobs", jobSpec).pipe(
+  Hyperlink.defaults({ label: (n: number) => `job=${n}` }),
+) {}
+
+const jobs = yield* Jobs
+jobs.label(1) // on Service — no WithDefaults cast
+```
+
+Same pattern must compose with existing pipes (`withReadiness`, node bind, …) without a second mint stage.
+
+### Why the bag needed a cast (fixed)
+
+Previously `defaults` stamped runtime keys on `defaultsSym` but **did not widen** `Service` / `yield* Tag`. `WithDefaults` papered over it at use sites. Spec `default` leaves were already fine (in Spec → in `ServiceOf`). **A1 Eng’d:** `defaults` widens via `remapTagService` + `Service`/`Effect` intersection (a direct `HyperlinkTag` `Svc` rebuild through `.pipe` recurses on class `Self`).
+
+### Constraint (class Self)
+
+`class X extends Tag<X>()(…).pipe(…)` always mentions `X` in the heritage. Remapping `Svc` cannot be *proved* through that cycle for arbitrary bags — same wall as Gate/WorkPool named handles.
+
+**Precedent that works:** `nameRunService` / `nameQueueService` — mint builds the Tag, then **one licensed cast** remaps `Svc` (`ServiceOf ⇄ Gate<…>` / `WorkPool<…>`), guarded by `.test-d.ts` bidirectional equality. Construction finishes **before** the class body closes; no separate const.
+
+### Design lock (Eng’d A1–A2)
+
+**Adornments are construction pipes that remap `Svc` via the same licensed-cast pattern — not a Prototype noun, not use-site casts.**
+
+| Rule | Choice |
+|------|--------|
+| Shape | One-shot: `class X extends Factory<X>()(…).pipe(adorners…) {}` |
+| No separate const | Rejected two-step Prototype mint as the product API |
+| Type safety | Pipe keeps `T` (no `HyperlinkTag<Self,…>` rebuild — that recurses on class `Self`) and widens via `Service` + covariant `Effect<Svc & Bag>` intersection |
+| Soundness | One cast at adornment apply (`remapTagService`); `.test-d.ts` proves `ServiceOf & Bag` ⇄ `Shape` / yield for representatives |
+| Spec vs bag | Spec `default` stays for contract fields; piped `defaults` for extras — both end on `Svc` after adorn |
+| Compose | Adorners chain: each widens/stamps; order defined (defaults → readiness → …) or commutative where possible |
+| Toolkit Tags | `WorkPool.Tag` / `Gate.Tag` / `Daemon.Tag` already return remapped `Svc`; further `.pipe(defaults)` must widen **that** `Svc`, not erase the named handle |
+| Post-construction | Still: new Context key / `Layer.updateService` — not silent mutate of an existing Tag class |
+
+### Primary API (one-shot pipe)
+
+```ts
+class Jobs extends WorkPool.Tag<Jobs>()("@app/Jobs", jobSpec).pipe(
+  Hyperlink.defaults({ label: (n: number) => `job=${n}` }),
+  // future adorners: same Svc-remap contract
+) {}
+```
+
+`Hyperlink.defaults` implementation (Eng’d):
+
+1. Keep runtime stamp on `defaultsSym` + collision checks.
+2. Return type: keep `T` (PipeableTag-safe) + widened `Service` + `Effect<Svc & Bag>` (rebuild of `HyperlinkTag<Self,S,Svc&Bag>` through `.pipe` hits class-`Self` recursion).
+3. Licensed cast via internal `remapTagService` (`as unknown as`).
+4. `test/defaults-handle.test-d.ts`: bidirectional `Shape` ⇄ `ServiceOf & Bag`; toolkit keeps `WorkPool` / `Gate` ∧ bag.
+5. `WithDefaults` kept as escape / migration (identity once Service is widened).
+
+### Optional sugar (same semantics, still one-shot)
+
+Third-arg / config nest — equivalent to piping `defaults` inside the factory (no second const):
+
+```ts
+class Jobs extends WorkPool.Tag<Jobs>()("@app/Jobs", jobSpec, {
+  defaults: { label: (n: number) => `job=${n}` },
+}) {}
+```
+
+Desugar: factory applies the same adornment before return. Pipe remains the composable core; options are sugar for the common case.
+
+### What is an “adorner”
+
+A construction-time combinator with this contract:
+
+- **In:** `PipeableTag` (or toolkit Tag) + adornment payload  
+- **Out:** same Tag identity (`Self`, wire key, Spec) with **updated `Svc` and/or stamps**  
+- **Runtime:** install extras onto every local/client handle (like today’s defaults bag)  
+- **Fail-loud:** collisions / illegal adorn → TaggedError at construction  
+- **Not:** post-hoc mutate of a live Context service; not Spec wire leaves (those stay Spec builders)
+
+Today’s candidates under this umbrella:
+
+| Adorner | Remaps `Svc`? | Stamp |
+|---------|---------------|--------|
+| `defaults(bag)` | **yes** — `Svc & Bag` | `defaultsSym` |
+| `withReadiness` | no (keep shallow `PipeableTag`) | `readinessSym` |
+| `default` Spec leaf | n/a — in Spec | — |
+| future: more handle extras | yes if surface changes | TBD |
+
+### Eng slices
+
+| Slice | Scope |
+|-------|--------|
+| **A1** | ~~Remap `Svc` in `defaults` + licensed cast + `.test-d.ts`~~ **done** (`remapTagService`) |
+| **A2** | ~~Toolkit Tags keep named handle ∧ bag~~ **done** (`test/defaults-handle.test-d.ts`) |
+| **A3** | ~~Factory `{ defaults }` sugar~~ **done** (Hyperlink / WorkPool / Gate / Daemon; after naming casts) |
+| **A4** | Docs polish / getting-started migrate (partial — demo + Creating use factory sugar) |
+| **A5** | Further adorners share `remapTagService` |
+
+### Non-goals
+
+- Separate `const Proto = Prototype(…).pipe(…)` then mint  
+- Use-site `as WithDefaults` as the long-term safe story  
+- Putting wire RPC fields into the defaults bag  
+- Silent local/remote divergence  
 
 ## Open decisions (owner)
 
 1. ~~Rename `constant` → `value`~~ **done**.
 2. ~~Tag-baked / handle bag naming~~ **done** — `default` (Spec) / `defaults` (pipe).
-3. Live plain cell (`cell`): Eng, park, or reject in favor of `ref`?
+3. ~~Live plain cell (`cell`)~~ **LOCKED park/reject** (2026-07-27) — `ref` + adapters enough; no Spec `cell` / live plain `A`.
 4. ~~Fallible materialize~~ **done** (`value` + `E`).
 5. ~~Promise adapter~~ **done** (`Hyperlink.promise`).
 6. Getting-started / Core Concepts polish for the taxonomy (optional).
 7. ~~`default` payload + `pure` fate~~ **done** — literals + sync fns; `pure` removed.
+8. ~~**Construction adornments A1–A3**~~ **Eng’d** (pipe + factory `{ defaults }`).
 
 ---
 
@@ -201,9 +311,9 @@ Shipped rules:
 |-------|--------|
 | **S2** | ~~Eng `default` / `defaults`~~ **done** (`pure` retired) |
 | **S3** | ~~Docs: Creating / Core Concepts taxonomy~~ **done** (light polish with `default`/`defaults`) |
-| **S5** | Live plain `cell` (only if decision 3 = Eng) |
+| **S5** | ~~Live plain `cell`~~ **parked/rejected** — `ref` + adapters |
 | **S6** | Upload / sink (transport-gated) |
-| **S7** | Prototype `.pipe(defaults)` mint (lean) |
+| **S7** | ~~Prototype mint~~ **replaced** by construction adornments A1–A4 above |
 
 ---
 
@@ -212,7 +322,7 @@ Shipped rules:
 - Spec builders that return `Promise` or sync `(In) => A` as the native handle shape.
 - Silent divergence (local plain vs remote Effect for the “same” field).
 - Polling adapters for “live” dashboard data.
-- Replacing `ref` with plain cells for TUI/web unless decision 3 says so.
+- Replacing `ref` with plain cells for TUI/web (`cell` parked/rejected).
 
 ---
 

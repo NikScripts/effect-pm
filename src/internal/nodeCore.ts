@@ -6,7 +6,7 @@
  * @internal
  */
 import { Context, Data, Predicate, Result } from "effect"
-import type { Effect, Layer, Stream } from "effect"
+import type { Effect, Layer, Redacted, Stream } from "effect"
 import type { HttpRouter } from "effect/unstable/http"
 import type { RpcClient } from "effect/unstable/rpc"
 import type { RpcSerialization } from "effect/unstable/rpc"
@@ -305,6 +305,19 @@ export type ListenOptions = {
    */
   readonly port?: number;
   readonly url?: string;
+  /**
+   * Expected launcher ownership-ack token for {@link Node.assume}. When set, node status
+   * mirrors `ownership: "launcher" | "self"`. Injection into the child is open (env / argv /
+   * {@link Config}); this option only arms the handshake on the listening node.
+   */
+  readonly assumeToken?: string | Redacted.Redacted<string>;
+  /**
+   * Cooperative directory handoff handler for Lookup {@link OnConflict} `"askIncumbent"` —
+   * wired to the auto-mounted node-status `yield` RPC. `true` = step aside (row may replace);
+   * `false` / timeout → newcomer sees Lookup `IncumbentAlive`. Default when omitted: accept.
+   * Does **not** drain work or shut down the process (Track C).
+   */
+  readonly onYield?: Effect.Effect<boolean>;
 };
 
 /**
@@ -688,7 +701,7 @@ const isNodeTagValue = <Self, ROut, Addr>(
   catalogSym in x;
 
 /**
- * Declare a **node** — a named transport endpoint a resource connects to. **Two-stage** and keyed by
+ * Declare a **node** — a named transport endpoint a HyperService connects to. **Two-stage** and keyed by
  * a string, mirroring Effect's `Context.Service<Self, Shape>()(key)` (a node *is* a `Context.Key`,
  * resolved by its `key` in the Context map) and every sibling factory (`Hyperlink.Tag<Self>()`, …).
  * The second call infers the target shape, so the `{ http, ws }` shorthand types its
@@ -904,7 +917,7 @@ export const Tag = <Self, ROut = never>() => {
 /**
  * Add transports to a node — piped on to derive a **same-identity** handle that speaks more
  * protocols: `class DropletWs extends Droplet.pipe(Node.withProtocol({ ws: "/rpc" })) {}`. Takes the
- * same `{ http, ws, ipc }` record as the declaration; keeps the node's **key** and served resources,
+ * same `{ http, ws, ipc }` record as the declaration; keeps the node's **key** and served HyperServices,
  * merges the transports into its `endpoints`, and **widens** its {@link ProtocolKind} set in the type.
  * Accepts single- or multi-protocol nodes alike.
  *
@@ -954,7 +967,7 @@ export const withProtocol =
 
 /**
  * Brand a node as the fleet **lookup / identity server** — piped onto a {@link Tag} node (sibling to
- * {@link withProtocol}). Reuses the node verbatim (address, transports, key, served resources) and
+ * {@link withProtocol}). Reuses the node verbatim (address, transports, key, served HyperServices) and
  * folds its advertise policy to a **concrete** default: an explicit `{ onConflict }` survives, while an
  * ordinary node's `"inherit"` (or none) becomes `"livenessReplace"` — a lookup root never inherits.
  *
@@ -995,7 +1008,7 @@ export class UnaddressedNode extends Data.TaggedError("UnaddressedNode")<{
 }
 
 /**
- * Protocol Tag+impl (`unix` / `http` / `ws`(Tag, impl)) needs exactly one Node on the resource
+ * Protocol Tag+impl (`unix` / `http` / `ws`(Tag, impl)) needs exactly one Node on the HyperService
  * handle (`{ node }` / {@link Hyperlink.nodes}`([X])` / {@link Hyperlink.andNode}).
  * `missing` = none; `ambiguous` = two or more (pick with `unix/http/ws(node, [serve…])`).
  * Anonymous transport stays `unix/http/ws([serve…])` / `unix/http/ws(serve)` — never this overload.
@@ -1186,7 +1199,7 @@ export class ProtocolUnanswered extends Data.TaggedError("ProtocolUnanswered")<{
 }
 
 /**
- * The peer answered the node-status RPC, but the target resource key is not in `status.resources`.
+ * The peer answered the node-status RPC, but the target resource key is not in `status.services`.
  * Surfaced by {@link Hyperlink.verifyConnection}`(node, { deep: true, resource })`.
  *
  * @category errors
@@ -1195,13 +1208,13 @@ export class ProtocolUnanswered extends Data.TaggedError("ProtocolUnanswered")<{
 export class ServiceNotServed extends Data.TaggedError("ServiceNotServed")<{
   readonly node: string;
   readonly url: string;
-  readonly resource: string;
+  readonly serviceKey: string;
   readonly served: ReadonlyArray<string>;
 }> {
   override get message() {
     const list = this.served.length === 0 ? "none" : this.served.join(", ");
     return (
-      `Node "${this.node}" at ${this.url} does not serve "${this.resource}" ` +
+      `Node "${this.node}" at ${this.url} does not serve "${this.serviceKey}" ` +
       `(serves: ${list}).`
     );
   }
@@ -1217,18 +1230,18 @@ export class ServiceNotServed extends Data.TaggedError("ServiceNotServed")<{
 export class ServiceNotReady extends Data.TaggedError("ServiceNotReady")<{
   readonly node: string;
   readonly url: string;
-  readonly resource: string;
+  readonly serviceKey: string;
   readonly detail?: string;
 }> {
   override get message() {
     const why = this.detail !== undefined ? ` (${this.detail})` : "";
-    return `Node "${this.node}" serves "${this.resource}" but it is not ready${why}.`;
+    return `Node "${this.node}" serves "${this.serviceKey}" but it is not ready${why}.`;
   }
 }
 
 /**
- * Client and server disagree on a resource's wire contract (`contractHash` mismatch).
- * Surfaced by {@link Hyperlink.verifyConnection}`(node, { deep: true, resource, contractHash })`
+ * Client and server disagree on a HyperService's wire contract (`contractHash` mismatch).
+ * Surfaced by {@link Hyperlink.verifyConnection}`(node, { deep: true, serviceKey, contractHash })`
  * and by default-on addressed {@link Hyperlink.client} verify (F4).
  *
  * @category errors
@@ -1237,21 +1250,21 @@ export class ServiceNotReady extends Data.TaggedError("ServiceNotReady")<{
 export class ContractMismatch extends Data.TaggedError("ContractMismatch")<{
   readonly node: string;
   readonly url: string;
-  readonly resource: string;
+  readonly serviceKey: string;
   readonly expected: string;
   readonly actual: string | undefined;
 }> {
   override get message() {
     const got = this.actual === undefined ? "(missing)" : this.actual;
     return (
-      `Node "${this.node}" at ${this.url} serves "${this.resource}" with contract ` +
+      `Node "${this.node}" at ${this.url} serves "${this.serviceKey}" with contract ` +
       `${got}, but this client expects ${this.expected} — redeploy the stale side.`
     );
   }
 }
 
 /**
- * A node-bound resource is being served over a transport that isn't in its node's declared
+ * A node-bound HyperService is being served over a transport that isn't in its node's declared
  * {@link ProtocolKind} set. Because a client derives its transport *from* the node's declared
  * transports, serving it over one the node doesn't advertise (e.g. a `WebSocket`-only node served on
  * an `httpServer`) means every client dials a protocol the server never answers — the silent "blank
@@ -1262,7 +1275,7 @@ export class ContractMismatch extends Data.TaggedError("ContractMismatch")<{
  * @public
  */
 export class ProtocolKindMismatch extends Data.TaggedError("ProtocolKindMismatch")<{
-  readonly resource: string;
+  readonly serviceKey: string;
   readonly declared: ReadonlyArray<ProtocolKind>;
   readonly servedOver: ProtocolKind;
 }> {
@@ -1271,7 +1284,7 @@ export class ProtocolKindMismatch extends Data.TaggedError("ProtocolKindMismatch
       k === "Http" ? "httpServer" : k === "WebSocket" ? "wsServer" : "ipcServer";
     const kinds = this.declared.join(" / ");
     const servers = this.declared.map((k) => `Node.${serverFor(k)}`).join(" / ");
-    return `Hyperlink "${this.resource}" declares its node over ${kinds}, but is being served over ${this.servedOver} — a client dials one of [${kinds}] and would never reach it. Serve it over a declared transport (${servers}), or add ${this.servedOver} to the node.`;
+    return `Hyperlink "${this.serviceKey}" declares its node over ${kinds}, but is being served over ${this.servedOver} — a client dials one of [${kinds}] and would never reach it. Serve it over a declared transport (${servers}), or add ${this.servedOver} to the node.`;
   }
 }
 

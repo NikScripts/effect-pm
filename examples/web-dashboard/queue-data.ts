@@ -89,9 +89,9 @@ const dropletTransport = Hyperlink.ws(Droplet, { url: dropletRpc });
 const miniTransport = Hyperlink.ws(MiniNode, { url: miniUrl });
 
 // The node this resource lives on — connect it so `yield* node` yields the handle (status/logs/ping).
-const nodeFor = (resourceKey: string) =>
-  nodeOf(resourceKey) === "mini" ? MiniNode : Droplet;
-const nodeStatusLayer = (resourceKey: string) => Node.connect(nodeFor(resourceKey));
+const nodeFor = (serviceKey: string) =>
+  nodeOf(serviceKey) === "mini" ? MiniNode : Droplet;
+const nodeStatusLayer = (serviceKey: string) => Node.connect(nodeFor(serviceKey));
 
 /** The merged remote client layer — every fleet resource over http. Shared by the
  *  reactive runtime (below) and the `hyperlink` CLI (run-and-exit commands). */
@@ -165,7 +165,7 @@ const bumpLogIdFrom = (key: string): void => {
 /**
  * Generic cached accumulator: seed from the localStorage snapshot (instant paint + skip
  * the server history query while the snapshot is fresh), accumulate the live stream, and
- * persist — one mechanism for every resource/atom, no per-type cache code.
+ * persist — one mechanism for every HyperService/atom, no per-type cache code.
  */
 const cachedAccumulator = <A, R>(opts: {
   readonly key: string;
@@ -188,21 +188,21 @@ const cachedAccumulator = <A, R>(opts: {
 
 const cache = new Map<string, QueueBundle>();
 
-const hyperlinkLogsAccumulator = (resourceKey: string) =>
+const hyperlinkLogsAccumulator = (serviceKey: string) =>
   runtime.atom(
     cachedAccumulator({
-      key: `${resourceKey}/logs`,
+      key: `${serviceKey}/logs`,
       cap: 300,
-      stream: Stream.unwrap(Effect.map(nodeFor(resourceKey), (h) => h.logs.stream)).pipe(
-        Stream.filter(LogEntry.hasKey(resourceKey)),
+      stream: Stream.unwrap(Effect.map(nodeFor(serviceKey), (h) => h.logs.stream)).pipe(
+        Stream.filter(LogEntry.hasKey(serviceKey)),
         Stream.map(toLogLine),
         Stream.orDie,
       ),
-      query: Effect.flatMap(nodeFor(resourceKey), (h) => h.logs.query({ limit: 300 })).pipe(
-        Effect.map((entries) => entries.filter(LogEntry.hasKey(resourceKey)).map(toLogLine)),
+      query: Effect.flatMap(nodeFor(serviceKey), (h) => h.logs.query({ limit: 300 })).pipe(
+        Effect.map((entries) => entries.filter(LogEntry.hasKey(serviceKey)).map(toLogLine)),
         Effect.orDie,
       ),
-    }).pipe(Stream.provide(nodeStatusLayer(resourceKey))),
+    }).pipe(Stream.provide(nodeStatusLayer(serviceKey))),
   );
 
 /** Build (once per tag) the atom bundle for a queue tag. */

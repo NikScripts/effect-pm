@@ -108,7 +108,7 @@ describe("Hyperlink.lookupClient", () => {
       const dir = Context.get(lookup, Lookup.Directory);
       const rows = yield* dir
         .nodesServing(
-          new Lookup.NodesServingRequest({ resourceKey: "d7/Jobs" }),
+          new Lookup.NodesServingRequest({ serviceKey: "d7/Jobs" }),
         )
         .pipe(Effect.provide(lookup));
       expect(rows.length).toBeGreaterThan(0);

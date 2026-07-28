@@ -55,7 +55,7 @@ export const readScopeLog = (
   });
 
 /**
- * Durable rows for a resource registration scope (private `_logs` shape), or `[]` when unregistered.
+ * Durable rows for a HyperService registration scope (private `_logs` shape), or `[]` when unregistered.
  *
  * @internal
  */

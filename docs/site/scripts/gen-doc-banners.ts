@@ -12,10 +12,10 @@ import { Console, Effect, Exit } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import { NodeServices } from "@effect/platform-node";
 import { docBanner, stripDocBanner } from "../src/lib/doc-banner.js";
+import { listDocsChapterFiles } from "./docsContentWalk.js";
 
 const repoRoot = nodePath.resolve(fileURLToPath(new URL("../../../", import.meta.url)));
 const docsDir = nodePath.join(repoRoot, "docs");
-const contentDirs = ["getting-started", "guides", "standards", "examples", ""];
 
 const program = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem;
@@ -25,27 +25,18 @@ const program = Effect.gen(function* () {
     return;
   }
   let written = 0;
-  for (const dir of contentDirs) {
-    const abs = nodePath.join(docsDir, dir);
-    const files = (yield* fs.readDirectory(abs).pipe(Effect.orElseSucceed(() => []))).filter((f) =>
-      f.endsWith(".md")
-    );
-    for (const file of files) {
-      const slug = file.replace(/\.md$/, "");
-      if (slug === "README") continue;
-      const path = nodePath.join(abs, file);
-      const raw = yield* fs.readFileString(path).pipe(Effect.orElseSucceed(() => ""));
-      if (raw === "") continue;
-      const stripped = stripDocBanner(raw);
-      const banner = docBanner(`${origin}/docs/${slug}`);
-      // insert after the page attr block when present (first line `{#…}`), else at the top
-      const lines = stripped.split("\n");
-      const attr = lines[0]?.startsWith("{#") === true ? 1 : 0;
-      const next = [...lines.slice(0, attr), banner, ...lines.slice(attr)].join("\n");
-      if (next !== raw) {
-        yield* fs.writeFileString(path, next).pipe(Effect.orElseSucceed(() => undefined));
-        written += 1;
-      }
+  for (const file of yield* listDocsChapterFiles(docsDir)) {
+    const raw = yield* fs.readFileString(file.absPath).pipe(Effect.orElseSucceed(() => ""));
+    if (raw === "") continue;
+    const stripped = stripDocBanner(raw);
+    const banner = docBanner(`${origin}/docs/${file.slug}`);
+    // insert after the page attr block when present (first line `{#…}`), else at the top
+    const lines = stripped.split("\n");
+    const attr = lines[0]?.startsWith("{#") === true ? 1 : 0;
+    const next = [...lines.slice(0, attr), banner, ...lines.slice(attr)].join("\n");
+    if (next !== raw) {
+      yield* fs.writeFileString(file.absPath, next).pipe(Effect.orElseSucceed(() => undefined));
+      written += 1;
     }
   }
   yield* Console.log(`gen-doc-banners: ${written} file(s) updated for ${origin}`);

@@ -27,6 +27,8 @@ const CHANGE_EVENT = "docs:pm-change";
 
 export function PackageInstall({ packages }: { readonly packages: string }): React.ReactElement {
   const pkgs = packages.trim().replace(/\s+/g, " ");
+  // SSR + first client paint always "pnpm"; read localStorage only after mount so hydration
+  // matches (React #418 / Lighthouse errors-in-console on /docs/install).
   const [pm, setPm] = React.useState<PM>("pnpm");
 
   React.useEffect(() => {

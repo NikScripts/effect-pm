@@ -49,14 +49,21 @@ New machine: `pnpm run op:restore-keys` (writes `.env.keys` from 1Password), the
 
 ```sh
 cd docs/site
-pnpm run deploy:do -- hyperlink-docs          # dotenvx → build → DOCR push → CF purge
-doctl --context hyperlink apps update "$DO_DOCS_APP_ID" --spec deploy/do-app.yaml
-# or: doctl --context hyperlink apps update ed0a18b6-946a-4219-a427-af456d181755 --spec deploy/do-app.yaml
+pnpm run deploy:do -- hyperlink-docs
+# dotenvx → full build → check-ssg → DOCR push → create-deployment --wait → CF purge → live-routes-smoke
 ```
 
-The script: full `pnpm build` (regens api-data / search / llms / sitemap with absolute URLs,
-link-check gates the build) → docker image from `docs/` context → push `:latest` to DOCR.
-When `CLOUDFLARE_API_TOKEN` is present (via dotenvx) it also purges the dep-API edge cache.
+The script fails closed: truncated API SSG (missing `api-data/index.json` / module HTML), ciphertext
+in HTML, a non-ACTIVE App Platform cutover, or a live 404 on `/api/hyperlink-ts/WorkPool` (and other
+canaries) all abort the deploy. Do **not** bypass with bare `waku build` + docker push.
+
+Gates (also runnable alone):
+
+| Gate | Command | When |
+|------|---------|------|
+| SSG integrity | `pnpm run docs:check-ssg` | `postbuild` + deploy |
+| Live routes | `pnpm run docs:smoke:routes -- https://hyperlink.cool` | end of deploy |
+| Browser / search | `pnpm run docs:smoke` / `docs:smoke:search` | `docs:verify` |
 
 ## Cloudflare — edge-cache SSR'd dependency API pages
 
@@ -70,9 +77,20 @@ pnpm run cf:ensure   # once (idempotent upsert)
 pnpm run cf:status   # expect cf-cache-status: HIT on the 2nd probe
 ```
 
-Rule match: `/api/effect*`, `/api/platform-node*`, `/api/sql-sqlite-node*` on
-`hyperlink.cool` / `www`. Edge TTL 1 day with `override_origin` (DO often emits
-`Cache-Control: private`). Purge on every image deploy (`pnpm run deploy:do` / `pnpm run cf:purge`).
+Rules (both `override_origin` — DO often emits `Cache-Control: private`):
+
+| Rule | Match | Edge TTL |
+|------|--------|----------|
+| dep API SSR | `/api/effect*`, `/api/platform-node*`, `/api/sql-sqlite-node*` | 1 day |
+| static corpus | `/assets/*`, `/search/*`, favicon/og/robots/llms/sitemap/healthz | 1 year (assets) |
+
+Purge on every image deploy (`pnpm run deploy:do` / `pnpm run cf:purge`).
+
+**DOCS_SITE_ORIGIN:** must decrypt to a real `https://…` URL at build time. Bare `waku build`
+without dotenvx once baked `encrypted:…` into every canonical/og tag — `deploy-do.sh` now refuses
+non-http(s) origins, and `siteOrigin()` falls back to `https://hyperlink.cool`.
+
+**robots.txt:** origin serves `docs/site/public/robots.txt` (Allow + Sitemap).
 
 Origin also stamps `Cache-Control: public, s-maxage=86400, …` via
 `src/middleware/cacheHeaders.ts` for those paths — documentation of intent; the Cache Rule is

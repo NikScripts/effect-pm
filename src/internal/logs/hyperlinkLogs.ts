@@ -1,5 +1,5 @@
 /**
- * {@link Hyperlink.logs} — per-resource log export surface.
+ * {@link Hyperlink.logs} — per-HyperService log export surface.
  *
  * @module internal/logs/hyperlinkLogs
  * @internal
@@ -16,7 +16,7 @@ import { LogRelay } from "./relay";
 import type { StoreLogLevel } from "../store/types";
 import { streamLevelOf, type StreamLevelCarrier } from "./streamLevel";
 
-/** Live + durable log export for one resource tag. @internal */
+/** Live + durable log export for one HyperService tag. @internal */
 export interface LogsExportHandle {
   readonly stream: Stream.Stream<LogEntry, never, never>;
   readonly query: (
@@ -34,7 +34,7 @@ const applyStreamGates = (
 };
 
 /**
- * Durable rows for a resource. Prefers local registration Storage; on a remote client
+ * Durable rows for a HyperService. Prefers local registration Storage; on a remote client
  * (no local scope), falls back to {@link NodeStatus} `logs.query` filtered by lineage.
  *
  * @internal

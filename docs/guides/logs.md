@@ -27,7 +27,7 @@ Your Node (key: billing/scores)
   Store.Service
     └── Logs.layer          — one capture Logger + Logs.Relay bus
     └── BillingNode.logs    — match-all durable tail → node journal
-    └── Daemon.store(Daily)— lineage durable tail → resource journal
+    └── Daemon.store(Daily)— lineage durable tail → HyperService journal
   Daemon / WorkPool layers
     └── Logs.withScope(tag) — appends tag.key onto the fiber lineage path
 ```
@@ -44,7 +44,7 @@ Your Node (key: billing/scores)
 
 {.note}
 **Two copies are intentional.** If both `Node.logs` and `Daemon.store(Daily)` are registered, the
-same published line can appear in the node journal *and* the resource journal. Dedup is per scope, not
+same published line can appear in the node journal *and* the HyperService journal. Dedup is per scope, not
 global.
 
 ## Your first live bus
@@ -115,7 +115,7 @@ const program = Effect.gen(function* () {
 ### Layer order
 
 Toolkit `layer` / `serve` soft-default in-memory `Storage` (**R fulfilled**). Provide your
-`Store.Service` **into** the resource Layer so Soft unwrap captures that store — especially
+`Store.Service` **into** the HyperService Layer so Soft unwrap captures that store — especially
 before queue workers fork at Layer build:
 
 ``` ts
@@ -143,7 +143,7 @@ Say the identifier kind out loud. Mixing them is the common failure mode.
 
 ``` ts
 BillingNode.key          // node log key  — "billing/scores"
-Daily.key                // resource key  — "app/Daily"
+Daily.key                // service key  — "app/Daily"
 LogAnnotationKeys.node   // annotation key — "node" (holds a node log key value)
 LogAnnotationKeys.lineage // annotation key — JSON array of lineage segment keys
 ```
@@ -191,9 +191,9 @@ auto-injected into lineage; the node journal uses `annotations.node` instead.
 import { LogEntry } from "hyperlink-ts"
 
 LogEntry.lineage(entry)                 // ReadonlyArray<string>
-LogEntry.hasKey(resourceKey)(entry)     // key anywhere in the path
+LogEntry.hasKey(serviceKey)(entry)     // key anywhere in the path
 LogEntry.atRoot(segment)(entry)         // lineage[0] === segment
-LogEntry.atLeaf(resourceKey)(entry)     // last segment === resourceKey
+LogEntry.atLeaf(serviceKey)(entry)     // last segment === serviceKey
 ```
 
 Legacy `processId` / `queueId` annotations are gone — writers stamp lineage only via `Logs.withScope`.
@@ -264,7 +264,7 @@ class QuietProc extends Daemon.Tag<QuietProc>()("app/Quiet").pipe(
 ## Remote clients
 
 When the dashboard (or any client) reaches a Node over RPC, durable per-hyperlink rows come from that
-node’s journal — `(yield* MyNode).logs` — filtered by **resource key**. Locally,
+node’s journal — `(yield* MyNode).logs` — filtered by **service key**. Locally,
 `Hyperlink.logs(tag).query` prefers registration Storage and falls back to the node-handle logs path
 when Storage isn’t there.
 
@@ -272,13 +272,13 @@ when Storage isn’t there.
 import * as LogEntry from "hyperlink-ts/LogEntry"
 import { Stream } from "effect"
 
-const resourceKey = LiveScorePoller.key
+const serviceKey = LiveScorePoller.key
 const n = yield* LiveNode // connected node handle
 
-n.logs.stream.pipe(Stream.filter(LogEntry.hasKey(resourceKey)))
+n.logs.stream.pipe(Stream.filter(LogEntry.hasKey(serviceKey)))
 
 const rows = yield* n.logs.query({ limit: 300 })
-const scoped = rows.filter(LogEntry.hasKey(resourceKey))
+const scoped = rows.filter(LogEntry.hasKey(serviceKey))
 ```
 
 The server must still provide a `Store.Service` with `Node.logs` (and any toolkit stores you care

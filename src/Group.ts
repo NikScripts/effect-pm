@@ -18,7 +18,7 @@
  * you pass it in under a name, the name is preserved.
  *
  *   class Ops extends Group.Tag<Ops>("@pkg/Ops")({
- *     Web,            // a resource tag
+ *     Web,            // a HyperService tag
  *     Jobs: MyGroup,  // a child group — nesting is free
  *   }) {}
  *
@@ -64,7 +64,7 @@ export const members = <Members extends Record<string, unknown>>(group: {
 }): Members => group.members;
 
 /**
- * Whether `x` is a group tag (vs a leaf resource tag) — the discriminator for walking a tree.
+ * Whether `x` is a group tag (vs a leaf HyperService tag) — the discriminator for walking a tree.
  * Tags are **classes** (so `typeof` is `"function"`, not `"object"`); a group is one carrying a
  * `members` record. Use it to recurse on branches and treat everything else as a leaf:
  *

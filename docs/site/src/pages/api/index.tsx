@@ -10,6 +10,7 @@ export default async function ApiIndex() {
       <PageMeta
         title="API Reference — Hyperlink"
         description="Compiler-accurate API reference for Hyperlink and its Effect dependencies."
+        path="/api"
       />
       <article className="prose">
         <h1>API Reference</h1>

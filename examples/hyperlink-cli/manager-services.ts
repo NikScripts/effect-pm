@@ -1,12 +1,12 @@
 /**
- * @module examples/hyperlink-cli/manager-resources
+ * @module examples/hyperlink-cli/manager-services
  *
- * The resources, layers, and the composed `Record` — defined **once** and shared
+ * The HyperServices, layers, and the composed `Record` — defined **once** and shared
  * by every projection: the CLI (`manager-cli.ts`), the TUI (`manager-tui.tsx`),
  * and the unified entry (`hyperlink.tsx`). Configure the surface here; pick a renderer
  * there.
  *
- * - `Counter` — a plain resource (a live `current`, an `increment({ by })`).
+ * - `Counter` — a plain HyperService (a live `current`, an `increment({ by })`).
  * - `QueueManager` — a manager tag owning many queue instances (`list`,
  *   `status({ id })`, `pause/resume/enqueue({ id, … })`).
  */
@@ -73,7 +73,7 @@ export const queueManagerLayer = Hyperlink.layer(QueueManager, {
 });
 
 /** The one record — every renderer derives from this. */
-export const resources = { counter: Counter, queue: QueueManager };
+export const services = { counter: Counter, queue: QueueManager };
 
-/** The merged layer providing every resource in `resources`. */
-export const resourcesLayer = Layer.mergeAll(counterLayer, queueManagerLayer);
+/** The merged layer providing every HyperService in `services`. */
+export const servicesLayer = Layer.mergeAll(counterLayer, queueManagerLayer);

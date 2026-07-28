@@ -46,5 +46,5 @@ const program = runCli(process.argv.slice(2)).pipe(
 );
 
 // Boundary: the command's requirement is loose (it's built from a dynamic record
-// of tags); the resource + node layers above fully provide it at run time.
+// of tags); the HyperService + node layers above fully provide it at run time.
 NodeRuntime.runMain(program as Effect.Effect<void, TuiNotConfigured, never>);

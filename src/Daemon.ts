@@ -566,7 +566,7 @@ function createDaemon<E, RUser>(state: AnyDaemonBuildState<E, RUser>) {
   ): Effect.Effect<void> =>
     store === undefined ? Effect.void : write(store).pipe(Effect.asVoid);
 
-  const resourceKey = storeScopeTag?.key ?? name;
+  const serviceKey = storeScopeTag?.key ?? name;
 
   // Sliding PubSub: publishing never blocks the driver (drops oldest when a subscriber lags).
   // Guaranteed delivery stays on the durable store — persist == stream at the source (Queue pattern).
@@ -578,7 +578,7 @@ function createDaemon<E, RUser>(state: AnyDaemonBuildState<E, RUser>) {
   const eventsHub = Effect.runSync(PubSub.sliding<DaemonLiveEvent>(1024));
 
   const terminalRow = (input: DaemonStoreTerminalInput) => ({
-    key: resourceKey,
+    key: serviceKey,
     scheduleKey: input.scheduleKey,
     startedAt: input.startedAt,
     completedAt: input.completedAt,
@@ -596,7 +596,7 @@ function createDaemon<E, RUser>(state: AnyDaemonBuildState<E, RUser>) {
   const recordStoreStarted = (args: DaemonStoreStartedInput): Effect.Effect<void> =>
     publishExecutionEvent({
       _tag: "Started",
-      key: resourceKey,
+      key: serviceKey,
       scheduleKey: args.scheduleKey,
       startedAt: args.startedAt,
       isStartupRun: args.isStartupRun,
@@ -1547,7 +1547,7 @@ export const daemonStatus = Schema.Struct({
 });
 
 /**
- * Log entry wire schema — alias of {@link LogEntrySchema}. Per-resource logs use {@link Hyperlink.logs}.
+ * Log entry wire schema — alias of {@link LogEntrySchema}. Per-HyperService logs use {@link Hyperlink.logs}.
  *
  * @category wire schemas
  * @public
@@ -1781,7 +1781,7 @@ export const scheduleHyperlinkSpec = {
 // The spec is validated (without widening) at the `Hyperlink.Tag` call site.
 
 /**
- * The standalone {@link Schedule} resource's spec.
+ * The standalone {@link Schedule} HyperService's spec.
  *
  * @category models
  * @public
@@ -1983,7 +1983,8 @@ const isDaemonTagOptions = (value: unknown): value is DaemonTagOptions =>
   ("description" in value ||
     "node" in value ||
     "success" in value ||
-    "error" in value);
+    "error" in value ||
+    "defaults" in value);
 
 /** Graft `result` ref + stamp wire schemas on a daemon tag. @internal */
 const applyDaemonTagSchemas = (
@@ -2031,13 +2032,16 @@ const withDaemonReadiness = (
 /** @internal */
 const buildDaemonTag = <Self>(
   key: string,
-  options: DaemonTagOptions | undefined,
+  options:
+    | (DaemonTagOptions & { readonly defaults?: Hyperlink.DefaultsBag })
+    | undefined,
   positional: {
     readonly success?: Schema.Top;
     readonly error?: Schema.Top;
   } = {},
 ): HyperlinkTag<any, any, any> | NodeBoundTag<any, any, unknown, any> => {
   const node = options?.node;
+  // Do not pass `defaults` into Hyperlink.Tag here — apply after readiness (below).
   const tagOptions = { description: options?.description, kind };
   const success = positional.success ?? options?.success;
   const error = positional.error ?? options?.error;
@@ -2050,7 +2054,7 @@ const buildDaemonTag = <Self>(
     success === undefined && error === undefined
       ? base
       : applyDaemonTagSchemas(base, { success, error });
-  return withDaemonReadiness(stamped);
+  return Hyperlink.applyTagDefaults(withDaemonReadiness(stamped), options?.defaults);
 };
 
 /** How a daemon is scheduled — read by the runtime to build the right impl. @internal */
@@ -2114,7 +2118,7 @@ const scheduleGroupFlat: FlatSpec = Object.fromEntries(
  * ```
  *
  * - **an external {@link Schedule}** — the daemon is **gated by** a shared schedule resource and
- *   gains **no** schedule verbs (they live on the resource, which can arm many daemons at once):
+ *   gains **no** schedule verbs (they live on the HyperService, which can arm many daemons at once):
  *
  * ```ts
  * class IngestScores extends Daemon.Tag<IngestScores>()("app/IngestScores").pipe(
@@ -2169,31 +2173,75 @@ export type DaemonTagBuild<Self> = {
     success: A,
     error: E,
   ): HyperlinkTag<Self, DaemonInstanceSpec<A, E>>;
+  <A extends Schema.Top, const D extends Hyperlink.DefaultsBag>(
+    key: string,
+    options: DaemonTagOptions & {
+      readonly success: A;
+      readonly defaults: Hyperlink.DefaultsInput<D>;
+    },
+  ): Hyperlink.TagWithDefaults<HyperlinkTag<Self, DaemonInstanceSpec<A>>, D>;
   <A extends Schema.Top>(
     key: string,
     options: DaemonTagOptions & { readonly success: A },
   ): HyperlinkTag<Self, DaemonInstanceSpec<A>>;
+  <E extends Schema.Top, const D extends Hyperlink.DefaultsBag>(
+    key: string,
+    options: DaemonTagOptions & {
+      readonly error: E;
+      readonly defaults: Hyperlink.DefaultsInput<D>;
+    },
+  ): Hyperlink.TagWithDefaults<
+    HyperlinkTag<Self, DaemonInstanceSpec<typeof Schema.Void, E>>,
+    D
+  >;
   <E extends Schema.Top>(
     key: string,
     options: DaemonTagOptions & { readonly error: E },
   ): HyperlinkTag<Self, DaemonInstanceSpec<typeof Schema.Void, E>>;
+  <A extends Schema.Top, E extends Schema.Top, const D extends Hyperlink.DefaultsBag>(
+    key: string,
+    options: DaemonTagOptions & {
+      readonly success: A;
+      readonly error: E;
+      readonly defaults: Hyperlink.DefaultsInput<D>;
+    },
+  ): Hyperlink.TagWithDefaults<HyperlinkTag<Self, DaemonInstanceSpec<A, E>>, D>;
   <A extends Schema.Top, E extends Schema.Top>(
     key: string,
     options: DaemonTagOptions & { readonly success: A; readonly error: E },
   ): HyperlinkTag<Self, DaemonInstanceSpec<A, E>>;
+  <HSelf, const D extends Hyperlink.DefaultsBag>(
+    key: string,
+    options: DaemonTagOptions & {
+      readonly node: NodeKey<HSelf>;
+      readonly defaults: Hyperlink.DefaultsInput<D>;
+    },
+  ): Hyperlink.TagWithDefaults<NodeBoundTag<Self, DaemonInstanceSpec, HSelf>, D>;
   <HSelf>(
     key: string,
     options: DaemonTagOptions & { readonly node: NodeKey<HSelf> },
   ): NodeBoundTag<Self, DaemonInstanceSpec, HSelf>;
+  <A extends Schema.Top, HSelf, const D extends Hyperlink.DefaultsBag>(
+    key: string,
+    options: DaemonTagOptions & {
+      readonly success: A;
+      readonly node: NodeKey<HSelf>;
+      readonly defaults: Hyperlink.DefaultsInput<D>;
+    },
+  ): Hyperlink.TagWithDefaults<NodeBoundTag<Self, DaemonInstanceSpec<A>, HSelf>, D>;
   <A extends Schema.Top, HSelf>(
     key: string,
     options: DaemonTagOptions & { readonly success: A; readonly node: NodeKey<HSelf> },
   ): NodeBoundTag<Self, DaemonInstanceSpec<A>, HSelf>;
+  <const D extends Hyperlink.DefaultsBag>(
+    key: string,
+    options: DaemonTagOptions & { readonly defaults: Hyperlink.DefaultsInput<D> },
+  ): Hyperlink.TagWithDefaults<HyperlinkTag<Self, DaemonInstanceSpec>, D>;
   (key: string, options?: DaemonTagOptions): HyperlinkTag<Self, DaemonInstanceSpec>;
 };
 
 /**
- * Define a managed daemon as a toolkit resource. `Self` is given explicitly (Effect's `()`
+ * Define a managed daemon as a toolkit HyperService. `Self` is given explicitly (Effect's `()`
  * two-stage form). The base tag carries observation + lifecycle; add a schedule with
  * `.pipe(`{@link schedule}`(…))`. Declare value/error wire schemas on the tag:
  *
@@ -2613,7 +2661,7 @@ export const serveMemory = serve;
 
 /**
  * Serve a daemon **remotely (served-only)** — mounts its RPC handlers without granting the local
- * instance, preserving the requirement `R` for a per-resource `Layer.provide`.
+ * instance, preserving the requirement `R` for a per-HyperService `Layer.provide`.
  *
  * Soft-defaults {@link Store.Storage}. Override with `Layer.provide` / `provideMerge(AppStore)`.
  *

@@ -14,6 +14,7 @@
  * - {@link httpServer} / {@link wsServer} / {@link ipcServer} — low-level transport escape hatches
  * - {@link connect} / {@link connectHttp} / {@link connectSocket} / {@link connectIpc} — dial
  * - {@link clients} — bundle clients for a catalog node's `ROut`
+ * - {@link assume} — launcher ownership ack (`{ token }`) on a running node
  *
  * @module Node
  */
@@ -78,6 +79,17 @@ export {
   connectSocket,
   connectIpc,
 } from "./internal/node"
+export {
+  AssumeTokenMismatch,
+  AssumeTokenReused,
+  AssumeNotReady,
+} from "./internal/nodeAssume"
+export type { NodeOwnership as Ownership } from "./internal/nodeAssume"
+export {
+  assume,
+  assumeTokenConfig,
+  ASSUME_TOKEN_ENV as assumeTokenEnv,
+} from "./internal/nodeAssumeClient"
 
 import { Layer } from "effect"
 import { unix } from "./internal/nodeUnix"
@@ -138,7 +150,7 @@ export function listenLocal(
 
 /** A node's live status snapshot — what `(yield* MyNode).status.get` resolves to. @category services @public */
 export type { NodeStatus as Status } from "./internal/nodeStatus"
-/** One served resource's readiness — an element of {@link Status}`.resources`. @category services @public */
-export type { ResourceReadiness } from "./internal/nodeStatus"
-/** The {@link ResourceReadiness} wire schema (for composing your own health surfaces). @category services @public */
-export { resourceReadiness } from "./internal/nodeStatus"
+/** One served HyperService's readiness — an element of {@link Status}`.services`. @category services @public */
+export type { ServiceReadiness } from "./internal/nodeStatus"
+/** The {@link ServiceReadiness} wire schema (for composing your own health surfaces). @category services @public */
+export { serviceReadiness } from "./internal/nodeStatus"

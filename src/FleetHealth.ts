@@ -8,8 +8,8 @@
  *
  * ## Shape (Telemetry twin)
  *
- * - Leaf: `local` — this node's `ok` / `degraded` + per-resource rows (same readiness SSOT
- *   shape as `Node.Status.resources`).
+ * - Leaf: `local` — this node's `ok` / `degraded` + per-HyperService rows (same readiness SSOT
+ *   shape as `Node.Status.services`).
  * - Fleet: `byNode` / `status` — map + rollup (`ok` | `degraded` | `partial`).
  *
  * Discharge the mesh with {@link Hyperlink.peersLayer} (or {@link alone} for a single node).
@@ -18,13 +18,13 @@
  */
 import { Effect, Exit, Layer, Schema } from "effect";
 import { combineByNodeExit, combineQuery } from "./MultiNode";
-import { resourceReadiness, type ResourceReadiness } from "./Node";
+import { serviceReadiness, type ServiceReadiness } from "./Node";
 import * as Hyperlink from "./Hyperlink";
 import {
-  Tag as resourceTag,
-  layer as resourceLayer,
-  serve as resourceServe,
-  serveRemote as resourceServeRemote,
+  Tag as hyperlinkTag,
+  layer as hyperlinkLayer,
+  serve as hyperlinkServe,
+  serveRemote as hyperlinkServeRemote,
   effect,
   fleet,
   type NodeBoundTag,
@@ -40,14 +40,14 @@ import * as Node from "./Node";
 // ============================================================================
 
 /**
- * This node's readiness aggregate — same element shape as {@link resourceReadiness}.
+ * This node's readiness aggregate — same element shape as {@link serviceReadiness}.
  *
  * @category models
  * @public
  */
 export class LocalHealth extends Schema.Class<LocalHealth>("FleetHealthLocal")({
   status: Schema.Literals(["ok", "degraded"]),
-  resources: Schema.Array(resourceReadiness),
+  services: Schema.Array(serviceReadiness),
 }) {}
 
 /**
@@ -58,7 +58,7 @@ export class LocalHealth extends Schema.Class<LocalHealth>("FleetHealthLocal")({
  */
 export class Reachable extends Schema.TaggedClass<Reachable>()("Reachable", {
   status: Schema.Literals(["ok", "degraded"]),
-  resources: Schema.Array(resourceReadiness),
+  services: Schema.Array(serviceReadiness),
 }) {}
 
 /**
@@ -102,7 +102,7 @@ const byNodeSchema = Schema.Record(Schema.String, nodeReport);
 const fleetHealthSpec = {
   local: effect(LocalHealth).annotate({
     description:
-      "This node's readiness aggregate (same SSOT shape as Node.Status.resources) — leaf only.",
+      "This node's readiness aggregate (same SSOT shape as Node.Status.services) — leaf only.",
   }),
   byNode: effect(byNodeSchema).pipe(fleet).annotate({
     description:
@@ -180,11 +180,11 @@ export const Tag = <Self>() => {
     const node = options?.node;
     const key = keyFor(node);
     return node === undefined
-      ? resourceTag<Self>()(key, fleetHealthSpec, {
+      ? hyperlinkTag<Self>()(key, fleetHealthSpec, {
           kind,
           description: options?.description,
         })
-      : resourceTag<Self>()(key, fleetHealthSpec, {
+      : hyperlinkTag<Self>()(key, fleetHealthSpec, {
           kind,
           description: options?.description,
           node,
@@ -200,15 +200,15 @@ export const Tag = <Self>() => {
 /**
  * Options for {@link layer} / {@link serve} / {@link serveRemote}.
  *
- * Pass the **same** per-resource readiness Effect {@link Node.httpServer} uses for `/health`
+ * Pass the **same** per-HyperService readiness Effect {@link Node.httpServer} uses for `/health`
  * when you want FleetHealth's leaf to match the node-handle status snapshot. Absent ⇒ empty
- * resources / `ok`.
+ * HyperServices / `ok`.
  *
  * @category models
  * @public
  */
 export interface FleetHealthOptions {
-  readonly readiness?: Effect.Effect<ReadonlyArray<ResourceReadiness>>;
+  readonly readiness?: Effect.Effect<ReadonlyArray<ServiceReadiness>>;
 }
 
 /** Identity node for a **non-meshed** FleetHealth instance. @internal */
@@ -232,16 +232,16 @@ export const alone = <Self>(
 
 /** Build {@link LocalHealth} from a readiness row list. @internal */
 const localFrom = (
-  resources: ReadonlyArray<ResourceReadiness>,
+  services: ReadonlyArray<ServiceReadiness>,
 ): LocalHealth =>
   LocalHealth.make({
-    status: resources.every((r) => r.ready) ? "ok" : "degraded",
-    resources: [...resources],
+    status: services.every((r) => r.ready) ? "ok" : "degraded",
+    services: [...services],
   });
 
 /** {@link Reachable} from a leaf local aggregate. @internal */
 const reachableOf = (local: LocalHealth): Reachable =>
-  Reachable.make({ status: local.status, resources: local.resources });
+  Reachable.make({ status: local.status, services: local.services });
 
 /**
  * Roll up {@link byNode}: any {@link Unreachable} ⇒ `partial`; else any degraded ⇒ `degraded`;
@@ -332,7 +332,7 @@ export const layer = <Self>(
   PeersId<Self> | SelfNodeId<Self>
 > =>
   buildImpl(tag, options).pipe(
-    Effect.map((impl) => resourceLayer(tag, impl)),
+    Effect.map((impl) => hyperlinkLayer(tag, impl)),
     Layer.unwrap,
   );
 
@@ -347,7 +347,7 @@ export const serveRemote = <Self>(
   options?: FleetHealthOptions,
 ): Layer.Layer<never, never, PeersId<Self> | SelfNodeId<Self>> =>
   buildImpl(tag, options).pipe(
-    Effect.map((impl) => resourceServeRemote(tag, impl)),
+    Effect.map((impl) => hyperlinkServeRemote(tag, impl)),
     Layer.unwrap,
   );
 
@@ -366,4 +366,4 @@ export const serveRemote = <Self>(
 export const serve = <Self>(
   tag: FleetHealthTag<Self>,
   options?: FleetHealthOptions,
-) => resourceServe(tag, buildImpl(tag, options));
+) => hyperlinkServe(tag, buildImpl(tag, options));

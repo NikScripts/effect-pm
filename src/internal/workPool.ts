@@ -2233,7 +2233,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
         yield* Ref.update(windowAccum, (acc) => accumulate(acc, event));
         yield* recordEventMetric(event);
         yield* PubSub.publish(eventsHub, event);
-        // Persist to the resource store at the source, so no burst is dropped by a late subscriber.
+        // Persist to the HyperService store at the source, so no burst is dropped by a late subscriber.
         if (config.store !== undefined) yield* recordToStore(config.store, event);
         if (isSignificant(event)) yield* requestMetricsFlush;
       });

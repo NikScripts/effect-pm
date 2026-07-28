@@ -9,13 +9,15 @@ import { stripDocBanner } from "./doc-banner.js";
 // Content lives at the docs/ root (a sibling of this app), so the reading paths reach
 // up out of the Vite root (docs/site). `legacy/` and `handoffs/` are never globbed, so
 // they're ignored. Requires `server.fs.allow` to include the parent (see waku.config.ts).
+// Offline generators (search / llms / banners) mirror these roots in
+// `scripts/docsContentWalk.ts` — keep both lists in sync.
 const modules = import.meta.glob(
   [
     "../../../index.md",
     "../../../examples.md",
     "../../../examples/**/*.md",
     "../../../getting-started/**/*.md",
-    "../../../resources/**/*.md",
+    "../../../services/**/*.md",
     "../../../guides/**/*.md",
     "../../../observe/**/*.md",
     "../../../standards/**/*.md",

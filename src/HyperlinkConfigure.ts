@@ -135,7 +135,7 @@ export const resourcePatches = <T extends object>(
 /**
  * `Layer` that appends one configure patch for `resourceId`.
  *
- * Provide or merge with the resource `.layer` so patches are visible when that layer builds.
+ * Provide or merge with the HyperService `.layer` so patches are visible when that layer builds.
  *
  * @category layers & serving
  * @public

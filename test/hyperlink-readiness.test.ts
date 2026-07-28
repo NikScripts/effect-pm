@@ -49,10 +49,10 @@ it("NodeStatus reports the same per-resource readiness (degraded board)", () =>
         const node = yield* NodeStatusTag;
         const snap = yield* node.status.get;
         expect(snap.status).toBe("degraded");
-        expect(snap.resources.length).toBe(1);
-        expect(snap.resources[0]?.ready).toBe(false);
-        expect(snap.resources[0]?.detail).toBe("warming up");
-        expect(snap.resources[0]?.key).toBe("readiness/Warming");
+        expect(snap.services.length).toBe(1);
+        expect(snap.services[0]?.ready).toBe(false);
+        expect(snap.services[0]?.detail).toBe("warming up");
+        expect(snap.services[0]?.key).toBe("readiness/Warming");
       }).pipe(
         Effect.provide(nodeStatusHttpClient(`http://127.0.0.1:${port}/rpc`)),
         Effect.scoped,

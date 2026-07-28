@@ -52,6 +52,10 @@
       "types": "./dist/Node.d.ts",
       "default": "./dist/Node.js"
     },
+    "./Launcher": {
+      "types": "./dist/Launcher.d.ts",
+      "default": "./dist/Launcher.js"
+    },
     "./MultiNode": {
       "types": "./dist/MultiNode.d.ts",
       "default": "./dist/MultiNode.js"
@@ -87,10 +91,6 @@
     "./Store": {
       "types": "./dist/Store.d.ts",
       "default": "./dist/Store.js"
-    },
-    "./ApiMetrics": {
-      "types": "./dist/ApiMetrics.d.ts",
-      "default": "./dist/ApiMetrics.js"
     },
     "./Telemetry": {
       "types": "./dist/Telemetry.d.ts",

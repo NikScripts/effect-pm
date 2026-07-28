@@ -36,7 +36,7 @@ const program = Effect.gen(function* () {
   yield* Hyperlink.verifyConnection(Droplet, {
     url,
     deep: true,
-    resource: "forms/verify/Emails",
+    serviceKey: "forms/verify/Emails",
   })
   yield* Effect.logInfo(`verify ok — ${url} serves Emails ready`)
 }).pipe(Effect.provide(Server), Effect.scoped)

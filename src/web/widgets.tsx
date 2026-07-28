@@ -43,7 +43,7 @@ import {
   nodesOf,
   leafTags,
   queueLeaves,
-  resourceNodeRef,
+  serviceNodeRef,
   tagWireKey,
 } from "../ui/data";
 import { dateFromMillis, fmtClock, fmtDayLabel, millisFromLocalInput, now, startOfDayMillis, toLocalInput } from "../ui/now";
@@ -127,7 +127,7 @@ export const DaemonStatusBadge = (props: { readonly supervising: boolean | undef
   </Badge>
 );
 
-/** Health pill for an API-metrics resource — green / amber / red by error rate ({@link apiHealth}).
+/** Health pill for an API-metrics HyperService — green / amber / red by error rate ({@link apiHealth}).
  *  Shared by the API card and its detail header. @public */
 export const ApiStatusBadge = (props: {
   readonly requests: number;
@@ -356,7 +356,7 @@ const NodeDegradedProbe = (props: {
 }): null => {
   const r = useAtomValue(useNodeBundle(props.node).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
-  const count = (s?.resources ?? []).filter((x) => !x.ready && props.leafKeys.has(x.key)).length;
+  const count = (s?.services ?? []).filter((x) => !x.ready && props.leafKeys.has(x.key)).length;
   const { onCount, node } = props;
   React.useEffect(() => onCount(node.id, count), [onCount, node.id, count]);
   return null;
@@ -428,7 +428,7 @@ export const GroupCard = (props: {
           </span>
         ) : (
           <span className="shrink-0 text-xs text-muted-foreground">
-            {leafTags(props.node).length} resources
+            {leafTags(props.node).length} services
           </span>
         )}
       </div>
@@ -480,6 +480,7 @@ export const Cell = (props: {
   if (isGroup) {
     return <GroupCard node={props.member} name={props.name} onOpen={props.onOpenGroup} />;
   }
+  // A non-group member is a HyperService tag; resolve its widget by key → kind → fallback.
   if (leaf === null) return <></>;
   const Widget = widgetFor(registry, leaf.key, hyperlinkKindOf(leaf) ?? hyperlinkKind);
   return <Widget tag={leaf} name={props.name} onOpen={props.onOpenLeaf} />;
@@ -505,7 +506,7 @@ const DegradedOverlayInner = (props: {
       </>
     );
   }
-  const readiness = s?.resources.find((x) => x.key === tagWireKey(props.tag));
+  const readiness = s?.services.find((x) => x.key === tagWireKey(props.tag));
   if (readiness === undefined || readiness.ready) return null; // ready / still loading → no overlay
   return (
     <>
@@ -525,12 +526,12 @@ const DegradedOverlayInner = (props: {
   );
 };
 
-/** The card **problem overlay**, read from the resource's node node status (SSOT): a slate dim +
+/** The card **problem overlay**, read from the HyperService's node node status (SSOT): a slate dim +
  *  "not responding" when the node's heartbeat stalls (its data is frozen), else an amber ring +
- *  "degraded — <cause>" when the resource isn't ready. Absolute (no layout shift), works for every
+ *  "degraded — <cause>" when the HyperService isn't ready. Absolute (no layout shift), works for every
  *  card type; nothing while live-and-ready, loading, or nodeless. @public */
 export const DegradedOverlay = (props: { readonly tag: unknown }): React.ReactElement | null => {
-  const node = resourceNodeRef(props.tag);
+  const node = serviceNodeRef(props.tag);
   if (node === undefined) return null;
   return <DegradedOverlayInner tag={props.tag} node={node} />;
 };
@@ -776,7 +777,7 @@ export const ActionButton = (props: {
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         title={`${props.label.charAt(0).toUpperCase()}${props.label.slice(1)}?`}
-        description={`Are you sure you want to ${props.label} this resource?`}
+        description={`Are you sure you want to ${props.label} this HyperService?`}
         confirmLabel={props.label}
         destructive={props.destructive}
         onConfirm={trigger}
@@ -1564,7 +1565,7 @@ export const Deck = (props: {
  * A **fullscreen detail** shell — a standard header (back + icon/title + optional badge + readiness
  * banner) over an auto-paginating {@link Deck}. Hand it an ordered list of `sections` and it packs
  * them into as many pages as the viewport needs (one → no dots); or pass explicit `pages` as an
- * escape hatch. Gives a resource more room than its grid card. @public
+ * escape hatch. Gives a HyperService more room than its grid card. @public
  */
 export const DetailScreen = (props: {
   readonly title: string;
@@ -1616,8 +1617,8 @@ const topEndpoints = (
 ): ReadonlyArray<{ readonly endpoint: string; readonly requests: number; readonly errors: number }> =>
   [...bundle].sort((a, b) => b.requests - a.requests).slice(0, limit);
 
-/** An API-metrics resource as a grid card — a {@link Deck}: page 1 is throughput + health, page 2
- *  is the busiest endpoints. Read-only. */
+/** An HttpApiClient HyperService as a grid card — a {@link Deck}: page 1 is throughput + rate-limit
+ *  remaining, page 2 is the busiest endpoints. Read-only. */
 export const ApiCard = (props: {
   readonly tag: ApiTag;
   /** Display name — the member key under which the parent group holds this tag. */
@@ -1630,9 +1631,13 @@ export const ApiCard = (props: {
   const statusR = useAtomValue(bundle.status);
   const metricsR = useAtomValue(bundle.metrics);
   const historyR = useAtomValue(bundle.history);
+  const remainingR = useAtomValue(bundle.remaining);
+  const exceededR = useAtomValue(bundle.exceeded);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const m = AsyncResult.isSuccess(metricsR) ? Option.getOrUndefined(metricsR.value) : undefined;
   const history = AsyncResult.isSuccess(historyR) ? historyR.value : [];
+  const remaining = AsyncResult.isSuccess(remainingR) ? remainingR.value : undefined;
+  const exceeded = AsyncResult.isSuccess(exceededR) ? exceededR.value : 0;
   const health = apiHealth(s?.requestsTotal ?? 0, s?.errorsTotal ?? 0);
   const endpoints = topEndpoints([...(m?.byEndpoint ?? [])], 6);
   const maxReq = Math.max(...endpoints.map((e) => e.requests), 1);
@@ -1648,6 +1653,12 @@ export const ApiCard = (props: {
         <span><strong className="text-foreground">{(m?.throughputPerSec ?? 0).toFixed(1)}</strong> req/s</span>
         <span><strong className="text-foreground">{s?.inFlight ?? 0}</strong> in-flight</span>
       </div>
+      {remaining !== undefined ? (
+        <div className="flex justify-between text-xs text-muted-foreground">
+          <span><strong className="text-foreground">{remaining}</strong> remaining</span>
+          <span><strong className="text-foreground">{exceeded}</strong> exceeded</span>
+        </div>
+      ) : null}
       <Sparkline points={history.map((p) => p.throughput)} color={health.color} />
     </div>
   );
@@ -1678,12 +1689,25 @@ export const ApiCard = (props: {
   );
 };
 
-/** Stat cards from an API resource's snapshot + latest window. */
+/** Format nest `resetAfter` (ms) for the API stats strip. */
+const fmtResetAfter = (ms: number): string => {
+  if (!(ms > 0)) return "—";
+  if (ms < 1_000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1_000).toFixed(1)}s`;
+};
+
+/** Stat cards from an API HyperService's snapshot + latest window + rate-limit nest. */
 export const ApiStats = (props: { readonly bundle: ApiBundle }): React.ReactElement => {
   const statusR = useAtomValue(props.bundle.status);
   const metricsR = useAtomValue(props.bundle.metrics);
+  const remainingR = useAtomValue(props.bundle.remaining);
+  const resetAfterR = useAtomValue(props.bundle.resetAfter);
+  const exceededR = useAtomValue(props.bundle.exceeded);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const m = AsyncResult.isSuccess(metricsR) ? Option.getOrUndefined(metricsR.value) : undefined;
+  const remaining = AsyncResult.isSuccess(remainingR) ? remainingR.value : undefined;
+  const resetAfter = AsyncResult.isSuccess(resetAfterR) ? resetAfterR.value : undefined;
+  const exceeded = AsyncResult.isSuccess(exceededR) ? exceededR.value : undefined;
   const requests = s?.requestsTotal ?? 0;
   const errors = s?.errorsTotal ?? 0;
   const rate = requests > 0 ? (errors / requests) * 100 : 0;
@@ -1694,6 +1718,9 @@ export const ApiStats = (props: { readonly bundle: ApiBundle }): React.ReactElem
       <Stat label="error rate" value={`${rate.toFixed(1)}%`} />
       <Stat label="in-flight" value={String(s?.inFlight ?? 0)} />
       <Stat label="req/s" value={(m?.throughputPerSec ?? 0).toFixed(1)} />
+      {remaining !== undefined ? <Stat label="remaining" value={String(remaining)} /> : null}
+      {resetAfter !== undefined ? <Stat label="reset" value={fmtResetAfter(resetAfter)} /> : null}
+      {exceeded !== undefined ? <Stat label="exceeded" value={String(exceeded)} /> : null}
     </div>
   );
 };
@@ -1869,7 +1896,7 @@ export const ApiEndpointTable = (props: { readonly bundle: ApiBundle }): React.R
 };
 
 // ── Node widgets ─────────────────────────────────────────────────────────────
-// Nodes are read straight off the tags (`nodesOf`): a dot per node the group's resources are bound
+// Nodes are read straight off the tags (`nodesOf`): a dot per node the group's HyperServices are bound
 // to. Each dot's colour + popover come from that node's node status (over its own transport).
 
 /**
@@ -2048,10 +2075,10 @@ const HealthStat = (props: {
   </div>
 );
 
-/** One resource's readiness row — pip (green ready / amber degraded) + name + (kind or node) + the
- *  root-cause detail when degraded. Tap to open that resource's detail page. */
+/** One HyperService's readiness row — pip (green ready / amber degraded) + name + (kind or node) + the
+ *  root-cause detail when degraded. Tap to open that HyperService's detail page. */
 const HyperlinkReadinessRow = (props: {
-  readonly res: NodeStatusValue["resources"][number];
+  readonly res: NodeStatusValue["services"][number];
   readonly node: NodeRef;
   /** Show the node id on the right (cross-node "needs attention" list) instead of the kind. */
   readonly showNode?: boolean;
@@ -2089,22 +2116,22 @@ const HyperlinkReadinessRow = (props: {
   );
 };
 
-/** One node's card on the health board — status dot + name + stats (uptime · ready/total · resource
- *  count), then its full resource roster (each tappable). Tap the header for the node's full screen.
+/** One node's card on the health board — status dot + name + stats (uptime · ready/total · service
+ *  count), then its full service roster (each tappable). Tap the header for the node's full screen.
  *  Pure: the connection state is read once by {@link HealthBoard} and passed in. */
 const NodeHealthCard = (props: {
   readonly node: NodeRef;
   readonly state: NodeConnState;
   readonly history: ReadonlyArray<number>;
   readonly onOpen: () => void;
-  readonly onOpenHyperlink: (resourceKey: string) => void;
+  readonly onOpenHyperlink: (serviceKey: string) => void;
 }): React.ReactElement => {
   const s = props.state._tag === "Ready" ? props.state.status : undefined;
-  const ready = s !== undefined ? s.resources.filter((x) => x.ready).length : 0;
-  const total = s !== undefined ? s.resources.length : 0;
+  const ready = s !== undefined ? s.services.filter((x) => x.ready).length : 0;
+  const total = s !== undefined ? s.services.length : 0;
   const subtitle =
     s !== undefined
-      ? `${s.up ? s.status : "down"} · up ${fmtUptime(s.uptimeMillis)} · ${ready}/${total} ready · ${s.resourceCount} resource${s.resourceCount === 1 ? "" : "s"}`
+      ? `${s.up ? s.status : "down"} · up ${fmtUptime(s.uptimeMillis)} · ${ready}/${total} ready · ${s.serviceCount} service${s.serviceCount === 1 ? "" : "s"}`
       : props.state._tag === "Failed"
         ? "unreachable — missing same-origin runtime transport"
         : "connecting…";
@@ -2143,9 +2170,9 @@ const NodeHealthCard = (props: {
           <Sparkline points={props.history} color={nodeConnColor(props.state)} />
         </div>
       ) : null}
-      {s !== undefined && s.resources.length > 0 ? (
+      {s !== undefined && s.services.length > 0 ? (
         <ul className="space-y-0.5 border-t px-1 py-1">
-          {s.resources.map((res) => (
+          {s.services.map((res) => (
             <HyperlinkReadinessRow
               key={res.key}
               res={res}
@@ -2194,22 +2221,22 @@ export const NodeBar = (props: {
   );
 };
 
-/** The full-screen **health board** (opened from the die): a top stat strip, then degraded resources
- *  across **every** node first (with their root-cause detail — tap → that resource's detail), then a
- *  card per node (status · uptime · ready/total · resource count, tap → its full screen) with its full
- *  resource roster. Reads each node's node status once (the node list is stable for a group, so the
+/** The full-screen **health board** (opened from the die): a top stat strip, then degraded HyperServices
+ *  across **every** node first (with their root-cause detail — tap → that HyperService's detail), then a
+ *  card per node (status · uptime · ready/total · service count, tap → its full screen) with its full
+ *  service roster. Reads each node's node status once (the node list is stable for a group, so the
  *  per-node reads keep a constant hook order; bundles are cached per runtime+node). */
 export const HealthBoard = (props: {
   readonly group: GroupNode;
   readonly onBack: () => void;
   readonly onOpenNode: (node: NodeRef) => void;
-  readonly onOpenHyperlink: (resourceKey: string) => void;
+  readonly onOpenHyperlink: (serviceKey: string) => void;
 }): React.ReactElement => {
   const nodes = nodesOf(props.group);
   // Each node's live status is read by its own `NodeHealthRow` child (hooks at the child's top level —
   // not in a `.map` over the node list, which the Rules of Hooks forbid and which would break if a
   // group ever gained/lost a node). The children report their status up so this board can compute the
-  // cross-node aggregates (ready/total, degraded resources, degraded nodes). Statuses arrive async
+  // cross-node aggregates (ready/total, degraded HyperServices, degraded nodes). Statuses arrive async
   // (the underlying atoms start "connecting"), so this reporting adds no flash the direct reads didn't.
   const [stateMap, setStateMap] = React.useState<ReadonlyMap<string, NodeConnState>>(
     () => new Map(),
@@ -2226,17 +2253,17 @@ export const HealthBoard = (props: {
     state: stateMap.get(node.id) ?? ({ _tag: "Connecting" } satisfies NodeConnState),
   }));
   const degraded = statuses.flatMap(({ node, state }) =>
-    (state._tag === "Ready" ? state.status.resources : [])
+    (state._tag === "Ready" ? state.status.services : [])
       .filter((x) => !x.ready)
       .map((res) => ({ node, res })),
   );
   const total = statuses.reduce(
-    (n, { state }) => n + (state._tag === "Ready" ? state.status.resources.length : 0),
+    (n, { state }) => n + (state._tag === "Ready" ? state.status.services.length : 0),
     0,
   );
   const ready = statuses.reduce(
     (n, { state }) =>
-      n + (state._tag === "Ready" ? state.status.resources.filter((x) => x.ready).length : 0),
+      n + (state._tag === "Ready" ? state.status.services.filter((x) => x.ready).length : 0),
     0,
   );
   const live = statuses.filter(({ state }) => state._tag === "Ready").length;
@@ -2281,7 +2308,7 @@ export const HealthBoard = (props: {
               : `${nodes.length - degradedNodes}/${nodes.length}`
           }
         />
-        <HealthStat label="resources ready" value={`${ready}/${total}`} />
+        <HealthStat label="HyperServices ready" value={`${ready}/${total}`} />
         <HealthStat
           label="needs attention"
           value={`${degraded.length + failed}`}
@@ -2332,7 +2359,7 @@ const NodeHealthRow = (props: {
   readonly node: NodeRef;
   readonly onState: (id: string, state: NodeConnState) => void;
   readonly onOpen: () => void;
-  readonly onOpenHyperlink: (resourceKey: string) => void;
+  readonly onOpenHyperlink: (serviceKey: string) => void;
 }): React.ReactElement => {
   const bundle = useNodeBundle(props.node);
   const r = useAtomValue(bundle.status);
@@ -2356,7 +2383,7 @@ const NodeHealthRow = (props: {
   );
 };
 
-/** Reads one resource's readiness from its node's node status (the node computes it — SSOT). Always
+/** Reads one HyperService's readiness from its node's node status (the node computes it — SSOT). Always
  *  has a node (the public wrapper renders nothing for a nodeless tag). Shows **only when degraded** —
  *  nothing while ready/connecting, so the banner only takes space when there's a problem. */
 const ReadinessBannerInner = (props: {
@@ -2366,7 +2393,7 @@ const ReadinessBannerInner = (props: {
   const r = useAtomValue(useNodeBundle(props.node).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   const key = tagWireKey(props.tag);
-  const readiness = s?.resources.find((x) => x.key === key);
+  const readiness = s?.services.find((x) => x.key === key);
   if (readiness === undefined || readiness.ready) return null; // ready/connecting → no banner
   return (
     <div
@@ -2385,22 +2412,22 @@ const ReadinessBannerInner = (props: {
   );
 };
 
-/** A resource's **degraded** banner for its detail page — an amber "degraded — &lt;root cause&gt;" line
+/** A HyperService's **degraded** banner for its detail page — an amber "degraded — &lt;root cause&gt;" line
  *  read from its node's node status (the same SSOT the health board uses). Renders nothing while the
  *  resource is ready/connecting or nodeless, so it only appears (pushing content down) on a problem. */
 export const HyperlinkReadinessBanner = (props: { readonly tag: unknown }): React.ReactElement | null => {
-  const node = resourceNodeRef(props.tag);
+  const node = serviceNodeRef(props.tag);
   if (node === undefined) return null;
   return <ReadinessBannerInner tag={props.tag} node={node} />;
 };
 
-/** Fullscreen node view: header + each served resource's readiness (tap → that resource's page).
+/** Fullscreen node view: header + each served HyperService's readiness (tap → that HyperService's page).
  *  Graphs land with node metrics. */
 export const NodeDetail = (props: {
   readonly node: NodeRef;
   readonly onBack: () => void;
-  /** Open a served resource's detail page, by its wire key (`Node.Status.resources[].key`). */
-  readonly onOpenHyperlink: (resourceKey: string) => void;
+  /** Open a served HyperService's detail page, by its wire key (`Node.Status.services[].key`). */
+  readonly onOpenHyperlink: (serviceKey: string) => void;
 }): React.ReactElement => {
   const bundle = useNodeBundle(props.node);
   const r = useAtomValue(bundle.status);
@@ -2434,13 +2461,13 @@ export const NodeDetail = (props: {
         <>
           <div className="flex gap-3">
             <Stat label="uptime" value={fmtUptime(s.uptimeMillis)} />
-            <Stat label="resources" value={String(s.resourceCount)} />
+            <Stat label="services" value={String(s.serviceCount)} />
             <Stat label="status" value={s.status} />
           </div>
           <div className="max-h-[38dvh] shrink-0 overflow-auto rounded-xl border bg-card p-3">
-            <div className="mb-2 text-sm font-semibold">resources</div>
+            <div className="mb-2 text-sm font-semibold">services</div>
             <ul className="space-y-1">
-              {s.resources.map((res) => (
+              {s.services.map((res) => (
                 <li key={res.key}>
                   <button
                     type="button"
@@ -2486,7 +2513,7 @@ export const NodeDetail = (props: {
 // Widget registry — the built-in set
 // ============================================================================
 
-/** A resource's readiness as a small "badge dot": a border-only **green** circle when ready, a filled
+/** A HyperService's readiness as a small "badge dot": a border-only **green** circle when ready, a filled
  *  **amber** one when not — the UI's ready/degraded colours (`#22c55e` / `#eab308`, as the readiness
  *  pips). Reads its node's node status — the SSOT the overlay uses. */
 const ReadinessDotInner = (props: {
@@ -2495,7 +2522,7 @@ const ReadinessDotInner = (props: {
 }): React.ReactElement => {
   const r = useAtomValue(useNodeBundle(props.node).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
-  const readiness = s?.resources.find((x) => x.key === tagWireKey(props.tag));
+  const readiness = s?.services.find((x) => x.key === tagWireKey(props.tag));
   const ready = readiness === undefined || readiness.ready; // loading/unknown → ready (empty)
   return (
     <span
@@ -2507,17 +2534,17 @@ const ReadinessDotInner = (props: {
   );
 };
 
-/** The plain-resource readiness dot — an empty badge when ready, filled when degraded. Nothing for a
+/** The plain-HyperService readiness dot — an empty badge when ready, filled when degraded. Nothing for a
  *  nodeless tag (no node computes its readiness). @public */
 export const ReadinessDot = (props: { readonly tag: unknown }): React.ReactElement | null => {
-  const node = resourceNodeRef(props.tag);
+  const node = serviceNodeRef(props.tag);
   if (node === undefined) return null;
   return <ReadinessDotInner tag={props.tag} node={node} />;
 };
 
 /**
- * Basic fallback card — a resource whose kind has no registered widget (a bare `…/Hyperlink`, or an
- * unregistered kind). Shows the resource's name, its kind, and a degraded banner; a richer card is
+ * Basic fallback card — a HyperService whose kind has no registered widget (a bare `…/Hyperlink`, or an
+ * unregistered kind). Shows the HyperService's name, its kind, and a degraded banner; a richer card is
  * left to a dedicated widget registered for that kind. @public
  */
 export const FallbackCard = (props: WidgetProps): React.ReactElement => (
@@ -2534,7 +2561,7 @@ export const FallbackCard = (props: WidgetProps): React.ReactElement => (
 );
 
 /**
- * The card for a plain resource — a bare `Hyperlink.Tag` with no richer widget (a dependency like a
+ * The card for a plain HyperService — a bare `Hyperlink.Tag` with no richer widget (a dependency like a
  * DB connection, a health gate). There's little beyond identity to show, so it's the readiness LED
  * (its degraded reason on hover, like every card) + name + kind + the node it runs on. @public
  */
@@ -2544,7 +2571,7 @@ export const HyperlinkCard = (props: {
   /** Unused — parent View Cell owns activation when present. */
   readonly onOpen?: (tag: LeafTag) => void;
 }): React.ReactElement => {
-  const node = resourceNodeRef(props.tag);
+  const node = serviceNodeRef(props.tag);
   return (
     <Card className="relative">
       <CardContent className="p-3">
@@ -2586,7 +2613,7 @@ const FleetNodeRow = (props: { readonly node: string; readonly report: NodeRepor
 const FLEET_STATUS: Record<string, string> = { ok: "#22c55e", degraded: "#eab308", partial: "#ef4444" };
 
 /**
- * The card for a **FleetHealth** resource — surfaces its two `fleet` fields: the `status` rollup
+ * The card for a **FleetHealth** HyperService — surfaces its two `fleet` fields: the `status` rollup
  * (ok / degraded / partial) as the header badge, and the `byNode` map as a pip-per-node roster
  * (Reachable ok/degraded, or Unreachable when a peer is down). Read-only. @public
  */
@@ -2640,7 +2667,7 @@ const NodeCountRow = (props: {
 );
 
 /**
- * The card for a **Telemetry** resource — surfaces its fleet folds: `fleetInFlight` (in-flight across
+ * The card for a **Telemetry** HyperService — surfaces its fleet folds: `fleetInFlight` (in-flight across
  * the whole fleet) as the headline number, `inFlightByNode` as a bar-per-node breakdown, plus this
  * node's live metric count (from `snapshot`). Read-only. @public
  */
@@ -2688,7 +2715,7 @@ export const TelemetryCard = (props: {
 };
 
 /**
- * The card for a **ShardMap** resource — a partitioned key/value mesh. Surfaces its fleet folds:
+ * The card for a **ShardMap** HyperService — a partitioned key/value mesh. Surfaces its fleet folds:
  * `size` (entries across the whole fleet) as the headline, `sizeByNode` as a bar-per-node breakdown,
  * plus this node's own shard (`sizeLocal`) as a footnote. Read-only. @public
  */

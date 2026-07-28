@@ -1,7 +1,7 @@
 {#fleets-and-peers title="Fleets & Peers" status="draft" appliesTo=all}
 # Fleets & Peers
 
-Running one resource across many runtimes and having its instances coordinate.
+Running one HyperService across many runtimes and having its instances coordinate.
 
 **Fleets** — declare nodes with `Hyperlink.nodes([...])` (or bare `Hyperlink.distributed` for
 directory discovery), mark fields with `Hyperlink.fleet` so peers don't recurse into them.

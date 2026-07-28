@@ -1,6 +1,6 @@
 # Documentation index (legacy / pre-site)
 
-Prefer the **living book** (`docs/guides/`, `docs/resources/`, `docs/getting-started/`, …) served by
+Prefer the **living book** (`docs/guides/`, `docs/services/`, `docs/getting-started/`, …) served by
 the docs site. This folder is the **pre-site corpus** — still useful for agents and as a port source
 during Phase 3 ([plan](../handoffs/agent-01-docs-corpus-phase3-plan.md)).
 

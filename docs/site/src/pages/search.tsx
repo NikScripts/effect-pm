@@ -10,6 +10,7 @@ export default function SearchPage() {
       <PageMeta
         title="Search — Hyperlink"
         description="Search the Hyperlink docs, API reference, and glossary."
+        path="/search"
       />
       <article className="prose">
         <h1>Search</h1>

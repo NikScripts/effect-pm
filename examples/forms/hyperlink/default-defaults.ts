@@ -14,21 +14,25 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Schema } from "effect";
 import * as Hyperlink from "../../../src/Hyperlink";
 
-class Counter extends Hyperlink.Tag<Counter>()("forms/default/Counter", {
-  current: Hyperlink.effect(Schema.Number),
-  add: Hyperlink.effectFn(Schema.Number, Schema.Number),
-  /** Spec leaf — fully typed on `Service`. */
-  label: Hyperlink.default((n: number) => `count=${n}`),
-  unit: Hyperlink.default("count" as const),
-}).pipe(
-  /** Piped bag — runtime on every handle; type with `WithDefaults`. */
-  Hyperlink.defaults({
-    tags: ["demo", "defaults"] as const,
-  }),
+class Counter extends Hyperlink.Tag<Counter>()(
+  "forms/default/Counter",
+  {
+    current: Hyperlink.effect(Schema.Number),
+    add: Hyperlink.effectFn(Schema.Number, Schema.Number),
+    /** Spec leaf — fully typed on `Service`. */
+    label: Hyperlink.default((n: number) => `count=${n}`),
+    unit: Hyperlink.default("count" as const),
+  },
+  {
+    /** Factory sugar ≡ `.pipe(Hyperlink.defaults(…))` — widens `Service`. */
+    defaults: {
+      tags: ["demo", "defaults"] as const,
+    },
+  },
 ) {}
 
 const program = Effect.gen(function* () {
-  const c = (yield* Counter) as Hyperlink.WithDefaults<typeof Counter>;
+  const c = yield* Counter;
   const n = yield* c.add(41);
   yield* Effect.log(`current after add: ${n}`);
   yield* Effect.log(`label: ${c.label(n)}`);

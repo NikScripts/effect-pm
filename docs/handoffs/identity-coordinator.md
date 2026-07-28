@@ -35,7 +35,7 @@ Same `yield* Router` / `yield* Worker` everywhere. Winner serves; losers dial th
 
 | # | Decision | Lock |
 |---|----------|------|
-| **M1** | **Collapse** | No `Hyperlink.Manager` ctor / product surface. Exclusive resources = `Hyperlink.identity` (S1, already Eng’d). |
+| **M1** | **Collapse** | No `Hyperlink.Manager` ctor / product surface. Exclusive HyperServices = `Hyperlink.identity` (S1, already Eng’d). |
 | **M2** | **Dedupe** | Key-only (already S1). No required value-level `manages[]` Tag list. |
 | **M3** | **Pattern** | One brain (identity) + many hands (directory / nameless / `Prototype` / `distributed`). Taught as the fleet recipe. |
 | **M4** | **v1 Eng spine** | **Identity liveness** (dead winner → claim releasable / replaceable) + **coordinator+workers example**. |
@@ -100,21 +100,21 @@ Shipped:
 | Topic | Lock |
 |-------|------|
 | Wire | `Lookup.Advice` — `advise` / `clear` / `preferred`; helpers `Lookup.advise` / `clearAdvice` / `preferred` |
-| Key | `resourceKey` → preferred directory `nodeKey` |
+| Key | `serviceKey` → preferred directory `nodeKey` |
 | Retention | In-memory last-write-wins; stale prefer (not in `nodesServing`) ignored |
 | Multi-advisor | Last write wins; no advisor ACL |
 | Dial | `lookupClient` N>1: live prefer → dial; else D4 `pick` / ambiguous |
 | Algorithms | App-owned (identity Router decides prefer) |
 
 ```ts
-yield* Lookup.advise({ resourceKey: Worker.key, prefer: "fleet/Worker#w2" })
+yield* Lookup.advise({ serviceKey: Worker.key, prefer: "fleet/Worker#w2" })
 Hyperlink.lookupClient(Worker) // honors advice; pick only if absent/stale
 ```
 
 ### Slice 4 — Sugar (**M6**, last) — **Eng’d**
 
 - Guide: [`docs/guides/identity-coordinator.md`](../guides/identity-coordinator.md)
-- Helpers: `Lookup.prefer(tag\|key, nodeKey)`, `Lookup.preferEntry(resourceKey, entry)`
+- Helpers: `Lookup.prefer(tag\|key, nodeKey)`, `Lookup.preferEntry(tag|key, entry)`
 - Clearer `IdentitySelfRequired` message (Lookup pipe + dialable self)
 - Lookup stays pipe-only on listens (no magic in listen options)
 

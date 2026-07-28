@@ -6,7 +6,7 @@
 <!-- docs-site-link:end -->
 # Stores
 
-Durable storage for resources — one composition recipe so Soft unwrap captures your
+Durable storage for HyperServices — one composition recipe so Soft unwrap captures your
 app journal when you override, and bare toolkit layers still work (in-memory baked in).
 
 This guide is the SSOT for wiring. Persistence *shapes* (append/read vs custom store vs

@@ -1,6 +1,6 @@
 # Plan: fleet rate limiting (Gates + HttpApiClient)
 
-**Status:** Eng in progress — **R1 + R2 + R3 + R3b Eng’d**. R4 HttpApiClient open.  
+**Status:** **Eng’d + tip-synced** — R1–R4 (incl. opt-in adaptive 429). **Closed** — no Hyperlink-backed store; Effect store layers only.  
 **Agent:** 4 (`cursor/hyperservice-open-deps-5679`).  
 **Depends on:** Effect `4.0.0-beta.98` `effect/unstable/persistence/RateLimiter`; WorkPool `rateLimit` precedent; optional peer `ioredis` + `@effect/platform-node` `NodeRedis`.  
 **Product context:** HttpApiClient Gate = local routes + wire observe/limit nest; ApiMetrics absorbed (not a migrate track). Fleet rate limiting is the substrate that nest uses.
@@ -88,7 +88,7 @@ Effect already solved cross-process limiting **when the store is shared**. We do
 ### Law
 
 1. **Algorithm = Effect `RateLimiter`.** Do not fork a second fixed-window / token-bucket.  
-2. **Fleet = shared `RateLimiterStore`.** Memory for single-node; Redis (or a Hyperlink-backed store adapter) for multi-node.  
+2. **Fleet = shared `RateLimiterStore`.** Use **Effect’s store layers only** (today Soft memory / Redis). No Hyperlink-backed store adapter.  
 3. **Concurrency ≠ rate limit.** Keep Semaphore for in-flight; RateLimiter for temporal budget. Same orthogonal split as WorkPool.  
 4. **Egress stays local.** HttpApi routes remain `Hyperlink.local` — consume runs on the node that holds the real Layer; peers share the **store**, not route RPC.  
 5. **ApiMetrics dies into the Gate nest** as observation of limiter + usage, not a separate enforce path.
@@ -98,7 +98,7 @@ Effect already solved cross-process limiting **when the store is shared**. We do
 ```
                     ┌─────────────────────────────┐
                     │  RateLimiterStore (shared)  │
-                    │  memory | Redis | (later HL)│
+                    │  memory Soft | Redis (Effect) │
                     └────────────▲────────────────┘
                                  │ consume(key, …)
            ┌─────────────────────┴─────────────────────┐
@@ -210,13 +210,13 @@ const store = Option.getOrElse(storeOpt, () => memoryStore) // Soft fallback —
 | Switch | **presence** (`serviceOption`) | **presence** (`serviceOption`) |
 | Config flag? | No | No (`rateLimit: { limit, window, … }` only configures the *policy*) |
 | Absent | Ephemeral queue (no durable default — memory durability is a contradiction) | **Soft memory** `layerStoreMemory` (single-node rate limit is valid) |
-| Present | SQLite / backend layer at root | Redis (Effect) or future SQL adapter at root |
+| Present | SQLite / backend layer at root | Effect store layer at root (today Redis) |
 | Scope escape | Don’t provide the store layer to queues that must stay ephemeral | Same — omit store from that Gate’s provide tree |
 
 **Policy vs store stay separate:**
 
 - `rateLimit?: { limit, window, algorithm?, onExceeded?, key? }` — “this Gate is rate-limited” (like today on WorkPool).  
-- Ambient **`RateLimiterStore`** — where tokens live (memory Soft / Redis fleet / SQL later).
+- Ambient **`RateLimiterStore`** — where tokens live (Effect Soft memory / Effect Redis fleet; whatever else Effect ships later).
 
 App composition (fleet):
 
@@ -258,7 +258,7 @@ Fleet rate limiting is **first-class Gate substrate**. HttpApiClient update **us
 ## Open decisions (owner)
 
 1. ~~How is the store selected?~~ **LOCKED (owner):** presence-driven `serviceOption(RateLimiterStore)` like `DurableQueueStore`; Soft memory when absent.  
-2. ~~**Fleet store v1 backend:**~~ **LOCKED:** Effect **Redis** only for fleet v1 (`NodeRedis` + `layerStoreRedis`). SQL `RateLimiterStore` later if needed.  
+2. ~~**Fleet store backend:**~~ **LOCKED:** Effect store layers only — Soft memory / Redis today (`NodeRedis` + `layerStoreRedis`). No Hyperlink-backed store; adopt further Effect stores if/when they ship.  
 3. **Distributed + memory Soft:** docs-only vs fail-loud? — lean docs  
 4. ~~**Default `onExceeded` for Gates:**~~ **LOCKED (R1 lean):** `"delay"`  
 5. ~~**Nest name / shape / collision:**~~ **LOCKED (bake 2026-07-27):** nest default **`metrics`**, **flat siblings**. Escape = const **`metricsKey`** rename (typed); fail-loud if Api group id equals chosen key.  
@@ -275,8 +275,9 @@ Fleet rate limiting is **first-class Gate substrate**. HttpApiClient update **us
 | **R2** | ~~Light **`metrics` nest** on ordinary Gate~~ **Eng’d** — wire nest `remaining` / `resetAfter` / `exceeded`; Tag metadata `rateLimitKeyOf` / `metricsKeyOf`; live updates when `rateLimit` set |
 | **R3** | ~~Fleet recipe + shared-store tests (Gate + WorkPool presence-driven); Soft vs shared contrast; demo/docs~~ **Eng’d** (shared memory CI stand-in) |
 | **R3b** | ~~Live Redis proof~~ **Eng’d** — `NodeRedis.layer` + `RateLimiter.layerStoreRedis`; Gate/WorkPool live suites + child-process peer; `Persistence.layerRedis` / `PersistedQueue.layerStoreRedis` smoke; `docker-compose.redis.yml`; demo auto-detects Redis |
-| **R4** | `Gate.HttpApiClient` Tag (local routes + `metrics` nest); `static layer` pattern; **opt-in adaptive 429**; retire ApiMetrics public story |
-| **R5** | (Optional) Hyperlink-backed `RateLimiterStore` without Redis |
+| **R4** | ~~`Gate.HttpApiClient` Tag + nest + adaptive 429~~ **Eng’d** — `httpApiClientLayer(Tag)`; `usage`/`windows`; `adaptive: true` |
+| **R4b** | ~~Delete sibling `ApiMetrics` + dashboard nest parity~~ **Eng’d** — module/subpath removed; web/TUI API widgets surface `remaining` / `resetAfter` / `exceeded` |
+| **R5** | ~~Hyperlink-backed `RateLimiterStore`~~ **rejected** — Effect store layers only (`layerStoreMemory` / `layerStoreRedis`; adopt further Effect stores if/when they ship) |
 
 ---
 
@@ -287,5 +288,5 @@ Fleet rate limiting is **first-class Gate substrate**. HttpApiClient update **us
 - WorkPool: `src/internal/workPool.ts` (`WorkPoolRateLimitOptions`, `queueRateLimiterLayer`, `acquireQueueRateLimitAwait`)  
 - Guide: `docs/guides/work-pools.md` (concurrency vs rateLimit)  
 - Gate concurrency: `src/internal/gate.ts` (Semaphore)  
-- HttpApi instrument / usage registry: `src/internal/httpApiClient.ts`, `src/ApiMetrics.ts`  
+- HttpApi instrument / usage registry: `src/internal/httpApiClient.ts`, `src/ApiUsageSchema.ts`  
 - Product bake: local routes + wire nest — owner chat 2026-07-27; [`wire-groups-and-identity.md`](./wire-groups-and-identity.md), [`service-shapes.md`](./service-shapes.md)

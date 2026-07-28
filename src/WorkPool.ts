@@ -152,7 +152,7 @@ import { configureLayer, foldConfiguredSpec } from "./HyperlinkConfigure";
 import type { ConfigPatch } from "./HyperlinkConfigure";
 
 /**
- * Log entry wire schema — alias of {@link LogEntrySchema}. Per-resource logs use {@link Hyperlink.logs}.
+ * Log entry wire schema — alias of {@link LogEntrySchema}. Per-HyperService logs use {@link Hyperlink.logs}.
  *
  * @category wire schemas
  * @public
@@ -836,6 +836,16 @@ interface QueueTagPositionalOptions {
   readonly node?: NodeKey<unknown>;
 }
 
+/**
+ * Runtime-only extras on queue Tag config / positional options (`defaults` typed
+ * precisely via overloads that require {@link Hyperlink.DefaultsInput}).
+ *
+ * @internal
+ */
+type QueueTagDefaultsRuntime = {
+  readonly defaults?: Hyperlink.DefaultsBag;
+};
+
 /** The 2nd arg is the config-object form (not a payload schema). @internal */
 const isQueueTagConfig = <F extends Schema.Struct.Fields>(
   value: Schema.Struct<F> | QueueTagConfig<F, Schema.Top, Schema.Top>,
@@ -1039,15 +1049,45 @@ const nameQueueService = <
  * @public
  * @category constructors
  */
+type QueueTagCarriers<
+  Self,
+  F extends Schema.Struct.Fields,
+  Success extends Schema.Top,
+  Error extends Schema.Top,
+> = QueueTag<Self, F, Success, Error> &
+  QueueSuccessCarrier<Success> &
+  QueueErrorCarrier<Error> &
+  QueueItemSchemaCarrier<F>;
+
+type QueueNodeBoundTagCarriers<
+  Self,
+  F extends Schema.Struct.Fields,
+  HSelf,
+  Success extends Schema.Top,
+  Error extends Schema.Top,
+> = QueueNodeBoundTag<Self, F, HSelf, Success, Error> &
+  QueueSuccessCarrier<Success> &
+  QueueErrorCarrier<Error> &
+  QueueItemSchemaCarrier<F>;
+
 const queueTag = <Self>() => {
+  function build<F extends Schema.Struct.Fields, HSelf, const D extends Hyperlink.DefaultsBag>(
+    key: string,
+    payload: Schema.Struct<F>,
+    options: {
+      readonly description?: string;
+      readonly node: NodeKey<HSelf>;
+      readonly defaults: Hyperlink.DefaultsInput<D>;
+    },
+  ): Hyperlink.TagWithDefaults<
+    QueueNodeBoundTagCarriers<Self, F, HSelf, typeof Schema.Void, typeof Schema.Never>,
+    D
+  >;
   function build<F extends Schema.Struct.Fields, HSelf>(
     key: string,
     payload: Schema.Struct<F>,
     options: { readonly description?: string; readonly node: NodeKey<HSelf> },
-  ): QueueNodeBoundTag<Self, F, HSelf> &
-    QueueSuccessCarrier<typeof Schema.Void> &
-    QueueErrorCarrier<typeof Schema.Never> &
-    QueueItemSchemaCarrier<F>;
+  ): QueueNodeBoundTagCarriers<Self, F, HSelf, typeof Schema.Void, typeof Schema.Never>;
   function build<
     F extends Schema.Struct.Fields,
     Success extends Schema.Top,
@@ -1057,25 +1097,52 @@ const queueTag = <Self>() => {
     payload: Schema.Struct<F>,
     success: Success,
     error?: Error,
-  ): QueueTag<Self, F, Success, Error> &
-    QueueSuccessCarrier<Success> &
-    QueueErrorCarrier<Error> &
-    QueueItemSchemaCarrier<F>;
+  ): QueueTagCarriers<Self, F, Success, Error>;
+  function build<F extends Schema.Struct.Fields, const D extends Hyperlink.DefaultsBag>(
+    key: string,
+    payload: Schema.Struct<F>,
+    options: {
+      readonly description?: string;
+      readonly defaults: Hyperlink.DefaultsInput<D>;
+    },
+  ): Hyperlink.TagWithDefaults<
+    QueueTagCarriers<Self, F, typeof Schema.Void, typeof Schema.Never>,
+    D
+  >;
   function build<F extends Schema.Struct.Fields>(
     key: string,
     payload: Schema.Struct<F>,
     options?: { readonly description?: string },
-  ): QueueTag<Self, F> &
-    QueueSuccessCarrier<typeof Schema.Void> &
-    QueueErrorCarrier<typeof Schema.Never> &
-    QueueItemSchemaCarrier<F>;
+  ): QueueTagCarriers<Self, F, typeof Schema.Void, typeof Schema.Never>;
+  function build<
+    F extends Schema.Struct.Fields,
+    HSelf,
+    const D extends Hyperlink.DefaultsBag,
+  >(
+    key: string,
+    config: QueueTagConfig<F> & {
+      readonly node: NodeKey<HSelf>;
+      readonly defaults: Hyperlink.DefaultsInput<D>;
+    },
+  ): Hyperlink.TagWithDefaults<
+    QueueNodeBoundTagCarriers<Self, F, HSelf, typeof Schema.Void, typeof Schema.Never>,
+    D
+  >;
   function build<F extends Schema.Struct.Fields, HSelf>(
     key: string,
     config: QueueTagConfig<F> & { readonly node: NodeKey<HSelf> },
-  ): QueueNodeBoundTag<Self, F, HSelf> &
-    QueueSuccessCarrier<typeof Schema.Void> &
-    QueueErrorCarrier<typeof Schema.Never> &
-    QueueItemSchemaCarrier<F>;
+  ): QueueNodeBoundTagCarriers<Self, F, HSelf, typeof Schema.Void, typeof Schema.Never>;
+  function build<
+    F extends Schema.Struct.Fields,
+    const D extends Hyperlink.DefaultsBag,
+    Success extends Schema.Top = typeof Schema.Void,
+    Error extends Schema.Top = typeof Schema.Never,
+  >(
+    key: string,
+    config: QueueTagConfig<F, Success, Error> & {
+      readonly defaults: Hyperlink.DefaultsInput<D>;
+    },
+  ): Hyperlink.TagWithDefaults<QueueTagCarriers<Self, F, Success, Error>, D>;
   function build<
     F extends Schema.Struct.Fields,
     Success extends Schema.Top = typeof Schema.Void,
@@ -1083,17 +1150,14 @@ const queueTag = <Self>() => {
   >(
     key: string,
     config: QueueTagConfig<F, Success, Error>,
-  ): QueueTag<Self, F, Success, Error> &
-    QueueSuccessCarrier<Success> &
-    QueueErrorCarrier<Error> &
-    QueueItemSchemaCarrier<F>;
+  ): QueueTagCarriers<Self, F, Success, Error>;
   // Implementation signature — intentionally loose (`any` wire slots): the tag's real `Success`/
   // `Error` are fixed by the overload selected above. The runtime resolves them from the config /
   // positional args below; the phantom carriers are type-only.
   function build<F extends Schema.Struct.Fields>(
     key: string,
     second: Schema.Struct<F> | QueueTagConfig<F, Schema.Top, Schema.Top>,
-    third?: Schema.Top | QueueTagPositionalOptions,
+    third?: Schema.Top | (QueueTagPositionalOptions & QueueTagDefaultsRuntime),
     fourth?: Schema.Top,
   ): QueueTag<Self, F, any, any> &
     QueueSuccessCarrier<any> &
@@ -1106,6 +1170,7 @@ const queueTag = <Self>() => {
           error: second.error,
           description: second.description,
           node: second.node,
+          defaults: (second as QueueTagConfig<F> & QueueTagDefaultsRuntime).defaults,
         }
       : Schema.isSchema(third)
         ? {
@@ -1114,6 +1179,7 @@ const queueTag = <Self>() => {
             error: fourth,
             description: undefined,
             node: undefined,
+            defaults: undefined,
           }
         : {
             payload: second,
@@ -1121,8 +1187,13 @@ const queueTag = <Self>() => {
             error: undefined,
             description: third?.description,
             node: third?.node,
+            defaults: third?.defaults,
           };
-    return nameQueueService(materializeQueueTag<Self, F, Schema.Top, Schema.Top>(key, resolved));
+    // defaults **after** nameQueueService — naming remaps Svc to WorkPool and would wipe a prior bag.
+    const named = nameQueueService(
+      materializeQueueTag<Self, F, Schema.Top, Schema.Top>(key, resolved),
+    );
+    return Hyperlink.applyTagDefaults(named, resolved.defaults) as typeof named;
   }
   return build;
 };
@@ -1975,9 +2046,9 @@ export const layerMemory = layer;
 
 /**
  * Serve this queue **remotely (served-only)** — run the worker / refill / `persist`
- * engine behind the tag, mount its RPC handlers, and register into {@link Hyperlink.servedHyperlinksLayer},
+ * engine behind the tag, mount its RPC handlers, and register into {@link Hyperlink.servedHyperServicesLayer},
  * **without** granting the local instance (no `yield* Tag` in the serving process). The engine's worker
- * requirement `R` is **preserved**, so a per-resource `Layer.provide` discharges it in isolation — the
+ * requirement `R` is **preserved**, so a per-HyperService `Layer.provide` discharges it in isolation — the
  * queue's counterpart to {@link Hyperlink.serveRemote}.
  *
  * Reach for this (with {@link Node.httpServer}) for a pure gateway/edge that exposes the queue for
@@ -2048,9 +2119,9 @@ export const serveRemoteMemory = serveRemote;
 /**
  * Serve this queue **and** grant its local instance from **one** materialization — run the worker /
  * refill / `persist` engine behind the tag, mount its RPC handlers, register into
- * {@link Hyperlink.servedHyperlinksLayer}, **and** grant `Self | Local<Self>` so co-located code
+ * {@link Hyperlink.servedHyperServicesLayer}, **and** grant `Self | Local<Self>` so co-located code
  * can `yield* Tag`. The served cells *are* the in-process instance (one engine, one `peersLayer`); the
- * worker requirement `R` is preserved for per-resource `Layer.provide`. This is the queue's counterpart
+ * worker requirement `R` is preserved for per-HyperService `Layer.provide`. This is the queue's counterpart
  * to {@link Hyperlink.serve}; a served-**only** gateway uses {@link serveRemote}.
  *
  * ```ts

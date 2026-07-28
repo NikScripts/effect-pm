@@ -138,9 +138,9 @@ const program = Effect.gen(function* () {
 
 This exact Counter (the same tag, the same `Hyperlink.layer`) is running in this page right now.
 The buttons call `increment` / `reset` on the handle; the count reads straight off `value.changes`.
-There is no extra API between the UI and the resource: the handle *is* the surface.
+There is no extra API between the UI and the serviceKey: the handle *is* the surface.
 
-``` resource
+``` ts
 docs/Counter
 ```
 
@@ -157,17 +157,15 @@ import { Schema } from "effect"
 class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
   value: Hyperlink.ref(Schema.Number),
   label: Hyperlink.default((n: number) => `count=${n}`),
-}).pipe(
-  Hyperlink.defaults({
-    unit: "count" as const,
-  }),
-) {}
+}, {
+  defaults: { unit: "count" as const },
+}) {}
 ```
 
-`label` is on `Service` (Spec leaf). Piped `unit` is on every handle at runtime; type it with
-`Hyperlink.WithDefaults<typeof Counter>` when you need the bag keys in TypeScript. Layer
-overrides are **provide-site only** (local handle) — clients always see the Tag-baked value.
-Post-hoc local patches: `Layer.updateService`.
+`label` is on `Service` (Spec leaf). Factory `{ defaults }` (or `.pipe(Hyperlink.defaults(…))`)
+widens `Service` the same way — `yield* Counter` sees both. Layer overrides are
+**provide-site only** (local handle) — clients always see the Tag-baked value. Post-hoc
+local patches: `Layer.updateService`.
 
 ## What changes next
 

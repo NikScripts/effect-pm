@@ -85,10 +85,10 @@ describe("httpServer — shared majority + isolated outlier", () => {
 
       const body = health as {
         readonly status: string;
-        readonly resources: ReadonlyArray<{ readonly key: string }>;
+        readonly services: ReadonlyArray<{ readonly key: string }>;
       };
       expect(body.status).toBe("ok");
-      expect(body.resources.map((r) => r.key).sort()).toEqual([
+      expect(body.services.map((r) => r.key).sort()).toEqual([
         "sharedIso/A",
         "sharedIso/B",
         "sharedIso/Outlier",

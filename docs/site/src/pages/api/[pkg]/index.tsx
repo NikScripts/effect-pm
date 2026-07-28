@@ -87,6 +87,7 @@ export default async function ApiPackagePage({ pkg }: { pkg: string }) {
       <PageMeta
         title={`${p.name} — API — Hyperlink`}
         description={`API reference for ${p.name}: ${p.modules.length} documented modules.`}
+        path={`/api/${pkg}`}
       />
       <article className="prose">
         <p className="api-back">

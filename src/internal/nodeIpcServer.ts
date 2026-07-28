@@ -7,6 +7,7 @@ import {
   Clock,
   Effect,
   Layer,
+  type Redacted,
 } from "effect"
 import {
   RpcSerialization,
@@ -63,6 +64,15 @@ export interface IpcServerOptions {
    * @internal
    */
   readonly onConflict?: OnConflict;
+  /**
+   * Expected launcher ownership-ack token for {@link Node.assume} on the auto-mounted
+   * node-status Hyperlink.
+   */
+  readonly assumeToken?: string | Redacted.Redacted<string>;
+  /**
+   * Cooperative `askIncumbent` handler — node-status `yield` (`true` = accept replace).
+   */
+  readonly onYield?: Effect.Effect<boolean>;
 }
 
 /**
@@ -107,13 +117,13 @@ export function ipcServer(
   return ipcServerBase(options).pipe(
     Layer.provideMerge(closedLayer(mergeServeList(list))),
     // Fresh registry per server — Lookup + Worker in one process must not share.
-    Layer.provide(Layer.fresh(Hyperlink.servedHyperlinksLayer)),
+    Layer.provide(Layer.fresh(Hyperlink.servedHyperServicesLayer)),
   );
 }
 
 /** Closed layer — overload-impl erase target for dynamic Rpc graphs. */
 type ClosedLayer = Layer.Layer<never, never, never>;
-type IpcServed = Layer.Layer<never, never, Hyperlink.ServedHyperlinks>;
+type IpcServed = Layer.Layer<never, never, Hyperlink.ServedHyperServices>;
 
 /** Registry → one RpcServer over a Unix-domain {@link SocketServer}. @internal */
 const ipcServerBase = (options: IpcServerOptions): IpcServed => {
@@ -123,12 +133,12 @@ const ipcServerBase = (options: IpcServerOptions): IpcServed => {
   const unwrapServed = retype<(effect: never) => IpcServed>(Layer.unwrap as never);
   return unwrapServed(
     Effect.gen(function* () {
-      const registry = yield* Hyperlink.ServedHyperlinks;
+      const registry = yield* Hyperlink.ServedHyperServices;
       const entries = yield* registry.all;
       if (entries.length === 0) {
         return yield* Effect.die(
           new Error(
-            "Node.ipcServer: no resources registered — provideMerge at least one Hyperlink.serve(...) layer",
+            "Node.ipcServer: no HyperServices registered — provideMerge at least one Hyperlink.serve(...) layer",
           ),
         );
       }
@@ -163,9 +173,14 @@ const ipcServerBase = (options: IpcServerOptions): IpcServed => {
       );
       const nodeEntry = nodeStatusServeEntry({
         startedAt,
-        resourceCount: entries.length,
+        serviceCount: entries.length,
         readiness,
         ...(inferredNodeKey !== undefined ? { nodeLogKey: inferredNodeKey } : {}),
+        ...(options.assumeToken !== undefined
+          ? { assumeToken: options.assumeToken }
+          : {}),
+        ...(inferredNodeKey !== undefined ? { assumeNodeKey: inferredNodeKey } : {}),
+        ...(options.onYield !== undefined ? { onYield: options.onYield } : {}),
       });
       const nodeTag = nodeEntry.tag;
       // nodeStatus impl Effect is Effect-bounded with open channels — retype before yield*.

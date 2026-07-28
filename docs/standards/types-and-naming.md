@@ -221,7 +221,7 @@ tag names the case; it reads like the variant it is.
 ## Canonical ids are slash-scoped
 
 A service or contract id is a slash-separated, package-scoped string with PascalCase segments:
-`hyperlink-ts/WorkPool`, `hyperlink-ts/ApiMetrics/clientId`. (CLI and remote
+`hyperlink-ts/WorkPool`, `hyperlink-ts/Gate/HttpApiClient`. (CLI and remote
 surfaces additionally accept normalized kebab suffix aliases; an ambiguous suffix errors with the
 candidate list.)
 
@@ -335,7 +335,7 @@ shape.
 {#services-use-class-extends .must appliesTo="src examples"}
 ## Services, tags, and facets use the class-extends form
 
-A service, resource tag, or storage facet is declared by extending the framework factory *in a
+A service, HyperService tag, or storage facet is declared by extending the framework factory *in a
 class* — never a bare factory call bound to a const. This is the **only** sanctioned `class extends`
 in the codebase (see *Principles → Composition over inheritance*): you are not inheriting behaviour,
 you are giving the service a **nominal identity**. The `<Self>` self-reference is what supplies it —
@@ -348,7 +348,7 @@ class DurableQueueStore extends Context.Service<DurableQueueStore, DurableQueueS
   "hyperlink-ts/DurableQueueStore",
 ) {}
 
-// resource tag — X.Tag
+// HyperService tag — X.Tag
 class Prices extends Daemon.Tag<Prices>()("app/Prices", { success: priceSchema }) {}
 
 // storage facet — X.Store.Service

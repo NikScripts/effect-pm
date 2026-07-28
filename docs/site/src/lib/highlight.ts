@@ -27,12 +27,31 @@ import {
 } from "./api-source-links";
 import * as Annotate from "@nikscripts/docgen/Annotate";
 import { inertTemplate } from "./inert-html.js";
+import { processSlot } from "./processSlot.js";
 import { runServer } from "./runtime";
+
+type HighlightSlot = {
+  hl: Highlighter | undefined;
+  /** In-flight createHighlighter — SSG fans out loadHighlighter concurrently. */
+  hlPromise: Promise<Highlighter> | undefined;
+  linksReady: boolean;
+  linksPromise: Promise<void> | undefined;
+  hoverDocLinks: Readonly<Record<string, Record<string, string>>>;
+};
+const slot = (): HighlightSlot =>
+  processSlot("highlight", () => ({
+    hl: undefined,
+    hlPromise: undefined,
+    linksReady: false,
+    linksPromise: undefined,
+    hoverDocLinks: {},
+  }));
 
 // Compiler-resolved {@link} maps, keyed by a symbol's declaration `file:line` (see gen-api). Hovers
 // look up the hovered symbol's location here to link the same as the pages do. Populated by
 // loadHighlighter (via effect/FileSystem), so the sync render pipeline just reads it.
-let hoverDocLinks: Readonly<Record<string, Record<string, string>>> = {};
+const hoverDocLinksOf = (): Readonly<Record<string, Record<string, string>>> =>
+  slot().hoverDocLinks;
 // When rendering the source panel we KNOW the owner symbol (the page's), so pass its resolved links
 // directly — the source is compiled inline, so its local symbols have no real location to key on.
 let currentOwnerDocLinks: Record<string, string> | undefined;
@@ -319,7 +338,7 @@ const twoslasher = Object.assign(
         if (h.docs !== undefined) {
           const links =
             currentOwnerDocLinks ??
-            (info?.ownerLoc !== undefined ? hoverDocLinks[info.ownerLoc] : undefined);
+            (info?.ownerLoc !== undefined ? hoverDocLinksOf()[info.ownerLoc] : undefined);
           if (links !== undefined) h.docs = embedDocLinks(h.docs, links);
         }
         // Dual-preview expand box (existing), now with compiler links on the member types.
@@ -552,6 +571,7 @@ function jsdocToHast(docs: string, resolveLink?: (target: string) => string | un
         const lang = (node.lang && ALIAS[String(node.lang).toLowerCase()]) || "typescript";
         let children: any[];
         try {
+          const hl = slot().hl;
           if (!hl) throw new Error("highlighter not loaded");
           children = hl.codeToHast(String(node.value), {
             themes: THEMES,
@@ -720,18 +740,32 @@ const renderer = {
 };
 const twoslash = createTransformerFactory(twoslasher, renderer as never)({});
 
-let hl: Highlighter | undefined;
-
 /** Load the shared highlighter + the link data once, before the (sync) render walk. */
 export const loadHighlighter = async (): Promise<void> => {
-  if (!hl) {
-    hl = await createHighlighter({
+  const s = slot();
+  // Process slot (not module `let`) — Vite SSR re-evaluates this module per SSG page; a module
+  // `let` would allocate hundreds of Shiki instances and OOM the build. The promise latch collapses
+  // concurrent first loads (SSG fans out pages) onto a single createHighlighter.
+  if (s.hl === undefined) {
+    s.hlPromise ??= createHighlighter({
       themes: [THEMES.light, THEMES.dark],
       langs: [...LOAD_LANGS],
+    }).then((h) => {
+      s.hl = h;
+      return h;
     });
+    await s.hlPromise;
   }
-  hoverDocLinks = await runServer(docLinksByLocation());
-  await loadSourceLinks();
+  // Doclinks + source location index are process-cached in api-data / api-source-links; skip the
+  // runServer round-trip after the first successful load (every API symbol page used to re-hit both).
+  if (!s.linksReady) {
+    s.linksPromise ??= (async () => {
+      s.hoverDocLinks = await runServer(docLinksByLocation());
+      await loadSourceLinks();
+      s.linksReady = true;
+    })();
+    await s.linksPromise;
+  }
 };
 
 // HTML attribute → React prop name for the few twoslash emits that React is strict about.
@@ -797,6 +831,7 @@ export const highlightToHast = (
 ): any | undefined => {
   const text = code.replace(/\n$/, "");
   const resolved = lang ? ALIAS[lang.toLowerCase()] : undefined;
+  const hl = slot().hl;
   if (!hl || !resolved) return undefined;
   return hl.codeToHast(text, {
     lang: resolved,

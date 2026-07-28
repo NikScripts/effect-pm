@@ -3,7 +3,7 @@
  *
  * The reserved **node status** resource — every node that serves a group over
  * {@link Node.httpServer} automatically also serves this, so a client can ask any node
- * "are you up, how long, how many resources, and what are your logs?" without the node author
+ * "are you up, how long, how many HyperServices, and what are your logs?" without the node author
  * wiring anything. It's a nodeless {@link Hyperlink.Tag} (one reserved group id); a client reaches
  * a specific node by pointing the ambient transport at that node's url.
  *
@@ -19,6 +19,8 @@ import {
   Effect,
   Layer,
   Option,
+  Redacted,
+  Ref,
   Schema,
   Stream,
 } from "effect";
@@ -31,6 +33,15 @@ import { Relay as LogRelay } from "../Logs";
 import { LogEntrySchema } from "../LogEntry";
 import type { LogEntry } from "../LogEntry";
 import { queryDurableNode } from "./logs/durableRead";
+import {
+  AssumeNotReady,
+  AssumeTokenMismatch,
+  AssumeTokenReused,
+  assumeError,
+  assumePayload,
+  nodeOwnership,
+  type NodeOwnership,
+} from "./nodeAssume";
 
 /** The reserved group id (wire prefix) for the node status resource. */
 const NODE_STATUS_KEY = "hyperlink-ts/node-status";
@@ -39,13 +50,13 @@ const NODE_STATUS_KEY = "hyperlink-ts/node-status";
 const STATUS_INTERVAL = Duration.seconds(2);
 
 /**
- * One served resource's readiness, as the node reports it — its wire key, {@link Hyperlink.kindOf}
+ * One served HyperService's readiness, as the node reports it — its wire key, {@link Hyperlink.kindOf}
  * kind, optional F4 {@link contractHash}, whether it's ready, and (when not) why. The element of
- * {@link nodeStatus}'s `resources`.
+ * {@link nodeStatus}'s `services`.
  *
  * @internal
  */
-export const resourceReadiness = Schema.Struct({
+export const serviceReadiness = Schema.Struct({
   key: Schema.String,
   kind: Schema.String,
   ready: Schema.Boolean,
@@ -54,12 +65,12 @@ export const resourceReadiness = Schema.Struct({
   contractHash: Schema.optionalKey(Schema.String),
 });
 
-/** A served resource's readiness as reported by its node. @internal */
-export type ResourceReadiness = typeof resourceReadiness.Type;
+/** A served HyperService's readiness as reported by its node. @internal */
+export type ServiceReadiness = typeof serviceReadiness.Type;
 
 /**
  * A node's live status — whether it's up, its overall readiness rollup, when it started, how long
- * it's been up, how many resources it serves, and each resource's readiness. `status` is `degraded`
+ * it's been up, how many HyperServices it serves, and each HyperService's readiness. `status` is `degraded`
  * (and `/health` returns 503) when any served resource is not ready.
  *
  * @internal
@@ -69,15 +80,20 @@ export const nodeStatus = Schema.Struct({
   status: Schema.Literals(["ok", "degraded"]),
   startedAt: Schema.DateTimeUtc,
   uptimeMillis: Schema.Number,
-  resourceCount: Schema.Number,
-  resources: Schema.Array(resourceReadiness),
+  serviceCount: Schema.Number,
+  services: Schema.Array(serviceReadiness),
+  /**
+   * Custody mirror when the node was started with an assume token (`"launcher"` until
+   * {@link NodeStatusTag}.`assume` succeeds, then `"self"`). Omitted when no assume token.
+   */
+  ownership: Schema.optionalKey(nodeOwnership),
 });
 
 /** Live node status. @internal */
 export type NodeStatus = typeof nodeStatus.Type;
 
 /**
- * The reserved node status resource tag — nodeless, so a client queries it over whichever node
+ * The reserved node status HyperService tag — nodeless, so a client queries it over whichever node
  * transport it points the ambient `RpcClient.Protocol` at.
  *
  * @internal
@@ -87,7 +103,7 @@ export class NodeStatusTag extends Hyperlink.Tag<NodeStatusTag>()(
   {
   status: Hyperlink.ref(nodeStatus).annotate({
     description:
-      "Live node status (up / uptime / resource count / per-resource readiness) — " +
+      "Live node status (up / uptime / resource count / per-HyperService readiness) — " +
       "`status.get` for one-shot, `status.changes` re-emitted periodically.",
   }),
   ping: Hyperlink.effect(Schema.Number).annotate({
@@ -101,6 +117,18 @@ export class NodeStatusTag extends Hyperlink.Tag<NodeStatusTag>()(
     description:
       "Cooperative handoff: true = accept yield (Lookup may replace the directory row). " +
       "Refuse with false. Distinct from Effect generator yield*.",
+  }),
+  /**
+   * Launcher → node ownership ack — child assumes self-custody so the launcher may exit.
+   * Rejects until Ready; token is single-use; mismatch / reuse / not-ready are loud tagged errors.
+   */
+  assume: Hyperlink.effectFn({
+    payload: assumePayload,
+    success: Schema.Void,
+    error: assumeError,
+  }).annotate({
+    description:
+      "Assume process ownership from the launcher (`{ token }`). Ready required; single-use token.",
   }),
   logs: {
     stream: Hyperlink.stream(LogEntrySchema).annotate({
@@ -116,13 +144,14 @@ export class NodeStatusTag extends Hyperlink.Tag<NodeStatusTag>()(
 }) {}
 
 /** Build the node status service implementation for a node that started at `startedAt` and serves
- *  `resourceCount` resources. Logs/history are optional (read via `serviceOption`), so this adds no
- *  requirement to the server layer. @internal */
+ *  `serviceCount` services. Logs/history are optional (read via `serviceOption`), so this adds no
+ *  requirement to the server layer. When `assumeToken` is set, `assume` / ownership mirror are live.
+ *  @internal */
 export const buildNodeStatusImpl = (options: {
   readonly startedAt: number;
-  readonly resourceCount: number;
-  /** Per-resource readiness aggregate (same one `/health` reads); absent ⇒ no resources, `ok`. */
-  readonly readiness?: Effect.Effect<ReadonlyArray<ResourceReadiness>>;
+  readonly serviceCount: number;
+  /** Per-HyperService readiness aggregate (same one `/health` reads); absent ⇒ no HyperServices, `ok`. */
+  readonly readiness?: Effect.Effect<ReadonlyArray<ServiceReadiness>>;
   /**
    * Node log key for durable `logs.query` via registration Storage (`Node.logs`).
    * When omitted, query returns `[]`.
@@ -133,49 +162,120 @@ export const buildNodeStatusImpl = (options: {
    * Default: accept (`true`) — Lookup then replaces the directory row.
    */
   readonly onYield?: Effect.Effect<boolean>;
-}) => {
-  const readiness = options.readiness ?? Effect.succeed([]);
-  const computeStatus: Effect.Effect<NodeStatus> = Effect.gen(function* () {
-    const now = yield* Clock.currentTimeMillis;
-    const resources = yield* readiness;
-    const ok = resources.every((r) => r.ready);
-    const status: "ok" | "degraded" = ok ? "ok" : "degraded";
+  /**
+   * Expected launcher handoff token. When set, ownership starts as `"launcher"` and
+   * {@link NodeStatusTag}.`assume` is armed. Cleartext or {@link Redacted}.
+   */
+  readonly assumeToken?: string | Redacted.Redacted<string>;
+  /** Node key stamped into assume errors (defaults to the reserved status key). */
+  readonly assumeNodeKey?: string;
+}): Effect.Effect<{
+  readonly status: Hyperlink.Subscribable<NodeStatus>;
+  readonly ping: Effect.Effect<number>;
+  readonly yield: Effect.Effect<boolean>;
+  readonly assume: (payload: {
+    readonly token: string;
+  }) => Effect.Effect<void, AssumeTokenMismatch | AssumeTokenReused | AssumeNotReady>;
+  readonly logs: {
+    readonly stream: Stream.Stream<LogEntry>;
+    readonly query: (payload: {
+      readonly limit: number;
+    }) => Effect.Effect<ReadonlyArray<LogEntry>>;
+  };
+}> =>
+  Effect.gen(function* () {
+    const readiness = options.readiness ?? Effect.succeed([]);
+    const expectedToken =
+      options.assumeToken === undefined
+        ? undefined
+        : Redacted.isRedacted(options.assumeToken)
+          ? Redacted.value(options.assumeToken)
+          : options.assumeToken;
+    const assumeNodeKey = options.assumeNodeKey ?? NODE_STATUS_KEY;
+    const ownership = yield* Ref.make<NodeOwnership>(
+      expectedToken !== undefined ? "launcher" : "self",
+    );
+    const assumed = yield* Ref.make(false);
+    const computeStatus: Effect.Effect<NodeStatus> = Effect.gen(function* () {
+      const now = yield* Clock.currentTimeMillis;
+      const services = yield* readiness;
+      const ok = services.every((r) => r.ready);
+      const status: "ok" | "degraded" = ok ? "ok" : "degraded";
+      const ownershipValue = yield* Ref.get(ownership);
+      return {
+        up: true,
+        status,
+        startedAt: DateTime.makeUnsafe(options.startedAt),
+        uptimeMillis: now - options.startedAt,
+        serviceCount: options.serviceCount,
+        services,
+        ...(expectedToken !== undefined ? { ownership: ownershipValue } : {}),
+      };
+    });
+    const statusSub: Hyperlink.Subscribable<NodeStatus> = {
+      get: computeStatus,
+      changes: Stream.tick(STATUS_INTERVAL).pipe(Stream.mapEffect(() => computeStatus)),
+    };
+    const logsLive = Stream.unwrap(
+      Effect.gen(function* () {
+        const relay = yield* Effect.serviceOption(LogRelay);
+        if (Option.isNone(relay)) return Stream.empty;
+        const tail = yield* relay.value.snapshot;
+        return Stream.concat(Stream.fromIterable(tail), relay.value.stream);
+      }),
+    );
+    const assume = (payload: {
+      readonly token: string;
+    }): Effect.Effect<
+      void,
+      AssumeTokenMismatch | AssumeTokenReused | AssumeNotReady
+    > =>
+      Effect.gen(function* () {
+        if (expectedToken === undefined || payload.token !== expectedToken) {
+          yield* Effect.logWarning("assume rejected: token mismatch");
+          return yield* new AssumeTokenMismatch({ node: assumeNodeKey });
+        }
+        if (yield* Ref.get(assumed)) {
+          yield* Effect.logWarning("assume rejected: token already used");
+          return yield* new AssumeTokenReused({ node: assumeNodeKey });
+        }
+        const services = yield* readiness;
+        const blocked = services.find((r) => !r.ready);
+        if (blocked !== undefined) {
+          yield* Effect.logWarning("assume rejected: not Ready").pipe(
+            Effect.annotateLogs({ "assume.service": blocked.key }),
+          );
+          return yield* new AssumeNotReady({
+            node: assumeNodeKey,
+            serviceKey: blocked.key,
+            ...(blocked.detail !== undefined ? { detail: blocked.detail } : {}),
+          });
+        }
+        yield* Ref.set(assumed, true);
+        yield* Ref.set(ownership, "self");
+        yield* Effect.logInfo("ownership assumed (self)").pipe(
+          Effect.annotateLogs({ "assume.ownership": "self" }),
+        );
+      }).pipe(
+        Effect.annotateLogs({ "assume.node": assumeNodeKey }),
+        Effect.withLogSpan("node.assume.handle"),
+      );
     return {
-      up: true,
-      status,
-      startedAt: DateTime.makeUnsafe(options.startedAt),
-      uptimeMillis: now - options.startedAt,
-      resourceCount: options.resourceCount,
-      resources,
+      status: statusSub,
+      ping: Clock.currentTimeMillis,
+      // Default accept — Lookup askIncumbent replaces the row; dial-matched unregister
+      // prevents a late finalizer from wiping the newcomer.
+      yield: options.onYield ?? Effect.succeed(true),
+      assume,
+      logs: {
+        stream: logsLive,
+        query: (payload: { readonly limit: number }) =>
+          options.nodeLogKey !== undefined
+            ? queryDurableNode(options.nodeLogKey, { limit: payload.limit })
+            : Effect.succeed([] as ReadonlyArray<LogEntry>),
+      },
     };
   });
-  const statusSub: Hyperlink.Subscribable<NodeStatus> = {
-    get: computeStatus,
-    changes: Stream.tick(STATUS_INTERVAL).pipe(Stream.mapEffect(() => computeStatus)),
-  };
-  const logsLive = Stream.unwrap(
-    Effect.gen(function* () {
-      const relay = yield* Effect.serviceOption(LogRelay);
-      if (Option.isNone(relay)) return Stream.empty;
-      const tail = yield* relay.value.snapshot;
-      return Stream.concat(Stream.fromIterable(tail), relay.value.stream);
-    }),
-  );
-  return {
-    status: statusSub,
-    ping: Clock.currentTimeMillis,
-    // Default accept — Lookup askIncumbent replaces the row; dial-matched unregister
-    // prevents a late finalizer from wiping the newcomer.
-    yield: options.onYield ?? Effect.succeed(true),
-    logs: {
-      stream: logsLive,
-      query: (payload: { readonly limit: number }) =>
-        options.nodeLogKey !== undefined
-          ? queryDurableNode(options.nodeLogKey, { limit: payload.limit })
-          : Effect.succeed([] as ReadonlyArray<LogEntry>),
-    },
-  };
-};
 
 /**
  * The reserved node-status resource paired with its built impl — the `{ tag, impl }` that
@@ -186,9 +286,12 @@ export const buildNodeStatusImpl = (options: {
  */
 export const nodeStatusServeEntry = (options: {
   readonly startedAt: number;
-  readonly resourceCount: number;
-  readonly readiness?: Effect.Effect<ReadonlyArray<ResourceReadiness>>;
+  readonly serviceCount: number;
+  readonly readiness?: Effect.Effect<ReadonlyArray<ServiceReadiness>>;
   readonly nodeLogKey?: string;
+  readonly assumeToken?: string | Redacted.Redacted<string>;
+  readonly assumeNodeKey?: string;
+  readonly onYield?: Effect.Effect<boolean>;
 }): {
   readonly tag: typeof NodeStatusTag;
   readonly impl: ReturnType<typeof buildNodeStatusImpl>;

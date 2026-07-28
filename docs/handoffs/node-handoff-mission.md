@@ -15,7 +15,7 @@ decisions-doc bake with the owner before any implementation.
 Two headline capabilities, in the owner's framing:
 
 1. **Updates without downtime.** Use handoff to update a node: stand up the replacement, hand the
-   node's Hyperlinks over, retire the original. Callers keep calling the whole time.
+   node's HyperServices over, retire the original. Callers keep calling the whole time.
 2. **Migration across versions.** Handoff must work **between nodes running different versions of
    the library**. A fleet is never all on one version during a rollout, so version skew is the
    normal case, not the edge case.
@@ -32,7 +32,7 @@ Two headline capabilities, in the owner's framing:
 
 - **Cutover semantics**: what happens to in-flight calls and open streams at the moment of
   handoff (drain? dual-serve? redirect?).
-- **Stateful Hyperlinks**: queues and stores carry state; a handoff either transfers it, shares
+- **Stateful HyperServices**: queues and stores carry state; a handoff either transfers it, shares
   it, or declares those kinds non-transferable at first. Scope decision for the owner.
 - **Version negotiation**: how two nodes agree on wire shape when their library versions differ;
   what "compatible" means for a contract (schema evolution rules), and what happens on a

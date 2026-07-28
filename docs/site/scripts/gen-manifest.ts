@@ -13,6 +13,7 @@ import * as nodeFs from "node:fs";
 import * as nodePath from "node:path";
 import { fileURLToPath } from "node:url";
 import { Console, Data, Effect, Exit } from "effect";
+import { stripDocBanner } from "../src/lib/doc-banner.js";
 import { buildManifest, parseChapter } from "../src/lib/standards-manifest.js";
 
 const standardsDir = nodePath.resolve(
@@ -56,6 +57,9 @@ const buildFromCorpus = listMarkdown.pipe(
   Effect.flatMap((files) =>
     Effect.forEach(files, (file) =>
       readText(nodePath.join(standardsDir, file)).pipe(
+        // GitHub-facing banners attach attrs to a `para` and break page-block detection —
+        // same strip the Vite content loader applies before parse.
+        Effect.map(stripDocBanner),
         Effect.flatMap(parseChapter),
         Effect.map(({ meta }) => meta),
       ),

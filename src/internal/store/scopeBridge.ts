@@ -70,7 +70,7 @@ export const buildScopeBridge = (
 /**
  * Default bridge — materializes **any** requested scope on demand against a single journal,
  * with no registration check (never `StoreScopeNotRegistered`). Backs the baked-in in-memory
- * store default: every resource always has a store, so consumers append unconditionally (no
+ * store default: every HyperService always has a store, so consumers append unconditionally (no
  * serviceOption). Scopes are separated by `primaryKey === scopeKey`, exactly like {@link buildScopeBridge}.
  *
  * @internal
