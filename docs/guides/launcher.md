@@ -26,7 +26,7 @@ Membership after assume: [Identity coordinator — custody vs membership](./iden
 | OS process custody (spawn / Ready / assume / exit) | Lookup / directory membership |
 | Node-platform (`ChildProcessSpawner` + `Scope`) | Browser / wire-portable spawn |
 | Stable **addressed** `SpawnSpec.node` | Nameless discovery / blank-worker assign |
-| Ready = served resources ready (reuse node status) | “Process started” alone |
+| Ready = served HyperServices ready (reuse node status) | “Process started” alone |
 
 ## Minimal recipe
 
@@ -76,7 +76,7 @@ Launcher only mints and passes the cleartext into your `process` factory.
 - Child dies during Ready wait → `ChildExited`.
 - Outer wait expires → `ReadyTimedOut`.
 
-Optional `ready.resources` waits on a named subset instead of all served resources.
+Optional `ready.services` waits on a named HyperService subset instead of all served services.
 
 ## Errors (typed)
 

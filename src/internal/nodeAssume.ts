@@ -56,8 +56,8 @@ export class AssumeTokenReused extends Schema.TaggedErrorClass<AssumeTokenReused
 }
 
 /**
- * `Node.assume` rejected because the node is not Ready yet (served resources not all ready,
- * or a configured subset is not ready). Ready ≠ ownership — wait for Ready, then assume.
+ * `Node.assume` rejected because the node is not Ready yet (served HyperServices not all
+ * ready, or a configured subset is not ready). Ready ≠ ownership — wait for Ready, then assume.
  *
  * @category errors
  * @public
@@ -66,16 +66,19 @@ export class AssumeNotReady extends Schema.TaggedErrorClass<AssumeNotReady>()(
   "AssumeNotReady",
   {
     node: Schema.String,
+    /** Blocking HyperService wire key when known. */
     resource: Schema.optionalKey(Schema.String),
     detail: Schema.optionalKey(Schema.String),
   },
 ) {
   override get message() {
-    const resource =
-      this.resource === undefined ? "served resources" : `resource "${this.resource}"`;
+    const service =
+      this.resource === undefined
+        ? "served HyperServices"
+        : `service "${this.resource}"`;
     const detail =
       this.detail === undefined ? "" : ` (${this.detail})`;
-    return `Node.assume rejected for "${this.node}" — not Ready yet (${resource})${detail}.`;
+    return `Node.assume rejected for "${this.node}" — not Ready yet (${service})${detail}.`;
   }
 }
 

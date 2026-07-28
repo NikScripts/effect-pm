@@ -39,7 +39,7 @@ export type AdvertiseOutcome =
       readonly incumbent: StoredDirectoryEntry;
     };
 
-/** Mutable claim map — resource key → winning endpoint. @internal */
+/** Mutable claim map — HyperService key → winning endpoint. @internal */
 export type ClaimRegistry = {
   readonly claim: (
     key: string,
@@ -75,19 +75,19 @@ export type DirectoryRegistry = {
     endpoint: StoredEndpoint,
   ) => Effect.Effect<boolean>;
   readonly nodesServing: (
-    resourceKey: string,
+    serviceKey: string,
   ) => Effect.Effect<ReadonlyArray<StoredDirectoryEntry>>;
 };
 
-/** Placement advice — resource key → preferred directory `nodeKey`. @internal */
+/** Placement advice — HyperService key → preferred directory `nodeKey`. @internal */
 export type AdviceRegistry = {
   readonly set: (
-    resourceKey: string,
+    serviceKey: string,
     prefer: string,
   ) => Effect.Effect<string>;
-  readonly clear: (resourceKey: string) => Effect.Effect<boolean>;
+  readonly clear: (serviceKey: string) => Effect.Effect<boolean>;
   readonly get: (
-    resourceKey: string,
+    serviceKey: string,
   ) => Effect.Effect<Option.Option<string>>;
 };
 
@@ -174,35 +174,35 @@ export const makeRegistries = (): Effect.Effect<LookupRegistries> =>
             next.delete(endpoint.nodeKey);
             return [true, next] as const;
           }),
-        nodesServing: (resourceKey) =>
+        nodesServing: (serviceKey) =>
           Ref.get(directoryMap).pipe(
             Effect.map((current) =>
               [...current.values()].filter((entry) =>
-                entry.serves.includes(resourceKey),
+                entry.serves.includes(serviceKey),
               ),
             ),
           ),
       },
       advice: {
-        set: (resourceKey, prefer) =>
+        set: (serviceKey, prefer) =>
           Ref.update(adviceMap, (current) => {
             const next = new Map(current);
-            next.set(resourceKey, prefer);
+            next.set(serviceKey, prefer);
             return next;
           }).pipe(Effect.as(prefer)),
-        clear: (resourceKey) =>
+        clear: (serviceKey) =>
           Ref.modify(adviceMap, (current) => {
-            if (!current.has(resourceKey)) {
+            if (!current.has(serviceKey)) {
               return [false, current] as const;
             }
             const next = new Map(current);
-            next.delete(resourceKey);
+            next.delete(serviceKey);
             return [true, next] as const;
           }),
-        get: (resourceKey) =>
+        get: (serviceKey) =>
           Ref.get(adviceMap).pipe(
             Effect.map((current) =>
-              Option.fromNullishOr(current.get(resourceKey)),
+              Option.fromNullishOr(current.get(serviceKey)),
             ),
           ),
       },

@@ -5,7 +5,7 @@
  * (OS exclusivity; bind-or-dial). Cross-network: {@link layerNode} / {@link client} on an
  * explicit {@link Node.asLookup}-branded node — no self-elect (L1).
  *
- * - {@link Identity} — `claim` by resource key (first wins / {@link DuplicateIdentity}).
+ * - {@link Identity} — `claim` by HyperService key (first wins / {@link DuplicateIdentity}).
  *   Live winner: same dial refreshes; different dial + dead/unreachable incumbent
  *   (node-handle `ping`) → replace; alive → {@link DuplicateIdentity}.
  * - {@link Directory} — `advertise` / `unregister` / `nodesServing` (D5/D6). Duplicate
@@ -13,7 +13,7 @@
  *   incumbent node handle; alive → {@link IncumbentAlive} (or ask handle `yield` when
  *   `askIncumbent`); dead/unreachable → replace row.
  * - {@link Advice} — last-write placement board (`prefer` a directory `nodeKey` for a
- *   resource key). {@link Hyperlink.lookupClient} honors a live preferred row before D4 `pick`.
+ *   HyperService key). {@link Hyperlink.lookupClient} honors a live preferred row before D4 `pick`.
  *
  * @module Lookup
  */
@@ -66,7 +66,7 @@ export class ClaimRequest extends Schema.Class<ClaimRequest>("LookupClaimRequest
 }) {}
 
 /**
- * Resolve payload — look up a winning claim by resource key (nodeless clients).
+ * Resolve payload — look up a winning claim by HyperService key (nodeless clients).
  *
  * @category wire schemas
  * @public
@@ -76,7 +76,7 @@ export class ResolveRequest extends Schema.Class<ResolveRequest>("LookupResolveR
 }) {}
 
 /**
- * Another process already owns this resource key — `original` is where to dial.
+ * Another process already owns this HyperService key — `original` is where to dial.
  *
  * @category errors
  * @public
@@ -90,7 +90,7 @@ export class DuplicateIdentity extends Schema.TaggedErrorClass<DuplicateIdentity
 ) {}
 
 /**
- * Directory row — dial target plus resource keys this node serves (`listen` catalog).
+ * Directory row — dial target plus HyperService keys this node serves (`listen` catalog).
  *
  * @category wire schemas
  * @public
@@ -149,7 +149,7 @@ export class UnregisterRequest extends Schema.Class<UnregisterRequest>(
 }) {}
 
 /**
- * List nodes that advertised a given resource key in `serves`.
+ * List nodes that advertised a given HyperService key in `serves`.
  *
  * @category wire schemas
  * @public
@@ -157,7 +157,7 @@ export class UnregisterRequest extends Schema.Class<UnregisterRequest>(
 export class NodesServingRequest extends Schema.Class<NodesServingRequest>(
   "LookupNodesServingRequest",
 )({
-  resourceKey: Schema.String,
+  serviceKey: Schema.String,
 }) {}
 
 /**
@@ -175,7 +175,7 @@ export class IncumbentAlive extends Schema.TaggedErrorClass<IncumbentAlive>()(
 ) {}
 
 /**
- * Placement advice — prefer this directory `nodeKey` when dialing `resourceKey`.
+ * Placement advice — prefer this directory `nodeKey` when dialing `serviceKey`.
  *
  * @category wire schemas
  * @public
@@ -183,13 +183,13 @@ export class IncumbentAlive extends Schema.TaggedErrorClass<IncumbentAlive>()(
 export class AdviseRequest extends Schema.Class<AdviseRequest>(
   "LookupAdviseRequest",
 )({
-  resourceKey: Schema.String,
+  serviceKey: Schema.String,
   /** Directory row `nodeKey` to prefer (e.g. `fleet/Worker#w2`). */
   prefer: Schema.String,
 }) {}
 
 /**
- * Clear placement advice for a resource key.
+ * Clear placement advice for a HyperService key.
  *
  * @category wire schemas
  * @public
@@ -197,11 +197,11 @@ export class AdviseRequest extends Schema.Class<AdviseRequest>(
 export class ClearAdviceRequest extends Schema.Class<ClearAdviceRequest>(
   "LookupClearAdviceRequest",
 )({
-  resourceKey: Schema.String,
+  serviceKey: Schema.String,
 }) {}
 
 /**
- * Read the preferred directory `nodeKey` for a resource (if any).
+ * Read the preferred directory `nodeKey` for a HyperService (if any).
  *
  * @category wire schemas
  * @public
@@ -209,7 +209,7 @@ export class ClearAdviceRequest extends Schema.Class<ClearAdviceRequest>(
 export class PreferredRequest extends Schema.Class<PreferredRequest>(
   "LookupPreferredRequest",
 )({
-  resourceKey: Schema.String,
+  serviceKey: Schema.String,
 }) {}
 
 /**
@@ -228,7 +228,7 @@ export class LookupUnaddressed extends Data.TaggedError("LookupUnaddressed")<{
 // ============================================================================
 
 /**
- * Canonical kind stamped on Lookup resources.
+ * Canonical kind stamped on Lookup HyperServices.
  *
  * @category utils
  * @public
@@ -256,7 +256,7 @@ const identitySpec = {
 };
 
 /**
- * Lookup identity service — claim resource keys (first wins; dead winners replaceable).
+ * Lookup identity service — claim HyperService keys (first wins; dead winners replaceable).
  *
  * @category services
  * @public
@@ -290,12 +290,12 @@ const directorySpec = {
     payload: NodesServingRequest,
     success: Schema.Array(DirectoryEntry),
   }).annotate({
-    description: "List advertised nodes whose serves[] includes resourceKey.",
+    description: "List advertised nodes whose serves[] includes that HyperService key.",
   }),
 };
 
 /**
- * Lookup node directory — advertise / unregister / list by served resource key.
+ * Lookup node directory — advertise / unregister / list by served HyperService key.
  *
  * @category services
  * @public
@@ -312,20 +312,20 @@ const adviceSpec = {
     success: Schema.String,
   }).annotate({
     description:
-      "Last-write placement advice: prefer this directory nodeKey when dialing resourceKey. " +
+      "Last-write placement advice: prefer this directory nodeKey when dialing serviceKey. " +
       "Stale prefer (not in nodesServing) is ignored by lookupClient.",
   }),
   clear: Hyperlink.effectFn({
     payload: ClearAdviceRequest,
     success: Schema.Boolean,
   }).annotate({
-    description: "Drop placement advice for resourceKey (true if a row was removed).",
+    description: "Drop placement advice for serviceKey (true if a row was removed).",
   }),
   preferred: Hyperlink.effectFn({
     payload: PreferredRequest,
     success: Schema.Option(Schema.String),
   }).annotate({
-    description: "Read the preferred directory nodeKey for resourceKey, if any.",
+    description: "Read the preferred directory nodeKey for serviceKey, if any.",
   }),
 };
 
@@ -352,12 +352,12 @@ export class Advice extends Hyperlink.Tag<Advice>()(
  */
 export type Services = Identity | Directory | Advice;
 
-/** Tag or wire key → `resourceKey` string. @internal */
-const resourceKeyOf = (resource: string | { readonly key: string }): string =>
-  typeof resource === "string" ? resource : resource.key;
+/** Tag or wire key → `serviceKey` string. @internal */
+const serviceKeyOf = (service: string | { readonly key: string }): string =>
+  typeof service === "string" ? service : service.key;
 
 /**
- * List directory rows that advertise `resource` (Tag or wire key).
+ * List directory rows that advertise a HyperService (Tag or wire key).
  * Sugar over {@link Directory}.`nodesServing` — wire stays {@link NodesServingRequest}.
  *
  * ```ts
@@ -369,11 +369,11 @@ const resourceKeyOf = (resource: string | { readonly key: string }): string =>
  * @public
  */
 export const nodesServing = (
-  resource: string | { readonly key: string },
+  service: string | { readonly key: string },
 ): Effect.Effect<ReadonlyArray<DirectoryEntry>, never, Directory> =>
   Effect.flatMap(Directory, (svc) =>
     svc.nodesServing(
-      new NodesServingRequest({ resourceKey: resourceKeyOf(resource) }),
+      new NodesServingRequest({ serviceKey: serviceKeyOf(service) }),
     ),
   );
 
@@ -381,27 +381,27 @@ export const nodesServing = (
  * Publish placement advice (requires {@link Advice} in context).
  *
  * ```ts
- * yield* Lookup.advise({ resourceKey: Worker.key, prefer: "fleet/Worker#w2" })
+ * yield* Lookup.advise({ serviceKey: Worker.key, prefer: "fleet/Worker#w2" })
  * ```
  *
  * @category constructors
  * @public
  */
 export const advise = (input: {
-  readonly resourceKey: string;
+  readonly serviceKey: string;
   readonly prefer: string;
 }): Effect.Effect<string, never, Advice> =>
   Effect.flatMap(Advice, (svc) =>
     svc.advise(
       new AdviseRequest({
-        resourceKey: input.resourceKey,
+        serviceKey: input.serviceKey,
         prefer: input.prefer,
       }),
     ),
   );
 
 /**
- * Prefer `nodeKey` when dialing `resource` (Tag or key string).
+ * Prefer `nodeKey` when dialing a HyperService (Tag or wire key).
  * Coordinator sugar over {@link advise} — algorithms stay app-owned.
  *
  * ```ts
@@ -412,16 +412,16 @@ export const advise = (input: {
  * @public
  */
 export const prefer = (
-  resource: string | { readonly key: string },
+  service: string | { readonly key: string },
   nodeKey: string,
 ): Effect.Effect<string, never, Advice> =>
   advise({
-    resourceKey: resourceKeyOf(resource),
+    serviceKey: serviceKeyOf(service),
     prefer: nodeKey,
   });
 
 /**
- * Prefer a directory row's `nodeKey` for `resource`.
+ * Prefer a directory row's `nodeKey` for a HyperService.
  *
  * ```ts
  * const rows = yield* Lookup.nodesServing(Worker)
@@ -432,36 +432,36 @@ export const prefer = (
  * @public
  */
 export const preferEntry = (
-  resource: string | { readonly key: string },
+  service: string | { readonly key: string },
   entry: { readonly nodeKey: string },
 ): Effect.Effect<string, never, Advice> =>
-  advise({ resourceKey: resourceKeyOf(resource), prefer: entry.nodeKey });
+  advise({ serviceKey: serviceKeyOf(service), prefer: entry.nodeKey });
 
 /**
- * Clear placement advice for a resource (Tag or wire key).
+ * Clear placement advice for a HyperService (Tag or wire key).
  *
  * @category constructors
  * @public
  */
 export const clearAdvice = (
-  resource: string | { readonly key: string },
+  service: string | { readonly key: string },
 ): Effect.Effect<boolean, never, Advice> =>
   Effect.flatMap(Advice, (svc) =>
-    svc.clear(new ClearAdviceRequest({ resourceKey: resourceKeyOf(resource) })),
+    svc.clear(new ClearAdviceRequest({ serviceKey: serviceKeyOf(service) })),
   );
 
 /**
- * Read preferred directory `nodeKey` for a resource (Tag or wire key).
+ * Read preferred directory `nodeKey` for a HyperService (Tag or wire key).
  *
  * @category constructors
  * @public
  */
 export const preferred = (
-  resource: string | { readonly key: string },
+  service: string | { readonly key: string },
 ): Effect.Effect<Option.Option<string>, never, Advice> =>
   Effect.flatMap(Advice, (svc) =>
     svc.preferred(
-      new PreferredRequest({ resourceKey: resourceKeyOf(resource) }),
+      new PreferredRequest({ serviceKey: serviceKeyOf(service) }),
     ),
   );
 // ============================================================================
@@ -701,17 +701,17 @@ const lookupServeLayers = (serverOnConflict: OnConflictResolved) =>
           return registries.directory.remove(req.nodeKey);
         },
         nodesServing: (req: NodesServingRequest) =>
-          registries.directory.nodesServing(req.resourceKey).pipe(
+          registries.directory.nodesServing(req.serviceKey).pipe(
             Effect.map((entries) => entries.map(toDirectoryEntry)),
           ),
       });
       const advice = Hyperlink.serve(Advice, {
         advise: (req: AdviseRequest) =>
-          registries.advice.set(req.resourceKey, req.prefer),
+          registries.advice.set(req.serviceKey, req.prefer),
         clear: (req: ClearAdviceRequest) =>
-          registries.advice.clear(req.resourceKey),
+          registries.advice.clear(req.serviceKey),
         preferred: (req: PreferredRequest) =>
-          registries.advice.get(req.resourceKey),
+          registries.advice.get(req.serviceKey),
       });
       return Layer.mergeAll(identity, directory, advice);
     }),

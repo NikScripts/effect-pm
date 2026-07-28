@@ -91,7 +91,7 @@ describe("Hyperlink.distributed bare / D3 peersLayer", () => {
       const dir = Context.get(lookup, Lookup.Directory);
       const rows = yield* dir
         .nodesServing(
-          new Lookup.NodesServingRequest({ resourceKey: "d3/Pool" }),
+          new Lookup.NodesServingRequest({ serviceKey: "d3/Pool" }),
         )
         .pipe(Effect.provide(lookup));
       expect(rows.some((r) => r.nodeKey === West.key)).toBe(true);

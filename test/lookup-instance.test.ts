@@ -101,7 +101,7 @@ describe("Node.Prototype.instance / .listen", () => {
       const dir = Context.get(lookup, Lookup.Directory);
       const rows = yield* dir
         .nodesServing(
-          new Lookup.NodesServingRequest({ resourceKey: "inst/Jobs" }),
+          new Lookup.NodesServingRequest({ serviceKey: "inst/Jobs" }),
         )
         .pipe(Effect.provide(lookup));
       expect(rows.length).toBe(2);
@@ -227,7 +227,7 @@ describe("Node.Prototype.instance / .listen", () => {
       const rows = yield* dir
         .nodesServing(
           new Lookup.NodesServingRequest({
-            resourceKey: "inst/FleetJobs",
+            serviceKey: "inst/FleetJobs",
           }),
         )
         .pipe(Effect.provide(lookup));

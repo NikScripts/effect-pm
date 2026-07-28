@@ -132,7 +132,7 @@ describe("Launcher.Handle.awaitReady", () => {
             ),
           ready: {
             timeout: "25 seconds",
-            resources: ["launcher-child/Jobs"],
+            services: ["launcher-child/Jobs"],
           },
         });
 

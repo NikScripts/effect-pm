@@ -59,7 +59,7 @@ describe("Lookup directory advertise / nodesServing", () => {
 
           const hit = yield* dir.nodesServing(
             new Lookup.NodesServingRequest({
-              resourceKey: "lookup-dir/Jobs",
+              serviceKey: "lookup-dir/Jobs",
             }),
           );
           expect(hit).toHaveLength(1);
@@ -72,7 +72,7 @@ describe("Lookup directory advertise / nodesServing", () => {
 
           const miss = yield* dir.nodesServing(
             new Lookup.NodesServingRequest({
-              resourceKey: "lookup-dir/Other",
+              serviceKey: "lookup-dir/Other",
             }),
           );
           expect(miss).toHaveLength(0);
@@ -109,7 +109,7 @@ describe("Lookup directory advertise / nodesServing", () => {
           expect(again).toBe(false);
           const hit = yield* dir.nodesServing(
             new Lookup.NodesServingRequest({
-              resourceKey: "lookup-dir/Jobs",
+              serviceKey: "lookup-dir/Jobs",
             }),
           );
           expect(hit).toHaveLength(0);
@@ -180,7 +180,7 @@ describe("Lookup directory livenessReplace", () => {
       const listed = yield* dir
         .nodesServing(
           new Lookup.NodesServingRequest({
-            resourceKey: "lookup-dir/Jobs",
+            serviceKey: "lookup-dir/Jobs",
           }),
         )
         .pipe(Effect.provide(lookupCtx));
@@ -277,7 +277,7 @@ describe("Node.unix directory wire", () => {
         const during = yield* dir
           .nodesServing(
             new Lookup.NodesServingRequest({
-              resourceKey: "lookup-dir/Jobs",
+              serviceKey: "lookup-dir/Jobs",
             }),
           )
           .pipe(Effect.provide(lookupCtx));
@@ -288,7 +288,7 @@ describe("Node.unix directory wire", () => {
       const after = yield* dir
         .nodesServing(
           new Lookup.NodesServingRequest({
-            resourceKey: "lookup-dir/Jobs",
+            serviceKey: "lookup-dir/Jobs",
           }),
         )
         .pipe(Effect.provide(lookupCtx));
@@ -383,7 +383,7 @@ describe("Lookup directory askIncumbent", () => {
       const listed = yield* dir
         .nodesServing(
           new Lookup.NodesServingRequest({
-            resourceKey: "lookup-dir/Jobs",
+            serviceKey: "lookup-dir/Jobs",
           }),
         )
         .pipe(Effect.provide(lookupCtx));
