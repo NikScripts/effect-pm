@@ -1,24 +1,27 @@
 /**
  * @module ui/DaemonView
  *
- * Shared Daemon View handles + contribution Layer — no platform TSX.
+ * Shared View handles + contribution Layer — no platform TSX.
  */
 import { Layer } from "effect";
 import * as Daemon from "../Daemon";
 import * as View from "./View";
 
+const CardProto = View.card.Prototype()({
+  spec: Daemon.daemonControlSpec,
+});
+const DetailProto = View.detail.Prototype()({
+  spec: Daemon.daemonControlSpec,
+});
+
 /** @public */
-export class DaemonCard extends View.Tag<DaemonCard>()(
+export class DaemonCard extends CardProto.Tag<DaemonCard>()(
   "hyperlink/view/daemon-card",
-  "card",
-  Daemon.daemonControlSpec,
 ) {}
 
 /** @public */
-export class DaemonDetail extends View.Tag<DaemonDetail>()(
+export class DaemonDetail extends DetailProto.Tag<DaemonDetail>()(
   "hyperlink/view/daemon-detail",
-  "detail",
-  Daemon.daemonControlSpec,
 ) {}
 
 /** @public */

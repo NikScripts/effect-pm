@@ -13,21 +13,11 @@ class Special extends WorkPool.Tag<Special>()("app/Special", { payload: Item }) 
 class Nested extends Group.Tag<Nested>("app/Nested")({ Special }) {}
 class AppGroup extends Group.Tag<AppGroup>("app/AppGroup")({ Jobs, Nested }) {}
 
-class PoolCard extends View.Tag<PoolCard>()(
-  "hyperlink/view/pool-card",
-  "card",
-  { pause: true },
-) {}
-class CustomCard extends View.Tag<CustomCard>()(
-  "hyperlink/view/custom-card",
-  "card",
-  {},
-) {}
-class PoolDetail extends View.Tag<PoolDetail>()(
-  "hyperlink/view/pool-detail",
-  "detail",
-  {},
-) {}
+class PoolCard extends View.card.Tag<PoolCard>()("hyperlink/view/pool-card") {}
+
+class CustomCard extends View.card.Tag<CustomCard>()("hyperlink/view/custom-card") {}
+
+class PoolDetail extends View.detail.Tag<PoolDetail>()("hyperlink/view/pool-detail") {}
 
 const chrome = Layer.mergeAll(
   Layer.succeed(PoolCard, () => null),
@@ -79,7 +69,7 @@ describe("View registry", () => {
     ).toEqual(["hyperlink/view/custom-card", "hyperlink/view/pool-card"]);
   });
 
-  it("only allowlists kinds present; other sizes still use family bind", () => {
+  it("only allowlists sizes present; other sizes still use bind", () => {
     const viewLayer = withChrome(
       Layer.mergeAll(
         View.bind(WorkPool.kind, PoolCard),
@@ -91,7 +81,7 @@ describe("View registry", () => {
     expect(resolve(Special, "card").map((r) => r.key)).toEqual([
       "hyperlink/view/custom-card",
     ]);
-    // detail not in only → still kind defaults
+    // detail not in only → still family bind
     expect(resolve(Special, "detail").map((r) => r.key)).toEqual([
       "hyperlink/view/pool-detail",
     ]);
@@ -155,5 +145,22 @@ describe("View.group + kit.for", () => {
     expect(Card.length).toBe(1);
     expect(Detail.length).toBe(1);
     expect(Page.length).toBe(1);
+  });
+});
+
+describe("View.Tag / Prototype", () => {
+  it("card prototype stamps size static", () => {
+    expect(PoolCard.size).toBe("card");
+    expect(PoolDetail.size).toBe("detail");
+    expect(PoolCard.key).toBe("hyperlink/view/pool-card");
+  });
+
+  it("Prototype chain merges statics", () => {
+    const Base = View.Prototype<{ readonly label: string }>()({ base: true as const });
+    const Child = Base.Prototype()({ size: "page" as const });
+    class PageView extends Child.Tag<PageView>()("test/page-view") {}
+    expect(PageView.base).toBe(true);
+    expect(PageView.size).toBe("page");
+    expect(PageView.key).toBe("test/page-view");
   });
 });

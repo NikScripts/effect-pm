@@ -10,11 +10,13 @@ import * as View from "./View";
 /** @public */
 export const groupViewSpec = { kind: Group.kind } as const;
 
+const GroupCardProto = View.card.Prototype()({
+  spec: groupViewSpec,
+});
+
 /** Group grid card — open via {@link ./Navigator}. @public */
-export class GroupCard extends View.Tag<GroupCard>()(
+export class GroupCard extends GroupCardProto.Tag<GroupCard>()(
   "hyperlink/view/group-card",
-  "card",
-  groupViewSpec,
 ) {}
 
 /** @public */

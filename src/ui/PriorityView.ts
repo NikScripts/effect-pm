@@ -1,24 +1,27 @@
 /**
  * @module ui/PriorityView
  *
- * Shared WorkPool.priority View handles + contribution Layer — no platform TSX.
+ * Shared View handles + contribution Layer — no platform TSX.
  */
 import { Layer } from "effect";
 import * as WorkPool from "../WorkPool";
 import * as View from "./View";
 
+const CardProto = View.card.Prototype()({
+  spec: WorkPool.priorityControlSpec,
+});
+const DetailProto = View.detail.Prototype()({
+  spec: WorkPool.priorityControlSpec,
+});
+
 /** @public */
-export class PriorityCard extends View.Tag<PriorityCard>()(
+export class PriorityCard extends CardProto.Tag<PriorityCard>()(
   "hyperlink/view/priority-card",
-  "card",
-  WorkPool.priorityControlSpec,
 ) {}
 
 /** @public */
-export class PriorityDetail extends View.Tag<PriorityDetail>()(
+export class PriorityDetail extends DetailProto.Tag<PriorityDetail>()(
   "hyperlink/view/priority-detail",
-  "detail",
-  WorkPool.priorityControlSpec,
 ) {}
 
 /** @public */

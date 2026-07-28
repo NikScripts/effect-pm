@@ -1,13 +1,13 @@
 /**
  * @module ui/View
  *
- * View **services** (Context) + chrome contribution Layers + React matchers.
- * Design: `docs/handoffs/client-adapters-design.md`.
+ * View **DI** (Context) + optional size chrome (card/detail/page) + React matchers.
+ * Notes: `docs/handoffs/view-tag-prototype.md`. Design: `docs/handoffs/client-adapters-design.md`.
  *
- * - `View.Tag` → class Context.Service handle (Svc = React/Ink component + key/kind/spec).
- * - Provide TSX with `Layer.succeed(PoolCard, Comp)`.
- * - Chrome policy = Layers: `View.bind` / `View.only` (merge with `Layer.mergeAll`; last wins).
- * - `View.react(layer)` runs the Layer and requires `R = never` (missing skin = type error).
+ * - `View.Tag` / `View.Prototype` → component DI. Self = **props** (reversed service shape).
+ * - Size chrome is an add-on: `View.card` / `View.detail` / `View.page` prototypes stamp `size`.
+ * - Matchers `View.Card` / `Detail` / `Page` are taken (resolve + render).
+ * - `View.bind` / `View.only` register sized handles; `View.react` needs Layer `R = never`.
  */
 import * as React from "react";
 import { Context, Effect, Layer, Option } from "effect";
@@ -38,7 +38,11 @@ export type ViewKind = "card" | "detail" | "page";
  */
 export type ViewTag = LeafTag | Navigator.MemberTag;
 
-/** Props every matched card/detail/page receives. Navigation stays with the parent. @public */
+/**
+ * Base props for size-chrome skins (card/detail/page). Navigation stays with the parent.
+ *
+ * @public
+ */
 export interface ViewProps {
   readonly tag: ViewTag;
   readonly name?: string;
@@ -74,22 +78,21 @@ export const ChromeProvider = (props: {
 /** Read parent {@link Chrome} (empty object when none). @public */
 export const useChrome = (): Chrome => React.useContext(ChromeContext);
 
-/** A React/Ink view for one chrome role — the View service’s Svc. @public */
-export type ViewComponent = (props: ViewProps) => React.ReactElement | null;
-
 /**
- * A View service: Context tag for {@link ViewComponent}, plus identity metadata.
+ * Component Svc for a View tag — **props in, element out** (reversed vs Hyperlink service APIs).
  *
  * @public
  */
-export type AnyView<Self = unknown> = Context.Service<Self, ViewComponent> & {
-  readonly key: ViewKey;
-  readonly kind: ViewKind;
-  readonly spec: unknown;
-};
+export type ViewFn<Props> = (props: Props) => React.ReactElement | null;
 
 /**
- * A matched view ready to render.
+ * @deprecated Prefer {@link ViewFn}`<ViewProps>` — kept for matcher call sites.
+ * @public
+ */
+export type ViewComponent = ViewFn<ViewProps>;
+
+/**
+ * A matched view ready to render (size chrome).
  *
  * @public
  */
@@ -99,30 +102,186 @@ export interface Resolved {
   readonly Component: ViewComponent;
 }
 
+// =============================================================================
+// Prototype + Tag (DI core)
+// =============================================================================
+
+type AnyStatics = Record<string, unknown>;
+
 /**
- * Declare a View service as a **class handle** (same seam as `Daemon.Tag` / `Group.Tag`).
- * Svc = the React/Ink component — provide with `Layer.succeed(PoolCard, Comp)`.
+ * Accumulated props type for a {@link Prototype}.
  *
- * In `.tsx` files the Self type-parameter needs a trailing comma:
- * `View.Tag<PoolCard,>()(…)` (JSX parse). Handle modules stay `.ts`.
+ * @public
+ */
+export type PropsOf<P> = P extends Prototype<infer Props, AnyStatics> ? Props : never;
+
+/**
+ * A View prototype — props (type) + static accessors (runtime) before minting a {@link Tag}.
  *
  * @example
  * ```ts
- * class PoolCard extends View.Tag<PoolCard>()(
- *   "hyperlink/view/pool-card",
- *   "card",
- *   WorkPool.queueControlSpec,
- * ) {}
+ * const Base = View.Prototype<{ readonly tag: ViewTag; readonly name?: string }>()()
+ * const Card = Base.Prototype()({ size: "card" as const })
+ * interface ScheduleCard extends View.PropsOf<typeof Card> {}
+ * class ScheduleCard extends Card.Tag<ScheduleCard>()("hyperlink/view/schedule-card") {}
  * ```
  *
  * @public
  */
-export const Tag =
-  <Self,>() =>
-  <const K extends string>(key: K, kind: ViewKind, spec: unknown = {}) => {
-    const base = Context.Service<Self, ViewComponent>()(key);
-    return Object.assign(base, { key, kind, spec });
+/**
+ * Constructable View handle from {@link Prototype.Tag}.
+ *
+ * - **Self** — Context identity (the class)
+ * - **Props** — component input (reversed service shape) from the Prototype chain
+ * - **Svc** — {@link ViewFn}`<Props>` (provide with `Layer.succeed`)
+ *
+ * `ServiceClass` instance typing cannot be the props bag (it carries key/Service brands),
+ * so props live on the Prototype; read them with {@link Type} / {@link PropsOf}.
+ *
+ * @public
+ */
+export type ViewHandle<
+  Self,
+  K extends string,
+  Props extends object,
+  Statics extends AnyStatics = {},
+> = Context.ServiceClass<Self, K, ViewFn<Props>> &
+  Statics & {
+    /** Phantom — component props for this handle (`View.Type<typeof PoolCard>`). */
+    readonly Type: Props
   };
+
+/**
+ * Component props for a View handle class.
+ *
+ * @public
+ */
+export type Type<T> = T extends { readonly Type: infer P } ? P : never;
+
+export interface Prototype<
+  in out Props extends object,
+  out Statics extends AnyStatics = {},
+> {
+  readonly statics: Statics;
+  /**
+   * Extend props (type parameter) and/or merge more static accessors.
+   * In `.tsx` use a trailing comma on type args: `proto.Prototype<NewProps,>()`.
+   */
+  /**
+   * Extend props (type arg) then merge static accessors (value).
+   * `proto.Prototype()({ size: "card" })` or `proto.Prototype<{ sel?: boolean }>()({ … })`.
+   */
+  readonly Prototype: <NewProps extends object = {},>() => <
+    const NewStatics extends AnyStatics = {},
+  >(
+    statics?: NewStatics,
+  ) => Prototype<Props & NewProps, Statics & NewStatics>;
+  /**
+   * Mint a Context.Service **class** handle.
+   * `Layer.succeed(Tag, (props) => …)` types `props` as this prototype’s Props.
+   */
+  readonly Tag: <Self,>() => <const K extends string>(
+    key: K,
+  ) => Context.ServiceClass<Self, K, ViewFn<Props>> & Statics & {
+    readonly Type: Props
+  };
+}
+
+const makePrototype = <
+  Props extends object,
+  Statics extends AnyStatics,
+>(
+  statics: Statics,
+): Prototype<Props, Statics> => ({
+  statics,
+  Prototype:
+    <NewProps extends object = {},>() =>
+    <const NewStatics extends AnyStatics = {},>(next?: NewStatics) =>
+      makePrototype<Props & NewProps, Statics & NewStatics>({
+        ...statics,
+        ...(next ?? ({} as NewStatics)),
+      }),
+  Tag:
+    <Self,>() =>
+    <const K extends string>(key: K) => {
+      // Infer Object.assign like Group.Tag so class-extends keeps static accessors.
+      const base = Context.Service<Self, ViewFn<Props>>()(key);
+      return Object.assign(base, statics, {
+        Type: undefined as unknown as Props,
+      });
+    },
+});
+
+/**
+ * Start a prototype chain — props via type arg, optional static accessors via value.
+ *
+ * @example
+ * ```ts
+ * const Base = View.Prototype<{ readonly tag: ViewTag }>()({ version: 1 as const })
+ * const Card = Base.Prototype()({ size: "card" as const })
+ * ```
+ *
+ * @public
+ */
+/**
+ * Props via type arg, statics via value: `View.Prototype<Props>()(statics?)`.
+ * (Explicit `Prototype<Props>(statics)` would default Statics to `{}` and drop inference.)
+ */
+export const Prototype =
+  <Props extends object = {},>() =>
+  <const Statics extends AnyStatics = {},>(statics?: Statics): Prototype<Props, Statics> =>
+    makePrototype<Props, Statics>((statics ?? {}) as Statics);
+
+/**
+ * Naked View Tag — DI component handle with **no** size chrome.
+ * Self = props shape. Prefer sized add-ons (`View.card.Tag`, …) for dashboard skins.
+ *
+ * In `.tsx`: `View.Tag<PoolCard,>()(…)`.
+ *
+ * @example
+ * ```ts
+ * const GreeterProto = View.Prototype<{ readonly name: string }>()()
+ * class Greeter extends GreeterProto.Tag<Greeter>()("app/view/greeter") {}
+ * Layer.succeed(Greeter, (props) => React.createElement("span", null, props.name))
+ * ```
+ *
+ * @public
+ */
+export const Tag = Prototype()().Tag;
+
+/**
+ * A View service handle (sized or naked). Sized chrome handles carry {@link ViewKind} `size`.
+ *
+ * @public
+ */
+export type AnyView<Self extends object = object> = Context.Service<
+  Self,
+  ViewFn<Self>
+> & {
+  readonly key: ViewKey;
+  readonly size?: ViewKind;
+  readonly spec?: unknown;
+};
+
+/**
+ * Size-chrome add-on prototypes — stamp `size` for {@link bind} / matchers.
+ * Matcher components remain {@link Card} / {@link Detail} / {@link Page} (PascalCase).
+ *
+ * @public
+ */
+export const card = Prototype<ViewProps>()({
+  size: "card" as const satisfies ViewKind,
+});
+
+/** @public */
+export const detail = Prototype<ViewProps>()({
+  size: "detail" as const satisfies ViewKind,
+});
+
+/** @public */
+export const page = Prototype<ViewProps>()({
+  size: "page" as const satisfies ViewKind,
+});
 
 // =============================================================================
 // Registry service
@@ -249,11 +408,12 @@ export const layer: Layer.Layer<Registry> = Layer.sync(Registry, makeRegistrySer
  */
 export const base: Layer.Layer<Registry> = layer;
 
-type ViewService<Id> = Context.Service<Id, ViewComponent> & {
+/** Sized View handle — required for {@link bind} / {@link only}. @internal */
+type ViewService<Id> = {
   readonly key: ViewKey;
-  readonly kind: ViewKind;
-  readonly spec: unknown;
-};
+  readonly size: ViewKind;
+  readonly spec?: unknown;
+} & Context.Key<Id, ViewFn<ViewProps>>;
 
 /** Avoid `Foo<Id>>` in .tsx return positions (parsed as JSX). */
 type ContribLayer<R> = Layer.Layer<never, never, Registry | R>;
@@ -284,7 +444,7 @@ export const bind: {
     Effect.gen(function* () {
       const reg = yield* Registry;
       const Component = yield* view;
-      const bound = { key: view.key, kind: view.kind, Component };
+      const bound = { key: view.key, kind: view.size, Component };
       if (typeof targetOrKind === "string") {
         reg.addKind(targetOrKind, bound);
       } else {
@@ -311,14 +471,14 @@ export const only = <Id1, Id2 = never, Id3 = never>(
       const reg = yield* Registry;
       const bounds: Bound[] = [];
       const c1 = yield* v1;
-      bounds.push({ key: v1.key, kind: v1.kind, Component: c1 });
+      bounds.push({ key: v1.key, kind: v1.size, Component: c1 });
       if (v2 !== undefined) {
         const c2 = yield* v2;
-        bounds.push({ key: v2.key, kind: v2.kind, Component: c2 });
+        bounds.push({ key: v2.key, kind: v2.size, Component: c2 });
       }
       if (v3 !== undefined) {
         const c3 = yield* v3;
-        bounds.push({ key: v3.key, kind: v3.kind, Component: c3 });
+        bounds.push({ key: v3.key, kind: v3.size, Component: c3 });
       }
       reg.setOnly(target.key, bounds);
     }),

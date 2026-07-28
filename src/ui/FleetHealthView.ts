@@ -1,7 +1,7 @@
 /**
  * @module ui/FleetHealthView
  *
- * Shared FleetHealth View handles + contribution Layer — no platform TSX.
+ * Shared View handles + contribution Layer — no platform TSX.
  */
 import { Layer } from "effect";
 import * as FleetHealth from "../FleetHealth";
@@ -10,18 +10,21 @@ import * as View from "./View";
 /** @public */
 export const fleetHealthViewSpec = { kind: FleetHealth.kind } as const;
 
+const CardProto = View.card.Prototype()({
+  spec: fleetHealthViewSpec,
+});
+const DetailProto = View.detail.Prototype()({
+  spec: fleetHealthViewSpec,
+});
+
 /** @public */
-export class FleetCard extends View.Tag<FleetCard>()(
+export class FleetCard extends CardProto.Tag<FleetCard>()(
   "hyperlink/view/fleet-card",
-  "card",
-  fleetHealthViewSpec,
 ) {}
 
 /** @public */
-export class FleetDetail extends View.Tag<FleetDetail>()(
+export class FleetDetail extends DetailProto.Tag<FleetDetail>()(
   "hyperlink/view/fleet-detail",
-  "detail",
-  fleetHealthViewSpec,
 ) {}
 
 /** @public */

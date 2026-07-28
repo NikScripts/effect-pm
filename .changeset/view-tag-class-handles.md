@@ -2,4 +2,4 @@
 "hyperlink-ts": minor
 ---
 
-**View handles:** `View.make` → **`View.Tag`** class Context.Service handles (`class PoolCard extends View.Tag<PoolCard>()(key, kind, spec) {}`), matching Daemon/Group Tags. Chrome binders **`View.kind` / `View.tag`** merge into one generic **`View.bind(kind | tag, view)`** (string → stamped kind; `{ key }` → tag key). Dropped phantom `ViewId<K>` — Layer `R` is the class Self.
+**View DI:** `View.Tag` / **`View.Prototype`** — component Context.Service handles. Props come from the Prototype chain (reversed vs Hyperlink service APIs); Self is DI identity; `View.Type<typeof Tag>` reads props. Size chrome is an add-on: `View.card` / `View.detail` / `View.page` stamp `size` (matchers stay PascalCase `View.Card` / `Detail` / `Page`). Chrome registration: **`View.bind(kind | tag, view)`** + `View.only`.
