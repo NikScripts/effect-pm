@@ -1,10 +1,9 @@
-import "../styles/docs.css";
 import type { ReactNode } from "react";
 
 /**
- * Root shell for every route — styles + document chrome only.
- * Docs nav / sidebar / footer live in `(book)/_layout.tsx` so `/` (coming soon)
- * never ships that HTML (CSS-hiding is not enough).
+ * Root shell for every route — document chrome only (no docs stylesheet).
+ * Book routes import `docs.css` from `(book)/_layout.tsx`. Coming-soon `/`
+ * inlines its own CSS so a failed `/assets/*` fetch cannot unstyle the brand host.
  */
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

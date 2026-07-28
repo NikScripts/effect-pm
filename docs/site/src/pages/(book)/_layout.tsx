@@ -1,3 +1,4 @@
+import "../../styles/docs.css";
 import type { ReactNode } from "react";
 import { navGroups, glossaryEntries } from "../../lib/docs-content.js";
 import { NavBar } from "../../components/NavBar.js";
