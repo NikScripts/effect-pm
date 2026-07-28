@@ -4,8 +4,9 @@
 #   DOCS_SITE_ORIGIN=https://your.domain ./scripts/deploy-do.sh <docr-registry-name>
 #
 # Steps: full site build (regens api-data/search/llms/sitemap with absolute URLs, verifies
-# links) → docker image (context docs/, artifact only) → push to DOCR → App Platform picks up
-# :latest on the next `doctl apps update` (or auto-deploy if enabled on the app).
+# links) → SSG integrity gate → docker image → push to DOCR → App Platform deployment →
+# wait ACTIVE → CF purge → live route smoke (must be 200). Failures abort before/after ship
+# so truncated SSG / API 404s are never "noticed by a human" first.
 set -euo pipefail
 
 # `pnpm run deploy:do -- <registry>` can forward a literal `--` through dotenvx; skip all of them.
@@ -36,48 +37,48 @@ if [ -n "$(git status --porcelain)" ]; then
   exit 1
 fi
 SHA="$(git rev-parse --short HEAD)"
+APP_ID="${DO_DOCS_APP_ID:-ed0a18b6-946a-4219-a427-af456d181755}"
 
 echo "==> building site @ ${SHA} (origin: ${DOCS_SITE_ORIGIN})"
 pnpm build
+# postbuild already runs check-ssg; call again so a future `waku build` shortcut still gates.
+echo "==> SSG integrity"
+node scripts/check-ssg.mjs
 
-# Guard: a waku-only rebuild without api-data/index.json yields ~90 HTML files and ships
-# 404s for every /api/<pkg> and /api/<pkg>/<module> URL (symbols can still SSR). A healthy
-# hyperlink-ts prerender is hundreds of pages; refuse to push a truncated artifact.
-if [ ! -f api-data/index.json ]; then
-  echo "refusing to deploy: api-data/index.json missing after build" >&2
-  exit 1
-fi
-API_HTML=$(find dist/public/api -name '*.html' 2>/dev/null | wc -l | tr -d ' ')
-if [ "${API_HTML}" -lt 200 ]; then
-  echo "refusing to deploy: only ${API_HTML} api HTML page(s) under dist/public/api (need ≥200)" >&2
-  echo "  tip: ensure gen-api wrote api-data/index.json, then re-run a full \`pnpm build\`" >&2
-  exit 1
-fi
-for must in \
-  dist/public/api/hyperlink-ts/index.html \
-  dist/public/api/hyperlink-ts/WorkPool/index.html
-do
-  if [ ! -f "${must}" ]; then
-    echo "refusing to deploy: missing ${must}" >&2
-    exit 1
-  fi
-done
-echo "==> api SSG ok (${API_HTML} html pages; WorkPool module present)"
-
-echo "==> docker build"
+echo "==> docker build + push"
 BASE="registry.digitalocean.com/${REGISTRY}/hyperlink-docs"
 (cd .. && docker buildx build --platform linux/amd64 --push -f site/Dockerfile -t "${BASE}:${SHA}" -t "${BASE}:latest" .)
 
-APP_ID="${DO_DOCS_APP_ID:-<app-id>}"
-echo "==> done — deploy: doctl --context hyperlink apps update ${APP_ID} --spec deploy/do-app.yaml"
-echo "    rollback: retag a previous sha as latest and update again"
-echo "    (banners: DOCS_SITE_ORIGIN=${DOCS_SITE_ORIGIN} npx tsx scripts/gen-doc-banners.ts)"
+if ! command -v doctl >/dev/null 2>&1; then
+  echo "refusing to finish deploy: doctl not on PATH (need create-deployment + live smoke)" >&2
+  exit 1
+fi
+
+echo "==> create-deployment --wait (app ${APP_ID})"
+# --wait blocks until ACTIVE (or fails the command); no silent "pushed image, forgot to cut over".
+doctl --context hyperlink apps create-deployment "${APP_ID}" --force-rebuild=false --wait
+phase="$(doctl --context hyperlink apps list-deployments "${APP_ID}" -o json | node -e '
+  const j = JSON.parse(require("fs").readFileSync(0, "utf8"));
+  process.stdout.write(String(j[0]?.phase ?? ""));
+')"
+if [ "${phase}" != "ACTIVE" ]; then
+  echo "refusing to continue: latest deployment phase is ${phase:-<empty>} (want ACTIVE)" >&2
+  exit 1
+fi
+
 
 # Edge-cached dep API HTML must not outlive the new image.
-# Prefer: pnpm run deploy:do -- <registry>  (dotenvx injects CLOUDFLARE_API_TOKEN)
 if [ -n "${CLOUDFLARE_API_TOKEN:-}" ]; then
   echo "==> purging Cloudflare dep-API edge cache"
   ./scripts/cf-edge-cache.sh purge
 else
   echo "==> skip CF purge (pnpm run cf:purge, or set CLOUDFLARE_API_TOKEN)"
 fi
+
+echo "==> live route smoke (${DOCS_SITE_ORIGIN})"
+# Brief settle so the new replica is the one answering through Cloudflare.
+sleep 5
+node scripts/live-routes-smoke.mjs "${DOCS_SITE_ORIGIN}"
+
+echo "==> deploy OK @ ${SHA} (App Platform ACTIVE; live routes green)"
+echo "    rollback: retag a previous sha as latest and create-deployment --wait again"
