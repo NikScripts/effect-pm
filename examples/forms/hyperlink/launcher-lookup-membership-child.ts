@@ -9,7 +9,7 @@
  */
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Effect, Layer, Redacted, Schema } from "effect";
+import { Effect, Layer, Schema } from "effect";
 import * as Hyperlink from "../../../src/Hyperlink";
 import * as Lookup from "../../../src/Lookup";
 import * as Node from "../../../src/Node";

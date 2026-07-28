@@ -33,9 +33,7 @@ Membership after assume: [Identity coordinator — custody vs membership](./iden
 ```ts
 import * as Launcher from "hyperlink-ts/Launcher"
 import * as Node from "hyperlink-ts/Node"
-import { Effect, Layer } from "effect"
-import * as NodeChildProcessSpawner from "@effect/platform-node/NodeChildProcessSpawner"
-import * as NodeServices from "@effect/platform-node/NodeServices"
+import { Effect } from "effect"
 
 const worker = Node.Tag()("app/Worker", {
   url: "http://127.0.0.1:4100/rpc",
@@ -47,9 +45,7 @@ const program = Launcher.up({
   process: Launcher.command("node", ["./worker.js"]), // injects HYPERLINK_ASSUME_TOKEN
 }).pipe(
   Effect.scoped,
-  Effect.provide(
-    Layer.provideMerge(NodeChildProcessSpawner.layer, NodeServices.layer),
-  ),
+  Effect.provide(Launcher.layer),
 )
 ```
 
@@ -61,44 +57,51 @@ Child listen must arm assume with the same token (`ListenOptions.assumeToken`, o
 
 | Phase | API | Notes |
 |-------|-----|-------|
-| Spawned | `Launcher.spawn(spec)` | Mints CSPRNG token (`Redacted` + `Encoding.encodeHex`); starts the OS child |
-| Ready | `handle.awaitReady()` | `Schedule.spaced` poll (Config/`ready.poll`) + 2s per dial; outer bound Config/`ready.timeout` |
+| Spawned | `Launcher.spawn(spec)` | Mints branded `Token` (`Redacted`); resolves Ready Config; starts the OS child |
+| Ready | `handle.awaitReady()` | `Schedule.spaced` poll (resolved at spawn) + 2s per dial; outer bound from spawn |
 | Handed off | `handle.handoff()` | `Node.assume({ token })`, then `unref` so the launcher scope may close |
+| Kill | `handle.kill()` | SIGTERM + spend the handle (also auto on `ReadyTimedOut`) |
 
-- `awaitReady` / `handoff` are **single-flight** (`Semaphore`) — concurrent calls serialize.
+- `awaitReady` / `handoff` / `kill` are **single-flight** (`Semaphore`) — concurrent calls serialize.
 - `awaitReady` is idempotent once Ready.
 - `handoff` before Ready → `HandleNotReady`.
-- Second `handoff` / `awaitReady` after handoff → `HandleSpent`.
+- Second `handoff` / `awaitReady` / `kill` after handoff or kill → `HandleSpent`.
 - Child dies during Ready wait → `ChildExited` (`Effect.raceFirst` vs poll).
-- Outer wait expires → `ReadyTimedOut`.
+- Outer wait expires → `ReadyTimedOut` **and** the child is kill-reaped (fail-closed).
 
-Optional `ready.services` waits on a named HyperService subset instead of all served services.
+Optional `ready.services` waits on a named HyperService subset (Tags or wire-key strings)
+instead of all served services.
 
-**Config (auto-read when omitted on the spec):**
+**Config (read once at `spawn` when omitted on the spec):**
 
 | Config | Env | Default |
 |--------|-----|---------|
 | `Launcher.readyTimeoutConfig` | `HYPERLINK_LAUNCHER_READY_TIMEOUT` | `30 seconds` |
 | `Launcher.readyPollConfig` | `HYPERLINK_LAUNCHER_READY_POLL` | `100 millis` |
 
-**Token injection helper:**
+**Token injection helpers:**
 
 ```ts
 process: Launcher.command("node", ["./worker.js"])                 // env (default)
 process: Launcher.command("node", ["./worker.js"], { token: "argv" })
-process: Launcher.command("pnpm", ["exec", "tsx", entry], { cwd, token: "both" })
+process: Launcher.command("node", ["--flag", "./worker.js"], { token: "argv", tokenArgvAt: 0 })
+process: Launcher.entry("./worker.js")
+process: Launcher.entry("./worker.ts", { exec: "pnpm", execArgs: ["exec", "tsx"], token: "argv" })
 ```
+
+**Multi-unit `up`:** default sequential; pass `{ concurrency: n }` (or `"unbounded"`) for independent units.
 
 ## Errors (typed)
 
 | Tag | When |
 |-----|------|
-| `ReadyTimedOut` | Ready poll bound expired |
+| `ReadyTimedOut` | Ready poll bound expired (child kill-reaped) |
 | `ChildExited` | OS child exited during `awaitReady` |
 | `HandleNotReady` | `handoff` before Ready |
-| `HandleSpent` | Control after handoff |
+| `HandleSpent` | Control after handoff / kill |
 | `AssumeTokenMismatch` / `AssumeTokenReused` / `AssumeNotReady` | From `Node.assume` |
 | Reachability | `NodeUnreachable` / `UnaddressedNode` / protocol readiness errors |
+| `ConfigError` | On `spawn` / `up` when Ready Config fails (not on Handle phases) |
 
 Assert on `_tag`, not message strings. Messages exist for operators / logs.
 

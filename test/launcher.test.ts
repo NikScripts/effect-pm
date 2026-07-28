@@ -2,20 +2,16 @@
  * `Launcher` Track A — mintToken, ReadyTimedOut (TestClock), custody handle phases,
  * spawn→awaitReady→handoff vs live child, and `up`.
  */
-import * as NodeChildProcessSpawner from "@effect/platform-node/NodeChildProcessSpawner";
-import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Fiber, Layer, Redacted } from "effect";
+import { Effect, Fiber, Layer, Redacted, Schema } from "effect";
 import { TestClock } from "effect/testing";
 import { ChildProcess } from "effect/unstable/process";
+import * as Hyperlink from "../src/Hyperlink";
 import * as Launcher from "../src/Launcher";
 import * as Node from "../src/Node";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 
-const platform = Layer.provideMerge(
-  NodeChildProcessSpawner.layer,
-  NodeServices.layer,
-);
+const platform = Launcher.layer;
 
 const childEntry = () => {
   const root = new URL("..", import.meta.url).pathname;
@@ -24,6 +20,11 @@ const childEntry = () => {
     entry: `${root}/test/fixtures/launcher-child-serve.ts`,
   };
 };
+
+/** Matches the HyperService served by `launcher-child-serve.ts`. */
+class ChildJobs extends Hyperlink.Tag<ChildJobs>()("launcher-child/Jobs", {
+  ping: Hyperlink.effect(Schema.String),
+}) {}
 
 const ephemeralPort = (tokenHex: string): number =>
   20_000 + (Number.parseInt(tokenHex.slice(0, 4), 16) % 10_000);
@@ -35,6 +36,14 @@ const reapLauncherChildren = ChildProcess.make("pkill", [
   Effect.flatMap((h) => h.exitCode),
   Effect.ignore,
 );
+
+const childProcess = (root: string, entry: string, port: number) =>
+  Launcher.command("pnpm", ["exec", "tsx", entry, String(port)], {
+    cwd: root,
+    stdout: "inherit",
+    stderr: "inherit",
+    token: "argv",
+  });
 
 describe("Launcher.mintToken", () => {
   it.effect("mints a redacted 32-byte hex token (CSPRNG)", () =>
@@ -120,19 +129,10 @@ describe("Launcher.Handle.awaitReady", () => {
 
         const handle = yield* Launcher.spawn({
           node,
-          process: Launcher.command(
-            "pnpm",
-            ["exec", "tsx", entry, String(port)],
-            {
-              cwd: root,
-              stdout: "inherit",
-              stderr: "inherit",
-              token: "argv",
-            },
-          ),
+          process: childProcess(root, entry, port),
           ready: {
             timeout: "25 seconds",
-            services: ["launcher-child/Jobs"],
+            services: [ChildJobs],
           },
         });
 
@@ -161,7 +161,7 @@ describe("Launcher.Handle.handoff", () => {
         });
         const exit = yield* Effect.exit(handle.handoff());
         expectTaggedFailure(exit, "HandleNotReady");
-        // Kill the sleep child via Scope close (scoped).
+        yield* handle.kill();
       }).pipe(Effect.scoped, Effect.provide(platform)),
     { timeout: 15_000 },
   );
@@ -180,16 +180,7 @@ describe("Launcher.Handle.handoff", () => {
 
         const handle = yield* Launcher.spawn({
           node,
-          process: Launcher.command(
-            "pnpm",
-            ["exec", "tsx", entry, String(port)],
-            {
-              cwd: root,
-              stdout: "inherit",
-              stderr: "inherit",
-              token: "argv",
-            },
-          ),
+          process: childProcess(root, entry, port),
           ready: { timeout: "25 seconds" },
         });
 
@@ -199,19 +190,41 @@ describe("Launcher.Handle.handoff", () => {
         expectTaggedFailure(spentHandoff, "HandleSpent");
         const spentReady = yield* Effect.exit(handle.awaitReady());
         expectTaggedFailure(spentReady, "HandleSpent");
+        const spentKill = yield* Effect.exit(handle.kill());
+        expectTaggedFailure(spentKill, "HandleSpent");
         yield* reapLauncherChildren;
       }).pipe(Effect.scoped, Effect.provide(platform)),
     { timeout: 45_000 },
   );
 });
 
-describe("Launcher.command", () => {
+describe("Launcher.Handle.kill", () => {
+  it.live(
+    "SIGTERMs the child and spends the handle",
+    () =>
+      Effect.gen(function* () {
+        const node = Node.Tag()("launcher/kill", {
+          url: "http://127.0.0.1:1/rpc",
+          kind: "Http",
+        });
+        const handle = yield* Launcher.spawn({
+          node,
+          process: ChildProcess.make("sleep", ["120"]),
+        });
+        yield* handle.kill();
+        const spent = yield* Effect.exit(handle.awaitReady());
+        expectTaggedFailure(spent, "HandleSpent");
+      }).pipe(Effect.scoped, Effect.provide(platform)),
+    { timeout: 15_000 },
+  );
+});
+
+describe("Launcher.command / entry", () => {
   it("injects HYPERLINK_ASSUME_TOKEN into env by default", () => {
     const factory = Launcher.command("node", ["./worker.js"], {
       cwd: "/tmp",
     });
     const built = factory("secret-token");
-    // StandardCommand carries options.env
     expect(
       typeof built === "object" &&
         built !== null &&
@@ -238,6 +251,44 @@ describe("Launcher.command", () => {
         built.args.at(-1) === "secret-token",
     ).toBe(true);
   });
+
+  it("inserts token at tokenArgvAt", () => {
+    const factory = Launcher.command("node", ["./worker.js", "--port", "1"], {
+      token: "argv",
+      tokenArgvAt: 1,
+    });
+    const built = factory("secret-token");
+    expect(
+      typeof built === "object" &&
+        built !== null &&
+        "args" in built &&
+        Array.isArray(built.args) &&
+        built.args[0] === "./worker.js" &&
+        built.args[1] === "secret-token" &&
+        built.args[2] === "--port",
+    ).toBe(true);
+  });
+
+  it("entry builds exec + execArgs + path", () => {
+    const factory = Launcher.entry("./worker.ts", {
+      exec: "pnpm",
+      execArgs: ["exec", "tsx"],
+      token: "argv",
+    });
+    const built = factory("secret-token");
+    expect(
+      typeof built === "object" &&
+        built !== null &&
+        "command" in built &&
+        built.command === "pnpm" &&
+        "args" in built &&
+        Array.isArray(built.args) &&
+        built.args[0] === "exec" &&
+        built.args[1] === "tsx" &&
+        built.args[2] === "./worker.ts" &&
+        built.args[3] === "secret-token",
+    ).toBe(true);
+  });
 });
 
 describe("Launcher.up", () => {
@@ -255,16 +306,7 @@ describe("Launcher.up", () => {
 
         yield* Launcher.up({
           node,
-          process: Launcher.command(
-            "pnpm",
-            ["exec", "tsx", entry, String(port)],
-            {
-              cwd: root,
-              stdout: "inherit",
-              stderr: "inherit",
-              token: "argv",
-            },
-          ),
+          process: childProcess(root, entry, port),
           ready: { timeout: "25 seconds" },
         });
         yield* reapLauncherChildren;
