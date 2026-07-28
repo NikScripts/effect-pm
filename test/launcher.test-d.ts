@@ -1,7 +1,7 @@
 /**
  * Type-level lock: Launcher.spawn / up and Node.assume error channels.
  */
-import type { Effect, Redacted, Scope } from "effect";
+import type { Config, Duration, Effect, Redacted, Scope } from "effect";
 import type { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import type * as Launcher from "../src/Launcher";
 import type {
@@ -24,6 +24,7 @@ function typeLock(
   spawn: typeof Launcher.spawn,
   up: typeof Launcher.up,
   mintToken: typeof Launcher.mintToken,
+  readyTimeoutConfig: typeof Launcher.readyTimeoutConfig,
 ): void {
   type MintSuccess = typeof mintToken extends Effect.Effect<
     infer A,
@@ -34,6 +35,11 @@ function typeLock(
     : never;
   const _mintIsRedacted: AssertExtends<MintSuccess, Redacted.Redacted<string>> =
     true;
+
+  const _readyTimeoutIsConfig: AssertExtends<
+    typeof readyTimeoutConfig,
+    Config.Config<Duration.Duration>
+  > = true;
 
   const spawned = spawn({ node, process: command });
   type SpawnReq = ReqOf<typeof spawned>;
@@ -62,6 +68,7 @@ function typeLock(
   const _assumeUnaddressed: AssertExtends<UnaddressedNode, AssumeErr> = true;
 
   void _mintIsRedacted;
+  void _readyTimeoutIsConfig;
   void _spawnNeedsSpawner;
   void _spawnNeedsScope;
   void _upHasReadyTimedOut;

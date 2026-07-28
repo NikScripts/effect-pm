@@ -3,15 +3,23 @@
  *
  * Spine-α spawn-and-exit launcher — mint token, spawn OS child, poll Ready, `Node.assume`, unref.
  * Node-platform only (`ChildProcessSpawner` + Scope). Wire-portable pieces stay on {@link Node}.
+ *
+ * Effect-first: `Schedule` + `TestClock`-friendly Ready poll, `Semaphore` single-flight on the
+ * handle, `Config` for the Ready bound, `Effect.provide(Layer)` for status dials, `withSpan` /
+ * `withLogSpan` on every phase, `_tag` predicates (never `instanceof`), `Effect.forEach` for `up`.
  */
 import {
+  Config,
   Data,
   Duration,
   Effect,
   Layer,
+  Option,
+  Predicate,
   Redacted,
   Ref,
   Schedule,
+  Semaphore,
   type Scope,
 } from "effect";
 import type { PlatformError } from "effect/PlatformError";
@@ -35,24 +43,37 @@ import {
   UnaddressedNode,
   type AnyNode,
 } from "./nodeCore";
+import type { NodeStatus } from "./nodeStatus";
 import { mintAssumeToken } from "./launcherToken";
 
 /** Opaque assume-token brand (thin sugar over a redacted string). @public */
 export type Token = string & { readonly [LauncherTokenBrand]: unique symbol };
 declare const LauncherTokenBrand: unique symbol;
 
-/** Default Ready poll bound when `ready.timeout` is omitted. */
-const DEFAULT_READY_TIMEOUT = "30 seconds" as const;
+/** Default Ready poll bound when `ready.timeout` is omitted and Config is unset. */
+const DEFAULT_READY_TIMEOUT = Duration.seconds(30);
 
 /** How often `awaitReady` re-probes node status while waiting. */
-const READY_POLL = "100 millis" as const;
+const READY_POLL = Duration.millis(100);
 
 /** Per-dial bound so a hung connect cannot stall the outer Ready timeout. */
-const READY_PROBE_TIMEOUT = "2 seconds" as const;
+const READY_PROBE_TIMEOUT = Duration.seconds(2);
+
+/**
+ * Effect {@link Config} for the Ready wait bound (`HYPERLINK_LAUNCHER_READY_TIMEOUT`).
+ * Falls back to 30 seconds when unset — same house default as {@link ReadyOptions.timeout}.
+ *
+ * @category config
+ * @public
+ */
+export const readyTimeoutConfig: Config.Config<Duration.Duration> =
+  Config.duration("HYPERLINK_LAUNCHER_READY_TIMEOUT").pipe(
+    Config.withDefault(DEFAULT_READY_TIMEOUT),
+  );
 
 /**
  * Ready-wait options on a spawn unit — omit `services` for allReady-shaped; omit `timeout`
- * for the house default (`"30 seconds"`).
+ * to read {@link readyTimeoutConfig} (default `"30 seconds"`).
  *
  * @category models
  * @public
@@ -145,6 +166,7 @@ export class HandleNotReady extends Data.TaggedError("HandleNotReady")<{
 }
 
 type LauncherChildHandle = ChildProcessSpawner.ChildProcessHandle;
+type HandlePhase = "spawned" | "ready" | "handedOff";
 
 /**
  * Custody handle — only {@link spawn} / {@link up} construct these. After {@link Handle.handoff},
@@ -207,7 +229,7 @@ const nodeAddress = (node: AnyNode): string =>
       ? node.path
       : node.key;
 
-const withLauncherLogs = <A, E, R>(
+const withLauncherPhase = <A, E, R>(
   nodeKey: string,
   phase: string,
   effect: Effect.Effect<A, E, R>,
@@ -218,7 +240,92 @@ const withLauncherLogs = <A, E, R>(
       "launcher.phase": phase,
     }),
     Effect.withLogSpan(`launcher.${phase}`),
+    Effect.withSpan(`launcher.${phase}`, {
+      attributes: {
+        "launcher.node": nodeKey,
+        "launcher.phase": phase,
+      },
+    }),
   );
+
+const isTransientReadyFailure = Predicate.or(
+  Predicate.isTagged("ServiceNotReady"),
+  Predicate.or(
+    Predicate.isTagged("ServiceNotServed"),
+    Predicate.or(
+      Predicate.isTagged("NodeUnreachable"),
+      Predicate.isTagged("ProtocolUnanswered"),
+    ),
+  ),
+);
+
+const assertServicesReady = (
+  node: AnyNode,
+  address: string,
+  snap: NodeStatus,
+  services: ReadonlyArray<string> | undefined,
+): Effect.Effect<void, ServiceNotReady | ServiceNotServed> => {
+  if (services !== undefined) {
+    return Effect.forEach(
+      services,
+      (key): Effect.Effect<void, ServiceNotReady | ServiceNotServed> => {
+        const row = Option.fromNullishOr(
+          snap.services.find((r) => r.key === key),
+        );
+        return Option.match(row, {
+          onNone: () =>
+            Effect.fail(
+              new ServiceNotServed({
+                node: node.key,
+                url: address,
+                serviceKey: key,
+                served: snap.services.map((r) => r.key),
+              }),
+            ),
+          onSome: (r) =>
+            r.ready
+              ? Effect.void
+              : Effect.fail(
+                  new ServiceNotReady({
+                    node: node.key,
+                    url: address,
+                    serviceKey: key,
+                    ...(r.detail !== undefined ? { detail: r.detail } : {}),
+                  }),
+                ),
+        });
+      },
+      { discard: true },
+    );
+  }
+  if (snap.services.length === 0) {
+    return Effect.fail(
+      new ServiceNotReady({
+        node: node.key,
+        url: address,
+        serviceKey: "*",
+        detail: "no served HyperServices yet",
+      }),
+    );
+  }
+  return Option.match(
+    Option.fromNullishOr(snap.services.find((r) => !r.ready)),
+    {
+      onNone: () => Effect.void,
+      onSome: (blocked) =>
+        Effect.fail(
+          new ServiceNotReady({
+            node: node.key,
+            url: address,
+            serviceKey: blocked.key,
+            ...(blocked.detail !== undefined
+              ? { detail: blocked.detail }
+              : {}),
+          }),
+        ),
+    },
+  );
+};
 
 const probeReady = (
   node: AnyNode,
@@ -235,6 +342,8 @@ const probeReady = (
     return Effect.fail(new UnaddressedNode({ node: node.key }));
   }
   const address = nodeAddress(node);
+  // Dynamic import keeps Hyperlink⇄nodeStatus acyclic; Layer.build + Context provide
+  // (not Effect.provide(Layer)) so R stays never for this internal dial.
   return Effect.gen(function* () {
     const { NodeStatusTag } = yield* Effect.promise(() => import("./nodeStatus"));
     const ctx = yield* Layer.build(
@@ -246,57 +355,17 @@ const probeReady = (
       const status = yield* NodeStatusTag;
       return yield* status.status.get;
     }).pipe(Effect.provide(ctx));
-    // Node status still exposes the readiness rollup as `.services` (status schema);
-    // Launcher call sites use `ready.services` / HyperService keys.
-    if (services !== undefined) {
-      for (const key of services) {
-        const row = snap.services.find((r) => r.key === key);
-        if (row === undefined) {
-          return yield* new ServiceNotServed({
-            node: node.key,
-            url: address,
-            serviceKey: key,
-            served: snap.services.map((r) => r.key),
-          });
-        }
-        if (!row.ready) {
-          return yield* new ServiceNotReady({
-            node: node.key,
-            url: address,
-            serviceKey: key,
-            ...(row.detail !== undefined ? { detail: row.detail } : {}),
-          });
-        }
-      }
-      return;
-    }
-    if (snap.services.length === 0) {
-      return yield* new ServiceNotReady({
-        node: node.key,
-        url: address,
-        serviceKey: "*",
-        detail: "no served HyperServices yet",
-      });
-    }
-    const blocked = snap.services.find((r) => !r.ready);
-    if (blocked !== undefined) {
-      return yield* new ServiceNotReady({
-        node: node.key,
-        url: address,
-        serviceKey: blocked.key,
-        ...(blocked.detail !== undefined ? { detail: blocked.detail } : {}),
-      });
-    }
+    yield* assertServicesReady(node, address, snap, services);
   }).pipe(
     Effect.scoped,
     Effect.timeout(READY_PROBE_TIMEOUT),
     Effect.mapError((cause) => {
       if (
-        cause instanceof ServiceNotReady ||
-        cause instanceof ServiceNotServed ||
-        cause instanceof UnaddressedNode ||
-        cause instanceof NodeUnreachable ||
-        cause instanceof ProtocolUnanswered
+        Predicate.isTagged(cause, "ServiceNotReady") ||
+        Predicate.isTagged(cause, "ServiceNotServed") ||
+        Predicate.isTagged(cause, "UnaddressedNode") ||
+        Predicate.isTagged(cause, "NodeUnreachable") ||
+        Predicate.isTagged(cause, "ProtocolUnanswered")
       ) {
         return cause;
       }
@@ -309,19 +378,28 @@ const probeReady = (
   );
 };
 
-const isTransientReadyFailure = (error: unknown): boolean =>
-  error instanceof ServiceNotReady ||
-  error instanceof ServiceNotServed ||
-  error instanceof NodeUnreachable ||
-  error instanceof ProtocolUnanswered;
+/**
+ * Resolve the Ready bound: explicit `ready.timeout`, else the house default.
+ * Compose {@link readyTimeoutConfig} at the app edge for env override
+ * (`ready: { timeout: yield* Launcher.readyTimeoutConfig }`).
+ */
+const resolveReadyTimeout = (
+  ready: ReadyOptions | undefined,
+): Duration.Duration =>
+  ready?.timeout !== undefined
+    ? Duration.fromInputUnsafe(ready.timeout)
+    : DEFAULT_READY_TIMEOUT;
 
 const makeHandle = (options: {
   readonly node: AnyNode;
   readonly token: Redacted.Redacted<string>;
   readonly child: LauncherChildHandle;
   readonly ready: ReadyOptions | undefined;
-  readonly phase: Ref.Ref<"spawned" | "ready" | "handedOff">;
+  readonly phase: Ref.Ref<HandlePhase>;
+  readonly gate: Semaphore.Semaphore;
 }): Handle => {
+  const self = (): Handle => makeHandle(options);
+
   const awaitReady = (): Effect.Effect<
     Handle,
     | ReadyTimedOut
@@ -334,55 +412,57 @@ const makeHandle = (options: {
     | ServiceNotServed
     | PlatformError
   > =>
-    withLauncherLogs(
+    withLauncherPhase(
       options.node.key,
       "awaitReady",
-      Effect.gen(function* () {
-        const phase = yield* Ref.get(options.phase);
-        if (phase === "handedOff") {
-          return yield* new HandleSpent({
-            node: options.node.key,
-            phase: "awaitReady",
-          });
-        }
-        if (phase === "ready") {
-          return makeHandle(options);
-        }
-        yield* Effect.logDebug("polling child Ready");
-        const timeout = options.ready?.timeout ?? DEFAULT_READY_TIMEOUT;
-        const services = options.ready?.services;
-        const wait = probeReady(options.node, services).pipe(
-          Effect.retry({
-            while: isTransientReadyFailure,
-            schedule: Schedule.spaced(READY_POLL),
-          }),
-          Effect.timeoutOrElse({
-            duration: timeout,
-            orElse: () =>
+      options.gate.withPermits(1)(
+        Effect.gen(function* () {
+          const phase = yield* Ref.get(options.phase);
+          if (phase === "handedOff") {
+            return yield* new HandleSpent({
+              node: options.node.key,
+              phase: "awaitReady",
+            });
+          }
+          if (phase === "ready") {
+            return self();
+          }
+          yield* Effect.logDebug("polling child Ready");
+          const timeout = resolveReadyTimeout(options.ready);
+          const services = options.ready?.services;
+          const wait = probeReady(options.node, services).pipe(
+            Effect.retry({
+              while: isTransientReadyFailure,
+              schedule: Schedule.spaced(READY_POLL),
+            }),
+            Effect.timeoutOrElse({
+              duration: timeout,
+              orElse: () =>
+                Effect.fail(
+                  new ReadyTimedOut({
+                    node: options.node.key,
+                    ...(services !== undefined ? { services } : {}),
+                    timeout,
+                  }),
+                ),
+            }),
+          );
+          const childDied = options.child.exitCode.pipe(
+            Effect.flatMap((code) =>
               Effect.fail(
-                new ReadyTimedOut({
+                new ChildExited({
                   node: options.node.key,
-                  ...(services !== undefined ? { services } : {}),
-                  timeout,
+                  code: Number(code),
                 }),
               ),
-          }),
-        );
-        const childDied = options.child.exitCode.pipe(
-          Effect.flatMap((code) =>
-            Effect.fail(
-              new ChildExited({
-                node: options.node.key,
-                code: Number(code),
-              }),
             ),
-          ),
-        );
-        yield* Effect.raceFirst(wait, childDied);
-        yield* Ref.set(options.phase, "ready");
-        yield* Effect.logInfo("child Ready");
-        return makeHandle(options);
-      }),
+          );
+          yield* Effect.raceFirst(wait, childDied);
+          yield* Ref.set(options.phase, "ready");
+          yield* Effect.logInfo("child Ready");
+          return self();
+        }),
+      ),
     );
 
   const handoff = (): Effect.Effect<
@@ -396,31 +476,31 @@ const makeHandle = (options: {
     | HandleSpent
     | PlatformError
   > =>
-    withLauncherLogs(
+    withLauncherPhase(
       options.node.key,
       "handoff",
-      Effect.gen(function* () {
-        const phase = yield* Ref.get(options.phase);
-        if (phase === "handedOff") {
-          return yield* new HandleSpent({
-            node: options.node.key,
-            phase: "handoff",
+      options.gate.withPermits(1)(
+        Effect.gen(function* () {
+          const phase = yield* Ref.get(options.phase);
+          if (phase === "handedOff") {
+            return yield* new HandleSpent({
+              node: options.node.key,
+              phase: "handoff",
+            });
+          }
+          if (phase !== "ready") {
+            return yield* new HandleNotReady({ node: options.node.key });
+          }
+          yield* Effect.logDebug("calling Node.assume");
+          yield* nodeAssume(options.node, {
+            token: Redacted.value(options.token),
           });
-        }
-        if (phase !== "ready") {
-          return yield* new HandleNotReady({ node: options.node.key });
-        }
-        yield* Effect.logDebug("calling Node.assume");
-        yield* nodeAssume(options.node, {
-          token: Redacted.value(options.token),
-        });
-        // Unref the child so Scope close does not kill it. Discard reref — the
-        // launcher exits; custody is the child's after assume.
-        const _reref = yield* options.child.unref;
-        void _reref;
-        yield* Ref.set(options.phase, "handedOff");
-        yield* Effect.logInfo("handoff complete; child unref'd");
-      }),
+          // Unref so Scope close does not kill the child; discard reref — launcher exits.
+          yield* Effect.asVoid(options.child.unref);
+          yield* Ref.set(options.phase, "handedOff");
+          yield* Effect.logInfo("handoff complete; child unref'd");
+        }),
+      ),
     );
 
   return {
@@ -446,7 +526,7 @@ export const spawn = (
   PlatformError,
   ChildProcessSpawner.ChildProcessSpawner | Scope.Scope
 > =>
-  withLauncherLogs(
+  withLauncherPhase(
     spec.node.key,
     "spawn",
     Effect.gen(function* () {
@@ -455,9 +535,8 @@ export const spawn = (
       const command =
         typeof spec.process === "function" ? spec.process(clear) : spec.process;
       const child = yield* command;
-      const phase = yield* Ref.make<"spawned" | "ready" | "handedOff">(
-        "spawned",
-      );
+      const phase = yield* Ref.make<HandlePhase>("spawned");
+      const gate = yield* Semaphore.make(1);
       yield* Effect.logInfo("child spawned under launcher custody").pipe(
         Effect.annotateLogs({ "launcher.pid": String(child.pid) }),
       );
@@ -467,13 +546,15 @@ export const spawn = (
         child,
         ready: spec.ready,
         phase,
+        gate,
       });
     }),
   );
 
 /**
  * One-shot bring-up: spawn → awaitReady → handoff per unit, then the launcher may exit.
- * Accepts one {@link SpawnSpec} or a readonly array (not {@link Group}).
+ * Accepts one {@link SpawnSpec} or a readonly array (not {@link Group}). Units run
+ * sequentially (`Effect.forEach` concurrency 1) so custody stays ordered.
  *
  * @category constructors
  * @public
@@ -497,15 +578,23 @@ export const up = (
   | PlatformError,
   ChildProcessSpawner.ChildProcessSpawner | Scope.Scope
 > =>
-  Effect.gen(function* () {
-    const units = isSpawnSpec(spec) ? [spec] : spec;
-    yield* Effect.logInfo("Launcher.up starting").pipe(
-      Effect.annotateLogs({ "launcher.units": String(units.length) }),
-    );
-    for (const unit of units) {
-      const handle = yield* spawn(unit);
-      yield* handle.awaitReady();
-      yield* handle.handoff();
-    }
-    yield* Effect.logInfo("Launcher.up complete");
-  });
+  withLauncherPhase(
+    "up",
+    "up",
+    Effect.gen(function* () {
+      const units = isSpawnSpec(spec) ? [spec] : spec;
+      yield* Effect.logInfo("Launcher.up starting").pipe(
+        Effect.annotateLogs({ "launcher.units": String(units.length) }),
+      );
+      yield* Effect.forEach(
+        units,
+        (unit) =>
+          spawn(unit).pipe(
+            Effect.flatMap((handle) => handle.awaitReady()),
+            Effect.flatMap((handle) => handle.handoff()),
+          ),
+        { concurrency: 1 },
+      );
+      yield* Effect.logInfo("Launcher.up complete");
+    }),
+  );

@@ -66,17 +66,24 @@ Launcher only mints and passes the cleartext into your `process` factory.
 
 | Phase | API | Notes |
 |-------|-----|-------|
-| Spawned | `Launcher.spawn(spec)` | Mints CSPRNG token (`Redacted` on the handle); starts the OS child |
-| Ready | `handle.awaitReady()` | Polls node status (100ms spaced; 2s per dial; default outer `"30 seconds"`) |
+| Spawned | `Launcher.spawn(spec)` | Mints CSPRNG token (`Redacted` + `Encoding.encodeHex`); starts the OS child |
+| Ready | `handle.awaitReady()` | `Schedule.spaced(100ms)` poll + 2s per dial; default outer `"30 seconds"` |
 | Handed off | `handle.handoff()` | `Node.assume({ token })`, then `unref` so the launcher scope may close |
 
+- `awaitReady` / `handoff` are **single-flight** (`Semaphore`) — concurrent calls serialize.
 - `awaitReady` is idempotent once Ready.
 - `handoff` before Ready → `HandleNotReady`.
 - Second `handoff` / `awaitReady` after handoff → `HandleSpent`.
-- Child dies during Ready wait → `ChildExited`.
+- Child dies during Ready wait → `ChildExited` (`Effect.raceFirst` vs poll).
 - Outer wait expires → `ReadyTimedOut`.
 
 Optional `ready.services` waits on a named HyperService subset instead of all served services.
+
+Env override for the Ready bound (compose at the app edge):
+
+```ts
+ready: { timeout: yield* Launcher.readyTimeoutConfig } // HYPERLINK_LAUNCHER_READY_TIMEOUT
+```
 
 ## Errors (typed)
 
@@ -93,13 +100,13 @@ Assert on `_tag`, not message strings. Messages exist for operators / logs.
 
 ## Observability
 
-Phases log under spans `launcher.spawn`, `launcher.awaitReady`, `launcher.handoff` with
-annotations `launcher.node`, `launcher.phase`, and (on spawn) `launcher.pid`. Assume dial /
-server paths use `node.assume` / `node.assume.handle` and `assume.node` (the listen
-`Node.Tag` key) — **never** the token (tokens are `Redacted` / cleartext only on the wire
-and in your injection channel).
+Phases use Effect **log spans** and **OTEL spans** (`launcher.spawn` / `launcher.awaitReady` /
+`launcher.handoff`) with annotations `launcher.node`, `launcher.phase`, and (on spawn)
+`launcher.pid`. Assume dial / server paths use `node.assume` / `node.assume.handle` —
+**never** the token (tokens are `Redacted` / cleartext only on the wire and in your injection
+channel).
 
-Provide an Effect log layer / sink at the app edge if you want these in stdout or a collector.
+Provide an Effect log / tracer layer at the app edge if you want these in stdout or a collector.
 
 ## Custody vs membership
 
