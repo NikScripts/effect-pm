@@ -275,7 +275,8 @@ Fleet rate limiting is **first-class Gate substrate**. HttpApiClient update **us
 | **R2** | ~~Light **`metrics` nest** on ordinary Gate~~ **Eng’d** — wire nest `remaining` / `resetAfter` / `exceeded`; Tag metadata `rateLimitKeyOf` / `metricsKeyOf`; live updates when `rateLimit` set |
 | **R3** | ~~Fleet recipe + shared-store tests (Gate + WorkPool presence-driven); Soft vs shared contrast; demo/docs~~ **Eng’d** (shared memory CI stand-in) |
 | **R3b** | ~~Live Redis proof~~ **Eng’d** — `NodeRedis.layer` + `RateLimiter.layerStoreRedis`; Gate/WorkPool live suites + child-process peer; `Persistence.layerRedis` / `PersistedQueue.layerStoreRedis` smoke; `docker-compose.redis.yml`; demo auto-detects Redis |
-| **R4** | ~~`Gate.HttpApiClient` Tag + nest + adaptive 429~~ **Eng’d** — `httpApiClientLayer(Tag)`; `usage`/`windows`; `adaptive: true`; ApiMetrics deprecated |
+| **R4** | ~~`Gate.HttpApiClient` Tag + nest + adaptive 429~~ **Eng’d** — `httpApiClientLayer(Tag)`; `usage`/`windows`; `adaptive: true` |
+| **R4b** | ~~Delete sibling `ApiMetrics` + dashboard nest parity~~ **Eng’d** — module/subpath removed; web/TUI API widgets surface `remaining` / `resetAfter` / `exceeded` |
 | **R5** | ~~Hyperlink-backed `RateLimiterStore`~~ **rejected** — Effect store layers only (`layerStoreMemory` / `layerStoreRedis`; adopt further Effect stores if/when they ship) |
 
 ---
@@ -287,5 +288,5 @@ Fleet rate limiting is **first-class Gate substrate**. HttpApiClient update **us
 - WorkPool: `src/internal/workPool.ts` (`WorkPoolRateLimitOptions`, `queueRateLimiterLayer`, `acquireQueueRateLimitAwait`)  
 - Guide: `docs/guides/work-pools.md` (concurrency vs rateLimit)  
 - Gate concurrency: `src/internal/gate.ts` (Semaphore)  
-- HttpApi instrument / usage registry: `src/internal/httpApiClient.ts`, `src/ApiMetrics.ts`  
+- HttpApi instrument / usage registry: `src/internal/httpApiClient.ts`, `src/ApiUsageSchema.ts`  
 - Product bake: local routes + wire nest — owner chat 2026-07-27; [`wire-groups-and-identity.md`](./wire-groups-and-identity.md), [`service-shapes.md`](./service-shapes.md)

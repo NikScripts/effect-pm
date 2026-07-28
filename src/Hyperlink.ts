@@ -3574,11 +3574,11 @@ export interface SharedTagFactory<S extends Spec> {
  * {@link serveRemote} (merge layers); dial with ordinary {@link client}.
  *
  * ```ts
- * const Metrics = Hyperlink.Tag("demo/ApiMetrics", {
+ * const Counters = Hyperlink.Tag("demo/SharedCounters", {
  *   snapshot: Hyperlink.effect(Schema.Number),
  * });
- * class Nwsl extends Metrics<Nwsl>()("@app/Nwsl/metrics") {}
- * class Mls extends Metrics<Mls>()("@app/Mls/metrics") {}
+ * class Nwsl extends Counters<Nwsl>()("@app/Nwsl/counters") {}
+ * class Mls extends Counters<Mls>()("@app/Mls/counters") {}
  *
  * Layer.mergeAll(
  *   Hyperlink.serve(Nwsl, { snapshot: Effect.succeed(1) }),

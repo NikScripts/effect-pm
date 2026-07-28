@@ -1519,8 +1519,8 @@ const topEndpoints = (
 ): ReadonlyArray<{ readonly endpoint: string; readonly requests: number; readonly errors: number }> =>
   [...bundle].sort((a, b) => b.requests - a.requests).slice(0, limit);
 
-/** An API-metrics HyperService as a grid card — a {@link Deck}: page 1 is throughput + health, page 2
- *  is the busiest endpoints. Read-only. */
+/** An HttpApiClient HyperService as a grid card — a {@link Deck}: page 1 is throughput + rate-limit
+ *  remaining, page 2 is the busiest endpoints. Read-only. */
 export const ApiCard = (props: {
   readonly tag: ApiTag;
   /** Display name — the member key under which the parent group holds this tag. */
@@ -1532,9 +1532,13 @@ export const ApiCard = (props: {
   const statusR = useAtomValue(bundle.status);
   const metricsR = useAtomValue(bundle.metrics);
   const historyR = useAtomValue(bundle.history);
+  const remainingR = useAtomValue(bundle.remaining);
+  const exceededR = useAtomValue(bundle.exceeded);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const m = AsyncResult.isSuccess(metricsR) ? Option.getOrUndefined(metricsR.value) : undefined;
   const history = AsyncResult.isSuccess(historyR) ? historyR.value : [];
+  const remaining = AsyncResult.isSuccess(remainingR) ? remainingR.value : undefined;
+  const exceeded = AsyncResult.isSuccess(exceededR) ? exceededR.value : 0;
   const health = apiHealth(s?.requestsTotal ?? 0, s?.errorsTotal ?? 0);
   const endpoints = topEndpoints([...(m?.byEndpoint ?? [])], 6);
   const maxReq = Math.max(...endpoints.map((e) => e.requests), 1);
@@ -1550,6 +1554,12 @@ export const ApiCard = (props: {
         <span><strong className="text-foreground">{(m?.throughputPerSec ?? 0).toFixed(1)}</strong> req/s</span>
         <span><strong className="text-foreground">{s?.inFlight ?? 0}</strong> in-flight</span>
       </div>
+      {remaining !== undefined ? (
+        <div className="flex justify-between text-xs text-muted-foreground">
+          <span><strong className="text-foreground">{remaining}</strong> remaining</span>
+          <span><strong className="text-foreground">{exceeded}</strong> exceeded</span>
+        </div>
+      ) : null}
       <Sparkline points={history.map((p) => p.throughput)} color={health.color} />
     </div>
   );
@@ -1580,12 +1590,25 @@ export const ApiCard = (props: {
   );
 };
 
-/** Stat cards from an API HyperService's snapshot + latest window. */
+/** Format nest `resetAfter` (ms) for the API stats strip. */
+const fmtResetAfter = (ms: number): string => {
+  if (!(ms > 0)) return "—";
+  if (ms < 1_000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1_000).toFixed(1)}s`;
+};
+
+/** Stat cards from an API HyperService's snapshot + latest window + rate-limit nest. */
 export const ApiStats = (props: { readonly bundle: ApiBundle }): React.ReactElement => {
   const statusR = useAtomValue(props.bundle.status);
   const metricsR = useAtomValue(props.bundle.metrics);
+  const remainingR = useAtomValue(props.bundle.remaining);
+  const resetAfterR = useAtomValue(props.bundle.resetAfter);
+  const exceededR = useAtomValue(props.bundle.exceeded);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const m = AsyncResult.isSuccess(metricsR) ? Option.getOrUndefined(metricsR.value) : undefined;
+  const remaining = AsyncResult.isSuccess(remainingR) ? remainingR.value : undefined;
+  const resetAfter = AsyncResult.isSuccess(resetAfterR) ? resetAfterR.value : undefined;
+  const exceeded = AsyncResult.isSuccess(exceededR) ? exceededR.value : undefined;
   const requests = s?.requestsTotal ?? 0;
   const errors = s?.errorsTotal ?? 0;
   const rate = requests > 0 ? (errors / requests) * 100 : 0;
@@ -1596,6 +1619,9 @@ export const ApiStats = (props: { readonly bundle: ApiBundle }): React.ReactElem
       <Stat label="error rate" value={`${rate.toFixed(1)}%`} />
       <Stat label="in-flight" value={String(s?.inFlight ?? 0)} />
       <Stat label="req/s" value={(m?.throughputPerSec ?? 0).toFixed(1)} />
+      {remaining !== undefined ? <Stat label="remaining" value={String(remaining)} /> : null}
+      {resetAfter !== undefined ? <Stat label="reset" value={fmtResetAfter(resetAfter)} /> : null}
+      {exceeded !== undefined ? <Stat label="exceeded" value={String(exceeded)} /> : null}
     </div>
   );
 };

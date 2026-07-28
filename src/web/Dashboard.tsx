@@ -246,8 +246,8 @@ const DaemonDetail = (props: {
   );
 };
 
-/** Detail view for an API-metrics resource — stats + usage chart + endpoint table. Read-only: no
- *  controls, no logs (an `ApiMetrics` tap has neither). */
+/** Detail view for a {@link Gate.HttpApiClient} (or nest fixture) — usage stats, rate-limit
+ *  counters, chart, and endpoint table. Read-only: no controls, no logs. */
 const ApiDetail = (props: { readonly tag: ApiTag; readonly onBack: () => void }): React.ReactElement => {
   const bundle = useApiBundle(props.tag);
   const statusR = useAtomValue(bundle.status);
