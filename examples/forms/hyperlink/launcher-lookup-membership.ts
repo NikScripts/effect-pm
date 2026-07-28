@@ -43,12 +43,11 @@ const program = Effect.gen(function* () {
 
   yield* Launcher.up({
     node: worker,
-    process: (token) =>
-      ChildProcess.make(
-        "pnpm",
-        ["exec", "tsx", entry, String(port), token, lookupPath],
-        { cwd: root, stdout: "inherit", stderr: "inherit" },
-      ),
+    process: Launcher.command(
+      "pnpm",
+      ["exec", "tsx", entry, String(port), lookupPath],
+      { cwd: root, stdout: "inherit", stderr: "inherit" },
+    ),
     ready: { timeout: "25 seconds" },
   });
 

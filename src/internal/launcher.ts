@@ -5,7 +5,7 @@
  * Node-platform only (`ChildProcessSpawner` + Scope). Wire-portable pieces stay on {@link Node}.
  *
  * Effect-first: `Schedule` + `TestClock`-friendly Ready poll, `Semaphore` single-flight on the
- * handle, `Config` for the Ready bound, `Effect.provide(Layer)` for status dials, `withSpan` /
+ * handle, `Config` auto-read for Ready timeout/poll, `command` token injection, Effect `Metric`s, `withSpan` /
  * `withLogSpan` on every phase, `_tag` predicates (never `instanceof`), `Effect.forEach` for `up`.
  */
 import {
@@ -14,6 +14,7 @@ import {
   Duration,
   Effect,
   Layer,
+  Metric,
   Option,
   Predicate,
   Redacted,
@@ -22,9 +23,10 @@ import {
   Semaphore,
   type Scope,
 } from "effect";
+import type { ConfigError } from "effect/Config";
 import type { PlatformError } from "effect/PlatformError";
 import {
-  type ChildProcess,
+  ChildProcess,
   ChildProcessSpawner,
 } from "effect/unstable/process";
 import * as Hyperlink from "../Hyperlink";
@@ -33,7 +35,7 @@ import {
   AssumeTokenMismatch,
   AssumeTokenReused,
 } from "./nodeAssume";
-import { assume as nodeAssume } from "./nodeAssumeClient";
+import { ASSUME_TOKEN_ENV, assume as nodeAssume } from "./nodeAssumeClient";
 import {
   isAddressedNode,
   NodeUnreachable,
@@ -50,18 +52,18 @@ import { mintAssumeToken } from "./launcherToken";
 export type Token = string & { readonly [LauncherTokenBrand]: unique symbol };
 declare const LauncherTokenBrand: unique symbol;
 
-/** Default Ready poll bound when `ready.timeout` is omitted and Config is unset. */
+/** Default Ready outer bound when `ready.timeout` is omitted and Config is unset. */
 const DEFAULT_READY_TIMEOUT = Duration.seconds(30);
 
-/** How often `awaitReady` re-probes node status while waiting. */
-const READY_POLL = Duration.millis(100);
+/** Default Ready poll spacing when `ready.poll` is omitted and Config is unset. */
+const DEFAULT_READY_POLL = Duration.millis(100);
 
 /** Per-dial bound so a hung connect cannot stall the outer Ready timeout. */
 const READY_PROBE_TIMEOUT = Duration.seconds(2);
 
 /**
  * Effect {@link Config} for the Ready wait bound (`HYPERLINK_LAUNCHER_READY_TIMEOUT`).
- * Falls back to 30 seconds when unset — same house default as {@link ReadyOptions.timeout}.
+ * Read automatically when `ready.timeout` is omitted (default 30 seconds).
  *
  * @category config
  * @public
@@ -72,8 +74,37 @@ export const readyTimeoutConfig: Config.Config<Duration.Duration> =
   );
 
 /**
- * Ready-wait options on a spawn unit — omit `services` for allReady-shaped; omit `timeout`
- * to read {@link readyTimeoutConfig} (default `"30 seconds"`).
+ * Effect {@link Config} for Ready poll spacing (`HYPERLINK_LAUNCHER_READY_POLL`).
+ * Read automatically when `ready.poll` is omitted (default 100 millis).
+ *
+ * @category config
+ * @public
+ */
+export const readyPollConfig: Config.Config<Duration.Duration> =
+  Config.duration("HYPERLINK_LAUNCHER_READY_POLL").pipe(
+    Config.withDefault(DEFAULT_READY_POLL),
+  );
+
+/** How the assume token is injected into the child process. @public */
+export type TokenInjection = "env" | "argv" | "both";
+
+/**
+ * Options for {@link command} — Effect `ChildProcess` options plus token injection mode.
+ *
+ * @category models
+ * @public
+ */
+export interface CommandOptions extends ChildProcess.CommandOptions {
+  /**
+   * Where to put the minted assume token. Default `"env"` → `HYPERLINK_ASSUME_TOKEN`.
+   * `"argv"` appends the token as the last argument; `"both"` does both.
+   */
+  readonly token?: TokenInjection;
+}
+
+/**
+ * Ready-wait options on a spawn unit — omit `services` for allReady-shaped; omit `timeout` /
+ * `poll` to read {@link readyTimeoutConfig} / {@link readyPollConfig}.
  *
  * @category models
  * @public
@@ -82,11 +113,14 @@ export interface ReadyOptions {
   /** HyperService wire keys to wait on; omit ⇒ all served services Ready. */
   readonly services?: ReadonlyArray<string>;
   readonly timeout?: Duration.Input;
+  /** Poll spacing while waiting for Ready; omit ⇒ {@link readyPollConfig}. */
+  readonly poll?: Duration.Input;
 }
 
 /**
  * One spawn unit — dial target + Effect `ChildProcess` command (or a factory that receives the
- * minted cleartext token for open injection into env/argv).
+ * minted cleartext token for open injection into env/argv). Prefer {@link command} for the
+ * factory form.
  *
  * @category models
  * @public
@@ -98,6 +132,73 @@ export interface SpawnSpec {
     | ((token: string) => ChildProcess.Command);
   readonly ready?: ReadyOptions;
 }
+
+/**
+ * Build a `SpawnSpec.process` factory that injects the assume token into env and/or argv.
+ *
+ * @example
+ * ```ts
+ * Launcher.up({
+ *   node: worker,
+ *   process: Launcher.command("node", ["./worker.js"], { token: "env" }),
+ * })
+ * ```
+ *
+ * @category constructors
+ * @public
+ */
+export const command = (
+  cmd: string,
+  args: ReadonlyArray<string> = [],
+  options?: CommandOptions,
+): ((token: string) => ChildProcess.Command) => {
+  const injection: TokenInjection = options?.token ?? "env";
+  const {
+    token: _tokenMode,
+    env: baseEnv,
+    extendEnv,
+    ...rest
+  } = options ?? {};
+  return (clearToken: string) => {
+    const argv =
+      injection === "argv" || injection === "both"
+        ? [...args, clearToken]
+        : [...args];
+    const env =
+      injection === "env" || injection === "both"
+        ? { ...(baseEnv ?? {}), [ASSUME_TOKEN_ENV]: clearToken }
+        : baseEnv;
+    return ChildProcess.make(cmd, argv, {
+      ...rest,
+      ...(env !== undefined ? { env } : {}),
+      // Default merge with process env so PATH / etc. survive token injection.
+      extendEnv: extendEnv ?? true,
+    });
+  };
+};
+
+// ─── OTEL metrics (Effect Metric → runtime metric reader) ───────────────────
+const readyLatencyBoundaries = Metric.exponentialBoundaries({
+  start: 1,
+  factor: 2,
+  count: 16,
+});
+const readyDurationMs = Metric.histogram("launcher_ready_duration_ms", {
+  description: "Launcher awaitReady elapsed time in milliseconds",
+  boundaries: readyLatencyBoundaries,
+});
+const readyTimeoutTotal = Metric.counter("launcher_ready_timeout_total", {
+  incremental: true,
+  description: "Launcher ReadyTimedOut count",
+});
+const childExitedTotal = Metric.counter("launcher_child_exited_total", {
+  incremental: true,
+  description: "Launcher ChildExited count during awaitReady",
+});
+const handoffTotal = Metric.counter("launcher_handoff_total", {
+  incremental: true,
+  description: "Launcher handoff attempts by outcome",
+});
 
 /**
  * Ready poll expired before the child reported Ready.
@@ -192,6 +293,7 @@ export interface Handle {
     | ServiceNotReady
     | ServiceNotServed
     | PlatformError
+    | ConfigError
   >;
   /** Call {@link Node.assume}, then unref the child so the launcher scope may close. */
   readonly handoff: () => Effect.Effect<
@@ -378,17 +480,21 @@ const probeReady = (
   );
 };
 
-/**
- * Resolve the Ready bound: explicit `ready.timeout`, else the house default.
- * Compose {@link readyTimeoutConfig} at the app edge for env override
- * (`ready: { timeout: yield* Launcher.readyTimeoutConfig }`).
- */
+/** Explicit `ready.timeout`, else {@link readyTimeoutConfig}. */
 const resolveReadyTimeout = (
   ready: ReadyOptions | undefined,
-): Duration.Duration =>
+): Effect.Effect<Duration.Duration, ConfigError> =>
   ready?.timeout !== undefined
-    ? Duration.fromInputUnsafe(ready.timeout)
-    : DEFAULT_READY_TIMEOUT;
+    ? Effect.succeed(Duration.fromInputUnsafe(ready.timeout))
+    : readyTimeoutConfig;
+
+/** Explicit `ready.poll`, else {@link readyPollConfig}. */
+const resolveReadyPoll = (
+  ready: ReadyOptions | undefined,
+): Effect.Effect<Duration.Duration, ConfigError> =>
+  ready?.poll !== undefined
+    ? Effect.succeed(Duration.fromInputUnsafe(ready.poll))
+    : readyPollConfig;
 
 const makeHandle = (options: {
   readonly node: AnyNode;
@@ -411,6 +517,7 @@ const makeHandle = (options: {
     | ServiceNotReady
     | ServiceNotServed
     | PlatformError
+    | ConfigError
   > =>
     withLauncherPhase(
       options.node.key,
@@ -428,12 +535,14 @@ const makeHandle = (options: {
             return self();
           }
           yield* Effect.logDebug("polling child Ready");
-          const timeout = resolveReadyTimeout(options.ready);
+          const timeout = yield* resolveReadyTimeout(options.ready);
+          const poll = yield* resolveReadyPoll(options.ready);
           const services = options.ready?.services;
+          const nodeAttrs = { "launcher.node": options.node.key };
           const wait = probeReady(options.node, services).pipe(
             Effect.retry({
               while: isTransientReadyFailure,
-              schedule: Schedule.spaced(READY_POLL),
+              schedule: Schedule.spaced(poll),
             }),
             Effect.timeoutOrElse({
               duration: timeout,
@@ -457,9 +566,35 @@ const makeHandle = (options: {
               ),
             ),
           );
-          yield* Effect.raceFirst(wait, childDied);
+          const [elapsed] = yield* Effect.timed(
+            Effect.raceFirst(wait, childDied),
+          ).pipe(
+            Effect.tapError((err) => {
+              if (Predicate.isTagged(err, "ReadyTimedOut")) {
+                return Metric.update(
+                  Metric.withAttributes(readyTimeoutTotal, nodeAttrs),
+                  1,
+                );
+              }
+              if (Predicate.isTagged(err, "ChildExited")) {
+                return Metric.update(
+                  Metric.withAttributes(childExitedTotal, nodeAttrs),
+                  1,
+                );
+              }
+              return Effect.void;
+            }),
+          );
+          yield* Metric.update(
+            Metric.withAttributes(readyDurationMs, nodeAttrs),
+            Duration.toMillis(elapsed),
+          );
           yield* Ref.set(options.phase, "ready");
-          yield* Effect.logInfo("child Ready");
+          yield* Effect.logInfo("child Ready").pipe(
+            Effect.annotateLogs({
+              "launcher.ready_ms": String(Duration.toMillis(elapsed)),
+            }),
+          );
           return self();
         }),
       ),
@@ -492,9 +627,29 @@ const makeHandle = (options: {
             return yield* new HandleNotReady({ node: options.node.key });
           }
           yield* Effect.logDebug("calling Node.assume");
+          const nodeAttrs = { "launcher.node": options.node.key };
           yield* nodeAssume(options.node, {
             token: Redacted.value(options.token),
-          });
+          }).pipe(
+            Effect.tap(() =>
+              Metric.update(
+                Metric.withAttributes(handoffTotal, {
+                  ...nodeAttrs,
+                  "launcher.outcome": "ok",
+                }),
+                1,
+              ),
+            ),
+            Effect.tapError(() =>
+              Metric.update(
+                Metric.withAttributes(handoffTotal, {
+                  ...nodeAttrs,
+                  "launcher.outcome": "error",
+                }),
+                1,
+              ),
+            ),
+          );
           // Unref so Scope close does not kill the child; discard reref — launcher exits.
           yield* Effect.asVoid(options.child.unref);
           yield* Ref.set(options.phase, "handedOff");
@@ -575,7 +730,8 @@ export const up = (
   | ServiceNotReady
   | ServiceNotServed
   | UnaddressedNode
-  | PlatformError,
+  | PlatformError
+  | ConfigError,
   ChildProcessSpawner.ChildProcessSpawner | Scope.Scope
 > =>
   withLauncherPhase(

@@ -2,6 +2,7 @@
  * Type-level lock: Launcher.spawn / up and Node.assume error channels.
  */
 import type { Config, Duration, Effect, Redacted, Scope } from "effect";
+import type { ConfigError } from "effect/Config";
 import type { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import type * as Launcher from "../src/Launcher";
 import type {
@@ -25,6 +26,8 @@ function typeLock(
   up: typeof Launcher.up,
   mintToken: typeof Launcher.mintToken,
   readyTimeoutConfig: typeof Launcher.readyTimeoutConfig,
+  readyPollConfig: typeof Launcher.readyPollConfig,
+  commandFactory: typeof Launcher.command,
 ): void {
   type MintSuccess = typeof mintToken extends Effect.Effect<
     infer A,
@@ -39,6 +42,16 @@ function typeLock(
   const _readyTimeoutIsConfig: AssertExtends<
     typeof readyTimeoutConfig,
     Config.Config<Duration.Duration>
+  > = true;
+  const _readyPollIsConfig: AssertExtends<
+    typeof readyPollConfig,
+    Config.Config<Duration.Duration>
+  > = true;
+
+  const processFactory = commandFactory("node", ["./worker.js"]);
+  const _processIsFactory: AssertExtends<
+    typeof processFactory,
+    (token: string) => ChildProcess.Command
   > = true;
 
   const spawned = spawn({ node, process: command });
@@ -58,6 +71,7 @@ function typeLock(
     true;
   const _upHasHandleSpent: AssertExtends<Launcher.HandleSpent, UpErr> = true;
   const _upHasAssume: AssertExtends<AssumeTokenMismatch, UpErr> = true;
+  const _upHasConfigError: AssertExtends<ConfigError, UpErr> = true;
 
   const assumed = assume(node, { token: "x" });
   type AssumeErr = ErrOf<typeof assumed>;
@@ -69,6 +83,8 @@ function typeLock(
 
   void _mintIsRedacted;
   void _readyTimeoutIsConfig;
+  void _readyPollIsConfig;
+  void _processIsFactory;
   void _spawnNeedsSpawner;
   void _spawnNeedsScope;
   void _upHasReadyTimedOut;
@@ -76,6 +92,7 @@ function typeLock(
   void _upHasHandleNotReady;
   void _upHasHandleSpent;
   void _upHasAssume;
+  void _upHasConfigError;
   void _assumeMismatch;
   void _assumeReuse;
   void _assumeNotReady;

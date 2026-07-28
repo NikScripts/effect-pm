@@ -4,7 +4,7 @@
  * Child for {@link launcher-lookup-membership}: Track A custody (`assumeToken`) then
  * Track B membership (`Lookup.client` + Directory advertise).
  *
- * argv: `<port> <assume-token> <lookup-sock>`
+ * argv: `<port> <lookup-sock>` — assume token from `HYPERLINK_ASSUME_TOKEN` (Launcher.command).
  */
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -18,8 +18,8 @@ class Jobs extends Hyperlink.Tag<Jobs>()("forms/launcher-membership/Jobs", {
 }) {}
 
 const portArg = process.argv[2];
-const tokenArg = process.argv[3];
-const lookupArg = process.argv[4];
+const lookupArg = process.argv[3];
+const tokenArg = process.env.HYPERLINK_ASSUME_TOKEN;
 const port = portArg !== undefined ? Number(portArg) : Number.NaN;
 
 const program =
@@ -30,7 +30,7 @@ const program =
   lookupArg === undefined ||
   lookupArg.length === 0
     ? Effect.die(
-        "launcher-lookup-membership-child: need <port> <assume-token> <lookup-sock>",
+        "launcher-lookup-membership-child: need <port> <lookup-sock> and HYPERLINK_ASSUME_TOKEN",
       )
     : Effect.gen(function* () {
         const node = Node.Tag()("forms/launcher-membership/Worker", {
