@@ -9,7 +9,7 @@ import { Option, Layer } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useAtomValue } from "../ui/atom-react";
 import { isQueueTag, type QueueTag } from "../ui/data";
-import * as Navigator from "../ui/Navigator";
+import * as Router from "../ui/Router";
 import * as View from "../ui/View";
 import * as Observe from "../Observe";
 import * as WorkPoolView from "../ui/WorkPoolView";
@@ -92,7 +92,7 @@ const PoolDetailView: View.View = (props) => {
 
 const PoolPageView: View.View = (props) => {
   if (!isQueueTag(props.tag)) return null;
-  const nav = Navigator.useNavigator();
+  const nav = Router.useRouter();
   const bundle = Observe.use(props.tag, WorkPoolView.pack);
   const logsR = useAtomValue(bundle.logs);
   if (nav.view !== "logs") return null;

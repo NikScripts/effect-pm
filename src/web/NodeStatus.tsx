@@ -3,9 +3,9 @@
  *
  * Public **node status** chrome for the web dashboard — die, health board, node detail.
  *
- * Batteries {@link ./DashboardShell} uses **Navigator pages** (`/health`, `/health/<nodeId>`
- * via `Navigator.openHealth` / `.openNode`). {@link NodeStatusHost} remains for overlay embeds
- * without a Navigator.
+ * Batteries {@link ./DashboardShell} uses **Router pages** (`/health`, `/health/<nodeId>`
+ * via `Router.openHealth` / `.openNode`). {@link NodeStatusHost} remains for overlay embeds
+ * without a Router.
  *
  * @example
  * ```tsx
@@ -13,7 +13,7 @@
  * nav.openHealth()
  * nav.openNode(node.id)
  *
- * // Overlay embed (no Navigator):
+ * // Overlay embed (no Router):
  * <NodeStatusHost group={ServicesHub}>
  *   {({ openHealth }) => (
  *     <DashboardTopBar

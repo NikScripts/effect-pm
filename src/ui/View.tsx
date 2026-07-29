@@ -16,7 +16,7 @@ import { Context, Data, Effect, Layer, Match, Option } from "effect";
 import type * as Types from "effect/Types";
 import * as Group from "../Group";
 import { kindOf } from "../Hyperlink";
-import * as Navigator from "./Navigator";
+import * as Router from "./Router";
 import type { LeafTag } from "./widgetRegistry";
 
 // =============================================================================
@@ -81,7 +81,7 @@ const sameViewKind = (a: ViewKind, b: ViewKind): boolean => a._tag === b._tag;
  *
  * @public
  */
-export type ViewTag = LeafTag | Navigator.MemberTag;
+export type ViewTag = LeafTag | Router.MemberTag;
 
 /**
  * Base props for size-chrome skins (card/detail/page). Navigation stays with the parent.
@@ -94,7 +94,7 @@ export interface ViewProps {
 }
 
 /**
- * Layout / shell hints for View skins. **Navigation is {@link Navigator}** — not here.
+ * Layout / shell hints for View skins. **Navigation is {@link Router}** — not here.
  *
  * @public
  */
@@ -1006,7 +1006,7 @@ export const react = <ROut, E,>(viewLayer: Layer.Layer<ROut, E, never>) => {
 };
 
 // =============================================================================
-// compose — thin sugar over react + Navigator (lock C)
+// compose — thin sugar over react + Router (lock C)
 // =============================================================================
 
 const displayNameOf = (tag: ViewTag, fallback: string): string => {
@@ -1021,7 +1021,7 @@ const displayNameOf = (tag: ViewTag, fallback: string): string => {
 };
 
 /**
- * Members of the current {@link Navigator} group — shells (esp. TUI) render their own grid.
+ * Members of the current {@link Router} group — shells (esp. TUI) render their own grid.
  *
  * @public
  */
@@ -1029,15 +1029,17 @@ export const useGridMembers = (): ReadonlyArray<{
   readonly name: string;
   readonly tag: ViewTag;
 }> => {
-  const nav = Navigator.useNavigator();
-  return Object.entries(Group.members(nav.group)).map(([name, tag]) => ({
+  const router = Router.useRouter();
+  const group = router.group;
+  if (group === undefined) return [];
+  return Object.entries(Group.members(group)).map(([name, tag]) => ({
     name,
     tag: tag as ViewTag,
   }));
 };
 
 /**
- * Thin Dashboard sugar: {@link react} + {@link Navigator} Layer. No second registry;
+ * Thin Dashboard sugar: {@link react} + {@link Router} Layer. No second registry;
  * no `Atom.runtime` inside — wrap with {@link ./runtime.RuntimeProvider} outside.
  *
  * Observe via `Observe.use(tag, *View.pack)` / `NodeView.use` under `RuntimeProvider`.
@@ -1049,7 +1051,7 @@ export const useGridMembers = (): ReadonlyArray<{
  * import * as DaemonView from "hyperlink-ts/ui/DaemonView"
  * const ui = View.compose({
  *   views: Layer.mergeAll(View.bind(Group.kind, GroupCard), WebDashboardViews.layer),
- *   navigator: Navigator.history(ServicesHub),
+ *   router: Router.history(ServicesHub),
  * })
  * <RuntimeProvider runtime={runtime}>
  *   <ui.Provider>
@@ -1067,7 +1069,7 @@ export const useGridMembers = (): ReadonlyArray<{
  */
 export const compose = <VR, VE,>(options: {
   readonly views: Layer.Layer<VR, VE, never>;
-  readonly navigator: Layer.Layer<Navigator.Navigator>;
+  readonly router: Layer.Layer<Router.Router>;
 }): ReturnType<typeof react<VR, VE>> & {
   readonly Provider: (props: {
     readonly children: React.ReactNode;
@@ -1075,14 +1077,14 @@ export const compose = <VR, VE,>(options: {
   readonly Grid: () => React.ReactElement;
   readonly Outlet: () => React.ReactElement | null;
   readonly useGridMembers: typeof useGridMembers;
-  readonly navigator: Navigator.Service;
+  readonly router: Router.Service;
 } => {
   const viewKit = react(options.views);
-  const nav = Effect.runSync(
+  const router = Effect.runSync(
     Effect.scoped(
       Effect.gen(function* () {
-        const ctx = yield* Layer.build(options.navigator);
-        return Context.get(ctx, Navigator.Navigator);
+        const ctx = yield* Layer.build(options.router);
+        return Context.get(ctx, Router.Router);
       }),
     ),
   );
@@ -1094,15 +1096,15 @@ export const compose = <VR, VE,>(options: {
       viewKit.Provider,
       null,
       React.createElement(
-        Navigator.Provider,
-        { value: nav, children: props.children },
+        Router.Provider,
+        { value: router, children: props.children },
       ),
     );
 
-  /** DOM grid — Card per member; click opens via Navigator. TUI: use {@link useGridMembers}. */
+  /** DOM grid — Card per member; click opens via Router. TUI: use {@link useGridMembers}. */
   const Grid = (): React.ReactElement => {
     const members = useGridMembers();
-    const navigation = Navigator.useNavigator();
+    const navigation = Router.useRouter();
     return React.createElement(
       React.Fragment,
       null,
@@ -1113,7 +1115,7 @@ export const compose = <VR, VE,>(options: {
             key: name,
             type: "button",
             className: "contents",
-            onClick: () => navigation.open(tag as Navigator.MemberTag),
+            onClick: () => navigation.open(tag as Router.MemberTag),
           },
           React.createElement(MatchCard, { tag, name }),
         ),
@@ -1123,7 +1125,7 @@ export const compose = <VR, VE,>(options: {
 
   /** Shell outlet — back/title + Detail, or page-sized logs/schedule content. */
   const Outlet = (): React.ReactElement | null => {
-    const navigation = Navigator.useNavigator();
+    const navigation = Router.useRouter();
     const selected = navigation.selected;
     if (selected === null) return null;
     const tag = selected as ViewTag;
@@ -1136,7 +1138,7 @@ export const compose = <VR, VE,>(options: {
         React.createElement(
           "div",
           { style: { display: "flex", gap: 8, alignItems: "center", marginBottom: 12 } },
-          React.createElement("button", { type: "button", onClick: () => navigation.back() }, "← back"),
+          React.createElement("button", { type: "button", onClick: () => navigation.up() }, "← back"),
           React.createElement("strong", null, `${title} · ${navigation.view}`),
         ),
         React.createElement(MatchPage, { tag, name: title }),
@@ -1149,7 +1151,7 @@ export const compose = <VR, VE,>(options: {
       React.createElement(
         "div",
         { style: { display: "flex", gap: 8, alignItems: "center", marginBottom: 12 } },
-        React.createElement("button", { type: "button", onClick: () => navigation.back() }, "← back"),
+        React.createElement("button", { type: "button", onClick: () => navigation.up() }, "← back"),
         React.createElement("strong", null, title),
       ),
       React.createElement(MatchDetail, { tag, name: title }),
@@ -1162,6 +1164,6 @@ export const compose = <VR, VE,>(options: {
     Grid,
     Outlet,
     useGridMembers,
-    navigator: nav,
+    router,
   };
 };

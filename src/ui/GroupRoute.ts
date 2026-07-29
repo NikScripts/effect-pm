@@ -1,8 +1,8 @@
 /**
  * @module ui/GroupRoute
  *
- * Legacy Group **path resolve** for Navigator (`resolveGroupRoute` — short-name
- * segment arrays). Retires when Navigator mounts a {@link ./Route} catalog.
+ * Group **path resolve** for Group-backed {@link ./Router} (`resolveGroupRoute`
+ * — short-name segment arrays → trail / selected / view).
  *
  * Not a route-declaration toolkit — use {@link ./Route} (`make` / `group` /
  * `get` / `addHttpApi`) for that.

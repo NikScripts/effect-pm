@@ -48,7 +48,7 @@ import {
 } from "../ui/data";
 import { dateFromMillis, fmtClock, fmtDayLabel, millisFromLocalInput, now, startOfDayMillis, toLocalInput } from "../ui/now";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
-import * as Navigator from "../ui/Navigator";
+import * as Router from "../ui/Router";
 import * as View from "../ui/View";
 import { kindOf as hyperlinkKindOf, kind as hyperlinkKind } from "../Hyperlink";
 import type { NodeReport } from "../FleetHealth";
@@ -383,13 +383,13 @@ export const GroupCard = (props: {
   /** Display name — the member key under which the parent group holds this subgroup. */
   readonly name: string;
   /**
-   * Optional — prefer {@link Navigator} (`useNavigator().open`). Kept for shells that
-   * have not mounted a Navigator Provider yet.
+   * Optional — prefer {@link Router} (`useRouter().open`). Kept for shells that
+   * have not mounted a Router Provider yet.
    */
   readonly onOpen?: (g: GroupNode) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`grp-${props.node.key}`);
-  const nav = Navigator.useNavigatorOption();
+  const nav = Router.useRouterOption();
   const members = Object.values(Group.members(props.node));
   const leaves = queueLeaves(props.node).slice(0, 4);
   const subs = members.filter((m): m is GroupNode => Group.isGroup(m));
@@ -467,7 +467,7 @@ export const Cell = (props: {
   readonly onOpenGroup: (g: GroupNode) => void;
 }): React.ReactElement => {
   const registry = useWidgets();
-  const nav = Navigator.useNavigatorOption();
+  const nav = Router.useRouterOption();
   const isGroup = Group.isGroup(props.member);
   const leaf = isLeafTag(props.member) ? props.member : null;
   const viewTag = isGroup ? props.member : leaf;
@@ -1584,7 +1584,7 @@ export const Deck = (props: {
  */
 export const DetailScreen = (props: {
   readonly title: string;
-  /** Omit when the shell Outlet owns back (View compose / Navigator). */
+  /** Omit when the shell Outlet owns back (View compose / Router). */
   readonly onBack?: () => void;
   /**
    * When `false`, render body only (Deck + readiness) — shell owns title/back.

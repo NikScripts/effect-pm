@@ -1,6 +1,6 @@
 # UI Route + Router
 
-**Locked (owner 2026-07-29)**
+**Locked (owner 2026-07-29)** · **Navigator cutover Eng’d**
 
 ## Catalog (`Route`) — data
 
@@ -35,6 +35,22 @@ router.match
 
 Swap transport by swapping the layer. Catalog stays a plain value (not a Service).
 
-## Not yet
+## Group dashboard
 
-Navigator cutover onto `Router` (dashboard still uses `Navigator` + Group path resolve).
+Pass a Group to `Router.memory` / `Router.history` — the layer builds the catalog with
+the same `Route.make` / `group` / `get` constructors (ordinary loops) and attaches
+short-name helpers (`open` / `openKey` / `up` / `openLogs` / `openHealth` / …).
+
+```ts
+View.compose({
+  views: …,
+  router: Router.history(ServicesHub), // or Router.memory(ServicesHub)
+})
+
+const router = Router.useRouter()
+router.open(HttpApi)           // → /Nwsl/HttpApi
+router.up()                    // pop one short-name segment
+router.back()                  // history / memory stack
+```
+
+`Navigator` is removed — use `Router`.

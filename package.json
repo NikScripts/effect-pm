@@ -168,10 +168,6 @@
       "types": "./dist/ui/NodeView.d.ts",
       "default": "./dist/ui/NodeView.js"
     },
-    "./ui/Navigator": {
-      "types": "./dist/ui/Navigator.d.ts",
-      "default": "./dist/ui/Navigator.js"
-    },
     "./ui/Route": {
       "types": "./dist/ui/Route.d.ts",
       "default": "./dist/ui/Route.js"

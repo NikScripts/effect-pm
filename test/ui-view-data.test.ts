@@ -11,7 +11,7 @@ import * as Node from "../src/Node";
 import * as Observe from "../src/Observe";
 import * as WorkPool from "../src/WorkPool";
 import * as Daemon from "../src/Daemon";
-import * as Navigator from "../src/ui/Navigator";
+import * as Router from "../src/ui/Router";
 import * as View from "../src/ui/View";
 import * as WorkPoolView from "../src/ui/WorkPoolView";
 import * as DaemonView from "../src/ui/DaemonView";
@@ -43,7 +43,7 @@ describe("RuntimeProvider + Observe.use", () => {
   it("compose has no data door", () => {
     const ui = View.compose({
       views,
-      navigator: Navigator.memory(Hub),
+      router: Router.memory(Hub),
     });
     expect("data" in ui).toBe(false);
   });

@@ -1,7 +1,7 @@
 /**
  * @module web/DashboardShell
  *
- * Web batteries shell over {@link ../ui/View.compose} — Cell grid, Navigator `/health`
+ * Web batteries shell over {@link ../ui/View.compose} — Cell grid, Router `/health`
  * node-status pages, {@link ./DashboardTopBar.DashboardDetailChrome}, LogBox / schedule.
  * {@link ./Dashboard} is the public one-liner over compose + this shell.
  */
@@ -37,7 +37,7 @@ import { useViewTransition, useViewTransitionStyle } from "./useViewTransition";
 import { Cell, displayName } from "./widgets";
 import { LogBox, LogsPage, SchedulePage } from "./resourcePages";
 import { isLeafTag, type LeafTag } from "../ui/widgetRegistry";
-import * as Navigator from "../ui/Navigator";
+import * as Router from "../ui/Router";
 import * as View from "../ui/View";
 import { DashboardDetailChrome, DashboardTopBar } from "./DashboardTopBar";
 import { HealthBoard, NodeBar, NodeDetail } from "./NodeStatus";
@@ -131,7 +131,7 @@ const DashboardInner = (props: {
   readonly group: GroupNode;
   readonly onOpenHealth: () => void;
 }): React.ReactElement => {
-  const nav = Navigator.useNavigator();
+  const nav = Router.useRouter();
   const Match = View.useMatch();
   const group = nav.group as GroupNode;
   const selected = nav.selected;
@@ -161,7 +161,7 @@ const DashboardInner = (props: {
     // the member key the selected leaf sits under — the display name the grid card used (mesh factory
     // tags share a generic key like "telemetry", so title off the member name, not the tag key).
     const selectedName = keys[trail.length - 1];
-    const toGrid = (id: string) => () => transition(`res-${id}`, () => nav.back());
+    const toGrid = (id: string) => () => transition(`res-${id}`, () => nav.up());
     const openLogs = (): void => transition("log-panel", () => nav.openKey("logs"));
     if (nav.view === "logs" || nav.view === "schedule") {
       if (isDaemonTag(selected) || isQueueTag(selected)) {
@@ -242,7 +242,7 @@ const DashboardInner = (props: {
         root={!canBack}
         onBack={
           canBack
-            ? () => transition(`grp-${group.key}`, () => nav.back())
+            ? () => transition(`grp-${group.key}`, () => nav.up())
             : undefined
         }
         trailing={
@@ -342,7 +342,7 @@ const NodeHyperlinkView = (props: {
 
 
 /**
- * Batteries shell: Navigator `/health` pages + group drill-down. Requires compose
+ * Batteries shell: Router `/health` pages + group drill-down. Requires compose
  * {@link View} Provider + {@link ./runtime.RuntimeProvider} above.
  *
  * @public
@@ -350,7 +350,7 @@ const NodeHyperlinkView = (props: {
 export const DashboardShell = (props: {
   readonly group: GroupNode;
 }): React.ReactElement => {
-  const nav = Navigator.useNavigator();
+  const nav = Router.useRouter();
   const [nodeTag, setNodeTag] = React.useState<unknown>(null);
   const openHyperlink = React.useCallback(
     (serviceKey: string): void => {
@@ -372,7 +372,7 @@ export const DashboardShell = (props: {
         return (
           <NodeDetail
             node={node}
-            onBack={() => nav.back()}
+            onBack={() => nav.up()}
             onOpenHyperlink={openHyperlink}
           />
         );
@@ -381,7 +381,7 @@ export const DashboardShell = (props: {
     return (
       <HealthBoard
         group={props.group}
-        onBack={() => nav.back()}
+        onBack={() => nav.up()}
         onOpenNode={(n) => nav.openNode(n.id)}
         onOpenHyperlink={openHyperlink}
       />

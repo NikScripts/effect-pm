@@ -24,7 +24,7 @@ import { RuntimeProvider } from "./runtime";
 import { ViewTransitionProvider } from "./useViewTransition";
 import { base } from "./widgets";
 import { type WidgetRegistry } from "../ui/widgetRegistry";
-import * as Navigator from "../ui/Navigator";
+import * as Router from "../ui/Router";
 import * as View from "../ui/View";
 import { WidgetsProvider } from "../ui/widgetsContext";
 import type { Widget } from "./widget-registry";
@@ -55,7 +55,7 @@ export const DashboardView = <R, ER>(props: {
           skins: WebDashboardViews.skins,
           views: props.views,
         }),
-        navigator: Navigator.history(props.group),
+        router: Router.history(props.group),
       }),
     [props.group, props.views],
   );

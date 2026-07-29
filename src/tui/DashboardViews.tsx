@@ -22,7 +22,7 @@ import {
   isTelemetryTag,
   type QueueTag,
 } from "../ui/data";
-import * as Navigator from "../ui/Navigator";
+import * as Router from "../ui/Router";
 import * as View from "../ui/View";
 import * as ApiMetricsView from "../ui/ApiMetricsView";
 import * as DaemonView from "../ui/DaemonView";
@@ -280,7 +280,7 @@ const DaemonDetailView: View.View = (props) => {
 
 const PoolPageView: View.View = (props) => {
   if (!isQueueTag(props.tag)) return null;
-  const nav = Navigator.useNavigator();
+  const nav = Router.useRouter();
   const bundle = Observe.use(props.tag, WorkPoolView.pack);
   const logsR = useAtomValue(bundle.logs);
   if (nav.view !== "logs") return null;
@@ -295,7 +295,7 @@ const PoolPageView: View.View = (props) => {
 
 const DaemonPageView: View.View = (props) => {
   if (!isDaemonTag(props.tag)) return null;
-  const nav = Navigator.useNavigator();
+  const nav = Router.useRouter();
   const bundle = Observe.use(props.tag, DaemonView.pack);
   const logsR = useAtomValue(bundle.logs);
   const scheduleR = useAtomValue(bundle.schedule);

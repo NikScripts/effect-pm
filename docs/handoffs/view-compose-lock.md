@@ -9,19 +9,19 @@ Owner overrides on lineage URL + F1 sizes-vs-content; everything else = prior re
 
 ## Locked
 
-### A. Chrome vs Navigator — **split (B)**
+### A. Chrome vs Router — **split (B)**
 
 - **`Chrome`** — layout only: `width`, `selected`, `cols`, `rows`, `editMode`
-- **`Navigator`** — `Context.Service` + Layer: `open` / `back` / path / overlays
-- Skins read nav via `useNavigator()`, not callback props
+- **`Router`** — `Context.Service` + Layer: `open` / `up` / path / overlays (history `back` separate)
+- Skins read nav via `useRouter()`, not callback props
 
 ### B. Matcher — **kit `Card` for Group + leaf**
 
 - Group = family skin (`View.bind(Group.kind, WebGroupCard)`); matcher is `ui.Card` / `useMatch().Card`
 - No `View.Member`; no `Cell` group fork
-- `Navigator.open(member: GroupTag | LeafTag)`
+- `Router.open(member: GroupTag | LeafTag)`
 
-### C. `View.compose` — **sugar over `View.react` + Navigator**
+### C. `View.compose` — **sugar over `View.react` + Router**
 
 - No second registry; no `runtime` inside compose (W4 — `RuntimeProvider` outside)
 - Returns `{ Provider, Grid, Outlet, for, data?, …react kit }`
@@ -55,18 +55,19 @@ Browser:
 ```
 
 ```ts
-interface Navigator {
+interface Router {
   /** Short-name path for URL / crumbs — ["Nwsl", "HttpApi"] */
   readonly path: ReadonlyArray<string>
   /** Wire keys when observe needs them — separate from URL */
   readonly wireLineage?: ReadonlyArray<string>
   readonly open: (member: GroupTag | LeafTag) => void
-  readonly back: () => void
+  readonly up: () => void   // pop one short-name segment
+  readonly back: () => void // history / memory stack
 }
 
-Navigator.toHref(["Nwsl", "HttpApi"])  // "/Nwsl/HttpApi"
-Navigator.history(ServicesHub)         // web
-Navigator.memory(ServicesHub)          // tests / TUI / embed
+Router.toHref(["Nwsl", "HttpApi"])  // "/Nwsl/HttpApi"
+Router.history(ServicesHub)         // web
+Router.memory(ServicesHub)          // tests / TUI / embed
 ```
 
 Cards never touch History.
@@ -99,9 +100,9 @@ View.bind(Daemon.kind, SchedulePack) // Pack.Card / .Detail / .Page internally
 ```
 
 **Not** new ViewKinds named `logs` / `schedule`.  
-Navigator may still say `openLogs(tag)` / `openSchedule(tag)` — that means “show this tag’s **page** (or detail) skin for that content,” not a fourth kind.
+Router may still say `openLogs(tag)` / `openSchedule(tag)` — that means “show this tag’s **page** (or detail) skin for that content,” not a fourth kind.
 
-**F2:** HealthBoard / NodeDetail are **Navigator root pages** — `/health`, `/health/<nodeId>` (`openHealth` / `openNode`). HyperService drill from the board stays a local stack (not a Group leaf path). `NodeStatusHost` remains for overlay embeds.
+**F2:** HealthBoard / NodeDetail are **Router root pages** — `/health`, `/health/<nodeId>` (`openHealth` / `openNode`). HyperService drill from the board stays a local stack (not a Group leaf path). `NodeStatusHost` remains for overlay embeds.
 
 ### G. Observe door
 
@@ -117,12 +118,12 @@ Navigator may still say `openLogs(tag)` / `openSchedule(tag)` — that means “
 - `ViewPack.null` **later** (not first slice)
 - Web + TUI **same slice**
 
-### I. Navigator defaults
+### I. Router defaults
 
 | Case | API |
 |---|---|
-| Web shell | `Navigator.history(group)` |
-| Tests / embed / TUI | `Navigator.memory(group)` |
+| Web shell | `Router.history(group)` |
+| Tests / embed / TUI | `Router.memory(group)` |
 
 ### J. Detail peel
 
@@ -146,24 +147,24 @@ First peel = header/body split; page-sized logs/schedule **Eng’d**.
 |------|-------|-------|
 | **0** Unhold batteries | **Eng’d** | `<Dashboard />` + `DashboardLayer.forCompose` + `View.compose` + `DashboardShell` supported |
 | **1** Top bar / detail chrome | **Eng’d** | `DashboardTopBar` + web `DashboardDetailChrome` public |
-| **2** Node status | **Eng’d (Navigator pages)** | `/health` + `/health/<nodeId>`; `NodeStatusHost` for overlay embeds |
+| **2** Node status | **Eng’d (Router pages)** | `/health` + `/health/<nodeId>`; `NodeStatusHost` for overlay embeds |
 | **3** Logs / schedule pages | **Eng’d** | `PoolPage` / `DaemonPage` + web `resourcePages`; shell uses `Match.Page` |
 
 ### K3. UI Route toolkit (2026-07-29)
 
-HttpApi-shaped `Route` catalog + `Router` service (`memory` / `history` layers over a `Route.Api`). See [`ui-routes-dream.md`](./ui-routes-dream.md). Navigator → Router cutover next.
+HttpApi-shaped `Route` catalog + `Router` service (`memory` / `history` over `Route.Api` or a Group). See [`ui-routes-dream.md`](./ui-routes-dream.md). **Navigator → Router cutover Eng’d.**
 
 ### L. Acceptance
 
-1. Group opens via kit `Card` + Navigator — no `Cell` group fork  
+1. Group opens via kit `Card` + Router — no `Cell` group fork  
 2. URL path = short member names (`/Nwsl/HttpApi`)  
 3. Default family Details body-only; shell owns back/title  
 4. `View.compose` runs hyperlink-web + TUI dashboard  
 5. WorkerPool example → `View.only` — **done** (`Dashboard views=` / hyperlink-web)  
 6. ViewKind stays `card | detail | page`; schedule/logs are **content** that fills sizes  
-7. Tests: `Navigator.memory` + Group card + short-name path + missing skin `R=never`
+7. Tests: `Router.memory(group)` + Group card + short-name path + missing skin `R=never`
 
-**Changeset:** minor if `Chrome` drops nav callbacks; migration → `useNavigator()`.
+**Changeset:** minor — `Navigator` removed; migration → `Router.useRouter()` / `View.compose({ router })`.
 
 ---
 
@@ -193,7 +194,7 @@ const ui = View.compose({
     skins: WebDashboardViews.skins,
     views: View.only(WorkerPool, WorkerPoolCard),
   }),
-  navigator: Navigator.history(ServicesHub),
+  router: Router.history(ServicesHub),
 })
 <ui.Provider>
   <RuntimeProvider runtime={runtime}>

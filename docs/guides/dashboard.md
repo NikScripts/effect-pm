@@ -36,7 +36,7 @@ const ui = View.compose({
     skins: WebDashboardViews.skins,
     views: appViews,
   }),
-  navigator: Navigator.history(ServicesHub),
+  router: Router.history(ServicesHub),
 })
 <ui.Provider>
   <RuntimeProvider runtime={runtime}>
@@ -56,16 +56,16 @@ Reuse without forking the shell:
 | `DashboardTopBar` | `DashboardTopBar` | Grid title / crumb strip |
 | `DashboardDetailChrome` | — | Detail back + title (lock J) |
 | `NodeBar` / `HealthBoard` / `NodeDetail` | `NodeMark` | Node status pieces |
-| `Navigator.openHealth` / `.openNode` | — | URL pages `/health`, `/health/<nodeId>` |
+| `Router.openHealth` / `.openNode` | — | URL pages `/health`, `/health/<nodeId>` |
 | `PoolPage` / `DaemonPage` | same | `/…/logs`, `/…/schedule` via `Match.Page` |
-| `NodeStatusHost` | — | Overlay stack when no Navigator |
+| `NodeStatusHost` | — | Overlay stack when no Router |
 
 ```tsx
 // Batteries — die opens /health (History); node card → /health/<nodeId>
-nav.openHealth()
-nav.openNode(node.id)
+router.openHealth()
+router.openNode(node.id)
 
-// Overlay embed (no Navigator) — hyperlink-ts/web/NodeStatus
+// Overlay embed (no Router) — hyperlink-ts/web/NodeStatus
 import { NodeBar, NodeStatusHost, DashboardTopBar } from "hyperlink-ts/web"
 
 <NodeStatusHost group={ServicesHub}>

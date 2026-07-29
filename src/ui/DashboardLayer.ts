@@ -16,7 +16,7 @@
  *     skins: WebDashboardViews.skins,
  *     views: appViews,
  *   }),
- *   navigator: Navigator.history(ServicesHub),
+ *   router: Router.history(ServicesHub),
  * })
  * ```
  */

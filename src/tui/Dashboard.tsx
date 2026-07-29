@@ -23,7 +23,7 @@ import {
 } from "../ui/data";
 import * as DashboardLayer from "../ui/DashboardLayer";
 import { RegistryProvider } from "../ui/atom-react";
-import * as Navigator from "../ui/Navigator";
+import * as Router from "../ui/Router";
 import * as View from "../ui/View";
 import { WidgetsProvider } from "../ui/widgetsContext";
 import { base, type TuiWidgetRegistry } from "./cellWidgets";
@@ -56,10 +56,10 @@ export const Dashboard = <R, ER>(props: {
         skins: TuiDashboardViews.skins,
         views: props.views,
       }),
-      navigator: Navigator.memory(props.group),
+      router: Router.memory(props.group),
     });
     for (const key of props.path ?? []) {
-      composed.navigator.openKey(key);
+      composed.router.openKey(key);
     }
     return composed;
   }, [props.group, props.views, props.path]);

@@ -28,7 +28,7 @@ import {
   type QueueTag,
 } from "../ui/data";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
-import * as Navigator from "../ui/Navigator";
+import * as Router from "../ui/Router";
 import * as View from "../ui/View";
 import { Cell } from "./cellWidgets";
 import { DashboardTopBar } from "./DashboardTopBar";
@@ -202,7 +202,7 @@ export const DashboardShell = (props: {
   readonly group: GroupNode;
 }): React.ReactElement => {
   const { cols, rows } = useTerminalSize();
-  const nav = Navigator.useNavigator();
+  const nav = Router.useRouter();
   const [sel, setSel] = React.useState(0);
   const [editMode, setEditMode] = React.useState(false);
   const [cmd, setCmd] = React.useState<string | null>(null);
@@ -357,7 +357,7 @@ export const DashboardShell = (props: {
       return;
     }
     if (key.escape || key.backspace || key.delete) {
-      nav.back();
+      nav.up();
       return;
     }
     if (nav.selected !== null) {

@@ -68,7 +68,7 @@ export type MemberTag = unknown;
  *
  * Shell provides one of these; cards never import History.
  */
-export interface Navigator {
+export interface Router {
   readonly path: ReadonlyArray<string>;
   readonly open: (member: MemberTag) => void;
   readonly back: () => void;
@@ -77,25 +77,25 @@ export interface Navigator {
 }
 
 /**
- * Thin Dashboard = merge views + provide navigator (+ optional runtime).
+ * Thin Dashboard = merge views + provide router (+ optional runtime).
  * Kit `<Dashboard />` is the public one-liner over this seam (unheld).
  *
  * ```ts
  * const ui = View.compose({
  *   views: Layer.mergeAll(View.group(Hub), WebDashboardViews.layer),
- *   navigator: Navigator.memory(Hub),       // or Navigator.history()
+ *   router: Router.memory(Hub),       // or Router.history()
  * })
  *
  * <ui.Provider>
  *   <ui.Grid />           // ui.Card per member — Group included
- *   <ui.Outlet />         // Detail | overlays from navigator
+ *   <ui.Outlet />         // Detail | overlays from router
  * </ui.Provider>
  * ```
  */
 export declare const ViewCompose: {
   readonly compose: <E>(options: {
     readonly views: Layer.Layer<unknown, E, never>;
-    readonly navigator: Layer.Layer<Navigator, never, never>;
+    readonly router: Layer.Layer<Router, never, never>;
   }) => {
     readonly Provider: (props: { readonly children: React.ReactNode }) => React.ReactElement;
     readonly Grid: () => React.ReactElement | null;
@@ -118,26 +118,26 @@ declare namespace React {
 // =============================================================================
 
 /**
- * **WILD 1 — `Navigator` as Context.Service (not callback bag)**
+ * **WILD 1 — `Router` as Context.Service (not callback bag)**
  *
  * Why: ChromeV1 callbacks don’t compose (who wins `onOpen`?). A service Layer
  * does — same reason View skins are Layers. Steal Effect DI; invent nothing
  * about URLs.
  *
  * ```ts
- * class Navigator extends Context.Service<Navigator, NavigatorApi>()("…/Navigator") {}
- * Layer.succeed(Navigator, Navigator.memory(Hub))
- * // skin: const nav = useNavigator(); nav.open(tag)
+ * class Router extends Context.Service<Router, RouterApi>()("…/Router") {}
+ * Layer.succeed(Router, Router.memory(Hub))
+ * // skin: const nav = useRouter(); nav.open(tag)
  * ```
  */
-export type WildNavigatorService = Navigator;
+export type WildRouterService = Router;
 
 /**
  * **WILD 2 — LineagePath (wire lineage as the address)**
  *
  * Steal `LogContext` / node status lineage keys. Route identity =
  * `ReadonlyArray<serviceKey>`, not a bespoke URL DSL. `useGroupRoute` already
- * walks Group membership — expose that as `Navigator.lineage` and let crumbs /
+ * walks Group membership — expose that as `Router.lineage` and let crumbs /
  * deep links serialize the same array.
  *
  * Extra value: PiP logs, Soft followers, and HealthBoard already speak lineage;
@@ -158,7 +158,7 @@ export type LineagePath = ReadonlyArray<string>;
  *
  * ```ts
  * View.bind(WorkPool.kind, QueueLogsPage, { as: "page" })
- * // navigator.openLogs(tag) → Outlet renders ui.Page
+ * // router.openLogs(tag) → Outlet renders ui.Page
  * ```
  */
 export type WildOverlayKind = "page"; // or extend ViewKind later — owner call
@@ -189,7 +189,7 @@ export declare const ViewMember: (props: {
  * dumb TSX; apps can read data without mounting a card.
  *
  * ```ts
- * const ui = View.compose({ views, navigator })
+ * const ui = View.compose({ views, router })
  * const box = ui.data(BoxScoreQueue)   // { status, metrics, logs, … }
  * <ui.for(BoxScoreQueue).Card />
  * ```
@@ -219,7 +219,7 @@ export type WildViewPack = "web" | "tui" | "null";
 // =============================================================================
 
 /**
- * 1. Extend `Chrome` with `onOpen(member)` (or land Wild 1 Navigator service).
+ * 1. Extend `Chrome` with `onOpen(member)` (or land Wild 1 Router service).
  * 2. Group family Card skin + `View.Member` (Wild 4) — delete Dashboard Cell fork.
  * 3. Peel DetailScreen → body skins; shell keeps header (STEAL path).
  * 4. `View.compose` thin wrapper over today’s DashboardView (PROPOSED).
@@ -228,7 +228,7 @@ export type WildViewPack = "web" | "tui" | "null";
  * HOLD kit Dashboard product export until 1–4 are boring.
  */
 export const engOrder = [
-  "chrome-onOpen-or-Navigator",
+  "chrome-onOpen-or-Router",
   "group-card-as-View-Member",
   "peel-DetailScreen",
   "View.compose-thin-shell",

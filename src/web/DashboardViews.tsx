@@ -25,7 +25,7 @@ import * as FleetHealthView from "../ui/FleetHealthView";
 import * as GateView from "../ui/GateView";
 import * as GroupView from "../ui/GroupView";
 import * as HyperlinkView from "../ui/HyperlinkView";
-import * as Navigator from "../ui/Navigator";
+import * as Router from "../ui/Router";
 import * as PriorityView from "../ui/PriorityView";
 import * as ShardMapView from "../ui/ShardMapView";
 import * as TelemetryView from "../ui/TelemetryView";
@@ -166,8 +166,8 @@ const PoolDetailView: View.View = (props) => {
 
 const PriorityDetailView: View.View = (props) => {
   if (!isPriorityTag(props.tag)) return null;
-  // Shell owns back/title; body-only when Navigator is present (lock J).
-  const nav = Navigator.useNavigatorOption();
+  // Shell owns back/title; body-only when Router is present (lock J).
+  const nav = Router.useRouterOption();
   return (
     <PriorityDetailWidget
       tag={props.tag}
@@ -179,7 +179,7 @@ const PriorityDetailView: View.View = (props) => {
 
 const DaemonDetailView: View.View = (props) => {
   if (!isDaemonTag(props.tag)) return null;
-  const nav = Navigator.useNavigatorOption();
+  const nav = Router.useRouterOption();
   const bundle = Observe.use(props.tag, DaemonView.pack);
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
@@ -230,7 +230,7 @@ const ApiDetailView: View.View = (props) => {
 
 const FleetDetailView: View.View = (props) => {
   if (!isFleetHealthTag(props.tag)) return null;
-  const nav = Navigator.useNavigatorOption();
+  const nav = Router.useRouterOption();
   return (
     <FleetHealthDetailWidget
       tag={props.tag}
@@ -242,7 +242,7 @@ const FleetDetailView: View.View = (props) => {
 
 const TelemetryDetailView: View.View = (props) => {
   if (!isTelemetryTag(props.tag)) return null;
-  const nav = Navigator.useNavigatorOption();
+  const nav = Router.useRouterOption();
   return (
     <TelemetryDetailWidget
       tag={props.tag}
@@ -254,7 +254,7 @@ const TelemetryDetailView: View.View = (props) => {
 
 const ShardMapDetailView: View.View = (props) => {
   if (!isShardMapTag(props.tag)) return null;
-  const nav = Navigator.useNavigatorOption();
+  const nav = Router.useRouterOption();
   return (
     <ShardMapDetailWidget
       tag={props.tag}
@@ -266,7 +266,7 @@ const ShardMapDetailView: View.View = (props) => {
 
 const GateDetailView: View.View = (props) => {
   if (!isGateTag(props.tag)) return null;
-  const nav = Navigator.useNavigatorOption();
+  const nav = Router.useRouterOption();
   return (
     <GateDetailWidget
       tag={props.tag}
@@ -279,20 +279,20 @@ const GateDetailView: View.View = (props) => {
 /** WorkPool page — `/…/logs`. */
 const PoolPageView: View.View = (props) => {
   if (!isQueueTag(props.tag)) return null;
-  const nav = Navigator.useNavigator();
+  const nav = Router.useRouter();
   if (nav.view !== "logs") return null;
-  return <LogsPage tag={props.tag} onClose={() => nav.back()} />;
+  return <LogsPage tag={props.tag} onClose={() => nav.up()} />;
 };
 
 /** Daemon page — `/…/logs` or `/…/schedule`. */
 const DaemonPageView: View.View = (props) => {
   if (!isDaemonTag(props.tag)) return null;
-  const nav = Navigator.useNavigator();
+  const nav = Router.useRouter();
   if (nav.view === "logs") {
-    return <LogsPage tag={props.tag} onClose={() => nav.back()} />;
+    return <LogsPage tag={props.tag} onClose={() => nav.up()} />;
   }
   if (nav.view === "schedule") {
-    return <SchedulePage tag={props.tag} onClose={() => nav.back()} />;
+    return <SchedulePage tag={props.tag} onClose={() => nav.up()} />;
   }
   return null;
 };

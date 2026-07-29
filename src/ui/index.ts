@@ -14,7 +14,7 @@
  */
 export * from "./atom-react";
 export * from "./GroupRoute";
-/** Legacy Group path resolve (Navigator); route declaration is {@link ./Route}. */
+/** Legacy Group path resolve (Router); route declaration is {@link ./Route}. */
 export * as GroupRoute from "./GroupRoute";
 export * from "./data";
 export * from "./cache";
@@ -28,11 +28,12 @@ export {
 } from "./runtime";
 /** Keyed Spec-based view registry (`View.Tag` / `View.react`) — prefer `import * as View`. */
 export * as View from "./View";
-/** Parent-owned Group navigation (memory / history) for View compose. */
-export * as Navigator from "./Navigator";
 /** UI routing toolkit — HttpApi-shaped make/group/get/match/urlBuilder. */
 export * as Route from "./Route";
-/** Runtime navigation over a Route catalog — memory / history layers. */
+/**
+ * Runtime navigation over a Route catalog (`memory` / `history`); Group dashboards
+ * pass a Group and get short-name `open` / `up` / `path` helpers too.
+ */
 export * as Router from "./Router";
 /** Shared Group card View handle + contribution Layer (no platform TSX). */
 export * as GroupView from "./GroupView";
