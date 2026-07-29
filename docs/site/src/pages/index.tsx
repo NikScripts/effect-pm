@@ -15,7 +15,8 @@ export default function LandingPage() {
         path="/"
       />
       <div className="landing-atmosphere" aria-hidden="true">
-        <div className="landing-glow" />
+        <div className="landing-glow landing-glow-top" />
+        <div className="landing-glow landing-glow-bottom" />
       </div>
       <section className="landing">
         <div className="landing-inner">
