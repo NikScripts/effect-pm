@@ -3,16 +3,18 @@
  *
  * TUI (Ink) skins for shared {@link WorkPoolView} handles — `View.provide` only.
  */
-import { Box } from "ink";
+import { Box, Text } from "ink";
 import * as React from "react";
 import { Option, Layer } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useAtomValue } from "../ui/atom-react";
 import { isQueueTag, type QueueTag } from "../ui/data";
+import * as Navigator from "../ui/Navigator";
 import * as View from "../ui/View";
 import * as Observe from "../Observe";
 import * as WorkPoolView from "../ui/WorkPoolView";
 import { QueueCell } from "./cellWidgets";
+import { LogTail } from "./focusWidgets";
 import {
   displayName,
   PageXL,
@@ -88,16 +90,34 @@ const PoolDetailView: View.View = (props) => {
   );
 };
 
+const PoolPageView: View.View = (props) => {
+  if (!isQueueTag(props.tag)) return null;
+  const nav = Navigator.useNavigator();
+  const bundle = Observe.use(props.tag, WorkPoolView.pack);
+  const logsR = useAtomValue(bundle.logs);
+  if (nav.view !== "logs") return null;
+  const logs = AsyncResult.isSuccess(logsR) ? logsR.value : [];
+  return (
+    <Box flexDirection="column">
+      <Text>
+        logs · {props.name ?? displayName(props.tag.key)} · Esc back
+      </Text>
+      <LogTail logs={logs} visible={20} />
+    </Box>
+  );
+};
+
 /**
- * TUI TSX provides for {@link WorkPoolView.PoolCard} / {@link WorkPoolView.PoolDetail}.
+ * TUI TSX provides for {@link WorkPoolView} card / detail / page.
  *
  * @public
  */
 export const skins: Layer.Layer<
-  WorkPoolView.PoolCard | WorkPoolView.PoolDetail
+  WorkPoolView.PoolCard | WorkPoolView.PoolDetail | WorkPoolView.PoolPage
 > = Layer.mergeAll(
   View.provide(WorkPoolView.PoolCard, PoolCardView),
   View.provide(WorkPoolView.PoolDetail, PoolDetailView),
+  View.provide(WorkPoolView.PoolPage, PoolPageView),
 );
 
 /**
@@ -110,4 +130,4 @@ export const layer = WorkPoolView.layer.pipe(
   Layer.provideMerge(View.base),
 );
 
-export { PoolCard, PoolDetail } from "../ui/WorkPoolView";
+export { PoolCard, PoolDetail, PoolPage } from "../ui/WorkPoolView";

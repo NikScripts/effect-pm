@@ -1,6 +1,6 @@
 # Examples IA reorg — replace `forms/` + confusing names
 
-**Status:** **Eng’d** (2026-07-29) — tree + hub + scripts + Twoslash globs on work branch.  
+**Status:** **Eng’d** (2026-07-29) — tree + hub + scripts + Twoslash globs; polish pass (Run headers, guide cites, README discovery).  
 **Branch:** `cursor/hyperservice-open-deps-5679`.  
 **Supersedes naming in:** [`agent-01-examples-book.md`](./agent-01-examples-book.md); apps live under `examples/apps/*` (update E5 plan paths when locking).
 

@@ -57,6 +57,7 @@ Reuse without forking the shell:
 | `DashboardDetailChrome` | — | Detail back + title (lock J) |
 | `NodeBar` / `HealthBoard` / `NodeDetail` | `NodeMark` | Node status pieces |
 | `Navigator.openHealth` / `.openNode` | — | URL pages `/health`, `/health/<nodeId>` |
+| `PoolPage` / `DaemonPage` | same | `/…/logs`, `/…/schedule` via `Match.Page` |
 | `NodeStatusHost` | — | Overlay stack when no Navigator |
 
 ```tsx

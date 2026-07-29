@@ -1,7 +1,7 @@
 /**
  * @module examples/gate/unit-and-input
  *
- * Gate unit + input forms. Run: `pnpm run example:gate`
+ * Gate unit + input forms. Run: `pnpm run example:gate-unit-and-input`
  *
  * Docs: `docs/examples/gate/unit-and-input.md` includes this file;
  * cut markers hide the module header and demo harness.

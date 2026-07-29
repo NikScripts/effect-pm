@@ -1,5 +1,5 @@
 /**
- * @module examples/apps/tui/dashboard
+ * @module examples/apps/tui/dashboard-app
  *
  * Thin example wrapper around the shipped Group TUI {@link Dashboard} — same `Fleet` +
  * `appLayer` the web dashboard uses. Prefer importing `Dashboard` from `hyperlink-ts/tui`

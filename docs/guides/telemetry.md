@@ -127,6 +127,6 @@ Telemetry does not retain, alert, or query history. Wire `@effect/opentelemetry`
 collectors; keep Telemetry when you want the registry on a Hyperlink tag your CLI / TUI / web already
 speak.
 
-Runnable form: `pnpm run example:telemetry-fleet-glass`. For readiness across the same mesh
+Runnable form: `pnpm run example:fleet-telemetry-glass`. For readiness across the same mesh
 (Reachable / Unreachable, not metric skip-omit), see [Fleet Health](/docs/fleet-health). Also
 [Fleets & Peers](/docs/fleets-and-peers).

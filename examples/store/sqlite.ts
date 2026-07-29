@@ -2,7 +2,7 @@
  * @module examples/store/sqlite
  *
  * SQLite-backed {@link Store.Service} — rows survive reconnections.
- * Run: `npx tsx examples/store/store-sqlite.ts`
+ * Run: `npx tsx examples/store/sqlite.ts`
  *
  * Docs: `docs/examples/store/sqlite.md` includes this file;
  * cut markers hide the module header and runner epilogue.

@@ -28,6 +28,8 @@ export {
 export * as View from "./View";
 /** Parent-owned Group navigation (memory / history) for View compose. */
 export * as Navigator from "./Navigator";
+/** UI routing toolkit — destinations, nests, app, match, urlBuilder. */
+export * as Route from "./Route";
 /** Shared Group card View handle + contribution Layer (no platform TSX). */
 export * as GroupView from "./GroupView";
 /** Shared WorkPool View handles + observe pack (no platform TSX). */

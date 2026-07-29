@@ -14,7 +14,7 @@ import * as Node from "../src/Node";
 // `fleetActive` collapsed to own-only. Here we prove, over a real two-server wire, that (1) the
 // default builder folds across peers, and (2) an injected builder is invoked with each peer's url —
 // the exact seam that lets `protocolWebsocket` reach ws-serving peers (proven end-to-end, over real
-// websockets, by the hyperlink-web example — an isolated two-ws-server harness deadlocks in-process).
+// websockets, by the examples/apps/web example — an isolated two-ws-server harness deadlocks in-process).
 const PORT_A = 7913;
 const PORT_B = 7914;
 

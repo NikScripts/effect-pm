@@ -37,6 +37,7 @@ export { NodeStatusHost } from "./NodeStatus";
 // NodeBar / HealthBoard / NodeDetail also on this barrel via `./widgets`; prefer
 // `import { NodeBar, NodeStatusHost, … } from "hyperlink-ts/web"` or
 // `import * as NodeStatus from "hyperlink-ts/web/NodeStatus"`.
+export { LogBox, LogsPage, SchedulePage } from "./resourcePages";
 export * from "./debug-console";
 export { cn } from "./cn";
 // Platform skins: `import * as WorkPoolView from "hyperlink-ts/web/WorkPoolView"`

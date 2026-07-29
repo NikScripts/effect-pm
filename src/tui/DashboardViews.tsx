@@ -4,7 +4,7 @@
  * TUI (Ink) skins for all default Dashboard View families — `View.provide` only.
  * Ready {@link layer} for {@link View.react}.
  */
-import { Box } from "ink";
+import { Box, Text } from "ink";
 import * as React from "react";
 import { Option, Layer } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
@@ -22,6 +22,7 @@ import {
   isTelemetryTag,
   type QueueTag,
 } from "../ui/data";
+import * as Navigator from "../ui/Navigator";
 import * as View from "../ui/View";
 import * as ApiMetricsView from "../ui/ApiMetricsView";
 import * as DaemonView from "../ui/DaemonView";
@@ -41,7 +42,7 @@ import {
   PriorityCell,
   QueueCell,
 } from "./cellWidgets";
-import { FocusedDaemon, FocusedPriority } from "./focusWidgets";
+import { FocusedDaemon, FocusedPriority, LogTail } from "./focusWidgets";
 import {
   ApiCell,
   FocusedApi,
@@ -277,6 +278,48 @@ const DaemonDetailView: View.View = (props) => {
   );
 };
 
+const PoolPageView: View.View = (props) => {
+  if (!isQueueTag(props.tag)) return null;
+  const nav = Navigator.useNavigator();
+  const bundle = Observe.use(props.tag, WorkPoolView.pack);
+  const logsR = useAtomValue(bundle.logs);
+  if (nav.view !== "logs") return null;
+  const logs = AsyncResult.isSuccess(logsR) ? logsR.value : [];
+  return (
+    <Box flexDirection="column">
+      <Text>logs · {props.name ?? displayName(props.tag.key)} · Esc back</Text>
+      <LogTail logs={logs} visible={20} />
+    </Box>
+  );
+};
+
+const DaemonPageView: View.View = (props) => {
+  if (!isDaemonTag(props.tag)) return null;
+  const nav = Navigator.useNavigator();
+  const bundle = Observe.use(props.tag, DaemonView.pack);
+  const logsR = useAtomValue(bundle.logs);
+  const scheduleR = useAtomValue(bundle.schedule);
+  if (nav.view === "logs") {
+    const logs = AsyncResult.isSuccess(logsR) ? logsR.value : [];
+    return (
+      <Box flexDirection="column">
+        <Text>logs · {props.name ?? displayName(props.tag.key)} · Esc back</Text>
+        <LogTail logs={logs} visible={20} />
+      </Box>
+    );
+  }
+  if (nav.view === "schedule") {
+    const entries = AsyncResult.isSuccess(scheduleR) ? scheduleR.value : [];
+    return (
+      <Box flexDirection="column">
+        <Text>schedule · {props.name ?? displayName(props.tag.key)} · Esc back</Text>
+        <Text dimColor>{entries.length} window(s)</Text>
+      </Box>
+    );
+  }
+  return null;
+};
+
 const ApiDetailView: View.View = (props) => {
   if (!isApiTag(props.tag)) return null;
   const chrome = View.useChrome();
@@ -351,10 +394,12 @@ export const skins = Layer.mergeAll(
   View.provide(GroupView.GroupCard, GroupCardView),
   View.provide(WorkPoolView.PoolCard, PoolCardView),
   View.provide(WorkPoolView.PoolDetail, PoolDetailView),
+  View.provide(WorkPoolView.PoolPage, PoolPageView),
   View.provide(PriorityView.PriorityCard, PriorityCardView),
   View.provide(PriorityView.PriorityDetail, PriorityDetailView),
   View.provide(DaemonView.DaemonCard, DaemonCardView),
   View.provide(DaemonView.DaemonDetail, DaemonDetailView),
+  View.provide(DaemonView.DaemonPage, DaemonPageView),
   View.provide(ApiMetricsView.ApiCard, ApiCardView),
   View.provide(ApiMetricsView.ApiDetail, ApiDetailView),
   View.provide(FleetHealthView.FleetCard, FleetCardView),

@@ -7,11 +7,11 @@
  *
  * ```bash
  * # memory stand-in
- * pnpm exec tsx examples/gate-rate-limit-fleet.ts
+ * pnpm run example:gate-rate-limit-fleet
  *
  * # real Redis (compose or local redis-server)
  * docker compose -f docker-compose.redis.yml up -d
- * REDIS_URL=redis://127.0.0.1:6379 pnpm exec tsx examples/gate-rate-limit-fleet.ts
+ * REDIS_URL=redis://127.0.0.1:6379 pnpm run example:gate-rate-limit-fleet
  * ```
  *
  * Docs: `docs/examples/gate/rate-limit-fleet.md` includes this file;

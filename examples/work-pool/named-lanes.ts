@@ -5,7 +5,7 @@
  * `layerMemory` soft-defaults in-memory Storage (R fulfilled). For durable journals + Logs,
  * Soft-override: `WorkPool.layer(…).pipe(Layer.provideMerge(AppStore.layer…))`
  * — see `docs/guides/stores.md`.
- * Run: `pnpm run example:workpool-priority`
+ * Run: `pnpm run example:work-pool-named-lanes`
  *
  * Docs: `docs/examples/work-pool/named-lanes.md` includes this file via Twoslash;
  * `// ---cut---` hides this module header from the page (Twoslash still type-checks it).

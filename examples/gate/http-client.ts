@@ -1,7 +1,7 @@
 /**
  * @module examples/gate/http-client
  *
- * HttpClientGate on a fetch client. Run: `pnpm run example:http-client-gate`
+ * HttpClientGate on a fetch client. Run: `pnpm run example:gate-http-client`
  *
  * Docs: `docs/examples/gate/http-client.md` includes this file;
  * cut markers hide the module header and demo harness.

@@ -6,7 +6,7 @@
  * Elevated {@link Telemetry} — leaf snapshot for this node, fleet folds via peers.
  * Node ids are Context service keys (`app/Droplet…`).
  *
- * Run: `pnpm run example:telemetry-fleet-glass`
+ * Run: `pnpm run example:fleet-telemetry-glass`
  *
  * Docs: `docs/examples/fleet/telemetry-glass.md` includes this file;
  * cut markers hide the module header and demo harness.

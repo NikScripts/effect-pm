@@ -4,7 +4,7 @@
  * WorkPool priority lanes, in-flight dedup, auto re-enqueue (`attempts`), and lifecycle
  * observation via `events` + `Hyperlink.runForEachTag`.
  *
- * Tip surface: `Tag` + `layer` (see Queues guide). Run: `pnpm run example:workpool-retry`
+ * Tip surface: `Tag` + `layer` (see Queues guide). Run: `pnpm run example:work-pool-priority-retry`
  *
  * Docs: `docs/examples/work-pool/priority-retry.md` includes this file via Twoslash;
  * `// ---cut---` hides this module header from the page (Twoslash still type-checks it).
