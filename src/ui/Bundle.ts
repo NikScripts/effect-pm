@@ -2,9 +2,9 @@
  * @module ui/Bundle
  *
  * Namespaced UI observe door — `Bundle.observe(tag)` → family `*Bundle`.
- * Thin Tags; free helper (see principles.handles-stay-thin). Builds on the same
- * `*Bundle(runtime, tag)` memoization as Dashboard. Prefer this over deprecated
- * `use*Bundle` / `ui.data.*` — one public door for library and apps.
+ * Thin Tags; free helper (see principles.handles-stay-thin). Canonical path for
+ * library Dashboard and apps: builders in {@link ./data} + {@link ./runtime.useRuntime}.
+ * Deprecated `use*Bundle` / `ui.data.*` are aliases only.
  *
  * @example
  * ```ts
@@ -13,6 +13,10 @@
  * ```
  */
 import {
+  apiBundle,
+  daemonBundle,
+  fleetHealthBundle,
+  gateBundle,
   isApiTag,
   isDaemonTag,
   isFleetHealthTag,
@@ -21,6 +25,11 @@ import {
   isQueueTag,
   isShardMapTag,
   isTelemetryTag,
+  nodeStatusBundle,
+  priorityBundle,
+  queueBundle,
+  shardMapBundle,
+  telemetryBundle,
   type ApiBundle,
   type ApiTag,
   type DaemonBundle,
@@ -40,24 +49,12 @@ import {
   type TelemetryBundle,
   type TelemetryTag,
 } from "./data";
-import {
-  useApiBundle,
-  useDaemonBundle,
-  useFleetHealthBundle,
-  useGateBundle,
-  useNodeBundle,
-  usePriorityBundle,
-  useQueueBundle,
-  useRuntime,
-  useShardMapBundle,
-  useTelemetryBundle,
-  type DataTag,
-} from "./runtime";
+import { useRuntime, type DataTag } from "./runtime";
 
 /**
  * Observe / control atoms for a Hyperlink Tag (or node), under {@link RuntimeProvider}.
  *
- * Kind-checked: wrong family throws. Prefer this over `ui.data.*` / `useQueueBundle`.
+ * Kind-checked: wrong family throws. This is the public door (not `use*Bundle` / `ui.data`).
  *
  * @public
  */
@@ -81,14 +78,15 @@ export function observe(
   | TelemetryBundle
   | ShardMapBundle
   | GateBundle {
-  if (isQueueTag(tag)) return useQueueBundle(tag);
-  if (isPriorityTag(tag)) return usePriorityBundle(tag);
-  if (isDaemonTag(tag)) return useDaemonBundle(tag);
-  if (isApiTag(tag)) return useApiBundle(tag);
-  if (isFleetHealthTag(tag)) return useFleetHealthBundle(tag);
-  if (isTelemetryTag(tag)) return useTelemetryBundle(tag);
-  if (isShardMapTag(tag)) return useShardMapBundle(tag);
-  if (isGateTag(tag)) return useGateBundle(tag);
+  const rt = useRuntime();
+  if (isQueueTag(tag)) return queueBundle(rt, tag);
+  if (isPriorityTag(tag)) return priorityBundle(rt, tag);
+  if (isDaemonTag(tag)) return daemonBundle(rt, tag);
+  if (isApiTag(tag)) return apiBundle(rt, tag);
+  if (isFleetHealthTag(tag)) return fleetHealthBundle(rt, tag);
+  if (isTelemetryTag(tag)) return telemetryBundle(rt, tag);
+  if (isShardMapTag(tag)) return shardMapBundle(rt, tag);
+  if (isGateTag(tag)) return gateBundle(rt, tag);
   throw new Error(`Bundle.observe: no family for tag ${tag.key}`);
 }
 
@@ -97,7 +95,7 @@ export function observe(
  *
  * @public
  */
-export const node = (ref: NodeRef): NodeBundle => useNodeBundle(ref);
+export const node = (ref: NodeRef): NodeBundle => nodeStatusBundle(useRuntime(), ref);
 
 /**
  * Underlying `Atom.AtomRuntime` from {@link RuntimeProvider}.

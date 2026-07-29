@@ -2,8 +2,8 @@
  * @module ui/runtime
  *
  * Shared reactive runtime context for web + TUI. `<Dashboard>` / compose apps provide
- * `Atom.runtime(layer)` here; {@link data} (and the `use*Bundle` hooks) read it — no
- * parallel atoms, no runtime baked into {@link ./View.compose}.
+ * `Atom.runtime(layer)` here; {@link ./Bundle.observe} (and deprecated `use*Bundle` /
+ * {@link data}) read it — no parallel atoms, no runtime baked into {@link ./View.compose}.
  */
 import * as React from "react";
 import type { Effect } from "effect";

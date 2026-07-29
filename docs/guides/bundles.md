@@ -73,7 +73,7 @@ Bundle.node(ref)         // NodeBundle
 Bundle.runtime()         // Atom.AtomRuntime
 ```
 
-**One public door:** `Bundle.observe` / `Bundle.node`.  
+**One public door:** `Bundle.observe` / `Bundle.node` (calls the builders directly).  
 `use*Bundle` and `View.compose(…).data.*` are **deprecated** aliases (same builders; removal later).
 
 Same stack for library Dashboard and app code: `Hyperlink.atom/fn` → Bundle builders →
