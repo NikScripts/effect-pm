@@ -29,7 +29,8 @@ export default function LandingPage() {
             </span>
           </p>
           <p className="landing-lede">
-            One Contract. Local or over the network. The same typed Handle either way.
+            <span>One Contract. Local or over the network.</span>
+            <span>The same typed Handle either way.</span>
           </p>
           <p className="landing-soon">Coming soon</p>
         </div>

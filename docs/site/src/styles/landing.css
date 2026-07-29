@@ -8,7 +8,7 @@
   --landing-bg: #f7f9fc;
   --landing-bg-deep: #e8eef8;
   --landing-fg: #2a2f38;
-  --landing-muted: #6b7280;
+  --landing-muted: rgba(18, 38, 56, 0.62);
   --landing-panel: #f0f2f5;
   --landing-border: #e2e6eb;
   --landing-primary: #0a8ad4;
@@ -23,7 +23,7 @@
     --landing-bg: oklch(98.5% 0.006 250);
     --landing-bg-deep: oklch(94.5% 0.018 250);
     --landing-fg: oklch(24% 0.01 260);
-    --landing-muted: oklch(50% 0.01 260);
+    --landing-muted: oklch(22% 0.03 230 / 0.58);
     --landing-panel: oklch(96.5% 0.005 260);
     --landing-border: oklch(90% 0.008 260);
     --landing-primary: oklch(60% 0.15 230);
@@ -37,7 +37,7 @@
     --landing-bg: #12151a;
     --landing-bg-deep: #0c1016;
     --landing-fg: #e8eaed;
-    --landing-muted: #9aa3ad;
+    --landing-muted: rgba(255, 255, 255, 0.68);
     --landing-panel: #1c2026;
     --landing-border: #2f353d;
     --landing-primary: #4bb8f0;
@@ -50,7 +50,7 @@
       --landing-bg: oklch(15% 0.012 260);
       --landing-bg-deep: oklch(11% 0.018 260);
       --landing-fg: oklch(92% 0.01 260);
-      --landing-muted: oklch(64% 0.01 260);
+      --landing-muted: oklch(100% 0 0 / 0.68);
       --landing-panel: oklch(19% 0.012 260);
       --landing-border: oklch(30% 0.01 260);
       --landing-primary: oklch(76% 0.13 228);
@@ -204,12 +204,16 @@ body {
 
 .landing-lede {
   align-self: center;
-  max-width: 26rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: 28rem;
   margin: 0.15rem 0 0;
   text-align: center;
   font-size: clamp(0.98rem, 2.6vw, 1.1rem);
   font-weight: 450;
-  line-height: 1.45;
+  line-height: 1.4;
   color: var(--landing-muted);
   animation: landing-rise 0.85s cubic-bezier(0.22, 1, 0.36, 1) 0.18s both;
 }
