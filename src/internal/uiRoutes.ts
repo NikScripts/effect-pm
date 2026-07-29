@@ -581,7 +581,7 @@ type NestedOfGroup<G> = G extends Group<string, infer _R, infer Nested, infer _T
   : never;
 
 /** Nested group builders (finite depth — dashboards nest a few levels). */
-type GroupBuilder<G extends GroupTop> = Simplify<
+type GroupBuilder<G> = [G] extends [GroupTop] ? Simplify<
   EndpointMethods<EndpointsOfGroup<G>> & {
     readonly [
       C in Extract<NestedOfGroup<G>, GroupTop & { readonly topLevel: false }> as C["identifier"]
@@ -596,9 +596,15 @@ type GroupBuilder<G extends GroupTop> = Simplify<
       }
     >;
   }
->;
+>
+  : {};
 
-type NestedBuilders<Groups extends GroupTop> = {
+/**
+ * Nested group slots on UrlBuilder.
+ * Do **not** intersect nested groups with {@link GroupTop} here — that erases
+ * `Group<Id, Routes, …>` type parameters and collapses builders to `{}`.
+ */
+type NestedBuilders<Groups> = {
   readonly [
     G in Extract<Groups, GroupTop & { readonly topLevel: false }> as G["identifier"]
   ]: GroupBuilder<G>;
@@ -607,7 +613,7 @@ type NestedBuilders<Groups extends GroupTop> = {
 type TopLevelMethods<Groups extends GroupTop> = EndpointMethods<
   EndpointsOfGroup<Extract<Groups, GroupTop & { readonly topLevel: true }>>
 > & NestedBuilders<
-  NestedOfGroup<Extract<Groups, GroupTop & { readonly topLevel: true }>> & GroupTop
+  NestedOfGroup<Extract<Groups, GroupTop & { readonly topLevel: true }>>
 >;
 
 /**

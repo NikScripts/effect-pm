@@ -29,3 +29,18 @@ const router = Router.make(site, "memory");
 router.to((u) => u.app.dashboard());
 router.to((u) => u.home());
 expectTypeOf(router.urls.home()).toEqualTypeOf<string>();
+
+// topLevel flattens health + keeps nested group builders (fromEffect shape)
+const flat = Route.make("site").add(
+  Route.group("hub", { topLevel: true }).add(
+    Route.get("health", "/health"),
+    Route.group("Nwsl").add(
+      Route.get("index", "/Nwsl"),
+      Route.get("HttpApi", "/Nwsl/HttpApi"),
+    ),
+  ),
+);
+const flatUrls = Route.urlBuilder(flat);
+expectTypeOf(flatUrls.health()).toEqualTypeOf<string>();
+expectTypeOf(flatUrls.Nwsl.index()).toEqualTypeOf<string>();
+expectTypeOf(flatUrls.Nwsl.HttpApi()).toEqualTypeOf<string>();

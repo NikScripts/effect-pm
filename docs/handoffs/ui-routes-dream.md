@@ -40,7 +40,7 @@ That is the whole product story. No View registry required. No Group tag on Rout
 |------|------|
 | `Route.group` / `topLevel` | Nest / flatten URL builders |
 | `Route.addHttpApi` | Reuse Effect HttpApi paths |
-| `Group.asRoutes` + `fromEffect` | Generate destinations from a Group tree (**typed** UrlBuilder) |
+| `Group.asRoutes` + `fromEffect` | Generate destinations from a Group tree — **typed** UrlBuilder (`urls.Nwsl.HttpApi()`, health params, nested under `topLevel`) |
 | `Route.Target` / `DashboardRoot` | Dashboard metadata (`selected` / `view`) — optional |
 
 Group dashboards may still use Target + View skins in `DashboardShell`; ordinary apps use `handle` + `Outlet`.
