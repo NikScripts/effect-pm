@@ -118,7 +118,7 @@ Provide an Effect log / tracer / metric reader at the app edge if you want these
 After handoff, registration is the **child’s** job (`Lookup.client` / advertise). Launcher
 does not call Lookup. Parent checks membership with `Lookup.nodesServing(Jobs)` (Tag or
 wire key) — sugar over Directory’s schema’d request. See:
-[`examples/forms/hyperlink/launcher-lookup-membership.ts`](../../examples/forms/hyperlink/launcher-lookup-membership.ts).
+[`examples/launcher/lookup-membership.ts`](../../examples/launcher/lookup-membership.ts).
 
 ## Deferred (not beta Launcher)
 

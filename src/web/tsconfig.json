@@ -101,7 +101,7 @@
     "../../test/view-requirement.test-d.ts",
     "../../test/view-proto-infer.test-d.ts",
     "../../test/view-effect-service-poc.test-d.ts",
-    "../../examples/forms/view/**/*.ts",
+    "../../examples/apps/view-scratch/**/*.ts",
     "../tui/cellWidgets.tsx",
     // DashboardViews skins (imported by ui-dashboard-views tests).
     "../tui/DashboardViews.tsx",

@@ -142,7 +142,7 @@ export {
   MissingContractMethod,
   ProtocolMismatch,
   // Contract introspection — the basis for generic UIs (walk a tag's spec, render a widget
-  // per method from its kind/description/destructive/streaming). See examples/hyperlink-tui.
+  // per method from its kind/description/destructive/streaming). See examples/apps/tui.
   methodMeta,
   isVoidCommand,
   isEffect,

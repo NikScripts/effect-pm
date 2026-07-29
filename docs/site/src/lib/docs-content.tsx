@@ -105,7 +105,7 @@ const resolveFenceText = (n: {
   const raw = exampleSource(include);
   if (raw === undefined) {
     throw new Error(
-      `docs fence include not in examples glob: "${include}" (expected under examples/forms or examples/shared)`,
+      `docs fence include not in examples glob: "${include}" (expected under examples/<topic>, examples/scenarios, or examples/shared)`,
     );
   }
   const prepared = prepareExampleForTwoslash(raw, include);

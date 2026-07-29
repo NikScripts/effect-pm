@@ -139,7 +139,7 @@ Node.http(
 
 `Hyperlink.provide(dep, [serveA, serveB])` is sugar for "these HyperServices, on this dependency."
 Engine tags use `WorkPool.serve` / `Daemon.serve` / `Gate.serve` (they also run the worker or tick);
-`Hyperlink.serve` / `serveRemote` only mount handlers. See `examples/serve-per-hyperlink-deps.ts`.
+`Hyperlink.serve` / `serveRemote` only mount handlers. See `examples/scenarios/serve-per-deps.ts`.
 
 ## Fleets and peers
 

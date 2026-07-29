@@ -119,7 +119,7 @@ import { WorkerPool } from "./hub"
 export class WorkerPoolCard extends View.Card.Tag<
   WorkerPoolCard,
   { readonly dense?: boolean }
->()("examples/hyperlink-web/worker-pool-card", {
+>()("examples/apps/web/worker-pool-card", {
   spec: { kind: "examples/worker-pool-card" } as const,
 }) {}
 
@@ -130,4 +130,4 @@ export const layer = View.only(WorkerPool, WorkerPoolCard).pipe(
 )
 ```
 
-Full dogfood: [`examples/hyperlink-web/worker-pool-card.tsx`](../../examples/hyperlink-web/worker-pool-card.tsx).
+Full dogfood: [`examples/apps/web/worker-pool-card.tsx`](../../examples/apps/web/worker-pool-card.tsx).

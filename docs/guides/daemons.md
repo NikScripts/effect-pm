@@ -204,9 +204,9 @@ build** — same Layer-patch model as WorkPool / Gate. Merge with
 
 | Path | Focus |
 |------|--------|
-| [`examples/forms/schedule/`](../../examples/forms/schedule/) | Windows, `at`, controls, `scheduleDefine` |
-| [`examples/forms/polling/`](../../examples/forms/polling/) | Spaced / accelerating cadence, `TestClock` |
-| [`examples/forms/daemon-store/`](../../examples/forms/daemon-store/) | `Daemon.layer` + `Daemon.store` + typed errors |
+| [`examples/schedule/`](../../examples/schedule/) | Windows, `at`, controls, `scheduleDefine` |
+| [`examples/polling/`](../../examples/polling/) | Spaced / accelerating cadence, `TestClock` |
+| [`examples/daemon/`](../../examples/daemon/) | `Daemon.layer` + `Daemon.store` + typed errors |
 
 ## See also
 

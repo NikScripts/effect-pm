@@ -1,4 +1,4 @@
-{#examples title="Examples" status="draft" appliesTo=all}
+{#examples title="Examples" appliesTo=all}
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
@@ -6,235 +6,291 @@
 <!-- docs-site-link:end -->
 # Examples
 
-Runnable teaching scripts live under `examples/forms/`. Each form below has a **paired doc**
-with Twoslash — the fence **includes the real `.ts` file** (`include="examples/…"`). Cuts in
-that file (`// ---cut---` / `---cut-after---`) hide harness noise on the page; Twoslash still
-type-checks the full program. Run with the `pnpm run example:…` command on each page.
+Teaching scripts live under `examples/<topic>/` — **same topic names as the guides**.
+Each page Twoslash-`include`s the real `.ts` file. Cuts in that file hide harness noise.
 
-Individual example docs are **not** in the sidebar; this hub is the index. Deep-link a module
-with `#queue`, `#daemon-store`, …
+Deep-link a topic: `#work-pool`, `#gate`, `#node`, …
 
 ---
 
-## Queue
+## WorkPool
 
-### [Priority, Dedup, Retry](/docs/workpool-priority-retry)
+Guide: [WorkPool](/docs/work-pools)
 
-Source: `examples/forms/queue/workpool-priority-retry.ts`  
-Run: `pnpm run example:workpool-retry`
+### [priority, dedup, retry](/docs/work-pool-priority-retry)
 
-### [Custom N-Lane Priorities](/docs/workpool-priority-lanes)
+`examples/work-pool/priority-retry.ts` · `pnpm run example:work-pool-priority-retry`
 
-Source: `examples/forms/queue/workpool-priority-lanes.ts`  
-Run: `pnpm run example:workpool-priority`
+### [named lanes](/docs/work-pool-named-lanes)
 
----
-
-## Daemon Store
-
-### [Soft store auto-write](/docs/daemon-layer-store-auto-write)
-
-Source: `examples/forms/daemon-store/daemon-layer-store-auto-write.ts`  
-Run: `pnpm run example:daemon-layer-store-auto-write`
-
-### [Typed Failed.error](/docs/daemon-layer-typed-error-store)
-
-Source: `examples/forms/daemon-store/daemon-layer-typed-error-store.ts`  
-Run: `pnpm run example:daemon-layer-typed-error-store`
+`examples/work-pool/named-lanes.ts` · `pnpm run example:work-pool-named-lanes`
 
 ---
 
-## Hyperlink
+## Gate
 
-### [Gate — unit + input](/docs/gate-unit-and-input)
+Guide: [Gate](/docs/gates)
 
-Source: `examples/forms/hyperlink/gate-unit-and-input.ts`  
-Run: `pnpm run example:gate`
+### [unit + input](/docs/gate-unit-and-input)
 
-### [Gate — fleet rate limit](/docs/gate-rate-limit-fleet)
+`examples/gate/unit-and-input.ts` · `pnpm run example:gate-unit-and-input`
 
-Source: `examples/forms/hyperlink/gate-rate-limit-fleet.ts`  
-Run: `pnpm run example:gate-rate-limit-fleet`
+### [fleet rate limit](/docs/gate-rate-limit-fleet)
 
-### [Gate — store readback](/docs/gate-store-readback)
+`examples/gate/rate-limit-fleet.ts` · `pnpm run example:gate-rate-limit-fleet`
 
-Source: `examples/forms/hyperlink/gate-store-readback.ts`  
-Run: `pnpm run example:gate-store-readback`
+### [store readback](/docs/gate-store-readback)
 
-### [HttpClientGate](/docs/http-client-gate)
+`examples/gate/store-readback.ts` · `pnpm run example:gate-store-readback`
 
-Source: `examples/forms/hyperlink/http-client-gate.ts`  
-Run: `pnpm run example:http-client-gate`
+### [runtime observer](/docs/gate-runtime-observer)
 
-### [Gate.HttpApiClient](/docs/gate-http-api-client)
+`examples/gate/runtime-observer.ts` · `pnpm run example:gate-runtime-observer`
 
-Source: `examples/forms/hyperlink/gate-http-api-client.ts`  
-Run: `pnpm run example:gate-http-api-client`
+### [HttpClientGate](/docs/gate-http-client)
 
-### [Gate.httpApiClientLayer + capture](/docs/gate-http-api-layer-effect)
+`examples/gate/http-client.ts` · `pnpm run example:gate-http-client`
 
-Source: `examples/forms/hyperlink/gate-http-api-layer-effect.ts`  
-Run: `pnpm run example:gate-http-api-layer-effect`
+### [HttpApiClient](/docs/gate-http-api-client)
 
-### [Telemetry — fleet glass](/docs/telemetry-fleet-glass)
+`examples/gate/http-api-client.ts` · `pnpm run example:gate-http-api-client`
 
-Source: `examples/forms/hyperlink/telemetry-fleet-glass.ts`  
-Run: `pnpm run example:telemetry-fleet-glass`
+### [httpApiClientLayer + capture](/docs/gate-http-api-layer)
 
-### [FleetHealth — fleet glass](/docs/fleet-health-glass)
-
-Source: `examples/forms/hyperlink/fleet-health-glass.ts`  
-Run: `pnpm run example:fleet-health-glass`
-
-### [ShardMap — sessions](/docs/shardmap-sessions)
-
-Source: `examples/forms/hyperlink/shardmap-sessions.ts`  
-Run: `pnpm run example:shardmap-sessions`
-
-### [Gate — runtime observer](/docs/gate-runtime-observer)
-
-Source: `examples/forms/hyperlink/gate-runtime-observer.ts`  
-Run: `pnpm run example:gate-runtime-observer`
-
-### [Hyperlink — Tag defaults](/docs/default-defaults)
-
-Source: `examples/forms/hyperlink/default-defaults.ts`  
-Run: `pnpm run example:default-defaults`
-
-### [Hyperlink — shared Spec wire](/docs/shared-tag-wire)
-
-Source: `examples/forms/hyperlink/shared-tag-wire.ts`  
-Run: `pnpm run example:shared-tag-wire`
-
-### [Launcher — Lookup membership](/docs/launcher-lookup-membership)
-
-Source: `examples/forms/hyperlink/launcher-lookup-membership.ts`  
-Run: `pnpm run example:launcher-lookup-membership`  
-Child: [membership child](/docs/launcher-lookup-membership-child)
-
-### [Node — clients catalog](/docs/node-clients)
-
-Source: `examples/forms/hyperlink/node-clients.ts`  
-Run: `pnpm run example:node-clients`
-
-### [Node — asLookup](/docs/node-lookup)
-
-Source: `examples/forms/hyperlink/node-lookup.ts`  
-Run: `pnpm run example:node-lookup`
-
-### [Node — Prototype](/docs/node-prototype)
-
-Source: `examples/forms/hyperlink/node-prototype.ts`  
-Run: `pnpm run example:node-prototype`
-
-### [Node.Tag — fixed address](/docs/node-tag-addressed)
-
-Source: `examples/forms/hyperlink/node-tag-addressed.ts`  
-Run: `pnpm run example:node-tag-addressed`
-
-### [Node.Tag — addressless serve](/docs/node-tag-addressless-serve) · [call](/docs/node-tag-addressless-call)
-
-Source: `node-tag-addressless-serve.ts` / `node-tag-addressless-call.ts`  
-Run: `pnpm run example:node-tag-addressless-serve` then `example:node-tag-addressless-call`
-
-### [Node — Tag-bound serve](/docs/node-tag-bound)
-
-Source: `examples/forms/hyperlink/node-tag-bound.ts`  
-Run: `pnpm run example:node-tag-bound`
-
-### [Node — nameless listen demo](/docs/node-nameless-listen-demo)
-
-Source: `examples/forms/hyperlink/node-nameless-listen-demo.ts`  
-Run: `pnpm run example:node-nameless-listen-demo`  
-Also: [serve](/docs/node-nameless-listen-serve) · [call](/docs/node-nameless-listen-call)
-
-### [Node — nameless HTTP serve](/docs/node-http-nameless-serve) · [WebSocket](/docs/node-ws-nameless-serve)
-
-Run: `pnpm run example:node-http-nameless-serve` / `example:node-ws-nameless-serve` (hold until interrupt)
-
-### [Node — identity coordinator](/docs/node-identity-coordinator)
-
-Source: `examples/forms/hyperlink/node-identity-coordinator.ts`  
-Run: `pnpm run example:node-identity-coordinator`
-
-### [Node — verifyConnection](/docs/node-verify-connection)
-
-Source: `examples/forms/hyperlink/node-verify-connection.ts`  
-Run: `pnpm run example:node-verify-connection`
+`examples/gate/http-api-layer.ts` · `pnpm run example:gate-http-api-layer`
 
 ---
 
-## Schedule
+## Daemon
 
-### [at](/docs/schedule-at) · [window](/docs/schedule-window) · [define](/docs/schedule-define)
+Guide: [Daemon](/docs/daemons)
 
-Run: `pnpm run example:form:schedule-at` / `schedule-window` / `schedule-define`
+### [Soft store auto-write](/docs/daemon-store-auto-write)
 
-### [Controls — initializer](/docs/schedule-controls-initializer) · [in Effect](/docs/schedule-controls-in-effect) · [external fiber](/docs/schedule-controls-external-fiber)
+`examples/daemon/store-auto-write.ts` · `pnpm run example:daemon-store-auto-write`
 
-Run: `pnpm run example:form:schedule-controls-initializer` (and siblings)
+### [typed Failed.error](/docs/daemon-typed-failed-error)
+
+`examples/daemon/typed-failed-error.ts` · `pnpm run example:daemon-typed-failed-error`
 
 ---
 
-## Polling
+## Node & discovery
 
-### [Accelerating](/docs/polling-accelerating) · [spaced read](/docs/polling-spaced-read)
+Guide: [Node & discovery](/docs/identity-coordinator)
 
-### [Accelerating reset](/docs/polling-accelerating-reset-cadence) · [peek](/docs/polling-accelerating-peek-cadence)
+### [Tag with address](/docs/node-tag-addressed)
 
-### [Delayed start](/docs/schedule-delayed-start)
+`examples/node/tag-addressed.ts` · `pnpm run example:node-tag-addressed`
 
-Run: `pnpm run example:form:polling-accelerating` (and siblings under `example:form:…`)
+### [Tag-bound serve](/docs/node-tag-bound)
+
+`examples/node/tag-bound.ts` · `pnpm run example:node-tag-bound`
+
+### [clients catalog](/docs/node-clients)
+
+`examples/node/clients.ts` · `pnpm run example:node-clients`
+
+### [addressless serve](/docs/node-addressless-serve)
+
+`examples/node/addressless-serve.ts` · `pnpm run example:node-addressless-serve`
+
+### [addressless call](/docs/node-addressless-call)
+
+`examples/node/addressless-call.ts` · `pnpm run example:node-addressless-call`
+
+### [nameless unix serve](/docs/node-nameless-unix-serve)
+
+`examples/node/nameless-unix-serve.ts` · `pnpm run example:node-nameless-unix-serve`
+
+### [nameless unix call](/docs/node-nameless-unix-call)
+
+`examples/node/nameless-unix-call.ts` · `pnpm run example:node-nameless-unix-call`
+
+### [nameless unix demo](/docs/node-nameless-unix-demo)
+
+`examples/node/nameless-unix-demo.ts` · `pnpm run example:node-nameless-unix-demo`
+
+### [nameless HTTP serve](/docs/node-nameless-http-serve)
+
+`examples/node/nameless-http-serve.ts` · `pnpm run example:node-nameless-http-serve`
+
+### [nameless WebSocket serve](/docs/node-nameless-ws-serve)
+
+`examples/node/nameless-ws-serve.ts` · `pnpm run example:node-nameless-ws-serve`
+
+### [Prototype](/docs/node-prototype)
+
+`examples/node/prototype.ts` · `pnpm run example:node-prototype`
+
+### [asLookup](/docs/node-as-lookup)
+
+`examples/node/as-lookup.ts` · `pnpm run example:node-as-lookup`
+
+### [identity coordinator](/docs/node-identity-coordinator)
+
+`examples/node/identity-coordinator.ts` · `pnpm run example:node-identity-coordinator`
+
+### [verifyConnection](/docs/node-verify-connection)
+
+`examples/node/verify-connection.ts` · `pnpm run example:node-verify-connection`
+
+---
+
+## Fleet
+
+Guide: [Fleet](/docs/telemetry)
+
+### [Telemetry glass](/docs/fleet-telemetry-glass)
+
+`examples/fleet/telemetry-glass.ts` · `pnpm run example:fleet-telemetry-glass`
+
+### [FleetHealth glass](/docs/fleet-health-glass)
+
+`examples/fleet/health-glass.ts` · `pnpm run example:fleet-health-glass`
+
+### [ShardMap sessions](/docs/fleet-shardmap-sessions)
+
+`examples/fleet/shardmap-sessions.ts` · `pnpm run example:fleet-shardmap-sessions`
+
+---
+
+## Launcher
+
+Guide: [Launcher](/docs/launcher)
+
+### [Lookup membership](/docs/launcher-lookup-membership)
+
+`examples/launcher/lookup-membership.ts` · `pnpm run example:launcher-lookup-membership`
+
+Child of [Lookup membership](/docs/launcher-lookup-membership): `examples/launcher/lookup-membership-child.ts`
+
+---
+
+## Hyperlink (Tag & wire)
+
+Guide: [Hyperlink (Tag & wire)](/docs/creating-a-hyperlink)
+
+### [Tag defaults](/docs/hyperlink-tag-defaults)
+
+`examples/hyperlink/tag-defaults.ts` · `pnpm run example:hyperlink-tag-defaults`
+
+### [shared Spec wire](/docs/hyperlink-shared-spec-wire)
+
+`examples/hyperlink/shared-spec-wire.ts` · `pnpm run example:hyperlink-shared-spec-wire`
 
 ---
 
 ## Store
 
-### [Memory](/docs/store-memory) · [SQLite](/docs/store-sqlite)
+Guide: [Store](/docs/stores)
 
-Source: `examples/forms/store/store-memory.ts` / `store-sqlite.ts`  
-Run: `pnpm run example:store-memory` / `example:store-sqlite`
+### [memory](/docs/store-memory)
+
+`examples/store/memory.ts` · `pnpm run example:store-memory`
+
+### [SQLite](/docs/store-sqlite)
+
+`examples/store/sqlite.ts` · `pnpm run example:store-sqlite`
 
 ---
 
-## Dynamic Config
+## Schedule
 
-### [Hot swap](/docs/dynamic-config-hot-swap)
+Guide: [Schedule](/docs/daemons)
 
-Source: `examples/forms/dynamic-config/dynamic-config-hot-swap.ts`  
-Run: `pnpm run example:form:dynamic-config-hot-swap`
+### [at](/docs/schedule-at)
+
+`examples/schedule/at.ts` · `pnpm run example:schedule-at`
+
+### [window](/docs/schedule-window)
+
+`examples/schedule/window.ts` · `pnpm run example:schedule-window`
+
+### [define](/docs/schedule-define)
+
+`examples/schedule/define.ts` · `pnpm run example:schedule-define`
+
+### [controls (initializer)](/docs/schedule-controls-initializer)
+
+`examples/schedule/controls-initializer.ts` · `pnpm run example:schedule-controls-initializer`
+
+### [controls (in Effect)](/docs/schedule-controls-in-effect)
+
+`examples/schedule/controls-in-effect.ts` · `pnpm run example:schedule-controls-in-effect`
+
+### [controls (external fiber)](/docs/schedule-controls-external-fiber)
+
+`examples/schedule/controls-external-fiber.ts` · `pnpm run example:schedule-controls-external-fiber`
+
+---
+
+## Polling
+
+Guide: [Polling](/docs/daemons)
+
+### [accelerating](/docs/polling-accelerating)
+
+`examples/polling/accelerating.ts` · `pnpm run example:polling-accelerating`
+
+### [spaced](/docs/polling-spaced)
+
+`examples/polling/spaced.ts` · `pnpm run example:polling-spaced`
+
+### [accelerating reset](/docs/polling-accelerating-reset)
+
+`examples/polling/accelerating-reset.ts` · `pnpm run example:polling-accelerating-reset`
+
+### [accelerating peek](/docs/polling-accelerating-peek)
+
+`examples/polling/accelerating-peek.ts` · `pnpm run example:polling-accelerating-peek`
+
+### [delayed start](/docs/polling-delayed-start)
+
+`examples/polling/delayed-start.ts` · `pnpm run example:polling-delayed-start`
+
+---
+
+## Config
+
+Guide: [Config](/docs/configuration)
+
+### [hot swap](/docs/config-hot-swap)
+
+`examples/config/hot-swap.ts` · `pnpm run example:config-hot-swap`
 
 ---
 
 ## Scenarios
 
-Compositions (not one-shape forms). Same `include=` + cut convention.
+### [multi-protocol dual serve](/docs/scenario-multi-protocol)
 
-### [Multi-protocol dual serve](/docs/multi-protocol-dual-serve)
+`examples/scenarios/multi-protocol-dual-serve.ts` · `pnpm run example:scenario-multi-protocol`
 
-Source: `examples/scenarios/multi-protocol-dual-serve.ts`  
-Run: `pnpm run example:multi-protocol-dual-serve`
+### [schedule sync from DB](/docs/scenario-schedule-sync-db)
 
-### [Schedule sync from DB](/docs/schedule-sync-from-external-db)
+`examples/scenarios/schedule-sync-from-db.ts` · `pnpm run example:scenario-schedule-sync-db`
 
-Source: `examples/scenarios/schedule-sync-from-external-db.ts`  
-Run: `pnpm run example:schedule-control-db-sync`
+### [serve-per-hyperlink deps](/docs/scenario-serve-per-deps)
 
-### [Serve-per-hyperlink deps](/docs/serve-per-hyperlink-deps)
+`examples/scenarios/serve-per-deps.ts` · `pnpm run example:scenario-serve-per-deps`
 
-Source: `examples/serve-per-hyperlink-deps.ts`  
-Run: `pnpm run example:serve-per-hyperlink-deps`
+### [NWSL Gate.HttpApiClient](/docs/scenario-nwsl-http-api)
 
-### [NWSL Gate.HttpApiClient](/docs/nwsl-gate-http-api)
-
-Source: `examples/scenarios/nwslsoccer/gate-http-api-client.ts`  
-Run: `pnpm run example:nwsl-gate-http-api`  
-(Supporting tree under `examples/scenarios/nwslsoccer/` — not 1:1 paired.)
+`examples/scenarios/nwslsoccer/gate-http-api-client.ts` · `pnpm run example:scenario-nwsl-http-api`
 
 ---
 
-## Apps (not 1:1 paired)
+## Apps
 
-Full apps under `examples/hyperlink-tui`, `hyperlink-web`, `web-dashboard`, `queue-widget`, …
-stay **out of the include book** until an owner call (E5) — prefer a scenario-style page per
-app, not a Twoslash dump of every file.
+Full apps under `examples/apps/` (TUI, web, dashboard, CLI, widgets). **Not** 1:1 Twoslash —
+see [E5 apps plan](../handoffs/examples-apps-e5-plan.md) (handoff). Run via `pnpm run example:apps-tui`,
+`example:apps-web`, `example:apps-dashboard`, …
+
+| App | Path | Start |
+|-----|------|-------|
+| TUI | `examples/apps/tui` | `pnpm run example:apps-tui` |
+| Web | `examples/apps/web` | `example:apps-web` + `example:apps-web-server` |
+| Dashboard | `examples/apps/dashboard` | `example:apps-dashboard` |
+| CLI | `examples/apps/cli` | `example:apps-cli` |
+| Queue widget | `examples/apps/queue-widget` | `example:apps-queue-widget` |

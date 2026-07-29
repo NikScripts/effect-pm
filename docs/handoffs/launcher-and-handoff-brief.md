@@ -115,7 +115,7 @@ Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.m
 ### Track A — research note (2026-07-27): what already exists
 
 **Build on (shipped):**
-- OS child pattern: Effect `ChildProcess` / `ChildProcessSpawner` (see `examples/forms/hyperlink/node-nameless-listen-demo.ts`) — no package Launcher yet; demos `spawn` + sleep.
+- OS child pattern: Effect `ChildProcess` / `ChildProcessSpawner` (see `examples/node-nameless-listen-demo.ts`) — no package Launcher yet; demos `spawn` + sleep.
 - Child entry: `Layer.launch(Node.unix|http|ws(…, [Hyperlink.serve…]))` forms.
 - Ready substrate: `withReadiness` / `Readiness` / `allReady` / `Node.status` (per-HyperService readiness rollup) / `Hyperlink.verifyConnection` (deep → `ServiceNotReady`).
 - Identity/placement: `Lookup.Identity` / `Directory` / `Advice`, `Hyperlink.identity` — child’s job after Ready.

@@ -15,7 +15,7 @@
  * the live API drifts ahead of the checked-in `NwslMatchesResponse` schema. For decoded domain
  * types, omit `responseMode` once schemas match the API.
  *
- * Docs: `docs/examples/scenarios/nwsl-gate-http-api.md` includes this file;
+ * Docs: `docs/examples/scenarios/gate-http-api-client.md` includes this file;
  * cut markers hide the module header and runner epilogue.
  */
 

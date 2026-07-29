@@ -126,7 +126,7 @@ widgets operate on erased tags, so:
 
 ## Out of scope
 
-- `examples/web-dashboard/*` (e.g. `cache.ts` `@since` locks) and the `examples/*` suppressions —
+- `examples/apps/dashboard/*` (e.g. `cache.ts` `@since` locks) and the `examples/*` suppressions —
   a separate example sweep, not this branch.
 - Engine internals (`src/internal/*` `satisfies`, `Store.ts` boundary casts) — Agent C.
 - Any behavioural change to widgets. This is types + doc-comment hygiene only; the rendered dashboard

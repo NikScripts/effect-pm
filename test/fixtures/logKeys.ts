@@ -6,7 +6,7 @@
  * | `testBillingNodeKey` | node log key | `billing/scores` | `test/host-logs-history.test.ts`, `test/log-pipeline.test.ts`, … |
  * | `testRelayNodeKey` | node log key | `test/relay` | `test/logs-relay.test.ts` |
  * | `testSyncDaemonKey` | resource key | `billing/SyncWorker` | `test/log-pipeline.test.ts`, `test/logs-resource.test.ts`, … |
- * | `testTuiNodeKey` | node log key | `acme/tui` | `examples/hyperlink-tui/live-queues.ts`, `examples/hyperlink-tui/queue-live.tsx` |
+ * | `testTuiNodeKey` | node log key | `acme/tui` | `examples/apps/tui/live-queues.ts`, `examples/apps/tui/queue-live.tsx` |
  *
  * Production equivalents: `hyperlink-web/hub.ts` (`WnbaNode.key`, `LiveScorePoller.key`, …).
  * Full catalog: `docs/LOGS.md`.

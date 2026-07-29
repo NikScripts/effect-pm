@@ -89,7 +89,7 @@ server: {
 }
 ```
 
-A worked end-to-end setup is in `examples/hyperlink-web` (three nodes, one WebSocket each).
+A worked end-to-end setup is in `examples/apps/web` (three nodes, one WebSocket each).
 
 ## Styling the web widgets (Tailwind)
 

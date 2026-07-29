@@ -55,7 +55,7 @@ Start with [`docs/handoffs/agent-status.md`](./docs/handoffs/agent-status.md) fo
 | `docs/standards/` | Enforced invariants (manifest) |
 | `docs/handoffs/` | Active designs + agent status bus |
 | `docs/plans/` | Future-only roadmap |
-| `examples/forms/`, `examples/scenarios/` | Teaching scripts — [`examples/README.md`](./examples/README.md) |
+| `examples/<topic>/`, `examples/scenarios/`, `examples/apps/` | Teaching scripts + apps — [`examples/README.md`](./examples/README.md) · [hub](./docs/examples.md) |
 | `repos/effect/` | Vendored Effect (read-only; do not import) |
 | `test/*.ts` | Vitest — `pnpm test` |
 

@@ -147,11 +147,11 @@
     "test/view-requirement.test-d.ts",
     "test/view-proto-infer.test-d.ts",
     "test/view-effect-service-poc.test-d.ts",
-    "examples/forms/view/**",
+    "examples/apps/view-scratch/**",
     "examples/scenarios/nwslsoccer",
-    "examples/queue-widget/**",
-    "examples/hyperlink-tui/**",
-    "examples/hyperlink-web/**",
-    "examples/web-dashboard/**"
+    "examples/apps/queue-widget/**",
+    "examples/apps/tui/**",
+    "examples/apps/web/**",
+    "examples/apps/dashboard/**"
   ]
 }

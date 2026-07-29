@@ -10,7 +10,7 @@ Exclusive HyperServices claim at Lookup. Workers advertise. The winning brain ca
 placement advice. Clients dial through Lookup — no `Hyperlink.Manager`.
 
 Handoff SSOT: [`docs/handoffs/identity-coordinator.md`](../handoffs/identity-coordinator.md).
-Runnable form: [`examples/forms/hyperlink/node-identity-coordinator.ts`](../../examples/forms/hyperlink/node-identity-coordinator.ts).
+Runnable form: [`examples/node/identity-coordinator.ts`](../../examples/node/identity-coordinator.ts).
 
 ## The picture
 
@@ -92,7 +92,7 @@ Membership Lookup Identity/Directory/Advice   who wins / where clients dial
 - Directory-row replace: `onConflict: "askIncumbent"` + optional `ListenOptions.onYield`
   (`false` refuses). Drain / state / old shutdown are a later handoff track — not Lookup.
 
-Runnable: [`examples/forms/hyperlink/launcher-lookup-membership.ts`](../../examples/forms/hyperlink/launcher-lookup-membership.ts).
+Runnable: [`examples/launcher/lookup-membership.ts`](../../examples/launcher/lookup-membership.ts).
 Custody API: [`docs/guides/launcher.md`](./launcher.md).
 
 ## What not to build

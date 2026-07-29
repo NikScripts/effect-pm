@@ -62,7 +62,7 @@ Merge `.changeset/run-resource-handle-rpc-store.md` into the platform-wide renam
 pnpm run typecheck
 pnpm exec vitest run test/run-resource.test.ts test/run-resource-remote-http.test.ts \
   test/store.test.ts test/store-default.test.ts
-npx tsx examples/forms/process-store/process-store-events-sqlite-layer.ts
+npx tsx examples/process-store/process-store-events-sqlite-layer.ts
 ```
 
 ---

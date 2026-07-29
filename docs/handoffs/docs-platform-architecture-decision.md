@@ -90,10 +90,10 @@ Update [`agent-status.md`](./agent-status.md) when B starts.
 
 ## Reference: shipped dashboard (separate product)
 
-`hyperlink-ts/web` — `examples/hyperlink-web/app.tsx` — remains the **ops** dashboard. Docs app reuses **tooling and theme**, not `Dashboard.tsx`.
+`hyperlink-ts/web` — `examples/apps/web/app.tsx` — remains the **ops** dashboard. Docs app reuses **tooling and theme**, not `Dashboard.tsx`.
 
 ## Reference: Effect RSC (future)
 
 - `effect/unstable/reactivity/Hydration` — `dehydrate`, `hydrate`, `toValues`
 - `@effect/atom-react` — `HydrationBoundary`
-- `examples/queue-widget/README.md` — prior mention of Hydration for RSC experiment
+- `examples/apps/queue-widget/README.md` — prior mention of Hydration for RSC experiment

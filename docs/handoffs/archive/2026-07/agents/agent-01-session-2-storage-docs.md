@@ -53,7 +53,7 @@ Full pass — not a patch. Structure:
 1. **Golden model** — `Store.Service`, `Tag.store(tag)`, `Storage` declared dependency, `layerDefaultMemory`
 2. **What facets remain** — Log, ProcessLifecycle (if still accurate); what was **removed** from engine paths
 3. **Per-toolkit store** — Queue/CQR/Process/RunResource one subsection each; link store-cutover handoffs
-4. **Usage example** — app `Store.Service` + `Process.store` / queue registration (copy from `examples/forms/process-store/` if needed)
+4. **Usage example** — app `Store.Service` + `Process.store` / queue registration (copy from `examples/process-store/` if needed)
 5. **Wire events** — queue persists `QueueEvent<T>` union via store bridge; drop `queue.entry.*` facet tables if engine no longer writes them (verify in `src/` before deleting claims)
 
 Verify claims against `src/QueueResource.ts`, `src/Store.ts`, `src/store/*` — **no guessing**.

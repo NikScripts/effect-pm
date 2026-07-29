@@ -1,7 +1,7 @@
-// Runnable teaching scripts under `examples/forms/**` for `{.twoslash include="…"}` fences.
+// Runnable teaching scripts for `{.twoslash include="examples/…"}` fences.
 //
-// Vite `?raw` glob (same pattern as `./content.ts`) — editing an example HMR-updates the paired
-// doc without `node:fs` in the render path. Offline checkers use `./example-include.ts` + disk.
+// Vite `?raw` glob — editing an example HMR-updates the paired doc. Offline checkers
+// use `./example-include.ts` + disk.
 
 import { normalizeExampleRel } from "./example-include.js";
 
@@ -14,11 +14,19 @@ export {
 
 const modules = import.meta.glob(
   [
-    "../../../../examples/forms/**/*.ts",
-    "../../../../examples/shared/**/*.ts",
+    "../../../../examples/work-pool/**/*.ts",
+    "../../../../examples/gate/**/*.ts",
+    "../../../../examples/daemon/**/*.ts",
+    "../../../../examples/node/**/*.ts",
+    "../../../../examples/fleet/**/*.ts",
+    "../../../../examples/launcher/**/*.ts",
+    "../../../../examples/hyperlink/**/*.ts",
+    "../../../../examples/store/**/*.ts",
+    "../../../../examples/schedule/**/*.ts",
+    "../../../../examples/polling/**/*.ts",
+    "../../../../examples/config/**/*.ts",
     "../../../../examples/scenarios/**/*.ts",
-    // Root teaching scripts (e.g. serve-per-hyperlink-deps) — not full apps.
-    "../../../../examples/*.ts",
+    "../../../../examples/shared/**/*.ts",
   ],
   { query: "?raw", import: "default", eager: true },
 ) as Record<string, string>;
@@ -27,8 +35,5 @@ const byRel: ReadonlyMap<string, string> = new Map(
   Object.entries(modules).map(([key, text]) => [normalizeExampleRel(key), text]),
 );
 
-/**
- * Load a teaching example for an `include=` fence. `rel` is repo-relative
- * (`examples/forms/queue/workpool-priority-retry.ts`). Undefined when missing from the glob.
- */
-export const exampleSource = (rel: string): string | undefined => byRel.get(normalizeExampleRel(rel));
+export const exampleSource = (rel: string): string | undefined =>
+  byRel.get(normalizeExampleRel(rel));

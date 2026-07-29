@@ -32,7 +32,7 @@ Authoritative cutover notes: [`../store-cutover-process.md`](../store-cutover-pr
 |------|--------|----------|
 | Store `Failed.error` — typed + fallback | ✅ | `test/process-store-engine.test.ts` (memory, engine path); `test/process-store-sqlite.test.ts` (typed error journal codec round-trip) |
 | RPC `error` wire | ⛔ **Blocked** | See § RPC error wire blocker below — no half-ship |
-| Examples + review docs | ✅ | `examples/forms/process-store/*`, `process-store-cutover-review.md` Review 2026-07-09, `integration-sync-2026-07-07.md`, `STORAGE.md` Process subsection |
+| Examples + review docs | ✅ | `examples/process-store/*`, `process-store-cutover-review.md` Review 2026-07-09, `integration-sync-2026-07-07.md`, `STORAGE.md` Process subsection |
 | `process-contract-shape.test-d.ts` | ✅ | `errorOf(PricedErr)` + store-only comment |
 
 ---
