@@ -25,6 +25,38 @@ Guide: [WorkPool](/docs/work-pools)
 
 `examples/work-pool/named-lanes.ts` · `pnpm run example:work-pool-named-lanes`
 
+### [store analytics](/docs/work-pool-store-analytics)
+
+`examples/work-pool/store-analytics.ts` · `pnpm run example:work-pool-store-analytics`
+
+### [serve and client](/docs/work-pool-serve-client)
+
+`examples/work-pool/serve-client.ts` · `pnpm run example:work-pool-serve-client`
+
+### [durable SQLite](/docs/work-pool-durable-sqlite)
+
+`examples/work-pool/durable-sqlite.ts` · `pnpm run example:work-pool-durable-sqlite`
+
+### [refill](/docs/work-pool-refill)
+
+`examples/work-pool/refill.ts` · `pnpm run example:work-pool-refill`
+
+### [rate limit](/docs/work-pool-rate-limit)
+
+`examples/work-pool/rate-limit.ts` · `pnpm run example:work-pool-rate-limit`
+
+### [history metrics](/docs/work-pool-history-metrics)
+
+`examples/work-pool/history-metrics.ts` · `pnpm run example:work-pool-history-metrics`
+
+### [typed success](/docs/work-pool-typed-success)
+
+`examples/work-pool/typed-success.ts` · `pnpm run example:work-pool-typed-success`
+
+### [configure](/docs/work-pool-configure)
+
+`examples/work-pool/configure.ts` · `pnpm run example:work-pool-configure`
+
 ---
 
 ## Gate
@@ -72,6 +104,22 @@ Guide: [Daemon](/docs/daemons)
 ### [typed Failed.error](/docs/daemon-typed-failed-error)
 
 `examples/daemon/typed-failed-error.ts` · `pnpm run example:daemon-typed-failed-error`
+
+### [serve and client](/docs/daemon-serve-client)
+
+`examples/daemon/serve-client.ts` · `pnpm run example:daemon-serve-client`
+
+### [result ref](/docs/daemon-result-ref)
+
+`examples/daemon/result-ref.ts` · `pnpm run example:daemon-result-ref`
+
+### [tag schedule](/docs/daemon-tag-schedule)
+
+`examples/daemon/tag-schedule.ts` · `pnpm run example:daemon-tag-schedule`
+
+### [configure](/docs/daemon-configure)
+
+`examples/daemon/configure.ts` · `pnpm run example:daemon-configure`
 
 ---
 
@@ -161,6 +209,18 @@ Guide: [Fleet](/docs/telemetry)
 
 `examples/fleet/shardmap-sessions.ts` · `pnpm run example:fleet-shardmap-sessions`
 
+### [Telemetry alone](/docs/fleet-telemetry-alone)
+
+`examples/fleet/telemetry-alone.ts` · `pnpm run example:fleet-telemetry-alone`
+
+### [ShardMap persist](/docs/fleet-shardmap-persist)
+
+`examples/fleet/shardmap-persist.ts` · `pnpm run example:fleet-shardmap-persist`
+
+### [health with readiness](/docs/fleet-health-with-readiness)
+
+`examples/fleet/health-with-readiness.ts` · `pnpm run example:fleet-health-with-readiness`
+
 ---
 
 ## Launcher
@@ -172,6 +232,50 @@ Guide: [Launcher](/docs/launcher)
 `examples/launcher/lookup-membership.ts` · `pnpm run example:launcher-lookup-membership`
 
 Child of [Lookup membership](/docs/launcher-lookup-membership): `examples/launcher/lookup-membership-child.ts`
+
+### [minimal up](/docs/launcher-minimal-up)
+
+`examples/launcher/minimal-up.ts` · `pnpm run example:launcher-minimal-up`
+
+### [handle phases](/docs/launcher-handle-phases)
+
+`examples/launcher/handle-phases.ts` · `pnpm run example:launcher-handle-phases`
+
+### [token injection](/docs/launcher-token-injection)
+
+`examples/launcher/token-injection.ts` · `pnpm run example:launcher-token-injection`
+
+### [ready services](/docs/launcher-ready-services)
+
+`examples/launcher/ready-services.ts` · `pnpm run example:launcher-ready-services`
+
+### [Ready timeout errors](/docs/launcher-ready-timeout)
+
+`examples/launcher/ready-timeout.ts` · `pnpm run example:launcher-ready-timeout`
+
+Child helper for Launcher examples: [`examples/launcher/ready-worker-child.ts`](/docs/launcher-ready-worker-child) · `pnpm run example:launcher-ready-worker-child`
+
+---
+
+## Readiness
+
+Guide: [Readiness & Health](/docs/readiness)
+
+### [withReadiness](/docs/readiness-with-readiness)
+
+`examples/readiness/with-readiness.ts` · `pnpm run example:readiness-with-readiness`
+
+### [allReady](/docs/readiness-all-ready)
+
+`examples/readiness/all-ready.ts` · `pnpm run example:readiness-all-ready`
+
+### [monitored dependency](/docs/readiness-monitored-dependency)
+
+`examples/readiness/monitored-dependency.ts` · `pnpm run example:readiness-monitored-dependency`
+
+### [degraded health](/docs/readiness-degraded-health)
+
+`examples/readiness/degraded-health.ts` · `pnpm run example:readiness-degraded-health`
 
 ---
 
@@ -187,6 +291,44 @@ Guide: [Hyperlink (Tag & wire)](/docs/creating-a-hyperlink)
 
 `examples/hyperlink/shared-spec-wire.ts` · `pnpm run example:hyperlink-shared-spec-wire`
 
+### [counter layer](/docs/hyperlink-counter-layer)
+
+`examples/hyperlink/counter-layer.ts` · `pnpm run example:hyperlink-counter-layer`
+
+### [serve and client](/docs/hyperlink-serve-client)
+
+`examples/hyperlink/serve-client.ts` · `pnpm run example:hyperlink-serve-client`
+
+### [method kinds](/docs/hyperlink-method-kinds)
+
+`examples/hyperlink/method-kinds.ts` · `pnpm run example:hyperlink-method-kinds`
+
+---
+
+## Logs
+
+Guide: [Logs](/docs/logs)
+
+### [live bus](/docs/logs-live-bus)
+
+`examples/logs/live-bus.ts` · `pnpm run example:logs-live-bus`
+
+### [node journal](/docs/logs-node-journal)
+
+`examples/logs/node-journal.ts` · `pnpm run example:logs-node-journal`
+
+### [Hyperlink logs export](/docs/logs-hyperlink-logs)
+
+`examples/logs/hyperlink-logs.ts` · `pnpm run example:logs-hyperlink-logs`
+
+### [lineage scope](/docs/logs-lineage-scope)
+
+`examples/logs/lineage-scope.ts` · `pnpm run example:logs-lineage-scope`
+
+### [levels](/docs/logs-levels)
+
+`examples/logs/levels.ts` · `pnpm run example:logs-levels`
+
 ---
 
 ## Store
@@ -200,6 +342,26 @@ Guide: [Store](/docs/stores)
 ### [SQLite](/docs/store-sqlite)
 
 `examples/store/sqlite.ts` · `pnpm run example:store-sqlite`
+
+### [Soft override WorkPool](/docs/store-soft-override-work-pool)
+
+`examples/store/soft-override-work-pool.ts` · `pnpm run example:store-soft-override-work-pool`
+
+### [one store, many registrations](/docs/store-one-store-many-regs)
+
+`examples/store/one-store-many-regs.ts` · `pnpm run example:store-one-store-many-regs`
+
+### [durable and Soft planes](/docs/store-durable-and-soft)
+
+`examples/store/durable-and-soft.ts` · `pnpm run example:store-durable-and-soft`
+
+### [HistoryStore presence](/docs/store-history-presence)
+
+`examples/store/history-presence.ts` · `pnpm run example:store-history-presence`
+
+### [loud missing registration](/docs/store-loud-missing-registration)
+
+`examples/store/loud-missing-registration.ts` · `pnpm run example:store-loud-missing-registration`
 
 ---
 
@@ -278,6 +440,30 @@ Guide: [Observe recipes](/docs/observe)
 `examples/observe/pack-demo.ts` · `pnpm run example:observe-pack-demo`
 
 `Observe.bind` + compositional pack (same stack as `Observe.use` in React). Not Twoslash-paired yet (top-level await demo).
+
+### [WorkPool pack](/docs/observe-work-pool-pack)
+
+`examples/observe/work-pool-pack.ts` · `pnpm run example:observe-work-pool-pack`
+
+### [recipes](/docs/observe-recipes)
+
+`examples/observe/recipes.ts` · `pnpm run example:observe-recipes`
+
+### [scan and fold](/docs/observe-scan-fold)
+
+`examples/observe/scan-fold.ts` · `pnpm run example:observe-scan-fold`
+
+### [Hyperlink atom adapters](/docs/observe-hyperlink-atom)
+
+`examples/observe/hyperlink-atom.ts` · `pnpm run example:observe-hyperlink-atom`
+
+### [Daemon pack](/docs/observe-daemon-pack)
+
+`examples/observe/daemon-pack.ts` · `pnpm run example:observe-daemon-pack`
+
+### [Gate pack](/docs/observe-gate-pack)
+
+`examples/observe/gate-pack.ts` · `pnpm run example:observe-gate-pack`
 
 ---
 
