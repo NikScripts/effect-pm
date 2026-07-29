@@ -291,6 +291,7 @@
     "example:node-prototype": "tsx examples/node/prototype.ts",
     "example:node-as-lookup": "tsx examples/node/as-lookup.ts",
     "example:node-identity-coordinator": "tsx examples/node/identity-coordinator.ts",
+    "example:node-handoff-ab-cutover": "tsx examples/node/handoff-ab-cutover.ts",
     "example:node-verify-connection": "tsx examples/node/verify-connection.ts",
     "example:fleet-telemetry-glass": "tsx examples/fleet/telemetry-glass.ts",
     "example:fleet-health-glass": "tsx examples/fleet/health-glass.ts",

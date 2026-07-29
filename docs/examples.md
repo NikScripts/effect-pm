@@ -131,6 +131,10 @@ Guide: [Node & discovery](/docs/identity-coordinator)
 
 `examples/node/identity-coordinator.ts` · `pnpm run example:node-identity-coordinator`
 
+### [A→B handoff cutover](/docs/node-handoff-ab-cutover)
+
+`examples/node/handoff-ab-cutover.ts` · `pnpm run example:node-handoff-ab-cutover`
+
 ### [verifyConnection](/docs/node-verify-connection)
 
 `examples/node/verify-connection.ts` · `pnpm run example:node-verify-connection`
