@@ -220,6 +220,11 @@ export const buildNodeStatusImpl = (options: {
    * When omitted, shutdown only drains + leaves membership (no process/listen exit).
    */
   readonly closeListen?: Effect.Effect<void>;
+  /**
+   * Per-service opt-in handoffs ({@link Hyperlink.withHandoff}) — run after drain,
+   * before Lookup leave (Locked #33).
+   */
+  readonly handoff?: Effect.Effect<void>;
 }): Effect.Effect<{
   readonly status: Hyperlink.Subscribable<NodeStatus>;
   readonly ping: Effect.Effect<number>;
@@ -358,6 +363,9 @@ export const buildNodeStatusImpl = (options: {
     const shutdown = Effect.gen(function* () {
       if (yield* Ref.getAndSet(shuttingDown, true)) return;
       yield* drain;
+      if (options.handoff !== undefined) {
+        yield* options.handoff.pipe(Effect.withLogSpan("node.shutdown.handoff"));
+      }
       yield* leaveMembership;
       yield* Effect.logInfo("node shutdown leaving listen").pipe(
         Effect.annotateLogs({ "node.phase": "draining" }),
@@ -411,6 +419,7 @@ export const nodeStatusServeEntry = (options: {
     readonly serves: ReadonlyArray<string>;
   };
   readonly closeListen?: Effect.Effect<void>;
+  readonly handoff?: Effect.Effect<void>;
 }): {
   readonly tag: typeof NodeStatusTag;
   readonly impl: ReturnType<typeof buildNodeStatusImpl>;
