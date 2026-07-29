@@ -8,17 +8,16 @@
 
 **Define once. Run anywhere. `yield*` everywhere.**
 
-An Effect Service lives in one runtime. Split that Service across processes and you usually grow a
-second client, a second error model, and a second set of types to keep in sync. A *Hyperlink Service*
-is still a Service (same Tag, same `yield*`), but its Contract is schema-typed, so the seam can sit
-between processes, not only modules. You define it once. You decide later whether it runs in-process,
-on another core, or across the network. The call site does not change.
+An Effect Service lives in one runtime. A *Hyperlink Service* is still a Service, same Tag,
+same `yield*`, but its Contract is schema-typed, so the seam can sit between processes, not just
+modules. You define it once; you decide later whether it runs in-process, on another core, or across
+the network. The call site does not change.
 
 What you `yield*` is a typed **Handle**: call methods, observe live state, steer the service at
-runtime. Local and remote share that type. Change the Contract and TypeScript flags every caller in
-every process that imports the Tag.
+runtime. Local and remote are the same type. Change the Contract and TypeScript flags every caller
+in every process that imports the Tag.
 
-That same Tag under load looks like this.
+Same Tag, two runtimes:
 
 ## Two runtimes, one program
 
