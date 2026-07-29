@@ -6,7 +6,7 @@ Pre-1.0: breaking changes land as minor bumps.
 
 ## Toolkit
 
-- **Observe recipes (pipeable UI packs)** — universal `Observe.*`; family packs as values on shared `Live` (`Live.queue`, `Live.daemon`, …); bind via `Observe.bind` / `Observe.use`. Not on domain `WorkPool` / Tags. Retires legacy `Bundle` kind menu. Plan: [observe-recipes.md](./observe-recipes.md).
+- **Observe recipes (pipeable UI packs)** — universal `Observe.*`; family packs as values on shared `Bundle` (`Bundle.queue`, `Bundle.daemon`, …); bind via `Observe.bind` / `Observe.use`. Not on domain `WorkPool` / Tags. Retires `Bundle.observe` kind menu. Plan: [observe-recipes.md](./observe-recipes.md).
 - **Service / contract shapes** — taxonomy for materialize vs pull vs Tag-baked / adapters. Draft: [service-shapes.md](./service-shapes.md). Eng’d: `Tag`/`value`/`promise`/`default`/`defaults` + factory `{ defaults }` (`pure` retired); `cell` parked/rejected.
 - **Wire groups & identity** — regular RpcGroup = tag key; shared Spec = `Tag(wireKey, spec)` → `Factory<Self>()(instanceKey)` (kind-keyed wire, ordinary serve/client). W1–W3 Eng’d: [wire-groups-and-identity.md](./wire-groups-and-identity.md).
 - **Guaranteed barrel-namespace tree-shaking** — make `import { WorkPool } from "hyperlink-ts"` + `WorkPool.Tag` tree-shake the engine in *every* bundler (subpath imports already do). Detailed plan: [18-unbundled-build-treeshaking.md](./18-unbundled-build-treeshaking.md).
