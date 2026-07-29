@@ -132,5 +132,5 @@ const program = Effect.gen(function* () {
 runNodeProgramWithLayer(
   program,
   eastLayer,
-  "form:shardmap-sessions finished OK",
+  "example:fleet-shardmap-sessions finished OK",
 );

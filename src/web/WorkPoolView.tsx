@@ -1,28 +1,13 @@
 /**
  * @module web/WorkPoolView
  *
- * Web (DOM) skins for shared {@link WorkPoolView} handles — `Layer.succeed` only.
+ * Web (DOM) skins for shared {@link WorkPoolView} handles — {@link View.provide} only.
  */
 import { Layer } from "effect";
 import { isQueueTag } from "../ui/data";
 import * as View from "../ui/View";
 import * as WorkPoolView from "../ui/WorkPoolView";
 import { displayName, QueueCard, QueueDetailPanel } from "./widgets";
-
-const PoolCardView: View.View = (props) => {
-  if (!isQueueTag(props.tag)) return null;
-  return (
-    <QueueCard
-      tag={props.tag}
-      name={props.name ?? displayName(props.tag.key)}
-    />
-  );
-};
-
-const PoolDetailView: View.View = (props) => {
-  if (!isQueueTag(props.tag)) return null;
-  return <QueueDetailPanel tag={props.tag} />;
-};
 
 /**
  * Web TSX provides for {@link WorkPoolView.PoolCard} / {@link WorkPoolView.PoolDetail}.
@@ -32,8 +17,19 @@ const PoolDetailView: View.View = (props) => {
 export const skins: Layer.Layer<
   WorkPoolView.PoolCard | WorkPoolView.PoolDetail
 > = Layer.mergeAll(
-  Layer.succeed(WorkPoolView.PoolCard, PoolCardView),
-  Layer.succeed(WorkPoolView.PoolDetail, PoolDetailView),
+  View.provide(WorkPoolView.PoolCard, (props) => {
+    if (!isQueueTag(props.tag)) return null;
+    return (
+      <QueueCard
+        tag={props.tag}
+        name={props.name ?? displayName(props.tag.key)}
+      />
+    );
+  }),
+  View.provide(WorkPoolView.PoolDetail, (props) => {
+    if (!isQueueTag(props.tag)) return null;
+    return <QueueDetailPanel tag={props.tag} />;
+  }),
 );
 
 /**

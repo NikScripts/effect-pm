@@ -48,4 +48,4 @@ const program = Effect.gen(function* () {
 }).pipe(Effect.scoped);
 
 // ---cut-after---
-runNodeProgramWithLayer(program, env, "form:schedule-delayed-start finished");
+runNodeProgramWithLayer(program, env, "example:polling-delayed-start finished");

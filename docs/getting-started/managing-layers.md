@@ -1,8 +1,8 @@
-{#managing-layers title="Managing Layers" status="draft" done="api previews types" appliesTo=all}
+{#managing-layers title="Managing Layers" done="api previews types" appliesTo=all}
 <!-- docs-site-link:begin -->
 > [!NOTE]
-> You're reading this page's **source**. The rendered version — with navigation, search,
-> and live type previews — is at <https://dev.hyperlink.cool/docs/managing-layers>.
+> You're reading this page's **source**. The rendered version has navigation, search,
+> and live type previews at <https://dev.hyperlink.cool/docs/managing-layers>.
 <!-- docs-site-link:end -->
 # Managing Layers
 
@@ -24,7 +24,16 @@ the consuming code alone.
 
 Run the implementation in the current runtime:
 
+{.twoslash}
 ``` ts
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
+import { Effect, Schema, Layer } from "effect"
+class Jobs extends Hyperlink.Tag<Jobs>()("app/Jobs", {
+  run: Hyperlink.effect(Schema.Void),
+}) {}
+declare const jobsImpl: Effect.Effect<{ readonly run: Effect.Effect<void> }>
+declare const program: Effect.Effect<void, never, Jobs>
+// ---cut---
 const inProcess = Hyperlink.layer(Jobs, jobsImpl)
 
 program.pipe(Effect.provide(inProcess)) // `yield* Jobs` runs jobsImpl locally
@@ -107,10 +116,10 @@ Effect.provide(app, Hyperlink.layerProtocol(Hyperlink.protocolWebsocket(3000))) 
 ## Dependencies on the server
 
 A HyperService may depend on other Effect services, including other HyperServices.
-`Hyperlink.serve` / `serveRemote`, the engine forms (`WorkPool.serve`, `Daemon.serve`, `Gate.serve`),
-and the protocol listens **preserve that requirement `R`**. They do not close dependencies at the
-server boundary. Composition matches Effect's `Layer.mergeAll`: list the serve layers, then
-`Layer.provide` what they need outside.
+`Hyperlink.serve` / `serveRemote`, the included HyperService serves (`WorkPool.serve`, `Daemon.serve`,
+`Gate.serve`), and the protocol listens **preserve that requirement `R`**. They do not close
+dependencies at the server boundary. Composition matches Effect's `Layer.mergeAll`: list the serve
+layers, then `Layer.provide` what they need outside.
 
 Provide a shared dependency once onto the whole server:
 

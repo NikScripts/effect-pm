@@ -68,6 +68,7 @@ const watchDocsContent = {
         "../../examples/schedule",
         "../../examples/polling",
         "../../examples/config",
+        "../../examples/observe",
         "../../examples/scenarios",
         "../../examples/apps",
         "../../examples/shared",
@@ -86,14 +87,15 @@ export default defineConfig({
     // JS import-analysis on it (which errors on edit and breaks the HMR signal), so `?raw`
     // imports and hot-reload work cleanly.
     assetsInclude: ["**/*.md"],
-    // `@pm` -> the hyperlink-ts package SOURCE, so island widgets bundle with THIS app's
+    // `hyperlink-ts` -> package SOURCE, so island widgets bundle with THIS app's
     // single `effect`/`react` instance (a dual instance would break atom reactivity).
+    // Same specifier as Twoslash/guides — no leftover `@pm` alias.
     resolve: {
       // Source-imported package widgets pull react/lucide/recharts from the repo's
       // node_modules; dedupe forces ONE react instance (else "Invalid hook call").
       dedupe: ["react", "react-dom", "react/jsx-runtime", "effect"],
       alias: {
-        "@pm": fileURLToPath(new URL("../../src", import.meta.url)),
+        "hyperlink-ts": fileURLToPath(new URL("../../src", import.meta.url)),
         // Node-only deps the package pulls transitively (SQLite storage, CI check).
         // A demo queue is in-memory, so stub them out of the browser bundle.
         "@effect/sql-sqlite-node/SqliteClient": fileURLToPath(new URL("./shims/sqlite-node-stub.js", import.meta.url)),

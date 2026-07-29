@@ -77,4 +77,4 @@ const program = Effect.gen(function* () {
 const mainLayer = Layer.mergeAll(TimedWorkGate.layer, DoubleGate.layer);
 // ---cut-after---
 
-runNodeProgramWithLayer(program, mainLayer, "form:gate-unit-and-input finished OK");
+runNodeProgramWithLayer(program, mainLayer, "example:gate-unit-and-input finished OK");

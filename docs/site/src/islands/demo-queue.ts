@@ -4,7 +4,7 @@
 
 import { Effect, Stream } from "effect";
 import { Atom } from "effect/unstable/reactivity";
-import * as WorkPool from "@pm/WorkPool";
+import * as WorkPool from "hyperlink-ts/WorkPool";
 
 class DemoQueue extends WorkPool.Service<DemoQueue, string, never>()("docs/DemoQueue", {
   concurrency: 1,

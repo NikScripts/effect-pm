@@ -1,7 +1,7 @@
 /**
  * @module web/DashboardViews
  *
- * Web (DOM) skins for all default Dashboard View families — `Layer.succeed` only.
+ * Web (DOM) skins for all default Dashboard View families — `View.provide` only.
  * Ready {@link layer} for {@link View.react}.
  */
 import * as React from "react";
@@ -30,15 +30,19 @@ import * as PriorityView from "../ui/PriorityView";
 import * as ShardMapView from "../ui/ShardMapView";
 import * as TelemetryView from "../ui/TelemetryView";
 import * as WorkPoolView from "../ui/WorkPoolView";
-import { useApiBundle, useDaemonBundle } from "./runtime";
+import { AsyncResult } from "effect/unstable/reactivity";
+import { useAtomValue } from "../ui/atom-react";
+import * as Observe from "../Observe";
 import {
   ApiCard,
   ApiEndpointTable,
   ApiMetricChart,
   ApiStats,
+  ApiStatusBadge,
   DaemonCard,
   DaemonControls,
   DaemonStats,
+  DaemonStatusBadge,
   displayName,
   FleetHealthCard,
   FleetHealthDetail as FleetHealthDetailWidget,
@@ -161,13 +165,12 @@ const PoolDetailView: View.View = (props) => {
 
 const PriorityDetailView: View.View = (props) => {
   if (!isPriorityTag(props.tag)) return null;
-  // Shell Outlet owns back/title; body-only when Navigator is present (lock J).
+  // Shell owns back/title; body-only when Navigator is present (lock J).
   const nav = Navigator.useNavigatorOption();
   return (
     <PriorityDetailWidget
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
-      onBack={nav?.back}
       chrome={nav === null}
     />
   );
@@ -176,10 +179,15 @@ const PriorityDetailView: View.View = (props) => {
 const DaemonDetailView: View.View = (props) => {
   if (!isDaemonTag(props.tag)) return null;
   const nav = Navigator.useNavigatorOption();
-  const bundle = useDaemonBundle(props.tag);
+  const bundle = Observe.use(props.tag, DaemonView.pack);
+  const statusR = useAtomValue(bundle.status);
+  const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const [locked, setLocked] = React.useState(true);
   return (
     <>
+      <div className="flex justify-end">
+        <DaemonStatusBadge supervising={s?.supervising} />
+      </div>
       <HyperlinkReadinessBanner tag={props.tag} />
       <DaemonStats bundle={bundle} />
       <DaemonControls
@@ -201,9 +209,14 @@ const DaemonDetailView: View.View = (props) => {
 
 const ApiDetailView: View.View = (props) => {
   if (!isApiTag(props.tag)) return null;
-  const bundle = useApiBundle(props.tag);
+  const bundle = Observe.use(props.tag, ApiMetricsView.pack);
+  const statusR = useAtomValue(bundle.status);
+  const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   return (
     <>
+      <div className="flex justify-end">
+        <ApiStatusBadge requests={s?.requestsTotal ?? 0} errors={s?.errorsTotal ?? 0} />
+      </div>
       <HyperlinkReadinessBanner tag={props.tag} />
       <ApiStats bundle={bundle} />
       <div className="overflow-hidden rounded-xl border bg-card p-3">
@@ -221,7 +234,6 @@ const FleetDetailView: View.View = (props) => {
     <FleetHealthDetailWidget
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
-      onBack={nav?.back}
       chrome={nav === null}
     />
   );
@@ -234,7 +246,6 @@ const TelemetryDetailView: View.View = (props) => {
     <TelemetryDetailWidget
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
-      onBack={nav?.back}
       chrome={nav === null}
     />
   );
@@ -247,7 +258,6 @@ const ShardMapDetailView: View.View = (props) => {
     <ShardMapDetailWidget
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
-      onBack={nav?.back}
       chrome={nav === null}
     />
   );
@@ -260,7 +270,6 @@ const GateDetailView: View.View = (props) => {
     <GateDetailWidget
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
-      onBack={nav?.back}
       chrome={nav === null}
     />
   );
@@ -272,24 +281,24 @@ const GateDetailView: View.View = (props) => {
  * @public
  */
 export const skins = Layer.mergeAll(
-  Layer.succeed(GroupView.GroupCard, GroupCardView),
-  Layer.succeed(WorkPoolView.PoolCard, PoolCardView),
-  Layer.succeed(WorkPoolView.PoolDetail, PoolDetailView),
-  Layer.succeed(PriorityView.PriorityCard, PriorityCardView),
-  Layer.succeed(PriorityView.PriorityDetail, PriorityDetailView),
-  Layer.succeed(DaemonView.DaemonCard, DaemonCardView),
-  Layer.succeed(DaemonView.DaemonDetail, DaemonDetailView),
-  Layer.succeed(ApiMetricsView.ApiCard, ApiCardView),
-  Layer.succeed(ApiMetricsView.ApiDetail, ApiDetailView),
-  Layer.succeed(FleetHealthView.FleetCard, FleetCardView),
-  Layer.succeed(FleetHealthView.FleetDetail, FleetDetailView),
-  Layer.succeed(TelemetryView.TelemetryCard, TelemetryCardView),
-  Layer.succeed(TelemetryView.TelemetryDetail, TelemetryDetailView),
-  Layer.succeed(ShardMapView.ShardMapCard, ShardMapCardView),
-  Layer.succeed(ShardMapView.ShardMapDetail, ShardMapDetailView),
-  Layer.succeed(GateView.GateCard, GateCardView),
-  Layer.succeed(GateView.GateDetail, GateDetailView),
-  Layer.succeed(HyperlinkView.HyperlinkCard, HyperlinkCardView),
+  View.provide(GroupView.GroupCard, GroupCardView),
+  View.provide(WorkPoolView.PoolCard, PoolCardView),
+  View.provide(WorkPoolView.PoolDetail, PoolDetailView),
+  View.provide(PriorityView.PriorityCard, PriorityCardView),
+  View.provide(PriorityView.PriorityDetail, PriorityDetailView),
+  View.provide(DaemonView.DaemonCard, DaemonCardView),
+  View.provide(DaemonView.DaemonDetail, DaemonDetailView),
+  View.provide(ApiMetricsView.ApiCard, ApiCardView),
+  View.provide(ApiMetricsView.ApiDetail, ApiDetailView),
+  View.provide(FleetHealthView.FleetCard, FleetCardView),
+  View.provide(FleetHealthView.FleetDetail, FleetDetailView),
+  View.provide(TelemetryView.TelemetryCard, TelemetryCardView),
+  View.provide(TelemetryView.TelemetryDetail, TelemetryDetailView),
+  View.provide(ShardMapView.ShardMapCard, ShardMapCardView),
+  View.provide(ShardMapView.ShardMapDetail, ShardMapDetailView),
+  View.provide(GateView.GateCard, GateCardView),
+  View.provide(GateView.GateDetail, GateDetailView),
+  View.provide(HyperlinkView.HyperlinkCard, HyperlinkCardView),
 );
 
 /**

@@ -57,7 +57,7 @@ Namespace clash check done before locking: `WorkPool` / `Gate` / `Daemon` clear 
 3. **Every `Hyperlink.` call site** — src, examples, test, docs (guides use it in twoslash
    blocks; they typecheck, so misses fail loudly).
 4. **Docs site**: glossary entries (Resource/Tag/Contract/Handle), nav, api-slugs, the
-   `@pm/Resource` aliases, search corpus + llms regen, README, hero copy.
+   island `hyperlink-ts` alias (done), search corpus + llms regen, README, hero copy.
 5. **Changeset**: this is THE breaking change of the next release; write it prominently.
 
 ## Precedent & tooling

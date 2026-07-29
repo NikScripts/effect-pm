@@ -93,5 +93,5 @@ const program = Effect.gen(function* () {
 runNodeProgramWithLayer(
   program,
   eastLayer,
-  "form:fleet-health-glass finished OK",
+  "example:fleet-health-glass finished OK",
 );

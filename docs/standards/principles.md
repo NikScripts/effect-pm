@@ -27,6 +27,28 @@ class LoggingStore extends MemoryStore { /* override append… */ }
 const store = memoryStore.pipe(Store.mapEffects(withLogging))
 ```
 
+{#handles-stay-thin .must appliesTo="src examples"}
+## Handles stay thin; ship helpers separately
+
+A handle (Tag, kit, service class, compose result) carries only what cannot be refactored out:
+identity, contract, and the surface the type system must attach there. If something can be a free
+function or an `Effect`, extract it and ship it as a helper. Do not hang derived menus, observe
+doors, or convenience nouns on the handle to make call sites shorter.
+
+``` ts
+// ❌ bad — weight on the handle / kit
+Jobs.observe()
+ui.data.queue(Jobs)
+
+// ✅ good — thin handle; Observe + *View.pack owns the derived surface
+import * as Observe from "hyperlink-ts/Observe"
+import * as WorkPoolView from "hyperlink-ts/ui/WorkPoolView"
+Observe.use(Jobs, WorkPoolView.pack)
+```
+
+The test: if removing the method leaves a complete Tag (or kit) and a named helper that takes that
+handle as data, the method did not belong on the handle. See [Observe](/docs/observe).
+
 {#single-source-of-truth .must appliesTo="all docs"}
 ## Single source of truth
 

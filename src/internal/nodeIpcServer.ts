@@ -6,7 +6,9 @@
 import {
   Clock,
   Effect,
+  Exit,
   Layer,
+  Scope,
   type Redacted,
 } from "effect"
 import {
@@ -23,6 +25,7 @@ import {
   assertProtocolKinds,
   closedLayer,
   directoryAdvertiseMerge,
+  membershipFromAdvertise,
   mergeServeList,
   retype,
   toServeList,
@@ -171,6 +174,15 @@ const ipcServerBase = (options: IpcServerOptions): IpcServed => {
       const { nodeStatusServeEntry } = yield* Effect.promise(
         () => import("./nodeStatus"),
       );
+      const listenScope = yield* Scope.Scope;
+      const membership = membershipFromAdvertise(
+        options.advertiseNode,
+        entries,
+      );
+      const { signal: signalListenExit } = yield* Effect.promise(
+        () => import("./nodeListenExit"),
+      );
+      const handoffRuns = Hyperlink.collectServedHandoffRuns(entries);
       const nodeEntry = nodeStatusServeEntry({
         startedAt,
         serviceCount: entries.length,
@@ -181,6 +193,24 @@ const ipcServerBase = (options: IpcServerOptions): IpcServed => {
           : {}),
         ...(inferredNodeKey !== undefined ? { assumeNodeKey: inferredNodeKey } : {}),
         ...(options.onYield !== undefined ? { onYield: options.onYield } : {}),
+        ...(membership !== undefined ? { membership } : {}),
+        ...(handoffRuns.length > 0
+          ? {
+              handoff: Effect.forEach(handoffRuns, (run) => run, {
+                discard: true,
+                concurrency: "unbounded",
+              }),
+            }
+          : {}),
+        closeListen: Effect.gen(function* () {
+          if (membership !== undefined) {
+            // Detach so the shutdown RPC can finish before Node.launch tears the scope down.
+            yield* Effect.forkDetach(signalListenExit(membership.nodeKey));
+            return;
+          }
+          // No launch latch — best-effort close for Layer.build holders.
+          yield* Scope.close(listenScope, Exit.void).pipe(Effect.ignore);
+        }),
       });
       const nodeTag = nodeEntry.tag;
       // nodeStatus impl Effect is Effect-bounded with open channels — retype before yield*.

@@ -315,7 +315,9 @@ export type ListenOptions = {
    * Cooperative directory handoff handler for Lookup {@link OnConflict} `"askIncumbent"` —
    * wired to the auto-mounted node-status `yield` RPC. `true` = step aside (row may replace);
    * `false` / timeout → newcomer sees Lookup `IncumbentAlive`. Default when omitted: accept.
-   * Does **not** drain work or shut down the process (Track C).
+   * While the node is in status `phase: "draining"` ({@link Node.drain}), yield **always
+   * refuses** (fail-closed) regardless of this handler. Does **not** itself drain work or
+   * exit the process — call {@link Node.drain} / later shutdown sequence for that.
    */
   readonly onYield?: Effect.Effect<boolean>;
 };

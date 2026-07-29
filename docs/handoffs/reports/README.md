@@ -4,7 +4,7 @@
 
 **Active major Eng:** none unlocked. Last complete: [`identity-coordinator.md`](../identity-coordinator.md) M1–M6 + loud-failures core. Guide: [`docs/guides/identity-coordinator.md`](../../guides/identity-coordinator.md).
 
-**Next design brief (unassigned):** [`launcher-and-handoff-brief.md`](../launcher-and-handoff-brief.md) — launcher **not locked** (may restart from scratch); contract drift Eng keep; node-owned processes; Lookup-directed startup; handoff on version upgrade.
+**Agent 5 brief:** [`launcher-and-handoff-brief.md`](../launcher-and-handoff-brief.md) — Track A+B+C(#27–33) Eng'd; `lookupClient` + `peersLayer` hot-rebind Eng'd. Next: owner-lock deferred #34–37. Launcher redesign notes remain reference-only.
 
 Historical review reports and session closeouts from the 2026-07 store cutover land under [`../archive/2026-07/`](../archive/2026-07/). This folder keeps only the **index** (so `AGENTS.md` / legacy links stay stable).
 

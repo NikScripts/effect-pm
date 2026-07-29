@@ -7,8 +7,11 @@
  * live service over the consumer's reactive `runtime` (an `Atom.runtime(layer)` that provides
  * the tags — local engine or `Hyperlink.client` over http; the widgets don't care which).
  *
+ * Prefer `Observe.use(tag, *View.pack)` at call sites. Builders are thin wraps over packs
+ * (or shared scan helpers); composite scans live on the matching `*View` pack.
+ *
  */
-import { DateTime, Duration, Effect, Option, Predicate, type Schema, Stream } from "effect";
+import { Effect, Option, Predicate, Stream, type Schema } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
 import * as Group from "../Group";
 import {
@@ -17,9 +20,7 @@ import {
   wireKeySym,
   type Subscribable,
 } from "../Hyperlink";
-import { connect } from "../Node";
-import type { NodeKey, AddressedNode, Status as NodeStatusSnapshot } from "../Node";
-import * as LogEntry from "../LogEntry";
+import type { NodeKey, Status as NodeStatusSnapshot } from "../Node";
 import {
   kind as queueKind,
   queueMetrics,
@@ -38,8 +39,25 @@ import {
 } from "../Gate";
 import { kind as daemonKind, daemonScheduleEntry, daemonStatus } from "../Daemon";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../ApiUsageSchema";
-import { FRESH_MS, readCache, writeCache } from "./cache";
-import { now } from "./now";
+import * as Observe from "../Observe";
+import {
+  bumpLogIdFrom,
+  cachedAccumulator,
+  nodeConn,
+  serviceLogsAtom,
+  toLogLine,
+  type LogLine,
+} from "./observeSupport";
+import { pack as apiMetricsPack } from "./apiMetricsViewPack";
+import { pack as daemonPack } from "./daemonViewPack";
+import { pack as gatePack } from "./gateViewPack";
+import {
+  fleetHealthPack,
+  shardMapPack,
+  telemetryPack,
+} from "./pollViewPacks";
+import { pack as priorityPack } from "./priorityViewPack";
+import { pack as workPoolQueuePack } from "./workPoolViewPack";
 
 /** Live queue status (from the contract schema). */
 export type QueueStatus = Schema.Schema.Type<typeof queueStatus>;
@@ -52,13 +70,8 @@ export type DaemonStatus = Schema.Schema.Type<typeof daemonStatus>;
 /** One scheduled run window (from the contract schema): `{ id?, startAt, stopAt? }`. */
 export type ScheduleEntry = Schema.Schema.Type<typeof daemonScheduleEntry>;
 
-/** A captured log line for the log pane. */
-export interface LogLine {
-  readonly id: number;
-  readonly t: number;
-  readonly level: string;
-  readonly message: string;
-}
+/** A captured log line for the log pane. @public */
+export type { LogLine };
 /** A windowed metrics sample for the chart. */
 export interface MetricPoint {
   readonly t: number;
@@ -401,55 +414,7 @@ export const isShardMapTag = (m: unknown): m is ShardMapTag =>
 export const isGateTag = (m: unknown): m is GateTag =>
   hyperlinkKindOf(m) === gateKind;
 
-// one combined metrics stream carries both backfill points and live raw metrics
-type MetricsItem = { readonly point: MetricPoint } | { readonly metric: QueueMetrics };
-
-// Retain a deep metrics history (server keeps up to ~10k) so the chart's time-window control can
-// show real backfill up to ~1 hour; the localStorage cache keeps only a small recent slice for
-// instant first paint (the server query refills the rest, since the metrics atom always backfills).
-const HISTORY = 1800;
-const HISTORY_CACHE = 120;
-const TREND = 60;
-let logId = 0;
-
-const toLogLine = (l: { readonly level: string; readonly message: string }): LogLine => ({
-  id: (logId += 1),
-  t: now(),
-  level: l.level,
-  message: l.message,
-});
-const bumpLogIdFrom = (key: string): void => {
-  const entry = readCache<LogLine>(key);
-  if (entry !== undefined) logId = entry.items.reduce((mx, l) => Math.max(mx, l.id), logId);
-};
-
-/**
- * Generic cached accumulator: seed from the localStorage snapshot (instant paint + skip the
- * server history query while the snapshot is fresh), accumulate the live stream, and persist.
- */
-const cachedAccumulator = <A, R>(opts: {
-  readonly key: string;
-  readonly cap: number;
-  readonly stream: Stream.Stream<A, never, R>;
-  readonly query?: Effect.Effect<ReadonlyArray<A>, never, R>;
-}): Stream.Stream<ReadonlyArray<A>, never, R> => {
-  const entry = readCache<A>(opts.key);
-  const fresh = entry !== undefined && now() - entry.at < FRESH_MS;
-  const seed: ReadonlyArray<A> = fresh && entry !== undefined ? entry.items : [];
-  const source =
-    fresh || opts.query === undefined
-      ? opts.stream
-      : Stream.concat(Stream.unwrap(Effect.map(opts.query, Stream.fromIterable)), opts.stream);
-  return source.pipe(
-    Stream.scan(seed, (acc, x) => [...acc, x].slice(-opts.cap)),
-    Stream.tap((acc) => Effect.sync(() => writeCache(opts.key, acc))),
-  );
-};
-
-// bundles are runtime-specific (their atoms close over the runtime), so cache per runtime+tag
-const bundleCache = new WeakMap<object, Map<string, QueueBundle>>();
-const daemonBundleCache = new WeakMap<object, Map<string, DaemonBundle>>();
-const apiBundleCache = new WeakMap<object, Map<string, ApiBundle>>();
+// node bundles are runtime-specific (their atoms close over the runtime), so cache per runtime+id
 const nodeBundleCache = new WeakMap<object, Map<string, NodeBundle>>();
 const cacheFor = <V>(map: WeakMap<object, Map<string, V>>, runtime: object): Map<string, V> => {
   let m = map.get(runtime);
@@ -460,394 +425,55 @@ const cacheFor = <V>(map: WeakMap<object, Map<string, V>>, runtime: object): Map
   return m;
 };
 
-const hyperlinkLogsAtom = <R, ER>(
+export { serviceLogsAtom };
+
+/** Build (once per runtime+tag) the atom bundle for a queue tag — thin wrap over WorkPoolView.pack. */
+export const queueBundle = <R, ER>(
   runtime: DashboardRuntime<R, ER>,
-  serviceKey: string,
-  node: NodeKey<unknown>,
-) =>
-  runtime.atom(
-    cachedAccumulator({
-      key: `${serviceKey}/logs`,
-      cap: 300,
-      // A dead node surfaces NodeUnreachable; the dashboard atoms have no error channel, so it
-      // becomes a defect the atom's AsyncResult reports (same as before the node-handle move).
-      stream: Stream.unwrap(Effect.map(node, (h) => h.logs.stream)).pipe(
-        Stream.filter(LogEntry.hasKey(serviceKey)),
-        Stream.map(toLogLine),
-        Stream.orDie,
-      ),
-      query: Effect.flatMap(node, (h) => h.logs.query({ limit: 300 })).pipe(
-        Effect.map((entries) => entries.filter(LogEntry.hasKey(serviceKey)).map(toLogLine)),
-        Effect.orDie,
-      ),
-    }).pipe(Stream.provide(nodeConn(node))),
-  );
+  tag: QueueTag<R>,
+): QueueBundle => Observe.bind(runtime)(tag, workPoolQueuePack);
 
-/** Build (once per runtime+tag) the atom bundle for a queue tag. */
-export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueTag<R>): QueueBundle => {
-  const cache = cacheFor(bundleCache, runtime);
-  const existing = cache.get(tag.key);
-  if (existing !== undefined) return existing;
-
-  const node = nodeOf(tag);
-  if (node === undefined) {
-    throw new Error(`queue tag ${tag.key} is missing a node`);
-  }
-
-  // `status` is a reactive `ref` — subscribe via `.changes`; `metrics` is nested `{ stream, query }`.
-  const statusStream = Stream.unwrap(
-    Effect.map(tag, (q) => q.status.changes),
-  );
-  const metricsStream = Stream.unwrap(Effect.map(tag, (q) => q.metrics.stream));
-  // Stamp the point with the metric's own window-end (real server time), not the client's receive
-  // time — so backfilled points land at their true position on the time axis (the window filter).
-  const toPoint = (m: QueueMetrics): MetricPoint => ({
-    t: DateTime.toEpochMillis(m.windowEnd),
-    throughput: m.throughputPerSec,
-    latency: m.avgTotalMillis ?? 0,
-  });
-  const trendValue = (s: QueueStatus): number => s.sizes.high + s.sizes.normal + s.sizes.low;
-  bumpLogIdFrom(`${tag.key}/logs`);
-
-  // Dedup the wire streams: ONE status stream feeds status + trend, ONE metrics stream feeds
-  // metrics + history (derived via Atom.mapResult) — keeps concurrent streams under the
-  // browser's ~6-connection limit. trend/history seed from the localStorage cache.
-  const statusTrend = runtime.atom(
-    statusStream.pipe(
-      Stream.scan(
-        {
-          latest: Option.none<QueueStatus>(),
-          trend: readCache<number>(`${tag.key}/trend`)?.items ?? [],
-        },
-        (acc, s) => ({ latest: Option.some(s), trend: [...acc.trend, trendValue(s)].slice(-TREND) }),
-      ),
-      Stream.tap((acc) => Effect.sync(() => writeCache(`${tag.key}/trend`, acc.trend))),
-    ),
-  );
-  const metricsHistory = runtime.atom(
-    Stream.concat(
-      Stream.unwrap(
-        Effect.flatMap(tag, (q) => q.metrics.query({ limit: HISTORY })).pipe(
-          Effect.map((ms) => Stream.fromIterable(ms.map((m): MetricsItem => ({ point: toPoint(m) })))),
-        ),
-      ),
-      metricsStream.pipe(Stream.map((m): MetricsItem => ({ metric: m }))),
-    ).pipe(
-      Stream.scan(
-        {
-          latest: Option.none<QueueMetrics>(),
-          history: readCache<MetricPoint>(`${tag.key}/history`)?.items ?? [],
-        },
-        (acc, item) =>
-          "metric" in item
-            ? { latest: Option.some(item.metric), history: [...acc.history, toPoint(item.metric)].slice(-HISTORY) }
-            : { latest: acc.latest, history: [...acc.history, item.point].slice(-HISTORY) },
-      ),
-      Stream.tap((acc) =>
-        Effect.sync(() => writeCache(`${tag.key}/history`, acc.history.slice(-HISTORY_CACHE))),
-      ),
-    ),
-  );
-
-  const bundle: QueueBundle = {
-    status: Atom.mapResult(statusTrend, (a) => a.latest),
-    metrics: Atom.mapResult(metricsHistory, (a) => a.latest),
-    history: Atom.mapResult(metricsHistory, (a) => a.history),
-    trend: Atom.mapResult(statusTrend, (a) => a.trend),
-    logs: hyperlinkLogsAtom(runtime, tag.key, node),
-    pause: runtime.fn(() => Effect.flatMap(tag, (q) => q.pause)),
-    resume: runtime.fn(() => Effect.flatMap(tag, (q) => q.resume)),
-    clear: runtime.fn(() => Effect.flatMap(tag, (q) => q.clear)),
-    shutdown: runtime.fn(() => Effect.flatMap(tag, (q) => q.shutdown)),
-  };
-  cache.set(tag.key, bundle);
-  return bundle;
-};
-
-const priorityBundleCache = new WeakMap<object, Map<string, PriorityBundle>>();
-
-/** Build (once per runtime+tag) the atom bundle for a `WorkPool.priority` tag — the
- *  {@link queueBundle} parallel: same metrics/logs wire, a named-lane status, and a `start`
- *  command. @public */
+/** Build (once per runtime+tag) the atom bundle for a `WorkPool.priority` tag — thin wrap. @public */
 export const priorityBundle = <R, ER>(
   runtime: DashboardRuntime<R, ER>,
   tag: PriorityTag<R>,
-): PriorityBundle => {
-  const cache = cacheFor(priorityBundleCache, runtime);
-  const existing = cache.get(tag.key);
-  if (existing !== undefined) return existing;
+): PriorityBundle => Observe.bind(runtime)(tag, priorityPack);
 
-  const node = nodeOf(tag);
-  if (node === undefined) {
-    throw new Error(`WorkPool.priority tag ${tag.key} is missing a node`);
-  }
-
-  const statusStream = Stream.unwrap(Effect.map(tag, (q) => q.status.changes));
-  const metricsStream = Stream.unwrap(Effect.map(tag, (q) => q.metrics.stream));
-  const toPoint = (m: QueueMetrics): MetricPoint => ({
-    t: DateTime.toEpochMillis(m.windowEnd),
-    throughput: m.throughputPerSec,
-    latency: m.avgTotalMillis ?? 0,
-  });
-  // total pending across all named lanes (the fixed high/normal/low sum has no meaning here)
-  const trendValue = (s: PriorityStatus): number =>
-    Object.values(s.sizes).reduce((sum, n) => sum + n, 0);
-  bumpLogIdFrom(`${tag.key}/logs`);
-
-  const statusTrend = runtime.atom(
-    statusStream.pipe(
-      Stream.scan(
-        {
-          latest: Option.none<PriorityStatus>(),
-          trend: readCache<number>(`${tag.key}/trend`)?.items ?? [],
-        },
-        (acc, s) => ({ latest: Option.some(s), trend: [...acc.trend, trendValue(s)].slice(-TREND) }),
-      ),
-      Stream.tap((acc) => Effect.sync(() => writeCache(`${tag.key}/trend`, acc.trend))),
-    ),
-  );
-  const metricsHistory = runtime.atom(
-    Stream.concat(
-      Stream.unwrap(
-        Effect.flatMap(tag, (q) => q.metrics.query({ limit: HISTORY })).pipe(
-          Effect.map((ms) => Stream.fromIterable(ms.map((m): MetricsItem => ({ point: toPoint(m) })))),
-        ),
-      ),
-      metricsStream.pipe(Stream.map((m): MetricsItem => ({ metric: m }))),
-    ).pipe(
-      Stream.scan(
-        {
-          latest: Option.none<QueueMetrics>(),
-          history: readCache<MetricPoint>(`${tag.key}/history`)?.items ?? [],
-        },
-        (acc, item) =>
-          "metric" in item
-            ? { latest: Option.some(item.metric), history: [...acc.history, toPoint(item.metric)].slice(-HISTORY) }
-            : { latest: acc.latest, history: [...acc.history, item.point].slice(-HISTORY) },
-      ),
-      Stream.tap((acc) =>
-        Effect.sync(() => writeCache(`${tag.key}/history`, acc.history.slice(-HISTORY_CACHE))),
-      ),
-    ),
-  );
-
-  const bundle: PriorityBundle = {
-    status: Atom.mapResult(statusTrend, (a) => a.latest),
-    metrics: Atom.mapResult(metricsHistory, (a) => a.latest),
-    history: Atom.mapResult(metricsHistory, (a) => a.history),
-    trend: Atom.mapResult(statusTrend, (a) => a.trend),
-    logs: hyperlinkLogsAtom(runtime, tag.key, node),
-    start: runtime.fn(() => Effect.flatMap(tag, (q) => q.start)),
-    pause: runtime.fn(() => Effect.flatMap(tag, (q) => q.pause)),
-    resume: runtime.fn(() => Effect.flatMap(tag, (q) => q.resume)),
-    clear: runtime.fn(() => Effect.flatMap(tag, (q) => q.clear)),
-    shutdown: runtime.fn(() => Effect.flatMap(tag, (q) => q.shutdown)),
-  };
-  cache.set(tag.key, bundle);
-  return bundle;
-};
-
-const fleetHealthBundleCache = new WeakMap<object, Map<string, FleetHealthBundle>>();
-
-/** Build (once per runtime+tag) the atom bundle for a **fleet-health** tag. `byNode` / `status` are
- *  `fleet` effect fields (a server-side peer fold, no reactive ref), so they're **polled** on a tick —
- *  the first read fires immediately, then every ~2s. @public */
+/** Build (once per runtime+tag) the atom bundle for a **fleet-health** tag — thin wrap. @public */
 export const fleetHealthBundle = <R, ER>(
   runtime: DashboardRuntime<R, ER>,
   tag: FleetHealthTag<R>,
-): FleetHealthBundle => {
-  const cache = cacheFor(fleetHealthBundleCache, runtime);
-  const existing = cache.get(tag.key);
-  if (existing !== undefined) return existing;
+): FleetHealthBundle => Observe.bind(runtime)(tag, fleetHealthPack);
 
-  const read = Effect.flatMap(tag, (h) => Effect.all({ byNode: h.byNode, status: h.status }));
-  const poll = runtime.atom(
-    Stream.fromEffect(read).pipe(
-      Stream.concat(Stream.tick(Duration.seconds(2)).pipe(Stream.mapEffect(() => read))),
-    ),
-  );
-  const bundle: FleetHealthBundle = {
-    byNode: Atom.mapResult(poll, (a) => a.byNode),
-    status: Atom.mapResult(poll, (a) => a.status),
-  };
-  cache.set(tag.key, bundle);
-  return bundle;
-};
-
-const telemetryBundleCache = new WeakMap<object, Map<string, TelemetryBundle>>();
-
-/** Build (once per runtime+tag) the atom bundle for a **telemetry** tag. `snapshot` (leaf) +
- *  `inFlightByNode` / `fleetInFlight` (fleet folds) are effect fields — **polled** on a tick (first
- *  read immediate, then ~2s). @public */
+/** Build (once per runtime+tag) the atom bundle for a **telemetry** tag — thin wrap. @public */
 export const telemetryBundle = <R, ER>(
   runtime: DashboardRuntime<R, ER>,
   tag: TelemetryTag<R>,
-): TelemetryBundle => {
-  const cache = cacheFor(telemetryBundleCache, runtime);
-  const existing = cache.get(tag.key);
-  if (existing !== undefined) return existing;
+): TelemetryBundle => Observe.bind(runtime)(tag, telemetryPack);
 
-  const read = Effect.flatMap(tag, (t) =>
-    Effect.all({ snapshot: t.snapshot, inFlightByNode: t.inFlightByNode, fleetInFlight: t.fleetInFlight }),
-  );
-  const poll = runtime.atom(
-    Stream.fromEffect(read).pipe(
-      Stream.concat(Stream.tick(Duration.seconds(2)).pipe(Stream.mapEffect(() => read))),
-    ),
-  );
-  const bundle: TelemetryBundle = {
-    metricCount: Atom.mapResult(poll, (a) => a.snapshot.metrics.length),
-    inFlightByNode: Atom.mapResult(poll, (a) => a.inFlightByNode),
-    fleetInFlight: Atom.mapResult(poll, (a) => a.fleetInFlight),
-    metrics: Atom.mapResult(poll, (a) => a.snapshot.metrics),
-  };
-  cache.set(tag.key, bundle);
-  return bundle;
-};
-
-const shardMapBundleCache = new WeakMap<object, Map<string, ShardMapBundle>>();
-
-/** Build (once per runtime+tag) the atom bundle for a **shard-map** tag. `size` / `sizeByNode` (fleet
- *  folds) + `sizeLocal` (leaf) are effect fields — **polled** on a tick (first read immediate, then
- *  ~2s). @public */
+/** Build (once per runtime+tag) the atom bundle for a **shard-map** tag — thin wrap. @public */
 export const shardMapBundle = <R, ER>(
   runtime: DashboardRuntime<R, ER>,
   tag: ShardMapTag<R>,
-): ShardMapBundle => {
-  const cache = cacheFor(shardMapBundleCache, runtime);
-  const existing = cache.get(tag.key);
-  if (existing !== undefined) return existing;
+): ShardMapBundle => Observe.bind(runtime)(tag, shardMapPack);
 
-  const read = Effect.flatMap(tag, (m) =>
-    Effect.all({ size: m.size, sizeByNode: m.sizeByNode, sizeLocal: m.sizeLocal }),
-  );
-  const poll = runtime.atom(
-    Stream.fromEffect(read).pipe(
-      Stream.concat(Stream.tick(Duration.seconds(2)).pipe(Stream.mapEffect(() => read))),
-    ),
-  );
-  const bundle: ShardMapBundle = {
-    size: Atom.mapResult(poll, (a) => a.size),
-    sizeByNode: Atom.mapResult(poll, (a) => ({ ...a.sizeByNode })),
-    sizeLocal: Atom.mapResult(poll, (a) => a.sizeLocal),
-  };
-  cache.set(tag.key, bundle);
-  return bundle;
-};
-
-const gateBundleCache = new WeakMap<object, Map<string, GateBundle>>();
-
-/** Build (once per runtime+tag) the atom bundle for a **Gate** tag — subscribes to the reactive
- *  `status` ref (streamed, like the queue/daemon cards). @public */
+/** Build (once per runtime+tag) the atom bundle for a **Gate** tag — thin wrap. @public */
 export const gateBundle = <R, ER>(
   runtime: DashboardRuntime<R, ER>,
   tag: GateTag<R>,
-): GateBundle => {
-  const cache = cacheFor(gateBundleCache, runtime);
-  const existing = cache.get(tag.key);
-  if (existing !== undefined) return existing;
+): GateBundle => Observe.bind(runtime)(tag, gatePack);
 
-  const bundle: GateBundle = {
-    status: runtime.atom(Stream.unwrap(Effect.map(tag, (r) => r.status.changes))),
-  };
-  cache.set(tag.key, bundle);
-  return bundle;
-};
+/** Build (once per runtime+tag) the atom bundle for a daemon tag — thin wrap. @public */
+export const daemonBundle = <R, ER>(
+  runtime: DashboardRuntime<R, ER>,
+  tag: DaemonTag<R>,
+): DaemonBundle => Observe.bind(runtime)(tag, daemonPack);
 
-/** Build (once per runtime+tag) the atom bundle for a daemon tag. */
-export const daemonBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: DaemonTag<R>): DaemonBundle => {
-  const cache = cacheFor(daemonBundleCache, runtime);
-  const existing = cache.get(tag.key);
-  if (existing !== undefined) return existing;
-  const node = nodeOf(tag);
-  if (node === undefined) {
-    throw new Error(`daemon tag ${tag.key} is missing a node`);
-  }
-  bumpLogIdFrom(`${tag.key}/logs`);
-  // The inline `schedule` group is optional (only daemons that own an inline schedule have it),
-  // so the schedule read/mutations degrade to empty / no-op when a daemon is schedule-less.
-  const scheduleEntries = Effect.flatMap(tag, (p) =>
-    p.schedule === undefined
-      ? Effect.succeed<ReadonlyArray<ScheduleEntry>>([])
-      : p.schedule.entries.get,
-  );
-  const bundle: DaemonBundle = {
-    status: runtime.atom(Stream.unwrap(Effect.map(tag, (p) => p.status.changes))),
-    logs: hyperlinkLogsAtom(runtime, tag.key, node),
-    // Poll the schedule so a read-only inline view reflects edits made on the fullscreen page (and
-    // any external changes) — the contract exposes `schedule.entries` as a reactive ref, read here.
-    schedule: runtime.atom(
-      Stream.tick(Duration.seconds(3)).pipe(Stream.mapEffect(() => scheduleEntries)),
-    ),
-    start: runtime.fn(() => Effect.flatMap(tag, (p) => p.start)),
-    stop: runtime.fn(() => Effect.flatMap(tag, (p) => p.stop)),
-    run: runtime.fn(() => Effect.flatMap(tag, (p) => p.run)),
-    setSchedule: runtime.fn((entries: ReadonlyArray<ScheduleEntry>) =>
-      Effect.flatMap(tag, (p) => (p.schedule === undefined ? Effect.void : p.schedule.set(entries))),
-    ),
-    clearSchedule: runtime.fn(() => Effect.flatMap(tag, (p) => (p.schedule === undefined ? Effect.void : p.schedule.clear))),
-  };
-  cache.set(tag.key, bundle);
-  return bundle;
-};
-
-/** Build (once per runtime+tag) the atom bundle for an API-metrics tag — read-only. */
-export const apiBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: ApiTag<R>): ApiBundle => {
-  const cache = cacheFor(apiBundleCache, runtime);
-  const existing = cache.get(tag.key);
-  if (existing !== undefined) return existing;
-  const toApiPoint = (m: ApiUsageMetrics): ApiPoint => ({
-    t: DateTime.toEpochMillis(m.windowEnd),
-    throughput: m.throughputPerSec,
-    errors: m.errors,
-    inFlight: m.inFlight,
-  });
-  // One metrics stream feeds the latest window + the accumulated chart history (no server backfill
-  // for API — there's no history query — so seed from the localStorage cache and accumulate live).
-  const metricsHistory = runtime.atom(
-    Stream.unwrap(Effect.map(tag, (a) => a.metrics.windows)).pipe(
-      Stream.scan(
-        {
-          latest: Option.none<ApiUsageMetrics>(),
-          history: readCache<ApiPoint>(`${tag.key}/api-history`)?.items ?? [],
-        },
-        (acc, m) => ({ latest: Option.some(m), history: [...acc.history, toApiPoint(m)].slice(-HISTORY) }),
-      ),
-      Stream.tap((acc) =>
-        Effect.sync(() => writeCache(`${tag.key}/api-history`, acc.history.slice(-HISTORY_CACHE))),
-      ),
-    ),
-  );
-  const bundle: ApiBundle = {
-    status: runtime.atom(Stream.unwrap(Effect.map(tag, (a) => a.metrics.usage.changes))),
-    metrics: Atom.mapResult(metricsHistory, (a) => a.latest),
-    history: Atom.mapResult(metricsHistory, (a) => a.history),
-    remaining: runtime.atom(
-      Stream.unwrap(Effect.map(tag, (a) => a.metrics.remaining.changes)),
-    ),
-    resetAfter: runtime.atom(
-      Stream.unwrap(Effect.map(tag, (a) => a.metrics.resetAfter.changes)),
-    ),
-    exceeded: runtime.atom(
-      Stream.unwrap(Effect.map(tag, (a) => a.metrics.exceeded.changes)),
-    ),
-  };
-  cache.set(tag.key, bundle);
-  return bundle;
-};
-
-// (comment removed)
-// so provide it as the ambient `RpcClient.Protocol`. The tag-walk (`nodesOf`) erases the node's
-// identity, and the runtime supplies its transport via `connect`, so we restate the resolved
-// requirement — the same contained boundary assertion `Hyperlink.client` makes for node-bearing tags.
-// The 2-arg `client(tag, node)` form reads the node's value and unwraps its transport — the sanctioned
-// way to point a nodeless reserved tag at a specific node. (The node is exposed at runtime via
-// `connect`, so we erase its identity to `never` — the same contained boundary assertion Hyperlink.client
-// makes for node-bearing tags.)
-const nodeConn = (node: NodeKey<unknown>) =>
-  // Connect the node so `yield* node` yields its handle (protocol + status/logs/ping). The list is
-  // heterogeneous, so the node is erased; these are real addressed dashboard nodes.
-  connect(node as AddressedNode<unknown>);
+/** Build (once per runtime+tag) the atom bundle for an API-metrics tag — thin wrap. @public */
+export const apiBundle = <R, ER>(
+  runtime: DashboardRuntime<R, ER>,
+  tag: ApiTag<R>,
+): ApiBundle => Observe.bind(runtime)(tag, apiMetricsPack);
 
 /** Build (once per runtime+node) the atom bundle for a node's live status — read from the
  *  connected node handle's status/logs accessors. */

@@ -15,7 +15,10 @@
     ],
     "baseUrl": ".",
     "paths": {
-      "@pm/*": [
+      "hyperlink-ts": [
+        "../../src/index.ts"
+      ],
+      "hyperlink-ts/*": [
         "../../src/*"
       ]
     },

@@ -4,7 +4,7 @@
 
 import { Effect, Schema, Stream } from "effect";
 import { Atom } from "effect/unstable/reactivity";
-import * as Gate from "@pm/Gate";
+import * as Gate from "hyperlink-ts/Gate";
 
 class Double extends Gate.Service<Double>()("docs/Double", {
   payload: Schema.Number,

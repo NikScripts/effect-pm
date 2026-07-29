@@ -46,4 +46,4 @@ const program = Effect.gen(function* () {
 }).pipe(Effect.scoped);
 
 // ---cut-after---
-runNodeProgramWithLayer(program, env, "form:polling-spaced-read finished");
+runNodeProgramWithLayer(program, env, "example:polling-spaced finished");

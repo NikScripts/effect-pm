@@ -16,9 +16,7 @@
  */
 
 // ---cut---
-import * as NodeChildProcessSpawner from "@effect/platform-node/NodeChildProcessSpawner";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Clock, Context, Effect, Layer } from "effect";
 import { ChildProcess } from "effect/unstable/process";
 import * as Launcher from "../../src/Launcher";
@@ -71,12 +69,7 @@ const program = Effect.gen(function* () {
     Effect.flatMap((h) => h.exitCode),
     Effect.ignore,
   );
-}).pipe(
-  Effect.scoped,
-  Effect.provide(
-    Layer.provideMerge(NodeChildProcessSpawner.layer, NodeServices.layer),
-  ),
-);
+}).pipe(Effect.scoped, Effect.provide(Launcher.layer));
 
 // ---cut-after---
 NodeRuntime.runMain(program);

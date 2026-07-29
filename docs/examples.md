@@ -261,6 +261,18 @@ Guide: [Config](/docs/configuration)
 
 ---
 
+## Observe
+
+Guide: [Observe recipes](/docs/observe)
+
+### [pack demo](/docs/observe-pack-demo)
+
+`examples/observe/pack-demo.ts` · `pnpm run example:observe-pack-demo`
+
+`Observe.bind` + compositional pack (same stack as `Observe.use` in React). Not Twoslash-paired yet (top-level await demo).
+
+---
+
 ## Scenarios
 
 ### [multi-protocol dual serve](/docs/scenario-multi-protocol)

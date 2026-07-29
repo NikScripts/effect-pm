@@ -37,4 +37,4 @@ const program = Effect.gen(function* () {
 }).pipe(Effect.scoped);
 
 // ---cut-after---
-runNodeProgramWithLayer(program, env, "form:schedule-at finished");
+runNodeProgramWithLayer(program, env, "example:schedule-at finished");

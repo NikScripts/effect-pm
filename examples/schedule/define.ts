@@ -46,4 +46,4 @@ const program = Effect.gen(function* () {
 }).pipe(Effect.scoped);
 
 // ---cut-after---
-runNodeProgramWithLayer(program, env, "form:schedule-define finished");
+runNodeProgramWithLayer(program, env, "example:schedule-define finished");

@@ -24,12 +24,13 @@ examples/
   schedule/        # Daemon schedule controls
   polling/         # Polling cadences
   config/          # Dynamic config
+  observe/         # Observe.bind / packs (guide: observe)
   scenarios/       # multi-file compositions (+ serve-per, NWSL)
   apps/            # tui, web, dashboard, cli, widgets (not 1:1 Twoslash)
   shared/          # harness (unchanged role)
 ```
 
-**Deleted concept:** `examples/**` as a namespace. Teaching scripts live in topic folders.
+**Deleted concept:** `examples/forms/**`. Teaching scripts live in topic folders.
 
 **Docs pairs:** `docs/examples/<topic>/<name>.md` with `include="examples/<topic>/<name>.ts"`.  
 **Slugs:** prefer `topic-name` (e.g. `work-pool-priority-retry`) so URLs grep like guides.  
@@ -46,8 +47,9 @@ examples/
 7. Hyperlink (Tag / wire)  
 8. Store → `/docs/stores`  
 9. Schedule · Polling · Config  
-10. Scenarios  
-11. Apps (run matrix only until E5 extracts)
+10. Observe → `/docs/observe`  
+11. Scenarios  
+12. Apps (run matrix only until E5 extracts)
 
 ## Rename map (old → new)
 

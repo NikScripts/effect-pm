@@ -110,7 +110,7 @@ const bundle = ui.data.queue(Jobs)   // QueueBundle
 const d = ui.data.daemon(Nightly)
 ```
 
-Shared `src/ui/runtime.tsx` (`RuntimeProvider` + door). Guide: [`../guides/view-data.md`](../guides/view-data.md).
+Shared `src/ui/runtime.tsx` (`RuntimeProvider` + door). Bundles guide: [`../guides/bundles.md`](../guides/bundles.md).
 
 ## Effect-faithful Tag mint (Eng’d 2026-07-28)
 

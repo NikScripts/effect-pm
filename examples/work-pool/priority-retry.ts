@@ -126,6 +126,6 @@ void Effect.runPromise(
   program.pipe(
     Effect.provide(EmailQueueLive),
     Effect.scoped,
-    Effect.tap(() => Effect.logInfo("form:workpool-priority-retry-priority-retry finished OK")),
+    Effect.tap(() => Effect.logInfo("example:work-pool-priority-retry finished OK")),
   ),
 );

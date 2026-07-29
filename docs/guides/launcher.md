@@ -12,6 +12,7 @@ ack ownership with `Node.assume`, then exit. The child keeps running under its o
 ```text
 Launcher.spawn → Handle.awaitReady → Handle.handoff → launcher exits
                  (or Launcher.up = all three)
+                 Handle.kill aborts custody (also auto on ReadyTimedOut)
 ```
 
 Consume: `import * as Launcher from "hyperlink-ts/Launcher"`.
@@ -33,9 +34,7 @@ Membership after assume: [Identity coordinator — custody vs membership](./iden
 ```ts
 import * as Launcher from "hyperlink-ts/Launcher"
 import * as Node from "hyperlink-ts/Node"
-import { Effect, Layer } from "effect"
-import * as NodeChildProcessSpawner from "@effect/platform-node/NodeChildProcessSpawner"
-import * as NodeServices from "@effect/platform-node/NodeServices"
+import { Effect } from "effect"
 
 const worker = Node.Tag()("app/Worker", {
   url: "http://127.0.0.1:4100/rpc",
@@ -47,9 +46,7 @@ const program = Launcher.up({
   process: Launcher.command("node", ["./worker.js"]), // injects HYPERLINK_ASSUME_TOKEN
 }).pipe(
   Effect.scoped,
-  Effect.provide(
-    Layer.provideMerge(NodeChildProcessSpawner.layer, NodeServices.layer),
-  ),
+  Effect.provide(Launcher.layer),
 )
 ```
 
@@ -61,51 +58,64 @@ Child listen must arm assume with the same token (`ListenOptions.assumeToken`, o
 
 | Phase | API | Notes |
 |-------|-----|-------|
-| Spawned | `Launcher.spawn(spec)` | Mints CSPRNG token (`Redacted` + `Encoding.encodeHex`); starts the OS child |
-| Ready | `handle.awaitReady()` | `Schedule.spaced` poll (Config/`ready.poll`) + 2s per dial; outer bound Config/`ready.timeout` |
+| Spawned | `Launcher.spawn(spec)` | Mints branded `Token` (`Redacted`); resolves Ready Config; starts the OS child |
+| Ready | `handle.awaitReady()` | `Schedule.spaced` poll (resolved at spawn) + 2s per dial; outer bound from spawn |
 | Handed off | `handle.handoff()` | `Node.assume({ token })`, then `unref` so the launcher scope may close |
+| Kill | `handle.kill()` | SIGTERM + spend the handle (also auto on `ReadyTimedOut`) |
 
-- `awaitReady` / `handoff` are **single-flight** (`Semaphore`) — concurrent calls serialize.
+- `awaitReady` / `handoff` / `kill` are **single-flight** (`Semaphore`) — concurrent calls serialize.
 - `awaitReady` is idempotent once Ready.
 - `handoff` before Ready → `HandleNotReady`.
-- Second `handoff` / `awaitReady` after handoff → `HandleSpent`.
+- Second `handoff` / `awaitReady` / `kill` after handoff or kill → `HandleSpent`.
 - Child dies during Ready wait → `ChildExited` (`Effect.raceFirst` vs poll).
-- Outer wait expires → `ReadyTimedOut`.
+- Outer wait expires → `ReadyTimedOut` **and** the child is kill-reaped (fail-closed); the handle is spent.
 
-Optional `ready.services` waits on a named HyperService subset instead of all served services.
+Optional `ready.services` waits on a named HyperService subset (Tags or wire-key strings;
+Tags resolve via `wireKeyOf` when present) instead of all served services.
 
-**Config (auto-read when omitted on the spec):**
+**Config (read once at `spawn` when omitted on the spec):**
 
 | Config | Env | Default |
 |--------|-----|---------|
 | `Launcher.readyTimeoutConfig` | `HYPERLINK_LAUNCHER_READY_TIMEOUT` | `30 seconds` |
 | `Launcher.readyPollConfig` | `HYPERLINK_LAUNCHER_READY_POLL` | `100 millis` |
 
-**Token injection helper:**
+`ConfigError` surfaces on `spawn` / `up` only — not on Handle phases.
+
+**Token injection helpers:**
 
 ```ts
 process: Launcher.command("node", ["./worker.js"])                 // env (default)
 process: Launcher.command("node", ["./worker.js"], { token: "argv" })
-process: Launcher.command("pnpm", ["exec", "tsx", entry], { cwd, token: "both" })
+process: Launcher.command("node", ["./worker.js"], { token: "both" })
+process: Launcher.command("node", ["--flag", "./worker.js"], { token: "argv", tokenArgvAt: 0 })
+process: Launcher.entry("./worker.js")
+process: Launcher.entry("./worker.ts", { exec: "pnpm", execArgs: ["exec", "tsx"], token: "argv" })
 ```
+
+**Multi-unit `up`:** default sequential (`concurrency: 1`); pass `{ concurrency: n }` or
+`"unbounded"` for independent units.
+
+**Platform:** `Effect.provide(Launcher.layer)` — `NodeServices` including `ChildProcessSpawner`.
 
 ## Errors (typed)
 
 | Tag | When |
 |-----|------|
-| `ReadyTimedOut` | Ready poll bound expired |
+| `ReadyTimedOut` | Ready poll bound expired (child kill-reaped; handle spent) |
 | `ChildExited` | OS child exited during `awaitReady` |
 | `HandleNotReady` | `handoff` before Ready |
-| `HandleSpent` | Control after handoff |
+| `HandleSpent` | Control after handoff / kill / ReadyTimedOut reap |
 | `AssumeTokenMismatch` / `AssumeTokenReused` / `AssumeNotReady` | From `Node.assume` |
 | Reachability | `NodeUnreachable` / `UnaddressedNode` / protocol readiness errors |
+| `ConfigError` | On `spawn` / `up` when Ready Config fails (not on Handle phases) |
 
 Assert on `_tag`, not message strings. Messages exist for operators / logs.
 
 ## Observability
 
 Phases use Effect **log spans** and **OTEL spans** (`launcher.spawn` / `launcher.awaitReady` /
-`launcher.handoff`) with annotations `launcher.node`, `launcher.phase`, (on spawn)
+`launcher.handoff` / `launcher.kill`) with annotations `launcher.node`, `launcher.phase`, (on spawn)
 `launcher.pid`, and (on Ready) `launcher.ready_ms`. Effect **metrics**:
 `launcher_ready_duration_ms`, `launcher_ready_timeout_total`, `launcher_child_exited_total`,
 `launcher_handoff_total{launcher.outcome}`. Assume dial / server paths use `node.assume` —
@@ -122,6 +132,9 @@ wire key) — sugar over Directory’s schema’d request. See:
 
 ## Deferred (not beta Launcher)
 
-- Zero-downtime move / drain / version skew (Track C)
-- Client-side reconnect story (Track D)
+- Peer WorkPool transfer (`release` → peer `enqueue`, brief #34) — local
+  `Hyperlink.withHandoff("drainOnly" | "workPoolRelease")` already ships on
+  `Node.shutdown`; see [identity coordinator](./identity-coordinator.md#custody-vs-membership-launcher--lookup).
+- Track D client redirect / dual-serve (`lookupClient` + directory `peersLayer` already rebind on dial swap)
 - Blank worker + remote assign; HTTP/WS Lookup; nameless Launcher discovery
+- `Handle.events` Stream; stdout/stderr tap; thin `hl up` CLI

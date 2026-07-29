@@ -48,4 +48,4 @@ const program = Effect.gen(function* () {
 const mainLayer = Layer.mergeAll(DemoHttpRunner.layer, FetchHttpClient.layer);
 // ---cut-after---
 
-runNodeProgramWithLayer(program, mainLayer, "form:http-client-gate finished OK");
+runNodeProgramWithLayer(program, mainLayer, "example:gate-http-client finished OK");

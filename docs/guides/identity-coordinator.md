@@ -90,7 +90,19 @@ Membership Lookup Identity/Directory/Advice   who wins / where clients dial
 - **Launcher** stays custody-only (stable addressed node; exits after assume).
 - **Child** pipes `Lookup.client` / `layerOptions` on listen — advertise + identity claim.
 - Directory-row replace: `onConflict: "askIncumbent"` + optional `ListenOptions.onYield`
-  (`false` refuses). Drain / state / old shutdown are a later handoff track — not Lookup.
+  (`false` refuses). While `Node.drain` / `shutdown` has set `phase: "draining"`, yield
+  **always refuses** (draining ≠ dead; Directory row held).
+- **Leave / exit:** `Node.shutdown(node)` = drain → opted-in per-service handoffs
+  (`Hyperlink.withHandoff`) → Advice clear → Directory unregister → listen exit.
+  Prefer `Node.launch(node, listenLayer)` over bare `Layer.launch` so shutdown ends the
+  process (no `process.exit`).
+- **Per-service handoff (opt-in, default off):** pipe `Hyperlink.withHandoff("drainOnly" |
+  "workPoolRelease")` on the HyperService tag (not `ListenOptions`). Absent stamp ⇒ not
+  migrated. WorkPool-shaped: `drainOnly` shuts the queue down; `workPoolRelease` does
+  local `release`/`releaseEncoded` then shutdown (peer enqueue still deferred).
+- **Membership push / dialers:** directory-mode `Hyperlink.peersLayer` and
+  `Hyperlink.lookupClient` **hot-rebind** on `Directory.changes` (dial move / join /
+  leave). Escape hatch: `Lookup.changes` / `directoryTable()`.
 
 Runnable: [`examples/launcher/lookup-membership.ts`](../../examples/launcher/lookup-membership.ts).
 Custody API: [`docs/guides/launcher.md`](./launcher.md).

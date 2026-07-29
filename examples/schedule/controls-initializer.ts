@@ -47,4 +47,4 @@ const program = Effect.gen(function* () {
 }).pipe(Effect.scoped);
 
 // ---cut-after---
-runNodeProgramWithLayer(program, env, "form:schedule-controls-initializer finished");
+runNodeProgramWithLayer(program, env, "example:schedule-controls-initializer finished");

@@ -69,5 +69,5 @@ runNodeProgramWithLayer(
   program,
   // scoped: layer(cfg) allowlists cfg's swappable keys for the setByKey path
   DynamicConfig.layer(cfg),
-  "form:dynamic-config-hot-swap finished",
+  "example:config-hot-swap finished",
 );

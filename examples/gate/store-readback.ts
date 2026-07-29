@@ -62,4 +62,4 @@ const program = Effect.gen(function* () {
 });
 // ---cut-after---
 
-runNodeProgramWithLayer(program, live, "form:gate-store-readback finished OK");
+runNodeProgramWithLayer(program, live, "example:gate-store-readback finished OK");

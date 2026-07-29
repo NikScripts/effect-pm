@@ -103,11 +103,13 @@ Navigator may still say `openLogs(tag)` / `openSchedule(tag)` — that means “
 
 **F2:** HealthBoard / NodeDetail stay **shell-owned** for v1.
 
-### G. `ui.data` — **Eng’d**
+### G. Observe door
 
-- Door to existing `*Bundle(runtime, tag)` — no parallel atoms
-- On `compose` result (`ui.data.queue` / `.daemon` / …); reads shared `ui/runtime` `RuntimeProvider`
-- Guide: [`../guides/view-data.md`](../guides/view-data.md)
+- **Eng’d:** `Observe.use(tag, *View.pack)` / `NodeView.use` ([`../guides/observe.md`](../guides/observe.md)) + `Hyperlink.atom` / `.query` / `.fn` ([`../guides/hyperlink-atom.md`](../guides/hyperlink-atom.md))
+- Thin handles ([`../standards/principles.md#handles-stay-thin`](../standards/principles.md#handles-stay-thin)): no Tag methods; no kit noun menu
+- **`Bundle.observe` / `ui.data.*` / `use*Bundle`:** **removed** (Phase 4)
+- View Prototype `use` for component logic is **not** the observe door (later / optional)
+- RuntimeProvider stays shared `ui/runtime`
 
 ### H. Migration
 
@@ -135,7 +137,7 @@ First peel = header/body split; page-sized logs/schedule content follows.
 ### K. Non-goals (this arc)
 
 - Kit batteries `Dashboard` = compose — **HOLD**
-- Client adapters (`Hyperlink.atom` / TanStack / Promise) — parallel
+- Client adapters: Promise + atom/query/fn Eng’d; TanStack hooks — parallel
 - Desktop tabs / real multi-match pager — later
 - Wild UI (⌘K, PiP, scrubber) — out of library scope
 
@@ -155,29 +157,37 @@ First peel = header/body split; page-sized logs/schedule content follows.
 
 ## App shape (batteries Dashboard)
 
+Kit `<Dashboard />` batteries **HOLD**. Internally it is thin wiring:
+
+`DashboardLayer.forCompose({ skins, views })` → `View.compose` → platform `DashboardShell`.
+
 ```tsx
 // worker-pool-card.tsx
 export const layer = View.only(WorkerPool, WorkerPoolCard).pipe(
-  Layer.provide(Layer.succeed(WorkerPoolCard, WorkerPoolCardView)),
+  Layer.provide(View.provide(WorkerPoolCard, WorkerPoolCardView)),
 )
 
-// app.tsx — Dashboard merges views under shipped skins + View.base
+// app.tsx — public one-liner unchanged
 <Dashboard runtime={runtime} group={ServicesHub} views={layer} />
 ```
 
-Compose-only (no batteries shell) still looks like:
+Compose + shell (escape hatch; same stack Dashboard uses):
 
 ```tsx
 const ui = View.compose({
-  views: Layer.mergeAll(
-    UiDashboardViews.layer,
-    View.only(WorkerPool, WorkerPoolCard),
-  ).pipe(
-    Layer.provideMerge(WebDashboardViews.skins),
-    Layer.provideMerge(View.base),
-  ),
+  views: DashboardLayer.forCompose({
+    skins: WebDashboardViews.skins,
+    views: View.only(WorkerPool, WorkerPoolCard),
+  }),
   navigator: Navigator.history(ServicesHub),
 })
+<ui.Provider>
+  <RuntimeProvider runtime={runtime}>
+    <DashboardShell group={ServicesHub} />
+  </RuntimeProvider>
+</ui.Provider>
 ```
+
+Bare `ui.Grid` / `ui.Outlet` stays available but is **not** the batteries default (no Cell / NodeBar / HealthBoard / LogBox).
 
 Open Nwsl → HttpApi → browser shows `/Nwsl/HttpApi`.

@@ -5,7 +5,7 @@ file names, hub pages that include the same `.ts` via Twoslash.
 
 | Layer | Path | Purpose |
 |-------|------|---------|
-| **Topics** | `work-pool/`, `gate/`, `daemon/`, `node/`, `fleet/`, `launcher/`, `hyperlink/`, `store/`, `schedule/`, `polling/`, `config/` | One API shape per file — same names as the guides |
+| **Topics** | `work-pool/`, `gate/`, `daemon/`, `node/`, `fleet/`, `launcher/`, `hyperlink/`, `store/`, `schedule/`, `polling/`, `config/`, `observe/` | One API shape per file — same names as the guides |
 | **Scenarios** | [`scenarios/`](./scenarios/) | Multi-file / multi-process compositions |
 | **Apps** | [`apps/`](./apps/) | TUI, web, dashboard, CLI, widgets (not 1:1 Twoslash yet) |
 | **Shared** | [`shared/`](./shared/) | Harness helpers |
@@ -42,6 +42,7 @@ extensions — run via `tsx` on sources. Prefer the hub over hunting old `forms/
 | **Fleet glass** | `fleet/telemetry-glass` → `health-glass` → `shardmap-sessions` |
 | **Launcher** | `launcher/lookup-membership` |
 | **Schedule / polling / config** | `pnpm run example:schedule-basics` → `example:schedule-controls` → `example:polling-sports` → `example:config-hot-swap` |
+| **Observe** | `pnpm run example:observe-pack-demo` · guide [Observe](../docs/guides/observe.md) |
 | **Scenarios** | `scenarios/multi-protocol-dual-serve` → `schedule-sync-from-db` → `serve-per-deps` → NWSL |
 | **Apps** | `pnpm run example:apps-tui` · `example:apps-web` (+ `example:apps-web-server`) · `example:apps-dashboard` · `example:apps-cli` |
 
@@ -111,6 +112,7 @@ Paths are under `examples/`. Script = `pnpm run example:<topic>-<kebab-file>` (s
 | [`schedule/*.ts`](./schedule/) | `at` / `window` / `define` / controls |
 | [`polling/*.ts`](./polling/) | accelerating / spaced / reset / peek / delayed-start |
 | [`config/hot-swap.ts`](./config/hot-swap.ts) | Dynamic config hot swap |
+| [`observe/pack-demo.ts`](./observe/pack-demo.ts) | `Observe.bind` + compositional pack |
 
 ---
 

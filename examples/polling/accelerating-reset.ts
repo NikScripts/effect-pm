@@ -68,4 +68,4 @@ const program = Effect.gen(function* () {
 }).pipe(Effect.scoped);
 
 // ---cut-after---
-runNodeProgramWithLayer(program, env, "form:polling-accelerating-reset-cadence finished");
+runNodeProgramWithLayer(program, env, "example:polling-accelerating-reset finished");

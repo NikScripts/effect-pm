@@ -24,6 +24,7 @@ import {
   Schema,
   Stream,
 } from "effect";
+import type { ProtocolKind } from "./nodeCore";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { FetchHttpClient } from "effect/unstable/http";
 import type { AddressedNode } from "./nodeCore";
@@ -69,6 +70,18 @@ export const serviceReadiness = Schema.Struct({
 export type ServiceReadiness = typeof serviceReadiness.Type;
 
 /**
+ * Node lifecycle phase — WorkPool-shaped (`running` | `draining`).
+ * `draining` means intentional cutover drain: still reachable (≠ dead), Directory row held,
+ * cooperative {@link NodeStatusTag}.`yield` refuses (fail-closed).
+ *
+ * @internal
+ */
+export const nodePhase = Schema.Literals(["running", "draining"]);
+
+/** Node lifecycle phase. @internal */
+export type NodePhase = typeof nodePhase.Type;
+
+/**
  * A node's live status — whether it's up, its overall readiness rollup, when it started, how long
  * it's been up, how many HyperServices it serves, and each HyperService's readiness. `status` is `degraded`
  * (and `/health` returns 503) when any served resource is not ready.
@@ -78,6 +91,11 @@ export type ServiceReadiness = typeof serviceReadiness.Type;
 export const nodeStatus = Schema.Struct({
   up: Schema.Boolean,
   status: Schema.Literals(["ok", "degraded"]),
+  /**
+   * Lifecycle phase — `draining` is intentional Track C cutover (reachable; yield refuse).
+   * Distinct from readiness `status` (`ok` / `degraded`).
+   */
+  phase: nodePhase,
   startedAt: Schema.DateTimeUtc,
   uptimeMillis: Schema.Number,
   serviceCount: Schema.Number,
@@ -112,11 +130,28 @@ export class NodeStatusTag extends Hyperlink.Tag<NodeStatusTag>()(
   /**
    * Cooperative handoff ask (Lookup `askIncumbent`) — `true` = step aside so a
    * newcomer may take this `nodeKey`. Not Effect `yield*`; wire RPC only.
+   * While {@link nodeStatus}.`phase` is `"draining"`, always refuses (fail-closed).
    */
   yield: Hyperlink.effect(Schema.Boolean).annotate({
     description:
       "Cooperative handoff: true = accept yield (Lookup may replace the directory row). " +
-      "Refuse with false. Distinct from Effect generator yield*.",
+      "Refuse with false. Always false while phase is draining. Distinct from Effect generator yield*.",
+  }),
+  /**
+   * Enter intentional drain (Track C) — sets `phase: "draining"`. Idempotent.
+   * Keeps the process reachable (ping/status stay up); does not unregister or exit.
+   */
+  drain: Hyperlink.effect(Schema.Void).annotate({
+    description:
+      "Enter draining phase (Directory row held; yield refuse). Idempotent; no process exit.",
+  }),
+  /**
+   * Compose leave + exit listen scope (Track C #32): drain → clear Advice → Directory
+   * unregister → close listen (finalizers unlink / etc.). Idempotent.
+   */
+  shutdown: Hyperlink.effect(Schema.Void).annotate({
+    description:
+      "Drain, leave membership (Advice clear + Directory unregister), then exit the listen scope.",
   }),
   /**
    * Launcher → node ownership ack — child assumes self-custody so the launcher may exit.
@@ -169,10 +204,33 @@ export const buildNodeStatusImpl = (options: {
   readonly assumeToken?: string | Redacted.Redacted<string>;
   /** Node key stamped into assume errors (defaults to the reserved status key). */
   readonly assumeNodeKey?: string;
+  /**
+   * Directory / Advice leave identity for {@link NodeStatusTag}.`shutdown`.
+   * Soft-skipped when Lookup client is not provided on the listen.
+   */
+  readonly membership?: {
+    readonly nodeKey: string;
+    readonly kind: ProtocolKind;
+    readonly path?: string;
+    readonly url?: string;
+    readonly serves: ReadonlyArray<string>;
+  };
+  /**
+   * Signal listen-scope exit after membership leave (wired to Deferred + Scope.close).
+   * When omitted, shutdown only drains + leaves membership (no process/listen exit).
+   */
+  readonly closeListen?: Effect.Effect<void>;
+  /**
+   * Per-service opt-in handoffs ({@link Hyperlink.withHandoff}) — run after drain,
+   * before Lookup leave (Locked #33).
+   */
+  readonly handoff?: Effect.Effect<void>;
 }): Effect.Effect<{
   readonly status: Hyperlink.Subscribable<NodeStatus>;
   readonly ping: Effect.Effect<number>;
   readonly yield: Effect.Effect<boolean>;
+  readonly drain: Effect.Effect<void>;
+  readonly shutdown: Effect.Effect<void>;
   readonly assume: (payload: {
     readonly token: string;
   }) => Effect.Effect<void, AssumeTokenMismatch | AssumeTokenReused | AssumeNotReady>;
@@ -196,15 +254,19 @@ export const buildNodeStatusImpl = (options: {
       expectedToken !== undefined ? "launcher" : "self",
     );
     const assumed = yield* Ref.make(false);
+    const phase = yield* Ref.make<NodePhase>("running");
+    const shuttingDown = yield* Ref.make(false);
     const computeStatus: Effect.Effect<NodeStatus> = Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis;
       const services = yield* readiness;
       const ok = services.every((r) => r.ready);
       const status: "ok" | "degraded" = ok ? "ok" : "degraded";
       const ownershipValue = yield* Ref.get(ownership);
+      const phaseValue = yield* Ref.get(phase);
       return {
         up: true,
         status,
+        phase: phaseValue,
         startedAt: DateTime.makeUnsafe(options.startedAt),
         uptimeMillis: now - options.startedAt,
         serviceCount: options.serviceCount,
@@ -260,12 +322,69 @@ export const buildNodeStatusImpl = (options: {
         Effect.annotateLogs({ "assume.node": assumeNodeKey }),
         Effect.withLogSpan("node.assume.handle"),
       );
+    const drain = Effect.gen(function* () {
+      const previous = yield* Ref.getAndSet(phase, "draining");
+      if (previous === "draining") return;
+      yield* Effect.logInfo("node entered draining").pipe(
+        Effect.annotateLogs({ "node.phase": "draining" }),
+      );
+    }).pipe(Effect.withLogSpan("node.drain.handle"));
+    const leaveMembership = Effect.gen(function* () {
+      const membership = options.membership;
+      if (membership === undefined) return;
+      const Lookup = yield* Effect.promise(() => import("../Lookup"));
+      const adviceOpt = yield* Effect.serviceOption(Lookup.Advice);
+      if (Option.isSome(adviceOpt)) {
+        yield* Effect.forEach(
+          membership.serves,
+          (serviceKey) =>
+            adviceOpt.value
+              .clear(new Lookup.ClearAdviceRequest({ serviceKey }))
+              .pipe(Effect.ignore),
+          { discard: true },
+        );
+      }
+      const dirOpt = yield* Effect.serviceOption(Lookup.Directory);
+      if (Option.isSome(dirOpt)) {
+        yield* dirOpt.value
+          .unregister(
+            new Lookup.UnregisterRequest({
+              nodeKey: membership.nodeKey,
+              kind: membership.kind,
+              ...(membership.path !== undefined
+                ? { path: membership.path }
+                : {}),
+              ...(membership.url !== undefined ? { url: membership.url } : {}),
+            }),
+          )
+          .pipe(Effect.ignore);
+      }
+    });
+    const shutdown = Effect.gen(function* () {
+      if (yield* Ref.getAndSet(shuttingDown, true)) return;
+      yield* drain;
+      if (options.handoff !== undefined) {
+        yield* options.handoff.pipe(Effect.withLogSpan("node.shutdown.handoff"));
+      }
+      yield* leaveMembership;
+      yield* Effect.logInfo("node shutdown leaving listen").pipe(
+        Effect.annotateLogs({ "node.phase": "draining" }),
+      );
+      if (options.closeListen !== undefined) {
+        yield* options.closeListen;
+      }
+    }).pipe(Effect.withLogSpan("node.shutdown.handle"));
+    // While draining: always refuse (Locked #31). Otherwise ListenOptions.onYield / default accept.
+    const yieldEffect = Effect.gen(function* () {
+      if ((yield* Ref.get(phase)) === "draining") return false;
+      return yield* (options.onYield ?? Effect.succeed(true));
+    });
     return {
       status: statusSub,
       ping: Clock.currentTimeMillis,
-      // Default accept — Lookup askIncumbent replaces the row; dial-matched unregister
-      // prevents a late finalizer from wiping the newcomer.
-      yield: options.onYield ?? Effect.succeed(true),
+      yield: yieldEffect,
+      drain,
+      shutdown,
       assume,
       logs: {
         stream: logsLive,
@@ -292,6 +411,15 @@ export const nodeStatusServeEntry = (options: {
   readonly assumeToken?: string | Redacted.Redacted<string>;
   readonly assumeNodeKey?: string;
   readonly onYield?: Effect.Effect<boolean>;
+  readonly membership?: {
+    readonly nodeKey: string;
+    readonly kind: ProtocolKind;
+    readonly path?: string;
+    readonly url?: string;
+    readonly serves: ReadonlyArray<string>;
+  };
+  readonly closeListen?: Effect.Effect<void>;
+  readonly handoff?: Effect.Effect<void>;
 }): {
   readonly tag: typeof NodeStatusTag;
   readonly impl: ReturnType<typeof buildNodeStatusImpl>;
