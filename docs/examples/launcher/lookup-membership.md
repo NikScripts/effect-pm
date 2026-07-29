@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:launcher-lookup-membership`  
 **Hub:** [Examples → launcher](/docs/examples#launcher)
 
+> [!NOTE]
+> **Related examples:** [membership child](/docs/launcher-lookup-membership-child) · [minimal up](/docs/launcher-minimal-up) · [Node asLookup](/docs/node-as-lookup)
+
 ## What this shows
 
 `Launcher.up` then Directory membership verify.

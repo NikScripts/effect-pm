@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:work-pool-typed-success`  
 **Hub:** [Examples → work-pool](/docs/examples#work-pool)
 
+> [!NOTE]
+> **Related examples:** [priority, dedup, retry](/docs/work-pool-priority-retry) · [Daemon typed Failed.error](/docs/daemon-typed-failed-error) · [Daemon result ref](/docs/daemon-result-ref)
+
 ## What this shows
 
 Declaring a `success` schema on a queue Tag and reading typed `Completed.success`.

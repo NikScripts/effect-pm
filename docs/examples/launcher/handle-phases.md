@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:launcher-handle-phases`  
 **Hub:** [Examples → launcher](/docs/examples#launcher)
 
+> [!NOTE]
+> **Related examples:** [minimal up](/docs/launcher-minimal-up) · [Ready errors](/docs/launcher-ready-timeout)
+
 ## What this shows
 
 Explicit `spawn`, `awaitReady`, `handoff`, and `kill` handle phases.

@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:node-nameless-http-serve`  
 **Hub:** [Examples → node](/docs/examples#node)
 
+> [!NOTE]
+> **Related examples:** [nameless WebSocket serve](/docs/node-nameless-ws-serve) · [nameless unix serve](/docs/node-nameless-unix-serve) · [multi-protocol dual serve](/docs/scenario-multi-protocol)
+
 ## What this shows
 
 Nameless `Node.http(serve)` — holds until interrupt.

@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:work-pool-configure`  
 **Hub:** [Examples → work-pool](/docs/examples#work-pool)
 
+> [!NOTE]
+> **Related examples:** [Daemon configure](/docs/daemon-configure) · [priority, dedup, retry](/docs/work-pool-priority-retry)
+
 ## What this shows
 
 `WorkPool.configure(Tag, patch)` folding config at layer build time.

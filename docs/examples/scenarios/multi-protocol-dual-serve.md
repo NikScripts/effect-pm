@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:scenario-multi-protocol`  
 **Hub:** [Examples → scenarios](/docs/examples#scenarios)
 
+> [!NOTE]
+> **Related examples:** [nameless HTTP serve](/docs/node-nameless-http-serve) · [nameless WebSocket serve](/docs/node-nameless-ws-serve)
+
 ## What this shows
 
 One node served over HTTP and WebSocket; both transports live.

@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:logs-node-journal`  
 **Hub:** [Examples → logs](/docs/examples#logs)
 
+> [!NOTE]
+> **Related examples:** [live bus](/docs/logs-live-bus) · [Hyperlink export](/docs/logs-hyperlink-logs) · [one store, many regs](/docs/store-one-store-many-regs)
+
 ## What this shows
 
 `Node.logs` on `Store.Service` plus durable readback through `Logs.byNode`.

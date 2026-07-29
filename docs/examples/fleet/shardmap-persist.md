@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:fleet-shardmap-persist`  
 **Hub:** [Examples → fleet](/docs/examples#fleet)
 
+> [!NOTE]
+> **Related examples:** [ShardMap sessions](/docs/fleet-shardmap-sessions) · [Store SQLite](/docs/store-sqlite)
+
 ## What this shows
 
 ShardMap `{ filename }` persists the keyed SQLite shard.

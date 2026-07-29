@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:fleet-health-with-readiness`  
 **Hub:** [Examples → fleet](/docs/examples#fleet)
 
+> [!NOTE]
+> **Related examples:** [FleetHealth glass](/docs/fleet-health-glass) · [withReadiness](/docs/readiness-with-readiness) · [degraded health](/docs/readiness-degraded-health)
+
 ## What this shows
 
 `FleetHealth` folds node-style readiness rows.

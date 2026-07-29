@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:logs-hyperlink-logs`  
 **Hub:** [Examples → logs](/docs/examples#logs)
 
+> [!NOTE]
+> **Related examples:** [node journal](/docs/logs-node-journal) · [lineage scope](/docs/logs-lineage-scope) · [WorkPool priority retry](/docs/work-pool-priority-retry)
+
 ## What this shows
 
 `Hyperlink.logs(tag).stream` and `.query` with a WorkPool producer.

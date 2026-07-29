@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:fleet-shardmap-sessions`  
 **Hub:** [Examples → fleet](/docs/examples#fleet)
 
+> [!NOTE]
+> **Related examples:** [ShardMap persist](/docs/fleet-shardmap-persist) · [Telemetry glass](/docs/fleet-telemetry-glass)
+
 ## What this shows
 
 ShardMap routes get/put across nodes.

@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:polling-accelerating-reset`  
 **Hub:** [Examples → polling](/docs/examples#polling)
 
+> [!NOTE]
+> **Related examples:** [accelerating](/docs/polling-accelerating) · [accelerating peek](/docs/polling-accelerating-peek)
+
 ## What this shows
 
 Accelerating poll with cadence reset on success.

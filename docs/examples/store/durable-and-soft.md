@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:store-durable-and-soft`  
 **Hub:** [Examples → store](/docs/examples#store)
 
+> [!NOTE]
+> **Related examples:** [WorkPool durable SQLite](/docs/work-pool-durable-sqlite) · [Soft override WorkPool](/docs/store-soft-override-work-pool)
+
 ## What this shows
 
 Durable WorkPool backlog versus Soft observability journals.

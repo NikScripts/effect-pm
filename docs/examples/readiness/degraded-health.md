@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:readiness-degraded-health`  
 **Hub:** [Examples → readiness](/docs/examples#readiness)
 
+> [!NOTE]
+> **Related examples:** [withReadiness](/docs/readiness-with-readiness) · [Fleet health with readiness](/docs/fleet-health-with-readiness)
+
 ## What this shows
 
 Node `/health` returns 503 when a served HyperService is not ready.

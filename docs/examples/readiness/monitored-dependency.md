@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:readiness-monitored-dependency`  
 **Hub:** [Examples → readiness](/docs/examples#readiness)
 
+> [!NOTE]
+> **Related examples:** [withReadiness](/docs/readiness-with-readiness) · [degraded health](/docs/readiness-degraded-health)
+
 ## What this shows
 
 `Hyperlink.monitoredDependency` builds status, changes, and readiness together.

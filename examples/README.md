@@ -1,10 +1,10 @@
 # Examples (`examples/`)
 
-**Find an example:** open the **[Examples hub](../docs/examples.md)** (grouped like the guides),
-or go to `examples/<topic>/<name>.ts` and run `pnpm run example:<topic>-<name>`.
+**Find an example:** open the **[Examples index](../docs/examples.md)** (hub — grouped like the
+guides), or go to `examples/<topic>/<name>.ts` and run `pnpm run example:<topic>-<name>`.
 
-Paired docs live at `docs/examples/<topic>/<name>.md` and Twoslash-`include` the same `.ts`
-(with `// ---cut---` hiding harness noise). Full demos are under [`apps/`](./apps/).
+Paired docs live at `docs/examples/<topic>/<name>.md`, Twoslash-`include` the same `.ts`, and
+link to **related examples** (often more than one). Full demos are under [`apps/`](./apps/).
 
 | Layer | Path | Purpose |
 |-------|------|---------|

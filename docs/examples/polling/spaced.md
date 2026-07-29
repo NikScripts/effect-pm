@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:polling-spaced`  
 **Hub:** [Examples → polling](/docs/examples#polling)
 
+> [!NOTE]
+> **Related examples:** [accelerating](/docs/polling-accelerating) · [Schedule at](/docs/schedule-at)
+
 ## What this shows
 
 `Polling.spaced` — fixed gap between reads.

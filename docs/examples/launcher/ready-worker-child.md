@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:launcher-ready-worker-child`  
 **Hub:** [Examples → launcher](/docs/examples#launcher)
 
+> [!NOTE]
+> **Related examples:** [minimal up](/docs/launcher-minimal-up) · [token injection](/docs/launcher-token-injection)
+
 ## What this shows
 
 Child-side `assumeToken` wiring for Launcher examples.

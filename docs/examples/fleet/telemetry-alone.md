@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:fleet-telemetry-alone`  
 **Hub:** [Examples → fleet](/docs/examples#fleet)
 
+> [!NOTE]
+> **Related examples:** [Telemetry glass](/docs/fleet-telemetry-glass)
+
 ## What this shows
 
 `Telemetry.alone` for a single node without peers.

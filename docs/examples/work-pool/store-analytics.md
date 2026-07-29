@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:work-pool-store-analytics`  
 **Hub:** [Examples → work-pool](/docs/examples#work-pool)
 
+> [!NOTE]
+> **Related examples:** [Soft override WorkPool](/docs/store-soft-override-work-pool) · [one store, many regs](/docs/store-one-store-many-regs) · [history metrics](/docs/work-pool-history-metrics) · [Daemon Soft auto-write](/docs/daemon-store-auto-write)
+
 ## What this shows
 
 `WorkPool.store(tag)` soft analytics: `stats`, `failureRate`, `slowest`, `latency`, and `lastFailure`.

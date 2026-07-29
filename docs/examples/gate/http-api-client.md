@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:gate-http-api-client`  
 **Hub:** [Examples → gate](/docs/examples#gate)
 
+> [!NOTE]
+> **Related examples:** [HttpClientGate](/docs/gate-http-client) · [httpApiClientLayer](/docs/gate-http-api-layer) · [NWSL Gate.HttpApiClient](/docs/scenario-nwsl-http-api)
+
 ## What this shows
 
 `Gate.HttpApiClient` Tag + nest `metrics.usage`.

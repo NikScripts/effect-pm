@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:launcher-ready-timeout`  
 **Hub:** [Examples → launcher](/docs/examples#launcher)
 
+> [!NOTE]
+> **Related examples:** [handle phases](/docs/launcher-handle-phases) · [minimal up](/docs/launcher-minimal-up)
+
 ## What this shows
 
 Typed `ReadyTimedOut` and `ChildExited` errors by `_tag`.

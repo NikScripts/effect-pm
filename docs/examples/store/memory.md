@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:store-memory`  
 **Hub:** [Examples → store](/docs/examples#store)
 
+> [!NOTE]
+> **Related examples:** [SQLite](/docs/store-sqlite) · [shared Spec wire](/docs/hyperlink-shared-spec-wire)
+
 ## What this shows
 
 In-memory Store.Service Soft journals.

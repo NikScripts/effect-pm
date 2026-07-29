@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:store-loud-missing-registration`  
 **Hub:** [Examples → store](/docs/examples#store)
 
+> [!NOTE]
+> **Related examples:** [Soft override WorkPool](/docs/store-soft-override-work-pool) · [one store, many regs](/docs/store-one-store-many-regs)
+
 ## What this shows
 
 Soft override failure when the AppStore omits the engine registration it captured.

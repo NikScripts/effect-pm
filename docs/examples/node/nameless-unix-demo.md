@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:node-nameless-unix-demo`  
 **Hub:** [Examples → node](/docs/examples#node)
 
+> [!NOTE]
+> **Related examples:** [nameless unix serve](/docs/node-nameless-unix-serve) · [nameless unix call](/docs/node-nameless-unix-call)
+
 ## What this shows
 
 Forks serve then call in one command.

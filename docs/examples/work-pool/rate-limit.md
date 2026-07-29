@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:work-pool-rate-limit`  
 **Hub:** [Examples → work-pool](/docs/examples#work-pool)
 
+> [!NOTE]
+> **Related examples:** [Gate fleet rate limit](/docs/gate-rate-limit-fleet) · [named lanes](/docs/work-pool-named-lanes)
+
 ## What this shows
 
 Drain `rateLimit` delaying item starts independently from queue concurrency.

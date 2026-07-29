@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:node-addressless-serve`  
 **Hub:** [Examples → node](/docs/examples#node)
 
+> [!NOTE]
+> **Related examples:** [addressless call](/docs/node-addressless-call) · [nameless unix serve](/docs/node-nameless-unix-serve)
+
 ## What this shows
 
 Address-less Tag serve — Lookup piped; pair with call.

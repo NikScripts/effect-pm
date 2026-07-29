@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:work-pool-history-metrics`  
 **Hub:** [Examples → work-pool](/docs/examples#work-pool)
 
+> [!NOTE]
+> **Related examples:** [HistoryStore presence](/docs/store-history-presence) · [store analytics](/docs/work-pool-store-analytics) · [Observe WorkPool pack](/docs/observe-work-pool-pack)
+
 ## What this shows
 
 `HistoryStore` capturing metrics windows so `metrics.query` can read them back.

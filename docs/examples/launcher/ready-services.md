@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:launcher-ready-services`  
 **Hub:** [Examples → launcher](/docs/examples#launcher)
 
+> [!NOTE]
+> **Related examples:** [minimal up](/docs/launcher-minimal-up) · [allReady](/docs/readiness-all-ready)
+
 ## What this shows
 
 `ready.services` waits on named HyperService Tags.

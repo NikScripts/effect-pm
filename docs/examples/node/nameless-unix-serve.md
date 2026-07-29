@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:node-nameless-unix-serve`  
 **Hub:** [Examples → node](/docs/examples#node)
 
+> [!NOTE]
+> **Related examples:** [nameless unix call](/docs/node-nameless-unix-call) · [nameless unix demo](/docs/node-nameless-unix-demo) · [nameless HTTP serve](/docs/node-nameless-http-serve) · [nameless WebSocket serve](/docs/node-nameless-ws-serve)
+
 ## What this shows
 
 Nameless `Node.unix([serve…])` — Lookup Soft-baked.

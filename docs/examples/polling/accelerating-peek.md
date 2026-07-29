@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:polling-accelerating-peek`  
 **Hub:** [Examples → polling](/docs/examples#polling)
 
+> [!NOTE]
+> **Related examples:** [accelerating reset](/docs/polling-accelerating-reset) · [accelerating](/docs/polling-accelerating)
+
 ## What this shows
 
 Accelerating poll with peek/cadence observation.

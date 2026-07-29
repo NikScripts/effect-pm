@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:daemon-tag-schedule`  
 **Hub:** [Examples → daemon](/docs/examples#daemon)
 
+> [!NOTE]
+> **Related examples:** [Schedule at](/docs/schedule-at) · [Schedule window](/docs/schedule-window) · [Schedule define](/docs/schedule-define)
+
 ## What this shows
 
 `Daemon.schedule` on a tag adds schedule controls.

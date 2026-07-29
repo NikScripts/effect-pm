@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:gate-http-api-layer`  
 **Hub:** [Examples → gate](/docs/examples#gate)
 
+> [!NOTE]
+> **Related examples:** [HttpApiClient](/docs/gate-http-api-client) · [HttpClientGate](/docs/gate-http-client)
+
 ## What this shows
 
 `Gate.httpApiClientLayer` on an existing client Layer with capture.

@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:store-history-presence`  
 **Hub:** [Examples → store](/docs/examples#store)
 
+> [!NOTE]
+> **Related examples:** [WorkPool history metrics](/docs/work-pool-history-metrics) · [Soft override WorkPool](/docs/store-soft-override-work-pool)
+
 ## What this shows
 
 Omitting versus providing the optional `HistoryStore` service.

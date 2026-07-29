@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:node-as-lookup`  
 **Hub:** [Examples → node](/docs/examples#node)
 
+> [!NOTE]
+> **Related examples:** [Prototype](/docs/node-prototype) · [Launcher Lookup membership](/docs/launcher-lookup-membership)
+
 Fence body `// @noErrors` covers `process` under the docs Twoslash host.
 
 ## What this shows

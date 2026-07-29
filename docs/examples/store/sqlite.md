@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:store-sqlite`  
 **Hub:** [Examples → store](/docs/examples#store)
 
+> [!NOTE]
+> **Related examples:** [memory](/docs/store-memory) · [WorkPool durable SQLite](/docs/work-pool-durable-sqlite) · [durable and Soft planes](/docs/store-durable-and-soft)
+
 ## What this shows
 
 SQLite-backed Store.Service Soft journals.

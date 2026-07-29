@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:node-nameless-unix-call`  
 **Hub:** [Examples → node](/docs/examples#node)
 
+> [!NOTE]
+> **Related examples:** [nameless unix serve](/docs/node-nameless-unix-serve) · [nameless unix demo](/docs/node-nameless-unix-demo)
+
 ## What this shows
 
 Second process for nameless unix listen.

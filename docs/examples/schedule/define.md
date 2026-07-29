@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:schedule-define`  
 **Hub:** [Examples → schedule](/docs/examples#schedule)
 
+> [!NOTE]
+> **Related examples:** [at](/docs/schedule-at) · [window](/docs/schedule-window) · [controls (initializer)](/docs/schedule-controls-initializer)
+
 ## What this shows
 
 Compose named windows into a schedule bag.

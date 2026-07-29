@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:node-clients`  
 **Hub:** [Examples → node](/docs/examples#node)
 
+> [!NOTE]
+> **Related examples:** [tag-bound serve](/docs/node-tag-bound) · [asLookup](/docs/node-as-lookup)
+
 Fence body `// @noErrors` covers `process` under the docs Twoslash host.
 
 ## What this shows

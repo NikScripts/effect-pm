@@ -14,6 +14,9 @@
 **Run:** spawned by [lookup membership](/docs/launcher-lookup-membership)
 **Hub:** [Examples → launcher](/docs/examples#launcher)
 
+> [!NOTE]
+> **Related examples:** [Lookup membership](/docs/launcher-lookup-membership)
+
 Fence body `// @noErrors` covers `process` under the docs Twoslash host.
 
 ## What this shows

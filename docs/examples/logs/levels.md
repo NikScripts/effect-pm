@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:logs-levels`  
 **Hub:** [Examples → logs](/docs/examples#logs)
 
+> [!NOTE]
+> **Related examples:** [live bus](/docs/logs-live-bus) · [node journal](/docs/logs-node-journal)
+
 ## What this shows
 
 Live stream floors versus durable tail floors.

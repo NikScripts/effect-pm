@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:observe-hyperlink-atom`  
 **Hub:** [Examples → observe](/docs/examples#observe)
 
+> [!NOTE]
+> **Related examples:** [atom, query, fn, poll](/docs/observe-recipes) · [Hyperlink method kinds](/docs/hyperlink-method-kinds)
+
 ## What this shows
 
 `Hyperlink.atom`, `Hyperlink.query`, and `Hyperlink.fn` as one-field atom adapters.

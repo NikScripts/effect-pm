@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:node-handoff-ab-cutover`  
 **Watchable twin:** [`pnpm run example:handoff-ab-live`](/docs/apps-tui-handoff-ab-live) (Ink dual-pane, real TTY)  
 **Hub:** [Examples → node](/docs/examples#node)  
+
+> [!NOTE]
+> **Related examples:** [Apps A→B handoff live](/docs/apps-tui-handoff-ab-live) · [Launcher minimal up](/docs/launcher-minimal-up)
 **Guide:** [Identity coordinator — A→B cutover](/docs/identity-coordinator#ab-cutover-recipe-state-transfer)
 
 Fence body `// @noErrors` covers `process` under the docs Twoslash host.

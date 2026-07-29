@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:observe-daemon-pack`  
 **Hub:** [Examples → observe](/docs/examples#observe)
 
+> [!NOTE]
+> **Related examples:** [WorkPool pack](/docs/observe-work-pool-pack) · [Daemon result ref](/docs/daemon-result-ref)
+
 ## What this shows
 
 `Observe.bind` with the shipped `DaemonView.pack` against a local daemon served by a Node.

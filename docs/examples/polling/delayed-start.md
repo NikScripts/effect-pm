@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:polling-delayed-start`  
 **Hub:** [Examples → polling](/docs/examples#polling)
 
+> [!NOTE]
+> **Related examples:** [Schedule window](/docs/schedule-window) · [spaced](/docs/polling-spaced)
+
 ## What this shows
 
 Daemon schedule delays the first armed tick.

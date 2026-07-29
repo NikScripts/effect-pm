@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:gate-rate-limit-fleet`  
 **Hub:** [Examples → gate](/docs/examples#gate)
 
+> [!NOTE]
+> **Related examples:** [WorkPool rate limit](/docs/work-pool-rate-limit) · [Telemetry glass](/docs/fleet-telemetry-glass)
+
 ## What this shows
 
 Two Gates share one RateLimiterStore (Redis or memory).

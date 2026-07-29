@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:observe-scan-fold`  
 **Hub:** [Examples → observe](/docs/examples#observe)
 
+> [!NOTE]
+> **Related examples:** [atom, query, fn, poll](/docs/observe-recipes) · [WorkPool history metrics](/docs/work-pool-history-metrics)
+
 ## What this shows
 
 `Observe.scan` for capped history and `Observe.fold` for a custom accumulator over a live source.
