@@ -156,7 +156,7 @@ body {
   width: fit-content;
   margin-inline: auto;
   font-size: clamp(3.6rem, 13vw, 7.5rem);
-  margin-block: clamp(1.2rem, 3.5vh, 2.4rem) clamp(0.9rem, 2.5vh, 1.8rem);
+  margin-block: clamp(1.2rem, 3.5vh, 2.4rem) clamp(0.5rem, 1.5vh, 1rem);
   animation: landing-rise 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .landing-mark .landing-sub {
@@ -171,8 +171,8 @@ body {
   align-items: center;
   text-align: center;
   align-self: center;
-  gap: 0.5rem;
-  margin: clamp(1.4rem, 3.5vh, 2.2rem) 0 1.2rem;
+  gap: 0.65rem;
+  margin: clamp(2.2rem, 5.5vh, 3.4rem) 0 clamp(1.5rem, 3.5vh, 2.1rem);
   font-size: clamp(1.15rem, 2.6vw, 1.55rem);
   letter-spacing: 0.005em;
   color: var(--landing-muted);
@@ -207,9 +207,9 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.45rem;
   max-width: 28rem;
-  margin: 0.15rem 0 0;
+  margin: 0.25rem 0 0;
   text-align: center;
   font-size: clamp(0.98rem, 2.6vw, 1.1rem);
   font-weight: 450;
@@ -220,7 +220,7 @@ body {
 
 .landing-soon {
   align-self: center;
-  margin: 1.75rem 0 2.2rem;
+  margin: clamp(2.2rem, 5vh, 3rem) 0 clamp(2rem, 4vh, 2.6rem);
   padding: 0.5rem 1.3rem;
   border: 1px solid var(--landing-border);
   border-radius: 999px;
