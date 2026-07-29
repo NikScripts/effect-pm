@@ -15,7 +15,7 @@
 
 ## What this form shows
 
-`Schedule.at` — one-shot window at a point in time.
+`Daemon.at` — open-ended schedule entry (armed from a start instant).
 
 {.twoslash include="examples/forms/schedule/schedule-at.ts"}
 ``` ts

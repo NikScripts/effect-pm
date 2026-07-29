@@ -116,11 +116,12 @@ Storage:
 
 ## Scenarios catalog
 
-| File | Teaches |
-|------|---------|
-| [`scenarios/schedule-sync-from-external-db.ts`](./scenarios/schedule-sync-from-external-db.ts) | DB-to-runtime schedule sync pattern |
-| [`scenarios/multi-protocol-dual-serve.ts`](./scenarios/multi-protocol-dual-serve.ts) | One `{ http, ws }` node served over both transports (P3 boot guard) + a live round-trip over each |
-| [`scenarios/nwslsoccer/`](./scenarios/nwslsoccer/) | Real HttpApi client against NWSL SDP (optional local tree) |
+| File | Teaches | Docs |
+|------|---------|------|
+| [`scenarios/schedule-sync-from-external-db.ts`](./scenarios/schedule-sync-from-external-db.ts) | DB-to-runtime schedule sync pattern | [hub](../docs/examples.md#scenarios) |
+| [`scenarios/multi-protocol-dual-serve.ts`](./scenarios/multi-protocol-dual-serve.ts) | One `{ http, ws }` node over both transports | [page](../docs/examples/scenarios/multi-protocol-dual-serve.md) |
+| [`serve-per-hyperlink-deps.ts`](./serve-per-hyperlink-deps.ts) | Per-HyperService deps on one `/rpc` | [page](../docs/examples/scenarios/serve-per-hyperlink-deps.md) |
+| [`scenarios/nwslsoccer/gate-http-api-client.ts`](./scenarios/nwslsoccer/gate-http-api-client.ts) | Live NWSL SDP via `Gate.HttpApiClient` | [page](../docs/examples/scenarios/nwsl-gate-http-api.md) |
 
 ---
 
