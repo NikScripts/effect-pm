@@ -1,37 +1,47 @@
 /**
  * @module ui/Route
  *
- * UI routing — **HttpApi-shaped**, one namespace:
+ * Public URL / UI router — **Effect HttpApi shape**:
  *
- * | HttpApi | Route |
- * |---------|--------|
+ * | Effect | Route |
+ * |--------|--------|
  * | `HttpApi.make` | {@link make} |
- * | `HttpApiGroup.make` | {@link group} |
+ * | `HttpApiGroup.make` | {@link Group.make} |
  * | `HttpApiEndpoint.get` | {@link get} |
+ * | `HttpApi.addHttpApi` | {@link addHttpApi} / {@link Api.addHttpApi} |
  * | `HttpApiClient.urlBuilder` | {@link urlBuilder} |
+ * | `HttpApi.reflect` | {@link reflect} |
  *
- * Most dashboard routes are **not** hand-written here — build them with
- * {@link ./GroupRoute} (`GroupRoute.from`), which only calls these same tools.
+ * Root endpoints go on {@link make} directly. Optional `topLevel` on
+ * {@link Group.make} flattens that group’s endpoints onto the parent builder
+ * (HttpApi parity). Mix wire APIs in with {@link addHttpApi}.
+ *
+ * Runtime creation = the same constructors in ordinary loops — no Group Tag helper.
  *
  * ```ts
  * import * as Route from "hyperlink-ts/ui/Route"
- * import * as GroupRoute from "hyperlink-ts/ui/GroupRoute"
+ * import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
  * import { Schema } from "effect"
  *
- * const Dashboard = Route.make("dashboard").add(
- *   GroupRoute.from(ServicesHub, {
- *     leaf: (g, ctx) => g.add(...GroupRoute.gets(ctx, "logs", "schedule")),
- *   }),
- *   Route.group("shell", { topLevel: true }).add(
- *     Route.get("health", "/health"),
- *     Route.get("node", "/health/:nodeId").pipe(
- *       Route.params(Schema.Struct({ nodeId: Schema.String })),
- *     ),
+ * const Wire = HttpApi.make("wire").add(
+ *   HttpApiGroup.make("users", { topLevel: true }).add(
+ *     HttpApiEndpoint.get("getUser", "/users/:id"),
  *   ),
  * )
  *
- * Route.urlBuilder(Dashboard).Nwsl.HttpApi.logs()
- * Route.match(Dashboard, "/Nwsl/HttpApi")
+ * const Site = Route.make("site").add(
+ *   Route.get("home", "/"),
+ *   Route.get("docs", "/docs"),
+ *   Route.Group.make("app").add(
+ *     Route.get("dashboard", "/app"),
+ *   ),
+ *   Route.addHttpApi(Wire),
+ * )
+ *
+ * Route.urlBuilder(Site).home()
+ * Route.urlBuilder(Site).getUser({ params: { id: "1" } })
+ * Route.urlBuilder(Site).app.dashboard()
+ * Route.match(Site, "/users/1")
  * ```
  *
  * @see docs/handoffs/ui-routes-dream.md
@@ -39,10 +49,11 @@
 import type * as Context from "effect/Context";
 import type * as Option from "effect/Option";
 import type * as Schema from "effect/Schema";
+import type { HttpApi, HttpApiGroup } from "effect/unstable/httpapi";
 import * as endpoint from "../internal/uiRoute";
 import * as catalog from "../internal/uiRoutes";
 
-/** Absolute pathname template (`/health`, `/health/:nodeId`). @public */
+/** Absolute pathname template (`/health`, `/users/:id`). @public */
 export type Path = endpoint.Path;
 
 /**
@@ -50,17 +61,27 @@ export type Path = endpoint.Path;
  *
  * @public
  */
-export interface Route<
+export interface Endpoint<
   out Id extends string = string,
   out PathType extends Path = Path,
   out Params = never,
 > extends endpoint.Route<Id, PathType, Params> {}
 
+/** @deprecated Use {@link Endpoint}. @public */
+export type Route<
+  Id extends string = string,
+  PathType extends Path = Path,
+  Params = never,
+> = Endpoint<Id, PathType, Params>;
+
 /** @public */
 export type Constraint = endpoint.Constraint;
 
 /** @public */
-export const isRoute: (u: unknown) => u is Constraint = endpoint.isRoute;
+export const isEndpoint: (u: unknown) => u is Constraint = endpoint.isRoute;
+
+/** @deprecated Use {@link isEndpoint}. @public */
+export const isRoute = isEndpoint;
 
 /**
  * Declare a destination (`HttpApiEndpoint.get`).
@@ -73,10 +94,10 @@ export const get: <const Id extends string, const PathType extends Path>(
   options?: {
     readonly params?: Schema.Top | undefined;
   },
-) => Route<Id, PathType> = endpoint.get;
+) => Endpoint<Id, PathType> = endpoint.get;
 
 /**
- * Attach a params schema (`:nodeId` ↔ typed object). Dual.
+ * Attach a params schema. Dual.
  *
  * @public
  */
@@ -88,9 +109,9 @@ export const params: typeof endpoint.params = endpoint.params;
  * @public
  */
 export const prefix = <Id extends string, PathType extends Path, Params>(
-  self: Route<Id, PathType, Params>,
+  self: Endpoint<Id, PathType, Params>,
   prefixPath: Path,
-): Route<Id, Path, Params> => self.prefix(prefixPath);
+): Endpoint<Id, Path, Params> => self.prefix(prefixPath);
 
 /**
  * Annotate a destination.
@@ -98,10 +119,10 @@ export const prefix = <Id extends string, PathType extends Path, Params>(
  * @public
  */
 export const annotate = <Id extends string, PathType extends Path, Params, I, S>(
-  self: Route<Id, PathType, Params>,
+  self: Endpoint<Id, PathType, Params>,
   tag: Context.Key<I, S>,
   value: S,
-): Route<Id, PathType, Params> => self.annotate(tag, value);
+): Endpoint<Id, PathType, Params> => self.annotate(tag, value);
 
 /** Join two absolute path templates. @public */
 export const joinPath: (prefix: Path | "/", path: Path | "/") => Path =
@@ -111,19 +132,47 @@ export const joinPath: (prefix: Path | "/", path: Path | "/") => Path =
 export const compilePath: typeof endpoint.compilePath = endpoint.compilePath;
 
 // =============================================================================
-// Group + catalog (HttpApi / HttpApiGroup)
+// Group (`HttpApiGroup`)
 // =============================================================================
 
 /**
- * Nested group of destinations — optional `path` makes the nest itself
- * navigable (UI extension; HttpApi groups are not path-bearing).
+ * Nested group of destinations — `HttpApiGroup` analogue.
  *
  * @public
  */
 export interface Group extends catalog.GroupConstraint {}
 
 /**
- * Route catalog — what `HttpApi.make` is in Effect.
+ * `HttpApiGroup` constructors.
+ *
+ * @public
+ */
+export const Group: {
+  readonly make: <const Id extends string>(
+    identifier: Id,
+    options?: {
+      readonly topLevel?: boolean | undefined;
+    },
+  ) => Group;
+  readonly isGroup: (u: unknown) => u is Group;
+} = {
+  make: (identifier, options) =>
+    catalog.group(identifier, { topLevel: options?.topLevel }),
+  isGroup: catalog.isGroup,
+};
+
+/**
+ * @deprecated Prefer {@link Group.make}.
+ * @public
+ */
+export const group = Group.make;
+
+// =============================================================================
+// Api (`HttpApi`)
+// =============================================================================
+
+/**
+ * Route catalog — `HttpApi` analogue.
  *
  * @public
  */
@@ -133,10 +182,7 @@ export interface Api extends catalog.AppConstraint {}
 export type RouteLike = catalog.RouteLike;
 
 /** @public */
-export const isGroup: (u: unknown) => u is Group = catalog.isGroup;
-
-/** @public */
-export const isApi: (u: unknown) => u is Api = catalog.isApp;
+export const isApi: (u: unknown) => u is Api = catalog.isApi;
 
 /**
  * Empty catalog (`HttpApi.make`).
@@ -147,23 +193,17 @@ export const make: <const Id extends string>(identifier: Id) => Api =
   catalog.make;
 
 /**
- * Named group (`HttpApiGroup.make`). Pass `path` so the nest is navigable
- * (`urls.Nwsl()`). Pass `topLevel: true` so child methods flatten onto the
- * parent URL builder (same as HttpApi).
+ * Turn an Effect `HttpApi` into a top-level group bundle for {@link Api.add}
+ * (`HttpApi.addHttpApi` analogue — **URL surface only**).
  *
  * @public
  */
-export const group = <const Id extends string>(
-  identifier: Id,
-  options?: {
-    readonly path?: Path | undefined;
-    readonly topLevel?: boolean | undefined;
-  },
-): Group =>
-  catalog.group(identifier, {
-    path: options?.path,
-    topLevel: options?.topLevel,
-  });
+export const addHttpApi: <
+  Id extends string,
+  Groups extends HttpApiGroup.Constraint,
+>(
+  api: HttpApi.HttpApi<Id, Groups>,
+) => Group = catalog.addHttpApi;
 
 /** Flattened match hit. @public */
 export type Match = catalog.Match;
@@ -184,7 +224,7 @@ export type UrlBuilder = catalog.UrlBuilder;
 /** @public */
 export const urlBuilder: (self: Api) => UrlBuilder = catalog.urlBuilder;
 
-/** Walk groups/destinations (tooling). @public */
+/** Walk groups/endpoints (tooling) — `HttpApi.reflect` analogue. @public */
 export const reflect: typeof catalog.reflect = catalog.reflect;
 
 /** Flat list of navigable paths (tests / debugging). @public */

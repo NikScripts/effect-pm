@@ -151,7 +151,7 @@ First peel = header/body split; page-sized logs/schedule **Eng’d**.
 
 ### K3. UI Route toolkit (2026-07-29)
 
-HttpApi-shaped `Route` (`make` / `group` / `get` / `match` / `urlBuilder`). Dynamic tools = `GroupRoute.from` + `gets`. See [`ui-routes-dream.md`](./ui-routes-dream.md). Navigator cutover next.
+HttpApi-shaped `Route` (`make` / `Group.make` / `get` / `addHttpApi` / `match` / `urlBuilder`). Root endpoints + optional `topLevel`; mix Effect `HttpApi` via `addHttpApi`. See [`ui-routes-dream.md`](./ui-routes-dream.md). Navigator cutover next.
 
 ### L. Acceptance
 

@@ -14,7 +14,7 @@
  */
 export * from "./atom-react";
 export * from "./GroupRoute";
-/** Dynamic Group → Route tools (`from` / `gets`) + legacy path resolve. */
+/** Legacy Group path resolve (Navigator); route declaration is {@link ./Route}. */
 export * as GroupRoute from "./GroupRoute";
 export * from "./data";
 export * from "./cache";

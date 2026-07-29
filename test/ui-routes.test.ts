@@ -1,16 +1,14 @@
 /**
- * Route (HttpApi-shaped) + GroupRoute.from (dynamic).
+ * Route — HttpApi-shaped catalog, root endpoints, topLevel, addHttpApi.
  */
 import { describe, expect, it } from "@effect/vitest";
 import { Option, Schema } from "effect";
-import * as Daemon from "../src/Daemon";
-import * as Group from "../src/Group";
-import * as GroupRoute from "../src/ui/GroupRoute";
+import {
+  HttpApi,
+  HttpApiEndpoint,
+  HttpApiGroup,
+} from "effect/unstable/httpapi";
 import * as Route from "../src/ui/Route";
-
-class HttpApi extends Daemon.Tag<HttpApi>()("test/routes/HttpApi") {}
-class Nwsl extends Group.Tag<Nwsl>("test/routes/Nwsl")({ HttpApi }) {}
-class Hub extends Group.Tag<Hub>("test/routes/Hub")({ Nwsl }) {}
 
 describe("Route", () => {
   it("get + params + prefix", () => {
@@ -22,93 +20,91 @@ describe("Route", () => {
     expect(node.prefix("/app").path).toBe("/app/health/:nodeId");
   });
 
-  it("compilePath builds and matches", () => {
-    const compiled = Route.compilePath("/health/:nodeId");
-    expect(compiled.build({ nodeId: "a/b" })).toBe("/health/a%2Fb");
-    expect(Option.getOrThrow(compiled.match("/health/a%2Fb"))).toEqual({
-      nodeId: "a/b",
-    });
+  it("root endpoints sit on the api (no topLevel needed)", () => {
+    const api = Route.make("site").add(
+      Route.get("home", "/"),
+      Route.get("docs", "/docs"),
+    );
+    // "/" alone does not match; docs does
+    const urls = Route.urlBuilder(api) as {
+      docs: () => string;
+    };
+    expect(urls.docs()).toBe("/docs");
+    expect(Option.getOrThrow(Route.match(api, "/docs")).identifiers).toEqual([
+      "docs",
+    ]);
   });
-});
 
-describe("GroupRoute.from", () => {
-  const api = Route.make("dashboard").add(
-    GroupRoute.from(Hub, {
-      leaf: (g, ctx) => g.add(...GroupRoute.gets(ctx, "logs", "schedule")),
-    }),
-    Route.group("shell", { topLevel: true }).add(
-      Route.get("health", "/health"),
-      Route.get("node", "/health/:nodeId").pipe(
-        Route.params(Schema.Struct({ nodeId: Schema.String })),
+  it("Group.make topLevel flattens onto parent builder", () => {
+    const api = Route.make("site").add(
+      Route.Group.make("shell", { topLevel: true }).add(
+        Route.get("health", "/health"),
       ),
-    ),
-  );
-
-  it("urlBuilder nests Group members + leaf gets", () => {
+      Route.Group.make("app").add(Route.get("dashboard", "/app")),
+    );
     const urls = Route.urlBuilder(api) as {
       health: () => string;
-      node: (r?: { params?: { nodeId: string } }) => string;
-      Nwsl: (() => string) & {
-        HttpApi: (() => string) & {
-          logs: () => string;
-          schedule: () => string;
-        };
-      };
+      app: { dashboard: () => string };
     };
     expect(urls.health()).toBe("/health");
-    expect(urls.node({ params: { nodeId: "n1" } })).toBe("/health/n1");
-    expect(urls.Nwsl()).toBe("/Nwsl");
-    expect(urls.Nwsl.HttpApi()).toBe("/Nwsl/HttpApi");
-    expect(urls.Nwsl.HttpApi.logs()).toBe("/Nwsl/HttpApi/logs");
-    expect(urls.Nwsl.HttpApi.schedule()).toBe("/Nwsl/HttpApi/schedule");
+    expect(urls.app.dashboard()).toBe("/app");
   });
 
-  it("match resolves group, leaf, leaf get, and params", () => {
-    const leaf = Option.getOrThrow(Route.match(api, "/Nwsl/HttpApi"));
-    expect(leaf.kind).toBe("group");
-    expect(leaf.member).toBe(HttpApi);
-
-    const logs = Option.getOrThrow(Route.match(api, "/Nwsl/HttpApi/logs"));
-    expect(logs.kind).toBe("route");
-    expect(logs.leafView).toBe("logs");
-    expect(logs.member).toBe(HttpApi);
-
-    const node = Option.getOrThrow(Route.match(api, "/health/app%2FNode"));
-    expect(node.params).toEqual({ nodeId: "app/Node" });
+  it("runtime loop uses the same constructors", () => {
+    const entries: ReadonlyArray<readonly [string, `/${string}`]> = [
+      ["a", "/a"],
+      ["b", "/b"],
+    ];
+    let pages = Route.Group.make("pages", { topLevel: true });
+    for (const [id, path] of entries) {
+      pages = pages.add(Route.get(id, path));
+    }
+    const api = Route.make("site").add(pages);
+    const urls = Route.urlBuilder(api) as {
+      a: () => string;
+      b: () => string;
+    };
+    expect(urls.a()).toBe("/a");
+    expect(urls.b()).toBe("/b");
   });
 
-  it("hand-written tree equals GroupRoute.from paths", () => {
-    const hand = Route.make("hand").add(
-      Route.group("hub", { path: undefined }).add(
-        Route.group("Nwsl", { path: "/Nwsl" }).add(
-          Route.group("HttpApi", { path: "/Nwsl/HttpApi" }).add(
-            Route.get("logs", "/Nwsl/HttpApi/logs"),
-          ),
-        ),
+  it("addHttpApi imports Effect HttpApi paths", () => {
+    const Wire = HttpApi.make("wire").add(
+      HttpApiGroup.make("users", { topLevel: true }).add(
+        HttpApiEndpoint.get("getUser", "/users/:id"),
+      ),
+      HttpApiGroup.make("admin").add(
+        HttpApiEndpoint.get("stats", "/admin/stats"),
       ),
     );
-    // Hand tree without topLevel won't flatten the same — compare generated
-    // flatten paths against an equivalent from() without shell.
-    const generated = Route.make("gen").add(
-      GroupRoute.from(Hub, {
-        leaf: (g, ctx) => g.add(...GroupRoute.gets(ctx, "logs")),
-      }),
+
+    const site = Route.make("site").add(
+      Route.get("home", "/home"),
+      Route.addHttpApi(Wire),
     );
-    const paths = Route.flatten(generated)
-      .map((e) => e.path)
-      .slice()
-      .sort();
-    expect(paths).toEqual([
-      "/Nwsl",
-      "/Nwsl/HttpApi",
-      "/Nwsl/HttpApi/logs",
-    ]);
-    // Hand-written nested (non-topLevel) still has the same path strings.
-    expect(
-      Route.flatten(hand)
-        .map((e) => e.path)
-        .slice()
-        .sort(),
-    ).toEqual(paths);
+
+    const urls = Route.urlBuilder(site) as {
+      home: () => string;
+      getUser: (r?: { params?: { id: string } }) => string;
+      admin: { stats: () => string };
+    };
+    expect(urls.home()).toBe("/home");
+    expect(urls.getUser({ params: { id: "1" } })).toBe("/users/1");
+    expect(urls.admin.stats()).toBe("/admin/stats");
+
+    const hit = Option.getOrThrow(Route.match(site, "/users/42"));
+    expect(hit.route.identifier).toBe("getUser");
+    expect(hit.params).toEqual({ id: "42" });
+  });
+
+  it("Api.addHttpApi method merges the same way", () => {
+    const Wire = HttpApi.make("wire").add(
+      HttpApiGroup.make("x", { topLevel: true }).add(
+        HttpApiEndpoint.get("ping", "/ping"),
+      ),
+    );
+    const site = Route.make("site").addHttpApi(Wire);
+    const urls = Route.urlBuilder(site) as { ping: () => string };
+    expect(urls.ping()).toBe("/ping");
   });
 });

@@ -1,49 +1,42 @@
-# UI Route — HttpApi-shaped + GroupRoute dynamic tools
+# UI Route — HttpApi-shaped public URL router
 
-## Split
+**Locked (owner 2026-07-29)**
 
-| Module | Role |
-|--------|------|
-| `hyperlink-ts/ui/Route` | Toolkit — `make` / `group` / `get` / `match` / `urlBuilder` (like HttpApi / HttpApiGroup / HttpApiEndpoint) |
-| `hyperlink-ts/ui/GroupRoute` | **Dynamic tools** — `from` + `gets` turn a Hyperlink Group into Route declarations |
+## Shape
 
-Most dashboard routes come from **`GroupRoute.from`**, not hand-written `Route.get`s.
-
-## HttpApi mapping
-
-| Effect | Ours |
-|--------|------|
-| `HttpApi.make("id")` | `Route.make("id")` |
-| `HttpApiGroup.make("id")` | `Route.group("id", { path? })` |
-| `HttpApiEndpoint.get("id", "/path")` | `Route.get("id", "/path")` |
+| Effect | Route |
+|--------|--------|
+| `HttpApi.make` | `Route.make` |
+| `HttpApiGroup.make` | `Route.Group.make` |
+| `HttpApiEndpoint.get` | `Route.get` |
+| `HttpApi.addHttpApi` | `Route.addHttpApi` / `api.addHttpApi` |
 | `HttpApiClient.urlBuilder` | `Route.urlBuilder` |
+| `HttpApi.reflect` | `Route.reflect` |
 
-Optional `path` on `Route.group` = navigable nest (UI-only; HttpApi groups have no path).
-
-## Dynamic generation
-
-```ts
-GroupRoute.from(ServicesHub, {
-  leaf: (g, ctx) => g.add(...GroupRoute.gets(ctx, "logs", "schedule")),
-})
-```
-
-- `from` walks the Group and emits `Route.group({ path })` per member.
-- `gets` emits ordinary `Route.get`s for leaf pages — **not** a `leafViews` string bag.
-- `leaf` callback is where apps compose those gets (or any other Route builders).
+- **Root endpoints:** `Route.make("site").add(Route.get("docs", "/docs"))` — no `topLevel` needed.
+- **`topLevel`:** optional on `Route.Group.make` (HttpApi parity) when a named group should flatten onto the parent builder.
+- **Mix wire APIs:** `Route.addHttpApi(wireHttpApi)` imports **URL surface only** (paths / ids / params / group nesting).
+- **Runtime:** same constructors in loops — no Group.Tag / `fromMembers` helper in this module.
 
 ## Example
 
 ```ts
-const Dashboard = Route.make("dashboard").add(
-  GroupRoute.from(ServicesHub, {
-    leaf: (g, ctx) => g.add(...GroupRoute.gets(ctx, "logs", "schedule")),
-  }),
-  Route.group("shell", { topLevel: true }).add(
-    Route.get("health", "/health"),
-    Route.get("node", "/health/:nodeId").pipe(
-      Route.params(Schema.Struct({ nodeId: Schema.String })),
-    ),
+const Wire = HttpApi.make("wire").add(
+  HttpApiGroup.make("users", { topLevel: true }).add(
+    HttpApiEndpoint.get("getUser", "/users/:id"),
   ),
 )
+
+const Site = Route.make("site").add(
+  Route.get("home", "/home"),
+  Route.Group.make("app").add(Route.get("dashboard", "/app")),
+  Route.addHttpApi(Wire),
+)
+
+Route.urlBuilder(Site).getUser({ params: { id: "1" } })
+Route.match(Site, "/users/1")
 ```
+
+## Not in scope (yet)
+
+Navigator cutover onto `Route` catalogs (still uses legacy `GroupRoute.resolveGroupRoute`).
