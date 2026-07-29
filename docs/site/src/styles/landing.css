@@ -79,6 +79,8 @@ html {
     radial-gradient(ellipse 160% 70% at 50% -10%, var(--landing-glow), var(--landing-canvas) 72%),
     radial-gradient(ellipse 100% 55% at 100% 110%, var(--landing-bg-deep), var(--landing-canvas) 68%),
     radial-gradient(ellipse 90% 50% at 0% 110%, var(--landing-bg-deep), var(--landing-canvas) 65%);
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
 }
 body {
   margin: 0;
