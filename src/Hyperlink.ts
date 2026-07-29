@@ -128,8 +128,10 @@ import * as atomHandle from "./internal/atomHandle";
 import { adaptPromiseHandle } from "./internal/promiseHandle";
 import {
   HandoffDeferred as HyperlinkHandoffDeferred,
+  handoffDeferralReason as handoffDeferralReasonInternal,
   hyperlinkHandoffContext,
   runHandoffFunction,
+  type HandoffDeferralReason as HyperlinkHandoffDeferralReason,
   type HyperlinkHandoffContext,
   type HyperlinkHandoffFn,
   type HyperlinkHandoffOutcome,
@@ -185,9 +187,21 @@ type ServeAny = any;
 export const handoffContext: HandoffContext = hyperlinkHandoffContext;
 
 /**
+ * Why {@link HandoffDeferred} fired — schema of PascalCase discriminant strings
+ * (`Defer` | `NoPeer` | `RetryExhausted` | `Failed`), same rule as store state-transition reasons.
+ *
+ * @category errors
+ * @public
+ */
+export const handoffDeferralReason = handoffDeferralReasonInternal;
+/** {@link handoffDeferralReason} member type. @public */
+export type HandoffDeferralReason = HyperlinkHandoffDeferralReason;
+
+/**
  * A served HyperService's handoff asked to defer (or had no peer / exhausted retries / failed), so
  * the OUTGOING node stayed running and did **not** leave membership. Surfaced to the
- * {@link Node.shutdown} caller (Locked #39 #8/#9).
+ * {@link Node.shutdown} caller (Locked #39 #8/#9). Match with `_tag: "HandoffDeferred"` and
+ * {@link HandoffDeferralReason} on `.reason`.
  *
  * @category errors
  * @public

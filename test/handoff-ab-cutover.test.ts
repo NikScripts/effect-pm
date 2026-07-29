@@ -9,11 +9,11 @@
  * - L1 / L1b / L8 / L14 — WorkPool bake + lookupClient + payload fidelity
  * - L-same / L16 — same nodeKey + askIncumbent then dial-peer transfer
  * - L2 / L15 / L17 — custom take→give / empty / peer identity
- * - L3 / L4 / L4b / L10 / L11 — defer paths (no-peer, peer gone, give fail, defect, retry-exhausted)
+ * - L3 / L4 / L4b / L10 / L11 — defer paths (NoPeer, peer gone, give fail, Failed, RetryExhausted)
  * - L5 / L9 — Retry→Done / void→Done
  * - L6 / L18 — multi-service Done+Defer / dual Done
  * - L7 — mid-handoff draining refuses askIncumbent
- * - L12 — no-peer defer then retry after B joins
+ * - L12 — NoPeer defer then retry after B joins
  * - L13 — three peers, first non-self dial
  * - L19 — Advice cleared on successful leave
  * - L20 — WorkPool.serveRemote bake
@@ -28,6 +28,7 @@ import {
   Fiber,
   Layer,
   Option,
+  Predicate,
   Ref,
   Schedule,
   Schema,
@@ -42,6 +43,7 @@ import {
   NodeStatusTag,
   client as nodeStatusClient,
 } from "../src/internal/nodeStatus";
+import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 
 const Item = Schema.Struct({ n: Schema.Number });
 type Item = { readonly n: number };
@@ -69,26 +71,37 @@ const nodesServing = (
     .nodesServing(new Lookup.NodesServingRequest({ serviceKey }))
     .pipe(Effect.provide(lookupCtx));
 
-/** Typed `HandoffDeferred` channel asserts (reason + serviceKey + optional phase). */
+/**
+ * Match `HandoffDeferred` by `_tag` (never `instanceof` / message strings) + PascalCase reason.
+ */
 const expectHandoffDeferred = (
   err: unknown,
   expected: {
-    readonly reason: Hyperlink.HandoffDeferred["reason"];
+    readonly reason: Hyperlink.HandoffDeferralReason;
     readonly serviceKey: string;
   },
-) => {
-  expect(err).toBeInstanceOf(Hyperlink.HandoffDeferred);
-  const deferred = err as Hyperlink.HandoffDeferred;
-  expect(deferred._tag).toBe("HandoffDeferred");
-  expect(deferred.reason).toBe(expected.reason);
-  expect(deferred.serviceKey).toBe(expected.serviceKey);
+): void => {
+  expect(Predicate.isTagged(err, "HandoffDeferred")).toBe(true);
+  if (
+    typeof err !== "object" ||
+    err === null ||
+    !("_tag" in err) ||
+    err._tag !== "HandoffDeferred" ||
+    !("reason" in err) ||
+    !("serviceKey" in err)
+  ) {
+    throw new Error(
+      `expected HandoffDeferred with reason/serviceKey, got ${String(err)}`,
+    );
+  }
+  expect(err.reason).toBe(expected.reason);
+  expect(err.serviceKey).toBe(expected.serviceKey);
 };
 
-const nodePhase = (node: Node.AnyNode) =>
-  Effect.gen(function* () {
-    const status = yield* NodeStatusTag;
-    return (yield* status.status.get).phase;
-  }).pipe(Effect.provide(nodeStatusClient(node)), Effect.scoped);
+const nodePhase = (node: Node.AddressedNode<unknown>) =>
+  Effect.flatMap(NodeStatusTag, (status) =>
+    Effect.map(status.status.get, (snap) => snap.phase),
+  ).pipe(Effect.provide(nodeStatusClient(node)), Effect.scoped);
 
 describe("A→B cutover — WorkPool baked releaseEnqueueHandoff", () => {
   it.live(
@@ -482,7 +495,7 @@ describe("A→B cutover — custom Hyperlink.serve { handoff }", () => {
   );
 
   it.live(
-    "L4: peer gone before handoff ⇒ HandoffDeferred(failed|no-peer); A stays up with state",
+    "L4: peer gone before handoff ⇒ HandoffDeferred(Failed|NoPeer); A stays up with state",
     () =>
       Effect.gen(function* () {
         const lookupPath = yield* tmpSock("l4-lookup");
@@ -532,7 +545,17 @@ describe("A→B cutover — custom Hyperlink.serve { handoff }", () => {
         yield* Layer.build(
           Node.unix(WorkerA, [
             Hyperlink.serve(Mover, moverImpl(storeA), {
-              handoff: (from, to, ctx) =>
+              handoff: (
+                from: {
+                  readonly take: Effect.Effect<ReadonlyArray<string>>;
+                },
+                to: {
+                  readonly give: (
+                    items: ReadonlyArray<string>,
+                  ) => Effect.Effect<void>;
+                },
+                ctx: Hyperlink.HandoffContext,
+              ) =>
                 Effect.gen(function* () {
                   const items = yield* from.take;
                   if (items.length === 0) return yield* ctx.done;
@@ -560,11 +583,12 @@ describe("A→B cutover — custom Hyperlink.serve { handoff }", () => {
         });
 
         const err = yield* Effect.flip(Node.shutdown(WorkerA));
-        expect(err).toBeInstanceOf(Hyperlink.HandoffDeferred);
-        expect(["failed", "no-peer", "defer"]).toContain(
-          (err as Hyperlink.HandoffDeferred).reason,
-        );
-        expect((err as Hyperlink.HandoffDeferred).serviceKey).toBe(Mover.key);
+        expect(Predicate.isTagged(err, "HandoffDeferred")).toBe(true);
+        if (!Predicate.isTagged(err, "HandoffDeferred")) {
+          throw new Error(`expected HandoffDeferred, got ${err._tag}`);
+        }
+        expect(["Failed", "NoPeer", "Defer"]).toContain(err.reason);
+        expect(err.serviceKey).toBe(Mover.key);
 
         // A restored locally — either never took, or re-queued after failed give.
         expect(yield* Ref.get(storeA)).toEqual(["keep-me"]);
@@ -642,7 +666,7 @@ describe("A→B cutover — custom Hyperlink.serve { handoff }", () => {
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(30))),
   );
 
-  it.live("L3: sole node with handoff ⇒ no-peer defer (suite control)", () =>
+  it.live("L3: sole node with handoff ⇒ NoPeer defer (suite control)", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("l3-lookup");
       const pathA = yield* tmpSock("l3-a");
@@ -670,7 +694,7 @@ describe("A→B cutover — custom Hyperlink.serve { handoff }", () => {
 
       const err = yield* Effect.flip(Node.shutdown(WorkerA));
       expectHandoffDeferred(err, {
-        reason: "no-peer",
+        reason: "NoPeer",
         serviceKey: Jobs.key,
       });
       expect(yield* nodePhase(WorkerA)).toBe("running");
@@ -773,7 +797,7 @@ describe("A→B cutover — multi-service + membership", () => {
 
         const err = yield* Effect.flip(Node.shutdown(WorkerA));
         expectHandoffDeferred(err, {
-          reason: "defer",
+          reason: "Defer",
           serviceKey: Beta.key,
         });
         expect(yield* nodePhase(WorkerA)).toBe("running");
@@ -851,7 +875,17 @@ describe("A→B cutover — multi-service + membership", () => {
             WorkerA,
             [
               Hyperlink.serve(Mover, moverImpl(storeA), {
-                handoff: (from, to, ctx) =>
+                handoff: (
+                  from: {
+                    readonly take: Effect.Effect<ReadonlyArray<string>>;
+                  },
+                  to: {
+                    readonly give: (
+                      items: ReadonlyArray<string>,
+                    ) => Effect.Effect<void>;
+                  },
+                  ctx: Hyperlink.HandoffContext,
+                ) =>
                   Effect.gen(function* () {
                     yield* Deferred.succeed(handoffEntered, undefined);
                     yield* Deferred.await(releaseHandoff);
@@ -899,15 +933,15 @@ describe("A→B cutover — multi-service + membership", () => {
             }),
           )
           .pipe(
-            Effect.map((entry) => ({ _tag: "ok" as const, entry })),
+            Effect.map((entry) => ({ _tag: "Ok" as const, entry })),
             Effect.catchTag("IncumbentAlive", (error) =>
-              Effect.succeed({ _tag: "alive" as const, error }),
+              Effect.succeed({ _tag: "Alive" as const, error }),
             ),
             Effect.provide(lookupCtx),
           );
 
-        expect(conflict._tag).toBe("alive");
-        if (conflict._tag === "alive") {
+        expect(conflict._tag).toBe("Alive");
+        if (conflict._tag === "Alive") {
           expect(conflict.error.incumbent.path).toBe(pathA);
         }
 
@@ -918,6 +952,9 @@ describe("A→B cutover — multi-service + membership", () => {
         yield* Deferred.succeed(releaseHandoff, undefined);
         const shutExit = yield* Fiber.join(shutdownFiber);
         expect(Exit.isSuccess(shutExit)).toBe(true);
+        if (Exit.isFailure(shutExit)) {
+          expect.fail(`expected successful leave; got ${String(shutExit.cause)}`);
+        }
 
         yield* waitUntil(
           nodesServing(lookupCtx, Mover.key),
@@ -970,9 +1007,7 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
               {
                 // Return void Effect (no ctx.done) — runner coerces to Done.
                 handoff: () =>
-                  Effect.gen(function* () {
-                    yield* Ref.set(ran, true);
-                  }),
+                  Effect.andThen(Ref.set(ran, true), Effect.void),
               },
             ),
           ]).pipe(Layer.provide(lookupClient)),
@@ -995,7 +1030,7 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
   );
 
   it.live(
-    "L10: defecting handoff ⇒ HandoffDeferred(failed); phase running; Directory held",
+    "L10: defecting handoff ⇒ HandoffDeferred(Failed); phase running; Directory held",
     () =>
       Effect.gen(function* () {
         const lookupPath = yield* tmpSock("l10-lookup");
@@ -1042,7 +1077,7 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
 
         const err = yield* Effect.flip(Node.shutdown(WorkerA));
         expectHandoffDeferred(err, {
-          reason: "failed",
+          reason: "Failed",
           serviceKey: Ping.key,
         });
         expect(yield* nodePhase(WorkerA)).toBe("running");
@@ -1053,7 +1088,7 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
     60_000,
   );
 
-  it.live("L11: Retry exhausted ⇒ HandoffDeferred(retry-exhausted); A stays", () =>
+  it.live("L11: Retry exhausted ⇒ HandoffDeferred(RetryExhausted); A stays", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("l11-lookup");
       const pathA = yield* tmpSock("l11-a");
@@ -1106,7 +1141,7 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
 
       const err = yield* Effect.flip(Node.shutdown(WorkerA));
       expectHandoffDeferred(err, {
-        reason: "retry-exhausted",
+        reason: "RetryExhausted",
         serviceKey: Ping.key,
       });
       // Default retries = N ⇒ initial attempt + N retries = N + 1 invocations.
@@ -1120,7 +1155,7 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
   );
 
   it.live(
-    "L12: after no-peer defer, bring B up and retry shutdown ⇒ Done transfer",
+    "L12: after NoPeer defer, bring B up and retry shutdown ⇒ Done transfer",
     () =>
       Effect.gen(function* () {
         const lookupPath = yield* tmpSock("l12-lookup");
@@ -1161,7 +1196,7 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
 
         const first = yield* Effect.flip(Node.shutdown(WorkerA));
         expectHandoffDeferred(first, {
-          reason: "no-peer",
+          reason: "NoPeer",
           serviceKey: Jobs.key,
         });
         expect(yield* nodePhase(WorkerA)).toBe("running");
@@ -1241,7 +1276,9 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
               give: (items: ReadonlyArray<string>) =>
                 Effect.gen(function* () {
                   if (yield* Ref.get(refuseGive)) {
-                    return yield* Effect.fail("peer-refusing-give");
+                    // Defect — runner folds into HandoffDeferred({ reason: "Failed" }) on A;
+                    // here we force the peer RPC to fail mid-handoff.
+                    return yield* Effect.die("peer-refusing-give");
                   }
                   yield* Ref.update(storeB, (a) => [...a, ...items]);
                 }),
@@ -1263,7 +1300,17 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
                   Ref.update(storeA, (a) => [...a, ...items]),
               },
               {
-                handoff: (from, to, ctx) =>
+                handoff: (
+                  from: {
+                    readonly take: Effect.Effect<ReadonlyArray<string>>;
+                  },
+                  to: {
+                    readonly give: (
+                      items: ReadonlyArray<string>,
+                    ) => Effect.Effect<void>;
+                  },
+                  ctx: Hyperlink.HandoffContext,
+                ) =>
                   Effect.gen(function* () {
                     const items = yield* from.take;
                     if (items.length === 0) return yield* ctx.done;
@@ -1296,15 +1343,15 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
         yield* Deferred.succeed(proceedGive, undefined);
 
         const shutExit = yield* Fiber.join(shutdownFiber);
-        expect(Exit.isFailure(shutExit)).toBe(true);
+        expect(expectTaggedFailure(shutExit, "HandoffDeferred")).toMatchObject({
+          _tag: "HandoffDeferred",
+          reason: "Defer",
+          serviceKey: Mover.key,
+        });
 
         expect(yield* Ref.get(storeA)).toEqual(["keep-me"]);
         expect(yield* Ref.get(storeB)).toEqual([]);
-        const phase = yield* Effect.gen(function* () {
-          const status = yield* NodeStatusTag;
-          return (yield* status.status.get).phase;
-        }).pipe(Effect.provide(nodeStatusClient(WorkerA)), Effect.scoped);
-        expect(phase).toBe("running");
+        expect(yield* nodePhase(WorkerA)).toBe("running");
         expect(
           (yield* nodesServing(lookupCtx, Mover.key)).some(
             (r) => r.nodeKey === WorkerA.key,
@@ -1525,7 +1572,17 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
                 give: (items) => Ref.update(storeA, (a) => [...a, ...items]),
               },
               {
-                handoff: (from, to, ctx) =>
+                handoff: (
+                  from: {
+                    readonly take: Effect.Effect<ReadonlyArray<string>>;
+                  },
+                  to: {
+                    readonly give: (
+                      items: ReadonlyArray<string>,
+                    ) => Effect.Effect<void>;
+                  },
+                  ctx: Hyperlink.HandoffContext,
+                ) =>
                   Effect.gen(function* () {
                     const items = yield* from.take;
                     if (items.length === 0) return yield* ctx.done;
@@ -1925,7 +1982,8 @@ describe("A→B cutover — peer identity, dual Done, Advice, serveRemote", () =
         class Jobs extends WorkPool.Tag<Jobs>()("ab/l20/Jobs", {
           payload: Item,
         }) {}
-        class WorkerA extends Node.Tag<WorkerA, Jobs>()("ab/l20/WorkerA", {
+        // No Jobs catalog on A — serveRemote grants handlers only (not `yield* Jobs`).
+        class WorkerA extends Node.Tag<WorkerA>()("ab/l20/WorkerA", {
           path: pathA,
         }) {}
         class WorkerB extends Node.Tag<WorkerB, Jobs>()("ab/l20/WorkerB", {

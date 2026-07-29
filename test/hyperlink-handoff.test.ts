@@ -9,6 +9,7 @@ import {
   Exit,
   Layer,
   Option,
+  Predicate,
   Ref,
   Schema,
 } from "effect";
@@ -64,7 +65,7 @@ describe("runHandoffFunction", () => {
     }),
   );
 
-  it.effect("no peer defers (HandoffDeferred reason=no-peer)", () =>
+  it.effect("no peer defers (HandoffDeferred reason=NoPeer)", () =>
     Effect.gen(function* () {
       const err = yield* Effect.flip(
         runHandoffFunction({
@@ -75,11 +76,12 @@ describe("runHandoffFunction", () => {
         }),
       );
       expect(err._tag).toBe("HandoffDeferred");
-      expect(err.reason).toBe("no-peer");
+      expect(err.reason).toBe("NoPeer");
+      expect(err.serviceKey).toBe("svc");
     }),
   );
 
-  it.effect("ctx.defer defers (reason=defer)", () =>
+  it.effect("ctx.defer defers (reason=Defer)", () =>
     Effect.gen(function* () {
       const err = yield* Effect.flip(
         runHandoffFunction({
@@ -89,7 +91,8 @@ describe("runHandoffFunction", () => {
           dialPeer: Effect.succeed(Option.some({})),
         }),
       );
-      expect(err.reason).toBe("defer");
+      expect(err._tag).toBe("HandoffDeferred");
+      expect(err.reason).toBe("Defer");
     }),
   );
 
@@ -111,7 +114,7 @@ describe("runHandoffFunction", () => {
     }),
   );
 
-  it.effect("Retry exhausted defers (reason=retry-exhausted)", () =>
+  it.effect("Retry exhausted defers (reason=RetryExhausted)", () =>
     Effect.gen(function* () {
       const attempts = yield* Ref.make(0);
       const err = yield* Effect.flip(
@@ -127,7 +130,8 @@ describe("runHandoffFunction", () => {
           retries: 2,
         }),
       );
-      expect(err.reason).toBe("retry-exhausted");
+      expect(err._tag).toBe("HandoffDeferred");
+      expect(err.reason).toBe("RetryExhausted");
       expect(err.serviceKey).toBe("svc");
       // retries: 2 ⇒ initial + 2 retries = 3 invocations.
       expect(yield* Ref.get(attempts)).toBe(3);
@@ -149,12 +153,13 @@ describe("runHandoffFunction", () => {
           dialPeer: Effect.succeed(Option.some({})),
         }),
       );
-      expect(err.reason).toBe("retry-exhausted");
+      expect(err._tag).toBe("HandoffDeferred");
+      expect(err.reason).toBe("RetryExhausted");
       expect(yield* Ref.get(attempts)).toBe(DEFAULT_HANDOFF_RETRIES + 1);
     }),
   );
 
-  it.effect("a failing/defecting handoff defers (reason=failed)", () =>
+  it.effect("a failing/defecting handoff defers (reason=Failed)", () =>
     Effect.gen(function* () {
       const err = yield* Effect.flip(
         runHandoffFunction({
@@ -164,7 +169,8 @@ describe("runHandoffFunction", () => {
           dialPeer: Effect.succeed(Option.some({})),
         }),
       );
-      expect(err.reason).toBe("failed");
+      expect(err._tag).toBe("HandoffDeferred");
+      expect(err.reason).toBe("Failed");
     }),
   );
 });
@@ -242,7 +248,7 @@ describe("Node.shutdown handoff orchestration", () => {
         serviceCount: 1,
         handoff: new Hyperlink.HandoffDeferred({
           serviceKey: "svc",
-          reason: "defer",
+          reason: "Defer",
         }),
         closeListen: Ref.update(order, (a) => [...a, "close"]),
       });
@@ -313,9 +319,14 @@ describe("Node.shutdown end-to-end (Locked #39)", () => {
         ]).pipe(Layer.provide(Lookup.client(lookupNode))),
       );
 
-      // Only one node serves Mover, so there is no peer to hand off to ⇒ defer (node stays up).
+      // Only one node serves Mover, so there is no peer to hand off to ⇒ NoPeer (node stays up).
       const err = yield* Effect.flip(Node.shutdown(Worker));
-      expect(err._tag).toBe("HandoffDeferred");
+      expect(Predicate.isTagged(err, "HandoffDeferred")).toBe(true);
+      if (!Predicate.isTagged(err, "HandoffDeferred")) {
+        throw new Error(`expected HandoffDeferred, got ${err._tag}`);
+      }
+      expect(err.reason).toBe("NoPeer");
+      expect(err.serviceKey).toBe(Mover.key);
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
   );
 });

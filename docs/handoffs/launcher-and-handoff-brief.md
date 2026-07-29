@@ -146,8 +146,8 @@
     - **Signature:** `handoff: (from, to, ctx) => Effect<void | HandoffOutcome>` — `from` = local handle, `to` = peer client (same service type, dialed from the Directory excluding self **by dial**).
     - **Outcomes:** tagged `_tag` PascalCase — `Done` | `Retry` | `Defer`. Type / API camelCase (`HandoffOutcome`, `HandoffContext`, `handoffContext`). `ctx.done` / `ctx.retry` / `ctx.defer` are Effects that succeed with those tags. Returning `void` coerces to `Done` at the runner (happy path easy).
     - **Orchestration:** run local on the OUTGOING node during `Node.shutdown` after drain; dial the Directory peer (exclude self by dial); run `handoff(from, to, ctx)`.
-    - **Retry** = bounded re-run of that service's handoff. **Defer** (or **no peer**, or **defect/orDie**, or retry-exhausted) = do **not** leave / shut down — restore `phase: "running"`, clear the shutting-down latch, surface typed `HandoffDeferred` to the shutdown caller (over the wire on the node-status `shutdown` RPC error channel).
-    - **No peer when handoff set ⇒ Defer** (keep up, log warning).
+    - **Retry** = bounded re-run of that service's handoff. **Defer** / **NoPeer** / **RetryExhausted** / **Failed** (defect/`orDie`) = do **not** leave / shut down — restore `phase: "running"`, clear the shutting-down latch, surface typed `HandoffDeferred` (`_tag: "HandoffDeferred"`, `.reason` PascalCase via `handoffDeferralReason`) to the shutdown caller (over the wire on the node-status `shutdown` RPC error channel). Match by `_tag`, never message strings.
+    - **No peer when handoff set ⇒ `HandoffDeferred({ reason: "NoPeer" })`** (keep up, log warning).
     - **WorkPool:** handoff **baked into** `WorkPool.serve` / `serveRemote` (`releaseEnqueueHandoff`). Config override/opt-out deferred. **Daemon / Gate:** optional `handoff` in config bag → `Hyperlink.serve` options (no baked migrate).
     - **Deferred:** `restartSuccessor`; full `Node.http` 3rd-arg unify (serve `{ node }` currently threads registration only, not a tag re-stamp for `client(Tag)`).
 38. **Replacement addressing recipe (owner lock 2026-07-29)** — not an A/B product mode.

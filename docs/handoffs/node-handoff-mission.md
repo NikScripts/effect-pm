@@ -39,7 +39,7 @@ Two headline capabilities, in the owner's framing:
 | Opt-in per HyperService | `Hyperlink.serve(…, { handoff })` (#39); default off except WorkPool bake |
 | WorkPool state | `WorkPool.releaseEnqueueHandoff` always on `serve` / `serveRemote` |
 | Peer pick | Directory row, **exclude self by dial** (not `nodeKey`) |
-| Defer / no peer / defect | Restore `running`, keep Directory row, surface `HandoffDeferred` |
+| Defer / NoPeer / Failed | Restore `running`, keep Directory row, surface `HandoffDeferred` (`_tag` + PascalCase `.reason`) |
 | Membership during swap | Directory row held while draining; `askIncumbent` cannot steal |
 
 ## Still hard / open (bring to design; do not solve silently)

@@ -102,7 +102,9 @@ Membership Lookup Identity/Directory/Advice   who wins / where clients dial
   where `from` is the local handle and `to` is a peer client of the same HyperService (dialed from
   the Directory, self excluded by dial). Return `ctx.done` / `void` to leave + shut down, `ctx.retry`
   to re-run (bounded), `ctx.defer` to keep the node up. Any failure / defect — or **no peer** —
-  defers: the node restores `phase: "running"` and `Node.shutdown` fails with `HandoffDeferred`.
+  defers: the node restores `phase: "running"` and `Node.shutdown` fails with `HandoffDeferred`
+  (`_tag: "HandoffDeferred"`; `.reason` PascalCase — `Defer` | `NoPeer` | `RetryExhausted` |
+  `Failed`). Match by `_tag` / `.reason`, never message strings.
   WorkPool queues bake that in via `WorkPool.serve` / `serveRemote` (`releaseEnqueueHandoff`).
 - **Membership push / dialers:** directory-mode `Hyperlink.peersLayer` and
   `Hyperlink.lookupClient` **hot-rebind** on `Directory.changes` (dial move / join /
