@@ -29,7 +29,7 @@
 
 ### Active (owner approval required)
 1. **Agent 4:** W1–W3 + `default`/`defaults` + R1–R4+adaptive + A1–A3; **`cell` parked/rejected**; **R5 rejected**; **R4b tip-synced** — sibling `ApiMetrics` deleted; dashboard/TUI surface limiter nest. Idle. Incident: [`agent-04-w3-incident-2026-07-27.md`](./agent-04-w3-incident-2026-07-27.md).
-2. **Agent G / TUI:** Observe recipes design-locked — packs on service `*View` modules (`Observe.use(WorkPoolView.pack, Jobs)`). Next: Eng Phase 0. Kit HOLD. Branch `cursor/view-withsize-types-125f`.
+2. **Agent G / TUI:** Observe recipes design-locked — packs on service `*View` modules (`Observe.use(Jobs, WorkPoolView.pack)`). Next: Eng Phase 0. Kit HOLD. Branch `cursor/view-withsize-types-125f`.
 3. **Agent 5 (Launcher + handoff):** Track A+B Eng'd; HyperService vocab/URL purge + Effect-fullest Launcher + **refinements** (Config auto-read, `Launcher.command`, metrics) on tip; Track C bake #27–36 proposed. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md). Rename SSOT: [`rename-hyperlink-handoff.md`](./rename-hyperlink-handoff.md).
 4. **Docs site:** tip-synced + redeployed (`fd988b1f5` ACTIVE). Fail-fast deploy gates; React **#418** fixed; lang-gated Queue/Gate/Counter/Listen islands — live `/docs/install` no Hyperlink preload. Remaining LH: render-blocking `_layout` CSS. Landing UI unchanged. Keychain backup local (no 1Password).
 

@@ -28,8 +28,8 @@ Library Dashboard skins and app code use the **same** stack.
 `Bundle.observe(tag)` kind-dispatch **retires**. Call site:
 
 ```ts
-Observe.use(WorkPoolView.pack, Jobs)
-Observe.use(DaemonView.pack, MyDaemon)
+Observe.use(Jobs, WorkPoolView.pack)
+Observe.use(MyDaemon, DaemonView.pack)
 ```
 
 ### Mapping (today’s Bundle → `*View`)
@@ -129,14 +129,14 @@ Observe.and<Svc, B>(right: Pack<Svc, B>): <A>(left: Pack<Svc, A>) => Pack<Svc, A
 
 ```ts
 Observe.bind(runtime: Atom.AtomRuntime<R, ER>): <Svc, Out>(
-  pack: Pack<Svc, Out>,
   tag: Effect<Svc, never, R> & { readonly key: string },
+  pack: Pack<Svc, Out>,
 ) => Out
 
 /** React — reads RuntimeProvider; same memo as bind. */
 Observe.use<Svc, Out>(
-  pack: Pack<Svc, Out>,
   tag: Effect<Svc, never, unknown> & { readonly key: string },
+  pack: Pack<Svc, Out>,
 ): Out
 ```
 
@@ -177,8 +177,8 @@ Same pattern on `DaemonView`, `GateView`, … — each exports **`pack`**.
 | Phase | Work |
 |-------|------|
 | **0** | Eng `Observe` + `WorkPoolView.pack`; tests; guide |
-| **1** | Dogfood one web queue card/detail on `Observe.use(WorkPoolView.pack, tag)` |
-| **2** | Rewrite `queueBundle` as thin wrapper over `Observe.bind(WorkPoolView.pack, …)` (or delete) |
+| **1** | Dogfood one web queue card/detail on `Observe.use(tag, WorkPoolView.pack)` |
+| **2** | Rewrite `queueBundle` as thin wrapper over `Observe.bind(rt)(tag, WorkPoolView.pack)` (or delete) |
 | **3** | Port remaining packs onto matching `*View.pack`; delete `Bundle.observe` kind switch + `ui/Bundle` |
 | **4** | Remove deprecated `use*Bundle` / `ui.data` after in-tree greps are clean |
 
@@ -189,8 +189,8 @@ Same pattern on `DaemonView`, `GateView`, … — each exports **`pack`**.
 ## Acceptance
 
 1. `WorkPoolView.pack` is a camelCase pack value on `ui/WorkPoolView`; Tag / domain `WorkPool` have no observe API.  
-2. `Observe.use(WorkPoolView.pack, Jobs)` works under `RuntimeProvider`.  
-3. `Observe.bind(rt)(WorkPoolView.pack, Jobs)` works without React.  
+2. `Observe.use(Jobs, WorkPoolView.pack)` works under `RuntimeProvider`.  
+3. `Observe.bind(rt)(Jobs, WorkPoolView.pack)` works without React.  
 4. History/trend scans + cache behavior match today’s `queueBundle` (or documented deltas).  
 5. Web queue card dogfood uses only `Observe` + `WorkPoolView.pack` (no kind-switch `Bundle.observe`).  
 6. Typecheck + Observe / WorkPoolView pack tests green; guide under `docs/guides/observe.md`.
@@ -309,7 +309,7 @@ import { Jobs } from "./Jobs"
 import { runtime } from "./runtime"
 
 export function JobsCard(): React.ReactElement {
-  const box = Observe.use(WorkPoolView.pack, Jobs)
+  const box = Observe.use(Jobs, WorkPoolView.pack)
   const statusR = useAtomValue(box.status)
   const pause = useAtomSet(box.pause)
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined
@@ -326,7 +326,7 @@ export function JobsCard(): React.ReactElement {
 }
 
 export function JobsDetail(): React.ReactElement {
-  const box = Observe.use(WorkPoolView.pack, Jobs)
+  const box = Observe.use(Jobs, WorkPoolView.pack)
   const historyR = useAtomValue(box.history)
   const points = AsyncResult.isSuccess(historyR) ? historyR.value : []
   const resume = useAtomSet(box.resume)
@@ -359,7 +359,7 @@ import * as WorkPoolView from "hyperlink-ts/ui/WorkPoolView"
 import { Jobs } from "./Jobs"
 import { runtime } from "./runtime"
 
-const box = Observe.bind(runtime)(WorkPoolView.pack, Jobs)
+const box = Observe.bind(runtime)(Jobs, WorkPoolView.pack)
 const registry = AtomRegistry.make()
 registry.mount(box.status)
 
@@ -379,7 +379,7 @@ const counterPack = Observe.struct({
   bump: Observe.fn((c: { readonly bump: Effect.Effect<void> }) => c.bump),
 })
 
-const box = Observe.use(counterPack, Counter)
+const box = Observe.use(Counter, counterPack)
 ```
 
 Compose with `Observe.*`; optionally add `pack` on a matching `*View` later — no kind menu.
@@ -399,6 +399,6 @@ Compose with `Observe.*`; optionally add `pack` on a matching `*View` later — 
 ## Docs / changeset
 
 - Guide: `docs/guides/observe.md` (stack diagram; bundles guide becomes migration → `WorkPoolView.pack`).  
-- Update `principles.md` example: `Observe.use(WorkPoolView.pack, Jobs)`.  
+- Update `principles.md` example: `Observe.use(Jobs, WorkPoolView.pack)`.  
 - Changeset **minor** on Eng of `Observe` + `WorkPoolView.pack`.  
 - Lock note in `view-compose-lock.md` §G when Phase 0 lands.
