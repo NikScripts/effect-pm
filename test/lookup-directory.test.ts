@@ -9,6 +9,7 @@ import {
   Schedule,
   Schema,
   Stream,
+  type Scope,
 } from "effect";
 import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
@@ -27,7 +28,7 @@ const tmpSock = (label: string) =>
 const withLookup = <A, E>(
   server: Layer.Layer<never, Lookup.LookupUnaddressed>,
   client: Layer.Layer<Lookup.Services, Lookup.LookupUnaddressed>,
-  use: Effect.Effect<A, E, Lookup.Services>,
+  use: Effect.Effect<A, E, Lookup.Services | Scope.Scope>,
 ) =>
   Effect.gen(function* () {
     const serverCtx = yield* Layer.build(server);
@@ -510,7 +511,8 @@ describe("Lookup directory membership push", () => {
       schedule: Schedule.spaced(Duration.millis(5)),
     });
 
-  it.effect("changes emits upsert then remove; dialChanged false on first advertise", () =>
+  // Sliding PubSub + stream subscribe needs a live clock (attach sleep / await poll).
+  it.live("changes emits upsert then remove; dialChanged false on first advertise", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("push");
       const node = Node.Tag()("lookup/dir-push", { path }).pipe(Node.asLookup);
@@ -565,7 +567,7 @@ describe("Lookup directory membership push", () => {
     }).pipe(Effect.timeout(Duration.seconds(15))),
   );
 
-  it.effect("same-dial refresh upserts with dialChanged false", () =>
+  it.live("same-dial refresh upserts with dialChanged false", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("push-refresh");
       const node = Node.Tag()("lookup/dir-push-refresh", { path }).pipe(
@@ -679,7 +681,7 @@ describe("Lookup directory membership push", () => {
     }).pipe(Effect.timeout(Duration.seconds(20))),
   );
 
-  it.effect("directoryTable tracks upserts and removes", () =>
+  it.live("directoryTable tracks upserts and removes", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("push-table");
       const node = Node.Tag()("lookup/dir-push-table", { path }).pipe(
