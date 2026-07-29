@@ -27,8 +27,19 @@ export class DaemonDetail extends View.Detail.Tag<DaemonDetail>()(
   { spec: Daemon.daemonControlSpec },
 ) {}
 
+/**
+ * Default Daemon page View service — logs / schedule fullscreen (`/…/logs` · `/…/schedule`).
+ *
+ * @public
+ */
+export class DaemonPage extends View.Page.Tag<DaemonPage>()(
+  "hyperlink/view/daemon-page",
+  { spec: Daemon.daemonControlSpec },
+) {}
+
 /** @public */
 export const layer = Layer.mergeAll(
   View.bind(Daemon.kind, DaemonCard),
   View.bind(Daemon.kind, DaemonDetail),
+  View.bind(Daemon.kind, DaemonPage),
 );

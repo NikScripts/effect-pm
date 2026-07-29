@@ -130,9 +130,9 @@ Navigator may still say `openLogs(tag)` / `openSchedule(tag)` — that means “
 |---|---|
 | Back + title | Shell (Outlet) |
 | Badges / charts / controls | Detail skin |
-| LogBox / schedule fullscreen | Shell until that content has a `page` (or detail) skin wired through Outlet |
+| LogBox / schedule fullscreen | **Page skins** (`PoolPage` / `DaemonPage`) via `Match.Page` — Eng’d |
 
-First peel = header/body split; page-sized logs/schedule content follows.
+First peel = header/body split; page-sized logs/schedule **Eng’d**.
 
 ### K. Non-goals (this arc)
 
@@ -147,7 +147,7 @@ First peel = header/body split; page-sized logs/schedule content follows.
 | **0** Unhold batteries | **Eng’d** | `<Dashboard />` + `DashboardLayer.forCompose` + `View.compose` + `DashboardShell` supported |
 | **1** Top bar / detail chrome | **Eng’d** | `DashboardTopBar` + web `DashboardDetailChrome` public |
 | **2** Node status | **Eng’d (Navigator pages)** | `/health` + `/health/<nodeId>`; `NodeStatusHost` for overlay embeds |
-| **3** Logs / schedule pages | next | Content as `page` skins through Outlet (lock J) — logs/schedule already path suffixes |
+| **3** Logs / schedule pages | **Eng’d** | `PoolPage` / `DaemonPage` + web `resourcePages`; shell uses `Match.Page` |
 
 ### L. Acceptance
 

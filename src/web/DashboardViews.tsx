@@ -61,6 +61,7 @@ import {
   TelemetryCard,
   TelemetryDetail as TelemetryDetailWidget,
 } from "./widgets";
+import { LogsPage, SchedulePage } from "./resourcePages";
 
 // ── cards (presentational — Cell wraps with button) ─────────────────────────
 
@@ -275,6 +276,27 @@ const GateDetailView: View.View = (props) => {
   );
 };
 
+/** WorkPool page — `/…/logs`. */
+const PoolPageView: View.View = (props) => {
+  if (!isQueueTag(props.tag)) return null;
+  const nav = Navigator.useNavigator();
+  if (nav.view !== "logs") return null;
+  return <LogsPage tag={props.tag} onClose={() => nav.back()} />;
+};
+
+/** Daemon page — `/…/logs` or `/…/schedule`. */
+const DaemonPageView: View.View = (props) => {
+  if (!isDaemonTag(props.tag)) return null;
+  const nav = Navigator.useNavigator();
+  if (nav.view === "logs") {
+    return <LogsPage tag={props.tag} onClose={() => nav.back()} />;
+  }
+  if (nav.view === "schedule") {
+    return <SchedulePage tag={props.tag} onClose={() => nav.back()} />;
+  }
+  return null;
+};
+
 /**
  * Web TSX provides for all {@link DashboardViews} handles.
  *
@@ -284,10 +306,12 @@ export const skins = Layer.mergeAll(
   View.provide(GroupView.GroupCard, GroupCardView),
   View.provide(WorkPoolView.PoolCard, PoolCardView),
   View.provide(WorkPoolView.PoolDetail, PoolDetailView),
+  View.provide(WorkPoolView.PoolPage, PoolPageView),
   View.provide(PriorityView.PriorityCard, PriorityCardView),
   View.provide(PriorityView.PriorityDetail, PriorityDetailView),
   View.provide(DaemonView.DaemonCard, DaemonCardView),
   View.provide(DaemonView.DaemonDetail, DaemonDetailView),
+  View.provide(DaemonView.DaemonPage, DaemonPageView),
   View.provide(ApiMetricsView.ApiCard, ApiCardView),
   View.provide(ApiMetricsView.ApiDetail, ApiDetailView),
   View.provide(FleetHealthView.FleetCard, FleetCardView),

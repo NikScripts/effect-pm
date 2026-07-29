@@ -45,7 +45,17 @@ export class PoolDetail extends View.Detail.Tag<PoolDetail>()(
 ) {}
 
 /**
- * Contribution Layer: stamped {@link WorkPool.kind} → card + detail (append).
+ * Default WorkPool page View service — logs fullscreen (`/…/logs`).
+ *
+ * @public
+ */
+export class PoolPage extends View.Page.Tag<PoolPage>()(
+  "hyperlink/view/pool-page",
+  { spec: WorkPool.queueControlSpec },
+) {}
+
+/**
+ * Contribution Layer: stamped {@link WorkPool.kind} → card + detail + page (append).
  * Merge with platform skins + {@link View.base}, then {@link View.react}.
  *
  * @public
@@ -53,4 +63,5 @@ export class PoolDetail extends View.Detail.Tag<PoolDetail>()(
 export const layer = Layer.mergeAll(
   View.bind(WorkPool.kind, PoolCard),
   View.bind(WorkPool.kind, PoolDetail),
+  View.bind(WorkPool.kind, PoolPage),
 );

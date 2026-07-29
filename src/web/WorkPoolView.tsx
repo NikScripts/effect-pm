@@ -5,8 +5,10 @@
  */
 import { Layer } from "effect";
 import { isQueueTag } from "../ui/data";
+import * as Navigator from "../ui/Navigator";
 import * as View from "../ui/View";
 import * as WorkPoolView from "../ui/WorkPoolView";
+import { LogsPage } from "./resourcePages";
 import { displayName, QueueCard, QueueDetailPanel } from "./widgets";
 
 /**
@@ -15,7 +17,7 @@ import { displayName, QueueCard, QueueDetailPanel } from "./widgets";
  * @public
  */
 export const skins: Layer.Layer<
-  WorkPoolView.PoolCard | WorkPoolView.PoolDetail
+  WorkPoolView.PoolCard | WorkPoolView.PoolDetail | WorkPoolView.PoolPage
 > = Layer.mergeAll(
   View.provide(WorkPoolView.PoolCard, (props) => {
     if (!isQueueTag(props.tag)) return null;
@@ -30,6 +32,12 @@ export const skins: Layer.Layer<
     if (!isQueueTag(props.tag)) return null;
     return <QueueDetailPanel tag={props.tag} />;
   }),
+  View.provide(WorkPoolView.PoolPage, (props) => {
+    if (!isQueueTag(props.tag)) return null;
+    const nav = Navigator.useNavigator();
+    if (nav.view !== "logs") return null;
+    return <LogsPage tag={props.tag} onClose={() => nav.back()} />;
+  }),
 );
 
 /**
@@ -42,4 +50,4 @@ export const layer = WorkPoolView.layer.pipe(
   Layer.provideMerge(View.base),
 );
 
-export { PoolCard, PoolDetail } from "../ui/WorkPoolView";
+export { PoolCard, PoolDetail, PoolPage } from "../ui/WorkPoolView";
