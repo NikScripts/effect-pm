@@ -60,6 +60,7 @@ export default defineConfig([
       "ui/Bundle": "src/ui/Bundle.ts",
       "ui/GroupView": "src/ui/GroupView.ts",
       "ui/DashboardViews": "src/ui/DashboardViews.ts",
+      "ui/DashboardLayer": "src/ui/DashboardLayer.ts",
     },
     tsconfig: "src/ui/tsconfig.json",
     dts: true,

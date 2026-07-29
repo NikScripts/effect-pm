@@ -156,29 +156,37 @@ First peel = header/body split; page-sized logs/schedule content follows.
 
 ## App shape (batteries Dashboard)
 
+Kit `<Dashboard />` batteries **HOLD**. Internally it is thin wiring:
+
+`DashboardLayer.forCompose({ skins, views })` → `View.compose` → platform `DashboardShell`.
+
 ```tsx
 // worker-pool-card.tsx
 export const layer = View.only(WorkerPool, WorkerPoolCard).pipe(
-  Layer.provide(Layer.succeed(WorkerPoolCard, WorkerPoolCardView)),
+  Layer.provide(View.provide(WorkerPoolCard, WorkerPoolCardView)),
 )
 
-// app.tsx — Dashboard merges views under shipped skins + View.base
+// app.tsx — public one-liner unchanged
 <Dashboard runtime={runtime} group={ServicesHub} views={layer} />
 ```
 
-Compose-only (no batteries shell) still looks like:
+Compose + shell (escape hatch; same stack Dashboard uses):
 
 ```tsx
 const ui = View.compose({
-  views: Layer.mergeAll(
-    UiDashboardViews.layer,
-    View.only(WorkerPool, WorkerPoolCard),
-  ).pipe(
-    Layer.provideMerge(WebDashboardViews.skins),
-    Layer.provideMerge(View.base),
-  ),
+  views: DashboardLayer.forCompose({
+    skins: WebDashboardViews.skins,
+    views: View.only(WorkerPool, WorkerPoolCard),
+  }),
   navigator: Navigator.history(ServicesHub),
 })
+<ui.Provider>
+  <RuntimeProvider runtime={runtime}>
+    <DashboardShell group={ServicesHub} />
+  </RuntimeProvider>
+</ui.Provider>
 ```
+
+Bare `ui.Grid` / `ui.Outlet` stays available but is **not** the batteries default (no Cell / NodeBar / HealthBoard / LogBox).
 
 Open Nwsl → HttpApi → browser shows `/Nwsl/HttpApi`.

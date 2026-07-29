@@ -25,6 +25,7 @@ export * from "./chrome";
 export { make, type AnyTag } from "./make";
 export { layer } from "./layer";
 export { Dashboard } from "./Dashboard";
+export { DashboardShell } from "./DashboardShell";
 export { base, Cell, DaemonCell, FallbackCell, GroupCell, PriorityCell, QueueCell, type TuiCellProps, type TuiCellWidget, type TuiWidgetRegistry } from "./cellWidgets";
 export { RuntimeProvider, useRuntime } from "./runtime";
 export { useGroupRoute } from "./useGroupRoute";

@@ -148,6 +148,10 @@
       "types": "./dist/ui/DashboardViews.d.ts",
       "default": "./dist/ui/DashboardViews.js"
     },
+    "./ui/DashboardLayer": {
+      "types": "./dist/ui/DashboardLayer.d.ts",
+      "default": "./dist/ui/DashboardLayer.js"
+    },
     "./web": {
       "types": "./dist/web.d.ts",
       "default": "./dist/web.js"

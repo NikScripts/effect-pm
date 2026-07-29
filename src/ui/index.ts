@@ -48,5 +48,7 @@ export * as GroupView from "./GroupView";
 export * as WorkPoolView from "./WorkPoolView";
 /** Merged Dashboard View contribution Layers (no platform TSX). */
 export * as DashboardViews from "./DashboardViews";
+/** Layer recipe: contributions + skins + View.base for {@link ./View.compose}. */
+export * as DashboardLayer from "./DashboardLayer";
 /** Provider only — renderers expose a typed `useWidgets` (web cards vs TUI cells). */
 export { WidgetsProvider } from "./widgetsContext";
