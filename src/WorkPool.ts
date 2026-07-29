@@ -1230,13 +1230,6 @@ export type QueueLayerConfig<Item, A, E, R, RR = never> = Omit<
       queue: EngineQueueHandle<Item, E, QueueEnqueueErrors, never, A>,
     ) => Effect.Effect<void, never, RR>;
   };
-  /**
-   * Node handoff (Locked #39) — run on the OUTGOING node during {@link Node.shutdown} after drain.
-   * `(from, to, ctx) => Effect<void | HandoffOutcome>`: move pending work from the local queue handle
-   * `from` to the peer client `to`. Pass {@link releaseEnqueueHandoff} for the release→enqueue recipe,
-   * or write your own. Threaded to {@link Hyperlink.serve}'s options; omit ⇒ not migrated.
-   */
-  readonly handoff?: Hyperlink.HandoffFn;
 };
 
 /**
@@ -1860,11 +1853,6 @@ export type PriorityLayerConfig<A, E, R, RR = never> = Omit<
       queue: WorkPoolPriorityHandle<A, E, QueueEnqueueErrors, never>,
     ) => Effect.Effect<void, never, RR>;
   };
-  /**
-   * Node handoff (Locked #39) — run on the OUTGOING node during {@link Node.shutdown} after drain.
-   * See {@link QueueLayerConfig.handoff}; pass {@link releaseEnqueueHandoff} for release→enqueue.
-   */
-  readonly handoff?: Hyperlink.HandoffFn;
 };
 
 type PriorityItemFields = Record<
@@ -2056,36 +2044,12 @@ export function layer(
  */
 export const layerMemory = layer;
 
-/** Extract a config's `handoff` fn as a {@link Hyperlink.ServeOptions} bag (Locked #39). @internal */
-const handoffOptionOf = (
-  config: unknown,
-): Hyperlink.ServeOptions | undefined => {
-  if (
-    typeof config === "object" &&
-    config !== null &&
-    "handoff" in config &&
-    typeof (config as { readonly handoff?: unknown }).handoff === "function"
-  ) {
-    return {
-      handoff: (config as { readonly handoff: Hyperlink.HandoffFn }).handoff,
-    };
-  }
-  return undefined;
-};
-
 /**
- * A ready-made {@link Hyperlink.HandoffFn} for WorkPool queues (Locked #39 #14): `release` the local
- * queue's pending entries and `enqueue` them onto the peer, then finish (`Done`). Pass it as a
- * queue config's `handoff` (or directly to {@link Hyperlink.serve}'s options) so pending work moves
- * to the incoming node during {@link Node.shutdown}:
+ * WorkPool's baked handoff (Locked #39): `release` pending entries on `from`, `enqueue` onto peer
+ * `to`, then `Done`. {@link serve} / {@link serveRemote} always attach this — no config knob
+ * (opt-out / override later). Also usable with bare {@link Hyperlink.serve}`(…, { handoff })`.
  *
- * ```ts
- * WorkPool.serve(Jobs, { effect, itemSchema, handoff: WorkPool.releaseEnqueueHandoff });
- * ```
- *
- * `from` is the local queue handle (needs `release`), `to` is the peer client (needs `enqueue`).
- * Nothing to release ⇒ `Done` without touching the peer. Any failure is treated by the runner as a
- * defer (the node stays up), so this is safe to pass unconditionally.
+ * Nothing to release ⇒ `Done` without touching the peer. Missing `release`/`enqueue` ⇒ `Defer`.
  *
  * @category layers & serving
  * @public
@@ -2117,6 +2081,11 @@ export const releaseEnqueueHandoff: Hyperlink.HandoffFn = (from, to, ctx) =>
     return yield* ctx.done;
   });
 
+/** Always-on serve options for WorkPool wire mounts (Locked #39). @internal */
+const bakedHandoffOptions: Hyperlink.ServeOptions = {
+  handoff: releaseEnqueueHandoff,
+};
+
 /**
  * Serve this queue **remotely (served-only)** — run the worker / refill / `persist`
  * engine behind the tag, mount its RPC handlers, and register into {@link Hyperlink.servedHyperServicesLayer},
@@ -2126,6 +2095,8 @@ export const releaseEnqueueHandoff: Hyperlink.HandoffFn = (from, to, ctx) =>
  *
  * Reach for this (with {@link Node.httpServer}) for a pure gateway/edge that exposes the queue for
  * remote clients but never consumes it locally; use {@link serve} when the serving node also drives it.
+ *
+ * Handoff is **baked in** ({@link releaseEnqueueHandoff}), same as {@link serve}.
  *
  * ```ts
  * Node.httpServer([
@@ -2159,7 +2130,6 @@ export function serveRemote<
   config: PriorityLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ): Layer.Layer<HandlerContextOf<PriorityInstanceSpec<F>>, never, R | RR>;
 export function serveRemote(tag: AnyPoolTag, config: unknown): Layer.Any {
-  const serveOptions = handoffOptionOf(config);
   return isPriorityTag(tag)
     ? withDefaultMemory(
         Layer.unwrap(
@@ -2168,7 +2138,8 @@ export function serveRemote(tag: AnyPoolTag, config: unknown): Layer.Any {
               tag,
               config as PriorityLayerConfig<Schema.Struct<PriorityItemFields>["Type"], never, never, never>,
             ),
-            (built) => Hyperlink.serveRemoteDriver(tag, built, serveOptions),
+            (built) =>
+              Hyperlink.serveRemoteDriver(tag, built, bakedHandoffOptions),
           ),
         ),
       )
@@ -2176,7 +2147,8 @@ export function serveRemote(tag: AnyPoolTag, config: unknown): Layer.Any {
         Layer.unwrap(
           Effect.map(
             buildQueueImpl(tag, config as QueueVerbConfig<QueueItemFields, unknown, never, never, Schema.Top>),
-            (built) => Hyperlink.serveRemoteDriver(tag, built, serveOptions),
+            (built) =>
+              Hyperlink.serveRemoteDriver(tag, built, bakedHandoffOptions),
           ),
         ),
       );
@@ -2197,6 +2169,9 @@ export const serveRemoteMemory = serveRemote;
  * can `yield* Tag`. The served cells *are* the in-process instance (one engine, one `peersLayer`); the
  * worker requirement `R` is preserved for per-HyperService `Layer.provide`. This is the queue's counterpart
  * to {@link Hyperlink.serve}; a served-**only** gateway uses {@link serveRemote}.
+ *
+ * Handoff is **baked in** ({@link releaseEnqueueHandoff}) — pending work moves to the Directory
+ * peer on {@link Node.shutdown}. Opt-out / override is deferred (configuration later).
  *
  * ```ts
  * Node.httpServer([
@@ -2238,7 +2213,6 @@ export function serve<
   R | RR
 >;
 export function serve(tag: AnyPoolTag, config: unknown): Layer.Layer<unknown, never, unknown> {
-  const serveOptions = handoffOptionOf(config);
   return isPriorityTag(tag)
     ? withDefaultMemory(
         Layer.unwrap(
@@ -2247,7 +2221,7 @@ export function serve(tag: AnyPoolTag, config: unknown): Layer.Layer<unknown, ne
               tag,
               config as PriorityLayerConfig<Schema.Struct<PriorityItemFields>["Type"], never, never, never>,
             ),
-            (built) => Hyperlink.serve(tag, built, serveOptions),
+            (built) => Hyperlink.serve(tag, built, bakedHandoffOptions),
           ),
         ),
       )
@@ -2255,7 +2229,7 @@ export function serve(tag: AnyPoolTag, config: unknown): Layer.Layer<unknown, ne
         Layer.unwrap(
           Effect.map(
             buildQueueImpl(tag, config as QueueVerbConfig<QueueItemFields, unknown, never, never, Schema.Top>),
-            (built) => Hyperlink.serve(tag, built, serveOptions),
+            (built) => Hyperlink.serve(tag, built, bakedHandoffOptions),
           ),
         ),
       );

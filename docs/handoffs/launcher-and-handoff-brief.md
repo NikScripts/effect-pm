@@ -139,7 +139,7 @@
     - Runs during `Node.shutdown` after drain, before Lookup leave.
 34. **Stateful v1 = non-transferable by default; WorkPool opt-in `release` → peer `enqueue`; Stores stay per-node** (owner lock 2026-07-29; **mechanism superseded by #39**).
     - **Default:** queues / stores / Gate / Daemon journals are **not** auto-moved across nodes.
-    - **WorkPool transfer:** now the app-passable `WorkPool.releaseEnqueueHandoff` fn (release → peer `enqueue`), given as the serve `{ handoff }` (or nested in the queue config). Directory peer excludes **self by dial** (not `nodeKey`).
+    - **WorkPool transfer:** `WorkPool.serve` / `serveRemote` **always bake** `WorkPool.releaseEnqueueHandoff` (release → peer `enqueue`). No config knob yet (opt-out later). Directory peer excludes **self by dial** (not `nodeKey`).
     - **Rejected for v1:** shared cross-node Store; library-magic state shipping; Gate/Daemon live migrate.
 39. **Handoff = serve-site function returning outcomes, not a tag strategy string** (owner lock 2026-07-29; **Eng'd**). Retires #33's `withHandoff` + library strategy runners.
     - **Not on the Tag, not an RPC Spec member.** `Hyperlink.serve(Tag, impl, third?)` where `third` is an `AnyNode` (sugar for `{ node }`) **or** an options bag `{ node?, handoff? }`. No bare handoff-fn overload.
@@ -148,7 +148,7 @@
     - **Orchestration:** run local on the OUTGOING node during `Node.shutdown` after drain; dial the Directory peer (exclude self by dial); run `handoff(from, to, ctx)`.
     - **Retry** = bounded re-run of that service's handoff. **Defer** (or **no peer**, or **defect/orDie**, or retry-exhausted) = do **not** leave / shut down — restore `phase: "running"`, clear the shutting-down latch, surface typed `HandoffDeferred` to the shutdown caller (over the wire on the node-status `shutdown` RPC error channel).
     - **No peer when handoff set ⇒ Defer** (keep up, log warning).
-    - **WorkPool / Daemon / Gate:** nest `handoff` in their config bag → forwarded to `Hyperlink.serve`'s options. Optional helper `WorkPool.releaseEnqueueHandoff` (release → enqueue) apps can pass.
+    - **WorkPool:** handoff **baked into** `WorkPool.serve` / `serveRemote` (`releaseEnqueueHandoff`). Config override/opt-out deferred. **Daemon / Gate:** optional `handoff` in config bag → `Hyperlink.serve` options (no baked migrate).
     - **Deferred:** `restartSuccessor`; full `Node.http` 3rd-arg unify (serve `{ node }` currently threads registration only, not a tag re-stamp for `client(Tag)`).
 38. **Replacement addressing recipe (owner lock 2026-07-29)** — not an A/B product mode.
     - You **give addresses** (or mint at listen); you do not “configure as A/B.”

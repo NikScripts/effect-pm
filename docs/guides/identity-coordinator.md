@@ -103,7 +103,7 @@ Membership Lookup Identity/Directory/Advice   who wins / where clients dial
   the Directory, self excluded by dial). Return `ctx.done` / `void` to leave + shut down, `ctx.retry`
   to re-run (bounded), `ctx.defer` to keep the node up. Any failure / defect — or **no peer** —
   defers: the node restores `phase: "running"` and `Node.shutdown` fails with `HandoffDeferred`.
-  For WorkPool queues pass `WorkPool.releaseEnqueueHandoff` (release → peer `enqueue`).
+  WorkPool queues bake that in via `WorkPool.serve` (`releaseEnqueueHandoff`).
 - **Membership push / dialers:** directory-mode `Hyperlink.peersLayer` and
   `Hyperlink.lookupClient` **hot-rebind** on `Directory.changes` (dial move / join /
   leave). Escape hatch: `Lookup.changes` / `directoryTable()`.

@@ -30,7 +30,7 @@
 ### Active (owner approval required)
 1. **Agent 4:** Examples IA Eng’d (`forms/` → topic folders + `apps/`); Observe pack demo under `examples/observe/`. E5 apps book still owner-gated. Handoff: [`examples-ia-reorg.md`](./examples-ia-reorg.md).
 2. **Agent G / TUI:** Dashboard unheld; node status via Navigator `/health` pages; `NodeStatusHost` for overlays. Next: K2.3 logs/schedule Outlet peel. Branch `cursor/view-withsize-types-125f`.
-3. **Agent 5 (Launcher + handoff):** Eng'd serve-site `handoff(from,to,ctx)` fn returning outcomes (#39); retired Tag `withHandoff` / `handoffOf` / `HandoffStrategy` + library strategy runners; `WorkPool.releaseEnqueueHandoff` helper. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
+3. **Agent 5 (Launcher + handoff):** Eng'd serve-site `handoff(from,to,ctx)` (#39); WorkPool.serve bakes `releaseEnqueueHandoff`. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
 4. **Docs site:** Live — apex coming-soon (inlined CSS + `(book)` chrome); docs on `dev`. Origin host-gate via `serve-production.mjs` (before Waku static). Islands: `hyperlink-ts` alias + `.hl-dashboard`. Getting Started em-dash/voice polish.
 
 ### Frozen / dead (do not assign)

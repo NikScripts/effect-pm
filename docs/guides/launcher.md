@@ -137,6 +137,6 @@ wire key) — sugar over Directory’s schema’d request. See:
 - Blank worker + remote assign; HTTP/WS Lookup; nameless Launcher discovery
 - `Handle.events` Stream; stdout/stderr tap; thin `hl up` CLI
 
-WorkPool peer transfer (serve `{ handoff: WorkPool.releaseEnqueueHandoff }` → `release` → peer
-`enqueue`) runs on `Node.shutdown`; see
+WorkPool peer transfer is baked into `WorkPool.serve` / `serveRemote` (`releaseEnqueueHandoff`
+→ peer `enqueue` on `Node.shutdown`); see
 [identity coordinator](./identity-coordinator.md#custody-vs-membership-launcher--lookup).
