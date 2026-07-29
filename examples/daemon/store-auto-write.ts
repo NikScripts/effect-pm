@@ -4,7 +4,7 @@
  * Daemon.layer soft-defaults in-memory Storage (R fulfilled). Provide AppStore into the
  * layer to override Soft capture (journals + Logs). One AppStore — do not also wrap the
  * program in a second `DemoStore.layerMemory` (split journals).
- * Run: `pnpm run example:daemon-layer-store-auto-write`
+ * Run: `pnpm run example:daemon-store-auto-write`
  *
  * Docs: `docs/examples/daemon/store-auto-write.md` includes this file;
  * cut markers hide the module header and demo harness from the page.

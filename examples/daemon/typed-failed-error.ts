@@ -3,7 +3,7 @@
  *
  * `Daemon.layer` auto-writes typed `Failed.error` when the tag stamps an `error` schema.
  * Register the tag on an app `Store.Service` via `Daemon.store` and Soft-override with
- * `provideMerge`. Run: `pnpm run example:daemon-layer-typed-error-store`
+ * `provideMerge`. Run: `pnpm run example:daemon-typed-failed-error`
  *
  * Docs: `docs/examples/daemon/typed-failed-error.md` includes this file;
  * cut markers hide the module header and demo harness from the page.

@@ -1,7 +1,7 @@
 /**
  * @module examples/gate/http-api-layer
  *
- * Gate.httpApiClientLayer on an existing client Layer. Run: `pnpm run example:gate-http-api-layer-effect`
+ * Gate.httpApiClientLayer on an existing client Layer. Run: `pnpm run example:gate-http-api-layer`
  *
  * Docs: `docs/examples/gate/http-api-layer.md` includes this file;
  * cut markers hide the module header and demo harness.
