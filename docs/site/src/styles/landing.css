@@ -61,14 +61,26 @@
   }
 }
 
+/* Full-bleed paint under notch / home indicator (needs viewport-fit=cover). */
 html {
-  background: var(--landing-bg);
+  background-color: var(--landing-bg);
+  background-image:
+    radial-gradient(ellipse 90% 60% at 50% -8%, var(--landing-glow), transparent 58%),
+    radial-gradient(ellipse 55% 45% at 100% 100%, var(--landing-bg-deep), transparent 52%),
+    radial-gradient(ellipse 50% 40% at 0% 85%, var(--landing-bg-deep), transparent 48%);
+  background-repeat: no-repeat;
+  background-size: cover;
   min-height: 100%;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
   -webkit-text-size-adjust: 100%;
 }
 body {
   margin: 0;
-  background: var(--landing-bg);
+  min-height: 100%;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+  background: transparent;
   color: var(--landing-fg);
   font-family: var(--landing-sans);
   -webkit-font-smoothing: antialiased;
@@ -79,19 +91,19 @@ body {
   isolation: isolate;
   width: 100%;
   min-height: 100dvh;
+  min-height: -webkit-fill-available;
   display: flex;
   align-items: center;
   justify-content: center;
   text-align: left;
-  padding: max(1.6rem, env(safe-area-inset-top)) 1.25rem
-    calc(2rem + env(safe-area-inset-bottom, 0px));
+  padding:
+    max(1.6rem, env(safe-area-inset-top, 0px))
+    max(1.25rem, env(safe-area-inset-right, 0px))
+    max(2rem, env(safe-area-inset-bottom, 0px))
+    max(1.25rem, env(safe-area-inset-left, 0px));
   box-sizing: border-box;
   overflow: hidden;
-  background:
-    radial-gradient(ellipse 90% 60% at 50% -8%, var(--landing-glow), transparent 58%),
-    radial-gradient(ellipse 55% 45% at 100% 100%, var(--landing-bg-deep), transparent 52%),
-    radial-gradient(ellipse 50% 40% at 0% 85%, var(--landing-bg-deep), transparent 48%),
-    var(--landing-bg);
+  background: transparent;
 }
 
 .landing-glow {

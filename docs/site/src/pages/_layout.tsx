@@ -13,9 +13,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       {/* Override Waku's default viewport: `viewport-fit=cover` lets the page paint under
           the notch/safe-area, so html's dark background fills it instead of white. */}
       <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-      {/* Tint the mobile browser chrome (status bar / notch) to match the page in each mode. */}
-      <meta name="theme-color" content="#fafbfc" media="(prefers-color-scheme: light)" />
-      <meta name="theme-color" content="#141619" media="(prefers-color-scheme: dark)" />
+      {/* Tint status bar / notch to the landing desk (matches landing.css --landing-bg). */}
+      <meta name="theme-color" content="#f7f9fc" media="(prefers-color-scheme: light)" />
+      <meta name="theme-color" content="#12151a" media="(prefers-color-scheme: dark)" />
+      <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
       {children}
     </>
