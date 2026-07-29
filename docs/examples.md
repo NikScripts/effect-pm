@@ -25,6 +25,38 @@ Guide: [WorkPool](/docs/work-pools)
 
 `examples/work-pool/named-lanes.ts` · `pnpm run example:work-pool-named-lanes`
 
+### [store analytics](/docs/work-pool-store-analytics)
+
+`examples/work-pool/store-analytics.ts` · `pnpm run example:work-pool-store-analytics`
+
+### [serve and client](/docs/work-pool-serve-client)
+
+`examples/work-pool/serve-client.ts` · `pnpm run example:work-pool-serve-client`
+
+### [durable SQLite](/docs/work-pool-durable-sqlite)
+
+`examples/work-pool/durable-sqlite.ts` · `pnpm run example:work-pool-durable-sqlite`
+
+### [refill](/docs/work-pool-refill)
+
+`examples/work-pool/refill.ts` · `pnpm run example:work-pool-refill`
+
+### [rate limit](/docs/work-pool-rate-limit)
+
+`examples/work-pool/rate-limit.ts` · `pnpm run example:work-pool-rate-limit`
+
+### [history metrics](/docs/work-pool-history-metrics)
+
+`examples/work-pool/history-metrics.ts` · `pnpm run example:work-pool-history-metrics`
+
+### [typed success](/docs/work-pool-typed-success)
+
+`examples/work-pool/typed-success.ts` · `pnpm run example:work-pool-typed-success`
+
+### [configure](/docs/work-pool-configure)
+
+`examples/work-pool/configure.ts` · `pnpm run example:work-pool-configure`
+
 ---
 
 ## Gate

@@ -30,7 +30,7 @@ Living book: [docs/index.md](../docs/index.md) · [API Reference](https://hyperl
 | Track | Read / run |
 |-------|------------|
 | **Start here** | [`work-pool/priority-retry.ts`](./work-pool/priority-retry.ts) → [hub § WorkPool](../docs/examples.md) |
-| **WorkPool** | `priority-retry` → `named-lanes` |
+| **WorkPool** | `priority-retry` → `named-lanes` → store / serve / durable / refill / metrics |
 | **Gate** | `gate/unit-and-input` → `store-readback` → `runtime-observer` → http-client → http-api |
 | **Daemon + Soft** | `daemon/store-auto-write` → `typed-failed-error` |
 | **Node & discovery** | `node/tag-addressed` → `tag-bound` → `clients` → addressless → nameless unix → `prototype` → `as-lookup` → nameless http/ws → `identity-coordinator` |
@@ -53,6 +53,14 @@ Paths are under `examples/`. Script = `pnpm run example:<topic>-<kebab-file>` (s
 |------|---------|
 | [`work-pool/priority-retry.ts`](./work-pool/priority-retry.ts) | Priority, dedup key, handler retry |
 | [`work-pool/named-lanes.ts`](./work-pool/named-lanes.ts) | Named lanes, weighted take |
+| [`work-pool/store-analytics.ts`](./work-pool/store-analytics.ts) | `WorkPool.store` soft analytics |
+| [`work-pool/serve-client.ts`](./work-pool/serve-client.ts) | `WorkPool.serve` + `Hyperlink.client` |
+| [`work-pool/durable-sqlite.ts`](./work-pool/durable-sqlite.ts) | SQLite durable backlog recovery |
+| [`work-pool/refill.ts`](./work-pool/refill.ts) | `refill.onStart` / `onDrained` |
+| [`work-pool/rate-limit.ts`](./work-pool/rate-limit.ts) | Drain `rateLimit` config |
+| [`work-pool/history-metrics.ts`](./work-pool/history-metrics.ts) | `HistoryStore` + `metrics.query` |
+| [`work-pool/typed-success.ts`](./work-pool/typed-success.ts) | Tag `success` + `Completed.success` |
+| [`work-pool/configure.ts`](./work-pool/configure.ts) | `WorkPool.configure` layer patch |
 
 ### Gate — guide [Gates](../docs/guides/gates.md)
 
