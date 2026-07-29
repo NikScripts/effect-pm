@@ -1,6 +1,7 @@
 # Plan: Observe recipes (pipeable UI packs)
 
 **Status:** design-locked (owner 2026-07-28; pack home 2026-07-29) — not Eng’d.  
+**Pack namespace name:** **open** — `Live` rejected (worse than `Bundle`). Plan still uses `Bundle.*` as a working label only.  
 **Branch:** `cursor/view-withsize-types-125f` (Agent G).  
 **Prior art:** [`../guides/hyperlink-atom.md`](../guides/hyperlink-atom.md), [`../guides/bundles.md`](../guides/bundles.md), [`../standards/principles.md#handles-stay-thin`](../standards/principles.md#handles-stay-thin), [`../handoffs/view-compose-lock.md`](../handoffs/view-compose-lock.md) §G.
 
@@ -376,12 +377,24 @@ Compose with `Observe.*`; optionally contribute a pack to `Bundle` later — no 
 
 ---
 
-## Open Eng details (resolve while implementing)
+## Open questions
+
+### Blocking Eng Phase 0 — pack namespace name
+
+`Live` rejected. Need the noun for the shared UI pack module:
+
+```ts
+Observe.use(???.queue, Jobs)
+```
+
+Locked shape (not renaming): not on Tag / not on domain / not per-family `*Observe` / not a kind-switch `*.observe`. Combinators stay on **`Observe`**; this NS is **only shipped packs**.
+
+### Open Eng details (resolve while implementing)
 
 1. **Deduped dual-projection** — today one status stream feeds `status` + `trend`. `Observe.scan` + `Observe.atom` on the same select should share a channel (extend `channelKeyOf` / pack-local share).  
-2. **Logs** — node-scoped log stream needs `nodeOf(tag)`; `Observe` helper or `Bundle.queue` pipe stage.  
+2. **Logs** — node-scoped log stream needs `nodeOf(tag)`; `Observe` helper or pack pipe stage.  
 3. **`Observe.use` vs hooks rules** — `use` must call `useRuntime()` unconditionally.  
-4. **Fold vs keep `Hyperlink.atom`** — keep both: Hyperlink = one-field bind; Observe = recipes; Bundle = shipped packs.
+4. **Fold vs keep `Hyperlink.atom`** — keep both: Hyperlink = one-field bind; Observe = recipes; pack NS = shipped packs.
 
 ---
 
