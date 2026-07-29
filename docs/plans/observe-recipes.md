@@ -1,7 +1,6 @@
 # Plan: Observe recipes (pipeable UI packs)
 
-**Status:** design-locked (owner 2026-07-28; pack home 2026-07-29) — not Eng’d.  
-**Pack namespace name:** **open** — `Live` rejected (worse than `Bundle`). Plan still uses `Bundle.*` as a working label only.  
+**Status:** design-locked (owner 2026-07-28; pack home 2026-07-29 → **`*View` modules**) — not Eng’d.  
 **Branch:** `cursor/view-withsize-types-125f` (Agent G).  
 **Prior art:** [`../guides/hyperlink-atom.md`](../guides/hyperlink-atom.md), [`../guides/bundles.md`](../guides/bundles.md), [`../standards/principles.md#handles-stay-thin`](../standards/principles.md#handles-stay-thin), [`../handoffs/view-compose-lock.md`](../handoffs/view-compose-lock.md) §G.
 
@@ -11,8 +10,8 @@
 
 One **universal** foundation for Effect-reactive UI over Hyperlink Tags:
 
-1. Small recipe combinators (`atom` / `fn` / `query` / `scan` / `struct` / `merge`).
-2. Family packs as **pipeable values on a shared `Bundle` namespace** (`Bundle.queue`, `Bundle.daemon`, …) — not Tag methods, not a kind-switch door, not per-family `*Observe` modules.
+1. Small recipe combinators (`atom` / `fn` / `query` / `scan` / `struct` / `merge`) on **`Observe`**.
+2. Family packs as **pipeable values on the matching service `*View` module** (`WorkPoolView.pack`, `DaemonView.pack`, …) — same modules that already own card/detail Tags + contribution Layers.
 3. Bind at the edge (`Observe.bind` / `Observe.use`) under a shared `Atom.AtomRuntime`.
 
 Library Dashboard skins and app code use the **same** stack.
@@ -21,17 +20,40 @@ Library Dashboard skins and app code use the **same** stack.
 
 | Option | Verdict |
 |--------|---------|
-| `WorkPool.live` / packs on domain modules | **No** — packs carry UI concerns (localStorage history, trend caps). Domain modules (`WorkPool`, `Daemon`, `Gate`) stay wire/engine clean. |
-| Per-family `QueueObserve` modules | **No** — fragments the former Bundle surface. |
-| **Shared `Bundle` namespace** (`hyperlink-ts/ui/Bundle`) | **Yes** — one home for all former packs: `Bundle.queue`, `Bundle.priority`, `Bundle.daemon`, `Bundle.api`, … |
+| Domain `WorkPool` / `Daemon` / … | **No** — packs carry UI concerns (localStorage history, trend caps). Domain stays wire/engine clean. |
+| Shared pack NS (`Bundle` / `Live` / `Pack` / `Family`) | **No** — `Live` rejected; `Family` was a **name** veto, not a placement veto; no second noun for “all packs”. |
+| Orphan `*Observe` modules | **No** — don’t invent a parallel tree next to `*View`. |
+| **Service `ui/*View` modules** | **Yes** — packs sit beside View handles + `layer` on the module apps already import for that service. |
 
-`Bundle.observe(tag)` kind-dispatch **retires**. Call site becomes `Observe.use(Bundle.queue, Jobs)`.
+`Bundle.observe(tag)` kind-dispatch **retires**. Call site:
+
+```ts
+Observe.use(WorkPoolView.pack, Jobs)
+Observe.use(DaemonView.pack, MyDaemon)
+```
+
+### Mapping (today’s Bundle → `*View`)
+
+| Today | Pack home | Export |
+|-------|-----------|--------|
+| `queueBundle` / `Bundle.observe(queueTag)` | `ui/WorkPoolView` | `WorkPoolView.pack` |
+| `priorityBundle` | `ui/PriorityView` | `PriorityView.pack` |
+| `daemonBundle` | `ui/DaemonView` | `DaemonView.pack` |
+| `apiBundle` | `ui/ApiMetricsView` | `ApiMetricsView.pack` |
+| `gateBundle` | `ui/GateView` | `GateView.pack` |
+| `fleetHealthBundle` | `ui/FleetHealthView` | `FleetHealthView.pack` |
+| `telemetryBundle` | `ui/TelemetryView` | `TelemetryView.pack` |
+| `shardMapBundle` | `ui/ShardMapView` | `ShardMapView.pack` |
+| `nodeStatusBundle` / `Bundle.node` | TBD (no `NodeView` yet) | Eng detail — helper on `Observe` or small `ui/NodeView` if warranted |
+
+Convention: each service `*View` exports one primary observe pack as **`pack`** (camelCase value). Shared sub-pipes (`queueControls`, history scans) are additional flat exports on the same module when useful, or `internal/` only.
 
 ## Non-goals
 
 - View Prototype `.use` for component logic (orthogonal; skins stay render-only for now).
-- Putting observe weight on `Jobs` / any Tag, or UI packs on `WorkPool` / `Daemon`.
+- Putting observe weight on `Jobs` / any Tag, or UI packs on domain `WorkPool` / `Daemon`.
 - A forever `Bundle.observe(tag)` kind menu (retire after migration).
+- A shared `Bundle` / `Live` / `Pack` / `Family` namespace whose only job is holding packs.
 - TanStack / Promise hosts (still `Hyperlink.promise` + parallel adapters).
 - Un-HOLD kit `<Dashboard />` (shell stays product chrome).
 
@@ -40,10 +62,10 @@ Library Dashboard skins and app code use the **same** stack.
 | Must | Must not |
 |------|----------|
 | Handles stay thin | `Jobs.observe()` / kit noun menus |
-| Composition over inheritance | Bundle base classes |
+| Composition over inheritance | Bundle / View base classes for packs |
 | File = namespace, flat exports | `export const Observe = { … }` |
-| Values camelCase | `QueueLive` as a value name |
-| UI packs under `ui/Bundle` | Packs on domain `WorkPool` / `Daemon` |
+| Values camelCase (`pack`) | `QueueLive` as a value name |
+| Packs on matching `ui/*View` | Packs on domain `WorkPool` / `Daemon` |
 | Same stack for lib + apps | Private dashboard-only observe path |
 
 ---
@@ -54,10 +76,11 @@ Library Dashboard skins and app code use the **same** stack.
 |------|--------|------|
 | `src/Observe.ts` | `import * as Observe from "hyperlink-ts/Observe"` | Universal recipes + bind / use |
 | `src/internal/observe.ts` | — | Engine (name mirror) |
-| `src/ui/Bundle.ts` | `import * as Bundle from "hyperlink-ts/ui/Bundle"` | All family **pack values** (`queue`, `daemon`, …) |
-| `src/internal/bundleQueue.ts` (etc.) | — | Heavy pack pipes (optional split); re-exported flat from `Bundle.ts` |
+| `src/ui/WorkPoolView.ts` (etc.) | `import * as WorkPoolView from "hyperlink-ts/ui/WorkPoolView"` | View handles + `layer` + **`pack`** (and sub-pipes) |
+| `src/internal/workPoolViewPack.ts` (optional) | — | Heavy pack pipes; re-exported flat from `*View.ts` |
+| `src/ui/Bundle.ts` | — | Retire after migration (kind-switch door) |
 
-`package.json` / tsup: `./Observe` (new); `./ui/Bundle` already exists.
+`package.json` / tsup: `./Observe` (new); `./ui/*View` already exist.
 
 **Relationship to `Hyperlink.atom` / `.query` / `.fn`:** keep those as the low-level “already bound to `rt`” adapters. `Observe.*` recipes are **unbound**; `Observe.bind(rt)` / `Observe.use` discharge them (internally may call `Hyperlink.atom` / `.fn`). No duplicate semantics.
 
@@ -117,7 +140,7 @@ Observe.use<Svc, Out>(
 ): Out
 ```
 
-Memo key: `(runtime, tag.key, packIdentity)`. Pack identity = stable module const (reference equality), or an optional `Observe.named("queue/live", pack)` for HMR-safe keys.
+Memo key: `(runtime, tag.key, packIdentity)`. Pack identity = stable module const (reference equality), or an optional `Observe.named("workpool/pack", pack)` for HMR-safe keys.
 
 ### Types (`export declare namespace Observe`)
 
@@ -131,33 +154,21 @@ export declare namespace Observe {
 
 ---
 
-## Family packs (`Bundle`)
+## Packs on `*View`
 
-Flat camelCase exports on `src/ui/Bundle.ts` (heavy pipes may live in `src/internal/bundle*.ts`):
-
-| Export | Replaces |
-|--------|----------|
-| `Bundle.queue` | `queueBundle` / `QueueBundle` door |
-| `Bundle.priority` | `priorityBundle` |
-| `Bundle.daemon` | `daemonBundle` |
-| `Bundle.api` | `apiBundle` |
-| `Bundle.gate` | `gateBundle` |
-| `Bundle.fleetHealth` | `fleetHealthBundle` |
-| `Bundle.telemetry` | `telemetryBundle` |
-| `Bundle.shardMap` | `shardMapBundle` |
-| `Bundle.node` | pack for `NodeRef` (or keep as bind helper) |
-
-Shared queue/priority pieces (also on `Bundle`, or internal-only):
+Example shape on `WorkPoolView` (heavy pipe may live in `internal/workPoolViewPack.ts`):
 
 ```ts
 export const queueControls = Observe.struct({ /* pause/resume/clear/shutdown */ })
 export const queueMetricsHistory = Observe.struct({ /* metrics + history scan */ })
-export const queue = pipe(
+export const pack = pipe(
   Observe.struct({ status, trend }),
   Observe.and(queueControls),
   Observe.and(queueMetricsHistory),
 )
 ```
+
+Same pattern on `DaemonView`, `GateView`, … — each exports **`pack`**.
 
 ---
 
@@ -165,10 +176,10 @@ export const queue = pipe(
 
 | Phase | Work |
 |-------|------|
-| **0** | Eng `Observe` + `Bundle.queue` pack value; tests; guide |
-| **1** | Dogfood one web `QueueCard` / `QueueDetailPanel` on `Observe.use(Bundle.queue, tag)` |
-| **2** | Rewrite `queueBundle` as thin wrapper over `Observe.bind(Bundle.queue, …)` (or delete) |
-| **3** | Port remaining packs onto `Bundle.*`; delete `Bundle.observe` kind switch |
+| **0** | Eng `Observe` + `WorkPoolView.pack`; tests; guide |
+| **1** | Dogfood one web queue card/detail on `Observe.use(WorkPoolView.pack, tag)` |
+| **2** | Rewrite `queueBundle` as thin wrapper over `Observe.bind(WorkPoolView.pack, …)` (or delete) |
+| **3** | Port remaining packs onto matching `*View.pack`; delete `Bundle.observe` kind switch + `ui/Bundle` |
 | **4** | Remove deprecated `use*Bundle` / `ui.data` after in-tree greps are clean |
 
 `Bundle.observe` stays until Phase 3 so nothing breaks mid-flight. Changeset: **minor** (`Observe` + pack reshape).
@@ -177,12 +188,12 @@ export const queue = pipe(
 
 ## Acceptance
 
-1. `Bundle.queue` is a camelCase pack value on `ui/Bundle`; Tag / `WorkPool` have no observe API.  
-2. `Observe.use(Bundle.queue, Jobs)` works under `RuntimeProvider`.  
-3. `Observe.bind(rt)(Bundle.queue, Jobs)` works without React.  
+1. `WorkPoolView.pack` is a camelCase pack value on `ui/WorkPoolView`; Tag / domain `WorkPool` have no observe API.  
+2. `Observe.use(WorkPoolView.pack, Jobs)` works under `RuntimeProvider`.  
+3. `Observe.bind(rt)(WorkPoolView.pack, Jobs)` works without React.  
 4. History/trend scans + cache behavior match today’s `queueBundle` (or documented deltas).  
-5. Web queue card dogfood uses only `Observe` + `Bundle.queue` (no kind-switch `Bundle.observe`).  
-6. Typecheck + Observe/Bundle pack tests green; guide under `docs/guides/observe.md`.
+5. Web queue card dogfood uses only `Observe` + `WorkPoolView.pack` (no kind-switch `Bundle.observe`).  
+6. Typecheck + Observe / WorkPoolView pack tests green; guide under `docs/guides/observe.md`.
 
 ---
 
@@ -210,13 +221,13 @@ export class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", {
 }) {}
 ```
 
-### 2. Queue pack on shared `Bundle`
+### 2. Queue pack on `WorkPoolView`
 
 ```ts
 /**
- * @module ui/Bundle
+ * @module ui/WorkPoolView
  *
- * Former family packs as pipeable values — not a kind-switch door.
+ * View handles + contribution Layer + observe pack.
  */
 import { DateTime, pipe, type Effect, type Stream } from "effect"
 import * as Observe from "hyperlink-ts/Observe"
@@ -261,7 +272,7 @@ export const queueMetricsHistory = Observe.struct({
 })
 
 /** Full queue UI pack — every queue card/detail uses this value. */
-export const queue = pipe(
+export const pack = pipe(
   Observe.struct({
     status: Observe.atom((q: Queue) => q.status),
     trend: Observe.scan((q: Queue) => q.status, {
@@ -273,8 +284,6 @@ export const queue = pipe(
   Observe.and(queueControls),
   Observe.and(queueMetricsHistory),
 )
-
-// later on the same module: priority, daemon, api, gate, …
 ```
 
 ### 3. Wire runtime (app edge)
@@ -294,13 +303,13 @@ export const runtime = Atom.runtime(appLayer)
 import * as React from "react"
 import { AsyncResult } from "effect/unstable/reactivity"
 import * as Observe from "hyperlink-ts/Observe"
-import * as Bundle from "hyperlink-ts/ui/Bundle"
+import * as WorkPoolView from "hyperlink-ts/ui/WorkPoolView"
 import { RuntimeProvider, useAtomValue, useAtomSet } from "hyperlink-ts/ui"
 import { Jobs } from "./Jobs"
 import { runtime } from "./runtime"
 
 export function JobsCard(): React.ReactElement {
-  const box = Observe.use(Bundle.queue, Jobs)
+  const box = Observe.use(WorkPoolView.pack, Jobs)
   const statusR = useAtomValue(box.status)
   const pause = useAtomSet(box.pause)
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined
@@ -317,7 +326,7 @@ export function JobsCard(): React.ReactElement {
 }
 
 export function JobsDetail(): React.ReactElement {
-  const box = Observe.use(Bundle.queue, Jobs)
+  const box = Observe.use(WorkPoolView.pack, Jobs)
   const historyR = useAtomValue(box.history)
   const points = AsyncResult.isSuccess(historyR) ? historyR.value : []
   const resume = useAtomSet(box.resume)
@@ -346,11 +355,11 @@ export function App(): React.ReactElement {
 ```ts
 import { AtomRegistry, AsyncResult } from "effect/unstable/reactivity"
 import * as Observe from "hyperlink-ts/Observe"
-import * as Bundle from "hyperlink-ts/ui/Bundle"
+import * as WorkPoolView from "hyperlink-ts/ui/WorkPoolView"
 import { Jobs } from "./Jobs"
 import { runtime } from "./runtime"
 
-const box = Observe.bind(runtime)(Bundle.queue, Jobs)
+const box = Observe.bind(runtime)(WorkPoolView.pack, Jobs)
 const registry = AtomRegistry.make()
 registry.mount(box.status)
 
@@ -365,42 +374,31 @@ const read = () => {
 ```ts
 import * as Observe from "hyperlink-ts/Observe"
 
-const counterLive = Observe.struct({
+const counterPack = Observe.struct({
   count: Observe.atom((c: { readonly count: Subscribable<number> }) => c.count),
   bump: Observe.fn((c: { readonly bump: Effect.Effect<void> }) => c.bump),
 })
 
-const box = Observe.use(counterLive, Counter)
+const box = Observe.use(counterPack, Counter)
 ```
 
-Compose with `Observe.*`; optionally contribute a pack to `Bundle` later — no kind menu.
+Compose with `Observe.*`; optionally add `pack` on a matching `*View` later — no kind menu.
 
 ---
 
-## Open questions
-
-### Blocking Eng Phase 0 — pack namespace name
-
-`Live` rejected. Need the noun for the shared UI pack module:
-
-```ts
-Observe.use(???.queue, Jobs)
-```
-
-Locked shape (not renaming): not on Tag / not on domain / not per-family `*Observe` / not a kind-switch `*.observe`. Combinators stay on **`Observe`**; this NS is **only shipped packs**.
-
-### Open Eng details (resolve while implementing)
+## Open Eng details (resolve while implementing)
 
 1. **Deduped dual-projection** — today one status stream feeds `status` + `trend`. `Observe.scan` + `Observe.atom` on the same select should share a channel (extend `channelKeyOf` / pack-local share).  
-2. **Logs** — node-scoped log stream needs `nodeOf(tag)`; `Observe` helper or pack pipe stage.  
+2. **Logs** — node-scoped log stream needs `nodeOf(tag)`; `Observe` helper or `WorkPoolView` pipe stage.  
 3. **`Observe.use` vs hooks rules** — `use` must call `useRuntime()` unconditionally.  
-4. **Fold vs keep `Hyperlink.atom`** — keep both: Hyperlink = one-field bind; Observe = recipes; pack NS = shipped packs.
+4. **Fold vs keep `Hyperlink.atom`** — keep both: Hyperlink = one-field bind; Observe = recipes; `*View.pack` = shipped packs.  
+5. **Node pack home** — no `NodeView` yet; keep a small helper vs add `ui/NodeView`.
 
 ---
 
 ## Docs / changeset
 
-- Guide: `docs/guides/observe.md` (stack diagram; bundles guide becomes migration → `Bundle.queue`).  
-- Update `principles.md` example: `Observe.use(Bundle.queue, Jobs)`.  
-- Changeset **minor** on Eng of `Observe` + `Bundle.queue` packs.  
+- Guide: `docs/guides/observe.md` (stack diagram; bundles guide becomes migration → `WorkPoolView.pack`).  
+- Update `principles.md` example: `Observe.use(WorkPoolView.pack, Jobs)`.  
+- Changeset **minor** on Eng of `Observe` + `WorkPoolView.pack`.  
 - Lock note in `view-compose-lock.md` §G when Phase 0 lands.
