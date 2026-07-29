@@ -1131,6 +1131,12 @@ export const compose = <VR, VE,>(options: {
     const tag = selected as ViewTag;
     const title = displayNameOf(tag, "detail");
 
+    const back = React.createElement("button", {
+      type: "button",
+      onClick: () => navigation.up(),
+      disabled: !navigation.canUp,
+    }, "← back");
+
     if (navigation.view === "logs" || navigation.view === "schedule") {
       return React.createElement(
         "div",
@@ -1138,7 +1144,7 @@ export const compose = <VR, VE,>(options: {
         React.createElement(
           "div",
           { style: { display: "flex", gap: 8, alignItems: "center", marginBottom: 12 } },
-          React.createElement("button", { type: "button", onClick: () => navigation.up() }, "← back"),
+          back,
           React.createElement("strong", null, `${title} · ${navigation.view}`),
         ),
         React.createElement(MatchPage, { tag, name: title }),
@@ -1151,7 +1157,7 @@ export const compose = <VR, VE,>(options: {
       React.createElement(
         "div",
         { style: { display: "flex", gap: 8, alignItems: "center", marginBottom: 12 } },
-        React.createElement("button", { type: "button", onClick: () => navigation.up() }, "← back"),
+        back,
         React.createElement("strong", null, title),
       ),
       React.createElement(MatchDetail, { tag, name: title }),

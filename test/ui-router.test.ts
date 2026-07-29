@@ -2,7 +2,7 @@
  * Router.memory / .history — bare Route.Api + Group-backed dashboard helpers.
  */
 import { describe, expect, it } from "@effect/vitest";
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Layer, Option } from "effect";
 import * as Daemon from "../src/Daemon";
 import * as Group from "../src/Group";
 import { pathToMember } from "../src/ui/GroupRoute";
@@ -56,11 +56,31 @@ describe("Router.memory (Route.Api)", () => {
     });
   });
 
-  it("toRoot", () => {
+  it("go({ replace }) does not deepen the memory stack", () => {
+    run(Router.memory(site), (router) => {
+      router.go("/home");
+      router.go("/app", { replace: true });
+      expect(router.pathname).toBe("/app");
+      router.back();
+      expect(router.pathname).toBe("/");
+    });
+  });
+
+  it("toRoot replaces to /", () => {
     run(Router.memory(site), (router) => {
       router.go("/app");
       router.toRoot();
       expect(router.pathname).toBe("/");
+      router.back();
+      expect(router.pathname).toBe("/"); // stack collapsed to root
+    });
+  });
+
+  it("Group helpers fail loud without a Group root", () => {
+    run(Router.memory(site), (router) => {
+      expect(() => router.openKey("x")).toThrow(/Group-backed/);
+      expect(() => router.up()).toThrow(/Group-backed/);
+      expect(() => router.openHealth()).toThrow(/Group-backed/);
     });
   });
 
@@ -81,7 +101,7 @@ describe("Router.memory (Route.Api)", () => {
 });
 
 describe("Router.memory (Group)", () => {
-  it("open by member yields short-name path", () => {
+  it("open by member yields short-name path + Target match", () => {
     run(Router.memory(Hub), (nav) => {
       nav.open(HttpApi);
       expect(nav.path).toEqual(["Nwsl", "HttpApi"]);
@@ -89,6 +109,11 @@ describe("Router.memory (Group)", () => {
       expect(nav.group).toBe(Nwsl);
       expect(nav.pathname).toBe("/Nwsl/HttpApi");
       expect(nav.match?.route.identifier).toBe("HttpApi");
+      const target = Option.getOrThrow(
+        Context.getOption(nav.match!.annotations, Route.Target),
+      );
+      expect(target.kind).toBe("leaf");
+      expect(target.member).toBe(HttpApi);
     });
   });
 
@@ -99,23 +124,43 @@ describe("Router.memory (Group)", () => {
     expect(Router.toHref([])).toBe("/");
   });
 
-  it("openKey / up walk the tree", () => {
+  it("openKey / up walk the tree without corrupting back()", () => {
     run(Router.memory(Hub), (nav) => {
       nav.openKey("Nwsl");
       expect(nav.path).toEqual(["Nwsl"]);
       expect(nav.selected).toBeNull();
       expect(nav.group).toBe(Nwsl);
+      expect(nav.canUp).toBe(true);
+
       nav.openKey("HttpApi");
       expect(nav.path).toEqual(["Nwsl", "HttpApi"]);
-      nav.up();
+
+      nav.up(); // replace — stack stays coherent
       expect(nav.path).toEqual(["Nwsl"]);
-      nav.up();
+      nav.back(); // previous push was Nwsl entry before HttpApi… after replace top is Nwsl
+      // stack: [/] --openKey--> [/, /Nwsl] --openKey--> [/, /Nwsl, /Nwsl/HttpApi]
+      // --up replace--> [/, /Nwsl, /Nwsl] → collapse → [/, /Nwsl]
+      // --back--> [/]
       expect(nav.path).toEqual([]);
       expect(nav.group).toBe(Hub);
+      expect(nav.canUp).toBe(false);
     });
   });
 
-  it("openHealth / openNode are root shell pages", () => {
+  it("open then up lands on parent group (deep jump)", () => {
+    run(Router.memory(Hub), (nav) => {
+      nav.open(HttpApi); // one push to /Nwsl/HttpApi
+      nav.up(); // replace → /Nwsl
+      expect(nav.path).toEqual(["Nwsl"]);
+      expect(nav.group).toBe(Nwsl);
+      nav.up();
+      expect(nav.path).toEqual([]);
+      nav.back();
+      expect(nav.path).toEqual([]); // only root remains after replaces
+    });
+  });
+
+  it("openHealth / openNode use catalog urls", () => {
     run(Router.memory(Hub), (nav) => {
       nav.openKey("Nwsl");
       nav.openHealth();
@@ -123,10 +168,15 @@ describe("Router.memory (Group)", () => {
       expect(nav.view).toBe("health");
       expect(nav.selected).toBeNull();
       expect(nav.group).toBe(Hub);
+      expect(nav.match?.route.identifier).toBe("health");
+
       nav.openNode("app/NodeA");
       expect(nav.path).toEqual(["health", "app/NodeA"]);
       expect(nav.view).toBe("health");
       expect(Router.toHref(nav.path)).toBe("/health/app%2FNodeA");
+      expect(nav.match?.route.identifier).toBe("healthNode");
+      expect(nav.match?.params.nodeId).toBe("app/NodeA");
+
       nav.up();
       expect(nav.path).toEqual(["health"]);
       nav.up();
@@ -134,12 +184,18 @@ describe("Router.memory (Group)", () => {
     });
   });
 
-  it("catalog includes leaf sub-views", () => {
+  it("openLogs stamps leafView Target", () => {
     run(Router.memory(Hub), (nav) => {
       nav.openLogs(HttpApi);
       expect(nav.path).toEqual(["Nwsl", "HttpApi", "logs"]);
       expect(nav.view).toBe("logs");
+      expect(nav.selected).toBe(HttpApi);
       expect(nav.match?.route.identifier).toBe("HttpApiLogs");
+      const target = Option.getOrThrow(
+        Context.getOption(nav.match!.annotations, Route.Target),
+      );
+      expect(target.kind).toBe("leafView");
+      expect(target.view).toBe("logs");
     });
   });
 });

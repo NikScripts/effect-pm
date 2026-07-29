@@ -45,12 +45,32 @@
  *
  * @see docs/handoffs/ui-routes-dream.md
  */
-import type * as Context from "effect/Context";
+import * as Context from "effect/Context";
 import type * as Option from "effect/Option";
 import type * as Schema from "effect/Schema";
 import type { HttpApi, HttpApiGroup } from "effect/unstable/httpapi";
 import * as endpoint from "../internal/uiRoute";
 import * as catalog from "../internal/uiRoutes";
+
+// =============================================================================
+// Target annotation (Group dashboard / typed destinations)
+// =============================================================================
+
+/**
+ * Destination metadata stamped on catalog endpoints (esp. Group-built dashboards).
+ * {@link ./Router} reads this from {@link Match.annotations} for `selected` / `view`.
+ *
+ * @public
+ */
+export class Target extends Context.Service<
+  Target,
+  {
+    readonly keys: ReadonlyArray<string>;
+    readonly member: unknown | null;
+    readonly view: string | undefined;
+    readonly kind: "group" | "leaf" | "leafView" | "health";
+  }
+>()("hyperlink-ts/ui/Route/Target") {}
 
 /** Absolute pathname template (`/health`, `/users/:id`). @public */
 export type Path = endpoint.Path;

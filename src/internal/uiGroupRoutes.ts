@@ -2,6 +2,9 @@
  * Build a {@link ../ui/Route} catalog from a Group tree using the same
  * `Route.make` / `group` / `get` constructors apps use — ordinary loops, no
  * Group-Tag declaration helper on the public routing API.
+ *
+ * Each destination is annotated with {@link Route.Target} so {@link ../ui/Router}
+ * can read `selected` / `view` from match.
  */
 import { Schema } from "effect";
 import * as Group from "../Group";
@@ -15,8 +18,24 @@ const isGroupNode = (x: unknown): x is RouteGroup => Group.isGroup(x);
 
 const pathOf = (keys: ReadonlyArray<string>): Route.Path => {
   const href = formatGroupPath(keys);
-  return (href === "/" ? "/" : href) as Route.Path;
+  return href as Route.Path;
 };
+
+const target = <Id extends string, PathType extends Route.Path, Params>(
+  endpoint: Route.Endpoint<Id, PathType, Params>,
+  value: {
+    readonly keys: ReadonlyArray<string>;
+    readonly member: unknown | null;
+    readonly view?: string | undefined;
+    readonly kind: "group" | "leaf" | "leafView" | "health";
+  },
+): Route.Endpoint<Id, PathType, Params> =>
+  Route.annotate(endpoint, Route.Target, {
+    keys: value.keys,
+    member: value.member,
+    view: value.view,
+    kind: value.kind,
+  });
 
 /** Nested Route.group / Route.get tree mirroring Group membership. */
 const membersToRoutes = (
@@ -30,15 +49,33 @@ const membersToRoutes = (
     if (isGroupNode(member)) {
       out.push(
         Route.group(name).add(
-          Route.get("index", path),
+          target(Route.get("index", path), {
+            keys,
+            member,
+            kind: "group",
+          }),
           ...membersToRoutes(member, keys),
         ),
       );
     } else {
       out.push(
-        Route.get(name, path),
-        Route.get(`${name}Logs`, pathOf([...keys, "logs"])),
-        Route.get(`${name}Schedule`, pathOf([...keys, "schedule"])),
+        target(Route.get(name, path), {
+          keys,
+          member,
+          kind: "leaf",
+        }),
+        target(Route.get(`${name}Logs`, pathOf([...keys, "logs"])), {
+          keys: [...keys, "logs"],
+          member,
+          view: "logs",
+          kind: "leafView",
+        }),
+        target(Route.get(`${name}Schedule`, pathOf([...keys, "schedule"])), {
+          keys: [...keys, "schedule"],
+          member,
+          view: "schedule",
+          kind: "leafView",
+        }),
       );
     }
   }
@@ -57,9 +94,22 @@ const rootId = (root: RouteGroup): string => {
  */
 export const routesForGroup = (root: RouteGroup): Route.Api =>
   Route.make(rootId(root)).add(
-    Route.get("health", "/health"),
-    Route.get("healthNode", "/health/:nodeId").pipe(
-      Route.params(Schema.Struct({ nodeId: Schema.String })),
+    target(Route.get("health", "/health"), {
+      keys: ["health"],
+      member: null,
+      view: "health",
+      kind: "health",
+    }),
+    target(
+      Route.get("healthNode", "/health/:nodeId").pipe(
+        Route.params(Schema.Struct({ nodeId: Schema.String })),
+      ),
+      {
+        keys: ["health"],
+        member: null,
+        view: "health",
+        kind: "health",
+      },
     ),
     ...membersToRoutes(root, []),
   );

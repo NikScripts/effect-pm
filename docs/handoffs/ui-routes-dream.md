@@ -1,6 +1,6 @@
 # UI Route + Router
 
-**Locked (owner 2026-07-29)** · **Navigator cutover Eng’d**
+**Locked (owner 2026-07-29)** · Navigator cutover + refinements on `cursor/view-withsize-types-125f`
 
 ## Catalog (`Route`) — data
 
@@ -14,6 +14,9 @@
 | `HttpApi.reflect` | `Route.reflect` |
 
 CamelCase values: `const site = Route.make("site").add(…)`.
+
+Optional destination metadata: `Route.Target` annotation (`kind` / `keys` / `member` / `view`).
+Group-built catalogs stamp this so the runtime can read `selected` / `view` from `match`.
 
 ## Runtime (`Router`) — service + layers
 
@@ -29,17 +32,24 @@ Router.memory(site)  // Layer — tests / TUI / embed
 
 const router = yield* Router.Router
 router.to((urls) => urls.app.dashboard())
+router.go("/home", { replace: true })
 router.pathname
 router.match
 ```
 
 Swap transport by swapping the layer. Catalog stays a plain value (not a Service).
 
+| Method | History effect |
+|--------|----------------|
+| `go` / `to` / `open*` | **push** (default); `go/to(…, { replace: true })` replaces |
+| `up` / `toRoot` | **replace** (tree chrome stays coherent with `back`) |
+| `back` | pop memory stack / `history.back()` |
+
 ## Group dashboard
 
 Pass a Group to `Router.memory` / `Router.history` — the layer builds the catalog with
-the same `Route.make` / `group` / `get` constructors (ordinary loops) and attaches
-short-name helpers (`open` / `openKey` / `up` / `openLogs` / `openHealth` / …).
+the same `Route.make` / `group` / `get` constructors (ordinary loops; not a public
+`fromMembers` helper), stamps `Route.Target`, and attaches short-name helpers.
 
 ```ts
 View.compose({
@@ -48,9 +58,13 @@ View.compose({
 })
 
 const router = Router.useRouter()
-router.open(HttpApi)           // → /Nwsl/HttpApi
-router.up()                    // pop one short-name segment
-router.back()                  // history / memory stack
+router.open(HttpApi)           // → /Nwsl/HttpApi (push)
+router.up()                    // parent segment (replace)
+router.back()                  // previous history entry
+router.openHealth()            // via catalog `urls.health()`
 ```
+
+Group helpers (`open` / `up` / `openLogs` / …) **throw** on a bare `Route.Api` layer —
+fail loud, no silent no-ops.
 
 `Navigator` is removed — use `Router`.
