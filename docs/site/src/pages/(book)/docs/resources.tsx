@@ -8,17 +8,12 @@ export default function ResourcesRedirect() {
   return (
     <>
       <PageMeta
-        title="Moved — Hyperlink Factories"
+        title="Moved: Hyperlink Factories"
         description="This standards page moved to /docs/hyperlink-services."
         path="/docs/hyperlink-services"
         noIndex
       />
       <meta httpEquiv="refresh" content="0;url=/docs/hyperlink-services" />
-      <script
-        dangerouslySetInnerHTML={{
-          __html: 'location.replace("/docs/hyperlink-services");',
-        }}
-      />
       <article className="prose">
         <h1>Moved</h1>
         <p>

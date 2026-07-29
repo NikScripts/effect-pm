@@ -1,6 +1,7 @@
 # Docs demo host — `dev.hyperlink.cool`
 
-**Status:** Live (2026-07-28). Deploy `c33f1e10a` + CF Single Redirects.  
+**Status:** Live (2026-07-28). CF Single Redirects (edge SSOT) + origin
+`scripts/serve-production.mjs` (host-gate before Waku `serveStatic`).  
 **Decision (owner, 2026-07-28):** Keep advertising off. Brand host is coming-soon;
 docs stay available for feedback on a demo host.
 
@@ -12,9 +13,11 @@ docs stay available for feedback on a demo host.
 
 ## Enforcement (SSOT = Cloudflare Single Redirects)
 
-Waku serves prerendered HTML **before** Hono middleware, so
-`docs/site/src/middleware/00-publicHostGate.ts` does **not** gate static pages in
-production. Edge redirects do:
+Waku's Node adapter mounts `serveStatic` **before** Hono middleware, so
+`docs/site/src/middleware/00-publicHostGate.ts` alone would miss prerendered HTML.
+Production therefore starts via `scripts/serve-production.mjs`, which applies the same
+`resolvePublicHostGate` rules **before** Waku (and still allows `/assets/*`). Edge
+redirects remain the public SSOT:
 
 Ruleset `90c650374e5d4ce0adc5f4be936ddf46` (`http_request_dynamic_redirect`):
 

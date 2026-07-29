@@ -6,7 +6,7 @@
 
 import { Effect, Schema, Stream, SubscriptionRef } from "effect";
 import { Atom } from "effect/unstable/reactivity";
-import * as Hyperlink from "@pm/Hyperlink";
+import * as Hyperlink from "hyperlink-ts/Hyperlink";
 
 // 1. the contract — `value` is a reactive ref (Subscribable: get + changes)
 class Counter extends Hyperlink.Tag<Counter>()("docs/Counter", {

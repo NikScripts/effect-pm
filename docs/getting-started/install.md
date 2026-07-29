@@ -1,22 +1,22 @@
-{#install title="Installation" status="draft" done="api previews types" appliesTo=all}
+{#install title="Installation" done="api previews types" appliesTo=all}
 <!-- docs-site-link:begin -->
 > [!NOTE]
-> You're reading this page's **source**. The rendered version — with navigation, search,
-> and live type previews — is at <https://dev.hyperlink.cool/docs/install>.
+> You're reading this page's **source**. The rendered version has navigation, search,
+> and live type previews at <https://dev.hyperlink.cool/docs/install>.
 <!-- docs-site-link:end -->
 # Installation
 
 hyperlink-ts is published as **`hyperlink-ts`**. It builds on Effect, so you bring your own
-`effect` version as a peer dependency — the toolkit pins a range, you pick the exact release.
+`effect` version as a peer dependency (the toolkit pins a range; you pick the exact release).
 
 {.note}
 **Pre-1.0 beta** (`0.9.0-beta`, tracking Effect's own beta). It's stable enough to build on, but shapes
-can still change between betas — nothing is frozen until 1.0 (there's no `@since` yet).
+can still change between betas. Nothing is frozen until 1.0 (there's no `@since` yet).
 
 ## Requirements
 
 - **Node.js ≥ 20.19**
-- **Effect** `^4.0.0-beta.98` — a peer dependency, installed alongside (below).
+- **Effect** `^4.0.0-beta.98` (peer dependency, installed alongside below)
 
 ## Install
 
@@ -24,17 +24,18 @@ can still change between betas — nothing is frozen until 1.0 (there's no `@sin
 hyperlink-ts effect
 ```
 
-That's the core — Hyperlink Services, included WorkPool / Daemon / Gate kinds, and serving them over RPC.
+That's enough for day one: define Hyperlink Services, use the included WorkPool / Daemon / Gate
+kinds, and listen with `Node.http` / `Node.ws` / `Node.unix` (see
+[Managing Layers](/docs/managing-layers)). No separate platform recipe for the common case.
+`@effect/platform-node` already ships as a dependency of `hyperlink-ts`.
 
 ## Additional dependencies
 
 Beyond `effect`, some entry points want extra peers. Install them **only when you use that entry
-point** — nothing here is needed for core Hyperlink work.
+point**. Nothing here is required for core Hyperlink work.
 
-**Serving over HTTP** needs a platform HTTP server. Pick the one that matches your runtime —
-`@effect/platform-node` already ships as a dependency, so it's there for Node:
+**Other runtimes** (Bun / Deno) need their platform HTTP package when you serve outside Node:
 
-`@effect/platform-node`\
 `@effect/platform-bun`\
 `@effect/platform-deno`
 
@@ -44,9 +45,9 @@ point** — nothing here is needed for core Hyperlink work.
 |-------|--------------|
 | `/web` Web dashboard | `react`, `react-dom`, `recharts`, `@tanstack/react-table` |
 | `/tui` Terminal dashboard | `react`, `ink` |
-| `/ui` Shared dashboard core | pulled in by `/web` / `/tui` — no extra install if you only use those |
+| `/ui` Shared dashboard core | pulled in by `/web` / `/tui`, no extra install if you only use those |
 
-Install them the same way — for the full web dashboard:
+Install them the same way, for the full web dashboard:
 
 ``` install
 react react-dom recharts @tanstack/react-table
@@ -54,20 +55,20 @@ react react-dom recharts @tanstack/react-table
 
 ## The package surface
 
-Each area is a tree-shakeable subpath under `hyperlink-ts/*` — import only what you use:
+Each area is a tree-shakeable subpath under `hyperlink-ts/*`. Import only what you use:
 
-- **`/Hyperlink`** — build your own Hyperlink Service
-- **`/WorkPool`**, **`/Daemon`**, **`/Gate`**, **`/ShardMap`** — included Hyperlink Services
-- **`/Store`** — Soft journals (`Store.Service`, `Daemon.store` / `WorkPool.store` / …)
-- **`/DurableWorkPoolStore`**, **`/HistoryStore`**, **`/storage/sqlite`** — WorkPool durability + history backfill (SQL)
-- **`/ui`** — shared dashboard core (data, routing, atoms) used by web and TUI
-- **`/web`**, **`/tui`**, **`/cli`** — web dashboard, terminal dashboard, CLI
-- **`hyperlink-ts`** — the barrel: everything under short names
+- **`/Hyperlink`**: build your own Hyperlink Service
+- **`/WorkPool`**, **`/Daemon`**, **`/Gate`**, **`/ShardMap`**: included Hyperlink Services
+- **`/Store`**: Soft journals (`Store.Service`, `Daemon.store` / `WorkPool.store` / …)
+- **`/DurableWorkPoolStore`**, **`/HistoryStore`**, **`/storage/sqlite`**: WorkPool durability + history backfill (SQL)
+- **`/ui`**: shared dashboard core (data, routing, atoms) used by web and TUI
+- **`/web`**, **`/tui`**, **`/cli`**: web dashboard, terminal dashboard, CLI
+- **`hyperlink-ts`**: the barrel (everything under short names)
 
 ## TypeScript
 
 hyperlink-ts ships ESM with bundled types. Your `tsconfig.json` needs modern module resolution and strict
-mode — the same settings Effect itself wants:
+mode, the same settings Effect itself wants:
 
 ``` json
 {
@@ -86,7 +87,7 @@ mode — the same settings Effect itself wants:
 
 Two one-time additions make the whole experience better:
 
-**Effect Language Service** — richer diagnostics, type extraction, and refactors. Install and add the
+**Effect Language Service**, richer diagnostics, type extraction, and refactors. Install and add the
 plugin:
 
 ``` install
@@ -103,10 +104,10 @@ plugin:
 
 Defaults are enough to start. Ratchet individual rules to `error` as you adopt them. If you have a
 **browser / React** layer, give it its own `tsconfig` that turns Effect purity rules off for that
-path (`globalDate`, `globalConsole`, `globalTimers`, `asyncFunction`, `newPromise`, …) — those
+path (`globalDate`, `globalConsole`, `globalTimers`, `asyncFunction`, `newPromise`, …), those
 primitives are correct in UI code, wrong in Effect-domain code.
 
-**Prettify TS** — editor extension `mylesmurphy.prettify-ts`, so type hovers expand into readable
+**Prettify TS**, editor extension `mylesmurphy.prettify-ts`, so type hovers expand into readable
 shapes instead of a collapsed `…`. Nearly every type in hyperlink-ts reads better through it.
 
 ## Next
