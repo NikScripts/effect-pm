@@ -1038,9 +1038,35 @@ export const useGridMembers = (): ReadonlyArray<{
   }));
 };
 
+/** Live router vs Layer — `Layer.isLayer` predicate is too wide to exclude. @internal */
+const isLiveRouter = (
+  input: Layer.Layer<Router.Router> | Router.Service,
+): input is Router.Service =>
+  typeof input === "object" &&
+  input !== null &&
+  "go" in input &&
+  "subscribe" in input &&
+  "pathname" in input;
+
+/** Build or accept a live router for {@link compose}. @internal */
+const resolveComposeRouter = (
+  input: Layer.Layer<Router.Router> | Router.Service,
+): Router.Service => {
+  if (isLiveRouter(input)) return input;
+  return Effect.runSync(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const ctx = yield* Layer.build(input);
+        return Context.get(ctx, Router.Router);
+      }),
+    ),
+  );
+};
+
 /**
- * Thin Dashboard sugar: {@link react} + {@link Router} Layer. No second registry;
- * no `Atom.runtime` inside — wrap with {@link ./runtime.RuntimeProvider} outside.
+ * Thin Dashboard sugar: {@link react} + {@link Router} Layer **or** live
+ * {@link Router.Service}. No second registry; no `Atom.runtime` inside — wrap
+ * with {@link ./runtime.RuntimeProvider} outside.
  *
  * Observe via `Observe.use(tag, *View.pack)` / `NodeView.use` under `RuntimeProvider`.
  *
@@ -1080,16 +1106,7 @@ export const compose = <VR, VE,>(options: {
   readonly router: Router.Service;
 } => {
   const viewKit = react(options.views);
-  const router = Layer.isLayer(options.router)
-    ? Effect.runSync(
-        Effect.scoped(
-          Effect.gen(function* () {
-            const ctx = yield* Layer.build(options.router);
-            return Context.get(ctx, Router.Router);
-          }),
-        ),
-      )
-    : options.router;
+  const router = resolveComposeRouter(options.router);
 
   const Provider = (props: {
     readonly children: React.ReactNode;
