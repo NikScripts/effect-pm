@@ -24,7 +24,10 @@ import {
  */
 export const shutdown = (
   node: AnyNode,
-): Effect.Effect<void, NodeUnreachable | UnaddressedNode> => {
+): Effect.Effect<
+  void,
+  NodeUnreachable | UnaddressedNode | Hyperlink.HandoffDeferred
+> => {
   if (!isAddressedNode(node)) {
     return Effect.fail(new UnaddressedNode({ node: node.key }));
   }
@@ -62,6 +65,8 @@ export const shutdown = (
     }),
     Effect.mapError((cause) => {
       if (Predicate.isTagged(cause, "UnaddressedNode")) return cause;
+      // A deferred handoff (node stayed up) is a legible typed outcome, not unreachability.
+      if (Predicate.isTagged(cause, "HandoffDeferred")) return cause;
       return new NodeUnreachable({
         node: node.key,
         url: address,

@@ -93,13 +93,17 @@ Membership Lookup Identity/Directory/Advice   who wins / where clients dial
   (`false` refuses). While `Node.drain` / `shutdown` has set `phase: "draining"`, yield
   **always refuses** (draining ≠ dead; Directory row held).
 - **Leave / exit:** `Node.shutdown(node)` = drain → opted-in per-service handoffs
-  (`Hyperlink.withHandoff`) → Advice clear → Directory unregister → listen exit.
+  (serve `{ handoff }`) → Advice clear → Directory unregister → listen exit.
   Prefer `Node.launch(node, listenLayer)` over bare `Layer.launch` so shutdown ends the
   process (no `process.exit`).
-- **Per-service handoff (opt-in, default off):** pipe `Hyperlink.withHandoff("drainOnly" |
-  "workPoolRelease")` on the HyperService tag (not `ListenOptions`). Absent stamp ⇒ not
-  migrated. WorkPool-shaped: `drainOnly` shuts the queue down; `workPoolRelease` does
-  local `release`/`releaseEncoded` then shutdown (peer enqueue still deferred).
+- **Per-service handoff (opt-in, default off):** pass a `handoff` fn in the HyperService's
+  serve options — `Hyperlink.serve(Tag, impl, { handoff })` (or nest `handoff` in a
+  `WorkPool` / `Daemon` / `Gate` config). Signature `(from, to, ctx) => Effect<void | HandoffOutcome>`
+  where `from` is the local handle and `to` is a peer client of the same HyperService (dialed from
+  the Directory, self excluded by dial). Return `ctx.done` / `void` to leave + shut down, `ctx.retry`
+  to re-run (bounded), `ctx.defer` to keep the node up. Any failure / defect — or **no peer** —
+  defers: the node restores `phase: "running"` and `Node.shutdown` fails with `HandoffDeferred`.
+  WorkPool queues bake that in via `WorkPool.serve` (`releaseEnqueueHandoff`).
 - **Membership push / dialers:** directory-mode `Hyperlink.peersLayer` and
   `Hyperlink.lookupClient` **hot-rebind** on `Directory.changes` (dial move / join /
   leave). Escape hatch: `Lookup.changes` / `directoryTable()`.

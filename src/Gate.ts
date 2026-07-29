@@ -434,6 +434,12 @@ export interface LayerConfig<I, A, E, R> {
    * Omitted = no rate limit (only {@link concurrency}).
    */
   readonly rateLimit?: RateLimitOptions;
+  /**
+   * Node handoff (Locked #39) — run on the OUTGOING node during {@link Node.shutdown} after drain.
+   * `(from, to, ctx) => Effect<void | HandoffOutcome>`. Gates default to non-transferable (#34), so
+   * this is opt-in; omit ⇒ not migrated. Threaded to {@link Hyperlink.serve}'s options.
+   */
+  readonly handoff?: Hyperlink.HandoffFn;
 }
 
 /**
@@ -962,6 +968,23 @@ export const layerMemory = <
  * @category layers & serving
  * @public
  */
+/** Extract a config's `handoff` fn as a {@link Hyperlink.ServeOptions} bag (Locked #39). @internal */
+const handoffOptionOf = (
+  config: unknown,
+): Hyperlink.ServeOptions | undefined => {
+  if (
+    typeof config === "object" &&
+    config !== null &&
+    "handoff" in config &&
+    typeof (config as { readonly handoff?: unknown }).handoff === "function"
+  ) {
+    return {
+      handoff: (config as { readonly handoff: Hyperlink.HandoffFn }).handoff,
+    };
+  }
+  return undefined;
+};
+
 export const serveRemote = <
   Self,
   I extends Schema.Top,
@@ -975,7 +998,7 @@ export const serveRemote = <
   withDefaultStoreBridge(
     Layer.unwrap(
       Effect.map(buildRunImpl(tag, config), (built) =>
-        Hyperlink.serveRemoteDriver(tag, built),
+        Hyperlink.serveRemoteDriver(tag, built, handoffOptionOf(config)),
       ),
     ),
   );
@@ -1013,7 +1036,9 @@ export const serve = <
   // Same deferred-`ValueErrorsOf` restatement as {@link layer} — Gate has no materialize leaves.
   withDefaultStoreBridge(
     Layer.unwrap(
-      Effect.map(buildRunImpl(tag, config), (built) => Hyperlink.serve(tag, built)),
+      Effect.map(buildRunImpl(tag, config), (built) =>
+        Hyperlink.serve(tag, built, handoffOptionOf(config)),
+      ),
     ),
   ) as Layer.Layer<
     Self | Local<Self> | HandlerContextOf<InstanceSpec<I, A, E>> | Store.Storage,

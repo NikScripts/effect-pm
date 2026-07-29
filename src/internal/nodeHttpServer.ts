@@ -166,7 +166,21 @@ const httpServerBase = (
       const { signal: signalListenExit } = yield* Effect.promise(
         () => import("./nodeListenExit"),
       );
-      const handoffRuns = Hyperlink.collectServedHandoffRuns(entries);
+      const handoffRun = Hyperlink.runServedHandoffs(entries, {
+        ...(membership !== undefined
+          ? {
+              selfDial: {
+                kind: membership.kind,
+                ...(membership.path !== undefined
+                  ? { path: membership.path }
+                  : {}),
+                ...(membership.url !== undefined
+                  ? { url: membership.url }
+                  : {}),
+              },
+            }
+          : {}),
+      });
       const nodeEntry = nodeStatusServeEntry({
         startedAt,
         serviceCount: entries.length,
@@ -178,14 +192,7 @@ const httpServerBase = (
         ...(inferredNodeKey !== undefined ? { assumeNodeKey: inferredNodeKey } : {}),
         ...(options?.onYield !== undefined ? { onYield: options.onYield } : {}),
         ...(membership !== undefined ? { membership } : {}),
-        ...(handoffRuns.length > 0
-          ? {
-              handoff: Effect.forEach(handoffRuns, (run) => run, {
-                discard: true,
-                concurrency: "unbounded",
-              }),
-            }
-          : {}),
+        handoff: handoffRun,
         closeListen: Effect.gen(function* () {
           if (membership !== undefined) {
             // Detach so the shutdown RPC can finish before Node.launch tears the scope down.

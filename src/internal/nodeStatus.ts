@@ -17,6 +17,7 @@ import {
   DateTime,
   Duration,
   Effect,
+  Exit,
   Layer,
   Option,
   Redacted,
@@ -149,9 +150,13 @@ export class NodeStatusTag extends Hyperlink.Tag<NodeStatusTag>()(
    * Compose leave + exit listen scope (Track C #32): drain → clear Advice → Directory
    * unregister → close listen (finalizers unlink / etc.). Idempotent.
    */
-  shutdown: Hyperlink.effect(Schema.Void).annotate({
+  shutdown: Hyperlink.effect({
+    success: Schema.Void,
+    error: Hyperlink.HandoffDeferred,
+  }).annotate({
     description:
-      "Drain, leave membership (Advice clear + Directory unregister), then exit the listen scope.",
+      "Drain, run per-service handoffs, leave membership (Advice clear + Directory unregister), " +
+      "then exit the listen scope. Fails with HandoffDeferred (node stays up) when a handoff defers.",
   }),
   /**
    * Launcher → node ownership ack — child assumes self-custody so the launcher may exit.
@@ -221,16 +226,17 @@ export const buildNodeStatusImpl = (options: {
    */
   readonly closeListen?: Effect.Effect<void>;
   /**
-   * Per-service opt-in handoffs ({@link Hyperlink.withHandoff}) — run after drain,
-   * before Lookup leave (Locked #33).
+   * Per-service opt-in handoffs (serve `{ handoff }`, Locked #39) — run on the OUTGOING node after
+   * drain, before Lookup leave. On failure/defect (`ctx.defer`, no peer, retry-exhausted) the node
+   * restores `phase: "running"`, clears the shutting-down latch, and refails (does NOT leave / close).
    */
-  readonly handoff?: Effect.Effect<void>;
+  readonly handoff?: Effect.Effect<void, Hyperlink.HandoffDeferred>;
 }): Effect.Effect<{
   readonly status: Hyperlink.Subscribable<NodeStatus>;
   readonly ping: Effect.Effect<number>;
   readonly yield: Effect.Effect<boolean>;
   readonly drain: Effect.Effect<void>;
-  readonly shutdown: Effect.Effect<void>;
+  readonly shutdown: Effect.Effect<void, Hyperlink.HandoffDeferred>;
   readonly assume: (payload: {
     readonly token: string;
   }) => Effect.Effect<void, AssumeTokenMismatch | AssumeTokenReused | AssumeNotReady>;
@@ -364,7 +370,20 @@ export const buildNodeStatusImpl = (options: {
       if (yield* Ref.getAndSet(shuttingDown, true)) return;
       yield* drain;
       if (options.handoff !== undefined) {
-        yield* options.handoff.pipe(Effect.withLogSpan("node.shutdown.handoff"));
+        // Locked #39 #8/#9: a deferred / failed / defected handoff must NOT leave membership or
+        // close the listen. Restore `phase: "running"`, clear the shutting-down latch (so a later
+        // shutdown can retry), and refail with the original cause (typed `HandoffDeferred` or defect).
+        const exit = yield* Effect.exit(
+          options.handoff.pipe(Effect.withLogSpan("node.shutdown.handoff")),
+        );
+        if (Exit.isFailure(exit)) {
+          yield* Ref.set(phase, "running");
+          yield* Ref.set(shuttingDown, false);
+          yield* Effect.logWarning(
+            "node shutdown deferred: handoff did not complete; staying up",
+          ).pipe(Effect.annotateLogs({ "node.phase": "running" }));
+          return yield* Effect.failCause(exit.cause);
+        }
       }
       yield* leaveMembership;
       yield* Effect.logInfo("node shutdown leaving listen").pipe(
@@ -419,7 +438,7 @@ export const nodeStatusServeEntry = (options: {
     readonly serves: ReadonlyArray<string>;
   };
   readonly closeListen?: Effect.Effect<void>;
-  readonly handoff?: Effect.Effect<void>;
+  readonly handoff?: Effect.Effect<void, Hyperlink.HandoffDeferred>;
 }): {
   readonly tag: typeof NodeStatusTag;
   readonly impl: ReturnType<typeof buildNodeStatusImpl>;

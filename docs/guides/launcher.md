@@ -132,9 +132,11 @@ wire key) — sugar over Directory’s schema’d request. See:
 
 ## Deferred (not beta Launcher)
 
-- Peer WorkPool transfer (`release` → peer `enqueue`, brief #34) — local
-  `Hyperlink.withHandoff("drainOnly" | "workPoolRelease")` already ships on
-  `Node.shutdown`; see [identity coordinator](./identity-coordinator.md#custody-vs-membership-launcher--lookup).
+- Explicit less-automated A/B launcher (replacement addressing = same `nodeKey` + new dial today)
 - Track D client redirect / dual-serve (`lookupClient` + directory `peersLayer` already rebind on dial swap)
 - Blank worker + remote assign; HTTP/WS Lookup; nameless Launcher discovery
 - `Handle.events` Stream; stdout/stderr tap; thin `hl up` CLI
+
+WorkPool peer transfer is baked into `WorkPool.serve` / `serveRemote` (`releaseEnqueueHandoff`
+→ peer `enqueue` on `Node.shutdown`); see
+[identity coordinator](./identity-coordinator.md#custody-vs-membership-launcher--lookup).
