@@ -6093,28 +6093,30 @@ const makeLiveLookupService = <Self, S extends Spec>(
  * **Lookup-resolved nodeless client** (D7/D4) — you do **not** pass a {@link Node}; Lookup
  * chooses the dial target. Contrast {@link client}`(Tag, node)`, where **you** name the Node.
  *
- * Resolution order: {@link Lookup.Identity}`resolve(tag.key)`, else
- * {@link Lookup.Directory}`nodesServing(tag.key)`.
+ * Resolution order: Identity `resolve(tag.key)`, else Directory `nodesServing`
+ * (via {@link Lookup.nodesServing} / the Directory tag as a Context key).
  *
  * **Fail-closed by default:** missing or more than one directory row →
- * {@link LookupClientError}. When N&gt;1, a live {@link Lookup.Advice} prefer that
- * matches a directory row wins before D4 `{ pick }`. Opt into soft pick with
+ * {@link LookupClientError}. When N&gt;1, a live Advice prefer that matches a
+ * directory row wins before D4 `{ pick }`. Opt into soft pick with
  * `{ pick: "first" }` or a sync `(rows) => DirectoryEntry`. Identity resolve
  * ignores advice / `pick` (unique by key).
  *
- * **Hot-rebind:** after the initial resolve, watches {@link Lookup.Directory}`changes`
- * and rebuilds the dial when the chosen endpoint moves (`dialChanged`) or membership
- * for this service key changes — same plane as directory {@link peersLayer}. The prior
- * dial stays live until the next dial builds successfully (no close-first gap).
+ * **Hot-rebind:** after the initial resolve, watches Directory `changes` and rebuilds
+ * the dial when the chosen endpoint moves (`dialChanged`) or membership for this
+ * service key changes — same plane as directory {@link peersLayer}. Prefer the flat
+ * sugar {@link Lookup.changes}. The prior dial stays live until the next dial builds
+ * successfully (no close-first gap).
  *
  * **Transparent retry (Track D v1):** Effect RPCs that fail with `RpcClientError` wait
  * briefly for a successful rebind (or proactively resolve once), then retry **once** on
  * the new dial. Streams are not auto-retried. Mutates retry once too — keep them
  * idempotent when cutover-safe.
  *
- * **Advice early move:** watches {@link Lookup.Advice}`changes` for this service key and
- * re-resolves when prefer flips — dialers move to B when you `advise({ prefer: B })`,
- * before A leaves and before the first transport error.
+ * **Advice early move:** watches Advice `changes` for this service key and re-resolves
+ * when prefer flips — dialers move to B when you {@link Lookup.advise}`({ prefer: B })`,
+ * before A leaves and before the first transport error. Apps use flat Lookup verbs
+ * (`advise` / `preferred` / `clearAdvice`); do not chain `Lookup.Advice.*`.
  *
  * Bake name sketch was `unsafeLookupClient` (“trust Lookup or die”); bare
  * `lookupClient(Tag)` keeps that fail-closed contract when advice is absent/stale.
