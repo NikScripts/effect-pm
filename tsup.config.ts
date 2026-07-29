@@ -66,6 +66,8 @@ export default defineConfig([
       "ui/ShardMapView": "src/ui/ShardMapView.ts",
       "ui/NodeView": "src/ui/NodeView.ts",
       "ui/Navigator": "src/ui/Navigator.ts",
+      "ui/Route": "src/ui/Route.ts",
+      "ui/Routes": "src/ui/Routes.ts",
       "ui/GroupView": "src/ui/GroupView.ts",
       "ui/DashboardViews": "src/ui/DashboardViews.ts",
       "ui/DashboardLayer": "src/ui/DashboardLayer.ts",

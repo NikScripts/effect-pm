@@ -149,6 +149,10 @@ First peel = header/body split; page-sized logs/schedule **Eng’d**.
 | **2** Node status | **Eng’d (Navigator pages)** | `/health` + `/health/<nodeId>`; `NodeStatusHost` for overlay embeds |
 | **3** Logs / schedule pages | **Eng’d** | `PoolPage` / `DaemonPage` + web `resourcePages`; shell uses `Match.Page` |
 
+### K3. UI Routes catalog (2026-07-29)
+
+HttpApi-shaped public `Route` / `Routes` (+ `fromGroup` / `match` / `urlBuilder`). See [`ui-routes-dream.md`](./ui-routes-dream.md). Navigator still owns location; cutover next.
+
 ### L. Acceptance
 
 1. Group opens via kit `Card` + Navigator — no `Cell` group fork  
