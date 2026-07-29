@@ -1,6 +1,6 @@
 # Brief — Launcher + node handoff (Agent 5)
 
-**Status:** Track A + **Track B Eng'd** on tip. **Track C Locked #27–34 + #39 Eng'd**. **Track D v1 + advice early-move Eng'd** — `lookupClient` build-then-swap + `RpcClientError` retry + `Advice.changes` dial move (`test/lookup-client-rebind.test.ts`, `test/lookup-advice.test.ts`). Dual-serve / stream replay / peersLayer parity still open. **#35–37** deferred. Explicit A/B launcher / `restartSuccessor` deferred.  
+**Status:** Track A + **Track B Eng'd** on tip. **Track C Locked #27–34 + #39 Eng'd**. **Track D v1 + advice early-move Eng'd** — `lookupClient` build-then-swap + `RpcClientError` retry + `Advice.changes` dial move (`test/lookup-client-rebind.test.ts`, `test/lookup-advice.test.ts`). **#44 no-triples Eng'd** — named `{ Advice, Directory, Identity }` + flat Lookup verbs. Dual-serve / stream replay / peersLayer parity still open. **#35–37** deferred. Explicit A/B launcher / `restartSuccessor` deferred.  
 **Opened:** 2026-07-25 (owner via Agent G).  
 **Audience:** next agent picking up launcher + handoff / migration discussion.
 
