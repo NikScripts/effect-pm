@@ -1,50 +1,59 @@
 /**
- * Self-contained coming-soon lockup. Loaded only by `/` (and inlined there) so the
+ * Self-contained brand lockup. Loaded only by `/` (and inlined there) so the
  * brand host never depends on the docs stylesheet or a successful `/assets/*` fetch.
- * Hex + system fonts first; oklch where supported matches the docs theme.
+ * Hex + system fonts first; oklch / web fonts where supported.
  */
 :root {
   color-scheme: light dark;
-  --landing-bg: #fafbfc;
-  --landing-fg: #2a2f38;
-  --landing-muted: #6b7280;
-  --landing-panel: #f0f2f5;
-  --landing-border: #e2e6eb;
-  --landing-primary: #2f6fed;
-  --landing-yield: #c26a1a;
-  --landing-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --landing-bg: #f4f6f9;
+  --landing-bg-deep: #e8eef7;
+  --landing-fg: #1c222c;
+  --landing-muted: #5c6573;
+  --landing-panel: #ffffffcc;
+  --landing-border: #c9d2de;
+  --landing-primary: #1f5fd6;
+  --landing-yield: #b85a12;
+  --landing-glow: #2f6fed33;
+  --landing-sans: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --landing-display: "Syne", "DM Sans", ui-sans-serif, system-ui, sans-serif;
   --landing-mono: ui-monospace, SFMono-Regular, Menlo, "Cascadia Code", monospace;
 }
 @supports (color: oklch(0% 0 0)) {
   :root {
-    --landing-bg: oklch(99% 0.004 260);
-    --landing-fg: oklch(24% 0.01 260);
-    --landing-muted: oklch(50% 0.01 260);
-    --landing-panel: oklch(96.5% 0.005 260);
-    --landing-border: oklch(90% 0.008 260);
-    --landing-primary: oklch(55% 0.16 250);
-    --landing-yield: oklch(62% 0.17 55);
+    --landing-bg: oklch(97.5% 0.008 250);
+    --landing-bg-deep: oklch(94% 0.02 250);
+    --landing-fg: oklch(22% 0.02 260);
+    --landing-muted: oklch(48% 0.02 260);
+    --landing-panel: oklch(100% 0.004 260 / 0.72);
+    --landing-border: oklch(86% 0.02 250);
+    --landing-primary: oklch(52% 0.18 255);
+    --landing-yield: oklch(60% 0.16 55);
+    --landing-glow: oklch(55% 0.16 250 / 0.22);
   }
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --landing-bg: #141619;
+    --landing-bg: #10141a;
+    --landing-bg-deep: #0a0e14;
     --landing-fg: #e8eaed;
     --landing-muted: #9aa3ad;
-    --landing-panel: #1c2026;
-    --landing-border: #2f353d;
-    --landing-primary: #6ea8ff;
+    --landing-panel: #1a2028cc;
+    --landing-border: #2f3844;
+    --landing-primary: #7eb0ff;
     --landing-yield: #e0a054;
+    --landing-glow: #3d7fff40;
   }
   @supports (color: oklch(0% 0 0)) {
     :root {
-      --landing-bg: oklch(16% 0.01 260);
-      --landing-fg: oklch(92% 0.01 260);
-      --landing-muted: oklch(64% 0.01 260);
-      --landing-panel: oklch(19% 0.012 260);
-      --landing-border: oklch(30% 0.01 260);
-      --landing-primary: oklch(74% 0.14 250);
-      --landing-yield: oklch(75% 0.16 60);
+      --landing-bg: oklch(15% 0.015 260);
+      --landing-bg-deep: oklch(11% 0.02 260);
+      --landing-fg: oklch(93% 0.01 260);
+      --landing-muted: oklch(68% 0.015 260);
+      --landing-panel: oklch(20% 0.02 260 / 0.7);
+      --landing-border: oklch(32% 0.02 260);
+      --landing-primary: oklch(76% 0.12 250);
+      --landing-yield: oklch(78% 0.14 65);
+      --landing-glow: oklch(60% 0.16 250 / 0.28);
     }
   }
 }
@@ -59,66 +68,100 @@ body {
   background: var(--landing-bg);
   color: var(--landing-fg);
   font-family: var(--landing-sans);
+  font-optical-sizing: auto;
   -webkit-font-smoothing: antialiased;
 }
 
 .landing {
+  position: relative;
+  isolation: isolate;
   width: 100%;
   min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
   text-align: left;
-  padding: 1.6rem 1.25rem calc(2rem + env(safe-area-inset-bottom, 0px));
+  padding: 1.6rem 1.25rem calc(2.4rem + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 90% 70% at 50% -10%, var(--landing-glow), transparent 55%),
+    radial-gradient(ellipse 60% 50% at 100% 100%, var(--landing-bg-deep), transparent 50%),
+    radial-gradient(ellipse 50% 40% at 0% 80%, var(--landing-bg-deep), transparent 45%),
+    var(--landing-bg);
 }
+
+.landing-glow {
+  position: absolute;
+  inset: auto auto 18% 50%;
+  width: min(42rem, 90vw);
+  height: min(42rem, 90vw);
+  translate: -50% 40%;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--landing-glow), transparent 68%);
+  filter: blur(8px);
+  pointer-events: none;
+  z-index: 0;
+  animation: landing-breathe 10s ease-in-out infinite;
+}
+
 .landing-inner {
+  position: relative;
+  z-index: 1;
   max-width: 70rem;
   width: 100%;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
 }
+
 .landing-title {
   margin: 0;
+  font-family: var(--landing-display);
   font-size: 1em;
-  line-height: 1;
-  letter-spacing: -0.035em;
+  font-weight: 700;
+  line-height: 0.95;
+  letter-spacing: -0.04em;
   color: var(--landing-primary);
 }
 .landing-sub {
-  margin: 0.4rem 0 0;
-  font-size: 0.27em;
-  font-weight: 500;
+  margin: 0.35rem 0 0;
+  font-family: var(--landing-sans);
+  font-size: 0.28em;
+  font-weight: 550;
   color: var(--landing-muted);
-  letter-spacing: 0.01em;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
 }
 .landing-mark {
   width: fit-content;
   margin-inline: auto;
-  font-size: clamp(3.6rem, 13vw, 7.5rem);
-  margin-block: clamp(1.2rem, 3.5vh, 2.4rem) clamp(0.9rem, 2.5vh, 1.8rem);
+  font-size: clamp(3.8rem, 14vw, 8rem);
+  margin-block: clamp(0.8rem, 3vh, 2rem) clamp(0.6rem, 2vh, 1.4rem);
+  animation: landing-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .landing-mark .landing-sub {
   text-align: left;
-  margin-top: -0.05em;
-  padding-left: 0.18em;
+  margin-top: -0.02em;
+  padding-left: 0.12em;
 }
+
 .landing-motto {
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
   align-self: center;
-  gap: 0.5rem;
-  margin: clamp(1.4rem, 3.5vh, 2.2rem) 0 1.2rem;
+  gap: 0.45rem;
+  margin: clamp(1.2rem, 3vh, 2rem) 0 0.85rem;
   font-size: clamp(1.15rem, 2.6vw, 1.55rem);
-  letter-spacing: 0.005em;
+  font-weight: 450;
+  letter-spacing: 0.01em;
   color: var(--landing-muted);
+  animation: landing-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both;
 }
 .landing-motto span:nth-child(2) {
-  color: var(--landing-fg);
-  opacity: 0.78;
+  color: color-mix(in oklab, var(--landing-fg) 78%, var(--landing-muted));
 }
 .landing-motto span:nth-child(1) {
   transform: translateX(-3.5rem);
@@ -145,17 +188,75 @@ body {
   padding: 0;
   border: none;
   font-size: 0.95em;
+  font-weight: 550;
 }
-.landing-soon {
+
+.landing-lede {
   align-self: center;
-  margin: 1.9rem 0 2.2rem;
-  padding: 0.5rem 1.3rem;
-  border: 1px solid var(--landing-border);
-  border-radius: 999px;
-  font-family: var(--landing-mono);
-  font-size: 0.95rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  max-width: 28rem;
+  margin: 0.35rem 0 0;
+  text-align: center;
+  font-size: clamp(0.95rem, 1.8vw, 1.08rem);
+  font-weight: 450;
+  line-height: 1.45;
   color: var(--landing-muted);
-  background: var(--landing-panel);
+  animation: landing-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.22s both;
+}
+
+.landing-cta {
+  align-self: center;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem 1.4rem;
+  margin: 2rem 0 0.5rem;
+  font-family: var(--landing-mono);
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  animation: landing-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.34s both;
+}
+.landing-cta a {
+  color: var(--landing-muted);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  padding-bottom: 0.1rem;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.landing-cta a:hover,
+.landing-cta a:focus-visible {
+  color: var(--landing-primary);
+  border-bottom-color: color-mix(in oklab, var(--landing-primary) 55%, transparent);
+  outline: none;
+}
+
+@keyframes landing-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.7rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes landing-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    scale: 1;
+  }
+  50% {
+    opacity: 0.9;
+    scale: 1.06;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-mark,
+  .landing-motto,
+  .landing-lede,
+  .landing-cta,
+  .landing-glow {
+    animation: none;
+  }
 }
