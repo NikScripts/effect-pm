@@ -764,7 +764,7 @@ Name collision: `Hyperlink.react` vs `View.react` — different jobs (service-bo
 3. ~~W21 `View.bind` / `only` as Layers~~ **done**
 4. ~~Packaging + WorkPool handles/skins~~ **Eng’d** — `ui/WorkPoolView` + `web|tui/WorkPoolView` subpaths
 5. **Migrate widgets onto existing Dashboard** — **Eng’d** for all default families via `View.react(web|tui DashboardViews.layer)` (WorkPool, priority, daemon, api, fleet, telemetry, shardmap, gate, hyperlink card). `base` registries are fallback-only; parent owns nav/logs/edit. `View.Chrome` carries width/selected/onBack/cols/rows.
-6. ~~Kit `Dashboard`~~ **HOLD** until owner revisits; then Dashboard + larger component library
+6. ~~Kit `Dashboard`~~ **Unheld** (2026-07-29) — one-liner + `DashboardTopBar` / `DashboardDetailChrome`; node status page peel next (compose lock K2)
 7. Retire remaining `forKind` callers / `ui/data` service dupes; peel DetailScreen bodies from chrome over time
 8. `Hyperlink.atom` / `query` / `fn` in parallel
 9. Desktop tabs + real Page kind — later
