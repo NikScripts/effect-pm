@@ -132,7 +132,8 @@ wire key) — sugar over Directory’s schema’d request. See:
 
 ## Deferred (not beta Launcher)
 
-- Zero-downtime move / drain / version skew (Track C)
-- Client-side reconnect story (Track D)
+- Zero-downtime move / drain / version skew (Track C remainder — bake #28–37)
+- Automatic peer/client hot-rebind on dial swap (Track D; apps can already subscribe
+  `Lookup.changes` / `directoryTable` — see [identity coordinator](./identity-coordinator.md#custody-vs-membership-launcher--lookup))
 - Blank worker + remote assign; HTTP/WS Lookup; nameless Launcher discovery
 - `Handle.events` Stream; stdout/stderr tap; thin `hl up` CLI

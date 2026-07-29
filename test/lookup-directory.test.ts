@@ -1,4 +1,15 @@
-import { Clock, Context, Duration, Effect, Layer, Schema } from "effect";
+import {
+  Clock,
+  Context,
+  Duration,
+  Effect,
+  Layer,
+  Option,
+  Ref,
+  Schedule,
+  Schema,
+  Stream,
+} from "effect";
 import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
 import * as Lookup from "../src/Lookup";
@@ -486,5 +497,233 @@ describe("Lookup directory askIncumbent", () => {
       expect(conflict._tag).toBe("alive");
       yield* Effect.sync(() => workerCtx);
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
+  );
+});
+
+describe("Lookup directory membership push", () => {
+  const awaitEvents = <A>(
+    seen: Ref.Ref<ReadonlyArray<A>>,
+    n: number,
+  ) =>
+    Effect.repeat(Ref.get(seen), {
+      until: (a) => a.length >= n,
+      schedule: Schedule.spaced(Duration.millis(5)),
+    });
+
+  it.effect("changes emits upsert then remove; dialChanged false on first advertise", () =>
+    Effect.gen(function* () {
+      const path = yield* tmpSock("push");
+      const node = Node.Tag()("lookup/dir-push", { path }).pipe(Node.asLookup);
+
+      yield* withLookup(
+        Lookup.layerNode(node),
+        Lookup.client(node),
+        Effect.gen(function* () {
+          const seen = yield* Ref.make<ReadonlyArray<Lookup.DirectoryChange>>(
+            [],
+          );
+          yield* Lookup.changes.pipe(
+            Stream.runForEach((event) =>
+              Ref.update(seen, (current) => [...current, event]),
+            ),
+            Effect.forkScoped,
+          );
+          yield* Effect.sleep(Duration.millis(20));
+
+          const dir = yield* Lookup.Directory;
+          yield* dir.advertise(
+            new Lookup.AdvertiseRequest({
+              nodeKey: "worker-a",
+              kind: "IpcSocket",
+              path: "/tmp/worker-a.sock",
+              serves: ["lookup-dir/Jobs"],
+            }),
+          );
+          yield* awaitEvents(seen, 1);
+
+          const first = (yield* Ref.get(seen))[0];
+          expect(first?._tag).toBe("DirectoryUpserted");
+          if (first?._tag === "DirectoryUpserted") {
+            expect(first.entry.nodeKey).toBe("worker-a");
+            expect(first.dialChanged).toBe(false);
+            expect(first.previous).toBeUndefined();
+          }
+
+          yield* dir.unregister(
+            new Lookup.UnregisterRequest({ nodeKey: "worker-a" }),
+          );
+          yield* awaitEvents(seen, 2);
+
+          const second = (yield* Ref.get(seen))[1];
+          expect(second?._tag).toBe("DirectoryRemoved");
+          if (second?._tag === "DirectoryRemoved") {
+            expect(second.nodeKey).toBe("worker-a");
+            expect(second.previous.path).toBe("/tmp/worker-a.sock");
+          }
+        }),
+      );
+    }).pipe(Effect.timeout(Duration.seconds(15))),
+  );
+
+  it.effect("same-dial refresh upserts with dialChanged false", () =>
+    Effect.gen(function* () {
+      const path = yield* tmpSock("push-refresh");
+      const node = Node.Tag()("lookup/dir-push-refresh", { path }).pipe(
+        Node.asLookup,
+      );
+
+      yield* withLookup(
+        Lookup.layerNode(node),
+        Lookup.client(node),
+        Effect.gen(function* () {
+          const seen = yield* Ref.make<ReadonlyArray<Lookup.DirectoryChange>>(
+            [],
+          );
+          yield* Lookup.changes.pipe(
+            Stream.runForEach((event) =>
+              Ref.update(seen, (current) => [...current, event]),
+            ),
+            Effect.forkScoped,
+          );
+          yield* Effect.sleep(Duration.millis(20));
+
+          const dir = yield* Lookup.Directory;
+          yield* dir.advertise(
+            new Lookup.AdvertiseRequest({
+              nodeKey: "worker-a",
+              kind: "IpcSocket",
+              path: "/tmp/worker-a.sock",
+              serves: ["lookup-dir/Jobs"],
+            }),
+          );
+          yield* awaitEvents(seen, 1);
+
+          yield* dir.advertise(
+            new Lookup.AdvertiseRequest({
+              nodeKey: "worker-a",
+              kind: "IpcSocket",
+              path: "/tmp/worker-a.sock",
+              serves: ["lookup-dir/Jobs", "lookup-dir/Emails"],
+            }),
+          );
+          yield* awaitEvents(seen, 2);
+
+          const refresh = (yield* Ref.get(seen))[1];
+          expect(refresh?._tag).toBe("DirectoryUpserted");
+          if (refresh?._tag === "DirectoryUpserted") {
+            expect(refresh.dialChanged).toBe(false);
+            expect(refresh.previous?.serves).toEqual(["lookup-dir/Jobs"]);
+            expect(refresh.entry.serves).toEqual([
+              "lookup-dir/Jobs",
+              "lookup-dir/Emails",
+            ]);
+          }
+        }),
+      );
+    }).pipe(Effect.timeout(Duration.seconds(15))),
+  );
+
+  // Dead-incumbent replace probes a missing sock (Effect.timeout) — live clock.
+  it.live("A→B dial replace publishes dialChanged true", () =>
+    Effect.gen(function* () {
+      const path = yield* tmpSock("push-dial");
+      const node = Node.Tag()("lookup/dir-push-dial", { path }).pipe(
+        Node.asLookup,
+      );
+
+      yield* withLookup(
+        Lookup.layerNode(node),
+        Lookup.client(node),
+        Effect.gen(function* () {
+          const seen = yield* Ref.make<ReadonlyArray<Lookup.DirectoryChange>>(
+            [],
+          );
+          yield* Lookup.changes.pipe(
+            Stream.runForEach((event) =>
+              Ref.update(seen, (current) => [...current, event]),
+            ),
+            Effect.forkScoped,
+          );
+          yield* Effect.sleep(Duration.millis(20));
+
+          const dir = yield* Lookup.Directory;
+          yield* dir.advertise(
+            new Lookup.AdvertiseRequest({
+              nodeKey: "worker-stale",
+              kind: "IpcSocket",
+              path: `/tmp/hyperlink-ts-lookup-dir-push-missing-${process.pid}.sock`,
+              serves: ["lookup-dir/Jobs"],
+            }),
+          );
+          yield* awaitEvents(seen, 1);
+
+          yield* dir.advertise(
+            new Lookup.AdvertiseRequest({
+              nodeKey: "worker-stale",
+              kind: "IpcSocket",
+              path: "/tmp/worker-fresh.sock",
+              serves: ["lookup-dir/Jobs"],
+            }),
+          );
+          yield* awaitEvents(seen, 2);
+
+          const swap = (yield* Ref.get(seen))[1];
+          expect(swap?._tag).toBe("DirectoryUpserted");
+          if (swap?._tag === "DirectoryUpserted") {
+            expect(swap.dialChanged).toBe(true);
+            expect(swap.entry.path).toBe("/tmp/worker-fresh.sock");
+            expect(swap.previous?.path).toContain("push-missing");
+          }
+        }),
+      );
+    }).pipe(Effect.timeout(Duration.seconds(20))),
+  );
+
+  it.effect("directoryTable tracks upserts and removes", () =>
+    Effect.gen(function* () {
+      const path = yield* tmpSock("push-table");
+      const node = Node.Tag()("lookup/dir-push-table", { path }).pipe(
+        Node.asLookup,
+      );
+
+      yield* withLookup(
+        Lookup.layerNode(node),
+        Lookup.client(node),
+        Effect.gen(function* () {
+          const table = yield* Lookup.directoryTable();
+          yield* Effect.sleep(Duration.millis(20));
+
+          const dir = yield* Lookup.Directory;
+          yield* dir.advertise(
+            new Lookup.AdvertiseRequest({
+              nodeKey: "worker-a",
+              kind: "IpcSocket",
+              path: "/tmp/worker-a.sock",
+              serves: ["lookup-dir/Jobs"],
+            }),
+          );
+
+          yield* Effect.repeat(table.getNode("worker-a"), {
+            until: Option.isSome,
+            schedule: Schedule.spaced(Duration.millis(5)),
+          });
+          const hit = yield* table.getNode("worker-a");
+          expect(Option.isSome(hit)).toBe(true);
+          if (Option.isSome(hit)) {
+            expect(hit.value.path).toBe("/tmp/worker-a.sock");
+          }
+
+          yield* dir.unregister(
+            new Lookup.UnregisterRequest({ nodeKey: "worker-a" }),
+          );
+          yield* Effect.repeat(table.getNode("worker-a"), {
+            until: Option.isNone,
+            schedule: Schedule.spaced(Duration.millis(5)),
+          });
+          expect(Option.isNone(yield* table.getNode("worker-a"))).toBe(true);
+          expect((yield* table.get).size).toBe(0);
+        }),
+      );
+    }).pipe(Effect.timeout(Duration.seconds(15))),
   );
 });
