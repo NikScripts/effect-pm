@@ -31,6 +31,11 @@
  */
 
 import { Context } from "effect";
+import {
+  asRoutes as asRoutesImpl,
+  type AsRoutesEffect,
+  type AsRoutesOptions,
+} from "./internal/groupAsRoutes";
 
 /**
  * Stamped family kind for Group tags — View skins bind with `View.bind(Group.kind, …)`.
@@ -80,3 +85,22 @@ export const isGroup = (
   x: unknown,
 ): x is { readonly key: string; readonly members: Record<string, unknown> } =>
   (typeof x === "object" || typeof x === "function") && x !== null && "members" in x;
+
+/**
+ * Turn a Group tree into an Effect of {@link ./ui/Route} destinations.
+ * Compose with `Route.group(…).fromEffect(…)` — Route/Router never take a Group tag:
+ *
+ * ```ts
+ * const site = Route.make("site").add(
+ *   Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub)),
+ * )
+ * Router.history(site)
+ * ```
+ *
+ * @category constructors
+ * @public
+ */
+export const asRoutes: (
+  root: { readonly key: string; readonly members: Record<string, unknown> },
+  options?: AsRoutesOptions,
+) => AsRoutesEffect = asRoutesImpl;

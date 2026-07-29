@@ -1077,7 +1077,11 @@ const resolveComposeRouter = (
  * import * as DaemonView from "hyperlink-ts/ui/DaemonView"
  * const ui = View.compose({
  *   views: Layer.mergeAll(View.bind(Group.kind, GroupCard), WebDashboardViews.layer),
- *   router: Router.history(ServicesHub), // or Router.make(site, "memory")
+ *   router: Router.history(
+ *     Route.make("dash").add(
+ *       Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub)),
+ *     ),
+ *   ),
  * })
  * <RuntimeProvider runtime={runtime}>
  *   <ui.Provider>

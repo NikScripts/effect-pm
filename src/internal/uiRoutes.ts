@@ -3,6 +3,7 @@
  * with generics preserved for typed {@link UrlBuilder} (HttpApiClient pattern).
  */
 import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { type Pipeable, pipeArguments } from "effect/Pipeable";
 import * as Predicate from "effect/Predicate";
@@ -10,8 +11,15 @@ import type { Simplify } from "effect/Types";
 import { HttpApi } from "effect/unstable/httpapi";
 import type { HttpApiGroup } from "effect/unstable/httpapi";
 import type * as Schema from "effect/Schema";
+import {
+  AsRoutesTypeId,
+  DashboardRoot,
+  isAsRoutesBrand,
+} from "./asRoutesBrand";
 import * as uiRoute from "./uiRoute";
 import type { Path } from "./uiRoute";
+
+export { DashboardRoot } from "./asRoutesBrand";
 
 export const TypeId = "~hyperlink-ts/ui/Route/Api" as const;
 export const GroupTypeId = "~hyperlink-ts/ui/Route/Group" as const;
@@ -40,6 +48,13 @@ export interface GroupTop extends Pipeable {
   readonly groups: Readonly<Record<string, GroupTop>>;
   readonly annotations: Context.Context<never>;
   add(...items: ReadonlyArray<uiRoute.Constraint | GroupTop>): GroupTop;
+  /**
+   * Merge destinations from an Effect (`HttpRouter.addAll` analogue).
+   * Prefer {@link ../Group.asRoutes} for Group trees.
+   */
+  fromEffect(
+    effect: Effect.Effect<Iterable<RouteLike>, never, never>,
+  ): GroupTop;
   prefix(prefix: Path): GroupTop;
   annotate<I, S>(tag: Context.Key<I, S>, value: S): GroupTop;
 }
@@ -65,6 +80,9 @@ export interface Group<
     Groups | Extract<A[number], GroupTop>,
     TopLevel
   >;
+  fromEffect(
+    effect: Effect.Effect<Iterable<RouteLike>, never, never>,
+  ): GroupTop;
   prefix(prefix: Path): Group<Id, Routes, Groups, TopLevel>;
   annotate<I, S>(
     tag: Context.Key<I, S>,
@@ -235,6 +253,17 @@ const groupProto = {
       annotations: Context.add(this.annotations, tag, value),
     });
   },
+  fromEffect(
+    this: GroupTop,
+    effect: Effect.Effect<Iterable<RouteLike>, never, never>,
+  ): GroupTop {
+    const items = Array.from(Effect.runSync(effect));
+    let next = this.add(...items);
+    if (isAsRoutesBrand(effect)) {
+      next = next.annotate(DashboardRoot, effect[AsRoutesTypeId].root);
+    }
+    return next;
+  },
 };
 
 const makeGroupProto = (options: {
@@ -288,7 +317,18 @@ const appProto = {
       } else if (item.topLevel) {
         const id = "__top";
         const existing = groups[id] ?? group(id, { topLevel: true });
-        groups = { ...groups, [id]: mergeTopLevel(existing, item) };
+        const merged = mergeTopLevel(existing, item);
+        // Keep annotations (e.g. DashboardRoot from fromEffect(Group.asRoutes)).
+        groups = {
+          ...groups,
+          [id]: makeGroupProto({
+            identifier: merged.identifier,
+            topLevel: merged.topLevel,
+            routes: merged.routes,
+            groups: merged.groups,
+            annotations: Context.merge(merged.annotations, item.annotations),
+          }),
+        };
       } else {
         groups = { ...groups, [item.identifier]: item };
       }

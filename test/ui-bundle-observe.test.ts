@@ -12,6 +12,7 @@ import * as Node from "../src/Node";
 import * as Observe from "../src/Observe";
 import * as WorkPool from "../src/WorkPool";
 import * as DaemonView from "../src/ui/DaemonView";
+import * as Route from "../src/ui/Route";
 import * as Router from "../src/ui/Router";
 import { RuntimeProvider } from "../src/ui/runtime";
 import * as View from "../src/ui/View";
@@ -31,6 +32,10 @@ class Nightly extends Daemon.Tag<Nightly>()("app/observe-use/Nightly", {
 }) {}
 class Hub extends Group.Tag<Hub>("app/observe-use/Hub")({ Jobs, Nightly }) {}
 
+const hubSite = Route.make("hub").add(
+  Route.group("tree", { topLevel: true }).fromEffect(Group.asRoutes(Hub)),
+);
+
 class PoolCard extends View.Card.Tag<PoolCard>()("hyperlink/view/observe-use-pool-card") {}
 
 const views = View.bind(WorkPool.kind, PoolCard).pipe(
@@ -42,7 +47,7 @@ describe("Observe.use", () => {
   it("returns queue / daemon packs under RuntimeProvider", () => {
     const ui = View.compose({
       views,
-      router: Router.memory(Hub),
+      router: Router.memory(hubSite),
     });
     const runtime = Atom.runtime(Layer.empty);
     let queueKeys: ReadonlyArray<string> | undefined;

@@ -24,6 +24,8 @@ import { RuntimeProvider } from "./runtime";
 import { ViewTransitionProvider } from "./useViewTransition";
 import { base } from "./widgets";
 import { type WidgetRegistry } from "../ui/widgetRegistry";
+import * as Group from "../Group";
+import * as Route from "../ui/Route";
 import * as Router from "../ui/Router";
 import * as View from "../ui/View";
 import { WidgetsProvider } from "../ui/widgetsContext";
@@ -31,6 +33,11 @@ import type { Widget } from "./widget-registry";
 import { DebugConsole } from "./debug-console";
 import * as WebDashboardViews from "./DashboardViews";
 import { DashboardShell } from "./DashboardShell";
+
+const routesFor = (group: GroupNode) =>
+  Route.make("dashboard").add(
+    Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(group)),
+  );
 
 /**
  * The drill-down view + its runtime — compose with `RegistryProvider` + `ViewTransitionProvider`
@@ -55,7 +62,7 @@ export const DashboardView = <R, ER>(props: {
           skins: WebDashboardViews.skins,
           views: props.views,
         }),
-        router: Router.history(props.group),
+        router: Router.history(routesFor(props.group)),
       }),
     [props.group, props.views],
   );

@@ -31,12 +31,15 @@ DashboardLayer.forCompose({ skins, views? })
 Escape hatch (same stack the one-liner uses):
 
 ```tsx
+const site = Route.make("dashboard").add(
+  Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub)),
+)
 const ui = View.compose({
   views: DashboardLayer.forCompose({
     skins: WebDashboardViews.skins,
     views: appViews,
   }),
-  router: Router.history(ServicesHub),
+  router: Router.history(site),
 })
 <ui.Provider>
   <RuntimeProvider runtime={runtime}>

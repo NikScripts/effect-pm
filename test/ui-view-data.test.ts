@@ -11,6 +11,7 @@ import * as Node from "../src/Node";
 import * as Observe from "../src/Observe";
 import * as WorkPool from "../src/WorkPool";
 import * as Daemon from "../src/Daemon";
+import * as Route from "../src/ui/Route";
 import * as Router from "../src/ui/Router";
 import * as View from "../src/ui/View";
 import * as WorkPoolView from "../src/ui/WorkPoolView";
@@ -31,6 +32,10 @@ class Nightly extends Daemon.Tag<Nightly>()("app/runtime/Nightly", {
 }) {}
 class Hub extends Group.Tag<Hub>("app/runtime/Hub")({ Jobs, Nightly }) {}
 
+const hubSite = Route.make("hub").add(
+  Route.group("tree", { topLevel: true }).fromEffect(Group.asRoutes(Hub)),
+);
+
 class PoolCard extends View.Card.Tag<PoolCard>()("hyperlink/view/runtime-pool-card") {}
 
 const chrome = View.provide(PoolCard, () => null);
@@ -43,13 +48,13 @@ describe("RuntimeProvider + Observe.use", () => {
   it("compose has no data door", () => {
     const ui = View.compose({
       views,
-      router: Router.memory(Hub),
+      router: Router.memory(hubSite),
     });
     expect("data" in ui).toBe(false);
   });
 
   it("compose accepts a live Router.Service", () => {
-    const router = Router.makeGroup(Hub, "memory");
+    const router = Router.make(hubSite, "memory");
     router.open(Jobs);
     const ui = View.compose({ views, router });
     expect(ui.router).toBe(router);

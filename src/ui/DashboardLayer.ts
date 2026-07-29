@@ -16,7 +16,11 @@
  *     skins: WebDashboardViews.skins,
  *     views: appViews,
  *   }),
- *   router: Router.history(ServicesHub),
+ *   router: Router.history(
+ *     Route.make("dash").add(
+ *       Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub)),
+ *     ),
+ *   ),
  * })
  * ```
  */

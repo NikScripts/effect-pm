@@ -72,6 +72,15 @@ export class Target extends Context.Service<
   }
 >()("hyperlink-ts/ui/Route/Target") {}
 
+/**
+ * Optional dashboard Group root — stamped by
+ * `Route.group(…).fromEffect(Group.asRoutes(…))`. Router reads this; it never
+ * accepts a Group tag as a constructor argument.
+ *
+ * @public
+ */
+export { DashboardRoot } from "../internal/asRoutesBrand";
+
 /** Absolute pathname template (`/health`, `/users/:id`). @public */
 export type Path = endpoint.Path;
 
@@ -168,7 +177,8 @@ export type Group<
 
 /**
  * Named group (`HttpApiGroup.make`). Pass `topLevel: true` so child methods
- * flatten onto the parent URL builder.
+ * flatten onto the parent URL builder. Dynamic children:
+ * `Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub))`.
  *
  * @public
  */

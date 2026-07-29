@@ -66,8 +66,10 @@ interface Router {
 }
 
 Router.toHref(["Nwsl", "HttpApi"])  // "/Nwsl/HttpApi"
-Router.history(ServicesHub)         // web
-Router.memory(ServicesHub)          // tests / TUI / embed
+// Route catalog only — Group via asRoutes + fromEffect
+Router.history(Route.make("dash").add(
+  Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub)),
+))
 ```
 
 Cards never touch History.
@@ -122,8 +124,8 @@ Router may still say `openLogs(tag)` / `openSchedule(tag)` — that means “sho
 
 | Case | API |
 |---|---|
-| Web shell | `Router.history(group)` |
-| Tests / embed / TUI | `Router.memory(group)` |
+| Web shell | `Router.history(site)` with `fromEffect(Group.asRoutes(group))` |
+| Tests / embed / TUI | `Router.memory(site)` same pattern |
 
 ### J. Detail peel
 
@@ -162,7 +164,7 @@ HttpApi-shaped `Route` catalog + `Router` service (`memory` / `history` over `Ro
 4. `View.compose` runs hyperlink-web + TUI dashboard  
 5. WorkerPool example → `View.only` — **done** (`Dashboard views=` / hyperlink-web)  
 6. ViewKind stays `card | detail | page`; schedule/logs are **content** that fills sizes  
-7. Tests: `Router.memory(group)` + Group card + short-name path + missing skin `R=never`
+7. Tests: `Router.memory(site)` (`Group.asRoutes`) + Group card + short-name path + missing skin `R=never`
 
 **Changeset:** minor — `Navigator` removed; migration → `Router.useRouter()` / `View.compose({ router })`.
 
@@ -194,7 +196,11 @@ const ui = View.compose({
     skins: WebDashboardViews.skins,
     views: View.only(WorkerPool, WorkerPoolCard),
   }),
-  router: Router.history(ServicesHub),
+  router: Router.history(
+    Route.make("dash").add(
+      Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub)),
+    ),
+  ),
 })
 <ui.Provider>
   <RuntimeProvider runtime={runtime}>

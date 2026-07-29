@@ -5,25 +5,24 @@
  * swappable transport layers ({@link memory} / {@link history}).
  *
  * The catalog is data (`Route.make…`); this service owns location, match, and go.
- * Pass a Group to {@link memory} / {@link history} and the layer builds that
- * catalog with the same `Route.make` / `group` / `get` constructors (ordinary
- * loops), stamps {@link Route.Target} on each destination, and attaches Group
- * helpers (`open` / `up` / `path` / …).
+ * Router never takes a Group tag — build destinations with Route, including
+ * `Route.group(…).fromEffect(Group.asRoutes(…))` when the tree comes from a Group.
  *
- * Prefer {@link make} when you want a **typed** `Service` (`to` / `urls` know the
+ * Prefer {@link make} when you want a **typed** surface (`to` / `urls` know the
  * catalog). Layers erase to the Context service for DI.
  *
  * ```ts
+ * import * as Group from "hyperlink-ts/Group"
  * import * as Route from "hyperlink-ts/ui/Route"
  * import * as Router from "hyperlink-ts/ui/Router"
  *
  * const site = Route.make("site").add(
  *   Route.get("home", "/home"),
- *   Route.group("app").add(Route.get("dashboard", "/app")),
+ *   Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub)),
  * )
  *
  * const router = Router.make(site, "memory")
- * router.to((urls) => urls.app.dashboard())
+ * router.to((urls) => urls.home())
  *
  * const layer = Router.history(site) // or Router.memory(site)
  * ```
@@ -32,10 +31,6 @@
  */
 import * as React from "react";
 import { Context, Layer } from "effect";
-import {
-  routesForGroup,
-  type RouteGroup,
-} from "../internal/uiGroupRoutes";
 import * as internal from "../internal/uiRouter";
 import type { ApiConstraint } from "../internal/uiRoutes";
 import * as Route from "./Route";
@@ -44,7 +39,7 @@ import * as Route from "./Route";
 // Types
 // =============================================================================
 
-/** Group or leaf a Group-backed router can open. @public */
+/** Group or leaf a dashboard router can open (when catalog carries DashboardRoot). @public */
 export type MemberTag = internal.MemberTag;
 
 /**
@@ -90,49 +85,25 @@ export const isGroupMember = internal.isGroupMember;
 export const make = <A extends ApiConstraint>(
   api: A,
   mode: "memory" | "history",
-): Service<A> => internal.makeService(api, mode, undefined);
-
-/**
- * Build a Group-backed dashboard router (catalog via `Route.make` / `group` / `get` loops).
- *
- * @public
- */
-export const makeGroup = (
-  root: RouteGroup,
-  mode: "memory" | "history",
-): Service => internal.makeService(routesForGroup(root), mode, root);
-
-const layerFor = (
-  input: ApiConstraint | RouteGroup,
-  mode: "memory" | "history",
-): Layer.Layer<Router> => {
-  if (Route.isApi(input)) {
-    return Layer.sync(Router, () =>
-      internal.makeService(input, mode, undefined),
-    );
-  }
-  return Layer.sync(Router, () => makeGroup(input, mode));
-};
+): Service<A> => internal.makeService(api, mode);
 
 /**
  * In-memory router — tests, embed, TUI. Path is not bound to `window.history`.
- * Pass a {@link Route.Api} or a Group (catalog built with `Route.make` / `group` / `get`).
+ * Pass a {@link Route.Api} only (use `Group.asRoutes` + `fromEffect` for Groups).
  *
  * @public
  */
-export const memory = (
-  input: ApiConstraint | RouteGroup,
-): Layer.Layer<Router> => layerFor(input, "memory");
+export const memory = (api: ApiConstraint): Layer.Layer<Router> =>
+  Layer.sync(Router, () => internal.makeService(api, "memory"));
 
 /**
  * Browser History router — `pushState` / `popstate` / `replaceState` against the catalog.
- * Pass a {@link Route.Api} or a Group (catalog built with `Route.make` / `group` / `get`).
+ * Pass a {@link Route.Api} only (use `Group.asRoutes` + `fromEffect` for Groups).
  *
  * @public
  */
-export const history = (
-  input: ApiConstraint | RouteGroup,
-): Layer.Layer<Router> => layerFor(input, "history");
+export const history = (api: ApiConstraint): Layer.Layer<Router> =>
+  Layer.sync(Router, () => internal.makeService(api, "history"));
 
 // =============================================================================
 // React

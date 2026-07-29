@@ -1,5 +1,5 @@
 /**
- * Router.memory / .history — bare Route.Api + Group-backed dashboard helpers.
+ * Router.memory / .history — Route.Api only; Group via asRoutes + fromEffect.
  */
 import { describe, expect, it } from "@effect/vitest";
 import { Context, Effect, Layer } from "effect";
@@ -17,6 +17,10 @@ const site = Route.make("site").add(
 class HttpApi extends Daemon.Tag<HttpApi>()("test/nav/HttpApi") {}
 class Nwsl extends Group.Tag<Nwsl>("test/nav/Nwsl")({ HttpApi }) {}
 class Hub extends Group.Tag<Hub>("test/nav/Hub")({ Nwsl }) {}
+
+const hubSite = Route.make("hub").add(
+  Route.group("tree", { topLevel: true }).fromEffect(Group.asRoutes(Hub)),
+);
 
 const run = <A>(
   layer: Layer.Layer<Router.Router>,
@@ -38,7 +42,6 @@ describe("Router.make (typed)", () => {
     expect(router.pathname).toBe("/app");
     expect(router.urls.home()).toBe("/home");
   });
-
 });
 
 describe("Router.memory (Route.Api)", () => {
@@ -83,11 +86,11 @@ describe("Router.memory (Route.Api)", () => {
     });
   });
 
-  it("Group helpers fail loud without a Group root", () => {
+  it("Group helpers fail loud without DashboardRoot", () => {
     run(Router.memory(site), (router) => {
-      expect(() => router.openKey("x")).toThrow(/Group-backed/);
-      expect(() => router.up()).toThrow(/Group-backed/);
-      expect(() => router.openHealth()).toThrow(/Group-backed/);
+      expect(() => router.openKey("x")).toThrow(/DashboardRoot/);
+      expect(() => router.up()).toThrow(/DashboardRoot/);
+      expect(() => router.openHealth()).toThrow(/DashboardRoot/);
     });
   });
 
@@ -107,9 +110,10 @@ describe("Router.memory (Route.Api)", () => {
   });
 });
 
-describe("Router.memory (Group)", () => {
+describe("Group.asRoutes + fromEffect", () => {
   it("open by member yields short-name path + Target match", () => {
-    run(Router.memory(Hub), (nav) => {
+    run(Router.memory(hubSite), (nav) => {
+      expect(nav.root).toBe(Hub);
       nav.open(HttpApi);
       expect(nav.path).toEqual(["Nwsl", "HttpApi"]);
       expect(nav.selected).toBe(HttpApi);
@@ -130,7 +134,7 @@ describe("Router.memory (Group)", () => {
   });
 
   it("openKey / up walk the tree without corrupting back()", () => {
-    run(Router.memory(Hub), (nav) => {
+    run(Router.memory(hubSite), (nav) => {
       nav.openKey("Nwsl");
       expect(nav.path).toEqual(["Nwsl"]);
       expect(nav.selected).toBeNull();
@@ -142,10 +146,7 @@ describe("Router.memory (Group)", () => {
 
       nav.up(); // replace — stack stays coherent
       expect(nav.path).toEqual(["Nwsl"]);
-      nav.back(); // previous push was Nwsl entry before HttpApi… after replace top is Nwsl
-      // stack: [/] --openKey--> [/, /Nwsl] --openKey--> [/, /Nwsl, /Nwsl/HttpApi]
-      // --up replace--> [/, /Nwsl, /Nwsl] → collapse → [/, /Nwsl]
-      // --back--> [/]
+      nav.back();
       expect(nav.path).toEqual([]);
       expect(nav.group).toBe(Hub);
       expect(nav.canUp).toBe(false);
@@ -153,7 +154,7 @@ describe("Router.memory (Group)", () => {
   });
 
   it("open then up lands on parent group (deep jump)", () => {
-    run(Router.memory(Hub), (nav) => {
+    run(Router.memory(hubSite), (nav) => {
       nav.open(HttpApi); // one push to /Nwsl/HttpApi
       nav.up(); // replace → /Nwsl
       expect(nav.path).toEqual(["Nwsl"]);
@@ -166,7 +167,7 @@ describe("Router.memory (Group)", () => {
   });
 
   it("openHealth / openNode use catalog urls", () => {
-    run(Router.memory(Hub), (nav) => {
+    run(Router.memory(hubSite), (nav) => {
       nav.openKey("Nwsl");
       nav.openHealth();
       expect(nav.path).toEqual(["health"]);
@@ -190,7 +191,7 @@ describe("Router.memory (Group)", () => {
   });
 
   it("openLogs stamps leafView Target", () => {
-    run(Router.memory(Hub), (nav) => {
+    run(Router.memory(hubSite), (nav) => {
       nav.openLogs(HttpApi);
       expect(nav.path).toEqual(["Nwsl", "HttpApi", "logs"]);
       expect(nav.view).toBe("logs");
@@ -201,11 +202,9 @@ describe("Router.memory (Group)", () => {
       expect(target?.view).toBe("logs");
     });
   });
-});
 
-describe("Route.targetOf", () => {
-  it("reads Target from match annotations", () => {
-    const router = Router.makeGroup(Hub, "memory");
+  it("Route.targetOf reads Target from match annotations", () => {
+    const router = Router.make(hubSite, "memory");
     router.open(HttpApi);
     expect(Route.targetOf(undefined)).toBeUndefined();
     expect(Route.targetOf(router.match)?.member).toBe(HttpApi);

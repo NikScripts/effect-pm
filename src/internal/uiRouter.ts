@@ -11,7 +11,8 @@ import {
   resolveGroupRoute,
   type RouteGroup,
 } from "./uiGroupRoutes";
-import type { ApiConstraint } from "./uiRoutes";
+import { DashboardRoot } from "./asRoutesBrand";
+import type { ApiConstraint, GroupTop } from "./uiRoutes";
 
 // =============================================================================
 // Types
@@ -47,7 +48,8 @@ export interface Service<A extends ApiConstraint = ApiConstraint> {
   readonly syncFromLocation: () => void;
 
   /**
-   * Group root when layered from a Group; `undefined` for bare catalogs.
+   * Dashboard Group root when the catalog was built with
+   * `fromEffect(Group.asRoutes(…))` (`Route.DashboardRoot`); otherwise undefined.
    * Group helpers throw without a root.
    */
   readonly root: RouteGroup | undefined;
@@ -111,10 +113,31 @@ const requireRoot = (
 ): RouteGroup => {
   if (root === undefined) {
     throw new Error(
-      `Router.${method} requires a Group-backed router (Router.memory(group) / Router.history(group))`,
+      `Router.${method} requires Route.DashboardRoot (build with Route.group(…).fromEffect(Group.asRoutes(…)))`,
     );
   }
   return root;
+};
+
+const findDashboardRoot = (
+  api: ApiConstraint,
+): RouteGroup | undefined => {
+  const fromApi = Context.getOrUndefined(api.annotations, DashboardRoot);
+  if (fromApi !== undefined) return fromApi;
+  const walk = (group: GroupTop): RouteGroup | undefined => {
+    const here = Context.getOrUndefined(group.annotations, DashboardRoot);
+    if (here !== undefined) return here;
+    for (const child of Object.values(group.groups)) {
+      const found = walk(child);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  };
+  for (const group of Object.values(api.groups)) {
+    const found = walk(group);
+    if (found !== undefined) return found;
+  }
+  return undefined;
 };
 
 const urlMethod = (
@@ -224,8 +247,8 @@ const resolveState = (
 export const makeService = <A extends ApiConstraint>(
   api: A,
   mode: "memory" | "history",
-  root: RouteGroup | undefined,
 ): Service<A> => {
+  const root = findDashboardRoot(api);
   const urls = Route.urlBuilder(api);
   let pathname =
     mode === "history" ? locationPathname() : (normalize("/") as string);
