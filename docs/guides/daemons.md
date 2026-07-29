@@ -103,8 +103,9 @@ class Ingest extends Daemon.Tag<Ingest>()("nwsl/Ingest").pipe(Daemon.schedule([]
 ## Handle surface (`yield* Tag`)
 
 - **Lifecycle:** `start`, `stop`, `run` (typed success/error on RPC when stamped).
-- **Observe:** `status` (`status.get` / `status.changes`). Logs via `Hyperlink.logs(Tag)` — not on
-  the process handle.
+- **Observe:** `status` (`status.get` / `status.changes`), `events`. Logs via `Hyperlink.logs(Tag)` —
+  not on the daemon handle.
+- **Control:** `wake`, `resetCadence` (accelerating polls).
 - **Schedule** (inline schedule only): `schedule.entries`, `schedule.set` / `add` / `clear`.
 - **Result** (when `success` on tag): `result.get` / `result.changes` — `Option` until first success.
 
@@ -126,7 +127,8 @@ class AppStore extends Store.Service<AppStore>("@app/Store")(
 ) {}
 
 const program = Effect.gen(function* () {
-  const store = yield* AppStore.at(Prices)
+  // Single registration → yield the store service directly (no `.at`).
+  const store = yield* AppStore
   yield* store.record({
     _tag: "Completed",
     key: Prices.key,
@@ -185,8 +187,8 @@ import { Duration } from "effect"
 
 Polling.spaced(Duration.seconds(30))
 Polling.accelerating({
-  fast: Duration.seconds(2),
-  slow: Duration.minutes(5),
+  fastest: Duration.seconds(2),
+  slowest: Duration.minutes(5),
 })
 ```
 

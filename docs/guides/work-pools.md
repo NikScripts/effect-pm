@@ -116,9 +116,8 @@ the queue is served over RPC — validates it on the wire, so a bad item is reje
 before it ever reaches a worker. The decoded type flows everywhere: `add(item)`,
 the worker's argument, and every event that carries the item.
 
-Use whatever `Schema` shape fits — structs, unions, branded strings, nested data.
-The only rule is that the payload is a single schema (a `Schema.Struct` is the
-common case), so the wire contract is unambiguous.
+Tag payloads must be a `Schema.Struct` (nest unions / branded fields inside members).
+That keeps the wire contract unambiguous for RPC and Soft journals.
 
 ## The worker
 
@@ -194,7 +193,7 @@ part of its public shape, not an implementation detail.
 
 ## Enqueueing
 
-Four verbs put work in. Three are priority lanes:
+Four verbs put work in. Three map to priority levels (`high` / `normal` / `low`):
 
 {.twoslash}
 ``` ts
@@ -335,8 +334,10 @@ class Emails extends WorkPool.Service<Emails, typeof EmailJob.Type, never>()(
 ) {}
 ```
 
-`yield* Emails` yields the exact same handle type. Reach for `Service` for a
-self-contained local queue; reach for `Tag` + `layer` when the queue might move.
+`yield* Emails` on a `Service` is the engine handle; on a `Tag` it is the named
+`WorkPool<…>` HyperService handle (same verbs, different packaging). Reach for
+`Service` for a self-contained local queue; reach for `Tag` + `layer` when the
+queue might move.
 
 ---
 
@@ -514,7 +515,8 @@ class JobsStore extends Store.Service<JobsStore>("@app/JobsStore")(
 ) {}
 
 const program = Effect.gen(function* () {
-  const store = yield* JobsStore.at(Jobs)
+  // Single registration → yield the store service directly (no `.at`).
+  const store = yield* JobsStore
   const rate = yield* store.failureRate()
   const worst = yield* store.slowest(5)
   return { rate, worst }
@@ -523,7 +525,7 @@ const program = Effect.gen(function* () {
 
 `WorkPool.store(tag, additions)` adds app-specific shapes on top of base + analytics.
 
-Given `const store = yield* JobsStore.at(Jobs)`:
+Given `const store = yield* JobsStore`:
 
 | Read | Result |
 |------|--------|
@@ -629,8 +631,8 @@ patches win. For **live** retunes after the engine is up, use [DynamicConfig](/d
 
 ## Custom priority lanes
 
-`high` / `normal` / `defer` covers most needs, but some domains have their own
-ordering — tiers, SLAs, numbered levels. Reach for
+`high` / `normal` / `low` (via `prioritize` / `add` / `defer`) covers most needs, but
+some domains have their own ordering — tiers, SLAs, numbered levels. Reach for
 `WorkPool.priority` — the same HyperService with **arbitrary lanes**: you define the
 levels, and `add` targets one by name. The handle reads the same; only the priority
 axis is yours to shape.
@@ -652,8 +654,8 @@ extra wiring.
 
 ## The raw engine
 
-Under the HyperService wrapper is a plain queue engine. `WorkPool.make(config)`
-returns a handle directly — the workers, retries, and events, without the Tag,
-Layer, or RPC machinery. `layer` and `Service` are built on it; reach for `make`
+Under the HyperService wrapper is a plain queue engine. `yield* WorkPool.make(config)`
+(scoped Effect) gives the engine handle — workers, retries, and events — without the
+Tag, Layer, or RPC machinery. `layer` and `Service` are built on it; reach for `make`
 only when you want to embed a queue inside something else and manage its scope
 yourself. For everything else, the Tag *is* the WorkPool.

@@ -172,11 +172,13 @@ window, … }`). The store is a Context service: Soft in-memory limiter when abs
 fleet limit provide Effect Redis:
 
 ```ts
-import { RateLimiter } from "effect/unstable/persistence/RateLimiter"
+import {
+  layerStoreRedis as rateLimiterStoreRedis,
+} from "effect/unstable/persistence/RateLimiter"
 import { NodeRedis } from "@effect/platform-node"
 
 const FleetLive = Layer.mergeAll(EastGate.layer, WestGate.layer).pipe(
-  Layer.provide(RateLimiter.layerStoreRedis({ prefix: "fleet:" })),
+  Layer.provide(rateLimiterStoreRedis({ prefix: "fleet:" })),
   Layer.provide(NodeRedis.layer({ host: "127.0.0.1", port: 6379 })),
 )
 ```

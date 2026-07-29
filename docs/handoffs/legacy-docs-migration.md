@@ -26,7 +26,7 @@ See [`docs/standards/documentation.md`](../standards/documentation.md): ported p
 | **L3** | Port `process.md` → `docs/guides/daemons.md` draft | **done** |
 | **L4** | Spec tables → API site cites | **done** |
 | **L4b** | Gap recovery after audit | **done** — see below |
-| **L5** | Tip-check Daemon / install / stores / work-pools drafts | open |
+| **L5** | Tip-check Daemon / install / stores / work-pools drafts | **partial** — install cleared draft; tip API fixes on daemons/stores/work-pools (still `status=draft`) |
 | **L6** | Owner IA lock (sidebar + folder tree) before more moves | **open** |
 | **L7** | Optional: mine toolkit-by-example from git history | open |
 
