@@ -135,11 +135,14 @@ body {
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 1px 0 color-mix(in oklab, white 35%, transparent));
+  /* Contrasting ink edge — not a same-hue glow */
+  filter: drop-shadow(0 1px 0 color-mix(in oklab, #0a2438 22%, transparent));
 }
 @media (prefers-color-scheme: dark) {
   .landing-title {
-    filter: drop-shadow(0 0 28px color-mix(in oklab, var(--landing-primary) 55%, transparent));
+    filter: drop-shadow(
+      0 1px 0 color-mix(in oklab, var(--landing-yield) 35%, transparent)
+    );
   }
 }
 .landing-sub {
