@@ -39,14 +39,6 @@ describe("Router.make (typed)", () => {
     expect(router.urls.home()).toBe("/home");
   });
 
-  it("crumbs follow path prefixes", () => {
-    const router = Router.make(site, "memory");
-    expect(router.crumbs).toEqual([]);
-    router.go("/app");
-    expect(router.crumbs).toEqual([
-      { key: "app", label: "app", href: "/app" },
-    ]);
-  });
 });
 
 describe("Router.memory (Route.Api)", () => {
@@ -127,10 +119,6 @@ describe("Router.memory (Group)", () => {
       const target = Route.targetOf(nav.match);
       expect(target?.kind).toBe("leaf");
       expect(target?.member).toBe(HttpApi);
-      expect(nav.crumbs).toEqual([
-        { key: "Nwsl", label: "Nwsl", href: "/Nwsl" },
-        { key: "HttpApi", label: "HttpApi", href: "/Nwsl/HttpApi" },
-      ]);
     });
   });
 

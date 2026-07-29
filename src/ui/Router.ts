@@ -45,9 +45,6 @@ import type { RouteGroup } from "./GroupRoute";
 /** Group or leaf a Group-backed router can open. @public */
 export type MemberTag = internal.MemberTag;
 
-/** Breadcrumb step from {@link Service.crumbs}. @public */
-export type Crumb = internal.Crumb;
-
 /**
  * Live navigation API — provide with {@link memory} / {@link history}, or build
  * with {@link make} for a catalog-typed surface.

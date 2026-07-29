@@ -38,7 +38,6 @@ Route.urlBuilder(site).node({ params: { nodeId: "1" } }) // params required
 // Typed value (prefer when you hold the catalog):
 const router = Router.make(site, "memory")
 router.to((urls) => urls.app.dashboard())
-router.crumbs // [{ key, label, href }, …]
 
 // Layer for DI / View.compose (catalog type erased on Context):
 Router.history(site)

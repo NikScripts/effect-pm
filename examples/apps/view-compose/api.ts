@@ -33,7 +33,7 @@ export type StolenRouteCatalog = "Route.make | group | get | urlBuilder | Target
  *
  * - `Router.make(site, "memory"|"history")` — typed `to` / `urls`
  * - `Router.memory` / `Router.history` — Layer (Api **or** Group)
- * - Group helpers: `open` / `up` / `path` / `crumbs` / `openLogs` / …
+ * - Group helpers: `open` / `up` / `path` / `openLogs` / …
  * - React: `Provider` / `useRouter` / `Link` / `useMatch` / `useTarget`
  *
  * `up` / `toRoot` **replace**; `go` / `open*` **push**. `back` = stack.
@@ -42,11 +42,6 @@ export type StolenRouteCatalog = "Route.make | group | get | urlBuilder | Target
 export interface StolenRouter {
   readonly pathname: string;
   readonly path: ReadonlyArray<string>;
-  readonly crumbs: ReadonlyArray<{
-    readonly key: string;
-    readonly label: string;
-    readonly href: string;
-  }>;
   readonly open: (member: MemberTag) => void;
   readonly up: () => void;
   readonly back: () => void;
