@@ -66,24 +66,29 @@
   }
 }
 
-/* Canvas paint — this is what fills notch / status-bar / home-indicator. */
+/* Canvas paint — fills notch / status-bar / home-indicator.
+   Height is locked (not min-height) so content/margins cannot grow past 100dvh
+   and reintroduce scroll. Gradient stops use canvas color, not transparent —
+   transparent fades compositing to black in the chrome/overscroll bands. */
 html {
   -webkit-text-size-adjust: 100%;
-  min-height: 100dvh;
+  height: 100dvh;
+  overflow: hidden;
   background-color: var(--landing-canvas);
   background-image:
-    radial-gradient(ellipse 160% 70% at 50% -10%, var(--landing-glow), transparent 72%),
-    radial-gradient(ellipse 100% 55% at 100% 110%, var(--landing-bg-deep), transparent 68%),
-    radial-gradient(ellipse 90% 50% at 0% 110%, var(--landing-bg-deep), transparent 65%);
+    radial-gradient(ellipse 160% 70% at 50% -10%, var(--landing-glow), var(--landing-canvas) 72%),
+    radial-gradient(ellipse 100% 55% at 100% 110%, var(--landing-bg-deep), var(--landing-canvas) 68%),
+    radial-gradient(ellipse 90% 50% at 0% 110%, var(--landing-bg-deep), var(--landing-canvas) 65%);
 }
 body {
   margin: 0;
   padding: 0;
-  min-height: 100dvh;
+  height: 100dvh;
+  overflow: hidden;
   color: var(--landing-fg);
   font-family: var(--landing-sans);
   -webkit-font-smoothing: antialiased;
-  background: transparent;
+  background-color: var(--landing-canvas);
 }
 
 /* Decorative orb only — base wash lives on html. */
@@ -112,7 +117,8 @@ body {
   z-index: 1;
   width: 100%;
   box-sizing: border-box;
-  min-height: 100dvh;
+  height: 100dvh;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
