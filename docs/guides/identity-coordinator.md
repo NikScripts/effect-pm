@@ -90,7 +90,14 @@ Membership Lookup Identity/Directory/Advice   who wins / where clients dial
 - **Launcher** stays custody-only (stable addressed node; exits after assume).
 - **Child** pipes `Lookup.client` / `layerOptions` on listen — advertise + identity claim.
 - Directory-row replace: `onConflict: "askIncumbent"` + optional `ListenOptions.onYield`
-  (`false` refuses). Drain / state / old shutdown are a later handoff track — not Lookup.
+  (`false` refuses). While `Node.drain` has set status `phase: "draining"`, yield **always
+  refuses** (draining ≠ dead; Directory row held). Full process-exit shutdown + per-service
+  handoff layers = Track C remainder ([brief](../handoffs/launcher-and-handoff-brief.md) #32–33).
+- **Membership push:** subscribe `Lookup.changes` (or `Directory.changes`) for live
+  upserts/removes. `DirectoryUpserted.dialChanged === true` means the dial target moved
+  (A→B) — rebind peer clients. `Lookup.directoryTable()` maintains a scoped live map
+  (seed with `nodesServing` when you need a cold snapshot). Peer hot-rebind inside
+  `peersLayer` / `lookupClient` is still a follow-up.
 
 Runnable: [`examples/forms/hyperlink/launcher-lookup-membership.ts`](../../examples/forms/hyperlink/launcher-lookup-membership.ts).
 Custody API: [`docs/guides/launcher.md`](./launcher.md).

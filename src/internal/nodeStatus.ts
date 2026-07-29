@@ -69,6 +69,18 @@ export const serviceReadiness = Schema.Struct({
 export type ServiceReadiness = typeof serviceReadiness.Type;
 
 /**
+ * Node lifecycle phase — WorkPool-shaped (`running` | `draining`).
+ * `draining` means intentional cutover drain: still reachable (≠ dead), Directory row held,
+ * cooperative {@link NodeStatusTag}.`yield` refuses (fail-closed).
+ *
+ * @internal
+ */
+export const nodePhase = Schema.Literals(["running", "draining"]);
+
+/** Node lifecycle phase. @internal */
+export type NodePhase = typeof nodePhase.Type;
+
+/**
  * A node's live status — whether it's up, its overall readiness rollup, when it started, how long
  * it's been up, how many HyperServices it serves, and each HyperService's readiness. `status` is `degraded`
  * (and `/health` returns 503) when any served resource is not ready.
@@ -78,6 +90,11 @@ export type ServiceReadiness = typeof serviceReadiness.Type;
 export const nodeStatus = Schema.Struct({
   up: Schema.Boolean,
   status: Schema.Literals(["ok", "degraded"]),
+  /**
+   * Lifecycle phase — `draining` is intentional Track C cutover (reachable; yield refuse).
+   * Distinct from readiness `status` (`ok` / `degraded`).
+   */
+  phase: nodePhase,
   startedAt: Schema.DateTimeUtc,
   uptimeMillis: Schema.Number,
   serviceCount: Schema.Number,
@@ -112,11 +129,20 @@ export class NodeStatusTag extends Hyperlink.Tag<NodeStatusTag>()(
   /**
    * Cooperative handoff ask (Lookup `askIncumbent`) — `true` = step aside so a
    * newcomer may take this `nodeKey`. Not Effect `yield*`; wire RPC only.
+   * While {@link nodeStatus}.`phase` is `"draining"`, always refuses (fail-closed).
    */
   yield: Hyperlink.effect(Schema.Boolean).annotate({
     description:
       "Cooperative handoff: true = accept yield (Lookup may replace the directory row). " +
-      "Refuse with false. Distinct from Effect generator yield*.",
+      "Refuse with false. Always false while phase is draining. Distinct from Effect generator yield*.",
+  }),
+  /**
+   * Enter intentional drain (Track C) — sets `phase: "draining"`. Idempotent.
+   * Keeps the process reachable (ping/status stay up); does not unregister or exit.
+   */
+  drain: Hyperlink.effect(Schema.Void).annotate({
+    description:
+      "Enter draining phase (Directory row held; yield refuse). Idempotent; no process exit.",
   }),
   /**
    * Launcher → node ownership ack — child assumes self-custody so the launcher may exit.
@@ -173,6 +199,7 @@ export const buildNodeStatusImpl = (options: {
   readonly status: Hyperlink.Subscribable<NodeStatus>;
   readonly ping: Effect.Effect<number>;
   readonly yield: Effect.Effect<boolean>;
+  readonly drain: Effect.Effect<void>;
   readonly assume: (payload: {
     readonly token: string;
   }) => Effect.Effect<void, AssumeTokenMismatch | AssumeTokenReused | AssumeNotReady>;
@@ -196,15 +223,18 @@ export const buildNodeStatusImpl = (options: {
       expectedToken !== undefined ? "launcher" : "self",
     );
     const assumed = yield* Ref.make(false);
+    const phase = yield* Ref.make<NodePhase>("running");
     const computeStatus: Effect.Effect<NodeStatus> = Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis;
       const services = yield* readiness;
       const ok = services.every((r) => r.ready);
       const status: "ok" | "degraded" = ok ? "ok" : "degraded";
       const ownershipValue = yield* Ref.get(ownership);
+      const phaseValue = yield* Ref.get(phase);
       return {
         up: true,
         status,
+        phase: phaseValue,
         startedAt: DateTime.makeUnsafe(options.startedAt),
         uptimeMillis: now - options.startedAt,
         serviceCount: options.serviceCount,
@@ -260,12 +290,23 @@ export const buildNodeStatusImpl = (options: {
         Effect.annotateLogs({ "assume.node": assumeNodeKey }),
         Effect.withLogSpan("node.assume.handle"),
       );
+    const drain = Effect.gen(function* () {
+      const previous = yield* Ref.getAndSet(phase, "draining");
+      if (previous === "draining") return;
+      yield* Effect.logInfo("node entered draining").pipe(
+        Effect.annotateLogs({ "node.phase": "draining" }),
+      );
+    }).pipe(Effect.withLogSpan("node.drain.handle"));
+    // While draining: always refuse (Locked #31). Otherwise ListenOptions.onYield / default accept.
+    const yieldEffect = Effect.gen(function* () {
+      if ((yield* Ref.get(phase)) === "draining") return false;
+      return yield* (options.onYield ?? Effect.succeed(true));
+    });
     return {
       status: statusSub,
       ping: Clock.currentTimeMillis,
-      // Default accept — Lookup askIncumbent replaces the row; dial-matched unregister
-      // prevents a late finalizer from wiping the newcomer.
-      yield: options.onYield ?? Effect.succeed(true),
+      yield: yieldEffect,
+      drain,
       assume,
       logs: {
         stream: logsLive,
