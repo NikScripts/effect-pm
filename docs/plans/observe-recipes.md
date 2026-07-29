@@ -1,6 +1,6 @@
 # Plan: Observe recipes (pipeable UI packs)
 
-**Status:** design-locked (owner 2026-07-28) — not Eng’d.  
+**Status:** design-locked (owner 2026-07-28; pack home 2026-07-29) — not Eng’d.  
 **Branch:** `cursor/view-withsize-types-125f` (Agent G).  
 **Prior art:** [`../guides/hyperlink-atom.md`](../guides/hyperlink-atom.md), [`../guides/bundles.md`](../guides/bundles.md), [`../standards/principles.md#handles-stay-thin`](../standards/principles.md#handles-stay-thin), [`../handoffs/view-compose-lock.md`](../handoffs/view-compose-lock.md) §G.
 
@@ -11,15 +11,25 @@
 One **universal** foundation for Effect-reactive UI over Hyperlink Tags:
 
 1. Small recipe combinators (`atom` / `fn` / `query` / `scan` / `struct` / `merge`).
-2. Family packs as **pipeable values** (`QueueObserve.live`) — not Tag methods, not a kind-switch door.
+2. Family packs as **pipeable values on a shared `Bundle` namespace** (`Bundle.queue`, `Bundle.daemon`, …) — not Tag methods, not a kind-switch door, not per-family `*Observe` modules.
 3. Bind at the edge (`Observe.bind` / `Observe.use`) under a shared `Atom.AtomRuntime`.
 
 Library Dashboard skins and app code use the **same** stack.
 
+## Pack home (locked)
+
+| Option | Verdict |
+|--------|---------|
+| `WorkPool.live` / packs on domain modules | **No** — packs carry UI concerns (localStorage history, trend caps). Domain modules (`WorkPool`, `Daemon`, `Gate`) stay wire/engine clean. |
+| Per-family `QueueObserve` modules | **No** — fragments the former Bundle surface. |
+| **Shared `Bundle` namespace** (`hyperlink-ts/ui/Bundle`) | **Yes** — one home for all former packs: `Bundle.queue`, `Bundle.priority`, `Bundle.daemon`, `Bundle.api`, … |
+
+`Bundle.observe(tag)` kind-dispatch **retires**. Call site becomes `Observe.use(Bundle.queue, Jobs)`.
+
 ## Non-goals
 
 - View Prototype `.use` for component logic (orthogonal; skins stay render-only for now).
-- Putting observe weight on `Jobs` / any Tag.
+- Putting observe weight on `Jobs` / any Tag, or UI packs on `WorkPool` / `Daemon`.
 - A forever `Bundle.observe(tag)` kind menu (retire after migration).
 - TanStack / Promise hosts (still `Hyperlink.promise` + parallel adapters).
 - Un-HOLD kit `<Dashboard />` (shell stays product chrome).
@@ -32,6 +42,7 @@ Library Dashboard skins and app code use the **same** stack.
 | Composition over inheritance | Bundle base classes |
 | File = namespace, flat exports | `export const Observe = { … }` |
 | Values camelCase | `QueueLive` as a value name |
+| UI packs under `ui/Bundle` | Packs on domain `WorkPool` / `Daemon` |
 | Same stack for lib + apps | Private dashboard-only observe path |
 
 ---
@@ -40,12 +51,12 @@ Library Dashboard skins and app code use the **same** stack.
 
 | Path | Import | Role |
 |------|--------|------|
-| `src/Observe.ts` | `import * as Observe from "hyperlink-ts/Observe"` | Public recipes + bind |
+| `src/Observe.ts` | `import * as Observe from "hyperlink-ts/Observe"` | Universal recipes + bind / use |
 | `src/internal/observe.ts` | — | Engine (name mirror) |
-| `src/ui/QueueObserve.ts` | `import * as QueueObserve from "hyperlink-ts/ui/QueueObserve"` | Queue pack values |
-| later | `DaemonObserve`, `GateObserve`, … | Same pattern per family |
+| `src/ui/Bundle.ts` | `import * as Bundle from "hyperlink-ts/ui/Bundle"` | All family **pack values** (`queue`, `daemon`, …) |
+| `src/internal/bundleQueue.ts` (etc.) | — | Heavy pack pipes (optional split); re-exported flat from `Bundle.ts` |
 
-`package.json` exports + tsup entry for `./Observe` and `./ui/QueueObserve`.
+`package.json` / tsup: `./Observe` (new); `./ui/Bundle` already exists.
 
 **Relationship to `Hyperlink.atom` / `.query` / `.fn`:** keep those as the low-level “already bound to `rt`” adapters. `Observe.*` recipes are **unbound**; `Observe.bind(rt)` / `Observe.use` discharge them (internally may call `Hyperlink.atom` / `.fn`). No duplicate semantics.
 
@@ -119,24 +130,33 @@ export declare namespace Observe {
 
 ---
 
-## Family packs
+## Family packs (`Bundle`)
 
-`src/ui/QueueObserve.ts` exports camelCase values only (`live`, maybe `controls`, `metricsHistory` as building blocks).
+Flat camelCase exports on `src/ui/Bundle.ts` (heavy pipes may live in `src/internal/bundle*.ts`):
 
-Shared pieces used by queue + priority:
+| Export | Replaces |
+|--------|----------|
+| `Bundle.queue` | `queueBundle` / `QueueBundle` door |
+| `Bundle.priority` | `priorityBundle` |
+| `Bundle.daemon` | `daemonBundle` |
+| `Bundle.api` | `apiBundle` |
+| `Bundle.gate` | `gateBundle` |
+| `Bundle.fleetHealth` | `fleetHealthBundle` |
+| `Bundle.telemetry` | `telemetryBundle` |
+| `Bundle.shardMap` | `shardMapBundle` |
+| `Bundle.node` | pack for `NodeRef` (or keep as bind helper) |
+
+Shared queue/priority pieces (also on `Bundle`, or internal-only):
 
 ```ts
-export const controls = Observe.struct({ … pause/resume/clear/shutdown … })
-export const metricsHistory = Observe.struct({ … metrics + history scan … })
-export const live = pipe(
+export const queueControls = Observe.struct({ /* pause/resume/clear/shutdown */ })
+export const queueMetricsHistory = Observe.struct({ /* metrics + history scan */ })
+export const queue = pipe(
   Observe.struct({ status, trend }),
-  Observe.and(controls),
-  Observe.and(metricsHistory),
-  // logs: Observe.and(logs) when node-bound helper lands
+  Observe.and(queueControls),
+  Observe.and(queueMetricsHistory),
 )
 ```
-
-Daemon / Gate / Api follow the same file-per-family pattern.
 
 ---
 
@@ -144,24 +164,24 @@ Daemon / Gate / Api follow the same file-per-family pattern.
 
 | Phase | Work |
 |-------|------|
-| **0** | Eng `Observe` + `QueueObserve.live`; tests; guide |
-| **1** | Dogfood one web `QueueCard` / `QueueDetailPanel` on `Observe.use(QueueObserve.live, tag)` |
-| **2** | Rewrite `queueBundle` as thin wrapper over `Observe.bind` (or delete once call sites moved) |
-| **3** | Port priority / daemon / gate / api packs; delete `Bundle.observe` kind switch |
+| **0** | Eng `Observe` + `Bundle.queue` pack value; tests; guide |
+| **1** | Dogfood one web `QueueCard` / `QueueDetailPanel` on `Observe.use(Bundle.queue, tag)` |
+| **2** | Rewrite `queueBundle` as thin wrapper over `Observe.bind(Bundle.queue, …)` (or delete) |
+| **3** | Port remaining packs onto `Bundle.*`; delete `Bundle.observe` kind switch |
 | **4** | Remove deprecated `use*Bundle` / `ui.data` after in-tree greps are clean |
 
-`Bundle.observe` stays until Phase 3 so nothing breaks mid-flight. Changeset: **minor** (new module); later **minor** for Bundle soft-remove / deprecate.
+`Bundle.observe` stays until Phase 3 so nothing breaks mid-flight. Changeset: **minor** (`Observe` + pack reshape).
 
 ---
 
 ## Acceptance
 
-1. `QueueObserve.live` is a camelCase module value; Tag has no observe API.  
-2. `Observe.use(QueueObserve.live, Jobs)` works under `RuntimeProvider`.  
-3. `Observe.bind(rt)(QueueObserve.live, Jobs)` works without React.  
+1. `Bundle.queue` is a camelCase pack value on `ui/Bundle`; Tag / `WorkPool` have no observe API.  
+2. `Observe.use(Bundle.queue, Jobs)` works under `RuntimeProvider`.  
+3. `Observe.bind(rt)(Bundle.queue, Jobs)` works without React.  
 4. History/trend scans + cache behavior match today’s `queueBundle` (or documented deltas).  
-5. Web queue card dogfood uses only Observe + QueueObserve (no `Bundle.observe`).  
-6. Typecheck + Observe/QueueObserve tests green; guide under `docs/guides/observe.md`.
+5. Web queue card dogfood uses only `Observe` + `Bundle.queue` (no kind-switch `Bundle.observe`).  
+6. Typecheck + Observe/Bundle pack tests green; guide under `docs/guides/observe.md`.
 
 ---
 
@@ -189,19 +209,21 @@ export class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", {
 }) {}
 ```
 
-### 2. Queue pack (`QueueObserve.live`)
+### 2. Queue pack on shared `Bundle`
 
 ```ts
 /**
- * @module ui/QueueObserve
+ * @module ui/Bundle
+ *
+ * Former family packs as pipeable values — not a kind-switch door.
  */
-import { DateTime, pipe } from "effect"
+import { DateTime, pipe, type Effect, type Stream } from "effect"
 import * as Observe from "hyperlink-ts/Observe"
-import type { QueueMetrics, QueueStatus } from "hyperlink-ts/ui" // or WorkPool schemas
+import type { QueueMetrics, QueueStatus } from "./data"
 
 /** Structural queue service — select against this, not a concrete Tag class. */
 type Queue = {
-  readonly status: { readonly changes: Stream.Stream<QueueStatus> } // Subscribable
+  readonly status: { readonly get: Effect.Effect<QueueStatus>; readonly changes: Stream.Stream<QueueStatus> }
   readonly metrics: {
     readonly stream: Stream.Stream<QueueMetrics>
     readonly query: (o: { readonly limit: number }) => Effect.Effect<ReadonlyArray<QueueMetrics>>
@@ -220,14 +242,14 @@ const toMetricPoint = (m: QueueMetrics) => ({
 
 const pendingOf = (s: QueueStatus) => s.sizes.high + s.sizes.normal + s.sizes.low
 
-export const controls = Observe.struct({
+export const queueControls = Observe.struct({
   pause: Observe.fn((q: Queue) => q.pause),
   resume: Observe.fn((q: Queue) => q.resume),
   clear: Observe.fn((q: Queue) => q.clear),
   shutdown: Observe.fn((q: Queue) => q.shutdown),
 })
 
-export const metricsHistory = Observe.struct({
+export const queueMetricsHistory = Observe.struct({
   metrics: Observe.atom((q: Queue) => q.metrics.stream),
   history: Observe.scan((q: Queue) => q.metrics.stream, {
     map: toMetricPoint,
@@ -237,10 +259,8 @@ export const metricsHistory = Observe.struct({
   }),
 })
 
-/**
- * Full queue UI pack — every queue card/detail imports this value.
- */
-export const live = pipe(
+/** Full queue UI pack — every queue card/detail uses this value. */
+export const queue = pipe(
   Observe.struct({
     status: Observe.atom((q: Queue) => q.status),
     trend: Observe.scan((q: Queue) => q.status, {
@@ -249,16 +269,17 @@ export const live = pipe(
       cacheKey: (tag) => `${tag.key}/trend`,
     }),
   }),
-  Observe.and(controls),
-  Observe.and(metricsHistory),
+  Observe.and(queueControls),
+  Observe.and(queueMetricsHistory),
 )
+
+// later on the same module: priority, daemon, api, gate, …
 ```
 
 ### 3. Wire runtime (app edge)
 
 ```ts
 import { Atom } from "effect/unstable/reactivity"
-import { Layer } from "effect"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import { Jobs } from "./Jobs"
 
@@ -271,15 +292,14 @@ export const runtime = Atom.runtime(appLayer)
 ```tsx
 import * as React from "react"
 import { AsyncResult } from "effect/unstable/reactivity"
-import { Option } from "effect"
 import * as Observe from "hyperlink-ts/Observe"
-import * as QueueObserve from "hyperlink-ts/ui/QueueObserve"
+import * as Bundle from "hyperlink-ts/ui/Bundle"
 import { RuntimeProvider, useAtomValue, useAtomSet } from "hyperlink-ts/ui"
 import { Jobs } from "./Jobs"
 import { runtime } from "./runtime"
 
 export function JobsCard(): React.ReactElement {
-  const box = Observe.use(QueueObserve.live, Jobs)
+  const box = Observe.use(Bundle.queue, Jobs)
   const statusR = useAtomValue(box.status)
   const pause = useAtomSet(box.pause)
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined
@@ -296,7 +316,7 @@ export function JobsCard(): React.ReactElement {
 }
 
 export function JobsDetail(): React.ReactElement {
-  const box = Observe.use(QueueObserve.live, Jobs)
+  const box = Observe.use(Bundle.queue, Jobs)
   const historyR = useAtomValue(box.history)
   const points = AsyncResult.isSuccess(historyR) ? historyR.value : []
   const resume = useAtomSet(box.resume)
@@ -325,11 +345,11 @@ export function App(): React.ReactElement {
 ```ts
 import { AtomRegistry, AsyncResult } from "effect/unstable/reactivity"
 import * as Observe from "hyperlink-ts/Observe"
-import * as QueueObserve from "hyperlink-ts/ui/QueueObserve"
+import * as Bundle from "hyperlink-ts/ui/Bundle"
 import { Jobs } from "./Jobs"
 import { runtime } from "./runtime"
 
-const box = Observe.bind(runtime)(QueueObserve.live, Jobs)
+const box = Observe.bind(runtime)(Bundle.queue, Jobs)
 const registry = AtomRegistry.make()
 registry.mount(box.status)
 
@@ -339,7 +359,7 @@ const read = () => {
 }
 ```
 
-### 6. Custom HyperService (no family pack)
+### 6. Custom HyperService (no shipped pack)
 
 ```ts
 import * as Observe from "hyperlink-ts/Observe"
@@ -352,22 +372,22 @@ const counterLive = Observe.struct({
 const box = Observe.use(counterLive, Counter)
 ```
 
-No registration in a kind menu — import the pack you composed.
+Compose with `Observe.*`; optionally contribute a pack to `Bundle` later — no kind menu.
 
 ---
 
 ## Open Eng details (resolve while implementing)
 
 1. **Deduped dual-projection** — today one status stream feeds `status` + `trend`. `Observe.scan` + `Observe.atom` on the same select should share a channel (extend `channelKeyOf` / pack-local share).  
-2. **Logs** — node-scoped log stream needs `nodeOf(tag)`; either `Observe.logsFromNode` helper or a small `QueueObserve.withLogs` pipe stage.  
-3. **`Observe.use` vs hooks rules** — `use` must call `useRuntime()` unconditionally (same as today’s Bundle).  
-4. **Fold vs keep `Hyperlink.atom`** — recommend keep both: Hyperlink = one-field bind; Observe = recipes + packs.
+2. **Logs** — node-scoped log stream needs `nodeOf(tag)`; `Observe` helper or `Bundle.queue` pipe stage.  
+3. **`Observe.use` vs hooks rules** — `use` must call `useRuntime()` unconditionally.  
+4. **Fold vs keep `Hyperlink.atom`** — keep both: Hyperlink = one-field bind; Observe = recipes; Bundle = shipped packs.
 
 ---
 
 ## Docs / changeset
 
-- Guide: `docs/guides/observe.md` (stack diagram; link from bundles as migration).  
-- Update `principles.md` example: `Observe.use(QueueObserve.live, Jobs)`.  
-- Changeset **minor** on Eng of `Observe` + `QueueObserve`.  
+- Guide: `docs/guides/observe.md` (stack diagram; bundles guide becomes migration → `Bundle.queue`).  
+- Update `principles.md` example: `Observe.use(Bundle.queue, Jobs)`.  
+- Changeset **minor** on Eng of `Observe` + `Bundle.queue` packs.  
 - Lock note in `view-compose-lock.md` §G when Phase 0 lands.
