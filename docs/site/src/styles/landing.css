@@ -1,50 +1,58 @@
 /**
- * Self-contained coming-soon lockup. Loaded only by `/` (and inlined there) so the
- * brand host never depends on the docs stylesheet or a successful `/assets/*` fetch.
- * Hex + system fonts first; oklch where supported matches the docs theme.
+ * Coming-soon brand lockup (WIP design). Inlined on `/` so paint never depends
+ * on /assets. Same structure as the locked apex: logo + motto + Coming soon —
+ * no CTAs. Soft atmosphere only; no acrylic stage.
  */
 :root {
   color-scheme: light dark;
-  --landing-bg: #fafbfc;
+  --landing-bg: #f7f9fc;
+  --landing-bg-deep: #e8eef8;
   --landing-fg: #2a2f38;
   --landing-muted: #6b7280;
   --landing-panel: #f0f2f5;
   --landing-border: #e2e6eb;
   --landing-primary: #2f6fed;
   --landing-yield: #c26a1a;
+  --landing-glow: #2f6fed28;
   --landing-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --landing-mono: ui-monospace, SFMono-Regular, Menlo, "Cascadia Code", monospace;
 }
 @supports (color: oklch(0% 0 0)) {
   :root {
-    --landing-bg: oklch(99% 0.004 260);
+    --landing-bg: oklch(98.5% 0.006 250);
+    --landing-bg-deep: oklch(94.5% 0.018 250);
     --landing-fg: oklch(24% 0.01 260);
     --landing-muted: oklch(50% 0.01 260);
     --landing-panel: oklch(96.5% 0.005 260);
     --landing-border: oklch(90% 0.008 260);
     --landing-primary: oklch(55% 0.16 250);
     --landing-yield: oklch(62% 0.17 55);
+    --landing-glow: oklch(55% 0.16 250 / 0.18);
   }
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --landing-bg: #141619;
+    --landing-bg: #12151a;
+    --landing-bg-deep: #0c1016;
     --landing-fg: #e8eaed;
     --landing-muted: #9aa3ad;
     --landing-panel: #1c2026;
     --landing-border: #2f353d;
     --landing-primary: #6ea8ff;
     --landing-yield: #e0a054;
+    --landing-glow: #3d7fff40;
   }
   @supports (color: oklch(0% 0 0)) {
     :root {
-      --landing-bg: oklch(16% 0.01 260);
+      --landing-bg: oklch(15% 0.012 260);
+      --landing-bg-deep: oklch(11% 0.018 260);
       --landing-fg: oklch(92% 0.01 260);
       --landing-muted: oklch(64% 0.01 260);
       --landing-panel: oklch(19% 0.012 260);
       --landing-border: oklch(30% 0.01 260);
       --landing-primary: oklch(74% 0.14 250);
       --landing-yield: oklch(75% 0.16 60);
+      --landing-glow: oklch(62% 0.15 250 / 0.28);
     }
   }
 }
@@ -63,25 +71,54 @@ body {
 }
 
 .landing {
+  position: relative;
+  isolation: isolate;
   width: 100%;
   min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
   text-align: left;
-  padding: 1.6rem 1.25rem calc(2rem + env(safe-area-inset-bottom, 0px));
+  padding: max(1.6rem, env(safe-area-inset-top)) 1.25rem
+    calc(2rem + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 90% 60% at 50% -8%, var(--landing-glow), transparent 58%),
+    radial-gradient(ellipse 55% 45% at 100% 100%, var(--landing-bg-deep), transparent 52%),
+    radial-gradient(ellipse 50% 40% at 0% 85%, var(--landing-bg-deep), transparent 48%),
+    var(--landing-bg);
 }
+
+.landing-glow {
+  position: absolute;
+  inset: auto auto 10% 50%;
+  width: min(38rem, 92vw);
+  height: min(38rem, 92vw);
+  translate: -50% 42%;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--landing-glow), transparent 70%);
+  filter: blur(12px);
+  pointer-events: none;
+  z-index: 0;
+  animation: landing-breathe 12s ease-in-out infinite;
+}
+
 .landing-inner {
+  position: relative;
+  z-index: 1;
   max-width: 70rem;
   width: 100%;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
 }
+
+/* Logo mark — same geometry as the locked coming-soon lockup */
 .landing-title {
   margin: 0;
   font-size: 1em;
+  font-weight: 700;
   line-height: 1;
   letter-spacing: -0.035em;
   color: var(--landing-primary);
@@ -98,12 +135,14 @@ body {
   margin-inline: auto;
   font-size: clamp(3.6rem, 13vw, 7.5rem);
   margin-block: clamp(1.2rem, 3.5vh, 2.4rem) clamp(0.9rem, 2.5vh, 1.8rem);
+  animation: landing-rise 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .landing-mark .landing-sub {
   text-align: left;
   margin-top: -0.05em;
   padding-left: 0.18em;
 }
+
 .landing-motto {
   display: flex;
   flex-direction: column;
@@ -115,24 +154,18 @@ body {
   font-size: clamp(1.15rem, 2.6vw, 1.55rem);
   letter-spacing: 0.005em;
   color: var(--landing-muted);
+  animation: landing-rise 0.85s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
 }
 .landing-motto span:nth-child(2) {
   color: var(--landing-fg);
   opacity: 0.78;
 }
+/* Stair offsets — scale with viewport so mobile never clips */
 .landing-motto span:nth-child(1) {
-  transform: translateX(-3.5rem);
+  transform: translateX(clamp(-2.25rem, -6vw, -1.25rem));
 }
 .landing-motto .landing-motto-accent {
-  transform: translateX(3.5rem);
-}
-@media (max-width: 520px) {
-  .landing-motto span:nth-child(1) {
-    transform: translateX(-2rem);
-  }
-  .landing-motto .landing-motto-accent {
-    transform: translateX(2rem);
-  }
+  transform: translateX(clamp(1.25rem, 6vw, 2.25rem));
 }
 .landing-motto-accent {
   color: var(--landing-fg);
@@ -146,6 +179,7 @@ body {
   border: none;
   font-size: 0.95em;
 }
+
 .landing-soon {
   align-self: center;
   margin: 1.9rem 0 2.2rem;
@@ -157,5 +191,39 @@ body {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--landing-muted);
-  background: var(--landing-panel);
+  background: color-mix(in oklab, var(--landing-panel) 88%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: landing-rise 0.85s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both;
+}
+
+@keyframes landing-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.65rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes landing-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    scale: 1;
+  }
+  50% {
+    opacity: 0.9;
+    scale: 1.05;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-mark,
+  .landing-motto,
+  .landing-soon,
+  .landing-glow {
+    animation: none;
+  }
 }

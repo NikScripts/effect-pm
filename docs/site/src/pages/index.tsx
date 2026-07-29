@@ -15,6 +15,7 @@ export default function LandingPage() {
         path="/"
       />
       <section className="landing">
+        <div className="landing-glow" aria-hidden="true" />
         <div className="landing-inner">
           <div className="landing-mark">
             <h1 className="landing-title">Hyperlink</h1>
