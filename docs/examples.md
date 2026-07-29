@@ -135,6 +135,10 @@ Guide: [Node & discovery](/docs/identity-coordinator)
 
 `examples/node/handoff-ab-cutover.ts` · `pnpm run example:node-handoff-ab-cutover`
 
+### [A→B handoff live (Ink TUI)](/docs/apps-tui-handoff-ab-live)
+
+`examples/apps/tui/handoff-ab-live.tsx` · `pnpm run example:handoff-ab-live` — dual-pane watchable cutover (real TTY)
+
 ### [verifyConnection](/docs/node-verify-connection)
 
 `examples/node/verify-connection.ts` · `pnpm run example:node-verify-connection`
@@ -306,6 +310,7 @@ see [E5 apps plan](../handoffs/examples-apps-e5-plan.md) (handoff). Run via `pnp
 | App | Path | Start |
 |-----|------|-------|
 | TUI | `examples/apps/tui` | `pnpm run example:apps-tui` |
+| A→B handoff live | `examples/apps/tui/handoff-ab-live.tsx` | `pnpm run example:handoff-ab-live` |
 | Web | `examples/apps/web` | `example:apps-web` + `example:apps-web-server` |
 | Dashboard | `examples/apps/dashboard` | `example:apps-dashboard` |
 | CLI | `examples/apps/cli` | `example:apps-cli` |

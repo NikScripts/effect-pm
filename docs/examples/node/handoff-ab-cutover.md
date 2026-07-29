@@ -11,6 +11,7 @@
 
 **Source:** [`examples/node/handoff-ab-cutover.ts`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/node/handoff-ab-cutover.ts)  
 **Run:** `pnpm run example:node-handoff-ab-cutover`  
+**Watchable twin:** [`pnpm run example:handoff-ab-live`](/docs/apps-tui-handoff-ab-live) (Ink dual-pane, real TTY)  
 **Hub:** [Examples → node](/docs/examples#node)  
 **Guide:** [Identity coordinator — A→B cutover](/docs/identity-coordinator#ab-cutover-recipe-state-transfer)
 

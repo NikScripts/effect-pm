@@ -126,8 +126,11 @@ Same-`nodeKey` variant: `onConflict: "askIncumbent"` + A's `onYield: true` lets 
 Directory **row** first; A's later `shutdown` still finds B by dial and transfers. Mid-handoff,
 draining A **refuses** a further `askIncumbent` yield (`IncumbentAlive`; row held).
 
-**Runnable demo:** [`examples/node/handoff-ab-cutover.ts`](../../examples/node/handoff-ab-cutover.ts)
-(`pnpm run example:node-handoff-ab-cutover`). Live suite:
+**Runnable demos:** log-only
+[`examples/node/handoff-ab-cutover.ts`](../../examples/node/handoff-ab-cutover.ts)
+(`pnpm run example:node-handoff-ab-cutover`); **watchable Ink TUI**
+[`examples/apps/tui/handoff-ab-live.tsx`](../../examples/apps/tui/handoff-ab-live.tsx)
+(`pnpm run example:handoff-ab-live`, real TTY). Live suite:
 [`test/handoff-ab-cutover.test.ts`](../../test/handoff-ab-cutover.test.ts). Decisions:
 [`launcher-and-handoff-brief.md`](../handoffs/launcher-and-handoff-brief.md) Locked #39.
 
