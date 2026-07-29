@@ -21,7 +21,7 @@ Library Dashboard skins and app code use the **same** stack.
 | Option | Verdict |
 |--------|---------|
 | `WorkPool.live` / packs on domain modules | **No** — packs carry UI concerns (localStorage history, trend caps). Domain modules (`WorkPool`, `Daemon`, `Gate`) stay wire/engine clean. |
-| Per-family `QueueObserve` modules | **No** — fragments the former Bundle surface. |
+| Per-family `QueueObserve` modules | **No** — fragments the pack surface. |
 | **Shared `Live` namespace** (`hyperlink-ts/ui/Live`) | **Yes** — one home for all former packs: `Live.queue`, `Live.priority`, `Live.daemon`, `Live.api`, … |
 
 `Bundle.observe(tag)` (legacy name) kind-dispatch **retires**. Call site becomes `Observe.use(Live.queue, Jobs)`.
@@ -39,10 +39,10 @@ Library Dashboard skins and app code use the **same** stack.
 | Must | Must not |
 |------|----------|
 | Handles stay thin | `Jobs.observe()` / kit noun menus |
-| Composition over inheritance | Bundle base classes |
+| Composition over inheritance | Pack base classes |
 | File = namespace, flat exports | `export const Observe = { … }` |
 | Values camelCase | `QueueLive` as a value name |
-| UI packs under `ui/Live` | Packs on domain `WorkPool` / `Daemon`; keep the name `Bundle` |
+| UI packs under `ui/Live` | Packs on domain `WorkPool` / `Daemon`; keep the name “Bundle” |
 | Same stack for lib + apps | Private dashboard-only observe path |
 
 ---
@@ -160,23 +160,23 @@ export const queue = pipe(
 
 ---
 
-## Migration from Bundles
+## Migration from legacy Bundle
 
 | Phase | Work |
 |-------|------|
 | **0** | Eng `Observe` + `Live.queue` pack value; tests; guide |
 | **1** | Dogfood one web `QueueCard` / `QueueDetailPanel` on `Observe.use(Live.queue, tag)` |
-| **2** | Rewrite `queueBundle` as thin wrapper over `Observe.bind(Bundle.queue, …)` (or delete) |
-| **3** | Port remaining packs onto `Bundle.*`; delete `Bundle.observe` kind switch |
+| **2** | Rewrite `queueBundle` as thin wrapper over `Observe.bind(…, Live.queue)` (or delete) |
+| **3** | Port remaining packs onto `Live.*`; delete legacy `Bundle.observe` kind switch + `ui/Bundle` |
 | **4** | Remove deprecated `use*Bundle` / `ui.data` after in-tree greps are clean |
 
-`Bundle.observe` stays until Phase 3 so nothing breaks mid-flight. Changeset: **minor** (`Observe` + pack reshape).
+Legacy `Bundle.observe` stays until Phase 3 so nothing breaks mid-flight. Changeset: **minor** (`Observe` + `Live`).
 
 ---
 
 ## Acceptance
 
-1. `Live.queue` is a camelCase pack value on `ui/Bundle`; Tag / `WorkPool` have no observe API.  
+1. `Live.queue` is a camelCase pack value on `ui/Live`; Tag / `WorkPool` have no observe API.  
 2. `Observe.use(Live.queue, Jobs)` works under `RuntimeProvider`.  
 3. `Observe.bind(rt)(Live.queue, Jobs)` works without React.  
 4. History/trend scans + cache behavior match today’s `queueBundle` (or documented deltas).  
