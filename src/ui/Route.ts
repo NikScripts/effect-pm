@@ -6,14 +6,14 @@
  * | Effect | Route |
  * |--------|--------|
  * | `HttpApi.make` | {@link make} |
- * | `HttpApiGroup.make` | {@link Group.make} |
+ * | `HttpApiGroup.make` | {@link group} |
  * | `HttpApiEndpoint.get` | {@link get} |
  * | `HttpApi.addHttpApi` | {@link addHttpApi} / {@link Api.addHttpApi} |
  * | `HttpApiClient.urlBuilder` | {@link urlBuilder} |
  * | `HttpApi.reflect` | {@link reflect} |
  *
  * Root endpoints go on {@link make} directly. Optional `topLevel` on
- * {@link Group.make} flattens that group’s endpoints onto the parent builder
+ * {@link group} flattens that group’s endpoints onto the parent builder
  * (HttpApi parity). Mix wire APIs in with {@link addHttpApi}.
  *
  * Runtime creation = the same constructors in ordinary loops — no Group Tag helper.
@@ -21,7 +21,6 @@
  * ```ts
  * import * as Route from "hyperlink-ts/ui/Route"
  * import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
- * import { Schema } from "effect"
  *
  * const Wire = HttpApi.make("wire").add(
  *   HttpApiGroup.make("users", { topLevel: true }).add(
@@ -30,9 +29,9 @@
  * )
  *
  * const Site = Route.make("site").add(
- *   Route.get("home", "/"),
+ *   Route.get("home", "/home"),
  *   Route.get("docs", "/docs"),
- *   Route.Group.make("app").add(
+ *   Route.group("app").add(
  *     Route.get("dashboard", "/app"),
  *   ),
  *   Route.addHttpApi(Wire),
@@ -143,29 +142,20 @@ export const compilePath: typeof endpoint.compilePath = endpoint.compilePath;
 export interface Group extends catalog.GroupConstraint {}
 
 /**
- * `HttpApiGroup` constructors.
+ * Named group (`HttpApiGroup.make`). Pass `topLevel: true` so child methods
+ * flatten onto the parent URL builder.
  *
  * @public
  */
-export const Group: {
-  readonly make: <const Id extends string>(
-    identifier: Id,
-    options?: {
-      readonly topLevel?: boolean | undefined;
-    },
-  ) => Group;
-  readonly isGroup: (u: unknown) => u is Group;
-} = {
-  make: (identifier, options) =>
-    catalog.group(identifier, { topLevel: options?.topLevel }),
-  isGroup: catalog.isGroup,
-};
+export const group: <const Id extends string>(
+  identifier: Id,
+  options?: {
+    readonly topLevel?: boolean | undefined;
+  },
+) => Group = catalog.group;
 
-/**
- * @deprecated Prefer {@link Group.make}.
- * @public
- */
-export const group = Group.make;
+/** @public */
+export const isGroup: (u: unknown) => u is Group = catalog.isGroup;
 
 // =============================================================================
 // Api (`HttpApi`)

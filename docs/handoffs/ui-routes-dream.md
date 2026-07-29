@@ -7,16 +7,16 @@
 | Effect | Route |
 |--------|--------|
 | `HttpApi.make` | `Route.make` |
-| `HttpApiGroup.make` | `Route.Group.make` |
+| `HttpApiGroup.make` | `Route.group` |
 | `HttpApiEndpoint.get` | `Route.get` |
 | `HttpApi.addHttpApi` | `Route.addHttpApi` / `api.addHttpApi` |
 | `HttpApiClient.urlBuilder` | `Route.urlBuilder` |
 | `HttpApi.reflect` | `Route.reflect` |
 
 - **Root endpoints:** `Route.make("site").add(Route.get("docs", "/docs"))` — no `topLevel` needed.
-- **`topLevel`:** optional on `Route.Group.make` (HttpApi parity) when a named group should flatten onto the parent builder.
+- **`topLevel`:** optional on `Route.group` (HttpApi parity) when a named group should flatten onto the parent builder.
 - **Mix wire APIs:** `Route.addHttpApi(wireHttpApi)` imports **URL surface only** (paths / ids / params / group nesting).
-- **Runtime:** same constructors in loops — no Group.Tag / `fromMembers` helper in this module.
+- **Runtime:** same constructors in loops — no Group.Tag helper in this module.
 
 ## Example
 
@@ -29,7 +29,7 @@ const Wire = HttpApi.make("wire").add(
 
 const Site = Route.make("site").add(
   Route.get("home", "/home"),
-  Route.Group.make("app").add(Route.get("dashboard", "/app")),
+  Route.group("app").add(Route.get("dashboard", "/app")),
   Route.addHttpApi(Wire),
 )
 

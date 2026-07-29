@@ -4,7 +4,7 @@
  * Legacy Group **path resolve** for Navigator (`resolveGroupRoute` — short-name
  * segment arrays). Retires when Navigator mounts a {@link ./Route} catalog.
  *
- * Not a route-declaration toolkit — use {@link ./Route} (`make` / `Group.make` /
+ * Not a route-declaration toolkit — use {@link ./Route} (`make` / `group` /
  * `get` / `addHttpApi`) for that.
  */
 import * as Group from "../Group";

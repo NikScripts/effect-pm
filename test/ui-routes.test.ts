@@ -35,12 +35,12 @@ describe("Route", () => {
     ]);
   });
 
-  it("Group.make topLevel flattens onto parent builder", () => {
+  it("group topLevel flattens onto parent builder", () => {
     const api = Route.make("site").add(
-      Route.Group.make("shell", { topLevel: true }).add(
+      Route.group("shell", { topLevel: true }).add(
         Route.get("health", "/health"),
       ),
-      Route.Group.make("app").add(Route.get("dashboard", "/app")),
+      Route.group("app").add(Route.get("dashboard", "/app")),
     );
     const urls = Route.urlBuilder(api) as {
       health: () => string;
@@ -55,7 +55,7 @@ describe("Route", () => {
       ["a", "/a"],
       ["b", "/b"],
     ];
-    let pages = Route.Group.make("pages", { topLevel: true });
+    let pages = Route.group("pages", { topLevel: true });
     for (const [id, path] of entries) {
       pages = pages.add(Route.get(id, path));
     }
