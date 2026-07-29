@@ -192,7 +192,7 @@ WorkPool queue durability (**LOCKED pattern** — keep for Gate rate limit):
 
 ```ts
 // The layer is the switch — no config flag.
-const durableStoreOption = yield* Effect.serviceOption(DurableQueueStore)
+const durableStoreOption = yield* Effect.serviceOption(DurableWorkPoolStore)
 // Some → store is source of truth
 // None → ephemeral in-memory lanes
 ```
@@ -205,7 +205,7 @@ const storeOpt = yield* Effect.serviceOption(RateLimiterStore)
 const store = Option.getOrElse(storeOpt, () => memoryStore) // Soft fallback — see below
 ```
 
-| | WorkPool `DurableQueueStore` | Gate `RateLimiterStore` |
+| | WorkPool `DurableWorkPoolStore` | Gate `RateLimiterStore` |
 |--|------------------------------|-------------------------|
 | Switch | **presence** (`serviceOption`) | **presence** (`serviceOption`) |
 | Config flag? | No | No (`rateLimit: { limit, window, … }` only configures the *policy*) |
@@ -232,7 +232,7 @@ Layer.mergeAll(
 
 Single-node / tests: omit store layer → Soft memory (R fulfilled), same Soft spirit as `Store.withDefaultStorage`.
 
-**Not** the AppStore Soft path (`Storage` is never `serviceOption` — cutover law). This is the **durability-plane** pattern (`DurableQueueStore`), which *is* `serviceOption`.
+**Not** the AppStore Soft path (`Storage` is never `serviceOption` — cutover law). This is the **durability-plane** pattern (`DurableWorkPoolStore`), which *is* `serviceOption`.
 
 Fail loud if `distributed` + memory Soft only? **Lean: docs first; optional Soft die later.**
 
@@ -257,7 +257,7 @@ Fleet rate limiting is **first-class Gate substrate**. HttpApiClient update **us
 
 ## Open decisions (owner)
 
-1. ~~How is the store selected?~~ **LOCKED (owner):** presence-driven `serviceOption(RateLimiterStore)` like `DurableQueueStore`; Soft memory when absent.  
+1. ~~How is the store selected?~~ **LOCKED (owner):** presence-driven `serviceOption(RateLimiterStore)` like `DurableWorkPoolStore`; Soft memory when absent.  
 2. ~~**Fleet store backend:**~~ **LOCKED:** Effect store layers only — Soft memory / Redis today (`NodeRedis` + `layerStoreRedis`). No Hyperlink-backed store; adopt further Effect stores if/when they ship.  
 3. **Distributed + memory Soft:** docs-only vs fail-loud? — lean docs  
 4. ~~**Default `onExceeded` for Gates:**~~ **LOCKED (R1 lean):** `"delay"`  

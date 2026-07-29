@@ -208,7 +208,7 @@ const store = yield* LabThermometer.store;
 
 ### Durability (separate concern)
 
-Queue `persist: true` uses durability port (`DurableQueueStore` semantics). Same DB file possible via
+Queue `persist: true` uses durability port (`DurableWorkPoolStore` semantics). Same DB file possible via
 shared `SqlClient`; not part of store contract.
 
 ---

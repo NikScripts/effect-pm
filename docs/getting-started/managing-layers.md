@@ -1,30 +1,39 @@
-{#managing-layers title="Managing Layers" status="draft" done="api previews types" appliesTo=all}
+{#managing-layers title="Managing Layers" done="api previews types" appliesTo=all}
 <!-- docs-site-link:begin -->
 > [!NOTE]
-> You're reading this page's **source**. The rendered version — with navigation, search,
-> and live type previews — is at <https://hyperlink.cool/docs/managing-layers>.
+> You're reading this page's **source**. The rendered version has navigation, search,
+> and live type previews at <https://dev.hyperlink.cool/docs/managing-layers>.
 <!-- docs-site-link:end -->
 # Managing Layers
 
-A [hyperlink service](/docs/glossary#hyperlink-service) is defined once: a [tag](/docs/glossary#tag)
-with a [contract](/docs/glossary#contract), and an implementation behind it. Where it runs (and how
-you reach it) is decided entirely by the [layer](/docs/glossary#layer) you provide. The code that uses
-it never changes. `yield* Tag` reads the same whether the hyperservice runs in this process, is
+A [Hyperlink Service](/docs/glossary#hyperlink-service) is defined once: a [Tag](/docs/glossary#tag)
+with a [Contract](/docs/glossary#contract), and an Implementation behind it. Where it runs (and how
+you reach it) is decided entirely by the [Layer](/docs/glossary#layer) you provide. The code that uses
+it never changes. `yield* Tag` reads the same whether the HyperService runs in this process, is
 served over RPC, or is a client to one running elsewhere.
 
-[Core Concepts](/docs/core-concepts) covered that idea. This page is the layer vocabulary:
+[Core Concepts](/docs/core-concepts) covered that idea. This page is the Layer vocabulary:
 in-process, served, remote, or across a fleet. [Creating a Hyperlink Service](/docs/creating-a-hyperlink)
-builds one tag end to end when you're ready.
+builds one Tag end to end when you're ready.
 
 {.note}
-**The tag is fixed. The layer varies.** Swap in-process for remote at the composition root; leave
+**The Tag is fixed. The Layer varies.** Swap in-process for remote at the composition root; leave
 the consuming code alone.
 
 ## Running in-process
 
 Run the implementation in the current runtime:
 
+{.twoslash}
 ``` ts
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
+import { Effect, Schema, Layer } from "effect"
+class Jobs extends Hyperlink.Tag<Jobs>()("app/Jobs", {
+  run: Hyperlink.effect(Schema.Void),
+}) {}
+declare const jobsImpl: Effect.Effect<{ readonly run: Effect.Effect<void> }>
+declare const program: Effect.Effect<void, never, Jobs>
+// ---cut---
 const inProcess = Hyperlink.layer(Jobs, jobsImpl)
 
 program.pipe(Effect.provide(inProcess)) // `yield* Jobs` runs jobsImpl locally
@@ -32,7 +41,7 @@ program.pipe(Effect.provide(inProcess)) // `yield* Jobs` runs jobsImpl locally
 
 ## Serving over the network
 
-To expose a hyperservice over RPC, pick a **protocol listen**. `Node.listen` is the neutral spine
+To expose a HyperService over RPC, pick a **protocol listen**. `Node.listen` is the neutral spine
 (no transport bind). Day to day you call one of four siblings that share its overload family:
 `Node.http`, `Node.ws`, `Node.unix`, `Node.nPipe`. Toggle the wire; every form stays the same:
 
@@ -62,8 +71,8 @@ common case.
 
 ## Connecting a client
 
-Serving's mirror: a remote hyperservice needs the client [handle](/docs/glossary#handle) for the tag
-and a **transport** to the [node](/docs/glossary#node) that runs it. A node is a named endpoint that
+Serving's mirror: a remote HyperService needs the client [Handle](/docs/glossary#handle) for the Tag
+and a **transport** to the [Node](/docs/glossary#node) that runs it. A Node is a named endpoint that
 carries the address. Nameless listens stamp that address for you; a `Node.Tag` makes it
 self-describing in source.
 
@@ -106,11 +115,11 @@ Effect.provide(app, Hyperlink.layerProtocol(Hyperlink.protocolWebsocket(3000))) 
 
 ## Dependencies on the server
 
-A hyperservice may depend on other Effect services, including other hyperservices.
-`Hyperlink.serve` / `serveRemote`, the engine forms (`WorkPool.serve`, `Daemon.serve`, `Gate.serve`),
-and the protocol listens **preserve that requirement `R`**. They do not close dependencies at the
-server boundary. Composition matches Effect's `Layer.mergeAll`: list the serve layers, then
-`Layer.provide` what they need outside.
+A HyperService may depend on other Effect services, including other HyperServices.
+`Hyperlink.serve` / `serveRemote`, the included HyperService serves (`WorkPool.serve`, `Daemon.serve`,
+`Gate.serve`), and the protocol listens **preserve that requirement `R`**. They do not close
+dependencies at the server boundary. Composition matches Effect's `Layer.mergeAll`: list the serve
+layers, then `Layer.provide` what they need outside.
 
 Provide a shared dependency once onto the whole server:
 
@@ -143,10 +152,10 @@ Engine tags use `WorkPool.serve` / `Daemon.serve` / `Gate.serve` (they also run 
 
 ## Fleets and peers
 
-When a hyperservice runs across many nodes and its instances coordinate (see
+When a HyperService runs across many Nodes and its instances coordinate (see
 [Fleets & Peers](/docs/fleets-and-peers)), **server-to-server** peer calls have their own transport.
 `Hyperlink.peersLayer(tag, ThisNode)` discharges the mesh. Peer dials default to HTTP, so a fleet
-whose nodes serve WebSocket must move the peer mesh onto WebSocket too: one knob per node.
+whose Nodes serve WebSocket must move the peer mesh onto WebSocket too: one knob per Node.
 
 ``` ts
 Node.ws([Hyperlink.serve(WorkerPool, poolImpl)], 3000).pipe(
@@ -172,5 +181,5 @@ Pick per **deployment**, not per call. Every side of one wire must agree. In-pro
 
 ## Next
 
-Build one tag end to end in **[Creating a Hyperlink Service](/docs/creating-a-hyperlink)**, or go
+Build one Tag end to end in **[Creating a Hyperlink Service](/docs/creating-a-hyperlink)**, or go
 deeper on multi-node coordination in **[Fleets & Peers](/docs/fleets-and-peers)**.

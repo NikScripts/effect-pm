@@ -1,10 +1,10 @@
-// The `docs/DemoQueue` resource — declared here in a plain (non-"use client") module so a
+// The `docs/DemoQueue` HyperService — declared here in a plain (non-"use client") module so a
 // content hot-edit that re-imports the QueueIsland entry doesn't re-declare it (the registry
 // rejects a duplicate group id). Declared once; the island imports these prebuilt atoms.
 
 import { Effect, Stream } from "effect";
 import { Atom } from "effect/unstable/reactivity";
-import * as WorkPool from "@pm/WorkPool";
+import * as WorkPool from "hyperlink-ts/WorkPool";
 
 class DemoQueue extends WorkPool.Service<DemoQueue, string, never>()("docs/DemoQueue", {
   concurrency: 1,

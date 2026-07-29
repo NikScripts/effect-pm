@@ -15,6 +15,9 @@
  * - {@link connect} / {@link connectHttp} / {@link connectSocket} / {@link connectIpc} — dial
  * - {@link clients} — bundle clients for a catalog node's `ROut`
  * - {@link assume} — launcher ownership ack (`{ token }`) on a running node
+ * - {@link drain} — enter intentional cutover drain (`phase: "draining"`; yield refuse)
+ * - {@link shutdown} — drain → leave Lookup membership → exit listen scope
+ * - {@link launch} — `Layer.launch` raced with shutdown exit (prefer over bare launch)
  *
  * @module Node
  */
@@ -90,6 +93,9 @@ export {
   assumeTokenConfig,
   ASSUME_TOKEN_ENV as assumeTokenEnv,
 } from "./internal/nodeAssumeClient"
+export { drain } from "./internal/nodeDrainClient"
+export { shutdown } from "./internal/nodeShutdownClient"
+export { launch } from "./internal/nodeLaunch"
 
 import { Layer } from "effect"
 import { unix } from "./internal/nodeUnix"
@@ -150,6 +156,8 @@ export function listenLocal(
 
 /** A node's live status snapshot — what `(yield* MyNode).status.get` resolves to. @category services @public */
 export type { NodeStatus as Status } from "./internal/nodeStatus"
+/** Lifecycle phase on {@link Status} — `running` | `draining`. @category services @public */
+export type { NodePhase as Phase } from "./internal/nodeStatus"
 /** One served HyperService's readiness — an element of {@link Status}`.services`. @category services @public */
 export type { ServiceReadiness } from "./internal/nodeStatus"
 /** The {@link ServiceReadiness} wire schema (for composing your own health surfaces). @category services @public */

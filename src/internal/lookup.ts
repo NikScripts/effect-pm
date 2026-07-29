@@ -2,11 +2,12 @@
  * In-memory Lookup registries — identity claims, node directory, placement advice.
  *
  * Structural shapes only (no import from `Lookup.ts`) so the public module can own Schema
- * classes without a cycle.
+ * classes without a cycle. Directory mutations publish onto {@link LookupRegistries.directoryChanges}
+ * for membership-push (Track C A→B dial swap notify).
  *
  * @internal
  */
-import { Effect, Option, Ref } from "effect";
+import { Effect, Option, PubSub, Ref } from "effect";
 
 /** Wire-shaped endpoint stored for identity claims. @internal */
 export type StoredEndpoint = {
@@ -37,6 +38,23 @@ export type AdvertiseOutcome =
       readonly _tag: "IncumbentAlive";
       readonly nodeKey: string;
       readonly incumbent: StoredDirectoryEntry;
+    };
+
+/**
+ * Directory membership event (structural) — mapped to wire {@link DirectoryChange} in Lookup.
+ * @internal
+ */
+export type StoredDirectoryChange =
+  | {
+      readonly _tag: "DirectoryUpserted";
+      readonly entry: StoredDirectoryEntry;
+      readonly previous?: StoredDirectoryEntry;
+      readonly dialChanged: boolean;
+    }
+  | {
+      readonly _tag: "DirectoryRemoved";
+      readonly nodeKey: string;
+      readonly previous: StoredDirectoryEntry;
     };
 
 /** Mutable claim map — HyperService key → winning endpoint. @internal */
@@ -96,16 +114,30 @@ export type LookupRegistries = {
   readonly claims: ClaimRegistry;
   readonly directory: DirectoryRegistry;
   readonly advice: AdviceRegistry;
+  /** Sliding fan-out of directory upserts / removes (membership push). */
+  readonly directoryChanges: PubSub.PubSub<StoredDirectoryChange>;
 };
+
+/** Sliding buffer for directory change subscribers. @internal */
+const DIRECTORY_CHANGES_CAPACITY = 1024;
 
 /** Build empty claim + directory + advice registries (one per lookup server). @internal */
 export const makeRegistries = (): Effect.Effect<LookupRegistries> =>
-  Effect.all([
-    Ref.make(new Map<string, StoredEndpoint>()),
-    Ref.make(new Map<string, StoredDirectoryEntry>()),
-    Ref.make(new Map<string, string>()),
-  ]).pipe(
-    Effect.map(([claimMap, directoryMap, adviceMap]) => ({
+  Effect.gen(function* () {
+    const claimMap = yield* Ref.make(new Map<string, StoredEndpoint>());
+    const directoryMap = yield* Ref.make(
+      new Map<string, StoredDirectoryEntry>(),
+    );
+    const adviceMap = yield* Ref.make(new Map<string, string>());
+    const directoryChanges = yield* PubSub.sliding<StoredDirectoryChange>(
+      DIRECTORY_CHANGES_CAPACITY,
+    );
+
+    const publish = (
+      event: StoredDirectoryChange,
+    ): Effect.Effect<void> => PubSub.publish(directoryChanges, event);
+
+    return {
       claims: {
         claim: (key, endpoint) =>
           Ref.modify(
@@ -150,29 +182,77 @@ export const makeRegistries = (): Effect.Effect<LookupRegistries> =>
             Effect.map((current) => Option.fromNullishOr(current.get(nodeKey))),
           ),
         set: (entry) =>
-          Ref.update(directoryMap, (current) => {
-            const next = new Map(current);
-            next.set(entry.nodeKey, entry);
-            return next;
-          }).pipe(Effect.as(entry)),
+          Effect.gen(function* () {
+            const previous = yield* Ref.modify(directoryMap, (current) => {
+              const prior = current.get(entry.nodeKey);
+              const next = new Map(current);
+              next.set(entry.nodeKey, entry);
+              return [Option.fromNullishOr(prior), next] as const;
+            });
+            const dialChanged = Option.match(previous, {
+              onNone: () => false,
+              onSome: (prior) => !sameDialTarget(prior, entry),
+            });
+            yield* publish({
+              _tag: "DirectoryUpserted",
+              entry,
+              ...(Option.isSome(previous)
+                ? { previous: previous.value }
+                : {}),
+              dialChanged,
+            });
+            return entry;
+          }),
         remove: (nodeKey) =>
-          Ref.modify(directoryMap, (current) => {
-            if (!current.has(nodeKey)) {
-              return [false, current] as const;
+          Effect.gen(function* () {
+            const removed = yield* Ref.modify(directoryMap, (current) => {
+              const prior = current.get(nodeKey);
+              if (prior === undefined) {
+                return [
+                  Option.none<StoredDirectoryEntry>(),
+                  current,
+                ] as const;
+              }
+              const next = new Map(current);
+              next.delete(nodeKey);
+              return [Option.some(prior), next] as const;
+            });
+            if (Option.isSome(removed)) {
+              yield* publish({
+                _tag: "DirectoryRemoved",
+                nodeKey,
+                previous: removed.value,
+              });
+              return true;
             }
-            const next = new Map(current);
-            next.delete(nodeKey);
-            return [true, next] as const;
+            return false;
           }),
         removeIfSameDial: (endpoint) =>
-          Ref.modify(directoryMap, (current) => {
-            const existing = current.get(endpoint.nodeKey);
-            if (existing === undefined || !sameDialTarget(existing, endpoint)) {
-              return [false, current] as const;
+          Effect.gen(function* () {
+            const removed = yield* Ref.modify(directoryMap, (current) => {
+              const existing = current.get(endpoint.nodeKey);
+              if (
+                existing === undefined ||
+                !sameDialTarget(existing, endpoint)
+              ) {
+                return [
+                  Option.none<StoredDirectoryEntry>(),
+                  current,
+                ] as const;
+              }
+              const next = new Map(current);
+              next.delete(endpoint.nodeKey);
+              return [Option.some(existing), next] as const;
+            });
+            if (Option.isSome(removed)) {
+              yield* publish({
+                _tag: "DirectoryRemoved",
+                nodeKey: endpoint.nodeKey,
+                previous: removed.value,
+              });
+              return true;
             }
-            const next = new Map(current);
-            next.delete(endpoint.nodeKey);
-            return [true, next] as const;
+            return false;
           }),
         nodesServing: (serviceKey) =>
           Ref.get(directoryMap).pipe(
@@ -206,8 +286,9 @@ export const makeRegistries = (): Effect.Effect<LookupRegistries> =>
             ),
           ),
       },
-    })),
-  );
+      directoryChanges,
+    };
+  });
 
 /** @deprecated Use {@link makeRegistries}. @internal */
 export const makeRegistry = (): Effect.Effect<ClaimRegistry> =>

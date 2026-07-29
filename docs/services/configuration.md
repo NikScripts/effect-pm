@@ -1,4 +1,9 @@
 {#configuration title="Configuration" status="draft" done="api" appliesTo=all}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://dev.hyperlink.cool/docs/configuration>.
+<!-- docs-site-link:end -->
 # Configuration
 
 How an application declares configuration, and how the parts that change while it runs are swapped safely. This builds on Effect's `Config` — it doesn't replace it, it adds a hot-swap layer on top.

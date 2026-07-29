@@ -69,7 +69,7 @@ fact/state union).
   **Daemon:** factory cast removed — `record` accepts `DaemonStoreEventRow` via a narrow `event.append`
   bridge; journal encodes on append. Gate's contract likewise.
 - **No `serviceOption` on `Storage`.** Resolve it as a declared dependency (§1). (`serviceOption`
-  is still correct for the **durability** plane — `DurableQueueStore` — and irrelevant for the legacy facets
+  is still correct for the **durability** plane — `DurableWorkPoolStore` — and irrelevant for the legacy facets
   being deleted.)
 
 ## Who is currently wrong (2026-07-07)
@@ -83,7 +83,7 @@ fact/state union).
   `materializeEngineQueueStore*` + `publishEvent` → Store bridge; facet class deleted from `src/`.
 - Legacy-facet `serviceOption` calls (`HistoryStore` / `WorkPoolStore` /
   `LogStore`) are being **deleted** in the cutover — not this rule's concern.
-- Durability `serviceOption(DurableQueueStore)` is **correct** — leave it.
+- Durability `serviceOption(DurableWorkPoolStore)` is **correct** — leave it.
 
 ### 5. Store event wire — `_tag`, `success`, `error` (locked 2026-07-07)
 

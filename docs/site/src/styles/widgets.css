@@ -1,7 +1,7 @@
 /* Tailwind — ONLY for the dashboard widgets rendered inside islands. No preflight
    (Tailwind's global reset would clobber the classless doc prose); just the theme
-   mapping + utilities. The dashboard tokens are scoped to `.pm-dashboard`, so nothing
-   here leaks onto the doc content. Never used in a `.md` — Tailwind lives in island code. */
+   mapping + utilities. The dashboard tokens are scoped to `.hl-dashboard`, so nothing
+   here leaks onto the doc content. Never used in a `.md`; Tailwind lives in island code. */
 @layer theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
@@ -32,7 +32,7 @@
 }
 
 /* Actual token values — scoped to the widget wrapper only, NOT the global body. */
-.pm-dashboard {
+.hl-dashboard {
   --radius: 0.625rem;
   --background: oklch(0.16 0.01 260);
   --foreground: oklch(0.92 0.01 260);
@@ -58,9 +58,9 @@
   overflow: hidden;
 }
 /* Tailwind `border` utility sets width; the dashboard theme provides the default color. */
-.pm-dashboard *,
-.pm-dashboard ::before,
-.pm-dashboard ::after {
+.hl-dashboard *,
+.hl-dashboard ::before,
+.hl-dashboard ::after {
   border-color: var(--border);
   box-sizing: border-box;
 }

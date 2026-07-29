@@ -1,72 +1,11 @@
-import "../styles/docs.css";
 import type { ReactNode } from "react";
-import { navGroups, glossaryEntries } from "../lib/docs-content.js";
-import { NavBar } from "../components/NavBar.js";
-import { GroupedNav } from "../components/GroupedNav.js";
-import { ContextualNav } from "../islands/ContextualNav.js";
-import { Footer } from "../components/Footer.js";
-import { TwoslashHover } from "../islands/TwoslashHover.js";
-import { GlossaryHover } from "../islands/GlossaryHover.js";
-import { CodeCopy } from "../islands/CodeCopy.js";
-import { ShortcutsHelp } from "../islands/ShortcutsHelp.js";
-import { HoverGenProgress } from "../islands/HoverGenProgress.js";
-import { Effect } from "effect";
-import * as FileSystem from "effect/FileSystem";
-import * as nodePath from "node:path";
-import { runServer } from "../lib/runtime.js";
 
-const readVersion = Effect.gen(function* () {
-  const fs = yield* FileSystem.FileSystem;
-  const text = yield* fs.readFileString(nodePath.join(process.cwd(), "../..", "package.json"));
-  const m = /"version":\s*"([^"]+)"/.exec(text);
-  return m?.[1] ?? "";
-}).pipe(Effect.orElseSucceed(() => ""));
-
-// Root layout — owns all chrome. Nav is generated from the content manifest,
-// so adding a `.dj` file updates the nav with no edit here.
-export default async function RootLayout({ children }: { children: ReactNode }) {
-  const groups = await navGroups();
-  const version = await runServer(readVersion);
-  // Standards is its own book: the desktop sidebar swaps to its chapters while you're inside
-  // (ContextualNav), and the regular sidebar carries a single entry link instead of the group.
-  const standardsGroup = groups.find((g) => g.label === "Standards");
-  const mainGroups = groups
-    .filter((g) => g.label !== "Standards")
-    .concat(
-      standardsGroup !== undefined && standardsGroup.items[0] !== undefined
-        ? [
-            {
-              label: "Standards",
-              items: [
-                {
-                  slug: "",
-                  href: standardsGroup.items[0].href,
-                  title: "Standards",
-                },
-              ],
-              lone: true,
-            },
-          ]
-        : []
-    );
-  const standardsGroups =
-    standardsGroup !== undefined
-      ? [
-          {
-            label: "Docs",
-            items: [
-              {
-                slug: "",
-                href: "/docs/index",
-                title: "← All docs",
-              },
-            ],
-            lone: true,
-          },
-          standardsGroup,
-        ]
-      : groups;
-  const standardsHrefs = standardsGroup?.items.map((i) => i.href) ?? [];
+/**
+ * Root shell for every route — document chrome only (no docs stylesheet).
+ * Book routes import `docs.css` from `(book)/_layout.tsx`. Coming-soon `/`
+ * inlines its own CSS so a failed `/assets/*` fetch cannot unstyle the brand host.
+ */
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <>
       {/* description/og tags are PER-PAGE (PageMeta) — a layout-level description here would
@@ -78,23 +17,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
       <meta name="theme-color" content="#fafbfc" media="(prefers-color-scheme: light)" />
       <meta name="theme-color" content="#141619" media="(prefers-color-scheme: dark)" />
       <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-      <NavBar groups={groups} version={version} />
-      <div className="layout">
-        <aside className="sidebar">
-          <ContextualNav
-            main={mainGroups}
-            standards={standardsGroups}
-            standardsHrefs={standardsHrefs}
-          />
-        </aside>
-        <main>{children}</main>
-      </div>
-      <Footer />
-      <TwoslashHover />
-      <GlossaryHover data={glossaryEntries()} />
-      <CodeCopy />
-      <ShortcutsHelp />
-      <HoverGenProgress />
+      {children}
     </>
   );
 }

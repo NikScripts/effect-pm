@@ -8,16 +8,28 @@
  * - {@link Identity} — `claim` by HyperService key (first wins / {@link DuplicateIdentity}).
  *   Live winner: same dial refreshes; different dial + dead/unreachable incumbent
  *   (node-handle `ping`) → replace; alive → {@link DuplicateIdentity}.
- * - {@link Directory} — `advertise` / `unregister` / `nodesServing` (D5/D6). Duplicate
- *   `nodeKey` conflict policy via {@link OnConflict} (default **livenessReplace**): ping
- *   incumbent node handle; alive → {@link IncumbentAlive} (or ask handle `yield` when
- *   `askIncumbent`); dead/unreachable → replace row.
+ * - {@link Directory} — `advertise` / `unregister` / `nodesServing` / {@link Directory.changes}
+ *   (D5/D6 + membership push). Duplicate `nodeKey` conflict policy via {@link OnConflict}
+ *   (default **livenessReplace**): ping incumbent node handle; alive → {@link IncumbentAlive}
+ *   (or ask handle `yield` when `askIncumbent`); dead/unreachable → replace row.
+ *   {@link Directory.changes} fans out upserts/removes so nodes can rebind dials on A→B swap.
  * - {@link Advice} — last-write placement board (`prefer` a directory `nodeKey` for a
  *   HyperService key). {@link Hyperlink.lookupClient} honors a live preferred row before D4 `pick`.
  *
  * @module Lookup
  */
-import { Data, Duration, Effect, Exit, Layer, Option, Schema } from "effect";
+import {
+  Data,
+  Duration,
+  Effect,
+  Exit,
+  Layer,
+  Option,
+  Ref,
+  Schema,
+  Stream,
+  type Scope,
+} from "effect";
 import * as Hyperlink from "./Hyperlink";
 import type { AnyNode, OnConflict, OnConflictResolved } from "./internal/nodeCore";
 import {
@@ -102,6 +114,55 @@ export class DirectoryEntry extends Schema.Class<DirectoryEntry>("LookupDirector
   path: Schema.optionalKey(Schema.String),
   serves: Schema.Array(Schema.String),
 }) {}
+
+/**
+ * Directory row upserted (first advertise, serves refresh, or A→B dial replace).
+ * `dialChanged` is true when the dial target moved (membership push for peer rebind).
+ *
+ * @category wire schemas
+ * @public
+ */
+export class DirectoryUpserted extends Schema.TaggedClass<DirectoryUpserted>()(
+  "DirectoryUpserted",
+  {
+    entry: DirectoryEntry,
+    previous: Schema.optionalKey(DirectoryEntry),
+    dialChanged: Schema.Boolean,
+  },
+) {}
+
+/**
+ * Directory row removed (unregister / dial-matched remove).
+ *
+ * @category wire schemas
+ * @public
+ */
+export class DirectoryRemoved extends Schema.TaggedClass<DirectoryRemoved>()(
+  "DirectoryRemoved",
+  {
+    nodeKey: Schema.String,
+    previous: DirectoryEntry,
+  },
+) {}
+
+/**
+ * Membership-push event from {@link Directory.changes}.
+ *
+ * @category wire schemas
+ * @public
+ */
+export const DirectoryChange = Schema.Union([
+  DirectoryUpserted,
+  DirectoryRemoved,
+]);
+
+/**
+ * Membership-push event type.
+ *
+ * @category models
+ * @public
+ */
+export type DirectoryChange = typeof DirectoryChange.Type;
 
 /**
  * Advertise / refresh a directory row.
@@ -292,10 +353,16 @@ const directorySpec = {
   }).annotate({
     description: "List advertised nodes whose serves[] includes that HyperService key.",
   }),
+  changes: Hyperlink.stream(DirectoryChange).annotate({
+    description:
+      "Live directory membership push — upserts (incl. dialChanged on A→B swap) and removes. " +
+      "Nodes subscribe to rebind peer dials without restarting.",
+  }),
 };
 
 /**
- * Lookup node directory — advertise / unregister / list by served HyperService key.
+ * Lookup node directory — advertise / unregister / list by served HyperService key /
+ * {@link directorySpec.changes} membership push.
  *
  * @category services
  * @public
@@ -464,6 +531,73 @@ export const preferred = (
       new PreferredRequest({ serviceKey: serviceKeyOf(service) }),
     ),
   );
+
+/**
+ * Live directory membership push — sugar over {@link Directory}.`changes`.
+ *
+ * Subscribe from a node process to notice A→B dial swaps (`DirectoryUpserted` with
+ * `dialChanged: true`) and rebind peer clients without restart.
+ *
+ * ```ts
+ * yield* Lookup.changes.pipe(
+ *   Stream.filter((e) => e._tag === "DirectoryUpserted" && e.dialChanged),
+ *   Stream.runForEach((e) => Effect.logInfo(`dial moved ${e.entry.nodeKey}`)),
+ * )
+ * ```
+ *
+ * @category constructors
+ * @public
+ */
+export const changes: Stream.Stream<DirectoryChange, never, Directory> =
+  Stream.unwrap(Effect.map(Directory, (dir) => dir.changes));
+
+/**
+ * Live dial table driven by {@link Directory.changes} — for node-level peer rebind.
+ *
+ * Starts empty; applies upserts/removes as they arrive. Pair with an initial
+ * `nodesServing` seed when you need a cold snapshot before the first event.
+ *
+ * @category constructors
+ * @public
+ */
+export const directoryTable = (): Effect.Effect<
+  {
+    readonly get: Effect.Effect<ReadonlyMap<string, DirectoryEntry>>;
+    readonly getNode: (
+      nodeKey: string,
+    ) => Effect.Effect<Option.Option<DirectoryEntry>>;
+  },
+  never,
+  Directory | Scope.Scope
+> =>
+  Effect.gen(function* () {
+    const table = yield* Ref.make(new Map<string, DirectoryEntry>());
+    yield* changes.pipe(
+      Stream.runForEach((event) => {
+        if (event._tag === "DirectoryRemoved") {
+          return Ref.update(table, (current) => {
+            const next = new Map(current);
+            next.delete(event.nodeKey);
+            return next;
+          });
+        }
+        return Ref.update(table, (current) => {
+          const next = new Map(current);
+          next.set(event.entry.nodeKey, event.entry);
+          return next;
+        });
+      }),
+      Effect.forkScoped,
+    );
+    return {
+      get: Ref.get(table),
+      getNode: (nodeKey: string) =>
+        Ref.get(table).pipe(
+          Effect.map((current) => Option.fromNullishOr(current.get(nodeKey))),
+        ),
+    };
+  });
+
 // ============================================================================
 // Defaults (L1) — Lookup node = Tag node branded with {@link Node.asLookup}
 // ============================================================================
@@ -499,6 +633,24 @@ const toDirectoryEntry = (
     ...(stored.url !== undefined ? { url: stored.url } : {}),
     ...(stored.path !== undefined ? { path: stored.path } : {}),
   });
+
+const toDirectoryChange = (
+  event: internal.StoredDirectoryChange,
+): DirectoryChange => {
+  if (event._tag === "DirectoryRemoved") {
+    return new DirectoryRemoved({
+      nodeKey: event.nodeKey,
+      previous: toDirectoryEntry(event.previous),
+    });
+  }
+  return new DirectoryUpserted({
+    entry: toDirectoryEntry(event.entry),
+    ...(event.previous !== undefined
+      ? { previous: toDirectoryEntry(event.previous) }
+      : {}),
+    dialChanged: event.dialChanged,
+  });
+};
 
 const storedFromClaim = (req: ClaimRequest): internal.StoredEndpoint => ({
   nodeKey: req.nodeKey,
@@ -704,6 +856,9 @@ const lookupServeLayers = (serverOnConflict: OnConflictResolved) =>
           registries.directory.nodesServing(req.serviceKey).pipe(
             Effect.map((entries) => entries.map(toDirectoryEntry)),
           ),
+        changes: Stream.fromPubSub(registries.directoryChanges).pipe(
+          Stream.map(toDirectoryChange),
+        ),
       });
       const advice = Hyperlink.serve(Advice, {
         advise: (req: AdviseRequest) =>

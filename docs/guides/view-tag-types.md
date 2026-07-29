@@ -2,7 +2,7 @@
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
-> and live type previews — is at <https://hyperlink.cool/docs/view-tag-types>.
+> and live type previews — is at <https://dev.hyperlink.cool/docs/view-tag-types>.
 <!-- docs-site-link:end -->
 # View Tag types
 
@@ -16,7 +16,7 @@ Mint with `View.Card.Tag` (etc.), provide a skin with `View.provide` (props infe
 
 {.twoslash}
 ``` ts
-import { Layer, Match } from "effect"
+import { Layer } from "effect"
 import { View } from "hyperlink-ts/ui"
 
 class PoolCard extends View.Card.Tag<PoolCard>()(
@@ -47,17 +47,19 @@ export const layer = Layer.mergeAll(
   PoolPage.provide((_props) => null),
 )
 
-const label = Match.value(View.ViewKind.Card()).pipe(
-  Match.tag("Card", () => "card chrome"),
-  Match.tag("Detail", () => "detail chrome"),
-  Match.tag("Page", () => "page chrome"),
-  Match.exhaustive,
-)
+const kind: View.ViewKind = View.ViewKind.Card()
+const label = View.ViewKind.$match(kind, {
+  Card: () => "card chrome",
+  Detail: () => "detail chrome",
+  Page: () => "page chrome",
+})
 void label
 ```
 
-Provide skins with **`View.provide(Tag, impl)`** or **`Tag.provide(impl)`**. Props infer from the
-Tag. Sizes are `Data.TaggedEnum` — match with `Match.tag`.
+Provide skins with **`View.provide(Tag, impl)`** or **`Tag.provide(impl)`**. Props infer from
+the Tag. Annotate skins with **`PoolCard["Service"]`** (no `typeof`). Sizes are
+`Data.TaggedEnum` — match with `ViewKind.$match` (or `Match.tag` on a
+`View.ViewKind`-typed value).
 
 ## Extra props
 

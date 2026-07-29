@@ -19,7 +19,8 @@ set -euo pipefail
 
 API="https://api.cloudflare.com/client/v4"
 ZONE_NAME="${CLOUDFLARE_ZONE_NAME:-hyperlink.cool}"
-HOST_EXPR='(http.host eq "hyperlink.cool" or http.host eq "www.hyperlink.cool")'
+# Edge-cache the docs demo host. Brand host (apex/www) is coming-soon only — no API corpus.
+HOST_EXPR='(http.host eq "dev.hyperlink.cool")'
 
 DEP_RULE_DESC="${CF_CACHE_RULE_DESCRIPTION:-hyperlink-docs dep API SSR edge cache}"
 STATIC_RULE_DESC="${CF_STATIC_CACHE_RULE_DESCRIPTION:-hyperlink-docs static assets + search corpus}"
@@ -158,16 +159,11 @@ purge_prefixes() {
 import json
 print(json.dumps({
   "prefixes": [
-    "hyperlink.cool/api/effect",
-    "hyperlink.cool/api/platform-node",
-    "hyperlink.cool/api/sql-sqlite-node",
-    "hyperlink.cool/assets",
-    "hyperlink.cool/search",
-    "www.hyperlink.cool/api/effect",
-    "www.hyperlink.cool/api/platform-node",
-    "www.hyperlink.cool/api/sql-sqlite-node",
-    "www.hyperlink.cool/assets",
-    "www.hyperlink.cool/search",
+    "dev.hyperlink.cool/api/effect",
+    "dev.hyperlink.cool/api/platform-node",
+    "dev.hyperlink.cool/api/sql-sqlite-node",
+    "dev.hyperlink.cool/assets",
+    "dev.hyperlink.cool/search",
   ]
 }))
 ')")"

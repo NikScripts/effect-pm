@@ -1,43 +1,45 @@
 /**
- * `Launcher` Track A — mintToken, ReadyTimedOut (TestClock), custody handle phases,
- * spawn→awaitReady→handoff vs live child, and `up`.
+ * `Launcher` Track A — mintToken, Ready/handoff/kill phases, command/entry factories,
+ * Config-at-spawn, multi-unit `up`, and live child handoff.
  */
-import * as NodeChildProcessSpawner from "@effect/platform-node/NodeChildProcessSpawner";
-import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Fiber, Layer, Redacted } from "effect";
+import {
+  ConfigProvider,
+  Duration,
+  Effect,
+  Fiber,
+  Layer,
+  Redacted,
+} from "effect";
 import { TestClock } from "effect/testing";
 import { ChildProcess } from "effect/unstable/process";
 import * as Launcher from "../src/Launcher";
 import * as Node from "../src/Node";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
+import {
+  asStandard,
+  ChildJobs,
+  childArgvProcess,
+  childEntryPaths,
+  ephemeralPort,
+  platform,
+  reapLauncherChildren,
+} from "./fixtures/launcherHarness";
 
-const platform = Layer.provideMerge(
-  NodeChildProcessSpawner.layer,
-  NodeServices.layer,
-);
+const providePlatform = <A, E, R>(
+  effect: Effect.Effect<A, E, R>,
+) => effect.pipe(Effect.scoped, Effect.provide(platform));
 
-const childEntry = () => {
-  const root = new URL("..", import.meta.url).pathname;
-  return {
-    root,
-    entry: `${root}/test/fixtures/launcher-child-serve.ts`,
-  };
-};
-
-const ephemeralPort = (tokenHex: string): number =>
-  20_000 + (Number.parseInt(tokenHex.slice(0, 4), 16) % 10_000);
-
-const reapLauncherChildren = ChildProcess.make("pkill", [
-  "-f",
-  "test/fixtures/launcher-child-serve.ts",
-]).pipe(
-  Effect.flatMap((h) => h.exitCode),
-  Effect.ignore,
-);
+const provideTestClock = <A, E, R>(
+  effect: Effect.Effect<A, E, R>,
+) =>
+  effect.pipe(
+    Effect.scoped,
+    Effect.provide(Layer.mergeAll(TestClock.layer(), platform)),
+  );
 
 describe("Launcher.mintToken", () => {
-  it.effect("mints a redacted 32-byte hex token (CSPRNG)", () =>
+  it.effect("mints a redacted 32-byte hex branded token (CSPRNG)", () =>
     Effect.gen(function* () {
       const a = yield* Launcher.mintToken;
       const b = yield* Launcher.mintToken;
@@ -52,31 +54,97 @@ describe("Launcher.mintToken", () => {
   );
 });
 
-describe("Launcher.Handle.awaitReady", () => {
-  it.effect("fails ReadyTimedOut when the peer never answers (TestClock)", () =>
+describe("Launcher.readyTimeoutConfig / readyPollConfig", () => {
+  it.effect("defaults to 30s / 100ms when Config is unset", () =>
     Effect.gen(function* () {
-      const node = Node.Tag()("launcher/unreachable", {
-        url: "http://127.0.0.1:1/rpc",
-        kind: "Http",
-      });
-      const fiber = yield* Effect.forkChild(
-        Launcher.spawn({
+      const timeout = yield* Launcher.readyTimeoutConfig;
+      const poll = yield* Launcher.readyPollConfig;
+      expect(Duration.toMillis(timeout)).toBe(30_000);
+      expect(Duration.toMillis(poll)).toBe(100);
+    }).pipe(
+      Effect.provideService(
+        ConfigProvider.ConfigProvider,
+        ConfigProvider.fromUnknown({}),
+      ),
+    ),
+  );
+
+  it.effect("reads HYPERLINK_LAUNCHER_READY_* from ConfigProvider", () =>
+    Effect.gen(function* () {
+      const timeout = yield* Launcher.readyTimeoutConfig;
+      const poll = yield* Launcher.readyPollConfig;
+      expect(Duration.toMillis(timeout)).toBe(5_000);
+      expect(Duration.toMillis(poll)).toBe(250);
+    }).pipe(
+      Effect.provideService(
+        ConfigProvider.ConfigProvider,
+        ConfigProvider.fromUnknown({
+          HYPERLINK_LAUNCHER_READY_TIMEOUT: "5 seconds",
+          HYPERLINK_LAUNCHER_READY_POLL: "250 millis",
+        }),
+      ),
+    ),
+  );
+});
+
+describe("Launcher.Handle.awaitReady", () => {
+  it.effect(
+    "fails ReadyTimedOut, kill-reaps the child, and spends the handle (TestClock)",
+    () =>
+      Effect.gen(function* () {
+        const node = Node.Tag()("launcher/unreachable", {
+          url: "http://127.0.0.1:1/rpc",
+          kind: "Http",
+        });
+        const handle = yield* Launcher.spawn({
           node,
           process: ChildProcess.make("sleep", ["120"]),
-          ready: { timeout: "30 seconds" },
-        }).pipe(
-          Effect.flatMap((handle) => handle.awaitReady()),
-          Effect.exit,
-        ),
-      );
-      yield* Effect.yieldNow;
-      yield* TestClock.adjust("30 seconds");
-      const exit = yield* Fiber.join(fiber);
-      expectTaggedFailure(exit, "ReadyTimedOut");
-    }).pipe(
-      Effect.scoped,
-      Effect.provide(Layer.mergeAll(TestClock.layer(), platform)),
-    ),
+          ready: {
+            timeout: "30 seconds",
+            services: ["missing/Service"],
+          },
+        });
+        const fiber = yield* Effect.forkChild(
+          handle.awaitReady().pipe(Effect.exit),
+        );
+        yield* Effect.yieldNow;
+        yield* TestClock.adjust("30 seconds");
+        const exit = yield* Fiber.join(fiber);
+        const err = expectTaggedFailure(exit, "ReadyTimedOut");
+        expect(
+          typeof err === "object" &&
+            err !== null &&
+            "node" in err &&
+            err.node === "launcher/unreachable" &&
+            "services" in err &&
+            Array.isArray(err.services) &&
+            err.services[0] === "missing/Service",
+        ).toBe(true);
+
+        expectTaggedFailure(
+          yield* Effect.exit(handle.awaitReady()),
+          "HandleSpent",
+        );
+        expectTaggedFailure(yield* Effect.exit(handle.kill()), "HandleSpent");
+        expectTaggedFailure(
+          yield* Effect.exit(handle.handoff()),
+          "HandleSpent",
+        );
+      }).pipe(provideTestClock),
+  );
+
+  it.effect("fails UnaddressedNode for a bare (unaddressed) dial target", () =>
+    Effect.gen(function* () {
+      const bare = Node.Tag()("launcher/bare");
+      const handle = yield* Launcher.spawn({
+        node: bare,
+        process: ChildProcess.make("sleep", ["30"]),
+        ready: { timeout: "5 seconds" },
+      });
+      const exit = yield* Effect.exit(handle.awaitReady());
+      expectTaggedFailure(exit, "UnaddressedNode");
+      yield* handle.kill();
+    }).pipe(providePlatform),
   );
 
   it.live(
@@ -102,15 +170,15 @@ describe("Launcher.Handle.awaitReady", () => {
             "code" in err &&
             err.code === 7,
         ).toBe(true);
-      }).pipe(Effect.scoped, Effect.provide(platform)),
+      }).pipe(providePlatform),
     { timeout: 20_000 },
   );
 
   it.live(
-    "spawn → awaitReady → handoff against a child that listens with assumeToken",
+    "spawn → awaitReady → handoff with Tag-typed ready.services",
     () =>
       Effect.gen(function* () {
-        const { root, entry } = childEntry();
+        const { root, entry } = childEntryPaths();
         const tokenHex = Redacted.value(yield* Launcher.mintToken);
         const port = ephemeralPort(tokenHex);
         const node = Node.Tag()("launcher/child", {
@@ -120,28 +188,50 @@ describe("Launcher.Handle.awaitReady", () => {
 
         const handle = yield* Launcher.spawn({
           node,
-          process: Launcher.command(
-            "pnpm",
-            ["exec", "tsx", entry, String(port)],
-            {
-              cwd: root,
-              stdout: "inherit",
-              stderr: "inherit",
-              token: "argv",
-            },
-          ),
+          process: childArgvProcess(root, entry, port),
           ready: {
             timeout: "25 seconds",
-            services: ["launcher-child/Jobs"],
+            poll: "50 millis",
+            services: [ChildJobs],
           },
         });
+
+        expect(Redacted.isRedacted(handle.token)).toBe(true);
+        expect(handle.node.key).toBe("launcher/child");
 
         yield* handle.awaitReady();
         // Idempotent Ready re-check.
         yield* handle.awaitReady();
         yield* handle.handoff();
         yield* reapLauncherChildren;
-      }).pipe(Effect.scoped, Effect.provide(platform)),
+      }).pipe(providePlatform),
+    { timeout: 45_000 },
+  );
+
+  it.live(
+    "ready.services accepts a wire-key string",
+    () =>
+      Effect.gen(function* () {
+        const { root, entry } = childEntryPaths();
+        const tokenHex = Redacted.value(yield* Launcher.mintToken);
+        const port = ephemeralPort(tokenHex, 3);
+        const node = Node.Tag()("launcher/child-wire", {
+          url: `http://127.0.0.1:${String(port)}/rpc`,
+          kind: "Http",
+        });
+
+        const handle = yield* Launcher.spawn({
+          node,
+          process: childArgvProcess(root, entry, port),
+          ready: {
+            timeout: "25 seconds",
+            services: ["launcher-child/Jobs"],
+          },
+        });
+        yield* handle.awaitReady();
+        yield* handle.handoff();
+        yield* reapLauncherChildren;
+      }).pipe(providePlatform),
     { timeout: 45_000 },
   );
 });
@@ -159,10 +249,12 @@ describe("Launcher.Handle.handoff", () => {
           node,
           process: ChildProcess.make("sleep", ["30"]),
         });
-        const exit = yield* Effect.exit(handle.handoff());
-        expectTaggedFailure(exit, "HandleNotReady");
-        // Kill the sleep child via Scope close (scoped).
-      }).pipe(Effect.scoped, Effect.provide(platform)),
+        expectTaggedFailure(
+          yield* Effect.exit(handle.handoff()),
+          "HandleNotReady",
+        );
+        yield* handle.kill();
+      }).pipe(providePlatform),
     { timeout: 15_000 },
   );
 
@@ -170,9 +262,9 @@ describe("Launcher.Handle.handoff", () => {
     "fails HandleSpent after a successful handoff",
     () =>
       Effect.gen(function* () {
-        const { root, entry } = childEntry();
+        const { root, entry } = childEntryPaths();
         const tokenHex = Redacted.value(yield* Launcher.mintToken);
-        const port = ephemeralPort(tokenHex) + 1;
+        const port = ephemeralPort(tokenHex, 1);
         const node = Node.Tag()("launcher/spent", {
           url: `http://127.0.0.1:${String(port)}/rpc`,
           kind: "Http",
@@ -180,63 +272,190 @@ describe("Launcher.Handle.handoff", () => {
 
         const handle = yield* Launcher.spawn({
           node,
-          process: Launcher.command(
-            "pnpm",
-            ["exec", "tsx", entry, String(port)],
-            {
-              cwd: root,
-              stdout: "inherit",
-              stderr: "inherit",
-              token: "argv",
-            },
-          ),
+          process: childArgvProcess(root, entry, port),
           ready: { timeout: "25 seconds" },
         });
 
         yield* handle.awaitReady();
         yield* handle.handoff();
-        const spentHandoff = yield* Effect.exit(handle.handoff());
-        expectTaggedFailure(spentHandoff, "HandleSpent");
-        const spentReady = yield* Effect.exit(handle.awaitReady());
-        expectTaggedFailure(spentReady, "HandleSpent");
+        expectTaggedFailure(
+          yield* Effect.exit(handle.handoff()),
+          "HandleSpent",
+        );
+        expectTaggedFailure(
+          yield* Effect.exit(handle.awaitReady()),
+          "HandleSpent",
+        );
+        expectTaggedFailure(yield* Effect.exit(handle.kill()), "HandleSpent");
         yield* reapLauncherChildren;
-      }).pipe(Effect.scoped, Effect.provide(platform)),
+      }).pipe(providePlatform),
+    { timeout: 45_000 },
+  );
+
+  it.live(
+    "fails AssumeTokenMismatch when handoff uses a wrong token",
+    () =>
+      Effect.gen(function* () {
+        const { root, entry } = childEntryPaths();
+        const tokenHex = Redacted.value(yield* Launcher.mintToken);
+        const port = ephemeralPort(tokenHex, 4);
+        const node = Node.Tag()("launcher/mismatch", {
+          url: `http://127.0.0.1:${String(port)}/rpc`,
+          kind: "Http",
+        });
+
+        // Spawn with a forged factory so the child gets token A, handle holds token B.
+        const forged = (injected: string) =>
+          ChildProcess.make(
+            "pnpm",
+            ["exec", "tsx", entry, String(port), injected],
+            {
+              cwd: root,
+              stdout: "inherit",
+              stderr: "inherit",
+            },
+          );
+
+        const handle = yield* Launcher.spawn({
+          node,
+          process: (_ignored) => forged("not-the-handle-token"),
+          ready: { timeout: "25 seconds" },
+        });
+        yield* handle.awaitReady();
+        expectTaggedFailure(
+          yield* Effect.exit(handle.handoff()),
+          "AssumeTokenMismatch",
+        );
+        yield* handle.kill();
+        yield* reapLauncherChildren;
+      }).pipe(providePlatform),
     { timeout: 45_000 },
   );
 });
 
-describe("Launcher.command", () => {
+describe("Launcher.Handle.kill", () => {
+  it.live(
+    "SIGTERMs the child and spends the handle",
+    () =>
+      Effect.gen(function* () {
+        const node = Node.Tag()("launcher/kill", {
+          url: "http://127.0.0.1:1/rpc",
+          kind: "Http",
+        });
+        const handle = yield* Launcher.spawn({
+          node,
+          process: ChildProcess.make("sleep", ["120"]),
+        });
+        yield* handle.kill();
+        expectTaggedFailure(
+          yield* Effect.exit(handle.awaitReady()),
+          "HandleSpent",
+        );
+        expectTaggedFailure(
+          yield* Effect.exit(handle.handoff()),
+          "HandleSpent",
+        );
+        expectTaggedFailure(yield* Effect.exit(handle.kill()), "HandleSpent");
+      }).pipe(providePlatform),
+    { timeout: 15_000 },
+  );
+
+  it.live(
+    "kill after Ready (before handoff) spends the handle",
+    () =>
+      Effect.gen(function* () {
+        const { root, entry } = childEntryPaths();
+        const tokenHex = Redacted.value(yield* Launcher.mintToken);
+        const port = ephemeralPort(tokenHex, 5);
+        const node = Node.Tag()("launcher/kill-ready", {
+          url: `http://127.0.0.1:${String(port)}/rpc`,
+          kind: "Http",
+        });
+        const handle = yield* Launcher.spawn({
+          node,
+          process: childArgvProcess(root, entry, port),
+          ready: { timeout: "25 seconds" },
+        });
+        yield* handle.awaitReady();
+        yield* handle.kill();
+        expectTaggedFailure(
+          yield* Effect.exit(handle.handoff()),
+          "HandleSpent",
+        );
+        yield* reapLauncherChildren;
+      }).pipe(providePlatform),
+    { timeout: 45_000 },
+  );
+});
+
+describe("Launcher.command / entry", () => {
   it("injects HYPERLINK_ASSUME_TOKEN into env by default", () => {
-    const factory = Launcher.command("node", ["./worker.js"], {
-      cwd: "/tmp",
-    });
-    const built = factory("secret-token");
-    // StandardCommand carries options.env
-    expect(
-      typeof built === "object" &&
-        built !== null &&
-        "options" in built &&
-        typeof built.options === "object" &&
-        built.options !== null &&
-        "env" in built.options &&
-        (built.options as { env?: Record<string, string> }).env?.[
-          "HYPERLINK_ASSUME_TOKEN"
-        ] === "secret-token",
-    ).toBe(true);
+    const built = asStandard(
+      Launcher.command("node", ["./worker.js"], { cwd: "/tmp" })(
+        "secret-token",
+      ),
+    );
+    expect(built.options.env?.["HYPERLINK_ASSUME_TOKEN"]).toBe("secret-token");
+    expect(built.args).toEqual(["./worker.js"]);
   });
 
-  it("appends token to argv when token: \"argv\"", () => {
-    const factory = Launcher.command("node", ["./worker.js"], {
-      token: "argv",
-    });
-    const built = factory("secret-token");
-    expect(
-      typeof built === "object" &&
-        built !== null &&
-        "args" in built &&
-        Array.isArray(built.args) &&
-        built.args.at(-1) === "secret-token",
-    ).toBe(true);
+  it("appends token to argv when token: \"argv\" and leaves env alone", () => {
+    const built = asStandard(
+      Launcher.command("node", ["./worker.js"], { token: "argv" })(
+        "secret-token",
+      ),
+    );
+    expect(built.args.at(-1)).toBe("secret-token");
+    expect(built.options.env?.["HYPERLINK_ASSUME_TOKEN"]).toBeUndefined();
+  });
+
+  it("injects both env and argv when token: \"both\"", () => {
+    const built = asStandard(
+      Launcher.command("node", ["./worker.js"], { token: "both" })(
+        "secret-token",
+      ),
+    );
+    expect(built.args.at(-1)).toBe("secret-token");
+    expect(built.options.env?.["HYPERLINK_ASSUME_TOKEN"]).toBe("secret-token");
+  });
+
+  it("inserts token at tokenArgvAt", () => {
+    const built = asStandard(
+      Launcher.command("node", ["./worker.js", "--port", "1"], {
+        token: "argv",
+        tokenArgvAt: 1,
+      })("secret-token"),
+    );
+    expect(built.args).toEqual([
+      "./worker.js",
+      "secret-token",
+      "--port",
+      "1",
+    ]);
+  });
+
+  it("entry defaults to node + path", () => {
+    const built = asStandard(Launcher.entry("./worker.js")("secret-token"));
+    expect(built.command).toBe("node");
+    expect(built.args).toEqual(["./worker.js"]);
+    expect(built.options.env?.["HYPERLINK_ASSUME_TOKEN"]).toBe("secret-token");
+  });
+
+  it("entry builds exec + execArgs + path with argv token", () => {
+    const built = asStandard(
+      Launcher.entry("./worker.ts", {
+        exec: "pnpm",
+        execArgs: ["exec", "tsx"],
+        token: "argv",
+      })("secret-token"),
+    );
+    expect(built.command).toBe("pnpm");
+    expect(built.args).toEqual([
+      "exec",
+      "tsx",
+      "./worker.ts",
+      "secret-token",
+    ]);
   });
 });
 
@@ -245,9 +464,9 @@ describe("Launcher.up", () => {
     "spawn → awaitReady → handoff then exits (one-shot)",
     () =>
       Effect.gen(function* () {
-        const { root, entry } = childEntry();
+        const { root, entry } = childEntryPaths();
         const tokenHex = Redacted.value(yield* Launcher.mintToken);
-        const port = ephemeralPort(tokenHex) + 2;
+        const port = ephemeralPort(tokenHex, 2);
         const node = Node.Tag()("launcher/up", {
           url: `http://127.0.0.1:${String(port)}/rpc`,
           kind: "Http",
@@ -255,20 +474,99 @@ describe("Launcher.up", () => {
 
         yield* Launcher.up({
           node,
-          process: Launcher.command(
-            "pnpm",
-            ["exec", "tsx", entry, String(port)],
-            {
-              cwd: root,
-              stdout: "inherit",
-              stderr: "inherit",
-              token: "argv",
-            },
-          ),
+          process: childArgvProcess(root, entry, port),
           ready: { timeout: "25 seconds" },
         });
         yield* reapLauncherChildren;
-      }).pipe(Effect.scoped, Effect.provide(platform)),
+      }).pipe(providePlatform),
     { timeout: 45_000 },
+  );
+
+  it.effect("runs a multi-unit array sequentially by default (TestClock)", () =>
+    Effect.gen(function* () {
+      const a = Node.Tag()("launcher/up-a", {
+        url: "http://127.0.0.1:1/rpc",
+        kind: "Http",
+      });
+      const b = Node.Tag()("launcher/up-b", {
+        url: "http://127.0.0.1:1/rpc",
+        kind: "Http",
+      });
+      const fiber = yield* Effect.forkChild(
+        Launcher.up(
+          [
+            {
+              node: a,
+              process: ChildProcess.make("sleep", ["120"]),
+              ready: { timeout: "5 seconds" },
+            },
+            {
+              node: b,
+              process: ChildProcess.make("sleep", ["120"]),
+              ready: { timeout: "5 seconds" },
+            },
+          ],
+          { concurrency: 1 },
+        ).pipe(Effect.exit),
+      );
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust("5 seconds");
+      const exit = yield* Fiber.join(fiber);
+      // First unit times out; sequential so second never starts custody.
+      expectTaggedFailure(exit, "ReadyTimedOut");
+    }).pipe(provideTestClock),
+  );
+
+  it.effect("honors concurrency > 1 across independent units (TestClock)", () =>
+    Effect.gen(function* () {
+      const a = Node.Tag()("launcher/up-conc-a", {
+        url: "http://127.0.0.1:1/rpc",
+        kind: "Http",
+      });
+      const b = Node.Tag()("launcher/up-conc-b", {
+        url: "http://127.0.0.1:1/rpc",
+        kind: "Http",
+      });
+      const fiber = yield* Effect.forkChild(
+        Launcher.up(
+          [
+            {
+              node: a,
+              process: ChildProcess.make("sleep", ["120"]),
+              ready: { timeout: "5 seconds" },
+            },
+            {
+              node: b,
+              process: ChildProcess.make("sleep", ["120"]),
+              ready: { timeout: "5 seconds" },
+            },
+          ],
+          { concurrency: 2 },
+        ).pipe(Effect.exit),
+      );
+      yield* Effect.yieldNow;
+      yield* TestClock.adjust("5 seconds");
+      const exit = yield* Fiber.join(fiber);
+      expectTaggedFailure(exit, "ReadyTimedOut");
+    }).pipe(provideTestClock),
+  );
+});
+
+describe("Launcher.layer", () => {
+  it.live(
+    "provides ChildProcessSpawner for spawn",
+    () =>
+      Effect.gen(function* () {
+        const node = Node.Tag()("launcher/layer", {
+          url: "http://127.0.0.1:1/rpc",
+          kind: "Http",
+        });
+        const handle = yield* Launcher.spawn({
+          node,
+          process: ChildProcess.make("sleep", ["5"]),
+        });
+        yield* handle.kill();
+      }).pipe(Effect.scoped, Effect.provide(Launcher.layer)),
+    { timeout: 15_000 },
   );
 });

@@ -1058,7 +1058,7 @@
             "src",
             "examples"
           ],
-          "title": "Services, tags, and facets use the class-extends form"
+          "title": "Services, tags, and stores use the class-extends form"
         }
       ]
     },

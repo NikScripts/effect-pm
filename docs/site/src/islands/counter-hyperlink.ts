@@ -1,12 +1,12 @@
-// The `docs/Counter` resource — declared here, in a plain (non-"use client") module,
+// The `docs/Counter` HyperService — declared here, in a plain (non-"use client") module,
 // so that when Waku re-imports the CounterIsland *entry* on a content hot-edit it does
-// NOT re-declare the resource (the registry rejects a duplicate group id). The class is
+// NOT re-declare the HyperService (the registry rejects a duplicate group id). The class is
 // declared once; the island just imports these prebuilt atoms. This is the seam between
-// "the resource" and "the UI that drives it" — the same split a real app would make.
+// "the service" and "the UI that drives it" — the same split a real app would make.
 
 import { Effect, Schema, Stream, SubscriptionRef } from "effect";
 import { Atom } from "effect/unstable/reactivity";
-import * as Hyperlink from "@pm/Hyperlink";
+import * as Hyperlink from "hyperlink-ts/Hyperlink";
 
 // 1. the contract — `value` is a reactive ref (Subscribable: get + changes)
 class Counter extends Hyperlink.Tag<Counter>()("docs/Counter", {

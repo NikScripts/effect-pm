@@ -9,7 +9,7 @@
     "prebuild": "tsx scripts/gen-api.ts && NODE_OPTIONS=--max-old-space-size=8192 tsx scripts/gen-hovers.ts && tsx scripts/gen-search.ts && tsx scripts/gen-llms.ts && tsx scripts/check-links.ts",
     "build": "waku build",
     "postbuild": "node scripts/check-ssg.mjs",
-    "preview": "waku start --host 0.0.0.0 --port 5190",
+    "preview": "HOST=0.0.0.0 PORT=5190 node scripts/serve-production.mjs",
     "docs:manifest": "tsx scripts/gen-manifest.ts",
     "docs:manifest:check": "tsx scripts/gen-manifest.ts --check",
     "docs:api": "tsx scripts/gen-api.ts && NODE_OPTIONS=--max-old-space-size=8192 tsx scripts/gen-hovers.ts && tsx scripts/gen-search.ts && tsx scripts/gen-llms.ts",
