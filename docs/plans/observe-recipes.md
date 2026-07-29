@@ -79,7 +79,7 @@ Convention: each service `*View` exports one primary observe pack as **`pack`** 
 | `src/internal/observe.ts` | — | Engine (name mirror) |
 | `src/ui/WorkPoolView.ts` (etc.) | `import * as WorkPoolView from "hyperlink-ts/ui/WorkPoolView"` | View handles + `layer` + **`pack`** (and sub-pipes) |
 | `src/internal/workPoolViewPack.ts` (optional) | — | Heavy pack pipes; re-exported flat from `*View.ts` |
-| `src/ui/Bundle.ts` | — | Retire after migration (kind-switch door) |
+| ~~`src/ui/Bundle.ts`~~ | — | **Removed** (Phase 4) |
 
 `package.json` / tsup: `./Observe` (new); `./ui/*View` already exist.
 
