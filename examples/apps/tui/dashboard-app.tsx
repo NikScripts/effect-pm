@@ -5,7 +5,7 @@
  * `appLayer` the web dashboard uses. Prefer importing `Dashboard` from `hyperlink-ts/tui`
  * (or `../../src/tui`) in apps; this file exists so `pnpm run example:dashboard` still works.
  *
- *   pnpm run example:queue-server  +  example:mini-server  (then this)
+ *   pnpm run example:apps-dashboard-queue-server  +  example:apps-dashboard-mini-server  (then this)
  *   pnpm run example:dashboard
  */
 import { render } from "ink";

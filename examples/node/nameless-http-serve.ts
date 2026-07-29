@@ -19,7 +19,7 @@ import { Effect, Layer, Schema } from "effect"
 import * as Node from "../../src/Node"
 import * as Hyperlink from "../../src/Hyperlink"
 
-class Jobs extends Hyperlink.Tag<Jobs>()("forms/http/Jobs", {
+class Jobs extends Hyperlink.Tag<Jobs>()("http/Jobs", {
   jobs: Hyperlink.effect(Schema.Number),
 }) {}
 

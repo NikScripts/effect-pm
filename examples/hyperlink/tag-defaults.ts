@@ -20,7 +20,7 @@ import { Effect, Schema } from "effect";
 import * as Hyperlink from "../../src/Hyperlink";
 
 class Counter extends Hyperlink.Tag<Counter>()(
-  "forms/default/Counter",
+  "default/Counter",
   {
     current: Hyperlink.effect(Schema.Number),
     add: Hyperlink.effectFn(Schema.Number, Schema.Number),

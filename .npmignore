@@ -52,3 +52,18 @@ yarn-error.log*
 # Internal directory (not for public API)
 internal/
 
+# Internal / agent / site build — not for npm consumers
+docs/handoffs/
+docs/plans/
+docs/docgen/
+docs/site/
+docs/nav.ts
+docs/LOGS.md
+.cursor/
+archive/
+dev/
+scripts/
+*.changeset/
+.changeset/
+PUBLISHING.md
+AGENTS.md

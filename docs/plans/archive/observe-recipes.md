@@ -2,7 +2,7 @@
 
 **Status:** Phases 0–4 Eng’d — Observe + all family `*View.pack` + web/TUI dogfood; `Bundle` / `use*Bundle` / `View.compose().data` **removed**.  
 **Branch:** `cursor/view-withsize-types-125f` (Agent G).  
-**Prior art:** [`../guides/hyperlink-atom.md`](../guides/hyperlink-atom.md), [`../guides/bundles.md`](../guides/bundles.md), [`../guides/observe.md`](../guides/observe.md), [`../standards/principles.md#handles-stay-thin`](../standards/principles.md#handles-stay-thin), [`../handoffs/view-compose-lock.md`](../handoffs/view-compose-lock.md) §G.
+**Prior art:** [`../guides/hyperlink-atom.md`](../../guides/hyperlink-atom.md), [`../guides/bundles.md`](../../guides/bundles.md), [`../guides/observe.md`](../../guides/observe.md), [`../standards/principles.md#handles-stay-thin`](../../standards/principles.md#handles-stay-thin), [`../handoffs/view-compose-lock.md`](../../handoffs/view-compose-lock.md) §G.
 
 ---
 
@@ -55,7 +55,7 @@ Convention: each service `*View` exports one primary observe pack as **`pack`** 
 - A forever `Bundle.observe(tag)` kind menu (retire after migration).
 - A shared `Bundle` / `Live` / `Pack` / `Family` namespace whose only job is holding packs.
 - TanStack / Promise hosts (still `Hyperlink.promise` + parallel adapters).
-- Kit `<Dashboard />` unheld separately (see [`view-compose-lock.md`](../handoffs/view-compose-lock.md) K2).
+- Kit `<Dashboard />` unheld separately (see [`view-compose-lock.md`](../../handoffs/view-compose-lock.md) K2).
 
 ## Law
 
@@ -389,7 +389,7 @@ Compose with `Observe.*`; optionally add `pack` on a matching `*View` later — 
 
 ## Open Eng details
 
-None for Observe. Kit Dashboard unhold / chrome peel lives in [`view-compose-lock.md`](../handoffs/view-compose-lock.md) K2.
+None for Observe. Kit Dashboard unhold / chrome peel lives in [`view-compose-lock.md`](../../handoffs/view-compose-lock.md) K2.
 
 Resolved: shared fold via `Observe.map`; all family `*View.pack`s compositional (queue/priority/daemon/api/gate + polled fleet packs); `Observe.use` always calls `useRuntime()`; Phase 4 Bundle/`use*Bundle`/`data` removed; builders in `ui/data` are thin wraps; **NodeView** atom construction lives in `ui/nodeViewPack` (`NodeView.bind` / `.use`; `nodeStatusBundle` is a thin wrap — NodeRef is not a Tag).
 

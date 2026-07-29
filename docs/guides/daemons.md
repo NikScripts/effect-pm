@@ -213,4 +213,4 @@ build** — same Layer-patch model as WorkPool / Gate. Merge with
 - [Stores](/docs/stores) — Soft storage composition
 - [WorkPool](/docs/work-pools) — sibling included HyperService (queues)
 - [API Reference](/api/hyperlink-ts) — generated tables
-- Cutover history: [`docs/handoffs/store-cutover-daemon.md`](../handoffs/store-cutover-daemon.md)
+- Cutover history: [`docs/handoffs/archive/2026-07/features/store-cutover-daemon.md`](../handoffs/archive/2026-07/features/store-cutover-daemon.md)

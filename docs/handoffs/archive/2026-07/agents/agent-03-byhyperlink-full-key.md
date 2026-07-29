@@ -9,7 +9,7 @@
 
 **Owner locks (confirmed):** full key / tag; hard-break bag; kill resource-identity `processId`/`queueId` names (keep RPC `groupId`); no legacy storage fallback; classify via `Hyperlink.kindOf`.
 
-**Docs bus:** [`agent-status.md`](./agent-status.md) · [`owner-decisions.md`](./owner-decisions.md) · [`docs/LOGS.md`](../LOGS.md) · [`docs/guides/logs.md`](../guides/logs.md)
+**Docs bus:** [`agent-status.md`](../../../agent-status.md) · [`owner-decisions.md`](../../../owner-decisions.md) · [`docs/LOGS.md`](../../../../LOGS.md) · [`docs/guides/logs.md`](../../../../guides/logs.md)
 
 ---
 
@@ -97,7 +97,7 @@ Do **not** implement until unlocked.
 ```
 Checkout integration and pull (merge/ff #57 private `_logs` if not on tip yet).
 
-Read docs/handoffs/agent-03-byhyperlink-full-key.md.
+Read docs/handoffs/archive/2026-07/agents/agent-03-byhyperlink-full-key.md.
 
 You are Agent 3. Prior tracks done (events, lineage, ready-perfection). Do not reopen memo / handles / site.
 

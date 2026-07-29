@@ -4,8 +4,8 @@ The official `hyperlink-ts` website — a bespoke **Waku (RSC) + Effect** app.
 Content is authored in **Djot** (in `.md` files, so GitHub renders them) and rendered
 classless; read over Tailscale on your phone.
 
-Architecture + rationale: [`../handoffs/agent-b-plan.md`](../handoffs/agent-b-plan.md) ·
-[`../handoffs/docs-platform-architecture-decision.md`](../handoffs/docs-platform-architecture-decision.md).
+Architecture + rationale: [`../handoffs/archive/2026-07/agents/agent-b-plan.md`](../handoffs/archive/2026-07/agents/agent-b-plan.md) ·
+[`../handoffs/archive/2026-07/features/docs-platform-architecture-decision.md`](../handoffs/archive/2026-07/features/docs-platform-architecture-decision.md).
 
 ## Run
 

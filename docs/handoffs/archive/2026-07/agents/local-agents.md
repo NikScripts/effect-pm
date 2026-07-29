@@ -1,21 +1,21 @@
 # Local agents (Claude) — prompts & protocol
 
 **Order:** **B → A → C** · **Base:** `integration/storage`  
-**Decision (locked):** [`docs-platform-architecture-decision.md`](./docs-platform-architecture-decision.md) — Option 6: bespoke docs app, agent HTML + Tailwind, official website path.
+**Decision (locked):** [`docs-platform-architecture-decision.md`](../features/docs-platform-architecture-decision.md) — Option 6: bespoke docs app, agent HTML + Tailwind, official website path.
 
-**Owner chat:** Before/After blocks — [`supervisor-protocol.md`](./supervisor-protocol.md).  
-**Async:** [`agent-status.md`](./agent-status.md) on every push.
+**Owner chat:** Before/After blocks — [`supervisor-protocol.md`](../../../supervisor-protocol.md).  
+**Async:** [`agent-status.md`](../../../agent-status.md) on every push.
 
 ---
 
 ## Short prompt (Agent B — restart)
 
 ```
-Read docs/handoffs/agent-b-html-doc-platform.md and docs/handoffs/docs-platform-architecture-decision.md.
+Read docs/handoffs/archive/2026-07/agents/agent-b-html-doc-platform.md and docs/handoffs/archive/2026-07/features/docs-platform-architecture-decision.md.
 
 You are Agent B. Do NOT write code yet.
 
-Slice 0: have a real planning conversation with me. Read the handoff § Slice 0 — ask 3–5 questions at a time (styling, content format, phone UX, site scope, what must not be throwaway). Follow up on my answers. When we're aligned, write docs/handoffs/agent-b-plan.md and wait for my explicit approval before Slice 1.
+Slice 0: have a real planning conversation with me. Read the handoff § Slice 0 — ask 3–5 questions at a time (styling, content format, phone UX, site scope, what must not be throwaway). Follow up on my answers. When we're aligned, write docs/handoffs/archive/2026-07/agents/agent-b-plan.md and wait for my explicit approval before Slice 1.
 
 After approval: branch action/html-doc-platform from integration/storage and execute the plan (Slices 1–5). Before/After blocks each slice.
 ```
@@ -47,13 +47,13 @@ After approval: branch action/html-doc-platform from integration/storage and exe
 
 ## Agent C — audit (after A)
 
-**Handoff:** [`agent-c-standards-audit.md`](./agent-c-standards-audit.md)
+**Handoff:** [`agent-c-standards-audit.md`](../../../agent-c-standards-audit.md)
 
 ---
 
 ## Chat template
 
-See [`supervisor-protocol.md`](./supervisor-protocol.md) — Before / After / Verify; no `git diff`.
+See [`supervisor-protocol.md`](../../../supervisor-protocol.md) — Before / After / Verify; no `git diff`.
 
 ---
 

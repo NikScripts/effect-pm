@@ -24,12 +24,12 @@ import * as Lookup from "../../src/Lookup"
 import * as Node from "../../src/Node"
 import * as Hyperlink from "../../src/Hyperlink"
 
-class Jobs extends Hyperlink.Tag<Jobs>()("forms/Jobs", {
+class Jobs extends Hyperlink.Tag<Jobs>()("Jobs", {
   jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
 /** Address-less — `Node.unix` mints path + claims this key. */
-class Worker extends Node.Tag<Worker, Jobs>()("forms/AddresslessWorker") {}
+class Worker extends Node.Tag<Worker, Jobs>()("AddresslessWorker") {}
 
 const lookupSock = Config.string("LOOKUP_SOCK").pipe(
   Config.withDefault("/tmp/hyperlink-ts-forms-addressless.sock"),

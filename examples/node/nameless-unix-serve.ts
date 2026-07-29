@@ -19,11 +19,11 @@ import { Effect, Layer, Schema } from "effect"
 import * as Node from "../../src/Node"
 import * as Hyperlink from "../../src/Hyperlink"
 
-class Jobs extends Hyperlink.Tag<Jobs>()("forms/nameless/Jobs", {
+class Jobs extends Hyperlink.Tag<Jobs>()("nameless/Jobs", {
   jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
-class Emails extends Hyperlink.Tag<Emails>()("forms/nameless/Emails", {
+class Emails extends Hyperlink.Tag<Emails>()("nameless/Emails", {
   emails: Hyperlink.effect(Schema.String),
 }) {}
 

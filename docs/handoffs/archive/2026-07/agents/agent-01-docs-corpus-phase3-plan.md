@@ -1,7 +1,7 @@
 # Agent 1 — Phase 3 plan: legacy → live book + Draft
 
 **Status:** **SUPERSEDED** — Agent 4 finished the migrate-and-delete pass on 2026-07-28  
-([`legacy-docs-migration.md`](./legacy-docs-migration.md)). `docs/legacy/**` is gone.  
+([`legacy-docs-migration.md`](../../../legacy-docs-migration.md)). `docs/legacy/**` is gone.  
 **Assignment (historical):** [`agent-01-docs-corpus.md`](./agent-01-docs-corpus.md) Phase 3.  
 **Branch (historical):** `cursor/docs-corpus-phase3-ce05` off `integration`.
 
@@ -28,7 +28,7 @@ Wording for the callout:
 
 When tip-checked (prose + examples match tip APIs), keep or drop `status="draft"` per page maturity; remove the `{.draft}` callout; set `done=` tokens honestly. Do **not** invent CSS for Draft.
 
-Codified in [`docs/standards/documentation.md`](../standards/documentation.md).
+Codified in [`docs/standards/documentation.md`](../../../../standards/documentation.md).
 
 ---
 
@@ -67,7 +67,7 @@ Codified in [`docs/standards/documentation.md`](../standards/documentation.md).
 | **P3-0** | Plan + Draft convention in Documentation standard | **done** |
 | **P3-1** | Fill `docs/guides/stores.md`; pointer stubs for legacy store\* | **done** |
 | **P3-2** | ~~Port `toolkit-by-example` → Guides~~ | **cancelled** — not a guide |
-| **P3-2′** | Examples hub + Twoslash-paired `docs/examples/**` | **priority** — [`agent-01-examples-book.md`](./agent-01-examples-book.md) |
+| **P3-2′** | Examples hub + Twoslash-paired `docs/examples/**` | **priority** — [`agent-01-examples-book.md`](../../../agent-01-examples-book.md) |
 | **P3-3** | Replace `processes.md` placeholder | later (background) |
 | **P3-4** | Pointer stubs for queue/telemetry/setup overlap | later |
 | **P3-5** | Archive `beta-15-to-17` + `CODEBASE-INVENTORY` | **done** |

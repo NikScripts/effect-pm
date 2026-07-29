@@ -6,29 +6,29 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **4** | `cursor/hyperservice-open-deps-5679` | [gap proposals](./examples-gap-proposals.md) · [examples IA](./examples-ia-reorg.md) · [E5 apps](./examples-apps-e5-plan.md) | **tip-synced** — Ideas 1–9 + Related notes (97/97) | same tip as `integration` | includes 94/94; Related notes 97/97 | Idea 10 E5 still owner-gated | 2026-07-29 |
-| **G / TUI** | `cursor/view-withsize-types-125f` | View compose · [UI Route](./ui-routes-dream.md) | **landed** — Route+Router; GroupRoute/useGroupRoute removed | same tip as `integration` | ui-routes + ui-router | F5 flake pre-existing | 2026-07-29 |
+| **4** | `cursor/hyperservice-open-deps-5679` | [gap proposals](./examples-gap-proposals.md) · [E5 apps](./examples-apps-e5-plan.md) · [release cleanup](./release-prep-cleanup.md) | **tip-synced** — examples + release-prep cleanup | same tip as `integration` | Related 97/97; archive pass | Idea 10 E5 owner-gated; changeset consolidate owner | 2026-07-29 |
+| **G / TUI** | `cursor/tui-dashboard-parity-125f` | View compose · [UI Route](./ui-routes-dream.md) | **landed** — Route+Router; GroupRoute/useGroupRoute removed | same tip as `integration` | ui-routes + ui-router | F5 flake pre-existing | 2026-07-29 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **5**, **G** | 2026-07-26 |
 | **5** | `cursor/lookup-no-triples-929b` | [launcher + handoff brief](./launcher-and-handoff-brief.md) · [rename](./rename-hyperlink-handoff.md) | **landed** — no-triples + typecheck green on `integration` | same tip as `integration` | typecheck green; advice 4/4; rebind 3/3 | D remainder / `restartSuccessor` / #35–37 deferred | 2026-07-29 |
 | **Docs site** | `cursor/docs-site-edge-cache-dbdc` (ε) | [dev host](./docs-site-dev-host.md) · edge cache · SEO | **tip-synced / live** — apex coming-soon; docs on `dev`; GS polish; origin gate | same tip as `integration` | smoke + host-gate tests; CF + `serve-production.mjs`; islands on `hyperlink-ts` / `.hl-dashboard` | — | 2026-07-29 |
-| **1** | *(frozen)* | [Examples book](./agent-01-examples-book.md) · [Phase 3](./agent-01-docs-corpus-phase3-plan.md) | **frozen / superseded** — E1 examples on tip; intro voice [#68](https://github.com/nikolasstow/Hyperlink/pull/68) closed | — | — | Branch deleted (unique tip was pre-rebrand `docs/index.md`) | 2026-07-26 |
+| **1** | *(frozen)* | [Examples book](./agent-01-examples-book.md) · [Phase 3](./archive/2026-07/agents/agent-01-docs-corpus-phase3-plan.md) | **frozen / superseded** — E1 examples on tip; intro voice [#68](https://github.com/nikolasstow/Hyperlink/pull/68) closed | — | — | Branch deleted (unique tip was pre-rebrand `docs/index.md`) | 2026-07-26 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
 | **3** | *(dead)* | [identity-coordinator](./identity-coordinator.md) · [loud-failures](./loud-failures-design.md) | **dead** — Soft / verify / F4 / lineId memo Eng’d on tip | — | — | Work branch deleted (was tip-contained in `integration`) | 2026-07-26 |
 | **B** | from `integration` | [dashboard typesafety](./agent-b-dashboard-typesafety.md) | **plan-first** | on line | — | Owner-gated; remote `fix/dashboard-typesafety` tip was already on line (deleted) | 2026-07-14 |
 | **A** | merged | [rules/docs](archive/2026-07/agents/agent-a-rules-and-documentation.md) | **merged** | on line | — | — | 2026-07-12 |
 | **C** | from `integration` | [standards audit](./agent-c-standards-audit.md) | **plan-first** | on line | manifest ✓ | Owner-gated; remote `chore/standards-audit` tip was already on line (deleted) | 2026-07-14 |
 | **D** | **merged to `integration`** | [named handles](./agent-d-named-handles.md) · [convergence decisions](./queue-handle-convergence-decisions.md) | **M3 + M1b on tip** | `integration` tip | typecheck / lint / tests green (at land) | **Hover:** `yield* Emails` → **`WorkPool<EmailJob>`**; Gate → **`Gate<…>`** (`Svc` on `HyperlinkTag` + `nameQueueService` / `nameRunService`). **Not** `QueueResource` / public `QueueHandle`. Follow-ups: M2 `.Service` unify, carriers, trailing defaults, prettify asymmetry, Daemon naming, M4–M6. Public `QueueHandle` export removed (internal TEMP only). Do not reassign to Agent 3 | 2026-07-27 |
-| **E** | folded into Agent 3 work branch | [impossible-states](./impossible-states-proposal.md) · [loud-failures](./loud-failures-design.md) | **merged to tip** | `integration` | F1–F4 + default-on verify Eng’d | — | 2026-07-21 |
+| **E** | folded into Agent 3 work branch | [impossible-states](./archive/2026-07/features/impossible-states-proposal.md) · [loud-failures](./loud-failures-design.md) | **merged to tip** | `integration` | F1–F4 + default-on verify Eng’d | — | 2026-07-21 |
 
 ---
 
 ## Supervisor queue
 
 ### Reserved — hands off (2026-07-16, owner-assigned)
-0. **Agent E:** impossible-states plan ([`impossible-states-proposal.md`](./impossible-states-proposal.md)). **DONE + merged:** P1 (node↔protocol wiring bug → compile error, cast-free) + P5 (http transport dies in browser). **P2 SKIPPED** (cast). **P4 already-enforced** (loose-fields payload already rejected; proposal mis-scoped). **P3 deferred** (opaque serve layers). Clean wins complete. Reserved `src/Hyperlink.ts` node/client surface until fully merged (done). **Tag-config reservation RELEASED — Agent D WorkPool/Gate/Daemon payload-config unblocked.**
+0. **Agent E:** impossible-states plan ([`impossible-states-proposal.md`](./archive/2026-07/features/impossible-states-proposal.md)). **DONE + merged:** P1 (node↔protocol wiring bug → compile error, cast-free) + P5 (http transport dies in browser). **P2 SKIPPED** (cast). **P4 already-enforced** (loose-fields payload already rejected; proposal mis-scoped). **P3 deferred** (opaque serve layers). Clean wins complete. Reserved `src/Hyperlink.ts` node/client surface until fully merged (done). **Tag-config reservation RELEASED — Agent D WorkPool/Gate/Daemon payload-config unblocked.**
 
 ### Active (owner approval required)
-1. **Agent 4:** Examples gap Ideas 1–9 Eng’d (WorkPool→Fleet). Index = [`docs/examples.md`](../examples.md); every form page has a **Related examples** NOTE (often several). Idea 10 Apps/E5 still owner-gated. Handoff: [`examples-gap-proposals.md`](./examples-gap-proposals.md).
+1. **Agent 4:** Examples Ideas 1–9 + Related notes Eng’d. **Release-prep cleanup Eng’d** (archive completed handoffs/plans, dead scripts, npmignore, legacy example aliases). Idea 10 Apps/E5 still owner-gated. Owner still: changeset consolidate before `version`/publish.
 2. **Agent G / TUI:** Router dream machine **landed** — `Route` + `Router` only; public `GroupRoute` / `useGroupRoute` removed ([`ui-routes-dream.md`](./ui-routes-dream.md)). Tip-synced with `integration`.
 3. **Agent 5 (Launcher + handoff):** #39 + Ink + Track D on tip; **no-triples landed** (named `{ Advice, Directory, Identity }` + flat Lookup verbs; standard `no-tag-triples`). Next: D remainder / `restartSuccessor` / #35–37. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
 4. **Docs site:** Live — apex coming-soon (inlined CSS + `(book)` chrome); docs on `dev`. Origin host-gate via `serve-production.mjs` (before Waku static). Islands: `hyperlink-ts` alias + `.hl-dashboard`. Getting Started em-dash/voice polish.
@@ -70,7 +70,7 @@ Owner: only **Agent 4**, **Agent 5**, and **Agent G** remain active.
 - `archive/dashboard-readiness` — was `feat/dashboard-readiness` (deck-pack / pollAtom era; needs G-era rebase)
 - `archive/resource-toolkit-web-widgets` — was `rewrite/resource-toolkit`; handoff copies under [`archive/2026-07/widgets/`](./archive/2026-07/widgets/)
 
-**Left active:** `cursor/hyperservice-open-deps-5679` (4), `cursor/tui-dashboard-parity-125f` (G), `main`, `integration`.
+**Left active:** `cursor/hyperservice-open-deps-5679` (4), `cursor/tui-dashboard-parity-125f` (G), `cursor/docs-site-edge-cache-dbdc` (docs site), `main`, `integration`. Tip-contained remotes deleted in release-prep cleanup; unique non-ancestor tips kept under `archive/*` or listed in [`release-prep-cleanup.md`](./release-prep-cleanup.md).
 
 ---
 

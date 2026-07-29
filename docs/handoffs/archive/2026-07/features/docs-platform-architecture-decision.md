@@ -72,7 +72,7 @@ docs/site/
 | **Dashboard relationship** | Separate apps; shared design tokens only |
 | **RSC future** | Effect `Hydration` / atom-react — not Next |
 | **Foldkit** | Optional spike only; owner not impressed |
-| **Agent B restart** | **Unblocked** — see [`local-agents.md`](./local-agents.md) § Agent B |
+| **Agent B restart** | **Unblocked** — see [`local-agents.md`](../agents/local-agents.md) § Agent B |
 
 ---
 
@@ -84,7 +84,7 @@ docs/site/
 | **A** | Blocked on B — writes `content/standards/*.html` with Tailwind |
 | **C** | Blocked on A |
 
-Update [`agent-status.md`](./agent-status.md) when B starts.
+Update [`agent-status.md`](../../../agent-status.md) when B starts.
 
 ---
 

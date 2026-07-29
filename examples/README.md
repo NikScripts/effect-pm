@@ -180,7 +180,7 @@ Paths are under `examples/`. Script = `pnpm run example:<topic>-<kebab-file>` (s
 
 ## Apps (`examples/apps/`)
 
-Prefer `example:apps-*` scripts. Compat aliases (`example:hyperlink-tui`, …) still resolve but are not cited in docs.
+Prefer `example:apps-*` / `example:<topic>-<name>` scripts. Legacy compat aliases were removed for first-release cleanup.
 
 | App | Path | Start |
 |-----|------|-------|

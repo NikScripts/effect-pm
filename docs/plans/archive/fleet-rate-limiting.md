@@ -289,4 +289,4 @@ Fleet rate limiting is **first-class Gate substrate**. HttpApiClient update **us
 - Guide: `docs/guides/work-pools.md` (concurrency vs rateLimit)  
 - Gate concurrency: `src/internal/gate.ts` (Semaphore)  
 - HttpApi instrument / usage registry: `src/internal/httpApiClient.ts`, `src/ApiUsageSchema.ts`  
-- Product bake: local routes + wire nest — owner chat 2026-07-27; [`wire-groups-and-identity.md`](./wire-groups-and-identity.md), [`service-shapes.md`](./service-shapes.md)
+- Product bake: local routes + wire nest — owner chat 2026-07-27; [`wire-groups-and-identity.md`](../wire-groups-and-identity.md), [`service-shapes.md`](../service-shapes.md)

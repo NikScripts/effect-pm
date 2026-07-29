@@ -21,7 +21,7 @@ import { Config, Effect, Layer, Schema } from "effect"
 import * as Lookup from "../../src/Lookup"
 import * as Hyperlink from "../../src/Hyperlink"
 
-class Jobs extends Hyperlink.Tag<Jobs>()("forms/Jobs", {
+class Jobs extends Hyperlink.Tag<Jobs>()("Jobs", {
   jobs: Hyperlink.effect(Schema.Number),
 }) {}
 

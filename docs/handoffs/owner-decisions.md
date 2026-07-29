@@ -271,7 +271,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 ## 2026-07-15 — Task Agent 3: storage cutover follow-through
 
 - **Owner said:** Task Agent 3 (after Soft edge-case pass on #62).
-- **Chose:** Unlock [`agent-03-storage-cutover-followthrough.md`](./agent-03-storage-cutover-followthrough.md) slices **S1→S3** — inventory/TSDoc+plan ripple, example teachability, **untyped WorkPool Soft SQLite/sibling parity**. Queue/Run Soft guards already on #62 tip — do not redo. Plan-first first reply still required.
+- **Chose:** Unlock [`agent-03-storage-cutover-followthrough.md`](./archive/2026-07/agents/agent-03-storage-cutover-followthrough.md) slices **S1→S3** — inventory/TSDoc+plan ripple, example teachability, **untyped WorkPool Soft SQLite/sibling parity**. Queue/Run Soft guards already on #62 tip — do not redo. Plan-first first reply still required.
 - **Rejected / deferred for Agent 3:** fail-loud Soft die on Node-logs-only / unregistered engine; reopen #62 API; memo; handles; docs-site.
 - **Supervisor impact:** Agent 3 active; Manager/keeps #62 Eng.
 
@@ -298,7 +298,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 ## 2026-07-14 — Storage correctness (can’t get Store wrong)
 
 - **Owner said:** Focus on making sure you can’t get storage wrong (broader than child-runtime Logs alone). Build a plan.
-- **Chose:** Living plan [`docs/plans/storage-correctness.md`](../plans/storage-correctness.md) + Agent 3 brief [`agent-03-storage-correctness.md`](./agent-03-storage-correctness.md). Thesis: fail-loud composition; silent empty / split-brain journals are the enemy. Phases A (stores guide + provideMerge recipe) → B (hard guards) → C (one bus/journal per Node) → D (query key hygiene). Child-runtime Logs inherit folded into Phase C.
+- **Chose:** Living plan [`docs/plans/storage-correctness.md`](../plans/storage-correctness.md) + Agent 3 brief [`agent-03-storage-correctness.md`](./archive/2026-07/agents/agent-03-storage-correctness.md). Thesis: fail-loud composition; silent empty / split-brain journals are the enemy. Phases A (stores guide + provideMerge recipe) → B (hard guards) → C (one bus/journal per Node) → D (query key hygiene). Child-runtime Logs inherit folded into Phase C.
 - **Rejected / deferred this track:** store-layer lineId memo; assigning handles/site to Agent 3.
 - **Supervisor impact:** Agent 3 plan-first on storage correctness; unlock Phase A and/or B before code.
 
@@ -306,7 +306,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 ## 2026-07-15 — Phase 3 unlock (legacy → live book + Draft)
 
 - **Owner said:** “Go” on Phase 3 after FleetHealth landed; sync integration; ignore effect β98 fallout (Agent C).
-- **Chose:** Content-side Draft convention (`status="draft"` + `{.draft}` callout; no site chrome); inventory in [`agent-01-docs-corpus-phase3-plan.md`](./agent-01-docs-corpus-phase3-plan.md); first port = fill `docs/guides/stores.md`; archive `beta-15-to-17` + `CODEBASE-INVENTORY`; keep `STORAGE.md` as agent SSOT with consumer pointer.
+- **Chose:** Content-side Draft convention (`status="draft"` + `{.draft}` callout; no site chrome); inventory in [`agent-01-docs-corpus-phase3-plan.md`](./archive/2026-07/agents/agent-01-docs-corpus-phase3-plan.md); first port = fill `docs/guides/stores.md`; archive `beta-15-to-17` + `CODEBASE-INVENTORY`; keep `STORAGE.md` as agent SSOT with consumer pointer.
 - **Rejected / deferred:** Batch Z deletes; STORAGE rewrite; site Draft badges; toolkit-by-example / processes ports (next batches).
 - **Supervisor impact:** Branch `cursor/docs-corpus-phase3-ce05`.
 
@@ -366,7 +366,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 ## 2026-07-27 — Fleet rate limiting before ApiMetrics / HttpApiClient reshape
 
 - **Owner said:** Getting rid of ApiMetrics by combining into HttpApi Gate; all Gates should use rate limiting; fleet rate limiting is more important than an ApiMetrics migrate slice — bake limiter into the updated HttpApiClient.
-- **Chose (direction):** Research Effect `RateLimiter` + proposal [`../plans/fleet-rate-limiting.md`](../plans/fleet-rate-limiting.md). Eng order lean: Gate `rateLimit` substrate (shared store) → observe nest → HttpApiClient Tag (local routes) → absorb ApiMetrics. Not a standalone ApiMetrics migration.
+- **Chose (direction):** Research Effect `RateLimiter` + proposal [`../plans/archive/fleet-rate-limiting.md`](../plans/archive/fleet-rate-limiting.md). Eng order lean: Gate `rateLimit` substrate (shared store) → observe nest → HttpApiClient Tag (local routes) → absorb ApiMetrics. Not a standalone ApiMetrics migration.
 - **Chose (LOCKED — store wiring):** Presence-driven like WorkPool durability — `serviceOption(RateLimiterStore)` (layer is the switch). Soft **memory** when absent (single-node OK). Provide Effect’s fleet store at the root (today Redis); no config flag for “which store.”
 - **Chose (R1 Eng lean):** Gate default `onExceeded: "delay"`; whole-gate key = resource id; nest name lean `observe` (R2).
 - **Chose (R3 Eng):** WorkPool matches Gate presence-driven store (no auto Soft layer merge that blocked Redis). Fleet verified with shared memory store in CI; Redis recipe in guides. Soft + multi-node = docs warning (N× limit), not fail-loud.
@@ -436,7 +436,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 - **Owner said:** “Next” after #54/#55 land — continue corpus.
 - **Chose (Batch E):** Keep `*-decisions.md` + store-cutover SSOTs **flat at handoffs root** (no `decisions/` folder). Archive closed Agent 3 followers/tail plans + not-approved `store-layer-query` under `archive/2026-07/`. `queue-persistence-design` stays as historical SSOT; `queue-nonserializable-items` waits for Phase 2 move to `docs/plans/`.
-- **Chose (Phase 2):** Plan-first only — [`agent-01-docs-corpus-phase2-plan.md`](./agent-01-docs-corpus-phase2-plan.md). Proposed home = **`docs/plans/`**; no mass moves until owner unlocks P1–P4.
+- **Chose (Phase 2):** Plan-first only — [`agent-01-docs-corpus-phase2-plan.md`](./archive/2026-07/agents/agent-01-docs-corpus-phase2-plan.md). Proposed home = **`docs/plans/`**; no mass moves until owner unlocks P1–P4.
 - **Rejected / deferred:** Batch Z deletes; relocating STORAGE-cited cutover files; implementing roadmap features.
 - **Supervisor impact:** Branch `cursor/docs-corpus-phase2-plan-ce05`.
 
@@ -445,7 +445,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 ## 2026-07-14 — Storage correctness (can’t get Store wrong)
 
 - **Owner said:** Focus on making sure you can’t get storage wrong (broader than child-runtime Logs alone). Build a plan.
-- **Chose:** Living plan [`docs/plans/storage-correctness.md`](../plans/storage-correctness.md) + Agent 3 brief [`agent-03-storage-correctness.md`](./agent-03-storage-correctness.md). Thesis: fail-loud composition; silent empty / split-brain journals are the enemy. Phases A (stores guide + provideMerge recipe) → B (hard guards) → C (one bus/journal per Node) → D (query key hygiene). Child-runtime Logs inherit folded into Phase C.
+- **Chose:** Living plan [`docs/plans/storage-correctness.md`](../plans/storage-correctness.md) + Agent 3 brief [`agent-03-storage-correctness.md`](./archive/2026-07/agents/agent-03-storage-correctness.md). Thesis: fail-loud composition; silent empty / split-brain journals are the enemy. Phases A (stores guide + provideMerge recipe) → B (hard guards) → C (one bus/journal per Node) → D (query key hygiene). Child-runtime Logs inherit folded into Phase C.
 - **Rejected / deferred this track:** store-layer lineId memo; assigning handles/site to Agent 3.
 - **Supervisor impact:** Agent 3 plan-first on storage correctness; unlock Phase A and/or B before code.
 
@@ -496,7 +496,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
   registration-native followers. Leaving only `Logs.persistLayer` → standalone `LogStore` left
   Agent 3 clueless. Put a handoff on `integration` that states the locked intent and **requires
   Agent 3 to repeat it back** before code.
-- **Chose:** Rewrite [`agent-03-logs-p1.md`](./agent-03-logs-p1.md) — supersede the “B1/B2/B3 menu”
+- **Chose:** Rewrite [`agent-03-logs-p1.md`](./archive/2026-07/agents/agent-03-logs-p1.md) — supersede the “B1/B2/B3 menu”
   brief. End state = registration followers (`appendLog` / `logQuery` / shared follower factory);
   current `LogStore`+`persistLayer` is interim. Agent 3 first reply = repeat-back only.
 - **Rejected:** Treating node-primary-only as the approved permanent design without an explicit
@@ -517,7 +517,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 ## 2026-07-14 — Open asks priority queue
 
 - **Owner said:** For unfinished items like the dashboard widget plug-in seam — create a new doc that lists and organizes them; **priority at the top**. Walk one issue at a time in chat.
-- **Chose:** [`open-asks.md`](./open-asks.md) — owner-ordered priority queue for unfinished product/DX/consumer asks. First entry = dashboard widget plug-in seam (moved out of the date-stamped widgets handoff).
+- **Chose:** [`open-asks.md`](./archive/2026-07/features/open-asks.md) — owner-ordered priority queue for unfinished product/DX/consumer asks. First entry = dashboard widget plug-in seam (moved out of the date-stamped widgets handoff).
 - **Rejected:** Leaving open polish forever as date-stamped one-offs; burying the walk only in docs.
 - **Supervisor impact:** Agent 1 migrates unfinished asks into `open-asks.md` as they are walked; complete/declined rows leave the queue.
 
@@ -548,7 +548,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 ## 2026-07-14 — Agent 1 → docs corpus (UI stays with lettered agents)
 
 - **Owner said:** Save UI / Tailscale-facing site work for lettered (local) agents. Give Agent 1 the docs corpus instead: **handoffs cleanup first**, then plans refactor/migration, then port legacy docs with a **Draft** page label (owner will refine Draft UX after assign).
-- **Chose:** [`agent-01-docs-corpus.md`](./agent-01-docs-corpus.md) — Phase 1 plan-first inventory of `docs/handoffs/`. No `docs/site` UI. Draft label = content-side proposal only until B/owner specify site chrome.
+- **Chose:** [`agent-01-docs-corpus.md`](./archive/2026-07/agents/agent-01-docs-corpus.md) — Phase 1 plan-first inventory of `docs/handoffs/`. No `docs/site` UI. Draft label = content-side proposal only until B/owner specify site chrome.
 - **Rejected:** Agent 1 on dashboard/web/Tailscale UX; starting legacy port before handoffs/plans hygiene.
 - **Supervisor impact:** Agent 1 docs track; lettered agents keep site/UI.
 
@@ -557,7 +557,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 ## 2026-07-14 — Logs P1 → Agent 3 (Agent 2 retired)
 
 - **Owner said:** Handles are owned by other agents for now. Focus next engine work on **Logs P1** (former “option 2”): level pipes / store followers / remote per-hyperlink logs. Expand and clarify that brief for a **new Agent 3**.
-- **Chose:** [`agent-03-logs-p1.md`](./agent-03-logs-p1.md) — **superseded by the correction entry above** (registration followers are the locked write model; repeat-back first).
+- **Chose:** [`agent-03-logs-p1.md`](./archive/2026-07/agents/agent-03-logs-p1.md) — **superseded by the correction entry above** (registration followers are the locked write model; repeat-back first).
 - **Rejected:** Assigning named-handles work to Agent 3; treating Logs as closed without an explicit P1 park/unlock.
 - **Supervisor impact:** Agent 2 retired after #33; Agent 3 owns Logs P1.
 

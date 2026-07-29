@@ -29,12 +29,12 @@ const Job = Schema.Struct({
 })
 
 /** Exclusive coordinator — only one live winner via Lookup Identity. */
-class Router extends Hyperlink.Tag<Router>()("forms/Router", {
+class Router extends Hyperlink.Tag<Router>()("Router", {
   enqueue: Hyperlink.effectFn({ job: Job }, Schema.Void),
 }).pipe(Hyperlink.identity) {}
 
 /** Many hands — advertise via Directory; dial with lookupClient. */
-class Worker extends Hyperlink.Tag<Worker>()("forms/Worker", {
+class Worker extends Hyperlink.Tag<Worker>()("Worker", {
   run: Hyperlink.effectFn({ job: Job }, Schema.String),
 }) {}
 
@@ -47,7 +47,7 @@ const program = Effect.gen(function* () {
   const lookup = Lookup.clientOptions({ path: lookupPath })
   const lookupCtx = yield* Layer.build(lookup)
 
-  class RouterNode extends Node.Tag<RouterNode>()("forms/RouterNode", {
+  class RouterNode extends Node.Tag<RouterNode>()("RouterNode", {
     path: routerPath,
   }) {}
 

@@ -11,7 +11,7 @@
  *   pnpm run example:hyperlink ls
  *   pnpm run example:hyperlink --help
  *
- * Needs the example servers running (`example:queue-server` + `example:mini-server`);
+ * Needs the example servers running (`example:apps-dashboard-queue-server` + `example:apps-dashboard-mini-server`);
  * the CLI drives them over http via the same `appLayer` the dashboard uses.
  */
 

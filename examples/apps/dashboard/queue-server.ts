@@ -5,7 +5,7 @@
  * queue) so the browser can reach them with `Hyperlink.client`. Drives live traffic
  * the sanctioned way — a **client** that enqueues over the wire (a loopback producer
  * here), not server-side `yield* tag` (a node doesn't expose its served service).
- * Run: `pnpm run example:queue-server`.
+ * Run: `pnpm run example:apps-dashboard-queue-server`.
  */
 import { Duration, Effect, Layer, Logger } from "effect";
 import { createServer } from "node:http";

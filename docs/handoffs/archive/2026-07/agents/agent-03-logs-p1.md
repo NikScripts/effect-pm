@@ -8,7 +8,7 @@
 **Deferred (parked):** store-layer `(scopeKey, lineId)` memo.  
 **Do not reopen** for Eng unless owner unlocks a new slice. Superseded plan PRs [#35](https://github.com/NikScripts/effect-pm/pull/35)/[#46](https://github.com/NikScripts/effect-pm/pull/46) closed; branches deleted.
 
-**Docs bus:** [`agent-status.md`](./agent-status.md) · [`agent-03-logs-store-followers-plan.md`](./archive/2026-07/agents/agent-03-logs-store-followers-plan.md) · [`docs/LOGS.md`](../LOGS.md) · optional guide [#50](https://github.com/NikScripts/effect-pm/pull/50)
+**Docs bus:** [`agent-status.md`](../../../agent-status.md) · [`agent-03-logs-store-followers-plan.md`](./agent-03-logs-store-followers-plan.md) · [`docs/LOGS.md`](../../../../LOGS.md) · optional guide [#50](https://github.com/NikScripts/effect-pm/pull/50)
 
 ---
 
@@ -69,8 +69,8 @@ This is **not** optional, and it is **not** “keep `Logs.persistLayer` + standa
 
 Canonical sources:
 
-- [`agent-02-logs-platform-plan.md`](archive/2026-07/agents/agent-02-logs-platform-plan.md) — **Store integration** + Phase 3–4
-- [`store-and-logs-design.md`](./store-and-logs-design.md) — **Single capture, single store write** (overrides table in Agent 2 plan wins on naming; the follower diagram is still the intent)
+- [`agent-02-logs-platform-plan.md`](./agent-02-logs-platform-plan.md) — **Store integration** + Phase 3–4
+- [`store-and-logs-design.md`](../../../store-and-logs-design.md) — **Single capture, single store write** (overrides table in Agent 2 plan wins on naming; the follower diagram is still the intent)
 
 ### What “`LogStore`” was doing in the interim
 
@@ -139,7 +139,7 @@ If the owner later picks “node-journal only, query filters for resources,” t
 Checkout integration and pull:
   git fetch origin integration && git checkout integration && git pull
 
-Read docs/handoffs/agent-03-logs-p1.md carefully.
+Read docs/handoffs/archive/2026-07/agents/agent-03-logs-p1.md carefully.
 
 You are Agent 3. Agent 2 shipped capture + relay + an interim node-wide
 Logs.persistLayer → LogStore follower. That is NOT the finished product.
