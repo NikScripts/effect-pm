@@ -172,10 +172,6 @@
       "types": "./dist/ui/Navigator.d.ts",
       "default": "./dist/ui/Navigator.js"
     },
-    "./ui/Bundle": {
-      "types": "./dist/ui/Bundle.d.ts",
-      "default": "./dist/ui/Bundle.js"
-    },
     "./ui/GroupView": {
       "types": "./dist/ui/GroupView.d.ts",
       "default": "./dist/ui/GroupView.js"

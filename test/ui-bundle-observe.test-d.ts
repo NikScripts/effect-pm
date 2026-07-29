@@ -1,19 +1,20 @@
 /**
- * Bundle.observe — overload returns.
+ * Observe.use — pack field presence for queue / daemon.
  */
 import { expectTypeOf } from "vitest";
-import * as Bundle from "../src/ui/Bundle";
-import type {
-  DaemonBundle,
-  DaemonTag,
-  QueueBundle,
-  QueueTag,
-} from "../src/ui/data";
+import * as Observe from "../src/Observe";
+import * as DaemonView from "../src/ui/DaemonView";
+import * as WorkPoolView from "../src/ui/WorkPoolView";
+import type { DaemonTag, QueueTag } from "../src/ui/data";
 
 declare const jobs: QueueTag;
 declare const nightly: DaemonTag;
 
-const queueBox = Bundle.observe(jobs);
-const daemonBox = Bundle.observe(nightly);
-expectTypeOf(queueBox).toEqualTypeOf<QueueBundle>();
-expectTypeOf(daemonBox).toEqualTypeOf<DaemonBundle>();
+const queueBox = Observe.use(jobs, WorkPoolView.pack);
+const daemonBox = Observe.use(nightly, DaemonView.pack);
+
+expectTypeOf(queueBox).toHaveProperty("status");
+expectTypeOf(queueBox).toHaveProperty("pause");
+expectTypeOf(queueBox).toHaveProperty("logs");
+expectTypeOf(daemonBox).toHaveProperty("status");
+expectTypeOf(daemonBox).toHaveProperty("start");

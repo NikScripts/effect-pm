@@ -17,7 +17,7 @@
  *
  * Or compose the pieces: `DashboardLayer.forCompose` + `View.compose` + `DashboardShell`
  * under `RegistryProvider` + `RuntimeProvider` + `ViewTransitionProvider`. Prefer
- * `Observe.use(tag, *View.pack)` / `NodeView.use` over deprecated Bundle / `use*Bundle`.
+ * `Observe.use(tag, *View.pack)` / `NodeView.use`.
  *
  * Peers: `react`, `react-dom`, `recharts`. Styled with Tailwind utility classes + shadcn theme
  * tokens (`@source` + theme wiring in the consuming app).

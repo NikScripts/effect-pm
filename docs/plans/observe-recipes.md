@@ -1,6 +1,6 @@
 # Plan: Observe recipes (pipeable UI packs)
 
-**Status:** Phases 0–3 Eng’d — Observe + all family `*View.pack` + web/TUI dogfood; `Bundle.observe` / `Bundle.node` are deprecated shims. Phase 4 (delete shim + `use*Bundle` / `ui.data`) still open.  
+**Status:** Phases 0–4 Eng’d — Observe + all family `*View.pack` + web/TUI dogfood; `Bundle` / `use*Bundle` / `View.compose().data` **removed**.  
 **Branch:** `cursor/view-withsize-types-125f` (Agent G).  
 **Prior art:** [`../guides/hyperlink-atom.md`](../guides/hyperlink-atom.md), [`../guides/bundles.md`](../guides/bundles.md), [`../guides/observe.md`](../guides/observe.md), [`../standards/principles.md#handles-stay-thin`](../standards/principles.md#handles-stay-thin), [`../handoffs/view-compose-lock.md`](../handoffs/view-compose-lock.md) §G.
 
@@ -180,8 +180,8 @@ Same pattern on `DaemonView`, `GateView`, … — each exports **`pack`**.
 | **0** | Eng `Observe` + `WorkPoolView.pack`; tests; guide | **Eng’d** |
 | **1** | Dogfood web/TUI skins on `Observe.use(tag, *View.pack)` / `NodeView.use` | **Eng’d** |
 | **2** | Rewrite `queueBundle` as thin wrap over `WorkPoolView.pack` | **Eng’d** |
-| **3** | Port remaining packs onto matching `*View.pack`; `Bundle.*` → deprecated shim | **Eng’d** (delete module = Phase 4) |
-| **4** | Remove deprecated `use*Bundle` / `ui.data` / `ui/Bundle` after greps are clean | **Open** |
+| **3** | Port remaining packs onto matching `*View.pack`; `Bundle.*` → deprecated shim | **Eng’d** |
+| **4** | Remove deprecated `use*Bundle` / `ui.data` / `ui/Bundle` after greps are clean | **Eng’d** |
 
 Changeset: **minor** (`Observe` + pack reshape + `*View` subpaths).
 
@@ -390,10 +390,9 @@ Compose with `Observe.*`; optionally add `pack` on a matching `*View` later — 
 ## Open Eng details
 
 1. **Non-queue packs** — today `packOf` over proven `*Bundle` builders (parity). Optional later: rewrite compositionally like `WorkPoolView.pack`.  
-2. **Phase 4** — delete `ui/Bundle`, `use*Bundle`, and `View.compose().data` once out-of-tree greps are clean.  
-3. **Kit `<Dashboard />`** — HOLD unchanged.
+2. **Kit `<Dashboard />`** — HOLD unchanged.
 
-Resolved: shared fold via `Observe.map`; queue `logs` on `WorkPoolView.pack`; `Observe.use` always calls `useRuntime()`; `ui/NodeView` for NodeRef.
+Resolved: shared fold via `Observe.map`; queue `logs` on `WorkPoolView.pack`; `Observe.use` always calls `useRuntime()`; `ui/NodeView` for NodeRef; Phase 4 Bundle/`use*Bundle`/`data` removed.
 
 ---
 

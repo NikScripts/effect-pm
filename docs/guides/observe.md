@@ -32,7 +32,7 @@ const box2 = Observe.bind(runtime)(Jobs, WorkPoolView.pack)
 | Packs | `WorkPoolView.pack` | Shipped UI field sets on `*View` |
 | Discharge | `Observe.bind` / `.use` | Tag + pack → atom box |
 
-`Bundle.observe(tag)` remains a deprecated shim; new code uses `Observe.use(tag, *View.pack)`.
+`Bundle.observe`, `use*Bundle`, and `View.compose().data` are removed — see [Bundles](/docs/bundles).
 
 ## Recipes
 
@@ -86,11 +86,11 @@ NodeView.use(ref)
 
 Compositional queue card/detail surface:
 
-- `status` + `trend` share one fold (same pending series as today’s `queueBundle`)
+- `status` + `trend` share one fold (same pending series as today’s builders)
 - `metrics` + `history` share one fold (localStorage-backed cap)
 - `pause` / `resume` / `clear` / `shutdown` via `queueControls`
 - `logs` via node-scoped `queueLogs`
 
 Slices (`queueControls`, `queueMetricsHistory`, `queueLogs`) are also exported for apps that want a thinner pack.
 
-See also [Hyperlink atom](/docs/hyperlink-atom), [Bundles](/docs/bundles) (migration).
+See also [Hyperlink atom](/docs/hyperlink-atom), [Bundles](/docs/bundles) (retirement map).

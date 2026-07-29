@@ -38,4 +38,4 @@ const add = Hyperlink.fn(rt)(Jobs, (q) => q.add)
 5. React apps: put `rt` in `RuntimeProvider`; subscribe with `useAtomValue` / `useAtomSet`.
 
 Dashboard packs compose these via [Observe](/docs/observe) (`WorkPoolView.pack`, …).
-`Bundle.observe` remains a deprecated shim. See [Bundles](/docs/bundles).
+See [Bundles](/docs/bundles) for the retirement map from `Bundle.observe`.

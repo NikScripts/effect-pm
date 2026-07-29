@@ -7,7 +7,7 @@
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **4** | `cursor/hyperservice-open-deps-5679` | [fleet rate limiting](../plans/fleet-rate-limiting.md) · [wire groups](../plans/wire-groups-and-identity.md) · [service shapes](../plans/service-shapes.md) | **tip-synced** — R4b ApiMetrics deleted; dashboard nest parity | same tip as `integration` | typecheck 0 / api-metrics 7/7 | idle | 2026-07-28 |
-| **G / TUI** | `cursor/view-withsize-types-125f` | View compose · Shell · Observe Phases 0–3 | **pushed** — all `*View.pack` + web/TUI dogfood; Bundle shim | `f4f1bfa55` | typecheck 0 · observe/pack tests 8/8 | Phase 4 delete Bundle/`use*Bundle`; kit HOLD | 2026-07-29 |
+| **G / TUI** | `cursor/view-withsize-types-125f` | View compose · Shell · Observe Phases 0–4 | **pushed** — Observe packs; Bundle/`use*Bundle`/`data` removed | `f4f1bfa55` | typecheck 0 | kit HOLD; optional compositional non-queue packs | 2026-07-29 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **5**, **G** | 2026-07-26 |
 | **5** | `cursor/launcher-handoff-design-929b` | [launcher + handoff brief](./launcher-and-handoff-brief.md) · [rename](./rename-hyperlink-handoff.md) | **Launcher refinements** — Config/`command`/metrics | same tip as `integration` | typecheck + launcher suites | Owner: lock C #27–36 | 2026-07-28 |
 | **Docs site** | `cursor/docs-site-edge-cache-dbdc` (ε) | [origin down](./docs-site-origin-down.md) · edge cache · SEO · Lighthouse | **tip-synced + live** — lang-gated demo islands | same tip as `integration` | deploy ACTIVE `fd988b1f5`; live install no Hyperlink preload; smoke 34/34 | Keychain backup local; **no landing UI without owner OK** | 2026-07-28 |
@@ -29,7 +29,7 @@
 
 ### Active (owner approval required)
 1. **Agent 4:** W1–W3 + `default`/`defaults` + R1–R4+adaptive + A1–A3; **`cell` parked/rejected**; **R5 rejected**; **R4b tip-synced** — sibling `ApiMetrics` deleted; dashboard/TUI surface limiter nest. Idle. Incident: [`agent-04-w3-incident-2026-07-27.md`](./agent-04-w3-incident-2026-07-27.md).
-2. **Agent G / TUI:** Observe Phases 0–3 Eng’d — `Observe.use(tag, *View.pack)` / `NodeView.use` dogfooded in web+TUI; `Bundle.*` deprecated shim. Next: Phase 4 delete Bundle/`use*Bundle` when greps clean. Kit HOLD. Branch `cursor/view-withsize-types-125f`.
+2. **Agent G / TUI:** Observe Phases 0–4 Eng’d — `Observe.use(tag, *View.pack)` / `NodeView.use`; `Bundle` / `use*Bundle` / `View.compose().data` removed. Kit HOLD. Branch `cursor/view-withsize-types-125f`.
 3. **Agent 5 (Launcher + handoff):** Track A+B Eng'd; HyperService vocab/URL purge + Effect-fullest Launcher + **refinements** (Config auto-read, `Launcher.command`, metrics) on tip; Track C bake #27–36 proposed. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md). Rename SSOT: [`rename-hyperlink-handoff.md`](./rename-hyperlink-handoff.md).
 4. **Docs site:** tip-synced + redeployed (`fd988b1f5` ACTIVE). Fail-fast deploy gates; React **#418** fixed; lang-gated Queue/Gate/Counter/Listen islands — live `/docs/install` no Hyperlink preload. Remaining LH: render-blocking `_layout` CSS. Landing UI unchanged. Keychain backup local (no 1Password).
 

@@ -1,5 +1,5 @@
 /**
- * Bundle.observe — namespaced door over use*Bundle.
+ * Observe.use — React discharge of *View.pack under RuntimeProvider.
  */
 import * as React from "react";
 import { describe, expect, it } from "@effect/vitest";
@@ -9,35 +9,37 @@ import { renderToString } from "react-dom/server";
 import * as Daemon from "../src/Daemon";
 import * as Group from "../src/Group";
 import * as Node from "../src/Node";
+import * as Observe from "../src/Observe";
 import * as WorkPool from "../src/WorkPool";
-import * as Bundle from "../src/ui/Bundle";
+import * as DaemonView from "../src/ui/DaemonView";
 import * as Navigator from "../src/ui/Navigator";
 import { RuntimeProvider } from "../src/ui/runtime";
 import * as View from "../src/ui/View";
+import * as WorkPoolView from "../src/ui/WorkPoolView";
 
 const Item = Schema.Struct({ n: Schema.Number });
-class AppNode extends Node.Tag<AppNode>()("app/bundle/Node", {
+class AppNode extends Node.Tag<AppNode>()("app/observe-use/Node", {
   url: "http://127.0.0.1:9/rpc",
   kind: "Http",
 }) {}
-class Jobs extends WorkPool.Tag<Jobs>()("app/bundle/Jobs", {
+class Jobs extends WorkPool.Tag<Jobs>()("app/observe-use/Jobs", {
   payload: Item,
   node: AppNode,
 }) {}
-class Nightly extends Daemon.Tag<Nightly>()("app/bundle/Nightly", {
+class Nightly extends Daemon.Tag<Nightly>()("app/observe-use/Nightly", {
   node: AppNode,
 }) {}
-class Hub extends Group.Tag<Hub>("app/bundle/Hub")({ Jobs, Nightly }) {}
+class Hub extends Group.Tag<Hub>("app/observe-use/Hub")({ Jobs, Nightly }) {}
 
-class PoolCard extends View.Card.Tag<PoolCard>()("hyperlink/view/bundle-pool-card") {}
+class PoolCard extends View.Card.Tag<PoolCard>()("hyperlink/view/observe-use-pool-card") {}
 
 const views = View.bind(WorkPool.kind, PoolCard).pipe(
   Layer.provideMerge(View.provide(PoolCard, () => null)),
   Layer.provideMerge(View.base),
 );
 
-describe("Bundle.observe", () => {
-  it("returns queue / daemon bundles under RuntimeProvider", () => {
+describe("Observe.use", () => {
+  it("returns queue / daemon packs under RuntimeProvider", () => {
     const ui = View.compose({
       views,
       navigator: Navigator.memory(Hub),
@@ -47,8 +49,8 @@ describe("Bundle.observe", () => {
     let daemonKeys: ReadonlyArray<string> | undefined;
 
     function Probe() {
-      const q = Bundle.observe(Jobs);
-      const d = Bundle.observe(Nightly);
+      const q = Observe.use(Jobs, WorkPoolView.pack);
+      const d = Observe.use(Nightly, DaemonView.pack);
       queueKeys = Object.keys(q).sort();
       daemonKeys = Object.keys(d).sort();
       return null;
@@ -63,6 +65,7 @@ describe("Bundle.observe", () => {
 
     expect(queueKeys).toContain("status");
     expect(queueKeys).toContain("pause");
+    expect(queueKeys).toContain("logs");
     expect(daemonKeys).toContain("status");
     expect(daemonKeys).toContain("start");
   });

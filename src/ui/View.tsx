@@ -17,7 +17,6 @@ import type * as Types from "effect/Types";
 import * as Group from "../Group";
 import { kindOf } from "../Hyperlink";
 import * as Navigator from "./Navigator";
-import { data, type DataDoor } from "./runtime";
 import type { LeafTag } from "./widgetRegistry";
 
 // =============================================================================
@@ -1041,7 +1040,7 @@ export const useGridMembers = (): ReadonlyArray<{
  * Thin Dashboard sugar: {@link react} + {@link Navigator} Layer. No second registry;
  * no `Atom.runtime` inside — wrap with {@link ./runtime.RuntimeProvider} outside.
  *
- * Observe via `Observe.use(tag, *View.pack)` / `NodeView.use` (not `ui.data`).
+ * Observe via `Observe.use(tag, *View.pack)` / `NodeView.use` under `RuntimeProvider`.
  *
  * @example
  * ```tsx
@@ -1077,10 +1076,6 @@ export const compose = <VR, VE,>(options: {
   readonly Outlet: () => React.ReactElement | null;
   readonly useGridMembers: typeof useGridMembers;
   readonly navigator: Navigator.Service;
-  /**
-   * @deprecated Prefer `Observe.use` / `NodeView.use`.
-   */
-  readonly data: DataDoor;
 } => {
   const viewKit = react(options.views);
   const nav = Effect.runSync(
@@ -1168,6 +1163,5 @@ export const compose = <VR, VE,>(options: {
     Outlet,
     useGridMembers,
     navigator: nav,
-    data,
   };
 };
