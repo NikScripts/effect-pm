@@ -1,6 +1,6 @@
 # Brief — Launcher + node handoff (Agent 5)
 
-**Status:** Track A + **Track B Eng'd** on tip. **Track C Locked #27–33** (membership push + drain-then-cut spine); **#31/#32 Eng in progress** (`phase` / `Node.drain`). Deferred bake: state transfer / contract ranges / Lookup-node / Track D (#34–37).  
+**Status:** Track A + **Track B Eng'd** on tip. **Track C Locked #27–33**; **#27/#31/#32/#33 Eng'd** (`Directory.changes`, `Node.drain` / `shutdown` / `launch`, directory `peersLayer` rebind, `Hyperlink.withHandoff`). Deferred bake #34–37.  
 **Opened:** 2026-07-25 (owner via Agent G).  
 **Audience:** next agent picking up launcher + handoff / migration discussion.
 
@@ -128,13 +128,16 @@
     - `Node.drain(node)` / status `drain` RPC — idempotent enter draining; ping/status stay up.
     - While draining: node-status `yield` **always refuses** (overrides `ListenOptions.onYield`).
     - Lookup `livenessReplace` / `askIncumbent` cannot steal a reachable draining incumbent.
-32. **Old-node shutdown = Node control-plane sequence after migrate; compose B unregister + Advice clear** (owner lock 2026-07-29; **partial Eng** — `Node.drain` phase only).
+32. **Old-node shutdown = Node control-plane sequence after migrate; compose B unregister + Advice clear** (owner lock 2026-07-29; **Eng'd**).
     - **Not** `Launcher.kill`. **Not** Lookup-owned process kill. **Module home = `Node`**.
-    - Sequence (principle): drain → optional WorkPool transfer → Directory `unregister` → Advice `clear` → process exit.
-    - **Still to Eng:** process-exit / full `Node.shutdown` (or drain-then-exit) verb after per-service handoff (#33).
-33. **Layer shape = opt-in handoff config on the HyperService (serve / tag layer), not ListenOptions** (owner lock 2026-07-29; **not Eng'd yet**).
+    - **`Node.shutdown(node)`** — drain → opted-in handoffs (#33) → Advice clear → Directory unregister → listen exit.
+    - **`Node.launch(node, layer)`** — prefer over bare `Layer.launch`; races the shutdown latch (no `process.exit`).
+    - Per-service handoff (#33 Eng'd) runs between drain and leave; peer enqueue transfer still #34.
+33. **Layer shape = opt-in handoff config on the HyperService (serve / tag layer), not ListenOptions** (owner lock 2026-07-29; **Eng'd**).
     - Keep `ListenOptions` for A/B (`assumeToken`, `onConflict`, `onYield`).
-    - Per-service handoff attach with serve / readiness-adjacent config (name at Eng): e.g. `drain-only` | `workPool-release`.
+    - **`Hyperlink.withHandoff("drain-only" | "workPool-release")`** — pipe on the tag (same shape as `withReadiness`); default off (#29).
+    - Runs during `Node.shutdown` after drain, before Lookup leave. Non-WorkPool kinds log + no-op.
+    - `"workPool-release"` = local release half only; peer `enqueue` = #34.
 
 Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.md) remain **reference only** unless re-locked here.
 
@@ -216,7 +219,7 @@ Owner locked #22–26; Eng on tip:
 
 **Gone / do not invent lightly:** `HandoffManager`, parallel Directory, launcher-owned migration, Lookup.assign / blank-worker migrate.
 
-**Gaps vs full C:** no process-exit `Node.shutdown` yet; no per-service handoff layer option (#33); no WorkPool transfer bake; no dual-serve / client redirect. **Shipped:** #27 membership push; #31 `phase` + `Node.drain` + yield fail-closed.
+**Gaps vs full C:** no WorkPool peer-transfer bake (#34); no dual-serve / client redirect. **Shipped:** #27 membership push; #31 `phase` + `Node.drain` + yield fail-closed; #32 `Node.shutdown` / `launch` + peersLayer rebind; #33 `Hyperlink.withHandoff`.
 
 ### Track C — deferred bake (not locked; #34–37)
 
@@ -245,7 +248,7 @@ Owner locked #22–26; Eng on tip:
 
 **Rejected for C v1 (record):** dual-serve cutover; client redirect; shared Store; contract compatibility ranges; Lookup.assign / blank-worker migrate; Launcher as migration owner; `HandoffManager` noun.
 
-**Exit for Eng (remaining Locked):** finish #32 process-exit (`Node.shutdown` / drain-then-exit) → Eng #33 per-service handoff layer option. Then owner-lock #34–37 as needed.
+**Exit for Eng (remaining Locked):** none — #27–33 Eng'd. Owner-lock #34–37 as needed for transfer / contract / Lookup-node / Track D boundary.
 
 ---
 
@@ -319,10 +322,9 @@ How **clients** handle node handoff (redirect, dual-serve, drain, retry, discove
 
 ## Suggested first moves
 
-1. ~~Framing / A+B / lock #27–33~~ — done; #31 Eng’d (`phase` / `Node.drain`); #32 partial.
-2. **Eng next:** `Node.shutdown` / drain-then-exit (#32 remainder) → per-service handoff layer (#33).
-3. **Owner later:** lock deferred bake #34–37 (state transfer / contract / Lookup-node / Track D boundary) or amend.
-4. Track D: peer hot-rebind on `Directory.changes` remains the natural follow-up to #27.
+1. ~~Framing / A+B / lock #27–33 / #31–33 Eng / peersLayer rebind / withHandoff~~ — done.
+2. **Owner later:** lock deferred bake #34–37 (state transfer / contract / Lookup-node / Track D boundary) or amend.
+3. Track D: `lookupClient` hot-rebind still open (directory `peersLayer` already rebinds).
 
 ---
 

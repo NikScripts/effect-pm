@@ -54,6 +54,7 @@ import {
   Data,
   Duration,
   Effect,
+  Exit,
   Fiber,
   Function as Fn,
   Layer,
@@ -124,8 +125,15 @@ import {
   unaddressedLayer,
 } from "./internal/nodeConnect";
 import { adaptPromiseHandle } from "./internal/promiseHandle";
+import {
+  makeHandoffRun,
+  type HandoffStrategy,
+} from "./internal/hyperlinkHandoff";
 // Node listen/connect used only inside functions via dynamic import where needed;
 // clientLayerForEndpoint uses clientLayer auto-connect for dialable endpoints.
+
+/** Opt-in cutover strategy for {@link withHandoff} (Locked #33). @public */
+export type { HandoffStrategy };
 
 // ── typed errors (Data.TaggedError — never raw `Error`) ──
 
@@ -2587,6 +2595,11 @@ export const kindSym: unique symbol = Symbol.for(
 export const readinessSym: unique symbol = Symbol.for(
   "hyperlink-ts/Hyperlink/readiness",
 );
+/** Where a HyperService's opt-in cutover strategy is stowed — applied by {@link withHandoff}.
+ *  Absent ⇒ not migrated by Track C (#29). @internal */
+export const handoffSym: unique symbol = Symbol.for(
+  "hyperlink-ts/Hyperlink/handoff",
+);
 /** Where the HyperService's {@link Node} (if any) is stowed on a Tag. @internal */
 export const nodeSym: unique symbol = Symbol.for(
   "hyperlink-ts/Hyperlink/node",
@@ -2690,6 +2703,8 @@ export interface HyperlinkTag<Self, S extends Spec, Svc = ServiceOf<S, Self>>
   /** The HyperService's readiness derivation, if any (applied by {@link withReadiness}); `undefined`
    *  ⇒ ready by default. Read it via {@link readinessCheck}. */
   readonly [readinessSym]: ReadinessOf<ServiceOf<S, Self>> | undefined;
+  /** Opt-in cutover strategy ({@link withHandoff}); `undefined` ⇒ not migrated (#29). */
+  readonly [handoffSym]: HandoffStrategy | undefined;
   /** The per-HyperService {@link peers} capability key — its value is this HyperService's peer clients
    *  (the other nodes' leaf services), keyed by node. Provided by {@link peersLayer}, read via {@link peers}. */
   readonly [peersSym]: Context.Key<PeersId<Self>, Record<string, PeerServiceOf<S>>>;
@@ -3145,6 +3160,77 @@ export const withReadiness: {
 );
 
 /**
+ * Attach an opt-in cutover strategy to a HyperService tag (Locked #33). Default is **off** —
+ * absent stamp ⇒ Track C does not migrate this HyperService (#29). Dual (data-first or `.pipe`):
+ *
+ * ```ts
+ * class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", { payload: Item }).pipe(
+ *   Hyperlink.withHandoff("drain-only"),
+ * ) {}
+ * ```
+ *
+ * Strategies:
+ * - `"drain-only"` — WorkPool `shutdown` + wait `phase === "off"`
+ * - `"workPool-release"` — local `releaseEncoded`/`release` then shutdown (peer enqueue = #34)
+ *
+ * Run during {@link Node.shutdown} after drain and before Lookup leave. Non-WorkPool kinds log and no-op.
+ *
+ * @category spec fields
+ * @public
+ */
+export const withHandoff: {
+  <T extends PipeableTag>(strategy: HandoffStrategy): (tag: T) => T;
+  <Self, S extends Spec, HSelf>(
+    tag: NodeBoundTag<Self, S, HSelf>,
+    strategy: HandoffStrategy,
+  ): NodeBoundTag<Self, S, HSelf>;
+  <Self, S extends Spec>(
+    tag: HyperlinkTag<Self, S>,
+    strategy: HandoffStrategy,
+  ): HyperlinkTag<Self, S>;
+} = Fn.dual(
+  2,
+  <T extends HyperlinkTag<any, any, any>>(tag: T, strategy: HandoffStrategy): T =>
+    Object.assign(tag, { [handoffSym]: strategy }) as T,
+);
+
+/**
+ * Read a tag's {@link withHandoff} strategy, if any.
+ *
+ * @category spec fields
+ * @public
+ */
+export const handoffOf = (tag: unknown): HandoffStrategy | undefined => {
+  if (
+    (typeof tag === "object" || typeof tag === "function") &&
+    tag !== null &&
+    handoffSym in tag
+  ) {
+    const value = (tag as { readonly [handoffSym]?: HandoffStrategy })[handoffSym];
+    if (value === "drain-only" || value === "workPool-release") return value;
+  }
+  return undefined;
+};
+
+/** Build a {@link ServedHyperlink}.handoff entry from a stamped tag + wire impl. @internal */
+const servedHandoff = (
+  tag: unknown,
+  wireImpl: unknown,
+):
+  | {
+      readonly strategy: HandoffStrategy;
+      readonly run: Effect.Effect<void>;
+    }
+  | undefined => {
+  const strategy = handoffOf(tag);
+  if (strategy === undefined) return undefined;
+  return {
+    strategy,
+    run: makeHandoffRun(strategy, kindOf(tag), wireImpl),
+  };
+};
+
+/**
  * Run a tag's readiness derivation against its built service. A tag that declares none is **ready by
  * default**, so an unaware or bare HyperService never falsely fails a node's readiness gate. Accepts
  * `unknown` so a served entry's tag + impl pass straight in.
@@ -3401,6 +3487,7 @@ const buildInstanceTag = <Self, S extends Spec>(
     // Solo bare tags default to `kind`; shared-Spec instances default kind to the wire key.
     [kindSym]: kindOverride ?? (sharedMarker ? wireKey : kind),
     [readinessSym]: undefined,
+    [handoffSym]: undefined,
     [peersSym]: peersKey,
     [selfNodeSym]: selfNodeKey,
     ...(interfaceLocalsMarker ? { [interfaceLocalsSym]: true as const } : {}),
@@ -3992,6 +4079,12 @@ export interface ServedHyperlink {
   readonly readiness: Effect.Effect<Readiness>;
   /** F4 wire-contract fingerprint — stamped at serve from the tag Spec. */
   readonly contractHash: string;
+  /** Opt-in cutover Effect ({@link withHandoff}); run during {@link Node.shutdown} after drain. */
+  readonly handoff?: {
+    /** Solo stamp; omitted when aggregating shared-Spec instances. */
+    readonly strategy?: HandoffStrategy;
+    readonly run: Effect.Effect<void>;
+  };
   /** Node log key when the served tag is bound to a {@link Node} (`options.node`). */
   readonly nodeLogKey?: string;
   /** Declared transport set of the tag's {@link Node}, when node-bound — the server asserts its own
@@ -4113,6 +4206,7 @@ const INSTANCE_KEY_HEADER = "key";
 type SharedWireState = {
   readonly table: Map<string, Record<string, unknown>>;
   readonly readiness: Array<Effect.Effect<Readiness>>;
+  readonly handoffs: Array<Effect.Effect<void>>;
 };
 
 const sharedWireStates = new Map<string, SharedWireState>();
@@ -4121,7 +4215,7 @@ const sharedHandlerLayers = new Map<string, Layer.Any>();
 const getSharedWireState = (wireKey: string): SharedWireState => {
   let state = sharedWireStates.get(wireKey);
   if (state === undefined) {
-    state = { table: new Map(), readiness: [] };
+    state = { table: new Map(), readiness: [], handoffs: [] };
     sharedWireStates.set(wireKey, state);
   }
   return state;
@@ -4203,6 +4297,18 @@ const getOrCreateSharedHandlerLayer = (
               kind,
               contractHash: hashContract(wireKey, kind, spec),
               readiness: Effect.suspend(() => allReady(state.readiness)),
+              // Shared instances may stamp different strategies; `run` aggregates every
+              // opted-in instance handoff (no-op when none opted in).
+              handoff: {
+                run: Effect.suspend(() =>
+                  state.handoffs.length === 0
+                    ? Effect.void
+                    : Effect.forEach(state.handoffs, (run) => run, {
+                        discard: true,
+                        concurrency: "unbounded",
+                      }),
+                ),
+              },
               ...(bound !== undefined ? { nodeLogKey: bound.key } : {}),
               ...(boundKinds.length > 0 ? { nodeKinds: boundKinds } : {}),
             });
@@ -4241,6 +4347,7 @@ const sharedInstanceLayer = (
     tag[specSym],
   );
   const readiness = readinessCheckServed(tag, wireImpl);
+  const handoff = servedHandoff(tag, wireImpl)?.run;
   return Layer.effectDiscard(
     Effect.acquireRelease(
       Effect.sync(() => {
@@ -4250,6 +4357,7 @@ const sharedInstanceLayer = (
         }
         state.table.set(instanceKey, flatImpl);
         state.readiness.push(readiness);
+        if (handoff !== undefined) state.handoffs.push(handoff);
       }),
       () =>
         Effect.sync(() => {
@@ -4258,6 +4366,10 @@ const sharedInstanceLayer = (
           state.table.delete(instanceKey);
           const idx = state.readiness.indexOf(readiness);
           if (idx >= 0) state.readiness.splice(idx, 1);
+          if (handoff !== undefined) {
+            const hIdx = state.handoffs.indexOf(handoff);
+            if (hIdx >= 0) state.handoffs.splice(hIdx, 1);
+          }
           if (state.table.size === 0) {
             sharedWireStates.delete(wireKey);
           }
@@ -4319,12 +4431,14 @@ const serveRemoteHandlers = (
             const bound = nodeOf(tag);
             const boundKinds = nodeKindsOf(tag);
             const kind = kindOf(tag) ?? "hyperlink";
+            const handoff = servedHandoff(tag, wireImpl);
             return registry.register({
               wireKey: tag[wireKeySym],
               group: retype(group as never),
               kind,
               contractHash: hashContract(tag[wireKeySym], kind, tag[specSym]),
               readiness: readinessCheckServed(tag, wireImpl),
+              ...(handoff !== undefined ? { handoff } : {}),
               ...(bound !== undefined ? { nodeLogKey: bound.key } : {}),
               ...(boundKinds.length > 0 ? { nodeKinds: boundKinds } : {}),
             });
@@ -6029,7 +6143,9 @@ export const selfNodeLayer = <Self, S extends Spec>(
  * **Membership (D3):**
  * - **Fixed** — non-empty `options.nodes` or stamped `nodes([…])` / `distributed([…])`.
  * - **Directory** — stamped **empty** set (bare `.pipe(Hyperlink.distributed)` / `nodes([])`): read
- *   Lookup `Directory.nodesServing(tag.key)` at layer build. Soft empty map when Directory is absent.
+ *   Lookup `Directory.nodesServing(tag.key)` at layer build, then **hot-rebind** on
+ *   `Directory.changes` when a peer's dial moves (`dialChanged`) or membership changes.
+ *   Soft empty map when Directory is absent.
  * - **Undeclared** — no `nodesSym` and no `options.nodes` → empty static peers (not directory).
  *
  * **Peer addresses:** each {@link Node}'s own `url` / `path` is the default. Pass `options.url` to
@@ -6061,50 +6177,109 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
           options?.nodes !== undefined ? options.nodes : tag[nodesSym];
 
         // D3: stamped empty set → Lookup directory membership (soft if Directory absent).
+        // Live rebind on Directory.changes when dial moves / peers appear or leave.
         if (stamped !== undefined && stamped.length === 0) {
           const Lookup = yield* Effect.promise(() => import("./Lookup"));
           const dirOpt = yield* Effect.serviceOption(Lookup.Directory);
           if (Option.isNone(dirOpt)) {
             return {} as Record<string, PeerServiceOf<S>>;
           }
-          const rows = yield* Lookup.nodesServing(tag).pipe(
-            Effect.provideService(Lookup.Directory, dirOpt.value),
-          );
+          const directory = dirOpt.value;
+          const serviceKey = tag[wireKeySym];
           type DialTarget = {
             readonly key: string;
             readonly kind: ProtocolKind;
             readonly url?: string;
             readonly path?: string;
           };
-          const dialable: Array<DialTarget> = [];
-          for (const row of rows) {
-            if (row.nodeKey === self.key) continue;
-            if (row.kind === "IpcSocket" && row.path !== undefined) {
-              dialable.push({
-                key: row.nodeKey,
-                kind: row.kind,
-                path: row.path,
-              });
-              continue;
-            }
-            if (row.url !== undefined) {
-              dialable.push({
-                key: row.nodeKey,
-                kind: row.kind,
-                url: row.url,
-              });
-            }
-          }
-          const discovered = yield* Effect.forEach(dialable, (target) =>
-            Effect.map(
-              buildPeerClientAt(tag, target),
-              (client) => [target.key, client] as const,
-            ),
-          );
-          return Object.fromEntries(discovered) as unknown as Record<
+          const peersRecord = Object.create(null) as Record<
             string,
             PeerServiceOf<S>
           >;
+          const peerScopes = new Map<string, Scope.Closeable>();
+
+          const dialTargetOf = (row: {
+            readonly nodeKey: string;
+            readonly kind: ProtocolKind;
+            readonly url?: string;
+            readonly path?: string;
+          }): DialTarget | undefined => {
+            if (row.nodeKey === self.key) return undefined;
+            if (row.kind === "IpcSocket" && row.path !== undefined) {
+              return { key: row.nodeKey, kind: row.kind, path: row.path };
+            }
+            if (row.url !== undefined) {
+              return { key: row.nodeKey, kind: row.kind, url: row.url };
+            }
+            return undefined;
+          };
+
+          const removePeer = (nodeKey: string): Effect.Effect<void> =>
+            Effect.gen(function* () {
+              const scope = peerScopes.get(nodeKey);
+              if (scope === undefined) return;
+              peerScopes.delete(nodeKey);
+              delete peersRecord[nodeKey];
+              yield* Scope.close(scope, Exit.void);
+            });
+
+          const upsertPeer = (row: {
+            readonly nodeKey: string;
+            readonly kind: ProtocolKind;
+            readonly url?: string;
+            readonly path?: string;
+            readonly serves: ReadonlyArray<string>;
+          }): Effect.Effect<void> =>
+            Effect.gen(function* () {
+              if (!row.serves.includes(serviceKey)) {
+                yield* removePeer(row.nodeKey);
+                return;
+              }
+              const target = dialTargetOf(row);
+              if (target === undefined) {
+                yield* removePeer(row.nodeKey);
+                return;
+              }
+              yield* removePeer(row.nodeKey);
+              const scope = yield* Scope.make();
+              const client = yield* buildPeerClientAt(tag, target).pipe(
+                Scope.provide(scope),
+              );
+              peerScopes.set(row.nodeKey, scope);
+              peersRecord[row.nodeKey] = client;
+            });
+
+          const rows = yield* Lookup.nodesServing(tag).pipe(
+            Effect.provideService(Lookup.Directory, directory),
+          );
+          yield* Effect.forEach(rows, upsertPeer, { discard: true });
+
+          yield* directory.changes.pipe(
+            Stream.runForEach((event) => {
+              if (event._tag === "DirectoryRemoved") {
+                return removePeer(event.nodeKey);
+              }
+              // New peer, dial moved, or serves list may add/remove this service key.
+              if (
+                event.previous === undefined ||
+                event.dialChanged ||
+                peersRecord[event.entry.nodeKey] === undefined ||
+                !event.entry.serves.includes(serviceKey)
+              ) {
+                return upsertPeer(event.entry);
+              }
+              return Effect.void;
+            }),
+            Effect.forkScoped,
+          );
+
+          yield* Effect.addFinalizer(() =>
+            Effect.forEach([...peerScopes.keys()], removePeer, {
+              discard: true,
+            }),
+          );
+
+          return peersRecord;
         }
 
         // Fixed fleet (or undeclared → []); drop self to get the peers.

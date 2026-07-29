@@ -132,9 +132,8 @@ wire key) — sugar over Directory’s schema’d request. See:
 
 ## Deferred (not beta Launcher)
 
-- Full Track C cutover (`Node.shutdown` / per-service handoff layers — brief #32–33).
-  Status drain signal already ships: `Node.drain` → `phase: "draining"` (yield refuse).
-- Automatic peer/client hot-rebind on dial swap (Track D; apps can already subscribe
-  `Lookup.changes` / `directoryTable` — see [identity coordinator](./identity-coordinator.md#custody-vs-membership-launcher--lookup))
+- Per-service handoff layer option (brief #33). Cutover leave already ships:
+  `Node.drain` / `Node.shutdown` / `Node.launch` — see [identity coordinator](./identity-coordinator.md#custody-vs-membership-launcher--lookup).
+- `lookupClient` hot-rebind (directory `peersLayer` already rebinds on dial swap)
 - Blank worker + remote assign; HTTP/WS Lookup; nameless Launcher discovery
 - `Handle.events` Stream; stdout/stderr tap; thin `hl up` CLI

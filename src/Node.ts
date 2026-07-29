@@ -16,6 +16,8 @@
  * - {@link clients} — bundle clients for a catalog node's `ROut`
  * - {@link assume} — launcher ownership ack (`{ token }`) on a running node
  * - {@link drain} — enter intentional cutover drain (`phase: "draining"`; yield refuse)
+ * - {@link shutdown} — drain → leave Lookup membership → exit listen scope
+ * - {@link launch} — `Layer.launch` raced with shutdown exit (prefer over bare launch)
  *
  * @module Node
  */
@@ -92,6 +94,8 @@ export {
   ASSUME_TOKEN_ENV as assumeTokenEnv,
 } from "./internal/nodeAssumeClient"
 export { drain } from "./internal/nodeDrainClient"
+export { shutdown } from "./internal/nodeShutdownClient"
+export { launch } from "./internal/nodeLaunch"
 
 import { Layer } from "effect"
 import { unix } from "./internal/nodeUnix"

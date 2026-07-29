@@ -133,3 +133,35 @@ export const directoryAdvertiseMerge = (
     },
   );
 };
+
+/**
+ * Membership stamp for {@link Node.shutdown} leave (Directory unregister + Advice clear).
+ * @internal
+ */
+export const membershipFromAdvertise = (
+  advertiseNode: (AnyNode & { readonly key: string }) | undefined,
+  entries: ReadonlyArray<Hyperlink.ServedHyperlink>,
+):
+  | {
+      readonly nodeKey: string;
+      readonly kind: ProtocolKind;
+      readonly path?: string;
+      readonly url?: string;
+      readonly serves: ReadonlyArray<string>;
+    }
+  | undefined => {
+  if (advertiseNode === undefined || advertiseNode.kind === undefined) {
+    return undefined;
+  }
+  return {
+    nodeKey: advertiseNode.key,
+    kind: advertiseNode.kind,
+    serves: entries.map((entry) => entry.wireKey),
+    ...(typeof advertiseNode.path === "string"
+      ? { path: advertiseNode.path }
+      : {}),
+    ...(typeof advertiseNode.url === "string"
+      ? { url: advertiseNode.url }
+      : {}),
+  };
+};

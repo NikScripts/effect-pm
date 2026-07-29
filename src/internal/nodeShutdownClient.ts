@@ -1,8 +1,7 @@
 /**
- * @module internal/nodeDrainClient
+ * @module internal/nodeShutdownClient
  *
- * Public {@link Node.drain} dial — calls the reserved node-status `drain` RPC on an
- * addressed peer (verify off; status probe path).
+ * Public {@link Node.shutdown} dial — drain → leave membership → exit listen scope.
  */
 import { Effect, Layer, Predicate } from "effect";
 import * as Hyperlink from "../Hyperlink";
@@ -14,16 +13,16 @@ import {
 } from "./nodeCore";
 
 /**
- * Enter intentional drain on `node` — sets status `phase: "draining"`.
+ * Compose Track C leave on `node`: drain → Advice clear → Directory unregister →
+ * close the listen scope (socket unlink / Layer.launch exits). Idempotent.
  *
- * Keeps the process reachable (ping/status stay up). Cooperative `yield` refuses while
- * draining so Lookup `askIncumbent` cannot steal the Directory row. Does **not** unregister,
- * clear Advice, or exit the listen scope — use {@link Node.shutdown} for the full leave.
+ * Prefer this over chaining {@link Node.drain} + manual Lookup calls. Does **not** use
+ * `Launcher.kill` or raw `process.exit`.
  *
  * @category services
  * @public
  */
-export const drain = (
+export const shutdown = (
   node: AnyNode,
 ): Effect.Effect<void, NodeUnreachable | UnaddressedNode> => {
   if (!isAddressedNode(node)) {
@@ -36,10 +35,10 @@ export const drain = (
         ? node.path
         : node.key;
   return Effect.gen(function* () {
-    yield* Effect.logDebug("Node.drain dialing peer").pipe(
+    yield* Effect.logDebug("Node.shutdown dialing peer").pipe(
       Effect.annotateLogs({
-        "drain.node": node.key,
-        "drain.address": address,
+        "shutdown.node": node.key,
+        "shutdown.address": address,
       }),
     );
     const { NodeStatusTag } = yield* Effect.promise(() => import("./nodeStatus"));
@@ -50,16 +49,16 @@ export const drain = (
     );
     yield* Effect.gen(function* () {
       const status = yield* NodeStatusTag;
-      return yield* status.drain;
+      return yield* status.shutdown;
     }).pipe(Effect.provide(ctx));
-    yield* Effect.logInfo("Node.drain acknowledged").pipe(
-      Effect.annotateLogs({ "drain.node": node.key }),
+    yield* Effect.logInfo("Node.shutdown acknowledged").pipe(
+      Effect.annotateLogs({ "shutdown.node": node.key }),
     );
   }).pipe(
     Effect.scoped,
-    Effect.withLogSpan("node.drain"),
-    Effect.withSpan("node.drain", {
-      attributes: { "drain.node": node.key },
+    Effect.withLogSpan("node.shutdown"),
+    Effect.withSpan("node.shutdown", {
+      attributes: { "shutdown.node": node.key },
     }),
     Effect.mapError((cause) => {
       if (Predicate.isTagged(cause, "UnaddressedNode")) return cause;
