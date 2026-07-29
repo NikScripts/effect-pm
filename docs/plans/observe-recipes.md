@@ -1,6 +1,6 @@
 # Plan: Observe recipes (pipeable UI packs)
 
-**Status:** design-locked (owner 2026-07-28; pack home 2026-07-29 → **`*View` modules**) — not Eng’d.  
+**Status:** Phase 0 Eng’d (Observe + `WorkPoolView.pack`) — further packs / Bundle retirement still open.  
 **Branch:** `cursor/view-withsize-types-125f` (Agent G).  
 **Prior art:** [`../guides/hyperlink-atom.md`](../guides/hyperlink-atom.md), [`../guides/bundles.md`](../guides/bundles.md), [`../standards/principles.md#handles-stay-thin`](../standards/principles.md#handles-stay-thin), [`../handoffs/view-compose-lock.md`](../handoffs/view-compose-lock.md) §G.
 
@@ -67,6 +67,7 @@ Convention: each service `*View` exports one primary observe pack as **`pack`** 
 | Values camelCase (`pack`) | `QueueLive` as a value name |
 | Packs on matching `ui/*View` | Packs on domain `WorkPool` / `Daemon` |
 | Same stack for lib + apps | Private dashboard-only observe path |
+| Tag then pack (`use(Jobs, pack)`) | Pack then tag — match `Hyperlink.atom(rt)(Jobs, select)` |
 
 ---
 

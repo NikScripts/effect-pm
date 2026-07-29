@@ -129,6 +129,9 @@
     "src/ui/**",
     "src/web/**",
     "src/tui/**",
-    "src/bin/**"
+    "src/bin/**",
+    // Observe.use bridges to ui/runtime — typechecked under src/ui/tsconfig.json.
+    "src/Observe.ts",
+    "src/internal/observeUse.ts"
   ]
 }

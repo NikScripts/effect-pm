@@ -54,6 +54,7 @@ export default defineConfig([
     // entries don't wipe earlier output.
     ...shared,
     entry: {
+      Observe: "src/Observe.ts",
       ui: "src/ui/index.ts",
       "ui/WorkPoolView": "src/ui/WorkPoolView.ts",
       "ui/Navigator": "src/ui/Navigator.ts",

@@ -1,24 +1,22 @@
 /**
  * @module ui/WorkPoolView
  *
- * Shared WorkPool View **handles** + contribution Layer — no platform TSX.
+ * Shared WorkPool View **handles** + contribution Layer + observe **pack** — no platform TSX.
  * Provide skins with `View.provide` in `web/WorkPoolView` / `tui/WorkPoolView`.
  *
  * @example
  * ```ts
+ * import * as Observe from "hyperlink-ts/Observe"
  * import * as WorkPoolView from "hyperlink-ts/ui/WorkPoolView"
- * import * as WebWorkPoolView from "hyperlink-ts/web/WorkPoolView"
  *
- * const ready = WorkPoolView.layer.pipe(
- *   Layer.provideMerge(WebWorkPoolView.skins),
- *   Layer.provideMerge(View.base),
- * )
- * const kit = View.react(ready)
+ * const box = Observe.use(Jobs, WorkPoolView.pack)
  * ```
  */
 import { Layer } from "effect";
 import * as WorkPool from "../WorkPool";
 import * as View from "./View";
+
+export { pack, queueControls, queueMetricsHistory } from "./workPoolViewPack";
 
 /**
  * Default WorkPool card View service.

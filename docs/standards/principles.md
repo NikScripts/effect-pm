@@ -40,13 +40,16 @@ doors, or convenience nouns on the handle to make call sites shorter.
 Jobs.observe()
 ui.data.queue(Jobs)
 
-// ✅ good — thin handle; namespaced helper owns the derived surface
-import * as Bundle from "hyperlink-ts/ui/Bundle"
-Bundle.observe(Jobs)
+// ✅ good — thin handle; Observe + *View.pack owns the derived surface
+import * as Observe from "hyperlink-ts/Observe"
+import * as WorkPoolView from "hyperlink-ts/ui/WorkPoolView"
+Observe.use(Jobs, WorkPoolView.pack)
+// migration: Bundle.observe(Jobs) still works
 ```
 
 The test: if removing the method leaves a complete Tag (or kit) and a named helper that takes that
-handle as data, the method did not belong on the handle. See the [Bundles](/docs/bundles) guide.
+handle as data, the method did not belong on the handle. See [Observe](/docs/observe) and
+[Bundles](/docs/bundles).
 
 {#single-source-of-truth .must appliesTo="all docs"}
 ## Single source of truth

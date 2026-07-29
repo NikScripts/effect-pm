@@ -48,6 +48,10 @@
       "types": "./dist/Hyperlink.d.ts",
       "default": "./dist/Hyperlink.js"
     },
+    "./Observe": {
+      "types": "./dist/Observe.d.ts",
+      "default": "./dist/Observe.js"
+    },
     "./Node": {
       "types": "./dist/Node.d.ts",
       "default": "./dist/Node.js"

@@ -84,6 +84,15 @@
       }
     ]
   },
-  "include": ["./**/*.ts", "./**/*.tsx"],
+  "include": [
+    "./**/*.ts",
+    "./**/*.tsx",
+    "../Observe.ts",
+    "../internal/observe.ts",
+    "../internal/observeUse.ts",
+    "../../test/observe.test.ts",
+    "../../test/observe.test-d.ts",
+    "../../test/ui-workpool-view-pack.test.ts"
+  ],
   "exclude": ["../../node_modules", "../../dist"]
 }

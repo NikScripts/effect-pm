@@ -30,9 +30,10 @@ function JobsCard({ tag }: { tag: typeof Jobs }) {
 | Handle | `yield* Jobs` | Universal Effect / Stream / ref surface |
 | Promise | `Hyperlink.promise(handle)` | OS edge for non-Effect hosts |
 | Atom adapters | `Hyperlink.atom` / `.query` / `.fn` | Universal Effect-reactive bindings |
-| Bundle | `Bundle.observe(Jobs)` | Family UI pack (charts, cache, commands) on the atom path |
+| Bundle | `Bundle.observe(Jobs)` | Family UI pack (charts, cache, commands) — **migration**; prefer Observe |
+| Observe | `Observe.use(Jobs, WorkPoolView.pack)` | Unbound recipes + `*View.pack` ([Observe](/docs/observe)) |
 
-`Bundle.observe` is a free helper (thin Tags). It is not a method on the Tag or on `View.compose`.
+`Bundle.observe` is a free helper (thin Tags). New code: `Observe.use(tag, *View.pack)`.
 
 ## What it is
 
