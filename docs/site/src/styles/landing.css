@@ -70,6 +70,15 @@
   }
 }
 
+/*
+ * Edge / notch / Safari chrome paint model (iOS 26+):
+ * - Physical letterbox outside the layout viewport: ONLY body background-color
+ *   reaches those pixels (gradients/images cannot). Match --landing-canvas.
+ * - Inside the layout viewport, under the floating toolbar: a fixed layer with
+ *   opacity < 1 (0.99) is composited full-bleed; opaque fixed fills get clipped.
+ * - viewport-fit=cover + env(safe-area-inset-*) for content; insets are often 0
+ *   in Safari portrait because chrome already owns the notch.
+ */
 html {
   min-height: 100%;
   -webkit-text-size-adjust: 100%;
@@ -83,26 +92,16 @@ body {
   color: var(--landing-fg);
   font-family: var(--landing-sans);
   -webkit-font-smoothing: antialiased;
-  /* Explicit property — do not use `background:` shorthand here. */
   background-color: var(--landing-canvas);
 }
 
-.landing {
-  position: relative;
-  isolation: isolate;
-  width: 100%;
-  min-height: 100dvh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: left;
-  padding:
-    max(1.6rem, env(safe-area-inset-top, 0px))
-    max(1.25rem, env(safe-area-inset-right, 0px))
-    max(2rem, env(safe-area-inset-bottom, 0px))
-    max(1.25rem, env(safe-area-inset-left, 0px));
-  box-sizing: border-box;
-  overflow: hidden;
+.landing-atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  /* 0.99 — Safari 26 clips opaque fixed layers at the chrome edge. */
+  opacity: 0.99;
   background-color: var(--landing-canvas);
   background-image:
     radial-gradient(ellipse 90% 60% at 50% -8%, var(--landing-glow), transparent 58%),
@@ -119,9 +118,25 @@ body {
   border-radius: 50%;
   background: radial-gradient(circle, var(--landing-glow), transparent 70%);
   filter: blur(12px);
-  pointer-events: none;
-  z-index: 0;
   animation: landing-breathe 12s ease-in-out infinite;
+}
+
+.landing {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: left;
+  padding:
+    max(1.6rem, env(safe-area-inset-top, 0px))
+    max(1.25rem, env(safe-area-inset-right, 0px))
+    max(2rem, env(safe-area-inset-bottom, 0px))
+    max(1.25rem, env(safe-area-inset-left, 0px));
+  box-sizing: border-box;
+  background: transparent;
 }
 
 .landing-inner {
