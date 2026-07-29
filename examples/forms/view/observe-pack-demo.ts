@@ -30,6 +30,12 @@ const Status = Schema.Struct({
   paused: Schema.Boolean,
   phase: Schema.Literals(["idle", "running", "paused"]),
 });
+type Phase = "idle" | "running" | "paused";
+type DemoStatus = {
+  sizes: { high: number; normal: number; low: number };
+  paused: boolean;
+  phase: Phase;
+};
 
 class Jobs extends Hyperlink.Tag<Jobs>()("demo/observe/Jobs", {
   status: Hyperlink.ref(Status),
@@ -53,23 +59,25 @@ const demoPack = Observe.named(
 const layer = Hyperlink.layer(
   Jobs,
   Effect.gen(function* () {
-    const cell = yield* SubscriptionRef.make({
+    const cell = yield* SubscriptionRef.make<DemoStatus>({
       sizes: { high: 2, normal: 5, low: 1 },
       paused: false,
-      phase: "running" as const,
+      phase: "running",
     });
+    const paused: DemoStatus = {
+      sizes: { high: 2, normal: 5, low: 1 },
+      paused: true,
+      phase: "paused",
+    };
+    const running: DemoStatus = {
+      sizes: { high: 2, normal: 5, low: 1 },
+      paused: false,
+      phase: "running",
+    };
     return {
       status: Hyperlink.subscribable(cell),
-      pause: SubscriptionRef.set(cell, {
-        sizes: { high: 2, normal: 5, low: 1 },
-        paused: true,
-        phase: "paused" as const,
-      }),
-      resume: SubscriptionRef.set(cell, {
-        sizes: { high: 2, normal: 5, low: 1 },
-        paused: false,
-        phase: "running" as const,
-      }),
+      pause: SubscriptionRef.set(cell, paused),
+      resume: SubscriptionRef.set(cell, running),
       clear: Effect.void,
       shutdown: Effect.void,
     };
@@ -105,24 +113,24 @@ await Effect.runPromise(
   Effect.gen(function* () {
     yield* Effect.sleep("80 millis");
 
-    console.log("— Observe.bind(runtime)(Jobs, demoPack) —");
-    console.log("pack id:     ", demoPack.id);
-    console.log("memoized:    ", box === again);
-    console.log("box keys:    ", Object.keys(box).sort().join(", "));
-    console.log("shipped pack:", WorkPoolView.pack.id);
+    yield* Effect.log("— Observe.bind(runtime)(Jobs, demoPack) —");
+    yield* Effect.log(`pack id:      ${demoPack.id}`);
+    yield* Effect.log(`memoized:     ${String(box === again)}`);
+    yield* Effect.log(`box keys:     ${Object.keys(box).sort().join(", ")}`);
+    yield* Effect.log(`shipped pack: ${WorkPoolView.pack.id}`);
 
     const s0 = readStatus();
-    console.log("status:      ", s0?.phase, `pending=${pendingOf(s0)}`);
+    yield* Effect.log(`status:       ${s0?.phase} pending=${pendingOf(s0)}`);
 
     registry.set(box.pause, undefined as void);
     yield* Effect.sleep("80 millis");
 
     const s1 = readStatus();
-    console.log("after pause: ", s1?.phase, `paused=${s1?.paused}`);
+    yield* Effect.log(`after pause:  ${s1?.phase} paused=${String(s1?.paused)}`);
 
-    console.log("");
-    console.log("React (same discharge under RuntimeProvider):");
-    console.log("  const box = Observe.use(Jobs, WorkPoolView.pack)");
-    console.log("  // or Observe.use(Jobs, demoPack)");
+    yield* Effect.log("");
+    yield* Effect.log("React (same discharge under RuntimeProvider):");
+    yield* Effect.log("  const box = Observe.use(Jobs, WorkPoolView.pack)");
+    yield* Effect.log("  // or Observe.use(Jobs, demoPack)");
   }),
 );

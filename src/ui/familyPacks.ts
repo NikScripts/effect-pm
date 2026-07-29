@@ -1,12 +1,12 @@
 /**
- * Family Observe packs — compositional recipes (parity with WorkPoolView.pack).
+ * Family Observe packs — re-exports for internal wiring.
+ * Prefer importing `pack` from each `*View` module at call sites.
  * @internal
  */
-import type { NodeRef } from "./data";
-import { nodeStatusBundle } from "./data";
 import { pack as apiPack } from "./apiMetricsViewPack";
 import { pack as daemonPack } from "./daemonViewPack";
 import { pack as gatePack } from "./gateViewPack";
+import { bind as nodeBind } from "./nodeViewPack";
 import {
   fleetHealthPack,
   shardMapPack,
@@ -19,15 +19,8 @@ export {
   daemonPack,
   fleetHealthPack,
   gatePack,
+  nodeBind,
   priorityPack,
   shardMapPack,
   telemetryPack,
 };
-
-/**
- * Node observe — NodeRef is not a Hyperlink Tag, so bind/use take the ref directly.
- */
-export const nodeBind =
-  <R, ER>(runtime: import("effect/unstable/reactivity").Atom.AtomRuntime<R, ER>) =>
-  (ref: NodeRef) =>
-    nodeStatusBundle(runtime, ref);

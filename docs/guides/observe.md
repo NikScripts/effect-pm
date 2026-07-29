@@ -72,7 +72,7 @@ Observe.named("workpool/queue", pack) // stable memo id
 | Fleet | `FleetHealthView.pack` | fleet health |
 | Telemetry | `TelemetryView.pack` | telemetry |
 | Shard map | `ShardMapView.pack` | shard map |
-| Node | `NodeView.use(ref)` | status / logs / health (`NodeRef`, not a Tag) |
+| Node | `NodeView.bind` / `.use(ref)` | status / logs / health (`NodeRef`, not a Tag) |
 
 Call site shape is always **tag then pack**:
 
@@ -91,6 +91,7 @@ All shipped `*View.pack` values are `Observe` recipes (not kind-switch builders)
 - **API** — usage atoms + window history fold
 - **Gate** — status atom
 - **FleetHealth / Telemetry / ShardMap** — `Observe.poll` every 2s with projected fields
+- **Node** — `NodeView.bind` / `.use` (NodeRef is not a Tag; not `Observe.use`)
 
 `WorkPoolView` also exports slices (`queueControls`, `queueMetricsHistory`, `serviceLogs`) for thinner packs.
 

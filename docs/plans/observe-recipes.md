@@ -389,10 +389,9 @@ Compose with `Observe.*`; optionally add `pack` on a matching `*View` later — 
 
 ## Open Eng details
 
-1. **Kit `<Dashboard />`** — HOLD unchanged.  
-2. **NodeView** — still wraps `nodeStatusBundle` (NodeRef is not a Tag; optional later recipe extraction).
+1. **Kit `<Dashboard />`** — HOLD unchanged.
 
-Resolved: shared fold via `Observe.map`; all family `*View.pack`s compositional (queue/priority/daemon/api/gate + polled fleet packs); `Observe.use` always calls `useRuntime()`; Phase 4 Bundle/`use*Bundle`/`data` removed; builders in `ui/data` are thin wraps.
+Resolved: shared fold via `Observe.map`; all family `*View.pack`s compositional (queue/priority/daemon/api/gate + polled fleet packs); `Observe.use` always calls `useRuntime()`; Phase 4 Bundle/`use*Bundle`/`data` removed; builders in `ui/data` are thin wraps; **NodeView** atom construction lives in `ui/nodeViewPack` (`NodeView.bind` / `.use`; `nodeStatusBundle` is a thin wrap — NodeRef is not a Tag).
 
 ---
 

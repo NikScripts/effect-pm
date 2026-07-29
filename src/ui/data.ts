@@ -40,17 +40,11 @@ import {
 import { kind as daemonKind, daemonScheduleEntry, daemonStatus } from "../Daemon";
 import type { ApiUsageMetrics, ApiUsageSnapshot } from "../ApiUsageSchema";
 import * as Observe from "../Observe";
-import {
-  bumpLogIdFrom,
-  cachedAccumulator,
-  nodeConn,
-  serviceLogsAtom,
-  toLogLine,
-  type LogLine,
-} from "./observeSupport";
+import { serviceLogsAtom, type LogLine } from "./observeSupport";
 import { pack as apiMetricsPack } from "./apiMetricsViewPack";
 import { pack as daemonPack } from "./daemonViewPack";
 import { pack as gatePack } from "./gateViewPack";
+import { bind as nodeViewBind } from "./nodeViewPack";
 import {
   fleetHealthPack,
   shardMapPack,
@@ -414,17 +408,6 @@ export const isShardMapTag = (m: unknown): m is ShardMapTag =>
 export const isGateTag = (m: unknown): m is GateTag =>
   hyperlinkKindOf(m) === gateKind;
 
-// node bundles are runtime-specific (their atoms close over the runtime), so cache per runtime+id
-const nodeBundleCache = new WeakMap<object, Map<string, NodeBundle>>();
-const cacheFor = <V>(map: WeakMap<object, Map<string, V>>, runtime: object): Map<string, V> => {
-  let m = map.get(runtime);
-  if (m === undefined) {
-    m = new Map<string, V>();
-    map.set(runtime, m);
-  }
-  return m;
-};
-
 export { serviceLogsAtom };
 
 /** Build (once per runtime+tag) the atom bundle for a queue tag — thin wrap over WorkPoolView.pack. */
@@ -475,60 +458,11 @@ export const apiBundle = <R, ER>(
   tag: ApiTag<R>,
 ): ApiBundle => Observe.bind(runtime)(tag, apiMetricsPack);
 
-/** Build (once per runtime+node) the atom bundle for a node's live status — read from the
- *  connected node handle's status/logs accessors. */
+/** Build (once per runtime+node) the atom bundle for a node's live status — thin wrap over NodeView.bind. */
 export const nodeStatusBundle = <R, ER>(
   runtime: DashboardRuntime<R, ER>,
   ref: NodeRef,
-): NodeBundle => {
-  const cache = cacheFor(nodeBundleCache, runtime);
-  const existing = cache.get(ref.id);
-  if (existing !== undefined) return existing;
-  const logsKey = `${ref.id}/logs`;
-  bumpLogIdFrom(logsKey);
-  const bundle: NodeBundle = {
-    id: ref.id,
-    status: runtime.atom(
-      // Provide the per-node client at the STREAM level so its scope spans the whole subscription.
-      // (Providing it to the producing Effect tore the scoped RPC client down as soon as that effect
-      // returned the stream, interrupting it — "all fibers interrupted".)
-      Stream.unwrap(Effect.map(ref.node, (h) => h.status.changes)).pipe(
-        Stream.provide(nodeConn(ref.node)),
-        Stream.orDie,
-      ),
-    ),
-    logs: runtime.atom(
-      // `cachedAccumulator`'s live + history both read the node's status; provide the per-node
-      // connection once over the combined stream (stream-scoped so it spans the subscription).
-      cachedAccumulator({
-        key: logsKey,
-        cap: 300,
-        stream: Stream.unwrap(Effect.map(ref.node, (h) => h.logs.stream)).pipe(
-          Stream.map(toLogLine),
-          Stream.orDie,
-        ),
-        query: Effect.flatMap(ref.node, (h) => h.logs.query({ limit: 300 })).pipe(
-          Effect.map((entries) => entries.map(toLogLine)),
-          Effect.orDie,
-        ),
-      }).pipe(Stream.provide(nodeConn(ref.node))),
-    ),
-    // Ready-count over time, accumulated client-side from the status stream — a compact readiness
-    // sparkline (no server change). Dips when a HyperService degrades (e.g. a dependency blips).
-    health: runtime.atom(
-      cachedAccumulator({
-        key: `${ref.id}/health`,
-        cap: 120,
-        stream: Stream.unwrap(Effect.map(ref.node, (h) => h.status.changes)).pipe(
-          Stream.map((st) => st.services.filter((x) => x.ready).length),
-          Stream.orDie,
-        ),
-      }).pipe(Stream.provide(nodeConn(ref.node))),
-    ),
-  };
-  cache.set(ref.id, bundle);
-  return bundle;
-};
+): NodeBundle => nodeViewBind(runtime)(ref);
 
 /** Walk a `Group.Tag` tree to its leaf resource tags (WorkPools + Daemons), raw. */
 export const leafTags = (node: GroupNode): ReadonlyArray<unknown> =>

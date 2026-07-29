@@ -12,7 +12,7 @@
  */
 import * as React from "react";
 import type { NodeBundle, NodeRef } from "./data";
-import { nodeBind } from "./familyPacks";
+import { bind as nodeBind } from "./nodeViewPack";
 import { useRuntime } from "./runtime";
 
 /**
