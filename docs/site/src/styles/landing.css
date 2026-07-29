@@ -1,9 +1,9 @@
 /**
  * Coming-soon brand lockup (WIP). Inlined on `/` so paint never depends on /assets.
  *
- * All wash/tiling is on `html` (root canvas — fills notch). `body` stays
- * transparent so it cannot cover the html background. Mid-tile glow +
- * `repeat-y` + length offset `-50dvh`. Stage locked to `100dvh`, no scroll.
+ * Wash on `html` (root canvas). Locked `height: 100dvh; overflow: hidden`.
+ * Opaque gradient stops (canvas, not transparent). `background-repeat: no-repeat`
+ * only — never `background-size: %` (collapses the wash on iOS).
  */
 :root {
   color-scheme: light dark;
@@ -65,25 +65,21 @@
   }
 }
 
-/*
- * Root canvas only — this is what fills notch / status-bar / home-indicator.
- * Glow centered in each tile; repeat-y; offset by -50dvh (length, not %) so
- * the two mid-glows sit on the top and bottom edges.
- */
+/* Canvas paint — fills notch / status-bar / home-indicator.
+   Height is locked (not min-height) so content/margins cannot grow past 100dvh
+   and reintroduce scroll. Gradient stops use canvas color, not transparent —
+   transparent fades compositing to black in the chrome/overscroll bands. */
 html {
   -webkit-text-size-adjust: 100%;
   height: 100dvh;
   overflow: hidden;
   background-color: var(--landing-canvas);
-  background-image: radial-gradient(
-    ellipse 140% 55% at 50% 50%,
-    var(--landing-glow),
-    var(--landing-bg-deep) 42%,
-    var(--landing-canvas) 72%
-  );
-  background-repeat: repeat-y;
-  background-size: 100% 100dvh;
-  background-position: 0 -50dvh;
+  background-image:
+    radial-gradient(ellipse 160% 70% at 50% -10%, var(--landing-glow), var(--landing-canvas) 72%),
+    radial-gradient(ellipse 100% 55% at 100% 110%, var(--landing-bg-deep), var(--landing-canvas) 68%),
+    radial-gradient(ellipse 90% 50% at 0% 110%, var(--landing-bg-deep), var(--landing-canvas) 65%);
+  /* Stop tile seams. Do NOT set background-size — % size collapses the wash on iOS. */
+  background-repeat: no-repeat;
 }
 body {
   margin: 0;
@@ -93,12 +89,33 @@ body {
   color: var(--landing-fg);
   font-family: var(--landing-sans);
   -webkit-font-smoothing: antialiased;
-  /* Must stay transparent — an opaque body hides the html canvas wash. */
+  background-color: var(--landing-canvas);
+}
+
+/* Decorative orb only — base wash lives on html. */
+.landing-atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
   background: transparent;
+}
+
+.landing-glow {
+  position: absolute;
+  inset: auto auto 10% 50%;
+  width: min(38rem, 92vw);
+  height: min(38rem, 92vw);
+  translate: -50% 42%;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--landing-glow), transparent 70%);
+  filter: blur(12px);
+  animation: landing-breathe 12s ease-in-out infinite;
 }
 
 .landing {
   position: relative;
+  z-index: 1;
   width: 100%;
   box-sizing: border-box;
   height: 100dvh;
@@ -249,11 +266,24 @@ body {
     transform: translateY(0);
   }
 }
+@keyframes landing-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    scale: 1;
+  }
+  50% {
+    opacity: 0.9;
+    scale: 1.05;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .landing-mark,
   .landing-motto,
   .landing-lede,
-  .landing-soon {
+  .landing-soon,
+  .landing-glow {
     animation: none;
   }
 }
