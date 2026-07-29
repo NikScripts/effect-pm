@@ -87,7 +87,12 @@ export type DataTag = {
   readonly key: string;
 } & Effect.Effect<unknown, unknown, unknown>;
 
-/** Atom bundle for a queue tag, memoized per runtime+tag. @public */
+/**
+ * Atom bundle for a queue tag, memoized per runtime+tag.
+ *
+ * @deprecated Prefer `Bundle.observe(tag)` — same builders, one public door.
+ * @public
+ */
 export const useQueueBundle = (tag: DataTag): QueueBundle => {
   if (!isQueueTag(tag)) {
     throw new Error(`View.data.queue: tag ${tag.key} is not a queue tag`);
@@ -95,7 +100,12 @@ export const useQueueBundle = (tag: DataTag): QueueBundle => {
   return queueBundle(useRuntime(), tag);
 };
 
-/** Atom bundle for a `WorkPool.priority` tag. @public */
+/**
+ * Atom bundle for a `WorkPool.priority` tag.
+ *
+ * @deprecated Prefer `Bundle.observe(tag)`.
+ * @public
+ */
 export const usePriorityBundle = (tag: DataTag): PriorityBundle => {
   if (!isPriorityTag(tag)) {
     throw new Error(`View.data.priority: tag ${tag.key} is not a priority tag`);
@@ -103,7 +113,12 @@ export const usePriorityBundle = (tag: DataTag): PriorityBundle => {
   return priorityBundle(useRuntime(), tag);
 };
 
-/** Atom bundle for a fleet-health tag. @public */
+/**
+ * Atom bundle for a fleet-health tag.
+ *
+ * @deprecated Prefer `Bundle.observe(tag)`.
+ * @public
+ */
 export const useFleetHealthBundle = (tag: DataTag): FleetHealthBundle => {
   if (!isFleetHealthTag(tag)) {
     throw new Error(
@@ -113,7 +128,12 @@ export const useFleetHealthBundle = (tag: DataTag): FleetHealthBundle => {
   return fleetHealthBundle(useRuntime(), tag);
 };
 
-/** Atom bundle for a telemetry tag. @public */
+/**
+ * Atom bundle for a telemetry tag.
+ *
+ * @deprecated Prefer `Bundle.observe(tag)`.
+ * @public
+ */
 export const useTelemetryBundle = (tag: DataTag): TelemetryBundle => {
   if (!isTelemetryTag(tag)) {
     throw new Error(
@@ -123,7 +143,12 @@ export const useTelemetryBundle = (tag: DataTag): TelemetryBundle => {
   return telemetryBundle(useRuntime(), tag);
 };
 
-/** Atom bundle for a shard-map tag. @public */
+/**
+ * Atom bundle for a shard-map tag.
+ *
+ * @deprecated Prefer `Bundle.observe(tag)`.
+ * @public
+ */
 export const useShardMapBundle = (tag: DataTag): ShardMapBundle => {
   if (!isShardMapTag(tag)) {
     throw new Error(`View.data.shardMap: tag ${tag.key} is not a shard-map tag`);
@@ -131,7 +156,12 @@ export const useShardMapBundle = (tag: DataTag): ShardMapBundle => {
   return shardMapBundle(useRuntime(), tag);
 };
 
-/** Atom bundle for a Gate tag. @public */
+/**
+ * Atom bundle for a Gate tag.
+ *
+ * @deprecated Prefer `Bundle.observe(tag)`.
+ * @public
+ */
 export const useGateBundle = (tag: DataTag): GateBundle => {
   if (!isGateTag(tag)) {
     throw new Error(`View.data.gate: tag ${tag.key} is not a gate tag`);
@@ -139,7 +169,12 @@ export const useGateBundle = (tag: DataTag): GateBundle => {
   return gateBundle(useRuntime(), tag);
 };
 
-/** Atom bundle for a daemon tag. @public */
+/**
+ * Atom bundle for a daemon tag.
+ *
+ * @deprecated Prefer `Bundle.observe(tag)`.
+ * @public
+ */
 export const useDaemonBundle = (tag: DataTag): DaemonBundle => {
   if (!isDaemonTag(tag)) {
     throw new Error(`View.data.daemon: tag ${tag.key} is not a daemon tag`);
@@ -147,7 +182,12 @@ export const useDaemonBundle = (tag: DataTag): DaemonBundle => {
   return daemonBundle(useRuntime(), tag);
 };
 
-/** Atom bundle for an HttpApiClient / API tag. @public */
+/**
+ * Atom bundle for an HttpApiClient / API tag.
+ *
+ * @deprecated Prefer `Bundle.observe(tag)`.
+ * @public
+ */
 export const useApiBundle = (tag: DataTag): ApiBundle => {
   if (!isApiTag(tag)) {
     throw new Error(`View.data.api: tag ${tag.key} is not an api tag`);
@@ -155,23 +195,27 @@ export const useApiBundle = (tag: DataTag): ApiBundle => {
   return apiBundle(useRuntime(), tag);
 };
 
-/** Atom bundle for a node's status. @public */
+/**
+ * Atom bundle for a node's status.
+ *
+ * @deprecated Prefer `Bundle.node(ref)`.
+ * @public
+ */
 export const useNodeBundle = (ref: NodeRef): NodeBundle =>
   nodeStatusBundle(useRuntime(), ref);
 
 /**
  * Compose / kit **data door** — same `*Bundle(runtime, tag)` builders as Dashboard.
  *
+ * @deprecated Prefer `Bundle.observe` / `Bundle.node` — noun menu on compose
+ * violated handles-stay-thin (free helper, not kit weight).
+ *
  * Call during render (hooks): reads {@link RuntimeProvider}.
  *
  * @example
  * ```tsx
- * const ui = View.compose({ views, navigator })
- * function Card() {
- *   const box = ui.data.queue(Jobs)
- *   const st = useAtomValue(box.status)
- *   …
- * }
+ * import * as Bundle from "hyperlink-ts/ui/Bundle"
+ * const box = Bundle.observe(Jobs)
  * ```
  *
  * @public
@@ -192,6 +236,7 @@ export type DataDoor = {
 /**
  * Shared data door (also on {@link ./View.compose}`().data`).
  *
+ * @deprecated Prefer `Bundle.observe` / `Bundle.node`.
  * @public
  */
 export const data: DataDoor = {

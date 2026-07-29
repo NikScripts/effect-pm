@@ -107,7 +107,8 @@ Navigator may still say `openLogs(tag)` / `openSchedule(tag)` — that means “
 
 - **Eng’d:** `Bundle.observe(tag)` ([`../guides/bundles.md`](../guides/bundles.md)) + `Hyperlink.atom` / `.query` / `.fn` ([`../guides/hyperlink-atom.md`](../guides/hyperlink-atom.md))
 - Thin handles ([`../standards/principles.md#handles-stay-thin`](../standards/principles.md#handles-stay-thin)): no Tag methods; no kit noun menu
-- Interim alias: `ui.data.*` / `use*Bundle` (same builders)
+- **`ui.data.*` / `use*Bundle`:** soft-deprecated (same builders; one public door)
+- Bundles stay the family UI pack; View Prototype `use` for component logic is **not** the observe door (later / optional)
 - RuntimeProvider stays shared `ui/runtime`
 
 ### H. Migration

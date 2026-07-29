@@ -1041,10 +1041,11 @@ export const useGridMembers = (): ReadonlyArray<{
  * Thin Dashboard sugar: {@link react} + {@link Navigator} Layer. No second registry;
  * no `Atom.runtime` inside — wrap with {@link ./runtime.RuntimeProvider} outside.
  *
- * {@link data} is the compose **data door** (same `*Bundle` builders as Dashboard).
+ * Observe via {@link ./Bundle.observe} (not `ui.data` — deprecated noun menu).
  *
  * @example
  * ```tsx
+ * import * as Bundle from "hyperlink-ts/ui/Bundle"
  * const ui = View.compose({
  *   views: Layer.mergeAll(View.bind(Group.kind, GroupCard), WebDashboardViews.layer),
  *   navigator: Navigator.history(ServicesHub),
@@ -1057,8 +1058,8 @@ export const useGridMembers = (): ReadonlyArray<{
  * </RuntimeProvider>
  *
  * // in a skin / shell component:
- * const bundle = ui.data.queue(Jobs)
- * const logs = ui.data.daemon(Nightly)
+ * const bundle = Bundle.observe(Jobs)
+ * const logs = Bundle.observe(Nightly)
  * ```
  *
  * @public
@@ -1074,7 +1075,9 @@ export const compose = <VR, VE,>(options: {
   readonly Outlet: () => React.ReactElement | null;
   readonly useGridMembers: typeof useGridMembers;
   readonly navigator: Navigator.Service;
-  /** Same `*Bundle(runtime, tag)` door — reads {@link ./runtime.RuntimeProvider}. */
+  /**
+   * @deprecated Prefer `Bundle.observe` / `Bundle.node`.
+   */
   readonly data: DataDoor;
 } => {
   const viewKit = react(options.views);

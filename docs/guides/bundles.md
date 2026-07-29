@@ -73,8 +73,12 @@ Bundle.node(ref)         // NodeBundle
 Bundle.runtime()         // Atom.AtomRuntime
 ```
 
-Aliases: `useQueueBundle` / `useDaemonBundle` / … remain. Prefer `Bundle.observe`.
-`View.compose(…).data.*` is an interim kit noun menu.
+**One public door:** `Bundle.observe` / `Bundle.node`.  
+`use*Bundle` and `View.compose(…).data.*` are **deprecated** aliases (same builders; removal later).
+
+Same stack for library Dashboard and app code: `Hyperlink.atom/fn` → Bundle builders →
+`Bundle.observe` under `RuntimeProvider`. View Prototype `use` for component logic is **not**
+the observe door (future / optional); Bundles stay the family UI pack.
 
 ## Custom HyperServices
 

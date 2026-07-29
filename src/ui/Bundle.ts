@@ -3,7 +3,8 @@
  *
  * Namespaced UI observe door — `Bundle.observe(tag)` → family `*Bundle`.
  * Thin Tags; free helper (see principles.handles-stay-thin). Builds on the same
- * `*Bundle(runtime, tag)` memoization as Dashboard / `use*Bundle`.
+ * `*Bundle(runtime, tag)` memoization as Dashboard. Prefer this over deprecated
+ * `use*Bundle` / `ui.data.*` — one public door for library and apps.
  *
  * @example
  * ```ts
