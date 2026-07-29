@@ -11,6 +11,7 @@ import {
 import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
 import * as Lookup from "../src/Lookup";
+import { Advice, Directory } from "../src/Lookup";
 import * as Node from "../src/Node";
 import * as Hyperlink from "../src/Hyperlink";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
@@ -73,7 +74,8 @@ describe("Lookup Advice", () => {
       const client = yield* Layer.build(Lookup.client(node));
 
       const collected = yield* Effect.gen(function* () {
-        const board = yield* Lookup.Advice;
+        // Named Tag — not Lookup.Advice.changes (no triples).
+        const board = yield* Advice;
         const fiber = yield* Effect.forkChild(
           board.changes.pipe(Stream.take(3), Stream.runCollect),
         );
@@ -124,12 +126,8 @@ describe("Lookup Advice", () => {
         ]).pipe(Layer.provide(lookupClient)),
       );
 
-      const dir = Context.get(lookup, Lookup.Directory);
-      const rows = yield* dir
-        .nodesServing(
-          new Lookup.NodesServingRequest({ serviceKey: Jobs.key }),
-        )
-        .pipe(Effect.provide(lookup));
+      const dir = Context.get(lookup, Directory);
+      const rows = yield* Lookup.nodesServing(Jobs).pipe(Effect.provide(lookup));
       expect(rows.length).toBe(2);
 
       const preferB = rows.find((r) => {

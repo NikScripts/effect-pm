@@ -39,7 +39,7 @@ Same `yield* Router` / `yield* Worker` everywhere. Winner serves; losers dial th
 | **M2** | **Dedupe** | Key-only (already S1). No required value-level `manages[]` Tag list. |
 | **M3** | **Pattern** | One brain (identity) + many hands (directory / nameless / `Prototype` / `distributed`). Taught as the fleet recipe. |
 | **M4** | **v1 Eng spine** | **Identity liveness** (dead winner → claim releasable / replaceable) + **coordinator+workers example**. |
-| **M5** | **Placement advice** | **Eng’d** — `Lookup.Advice` last-write prefer; `lookupClient` honors live preferred `nodeKey` before D4 `pick`. Not a separate Manager type. |
+| **M5** | **Placement advice** | **Eng’d** — `Advice` Tag last-write prefer; `lookupClient` honors live preferred `nodeKey` before D4 `pick`. Not a separate Manager type. |
 | **M6** | **Sugar** | **Eng’d** — recipe guide + `Lookup.prefer` / `preferEntry`; clearer `IdentitySelfRequired`; Lookup stays pipe-only. |
 
 **Rejected / deferred:**
@@ -63,7 +63,7 @@ Same `yield* Router` / `yield* Worker` everywhere. Winner serves; losers dial th
 | Loud-failures: `verifyConnection({ deep })`, `ProtocolMismatch`, `MissingClientProtocol` | **Eng’d** |
 | Identity claim liveness (dead winner → replaceable) + same-dial refresh | **Eng’d** (M4 slice 1) |
 | Coordinator+workers form (`node-identity-coordinator`) | **Eng’d** (M4 slice 2) |
-| `Lookup.Advice` + `lookupClient` honors prefer | **Eng’d** (M5) |
+| `Advice` + `lookupClient` honors prefer | **Eng’d** (M5) |
 | Recipe guide + `Lookup.prefer*` + IdentitySelfRequired clarity | **Eng’d** (M6) |
 
 ---
@@ -99,7 +99,7 @@ Shipped:
 
 | Topic | Lock |
 |-------|------|
-| Wire | `Lookup.Advice` — `advise` / `clear` / `preferred`; helpers `Lookup.advise` / `clearAdvice` / `preferred` |
+| Wire | `Advice` (named import) — `advise` / `clear` / `preferred` / `changes`; helpers `Lookup.advise` / `clearAdvice` / `preferred` |
 | Key | `serviceKey` → preferred directory `nodeKey` |
 | Retention | In-memory last-write-wins; stale prefer (not in `nodesServing`) ignored |
 | Multi-advisor | Last write wins; no advisor ACL |

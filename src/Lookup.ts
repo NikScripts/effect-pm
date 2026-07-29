@@ -5,17 +5,33 @@
  * (OS exclusivity; bind-or-dial). Cross-network: {@link layerNode} / {@link client} on an
  * explicit {@link Node.asLookup}-branded node — no self-elect (L1).
  *
+ * **Import style (no triples):** one module namespace + flat verbs, or a **named** Tag import.
+ * Never write `Lookup.Advice.changes` / `Lookup.Directory.nodesServing` — that nests a Tag
+ * under the module as a second namespace. Match Effect: `import { Advice } from "…/Lookup"`
+ * then `Advice.changes`, or use flat sugars (`advise`, `preferred`, `clearAdvice`,
+ * {@link changes}, {@link nodesServing}).
+ *
+ * ```ts
+ * import * as Lookup from "hyperlink-ts/Lookup"
+ * import { Advice, Directory, Identity } from "hyperlink-ts/Lookup"
+ *
+ * yield* Lookup.advise({ serviceKey: Mail.key, prefer: "fleet/Mail#w2" })
+ * yield* Lookup.changes.pipe(Stream.runDrain) // Directory membership
+ * const board = yield* Advice
+ * yield* board.changes.pipe(Stream.runDrain) // placement prefer / clear
+ * ```
+ *
  * - {@link Identity} — `claim` by HyperService key (first wins / {@link DuplicateIdentity}).
  *   Live winner: same dial refreshes; different dial + dead/unreachable incumbent
  *   (node-handle `ping`) → replace; alive → {@link DuplicateIdentity}.
- * - {@link Directory} — `advertise` / `unregister` / `nodesServing` / {@link Directory.changes}
+ * - {@link Directory} — `advertise` / `unregister` / `nodesServing` / `changes`
  *   (D5/D6 + membership push). Duplicate `nodeKey` conflict policy via {@link OnConflict}
  *   (default **livenessReplace**): ping incumbent node handle; alive → {@link IncumbentAlive}
  *   (or ask handle `yield` when `askIncumbent`); dead/unreachable → replace row.
- *   {@link Directory.changes} fans out upserts/removes so nodes can rebind dials on A→B swap.
+ *   Prefer flat {@link changes} for membership push (A→B dial rebind).
  * - {@link Advice} — last-write placement board (`prefer` a directory `nodeKey` for a
- *   HyperService key). Prefer / clear fan out on {@link Advice}`changes` (same shape as
- *   {@link Directory}`changes`) so {@link Hyperlink.lookupClient} can move dials early.
+ *   HyperService key). Prefer / clear fan out on named-Tag `Advice.changes` (same shape as
+ *   Directory `changes`) so {@link Hyperlink.lookupClient} can move dials early.
  *
  * @module Lookup
  */
@@ -408,7 +424,10 @@ const directorySpec = {
 
 /**
  * Lookup node directory — advertise / unregister / list by served HyperService key /
- * {@link directorySpec.changes} membership push.
+ * membership `changes` push.
+ *
+ * Import the Tag by **name** (`import { Directory } from "hyperlink-ts/Lookup"`), or use
+ * flat sugars {@link nodesServing} / {@link changes}. Do not chain `Lookup.Directory.*`.
  *
  * @category services
  * @public
@@ -451,8 +470,15 @@ const adviceSpec = {
  * Lookup placement board — coordinator advice for nodeless / {@link Hyperlink.lookupClient} dial.
  *
  * v1: last-write-wins, in-memory, no advisor ACL. Algorithms stay app-owned (who calls
- * {@link advise}); Lookup only stores and surfaces the preference. {@link adviceSpec.changes}
+ * {@link advise}); Lookup only stores and surfaces the preference. Named-Tag `changes`
  * fans out prefer / clear for Track D early dial move.
+ *
+ * ```ts
+ * import { Advice } from "hyperlink-ts/Lookup"
+ * const board = yield* Advice
+ * yield* board.changes.pipe(Stream.take(1), Stream.runDrain)
+ * // or flat: Lookup.advise / preferred / clearAdvice
+ * ```
  *
  * @category services
  * @public
@@ -585,10 +611,11 @@ export const preferred = (
   );
 
 /**
- * Live directory membership push — sugar over {@link Directory}.`changes`.
+ * Live directory membership push — flat sugar over Directory `changes`.
  *
- * Subscribe from a node process to notice A→B dial swaps (`DirectoryUpserted` with
- * `dialChanged: true`) and rebind peer clients without restart.
+ * Prefer this over nesting (`Lookup.Directory.changes`). Subscribe from a node process
+ * to notice A→B dial swaps (`DirectoryUpserted` with `dialChanged: true`) and rebind
+ * peer clients without restart. Placement prefer/clear uses named `{ Advice }` instead.
  *
  * ```ts
  * yield* Lookup.changes.pipe(

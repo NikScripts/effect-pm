@@ -6105,8 +6105,8 @@ const makeLiveLookupService = <Self, S extends Spec>(
  * **Hot-rebind:** after the initial resolve, watches Directory `changes` and rebuilds
  * the dial when the chosen endpoint moves (`dialChanged`) or membership for this
  * service key changes — same plane as directory {@link peersLayer}. Prefer the flat
- * sugar {@link Lookup.changes}. The prior dial stays live until the next dial builds
- * successfully (no close-first gap).
+ * sugar {@link Lookup.changes} (not `Lookup.Directory.changes`). The prior dial stays
+ * live until the next dial builds successfully (no close-first gap).
  *
  * **Transparent retry (Track D v1):** Effect RPCs that fail with `RpcClientError` wait
  * briefly for a successful rebind (or proactively resolve once), then retry **once** on
@@ -6114,20 +6114,28 @@ const makeLiveLookupService = <Self, S extends Spec>(
  * idempotent when cutover-safe.
  *
  * **Advice early move:** watches Advice `changes` for this service key and re-resolves
- * when prefer flips — dialers move to B when you {@link Lookup.advise}`({ prefer: B })`,
- * before A leaves and before the first transport error. Apps use flat Lookup verbs
- * (`advise` / `preferred` / `clearAdvice`); do not chain `Lookup.Advice.*`.
+ * when prefer flips — dialers move to B when you {@link Lookup.advise} with
+ * `{ prefer: B }`, before A leaves and before the first transport error. Apps use flat
+ * Lookup verbs (`advise` / `preferred` / `clearAdvice`) or `import { Advice }` then
+ * `Advice.changes` — never `Lookup.Advice.*`.
  *
  * Bake name sketch was `unsafeLookupClient` (“trust Lookup or die”); bare
  * `lookupClient(Tag)` keeps that fail-closed contract when advice is absent/stale.
  *
  * ```ts
+ * import * as Lookup from "hyperlink-ts/Lookup"
+ * import { Advice } from "hyperlink-ts/Lookup"
+ *
  * // Sole endpoint (identity winner or one directory row):
  * Hyperlink.lookupClient(Mail).pipe(Layer.provide(Lookup.layer))
  *
  * // Coordinator published advice — bare client honors prefer:
  * yield* Lookup.advise({ serviceKey: Mail.key, prefer: "fleet/Mail#w2" })
  * Hyperlink.lookupClient(Mail)
+ *
+ * // Prefer / clear stream (named Tag — not Lookup.Advice.changes):
+ * const board = yield* Advice
+ * yield* board.changes.pipe(Stream.take(1), Stream.runDrain)
  *
  * // N>1 replicas — opt-in pick when no advice (still fail on 0):
  * Hyperlink.lookupClient(Mail, { pick: "first" })

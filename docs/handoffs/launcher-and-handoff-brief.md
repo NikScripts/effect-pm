@@ -199,6 +199,7 @@ North star: `lookupClient` callers never notice A→B. **v1 slice Eng'd:**
 41. **Transparent RPC retry** — Effect methods (`query` / `mutate`) that fail with `RpcClientError` proactively resolve+adopt once, else wait ≤2s for install generation bump, then **retry once**. App errors / `ProtocolMismatch` not retried. Streams not auto-retried.
 42. **Cutover order** — B Directory-visible (and/or Advice-prefer B) before A leaves so retry has a target. Same recipe as C crown-jewel.
 43. **Advice early move (Eng'd)** — `Advice.changes` (`AdvicePreferred` / `AdviceCleared`) on the existing Advice tag (no new sugar namespace). `lookupClient` watches prefer flips for its service key and re-resolves **before** A leaves / before the first transport error.
+44. **No Tag triples (Eng'd)** — apps/docs use named Tag imports (`import { Advice } from "…/Lookup"` → `Advice.changes`) or flat Lookup verbs (`advise` / `changes` / `nodesServing`). Banned: `Lookup.Advice.*` / `Lookup.Directory.*` as a nested API. Standard: [`modules-and-boundaries.md`](../standards/modules-and-boundaries.md#no-tag-triples).
 
 **Still open for D:** dual-serve window, in-flight stream migrate/replay, peersLayer parity retry.
 

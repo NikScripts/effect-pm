@@ -21,6 +21,35 @@ WorkPool.Tag        // pulls zero engine code
 WorkPool.serve      // pulls the engine only when used
 ```
 
+{#no-tag-triples .must appliesTo="src examples"}
+## No `Module.Tag.member` triples
+
+When a module hosts several service Tags (e.g. Lookup’s `Identity` / `Directory` / `Advice`),
+apps must not nest Tag members under the module namespace (`Lookup.Advice.changes`). That treats
+the Tag as a second namespace. Match Effect:
+
+- **Named Tag import:** `import { Advice } from "hyperlink-ts/Lookup"` → `yield* Advice` /
+  `Advice.changes`
+- **Flat module verbs:** `Lookup.advise` / `Lookup.changes` / `Lookup.nodesServing`
+
+`import * as Lookup` may still *name* the Tag (`Lookup.Advice` as a Context key / `yield*`
+target). Chaining a third segment for API surface is banned in apps, examples, and public prose.
+
+``` ts
+// ❌ triple — Tag used as a nested namespace
+Lookup.Advice.changes
+Lookup.Directory.nodesServing(req)
+
+// ✅ named Tag
+import { Advice } from "hyperlink-ts/Lookup"
+const board = yield* Advice
+yield* board.changes.pipe(Stream.runDrain)
+
+// ✅ flat sugar on the module
+yield* Lookup.advise({ serviceKey: Mail.key, prefer: "fleet/Mail#w2" })
+yield* Lookup.changes.pipe(Stream.runDrain)
+```
+
 {#filename-matches-export .must appliesTo=src}
 ## The filename matches what it exports
 
