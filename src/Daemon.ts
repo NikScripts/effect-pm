@@ -2343,7 +2343,30 @@ export interface DaemonLayerConfig<A, E, R> {
   readonly effect: Effect.Effect<A, E, R>;
   /** Optional polling layer for in-instance repeat cadence. */
   readonly polling?: Layer.Layer<PollingTag, never, never>;
+  /**
+   * Node handoff (Locked #39) — run on the OUTGOING node during {@link Node.shutdown} after drain.
+   * `(from, to, ctx) => Effect<void | HandoffOutcome>`. Daemons default to non-transferable (#34),
+   * so this is opt-in for a daemon that can hand its work to the incoming node; omit ⇒ not migrated.
+   */
+  readonly handoff?: Hyperlink.HandoffFn;
 }
+
+/** Extract a config's `handoff` fn as a {@link Hyperlink.ServeOptions} bag (Locked #39). @internal */
+const handoffOptionOf = (
+  config: unknown,
+): Hyperlink.ServeOptions | undefined => {
+  if (
+    typeof config === "object" &&
+    config !== null &&
+    "handoff" in config &&
+    typeof (config as { readonly handoff?: unknown }).handoff === "function"
+  ) {
+    return {
+      handoff: (config as { readonly handoff: Hyperlink.HandoffFn }).handoff,
+    };
+  }
+  return undefined;
+};
 
 // ============================================================================
 // wire ⇄ engine mapping
@@ -2642,10 +2665,11 @@ export function serve(
 ): Layer.Any {
   const baseTag: HyperlinkTag<unknown, DaemonSpec> = tag;
   const closedConfig = retype<DaemonLayerConfig<unknown, never, never>>(config as never);
+  const serveOptions = handoffOptionOf(config);
   return withDefaultMemory(
     Layer.unwrap(
       Effect.map(buildDaemonImpl(tag, closedConfig), (built) =>
-        Hyperlink.serve(baseTag, built),
+        Hyperlink.serve(baseTag, built, serveOptions),
       ),
     ),
   );
@@ -2678,10 +2702,11 @@ export function serveRemote(
 ): Layer.Any {
   const baseTag: HyperlinkTag<unknown, DaemonSpec> = tag;
   const closedConfig = retype<DaemonLayerConfig<unknown, never, never>>(config as never);
+  const serveOptions = handoffOptionOf(config);
   return withDefaultMemory(
     Layer.unwrap(
       Effect.map(buildDaemonImpl(tag, closedConfig), (built) =>
-        Hyperlink.serveRemoteDriver(baseTag, built),
+        Hyperlink.serveRemoteDriver(baseTag, built, serveOptions),
       ),
     ),
   );

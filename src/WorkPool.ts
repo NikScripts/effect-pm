@@ -1230,6 +1230,13 @@ export type QueueLayerConfig<Item, A, E, R, RR = never> = Omit<
       queue: EngineQueueHandle<Item, E, QueueEnqueueErrors, never, A>,
     ) => Effect.Effect<void, never, RR>;
   };
+  /**
+   * Node handoff (Locked #39) — run on the OUTGOING node during {@link Node.shutdown} after drain.
+   * `(from, to, ctx) => Effect<void | HandoffOutcome>`: move pending work from the local queue handle
+   * `from` to the peer client `to`. Pass {@link releaseEnqueueHandoff} for the release→enqueue recipe,
+   * or write your own. Threaded to {@link Hyperlink.serve}'s options; omit ⇒ not migrated.
+   */
+  readonly handoff?: Hyperlink.HandoffFn;
 };
 
 /**
@@ -1853,6 +1860,11 @@ export type PriorityLayerConfig<A, E, R, RR = never> = Omit<
       queue: WorkPoolPriorityHandle<A, E, QueueEnqueueErrors, never>,
     ) => Effect.Effect<void, never, RR>;
   };
+  /**
+   * Node handoff (Locked #39) — run on the OUTGOING node during {@link Node.shutdown} after drain.
+   * See {@link QueueLayerConfig.handoff}; pass {@link releaseEnqueueHandoff} for release→enqueue.
+   */
+  readonly handoff?: Hyperlink.HandoffFn;
 };
 
 type PriorityItemFields = Record<
@@ -2044,6 +2056,67 @@ export function layer(
  */
 export const layerMemory = layer;
 
+/** Extract a config's `handoff` fn as a {@link Hyperlink.ServeOptions} bag (Locked #39). @internal */
+const handoffOptionOf = (
+  config: unknown,
+): Hyperlink.ServeOptions | undefined => {
+  if (
+    typeof config === "object" &&
+    config !== null &&
+    "handoff" in config &&
+    typeof (config as { readonly handoff?: unknown }).handoff === "function"
+  ) {
+    return {
+      handoff: (config as { readonly handoff: Hyperlink.HandoffFn }).handoff,
+    };
+  }
+  return undefined;
+};
+
+/**
+ * A ready-made {@link Hyperlink.HandoffFn} for WorkPool queues (Locked #39 #14): `release` the local
+ * queue's pending entries and `enqueue` them onto the peer, then finish (`Done`). Pass it as a
+ * queue config's `handoff` (or directly to {@link Hyperlink.serve}'s options) so pending work moves
+ * to the incoming node during {@link Node.shutdown}:
+ *
+ * ```ts
+ * WorkPool.serve(Jobs, { effect, itemSchema, handoff: WorkPool.releaseEnqueueHandoff });
+ * ```
+ *
+ * `from` is the local queue handle (needs `release`), `to` is the peer client (needs `enqueue`).
+ * Nothing to release ⇒ `Done` without touching the peer. Any failure is treated by the runner as a
+ * defer (the node stays up), so this is safe to pass unconditionally.
+ *
+ * @category layers & serving
+ * @public
+ */
+export const releaseEnqueueHandoff: Hyperlink.HandoffFn = (from, to, ctx) =>
+  Effect.gen(function* () {
+    const release = (from as {
+      readonly release?: (input: {
+        readonly options?: unknown;
+      }) => Effect.Effect<ReadonlyArray<unknown>>;
+    }).release;
+    const enqueue = (to as {
+      readonly enqueue?: (
+        entries: ReadonlyArray<unknown>,
+      ) => Effect.Effect<unknown>;
+    }).enqueue;
+    if (typeof release !== "function" || typeof enqueue !== "function") {
+      yield* Effect.logWarning(
+        "WorkPool.releaseEnqueueHandoff: from.release / to.enqueue not callable; deferring",
+      );
+      return yield* ctx.defer;
+    }
+    const released = yield* release({ options: {} });
+    if (released.length === 0) return yield* ctx.done;
+    yield* enqueue(released);
+    yield* Effect.logInfo("WorkPool handoff released entries to peer").pipe(
+      Effect.annotateLogs({ "handoff.released": released.length }),
+    );
+    return yield* ctx.done;
+  });
+
 /**
  * Serve this queue **remotely (served-only)** — run the worker / refill / `persist`
  * engine behind the tag, mount its RPC handlers, and register into {@link Hyperlink.servedHyperServicesLayer},
@@ -2086,6 +2159,7 @@ export function serveRemote<
   config: PriorityLayerConfig<Schema.Struct<F>["Type"], E, R, RR>,
 ): Layer.Layer<HandlerContextOf<PriorityInstanceSpec<F>>, never, R | RR>;
 export function serveRemote(tag: AnyPoolTag, config: unknown): Layer.Any {
+  const serveOptions = handoffOptionOf(config);
   return isPriorityTag(tag)
     ? withDefaultMemory(
         Layer.unwrap(
@@ -2094,7 +2168,7 @@ export function serveRemote(tag: AnyPoolTag, config: unknown): Layer.Any {
               tag,
               config as PriorityLayerConfig<Schema.Struct<PriorityItemFields>["Type"], never, never, never>,
             ),
-            (built) => Hyperlink.serveRemoteDriver(tag, built),
+            (built) => Hyperlink.serveRemoteDriver(tag, built, serveOptions),
           ),
         ),
       )
@@ -2102,7 +2176,7 @@ export function serveRemote(tag: AnyPoolTag, config: unknown): Layer.Any {
         Layer.unwrap(
           Effect.map(
             buildQueueImpl(tag, config as QueueVerbConfig<QueueItemFields, unknown, never, never, Schema.Top>),
-            (built) => Hyperlink.serveRemoteDriver(tag, built),
+            (built) => Hyperlink.serveRemoteDriver(tag, built, serveOptions),
           ),
         ),
       );
@@ -2164,6 +2238,7 @@ export function serve<
   R | RR
 >;
 export function serve(tag: AnyPoolTag, config: unknown): Layer.Layer<unknown, never, unknown> {
+  const serveOptions = handoffOptionOf(config);
   return isPriorityTag(tag)
     ? withDefaultMemory(
         Layer.unwrap(
@@ -2172,7 +2247,7 @@ export function serve(tag: AnyPoolTag, config: unknown): Layer.Layer<unknown, ne
               tag,
               config as PriorityLayerConfig<Schema.Struct<PriorityItemFields>["Type"], never, never, never>,
             ),
-            (built) => Hyperlink.serve(tag, built),
+            (built) => Hyperlink.serve(tag, built, serveOptions),
           ),
         ),
       )
@@ -2180,7 +2255,7 @@ export function serve(tag: AnyPoolTag, config: unknown): Layer.Layer<unknown, ne
         Layer.unwrap(
           Effect.map(
             buildQueueImpl(tag, config as QueueVerbConfig<QueueItemFields, unknown, never, never, Schema.Top>),
-            (built) => Hyperlink.serve(tag, built),
+            (built) => Hyperlink.serve(tag, built, serveOptions),
           ),
         ),
       );
