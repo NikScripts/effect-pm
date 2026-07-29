@@ -56,9 +56,11 @@ const watchDocsContent = {
         "../guides",
         "../observe",
         "../standards",
-        // Paired Twoslash includes (`include="examples/forms/…"`) — HMR when teaching scripts change.
+        // Paired Twoslash includes (`include="examples/…"`) — HMR when teaching scripts change.
         "../../examples/forms",
         "../../examples/shared",
+        "../../examples/scenarios",
+        "../../examples/serve-per-hyperlink-deps.ts",
       ].map((p) => fileURLToPath(new URL(p, import.meta.url))),
     );
   },

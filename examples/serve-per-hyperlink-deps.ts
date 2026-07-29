@@ -6,7 +6,12 @@
  * `Import` gets a "hooked" one — proven by each reading back its own label, plus `/health` listing both.
  *
  * Run: `npx tsx examples/serve-per-hyperlink-deps.ts`
+ *
+ * Docs: `docs/examples/scenarios/serve-per-hyperlink-deps.md` includes this file;
+ * cut markers hide the module header and runner epilogue.
  */
+
+// ---cut---
 import { Console, Context, Duration, Effect, Layer, Schema } from "effect";
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import { createServer } from "node:http";
@@ -84,4 +89,5 @@ const program = Effect.gen(function* () {
   );
 }).pipe(Effect.scoped);
 
+// ---cut-after---
 NodeRuntime.runMain(program);

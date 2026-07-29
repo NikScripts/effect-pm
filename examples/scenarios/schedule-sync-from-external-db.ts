@@ -2,12 +2,17 @@
  * @module examples/scenarios/schedule-sync-from-external-db
  *
  * DB rows → Daemon schedule entries, synced at startup and each tick. Run: `pnpm run example:schedule-control-db-sync`
+ *
+ * Docs: `docs/examples/scenarios/schedule-sync-from-external-db.md` includes this file;
+ * cut markers hide the module header and runner epilogue.
  */
 
+import { runNodeProgramWithLayer } from "../shared/demo-harness";
+
+// ---cut---
 import { Duration, Effect, Fiber, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
 import { Polling, Daemon } from "../../src";
-import { runNodeProgramWithLayer } from "../shared/demo-harness";
 import { utcDateFromMillis } from "../../src/internal/utcDate";
 
 interface DbScheduleRow {
@@ -60,6 +65,7 @@ const program = Effect.gen(function* () {
   yield* Fiber.interrupt(supervisor);
 }).pipe(Effect.scoped);
 
+// ---cut-after---
 runNodeProgramWithLayer(
   program,
   TestClock.layer(),

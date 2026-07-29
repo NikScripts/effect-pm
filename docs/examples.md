@@ -203,3 +203,38 @@ Run: `pnpm run example:store-memory` / `example:store-sqlite`
 
 Source: `examples/forms/dynamic-config/dynamic-config-hot-swap.ts`  
 Run: `pnpm run example:form:dynamic-config-hot-swap`
+
+---
+
+## Scenarios
+
+Compositions (not one-shape forms). Same `include=` + cut convention.
+
+### [Multi-protocol dual serve](/docs/multi-protocol-dual-serve)
+
+Source: `examples/scenarios/multi-protocol-dual-serve.ts`  
+Run: `pnpm run example:multi-protocol-dual-serve`
+
+### [Schedule sync from DB](/docs/schedule-sync-from-external-db)
+
+Source: `examples/scenarios/schedule-sync-from-external-db.ts`  
+Run: `pnpm run example:schedule-control-db-sync`
+
+### [Serve-per-hyperlink deps](/docs/serve-per-hyperlink-deps)
+
+Source: `examples/serve-per-hyperlink-deps.ts`  
+Run: `pnpm run example:serve-per-hyperlink-deps`
+
+### [NWSL Gate.HttpApiClient](/docs/nwsl-gate-http-api)
+
+Source: `examples/scenarios/nwslsoccer/gate-http-api-client.ts`  
+Run: `pnpm run example:nwsl-gate-http-api`  
+(Supporting tree under `examples/scenarios/nwslsoccer/` — not 1:1 paired.)
+
+---
+
+## Apps (not 1:1 paired)
+
+Full apps under `examples/hyperlink-tui`, `hyperlink-web`, `web-dashboard`, `queue-widget`, …
+stay **out of the include book** until an owner call (E5) — prefer a scenario-style page per
+app, not a Twoslash dump of every file.

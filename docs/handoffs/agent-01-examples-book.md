@@ -57,8 +57,8 @@ Guides keep **inline** fences for minimal deltas. The examples book prefers **in
 | **E2** | forms/hyperlink — 9 scripted forms (Gate / HttpApi / Telemetry / FleetHealth / ShardMap) | **done** (Agent 4) |
 | **E2b** | remaining forms/hyperlink (node / launcher / wire / defaults) — 19 pairs | **done** (Agent 4); forms/hyperlink complete |
 | **E3** | forms/schedule + polling + store + dynamic-config (14) | **done** (Agent 4) |
-| **E4** | scenarios / serve-per-hyperlink / remaining root scripts | |
-| **E5** | Large apps — owner call | |
+| **E4** | scenarios + serve-per-hyperlink + NWSL entry (4) | **done** (Agent 4) |
+| **E5** | Large apps (`hyperlink-tui` / `web` / `web-dashboard` / …) | **owner-gated** — hub notes “Apps (not 1:1 paired)”; do not dump every file |
 
 ---
 

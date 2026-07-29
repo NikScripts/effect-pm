@@ -239,6 +239,8 @@
     "example:schedule-control-surfaces": "tsx examples/forms/schedule/schedule-controls-initializer.ts && tsx examples/forms/schedule/schedule-controls-in-effect.ts && tsx examples/forms/schedule/schedule-controls-external-fiber.ts",
     "example:schedule-control-basics": "tsx examples/forms/schedule/schedule-at.ts && tsx examples/forms/schedule/schedule-window.ts && tsx examples/forms/schedule/schedule-define.ts",
     "example:schedule-control-db-sync": "tsx examples/scenarios/schedule-sync-from-external-db.ts",
+    "example:multi-protocol-dual-serve": "tsx examples/scenarios/multi-protocol-dual-serve.ts",
+    "example:serve-per-hyperlink-deps": "tsx examples/serve-per-hyperlink-deps.ts",
     "example:gate": "tsx examples/forms/hyperlink/gate-unit-and-input.ts",
     "example:gate-rate-limit-fleet": "tsx examples/forms/hyperlink/gate-rate-limit-fleet.ts",
     "test:redis": "vitest run test/rate-limit-redis.test.ts test/effect-redis-stores.test.ts",

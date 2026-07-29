@@ -16,6 +16,9 @@ const modules = import.meta.glob(
   [
     "../../../../examples/forms/**/*.ts",
     "../../../../examples/shared/**/*.ts",
+    "../../../../examples/scenarios/**/*.ts",
+    // Root teaching scripts (e.g. serve-per-hyperlink-deps) — not full apps.
+    "../../../../examples/*.ts",
   ],
   { query: "?raw", import: "default", eager: true },
 ) as Record<string, string>;

@@ -10,7 +10,7 @@ Runnable teaching scripts organized in two layers:
 
 Living book: [docs/index.md](../docs/index.md) · [Examples hub](../docs/examples.md) · [API Reference](https://hyperlink.cool/api/hyperlink-ts).
 
-**Conventions:** Each file has a one-line module header (what + how to run). Teaching notes live **inline next to the code** they describe. Imports omit `.js` extensions — examples run via `tsx` on `.ts` sources directly.
+**Conventions:** Each file has a one-line module header (what + how to run). Teaching notes live **inline next to the code** they describe. Imports omit `.js` extensions — examples run via `tsx` on `.ts` sources directly. Paired Twoslash docs **include** these files (`{.twoslash include="examples/…"}`); use `// ---cut---` / `---cut-after---` in the `.ts` to hide harness noise on the page — see [Examples hub](../docs/examples.md).
 
 ---
 

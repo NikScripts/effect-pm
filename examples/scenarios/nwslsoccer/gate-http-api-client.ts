@@ -14,8 +14,12 @@
  * This script uses `responseMode: "response-only"` and parses JSON by hand so it keeps working if
  * the live API drifts ahead of the checked-in `NwslMatchesResponse` schema. For decoded domain
  * types, omit `responseMode` once schemas match the API.
+ *
+ * Docs: `docs/examples/scenarios/nwsl-gate-http-api.md` includes this file;
+ * cut markers hide the module header and runner epilogue.
  */
 
+// ---cut---
 import { FetchHttpClient } from "effect/unstable/http";
 import { ConfigProvider, Effect, Layer } from "effect";
 import { Gate } from "../../../src";
@@ -66,6 +70,7 @@ const program = Effect.gen(function* () {
   );
 }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv())));
 
+// ---cut-after---
 Effect.runPromise(program).then(
   () => console.log("example:nwsl-gate-http-api finished OK"),
   (e) => {
