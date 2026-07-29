@@ -35,17 +35,16 @@ import {
   leafByKey,
   leafTags,
   nodesOf,
-  daemonBundle,
-  queueBundle,
   tagWireKey,
 } from "../ui/data";
+import * as Bundle from "../ui/Bundle";
 import { fmtDayLabel, now, startOfWeekMillis } from "../ui/now";
 import { RegistryProvider, useAtomValue } from "../ui/atom-react";
 import * as Group from "../Group";
-import { RuntimeProvider, useApiBundle, useNodeBundle, useDaemonBundle, useQueueBundle, useRuntime } from "./runtime";
+import { RuntimeProvider } from "./runtime";
 import { ViewTransitionProvider, useViewTransition, useViewTransitionStyle } from "./useViewTransition";
 import { Button } from "./components/ui/button";
-import { ApiStatusBadge, base, Cell, ConfirmDialog, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, DaemonStatusBadge, StatusBadge, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
+import { base, Cell, ConfirmDialog, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
 import { isLeafTag, type LeafTag, type WidgetRegistry } from "../ui/widgetRegistry";
 import * as Navigator from "../ui/Navigator";
 import * as View from "../ui/View";
@@ -55,13 +54,39 @@ import { DebugConsole } from "./debug-console";
 import * as UiDashboardViews from "../ui/DashboardViews";
 import * as WebDashboardViews from "./DashboardViews";
 
-/** Detail body — shell / Navigator owns back (lock J). */
+/** Detail body — shell owns back/title (lock J). */
 const ViewDetailScreen = (props: {
   readonly tag: LeafTag;
   readonly name?: string;
 }): React.ReactElement => {
   const Match = View.useMatch();
   return <Match.Detail tag={props.tag} name={props.name} />;
+};
+
+/** Shell chrome for a detail route — back + title only; badges live in Detail skins. */
+const DetailShell = (props: {
+  readonly title: string;
+  readonly onBack: () => void;
+  readonly vtKey: string;
+  readonly children: React.ReactNode;
+  readonly className?: string;
+}): React.ReactElement => {
+  const vt = useViewTransitionStyle(props.vtKey);
+  return (
+    <div
+      className={
+        props.className ??
+        "flex h-[100dvh] flex-col gap-3 overflow-hidden safe-area landscape:h-auto landscape:min-h-[100dvh] landscape:overflow-visible"
+      }
+      style={vt}
+    >
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
+        <strong className="flex-1 truncate text-base">{props.title}</strong>
+      </div>
+      {props.children}
+    </div>
+  );
 };
 
 
@@ -72,7 +97,7 @@ const DegradedKeysProbe = (props: {
   readonly node: NodeRef;
   readonly onKeys: (id: string, keys: ReadonlyArray<string>) => void;
 }): null => {
-  const r = useAtomValue(useNodeBundle(props.node).status);
+  const r = useAtomValue(Bundle.node(props.node).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   const keys = (s?.services ?? []).filter((x) => !x.ready).map((x) => x.key);
   const { onKeys, node } = props;
@@ -123,8 +148,9 @@ const LogBox = (props: {
 
 /** Fullscreen logs page for a HyperService — its own route (`/…/Hyperlink/logs`). */
 const LogsPage = (props: { readonly tag: QueueTag | DaemonTag; readonly onClose: () => void }): React.ReactElement => {
-  const runtime = useRuntime();
-  const bundle = isDaemonTag(props.tag) ? daemonBundle(runtime, props.tag) : queueBundle(runtime, props.tag);
+  const bundle = isDaemonTag(props.tag)
+    ? Bundle.observe(props.tag)
+    : Bundle.observe(props.tag);
   return <LogBox bundle={bundle} full onToggle={props.onClose} meta={<> · {displayName(props.tag.key)}</>} />;
 };
 
@@ -134,7 +160,7 @@ const DAY_MS = 86_400_000;
  *  calendar grid of the run windows. Week nav up top (top-right kept free); add / clear / lock in a
  *  bottom bar; tap a window to edit or delete it. */
 const SchedulePage = (props: { readonly tag: DaemonTag; readonly onClose: () => void }): React.ReactElement => {
-  const bundle = useDaemonBundle(props.tag);
+  const bundle = Bundle.observe(props.tag);
   const { list, addEntry, update, remove, clearAll } = useScheduleEdit(bundle);
   const [weekStart, setWeekStart] = React.useState(() => startOfWeekMillis(now()));
   const [editing, setEditing] = React.useState<number | "new" | undefined>(undefined);
@@ -201,69 +227,59 @@ const SchedulePage = (props: { readonly tag: DaemonTag; readonly onClose: () => 
   );
 };
 
+/** Queue detail route — shell owns back/title; badge + body in Detail skin; LogBox stays shell. */
 const QueueDetail = (props: {
   readonly tag: QueueTag;
   readonly onBack: () => void;
   readonly onOpenLogs: () => void;
 }): React.ReactElement => {
   const Match = View.useMatch();
-  const bundle = useQueueBundle(props.tag);
+  const bundle = Bundle.observe(props.tag);
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? Option.getOrUndefined(statusR.value) : undefined;
-  const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   return (
-    <div className="flex h-[100dvh] flex-col gap-3 overflow-hidden safe-area landscape:h-auto landscape:min-h-[100dvh] landscape:overflow-visible" style={vt}>
-      <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
-        <strong className="flex-1 truncate text-base">{displayName(props.tag.key)}</strong>
-        <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
-      </div>
+    <DetailShell
+      title={displayName(props.tag.key)}
+      onBack={props.onBack}
+      vtKey={`res-${props.tag.key}`}
+    >
       <Match.Detail tag={props.tag} />
       <LogBox bundle={bundle} full={false} onToggle={props.onOpenLogs} meta={<> · phase {s?.phase ?? "?"}</>} />
-    </div>
+    </DetailShell>
   );
 };
 
+/** Daemon detail route — shell owns back/title; badge + body in Detail skin; LogBox stays shell. */
 const DaemonDetail = (props: {
   readonly tag: DaemonTag;
   readonly onBack: () => void;
   readonly onOpenLogs: () => void;
 }): React.ReactElement => {
   const Match = View.useMatch();
-  const bundle = useDaemonBundle(props.tag);
-  const statusR = useAtomValue(bundle.status);
-  const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
-  const vt = useViewTransitionStyle(`res-${props.tag.key}`);
+  const bundle = Bundle.observe(props.tag);
   return (
-    <div className="flex h-[100dvh] flex-col gap-3 overflow-hidden safe-area landscape:h-auto landscape:min-h-[100dvh] landscape:overflow-visible" style={vt}>
-      <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
-        <strong className="flex-1 truncate text-base">⚙ {displayName(props.tag.key)}</strong>
-        <DaemonStatusBadge supervising={s?.supervising} />
-      </div>
+    <DetailShell
+      title={`⚙ ${displayName(props.tag.key)}`}
+      onBack={props.onBack}
+      vtKey={`res-${props.tag.key}`}
+    >
       <Match.Detail tag={props.tag} />
       <LogBox bundle={bundle} full={false} onToggle={props.onOpenLogs} />
-    </div>
+    </DetailShell>
   );
 };
 
-/** Detail shell for a {@link Gate.HttpApiClient} (or nest fixture) — header + View detail body
- *  (usage stats, rate-limit counters, chart, endpoints). Read-only: no controls, no logs. */
+/** API detail route — shell owns back/title; badge + body in Detail skin. */
 const ApiDetail = (props: { readonly tag: ApiTag; readonly onBack: () => void }): React.ReactElement => {
   const Match = View.useMatch();
-  const bundle = useApiBundle(props.tag);
-  const statusR = useAtomValue(bundle.status);
-  const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
-  const vt = useViewTransitionStyle(`res-${props.tag.key}`);
   return (
-    <div className="flex h-[100dvh] flex-col gap-3 overflow-hidden safe-area landscape:h-auto landscape:min-h-[100dvh] landscape:overflow-visible" style={vt}>
-      <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
-        <strong className="flex-1 truncate text-base">🌐 {displayName(props.tag.key)}</strong>
-        <ApiStatusBadge requests={s?.requestsTotal ?? 0} errors={s?.errorsTotal ?? 0} />
-      </div>
+    <DetailShell
+      title={`🌐 ${displayName(props.tag.key)}`}
+      onBack={props.onBack}
+      vtKey={`res-${props.tag.key}`}
+    >
       <Match.Detail tag={props.tag} />
-    </div>
+    </DetailShell>
   );
 };
 
@@ -324,15 +340,14 @@ const DashboardInner = (props: {
       isGateTag(selected)
     ) {
       return (
-        <div className="safe-area">
-          <div className="mb-3 flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={toGrid(selected.key)}>
-              ← back
-            </Button>
-            <strong className="flex-1 truncate text-base">{selectedName}</strong>
-          </div>
+        <DetailShell
+          title={selectedName ?? displayName(selected.key)}
+          onBack={toGrid(selected.key)}
+          vtKey={`res-${selected.key}`}
+          className="safe-area flex flex-col gap-3"
+        >
           <ViewDetailScreen tag={selected} name={selectedName} />
-        </div>
+        </DetailShell>
       );
     }
     return <></>;
@@ -472,12 +487,14 @@ const NodeHyperlinkView = (props: {
     isGateTag(tag)
   ) {
     return (
-      <>
-        <div className="mb-3 flex items-center gap-2 px-1">
-          <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
-        </div>
+      <DetailShell
+        title={displayName(tag.key)}
+        onBack={props.onBack}
+        vtKey={`res-${tag.key}`}
+        className="safe-area flex flex-col gap-3 px-1"
+      >
         <ViewDetailScreen tag={tag} />
-      </>
+      </DetailShell>
     );
   }
   return <></>;

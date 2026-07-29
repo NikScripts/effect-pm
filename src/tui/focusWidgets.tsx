@@ -10,15 +10,13 @@ import { Option } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { nodeOf } from "../Hyperlink";
 import {
-  daemonBundle,
-  priorityBundle,
   type CommandAtom,
   type DaemonTag,
   type PriorityTag,
 } from "../ui/data";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
 import { spark } from "./chrome";
-import { useRuntime } from "./runtime";
+import * as Bundle from "../ui/Bundle";
 import {
   bar,
   BLANK_BORDER,
@@ -125,7 +123,7 @@ export const FocusedPriority = (props: {
   const cmd = props.cmd ?? null;
   const barRows = props.barRows ?? 0;
   const renderBar = props.bar ?? ((hint) => hint);
-  const bundle = priorityBundle(useRuntime(), tag);
+  const bundle = Bundle.observe(tag);
   const statusR = useAtomValue(bundle.status);
   const metricsR = useAtomValue(bundle.metrics);
   const logsR = useAtomValue(bundle.logs);
@@ -261,7 +259,7 @@ export const FocusedDaemon = (props: {
   const cmd = props.cmd ?? null;
   const barRows = props.barRows ?? 0;
   const renderBar = props.bar ?? ((hint) => hint);
-  const bundle = daemonBundle(useRuntime(), tag);
+  const bundle = Bundle.observe(tag);
   const statusR = useAtomValue(bundle.status);
   const logsR = useAtomValue(bundle.logs);
 

@@ -41,7 +41,8 @@ function JobsCard({ tag }: { tag: typeof Jobs }) {
 | **Value atoms** | Live reads (`status`, `metrics`, `logs`, …) via `useAtomValue` |
 | **Command atoms** | Writes (`pause`, `resume`, `start`, …) as `Atom` result-fns |
 
-Builders memoize one Bundle per `(runtime, tag.key)`.
+Builders memoize one Bundle per `(runtime, tag.key)`. Straight status/command fields use
+`Hyperlink.atom` / `Hyperlink.fn`; history/trend/logs/schedule scans stay Bundle-owned.
 
 ## Families
 

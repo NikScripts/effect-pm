@@ -7,11 +7,16 @@
  * live service over the consumer's reactive `runtime` (an `Atom.runtime(layer)` that provides
  * the tags — local engine or `Hyperlink.client` over http; the widgets don't care which).
  *
+ * Prefer `Bundle.observe(tag)` at call sites. Builders use `Hyperlink.atom` / `Hyperlink.fn`
+ * for straight channels; keep composite scans (history / trend / logs) here.
+ *
  */
 import { DateTime, Duration, Effect, Option, Predicate, type Schema, Stream } from "effect";
 import { Atom, type AsyncResult } from "effect/unstable/reactivity";
 import * as Group from "../Group";
 import {
+  atom as liveAtom,
+  fn as commandFn,
   nodeOf,
   kindOf as hyperlinkKindOf,
   wireKeySym,
@@ -555,10 +560,11 @@ export const queueBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: QueueT
     history: Atom.mapResult(metricsHistory, (a) => a.history),
     trend: Atom.mapResult(statusTrend, (a) => a.trend),
     logs: hyperlinkLogsAtom(runtime, tag.key, node),
-    pause: runtime.fn(() => Effect.flatMap(tag, (q) => q.pause)),
-    resume: runtime.fn(() => Effect.flatMap(tag, (q) => q.resume)),
-    clear: runtime.fn(() => Effect.flatMap(tag, (q) => q.clear)),
-    shutdown: runtime.fn(() => Effect.flatMap(tag, (q) => q.shutdown)),
+    // Commands via Hyperlink.fn — status/metrics stay Bundle-owned (deduped scan + cache).
+    pause: commandFn(runtime)(tag, (q) => q.pause),
+    resume: commandFn(runtime)(tag, (q) => q.resume),
+    clear: commandFn(runtime)(tag, (q) => q.clear),
+    shutdown: commandFn(runtime)(tag, (q) => q.shutdown),
   };
   cache.set(tag.key, bundle);
   return bundle;
@@ -637,11 +643,11 @@ export const priorityBundle = <R, ER>(
     history: Atom.mapResult(metricsHistory, (a) => a.history),
     trend: Atom.mapResult(statusTrend, (a) => a.trend),
     logs: hyperlinkLogsAtom(runtime, tag.key, node),
-    start: runtime.fn(() => Effect.flatMap(tag, (q) => q.start)),
-    pause: runtime.fn(() => Effect.flatMap(tag, (q) => q.pause)),
-    resume: runtime.fn(() => Effect.flatMap(tag, (q) => q.resume)),
-    clear: runtime.fn(() => Effect.flatMap(tag, (q) => q.clear)),
-    shutdown: runtime.fn(() => Effect.flatMap(tag, (q) => q.shutdown)),
+    start: commandFn(runtime)(tag, (q) => q.start),
+    pause: commandFn(runtime)(tag, (q) => q.pause),
+    resume: commandFn(runtime)(tag, (q) => q.resume),
+    clear: commandFn(runtime)(tag, (q) => q.clear),
+    shutdown: commandFn(runtime)(tag, (q) => q.shutdown),
   };
   cache.set(tag.key, bundle);
   return bundle;
@@ -748,7 +754,7 @@ export const gateBundle = <R, ER>(
   if (existing !== undefined) return existing;
 
   const bundle: GateBundle = {
-    status: runtime.atom(Stream.unwrap(Effect.map(tag, (r) => r.status.changes))),
+    status: liveAtom(runtime)(tag, (r) => r.status),
   };
   cache.set(tag.key, bundle);
   return bundle;
@@ -772,20 +778,22 @@ export const daemonBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: Daemo
       : p.schedule.entries.get,
   );
   const bundle: DaemonBundle = {
-    status: runtime.atom(Stream.unwrap(Effect.map(tag, (p) => p.status.changes))),
+    status: liveAtom(runtime)(tag, (p) => p.status),
     logs: hyperlinkLogsAtom(runtime, tag.key, node),
     // Poll the schedule so a read-only inline view reflects edits made on the fullscreen page (and
     // any external changes) — the contract exposes `schedule.entries` as a reactive ref, read here.
     schedule: runtime.atom(
       Stream.tick(Duration.seconds(3)).pipe(Stream.mapEffect(() => scheduleEntries)),
     ),
-    start: runtime.fn(() => Effect.flatMap(tag, (p) => p.start)),
-    stop: runtime.fn(() => Effect.flatMap(tag, (p) => p.stop)),
-    run: runtime.fn(() => Effect.flatMap(tag, (p) => p.run)),
-    setSchedule: runtime.fn((entries: ReadonlyArray<ScheduleEntry>) =>
-      Effect.flatMap(tag, (p) => (p.schedule === undefined ? Effect.void : p.schedule.set(entries))),
+    start: commandFn(runtime)(tag, (p) => p.start),
+    stop: commandFn(runtime)(tag, (p) => p.stop),
+    run: commandFn(runtime)(tag, (p) => p.run),
+    setSchedule: commandFn(runtime)(tag, (p) => (entries: ReadonlyArray<ScheduleEntry>) =>
+      p.schedule === undefined ? Effect.void : p.schedule.set(entries),
     ),
-    clearSchedule: runtime.fn(() => Effect.flatMap(tag, (p) => (p.schedule === undefined ? Effect.void : p.schedule.clear))),
+    clearSchedule: commandFn(runtime)(tag, (p) =>
+      p.schedule === undefined ? Effect.void : p.schedule.clear,
+    ),
   };
   cache.set(tag.key, bundle);
   return bundle;
@@ -819,18 +827,12 @@ export const apiBundle = <R, ER>(runtime: DashboardRuntime<R, ER>, tag: ApiTag<R
     ),
   );
   const bundle: ApiBundle = {
-    status: runtime.atom(Stream.unwrap(Effect.map(tag, (a) => a.metrics.usage.changes))),
+    status: liveAtom(runtime)(tag, (a) => a.metrics.usage),
     metrics: Atom.mapResult(metricsHistory, (a) => a.latest),
     history: Atom.mapResult(metricsHistory, (a) => a.history),
-    remaining: runtime.atom(
-      Stream.unwrap(Effect.map(tag, (a) => a.metrics.remaining.changes)),
-    ),
-    resetAfter: runtime.atom(
-      Stream.unwrap(Effect.map(tag, (a) => a.metrics.resetAfter.changes)),
-    ),
-    exceeded: runtime.atom(
-      Stream.unwrap(Effect.map(tag, (a) => a.metrics.exceeded.changes)),
-    ),
+    remaining: liveAtom(runtime)(tag, (a) => a.metrics.remaining),
+    resetAfter: liveAtom(runtime)(tag, (a) => a.metrics.resetAfter),
+    exceeded: liveAtom(runtime)(tag, (a) => a.metrics.exceeded),
   };
   cache.set(tag.key, bundle);
   return bundle;

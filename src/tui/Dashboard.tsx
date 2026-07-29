@@ -20,6 +20,7 @@ import * as React from "react";
 import { Layer, Option } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import * as Group from "../Group";
+import * as Bundle from "../ui/Bundle";
 import { kindOf as hyperlinkKindOf, nodeOf } from "../Hyperlink";
 import {
   daemonLeaves,
@@ -31,7 +32,6 @@ import {
   isQueueTag,
   isShardMapTag,
   isTelemetryTag,
-  queueBundle,
   queueLeaves,
   type DaemonTag,
   type DashboardRuntime,
@@ -52,7 +52,7 @@ import {
   LogTail,
   NodeMark,
 } from "./focusWidgets";
-import { RuntimeProvider, useRuntime } from "./runtime";
+import { RuntimeProvider } from "./runtime";
 import {
   BLANK_BORDER,
   displayName,
@@ -139,7 +139,7 @@ const FocusedQueue = (props: {
 }): React.ReactElement => {
   const Match = View.useMatch();
   const { name, tag, cols, rows, editMode } = props;
-  const bundle = queueBundle(useRuntime(), tag);
+  const bundle = Bundle.observe(tag);
   const statusR = useAtomValue(bundle.status);
   const logsR = useAtomValue(bundle.logs);
 

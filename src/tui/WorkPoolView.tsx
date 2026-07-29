@@ -8,11 +8,11 @@ import * as React from "react";
 import { Option, Layer } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useAtomValue } from "../ui/atom-react";
-import { isQueueTag, queueBundle, type QueueTag } from "../ui/data";
+import { isQueueTag, type QueueTag } from "../ui/data";
 import * as View from "../ui/View";
+import * as Bundle from "../ui/Bundle";
 import * as WorkPoolView from "../ui/WorkPoolView";
 import { QueueCell } from "./cellWidgets";
-import { useRuntime } from "./runtime";
 import {
   displayName,
   PageXL,
@@ -43,7 +43,7 @@ const QueueDetailPanel = (props: {
   readonly name: string;
   readonly width?: number;
 }): React.ReactElement => {
-  const bundle = queueBundle(useRuntime(), props.tag);
+  const bundle = Bundle.observe(props.tag);
   const statusR = useAtomValue(bundle.status);
   const metricsR = useAtomValue(bundle.metrics);
   const trendR = useAtomValue(bundle.trend);

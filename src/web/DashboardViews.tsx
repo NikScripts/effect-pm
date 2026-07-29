@@ -30,15 +30,19 @@ import * as PriorityView from "../ui/PriorityView";
 import * as ShardMapView from "../ui/ShardMapView";
 import * as TelemetryView from "../ui/TelemetryView";
 import * as WorkPoolView from "../ui/WorkPoolView";
-import { useApiBundle, useDaemonBundle } from "./runtime";
+import { AsyncResult } from "effect/unstable/reactivity";
+import { useAtomValue } from "../ui/atom-react";
+import * as Bundle from "../ui/Bundle";
 import {
   ApiCard,
   ApiEndpointTable,
   ApiMetricChart,
   ApiStats,
+  ApiStatusBadge,
   DaemonCard,
   DaemonControls,
   DaemonStats,
+  DaemonStatusBadge,
   displayName,
   FleetHealthCard,
   FleetHealthDetail as FleetHealthDetailWidget,
@@ -161,13 +165,12 @@ const PoolDetailView: View.View = (props) => {
 
 const PriorityDetailView: View.View = (props) => {
   if (!isPriorityTag(props.tag)) return null;
-  // Shell Outlet owns back/title; body-only when Navigator is present (lock J).
+  // Shell owns back/title; body-only when Navigator is present (lock J).
   const nav = Navigator.useNavigatorOption();
   return (
     <PriorityDetailWidget
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
-      onBack={nav?.back}
       chrome={nav === null}
     />
   );
@@ -176,10 +179,15 @@ const PriorityDetailView: View.View = (props) => {
 const DaemonDetailView: View.View = (props) => {
   if (!isDaemonTag(props.tag)) return null;
   const nav = Navigator.useNavigatorOption();
-  const bundle = useDaemonBundle(props.tag);
+  const bundle = Bundle.observe(props.tag);
+  const statusR = useAtomValue(bundle.status);
+  const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const [locked, setLocked] = React.useState(true);
   return (
     <>
+      <div className="flex justify-end">
+        <DaemonStatusBadge supervising={s?.supervising} />
+      </div>
       <HyperlinkReadinessBanner tag={props.tag} />
       <DaemonStats bundle={bundle} />
       <DaemonControls
@@ -201,9 +209,14 @@ const DaemonDetailView: View.View = (props) => {
 
 const ApiDetailView: View.View = (props) => {
   if (!isApiTag(props.tag)) return null;
-  const bundle = useApiBundle(props.tag);
+  const bundle = Bundle.observe(props.tag);
+  const statusR = useAtomValue(bundle.status);
+  const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   return (
     <>
+      <div className="flex justify-end">
+        <ApiStatusBadge requests={s?.requestsTotal ?? 0} errors={s?.errorsTotal ?? 0} />
+      </div>
       <HyperlinkReadinessBanner tag={props.tag} />
       <ApiStats bundle={bundle} />
       <div className="overflow-hidden rounded-xl border bg-card p-3">
@@ -221,7 +234,6 @@ const FleetDetailView: View.View = (props) => {
     <FleetHealthDetailWidget
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
-      onBack={nav?.back}
       chrome={nav === null}
     />
   );
@@ -234,7 +246,6 @@ const TelemetryDetailView: View.View = (props) => {
     <TelemetryDetailWidget
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
-      onBack={nav?.back}
       chrome={nav === null}
     />
   );
@@ -247,7 +258,6 @@ const ShardMapDetailView: View.View = (props) => {
     <ShardMapDetailWidget
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
-      onBack={nav?.back}
       chrome={nav === null}
     />
   );
@@ -260,7 +270,6 @@ const GateDetailView: View.View = (props) => {
     <GateDetailWidget
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
-      onBack={nav?.back}
       chrome={nav === null}
     />
   );

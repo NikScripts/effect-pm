@@ -37,5 +37,5 @@ const add = Hyperlink.fn(rt)(Jobs, (q) => q.add)
 4. Identity: `q.status` and `q.status.changes` share one atom (channel key from the select path).
 5. React apps: put `rt` in `RuntimeProvider`; subscribe with `useAtomValue` / `useAtomSet`.
 
-Dashboard family packs use these (or the same `runtime.atom` / `runtime.fn` primitives) inside
-`Bundle.observe` builders. See [Bundles](/docs/bundles).
+Dashboard `*Bundle` builders call these for live status and commands; composite scans
+(history / trend / logs / schedule poll) stay inside the Bundle. See [Bundles](/docs/bundles).

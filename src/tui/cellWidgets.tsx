@@ -11,12 +11,10 @@ import * as React from "react";
 import { Option } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import * as Group from "../Group";
+import * as Bundle from "../ui/Bundle";
 import { kind as hyperlinkKind, kindOf as hyperlinkKindOf, nodeOf } from "../Hyperlink";
 import {
-  daemonBundle,
   isDaemonTag,
-  priorityBundle,
-  queueBundle,
   type DaemonTag,
   type GroupNode,
   type PriorityTag,
@@ -112,7 +110,7 @@ export const QueueCell = (props: {
   const { name, tag } = props;
   const width = props.width ?? 24;
   const selected = props.selected === true;
-  const r = useAtomValue(queueBundle(useRuntime(), tag).status);
+  const r = useAtomValue(Bundle.observe(tag).status);
   const opt = AsyncResult.isSuccess(r) ? r.value : Option.none();
   const s = Option.isSome(opt) ? opt.value : undefined;
   const sizes = s?.sizes ?? { high: 0, normal: 0, low: 0 };
@@ -161,7 +159,7 @@ export const PriorityCell = (props: {
   readonly selected: boolean;
 }): React.ReactElement => {
   const { name, tag, width, selected } = props;
-  const r = useAtomValue(priorityBundle(useRuntime(), tag).status);
+  const r = useAtomValue(Bundle.observe(tag).status);
   const opt = AsyncResult.isSuccess(r) ? r.value : Option.none();
   const s = Option.isSome(opt) ? opt.value : undefined;
   const lanes = s !== undefined ? Object.entries(s.sizes) : [];
@@ -220,7 +218,7 @@ export const DaemonCell = (props: {
   readonly selected: boolean;
 }): React.ReactElement => {
   const { name, tag, width, selected } = props;
-  const r = useAtomValue(daemonBundle(useRuntime(), tag).status);
+  const r = useAtomValue(Bundle.observe(tag).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   const up = s?.supervising === true;
   return (
