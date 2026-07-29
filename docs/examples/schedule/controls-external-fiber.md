@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:schedule-controls-external-fiber`  
 **Hub:** [Examples → schedule](/docs/examples#schedule)
 
+> [!NOTE]
+> **Related examples:** [controls (initializer)](/docs/schedule-controls-initializer) · [controls (in Effect)](/docs/schedule-controls-in-effect)
+
 ## What this shows
 
 Drive schedule controls from an external fiber.

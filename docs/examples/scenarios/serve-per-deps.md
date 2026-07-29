@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:scenario-serve-per-deps`  
 **Hub:** [Examples → scenarios](/docs/examples#scenarios)
 
+> [!NOTE]
+> **Related examples:** [Hyperlink serve + client](/docs/hyperlink-serve-client) · [WorkPool serve + client](/docs/work-pool-serve-client)
+
 ## What this shows
 
 Two HyperServices, different impls of one dependency tag, one /rpc.

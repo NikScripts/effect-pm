@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:polling-accelerating`  
 **Hub:** [Examples → polling](/docs/examples#polling)
 
+> [!NOTE]
+> **Related examples:** [accelerating reset](/docs/polling-accelerating-reset) · [accelerating peek](/docs/polling-accelerating-peek) · [spaced](/docs/polling-spaced)
+
 ## What this shows
 
 Accelerating poll cadence for a Daemon tick body.

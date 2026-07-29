@@ -12,6 +12,9 @@
 **Source:** [`examples/apps/tui/handoff-ab-live.tsx`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/apps/tui/handoff-ab-live.tsx)  
 **Run:** `pnpm run example:handoff-ab-live` (needs a real TTY / alt-screen)  
 **Hub:** [Examples → node](/docs/examples#node) · [Apps](/docs/examples#apps)  
+
+> [!NOTE]
+> **Related examples:** [Node A→B handoff cutover](/docs/node-handoff-ab-cutover) · [Launcher minimal up](/docs/launcher-minimal-up)
 **Guide:** [Identity coordinator — A→B cutover](/docs/identity-coordinator#ab-cutover-recipe-state-transfer)  
 **Log-only twin:** [`example:node-handoff-ab-cutover`](/docs/node-handoff-ab-cutover)
 

@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:store-one-store-many-regs`  
 **Hub:** [Examples → store](/docs/examples#store)
 
+> [!NOTE]
+> **Related examples:** [Soft override WorkPool](/docs/store-soft-override-work-pool) · [Logs node journal](/docs/logs-node-journal) · [Daemon Soft auto-write](/docs/daemon-store-auto-write)
+
 ## What this shows
 
 `Node.logs`, `WorkPool.store`, and `Daemon.store` on one `Store.Service`.

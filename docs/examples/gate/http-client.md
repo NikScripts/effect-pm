@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:gate-http-client`  
 **Hub:** [Examples → gate](/docs/examples#gate)
 
+> [!NOTE]
+> **Related examples:** [HttpApiClient](/docs/gate-http-api-client) · [httpApiClientLayer](/docs/gate-http-api-layer)
+
 ## What this shows
 
 `HttpClientGate.transformClient` concurrency on fetch.

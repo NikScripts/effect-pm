@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:daemon-result-ref`  
 **Hub:** [Examples → daemon](/docs/examples#daemon)
 
+> [!NOTE]
+> **Related examples:** [typed Failed.error](/docs/daemon-typed-failed-error) · [Observe Daemon pack](/docs/observe-daemon-pack)
+
 ## What this shows
 
 Tag `success` schema adds `result.get` and `result.changes`.

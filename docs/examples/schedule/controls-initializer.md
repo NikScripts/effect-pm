@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:schedule-controls-initializer`  
 **Hub:** [Examples → schedule](/docs/examples#schedule)
 
+> [!NOTE]
+> **Related examples:** [controls (in Effect)](/docs/schedule-controls-in-effect) · [controls (external fiber)](/docs/schedule-controls-external-fiber) · [schedule sync from DB](/docs/scenario-schedule-sync-db)
+
 ## What this shows
 
 Schedule control surface at layer/initializer time.

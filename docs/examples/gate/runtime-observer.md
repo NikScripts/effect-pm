@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:gate-runtime-observer`  
 **Hub:** [Examples → gate](/docs/examples#gate)
 
+> [!NOTE]
+> **Related examples:** [unit + input](/docs/gate-unit-and-input) · [Observe Gate pack](/docs/observe-gate-pack)
+
 ## What this shows
 
 Subscribable status / counters on a Gate.Service handle.

@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:schedule-at`  
 **Hub:** [Examples → schedule](/docs/examples#schedule)
 
+> [!NOTE]
+> **Related examples:** [window](/docs/schedule-window) · [define](/docs/schedule-define) · [Daemon tag schedule](/docs/daemon-tag-schedule)
+
 ## What this shows
 
 `Daemon.at` — open-ended schedule entry.

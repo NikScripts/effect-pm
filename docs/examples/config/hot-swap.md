@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:config-hot-swap`  
 **Hub:** [Examples → config](/docs/examples#config)
 
+> [!NOTE]
+> **Related examples:** [Daemon configure](/docs/daemon-configure) · [WorkPool configure](/docs/work-pool-configure)
+
 ## What this shows
 
 Hot-swap dynamic config into a running layer graph.

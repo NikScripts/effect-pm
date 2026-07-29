@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:scenario-schedule-sync-db`  
 **Hub:** [Examples → scenarios](/docs/examples#scenarios)
 
+> [!NOTE]
+> **Related examples:** [Schedule controls (initializer)](/docs/schedule-controls-initializer) · [Schedule define](/docs/schedule-define)
+
 ## What this shows
 
 DB rows → Daemon schedule entries each tick.

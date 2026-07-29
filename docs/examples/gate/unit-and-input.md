@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:gate-unit-and-input`  
 **Hub:** [Examples → gate](/docs/examples#gate)
 
+> [!NOTE]
+> **Related examples:** [runtime observer](/docs/gate-runtime-observer) · [store readback](/docs/gate-store-readback) · [Observe Gate pack](/docs/observe-gate-pack)
+
 ## What this shows
 
 Void-payload and parameterized Gate.Service with concurrency.

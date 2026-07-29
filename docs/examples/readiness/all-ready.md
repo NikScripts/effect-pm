@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:readiness-all-ready`  
 **Hub:** [Examples → readiness](/docs/examples#readiness)
 
+> [!NOTE]
+> **Related examples:** [withReadiness](/docs/readiness-with-readiness) · [Launcher ready services](/docs/launcher-ready-services)
+
 ## What this shows
 
 Compose local and dependency readiness checks.

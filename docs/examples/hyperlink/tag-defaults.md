@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:hyperlink-tag-defaults`  
 **Hub:** [Examples → hyperlink](/docs/examples#hyperlink)
 
+> [!NOTE]
+> **Related examples:** [counter layer](/docs/hyperlink-counter-layer) · [method kinds](/docs/hyperlink-method-kinds)
+
 ## What this shows
 
 `Hyperlink.default` / `defaults` — same value local and remote.

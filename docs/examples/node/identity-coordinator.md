@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:node-identity-coordinator`  
 **Hub:** [Examples → node](/docs/examples#node)
 
+> [!NOTE]
+> **Related examples:** [asLookup](/docs/node-as-lookup) · [Launcher Lookup membership](/docs/launcher-lookup-membership)
+
 Fence body `// @noErrors` covers `process` under the docs Twoslash host.
 
 ## What this shows

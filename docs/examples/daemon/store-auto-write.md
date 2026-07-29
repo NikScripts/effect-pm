@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:daemon-store-auto-write`  
 **Hub:** [Examples → daemon](/docs/examples#daemon)
 
+> [!NOTE]
+> **Related examples:** [typed Failed.error](/docs/daemon-typed-failed-error) · [Soft override WorkPool](/docs/store-soft-override-work-pool) · [one store, many regs](/docs/store-one-store-many-regs)
+
 ## What this shows
 
 `Daemon.layer` + `Daemon.store(tag)` Soft journals on terminal ticks.

@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:launcher-minimal-up`  
 **Hub:** [Examples → launcher](/docs/examples#launcher)
 
+> [!NOTE]
+> **Related examples:** [handle phases](/docs/launcher-handle-phases) · [ready services](/docs/launcher-ready-services) · [Lookup membership](/docs/launcher-lookup-membership)
+
 ## What this shows
 
 `Launcher.up` performs spawn → Ready → handoff.

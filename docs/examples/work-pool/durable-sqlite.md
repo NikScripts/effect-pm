@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:work-pool-durable-sqlite`  
 **Hub:** [Examples → work-pool](/docs/examples#work-pool)
 
+> [!NOTE]
+> **Related examples:** [durable and Soft planes](/docs/store-durable-and-soft) · [Store SQLite](/docs/store-sqlite) · [store analytics](/docs/work-pool-store-analytics)
+
 ## What this shows
 
 `SQLiteDurableWorkPoolStore` preserving pending work across a rebuilt queue layer.

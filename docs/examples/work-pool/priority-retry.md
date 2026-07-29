@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:work-pool-priority-retry`  
 **Hub:** [Examples → work-pool](/docs/examples#work-pool)
 
+> [!NOTE]
+> **Related examples:** [named lanes](/docs/work-pool-named-lanes) · [typed success](/docs/work-pool-typed-success) · [configure](/docs/work-pool-configure)
+
 ## What this shows
 
 Lanes, in-flight dedup, retry budget, and lifecycle events on one WorkPool Tag.

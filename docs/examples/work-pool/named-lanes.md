@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:work-pool-named-lanes`  
 **Hub:** [Examples → work-pool](/docs/examples#work-pool)
 
+> [!NOTE]
+> **Related examples:** [priority, dedup, retry](/docs/work-pool-priority-retry) · [rate limit](/docs/work-pool-rate-limit)
+
 ## What this shows
 
 `WorkPool.priority` with named lanes and weighted take.

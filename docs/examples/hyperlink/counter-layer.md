@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:hyperlink-counter-layer`  
 **Hub:** [Examples → hyperlink](/docs/examples#hyperlink-tag--wire)
 
+> [!NOTE]
+> **Related examples:** [method kinds](/docs/hyperlink-method-kinds) · [Tag defaults](/docs/hyperlink-tag-defaults) · [serve + client](/docs/hyperlink-serve-client)
+
 ## What this shows
 
 A first Counter Tag, local implementation, `Hyperlink.layer`, and `yield* Counter` call site.

@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:launcher-token-injection`  
 **Hub:** [Examples → launcher](/docs/examples#launcher)
 
+> [!NOTE]
+> **Related examples:** [minimal up](/docs/launcher-minimal-up) · [ready worker child](/docs/launcher-ready-worker-child)
+
 ## What this shows
 
 `Launcher.command` token injection through env (default) and argv.

@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:scenario-nwsl-http-api`  
 **Hub:** [Examples → scenarios](/docs/examples#scenarios)
 
+> [!NOTE]
+> **Related examples:** [Gate HttpApiClient](/docs/gate-http-api-client) · [httpApiClientLayer](/docs/gate-http-api-layer)
+
 Fence body `// @noErrors` covers `process` under the docs Twoslash host.
 
 ## What this shows

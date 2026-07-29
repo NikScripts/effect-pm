@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:hyperlink-shared-spec-wire`  
 **Hub:** [Examples → hyperlink](/docs/examples#hyperlink)
 
+> [!NOTE]
+> **Related examples:** [method kinds](/docs/hyperlink-method-kinds) · [serve + client](/docs/hyperlink-serve-client)
+
 Fence body `// @noErrors` covers `process` under the docs Twoslash host.
 
 ## What this shows

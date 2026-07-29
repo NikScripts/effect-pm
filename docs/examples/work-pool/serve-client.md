@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:work-pool-serve-client`  
 **Hub:** [Examples → work-pool](/docs/examples#work-pool)
 
+> [!NOTE]
+> **Related examples:** [Hyperlink serve + client](/docs/hyperlink-serve-client) · [Daemon serve + client](/docs/daemon-serve-client) · [Node tag-bound serve](/docs/node-tag-bound)
+
 ## What this shows
 
 `WorkPool.serve` on a real RPC server and `Hyperlink.client` driving the same Tag from a client layer.

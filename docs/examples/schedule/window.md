@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:schedule-window`  
 **Hub:** [Examples → schedule](/docs/examples#schedule)
 
+> [!NOTE]
+> **Related examples:** [at](/docs/schedule-at) · [define](/docs/schedule-define) · [Polling delayed start](/docs/polling-delayed-start)
+
 ## What this shows
 
 Armed only inside a closed interval.

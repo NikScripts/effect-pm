@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:observe-gate-pack`  
 **Hub:** [Examples → observe](/docs/examples#observe)
 
+> [!NOTE]
+> **Related examples:** [WorkPool pack](/docs/observe-work-pool-pack) · [Gate unit + input](/docs/gate-unit-and-input)
+
 ## What this shows
 
 `Observe.bind` with `GateView.pack`, plus a sibling command atom to drive the gate.

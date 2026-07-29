@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:daemon-typed-failed-error`  
 **Hub:** [Examples → daemon](/docs/examples#daemon)
 
+> [!NOTE]
+> **Related examples:** [Soft store auto-write](/docs/daemon-store-auto-write) · [WorkPool typed success](/docs/work-pool-typed-success)
+
 ## What this shows
 
 Tag `error` schema → typed `Failed.error` rows via `Daemon.store`.

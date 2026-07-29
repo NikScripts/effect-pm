@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:work-pool-refill`  
 **Hub:** [Examples → work-pool](/docs/examples#work-pool)
 
+> [!NOTE]
+> **Related examples:** [priority, dedup, retry](/docs/work-pool-priority-retry) · [rate limit](/docs/work-pool-rate-limit)
+
 ## What this shows
 
 `refill.onStart` and `refill.onDrained` pulling batches from a source into the queue.

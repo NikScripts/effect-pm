@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:node-tag-bound`  
 **Hub:** [Examples → node](/docs/examples#node)
 
+> [!NOTE]
+> **Related examples:** [Tag with address](/docs/node-tag-addressed) · [clients catalog](/docs/node-clients) · [WorkPool serve + client](/docs/work-pool-serve-client)
+
 Fence body `// @noErrors` covers `process` under the docs Twoslash host.
 
 ## What this shows

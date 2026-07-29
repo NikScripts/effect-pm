@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:daemon-serve-client`  
 **Hub:** [Examples → daemon](/docs/examples#daemon)
 
+> [!NOTE]
+> **Related examples:** [WorkPool serve + client](/docs/work-pool-serve-client) · [Hyperlink serve + client](/docs/hyperlink-serve-client)
+
 ## What this shows
 
 `Daemon.serve` + `Hyperlink.client` over HTTP.

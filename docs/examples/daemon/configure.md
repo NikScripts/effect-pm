@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:daemon-configure`  
 **Hub:** [Examples → daemon](/docs/examples#daemon)
 
+> [!NOTE]
+> **Related examples:** [WorkPool configure](/docs/work-pool-configure) · [Soft store auto-write](/docs/daemon-store-auto-write)
+
 ## What this shows
 
 `Daemon.configure` patches config when the layer builds.

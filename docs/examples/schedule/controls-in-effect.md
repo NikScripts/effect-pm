@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:schedule-controls-in-effect`  
 **Hub:** [Examples → schedule](/docs/examples#schedule)
 
+> [!NOTE]
+> **Related examples:** [controls (initializer)](/docs/schedule-controls-initializer) · [controls (external fiber)](/docs/schedule-controls-external-fiber)
+
 ## What this shows
 
 Mutate schedule entries from inside a running Effect.

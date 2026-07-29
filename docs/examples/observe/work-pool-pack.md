@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:observe-work-pool-pack`  
 **Hub:** [Examples → observe](/docs/examples#observe)
 
+> [!NOTE]
+> **Related examples:** [Daemon pack](/docs/observe-daemon-pack) · [Gate pack](/docs/observe-gate-pack) · [atom, query, fn, poll](/docs/observe-recipes) · [WorkPool priority retry](/docs/work-pool-priority-retry)
+
 ## What this shows
 
 `Observe.bind` with the shipped `WorkPoolView.pack` against a real local WorkPool served by a Node.

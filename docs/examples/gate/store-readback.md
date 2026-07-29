@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:gate-store-readback`  
 **Hub:** [Examples → gate](/docs/examples#gate)
 
+> [!NOTE]
+> **Related examples:** [WorkPool store analytics](/docs/work-pool-store-analytics) · [Daemon Soft auto-write](/docs/daemon-store-auto-write) · [Soft override WorkPool](/docs/store-soft-override-work-pool)
+
 ## What this shows
 
 `Gate.store` facts and state history after `gate.run`.

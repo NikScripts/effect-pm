@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:node-verify-connection`  
 **Hub:** [Examples → node](/docs/examples#node)
 
+> [!NOTE]
+> **Related examples:** [tag-bound serve](/docs/node-tag-bound) · [Hyperlink serve + client](/docs/hyperlink-serve-client)
+
 ## What this shows
 
 Tier-1 reachability and deep `node.status` checks.

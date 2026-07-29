@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:fleet-telemetry-glass`  
 **Hub:** [Examples → fleet](/docs/examples#fleet)
 
+> [!NOTE]
+> **Related examples:** [Telemetry alone](/docs/fleet-telemetry-alone) · [FleetHealth glass](/docs/fleet-health-glass) · [ShardMap sessions](/docs/fleet-shardmap-sessions)
+
 ## What this shows
 
 Leaf snapshot + fleet in-flight folds via peers.

@@ -6,10 +6,13 @@
 <!-- docs-site-link:end -->
 # Examples
 
-Teaching scripts live under `examples/<topic>/` — **same topic names as the guides**.
-Each page Twoslash-`include`s the real `.ts` file. Cuts in that file hide harness noise.
+**This page is the examples index** — every teaching form, grouped like the guides.
 
-Deep-link a topic: `#work-pool`, `#gate`, `#node`, `#observe`, …
+Teaching scripts live under `examples/<topic>/`. Each form page Twoslash-`include`s the
+real `.ts` file (cuts hide harness noise) and carries a **Related examples** note with
+cross-links (often several) into neighboring forms and topics.
+
+Deep-link a topic: `#work-pool`, `#gate`, `#node`, `#observe`, `#logs`, `#store`, …
 
 ---
 

@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:logs-lineage-scope`  
 **Hub:** [Examples → logs](/docs/examples#logs)
 
+> [!NOTE]
+> **Related examples:** [Hyperlink export](/docs/logs-hyperlink-logs) · [node journal](/docs/logs-node-journal)
+
 ## What this shows
 
 `Logs.withScope` lineage plus `LogEntry` predicates.

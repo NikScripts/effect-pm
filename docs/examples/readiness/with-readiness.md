@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:readiness-with-readiness`  
 **Hub:** [Examples → readiness](/docs/examples#readiness)
 
+> [!NOTE]
+> **Related examples:** [allReady](/docs/readiness-all-ready) · [monitored dependency](/docs/readiness-monitored-dependency) · [Fleet health with readiness](/docs/fleet-health-with-readiness)
+
 ## What this shows
 
 Attach a readiness derivation to a Hyperlink tag.

@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:fleet-health-glass`  
 **Hub:** [Examples → fleet](/docs/examples#fleet)
 
+> [!NOTE]
+> **Related examples:** [health with readiness](/docs/fleet-health-with-readiness) · [Telemetry glass](/docs/fleet-telemetry-glass) · [withReadiness](/docs/readiness-with-readiness)
+
 ## What this shows
 
 Local readiness + fleet byNode / Unreachable peers.

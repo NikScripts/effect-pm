@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:node-addressless-call`  
 **Hub:** [Examples → node](/docs/examples#node)
 
+> [!NOTE]
+> **Related examples:** [addressless serve](/docs/node-addressless-serve) · [nameless unix call](/docs/node-nameless-unix-call)
+
 ## What this shows
 
 Address-less call terminal (`LOOKUP_SOCK`).

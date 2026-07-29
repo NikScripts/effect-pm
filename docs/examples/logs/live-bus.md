@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:logs-live-bus`  
 **Hub:** [Examples → logs](/docs/examples#logs)
 
+> [!NOTE]
+> **Related examples:** [node journal](/docs/logs-node-journal) · [levels](/docs/logs-levels)
+
 ## What this shows
 
 `Logs.layer`, `Logs.stream`, and `Logs.snapshot` for live-only capture.

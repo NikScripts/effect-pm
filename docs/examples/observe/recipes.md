@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:observe-recipes`  
 **Hub:** [Examples → observe](/docs/examples#observe)
 
+> [!NOTE]
+> **Related examples:** [scan and fold](/docs/observe-scan-fold) · [Hyperlink atom adapters](/docs/observe-hyperlink-atom) · [pack demo](/docs/observe-pack-demo)
+
 ## What this shows
 
 The primitive Observe recipes bound without React: live atom, one-shot query, command fn, and poll.

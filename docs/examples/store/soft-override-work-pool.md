@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:store-soft-override-work-pool`  
 **Hub:** [Examples → store](/docs/examples#store)
 
+> [!NOTE]
+> **Related examples:** [WorkPool store analytics](/docs/work-pool-store-analytics) · [one store, many regs](/docs/store-one-store-many-regs) · [loud missing registration](/docs/store-loud-missing-registration)
+
 ## What this shows
 
 Providing an AppStore into `WorkPool.layer` so Soft captures the app journal.

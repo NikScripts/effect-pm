@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:hyperlink-method-kinds`  
 **Hub:** [Examples → hyperlink](/docs/examples#hyperlink-tag--wire)
 
+> [!NOTE]
+> **Related examples:** [counter layer](/docs/hyperlink-counter-layer) · [Hyperlink atom adapters](/docs/observe-hyperlink-atom)
+
 ## What this shows
 
 `Hyperlink.effect`, `effectFn`, `ref`, and `stream` in one small custom service.

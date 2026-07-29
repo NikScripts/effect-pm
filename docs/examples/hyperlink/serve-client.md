@@ -13,6 +13,9 @@
 **Run:** `pnpm run example:hyperlink-serve-client`  
 **Hub:** [Examples → hyperlink](/docs/examples#hyperlink-tag--wire)
 
+> [!NOTE]
+> **Related examples:** [WorkPool serve + client](/docs/work-pool-serve-client) · [Daemon serve + client](/docs/daemon-serve-client) · [counter layer](/docs/hyperlink-counter-layer)
+
 ## What this shows
 
 The same Counter Tag served over a local RPC node and consumed through `Node.clients`.
