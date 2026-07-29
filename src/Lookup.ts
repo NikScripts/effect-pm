@@ -1,37 +1,23 @@
 /**
- * Lookup — identity claims + node directory + placement advice.
+ * Lookup — bind/dial layers that serve Identity / Directory / Advice Tags together.
  *
  * Same-machine default: {@link layer} / {@link layerOptions} on a well-known `ipc` path
  * (OS exclusivity; bind-or-dial). Cross-network: {@link layerNode} / {@link client} on an
  * explicit {@link Node.asLookup}-branded node — no self-elect (L1).
  *
- * **Import style (no triples):** one module namespace + flat verbs, or a **named** Tag import.
- * Never write `Lookup.Advice.changes` / `Lookup.Directory.nodesServing` — that nests a Tag
- * under the module as a second namespace. Match Effect: `import { Advice } from "…/Lookup"`
- * then `Advice.changes`, or use flat sugars (`advise`, `preferred`, `clearAdvice`,
- * {@link changes}, {@link nodesServing}).
+ * **Tags are sibling modules** — not members of this namespace:
  *
  * ```ts
  * import * as Lookup from "hyperlink-ts/Lookup"
- * import { Advice, Directory, Identity } from "hyperlink-ts/Lookup"
+ * import * as Advice from "hyperlink-ts/Advice"
+ * import * as Directory from "hyperlink-ts/Directory"
  *
- * yield* Lookup.advise({ serviceKey: Mail.key, prefer: "fleet/Mail#w2" })
- * yield* Lookup.changes.pipe(Stream.runDrain) // Directory membership
- * const board = yield* Advice
- * yield* board.changes.pipe(Stream.runDrain) // placement prefer / clear
+ * Layer.provide(Lookup.layer)
+ * yield* Advice.prefer(Mail, "fleet/Mail#w2")
+ * yield* Directory.changes.pipe(Stream.runDrain)
  * ```
  *
- * - {@link Identity} — `claim` by HyperService key (first wins / {@link DuplicateIdentity}).
- *   Live winner: same dial refreshes; different dial + dead/unreachable incumbent
- *   (node-handle `ping`) → replace; alive → {@link DuplicateIdentity}.
- * - {@link Directory} — `advertise` / `unregister` / `nodesServing` / `changes`
- *   (D5/D6 + membership push). Duplicate `nodeKey` conflict policy via {@link OnConflict}
- *   (default **livenessReplace**): ping incumbent node handle; alive → {@link IncumbentAlive}
- *   (or ask handle `yield` when `askIncumbent`); dead/unreachable → replace row.
- *   Prefer flat {@link changes} for membership push (A→B dial rebind).
- * - {@link Advice} — last-write placement board (`prefer` a directory `nodeKey` for a
- *   HyperService key). Prefer / clear fan out on named-Tag `Advice.changes` (same shape as
- *   Directory `changes`) so {@link Hyperlink.lookupClient} can move dials early.
+ * Never `import { Advice } from "hyperlink-ts/Lookup"` / `Lookup.Advice.*`.
  *
  * @module Lookup
  */
@@ -42,12 +28,36 @@ import {
   Exit,
   Layer,
   Option,
-  Ref,
-  Schema,
   Stream,
-  type Scope,
 } from "effect";
 import * as Hyperlink from "./Hyperlink";
+import {
+  Tag as Advice,
+  AdviseRequest,
+  ClearAdviceRequest,
+  PreferredRequest,
+  AdvicePreferred,
+  AdviceCleared,
+  type AdviceChange,
+} from "./Advice";
+import {
+  Tag as Directory,
+  DirectoryEntry,
+  DirectoryUpserted,
+  DirectoryRemoved,
+  AdvertiseRequest,
+  UnregisterRequest,
+  NodesServingRequest,
+  IncumbentAlive,
+  type DirectoryChange,
+} from "./Directory";
+import {
+  Tag as Identity,
+  Endpoint,
+  ClaimRequest,
+  ResolveRequest,
+  DuplicateIdentity,
+} from "./Identity";
 import type { AnyNode, OnConflict, OnConflictResolved } from "./internal/nodeCore";
 import {
   asLookup,
@@ -63,277 +73,39 @@ import * as internal from "./internal/lookup";
 export type { OnConflict, OnConflictResolved };
 export { resolveOnConflict };
 
-// ============================================================================
-// Wire schemas
-// ============================================================================
-
-/**
- * Where a winning claimant / advertised node lives — node key + transport address.
- *
- * @category wire schemas
- * @public
- */
-export class Endpoint extends Schema.Class<Endpoint>("LookupEndpoint")({
-  nodeKey: Schema.String,
-  kind: Schema.Literals(["Http", "WebSocket", "IpcSocket"]),
-  url: Schema.optionalKey(Schema.String),
-  path: Schema.optionalKey(Schema.String),
-}) {}
-
-/**
- * Claim payload — hyperlink identity key plus the claimant's endpoint.
- *
- * @category wire schemas
- * @public
- */
-export class ClaimRequest extends Schema.Class<ClaimRequest>("LookupClaimRequest")({
-  key: Schema.String,
-  nodeKey: Schema.String,
-  kind: Schema.Literals(["Http", "WebSocket", "IpcSocket"]),
-  url: Schema.optionalKey(Schema.String),
-  path: Schema.optionalKey(Schema.String),
-}) {}
-
-/**
- * Resolve payload — look up a winning claim by HyperService key (nodeless clients).
- *
- * @category wire schemas
- * @public
- */
-export class ResolveRequest extends Schema.Class<ResolveRequest>("LookupResolveRequest")({
-  key: Schema.String,
-}) {}
-
-/**
- * Another process already owns this HyperService key — `original` is where to dial.
- *
- * @category errors
- * @public
- */
-export class DuplicateIdentity extends Schema.TaggedErrorClass<DuplicateIdentity>()(
-  "DuplicateIdentity",
-  {
-    key: Schema.String,
-    original: Endpoint,
-  },
-) {}
-
-/**
- * Directory row — dial target plus HyperService keys this node serves (`listen` catalog).
- *
- * @category wire schemas
- * @public
- */
-export class DirectoryEntry extends Schema.Class<DirectoryEntry>("LookupDirectoryEntry")({
-  nodeKey: Schema.String,
-  kind: Schema.Literals(["Http", "WebSocket", "IpcSocket"]),
-  url: Schema.optionalKey(Schema.String),
-  path: Schema.optionalKey(Schema.String),
-  serves: Schema.Array(Schema.String),
-}) {}
-
-/**
- * Directory row upserted (first advertise, serves refresh, or A→B dial replace).
- * `dialChanged` is true when the dial target moved (membership push for peer rebind).
- *
- * @category wire schemas
- * @public
- */
-export class DirectoryUpserted extends Schema.TaggedClass<DirectoryUpserted>()(
-  "DirectoryUpserted",
-  {
-    entry: DirectoryEntry,
-    previous: Schema.optionalKey(DirectoryEntry),
-    dialChanged: Schema.Boolean,
-  },
-) {}
-
-/**
- * Directory row removed (unregister / dial-matched remove).
- *
- * @category wire schemas
- * @public
- */
-export class DirectoryRemoved extends Schema.TaggedClass<DirectoryRemoved>()(
-  "DirectoryRemoved",
-  {
-    nodeKey: Schema.String,
-    previous: DirectoryEntry,
-  },
-) {}
-
-/**
- * Membership-push event from {@link Directory.changes}.
- *
- * @category wire schemas
- * @public
- */
-export const DirectoryChange = Schema.Union([
+// Wire schemas + sugars from sibling modules (Tags stay on Advice/Directory/Identity).
+export {
+  Endpoint,
+  ClaimRequest,
+  ResolveRequest,
+  DuplicateIdentity,
+} from "./Identity";
+export {
+  DirectoryEntry,
   DirectoryUpserted,
   DirectoryRemoved,
-]);
-
-/**
- * Membership-push event type.
- *
- * @category models
- * @public
- */
-export type DirectoryChange = typeof DirectoryChange.Type;
-
-/**
- * Advertise / refresh a directory row.
- *
- * @category wire schemas
- * @public
- */
-export class AdvertiseRequest extends Schema.Class<AdvertiseRequest>(
-  "LookupAdvertiseRequest",
-)({
-  nodeKey: Schema.String,
-  kind: Schema.Literals(["Http", "WebSocket", "IpcSocket"]),
-  url: Schema.optionalKey(Schema.String),
-  path: Schema.optionalKey(Schema.String),
-  serves: Schema.Array(Schema.String),
-  /**
-   * Advertiser preference after call-site∋node resolve — may still be `"inherit"`.
-   * Lookup finishes resolve with its node stamp. Omit → inherit.
-   */
-  onConflict: Schema.optionalKey(
-    Schema.Literals([
-      "livenessReplace",
-      "askIncumbent",
-      "reject",
-      "inherit",
-    ]),
-  ),
-}) {}
-
-/**
- * Unregister payload — remove a directory row by `nodeKey`.
- * When dial fields are present, remove only if the stored dial still matches
- * (askIncumbent-safe finalizers).
- *
- * @category wire schemas
- * @public
- */
-export class UnregisterRequest extends Schema.Class<UnregisterRequest>(
-  "LookupUnregisterRequest",
-)({
-  nodeKey: Schema.String,
-  kind: Schema.optionalKey(Schema.Literals(["Http", "WebSocket", "IpcSocket"])),
-  url: Schema.optionalKey(Schema.String),
-  path: Schema.optionalKey(Schema.String),
-}) {}
-
-/**
- * List nodes that advertised a given HyperService key in `serves`.
- *
- * @category wire schemas
- * @public
- */
-export class NodesServingRequest extends Schema.Class<NodesServingRequest>(
-  "LookupNodesServingRequest",
-)({
-  serviceKey: Schema.String,
-}) {}
-
-/**
- * Advertise rejected — an incumbent with the same `nodeKey` still answers a node-handle ping.
- *
- * @category errors
- * @public
- */
-export class IncumbentAlive extends Schema.TaggedErrorClass<IncumbentAlive>()(
-  "IncumbentAlive",
-  {
-    nodeKey: Schema.String,
-    incumbent: DirectoryEntry,
-  },
-) {}
-
-/**
- * Placement advice — prefer this directory `nodeKey` when dialing `serviceKey`.
- *
- * @category wire schemas
- * @public
- */
-export class AdviseRequest extends Schema.Class<AdviseRequest>(
-  "LookupAdviseRequest",
-)({
-  serviceKey: Schema.String,
-  /** Directory row `nodeKey` to prefer (e.g. `fleet/Worker#w2`). */
-  prefer: Schema.String,
-}) {}
-
-/**
- * Clear placement advice for a HyperService key.
- *
- * @category wire schemas
- * @public
- */
-export class ClearAdviceRequest extends Schema.Class<ClearAdviceRequest>(
-  "LookupClearAdviceRequest",
-)({
-  serviceKey: Schema.String,
-}) {}
-
-/**
- * Read the preferred directory `nodeKey` for a HyperService (if any).
- *
- * @category wire schemas
- * @public
- */
-export class PreferredRequest extends Schema.Class<PreferredRequest>(
-  "LookupPreferredRequest",
-)({
-  serviceKey: Schema.String,
-}) {}
-
-/**
- * Placement advice set or replaced for a HyperService key.
- *
- * @category wire schemas
- * @public
- */
-export class AdvicePreferred extends Schema.TaggedClass<AdvicePreferred>()(
-  "AdvicePreferred",
-  {
-    serviceKey: Schema.String,
-    prefer: Schema.String,
-    previous: Schema.optionalKey(Schema.String),
-  },
-) {}
-
-/**
- * Placement advice cleared for a HyperService key.
- *
- * @category wire schemas
- * @public
- */
-export class AdviceCleared extends Schema.TaggedClass<AdviceCleared>()(
-  "AdviceCleared",
-  {
-    serviceKey: Schema.String,
-    previous: Schema.String,
-  },
-) {}
-
-/**
- * Placement-board event from {@link Advice.changes}.
- *
- * @category wire schemas
- * @public
- */
-export const AdviceChange = Schema.Union([AdvicePreferred, AdviceCleared]);
-
-/**
- * Placement-board event type.
- *
- * @category models
- * @public
- */
-export type AdviceChange = Schema.Schema.Type<typeof AdviceChange>;
+  DirectoryChange,
+  AdvertiseRequest,
+  UnregisterRequest,
+  NodesServingRequest,
+  IncumbentAlive,
+  nodesServing,
+  changes,
+  directoryTable,
+} from "./Directory";
+export {
+  AdviseRequest,
+  ClearAdviceRequest,
+  PreferredRequest,
+  AdvicePreferred,
+  AdviceCleared,
+  AdviceChange,
+  advise,
+  prefer,
+  preferEntry,
+  clearAdvice,
+  preferred,
+} from "./Advice";
 
 /**
  * Lookup node has no dialable address — need `{ path }` / url, or use {@link layer} /
@@ -346,10 +118,6 @@ export class LookupUnaddressed extends Data.TaggedError("LookupUnaddressed")<{
   readonly node: string;
 }> {}
 
-// ============================================================================
-// Contracts
-// ============================================================================
-
 /**
  * Canonical kind stamped on Lookup HyperServices.
  *
@@ -358,137 +126,6 @@ export class LookupUnaddressed extends Data.TaggedError("LookupUnaddressed")<{
  */
 export const kind = "hyperlink-ts/Lookup";
 
-const identitySpec = {
-  claim: Hyperlink.effectFn({
-    payload: ClaimRequest,
-    success: Endpoint,
-    error: DuplicateIdentity,
-  }).annotate({
-    description:
-      "First claim for `key` wins and returns the endpoint. Later claims: same dial " +
-      "refreshes; dead/unreachable incumbent (node-handle ping) is replaced; a live " +
-      "different dial fails with DuplicateIdentity.",
-  }),
-  resolve: Hyperlink.effectFn({
-    payload: ResolveRequest,
-    success: Schema.Option(Endpoint),
-  }).annotate({
-    description:
-      "Read the winning endpoint for `key` without claiming (nodeless / lookupClient).",
-  }),
-};
-
-/**
- * Lookup identity service — claim HyperService keys (first wins; dead winners replaceable).
- *
- * @category services
- * @public
- */
-export class Identity extends Hyperlink.Tag<Identity>()(
-  "hyperlink-ts/Lookup/Identity",
-  identitySpec,
-  { kind },
-) {}
-
-const directorySpec = {
-  advertise: Hyperlink.effectFn({
-    payload: AdvertiseRequest,
-    success: DirectoryEntry,
-    error: IncumbentAlive,
-  }).annotate({
-    description:
-      "Register or refresh a node directory row. Same dial target refreshes serves; " +
-      "a different dial target runs onConflict (default livenessReplace via node-handle ping; " +
-      "askIncumbent asks the incumbent handle's yield on a live peer).",
-  }),
-  unregister: Hyperlink.effectFn({
-    payload: UnregisterRequest,
-    success: Schema.Boolean,
-  }).annotate({
-    description:
-      "Remove a directory row by nodeKey (clean listen scope close). " +
-      "With dial fields, removes only if the stored dial still matches.",
-  }),
-  nodesServing: Hyperlink.effectFn({
-    payload: NodesServingRequest,
-    success: Schema.Array(DirectoryEntry),
-  }).annotate({
-    description: "List advertised nodes whose serves[] includes that HyperService key.",
-  }),
-  changes: Hyperlink.stream(DirectoryChange).annotate({
-    description:
-      "Live directory membership push — upserts (incl. dialChanged on A→B swap) and removes. " +
-      "Nodes subscribe to rebind peer dials without restarting.",
-  }),
-};
-
-/**
- * Lookup node directory — advertise / unregister / list by served HyperService key /
- * membership `changes` push.
- *
- * Import the Tag by **name** (`import { Directory } from "hyperlink-ts/Lookup"`), or use
- * flat sugars {@link nodesServing} / {@link changes}. Do not chain `Lookup.Directory.*`.
- *
- * @category services
- * @public
- */
-export class Directory extends Hyperlink.Tag<Directory>()(
-  "hyperlink-ts/Lookup/Directory",
-  directorySpec,
-  { kind },
-) {}
-
-const adviceSpec = {
-  advise: Hyperlink.effectFn({
-    payload: AdviseRequest,
-    success: Schema.String,
-  }).annotate({
-    description:
-      "Last-write placement advice: prefer this directory nodeKey when dialing serviceKey. " +
-      "Stale prefer (not in nodesServing) is ignored by lookupClient.",
-  }),
-  clear: Hyperlink.effectFn({
-    payload: ClearAdviceRequest,
-    success: Schema.Boolean,
-  }).annotate({
-    description: "Drop placement advice for serviceKey (true if a row was removed).",
-  }),
-  preferred: Hyperlink.effectFn({
-    payload: PreferredRequest,
-    success: Schema.Option(Schema.String),
-  }).annotate({
-    description: "Read the preferred directory nodeKey for serviceKey, if any.",
-  }),
-  changes: Hyperlink.stream(AdviceChange).annotate({
-    description:
-      "Live placement-board push — advise / clear events so lookupClient can move " +
-      "dials when prefer flips (before the first transport error).",
-  }),
-};
-
-/**
- * Lookup placement board — coordinator advice for nodeless / {@link Hyperlink.lookupClient} dial.
- *
- * v1: last-write-wins, in-memory, no advisor ACL. Algorithms stay app-owned (who calls
- * {@link advise}); Lookup only stores and surfaces the preference. Named-Tag `changes`
- * fans out prefer / clear for Track D early dial move.
- *
- * ```ts
- * import { Advice } from "hyperlink-ts/Lookup"
- * const board = yield* Advice
- * yield* board.changes.pipe(Stream.take(1), Stream.runDrain)
- * // or flat: Lookup.advise / preferred / clearAdvice
- * ```
- *
- * @category services
- * @public
- */
-export class Advice extends Hyperlink.Tag<Advice>()(
-  "hyperlink-ts/Lookup/Advice",
-  adviceSpec,
-  { kind },
-) {}
-
 /**
  * Services a Lookup client layer provides — identity, directory, and placement advice.
  *
@@ -496,186 +133,6 @@ export class Advice extends Hyperlink.Tag<Advice>()(
  * @public
  */
 export type Services = Identity | Directory | Advice;
-
-/** Tag or wire key → `serviceKey` string. @internal */
-const serviceKeyOf = (service: string | { readonly key: string }): string =>
-  typeof service === "string" ? service : service.key;
-
-/**
- * List directory rows that advertise a HyperService (Tag or wire key).
- * Sugar over {@link Directory}.`nodesServing` — wire stays {@link NodesServingRequest}.
- *
- * ```ts
- * const rows = yield* Lookup.nodesServing(Jobs)
- * // or Lookup.nodesServing("fleet/Jobs")
- * ```
- *
- * @category constructors
- * @public
- */
-export const nodesServing = (
-  service: string | { readonly key: string },
-): Effect.Effect<ReadonlyArray<DirectoryEntry>, never, Directory> =>
-  Effect.flatMap(Directory, (svc) =>
-    svc.nodesServing(
-      new NodesServingRequest({ serviceKey: serviceKeyOf(service) }),
-    ),
-  );
-
-/**
- * Publish placement advice (requires {@link Advice} in context).
- *
- * ```ts
- * yield* Lookup.advise({ serviceKey: Worker.key, prefer: "fleet/Worker#w2" })
- * ```
- *
- * @category constructors
- * @public
- */
-export const advise = (input: {
-  readonly serviceKey: string;
-  readonly prefer: string;
-}): Effect.Effect<string, never, Advice> =>
-  Effect.flatMap(Advice, (svc) =>
-    svc.advise(
-      new AdviseRequest({
-        serviceKey: input.serviceKey,
-        prefer: input.prefer,
-      }),
-    ),
-  );
-
-/**
- * Prefer `nodeKey` when dialing a HyperService (Tag or wire key).
- * Coordinator sugar over {@link advise} — algorithms stay app-owned.
- *
- * ```ts
- * yield* Lookup.prefer(Worker, "fleet/Worker#w2")
- * ```
- *
- * @category constructors
- * @public
- */
-export const prefer = (
-  service: string | { readonly key: string },
-  nodeKey: string,
-): Effect.Effect<string, never, Advice> =>
-  advise({
-    serviceKey: serviceKeyOf(service),
-    prefer: nodeKey,
-  });
-
-/**
- * Prefer a directory row's `nodeKey` for a HyperService.
- *
- * ```ts
- * const rows = yield* Lookup.nodesServing(Worker)
- * yield* Lookup.preferEntry(Worker, rows[0]!)
- * ```
- *
- * @category constructors
- * @public
- */
-export const preferEntry = (
-  service: string | { readonly key: string },
-  entry: { readonly nodeKey: string },
-): Effect.Effect<string, never, Advice> =>
-  advise({ serviceKey: serviceKeyOf(service), prefer: entry.nodeKey });
-
-/**
- * Clear placement advice for a HyperService (Tag or wire key).
- *
- * @category constructors
- * @public
- */
-export const clearAdvice = (
-  service: string | { readonly key: string },
-): Effect.Effect<boolean, never, Advice> =>
-  Effect.flatMap(Advice, (svc) =>
-    svc.clear(new ClearAdviceRequest({ serviceKey: serviceKeyOf(service) })),
-  );
-
-/**
- * Read preferred directory `nodeKey` for a HyperService (Tag or wire key).
- *
- * @category constructors
- * @public
- */
-export const preferred = (
-  service: string | { readonly key: string },
-): Effect.Effect<Option.Option<string>, never, Advice> =>
-  Effect.flatMap(Advice, (svc) =>
-    svc.preferred(
-      new PreferredRequest({ serviceKey: serviceKeyOf(service) }),
-    ),
-  );
-
-/**
- * Live directory membership push — flat sugar over Directory `changes`.
- *
- * Prefer this over nesting (`Lookup.Directory.changes`). Subscribe from a node process
- * to notice A→B dial swaps (`DirectoryUpserted` with `dialChanged: true`) and rebind
- * peer clients without restart. Placement prefer/clear uses named `{ Advice }` instead.
- *
- * ```ts
- * yield* Lookup.changes.pipe(
- *   Stream.filter((e) => e._tag === "DirectoryUpserted" && e.dialChanged),
- *   Stream.runForEach((e) => Effect.logInfo(`dial moved ${e.entry.nodeKey}`)),
- * )
- * ```
- *
- * @category constructors
- * @public
- */
-export const changes: Stream.Stream<DirectoryChange, never, Directory> =
-  Stream.unwrap(Effect.map(Directory, (dir) => dir.changes));
-
-/**
- * Live dial table driven by {@link Directory.changes} — for node-level peer rebind.
- *
- * Starts empty; applies upserts/removes as they arrive. Pair with an initial
- * `nodesServing` seed when you need a cold snapshot before the first event.
- *
- * @category constructors
- * @public
- */
-export const directoryTable = (): Effect.Effect<
-  {
-    readonly get: Effect.Effect<ReadonlyMap<string, DirectoryEntry>>;
-    readonly getNode: (
-      nodeKey: string,
-    ) => Effect.Effect<Option.Option<DirectoryEntry>>;
-  },
-  never,
-  Directory | Scope.Scope
-> =>
-  Effect.gen(function* () {
-    const table = yield* Ref.make(new Map<string, DirectoryEntry>());
-    yield* changes.pipe(
-      Stream.runForEach((event) => {
-        if (event._tag === "DirectoryRemoved") {
-          return Ref.update(table, (current) => {
-            const next = new Map(current);
-            next.delete(event.nodeKey);
-            return next;
-          });
-        }
-        return Ref.update(table, (current) => {
-          const next = new Map(current);
-          next.set(event.entry.nodeKey, event.entry);
-          return next;
-        });
-      }),
-      Effect.forkScoped,
-    );
-    return {
-      get: Ref.get(table),
-      getNode: (nodeKey: string) =>
-        Ref.get(table).pipe(
-          Effect.map((current) => Option.fromNullishOr(current.get(nodeKey))),
-        ),
-    };
-  });
 
 // ============================================================================
 // Defaults (L1) — Lookup node = Tag node branded with {@link Node.asLookup}

@@ -93,13 +93,13 @@ import {
   withRegistrationJournal,
   type StoreScopeTag,
 } from "./internal/store/registration";
-// Type-only — avoids a runtime Hyperlink↔Lookup cycle; claim path dynamic-imports the module.
+// Type-only — avoids a runtime Hyperlink↔Lookup-family cycle; claim path dynamic-imports.
+import type { Tag as LookupAdvice } from "./Advice";
 import type {
-  Advice as LookupAdvice,
-  Directory as LookupDirectory,
+  Tag as LookupDirectory,
   DirectoryEntry as LookupDirectoryEntry,
-  Identity as LookupIdentity,
-} from "./Lookup";
+} from "./Directory";
+import type { Tag as LookupIdentity } from "./Identity";
 import {
   AddressedNode,
   AnyNode,
@@ -3391,11 +3391,11 @@ const dialHandoffPeer = (
   },
 ): Effect.Effect<Option.Option<unknown>, never, Scope.Scope> =>
   Effect.gen(function* () {
-    const Lookup = yield* Effect.promise(() => import("./Lookup"));
-    const dirOpt = yield* Effect.serviceOption(Lookup.Directory);
+    const Directory = yield* Effect.promise(() => import("./Directory"));
+    const dirOpt = yield* Effect.serviceOption(Directory.Tag);
     if (Option.isNone(dirOpt)) return Option.none();
     const rows = yield* dirOpt.value.nodesServing(
-      new Lookup.NodesServingRequest({ serviceKey: wireKey }),
+      new Directory.NodesServingRequest({ serviceKey: wireKey }),
     );
     const peer = rows.find((row) => !sameHandoffDial(selfDial, row));
     if (peer === undefined) return Option.none();
@@ -4200,11 +4200,11 @@ const identityClaimLayer = <Self, S extends Spec, A, E, R>(
       if (self === undefined || !isDialableSelf(self)) {
         return yield* new IdentitySelfRequired({ tag: tag.key });
       }
-      const Lookup = yield* Effect.promise(() => import("./Lookup"));
-      const identity = yield* Lookup.Identity;
+      const Identity = yield* Effect.promise(() => import("./Identity"));
+      const identity = yield* Identity.Tag;
       const outcome = yield* identity
         .claim(
-          new Lookup.ClaimRequest({
+          new Identity.ClaimRequest({
             key: tag.key,
             nodeKey: self.key,
             kind: self.kind,
@@ -6114,28 +6114,27 @@ const makeLiveLookupService = <Self, S extends Spec>(
  * idempotent when cutover-safe.
  *
  * **Advice early move:** watches Advice `changes` for this service key and re-resolves
- * when prefer flips — dialers move to B when you {@link Lookup.advise} with
- * `{ prefer: B }`, before A leaves and before the first transport error. Apps use flat
- * Lookup verbs (`advise` / `preferred` / `clearAdvice`) or `import { Advice }` then
- * `Advice.changes` — never `Lookup.Advice.*`.
+ * when prefer flips — dialers move to B when you prefer B, before A leaves and before
+ * the first transport error. Apps use the sibling module
+ * `import * as Advice from "hyperlink-ts/Advice"` (`Advice.prefer` / `Advice.changes`) —
+ * never `import { Advice } from "…/Lookup"` / `Lookup.Advice.*`.
  *
  * Bake name sketch was `unsafeLookupClient` (“trust Lookup or die”); bare
  * `lookupClient(Tag)` keeps that fail-closed contract when advice is absent/stale.
  *
  * ```ts
  * import * as Lookup from "hyperlink-ts/Lookup"
- * import { Advice } from "hyperlink-ts/Lookup"
+ * import * as Advice from "hyperlink-ts/Advice"
  *
  * // Sole endpoint (identity winner or one directory row):
  * Hyperlink.lookupClient(Mail).pipe(Layer.provide(Lookup.layer))
  *
  * // Coordinator published advice — bare client honors prefer:
- * yield* Lookup.advise({ serviceKey: Mail.key, prefer: "fleet/Mail#w2" })
+ * yield* Advice.prefer(Mail, "fleet/Mail#w2")
  * Hyperlink.lookupClient(Mail)
  *
- * // Prefer / clear stream (named Tag — not Lookup.Advice.changes):
- * const board = yield* Advice
- * yield* board.changes.pipe(Stream.take(1), Stream.runDrain)
+ * // Prefer / clear stream (sibling module — not Lookup.Advice):
+ * yield* Advice.changes.pipe(Stream.take(1), Stream.runDrain)
  *
  * // N>1 replicas — opt-in pick when no advice (still fail on 0):
  * Hyperlink.lookupClient(Mail, { pick: "first" })
@@ -6158,23 +6157,25 @@ export const lookupClient = <Self, S extends Spec>(
   Layer.effect(
     tag,
     Effect.gen(function* () {
-      const Lookup = yield* Effect.promise(() => import("./Lookup"));
-      const identity = yield* Lookup.Identity;
-      const directory = yield* Lookup.Directory;
-      const advice = yield* Lookup.Advice;
+      const Identity = yield* Effect.promise(() => import("./Identity"));
+      const Directory = yield* Effect.promise(() => import("./Directory"));
+      const Advice = yield* Effect.promise(() => import("./Advice"));
+      const identity = yield* Identity.Tag;
+      const directory = yield* Directory.Tag;
+      const advice = yield* Advice.Tag;
       const serviceKey = tag[wireKeySym];
 
       // Closed over Identity/Directory/Advice services so call-time dial retry
       // does not re-require Lookup tags in the app Effect's R.
       const resolve = Effect.gen(function* () {
         const resolved = yield* identity.resolve(
-          new Lookup.ResolveRequest({ key: tag.key }),
+          new Identity.ResolveRequest({ key: tag.key }),
         );
         if (Option.isSome(resolved)) {
           return resolved.value satisfies LookupDialEndpoint;
         }
         const entries = yield* directory.nodesServing(
-          new Lookup.NodesServingRequest({ serviceKey: tag.key }),
+          new Directory.NodesServingRequest({ serviceKey: tag.key }),
         );
         if (entries.length === 0) {
           return yield* new LookupClientError({
@@ -6187,7 +6188,7 @@ export const lookupClient = <Self, S extends Spec>(
           return entries[0]!;
         }
         const prefer = yield* advice.preferred(
-          new Lookup.PreferredRequest({ serviceKey: tag.key }),
+          new Advice.PreferredRequest({ serviceKey: tag.key }),
         );
         if (Option.isSome(prefer)) {
           const advised = entries.find((row) => row.nodeKey === prefer.value);
@@ -6760,8 +6761,8 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
         // D3: stamped empty set → Lookup directory membership (soft if Directory absent).
         // Live rebind on Directory.changes when dial moves / peers appear or leave.
         if (stamped !== undefined && stamped.length === 0) {
-          const Lookup = yield* Effect.promise(() => import("./Lookup"));
-          const dirOpt = yield* Effect.serviceOption(Lookup.Directory);
+          const Directory = yield* Effect.promise(() => import("./Directory"));
+          const dirOpt = yield* Effect.serviceOption(Directory.Tag);
           if (Option.isNone(dirOpt)) {
             return {} as Record<string, PeerServiceOf<S>>;
           }
@@ -6830,8 +6831,8 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
               peersRecord[row.nodeKey] = client;
             });
 
-          const rows = yield* Lookup.nodesServing(tag).pipe(
-            Effect.provideService(Lookup.Directory, directory),
+          const rows = yield* Directory.nodesServing(tag).pipe(
+            Effect.provideService(Directory.Tag, directory),
           );
           yield* Effect.forEach(rows, upsertPeer, { discard: true });
 

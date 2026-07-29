@@ -11,7 +11,7 @@ import {
 import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
 import * as Lookup from "../src/Lookup";
-import { Advice } from "../src/Lookup";
+import * as Advice from "../src/Advice";
 import * as Node from "../src/Node";
 import * as Hyperlink from "../src/Hyperlink";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
@@ -39,25 +39,25 @@ describe("Lookup Advice", () => {
       const ctx = Context.merge(server, client);
 
       yield* Effect.gen(function* () {
-        const set = yield* Lookup.prefer(Jobs, "worker-a");
+        const set = yield* Advice.prefer(Jobs, "worker-a");
         expect(set).toBe("worker-a");
 
-        const first = yield* Lookup.preferred(Jobs.key);
+        const first = yield* Advice.preferred(Jobs.key);
         expect(first._tag).toBe("Some");
         if (first._tag === "Some") {
           expect(first.value).toBe("worker-a");
         }
 
-        yield* Lookup.preferEntry(Jobs.key, { nodeKey: "worker-b" });
-        const second = yield* Lookup.preferred(Jobs.key);
+        yield* Advice.preferEntry(Jobs.key, { nodeKey: "worker-b" });
+        const second = yield* Advice.preferred(Jobs.key);
         expect(second._tag).toBe("Some");
         if (second._tag === "Some") {
           expect(second.value).toBe("worker-b");
         }
 
-        const cleared = yield* Lookup.clearAdvice(Jobs.key);
+        const cleared = yield* Advice.clear(Jobs.key);
         expect(cleared).toBe(true);
-        const empty = yield* Lookup.preferred(Jobs.key);
+        const empty = yield* Advice.preferred(Jobs.key);
         expect(empty._tag).toBe("None");
       }).pipe(Effect.provide(ctx));
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(15))),
@@ -74,15 +74,14 @@ describe("Lookup Advice", () => {
       const client = yield* Layer.build(Lookup.client(node));
 
       const collected = yield* Effect.gen(function* () {
-        // Named Tag — not Lookup.Advice.changes (no triples).
-        const board = yield* Advice;
+        // Sibling module — not Lookup.Advice / import { Advice } from Lookup.
         const fiber = yield* Effect.forkChild(
-          board.changes.pipe(Stream.take(3), Stream.runCollect),
+          Advice.changes.pipe(Stream.take(3), Stream.runCollect),
         );
         yield* Effect.sleep(Duration.millis(50));
-        yield* Lookup.prefer(Jobs, "worker-a");
-        yield* Lookup.prefer(Jobs, "worker-b");
-        yield* Lookup.clearAdvice(Jobs.key);
+        yield* Advice.prefer(Jobs, "worker-a");
+        yield* Advice.prefer(Jobs, "worker-b");
+        yield* Advice.clear(Jobs.key);
         return yield* Fiber.join(fiber);
       }).pipe(Effect.provide(client));
 
@@ -143,7 +142,7 @@ describe("Lookup Advice", () => {
       );
       expectTaggedFailure(bareExit, "LookupClientError");
 
-      yield* Lookup.advise({
+      yield* Advice.advise({
         serviceKey: Jobs.key,
         prefer: preferB!.nodeKey,
       }).pipe(Effect.provide(lookup));
@@ -186,7 +185,7 @@ describe("Lookup Advice", () => {
         ]).pipe(Layer.provide(lookupClient)),
       );
 
-      yield* Lookup.advise({
+      yield* Advice.advise({
         serviceKey: Jobs.key,
         prefer: "lookup-adv/Jobs#does-not-exist",
       }).pipe(Effect.provide(lookup));

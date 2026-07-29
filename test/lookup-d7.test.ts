@@ -2,6 +2,8 @@ import { Clock, Context, Duration, Effect, Layer, Option, Schema } from "effect"
 import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
 import * as Lookup from "../src/Lookup";
+import * as Directory from "../src/Directory";
+import * as Identity from "../src/Identity";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
@@ -30,7 +32,7 @@ describe("Lookup.layerOptions", () => {
       const second = yield* Layer.build(
         Lookup.layerOptions({ path, unlink: false }),
       );
-      const id = Context.get(second, Lookup.Identity);
+      const id = Context.get(second, Identity.Tag);
       const won = yield* id
         .claim(
           new Lookup.ClaimRequest({
@@ -47,7 +49,7 @@ describe("Lookup.layerOptions", () => {
   );
 });
 
-describe("Lookup.Identity.resolve", () => {
+describe("Identity.Tag.resolve", () => {
   it.effect("returns Some after claim and None when missing", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("resolve");
@@ -55,7 +57,7 @@ describe("Lookup.Identity.resolve", () => {
       const serverCtx = yield* Layer.build(Lookup.layerNode(node));
       const clientCtx = yield* Layer.build(Lookup.client(node));
       const ctx = Context.merge(serverCtx, clientCtx);
-      const id = Context.get(ctx, Lookup.Identity);
+      const id = Context.get(ctx, Identity.Tag);
 
       const empty = yield* id
         .resolve(new Lookup.ResolveRequest({ key: "missing" }))
@@ -105,7 +107,7 @@ describe("Hyperlink.lookupClient", () => {
         Node.unix(Worker, [Hyperlink.serve(Jobs, jobsImpl)]).pipe(Layer.provide(lookupClient)),
       );
 
-      const dir = Context.get(lookup, Lookup.Directory);
+      const dir = Context.get(lookup, Directory.Tag);
       const rows = yield* dir
         .nodesServing(
           new Lookup.NodesServingRequest({ serviceKey: "d7/Jobs" }),

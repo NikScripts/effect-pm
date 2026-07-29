@@ -20,6 +20,7 @@ import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
 import * as NodeServices from "@effect/platform-node/NodeServices"
 import { Context, Effect, Layer, Schema } from "effect"
 import * as Lookup from "../../src/Lookup"
+import * as Advice from "../../src/Advice";
 import * as Node from "../../src/Node"
 import * as Hyperlink from "../../src/Hyperlink"
 
@@ -70,7 +71,7 @@ const program = Effect.gen(function* () {
   )
 
   const preferB = Context.get(workerB, Node.ListenNode).key
-  yield* Lookup.prefer(Worker, preferB).pipe(Effect.provide(lookupCtx))
+  yield* Advice.prefer(Worker, preferB).pipe(Effect.provide(lookupCtx))
 
   // Bare lookupClient — M5 honors advice (no D4 pick needed).
   const workerCtx = yield* Layer.build(
@@ -101,7 +102,7 @@ const program = Effect.gen(function* () {
   yield* Effect.sync(() => workerA)
 
   yield* Effect.logInfo(
-    "identity coordinator ok — Router advised Worker B via Lookup.Advice",
+    "identity coordinator ok — Router advised Worker B via Advice.Tag",
   )
 }).pipe(Effect.scoped, Effect.provide(NodeServices.layer))
 

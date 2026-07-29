@@ -37,6 +37,7 @@ import {
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Hyperlink from "../../../src/Hyperlink";
 import * as Lookup from "../../../src/Lookup";
+import * as Directory from "../../../src/Directory";
 import * as Node from "../../../src/Node";
 import * as WorkPool from "../../../src/WorkPool";
 
@@ -126,10 +127,10 @@ const waitUntil = <A, E, R>(
   });
 
 const nodesServing = (
-  lookupCtx: Context.Context<Lookup.Directory>,
+  lookupCtx: Context.Context<Directory.Tag>,
   serviceKey: string,
 ) =>
-  Context.get(lookupCtx, Lookup.Directory)
+  Context.get(lookupCtx, Directory.Tag)
     .nodesServing(new Lookup.NodesServingRequest({ serviceKey }))
     .pipe(Effect.provide(lookupCtx));
 

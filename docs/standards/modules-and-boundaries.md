@@ -22,32 +22,26 @@ WorkPool.serve      // pulls the engine only when used
 ```
 
 {#no-tag-triples .must appliesTo="src examples"}
-## No `Module.Tag.member` triples
+## Sibling Tags — never nest a Tag under another module
 
-When a module hosts several service Tags (e.g. Lookup’s `Identity` / `Directory` / `Advice`),
-apps must not nest Tag members under the module namespace (`Lookup.Advice.changes`). That treats
-the Tag as a second namespace. Match Effect:
-
-- **Named Tag import:** `import { Advice } from "hyperlink-ts/Lookup"` → `yield* Advice` /
-  `Advice.changes`
-- **Flat module verbs:** `Lookup.advise` / `Lookup.changes` / `Lookup.nodesServing`
-
-`import * as Lookup` may still *name* the Tag (`Lookup.Advice` as a Context key / `yield*`
-target). Chaining a third segment for API surface is banned in apps, examples, and public prose.
+When several service Tags belong to one product family (Lookup’s Identity / Directory /
+Advice), each Tag is its **own module** (`hyperlink-ts/Advice`, …). Apps do **not** import
+Tags from the parent (`import { Advice } from "hyperlink-ts/Lookup"`) or chain
+`Lookup.Advice.changes`. Match Effect: one file = one namespace; flat members on that
+namespace.
 
 ``` ts
-// ❌ triple — Tag used as a nested namespace
-Lookup.Advice.changes
-Lookup.Directory.nodesServing(req)
-
-// ✅ named Tag
+// ❌ Tag nested under Lookup (named import or triple)
 import { Advice } from "hyperlink-ts/Lookup"
-const board = yield* Advice
-yield* board.changes.pipe(Stream.runDrain)
+Lookup.Advice.changes
 
-// ✅ flat sugar on the module
-yield* Lookup.advise({ serviceKey: Mail.key, prefer: "fleet/Mail#w2" })
-yield* Lookup.changes.pipe(Stream.runDrain)
+// ✅ sibling module
+import * as Advice from "hyperlink-ts/Advice"
+import * as Directory from "hyperlink-ts/Directory"
+yield* Advice.prefer(Mail, "fleet/Mail#w2")
+yield* Advice.changes.pipe(Stream.runDrain)
+yield* Directory.nodesServing(Mail)
+const board = yield* Advice.Tag
 ```
 
 {#filename-matches-export .must appliesTo=src}

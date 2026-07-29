@@ -11,6 +11,7 @@ import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
 import { combineQuery, combineSum } from "../src/MultiNode";
 import * as Lookup from "../src/Lookup";
+import * as Directory from "../src/Directory";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
@@ -96,7 +97,7 @@ describe("Hyperlink.distributed bare / D3 peersLayer", () => {
         ).pipe(Layer.provide(lookupClient)),
       );
 
-      const dir = Context.get(lookup, Lookup.Directory);
+      const dir = Context.get(lookup, Directory.Tag);
       const rows = yield* dir
         .nodesServing(
           new Lookup.NodesServingRequest({ serviceKey: "d3/Pool" }),
@@ -210,7 +211,7 @@ describe("Hyperlink.distributed bare / D3 peersLayer", () => {
       // A exits membership; B advertises same nodeKey on a new dial.
       yield* Node.shutdown(West);
 
-      const dir = Context.get(lookupCtx, Lookup.Directory);
+      const dir = Context.get(lookupCtx, Directory.Tag);
       yield* Effect.repeat(
         dir
           .nodesServing(

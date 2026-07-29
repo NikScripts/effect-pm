@@ -112,6 +112,18 @@
       "types": "./dist/Lookup.d.ts",
       "default": "./dist/Lookup.js"
     },
+    "./Advice": {
+      "types": "./dist/Advice.d.ts",
+      "default": "./dist/Advice.js"
+    },
+    "./Directory": {
+      "types": "./dist/Directory.d.ts",
+      "default": "./dist/Directory.js"
+    },
+    "./Identity": {
+      "types": "./dist/Identity.d.ts",
+      "default": "./dist/Identity.js"
+    },
     "./DynamicConfig": {
       "types": "./dist/DynamicConfig.d.ts",
       "default": "./dist/DynamicConfig.js"

@@ -1,6 +1,6 @@
 # Brief — Launcher + node handoff (Agent 5)
 
-**Status:** Track A + **Track B Eng'd** on tip. **Track C Locked #27–34 + #39 Eng'd**. **Track D v1 + advice early-move Eng'd** — `lookupClient` build-then-swap + `RpcClientError` retry + `Advice.changes` dial move (`test/lookup-client-rebind.test.ts`, `test/lookup-advice.test.ts`). **#44 no-triples Eng'd** — named `{ Advice, Directory, Identity }` + flat Lookup verbs. Dual-serve / stream replay / peersLayer parity still open. **#35–37** deferred. Explicit A/B launcher / `restartSuccessor` deferred.  
+**Status:** Track A + **Track B Eng'd** on tip. **Track C Locked #27–34 + #39 Eng'd**. **Track D v1 + advice early-move Eng'd** — `lookupClient` build-then-swap + `RpcClientError` retry + `Advice.changes` dial move (`test/lookup-client-rebind.test.ts`, `test/lookup-advice.test.ts`). **#44 sibling Tags Eng'd** — `hyperlink-ts/Advice` / `Directory` / `Identity` (not nested under Lookup). Dual-serve / stream replay / peersLayer parity still open. **#35–37** deferred. Explicit A/B launcher / `restartSuccessor` deferred.  
 **Opened:** 2026-07-25 (owner via Agent G).  
 **Audience:** next agent picking up launcher + handoff / migration discussion.
 
@@ -199,7 +199,7 @@ North star: `lookupClient` callers never notice A→B. **v1 slice Eng'd:**
 41. **Transparent RPC retry** — Effect methods (`query` / `mutate`) that fail with `RpcClientError` proactively resolve+adopt once, else wait ≤2s for install generation bump, then **retry once**. App errors / `ProtocolMismatch` not retried. Streams not auto-retried.
 42. **Cutover order** — B Directory-visible (and/or Advice-prefer B) before A leaves so retry has a target. Same recipe as C crown-jewel.
 43. **Advice early move (Eng'd)** — `Advice.changes` (`AdvicePreferred` / `AdviceCleared`) on the existing Advice tag (no new sugar namespace). `lookupClient` watches prefer flips for its service key and re-resolves **before** A leaves / before the first transport error.
-44. **No Tag triples (Eng'd)** — apps/docs use named Tag imports (`import { Advice } from "…/Lookup"` → `Advice.changes`) or flat Lookup verbs (`advise` / `changes` / `nodesServing`). Banned: `Lookup.Advice.*` / `Lookup.Directory.*` as a nested API. Standard: [`modules-and-boundaries.md`](../standards/modules-and-boundaries.md#no-tag-triples).
+44. **Sibling Tag modules (Eng'd)** — `hyperlink-ts/Advice` / `Directory` / `Identity` are own namespaces (`import * as Advice` → `Advice.Tag` / `Advice.prefer` / `Advice.changes`). Banned: `import { Advice } from "…/Lookup"` and `Lookup.Advice.*`. Standard: [`modules-and-boundaries.md`](../standards/modules-and-boundaries.md#no-tag-triples).
 
 **Still open for D:** dual-serve window, in-flight stream migrate/replay, peersLayer parity retry.
 
