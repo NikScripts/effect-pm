@@ -11,8 +11,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       {/* description/og tags are PER-PAGE (PageMeta) — a layout-level description here would
           duplicate them (React 19 hoists but does not dedupe meta by name) */}
       <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-      <meta name="theme-color" content="#f7f9fc" media="(prefers-color-scheme: light)" />
-      <meta name="theme-color" content="#12151a" media="(prefers-color-scheme: dark)" />
+      <meta name="theme-color" content="#e8f2f7" media="(prefers-color-scheme: light)" />
+      <meta name="theme-color" content="#0c1c24" media="(prefers-color-scheme: dark)" />
       <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
       {children}
     </>

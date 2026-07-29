@@ -1,13 +1,15 @@
 /**
  * Coming-soon brand lockup (WIP). Inlined on `/` so paint never depends on /assets.
  *
- * Safari’s status / toolbar chrome is translucent and shows the page underneath.
- * Edge pixels must carry the atmosphere — if the top/bottom of the page are flat
- * canvas, the chrome looks flat too. Paint the glow on body, pinned to the edges.
+ * Phone chrome (status bar / home indicator / Liquid Glass): probed on device —
+ * solid body/html background-color reaches those zones; body gradients and
+ * position:fixed layers do not. Match --landing-canvas to the design edge so
+ * the bands blend; keep atmosphere inside the layout viewport.
  */
 :root {
   color-scheme: light dark;
-  --landing-canvas: #f7f9fc;
+  /* Cooler desk — chrome bands can only show this solid, not the gradient. */
+  --landing-canvas: #e8f2f7;
   --landing-bg: var(--landing-canvas);
   --landing-bg-deep: #e8eef8;
   --landing-fg: #2a2f38;
@@ -37,7 +39,7 @@
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --landing-canvas: #12151a;
+    --landing-canvas: #0c1c24;
     --landing-bg: var(--landing-canvas);
     --landing-bg-deep: #0c1016;
     --landing-fg: #e8eaed;
