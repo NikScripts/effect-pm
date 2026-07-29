@@ -127,21 +127,89 @@ import {
 import * as atomHandle from "./internal/atomHandle";
 import { adaptPromiseHandle } from "./internal/promiseHandle";
 import {
-  makeHyperlinkHandoffRun,
-  type HyperlinkHandoffPeerTransfer,
-  type HyperlinkHandoffStrategy,
+  HandoffDeferred as HyperlinkHandoffDeferred,
+  hyperlinkHandoffContext,
+  runHandoffFunction,
+  type HyperlinkHandoffContext,
+  type HyperlinkHandoffFn,
+  type HyperlinkHandoffOutcome,
 } from "./internal/hyperlinkHandoff";
 // Node listen/connect used only inside functions via dynamic import where needed;
 // clientLayerForEndpoint uses clientLayer auto-connect for dialable endpoints.
 
 /**
- * Opt-in cutover strategy for {@link withHandoff} (Locked #33).
- * camelCase option strings — same family as `OnConflict` / WorkPool `shutdownMode`
- * (PascalCase is reserved for `_tag` discriminants).
+ * A handoff function's result (Locked #39). Tagged (`_tag` PascalCase) — `Done` (work handed off,
+ * node may leave + shut down), `Retry` (re-run this HyperService's handoff, bounded), `Defer` (keep
+ * the node up; surface {@link HandoffDeferred}). Build them with {@link handoffContext}.
  *
+ * @category handoff
  * @public
  */
-export type HandoffStrategy = HyperlinkHandoffStrategy;
+export type HandoffOutcome = HyperlinkHandoffOutcome;
+
+/**
+ * The context handed to a {@link serve} handoff function as its third argument — the outcome
+ * Effects ({@link handoffContext}) to `yield*`. The happy path is `return yield* ctx.done`, or
+ * just `return` (the runner coerces `void` to `Done`).
+ *
+ * @category handoff
+ * @public
+ */
+export type HandoffContext = HyperlinkHandoffContext;
+
+/**
+ * A serve-site handoff function (Locked #39): `(from, to, ctx) => Effect<void | HandoffOutcome>`,
+ * where `from` is the local service handle and `to` is a peer client of the same HyperService
+ * (dialed from the Directory, self excluded by dial). Returning `void` (or `ctx.done`) succeeds.
+ * Pass it via {@link serve}'s third options bag (`{ handoff }`).
+ *
+ * @category handoff
+ * @public
+ */
+export type HandoffFn<From = ServeAny, To = ServeAny> = HyperlinkHandoffFn<
+  From,
+  To
+>;
+
+/** Loose service shape for {@link HandoffFn} defaults — bivariant so a handoff fn typed against the
+ *  concrete service (`{ take }` / `{ enqueue }`) is still assignable. @internal */
+type ServeAny = any;
+
+/**
+ * The shared {@link HandoffContext} — the outcome Effects a handoff function `yield*`s
+ * (`ctx.done` / `ctx.retry` / `ctx.defer`).
+ *
+ * @category handoff
+ * @public
+ */
+export const handoffContext: HandoffContext = hyperlinkHandoffContext;
+
+/**
+ * A served HyperService's handoff asked to defer (or had no peer / exhausted retries / failed), so
+ * the OUTGOING node stayed running and did **not** leave membership. Surfaced to the
+ * {@link Node.shutdown} caller (Locked #39 #8/#9).
+ *
+ * @category errors
+ * @public
+ */
+export const HandoffDeferred = HyperlinkHandoffDeferred;
+/** {@link HandoffDeferred} instance type. @public */
+export type HandoffDeferred = HyperlinkHandoffDeferred;
+
+/**
+ * Options bag for {@link serve}'s third argument (Locked #39 #2). Either pass an {@link AnyNode}
+ * directly (sugar for `{ node }`) or this bag:
+ *
+ * - `node` — bind the HyperService to a {@link Node} at serve time (sugar for the tag's `{ node }`).
+ * - `handoff` — a {@link HandoffFn} run during {@link Node.shutdown} after drain (Locked #39).
+ *
+ * @category serving
+ * @public
+ */
+export interface ServeOptions<From = ServeAny, To = ServeAny> {
+  readonly node?: AnyNode;
+  readonly handoff?: HandoffFn<From, To>;
+}
 
 // ── typed errors (Data.TaggedError — never raw `Error`) ──
 
@@ -2650,11 +2718,6 @@ export const kindSym: unique symbol = Symbol.for(
 export const readinessSym: unique symbol = Symbol.for(
   "hyperlink-ts/Hyperlink/readiness",
 );
-/** Where a HyperService's opt-in cutover strategy is stowed — applied by {@link withHandoff}.
- *  Absent ⇒ not migrated by Track C (#29). @internal */
-export const handoffSym: unique symbol = Symbol.for(
-  "hyperlink-ts/Hyperlink/handoff",
-);
 /** Where the HyperService's {@link Node} (if any) is stowed on a Tag. @internal */
 export const nodeSym: unique symbol = Symbol.for(
   "hyperlink-ts/Hyperlink/node",
@@ -2758,8 +2821,6 @@ export interface HyperlinkTag<Self, S extends Spec, Svc = ServiceOf<S, Self>>
   /** The HyperService's readiness derivation, if any (applied by {@link withReadiness}); `undefined`
    *  ⇒ ready by default. Read it via {@link readinessCheck}. */
   readonly [readinessSym]: ReadinessOf<ServiceOf<S, Self>> | undefined;
-  /** Opt-in cutover strategy ({@link withHandoff}); `undefined` ⇒ not migrated (#29). */
-  readonly [handoffSym]: HandoffStrategy | undefined;
   /** The per-HyperService {@link peers} capability key — its value is this HyperService's peer clients
    *  (the other nodes' leaf services), keyed by node. Provided by {@link peersLayer}, read via {@link peers}. */
   readonly [peersSym]: Context.Key<PeersId<Self>, Record<string, PeerServiceOf<S>>>;
@@ -3214,81 +3275,78 @@ export const withReadiness: {
   },
 );
 
-/**
- * Attach an opt-in cutover strategy to a HyperService tag (Locked #33). Default is **off** —
- * absent stamp ⇒ Track C does not migrate this HyperService (#29). Dual (data-first or `.pipe`):
- *
- * ```ts
- * class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", { payload: Item }).pipe(
- *   Hyperlink.withHandoff("drainOnly"),
- * ) {}
- * ```
- *
- * Strategies:
- * - `"drainOnly"` — WorkPool `shutdown` + wait `phase === "off"`
- * - `"workPoolRelease"` — decoded `release` → Directory peer `enqueue` (exclude self by dial)
- *   → shutdown (Locked #34). Soft-fails re-queue locally. Without advertise/`selfDial`,
- *   local `release`/`releaseEncoded` only.
- *
- * Run during {@link Node.shutdown} after drain and before Lookup leave. Non-WorkPool kinds log and no-op.
- *
- * @category spec fields
- * @public
- */
-export const withHandoff: {
-  <T extends PipeableTag>(strategy: HandoffStrategy): (tag: T) => T;
-  <Self, S extends Spec, HSelf>(
-    tag: NodeBoundTag<Self, S, HSelf>,
-    strategy: HandoffStrategy,
-  ): NodeBoundTag<Self, S, HSelf>;
-  <Self, S extends Spec>(
-    tag: HyperlinkTag<Self, S>,
-    strategy: HandoffStrategy,
-  ): HyperlinkTag<Self, S>;
-} = Fn.dual(
-  2,
-  <T extends HyperlinkTag<any, any, any>>(tag: T, strategy: HandoffStrategy): T =>
-    // SAFE: same stamp pattern as withReadiness — Object.assign mutates the tag identity; T is preserved.
-    Object.assign(tag, { [handoffSym]: strategy }) as T,
-);
-
-/**
- * Read a tag's {@link withHandoff} strategy, if any.
- *
- * @category spec fields
- * @public
- */
-export const handoffOf = (tag: unknown): HandoffStrategy | undefined => {
-  if (!Predicate.hasProperty(tag, handoffSym)) return undefined;
-  const value = tag[handoffSym];
-  if (value === "drainOnly" || value === "workPoolRelease") return value;
-  return undefined;
-};
-
-/** Opt-in handoff recipe stowed on a served entry / shared instance (Locked #33/#34). @internal */
+/** Opt-in handoff recipe stowed on a served entry / shared instance (Locked #39). @internal */
 export type ServedHandoff = {
-  readonly strategy: HandoffStrategy;
   readonly tag: unknown;
-  readonly kind: string | undefined;
   readonly wireImpl: unknown;
+  readonly handoff: HandoffFn;
 };
 
-/** Build a {@link ServedHyperlink}.handoff entry from a stamped tag + wire impl. @internal */
+/** Build a {@link ServedHyperlink}.handoff entry from a serve-site handoff fn + wire impl. @internal */
 const servedHandoff = (
   tag: unknown,
   wireImpl: unknown,
+  handoff: HandoffFn | undefined,
 ): ServedHandoff | undefined => {
-  const strategy = handoffOf(tag);
-  if (strategy === undefined) return undefined;
+  if (handoff === undefined) return undefined;
+  return { tag, wireImpl, handoff };
+};
+
+/** Resolved {@link serve} third-arg options (AnyNode sugar already normalized to `{ node }`). @internal */
+type ResolvedServeOptions = {
+  readonly node?: AnyNode;
+  readonly handoff?: HandoffFn;
+};
+
+/** True when a {@link serve} third argument is an {@link AnyNode} (sugar) rather than a {@link ServeOptions}
+ *  bag — a node carries a `.key` + `.kind`; the options bag carries `handoff` / `node`. @internal */
+const isServeNodeArg = (
+  value: AnyNode | ServeOptions | undefined,
+): value is AnyNode =>
+  value !== undefined &&
+  isAddressedNode(value as AnyNode) === false &&
+  Predicate.hasProperty(value, "key") &&
+  Predicate.hasProperty(value, "kind") &&
+  !Predicate.hasProperty(value, "handoff");
+
+/** Normalize {@link serve}'s third argument (AnyNode sugar OR {@link ServeOptions} bag). @internal */
+const resolveServeOptions = (
+  third: AnyNode | ServeOptions | undefined,
+): ResolvedServeOptions | undefined => {
+  if (third === undefined) return undefined;
+  if (isServeNodeArg(third)) return { node: third };
+  // An addressed node passed directly is still node sugar; otherwise it's the options bag.
+  if (
+    isAddressedNode(third as AnyNode) &&
+    !Predicate.hasProperty(third, "handoff")
+  ) {
+    return { node: third as AnyNode };
+  }
+  const bag = third as ServeOptions;
   return {
-    strategy,
-    tag,
-    kind: kindOf(tag),
-    wireImpl,
+    ...(bag.node !== undefined ? { node: bag.node } : {}),
+    ...(bag.handoff !== undefined ? { handoff: bag.handoff } : {}),
   };
 };
 
-/** Same dial target? (exclude self during #34 peer pick — not by nodeKey). */
+/** {@link nodeKindsOf} for an {@link AnyNode} value directly (serve-site `{ node }` override). @internal */
+const nodeKindsOfNode = (node: AnyNode): ReadonlyArray<ProtocolKind> => {
+  const kinds: Array<ProtocolKind> = [];
+  if (Predicate.hasProperty(node, "endpoints")) {
+    const ep = node.endpoints;
+    if (Predicate.hasProperty(ep, "Http")) kinds.push("Http");
+    if (Predicate.hasProperty(ep, "WebSocket")) kinds.push("WebSocket");
+    if (Predicate.hasProperty(ep, "IpcSocket")) kinds.push("IpcSocket");
+  }
+  if (kinds.length > 0) return kinds;
+  if (Predicate.hasProperty(node, "kind")) {
+    const k = node.kind;
+    if (k === "Http" || k === "WebSocket" || k === "IpcSocket") return [k];
+  }
+  return [];
+};
+
+/** Same dial target? (exclude self during peer pick — by dial, not by nodeKey; Locked #39 #7). */
 const sameHandoffDial = (
   a: {
     readonly kind: string;
@@ -3303,15 +3361,12 @@ const sameHandoffDial = (
 ): boolean => a.kind === b.kind && a.path === b.path && a.url === b.url;
 
 /**
- * Directory peer enqueue for {@link withHandoff}`("workPoolRelease")` — excludes self by dial
- * so same-`nodeKey` A→B replacement still finds the incoming row (Locked #34 / #38).
+ * Dial the handoff `to` peer for a served HyperService — the Directory row for `wireKey` that is
+ * **not** this node (excluded by dial, so a same-`nodeKey` A→B replacement still finds the incoming
+ * row). `None` when there's no Directory, no other row, or no dialable address (⇒ the runner defers,
+ * Locked #39 #10). The peer client is scoped by the caller ({@link runHandoffFunction}).
  */
-/** Close a type-erased wire Effect at the handoff peer-dial edge. */
-const closeHandoffEffect = <A = unknown>(value: unknown): Effect.Effect<A> =>
-  // SAFE: caller proved Effect.isEffect on a copy kept as unknown.
-  value as never;
-
-const makeWorkPoolPeerTransfer = (
+const dialHandoffPeer = (
   tag: unknown,
   wireKey: string,
   selfDial: {
@@ -3319,62 +3374,40 @@ const makeWorkPoolPeerTransfer = (
     readonly path?: string;
     readonly url?: string;
   },
-): HyperlinkHandoffPeerTransfer => ({
-  tryEnqueueToPeer: (entries) => {
-    // Soft-fail transfer: Directory optional, peer dial best-effort, no R leaked to shutdown.
-    const attempt: Effect.Effect<boolean> = Effect.gen(function* () {
-      const Lookup = yield* Effect.promise(() => import("./Lookup"));
-      const dirOpt = yield* Effect.serviceOption(Lookup.Directory);
-      if (Option.isNone(dirOpt)) return false;
-      const rows = yield* dirOpt.value.nodesServing(
-        new Lookup.NodesServingRequest({ serviceKey: wireKey }),
-      );
-      const peer = rows.find((row) => !sameHandoffDial(selfDial, row));
-      if (peer === undefined) return false;
-      if (peer.path === undefined && peer.url === undefined) return false;
-      // buildPeerClientAt is defined later in this module; runtime call is after init.
-      const dial = retype<
-        (
-          peerTag: unknown,
-          target: {
-            readonly key: string;
-            readonly kind?: ProtocolKind;
-            readonly url?: string;
-            readonly path?: string;
-          },
-        ) => Effect.Effect<unknown, never, Scope.Scope>
-      >(buildPeerClientAt as never);
-      return yield* Effect.scoped(
-        Effect.gen(function* () {
-          const client = yield* dial(tag, {
-            key: peer.nodeKey,
-            kind: peer.kind,
-            ...(peer.path !== undefined ? { path: peer.path } : {}),
-            ...(peer.url !== undefined ? { url: peer.url } : {}),
-          });
-          if (
-            !Predicate.hasProperty(client, "enqueue") ||
-            typeof client.enqueue !== "function"
-          ) {
-            return false;
-          }
-          const out: unknown = client.enqueue(entries);
-          const payload: unknown = out;
-          if (!Effect.isEffect(out)) return true;
-          const exit = yield* Effect.exit(closeHandoffEffect(payload));
-          return Exit.isSuccess(exit);
-        }),
-      );
+): Effect.Effect<Option.Option<unknown>, never, Scope.Scope> =>
+  Effect.gen(function* () {
+    const Lookup = yield* Effect.promise(() => import("./Lookup"));
+    const dirOpt = yield* Effect.serviceOption(Lookup.Directory);
+    if (Option.isNone(dirOpt)) return Option.none();
+    const rows = yield* dirOpt.value.nodesServing(
+      new Lookup.NodesServingRequest({ serviceKey: wireKey }),
+    );
+    const peer = rows.find((row) => !sameHandoffDial(selfDial, row));
+    if (peer === undefined) return Option.none();
+    if (peer.path === undefined && peer.url === undefined) return Option.none();
+    // buildPeerClientAt is defined later in this module; runtime call is after init.
+    const dial = retype<
+      (
+        peerTag: unknown,
+        target: {
+          readonly key: string;
+          readonly kind?: ProtocolKind;
+          readonly url?: string;
+          readonly path?: string;
+        },
+      ) => Effect.Effect<unknown, never, Scope.Scope>
+    >(buildPeerClientAt as never);
+    const client = yield* dial(tag, {
+      key: peer.nodeKey,
+      kind: peer.kind,
+      ...(peer.path !== undefined ? { path: peer.path } : {}),
+      ...(peer.url !== undefined ? { url: peer.url } : {}),
     });
-    return Effect.gen(function* () {
-      const exit = yield* Effect.exit(attempt);
-      return Exit.isSuccess(exit) ? exit.value : false;
-    });
-  },
-});
+    return Option.some(client);
+  });
 
 const materializeHandoffRun = (
-  handoff: ServedHandoff,
+  entry: ServedHandoff,
   wireKey: string,
   selfDial:
     | {
@@ -3383,30 +3416,31 @@ const materializeHandoffRun = (
         readonly url?: string;
       }
     | undefined,
-): Effect.Effect<void> => {
-  const peerTransfer =
-    handoff.strategy === "workPoolRelease" && selfDial !== undefined
-      ? makeWorkPoolPeerTransfer(handoff.tag, wireKey, selfDial)
-      : undefined;
-  return makeHyperlinkHandoffRun(
-    handoff.strategy,
-    handoff.kind,
-    handoff.wireImpl,
-    peerTransfer,
-  );
-};
+): Effect.Effect<void, HandoffDeferred> =>
+  runHandoffFunction({
+    handoff: entry.handoff,
+    from: entry.wireImpl,
+    serviceKey: wireKey,
+    // No advertise membership ⇒ no self dial ⇒ we can't exclude self ⇒ treat as no peer (defer, #10).
+    dialPeer:
+      selfDial === undefined
+        ? Effect.succeed(Option.none())
+        : dialHandoffPeer(entry.tag, wireKey, selfDial),
+  });
 
 /**
- * Package-private — used by protocol listen servers when wiring {@link Node.shutdown}.
- * Solo {@link ServedHyperlink}.handoff runs plus any opted-in shared-Spec instance handoffs
- * for the same wire keys (shared stamps live on module-private shared wire-key state).
+ * Package-private — used by protocol listen servers when wiring {@link Node.shutdown} (Locked #39 #7).
+ * Runs every served HyperService's handoff (solo entries + shared-Spec instance handoffs for the same
+ * wire keys) on the OUTGOING node after drain: dials the Directory peer (self excluded by dial) and
+ * runs `handoff(from, to, ctx)`. Fails with the first {@link HandoffDeferred} when any HyperService
+ * defers (no peer / `ctx.defer` / retry-exhausted / failure), so the shutdown caller can stay running.
  *
- * Pass `selfDial` from advertise membership so `"workPoolRelease"` can Directory-find the
- * peer and enqueue (Locked #34). Omit for local-only release.
+ * Pass `selfDial` from advertise membership so the peer can be Directory-found; omit ⇒ every handoff
+ * defers (no peer).
  *
  * @internal
  */
-export const collectServedHandoffRuns = (
+export const runServedHandoffs = (
   entries: ReadonlyArray<ServedHyperlink>,
   options?: {
     readonly selfDial?: {
@@ -3415,27 +3449,37 @@ export const collectServedHandoffRuns = (
       readonly url?: string;
     };
   },
-): ReadonlyArray<Effect.Effect<void>> => {
+): Effect.Effect<void, HandoffDeferred> => {
   const selfDial = options?.selfDial;
-  const fromEntries = entries.flatMap((entry) =>
-    entry.handoff === undefined
-      ? []
-      : [materializeHandoffRun(entry.handoff, entry.wireKey, selfDial)],
-  );
+  const runs: Array<Effect.Effect<void, HandoffDeferred>> = [];
+  for (const entry of entries) {
+    if (entry.handoff !== undefined) {
+      runs.push(materializeHandoffRun(entry.handoff, entry.wireKey, selfDial));
+    }
+  }
   const seen = new Set<string>();
-  const fromShared: Array<Effect.Effect<void>> = [];
   for (const entry of entries) {
     if (seen.has(entry.wireKey)) continue;
     seen.add(entry.wireKey);
     const state = sharedWireStates.get(entry.wireKey);
     if (state === undefined) continue;
     for (const handoff of state.handoffs) {
-      fromShared.push(
-        materializeHandoffRun(handoff, entry.wireKey, selfDial),
-      );
+      runs.push(materializeHandoffRun(handoff, entry.wireKey, selfDial));
     }
   }
-  return [...fromEntries, ...fromShared];
+  if (runs.length === 0) return Effect.void;
+  // Run all handoffs, then fail with the first deferral (if any). We let the successful transfers
+  // finish rather than fail-fast-interrupt mid-transfer; the node stays up on any deferral.
+  return Effect.gen(function* () {
+    const exits = yield* Effect.forEach(runs, (run) => Effect.exit(run), {
+      concurrency: "unbounded",
+    });
+    for (const exit of exits) {
+      if (Exit.isFailure(exit)) {
+        return yield* Effect.failCause(exit.cause);
+      }
+    }
+  });
 };
 
 /**
@@ -3695,7 +3739,6 @@ const buildInstanceTag = <Self, S extends Spec>(
     // Solo bare tags default to `kind`; shared-Spec instances default kind to the wire key.
     [kindSym]: kindOverride ?? (sharedMarker ? wireKey : kind),
     [readinessSym]: undefined,
-    [handoffSym]: undefined,
     [peersSym]: peersKey,
     [selfNodeSym]: selfNodeKey,
     ...(interfaceLocalsMarker ? { [interfaceLocalsSym]: true as const } : {}),
@@ -4287,7 +4330,7 @@ export interface ServedHyperlink {
   readonly readiness: Effect.Effect<Readiness>;
   /** F4 wire-contract fingerprint — stamped at serve from the tag Spec. */
   readonly contractHash: string;
-  /** Opt-in cutover recipe ({@link withHandoff}); materialized in {@link collectServedHandoffRuns}. */
+  /** Opt-in handoff fn (serve `{ handoff }`, Locked #39); materialized in {@link runServedHandoffs}. */
   readonly handoff?: ServedHandoff;
   /** Node log key when the served tag is bound to a {@link Node} (`options.node`). */
   readonly nodeLogKey?: string;
@@ -4501,7 +4544,7 @@ const getOrCreateSharedHandlerLayer = (
               kind,
               contractHash: hashContract(wireKey, kind, spec),
               readiness: Effect.suspend(() => allReady(state.readiness)),
-              // Shared instance handoffs live on SharedWireState — see {@link collectServedHandoffRuns}.
+              // Shared instance handoffs live on SharedWireState — see {@link runServedHandoffs}.
               ...(bound !== undefined ? { nodeLogKey: bound.key } : {}),
               ...(boundKinds.length > 0 ? { nodeKinds: boundKinds } : {}),
             });
@@ -4532,6 +4575,7 @@ const getOrCreateSharedHandlerLayer = (
 const sharedInstanceLayer = (
   tag: ServeRemoteTag & { readonly key: string },
   wireImpl: unknown,
+  handoffFn: HandoffFn | undefined,
 ): Layer.Any => {
   const wireKey = tag[wireKeySym];
   const instanceKey = tag.key;
@@ -4540,7 +4584,7 @@ const sharedInstanceLayer = (
     tag[specSym],
   );
   const readiness = readinessCheckServed(tag, wireImpl);
-  const handoff = servedHandoff(tag, wireImpl);
+  const handoff = servedHandoff(tag, wireImpl, handoffFn);
   return Layer.effectDiscard(
     Effect.acquireRelease(
       Effect.sync(() => {
@@ -4582,11 +4626,18 @@ const serveRemoteHandlers = (
   tag: ServeRemoteTag,
   wireImpl: unknown,
   workerContext: Context.Context<unknown> | undefined,
+  serveOptions?: ResolvedServeOptions,
 ): Layer.Any => {
+  const handoffFn = serveOptions?.handoff;
+  const overrideNode = serveOptions?.node;
   if (isSharedTag(tag)) {
     // Context.Service always carries `.key`; shared mint uses it as the routing header.
     return mergeAnyLayer(
-      sharedInstanceLayer(tag as ServeRemoteTag & { readonly key: string }, wireImpl),
+      sharedInstanceLayer(
+        tag as ServeRemoteTag & { readonly key: string },
+        wireImpl,
+        handoffFn,
+      ),
       getOrCreateSharedHandlerLayer(tag, workerContext),
     );
   }
@@ -4621,10 +4672,13 @@ const serveRemoteHandlers = (
         Option.match({
           onNone: () => Effect.void,
           onSome: (registry) => {
-            const bound = nodeOf(tag);
-            const boundKinds = nodeKindsOf(tag);
+            const bound = overrideNode ?? nodeOf(tag);
+            const boundKinds =
+              overrideNode !== undefined
+                ? nodeKindsOfNode(overrideNode)
+                : nodeKindsOf(tag);
             const kind = kindOf(tag) ?? "hyperlink";
-            const handoff = servedHandoff(tag, wireImpl);
+            const handoff = servedHandoff(tag, wireImpl, handoffFn);
             return registry.register({
               wireKey: tag[wireKeySym],
               group: retype(group as never),
@@ -4672,9 +4726,15 @@ export const serveRemote = <S extends Spec, Impl extends ServeImplOf<S, any>>(
     readonly [groupSym]: RpcGroupOf<S>;
   },
   impl: Impl,
+  options?: ServeOptions,
 ): Layer.Layer<HandlerContextOf<S>, never, ServeRequirements<Impl>> =>
   retype<Layer.Layer<HandlerContextOf<S>, never, ServeRequirements<Impl>>>(
-    serveRemoteHandlers(tag, impl, undefined) as never,
+    serveRemoteHandlers(
+      tag,
+      impl,
+      undefined,
+      resolveServeOptions(options),
+    ) as never,
   );
 
 /**
@@ -4696,9 +4756,15 @@ export const serveRemoteDriver = <S extends Spec, R>(
     readonly [groupSym]: ServeRemoteTag[typeof groupSym];
   },
   driver: Driver<S, R>,
+  options?: ServeOptions,
 ): Layer.Layer<HandlerContextOf<S>, never, R> =>
   retype<Layer.Layer<HandlerContextOf<S>, never, R>>(
-    serveRemoteHandlers(tag, driver.impl, driver.workerContext as Context.Context<unknown>) as never,
+    serveRemoteHandlers(
+      tag,
+      driver.impl,
+      driver.workerContext as Context.Context<unknown>,
+      resolveServeOptions(options),
+    ) as never,
   );
 
 /**
@@ -4724,6 +4790,7 @@ const servePlain = <Self, S extends Spec, R = never>(
     | ImplWithDefaultOverrides<S>
     | Driver<S, R>
     | Effect.Effect<ImplWithDefaultOverrides<S> | Driver<S, R>, never, R>,
+  options?: ServeOptions,
 ): Layer.Layer<Self | Local<Self> | HandlerContextOf<S>, ValueErrorsOf<S>, R> => {
   const unwrapServe = retype<
     (
@@ -4742,7 +4809,7 @@ const servePlain = <Self, S extends Spec, R = never>(
         // Plain local — identity claim (if any) already happened in {@link serve}.
         return mergeServe(
           localLayerPlain(tag, grantLocal(tag, built)),
-          serveRemoteDriver(tag, built),
+          serveRemoteDriver(tag, built, options),
         );
       }
       // Wire handlers only: `flattenImpl` drops `local` members. Bridge ImplOf → ServeImplOf at the
@@ -4750,7 +4817,11 @@ const servePlain = <Self, S extends Spec, R = never>(
       return mergeServe(
         localLayerPlain(tag, built),
         retype<Layer.Layer<HandlerContextOf<S>, never, R>>(
-          serveRemote(tag, retype<ServeImplOf<S, never>>(built as never)) as never,
+          serveRemote(
+            tag,
+            retype<ServeImplOf<S, never>>(built as never),
+            options,
+          ) as never,
         ),
       );
     }) as never,
@@ -4781,6 +4852,11 @@ export const servedKeyOf = (layer: unknown): string | undefined => {
  * RpcGroup: `Layer.mergeAll(serve(A, …), serve(B, …))` mounts handlers once and routes by
  * the per-call `key` header.
  *
+ * The optional third argument is either an {@link AnyNode} (sugar for `{ node }`) or a
+ * {@link ServeOptions} bag — `{ node?, handoff? }`. A `handoff` fn (Locked #39) runs during
+ * {@link Node.shutdown} after drain: `(from, to, ctx) => Effect<void | HandoffOutcome>` moving work
+ * from the local handle `from` to the peer client `to`.
+ *
  * @category serving
  * @public
  */
@@ -4790,11 +4866,13 @@ export const serve = <Self, S extends Spec, R = never>(
     | ImplWithDefaultOverrides<S>
     | Driver<S, R>
     | Effect.Effect<ImplWithDefaultOverrides<S> | Driver<S, R>, never, R>,
+  options?: AnyNode | ServeOptions,
 ): Layer.Layer<Self | Local<Self> | HandlerContextOf<S>, ValueErrorsOf<S>, R> => {
+  const serveOptions = resolveServeOptions(options);
   // Stamp the served tag's key so an anonymous `listen` can derive a legible node name from the first
   // resource it serves (see {@link servedKeyOf} / anonymousNodeKey). Stamped on the FINAL layer both
   // paths return (servePlain re-merges, which would drop an earlier stamp).
-  const plain = Object.assign(servePlain(tag, impl), {
+  const plain = Object.assign(servePlain(tag, impl, serveOptions), {
     [servedKeySym]: tag.key,
   });
   if (!isIdentity(tag)) {
