@@ -105,6 +105,22 @@ Guide: [Daemon](/docs/daemons)
 
 `examples/daemon/typed-failed-error.ts` · `pnpm run example:daemon-typed-failed-error`
 
+### [serve and client](/docs/daemon-serve-client)
+
+`examples/daemon/serve-client.ts` · `pnpm run example:daemon-serve-client`
+
+### [result ref](/docs/daemon-result-ref)
+
+`examples/daemon/result-ref.ts` · `pnpm run example:daemon-result-ref`
+
+### [tag schedule](/docs/daemon-tag-schedule)
+
+`examples/daemon/tag-schedule.ts` · `pnpm run example:daemon-tag-schedule`
+
+### [configure](/docs/daemon-configure)
+
+`examples/daemon/configure.ts` · `pnpm run example:daemon-configure`
+
 ---
 
 ## Node & discovery
@@ -185,6 +201,18 @@ Guide: [Fleet](/docs/telemetry)
 
 `examples/fleet/shardmap-sessions.ts` · `pnpm run example:fleet-shardmap-sessions`
 
+### [Telemetry alone](/docs/fleet-telemetry-alone)
+
+`examples/fleet/telemetry-alone.ts` · `pnpm run example:fleet-telemetry-alone`
+
+### [ShardMap persist](/docs/fleet-shardmap-persist)
+
+`examples/fleet/shardmap-persist.ts` · `pnpm run example:fleet-shardmap-persist`
+
+### [health with readiness](/docs/fleet-health-with-readiness)
+
+`examples/fleet/health-with-readiness.ts` · `pnpm run example:fleet-health-with-readiness`
+
 ---
 
 ## Launcher
@@ -196,6 +224,50 @@ Guide: [Launcher](/docs/launcher)
 `examples/launcher/lookup-membership.ts` · `pnpm run example:launcher-lookup-membership`
 
 Child of [Lookup membership](/docs/launcher-lookup-membership): `examples/launcher/lookup-membership-child.ts`
+
+### [minimal up](/docs/launcher-minimal-up)
+
+`examples/launcher/minimal-up.ts` · `pnpm run example:launcher-minimal-up`
+
+### [handle phases](/docs/launcher-handle-phases)
+
+`examples/launcher/handle-phases.ts` · `pnpm run example:launcher-handle-phases`
+
+### [token injection](/docs/launcher-token-injection)
+
+`examples/launcher/token-injection.ts` · `pnpm run example:launcher-token-injection`
+
+### [ready services](/docs/launcher-ready-services)
+
+`examples/launcher/ready-services.ts` · `pnpm run example:launcher-ready-services`
+
+### [Ready timeout errors](/docs/launcher-ready-timeout)
+
+`examples/launcher/ready-timeout.ts` · `pnpm run example:launcher-ready-timeout`
+
+Child helper for Launcher examples: [`examples/launcher/ready-worker-child.ts`](/docs/launcher-ready-worker-child) · `pnpm run example:launcher-ready-worker-child`
+
+---
+
+## Readiness
+
+Guide: [Readiness & Health](/docs/readiness)
+
+### [withReadiness](/docs/readiness-with-readiness)
+
+`examples/readiness/with-readiness.ts` · `pnpm run example:readiness-with-readiness`
+
+### [allReady](/docs/readiness-all-ready)
+
+`examples/readiness/all-ready.ts` · `pnpm run example:readiness-all-ready`
+
+### [monitored dependency](/docs/readiness-monitored-dependency)
+
+`examples/readiness/monitored-dependency.ts` · `pnpm run example:readiness-monitored-dependency`
+
+### [degraded health](/docs/readiness-degraded-health)
+
+`examples/readiness/degraded-health.ts` · `pnpm run example:readiness-degraded-health`
 
 ---
 

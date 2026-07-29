@@ -63,6 +63,7 @@ const watchDocsContent = {
         "../../examples/node",
         "../../examples/fleet",
         "../../examples/launcher",
+        "../../examples/readiness",
         "../../examples/hyperlink",
         "../../examples/logs",
         "../../examples/store",

@@ -20,6 +20,7 @@ const modules = import.meta.glob(
     "../../../../examples/node/**/*.ts",
     "../../../../examples/fleet/**/*.ts",
     "../../../../examples/launcher/**/*.ts",
+    "../../../../examples/readiness/**/*.ts",
     "../../../../examples/hyperlink/**/*.ts",
     "../../../../examples/logs/**/*.ts",
     "../../../../examples/store/**/*.ts",

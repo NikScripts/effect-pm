@@ -8,7 +8,7 @@ Paired docs live at `docs/examples/<topic>/<name>.md` and Twoslash-`include` the
 
 | Layer | Path | Purpose |
 |-------|------|---------|
-| **Topics** | `work-pool/`, `gate/`, `daemon/`, `node/`, `fleet/`, `launcher/`, `hyperlink/`, `logs/`, `store/`, `schedule/`, `polling/`, `config/`, `observe/` | One API shape per file — same names as the guides |
+| **Topics** | `work-pool/`, `gate/`, `daemon/`, `node/`, `fleet/`, `launcher/`, `readiness/`, `hyperlink/`, `logs/`, `store/`, `schedule/`, `polling/`, `config/`, `observe/` | One API shape per file — same names as the guides |
 | **Scenarios** | [`scenarios/`](./scenarios/) | Multi-file / multi-process compositions |
 | **Apps** | [`apps/`](./apps/) | TUI, web, dashboard, CLI, widgets (not 1:1 Twoslash yet) |
 | **Shared** | [`shared/`](./shared/) | Harness helpers |
@@ -32,10 +32,11 @@ Living book: [docs/index.md](../docs/index.md) · [API Reference](https://hyperl
 | **Start here** | [`work-pool/priority-retry.ts`](./work-pool/priority-retry.ts) → [hub § WorkPool](../docs/examples.md) |
 | **WorkPool** | `priority-retry` → `named-lanes` → store / serve / durable / refill / metrics |
 | **Gate** | `gate/unit-and-input` → `store-readback` → `runtime-observer` → http-client → http-api |
-| **Daemon + Soft** | `daemon/store-auto-write` → `typed-failed-error` |
+| **Daemon + Soft** | `daemon/store-auto-write` → `typed-failed-error` → serve / result / schedule / configure |
 | **Node & discovery** | `node/tag-addressed` → `tag-bound` → `clients` → addressless → nameless unix → `prototype` → `as-lookup` → nameless http/ws → `identity-coordinator` |
-| **Fleet glass** | `fleet/telemetry-glass` → `health-glass` → `shardmap-sessions` |
-| **Launcher** | `launcher/lookup-membership` |
+| **Fleet glass** | `fleet/telemetry-glass` → `health-glass` → `shardmap-sessions` → edge examples |
+| **Launcher** | `launcher/minimal-up` → `handle-phases` → `lookup-membership` |
+| **Readiness** | `readiness/with-readiness` → `all-ready` → `monitored-dependency` → `degraded-health` |
 | **Logs** | `logs/live-bus` → `node-journal` → `hyperlink-logs` → `lineage-scope` → `levels` |
 | **Schedule / polling / config** | `pnpm run example:schedule-basics` → `example:schedule-controls` → `example:polling-sports` → `example:config-hot-swap` |
 | **Observe** | `observe-pack-demo` → `observe-recipes` → `observe-work-pool-pack` / daemon / gate packs · guide [Observe](../docs/guides/observe.md) |
@@ -81,6 +82,10 @@ Paths are under `examples/`. Script = `pnpm run example:<topic>-<kebab-file>` (s
 |------|---------|
 | [`daemon/store-auto-write.ts`](./daemon/store-auto-write.ts) | `Daemon.layer` + `Daemon.store` auto-append |
 | [`daemon/typed-failed-error.ts`](./daemon/typed-failed-error.ts) | Typed `Failed.error` in history |
+| [`daemon/serve-client.ts`](./daemon/serve-client.ts) | `Daemon.serve` + `Hyperlink.client` |
+| [`daemon/result-ref.ts`](./daemon/result-ref.ts) | Tag `success` + `result.get` / `changes` |
+| [`daemon/tag-schedule.ts`](./daemon/tag-schedule.ts) | `Daemon.schedule` on a tag |
+| [`daemon/configure.ts`](./daemon/configure.ts) | `Daemon.configure` layer patch |
 
 ### Node — [Identity coordinator](../docs/guides/identity-coordinator.md) · [Fleets and peers](../docs/services/fleets-and-peers.md)
 
@@ -104,12 +109,35 @@ Paths are under `examples/`. Script = `pnpm run example:<topic>-<kebab-file>` (s
 | [`fleet/telemetry-glass.ts`](./fleet/telemetry-glass.ts) | Telemetry fleet glass |
 | [`fleet/health-glass.ts`](./fleet/health-glass.ts) | FleetHealth |
 | [`fleet/shardmap-sessions.ts`](./fleet/shardmap-sessions.ts) | ShardMap sessions |
+| [`fleet/telemetry-alone.ts`](./fleet/telemetry-alone.ts) | `Telemetry.alone` |
+| [`fleet/shardmap-persist.ts`](./fleet/shardmap-persist.ts) | ShardMap `{ filename }` persistence |
+| [`fleet/health-with-readiness.ts`](./fleet/health-with-readiness.ts) | FleetHealth from readiness rows |
 
-### Launcher · Hyperlink · Logs · Store · Schedule · Polling · Config · Observe
+### Launcher — guide [Launcher](../docs/guides/launcher.md)
 
 | File | Teaches |
 |------|---------|
 | [`launcher/lookup-membership.ts`](./launcher/lookup-membership.ts) | Launcher → Lookup membership |
+| [`launcher/minimal-up.ts`](./launcher/minimal-up.ts) | `Launcher.up` spawn → Ready → handoff |
+| [`launcher/handle-phases.ts`](./launcher/handle-phases.ts) | Explicit `spawn` / `awaitReady` / `handoff` / `kill` |
+| [`launcher/token-injection.ts`](./launcher/token-injection.ts) | `Launcher.command` env vs argv tokens |
+| [`launcher/ready-services.ts`](./launcher/ready-services.ts) | `ready.services` named Tags |
+| [`launcher/ready-timeout.ts`](./launcher/ready-timeout.ts) | `ReadyTimedOut` / `ChildExited` by `_tag` |
+| [`launcher/ready-worker-child.ts`](./launcher/ready-worker-child.ts) | Child helper for Launcher examples |
+
+### Readiness — service [Readiness & Health](../docs/services/readiness.md)
+
+| File | Teaches |
+|------|---------|
+| [`readiness/with-readiness.ts`](./readiness/with-readiness.ts) | `Hyperlink.withReadiness` |
+| [`readiness/all-ready.ts`](./readiness/all-ready.ts) | `Hyperlink.allReady` + `readinessOf` |
+| [`readiness/monitored-dependency.ts`](./readiness/monitored-dependency.ts) | `Hyperlink.monitoredDependency` |
+| [`readiness/degraded-health.ts`](./readiness/degraded-health.ts) | `/health` degraded body |
+
+### Hyperlink · Logs · Store · Schedule · Polling · Config · Observe
+
+| File | Teaches |
+|------|---------|
 | [`hyperlink/tag-defaults.ts`](./hyperlink/tag-defaults.ts) | Tag defaults |
 | [`hyperlink/shared-spec-wire.ts`](./hyperlink/shared-spec-wire.ts) | Shared Spec wire |
 | [`hyperlink/counter-layer.ts`](./hyperlink/counter-layer.ts) | Counter Tag + `Hyperlink.layer` |
