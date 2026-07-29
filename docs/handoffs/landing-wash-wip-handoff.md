@@ -4,7 +4,7 @@
 **Date:** 2026-07-29  
 **Worktree:** `/Users/nikolasstow/Coding/Hyperlink/worktrees/epsilon`  
 **Branch:** `cursor/docs-site-edge-cache-dbdc`  
-**Tip:** `941962609` — `wip(docs-site): restore almost-perfect html wash; no-repeat only`  
+**Tip:** `06905bbf7` (handoff commit) · wash restore at `941962609`  
 **Do not deploy** without owner approval (standing rule; landing WIP was Tailscale-only).
 
 ---
