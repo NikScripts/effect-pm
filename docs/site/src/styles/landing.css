@@ -1,7 +1,8 @@
 /**
  * Coming-soon brand lockup (WIP). Inlined on `/` so paint never depends on /assets.
  *
- * Wash on `html` (root canvas). Locked `height: 100dvh; overflow: hidden`.
+ * Wash on `html` (root canvas). Paint box locked to `100lvh` (full screen);
+ * content stage (`.landing`) locked to `100dvh`. `overflow: hidden` throughout.
  * Opaque gradient stops (canvas, not transparent). `background-repeat: no-repeat`
  * only — never `background-size: %` (collapses the wash on iOS).
  */
@@ -71,7 +72,12 @@
    transparent fades compositing to black in the chrome/overscroll bands. */
 html {
   -webkit-text-size-adjust: 100%;
+  /* Paint box = LARGE viewport: the wash and the clip boundary must cover the
+     full screen (toolbar-collapsed height), not the dynamic 100dvh line —
+     otherwise the bottom band behind Safari's bar shows flat canvas and clips
+     the orb on a hard edge. Content stage (.landing) stays 100dvh. */
   height: 100dvh;
+  height: 100lvh;
   overflow: hidden;
   background-color: var(--landing-canvas);
   /* Offset lives in the gradient `at` coords — never in background-position/size
@@ -86,7 +92,10 @@ html {
 body {
   margin: 0;
   padding: 0;
+  /* Match html: body overflow:hidden clips descendants (incl. the orb) at its
+     own box — that box must reach the full screen, not the 100dvh line. */
   height: 100dvh;
+  height: 100lvh;
   overflow: hidden;
   color: var(--landing-fg);
   font-family: var(--landing-sans);
