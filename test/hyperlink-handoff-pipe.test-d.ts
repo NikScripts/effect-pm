@@ -14,11 +14,11 @@ class N1 extends Node.Tag<N1>()("handoff-pipe/n1") {}
 
 class Jobs extends Hyperlink.Tag<Jobs>()("handoff-pipe/Jobs", spec, {
   node: N1,
-}).pipe(Hyperlink.withHandoff("drain-only")) {}
+}).pipe(Hyperlink.withHandoff("drainOnly")) {}
 
 class Released extends Hyperlink.Tag<Released>()("handoff-pipe/Released", spec, {
   node: N1,
-}).pipe(Hyperlink.withHandoff("workPool-release")) {}
+}).pipe(Hyperlink.withHandoff("workPoolRelease")) {}
 
 const _drain: Hyperlink.HandoffStrategy | undefined = Hyperlink.handoffOf(Jobs);
 const _release: Hyperlink.HandoffStrategy | undefined = Hyperlink.handoffOf(Released);

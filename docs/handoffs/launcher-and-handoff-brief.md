@@ -133,11 +133,12 @@
     - **`Node.shutdown(node)`** — drain → opted-in handoffs (#33) → Advice clear → Directory unregister → listen exit.
     - **`Node.launch(node, layer)`** — prefer over bare `Layer.launch`; races the shutdown latch (no `process.exit`).
     - Per-service handoff (#33 Eng'd) runs between drain and leave; peer enqueue transfer still #34.
-33. **Layer shape = opt-in handoff config on the HyperService (serve / tag layer), not ListenOptions** (owner lock 2026-07-29; **Eng'd**).
+33. **Layer shape = opt-in handoff config on the HyperService (serve / tag layer), not ListenOptions** (owner lock 2026-07-29; **Eng'd**; style amend 2026-07-29).
     - Keep `ListenOptions` for A/B (`assumeToken`, `onConflict`, `onYield`).
-    - **`Hyperlink.withHandoff("drain-only" | "workPool-release")`** — pipe on the tag (same shape as `withReadiness`); default off (#29).
+    - **`Hyperlink.withHandoff("drainOnly" | "workPoolRelease")`** — pipe on the tag (same shape as `withReadiness`); default off (#29).
+    - camelCase option strings (like `OnConflict` / `shutdownMode`); PascalCase reserved for `_tag` discriminants.
     - Runs during `Node.shutdown` after drain, before Lookup leave. Non-WorkPool kinds log + no-op.
-    - `"workPool-release"` = local release half only; peer `enqueue` = #34.
+    - `"workPoolRelease"` = local release half only; peer `enqueue` = #34.
 
 Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.md) remain **reference only** unless re-locked here.
 

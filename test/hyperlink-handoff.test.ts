@@ -14,7 +14,7 @@ import { describe, expect, it } from "@effect/vitest";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Lookup from "../src/Lookup";
 import * as Node from "../src/Node";
-import { makeHandoffRun } from "../src/internal/hyperlinkHandoff";
+import { makeHyperlinkHandoffRun } from "../src/internal/hyperlinkHandoff";
 import { buildNodeStatusImpl } from "../src/internal/nodeStatus";
 
 class Bare extends Hyperlink.Tag<Bare>()("handoff/Bare", {
@@ -27,7 +27,7 @@ class DrainJobs extends Hyperlink.Tag<DrainJobs>()(
     ping: Hyperlink.effect(Schema.String),
   },
   { kind: "hyperlink-ts/WorkPool" },
-).pipe(Hyperlink.withHandoff("drain-only")) {}
+).pipe(Hyperlink.withHandoff("drainOnly")) {}
 
 class ReleaseJobs extends Hyperlink.Tag<ReleaseJobs>()(
   "handoff/ReleaseJobs",
@@ -35,7 +35,7 @@ class ReleaseJobs extends Hyperlink.Tag<ReleaseJobs>()(
     ping: Hyperlink.effect(Schema.String),
   },
   { kind: "hyperlink-ts/WorkPool" },
-).pipe(Hyperlink.withHandoff("workPool-release")) {}
+).pipe(Hyperlink.withHandoff("workPoolRelease")) {}
 
 const tmpSock = (label: string) =>
   Effect.gen(function* () {
@@ -46,20 +46,20 @@ const tmpSock = (label: string) =>
 describe("Hyperlink.withHandoff", () => {
   it("defaults off and stamps strategies", () => {
     expect(Hyperlink.handoffOf(Bare)).toBeUndefined();
-    expect(Hyperlink.handoffOf(DrainJobs)).toBe("drain-only");
-    expect(Hyperlink.handoffOf(ReleaseJobs)).toBe("workPool-release");
+    expect(Hyperlink.handoffOf(DrainJobs)).toBe("drainOnly");
+    expect(Hyperlink.handoffOf(ReleaseJobs)).toBe("workPoolRelease");
   });
 
   it("data-first withHandoff stamps the tag", () => {
-    const stamped = Hyperlink.withHandoff(Bare, "drain-only");
-    expect(Hyperlink.handoffOf(stamped)).toBe("drain-only");
+    const stamped = Hyperlink.withHandoff(Bare, "drainOnly");
+    expect(Hyperlink.handoffOf(stamped)).toBe("drainOnly");
   });
 
-  it.effect("drain-only shuts down WorkPool-shaped impls", () =>
+  it.effect("drainOnly shuts down WorkPool-shaped impls", () =>
     Effect.gen(function* () {
       const events = yield* Ref.make<Array<string>>([]);
       const phase = yield* Ref.make("running");
-      yield* makeHandoffRun("drain-only", "hyperlink-ts/WorkPool", {
+      yield* makeHyperlinkHandoffRun("drainOnly", "hyperlink-ts/WorkPool", {
         shutdown: Effect.gen(function* () {
           yield* Ref.update(events, (a) => [...a, "shutdown"]);
           yield* Ref.set(phase, "off");
@@ -73,11 +73,11 @@ describe("Hyperlink.withHandoff", () => {
     }),
   );
 
-  it.effect("workPool-release releases then shuts down", () =>
+  it.effect("workPoolRelease releases then shuts down", () =>
     Effect.gen(function* () {
       const events = yield* Ref.make<Array<string>>([]);
       const phase = yield* Ref.make("running");
-      yield* makeHandoffRun("workPool-release", "hyperlink-ts/WorkPool", {
+      yield* makeHyperlinkHandoffRun("workPoolRelease", "hyperlink-ts/WorkPool", {
         releaseEncoded: () =>
           Effect.gen(function* () {
             yield* Ref.update(events, (a) => [...a, "releaseEncoded"]);
@@ -98,7 +98,7 @@ describe("Hyperlink.withHandoff", () => {
   it.effect("non-WorkPool kinds no-op", () =>
     Effect.gen(function* () {
       const events = yield* Ref.make<Array<string>>([]);
-      yield* makeHandoffRun("drain-only", "hyperlink", {
+      yield* makeHyperlinkHandoffRun("drainOnly", "hyperlink", {
         shutdown: Ref.update(events, (a) => [...a, "shutdown"]),
       });
       expect(yield* Ref.get(events)).toEqual([]);
@@ -120,7 +120,7 @@ describe("Hyperlink.withHandoff", () => {
     }),
   );
 
-  it.live("Node.shutdown invokes served drain-only handoff", () =>
+  it.live("Node.shutdown invokes served drainOnly handoff", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("lookup");
       const workerPath = yield* tmpSock("worker");
@@ -137,7 +137,7 @@ describe("Hyperlink.withHandoff", () => {
           status: Hyperlink.ref(Schema.Struct({ phase: Schema.String })),
         },
         { kind: "hyperlink-ts/WorkPool" },
-      ).pipe(Hyperlink.withHandoff("drain-only")) {}
+      ).pipe(Hyperlink.withHandoff("drainOnly")) {}
 
       class Worker extends Node.Tag<Worker, Queue>()("handoff/Worker", {
         path: workerPath,

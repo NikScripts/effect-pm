@@ -96,9 +96,9 @@ Membership Lookup Identity/Directory/Advice   who wins / where clients dial
   (`Hyperlink.withHandoff`) → Advice clear → Directory unregister → listen exit.
   Prefer `Node.launch(node, listenLayer)` over bare `Layer.launch` so shutdown ends the
   process (no `process.exit`).
-- **Per-service handoff (opt-in, default off):** pipe `Hyperlink.withHandoff("drain-only" |
-  "workPool-release")` on the HyperService tag (not `ListenOptions`). Absent stamp ⇒ not
-  migrated. WorkPool-shaped: `drain-only` shuts the queue down; `workPool-release` does
+- **Per-service handoff (opt-in, default off):** pipe `Hyperlink.withHandoff("drainOnly" |
+  "workPoolRelease")` on the HyperService tag (not `ListenOptions`). Absent stamp ⇒ not
+  migrated. WorkPool-shaped: `drainOnly` shuts the queue down; `workPoolRelease` does
   local `release`/`releaseEncoded` then shutdown (peer enqueue still deferred).
 - **Membership push / peers:** directory-mode `Hyperlink.peersLayer` **hot-rebinds** on
   `Directory.changes` (dial move / join / leave). Escape hatch: `Lookup.changes` /

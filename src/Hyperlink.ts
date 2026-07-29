@@ -126,14 +126,20 @@ import {
 } from "./internal/nodeConnect";
 import { adaptPromiseHandle } from "./internal/promiseHandle";
 import {
-  makeHandoffRun,
-  type HandoffStrategy,
+  makeHyperlinkHandoffRun,
+  type HyperlinkHandoffStrategy,
 } from "./internal/hyperlinkHandoff";
 // Node listen/connect used only inside functions via dynamic import where needed;
 // clientLayerForEndpoint uses clientLayer auto-connect for dialable endpoints.
 
-/** Opt-in cutover strategy for {@link withHandoff} (Locked #33). @public */
-export type { HandoffStrategy };
+/**
+ * Opt-in cutover strategy for {@link withHandoff} (Locked #33).
+ * camelCase option strings — same family as {@link Node.OnConflict} / WorkPool `shutdownMode`
+ * (PascalCase is reserved for `_tag` discriminants).
+ *
+ * @public
+ */
+export type HandoffStrategy = HyperlinkHandoffStrategy;
 
 // ── typed errors (Data.TaggedError — never raw `Error`) ──
 
@@ -3165,13 +3171,13 @@ export const withReadiness: {
  *
  * ```ts
  * class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", { payload: Item }).pipe(
- *   Hyperlink.withHandoff("drain-only"),
+ *   Hyperlink.withHandoff("drainOnly"),
  * ) {}
  * ```
  *
  * Strategies:
- * - `"drain-only"` — WorkPool `shutdown` + wait `phase === "off"`
- * - `"workPool-release"` — local `releaseEncoded`/`release` then shutdown (peer enqueue = #34)
+ * - `"drainOnly"` — WorkPool `shutdown` + wait `phase === "off"`
+ * - `"workPoolRelease"` — local `releaseEncoded`/`release` then shutdown (peer enqueue = #34)
  *
  * Run during {@link Node.shutdown} after drain and before Lookup leave. Non-WorkPool kinds log and no-op.
  *
@@ -3191,6 +3197,7 @@ export const withHandoff: {
 } = Fn.dual(
   2,
   <T extends HyperlinkTag<any, any, any>>(tag: T, strategy: HandoffStrategy): T =>
+    // SAFE: same stamp pattern as withReadiness — Object.assign mutates the tag identity; T is preserved.
     Object.assign(tag, { [handoffSym]: strategy }) as T,
 );
 
@@ -3201,14 +3208,9 @@ export const withHandoff: {
  * @public
  */
 export const handoffOf = (tag: unknown): HandoffStrategy | undefined => {
-  if (
-    (typeof tag === "object" || typeof tag === "function") &&
-    tag !== null &&
-    handoffSym in tag
-  ) {
-    const value = (tag as { readonly [handoffSym]?: HandoffStrategy })[handoffSym];
-    if (value === "drain-only" || value === "workPool-release") return value;
-  }
+  if (!Predicate.hasProperty(tag, handoffSym)) return undefined;
+  const value = tag[handoffSym];
+  if (value === "drainOnly" || value === "workPoolRelease") return value;
   return undefined;
 };
 
@@ -3226,8 +3228,32 @@ const servedHandoff = (
   if (strategy === undefined) return undefined;
   return {
     strategy,
-    run: makeHandoffRun(strategy, kindOf(tag), wireImpl),
+    run: makeHyperlinkHandoffRun(strategy, kindOf(tag), wireImpl),
   };
+};
+
+/**
+ * Solo {@link ServedHyperlink}.handoff runs plus any opted-in shared-Spec instance handoffs
+ * for the same wire keys (shared stamps are kept on {@link SharedWireState}, not the registry row).
+ *
+ * @internal
+ */
+export const collectServedHandoffRuns = (
+  entries: ReadonlyArray<ServedHyperlink>,
+): ReadonlyArray<Effect.Effect<void>> => {
+  const fromEntries = entries.flatMap((entry) =>
+    entry.handoff === undefined ? [] : [entry.handoff.run],
+  );
+  const seen = new Set<string>();
+  const fromShared: Array<Effect.Effect<void>> = [];
+  for (const entry of entries) {
+    if (seen.has(entry.wireKey)) continue;
+    seen.add(entry.wireKey);
+    const state = sharedWireStates.get(entry.wireKey);
+    if (state === undefined) continue;
+    for (const run of state.handoffs) fromShared.push(run);
+  }
+  return [...fromEntries, ...fromShared];
 };
 
 /**
@@ -4297,18 +4323,7 @@ const getOrCreateSharedHandlerLayer = (
               kind,
               contractHash: hashContract(wireKey, kind, spec),
               readiness: Effect.suspend(() => allReady(state.readiness)),
-              // Shared instances may stamp different strategies; `run` aggregates every
-              // opted-in instance handoff (no-op when none opted in).
-              handoff: {
-                run: Effect.suspend(() =>
-                  state.handoffs.length === 0
-                    ? Effect.void
-                    : Effect.forEach(state.handoffs, (run) => run, {
-                        discard: true,
-                        concurrency: "unbounded",
-                      }),
-                ),
-              },
+              // Shared instance handoffs live on SharedWireState — see {@link collectServedHandoffRuns}.
               ...(bound !== undefined ? { nodeLogKey: bound.key } : {}),
               ...(boundKinds.length > 0 ? { nodeKinds: boundKinds } : {}),
             });

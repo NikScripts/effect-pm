@@ -166,9 +166,7 @@ const httpServerBase = (
       const { signal: signalListenExit } = yield* Effect.promise(
         () => import("./nodeListenExit"),
       );
-      const handoffRuns = entries.flatMap((entry) =>
-        entry.handoff === undefined ? [] : [entry.handoff.run],
-      );
+      const handoffRuns = Hyperlink.collectServedHandoffRuns(entries);
       const nodeEntry = nodeStatusServeEntry({
         startedAt,
         serviceCount: entries.length,
