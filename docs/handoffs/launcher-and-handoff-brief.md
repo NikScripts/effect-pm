@@ -130,7 +130,7 @@
     - Lookup `livenessReplace` / `askIncumbent` cannot steal a reachable draining incumbent.
 32. **Old-node shutdown = Node control-plane sequence after migrate; compose B unregister + Advice clear** (owner lock 2026-07-29; **Eng'd**).
     - **Not** `Launcher.kill`. **Not** Lookup-owned process kill. **Module home = `Node`**.
-    - **`Node.shutdown(node)`** — drain → Advice clear (served keys) → Directory unregister → signal listen exit.
+    - **`Node.shutdown(node)`** — drain → opted-in handoffs (#33) → Advice clear → Directory unregister → listen exit.
     - **`Node.launch(node, layer)`** — prefer over bare `Layer.launch`; races the shutdown latch (no `process.exit`).
     - Per-service handoff (#33 Eng'd) runs between drain and leave; peer enqueue transfer still #34.
 33. **Layer shape = opt-in handoff config on the HyperService (serve / tag layer), not ListenOptions** (owner lock 2026-07-29; **Eng'd**).

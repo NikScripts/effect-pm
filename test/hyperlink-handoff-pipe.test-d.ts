@@ -20,7 +20,7 @@ class Released extends Hyperlink.Tag<Released>()("handoff-pipe/Released", spec, 
   node: N1,
 }).pipe(Hyperlink.withHandoff("workPool-release")) {}
 
-const _drain: "drain-only" | undefined = Hyperlink.handoffOf(Jobs);
-const _release: "workPool-release" | undefined = Hyperlink.handoffOf(Released);
+const _drain: Hyperlink.HandoffStrategy | undefined = Hyperlink.handoffOf(Jobs);
+const _release: Hyperlink.HandoffStrategy | undefined = Hyperlink.handoffOf(Released);
 
 void [_drain, _release, Jobs, Released];

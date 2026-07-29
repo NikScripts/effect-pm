@@ -153,7 +153,7 @@ describe("Hyperlink.withHandoff", () => {
               yield* Ref.update(events, (a) => [...a, "shutdown"]);
               yield* SubscriptionRef.set(status, { phase: "off" });
             }),
-            status,
+            status: Hyperlink.subscribable(status),
           }),
         ]).pipe(Layer.provide(Lookup.client(lookupNode))),
       );

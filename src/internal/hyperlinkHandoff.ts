@@ -23,15 +23,13 @@ type WorkPoolHandle = {
   }) => Effect.Effect<unknown>;
   readonly releaseEncoded?: (input: {
     readonly options?: unknown;
-  }) => Effect.Effect<unknown, unknown>;
+  }) => Effect.Effect<unknown>;
   readonly status?: {
     readonly get: Effect.Effect<{ readonly phase: string }>;
   };
 };
 
-const awaitQueueOff = (
-  handle: WorkPoolHandle,
-): Effect.Effect<void> => {
+const awaitQueueOff = (handle: WorkPoolHandle): Effect.Effect<void> => {
   if (handle.status === undefined) return Effect.void;
   return Effect.repeat(handle.status.get, {
     until: (snap) => snap.phase === "off",
@@ -42,6 +40,11 @@ const awaitQueueOff = (
     Effect.asVoid,
   );
 };
+
+const runRelease = (
+  release: (input: { readonly options?: unknown }) => Effect.Effect<unknown>,
+): Effect.Effect<boolean> =>
+  Effect.map(Effect.exit(release({ options: {} })), Exit.isSuccess);
 
 /**
  * Build the Effect run for one served HyperService's handoff strategy.
@@ -80,14 +83,12 @@ export const makeHandoffRun = (
   return Effect.gen(function* () {
     // Local half of transfer: export pending off the source queue (peer enqueue = #34).
     if (handle.releaseEncoded !== undefined) {
-      const encoded = yield* Effect.exit(
-        handle.releaseEncoded({ options: {} }),
-      );
-      if (Exit.isFailure(encoded) && handle.release !== undefined) {
-        yield* handle.release({ options: {} }).pipe(Effect.asVoid);
+      const ok = yield* runRelease(handle.releaseEncoded);
+      if (!ok && handle.release !== undefined) {
+        yield* runRelease(handle.release);
       }
     } else if (handle.release !== undefined) {
-      yield* handle.release({ options: {} }).pipe(Effect.asVoid);
+      yield* runRelease(handle.release);
     } else {
       yield* Effect.logWarning("handoff workPool-release: no release on impl");
     }
