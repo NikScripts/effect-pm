@@ -13,7 +13,12 @@
  * docker compose -f docker-compose.redis.yml up -d
  * REDIS_URL=redis://127.0.0.1:6379 pnpm exec tsx examples/forms/hyperlink/gate-rate-limit-fleet.ts
  * ```
+ *
+ * Docs: `docs/examples/hyperlink/gate-rate-limit-fleet.md` includes this file;
+ * cut markers hide the module header and demo harness.
  */
+
+// ---cut---
 import * as NodeRedis from "@effect/platform-node/NodeRedis";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -121,5 +126,6 @@ const main = Effect.gen(function* () {
   );
   yield* program(useRedis, endpoint);
 }).pipe(Effect.provide(NodeServices.layer));
+// ---cut-after---
 
 NodeRuntime.runMain(main);

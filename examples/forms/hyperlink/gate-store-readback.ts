@@ -8,12 +8,17 @@
  * {@link Store.layerDefaultMemory} when you have no custom aggregate store).
  *
  * Run: `pnpm run example:gate-store-readback`
+ *
+ * Docs: `docs/examples/hyperlink/gate-store-readback.md` includes this file;
+ * cut markers hide the module header and demo harness.
  */
 
+import { runNodeProgramWithLayer } from "../../shared/demo-harness";
+
+// ---cut---
 import { Effect, Layer, Schema } from "effect";
 import * as Gate from "../../../src/Gate";
 import * as Store from "../../../src/Store";
-import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 
 class PriceGate extends Gate.Service<PriceGate>()("examples/PriceGate", {
   payload: Schema.Number,
@@ -55,5 +60,6 @@ const program = Effect.gen(function* () {
   );
   yield* Effect.log("");
 });
+// ---cut-after---
 
 runNodeProgramWithLayer(program, live, "form:gate-store-readback finished OK");

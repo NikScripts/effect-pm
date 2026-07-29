@@ -7,12 +7,17 @@
  * A down peer is `Unreachable`, not a silent omit.
  *
  * Run: `pnpm run example:fleet-health-glass`
+ *
+ * Docs: `docs/examples/hyperlink/fleet-health-glass.md` includes this file;
+ * cut markers hide the module header and demo harness.
  */
 
+import { runNodeProgramWithLayer } from "../../shared/demo-harness";
+
+// ---cut---
 import { Effect, Layer } from "effect";
 import * as FleetHealth from "../../../src/FleetHealth";
 import * as Hyperlink from "../../../src/Hyperlink";
-import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import * as Node from "../../../src/Node";
 
 class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
@@ -83,6 +88,7 @@ const program = Effect.gen(function* () {
   yield* Effect.log("Caption: readiness is local · FleetHealth folds · Exit → Unreachable");
   yield* Effect.log("");
 });
+// ---cut-after---
 
 runNodeProgramWithLayer(
   program,

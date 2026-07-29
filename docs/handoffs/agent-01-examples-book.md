@@ -54,7 +54,8 @@ Guides keep **inline** fences for minimal deltas. The examples book prefers **in
 | **E0** | Model + B ask (content glob + exclude example docs from “More”) | **done** |
 | **E1** | Hub + nav + forms/queue (2) | **done** (now `include=` SSOT) |
 | **E1b** | Include pipeline + daemon-store (2) | **done** (Agent 4) |
-| **E2** | forms/hyperlink | next — convert with `include=` + cuts |
+| **E2** | forms/hyperlink — 9 scripted forms (Gate / HttpApi / Telemetry / FleetHealth / ShardMap) | **done** (Agent 4) |
+| **E2b** | remaining forms/hyperlink (node-listen, launcher, wire, …) | next |
 | **E3** | forms/schedule + polling + store + dynamic-config | |
 | **E4** | scenarios / serve-per-hyperlink / remaining root scripts | |
 | **E5** | Large apps — owner call | |

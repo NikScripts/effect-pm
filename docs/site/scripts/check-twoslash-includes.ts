@@ -14,6 +14,15 @@ const pages = [
   "examples/queue/workpool-priority-lanes.md",
   "examples/daemon-store/daemon-layer-store-auto-write.md",
   "examples/daemon-store/daemon-layer-typed-error-store.md",
+  "examples/hyperlink/gate-unit-and-input.md",
+  "examples/hyperlink/gate-rate-limit-fleet.md",
+  "examples/hyperlink/gate-store-readback.md",
+  "examples/hyperlink/http-client-gate.md",
+  "examples/hyperlink/gate-http-api-client.md",
+  "examples/hyperlink/gate-http-api-layer-effect.md",
+  "examples/hyperlink/telemetry-fleet-glass.md",
+  "examples/hyperlink/fleet-health-glass.md",
+  "examples/hyperlink/shardmap-sessions.md",
 ];
 const fenceRe = /\{\.twoslash([^}]*)\}\s*\n```\s*ts\n([\s\S]*?)```/g;
 

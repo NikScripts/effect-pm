@@ -7,12 +7,17 @@
  * fleet folds report shard sizes.
  *
  * Run: `pnpm run example:shardmap-sessions`
+ *
+ * Docs: `docs/examples/hyperlink/shardmap-sessions.md` includes this file;
+ * cut markers hide the module header and demo harness.
  */
 
+import { runNodeProgramWithLayer } from "../../shared/demo-harness";
+
+// ---cut---
 import { Effect, Layer, Option, Schema } from "effect";
 import * as Hyperlink from "../../../src/Hyperlink";
 import * as ShardMap from "../../../src/ShardMap";
-import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import * as Node from "../../../src/Node";
 
 class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
@@ -122,6 +127,7 @@ const program = Effect.gen(function* () {
   yield* Effect.log("Caption: one map · the key finds its droplet");
   yield* Effect.log("");
 });
+// ---cut-after---
 
 runNodeProgramWithLayer(
   program,

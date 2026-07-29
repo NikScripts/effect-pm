@@ -2,11 +2,16 @@
  * @module examples/forms/hyperlink/gate-unit-and-input
  *
  * Gate unit + input forms. Run: `pnpm run example:gate`
+ *
+ * Docs: `docs/examples/hyperlink/gate-unit-and-input.md` includes this file;
+ * cut markers hide the module header and demo harness.
  */
 
+import { runNodeProgramWithLayer } from "../../shared/demo-harness";
+
+// ---cut---
 import { Clock, Duration, Effect, Layer, Schema } from "effect";
 import { Gate } from "../../../src";
-import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 
 class TimedWorkGate extends Gate.Service<TimedWorkGate>()("examples/TimedWorkGate", {
   payload: Schema.Void,
@@ -70,5 +75,6 @@ const program = Effect.gen(function* () {
 });
 
 const mainLayer = Layer.mergeAll(TimedWorkGate.layer, DoubleGate.layer);
+// ---cut-after---
 
 runNodeProgramWithLayer(program, mainLayer, "form:gate-unit-and-input finished OK");

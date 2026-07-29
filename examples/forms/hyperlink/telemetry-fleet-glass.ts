@@ -7,12 +7,17 @@
  * Node ids are Context service keys (`app/Droplet…`).
  *
  * Run: `pnpm run example:telemetry-fleet-glass`
+ *
+ * Docs: `docs/examples/hyperlink/telemetry-fleet-glass.md` includes this file;
+ * cut markers hide the module header and demo harness.
  */
 
+import { runNodeProgramWithLayer } from "../../shared/demo-harness";
+
+// ---cut---
 import { Effect, Layer, Metric, Stream } from "effect";
 import * as Hyperlink from "../../../src/Hyperlink";
 import * as Telemetry from "../../../src/Telemetry";
-import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import * as Node from "../../../src/Node";
 
 // ── Nodes = Context service keys (machines) ───────────────────────────────────
@@ -94,6 +99,7 @@ const program = Effect.gen(function* () {
   );
   yield* Effect.log("");
 });
+// ---cut-after---
 
 runNodeProgramWithLayer(
   program,

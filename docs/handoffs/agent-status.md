@@ -6,7 +6,7 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **4** | `cursor/hyperservice-open-deps-5679` | [legacy docs](./legacy-docs-migration.md) · [examples book](./agent-01-examples-book.md) | **Eng** — examples `include=` SSOT + daemon-store pairs | work branch | check-twoslash on pairs | IA lock still owner-open; E2 hyperlink next | 2026-07-29 |
+| **4** | `cursor/hyperservice-open-deps-5679` | [legacy docs](./legacy-docs-migration.md) · [examples book](./agent-01-examples-book.md) | **Eng** — E2 hyperlink `include=` pairs (9) | work branch | check-twoslash-includes | IA lock owner-open; E2b node-listen forms next | 2026-07-29 |
 | **G / TUI** | `cursor/view-withsize-types-125f` | TUI ↔ web Dashboard Group parity · **View compose** · `ui.data` | **tip-synced** — compose `data` door + shared RuntimeProvider | same tip as `integration` | typecheck 0; view suites + data 18/18 | Hold kit Dashboard | 2026-07-28 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **5**, **G** | 2026-07-26 |
 | **5** | `cursor/launcher-handoff-design-929b` | [launcher + handoff brief](./launcher-and-handoff-brief.md) · [rename](./rename-hyperlink-handoff.md) | **Launcher refinements** — Config/`command`/metrics | same tip as `integration` | typecheck + launcher suites | Owner: lock C #27–36 | 2026-07-28 |

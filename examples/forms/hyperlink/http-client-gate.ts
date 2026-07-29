@@ -2,8 +2,14 @@
  * @module examples/forms/hyperlink/http-client-gate
  *
  * HttpClientGate on a fetch client. Run: `pnpm run example:http-client-gate`
+ *
+ * Docs: `docs/examples/hyperlink/http-client-gate.md` includes this file;
+ * cut markers hide the module header and demo harness.
  */
 
+import { runNodeProgramWithLayer } from "../../shared/demo-harness";
+
+// ---cut---
 import {
   FetchHttpClient,
   HttpClient,
@@ -11,7 +17,6 @@ import {
 } from "effect/unstable/http";
 import { Clock, Effect, Layer } from "effect";
 import { HttpClientGate, Gate } from "../../../src";
-import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 
 const DemoHttpRunner = Gate.makeRunner({
   name: "examples/DemoHttpRunner",
@@ -41,5 +46,6 @@ const program = Effect.gen(function* () {
 });
 
 const mainLayer = Layer.mergeAll(DemoHttpRunner.layer, FetchHttpClient.layer);
+// ---cut-after---
 
 runNodeProgramWithLayer(program, mainLayer, "form:http-client-gate finished OK");

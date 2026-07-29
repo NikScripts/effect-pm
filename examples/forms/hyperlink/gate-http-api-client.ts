@@ -3,13 +3,18 @@
  *
  * Gate.HttpApiClient Tag + nest metrics (usage absorbed; no sibling ApiMetrics).
  * Run: `pnpm run example:gate-http-api-client`
+ *
+ * Docs: `docs/examples/hyperlink/gate-http-api-client.md` includes this file;
+ * cut markers hide the module header and demo harness.
  */
 
+import { runNodeProgramOrExit } from "../../shared/demo-harness";
+
+// ---cut---
 import { FetchHttpClient } from "effect/unstable/http";
 import { Effect, Layer, Schema } from "effect";
 import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi";
 import * as Gate from "../../../src/Gate";
-import { runNodeProgramOrExit } from "../../shared/demo-harness";
 
 const DemoClientId = "examples/jsonplaceholder/DemoApiClient" as const;
 
@@ -47,6 +52,7 @@ const program = Effect.gen(function* () {
   yield* Effect.log(`post ${post.id}: ${post.title}`);
   yield* Effect.log(`usage requests=${snap.requestsTotal} inFlight=${snap.inFlight}`);
 });
+// ---cut-after---
 
 runNodeProgramOrExit(
   program.pipe(

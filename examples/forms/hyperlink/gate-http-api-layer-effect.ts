@@ -2,8 +2,14 @@
  * @module examples/forms/hyperlink/gate-http-api-layer-effect
  *
  * Gate.httpApiClientLayer on an existing client Layer. Run: `pnpm run example:gate-http-api-layer-effect`
+ *
+ * Docs: `docs/examples/hyperlink/gate-http-api-layer-effect.md` includes this file;
+ * cut markers hide the module header and demo harness.
  */
 
+import { runNodeProgramWithLayer } from "../../shared/demo-harness";
+
+// ---cut---
 import { Context, Effect, Layer, Ref, Schema } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import type { HttpClientError } from "effect/unstable/http";
@@ -14,7 +20,6 @@ import {
   HttpApiGroup,
 } from "effect/unstable/httpapi";
 import { acceptJson, Gate } from "../../../src";
-import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 
 const Post = Schema.Struct({
   userId: Schema.Number,
@@ -148,5 +153,6 @@ const mainLayer = Layer.provideMerge(
   Layer.provide(DemoApiClient.resourceLayerCapture, Layer.succeed(HttpClient.HttpClient, fakeHttpClient)),
   DecodeCaptureLive,
 );
+// ---cut-after---
 
 runNodeProgramWithLayer(program, mainLayer, "form:gate-http-api-layer-effect finished OK");

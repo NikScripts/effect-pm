@@ -46,7 +46,53 @@ Run: `pnpm run example:daemon-layer-typed-error-store`
 
 ## Hyperlink
 
-Coming next (forms/hyperlink — Gate, HttpApi, Telemetry, FleetHealth, ShardMap).
+### [Gate — unit + input](/docs/gate-unit-and-input)
+
+Source: `examples/forms/hyperlink/gate-unit-and-input.ts`  
+Run: `pnpm run example:gate`
+
+### [Gate — fleet rate limit](/docs/gate-rate-limit-fleet)
+
+Source: `examples/forms/hyperlink/gate-rate-limit-fleet.ts`  
+Run: `pnpm run example:gate-rate-limit-fleet`
+
+### [Gate — store readback](/docs/gate-store-readback)
+
+Source: `examples/forms/hyperlink/gate-store-readback.ts`  
+Run: `pnpm run example:gate-store-readback`
+
+### [HttpClientGate](/docs/http-client-gate)
+
+Source: `examples/forms/hyperlink/http-client-gate.ts`  
+Run: `pnpm run example:http-client-gate`
+
+### [Gate.HttpApiClient](/docs/gate-http-api-client)
+
+Source: `examples/forms/hyperlink/gate-http-api-client.ts`  
+Run: `pnpm run example:gate-http-api-client`
+
+### [Gate.httpApiClientLayer + capture](/docs/gate-http-api-layer-effect)
+
+Source: `examples/forms/hyperlink/gate-http-api-layer-effect.ts`  
+Run: `pnpm run example:gate-http-api-layer-effect`
+
+### [Telemetry — fleet glass](/docs/telemetry-fleet-glass)
+
+Source: `examples/forms/hyperlink/telemetry-fleet-glass.ts`  
+Run: `pnpm run example:telemetry-fleet-glass`
+
+### [FleetHealth — fleet glass](/docs/fleet-health-glass)
+
+Source: `examples/forms/hyperlink/fleet-health-glass.ts`  
+Run: `pnpm run example:fleet-health-glass`
+
+### [ShardMap — sessions](/docs/shardmap-sessions)
+
+Source: `examples/forms/hyperlink/shardmap-sessions.ts`  
+Run: `pnpm run example:shardmap-sessions`
+
+Remaining node-listen / launcher / wire forms under `examples/forms/hyperlink/` —
+pair next (E2b).
 
 ---
 
