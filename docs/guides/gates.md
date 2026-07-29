@@ -154,7 +154,7 @@ warn; not fail-loud in v1).
 `test/rate-limit-redis.test.ts` (Gate + WorkPool + child-process peer) and
 `test/effect-redis-stores.test.ts` (`Persistence.layerRedis` /
 `PersistedQueue.layerStoreRedis`). Runnable form auto-detects Redis:
-`pnpm exec tsx examples/gate-rate-limit-fleet.ts`.
+`pnpm exec tsx examples/gate/rate-limit-fleet.ts`.
 
 ## Reconfiguring (layer patches)
 

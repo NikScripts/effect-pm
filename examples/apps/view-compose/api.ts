@@ -1,5 +1,5 @@
 /**
- * @module examples/view-compose-proto/api
+ * @module examples/apps/view-compose/api
  *
  * **API prototype** (not Eng’d) — React utilities composition surface.
  * Steal from shipped `View` / W9–W21 / Dashboard; invent only where noted.

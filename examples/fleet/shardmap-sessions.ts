@@ -6,7 +6,7 @@
  * {@link ShardMap} routes get/put to the owning node via peers; leaf ops stay local;
  * fleet folds report shard sizes.
  *
- * Run: `pnpm run example:shardmap-sessions`
+ * Run: `pnpm run example:fleet-shardmap-sessions`
  *
  * Docs: `docs/examples/fleet/shardmap-sessions.md` includes this file;
  * cut markers hide the module header and demo harness.

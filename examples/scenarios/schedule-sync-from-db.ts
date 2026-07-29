@@ -1,7 +1,7 @@
 /**
- * @module examples/scenarios/schedule-sync-from-external-db
+ * @module examples/scenarios/schedule-sync-from-db
  *
- * DB rows → Daemon schedule entries, synced at startup and each tick. Run: `pnpm run example:schedule-control-db-sync`
+ * DB rows → Daemon schedule entries, synced at startup and each tick. Run: `pnpm run example:scenario-schedule-sync-db`
  *
  * Docs: `docs/examples/scenarios/schedule-sync-from-db.md` includes this file;
  * cut markers hide the module header and runner epilogue.
@@ -69,5 +69,5 @@ const program = Effect.gen(function* () {
 runNodeProgramWithLayer(
   program,
   TestClock.layer(),
-  "scenario:schedule-sync-from-external-db finished",
+  "scenario:schedule-sync-from-db finished",
 );

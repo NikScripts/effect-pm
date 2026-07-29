@@ -5,7 +5,7 @@
  * views (`status`, `waiting`, `completed`, …). `Service.layer` already merges the
  * default store bridge — no extra `Store.layerDefaultMemory` is required here.
  *
- * Run: `npx tsx examples/gate-runtime-observer.ts`
+ * Run: `pnpm run example:gate-runtime-observer`
  *
  * Docs: `docs/examples/gate/runtime-observer.md` includes this file;
  * cut markers hide the module header and runner epilogue.

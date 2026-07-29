@@ -188,5 +188,5 @@ const live = ShardMap.serve(Sessions, {
 **fixed** fleet. Membership change remaps keys; treat that as intentional. Unreachable owner →
 `get` is `none`, `put` returns `false` — miss beats silent wrong answer.
 
-Runnable form: `pnpm run example:shardmap-sessions`. See also
+Runnable form: `pnpm run example:fleet-shardmap-sessions`. See also
 [Fleets & Peers](/docs/fleets-and-peers).

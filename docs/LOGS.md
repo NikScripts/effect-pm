@@ -247,7 +247,7 @@ LogEntry.atLeaf(serviceKey)(entry);             // last segment
 
 Lineage JSON uses annotation key `LogAnnotationKeys.lineage`. Hyperlink kind is `Hyperlink.kindOf(tag)` — there are no `processId` / `queueId` log annotations.
 
-## Multi-node fixture (`hyperlink-web`)
+## Multi-node fixture (`examples/apps/web`)
 
 | Class | Key kind | Key value | Example file |
 |-------|----------|-----------|--------------|

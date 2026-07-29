@@ -9,7 +9,7 @@
 Teaching scripts live under `examples/<topic>/` — **same topic names as the guides**.
 Each page Twoslash-`include`s the real `.ts` file. Cuts in that file hide harness noise.
 
-Deep-link a topic: `#work-pool`, `#gate`, `#node`, …
+Deep-link a topic: `#work-pool`, `#gate`, `#node`, `#observe`, …
 
 ---
 
@@ -283,7 +283,7 @@ Guide: [Observe recipes](/docs/observe)
 
 `examples/scenarios/schedule-sync-from-db.ts` · `pnpm run example:scenario-schedule-sync-db`
 
-### [serve-per-hyperlink deps](/docs/scenario-serve-per-deps)
+### [serve-per-deps](/docs/scenario-serve-per-deps)
 
 `examples/scenarios/serve-per-deps.ts` · `pnpm run example:scenario-serve-per-deps`
 
@@ -306,3 +306,4 @@ see [E5 apps plan](../handoffs/examples-apps-e5-plan.md) (handoff). Run via `pnp
 | Dashboard | `examples/apps/dashboard` | `example:apps-dashboard` |
 | CLI | `examples/apps/cli` | `example:apps-cli` |
 | Queue widget | `examples/apps/queue-widget` | `example:apps-queue-widget` |
+| View compose | `examples/apps/view-compose` | `example:apps-view-compose` |

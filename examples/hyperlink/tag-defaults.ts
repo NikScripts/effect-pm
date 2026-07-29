@@ -6,7 +6,7 @@
  * round-trip. Layer overrides are provide-site only.
  *
  * ```bash
- * pnpm exec tsx examples/default-defaults.ts
+ * pnpm run example:hyperlink-tag-defaults
  * ```
  *
  * Docs: `docs/examples/hyperlink/tag-defaults.md` includes this file;

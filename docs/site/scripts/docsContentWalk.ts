@@ -2,7 +2,7 @@
 // Keep roots in sync with `src/lib/content.ts` `import.meta.glob` (Vite) — that glob is the
 // runtime SSOT; this is the Node/Effect mirror for offline generators.
 //
-// Walks recursively so nested books (e.g. `docs/examples/queue/*.md`) are included.
+// Walks recursively so nested books (e.g. `docs/examples/<topic>/*.md`) are included.
 // Skips `legacy/`, `handoffs/`, `plans/`, `site/` by never listing them as roots.
 
 import * as nodePath from "node:path";
