@@ -1,16 +1,15 @@
 /**
- * Coming-soon brand lockup (WIP design). Inlined on `/` so paint never depends
- * on /assets. Same structure as the locked apex: logo + motto + Coming soon —
- * no CTAs. Soft atmosphere only; no acrylic stage.
+ * Coming-soon brand lockup (WIP). Inlined on `/` so paint never depends on /assets.
+ *
+ * Full-bleed past notches / home indicator (WebKit + MDN):
+ * 1. viewport-fit=cover + black-translucent status bar (see _layout / preview)
+ * 2. Never set height/min-height: 100% on html/body — that defeats cover and
+ *    keeps the layout letterboxed (content never extends behind the cutout).
+ * 3. Size with 100vh; pad content with calc(base + env(safe-area-inset-*)).
+ * 4. Solid body background-color for overscroll / chrome sampling (hex canvas).
  */
 :root {
   color-scheme: light dark;
-  /*
-   * --landing-canvas stays hex forever. iOS 26+ Safari Liquid Glass samples
-   * body { background-color } for status/toolbar + overscroll — not theme-color,
-   * not html, not background-image, and `background:` shorthand can clear the
-   * color Safari actually reads (see nasedk.in / 1ar.io Safari 26 notes).
-   */
   --landing-canvas: #f7f9fc;
   --landing-bg: var(--landing-canvas);
   --landing-bg-deep: #e8eef8;
@@ -27,7 +26,6 @@
 }
 @supports (color: oklch(0% 0 0)) {
   :root {
-    /* Decorative only — never replace --landing-canvas with oklch. */
     --landing-bg: oklch(98.5% 0.006 250);
     --landing-bg-deep: oklch(94.5% 0.018 250);
     --landing-fg: oklch(24% 0.01 260);
@@ -70,38 +68,38 @@
   }
 }
 
-/*
- * Edge / notch / Safari chrome paint model (iOS 26+):
- * - Physical letterbox outside the layout viewport: ONLY body background-color
- *   reaches those pixels (gradients/images cannot). Match --landing-canvas.
- * - Inside the layout viewport, under the floating toolbar: a fixed layer with
- *   opacity < 1 (0.99) is composited full-bleed; opaque fixed fills get clipped.
- * - viewport-fit=cover + env(safe-area-inset-*) for content; insets are often 0
- *   in Safari portrait because chrome already owns the notch.
- */
 html {
-  min-height: 100%;
   -webkit-text-size-adjust: 100%;
   background-color: var(--landing-canvas);
 }
 body {
   margin: 0;
   padding: 0;
-  min-height: 100%;
-  min-height: 100dvh;
+  /* 100vh — not 100%. Percentage height breaks viewport-fit=cover. */
+  min-height: 100vh;
   color: var(--landing-fg);
   font-family: var(--landing-sans);
   -webkit-font-smoothing: antialiased;
   background-color: var(--landing-canvas);
 }
 
-.landing-atmosphere {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  /* 0.99 — Safari 26 clips opaque fixed layers at the chrome edge. */
-  opacity: 0.99;
+.landing {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: left;
+  /* Base spacing + safe-area (ADD, not max) so cover insets actually grow the pad. */
+  padding:
+    calc(1.6rem + env(safe-area-inset-top, 0px))
+    calc(1.25rem + env(safe-area-inset-right, 0px))
+    calc(2rem + env(safe-area-inset-bottom, 0px))
+    calc(1.25rem + env(safe-area-inset-left, 0px));
+  overflow: hidden;
   background-color: var(--landing-canvas);
   background-image:
     radial-gradient(ellipse 90% 60% at 50% -8%, var(--landing-glow), transparent 58%),
@@ -112,31 +110,15 @@ body {
 .landing-glow {
   position: absolute;
   inset: auto auto 10% 50%;
+  z-index: 0;
   width: min(38rem, 92vw);
   height: min(38rem, 92vw);
   translate: -50% 42%;
   border-radius: 50%;
   background: radial-gradient(circle, var(--landing-glow), transparent 70%);
   filter: blur(12px);
+  pointer-events: none;
   animation: landing-breathe 12s ease-in-out infinite;
-}
-
-.landing {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  min-height: 100dvh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: left;
-  padding:
-    max(1.6rem, env(safe-area-inset-top, 0px))
-    max(1.25rem, env(safe-area-inset-right, 0px))
-    max(2rem, env(safe-area-inset-bottom, 0px))
-    max(1.25rem, env(safe-area-inset-left, 0px));
-  box-sizing: border-box;
-  background: transparent;
 }
 
 .landing-inner {
@@ -149,7 +131,6 @@ body {
   align-items: flex-start;
 }
 
-/* Logo mark — same geometry as the locked coming-soon lockup */
 .landing-title {
   margin: 0;
   font-size: 1em;
@@ -166,7 +147,6 @@ body {
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  /* Contrasting ink edge — not a same-hue glow */
   filter: drop-shadow(0 1px 0 color-mix(in oklab, #0a2438 22%, transparent));
 }
 @media (prefers-color-scheme: dark) {
@@ -213,7 +193,6 @@ body {
   color: var(--landing-fg);
   opacity: 0.78;
 }
-/* Stair offsets — scale with viewport so mobile never clips */
 .landing-motto span:nth-child(1) {
   transform: translateX(clamp(-2.25rem, -6vw, -1.25rem));
 }
