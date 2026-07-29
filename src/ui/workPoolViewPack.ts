@@ -10,7 +10,6 @@ import type {
   MetricPoint,
   QueueMetrics,
   QueueStatus,
-  QueueTag,
 } from "./data";
 import { serviceLogsAtom } from "./observeSupport";
 
@@ -139,20 +138,23 @@ export const queueMetricsHistory = Observe.struct({
 });
 
 /**
- * Node-scoped service logs for the bound tag.
+ * Node-scoped service logs for the bound tag (any Hyperlink Tag with `nodeOf`).
  *
  * @public
  */
-export const queueLogs = Observe.struct({
+export const serviceLogs = Observe.struct({
   logs: Observe.recipe((ctx) => {
-    const tag = ctx.tag as QueueTag;
+    const tag = ctx.tag;
     const node = nodeOf(tag);
     if (node === undefined) {
-      throw new Error(`queue tag ${tag.key} is missing a node`);
+      throw new Error(`tag ${tag.key} is missing a node`);
     }
     return serviceLogsAtom(ctx.runtime, tag.key, node);
   }),
 });
+
+/** @public @deprecated Prefer {@link serviceLogs}. */
+export const queueLogs = serviceLogs;
 
 /**
  * Full WorkPool queue UI pack — card + detail observe surface.
@@ -168,6 +170,6 @@ export const pack = Observe.named(
     }),
     Observe.and(queueControls),
     Observe.and(queueMetricsHistory),
-    Observe.and(queueLogs),
+    Observe.and(serviceLogs),
   ),
 );

@@ -1,69 +1,28 @@
 /**
- * Family Observe packs for non-queue Views — `packOf` over proven `*Bundle` builders
- * (parity-first). Queue stays compositional in {@link ./workPoolViewPack}.
+ * Family Observe packs — compositional recipes (parity with WorkPoolView.pack).
  * @internal
  */
-import * as Observe from "../Observe";
+import type { NodeRef } from "./data";
+import { nodeStatusBundle } from "./data";
+import { pack as apiPack } from "./apiMetricsViewPack";
+import { pack as daemonPack } from "./daemonViewPack";
+import { pack as gatePack } from "./gateViewPack";
 import {
-  apiBundle,
-  daemonBundle,
-  fleetHealthBundle,
-  gateBundle,
-  nodeStatusBundle,
-  priorityBundle,
-  shardMapBundle,
-  telemetryBundle,
-  type ApiTag,
-  type DaemonTag,
-  type FleetHealthTag,
-  type GateTag,
-  type NodeRef,
-  type PriorityTag,
-  type ShardMapTag,
-  type TelemetryTag,
-} from "./data";
+  fleetHealthPack,
+  shardMapPack,
+  telemetryPack,
+} from "./pollViewPacks";
+import { pack as priorityPack } from "./priorityViewPack";
 
-/** @public */
-export const priorityPack = Observe.packOf(
-  "workpool/priority",
-  (ctx) => priorityBundle(ctx.runtime, ctx.tag as PriorityTag),
-);
-
-/** @public */
-export const daemonPack = Observe.packOf(
-  "daemon",
-  (ctx) => daemonBundle(ctx.runtime, ctx.tag as DaemonTag),
-);
-
-/** @public */
-export const apiPack = Observe.packOf(
-  "api",
-  (ctx) => apiBundle(ctx.runtime, ctx.tag as ApiTag),
-);
-
-/** @public */
-export const gatePack = Observe.packOf(
-  "gate",
-  (ctx) => gateBundle(ctx.runtime, ctx.tag as GateTag),
-);
-
-/** @public */
-export const fleetHealthPack = Observe.packOf(
-  "fleetHealth",
-  (ctx) => fleetHealthBundle(ctx.runtime, ctx.tag as FleetHealthTag),
-);
-
-/** @public */
-export const telemetryPack = Observe.packOf(
-  "telemetry",
-  (ctx) => telemetryBundle(ctx.runtime, ctx.tag as TelemetryTag),
-);
-
-/** @public */
-export const shardMapPack = Observe.packOf(
-  "shardMap",
-  (ctx) => shardMapBundle(ctx.runtime, ctx.tag as ShardMapTag),
-);
+export {
+  apiPack,
+  daemonPack,
+  fleetHealthPack,
+  gatePack,
+  priorityPack,
+  shardMapPack,
+  telemetryPack,
+};
 
 /**
  * Node observe — NodeRef is not a Hyperlink Tag, so bind/use take the ref directly.

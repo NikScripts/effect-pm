@@ -5,7 +5,7 @@
  */
 import { Layer } from "effect";
 import * as Telemetry from "../Telemetry";
-import { telemetryPack as pack } from "./familyPacks";
+import { telemetryPack as pack } from "./pollViewPacks";
 import * as View from "./View";
 
 export { pack };

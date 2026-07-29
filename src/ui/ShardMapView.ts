@@ -5,7 +5,7 @@
  */
 import { Layer } from "effect";
 import * as ShardMap from "../ShardMap";
-import { shardMapPack as pack } from "./familyPacks";
+import { shardMapPack as pack } from "./pollViewPacks";
 import * as View from "./View";
 
 export { pack };

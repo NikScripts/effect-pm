@@ -5,7 +5,7 @@
  */
 import { Layer } from "effect";
 import * as Gate from "../Gate";
-import { apiPack as pack } from "./familyPacks";
+import { pack } from "./apiMetricsViewPack";
 import * as View from "./View";
 
 export { pack };

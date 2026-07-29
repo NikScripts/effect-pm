@@ -10,7 +10,7 @@
  */
 import { Layer } from "effect";
 import * as Daemon from "../Daemon";
-import { daemonPack as pack } from "./familyPacks";
+import { pack } from "./daemonViewPack";
 import * as View from "./View";
 
 export { pack };

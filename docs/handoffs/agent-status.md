@@ -7,7 +7,7 @@
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **4** | `cursor/hyperservice-open-deps-5679` | [fleet rate limiting](../plans/fleet-rate-limiting.md) · [wire groups](../plans/wire-groups-and-identity.md) · [service shapes](../plans/service-shapes.md) | **tip-synced** — R4b ApiMetrics deleted; dashboard nest parity | same tip as `integration` | typecheck 0 / api-metrics 7/7 | idle | 2026-07-28 |
-| **G / TUI** | `cursor/view-withsize-types-125f` | View compose · Shell · Observe Phases 0–4 | **tip-synced** — Observe packs; Bundle/`use*Bundle`/`data` removed | same tip as `integration` | typecheck 0 | kit HOLD; optional compositional non-queue packs | 2026-07-29 |
+| **G / TUI** | `cursor/view-withsize-types-125f` | View compose · Shell · Observe Phases 0–4 | **tip-synced** — compositional *View.pack; Bundle/`data` removed | same tip as `integration` | typecheck 0 | kit HOLD; NodeView still wraps nodeStatusBundle | 2026-07-29 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **5**, **G** | 2026-07-26 |
 | **5** | `cursor/launcher-handoff-design-929b` | [launcher + handoff brief](./launcher-and-handoff-brief.md) · [rename](./rename-hyperlink-handoff.md) | **tip-synced** — lookupClient hot-rebind | same tip as `integration` | typecheck 0; lookup rebind green | Awaiting owner-lock #34–37 | 2026-07-29 |
 | **Docs site** | `cursor/docs-site-edge-cache-dbdc` (ε) | [dev host](./docs-site-dev-host.md) · edge cache · SEO | **tip-synced / live** — apex coming-soon; docs on `dev`; GS polish; origin gate | same tip as `integration` | smoke + host-gate tests; CF + `serve-production.mjs`; islands on `hyperlink-ts` / `.hl-dashboard` | — | 2026-07-29 |
@@ -29,7 +29,7 @@
 
 ### Active (owner approval required)
 1. **Agent 4:** W1–W3 + `default`/`defaults` + R1–R4+adaptive + A1–A3; **`cell` parked/rejected**; **R5 rejected**; **R4b tip-synced** — sibling `ApiMetrics` deleted; dashboard/TUI surface limiter nest. Idle. Incident: [`agent-04-w3-incident-2026-07-27.md`](./agent-04-w3-incident-2026-07-27.md).
-2. **Agent G / TUI:** Observe Phases 0–4 Eng’d — `Observe.use(tag, *View.pack)` / `NodeView.use`; `Bundle` / `use*Bundle` / `View.compose().data` removed. Kit HOLD. Branch `cursor/view-withsize-types-125f`.
+2. **Agent G / TUI:** Observe fully Eng’d — compositional `*View.pack`s; Bundle/`use*Bundle`/`data` removed. Kit HOLD. Branch `cursor/view-withsize-types-125f`.
 3. **Agent 5 (Launcher + handoff):** Track C #27–33 Eng'd; `lookupClient` + directory `peersLayer` hot-rebind Eng'd. Next: owner-lock #34–37. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
 4. **Docs site:** Live — apex coming-soon (inlined CSS + `(book)` chrome); docs on `dev`. Origin host-gate via `serve-production.mjs` (before Waku static). Islands: `hyperlink-ts` alias + `.hl-dashboard`. Getting Started em-dash/voice polish.
 

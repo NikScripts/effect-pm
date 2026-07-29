@@ -21,6 +21,7 @@ export {
   queueControls,
   queueLogs,
   queueMetricsHistory,
+  serviceLogs,
 } from "./workPoolViewPack";
 
 /**

@@ -389,10 +389,10 @@ Compose with `Observe.*`; optionally add `pack` on a matching `*View` later — 
 
 ## Open Eng details
 
-1. **Non-queue packs** — today `packOf` over proven `*Bundle` builders (parity). Optional later: rewrite compositionally like `WorkPoolView.pack`.  
-2. **Kit `<Dashboard />`** — HOLD unchanged.
+1. **Kit `<Dashboard />`** — HOLD unchanged.  
+2. **NodeView** — still wraps `nodeStatusBundle` (NodeRef is not a Tag; optional later recipe extraction).
 
-Resolved: shared fold via `Observe.map`; queue `logs` on `WorkPoolView.pack`; `Observe.use` always calls `useRuntime()`; `ui/NodeView` for NodeRef; Phase 4 Bundle/`use*Bundle`/`data` removed.
+Resolved: shared fold via `Observe.map`; all family `*View.pack`s compositional (queue/priority/daemon/api/gate + polled fleet packs); `Observe.use` always calls `useRuntime()`; Phase 4 Bundle/`use*Bundle`/`data` removed; builders in `ui/data` are thin wraps.
 
 ---
 

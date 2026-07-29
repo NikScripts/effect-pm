@@ -12,7 +12,7 @@
  */
 import { Layer } from "effect";
 import * as WorkPool from "../WorkPool";
-import { priorityPack as pack } from "./familyPacks";
+import { pack } from "./priorityViewPack";
 import * as View from "./View";
 
 export { pack };
