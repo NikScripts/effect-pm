@@ -82,15 +82,16 @@ Observe.use(Nightly, DaemonView.pack)
 NodeView.use(ref)
 ```
 
-## WorkPoolView.pack
+## Compositional packs
 
-Compositional queue card/detail surface:
+All shipped `*View.pack` values are `Observe` recipes (not kind-switch builders):
 
-- `status` + `trend` share one fold (same pending series as today’s builders)
-- `metrics` + `history` share one fold (localStorage-backed cap)
-- `pause` / `resume` / `clear` / `shutdown` via `queueControls`
-- `logs` via node-scoped `queueLogs`
+- **Queue / Priority** — shared folds for status+trend and metrics+history; controls + `serviceLogs`
+- **Daemon** — status atom, polled schedule, controls, logs
+- **API** — usage atoms + window history fold
+- **Gate** — status atom
+- **FleetHealth / Telemetry / ShardMap** — `Observe.poll` every 2s with projected fields
 
-Slices (`queueControls`, `queueMetricsHistory`, `queueLogs`) are also exported for apps that want a thinner pack.
+`WorkPoolView` also exports slices (`queueControls`, `queueMetricsHistory`, `serviceLogs`) for thinner packs.
 
 See also [Hyperlink atom](/docs/hyperlink-atom), [Bundles](/docs/bundles) (retirement map).
