@@ -10,13 +10,13 @@
 import {
   forkSupervisedAndSideThenAdvanceTime,
   runNodeProgramWithLayer,
-} from "../../shared/demo-harness";
+} from "../shared/demo-harness";
 
 // ---cut---
 import { DateTime, Duration, Effect } from "effect";
 import { TestClock } from "effect/testing";
 import { Daemon, Polling } from "../../src";
-import { makeSportsScoreFeedTestDouble } from "../../shared/sports-score-feed";
+import { makeSportsScoreFeedTestDouble } from "../shared/sports-score-feed";
 
 const scheduleStartAtUnixEpoch = DateTime.toDateUtc(DateTime.makeUnsafe(0));
 

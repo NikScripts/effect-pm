@@ -19,7 +19,7 @@ import * as Hyperlink from "../../src/Hyperlink";
 import * as Lookup from "../../src/Lookup";
 import * as Node from "../../src/Node";
 
-class Jobs extends Hyperlink.Tag<Jobs>()("forms/launcher-membership/Jobs", {
+class Jobs extends Hyperlink.Tag<Jobs>()("examples/launcher-membership/Jobs", {
   ping: Hyperlink.effect(Schema.String),
 }) {}
 
@@ -37,7 +37,7 @@ const program =
       )
     : Effect.gen(function* () {
         const token = yield* Node.assumeTokenConfig;
-        const node = Node.Tag()("forms/launcher-membership/Worker", {
+        const node = Node.Tag()("examples/launcher-membership/Worker", {
           url: `http://127.0.0.1:${String(port)}/rpc`,
           kind: "Http",
         });

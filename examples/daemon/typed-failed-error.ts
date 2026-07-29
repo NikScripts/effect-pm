@@ -9,7 +9,7 @@
  * cut markers hide the module header and demo harness from the page.
  */
 
-import { runNodeProgramOrExit } from "../../shared/demo-harness";
+import { runNodeProgramOrExit } from "../shared/demo-harness";
 
 // ---cut---
 import { Duration, Effect, Layer, Schema } from "effect";

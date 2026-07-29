@@ -19,7 +19,7 @@ import { Effect, FileSystem, Layer } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
 import { defaultIpcPath } from "../../src/Lookup"
 
-const root = new URL("../../..", import.meta.url).pathname
+const root = new URL("../..", import.meta.url).pathname
 
 const program = Effect.gen(function* () {
   const fs = yield* FileSystem.FileSystem

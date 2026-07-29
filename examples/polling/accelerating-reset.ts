@@ -10,7 +10,7 @@
 import {
   forkSupervisedAndSideThenAdvanceTime,
   runNodeProgramWithLayer,
-} from "../../shared/demo-harness";
+} from "../shared/demo-harness";
 
 // ---cut---
 import { DateTime, Duration, Effect, Layer, Ref } from "effect";
@@ -19,7 +19,7 @@ import { Daemon, Polling } from "../../src";
 import {
   makeSportsScoreFeedTestDouble,
   scoreKey,
-} from "../../shared/sports-score-feed";
+} from "../shared/sports-score-feed";
 
 const scheduleStartAtUnixEpoch = DateTime.toDateUtc(DateTime.makeUnsafe(0));
 

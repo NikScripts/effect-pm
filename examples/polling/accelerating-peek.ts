@@ -10,7 +10,7 @@
 import {
   forkSupervisedAndSideThenAdvanceTime,
   runNodeProgramWithLayer,
-} from "../../shared/demo-harness";
+} from "../shared/demo-harness";
 
 // ---cut---
 import { DateTime, Duration, Effect, Layer, Option, Ref } from "effect";
@@ -19,7 +19,7 @@ import { Daemon, Polling } from "../../src";
 import {
   makeSportsScoreFeedTestDouble,
   scoreKey,
-} from "../../shared/sports-score-feed";
+} from "../shared/sports-score-feed";
 
 // Daemon.at expects Date — build from DateTime, not `new Date()` inside Effect.
 const scheduleStartAtUnixEpoch = DateTime.toDateUtc(DateTime.makeUnsafe(0));

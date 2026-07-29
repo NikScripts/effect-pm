@@ -8,7 +8,7 @@
  * cut markers hide the module header and runner epilogue.
  */
 
-import { runNodeProgramOrExit } from "../../shared/demo-harness";
+import { runNodeProgramOrExit } from "../shared/demo-harness";
 
 // ---cut---
 import * as Store from "../../src/Store";

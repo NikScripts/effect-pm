@@ -26,13 +26,13 @@ import * as Lookup from "../../src/Lookup";
 import * as Node from "../../src/Node";
 
 const program = Effect.gen(function* () {
-  const root = new URL("../../..", import.meta.url).pathname;
+  const root = new URL("../..", import.meta.url).pathname;
   const entry = `${root}/examples/launcher/lookup-membership-child.ts`;
   const now = yield* Clock.currentTimeMillis;
   const lookupPath = `/tmp/hyperlink-ts-launcher-membership-${String(now)}.sock`;
   const port = 28_700 + (now % 200);
 
-  const lookupNode = Node.Tag()("forms/launcher-membership/Lookup", {
+  const lookupNode = Node.Tag()("examples/launcher-membership/Lookup", {
     path: lookupPath,
   }).pipe(Node.asLookup);
   const lookupServer = yield* Layer.build(
@@ -41,7 +41,7 @@ const program = Effect.gen(function* () {
   const lookupClient = yield* Layer.build(Lookup.client(lookupNode));
   const lookupCtx = Context.merge(lookupServer, lookupClient);
 
-  const worker = Node.Tag()("forms/launcher-membership/Worker", {
+  const worker = Node.Tag()("examples/launcher-membership/Worker", {
     url: `http://127.0.0.1:${String(port)}/rpc`,
     kind: "Http",
   });
@@ -57,7 +57,7 @@ const program = Effect.gen(function* () {
   });
 
   const rows = yield* Lookup.nodesServing(
-    "forms/launcher-membership/Jobs",
+    "examples/launcher-membership/Jobs",
   ).pipe(Effect.provide(lookupCtx));
 
   yield* Effect.logInfo(
