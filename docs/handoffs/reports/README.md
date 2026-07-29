@@ -4,7 +4,7 @@
 
 **Active major Eng:** none unlocked. Last complete: [`identity-coordinator.md`](../identity-coordinator.md) M1–M6 + loud-failures core. Guide: [`docs/guides/identity-coordinator.md`](../../guides/identity-coordinator.md).
 
-**Agent 5 brief:** [`launcher-and-handoff-brief.md`](../launcher-and-handoff-brief.md) — Track A+B+C(#27–34) Eng'd; `lookupClient` + `peersLayer` hot-rebind Eng'd. #35–37 deferred; explicit A/B launcher later. Launcher redesign notes remain reference-only.
+**Agent 5 brief:** [`launcher-and-handoff-brief.md`](../launcher-and-handoff-brief.md) — Track A+B+C(#27–34+#39) Eng'd (serve-site `{ handoff }`, WorkPool `releaseEnqueueHandoff`, live A→B suite); `lookupClient` + `peersLayer` hot-rebind Eng'd. #35–37 deferred; explicit A/B launcher / `restartSuccessor` later. Launcher redesign notes remain reference-only.
 
 Historical review reports and session closeouts from the 2026-07 store cutover land under [`../archive/2026-07/`](../archive/2026-07/). This folder keeps only the **index** (so `AGENTS.md` / legacy links stay stable).
 

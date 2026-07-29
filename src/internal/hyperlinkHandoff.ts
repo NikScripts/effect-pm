@@ -75,13 +75,21 @@ export type HyperlinkHandoffFn<From = any, To = any> = (
   ctx: HyperlinkHandoffContext,
 ) => Effect.Effect<void | HyperlinkHandoffOutcome, any, any>;
 
-/** Why a handoff did not complete — carried on {@link HandoffDeferred}. @internal */
+/**
+ * Why a handoff did not complete — carried on {@link HandoffDeferred}.
+ * Discriminant strings are PascalCase (types-and-naming: reason tags like store transitions).
+ *
+ * @internal
+ */
 export const handoffDeferralReason = Schema.Literals([
-  "defer",
-  "no-peer",
-  "retry-exhausted",
-  "failed",
+  "Defer",
+  "NoPeer",
+  "RetryExhausted",
+  "Failed",
 ]);
+
+/** {@link handoffDeferralReason} member type. @internal */
+export type HandoffDeferralReason = typeof handoffDeferralReason.Type;
 
 /**
  * A HyperService's handoff asked to defer (or had no peer / exhausted its retries / failed), so
@@ -132,8 +140,8 @@ const closeHandoff = (
 /**
  * Run one served HyperService's handoff function during {@link Node.shutdown}. Dials the peer
  * (`dialPeer`; `None` ⇒ no peer ⇒ defer), runs `handoff(from, to, ctx)`, coerces `void` to `Done`,
- * loops on `Retry` up to `retries`, and fails with {@link HandoffDeferred} on `Defer` / no peer /
- * retry-exhausted / any failure or defect. The peer dial is scoped for the duration of the run.
+ * loops on `Retry` up to `retries`, and fails with {@link HandoffDeferred} on `Defer` / `NoPeer` /
+ * `RetryExhausted` / any failure or defect. The peer dial is scoped for the duration of the run.
  *
  * @internal
  */
@@ -148,7 +156,7 @@ export const runHandoffFunction = <To>(params: {
   Effect.scoped(
     Effect.gen(function* () {
       const fail = (
-        reason: typeof handoffDeferralReason.Type,
+        reason: HandoffDeferralReason,
       ): Effect.Effect<never, HandoffDeferred> =>
         new HandoffDeferred({
           serviceKey: params.serviceKey,
@@ -161,7 +169,7 @@ export const runHandoffFunction = <To>(params: {
         yield* Effect.logWarning(
           "handoff deferred: no peer to hand off to; keeping node up",
         ).pipe(Effect.annotateLogs({ "handoff.service": params.serviceKey }));
-        return yield* fail("no-peer");
+        return yield* fail("NoPeer");
       }
       const to = peer.value;
 
@@ -175,8 +183,8 @@ export const runHandoffFunction = <To>(params: {
           ) => unknown
         )(params.from, peerClient, hyperlinkHandoffContext);
 
-      // `Failed` is a private settle state for a handoff that failed or defected — folded into a
-      // `HandoffDeferred(reason: "failed")` so #9 (defect/orDie) restores running like a defer.
+      // Private settle state for a handoff that failed/defected — folded into
+      // `HandoffDeferred({ reason: "Failed" })` so #9 restores running like a defer.
       type Settled = HyperlinkHandoffOutcome | { readonly _tag: "Failed" };
       const settle = (
         run: Effect.Effect<void | HyperlinkHandoffOutcome>,
@@ -212,7 +220,7 @@ export const runHandoffFunction = <To>(params: {
                 return Effect.void;
               case "Retry":
                 return remaining <= 0
-                  ? fail("retry-exhausted")
+                  ? fail("RetryExhausted")
                   : Effect.andThen(
                       Effect.logInfo("handoff retrying").pipe(
                         Effect.annotateLogs({
@@ -223,9 +231,9 @@ export const runHandoffFunction = <To>(params: {
                       attempt(remaining - 1),
                     );
               case "Defer":
-                return fail("defer");
+                return fail("Defer");
               case "Failed":
-                return fail("failed");
+                return fail("Failed");
             }
           },
         );

@@ -102,11 +102,37 @@ Membership Lookup Identity/Directory/Advice   who wins / where clients dial
   where `from` is the local handle and `to` is a peer client of the same HyperService (dialed from
   the Directory, self excluded by dial). Return `ctx.done` / `void` to leave + shut down, `ctx.retry`
   to re-run (bounded), `ctx.defer` to keep the node up. Any failure / defect — or **no peer** —
-  defers: the node restores `phase: "running"` and `Node.shutdown` fails with `HandoffDeferred`.
-  WorkPool queues bake that in via `WorkPool.serve` (`releaseEnqueueHandoff`).
+  defers: the node restores `phase: "running"` and `Node.shutdown` fails with `HandoffDeferred`
+  (`_tag: "HandoffDeferred"`; `.reason` PascalCase — `Defer` | `NoPeer` | `RetryExhausted` |
+  `Failed`). Match by `_tag` / `.reason`, never message strings.
+  WorkPool queues bake that in via `WorkPool.serve` / `serveRemote` (`releaseEnqueueHandoff`).
 - **Membership push / dialers:** directory-mode `Hyperlink.peersLayer` and
   `Hyperlink.lookupClient` **hot-rebind** on `Directory.changes` (dial move / join /
   leave). Escape hatch: `Lookup.changes` / `directoryTable()`.
+
+### A→B cutover recipe (state transfer)
+
+Crown-jewel path — **B is Directory-visible before A shuts down** (peer pick excludes self by
+**dial**, not `nodeKey`):
+
+1. Start Lookup + **B** serving the HyperService (WorkPool: `autoStart: false` if you want pending
+   to stay queued).
+2. Start **A** with the same HyperService; enqueue / store state on A.
+3. `Node.shutdown(A)` → drain → handoff → Advice clear → unregister → listen exit.
+4. Pending / moved state is on B; Directory lists B only; `lookupClient` keeps dialing B when
+   Advice / Directory already prefer it.
+
+Same-`nodeKey` variant: `onConflict: "askIncumbent"` + A's `onYield: true` lets B take the
+Directory **row** first; A's later `shutdown` still finds B by dial and transfers. Mid-handoff,
+draining A **refuses** a further `askIncumbent` yield (`IncumbentAlive`; row held).
+
+**Runnable demos:** log-only
+[`examples/node/handoff-ab-cutover.ts`](../../examples/node/handoff-ab-cutover.ts)
+(`pnpm run example:node-handoff-ab-cutover`); **watchable Ink TUI**
+[`examples/apps/tui/handoff-ab-live.tsx`](../../examples/apps/tui/handoff-ab-live.tsx)
+(`pnpm run example:handoff-ab-live`, real TTY). Live suite:
+[`test/handoff-ab-cutover.test.ts`](../../test/handoff-ab-cutover.test.ts). Decisions:
+[`launcher-and-handoff-brief.md`](../handoffs/launcher-and-handoff-brief.md) Locked #39.
 
 Runnable: [`examples/launcher/lookup-membership.ts`](../../examples/launcher/lookup-membership.ts).
 Custody API: [`docs/guides/launcher.md`](./launcher.md).

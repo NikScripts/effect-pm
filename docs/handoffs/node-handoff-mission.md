@@ -1,12 +1,13 @@
 # Mission: node handoff (zero-downtime updates, cross-version migration)
 
-> **2026-07-25:** Active agent entrypoint is [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md)
-> (launcher redesign may start from scratch; this mission doc remains the goal framing for handoff /
-> cross-version migration). Nothing here is an approved Eng plan.
+> **Active agent entrypoint:** [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
+> This file is **goal framing** — what “done” looks like for callers and fleets.
+> Track C Locked **#27–34 + #39** are **Eng'd** on tip (drain → serve-site `{ handoff }` →
+> leave; WorkPool baked `releaseEnqueueHandoff`; live suite `test/handoff-ab-cutover.test.ts`).
+> Open problems below are still design/product territory (version negotiation, dual-serve,
+> client redirect) — not a license to re-invent shipped verbs.
 
-Owner directive, 2026-07-22. This is the next major goal for the library. This doc states the
-mission and its boundaries; the design itself is NOT done and must go through the normal
-decisions-doc bake with the owner before any implementation.
+Owner directive, 2026-07-22. Updated 2026-07-29 after #39 land.
 
 ## The goal
 
@@ -14,44 +15,54 @@ decisions-doc bake with the owner before any implementation.
 
 Two headline capabilities, in the owner's framing:
 
-1. **Updates without downtime.** Use handoff to update a node: stand up the replacement, hand the
-   node's HyperServices over, retire the original. Callers keep calling the whole time.
+1. **Updates without downtime.** Stand up the replacement, hand the node's HyperServices over,
+   retire the original. Callers keep calling the whole time.
 2. **Migration across versions.** Handoff must work **between nodes running different versions of
    the library**. A fleet is never all on one version during a rollout, so version skew is the
    normal case, not the edge case.
 
 ## Why this is now natural to attempt
 
-- Placement is already dynamic: peers model, Lookup two-stage Tag/Lookup, `onConflict` threading
-  (multi-protocol-nodes work, merged).
-- Transports are injected and typed (protocol dependency + loud-failures work, merged).
+- Placement is already dynamic: peers model, Lookup two-stage Tag/Lookup, `onConflict` threading.
+- Transports are injected and typed (protocol dependency + loud-failures).
 - Contracts are schema-first everywhere: every value that crosses a boundary already has a codec,
   which is the raw material for cross-version compatibility.
+- **Cutover substrate (Eng'd):** `Node.drain` / `shutdown`, Directory membership push,
+  serve-site `handoff(from, to, ctx)` with `Done` | `Retry` | `Defer`, WorkPool peer transfer,
+  `lookupClient` / `peersLayer` dial rebind.
 
-## Known hard problems (bring these to the design discussion, do not solve them silently)
+## Solved for C v1 (do not re-open casually)
 
-- **Cutover semantics**: what happens to in-flight calls and open streams at the moment of
-  handoff (drain? dual-serve? redirect?).
-- **Stateful HyperServices**: queues and stores carry state; a handoff either transfers it, shares
-  it, or declares those kinds non-transferable at first. Scope decision for the owner.
-- **Version negotiation**: how two nodes agree on wire shape when their library versions differ;
-  what "compatible" means for a contract (schema evolution rules), and what happens on a
-  mismatch (typed, loud failure per the loud-failures doctrine, never silent).
-- **Discovery during the swap**: Lookup liveness vs. a node that is intentionally draining.
+| Problem (was open) | Shipped answer |
+|--------------------|----------------|
+| Cutover drain | `phase: "draining"`; yield fail-closed; drain-then-cut on outgoing node |
+| Opt-in per HyperService | `Hyperlink.serve(…, { handoff })` (#39); default off except WorkPool bake |
+| WorkPool state | `WorkPool.releaseEnqueueHandoff` always on `serve` / `serveRemote` |
+| Peer pick | Directory row, **exclude self by dial** (not `nodeKey`) |
+| Defer / NoPeer / Failed | Restore `running`, keep Directory row, surface `HandoffDeferred` (`_tag` + PascalCase `.reason`) |
+| Membership during swap | Directory row held while draining; `askIncumbent` cannot steal |
+
+## Still hard / open (bring to design; do not solve silently)
+
+- **Dual-serve / client redirect** — Track D (C emits signals only: Directory.changes, Advice, status).
+- **Version negotiation ranges** — #35 deferred; reuse binary `contractHash` / `ContractMismatch` for now.
+- **Lookup-node handoff** — #36 deferred (not special-cased in C v1).
+- **`restartSuccessor` / automated A/B launcher** — deferred; replacement addressing today =
+  same `nodeKey` + new dial (manual / less-automated).
 
 ## House constraints that apply
 
-- Design first: decisions doc, owner approval item by item, no code before the go
-  (docs/standards/working-agreement.md).
+- Design first for *new* surface: decisions doc, owner approval item by item
+  ([working-agreement](../standards/working-agreement.md)).
 - "What would Effect do" is the standing tiebreaker for API shape.
-- The rename ships around this work: the primitive is `Hyperlink`, kinds are being renamed
-  (see docs/handoffs/rename-hyperlink-handoff.md and the rebrand memory). Do not build new
-  surface on the old names.
+- Prefer existing nouns (`Node`, Lookup, `Hyperlink.serve`) — no `HandoffManager`.
 
-## Working setup
+## Where to look
 
-- Worktree: `~/Coding/Hyperlink/worktrees/delta` on branch `feat/node-handoff` (cut from
-  integration @ 717c3263c). The worktree name is deliberately agent-agnostic; the tree outlives
-  any one agent.
-- Sync ritual, force-push ban, and green-before-commit are all in
-  docs/standards/working-agreement.md.
+| Doc / suite | Role |
+|-------------|------|
+| [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md) | Locked decisions + short prompt |
+| [`../guides/identity-coordinator.md`](../guides/identity-coordinator.md) | Custody vs membership + A→B recipe |
+| [`../guides/work-pools.md`](../guides/work-pools.md) | `release` / `enqueue` + baked handoff |
+| `test/handoff-ab-cutover.test.ts` | Live A→B crown-jewel suite |
+| `test/hyperlink-handoff.test.ts` | Outcomes + shutdown orchestration units |
