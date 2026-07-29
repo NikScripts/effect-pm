@@ -501,6 +501,71 @@ describe("Lookup directory askIncumbent", () => {
   );
 });
 
+describe("Lookup directory draining ≠ dead", () => {
+  it.effect("draining incumbent refuses askIncumbent yield; Directory row held", () =>
+    Effect.gen(function* () {
+      const lookupPath = yield* tmpSock("drain-lookup");
+      const workerPath = yield* tmpSock("drain-worker");
+      const lookupNode = Node.Tag()("lookup/dir-drain", {
+        path: lookupPath,
+        onConflict: "askIncumbent",
+      }).pipe(Node.asLookup);
+
+      class Worker extends Node.Tag<Worker, Jobs>()("lookup-dir/DrainWorker", {
+        path: workerPath,
+      }) {}
+
+      const lookupServer = yield* Layer.build(Lookup.layerNode(lookupNode));
+      const lookupClient = yield* Layer.build(Lookup.client(lookupNode));
+      const lookupCtx = Context.merge(lookupServer, lookupClient);
+
+      const workerCtx = yield* Layer.build(
+        Node.unix(Worker, [Hyperlink.serve(Jobs, jobsImpl)]).pipe(
+          Layer.provide(Lookup.client(lookupNode)),
+        ),
+      );
+
+      yield* Node.drain(Worker);
+
+      const dir = Context.get(lookupCtx, Lookup.Directory);
+      const conflict = yield* dir
+        .advertise(
+          new Lookup.AdvertiseRequest({
+            nodeKey: Worker.key,
+            kind: "IpcSocket",
+            path: "/tmp/drain-newcomer.sock",
+            serves: ["lookup-dir/Jobs"],
+            onConflict: "inherit",
+          }),
+        )
+        .pipe(
+          Effect.map((entry) => ({ _tag: "ok" as const, entry })),
+          Effect.catchTag("IncumbentAlive", (error) =>
+            Effect.succeed({ _tag: "alive" as const, error }),
+          ),
+          Effect.provide(lookupCtx),
+        );
+
+      expect(conflict._tag).toBe("alive");
+      if (conflict._tag === "alive") {
+        expect(conflict.error.incumbent.path).toBe(workerPath);
+      }
+
+      const listed = yield* dir
+        .nodesServing(
+          new Lookup.NodesServingRequest({
+            serviceKey: "lookup-dir/Jobs",
+          }),
+        )
+        .pipe(Effect.provide(lookupCtx));
+      expect(listed).toHaveLength(1);
+      expect(listed[0]?.path).toBe(workerPath);
+
+      yield* Effect.sync(() => workerCtx);
+    }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
+  );
+});
+
 describe("Lookup directory membership push", () => {
   const awaitEvents = <A>(
     seen: Ref.Ref<ReadonlyArray<A>>,
