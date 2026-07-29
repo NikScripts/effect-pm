@@ -54,6 +54,7 @@ import {
   Data,
   Duration,
   Effect,
+  Exit,
   Fiber,
   Function as Fn,
   Layer,
@@ -6029,7 +6030,9 @@ export const selfNodeLayer = <Self, S extends Spec>(
  * **Membership (D3):**
  * - **Fixed** — non-empty `options.nodes` or stamped `nodes([…])` / `distributed([…])`.
  * - **Directory** — stamped **empty** set (bare `.pipe(Hyperlink.distributed)` / `nodes([])`): read
- *   Lookup `Directory.nodesServing(tag.key)` at layer build. Soft empty map when Directory is absent.
+ *   Lookup `Directory.nodesServing(tag.key)` at layer build, then **hot-rebind** on
+ *   `Directory.changes` when a peer's dial moves (`dialChanged`) or membership changes.
+ *   Soft empty map when Directory is absent.
  * - **Undeclared** — no `nodesSym` and no `options.nodes` → empty static peers (not directory).
  *
  * **Peer addresses:** each {@link Node}'s own `url` / `path` is the default. Pass `options.url` to
@@ -6061,50 +6064,109 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
           options?.nodes !== undefined ? options.nodes : tag[nodesSym];
 
         // D3: stamped empty set → Lookup directory membership (soft if Directory absent).
+        // Live rebind on Directory.changes when dial moves / peers appear or leave.
         if (stamped !== undefined && stamped.length === 0) {
           const Lookup = yield* Effect.promise(() => import("./Lookup"));
           const dirOpt = yield* Effect.serviceOption(Lookup.Directory);
           if (Option.isNone(dirOpt)) {
             return {} as Record<string, PeerServiceOf<S>>;
           }
-          const rows = yield* Lookup.nodesServing(tag).pipe(
-            Effect.provideService(Lookup.Directory, dirOpt.value),
-          );
+          const directory = dirOpt.value;
+          const serviceKey = tag[wireKeySym];
           type DialTarget = {
             readonly key: string;
             readonly kind: ProtocolKind;
             readonly url?: string;
             readonly path?: string;
           };
-          const dialable: Array<DialTarget> = [];
-          for (const row of rows) {
-            if (row.nodeKey === self.key) continue;
-            if (row.kind === "IpcSocket" && row.path !== undefined) {
-              dialable.push({
-                key: row.nodeKey,
-                kind: row.kind,
-                path: row.path,
-              });
-              continue;
-            }
-            if (row.url !== undefined) {
-              dialable.push({
-                key: row.nodeKey,
-                kind: row.kind,
-                url: row.url,
-              });
-            }
-          }
-          const discovered = yield* Effect.forEach(dialable, (target) =>
-            Effect.map(
-              buildPeerClientAt(tag, target),
-              (client) => [target.key, client] as const,
-            ),
-          );
-          return Object.fromEntries(discovered) as unknown as Record<
+          const peersRecord = Object.create(null) as Record<
             string,
             PeerServiceOf<S>
           >;
+          const peerScopes = new Map<string, Scope.Closeable>();
+
+          const dialTargetOf = (row: {
+            readonly nodeKey: string;
+            readonly kind: ProtocolKind;
+            readonly url?: string;
+            readonly path?: string;
+          }): DialTarget | undefined => {
+            if (row.nodeKey === self.key) return undefined;
+            if (row.kind === "IpcSocket" && row.path !== undefined) {
+              return { key: row.nodeKey, kind: row.kind, path: row.path };
+            }
+            if (row.url !== undefined) {
+              return { key: row.nodeKey, kind: row.kind, url: row.url };
+            }
+            return undefined;
+          };
+
+          const removePeer = (nodeKey: string): Effect.Effect<void> =>
+            Effect.gen(function* () {
+              const scope = peerScopes.get(nodeKey);
+              if (scope === undefined) return;
+              peerScopes.delete(nodeKey);
+              delete peersRecord[nodeKey];
+              yield* Scope.close(scope, Exit.void);
+            });
+
+          const upsertPeer = (row: {
+            readonly nodeKey: string;
+            readonly kind: ProtocolKind;
+            readonly url?: string;
+            readonly path?: string;
+            readonly serves: ReadonlyArray<string>;
+          }): Effect.Effect<void> =>
+            Effect.gen(function* () {
+              if (!row.serves.includes(serviceKey)) {
+                yield* removePeer(row.nodeKey);
+                return;
+              }
+              const target = dialTargetOf(row);
+              if (target === undefined) {
+                yield* removePeer(row.nodeKey);
+                return;
+              }
+              yield* removePeer(row.nodeKey);
+              const scope = yield* Scope.make();
+              const client = yield* buildPeerClientAt(tag, target).pipe(
+                Scope.provide(scope),
+              );
+              peerScopes.set(row.nodeKey, scope);
+              peersRecord[row.nodeKey] = client;
+            });
+
+          const rows = yield* Lookup.nodesServing(tag).pipe(
+            Effect.provideService(Lookup.Directory, directory),
+          );
+          yield* Effect.forEach(rows, upsertPeer, { discard: true });
+
+          yield* directory.changes.pipe(
+            Stream.runForEach((event) => {
+              if (event._tag === "DirectoryRemoved") {
+                return removePeer(event.nodeKey);
+              }
+              // New peer, dial moved, or serves list may add/remove this service key.
+              if (
+                event.previous === undefined ||
+                event.dialChanged ||
+                peersRecord[event.entry.nodeKey] === undefined ||
+                !event.entry.serves.includes(serviceKey)
+              ) {
+                return upsertPeer(event.entry);
+              }
+              return Effect.void;
+            }),
+            Effect.forkScoped,
+          );
+
+          yield* Effect.addFinalizer(() =>
+            Effect.forEach([...peerScopes.keys()], removePeer, {
+              discard: true,
+            }),
+          );
+
+          return peersRecord;
         }
 
         // Fixed fleet (or undeclared → []); drop self to get the peers.
