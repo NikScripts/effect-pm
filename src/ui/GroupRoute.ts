@@ -1,50 +1,19 @@
 /**
  * @module ui/GroupRoute
  *
- * Bridge: Hyperlink {@link ../Group} ↔ UI {@link ./Route}.
+ * Legacy Group **path resolve** for Navigator (`resolveGroupRoute` — short-name
+ * segment arrays). Retires when Navigator mounts a {@link ./Route} catalog.
  *
- * **Dynamic tools (most dashboard routes):** {@link from} + {@link gets} — walk a
- * Group and emit `Route.group` / `Route.get` (same builders as hand-written routes).
- *
- * **Legacy path resolve (Navigator):** {@link resolveGroupRoute} — segment arrays;
- * retires when Navigator mounts a `Route` catalog.
- *
- * ```ts
- * import * as Route from "hyperlink-ts/ui/Route"
- * import * as GroupRoute from "hyperlink-ts/ui/GroupRoute"
- *
- * const Dashboard = Route.make("dashboard").add(
- *   GroupRoute.from(ServicesHub, {
- *     leaf: (g, ctx) => g.add(...GroupRoute.gets(ctx, "logs", "schedule")),
- *   }),
- *   Route.group("shell", { topLevel: true }).add(
- *     Route.get("health", "/health"),
- *     Route.get("node", "/health/:nodeId").pipe(
- *       Route.params(Schema.Struct({ nodeId: Schema.String })),
- *     ),
- *   ),
- * )
- * ```
- *
- * @see docs/handoffs/ui-routes-dream.md
+ * Not a route-declaration toolkit — use {@link ./Route} (`make` / `group` /
+ * `get` / `addHttpApi`) for that.
  */
 import * as Group from "../Group";
-import * as Route from "./Route";
-import * as catalog from "../internal/uiRoutes";
-import type { Path } from "../internal/uiRoute";
-
-// =============================================================================
-// Legacy resolve (Navigator)
-// =============================================================================
 
 /** Group-shaped node the resolver can walk. @public */
 export type RouteGroup = {
   readonly key: string;
   readonly members: Record<string, unknown>;
 };
-
-/** @public */
-export type Source = RouteGroup;
 
 /**
  * Nav state from a path into a Group tree.
@@ -190,88 +159,4 @@ export const pathToMember = (
     return undefined;
   };
   return walk(root, []);
-};
-
-// =============================================================================
-// Dynamic Route generation (HttpApi builders only)
-// =============================================================================
-
-/** Annotation: Group or leaf member at this route. @public */
-export const Member: typeof catalog.Member = catalog.Member;
-
-/** Annotation: sub-page id under a leaf. @public */
-export const LeafView: typeof catalog.LeafView = catalog.LeafView;
-
-export type LeafContext = {
-  readonly name: string;
-  readonly path: Path;
-  readonly member: unknown;
-};
-
-export type FromOptions = {
-  /**
-   * Customize each leaf nest. Default: path-bearing `Route.group` + {@link Member}.
-   * Add pages with {@link Route.get} via {@link gets}.
-   */
-  readonly leaf?: (group: Route.Group, context: LeafContext) => Route.Group;
-};
-
-/**
- * Reflect a Hyperlink Group into nested `Route.group`s — **the** dynamic tool
- * for most dashboard routes. Only calls `Route.group` / `.add` / `.annotate`.
- *
- * @public
- */
-export const from = (root: Source, options?: FromOptions): Route.Group => {
-  const leafFn = options?.leaf ?? ((g: Route.Group) => g);
-
-  const walk = (node: Source, prefix: string): Route.Group => {
-    const atRoot = prefix === "";
-    let g: Route.Group = catalog
-      .group(atRoot ? rootIdentifier(root) : lastSegment(prefix), {
-        path: atRoot ? undefined : (prefix as Path),
-        topLevel: atRoot,
-      })
-      .annotate(Member, node);
-
-    for (const [name, member] of Object.entries(Group.members(node))) {
-      const path = `${prefix}/${name}` as Path;
-      if (Group.isGroup(member)) {
-        g = g.add(walk(member, path));
-      } else {
-        const base = Route.group(name, { path }).annotate(Member, member);
-        g = g.add(leafFn(base, { name, path, member }));
-      }
-    }
-    return g;
-  };
-
-  return walk(root, "");
-};
-
-/**
- * Emit `Route.get` destinations under a leaf path (compose with {@link from}'s
- * `leaf` callback — not a `leafViews: string[]` bag).
- *
- * @public
- */
-export const gets = (
-  context: { readonly path: Path; readonly member: unknown },
-  ...ids: ReadonlyArray<string>
-): ReadonlyArray<Route.Constraint> =>
-  ids.map((id) =>
-    Route.get(id, `${context.path}/${id}` as Path)
-      .annotate(Member, context.member)
-      .annotate(LeafView, id),
-  );
-
-const rootIdentifier = (root: Source): string => {
-  const key = root.key;
-  const slash = key.lastIndexOf("/");
-  return slash === -1 ? key : key.slice(slash + 1);
-};
-
-const lastSegment = (path: string): string => {
-  const parts = path.split("/").filter((s) => s.length > 0);
-  return parts[parts.length - 1] ?? path;
 };

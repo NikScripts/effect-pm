@@ -6,8 +6,8 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **4** | `cursor/hyperservice-open-deps-5679` | [examples IA](./examples-ia-reorg.md) · [examples book](./agent-01-examples-book.md) · [E5 apps plan](./examples-apps-e5-plan.md) | **tip-synced** — examples IA polish (headers/hub/guides) | same tip as `integration` | includes 50/50; smoke OK | Owner: lock E5 checklist; L6 IA still open | 2026-07-29 |
-| **G / TUI** | `cursor/view-withsize-types-125f` | View compose · [UI Route](./ui-routes-dream.md) | **tip-synced** — HttpApi-shaped `Route` + `GroupRoute.from`; Navigator cutover next | same tip as `integration` | ui-routes + navigator | F5 flake pre-existing | 2026-07-29 |
+| **4** | `cursor/hyperservice-open-deps-5679` | [examples IA](./examples-ia-reorg.md) · [gap proposals](./examples-gap-proposals.md) · [E5 apps](./examples-apps-e5-plan.md) | **Plan** — examples gap queue (Idea 1 WorkPool) | same tip as `integration` | proposal doc Eng’d | Owner: confirm Idea 1 subset / order | 2026-07-29 |
+| **G / TUI** | `cursor/view-withsize-types-125f` | View compose · [UI Route](./ui-routes-dream.md) | **tip-synced** — Route + `addHttpApi`; Navigator cutover next | same tip as `integration` | ui-routes 6/6 | F5 flake pre-existing | 2026-07-29 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **5**, **G** | 2026-07-26 |
 | **5** | `cursor/launcher-handoff-design-929b` | [launcher + handoff brief](./launcher-and-handoff-brief.md) · [rename](./rename-hyperlink-handoff.md) | **tip-synced** — #39 + A→B suite + Ink live TUI | same tip as `integration` | handoff+cutover 37/37; `example:handoff-ab-live` (TTY) | `restartSuccessor` / serve `{ node }` / #35–37 deferred | 2026-07-29 |
 | **Docs site** | `cursor/docs-site-edge-cache-dbdc` (ε) | [dev host](./docs-site-dev-host.md) · edge cache · SEO | **tip-synced / live** — apex coming-soon; docs on `dev`; GS polish; origin gate | same tip as `integration` | smoke + host-gate tests; CF + `serve-production.mjs`; islands on `hyperlink-ts` / `.hl-dashboard` | — | 2026-07-29 |
@@ -28,8 +28,8 @@
 0. **Agent E:** impossible-states plan ([`impossible-states-proposal.md`](./impossible-states-proposal.md)). **DONE + merged:** P1 (node↔protocol wiring bug → compile error, cast-free) + P5 (http transport dies in browser). **P2 SKIPPED** (cast). **P4 already-enforced** (loose-fields payload already rejected; proposal mis-scoped). **P3 deferred** (opaque serve layers). Clean wins complete. Reserved `src/Hyperlink.ts` node/client surface until fully merged (done). **Tag-config reservation RELEASED — Agent D WorkPool/Gate/Daemon payload-config unblocked.**
 
 ### Active (owner approval required)
-1. **Agent 4:** Examples IA Eng’d + polish (headers, hub, guide cites). E5 apps book still owner-gated. Handoff: [`examples-ia-reorg.md`](./examples-ia-reorg.md).
-2. **Agent G / TUI:** Dashboard unheld; HttpApi-shaped `Route` + `GroupRoute.from`/`gets` Eng’d ([`ui-routes-dream.md`](./ui-routes-dream.md)); Navigator cutover next. Branch `cursor/view-withsize-types-125f`.
+1. **Agent 4:** Examples IA Eng’d. **Gap proposals** — walk Idea 1 (WorkPool) then next. Handoff: [`examples-gap-proposals.md`](./examples-gap-proposals.md). E5 still owner-gated.
+2. **Agent G / TUI:** Dashboard unheld; HttpApi-shaped `Route` + `addHttpApi` Eng’d ([`ui-routes-dream.md`](./ui-routes-dream.md)); Navigator cutover next. Branch `cursor/view-withsize-types-125f`.
 3. **Agent 5 (Launcher + handoff):** #39 landed — serve-site `handoff(from,to,ctx)`; WorkPool bakes `releaseEnqueueHandoff`; live A→B suite (23) + watchable Ink TUI (`example:handoff-ab-live`). Next: deferred `restartSuccessor` / Track D. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
 4. **Docs site:** Live — apex coming-soon (inlined CSS + `(book)` chrome); docs on `dev`. Origin host-gate via `serve-production.mjs` (before Waku static). Islands: `hyperlink-ts` alias + `.hl-dashboard`. Getting Started em-dash/voice polish.
 

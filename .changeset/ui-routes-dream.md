@@ -2,4 +2,4 @@
 "hyperlink-ts": minor
 ---
 
-**UI Route (HttpApi-shaped) + GroupRoute:** `Route.make` / `group` / `get` / `match` / `urlBuilder`. Dynamic Group → routes live in `hyperlink-ts/ui/GroupRoute` (`from` + `gets` via real `Route.get`s — no `leafViews` bag). Removed `Route.app` / `ui/Routes`.
+**UI Route (HttpApi-shaped):** `Route.make` / `group` / `get` / `urlBuilder` / `match` / `reflect`. Root endpoints on the api; optional `topLevel` on groups. `Route.addHttpApi` mixes Effect `HttpApi` path trees into the router (URL surface only). No Group.Tag route helpers.
