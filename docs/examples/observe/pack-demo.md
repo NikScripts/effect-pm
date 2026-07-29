@@ -13,3 +13,6 @@ Binds a compositional pack under `Atom.runtime`, reads status, fires `pause` —
 path skins use via `Observe.use` under `RuntimeProvider`.
 
 Guide: [Observe recipes](/docs/observe) · Hub: [Examples](/docs/examples#observe)
+
+> [!NOTE]
+> **Related examples:** [atom, query, fn, poll](/docs/observe-recipes) · [WorkPool pack](/docs/observe-work-pool-pack) · [Daemon pack](/docs/observe-daemon-pack) · [Gate pack](/docs/observe-gate-pack)

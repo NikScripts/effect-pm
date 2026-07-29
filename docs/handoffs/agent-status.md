@@ -6,7 +6,7 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **4** | `cursor/hyperservice-open-deps-5679` | [gap proposals](./examples-gap-proposals.md) · [examples IA](./examples-ia-reorg.md) · [E5 apps](./examples-apps-e5-plan.md) | **tip-synced** — Ideas 1–9 topic forms Eng’d | same tip as `integration` | includes 94/94 | Idea 10 E5 still owner-gated | 2026-07-29 |
+| **4** | `cursor/hyperservice-open-deps-5679` | [gap proposals](./examples-gap-proposals.md) · [examples IA](./examples-ia-reorg.md) · [E5 apps](./examples-apps-e5-plan.md) | **tip-synced** — Ideas 1–9 + Related notes (97/97) | same tip as `integration` | includes 94/94; Related notes 97/97 | Idea 10 E5 still owner-gated | 2026-07-29 |
 | **G / TUI** | `cursor/view-withsize-types-125f` | View compose · [UI Route](./ui-routes-dream.md) | **tip-synced** — Navigator→Router cutover Eng’d | same tip as `integration` | ui-router + compose tests | F5 flake pre-existing | 2026-07-29 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **5**, **G** | 2026-07-26 |
 | **5** | `cursor/launcher-handoff-design-929b` | [launcher + handoff brief](./launcher-and-handoff-brief.md) · [rename](./rename-hyperlink-handoff.md) | **landed** — #39 + A→B suite + Ink live TUI on `integration` | same tip as `integration` | handoff+cutover 37/37; `example:handoff-ab-live` (TTY) | `restartSuccessor` / serve `{ node }` / #35–37 deferred | 2026-07-29 |
