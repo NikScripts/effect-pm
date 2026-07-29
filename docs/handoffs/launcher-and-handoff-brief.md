@@ -171,7 +171,7 @@ Shipped on tip (owner Eng go + refinements):
 
 Eng defaults: 32-byte hex token; Ready poll `100 millis` with per-dial `2 seconds` bound; outer default `"30 seconds"`.
 
-**Next bake:** Track C remainder (version handoff) — owner lock #28–37; Track D (clients during handoff + peer hot-rebind).
+**Next bake:** Track C deferred #34–37 (owner lock); Track D (`lookupClient` rebind + clients during handoff).
 
 ### Track B — research note (2026-07-27): what already exists
 
@@ -198,7 +198,7 @@ Owner locked #22–26; Eng on tip:
 - Recipe + example: custody (`Launcher.up`) then membership (`Lookup.client` + advertise/identity).
 - Guide: [`identity-coordinator.md`](../guides/identity-coordinator.md) planes section.
 
-**Still deferred:** blank worker / assign protocol; HTTP/WS Lookup; nameless Launcher discovery; Track D clients (+ peer hot-rebind). Track C bake #28–37 proposed below (not locked); Locked #27 membership push Eng'd.
+**Still deferred:** blank worker / assign protocol; HTTP/WS Lookup; nameless Launcher discovery; Track D clients (+ `lookupClient` rebind). Track C Locked #27–33 Eng'd; deferred bake #34–37 below (not locked).
 
 ### Track C — research note (2026-07-28): what already exists
 
@@ -342,15 +342,13 @@ How **clients** handle node handoff (redirect, dual-serve, drain, retry, discove
 ```
 Read docs/handoffs/launcher-and-handoff-brief.md carefully.
 
-You own launcher + node handoff design discussion. NOTHING about the launcher
-is locked — launcher-decisions.md is reference only; expect to start over.
-Contract drift detection (contractHash / verify / loud-failures) is solid — reuse it.
+You own launcher + node handoff (Agent 5). Track A+B and Track C Locked #27–33
+are Eng'd on tip (Launcher, Directory.changes, Node.drain/shutdown/launch,
+peersLayer rebind, Hyperlink.withHandoff). launcher-decisions.md stays
+reference-only if redesigning Track A further.
 
-Owner intent: dumb launcher that exits when spawn job is done; as soon as a
-process starts, nodes own it (all controls through the node); Lookup tells new
-nodes what to do; version upgrade triggers handoff (per-service, configured in
-layers; old node shuts down when done); clients-during-handoff is open.
+Contract drift (contractHash / verify / loud-failures) is solid — reuse it.
 
-Do not invent concepts unless they are really really good. Plan-first; no Eng
-until owner bakes items. Repeat the framing back before proposing APIs.
+Next: do NOT Eng deferred bake #34–37 until the owner locks them; Track D
+lookupClient hot-rebind is open. Plan-first; no new nouns unless really good.
 ```

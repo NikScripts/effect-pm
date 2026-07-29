@@ -14,8 +14,8 @@ import { Duration, Effect, Exit, Match, Predicate, Schedule } from "effect";
  */
 export type HyperlinkHandoffStrategy = "drainOnly" | "workPoolRelease";
 
-/** WorkPool kind ids (plain + priority). @internal */
-export const isHyperlinkWorkPoolKind = (kind: string | undefined): boolean =>
+/** WorkPool kind ids (plain + priority). */
+const isHyperlinkWorkPoolKind = (kind: string | undefined): boolean =>
   kind !== undefined && kind.startsWith("hyperlink-ts/WorkPool");
 
 /**

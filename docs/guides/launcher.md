@@ -132,8 +132,9 @@ wire key) — sugar over Directory’s schema’d request. See:
 
 ## Deferred (not beta Launcher)
 
-- Per-service handoff layer option (brief #33). Cutover leave already ships:
-  `Node.drain` / `Node.shutdown` / `Node.launch` — see [identity coordinator](./identity-coordinator.md#custody-vs-membership-launcher--lookup).
+- Peer WorkPool transfer (`release` → peer `enqueue`, brief #34) — local
+  `Hyperlink.withHandoff("drainOnly" | "workPoolRelease")` already ships on
+  `Node.shutdown`; see [identity coordinator](./identity-coordinator.md#custody-vs-membership-launcher--lookup).
 - `lookupClient` hot-rebind (directory `peersLayer` already rebinds on dial swap)
 - Blank worker + remote assign; HTTP/WS Lookup; nameless Launcher discovery
 - `Handle.events` Stream; stdout/stderr tap; thin `hl up` CLI

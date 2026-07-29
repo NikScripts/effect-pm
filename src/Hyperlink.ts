@@ -134,7 +134,7 @@ import {
 
 /**
  * Opt-in cutover strategy for {@link withHandoff} (Locked #33).
- * camelCase option strings — same family as {@link Node.OnConflict} / WorkPool `shutdownMode`
+ * camelCase option strings — same family as `OnConflict` / WorkPool `shutdownMode`
  * (PascalCase is reserved for `_tag` discriminants).
  *
  * @public
@@ -3233,8 +3233,9 @@ const servedHandoff = (
 };
 
 /**
+ * Package-private — used by protocol listen servers when wiring {@link Node.shutdown}.
  * Solo {@link ServedHyperlink}.handoff runs plus any opted-in shared-Spec instance handoffs
- * for the same wire keys (shared stamps are kept on {@link SharedWireState}, not the registry row).
+ * for the same wire keys (shared stamps live on module-private shared wire-key state).
  *
  * @internal
  */
