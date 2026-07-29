@@ -1,6 +1,6 @@
 /**
- * Internal impl for {@link ../ui/Routes} — UI route catalogs (HttpApi-shaped) with
- * path-bearing groups so {@link fromGroup} uses the same builders as hand-written routes.
+ * Internal impl for {@link ../ui/Route} catalog/nest helpers (HttpApi-shaped).
+ * Group → route reflection lives in {@link ../ui/groupRoute} (`routes`), not here.
  */
 import * as Context from "effect/Context";
 import * as Option from "effect/Option";
@@ -10,8 +10,8 @@ import * as Group from "../Group";
 import * as uiRoute from "./uiRoute";
 import type { Path } from "./uiRoute";
 
-export const TypeId = "~hyperlink-ts/ui/Routes" as const;
-export const GroupTypeId = "~hyperlink-ts/ui/Routes/Group" as const;
+export const TypeId = "~hyperlink-ts/ui/Route/App" as const;
+export const GroupTypeId = "~hyperlink-ts/ui/Route/Group" as const;
 
 /** Tag stamped by {@link fromGroup} — the Group/leaf member at this route. */
 export class Member extends Context.Service<Member, unknown>()(
@@ -33,20 +33,20 @@ export interface GroupConstraint extends Pipeable {
   annotate<I, S>(tag: Context.Key<I, S>, value: S): GroupConstraint;
 }
 
-export interface RoutesConstraint extends Pipeable {
+export interface AppConstraint extends Pipeable {
   readonly [TypeId]: typeof TypeId;
   readonly identifier: string;
   readonly groups: Readonly<Record<string, GroupConstraint>>;
   readonly annotations: Context.Context<never>;
-  add(...items: ReadonlyArray<RouteLike>): RoutesConstraint;
-  prefix(prefix: Path): RoutesConstraint;
-  annotate<I, S>(tag: Context.Key<I, S>, value: S): RoutesConstraint;
+  add(...items: ReadonlyArray<RouteLike>): AppConstraint;
+  prefix(prefix: Path): AppConstraint;
+  annotate<I, S>(tag: Context.Key<I, S>, value: S): AppConstraint;
 }
 
 export const isGroup = (u: unknown): u is GroupConstraint =>
   Predicate.hasProperty(u, GroupTypeId);
 
-export const isRoutes = (u: unknown): u is RoutesConstraint =>
+export const isApp = (u: unknown): u is AppConstraint =>
   Predicate.hasProperty(u, TypeId);
 
 const groupProto = {
@@ -143,11 +143,11 @@ export const group = <const Id extends string>(
     annotations: Context.empty(),
   });
 
-const routesProto = {
+const appProto = {
   pipe() {
     return pipeArguments(this, arguments);
   },
-  add(this: RoutesConstraint, ...items: ReadonlyArray<RouteLike>): RoutesConstraint {
+  add(this: AppConstraint, ...items: ReadonlyArray<RouteLike>): AppConstraint {
     let groups = { ...this.groups };
     for (const item of items) {
       if (uiRoute.isRoute(item)) {
@@ -169,29 +169,29 @@ const routesProto = {
         groups = { ...groups, [item.identifier]: item };
       }
     }
-    return makeRoutesProto({
+    return makeAppProto({
       identifier: this.identifier,
       groups,
       annotations: this.annotations,
     });
   },
-  prefix(this: RoutesConstraint, prefix: Path): RoutesConstraint {
+  prefix(this: AppConstraint, prefix: Path): AppConstraint {
     const groups: Record<string, GroupConstraint> = {};
     for (const [id, g] of Object.entries(this.groups)) {
       groups[id] = g.prefix(prefix);
     }
-    return makeRoutesProto({
+    return makeAppProto({
       identifier: this.identifier,
       groups,
       annotations: this.annotations,
     });
   },
   annotate<I, S>(
-    this: RoutesConstraint,
+    this: AppConstraint,
     tag: Context.Key<I, S>,
     value: S,
-  ): RoutesConstraint {
-    return makeRoutesProto({
+  ): AppConstraint {
+    return makeAppProto({
       identifier: this.identifier,
       groups: this.groups,
       annotations: Context.add(this.annotations, tag, value),
@@ -199,20 +199,21 @@ const routesProto = {
   },
 };
 
-const makeRoutesProto = (options: {
+const makeAppProto = (options: {
   readonly identifier: string;
   readonly groups: Readonly<Record<string, GroupConstraint>>;
   readonly annotations: Context.Context<never>;
-}): RoutesConstraint =>
-  Object.assign(Object.create(routesProto), {
+}): AppConstraint =>
+  Object.assign(Object.create(appProto), {
     [TypeId]: TypeId,
     identifier: options.identifier,
     groups: options.groups,
     annotations: options.annotations,
-  }) as RoutesConstraint;
+  }) as AppConstraint;
 
-export const make = <const Id extends string>(identifier: Id): RoutesConstraint =>
-  makeRoutesProto({
+/** Empty route app / catalog (`HttpApi.make` analogue). */
+export const app = <const Id extends string>(identifier: Id): AppConstraint =>
+  makeAppProto({
     identifier,
     groups: {},
     annotations: Context.empty(),
@@ -296,7 +297,7 @@ export type FlatEntry = {
   readonly annotations: Context.Context<never>;
 };
 
-export const flatten = (self: RoutesConstraint): ReadonlyArray<FlatEntry> => {
+export const flatten = (self: AppConstraint): ReadonlyArray<FlatEntry> => {
   const out: Array<FlatEntry> = [];
   const walkGroup = (
     g: GroupConstraint,
@@ -352,7 +353,7 @@ export type Match = {
 };
 
 export const match = (
-  self: RoutesConstraint,
+  self: AppConstraint,
   pathname: string,
 ): Option.Option<Match> => {
   const normalized =
@@ -408,7 +409,7 @@ export type UrlMethod = (request?: {
  * Nested URL builder — same nesting idea as `HttpApiClient.urlBuilder`.
  * Path-bearing groups are callable (`urls.Nwsl()`); child routes/groups nest.
  */
-export const urlBuilder = (self: RoutesConstraint): UrlBuilder => {
+export const urlBuilder = (self: AppConstraint): UrlBuilder => {
   const root: UrlBuilder = {};
 
   /** Nest node that may also be callable (`urls.Nwsl()` + `urls.Nwsl.HttpApi`). */
@@ -469,7 +470,7 @@ export const urlBuilder = (self: RoutesConstraint): UrlBuilder => {
 };
 
 export const reflect = (
-  self: RoutesConstraint,
+  self: AppConstraint,
   options: {
     readonly onGroup?: (entry: {
       readonly group: GroupConstraint;

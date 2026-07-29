@@ -1,17 +1,26 @@
 /**
  * @module ui/groupRoute
  *
- * Pure Group-tree path resolution shared by the web and TUI dashboards. The path is the
- * chain of member keys from the root (`ServicesHub → Wnba → ImportSchedule` →
- * `["Wnba", "ImportSchedule"]`). Matching is **case-insensitive**; resolved keys keep the
- * tree's actual casing. A trailing segment after a leaf is a leaf sub-view (e.g. `"logs"`).
- * At the **root**, a reserved `"health"` segment (optional node-id child) is the node-status
- * shell page — not a Group member.
+ * Bridge between Hyperlink {@link ../Group} trees and UI navigation:
  *
- * Renderers bind this to History (web) or in-memory state (TUI); the resolve math stays here.
+ * 1. **Legacy resolve** — walk short member-name segments (`resolveGroupRoute`) for the
+ *    current Navigator (arrays at the edge; retiring when Navigator mounts {@link ./Route}).
+ * 2. **`routes`** — reflect a Group into a {@link ./Route.Group} using the **same**
+ *    `Route.make` / `Route.group` / `.add` builders apps use by hand (not a private walk).
  *
+ * ```ts
+ * import * as Route from "hyperlink-ts/ui/Route"
+ * import { routes } from "hyperlink-ts/ui"
+ *
+ * Route.app("dashboard").add(
+ *   routes(ServicesHub, { leafViews: ["logs", "schedule"] }),
+ *   Route.group("shell", { topLevel: true }).add(Route.make("health", "/health")),
+ * )
+ * ```
  */
 import * as Group from "../Group";
+import type * as Route from "./Route";
+import * as uiRoutes from "../internal/uiRoutes";
 
 /** A group-shaped node the router can walk (`Group.Tag` or `{ key, members }`). */
 export type RouteGroup = {
@@ -174,3 +183,41 @@ export const pathToMember = (
   };
   return walk(root, []);
 };
+
+// =============================================================================
+// Group → Route.Group (dynamic generation)
+// =============================================================================
+
+/**
+ * Annotation stamped by {@link routes} — the Group or leaf member at this route.
+ *
+ * @public
+ */
+export const Member: typeof uiRoutes.Member = uiRoutes.Member;
+
+/**
+ * Annotation for a leaf sub-view name (`logs` / `schedule`).
+ *
+ * @public
+ */
+export const LeafView: typeof uiRoutes.LeafView = uiRoutes.LeafView;
+
+export type RoutesOptions = {
+  /** Leaf sub-view segments (e.g. `"logs"`, `"schedule"`). */
+  readonly leafViews?: ReadonlyArray<string> | undefined;
+};
+
+/**
+ * Reflect a Hyperlink Group into a path-bearing {@link Route.Group} by calling the
+ * public Route builders (`Route.group` / `Route.make` / `.add`) — not a privileged path.
+ *
+ * For each member name `Nwsl` → nest at `/Nwsl`; nested leaf `HttpApi` → `/Nwsl/HttpApi`;
+ * optional `leafViews` → `/Nwsl/HttpApi/logs`, etc. Member tags are annotated via
+ * {@link Member} / {@link LeafView} for {@link Route.match}.
+ *
+ * @public
+ */
+export const routes = (
+  root: RouteGroup,
+  options?: RoutesOptions,
+): Route.Group => uiRoutes.fromGroup(root, options);

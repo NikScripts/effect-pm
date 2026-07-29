@@ -1,12 +1,12 @@
 /**
- * Routes / Route — HttpApi-shaped UI catalog + fromGroup.
+ * Route app catalog + groupRoute.routes (Group → Route.Group).
  */
 import { describe, expect, it } from "@effect/vitest";
 import { Option, Schema } from "effect";
 import * as Daemon from "../src/Daemon";
 import * as Group from "../src/Group";
+import { routes } from "../src/ui/groupRoute";
 import * as Route from "../src/ui/Route";
-import * as Routes from "../src/ui/Routes";
 
 class HttpApi extends Daemon.Tag<HttpApi>()("test/routes/HttpApi") {}
 class Nwsl extends Group.Tag<Nwsl>("test/routes/Nwsl")({ HttpApi }) {}
@@ -32,10 +32,10 @@ describe("Route", () => {
   });
 });
 
-describe("Routes.fromGroup", () => {
-  const api = Routes.make("dashboard").add(
-    Routes.fromGroup(Hub, { leafViews: ["logs", "schedule"] }),
-    Routes.group("shell", { topLevel: true }).add(
+describe("groupRoute.routes", () => {
+  const api = Route.app("dashboard").add(
+    routes(Hub, { leafViews: ["logs", "schedule"] }),
+    Route.group("shell", { topLevel: true }).add(
       Route.make("health", "/health"),
       Route.make("node", "/health/:nodeId").pipe(
         Route.params(Schema.Struct({ nodeId: Schema.String })),
@@ -44,7 +44,7 @@ describe("Routes.fromGroup", () => {
   );
 
   it("urlBuilder nests Group members + leaf views", () => {
-    const urls = Routes.urlBuilder(api) as {
+    const urls = Route.urlBuilder(api) as {
       health: () => string;
       node: (r?: { params?: { nodeId: string } }) => string;
       Nwsl: (() => string) & {
@@ -63,43 +63,43 @@ describe("Routes.fromGroup", () => {
   });
 
   it("match resolves group, leaf, leaf view, and params", () => {
-    const leaf = Option.getOrThrow(Routes.match(api, "/Nwsl/HttpApi"));
+    const leaf = Option.getOrThrow(Route.match(api, "/Nwsl/HttpApi"));
     expect(leaf.kind).toBe("group");
     expect(leaf.identifiers).toEqual(["Nwsl", "HttpApi"]);
     expect(leaf.member).toBe(HttpApi);
     expect(leaf.leafView).toBeUndefined();
 
-    const logs = Option.getOrThrow(Routes.match(api, "/Nwsl/HttpApi/logs"));
+    const logs = Option.getOrThrow(Route.match(api, "/Nwsl/HttpApi/logs"));
     expect(logs.kind).toBe("route");
     expect(logs.leafView).toBe("logs");
     expect(logs.member).toBe(HttpApi);
 
-    const group = Option.getOrThrow(Routes.match(api, "/Nwsl"));
+    const group = Option.getOrThrow(Route.match(api, "/Nwsl"));
     expect(group.member).toBe(Nwsl);
 
-    const node = Option.getOrThrow(Routes.match(api, "/health/app%2FNode"));
+    const node = Option.getOrThrow(Route.match(api, "/health/app%2FNode"));
     expect(node.identifiers).toEqual(["node"]);
     expect(node.params).toEqual({ nodeId: "app/Node" });
   });
 
-  it("hand-written tree equals fromGroup paths", () => {
-    const hand = Routes.make("hand").add(
-      Routes.group("hub", { topLevel: true }).add(
-        Routes.group("Nwsl", { path: "/Nwsl" }).add(
-          Routes.group("HttpApi", { path: "/Nwsl/HttpApi" }).add(
+  it("hand-written tree equals groupRoute.routes paths", () => {
+    const hand = Route.app("hand").add(
+      Route.group("hub", { topLevel: true }).add(
+        Route.group("Nwsl", { path: "/Nwsl" }).add(
+          Route.group("HttpApi", { path: "/Nwsl/HttpApi" }).add(
             Route.make("logs", "/Nwsl/HttpApi/logs"),
           ),
         ),
       ),
     );
-    const generated = Routes.make("gen").add(
-      Routes.fromGroup(Hub, { leafViews: ["logs"] }),
+    const generated = Route.app("gen").add(
+      routes(Hub, { leafViews: ["logs"] }),
     );
-    const handPaths = Routes.flatten(hand)
+    const handPaths = Route.flatten(hand)
       .map((e) => e.path)
       .slice()
       .sort();
-    const genPaths = Routes.flatten(generated)
+    const genPaths = Route.flatten(generated)
       .map((e) => e.path)
       .slice()
       .sort();

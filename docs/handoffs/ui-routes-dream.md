@@ -1,44 +1,60 @@
-# UI Routes — dream API (HttpApi-shaped)
+# UI Route — dream API (HttpApi-shaped)
 
 **Branch:** `cursor/view-withsize-types-125f`  
-**State:** declaration + match + urlBuilder **Eng’d**; Navigator cutover **not** yet.
+**State:** `Route` toolkit + `groupRoute.routes` **Eng’d**; Navigator cutover **not** yet.
 
 ## Invariants
 
-1. **One toolkit** — apps and kit use the same `Route` / `Routes` builders.
-2. **`fromGroup` is a feature** of that toolkit, not private Navigator walk math.
-3. **String paths** at the public edge (`/Nwsl/HttpApi`, `/health/:nodeId`). Segment arrays stay internal if needed.
-4. **Not HttpApi runtime** — we do **not** drive nav via `HttpApiClient.make` / `HttpRouter`. Inspiration only; location stays ours.
+1. **One toolkit namespace:** `hyperlink-ts/ui/Route` — destinations, nests, app, match, urlBuilder.
+2. **Group → routes is a bridge**, not a Route primitive — `groupRoute.routes(hub)` (same file family as Group path resolve). It only calls `Route.group` / `Route.make` / `.add`.
+3. **String paths** at the public edge. Segment arrays stay on legacy Navigator until cutover.
+4. **Not HttpApi runtime** — no `HttpApiClient.make` / `HttpRouter` for UI nav.
+
+## How dynamic routes work
+
+`groupRoute.routes(ServicesHub, { leafViews: ["logs", "schedule"] })` walks the Group tree:
+
+| Member | Emitted with Route builders |
+|--------|-----------------------------|
+| nested Group `Nwsl` | `Route.group("Nwsl", { path: "/Nwsl" }).add(…children)` |
+| leaf `HttpApi` | `Route.group("HttpApi", { path: "/Nwsl/HttpApi" })` |
+| leaf view | `Route.make("logs", "/Nwsl/HttpApi/logs")` on that nest |
+
+Each node is annotated with `Member` (and `LeafView` for sub-views) so `Route.match` can recover the tag. Equivalent hand-written tree is bit-identical for paths (see tests).
+
+```text
+Hub
+└─ Nwsl          →  /Nwsl
+   └─ HttpApi    →  /Nwsl/HttpApi
+      ├─ logs    →  /Nwsl/HttpApi/logs
+      └─ schedule→  /Nwsl/HttpApi/schedule
+```
 
 ## Modules
 
-| Module | HttpApi analogue | Role |
-|--------|------------------|------|
-| `hyperlink-ts/ui/Route` | `HttpApiEndpoint` | id + path + params (+ annotations) |
-| `hyperlink-ts/ui/Routes` | `HttpApi` + `HttpApiGroup` | catalog, groups, `fromGroup`, `match`, `urlBuilder` |
+| Surface | Role |
+|---------|------|
+| `ui/Route` | `make` / `group` / `app` / `match` / `urlBuilder` |
+| `ui/groupRoute.routes` | Group tree → `Route.Group` |
 
-**UI extension:** groups may carry a `path` (layout / navigable nest). HttpApi groups are not path-bearing; we need this so `urls.Nwsl()` and `fromGroup` share one shape.
-
-## Dream usage
+## Usage
 
 ```ts
-const Dashboard = Routes.make("dashboard").add(
-  Routes.group("shell", { topLevel: true }).add(
+const Dashboard = Route.app("dashboard").add(
+  routes(ServicesHub, { leafViews: ["logs", "schedule"] }),
+  Route.group("shell", { topLevel: true }).add(
     Route.make("health", "/health"),
     Route.make("node", "/health/:nodeId").pipe(
       Route.params(Schema.Struct({ nodeId: Schema.String })),
     ),
   ),
-  Routes.fromGroup(ServicesHub, { leafViews: ["logs", "schedule"] }),
 )
 
-const urls = Routes.urlBuilder(Dashboard)
-urls.health()
+const urls = Route.urlBuilder(Dashboard)
 urls.Nwsl.HttpApi.logs()
-
-Routes.match(Dashboard, location.pathname)
+Route.match(Dashboard, location.pathname)
 ```
 
-## Next (Navigator)
+## Next
 
-Thin Navigator to: bind `memory` / `history` + subscribe over a `Routes` catalog (derived client / `go`). Retire hard-coded `openHealth` / path arrays from the public `Service` once skins migrate.
+Thin Navigator over `Route.app` + location; retire public path arrays / hard-coded `openHealth`.
