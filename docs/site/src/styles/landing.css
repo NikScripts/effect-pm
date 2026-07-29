@@ -11,10 +11,10 @@
   --landing-muted: #6b7280;
   --landing-panel: #f0f2f5;
   --landing-border: #e2e6eb;
-  --landing-primary: #0096c7;
-  --landing-primary-bright: #22c4e8;
+  --landing-primary: #0a8ad4;
+  --landing-primary-bright: #34b8ef;
   --landing-yield: #c26a1a;
-  --landing-glow: #00a8d833;
+  --landing-glow: #1496e033;
   --landing-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --landing-mono: ui-monospace, SFMono-Regular, Menlo, "Cascadia Code", monospace;
 }
@@ -26,10 +26,10 @@
     --landing-muted: oklch(50% 0.01 260);
     --landing-panel: oklch(96.5% 0.005 260);
     --landing-border: oklch(90% 0.008 260);
-    --landing-primary: oklch(62% 0.14 220);
-    --landing-primary-bright: oklch(74% 0.13 215);
+    --landing-primary: oklch(60% 0.15 230);
+    --landing-primary-bright: oklch(72% 0.14 225);
     --landing-yield: oklch(62% 0.17 55);
-    --landing-glow: oklch(68% 0.13 220 / 0.24);
+    --landing-glow: oklch(66% 0.14 230 / 0.24);
   }
 }
 @media (prefers-color-scheme: dark) {
@@ -40,10 +40,10 @@
     --landing-muted: #9aa3ad;
     --landing-panel: #1c2026;
     --landing-border: #2f353d;
-    --landing-primary: #3ec9e8;
-    --landing-primary-bright: #7ae0f5;
+    --landing-primary: #4bb8f0;
+    --landing-primary-bright: #85d2fa;
     --landing-yield: #e0a054;
-    --landing-glow: #3ec9e855;
+    --landing-glow: #4bb8f055;
   }
   @supports (color: oklch(0% 0 0)) {
     :root {
@@ -53,10 +53,10 @@
       --landing-muted: oklch(64% 0.01 260);
       --landing-panel: oklch(19% 0.012 260);
       --landing-border: oklch(30% 0.01 260);
-      --landing-primary: oklch(78% 0.12 215);
-      --landing-primary-bright: oklch(86% 0.1 210);
+      --landing-primary: oklch(76% 0.13 228);
+      --landing-primary-bright: oklch(84% 0.11 222);
       --landing-yield: oklch(75% 0.16 60);
-      --landing-glow: oklch(74% 0.12 215 / 0.36);
+      --landing-glow: oklch(72% 0.13 228 / 0.36);
     }
   }
 }
@@ -130,7 +130,7 @@ body {
     165deg,
     var(--landing-primary-bright) 0%,
     var(--landing-primary) 55%,
-    color-mix(in oklab, var(--landing-primary) 72%, #00607a) 100%
+    color-mix(in oklab, var(--landing-primary) 72%, #0a4f8a) 100%
   );
   -webkit-background-clip: text;
   background-clip: text;
