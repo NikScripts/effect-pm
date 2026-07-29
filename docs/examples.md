@@ -211,6 +211,18 @@ Guide: [Hyperlink (Tag & wire)](/docs/creating-a-hyperlink)
 
 `examples/hyperlink/shared-spec-wire.ts` · `pnpm run example:hyperlink-shared-spec-wire`
 
+### [counter layer](/docs/hyperlink-counter-layer)
+
+`examples/hyperlink/counter-layer.ts` · `pnpm run example:hyperlink-counter-layer`
+
+### [serve and client](/docs/hyperlink-serve-client)
+
+`examples/hyperlink/serve-client.ts` · `pnpm run example:hyperlink-serve-client`
+
+### [method kinds](/docs/hyperlink-method-kinds)
+
+`examples/hyperlink/method-kinds.ts` · `pnpm run example:hyperlink-method-kinds`
+
 ---
 
 ## Logs
@@ -348,6 +360,30 @@ Guide: [Observe recipes](/docs/observe)
 `examples/observe/pack-demo.ts` · `pnpm run example:observe-pack-demo`
 
 `Observe.bind` + compositional pack (same stack as `Observe.use` in React). Not Twoslash-paired yet (top-level await demo).
+
+### [WorkPool pack](/docs/observe-work-pool-pack)
+
+`examples/observe/work-pool-pack.ts` · `pnpm run example:observe-work-pool-pack`
+
+### [recipes](/docs/observe-recipes)
+
+`examples/observe/recipes.ts` · `pnpm run example:observe-recipes`
+
+### [scan and fold](/docs/observe-scan-fold)
+
+`examples/observe/scan-fold.ts` · `pnpm run example:observe-scan-fold`
+
+### [Hyperlink atom adapters](/docs/observe-hyperlink-atom)
+
+`examples/observe/hyperlink-atom.ts` · `pnpm run example:observe-hyperlink-atom`
+
+### [Daemon pack](/docs/observe-daemon-pack)
+
+`examples/observe/daemon-pack.ts` · `pnpm run example:observe-daemon-pack`
+
+### [Gate pack](/docs/observe-gate-pack)
+
+`examples/observe/gate-pack.ts` · `pnpm run example:observe-gate-pack`
 
 ---
 

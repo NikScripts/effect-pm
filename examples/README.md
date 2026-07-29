@@ -38,7 +38,7 @@ Living book: [docs/index.md](../docs/index.md) · [API Reference](https://hyperl
 | **Launcher** | `launcher/lookup-membership` |
 | **Logs** | `logs/live-bus` → `node-journal` → `hyperlink-logs` → `lineage-scope` → `levels` |
 | **Schedule / polling / config** | `pnpm run example:schedule-basics` → `example:schedule-controls` → `example:polling-sports` → `example:config-hot-swap` |
-| **Observe** | `pnpm run example:observe-pack-demo` · guide [Observe](../docs/guides/observe.md) |
+| **Observe** | `observe-pack-demo` → `observe-recipes` → `observe-work-pool-pack` / daemon / gate packs · guide [Observe](../docs/guides/observe.md) |
 | **Scenarios** | `scenarios/multi-protocol-dual-serve` → `schedule-sync-from-db` → `serve-per-deps` → NWSL |
 | **Apps** | `pnpm run example:apps-tui` · `example:apps-web` (+ `example:apps-web-server`) · `example:apps-dashboard` · `example:apps-cli` |
 
@@ -112,6 +112,9 @@ Paths are under `examples/`. Script = `pnpm run example:<topic>-<kebab-file>` (s
 | [`launcher/lookup-membership.ts`](./launcher/lookup-membership.ts) | Launcher → Lookup membership |
 | [`hyperlink/tag-defaults.ts`](./hyperlink/tag-defaults.ts) | Tag defaults |
 | [`hyperlink/shared-spec-wire.ts`](./hyperlink/shared-spec-wire.ts) | Shared Spec wire |
+| [`hyperlink/counter-layer.ts`](./hyperlink/counter-layer.ts) | Counter Tag + `Hyperlink.layer` |
+| [`hyperlink/serve-client.ts`](./hyperlink/serve-client.ts) | Same Counter Tag over RPC |
+| [`hyperlink/method-kinds.ts`](./hyperlink/method-kinds.ts) | `effect` / `effectFn` / `ref` / `stream` |
 | [`logs/live-bus.ts`](./logs/live-bus.ts) | `Logs.layer` + stream/snapshot |
 | [`logs/node-journal.ts`](./logs/node-journal.ts) | `Node.logs` + `Logs.byNode` |
 | [`logs/hyperlink-logs.ts`](./logs/hyperlink-logs.ts) | `Hyperlink.logs(tag).stream` / `.query` |
@@ -127,6 +130,12 @@ Paths are under `examples/`. Script = `pnpm run example:<topic>-<kebab-file>` (s
 | [`polling/*.ts`](./polling/) | accelerating / spaced / reset / peek / delayed-start |
 | [`config/hot-swap.ts`](./config/hot-swap.ts) | Dynamic config hot swap |
 | [`observe/pack-demo.ts`](./observe/pack-demo.ts) | `Observe.bind` + compositional pack |
+| [`observe/work-pool-pack.ts`](./observe/work-pool-pack.ts) | `Observe.bind` + `WorkPoolView.pack` |
+| [`observe/recipes.ts`](./observe/recipes.ts) | `Observe.atom` / `query` / `fn` / `poll` |
+| [`observe/scan-fold.ts`](./observe/scan-fold.ts) | `Observe.scan` + `Observe.fold` |
+| [`observe/hyperlink-atom.ts`](./observe/hyperlink-atom.ts) | `Hyperlink.atom` / `query` / `fn` adapters |
+| [`observe/daemon-pack.ts`](./observe/daemon-pack.ts) | `Observe.bind` + `DaemonView.pack` |
+| [`observe/gate-pack.ts`](./observe/gate-pack.ts) | `Observe.bind` + `GateView.pack` |
 
 ---
 

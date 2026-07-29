@@ -306,6 +306,9 @@
     "example:launcher-lookup-membership": "tsx examples/launcher/lookup-membership.ts",
     "example:hyperlink-tag-defaults": "tsx examples/hyperlink/tag-defaults.ts",
     "example:hyperlink-shared-spec-wire": "tsx examples/hyperlink/shared-spec-wire.ts",
+    "example:hyperlink-counter-layer": "tsx examples/hyperlink/counter-layer.ts",
+    "example:hyperlink-serve-client": "tsx examples/hyperlink/serve-client.ts",
+    "example:hyperlink-method-kinds": "tsx examples/hyperlink/method-kinds.ts",
     "example:logs-live-bus": "tsx examples/logs/live-bus.ts",
     "example:logs-node-journal": "tsx examples/logs/node-journal.ts",
     "example:logs-hyperlink-logs": "tsx examples/logs/hyperlink-logs.ts",
@@ -376,7 +379,13 @@
     "example:sports-polling-accelerating": "pnpm run example:polling-sports",
     "example:daemon-supervisor-patterns": "pnpm run example:daemon-patterns",
     "example:nwsl-gate-http-api": "pnpm run example:scenario-nwsl-http-api",
-    "example:observe-pack-demo": "tsx examples/observe/pack-demo.ts"
+    "example:observe-pack-demo": "tsx examples/observe/pack-demo.ts",
+    "example:observe-work-pool-pack": "tsx examples/observe/work-pool-pack.ts",
+    "example:observe-recipes": "tsx examples/observe/recipes.ts",
+    "example:observe-scan-fold": "tsx examples/observe/scan-fold.ts",
+    "example:observe-hyperlink-atom": "tsx examples/observe/hyperlink-atom.ts",
+    "example:observe-daemon-pack": "tsx examples/observe/daemon-pack.ts",
+    "example:observe-gate-pack": "tsx examples/observe/gate-pack.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
