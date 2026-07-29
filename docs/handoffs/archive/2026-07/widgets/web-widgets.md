@@ -65,7 +65,7 @@ paint + fewer concurrent streams (dedup under browser ~6-connection limit).
 - Route: `/…/Resource/logs` fullscreen log viewer.
 - **Unknown or misclassified leaves:** empty fragment or wrong widget (see gaps below).
 
-### Example fleet (`examples/web-dashboard/fleet.ts`)
+### Example fleet (`examples/apps/dashboard/fleet.ts`)
 
 Only **QueueResource.Tag** (QueueContract) + **ScheduledProcess.Tag** — the happy path the dashboard
 was built against.
@@ -186,7 +186,7 @@ Commit `70146c542` on `rewrite/resource-toolkit`:
 
 **Example**
 
-- Add `ApiMetrics.Tag` sibling under a group in `examples/web-dashboard/fleet.ts` (or separate demo)
+- Add `ApiMetrics.Tag` sibling under a group in `examples/apps/dashboard/fleet.ts` (or separate demo)
   with matching `HttpApiResource.Service` on server only.
 
 **Tests**
@@ -227,7 +227,7 @@ Host-wide aggregation UI consumes `Telemetry` resource, not per-leaf widgets. Se
 | `src/web/widgets.tsx` | `ApiMetricsCard`, `ApiMetricsStats`, `ApiMetricsChart`, … |
 | `src/web/Dashboard.tsx` | `Cell`, `ApiMetricsDetail`, route guards |
 | `src/web/index.ts` | Export new hooks/types if public |
-| `examples/web-dashboard/*` | Demo tag + server wiring |
+| `examples/apps/dashboard/*` | Demo tag + server wiring |
 | `docs/guides/toolkit-by-example.md` or web setup guide | Short ApiMetrics dashboard section |
 | `.changeset/*.md` | Minor if only `@nikscripts/effect-pm/web` behavior |
 

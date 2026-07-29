@@ -43,7 +43,7 @@ Layer.mergeAll(
 // one RpcGroup prefixed by demo/SharedCounters; route by header key
 ```
 
-Demo: [`../../examples/forms/hyperlink/shared-tag-wire.ts`](../../examples/forms/hyperlink/shared-tag-wire.ts).
+Demo: [`../../examples/shared-tag-wire.ts`](../../examples/shared-tag-wire.ts).
 API usage + limiter observation: `Gate.HttpApiClient` nest `metrics` (sibling `ApiMetrics` removed).
 
 ---
@@ -129,6 +129,6 @@ Spec-hash stays **`contractHash` / verify**, not the RpcGroup name.
 
 - Claim / build: `src/Hyperlink.ts` (`Tag`, `buildInstanceTag`, `wireTag`, `forwardClient`, `sharedTagSym`).  
 - Shareable fragments: `queueControlSpec` / `priorityControlSpec` (`WorkPool.ts`), `daemonControlSpec` / `scheduleHyperlinkSpec` (`Daemon.ts`), `httpApiMetricsNestSpec` (`internal/httpApiClientSpec.ts`), Gate observation in `internal/gateSchema.ts`.  
-- Demo: `examples/forms/hyperlink/shared-tag-wire.ts`.  
+- Demo: `examples/shared-tag-wire.ts`.  
 - UI: `tagWireKey` in `src/ui/data.ts`.  
 - Related: [`service-shapes.md`](./service-shapes.md) (handle taxonomy; orthogonal).

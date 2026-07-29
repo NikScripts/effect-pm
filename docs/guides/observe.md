@@ -95,4 +95,7 @@ All shipped `*View.pack` values are `Observe` recipes (not kind-switch builders)
 
 `WorkPoolView` also exports slices (`queueControls`, `queueMetricsHistory`, `serviceLogs`) for thinner packs.
 
+Runnable pack demo: [`examples/observe/pack-demo.ts`](../../examples/observe/pack-demo.ts) ·
+`pnpm run example:observe-pack-demo` · [Examples hub](/docs/examples#observe).
+
 See also [Hyperlink atom](/docs/hyperlink-atom), [Bundles](/docs/bundles) (retirement map).

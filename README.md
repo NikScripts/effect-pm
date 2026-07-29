@@ -132,7 +132,7 @@ Two planes, both opt-in, same `yield* Tag` surface, in-memory or SQLite:
 | [docs/guides/work-pools.md](./docs/guides/work-pools.md) | Work pools end to end |
 | [docs/guides/stores.md](./docs/guides/stores.md) | Store composition recipe |
 | [docs/index.md](./docs/index.md) | Live book |
-| [docs/legacy/AGENTS.md](./docs/legacy/AGENTS.md) | Repo map for agents |
+| [AGENTS.md](./AGENTS.md) | Repo map / branch policy for agents |
 
 ## License
 

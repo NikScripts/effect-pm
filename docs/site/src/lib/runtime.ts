@@ -18,6 +18,6 @@ export const runServer = <A, E>(
 ): Promise<A> => Effect.runPromise(effect.pipe(Effect.provide(NodeFileSystem.layer)));
 
 // Future SSR/RSC hydration seam (no implementation now): the client island runtime
-// would be `Atom.runtime(layer)` (see examples/queue-widget), and server->client
+// would be `Atom.runtime(layer)` (see examples/apps/queue-widget), and server->client
 // handoff would use `effect/unstable/reactivity/Hydration` (`dehydrate`/`hydrate`)
 // with atom-react's `HydrationBoundary`. Wired only when a doc page needs a live island.

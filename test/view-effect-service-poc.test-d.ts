@@ -1,5 +1,5 @@
 /**
- * Type proof — Effect-faithful View Tag POC (`examples/forms/view/effect-service-poc`).
+ * Type proof — Effect-faithful View Tag POC (`examples/apps/view-scratch/effect-service-poc`).
  */
 import { expectTypeOf } from "vitest";
 import type * as React from "react";
@@ -15,7 +15,7 @@ import {
   PoolCard,
   denseSkin,
   poolSkin,
-} from "../examples/forms/view/effect-service-poc";
+} from "../examples/apps/view-scratch/effect-service-poc";
 
 // ── WIN: instance Service — no typeof ───────────────────────────────────────
 // Effect puts Shape on ServiceClass.Shape → class instance type has `.Service`.

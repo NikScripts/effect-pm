@@ -144,7 +144,8 @@ const live = WorkPool.layer(Mail, { /* … */ }).pipe(
 ```
 
 This is a **different plane** from Soft `WorkPool.store(Mail)` on an AppStore (observability /
-analytics). You can run durability alone, Soft journals alone, or both.
+analytics). You can run durability alone, Soft journals alone, or both. Consumer analytics reads
+are listed on [WorkPool](/docs/work-pools#persistence-and-analytics).
 
 ### History backfill — `HistoryStore`
 
@@ -153,6 +154,17 @@ Keyed append-log for stream history (metrics windows, etc.). Port: `hyperlink-ts
 Engines read it via `serviceOption(HistoryStore)` — omit the layer and `*History` / windowed
 `metrics.query` backfill stay empty.
 
+Provide onto the WorkPool / Daemon / Gate layer that should capture windows:
+
+```ts
+import { HistoryStore } from "hyperlink-ts"
+import { SQLiteHistoryStore } from "hyperlink-ts/storage/sqlite"
+import { Layer } from "effect"
+
+Layer.provide(HistoryStore.layerMemory())
+// or: Layer.provide(SQLiteHistoryStore.layer({ filename: "history.db" }))
+```
+
 ### Fleet rate limit — Effect `RateLimiterStore` (Redis)
 
 Gate / WorkPool / HttpApiClient rate limits take **policy** on the tag (`rateLimit: { limit,
@@ -160,11 +172,13 @@ window, … }`). The store is a Context service: Soft in-memory limiter when abs
 fleet limit provide Effect Redis:
 
 ```ts
-import { RateLimiter } from "effect/unstable/persistence/RateLimiter"
+import {
+  layerStoreRedis as rateLimiterStoreRedis,
+} from "effect/unstable/persistence/RateLimiter"
 import { NodeRedis } from "@effect/platform-node"
 
 const FleetLive = Layer.mergeAll(EastGate.layer, WestGate.layer).pipe(
-  Layer.provide(RateLimiter.layerStoreRedis({ prefix: "fleet:" })),
+  Layer.provide(rateLimiterStoreRedis({ prefix: "fleet:" })),
   Layer.provide(NodeRedis.layer({ host: "127.0.0.1", port: 6379 })),
 )
 ```
@@ -193,6 +207,13 @@ ports and do not replace `DurableWorkPoolStore` or `Store.Service`.
 | `hyperlink-ts/HistoryStore` | Stream history port (`layerMemory`) |
 | `hyperlink-ts/storage/sqlite` | `SQLiteDurableWorkPoolStore`, `SQLiteHistoryStore` |
 | Effect `RateLimiter` + `@effect/platform-node` Redis | Fleet rate-limit store |
+
+## Cutover history
+
+Historical Store-bridge / facet-retirement decisions live under
+[`docs/handoffs/store-cutover-00-store-core.md`](../handoffs/store-cutover-00-store-core.md) and
+sibling `store-cutover-*.md` files — **prefer this guide** when they disagree. Do not revive
+`DaemonStorage` / `LogStore` / `ProcessLifecycleStore`.
 
 ## Related
 

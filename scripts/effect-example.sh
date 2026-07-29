@@ -59,7 +59,7 @@ tmux send-keys -t "$SESSION:tui" "pnpm run example:dashboard"
 
 # window 3: the web UI — same, command ready to launch
 tmux new-window -t "$SESSION" -n web -c "$ROOT"
-tmux send-keys -t "$SESSION:web" "pnpm run example:web-dashboard"
+tmux send-keys -t "$SESSION:web" "pnpm run example:apps-dashboard"
 
 # land on the TUI window *within the detached session* (does not affect your client)
 tmux select-window -t "$SESSION:tui"

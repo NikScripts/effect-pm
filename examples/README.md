@@ -1,16 +1,24 @@
 # Examples (`examples/`)
 
-Runnable teaching scripts organized in two layers:
+Teaching scripts and demo apps, organized like the living guides — **topic folders**, short
+file names, hub pages that include the same `.ts` via Twoslash.
 
 | Layer | Path | Purpose |
 |-------|------|---------|
-| **Forms** | [`forms/`](./forms/) | One API shape per file — minimal, focused references |
-| **Scenarios** | [`scenarios/`](./scenarios/) | Descriptive compositions showing subsystems working together |
-| **Shared** | [`shared/`](./shared/) | Test doubles, harness helpers, small shared utilities |
+| **Topics** | `work-pool/`, `gate/`, `daemon/`, `node/`, `fleet/`, `launcher/`, `hyperlink/`, `store/`, `schedule/`, `polling/`, `config/`, `observe/` | One API shape per file — same names as the guides |
+| **Scenarios** | [`scenarios/`](./scenarios/) | Multi-file / multi-process compositions |
+| **Apps** | [`apps/`](./apps/) | TUI, web, dashboard, CLI, widgets (not 1:1 Twoslash yet) |
+| **Shared** | [`shared/`](./shared/) | Harness helpers |
 
-Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-GUIDE.md). API tables: [docs/legacy/PROCESS-API.md](../docs/legacy/PROCESS-API.md), [docs/legacy/HYPERLINK-API.md](../docs/legacy/HYPERLINK-API.md).
+Living book: [docs/index.md](../docs/index.md) · **[Examples hub](../docs/examples.md)** · [API Reference](https://hyperlink.cool/api/hyperlink-ts).
 
-**Conventions:** Each file has a one-line module header (what + how to run). Teaching notes live **inline next to the code** they describe. Imports omit `.js` extensions — examples run via `tsx` on `.ts` sources directly.
+**How to find an example:** open the [hub](../docs/examples.md) (grouped like guides), or go
+straight to `examples/<topic>/<name>.ts`. Docs pairs live at `docs/examples/<topic>/<name>.md`
+and include the source with `{.twoslash include="examples/…"}` plus `// ---cut---` markers in the `.ts`.
+
+**Conventions:** Module header = what + `pnpm run example:<topic>-<name>`. Imports omit `.js`
+extensions — run via `tsx` on sources. Prefer the hub over hunting old `forms/` / `hyperlink-*` paths
+(those are gone).
 
 ---
 
@@ -18,151 +26,146 @@ Cross-cutting narrative: [docs/legacy/PACKAGE-GUIDE.md](../docs/legacy/PACKAGE-G
 
 - **Node.js** compatible with the repo `engines` field in `package.json`.
 - **Dependencies** installed from the package root (`pnpm install`).
-- Most examples use **`tsx`** via `pnpm run example:*` or `npx tsx`.
+- Most examples use **`tsx`** via `pnpm run example:*`.
 
 ---
 
 ## Suggested tracks
 
-| Track | Read / run in this order |
-|-------|--------------------------|
-| **Start here** | [`forms/queue/workpool-priority-retry.ts`](./forms/queue/workpool-priority-retry.ts) → [Examples (docs)](../docs/examples.md#queue) |
-| **Dashboard / TUI** | [`hyperlink-tui/`](./hyperlink-tui/) — terminal dashboards over hyperlink tags |
-| **Queues** | [`forms/queue/workpool-priority-retry.ts`](./forms/queue/workpool-priority-retry.ts) → [`forms/queue/workpool-priority-lanes.ts`](./forms/queue/workpool-priority-lanes.ts) |
-| **Schedule controls** | `pnpm run example:schedule-control-basics` → `example:schedule-control-surfaces` → [`scenarios/schedule-sync-from-external-db.ts`](./scenarios/schedule-sync-from-external-db.ts) |
-| **Daemon runtime** | `pnpm run example:daemon-supervisor-patterns` |
-| **Polling patterns** | `pnpm run example:sports-polling-accelerating` |
-| **Hyperlink gating** | [`forms/hyperlink/gate-unit-and-input.ts`](./forms/hyperlink/gate-unit-and-input.ts) → [`gate-store-readback.ts`](./forms/hyperlink/gate-store-readback.ts) → [`gate-runtime-observer.ts`](./forms/hyperlink/gate-runtime-observer.ts) → http-client → http-api forms |
-| **Fleet glass** | `pnpm run example:telemetry-fleet-glass` → `example:fleet-health-glass` → `example:shardmap-sessions` |
-| **Node module** | (1) `node-tag-addressed` → (2) `node-tag-bound` → (3) `node-clients` → (4) addressless → (5) nameless unix → (6) `node-prototype` → (7) `node-lookup` → (8) nameless `http`/`ws` siblings → identity coordinator (`node-identity-coordinator`). Keep protocol listens in sync — [§ Protocol listen siblings](../docs/handoffs/node-catalog-and-discovery.md#protocol-listen-siblings-keep-in-sync). |
-| **Storage** | [`forms/daemon-store/daemon-layer-store-auto-write.ts`](./forms/daemon-store/daemon-layer-store-auto-write.ts) (execution events) → [`daemon-layer-typed-error-store.ts`](./forms/daemon-store/daemon-layer-typed-error-store.ts) |
+| Track | Read / run |
+|-------|------------|
+| **Start here** | [`work-pool/priority-retry.ts`](./work-pool/priority-retry.ts) → [hub § WorkPool](../docs/examples.md) |
+| **WorkPool** | `priority-retry` → `named-lanes` |
+| **Gate** | `gate/unit-and-input` → `store-readback` → `runtime-observer` → http-client → http-api |
+| **Daemon + Soft** | `daemon/store-auto-write` → `typed-failed-error` |
+| **Node & discovery** | `node/tag-addressed` → `tag-bound` → `clients` → addressless → nameless unix → `prototype` → `as-lookup` → nameless http/ws → `identity-coordinator` |
+| **Fleet glass** | `fleet/telemetry-glass` → `health-glass` → `shardmap-sessions` |
+| **Launcher** | `launcher/lookup-membership` |
+| **Schedule / polling / config** | `pnpm run example:schedule-basics` → `example:schedule-controls` → `example:polling-sports` → `example:config-hot-swap` |
+| **Observe** | `pnpm run example:observe-pack-demo` · guide [Observe](../docs/guides/observe.md) |
+| **Scenarios** | `scenarios/multi-protocol-dual-serve` → `schedule-sync-from-db` → `serve-per-deps` → NWSL |
+| **Apps** | `pnpm run example:apps-tui` · `example:apps-web` (+ `example:apps-web-server`) · `example:apps-dashboard` · `example:apps-cli` |
 
 ---
 
-## Forms catalog
+## Topic catalog
 
-### Queue
+Paths are under `examples/`. Script = `pnpm run example:<topic>-<kebab-file>` (see `package.json`).
 
-| File | Teaches |
-|------|---------|
-| [`forms/queue/workpool-priority-retry.ts`](./forms/queue/workpool-priority-retry.ts) | `WorkPool.Service`, priority, dedup key, handler retry |
-| [`forms/queue/workpool-priority-lanes.ts`](./forms/queue/workpool-priority-lanes.ts) | `WorkPool.priority`, named lanes, `add(item, lane?)`, weighted take |
-
-### Hyperlink
+### WorkPool — guide [Work pools](../docs/guides/work-pools.md)
 
 | File | Teaches |
 |------|---------|
-| [`forms/hyperlink/gate-unit-and-input.ts`](./forms/hyperlink/gate-unit-and-input.ts) | `Gate.Service` unit/input forms + concurrency + `Store.layerDefaultMemory` |
-| [`forms/hyperlink/gate-store-readback.ts`](./forms/hyperlink/gate-store-readback.ts) | Engine auto-write + `Gate.store` + `Store.Service.at` readback |
-| [`forms/hyperlink/gate-runtime-observer.ts`](./forms/hyperlink/gate-runtime-observer.ts) | Observable handle (`status`, counters) via `Subscribable` |
-| [`forms/hyperlink/http-client-gate.ts`](./forms/hyperlink/http-client-gate.ts) | `HttpClientGate.transformClient` |
-| [`forms/hyperlink/gate-http-api-client.ts`](./forms/hyperlink/gate-http-api-client.ts) | `Gate.HttpApiClient` Tag + nest metrics |
-| [`forms/hyperlink/gate-http-api-layer-effect.ts`](./forms/hyperlink/gate-http-api-layer-effect.ts) | `Gate.httpApiClientLayer` + sidecar capture |
-| [`forms/hyperlink/telemetry-fleet-glass.ts`](./forms/hyperlink/telemetry-fleet-glass.ts) | `Telemetry` leaf snapshot + fleet `inFlightByNode` / `fleetInFlight` |
-| [`forms/hyperlink/fleet-health-glass.ts`](./forms/hyperlink/fleet-health-glass.ts) | `FleetHealth` leaf `local` + fleet `byNode` / `status` (`Reachable` \| `Unreachable`) |
-| [`forms/hyperlink/node-tag-addressed.ts`](./forms/hyperlink/node-tag-addressed.ts) | `Node.Tag` with `{ path }` + `Node.unix` / `client` |
-| [`forms/hyperlink/node-http-nameless-serve.ts`](./forms/hyperlink/node-http-nameless-serve.ts) | **(8a)** Nameless `Node.http(serve)` — Lookup **piped** |
-| [`forms/hyperlink/node-ws-nameless-serve.ts`](./forms/hyperlink/node-ws-nameless-serve.ts) | **(8b)** Nameless `Node.ws(serve)` — Lookup **piped** |
-| — | `Node.nPipe` — Windows named-pipe sibling of `unix` (same `IpcSocket` kind; see `test/node-npipe.test.ts`) |
-| [`forms/hyperlink/node-tag-bound.ts`](./forms/hyperlink/node-tag-bound.ts) | Tag carries node — `Node.unix(Jobs, impl)` + `Hyperlink.client(Jobs)` |
-| [`forms/hyperlink/node-clients.ts`](./forms/hyperlink/node-clients.ts) | Catalog `ROut` + `Node.clients(Worker, [Jobs, Emails])` |
-| [`forms/hyperlink/node-tag-addressless-serve.ts`](./forms/hyperlink/node-tag-addressless-serve.ts) | Address-less serve — Lookup **piped** (`Lookup.layerOptions({ path })`; default is bare `Lookup.layer`) — terminal A |
-| [`forms/hyperlink/node-tag-addressless-call.ts`](./forms/hyperlink/node-tag-addressless-call.ts) | Address-less call — `lookupClient` + Lookup **piped** — terminal B |
-| [`forms/hyperlink/node-nameless-listen-serve.ts`](./forms/hyperlink/node-nameless-listen-serve.ts) | **(5)** Nameless `Node.unix([serve…])` — Lookup **piped**, terminal A |
-| [`forms/hyperlink/node-nameless-listen-call.ts`](./forms/hyperlink/node-nameless-listen-call.ts) | Nameless call (`discoverClients(Jobs, Emails)`) — terminal B |
-| [`forms/hyperlink/node-nameless-listen-demo.ts`](./forms/hyperlink/node-nameless-listen-demo.ts) | One-command proof — forks serve, then call |
-| [`forms/hyperlink/node-prototype.ts`](./forms/hyperlink/node-prototype.ts) | `Node.Prototype.make` + `.listen(serves)` |
-| [`forms/hyperlink/node-lookup.ts`](./forms/hyperlink/node-lookup.ts) | **(7)** `Node.asLookup` + `Lookup.layerNode` / `client` |
-| [`forms/hyperlink/node-identity-coordinator.ts`](./forms/hyperlink/node-identity-coordinator.ts) | **One brain, many hands** — identity Router + Advice + N Workers ([guide](../docs/guides/identity-coordinator.md)) |
-| [`forms/hyperlink/launcher-lookup-membership.ts`](./forms/hyperlink/launcher-lookup-membership.ts) | **Custody → membership** — `Launcher.up` then Lookup Directory advertise (`onYield` / assume) |
-| [`forms/hyperlink/node-verify-connection.ts`](./forms/hyperlink/node-verify-connection.ts) | `Hyperlink.verifyConnection` tier-1 + `{ deep: true, resource }` |
-| [`forms/hyperlink/shardmap-sessions.ts`](./forms/hyperlink/shardmap-sessions.ts) | `ShardMap` routed ops across distributed nodes |
+| [`work-pool/priority-retry.ts`](./work-pool/priority-retry.ts) | Priority, dedup key, handler retry |
+| [`work-pool/named-lanes.ts`](./work-pool/named-lanes.ts) | Named lanes, weighted take |
 
-### Daemon store (EventJournal)
+### Gate — guide [Gates](../docs/guides/gates.md)
 
 | File | Teaches |
 |------|---------|
-| [`forms/daemon-store/daemon-layer-store-auto-write.ts`](./forms/daemon-store/daemon-layer-store-auto-write.ts) | **`Daemon.layer`** + **`Daemon.store(tag)`** — auto-append on terminal runs, app store override |
-| [`forms/daemon-store/daemon-layer-typed-error-store.ts`](./forms/daemon-store/daemon-layer-typed-error-store.ts) | Tag `{ error }` → typed `Failed.error` in execution history |
+| [`gate/unit-and-input.ts`](./gate/unit-and-input.ts) | Unit/input forms + concurrency |
+| [`gate/store-readback.ts`](./gate/store-readback.ts) | Auto-write + store readback |
+| [`gate/runtime-observer.ts`](./gate/runtime-observer.ts) | Observable handle via `Subscribable` |
+| [`gate/http-client.ts`](./gate/http-client.ts) | `HttpClientGate.transformClient` |
+| [`gate/http-api-client.ts`](./gate/http-api-client.ts) | `Gate.HttpApiClient` Tag |
+| [`gate/http-api-layer.ts`](./gate/http-api-layer.ts) | `Gate.httpApiClientLayer` |
+| [`gate/rate-limit-fleet.ts`](./gate/rate-limit-fleet.ts) | Rate limit across fleet |
 
-Start here for execution history. **`Daemon.make`** does not auto-append.
-
-Storage:
-
-- **`Store.Service` + `Daemon.store(tag)`** — execution events (`Started` / `Completed` / `Failed` / `Interrupted`) on EventJournal; auto-write on **`Daemon.layer`** only.
-- **Durable logs** — `Node.logs` / toolkit `*.store` on a `Store.Service`; `hyperlink-ts/Logs` handles capture/relay + `byNode` / `byHyperlink`.
-
-### Schedule
+### Daemon — guide [Daemons](../docs/guides/daemons.md)
 
 | File | Teaches |
 |------|---------|
-| [`forms/schedule/schedule-at.ts`](./forms/schedule/schedule-at.ts) | `DaemonSchedule.at` (one-shot) |
-| [`forms/schedule/schedule-window.ts`](./forms/schedule/schedule-window.ts) | `DaemonSchedule.window` (bounded) |
-| [`forms/schedule/schedule-define.ts`](./forms/schedule/schedule-define.ts) | `DaemonSchedule.define` composition |
-| [`forms/schedule/schedule-controls-initializer.ts`](./forms/schedule/schedule-controls-initializer.ts) | Controls from `schedule` initializer |
-| [`forms/schedule/schedule-controls-in-effect.ts`](./forms/schedule/schedule-controls-in-effect.ts) | `Daemon.scheduleControls` in tick body |
-| [`forms/schedule/schedule-controls-external-fiber.ts`](./forms/schedule/schedule-controls-external-fiber.ts) | External fiber via `DaemonSchedule` service |
+| [`daemon/store-auto-write.ts`](./daemon/store-auto-write.ts) | `Daemon.layer` + `Daemon.store` auto-append |
+| [`daemon/typed-failed-error.ts`](./daemon/typed-failed-error.ts) | Typed `Failed.error` in history |
 
-### Polling
+### Node — [Identity coordinator](../docs/guides/identity-coordinator.md) · [Fleets and peers](../docs/services/fleets-and-peers.md)
 
 | File | Teaches |
 |------|---------|
-| [`forms/polling/polling-accelerating.ts`](./forms/polling/polling-accelerating.ts) | `Polling.accelerating` |
-| [`forms/polling/schedule-delayed-start.ts`](./forms/polling/schedule-delayed-start.ts) | Disarmed until `startAt` |
-| [`forms/polling/polling-spaced-read.ts`](./forms/polling/polling-spaced-read.ts) | `Polling.spaced` + feed read |
-| [`forms/polling/polling-accelerating-reset-cadence.ts`](./forms/polling/polling-accelerating-reset-cadence.ts) | `resetCadence` on score change |
-| [`forms/polling/polling-accelerating-peek-cadence.ts`](./forms/polling/polling-accelerating-peek-cadence.ts) | `peekCadence` + event buffer |
+| [`node/tag-addressed.ts`](./node/tag-addressed.ts) | `Node.Tag` + unix/client |
+| [`node/tag-bound.ts`](./node/tag-bound.ts) | Tag carries node |
+| [`node/clients.ts`](./node/clients.ts) | `Node.clients` catalog |
+| [`node/addressless-serve.ts`](./node/addressless-serve.ts) / [`addressless-call.ts`](./node/addressless-call.ts) | Lookup-piped addressless |
+| [`node/nameless-unix-*.ts`](./node/) | Nameless unix serve/call/demo |
+| [`node/nameless-http-serve.ts`](./node/nameless-http-serve.ts) / [`nameless-ws-serve.ts`](./node/nameless-ws-serve.ts) | Protocol siblings |
+| [`node/prototype.ts`](./node/prototype.ts) | `Node.Prototype.make` |
+| [`node/as-lookup.ts`](./node/as-lookup.ts) | `Node.asLookup` |
+| [`node/identity-coordinator.ts`](./node/identity-coordinator.ts) | Router + workers + Lookup |
+| [`node/verify-connection.ts`](./node/verify-connection.ts) | `Hyperlink.verifyConnection` |
 
-
-## Scenarios catalog
+### Fleet
 
 | File | Teaches |
 |------|---------|
-| [`scenarios/schedule-sync-from-external-db.ts`](./scenarios/schedule-sync-from-external-db.ts) | DB-to-runtime schedule sync pattern |
-| [`scenarios/multi-protocol-dual-serve.ts`](./scenarios/multi-protocol-dual-serve.ts) | One `{ http, ws }` node served over both transports (P3 boot guard) + a live round-trip over each |
-| [`scenarios/nwslsoccer/`](./scenarios/nwslsoccer/) | Real HttpApi client against NWSL SDP (optional local tree) |
+| [`fleet/telemetry-glass.ts`](./fleet/telemetry-glass.ts) | Telemetry fleet glass |
+| [`fleet/health-glass.ts`](./fleet/health-glass.ts) | FleetHealth |
+| [`fleet/shardmap-sessions.ts`](./fleet/shardmap-sessions.ts) | ShardMap sessions |
+
+### Launcher · Hyperlink · Store · Schedule · Polling · Config
+
+| File | Teaches |
+|------|---------|
+| [`launcher/lookup-membership.ts`](./launcher/lookup-membership.ts) | Launcher → Lookup membership |
+| [`hyperlink/tag-defaults.ts`](./hyperlink/tag-defaults.ts) | Tag defaults |
+| [`hyperlink/shared-spec-wire.ts`](./hyperlink/shared-spec-wire.ts) | Shared Spec wire |
+| [`store/memory.ts`](./store/memory.ts) / [`sqlite.ts`](./store/sqlite.ts) | Store backends |
+| [`schedule/*.ts`](./schedule/) | `at` / `window` / `define` / controls |
+| [`polling/*.ts`](./polling/) | accelerating / spaced / reset / peek / delayed-start |
+| [`config/hot-swap.ts`](./config/hot-swap.ts) | Dynamic config hot swap |
+| [`observe/pack-demo.ts`](./observe/pack-demo.ts) | `Observe.bind` + compositional pack |
+
+---
+
+## Scenarios
+
+| File | Docs |
+|------|------|
+| [`scenarios/multi-protocol-dual-serve.ts`](./scenarios/multi-protocol-dual-serve.ts) | [page](../docs/examples/scenarios/multi-protocol-dual-serve.md) |
+| [`scenarios/schedule-sync-from-db.ts`](./scenarios/schedule-sync-from-db.ts) | [page](../docs/examples/scenarios/schedule-sync-from-db.md) |
+| [`scenarios/serve-per-deps.ts`](./scenarios/serve-per-deps.ts) | [page](../docs/examples/scenarios/serve-per-deps.md) |
+| [`scenarios/nwslsoccer/gate-http-api-client.ts`](./scenarios/nwslsoccer/gate-http-api-client.ts) | [page](../docs/examples/scenarios/gate-http-api-client.md) |
+
+---
+
+## Apps (`examples/apps/`)
+
+| App | Path | Start |
+|-----|------|-------|
+| TUI | [`apps/tui/`](./apps/tui/) | `pnpm run example:apps-tui` |
+| Web | [`apps/web/`](./apps/web/) | `example:apps-web` + `example:apps-web-server` |
+| Dashboard | [`apps/dashboard/`](./apps/dashboard/) | `example:apps-dashboard` |
+| CLI | [`apps/cli/`](./apps/cli/) | `example:apps-cli` |
+| Queue widget | [`apps/queue-widget/`](./apps/queue-widget/) | `example:apps-queue-widget` |
+| View compose | [`apps/view-compose/`](./apps/view-compose/) | `example:apps-view-compose` |
+
+Old script names (`example:hyperlink-tui`, `example:web-dashboard`, …) remain as aliases.
 
 ---
 
 ## npm scripts (from package root)
 
-| Script | What it runs |
-|--------|----------------|
-| `pnpm run example:queue-hyperlink` | Queue form |
-| `pnpm run example:daemon-patterns` | Alias for `example:daemon-supervisor-patterns` |
-| `pnpm run example:daemon-supervisor-patterns` | Accelerating + delayed-start forms |
-| `pnpm run example:sports-polling-accelerating` | All three sports polling forms |
-| `pnpm run example:schedule-control-surfaces` | All three schedule control forms |
-| `pnpm run example:schedule-control-basics` | `at` + `window` + `define` forms |
-| `pnpm run example:schedule-control-db-sync` | DB sync scenario |
-| `pnpm run example:gate` | Gate concurrency form |
-| `pnpm run example:gate-store-readback` | Gate store auto-write + readback |
-| `pnpm run example:http-client-gate` | HttpClient gate form |
-| `pnpm run example:gate-http-api-client` | Gate.HttpApiClient form |
-| `pnpm run example:gate-http-api-layer-effect` | `layerEffect` form |
-| `pnpm run example:form:*` | Individual form scripts that are registered in `package.json` |
-
-Run any file directly:
+Prefer `example:<topic>-<name>` for teaching scripts and `example:apps-*` for apps.
+Composites: `example:schedule-basics`, `example:schedule-controls`, `example:polling-sports`,
+`example:daemon-patterns`.
 
 ```bash
-npx tsx examples/forms/schedule/schedule-at.ts
+pnpm run example:work-pool-priority-retry
+pnpm run example:gate-unit-and-input
+npx tsx examples/schedule/at.ts
 ```
 
 ---
 
 ## Control port
 
-Examples and the CLI default to port **3001** unless **`HOME_SERVER_PORT`** is set. Keep the scenario and CLI on the **same** port.
+Examples and the CLI default to port **3001** unless **`HOME_SERVER_PORT`** is set.
 
 ---
 
 ## For AI assistants
 
-When answering questions about **behavior**, prefer **source of truth** in this order:
+1. `src/*.ts` + TSDoc  
+2. Living book + [Examples hub](../docs/examples.md)  
+3. `examples/<topic>/` for one API shape; `scenarios/` for composition; `apps/` for product demos  
 
-1. `src/*.ts` implementation + TSDoc
-2. `docs/legacy/PROCESS-API.md` / `docs/legacy/HYPERLINK-API.md` for tables
-3. `docs/legacy/guides/toolkit-by-example.md` / `docs/legacy/guides/history-and-persistence.md` for patterns
-4. **`forms/`** for a single API shape; **`scenarios/`** for composition patterns
-
-Committed agent map: [docs/legacy/AGENTS.md](../docs/legacy/AGENTS.md).
+Committed agent map: [AGENTS.md](../AGENTS.md).

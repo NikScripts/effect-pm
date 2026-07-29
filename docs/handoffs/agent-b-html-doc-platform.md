@@ -51,7 +51,7 @@ Build the **official package website shell** — a bespoke docs application, not
 | Agent pages = **HTML in repo** under `content/` | Same app grows into full public site |
 | `pnpm run docs:serve` — Tailscale **read** on phone | |
 
-**Pattern reference (not a commitment):** `examples/hyperlink-web/` (Vite, `host: true`, React entry) — **not** its Dashboard import.
+**Pattern reference (not a commitment):** `examples/apps/web/` (Vite, `host: true`, React entry) — **not** its Dashboard import.
 
 ---
 

@@ -23,8 +23,8 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 
 | Example | Short path | Role |
 |---------|------------|------|
-| WNBA hub fixture | `hyperlink-web/hub.ts` | Node + HyperService tag definitions |
-| WNBA servers | `hyperlink-web/server.ts` | `Store.Service` + `Node.logs` / toolkit `.store` per node |
+| WNBA hub fixture | `apps/web/hub.ts` | Node + HyperService tag definitions |
+| WNBA servers | `apps/web/server.ts` | `Store.Service` + `Node.logs` / toolkit `.store` per node |
 | Test key constants | `test/fixtures/logKeys.ts` | Canonical keys for unit tests |
 | Logs env helper | `test/fixtures/logsEnv.ts` | `EnvNode.logs` on `Store.Service.layerMemory` for tests |
 | Hyperlink.logs integration | `test/logs-resource.test.ts` | Runtime `Hyperlink.logs` stream + query |
@@ -47,26 +47,26 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 
 | Symbol | Key kind | Key value | Package import | Source | Example |
 |--------|----------|-----------|----------------|--------|---------|
-| `WnbaNode.key` | node log key | `wnba/scores` | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` | `hyperlink-web/hub.ts` |
-| `LiveNode.key` | node log key | `wnba/live` | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` | `hyperlink-web/hub.ts` |
-| `StatsNode.key` | node log key | `wnba/stats` | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` | `hyperlink-web/hub.ts` |
-| `Hyperlink.selfNode(tag)` | node log key (runtime) | same as host `Node.key` | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` | `hyperlink-web/server.ts` |
+| `WnbaNode.key` | node log key | `wnba/scores` | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` | `apps/web/hub.ts` |
+| `LiveNode.key` | node log key | `wnba/live` | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` | `apps/web/hub.ts` |
+| `StatsNode.key` | node log key | `wnba/stats` | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` | `apps/web/hub.ts` |
+| `Hyperlink.selfNode(tag)` | node log key (runtime) | same as host `Node.key` | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` | `apps/web/server.ts` |
 | `Logs.NodeLogKey` | node log key (type) | `string` constrained to `Node.key` | `hyperlink-ts/Logs` | `src/Logs.ts` | — |
 | `Logs.nodeLogKey(node)` | node log key (resolver) | `node.key` | `hyperlink-ts/Logs` | `src/Logs.ts` | — |
 | `testBillingNodeKey` | node log key (test) | `billing/scores` | — (test fixture) | `test/fixtures/logKeys.ts` | `test/host-logs-history.test.ts` |
 | `testRelayNodeKey` | node log key (test) | `test/relay` | — (test fixture) | `test/fixtures/logKeys.ts` | `test/logs-relay.test.ts` |
-| `testTuiNodeKey` | node log key (example) | `acme/tui` | — (example fixture) | `hyperlink-tui/live-queues.ts` | `hyperlink-tui/queue-live.tsx` |
+| `testTuiNodeKey` | node log key (example) | `acme/tui` | — (example fixture) | `apps/tui/live-queues.ts` | `apps/tui/queue-live.tsx` |
 
 ### Hyperlink keys (resource-web)
 
 | Symbol | Key kind | Key value | Package import | Source | Example |
 |--------|----------|-----------|----------------|--------|---------|
-| `BoxScoreQueue.key` | service key | `wnba/BoxScoreQueue` | `hyperlink-ts/WorkPool` | `src/WorkPool.ts` | `hyperlink-web/hub.ts` |
-| `LiveScorePoller.key` | service key | `wnba/LiveScorePoller` | `hyperlink-ts/Daemon` | `src/Daemon.ts` | `hyperlink-web/hub.ts` |
-| `PlayByPlayQueue.key` | service key | `wnba/PlayByPlayQueue` | `hyperlink-ts/WorkPool` | `src/WorkPool.ts` | `hyperlink-web/hub.ts` |
-| `ScoresDb.key` | service key | `wnba/ScoresDb` | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` | `hyperlink-web/hub.ts` |
-| `ScoresApi.key` | service key | `@wnba/ScoresApi` | `hyperlink-ts/Gate` (`httpApiClientKind`) | `src/Gate.ts` | `hyperlink-web/hub.ts` |
-| `WorkerPool.key` | service key | `wnba/WorkerPool` | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` | `hyperlink-web/hub.ts` |
+| `BoxScoreQueue.key` | service key | `wnba/BoxScoreQueue` | `hyperlink-ts/WorkPool` | `src/WorkPool.ts` | `apps/web/hub.ts` |
+| `LiveScorePoller.key` | service key | `wnba/LiveScorePoller` | `hyperlink-ts/Daemon` | `src/Daemon.ts` | `apps/web/hub.ts` |
+| `PlayByPlayQueue.key` | service key | `wnba/PlayByPlayQueue` | `hyperlink-ts/WorkPool` | `src/WorkPool.ts` | `apps/web/hub.ts` |
+| `ScoresDb.key` | service key | `wnba/ScoresDb` | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` | `apps/web/hub.ts` |
+| `ScoresApi.key` | service key | `@wnba/ScoresApi` | `hyperlink-ts/Gate` (`httpApiClientKind`) | `src/Gate.ts` | `apps/web/hub.ts` |
+| `WorkerPool.key` | service key | `wnba/WorkerPool` | `hyperlink-ts/Hyperlink` | `src/Hyperlink.ts` | `apps/web/hub.ts` |
 | `testSyncProcessKey` | service key (test) | `billing/SyncWorker` | — (test fixture) | `test/fixtures/logKeys.ts` | `test/log-pipeline.test.ts` |
 | `Logs.HyperlinkLogKey` | service key (type) | `string` constrained to `Tag.key` | `hyperlink-ts/Logs` | `src/Logs.ts` | — |
 
@@ -131,7 +131,7 @@ import * as Daemon from "hyperlink-ts/Daemon";
 import * as Hyperlink from "hyperlink-ts/Hyperlink";
 import * as Logs from "hyperlink-ts/Logs";
 import * as LogEntry from "hyperlink-ts/LogEntry";
-// example: hyperlink-web/hub.ts
+// example: apps/web/hub.ts
 import { LiveNode, LiveScorePoller } from "./hub";
 
 // service key — LiveScorePoller.key === "wnba/LiveScorePoller"
@@ -179,7 +179,7 @@ const live = yield* Logs.stream;
 import * as Logs from "hyperlink-ts/Logs";
 import * as Daemon from "hyperlink-ts/Daemon";
 import * as Store from "hyperlink-ts/Store";
-// example: hyperlink-web/server.ts
+// example: apps/web/server.ts
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
   WnbaNode.logs,
@@ -234,7 +234,7 @@ All predicate arguments are **lineage segment keys** (usually a **service key** 
 
 ```ts
 import * as LogEntry from "hyperlink-ts/LogEntry";
-import { LiveNode, LiveScorePoller } from "hyperlink-web/hub";
+import { LiveNode, LiveScorePoller } from "apps/web/hub";
 
 const nodeLogKey = LiveNode.key;           // "wnba/live"
 const serviceKey = LiveScorePoller.key;   // "wnba/LiveScorePoller"
@@ -251,17 +251,17 @@ Lineage JSON uses annotation key `LogAnnotationKeys.lineage`. Hyperlink kind is 
 
 | Class | Key kind | Key value | Example file |
 |-------|----------|-----------|--------------|
-| `WnbaNode` | node log key | `wnba/scores` | `hyperlink-web/hub.ts` |
-| `LiveNode` | node log key | `wnba/live` | `hyperlink-web/hub.ts` |
-| `StatsNode` | node log key | `wnba/stats` | `hyperlink-web/hub.ts` |
-| `BoxScoreQueue` | service key | `wnba/BoxScoreQueue` | `hyperlink-web/hub.ts` |
-| `ScoresDb` | service key | `wnba/ScoresDb` | `hyperlink-web/hub.ts` |
-| `ScoresApi` | service key | `@wnba/ScoresApi` | `hyperlink-web/hub.ts` |
-| `LiveScorePoller` | service key | `wnba/LiveScorePoller` | `hyperlink-web/hub.ts` |
-| `PlayByPlayQueue` | service key | `wnba/PlayByPlayQueue` | `hyperlink-web/hub.ts` |
-| `WorkerPool` | service key | `wnba/WorkerPool` | `hyperlink-web/hub.ts` |
+| `WnbaNode` | node log key | `wnba/scores` | `apps/web/hub.ts` |
+| `LiveNode` | node log key | `wnba/live` | `apps/web/hub.ts` |
+| `StatsNode` | node log key | `wnba/stats` | `apps/web/hub.ts` |
+| `BoxScoreQueue` | service key | `wnba/BoxScoreQueue` | `apps/web/hub.ts` |
+| `ScoresDb` | service key | `wnba/ScoresDb` | `apps/web/hub.ts` |
+| `ScoresApi` | service key | `@wnba/ScoresApi` | `apps/web/hub.ts` |
+| `LiveScorePoller` | service key | `wnba/LiveScorePoller` | `apps/web/hub.ts` |
+| `PlayByPlayQueue` | service key | `wnba/PlayByPlayQueue` | `apps/web/hub.ts` |
+| `WorkerPool` | service key | `wnba/WorkerPool` | `apps/web/hub.ts` |
 
-`hyperlink-web/server.ts` registers `WnbaNode.logs` / `LiveNode.logs` / `StatsNode.logs` on per-node `Store.Service` classes (plus toolkit `.store` registrations).
+`apps/web/server.ts` registers `WnbaNode.logs` / `LiveNode.logs` / `StatsNode.logs` on per-node `Store.Service` classes (plus toolkit `.store` registrations).
 
 ## Remote dashboard (browser → node)
 
@@ -282,9 +282,9 @@ const rows = yield* n.logs.query({ limit: 300 });
 const scoped = rows.filter(LogEntry.hasKey(serviceKey));
 ```
 
-Example: `src/web/data.ts` (`hyperlinkLogsAtom`), `examples/web-dashboard/queue-data.ts` (`hyperlinkLogsAccumulator`).
+Example: `src/web/data.ts` (`hyperlinkLogsAtom`), `examples/apps/dashboard/queue-data.ts` (`hyperlinkLogsAccumulator`).
 
-Server must provide an app `Store.Service` with `Node.logs` (and desired toolkit stores) on the node stack — e.g. `DropletStore.layerMemory` in `examples/web-dashboard/queue-server.ts`. `httpServer` infers the node log key from served tags' bound `Node` for the handle’s `logs.query`.
+Server must provide an app `Store.Service` with `Node.logs` (and desired toolkit stores) on the node stack — e.g. `DropletStore.layerMemory` in `examples/apps/dashboard/queue-server.ts`. `httpServer` infers the node log key from served tags' bound `Node` for the handle’s `logs.query`.
 
 ## Migration
 

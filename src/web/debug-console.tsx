@@ -1,5 +1,5 @@
 /**
- * @module examples/web-dashboard/debug-console
+ * @module web/debug-console
  *
  * On-screen console for mobile (no devtools). Captures every `console.*` call plus uncaught
  * errors / rejections into a toggle-able overlay. Enable by adding **`?debug`** to the URL

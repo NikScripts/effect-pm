@@ -150,7 +150,7 @@ Guide: [`../guides/view-tag-types.md`](../guides/view-tag-types.md).
 
 ## Effect-faithful Tag POC (archived — baked)
 
-Historical POC: `examples/forms/view/effect-service-poc.ts`. Behavior now on
+Historical POC: `examples/view/effect-service-poc.ts`. Behavior now on
 shipped `View.Card.Tag` / `PropsOf` / `["Service"]` (see above).
 
 ## Checkpoint notes (2026-07-27)
@@ -168,7 +168,7 @@ shipped `View.Card.Tag` / `PropsOf` / `["Service"]` (see above).
 export class WorkerPoolCard extends View.Card.Tag<
   WorkerPoolCard,
   { readonly dense?: boolean }
->()("examples/hyperlink-web/worker-pool-card", {
+>()("examples/apps/web/worker-pool-card", {
   spec: workerPoolCardSpec,
 }) {}
 

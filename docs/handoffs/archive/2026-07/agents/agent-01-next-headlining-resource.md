@@ -50,7 +50,7 @@ Fleet/peer machinery already shipped (`Resource.distributed`, `Resource.peers`, 
 | `docs/handoffs/multi-host-instances-decisions.md` | SSOT (names may say Host/MultiHost — code is Node/MultiNode) |
 | `docs/standards/resources.md` | Locked peer/fleet rules |
 | `examples/resource-web/hub.ts`, `server.ts` | WorkerPool dogfood |
-| `examples/web-dashboard/fleet.ts` | “Fleet” UI = Group tree, **not** peers mesh — don’t conflate |
+| `examples/apps/dashboard/fleet.ts` | “Fleet” UI = Group tree, **not** peers mesh — don’t conflate |
 | `src/Telemetry.ts`, `docs/handoffs/archive/2026-07/features/telemetry-resource.md` | Adjacent observability candidate |
 | `package.json` exports | RunResource lacks dedicated subpath; Process/Queue/MultiNode have them |
 

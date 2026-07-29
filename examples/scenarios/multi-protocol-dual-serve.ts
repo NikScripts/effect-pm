@@ -22,7 +22,12 @@
  * ```bash
  * pnpm exec tsx examples/scenarios/multi-protocol-dual-serve.ts
  * ```
+ *
+ * Docs: `docs/examples/scenarios/multi-protocol-dual-serve.md` includes this file;
+ * cut markers hide the module header and runner epilogue.
  */
+
+// ---cut---
 // @effect-diagnostics-next-line nodeBuiltinImport:off
 import { createServer } from "node:http";
 import { Effect, Layer, Ref, Schema } from "effect";
@@ -106,4 +111,5 @@ const program = Effect.gen(function* () {
   }
 }).pipe(Effect.scoped);
 
+// ---cut-after---
 NodeRuntime.runMain(program);
