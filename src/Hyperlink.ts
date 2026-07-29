@@ -6109,9 +6109,12 @@ const makeLiveLookupService = <Self, S extends Spec>(
  *
  * **Transparent retry (Track D v1):** Effect RPCs that fail with `RpcClientError` wait
  * briefly for a successful rebind (or proactively resolve once), then retry **once** on
- * the new dial. Prefer B Directory-visible / Advice-preferred before A leaves so the
- * wait has a target. Streams are not auto-retried. Mutates retry once too — keep them
+ * the new dial. Streams are not auto-retried. Mutates retry once too — keep them
  * idempotent when cutover-safe.
+ *
+ * **Advice early move:** watches {@link Lookup.Advice}`changes` for this service key and
+ * re-resolves when prefer flips — dialers move to B when you `advise({ prefer: B })`,
+ * before A leaves and before the first transport error.
  *
  * Bake name sketch was `unsafeLookupClient` (“trust Lookup or die”); bare
  * `lookupClient(Tag)` keeps that fail-closed contract when advice is absent/stale.
@@ -6235,6 +6238,27 @@ export const lookupClient = <Self, S extends Spec>(
       let currentKey = lookupDialKey(endpoint);
       let currentNodeKey = endpoint.nodeKey;
 
+      const tryResolveAdopt = Effect.gen(function* () {
+        const next = yield* Effect.option(resolve);
+        if (Option.isNone(next)) return;
+        const nextKey = lookupDialKey(next.value);
+        if (nextKey === currentKey) return;
+        const installed = yield* Effect.exit(install(next.value));
+        if (Exit.isSuccess(installed)) {
+          currentKey = nextKey;
+          currentNodeKey = next.value.nodeKey;
+          return;
+        }
+        yield* Effect.logWarning(
+          "lookupClient rebind failed; keeping prior dial",
+        ).pipe(
+          Effect.annotateLogs({
+            "lookupClient.tag": tag.key,
+            "lookupClient.node": next.value.nodeKey,
+          }),
+        );
+      });
+
       yield* directory.changes.pipe(
         Stream.runForEach((event) =>
           Effect.gen(function* () {
@@ -6255,26 +6279,19 @@ export const lookupClient = <Self, S extends Spec>(
                 return;
               }
             }
-            const next = yield* Effect.option(resolve);
-            if (Option.isNone(next)) return;
-            const nextKey = lookupDialKey(next.value);
-            if (nextKey === currentKey) return;
-            const installed = yield* Effect.exit(install(next.value));
-            if (Exit.isSuccess(installed)) {
-              currentKey = nextKey;
-              currentNodeKey = next.value.nodeKey;
-              return;
-            }
-            yield* Effect.logWarning(
-              "lookupClient rebind failed; keeping prior dial",
-            ).pipe(
-              Effect.annotateLogs({
-                "lookupClient.tag": tag.key,
-                "lookupClient.node": next.value.nodeKey,
-              }),
-            );
+            yield* tryResolveAdopt;
           }),
         ),
+        Effect.forkScoped,
+      );
+
+      // Prefer flip → re-resolve before A leaves / before first RpcClientError.
+      yield* advice.changes.pipe(
+        Stream.filter(
+          (event) =>
+            event.serviceKey === tag.key || event.serviceKey === serviceKey,
+        ),
+        Stream.runForEach(() => tryResolveAdopt),
         Effect.forkScoped,
       );
 
@@ -6288,17 +6305,7 @@ export const lookupClient = <Self, S extends Spec>(
             }
             return Effect.gen(function* () {
               const before = yield* Ref.get(generation);
-              const next = yield* Effect.option(resolve);
-              if (Option.isSome(next)) {
-                const nextKey = lookupDialKey(next.value);
-                if (nextKey !== currentKey) {
-                  const installed = yield* Effect.exit(install(next.value));
-                  if (Exit.isSuccess(installed)) {
-                    currentKey = nextKey;
-                    currentNodeKey = next.value.nodeKey;
-                  }
-                }
-              }
+              yield* tryResolveAdopt;
               if ((yield* Ref.get(generation)) <= before) {
                 yield* SubscriptionRef.changes(installGen).pipe(
                   Stream.filter((g) => g > before),

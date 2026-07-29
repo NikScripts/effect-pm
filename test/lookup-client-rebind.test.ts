@@ -194,4 +194,70 @@ describe("Hyperlink.lookupClient hot-rebind", () => {
         expect(yield* Ref.get(failures)).toBe(0);
       }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(30))),
   );
+
+  it.live(
+    "Advice.changes early move: prefer B while A still up (no transport error)",
+    () =>
+      Effect.gen(function* () {
+        const lookupPath = yield* tmpSock("lookup-advice-move");
+        const workerAPath = yield* tmpSock("worker-a-advice");
+        const workerBPath = yield* tmpSock("worker-b-advice");
+
+        const lookupNode = Node.Tag()("lc-rebind/lookup-advice", {
+          path: lookupPath,
+        }).pipe(Node.asLookup);
+
+        class WorkerA extends Node.Tag<WorkerA, Jobs>()(
+          "lc-rebind/AdviceWorkerA",
+          { path: workerAPath },
+        ) {}
+        class WorkerB extends Node.Tag<WorkerB, Jobs>()(
+          "lc-rebind/AdviceWorkerB",
+          { path: workerBPath },
+        ) {}
+
+        const lookupClientLayer = Lookup.client(lookupNode);
+        yield* Layer.build(Lookup.layerNode(lookupNode));
+        const lookupCtx = yield* Layer.build(lookupClientLayer);
+
+        yield* Layer.build(
+          Node.unix(WorkerB, [
+            Hyperlink.serve(Jobs, { jobs: Effect.succeed(9) }),
+          ]).pipe(Layer.provide(lookupClientLayer)),
+        );
+        yield* Layer.build(
+          Node.unix(WorkerA, [
+            Hyperlink.serve(Jobs, { jobs: Effect.succeed(5) }),
+          ]).pipe(Layer.provide(lookupClientLayer)),
+        );
+
+        yield* Lookup.advise({
+          serviceKey: Jobs.key,
+          prefer: WorkerA.key,
+        }).pipe(Effect.provide(lookupCtx));
+
+        const clientCtx = yield* Layer.build(
+          Hyperlink.lookupClient(Jobs).pipe(Layer.provide(lookupClientLayer)),
+        );
+
+        const readJobs = Effect.gen(function* () {
+          const jobs = yield* Jobs;
+          return yield* jobs.jobs;
+        }).pipe(Effect.provide(Context.merge(lookupCtx, clientCtx)));
+
+        expect(yield* readJobs).toBe(5);
+
+        // Flip prefer to B while A is still Directory-visible — no shutdown.
+        yield* Lookup.advise({
+          serviceKey: Jobs.key,
+          prefer: WorkerB.key,
+        }).pipe(Effect.provide(lookupCtx));
+
+        yield* Effect.repeat(readJobs, {
+          until: (n) => n === 9,
+          schedule: Schedule.spaced(Duration.millis(25)),
+        });
+        expect(yield* readJobs).toBe(9);
+      }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(30))),
+  );
 });

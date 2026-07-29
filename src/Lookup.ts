@@ -14,7 +14,8 @@
  *   (or ask handle `yield` when `askIncumbent`); dead/unreachable → replace row.
  *   {@link Directory.changes} fans out upserts/removes so nodes can rebind dials on A→B swap.
  * - {@link Advice} — last-write placement board (`prefer` a directory `nodeKey` for a
- *   HyperService key). {@link Hyperlink.lookupClient} honors a live preferred row before D4 `pick`.
+ *   HyperService key) + {@link Advice.changes} so {@link Hyperlink.lookupClient} can move
+ *   dials when prefer flips (before the first transport error).
  *
  * @module Lookup
  */
@@ -274,6 +275,51 @@ export class PreferredRequest extends Schema.Class<PreferredRequest>(
 }) {}
 
 /**
+ * Placement advice set or replaced for a HyperService key.
+ *
+ * @category wire schemas
+ * @public
+ */
+export class AdvicePreferred extends Schema.TaggedClass<AdvicePreferred>()(
+  "AdvicePreferred",
+  {
+    serviceKey: Schema.String,
+    prefer: Schema.String,
+    previous: Schema.optionalKey(Schema.String),
+  },
+) {}
+
+/**
+ * Placement advice cleared for a HyperService key.
+ *
+ * @category wire schemas
+ * @public
+ */
+export class AdviceCleared extends Schema.TaggedClass<AdviceCleared>()(
+  "AdviceCleared",
+  {
+    serviceKey: Schema.String,
+    previous: Schema.String,
+  },
+) {}
+
+/**
+ * Placement-board event from {@link Advice.changes}.
+ *
+ * @category wire schemas
+ * @public
+ */
+export const AdviceChange = Schema.Union([AdvicePreferred, AdviceCleared]);
+
+/**
+ * Placement-board event type.
+ *
+ * @category models
+ * @public
+ */
+export type AdviceChange = Schema.Schema.Type<typeof AdviceChange>;
+
+/**
  * Lookup node has no dialable address — need `{ path }` / url, or use {@link layer} /
  * {@link layerOptions}. Layer error channel (not a sync throw).
  *
@@ -394,13 +440,19 @@ const adviceSpec = {
   }).annotate({
     description: "Read the preferred directory nodeKey for serviceKey, if any.",
   }),
+  changes: Hyperlink.stream(AdviceChange).annotate({
+    description:
+      "Live placement-board push — advise / clear events so lookupClient can move " +
+      "dials when prefer flips (before the first transport error).",
+  }),
 };
 
 /**
  * Lookup placement board — coordinator advice for nodeless / {@link Hyperlink.lookupClient} dial.
  *
  * v1: last-write-wins, in-memory, no advisor ACL. Algorithms stay app-owned (who calls
- * {@link advise}); Lookup only stores and surfaces the preference.
+ * {@link advise}); Lookup only stores and surfaces the preference. {@link adviceSpec.changes}
+ * fans out prefer / clear for Track D early dial move.
  *
  * @category services
  * @public
@@ -552,6 +604,22 @@ export const changes: Stream.Stream<DirectoryChange, never, Directory> =
   Stream.unwrap(Effect.map(Directory, (dir) => dir.changes));
 
 /**
+ * Live placement-board push — sugar over {@link Advice}.`changes`.
+ *
+ * ```ts
+ * yield* Lookup.adviceChanges.pipe(
+ *   Stream.filter((e) => e.serviceKey === Mail.key),
+ *   Stream.runForEach((e) => Effect.logInfo(`advice ${e._tag}`)),
+ * )
+ * ```
+ *
+ * @category constructors
+ * @public
+ */
+export const adviceChanges: Stream.Stream<AdviceChange, never, Advice> =
+  Stream.unwrap(Effect.map(Advice, (board) => board.changes));
+
+/**
  * Live dial table driven by {@link Directory.changes} — for node-level peer rebind.
  *
  * Starts empty; applies upserts/removes as they arrive. Pair with an initial
@@ -649,6 +717,22 @@ const toDirectoryChange = (
       ? { previous: toDirectoryEntry(event.previous) }
       : {}),
     dialChanged: event.dialChanged,
+  });
+};
+
+const toAdviceChange = (
+  event: internal.StoredAdviceChange,
+): AdviceChange => {
+  if (event._tag === "AdviceCleared") {
+    return new AdviceCleared({
+      serviceKey: event.serviceKey,
+      previous: event.previous,
+    });
+  }
+  return new AdvicePreferred({
+    serviceKey: event.serviceKey,
+    prefer: event.prefer,
+    ...(event.previous !== undefined ? { previous: event.previous } : {}),
   });
 };
 
@@ -867,6 +951,9 @@ const lookupServeLayers = (serverOnConflict: OnConflictResolved) =>
           registries.advice.clear(req.serviceKey),
         preferred: (req: PreferredRequest) =>
           registries.advice.get(req.serviceKey),
+        changes: Stream.fromPubSub(registries.adviceChanges).pipe(
+          Stream.map(toAdviceChange),
+        ),
       });
       return Layer.mergeAll(identity, directory, advice);
     }),
