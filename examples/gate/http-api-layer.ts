@@ -44,7 +44,7 @@ class DecodeCapture extends Context.Service<
     readonly record: (label: string) => Effect.Effect<void>;
     readonly count: () => Effect.Effect<number>;
   }
->()("hyperlink-ts/examples/gate-http-api-layer-effect/DecodeCapture") {}
+>()("hyperlink-ts/examples/gate/http-api-layer/DecodeCapture") {}
 
 const DecodeCaptureNoop = Layer.succeed(DecodeCapture, {
   record: (_label: string) => Effect.void,
@@ -71,7 +71,7 @@ const _make = Effect.gen(function* () {
 });
 
 export class DemoApiClient extends Context.Service<DemoApiClient>()(
-  "hyperlink-ts/examples/gate-http-api-layer-effect/DemoApiClient",
+  "hyperlink-ts/examples/gate/http-api-layer/DemoApiClient",
   {
     make: _make,
   },

@@ -24,8 +24,9 @@ class FailingPrices extends Daemon.Tag<FailingPrices>()("examples/FailingPrices"
   error: FetchErr,
 }) {}
 
+const failingPricesRegistration = Daemon.store(FailingPrices);
 class DemoStore extends Store.Service<DemoStore>("@examples/DemoStore")(
-  Daemon.store(FailingPrices),
+  failingPricesRegistration,
 ) {}
 
 const program = Effect.gen(function* () {

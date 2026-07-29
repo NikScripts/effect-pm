@@ -23,8 +23,9 @@ const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 
 class PricesDaemon extends Daemon.Tag<PricesDaemon>()("examples/Prices", { success: Price }) {}
 
+const pricesRegistration = Daemon.store(PricesDaemon);
 class DemoStore extends Store.Service<DemoStore>("@examples/DemoStore")(
-  Daemon.store(PricesDaemon),
+  pricesRegistration,
 ) {}
 
 const program = Effect.gen(function* () {
