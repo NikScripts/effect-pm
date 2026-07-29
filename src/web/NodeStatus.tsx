@@ -1,15 +1,19 @@
 /**
  * @module web/NodeStatus
  *
- * Public **node status** chrome for the web dashboard — die, health board, node detail,
- * plus a host that stacks them as fullscreen overlays (batteries default / compose lock F2).
+ * Public **node status** chrome for the web dashboard — die, health board, node detail.
  *
- * Navigator **page** skins for this surface are a later peel (lock K2 slice 2 fork).
+ * Batteries {@link ./DashboardShell} uses **Navigator pages** (`/health`, `/health/<nodeId>`
+ * via `Navigator.openHealth` / `.openNode`). {@link NodeStatusHost} remains for overlay embeds
+ * without a Navigator.
  *
  * @example
  * ```tsx
- * import { NodeBar, NodeStatusHost } from "hyperlink-ts/web"
+ * // Batteries path (URL-backed):
+ * nav.openHealth()
+ * nav.openNode(node.id)
  *
+ * // Overlay embed (no Navigator):
  * <NodeStatusHost group={ServicesHub}>
  *   {({ openHealth }) => (
  *     <DashboardTopBar

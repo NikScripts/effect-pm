@@ -1,8 +1,8 @@
 /**
  * @module web/DashboardShell
  *
- * Web batteries shell over {@link ../ui/View.compose} — Cell grid, NodeBar / HealthBoard
- * overlays, {@link ./DashboardTopBar.DashboardDetailChrome}, LogBox / schedule fullscreen.
+ * Web batteries shell over {@link ../ui/View.compose} — Cell grid, Navigator `/health`
+ * node-status pages, {@link ./DashboardTopBar.DashboardDetailChrome}, LogBox / schedule.
  * {@link ./Dashboard} is the public one-liner over compose + this shell.
  */
 import * as React from "react";
@@ -24,6 +24,7 @@ import {
   isGateTag,
   isShardMapTag,
   isTelemetryTag,
+  leafByKey,
   leafTags,
   nodesOf,
   tagWireKey,
@@ -42,7 +43,7 @@ import { isLeafTag, type LeafTag } from "../ui/widgetRegistry";
 import * as Navigator from "../ui/Navigator";
 import * as View from "../ui/View";
 import { DashboardDetailChrome, DashboardTopBar } from "./DashboardTopBar";
-import { NodeBar, NodeStatusHost } from "./NodeStatus";
+import { HealthBoard, NodeBar, NodeDetail } from "./NodeStatus";
 
 /** Detail body — chrome owns back/title (lock J). */
 const ViewDetailScreen = (props: {
@@ -466,20 +467,56 @@ const NodeHyperlinkView = (props: {
 
 
 /**
- * Batteries shell: {@link NodeStatusHost} overlays + group drill-down. Requires compose
+ * Batteries shell: Navigator `/health` pages + group drill-down. Requires compose
  * {@link View} Provider + {@link ./runtime.RuntimeProvider} above.
  *
  * @public
  */
 export const DashboardShell = (props: {
   readonly group: GroupNode;
-}): React.ReactElement => (
-  <NodeStatusHost
-    group={props.group}
-    renderHyperlink={(tag, onBack) => <NodeHyperlinkView tag={tag} onBack={onBack} />}
-  >
-    {({ openHealth }) => (
-      <DashboardInner group={props.group} onOpenHealth={openHealth} />
-    )}
-  </NodeStatusHost>
-);
+}): React.ReactElement => {
+  const nav = Navigator.useNavigator();
+  const [nodeTag, setNodeTag] = React.useState<unknown>(null);
+  const openHyperlink = React.useCallback(
+    (serviceKey: string): void => {
+      const found = leafByKey(props.group, serviceKey);
+      if (found !== undefined) setNodeTag(found);
+    },
+    [props.group],
+  );
+
+  if (nodeTag !== null) {
+    return <NodeHyperlinkView tag={nodeTag} onBack={() => setNodeTag(null)} />;
+  }
+
+  if (nav.view === "health") {
+    const nodeId = nav.path[0] === "health" ? nav.path[1] : undefined;
+    if (nodeId !== undefined) {
+      const node = nodesOf(props.group).find((n) => n.id === nodeId);
+      if (node !== undefined) {
+        return (
+          <NodeDetail
+            node={node}
+            onBack={() => nav.back()}
+            onOpenHyperlink={openHyperlink}
+          />
+        );
+      }
+    }
+    return (
+      <HealthBoard
+        group={props.group}
+        onBack={() => nav.back()}
+        onOpenNode={(n) => nav.openNode(n.id)}
+        onOpenHyperlink={openHyperlink}
+      />
+    );
+  }
+
+  return (
+    <DashboardInner
+      group={props.group}
+      onOpenHealth={() => nav.openHealth()}
+    />
+  );
+};

@@ -101,7 +101,7 @@ View.bind(Daemon.kind, SchedulePack) // Pack.Card / .Detail / .Page internally
 **Not** new ViewKinds named `logs` / `schedule`.  
 Navigator may still say `openLogs(tag)` / `openSchedule(tag)` — that means “show this tag’s **page** (or detail) skin for that content,” not a fourth kind.
 
-**F2:** HealthBoard / NodeDetail stay **shell overlays** for v1 (exported widgets; not Outlet page skins yet). Slice 2 may promote a Node status page.
+**F2:** HealthBoard / NodeDetail are **Navigator root pages** — `/health`, `/health/<nodeId>` (`openHealth` / `openNode`). HyperService drill from the board stays a local stack (not a Group leaf path). `NodeStatusHost` remains for overlay embeds.
 
 ### G. Observe door
 
@@ -146,8 +146,8 @@ First peel = header/body split; page-sized logs/schedule content follows.
 |------|-------|-------|
 | **0** Unhold batteries | **Eng’d** | `<Dashboard />` + `DashboardLayer.forCompose` + `View.compose` + `DashboardShell` supported |
 | **1** Top bar / detail chrome | **Eng’d** | `DashboardTopBar` + web `DashboardDetailChrome` public |
-| **2** Node status | **Eng’d (overlay host)** | `NodeStatusHost` + `NodeBar` / `HealthBoard` / `NodeDetail` public; batteries use overlays. **Owner fork:** keep overlays vs Navigator page skin |
-| **3** Logs / schedule pages | later | Content as `page` skins through Outlet (lock J) |
+| **2** Node status | **Eng’d (Navigator pages)** | `/health` + `/health/<nodeId>`; `NodeStatusHost` for overlay embeds |
+| **3** Logs / schedule pages | next | Content as `page` skins through Outlet (lock J) — logs/schedule already path suffixes |
 
 ### L. Acceptance
 

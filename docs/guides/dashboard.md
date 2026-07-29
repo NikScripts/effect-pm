@@ -56,13 +56,18 @@ Reuse without forking the shell:
 | `DashboardTopBar` | `DashboardTopBar` | Grid title / crumb strip |
 | `DashboardDetailChrome` | — | Detail back + title (lock J) |
 | `NodeBar` / `HealthBoard` / `NodeDetail` | `NodeMark` | Node status pieces |
-| `NodeStatusHost` | — | Stacks board → node → HyperService as overlays |
+| `Navigator.openHealth` / `.openNode` | — | URL pages `/health`, `/health/<nodeId>` |
+| `NodeStatusHost` | — | Overlay stack when no Navigator |
 
 ```tsx
-import { NodeBar, NodeStatusHost, DashboardTopBar } from "hyperlink-ts/web"
-// or: import * as NodeStatus from "hyperlink-ts/web/NodeStatus"
+// Batteries — die opens /health (History); node card → /health/<nodeId>
+nav.openHealth()
+nav.openNode(node.id)
 
-<NodeStatusHost group={ServicesHub} renderHyperlink={(tag, onBack) => /* detail */ null}>
+// Overlay embed (no Navigator) — hyperlink-ts/web/NodeStatus
+import { NodeBar, NodeStatusHost, DashboardTopBar } from "hyperlink-ts/web"
+
+<NodeStatusHost group={ServicesHub}>
   {({ openHealth }) => (
     <DashboardTopBar
       title="Hub"
@@ -71,9 +76,6 @@ import { NodeBar, NodeStatusHost, DashboardTopBar } from "hyperlink-ts/web"
   )}
 </NodeStatusHost>
 ```
-
-Batteries `DashboardShell` uses `NodeStatusHost` (overlay stack). **Owner fork:** keep
-overlays vs a Navigator **page** skin for health / node detail (compose lock K2).
 
 ## App views
 

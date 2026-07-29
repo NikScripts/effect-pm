@@ -5,6 +5,8 @@
  * chain of member keys from the root (`ServicesHub → Wnba → ImportSchedule` →
  * `["Wnba", "ImportSchedule"]`). Matching is **case-insensitive**; resolved keys keep the
  * tree's actual casing. A trailing segment after a leaf is a leaf sub-view (e.g. `"logs"`).
+ * At the **root**, a reserved `"health"` segment (optional node-id child) is the node-status
+ * shell page — not a Group member.
  *
  * Renderers bind this to History (web) or in-memory state (TUI); the resolve math stays here.
  *
@@ -27,7 +29,7 @@ export interface GroupRoute {
   readonly group: RouteGroup;
   /** The open leaf tag if the path ends on a leaf, else `null`. */
   readonly selected: unknown | null;
-  /** Sub-view of the selected leaf (e.g. `"logs"`), else `undefined`. */
+  /** Sub-view of the selected leaf (e.g. `"logs"`) or root shell page (`"health"`). */
   readonly view: string | undefined;
   /** Descend into a member by key (or append a leaf sub-view). */
   readonly open: (key: string) => void;
@@ -64,7 +66,20 @@ export const resolveGroupRoute = (
     if (segment === undefined) break;
     const members = Group.members(node);
     const key = Object.keys(members).find((k) => k.toLowerCase() === segment.toLowerCase());
-    if (key === undefined) break;
+    if (key === undefined) {
+      // Root shell page: /health or /health/<nodeId> (node id may contain `/` when decoded).
+      if (
+        keys.length === 0 &&
+        trail.length === 1 &&
+        segment.toLowerCase() === "health"
+      ) {
+        keys.push("health");
+        view = "health";
+        const nodeId = segments[i + 1];
+        if (nodeId !== undefined) keys.push(nodeId);
+      }
+      break;
+    }
     keys.push(key);
     const member = members[key];
     if (isGroupNode(member)) {
