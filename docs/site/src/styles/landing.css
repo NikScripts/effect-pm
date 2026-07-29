@@ -1,9 +1,9 @@
 /**
  * Coming-soon brand lockup (WIP). Inlined on `/` so paint never depends on /assets.
  *
- * Notch chrome: solid canvas on `html`. Wash: mid-tile glow, `repeat-y`, with a
- * LENGTH offset (`-50dvh`) — %-position is a no-op when tile size === box size.
- * Stage locked to `height: 100dvh; overflow: hidden`.
+ * Notch chrome: solid canvas on `html`. Wash: mid-tile glow on a 200%-tall
+ * `::before` shifted with `top: -50%` (layer offset — Safari was ignoring
+ * `background-position` phase on the fixed box). Stage: `100dvh`, no scroll.
  */
 :root {
   color-scheme: light dark;
@@ -84,15 +84,26 @@ body {
 }
 
 /*
- * Glow in the middle of each tile. Tile height = 100dvh, repeat-y, then shift
- * by -50dvh (not -50% — with size === box, %-position always computes to 0).
- * Result: mid-glows sit on the top edge and the bottom edge.
+ * Tiling origin via layer geometry (not background-position):
+ *   ::before is 200% tall, top: -50% → pattern phase shifted half a viewport.
+ *   Each tile is 50% of ::before (= one viewport); glow at tile center →
+ *   centers land on the top and bottom edges of the visible stage.
  */
 .landing-atmosphere {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
+  overflow: hidden;
+  background-color: var(--landing-canvas);
+}
+.landing-atmosphere::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 200%;
+  top: -50%;
   background-color: var(--landing-canvas);
   background-image: radial-gradient(
     ellipse 140% 55% at 50% 50%,
@@ -101,22 +112,8 @@ body {
     var(--landing-canvas) 72%
   );
   background-repeat: repeat-y;
-  background-size: 100% 100dvh;
-  background-position: 0 -50dvh;
-}
-
-.landing-glow {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: min(28rem, 70vw);
-  height: min(28rem, 70vw);
-  translate: -50% -50%;
-  border-radius: 50%;
-  background: radial-gradient(circle, var(--landing-glow), transparent 70%);
-  filter: blur(12px);
-  opacity: 0.55;
-  animation: landing-breathe 12s ease-in-out infinite;
+  background-size: 100% 50%;
+  background-position: 0 0;
 }
 
 .landing {
