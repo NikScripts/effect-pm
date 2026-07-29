@@ -338,23 +338,24 @@ export const buildNodeStatusImpl = (options: {
     const leaveMembership = Effect.gen(function* () {
       const membership = options.membership;
       if (membership === undefined) return;
-      const Lookup = yield* Effect.promise(() => import("../Lookup"));
-      const adviceOpt = yield* Effect.serviceOption(Lookup.Advice);
+      const Advice = yield* Effect.promise(() => import("../Advice"));
+      const Directory = yield* Effect.promise(() => import("../Directory"));
+      const adviceOpt = yield* Effect.serviceOption(Advice.Tag);
       if (Option.isSome(adviceOpt)) {
         yield* Effect.forEach(
           membership.serves,
           (serviceKey) =>
             adviceOpt.value
-              .clear(new Lookup.ClearAdviceRequest({ serviceKey }))
+              .clear(new Advice.ClearAdviceRequest({ serviceKey }))
               .pipe(Effect.ignore),
           { discard: true },
         );
       }
-      const dirOpt = yield* Effect.serviceOption(Lookup.Directory);
+      const dirOpt = yield* Effect.serviceOption(Directory.Tag);
       if (Option.isSome(dirOpt)) {
         yield* dirOpt.value
           .unregister(
-            new Lookup.UnregisterRequest({
+            new Directory.UnregisterRequest({
               nodeKey: membership.nodeKey,
               kind: membership.kind,
               ...(membership.path !== undefined

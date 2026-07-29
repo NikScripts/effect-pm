@@ -4,8 +4,8 @@
 
 **Status:** **CLOSED** — Soft stack on `integration`: [#62](https://github.com/NikScripts/effect-pm/pull/62) bake+override + [#65](https://github.com/NikScripts/effect-pm/pull/65) follow-through S1–S3.  
 **Follow-through brief:** [`agent-03-storage-cutover-followthrough.md`](./agent-03-storage-cutover-followthrough.md) (**CLOSED**)  
-**Guide SSOT:** [`docs/guides/stores.md`](../guides/stores.md)  
-**Living plan:** [`docs/plans/storage-correctness.md`](../plans/storage-correctness.md)
+**Guide SSOT:** [`docs/guides/stores.md`](../../../../guides/stores.md)  
+**Living plan:** [`docs/plans/storage-correctness.md`](../../../../plans/storage-correctness.md)
 
 ---
 

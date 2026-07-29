@@ -1,11 +1,11 @@
 # Agent B — Bespoke docs app shell (local Claude)
 
-**Status:** **UNBLOCKED** — Option 6 locked in [`docs-platform-architecture-decision.md`](./docs-platform-architecture-decision.md)  
+**Status:** **UNBLOCKED** — Option 6 locked in [`docs-platform-architecture-decision.md`](../features/docs-platform-architecture-decision.md)  
 **Branch:** `action/html-doc-platform` from **`integration/storage`** (minimum tip **`9042ce4`** — has Slice 0 + decision doc)  
 **Resume:** Pull before Slice 0 — see § Sync below. Old `docs/site/` scaffold exists; Slice 1+ work may be spike until plan approved.
 
-**Docs bus:** [`agent-status.md`](./agent-status.md) on every push.  
-**Owner chat:** Before/After blocks per [`supervisor-protocol.md`](./supervisor-protocol.md).
+**Docs bus:** [`agent-status.md`](../../../agent-status.md) on every push.  
+**Owner chat:** Before/After blocks per [`supervisor-protocol.md`](../../../supervisor-protocol.md).
 
 **Critical:** **Slice 0 is a conversation, not code.** Do not branch, scaffold, or delete the old site until the owner approves a written plan.
 
@@ -18,13 +18,13 @@ Agent B on a stale `origin/integration/storage` will **not** see required handof
 ```bash
 git fetch origin
 git log --oneline -1 origin/integration/storage   # expect 9042ce4 or later
-test -f docs/handoffs/docs-platform-architecture-decision.md && echo OK decision
-test -f docs/handoffs/agent-b-html-doc-platform.md && rg -q "Slice 0" docs/handoffs/agent-b-html-doc-platform.md && echo OK slice0
+test -f docs/handoffs/archive/2026-07/features/docs-platform-architecture-decision.md && echo OK decision
+test -f docs/handoffs/archive/2026-07/agents/agent-b-html-doc-platform.md && rg -q "Slice 0" docs/handoffs/archive/2026-07/agents/agent-b-html-doc-platform.md && echo OK slice0
 ```
 
 | File | Landed in commit |
 |------|------------------|
-| [`docs-platform-architecture-decision.md`](./docs-platform-architecture-decision.md) | `5dee13c` |
+| [`docs-platform-architecture-decision.md`](../features/docs-platform-architecture-decision.md) | `5dee13c` |
 | § Slice 0 in this handoff | `9042ce4` |
 
 Rebase `action/html-doc-platform` onto current `origin/integration/storage` after pull so handoffs are on your branch.
@@ -61,12 +61,12 @@ Build the **official package website shell** — a bespoke docs application, not
 
 ### How to run the conversation
 
-1. **Read** [`docs-platform-architecture-decision.md`](./docs-platform-architecture-decision.md), [`docs/site/README.md`](../site/README.md), and skim the existing `docs/site/` scaffold — know what exists, do not change it yet.
+1. **Read** [`docs-platform-architecture-decision.md`](../features/docs-platform-architecture-decision.md), [`docs/site/README.md`](../../../../site/README.md), and skim the existing `docs/site/` scaffold — know what exists, do not change it yet.
 2. **Open with 3–5 questions** (pick the highest-uncertainty ones first; do not dump all at once).
 3. **Listen** — follow up on answers; ask clarifying questions until tradeoffs are clear.
 4. **Summarize** a short plan (stack, folder layout, content format, phone UX, what Slice 1 will ship).
 5. **Wait for explicit owner approval** (`yes`, `ship it`, `approved`, or equivalent) before Slice 1.
-6. **Write the plan** to `docs/handoffs/agent-b-plan.md` after approval — that file is the contract for Slices 1–5.
+6. **Write the plan** to `docs/handoffs/archive/2026-07/agents/agent-b-plan.md` after approval — that file is the contract for Slices 1–5.
 
 ### Questions to ask (use as a menu — not a questionnaire dump)
 
@@ -85,7 +85,7 @@ Ask what you need; skip what the decision doc already locks.
 
 ### Slice 0 deliverables (after owner approves)
 
-- [ ] `docs/handoffs/agent-b-plan.md` — locked plan (stack, layout, content contract, slice order)
+- [ ] `docs/handoffs/archive/2026-07/agents/agent-b-plan.md` — locked plan (stack, layout, content contract, slice order)
 - [ ] Owner approval quoted or paraphrased in that file
 - [ ] `agent-status.md` row updated: B → **planning-done** or **building**
 

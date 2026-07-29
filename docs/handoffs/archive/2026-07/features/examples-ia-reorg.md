@@ -2,7 +2,7 @@
 
 **Status:** **Eng’d** (2026-07-29) — tree + hub + scripts + Twoslash globs; polish pass (Run headers, guide cites, README discovery).  
 **Branch:** `cursor/hyperservice-open-deps-5679`.  
-**Supersedes naming in:** [`agent-01-examples-book.md`](./agent-01-examples-book.md); apps live under `examples/apps/*` (update E5 plan paths when locking).
+**Supersedes naming in:** [`agent-01-examples-book.md`](../../../agent-01-examples-book.md); apps live under `examples/apps/*` (update E5 plan paths when locking).
 
 ## Goal
 
@@ -53,7 +53,7 @@ examples/
 
 ## Rename map (old → new)
 
-See Eng commit / script `scripts/reorg-examples-ia.mjs` (authoritative after land).
+Historical: Eng’d on tip; one-shot `scripts/reorg-examples-ia.mjs` removed after land.
 
 ## Non-goals
 

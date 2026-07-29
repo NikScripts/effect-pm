@@ -34,11 +34,11 @@ Cloud agent environment has **no `doctl`** — cannot inspect or restart the DO 
 | Layer | What |
 |-------|------|
 | Edge | Cloudflare DNS-proxy in front of `hyperlink.cool` / `www` |
-| Origin | DigitalOcean App Platform app **`hyperlink-docs`** (spec: [`docs/site/deploy/do-app.yaml`](../site/deploy/do-app.yaml)) |
+| Origin | DigitalOcean App Platform app **`hyperlink-docs`** (spec: [`docs/site/deploy/do-app.yaml`](../../../../site/deploy/do-app.yaml)) |
 | Runtime | Waku Node `waku start` on `:8080` from prebuilt DOCR image `hyperlink-docs:latest` |
 | Build | **Never on DO.** Local/CI runs `pnpm build` in `docs/site` (gen-api → gen-hovers → gen-search → gen-llms → check-links), then Docker packages `dist/` + `api-data/` + `api-hovers/` |
 
-Deploy recipe: [`docs/site/deploy/README.md`](../site/deploy/README.md) · script [`docs/site/scripts/deploy-do.sh`](../site/scripts/deploy-do.sh).
+Deploy recipe: [`docs/site/deploy/README.md`](../../../../site/deploy/README.md) · script [`docs/site/scripts/deploy-do.sh`](../../../../site/scripts/deploy-do.sh).
 
 ### API page shapes (once origin is up)
 
@@ -128,7 +128,7 @@ Do **not** chase Twoslash / gen-api content bugs until `/healthz` is green.
 2. Landing + a docs chapter render (e.g. `/docs/index`, `/docs/work-pools`). ✅
 3. Static API: `/api/hyperlink-ts/Polling` (or another shipped module) 200. ✅
 4. SSR API: `/api/effect/Effect/retry` 200 with hover sidecars present. ✅
-5. Update [`agent-status.md`](./agent-status.md) — note outage cleared + deploy SHA / time. ✅ (`6e1150bd` @ 2026-07-27T15:42Z; instance `basic-s`)
+5. Update [`agent-status.md`](../../../agent-status.md) — note outage cleared + deploy SHA / time. ✅ (`6e1150bd` @ 2026-07-27T15:42Z; instance `basic-s`)
 
 ---
 
@@ -143,6 +143,6 @@ Do **not** chase Twoslash / gen-api content bugs until `/healthz` is green.
 
 ## References
 
-- Deploy: [`docs/site/deploy/README.md`](../site/deploy/README.md), [`do-app.yaml`](../site/deploy/do-app.yaml), [`deploy-do.sh`](../site/scripts/deploy-do.sh), [`Dockerfile`](../site/Dockerfile)
-- Site overview: [`docs/site/README.md`](../site/README.md)
+- Deploy: [`docs/site/deploy/README.md`](../../../../site/deploy/README.md), [`do-app.yaml`](../../../../site/deploy/do-app.yaml), [`deploy-do.sh`](../../../../site/scripts/deploy-do.sh), [`Dockerfile`](../../../../site/Dockerfile)
+- Site overview: [`docs/site/README.md`](../../../../site/README.md)
 - Platform decisions: [`docs-platform-architecture-decision.md`](./docs-platform-architecture-decision.md)

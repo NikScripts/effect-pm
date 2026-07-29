@@ -5,7 +5,7 @@
  * **Hyperlink Tag** — concurrency / rateLimit apply on the transport like Gate + HttpClientGate.
  *
  * Run (from repo root):
- *   `npm run example:nwsl-gate-http-api`
+ *   `pnpm run example:scenario-nwsl-http-api`
  *
  * Requires this `examples/nwslsoccer` tree (same as the hand-rolled client). Uses
  * `NWSL_SOCCER_API_BASE_URL` (optional; default `https://api-sdp.nwslsoccer.com`) and optional
@@ -72,7 +72,7 @@ const program = Effect.gen(function* () {
 
 // ---cut-after---
 Effect.runPromise(program).then(
-  () => console.log("example:nwsl-gate-http-api finished OK"),
+  () => console.log("example:scenario-nwsl-http-api finished OK"),
   (e) => {
     console.error(e);
     process.exitCode = 1;

@@ -20,9 +20,9 @@ import { HttpServer } from "effect/unstable/http"
 import * as Node from "../../src/Node"
 import * as Hyperlink from "../../src/Hyperlink"
 
-class Droplet extends Node.Tag<Droplet>()("forms/verify/Droplet") {}
+class Droplet extends Node.Tag<Droplet>()("verify/Droplet") {}
 
-class Emails extends Hyperlink.Tag<Emails>()("forms/verify/Emails", {
+class Emails extends Hyperlink.Tag<Emails>()("verify/Emails", {
   ping: Hyperlink.effect(Schema.String),
 }) {}
 
@@ -41,7 +41,7 @@ const program = Effect.gen(function* () {
   yield* Hyperlink.verifyConnection(Droplet, {
     url,
     deep: true,
-    serviceKey: "forms/verify/Emails",
+    serviceKey: "verify/Emails",
   })
   yield* Effect.logInfo(`verify ok — ${url} serves Emails ready`)
 }).pipe(Effect.provide(Server), Effect.scoped)

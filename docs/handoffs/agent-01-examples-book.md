@@ -58,7 +58,7 @@ Guides keep **inline** fences for minimal deltas. The examples book prefers **in
 | **E2b** | Node / launcher / wire / defaults | **done** (Agent 4) |
 | **E3** | schedule + polling + store + config | **done** (Agent 4) |
 | **E4** | scenarios + serve-per-deps + NWSL entry | **done** (Agent 4) |
-| **IA** | Drop `forms/` — topic folders + hub rename | **Eng’d** — [`examples-ia-reorg.md`](./examples-ia-reorg.md) |
+| **IA** | Drop `forms/` — topic folders + hub rename | **Eng’d** — [`examples-ia-reorg.md`](./archive/2026-07/features/examples-ia-reorg.md) |
 | **E5** | Large apps — refactor + app pages | **plan draft** — [`examples-apps-e5-plan.md`](./examples-apps-e5-plan.md); owner lock checklist there |
 
 ---

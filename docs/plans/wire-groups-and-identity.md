@@ -111,7 +111,7 @@ Spec-hash stays **`contractHash` / verify**, not the RpcGroup name.
 | **W4** | Prototype story (compose Spec + features) — later | open |
 | **W5** | Optional WorkPool/Daemon control vs data-plane split | open |
 
-**Paused / next (not this slice):** W4 Prototype story; W5 control vs data-plane split. Tag-baked adornments Eng’d as `default` / `defaults` ([`service-shapes.md`](./service-shapes.md)). ApiMetrics absorb + nest Eng’d ([`fleet-rate-limiting.md`](./fleet-rate-limiting.md) R4/R4b).
+**Paused / next (not this slice):** W4 Prototype story; W5 control vs data-plane split. Tag-baked adornments Eng’d as `default` / `defaults` ([`service-shapes.md`](./service-shapes.md)). ApiMetrics absorb + nest Eng’d ([`fleet-rate-limiting.md`](./archive/fleet-rate-limiting.md) R4/R4b).
 
 ---
 

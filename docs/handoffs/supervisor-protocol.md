@@ -124,12 +124,12 @@ When the owner steers scope, architecture, or defer/ship choices **in chat**, th
 
 ### Local Claude — B → A → C
 
-**Full prompts:** [`local-agents.md`](./local-agents.md)
+**Full prompts:** [`local-agents.md`](./archive/2026-07/agents/local-agents.md)
 
 | Phase | Agent | Handoff |
 |-------|-------|---------|
-| **1** | **B** | [`agent-b-html-doc-platform.md`](./agent-b-html-doc-platform.md) |
-| **2** | **A** | [`agent-a-html-standards-corpus.md`](./agent-a-html-standards-corpus.md) |
+| **1** | **B** | [`agent-b-html-doc-platform.md`](./archive/2026-07/agents/agent-b-html-doc-platform.md) |
+| **2** | **A** | [`agent-a-html-standards-corpus.md`](./archive/2026-07/agents/agent-a-html-standards-corpus.md) |
 | **3** | **C** | [`agent-c-standards-audit.md`](./agent-c-standards-audit.md) |
 
 Index: [`reports/README.md`](./reports/README.md) · dashboard: [`agent-status.md`](./agent-status.md)

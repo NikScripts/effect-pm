@@ -1,7 +1,7 @@
 # Agent A — HTML + Tailwind standards corpus (local Claude) — PHASE 2
 
 **Blocked until:** Agent B merges bespoke docs app shell.  
-**Decision:** [`docs-platform-architecture-decision.md`](./docs-platform-architecture-decision.md) Option 6.
+**Decision:** [`docs-platform-architecture-decision.md`](../features/docs-platform-architecture-decision.md) Option 6.
 
 **Writes to:** `docs/site/content/standards/*.html` — **HTML with Tailwind utility classes** (not Markdown). Agents author source in repo; owner reads on phone via `docs:serve`.
 

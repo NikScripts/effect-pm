@@ -21,11 +21,11 @@ import * as Lookup from "../../src/Lookup"
 import * as Node from "../../src/Node"
 import * as Hyperlink from "../../src/Hyperlink"
 
-class Mail extends Hyperlink.Tag<Mail>()("forms/Mail", {
+class Mail extends Hyperlink.Tag<Mail>()("Mail", {
   pending: Hyperlink.effect(Schema.Number),
 }) {}
 
-class MailWorker extends Node.Prototype<MailWorker, Mail>("forms/MailWorker") {}
+class MailWorker extends Node.Prototype<MailWorker, Mail>("MailWorker") {}
 
 const program = Effect.gen(function* () {
   const sock = `/tmp/hyperlink-ts-forms-proto-${process.pid}.sock`

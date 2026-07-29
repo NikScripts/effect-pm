@@ -6,16 +6,13 @@ Pre-1.0: breaking changes land as minor bumps.
 
 ## Toolkit
 
-- **Observe recipes (pipeable UI packs)** — universal `Observe.*`; family packs as `*View.pack` on matching service view modules (`WorkPoolView.pack`, …); bind via `Observe.bind` / `Observe.use`. `Bundle.observe` removed (Phase 4). Plan: [observe-recipes.md](./observe-recipes.md).
 - **Service / contract shapes** — taxonomy for materialize vs pull vs Tag-baked / adapters. Draft: [service-shapes.md](./service-shapes.md). Eng’d: `Tag`/`value`/`promise`/`default`/`defaults` + factory `{ defaults }` (`pure` retired); `cell` parked/rejected.
 - **Wire groups & identity** — regular RpcGroup = tag key; shared Spec = `Tag(wireKey, spec)` → `Factory<Self>()(instanceKey)` (kind-keyed wire, ordinary serve/client). W1–W3 Eng’d: [wire-groups-and-identity.md](./wire-groups-and-identity.md).
 - **Guaranteed barrel-namespace tree-shaking** — make `import { WorkPool } from "hyperlink-ts"` + `WorkPool.Tag` tree-shake the engine in *every* bundler (subpath imports already do). Detailed plan: [18-unbundled-build-treeshaking.md](./18-unbundled-build-treeshaking.md).
-- **Fleet health** — **shipped** as [`FleetHealth`](../guides/fleet-health.md) (`hyperlink-ts/FleetHealth`). Per-node readiness + `/health` stay local; the glass folds peers with `Reachable` / `Unreachable` (Effect `Exit` kept). See that guide.
 - **Hyperlink-RPC auth** — a first-class authentication/authorization story for served resources (deployments use an edge gateway / Cloudflare Zero Trust short-term). Spec TBD when scope is locked; stays a roadmap bullet until then.
 
 ## Orchestration
 
-- **Fleet rate limiting (Gates + HttpApiClient)** — **Eng’d** (R1–R4). Effect `RateLimiter` + Effect store layers only (Soft memory / Redis). No Hyperlink-backed store. Plan: [fleet-rate-limiting.md](./fleet-rate-limiting.md).
 - **Weighted middle scheduling** — diversify the queue's middle priority into many weighted numeric/named groups pulled by a non-starving algorithm (DRR / strict), fixing strict-priority starvation. Design spec: [weighted-middle-scheduling.md](./weighted-middle-scheduling.md).
 - **Non-serializable queue items** — local-only enqueue for function/`Effect` items; wire control + observability stay served. [queue-nonserializable-items.md](./queue-nonserializable-items.md).
 - **Standalone spawns** — `Daemon.spawn` / `WorkPool.open`: multi-instance ergonomics where spawned handles are plain caller-scoped Effects (alongside `Group`).
@@ -28,7 +25,6 @@ Pre-1.0: breaking changes land as minor bumps.
 - **Postgres backends** for `HistoryStore` and `DurableWorkPoolStore` (same interfaces; today: in-memory + SQLite).
 - **Storage-adapter integration testing** — real-DB integration suites beyond the in-memory conformance tests.
 - **Richer history vocabulary + listener/stream hooks** — for domains that need more than append-only facts, layered *beside* the store (never a process-store monolith).
-- **Store-layer `(scopeKey, lineId)` durable memo** — **Eng’d** (seed claim from `_logs` at durable-tail acquire).
 
 ## Durable queue refinements
 
@@ -39,7 +35,13 @@ Pre-1.0: breaking changes land as minor bumps.
 
 ## Hygiene
 
-- **`anyUnknownInErrorContext`** — **Eng’d** (rule `"error"`, tip clear). Open-`R` docs in
-  *Managing Layers* + *Hyperlink Factories* standards. Remaining `toLayer` / wire `provideContext` /
-  D1 factory retypes are **parked** erase debt — see
-  [any-unknown-in-error-context.md](./any-unknown-in-error-context.md).
+- Parked erase debt (`toLayer` / wire `provideContext` / D1 factory retypes) — see archived
+  [any-unknown-in-error-context.md](./archive/any-unknown-in-error-context.md).
+
+## Archived (shipped)
+
+Plans that finished Eng and left this index:
+
+- [observe-recipes.md](./archive/observe-recipes.md)
+- [fleet-rate-limiting.md](./archive/fleet-rate-limiting.md)
+- [any-unknown-in-error-context.md](./archive/any-unknown-in-error-context.md)

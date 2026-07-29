@@ -25,15 +25,15 @@ Historical review reports and session closeouts from the 2026-07 store cutover l
 | [Integration sync 2026-07-07](../archive/2026-07/agents/integration-sync-2026-07-07.md) | Merge context for that sync |
 | [Branch cleanup manifest](../archive/2026-07/agents/branch-cleanup-manifest.md) | 2026-07-09 remote `cursor/*` audit |
 
-## Store cutover handoffs (still at handoffs root — STORAGE cites them)
+## Store cutover handoffs
 
 | Doc | Owner |
 |-----|-------|
-| [Store core](../store-cutover-00-store-core.md) | Shared decisions — **read first** |
-| [Daemon](../store-cutover-daemon.md) | Daemon engine → `tag.store` |
-| [WorkPool](../store-cutover-queue.md) | WorkPool engine |
-| [Gate](../store-cutover-gate.md) | Gate cutover |
-| [untyped WorkPool](../store-cutover-workpool-untyped.md) | untyped WorkPool cutover |
+| [Store core](../store-cutover-00-store-core.md) | Shared decisions — **read first** (stays at handoffs root) |
+| [Daemon](../archive/2026-07/features/store-cutover-daemon.md) | Daemon engine → `tag.store` |
+| [WorkPool](../archive/2026-07/features/store-cutover-queue.md) | WorkPool engine |
+| [Gate](../archive/2026-07/features/store-cutover-gate.md) | Gate cutover |
+| [untyped WorkPool](../archive/2026-07/features/store-cutover-workpool-untyped.md) | untyped WorkPool cutover |
 
 ## Naming & RPC policy
 

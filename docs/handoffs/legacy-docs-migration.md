@@ -3,7 +3,7 @@
 **Status:** Gap recovery Eng’d (2026-07-28); IA / sidebar still owner-open.  
 **Branch:** `cursor/hyperservice-open-deps-5679`.  
 **Related:** Examples book SSOT-include (E1b) — see [`agent-01-examples-book.md`](./agent-01-examples-book.md).  
-**Supersedes:** leftover Phase 3 batches in [`agent-01-docs-corpus-phase3-plan.md`](./agent-01-docs-corpus-phase3-plan.md).
+**Supersedes:** leftover Phase 3 batches in [`agent-01-docs-corpus-phase3-plan.md`](./archive/2026-07/agents/agent-01-docs-corpus-phase3-plan.md).
 
 ## Goal
 

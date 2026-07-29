@@ -146,7 +146,7 @@ Guide: [`../guides/view-tag-types.md`](../guides/view-tag-types.md).
 ## Type previews (served docs)
 
 **Guide:** [`../guides/view-tag-types.md`](../guides/view-tag-types.md) — `pnpm run docs:serve` →  
-<http://100.67.32.32:5190/docs/view-tag-types> (Tailscale). Index: [`view-hover-types.md`](./view-hover-types.md).
+<http://100.67.32.32:5190/docs/view-tag-types> (Tailscale). Scratch: [`examples/apps/view-scratch/hover-types.ts`](../../examples/apps/view-scratch/hover-types.ts).
 
 ## Effect-faithful Tag POC (archived — baked)
 

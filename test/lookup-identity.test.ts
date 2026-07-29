@@ -2,6 +2,7 @@ import { Clock, Context, Duration, Effect, Exit, Layer, Schema } from "effect";
 import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
 import * as Lookup from "../src/Lookup";
+import * as Identity from "../src/Identity";
 import * as Node from "../src/Node";
 import * as Hyperlink from "../src/Hyperlink";
 
@@ -69,7 +70,7 @@ describe("Lookup identity claim", () => {
         ),
       );
 
-      const id = Context.get(lookupCtx, Lookup.Identity);
+      const id = Context.get(lookupCtx, Identity.Tag);
       const won = yield* id
         .claim(
           new Lookup.ClaimRequest({
@@ -122,7 +123,7 @@ describe("Lookup identity claim", () => {
         Lookup.layerNode(node),
         Lookup.client(node),
         Effect.gen(function* () {
-          const id = yield* Lookup.Identity;
+          const id = yield* Identity.Tag;
           const req = new Lookup.ClaimRequest({
             key: "app/Mail",
             nodeKey: "worker-a",
@@ -148,7 +149,7 @@ describe("Lookup identity claim", () => {
         Lookup.layerNode(node),
         Lookup.client(node),
         Effect.gen(function* () {
-          const id = yield* Lookup.Identity;
+          const id = yield* Identity.Tag;
           yield* id.claim(
             new Lookup.ClaimRequest({
               key: "app/Mail",
@@ -214,7 +215,7 @@ describe("Lookup.layerIpc (path override)", () => {
         Lookup.layerIpc(path),
         Lookup.clientOptions({ path }),
         Effect.gen(function* () {
-          const id = yield* Lookup.Identity;
+          const id = yield* Identity.Tag;
           const won = yield* id.claim(
             new Lookup.ClaimRequest({
               key: "k",

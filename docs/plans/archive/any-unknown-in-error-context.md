@@ -4,8 +4,8 @@
 no channel casts, no rule disables except `serviceNotAsClass` at Service/Tag factories.
 
 **Product docs:** open-`R` serve composition lives in
-[`docs/getting-started/managing-layers.md`](../getting-started/managing-layers.md) and the must-rules
-in [`docs/standards/hyperlink-services.md`](../standards/hyperlink-services.md) (`serve-preserves-requirements`).
+[`docs/getting-started/managing-layers.md`](../../getting-started/managing-layers.md) and the must-rules
+in [`docs/standards/hyperlink-services.md`](../../standards/hyperlink-services.md) (`serve-preserves-requirements`).
 
 ## Locked product invariant
 

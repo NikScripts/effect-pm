@@ -49,6 +49,6 @@ docs/plans/
 ## Next
 
 **Pivot (2026-07-15):** **Examples book** takes priority over remaining legacy recipe ports.
-See [`agent-01-examples-book.md`](./agent-01-examples-book.md).  
+See [`agent-01-examples-book.md`](../../../agent-01-examples-book.md).  
 `toolkit-by-example` is **not** promoted to a Guides chapter.  
 Legacy leftovers (processes placeholder, pointer stubs) are background. Batch Z still per-row.

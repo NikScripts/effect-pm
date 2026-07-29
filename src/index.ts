@@ -155,9 +155,11 @@ export * as Node from "./Node";
 export * as Launcher from "./Launcher";
 export * as MultiNode from "./MultiNode";
 export * as Lookup from "./Lookup";
-// Named Tags — `import { Advice } from "hyperlink-ts"` then `Advice.changes`.
-// Do not chain `Lookup.Advice.*` (see Lookup module overview).
-export { Advice, Directory, Identity } from "./Lookup";
+// Sibling Tag modules — `import * as Advice from "hyperlink-ts/Advice"` → `Advice.Tag` /
+// `Advice.changes`. Never nest Tags under Lookup.
+export * as Advice from "./Advice";
+export * as Directory from "./Directory";
+export * as Identity from "./Identity";
 export type {
   AnyDefaultMethod,
   AnyLocalMethod,

@@ -8,7 +8,7 @@
 **Branch:** `cursor/docs-corpus-phase1-archive-ce05`.  
 **Scope:** `docs/handoffs/**` (+ link ripples in legacy / standards). **Out of scope:** `docs/site/**` UI, `src/web` / `src/ui`, Phases 2–3, batch **E** (SSOT layout), batch **Z** (deletes).
 
-Inventory below remains the fate table. Soft asks → [`open-asks.md`](./open-asks.md).
+Inventory below remains the fate table. Soft asks → [`open-asks.md`](../features/open-asks.md).
 
 ---
 
@@ -159,7 +159,7 @@ Owner rule (2026-07-14): one stack at a time; **complete → delete**, unfinishe
 | Path | Fate |
 |------|------|
 | Date-stamped `2026-*.md` stack | **closed** — deletes + open-asks absorbs; beta22 handoff deleted (PipeableTag fix + type hygiene) |
-| [`open-asks.md`](./open-asks.md) | **active** — §1 widget seam · §2 when-not-to-hoist · §3 layerNoop |
+| [`open-asks.md`](../features/open-asks.md) | **active** — §1 widget seam · §2 when-not-to-hoist · §3 layerNoop |
 
 ### F. Feature handoffs superseded by shipped API — **archive** (default)
 

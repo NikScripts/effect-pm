@@ -2,7 +2,7 @@
   "name": "hyperlink-ts",
   "version": "0.9.0-beta.0",
   "packageManager": "pnpm@10.33.4",
-  "description": "Effect Hyperlink — location-transparent services for Effect. Define a Hyperlink once, run it on one runtime, and call it from another over RPC with the same typed Handle. Includes WorkPool, Daemon, Gate, stores, logs, and dashboards.",
+  "description": "Effect Hyperlink \u2014 location-transparent services for Effect. Define a Hyperlink once, run it on one runtime, and call it from another over RPC with the same typed Handle. Includes WorkPool, Daemon, Gate, stores, logs, and dashboards.",
   "keywords": [
     "effect",
     "hyperlink",
@@ -111,6 +111,18 @@
     "./Lookup": {
       "types": "./dist/Lookup.d.ts",
       "default": "./dist/Lookup.js"
+    },
+    "./Advice": {
+      "types": "./dist/Advice.d.ts",
+      "default": "./dist/Advice.js"
+    },
+    "./Directory": {
+      "types": "./dist/Directory.d.ts",
+      "default": "./dist/Directory.js"
+    },
+    "./Identity": {
+      "types": "./dist/Identity.d.ts",
+      "default": "./dist/Identity.js"
     },
     "./DynamicConfig": {
       "types": "./dist/DynamicConfig.d.ts",
@@ -229,8 +241,14 @@
   "files": [
     "dist",
     "src",
-    "docs",
-    "examples",
+    "docs/guides",
+    "docs/services",
+    "docs/getting-started",
+    "docs/observe",
+    "docs/standards",
+    "docs/examples",
+    "docs/examples.md",
+    "docs/index.md",
     "README.md",
     "LICENSE",
     "CHANGELOG.md"
@@ -258,7 +276,6 @@
     "docs:manifest": "tsx dev/cli/main.ts docs manifest generate",
     "docs:manifest:check": "tsx dev/cli/main.ts docs manifest check",
     "example:session": "bash scripts/effect-example.sh",
-    "example:schedule-gates-and-cron": "pnpm run example:schedule-control-surfaces",
     "test:redis": "vitest run test/rate-limit-redis.test.ts test/effect-redis-stores.test.ts",
     "prepare": "effect-language-service patch && effect-tsgo patch",
     "docs:install": "tsx dev/cli/main.ts docs install",
@@ -369,19 +386,6 @@
     "example:apps-tui-grid": "tsx --tsconfig examples/apps/tui/tsconfig.json examples/apps/tui/grid-tui.tsx",
     "example:apps-tui-manager": "tsx --tsconfig examples/apps/tui/tsconfig.json examples/apps/tui/manager-tui.tsx",
     "example:apps-tui-fleet": "tsx --tsconfig examples/apps/tui/tsconfig.json examples/apps/tui/hyperlink.tsx",
-    "example:queue-widget": "pnpm run example:apps-queue-widget",
-    "example:queue-server": "pnpm run example:apps-dashboard-queue-server",
-    "example:mini-server": "pnpm run example:apps-dashboard-mini-server",
-    "example:web-dashboard": "pnpm run example:apps-dashboard",
-    "example:hyperlink-web": "pnpm run example:apps-web",
-    "example:hyperlink-web-server": "pnpm run example:apps-web-server",
-    "example:view-compose-proto": "pnpm run example:apps-view-compose",
-    "example:hyperlink-cli": "pnpm run example:apps-cli",
-    "example:hyperlink-cli-manager": "pnpm run example:apps-cli-manager",
-    "example:hyperlink-tui": "pnpm run example:apps-tui",
-    "example:hyperlink-tui-grid": "pnpm run example:apps-tui-grid",
-    "example:hyperlink-tui-manager": "pnpm run example:apps-tui-manager",
-    "example:hyperlink": "pnpm run example:apps-tui-fleet",
     "example:group-terminal": "tsx --tsconfig examples/apps/tui/tsconfig.json examples/apps/tui/group-terminal.tsx",
     "example:queue-mock": "tsx --tsconfig examples/apps/tui/tsconfig.json examples/apps/tui/queue-mock.tsx",
     "example:group-grid": "tsx --tsconfig examples/apps/tui/tsconfig.json examples/apps/tui/group-grid-mock.tsx",
@@ -389,11 +393,6 @@
     "example:dashboard": "tsx --tsconfig examples/apps/tui/tsconfig.json examples/apps/tui/dashboard.tsx",
     "example:dashboard-mock": "tsx --tsconfig examples/apps/tui/tsconfig.json examples/apps/tui/dashboard-mock.tsx",
     "example:queue-live": "tsx --tsconfig examples/apps/tui/tsconfig.json examples/apps/tui/queue-live.tsx",
-    "example:schedule-control-basics": "pnpm run example:schedule-basics",
-    "example:schedule-control-surfaces": "pnpm run example:schedule-controls",
-    "example:sports-polling-accelerating": "pnpm run example:polling-sports",
-    "example:daemon-supervisor-patterns": "pnpm run example:daemon-patterns",
-    "example:nwsl-gate-http-api": "pnpm run example:scenario-nwsl-http-api",
     "example:observe-pack-demo": "tsx examples/observe/pack-demo.ts",
     "example:observe-work-pool-pack": "tsx examples/observe/work-pool-pack.ts",
     "example:observe-recipes": "tsx examples/observe/recipes.ts",

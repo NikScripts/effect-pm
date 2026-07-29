@@ -42,7 +42,7 @@ class NwslCounters extends SharedCounters<NwslCounters>()("@app/Nwsl/counters") 
 class MlsCounters extends SharedCounters<MlsCounters>()("@app/Mls/counters") {}
 
 class DemoNode extends Node.Tag<DemoNode, NwslCounters | MlsCounters>()(
-  "forms/shared-tag/Demo",
+  "shared-tag/Demo",
   {
     path: `/tmp/hyperlink-ts-shared-tag-${process.pid}.sock`,
   },

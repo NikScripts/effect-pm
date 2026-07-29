@@ -8,7 +8,7 @@
 **Branch from:** **`integration`**.  
 **Working branch:** `cursor/docs-corpus-phase3-ce05`.
 
-**Docs bus:** [`agent-status.md`](./agent-status.md) · [`owner-decisions.md`](./owner-decisions.md) · [`docs/standards/documentation.md`](../standards/documentation.md) · [`docs/nav.ts`](../nav.ts) · [`docs/site/src/lib/content.ts`](../site/src/lib/content.ts)
+**Docs bus:** [`agent-status.md`](../../../agent-status.md) · [`owner-decisions.md`](../../../owner-decisions.md) · [`docs/standards/documentation.md`](../../../../standards/documentation.md) · [`docs/nav.ts`](../../../../nav.ts) · [`docs/site/src/lib/content.ts`](../../../../site/src/lib/content.ts)
 
 ---
 
@@ -76,7 +76,7 @@ Then **stop**. After owner unlocks: execute moves/deletes + fix links + update `
 
 ## Phase 2 — Plans refactor & migration (**done**)
 
-Living roadmap: [`docs/plans/README.md`](../plans/README.md). Specs beside it. Owner locks recorded in [`owner-decisions.md`](./owner-decisions.md) + [`agent-01-docs-corpus-phase2-plan.md`](./agent-01-docs-corpus-phase2-plan.md).
+Living roadmap: [`docs/plans/README.md`](../../../../plans/README.md). Specs beside it. Owner locks recorded in [`owner-decisions.md`](../../../owner-decisions.md) + [`agent-01-docs-corpus-phase2-plan.md`](./agent-01-docs-corpus-phase2-plan.md).
 
 ---
 
@@ -91,7 +91,7 @@ Port still-useful `docs/legacy/**` content into the live book (`getting-started`
 
 ### Draft label (content-side — locked)
 
-See Phase 3 plan + [`docs/standards/documentation.md`](../standards/documentation.md):
+See Phase 3 plan + [`docs/standards/documentation.md`](../../../../standards/documentation.md):
 `status="draft"` + `{.draft}` callout on ports; no site chrome.
 
 ---
@@ -122,7 +122,7 @@ See Phase 3 plan + [`docs/standards/documentation.md`](../standards/documentatio
 Branch from integration:
   git fetch origin integration && git checkout integration && git pull
 
-Read docs/handoffs/agent-01-docs-corpus.md
+Read docs/handoffs/archive/2026-07/agents/agent-01-docs-corpus.md
 
 You are Agent 1. Docs corpus track. UI / docs-site chrome / dashboard = lettered agents only — do not touch docs/site UI.
 

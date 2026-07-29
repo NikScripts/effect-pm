@@ -4,9 +4,9 @@
 
 **Status:** **CLOSED** — S1–S3 shipped via [#65](https://github.com/NikScripts/effect-pm/pull/65) onto `integration` (after Soft bake+override [#62](https://github.com/NikScripts/effect-pm/pull/62)).  
 **Agent:** **3** (idle on Soft)  
-**Guide SSOT:** [`docs/guides/stores.md`](../guides/stores.md)
+**Guide SSOT:** [`docs/guides/stores.md`](../../../../guides/stores.md)
 
-**Docs bus:** [`agent-status.md`](./agent-status.md) · [`owner-decisions.md`](./owner-decisions.md)
+**Docs bus:** [`agent-status.md`](../../../agent-status.md) · [`owner-decisions.md`](../../../owner-decisions.md)
 
 ---
 

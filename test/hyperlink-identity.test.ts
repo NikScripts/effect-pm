@@ -2,6 +2,7 @@ import { Clock, Context, Duration, Effect, Layer, Schema } from "effect";
 import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
 import * as Lookup from "../src/Lookup";
+import * as Identity from "../src/Identity";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
@@ -30,7 +31,7 @@ describe("Hyperlink.identity", () => {
 
   it("IdentitySelfRequired message points at Lookup + dialable self", () => {
     const err = new Hyperlink.IdentitySelfRequired({ tag: "app/Mail" });
-    expect(err.message).toContain("Lookup.Identity");
+    expect(err.message).toContain("Identity.Tag");
     expect(err.message).toContain("dialable self");
     expect(err.message).toContain("Lookup.layer");
   });
@@ -173,7 +174,7 @@ describe("Hyperlink.identity", () => {
 
       expect(n).toBe(13);
 
-      const id = Context.get(lookupCtx, Lookup.Identity);
+      const id = Context.get(lookupCtx, Identity.Tag);
       const resolved = yield* id
         .resolve(new Lookup.ResolveRequest({ key: Mail.key }))
         .pipe(Effect.provide(lookupCtx));

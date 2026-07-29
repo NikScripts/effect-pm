@@ -18,11 +18,11 @@ import { Effect, Layer, Schema } from "effect"
 import * as Node from "../../src/Node"
 import * as Hyperlink from "../../src/Hyperlink"
 
-class Jobs extends Hyperlink.Tag<Jobs>()("forms/Jobs", {
+class Jobs extends Hyperlink.Tag<Jobs>()("Jobs", {
   jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
-class Worker extends Node.Tag<Worker, Jobs>()("forms/Worker", {
+class Worker extends Node.Tag<Worker, Jobs>()("Worker", {
   path: `/tmp/hyperlink-ts-forms-node-tag-addressed-${process.pid}.sock`,
 }) {}
 

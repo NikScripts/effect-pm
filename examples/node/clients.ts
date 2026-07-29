@@ -19,15 +19,15 @@ import { Context, Effect, Layer, Schema } from "effect"
 import * as Node from "../../src/Node"
 import * as Hyperlink from "../../src/Hyperlink"
 
-class Jobs extends Hyperlink.Tag<Jobs>()("forms/clients/Jobs", {
+class Jobs extends Hyperlink.Tag<Jobs>()("clients/Jobs", {
   jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
-class Emails extends Hyperlink.Tag<Emails>()("forms/clients/Emails", {
+class Emails extends Hyperlink.Tag<Emails>()("clients/Emails", {
   emails: Hyperlink.effect(Schema.String),
 }) {}
 
-class Worker extends Node.Tag<Worker, Jobs | Emails>()("forms/clients/Worker", {
+class Worker extends Node.Tag<Worker, Jobs | Emails>()("clients/Worker", {
   path: `/tmp/hyperlink-ts-forms-clients-${process.pid}.sock`,
 }) {}
 

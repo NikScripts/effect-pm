@@ -3,7 +3,7 @@
 **Status:** **LOCKED** (owner approved 2026-07-09). Contract for Slices 1–5.
 **Owner steer at approval:** seed the app with *a few short instructional pages on the most core functional features* (best-effort, using real APIs) — the full standards corpus is Agent A's, not this agent's. First pages = instructional, not a marketing landing. Island in v1 may be a stub seam.
 **Branch:** `action/html-doc-platform` (rebase onto current `origin/integration/storage` in Slice 1).
-**Supersedes:** the "HTML + Tailwind" content row in [`docs-platform-architecture-decision.md`](./docs-platform-architecture-decision.md) (owner-approved change, 2026-07-09) and the generic-HTML approach in the older [`agent-b-html-doc-platform.md`](./agent-b-html-doc-platform.md).
+**Supersedes:** the "HTML + Tailwind" content row in [`docs-platform-architecture-decision.md`](../features/docs-platform-architecture-decision.md) (owner-approved change, 2026-07-09) and the generic-HTML approach in the older [`agent-b-html-doc-platform.md`](./agent-b-html-doc-platform.md).
 
 ---
 
