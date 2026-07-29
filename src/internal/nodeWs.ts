@@ -337,14 +337,14 @@ const ephemeralWsListen = (
               },
             ) as AnyNode & { readonly key: string };
             if (claim?.claimIdentity === true) {
-              const Lookup = yield* Effect.promise(() => import("../Lookup"));
-              const identity = yield* Effect.serviceOption(Lookup.Identity);
+              const Identity = yield* Effect.promise(() => import("../Identity"));
+              const identity = yield* Effect.serviceOption(Identity.Tag);
               if (Option.isNone(identity)) {
                 return yield* new Hyperlink.IdentitySelfRequired({ tag: wireKey });
               }
               const outcome = yield* identity.value
                 .claim(
-                  new Lookup.ClaimRequest({
+                  new Identity.ClaimRequest({
                     key: wireKey,
                     nodeKey: wireKey,
                     kind: "WebSocket",

@@ -14,6 +14,7 @@ import {
 import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
 import * as Lookup from "../src/Lookup";
+import * as Directory from "../src/Directory";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
@@ -54,7 +55,7 @@ describe("Lookup directory advertise / nodesServing", () => {
         Lookup.layerNode(node),
         Lookup.client(node),
         Effect.gen(function* () {
-          const dir = yield* Lookup.Directory;
+          const dir = yield* Directory.Tag;
           const entry = yield* dir.advertise(
             new Lookup.AdvertiseRequest({
               nodeKey: "worker-a",
@@ -102,7 +103,7 @@ describe("Lookup directory advertise / nodesServing", () => {
         Lookup.layerNode(node),
         Lookup.client(node),
         Effect.gen(function* () {
-          const dir = yield* Lookup.Directory;
+          const dir = yield* Directory.Tag;
           yield* dir.advertise(
             new Lookup.AdvertiseRequest({
               nodeKey: "worker-a",
@@ -139,7 +140,7 @@ describe("Lookup directory advertise / nodesServing", () => {
         Lookup.layerNode(node),
         Lookup.client(node),
         Effect.gen(function* () {
-          const dir = yield* Lookup.Directory;
+          const dir = yield* Directory.Tag;
           yield* dir.advertise(
             new Lookup.AdvertiseRequest({
               nodeKey: "worker-a",
@@ -188,7 +189,7 @@ describe("Lookup directory livenessReplace", () => {
         Node.unix(Worker, [Hyperlink.serve(Jobs, jobsImpl)]).pipe(Layer.provide(Lookup.client(lookupNode))),
       );
 
-      const dir = Context.get(lookupCtx, Lookup.Directory);
+      const dir = Context.get(lookupCtx, Directory.Tag);
       const listed = yield* dir
         .nodesServing(
           new Lookup.NodesServingRequest({
@@ -238,7 +239,7 @@ describe("Lookup directory livenessReplace", () => {
         Lookup.layerNode(node),
         Lookup.client(node),
         Effect.gen(function* () {
-          const dir = yield* Lookup.Directory;
+          const dir = yield* Directory.Tag;
           // Stale row — no process on this sock
           yield* dir.advertise(
             new Lookup.AdvertiseRequest({
@@ -285,7 +286,7 @@ describe("Node.unix directory wire", () => {
         yield* Layer.build(
         Node.unix(Worker, [Hyperlink.serve(Jobs, jobsImpl)]).pipe(Layer.provide(Lookup.client(lookupNode))),
         );
-        const dir = Context.get(lookupCtx, Lookup.Directory);
+        const dir = Context.get(lookupCtx, Directory.Tag);
         const during = yield* dir
           .nodesServing(
             new Lookup.NodesServingRequest({
@@ -296,7 +297,7 @@ describe("Node.unix directory wire", () => {
         expect(during).toHaveLength(1);
       }).pipe(Effect.scoped);
 
-      const dir = Context.get(lookupCtx, Lookup.Directory);
+      const dir = Context.get(lookupCtx, Directory.Tag);
       const after = yield* dir
         .nodesServing(
           new Lookup.NodesServingRequest({
@@ -365,7 +366,7 @@ describe("Lookup directory askIncumbent", () => {
         Node.unix(Worker, [Hyperlink.serve(Jobs, jobsImpl)]).pipe(Layer.provide(Lookup.client(lookupNode))),
       );
 
-      const dir = Context.get(lookupCtx, Lookup.Directory);
+      const dir = Context.get(lookupCtx, Directory.Tag);
       const replaced = yield* dir
         .advertise(
           new Lookup.AdvertiseRequest({
@@ -428,7 +429,7 @@ describe("Lookup directory askIncumbent", () => {
         Node.unix(Worker, [Hyperlink.serve(Jobs, jobsImpl)]).pipe(Layer.provide(Lookup.client(lookupNode))),
       );
 
-      const dir = Context.get(lookupCtx, Lookup.Directory);
+      const dir = Context.get(lookupCtx, Directory.Tag);
       const conflict = yield* dir
         .advertise(
           new Lookup.AdvertiseRequest({
@@ -476,7 +477,7 @@ describe("Lookup directory askIncumbent", () => {
         }).pipe(Layer.provide(Lookup.client(lookupNode))),
       );
 
-      const dir = Context.get(lookupCtx, Lookup.Directory);
+      const dir = Context.get(lookupCtx, Directory.Tag);
       const conflict = yield* dir
         .advertise(
           new Lookup.AdvertiseRequest({
@@ -527,7 +528,7 @@ describe("Lookup directory draining ≠ dead", () => {
 
       yield* Node.drain(Worker);
 
-      const dir = Context.get(lookupCtx, Lookup.Directory);
+      const dir = Context.get(lookupCtx, Directory.Tag);
       const conflict = yield* dir
         .advertise(
           new Lookup.AdvertiseRequest({
@@ -597,7 +598,7 @@ describe("Lookup directory membership push", () => {
           );
           yield* Effect.sleep(Duration.millis(20));
 
-          const dir = yield* Lookup.Directory;
+          const dir = yield* Directory.Tag;
           yield* dir.advertise(
             new Lookup.AdvertiseRequest({
               nodeKey: "worker-a",
@@ -654,7 +655,7 @@ describe("Lookup directory membership push", () => {
           );
           yield* Effect.sleep(Duration.millis(20));
 
-          const dir = yield* Lookup.Directory;
+          const dir = yield* Directory.Tag;
           yield* dir.advertise(
             new Lookup.AdvertiseRequest({
               nodeKey: "worker-a",
@@ -713,7 +714,7 @@ describe("Lookup directory membership push", () => {
           );
           yield* Effect.sleep(Duration.millis(20));
 
-          const dir = yield* Lookup.Directory;
+          const dir = yield* Directory.Tag;
           yield* dir.advertise(
             new Lookup.AdvertiseRequest({
               nodeKey: "worker-stale",
@@ -760,7 +761,7 @@ describe("Lookup directory membership push", () => {
           const table = yield* Lookup.directoryTable();
           yield* Effect.sleep(Duration.millis(20));
 
-          const dir = yield* Lookup.Directory;
+          const dir = yield* Directory.Tag;
           yield* dir.advertise(
             new Lookup.AdvertiseRequest({
               nodeKey: "worker-a",

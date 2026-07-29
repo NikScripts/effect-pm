@@ -3,6 +3,7 @@ import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
 import { combineQuery, combineSum } from "../src/MultiNode";
 import * as Lookup from "../src/Lookup";
+import * as Directory from "../src/Directory";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
@@ -98,7 +99,7 @@ describe("Node.Prototype.instance / .listen", () => {
         workerB().pipe(Layer.provide(lookupClient)),
       );
 
-      const dir = Context.get(lookup, Lookup.Directory);
+      const dir = Context.get(lookup, Directory.Tag);
       const rows = yield* dir
         .nodesServing(
           new Lookup.NodesServingRequest({ serviceKey: "inst/Jobs" }),
@@ -223,7 +224,7 @@ describe("Node.Prototype.instance / .listen", () => {
       );
 
       // instance() is address-less until listen — dial the advertised path.
-      const dir = Context.get(lookup, Lookup.Directory);
+      const dir = Context.get(lookup, Directory.Tag);
       const rows = yield* dir
         .nodesServing(
           new Lookup.NodesServingRequest({

@@ -154,7 +154,7 @@ export const serveListFromTagImpl = (
 };
 
 /**
- * Soft-bake {@link Lookup.layer} when {@link Lookup.Identity} is absent — nameless listens
+ * Soft-bake {@link Lookup.layer} when {@link Identity.Tag} is absent — nameless listens
  * (http / ws / unix / nPipe) need claim + advertise with no caller Lookup pipe.
  * `Layer.provide(Lookup.layerOptions(…))` still wins when Identity is already in env.
  * @internal
@@ -164,7 +164,8 @@ export const softBakeLookupLayer = <A, E, R>(
 ): Effect.Effect<Layer.Layer<A, E, R>> =>
   Effect.gen(function* () {
     const Lookup = yield* Effect.promise(() => import("../Lookup"));
-    const identity = yield* Effect.serviceOption(Lookup.Identity);
+    const Identity = yield* Effect.promise(() => import("../Identity"));
+    const identity = yield* Effect.serviceOption(Identity.Tag);
     if (Option.isSome(identity)) {
       return core;
     }

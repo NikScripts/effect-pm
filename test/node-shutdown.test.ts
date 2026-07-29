@@ -13,6 +13,7 @@ import {
 import { describe, expect, it } from "@effect/vitest";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Lookup from "../src/Lookup";
+import * as Directory from "../src/Directory";
 import * as Node from "../src/Node";
 
 class Jobs extends Hyperlink.Tag<Jobs>()("shutdown/Jobs", {
@@ -41,7 +42,7 @@ describe("Node.shutdown", () => {
       const lookupServer = yield* Layer.build(Lookup.layerNode(lookupNode));
       const lookupClient = yield* Layer.build(Lookup.client(lookupNode));
       const lookupCtx = Context.merge(lookupServer, lookupClient);
-      const dir = Context.get(lookupCtx, Lookup.Directory);
+      const dir = Context.get(lookupCtx, Directory.Tag);
 
       const workerCtx = yield* Layer.build(
         Node.unix(Worker, [

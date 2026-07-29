@@ -36,6 +36,7 @@ import {
 import { describe, expect, it } from "@effect/vitest";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Lookup from "../src/Lookup";
+import * as Directory from "../src/Directory";
 import * as Node from "../src/Node";
 import * as WorkPool from "../src/WorkPool";
 import { DEFAULT_HANDOFF_RETRIES } from "../src/internal/hyperlinkHandoff";
@@ -64,10 +65,10 @@ const waitUntil = <A, E, R>(
   });
 
 const nodesServing = (
-  lookupCtx: Context.Context<Lookup.Directory>,
+  lookupCtx: Context.Context<Directory.Tag>,
   serviceKey: string,
 ) =>
-  Context.get(lookupCtx, Lookup.Directory)
+  Context.get(lookupCtx, Directory.Tag)
     .nodesServing(new Lookup.NodesServingRequest({ serviceKey }))
     .pipe(Effect.provide(lookupCtx));
 
@@ -921,7 +922,7 @@ describe("A→B cutover — multi-service + membership", () => {
         expect(mid.snapshot.phase).toBe("draining");
         expect(mid.yielded).toBe(false);
 
-        const dir = Context.get(lookupCtx, Lookup.Directory);
+        const dir = Context.get(lookupCtx, Directory.Tag);
         const conflict = yield* dir
           .advertise(
             new Lookup.AdvertiseRequest({

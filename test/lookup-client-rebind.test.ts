@@ -17,6 +17,7 @@ import {
 import { describe, expect, it } from "@effect/vitest";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Lookup from "../src/Lookup";
+import * as Directory from "../src/Directory";
 import * as Node from "../src/Node";
 
 class Jobs extends Hyperlink.Tag<Jobs>()("lc-rebind/Jobs", {
@@ -70,7 +71,7 @@ describe("Hyperlink.lookupClient hot-rebind", () => {
 
       yield* Node.shutdown(WorkerA);
 
-      const dir = Context.get(lookupCtx, Lookup.Directory);
+      const dir = Context.get(lookupCtx, Directory.Tag);
       yield* Effect.repeat(
         dir
           .nodesServing(
