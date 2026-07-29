@@ -10,7 +10,7 @@
  * (no `*Family` verbs). Merging two `serve`s that share a wire key mounts one group.
  *
  * ```bash
- * pnpm exec tsx examples/shared-tag-wire.ts
+ * pnpm run example:hyperlink-shared-spec-wire
  * ```
  *
  * Docs: `docs/examples/hyperlink/shared-spec-wire.md` includes this file;

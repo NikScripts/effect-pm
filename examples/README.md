@@ -1,7 +1,10 @@
 # Examples (`examples/`)
 
-Teaching scripts and demo apps, organized like the living guides — **topic folders**, short
-file names, hub pages that include the same `.ts` via Twoslash.
+**Find an example:** open the **[Examples hub](../docs/examples.md)** (grouped like the guides),
+or go to `examples/<topic>/<name>.ts` and run `pnpm run example:<topic>-<name>`.
+
+Paired docs live at `docs/examples/<topic>/<name>.md` and Twoslash-`include` the same `.ts`
+(with `// ---cut---` hiding harness noise). Full demos are under [`apps/`](./apps/).
 
 | Layer | Path | Purpose |
 |-------|------|---------|
@@ -10,15 +13,7 @@ file names, hub pages that include the same `.ts` via Twoslash.
 | **Apps** | [`apps/`](./apps/) | TUI, web, dashboard, CLI, widgets (not 1:1 Twoslash yet) |
 | **Shared** | [`shared/`](./shared/) | Harness helpers |
 
-Living book: [docs/index.md](../docs/index.md) · **[Examples hub](../docs/examples.md)** · [API Reference](https://hyperlink.cool/api/hyperlink-ts).
-
-**How to find an example:** open the [hub](../docs/examples.md) (grouped like guides), or go
-straight to `examples/<topic>/<name>.ts`. Docs pairs live at `docs/examples/<topic>/<name>.md`
-and include the source with `{.twoslash include="examples/…"}` plus `// ---cut---` markers in the `.ts`.
-
-**Conventions:** Module header = what + `pnpm run example:<topic>-<name>`. Imports omit `.js`
-extensions — run via `tsx` on sources. Prefer the hub over hunting old `forms/` / `hyperlink-*` paths
-(those are gone).
+Living book: [docs/index.md](../docs/index.md) · [API Reference](https://hyperlink.cool/api/hyperlink-ts).
 
 ---
 
@@ -101,7 +96,7 @@ Paths are under `examples/`. Script = `pnpm run example:<topic>-<kebab-file>` (s
 | [`fleet/health-glass.ts`](./fleet/health-glass.ts) | FleetHealth |
 | [`fleet/shardmap-sessions.ts`](./fleet/shardmap-sessions.ts) | ShardMap sessions |
 
-### Launcher · Hyperlink · Store · Schedule · Polling · Config
+### Launcher · Hyperlink · Store · Schedule · Polling · Config · Observe
 
 | File | Teaches |
 |------|---------|
@@ -129,6 +124,8 @@ Paths are under `examples/`. Script = `pnpm run example:<topic>-<kebab-file>` (s
 
 ## Apps (`examples/apps/`)
 
+Prefer `example:apps-*` scripts. Compat aliases (`example:hyperlink-tui`, …) still resolve but are not cited in docs.
+
 | App | Path | Start |
 |-----|------|-------|
 | TUI | [`apps/tui/`](./apps/tui/) | `pnpm run example:apps-tui` |
@@ -137,8 +134,6 @@ Paths are under `examples/`. Script = `pnpm run example:<topic>-<kebab-file>` (s
 | CLI | [`apps/cli/`](./apps/cli/) | `example:apps-cli` |
 | Queue widget | [`apps/queue-widget/`](./apps/queue-widget/) | `example:apps-queue-widget` |
 | View compose | [`apps/view-compose/`](./apps/view-compose/) | `example:apps-view-compose` |
-
-Old script names (`example:hyperlink-tui`, `example:web-dashboard`, …) remain as aliases.
 
 ---
 

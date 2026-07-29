@@ -2,7 +2,7 @@
  * @module examples/store/memory
  *
  * In-memory {@link Store.Service} with shape-first contracts.
- * Run: `npx tsx examples/store/store-memory.ts`
+ * Run: `npx tsx examples/store/memory.ts`
  *
  * Docs: `docs/examples/store/memory.md` includes this file;
  * cut markers hide the module header and runner epilogue.
