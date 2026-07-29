@@ -29,11 +29,12 @@ class ImportQueue extends WorkPool.Tag<ImportQueue>()("examples/store/OneStoreQu
 
 class Heartbeat extends Daemon.Tag<Heartbeat>()("examples/store/Heartbeat") {}
 
-class AppStore extends Store.Service<AppStore>("@examples/store/OneStore")(
-  DemoNode.logs,
-  WorkPool.store(ImportQueue),
-  Daemon.store(Heartbeat),
-) {}
+/** Custom keys → `yield* AppStore.at("queue")` (tag-keyed `.at(Tag)` is equivalent at runtime). */
+class AppStore extends Store.Service<AppStore>("@examples/store/OneStore")({
+  node: DemoNode.logs,
+  queue: WorkPool.store(ImportQueue),
+  daemon: Daemon.store(Heartbeat),
+}) {}
 
 const waitUntil = (predicate: Effect.Effect<boolean>) =>
   Effect.gen(function* () {
@@ -71,8 +72,8 @@ const program = Effect.gen(function* () {
     ),
   );
 
-  const queueStore = yield* AppStore.at(ImportQueue);
-  const daemonStore = yield* AppStore.at(Heartbeat);
+  const queueStore = yield* AppStore.at("queue");
+  const daemonStore = yield* AppStore.at("daemon");
   const queueEvents = yield* queueStore.events();
   const daemonEvents = yield* daemonStore.events();
   const nodeRows = yield* Logs.byNode(DemoNode, { limit: 100 });

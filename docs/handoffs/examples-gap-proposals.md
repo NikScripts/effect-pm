@@ -1,6 +1,6 @@
 # Examples gap proposals — expand one idea until covered
 
-**Status:** proposal for owner walk (2026-07-29).  
+**Status:** **Eng’d** (2026-07-29) — Ideas 1–9 topic forms shipped; Idea 10 (Apps/E5) still owner-gated.  
 **Branch:** `cursor/hyperservice-open-deps-5679` (tip-synced with `integration`).  
 **Method:** pick **one idea** → ship/teach until that idea’s guide recipes have 1-file forms → next idea.  
 **Not this doc:** E5 apps Twoslash (owner lock [`examples-apps-e5-plan.md`](./examples-apps-e5-plan.md)); View/Dashboard skins (Agent G).
@@ -26,20 +26,11 @@ Prefer **guide-aligned topic folders**. One teachable recipe per file.
 
 **Why first:** Largest living guide ([`work-pools.md`](../guides/work-pools.md)); hub only has two forms.
 
-| Status | File | Teaches |
-|--------|------|---------|
-| Have | `examples/work-pool/priority-retry.ts` | priority, dedup, handler retry |
-| Have | `examples/work-pool/named-lanes.ts` | named lanes / weighted take |
-| **Missing** | `store-analytics.ts` | `WorkPool.store(tag)` + `failureRate` / `slowest` / `stats` |
-| **Missing** | `serve-client.ts` | `WorkPool.serve` + `Hyperlink.client`, same `yield* Tag` |
-| **Missing** | `durable-sqlite.ts` | durable backlog survives restart |
-| **Missing** | `refill.ts` | `refill.onStart` / `onDrained` |
-| **Missing** | `rate-limit.ts` | drain `rateLimit` |
-| **Missing** | `history-metrics.ts` | `HistoryStore` + `metrics.query` |
-| **Missing** | `typed-success.ts` | tag `success` + `Completed.success` |
-| **Missing** | `configure.ts` | `WorkPool.configure` at layer build |
+| Status | File |
+|--------|------|
+| **Eng’d** | all listed expansions under `examples/work-pool/` (10 forms) |
 
-**Covered when:** the Missing rows above are Eng’d (or owner drops some).  
+**Covered:** yes.  
 **Guides:** [`work-pools.md`](../guides/work-pools.md), Soft bits in [`stores.md`](../guides/stores.md).  
 **Blocked:** none for 1-file forms.
 
@@ -200,8 +191,4 @@ Not 1-file topics. See E5 + Agent G. Hub keeps run matrix only.
 
 ## Owner call
 
-Reply with:
-
-1. Confirm **Idea 1 = WorkPool** (or pick another).  
-2. For Idea 1: Eng **all** Missing rows, or a **subset** (list titles).  
-3. After Idea 1: auto-advance to Idea 2 (Logs), or pause for another pick.
+Owner said **do it all** — Ideas 1–9 Eng’d on tip. Remaining: Idea 10 Apps/E5 ([`examples-apps-e5-plan.md`](./examples-apps-e5-plan.md)).
