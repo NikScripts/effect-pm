@@ -1,8 +1,8 @@
 /**
  * Coming-soon brand lockup (WIP). Inlined on `/` so paint never depends on /assets.
  *
- * Notch chrome: solid canvas on `html`. Wash: two explicit edge radials (top +
- * bottom) — no repeat/offset tricks. Soft orbs pinned to each edge, fully on-screen.
+ * Notch chrome: solid canvas on `html`. Wash: mid-tile glow, `repeat-y`, with a
+ * LENGTH offset (`-50dvh`) — %-position is a no-op when tile size === box size.
  * Stage locked to `height: 100dvh; overflow: hidden`.
  */
 :root {
@@ -83,47 +83,40 @@ body {
   background-color: var(--landing-canvas);
 }
 
-/* Two edge washes — centers on the top and bottom edges, no repeat math. */
+/*
+ * Glow in the middle of each tile. Tile height = 100dvh, repeat-y, then shift
+ * by -50dvh (not -50% — with size === box, %-position always computes to 0).
+ * Result: mid-glows sit on the top edge and the bottom edge.
+ */
 .landing-atmosphere {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  overflow: hidden;
   background-color: var(--landing-canvas);
-  background-image:
-    radial-gradient(
-      ellipse 160% 75% at 50% 0%,
-      var(--landing-glow),
-      var(--landing-bg-deep) 45%,
-      var(--landing-canvas) 75%
-    ),
-    radial-gradient(
-      ellipse 160% 75% at 50% 100%,
-      var(--landing-glow),
-      var(--landing-bg-deep) 45%,
-      var(--landing-canvas) 75%
-    );
-  background-repeat: no-repeat;
+  background-image: radial-gradient(
+    ellipse 140% 55% at 50% 50%,
+    var(--landing-glow),
+    var(--landing-bg-deep) 42%,
+    var(--landing-canvas) 72%
+  );
+  background-repeat: repeat-y;
+  background-size: 100% 100dvh;
+  background-position: 0 -50dvh;
 }
 
 .landing-glow {
   position: absolute;
   left: 50%;
-  width: min(36rem, 90vw);
-  height: min(18rem, 42vw);
-  translate: -50% 0;
+  top: 50%;
+  width: min(28rem, 70vw);
+  height: min(28rem, 70vw);
+  translate: -50% -50%;
   border-radius: 50%;
   background: radial-gradient(circle, var(--landing-glow), transparent 70%);
   filter: blur(12px);
+  opacity: 0.55;
   animation: landing-breathe 12s ease-in-out infinite;
-}
-.landing-glow-top {
-  top: 0;
-}
-.landing-glow-bottom {
-  bottom: 0;
-  top: auto;
 }
 
 .landing {
