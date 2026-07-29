@@ -196,6 +196,10 @@
       "types": "./dist/web/DashboardViews.d.ts",
       "default": "./dist/web/DashboardViews.js"
     },
+    "./web/NodeStatus": {
+      "types": "./dist/web/NodeStatus.d.ts",
+      "default": "./dist/web/NodeStatus.js"
+    },
     "./cli": {
       "types": "./dist/cli.d.ts",
       "default": "./dist/cli.js"

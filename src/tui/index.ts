@@ -27,6 +27,7 @@ export { layer } from "./layer";
 export { Dashboard } from "./Dashboard";
 export { DashboardShell } from "./DashboardShell";
 export { DashboardTopBar } from "./DashboardTopBar";
+export { ControlKey, FocusedDaemon, FocusedPriority, LogTail, NodeMark } from "./focusWidgets";
 export { base, Cell, DaemonCell, FallbackCell, GroupCell, PriorityCell, QueueCell, type TuiCellProps, type TuiCellWidget, type TuiWidgetRegistry } from "./cellWidgets";
 export { RuntimeProvider, useRuntime } from "./runtime";
 export { useGroupRoute } from "./useGroupRoute";

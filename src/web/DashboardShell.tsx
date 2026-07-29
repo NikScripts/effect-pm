@@ -24,7 +24,6 @@ import {
   isGateTag,
   isShardMapTag,
   isTelemetryTag,
-  leafByKey,
   leafTags,
   nodesOf,
   tagWireKey,
@@ -38,11 +37,12 @@ import { useAtomValue } from "../ui/atom-react";
 import * as Group from "../Group";
 import { useViewTransition, useViewTransitionStyle } from "./useViewTransition";
 import { Button } from "./components/ui/button";
-import { Cell, ConfirmDialog, HealthBoard, NodeBar, NodeDetail, LockToggle, LogStream, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
+import { Cell, ConfirmDialog, LockToggle, LogStream, WeekSchedule, WindowDialog, displayName, useScheduleEdit } from "./widgets";
 import { isLeafTag, type LeafTag } from "../ui/widgetRegistry";
 import * as Navigator from "../ui/Navigator";
 import * as View from "../ui/View";
 import { DashboardDetailChrome, DashboardTopBar } from "./DashboardTopBar";
+import { NodeBar, NodeStatusHost } from "./NodeStatus";
 
 /** Detail body — chrome owns back/title (lock J). */
 const ViewDetailScreen = (props: {
@@ -466,39 +466,20 @@ const NodeHyperlinkView = (props: {
 
 
 /**
- * Batteries shell: health / node overlays + group drill-down. Requires compose
+ * Batteries shell: {@link NodeStatusHost} overlays + group drill-down. Requires compose
  * {@link View} Provider + {@link ./runtime.RuntimeProvider} above.
  *
  * @public
  */
 export const DashboardShell = (props: {
   readonly group: GroupNode;
-}): React.ReactElement => {
-  const [health, setHealth] = React.useState(false);
-  const [node, setNode] = React.useState<NodeRef | null>(null);
-  const [nodeTag, setNodeTag] = React.useState<unknown>(null);
-  const openHyperlink = React.useCallback(
-    (serviceKey: string): void => {
-      const found = leafByKey(props.group, serviceKey);
-      if (found !== undefined) setNodeTag(found);
-    },
-    [props.group],
-  );
-  if (nodeTag !== null) {
-    return <NodeHyperlinkView tag={nodeTag} onBack={() => setNodeTag(null)} />;
-  }
-  if (node !== null) {
-    return <NodeDetail node={node} onBack={() => setNode(null)} onOpenHyperlink={openHyperlink} />;
-  }
-  if (health) {
-    return (
-      <HealthBoard
-        group={props.group}
-        onBack={() => setHealth(false)}
-        onOpenNode={setNode}
-        onOpenHyperlink={openHyperlink}
-      />
-    );
-  }
-  return <DashboardInner group={props.group} onOpenHealth={() => setHealth(true)} />;
-};
+}): React.ReactElement => (
+  <NodeStatusHost
+    group={props.group}
+    renderHyperlink={(tag, onBack) => <NodeHyperlinkView tag={tag} onBack={onBack} />}
+  >
+    {({ openHealth }) => (
+      <DashboardInner group={props.group} onOpenHealth={openHealth} />
+    )}
+  </NodeStatusHost>
+);

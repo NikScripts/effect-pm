@@ -55,7 +55,25 @@ Reuse without forking the shell:
 |-----|-----|------|
 | `DashboardTopBar` | `DashboardTopBar` | Grid title / crumb strip |
 | `DashboardDetailChrome` | — | Detail back + title (lock J) |
-| `NodeBar` / `HealthBoard` / `NodeDetail` | NodeMark / focus panes | Node status (shell overlays for v1) |
+| `NodeBar` / `HealthBoard` / `NodeDetail` | `NodeMark` | Node status pieces |
+| `NodeStatusHost` | — | Stacks board → node → HyperService as overlays |
+
+```tsx
+import { NodeBar, NodeStatusHost, DashboardTopBar } from "hyperlink-ts/web"
+// or: import * as NodeStatus from "hyperlink-ts/web/NodeStatus"
+
+<NodeStatusHost group={ServicesHub} renderHyperlink={(tag, onBack) => /* detail */ null}>
+  {({ openHealth }) => (
+    <DashboardTopBar
+      title="Hub"
+      trailing={<NodeBar group={ServicesHub} onOpen={openHealth} />}
+    />
+  )}
+</NodeStatusHost>
+```
+
+Batteries `DashboardShell` uses `NodeStatusHost` (overlay stack). **Owner fork:** keep
+overlays vs a Navigator **page** skin for health / node detail (compose lock K2).
 
 ## App views
 

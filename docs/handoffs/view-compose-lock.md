@@ -146,7 +146,7 @@ First peel = header/body split; page-sized logs/schedule content follows.
 |------|-------|-------|
 | **0** Unhold batteries | **Eng’d** | `<Dashboard />` + `DashboardLayer.forCompose` + `View.compose` + `DashboardShell` supported |
 | **1** Top bar / detail chrome | **Eng’d** | `DashboardTopBar` + web `DashboardDetailChrome` public |
-| **2** Node status | next | `NodeBar` / `HealthBoard` / `NodeDetail` already exported; decide overlay vs page skin |
+| **2** Node status | **Eng’d (overlay host)** | `NodeStatusHost` + `NodeBar` / `HealthBoard` / `NodeDetail` public; batteries use overlays. **Owner fork:** keep overlays vs Navigator page skin |
 | **3** Logs / schedule pages | later | Content as `page` skins through Outlet (lock J) |
 
 ### L. Acceptance
@@ -169,7 +169,7 @@ Kit `<Dashboard />` is the public one-liner. Internally it is thin wiring:
 
 `DashboardLayer.forCompose({ skins, views })` → `View.compose` → platform `DashboardShell`.
 
-Public chrome (reuse without forking the shell): `DashboardTopBar`, web `DashboardDetailChrome`, plus widgets `NodeBar` / `HealthBoard` / `NodeDetail`.
+Public chrome (reuse without forking the shell): `DashboardTopBar`, web `DashboardDetailChrome`, `NodeStatusHost`, plus `NodeBar` / `HealthBoard` / `NodeDetail`.
 
 ```tsx
 // worker-pool-card.tsx

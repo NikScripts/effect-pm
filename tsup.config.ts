@@ -83,6 +83,7 @@ export default defineConfig([
       web: "src/web/index.ts",
       "web/WorkPoolView": "src/web/WorkPoolView.tsx",
       "web/DashboardViews": "src/web/DashboardViews.tsx",
+      "web/NodeStatus": "src/web/NodeStatus.tsx",
     },
     tsconfig: "src/web/tsconfig.json",
     dts: true,

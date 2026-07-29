@@ -33,6 +33,10 @@ export { useWidgets } from "./widget-registry";
 export * from "./Dashboard";
 export { DashboardShell } from "./DashboardShell";
 export { DashboardDetailChrome, DashboardTopBar } from "./DashboardTopBar";
+export { NodeStatusHost } from "./NodeStatus";
+// NodeBar / HealthBoard / NodeDetail also on this barrel via `./widgets`; prefer
+// `import { NodeBar, NodeStatusHost, … } from "hyperlink-ts/web"` or
+// `import * as NodeStatus from "hyperlink-ts/web/NodeStatus"`.
 export * from "./debug-console";
 export { cn } from "./cn";
 // Platform skins: `import * as WorkPoolView from "hyperlink-ts/web/WorkPoolView"`
