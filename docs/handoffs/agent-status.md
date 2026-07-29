@@ -6,7 +6,7 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **4** | `cursor/hyperservice-open-deps-5679` | [examples IA](./examples-ia-reorg.md) · [examples book](./agent-01-examples-book.md) · [E5 apps plan](./examples-apps-e5-plan.md) | **Eng** — refining examples IA after tip-sync | same tip as `integration` (pending push) | includes + smoke | Owner: lock E5 checklist; L6 IA still open | 2026-07-29 |
+| **4** | `cursor/hyperservice-open-deps-5679` | [examples IA](./examples-ia-reorg.md) · [examples book](./agent-01-examples-book.md) · [E5 apps plan](./examples-apps-e5-plan.md) | **tip-synced** — examples IA polish (headers/hub/guides) | same tip as `integration` | includes 50/50; smoke OK | Owner: lock E5 checklist; L6 IA still open | 2026-07-29 |
 | **G / TUI** | `cursor/view-withsize-types-125f` | View compose · Shell · Dashboard unhold | **tip-synced** — K2 0–3 (health pages + logs/schedule Page skins) | same tip as `integration` | typecheck 0 | F5 flake pre-existing | 2026-07-29 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **5**, **G** | 2026-07-26 |
 | **5** | `cursor/launcher-handoff-design-929b` | [launcher + handoff brief](./launcher-and-handoff-brief.md) · [rename](./rename-hyperlink-handoff.md) | **tip-synced** — lookupClient hot-rebind | same tip as `integration` | typecheck 0; lookup rebind green | Awaiting owner-lock #34–37 | 2026-07-29 |
