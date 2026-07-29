@@ -151,7 +151,7 @@ First peel = header/body split; page-sized logs/schedule **Eng’d**.
 
 ### K3. UI Route toolkit (2026-07-29)
 
-HttpApi-shaped public `Route` (`make` / `group` / `app` / `match` / `urlBuilder`). Group reflection = `groupRoute.routes` (not on `Route`). See [`ui-routes-dream.md`](./ui-routes-dream.md). Navigator cutover next.
+HttpApi-shaped `Route` (`make` / `group` / `get` / `match` / `urlBuilder`). Dynamic tools = `GroupRoute.from` + `gets`. See [`ui-routes-dream.md`](./ui-routes-dream.md). Navigator cutover next.
 
 ### L. Acceptance
 

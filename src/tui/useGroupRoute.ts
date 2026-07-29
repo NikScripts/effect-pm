@@ -12,7 +12,7 @@ import {
   resolveGroupRoute,
   type GroupRoute,
   type RouteGroup,
-} from "../ui/groupRoute";
+} from "../ui/GroupRoute";
 
 export type { GroupRoute };
 

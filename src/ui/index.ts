@@ -13,7 +13,9 @@
  *
  */
 export * from "./atom-react";
-export * from "./groupRoute";
+export * from "./GroupRoute";
+/** Dynamic Group → Route tools (`from` / `gets`) + legacy path resolve. */
+export * as GroupRoute from "./GroupRoute";
 export * from "./data";
 export * from "./cache";
 export * from "./now";
@@ -28,7 +30,7 @@ export {
 export * as View from "./View";
 /** Parent-owned Group navigation (memory / history) for View compose. */
 export * as Navigator from "./Navigator";
-/** UI routing toolkit — destinations, nests, app, match, urlBuilder. */
+/** UI routing toolkit — HttpApi-shaped make/group/get/match/urlBuilder. */
 export * as Route from "./Route";
 /** Shared Group card View handle + contribution Layer (no platform TSX). */
 export * as GroupView from "./GroupView";

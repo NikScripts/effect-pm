@@ -1,21 +1,25 @@
 /**
  * Internal impl for {@link ../ui/Route} catalog/nest helpers (HttpApi-shaped).
- * Group → route reflection lives in {@link ../ui/groupRoute} (`routes`), not here.
+ * Group → route reflection lives in {@link ../ui/GroupRoute}.
  */
 import * as Context from "effect/Context";
 import * as Option from "effect/Option";
 import { type Pipeable, pipeArguments } from "effect/Pipeable";
 import * as Predicate from "effect/Predicate";
-import * as Group from "../Group";
 import * as uiRoute from "./uiRoute";
 import type { Path } from "./uiRoute";
 
 export const TypeId = "~hyperlink-ts/ui/Route/App" as const;
 export const GroupTypeId = "~hyperlink-ts/ui/Route/Group" as const;
 
-/** Tag stamped by {@link fromGroup} — the Group/leaf member at this route. */
+/** Annotation: Hyperlink Group/leaf member (stamped by {@link ../ui/GroupRoute}). */
 export class Member extends Context.Service<Member, unknown>()(
   "hyperlink-ts/internal/uiRoutes/Member",
+) {}
+
+/** Annotation: leaf sub-view id on a `Route.get` under a leaf. */
+export class LeafView extends Context.Service<LeafView, string>()(
+  "hyperlink-ts/internal/uiRoutes/LeafView",
 ) {}
 
 export type RouteLike = uiRoute.Constraint | GroupConstraint;
@@ -211,78 +215,13 @@ const makeAppProto = (options: {
     annotations: options.annotations,
   }) as AppConstraint;
 
-/** Empty route app / catalog (`HttpApi.make` analogue). */
-export const app = <const Id extends string>(identifier: Id): AppConstraint =>
+/** Empty catalog — `HttpApi.make` analogue. */
+export const make = <const Id extends string>(identifier: Id): AppConstraint =>
   makeAppProto({
     identifier,
     groups: {},
     annotations: Context.empty(),
   });
-
-export type SourceGroup = {
-  readonly key: string;
-  readonly members: Record<string, unknown>;
-};
-
-export type FromGroupOptions = {
-  /** Leaf sub-view segments (e.g. `"logs"`, `"schedule"`). */
-  readonly leafViews?: ReadonlyArray<string> | undefined;
-};
-
-/**
- * Reflect a Hyperlink {@link Group} into nested path-bearing {@link group}s +
- * {@link uiRoute.make} routes — the same builders apps use by hand.
- */
-export const fromGroup = (
-  root: SourceGroup,
-  options?: FromGroupOptions,
-): GroupConstraint => {
-  const leafViews = options?.leafViews ?? [];
-  const walk = (node: SourceGroup, prefix: string): GroupConstraint => {
-    // Root members are top-level URL segments (`/Nwsl/...`).
-    const atRoot = prefix === "";
-    let g = group(atRoot ? rootIdentifier(root) : lastSegment(prefix), {
-      path: atRoot ? undefined : (prefix as Path),
-      topLevel: atRoot,
-    }).annotate(Member, node);
-
-    for (const [name, member] of Object.entries(Group.members(node))) {
-      const path = `${prefix}/${name}` as Path;
-      if (Group.isGroup(member)) {
-        g = g.add(walk(member, path));
-      } else {
-        let leaf = group(name, { path }).annotate(Member, member);
-        for (const view of leafViews) {
-          leaf = leaf.add(
-            uiRoute
-              .make(view, `${path}/${view}` as Path)
-              .annotate(Member, member)
-              .annotate(LeafView, view),
-          );
-        }
-        g = g.add(leaf);
-      }
-    }
-    return g;
-  };
-  return walk(root, "");
-};
-
-/** Annotation for a leaf sub-view name (`logs` / `schedule`). */
-export class LeafView extends Context.Service<LeafView, string>()(
-  "hyperlink-ts/internal/uiRoutes/LeafView",
-) {}
-
-const rootIdentifier = (root: SourceGroup): string => {
-  const key = root.key;
-  const slash = key.lastIndexOf("/");
-  return slash === -1 ? key : key.slice(slash + 1);
-};
-
-const lastSegment = (path: string): string => {
-  const parts = path.split("/").filter((s) => s.length > 0);
-  return parts[parts.length - 1] ?? path;
-};
 
 // =============================================================================
 // Reflect / match / urlBuilder

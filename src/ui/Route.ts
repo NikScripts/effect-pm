@@ -1,28 +1,36 @@
 /**
  * @module ui/Route
  *
- * UI routing toolkit — one namespace (HttpApi-shaped): destinations, nests, app
- * catalog, match, URL builder. **Not** here: reflecting a Hyperlink `Group` into
- * routes — that bridge is {@link ./groupRoute.routes} (Group tree → same builders).
+ * UI routing — **HttpApi-shaped**, one namespace:
+ *
+ * | HttpApi | Route |
+ * |---------|--------|
+ * | `HttpApi.make` | {@link make} |
+ * | `HttpApiGroup.make` | {@link group} |
+ * | `HttpApiEndpoint.get` | {@link get} |
+ * | `HttpApiClient.urlBuilder` | {@link urlBuilder} |
+ *
+ * Most dashboard routes are **not** hand-written here — build them with
+ * {@link ./GroupRoute} (`GroupRoute.from`), which only calls these same tools.
  *
  * ```ts
  * import * as Route from "hyperlink-ts/ui/Route"
- * import { routes as groupRoutes } from "hyperlink-ts/ui"
+ * import * as GroupRoute from "hyperlink-ts/ui/GroupRoute"
  * import { Schema } from "effect"
  *
- * const Dashboard = Route.app("dashboard").add(
+ * const Dashboard = Route.make("dashboard").add(
+ *   GroupRoute.from(ServicesHub, {
+ *     leaf: (g, ctx) => g.add(...GroupRoute.gets(ctx, "logs", "schedule")),
+ *   }),
  *   Route.group("shell", { topLevel: true }).add(
- *     Route.make("health", "/health"),
- *     Route.make("node", "/health/:nodeId").pipe(
+ *     Route.get("health", "/health"),
+ *     Route.get("node", "/health/:nodeId").pipe(
  *       Route.params(Schema.Struct({ nodeId: Schema.String })),
  *     ),
  *   ),
- *   groupRoutes(ServicesHub, { leafViews: ["logs", "schedule"] }),
  * )
  *
- * const urls = Route.urlBuilder(Dashboard)
- * urls.health()
- * urls.Nwsl.HttpApi.logs()
+ * Route.urlBuilder(Dashboard).Nwsl.HttpApi.logs()
  * Route.match(Dashboard, "/Nwsl/HttpApi")
  * ```
  *
@@ -34,15 +42,11 @@ import type * as Schema from "effect/Schema";
 import * as endpoint from "../internal/uiRoute";
 import * as catalog from "../internal/uiRoutes";
 
-// =============================================================================
-// Path + single destination
-// =============================================================================
-
 /** Absolute pathname template (`/health`, `/health/:nodeId`). @public */
 export type Path = endpoint.Path;
 
 /**
- * Declared UI destination — stable id, path template, optional params schema.
+ * Declared destination — `HttpApiEndpoint` analogue.
  *
  * @public
  */
@@ -55,21 +59,21 @@ export interface Route<
 /** @public */
 export type Constraint = endpoint.Constraint;
 
-/** `true` when `u` is a destination {@link Route}. @public */
+/** @public */
 export const isRoute: (u: unknown) => u is Constraint = endpoint.isRoute;
 
 /**
- * Declare a destination.
+ * Declare a destination (`HttpApiEndpoint.get`).
  *
  * @public
  */
-export const make: <const Id extends string, const PathType extends Path>(
+export const get: <const Id extends string, const PathType extends Path>(
   identifier: Id,
   path: PathType,
   options?: {
     readonly params?: Schema.Top | undefined;
   },
-) => Route<Id, PathType> = endpoint.make;
+) => Route<Id, PathType> = endpoint.get;
 
 /**
  * Attach a params schema (`:nodeId` ↔ typed object). Dual.
@@ -79,7 +83,7 @@ export const make: <const Id extends string, const PathType extends Path>(
 export const params: typeof endpoint.params = endpoint.params;
 
 /**
- * Prefix the path (`/app` + `/health` → `/app/health`).
+ * Prefix a destination path.
  *
  * @public
  */
@@ -89,7 +93,7 @@ export const prefix = <Id extends string, PathType extends Path, Params>(
 ): Route<Id, Path, Params> => self.prefix(prefixPath);
 
 /**
- * Annotate a destination (HttpApi-style Context annotations).
+ * Annotate a destination.
  *
  * @public
  */
@@ -107,86 +111,81 @@ export const joinPath: (prefix: Path | "/", path: Path | "/") => Path =
 export const compilePath: typeof endpoint.compilePath = endpoint.compilePath;
 
 // =============================================================================
-// Nest + app catalog
+// Group + catalog (HttpApi / HttpApiGroup)
 // =============================================================================
 
 /**
- * Nested route group — may itself be navigable via {@link group}'s `path`
- * (layout route; HttpApi groups are not path-bearing).
+ * Nested group of destinations — optional `path` makes the nest itself
+ * navigable (UI extension; HttpApi groups are not path-bearing).
  *
  * @public
  */
 export interface Group extends catalog.GroupConstraint {}
 
 /**
- * Route app / catalog (`HttpApi` analogue) — compose with {@link app}.add.
+ * Route catalog — what `HttpApi.make` is in Effect.
  *
  * @public
  */
-export interface App extends catalog.AppConstraint {}
+export interface Api extends catalog.AppConstraint {}
 
-/** Destination or nest — what {@link App.add} / {@link Group.add} accept. @public */
+/** Destination or group — what `.add` accepts. @public */
 export type RouteLike = catalog.RouteLike;
 
 /** @public */
 export const isGroup: (u: unknown) => u is Group = catalog.isGroup;
 
 /** @public */
-export const isApp: (u: unknown) => u is App = catalog.isApp;
+export const isApi: (u: unknown) => u is Api = catalog.isApp;
 
 /**
- * Empty app catalog.
+ * Empty catalog (`HttpApi.make`).
  *
  * @public
  */
-export const app: <const Id extends string>(identifier: Id) => App = catalog.app;
+export const make: <const Id extends string>(identifier: Id) => Api =
+  catalog.make;
 
 /**
- * Named nest. Pass `path` so the nest itself is navigable (`urls.Nwsl()`).
- * Pass `topLevel: true` so child methods flatten onto the parent builder.
+ * Named group (`HttpApiGroup.make`). Pass `path` so the nest is navigable
+ * (`urls.Nwsl()`). Pass `topLevel: true` so child methods flatten onto the
+ * parent URL builder (same as HttpApi).
  *
  * @public
  */
-export const group: <const Id extends string>(
+export const group = <const Id extends string>(
   identifier: Id,
   options?: {
     readonly path?: Path | undefined;
     readonly topLevel?: boolean | undefined;
   },
-) => Group = catalog.group;
+): Group =>
+  catalog.group(identifier, {
+    path: options?.path,
+    topLevel: options?.topLevel,
+  });
 
 /** Flattened match hit. @public */
 export type Match = catalog.Match;
 
 /**
- * Match a pathname against an app (longest template wins).
+ * Match a pathname against a catalog (longest template wins).
  *
  * @public
  */
 export const match: (
-  self: App,
+  self: Api,
   pathname: string,
 ) => Option.Option<Match> = catalog.match;
 
-/** Nested URL builder (HttpApiClient.urlBuilder shape). @public */
+/** Nested URL builder (`HttpApiClient.urlBuilder`). @public */
 export type UrlBuilder = catalog.UrlBuilder;
 
-/**
- * Build nested URL helpers from an app.
- *
- * @public
- */
-export const urlBuilder: (self: App) => UrlBuilder = catalog.urlBuilder;
+/** @public */
+export const urlBuilder: (self: Api) => UrlBuilder = catalog.urlBuilder;
 
-/** Walk nests/destinations (tooling). @public */
+/** Walk groups/destinations (tooling). @public */
 export const reflect: typeof catalog.reflect = catalog.reflect;
 
 /** Flat list of navigable paths (tests / debugging). @public */
 export const flatten: typeof catalog.flatten = catalog.flatten;
-
-/** Annotate an app. @public */
-export const annotateApp = <I, S>(
-  self: App,
-  tag: Context.Key<I, S>,
-  value: S,
-): App => self.annotate(tag, value);

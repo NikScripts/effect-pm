@@ -2,7 +2,7 @@
  * @module ui/Navigator
  *
  * Parent-owned navigation for View skins — short **member names** as the path
- * (`/Nwsl/HttpApi`), not wire keys. Steal: {@link ./groupRoute} resolve math +
+ * (`/Nwsl/HttpApi`), not wire keys. Steal: {@link ./GroupRoute} resolve math +
  * Effect `Context.Service` / Layer (same seam as View skins).
  *
  * ```ts
@@ -25,7 +25,7 @@ import {
   pathToMember,
   resolveGroupRoute,
   type RouteGroup,
-} from "./groupRoute";
+} from "./GroupRoute";
 import type { LeafTag } from "./widgetRegistry";
 
 // =============================================================================

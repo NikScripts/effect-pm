@@ -77,7 +77,8 @@ const makeProto = <Id extends string, PathType extends Path, Params>(options: {
     annotations: options.annotations,
   }) as Route<Id, PathType, Params>;
 
-export const make = <const Id extends string, const PathType extends Path>(
+/** Single destination — `HttpApiEndpoint.get` analogue. */
+export const get = <const Id extends string, const PathType extends Path>(
   identifier: Id,
   path: PathType,
   options?: {

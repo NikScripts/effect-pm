@@ -5,7 +5,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Context, Effect, Layer } from "effect";
 import * as Daemon from "../src/Daemon";
 import * as Group from "../src/Group";
-import { pathToMember } from "../src/ui/groupRoute";
+import { pathToMember } from "../src/ui/GroupRoute";
 import * as Navigator from "../src/ui/Navigator";
 
 class HttpApi extends Daemon.Tag<HttpApi>()("test/nav/HttpApi") {}

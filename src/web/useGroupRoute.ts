@@ -14,7 +14,7 @@
  * route.back();      // up one segment
  * ```
  *
- * Resolve math lives in {@link ../ui/groupRoute} (shared with the TUI); this hook only
+ * Resolve math lives in {@link ../ui/GroupRoute} (shared with the TUI); this hook only
  * binds it to `window.history`.
  *
  */
@@ -24,7 +24,7 @@ import {
   resolveGroupRoute,
   type GroupRoute,
   type RouteGroup,
-} from "../ui/groupRoute";
+} from "../ui/GroupRoute";
 import type { GroupNode } from "../ui/data";
 
 export type { GroupRoute };

@@ -1,60 +1,49 @@
-# UI Route — dream API (HttpApi-shaped)
+# UI Route — HttpApi-shaped + GroupRoute dynamic tools
 
-**Branch:** `cursor/view-withsize-types-125f`  
-**State:** `Route` toolkit + `groupRoute.routes` **Eng’d**; Navigator cutover **not** yet.
+## Split
 
-## Invariants
+| Module | Role |
+|--------|------|
+| `hyperlink-ts/ui/Route` | Toolkit — `make` / `group` / `get` / `match` / `urlBuilder` (like HttpApi / HttpApiGroup / HttpApiEndpoint) |
+| `hyperlink-ts/ui/GroupRoute` | **Dynamic tools** — `from` + `gets` turn a Hyperlink Group into Route declarations |
 
-1. **One toolkit namespace:** `hyperlink-ts/ui/Route` — destinations, nests, app, match, urlBuilder.
-2. **Group → routes is a bridge**, not a Route primitive — `groupRoute.routes(hub)` (same file family as Group path resolve). It only calls `Route.group` / `Route.make` / `.add`.
-3. **String paths** at the public edge. Segment arrays stay on legacy Navigator until cutover.
-4. **Not HttpApi runtime** — no `HttpApiClient.make` / `HttpRouter` for UI nav.
+Most dashboard routes come from **`GroupRoute.from`**, not hand-written `Route.get`s.
 
-## How dynamic routes work
+## HttpApi mapping
 
-`groupRoute.routes(ServicesHub, { leafViews: ["logs", "schedule"] })` walks the Group tree:
+| Effect | Ours |
+|--------|------|
+| `HttpApi.make("id")` | `Route.make("id")` |
+| `HttpApiGroup.make("id")` | `Route.group("id", { path? })` |
+| `HttpApiEndpoint.get("id", "/path")` | `Route.get("id", "/path")` |
+| `HttpApiClient.urlBuilder` | `Route.urlBuilder` |
 
-| Member | Emitted with Route builders |
-|--------|-----------------------------|
-| nested Group `Nwsl` | `Route.group("Nwsl", { path: "/Nwsl" }).add(…children)` |
-| leaf `HttpApi` | `Route.group("HttpApi", { path: "/Nwsl/HttpApi" })` |
-| leaf view | `Route.make("logs", "/Nwsl/HttpApi/logs")` on that nest |
+Optional `path` on `Route.group` = navigable nest (UI-only; HttpApi groups have no path).
 
-Each node is annotated with `Member` (and `LeafView` for sub-views) so `Route.match` can recover the tag. Equivalent hand-written tree is bit-identical for paths (see tests).
-
-```text
-Hub
-└─ Nwsl          →  /Nwsl
-   └─ HttpApi    →  /Nwsl/HttpApi
-      ├─ logs    →  /Nwsl/HttpApi/logs
-      └─ schedule→  /Nwsl/HttpApi/schedule
-```
-
-## Modules
-
-| Surface | Role |
-|---------|------|
-| `ui/Route` | `make` / `group` / `app` / `match` / `urlBuilder` |
-| `ui/groupRoute.routes` | Group tree → `Route.Group` |
-
-## Usage
+## Dynamic generation
 
 ```ts
-const Dashboard = Route.app("dashboard").add(
-  routes(ServicesHub, { leafViews: ["logs", "schedule"] }),
+GroupRoute.from(ServicesHub, {
+  leaf: (g, ctx) => g.add(...GroupRoute.gets(ctx, "logs", "schedule")),
+})
+```
+
+- `from` walks the Group and emits `Route.group({ path })` per member.
+- `gets` emits ordinary `Route.get`s for leaf pages — **not** a `leafViews` string bag.
+- `leaf` callback is where apps compose those gets (or any other Route builders).
+
+## Example
+
+```ts
+const Dashboard = Route.make("dashboard").add(
+  GroupRoute.from(ServicesHub, {
+    leaf: (g, ctx) => g.add(...GroupRoute.gets(ctx, "logs", "schedule")),
+  }),
   Route.group("shell", { topLevel: true }).add(
-    Route.make("health", "/health"),
-    Route.make("node", "/health/:nodeId").pipe(
+    Route.get("health", "/health"),
+    Route.get("node", "/health/:nodeId").pipe(
       Route.params(Schema.Struct({ nodeId: Schema.String })),
     ),
   ),
 )
-
-const urls = Route.urlBuilder(Dashboard)
-urls.Nwsl.HttpApi.logs()
-Route.match(Dashboard, location.pathname)
 ```
-
-## Next
-
-Thin Navigator over `Route.app` + location; retire public path arrays / hard-coded `openHealth`.
