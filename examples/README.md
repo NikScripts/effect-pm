@@ -8,7 +8,7 @@ Paired docs live at `docs/examples/<topic>/<name>.md` and Twoslash-`include` the
 
 | Layer | Path | Purpose |
 |-------|------|---------|
-| **Topics** | `work-pool/`, `gate/`, `daemon/`, `node/`, `fleet/`, `launcher/`, `hyperlink/`, `store/`, `schedule/`, `polling/`, `config/`, `observe/` | One API shape per file — same names as the guides |
+| **Topics** | `work-pool/`, `gate/`, `daemon/`, `node/`, `fleet/`, `launcher/`, `hyperlink/`, `logs/`, `store/`, `schedule/`, `polling/`, `config/`, `observe/` | One API shape per file — same names as the guides |
 | **Scenarios** | [`scenarios/`](./scenarios/) | Multi-file / multi-process compositions |
 | **Apps** | [`apps/`](./apps/) | TUI, web, dashboard, CLI, widgets (not 1:1 Twoslash yet) |
 | **Shared** | [`shared/`](./shared/) | Harness helpers |
@@ -36,6 +36,7 @@ Living book: [docs/index.md](../docs/index.md) · [API Reference](https://hyperl
 | **Node & discovery** | `node/tag-addressed` → `tag-bound` → `clients` → addressless → nameless unix → `prototype` → `as-lookup` → nameless http/ws → `identity-coordinator` |
 | **Fleet glass** | `fleet/telemetry-glass` → `health-glass` → `shardmap-sessions` |
 | **Launcher** | `launcher/lookup-membership` |
+| **Logs** | `logs/live-bus` → `node-journal` → `hyperlink-logs` → `lineage-scope` → `levels` |
 | **Schedule / polling / config** | `pnpm run example:schedule-basics` → `example:schedule-controls` → `example:polling-sports` → `example:config-hot-swap` |
 | **Observe** | `pnpm run example:observe-pack-demo` · guide [Observe](../docs/guides/observe.md) |
 | **Scenarios** | `scenarios/multi-protocol-dual-serve` → `schedule-sync-from-db` → `serve-per-deps` → NWSL |
@@ -104,14 +105,24 @@ Paths are under `examples/`. Script = `pnpm run example:<topic>-<kebab-file>` (s
 | [`fleet/health-glass.ts`](./fleet/health-glass.ts) | FleetHealth |
 | [`fleet/shardmap-sessions.ts`](./fleet/shardmap-sessions.ts) | ShardMap sessions |
 
-### Launcher · Hyperlink · Store · Schedule · Polling · Config · Observe
+### Launcher · Hyperlink · Logs · Store · Schedule · Polling · Config · Observe
 
 | File | Teaches |
 |------|---------|
 | [`launcher/lookup-membership.ts`](./launcher/lookup-membership.ts) | Launcher → Lookup membership |
 | [`hyperlink/tag-defaults.ts`](./hyperlink/tag-defaults.ts) | Tag defaults |
 | [`hyperlink/shared-spec-wire.ts`](./hyperlink/shared-spec-wire.ts) | Shared Spec wire |
+| [`logs/live-bus.ts`](./logs/live-bus.ts) | `Logs.layer` + stream/snapshot |
+| [`logs/node-journal.ts`](./logs/node-journal.ts) | `Node.logs` + `Logs.byNode` |
+| [`logs/hyperlink-logs.ts`](./logs/hyperlink-logs.ts) | `Hyperlink.logs(tag).stream` / `.query` |
+| [`logs/lineage-scope.ts`](./logs/lineage-scope.ts) | `Logs.withScope` + `LogEntry` predicates |
+| [`logs/levels.ts`](./logs/levels.ts) | Live stream floor vs durable tail floor |
 | [`store/memory.ts`](./store/memory.ts) / [`sqlite.ts`](./store/sqlite.ts) | Store backends |
+| [`store/soft-override-work-pool.ts`](./store/soft-override-work-pool.ts) | AppStore Soft override into WorkPool |
+| [`store/one-store-many-regs.ts`](./store/one-store-many-regs.ts) | One store with node, queue, and daemon regs |
+| [`store/durable-and-soft.ts`](./store/durable-and-soft.ts) | Durable backlog vs Soft journal |
+| [`store/history-presence.ts`](./store/history-presence.ts) | `HistoryStore` omit vs provide |
+| [`store/loud-missing-registration.ts`](./store/loud-missing-registration.ts) | Loud Soft failure on missing engine reg |
 | [`schedule/*.ts`](./schedule/) | `at` / `window` / `define` / controls |
 | [`polling/*.ts`](./polling/) | accelerating / spaced / reset / peek / delayed-start |
 | [`config/hot-swap.ts`](./config/hot-swap.ts) | Dynamic config hot swap |

@@ -64,6 +64,7 @@ const watchDocsContent = {
         "../../examples/fleet",
         "../../examples/launcher",
         "../../examples/hyperlink",
+        "../../examples/logs",
         "../../examples/store",
         "../../examples/schedule",
         "../../examples/polling",

@@ -213,6 +213,32 @@ Guide: [Hyperlink (Tag & wire)](/docs/creating-a-hyperlink)
 
 ---
 
+## Logs
+
+Guide: [Logs](/docs/logs)
+
+### [live bus](/docs/logs-live-bus)
+
+`examples/logs/live-bus.ts` · `pnpm run example:logs-live-bus`
+
+### [node journal](/docs/logs-node-journal)
+
+`examples/logs/node-journal.ts` · `pnpm run example:logs-node-journal`
+
+### [Hyperlink logs export](/docs/logs-hyperlink-logs)
+
+`examples/logs/hyperlink-logs.ts` · `pnpm run example:logs-hyperlink-logs`
+
+### [lineage scope](/docs/logs-lineage-scope)
+
+`examples/logs/lineage-scope.ts` · `pnpm run example:logs-lineage-scope`
+
+### [levels](/docs/logs-levels)
+
+`examples/logs/levels.ts` · `pnpm run example:logs-levels`
+
+---
+
 ## Store
 
 Guide: [Store](/docs/stores)
@@ -224,6 +250,26 @@ Guide: [Store](/docs/stores)
 ### [SQLite](/docs/store-sqlite)
 
 `examples/store/sqlite.ts` · `pnpm run example:store-sqlite`
+
+### [Soft override WorkPool](/docs/store-soft-override-work-pool)
+
+`examples/store/soft-override-work-pool.ts` · `pnpm run example:store-soft-override-work-pool`
+
+### [one store, many registrations](/docs/store-one-store-many-regs)
+
+`examples/store/one-store-many-regs.ts` · `pnpm run example:store-one-store-many-regs`
+
+### [durable and Soft planes](/docs/store-durable-and-soft)
+
+`examples/store/durable-and-soft.ts` · `pnpm run example:store-durable-and-soft`
+
+### [HistoryStore presence](/docs/store-history-presence)
+
+`examples/store/history-presence.ts` · `pnpm run example:store-history-presence`
+
+### [loud missing registration](/docs/store-loud-missing-registration)
+
+`examples/store/loud-missing-registration.ts` · `pnpm run example:store-loud-missing-registration`
 
 ---
 
