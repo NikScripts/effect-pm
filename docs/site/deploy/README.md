@@ -1,5 +1,18 @@
 # Deploying the docs site (DigitalOcean App Platform + Cloudflare)
 
+**Hosts**
+
+| Host | What |
+|------|------|
+| `https://hyperlink.cool` | Coming-soon brand page only (host-gate; no docs/API) |
+| `https://www.hyperlink.cool` | Same as apex |
+| `https://dev.hyperlink.cool` | Full docs demo (feedback) — `DOCS_SITE_ORIGIN` |
+
+DNS (Cloudflare, proxied): apex/`www` as today; **`dev` CNAME →** the App Platform
+ingress (`*.ondigitalocean.app`). Host split is enforced by **Cloudflare Single Redirects**
+(see [`docs/handoffs/docs-site-dev-host.md`](../../handoffs/docs-site-dev-host.md)) — Waku
+static HTML bypasses origin middleware.
+
 The site is a Node service (Waku `start`): hyperlink-ts pages are pre-rendered static; effect dep
 API pages SSR on demand reading `api-data/` + `api-hovers/` from disk. **The artifact deploys;
 DO never builds** — a fresh builder has no hover cache (that's a 1.5 h gen-hovers run per deploy).
@@ -49,14 +62,21 @@ New machine: `pnpm run op:restore-keys` (writes `.env.keys` from 1Password), the
 
 ```sh
 cd docs/site
-pnpm run deploy:do -- hyperlink-docs          # dotenvx → build → DOCR push → CF purge
-doctl --context hyperlink apps update "$DO_DOCS_APP_ID" --spec deploy/do-app.yaml
-# or: doctl --context hyperlink apps update ed0a18b6-946a-4219-a427-af456d181755 --spec deploy/do-app.yaml
+pnpm run deploy:do -- hyperlink-docs
+# dotenvx → full build → check-ssg → DOCR push → create-deployment --wait → CF purge → live-routes-smoke
 ```
 
-The script: full `pnpm build` (regens api-data / search / llms / sitemap with absolute URLs,
-link-check gates the build) → docker image from `docs/` context → push `:latest` to DOCR.
-When `CLOUDFLARE_API_TOKEN` is present (via dotenvx) it also purges the dep-API edge cache.
+The script fails closed: truncated API SSG (missing `api-data/index.json` / module HTML), ciphertext
+in HTML, a non-ACTIVE App Platform cutover, or a live 404 on `/api/hyperlink-ts/WorkPool` (and other
+canaries) all abort the deploy. Do **not** bypass with bare `waku build` + docker push.
+
+Gates (also runnable alone):
+
+| Gate | Command | When |
+|------|---------|------|
+| SSG integrity | `pnpm run docs:check-ssg` | `postbuild` + deploy |
+| Live routes | `pnpm run docs:smoke:routes -- https://dev.hyperlink.cool` | end of deploy |
+| Browser / search | `pnpm run docs:smoke` / `docs:smoke:search` | `docs:verify` |
 
 ## Cloudflare — edge-cache SSR'd dependency API pages
 
@@ -81,9 +101,10 @@ Purge on every image deploy (`pnpm run deploy:do` / `pnpm run cf:purge`).
 
 **DOCS_SITE_ORIGIN:** must decrypt to a real `https://…` URL at build time. Bare `waku build`
 without dotenvx once baked `encrypted:…` into every canonical/og tag — `deploy-do.sh` now refuses
-non-http(s) origins, and `siteOrigin()` falls back to `https://hyperlink.cool`.
+non-http(s) origins, and `siteOrigin()` falls back to `https://dev.hyperlink.cool`.
 
-**robots.txt:** origin serves `docs/site/public/robots.txt` (Allow + Sitemap).
+**robots.txt:** demo host serves `docs/site/public/robots.txt` (Allow + Sitemap on `dev`).
+Brand host gets a disallow-docs body from `publicHostGate` middleware.
 
 Origin also stamps `Cache-Control: public, s-maxage=86400, …` via
 `src/middleware/cacheHeaders.ts` for those paths — documentation of intent; the Cache Rule is

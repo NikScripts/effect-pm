@@ -2,7 +2,7 @@
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
-> and live type previews — is at <https://hyperlink.cool/docs/storage>.
+> and live type previews — is at <https://dev.hyperlink.cool/docs/storage>.
 <!-- docs-site-link:end -->
 # Storage & Persistence
 
@@ -18,7 +18,7 @@ All persistence is one of these shapes:
   an event journal (in-memory or SQLite). This is the event-log form: record history, replay it,
   stream changes. Reach for it whenever the data is a log of things that happened.
 - **Custom store** — a bespoke store service with its own domain API and backend, for when append/read
-  cannot express the semantics (leasing, at-least-once, priority). `DurableQueueStore` is the model:
+  cannot express the semantics (leasing, at-least-once, priority). `DurableWorkPoolStore` is the model:
   `offer` / `take` / `complete` / `fail` / `recover` / `drain` over its own SQLite table.
   Use a `Context.Service` port when durability is presence-driven (`serviceOption`) or a second
   backend is likely.
@@ -26,7 +26,8 @@ All persistence is one of these shapes:
   engine owns a SQLite table directly (`SELECT` / `UPSERT` / `DELETE`). No Store bridge, no separate
   store port, no event replay. Default the client to `:memory:` when an in-process default carries
   value; pass a filename for crash-surviving durability. **Model: `ShardMap`**
-  (`effect_pm_shard_map` in `src/internal/shardMapSql.ts`).
+  (`hyperlink_ts_shard_map` in `src/internal/shardMapSql.ts`). Wiring recipes:
+  [`docs/guides/stores.md`](../guides/stores.md).
 
 New persistence uses one of these three — nothing else. Do not event-source a Map "because Daemon
 does history."

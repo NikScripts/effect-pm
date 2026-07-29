@@ -228,6 +228,45 @@ describe("Hyperlink.verifyConnection", () => {
       expectTaggedFailure(exit, "NodeUnreachable");
     }).pipe(Effect.provide(httpSrv), Effect.scoped, Effect.timeout(Duration.seconds(10))),
   );
+
+  it.live("verifyConnection treats a relative url as WebSocket (not Http GET)", () =>
+    Effect.gen(function* () {
+      const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
+      const port = address._tag === "TcpAddress" ? address.port : 0;
+      // Fake browser location so toWebSocketUrl("/rpc") → ws://127.0.0.1:<port>/rpc.
+      const prevLocation = (globalThis as { location?: unknown }).location;
+      ;(globalThis as { location: { protocol: string; host: string } }).location = {
+        protocol: "http:",
+        host: `127.0.0.1:${port}`,
+      };
+      try {
+        yield* Hyperlink.verifyConnection(VNode, { url: "/rpc", timeout: "2 seconds" });
+      } finally {
+        if (prevLocation === undefined) {
+          delete (globalThis as { location?: unknown }).location;
+        } else {
+          ;(globalThis as { location: unknown }).location = prevLocation;
+        }
+      }
+    }).pipe(Effect.provide(wsSrv), Effect.scoped, Effect.timeout(Duration.seconds(10))),
+  );
+});
+
+describe("Hyperlink.ws relative same-origin verify", () => {
+  it.live(
+    "Hyperlink.ws(addressed multi-protocol, { url: \"/rpc\" }) builds without probing Http /rpc",
+    () =>
+      Effect.gen(function* () {
+        // Dead stamp — if verify fell through to the addressed endpoints or classified
+        // "/rpc" as Http GET, Layer build would fail. Relative override must skip (no
+        // `location` in Node) while still wiring the dial target.
+        class StampDead extends Node.Tag<StampDead>()("verify/ws-relative", {
+          http: "http://127.0.0.1:1/rpc",
+          ws: "ws://127.0.0.1:1/rpc",
+        }) {}
+        yield* Layer.build(Hyperlink.ws(StampDead, { url: "/rpc" }));
+      }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(10))),
+  );
 });
 
 describe("Hyperlink.client default-on verify", () => {

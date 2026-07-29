@@ -1,4 +1,9 @@
 {#workpool-priority-retry title="Queue — Priority, Dedup, Retry" status="draft" appliesTo=all}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://dev.hyperlink.cool/docs/workpool-priority-retry>.
+<!-- docs-site-link:end -->
 # Queue — Priority, Dedup, Retry
 
 {.draft}

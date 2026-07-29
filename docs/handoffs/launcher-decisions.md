@@ -1,5 +1,10 @@
 # Launcher — decisions doc
 
+> **2026-07-25 — SUPERSEDED AS BINDING.** Owner: **nothing here is locked.** Treat this file as
+> **reference only**; a new agent may start the launcher design from scratch. Active brief:
+> [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md). Drift/`contractHash` work
+> remains solid; launcher “Locked” / “Proposed” rows below are historical.
+
 Bake started 2026-07-22 (owner + Agent F). Scope: the launcher (start/supervise the fleet's
 runtimes), Group-based cohorts, and the Lookup control loop. Sits directly upstream of the
 node-handoff mission (docs/handoffs/node-handoff-mission.md — delta's work after training).

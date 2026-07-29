@@ -7,10 +7,10 @@
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **4** | `cursor/hyperservice-open-deps-5679` | [fleet rate limiting](../plans/fleet-rate-limiting.md) · [wire groups](../plans/wire-groups-and-identity.md) · [service shapes](../plans/service-shapes.md) | **tip-synced** — R4b ApiMetrics deleted; dashboard nest parity | same tip as `integration` | typecheck 0 / api-metrics 7/7 | idle | 2026-07-28 |
-| **G / TUI** | `cursor/tui-dashboard-parity-125f` | TUI ↔ web Dashboard Group parity | **design** — client adapters notes; tip-synced | same tip as `integration` | prior suites green | Notes: [`client-adapters-design.md`](./client-adapters-design.md) — Promise / TanStack / tRPC-shape / Effect-reactive helpers; Eng TBD | 2026-07-24 |
+| **G / TUI** | `cursor/view-withsize-types-125f` | TUI ↔ web Dashboard Group parity · **View compose** · `ui.data` | **tip-synced** — compose `data` door + shared RuntimeProvider | same tip as `integration` | typecheck 0; view suites + data 18/18 | Hold kit Dashboard | 2026-07-28 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **5**, **G** | 2026-07-26 |
-| **5** | `cursor/launcher-handoff-design-929b` | [launcher + handoff brief](./launcher-and-handoff-brief.md) · [rename](./rename-hyperlink-handoff.md) | **Track C bake proposed** (#27–36) | ahead of `integration` (Launcher tip) | typecheck + launcher 23/23 | Owner: lock C #27–36 | 2026-07-28 |
-| **Docs site** | `cursor/docs-site-edge-cache-dbdc` (ε) | [origin down](./docs-site-origin-down.md) · edge cache · SEO · Lighthouse | **tip-synced** — LH home/api 100s; static edge cache; safe origin | same tip as `integration` | home/api 100/100/100/100; install a11y/seo 100 (perf 98 / BP 96 — React #418) | 1Password CLI deferred; **no landing UI without owner OK** | 2026-07-27 |
+| **5** | `cursor/launcher-handoff-design-929b` | [launcher + handoff brief](./launcher-and-handoff-brief.md) · [rename](./rename-hyperlink-handoff.md) | **Track C** — membership push Eng | tip-syncing | typecheck + lookup-directory | Owner: remainder of C #27–36 | 2026-07-29 |
+| **Docs site** | `cursor/docs-site-edge-cache-dbdc` (ε) | [dev host](./docs-site-dev-host.md) · edge cache · SEO | **tip-synced / live** — apex coming-soon; docs on `dev`; GS polish; origin gate | same tip as `integration` | smoke + host-gate tests; CF + `serve-production.mjs`; islands on `hyperlink-ts` / `.hl-dashboard` | — | 2026-07-29 |
 | **1** | *(frozen)* | [Examples book](./agent-01-examples-book.md) · [Phase 3](./agent-01-docs-corpus-phase3-plan.md) | **frozen / superseded** — E1 examples on tip; intro voice [#68](https://github.com/nikolasstow/Hyperlink/pull/68) closed | — | — | Branch deleted (unique tip was pre-rebrand `docs/index.md`) | 2026-07-26 |
 | **2** | merged via [#33](https://github.com/NikScripts/effect-pm/pull/33) | [logs plan](archive/2026-07/agents/agent-02-logs-platform-plan.md) | **retired / merged** | `integration` tip | green | Phase 5 + `NodeLogs` closeout done; P1 handed to Agent 3 | 2026-07-14 |
 | **3** | *(dead)* | [identity-coordinator](./identity-coordinator.md) · [loud-failures](./loud-failures-design.md) | **dead** — Soft / verify / F4 / lineId memo Eng’d on tip | — | — | Work branch deleted (was tip-contained in `integration`) | 2026-07-26 |
@@ -29,14 +29,15 @@
 
 ### Active (owner approval required)
 1. **Agent 4:** W1–W3 + `default`/`defaults` + R1–R4+adaptive + A1–A3; **`cell` parked/rejected**; **R5 rejected**; **R4b tip-synced** — sibling `ApiMetrics` deleted; dashboard/TUI surface limiter nest. Idle. Incident: [`agent-04-w3-incident-2026-07-27.md`](./agent-04-w3-incident-2026-07-27.md).
-2. **Agent G / TUI:** Dashboard Group parity + client-adapters design (`cursor/tui-dashboard-parity-125f`).
-3. **Agent 5 (Launcher + handoff):** Track A+B Eng'd; **Track C bake proposed** (#27–36) — drain-then-cut, per-HS opt-in, Node shutdown, no dual-serve/redirect in C. Awaiting owner lock. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
-4. **Docs site:** tip-synced + redeployed. Lighthouse **home/api 100/100/100/100**; install a11y/seo 100 (perf 98 / BP 96 — React #418 hydration). Static `/assets`+`/search` CF edge HIT. Landing UI unchanged (Coming soon). 1Password CLI deferred.
+2. **Agent G / TUI:** View compose + Tag mint + **`ui.data`** on `cursor/view-withsize-types-125f` — lock [`view-compose-lock.md`](./view-compose-lock.md); guides [`../guides/view-tag-types.md`](../guides/view-tag-types.md) · [`../guides/view-data.md`](../guides/view-data.md). Hold kit Dashboard.
+3. **Agent 5 (Launcher + handoff):** Track A+B Eng'd; Track C bake + **membership push** (`Directory.changes`) Eng in progress. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
+4. **Docs site:** Live — apex coming-soon (inlined CSS + `(book)` chrome); docs on `dev`. Origin host-gate via `serve-production.mjs` (before Waku static). Islands: `hyperlink-ts` alias + `.hl-dashboard`. Getting Started em-dash/voice polish.
 
 ### Frozen / dead (do not assign)
 - **Agent 1:** frozen — Examples book E1 already on tip; stale intro PR #68 closed; branch deleted.
 - **Agent 3:** dead — Soft/verify/F4/memo Eng’d on tip; work branch deleted.
-- **Agent D (+ peers):** named handles — do not reassign to Agent 3.
+- **Agent D (+ peers):** named handles — do not reassign (was: do not give to Agent 3).
+- **Hygiene:** landed on `integration` (`hyp` CLI + landing polish).
 
 ### Ready / owner calls
 5. **Node catalog + identity lookup** — design [`node-catalog-and-discovery.md`](./node-catalog-and-discovery.md); Phase-2–3 catalog/directory/**D3**/**D4**/**D7**/`Node.Prototype` Eng on tip; **`askIncumbent` Eng’d**; **X1 Eng’d**; **managers → [`identity-coordinator.md`](./identity-coordinator.md) M4–M6 Eng’d** (v1 complete)

@@ -27,6 +27,9 @@ COPY site/package.json ./
 COPY site/dist ./dist
 COPY site/api-data ./api-data
 COPY site/api-hovers ./api-hovers
+# Host-gate before Waku serveStatic (brand host must not serve prerendered /docs HTML).
+COPY site/scripts/serve-production.mjs ./scripts/serve-production.mjs
+COPY site/src/lib/publicHostGate.mjs ./src/lib/publicHostGate.mjs
 EXPOSE 8080
-# PORT is App Platform's contract; waku start serves dist/ from cwd
-CMD ["sh", "-c", "./node_modules/.bin/waku start --host 0.0.0.0 --port ${PORT:-8080}"]
+# PORT is App Platform's contract; gated entry wraps dist/server fetch
+CMD ["sh", "-c", "HOST=0.0.0.0 PORT=${PORT:-8080} node scripts/serve-production.mjs"]

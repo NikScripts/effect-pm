@@ -17,12 +17,11 @@
  */
 import { Box, Text, useInput, useStdout } from "ink";
 import * as React from "react";
-import { Option } from "effect";
+import { Layer, Option } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import * as Group from "../Group";
 import { kindOf as hyperlinkKindOf, nodeOf } from "../Hyperlink";
 import {
-  daemonBundle,
   daemonLeaves,
   isApiTag,
   isDaemonTag,
@@ -32,55 +31,35 @@ import {
   isQueueTag,
   isShardMapTag,
   isTelemetryTag,
-  priorityBundle,
   queueBundle,
   queueLeaves,
-  type CommandAtom,
   type DaemonTag,
   type DashboardRuntime,
   type GroupNode,
-  type PriorityTag,
   type QueueTag,
 } from "../ui/data";
 import { RegistryProvider, useAtomSet, useAtomValue } from "../ui/atom-react";
+import * as Navigator from "../ui/Navigator";
+import * as View from "../ui/View";
 import { WidgetsProvider } from "../ui/widgetsContext";
-import { spark } from "./chrome";
 import { base, Cell, type TuiWidgetRegistry } from "./cellWidgets";
+import * as UiDashboardViews from "../ui/DashboardViews";
+import * as TuiDashboardViews from "./DashboardViews";
 import {
-  FocusedApi,
-  FocusedFleetHealth,
-  FocusedGate,
-  FocusedShardMap,
-  FocusedTelemetry,
-} from "./kindCells";
+  ControlKey,
+  FocusedDaemon,
+  FocusedPriority,
+  LogTail,
+  NodeMark,
+} from "./focusWidgets";
 import { RuntimeProvider, useRuntime } from "./runtime";
 import {
-  bar,
   BLANK_BORDER,
-  COLOR,
-  compact,
   displayName,
-  PageXL,
   PAGE_HEIGHT,
-  STATUS_ICON,
-  type Priority,
-  type Status,
-  type View,
 } from "./queueWidget";
-import { useGroupRoute } from "./useGroupRoute";
 
 const CELL_HEIGHT = 7;
-const LEVEL_COLOR: Record<string, string> = {
-  Trace: "gray",
-  Debug: "gray",
-  Info: "white",
-  Warning: "yellow",
-  Error: "red",
-  Fatal: "red",
-};
-
-const statusOf = (phase: string, paused: boolean): Status =>
-  phase === "off" ? "off" : phase === "draining" ? "draining" : paused ? "paused" : "running";
 
 const useTerminalSize = (): { cols: number; rows: number } => {
   const { stdout } = useStdout();
@@ -112,12 +91,6 @@ const idOf = (m: unknown): string => {
     return m.key;
   }
   return "";
-};
-
-const NodeMark = (props: { readonly tag: unknown }): React.ReactElement | null => {
-  const node = nodeOf(props.tag);
-  if (node === undefined) return null;
-  return <Text color="cyan"> ⬡ {displayName(node.key)}</Text>;
 };
 
 const Bar = (props: {
@@ -154,65 +127,6 @@ const Bar = (props: {
   );
 };
 
-const ControlKey = (props: {
-  readonly k: string;
-  readonly label: string;
-  readonly atom: CommandAtom;
-}): React.ReactElement => {
-  const r = useAtomValue(props.atom);
-  const pending = AsyncResult.isWaiting(r);
-  const failed = AsyncResult.isFailure(r) && !pending;
-  const [flash, setFlash] = React.useState(false);
-  const wasPending = React.useRef(false);
-  React.useEffect(() => {
-    if (pending) {
-      wasPending.current = true;
-      return;
-    }
-    if (wasPending.current && AsyncResult.isSuccess(r)) {
-      wasPending.current = false;
-      setFlash(true);
-      const t = setTimeout(() => setFlash(false), 1500);
-      return () => clearTimeout(t);
-    }
-    return;
-  }, [pending, r]);
-  const sym = pending ? " …" : flash ? " ✓" : failed ? " ✗" : "";
-  const color = failed ? "red" : flash ? "green" : pending ? "yellow" : "gray";
-  return (
-    <Text color={color}>
-      [{props.k}]{props.label}
-      {sym}{" "}
-    </Text>
-  );
-};
-
-const LogTail = (props: {
-  readonly logs: ReadonlyArray<{
-    readonly id: number;
-    readonly t: number;
-    readonly level: string;
-    readonly message: string;
-  }>;
-  readonly visible: number;
-}): React.ReactElement => (
-  <Box flexGrow={1} flexDirection="column" justifyContent="flex-end">
-    {props.logs.slice(-props.visible).map((l) => (
-      <Box key={l.id}>
-        <Box width={11}>
-          <Text dimColor>{new Date(l.t).toLocaleTimeString()}</Text>
-        </Box>
-        <Box width={6}>
-          <Text color={LEVEL_COLOR[l.level] ?? "white"}>{l.level}</Text>
-        </Box>
-        <Box flexGrow={1}>
-          <Text>{l.message}</Text>
-        </Box>
-      </Box>
-    ))}
-  </Box>
-);
-
 const FocusedQueue = (props: {
   readonly name: string;
   readonly tag: QueueTag;
@@ -223,12 +137,11 @@ const FocusedQueue = (props: {
   readonly bar: (hint: React.ReactElement) => React.ReactElement;
   readonly barRows: number;
 }): React.ReactElement => {
+  const Match = View.useMatch();
   const { name, tag, cols, rows, editMode } = props;
   const bundle = queueBundle(useRuntime(), tag);
   const statusR = useAtomValue(bundle.status);
-  const metricsR = useAtomValue(bundle.metrics);
   const logsR = useAtomValue(bundle.logs);
-  const trendR = useAtomValue(bundle.trend);
 
   const pause = useAtomSet(bundle.pause);
   const resume = useAtomSet(bundle.resume);
@@ -246,28 +159,7 @@ const FocusedQueue = (props: {
 
   const statusOpt = AsyncResult.isSuccess(statusR) ? statusR.value : Option.none();
   const s = Option.isSome(statusOpt) ? statusOpt.value : undefined;
-  const metricsOpt = AsyncResult.isSuccess(metricsR) ? metricsR.value : Option.none();
-  const m = Option.isSome(metricsOpt) ? metricsOpt.value : undefined;
-  const trend = AsyncResult.isSuccess(trendR) ? trendR.value : [];
   const logs = AsyncResult.isSuccess(logsR) ? logsR.value : [];
-
-  const sizes: Record<Priority, number> = s?.sizes ?? { high: 0, normal: 0, low: 0 };
-  const view: View = {
-    name,
-    status: statusOf(s?.phase ?? "running", s?.paused ?? false),
-    sizes,
-    pending: sizes.high + sizes.normal + sizes.low,
-    completed: s?.completed ?? 0,
-    wait: {
-      high: m?.avgWaitMillis.high ?? 0,
-      normal: m?.avgWaitMillis.normal ?? 0,
-      low: m?.avgWaitMillis.low ?? 0,
-    },
-    execution: m?.avgExecutionMillis ?? 0,
-    total: m?.avgTotalMillis ?? 0,
-    throughput: m?.throughputPerSec ?? 0,
-    trend,
-  };
   const visible = Math.max(1, rows - PAGE_HEIGHT - 3 - props.barRows);
 
   const hint = (
@@ -298,7 +190,9 @@ const FocusedQueue = (props: {
       borderColor="red"
     >
       <Box flexShrink={0}>
-        <PageXL v={view} width={cols - 2} />
+        <View.ChromeProvider value={{ width: cols - 2 }}>
+          <Match.Detail tag={tag} name={name} />
+        </View.ChromeProvider>
       </Box>
       <Box flexGrow={1} flexDirection="column" paddingX={1}>
         <Box>
@@ -317,250 +211,18 @@ const FocusedQueue = (props: {
   );
 };
 
-const FocusedPriority = (props: {
-  readonly name: string;
-  readonly tag: PriorityTag;
-  readonly cols: number;
-  readonly rows: number;
-  readonly editMode: boolean;
-  readonly cmd: string | null;
-  readonly bar: (hint: React.ReactElement) => React.ReactElement;
-  readonly barRows: number;
-}): React.ReactElement => {
-  const { name, tag, cols, rows, editMode } = props;
-  const bundle = priorityBundle(useRuntime(), tag);
-  const statusR = useAtomValue(bundle.status);
-  const metricsR = useAtomValue(bundle.metrics);
-  const logsR = useAtomValue(bundle.logs);
-  const trendR = useAtomValue(bundle.trend);
-
-  const start = useAtomSet(bundle.start);
-  const pause = useAtomSet(bundle.pause);
-  const resume = useAtomSet(bundle.resume);
-  const clear = useAtomSet(bundle.clear);
-  const shutdown = useAtomSet(bundle.shutdown);
-  useInput(
-    (input) => {
-      if (input === "s") start();
-      else if (input === "p") pause();
-      else if (input === "r") resume();
-      else if (input === "c") clear();
-      else if (input === "x") shutdown();
-    },
-    { isActive: editMode && props.cmd === null },
-  );
-
-  const statusOpt = AsyncResult.isSuccess(statusR) ? statusR.value : Option.none();
-  const s = Option.isSome(statusOpt) ? statusOpt.value : undefined;
-  const metricsOpt = AsyncResult.isSuccess(metricsR) ? metricsR.value : Option.none();
-  const m = Option.isSome(metricsOpt) ? metricsOpt.value : undefined;
-  const trend = AsyncResult.isSuccess(trendR) ? trendR.value : [];
-  const logs = AsyncResult.isSuccess(logsR) ? logsR.value : [];
-  const lanes = s !== undefined ? Object.entries(s.sizes) : [];
-  const pending = lanes.reduce((sum, [, n]) => sum + n, 0);
-  const max = Math.max(1, ...lanes.map(([, n]) => n));
-  const status = statusOf(s?.phase ?? "running", s?.paused ?? false);
-  const visible = Math.max(1, rows - 12 - props.barRows);
-  const barWidth = Math.max(8, cols - 30);
-
-  const hint = (
-    <Box paddingX={1} backgroundColor="gray">
-      <Text dimColor> Esc back · </Text>
-      <Text color="cyan">:</Text>
-      <Text dimColor> command · </Text>
-      <Text color={editMode ? "red" : "gray"}>{editMode ? "EDIT " : "view "}</Text>
-      {editMode ? (
-        <>
-          <ControlKey k="s" label="start" atom={bundle.start} />
-          <ControlKey k="p" label="pause" atom={bundle.pause} />
-          <ControlKey k="r" label="resume" atom={bundle.resume} />
-          <ControlKey k="c" label="clear" atom={bundle.clear} />
-          <ControlKey k="x" label="shutdown" atom={bundle.shutdown} />
-        </>
-      ) : (
-        <Text dimColor>Ctrl+E edit</Text>
-      )}
-    </Box>
-  );
-
-  return (
-    <Box
-      flexDirection="column"
-      width={cols}
-      height={rows}
-      borderStyle={editMode ? "double" : BLANK_BORDER}
-      borderColor="red"
-    >
-      <Box
-        flexDirection="column"
-        borderStyle="round"
-        borderColor={COLOR[status]}
-        paddingX={2}
-        paddingY={1}
-        marginX={1}
-        marginTop={1}
-      >
-        <Box justifyContent="space-between">
-          <Text bold color="cyan">
-            {name}
-            <NodeMark tag={tag} />
-          </Text>
-          <Text color={COLOR[status]}>
-            {STATUS_ICON[status]} {status}
-          </Text>
-        </Box>
-        <Box marginTop={1} justifyContent="space-between">
-          <Text bold>PENDING {pending}</Text>
-          <Text bold>COMPLETED {s?.completed ?? 0}</Text>
-          <Text dimColor>
-            {m?.throughputPerSec.toFixed(1) ?? "0.0"}/s · in-flight {s?.inFlight ?? 0}
-          </Text>
-        </Box>
-        <Box marginTop={1} flexDirection="column">
-          {lanes.slice(0, 8).map(([lane, count]) => (
-            <Box key={lane}>
-              <Box width={12}>
-                <Text wrap="truncate">{lane}</Text>
-              </Box>
-              <Box width={barWidth + 1}>
-                <Text>{bar(count, max, barWidth)}</Text>
-              </Box>
-              <Box width={6} justifyContent="flex-end">
-                <Text>{compact(count)}</Text>
-              </Box>
-            </Box>
-          ))}
-        </Box>
-        <Box marginTop={1}>
-          <Text color="green">{spark(trend)}</Text>
-          <Text dimColor> pending · last {trend.length}s</Text>
-        </Box>
-      </Box>
-      <Box flexGrow={1} flexDirection="column" paddingX={1}>
-        <Box>
-          <Text dimColor>LOGS </Text>
-          <Text color="green">live</Text>
-        </Box>
-        <LogTail logs={logs} visible={visible} />
-      </Box>
-      {props.bar(hint)}
-    </Box>
-  );
-};
-
-const FocusedDaemon = (props: {
-  readonly name: string;
-  readonly tag: DaemonTag;
-  readonly cols: number;
-  readonly rows: number;
-  readonly editMode: boolean;
-  readonly cmd: string | null;
-  readonly bar: (hint: React.ReactElement) => React.ReactElement;
-  readonly barRows: number;
-}): React.ReactElement => {
-  const { name, tag, cols, rows, editMode } = props;
-  const bundle = daemonBundle(useRuntime(), tag);
-  const statusR = useAtomValue(bundle.status);
-  const logsR = useAtomValue(bundle.logs);
-
-  const start = useAtomSet(bundle.start);
-  const stop = useAtomSet(bundle.stop);
-  const runNow = useAtomSet(bundle.run);
-  useInput(
-    (input) => {
-      if (input === "s") start();
-      else if (input === "x") stop();
-      else if (input === "n") runNow();
-    },
-    { isActive: editMode && props.cmd === null },
-  );
-
-  const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
-  const logs = AsyncResult.isSuccess(logsR) ? logsR.value : [];
-  const up = s?.supervising === true;
-  const visible = Math.max(1, rows - 8 - props.barRows);
-
-  const hint = (
-    <Box paddingX={1} backgroundColor="gray">
-      <Text dimColor> Esc back · </Text>
-      <Text color="cyan">:</Text>
-      <Text dimColor> command · </Text>
-      <Text color={editMode ? "red" : "gray"}>{editMode ? "EDIT " : "view "}</Text>
-      {editMode ? (
-        <>
-          <ControlKey k="s" label="start" atom={bundle.start} />
-          <ControlKey k="x" label="stop" atom={bundle.stop} />
-          <ControlKey k="n" label="run now" atom={bundle.run} />
-        </>
-      ) : (
-        <Text dimColor>Ctrl+E edit</Text>
-      )}
-    </Box>
-  );
-
-  return (
-    <Box
-      flexDirection="column"
-      width={cols}
-      height={rows}
-      borderStyle={editMode ? "double" : BLANK_BORDER}
-      borderColor="red"
-    >
-      <Box
-        flexDirection="column"
-        borderStyle="round"
-        borderColor={up ? "green" : "gray"}
-        paddingX={2}
-        paddingY={1}
-        marginX={1}
-        marginTop={1}
-      >
-        <Box justifyContent="space-between">
-          <Text bold color="cyan">
-            ⚙ {name}
-            <NodeMark tag={tag} />
-          </Text>
-          <Text color={up ? "green" : "gray"}>{up ? "► running" : "■ stopped"}</Text>
-        </Box>
-        <Box marginTop={1}>
-          <Box width={24}>
-            <Text>supervising {up ? "yes" : "no"}</Text>
-          </Box>
-          <Box width={20}>
-            <Text>armed {s?.armed === true ? "yes" : "no"}</Text>
-          </Box>
-          <Box flexGrow={1}>
-            <Text>active {s?.activeInstances ?? 0}</Text>
-          </Box>
-        </Box>
-      </Box>
-      <Box flexGrow={1} flexDirection="column" paddingX={1}>
-        <Box>
-          <Box flexGrow={1}>
-            <Text dimColor>LOGS </Text>
-            <Text color="green">live</Text>
-          </Box>
-        </Box>
-        <LogTail logs={logs} visible={visible} />
-      </Box>
-      {props.bar(hint)}
-    </Box>
-  );
-};
-
 const DashboardApp = (props: {
   readonly group: GroupNode;
-  readonly path: ReadonlyArray<string>;
 }): React.ReactElement => {
   const { cols, rows } = useTerminalSize();
-  const route = useGroupRoute(props.group, props.path);
+  const nav = Navigator.useNavigator();
   const [sel, setSel] = React.useState(0);
   const [editMode, setEditMode] = React.useState(false);
   const [cmd, setCmd] = React.useState<string | null>(null);
   const [cmdSel, setCmdSel] = React.useState(0);
   const [scroll, setScroll] = React.useState(0);
 
-  const members = Object.entries(Group.members(route.group));
+  const members = Object.entries(Group.members(nav.group));
   const allLeaves: ReadonlyArray<QueueTag | DaemonTag> = [
     ...queueLeaves(props.group),
     ...daemonLeaves(props.group),
@@ -571,7 +233,7 @@ const DashboardApp = (props: {
   const layoutRef = React.useRef({
     perRow: 1,
     cellWidth: 16,
-    selected: route.selected,
+    selected: nav.selected,
     cmd,
     sel,
     scroll: 0,
@@ -602,7 +264,7 @@ const DashboardApp = (props: {
   layoutRef.current = {
     perRow,
     cellWidth,
-    selected: route.selected,
+    selected: nav.selected,
     cmd,
     sel,
     scroll: effScroll,
@@ -612,7 +274,7 @@ const DashboardApp = (props: {
   React.useEffect(() => {
     setSel(0);
     setScroll(0);
-  }, [route.group.key, route.keys.join("/")]);
+  }, [nav.group.key, nav.path.join("/")]);
 
   React.useEffect(() => {
     setScroll((sc) => {
@@ -661,7 +323,7 @@ const DashboardApp = (props: {
             continue;
           }
           if (idx === v.sel) {
-            route.open(entry[0]);
+            nav.openKey(entry[0]);
           } else {
             setSel(idx);
           }
@@ -673,7 +335,7 @@ const DashboardApp = (props: {
       stdout.write("\x1b[?1000l\x1b[?1006l");
       stdin.off("data", onData);
     };
-  }, [route]);
+  }, [nav]);
 
   useInput((input, key) => {
     if (cmd !== null) {
@@ -681,7 +343,7 @@ const DashboardApp = (props: {
         const pick = suggestions[cmdSel] ?? suggestions[0];
         setCmd(null);
         if (pick !== undefined) {
-          route.goToLeaf(pick.key);
+          nav.open(pick);
         }
       } else if (key.escape) {
         setCmd(null);
@@ -708,10 +370,10 @@ const DashboardApp = (props: {
       return;
     }
     if (key.escape || key.backspace || key.delete) {
-      route.back();
+      nav.back();
       return;
     }
-    if (route.selected !== null) {
+    if (nav.selected !== null) {
       return;
     }
     if (input === "h" || key.leftArrow) {
@@ -724,7 +386,7 @@ const DashboardApp = (props: {
       setSel((s) => Math.min(members.length - 1, s + perRow));
     } else if (key.return || input === " ") {
       const entry = members[Math.min(sel, members.length - 1)];
-      if (entry !== undefined) route.open(entry[0]);
+      if (entry !== undefined) nav.openKey(entry[0]);
     }
   });
 
@@ -733,9 +395,9 @@ const DashboardApp = (props: {
     <Bar cmd={cmd} suggestions={suggestions} cmdSel={cmdSel} hint={hint} />
   );
 
-  const focused = route.selected;
-  const focusName = route.keys[route.keys.length - 1] ?? displayName(idOf(focused));
-  const runtime = useRuntime();
+  const Match = View.useMatch();
+  const focused = nav.selected;
+  const focusName = nav.path[nav.path.length - 1] ?? displayName(idOf(focused));
   if (focused !== null) {
     if (isDaemonTag(focused)) {
       return (
@@ -782,66 +444,23 @@ const DashboardApp = (props: {
         />
       );
     }
-    if (isGateTag(focused)) {
+    if (
+      isGateTag(focused) ||
+      isApiTag(focused) ||
+      isFleetHealthTag(focused) ||
+      isTelemetryTag(focused) ||
+      isShardMapTag(focused)
+    ) {
       return (
-        <FocusedGate
+        <View.ChromeProvider
           key={focused.key}
-          runtime={runtime}
-          name={focusName}
-          tag={focused}
-          cols={cols}
-          rows={rows}
-        />
+          value={{ cols, rows, width: cols - 2 }}
+        >
+          <Match.Detail tag={focused} name={focusName} />
+        </View.ChromeProvider>
       );
     }
-    if (isApiTag(focused)) {
-      return (
-        <FocusedApi
-          key={focused.key}
-          runtime={runtime}
-          name={focusName}
-          tag={focused}
-          cols={cols}
-          rows={rows}
-        />
-      );
-    }
-    if (isFleetHealthTag(focused)) {
-      return (
-        <FocusedFleetHealth
-          key={focused.key}
-          runtime={runtime}
-          name={focusName}
-          tag={focused}
-          cols={cols}
-          rows={rows}
-        />
-      );
-    }
-    if (isTelemetryTag(focused)) {
-      return (
-        <FocusedTelemetry
-          key={focused.key}
-          runtime={runtime}
-          name={focusName}
-          tag={focused}
-          cols={cols}
-          rows={rows}
-        />
-      );
-    }
-    if (isShardMapTag(focused)) {
-      return (
-        <FocusedShardMap
-          key={focused.key}
-          runtime={runtime}
-          name={focusName}
-          tag={focused}
-          cols={cols}
-          rows={rows}
-        />
-      );
-    }
+    // Unknown / Hyperlink leaf — View card exists; no detail skin yet.
     const kind = hyperlinkKindOf(focused) ?? "unknown";
     const node = nodeOf(focused);
     return (
@@ -877,8 +496,8 @@ const DashboardApp = (props: {
   const start = effScroll * perRow;
   const visibleCells = members.slice(start, start + visibleRows * perRow);
   const more = totalRows - (effScroll + visibleRows);
-  // Root uses the group's tag short name; deeper segments are member nicknames (`route.keys`).
-  const crumb = [displayName(props.group.key), ...route.keys].join(" / ");
+  // Root uses the group's tag short name; deeper segments are member nicknames (`nav.path`).
+  const crumb = [displayName(props.group.key), ...nav.path].join(" / ");
 
   return (
     <Box
@@ -894,7 +513,7 @@ const DashboardApp = (props: {
         </Text>
         <Text dimColor>
           {" "}
-          {members.length} items{route.trail.length > 1 ? " · Esc up" : ""}
+          {members.length} items{nav.trail.length > 1 ? " · Esc up" : ""}
           {effScroll > 0 ? ` · ↑${effScroll}` : ""}
           {more > 0 ? ` · ↓${more}` : ""}
         </Text>
@@ -936,14 +555,41 @@ export const Dashboard = <R, ER>(props: {
   readonly group: GroupNode;
   /** CLI / deep-link focus as member-key nicknames (`["Inbox"]`, `["Mini", "KeyRotation"]`). */
   readonly path?: ReadonlyArray<string>;
-  /** Cell set (defaults to {@link base}); extend with `withEntries(base, [forKind(...), forKey(...)])`. */
+  /**
+   * App View contributions (`R = View.Registry`). Prefer
+   * `View.only(Tag, Card).pipe(Layer.provide(Layer.succeed(Card, Comp)))`.
+   */
+  readonly views?: Layer.Layer<never, never, View.Registry>;
+  /** Legacy widget registry fallback only. Prefer {@link views}. */
   readonly widgets?: TuiWidgetRegistry;
-}): React.ReactElement => (
-  <RegistryProvider>
-    <WidgetsProvider registry={props.widgets ?? base}>
-      <RuntimeProvider runtime={props.runtime}>
-        <DashboardApp group={props.group} path={props.path ?? []} />
-      </RuntimeProvider>
-    </WidgetsProvider>
-  </RegistryProvider>
-);
+}): React.ReactElement => {
+  // compose = contributions (+ app views) → skins → View.base; CLI `path` seeds Navigator once.
+  const ui = React.useMemo(() => {
+    const composed = View.compose({
+      views: Layer.mergeAll(
+        UiDashboardViews.layer,
+        props.views ?? Layer.empty,
+      ).pipe(
+        Layer.provideMerge(TuiDashboardViews.skins),
+        Layer.provideMerge(View.base),
+      ),
+      navigator: Navigator.memory(props.group),
+    });
+    for (const key of props.path ?? []) {
+      composed.navigator.openKey(key);
+    }
+    return composed;
+  }, [props.group, props.views, props.path]);
+
+  return (
+    <RegistryProvider>
+      <ui.Provider>
+        <WidgetsProvider registry={props.widgets ?? base}>
+          <RuntimeProvider runtime={props.runtime}>
+            <DashboardApp group={props.group} />
+          </RuntimeProvider>
+        </WidgetsProvider>
+      </ui.Provider>
+    </RegistryProvider>
+  );
+};

@@ -3,7 +3,8 @@
 // Reject ciphertext / junk — a bare `waku build` without dotenvx once baked
 // `encrypted:…` into every canonical and og:image on production.
 
-const DEFAULT_ORIGIN = "https://hyperlink.cool";
+/** Docs demo origin — brand host (`hyperlink.cool`) is coming-soon only. */
+const DEFAULT_ORIGIN = "https://dev.hyperlink.cool";
 
 const isHttpOrigin = (value: string): boolean => {
   try {

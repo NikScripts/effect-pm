@@ -29,7 +29,7 @@
  *   `docs/guides/`.
  * - **`Gate`**, **`HttpClientGate`**, **`Gate.HttpApiClient`** —
  *   Optional building blocks for **gated** HTTP and reusable service patterns.
- * - **Persistence** — `DurableQueueStore` (durable priority queue) + `HistoryStore`
+ * - **Persistence** — `DurableWorkPoolStore` (durable priority queue) + `HistoryStore`
  *   (metrics/logs history); in-memory or SQLite (`hyperlink-ts/storage/sqlite`).
  *
  * ## Where to read next
@@ -57,14 +57,14 @@
  * **`hyperlink-ts/MultiNode`** (multi-instance gather/fold),
  * **`hyperlink-ts/Group`**,
  * **`hyperlink-ts/HistoryStore`**,
- * and **`hyperlink-ts/DurableQueueStore`**.
+ * and **`hyperlink-ts/DurableWorkPoolStore`**.
  *
  * Durable logs: register `Node.logs` / toolkit `*.store(tag)` on a {@link Store.Service}
  * (`layerMemory` / `layer` bake in capture + per-registration tails). Capture/relay:
  * `hyperlink-ts/Logs`.
  *
  * Durable adapters: **`hyperlink-ts/storage/sqlite`**
- * (`SQLiteDurableQueueStore`, `SQLiteHistoryStore`).
+ * (`SQLiteDurableWorkPoolStore`, `SQLiteHistoryStore`).
  *
  * ## Source-only helpers
  *
@@ -228,19 +228,19 @@ export * as Logs from "./Logs";
 export { HistoryStore } from "./HistoryStore";
 export type { HistoryReadOptions, HistoryStoreShape } from "./HistoryStore";
 export {
-  DurableQueueStore,
-  DurableQueueError,
+  DurableWorkPoolStore,
+  DurableWorkPoolError,
   durablePriorityRank,
-} from "./DurableQueueStore";
+} from "./DurableWorkPoolStore";
 export type {
   DurableEntry,
   DurableEntryInput,
   DurablePriority,
-  DurableQueueStoreShape,
+  DurableWorkPoolStoreShape,
   DurableSizes,
   FailResult,
   OfferResult,
-} from "./DurableQueueStore";
+} from "./DurableWorkPoolStore";
 export * as Group from "./Group";
 export * as Store from "./Store";
 export {

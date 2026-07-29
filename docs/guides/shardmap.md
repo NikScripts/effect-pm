@@ -2,7 +2,7 @@
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
-> and live type previews — is at <https://hyperlink.cool/docs/shardmap>.
+> and live type previews — is at <https://dev.hyperlink.cool/docs/shardmap>.
 <!-- docs-site-link:end -->
 # ShardMap
 
@@ -74,7 +74,7 @@ class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
   Hyperlink.nodes([DropletEast, DropletWest, DropletCentral]),
 ) {}
 const nodeServer = (port: number) => <A, E, R>(serviceKey: Layer.Layer<A, E, R>) =>
-  Node.httpServer(resource).pipe(
+  Node.httpServer(serviceKey).pipe(
     Layer.provide(NodeHttpServer.layer(() => createServer(), { port })),
   )
 // ---cut---

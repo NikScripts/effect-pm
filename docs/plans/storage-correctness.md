@@ -33,7 +33,7 @@ Goal: happy path is **one recipe** (`stores.md`); intentional multi-node / two-c
 - Multi-node: N stores / N runtimes (`hyperlink-web`).  
 - Node journal + resource `_logs` copies of the same live line.  
 - `Store.layerDefaultMemory` for engine event observability **without** the Logs platform.  
-- `DurableQueueStore` / `ShardMap` / `HistoryStore(metrics)` as separate planes.
+- `DurableWorkPoolStore` / `ShardMap` / `HistoryStore(metrics)` as separate planes.
 
 ---
 

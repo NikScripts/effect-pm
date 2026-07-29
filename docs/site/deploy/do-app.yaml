@@ -9,9 +9,13 @@
 name: hyperlink-docs
 region: nyc
 domains:
+  # Brand host — host-gate serves coming-soon only (see publicHostGate middleware).
   - domain: hyperlink.cool
     type: PRIMARY
   - domain: www.hyperlink.cool
+    type: ALIAS
+  # Docs demo / feedback — full site. DNS: CNAME → <app>.ondigitalocean.app (CF proxied).
+  - domain: dev.hyperlink.cool
     type: ALIAS
 services:
   - name: web

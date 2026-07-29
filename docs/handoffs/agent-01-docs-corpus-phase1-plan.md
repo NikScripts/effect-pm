@@ -43,7 +43,7 @@ Inventory below remains the fate table. Soft asks → [`open-asks.md`](./open-as
 - ~~`store-cutover-*.md` + `store-and-logs-design.md` while STORAGE cites them~~ → **stay at root** until Phase 3  
 - ~~`agent-03-logs-store-followers-plan.md` / `agent-03-log-store-tail-plan.md`~~ → **archived** 2026-07-14  
 - ~~`store-layer-query.md`~~ → **archived** under `archive/2026-07/designs/` (banner kept)  
-- `queue-persistence-design.md` — **historical SSOT** at root (cited by DurableQueueStore)  
+- `queue-persistence-design.md` — **historical SSOT** at root (cited by DurableWorkPoolStore)  
 - `queue-nonserializable-items.md` — Phase 2 candidate → `docs/plans/` when P3 unlocked  
 - Any **delete** candidates (Batch Z)  
 - Letter-agent docs (`agent-b-plan`, docs-platform decision) linked from `docs/site/README.md`  

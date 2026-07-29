@@ -2055,16 +2055,21 @@ pre:focus-within > .copy-btn {
 }
 .shortcuts-list dd { margin: 0; color: var(--muted-fg); }
 
-/* --- landing page (/) — full-viewport brand hero, no sidebar --- */
+/* --- landing page (/) — full-viewport coming-soon lockup (brand host) --- */
 body:has(.landing) {
   padding: 0;
+}
+/* Quiet brand page: no docs chrome (search / nav / footer) — demo lives on dev. */
+body:has(.landing) .topbar,
+body:has(.landing) .menu-cb,
+body:has(.landing) .menu-overlay,
+body:has(.landing) .site-footer,
+body:has(.landing) .sidebar {
+  display: none;
 }
 body:has(.landing) .layout {
   max-width: none;
   gap: 0;
-}
-body:has(.landing) .sidebar {
-  display: none;
 }
 /* the base main is capped at 46rem (and the >=900px media pins margin to 0, not auto) — on the
    landing the section owns its own widths, so lift the cap entirely or landscape phones
@@ -2078,8 +2083,8 @@ body:has(.landing) main {
 .landing {
   /* main is a flex row — stretch to fill it, or the hero hugs its content off-center */
   width: 100%;
-  /* fill the viewport below the sticky topbar at every size (dvh: stable on iOS) */
-  min-height: calc(100dvh - 3.2rem);
+  /* full viewport — topbar is hidden on this page */
+  min-height: 100dvh;
   display: flex;
   /* safe: when the hero is TALLER than the viewport (landscape phones), fall back to top
      alignment instead of clipping the wordmark above the scroll origin */
@@ -2100,6 +2105,7 @@ body:has(.landing) main {
   font-size: 1em;
   line-height: 1;
   letter-spacing: -0.035em;
+  color: var(--primary);
 }
 .landing-sub {
   margin: 0.4rem 0 0;
@@ -2126,30 +2132,6 @@ body:has(.landing) main {
   text-align: left;
   margin-top: -0.05em;
   padding-left: 0.18em;
-}
-/* everything below the wordmark/motto rides in a readable-width, margin-centered column;
-   the text inside stays left-aligned */
-.landing-content {
-  width: 100%;
-  max-width: 44rem;
-  /* mx-auto centering: block margins do the centering at every viewport wider than the card;
-     the vertical breathing lives HERE as margin, outside the border — not as card padding */
-  margin: 1.1rem auto 1.75rem;
-  padding: clamp(1.2rem, 2.5vw, 1.9rem) clamp(1.1rem, 3.5vw, 2.4rem);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  align-self: stretch;
-}
-/* the title IS a hyperlink — the brand demonstrating itself. It navigates to the docs. */
-.landing-title a {
-  color: var(--primary);
-  text-decoration: none;
-}
-.landing-title a:hover {
-  text-decoration: underline;
-  text-decoration-thickness: 0.04em;
-  text-underline-offset: 0.14em;
-  text-decoration-color: color-mix(in oklab, var(--primary) 45%, transparent);
 }
 /* one flowing motto line: a quiet crescendo ending on the orange yield* */
 .landing-motto {
@@ -2201,13 +2183,6 @@ body:has(.landing) main {
     color: oklch(0.75 0.16 60);
   }
 }
-.landing-pitch {
-  max-width: 44rem;
-  margin: 0;
-  font-size: clamp(1rem, 2.2vw, 1.15rem);
-  line-height: 1.7;
-  color: var(--muted-fg);
-}
 .landing-soon {
   align-self: center;
   margin: 1.9rem 0 2.2rem;
@@ -2220,40 +2195,6 @@ body:has(.landing) main {
   text-transform: uppercase;
   color: var(--muted-fg);
   background: var(--panel);
-}
-.landing-preview {
-  margin-top: 1.1rem;
-  font-size: 0.95rem;
-  color: var(--muted-fg);
-  text-decoration: none;
-}
-.landing-preview:hover {
-  color: var(--primary);
-}
-.landing-credit {
-  margin: 0.9rem 0 0;
-  font-size: 0.9rem;
-  /* No opacity fade — Lighthouse color-contrast failed at 0.8 over the landing panel. */
-  color: var(--muted-fg);
-}
-.landing-pitch strong {
-  color: var(--fg);
-}
-.landing-body {
-  max-width: 40rem;
-  margin: 1.1rem 0 0;
-  margin-left: 0;
-  font-size: clamp(0.95rem, 2vw, 1.05rem);
-  line-height: 1.7;
-  color: var(--muted-fg);
-}
-.landing-pitch {
-  font-size: clamp(1.35rem, 3.4vw, 1.9rem);
-  font-weight: 600;
-  letter-spacing: -0.015em;
-  color: var(--fg);
-  max-width: 46rem;
-  margin-left: 0;
 }
 
 /* dev-only gen-hovers restamp toast (HoverGenProgress island) — Safari-download style,

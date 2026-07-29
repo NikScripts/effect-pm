@@ -15,7 +15,10 @@ export default defineConfig({
   },
   server: {
     host: true,
-    port: 5176,
+    // 5177 — keep off the common 5176 default so this worktree's demo doesn't collide with
+    // other local Vite apps (and silently land on a different port).
+    port: 5177,
+    strictPort: true,
     allowedHosts: true,
     // The browser is a thin client; proxy each node's RPC so the client is same-origin (no CORS).
     // `/rpc` → WnbaNode, `/live` → LiveNode, `/stats` → StatsNode (all from server.ts).

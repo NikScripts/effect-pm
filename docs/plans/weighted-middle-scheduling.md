@@ -66,7 +66,7 @@ Scope: a self-contained STM scheduler module + rewiring the worker take path in 
    dashboard are untouched — there's no migration of the current schema. The new type defines its own
    per-group `sizes` / `status` / `metrics` and `add(item, number | name)`; the UI agent adds a
    widget for it **when ready**, on its own timeline (additive, not a forced change).
-2. **Persistence:** `DurableQueueStore.priority_rank` is already numeric, so storing arbitrary
+2. **Persistence:** `DurableWorkPoolStore.priority_rank` is already numeric, so storing arbitrary
    numbers is small. Persisting **fairness state** (DRR deficits) across restart is the only extra —
    **skip in v1** (deficits re-converge in seconds).
 3. **Back-compat:** `high` / `normal` / `low` and the existing `add` / `prioritize` / `defer` stay

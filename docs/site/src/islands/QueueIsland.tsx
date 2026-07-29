@@ -2,13 +2,13 @@
 
 // A no-widget prototype: a real WorkPool running in the browser, with a hand-wired
 // control panel — live stats read straight off the current `status` stream, buttons that
-// call the handle. The resource itself lives in ./demo-queue (declared once); this file is
-// just the UI. No dashboard widgets (those wait on the web-ui-refresh fix). Scoped to .pm-dashboard.
+// call the handle. The HyperService itself lives in ./demo-queue (declared once); this file is
+// just the UI. No dashboard widgets (those wait on the web-ui-refresh fix). Scoped to .hl-dashboard.
 
 import * as React from "react";
 import "../styles/widgets.css";
 import { AsyncResult } from "effect/unstable/reactivity";
-import { RegistryProvider, useAtomValue, useAtomSet } from "@pm/ui/atom-react";
+import { RegistryProvider, useAtomValue, useAtomSet } from "hyperlink-ts/ui/atom-react";
 import { statusAtom, enqueue, pause, resume, clear } from "./demo-queue.js";
 
 const btn = "rounded-md px-2.5 py-1 text-xs font-medium bg-secondary text-secondary-foreground";
@@ -42,7 +42,7 @@ function Panel(): React.ReactElement {
   };
 
   return (
-    <div className="pm-dashboard grid gap-3 p-4 rounded-xl text-sm">
+    <div className="hl-dashboard grid gap-3 p-4 rounded-xl text-sm">
       <div className="flex items-center justify-between border-b border-border pb-2">
         <span className="font-medium text-card-foreground">docs/DemoQueue</span>
         <span className="text-xs text-muted-foreground">{s?.paused ? "paused" : s?.phase ?? "running"} · in your browser</span>

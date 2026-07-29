@@ -2,7 +2,7 @@
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
-> and live type previews — is at <https://hyperlink.cool/docs/identity-coordinator>.
+> and live type previews — is at <https://dev.hyperlink.cool/docs/identity-coordinator>.
 <!-- docs-site-link:end -->
 # Identity coordinator — one brain, many hands
 

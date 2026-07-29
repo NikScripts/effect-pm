@@ -1,4 +1,9 @@
 {#workpool-priority-lanes title="WorkPool — Priority Lanes" status="draft" appliesTo=all}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://dev.hyperlink.cool/docs/workpool-priority-lanes>.
+<!-- docs-site-link:end -->
 # WorkPool — Priority Lanes
 
 {.draft}
