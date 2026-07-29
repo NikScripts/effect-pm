@@ -35,6 +35,8 @@ export const isRoute = (u: unknown): u is Constraint =>
 
 const Proto = {
   pipe() {
+    // Effect Pipeable protocol — `arguments` is required by `pipeArguments`.
+    // eslint-disable-next-line prefer-rest-params -- pipeArguments(this, arguments)
     return pipeArguments(this, arguments);
   },
   prefix(this: Constraint, prefix: Path) {

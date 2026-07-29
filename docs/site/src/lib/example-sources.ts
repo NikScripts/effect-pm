@@ -28,9 +28,11 @@ const modules = import.meta.glob(
     "../../../../examples/polling/**/*.ts",
     "../../../../examples/config/**/*.ts",
     "../../../../examples/observe/**/*.ts",
+    "../../../../examples/ui/**/*.ts",
     "../../../../examples/scenarios/**/*.ts",
     "../../../../examples/shared/**/*.ts",
   ],
+
   { query: "?raw", import: "default", eager: true },
 ) as Record<string, string>;
 

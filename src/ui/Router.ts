@@ -140,9 +140,7 @@ export const Provider = (props: {
 export const useRouter = (): Service => {
   const router = React.useContext(RouterReactContext);
   if (router === null) {
-    throw new Error(
-      "Router: render inside View.compose(…).Provider (or Router.Provider)",
-    );
+    throw new Error("Router: render inside Router.Provider");
   }
   const [, bump] = React.useReducer((n: number) => n + 1, 0);
   React.useEffect(() => router.subscribe(bump), [router]);

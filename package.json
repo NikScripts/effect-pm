@@ -380,6 +380,9 @@
     "example:apps-web": "vite --config examples/apps/web/vite.config.ts examples/apps/web",
     "example:apps-web-server": "tsx examples/apps/web/server.ts",
     "example:apps-view-compose": "vite --config examples/apps/view-compose/vite.config.ts",
+    "example:apps-router-docs": "vite --config examples/apps/router-docs/vite.config.ts",
+    "example:ui-router-mini-docs": "tsx examples/ui/router-mini-docs.ts",
+
     "example:apps-cli": "tsx examples/apps/cli/counter-cli.ts",
     "example:apps-cli-manager": "tsx examples/apps/cli/manager-cli.ts",
     "example:apps-tui": "tsx --tsconfig examples/apps/tui/tsconfig.json examples/apps/tui/counter-tui.tsx",

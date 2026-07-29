@@ -470,6 +470,17 @@ Guide: [Observe recipes](/docs/observe)
 
 ---
 
+## UI
+
+Guide / handoff: Route + Router (`docs/handoffs/ui-routes-dream.md`)
+
+### [Router mini-docs](/docs/ui-router-mini-docs)
+
+`examples/ui/router-mini-docs.ts` · `pnpm run example:ui-router-mini-docs`  
+Browser: `pnpm run example:apps-router-docs` → <http://localhost:5189>
+
+---
+
 ## Scenarios
 
 ### [multi-protocol dual serve](/docs/scenario-multi-protocol)
@@ -505,3 +516,4 @@ see [E5 apps plan](../handoffs/examples-apps-e5-plan.md) (handoff). Run via `pnp
 | CLI | `examples/apps/cli` | `example:apps-cli` |
 | Queue widget | `examples/apps/queue-widget` | `example:apps-queue-widget` |
 | View compose | `examples/apps/view-compose` | `example:apps-view-compose` |
+| Router mini-docs | `examples/apps/router-docs` | `example:apps-router-docs` (+ `example:ui-router-mini-docs`) |

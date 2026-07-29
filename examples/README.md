@@ -8,9 +8,9 @@ link to **related examples** (often more than one). Full demos are under [`apps/
 
 | Layer | Path | Purpose |
 |-------|------|---------|
-| **Topics** | `work-pool/`, `gate/`, `daemon/`, `node/`, `fleet/`, `launcher/`, `readiness/`, `hyperlink/`, `logs/`, `store/`, `schedule/`, `polling/`, `config/`, `observe/` | One API shape per file — same names as the guides |
+| **Topics** | `work-pool/`, `gate/`, `daemon/`, `node/`, `fleet/`, `launcher/`, `readiness/`, `hyperlink/`, `logs/`, `store/`, `schedule/`, `polling/`, `config/`, `observe/`, `ui/` | One API shape per file — same names as the guides |
 | **Scenarios** | [`scenarios/`](./scenarios/) | Multi-file / multi-process compositions |
-| **Apps** | [`apps/`](./apps/) | TUI, web, dashboard, CLI, widgets (not 1:1 Twoslash yet) |
+| **Apps** | [`apps/`](./apps/) | TUI, web, dashboard, CLI, widgets, Router mini-docs (not 1:1 Twoslash yet) |
 | **Shared** | [`shared/`](./shared/) | Harness helpers |
 
 Living book: [docs/index.md](../docs/index.md) · [API Reference](https://hyperlink.cool/api/hyperlink-ts).
@@ -41,7 +41,8 @@ Living book: [docs/index.md](../docs/index.md) · [API Reference](https://hyperl
 | **Schedule / polling / config** | `pnpm run example:schedule-basics` → `example:schedule-controls` → `example:polling-sports` → `example:config-hot-swap` |
 | **Observe** | `observe-pack-demo` → `observe-recipes` → `observe-work-pool-pack` / daemon / gate packs · guide [Observe](../docs/guides/observe.md) |
 | **Scenarios** | `scenarios/multi-protocol-dual-serve` → `schedule-sync-from-db` → `serve-per-deps` → NWSL |
-| **Apps** | `pnpm run example:apps-tui` · `example:apps-web` (+ `example:apps-web-server`) · `example:apps-dashboard` · `example:apps-cli` |
+| **Apps** | `pnpm run example:apps-tui` · `example:apps-web` (+ `example:apps-web-server`) · `example:apps-dashboard` · `example:apps-cli` · `example:apps-router-docs` |
+| **UI Router** | [`ui/router-mini-docs.ts`](./ui/router-mini-docs.ts) → [hub § UI](../docs/examples.md#ui) · browser `example:apps-router-docs` |
 
 ---
 

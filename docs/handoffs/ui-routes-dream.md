@@ -54,3 +54,12 @@ Group dashboards may still use Target + View skins in `DashboardShell`; ordinary
 | `back` | memory stack / `history.back()` |
 
 `Router.memory` / `history` / `make` take a **Route catalog only**.
+
+## Demo
+
+| Run | What |
+|-----|------|
+| `pnpm run example:ui-router-mini-docs` | Typed catalog + match (Twoslash SSOT) |
+| `pnpm run example:apps-router-docs` | Browser mini-docs on `handle` + `Outlet` (:5189) |
+
+Doc page: [`docs/examples/ui/router-mini-docs.md`](../examples/ui/router-mini-docs.md).

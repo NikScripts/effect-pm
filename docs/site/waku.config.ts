@@ -71,6 +71,7 @@ const watchDocsContent = {
         "../../examples/polling",
         "../../examples/config",
         "../../examples/observe",
+        "../../examples/ui",
         "../../examples/scenarios",
         "../../examples/apps",
         "../../examples/shared",

@@ -217,6 +217,8 @@ export const isApp = isApi;
 
 const groupProto = {
   pipe() {
+    // Effect Pipeable protocol — `arguments` is required by `pipeArguments`.
+    // eslint-disable-next-line prefer-rest-params -- pipeArguments(this, arguments)
     return pipeArguments(this, arguments);
   },
   add(this: GroupTop, ...items: ReadonlyArray<RouteLike>): GroupTop {
@@ -319,6 +321,8 @@ const mergeTopLevel = (existing: GroupTop, item: GroupTop): GroupTop =>
 
 const appProto = {
   pipe() {
+    // Effect Pipeable protocol — `arguments` is required by `pipeArguments`.
+    // eslint-disable-next-line prefer-rest-params -- pipeArguments(this, arguments)
     return pipeArguments(this, arguments);
   },
   add(this: ApiConstraint, ...items: ReadonlyArray<RouteLike>): ApiConstraint {
@@ -597,12 +601,12 @@ type GroupBuilder<G> = [G] extends [GroupTop] ? Simplify<
     >;
   }
 >
-  : {};
+  : Record<PropertyKey, never>;
 
 /**
  * Nested group slots on UrlBuilder.
  * Do **not** intersect nested groups with {@link GroupTop} here — that erases
- * `Group<Id, Routes, …>` type parameters and collapses builders to `{}`.
+ * `Group<Id, Routes, …>` type parameters and collapses builders to empty objects.
  */
 type NestedBuilders<Groups> = {
   readonly [

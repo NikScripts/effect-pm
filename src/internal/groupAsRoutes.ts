@@ -13,7 +13,7 @@ import {
   type AsRoutesEffect,
   type RouteGroup,
 } from "./asRoutesBrand";
-import type { Group, GroupTop, RouteLike } from "./uiRoutes";
+import type { Group, GroupTop } from "./uiRoutes";
 import type * as uiRoute from "./uiRoute";
 
 export type { RouteGroup } from "./asRoutesBrand";
