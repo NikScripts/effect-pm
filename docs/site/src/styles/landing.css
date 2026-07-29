@@ -1,71 +1,72 @@
 /**
- * Self-contained brand lockup. Loaded only by `/` (and inlined there) so the
- * brand host never depends on the docs stylesheet or a successful `/assets/*` fetch.
- * Hex + system fonts first; oklch / web fonts where supported.
+ * Brand lockup — translucent “fruit iMac” acrylic: Bondi / tangerine / lime
+ * slabs behind a frosted shell. Inlined on `/` so paint never depends on /assets.
  */
 :root {
   color-scheme: light dark;
-  --landing-bg: #f4f6f9;
-  --landing-bg-deep: #e8eef7;
-  --landing-fg: #1c222c;
-  --landing-muted: #5c6573;
-  --landing-panel: #ffffffcc;
-  --landing-border: #c9d2de;
-  --landing-primary: #1f5fd6;
-  --landing-yield: #b85a12;
-  --landing-glow: #2f6fed33;
+  --landing-desk: #e7f3f7;
+  --landing-desk-deep: #c5e4ef;
+  --landing-fg: #0f2430;
+  --landing-muted: #3d5a68;
+  --landing-bondi: #00a3c8;
+  --landing-bondi-deep: #007fa3;
+  --landing-tangerine: #ff6a2a;
+  --landing-lime: #7ad9a8;
+  --landing-shell: rgba(255, 255, 255, 0.42);
+  --landing-shell-edge: rgba(255, 255, 255, 0.72);
+  --landing-shell-ink: rgba(15, 55, 72, 0.08);
   --landing-sans: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --landing-display: "Syne", "DM Sans", ui-sans-serif, system-ui, sans-serif;
   --landing-mono: ui-monospace, SFMono-Regular, Menlo, "Cascadia Code", monospace;
 }
 @supports (color: oklch(0% 0 0)) {
   :root {
-    --landing-bg: oklch(97.5% 0.008 250);
-    --landing-bg-deep: oklch(94% 0.02 250);
-    --landing-fg: oklch(22% 0.02 260);
-    --landing-muted: oklch(48% 0.02 260);
-    --landing-panel: oklch(100% 0.004 260 / 0.72);
-    --landing-border: oklch(86% 0.02 250);
-    --landing-primary: oklch(52% 0.18 255);
-    --landing-yield: oklch(60% 0.16 55);
-    --landing-glow: oklch(55% 0.16 250 / 0.22);
+    --landing-desk: oklch(95% 0.025 220);
+    --landing-desk-deep: oklch(90% 0.05 220);
+    --landing-fg: oklch(22% 0.04 230);
+    --landing-muted: oklch(42% 0.04 230);
+    --landing-bondi: oklch(68% 0.14 220);
+    --landing-bondi-deep: oklch(55% 0.12 230);
+    --landing-tangerine: oklch(68% 0.19 45);
+    --landing-lime: oklch(82% 0.12 160);
   }
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --landing-bg: #10141a;
-    --landing-bg-deep: #0a0e14;
-    --landing-fg: #e8eaed;
-    --landing-muted: #9aa3ad;
-    --landing-panel: #1a2028cc;
-    --landing-border: #2f3844;
-    --landing-primary: #7eb0ff;
-    --landing-yield: #e0a054;
-    --landing-glow: #3d7fff40;
+    --landing-desk: #07151c;
+    --landing-desk-deep: #0b2430;
+    --landing-fg: #eef8fb;
+    --landing-muted: #9bc0ce;
+    --landing-bondi: #3ec6e8;
+    --landing-bondi-deep: #1496b8;
+    --landing-tangerine: #ff8a4c;
+    --landing-lime: #8aefc0;
+    --landing-shell: rgba(18, 48, 62, 0.55);
+    --landing-shell-edge: rgba(160, 220, 240, 0.28);
+    --landing-shell-ink: rgba(0, 0, 0, 0.28);
   }
   @supports (color: oklch(0% 0 0)) {
     :root {
-      --landing-bg: oklch(15% 0.015 260);
-      --landing-bg-deep: oklch(11% 0.02 260);
-      --landing-fg: oklch(93% 0.01 260);
-      --landing-muted: oklch(68% 0.015 260);
-      --landing-panel: oklch(20% 0.02 260 / 0.7);
-      --landing-border: oklch(32% 0.02 260);
-      --landing-primary: oklch(76% 0.12 250);
-      --landing-yield: oklch(78% 0.14 65);
-      --landing-glow: oklch(60% 0.16 250 / 0.28);
+      --landing-desk: oklch(14% 0.03 230);
+      --landing-desk-deep: oklch(20% 0.05 230);
+      --landing-fg: oklch(96% 0.015 220);
+      --landing-muted: oklch(78% 0.04 220);
+      --landing-bondi: oklch(76% 0.12 220);
+      --landing-bondi-deep: oklch(62% 0.12 230);
+      --landing-tangerine: oklch(74% 0.16 50);
+      --landing-lime: oklch(86% 0.12 160);
     }
   }
 }
 
 html {
-  background: var(--landing-bg);
+  background: var(--landing-desk);
   min-height: 100%;
   -webkit-text-size-adjust: 100%;
 }
 body {
   margin: 0;
-  background: var(--landing-bg);
+  background: var(--landing-desk);
   color: var(--landing-fg);
   font-family: var(--landing-sans);
   font-optical-sizing: auto;
@@ -77,72 +78,153 @@ body {
   isolation: isolate;
   width: 100%;
   min-height: 100dvh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: left;
-  padding: 1.6rem 1.25rem calc(2.4rem + env(safe-area-inset-bottom, 0px));
+  display: grid;
+  place-items: center;
+  padding: max(1.25rem, env(safe-area-inset-top)) 1.25rem
+    calc(1.75rem + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
   overflow: hidden;
   background:
-    radial-gradient(ellipse 90% 70% at 50% -10%, var(--landing-glow), transparent 55%),
-    radial-gradient(ellipse 60% 50% at 100% 100%, var(--landing-bg-deep), transparent 50%),
-    radial-gradient(ellipse 50% 40% at 0% 80%, var(--landing-bg-deep), transparent 45%),
-    var(--landing-bg);
+    radial-gradient(ellipse 80% 55% at 50% 0%, color-mix(in oklab, var(--landing-bondi) 28%, transparent), transparent 60%),
+    radial-gradient(ellipse 50% 45% at 15% 85%, color-mix(in oklab, var(--landing-lime) 35%, transparent), transparent 55%),
+    radial-gradient(ellipse 45% 40% at 90% 75%, color-mix(in oklab, var(--landing-tangerine) 28%, transparent), transparent 50%),
+    linear-gradient(165deg, var(--landing-desk) 0%, var(--landing-desk-deep) 100%);
 }
 
-.landing-glow {
+/* Floating translucent acrylic slabs — the “fruit plastic” plane */
+.landing-stage {
   position: absolute;
-  inset: auto auto 18% 50%;
-  width: min(42rem, 90vw);
-  height: min(42rem, 90vw);
-  translate: -50% 40%;
-  border-radius: 50%;
-  background: radial-gradient(circle, var(--landing-glow), transparent 68%);
-  filter: blur(8px);
-  pointer-events: none;
+  inset: 0;
   z-index: 0;
-  animation: landing-breathe 10s ease-in-out infinite;
+  pointer-events: none;
+  overflow: hidden;
+}
+.landing-slab {
+  position: absolute;
+  border-radius: 28% 36% 32% 40% / 34% 28% 42% 30%;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -18px 40px rgba(0, 0, 0, 0.08),
+    0 28px 60px -20px rgba(15, 55, 72, 0.35);
+  backdrop-filter: blur(18px) saturate(1.55);
+  -webkit-backdrop-filter: blur(18px) saturate(1.55);
+}
+.landing-slab-bondi {
+  width: min(58vw, 34rem);
+  height: min(58vw, 34rem);
+  left: 50%;
+  top: 42%;
+  translate: -58% -48%;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.55), transparent 42%),
+    linear-gradient(210deg, color-mix(in oklab, var(--landing-bondi) 72%, white), color-mix(in oklab, var(--landing-bondi-deep) 85%, transparent));
+  opacity: 0.88;
+  animation: landing-drift-a 14s ease-in-out infinite;
+}
+.landing-slab-tangerine {
+  width: min(36vw, 18rem);
+  height: min(36vw, 18rem);
+  right: 8%;
+  top: 18%;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.5), transparent 50%),
+    color-mix(in oklab, var(--landing-tangerine) 70%, transparent);
+  opacity: 0.75;
+  border-radius: 40% 30% 45% 35%;
+  animation: landing-drift-b 11s ease-in-out infinite;
+}
+.landing-slab-lime {
+  width: min(32vw, 15rem);
+  height: min(32vw, 15rem);
+  left: 6%;
+  bottom: 12%;
+  background:
+    linear-gradient(200deg, rgba(255, 255, 255, 0.45), transparent 48%),
+    color-mix(in oklab, var(--landing-lime) 65%, transparent);
+  opacity: 0.7;
+  border-radius: 45% 35% 40% 50%;
+  animation: landing-drift-c 13s ease-in-out infinite;
+}
+.landing-shine {
+  position: absolute;
+  inset: -20% 20% auto;
+  height: 45%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55), transparent);
+  filter: blur(28px);
+  opacity: 0.55;
 }
 
+/* Frosted product shell — content sits in clear acrylic */
+.landing-shell {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 44rem);
+  border-radius: 2rem;
+  padding: clamp(2rem, 5vw, 3.25rem) clamp(1.4rem, 4vw, 2.75rem)
+    clamp(1.75rem, 4vw, 2.5rem);
+  background:
+    linear-gradient(165deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.12) 55%, transparent),
+    var(--landing-shell);
+  border: 1px solid var(--landing-shell-edge);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.65),
+    inset 0 -1px 0 var(--landing-shell-ink),
+    0 40px 80px -28px rgba(10, 60, 80, 0.45),
+    0 0 0 1px color-mix(in oklab, var(--landing-bondi) 18%, transparent);
+  backdrop-filter: blur(28px) saturate(1.65);
+  -webkit-backdrop-filter: blur(28px) saturate(1.65);
+  animation: landing-rise 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.landing-shell-gloss {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 70%;
+  height: 42%;
+  border-radius: 2rem 2rem 60% 40%;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.55), transparent 70%);
+  pointer-events: none;
+  opacity: 0.7;
+}
 .landing-inner {
   position: relative;
   z-index: 1;
-  max-width: 70rem;
-  width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: stretch;
 }
 
+.landing-mark {
+  width: fit-content;
+  margin-inline: auto;
+  font-size: clamp(4.2rem, 16vw, 8.75rem);
+  margin-block: 0.15rem 0.35rem;
+  animation: landing-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both;
+}
 .landing-title {
   margin: 0;
   font-family: var(--landing-display);
   font-size: 1em;
-  font-weight: 700;
-  line-height: 0.95;
-  letter-spacing: -0.04em;
-  color: var(--landing-primary);
+  font-weight: 800;
+  line-height: 0.92;
+  letter-spacing: -0.045em;
+  color: var(--landing-bondi-deep);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+@media (prefers-color-scheme: dark) {
+  .landing-title {
+    color: var(--landing-bondi);
+    text-shadow: 0 2px 24px color-mix(in oklab, var(--landing-bondi) 45%, transparent);
+  }
 }
 .landing-sub {
-  margin: 0.35rem 0 0;
+  margin: 0.28rem 0 0;
+  padding-left: 0.14em;
   font-family: var(--landing-sans);
-  font-size: 0.28em;
+  font-size: 0.26em;
   font-weight: 550;
-  color: var(--landing-muted);
   letter-spacing: 0.02em;
-}
-.landing-mark {
-  width: fit-content;
-  margin-inline: auto;
-  font-size: clamp(3.8rem, 14vw, 8rem);
-  margin-block: clamp(0.8rem, 3vh, 2rem) clamp(0.6rem, 2vh, 1.4rem);
-  animation: landing-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-.landing-mark .landing-sub {
-  text-align: left;
-  margin-top: -0.02em;
-  padding-left: 0.12em;
+  color: var(--landing-muted);
 }
 
 .landing-motto {
@@ -150,115 +232,177 @@ body {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  align-self: center;
-  gap: 0.45rem;
-  margin: clamp(1.2rem, 3vh, 2rem) 0 0.85rem;
-  font-size: clamp(1.15rem, 2.6vw, 1.55rem);
-  font-weight: 450;
-  letter-spacing: 0.01em;
+  gap: 0.35rem;
+  margin: clamp(1.4rem, 3.5vh, 2.2rem) 0 0.75rem;
+  font-size: clamp(1.2rem, 2.8vw, 1.65rem);
+  font-weight: 550;
+  letter-spacing: 0.005em;
   color: var(--landing-muted);
-  animation: landing-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both;
+  animation: landing-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.16s both;
 }
 .landing-motto span:nth-child(2) {
-  color: color-mix(in oklab, var(--landing-fg) 78%, var(--landing-muted));
-}
-.landing-motto span:nth-child(1) {
-  transform: translateX(-3.5rem);
-}
-.landing-motto .landing-motto-accent {
-  transform: translateX(3.5rem);
-}
-@media (max-width: 520px) {
-  .landing-motto span:nth-child(1) {
-    transform: translateX(-2rem);
-  }
-  .landing-motto .landing-motto-accent {
-    transform: translateX(2rem);
-  }
+  color: var(--landing-fg);
 }
 .landing-motto-accent {
   color: var(--landing-fg);
-  font-weight: 550;
+  font-weight: 700;
 }
 .landing-motto code {
   font-family: var(--landing-mono);
-  color: var(--landing-yield);
-  background: none;
-  padding: 0;
-  border: none;
-  font-size: 0.95em;
-  font-weight: 550;
+  color: var(--landing-tangerine);
+  background: color-mix(in oklab, var(--landing-tangerine) 14%, transparent);
+  border: 1px solid color-mix(in oklab, var(--landing-tangerine) 28%, transparent);
+  border-radius: 0.4rem;
+  padding: 0.05em 0.28em 0.08em;
+  font-size: 0.92em;
+  font-weight: 650;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 
 .landing-lede {
-  align-self: center;
-  max-width: 28rem;
-  margin: 0.35rem 0 0;
+  margin: 0 auto;
+  max-width: 26rem;
   text-align: center;
-  font-size: clamp(0.95rem, 1.8vw, 1.08rem);
+  font-size: clamp(1rem, 2vw, 1.12rem);
   font-weight: 450;
   line-height: 1.45;
   color: var(--landing-muted);
-  animation: landing-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.22s both;
+  animation: landing-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.24s both;
 }
 
 .landing-cta {
-  align-self: center;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 0.5rem 0.75rem;
-  margin: 2.1rem 0 0.5rem;
-  font-family: var(--landing-mono);
-  font-size: 0.9rem;
-  letter-spacing: 0.04em;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 2rem 0 0.25rem;
   animation: landing-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.34s both;
 }
-.landing-cta a {
-  color: var(--landing-muted);
-  text-decoration: none;
-  border-bottom: 1px solid transparent;
-  padding: 0.55rem 0.35rem;
-  min-height: 2.75rem;
+.landing-cta-primary,
+.landing-cta-ghost {
   display: inline-flex;
   align-items: center;
-  transition: color 0.15s ease, border-color 0.15s ease;
+  justify-content: center;
+  min-height: 3rem;
+  padding: 0.7rem 1.35rem;
+  border-radius: 999px;
+  font-family: var(--landing-sans);
+  font-size: 1rem;
+  font-weight: 650;
+  text-decoration: none;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease;
 }
-.landing-cta a:hover,
-.landing-cta a:focus-visible {
-  color: var(--landing-primary);
-  border-bottom-color: color-mix(in oklab, var(--landing-primary) 55%, transparent);
+.landing-cta-primary {
+  color: #fff;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28), transparent 55%),
+    linear-gradient(165deg, var(--landing-bondi), var(--landing-bondi-deep));
+  border: 1px solid color-mix(in oklab, white 35%, var(--landing-bondi-deep));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 14px 28px -10px color-mix(in oklab, var(--landing-bondi-deep) 65%, transparent);
+}
+.landing-cta-primary:hover,
+.landing-cta-primary:focus-visible {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 18px 34px -10px color-mix(in oklab, var(--landing-bondi-deep) 75%, transparent);
   outline: none;
+}
+.landing-cta-ghost {
+  color: var(--landing-fg);
+  background: color-mix(in oklab, white 35%, transparent);
+  border: 1px solid var(--landing-shell-edge);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  font-weight: 550;
+}
+.landing-cta-ghost:hover,
+.landing-cta-ghost:focus-visible {
+  background: color-mix(in oklab, white 55%, transparent);
+  border-color: color-mix(in oklab, var(--landing-bondi) 40%, white);
+  outline: none;
+}
+@media (prefers-color-scheme: dark) {
+  .landing-cta-ghost {
+    background: rgba(255, 255, 255, 0.06);
+  }
+  .landing-cta-ghost:hover,
+  .landing-cta-ghost:focus-visible {
+    background: rgba(255, 255, 255, 0.12);
+  }
 }
 
 @keyframes landing-rise {
   from {
     opacity: 0;
-    transform: translateY(0.7rem);
+    transform: translateY(1rem) scale(0.985);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
-@keyframes landing-breathe {
+@keyframes landing-drift-a {
   0%,
   100% {
-    opacity: 0.55;
-    scale: 1;
+    translate: -58% -48%;
+    rotate: -4deg;
   }
   50% {
-    opacity: 0.9;
-    scale: 1.06;
+    translate: -52% -52%;
+    rotate: 3deg;
+  }
+}
+@keyframes landing-drift-b {
+  0%,
+  100% {
+    translate: 0 0;
+    rotate: 8deg;
+  }
+  50% {
+    translate: -8% 10%;
+    rotate: 14deg;
+  }
+}
+@keyframes landing-drift-c {
+  0%,
+  100% {
+    translate: 0 0;
+    rotate: -10deg;
+  }
+  50% {
+    translate: 12% -8%;
+    rotate: -4deg;
+  }
+}
+
+@media (max-width: 520px) {
+  .landing-shell {
+    border-radius: 1.5rem;
+  }
+  .landing-slab-tangerine {
+    right: -6%;
+    top: 10%;
+  }
+  .landing-slab-lime {
+    left: -8%;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .landing-shell,
   .landing-mark,
   .landing-motto,
   .landing-lede,
   .landing-cta,
-  .landing-glow {
+  .landing-slab {
     animation: none;
   }
 }
