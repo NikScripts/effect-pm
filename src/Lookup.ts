@@ -14,8 +14,8 @@
  *   (or ask handle `yield` when `askIncumbent`); dead/unreachable → replace row.
  *   {@link Directory.changes} fans out upserts/removes so nodes can rebind dials on A→B swap.
  * - {@link Advice} — last-write placement board (`prefer` a directory `nodeKey` for a
- *   HyperService key) + {@link Advice.changes} so {@link Hyperlink.lookupClient} can move
- *   dials when prefer flips (before the first transport error).
+ *   HyperService key). Prefer / clear fan out on {@link Advice}`changes` (same shape as
+ *   {@link Directory}`changes`) so {@link Hyperlink.lookupClient} can move dials early.
  *
  * @module Lookup
  */
@@ -602,22 +602,6 @@ export const preferred = (
  */
 export const changes: Stream.Stream<DirectoryChange, never, Directory> =
   Stream.unwrap(Effect.map(Directory, (dir) => dir.changes));
-
-/**
- * Live placement-board push — sugar over {@link Advice}.`changes`.
- *
- * ```ts
- * yield* Lookup.adviceChanges.pipe(
- *   Stream.filter((e) => e.serviceKey === Mail.key),
- *   Stream.runForEach((e) => Effect.logInfo(`advice ${e._tag}`)),
- * )
- * ```
- *
- * @category constructors
- * @public
- */
-export const adviceChanges: Stream.Stream<AdviceChange, never, Advice> =
-  Stream.unwrap(Effect.map(Advice, (board) => board.changes));
 
 /**
  * Live dial table driven by {@link Directory.changes} — for node-level peer rebind.

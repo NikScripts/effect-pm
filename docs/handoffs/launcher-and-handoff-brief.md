@@ -198,7 +198,7 @@ North star: `lookupClient` callers never notice A→B. **v1 slice Eng'd:**
 40. **Dial install = build-then-swap** — new dial builds in a fresh scope; prior dial stays live until success; failed build keeps prior (warning). Semaphore single-flight.
 41. **Transparent RPC retry** — Effect methods (`query` / `mutate`) that fail with `RpcClientError` proactively resolve+adopt once, else wait ≤2s for install generation bump, then **retry once**. App errors / `ProtocolMismatch` not retried. Streams not auto-retried.
 42. **Cutover order** — B Directory-visible (and/or Advice-prefer B) before A leaves so retry has a target. Same recipe as C crown-jewel.
-43. **Advice early move (Eng'd)** — `Advice.changes` (`AdvicePreferred` / `AdviceCleared`) + `Lookup.adviceChanges`. `lookupClient` watches prefer flips for its service key and re-resolves **before** A leaves / before the first transport error.
+43. **Advice early move (Eng'd)** — `Advice.changes` (`AdvicePreferred` / `AdviceCleared`) on the existing Advice tag (no new sugar namespace). `lookupClient` watches prefer flips for its service key and re-resolves **before** A leaves / before the first transport error.
 
 **Still open for D:** dual-serve window, in-flight stream migrate/replay, peersLayer parity retry.
 
