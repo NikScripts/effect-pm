@@ -7,7 +7,7 @@
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **4** | `cursor/hyperservice-open-deps-5679` | [gap proposals](./examples-gap-proposals.md) · [examples IA](./examples-ia-reorg.md) · [E5 apps](./examples-apps-e5-plan.md) | **tip-synced** — Ideas 1–9 + Related notes (97/97) | same tip as `integration` | includes 94/94; Related notes 97/97 | Idea 10 E5 still owner-gated | 2026-07-29 |
-| **G / TUI** | `cursor/view-withsize-types-125f` | View compose · [UI Route](./ui-routes-dream.md) | **landing** — GroupRoute/useGroupRoute deleted; Route+Router only | same tip as `integration` (after land) | ui-routes + ui-router | F5 flake pre-existing | 2026-07-29 |
+| **G / TUI** | `cursor/view-withsize-types-125f` | View compose · [UI Route](./ui-routes-dream.md) | **landed** — Route+Router; GroupRoute/useGroupRoute removed | same tip as `integration` | ui-routes + ui-router | F5 flake pre-existing | 2026-07-29 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **5**, **G** | 2026-07-26 |
 | **5** | `cursor/lookup-no-triples-929b` | [launcher + handoff brief](./launcher-and-handoff-brief.md) · [rename](./rename-hyperlink-handoff.md) | **landed** — no-triples + typecheck green on `integration` | same tip as `integration` | typecheck green; advice 4/4; rebind 3/3 | D remainder / `restartSuccessor` / #35–37 deferred | 2026-07-29 |
 | **Docs site** | `cursor/docs-site-edge-cache-dbdc` (ε) | [dev host](./docs-site-dev-host.md) · edge cache · SEO | **tip-synced / live** — apex coming-soon; docs on `dev`; GS polish; origin gate | same tip as `integration` | smoke + host-gate tests; CF + `serve-production.mjs`; islands on `hyperlink-ts` / `.hl-dashboard` | — | 2026-07-29 |
@@ -29,7 +29,7 @@
 
 ### Active (owner approval required)
 1. **Agent 4:** Examples gap Ideas 1–9 Eng’d (WorkPool→Fleet). Index = [`docs/examples.md`](../examples.md); every form page has a **Related examples** NOTE (often several). Idea 10 Apps/E5 still owner-gated. Handoff: [`examples-gap-proposals.md`](./examples-gap-proposals.md).
-2. **Agent G / TUI:** Router dream machine landing — `Route` + `Router` only; public `GroupRoute` / `useGroupRoute` removed ([`ui-routes-dream.md`](./ui-routes-dream.md)). Branch `cursor/view-withsize-types-125f`.
+2. **Agent G / TUI:** Router dream machine **landed** — `Route` + `Router` only; public `GroupRoute` / `useGroupRoute` removed ([`ui-routes-dream.md`](./ui-routes-dream.md)). Tip-synced with `integration`.
 3. **Agent 5 (Launcher + handoff):** #39 + Ink + Track D on tip; **no-triples landed** (named `{ Advice, Directory, Identity }` + flat Lookup verbs; standard `no-tag-triples`). Next: D remainder / `restartSuccessor` / #35–37. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
 4. **Docs site:** Live — apex coming-soon (inlined CSS + `(book)` chrome); docs on `dev`. Origin host-gate via `serve-production.mjs` (before Waku static). Islands: `hyperlink-ts` alias + `.hl-dashboard`. Getting Started em-dash/voice polish.
 

@@ -1,6 +1,6 @@
 # UI Route + Router — dream machine
 
-**Branch:** `cursor/view-withsize-types-125f` · **Landed / landing to `integration`.**
+**Landed on `integration`.** Public surface: `ui/Route` + `ui/Router` only.
 
 ## Catalog (`Route`) — typed data
 
