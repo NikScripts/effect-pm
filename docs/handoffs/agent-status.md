@@ -6,13 +6,8 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-<<<<<<< HEAD
-| **4** | `cursor/hyperservice-open-deps-5679` | [gap proposals](./examples-gap-proposals.md) · [examples IA](./examples-ia-reorg.md) · [E5 apps](./examples-apps-e5-plan.md) | **tip-synced** — Ideas 1–9 + Related notes (97/97) | same tip as `integration` | includes 94/94; Related notes 97/97 | Idea 10 E5 still owner-gated | 2026-07-29 |
-| **G / TUI** | `cursor/view-withsize-types-125f` | View compose · [UI Route](./ui-routes-dream.md) | **landed** — Route+Router only; `Group.asRoutes` + `fromEffect` | same tip as `integration` | ui-routes + ui-router | F5 flake pre-existing | 2026-07-29 |
-=======
 | **4** | `cursor/hyperservice-open-deps-5679` | [gap proposals](./examples-gap-proposals.md) · [E5 apps](./examples-apps-e5-plan.md) · [release cleanup](./release-prep-cleanup.md) | **tip-synced** — examples + release-prep cleanup | same tip as `integration` | Related 97/97; archive pass | Idea 10 E5 owner-gated; changeset consolidate owner | 2026-07-29 |
-| **G / TUI** | `cursor/tui-dashboard-parity-125f` | View compose · [UI Route](./ui-routes-dream.md) | **landed** — Route+Router; GroupRoute/useGroupRoute removed | same tip as `integration` | ui-routes + ui-router | F5 flake pre-existing | 2026-07-29 |
->>>>>>> origin/integration
+| **G / TUI** | `cursor/view-withsize-types-125f` | View compose · [UI Route](./ui-routes-dream.md) | **landed** — real router: `Route.handle` + `Router.Outlet` | same tip as `integration` | ui-routes + ui-router | F5 flake pre-existing | 2026-07-29 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **5**, **G** | 2026-07-26 |
 | **5** | `cursor/peerslayer-d-parity-929b` | [launcher + handoff brief](./launcher-and-handoff-brief.md) · [rename](./rename-hyperlink-handoff.md) | **landed** — peersLayer D parity on `integration` | same tip as `integration` | typecheck green; d3 peers 6/6 | dual-serve / stream replay / `restartSuccessor` / #35–37 deferred | 2026-07-29 |
 | **Docs site** | `cursor/docs-site-edge-cache-dbdc` (ε) | [dev host](./docs-site-dev-host.md) · edge cache · SEO | **tip-synced / live** — apex coming-soon; docs on `dev`; GS polish; origin gate | same tip as `integration` | smoke + host-gate tests; CF + `serve-production.mjs`; islands on `hyperlink-ts` / `.hl-dashboard` | — | 2026-07-29 |
@@ -33,15 +28,9 @@
 0. **Agent E:** impossible-states plan ([`impossible-states-proposal.md`](./archive/2026-07/features/impossible-states-proposal.md)). **DONE + merged:** P1 (node↔protocol wiring bug → compile error, cast-free) + P5 (http transport dies in browser). **P2 SKIPPED** (cast). **P4 already-enforced** (loose-fields payload already rejected; proposal mis-scoped). **P3 deferred** (opaque serve layers). Clean wins complete. Reserved `src/Hyperlink.ts` node/client surface until fully merged (done). **Tag-config reservation RELEASED — Agent D WorkPool/Gate/Daemon payload-config unblocked.**
 
 ### Active (owner approval required)
-<<<<<<< HEAD
-1. **Agent 4:** Examples gap Ideas 1–9 Eng’d (WorkPool→Fleet). Index = [`docs/examples.md`](../examples.md); every form page has a **Related examples** NOTE (often several). Idea 10 Apps/E5 still owner-gated. Handoff: [`examples-gap-proposals.md`](./examples-gap-proposals.md).
-2. **Agent G / TUI:** Router dream machine **landed** — `Route` + `Router` only; Group trees via `Group.asRoutes` + `fromEffect` (no Router(Group) / makeGroup) ([`ui-routes-dream.md`](./ui-routes-dream.md)). Tip-synced with `integration`.
-3. **Agent 5 (Launcher + handoff):** #39 + Ink + Track D on tip; **no-triples landed** (named `{ Advice, Directory, Identity }` + flat Lookup verbs; standard `no-tag-triples`). Next: D remainder / `restartSuccessor` / #35–37. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
-=======
 1. **Agent 4:** Examples Ideas 1–9 + Related notes Eng’d. **Release-prep cleanup Eng’d** (archive completed handoffs/plans, dead scripts, npmignore, legacy example aliases). Idea 10 Apps/E5 still owner-gated. Owner still: changeset consolidate before `version`/publish.
-2. **Agent G / TUI:** Router dream machine **landed** — `Route` + `Router` only; public `GroupRoute` / `useGroupRoute` removed ([`ui-routes-dream.md`](./ui-routes-dream.md)). Tip-synced with `integration`.
+2. **Agent G / TUI:** Router dream machine **landed** — `Route` + `Router` only; `Route.handle` + `Router.Outlet`; Group trees via `Group.asRoutes` + `fromEffect` ([`ui-routes-dream.md`](./ui-routes-dream.md)). Tip-synced with `integration`.
 3. **Agent 5 (Launcher + handoff):** #39 + Ink + Track D on tip; sibling Tags + **peersLayer D parity landed**. Next: dual-serve / stream replay / `restartSuccessor` / #35–37. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
->>>>>>> origin/integration
 4. **Docs site:** Live — apex coming-soon (inlined CSS + `(book)` chrome); docs on `dev`. Origin host-gate via `serve-production.mjs` (before Waku static). Islands: `hyperlink-ts` alias + `.hl-dashboard`. Getting Started em-dash/voice polish.
 
 ### Frozen / dead (do not assign)

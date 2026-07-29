@@ -1,8 +1,10 @@
 /**
  * Router.memory / .history — Route.Api only; Group via asRoutes + fromEffect.
  */
+import { createElement } from "react";
 import { describe, expect, it } from "@effect/vitest";
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Layer, Schema } from "effect";
+import { renderToString } from "react-dom/server";
 import * as Daemon from "../src/Daemon";
 import * as Group from "../src/Group";
 import { pathToMember } from "../src/internal/uiGroupRoutes";
@@ -41,6 +43,33 @@ describe("Router.make (typed)", () => {
     router.to((urls) => urls.app.dashboard());
     expect(router.pathname).toBe("/app");
     expect(router.urls.home()).toBe("/home");
+  });
+});
+
+describe("Route.handle + Router.Outlet", () => {
+  it("Outlet renders the matched handle with params", () => {
+    const app = Route.make("app").add(
+      Route.get("home", "/home").pipe(
+        Route.handle(() => createElement("span", null, "home")),
+      ),
+      Route.get("user", "/users/:id").pipe(
+        Route.params(Schema.Struct({ id: Schema.String })),
+        Route.handle(({ params }) =>
+          createElement("span", null, `user:${params.id}`),
+        ),
+      ),
+    );
+    const router = Router.make(app, "memory");
+    router.go("/users/42");
+    expect(Route.handleOf(router.match)).toBeDefined();
+
+    const html = renderToString(
+      createElement(Router.Provider, {
+        value: router,
+        children: createElement(Router.Outlet),
+      }),
+    );
+    expect(html).toContain("user:42");
   });
 });
 

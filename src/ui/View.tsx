@@ -1146,9 +1146,15 @@ export const compose = <VR, VE,>(options: {
     );
   };
 
-  /** Shell outlet — back/title + Detail, or page-sized logs/schedule content. */
+  /**
+   * Shell outlet — prefer the matched route’s {@link Route.handle}
+   * ({@link Router.Outlet}); else Group-dashboard Target → View Detail/Page.
+   */
   const Outlet = (): React.ReactElement | null => {
     const navigation = Router.useRouter();
+    const handled = Router.Outlet();
+    if (handled !== null) return handled;
+
     const selected = navigation.selected;
     if (selected === null) return null;
     const tag = selected as ViewTag;

@@ -1,31 +1,28 @@
 /**
  * @module ui/Router
  *
- * Runtime navigation over a {@link ./Route} catalog — `Context.Service` with
- * swappable transport layers ({@link memory} / {@link history}).
+ * **Real UI router** over a {@link ./Route} catalog — match the URL, render the
+ * route’s {@link ./Route.handle}, navigate with {@link Link} / `go` / `to`.
  *
- * The catalog is data (`Route.make…`); this service owns location, match, and go.
- * Router never takes a Group tag — build destinations with Route, including
- * `Route.group(…).fromEffect(Group.asRoutes(…))` when the tree comes from a Group.
- *
- * Prefer {@link make} when you want a **typed** surface (`to` / `urls` know the
- * catalog). Layers erase to the Context service for DI.
- *
- * ```ts
- * import * as Group from "hyperlink-ts/Group"
- * import * as Route from "hyperlink-ts/ui/Route"
- * import * as Router from "hyperlink-ts/ui/Router"
- *
+ * ```tsx
  * const site = Route.make("site").add(
- *   Route.get("home", "/home"),
- *   Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub)),
+ *   Route.get("home", "/home").pipe(Route.handle(() => <Home />)),
+ *   Route.get("user", "/users/:id").pipe(
+ *     Route.params(Schema.Struct({ id: Schema.String })),
+ *     Route.handle(({ params }) => <User id={params.id} />),
+ *   ),
  * )
  *
- * const router = Router.make(site, "memory")
- * router.to((urls) => urls.home())
+ * const router = Router.make(site, "history")
  *
- * const layer = Router.history(site) // or Router.memory(site)
+ * <Router.Provider value={router}>
+ *   <Router.Link to={(u) => u.home()}>Home</Router.Link>
+ *   <Router.Outlet />
+ * </Router.Provider>
  * ```
+ *
+ * Layers: {@link memory} / {@link history}. Catalog only — never a Group tag
+ * (`Group.asRoutes` + `Route.group(…).fromEffect` when you need a Group tree).
  *
  * @see docs/handoffs/ui-routes-dream.md
  */
@@ -227,4 +224,32 @@ export const Link = (props: {
     },
     props.children,
   );
+};
+
+/**
+ * Render the matched route’s {@link Route.handle}. Returns `null` when there is
+ * no match or the destination has no handler.
+ *
+ * ```tsx
+ * <Router.Provider value={router}>
+ *   <Router.Outlet />
+ * </Router.Provider>
+ * ```
+ *
+ * @public
+ */
+export const Outlet = (): React.ReactElement | null => {
+  const router = useRouter();
+  const match = router.match;
+  const handler = Route.handleOf(match);
+  if (match === undefined || handler === undefined) return null;
+  const node = handler({
+    params: match.params,
+    pathname: match.pathname,
+  });
+  if (node === null || node === undefined || typeof node === "boolean") {
+    return null;
+  }
+  if (React.isValidElement(node)) return node;
+  return React.createElement(React.Fragment, null, node);
 };

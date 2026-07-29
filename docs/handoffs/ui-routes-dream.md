@@ -1,42 +1,51 @@
-# UI Route + Router — dream machine
+# UI Route + Router — real router
 
-**Landed on `integration`.** Public surface: `ui/Route` + `ui/Router`. Group trees enter via `Group.asRoutes` + `fromEffect` — never as a Router argument.
+**Landed on `integration`.** Anyone can use it. Same building blocks for every app.
 
-## Catalog (`Route`) — typed data
-
-| Effect | Route |
-|--------|--------|
-| `HttpApi.make` | `Route.make` |
-| `HttpApiGroup.make` | `Route.group` |
-| `HttpApiEndpoint.get` | `Route.get` |
-| `HttpApi.addHttpApi` | `Route.addHttpApi` / `api.addHttpApi` |
-| `HttpApiClient.urlBuilder` | `Route.urlBuilder` (**typed**) |
-| `HttpApi.reflect` | `Route.reflect` |
-| *(dynamic)* | `Route.group(…).fromEffect(effect)` |
+## How it works
 
 ```ts
 const site = Route.make("site").add(
-  Route.get("home", "/home"),
-  Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub)),
+  Route.get("home", "/home").pipe(Route.handle(() => <Home />)),
+  Route.get("user", "/users/:id").pipe(
+    Route.params(Schema.Struct({ id: Schema.String })),
+    Route.handle(({ params }) => <User id={params.id} />),
+  ),
 )
 
-Route.urlBuilder(site).home()
-Router.history(site) // Api only — never a Group tag
+const router = Router.make(site, "history")
+
+<Router.Provider value={router}>
+  <Router.Link to={(u) => u.home()}>Home</Router.Link>
+  <Router.Outlet />   // renders the matched Route.handle
+</Router.Provider>
 ```
 
-`Group.asRoutes` is the Group → destinations bridge. `fromEffect` stamps `Route.DashboardRoot` so dashboard helpers (`open` / `path` / …) can recover the tree without Router taking a tag.
+| Piece | Job |
+|--------|-----|
+| `Route.get` + `handle` | Declare path **and** what to render |
+| `Route.urlBuilder` | Typed URLs |
+| `Router` | Location / match / go |
+| `Router.Outlet` | Render the matched handle |
 
-## Runtime (`Router`)
-
-```ts
-const router = Router.make(site, "memory")
-router.to((urls) => urls.home())
-
-Router.history(site)
-Router.memory(site)
-
-View.compose({ views, router: Router.history(site) })
+```text
+URL → Router.match → Route.handle(args) → React node
 ```
+
+That is the whole product story. No View registry required. No Group tag on Router.
+
+## Catalog extras (optional)
+
+| Tool | When |
+|------|------|
+| `Route.group` / `topLevel` | Nest / flatten URL builders |
+| `Route.addHttpApi` | Reuse Effect HttpApi paths |
+| `Group.asRoutes` + `fromEffect` | Generate destinations from a Group tree |
+| `Route.Target` / `DashboardRoot` | Dashboard metadata (`selected` / `view`) — optional |
+
+Group dashboards may still use Target + View skins in `DashboardShell`; ordinary apps use `handle` + `Outlet`.
+
+## Runtime
 
 | Method | History |
 |--------|---------|
@@ -44,14 +53,4 @@ View.compose({ views, router: Router.history(site) })
 | `up` / `toRoot` | **replace** |
 | `back` | memory stack / `history.back()` |
 
-## Public surface
-
-- **`ui/Route`** — catalog data (+ `fromEffect` on groups)
-- **`ui/Router`** — runtime (`memory` / `history` / `make` over **Api only**)
-- **`Group.asRoutes`** — Effect of destinations for a Group tree
-
-Removed: `Navigator`, `GroupRoute`, `useGroupRoute`, **`Router.makeGroup`**, **`Router.memory|history(Group)`**.
-
-## Not inventing
-
-- No nested outlets / guards / query as kit product without owner ask  
+`Router.memory` / `history` / `make` take a **Route catalog only**.

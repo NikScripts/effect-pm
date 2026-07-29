@@ -1,64 +1,117 @@
 /**
  * @module ui/Route
  *
- * Public URL / UI router — **Effect HttpApi shape**:
+ * UI route **catalog** — Effect HttpApi-shaped declarations anyone can use:
  *
  * | Effect | Route |
  * |--------|--------|
  * | `HttpApi.make` | {@link make} |
  * | `HttpApiGroup.make` | {@link group} |
  * | `HttpApiEndpoint.get` | {@link get} |
- * | `HttpApi.addHttpApi` | {@link addHttpApi} / {@link Api.addHttpApi} |
+ * | endpoint handler | {@link handle} → {@link ./Router.Outlet} |
  * | `HttpApiClient.urlBuilder` | {@link urlBuilder} |
- * | `HttpApi.reflect` | {@link reflect} |
  *
- * Root endpoints go on {@link make} directly. Optional `topLevel` on
- * {@link group} flattens that group’s endpoints onto the parent builder
- * (HttpApi parity). Mix wire APIs in with {@link addHttpApi}.
- *
- * Generics are preserved through `.add` so {@link urlBuilder} is typed
- * (`urls.app.dashboard()`, params required when declared).
+ * Declare path + handler. {@link ./Router} matches the URL and
+ * {@link ./Router.Outlet} renders the matched {@link handle}.
  *
  * ```ts
- * import * as Route from "hyperlink-ts/ui/Route"
- * import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
- *
- * const wire = HttpApi.make("wire").add(
- *   HttpApiGroup.make("users", { topLevel: true }).add(
- *     HttpApiEndpoint.get("getUser", "/users/:id"),
- *   ),
- * )
- *
  * const site = Route.make("site").add(
- *   Route.get("home", "/home"),
- *   Route.get("docs", "/docs"),
- *   Route.group("app").add(
- *     Route.get("dashboard", "/app"),
+ *   Route.get("home", "/home").pipe(Route.handle(() => <Home />)),
+ *   Route.get("user", "/users/:id").pipe(
+ *     Route.params(Schema.Struct({ id: Schema.String })),
+ *     Route.handle(({ params }) => <User id={params.id} />),
  *   ),
- *   Route.addHttpApi(wire),
+ *   Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub)),
  * )
  *
  * Route.urlBuilder(site).home()
- * Route.urlBuilder(site).app.dashboard()
- * Route.match(site, "/users/1")
+ * Router.history(site)
+ * // <Router.Outlet /> renders the matched handle
  * ```
  *
  * @see docs/handoffs/ui-routes-dream.md
  */
 import * as Context from "effect/Context";
+import { dual } from "effect/Function";
 import type * as Option from "effect/Option";
 import type * as Schema from "effect/Schema";
 import type { HttpApi, HttpApiGroup } from "effect/unstable/httpapi";
+import type { ReactNode } from "react";
 import * as endpoint from "../internal/uiRoute";
 import * as catalog from "../internal/uiRoutes";
 
 // =============================================================================
-// Target annotation (Group dashboard / typed destinations)
+// Handler (what to render — real router)
 // =============================================================================
 
 /**
- * Destination metadata stamped on catalog endpoints (esp. Group-built dashboards).
- * {@link ./Router} reads this from {@link Match.annotations} for `selected` / `view`.
+ * Args passed to a route {@link handle} when {@link ./Router.Outlet} renders a match.
+ *
+ * @public
+ */
+export type HandleArgs = {
+  readonly params: Record<string, string>;
+  readonly pathname: string;
+};
+
+/**
+ * Render function for a matched destination (`HttpApiBuilder.handle` analogue for UI).
+ *
+ * @public
+ */
+export type Handle = (args: HandleArgs) => ReactNode;
+
+/**
+ * Handler annotation on a destination. Prefer {@link handle} to attach it.
+ *
+ * @public
+ */
+export class Handler extends Context.Service<Handler, Handle>()(
+  "hyperlink-ts/ui/Route/Handler",
+) {}
+
+/**
+ * Attach a render function to a destination. Dual.
+ *
+ * ```ts
+ * Route.get("home", "/home").pipe(Route.handle(() => <Home />))
+ * ```
+ *
+ * @public
+ */
+export const handle: {
+  (fn: Handle): <Id extends string, PathType extends Path, Params>(
+    self: Endpoint<Id, PathType, Params>,
+  ) => Endpoint<Id, PathType, Params>;
+  <Id extends string, PathType extends Path, Params>(
+    self: Endpoint<Id, PathType, Params>,
+    fn: Handle,
+  ): Endpoint<Id, PathType, Params>;
+} = dual(
+  2,
+  <Id extends string, PathType extends Path, Params>(
+    self: Endpoint<Id, PathType, Params>,
+    fn: Handle,
+  ): Endpoint<Id, PathType, Params> => self.annotate(Handler, fn),
+);
+
+/**
+ * Read {@link Handler} from a match (if the destination used {@link handle}).
+ *
+ * @public
+ */
+export const handleOf = (hit: Match | undefined): Handle | undefined =>
+  hit === undefined
+    ? undefined
+    : Context.getOrUndefined(hit.annotations, Handler);
+
+// =============================================================================
+// Target annotation (optional — Group dashboard metadata)
+// =============================================================================
+
+/**
+ * Optional destination metadata for Group-built dashboards (`selected` / `view`).
+ * Not required for ordinary {@link handle} routing.
  *
  * @public
  */
