@@ -6,8 +6,8 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-| **4** | `cursor/hyperservice-open-deps-5679` | [fleet rate limiting](../plans/fleet-rate-limiting.md) · [wire groups](../plans/wire-groups-and-identity.md) · [service shapes](../plans/service-shapes.md) | **tip-synced** — R4b ApiMetrics deleted; dashboard nest parity | same tip as `integration` | typecheck 0 / api-metrics 7/7 | idle | 2026-07-28 |
-| **G / TUI** | `cursor/view-withsize-types-125f` | TUI ↔ web Dashboard Group parity · **View compose** · `ui.data` | **tip-synced** — compose `data` door + shared RuntimeProvider | same tip as `integration` | typecheck 0; view suites + data 18/18 | Hold kit Dashboard | 2026-07-28 |
+| **4** | `cursor/hyperservice-open-deps-5679` | [examples IA](./examples-ia-reorg.md) · [examples book](./agent-01-examples-book.md) · [E5 apps plan](./examples-apps-e5-plan.md) | **tip-synced** — examples IA + Observe topic; E5 owner-gated | same tip as `integration` | includes 50/50; smoke OK | Owner: lock E5 checklist; L6 IA still open | 2026-07-29 |
+| **G / TUI** | `cursor/view-withsize-types-125f` | View compose · Shell · Dashboard unhold | **Eng** — `/health` Navigator pages (K2 0–2) | same tip as `integration` | typecheck TBD | K2.3 logs/schedule Outlet peel; F5 flake | 2026-07-29 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **5**, **G** | 2026-07-26 |
 | **5** | `cursor/launcher-handoff-design-929b` | [launcher + handoff brief](./launcher-and-handoff-brief.md) · [rename](./rename-hyperlink-handoff.md) | **#34 Eng'd** — workPoolRelease peer enqueue | merged `integration`; await land | typecheck 0; handoff tests green | #35–37 deferred; explicit A/B launcher later | 2026-07-29 |
 | **Docs site** | `cursor/docs-site-edge-cache-dbdc` (ε) | [dev host](./docs-site-dev-host.md) · edge cache · SEO | **tip-synced / live** — apex coming-soon; docs on `dev`; GS polish; origin gate | same tip as `integration` | smoke + host-gate tests; CF + `serve-production.mjs`; islands on `hyperlink-ts` / `.hl-dashboard` | — | 2026-07-29 |
@@ -28,9 +28,15 @@
 0. **Agent E:** impossible-states plan ([`impossible-states-proposal.md`](./impossible-states-proposal.md)). **DONE + merged:** P1 (node↔protocol wiring bug → compile error, cast-free) + P5 (http transport dies in browser). **P2 SKIPPED** (cast). **P4 already-enforced** (loose-fields payload already rejected; proposal mis-scoped). **P3 deferred** (opaque serve layers). Clean wins complete. Reserved `src/Hyperlink.ts` node/client surface until fully merged (done). **Tag-config reservation RELEASED — Agent D WorkPool/Gate/Daemon payload-config unblocked.**
 
 ### Active (owner approval required)
+<<<<<<< HEAD
 1. **Agent 4:** W1–W3 + `default`/`defaults` + R1–R4+adaptive + A1–A3; **`cell` parked/rejected**; **R5 rejected**; **R4b tip-synced** — sibling `ApiMetrics` deleted; dashboard/TUI surface limiter nest. Idle. Incident: [`agent-04-w3-incident-2026-07-27.md`](./agent-04-w3-incident-2026-07-27.md).
 2. **Agent G / TUI:** View compose + Tag mint + **`ui.data`** on `cursor/view-withsize-types-125f` — lock [`view-compose-lock.md`](./view-compose-lock.md); guides [`../guides/view-tag-types.md`](../guides/view-tag-types.md) · [`../guides/view-data.md`](../guides/view-data.md). Hold kit Dashboard.
 3. **Agent 5 (Launcher + handoff):** Track C #27–34 Eng'd; `lookupClient` + directory `peersLayer` hot-rebind Eng'd. #35–37 deferred; explicit A/B launcher later. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
+=======
+1. **Agent 4:** Examples IA Eng’d (`forms/` → topic folders + `apps/`); Observe pack demo under `examples/observe/`. E5 apps book still owner-gated. Handoff: [`examples-ia-reorg.md`](./examples-ia-reorg.md).
+2. **Agent G / TUI:** Dashboard unheld; node status via Navigator `/health` pages; `NodeStatusHost` for overlays. Next: K2.3 logs/schedule Outlet peel. Branch `cursor/view-withsize-types-125f`.
+3. **Agent 5 (Launcher + handoff):** Track C #27–33 Eng'd; `lookupClient` + directory `peersLayer` hot-rebind Eng'd. Next: owner-lock #34–37. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
+>>>>>>> origin/integration
 4. **Docs site:** Live — apex coming-soon (inlined CSS + `(book)` chrome); docs on `dev`. Origin host-gate via `serve-production.mjs` (before Waku static). Islands: `hyperlink-ts` alias + `.hl-dashboard`. Getting Started em-dash/voice polish.
 
 ### Frozen / dead (do not assign)

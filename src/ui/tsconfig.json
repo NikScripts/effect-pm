@@ -84,6 +84,20 @@
       }
     ]
   },
-  "include": ["./**/*.ts", "./**/*.tsx"],
+  "include": [
+    "./**/*.ts",
+    "./**/*.tsx",
+    "../Observe.ts",
+    "../internal/observe.ts",
+    "../internal/observeUse.ts",
+    "../../test/observe.test.ts",
+    "../../test/observe.test-d.ts",
+    "../../test/ui-workpool-view-pack.test.ts",
+    "../../test/ui-family-view-packs.test.ts",
+    "../../test/ui-bundle-observe.test.ts",
+    "../../test/ui-bundle-observe.test-d.ts",
+    "../../test/ui-view-data.test.ts",
+    "../../test/ui-view-data.test-d.ts"
+  ],
   "exclude": ["../../node_modules", "../../dist"]
 }

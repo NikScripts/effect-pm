@@ -15,9 +15,7 @@ class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", { payload: Item }) {}
 declare const runFullyWired: <A, E>(layer: Layer.Layer<A, E, never>) => void;
 
 const provided = View.bind(WorkPool.kind, PoolCard).pipe(
-  Layer.provideMerge(
-    Layer.succeed(PoolCard, (_props) => null),
-  ),
+  Layer.provideMerge(View.provide(PoolCard, (_props) => null)),
   Layer.provideMerge(View.base),
 );
 
@@ -32,10 +30,20 @@ type MissingR = Layer.Services<typeof missingProvide>;
 expectTypeOf<[MissingR] extends [never] ? true : false>().toEqualTypeOf<false>();
 expectTypeOf<MissingR>().toEqualTypeOf<PoolCard>();
 
-// succeed props = Prototype Props (reversed)
-Layer.succeed(PoolCard, (props) => {
+// provide props = Prototype Props (reversed)
+View.provide(PoolCard, (props) => {
   expectTypeOf(props).toEqualTypeOf<View.ViewProps>();
   expectTypeOf(props).toEqualTypeOf<View.Type<typeof PoolCard>>();
+  return null;
+});
+
+// dual + Tag.provide
+View.provide(PoolCard)((props) => {
+  expectTypeOf(props).toEqualTypeOf<View.ViewProps>();
+  return null;
+});
+PoolCard.provide((props) => {
+  expectTypeOf(props).toEqualTypeOf<View.ViewProps>();
   return null;
 });
 

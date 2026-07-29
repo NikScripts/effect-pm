@@ -47,7 +47,7 @@ export interface Service {
   /** Deepest group (grid to render). */
   readonly group: RouteGroup;
   readonly selected: unknown | null;
-  /** Leaf sub-view (`"logs"` / `"schedule"`), if any. */
+  /** Leaf sub-view (`"logs"` / `"schedule"`) or root shell page (`"health"`). */
   readonly view: string | undefined;
   readonly open: (member: MemberTag) => void;
   /** Descend by short member name from the current group (or append leaf sub-view). */
@@ -58,6 +58,10 @@ export interface Service {
   readonly openLogs: (tag: LeafTag) => void;
   /** Show schedule as page content (path + `"schedule"`). */
   readonly openSchedule: (tag: LeafTag) => void;
+  /** Root node-status board — path `["health"]` (`/health`). */
+  readonly openHealth: () => void;
+  /** Node detail under health — path `["health", nodeId]` (`/health/<nodeId>`). */
+  readonly openNode: (nodeId: string) => void;
   readonly subscribe: (listener: () => void) => () => void;
   /** History mode: re-read `location.pathname`. @internal */
   readonly syncFromLocation: () => void;
@@ -154,6 +158,8 @@ const makeService = (
       const path = pathToMember(root, tag);
       if (path !== undefined) setKeys([...path, "schedule"]);
     },
+    openHealth: () => setKeys(["health"]),
+    openNode: (nodeId) => setKeys(["health", nodeId]),
     subscribe: (listener) => {
       listeners.add(listener);
       return () => {

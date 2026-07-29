@@ -3,8 +3,9 @@
 // manifest live in ./standards-manifest.ts — the single parser shared with the manifest
 // generator, so nothing hand-copies rule data (Principles → Derive from the contract).
 //
-// Effect packages only (incl. unstable where relevant). No node:fs — content arrives
-// as strings from ./content.ts (Vite module graph).
+// Effect packages only (incl. unstable where relevant). No node:fs — chapter markdown and
+// `{.twoslash include="examples/…"}` sources arrive as strings from Vite `?raw` globs
+// (`./content.ts`, `./example-sources.ts`).
 
 import { Effect } from "effect";
 import * as React from "react";
@@ -12,6 +13,8 @@ import { runServer } from "./runtime.js";
 import { chapters, chapterBySlug } from "./content.js";
 import { nav } from "../../../nav.js";
 import { highlightToReact, loadHighlighter } from "./highlight.js";
+import { exampleSource } from "./example-sources.js";
+import { prepareExampleForTwoslash } from "./example-include.js";
 // Lightweight islands only — PackageInstall / CopyButton stay static so every code block can copy.
 // Demo / protocol islands pull heavier client graphs (Hyperlink+Ref+Store+widgets.css, or the
 // listen-protocol tabber); import those ONLY when the chapter contains their fence lang, otherwise
@@ -55,17 +58,60 @@ const loadDemoIslands = async (doc: any): Promise<void> => {
 // Re-exported for back-compat: the glossary data now lives in ./glossary (shared with highlight.ts).
 export { glossaryEntries, type GlossaryEntry } from "./glossary.js";
 
-// The copy button copies the *visible* code: twoslash preambles are hidden behind `// ---cut---`
-// markers, so strip everything up to a cut and after a cut-after — mirroring what the reader sees.
+// The copy button copies the *visible* code: Twoslash preambles / ranges stay behind cut markers
+// (`---cut---`, `---cut-after---`, `---cut-start---`/`---cut-end---`) — mirror what the reader sees.
 const CUT = /^\s*\/\/\s*---cut(-before)?---\s*$/;
 const CUT_AFTER = /^\s*\/\/\s*---cut-after---\s*$/;
+const CUT_START = /^\s*\/\/\s*---cut-start---\s*$/;
+const CUT_END = /^\s*\/\/\s*---cut-end---\s*$/;
 const visibleCode = (text: string): string => {
-  let lines = text.split("\n");
-  const start = lines.findIndex((l) => CUT.test(l));
-  if (start >= 0) lines = lines.slice(start + 1);
-  const end = lines.findIndex((l) => CUT_AFTER.test(l));
-  if (end >= 0) lines = lines.slice(0, end);
+  const out: Array<string> = [];
+  let hidingRange = false;
+  let seenCut = false;
+  let buf: Array<string> = [];
+  for (const line of text.split("\n")) {
+    if (CUT_START.test(line)) {
+      hidingRange = true;
+      continue;
+    }
+    if (CUT_END.test(line)) {
+      hidingRange = false;
+      continue;
+    }
+    if (hidingRange) continue;
+    if (CUT_AFTER.test(line)) break;
+    if (CUT.test(line)) {
+      seenCut = true;
+      buf = [];
+      continue;
+    }
+    (seenCut ? buf : out).push(line);
+  }
+  const lines = seenCut ? buf : out;
   return lines.join("\n").replace(/^\n+|\n+$/g, "");
+};
+
+/**
+ * Resolve `{.twoslash include="examples/…"}`. The runnable file is SSOT; an optional fence body
+ * is prepended (Twoslash directives like `// @noErrors`, short page-only notes) then discarded
+ * from copy via the usual cut markers in the included file.
+ */
+const resolveFenceText = (n: {
+  readonly text?: string;
+  readonly attributes?: Record<string, string>;
+}): string => {
+  const include = n.attributes?.include?.trim();
+  if (include === undefined || include === "") return n.text ?? "";
+  const raw = exampleSource(include);
+  if (raw === undefined) {
+    throw new Error(
+      `docs fence include not in examples glob: "${include}" (expected under examples/<topic>, examples/scenarios, or examples/shared)`,
+    );
+  }
+  const prepared = prepareExampleForTwoslash(raw, include);
+  const preamble = (n.text ?? "").trim();
+  // Directives in the fence body must precede `@filename` so Twoslash still sees them.
+  return preamble === "" ? prepared : `${preamble}\n${prepared}`;
 };
 
 // --- render layer: Djot AST -> React elements (no dangerouslySetInnerHTML) ---
@@ -259,15 +305,17 @@ const toReact = (n: any): React.ReactNode => {
           : null;
       }
       // everything else is Shiki-highlighted server-side (real React nodes). A `{.twoslash}`
-      // attribute above the fence opts the block into TS-language-service hover types. Wrapped in a
+      // attribute above the fence opts the block into TS-language-service hover types.
+      // `include="examples/…"` pulls the runnable `.ts` (cuts live in that file). Wrapped in a
       // `.code-block` container carrying the copy button; line numbers are pure CSS on `.line`.
       {
         const twoslash = (n.attributes?.class ?? "").split(/\s+/).includes("twoslash");
+        const text = resolveFenceText(n);
         return h(
           "div",
           { key: keySeq++, className: "code-block" },
-          h(CopyButton, { key: keySeq++, code: visibleCode(n.text) }),
-          highlightToReact(n.text, n.lang, { twoslash }),
+          h(CopyButton, { key: keySeq++, code: visibleCode(text) }),
+          highlightToReact(text, n.lang, { twoslash }),
         );
       }
     default: return kids(n);

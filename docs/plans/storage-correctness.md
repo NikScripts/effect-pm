@@ -21,7 +21,7 @@ Goal: happy path is **one recipe** (`stores.md`); intentional multi-node / two-c
 | Soft-default Memory via `Store.withDefaultStorage` — R fulfilled; `*Memory` aliases | Daemon / WorkPool / untyped WorkPool / Gate toolkit layers |
 | Soft SQLite capture + sibling-merge empty-file guards | `test/storage-correctness-guards.test.ts` (Daemon, WorkPool, Gate, untyped WorkPool) |
 | Node-logs-only Soft → layer build dies (`resolveOrDie`) | same guards + stores guide note |
-| Dual-`DemoStore` process-store forms fixed | `examples/forms/process-store/*` |
+| Dual-`DemoStore` process-store forms fixed | `examples/process-store/*` |
 | Living Soft teachability (examples + TSDoc ripple) | #65 S1–S2 |
 | AGENTS persistence → stores guide; cutover-00 §2 refreshed | repo tip |
 | `Store.Service.layerMemory` / `layer` bake `Logs.layer` + per-registration `_logs` tails | `src/Store.ts` |

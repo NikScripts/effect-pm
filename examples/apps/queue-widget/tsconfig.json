@@ -1,0 +1,10 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "../../..",
+    "noEmit": true,
+    "types": ["node", "react", "react-dom"]
+  },
+  "include": ["./**/*.ts", "./**/*.tsx"],
+  "exclude": ["../../../node_modules", "../../../dist", "./vite.config.ts"]
+}

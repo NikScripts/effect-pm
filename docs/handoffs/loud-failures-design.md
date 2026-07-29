@@ -183,6 +183,6 @@ The core addition is **not** `{ verify }` on `connect`. It is:
 
 **Invariant (client bake):** *Construct explicit dials (`Hyperlink.ws` / `connectSocket(url)`) before `Hyperlink.client(tag)`. `connectLayer` registers the override in the per-Node connect memo; `connectAddressed` (baked into addressed `Hyperlink.client`) reuses it — so resource cards and the die share one dial target.*
 
-**Apps:** merge node transports into the runtime (see `examples/hyperlink-web/hub.ts`) — resource clients alone do not expose the Node service for the die.
+**Apps:** merge node transports into the runtime (see `examples/apps/web/hub.ts`) — resource clients alone do not expose the Node service for the die.
 
 **Verification:** `test/ui-node-status-bundle.test.ts` (override path + same-transport resource/node + tag-url dial fails).

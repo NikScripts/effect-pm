@@ -15,8 +15,9 @@
  * <Dashboard runtime={runtime} group={ServicesHub} />
  * ```
  *
- * Or compose the pieces: `DashboardView` + the widgets + `useQueueBundle` / `useDaemonBundle`
- * under `RegistryProvider` + `RuntimeProvider` + `ViewTransitionProvider`.
+ * Or compose the pieces: `DashboardLayer.forCompose` + `View.compose` + `DashboardShell`
+ * under `RegistryProvider` + `RuntimeProvider` + `ViewTransitionProvider`. Prefer
+ * `Observe.use(tag, *View.pack)` / `NodeView.use`.
  *
  * Peers: `react`, `react-dom`, `recharts`. Styled with Tailwind utility classes + shadcn theme
  * tokens (`@source` + theme wiring in the consuming app).
@@ -30,6 +31,12 @@ export * from "./widgets";
 export type { Widget, WidgetProps } from "./widget-registry";
 export { useWidgets } from "./widget-registry";
 export * from "./Dashboard";
+export { DashboardShell } from "./DashboardShell";
+export { DashboardDetailChrome, DashboardTopBar } from "./DashboardTopBar";
+export { NodeStatusHost } from "./NodeStatus";
+// NodeBar / HealthBoard / NodeDetail also on this barrel via `./widgets`; prefer
+// `import { NodeBar, NodeStatusHost, … } from "hyperlink-ts/web"` or
+// `import * as NodeStatus from "hyperlink-ts/web/NodeStatus"`.
 export * from "./debug-console";
 export { cn } from "./cn";
 // Platform skins: `import * as WorkPoolView from "hyperlink-ts/web/WorkPoolView"`

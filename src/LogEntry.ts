@@ -146,7 +146,7 @@ export const lineage = (entry: LogEntry): ReadonlyArray<string> =>
 /**
  * `true` when the **lineage segment key** appears anywhere in {@link lineage}.
  *
- * @param key - Usually a **hyperlink key** (`Tag.key`, e.g. `wnba/LiveScorePoller` in `hyperlink-web/hub.ts`).
+ * @param key - Usually a **hyperlink key** (`Tag.key`, e.g. `wnba/LiveScorePoller` in `apps/web/hub.ts`).
  *
  * @category guards
  * @public

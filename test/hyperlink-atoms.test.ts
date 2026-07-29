@@ -2,7 +2,7 @@ import { Effect, Schema } from "effect";
 import { AsyncResult, Atom, AtomRegistry } from "effect/unstable/reactivity";
 import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
-import { makeHyperlinkAtoms } from "../examples/hyperlink-atoms/hyperlink-atoms";
+import { makeHyperlinkAtoms } from "../examples/apps/atoms/hyperlink-atoms";
 
 // A resource with one query (read atom), one void command, one payload mutate.
 class Counter extends Hyperlink.Tag<Counter>()("ratoms/Counter", {

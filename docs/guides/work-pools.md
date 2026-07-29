@@ -116,9 +116,8 @@ the queue is served over RPC — validates it on the wire, so a bad item is reje
 before it ever reaches a worker. The decoded type flows everywhere: `add(item)`,
 the worker's argument, and every event that carries the item.
 
-Use whatever `Schema` shape fits — structs, unions, branded strings, nested data.
-The only rule is that the payload is a single schema (a `Schema.Struct` is the
-common case), so the wire contract is unambiguous.
+Tag payloads must be a `Schema.Struct` (nest unions / branded fields inside members).
+That keeps the wire contract unambiguous for RPC and Soft journals.
 
 ## The worker
 
@@ -194,7 +193,7 @@ part of its public shape, not an implementation detail.
 
 ## Enqueueing
 
-Four verbs put work in. Three are priority lanes:
+Four verbs put work in. Three map to priority levels (`high` / `normal` / `low`):
 
 {.twoslash}
 ``` ts
@@ -335,8 +334,10 @@ class Emails extends WorkPool.Service<Emails, typeof EmailJob.Type, never>()(
 ) {}
 ```
 
-`yield* Emails` yields the exact same handle type. Reach for `Service` for a
-self-contained local queue; reach for `Tag` + `layer` when the queue might move.
+`yield* Emails` on a `Service` is the engine handle; on a `Tag` it is the named
+`WorkPool<…>` HyperService handle (same verbs, different packaging). Reach for
+`Service` for a self-contained local queue; reach for `Tag` + `layer` when the
+queue might move.
 
 ---
 
@@ -492,21 +493,101 @@ don't overlap.
 
 ## Persistence and analytics
 
-Three separate planes — do not collapse them into one “SQLite store”:
+Three separate planes — do not collapse them into one “SQLite store”. Full wiring SSOT:
+[Stores](/docs/stores).
 
-1. **Soft observability (`Store.Service`)** — every WorkPool soft-defaults an in-memory
-   journal. Lifecycle events and analytics live there for the process lifetime. Override with
-   an app `Store.Service` that registers `WorkPool.store(tag)` (SQLite or memory + Logs).
-   Reach analytics with `WorkPool.store(tag)` / `yield* AppStore.at(tag)`.
-2. **Durability (`DurableWorkPoolStore`)** — pending + in-flight work that must survive a
-   restart. Presence-driven: provide `SQLiteDurableWorkPoolStore.layer({ filename })` from
-   `hyperlink-ts/storage/sqlite` (needs a `payload` / `itemSchema` on the tag). No Soft
-   default — omit the layer and the queue is not durable.
-3. **History backfill (`HistoryStore`)** — optional keyed append-log for windowed
-   `metrics.query` / `*History` (memory or `SQLiteHistoryStore`).
+### Soft observability (`Store.Service`)
 
-Fleet rate limits use Effect `RateLimiterStore` (Soft memory, or Redis — see above). Full
-wiring SSOT: [Stores](/docs/stores).
+Every WorkPool soft-defaults an in-memory journal. Lifecycle events and analytics live there
+for the process lifetime. Override with an app `Store.Service` that registers
+`WorkPool.store(tag)` (SQLite or memory + Logs).
+
+```ts
+import * as Store from "hyperlink-ts/Store"
+import * as WorkPool from "hyperlink-ts/WorkPool"
+import { Effect, Schema } from "effect"
+
+const Job = Schema.Struct({ id: Schema.String })
+class Jobs extends WorkPool.Tag<Jobs>()("@app/Jobs", { payload: Job }) {}
+
+class JobsStore extends Store.Service<JobsStore>("@app/JobsStore")(
+  WorkPool.store(Jobs),
+) {}
+
+const program = Effect.gen(function* () {
+  // Single registration → yield the store service directly (no `.at`).
+  const store = yield* JobsStore
+  const rate = yield* store.failureRate()
+  const worst = yield* store.slowest(5)
+  return { rate, worst }
+})
+```
+
+`WorkPool.store(tag, additions)` adds app-specific shapes on top of base + analytics.
+
+Given `const store = yield* JobsStore`:
+
+| Read | Result |
+|------|--------|
+| `failures()` | Failed rows |
+| `deadLettered()` | Entries from `RetryExhausted` |
+| `inFlight()` | Started with no terminal yet |
+| `history(entryId)` | All events for one entry |
+| `lastFailure()` | `Option` of latest Failed |
+| `slowest(n)` | Completions by `elapsed` desc |
+| `recent(n)` | Last `n` events |
+| `since(when)` | Events enqueued at/after `when` |
+| `stats()` | Counts (`enqueued`, `started`, `completed`, `failed`, `retried`, `deadLettered`) |
+| `failureRate()` | `failed / (completed + failed)` |
+| `latency()` | `{ mean, p50, p95, p99, max }` over `Completed.elapsed` |
+| `changes()` | Live stream of events |
+
+Exercised in `test/queue-store-analytics.test.ts`.
+
+### Durability (`DurableWorkPoolStore`)
+
+Pending + in-flight work that must survive a restart (at-least-once + dedup).
+Presence-driven: provide the backend layer (needs `payload` / `itemSchema` on the tag).
+Omit the layer and the queue is not durable.
+
+```ts
+import * as WorkPool from "hyperlink-ts/WorkPool"
+import { SQLiteDurableWorkPoolStore } from "hyperlink-ts/storage/sqlite"
+import { Effect, Layer, Schema } from "effect"
+
+const Job = Schema.Struct({ id: Schema.String })
+class Jobs extends WorkPool.Tag<Jobs>()("@app/Jobs", { payload: Job }) {}
+declare const effect: (job: typeof Job.Type) => Effect.Effect<void>
+
+const live = WorkPool.layer(Jobs, { effect }).pipe(
+  Layer.provide(SQLiteDurableWorkPoolStore.layer({ filename: "queue.db" })),
+)
+```
+
+The durable store is then the **source of truth** for the backlog: enqueue persists, a feeder
+leases work into workers, and a restart recovers in-flight work. Distinct from the Soft
+event-log / analytics plane above.
+
+### History backfill (`HistoryStore`)
+
+Optional keyed append-log for windowed `metrics.query`. Without a `HistoryStore` layer,
+capture is skipped and history reads stay empty.
+
+```ts
+import { HistoryStore } from "hyperlink-ts"
+import * as WorkPool from "hyperlink-ts/WorkPool"
+import { Effect, Layer, Schema } from "effect"
+
+const Job = Schema.Struct({ id: Schema.String })
+class Jobs extends WorkPool.Tag<Jobs>()("@app/Jobs", { payload: Job }) {}
+declare const effect: (job: typeof Job.Type) => Effect.Effect<void>
+
+const withHistory = WorkPool.layer(Jobs, { effect }).pipe(
+  Layer.provide(HistoryStore.layerMemory()),
+)
+```
+
+Fleet rate limits use Effect `RateLimiterStore` (Soft memory, or Redis — see [Stores](/docs/stores)).
 
 ## Running it across the network
 
@@ -525,11 +606,11 @@ For moving *pending work* between runtimes, `release` exports entries decoded an
 `releaseEncoded` exports them in wire form (no item schema needed on the receiver);
 the other side `enqueue`s them, attempt budgets intact.
 
-## Reconfiguring at runtime
+## Reconfiguring (layer patches)
 
-A queue's `concurrency`, `rateLimit`, or `paused` state isn't frozen at definition.
-`WorkPool.configure(Tag, patch)` is a layer that overlays a config patch on top
-of the base — `Layer.provideMerge` it, and the queue drains under the merged config:
+`WorkPool.configure(Tag, patch)` (and the same shape on `Daemon.configure` /
+`Gate.configure`) is a **Layer** that folds a config patch onto the resource layer
+**once at build** — not hot reload of a running engine. Merge it with the base layer:
 
 {.twoslash}
 ``` ts
@@ -544,13 +625,14 @@ const Tuned = EmailsLive.pipe(
 )
 ```
 
-Because it's just a layer, the patch can come from anywhere a layer can — an env
-flag, or a live `DynamicConfig` swap that re-tunes the queue while it runs.
+Patches are partials (`{ concurrency: 3 }`), effect updaters, or full reducers — later
+patches win. For **live** retunes after the engine is up, use [DynamicConfig](/docs/configuration)
+(or rebuild the layer stack). Same configure verb on Daemon and Gate.
 
 ## Custom priority lanes
 
-`high` / `normal` / `defer` covers most needs, but some domains have their own
-ordering — tiers, SLAs, numbered levels. Reach for
+`high` / `normal` / `low` (via `prioritize` / `add` / `defer`) covers most needs, but
+some domains have their own ordering — tiers, SLAs, numbered levels. Reach for
 `WorkPool.priority` — the same HyperService with **arbitrary lanes**: you define the
 levels, and `add` targets one by name. The handle reads the same; only the priority
 axis is yours to shape.
@@ -572,8 +654,8 @@ extra wiring.
 
 ## The raw engine
 
-Under the HyperService wrapper is a plain queue engine. `WorkPool.make(config)`
-returns a handle directly — the workers, retries, and events, without the Tag,
-Layer, or RPC machinery. `layer` and `Service` are built on it; reach for `make`
+Under the HyperService wrapper is a plain queue engine. `yield* WorkPool.make(config)`
+(scoped Effect) gives the engine handle — workers, retries, and events — without the
+Tag, Layer, or RPC machinery. `layer` and `Service` are built on it; reach for `make`
 only when you want to embed a queue inside something else and manage its scope
 yourself. For everything else, the Tag *is* the WorkPool.

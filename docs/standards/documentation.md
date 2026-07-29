@@ -153,6 +153,10 @@ In this book the default device is the Twoslash fence with a `---cut---` preambl
 comments on the Handle. Stay with that device unless a page has a stronger domain-specific one, and
 then use *that* one consistently on that subject.
 
+For the **Examples** book, the runnable file is SSOT: use
+`{.twoslash include="examples/…"}` and put cut markers in that `.ts` so the page can hide
+harness / headers without forking the program into markdown.
+
 {#earn-the-abstraction .should appliesTo=docs}
 ## Earn the Abstraction
 
@@ -311,8 +315,8 @@ parsed straight from the blocks, so a page is both prose and a machine contract.
   **every glossary term** is marked with a `{.draft}` callout above its heading. Standards and the
   Introduction omit `status="draft"` (they are tip guidance / book home). Optional `done="…"` is a
   space-joined checklist of what has been tip-checked (`api`, `previews`, `types`, `verified`).
-  When a page is **ported from `docs/legacy/**`**, keep `status="draft"` and put a `{.draft}` callout
-  immediately under the H1 until a tip-check clears it:
+  When a page is **freshly ported** (or still immature), keep `status="draft"` and put a `{.draft}`
+  callout immediately under the H1 until a tip-check clears it:
 
   ```
   {.draft}
@@ -320,7 +324,8 @@ parsed straight from the blocks, so a page is both prose and a machine contract.
   ```
 
   After tip-check: remove the `{.draft}` callout; set `done=` honestly. **Do not** invent site CSS /
-  nav badges for Draft — that is lettered-agent / Agent B work (see handoff Phase 3).
+  nav badges for Draft — that is lettered-agent / Agent B work. The pre-site corpus under
+  `docs/legacy/**` has been **removed** (see [`legacy-docs-migration.md`](../handoffs/legacy-docs-migration.md)).
 
 **Known rough edges — for the LSP work to resolve, not to hand-fix now:**
 - `order=N` on standards pages duplicates `nav.ts`'s ordering — two sources for one fact.

@@ -1,11 +1,14 @@
 /**
  * @module ui/GateView
  *
- * Shared View handles + contribution Layer — no platform TSX.
+ * Shared View handles + contribution Layer + observe **pack** — no platform TSX.
  */
 import { Layer } from "effect";
 import * as Gate from "../Gate";
+import { pack } from "./gateViewPack";
 import * as View from "./View";
+
+export { pack };
 
 /** @public */
 export const gateViewSpec = { kind: Gate.kind } as const;

@@ -1,0 +1,26 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "../../..",
+    "declaration": false,
+    "declarationMap": false,
+    "jsx": "react-jsx",
+    "types": ["node", "react", "react-dom"],
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        "diagnosticSeverity": {
+          "globalTimers": "off",
+          "globalDate": "off",
+          "globalConsole": "off",
+          "newPromise": "off",
+          "asyncFunction": "off",
+          "nodeBuiltinImport": "off"
+        }
+      }
+    ]
+  },
+  "include": ["./**/*.ts", "./**/*.tsx"],
+  "exclude": ["../../../node_modules", "../../../dist", "./vite.config.ts"]
+}

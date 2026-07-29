@@ -4,7 +4,8 @@
  * View **DI** (Context) + optional size chrome (card/detail/page) + React matchers.
  * Notes: `docs/handoffs/view-tag-prototype.md`. Design: `docs/handoffs/client-adapters-design.md`.
  *
- * - Mint: `View.Card.Tag<Self, Props?>()(key, statics?)` — Effect-shaped; skins use `Tag["Service"]`.
+ * - Mint: `View.Card.Tag<Self, Props?>()(key, statics?)` — Effect-shaped.
+ * - Skins: {@link provide}`(Tag, impl)` (or `Tag.provide(impl)`) — props infer from the Tag.
  * - Open debt: {@link SizeChrome} / {@link Prototype}`<Props, Requirement>` then fulfill size.
  * - Svc type is {@link View}`<Props>` (props in → element out). Defaults to {@link ViewProps}.
  * - Matchers on {@link react} / {@link compose} kits (`ui.Card`) and {@link useMatch}.
@@ -12,10 +13,10 @@
  */
 import * as React from "react";
 import { Context, Data, Effect, Layer, Match, Option } from "effect";
+import type * as Types from "effect/Types";
 import * as Group from "../Group";
 import { kindOf } from "../Hyperlink";
 import * as Navigator from "./Navigator";
-import { data, type DataDoor } from "./runtime";
 import type { LeafTag } from "./widgetRegistry";
 
 // =============================================================================
@@ -126,10 +127,13 @@ export const useChrome = (): Chrome => React.useContext(ChromeContext);
  * Component Svc for a View tag — **props in, element out** (reversed vs Hyperlink service APIs).
  * Defaults to {@link ViewProps} (card/detail/page chrome); pass a props bag for custom Prototypes.
  *
+ * Prefer {@link provide} at the Layer boundary (props infer). Reach for `Tag["Service"]` only when
+ * you need a named binding before provide.
+ *
  * @example
  * ```ts
- * const skin: PoolCard["Service"] = (props) => …
- * const chrome: View.View = (props) => … // ViewProps
+ * View.provide(PoolCard, (props) => null)
+ * const chrome: View.View = (props) => null // ViewProps
  * ```
  *
  * @public
@@ -137,6 +141,39 @@ export const useChrome = (): Chrome => React.useContext(ChromeContext);
 export type View<Props extends object = ViewProps> = (
   props: Props,
 ) => React.ReactElement | null;
+
+/**
+ * Provide a View skin for a Tag. Props infer from the Tag — no `Tag["Service"]` annotation.
+ *
+ * Dual: `View.provide(PoolCard, impl)` or `View.provide(PoolCard)(impl)`.
+ * Minted Tags also expose {@link ViewHandle.provide} as `PoolCard.provide(impl)`.
+ *
+ * @example
+ * ```ts
+ * export const skins = Layer.mergeAll(
+ *   View.provide(PoolCard, ({ tag, name }) => <Card tag={tag} name={name} />),
+ *   View.provide(PoolDetail, ({ tag }) => <Detail tag={tag} />),
+ * )
+ * ```
+ *
+ * @public
+ */
+export function provide<I, P extends object>(
+  tag: Context.Key<I, View<P>>,
+): (impl: Types.NoInfer<View<P>>) => Layer.Layer<I>;
+export function provide<I, P extends object>(
+  tag: Context.Key<I, View<P>>,
+  impl: Types.NoInfer<View<P>>,
+): Layer.Layer<I>;
+export function provide<I, P extends object>(
+  tag: Context.Key<I, View<P>>,
+  impl?: Types.NoInfer<View<P>>,
+): Layer.Layer<I> | ((impl: Types.NoInfer<View<P>>) => Layer.Layer<I>) {
+  if (impl === undefined) {
+    return (resource) => Layer.succeed(tag, resource);
+  }
+  return Layer.succeed(tag, impl);
+}
 
 /**
  * A matched view ready to render (size chrome).
@@ -228,9 +265,8 @@ export type FulfilledPrototype<
  *
  * - **Self** — Context identity (the class)
  * - **Props** — component input (reversed service shape) from the Prototype chain
- * - **Svc** — {@link View}`<Props>` (provide with `Layer.succeed`)
+ * - **Svc** — {@link View}`<Props>` (provide with {@link provide} / {@link ViewHandle.provide})
  *
- * Prefer annotating skins with `PoolCard["Service"]` (Effect Shape — no `typeof`).
  * Phantom {@link Type} remains for `View.Type<typeof PoolCard>` / {@link PropsOf}.
  *
  * @public
@@ -242,8 +278,13 @@ export type ViewHandle<
   Statics extends AnyStatics = {},
 > = Context.ServiceClass<Self, K, View<Props>> &
   Flat<Statics> & {
-    /** Phantom — component props (`View.Type<typeof PoolCard>`). Prefer `PoolCard["Service"]`. */
-    readonly Type: Props
+    /** Phantom — component props (`View.Type<typeof PoolCard>` / {@link PropsOf}). */
+    readonly Type: Props;
+    /**
+     * Provide this Tag’s skin — same as {@link provide}`(this, impl)`.
+     * Props infer from the handle.
+     */
+    readonly provide: (impl: View<Props>) => Layer.Layer<Self>;
   };
 
 /**
@@ -302,7 +343,7 @@ export interface Prototype<
    *
    * - `NewProps` — extra component props (additive)
    * - `statics` — optional runtime statics (`spec`, …); merged onto the class
-   * - Annotate skins with `PoolCard["Service"]` (no `typeof`)
+   * - Skins via {@link provide} / returned handle’s `.provide` (props infer)
    *
    * Does **not** change this Prototype’s Requirement type — returns a class.
    * For `bind`, the class still needs `.size` (use {@link Card} / {@link Detail} /
@@ -314,10 +355,7 @@ export interface Prototype<
   >(
     key: K,
     statics?: NewStatics,
-  ) => Context.ServiceClass<Self, K, View<Flat<Props & NewProps>>> &
-    Flat<Statics & NewStatics> & {
-      readonly Type: Flat<Props & NewProps>
-    };
+  ) => ViewHandle<Self, K, Flat<Props & NewProps>, Flat<Statics & NewStatics>>;
 }
 
 const makePrototype = <
@@ -355,6 +393,8 @@ const makePrototype = <
       const base = Context.Service<Self, View<NextProps>>()(key);
       return Object.assign(base, merged, {
         Type: undefined as unknown as NextProps,
+        provide: (impl: View<NextProps>): Layer.Layer<Self> =>
+          Layer.succeed(base, impl),
       });
     },
 });
@@ -396,8 +436,8 @@ export const Prototype =
  * class Greeter extends View.Tag<Greeter, { readonly name: string }>()(
  *   "app/view/greeter",
  * ) {}
- * const skin: Greeter["Service"] = (props) => …
- * Layer.succeed(Greeter, skin)
+ * View.provide(Greeter, ({ name }) => <h1>{name}</h1>)
+ * // or: Greeter.provide(({ name }) => <h1>{name}</h1>)
  * ```
  *
  * @public
@@ -1000,10 +1040,13 @@ export const useGridMembers = (): ReadonlyArray<{
  * Thin Dashboard sugar: {@link react} + {@link Navigator} Layer. No second registry;
  * no `Atom.runtime` inside — wrap with {@link ./runtime.RuntimeProvider} outside.
  *
- * {@link data} is the compose **data door** (same `*Bundle` builders as Dashboard).
+ * Observe via `Observe.use(tag, *View.pack)` / `NodeView.use` under `RuntimeProvider`.
  *
  * @example
  * ```tsx
+ * import * as Observe from "hyperlink-ts/Observe"
+ * import * as WorkPoolView from "hyperlink-ts/ui/WorkPoolView"
+ * import * as DaemonView from "hyperlink-ts/ui/DaemonView"
  * const ui = View.compose({
  *   views: Layer.mergeAll(View.bind(Group.kind, GroupCard), WebDashboardViews.layer),
  *   navigator: Navigator.history(ServicesHub),
@@ -1016,8 +1059,8 @@ export const useGridMembers = (): ReadonlyArray<{
  * </RuntimeProvider>
  *
  * // in a skin / shell component:
- * const bundle = ui.data.queue(Jobs)
- * const logs = ui.data.daemon(Nightly)
+ * const queue = Observe.use(Jobs, WorkPoolView.pack)
+ * const daemon = Observe.use(Nightly, DaemonView.pack)
  * ```
  *
  * @public
@@ -1033,8 +1076,6 @@ export const compose = <VR, VE,>(options: {
   readonly Outlet: () => React.ReactElement | null;
   readonly useGridMembers: typeof useGridMembers;
   readonly navigator: Navigator.Service;
-  /** Same `*Bundle(runtime, tag)` door — reads {@link ./runtime.RuntimeProvider}. */
-  readonly data: DataDoor;
 } => {
   const viewKit = react(options.views);
   const nav = Effect.runSync(
@@ -1122,6 +1163,5 @@ export const compose = <VR, VE,>(options: {
     Outlet,
     useGridMembers,
     navigator: nav,
-    data,
   };
 };

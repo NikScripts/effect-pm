@@ -1,7 +1,7 @@
 /**
  * @module tui/DashboardViews
  *
- * TUI (Ink) skins for all default Dashboard View families — `Layer.succeed` only.
+ * TUI (Ink) skins for all default Dashboard View families — `View.provide` only.
  * Ready {@link layer} for {@link View.react}.
  */
 import { Box } from "ink";
@@ -9,6 +9,7 @@ import * as React from "react";
 import { Option, Layer } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import * as Group from "../Group";
+import * as Observe from "../Observe";
 import { useAtomValue } from "../ui/atom-react";
 import {
   isApiTag,
@@ -19,7 +20,6 @@ import {
   isQueueTag,
   isShardMapTag,
   isTelemetryTag,
-  queueBundle,
   type QueueTag,
 } from "../ui/data";
 import * as View from "../ui/View";
@@ -54,7 +54,6 @@ import {
   ShardMapCell,
   TelemetryCell,
 } from "./kindCells";
-import { useRuntime } from "./runtime";
 import {
   displayName,
   PageXL,
@@ -123,10 +122,8 @@ const DaemonCardView: View.View = (props) => {
 const ApiCardView: View.View = (props) => {
   if (!isApiTag(props.tag)) return null;
   const chrome = View.useChrome();
-  const runtime = useRuntime();
   return (
     <ApiCell
-      runtime={runtime}
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
       width={chrome.width ?? 24}
@@ -138,10 +135,8 @@ const ApiCardView: View.View = (props) => {
 const FleetCardView: View.View = (props) => {
   if (!isFleetHealthTag(props.tag)) return null;
   const chrome = View.useChrome();
-  const runtime = useRuntime();
   return (
     <FleetHealthCell
-      runtime={runtime}
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
       width={chrome.width ?? 24}
@@ -153,10 +148,8 @@ const FleetCardView: View.View = (props) => {
 const TelemetryCardView: View.View = (props) => {
   if (!isTelemetryTag(props.tag)) return null;
   const chrome = View.useChrome();
-  const runtime = useRuntime();
   return (
     <TelemetryCell
-      runtime={runtime}
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
       width={chrome.width ?? 24}
@@ -168,10 +161,8 @@ const TelemetryCardView: View.View = (props) => {
 const ShardMapCardView: View.View = (props) => {
   if (!isShardMapTag(props.tag)) return null;
   const chrome = View.useChrome();
-  const runtime = useRuntime();
   return (
     <ShardMapCell
-      runtime={runtime}
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
       width={chrome.width ?? 24}
@@ -183,10 +174,8 @@ const ShardMapCardView: View.View = (props) => {
 const GateCardView: View.View = (props) => {
   if (!isGateTag(props.tag)) return null;
   const chrome = View.useChrome();
-  const runtime = useRuntime();
   return (
     <GateCell
-      runtime={runtime}
       tag={props.tag}
       name={props.name ?? displayName(props.tag.key)}
       width={chrome.width ?? 24}
@@ -215,7 +204,7 @@ const QueueDetailPanel = (props: {
   readonly name: string;
   readonly width?: number;
 }): React.ReactElement => {
-  const bundle = queueBundle(useRuntime(), props.tag);
+  const bundle = Observe.use(props.tag, WorkPoolView.pack);
   const statusR = useAtomValue(bundle.status);
   const metricsR = useAtomValue(bundle.metrics);
   const trendR = useAtomValue(bundle.trend);
@@ -291,10 +280,8 @@ const DaemonDetailView: View.View = (props) => {
 const ApiDetailView: View.View = (props) => {
   if (!isApiTag(props.tag)) return null;
   const chrome = View.useChrome();
-  const runtime = useRuntime();
   return (
     <FocusedApi
-      runtime={runtime}
       name={props.name ?? displayName(props.tag.key)}
       tag={props.tag}
       cols={chrome.cols ?? chrome.width ?? 80}
@@ -306,10 +293,8 @@ const ApiDetailView: View.View = (props) => {
 const FleetDetailView: View.View = (props) => {
   if (!isFleetHealthTag(props.tag)) return null;
   const chrome = View.useChrome();
-  const runtime = useRuntime();
   return (
     <FocusedFleetHealth
-      runtime={runtime}
       name={props.name ?? displayName(props.tag.key)}
       tag={props.tag}
       cols={chrome.cols ?? chrome.width ?? 80}
@@ -321,10 +306,8 @@ const FleetDetailView: View.View = (props) => {
 const TelemetryDetailView: View.View = (props) => {
   if (!isTelemetryTag(props.tag)) return null;
   const chrome = View.useChrome();
-  const runtime = useRuntime();
   return (
     <FocusedTelemetry
-      runtime={runtime}
       name={props.name ?? displayName(props.tag.key)}
       tag={props.tag}
       cols={chrome.cols ?? chrome.width ?? 80}
@@ -336,10 +319,8 @@ const TelemetryDetailView: View.View = (props) => {
 const ShardMapDetailView: View.View = (props) => {
   if (!isShardMapTag(props.tag)) return null;
   const chrome = View.useChrome();
-  const runtime = useRuntime();
   return (
     <FocusedShardMap
-      runtime={runtime}
       name={props.name ?? displayName(props.tag.key)}
       tag={props.tag}
       cols={chrome.cols ?? chrome.width ?? 80}
@@ -351,10 +332,8 @@ const ShardMapDetailView: View.View = (props) => {
 const GateDetailView: View.View = (props) => {
   if (!isGateTag(props.tag)) return null;
   const chrome = View.useChrome();
-  const runtime = useRuntime();
   return (
     <FocusedGate
-      runtime={runtime}
       name={props.name ?? displayName(props.tag.key)}
       tag={props.tag}
       cols={chrome.cols ?? chrome.width ?? 80}
@@ -369,24 +348,24 @@ const GateDetailView: View.View = (props) => {
  * @public
  */
 export const skins = Layer.mergeAll(
-  Layer.succeed(GroupView.GroupCard, GroupCardView),
-  Layer.succeed(WorkPoolView.PoolCard, PoolCardView),
-  Layer.succeed(WorkPoolView.PoolDetail, PoolDetailView),
-  Layer.succeed(PriorityView.PriorityCard, PriorityCardView),
-  Layer.succeed(PriorityView.PriorityDetail, PriorityDetailView),
-  Layer.succeed(DaemonView.DaemonCard, DaemonCardView),
-  Layer.succeed(DaemonView.DaemonDetail, DaemonDetailView),
-  Layer.succeed(ApiMetricsView.ApiCard, ApiCardView),
-  Layer.succeed(ApiMetricsView.ApiDetail, ApiDetailView),
-  Layer.succeed(FleetHealthView.FleetCard, FleetCardView),
-  Layer.succeed(FleetHealthView.FleetDetail, FleetDetailView),
-  Layer.succeed(TelemetryView.TelemetryCard, TelemetryCardView),
-  Layer.succeed(TelemetryView.TelemetryDetail, TelemetryDetailView),
-  Layer.succeed(ShardMapView.ShardMapCard, ShardMapCardView),
-  Layer.succeed(ShardMapView.ShardMapDetail, ShardMapDetailView),
-  Layer.succeed(GateView.GateCard, GateCardView),
-  Layer.succeed(GateView.GateDetail, GateDetailView),
-  Layer.succeed(HyperlinkView.HyperlinkCard, HyperlinkCardView),
+  View.provide(GroupView.GroupCard, GroupCardView),
+  View.provide(WorkPoolView.PoolCard, PoolCardView),
+  View.provide(WorkPoolView.PoolDetail, PoolDetailView),
+  View.provide(PriorityView.PriorityCard, PriorityCardView),
+  View.provide(PriorityView.PriorityDetail, PriorityDetailView),
+  View.provide(DaemonView.DaemonCard, DaemonCardView),
+  View.provide(DaemonView.DaemonDetail, DaemonDetailView),
+  View.provide(ApiMetricsView.ApiCard, ApiCardView),
+  View.provide(ApiMetricsView.ApiDetail, ApiDetailView),
+  View.provide(FleetHealthView.FleetCard, FleetCardView),
+  View.provide(FleetHealthView.FleetDetail, FleetDetailView),
+  View.provide(TelemetryView.TelemetryCard, TelemetryCardView),
+  View.provide(TelemetryView.TelemetryDetail, TelemetryDetailView),
+  View.provide(ShardMapView.ShardMapCard, ShardMapCardView),
+  View.provide(ShardMapView.ShardMapDetail, ShardMapDetailView),
+  View.provide(GateView.GateCard, GateCardView),
+  View.provide(GateView.GateDetail, GateDetailView),
+  View.provide(HyperlinkView.HyperlinkCard, HyperlinkCardView),
 );
 
 /**

@@ -1,11 +1,21 @@
 /**
  * @module ui/PriorityView
  *
- * Shared View handles + contribution Layer — no platform TSX.
+ * Shared View handles + contribution Layer + observe **pack** — no platform TSX.
+ *
+ * @example
+ * ```ts
+ * import * as Observe from "hyperlink-ts/Observe"
+ * import * as PriorityView from "hyperlink-ts/ui/PriorityView"
+ * const box = Observe.use(Jobs, PriorityView.pack)
+ * ```
  */
 import { Layer } from "effect";
 import * as WorkPool from "../WorkPool";
+import { pack } from "./priorityViewPack";
 import * as View from "./View";
+
+export { pack };
 
 /** @public */
 export class PriorityCard extends View.Card.Tag<PriorityCard>()(

@@ -2,8 +2,8 @@
  * @module web/widgets
  *
  * Hand-crafted, per-type dashboard widgets — the building blocks the `<Dashboard>` and its
- * mobile/desktop views compose. Each is driven by a **tag** (its bundle comes from
- * `useQueueBundle` / `useDaemonBundle` over the context runtime); the tree is a `Group.Tag`
+ * mobile/desktop views compose. Each is driven by a **tag** (observe via
+ * `Observe.use(tag, *View.pack)` / `NodeView.use` under RuntimeProvider); the tree is a `Group.Tag`
  * walked with `Group.members` / `Group.isGroup`.
  *
  */
@@ -62,7 +62,16 @@ import {
 import { type Widget, type WidgetProps, useWidgets } from "./widget-registry";
 import type { ApiUsageMetrics } from "../ApiUsageSchema";
 import type { Status as NodeStatusValue } from "../Node";
-import { useApiBundle, usePriorityBundle, useFleetHealthBundle, useNodeBundle, useDaemonBundle, useQueueBundle, useGateBundle, useShardMapBundle, useTelemetryBundle } from "./runtime";
+import * as Observe from "../Observe";
+import * as WorkPoolView from "../ui/WorkPoolView";
+import * as PriorityView from "../ui/PriorityView";
+import * as DaemonView from "../ui/DaemonView";
+import * as ApiMetricsView from "../ui/ApiMetricsView";
+import * as GateView from "../ui/GateView";
+import * as FleetHealthView from "../ui/FleetHealthView";
+import * as TelemetryView from "../ui/TelemetryView";
+import * as ShardMapView from "../ui/ShardMapView";
+import * as NodeView from "../ui/NodeView";
 import { useViewTransitionStyle } from "./useViewTransition";
 import { dlog } from "./debug-console";
 import { Badge } from "./components/ui/badge";
@@ -189,7 +198,7 @@ export const QueueCard = (props: {
   readonly onOpen?: (tag: QueueTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
-  const r = useAtomValue(useQueueBundle(props.tag).status);
+  const r = useAtomValue(Observe.use(props.tag, WorkPoolView.pack).status);
   const s = AsyncResult.isSuccess(r) ? Option.getOrUndefined(r.value) : undefined;
   const sizes = s?.sizes ?? { high: 0, normal: 0, low: 0 };
   const pending = sizes.high + sizes.normal + sizes.low;
@@ -246,9 +255,14 @@ export const QueueCard = (props: {
 export const QueueDetailPanel = (props: {
   readonly tag: QueueTag;
 }): React.ReactElement => {
-  const bundle = useQueueBundle(props.tag);
+  const bundle = Observe.use(props.tag, WorkPoolView.pack);
+  const statusR = useAtomValue(bundle.status);
+  const s = AsyncResult.isSuccess(statusR) ? Option.getOrUndefined(statusR.value) : undefined;
   return (
     <>
+      <div className="flex justify-end">
+        <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
+      </div>
       <HyperlinkReadinessBanner tag={props.tag} />
       <QueueStats bundle={bundle} />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -294,7 +308,7 @@ export const PriorityCard = (props: {
   readonly onOpen?: (tag: PriorityTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
-  const r = useAtomValue(usePriorityBundle(props.tag).status);
+  const r = useAtomValue(Observe.use(props.tag, PriorityView.pack).status);
   const s = AsyncResult.isSuccess(r) ? Option.getOrUndefined(r.value) : undefined;
   const lanes = s !== undefined ? Object.entries(s.sizes) : [];
   const pending = lanes.reduce((sum, [, n]) => sum + n, 0);
@@ -332,10 +346,11 @@ export const PriorityCard = (props: {
 };
 
 const MemberRow = (props: { readonly tag: QueueTag; readonly name: string }): React.ReactElement => {
-  const r = useAtomValue(useQueueBundle(props.tag).status);
+  const r = useAtomValue(Observe.use(props.tag, WorkPoolView.pack).status);
   const s = AsyncResult.isSuccess(r) ? Option.getOrUndefined(r.value) : undefined;
   const sk = statusKey(s?.phase ?? "running", s?.paused ?? false);
-  const pending = s === undefined ? 0 : s.sizes.high + s.sizes.normal + s.sizes.low;
+  const pending =
+    s === undefined ? 0 : s.sizes.high + s.sizes.normal + s.sizes.low;
   return (
     <div className="flex items-center gap-2 text-xs text-muted-foreground">
       <span className="size-2 shrink-0 rounded-full" style={{ background: STATUS[sk]?.color }} />
@@ -354,7 +369,7 @@ const NodeDegradedProbe = (props: {
   readonly leafKeys: ReadonlySet<string>;
   readonly onCount: (id: string, count: number) => void;
 }): null => {
-  const r = useAtomValue(useNodeBundle(props.node).status);
+  const r = useAtomValue(NodeView.use(props.node).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   const count = (s?.services ?? []).filter((x) => !x.ready && props.leafKeys.has(x.key)).length;
   const { onCount, node } = props;
@@ -490,7 +505,7 @@ const DegradedOverlayInner = (props: {
   readonly tag: unknown;
   readonly node: NodeRef;
 }): React.ReactElement | null => {
-  const r = useAtomValue(useNodeBundle(props.node).status);
+  const r = useAtomValue(NodeView.use(props.node).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   const stale = useStale(s?.uptimeMillis);
   // Node stopped responding: dim the frozen card + say so. Priority over "degraded" — once the stream
@@ -952,7 +967,7 @@ export const DaemonCard = (props: {
   readonly onOpen?: (t: DaemonTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
-  const r = useAtomValue(useDaemonBundle(props.tag).status);
+  const r = useAtomValue(Observe.use(props.tag, DaemonView.pack).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   return (
     <DrillRoot
@@ -1627,7 +1642,7 @@ export const ApiCard = (props: {
   readonly onOpen?: (t: ApiTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
-  const bundle = useApiBundle(props.tag);
+  const bundle = Observe.use(props.tag, ApiMetricsView.pack);
   const statusR = useAtomValue(bundle.status);
   const metricsR = useAtomValue(bundle.metrics);
   const historyR = useAtomValue(bundle.history);
@@ -2017,7 +2032,7 @@ const NodePip = (props: {
   readonly node: NodeRef;
   readonly size: string;
 }): React.ReactElement => {
-  const r = useAtomValue(useNodeBundle(props.node).status);
+  const r = useAtomValue(NodeView.use(props.node).status);
   const state = nodeConnState(r);
   const s = state._tag === "Ready" ? state.status : undefined;
   const stale = useStale(s?.uptimeMillis);
@@ -2361,7 +2376,7 @@ const NodeHealthRow = (props: {
   readonly onOpen: () => void;
   readonly onOpenHyperlink: (serviceKey: string) => void;
 }): React.ReactElement => {
-  const bundle = useNodeBundle(props.node);
+  const bundle = NodeView.use(props.node);
   const r = useAtomValue(bundle.status);
   const h = useAtomValue(bundle.health);
   const state = nodeConnState(r);
@@ -2390,7 +2405,7 @@ const ReadinessBannerInner = (props: {
   readonly tag: unknown;
   readonly node: NodeRef;
 }): React.ReactElement | null => {
-  const r = useAtomValue(useNodeBundle(props.node).status);
+  const r = useAtomValue(NodeView.use(props.node).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   const key = tagWireKey(props.tag);
   const readiness = s?.services.find((x) => x.key === key);
@@ -2429,7 +2444,7 @@ export const NodeDetail = (props: {
   /** Open a served HyperService's detail page, by its wire key (`Node.Status.services[].key`). */
   readonly onOpenHyperlink: (serviceKey: string) => void;
 }): React.ReactElement => {
-  const bundle = useNodeBundle(props.node);
+  const bundle = NodeView.use(props.node);
   const r = useAtomValue(bundle.status);
   const state = nodeConnState(r);
   const s = state._tag === "Ready" ? state.status : undefined;
@@ -2520,7 +2535,7 @@ const ReadinessDotInner = (props: {
   readonly tag: unknown;
   readonly node: NodeRef;
 }): React.ReactElement => {
-  const r = useAtomValue(useNodeBundle(props.node).status);
+  const r = useAtomValue(NodeView.use(props.node).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   const readiness = s?.services.find((x) => x.key === tagWireKey(props.tag));
   const ready = readiness === undefined || readiness.ready; // loading/unknown → ready (empty)
@@ -2625,7 +2640,7 @@ export const FleetHealthCard = (props: {
   readonly onOpen?: (tag: FleetHealthTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
-  const bundle = useFleetHealthBundle(props.tag);
+  const bundle = Observe.use(props.tag, FleetHealthView.pack);
   const statusR = useAtomValue(bundle.status);
   const byNodeR = useAtomValue(bundle.byNode);
   const status = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
@@ -2679,7 +2694,7 @@ export const TelemetryCard = (props: {
   readonly onOpen?: (tag: TelemetryTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
-  const bundle = useTelemetryBundle(props.tag);
+  const bundle = Observe.use(props.tag, TelemetryView.pack);
   const fleetR = useAtomValue(bundle.fleetInFlight);
   const byNodeR = useAtomValue(bundle.inFlightByNode);
   const countR = useAtomValue(bundle.metricCount);
@@ -2727,7 +2742,7 @@ export const ShardMapCard = (props: {
   readonly onOpen?: (tag: ShardMapTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
-  const bundle = useShardMapBundle(props.tag);
+  const bundle = Observe.use(props.tag, ShardMapView.pack);
   const sizeR = useAtomValue(bundle.size);
   const byNodeR = useAtomValue(bundle.sizeByNode);
   const localR = useAtomValue(bundle.sizeLocal);
@@ -2788,7 +2803,7 @@ export const GateCard = (props: {
   readonly onOpen?: (tag: GateTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
-  const bundle = useGateBundle(props.tag);
+  const bundle = Observe.use(props.tag, GateView.pack);
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const concurrency = s !== undefined ? s.concurrency : 0;
@@ -2846,7 +2861,7 @@ export const PriorityDetail = (props: {
   readonly onBack?: () => void;
   readonly chrome?: boolean;
 }): React.ReactElement => {
-  const bundle = usePriorityBundle(props.tag);
+  const bundle = Observe.use(props.tag, PriorityView.pack);
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? Option.getOrUndefined(statusR.value) : undefined;
   const paused = s?.paused === true;
@@ -2945,7 +2960,7 @@ export const TelemetryDetail = (props: {
   readonly onBack?: () => void;
   readonly chrome?: boolean;
 }): React.ReactElement => {
-  const bundle = useTelemetryBundle(props.tag);
+  const bundle = Observe.use(props.tag, TelemetryView.pack);
   const fleetR = useAtomValue(bundle.fleetInFlight);
   const byNodeR = useAtomValue(bundle.inFlightByNode);
   const countR = useAtomValue(bundle.metricCount);
@@ -3013,7 +3028,7 @@ export const ShardMapDetail = (props: {
   readonly onBack?: () => void;
   readonly chrome?: boolean;
 }): React.ReactElement => {
-  const bundle = useShardMapBundle(props.tag);
+  const bundle = Observe.use(props.tag, ShardMapView.pack);
   const sizeR = useAtomValue(bundle.size);
   const byNodeR = useAtomValue(bundle.sizeByNode);
   const localR = useAtomValue(bundle.sizeLocal);
@@ -3064,7 +3079,7 @@ export const FleetHealthDetail = (props: {
   readonly onBack?: () => void;
   readonly chrome?: boolean;
 }): React.ReactElement => {
-  const bundle = useFleetHealthBundle(props.tag);
+  const bundle = Observe.use(props.tag, FleetHealthView.pack);
   const statusR = useAtomValue(bundle.status);
   const byNodeR = useAtomValue(bundle.byNode);
   const status = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
@@ -3110,7 +3125,7 @@ export const GateDetail = (props: {
   readonly onBack?: () => void;
   readonly chrome?: boolean;
 }): React.ReactElement => {
-  const bundle = useGateBundle(props.tag);
+  const bundle = Observe.use(props.tag, GateView.pack);
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const concurrency = s?.concurrency ?? 0;

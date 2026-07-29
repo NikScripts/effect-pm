@@ -110,7 +110,7 @@ const bundle = ui.data.queue(Jobs)   // QueueBundle
 const d = ui.data.daemon(Nightly)
 ```
 
-Shared `src/ui/runtime.tsx` (`RuntimeProvider` + door). Guide: [`../guides/view-data.md`](../guides/view-data.md).
+Shared `src/ui/runtime.tsx` (`RuntimeProvider` + door). Bundles guide: [`../guides/bundles.md`](../guides/bundles.md).
 
 ## Effect-faithful Tag mint (Eng’d 2026-07-28)
 
@@ -150,7 +150,7 @@ Guide: [`../guides/view-tag-types.md`](../guides/view-tag-types.md).
 
 ## Effect-faithful Tag POC (archived — baked)
 
-Historical POC: `examples/forms/view/effect-service-poc.ts`. Behavior now on
+Historical POC: `examples/view/effect-service-poc.ts`. Behavior now on
 shipped `View.Card.Tag` / `PropsOf` / `["Service"]` (see above).
 
 ## Checkpoint notes (2026-07-27)
@@ -168,7 +168,7 @@ shipped `View.Card.Tag` / `PropsOf` / `["Service"]` (see above).
 export class WorkerPoolCard extends View.Card.Tag<
   WorkerPoolCard,
   { readonly dense?: boolean }
->()("examples/hyperlink-web/worker-pool-card", {
+>()("examples/apps/web/worker-pool-card", {
   spec: workerPoolCardSpec,
 }) {}
 

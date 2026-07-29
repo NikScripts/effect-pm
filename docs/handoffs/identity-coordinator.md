@@ -87,7 +87,7 @@ Shipped:
 
 **Goal:** One copy-paste fleet story.
 
-- Form: [`examples/forms/hyperlink/node-identity-coordinator.ts`](../../examples/forms/hyperlink/node-identity-coordinator.ts) — identity **Router** + N **Worker**s + Lookup.
+- Form: [`examples/node-identity-coordinator.ts`](../../examples/node-identity-coordinator.ts) — identity **Router** + N **Worker**s + Lookup.
 - README / catalog cross-link: “one brain, many hands.”
 - Clearer `IdentitySelfRequired` message (Lookup + dialable self).
 

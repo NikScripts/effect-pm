@@ -14,7 +14,7 @@
 - **`CustomQueueContract`** — toolkit `Tag` / `layer` / `server` / `configure` (mirrors {@link QueueContract}).
 - **Tag factory** — `(id, schema, levelCount, namedLevels?)` or `(id, schema, levelNames[])`.
 - **`Resource.mutatePair`** — wire + service surface for `add(item, level?)`.
-- **Docs / example** — `docs/RESOURCE-API.md`, `docs/guides/toolkit-by-example.md`, `examples/forms/queue/custom-queue-resource-n-level.ts`.
+- **Docs / example** — `docs/RESOURCE-API.md`, `docs/guides/toolkit-by-example.md`, `examples/work-pool/custom-queue-resource-n-level.ts`.
 
 ## Quick reference
 

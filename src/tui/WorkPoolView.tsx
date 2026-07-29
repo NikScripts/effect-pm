@@ -1,18 +1,18 @@
 /**
  * @module tui/WorkPoolView
  *
- * TUI (Ink) skins for shared {@link WorkPoolView} handles — `Layer.succeed` only.
+ * TUI (Ink) skins for shared {@link WorkPoolView} handles — `View.provide` only.
  */
 import { Box } from "ink";
 import * as React from "react";
 import { Option, Layer } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useAtomValue } from "../ui/atom-react";
-import { isQueueTag, queueBundle, type QueueTag } from "../ui/data";
+import { isQueueTag, type QueueTag } from "../ui/data";
 import * as View from "../ui/View";
+import * as Observe from "../Observe";
 import * as WorkPoolView from "../ui/WorkPoolView";
 import { QueueCell } from "./cellWidgets";
-import { useRuntime } from "./runtime";
 import {
   displayName,
   PageXL,
@@ -43,7 +43,7 @@ const QueueDetailPanel = (props: {
   readonly name: string;
   readonly width?: number;
 }): React.ReactElement => {
-  const bundle = queueBundle(useRuntime(), props.tag);
+  const bundle = Observe.use(props.tag, WorkPoolView.pack);
   const statusR = useAtomValue(bundle.status);
   const metricsR = useAtomValue(bundle.metrics);
   const trendR = useAtomValue(bundle.trend);
@@ -96,8 +96,8 @@ const PoolDetailView: View.View = (props) => {
 export const skins: Layer.Layer<
   WorkPoolView.PoolCard | WorkPoolView.PoolDetail
 > = Layer.mergeAll(
-  Layer.succeed(WorkPoolView.PoolCard, PoolCardView),
-  Layer.succeed(WorkPoolView.PoolDetail, PoolDetailView),
+  View.provide(WorkPoolView.PoolCard, PoolCardView),
+  View.provide(WorkPoolView.PoolDetail, PoolDetailView),
 );
 
 /**

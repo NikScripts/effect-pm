@@ -53,7 +53,7 @@ import { utcDateFromMillis } from "../../src/internal/utcDate";
  *
  * ## Demo 3 — Dynamic toggles (feature flag / circuit breaker)
  *
- * Same primitive as **`examples/forms/polling/`** demos: a boolean **`armed`** ref.
+ * Same primitive as **`examples/polling/`** demos: a boolean **`armed`** ref.
  * A **`policyFiber`** flips **`armed`** at
  * fixed simulated offsets so you can see “ticks while open, ~none while closed, ticks again
  * after reopen” under **`TestClock`** without real delays.

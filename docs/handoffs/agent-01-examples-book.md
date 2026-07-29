@@ -1,7 +1,8 @@
 # Agent 1 — Examples book (Twoslash-paired)
 
 **Status:** owner direction 2026-07-15 — **priority over remaining legacy recipe ports**.  
-**Agent:** 1 (content + `docs/nav.ts`). **Site wiring / More filter:** Agent B (short ask below).
+**Agent:** 1 frozen; **Agent 4** picked up SSOT-include wiring (2026-07-29).  
+**Site wiring / More filter:** Agent B (E0 done).
 
 ---
 
@@ -9,27 +10,40 @@
 
 | Piece | Where | Sidebar? |
 |-------|-------|----------|
-| **Examples hub** | `docs/examples.md` (or `docs/examples/index.md` — decide on first PR) | **Yes** — one nav entry |
+| **Examples hub** | `docs/examples.md` | **Yes** — one nav entry |
 | **Paired example docs** | `docs/examples/<module>/<name>.md` | **No** — linked only from the hub (and deep links) |
-| **Runnable source** | `examples/**` (unchanged) | n/a |
+| **Runnable source** | `examples/**` (SSOT) | n/a |
 
-- Each **teaching** example file gets a **near-identical** doc with `{.twoslash}` (LSP/hover on).  
-- Hub lists every example doc, **grouped by module**, with **`#` anchors** per group (and preferably per example) so guides can link `…/examples#queue` or `…/examples/queue/queue-resource-priority-retry`.  
+- Hub lists every example doc, **grouped by module**, with **`#` anchors** per group.  
 - Individual example docs stay `status="draft"` until tip-checked.
+
+### SSOT + Twoslash include (locked 2026-07-29)
+
+**Do not duplicate** the program into the markdown fence. Pair like this:
+
+```djot
+{.twoslash include="examples/work-pool/priority-retry.ts"}
+``` ts
+```
+```
+
+| Concern | Where |
+|---------|--------|
+| Runnable truth | `examples/.../*.ts` |
+| Page-visible slice | Cut markers **in that `.ts`**: `// ---cut---`, `// ---cut-after---`, `// ---cut-start---` / `---cut-end---` |
+| Page-only Twoslash directives | Optional fence **body** prepended (e.g. `// @noErrors`) — not required in the runnable file |
+| Import style on the page | Site rewrites `../../../src` → `hyperlink-ts`; injects `// @filename: examples/…` so `examples/shared/…` still resolves |
+| Glob / HMR | `docs/site/src/lib/example-sources.ts` (+ watcher entries in `waku.config.ts`) |
+| Pure helpers (tsx-safe) | `docs/site/src/lib/example-include.ts` |
+| Offline check | `docs/site/scripts/check-twoslash.ts` (+ focused `check-twoslash-includes.ts`) |
+
+Guides keep **inline** fences for minimal deltas. The examples book prefers **include**.
 
 ### Not this work
 
-- Do **not** port `toolkit-by-example` as a Guides chapter (recipe strip ≠ guide; superseded by paired examples).  
+- Do **not** port `toolkit-by-example` as a Guides chapter.  
 - Do **not** put 50+ example slugs into `nav.ts`.  
-- Full apps (`hyperlink-tui`, `hyperlink-web`, `web-dashboard`) are **later batches** — prefer `examples/forms/` first (one shape per file).
-
----
-
-## Priority vs legacy (decision)
-
-**Examples book first.** Remaining Phase 3 legacy work (processes placeholder, pointer stubs, PACKAGE-GUIDE) is **background / later**. Stores port already landed; don’t spend the track on recipe-TOC ports.
-
-Why: runnable `examples/` is closer to tip truth; Twoslash-paired docs compound that; leftover legacy cheat sheets rot and duplicate living guides.
+- Full apps (`examples/apps/{tui,web,dashboard,…}`) are **later batches** (E5).
 
 ---
 
@@ -37,32 +51,24 @@ Why: runnable `examples/` is closer to tip truth; Twoslash-paired docs compound 
 
 | Batch | Scope | Status |
 |-------|-------|--------|
-| **E0** | Model + B ask (content glob + exclude example docs from “More”) | **done** (glob + More filter landed with E1) |
-| **E1** | Hub page + nav slug `examples` + first paired docs: **forms/queue** (2) | **in flight** |
-| **E2** | forms/hyperlink (9) | next |
-| **E3** | forms/schedule + polling + process-store + store + dynamic-config | |
-| **E4** | scenarios / serve-per-hyperlink / remaining root scripts | |
-| **E5** | Large apps (tui / web / dashboard) — owner call; maybe “scenario” page not 1:1 every file | |
-
----
-
-## Agent B — requirements note (chrome / wiring)
-
-Needed so hub-linked pages don’t spam **More** in the sidebar:
-
-1. Glob `docs/examples/**/*.md` (and hub) in `docs/site/src/lib/content.ts`.  
-2. When building nav extras, **exclude** slugs under the examples group **except** the hub slug listed in `nav.ts`.  
-3. Twoslash already works on guides — reuse for example docs; no new badge chrome.
-
-Agent 1 can author markdown + `nav.ts` before B lands; pages won’t render until (1).
+| **E0** | Model + B ask (content glob + exclude example docs from “More”) | **done** |
+| **E1** | Hub + nav + WorkPool (2) | **done** (now `include=` SSOT) |
+| **E1b** | Include pipeline + daemon store (2) | **done** (Agent 4) |
+| **E2** | Gate / HttpApi / Telemetry / FleetHealth / ShardMap | **done** (Agent 4) |
+| **E2b** | Node / launcher / wire / defaults | **done** (Agent 4) |
+| **E3** | schedule + polling + store + config | **done** (Agent 4) |
+| **E4** | scenarios + serve-per-deps + NWSL entry | **done** (Agent 4) |
+| **IA** | Drop `forms/` — topic folders + hub rename | **Eng’d** — [`examples-ia-reorg.md`](./examples-ia-reorg.md) |
+| **E5** | Large apps — refactor + app pages | **plan draft** — [`examples-apps-e5-plan.md`](./examples-apps-e5-plan.md); owner lock checklist there |
 
 ---
 
 ## Pairing convention
 
 ```
-examples/forms/queue/queue-resource-priority-retry.ts
-→ docs/examples/queue/queue-resource-priority-retry.md
+examples/work-pool/priority-retry.ts
+→ docs/examples/work-pool/priority-retry.md
 ```
 
-Doc: page block + short lead + `{.twoslash}` fence mirroring the `.ts` (trim harness/`runNodeProgram` noise where it hurts hover; keep the API under demo). Link back: `Run: pnpm run example:…` + path to source.
+Doc: page block + short lead + `{.twoslash include="examples/…"}` empty (or directive-only) fence.  
+Link back: `Run: pnpm run example:<topic>-<name>` + path to source + hub anchor.

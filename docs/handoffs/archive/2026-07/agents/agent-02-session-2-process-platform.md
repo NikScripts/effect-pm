@@ -66,7 +66,7 @@ Add `test/process-contract-shape.test-d.ts` or RPC test if wire changes.
 
 | Path | Action |
 |------|--------|
-| `examples/forms/process-store/**` | Ensure examples use `Process.layer`, `Process.store`, config-object Tag; fix stale imports/comments |
+| `examples/process-store/**` | Ensure examples use `Process.layer`, `Process.store`, config-object Tag; fix stale imports/comments |
 | `docs/handoffs/archive/2026-07/agents/process-store-cutover-review.md` | Add “Review 2026-07-09” — tap deleted, cast-free contract, journal codec on integration line; strike obsolete serialization warnings if store-core fix landed |
 | `docs/STORAGE.md` | **Only** Process execution history subsection if still wrong after Agent 1 (coordinate: if Agent 1 runs in parallel, touch Process paragraphs only) |
 | `integration-sync-2026-07-07.md` | Process table: cast ✅, open = RPC error only if slice 3 blocked |

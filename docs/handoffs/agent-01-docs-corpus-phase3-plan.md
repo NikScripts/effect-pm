@@ -1,8 +1,9 @@
 # Agent 1 — Phase 3 plan: legacy → live book + Draft
 
-**Status:** **UNLOCKED** (owner “Go” 2026-07-15).  
-**Assignment:** [`agent-01-docs-corpus.md`](./agent-01-docs-corpus.md) Phase 3.  
-**Branch:** `cursor/docs-corpus-phase3-ce05` off `integration`.
+**Status:** **SUPERSEDED** — Agent 4 finished the migrate-and-delete pass on 2026-07-28  
+([`legacy-docs-migration.md`](./legacy-docs-migration.md)). `docs/legacy/**` is gone.  
+**Assignment (historical):** [`agent-01-docs-corpus.md`](./agent-01-docs-corpus.md) Phase 3.  
+**Branch (historical):** `cursor/docs-corpus-phase3-ce05` off `integration`.
 
 ---
 

@@ -1,11 +1,14 @@
 /**
  * @module ui/TelemetryView
  *
- * Shared View handles + contribution Layer — no platform TSX.
+ * Shared View handles + contribution Layer + observe **pack** — no platform TSX.
  */
 import { Layer } from "effect";
 import * as Telemetry from "../Telemetry";
+import { telemetryPack as pack } from "./pollViewPacks";
 import * as View from "./View";
+
+export { pack };
 
 /** @public */
 export const telemetryViewSpec = { kind: Telemetry.kind } as const;

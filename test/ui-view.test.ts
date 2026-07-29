@@ -20,9 +20,9 @@ class CustomCard extends View.Card.Tag<CustomCard>()("hyperlink/view/custom-card
 class PoolDetail extends View.Detail.Tag<PoolDetail>()("hyperlink/view/pool-detail") {}
 
 const chrome = Layer.mergeAll(
-  Layer.succeed(PoolCard, () => null),
-  Layer.succeed(CustomCard, () => null),
-  Layer.succeed(PoolDetail, () => null),
+  View.provide(PoolCard, () => null),
+  View.provide(CustomCard, () => null),
+  View.provide(PoolDetail, () => null),
 );
 
 const withChrome = <A, E, R>(contrib: Layer.Layer<A, E, R>) =>

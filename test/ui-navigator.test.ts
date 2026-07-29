@@ -54,4 +54,23 @@ describe("Navigator.memory", () => {
       expect(nav.group).toBe(Hub);
     });
   });
+
+  it("openHealth / openNode are root shell pages", () => {
+    runNavigator(Navigator.memory(Hub), (nav) => {
+      nav.openKey("Nwsl");
+      nav.openHealth();
+      expect(nav.path).toEqual(["health"]);
+      expect(nav.view).toBe("health");
+      expect(nav.selected).toBeNull();
+      expect(nav.group).toBe(Hub);
+      nav.openNode("app/NodeA");
+      expect(nav.path).toEqual(["health", "app/NodeA"]);
+      expect(nav.view).toBe("health");
+      expect(Navigator.toHref(nav.path)).toBe("/health/app%2FNodeA");
+      nav.back();
+      expect(nav.path).toEqual(["health"]);
+      nav.back();
+      expect(nav.path).toEqual([]);
+    });
+  });
 });

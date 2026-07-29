@@ -25,7 +25,7 @@ Owner overrides on lineage URL + F1 sizes-vs-content; everything else = prior re
 
 - No second registry; no `runtime` inside compose (W4 — `RuntimeProvider` outside)
 - Returns `{ Provider, Grid, Outlet, for, data?, …react kit }`
-- Batteries `<Dashboard />` **HOLD** until compose is boring
+- Batteries `<Dashboard />` **unheld** (2026-07-29) — public one-liner over compose + shell
 
 ### D. Types
 
@@ -101,13 +101,15 @@ View.bind(Daemon.kind, SchedulePack) // Pack.Card / .Detail / .Page internally
 **Not** new ViewKinds named `logs` / `schedule`.  
 Navigator may still say `openLogs(tag)` / `openSchedule(tag)` — that means “show this tag’s **page** (or detail) skin for that content,” not a fourth kind.
 
-**F2:** HealthBoard / NodeDetail stay **shell-owned** for v1.
+**F2:** HealthBoard / NodeDetail are **Navigator root pages** — `/health`, `/health/<nodeId>` (`openHealth` / `openNode`). HyperService drill from the board stays a local stack (not a Group leaf path). `NodeStatusHost` remains for overlay embeds.
 
-### G. `ui.data` — **Eng’d**
+### G. Observe door
 
-- Door to existing `*Bundle(runtime, tag)` — no parallel atoms
-- On `compose` result (`ui.data.queue` / `.daemon` / …); reads shared `ui/runtime` `RuntimeProvider`
-- Guide: [`../guides/view-data.md`](../guides/view-data.md)
+- **Eng’d:** `Observe.use(tag, *View.pack)` / `NodeView.use` ([`../guides/observe.md`](../guides/observe.md)) + `Hyperlink.atom` / `.query` / `.fn` ([`../guides/hyperlink-atom.md`](../guides/hyperlink-atom.md))
+- Thin handles ([`../standards/principles.md#handles-stay-thin`](../standards/principles.md#handles-stay-thin)): no Tag methods; no kit noun menu
+- **`Bundle.observe` / `ui.data.*` / `use*Bundle`:** **removed** (Phase 4)
+- View Prototype `use` for component logic is **not** the observe door (later / optional)
+- RuntimeProvider stays shared `ui/runtime`
 
 ### H. Migration
 
@@ -134,10 +136,18 @@ First peel = header/body split; page-sized logs/schedule content follows.
 
 ### K. Non-goals (this arc)
 
-- Kit batteries `Dashboard` = compose — **HOLD**
-- Client adapters (`Hyperlink.atom` / TanStack / Promise) — parallel
+- Client adapters: Promise + atom/query/fn Eng’d; TanStack hooks — parallel
 - Desktop tabs / real multi-match pager — later
 - Wild UI (⌘K, PiP, scrubber) — out of library scope
+
+### K2. Dashboard unhold peel (2026-07-29)
+
+| Slice | State | Notes |
+|------|-------|-------|
+| **0** Unhold batteries | **Eng’d** | `<Dashboard />` + `DashboardLayer.forCompose` + `View.compose` + `DashboardShell` supported |
+| **1** Top bar / detail chrome | **Eng’d** | `DashboardTopBar` + web `DashboardDetailChrome` public |
+| **2** Node status | **Eng’d (Navigator pages)** | `/health` + `/health/<nodeId>`; `NodeStatusHost` for overlay embeds |
+| **3** Logs / schedule pages | next | Content as `page` skins through Outlet (lock J) — logs/schedule already path suffixes |
 
 ### L. Acceptance
 
@@ -155,29 +165,39 @@ First peel = header/body split; page-sized logs/schedule content follows.
 
 ## App shape (batteries Dashboard)
 
+Kit `<Dashboard />` is the public one-liner. Internally it is thin wiring:
+
+`DashboardLayer.forCompose({ skins, views })` → `View.compose` → platform `DashboardShell`.
+
+Public chrome (reuse without forking the shell): `DashboardTopBar`, web `DashboardDetailChrome`, `NodeStatusHost`, plus `NodeBar` / `HealthBoard` / `NodeDetail`.
+
 ```tsx
 // worker-pool-card.tsx
 export const layer = View.only(WorkerPool, WorkerPoolCard).pipe(
-  Layer.provide(Layer.succeed(WorkerPoolCard, WorkerPoolCardView)),
+  Layer.provide(View.provide(WorkerPoolCard, WorkerPoolCardView)),
 )
 
-// app.tsx — Dashboard merges views under shipped skins + View.base
+// app.tsx — public one-liner unchanged
 <Dashboard runtime={runtime} group={ServicesHub} views={layer} />
 ```
 
-Compose-only (no batteries shell) still looks like:
+Compose + shell (escape hatch; same stack Dashboard uses):
 
 ```tsx
 const ui = View.compose({
-  views: Layer.mergeAll(
-    UiDashboardViews.layer,
-    View.only(WorkerPool, WorkerPoolCard),
-  ).pipe(
-    Layer.provideMerge(WebDashboardViews.skins),
-    Layer.provideMerge(View.base),
-  ),
+  views: DashboardLayer.forCompose({
+    skins: WebDashboardViews.skins,
+    views: View.only(WorkerPool, WorkerPoolCard),
+  }),
   navigator: Navigator.history(ServicesHub),
 })
+<ui.Provider>
+  <RuntimeProvider runtime={runtime}>
+    <DashboardShell group={ServicesHub} />
+  </RuntimeProvider>
+</ui.Provider>
 ```
+
+Bare `ui.Grid` / `ui.Outlet` stays available but is **not** the batteries default (no Cell / NodeBar / HealthBoard / LogBox).
 
 Open Nwsl → HttpApi → browser shows `/Nwsl/HttpApi`.

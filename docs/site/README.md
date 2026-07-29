@@ -43,7 +43,7 @@ docs/index.md (Djot in .md)      (module graph = HMR, no fs)   (parse · validat
 ```
 
 Content lives at the **`docs/` root** (a sibling of this app), so the site is
-presentation only and Agent A owns the content. `docs/legacy/` and `docs/handoffs/`
+presentation only and Agent A owns the content. `docs/handoffs/`
 are never globbed, so they're ignored. `waku.config.ts` sets `server.fs.allow` +
 a watcher so out-of-root content edits **and new files** hot-reload.
 
