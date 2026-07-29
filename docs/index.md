@@ -18,13 +18,13 @@ What you `yield*` is a typed **Handle**: call methods, observe live state, steer
 runtime. Local and remote share that type. Change the Contract and TypeScript flags every caller in
 every process that imports the Tag.
 
+Here is that same Tag under load: a worker drains a queue, a scheduler fills it, two runtimes, one
+program.
+
 ## Two runtimes, one program
 
-A worker drains a queue; a scheduler fills it. Two runtimes, one Tag, no hand-rolled client on the
-scheduler side.
-
-Define two HyperServices: a priority queue and a scheduled daemon (included factories, used here as
-the demo):
+No hand-rolled client on the scheduler side. Define two HyperServices (a priority queue and a
+scheduled daemon; included factories, used here as the demo):
 
 {.twoslash}
 ``` ts
