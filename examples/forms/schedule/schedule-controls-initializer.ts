@@ -2,12 +2,17 @@
  * @module examples/forms/schedule/schedule-controls-initializer
  *
  * Schedule controls from the schedule initializer. Run: `pnpm run example:form:schedule-controls-initializer`
+ *
+ * Docs: `docs/examples/schedule/schedule-controls-initializer.md` includes this file;
+ * cut markers hide the module header and runner epilogue.
  */
 
+import { runNodeProgramWithLayer } from "../../shared/demo-harness";
+
+// ---cut---
 import { Duration, Effect, Fiber, Ref } from "effect";
 import { TestClock } from "effect/testing";
 import { Polling, Daemon } from "../../../src";
-import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { utcDateFromMillis } from "../../../src/internal/utcDate";
 
 const env = TestClock.layer();
@@ -41,4 +46,5 @@ const program = Effect.gen(function* () {
   yield* Effect.logInfo(`ticks across startup windows: ${yield* Ref.get(ticks)}`);
 }).pipe(Effect.scoped);
 
+// ---cut-after---
 runNodeProgramWithLayer(program, env, "form:schedule-controls-initializer finished");

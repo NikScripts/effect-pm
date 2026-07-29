@@ -3,11 +3,16 @@
  *
  * Hot-swappable config: define, read, swap on the field, read the whole bag,
  * swap by key, freeze. Run: `pnpm run example:form:dynamic-config-hot-swap`
+ *
+ * Docs: `docs/examples/dynamic-config/dynamic-config-hot-swap.md` includes this file;
+ * cut markers hide the module header and runner epilogue.
  */
 
+import { runNodeProgramWithLayer } from "../../shared/demo-harness";
+
+// ---cut---
 import { Config, Effect, Redacted } from "effect";
 import * as DynamicConfig from "../../../src/DynamicConfig";
-import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 
 // Define config the normal way; wrap the one field that may rotate at runtime.
 // Defaults let the demo run with no env vars set.
@@ -59,6 +64,7 @@ const program = Effect.gen(function* () {
   );
 });
 
+// ---cut-after---
 runNodeProgramWithLayer(
   program,
   // scoped: layer(cfg) allowlists cfg's swappable keys for the setByKey path

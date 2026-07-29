@@ -1,14 +1,19 @@
-import * as Hyperlink from "../../../src/Hyperlink";
-import * as Store from "../../../src/Store";
 /**
  * @module examples/forms/store/store-memory
  *
  * In-memory {@link Store.Service} with shape-first contracts.
  * Run: `npx tsx examples/forms/store/store-memory.ts`
+ *
+ * Docs: `docs/examples/store/store-memory.md` includes this file;
+ * cut markers hide the module header and runner epilogue.
  */
 
-import { Effect, Schema, Stream } from "effect";
 import { runNodeProgramWithLayer } from "../../shared/demo-harness";
+
+// ---cut---
+import * as Hyperlink from "../../../src/Hyperlink";
+import * as Store from "../../../src/Store";
+import { Effect, Schema, Stream } from "effect";
 
 const readingSchema = Schema.Struct({ value: Schema.Number });
 
@@ -46,4 +51,5 @@ const program = Effect.gen(function* () {
   yield* Effect.log(`subscribed to changes (buffer size ${collected.length})`);
 });
 
+// ---cut-after---
 runNodeProgramWithLayer(Effect.scoped(program), AppStore.layerMemory, "store memory example finished");

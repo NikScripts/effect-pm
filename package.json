@@ -280,6 +280,8 @@
     "example:form:polling-accelerating-reset-cadence": "tsx examples/forms/polling/polling-accelerating-reset-cadence.ts",
     "example:form:polling-accelerating-peek-cadence": "tsx examples/forms/polling/polling-accelerating-peek-cadence.ts",
     "example:form:dynamic-config-hot-swap": "tsx examples/forms/dynamic-config/dynamic-config-hot-swap.ts",
+    "example:store-memory": "tsx examples/forms/store/store-memory.ts",
+    "example:store-sqlite": "tsx examples/forms/store/store-sqlite.ts",
     "example:daemon-layer-store-auto-write": "tsx examples/forms/daemon-store/daemon-layer-store-auto-write.ts",
     "example:daemon-layer-typed-error-store": "tsx examples/forms/daemon-store/daemon-layer-typed-error-store.ts",
     "prepare": "effect-language-service patch && effect-tsgo patch",

@@ -2,12 +2,17 @@
  * @module examples/forms/polling/polling-accelerating
  *
  * Polling.accelerating only — no feed, no resetCadence. Run: `pnpm run example:form:polling-accelerating`
+ *
+ * Docs: `docs/examples/polling/polling-accelerating.md` includes this file;
+ * cut markers hide the module header and runner epilogue.
  */
 
+import { runNodeProgramWithLayer } from "../../shared/demo-harness";
+
+// ---cut---
 import { Duration, Effect, Fiber, Layer, Ref } from "effect";
 import { TestClock } from "effect/testing";
 import { Polling, Daemon } from "../../../src";
-import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { utcDateFromMillis } from "../../../src/internal/utcDate";
 
 const runtime = Layer.mergeAll(
@@ -44,4 +49,5 @@ const program = Effect.gen(function* () {
   );
 }).pipe(Effect.scoped);
 
+// ---cut-after---
 runNodeProgramWithLayer(program, env, "form:polling-accelerating finished");

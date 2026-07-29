@@ -2,15 +2,20 @@
  * @module examples/forms/polling/polling-accelerating-peek-cadence
  *
  * Accelerating poll + resetCadence + peekCadence (verbose). Run: `pnpm run example:form:polling-accelerating-peek-cadence`
+ *
+ * Docs: `docs/examples/polling/polling-accelerating-peek-cadence.md` includes this file;
+ * cut markers hide the module header and runner epilogue.
  */
 
-import { DateTime, Duration, Effect, Layer, Option, Ref } from "effect";
-import { TestClock } from "effect/testing";
-import { Daemon, Polling } from "../../../src";
 import {
   forkSupervisedAndSideThenAdvanceTime,
   runNodeProgramWithLayer,
 } from "../../shared/demo-harness";
+
+// ---cut---
+import { DateTime, Duration, Effect, Layer, Option, Ref } from "effect";
+import { TestClock } from "effect/testing";
+import { Daemon, Polling } from "../../../src";
 import {
   makeSportsScoreFeedTestDouble,
   scoreKey,
@@ -89,4 +94,5 @@ const program = Effect.gen(function* () {
   }
 }).pipe(Effect.scoped);
 
+// ---cut-after---
 runNodeProgramWithLayer(program, env, "form:polling-accelerating-peek-cadence finished");

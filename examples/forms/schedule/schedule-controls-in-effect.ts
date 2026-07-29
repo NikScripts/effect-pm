@@ -2,12 +2,17 @@
  * @module examples/forms/schedule/schedule-controls-in-effect
  *
  * Daemon.scheduleControls inside the tick body. Run: `pnpm run example:form:schedule-controls-in-effect`
+ *
+ * Docs: `docs/examples/schedule/schedule-controls-in-effect.md` includes this file;
+ * cut markers hide the module header and runner epilogue.
  */
 
+import { runNodeProgramWithLayer } from "../../shared/demo-harness";
+
+// ---cut---
 import { Duration, Effect, Fiber, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
 import { Polling, Daemon } from "../../../src";
-import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { utcDateFromMillis } from "../../../src/internal/utcDate";
 
 const env = TestClock.layer();
@@ -50,4 +55,5 @@ const program = Effect.gen(function* () {
   );
 }).pipe(Effect.scoped);
 
+// ---cut-after---
 runNodeProgramWithLayer(program, env, "form:schedule-controls-in-effect finished");

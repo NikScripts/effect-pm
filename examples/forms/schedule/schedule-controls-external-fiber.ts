@@ -5,12 +5,17 @@
  * seeds the first window and hands the live `Daemon.ScheduleControls` to a shared `Ref`; a separate
  * fiber then arms/replaces windows through those controls.
  * Run: `pnpm run example:form:schedule-controls-external-fiber`
+ *
+ * Docs: `docs/examples/schedule/schedule-controls-external-fiber.md` includes this file;
+ * cut markers hide the module header and runner epilogue.
  */
 
+import { runNodeProgramWithLayer } from "../../shared/demo-harness";
+
+// ---cut---
 import { Duration, Effect, Fiber, Option, Ref } from "effect";
 import { TestClock } from "effect/testing";
 import { Polling, Daemon } from "../../../src";
-import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { utcDateFromMillis } from "../../../src/internal/utcDate";
 
 const env = TestClock.layer();
@@ -58,4 +63,5 @@ const program = Effect.gen(function* () {
   yield* Effect.logInfo(`ticks with external schedule controller: ${yield* Ref.get(ticks)}`);
 }).pipe(Effect.scoped);
 
+// ---cut-after---
 runNodeProgramWithLayer(program, env, "form:schedule-controls-external-fiber finished");

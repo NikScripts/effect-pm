@@ -2,12 +2,17 @@
  * @module examples/forms/schedule/schedule-at
  *
  * Daemon.at — open-ended entry. Run: `pnpm run example:form:schedule-at`
+ *
+ * Docs: `docs/examples/schedule/schedule-at.md` includes this file;
+ * cut markers hide the module header and runner epilogue.
  */
 
+import { runNodeProgramWithLayer } from "../../shared/demo-harness";
+
+// ---cut---
 import { Duration, Effect, Fiber, Ref } from "effect";
 import { TestClock } from "effect/testing";
 import { Polling, Daemon } from "../../../src";
-import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { utcDateFromMillis } from "../../../src/internal/utcDate";
 
 const env = TestClock.layer();
@@ -31,4 +36,5 @@ const program = Effect.gen(function* () {
   yield* Effect.logInfo(`ticks with at entry: ${yield* Ref.get(ticks)}`);
 }).pipe(Effect.scoped);
 
+// ---cut-after---
 runNodeProgramWithLayer(program, env, "form:schedule-at finished");

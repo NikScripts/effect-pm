@@ -2,15 +2,20 @@
  * @module examples/forms/polling/polling-spaced-read
  *
  * Fixed-interval poll — read feed each tick. Run: `pnpm run example:form:polling-spaced-read`
+ *
+ * Docs: `docs/examples/polling/polling-spaced-read.md` includes this file;
+ * cut markers hide the module header and runner epilogue.
  */
 
-import { DateTime, Duration, Effect } from "effect";
-import { TestClock } from "effect/testing";
-import { Daemon, Polling } from "../../../src";
 import {
   forkSupervisedAndSideThenAdvanceTime,
   runNodeProgramWithLayer,
 } from "../../shared/demo-harness";
+
+// ---cut---
+import { DateTime, Duration, Effect } from "effect";
+import { TestClock } from "effect/testing";
+import { Daemon, Polling } from "../../../src";
 import { makeSportsScoreFeedTestDouble } from "../../shared/sports-score-feed";
 
 const scheduleStartAtUnixEpoch = DateTime.toDateUtc(DateTime.makeUnsafe(0));
@@ -40,4 +45,5 @@ const program = Effect.gen(function* () {
   });
 }).pipe(Effect.scoped);
 
+// ---cut-after---
 runNodeProgramWithLayer(program, env, "form:polling-spaced-read finished");

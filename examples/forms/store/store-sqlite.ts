@@ -1,13 +1,18 @@
-import * as Store from "../../../src/Store";
 /**
  * @module examples/forms/store/store-sqlite
  *
  * SQLite-backed {@link Store.Service} — rows survive reconnections.
  * Run: `npx tsx examples/forms/store/store-sqlite.ts`
+ *
+ * Docs: `docs/examples/store/store-sqlite.md` includes this file;
+ * cut markers hide the module header and runner epilogue.
  */
 
-import { Effect, Schema } from "effect";
 import { runNodeProgramOrExit } from "../../shared/demo-harness";
+
+// ---cut---
+import * as Store from "../../../src/Store";
+import { Effect, Schema } from "effect";
 
 const readingSchema = Schema.Struct({ value: Schema.Number });
 
@@ -33,4 +38,5 @@ const program = Effect.gen(function* () {
   Effect.orDie,
 );
 
+// ---cut-after---
 runNodeProgramOrExit(program, "store sqlite example finished");

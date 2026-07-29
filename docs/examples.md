@@ -166,22 +166,40 @@ Run: `pnpm run example:node-verify-connection`
 
 ## Schedule
 
-Coming next (`examples/forms/schedule`).
+### [at](/docs/schedule-at) · [window](/docs/schedule-window) · [define](/docs/schedule-define)
+
+Run: `pnpm run example:form:schedule-at` / `schedule-window` / `schedule-define`
+
+### [Controls — initializer](/docs/schedule-controls-initializer) · [in Effect](/docs/schedule-controls-in-effect) · [external fiber](/docs/schedule-controls-external-fiber)
+
+Run: `pnpm run example:form:schedule-controls-initializer` (and siblings)
 
 ---
 
 ## Polling
 
-Coming next (`examples/forms/polling`).
+### [Accelerating](/docs/polling-accelerating) · [spaced read](/docs/polling-spaced-read)
+
+### [Accelerating reset](/docs/polling-accelerating-reset-cadence) · [peek](/docs/polling-accelerating-peek-cadence)
+
+### [Delayed start](/docs/schedule-delayed-start)
+
+Run: `pnpm run example:form:polling-accelerating` (and siblings under `example:form:…`)
 
 ---
 
 ## Store
 
-Coming next (`examples/forms/store`).
+### [Memory](/docs/store-memory) · [SQLite](/docs/store-sqlite)
+
+Source: `examples/forms/store/store-memory.ts` / `store-sqlite.ts`  
+Run: `pnpm run example:store-memory` / `example:store-sqlite`
 
 ---
 
 ## Dynamic Config
 
-Coming next (`examples/forms/dynamic-config`).
+### [Hot swap](/docs/dynamic-config-hot-swap)
+
+Source: `examples/forms/dynamic-config/dynamic-config-hot-swap.ts`  
+Run: `pnpm run example:form:dynamic-config-hot-swap`

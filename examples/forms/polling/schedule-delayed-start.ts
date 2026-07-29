@@ -2,12 +2,17 @@
  * @module examples/forms/polling/schedule-delayed-start
  *
  * Zero ticks before schedule startAt. Run: `pnpm run example:form:schedule-delayed-start`
+ *
+ * Docs: `docs/examples/polling/schedule-delayed-start.md` includes this file;
+ * cut markers hide the module header and runner epilogue.
  */
 
+import { runNodeProgramWithLayer } from "../../shared/demo-harness";
+
+// ---cut---
 import { Duration, Effect, Fiber, Layer, Ref } from "effect";
 import { TestClock } from "effect/testing";
 import { Polling, Daemon } from "../../../src";
-import { runNodeProgramWithLayer } from "../../shared/demo-harness";
 import { utcDateFromMillis } from "../../../src/internal/utcDate";
 
 const runtime = Layer.mergeAll(
@@ -42,4 +47,5 @@ const program = Effect.gen(function* () {
   );
 }).pipe(Effect.scoped);
 
+// ---cut-after---
 runNodeProgramWithLayer(program, env, "form:schedule-delayed-start finished");

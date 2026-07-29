@@ -1,0 +1,22 @@
+{#schedule-window title="Schedule — window" status="draft" appliesTo=all}
+<!-- docs-site-link:begin -->
+> [!NOTE]
+> You're reading this page's **source**. The rendered version — with navigation, search,
+> and live type previews — is at <https://dev.hyperlink.cool/docs/schedule-window>.
+<!-- docs-site-link:end -->
+# Schedule — window
+
+{.draft}
+**Draft** — paired with a runnable example; tip-check before treating as SSOT.
+
+**Source:** [`examples/forms/schedule/schedule-window.ts`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/forms/schedule/schedule-window.ts)  
+**Run:** `pnpm run example:form:schedule-window`  
+**Hub:** [Examples → Schedule](/docs/examples#schedule)
+
+## What this form shows
+
+`Schedule.window` — armed only inside a closed interval.
+
+{.twoslash include="examples/forms/schedule/schedule-window.ts"}
+``` ts
+```
