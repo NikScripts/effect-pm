@@ -100,9 +100,9 @@ Membership Lookup Identity/Directory/Advice   who wins / where clients dial
   "workPoolRelease")` on the HyperService tag (not `ListenOptions`). Absent stamp ⇒ not
   migrated. WorkPool-shaped: `drainOnly` shuts the queue down; `workPoolRelease` does
   local `release`/`releaseEncoded` then shutdown (peer enqueue still deferred).
-- **Membership push / peers:** directory-mode `Hyperlink.peersLayer` **hot-rebinds** on
-  `Directory.changes` (dial move / join / leave). Escape hatch: `Lookup.changes` /
-  `directoryTable()`. `lookupClient` rebind is still a follow-up.
+- **Membership push / dialers:** directory-mode `Hyperlink.peersLayer` and
+  `Hyperlink.lookupClient` **hot-rebind** on `Directory.changes` (dial move / join /
+  leave). Escape hatch: `Lookup.changes` / `directoryTable()`.
 
 Runnable: [`examples/forms/hyperlink/launcher-lookup-membership.ts`](../../examples/forms/hyperlink/launcher-lookup-membership.ts).
 Custody API: [`docs/guides/launcher.md`](./launcher.md).

@@ -112,7 +112,7 @@
 27. **Directory membership push (Eng'd, owner go 2026-07-29)** — Lookup fans out live directory mutations so nodes notice A→B dial swaps without restart.
     - Wire: `Directory.changes` stream of `DirectoryUpserted` (`dialChanged: true` when dial target moves) + `DirectoryRemoved`.
     - Sugar: `Lookup.changes`, `Lookup.directoryTable()` (scoped live map; seed with `nodesServing` when a cold snapshot is needed).
-    - **Not in this slice:** automatic `peersLayer` / `lookupClient` hot-rebind (Track D / follow-up Eng). Apps subscribe and rebind until that ships.
+    - **Follow-up Eng'd:** directory `peersLayer` + `lookupClient` hot-rebind on `Directory.changes` dial moves.
 28. **Trigger = version-upgrade product story; initiation = incoming node after A+B, not Directory yield alone** (owner lock 2026-07-29).
     - Headline: Launcher A → Ready → `assume`, win membership (B), then migration (C).
     - **Who initiates:** the **incoming node** (or thin CLI over Node) after `Node.assume` — never Launcher, never Lookup `assign`.
@@ -171,7 +171,7 @@ Shipped on tip (owner Eng go + refinements):
 
 Eng defaults: 32-byte hex token; Ready poll `100 millis` with per-dial `2 seconds` bound; outer default `"30 seconds"`.
 
-**Next bake:** Track C deferred #34–37 (owner lock); Track D (`lookupClient` rebind + clients during handoff).
+**Next bake:** Track C deferred #34–37 (owner lock); Track D remainder (client redirect / dual-serve — `lookupClient` rebind Eng'd).
 
 ### Track B — research note (2026-07-27): what already exists
 
@@ -198,7 +198,7 @@ Owner locked #22–26; Eng on tip:
 - Recipe + example: custody (`Launcher.up`) then membership (`Lookup.client` + advertise/identity).
 - Guide: [`identity-coordinator.md`](../guides/identity-coordinator.md) planes section.
 
-**Still deferred:** blank worker / assign protocol; HTTP/WS Lookup; nameless Launcher discovery; Track D clients (+ `lookupClient` rebind). Track C Locked #27–33 Eng'd; deferred bake #34–37 below (not locked).
+**Still deferred:** blank worker / assign protocol; HTTP/WS Lookup; nameless Launcher discovery; Track D client redirect / dual-serve. `lookupClient` + directory `peersLayer` hot-rebind Eng'd. Track C Locked #27–33 Eng'd; deferred bake #34–37 below (not locked).
 
 ### Track C — research note (2026-07-28): what already exists
 
@@ -325,7 +325,7 @@ How **clients** handle node handoff (redirect, dual-serve, drain, retry, discove
 
 1. ~~Framing / A+B / lock #27–33 / #31–33 Eng / peersLayer rebind / withHandoff~~ — done.
 2. **Owner later:** lock deferred bake #34–37 (state transfer / contract / Lookup-node / Track D boundary) or amend.
-3. Track D: `lookupClient` hot-rebind still open (directory `peersLayer` already rebinds).
+3. ~~Track D `lookupClient` hot-rebind~~ — Eng'd (with directory `peersLayer`).
 
 ---
 
@@ -349,6 +349,7 @@ reference-only if redesigning Track A further.
 
 Contract drift (contractHash / verify / loud-failures) is solid — reuse it.
 
-Next: do NOT Eng deferred bake #34–37 until the owner locks them; Track D
-lookupClient hot-rebind is open. Plan-first; no new nouns unless really good.
+Next: do NOT Eng deferred bake #34–37 until the owner locks them. Track D
+lookupClient rebind is Eng'd; client redirect / dual-serve still open.
+Plan-first; no new nouns unless really good.
 ```
