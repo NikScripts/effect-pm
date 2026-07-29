@@ -7,7 +7,12 @@
  * ```bash
  * pnpm exec tsx examples/forms/hyperlink/node-ws-nameless-serve.ts
  * ```
+ *
+ * Docs: `docs/examples/hyperlink/node-ws-nameless-serve.md` includes this file;
+ * cut markers hide the module header and runner epilogue.
  */
+
+// ---cut---
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
 import * as NodeServices from "@effect/platform-node/NodeServices"
 import { Effect, Layer, Schema } from "effect"
@@ -22,6 +27,7 @@ const live = Node.ws(
   Hyperlink.serve(Jobs, { jobs: Effect.succeed(7) }),
 )
 
+// ---cut-after---
 NodeRuntime.runMain(
   Layer.launch(live).pipe(Effect.provide(NodeServices.layer)),
 )

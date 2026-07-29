@@ -10,7 +10,12 @@
  * ```bash
  * pnpm exec tsx examples/forms/hyperlink/launcher-lookup-membership.ts
  * ```
+ *
+ * Docs: `docs/examples/hyperlink/launcher-lookup-membership.md` includes this file;
+ * cut markers hide the module header and runner epilogue.
  */
+
+// ---cut---
 import * as NodeChildProcessSpawner from "@effect/platform-node/NodeChildProcessSpawner";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -73,4 +78,5 @@ const program = Effect.gen(function* () {
   ),
 );
 
+// ---cut-after---
 NodeRuntime.runMain(program);

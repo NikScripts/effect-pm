@@ -10,7 +10,12 @@
  * ```bash
  * pnpm exec tsx examples/forms/hyperlink/node-identity-coordinator.ts
  * ```
+ *
+ * Docs: `docs/examples/hyperlink/node-identity-coordinator.md` includes this file;
+ * cut markers hide the module header and runner epilogue.
  */
+
+// ---cut---
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
 import * as NodeServices from "@effect/platform-node/NodeServices"
 import { Context, Effect, Layer, Schema } from "effect"
@@ -100,4 +105,5 @@ const program = Effect.gen(function* () {
   )
 }).pipe(Effect.scoped, Effect.provide(NodeServices.layer))
 
+// ---cut-after---
 NodeRuntime.runMain(program)

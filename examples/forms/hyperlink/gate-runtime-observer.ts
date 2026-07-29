@@ -6,8 +6,12 @@
  * default store bridge — no extra `Store.layerDefaultMemory` is required here.
  *
  * Run: `npx tsx examples/forms/hyperlink/gate-runtime-observer.ts`
+ *
+ * Docs: `docs/examples/hyperlink/gate-runtime-observer.md` includes this file;
+ * cut markers hide the module header and runner epilogue.
  */
 
+// ---cut---
 import { Effect, Ref, Schema, Stream } from "effect";
 import { Gate, Store } from "../../../src";
 
@@ -62,4 +66,5 @@ const program = Effect.gen(function* () {
   yield* Effect.log(`unobserved result: ${String(value)}`);
 }).pipe(Effect.provide(Store.layerDefaultMemory), Effect.scoped);
 
+// ---cut-after---
 void Effect.runPromise(program);

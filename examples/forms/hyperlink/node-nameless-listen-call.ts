@@ -6,7 +6,12 @@
  * ```bash
  * pnpm exec tsx examples/forms/hyperlink/node-nameless-listen-call.ts
  * ```
+ *
+ * Docs: `docs/examples/hyperlink/node-nameless-listen-call.md` includes this file;
+ * cut markers hide the module header and runner epilogue.
  */
+
+// ---cut---
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
 import * as NodeServices from "@effect/platform-node/NodeServices"
 import { Effect, Schema } from "effect"
@@ -30,4 +35,5 @@ const program = Effect.gen(function* () {
   yield* Effect.logInfo(`jobs=${n} emails=${s}`)
 }).pipe(Effect.provide(clients), Effect.scoped, Effect.provide(NodeServices.layer))
 
+// ---cut-after---
 NodeRuntime.runMain(program)

@@ -91,8 +91,76 @@ Run: `pnpm run example:fleet-health-glass`
 Source: `examples/forms/hyperlink/shardmap-sessions.ts`  
 Run: `pnpm run example:shardmap-sessions`
 
-Remaining node-listen / launcher / wire forms under `examples/forms/hyperlink/` —
-pair next (E2b).
+### [Gate — runtime observer](/docs/gate-runtime-observer)
+
+Source: `examples/forms/hyperlink/gate-runtime-observer.ts`  
+Run: `pnpm run example:gate-runtime-observer`
+
+### [Hyperlink — Tag defaults](/docs/default-defaults)
+
+Source: `examples/forms/hyperlink/default-defaults.ts`  
+Run: `pnpm run example:default-defaults`
+
+### [Hyperlink — shared Spec wire](/docs/shared-tag-wire)
+
+Source: `examples/forms/hyperlink/shared-tag-wire.ts`  
+Run: `pnpm run example:shared-tag-wire`
+
+### [Launcher — Lookup membership](/docs/launcher-lookup-membership)
+
+Source: `examples/forms/hyperlink/launcher-lookup-membership.ts`  
+Run: `pnpm run example:launcher-lookup-membership`  
+Child: [membership child](/docs/launcher-lookup-membership-child)
+
+### [Node — clients catalog](/docs/node-clients)
+
+Source: `examples/forms/hyperlink/node-clients.ts`  
+Run: `pnpm run example:node-clients`
+
+### [Node — asLookup](/docs/node-lookup)
+
+Source: `examples/forms/hyperlink/node-lookup.ts`  
+Run: `pnpm run example:node-lookup`
+
+### [Node — Prototype](/docs/node-prototype)
+
+Source: `examples/forms/hyperlink/node-prototype.ts`  
+Run: `pnpm run example:node-prototype`
+
+### [Node.Tag — fixed address](/docs/node-tag-addressed)
+
+Source: `examples/forms/hyperlink/node-tag-addressed.ts`  
+Run: `pnpm run example:node-tag-addressed`
+
+### [Node.Tag — addressless serve](/docs/node-tag-addressless-serve) · [call](/docs/node-tag-addressless-call)
+
+Source: `node-tag-addressless-serve.ts` / `node-tag-addressless-call.ts`  
+Run: `pnpm run example:node-tag-addressless-serve` then `example:node-tag-addressless-call`
+
+### [Node — Tag-bound serve](/docs/node-tag-bound)
+
+Source: `examples/forms/hyperlink/node-tag-bound.ts`  
+Run: `pnpm run example:node-tag-bound`
+
+### [Node — nameless listen demo](/docs/node-nameless-listen-demo)
+
+Source: `examples/forms/hyperlink/node-nameless-listen-demo.ts`  
+Run: `pnpm run example:node-nameless-listen-demo`  
+Also: [serve](/docs/node-nameless-listen-serve) · [call](/docs/node-nameless-listen-call)
+
+### [Node — nameless HTTP serve](/docs/node-http-nameless-serve) · [WebSocket](/docs/node-ws-nameless-serve)
+
+Run: `pnpm run example:node-http-nameless-serve` / `example:node-ws-nameless-serve` (hold until interrupt)
+
+### [Node — identity coordinator](/docs/node-identity-coordinator)
+
+Source: `examples/forms/hyperlink/node-identity-coordinator.ts`  
+Run: `pnpm run example:node-identity-coordinator`
+
+### [Node — verifyConnection](/docs/node-verify-connection)
+
+Source: `examples/forms/hyperlink/node-verify-connection.ts`  
+Run: `pnpm run example:node-verify-connection`
 
 ---
 

@@ -12,7 +12,12 @@
  * ```bash
  * pnpm exec tsx examples/forms/hyperlink/shared-tag-wire.ts
  * ```
+ *
+ * Docs: `docs/examples/hyperlink/shared-tag-wire.md` includes this file;
+ * cut markers hide the module header and runner epilogue.
  */
+
+// ---cut---
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Context, Effect, Layer, Schema } from "effect";
@@ -78,6 +83,7 @@ const program = Effect.gen(function* () {
   return result;
 }).pipe(Effect.scoped, Effect.provide(NodeServices.layer));
 
+// ---cut-after---
 NodeRuntime.runMain(
   program.pipe(
     Effect.flatMap((result) =>

@@ -11,7 +11,12 @@
  * ```
  *
  * Terminal B: `node-tag-addressless-call.ts`
+ *
+ * Docs: `docs/examples/hyperlink/node-tag-addressless-serve.md` includes this file;
+ * cut markers hide the module header and runner epilogue.
  */
+
+// ---cut---
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
 import * as NodeServices from "@effect/platform-node/NodeServices"
 import { Config, Effect, Layer, Schema } from "effect"
@@ -46,4 +51,5 @@ const program = Effect.gen(function* () {
   return yield* Effect.never
 }).pipe(Effect.scoped, Effect.provide(NodeServices.layer))
 
+// ---cut-after---
 NodeRuntime.runMain(program)

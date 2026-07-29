@@ -8,7 +8,12 @@
  * ```bash
  * pnpm exec tsx examples/forms/hyperlink/node-prototype.ts
  * ```
+ *
+ * Docs: `docs/examples/hyperlink/node-prototype.md` includes this file;
+ * cut markers hide the module header and runner epilogue.
  */
+
+// ---cut---
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
 import * as NodeServices from "@effect/platform-node/NodeServices"
 import { Effect, Layer, Schema } from "effect"
@@ -47,4 +52,5 @@ const program = Effect.gen(function* () {
   yield* Effect.logInfo("Prototype.make + Prototype.listen ok")
 }).pipe(Effect.scoped, Effect.provide(NodeServices.layer))
 
+// ---cut-after---
 NodeRuntime.runMain(program)

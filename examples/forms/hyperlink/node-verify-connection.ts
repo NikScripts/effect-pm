@@ -7,7 +7,12 @@
  * ```bash
  * pnpm exec tsx examples/forms/hyperlink/node-verify-connection.ts
  * ```
+ *
+ * Docs: `docs/examples/hyperlink/node-verify-connection.md` includes this file;
+ * cut markers hide the module header and runner epilogue.
  */
+
+// ---cut---
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer"
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
 import { Effect, Layer, Schema } from "effect"
@@ -41,4 +46,5 @@ const program = Effect.gen(function* () {
   yield* Effect.logInfo(`verify ok — ${url} serves Emails ready`)
 }).pipe(Effect.provide(Server), Effect.scoped)
 
+// ---cut-after---
 NodeRuntime.runMain(program)

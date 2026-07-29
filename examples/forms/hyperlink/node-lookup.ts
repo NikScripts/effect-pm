@@ -10,7 +10,12 @@
  * ```bash
  * pnpm exec tsx examples/forms/hyperlink/node-lookup.ts
  * ```
+ *
+ * Docs: `docs/examples/hyperlink/node-lookup.md` includes this file;
+ * cut markers hide the module header and runner epilogue.
  */
+
+// ---cut---
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
 import * as NodeServices from "@effect/platform-node/NodeServices"
 import { Effect, Layer } from "effect"
@@ -33,4 +38,5 @@ const program = Effect.gen(function* () {
   yield* Effect.logInfo("Lookup.layerNode + client ok")
 }).pipe(Effect.scoped, Effect.provide(NodeServices.layer))
 
+// ---cut-after---
 NodeRuntime.runMain(program)

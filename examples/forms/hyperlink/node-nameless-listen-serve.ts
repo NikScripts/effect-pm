@@ -7,7 +7,12 @@
  * ```bash
  * pnpm exec tsx examples/forms/hyperlink/node-nameless-listen-serve.ts
  * ```
+ *
+ * Docs: `docs/examples/hyperlink/node-nameless-listen-serve.md` includes this file;
+ * cut markers hide the module header and runner epilogue.
  */
+
+// ---cut---
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime"
 import * as NodeServices from "@effect/platform-node/NodeServices"
 import { Effect, Layer, Schema } from "effect"
@@ -27,6 +32,7 @@ const live = Node.unix([
   Hyperlink.serve(Emails, { emails: Effect.succeed("ok") }),
 ])
 
+// ---cut-after---
 NodeRuntime.runMain(
   Layer.launch(live).pipe(Effect.provide(NodeServices.layer)),
 )
