@@ -6215,7 +6215,9 @@ export const lookupClient = <Self, S extends Spec>(
       const installGate = yield* Semaphore.make(1);
 
       /** Build next dial first; swap + close prior only on success (real keep-prior). */
-      const install = (endpoint: LookupDialEndpoint): Effect.Effect<void> =>
+      const install = (
+        endpoint: LookupDialEndpoint,
+      ): Effect.Effect<void, LookupClientError> =>
         installGate.withPermits(1)(
           Effect.gen(function* () {
             const scope = yield* Scope.make();
@@ -6224,13 +6226,11 @@ export const lookupClient = <Self, S extends Spec>(
             ).pipe(Scope.provide(scope), Effect.exit);
             if (Exit.isFailure(built)) {
               yield* Scope.close(scope, Exit.void);
-              return yield* Effect.fail(
-                new LookupClientError({
-                  tag: tag.key,
-                  reason: "missing",
-                  count: 0,
-                }),
-              );
+              return yield* new LookupClientError({
+                tag: tag.key,
+                reason: "missing",
+                count: 0,
+              });
             }
             const prev = clientScope;
             clientScope = scope;

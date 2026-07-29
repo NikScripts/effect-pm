@@ -22,8 +22,10 @@ class ImportQueue extends WorkPool.Tag<ImportQueue>()("examples/store/ImportQueu
   payload: Job,
 }) {}
 
+const importQueueStore = WorkPool.store(ImportQueue);
+
 class AppStore extends Store.Service<AppStore>("@examples/store/SoftOverrideStore")(
-  WorkPool.store(ImportQueue),
+  importQueueStore,
 ) {}
 
 const waitUntilCompleted = (expected: number) =>

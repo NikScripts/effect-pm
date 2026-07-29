@@ -27,7 +27,8 @@ import {
 } from "../ui/GroupRoute";
 import type { GroupNode } from "../ui/data";
 
-export type { GroupRoute };
+// GroupRoute type lives on `hyperlink-ts/ui` (and the web barrel via `export * from "../ui"`).
+// Do not re-export it here — star-exporting both collides with `export * as GroupRoute`.
 
 const pathSegments = (): ReadonlyArray<string> =>
   (typeof window === "undefined" ? "" : window.location.pathname)
