@@ -6090,6 +6090,65 @@ const makeLiveLookupService = <Self, S extends Spec>(
 };
 
 /**
+ * Stable peer facade (directory {@link peersLayer}) — always reads {@link holder}.current so
+ * A→B dial swaps can build-then-swap without changing the `peers[nodeKey]` identity.
+ * Effect members retry once on `RpcClientError` (Track D parity with {@link lookupClient}).
+ *
+ * @internal
+ */
+const makeLivePeerService = <Self, S extends Spec>(
+  tag: HyperlinkTag<Self, S>,
+  holder: { current: PeerServiceOf<S> },
+  withDialRetry: <A, E, R>(
+    run: () => Effect.Effect<A, E, R>,
+  ) => Effect.Effect<A, E, R>,
+): PeerServiceOf<S> => {
+  const service: Record<string, unknown> = {};
+  for (const [path, m] of Object.entries(tag[specSym])) {
+    if (isLocalMethod(m) || isDefaultMethod(m)) continue;
+    if (Predicate.hasProperty(m, "fleet") && m.fleet === true) continue;
+    if (isRefMethod(m)) {
+      // Peer refs surface as one-shot Effects (see buildPeerService).
+      setPath(
+        service,
+        path,
+        withDialRetry(
+          () => getPath(holder.current, path) as Effect.Effect<unknown>,
+        ),
+      );
+    } else if (Predicate.hasProperty(m, "stream") && m.stream === true) {
+      setPath(
+        service,
+        path,
+        Stream.unwrap(
+          Effect.sync(
+            () => getPath(holder.current, path) as Stream.Stream<unknown>,
+          ),
+        ),
+      );
+    } else if (m.payload === undefined) {
+      setPath(
+        service,
+        path,
+        withDialRetry(
+          () => getPath(holder.current, path) as Effect.Effect<unknown>,
+        ),
+      );
+    } else {
+      setPath(service, path, (...args: ReadonlyArray<unknown>) =>
+        withDialRetry(() => {
+          const member = getPath(holder.current, path) as (
+            ...a: ReadonlyArray<unknown>
+          ) => Effect.Effect<unknown>;
+          return member(...args);
+        }),
+      );
+    }
+  }
+  return service as PeerServiceOf<S>;
+};
+
+/**
  * **Lookup-resolved nodeless client** (D7/D4) — you do **not** pass a {@link Node}; Lookup
  * chooses the dial target. Contrast {@link client}`(Tag, node)`, where **you** name the Node.
  *
@@ -6727,7 +6786,9 @@ export const selfNodeLayer = <Self, S extends Spec>(
  * - **Directory** — stamped **empty** set (bare `.pipe(Hyperlink.distributed)` / `nodes([])`): read
  *   Lookup `Directory.nodesServing(tag.key)` at layer build, then **hot-rebind** on
  *   `Directory.changes` when a peer's dial moves (`dialChanged`) or membership changes.
- *   Soft empty map when Directory is absent.
+ *   Dial install is **build-then-swap** (prior peer stays until the next dial succeeds);
+ *   Effect RPCs that hit `RpcClientError` **retry once** after rebind (Track D parity with
+ *   {@link lookupClient}). Soft empty map when Directory is absent.
  * - **Undeclared** — no `nodesSym` and no `options.nodes` → empty static peers (not directory).
  *
  * **Peer addresses:** each {@link Node}'s own `url` / `path` is the default. Pass `options.url` to
@@ -6774,11 +6835,19 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
             readonly url?: string;
             readonly path?: string;
           };
+          type PeerSlot = {
+            readonly holder: { current: PeerServiceOf<S> };
+            readonly facade: PeerServiceOf<S>;
+            scope: Scope.Closeable | undefined;
+            readonly generation: Ref.Ref<number>;
+            readonly installGen: SubscriptionRef.SubscriptionRef<number>;
+            readonly gate: Semaphore.Semaphore;
+          };
           const peersRecord = Object.create(null) as Record<
             string,
             PeerServiceOf<S>
           >;
-          const peerScopes = new Map<string, Scope.Closeable>();
+          const slots = new Map<string, PeerSlot>();
 
           const dialTargetOf = (row: {
             readonly nodeKey: string;
@@ -6798,20 +6867,68 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
 
           const removePeer = (nodeKey: string): Effect.Effect<void> =>
             Effect.gen(function* () {
-              const scope = peerScopes.get(nodeKey);
-              if (scope === undefined) return;
-              peerScopes.delete(nodeKey);
+              const slot = slots.get(nodeKey);
+              if (slot === undefined) return;
+              slots.delete(nodeKey);
               delete peersRecord[nodeKey];
-              yield* Scope.close(scope, Exit.void);
+              if (slot.scope !== undefined) {
+                yield* Scope.close(slot.scope, Exit.void);
+              }
             });
 
-          const upsertPeer = (row: {
+          let upsertPeer: (row: {
             readonly nodeKey: string;
             readonly kind: ProtocolKind;
             readonly url?: string;
             readonly path?: string;
             readonly serves: ReadonlyArray<string>;
-          }): Effect.Effect<void> =>
+          }) => Effect.Effect<void> = () => Effect.void;
+
+          const withDialRetryFor = (nodeKey: string) =>
+            <A, E, R>(
+              run: () => Effect.Effect<A, E, R>,
+            ): Effect.Effect<A, E, R> =>
+              Effect.suspend(run).pipe(
+                Effect.catch((err: E) => {
+                  if (!isLookupDialTransportError(err)) {
+                    return Effect.fail(err);
+                  }
+                  return Effect.gen(function* () {
+                    const slot = slots.get(nodeKey);
+                    const before =
+                      slot === undefined
+                        ? 0
+                        : yield* Ref.get(slot.generation);
+                    const rows = yield* directory.nodesServing(
+                      new Directory.NodesServingRequest({
+                        serviceKey,
+                      }),
+                    );
+                    const row = rows.find((r) => r.nodeKey === nodeKey);
+                    if (row !== undefined) {
+                      yield* upsertPeer(row);
+                    } else if (slot !== undefined) {
+                      yield* SubscriptionRef.changes(slot.installGen).pipe(
+                        Stream.filter((g) => g > before),
+                        Stream.take(1),
+                        Stream.runDrain,
+                        Effect.timeoutOption(Duration.seconds(2)),
+                        Effect.asVoid,
+                      );
+                    }
+                    const after = slots.get(nodeKey);
+                    if (
+                      after === undefined ||
+                      (yield* Ref.get(after.generation)) <= before
+                    ) {
+                      return yield* Effect.fail(err);
+                    }
+                    return yield* Effect.suspend(run);
+                  });
+                }),
+              );
+
+          upsertPeer = (row) =>
             Effect.gen(function* () {
               if (!row.serves.includes(serviceKey)) {
                 yield* removePeer(row.nodeKey);
@@ -6822,13 +6939,65 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
                 yield* removePeer(row.nodeKey);
                 return;
               }
-              yield* removePeer(row.nodeKey);
-              const scope = yield* Scope.make();
-              const client = yield* buildPeerClientAt(tag, target).pipe(
-                Scope.provide(scope),
+
+              let slot = slots.get(row.nodeKey);
+              if (slot === undefined) {
+                const holder = {
+                  current: null as unknown as PeerServiceOf<S>,
+                };
+                const generation = yield* Ref.make(0);
+                const installGen = yield* SubscriptionRef.make(0);
+                const gate = yield* Semaphore.make(1);
+                const facade = makeLivePeerService(
+                  tag,
+                  holder,
+                  withDialRetryFor(row.nodeKey),
+                );
+                slot = {
+                  holder,
+                  facade,
+                  scope: undefined,
+                  generation,
+                  installGen,
+                  gate,
+                };
+                slots.set(row.nodeKey, slot);
+                peersRecord[row.nodeKey] = facade;
+              }
+
+              const active = slot;
+              yield* active.gate.withPermits(1)(
+                Effect.gen(function* () {
+                  const scope = yield* Scope.make();
+                  const built = yield* buildPeerClientAt(tag, target).pipe(
+                    Scope.provide(scope),
+                    Effect.exit,
+                  );
+                  if (Exit.isFailure(built)) {
+                    yield* Scope.close(scope, Exit.void);
+                    yield* Effect.logWarning(
+                      "peersLayer rebind failed; keeping prior dial",
+                    ).pipe(
+                      Effect.annotateLogs({
+                        "peersLayer.tag": tag.key,
+                        "peersLayer.node": row.nodeKey,
+                      }),
+                    );
+                    return;
+                  }
+                  const prev = active.scope;
+                  active.scope = scope;
+                  active.holder.current = built.value;
+                  const gen = yield* Ref.updateAndGet(
+                    active.generation,
+                    (n) => n + 1,
+                  );
+                  yield* SubscriptionRef.set(active.installGen, gen);
+                  if (prev !== undefined) {
+                    yield* Scope.close(prev, Exit.void);
+                  }
+                }),
               );
-              peerScopes.set(row.nodeKey, scope);
-              peersRecord[row.nodeKey] = client;
             });
 
           const rows = yield* Directory.nodesServing(tag).pipe(
@@ -6856,7 +7025,7 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
           );
 
           yield* Effect.addFinalizer(() =>
-            Effect.forEach([...peerScopes.keys()], removePeer, {
+            Effect.forEach([...slots.keys()], removePeer, {
               discard: true,
             }),
           );

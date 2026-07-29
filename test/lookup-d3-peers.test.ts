@@ -3,7 +3,10 @@ import {
   Context,
   Duration,
   Effect,
+  Exit,
+  Fiber,
   Layer,
+  Ref,
   Schedule,
   Schema,
 } from "effect";
@@ -251,5 +254,123 @@ describe("Hyperlink.distributed bare / D3 peersLayer", () => {
         void westB;
       });
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(30))),
+  );
+
+  it.live(
+    "Track D parity: concurrent peer folds survive A→B (build-then-swap + retry)",
+    () =>
+      Effect.gen(function* () {
+        const lookupPath = yield* tmpSock("parity-lookup");
+        const eastPath = yield* tmpSock("parity-east");
+        const westAPath = yield* tmpSock("parity-west-a");
+        const westBPath = yield* tmpSock("parity-west-b");
+        const lookupNode = Node.Tag()("d3/parity-lookup", {
+          path: lookupPath,
+        }).pipe(Node.asLookup);
+        class East extends Node.Tag<East, Pool>()("d3/ParityEast", {
+          path: eastPath,
+        }) {}
+        class West extends Node.Tag<West, Pool>()("d3/ParityWest", {
+          path: westAPath,
+        }) {}
+
+        const lookupClient = Lookup.client(lookupNode);
+        const lookupServer = yield* Layer.build(Lookup.layerNode(lookupNode));
+        const lookupCtx = Context.merge(
+          lookupServer,
+          yield* Layer.build(lookupClient),
+        );
+
+        const westA = yield* Layer.build(
+          Node.unix(
+            West,
+            [
+              Hyperlink.serve(Pool, impl(5)).pipe(
+                Layer.provide(Hyperlink.peersFrom(Pool, {})),
+              ),
+            ],
+          ).pipe(Layer.provide(lookupClient)),
+        );
+
+        const peersCtx = yield* Layer.build(
+          Hyperlink.peersLayer(Pool, East).pipe(Layer.provide(lookupClient)),
+        );
+
+        const foldWest = Effect.gen(function* () {
+          const peers = yield* Hyperlink.peers(Pool);
+          const west = peers[West.key];
+          if (west === undefined) return undefined as number | undefined;
+          return yield* west.active;
+        }).pipe(Effect.provide(peersCtx));
+
+        expect(yield* foldWest).toBe(5);
+
+        const failures = yield* Ref.make(0);
+        const last = yield* Ref.make(5);
+        const hammer = Effect.forever(
+          Effect.gen(function* () {
+            const exit = yield* Effect.exit(foldWest);
+            if (Exit.isFailure(exit)) {
+              yield* Ref.update(failures, (n) => n + 1);
+            } else if (exit.value !== undefined) {
+              yield* Ref.set(last, exit.value);
+            }
+            yield* Effect.sleep(Duration.millis(20));
+          }),
+        );
+        const fiber = yield* Effect.forkChild(hammer);
+
+        // Dream order: B Directory-visible before A leaves — start B first, then shut A.
+        // Same nodeKey: B must wait until A is gone (livenessReplace). Bring B up in the
+        // gap after A's unregister; hammer must not surface RpcClientError across the swap.
+        yield* Node.shutdown(West);
+        yield* Effect.sync(() => {
+          void westA;
+        });
+
+        const dir = Context.get(lookupCtx, Directory.Tag);
+        yield* Effect.repeat(
+          dir
+            .nodesServing(
+              new Lookup.NodesServingRequest({ serviceKey: "d3/Pool" }),
+            )
+            .pipe(
+              Effect.provide(lookupCtx),
+              Effect.map((rows) => rows.length === 0),
+            ),
+          {
+            until: (empty) => empty,
+            schedule: Schedule.spaced(Duration.millis(25)),
+          },
+        );
+
+        class WestB extends Node.Tag<WestB, Pool>()("d3/ParityWest", {
+          path: westBPath,
+        }) {}
+        const westB = yield* Layer.build(
+          Node.unix(
+            WestB,
+            [
+              Hyperlink.serve(Pool, impl(9)).pipe(
+                Layer.provide(Hyperlink.peersFrom(Pool, {})),
+              ),
+            ],
+          ).pipe(Layer.provide(lookupClient)),
+        );
+
+        yield* Effect.repeat(Ref.get(last), {
+          until: (n) => n === 9,
+          schedule: Schedule.spaced(Duration.millis(25)),
+        });
+        yield* Effect.sleep(Duration.millis(200));
+        yield* Fiber.interrupt(fiber);
+
+        expect(yield* Ref.get(last)).toBe(9);
+        // Mid-gap `undefined` (peer removed) is ok; transport errors must not leak.
+        expect(yield* Ref.get(failures)).toBe(0);
+        yield* Effect.sync(() => {
+          void westB;
+        });
+      }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(30))),
   );
 });
