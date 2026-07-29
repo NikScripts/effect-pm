@@ -58,7 +58,7 @@ Guides keep **inline** fences for minimal deltas. The examples book prefers **in
 | **E2b** | remaining forms/hyperlink (node / launcher / wire / defaults) — 19 pairs | **done** (Agent 4); forms/hyperlink complete |
 | **E3** | forms/schedule + polling + store + dynamic-config (14) | **done** (Agent 4) |
 | **E4** | scenarios + serve-per-hyperlink + NWSL entry (4) | **done** (Agent 4) |
-| **E5** | Large apps (`hyperlink-tui` / `web` / `web-dashboard` / …) | **owner-gated** — hub notes “Apps (not 1:1 paired)”; do not dump every file |
+| **E5** | Large apps — refactor + app pages | **plan draft** — [`examples-apps-e5-plan.md`](./examples-apps-e5-plan.md); owner lock checklist there |
 
 ---
 
