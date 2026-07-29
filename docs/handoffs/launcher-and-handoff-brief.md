@@ -1,6 +1,6 @@
 # Brief — Launcher + node handoff (Agent 5)
 
-**Status:** Track A + **Track B Eng'd** on tip. **Track C Locked #27–34**; **#27/#31/#32/#33/#34 Eng'd** (`Directory.changes`, `Node.drain` / `shutdown` / `launch`, directory `peersLayer` rebind, `Hyperlink.withHandoff`, WorkPool peer `enqueue`). **#35–37** deferred (owner-confirmed). Explicit A/B launcher mode deferred.  
+**Status:** Track A + **Track B Eng'd** on tip. **Track C Locked #27–34 + #39**; **#27/#31/#32/#39 Eng'd** (`Directory.changes`, `Node.drain` / `shutdown` / `launch`, directory `peersLayer` rebind, serve-site `{ handoff }` fn + `WorkPool.releaseEnqueueHandoff`). **#39 retires #33 `withHandoff` / #34's tag mechanism.** **#35–37** deferred (owner-confirmed). Explicit A/B launcher mode deferred.  
 **Opened:** 2026-07-25 (owner via Agent G).  
 **Audience:** next agent picking up launcher + handoff / migration discussion.
 
@@ -133,22 +133,28 @@
     - **`Node.shutdown(node)`** — drain → opted-in handoffs (#33) → Advice clear → Directory unregister → listen exit.
     - **`Node.launch(node, layer)`** — prefer over bare `Layer.launch`; races the shutdown latch (no `process.exit`).
     - Per-service handoff (#33/#34) runs between drain and leave.
-33. **Layer shape = opt-in handoff config on the HyperService (serve / tag layer), not ListenOptions** (owner lock 2026-07-29; **Eng'd**; style amend 2026-07-29).
+33. **Layer shape = opt-in handoff config on the HyperService (serve / tag layer), not ListenOptions** (owner lock 2026-07-29; **superseded by #39** 2026-07-29).
     - Keep `ListenOptions` for A/B (`assumeToken`, `onConflict`, `onYield`).
-    - **`Hyperlink.withHandoff("drainOnly" | "workPoolRelease")`** — pipe on the tag (same shape as `withReadiness`); default off (#29).
-    - camelCase option strings (like `OnConflict` / `shutdownMode`); PascalCase reserved for `_tag` discriminants.
-    - Runs during `Node.shutdown` after drain, before Lookup leave. Non-WorkPool kinds log + no-op.
-    - `"workPoolRelease"` peer transfer = #34.
-34. **Stateful v1 = non-transferable by default; WorkPool opt-in `release` → peer `enqueue`; Stores stay per-node** (owner lock 2026-07-29; **Eng'd**).
+    - ~~`Hyperlink.withHandoff("drainOnly" | "workPoolRelease")` — pipe on the tag~~ **Retired** — replaced by the serve-site `{ handoff }` fn (#39). The "opt-in per-HyperService, default off, not `ListenOptions`" spirit stands; the *mechanism* is a fn, not a tag-stamped strategy string.
+    - Runs during `Node.shutdown` after drain, before Lookup leave.
+34. **Stateful v1 = non-transferable by default; WorkPool opt-in `release` → peer `enqueue`; Stores stay per-node** (owner lock 2026-07-29; **mechanism superseded by #39**).
     - **Default:** queues / stores / Gate / Daemon journals are **not** auto-moved across nodes.
-    - **`workPoolRelease`:** local decoded `release` → Directory peer (exclude **self by dial**, not `nodeKey`) → peer `enqueue` → then local shutdown. Prefer `release` over `releaseEncoded` (no `enqueueEncoded` in v1).
-    - **Soft fail:** no Directory / no other dial → warn, re-queue locally if already released, still shutdown. Peer enqueue fail → re-queue locally, still shutdown.
+    - **WorkPool transfer:** now the app-passable `WorkPool.releaseEnqueueHandoff` fn (release → peer `enqueue`), given as the serve `{ handoff }` (or nested in the queue config). Directory peer excludes **self by dial** (not `nodeKey`).
     - **Rejected for v1:** shared cross-node Store; library-magic state shipping; Gate/Daemon live migrate.
+39. **Handoff = serve-site function returning outcomes, not a tag strategy string** (owner lock 2026-07-29; **Eng'd**). Retires #33's `withHandoff` + library strategy runners.
+    - **Not on the Tag, not an RPC Spec member.** `Hyperlink.serve(Tag, impl, third?)` where `third` is an `AnyNode` (sugar for `{ node }`) **or** an options bag `{ node?, handoff? }`. No bare handoff-fn overload.
+    - **Signature:** `handoff: (from, to, ctx) => Effect<void | HandoffOutcome>` — `from` = local handle, `to` = peer client (same service type, dialed from the Directory excluding self **by dial**).
+    - **Outcomes:** tagged `_tag` PascalCase — `Done` | `Retry` | `Defer`. Type / API camelCase (`HandoffOutcome`, `HandoffContext`, `handoffContext`). `ctx.done` / `ctx.retry` / `ctx.defer` are Effects that succeed with those tags. Returning `void` coerces to `Done` at the runner (happy path easy).
+    - **Orchestration:** run local on the OUTGOING node during `Node.shutdown` after drain; dial the Directory peer (exclude self by dial); run `handoff(from, to, ctx)`.
+    - **Retry** = bounded re-run of that service's handoff. **Defer** (or **no peer**, or **defect/orDie**, or retry-exhausted) = do **not** leave / shut down — restore `phase: "running"`, clear the shutting-down latch, surface typed `HandoffDeferred` to the shutdown caller (over the wire on the node-status `shutdown` RPC error channel).
+    - **No peer when handoff set ⇒ Defer** (keep up, log warning).
+    - **WorkPool / Daemon / Gate:** nest `handoff` in their config bag → forwarded to `Hyperlink.serve`'s options. Optional helper `WorkPool.releaseEnqueueHandoff` (release → enqueue) apps can pass.
+    - **Deferred:** `restartSuccessor`; full `Node.http` 3rd-arg unify (serve `{ node }` currently threads registration only, not a tag re-stamp for `client(Tag)`).
 38. **Replacement addressing recipe (owner lock 2026-07-29)** — not an A/B product mode.
     - You **give addresses** (or mint at listen); you do not “configure as A/B.”
     - Typical cutover: **same `nodeKey`, new dial** → Directory `dialChanged` → clients rebind (`lookupClient` / directory `peersLayer`).
     - Lookup = membership / client dial ownership only — **not** migration owner. Incoming initiates after assume (#28).
-    - Config planes stay split: `ListenOptions` (`assumeToken`, `onConflict`, `onYield`) + per-service `withHandoff`.
+    - Config planes stay split: `ListenOptions` (`assumeToken`, `onConflict`, `onYield`) + per-service serve `{ handoff }` fn (#39).
     - Address-less tags: handle has no dial; listen mints → `ListenNode` + Directory; clients use `lookupClient`.
     - Launcher custody still wants **addressed** `SpawnSpec.node`. **Explicit less-automated A/B launcher deferred** (owner go 2026-07-29).
 
@@ -232,7 +238,7 @@ Owner locked #22–26; Eng on tip:
 
 **Gone / do not invent lightly:** `HandoffManager`, parallel Directory, launcher-owned migration, Lookup.assign / blank-worker migrate.
 
-**Gaps vs full C:** no dual-serve / client redirect (Track D). **Shipped:** #27 membership push; #31 `phase` + `Node.drain` + yield fail-closed; #32 `Node.shutdown` / `launch` + peersLayer rebind; #33 `Hyperlink.withHandoff`; #34 WorkPool peer transfer.
+**Gaps vs full C:** no dual-serve / client redirect (Track D). **Shipped:** #27 membership push; #31 `phase` + `Node.drain` + yield fail-closed; #32 `Node.shutdown` / `launch` + peersLayer rebind; #39 serve-site `{ handoff }` fn (retires #33 `withHandoff`); #34/#39 WorkPool peer transfer (`WorkPool.releaseEnqueueHandoff`).
 
 ### Track C — deferred bake (owner-confirmed deferred; #35–37)
 
