@@ -25,7 +25,7 @@ Owner overrides on lineage URL + F1 sizes-vs-content; everything else = prior re
 
 - No second registry; no `runtime` inside compose (W4 — `RuntimeProvider` outside)
 - Returns `{ Provider, Grid, Outlet, for, data?, …react kit }`
-- Batteries `<Dashboard />` **HOLD** until compose is boring
+- Batteries `<Dashboard />` **unheld** (2026-07-29) — public one-liner over compose + shell
 
 ### D. Types
 
@@ -101,7 +101,7 @@ View.bind(Daemon.kind, SchedulePack) // Pack.Card / .Detail / .Page internally
 **Not** new ViewKinds named `logs` / `schedule`.  
 Navigator may still say `openLogs(tag)` / `openSchedule(tag)` — that means “show this tag’s **page** (or detail) skin for that content,” not a fourth kind.
 
-**F2:** HealthBoard / NodeDetail stay **shell-owned** for v1.
+**F2:** HealthBoard / NodeDetail stay **shell overlays** for v1 (exported widgets; not Outlet page skins yet). Slice 2 may promote a Node status page.
 
 ### G. Observe door
 
@@ -136,10 +136,18 @@ First peel = header/body split; page-sized logs/schedule content follows.
 
 ### K. Non-goals (this arc)
 
-- Kit batteries `Dashboard` = compose — **HOLD**
 - Client adapters: Promise + atom/query/fn Eng’d; TanStack hooks — parallel
 - Desktop tabs / real multi-match pager — later
 - Wild UI (⌘K, PiP, scrubber) — out of library scope
+
+### K2. Dashboard unhold peel (2026-07-29)
+
+| Slice | State | Notes |
+|------|-------|-------|
+| **0** Unhold batteries | **Eng’d** | `<Dashboard />` + `DashboardLayer.forCompose` + `View.compose` + `DashboardShell` supported |
+| **1** Top bar / detail chrome | **Eng’d** | `DashboardTopBar` + web `DashboardDetailChrome` public |
+| **2** Node status | next | `NodeBar` / `HealthBoard` / `NodeDetail` already exported; decide overlay vs page skin |
+| **3** Logs / schedule pages | later | Content as `page` skins through Outlet (lock J) |
 
 ### L. Acceptance
 
@@ -157,9 +165,11 @@ First peel = header/body split; page-sized logs/schedule content follows.
 
 ## App shape (batteries Dashboard)
 
-Kit `<Dashboard />` batteries **HOLD**. Internally it is thin wiring:
+Kit `<Dashboard />` is the public one-liner. Internally it is thin wiring:
 
 `DashboardLayer.forCompose({ skins, views })` → `View.compose` → platform `DashboardShell`.
+
+Public chrome (reuse without forking the shell): `DashboardTopBar`, web `DashboardDetailChrome`, plus widgets `NodeBar` / `HealthBoard` / `NodeDetail`.
 
 ```tsx
 // worker-pool-card.tsx

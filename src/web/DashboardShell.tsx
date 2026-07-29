@@ -2,8 +2,8 @@
  * @module web/DashboardShell
  *
  * Web batteries shell over {@link ../ui/View.compose} — Cell grid, NodeBar / HealthBoard
- * overlays, DetailShell (back + title), LogBox / schedule fullscreen. Not the kit un-HOLD:
- * {@link ./Dashboard} stays the public one-liner and wires compose + this shell.
+ * overlays, {@link ./DashboardTopBar.DashboardDetailChrome}, LogBox / schedule fullscreen.
+ * {@link ./Dashboard} is the public one-liner over compose + this shell.
  */
 import * as React from "react";
 import { Option } from "effect";
@@ -42,40 +42,15 @@ import { Cell, ConfirmDialog, HealthBoard, NodeBar, NodeDetail, LockToggle, LogS
 import { isLeafTag, type LeafTag } from "../ui/widgetRegistry";
 import * as Navigator from "../ui/Navigator";
 import * as View from "../ui/View";
+import { DashboardDetailChrome, DashboardTopBar } from "./DashboardTopBar";
 
-/** Detail body — shell owns back/title (lock J). */
+/** Detail body — chrome owns back/title (lock J). */
 const ViewDetailScreen = (props: {
   readonly tag: LeafTag;
   readonly name?: string;
 }): React.ReactElement => {
   const Match = View.useMatch();
   return <Match.Detail tag={props.tag} name={props.name} />;
-};
-
-/** Shell chrome for a detail route — back + title only; badges live in Detail skins. */
-const DetailShell = (props: {
-  readonly title: string;
-  readonly onBack: () => void;
-  readonly vtKey: string;
-  readonly children: React.ReactNode;
-  readonly className?: string;
-}): React.ReactElement => {
-  const vt = useViewTransitionStyle(props.vtKey);
-  return (
-    <div
-      className={
-        props.className ??
-        "flex h-[100dvh] flex-col gap-3 overflow-hidden safe-area landscape:h-auto landscape:min-h-[100dvh] landscape:overflow-visible"
-      }
-      style={vt}
-    >
-      <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" onClick={props.onBack}>← back</Button>
-        <strong className="flex-1 truncate text-base">{props.title}</strong>
-      </div>
-      {props.children}
-    </div>
-  );
 };
 
 
@@ -227,14 +202,14 @@ const QueueDetail = (props: {
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? Option.getOrUndefined(statusR.value) : undefined;
   return (
-    <DetailShell
+    <DashboardDetailChrome
       title={displayName(props.tag.key)}
       onBack={props.onBack}
       vtKey={`res-${props.tag.key}`}
     >
       <Match.Detail tag={props.tag} />
       <LogBox bundle={bundle} full={false} onToggle={props.onOpenLogs} meta={<> · phase {s?.phase ?? "?"}</>} />
-    </DetailShell>
+    </DashboardDetailChrome>
   );
 };
 
@@ -247,14 +222,14 @@ const DaemonDetail = (props: {
   const Match = View.useMatch();
   const bundle = Observe.use(props.tag, DaemonView.pack);
   return (
-    <DetailShell
+    <DashboardDetailChrome
       title={`⚙ ${displayName(props.tag.key)}`}
       onBack={props.onBack}
       vtKey={`res-${props.tag.key}`}
     >
       <Match.Detail tag={props.tag} />
       <LogBox bundle={bundle} full={false} onToggle={props.onOpenLogs} />
-    </DetailShell>
+    </DashboardDetailChrome>
   );
 };
 
@@ -262,13 +237,13 @@ const DaemonDetail = (props: {
 const ApiDetail = (props: { readonly tag: ApiTag; readonly onBack: () => void }): React.ReactElement => {
   const Match = View.useMatch();
   return (
-    <DetailShell
+    <DashboardDetailChrome
       title={`🌐 ${displayName(props.tag.key)}`}
       onBack={props.onBack}
       vtKey={`res-${props.tag.key}`}
     >
       <Match.Detail tag={props.tag} />
-    </DetailShell>
+    </DashboardDetailChrome>
   );
 };
 
@@ -329,14 +304,14 @@ const DashboardInner = (props: {
       isGateTag(selected)
     ) {
       return (
-        <DetailShell
+        <DashboardDetailChrome
           title={selectedName ?? displayName(selected.key)}
           onBack={toGrid(selected.key)}
           vtKey={`res-${selected.key}`}
           className="safe-area flex flex-col gap-3"
         >
           <ViewDetailScreen tag={selected} name={selectedName} />
-        </DetailShell>
+        </DashboardDetailChrome>
       );
     }
     return <></>;
@@ -386,38 +361,38 @@ const DashboardInner = (props: {
       className="mx-auto max-w-5xl safe-area"
       style={{ ...pageVt, paddingTop: "max(0.25rem, env(safe-area-inset-top))" }}
     >
-      <div className="relative mb-4 flex items-center gap-2">
-        {canBack ? (
+      <DashboardTopBar
+        title={title}
+        root={!canBack}
+        onBack={
+          canBack
+            ? () => transition(`grp-${group.key}`, () => nav.back())
+            : undefined
+        }
+        trailing={
           <>
-            <Button variant="outline" size="sm" onClick={() => transition(`grp-${group.key}`, () => nav.back())}>← back</Button>
-            {/* centered to the row (≈ the screen), not the flex remainder — absolutely overlaid, taps
-                pass through to the back/count/die around it. The ⬢ is dropped on drilled-in pages. */}
-            <h1 className="pointer-events-none absolute inset-0 m-0 flex items-center justify-center truncate px-24 text-lg font-semibold">
-              {title}
-            </h1>
-            <div className="flex-1" />
+            {/* float degraded HyperServices up — only when something's actually degraded. */}
+            {degradedKeys.size > 0 ? (
+              <button
+                type="button"
+                onClick={() => transition("res-sort", () => setDegradedFirst((v) => !v))}
+                aria-pressed={degradedFirst}
+                title="float degraded HyperServices to the top"
+                className={`shrink-0 rounded-full border px-2 py-0.5 text-[0.7rem] transition-colors ${
+                  degradedFirst
+                    ? "border-amber-500 text-amber-400"
+                    : "border-border text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                degraded first
+              </button>
+            ) : null}
+            {countCircle}
+            {/* node-status die — nodes the dashboard's HyperServices are bound to. */}
+            <NodeBar group={props.group} onOpen={props.onOpenHealth} />
           </>
-        ) : (
-          <h1 className="m-0 flex-1 text-lg font-semibold">⬢ {title}</h1>
-        )}
-        {/* float degraded HyperServices up — offered only when something's actually degraded. */}
-        {degradedKeys.size > 0 ? (
-          <button
-            type="button"
-            onClick={() => transition("res-sort", () => setDegradedFirst((v) => !v))}
-            aria-pressed={degradedFirst}
-            title="float degraded HyperServices to the top"
-            className={`shrink-0 rounded-full border px-2 py-0.5 text-[0.7rem] transition-colors ${
-              degradedFirst ? "border-amber-500 text-amber-400" : "border-border text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            degraded first
-          </button>
-        ) : null}
-        {countCircle}
-        {/* node-status die — all nodes the dashboard's HyperServices are bound to (the root group). */}
-        <NodeBar group={props.group} onOpen={props.onOpenHealth} />
-      </div>
+        }
+      />
       <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
         {sortNodes.map((node) => (
           <DegradedKeysProbe key={`probe-${node.id}`} node={node} onKeys={reportDegradedKeys} />
@@ -476,14 +451,14 @@ const NodeHyperlinkView = (props: {
     isGateTag(tag)
   ) {
     return (
-      <DetailShell
+      <DashboardDetailChrome
         title={displayName(tag.key)}
         onBack={props.onBack}
         vtKey={`res-${tag.key}`}
         className="safe-area flex flex-col gap-3 px-1"
       >
         <ViewDetailScreen tag={tag} />
-      </DetailShell>
+      </DashboardDetailChrome>
     );
   }
   return <></>;

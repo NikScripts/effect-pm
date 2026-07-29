@@ -7,10 +7,10 @@
  * animated with view transitions.
  *
  * Stack (Effect-shaped): {@link ../ui/DashboardLayer.forCompose} → {@link ../ui/View.compose}
- * → {@link ./DashboardShell}. Kit batteries API remains HOLD — this file is thin wiring.
+ * → {@link ./DashboardShell}. Public kit one-liner — thin wiring over that stack.
  *
- * Use `<Dashboard runtime group />` for the one-liner, or compose `DashboardView` with the
- * providers yourself.
+ * Use `<Dashboard runtime group />` for the one-liner, or compose `DashboardView` /
+ * `DashboardLayer.forCompose` + `View.compose` + `DashboardShell` yourself.
  */
 import * as React from "react";
 import { Layer } from "effect";

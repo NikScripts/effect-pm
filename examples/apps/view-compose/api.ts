@@ -78,8 +78,7 @@ export interface Navigator {
 
 /**
  * Thin Dashboard = merge views + provide navigator (+ optional runtime).
- * Adapt `DashboardView` internals; **HOLD** a big kit `Dashboard` export until
- * this seam is boring.
+ * Kit `<Dashboard />` is the public one-liner over this seam (unheld).
  *
  * ```ts
  * const ui = View.compose({

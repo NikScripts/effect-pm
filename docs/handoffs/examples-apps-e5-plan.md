@@ -21,7 +21,7 @@ The leftover **apps** violate that:
 | **Product line, not a form** | `examples/apps/tui` ≈ 12 `pnpm` scripts, overlapping demos |
 | **Multi-process** | `examples/apps/web` needs vite **and** `server.ts` |
 | **Wrong medium for Twoslash** | Ink/React mounts; docs pipeline is TS-fence + Effect hover |
-| **Other-agent holds** | Agent G: View compose + **Hold kit Dashboard**; Agent B: dashboard typesafety |
+| **Other-agent holds** | Agent G: View compose + Dashboard chrome peel (K2); Agent B: dashboard typesafety |
 
 Dumping every `.tsx` into `include=` either shows a useless launcher or a novel.
 
@@ -86,7 +86,7 @@ Hub section today (“Apps not 1:1 paired”) becomes a real **Apps** index once
    - Drop confusing aliases once hub uses `example:apps-*` only
 2. Extract **non-JSX** wiring where it exists (`live-queues.ts`) as include targets.
 3. Ink UI files (`*-app.tsx`, `*-mock.tsx`) stay **out of Twoslash** unless we later add a JSX Twoslash policy (out of scope).
-4. Respect **Hold kit Dashboard** — no dashboard app-page SSOT until Agent G releases the hold; counter/grid/queue pages can proceed earlier.
+4. Kit `<Dashboard />` is unheld — app-page SSOT may teach the one-liner + chrome; counter/grid/queue pages can proceed; node-status page peel still Agent G (K2 slice 2).
 
 **Doc:** 1–3 app pages max (Counter TUI, Queues TUI, Dashboard TUI when unblocked) — not twelve.
 

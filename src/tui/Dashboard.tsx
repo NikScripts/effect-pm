@@ -3,7 +3,7 @@
  *
  * The Ink Group dashboard — terminal counterpart to `<Dashboard runtime group />` from
  * `hyperlink-ts/web`. Stack: {@link ../ui/DashboardLayer.forCompose} → {@link ../ui/View.compose}
- * → {@link ./DashboardShell}. Kit batteries HOLD unchanged.
+ * → {@link ./DashboardShell}. Public kit one-liner.
  *
  * ```tsx
  * <Dashboard runtime={Atom.runtime(appLayer)} group={Fleet} />

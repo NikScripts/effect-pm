@@ -2,7 +2,7 @@
  * @module tui/DashboardShell
  *
  * Ink batteries shell over {@link ../ui/View.compose} — grid, focus panes, command bar.
- * {@link ./Dashboard} is thin wiring (compose + this shell). Kit HOLD unchanged.
+ * {@link ./Dashboard} is thin wiring (compose + this shell).
  */
 import { Box, Text, useInput, useStdout } from "ink";
 import * as React from "react";
@@ -31,6 +31,7 @@ import { useAtomSet, useAtomValue } from "../ui/atom-react";
 import * as Navigator from "../ui/Navigator";
 import * as View from "../ui/View";
 import { Cell } from "./cellWidgets";
+import { DashboardTopBar } from "./DashboardTopBar";
 import {
   ControlKey,
   FocusedDaemon,
@@ -493,17 +494,17 @@ export const DashboardShell = (props: {
       borderStyle={editMode ? "double" : BLANK_BORDER}
       borderColor="red"
     >
-      <Box paddingX={1}>
-        <Text bold color="black" backgroundColor="cyan">
-          {` ⬢ ${crumb} `}
-        </Text>
-        <Text dimColor>
-          {" "}
-          {members.length} items{nav.trail.length > 1 ? " · Esc up" : ""}
-          {effScroll > 0 ? ` · ↑${effScroll}` : ""}
-          {more > 0 ? ` · ↓${more}` : ""}
-        </Text>
-      </Box>
+      <DashboardTopBar
+        title={crumb}
+        trailing={
+          <Text dimColor>
+            {" "}
+            {members.length} items{nav.trail.length > 1 ? " · Esc up" : ""}
+            {effScroll > 0 ? ` · ↑${effScroll}` : ""}
+            {more > 0 ? ` · ↓${more}` : ""}
+          </Text>
+        }
+      />
 
       <Box flexGrow={1} flexDirection="row" flexWrap="wrap" padding={1}>
         {visibleCells.map(([name, node], i) => (

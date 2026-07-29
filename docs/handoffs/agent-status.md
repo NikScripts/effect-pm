@@ -7,7 +7,7 @@
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **4** | `cursor/hyperservice-open-deps-5679` | [examples IA](./examples-ia-reorg.md) · [examples book](./agent-01-examples-book.md) · [E5 apps plan](./examples-apps-e5-plan.md) | **tip-synced** — examples IA + Observe topic; E5 owner-gated | same tip as `integration` | includes 50/50; smoke OK | Owner: lock E5 checklist; L6 IA still open | 2026-07-29 |
-| **G / TUI** | `cursor/view-withsize-types-125f` | View compose · Shell · Observe Phases 0–4 | **tip-synced** — NodeView → nodeViewPack; all *View packs compositional | same tip as `integration` | typecheck 0; observe suites green | kit HOLD; F5 split-dial flake pre-existing on tip | 2026-07-29 |
+| **G / TUI** | `cursor/view-withsize-types-125f` | View compose · Shell · Dashboard unhold | **Eng** — Dashboard unheld; TopBar/DetailChrome public (K2 0–1) | same tip as `integration` | typecheck TBD | K2 slice 2 node status next; F5 flake pre-existing | 2026-07-29 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **5**, **G** | 2026-07-26 |
 | **5** | `cursor/launcher-handoff-design-929b` | [launcher + handoff brief](./launcher-and-handoff-brief.md) · [rename](./rename-hyperlink-handoff.md) | **tip-synced** — lookupClient hot-rebind | same tip as `integration` | typecheck 0; lookup rebind green | Awaiting owner-lock #34–37 | 2026-07-29 |
 | **Docs site** | `cursor/docs-site-edge-cache-dbdc` (ε) | [dev host](./docs-site-dev-host.md) · edge cache · SEO | **tip-synced / live** — apex coming-soon; docs on `dev`; GS polish; origin gate | same tip as `integration` | smoke + host-gate tests; CF + `serve-production.mjs`; islands on `hyperlink-ts` / `.hl-dashboard` | — | 2026-07-29 |
@@ -29,7 +29,7 @@
 
 ### Active (owner approval required)
 1. **Agent 4:** Examples IA Eng’d (`forms/` → topic folders + `apps/`); Observe pack demo under `examples/observe/`. E5 apps book still owner-gated. Handoff: [`examples-ia-reorg.md`](./examples-ia-reorg.md).
-2. **Agent G / TUI:** Observe fully Eng’d — compositional `*View.pack`s; NodeView atoms in `nodeViewPack`; Bundle/`use*Bundle`/`data` removed. Kit HOLD. Branch `cursor/view-withsize-types-125f`.
+2. **Agent G / TUI:** Observe Eng’d; kit `<Dashboard />` **unheld**; `DashboardTopBar` / web `DashboardDetailChrome` public. Next: K2 slice 2 (node status page vs overlay). Branch `cursor/view-withsize-types-125f`.
 3. **Agent 5 (Launcher + handoff):** Track C #27–33 Eng'd; `lookupClient` + directory `peersLayer` hot-rebind Eng'd. Next: owner-lock #34–37. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
 4. **Docs site:** Live — apex coming-soon (inlined CSS + `(book)` chrome); docs on `dev`. Origin host-gate via `serve-production.mjs` (before Waku static). Islands: `hyperlink-ts` alias + `.hl-dashboard`. Getting Started em-dash/voice polish.
 
