@@ -23,6 +23,13 @@ export type MemberTag =
 
 export type HistoryAction = "push" | "replace";
 
+/** One breadcrumb step derived from the current path keys. */
+export type Crumb = {
+  readonly key: string;
+  readonly label: string;
+  readonly href: string;
+};
+
 /** Live navigation API — provide with memory / history layers. */
 export interface Service<A extends ApiConstraint = ApiConstraint> {
   readonly api: A;
@@ -53,6 +60,8 @@ export interface Service<A extends ApiConstraint = ApiConstraint> {
   readonly root: RouteGroup | undefined;
   /** Short-name path segments — `["Nwsl", "HttpApi"]`. */
   readonly path: ReadonlyArray<string>;
+  /** Breadcrumb chain for `path` (`href` per prefix). */
+  readonly crumbs: ReadonlyArray<Crumb>;
   readonly trail: ReadonlyArray<RouteGroup>;
   /** Deepest group (grid to render), or root when at `/`. */
   readonly group: RouteGroup | undefined;
@@ -318,6 +327,14 @@ export const makeService = <A extends ApiConstraint>(
     },
     get path() {
       return state().keys;
+    },
+    get crumbs() {
+      const keys = state().keys;
+      return keys.map((key, i) => ({
+        key,
+        label: key,
+        href: toHref(keys.slice(0, i + 1)),
+      }));
     },
     get trail() {
       return state().trail;

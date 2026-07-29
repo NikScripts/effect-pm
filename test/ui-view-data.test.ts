@@ -48,6 +48,15 @@ describe("RuntimeProvider + Observe.use", () => {
     expect("data" in ui).toBe(false);
   });
 
+  it("compose accepts a live Router.Service", () => {
+    const router = Router.makeGroup(Hub, "memory");
+    router.open(Jobs);
+    const ui = View.compose({ views, router });
+    expect(ui.router).toBe(router);
+    expect(ui.router.pathname).toBe("/Jobs");
+    expect(ui.router.selected).toBe(Jobs);
+  });
+
   it("Observe.use reads RuntimeProvider", () => {
     const runtime = Atom.runtime(Layer.empty);
 

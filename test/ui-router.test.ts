@@ -2,7 +2,7 @@
  * Router.memory / .history — bare Route.Api + Group-backed dashboard helpers.
  */
 import { describe, expect, it } from "@effect/vitest";
-import { Context, Effect, Layer, Option } from "effect";
+import { Context, Effect, Layer } from "effect";
 import * as Daemon from "../src/Daemon";
 import * as Group from "../src/Group";
 import { pathToMember } from "../src/ui/GroupRoute";
@@ -37,6 +37,15 @@ describe("Router.make (typed)", () => {
     router.to((urls) => urls.app.dashboard());
     expect(router.pathname).toBe("/app");
     expect(router.urls.home()).toBe("/home");
+  });
+
+  it("crumbs follow path prefixes", () => {
+    const router = Router.make(site, "memory");
+    expect(router.crumbs).toEqual([]);
+    router.go("/app");
+    expect(router.crumbs).toEqual([
+      { key: "app", label: "app", href: "/app" },
+    ]);
   });
 });
 
@@ -115,11 +124,13 @@ describe("Router.memory (Group)", () => {
       expect(nav.group).toBe(Nwsl);
       expect(nav.pathname).toBe("/Nwsl/HttpApi");
       expect(nav.match?.route.identifier).toBe("HttpApi");
-      const target = Option.getOrThrow(
-        Context.getOption(nav.match!.annotations, Route.Target),
-      );
-      expect(target.kind).toBe("leaf");
-      expect(target.member).toBe(HttpApi);
+      const target = Route.targetOf(nav.match);
+      expect(target?.kind).toBe("leaf");
+      expect(target?.member).toBe(HttpApi);
+      expect(nav.crumbs).toEqual([
+        { key: "Nwsl", label: "Nwsl", href: "/Nwsl" },
+        { key: "HttpApi", label: "HttpApi", href: "/Nwsl/HttpApi" },
+      ]);
     });
   });
 
@@ -197,11 +208,18 @@ describe("Router.memory (Group)", () => {
       expect(nav.view).toBe("logs");
       expect(nav.selected).toBe(HttpApi);
       expect(nav.match?.route.identifier).toBe("HttpApiLogs");
-      const target = Option.getOrThrow(
-        Context.getOption(nav.match!.annotations, Route.Target),
-      );
-      expect(target.kind).toBe("leafView");
-      expect(target.view).toBe("logs");
+      const target = Route.targetOf(nav.match);
+      expect(target?.kind).toBe("leafView");
+      expect(target?.view).toBe("logs");
     });
+  });
+});
+
+describe("Route.targetOf", () => {
+  it("reads Target from match annotations", () => {
+    const router = Router.makeGroup(Hub, "memory");
+    router.open(HttpApi);
+    expect(Route.targetOf(undefined)).toBeUndefined();
+    expect(Route.targetOf(router.match)?.member).toBe(HttpApi);
   });
 });

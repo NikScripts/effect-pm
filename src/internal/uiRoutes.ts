@@ -568,8 +568,15 @@ export type UrlBuilder<A extends ApiConstraint = ApiConstraint> = A extends
   : UrlBuilderLoose;
 
 /** Nested URL builder — `HttpApiClient.urlBuilder` shape. */
-export const urlBuilder = <A extends ApiConstraint>(self: A): UrlBuilder<A> => {
+export const urlBuilder = <A extends ApiConstraint>(
+  self: A,
+  options?: { readonly baseUrl?: URL | string | undefined },
+): UrlBuilder<A> => {
   const root: UrlBuilderLoose = {};
+  const withBase = (url: string): string =>
+    options?.baseUrl === undefined
+      ? url
+      : new URL(url, options.baseUrl.toString()).toString();
 
   const ensure = (target: UrlBuilderLoose, id: string): UrlBuilderLoose => {
     const existing = target[id];
@@ -615,7 +622,7 @@ export const urlBuilder = <A extends ApiConstraint>(self: A): UrlBuilder<A> => {
     const leafId = identifiers[identifiers.length - 1]!;
     const compiled = uiRoute.compilePath(path);
     const method: UrlMethodLoose = (request) =>
-      compiled.build(request?.params ?? {});
+      withBase(compiled.build(request?.params ?? {}));
     setCallable(cursor, leafId, method);
   };
 

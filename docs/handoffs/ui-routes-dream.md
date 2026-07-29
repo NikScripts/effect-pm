@@ -38,12 +38,19 @@ Route.urlBuilder(site).node({ params: { nodeId: "1" } }) // params required
 // Typed value (prefer when you hold the catalog):
 const router = Router.make(site, "memory")
 router.to((urls) => urls.app.dashboard())
+router.crumbs // [{ key, label, href }, …]
 
 // Layer for DI / View.compose (catalog type erased on Context):
 Router.history(site)
 Router.memory(ServicesHub) // Group → catalog via Route.make/group/get loops
 
+// compose accepts Layer **or** a live Service:
+View.compose({ views, router: Router.history(Hub) })
+View.compose({ views, router: Router.make(site, "memory") })
+
 <Router.Link to={(urls) => urls.home()}>Home</Router.Link>
+Route.targetOf(router.match) // Target annotation | undefined
+Route.urlBuilder(site, { baseUrl: "https://example.com" })
 ```
 
 | Method | History |
@@ -53,6 +60,7 @@ Router.memory(ServicesHub) // Group → catalog via Route.make/group/get loops
 | `back` | memory stack / `history.back()` |
 
 Group helpers throw on bare catalogs (fail loud). `useGroupRoute` is **deprecated** → `Router`.
+React helpers: `useRouter` / `useMatch` / `useTarget` / `Link`.
 
 ## Not inventing
 
@@ -60,3 +68,5 @@ Group helpers throw on bare catalogs (fail loud). `useGroupRoute` is **deprecate
 - No Navigator  
 - Catalog stays data (not a Service)  
 - No new ViewKinds for logs/schedule  
+- No hard-delete of public `GroupRoute` / `useGroupRoute` without owner ask  
+- No nested outlets / guards / query as kit product without owner ask  

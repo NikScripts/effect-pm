@@ -6,13 +6,8 @@
 
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
-<<<<<<< HEAD
-| **4** | `cursor/hyperservice-open-deps-5679` | [gap proposals](./examples-gap-proposals.md) · [examples IA](./examples-ia-reorg.md) · [E5 apps](./examples-apps-e5-plan.md) | **tip-synced** — Ideas 1–9 topic forms Eng’d | same tip as `integration` | includes 94/94 | Idea 10 E5 still owner-gated | 2026-07-29 |
-| **G / TUI** | `cursor/view-withsize-types-125f` | View compose · [UI Route](./ui-routes-dream.md) | **dreaming** — typed UrlBuilder + Link; do not merge without ask | work branch ahead | ui-router tests | F5 flake pre-existing | 2026-07-29 |
-=======
 | **4** | `cursor/hyperservice-open-deps-5679` | [gap proposals](./examples-gap-proposals.md) · [examples IA](./examples-ia-reorg.md) · [E5 apps](./examples-apps-e5-plan.md) | **tip-synced** — Ideas 1–9 + Related notes (97/97) | same tip as `integration` | includes 94/94; Related notes 97/97 | Idea 10 E5 still owner-gated | 2026-07-29 |
-| **G / TUI** | `cursor/view-withsize-types-125f` | View compose · [UI Route](./ui-routes-dream.md) | **tip-synced** — Navigator→Router cutover Eng’d | same tip as `integration` | ui-router + compose tests | F5 flake pre-existing | 2026-07-29 |
->>>>>>> origin/integration
+| **G / TUI** | `cursor/view-withsize-types-125f` | View compose · [UI Route](./ui-routes-dream.md) | **dreaming** — crumbs/targetOf/compose(Service); do not merge without ask | work branch ahead | ui-routes + ui-router | F5 flake pre-existing; land/delete GroupRoute owner-gated | 2026-07-29 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **5**, **G** | 2026-07-26 |
 | **5** | `cursor/launcher-handoff-design-929b` | [launcher + handoff brief](./launcher-and-handoff-brief.md) · [rename](./rename-hyperlink-handoff.md) | **landed** — #39 + A→B suite + Ink live TUI on `integration` | same tip as `integration` | handoff+cutover 37/37; `example:handoff-ab-live` (TTY) | `restartSuccessor` / serve `{ node }` / #35–37 deferred | 2026-07-29 |
 | **Docs site** | `cursor/docs-site-edge-cache-dbdc` (ε) | [dev host](./docs-site-dev-host.md) · edge cache · SEO | **tip-synced / live** — apex coming-soon; docs on `dev`; GS polish; origin gate | same tip as `integration` | smoke + host-gate tests; CF + `serve-production.mjs`; islands on `hyperlink-ts` / `.hl-dashboard` | — | 2026-07-29 |
@@ -33,13 +28,8 @@
 0. **Agent E:** impossible-states plan ([`impossible-states-proposal.md`](./impossible-states-proposal.md)). **DONE + merged:** P1 (node↔protocol wiring bug → compile error, cast-free) + P5 (http transport dies in browser). **P2 SKIPPED** (cast). **P4 already-enforced** (loose-fields payload already rejected; proposal mis-scoped). **P3 deferred** (opaque serve layers). Clean wins complete. Reserved `src/Hyperlink.ts` node/client surface until fully merged (done). **Tag-config reservation RELEASED — Agent D WorkPool/Gate/Daemon payload-config unblocked.**
 
 ### Active (owner approval required)
-<<<<<<< HEAD
-1. **Agent 4:** Examples gap Ideas 1–9 Eng’d (WorkPool→Fleet). Idea 10 Apps/E5 still owner-gated. Handoff: [`examples-gap-proposals.md`](./examples-gap-proposals.md).
-2. **Agent G / TUI:** Router dream machine on work branch ([`ui-routes-dream.md`](./ui-routes-dream.md)). **Do not merge to `integration` without owner ask.** Branch `cursor/view-withsize-types-125f`.
-=======
 1. **Agent 4:** Examples gap Ideas 1–9 Eng’d (WorkPool→Fleet). Index = [`docs/examples.md`](../examples.md); every form page has a **Related examples** NOTE (often several). Idea 10 Apps/E5 still owner-gated. Handoff: [`examples-gap-proposals.md`](./examples-gap-proposals.md).
-2. **Agent G / TUI:** Dashboard unheld; `Route` + `Router` Eng’d; **Navigator→Router cutover Eng’d** ([`ui-routes-dream.md`](./ui-routes-dream.md)). Branch `cursor/view-withsize-types-125f`.
->>>>>>> origin/integration
+2. **Agent G / TUI:** Router dream machine on work branch ([`ui-routes-dream.md`](./ui-routes-dream.md)). **Do not merge to `integration` without owner ask.** Branch `cursor/view-withsize-types-125f`.
 3. **Agent 5 (Launcher + handoff):** #39 landed — serve-site `handoff(from,to,ctx)`; WorkPool bakes `releaseEnqueueHandoff`; live A→B suite (23) + watchable Ink TUI (`example:handoff-ab-live`). Next: deferred `restartSuccessor` / Track D. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
 4. **Docs site:** Live — apex coming-soon (inlined CSS + `(book)` chrome); docs on `dev`. Origin host-gate via `serve-production.mjs` (before Waku static). Islands: `hyperlink-ts` alias + `.hl-dashboard`. Getting Started em-dash/voice polish.
 

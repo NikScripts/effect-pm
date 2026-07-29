@@ -45,6 +45,9 @@ import type { RouteGroup } from "./GroupRoute";
 /** Group or leaf a Group-backed router can open. @public */
 export type MemberTag = internal.MemberTag;
 
+/** Breadcrumb step from {@link Service.crumbs}. @public */
+export type Crumb = internal.Crumb;
+
 /**
  * Live navigation API — provide with {@link memory} / {@link history}, or build
  * with {@link make} for a catalog-typed surface.
@@ -193,6 +196,23 @@ export const useRouterOption = (): Service | null => {
   }, [router]);
   return router;
 };
+
+/**
+ * Current catalog match. Re-renders on navigate.
+ *
+ * Distinct from `View.useMatch` (View-kind matcher props).
+ *
+ * @public
+ */
+export const useMatch = (): Route.Match | undefined => useRouter().match;
+
+/**
+ * Current {@link Route.Target} annotation when the match carries one.
+ *
+ * @public
+ */
+export const useTarget = (): Route.TargetValue | undefined =>
+  Route.targetOf(useRouter().match);
 
 /**
  * In-app link — `href` + click → {@link Service.go} (no full navigation).

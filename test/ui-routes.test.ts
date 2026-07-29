@@ -85,4 +85,16 @@ describe("Route", () => {
       "/health/app%2FNodeA",
     );
   });
+
+  it("urlBuilder baseUrl prefixes absolute URLs", () => {
+    const api = Route.make("site").add(
+      Route.get("home", "/home"),
+      Route.group("app").add(Route.get("dashboard", "/app")),
+    );
+    const urls = Route.urlBuilder(api, {
+      baseUrl: "https://example.com",
+    });
+    expect(urls.home()).toBe("https://example.com/home");
+    expect(urls.app.dashboard()).toBe("https://example.com/app");
+  });
 });

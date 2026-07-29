@@ -231,6 +231,23 @@ export const match: (
 ) => Option.Option<Match> = catalog.match;
 
 /**
+ * Destination metadata shape stamped via {@link Target}.
+ *
+ * @public
+ */
+export type TargetValue = Context.Service.Shape<typeof Target>;
+
+/**
+ * Read {@link Target} from a match hit (Group dashboards / annotated destinations).
+ *
+ * @public
+ */
+export const targetOf = (hit: Match | undefined): TargetValue | undefined =>
+  hit === undefined
+    ? undefined
+    : Context.getOrUndefined(hit.annotations, Target);
+
+/**
  * Typed URL builder for a catalog (`HttpApiClient.urlBuilder` analogue).
  *
  * @public
@@ -244,10 +261,13 @@ export type UrlBuilderLoose = catalog.UrlBuilderLoose;
 /**
  * Build the typed URL surface for a catalog.
  *
+ * Pass `{ baseUrl }` to prefix absolute URLs (`HttpApiClient.urlBuilder` parity).
+ *
  * @public
  */
 export const urlBuilder: <A extends catalog.ApiConstraint>(
   self: A,
+  options?: { readonly baseUrl?: URL | string | undefined },
 ) => UrlBuilder<A> = catalog.urlBuilder;
 
 /** Walk groups/endpoints (tooling) — `HttpApi.reflect` analogue. @public */

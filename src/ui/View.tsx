@@ -1051,7 +1051,7 @@ export const useGridMembers = (): ReadonlyArray<{
  * import * as DaemonView from "hyperlink-ts/ui/DaemonView"
  * const ui = View.compose({
  *   views: Layer.mergeAll(View.bind(Group.kind, GroupCard), WebDashboardViews.layer),
- *   router: Router.history(ServicesHub),
+ *   router: Router.history(ServicesHub), // or Router.make(site, "memory")
  * })
  * <RuntimeProvider runtime={runtime}>
  *   <ui.Provider>
@@ -1069,7 +1069,7 @@ export const useGridMembers = (): ReadonlyArray<{
  */
 export const compose = <VR, VE,>(options: {
   readonly views: Layer.Layer<VR, VE, never>;
-  readonly router: Layer.Layer<Router.Router>;
+  readonly router: Layer.Layer<Router.Router> | Router.Service;
 }): ReturnType<typeof react<VR, VE>> & {
   readonly Provider: (props: {
     readonly children: React.ReactNode;
@@ -1080,14 +1080,16 @@ export const compose = <VR, VE,>(options: {
   readonly router: Router.Service;
 } => {
   const viewKit = react(options.views);
-  const router = Effect.runSync(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const ctx = yield* Layer.build(options.router);
-        return Context.get(ctx, Router.Router);
-      }),
-    ),
-  );
+  const router = Layer.isLayer(options.router)
+    ? Effect.runSync(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const ctx = yield* Layer.build(options.router);
+            return Context.get(ctx, Router.Router);
+          }),
+        ),
+      )
+    : options.router;
 
   const Provider = (props: {
     readonly children: React.ReactNode;
