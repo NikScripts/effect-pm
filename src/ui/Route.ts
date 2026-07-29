@@ -16,7 +16,8 @@
  * {@link group} flattens that group’s endpoints onto the parent builder
  * (HttpApi parity). Mix wire APIs in with {@link addHttpApi}.
  *
- * Runtime creation = the same constructors in ordinary loops — no Group Tag helper.
+ * Generics are preserved through `.add` so {@link urlBuilder} is typed
+ * (`urls.app.dashboard()`, params required when declared).
  *
  * ```ts
  * import * as Route from "hyperlink-ts/ui/Route"
@@ -38,7 +39,6 @@
  * )
  *
  * Route.urlBuilder(site).home()
- * Route.urlBuilder(site).getUser({ params: { id: "1" } })
  * Route.urlBuilder(site).app.dashboard()
  * Route.match(site, "/users/1")
  * ```
@@ -155,11 +155,16 @@ export const compilePath: typeof endpoint.compilePath = endpoint.compilePath;
 // =============================================================================
 
 /**
- * Nested group of destinations — `HttpApiGroup` analogue.
+ * Nested group of destinations — `HttpApiGroup` analogue (+ nested groups).
  *
  * @public
  */
-export interface Group extends catalog.GroupConstraint {}
+export type Group<
+  Id extends string = string,
+  Routes extends Constraint = never,
+  Groups extends catalog.GroupTop = never,
+  TopLevel extends boolean = boolean,
+> = catalog.Group<Id, Routes, Groups, TopLevel>;
 
 /**
  * Named group (`HttpApiGroup.make`). Pass `topLevel: true` so child methods
@@ -167,40 +172,37 @@ export interface Group extends catalog.GroupConstraint {}
  *
  * @public
  */
-export const group: <const Id extends string>(
-  identifier: Id,
-  options?: {
-    readonly topLevel?: boolean | undefined;
-  },
-) => Group = catalog.group;
+export const group: typeof catalog.group = catalog.group;
 
 /** @public */
-export const isGroup: (u: unknown) => u is Group = catalog.isGroup;
+export const isGroup: (u: unknown) => u is catalog.GroupTop = catalog.isGroup;
 
 // =============================================================================
 // Api (`HttpApi`)
 // =============================================================================
 
 /**
- * Route catalog — `HttpApi` analogue.
+ * Route catalog — `HttpApi` analogue. Generics preserved through `.add`.
  *
  * @public
  */
-export interface Api extends catalog.AppConstraint {}
+export type Api<
+  Id extends string = string,
+  Groups extends catalog.GroupTop = never,
+> = catalog.Api<Id, Groups>;
 
 /** Destination or group — what `.add` accepts. @public */
 export type RouteLike = catalog.RouteLike;
 
 /** @public */
-export const isApi: (u: unknown) => u is Api = catalog.isApi;
+export const isApi: (u: unknown) => u is catalog.ApiConstraint = catalog.isApi;
 
 /**
  * Empty catalog (`HttpApi.make`).
  *
  * @public
  */
-export const make: <const Id extends string>(identifier: Id) => Api =
-  catalog.make;
+export const make: typeof catalog.make = catalog.make;
 
 /**
  * Turn an Effect `HttpApi` into a top-level group bundle for {@link Api.add}
@@ -213,7 +215,7 @@ export const addHttpApi: <
   Groups extends HttpApiGroup.Constraint,
 >(
   api: HttpApi.HttpApi<Id, Groups>,
-) => Group = catalog.addHttpApi;
+) => catalog.GroupTop = catalog.addHttpApi;
 
 /** Flattened match hit. @public */
 export type Match = catalog.Match;
@@ -224,15 +226,29 @@ export type Match = catalog.Match;
  * @public
  */
 export const match: (
-  self: Api,
+  self: catalog.ApiConstraint,
   pathname: string,
 ) => Option.Option<Match> = catalog.match;
 
-/** Nested URL builder (`HttpApiClient.urlBuilder`). @public */
-export type UrlBuilder = catalog.UrlBuilder;
+/**
+ * Typed URL builder for a catalog (`HttpApiClient.urlBuilder` analogue).
+ *
+ * @public
+ */
+export type UrlBuilder<A extends catalog.ApiConstraint = catalog.ApiConstraint> =
+  catalog.UrlBuilder<A>;
 
-/** @public */
-export const urlBuilder: (self: Api) => UrlBuilder = catalog.urlBuilder;
+/** Loose builder when the catalog type is erased. @public */
+export type UrlBuilderLoose = catalog.UrlBuilderLoose;
+
+/**
+ * Build the typed URL surface for a catalog.
+ *
+ * @public
+ */
+export const urlBuilder: <A extends catalog.ApiConstraint>(
+  self: A,
+) => UrlBuilder<A> = catalog.urlBuilder;
 
 /** Walk groups/endpoints (tooling) — `HttpApi.reflect` analogue. @public */
 export const reflect: typeof catalog.reflect = catalog.reflect;

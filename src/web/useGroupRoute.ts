@@ -1,6 +1,9 @@
 /**
  * @module web/useGroupRoute
  *
+ * @deprecated Prefer {@link ../ui/Router} (`Router.history(group)` + `useRouter`).
+ * This hook’s `back` pops a path segment (= Router `up`), not history.
+ *
  * URL routing that **mirrors the `Group` tree**: the path is the chain of member keys from
  * the root, so `ServicesHub → Wnba → ImportSchedule` is `/Wnba/ImportSchedule`. Matching is
  * **case-insensitive** (`/wnba/importschedule` resolves the same), while the URL keeps the

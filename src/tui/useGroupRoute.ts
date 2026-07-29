@@ -1,6 +1,9 @@
 /**
  * @module tui/useGroupRoute
  *
+ * @deprecated Prefer {@link ../ui/Router} (`Router.memory(group)` + `useRouter`).
+ * This hook’s `back` pops a path segment (= Router `up`), not history.
+ *
  * In-memory Group routing for the Ink dashboard — same resolve math as
  * `hyperlink-ts/ui` / web `useGroupRoute`, without the History API. `path` is the CLI
  * bare-path focus (`hyperlink Mail` → `["Mail"]`).

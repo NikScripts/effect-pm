@@ -1,10 +1,12 @@
 /**
- * Internal impl for {@link ../ui/Route} — HttpApi-shaped catalog + groups.
+ * Internal impl for {@link ../ui/Route} — HttpApi-shaped catalog + groups,
+ * with generics preserved for typed {@link UrlBuilder} (HttpApiClient pattern).
  */
 import * as Context from "effect/Context";
 import * as Option from "effect/Option";
 import { type Pipeable, pipeArguments } from "effect/Pipeable";
 import * as Predicate from "effect/Predicate";
+import type { Simplify } from "effect/Types";
 import { HttpApi } from "effect/unstable/httpapi";
 import type { HttpApiGroup } from "effect/unstable/httpapi";
 import type * as Schema from "effect/Schema";
@@ -14,49 +16,180 @@ import type { Path } from "./uiRoute";
 export const TypeId = "~hyperlink-ts/ui/Route/Api" as const;
 export const GroupTypeId = "~hyperlink-ts/ui/Route/Group" as const;
 
-export type RouteLike = uiRoute.Constraint | GroupConstraint;
+// =============================================================================
+// Typed models (HttpApi / HttpApiGroup shape + nested groups)
+// =============================================================================
 
-export interface GroupConstraint extends Pipeable {
+type RouteMap<Routes extends uiRoute.Constraint> = {
+  readonly [R in Routes as R["identifier"]]: R;
+};
+
+type GroupMap<Groups extends GroupTop> = {
+  readonly [G in Groups as G["identifier"]]: G;
+};
+
+/**
+ * Erased group shape (runtime + nested-group bound). Avoids a circular
+ * `Group.Constraint` that expands through itself.
+ */
+export interface GroupTop extends Pipeable {
   readonly [GroupTypeId]: typeof GroupTypeId;
   readonly identifier: string;
   readonly topLevel: boolean;
   readonly routes: Readonly<Record<string, uiRoute.Constraint>>;
-  readonly groups: Readonly<Record<string, GroupConstraint>>;
+  readonly groups: Readonly<Record<string, GroupTop>>;
   readonly annotations: Context.Context<never>;
-  add(...items: ReadonlyArray<RouteLike>): GroupConstraint;
-  prefix(prefix: Path): GroupConstraint;
-  annotate<I, S>(tag: Context.Key<I, S>, value: S): GroupConstraint;
+  add(...items: ReadonlyArray<uiRoute.Constraint | GroupTop>): GroupTop;
+  prefix(prefix: Path): GroupTop;
+  annotate<I, S>(tag: Context.Key<I, S>, value: S): GroupTop;
 }
 
-export interface AppConstraint extends Pipeable {
+/**
+ * Nested group of destinations — `HttpApiGroup` analogue, plus nested groups.
+ */
+export interface Group<
+  out Id extends string = string,
+  in out Routes extends uiRoute.Constraint = never,
+  in out Groups extends GroupTop = never,
+  out TopLevel extends boolean = boolean,
+> extends GroupTop {
+  readonly identifier: Id;
+  readonly topLevel: TopLevel;
+  readonly routes: RouteMap<Routes>;
+  readonly groups: GroupMap<Groups>;
+  add<const A extends ReadonlyArray<uiRoute.Constraint | GroupTop>>(
+    ...items: A
+  ): Group<
+    Id,
+    Routes | Extract<A[number], uiRoute.Constraint>,
+    Groups | Extract<A[number], GroupTop>,
+    TopLevel
+  >;
+  prefix(prefix: Path): Group<Id, Routes, Groups, TopLevel>;
+  annotate<I, S>(
+    tag: Context.Key<I, S>,
+    value: S,
+  ): Group<Id, Routes, Groups, TopLevel>;
+}
+
+export declare namespace Group {
+  export type Constraint = GroupTop;
+}
+
+/** @deprecated Use {@link Group.Constraint} */
+export type GroupConstraint = Group.Constraint;
+
+/**
+ * Route catalog — `HttpApi` analogue.
+ */
+export interface Api<
+  out Id extends string = string,
+  in out Groups extends GroupTop = never,
+> extends Pipeable {
+  readonly [TypeId]: typeof TypeId;
+  readonly identifier: Id;
+  readonly groups: GroupMap<Groups>;
+  readonly annotations: Context.Context<never>;
+  add<const A extends ReadonlyArray<uiRoute.Constraint | GroupTop>>(
+    ...items: A
+  ): Api<Id, MergeApiAddsFromTuple<Groups, A>>;
+  addHttpApi<Id2 extends string, ApiGroups extends HttpApiGroup.Constraint>(
+    api: HttpApi.HttpApi<Id2, ApiGroups>,
+  ): Api<Id, MergeApiAdds<Groups, GroupTop>>;
+  prefix(prefix: Path): Api<Id, Groups>;
+  annotate<I, S>(tag: Context.Key<I, S>, value: S): Api<Id, Groups>;
+}
+
+/**
+ * Erased catalog brand (HttpApi.Constraint style) — concrete `Api<Id, Groups>`
+ * values are assignable without forcing `Groups = GroupTop`.
+ */
+export interface ApiConstraint {
   readonly [TypeId]: typeof TypeId;
   readonly identifier: string;
-  readonly groups: Readonly<Record<string, GroupConstraint>>;
+  readonly groups: Readonly<Record<string, GroupTop>>;
   readonly annotations: Context.Context<never>;
-  add(...items: ReadonlyArray<RouteLike>): AppConstraint;
-  addHttpApi<Id extends string, Groups extends HttpApiGroup.Constraint>(
-    api: HttpApi.HttpApi<Id, Groups>,
-  ): AppConstraint;
-  prefix(prefix: Path): AppConstraint;
-  annotate<I, S>(tag: Context.Key<I, S>, value: S): AppConstraint;
+  add(...items: ReadonlyArray<RouteLike>): ApiConstraint;
+  addHttpApi<Id2 extends string, ApiGroups extends HttpApiGroup.Constraint>(
+    api: HttpApi.HttpApi<Id2, ApiGroups>,
+  ): ApiConstraint;
+  prefix(prefix: Path): ApiConstraint;
+  annotate<I, S>(tag: Context.Key<I, S>, value: S): ApiConstraint;
 }
 
-export const isGroup = (u: unknown): u is GroupConstraint =>
+export declare namespace Api {
+  export type Constraint = ApiConstraint;
+}
+
+/** @deprecated Use {@link Api.Constraint} */
+export type AppConstraint = Api.Constraint;
+
+export type RouteLike = uiRoute.Constraint | GroupTop;
+
+// Bare endpoint → `__top` group; topLevel groups merge into `__top`.
+type MergeTopEndpoint<
+  Groups extends GroupTop,
+  E extends uiRoute.Constraint,
+> = Extract<Groups, { readonly identifier: "__top" }> extends infer Top
+  ? [Top] extends [never]
+    ? Groups | Group<"__top", E, never, true>
+    : Top extends Group<"__top", infer Routes, infer Nested, true>
+      ? Exclude<Groups, { readonly identifier: "__top" }> | Group<"__top", Routes | E, Nested, true>
+      : Groups | Group<"__top", E, never, true>
+  : Groups | Group<"__top", E, never, true>;
+
+type MergeTopGroup<
+  Groups extends GroupTop,
+  G extends GroupTop,
+> = G extends Group<infer _Id, infer Routes, infer Nested, true>
+  ? Extract<Groups, { readonly identifier: "__top" }> extends infer Top
+    ? [Top] extends [never]
+      ? Groups | Group<"__top", Routes, Nested, true>
+      : Top extends Group<"__top", infer TopRoutes, infer TopNested, true>
+        ?
+          | Exclude<Groups, { readonly identifier: "__top" }>
+          | Group<"__top", TopRoutes | Routes, TopNested | Nested, true>
+        : Groups | Group<"__top", Routes, Nested, true>
+    : Groups | Group<"__top", Routes, Nested, true>
+  : Groups | G;
+
+type MergeApiAdd<Groups extends GroupTop, Item> = [Item] extends
+  [uiRoute.Constraint] ? MergeTopEndpoint<Groups, Item>
+  : [Item] extends [GroupTop]
+    ? [Item["topLevel"]] extends [true] ? MergeTopGroup<Groups, Item>
+    : Groups | Item
+  : Groups;
+
+type MergeApiAdds<Groups extends GroupTop, Item> = MergeApiAdd<Groups, Item>;
+
+/** Fold a `.add(...)` argument tuple left-to-right (no union distribution). */
+type MergeApiAddsFromTuple<
+  Groups extends GroupTop,
+  Tuple extends ReadonlyArray<unknown>,
+> = Tuple extends readonly [infer Head, ...infer Tail]
+  ? MergeApiAddsFromTuple<MergeApiAdd<Groups, Head>, Tail>
+  : Groups;
+
+export const isGroup = (u: unknown): u is GroupTop =>
   Predicate.hasProperty(u, GroupTypeId);
 
-export const isApi = (u: unknown): u is AppConstraint =>
+export const isApi = (u: unknown): u is ApiConstraint =>
   Predicate.hasProperty(u, TypeId);
 
 /** @deprecated Use {@link isApi} */
 export const isApp = isApi;
 
+// =============================================================================
+// Runtime protos
+// =============================================================================
+
 const groupProto = {
   pipe() {
     return pipeArguments(this, arguments);
   },
-  add(this: GroupConstraint, ...items: ReadonlyArray<RouteLike>): GroupConstraint {
-    let routes = { ...this.routes };
-    let groups = { ...this.groups };
+  add(this: GroupTop, ...items: ReadonlyArray<RouteLike>): GroupTop {
+    let routes = { ...this.routes } as Record<string, uiRoute.Constraint>;
+    let groups = { ...this.groups } as Record<string, GroupTop>;
     for (const item of items) {
       if (uiRoute.isRoute(item)) {
         routes = { ...routes, [item.identifier]: item };
@@ -72,12 +205,12 @@ const groupProto = {
       annotations: this.annotations,
     });
   },
-  prefix(this: GroupConstraint, prefix: Path): GroupConstraint {
+  prefix(this: GroupTop, prefix: Path): GroupTop {
     const routes: Record<string, uiRoute.Constraint> = {};
     for (const [id, route] of Object.entries(this.routes)) {
       routes[id] = route.prefix(prefix);
     }
-    const groups: Record<string, GroupConstraint> = {};
+    const groups: Record<string, GroupTop> = {};
     for (const [id, child] of Object.entries(this.groups)) {
       groups[id] = child.prefix(prefix);
     }
@@ -90,10 +223,10 @@ const groupProto = {
     });
   },
   annotate<I, S>(
-    this: GroupConstraint,
+    this: GroupTop,
     tag: Context.Key<I, S>,
     value: S,
-  ): GroupConstraint {
+  ): GroupTop {
     return makeGroupProto({
       identifier: this.identifier,
       topLevel: this.topLevel,
@@ -108,9 +241,9 @@ const makeGroupProto = (options: {
   readonly identifier: string;
   readonly topLevel: boolean;
   readonly routes: Readonly<Record<string, uiRoute.Constraint>>;
-  readonly groups: Readonly<Record<string, GroupConstraint>>;
+  readonly groups: Readonly<Record<string, GroupTop>>;
   readonly annotations: Context.Context<never>;
-}): GroupConstraint =>
+}): GroupTop =>
   Object.assign(Object.create(groupProto), {
     [GroupTypeId]: GroupTypeId,
     identifier: options.identifier,
@@ -118,35 +251,35 @@ const makeGroupProto = (options: {
     routes: options.routes,
     groups: options.groups,
     annotations: options.annotations,
-  }) as GroupConstraint;
+  }) as GroupTop;
 
 /** `HttpApiGroup.make` analogue. */
-export const group = <const Id extends string>(
+export const group = <
+  const Id extends string,
+  const TopLevel extends boolean = false,
+>(
   identifier: Id,
   options?: {
-    readonly topLevel?: boolean | undefined;
+    readonly topLevel?: TopLevel | undefined;
   },
-): GroupConstraint =>
+): Group<Id, never, never, [TopLevel] extends [true] ? true : false> =>
   makeGroupProto({
     identifier,
     topLevel: options?.topLevel ?? false,
     routes: {},
     groups: {},
     annotations: Context.empty(),
-  });
+  }) as Group<Id, never, never, [TopLevel] extends [true] ? true : false>;
 
-const mergeTopLevel = (
-  existing: GroupConstraint,
-  item: GroupConstraint,
-): GroupConstraint =>
+const mergeTopLevel = (existing: GroupTop, item: GroupTop): GroupTop =>
   existing.add(...Object.values(item.routes), ...Object.values(item.groups));
 
 const appProto = {
   pipe() {
     return pipeArguments(this, arguments);
   },
-  add(this: AppConstraint, ...items: ReadonlyArray<RouteLike>): AppConstraint {
-    let groups = { ...this.groups };
+  add(this: ApiConstraint, ...items: ReadonlyArray<RouteLike>): ApiConstraint {
+    let groups = { ...this.groups } as Record<string, GroupTop>;
     for (const item of items) {
       if (uiRoute.isRoute(item)) {
         const id = "__top";
@@ -167,13 +300,13 @@ const appProto = {
     });
   },
   addHttpApi<Id extends string, Groups extends HttpApiGroup.Constraint>(
-    this: AppConstraint,
+    this: ApiConstraint,
     api: HttpApi.HttpApi<Id, Groups>,
-  ): AppConstraint {
+  ): ApiConstraint {
     return this.add(addHttpApi(api));
   },
-  prefix(this: AppConstraint, prefix: Path): AppConstraint {
-    const groups: Record<string, GroupConstraint> = {};
+  prefix(this: ApiConstraint, prefix: Path): ApiConstraint {
+    const groups: Record<string, GroupTop> = {};
     for (const [id, g] of Object.entries(this.groups)) {
       groups[id] = g.prefix(prefix);
     }
@@ -184,10 +317,10 @@ const appProto = {
     });
   },
   annotate<I, S>(
-    this: AppConstraint,
+    this: ApiConstraint,
     tag: Context.Key<I, S>,
     value: S,
-  ): AppConstraint {
+  ): ApiConstraint {
     return makeAppProto({
       identifier: this.identifier,
       groups: this.groups,
@@ -198,23 +331,23 @@ const appProto = {
 
 const makeAppProto = (options: {
   readonly identifier: string;
-  readonly groups: Readonly<Record<string, GroupConstraint>>;
+  readonly groups: Readonly<Record<string, GroupTop>>;
   readonly annotations: Context.Context<never>;
-}): AppConstraint =>
+}): ApiConstraint =>
   Object.assign(Object.create(appProto), {
     [TypeId]: TypeId,
     identifier: options.identifier,
     groups: options.groups,
     annotations: options.annotations,
-  }) as AppConstraint;
+  }) as ApiConstraint;
 
 /** Empty catalog — `HttpApi.make` analogue. */
-export const make = <const Id extends string>(identifier: Id): AppConstraint =>
+export const make = <const Id extends string>(identifier: Id): Api<Id, never> =>
   makeAppProto({
     identifier,
     groups: {},
     annotations: Context.empty(),
-  });
+  }) as unknown as Api<Id, never>;
 
 /**
  * Import an Effect `HttpApi` path tree as a top-level {@link group} bundle
@@ -225,7 +358,7 @@ export const addHttpApi = <
   Groups extends HttpApiGroup.Constraint,
 >(
   api: HttpApi.HttpApi<Id, Groups>,
-): GroupConstraint => {
+): GroupTop => {
   const buckets = new Map<
     string,
     { readonly topLevel: boolean; ends: Array<uiRoute.Constraint> }
@@ -254,7 +387,7 @@ export const addHttpApi = <
     },
   });
 
-  let bag = group(api.identifier, { topLevel: true });
+  let bag: GroupTop = group(api.identifier, { topLevel: true });
   for (const [id, bucket] of buckets) {
     if (bucket.ends.length === 0) continue;
     if (bucket.topLevel) {
@@ -274,14 +407,14 @@ export type FlatEntry = {
   readonly identifiers: ReadonlyArray<string>;
   readonly path: Path;
   readonly route: uiRoute.Constraint;
-  readonly group: GroupConstraint;
+  readonly group: GroupTop;
   readonly annotations: Context.Context<never>;
 };
 
-export const flatten = (self: AppConstraint): ReadonlyArray<FlatEntry> => {
+export const flatten = (self: ApiConstraint): ReadonlyArray<FlatEntry> => {
   const out: Array<FlatEntry> = [];
   const walkGroup = (
-    g: GroupConstraint,
+    g: GroupTop,
     parentAnnotations: Context.Context<never>,
     identifiers: ReadonlyArray<string>,
   ): void => {
@@ -315,12 +448,12 @@ export type Match = {
   readonly path: Path;
   readonly params: Record<string, string>;
   readonly route: uiRoute.Constraint;
-  readonly group: GroupConstraint;
+  readonly group: GroupTop;
   readonly annotations: Context.Context<never>;
 };
 
 export const match = (
-  self: AppConstraint,
+  self: ApiConstraint,
   pathname: string,
 ): Option.Option<Match> => {
   const normalized =
@@ -355,39 +488,111 @@ export const match = (
   return Option.fromUndefinedOr(best);
 };
 
-export type UrlBuilder = {
-  [key: string]: UrlBuilder | UrlMethod;
-};
+// =============================================================================
+// Typed UrlBuilder (HttpApiClient.urlBuilder pattern + nested groups)
+// =============================================================================
 
-export type UrlMethod = (request?: {
+/** Loose builder for erased / runtime contexts. */
+export type UrlMethodLoose = (request?: {
   readonly params?: Record<string, string> | undefined;
 }) => string;
 
-/** Nested URL builder — `HttpApiClient.urlBuilder` shape. */
-export const urlBuilder = (self: AppConstraint): UrlBuilder => {
-  const root: UrlBuilder = {};
+export type UrlBuilderLoose = {
+  readonly [key: string]: UrlBuilderLoose | UrlMethodLoose;
+};
 
-  const ensure = (target: UrlBuilder, id: string): UrlBuilder => {
+type ParamsOf<E> = E extends uiRoute.Route<string, Path, infer P> ? P : never;
+
+type UrlRequest<E extends uiRoute.Constraint> = [ParamsOf<E>] extends [never]
+  ? void | undefined
+  : { readonly params: Simplify<ParamsOf<E>> };
+
+type UrlArgs<Request> = [Request] extends [void | undefined] ? [request?: Request]
+  : [request: Request];
+
+type UrlMethod<E extends uiRoute.Constraint> = (
+  ...args: UrlArgs<UrlRequest<E>>
+) => string;
+
+type EndpointMethods<Routes extends uiRoute.Constraint> = {
+  readonly [E in Routes as E["identifier"]]: UrlMethod<E>;
+};
+
+type EndpointsOfGroup<G> = G extends Group<string, infer Routes, infer _N, infer _T>
+  ? Routes
+  : never;
+
+type NestedOfGroup<G> = G extends Group<string, infer _R, infer Nested, infer _T>
+  ? Nested
+  : never;
+
+/** Nested group builders (finite depth — dashboards nest a few levels). */
+type GroupBuilder<G extends GroupTop> = Simplify<
+  EndpointMethods<EndpointsOfGroup<G>> & {
+    readonly [
+      C in Extract<NestedOfGroup<G>, GroupTop & { readonly topLevel: false }> as C["identifier"]
+    ]: Simplify<
+      EndpointMethods<EndpointsOfGroup<C>> & {
+        readonly [
+          C2 in Extract<
+            NestedOfGroup<C>,
+            GroupTop & { readonly topLevel: false }
+          > as C2["identifier"]
+        ]: EndpointMethods<EndpointsOfGroup<C2>>
+      }
+    >;
+  }
+>;
+
+type NestedBuilders<Groups extends GroupTop> = {
+  readonly [
+    G in Extract<Groups, GroupTop & { readonly topLevel: false }> as G["identifier"]
+  ]: GroupBuilder<G>;
+};
+
+type TopLevelMethods<Groups extends GroupTop> = EndpointMethods<
+  EndpointsOfGroup<Extract<Groups, GroupTop & { readonly topLevel: true }>>
+> & NestedBuilders<
+  NestedOfGroup<Extract<Groups, GroupTop & { readonly topLevel: true }>> & GroupTop
+>;
+
+/**
+ * Typed URL builder for a catalog — `HttpApiClient.UrlBuilder` analogue.
+ * Nested {@link Group}s nest on the builder; `topLevel` flattens.
+ */
+export type UrlBuilder<A extends ApiConstraint = ApiConstraint> = A extends
+  Api<infer _Id, infer Groups> ? Simplify<
+    TopLevelMethods<Extract<Groups, { readonly topLevel: true }>> &
+      NestedBuilders<Groups>
+  >
+  : UrlBuilderLoose;
+
+/** Nested URL builder — `HttpApiClient.urlBuilder` shape. */
+export const urlBuilder = <A extends ApiConstraint>(self: A): UrlBuilder<A> => {
+  const root: UrlBuilderLoose = {};
+
+  const ensure = (target: UrlBuilderLoose, id: string): UrlBuilderLoose => {
     const existing = target[id];
     if (existing === undefined) {
-      const nest: UrlBuilder = {};
-      target[id] = nest;
+      const nest: UrlBuilderLoose = {};
+      ;(target as Record<string, UrlBuilderLoose | UrlMethodLoose>)[id] = nest;
       return nest;
     }
     if (typeof existing === "function") {
-      return existing as unknown as UrlBuilder;
+      return existing as unknown as UrlBuilderLoose;
     }
     return existing;
   };
 
   const setCallable = (
-    target: UrlBuilder,
+    target: UrlBuilderLoose,
     id: string,
-    method: UrlMethod,
+    method: UrlMethodLoose,
   ): void => {
     const existing = target[id];
+    const record = target as Record<string, UrlBuilderLoose | UrlMethodLoose>;
     if (existing === undefined) {
-      target[id] = method as unknown as UrlBuilder;
+      record[id] = method as unknown as UrlBuilderLoose;
       return;
     }
     if (typeof existing === "function") {
@@ -395,10 +600,10 @@ export const urlBuilder = (self: AppConstraint): UrlBuilder => {
     }
     const fn = Object.assign(
       ((request?: { readonly params?: Record<string, string> }) =>
-        method(request)) as UrlMethod,
+        method(request)) as UrlMethodLoose,
       existing,
     );
-    target[id] = fn as unknown as UrlBuilder;
+    record[id] = fn as unknown as UrlBuilderLoose;
   };
 
   const place = (identifiers: ReadonlyArray<string>, path: Path): void => {
@@ -409,7 +614,7 @@ export const urlBuilder = (self: AppConstraint): UrlBuilder => {
     }
     const leafId = identifiers[identifiers.length - 1]!;
     const compiled = uiRoute.compilePath(path);
-    const method: UrlMethod = (request) =>
+    const method: UrlMethodLoose = (request) =>
       compiled.build(request?.params ?? {});
     setCallable(cursor, leafId, method);
   };
@@ -418,27 +623,27 @@ export const urlBuilder = (self: AppConstraint): UrlBuilder => {
     place(entry.identifiers, entry.path);
   }
 
-  return root;
+  return root as UrlBuilder<A>;
 };
 
 export const reflect = (
-  self: AppConstraint,
+  self: ApiConstraint,
   options: {
     readonly onGroup?: (entry: {
-      readonly group: GroupConstraint;
+      readonly group: GroupTop;
       readonly identifiers: ReadonlyArray<string>;
       readonly annotations: Context.Context<never>;
     }) => void;
     readonly onEndpoint?: (entry: {
       readonly route: uiRoute.Constraint;
-      readonly group: GroupConstraint;
+      readonly group: GroupTop;
       readonly identifiers: ReadonlyArray<string>;
       readonly annotations: Context.Context<never>;
     }) => void;
   },
 ): void => {
   const walk = (
-    g: GroupConstraint,
+    g: GroupTop,
     parent: Context.Context<never>,
     identifiers: ReadonlyArray<string>,
   ): void => {

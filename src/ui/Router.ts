@@ -10,6 +10,9 @@
  * loops), stamps {@link Route.Target} on each destination, and attaches Group
  * helpers (`open` / `up` / `path` / …).
  *
+ * Prefer {@link make} when you want a **typed** `Service` (`to` / `urls` know the
+ * catalog). Layers erase to the Context service for DI.
+ *
  * ```ts
  * import * as Route from "hyperlink-ts/ui/Route"
  * import * as Router from "hyperlink-ts/ui/Router"
@@ -19,13 +22,10 @@
  *   Route.group("app").add(Route.get("dashboard", "/app")),
  * )
  *
- * const layer = Router.history(site) // or Router.memory(site)
- * // Group dashboard:
- * const dash = Router.history(ServicesHub)
- *
- * const router = yield* Router.Router
+ * const router = Router.make(site, "memory")
  * router.to((urls) => urls.app.dashboard())
- * router.up() // Group: replace one short-name segment
+ *
+ * const layer = Router.history(site) // or Router.memory(site)
  * ```
  *
  * @see docs/handoffs/ui-routes-dream.md
@@ -34,6 +34,7 @@ import * as React from "react";
 import { Context, Layer } from "effect";
 import { routesForGroup } from "../internal/uiGroupRoutes";
 import * as internal from "../internal/uiRouter";
+import type { ApiConstraint } from "../internal/uiRoutes";
 import * as Route from "./Route";
 import type { RouteGroup } from "./GroupRoute";
 
@@ -44,8 +45,17 @@ import type { RouteGroup } from "./GroupRoute";
 /** Group or leaf a Group-backed router can open. @public */
 export type MemberTag = internal.MemberTag;
 
-/** Live navigation API — provide with {@link memory} / {@link history}. @public */
-export type Service = internal.Service;
+/**
+ * Live navigation API — provide with {@link memory} / {@link history}, or build
+ * with {@link make} for a catalog-typed surface.
+ *
+ * @public
+ */
+export type Service<A extends ApiConstraint = ApiConstraint> =
+  internal.Service<A>;
+
+/** Typed service for a concrete catalog (`HttpApiClient.ForApi` analogue). @public */
+export type ForApi<A extends ApiConstraint> = Service<A>;
 
 /**
  * Router Context service — provide with {@link memory} / {@link history}.
@@ -70,8 +80,28 @@ export const isGroupMember = internal.isGroupMember;
 // Construction
 // =============================================================================
 
+/**
+ * Build a live router value (typed when `api` is a concrete catalog).
+ *
+ * @public
+ */
+export const make = <A extends ApiConstraint>(
+  api: A,
+  mode: "memory" | "history",
+): Service<A> => internal.makeService(api, mode, undefined);
+
+/**
+ * Build a Group-backed dashboard router (catalog via `Route.make` / `group` / `get` loops).
+ *
+ * @public
+ */
+export const makeGroup = (
+  root: RouteGroup,
+  mode: "memory" | "history",
+): Service => internal.makeService(routesForGroup(root), mode, root);
+
 const layerFor = (
-  input: Route.Api | RouteGroup,
+  input: ApiConstraint | RouteGroup,
   mode: "memory" | "history",
 ): Layer.Layer<Router> => {
   if (Route.isApi(input)) {
@@ -79,8 +109,7 @@ const layerFor = (
       internal.makeService(input, mode, undefined),
     );
   }
-  const api = routesForGroup(input);
-  return Layer.sync(Router, () => internal.makeService(api, mode, input));
+  return Layer.sync(Router, () => makeGroup(input, mode));
 };
 
 /**
@@ -89,8 +118,9 @@ const layerFor = (
  *
  * @public
  */
-export const memory = (input: Route.Api | RouteGroup): Layer.Layer<Router> =>
-  layerFor(input, "memory");
+export const memory = (
+  input: ApiConstraint | RouteGroup,
+): Layer.Layer<Router> => layerFor(input, "memory");
 
 /**
  * Browser History router — `pushState` / `popstate` / `replaceState` against the catalog.
@@ -98,8 +128,9 @@ export const memory = (input: Route.Api | RouteGroup): Layer.Layer<Router> =>
  *
  * @public
  */
-export const history = (input: Route.Api | RouteGroup): Layer.Layer<Router> =>
-  layerFor(input, "history");
+export const history = (
+  input: ApiConstraint | RouteGroup,
+): Layer.Layer<Router> => layerFor(input, "history");
 
 // =============================================================================
 // React
@@ -161,4 +192,49 @@ export const useRouterOption = (): Service | null => {
     return router.subscribe(bump);
   }, [router]);
   return router;
+};
+
+/**
+ * In-app link — `href` + click → {@link Service.go} (no full navigation).
+ *
+ * ```tsx
+ * <Router.Link to="/home">Home</Router.Link>
+ * <Router.Link to={(urls) => urls.app.dashboard()}>App</Router.Link>
+ * ```
+ *
+ * @public
+ */
+export const Link = (props: {
+  readonly to: string | ((urls: Route.UrlBuilderLoose) => string);
+  readonly replace?: boolean;
+  readonly children: React.ReactNode;
+  readonly className?: string;
+}): React.ReactElement => {
+  const router = useRouter();
+  const href =
+    typeof props.to === "function"
+      ? props.to(router.urls as Route.UrlBuilderLoose)
+      : props.to;
+  return React.createElement(
+    "a",
+    {
+      href,
+      className: props.className,
+      onClick: (event: React.MouseEvent<HTMLAnchorElement>) => {
+        if (
+          event.defaultPrevented ||
+          event.button !== 0 ||
+          event.metaKey ||
+          event.altKey ||
+          event.ctrlKey ||
+          event.shiftKey
+        ) {
+          return;
+        }
+        event.preventDefault();
+        router.go(href, { replace: props.replace });
+      },
+    },
+    props.children,
+  );
 };

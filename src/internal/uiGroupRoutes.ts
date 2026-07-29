@@ -13,6 +13,7 @@ import {
   formatGroupPath,
   type RouteGroup,
 } from "../ui/GroupRoute";
+import type { ApiConstraint } from "./uiRoutes";
 
 const isGroupNode = (x: unknown): x is RouteGroup => Group.isGroup(x);
 
@@ -92,7 +93,7 @@ const rootId = (root: RouteGroup): string => {
 /**
  * Catalog for a Group dashboard: member short-name paths + `/health` shell pages.
  */
-export const routesForGroup = (root: RouteGroup): Route.Api =>
+export const routesForGroup = (root: RouteGroup): ApiConstraint =>
   Route.make(rootId(root)).add(
     target(Route.get("health", "/health"), {
       keys: ["health"],

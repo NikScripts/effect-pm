@@ -31,6 +31,15 @@ const run = <A>(
     ),
   );
 
+describe("Router.make (typed)", () => {
+  it("to / urls are catalog-typed", () => {
+    const router = Router.make(site, "memory");
+    router.to((urls) => urls.app.dashboard());
+    expect(router.pathname).toBe("/app");
+    expect(router.urls.home()).toBe("/home");
+  });
+});
+
 describe("Router.memory (Route.Api)", () => {
   it("go / to / match / back", () => {
     run(Router.memory(site), (router) => {
@@ -42,10 +51,7 @@ describe("Router.memory (Route.Api)", () => {
       expect(router.pathname).toBe("/home");
       expect(router.match?.route.identifier).toBe("home");
 
-      router.to((urls) => {
-        const app = urls.app as { dashboard: () => string };
-        return app.dashboard();
-      });
+      router.go("/app");
       expect(router.pathname).toBe("/app");
       expect(router.match?.route.identifier).toBe("dashboard");
 

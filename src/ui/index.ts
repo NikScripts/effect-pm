@@ -6,15 +6,18 @@
  * `hyperlink-ts/Observe`). Renderers import from here and supply their own chrome.
  *
  * ```ts
- * import { resolveGroupRoute, forKind, RuntimeProvider } from "hyperlink-ts/ui"
+ * import * as Route from "hyperlink-ts/ui/Route"
+ * import * as Router from "hyperlink-ts/ui/Router"
+ * import { RuntimeProvider } from "hyperlink-ts/ui"
  * import * as Observe from "hyperlink-ts/Observe"
  * import * as WorkPoolView from "hyperlink-ts/ui/WorkPoolView"
  * ```
  *
  */
 export * from "./atom-react";
+/** @deprecated Prefer {@link ./Route} + {@link ./Router}. */
 export * from "./GroupRoute";
-/** Legacy Group path resolve (Router); route declaration is {@link ./Route}. */
+/** @deprecated Prefer {@link ./Route} + {@link ./Router}. */
 export * as GroupRoute from "./GroupRoute";
 export * from "./data";
 export * from "./cache";

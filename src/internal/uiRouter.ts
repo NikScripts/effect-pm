@@ -11,6 +11,7 @@ import {
   type RouteGroup,
 } from "../ui/GroupRoute";
 import type { LeafTag } from "../ui/widgetRegistry";
+import type { ApiConstraint } from "./uiRoutes";
 
 // =============================================================================
 // Types
@@ -23,18 +24,18 @@ export type MemberTag =
 export type HistoryAction = "push" | "replace";
 
 /** Live navigation API — provide with memory / history layers. */
-export interface Service {
-  readonly api: Route.Api;
+export interface Service<A extends ApiConstraint = ApiConstraint> {
+  readonly api: A;
   readonly mode: "memory" | "history";
   readonly pathname: string;
   readonly match: Route.Match | undefined;
-  readonly urls: Route.UrlBuilder;
+  readonly urls: Route.UrlBuilder<A>;
   readonly go: (
     pathname: string,
     options?: { readonly replace?: boolean },
   ) => void;
   readonly to: (
-    build: (urls: Route.UrlBuilder) => string,
+    build: (urls: Route.UrlBuilder<A>) => string,
     options?: { readonly replace?: boolean },
   ) => void;
   /** Pop one history / memory entry. */
@@ -117,22 +118,41 @@ const requireRoot = (
 };
 
 const urlMethod = (
-  urls: Route.UrlBuilder,
+  urls: Route.UrlBuilderLoose,
   id: string,
 ):
   | ((request?: { readonly params?: Record<string, string> }) => string)
   | undefined => {
-  const value = urls[id];
-  return typeof value === "function" ? value : undefined;
+  const value = (urls as Record<string, unknown>)[id];
+  return typeof value === "function"
+    ? (value as (request?: {
+        readonly params?: Record<string, string>;
+      }) => string)
+    : undefined;
 };
 
 // =============================================================================
 // Resolve — match Target when present, else Group walk
 // =============================================================================
 
+/** Trail / group from short-name keys — Target is SSOT for selected/view/keys. */
+const trailFromKeys = (
+  root: RouteGroup,
+  keys: ReadonlyArray<string>,
+): {
+  readonly trail: ReadonlyArray<RouteGroup>;
+  readonly group: RouteGroup;
+} => {
+  const walked = resolveGroupRoute(root, keys);
+  return {
+    trail: walked.trail,
+    group: walked.trail[walked.trail.length - 1] ?? root,
+  };
+};
+
 const resolveState = (
   root: RouteGroup | undefined,
-  api: Route.Api,
+  api: ApiConstraint,
   pathname: string,
 ): {
   readonly keys: ReadonlyArray<string>;
@@ -154,9 +174,6 @@ const resolveState = (
     };
   }
 
-  const walked = resolveGroupRoute(root, segmentsOf(pathname));
-  const group = walked.trail[walked.trail.length - 1] ?? root;
-
   if (match !== undefined) {
     const target = Option.getOrUndefined(
       Context.getOption(match.annotations, Route.Target),
@@ -166,9 +183,17 @@ const resolveState = (
         target.kind === "health" && match.params.nodeId !== undefined
           ? (["health", match.params.nodeId] as const)
           : target.keys;
+      // Health keys are not Group members — trail stays at root.
+      const { trail, group } =
+        target.kind === "health"
+          ? { trail: [root] as const, group: root }
+          : trailFromKeys(
+              root,
+              keys.filter((k) => k !== "logs" && k !== "schedule"),
+            );
       return {
         keys,
-        trail: walked.trail,
+        trail,
         selected:
           target.kind === "leaf" || target.kind === "leafView"
             ? target.member
@@ -180,12 +205,14 @@ const resolveState = (
     }
   }
 
+  // Unmatched / unannotated URL — fall back to Group walk.
+  const walked = resolveGroupRoute(root, segmentsOf(pathname));
   return {
     keys: walked.keys,
     trail: walked.trail,
     selected: walked.selected,
     view: walked.view,
-    group,
+    group: walked.trail[walked.trail.length - 1] ?? root,
     match,
   };
 };
@@ -194,11 +221,11 @@ const resolveState = (
 // Construction
 // =============================================================================
 
-export const makeService = (
-  api: Route.Api,
+export const makeService = <A extends ApiConstraint>(
+  api: A,
   mode: "memory" | "history",
   root: RouteGroup | undefined,
-): Service => {
+): Service<A> => {
   const urls = Route.urlBuilder(api);
   let pathname =
     mode === "history" ? locationPathname() : (normalize("/") as string);
@@ -334,12 +361,12 @@ export const makeService = (
     },
     openHealth: () => {
       requireRoot(root, "openHealth");
-      const health = urlMethod(urls, "health");
+      const health = urlMethod(urls as Route.UrlBuilderLoose, "health");
       setPathname(health !== undefined ? health() : "/health", "push");
     },
     openNode: (nodeId) => {
       requireRoot(root, "openNode");
-      const healthNode = urlMethod(urls, "healthNode");
+      const healthNode = urlMethod(urls as Route.UrlBuilderLoose, "healthNode");
       setPathname(
         healthNode !== undefined
           ? healthNode({ params: { nodeId } })
