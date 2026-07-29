@@ -4,6 +4,19 @@
  * Crown-jewel coverage: B is Directory-visible **before** A shuts down (peer pick excludes
  * self by dial, not nodeKey). Membership rebind-only suites (shutdown A, then start B) live
  * elsewhere (`lookup-client-rebind`, `lookup-d3-peers`).
+ *
+ * Matrix (labels are stable for grep / brief cites):
+ * - L1 / L1b / L8 / L14 — WorkPool bake + lookupClient + payload fidelity
+ * - L-same / L16 — same nodeKey + askIncumbent then dial-peer transfer
+ * - L2 / L15 / L17 — custom take→give / empty / peer identity
+ * - L3 / L4 / L4b / L10 / L11 — defer paths (no-peer, peer gone, give fail, defect, retry-exhausted)
+ * - L5 / L9 — Retry→Done / void→Done
+ * - L6 / L18 — multi-service Done+Defer / dual Done
+ * - L7 — mid-handoff draining refuses askIncumbent
+ * - L12 — no-peer defer then retry after B joins
+ * - L13 — three peers, first non-self dial
+ * - L19 — Advice cleared on successful leave
+ * - L20 — WorkPool.serveRemote bake
  */
 import {
   Clock,
@@ -14,6 +27,7 @@ import {
   Exit,
   Fiber,
   Layer,
+  Option,
   Ref,
   Schedule,
   Schema,
@@ -23,6 +37,7 @@ import * as Hyperlink from "../src/Hyperlink";
 import * as Lookup from "../src/Lookup";
 import * as Node from "../src/Node";
 import * as WorkPool from "../src/WorkPool";
+import { DEFAULT_HANDOFF_RETRIES } from "../src/internal/hyperlinkHandoff";
 import {
   NodeStatusTag,
   client as nodeStatusClient,
@@ -53,6 +68,27 @@ const nodesServing = (
   Context.get(lookupCtx, Lookup.Directory)
     .nodesServing(new Lookup.NodesServingRequest({ serviceKey }))
     .pipe(Effect.provide(lookupCtx));
+
+/** Typed `HandoffDeferred` channel asserts (reason + serviceKey + optional phase). */
+const expectHandoffDeferred = (
+  err: unknown,
+  expected: {
+    readonly reason: Hyperlink.HandoffDeferred["reason"];
+    readonly serviceKey: string;
+  },
+) => {
+  expect(err).toBeInstanceOf(Hyperlink.HandoffDeferred);
+  const deferred = err as Hyperlink.HandoffDeferred;
+  expect(deferred._tag).toBe("HandoffDeferred");
+  expect(deferred.reason).toBe(expected.reason);
+  expect(deferred.serviceKey).toBe(expected.serviceKey);
+};
+
+const nodePhase = (node: Node.AnyNode) =>
+  Effect.gen(function* () {
+    const status = yield* NodeStatusTag;
+    return (yield* status.status.get).phase;
+  }).pipe(Effect.provide(nodeStatusClient(node)), Effect.scoped);
 
 describe("A→B cutover — WorkPool baked releaseEnqueueHandoff", () => {
   it.live(
@@ -524,16 +560,21 @@ describe("A→B cutover — custom Hyperlink.serve { handoff }", () => {
         });
 
         const err = yield* Effect.flip(Node.shutdown(WorkerA));
-        expect(err._tag).toBe("HandoffDeferred");
-        expect(["failed", "no-peer", "defer"]).toContain(err.reason);
+        expect(err).toBeInstanceOf(Hyperlink.HandoffDeferred);
+        expect(["failed", "no-peer", "defer"]).toContain(
+          (err as Hyperlink.HandoffDeferred).reason,
+        );
+        expect((err as Hyperlink.HandoffDeferred).serviceKey).toBe(Mover.key);
 
         // A restored locally — either never took, or re-queued after failed give.
         expect(yield* Ref.get(storeA)).toEqual(["keep-me"]);
+        expect(yield* nodePhase(WorkerA)).toBe("running");
 
         // A still advertised (did not leave).
         const rows = yield* nodesServing(lookupCtx, Mover.key);
         expect(rows.some((r) => r.nodeKey === WorkerA.key)).toBe(true);
       }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(35))),
+    60_000,
   );
 
   it.live("L5: Retry then Done over a live peer", () =>
@@ -628,12 +669,16 @@ describe("A→B cutover — custom Hyperlink.serve { handoff }", () => {
       );
 
       const err = yield* Effect.flip(Node.shutdown(WorkerA));
-      expect(err._tag).toBe("HandoffDeferred");
-      expect(err.reason).toBe("no-peer");
+      expectHandoffDeferred(err, {
+        reason: "no-peer",
+        serviceKey: Jobs.key,
+      });
+      expect(yield* nodePhase(WorkerA)).toBe("running");
 
       const rows = yield* nodesServing(lookupCtx, Jobs.key);
       expect(rows.some((r) => r.nodeKey === WorkerA.key)).toBe(true);
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(25))),
+    60_000,
   );
 });
 
@@ -727,18 +772,23 @@ describe("A→B cutover — multi-service + membership", () => {
         );
 
         const err = yield* Effect.flip(Node.shutdown(WorkerA));
-        expect(err._tag).toBe("HandoffDeferred");
-        expect(err.reason).toBe("defer");
-        expect(err.serviceKey).toBe(Beta.key);
+        expectHandoffDeferred(err, {
+          reason: "defer",
+          serviceKey: Beta.key,
+        });
+        expect(yield* nodePhase(WorkerA)).toBe("running");
 
         // Alpha may already have transferred (unbounded forEach, first fail after).
         expect(yield* Ref.get(alphaB)).toEqual(["x"]);
         expect(yield* Ref.get(alphaA)).toEqual([]);
 
-        // A did not leave.
-        const rows = yield* nodesServing(lookupCtx, Alpha.key);
-        expect(rows.some((r) => r.nodeKey === WorkerA.key)).toBe(true);
+        // A did not leave — both service ads still list A.
+        const alphaRows = yield* nodesServing(lookupCtx, Alpha.key);
+        const betaRows = yield* nodesServing(lookupCtx, Beta.key);
+        expect(alphaRows.some((r) => r.nodeKey === WorkerA.key)).toBe(true);
+        expect(betaRows.some((r) => r.nodeKey === WorkerA.key)).toBe(true);
       }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(35))),
+    60_000,
   );
 
   it.live(
@@ -991,18 +1041,16 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
         );
 
         const err = yield* Effect.flip(Node.shutdown(WorkerA));
-        expect(err._tag).toBe("HandoffDeferred");
-        expect(err.reason).toBe("failed");
-
-        const mid = yield* Effect.gen(function* () {
-          const status = yield* NodeStatusTag;
-          return yield* status.status.get;
-        }).pipe(Effect.provide(nodeStatusClient(WorkerA)), Effect.scoped);
-        expect(mid.phase).toBe("running");
+        expectHandoffDeferred(err, {
+          reason: "failed",
+          serviceKey: Ping.key,
+        });
+        expect(yield* nodePhase(WorkerA)).toBe("running");
 
         const rows = yield* nodesServing(lookupCtx, Ping.key);
         expect(rows.some((r) => r.nodeKey === WorkerA.key)).toBe(true);
       }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(30))),
+    60_000,
   );
 
   it.live("L11: Retry exhausted ⇒ HandoffDeferred(retry-exhausted); A stays", () =>
@@ -1057,14 +1105,18 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
       );
 
       const err = yield* Effect.flip(Node.shutdown(WorkerA));
-      expect(err._tag).toBe("HandoffDeferred");
-      expect(err.reason).toBe("retry-exhausted");
-      // Default retries = 3 ⇒ initial + 3 retries = 4 attempts.
-      expect(yield* Ref.get(attempts)).toBeGreaterThanOrEqual(3);
+      expectHandoffDeferred(err, {
+        reason: "retry-exhausted",
+        serviceKey: Ping.key,
+      });
+      // Default retries = N ⇒ initial attempt + N retries = N + 1 invocations.
+      expect(yield* Ref.get(attempts)).toBe(DEFAULT_HANDOFF_RETRIES + 1);
+      expect(yield* nodePhase(WorkerA)).toBe("running");
 
       const rows = yield* nodesServing(lookupCtx, Ping.key);
       expect(rows.some((r) => r.nodeKey === WorkerA.key)).toBe(true);
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(30))),
+    60_000,
   );
 
   it.live(
@@ -1108,10 +1160,13 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
         }).pipe(Effect.provide(aCtx));
 
         const first = yield* Effect.flip(Node.shutdown(WorkerA));
-        expect(first._tag).toBe("HandoffDeferred");
-        expect(first.reason).toBe("no-peer");
+        expectHandoffDeferred(first, {
+          reason: "no-peer",
+          serviceKey: Jobs.key,
+        });
+        expect(yield* nodePhase(WorkerA)).toBe("running");
 
-        // Pending still on A after restore.
+        // Pending still on A after restore; latch cleared so a later shutdown can retry.
         const aSnap = yield* Effect.gen(function* () {
           const q = yield* Jobs;
           return yield* q.status.get;
@@ -1580,5 +1635,350 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
           pathB,
         );
       }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(40))),
+  );
+});
+
+describe("A→B cutover — peer identity, dual Done, Advice, serveRemote", () => {
+  it.live(
+    "L17: handoff `to` is the Directory peer (B), not self — proven via snapshot id",
+    () =>
+      Effect.gen(function* () {
+        const lookupPath = yield* tmpSock("l17-lookup");
+        const pathA = yield* tmpSock("l17-a");
+        const pathB = yield* tmpSock("l17-b");
+
+        const lookupNode = Node.Tag()("ab/l17-lookup", {
+          path: lookupPath,
+        }).pipe(Node.asLookup);
+
+        class Mover extends Hyperlink.Tag<Mover>()("ab/l17/Mover", {
+          take: Hyperlink.effect(Schema.Array(Schema.String)),
+          give: Hyperlink.effectFn(Schema.Array(Schema.String), Schema.Void),
+          whoami: Hyperlink.effect(Schema.String),
+        }) {}
+        class WorkerA extends Node.Tag<WorkerA, Mover>()("ab/l17/WorkerA", {
+          path: pathA,
+        }) {}
+        class WorkerB extends Node.Tag<WorkerB, Mover>()("ab/l17/WorkerB", {
+          path: pathB,
+        }) {}
+
+        const lookupClient = Lookup.client(lookupNode);
+        yield* Layer.build(Lookup.layerNode(lookupNode));
+        const lookupCtx = yield* Layer.build(lookupClient);
+
+        const storeA = yield* Ref.make<ReadonlyArray<string>>(["x"]);
+        const storeB = yield* Ref.make<ReadonlyArray<string>>([]);
+        const peeredAs = yield* Ref.make<Option.Option<string>>(Option.none());
+
+        const impl = (
+          id: string,
+          store: Ref.Ref<ReadonlyArray<string>>,
+        ) => ({
+          take: Effect.gen(function* () {
+            const items = yield* Ref.get(store);
+            yield* Ref.set(store, []);
+            return items;
+          }),
+          give: (items: ReadonlyArray<string>) =>
+            Ref.update(store, (a) => [...a, ...items]),
+          whoami: Effect.succeed(id),
+        });
+
+        const handoff = (
+          from: {
+            readonly take: Effect.Effect<ReadonlyArray<string>>;
+          },
+          to: {
+            readonly give: (
+              items: ReadonlyArray<string>,
+            ) => Effect.Effect<void>;
+            readonly whoami: Effect.Effect<string>;
+          },
+          ctx: Hyperlink.HandoffContext,
+        ) =>
+          Effect.gen(function* () {
+            yield* Ref.set(peeredAs, Option.some(yield* to.whoami));
+            const items = yield* from.take;
+            if (items.length > 0) yield* to.give(items);
+            return yield* ctx.done;
+          });
+
+        yield* Layer.build(
+          Node.unix(WorkerB, [
+            Hyperlink.serve(Mover, impl("B", storeB), { handoff }),
+          ]).pipe(Layer.provide(lookupClient)),
+        );
+        yield* Layer.build(
+          Node.unix(WorkerA, [
+            Hyperlink.serve(Mover, impl("A", storeA), { handoff }),
+          ]).pipe(Layer.provide(lookupClient)),
+        );
+
+        yield* waitUntil(
+          nodesServing(lookupCtx, Mover.key),
+          (rows) => rows.length === 2,
+        );
+
+        yield* Node.shutdown(WorkerA);
+
+        expect(yield* Ref.get(peeredAs)).toEqual(Option.some("B"));
+        expect(yield* Ref.get(storeB)).toEqual(["x"]);
+        expect(yield* Ref.get(storeA)).toEqual([]);
+      }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(30))),
+    60_000,
+  );
+
+  it.live(
+    "L18: two services both Done ⇒ both transfer; A leaves Directory for both keys",
+    () =>
+      Effect.gen(function* () {
+        const lookupPath = yield* tmpSock("l18-lookup");
+        const pathA = yield* tmpSock("l18-a");
+        const pathB = yield* tmpSock("l18-b");
+
+        const lookupNode = Node.Tag()("ab/l18-lookup", {
+          path: lookupPath,
+        }).pipe(Node.asLookup);
+
+        class Alpha extends Hyperlink.Tag<Alpha>()("ab/l18/Alpha", {
+          take: Hyperlink.effect(Schema.Array(Schema.String)),
+          give: Hyperlink.effectFn(Schema.Array(Schema.String), Schema.Void),
+        }) {}
+        class Beta extends Hyperlink.Tag<Beta>()("ab/l18/Beta", {
+          take: Hyperlink.effect(Schema.Array(Schema.String)),
+          give: Hyperlink.effectFn(Schema.Array(Schema.String), Schema.Void),
+        }) {}
+
+        class WorkerA extends Node.Tag<WorkerA, Alpha | Beta>()(
+          "ab/l18/WorkerA",
+          { path: pathA },
+        ) {}
+        class WorkerB extends Node.Tag<WorkerB, Alpha | Beta>()(
+          "ab/l18/WorkerB",
+          { path: pathB },
+        ) {}
+
+        const lookupClient = Lookup.client(lookupNode);
+        yield* Layer.build(Lookup.layerNode(lookupNode));
+        const lookupCtx = yield* Layer.build(lookupClient);
+
+        const alphaA = yield* Ref.make<ReadonlyArray<string>>(["a1"]);
+        const alphaB = yield* Ref.make<ReadonlyArray<string>>([]);
+        const betaA = yield* Ref.make<ReadonlyArray<string>>(["b1"]);
+        const betaB = yield* Ref.make<ReadonlyArray<string>>([]);
+
+        const bag = (store: Ref.Ref<ReadonlyArray<string>>) => ({
+          take: Effect.gen(function* () {
+            const items = yield* Ref.get(store);
+            yield* Ref.set(store, []);
+            return items;
+          }),
+          give: (items: ReadonlyArray<string>) =>
+            Ref.update(store, (a) => [...a, ...items]),
+        });
+
+        const move = (
+          from: { readonly take: Effect.Effect<ReadonlyArray<string>> },
+          to: {
+            readonly give: (
+              items: ReadonlyArray<string>,
+            ) => Effect.Effect<void>;
+          },
+          ctx: Hyperlink.HandoffContext,
+        ) =>
+          Effect.gen(function* () {
+            const items = yield* from.take;
+            if (items.length > 0) yield* to.give(items);
+            return yield* ctx.done;
+          });
+
+        yield* Layer.build(
+          Node.unix(WorkerB, [
+            Hyperlink.serve(Alpha, bag(alphaB), { handoff: move }),
+            Hyperlink.serve(Beta, bag(betaB), { handoff: move }),
+          ]).pipe(Layer.provide(lookupClient)),
+        );
+        yield* Layer.build(
+          Node.unix(WorkerA, [
+            Hyperlink.serve(Alpha, bag(alphaA), { handoff: move }),
+            Hyperlink.serve(Beta, bag(betaA), { handoff: move }),
+          ]).pipe(Layer.provide(lookupClient)),
+        );
+
+        yield* waitUntil(
+          nodesServing(lookupCtx, Alpha.key),
+          (rows) => rows.length === 2,
+        );
+
+        yield* Node.shutdown(WorkerA);
+
+        expect(yield* Ref.get(alphaB)).toEqual(["a1"]);
+        expect(yield* Ref.get(betaB)).toEqual(["b1"]);
+        expect(yield* Ref.get(alphaA)).toEqual([]);
+        expect(yield* Ref.get(betaA)).toEqual([]);
+
+        yield* waitUntil(
+          nodesServing(lookupCtx, Alpha.key),
+          (rows) =>
+            rows.length === 1 && rows[0]?.nodeKey === WorkerB.key,
+        );
+        yield* waitUntil(
+          nodesServing(lookupCtx, Beta.key),
+          (rows) =>
+            rows.length === 1 && rows[0]?.nodeKey === WorkerB.key,
+        );
+      }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(35))),
+    60_000,
+  );
+
+  it.live(
+    "L19: successful leave clears Advice prefer for the outgoing node's services",
+    () =>
+      Effect.gen(function* () {
+        const lookupPath = yield* tmpSock("l19-lookup");
+        const pathA = yield* tmpSock("l19-a");
+        const pathB = yield* tmpSock("l19-b");
+
+        const lookupNode = Node.Tag()("ab/l19-lookup", {
+          path: lookupPath,
+        }).pipe(Node.asLookup);
+
+        class Jobs extends WorkPool.Tag<Jobs>()("ab/l19/Jobs", {
+          payload: Item,
+        }) {}
+        class WorkerA extends Node.Tag<WorkerA, Jobs>()("ab/l19/WorkerA", {
+          path: pathA,
+        }) {}
+        class WorkerB extends Node.Tag<WorkerB, Jobs>()("ab/l19/WorkerB", {
+          path: pathB,
+        }) {}
+
+        const lookupClient = Lookup.client(lookupNode);
+        yield* Layer.build(Lookup.layerNode(lookupNode));
+        const lookupCtx = yield* Layer.build(lookupClient);
+
+        yield* Layer.build(
+          Node.unix(WorkerB, [
+            WorkPool.serve(Jobs, {
+              effect: () => Effect.void,
+              autoStart: false,
+            }),
+          ]).pipe(Layer.provide(lookupClient)),
+        );
+        const aCtx = yield* Layer.build(
+          Node.unix(WorkerA, [
+            WorkPool.serve(Jobs, {
+              effect: () => Effect.void,
+              autoStart: false,
+            }),
+          ]).pipe(Layer.provide(lookupClient)),
+        );
+
+        yield* waitUntil(
+          nodesServing(lookupCtx, Jobs.key),
+          (rows) => rows.length === 2,
+        );
+
+        yield* Effect.gen(function* () {
+          const q = yield* Jobs;
+          yield* q.add([{ n: 1 }]);
+        }).pipe(Effect.provide(aCtx));
+
+        yield* Lookup.advise({
+          serviceKey: Jobs.key,
+          prefer: WorkerA.key,
+        }).pipe(Effect.provide(lookupCtx));
+
+        expect(
+          yield* Lookup.preferred(Jobs.key).pipe(Effect.provide(lookupCtx)),
+        ).toEqual(Option.some(WorkerA.key));
+
+        yield* Node.shutdown(WorkerA);
+
+        yield* waitUntil(
+          Lookup.preferred(Jobs.key).pipe(Effect.provide(lookupCtx)),
+          Option.isNone,
+        );
+
+        const bSnap = yield* Effect.gen(function* () {
+          const q = yield* Jobs;
+          return yield* q.status.get;
+        }).pipe(Effect.provide(Hyperlink.client(Jobs, WorkerB)), Effect.scoped);
+        expect(bSnap.sizes.normal).toBe(1);
+      }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(35))),
+    60_000,
+  );
+
+  it.live(
+    "L20: WorkPool.serveRemote bakes releaseEnqueueHandoff (no local grant on A)",
+    () =>
+      Effect.gen(function* () {
+        const lookupPath = yield* tmpSock("l20-lookup");
+        const pathA = yield* tmpSock("l20-a");
+        const pathB = yield* tmpSock("l20-b");
+
+        const lookupNode = Node.Tag()("ab/l20-lookup", {
+          path: lookupPath,
+        }).pipe(Node.asLookup);
+
+        class Jobs extends WorkPool.Tag<Jobs>()("ab/l20/Jobs", {
+          payload: Item,
+        }) {}
+        class WorkerA extends Node.Tag<WorkerA, Jobs>()("ab/l20/WorkerA", {
+          path: pathA,
+        }) {}
+        class WorkerB extends Node.Tag<WorkerB, Jobs>()("ab/l20/WorkerB", {
+          path: pathB,
+        }) {}
+
+        const lookupClient = Lookup.client(lookupNode);
+        yield* Layer.build(Lookup.layerNode(lookupNode));
+        const lookupCtx = yield* Layer.build(lookupClient);
+
+        // B keeps a local grant so we can observe pending after transfer.
+        yield* Layer.build(
+          Node.unix(WorkerB, [
+            WorkPool.serve(Jobs, {
+              effect: () => Effect.void,
+              autoStart: false,
+            }),
+          ]).pipe(Layer.provide(lookupClient)),
+        );
+        // A is served-only (gateway) — enqueue via addressed client.
+        yield* Layer.build(
+          Node.unix(WorkerA, [
+            WorkPool.serveRemote(Jobs, {
+              effect: () => Effect.void,
+              autoStart: false,
+            }),
+          ]).pipe(Layer.provide(lookupClient)),
+        );
+
+        yield* waitUntil(
+          nodesServing(lookupCtx, Jobs.key),
+          (rows) => rows.length === 2,
+        );
+
+        yield* Effect.gen(function* () {
+          const q = yield* Jobs;
+          yield* q.add([{ n: 9 }, { n: 8 }]);
+        }).pipe(Effect.provide(Hyperlink.client(Jobs, WorkerA)), Effect.scoped);
+
+        yield* Node.shutdown(WorkerA);
+
+        yield* waitUntil(
+          nodesServing(lookupCtx, Jobs.key),
+          (rows) =>
+            rows.length === 1 && rows[0]?.nodeKey === WorkerB.key,
+        );
+
+        const bSnap = yield* Effect.gen(function* () {
+          const q = yield* Jobs;
+          return yield* q.status.get;
+        }).pipe(Effect.provide(Hyperlink.client(Jobs, WorkerB)), Effect.scoped);
+        expect(bSnap.sizes.normal).toBe(2);
+      }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(35))),
+    60_000,
   );
 });

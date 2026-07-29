@@ -18,6 +18,7 @@ import * as Lookup from "../src/Lookup";
 import * as Node from "../src/Node";
 import * as WorkPool from "../src/WorkPool";
 import {
+  DEFAULT_HANDOFF_RETRIES,
   hyperlinkHandoffContext,
   runHandoffFunction,
 } from "../src/internal/hyperlinkHandoff";
@@ -112,9 +113,14 @@ describe("runHandoffFunction", () => {
 
   it.effect("Retry exhausted defers (reason=retry-exhausted)", () =>
     Effect.gen(function* () {
+      const attempts = yield* Ref.make(0);
       const err = yield* Effect.flip(
         runHandoffFunction({
-          handoff: (_from, _to, ctx) => ctx.retry,
+          handoff: (_from, _to, ctx) =>
+            Effect.gen(function* () {
+              yield* Ref.update(attempts, (n) => n + 1);
+              return yield* ctx.retry;
+            }),
           from: {},
           serviceKey: "svc",
           dialPeer: Effect.succeed(Option.some({})),
@@ -122,6 +128,29 @@ describe("runHandoffFunction", () => {
         }),
       );
       expect(err.reason).toBe("retry-exhausted");
+      expect(err.serviceKey).toBe("svc");
+      // retries: 2 ⇒ initial + 2 retries = 3 invocations.
+      expect(yield* Ref.get(attempts)).toBe(3);
+    }),
+  );
+
+  it.effect("default retry bound is DEFAULT_HANDOFF_RETRIES", () =>
+    Effect.gen(function* () {
+      const attempts = yield* Ref.make(0);
+      const err = yield* Effect.flip(
+        runHandoffFunction({
+          handoff: (_from, _to, ctx) =>
+            Effect.gen(function* () {
+              yield* Ref.update(attempts, (n) => n + 1);
+              return yield* ctx.retry;
+            }),
+          from: {},
+          serviceKey: "svc",
+          dialPeer: Effect.succeed(Option.some({})),
+        }),
+      );
+      expect(err.reason).toBe("retry-exhausted");
+      expect(yield* Ref.get(attempts)).toBe(DEFAULT_HANDOFF_RETRIES + 1);
     }),
   );
 

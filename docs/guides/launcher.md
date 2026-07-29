@@ -125,10 +125,17 @@ Provide an Effect log / tracer / metric reader at the app edge if you want these
 
 ## Custody vs membership
 
-After handoff, registration is the **child’s** job (`Lookup.client` / advertise). Launcher
-does not call Lookup. Parent checks membership with `Lookup.nodesServing(Jobs)` (Tag or
-wire key) — sugar over Directory’s schema’d request. See:
+After **Launcher** `Handle.handoff()` (custody → `Node.assume`), registration is the
+**child’s** job (`Lookup.client` / advertise). Launcher does not call Lookup. Parent checks
+membership with `Lookup.nodesServing(Jobs)` (Tag or wire key) — sugar over Directory’s
+schema’d request. See:
 [`examples/launcher/lookup-membership.ts`](../../examples/launcher/lookup-membership.ts).
+
+**Do not confuse** Launcher custody `Handle.handoff` with **node migration** handoff
+(`Hyperlink.serve(…, { handoff })` / WorkPool `releaseEnqueueHandoff` during `Node.shutdown`).
+Custody = “I own myself; launcher may exit.” Migration = move HyperService work A→B on the
+outgoing node. See
+[Identity coordinator — A→B cutover](./identity-coordinator.md#ab-cutover-recipe-state-transfer).
 
 ## Deferred (not beta Launcher)
 
@@ -136,7 +143,3 @@ wire key) — sugar over Directory’s schema’d request. See:
 - Track D client redirect / dual-serve (`lookupClient` + directory `peersLayer` already rebind on dial swap)
 - Blank worker + remote assign; HTTP/WS Lookup; nameless Launcher discovery
 - `Handle.events` Stream; stdout/stderr tap; thin `hl up` CLI
-
-WorkPool peer transfer is baked into `WorkPool.serve` / `serveRemote` (`releaseEnqueueHandoff`
-→ peer `enqueue` on `Node.shutdown`); see
-[identity coordinator](./identity-coordinator.md#custody-vs-membership-launcher--lookup).

@@ -1,6 +1,6 @@
 # Brief — Launcher + node handoff (Agent 5)
 
-**Status:** Track A + **Track B Eng'd** on tip. **Track C Locked #27–34 + #39**; **#27/#31/#32/#39 Eng'd** (`Directory.changes`, `Node.drain` / `shutdown` / `launch`, directory `peersLayer` rebind, serve-site `{ handoff }` fn + `WorkPool.releaseEnqueueHandoff`). **#39 retires #33 `withHandoff` / #34's tag mechanism.** **#35–37** deferred (owner-confirmed). Explicit A/B launcher mode deferred.  
+**Status:** Track A + **Track B Eng'd** on tip. **Track C Locked #27–34 + #39 Eng'd** (`Directory.changes`, `Node.drain` / `shutdown` / `launch`, directory `peersLayer` + `lookupClient` rebind, serve-site `{ handoff }` fn, WorkPool baked `releaseEnqueueHandoff`). Live A→B suite: `test/handoff-ab-cutover.test.ts`. **#39 retires #33 `withHandoff` / #34's tag mechanism.** **#35–37** deferred (owner-confirmed). Explicit A/B launcher mode deferred.  
 **Opened:** 2026-07-25 (owner via Agent G).  
 **Audience:** next agent picking up launcher + handoff / migration discussion.
 
@@ -216,7 +216,7 @@ Owner locked #22–26; Eng on tip:
 - Recipe + example: custody (`Launcher.up`) then membership (`Lookup.client` + advertise/identity).
 - Guide: [`identity-coordinator.md`](../guides/identity-coordinator.md) planes section.
 
-**Still deferred:** blank worker / assign protocol; HTTP/WS Lookup; nameless Launcher discovery; Track D client redirect / dual-serve; explicit A/B launcher. `lookupClient` + directory `peersLayer` hot-rebind Eng'd. Track C Locked #27–34 Eng'd; #35–37 deferred below.
+**Still deferred:** blank worker / assign protocol; HTTP/WS Lookup; nameless Launcher discovery; Track D client redirect / dual-serve; explicit A/B launcher. `lookupClient` + directory `peersLayer` hot-rebind Eng'd. Track C Locked #27–34 + **#39** Eng'd (serve-site `{ handoff }` + WorkPool `releaseEnqueueHandoff` + live A→B suite); #35–37 deferred below.
 
 ### Track C — research note (2026-07-28): what already exists
 
@@ -309,9 +309,9 @@ It does **not** answer cross-version state migration or zero-downtime handoff.
 ### 4. Version upgrade → handoff
 
 - If the new node is an **updated version of an existing node**, a **handoff** is triggered.
-- Each service that **supports** handoff must have handoff **configured in its layers**.
-- When handoff completes, the **old node shuts down** (via node control plane, not launcher).
-- Mission framing (still design-only): [`node-handoff-mission.md`](./node-handoff-mission.md) — zero-downtime updates + cross-version skew as normal.
+- Each service that **supports** handoff opts in via serve `{ handoff }` (or toolkit config). **WorkPool** always bakes `releaseEnqueueHandoff` on `serve` / `serveRemote`.
+- When handoffs complete, the **old node** leaves via `Node.shutdown` (drain → handoffs → Advice clear → Directory unregister → listen exit) — not launcher kill.
+- Mission framing (goal + open problems; Track C #27–34+#39 Eng'd): [`node-handoff-mission.md`](./node-handoff-mission.md).
 
 ### 5. Clients during handoff — open
 
@@ -334,9 +334,11 @@ How **clients** handle node handoff (redirect, dual-serve, drain, retry, discove
 
 ## Suggested first moves
 
-1. ~~Framing / A+B / lock #27–34 / Eng / peersLayer + lookupClient rebind / withHandoff + peer transfer~~ — done.
-2. **Owner later:** explicit A/B launcher; re-lock #35–37 if Eng wanted; Track D redirect / dual-serve.
+1. ~~Framing / A+B / lock #27–34+#39 / Eng / peersLayer + lookupClient rebind / serve-site `{ handoff }` + `releaseEnqueueHandoff` + live A→B suite~~ — done.
+2. **Owner later:** explicit A/B launcher; re-lock #35–37 if Eng wanted; Track D redirect / dual-serve; `restartSuccessor`.
 3. ~~Track D `lookupClient` hot-rebind~~ — Eng'd (with directory `peersLayer`).
+
+**Live cutover SSOT:** `test/handoff-ab-cutover.test.ts` (B Directory-visible first; peer by dial; same-`nodeKey` + `askIncumbent` variants). Unit/orchestration: `test/hyperlink-handoff.test.ts`.
 
 ---
 
@@ -353,15 +355,21 @@ How **clients** handle node handoff (redirect, dual-serve, drain, retry, discove
 ```
 Read docs/handoffs/launcher-and-handoff-brief.md carefully.
 
-You own launcher + node handoff (Agent 5). Track A+B and Track C Locked #27–34
-are Eng'd on tip (Launcher, Directory.changes, Node.drain/shutdown/launch,
-peersLayer rebind, Hyperlink.withHandoff + workPoolRelease peer enqueue).
+You own launcher + node handoff (Agent 5). Track A+B and Track C Locked
+#27–34+#39 are Eng'd on tip:
+  - Launcher custody; Directory.changes; Node.drain/shutdown/launch
+  - peersLayer + lookupClient hot-rebind
+  - serve-site handoff(from,to,ctx) on Hyperlink.serve (Locked #39)
+  - WorkPool.serve/serveRemote always bake releaseEnqueueHandoff
+  - live A→B suite: test/handoff-ab-cutover.test.ts
+
+Retired: withHandoff / handoffOf / HandoffStrategy / workPoolRelease tag strategy.
 Replacement addressing: same nodeKey + new dial; no automated A/B launcher yet.
 launcher-decisions.md stays reference-only if redesigning Track A further.
 
 Contract drift (contractHash / verify / loud-failures) is solid — reuse it.
 
-Next: do NOT Eng deferred #35–37 until re-locked. Track D lookupClient rebind
-is Eng'd; client redirect / dual-serve and explicit A/B launcher still open.
+Next: do NOT Eng deferred #35–37 until re-locked. Track D redirect /
+dual-serve, restartSuccessor, and explicit A/B launcher still open.
 Plan-first; no new nouns unless really good.
 ```

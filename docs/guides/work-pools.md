@@ -606,6 +606,18 @@ For moving *pending work* between runtimes, `release` exports entries decoded an
 `releaseEncoded` exports them in wire form (no item schema needed on the receiver);
 the other side `enqueue`s them, attempt budgets intact.
 
+### Node shutdown handoff (baked)
+
+`WorkPool.serve` / `WorkPool.serveRemote` **always** attach
+`WorkPool.releaseEnqueueHandoff`: on the outgoing node's `Node.shutdown`, after drain, pending
+entries are `release`d and `enqueue`d on the Directory peer (self excluded **by dial**). Empty
+pending ⇒ `Done` without touching the peer. No peer / failure ⇒ `HandoffDeferred` (node stays
+`running`, Directory row held). Opt-out / override is deferred.
+
+Recipe + same-`nodeKey` notes:
+[Identity coordinator — A→B cutover](./identity-coordinator.md#ab-cutover-recipe-state-transfer).
+Live suite: `test/handoff-ab-cutover.test.ts`.
+
 ## Reconfiguring (layer patches)
 
 `WorkPool.configure(Tag, patch)` (and the same shape on `Daemon.configure` /
