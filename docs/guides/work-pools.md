@@ -573,8 +573,11 @@ capture is skipped and history reads stay empty.
 
 ```ts
 import { HistoryStore } from "hyperlink-ts"
-import { Layer, Effect } from "effect"
+import * as WorkPool from "hyperlink-ts/WorkPool"
+import { Effect, Layer, Schema } from "effect"
 
+const Job = Schema.Struct({ id: Schema.String })
+class Jobs extends WorkPool.Tag<Jobs>()("@app/Jobs", { payload: Job }) {}
 declare const effect: (job: typeof Job.Type) => Effect.Effect<void>
 
 const withHistory = WorkPool.layer(Jobs, { effect }).pipe(

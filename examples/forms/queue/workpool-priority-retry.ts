@@ -5,8 +5,12 @@
  * observation via `events` + `Hyperlink.runForEachTag`.
  *
  * Tip surface: `Tag` + `layer` (see Queues guide). Run: `pnpm run example:workpool-retry`
+ *
+ * Docs: `docs/examples/queue/workpool-priority-retry.md` includes this file via Twoslash;
+ * `// ---cut---` hides this module header from the page (Twoslash still type-checks it).
  */
 
+// ---cut---
 import { Cause, Duration, Effect, Schema } from "effect";
 import { WorkPool, Hyperlink } from "../../../src";
 

@@ -6,8 +6,12 @@
  * Soft-override: `WorkPool.layer(…).pipe(Layer.provideMerge(AppStore.layer…))`
  * — see `docs/guides/stores.md`.
  * Run: `pnpm run example:workpool-priority`
+ *
+ * Docs: `docs/examples/queue/workpool-priority-lanes.md` includes this file via Twoslash;
+ * `// ---cut---` hides this module header from the page (Twoslash still type-checks it).
  */
 
+// ---cut---
 import { Effect, Schema } from "effect";
 import { WorkPool } from "../../../src";
 

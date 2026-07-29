@@ -154,6 +154,9 @@ On `Daemon.layer` / `serve` / `serveRemote`, finished runs append automatically.
 in-memory storage applies unless you override with an app store (see [Stores](/docs/stores)).
 `Daemon.make` does **not** auto-append.
 
+Runnable forms: [Soft store auto-write](/docs/daemon-layer-store-auto-write) ·
+[Typed Failed.error](/docs/daemon-layer-typed-error-store).
+
 ## `Daemon.make` (embeddable supervisor)
 
 ``` ts

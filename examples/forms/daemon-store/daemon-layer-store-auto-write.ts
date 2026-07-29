@@ -5,22 +5,26 @@
  * layer to override Soft capture (journals + Logs). One AppStore — do not also wrap the
  * program in a second `DemoStore.layerMemory` (split journals).
  * Run: `pnpm run example:daemon-layer-store-auto-write`
+ *
+ * Docs: `docs/examples/daemon-store/daemon-layer-store-auto-write.md` includes this file;
+ * cut markers hide the module header and demo harness from the page.
  */
 
+import { runNodeProgramOrExit } from "../../shared/demo-harness";
+
+// ---cut---
 import { Duration, Effect, Layer, Option, Schema } from "effect";
 import { TestClock } from "effect/testing";
 import * as Daemon from "../../../src/Daemon";
 import * as Store from "../../../src/Store";
 import * as Polling from "../../../src/Polling";
-import { builtInDaemonStoreContract } from "../../../src/internal/store/daemonStoreSpec";
-import { runNodeProgramOrExit } from "../../shared/demo-harness";
 
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 
 class PricesDaemon extends Daemon.Tag<PricesDaemon>()("examples/Prices", { success: Price }) {}
 
 class DemoStore extends Store.Service<DemoStore>("@examples/DemoStore")(
-  Store.register(PricesDaemon, builtInDaemonStoreContract(PricesDaemon)),
+  Daemon.store(PricesDaemon),
 ) {}
 
 const program = Effect.gen(function* () {
@@ -56,5 +60,6 @@ const program = Effect.gen(function* () {
   Effect.scoped,
   Effect.orDie,
 );
+// ---cut-after---
 
 runNodeProgramOrExit(program, "daemon-layer-store-auto-write finished");

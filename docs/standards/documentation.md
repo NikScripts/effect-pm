@@ -153,6 +153,10 @@ In this book the default device is the Twoslash fence with a `---cut---` preambl
 comments on the Handle. Stay with that device unless a page has a stronger domain-specific one, and
 then use *that* one consistently on that subject.
 
+For the **Examples** book, the runnable file is SSOT: use
+`{.twoslash include="examples/forms/…"}` and put cut markers in that `.ts` so the page can hide
+harness / headers without forking the program into markdown.
+
 {#earn-the-abstraction .should appliesTo=docs}
 ## Earn the Abstraction
 
