@@ -127,6 +127,7 @@ import {
 import { adaptPromiseHandle } from "./internal/promiseHandle";
 import {
   makeHyperlinkHandoffRun,
+  type HyperlinkHandoffPeerTransfer,
   type HyperlinkHandoffStrategy,
 } from "./internal/hyperlinkHandoff";
 // Node listen/connect used only inside functions via dynamic import where needed;
@@ -3177,7 +3178,9 @@ export const withReadiness: {
  *
  * Strategies:
  * - `"drainOnly"` — WorkPool `shutdown` + wait `phase === "off"`
- * - `"workPoolRelease"` — local `releaseEncoded`/`release` then shutdown (peer enqueue = #34)
+ * - `"workPoolRelease"` — decoded `release` → Directory peer `enqueue` (exclude self by dial)
+ *   → shutdown (Locked #34). Soft-fails re-queue locally. Without advertise/`selfDial`,
+ *   local `release`/`releaseEncoded` only.
  *
  * Run during {@link Node.shutdown} after drain and before Lookup leave. Non-WorkPool kinds log and no-op.
  *
@@ -3214,22 +3217,118 @@ export const handoffOf = (tag: unknown): HandoffStrategy | undefined => {
   return undefined;
 };
 
+/** Opt-in handoff recipe stowed on a served entry / shared instance (Locked #33/#34). @internal */
+export type ServedHandoff = {
+  readonly strategy: HandoffStrategy;
+  readonly tag: unknown;
+  readonly kind: string | undefined;
+  readonly wireImpl: unknown;
+};
+
 /** Build a {@link ServedHyperlink}.handoff entry from a stamped tag + wire impl. @internal */
 const servedHandoff = (
   tag: unknown,
   wireImpl: unknown,
-):
-  | {
-      readonly strategy: HandoffStrategy;
-      readonly run: Effect.Effect<void>;
-    }
-  | undefined => {
+): ServedHandoff | undefined => {
   const strategy = handoffOf(tag);
   if (strategy === undefined) return undefined;
   return {
     strategy,
-    run: makeHyperlinkHandoffRun(strategy, kindOf(tag), wireImpl),
+    tag,
+    kind: kindOf(tag),
+    wireImpl,
   };
+};
+
+/** Same dial target? (exclude self during #34 peer pick — not by nodeKey). */
+const sameHandoffDial = (
+  a: {
+    readonly kind: string;
+    readonly path?: string;
+    readonly url?: string;
+  },
+  b: {
+    readonly kind: string;
+    readonly path?: string;
+    readonly url?: string;
+  },
+): boolean => a.kind === b.kind && a.path === b.path && a.url === b.url;
+
+/**
+ * Directory peer enqueue for {@link withHandoff}`("workPoolRelease")` — excludes self by dial
+ * so same-`nodeKey` A→B replacement still finds the incoming row (Locked #34 / #38).
+ */
+const makeWorkPoolPeerTransfer = (
+  tag: unknown,
+  wireKey: string,
+  selfDial: {
+    readonly kind: ProtocolKind;
+    readonly path?: string;
+    readonly url?: string;
+  },
+): HyperlinkHandoffPeerTransfer => ({
+  tryEnqueueToPeer: (entries) =>
+    Effect.gen(function* () {
+      const Lookup = yield* Effect.promise(() => import("./Lookup"));
+      const dirOpt = yield* Effect.serviceOption(Lookup.Directory);
+      if (Option.isNone(dirOpt)) return false;
+      const rows = yield* dirOpt.value.nodesServing(
+        new Lookup.NodesServingRequest({ serviceKey: wireKey }),
+      );
+      const peer = rows.find((row) => !sameHandoffDial(selfDial, row));
+      if (peer === undefined) return false;
+      if (peer.path === undefined && peer.url === undefined) return false;
+      // buildPeerClientAt is defined later in this module; runtime call is after init.
+      const scoped = Effect.scoped(
+        Effect.gen(function* () {
+          const client = yield* buildPeerClientAt(
+            tag as HyperlinkTag<any, any>,
+            {
+              key: peer.nodeKey,
+              kind: peer.kind,
+              ...(peer.path !== undefined ? { path: peer.path } : {}),
+              ...(peer.url !== undefined ? { url: peer.url } : {}),
+            },
+          );
+          if (
+            !Predicate.hasProperty(client, "enqueue") ||
+            typeof client.enqueue !== "function"
+          ) {
+            return false;
+          }
+          const out: unknown = client.enqueue(entries);
+          const payload: unknown = out;
+          if (!Effect.isEffect(out)) return true;
+          // SAFE: proved Effect.isEffect on the copy kept as unknown (wire client edge).
+          const exit = yield* Effect.exit(payload as never);
+          return Exit.isSuccess(exit);
+        }),
+      );
+      return yield* scoped.pipe(Effect.catch(() => Effect.succeed(false)));
+    }),
+});
+
+const materializeHandoffRun = (
+  handoff: ServedHandoff,
+  wireKey: string,
+  selfDial:
+    | {
+        readonly kind: ProtocolKind;
+        readonly path?: string;
+        readonly url?: string;
+      }
+    | undefined,
+): Effect.Effect<void> => {
+  const peerTransfer =
+    handoff.strategy === "workPoolRelease" && selfDial !== undefined
+      ? makeWorkPoolPeerTransfer(handoff.tag, wireKey, selfDial)
+      : undefined;
+  return makeHyperlinkHandoffRun(
+    handoff.strategy,
+    handoff.kind,
+    handoff.wireImpl,
+    peerTransfer,
+  );
 };
 
 /**
@@ -3237,13 +3336,26 @@ const servedHandoff = (
  * Solo {@link ServedHyperlink}.handoff runs plus any opted-in shared-Spec instance handoffs
  * for the same wire keys (shared stamps live on module-private shared wire-key state).
  *
+ * Pass `selfDial` from advertise membership so `"workPoolRelease"` can Directory-find the
+ * peer and enqueue (Locked #34). Omit for local-only release.
+ *
  * @internal
  */
 export const collectServedHandoffRuns = (
   entries: ReadonlyArray<ServedHyperlink>,
+  options?: {
+    readonly selfDial?: {
+      readonly kind: ProtocolKind;
+      readonly path?: string;
+      readonly url?: string;
+    };
+  },
 ): ReadonlyArray<Effect.Effect<void>> => {
+  const selfDial = options?.selfDial;
   const fromEntries = entries.flatMap((entry) =>
-    entry.handoff === undefined ? [] : [entry.handoff.run],
+    entry.handoff === undefined
+      ? []
+      : [materializeHandoffRun(entry.handoff, entry.wireKey, selfDial)],
   );
   const seen = new Set<string>();
   const fromShared: Array<Effect.Effect<void>> = [];
@@ -3252,7 +3364,11 @@ export const collectServedHandoffRuns = (
     seen.add(entry.wireKey);
     const state = sharedWireStates.get(entry.wireKey);
     if (state === undefined) continue;
-    for (const run of state.handoffs) fromShared.push(run);
+    for (const handoff of state.handoffs) {
+      fromShared.push(
+        materializeHandoffRun(handoff, entry.wireKey, selfDial),
+      );
+    }
   }
   return [...fromEntries, ...fromShared];
 };
@@ -4106,12 +4222,8 @@ export interface ServedHyperlink {
   readonly readiness: Effect.Effect<Readiness>;
   /** F4 wire-contract fingerprint — stamped at serve from the tag Spec. */
   readonly contractHash: string;
-  /** Opt-in cutover Effect ({@link withHandoff}); run during {@link Node.shutdown} after drain. */
-  readonly handoff?: {
-    /** Solo stamp; omitted when aggregating shared-Spec instances. */
-    readonly strategy?: HandoffStrategy;
-    readonly run: Effect.Effect<void>;
-  };
+  /** Opt-in cutover recipe ({@link withHandoff}); materialized in {@link collectServedHandoffRuns}. */
+  readonly handoff?: ServedHandoff;
   /** Node log key when the served tag is bound to a {@link Node} (`options.node`). */
   readonly nodeLogKey?: string;
   /** Declared transport set of the tag's {@link Node}, when node-bound — the server asserts its own
@@ -4233,7 +4345,7 @@ const INSTANCE_KEY_HEADER = "key";
 type SharedWireState = {
   readonly table: Map<string, Record<string, unknown>>;
   readonly readiness: Array<Effect.Effect<Readiness>>;
-  readonly handoffs: Array<Effect.Effect<void>>;
+  readonly handoffs: Array<ServedHandoff>;
 };
 
 const sharedWireStates = new Map<string, SharedWireState>();
@@ -4363,7 +4475,7 @@ const sharedInstanceLayer = (
     tag[specSym],
   );
   const readiness = readinessCheckServed(tag, wireImpl);
-  const handoff = servedHandoff(tag, wireImpl)?.run;
+  const handoff = servedHandoff(tag, wireImpl);
   return Layer.effectDiscard(
     Effect.acquireRelease(
       Effect.sync(() => {

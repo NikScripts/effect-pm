@@ -166,7 +166,21 @@ const httpServerBase = (
       const { signal: signalListenExit } = yield* Effect.promise(
         () => import("./nodeListenExit"),
       );
-      const handoffRuns = Hyperlink.collectServedHandoffRuns(entries);
+      const handoffRuns = Hyperlink.collectServedHandoffRuns(entries, {
+        ...(membership !== undefined
+          ? {
+              selfDial: {
+                kind: membership.kind,
+                ...(membership.path !== undefined
+                  ? { path: membership.path }
+                  : {}),
+                ...(membership.url !== undefined
+                  ? { url: membership.url }
+                  : {}),
+              },
+            }
+          : {}),
+      });
       const nodeEntry = nodeStatusServeEntry({
         startedAt,
         serviceCount: entries.length,

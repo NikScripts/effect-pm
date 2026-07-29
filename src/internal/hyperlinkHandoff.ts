@@ -1,5 +1,5 @@
 /**
- * Per-HyperService handoff runners (Locked #33) — invoked from {@link Node.shutdown}
+ * Per-HyperService handoff runners (Locked #33/#34) — invoked from {@link Node.shutdown}
  * after node drain and before Lookup leave.
  *
  * @internal
@@ -13,6 +13,18 @@ import { Duration, Effect, Exit, Match, Predicate, Schedule } from "effect";
  * @internal
  */
 export type HyperlinkHandoffStrategy = "drainOnly" | "workPoolRelease";
+
+/**
+ * Peer transfer hook for {@link HyperlinkHandoffStrategy}`"workPoolRelease"` (Locked #34).
+ * Returns `true` when the peer accepted the entries.
+ *
+ * @internal
+ */
+export type HyperlinkHandoffPeerTransfer = {
+  readonly tryEnqueueToPeer: (
+    entries: ReadonlyArray<unknown>,
+  ) => Effect.Effect<boolean>;
+};
 
 /** WorkPool kind ids (plain + priority). */
 const isHyperlinkWorkPoolKind = (kind: string | undefined): boolean =>
@@ -29,6 +41,8 @@ const closeEffect = <A = unknown>(value: unknown): Effect.Effect<A> =>
 type ReleaseFn = (input: {
   readonly options?: unknown;
 }) => Effect.Effect<unknown>;
+
+type EnqueueFn = (entries: ReadonlyArray<unknown>) => Effect.Effect<unknown>;
 
 const statusPhase = (
   impl: unknown,
@@ -67,6 +81,18 @@ const releaseFnOf = (
   return (input) => {
     const out: unknown = fn(input);
     const payload: unknown = out;
+    if (!Effect.isEffect(out)) return Effect.succeed([]);
+    return closeEffect(payload);
+  };
+};
+
+const enqueueFnOf = (impl: unknown): EnqueueFn | undefined => {
+  if (!Predicate.hasProperty(impl, "enqueue")) return undefined;
+  const fn = impl.enqueue;
+  if (typeof fn !== "function") return undefined;
+  return (entries) => {
+    const out: unknown = fn(entries);
+    const payload: unknown = out;
     if (!Effect.isEffect(out)) return Effect.void;
     return closeEffect(payload);
   };
@@ -85,8 +111,33 @@ const awaitQueueOff = (impl: unknown): Effect.Effect<void> => {
   );
 };
 
-const runRelease = (release: ReleaseFn): Effect.Effect<boolean> =>
-  Effect.map(Effect.exit(release({ options: {} })), Exit.isSuccess);
+const asEntryArray = (value: unknown): ReadonlyArray<unknown> =>
+  Array.isArray(value) ? value : [];
+
+const requeueLocal = (
+  enqueue: EnqueueFn | undefined,
+  entries: ReadonlyArray<unknown>,
+  reason: string,
+): Effect.Effect<void> => {
+  if (entries.length === 0) return Effect.void;
+  if (enqueue === undefined) {
+    return Effect.logWarning(
+      `handoff workPoolRelease: ${reason}; no local enqueue to recover`,
+    );
+  }
+  return Effect.gen(function* () {
+    const exit = yield* Effect.exit(enqueue(entries));
+    if (Exit.isFailure(exit)) {
+      yield* Effect.logWarning(
+        `handoff workPoolRelease: ${reason}; local re-queue failed`,
+      );
+      return;
+    }
+    yield* Effect.logWarning(
+      `handoff workPoolRelease: ${reason}; re-queued locally`,
+    );
+  });
+};
 
 const drainOnly = (impl: unknown): Effect.Effect<void> =>
   Effect.gen(function* () {
@@ -102,21 +153,49 @@ const drainOnly = (impl: unknown): Effect.Effect<void> =>
     Effect.withLogSpan("handoff.drainOnly"),
   );
 
-const workPoolRelease = (impl: unknown): Effect.Effect<void> =>
+const workPoolRelease = (
+  impl: unknown,
+  peerTransfer: HyperlinkHandoffPeerTransfer | undefined,
+): Effect.Effect<void> =>
   Effect.gen(function* () {
-    // Local half of transfer: export pending off the source queue (peer enqueue = #34).
-    const releaseEncoded = releaseFnOf(impl, "releaseEncoded");
+    const enqueue = enqueueFnOf(impl);
     const release = releaseFnOf(impl, "release");
-    if (releaseEncoded !== undefined) {
-      const ok = yield* runRelease(releaseEncoded);
+    const releaseEncoded = releaseFnOf(impl, "releaseEncoded");
+
+    // Peer transfer needs decoded entries (#34). Without `release`, fall back to local-only
+    // `releaseEncoded` (no enqueueEncoded in v1).
+    if (peerTransfer !== undefined && release !== undefined) {
+      const released = asEntryArray(
+        yield* release({ options: {} }).pipe(
+          Effect.catch(() => Effect.succeed([])),
+        ),
+      );
+      if (released.length > 0) {
+        const ok = yield* peerTransfer.tryEnqueueToPeer(released);
+        if (!ok) {
+          yield* requeueLocal(enqueue, released, "peer transfer unavailable");
+        }
+      }
+    } else if (releaseEncoded !== undefined) {
+      const ok = yield* Effect.map(
+        Effect.exit(releaseEncoded({ options: {} })),
+        Exit.isSuccess,
+      );
       if (!ok && release !== undefined) {
-        yield* runRelease(release);
+        yield* Effect.exit(release({ options: {} }));
+      }
+      if (peerTransfer !== undefined && release === undefined) {
+        yield* Effect.logWarning(
+          "handoff workPoolRelease: peer transfer needs decoded release; local releaseEncoded only",
+        );
       }
     } else if (release !== undefined) {
-      yield* runRelease(release);
+      // Local-only path (no Directory self dial / no peerTransfer wired).
+      yield* Effect.exit(release({ options: {} }));
     } else {
       yield* Effect.logWarning("handoff workPoolRelease: no release on impl");
     }
+
     const shutdown = shutdownOf(impl);
     if (shutdown !== undefined) {
       yield* shutdown;
@@ -137,6 +216,7 @@ export const makeHyperlinkHandoffRun = (
   strategy: HyperlinkHandoffStrategy,
   kind: string | undefined,
   wireImpl: unknown,
+  peerTransfer?: HyperlinkHandoffPeerTransfer,
 ): Effect.Effect<void> => {
   if (!isHyperlinkWorkPoolKind(kind)) {
     return Effect.logWarning("handoff skipped: not a WorkPool kind").pipe(
@@ -149,7 +229,9 @@ export const makeHyperlinkHandoffRun = (
   }
   return Match.value(strategy).pipe(
     Match.when("drainOnly", () => drainOnly(wireImpl)),
-    Match.when("workPoolRelease", () => workPoolRelease(wireImpl)),
+    Match.when("workPoolRelease", () =>
+      workPoolRelease(wireImpl, peerTransfer),
+    ),
     Match.exhaustive,
   );
 };

@@ -99,7 +99,8 @@ Membership Lookup Identity/Directory/Advice   who wins / where clients dial
 - **Per-service handoff (opt-in, default off):** pipe `Hyperlink.withHandoff("drainOnly" |
   "workPoolRelease")` on the HyperService tag (not `ListenOptions`). Absent stamp ⇒ not
   migrated. WorkPool-shaped: `drainOnly` shuts the queue down; `workPoolRelease` does
-  local `release`/`releaseEncoded` then shutdown (peer enqueue still deferred).
+  decoded `release` → Directory peer `enqueue` (exclude self by dial) → shutdown. Soft-fails
+  re-queue locally when no peer / enqueue fails.
 - **Membership push / dialers:** directory-mode `Hyperlink.peersLayer` and
   `Hyperlink.lookupClient` **hot-rebind** on `Directory.changes` (dial move / join /
   leave). Escape hatch: `Lookup.changes` / `directoryTable()`.

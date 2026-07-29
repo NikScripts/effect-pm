@@ -95,6 +95,96 @@ describe("Hyperlink.withHandoff", () => {
     }),
   );
 
+  it.effect("workPoolRelease transfers released entries to peer then shuts down", () =>
+    Effect.gen(function* () {
+      const events = yield* Ref.make<Array<string>>([]);
+      const phase = yield* Ref.make("running");
+      const transferred = yield* Ref.make<ReadonlyArray<unknown>>([]);
+      yield* makeHyperlinkHandoffRun(
+        "workPoolRelease",
+        "hyperlink-ts/WorkPool",
+        {
+          release: () =>
+            Effect.gen(function* () {
+              yield* Ref.update(events, (a) => [...a, "release"]);
+              return [{ id: "job-1" }];
+            }),
+          enqueue: (entries: ReadonlyArray<unknown>) =>
+            Effect.gen(function* () {
+              yield* Ref.update(events, (a) => [...a, "enqueue-local"]);
+              yield* Ref.set(transferred, entries);
+            }),
+          shutdown: Effect.gen(function* () {
+            yield* Ref.update(events, (a) => [...a, "shutdown"]);
+            yield* Ref.set(phase, "off");
+          }),
+          status: {
+            get: Ref.get(phase).pipe(Effect.map((p) => ({ phase: p }))),
+          },
+        },
+        {
+          tryEnqueueToPeer: (entries) =>
+            Effect.gen(function* () {
+              yield* Ref.update(events, (a) => [...a, "enqueue-peer"]);
+              yield* Ref.set(transferred, entries);
+              return true;
+            }),
+        },
+      );
+      expect(yield* Ref.get(events)).toEqual([
+        "release",
+        "enqueue-peer",
+        "shutdown",
+      ]);
+      expect(yield* Ref.get(transferred)).toEqual([{ id: "job-1" }]);
+    }),
+  );
+
+  it.effect("workPoolRelease re-queues locally when peer transfer fails", () =>
+    Effect.gen(function* () {
+      const events = yield* Ref.make<Array<string>>([]);
+      const phase = yield* Ref.make("running");
+      const local = yield* Ref.make<ReadonlyArray<unknown>>([]);
+      yield* makeHyperlinkHandoffRun(
+        "workPoolRelease",
+        "hyperlink-ts/WorkPool",
+        {
+          release: () =>
+            Effect.gen(function* () {
+              yield* Ref.update(events, (a) => [...a, "release"]);
+              return [{ id: "job-2" }];
+            }),
+          enqueue: (entries: ReadonlyArray<unknown>) =>
+            Effect.gen(function* () {
+              yield* Ref.update(events, (a) => [...a, "enqueue-local"]);
+              yield* Ref.set(local, entries);
+            }),
+          shutdown: Effect.gen(function* () {
+            yield* Ref.update(events, (a) => [...a, "shutdown"]);
+            yield* Ref.set(phase, "off");
+          }),
+          status: {
+            get: Ref.get(phase).pipe(Effect.map((p) => ({ phase: p }))),
+          },
+        },
+        {
+          tryEnqueueToPeer: () =>
+            Effect.gen(function* () {
+              yield* Ref.update(events, (a) => [...a, "enqueue-peer-miss"]);
+              return false;
+            }),
+        },
+      );
+      expect(yield* Ref.get(events)).toEqual([
+        "release",
+        "enqueue-peer-miss",
+        "enqueue-local",
+        "shutdown",
+      ]);
+      expect(yield* Ref.get(local)).toEqual([{ id: "job-2" }]);
+    }),
+  );
+
   it.effect("non-WorkPool kinds no-op", () =>
     Effect.gen(function* () {
       const events = yield* Ref.make<Array<string>>([]);
