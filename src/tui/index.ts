@@ -30,7 +30,6 @@ export { DashboardTopBar } from "./DashboardTopBar";
 export { ControlKey, FocusedDaemon, FocusedPriority, LogTail, NodeMark } from "./focusWidgets";
 export { base, Cell, DaemonCell, FallbackCell, GroupCell, PriorityCell, QueueCell, type TuiCellProps, type TuiCellWidget, type TuiWidgetRegistry } from "./cellWidgets";
 export { RuntimeProvider, useRuntime } from "./runtime";
-export { useGroupRoute } from "./useGroupRoute";
 export { Tui, TuiNotConfigured } from "../cli/index";
 export type { TuiOpenInput } from "../cli/Tui";
 // Platform skins: `import * as WorkPoolView from "hyperlink-ts/tui/WorkPoolView"`

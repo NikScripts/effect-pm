@@ -32,11 +32,13 @@
  */
 import * as React from "react";
 import { Context, Layer } from "effect";
-import { routesForGroup } from "../internal/uiGroupRoutes";
+import {
+  routesForGroup,
+  type RouteGroup,
+} from "../internal/uiGroupRoutes";
 import * as internal from "../internal/uiRouter";
 import type { ApiConstraint } from "../internal/uiRoutes";
 import * as Route from "./Route";
-import type { RouteGroup } from "./GroupRoute";
 
 // =============================================================================
 // Types

@@ -4,13 +4,13 @@
 import { Context, Option } from "effect";
 import * as Group from "../Group";
 import * as Route from "../ui/Route";
+import type { LeafTag } from "../ui/widgetRegistry";
 import {
   formatGroupPath,
   pathToMember,
   resolveGroupRoute,
   type RouteGroup,
-} from "../ui/GroupRoute";
-import type { LeafTag } from "../ui/widgetRegistry";
+} from "./uiGroupRoutes";
 import type { ApiConstraint } from "./uiRoutes";
 
 // =============================================================================

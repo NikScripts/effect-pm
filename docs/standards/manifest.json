@@ -517,6 +517,15 @@
           "title": "A public module is one file with flat exports"
         },
         {
+          "id": "modules-and-boundaries.no-tag-triples",
+          "severity": "must",
+          "appliesTo": [
+            "src",
+            "examples"
+          ],
+          "title": "No Module.Tag.member triples"
+        },
+        {
           "id": "modules-and-boundaries.filename-matches-export",
           "severity": "must",
           "appliesTo": [

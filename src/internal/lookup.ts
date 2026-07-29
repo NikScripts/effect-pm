@@ -3,7 +3,9 @@
  *
  * Structural shapes only (no import from `Lookup.ts`) so the public module can own Schema
  * classes without a cycle. Directory mutations publish onto {@link LookupRegistries.directoryChanges}
- * for membership-push (Track C A→B dial swap notify).
+ * for membership-push (Track C A→B dial swap notify). Advice mutations publish onto
+ * {@link LookupRegistries.adviceChanges} so {@link Hyperlink.lookupClient} can move dials
+ * when prefer flips (Track D early move).
  *
  * @internal
  */
@@ -55,6 +57,23 @@ export type StoredDirectoryChange =
       readonly _tag: "DirectoryRemoved";
       readonly nodeKey: string;
       readonly previous: StoredDirectoryEntry;
+    };
+
+/**
+ * Advice board event (structural) — mapped to wire {@link AdviceChange} in Lookup.
+ * @internal
+ */
+export type StoredAdviceChange =
+  | {
+      readonly _tag: "AdvicePreferred";
+      readonly serviceKey: string;
+      readonly prefer: string;
+      readonly previous?: string;
+    }
+  | {
+      readonly _tag: "AdviceCleared";
+      readonly serviceKey: string;
+      readonly previous: string;
     };
 
 /** Mutable claim map — HyperService key → winning endpoint. @internal */
@@ -116,10 +135,12 @@ export type LookupRegistries = {
   readonly advice: AdviceRegistry;
   /** Sliding fan-out of directory upserts / removes (membership push). */
   readonly directoryChanges: PubSub.PubSub<StoredDirectoryChange>;
+  /** Sliding fan-out of advice prefer / clear (Track D early dial move). */
+  readonly adviceChanges: PubSub.PubSub<StoredAdviceChange>;
 };
 
-/** Sliding buffer for directory change subscribers. @internal */
-const DIRECTORY_CHANGES_CAPACITY = 1024;
+/** Sliding buffer for directory / advice change subscribers. @internal */
+const CHANGES_CAPACITY = 1024;
 
 /** Build empty claim + directory + advice registries (one per lookup server). @internal */
 export const makeRegistries = (): Effect.Effect<LookupRegistries> =>
@@ -130,12 +151,19 @@ export const makeRegistries = (): Effect.Effect<LookupRegistries> =>
     );
     const adviceMap = yield* Ref.make(new Map<string, string>());
     const directoryChanges = yield* PubSub.sliding<StoredDirectoryChange>(
-      DIRECTORY_CHANGES_CAPACITY,
+      CHANGES_CAPACITY,
+    );
+    const adviceChanges = yield* PubSub.sliding<StoredAdviceChange>(
+      CHANGES_CAPACITY,
     );
 
     const publish = (
       event: StoredDirectoryChange,
     ): Effect.Effect<void> => PubSub.publish(directoryChanges, event);
+
+    const publishAdvice = (
+      event: StoredAdviceChange,
+    ): Effect.Effect<void> => PubSub.publish(adviceChanges, event);
 
     return {
       claims: {
@@ -265,19 +293,42 @@ export const makeRegistries = (): Effect.Effect<LookupRegistries> =>
       },
       advice: {
         set: (serviceKey, prefer) =>
-          Ref.update(adviceMap, (current) => {
-            const next = new Map(current);
-            next.set(serviceKey, prefer);
-            return next;
-          }).pipe(Effect.as(prefer)),
+          Effect.gen(function* () {
+            const previous = yield* Ref.modify(adviceMap, (current) => {
+              const prior = current.get(serviceKey);
+              const next = new Map(current);
+              next.set(serviceKey, prefer);
+              return [Option.fromNullishOr(prior), next] as const;
+            });
+            // Same prefer is still a write — dialers may have missed the first event.
+            yield* publishAdvice({
+              _tag: "AdvicePreferred",
+              serviceKey,
+              prefer,
+              ...(Option.isSome(previous) ? { previous: previous.value } : {}),
+            });
+            return prefer;
+          }),
         clear: (serviceKey) =>
-          Ref.modify(adviceMap, (current) => {
-            if (!current.has(serviceKey)) {
-              return [false, current] as const;
+          Effect.gen(function* () {
+            const removed = yield* Ref.modify(adviceMap, (current) => {
+              const prior = current.get(serviceKey);
+              if (prior === undefined) {
+                return [Option.none<string>(), current] as const;
+              }
+              const next = new Map(current);
+              next.delete(serviceKey);
+              return [Option.some(prior), next] as const;
+            });
+            if (Option.isSome(removed)) {
+              yield* publishAdvice({
+                _tag: "AdviceCleared",
+                serviceKey,
+                previous: removed.value,
+              });
+              return true;
             }
-            const next = new Map(current);
-            next.delete(serviceKey);
-            return [true, next] as const;
+            return false;
           }),
         get: (serviceKey) =>
           Ref.get(adviceMap).pipe(
@@ -287,6 +338,7 @@ export const makeRegistries = (): Effect.Effect<LookupRegistries> =>
           ),
       },
       directoryChanges,
+      adviceChanges,
     };
   });
 

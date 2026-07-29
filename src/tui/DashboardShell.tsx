@@ -209,7 +209,9 @@ export const DashboardShell = (props: {
   const [cmdSel, setCmdSel] = React.useState(0);
   const [scroll, setScroll] = React.useState(0);
 
-  const members = Object.entries(Group.members(nav.group));
+  // Bare catalogs leave `nav.group` undefined — fall back to the shell prop root.
+  const activeGroup = nav.group ?? props.group;
+  const members = Object.entries(Group.members(activeGroup));
   const allLeaves: ReadonlyArray<QueueTag | DaemonTag> = [
     ...queueLeaves(props.group),
     ...daemonLeaves(props.group),
@@ -261,7 +263,7 @@ export const DashboardShell = (props: {
   React.useEffect(() => {
     setSel(0);
     setScroll(0);
-  }, [nav.group.key, nav.path.join("/")]);
+  }, [activeGroup.key, nav.path.join("/")]);
 
   React.useEffect(() => {
     setScroll((sc) => {

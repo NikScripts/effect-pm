@@ -5,7 +5,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Context, Effect, Layer } from "effect";
 import * as Daemon from "../src/Daemon";
 import * as Group from "../src/Group";
-import { pathToMember } from "../src/ui/GroupRoute";
+import { pathToMember } from "../src/internal/uiGroupRoutes";
 import * as Route from "../src/ui/Route";
 import * as Router from "../src/ui/Router";
 

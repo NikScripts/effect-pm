@@ -24,8 +24,10 @@ class DurableQueue extends WorkPool.Tag<DurableQueue>()("examples/store/DurableQ
   payload: Job,
 }) {}
 
+const durableQueueStore = WorkPool.store(DurableQueue);
+
 class AppStore extends Store.Service<AppStore>("@examples/store/DurableAndSoftStore")(
-  WorkPool.store(DurableQueue),
+  durableQueueStore,
 ) {}
 
 const waitUntilCompleted = (expected: number) =>

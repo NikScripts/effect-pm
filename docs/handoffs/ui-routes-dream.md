@@ -1,6 +1,6 @@
 # UI Route + Router — dream machine
 
-**Branch:** `cursor/view-withsize-types-125f` · **Do not merge to `integration` without owner ask.**
+**Branch:** `cursor/view-withsize-types-125f` · **Landed / landing to `integration`.**
 
 ## Catalog (`Route`) — typed data
 
@@ -43,7 +43,7 @@ router.to((urls) => urls.app.dashboard())
 Router.history(site)
 Router.memory(ServicesHub) // Group → catalog via Route.make/group/get loops
 
-// compose accepts Layer **or** a live Service:
+// compose accepts Layer **or** a live router value:
 View.compose({ views, router: Router.history(Hub) })
 View.compose({ views, router: Router.make(site, "memory") })
 
@@ -58,14 +58,20 @@ Route.urlBuilder(site, { baseUrl: "https://example.com" })
 | `up` / `toRoot` | **replace** |
 | `back` | memory stack / `history.back()` |
 
-Group helpers throw on bare catalogs (fail loud). `useGroupRoute` is **deprecated** → `Router`.
+Group helpers throw on bare catalogs (fail loud).
 React helpers: `useRouter` / `useMatch` / `useTarget` / `Link`.
+
+## Public surface
+
+- **`ui/Route`** — catalog data
+- **`ui/Router`** — runtime (`Context.Service` tag + `memory` / `history` / `make`)
+
+Removed: `Navigator`, public `ui/GroupRoute`, `web/useGroupRoute`, `tui/useGroupRoute`.
+Group path walk + catalog build live under `src/internal/uiGroupRoutes.ts`.
 
 ## Not inventing
 
 - No public `fromMembers` / Group-Tag route helper  
-- No Navigator  
-- Catalog stays data (not a Service)  
+- Catalog stays data (not a Context service)  
 - No new ViewKinds for logs/schedule  
-- No hard-delete of public `GroupRoute` / `useGroupRoute` without owner ask  
 - No nested outlets / guards / query as kit product without owner ask  

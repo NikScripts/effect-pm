@@ -27,7 +27,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 - **Owner said:** “Let’s do it” (after M4 tip).
 - **Chose (LOCKED + Eng):**
-  - `Lookup.Advice` — `advise` / `clear` / `preferred`; helpers `Lookup.advise` / `clearAdvice` / `preferred`.
+  - `Advice` Tag (named import) — `advise` / `clear` / `preferred` / `changes`; helpers `Lookup.advise` / `clearAdvice` / `preferred`. No `Lookup.Advice.*` triples.
   - Key = `resourceKey` → preferred directory `nodeKey`; in-memory **last-write-wins**; no advisor ACL.
   - Stale prefer (not in `nodesServing`) ignored; `lookupClient` honors live prefer **before** D4 `{ pick }`.
   - Algorithms stay app-owned (identity Router decides prefer).

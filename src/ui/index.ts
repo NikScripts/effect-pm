@@ -15,10 +15,6 @@
  *
  */
 export * from "./atom-react";
-/** @deprecated Prefer {@link ./Route} + {@link ./Router}. */
-export * from "./GroupRoute";
-/** @deprecated Prefer {@link ./Route} + {@link ./Router}. */
-export * as GroupRoute from "./GroupRoute";
 export * from "./data";
 export * from "./cache";
 export * from "./now";

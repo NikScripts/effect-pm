@@ -67,7 +67,6 @@ export default defineConfig([
       "ui/NodeView": "src/ui/NodeView.ts",
       "ui/Route": "src/ui/Route.ts",
       "ui/Router": "src/ui/Router.ts",
-      "ui/GroupRoute": "src/ui/GroupRoute.ts",
       "ui/GroupView": "src/ui/GroupView.ts",
       "ui/DashboardViews": "src/ui/DashboardViews.ts",
       "ui/DashboardLayer": "src/ui/DashboardLayer.ts",

@@ -1,7 +1,17 @@
-import { Clock, Context, Duration, Effect, Layer, Schema } from "effect";
+import {
+  Clock,
+  Context,
+  Duration,
+  Effect,
+  Fiber,
+  Layer,
+  Schema,
+  Stream,
+} from "effect";
 import { describe, it } from "@effect/vitest";
 import { expect } from "vitest";
 import * as Lookup from "../src/Lookup";
+import { Advice } from "../src/Lookup";
 import * as Node from "../src/Node";
 import * as Hyperlink from "../src/Hyperlink";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
@@ -53,6 +63,46 @@ describe("Lookup Advice", () => {
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(15))),
   );
 
+  it.live("Advice.changes fans out prefer / clear", () =>
+    Effect.gen(function* () {
+      const path = yield* tmpSock("changes");
+      const node = Node.Tag()("lookup/adv-changes", { path }).pipe(
+        Node.asLookup,
+      );
+
+      yield* Layer.build(Lookup.layerNode(node));
+      const client = yield* Layer.build(Lookup.client(node));
+
+      const collected = yield* Effect.gen(function* () {
+        // Named Tag — not Lookup.Advice.changes (no triples).
+        const board = yield* Advice;
+        const fiber = yield* Effect.forkChild(
+          board.changes.pipe(Stream.take(3), Stream.runCollect),
+        );
+        yield* Effect.sleep(Duration.millis(50));
+        yield* Lookup.prefer(Jobs, "worker-a");
+        yield* Lookup.prefer(Jobs, "worker-b");
+        yield* Lookup.clearAdvice(Jobs.key);
+        return yield* Fiber.join(fiber);
+      }).pipe(Effect.provide(client));
+
+      expect(collected.length).toBe(3);
+      expect(collected[0]?._tag).toBe("AdvicePreferred");
+      expect(collected[1]?._tag).toBe("AdvicePreferred");
+      expect(collected[2]?._tag).toBe("AdviceCleared");
+      if (collected[0]?._tag === "AdvicePreferred") {
+        expect(collected[0].prefer).toBe("worker-a");
+      }
+      if (collected[1]?._tag === "AdvicePreferred") {
+        expect(collected[1].prefer).toBe("worker-b");
+        expect(collected[1].previous).toBe("worker-a");
+      }
+      if (collected[2]?._tag === "AdviceCleared") {
+        expect(collected[2].previous).toBe("worker-b");
+      }
+    }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(15))),
+  );
+
   it.effect("lookupClient honors advice over bare ambiguous fail-closed", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("honor-lookup");
@@ -76,12 +126,7 @@ describe("Lookup Advice", () => {
         ]).pipe(Layer.provide(lookupClient)),
       );
 
-      const dir = Context.get(lookup, Lookup.Directory);
-      const rows = yield* dir
-        .nodesServing(
-          new Lookup.NodesServingRequest({ serviceKey: Jobs.key }),
-        )
-        .pipe(Effect.provide(lookup));
+      const rows = yield* Lookup.nodesServing(Jobs).pipe(Effect.provide(lookup));
       expect(rows.length).toBe(2);
 
       const preferB = rows.find((r) => {

@@ -39,9 +39,7 @@ const BadLayer = WorkPool.layer(MissingQueue, {
 
 const program = Effect.gen(function* () {
   const exit = yield* Effect.exit(
-    Effect.gen(function* () {
-      yield* MissingQueue;
-    }).pipe(
+    MissingQueue.pipe(
       // @effect-diagnostics-next-line strictEffectProvide:off
       Effect.provide(BadLayer),
       Effect.scoped,

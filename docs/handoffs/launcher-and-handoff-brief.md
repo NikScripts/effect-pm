@@ -1,6 +1,6 @@
 # Brief — Launcher + node handoff (Agent 5)
 
-**Status:** Track A + **Track B Eng'd** on tip. **Track C Locked #27–34 + #39 Eng'd** (`Directory.changes`, `Node.drain` / `shutdown` / `launch`, directory `peersLayer` + `lookupClient` rebind, serve-site `{ handoff }` fn, WorkPool baked `releaseEnqueueHandoff`). Live A→B suite: `test/handoff-ab-cutover.test.ts`. **#39 retires #33 `withHandoff` / #34's tag mechanism.** **#35–37** deferred (owner-confirmed). Explicit A/B launcher mode deferred.  
+**Status:** Track A + **Track B Eng'd** on tip. **Track C Locked #27–34 + #39 Eng'd**. **Track D v1 + advice early-move Eng'd** — `lookupClient` build-then-swap + `RpcClientError` retry + `Advice.changes` dial move (`test/lookup-client-rebind.test.ts`, `test/lookup-advice.test.ts`). **#44 no-triples Eng'd** — named `{ Advice, Directory, Identity }` + flat Lookup verbs. Dual-serve / stream replay / peersLayer parity still open. **#35–37** deferred. Explicit A/B launcher / `restartSuccessor` deferred.  
 **Opened:** 2026-07-25 (owner via Agent G).  
 **Audience:** next agent picking up launcher + handoff / migration discussion.
 
@@ -189,7 +189,19 @@ Shipped on tip (owner Eng go + refinements):
 
 Eng defaults: 32-byte hex token; Ready poll `100 millis` with per-dial `2 seconds` bound; outer default `"30 seconds"`.
 
-**Next bake:** Track D remainder (client redirect / dual-serve — `lookupClient` rebind Eng'd); explicit A/B launcher later; #35–37 stay deferred.
+**Next bake:** Track D remainder (dual-serve sticky, stream replay, peersLayer parity); explicit A/B launcher / `restartSuccessor`; #35–37 stay deferred.
+
+### Track D v1 — Eng'd (2026-07-29, owner go “make the dream happen”)
+
+North star: `lookupClient` callers never notice A→B. **v1 slice Eng'd:**
+
+40. **Dial install = build-then-swap** — new dial builds in a fresh scope; prior dial stays live until success; failed build keeps prior (warning). Semaphore single-flight.
+41. **Transparent RPC retry** — Effect methods (`query` / `mutate`) that fail with `RpcClientError` proactively resolve+adopt once, else wait ≤2s for install generation bump, then **retry once**. App errors / `ProtocolMismatch` not retried. Streams not auto-retried.
+42. **Cutover order** — B Directory-visible (and/or Advice-prefer B) before A leaves so retry has a target. Same recipe as C crown-jewel.
+43. **Advice early move (Eng'd)** — `Advice.changes` (`AdvicePreferred` / `AdviceCleared`) on the existing Advice tag (no new sugar namespace). `lookupClient` watches prefer flips for its service key and re-resolves **before** A leaves / before the first transport error.
+44. **No Tag triples (Eng'd)** — apps/docs use named Tag imports (`import { Advice } from "…/Lookup"` → `Advice.changes`) or flat Lookup verbs (`advise` / `changes` / `nodesServing`). Banned: `Lookup.Advice.*` / `Lookup.Directory.*` as a nested API. Standard: [`modules-and-boundaries.md`](../standards/modules-and-boundaries.md#no-tag-triples).
+
+**Still open for D:** dual-serve window, in-flight stream migrate/replay, peersLayer parity retry.
 
 ### Track B — research note (2026-07-27): what already exists
 
@@ -369,7 +381,8 @@ launcher-decisions.md stays reference-only if redesigning Track A further.
 
 Contract drift (contractHash / verify / loud-failures) is solid — reuse it.
 
-Next: do NOT Eng deferred #35–37 until re-locked. Track D redirect /
-dual-serve, restartSuccessor, and explicit A/B launcher still open.
+Track D v1 + Advice.changes early move Eng'd on tip.
+Next: do NOT Eng #35–37 until re-locked. D remainder (dual-serve / stream
+replay / peersLayer parity), restartSuccessor, explicit A/B launcher still open.
 Plan-first; no new nouns unless really good.
 ```

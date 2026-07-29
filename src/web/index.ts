@@ -25,7 +25,6 @@
  */
 export * from "../ui";
 export * from "./useViewTransition";
-export * from "./useGroupRoute";
 export * from "./runtime";
 export * from "./widgets";
 export type { Widget, WidgetProps } from "./widget-registry";

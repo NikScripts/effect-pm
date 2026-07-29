@@ -107,8 +107,14 @@ Membership Lookup Identity/Directory/Advice   who wins / where clients dial
   `Failed`). Match by `_tag` / `.reason`, never message strings.
   WorkPool queues bake that in via `WorkPool.serve` / `serveRemote` (`releaseEnqueueHandoff`).
 - **Membership push / dialers:** directory-mode `Hyperlink.peersLayer` and
-  `Hyperlink.lookupClient` **hot-rebind** on `Directory.changes` (dial move / join /
-  leave). Escape hatch: `Lookup.changes` / `directoryTable()`.
+  `Hyperlink.lookupClient` **hot-rebind** on Directory membership (dial move / join /
+  leave). Escape hatch: flat `Lookup.changes` / `directoryTable()` — not
+  `Lookup.Directory.changes`.
+- **Track D (lookupClient):** build-then-swap dials; Effect RPCs that hit
+  `RpcClientError` **retry once** after rebind; named-Tag **`Advice.changes`**
+  (`import { Advice }`) moves the dial when prefer flips (before A leaves / before
+  the first transport error). Flat verbs: `Lookup.advise` / `preferred` /
+  `clearAdvice`. Keep B Directory-visible. Streams are not auto-retried.
 
 ### A→B cutover recipe (state transfer)
 

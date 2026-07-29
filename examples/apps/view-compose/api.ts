@@ -37,7 +37,7 @@ export type StolenRouteCatalog = "Route.make | group | get | urlBuilder | Target
  * - React: `Provider` / `useRouter` / `Link` / `useMatch` / `useTarget`
  *
  * `up` / `toRoot` **replace**; `go` / `open*` **push**. `back` = stack.
- * Deprecated: `useGroupRoute` → use Router.
+ * Gone: `Navigator`, `GroupRoute`, `useGroupRoute`.
  */
 export interface StolenRouter {
   readonly pathname: string;
@@ -49,10 +49,7 @@ export interface StolenRouter {
 }
 
 /**
- * STEAL W12 — `View.react(layer)` → `{ Provider, Card, Detail, Page, for, groupDash }`.
- * STEAL W20 — `View.group(AppGroup)` stashes group + leaves on the kit.
- * STEAL W21 — skins via `Layer.succeed(View, Comp)` / `View.kind` / `View.only`.
- * STEAL `View.compose({ views, router })` — `router` is `Layer | Service`.
+ * STEAL `View.compose({ views, router })` — `router` is Layer or live router value.
  *
  * ```ts
  * const ui = View.compose({
@@ -91,65 +88,34 @@ export declare const ViewCompose: {
 /** A navigable member — Group **or** leaf. STEAL `Group.isGroup`. */
 export type MemberTag = unknown;
 
-// Minimal React namespace so the sketch typechecks without importing react deeply.
 declare namespace React {
   type ReactNode = unknown;
   type ReactElement = unknown;
 }
 
 // =============================================================================
-// WILD — still owner-gated (do not Eng without ask)
+// WILD — still owner-gated
 // =============================================================================
 
-/**
- * **WILD — Nested outlets / guards / query strings as kit product**
- *
- * Today: flat Outlet + Target view (`logs` / `schedule` / `health`). Nested
- * outlet trees, route guards, and first-class query are not kit surface yet.
- */
+/** Nested outlets / guards / query strings as kit product. */
 export type WildNestedOutlets = never;
 
-/**
- * **WILD — Overlay kinds on the View registry**
- *
- * Steal W8 (`card` | `detail` | `page`). Logs / schedule could become page
- * skins instead of Outlet forks — owner call.
- */
+/** Overlay kinds on the View registry. */
 export type WildOverlayKind = "page";
 
-/**
- * **WILD — `View.member` matcher (Group ∪ leaf)**
- *
- * One Grid cell path; Group card is just the Group family's Card skin.
- */
+/** One Grid cell path for Group ∪ leaf. */
 export declare const ViewMember: (props: {
   readonly tag: MemberTag;
   readonly name?: string;
 }) => React.ReactElement | null;
 
-/**
- * **WILD — Null / Test view packs**
- *
- * Swappable Layer that succeeds every required View with empty components.
- */
+/** Swappable null/test view packs. */
 export type WildViewPack = "web" | "tui" | "null";
 
-// =============================================================================
-// Recommended Eng order (steal-first)
-// =============================================================================
-
-/**
- * 1. ~~Router as Context.Service~~ — STEAL (done on work branch).
- * 2. ~~View.compose thin shell~~ — STEAL (Layer | Service).
- * 3. Group Card as View.Member (Wild) — kill Dashboard Cell fork.
- * 4. Peel DetailScreen → body skins; shell keeps header.
- * 5. Only then: overlay pages / null pack (owner-gated).
- *
- * HOLD hard-delete of public `GroupRoute` / `useGroupRoute` until owner asks.
- */
 export const engOrder = [
   "Router-service-STEAL",
   "View.compose-STEAL",
+  "GroupRoute-deleted",
   "group-card-as-View-Member",
   "peel-DetailScreen",
   "overlay-pages",

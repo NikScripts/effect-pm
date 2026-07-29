@@ -11,7 +11,7 @@
  */
 
 // ---cut---
-import { Duration, Effect, Layer, Ref, Schema } from "effect";
+import { Clock, Duration, Effect, Layer, Ref, Schema } from "effect";
 import { WorkPool } from "../../src";
 import { SQLiteDurableWorkPoolStore } from "../../src/storage/sqlite";
 
@@ -52,7 +52,8 @@ const queueLayer = (
   }).pipe(Layer.provideMerge(sqliteLayer(filename)));
 
 const program = Effect.gen(function* () {
-  const filename = `/tmp/hyperlink-work-pool-durable-${String(Date.now())}.sqlite`;
+  const now = yield* Clock.currentTimeMillis;
+  const filename = `/tmp/hyperlink-work-pool-durable-${String(now)}.sqlite`;
   const processed = yield* Ref.make<ReadonlyArray<string>>([]);
 
   yield* Effect.gen(function* () {
