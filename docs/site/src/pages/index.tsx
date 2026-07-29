@@ -28,6 +28,9 @@ export default function LandingPage() {
               <code>yield*</code> everywhere.
             </span>
           </p>
+          <p className="landing-lede">
+            One Contract. Local or over the network. The same typed Handle either way.
+          </p>
           <p className="landing-soon">Coming soon</p>
         </div>
       </section>
