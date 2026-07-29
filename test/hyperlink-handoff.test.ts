@@ -1,41 +1,27 @@
 /**
- * Locked #33 — `Hyperlink.withHandoff` stamp + Node.shutdown handoff hook.
+ * Locked #39 — serve-site `{ handoff }` fn + outcomes (`Done` | `Retry` | `Defer`) + the
+ * OUTGOING-node `Node.shutdown` orchestration (run after drain; defer keeps the node up).
  */
 import {
   Clock,
   Duration,
   Effect,
+  Exit,
   Layer,
+  Option,
   Ref,
   Schema,
-  SubscriptionRef,
 } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Lookup from "../src/Lookup";
 import * as Node from "../src/Node";
-import { makeHyperlinkHandoffRun } from "../src/internal/hyperlinkHandoff";
+import * as WorkPool from "../src/WorkPool";
+import {
+  hyperlinkHandoffContext,
+  runHandoffFunction,
+} from "../src/internal/hyperlinkHandoff";
 import { buildNodeStatusImpl } from "../src/internal/nodeStatus";
-
-class Bare extends Hyperlink.Tag<Bare>()("handoff/Bare", {
-  ping: Hyperlink.effect(Schema.String),
-}) {}
-
-class DrainJobs extends Hyperlink.Tag<DrainJobs>()(
-  "handoff/DrainJobs",
-  {
-    ping: Hyperlink.effect(Schema.String),
-  },
-  { kind: "hyperlink-ts/WorkPool" },
-).pipe(Hyperlink.withHandoff("drainOnly")) {}
-
-class ReleaseJobs extends Hyperlink.Tag<ReleaseJobs>()(
-  "handoff/ReleaseJobs",
-  {
-    ping: Hyperlink.effect(Schema.String),
-  },
-  { kind: "hyperlink-ts/WorkPool" },
-).pipe(Hyperlink.withHandoff("workPoolRelease")) {}
 
 const tmpSock = (label: string) =>
   Effect.gen(function* () {
@@ -43,159 +29,168 @@ const tmpSock = (label: string) =>
     return `/tmp/hyperlink-ts-handoff-${label}-${process.pid}-${now}.sock`;
   });
 
-describe("Hyperlink.withHandoff", () => {
-  it("defaults off and stamps strategies", () => {
-    expect(Hyperlink.handoffOf(Bare)).toBeUndefined();
-    expect(Hyperlink.handoffOf(DrainJobs)).toBe("drainOnly");
-    expect(Hyperlink.handoffOf(ReleaseJobs)).toBe("workPoolRelease");
-  });
+describe("handoff outcomes + context", () => {
+  it("handoffContext yields the tagged outcomes", () =>
+    Effect.runSync(
+      Effect.gen(function* () {
+        expect((yield* hyperlinkHandoffContext.done)._tag).toBe("Done");
+        expect((yield* hyperlinkHandoffContext.retry)._tag).toBe("Retry");
+        expect((yield* hyperlinkHandoffContext.defer)._tag).toBe("Defer");
+      }),
+    ));
+});
 
-  it("data-first withHandoff stamps the tag", () => {
-    const stamped = Hyperlink.withHandoff(Bare, "drainOnly");
-    expect(Hyperlink.handoffOf(stamped)).toBe("drainOnly");
-  });
-
-  it.effect("drainOnly shuts down WorkPool-shaped impls", () =>
+describe("runHandoffFunction", () => {
+  it.effect("void return coerces to Done and succeeds (peer present)", () =>
     Effect.gen(function* () {
       const events = yield* Ref.make<Array<string>>([]);
-      const phase = yield* Ref.make("running");
-      yield* makeHyperlinkHandoffRun("drainOnly", "hyperlink-ts/WorkPool", {
-        shutdown: Effect.gen(function* () {
-          yield* Ref.update(events, (a) => [...a, "shutdown"]);
-          yield* Ref.set(phase, "off");
-        }),
-        status: {
-          get: Ref.get(phase).pipe(Effect.map((p) => ({ phase: p }))),
-        },
+      yield* runHandoffFunction({
+        handoff: () => Ref.update(events, (a) => [...a, "ran"]),
+        from: {},
+        serviceKey: "svc",
+        dialPeer: Effect.succeed(Option.some({})),
       });
-      expect(yield* Ref.get(events)).toEqual(["shutdown"]);
-      expect(yield* Ref.get(phase)).toBe("off");
+      expect(yield* Ref.get(events)).toEqual(["ran"]);
     }),
   );
 
-  it.effect("workPoolRelease releases then shuts down", () =>
+  it.effect("explicit ctx.done succeeds", () =>
+    runHandoffFunction({
+      handoff: (_from, _to, ctx) => ctx.done,
+      from: {},
+      serviceKey: "svc",
+      dialPeer: Effect.succeed(Option.some({})),
+    }),
+  );
+
+  it.effect("no peer defers (HandoffDeferred reason=no-peer)", () =>
     Effect.gen(function* () {
-      const events = yield* Ref.make<Array<string>>([]);
-      const phase = yield* Ref.make("running");
-      yield* makeHyperlinkHandoffRun("workPoolRelease", "hyperlink-ts/WorkPool", {
-        releaseEncoded: () =>
+      const err = yield* Effect.flip(
+        runHandoffFunction({
+          handoff: () => Effect.void,
+          from: {},
+          serviceKey: "svc",
+          dialPeer: Effect.succeed(Option.none()),
+        }),
+      );
+      expect(err._tag).toBe("HandoffDeferred");
+      expect(err.reason).toBe("no-peer");
+    }),
+  );
+
+  it.effect("ctx.defer defers (reason=defer)", () =>
+    Effect.gen(function* () {
+      const err = yield* Effect.flip(
+        runHandoffFunction({
+          handoff: (_from, _to, ctx) => ctx.defer,
+          from: {},
+          serviceKey: "svc",
+          dialPeer: Effect.succeed(Option.some({})),
+        }),
+      );
+      expect(err.reason).toBe("defer");
+    }),
+  );
+
+  it.effect("Retry re-runs the handoff up to the bound, then succeeds", () =>
+    Effect.gen(function* () {
+      const attempts = yield* Ref.make(0);
+      yield* runHandoffFunction({
+        handoff: (_from, _to, ctx) =>
           Effect.gen(function* () {
-            yield* Ref.update(events, (a) => [...a, "releaseEncoded"]);
-            return [];
+            const n = yield* Ref.updateAndGet(attempts, (x) => x + 1);
+            return yield* n < 3 ? ctx.retry : ctx.done;
           }),
-        shutdown: Effect.gen(function* () {
-          yield* Ref.update(events, (a) => [...a, "shutdown"]);
-          yield* Ref.set(phase, "off");
+        from: {},
+        serviceKey: "svc",
+        dialPeer: Effect.succeed(Option.some({})),
+        retries: 5,
+      });
+      expect(yield* Ref.get(attempts)).toBe(3);
+    }),
+  );
+
+  it.effect("Retry exhausted defers (reason=retry-exhausted)", () =>
+    Effect.gen(function* () {
+      const err = yield* Effect.flip(
+        runHandoffFunction({
+          handoff: (_from, _to, ctx) => ctx.retry,
+          from: {},
+          serviceKey: "svc",
+          dialPeer: Effect.succeed(Option.some({})),
+          retries: 2,
         }),
-        status: {
-          get: Ref.get(phase).pipe(Effect.map((p) => ({ phase: p }))),
-        },
-      });
-      expect(yield* Ref.get(events)).toEqual(["releaseEncoded", "shutdown"]);
-    }),
-  );
-
-  it.effect("workPoolRelease transfers released entries to peer then shuts down", () =>
-    Effect.gen(function* () {
-      const events = yield* Ref.make<Array<string>>([]);
-      const phase = yield* Ref.make("running");
-      const transferred = yield* Ref.make<ReadonlyArray<unknown>>([]);
-      yield* makeHyperlinkHandoffRun(
-        "workPoolRelease",
-        "hyperlink-ts/WorkPool",
-        {
-          release: () =>
-            Effect.gen(function* () {
-              yield* Ref.update(events, (a) => [...a, "release"]);
-              return [{ id: "job-1" }];
-            }),
-          enqueue: (entries: ReadonlyArray<unknown>) =>
-            Effect.gen(function* () {
-              yield* Ref.update(events, (a) => [...a, "enqueue-local"]);
-              yield* Ref.set(transferred, entries);
-            }),
-          shutdown: Effect.gen(function* () {
-            yield* Ref.update(events, (a) => [...a, "shutdown"]);
-            yield* Ref.set(phase, "off");
-          }),
-          status: {
-            get: Ref.get(phase).pipe(Effect.map((p) => ({ phase: p }))),
-          },
-        },
-        {
-          tryEnqueueToPeer: (entries) =>
-            Effect.gen(function* () {
-              yield* Ref.update(events, (a) => [...a, "enqueue-peer"]);
-              yield* Ref.set(transferred, entries);
-              return true;
-            }),
-        },
       );
-      expect(yield* Ref.get(events)).toEqual([
-        "release",
-        "enqueue-peer",
-        "shutdown",
-      ]);
-      expect(yield* Ref.get(transferred)).toEqual([{ id: "job-1" }]);
+      expect(err.reason).toBe("retry-exhausted");
     }),
   );
 
-  it.effect("workPoolRelease re-queues locally when peer transfer fails", () =>
+  it.effect("a failing/defecting handoff defers (reason=failed)", () =>
     Effect.gen(function* () {
-      const events = yield* Ref.make<Array<string>>([]);
-      const phase = yield* Ref.make("running");
-      const local = yield* Ref.make<ReadonlyArray<unknown>>([]);
-      yield* makeHyperlinkHandoffRun(
-        "workPoolRelease",
-        "hyperlink-ts/WorkPool",
-        {
-          release: () =>
-            Effect.gen(function* () {
-              yield* Ref.update(events, (a) => [...a, "release"]);
-              return [{ id: "job-2" }];
-            }),
-          enqueue: (entries: ReadonlyArray<unknown>) =>
-            Effect.gen(function* () {
-              yield* Ref.update(events, (a) => [...a, "enqueue-local"]);
-              yield* Ref.set(local, entries);
-            }),
-          shutdown: Effect.gen(function* () {
-            yield* Ref.update(events, (a) => [...a, "shutdown"]);
-            yield* Ref.set(phase, "off");
-          }),
-          status: {
-            get: Ref.get(phase).pipe(Effect.map((p) => ({ phase: p }))),
-          },
-        },
-        {
-          tryEnqueueToPeer: () =>
-            Effect.gen(function* () {
-              yield* Ref.update(events, (a) => [...a, "enqueue-peer-miss"]);
-              return false;
-            }),
-        },
+      const err = yield* Effect.flip(
+        runHandoffFunction({
+          handoff: () => Effect.die("boom"),
+          from: {},
+          serviceKey: "svc",
+          dialPeer: Effect.succeed(Option.some({})),
+        }),
       );
-      expect(yield* Ref.get(events)).toEqual([
-        "release",
-        "enqueue-peer-miss",
-        "enqueue-local",
-        "shutdown",
-      ]);
-      expect(yield* Ref.get(local)).toEqual([{ id: "job-2" }]);
+      expect(err.reason).toBe("failed");
     }),
   );
+});
 
-  it.effect("non-WorkPool kinds no-op", () =>
+describe("WorkPool.releaseEnqueueHandoff", () => {
+  it.effect("releases local entries and enqueues them on the peer", () =>
     Effect.gen(function* () {
-      const events = yield* Ref.make<Array<string>>([]);
-      yield* makeHyperlinkHandoffRun("drainOnly", "hyperlink", {
-        shutdown: Ref.update(events, (a) => [...a, "shutdown"]),
+      const released = yield* Ref.make<ReadonlyArray<unknown>>([{ id: "a" }]);
+      const enqueued = yield* Ref.make<ReadonlyArray<unknown>>([]);
+      const from = {
+        release: (_input: { readonly options?: unknown }) =>
+          Effect.gen(function* () {
+            const items = yield* Ref.get(released);
+            yield* Ref.set(released, []);
+            return items;
+          }),
+      };
+      const to = {
+        enqueue: (entries: ReadonlyArray<unknown>) =>
+          Ref.set(enqueued, entries),
+      };
+      yield* runHandoffFunction({
+        handoff: WorkPool.releaseEnqueueHandoff,
+        from,
+        serviceKey: "queue",
+        dialPeer: Effect.succeed(Option.some(to)),
       });
-      expect(yield* Ref.get(events)).toEqual([]);
+      expect(yield* Ref.get(enqueued)).toEqual([{ id: "a" }]);
+      expect(yield* Ref.get(released)).toEqual([]);
     }),
   );
 
-  it.effect("Node.shutdown runs handoff after drain before closeListen", () =>
+  it.effect("nothing to release ⇒ Done without touching the peer", () =>
+    Effect.gen(function* () {
+      const touched = yield* Ref.make(false);
+      const from = {
+        release: (_input: { readonly options?: unknown }) =>
+          Effect.succeed([] as ReadonlyArray<unknown>),
+      };
+      const to = {
+        enqueue: (_entries: ReadonlyArray<unknown>) => Ref.set(touched, true),
+      };
+      yield* runHandoffFunction({
+        handoff: WorkPool.releaseEnqueueHandoff,
+        from,
+        serviceKey: "queue",
+        dialPeer: Effect.succeed(Option.some(to)),
+      });
+      expect(yield* Ref.get(touched)).toBe(false);
+    }),
+  );
+});
+
+describe("Node.shutdown handoff orchestration", () => {
+  it.effect("runs handoff after drain, before closeListen (happy path)", () =>
     Effect.gen(function* () {
       const order = yield* Ref.make<Array<string>>([]);
       const impl = yield* buildNodeStatusImpl({
@@ -205,53 +200,93 @@ describe("Hyperlink.withHandoff", () => {
         closeListen: Ref.update(order, (a) => [...a, "close"]),
       });
       yield* impl.shutdown;
-      const seen = yield* Ref.get(order);
-      expect(seen).toEqual(["handoff", "close"]);
+      expect(yield* Ref.get(order)).toEqual(["handoff", "close"]);
+      expect((yield* impl.status.get).phase).toBe("draining");
     }),
   );
 
-  it.live("Node.shutdown invokes served drainOnly handoff", () =>
+  it.effect("a deferred handoff restores phase=running and does not close", () =>
+    Effect.gen(function* () {
+      const order = yield* Ref.make<Array<string>>([]);
+      const impl = yield* buildNodeStatusImpl({
+        startedAt: 0,
+        serviceCount: 1,
+        handoff: new Hyperlink.HandoffDeferred({
+          serviceKey: "svc",
+          reason: "defer",
+        }),
+        closeListen: Ref.update(order, (a) => [...a, "close"]),
+      });
+      const exit = yield* Effect.exit(impl.shutdown);
+      expect(Exit.isFailure(exit)).toBe(true);
+      // Node stays up: phase back to running, listen not closed, latch cleared (a retry can re-enter).
+      expect((yield* impl.status.get).phase).toBe("running");
+      expect(yield* Ref.get(order)).toEqual([]);
+      const retry = yield* Effect.exit(impl.shutdown);
+      expect(Exit.isFailure(retry)).toBe(true);
+    }),
+  );
+});
+
+describe("Node.shutdown end-to-end (Locked #39)", () => {
+  it.live("a served { handoff } with no peer defers — the node stays up", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("lookup");
       const workerPath = yield* tmpSock("worker");
-      const events = yield* Ref.make<Array<string>>([]);
 
-      const lookupNode = Node.Tag()("handoff/lookup", {
+      const lookupNode = Node.Tag()("handoff/lookup2", {
         path: lookupPath,
       }).pipe(Node.asLookup);
 
-      class Queue extends Hyperlink.Tag<Queue>()(
-        "handoff/IntQueue",
-        {
-          shutdown: Hyperlink.effect(Schema.Void),
-          status: Hyperlink.ref(Schema.Struct({ phase: Schema.String })),
-        },
-        { kind: "hyperlink-ts/WorkPool" },
-      ).pipe(Hyperlink.withHandoff("drainOnly")) {}
+      class Mover extends Hyperlink.Tag<Mover>()("handoff/Mover", {
+        take: Hyperlink.effect(Schema.Array(Schema.String)),
+        give: Hyperlink.effectFn(Schema.Array(Schema.String), Schema.Void),
+      }) {}
 
-      class Worker extends Node.Tag<Worker, Queue>()("handoff/Worker", {
+      class Worker extends Node.Tag<Worker, Mover>()("handoff/Worker2", {
         path: workerPath,
       }) {}
 
       yield* Layer.build(Lookup.layerNode(lookupNode));
-      const status = yield* SubscriptionRef.make({ phase: "running" });
+      const store = yield* Ref.make<ReadonlyArray<string>>(["job-1"]);
 
       yield* Layer.build(
         Node.unix(Worker, [
-          Hyperlink.serve(Queue, {
-            shutdown: Effect.gen(function* () {
-              yield* Ref.update(events, (a) => [...a, "shutdown"]);
-              yield* SubscriptionRef.set(status, { phase: "off" });
-            }),
-            status: Hyperlink.subscribable(status),
-          }),
+          Hyperlink.serve(
+            Mover,
+            {
+              take: Effect.gen(function* () {
+                const items = yield* Ref.get(store);
+                yield* Ref.set(store, []);
+                return items;
+              }),
+              give: (items: ReadonlyArray<string>) =>
+                Ref.update(store, (a) => [...a, ...items]),
+            },
+            {
+              handoff: (
+                from: { readonly take: Effect.Effect<ReadonlyArray<string>> },
+                to: {
+                  readonly give: (
+                    items: ReadonlyArray<string>,
+                  ) => Effect.Effect<void>;
+                },
+                ctx,
+              ) =>
+                Effect.gen(function* () {
+                  const items = yield* from.take;
+                  if (items.length === 0) return yield* ctx.done;
+                  yield* to.give(items);
+                  return yield* ctx.done;
+                }),
+            },
+          ),
         ]).pipe(Layer.provide(Lookup.client(lookupNode))),
       );
 
-      yield* Node.shutdown(Worker);
-      yield* Effect.sleep(Duration.millis(200));
-      expect(yield* Ref.get(events)).toEqual(["shutdown"]);
-      expect((yield* SubscriptionRef.get(status)).phase).toBe("off");
+      // Only one node serves Mover, so there is no peer to hand off to ⇒ defer (node stays up).
+      const err = yield* Effect.flip(Node.shutdown(Worker));
+      expect(err._tag).toBe("HandoffDeferred");
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
   );
 });
