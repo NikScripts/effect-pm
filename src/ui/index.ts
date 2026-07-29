@@ -40,12 +40,28 @@ export {
 export * as View from "./View";
 /** Parent-owned Group navigation (memory / history) for View compose. */
 export * as Navigator from "./Navigator";
-/** Family observe door — `Bundle.observe(tag)` under RuntimeProvider. */
+/** @deprecated Prefer `Observe.use(tag, *View.pack)` / {@link ./NodeView}. */
 export * as Bundle from "./Bundle";
 /** Shared Group card View handle + contribution Layer (no platform TSX). */
 export * as GroupView from "./GroupView";
-/** Shared WorkPool View handles + contribution Layer (no platform TSX). */
+/** Shared WorkPool View handles + observe pack (no platform TSX). */
 export * as WorkPoolView from "./WorkPoolView";
+/** Shared Priority View handles + observe pack. */
+export * as PriorityView from "./PriorityView";
+/** Shared Daemon View handles + observe pack. */
+export * as DaemonView from "./DaemonView";
+/** Shared Gate View handles + observe pack. */
+export * as GateView from "./GateView";
+/** Shared ApiMetrics View handles + observe pack. */
+export * as ApiMetricsView from "./ApiMetricsView";
+/** Shared FleetHealth View handles + observe pack. */
+export * as FleetHealthView from "./FleetHealthView";
+/** Shared Telemetry View handles + observe pack. */
+export * as TelemetryView from "./TelemetryView";
+/** Shared ShardMap View handles + observe pack. */
+export * as ShardMapView from "./ShardMapView";
+/** Node observe (`NodeView.use` / `.bind`) — NodeRef, not a Tag. */
+export * as NodeView from "./NodeView";
 /** Merged Dashboard View contribution Layers (no platform TSX). */
 export * as DashboardViews from "./DashboardViews";
 /** Layer recipe: contributions + skins + View.base for {@link ./View.compose}. */

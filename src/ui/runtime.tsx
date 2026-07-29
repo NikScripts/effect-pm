@@ -2,8 +2,9 @@
  * @module ui/runtime
  *
  * Shared reactive runtime context for web + TUI. `<Dashboard>` / compose apps provide
- * `Atom.runtime(layer)` here; {@link ./Bundle.observe} (and deprecated `use*Bundle` /
- * {@link data}) read it — no parallel atoms, no runtime baked into {@link ./View.compose}.
+ * `Atom.runtime(layer)` here; `Observe.use` / `NodeView.use` (and deprecated
+ * `use*Bundle` / {@link data}) read it — no parallel atoms, no runtime baked into
+ * {@link ./View.compose}.
  */
 import * as React from "react";
 import type { Effect } from "effect";
@@ -90,7 +91,7 @@ export type DataTag = {
 /**
  * Atom bundle for a queue tag, memoized per runtime+tag.
  *
- * @deprecated Prefer `Bundle.observe(tag)` — same builders, one public door.
+ * @deprecated Prefer `Observe.use(tag, WorkPoolView.pack)`.
  * @public
  */
 export const useQueueBundle = (tag: DataTag): QueueBundle => {
@@ -103,7 +104,7 @@ export const useQueueBundle = (tag: DataTag): QueueBundle => {
 /**
  * Atom bundle for a `WorkPool.priority` tag.
  *
- * @deprecated Prefer `Bundle.observe(tag)`.
+ * @deprecated Prefer `Observe.use(tag, PriorityView.pack)`.
  * @public
  */
 export const usePriorityBundle = (tag: DataTag): PriorityBundle => {
@@ -116,7 +117,7 @@ export const usePriorityBundle = (tag: DataTag): PriorityBundle => {
 /**
  * Atom bundle for a fleet-health tag.
  *
- * @deprecated Prefer `Bundle.observe(tag)`.
+ * @deprecated Prefer `Observe.use(tag, FleetHealthView.pack)`.
  * @public
  */
 export const useFleetHealthBundle = (tag: DataTag): FleetHealthBundle => {
@@ -131,7 +132,7 @@ export const useFleetHealthBundle = (tag: DataTag): FleetHealthBundle => {
 /**
  * Atom bundle for a telemetry tag.
  *
- * @deprecated Prefer `Bundle.observe(tag)`.
+ * @deprecated Prefer `Observe.use(tag, TelemetryView.pack)`.
  * @public
  */
 export const useTelemetryBundle = (tag: DataTag): TelemetryBundle => {
@@ -146,7 +147,7 @@ export const useTelemetryBundle = (tag: DataTag): TelemetryBundle => {
 /**
  * Atom bundle for a shard-map tag.
  *
- * @deprecated Prefer `Bundle.observe(tag)`.
+ * @deprecated Prefer `Observe.use(tag, ShardMapView.pack)`.
  * @public
  */
 export const useShardMapBundle = (tag: DataTag): ShardMapBundle => {
@@ -159,7 +160,7 @@ export const useShardMapBundle = (tag: DataTag): ShardMapBundle => {
 /**
  * Atom bundle for a Gate tag.
  *
- * @deprecated Prefer `Bundle.observe(tag)`.
+ * @deprecated Prefer `Observe.use(tag, GateView.pack)`.
  * @public
  */
 export const useGateBundle = (tag: DataTag): GateBundle => {
@@ -172,7 +173,7 @@ export const useGateBundle = (tag: DataTag): GateBundle => {
 /**
  * Atom bundle for a daemon tag.
  *
- * @deprecated Prefer `Bundle.observe(tag)`.
+ * @deprecated Prefer `Observe.use(tag, DaemonView.pack)`.
  * @public
  */
 export const useDaemonBundle = (tag: DataTag): DaemonBundle => {
@@ -185,7 +186,7 @@ export const useDaemonBundle = (tag: DataTag): DaemonBundle => {
 /**
  * Atom bundle for an HttpApiClient / API tag.
  *
- * @deprecated Prefer `Bundle.observe(tag)`.
+ * @deprecated Prefer `Observe.use(tag, ApiMetricsView.pack)`.
  * @public
  */
 export const useApiBundle = (tag: DataTag): ApiBundle => {
@@ -198,7 +199,7 @@ export const useApiBundle = (tag: DataTag): ApiBundle => {
 /**
  * Atom bundle for a node's status.
  *
- * @deprecated Prefer `Bundle.node(ref)`.
+ * @deprecated Prefer `NodeView.use(ref)`.
  * @public
  */
 export const useNodeBundle = (ref: NodeRef): NodeBundle =>
@@ -207,15 +208,16 @@ export const useNodeBundle = (ref: NodeRef): NodeBundle =>
 /**
  * Compose / kit **data door** — same `*Bundle(runtime, tag)` builders as Dashboard.
  *
- * @deprecated Prefer `Bundle.observe` / `Bundle.node` — noun menu on compose
- * violated handles-stay-thin (free helper, not kit weight).
+ * @deprecated Prefer `Observe.use(tag, *View.pack)` / `NodeView.use` — noun menu on
+ * compose violated handles-stay-thin (free helper, not kit weight).
  *
  * Call during render (hooks): reads {@link RuntimeProvider}.
  *
  * @example
  * ```tsx
- * import * as Bundle from "hyperlink-ts/ui/Bundle"
- * const box = Bundle.observe(Jobs)
+ * import * as Observe from "hyperlink-ts/Observe"
+ * import * as WorkPoolView from "hyperlink-ts/ui/WorkPoolView"
+ * const box = Observe.use(Jobs, WorkPoolView.pack)
  * ```
  *
  * @public
@@ -236,7 +238,7 @@ export type DataDoor = {
 /**
  * Shared data door (also on {@link ./View.compose}`().data`).
  *
- * @deprecated Prefer `Bundle.observe` / `Bundle.node`.
+ * @deprecated Prefer `Observe.use(tag, *View.pack)` / `NodeView.use`.
  * @public
  */
 export const data: DataDoor = {

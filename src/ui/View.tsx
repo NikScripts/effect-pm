@@ -1041,11 +1041,13 @@ export const useGridMembers = (): ReadonlyArray<{
  * Thin Dashboard sugar: {@link react} + {@link Navigator} Layer. No second registry;
  * no `Atom.runtime` inside — wrap with {@link ./runtime.RuntimeProvider} outside.
  *
- * Observe via {@link ./Bundle.observe} (not `ui.data` — deprecated noun menu).
+ * Observe via `Observe.use(tag, *View.pack)` / `NodeView.use` (not `ui.data`).
  *
  * @example
  * ```tsx
- * import * as Bundle from "hyperlink-ts/ui/Bundle"
+ * import * as Observe from "hyperlink-ts/Observe"
+ * import * as WorkPoolView from "hyperlink-ts/ui/WorkPoolView"
+ * import * as DaemonView from "hyperlink-ts/ui/DaemonView"
  * const ui = View.compose({
  *   views: Layer.mergeAll(View.bind(Group.kind, GroupCard), WebDashboardViews.layer),
  *   navigator: Navigator.history(ServicesHub),
@@ -1058,8 +1060,8 @@ export const useGridMembers = (): ReadonlyArray<{
  * </RuntimeProvider>
  *
  * // in a skin / shell component:
- * const bundle = Bundle.observe(Jobs)
- * const logs = Bundle.observe(Nightly)
+ * const queue = Observe.use(Jobs, WorkPoolView.pack)
+ * const daemon = Observe.use(Nightly, DaemonView.pack)
  * ```
  *
  * @public
@@ -1076,7 +1078,7 @@ export const compose = <VR, VE,>(options: {
   readonly useGridMembers: typeof useGridMembers;
   readonly navigator: Navigator.Service;
   /**
-   * @deprecated Prefer `Bundle.observe` / `Bundle.node`.
+   * @deprecated Prefer `Observe.use` / `NodeView.use`.
    */
   readonly data: DataDoor;
 } => {

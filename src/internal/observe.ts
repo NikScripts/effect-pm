@@ -41,7 +41,7 @@ export type Recipe<Svc, Out> = {
 };
 
 /** Unbound pack. `_svc` is phantom so `Svc` stays in the type. */
-export type Pack<Svc, Out extends Record<string, unknown>> = {
+export type Pack<Svc, Out extends object> = {
   readonly [PackTypeId]: typeof PackTypeId;
   readonly bind: (ctx: BindContext) => Out;
   readonly _svc?: Svc;
@@ -87,19 +87,35 @@ const toLiveStream = <A, E>(selected: LiveSource<A, E>): StreamT.Stream<A, E> =>
   );
 };
 
-const makeRecipe = <Svc, Out>(bind: (ctx: BindContext) => Out): Recipe<Svc, Out> => ({
+/**
+ * Build a custom recipe from a bind function (tag-aware / node-scoped fields).
+ */
+export const recipe = <Svc, Out>(bind: (ctx: BindContext) => Out): Recipe<Svc, Out> => ({
   [RecipeTypeId]: RecipeTypeId,
   bind,
 });
 
-const makePack = <Svc, Out extends Record<string, unknown>>(
+const makeRecipe = recipe;
+
+/**
+ * Build a named pack from a bind function (escape hatch for complex family surfaces).
+ */
+export const packOf = <Svc, Out extends object>(
+  id: string,
   bind: (ctx: BindContext) => Out,
-  id?: string,
 ): Pack<Svc, Out> => ({
   [PackTypeId]: PackTypeId,
   bind,
-  ...(id === undefined ? {} : { id }),
+  id,
 });
+
+const makePack = <Svc, Out extends object>(
+  bind: (ctx: BindContext) => Out,
+  id?: string,
+): Pack<Svc, Out> =>
+  id === undefined
+    ? { [PackTypeId]: PackTypeId, bind }
+    : packOf(id, bind);
 
 const runRecipe = <Svc, Out>(recipe: Recipe<Svc, Out>, ctx: BindContext): Out => {
   const existing = ctx.recipeOut.get(recipe);
@@ -110,7 +126,7 @@ const runRecipe = <Svc, Out>(recipe: Recipe<Svc, Out>, ctx: BindContext): Out =>
 };
 
 const runField = <Svc>(
-  field: Recipe<Svc, unknown> | Pack<Svc, Record<string, unknown>>,
+  field: Recipe<Svc, unknown> | Pack<Svc, object>,
   ctx: BindContext,
 ): unknown => {
   if (isPack(field)) return field.bind(ctx);
@@ -290,7 +306,7 @@ export const map = <Svc, A, B, E>(
 
 type StructField<Svc> =
   | Recipe<Svc, unknown>
-  | Pack<Svc, Record<string, unknown>>;
+  | Pack<Svc, object>;
 
 type StructOut<Fields> = {
   readonly [K in keyof Fields]: BoundOf<Fields[K]>;
@@ -304,9 +320,9 @@ export const struct = <
   Fields extends { readonly [K in keyof Fields]: StructField<Svc> },
 >(
   fields: Fields,
-): Pack<Svc, StructOut<Fields> & Record<string, unknown>> =>
+): Pack<Svc, StructOut<Fields> & object> =>
   makePack((ctx) => {
-    const out: Record<string, unknown> = {};
+    const out: { [key: string]: unknown } = {};
     for (const key of Reflect.ownKeys(fields)) {
       if (typeof key !== "string") continue;
       out[key] = runField(
@@ -314,7 +330,7 @@ export const struct = <
         ctx,
       );
     }
-    return out as StructOut<Fields> & Record<string, unknown>;
+    return out as StructOut<Fields> & object;
   });
 
 /**
@@ -324,8 +340,8 @@ export const struct = <
 export const merge = <
   SvcA extends SvcB,
   SvcB,
-  A extends Record<string, unknown>,
-  B extends Record<string, unknown>,
+  A extends object,
+  B extends object,
 >(
   left: Pack<SvcA, A>,
   right: Pack<SvcB, B>,
@@ -336,8 +352,8 @@ export const merge = <
  * Pipe-friendly merge: `pipe(left, Observe.and(right))`.
  */
 export const and =
-  <SvcB, B extends Record<string, unknown>>(right: Pack<SvcB, B>) =>
-  <SvcA extends SvcB, A extends Record<string, unknown>>(
+  <SvcB, B extends object>(right: Pack<SvcB, B>) =>
+  <SvcA extends SvcB, A extends object>(
     left: Pack<SvcA, A>,
   ): Pack<SvcA, A & B> =>
     merge(left, right);
@@ -345,7 +361,7 @@ export const and =
 /**
  * Stable pack id for HMR-safe memo keys.
  */
-export const named = <Svc, Out extends Record<string, unknown>>(
+export const named = <Svc, Out extends object>(
   id: string,
   pack: Pack<Svc, Out>,
 ): Pack<Svc, Out> => makePack(pack.bind, id);
@@ -360,7 +376,7 @@ const packMemoKey = (tagKey: string, pack: Pack<any, any>): string =>
  */
 export const bind =
   <R, ER>(runtime: Atom.AtomRuntime<R, ER>) =>
-  <Svc, Out extends Record<string, unknown>>(
+  <Svc, Out extends object>(
     tag: AtomTag<Svc, R>,
     pack: Pack<Svc, Out>,
   ): Out => {

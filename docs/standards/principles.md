@@ -44,7 +44,7 @@ ui.data.queue(Jobs)
 import * as Observe from "hyperlink-ts/Observe"
 import * as WorkPoolView from "hyperlink-ts/ui/WorkPoolView"
 Observe.use(Jobs, WorkPoolView.pack)
-// migration: Bundle.observe(Jobs) still works
+// deprecated shim: Bundle.observe(Jobs)
 ```
 
 The test: if removing the method leaves a complete Tag (or kit) and a named helper that takes that

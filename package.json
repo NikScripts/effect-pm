@@ -136,6 +136,38 @@
       "types": "./dist/ui/WorkPoolView.d.ts",
       "default": "./dist/ui/WorkPoolView.js"
     },
+    "./ui/PriorityView": {
+      "types": "./dist/ui/PriorityView.d.ts",
+      "default": "./dist/ui/PriorityView.js"
+    },
+    "./ui/DaemonView": {
+      "types": "./dist/ui/DaemonView.d.ts",
+      "default": "./dist/ui/DaemonView.js"
+    },
+    "./ui/GateView": {
+      "types": "./dist/ui/GateView.d.ts",
+      "default": "./dist/ui/GateView.js"
+    },
+    "./ui/ApiMetricsView": {
+      "types": "./dist/ui/ApiMetricsView.d.ts",
+      "default": "./dist/ui/ApiMetricsView.js"
+    },
+    "./ui/FleetHealthView": {
+      "types": "./dist/ui/FleetHealthView.d.ts",
+      "default": "./dist/ui/FleetHealthView.js"
+    },
+    "./ui/TelemetryView": {
+      "types": "./dist/ui/TelemetryView.d.ts",
+      "default": "./dist/ui/TelemetryView.js"
+    },
+    "./ui/ShardMapView": {
+      "types": "./dist/ui/ShardMapView.d.ts",
+      "default": "./dist/ui/ShardMapView.js"
+    },
+    "./ui/NodeView": {
+      "types": "./dist/ui/NodeView.d.ts",
+      "default": "./dist/ui/NodeView.js"
+    },
     "./ui/Navigator": {
       "types": "./dist/ui/Navigator.d.ts",
       "default": "./dist/ui/Navigator.js"

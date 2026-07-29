@@ -32,7 +32,7 @@ const box2 = Observe.bind(runtime)(Jobs, WorkPoolView.pack)
 | Packs | `WorkPoolView.pack` | Shipped UI field sets on `*View` |
 | Discharge | `Observe.bind` / `.use` | Tag + pack → atom box |
 
-`Bundle.observe(tag)` remains during migration; new code prefers `Observe.use(tag, *View.pack)`.
+`Bundle.observe(tag)` remains a deprecated shim; new code uses `Observe.use(tag, *View.pack)`.
 
 ## Recipes
 
@@ -45,6 +45,8 @@ const box2 = Observe.bind(runtime)(Jobs, WorkPoolView.pack)
 | `Observe.fold(select, { initial, step, tap?, seed?, channel? })` | Custom accumulator (shared parent for `map`) |
 | `Observe.poll(select, every)` | Spaced Effect poll |
 | `Observe.map(recipe, f)` | Project success value (shares upstream bind) |
+| `Observe.recipe(bind)` | Escape hatch for custom bind logic |
+| `Observe.packOf(id, bind)` | Named pack over an existing builder (parity bridge) |
 
 ## Packs
 
@@ -53,14 +55,42 @@ const pack = pipe(
   Observe.struct({ status, trend }),
   Observe.and(queueControls),
   Observe.and(queueMetricsHistory),
+  Observe.and(queueLogs),
 )
 Observe.named("workpool/queue", pack) // stable memo id
 ```
 
+### Shipped family packs
+
+| Pack | Import | Surface |
+|------|--------|---------|
+| Queue | `WorkPoolView.pack` | status, trend, metrics, history, controls, logs |
+| Priority | `PriorityView.pack` | status, trend, metrics, history, start, logs |
+| Daemon | `DaemonView.pack` | status, schedule, controls, logs |
+| API | `ApiMetricsView.pack` | metrics / history |
+| Gate | `GateView.pack` | gate status / controls |
+| Fleet | `FleetHealthView.pack` | fleet health |
+| Telemetry | `TelemetryView.pack` | telemetry |
+| Shard map | `ShardMapView.pack` | shard map |
+| Node | `NodeView.use(ref)` | status / logs / health (`NodeRef`, not a Tag) |
+
+Call site shape is always **tag then pack**:
+
+```ts
+Observe.use(Jobs, WorkPoolView.pack)
+Observe.use(Nightly, DaemonView.pack)
+NodeView.use(ref)
+```
+
 ## WorkPoolView.pack
 
-`WorkPoolView.pack` is the queue card/detail surface: `status`, `trend`, `metrics`,
-`history`, `pause` / `resume` / `clear` / `shutdown`. Status+trend share one fold (same
-as today’s `queueBundle`). **Delta:** no `logs` field yet (node-scoped follow-up).
+Compositional queue card/detail surface:
+
+- `status` + `trend` share one fold (same pending series as today’s `queueBundle`)
+- `metrics` + `history` share one fold (localStorage-backed cap)
+- `pause` / `resume` / `clear` / `shutdown` via `queueControls`
+- `logs` via node-scoped `queueLogs`
+
+Slices (`queueControls`, `queueMetricsHistory`, `queueLogs`) are also exported for apps that want a thinner pack.
 
 See also [Hyperlink atom](/docs/hyperlink-atom), [Bundles](/docs/bundles) (migration).

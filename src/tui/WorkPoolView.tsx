@@ -10,7 +10,7 @@ import { AsyncResult } from "effect/unstable/reactivity";
 import { useAtomValue } from "../ui/atom-react";
 import { isQueueTag, type QueueTag } from "../ui/data";
 import * as View from "../ui/View";
-import * as Bundle from "../ui/Bundle";
+import * as Observe from "../Observe";
 import * as WorkPoolView from "../ui/WorkPoolView";
 import { QueueCell } from "./cellWidgets";
 import {
@@ -43,7 +43,7 @@ const QueueDetailPanel = (props: {
   readonly name: string;
   readonly width?: number;
 }): React.ReactElement => {
-  const bundle = Bundle.observe(props.tag);
+  const bundle = Observe.use(props.tag, WorkPoolView.pack);
   const statusR = useAtomValue(bundle.status);
   const metricsR = useAtomValue(bundle.metrics);
   const trendR = useAtomValue(bundle.trend);

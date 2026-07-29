@@ -9,7 +9,8 @@ import * as React from "react";
 import { Option } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import * as Group from "../Group";
-import * as Bundle from "../ui/Bundle";
+import * as WorkPoolView from "../ui/WorkPoolView";
+import * as Observe from "../Observe";
 import { kindOf as hyperlinkKindOf, nodeOf } from "../Hyperlink";
 import {
   daemonLeaves,
@@ -123,7 +124,7 @@ const FocusedQueue = (props: {
 }): React.ReactElement => {
   const Match = View.useMatch();
   const { name, tag, cols, rows, editMode } = props;
-  const bundle = Bundle.observe(tag);
+  const bundle = Observe.use(tag, WorkPoolView.pack);
   const statusR = useAtomValue(bundle.status);
   const logsR = useAtomValue(bundle.logs);
 

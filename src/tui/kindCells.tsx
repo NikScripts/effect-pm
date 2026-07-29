@@ -17,7 +17,12 @@ import {
   type TelemetryTag,
 } from "../ui/data";
 import { useAtomValue } from "../ui/atom-react";
-import * as Bundle from "../ui/Bundle";
+import * as GateView from "../ui/GateView";
+import * as ApiMetricsView from "../ui/ApiMetricsView";
+import * as FleetHealthView from "../ui/FleetHealthView";
+import * as TelemetryView from "../ui/TelemetryView";
+import * as ShardMapView from "../ui/ShardMapView";
+import * as Observe from "../Observe";
 import { bar, blankBorder as BLANK_BORDER, compact, displayName, spark } from "./chrome";
 
 
@@ -108,7 +113,7 @@ export const GateCell = (props: {
   readonly width: number;
   readonly selected: boolean;
 }): React.ReactElement => {
-  const r = useAtomValue(Bundle.observe(props.tag).status);
+  const r = useAtomValue(Observe.use(props.tag, GateView.pack).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   const inFlight = s?.inFlight ?? 0;
   const waiting = s?.waiting ?? 0;
@@ -149,7 +154,7 @@ export const FocusedGate = (props: {
   readonly cols: number;
   readonly rows: number;
 }): React.ReactElement => {
-  const r = useAtomValue(Bundle.observe(props.tag).status);
+  const r = useAtomValue(Observe.use(props.tag, GateView.pack).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   const completed = s?.completed ?? 0;
   const avgMs =
@@ -178,7 +183,7 @@ export const ApiCell = (props: {
   readonly width: number;
   readonly selected: boolean;
 }): React.ReactElement => {
-  const bundle = Bundle.observe(props.tag);
+  const bundle = Observe.use(props.tag, ApiMetricsView.pack);
   const statusR = useAtomValue(bundle.status);
   const metricsR = useAtomValue(bundle.metrics);
   const historyR = useAtomValue(bundle.history);
@@ -223,7 +228,7 @@ export const FocusedApi = (props: {
   readonly cols: number;
   readonly rows: number;
 }): React.ReactElement => {
-  const bundle = Bundle.observe(props.tag);
+  const bundle = Observe.use(props.tag, ApiMetricsView.pack);
   const statusR = useAtomValue(bundle.status);
   const metricsR = useAtomValue(bundle.metrics);
   const historyR = useAtomValue(bundle.history);
@@ -272,7 +277,7 @@ export const FleetHealthCell = (props: {
   readonly width: number;
   readonly selected: boolean;
 }): React.ReactElement => {
-  const bundle = Bundle.observe(props.tag);
+  const bundle = Observe.use(props.tag, FleetHealthView.pack);
   const statusR = useAtomValue(bundle.status);
   const byNodeR = useAtomValue(bundle.byNode);
   const status = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
@@ -310,7 +315,7 @@ export const FocusedFleetHealth = (props: {
   readonly cols: number;
   readonly rows: number;
 }): React.ReactElement => {
-  const bundle = Bundle.observe(props.tag);
+  const bundle = Observe.use(props.tag, FleetHealthView.pack);
   const statusR = useAtomValue(bundle.status);
   const byNodeR = useAtomValue(bundle.byNode);
   const status = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
@@ -340,7 +345,7 @@ export const TelemetryCell = (props: {
   readonly width: number;
   readonly selected: boolean;
 }): React.ReactElement => {
-  const bundle = Bundle.observe(props.tag);
+  const bundle = Observe.use(props.tag, TelemetryView.pack);
   const fleetR = useAtomValue(bundle.fleetInFlight);
   const byNodeR = useAtomValue(bundle.inFlightByNode);
   const countR = useAtomValue(bundle.metricCount);
@@ -374,7 +379,7 @@ export const FocusedTelemetry = (props: {
   readonly cols: number;
   readonly rows: number;
 }): React.ReactElement => {
-  const bundle = Bundle.observe(props.tag);
+  const bundle = Observe.use(props.tag, TelemetryView.pack);
   const fleetR = useAtomValue(bundle.fleetInFlight);
   const byNodeR = useAtomValue(bundle.inFlightByNode);
   const countR = useAtomValue(bundle.metricCount);
@@ -408,7 +413,7 @@ export const ShardMapCell = (props: {
   readonly width: number;
   readonly selected: boolean;
 }): React.ReactElement => {
-  const bundle = Bundle.observe(props.tag);
+  const bundle = Observe.use(props.tag, ShardMapView.pack);
   const sizeR = useAtomValue(bundle.size);
   const byNodeR = useAtomValue(bundle.sizeByNode);
   const localR = useAtomValue(bundle.sizeLocal);
@@ -443,7 +448,7 @@ export const FocusedShardMap = (props: {
   readonly cols: number;
   readonly rows: number;
 }): React.ReactElement => {
-  const bundle = Bundle.observe(props.tag);
+  const bundle = Observe.use(props.tag, ShardMapView.pack);
   const sizeR = useAtomValue(bundle.size);
   const byNodeR = useAtomValue(bundle.sizeByNode);
   const localR = useAtomValue(bundle.sizeLocal);

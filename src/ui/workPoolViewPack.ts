@@ -3,9 +3,16 @@
  * @internal
  */
 import { DateTime, Effect, Option, pipe, Stream, type Effect as EffectT, type Stream as StreamT } from "effect";
+import { nodeOf } from "../Hyperlink";
 import * as Observe from "../Observe";
 import { readCache, writeCache } from "./cache";
-import type { MetricPoint, QueueMetrics, QueueStatus } from "./data";
+import type {
+  MetricPoint,
+  QueueMetrics,
+  QueueStatus,
+  QueueTag,
+} from "./data";
+import { serviceLogsAtom } from "./observeSupport";
 
 const HISTORY = 1800;
 const HISTORY_CACHE = 120;
@@ -132,10 +139,23 @@ export const queueMetricsHistory = Observe.struct({
 });
 
 /**
- * Full WorkPool queue UI pack — card + detail observe surface.
+ * Node-scoped service logs for the bound tag.
  *
- * Delta vs `queueBundle`: no `logs` field yet (node-scoped; follow-up). Status / metrics
- * remain `Option` inside `AsyncResult` (same as today’s Bundle mapResult shape).
+ * @public
+ */
+export const queueLogs = Observe.struct({
+  logs: Observe.recipe((ctx) => {
+    const tag = ctx.tag as QueueTag;
+    const node = nodeOf(tag);
+    if (node === undefined) {
+      throw new Error(`queue tag ${tag.key} is missing a node`);
+    }
+    return serviceLogsAtom(ctx.runtime, tag.key, node);
+  }),
+});
+
+/**
+ * Full WorkPool queue UI pack — card + detail observe surface.
  *
  * @public
  */
@@ -148,5 +168,6 @@ export const pack = Observe.named(
     }),
     Observe.and(queueControls),
     Observe.and(queueMetricsHistory),
+    Observe.and(queueLogs),
   ),
 );

@@ -1,11 +1,14 @@
 /**
  * @module ui/ShardMapView
  *
- * Shared View handles + contribution Layer — no platform TSX.
+ * Shared View handles + contribution Layer + observe **pack** — no platform TSX.
  */
 import { Layer } from "effect";
 import * as ShardMap from "../ShardMap";
+import { shardMapPack as pack } from "./familyPacks";
 import * as View from "./View";
+
+export { pack };
 
 /** @public */
 export const shardMapViewSpec = { kind: ShardMap.kind } as const;

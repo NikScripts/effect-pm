@@ -92,7 +92,8 @@
     "../internal/observeUse.ts",
     "../../test/observe.test.ts",
     "../../test/observe.test-d.ts",
-    "../../test/ui-workpool-view-pack.test.ts"
+    "../../test/ui-workpool-view-pack.test.ts",
+    "../../test/ui-family-view-packs.test.ts"
   ],
   "exclude": ["../../node_modules", "../../dist"]
 }

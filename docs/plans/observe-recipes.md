@@ -1,8 +1,8 @@
 # Plan: Observe recipes (pipeable UI packs)
 
-**Status:** Phase 0 Eng’d (Observe + `WorkPoolView.pack`) — further packs / Bundle retirement still open.  
+**Status:** Phases 0–3 Eng’d — Observe + all family `*View.pack` + web/TUI dogfood; `Bundle.observe` / `Bundle.node` are deprecated shims. Phase 4 (delete shim + `use*Bundle` / `ui.data`) still open.  
 **Branch:** `cursor/view-withsize-types-125f` (Agent G).  
-**Prior art:** [`../guides/hyperlink-atom.md`](../guides/hyperlink-atom.md), [`../guides/bundles.md`](../guides/bundles.md), [`../standards/principles.md#handles-stay-thin`](../standards/principles.md#handles-stay-thin), [`../handoffs/view-compose-lock.md`](../handoffs/view-compose-lock.md) §G.
+**Prior art:** [`../guides/hyperlink-atom.md`](../guides/hyperlink-atom.md), [`../guides/bundles.md`](../guides/bundles.md), [`../guides/observe.md`](../guides/observe.md), [`../standards/principles.md#handles-stay-thin`](../standards/principles.md#handles-stay-thin), [`../handoffs/view-compose-lock.md`](../handoffs/view-compose-lock.md) §G.
 
 ---
 
@@ -44,7 +44,7 @@ Observe.use(MyDaemon, DaemonView.pack)
 | `fleetHealthBundle` | `ui/FleetHealthView` | `FleetHealthView.pack` |
 | `telemetryBundle` | `ui/TelemetryView` | `TelemetryView.pack` |
 | `shardMapBundle` | `ui/ShardMapView` | `ShardMapView.pack` |
-| `nodeStatusBundle` / `Bundle.node` | TBD (no `NodeView` yet) | Eng detail — helper on `Observe` or small `ui/NodeView` if warranted |
+| `nodeStatusBundle` / `Bundle.node` | `ui/NodeView` | `NodeView.use` / `.bind` (NodeRef, not a Tag) |
 
 Convention: each service `*View` exports one primary observe pack as **`pack`** (camelCase value). Shared sub-pipes (`queueControls`, history scans) are additional flat exports on the same module when useful, or `internal/` only.
 
@@ -175,15 +175,15 @@ Same pattern on `DaemonView`, `GateView`, … — each exports **`pack`**.
 
 ## Migration from Bundles
 
-| Phase | Work |
-|-------|------|
-| **0** | Eng `Observe` + `WorkPoolView.pack`; tests; guide |
-| **1** | Dogfood one web queue card/detail on `Observe.use(tag, WorkPoolView.pack)` |
-| **2** | Rewrite `queueBundle` as thin wrapper over `Observe.bind(rt)(tag, WorkPoolView.pack)` (or delete) |
-| **3** | Port remaining packs onto matching `*View.pack`; delete `Bundle.observe` kind switch + `ui/Bundle` |
-| **4** | Remove deprecated `use*Bundle` / `ui.data` after in-tree greps are clean |
+| Phase | Work | State |
+|-------|------|-------|
+| **0** | Eng `Observe` + `WorkPoolView.pack`; tests; guide | **Eng’d** |
+| **1** | Dogfood web/TUI skins on `Observe.use(tag, *View.pack)` / `NodeView.use` | **Eng’d** |
+| **2** | Rewrite `queueBundle` as thin wrap over `WorkPoolView.pack` | **Eng’d** |
+| **3** | Port remaining packs onto matching `*View.pack`; `Bundle.*` → deprecated shim | **Eng’d** (delete module = Phase 4) |
+| **4** | Remove deprecated `use*Bundle` / `ui.data` / `ui/Bundle` after greps are clean | **Open** |
 
-`Bundle.observe` stays until Phase 3 so nothing breaks mid-flight. Changeset: **minor** (`Observe` + pack reshape).
+Changeset: **minor** (`Observe` + pack reshape + `*View` subpaths).
 
 ---
 
@@ -387,19 +387,19 @@ Compose with `Observe.*`; optionally add `pack` on a matching `*View` later — 
 
 ---
 
-## Open Eng details (resolve while implementing)
+## Open Eng details
 
-1. **Deduped dual-projection** — today one status stream feeds `status` + `trend`. `Observe.scan` + `Observe.atom` on the same select should share a channel (extend `channelKeyOf` / pack-local share).  
-2. **Logs** — node-scoped log stream needs `nodeOf(tag)`; `Observe` helper or `WorkPoolView` pipe stage.  
-3. **`Observe.use` vs hooks rules** — `use` must call `useRuntime()` unconditionally.  
-4. **Fold vs keep `Hyperlink.atom`** — keep both: Hyperlink = one-field bind; Observe = recipes; `*View.pack` = shipped packs.  
-5. **Node pack home** — no `NodeView` yet; keep a small helper vs add `ui/NodeView`.
+1. **Non-queue packs** — today `packOf` over proven `*Bundle` builders (parity). Optional later: rewrite compositionally like `WorkPoolView.pack`.  
+2. **Phase 4** — delete `ui/Bundle`, `use*Bundle`, and `View.compose().data` once out-of-tree greps are clean.  
+3. **Kit `<Dashboard />`** — HOLD unchanged.
+
+Resolved: shared fold via `Observe.map`; queue `logs` on `WorkPoolView.pack`; `Observe.use` always calls `useRuntime()`; `ui/NodeView` for NodeRef.
 
 ---
 
 ## Docs / changeset
 
-- Guide: `docs/guides/observe.md` (stack diagram; bundles guide becomes migration → `WorkPoolView.pack`).  
-- Update `principles.md` example: `Observe.use(Jobs, WorkPoolView.pack)`.  
-- Changeset **minor** on Eng of `Observe` + `WorkPoolView.pack`.  
-- Lock note in `view-compose-lock.md` §G when Phase 0 lands.
+- Guide: `docs/guides/observe.md` (stack + family table).  
+- Bundles guide → migration pointer.  
+- `principles.md`: `Observe.use(Jobs, WorkPoolView.pack)`.  
+- Changeset **minor** for `Observe` + packs + `*View` / `NodeView` subpaths.

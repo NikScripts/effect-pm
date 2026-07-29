@@ -16,7 +16,12 @@ import { Layer } from "effect";
 import * as WorkPool from "../WorkPool";
 import * as View from "./View";
 
-export { pack, queueControls, queueMetricsHistory } from "./workPoolViewPack";
+export {
+  pack,
+  queueControls,
+  queueLogs,
+  queueMetricsHistory,
+} from "./workPoolViewPack";
 
 /**
  * Default WorkPool card View service.

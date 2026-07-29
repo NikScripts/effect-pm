@@ -10,7 +10,7 @@ import { bind, type AtomTag, type Pack } from "./observe";
 /**
  * Discharge a pack under {@link ../ui/runtime.RuntimeProvider}.
  */
-export const use = <Svc, Out extends Record<string, unknown>, R = never>(
+export const use = <Svc, Out extends object, R = never>(
   tag: AtomTag<Svc, R>,
   pack: Pack<Svc, Out>,
 ): Out => {

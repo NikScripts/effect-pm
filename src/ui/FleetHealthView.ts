@@ -1,11 +1,14 @@
 /**
  * @module ui/FleetHealthView
  *
- * Shared View handles + contribution Layer — no platform TSX.
+ * Shared View handles + contribution Layer + observe **pack** — no platform TSX.
  */
 import { Layer } from "effect";
 import * as FleetHealth from "../FleetHealth";
+import { fleetHealthPack as pack } from "./familyPacks";
 import * as View from "./View";
+
+export { pack };
 
 /** @public */
 export const fleetHealthViewSpec = { kind: FleetHealth.kind } as const;

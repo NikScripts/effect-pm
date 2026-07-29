@@ -29,11 +29,14 @@ export {
   map,
   merge,
   named,
+  packOf,
   poll,
   query,
+  recipe,
   scan,
   struct,
   type AtomTag,
+  type BindContext,
   type BoundOf,
   type FoldOptions,
   type Pack,
@@ -45,7 +48,7 @@ export { use } from "./internal/observeUse";
 
 export declare namespace Observe {
   export type Recipe<Svc, Out> = import("./internal/observe").Recipe<Svc, Out>;
-  export type Pack<Svc, Out extends Record<string, unknown>> =
+  export type Pack<Svc, Out extends object> =
     import("./internal/observe").Pack<Svc, Out>;
   export type BoundOf<R> = import("./internal/observe").BoundOf<R>;
 }

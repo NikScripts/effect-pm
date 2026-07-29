@@ -27,10 +27,11 @@ const makeControlLayer = () =>
   );
 
 describe("WorkPoolView.pack", () => {
-  it("exports a named pack and control slices", () => {
+  it("exports a named pack and control / logs slices", () => {
     expect(WorkPoolView.pack.id).toBe("workpool/queue");
     expect(WorkPoolView.queueControls).toBeDefined();
     expect(WorkPoolView.queueMetricsHistory).toBeDefined();
+    expect(WorkPoolView.queueLogs).toBeDefined();
   });
 });
 

@@ -29,7 +29,10 @@ import {
   nodesOf,
   tagWireKey,
 } from "../ui/data";
-import * as Bundle from "../ui/Bundle";
+import * as NodeView from "../ui/NodeView";
+import * as WorkPoolView from "../ui/WorkPoolView";
+import * as DaemonView from "../ui/DaemonView";
+import * as Observe from "../Observe";
 import { fmtDayLabel, now, startOfWeekMillis } from "../ui/now";
 import { useAtomValue } from "../ui/atom-react";
 import * as Group from "../Group";
@@ -83,7 +86,7 @@ const DegradedKeysProbe = (props: {
   readonly node: NodeRef;
   readonly onKeys: (id: string, keys: ReadonlyArray<string>) => void;
 }): null => {
-  const r = useAtomValue(Bundle.node(props.node).status);
+  const r = useAtomValue(NodeView.use(props.node).status);
   const s = AsyncResult.isSuccess(r) ? r.value : undefined;
   const keys = (s?.services ?? []).filter((x) => !x.ready).map((x) => x.key);
   const { onKeys, node } = props;
@@ -135,8 +138,8 @@ const LogBox = (props: {
 /** Fullscreen logs page for a HyperService — its own route (`/…/Hyperlink/logs`). */
 const LogsPage = (props: { readonly tag: QueueTag | DaemonTag; readonly onClose: () => void }): React.ReactElement => {
   const bundle = isDaemonTag(props.tag)
-    ? Bundle.observe(props.tag)
-    : Bundle.observe(props.tag);
+    ? Observe.use(props.tag, DaemonView.pack)
+    : Observe.use(props.tag, WorkPoolView.pack);
   return <LogBox bundle={bundle} full onToggle={props.onClose} meta={<> · {displayName(props.tag.key)}</>} />;
 };
 
@@ -146,7 +149,7 @@ const DAY_MS = 86_400_000;
  *  calendar grid of the run windows. Week nav up top (top-right kept free); add / clear / lock in a
  *  bottom bar; tap a window to edit or delete it. */
 const SchedulePage = (props: { readonly tag: DaemonTag; readonly onClose: () => void }): React.ReactElement => {
-  const bundle = Bundle.observe(props.tag);
+  const bundle = Observe.use(props.tag, DaemonView.pack);
   const { list, addEntry, update, remove, clearAll } = useScheduleEdit(bundle);
   const [weekStart, setWeekStart] = React.useState(() => startOfWeekMillis(now()));
   const [editing, setEditing] = React.useState<number | "new" | undefined>(undefined);
@@ -220,7 +223,7 @@ const QueueDetail = (props: {
   readonly onOpenLogs: () => void;
 }): React.ReactElement => {
   const Match = View.useMatch();
-  const bundle = Bundle.observe(props.tag);
+  const bundle = Observe.use(props.tag, WorkPoolView.pack);
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? Option.getOrUndefined(statusR.value) : undefined;
   return (
@@ -242,7 +245,7 @@ const DaemonDetail = (props: {
   readonly onOpenLogs: () => void;
 }): React.ReactElement => {
   const Match = View.useMatch();
-  const bundle = Bundle.observe(props.tag);
+  const bundle = Observe.use(props.tag, DaemonView.pack);
   return (
     <DetailShell
       title={`⚙ ${displayName(props.tag.key)}`}

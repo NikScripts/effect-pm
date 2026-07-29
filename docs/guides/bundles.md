@@ -6,16 +6,20 @@
 <!-- docs-site-link:end -->
 # Bundles
 
+> **Migration:** prefer [Observe](/docs/observe) — `Observe.use(tag, *View.pack)` /
+> `NodeView.use(ref)`. `Bundle.observe` / `Bundle.node` remain deprecated shims.
+
 A **Bundle** is the UI observe/control surface for one Hyperlink Tag (or node): a small
 object of Effect atoms derived from that tag under a shared `Atom.AtomRuntime`. Skins and
-panels read and steer through the Bundle. They do not open a second channel beside the Tag.
+panels read and steer through that surface. They do not open a second channel beside the Tag.
 
 ```tsx
 import { RuntimeProvider, useAtomValue } from "hyperlink-ts/ui"
-import * as Bundle from "hyperlink-ts/ui/Bundle"
+import * as Observe from "hyperlink-ts/Observe"
+import * as WorkPoolView from "hyperlink-ts/ui/WorkPoolView"
 
 function JobsCard({ tag }: { tag: typeof Jobs }) {
-  const box = Bundle.observe(tag)
+  const box = Observe.use(tag, WorkPoolView.pack)
   const status = useAtomValue(box.status)
   return <pre>{JSON.stringify(status)}</pre>
 }
@@ -30,10 +34,8 @@ function JobsCard({ tag }: { tag: typeof Jobs }) {
 | Handle | `yield* Jobs` | Universal Effect / Stream / ref surface |
 | Promise | `Hyperlink.promise(handle)` | OS edge for non-Effect hosts |
 | Atom adapters | `Hyperlink.atom` / `.query` / `.fn` | Universal Effect-reactive bindings |
-| Bundle | `Bundle.observe(Jobs)` | Family UI pack (charts, cache, commands) — **migration**; prefer Observe |
 | Observe | `Observe.use(Jobs, WorkPoolView.pack)` | Unbound recipes + `*View.pack` ([Observe](/docs/observe)) |
-
-`Bundle.observe` is a free helper (thin Tags). New code: `Observe.use(tag, *View.pack)`.
+| Bundle | `Bundle.observe(Jobs)` | Deprecated kind-dispatch shim → same packs |
 
 ## What it is
 
@@ -42,47 +44,26 @@ function JobsCard({ tag }: { tag: typeof Jobs }) {
 | **Value atoms** | Live reads (`status`, `metrics`, `logs`, …) via `useAtomValue` |
 | **Command atoms** | Writes (`pause`, `resume`, `start`, …) as `Atom` result-fns |
 
-Builders memoize one Bundle per `(runtime, tag.key)`. Straight status/command fields use
-`Hyperlink.atom` / `Hyperlink.fn`; history/trend/logs/schedule scans stay Bundle-owned.
+Builders / packs memoize one box per `(runtime, tag.key, pack id)`.
 
-## Families
+## Families → packs
 
-| Kind | Bundle |
-|------|--------|
-| WorkPool queue | `QueueBundle` |
-| WorkPool priority | `PriorityBundle` |
-| Daemon | `DaemonBundle` |
-| HttpApi / API metrics | `ApiBundle` |
-| Fleet health | `FleetHealthBundle` |
-| Telemetry | `TelemetryBundle` |
-| Shard map | `ShardMapBundle` |
-| Gate | `GateBundle` |
-| Node | `Bundle.node(ref)` → `NodeBundle` |
+| Kind | Prefer | Deprecated |
+|------|--------|------------|
+| WorkPool queue | `Observe.use(tag, WorkPoolView.pack)` | `Bundle.observe(tag)` |
+| WorkPool priority | `Observe.use(tag, PriorityView.pack)` | `Bundle.observe(tag)` |
+| Daemon | `Observe.use(tag, DaemonView.pack)` | `Bundle.observe(tag)` |
+| HttpApi / API metrics | `Observe.use(tag, ApiMetricsView.pack)` | `Bundle.observe(tag)` |
+| Fleet health | `Observe.use(tag, FleetHealthView.pack)` | `Bundle.observe(tag)` |
+| Telemetry | `Observe.use(tag, TelemetryView.pack)` | `Bundle.observe(tag)` |
+| Shard map | `Observe.use(tag, ShardMapView.pack)` | `Bundle.observe(tag)` |
+| Gate | `Observe.use(tag, GateView.pack)` | `Bundle.observe(tag)` |
+| Node | `NodeView.use(ref)` | `Bundle.node(ref)` |
 
-Wrong kind fails loudly.
-
-## Door
-
-Call during render under `RuntimeProvider`:
-
-```ts
-import * as Bundle from "hyperlink-ts/ui/Bundle"
-
-Bundle.observe(Jobs)     // QueueBundle
-Bundle.observe(Nightly)  // DaemonBundle
-Bundle.node(ref)         // NodeBundle
-Bundle.runtime()         // Atom.AtomRuntime
-```
-
-**One public door:** `Bundle.observe` / `Bundle.node` (calls the builders directly).  
-`use*Bundle` and `View.compose(…).data.*` are **deprecated** aliases (same builders; removal later).
-
-Same stack for library Dashboard and app code: `Hyperlink.atom/fn` → Bundle builders →
-`Bundle.observe` under `RuntimeProvider`. View Prototype `use` for component logic is **not**
-the observe door (future / optional); Bundles stay the family UI pack.
+Wrong kind still fails loudly on the shim.
 
 ## Custom HyperServices
 
 1. Spec + Tag + layer/client (Handle for free).
 2. For thin UI: `Hyperlink.atom(rt)(MyTag, (s) => s.field)` under `RuntimeProvider`.
-3. For a Dashboard-style pack: write a `*Bundle` builder (see `src/ui/data.ts`) and wire a kind into `Bundle.observe` (or call your builder directly until registered).
+3. For a Dashboard-style pack: compose `Observe.struct` / `Observe.and` (see [Observe](/docs/observe)), optionally export `pack` from a matching `*View` module.

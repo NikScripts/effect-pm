@@ -32,7 +32,7 @@ import * as TelemetryView from "../ui/TelemetryView";
 import * as WorkPoolView from "../ui/WorkPoolView";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useAtomValue } from "../ui/atom-react";
-import * as Bundle from "../ui/Bundle";
+import * as Observe from "../Observe";
 import {
   ApiCard,
   ApiEndpointTable,
@@ -179,7 +179,7 @@ const PriorityDetailView: View.View = (props) => {
 const DaemonDetailView: View.View = (props) => {
   if (!isDaemonTag(props.tag)) return null;
   const nav = Navigator.useNavigatorOption();
-  const bundle = Bundle.observe(props.tag);
+  const bundle = Observe.use(props.tag, DaemonView.pack);
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   const [locked, setLocked] = React.useState(true);
@@ -209,7 +209,7 @@ const DaemonDetailView: View.View = (props) => {
 
 const ApiDetailView: View.View = (props) => {
   if (!isApiTag(props.tag)) return null;
-  const bundle = Bundle.observe(props.tag);
+  const bundle = Observe.use(props.tag, ApiMetricsView.pack);
   const statusR = useAtomValue(bundle.status);
   const s = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
   return (
