@@ -22,25 +22,25 @@
  * import * as Route from "hyperlink-ts/ui/Route"
  * import { HttpApi, HttpApiEndpoint, HttpApiGroup } from "effect/unstable/httpapi"
  *
- * const Wire = HttpApi.make("wire").add(
+ * const wire = HttpApi.make("wire").add(
  *   HttpApiGroup.make("users", { topLevel: true }).add(
  *     HttpApiEndpoint.get("getUser", "/users/:id"),
  *   ),
  * )
  *
- * const Site = Route.make("site").add(
+ * const site = Route.make("site").add(
  *   Route.get("home", "/home"),
  *   Route.get("docs", "/docs"),
  *   Route.group("app").add(
  *     Route.get("dashboard", "/app"),
  *   ),
- *   Route.addHttpApi(Wire),
+ *   Route.addHttpApi(wire),
  * )
  *
- * Route.urlBuilder(Site).home()
- * Route.urlBuilder(Site).getUser({ params: { id: "1" } })
- * Route.urlBuilder(Site).app.dashboard()
- * Route.match(Site, "/users/1")
+ * Route.urlBuilder(site).home()
+ * Route.urlBuilder(site).getUser({ params: { id: "1" } })
+ * Route.urlBuilder(site).app.dashboard()
+ * Route.match(site, "/users/1")
  * ```
  *
  * @see docs/handoffs/ui-routes-dream.md

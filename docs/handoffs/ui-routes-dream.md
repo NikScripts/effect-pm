@@ -1,8 +1,8 @@
-# UI Route — HttpApi-shaped public URL router
+# UI Route + Router
 
 **Locked (owner 2026-07-29)**
 
-## Shape
+## Catalog (`Route`) — data
 
 | Effect | Route |
 |--------|--------|
@@ -13,30 +13,28 @@
 | `HttpApiClient.urlBuilder` | `Route.urlBuilder` |
 | `HttpApi.reflect` | `Route.reflect` |
 
-- **Root endpoints:** `Route.make("site").add(Route.get("docs", "/docs"))` — no `topLevel` needed.
-- **`topLevel`:** optional on `Route.group` (HttpApi parity) when a named group should flatten onto the parent builder.
-- **Mix wire APIs:** `Route.addHttpApi(wireHttpApi)` imports **URL surface only** (paths / ids / params / group nesting).
-- **Runtime:** same constructors in loops — no Group.Tag helper in this module.
+CamelCase values: `const site = Route.make("site").add(…)`.
 
-## Example
+## Runtime (`Router`) — service + layers
 
 ```ts
-const Wire = HttpApi.make("wire").add(
-  HttpApiGroup.make("users", { topLevel: true }).add(
-    HttpApiEndpoint.get("getUser", "/users/:id"),
-  ),
-)
-
-const Site = Route.make("site").add(
+const site = Route.make("site").add(
   Route.get("home", "/home"),
   Route.group("app").add(Route.get("dashboard", "/app")),
-  Route.addHttpApi(Wire),
+  Route.addHttpApi(wire),
 )
 
-Route.urlBuilder(Site).getUser({ params: { id: "1" } })
-Route.match(Site, "/users/1")
+Router.history(site) // Layer — browser
+Router.memory(site)  // Layer — tests / TUI / embed
+
+const router = yield* Router.Router
+router.to((urls) => urls.app.dashboard())
+router.pathname
+router.match
 ```
 
-## Not in scope (yet)
+Swap transport by swapping the layer. Catalog stays a plain value (not a Service).
 
-Navigator cutover onto `Route` catalogs (still uses legacy `GroupRoute.resolveGroupRoute`).
+## Not yet
+
+Navigator cutover onto `Router` (dashboard still uses `Navigator` + Group path resolve).

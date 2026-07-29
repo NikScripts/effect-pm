@@ -98,7 +98,8 @@
     "../../test/ui-bundle-observe.test-d.ts",
     "../../test/ui-view-data.test.ts",
     "../../test/ui-view-data.test-d.ts",
-    "../../test/ui-routes.test.ts"
+    "../../test/ui-routes.test.ts",
+    "../../test/ui-router.test.ts"
   ],
   "exclude": ["../../node_modules", "../../dist"]
 }

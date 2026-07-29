@@ -7,7 +7,7 @@
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **4** | `cursor/hyperservice-open-deps-5679` | [examples IA](./examples-ia-reorg.md) · [gap proposals](./examples-gap-proposals.md) · [E5 apps](./examples-apps-e5-plan.md) | **Plan** — examples gap queue (Idea 1 WorkPool) | same tip as `integration` | proposal doc Eng’d | Owner: confirm Idea 1 subset / order | 2026-07-29 |
-| **G / TUI** | `cursor/view-withsize-types-125f` | View compose · [UI Route](./ui-routes-dream.md) | **tip-synced** — Route + `addHttpApi`; Navigator cutover next | same tip as `integration` | ui-routes 6/6 | F5 flake pre-existing | 2026-07-29 |
+| **G / TUI** | `cursor/view-withsize-types-125f` | View compose · [UI Route](./ui-routes-dream.md) | **tip-synced** — `Router` memory/history layers; Navigator cutover next | same tip as `integration` | ui-router tests | F5 flake pre-existing | 2026-07-29 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **5**, **G** | 2026-07-26 |
 | **5** | `cursor/launcher-handoff-design-929b` | [launcher + handoff brief](./launcher-and-handoff-brief.md) · [rename](./rename-hyperlink-handoff.md) | **tip-synced** — #39 handoff landed | same tip as `integration` | typecheck 0; handoff 13/13 | `restartSuccessor` / serve `{ node }` / #35–37 deferred | 2026-07-29 |
 | **Docs site** | `cursor/docs-site-edge-cache-dbdc` (ε) | [dev host](./docs-site-dev-host.md) · edge cache · SEO | **tip-synced / live** — apex coming-soon; docs on `dev`; GS polish; origin gate | same tip as `integration` | smoke + host-gate tests; CF + `serve-production.mjs`; islands on `hyperlink-ts` / `.hl-dashboard` | — | 2026-07-29 |
@@ -29,7 +29,7 @@
 
 ### Active (owner approval required)
 1. **Agent 4:** Examples IA Eng’d. **Gap proposals** — walk Idea 1 (WorkPool) then next. Handoff: [`examples-gap-proposals.md`](./examples-gap-proposals.md). E5 still owner-gated.
-2. **Agent G / TUI:** Dashboard unheld; HttpApi-shaped `Route` + `addHttpApi` Eng’d ([`ui-routes-dream.md`](./ui-routes-dream.md)); Navigator cutover next. Branch `cursor/view-withsize-types-125f`.
+2. **Agent G / TUI:** Dashboard unheld; `Route` + `Router` (memory/history) Eng’d ([`ui-routes-dream.md`](./ui-routes-dream.md)); Navigator cutover next. Branch `cursor/view-withsize-types-125f`.
 3. **Agent 5 (Launcher + handoff):** #39 landed — serve-site `handoff(from,to,ctx)`; WorkPool.serve bakes `releaseEnqueueHandoff`. Next: deferred cutover items / Track D. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
 4. **Docs site:** Live — apex coming-soon (inlined CSS + `(book)` chrome); docs on `dev`. Origin host-gate via `serve-production.mjs` (before Waku static). Islands: `hyperlink-ts` alias + `.hl-dashboard`. Getting Started em-dash/voice polish.
 
