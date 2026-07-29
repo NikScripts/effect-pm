@@ -165,11 +165,10 @@ const workPoolRelease = (
     // Peer transfer needs decoded entries (#34). Without `release`, fall back to local-only
     // `releaseEncoded` (no enqueueEncoded in v1).
     if (peerTransfer !== undefined && release !== undefined) {
-      const released = asEntryArray(
-        yield* release({ options: {} }).pipe(
-          Effect.catch(() => Effect.succeed([])),
-        ),
-      );
+      const releasedExit = yield* Effect.exit(release({ options: {} }));
+      const released = Exit.isSuccess(releasedExit)
+        ? asEntryArray(releasedExit.value)
+        : [];
       if (released.length > 0) {
         const ok = yield* peerTransfer.tryEnqueueToPeer(released);
         if (!ok) {

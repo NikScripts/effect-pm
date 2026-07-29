@@ -3258,6 +3258,11 @@ const sameHandoffDial = (
  * Directory peer enqueue for {@link withHandoff}`("workPoolRelease")` — excludes self by dial
  * so same-`nodeKey` A→B replacement still finds the incoming row (Locked #34 / #38).
  */
+/** Close a type-erased wire Effect at the handoff peer-dial edge. */
+const closeHandoffEffect = <A = unknown>(value: unknown): Effect.Effect<A> =>
+  // SAFE: caller proved Effect.isEffect on a copy kept as unknown.
+  value as never;
+
 const makeWorkPoolPeerTransfer = (
   tag: unknown,
   wireKey: string,
@@ -3267,8 +3272,9 @@ const makeWorkPoolPeerTransfer = (
     readonly url?: string;
   },
 ): HyperlinkHandoffPeerTransfer => ({
-  tryEnqueueToPeer: (entries) =>
-    Effect.gen(function* () {
+  tryEnqueueToPeer: (entries) => {
+    // Soft-fail transfer: Directory optional, peer dial best-effort, no R leaked to shutdown.
+    const attempt: Effect.Effect<boolean> = Effect.gen(function* () {
       const Lookup = yield* Effect.promise(() => import("./Lookup"));
       const dirOpt = yield* Effect.serviceOption(Lookup.Directory);
       if (Option.isNone(dirOpt)) return false;
@@ -3279,17 +3285,25 @@ const makeWorkPoolPeerTransfer = (
       if (peer === undefined) return false;
       if (peer.path === undefined && peer.url === undefined) return false;
       // buildPeerClientAt is defined later in this module; runtime call is after init.
-      const scoped = Effect.scoped(
+      const dial = retype<
+        (
+          peerTag: unknown,
+          target: {
+            readonly key: string;
+            readonly kind?: ProtocolKind;
+            readonly url?: string;
+            readonly path?: string;
+          },
+        ) => Effect.Effect<unknown, never, Scope.Scope>
+      >(buildPeerClientAt as never);
+      return yield* Effect.scoped(
         Effect.gen(function* () {
-          const client = yield* buildPeerClientAt(
-            tag as HyperlinkTag<any, any>,
-            {
-              key: peer.nodeKey,
-              kind: peer.kind,
-              ...(peer.path !== undefined ? { path: peer.path } : {}),
-              ...(peer.url !== undefined ? { url: peer.url } : {}),
-            },
-          );
+          const client = yield* dial(tag, {
+            key: peer.nodeKey,
+            kind: peer.kind,
+            ...(peer.path !== undefined ? { path: peer.path } : {}),
+            ...(peer.url !== undefined ? { url: peer.url } : {}),
+          });
           if (
             !Predicate.hasProperty(client, "enqueue") ||
             typeof client.enqueue !== "function"
@@ -3299,13 +3313,16 @@ const makeWorkPoolPeerTransfer = (
           const out: unknown = client.enqueue(entries);
           const payload: unknown = out;
           if (!Effect.isEffect(out)) return true;
-          // SAFE: proved Effect.isEffect on the copy kept as unknown (wire client edge).
-          const exit = yield* Effect.exit(payload as never);
+          const exit = yield* Effect.exit(closeHandoffEffect(payload));
           return Exit.isSuccess(exit);
         }),
       );
-      return yield* scoped.pipe(Effect.catch(() => Effect.succeed(false)));
-    }),
+    });
+    return Effect.gen(function* () {
+      const exit = yield* Effect.exit(attempt);
+      return Exit.isSuccess(exit) ? exit.value : false;
+    });
+  },
 });
 
 const materializeHandoffRun = (
