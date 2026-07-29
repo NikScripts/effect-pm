@@ -99,6 +99,8 @@
     "../../test/ui-view-data.test.ts",
     "../../test/ui-view-data.test-d.ts",
     "../../test/ui-routes.test.ts",
+    "../../test/ui-routes.test-d.ts",
+    "../../test/ui-routes-from-effect.test-d.ts",
     "../../test/ui-router.test.ts"
   ],
   "exclude": ["../../node_modules", "../../dist"]

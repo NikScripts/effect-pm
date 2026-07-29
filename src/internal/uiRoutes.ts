@@ -15,11 +15,13 @@ import {
   AsRoutesTypeId,
   DashboardRoot,
   isAsRoutesBrand,
+  type AsRoutesEffect,
 } from "./asRoutesBrand";
 import * as uiRoute from "./uiRoute";
 import type { Path } from "./uiRoute";
 
 export { DashboardRoot } from "./asRoutesBrand";
+export type { AsRoutesEffect } from "./asRoutesBrand";
 
 export const TypeId = "~hyperlink-ts/ui/Route/Api" as const;
 export const GroupTypeId = "~hyperlink-ts/ui/Route/Group" as const;
@@ -50,7 +52,7 @@ export interface GroupTop extends Pipeable {
   add(...items: ReadonlyArray<uiRoute.Constraint | GroupTop>): GroupTop;
   /**
    * Merge destinations from an Effect (`HttpRouter.addAll` analogue).
-   * Prefer {@link ../Group.asRoutes} for Group trees.
+   * Prefer {@link ../Group.asRoutes} — typed UrlBuilder items are preserved.
    */
   fromEffect(
     effect: Effect.Effect<Iterable<RouteLike>, never, never>,
@@ -78,6 +80,18 @@ export interface Group<
     Id,
     Routes | Extract<A[number], uiRoute.Constraint>,
     Groups | Extract<A[number], GroupTop>,
+    TopLevel
+  >;
+  /**
+   * Merge destinations from {@link ../Group.asRoutes} (or any {@link AsRoutesEffect}).
+   * Preserves item identifiers for {@link UrlBuilder}.
+   */
+  fromEffect<Items extends RouteLike>(
+    effect: AsRoutesEffect<Items>,
+  ): Group<
+    Id,
+    Routes | Extract<Items, uiRoute.Constraint>,
+    Groups | Extract<Items, GroupTop>,
     TopLevel
   >;
   fromEffect(

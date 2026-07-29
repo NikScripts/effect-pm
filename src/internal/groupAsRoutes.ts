@@ -1,16 +1,23 @@
 /**
  * Build {@link ../ui/Route} destinations from a Group tree — used by
  * {@link ../Group.asRoutes}. Route/Router stay Group-agnostic; Group owns this bridge.
+ *
+ * Type-level {@link MembersRouteLikes} mirrors the runtime walk so
+ * `fromEffect(Group.asRoutes(hub))` keeps {@link UrlBuilder} typed.
  */
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as Route from "../ui/Route";
 import {
   AsRoutesTypeId,
+  type AsRoutesEffect,
   type RouteGroup,
 } from "./asRoutesBrand";
+import type { Group, GroupTop, RouteLike } from "./uiRoutes";
+import type * as uiRoute from "./uiRoute";
 
 export type { RouteGroup } from "./asRoutesBrand";
+export type { AsRoutesEffect } from "./asRoutesBrand";
 export { AsRoutesTypeId } from "./asRoutesBrand";
 
 export type AsRoutesOptions = {
@@ -18,14 +25,53 @@ export type AsRoutesOptions = {
   readonly health?: boolean | undefined;
 };
 
-/** Effect of {@link Route.RouteLike}s, branded with the source Group for `fromEffect`. */
-export type AsRoutesEffect = Effect.Effect<
-  ReadonlyArray<Route.RouteLike>,
-  never,
-  never
-> & {
-  readonly [AsRoutesTypeId]: { readonly root: RouteGroup };
-};
+type Path = uiRoute.Path;
+
+/** Leaf destinations generated for one Group member name. */
+export type LeafRouteLikes<K extends string> =
+  | uiRoute.Route<K, Path>
+  | uiRoute.Route<`${K}Logs`, Path>
+  | uiRoute.Route<`${K}Schedule`, Path>;
+
+type NestedGroupRouteLike<
+  Id extends string,
+  M extends Record<string, unknown>,
+  Depth extends ReadonlyArray<unknown>,
+> = Group<
+  Id,
+  | uiRoute.Route<"index", Path>
+  | Extract<MembersRouteLikes<M, Depth>, uiRoute.Constraint>,
+  Extract<MembersRouteLikes<M, Depth>, GroupTop>,
+  false
+>;
+
+/**
+ * Union of {@link RouteLike}s for a members record (finite depth).
+ * Mirrors {@link membersToRoutes}.
+ */
+export type MembersRouteLikes<
+  M extends Record<string, unknown>,
+  Depth extends ReadonlyArray<unknown> = [unknown, unknown, unknown, unknown],
+> = Depth extends readonly [unknown, ...infer Rest]
+  ? {
+      [K in keyof M & string]: M[K] extends {
+        readonly members: infer Nested extends Record<string, unknown>;
+      } ? NestedGroupRouteLike<K, Nested, Rest>
+      : LeafRouteLikes<K>;
+    }[keyof M & string]
+  : never;
+
+/** `/health` + `/health/:nodeId` when `health` is not false. */
+export type HealthRouteLikes =
+  | uiRoute.Route<"health", Path>
+  | uiRoute.Route<"healthNode", Path, { readonly nodeId: string }>;
+
+export type AsRoutesItemsOf<
+  M extends Record<string, unknown>,
+  WithHealth extends boolean = true,
+> =
+  | (WithHealth extends false ? never : HealthRouteLikes)
+  | MembersRouteLikes<M>;
 
 const isGroupNode = (x: unknown): x is RouteGroup =>
   (typeof x === "object" || typeof x === "function") &&
@@ -131,19 +177,38 @@ export const routesOf = (
 };
 
 /**
- * Effect that yields Route destinations for a Group tree.
- * Pass to {@link Route.Group.fromEffect}:
+ * Effect that yields Route destinations for a Group tree — **typed** for
+ * `Route.group(…).fromEffect(…)` / UrlBuilder.
  *
  * ```ts
  * Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub))
+ * // urls.Nwsl.HttpApi(), urls.healthNode({ params: { nodeId } }), …
  * ```
  */
-export const asRoutes = (
+export function asRoutes<
+  const Root extends {
+    readonly key: string;
+    readonly members: Record<string, unknown>;
+  },
+>(
+  root: Root,
+  options: AsRoutesOptions & { readonly health: false },
+): AsRoutesEffect<MembersRouteLikes<Root["members"]>>;
+export function asRoutes<
+  const Root extends {
+    readonly key: string;
+    readonly members: Record<string, unknown>;
+  },
+>(
+  root: Root,
+  options?: AsRoutesOptions,
+): AsRoutesEffect<HealthRouteLikes | MembersRouteLikes<Root["members"]>>;
+export function asRoutes(
   root: RouteGroup,
   options?: AsRoutesOptions,
-): AsRoutesEffect => {
+): AsRoutesEffect {
   const effect = Effect.sync(() => routesOf(root, options));
   return Object.assign(effect, {
     [AsRoutesTypeId]: { root },
-  });
-};
+  }) as AsRoutesEffect;
+}

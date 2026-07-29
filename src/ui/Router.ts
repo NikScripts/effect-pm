@@ -191,8 +191,8 @@ export const useTarget = (): Route.TargetValue | undefined =>
  *
  * @public
  */
-export const Link = (props: {
-  readonly to: string | ((urls: Route.UrlBuilderLoose) => string);
+export const Link = <A extends ApiConstraint = ApiConstraint>(props: {
+  readonly to: string | ((urls: Route.UrlBuilder<A>) => string);
   readonly replace?: boolean;
   readonly children: React.ReactNode;
   readonly className?: string;
@@ -200,7 +200,7 @@ export const Link = (props: {
   const router = useRouter();
   const href =
     typeof props.to === "function"
-      ? props.to(router.urls as Route.UrlBuilderLoose)
+      ? props.to(router.urls as Route.UrlBuilder<A>)
       : props.to;
   return React.createElement(
     "a",
