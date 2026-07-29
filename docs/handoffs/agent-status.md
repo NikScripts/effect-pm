@@ -30,7 +30,7 @@
 ### Active (owner approval required)
 1. **Agent 4:** W1–W3 + `default`/`defaults` + R1–R4+adaptive + A1–A3; **`cell` parked/rejected**; **R5 rejected**; **R4b tip-synced** — sibling `ApiMetrics` deleted; dashboard/TUI surface limiter nest. Idle. Incident: [`agent-04-w3-incident-2026-07-27.md`](./agent-04-w3-incident-2026-07-27.md).
 2. **Agent G / TUI:** View compose + Tag mint + **`ui.data`** on `cursor/view-withsize-types-125f` — lock [`view-compose-lock.md`](./view-compose-lock.md); guides [`../guides/view-tag-types.md`](../guides/view-tag-types.md) · [`../guides/view-data.md`](../guides/view-data.md). Hold kit Dashboard.
-3. **Agent 5 (Launcher + handoff):** Track C Locked #27–33; Eng'ing #33 `Hyperlink.withHandoff` (`drain-only` / `workPool-release`) on `Node.shutdown`. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
+3. **Agent 5 (Launcher + handoff):** Track C Locked #27–33 **Eng'd** (incl. #33 `Hyperlink.withHandoff`). Next: owner-lock #34–37; Track D `lookupClient` rebind. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
 4. **Docs site:** Live — apex coming-soon (inlined CSS + `(book)` chrome); docs on `dev`. Origin host-gate via `serve-production.mjs` (before Waku static). Islands: `hyperlink-ts` alias + `.hl-dashboard`. Getting Started em-dash/voice polish.
 
 ### Frozen / dead (do not assign)
