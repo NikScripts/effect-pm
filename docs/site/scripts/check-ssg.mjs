@@ -125,6 +125,20 @@ if (cipherHits.length > 0) {
   fail(`ciphertext "encrypted:" found in built HTML:\n  ${cipherHits.join("\n  ")}`);
 }
 
+// One viewport meta, and it must include viewport-fit=cover (Waku's default lacks it).
+const landingHtmlPath = path.join(distPublic, "index.html");
+if (!exists(landingHtmlPath)) fail("dist/public/index.html missing");
+{
+  const landing = fs.readFileSync(landingHtmlPath, "utf8");
+  const viewports = landing.match(/<meta[^>]*name="viewport"[^>]*>/gi) ?? [];
+  if (viewports.length !== 1) {
+    fail(`landing index has ${viewports.length} viewport meta(s); want exactly 1 with viewport-fit=cover`);
+  }
+  if (!/viewport-fit=cover/i.test(viewports[0] ?? "")) {
+    fail(`landing viewport missing viewport-fit=cover: ${viewports[0]}`);
+  }
+}
+
 console.log(
   `check-ssg OK — ${apiHtml.length} api HTML; ${packages.length} packages; ` +
     `${own.modules.length} hyperlink-ts modules; ${ownSymbolsChecked} own symbols prerendered`,

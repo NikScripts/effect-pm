@@ -69,9 +69,13 @@ export default async function BookLayout({ children }: { children: ReactNode }) 
     <>
       {/* description/og tags are PER-PAGE (PageMeta) — a layout-level description here would
           duplicate them (React 19 hoists but does not dedupe meta by name) */}
-      {/* Override Waku's default viewport: `viewport-fit=cover` lets the page paint under
-          the notch/safe-area, so html's dark background fills it instead of white. */}
-      <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+      {/* Same React key as Waku's DEFAULT_HTML_HEAD viewport — replaces the bare
+          `initial-scale=1` tag. `viewport-fit=cover` + html background fills notch chrome. */}
+      <meta
+        key="viewport"
+        name="viewport"
+        content="width=device-width, initial-scale=1, viewport-fit=cover"
+      />
       {/* Tint the mobile browser chrome (status bar / notch) to match the page in each mode. */}
       <meta name="theme-color" content="#fafbfc" media="(prefers-color-scheme: light)" />
       <meta name="theme-color" content="#141619" media="(prefers-color-scheme: dark)" />

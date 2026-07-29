@@ -1,17 +1,16 @@
 /**
  * Coming-soon brand lockup (WIP). Inlined on `/` so paint never depends on /assets.
  *
- * Phone chrome (status bar / home indicator / Liquid Glass): probed on device —
- * solid body/html background-color reaches those zones; body gradients and
- * position:fixed layers do not. Match --landing-canvas to the design edge so
- * the bands blend; keep atmosphere inside the layout viewport.
+ * Notch / status-bar / home-indicator fill: paint the atmosphere on `html`.
+ * The root background propagates to the browser canvas (see docs.css). A
+ * `position:fixed` layer does NOT — that was the white bands under the chrome.
+ * Do not use `background-size: %` on a min-height-only box; it collapses on iOS.
  */
 :root {
   color-scheme: light dark;
-  /* Cooler desk — chrome bands can only show this solid, not the gradient. */
   --landing-canvas: #e8f2f7;
   --landing-bg: var(--landing-canvas);
-  --landing-bg-deep: #e8eef8;
+  --landing-bg-deep: #d5e8f0;
   --landing-fg: #2a2f38;
   --landing-muted: rgba(18, 38, 56, 0.62);
   --landing-panel: #f0f2f5;
@@ -19,14 +18,14 @@
   --landing-primary: #0a8ad4;
   --landing-primary-bright: #34b8ef;
   --landing-yield: #c26a1a;
-  --landing-glow: #1496e033;
+  --landing-glow: #1496e044;
   --landing-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --landing-mono: ui-monospace, SFMono-Regular, Menlo, "Cascadia Code", monospace;
 }
 @supports (color: oklch(0% 0 0)) {
   :root {
-    --landing-bg: oklch(98.5% 0.006 250);
-    --landing-bg-deep: oklch(94.5% 0.018 250);
+    --landing-bg: oklch(96% 0.02 220);
+    --landing-bg-deep: oklch(92% 0.035 220);
     --landing-fg: oklch(24% 0.01 260);
     --landing-muted: oklch(22% 0.03 230 / 0.58);
     --landing-panel: oklch(96.5% 0.005 260);
@@ -34,14 +33,14 @@
     --landing-primary: oklch(60% 0.15 230);
     --landing-primary-bright: oklch(72% 0.14 225);
     --landing-yield: oklch(62% 0.17 55);
-    --landing-glow: oklch(66% 0.14 230 / 0.28);
+    --landing-glow: oklch(66% 0.14 230 / 0.32);
   }
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --landing-canvas: #0c1c24;
     --landing-bg: var(--landing-canvas);
-    --landing-bg-deep: #0c1016;
+    --landing-bg-deep: #102830;
     --landing-fg: #e8eaed;
     --landing-muted: rgba(255, 255, 255, 0.68);
     --landing-panel: #1c2026;
@@ -49,12 +48,12 @@
     --landing-primary: #4bb8f0;
     --landing-primary-bright: #85d2fa;
     --landing-yield: #e0a054;
-    --landing-glow: #4bb8f066;
+    --landing-glow: #4bb8f070;
   }
   @supports (color: oklch(0% 0 0)) {
     :root {
-      --landing-bg: oklch(15% 0.012 260);
-      --landing-bg-deep: oklch(11% 0.018 260);
+      --landing-bg: oklch(16% 0.03 230);
+      --landing-bg-deep: oklch(20% 0.04 230);
       --landing-fg: oklch(92% 0.01 260);
       --landing-muted: oklch(100% 0 0 / 0.68);
       --landing-panel: oklch(19% 0.012 260);
@@ -62,38 +61,60 @@
       --landing-primary: oklch(76% 0.13 228);
       --landing-primary-bright: oklch(84% 0.11 222);
       --landing-yield: oklch(75% 0.16 60);
-      --landing-glow: oklch(72% 0.13 228 / 0.42);
+      --landing-glow: oklch(72% 0.13 228 / 0.45);
     }
   }
 }
 
+/* Canvas paint — this is what fills notch / status-bar / home-indicator. */
 html {
   -webkit-text-size-adjust: 100%;
+  min-height: 100%;
   background-color: var(--landing-canvas);
+  background-image:
+    radial-gradient(ellipse 160% 70% at 50% -10%, var(--landing-glow), transparent 72%),
+    radial-gradient(ellipse 100% 55% at 100% 110%, var(--landing-bg-deep), transparent 68%),
+    radial-gradient(ellipse 90% 50% at 0% 110%, var(--landing-bg-deep), transparent 65%);
 }
 body {
   margin: 0;
   padding: 0;
   min-height: 100dvh;
+  min-height: -webkit-fill-available;
   color: var(--landing-fg);
   font-family: var(--landing-sans);
   -webkit-font-smoothing: antialiased;
-  /* Hex canvas for overscroll sampling; gradients pinned to edges for chrome. */
-  background-color: var(--landing-canvas);
-  background-image:
-    radial-gradient(ellipse 140% 55% at 50% 0%, var(--landing-glow), transparent 70%),
-    radial-gradient(ellipse 90% 45% at 100% 100%, var(--landing-bg-deep), transparent 65%),
-    radial-gradient(ellipse 80% 40% at 0% 100%, var(--landing-bg-deep), transparent 60%);
-  background-repeat: no-repeat;
-  background-size: 100% 100%;
+  background: transparent;
+}
+
+/* Decorative orb only — base wash lives on html. */
+.landing-atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: transparent;
+}
+
+.landing-glow {
+  position: absolute;
+  inset: auto auto 10% 50%;
+  width: min(38rem, 92vw);
+  height: min(38rem, 92vw);
+  translate: -50% 42%;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--landing-glow), transparent 70%);
+  filter: blur(12px);
+  animation: landing-breathe 12s ease-in-out infinite;
 }
 
 .landing {
   position: relative;
-  isolation: isolate;
+  z-index: 1;
   width: 100%;
   box-sizing: border-box;
   min-height: 100dvh;
+  min-height: -webkit-fill-available;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -103,22 +124,7 @@ body {
     max(1.25rem, env(safe-area-inset-right, 0px))
     max(2rem, env(safe-area-inset-bottom, 0px))
     max(1.25rem, env(safe-area-inset-left, 0px));
-  overflow: hidden;
   background: transparent;
-}
-
-.landing-glow {
-  position: absolute;
-  inset: auto auto 10% 50%;
-  z-index: 0;
-  width: min(38rem, 92vw);
-  height: min(38rem, 92vw);
-  translate: -50% 42%;
-  border-radius: 50%;
-  background: radial-gradient(circle, var(--landing-glow), transparent 70%);
-  filter: blur(12px);
-  pointer-events: none;
-  animation: landing-breathe 12s ease-in-out infinite;
 }
 
 .landing-inner {

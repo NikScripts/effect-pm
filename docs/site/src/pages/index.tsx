@@ -14,8 +14,10 @@ export default function LandingPage() {
         description="Hyperlink Services for Effect — define a Service once, run it in any runtime, and yield* the same typed Handle everywhere."
         path="/"
       />
+      <div className="landing-atmosphere" aria-hidden="true">
+        <div className="landing-glow" />
+      </div>
       <section className="landing">
-        <div className="landing-glow" aria-hidden="true" />
         <div className="landing-inner">
           <div className="landing-mark">
             <h1 className="landing-title">Hyperlink</h1>
