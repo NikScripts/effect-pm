@@ -10,10 +10,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <>
       {/* description/og tags are PER-PAGE (PageMeta) — a layout-level description here would
           duplicate them (React 19 hoists but does not dedupe meta by name) */}
-      {/* Full-bleed cutouts: cover + translucent status bar. Do not pair with
-          height:100% on html/body (that defeats cover). See landing.css. */}
       <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-      <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       <meta name="theme-color" content="#f7f9fc" media="(prefers-color-scheme: light)" />
       <meta name="theme-color" content="#12151a" media="(prefers-color-scheme: dark)" />
       <link rel="icon" href="/favicon.svg" type="image/svg+xml" />

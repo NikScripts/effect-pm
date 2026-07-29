@@ -1,12 +1,9 @@
 /**
  * Coming-soon brand lockup (WIP). Inlined on `/` so paint never depends on /assets.
  *
- * Full-bleed past notches / home indicator (WebKit + MDN):
- * 1. viewport-fit=cover + black-translucent status bar (see _layout / preview)
- * 2. Never set height/min-height: 100% on html/body — that defeats cover and
- *    keeps the layout letterboxed (content never extends behind the cutout).
- * 3. Size with 100vh; pad content with calc(base + env(safe-area-inset-*)).
- * 4. Solid body background-color for overscroll / chrome sampling (hex canvas).
+ * Safari’s status / toolbar chrome is translucent and shows the page underneath.
+ * Edge pixels must carry the atmosphere — if the top/bottom of the page are flat
+ * canvas, the chrome looks flat too. Paint the glow on body, pinned to the edges.
  */
 :root {
   color-scheme: light dark;
@@ -35,7 +32,7 @@
     --landing-primary: oklch(60% 0.15 230);
     --landing-primary-bright: oklch(72% 0.14 225);
     --landing-yield: oklch(62% 0.17 55);
-    --landing-glow: oklch(66% 0.14 230 / 0.24);
+    --landing-glow: oklch(66% 0.14 230 / 0.28);
   }
 }
 @media (prefers-color-scheme: dark) {
@@ -50,7 +47,7 @@
     --landing-primary: #4bb8f0;
     --landing-primary-bright: #85d2fa;
     --landing-yield: #e0a054;
-    --landing-glow: #4bb8f055;
+    --landing-glow: #4bb8f066;
   }
   @supports (color: oklch(0% 0 0)) {
     :root {
@@ -63,7 +60,7 @@
       --landing-primary: oklch(76% 0.13 228);
       --landing-primary-bright: oklch(84% 0.11 222);
       --landing-yield: oklch(75% 0.16 60);
-      --landing-glow: oklch(72% 0.13 228 / 0.36);
+      --landing-glow: oklch(72% 0.13 228 / 0.42);
     }
   }
 }
@@ -75,12 +72,18 @@ html {
 body {
   margin: 0;
   padding: 0;
-  /* 100vh — not 100%. Percentage height breaks viewport-fit=cover. */
-  min-height: 100vh;
+  min-height: 100dvh;
   color: var(--landing-fg);
   font-family: var(--landing-sans);
   -webkit-font-smoothing: antialiased;
+  /* Hex canvas for overscroll sampling; gradients pinned to edges for chrome. */
   background-color: var(--landing-canvas);
+  background-image:
+    radial-gradient(ellipse 140% 55% at 50% 0%, var(--landing-glow), transparent 70%),
+    radial-gradient(ellipse 90% 45% at 100% 100%, var(--landing-bg-deep), transparent 65%),
+    radial-gradient(ellipse 80% 40% at 0% 100%, var(--landing-bg-deep), transparent 60%);
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
 }
 
 .landing {
@@ -88,23 +91,18 @@ body {
   isolation: isolate;
   width: 100%;
   box-sizing: border-box;
-  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
   text-align: left;
-  /* Base spacing + safe-area (ADD, not max) so cover insets actually grow the pad. */
   padding:
-    calc(1.6rem + env(safe-area-inset-top, 0px))
-    calc(1.25rem + env(safe-area-inset-right, 0px))
-    calc(2rem + env(safe-area-inset-bottom, 0px))
-    calc(1.25rem + env(safe-area-inset-left, 0px));
+    max(1.6rem, env(safe-area-inset-top, 0px))
+    max(1.25rem, env(safe-area-inset-right, 0px))
+    max(2rem, env(safe-area-inset-bottom, 0px))
+    max(1.25rem, env(safe-area-inset-left, 0px));
   overflow: hidden;
-  background-color: var(--landing-canvas);
-  background-image:
-    radial-gradient(ellipse 90% 60% at 50% -8%, var(--landing-glow), transparent 58%),
-    radial-gradient(ellipse 55% 45% at 100% 100%, var(--landing-bg-deep), transparent 52%),
-    radial-gradient(ellipse 50% 40% at 0% 85%, var(--landing-bg-deep), transparent 48%);
+  background: transparent;
 }
 
 .landing-glow {
