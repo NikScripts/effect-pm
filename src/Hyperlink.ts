@@ -65,6 +65,7 @@ import {
   Ref,
   Schema,
   Scope,
+  Semaphore,
   Stream,
   SubscriptionRef,
 } from "effect";
@@ -5999,14 +6000,30 @@ const definePathGetter = (
 };
 
 /**
+ * True when a lookup-client RPC failed on the transport (peer gone / socket closed
+ * mid-call). App-declared errors and remapped {@link ProtocolMismatch} stay out.
+ *
+ * @internal
+ */
+const isLookupDialTransportError = (err: unknown): boolean =>
+  Predicate.hasProperty(err, "_tag") && err._tag === "RpcClientError";
+
+/**
  * Stable service facade that always reads {@link holder}.current — so Directory
  * dial swaps can replace the underlying client without changing the Context value.
+ *
+ * Effect methods (query / mutate) run through {@link withDialRetry} once so a brief
+ * A→B rebind gap does not surface `RpcClientError` to the app. Streams / refs are
+ * not auto-retried (resubscribe after rebind).
  *
  * @internal
  */
 const makeLiveLookupService = <Self, S extends Spec>(
   tag: HyperlinkTag<Self, S>,
   holder: { current: ServiceOf<S, Self> },
+  withDialRetry: <A, E, R>(
+    run: () => Effect.Effect<A, E, R>,
+  ) => Effect.Effect<A, E, R>,
 ): ServiceOf<S, Self> => {
   const service: Record<string, unknown> = {};
   const cap = tag[localCapSym];
@@ -6025,7 +6042,7 @@ const makeLiveLookupService = <Self, S extends Spec>(
       definePathGetter(service, path, () => getPath(holder.current, path));
     } else if (isRefMethod(m)) {
       setPath(service, path, {
-        get: Effect.suspend(() => {
+        get: withDialRetry(() => {
           const sub = getPath(holder.current, path) as {
             readonly get: Effect.Effect<unknown>;
           };
@@ -6054,17 +6071,19 @@ const makeLiveLookupService = <Self, S extends Spec>(
       setPath(
         service,
         path,
-        Effect.suspend(
+        withDialRetry(
           () => getPath(holder.current, path) as Effect.Effect<unknown>,
         ),
       );
     } else {
-      setPath(service, path, (...args: ReadonlyArray<unknown>) => {
-        const member = getPath(holder.current, path) as (
-          ...a: ReadonlyArray<unknown>
-        ) => unknown;
-        return member(...args);
-      });
+      setPath(service, path, (...args: ReadonlyArray<unknown>) =>
+        withDialRetry(() => {
+          const member = getPath(holder.current, path) as (
+            ...a: ReadonlyArray<unknown>
+          ) => Effect.Effect<unknown>;
+          return member(...args);
+        }),
+      );
     }
   }
   return service as ServiceOf<S, Self>;
@@ -6085,8 +6104,14 @@ const makeLiveLookupService = <Self, S extends Spec>(
  *
  * **Hot-rebind:** after the initial resolve, watches {@link Lookup.Directory}`changes`
  * and rebuilds the dial when the chosen endpoint moves (`dialChanged`) or membership
- * for this service key changes — same plane as directory {@link peersLayer}. A brief
- * gap keeps the previous client (calls may fail until the new row appears).
+ * for this service key changes — same plane as directory {@link peersLayer}. The prior
+ * dial stays live until the next dial builds successfully (no close-first gap).
+ *
+ * **Transparent retry (Track D v1):** Effect RPCs that fail with `RpcClientError` wait
+ * briefly for a successful rebind (or proactively resolve once), then retry **once** on
+ * the new dial. Prefer B Directory-visible / Advice-preferred before A leaves so the
+ * wait has a target. Streams are not auto-retried. Mutates retry once too — keep them
+ * idempotent when cutover-safe.
  *
  * Bake name sketch was `unsafeLookupClient` (“trust Lookup or die”); bare
  * `lookupClient(Tag)` keeps that fail-closed contract when advice is absent/stale.
@@ -6123,8 +6148,11 @@ export const lookupClient = <Self, S extends Spec>(
       const Lookup = yield* Effect.promise(() => import("./Lookup"));
       const identity = yield* Lookup.Identity;
       const directory = yield* Lookup.Directory;
+      const advice = yield* Lookup.Advice;
       const serviceKey = tag[wireKeySym];
 
+      // Closed over Identity/Directory/Advice services so call-time dial retry
+      // does not re-require Lookup tags in the app Effect's R.
       const resolve = Effect.gen(function* () {
         const resolved = yield* identity.resolve(
           new Lookup.ResolveRequest({ key: tag.key }),
@@ -6132,7 +6160,9 @@ export const lookupClient = <Self, S extends Spec>(
         if (Option.isSome(resolved)) {
           return resolved.value satisfies LookupDialEndpoint;
         }
-        const entries = yield* Lookup.nodesServing(tag);
+        const entries = yield* directory.nodesServing(
+          new Lookup.NodesServingRequest({ serviceKey: tag.key }),
+        );
         if (entries.length === 0) {
           return yield* new LookupClientError({
             tag: tag.key,
@@ -6143,7 +6173,9 @@ export const lookupClient = <Self, S extends Spec>(
         if (entries.length === 1) {
           return entries[0]!;
         }
-        const prefer = yield* Lookup.preferred(tag.key);
+        const prefer = yield* advice.preferred(
+          new Lookup.PreferredRequest({ serviceKey: tag.key }),
+        );
         if (Option.isSome(prefer)) {
           const advised = entries.find((row) => row.nodeKey === prefer.value);
           if (advised !== undefined) {
@@ -6165,19 +6197,38 @@ export const lookupClient = <Self, S extends Spec>(
       const holder: { current: ServiceOf<S, Self> } = {
         current: null as unknown as ServiceOf<S, Self>,
       };
+      const generation = yield* Ref.make(0);
+      const installGen = yield* SubscriptionRef.make(0);
+      const installGate = yield* Semaphore.make(1);
 
+      /** Build next dial first; swap + close prior only on success (real keep-prior). */
       const install = (endpoint: LookupDialEndpoint): Effect.Effect<void> =>
-        Effect.gen(function* () {
-          if (clientScope !== undefined) {
-            yield* Scope.close(clientScope, Exit.void);
-          }
-          const scope = yield* Scope.make();
-          clientScope = scope;
-          const ctx = yield* Layer.build(
-            clientLayerForEndpoint(tag, endpoint),
-          ).pipe(Scope.provide(scope));
-          holder.current = Context.get(ctx, tag);
-        });
+        installGate.withPermits(1)(
+          Effect.gen(function* () {
+            const scope = yield* Scope.make();
+            const built = yield* Layer.build(
+              clientLayerForEndpoint(tag, endpoint),
+            ).pipe(Scope.provide(scope), Effect.exit);
+            if (Exit.isFailure(built)) {
+              yield* Scope.close(scope, Exit.void);
+              return yield* Effect.fail(
+                new LookupClientError({
+                  tag: tag.key,
+                  reason: "missing",
+                  count: 0,
+                }),
+              );
+            }
+            const prev = clientScope;
+            clientScope = scope;
+            holder.current = Context.get(built.value, tag);
+            const gen = yield* Ref.updateAndGet(generation, (n) => n + 1);
+            yield* SubscriptionRef.set(installGen, gen);
+            if (prev !== undefined) {
+              yield* Scope.close(prev, Exit.void);
+            }
+          }),
+        );
 
       const endpoint = yield* resolve;
       yield* install(endpoint);
@@ -6195,7 +6246,6 @@ export const lookupClient = <Self, S extends Spec>(
                 event.entry.serves.includes(tag.key);
               const isCurrent = event.entry.nodeKey === currentNodeKey;
               if (!servesUs && !isCurrent) return;
-              // Same-dial refresh for our current node — nothing to rebuild.
               if (
                 isCurrent &&
                 servesUs &&
@@ -6228,13 +6278,51 @@ export const lookupClient = <Self, S extends Spec>(
         Effect.forkScoped,
       );
 
+      const withDialRetry = <A, E, R>(
+        run: () => Effect.Effect<A, E, R>,
+      ): Effect.Effect<A, E, R> =>
+        Effect.suspend(run).pipe(
+          Effect.catch((err: E) => {
+            if (!isLookupDialTransportError(err)) {
+              return Effect.fail(err);
+            }
+            return Effect.gen(function* () {
+              const before = yield* Ref.get(generation);
+              const next = yield* Effect.option(resolve);
+              if (Option.isSome(next)) {
+                const nextKey = lookupDialKey(next.value);
+                if (nextKey !== currentKey) {
+                  const installed = yield* Effect.exit(install(next.value));
+                  if (Exit.isSuccess(installed)) {
+                    currentKey = nextKey;
+                    currentNodeKey = next.value.nodeKey;
+                  }
+                }
+              }
+              if ((yield* Ref.get(generation)) <= before) {
+                yield* SubscriptionRef.changes(installGen).pipe(
+                  Stream.filter((g) => g > before),
+                  Stream.take(1),
+                  Stream.runDrain,
+                  Effect.timeoutOption(Duration.seconds(2)),
+                  Effect.asVoid,
+                );
+              }
+              if ((yield* Ref.get(generation)) <= before) {
+                return yield* Effect.fail(err);
+              }
+              return yield* Effect.suspend(run);
+            });
+          }),
+        );
+
       yield* Effect.addFinalizer(() =>
         clientScope === undefined
           ? Effect.void
           : Scope.close(clientScope, Exit.void),
       );
 
-      return makeLiveLookupService(tag, holder);
+      return makeLiveLookupService(tag, holder, withDialRetry);
     }),
   ) as Layer.Layer<
     Self,

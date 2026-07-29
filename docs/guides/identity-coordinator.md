@@ -109,6 +109,10 @@ Membership Lookup Identity/Directory/Advice   who wins / where clients dial
 - **Membership push / dialers:** directory-mode `Hyperlink.peersLayer` and
   `Hyperlink.lookupClient` **hot-rebind** on `Directory.changes` (dial move / join /
   leave). Escape hatch: `Lookup.changes` / `directoryTable()`.
+- **Track D v1 (lookupClient):** build-then-swap dials (prior stays until the next
+  dial succeeds). Effect RPCs that hit `RpcClientError` wait for rebind and **retry
+  once** — keep B Directory-visible / Advice-preferred before A leaves so the retry
+  has a target. Streams are not auto-retried.
 
 ### A→B cutover recipe (state transfer)
 
