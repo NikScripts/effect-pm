@@ -22,6 +22,7 @@ import {
   isTelemetryTag,
   type QueueTag,
 } from "../ui/data";
+import * as Route from "../ui/Route";
 import * as Router from "../ui/Router";
 import * as View from "../ui/View";
 import * as ApiMetricsView from "../ui/ApiMetricsView";
@@ -283,7 +284,7 @@ const PoolPageView: View.View = (props) => {
   const nav = Router.useRouter();
   const bundle = Observe.use(props.tag, WorkPoolView.pack);
   const logsR = useAtomValue(bundle.logs);
-  if (nav.view !== "logs") return null;
+  if (Route.targetOf(nav.match)?.view !== "logs") return null;
   const logs = AsyncResult.isSuccess(logsR) ? logsR.value : [];
   return (
     <Box flexDirection="column">
@@ -299,7 +300,8 @@ const DaemonPageView: View.View = (props) => {
   const bundle = Observe.use(props.tag, DaemonView.pack);
   const logsR = useAtomValue(bundle.logs);
   const scheduleR = useAtomValue(bundle.schedule);
-  if (nav.view === "logs") {
+  const view = Route.targetOf(nav.match)?.view;
+  if (view === "logs") {
     const logs = AsyncResult.isSuccess(logsR) ? logsR.value : [];
     return (
       <Box flexDirection="column">
@@ -308,7 +310,7 @@ const DaemonPageView: View.View = (props) => {
       </Box>
     );
   }
-  if (nav.view === "schedule") {
+  if (view === "schedule") {
     const entries = AsyncResult.isSuccess(scheduleR) ? scheduleR.value : [];
     return (
       <Box flexDirection="column">

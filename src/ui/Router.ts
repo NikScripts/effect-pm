@@ -24,10 +24,8 @@
  * </Router.Provider>
  * ```
  *
- * Layers: {@link memory} / {@link history}. Catalog only — never a Group tag
- * (`Group.asRoutes` + `Route.group(…).fromEffect` when you need a Group tree).
- * `go` / `to` / {@link Link} carry query strings; {@link Outlet} passes them to
- * {@link Route.handle}.
+ * Layers: {@link memory} / {@link history}. Group drill-down UI helpers are
+ * {@link ./GroupNav} (pass the Group root explicitly).
  *
  * @see docs/handoffs/ui-routes-dream.md
  */
@@ -40,9 +38,6 @@ import * as Route from "./Route";
 // =============================================================================
 // Types
 // =============================================================================
-
-/** Group or leaf a dashboard router can open (when catalog carries DashboardRoot). @public */
-export type MemberTag = internal.MemberTag;
 
 /**
  * Live navigation API — provide with {@link memory} / {@link history}, or build
@@ -64,16 +59,6 @@ export type ForApi<A extends ApiConstraint> = Service<A>;
 export class Router extends Context.Service<Router, Service>()(
   "hyperlink-ts/ui/Router",
 ) {}
-
-// =============================================================================
-// Path helpers
-// =============================================================================
-
-/** Format short-name path as a URL (`/` or `/Nwsl/HttpApi`). @public */
-export const toHref = internal.toHref;
-
-/** Re-export guard for compose Grid. @public */
-export const isGroupMember = internal.isGroupMember;
 
 // =============================================================================
 // Construction

@@ -192,6 +192,10 @@
       "types": "./dist/ui/Router.d.ts",
       "default": "./dist/ui/Router.js"
     },
+    "./ui/GroupNav": {
+      "types": "./dist/ui/GroupNav.d.ts",
+      "default": "./dist/ui/GroupNav.js"
+    },
     "./ui/GroupView": {
       "types": "./dist/ui/GroupView.d.ts",
       "default": "./dist/ui/GroupView.js"

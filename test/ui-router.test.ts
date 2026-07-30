@@ -8,6 +8,7 @@ import { renderToString } from "react-dom/server";
 import * as Daemon from "../src/Daemon";
 import * as Group from "../src/Group";
 import { pathToMember } from "../src/internal/uiGroupRoutes";
+import * as GroupNav from "../src/ui/GroupNav";
 import * as Route from "../src/ui/Route";
 import * as Router from "../src/ui/Router";
 
@@ -106,7 +107,6 @@ describe("Router.memory (Route.Api)", () => {
     run(Router.memory(site), (router) => {
       expect(router.pathname).toBe("/");
       expect(router.match).toBeUndefined();
-      expect(router.root).toBeUndefined();
 
       router.go("/home");
       expect(router.pathname).toBe("/home");
@@ -143,14 +143,6 @@ describe("Router.memory (Route.Api)", () => {
     });
   });
 
-  it("Group helpers fail loud without DashboardRoot", () => {
-    run(Router.memory(site), (router) => {
-      expect(() => router.openKey("x")).toThrow(/DashboardRoot/);
-      expect(() => router.up()).toThrow(/DashboardRoot/);
-      expect(() => router.openHealth()).toThrow(/DashboardRoot/);
-    });
-  });
-
   it("subscribe fires on navigate", () => {
     run(Router.memory(site), (router) => {
       let n = 0;
@@ -169,15 +161,15 @@ describe("Router.memory (Route.Api)", () => {
 
 describe("Group.asRoutes + fromEffect", () => {
   it("open by member yields short-name path + Target match", () => {
-    run(Router.memory(hubSite), (nav) => {
-      expect(nav.root).toBe(Hub);
-      nav.open(HttpApi);
-      expect(nav.path).toEqual(["Nwsl", "HttpApi"]);
+    run(Router.memory(hubSite), (router) => {
+      GroupNav.open(Hub, router, HttpApi);
+      const nav = GroupNav.state(Hub, router);
+      expect(nav.keys).toEqual(["Nwsl", "HttpApi"]);
       expect(nav.selected).toBe(HttpApi);
       expect(nav.group).toBe(Nwsl);
-      expect(nav.pathname).toBe("/Nwsl/HttpApi");
-      expect(nav.match?.route.identifier).toBe("HttpApi");
-      const target = Route.targetOf(nav.match);
+      expect(router.pathname).toBe("/Nwsl/HttpApi");
+      expect(router.match?.route.identifier).toBe("HttpApi");
+      const target = Route.targetOf(router.match);
       expect(target?.kind).toBe("leaf");
       expect(target?.member).toBe(HttpApi);
     });
@@ -186,75 +178,77 @@ describe("Group.asRoutes + fromEffect", () => {
   it("pathToMember + toHref match short names", () => {
     expect(pathToMember(Hub, HttpApi)).toEqual(["Nwsl", "HttpApi"]);
     expect(pathToMember(Hub, Nwsl)).toEqual(["Nwsl"]);
-    expect(Router.toHref(["Nwsl", "HttpApi"])).toBe("/Nwsl/HttpApi");
-    expect(Router.toHref([])).toBe("/");
+    expect(GroupNav.toHref(["Nwsl", "HttpApi"])).toBe("/Nwsl/HttpApi");
+    expect(GroupNav.toHref([])).toBe("/");
   });
 
   it("openKey / up walk the tree without corrupting back()", () => {
-    run(Router.memory(hubSite), (nav) => {
-      nav.openKey("Nwsl");
-      expect(nav.path).toEqual(["Nwsl"]);
-      expect(nav.selected).toBeNull();
-      expect(nav.group).toBe(Nwsl);
-      expect(nav.canUp).toBe(true);
+    run(Router.memory(hubSite), (router) => {
+      GroupNav.openKey(Hub, router, "Nwsl");
+      expect(GroupNav.state(Hub, router).keys).toEqual(["Nwsl"]);
+      expect(GroupNav.state(Hub, router).selected).toBeNull();
+      expect(GroupNav.state(Hub, router).group).toBe(Nwsl);
+      expect(GroupNav.state(Hub, router).canUp).toBe(true);
 
-      nav.openKey("HttpApi");
-      expect(nav.path).toEqual(["Nwsl", "HttpApi"]);
+      GroupNav.openKey(Hub, router, "HttpApi");
+      expect(GroupNav.state(Hub, router).keys).toEqual(["Nwsl", "HttpApi"]);
 
-      nav.up(); // replace — stack stays coherent
-      expect(nav.path).toEqual(["Nwsl"]);
-      nav.back();
-      expect(nav.path).toEqual([]);
-      expect(nav.group).toBe(Hub);
-      expect(nav.canUp).toBe(false);
+      GroupNav.up(Hub, router); // replace — stack stays coherent
+      expect(GroupNav.state(Hub, router).keys).toEqual(["Nwsl"]);
+      router.back();
+      expect(GroupNav.state(Hub, router).keys).toEqual([]);
+      expect(GroupNav.state(Hub, router).group).toBe(Hub);
+      expect(GroupNav.state(Hub, router).canUp).toBe(false);
     });
   });
 
   it("open then up lands on parent group (deep jump)", () => {
-    run(Router.memory(hubSite), (nav) => {
-      nav.open(HttpApi); // one push to /Nwsl/HttpApi
-      nav.up(); // replace → /Nwsl
-      expect(nav.path).toEqual(["Nwsl"]);
-      expect(nav.group).toBe(Nwsl);
-      nav.up();
-      expect(nav.path).toEqual([]);
-      nav.back();
-      expect(nav.path).toEqual([]); // only root remains after replaces
+    run(Router.memory(hubSite), (router) => {
+      GroupNav.open(Hub, router, HttpApi); // one push to /Nwsl/HttpApi
+      GroupNav.up(Hub, router); // replace → /Nwsl
+      expect(GroupNav.state(Hub, router).keys).toEqual(["Nwsl"]);
+      expect(GroupNav.state(Hub, router).group).toBe(Nwsl);
+      GroupNav.up(Hub, router);
+      expect(GroupNav.state(Hub, router).keys).toEqual([]);
+      router.back();
+      expect(GroupNav.state(Hub, router).keys).toEqual([]); // only root remains after replaces
     });
   });
 
   it("openHealth / openNode use catalog urls", () => {
-    run(Router.memory(hubSite), (nav) => {
-      nav.openKey("Nwsl");
-      nav.openHealth();
-      expect(nav.path).toEqual(["health"]);
-      expect(nav.view).toBe("health");
-      expect(nav.selected).toBeNull();
-      expect(nav.group).toBe(Hub);
-      expect(nav.match?.route.identifier).toBe("health");
+    run(Router.memory(hubSite), (router) => {
+      GroupNav.openKey(Hub, router, "Nwsl");
+      GroupNav.openHealth(router);
+      expect(GroupNav.state(Hub, router).keys).toEqual(["health"]);
+      expect(GroupNav.state(Hub, router).view).toBe("health");
+      expect(GroupNav.state(Hub, router).selected).toBeNull();
+      expect(GroupNav.state(Hub, router).group).toBe(Hub);
+      expect(router.match?.route.identifier).toBe("health");
 
-      nav.openNode("app/NodeA");
-      expect(nav.path).toEqual(["health", "app/NodeA"]);
-      expect(nav.view).toBe("health");
-      expect(Router.toHref(nav.path)).toBe("/health/app/NodeA");
-      expect(nav.match?.route.identifier).toBe("nodeHealth");
-      expect(nav.match?.params.nodeId).toBe("app/NodeA");
+      GroupNav.openNode(router, "app/NodeA");
+      const nodeState = GroupNav.state(Hub, router);
+      expect(nodeState.keys).toEqual(["health", "app/NodeA"]);
+      expect(nodeState.view).toBe("health");
+      expect(GroupNav.toHref(nodeState.keys)).toBe("/health/app/NodeA");
+      expect(router.match?.route.identifier).toBe("nodeHealth");
+      expect(router.match?.params.nodeId).toBe("app/NodeA");
 
-      nav.up();
-      expect(nav.path).toEqual(["health"]);
-      nav.up();
-      expect(nav.path).toEqual([]);
+      GroupNav.up(Hub, router);
+      expect(GroupNav.state(Hub, router).keys).toEqual(["health"]);
+      GroupNav.up(Hub, router);
+      expect(GroupNav.state(Hub, router).keys).toEqual([]);
     });
   });
 
   it("openLogs stamps leafView Target", () => {
-    run(Router.memory(hubSite), (nav) => {
-      nav.openLogs(HttpApi);
-      expect(nav.path).toEqual(["Nwsl", "HttpApi", "logs"]);
+    run(Router.memory(hubSite), (router) => {
+      GroupNav.openLogs(Hub, router, HttpApi);
+      const nav = GroupNav.state(Hub, router);
+      expect(nav.keys).toEqual(["Nwsl", "HttpApi", "logs"]);
       expect(nav.view).toBe("logs");
       expect(nav.selected).toBe(HttpApi);
-      expect(nav.match?.route.identifier).toBe("HttpApiLogs");
-      const target = Route.targetOf(nav.match);
+      expect(router.match?.route.identifier).toBe("HttpApiLogs");
+      const target = Route.targetOf(router.match);
       expect(target?.kind).toBe("leafView");
       expect(target?.view).toBe("logs");
     });
@@ -262,7 +256,7 @@ describe("Group.asRoutes + fromEffect", () => {
 
   it("Route.targetOf reads Target from match annotations", () => {
     const router = Router.make(hubSite, "memory");
-    router.open(HttpApi);
+    GroupNav.open(Hub, router, HttpApi);
     expect(Route.targetOf(undefined)).toBeUndefined();
     expect(Route.targetOf(router.match)?.member).toBe(HttpApi);
   });

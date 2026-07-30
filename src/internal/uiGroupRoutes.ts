@@ -1,6 +1,5 @@
 /**
- * Group path walk for Group-backed dashboard routers (root from
- * {@link ../ui/Route.DashboardRoot} annotation — not a Router constructor arg).
+ * Group path walk for {@link ../ui/GroupNav} (root Group passed explicitly).
  */
 import * as Group from "../Group";
 import type { RouteGroup } from "./asRoutesBrand";

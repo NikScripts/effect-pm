@@ -12,14 +12,14 @@ Owner overrides on lineage URL + F1 sizes-vs-content; everything else = prior re
 ### A. Chrome vs Router — **split (B)**
 
 - **`Chrome`** — layout only: `width`, `selected`, `cols`, `rows`, `editMode`
-- **`Router`** — `Context.Service` + Layer: `open` / `up` / path / overlays (history `back` separate)
-- Skins read nav via `useRouter()`, not callback props
+- **`Router`** — `Context.Service` + Layer for catalog match, `go` / `to`, and history
+- **`GroupNav`** — Group state plus `open` / `up` / URL page helpers over a Router
 
 ### B. Matcher — **kit `Card` for Group + leaf**
 
 - Group = family skin (`View.bind(Group.kind, WebGroupCard)`); matcher is `ui.Card` / `useMatch().Card`
 - No `View.Member`; no `Cell` group fork
-- `Router.open(member: GroupTag | LeafTag)`
+- `GroupNav.open(root, router, member: GroupTag | LeafTag)`
 
 ### C. `View.compose` — **sugar over `View.react` + Router**
 
@@ -55,17 +55,17 @@ Browser:
 ```
 
 ```ts
-interface Router {
+interface GroupNavState {
   /** Short-name path for URL / crumbs — ["Nwsl", "HttpApi"] */
-  readonly path: ReadonlyArray<string>
+  readonly keys: ReadonlyArray<string>
   /** Wire keys when observe needs them — separate from URL */
   readonly wireLineage?: ReadonlyArray<string>
-  readonly open: (member: GroupTag | LeafTag) => void
-  readonly up: () => void   // pop one short-name segment
-  readonly back: () => void // history / memory stack
 }
 
-Router.toHref(["Nwsl", "HttpApi"])  // "/Nwsl/HttpApi"
+GroupNav.toHref(["Nwsl", "HttpApi"])  // "/Nwsl/HttpApi"
+GroupNav.open(ServicesHub, router, NwslHttpApiClient)
+GroupNav.up(ServicesHub, router)
+router.back()
 // Route catalog only — Group via asRoutes + fromEffect
 Router.history(Route.make("dash").add(
   Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub)),
@@ -154,11 +154,11 @@ First peel = header/body split; page-sized logs/schedule **Eng’d**.
 
 ### K3. UI Route toolkit (2026-07-29)
 
-HttpApi-shaped `Route` catalog + `Router` service (`memory` / `history` over `Route.Api` or a Group). See [`ui-routes-dream.md`](./ui-routes-dream.md). **Navigator → Router cutover Eng’d.**
+HttpApi-shaped `Route` catalog + core `Router` service (`memory` / `history` over `Route.Api`) with `GroupNav` layered over it for Group dashboards. See [`ui-routes-dream.md`](./ui-routes-dream.md). **Navigator → Router cutover Eng’d.**
 
 ### L. Acceptance
 
-1. Group opens via kit `Card` + Router — no `Cell` group fork  
+1. Group opens via kit `Card` + GroupNav — no `Cell` group fork
 2. URL path = short member names (`/Nwsl/HttpApi`)  
 3. Default family Details body-only; shell owns back/title  
 4. `View.compose` runs hyperlink-web + TUI dashboard  
@@ -166,7 +166,7 @@ HttpApi-shaped `Route` catalog + `Router` service (`memory` / `history` over `Ro
 6. ViewKind stays `card | detail | page`; schedule/logs are **content** that fills sizes  
 7. Tests: `Router.memory(site)` (`Group.asRoutes`) + Group card + short-name path + missing skin `R=never`
 
-**Changeset:** minor — `Navigator` removed; migration → `Router.useRouter()` / `View.compose({ router })`.
+**Changeset:** minor — `Navigator` removed; Group navigation uses `GroupNav` over `View.compose({ router, group })`.
 
 ---
 
@@ -201,6 +201,7 @@ const ui = View.compose({
       Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub)),
     ),
   ),
+  group: ServicesHub,
 })
 <ui.Provider>
   <RuntimeProvider runtime={runtime}>
@@ -209,6 +210,6 @@ const ui = View.compose({
 </ui.Provider>
 ```
 
-Bare `ui.Grid` / `ui.Outlet` stays available but is **not** the batteries default (no Cell / NodeBar / HealthBoard / LogBox).
+`ui.Grid` uses the optional compose `group`; `ui.Outlet` falls back to route handles when it is absent. Neither is the batteries default (no Cell / NodeBar / HealthBoard / LogBox).
 
 Open Nwsl → HttpApi → browser shows `/Nwsl/HttpApi`.

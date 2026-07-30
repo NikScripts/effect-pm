@@ -16,7 +16,7 @@ import { Dashboard } from "hyperlink-ts/web"
 
 ```text
 DashboardLayer.forCompose({ skins, views? })
-  → View.compose({ views, navigator })
+  → View.compose({ views, router, group })
   → platform DashboardShell
 ```
 
@@ -40,6 +40,7 @@ const ui = View.compose({
     views: appViews,
   }),
   router: Router.history(site),
+  group: ServicesHub,
 })
 <ui.Provider>
   <RuntimeProvider runtime={runtime}>
@@ -59,14 +60,15 @@ Reuse without forking the shell:
 | `DashboardTopBar` | `DashboardTopBar` | Grid title / crumb strip |
 | `DashboardDetailChrome` | — | Detail back + title (lock J) |
 | `NodeBar` / `HealthBoard` / `NodeDetail` | `NodeMark` | Node status pieces |
-| `Router.openHealth` / `.openNode` | — | URL pages `/health`, `/health/<nodeId>` |
+| `GroupNav.openHealth` / `.openNode` | — | URL pages `/health`, `/health/<nodeId>` |
 | `PoolPage` / `DaemonPage` | same | `/…/logs`, `/…/schedule` via `Match.Page` |
 | `NodeStatusHost` | — | Overlay stack when no Router |
 
 ```tsx
-// Batteries — die opens /health (History); node card → /health/<nodeId>
-router.openHealth()
-router.openNode(node.id)
+// Batteries: die opens /health (History); node card → /health/<nodeId>
+const groupNav = GroupNav.use(ServicesHub)
+groupNav.openHealth()
+groupNav.openNode(node.id)
 
 // Overlay embed (no Router) — hyperlink-ts/web/NodeStatus
 import { NodeBar, NodeStatusHost, DashboardTopBar } from "hyperlink-ts/web"

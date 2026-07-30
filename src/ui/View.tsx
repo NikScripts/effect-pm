@@ -16,6 +16,7 @@ import { Context, Data, Effect, Layer, Match, Option } from "effect";
 import type * as Types from "effect/Types";
 import * as Group from "../Group";
 import { kindOf } from "../Hyperlink";
+import * as GroupNav from "./GroupNav";
 import * as Router from "./Router";
 import type { LeafTag } from "./widgetRegistry";
 
@@ -81,7 +82,7 @@ const sameViewKind = (a: ViewKind, b: ViewKind): boolean => a._tag === b._tag;
  *
  * @public
  */
-export type ViewTag = LeafTag | Router.MemberTag;
+export type ViewTag = LeafTag | GroupNav.MemberTag;
 
 /**
  * Base props for size-chrome skins (card/detail/page). Navigation stays with the parent.
@@ -94,7 +95,8 @@ export interface ViewProps {
 }
 
 /**
- * Layout / shell hints for View skins. **Navigation is {@link Router}** — not here.
+ * Layout / shell hints for View skins. Navigation is {@link Router} plus
+ * {@link GroupNav} for Group drill-down, not here.
  *
  * @public
  */
@@ -1021,17 +1023,19 @@ const displayNameOf = (tag: ViewTag, fallback: string): string => {
 };
 
 /**
- * Members of the current {@link Router} group — shells (esp. TUI) render their own grid.
+ * Members of the current Group route. Returns an empty list without a Group root.
  *
  * @public
  */
-export const useGridMembers = (): ReadonlyArray<{
+export const useGridMembers = (
+  root?: GroupNav.RouteGroup,
+): ReadonlyArray<{
   readonly name: string;
   readonly tag: ViewTag;
 }> => {
   const router = Router.useRouter();
-  const group = router.group;
-  if (group === undefined) return [];
+  if (root === undefined) return [];
+  const group = GroupNav.state(root, router).group;
   return Object.entries(Group.members(group)).map(([name, tag]) => ({
     name,
     tag: tag as ViewTag,
@@ -1077,6 +1081,7 @@ const resolveComposeRouter = (
  * import * as DaemonView from "hyperlink-ts/ui/DaemonView"
  * const ui = View.compose({
  *   views: Layer.mergeAll(View.bind(Group.kind, GroupCard), WebDashboardViews.layer),
+ *   group: ServicesHub,
  *   router: Router.history(
  *     Route.make("dash").add(
  *       Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub)),
@@ -1100,6 +1105,7 @@ const resolveComposeRouter = (
 export const compose = <VR, VE,>(options: {
   readonly views: Layer.Layer<VR, VE, never>;
   readonly router: Layer.Layer<Router.Router> | Router.Service;
+  readonly group?: GroupNav.RouteGroup;
 }): ReturnType<typeof react<VR, VE>> & {
   readonly Provider: (props: {
     readonly children: React.ReactNode;
@@ -1111,6 +1117,7 @@ export const compose = <VR, VE,>(options: {
 } => {
   const viewKit = react(options.views);
   const router = resolveComposeRouter(options.router);
+  const group = options.group;
 
   const Provider = (props: {
     readonly children: React.ReactNode;
@@ -1124,9 +1131,9 @@ export const compose = <VR, VE,>(options: {
       ),
     );
 
-  /** DOM grid — Card per member; click opens via Router. TUI: use {@link useGridMembers}. */
+  /** DOM grid — Card per member; click opens via GroupNav. TUI: use {@link useGridMembers}. */
   const Grid = (): React.ReactElement => {
-    const members = useGridMembers();
+    const members = useGridMembers(group);
     const navigation = Router.useRouter();
     return React.createElement(
       React.Fragment,
@@ -1138,7 +1145,9 @@ export const compose = <VR, VE,>(options: {
             key: name,
             type: "button",
             className: "contents",
-            onClick: () => navigation.open(tag as Router.MemberTag),
+            onClick: () => {
+              if (group !== undefined) GroupNav.open(group, navigation, tag);
+            },
           },
           React.createElement(MatchCard, { tag, name }),
         ),
@@ -1154,27 +1163,29 @@ export const compose = <VR, VE,>(options: {
     const navigation = Router.useRouter();
     const handled = Router.Outlet();
     if (handled !== null) return handled;
+    if (group === undefined) return null;
 
-    const selected = navigation.selected;
+    const state = GroupNav.state(group, navigation);
+    const selected = state.selected;
     if (selected === null) return null;
     const tag = selected as ViewTag;
     const title = displayNameOf(tag, "detail");
 
     const back = React.createElement("button", {
       type: "button",
-      onClick: () => navigation.up(),
-      disabled: !navigation.canUp,
+      onClick: () => GroupNav.up(group, navigation),
+      disabled: !state.canUp,
     }, "← back");
 
-    if (navigation.view === "logs" || navigation.view === "schedule") {
+    if (state.view === "logs" || state.view === "schedule") {
       return React.createElement(
         "div",
-        { "data-hyperlink-outlet": navigation.view },
+        { "data-hyperlink-outlet": state.view },
         React.createElement(
           "div",
           { style: { display: "flex", gap: 8, alignItems: "center", marginBottom: 12 } },
           back,
-          React.createElement("strong", null, `${title} · ${navigation.view}`),
+          React.createElement("strong", null, `${title} · ${state.view}`),
         ),
         React.createElement(MatchPage, { tag, name: title }),
       );

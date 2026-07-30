@@ -5,6 +5,8 @@
  */
 import { Layer } from "effect";
 import { isQueueTag } from "../ui/data";
+import * as GroupNav from "../ui/GroupNav";
+import * as Route from "../ui/Route";
 import * as Router from "../ui/Router";
 import * as View from "../ui/View";
 import * as WorkPoolView from "../ui/WorkPoolView";
@@ -35,8 +37,16 @@ export const skins: Layer.Layer<
   View.provide(WorkPoolView.PoolPage, (props) => {
     if (!isQueueTag(props.tag)) return null;
     const nav = Router.useRouter();
-    if (nav.view !== "logs") return null;
-    return <LogsPage tag={props.tag} onClose={() => nav.up()} />;
+    const target = Route.targetOf(nav.match);
+    if (target?.view !== "logs") return null;
+    return (
+      <LogsPage
+        tag={props.tag}
+        onClose={() =>
+          nav.go(GroupNav.toHref(target.keys.slice(0, -1)), { replace: true })
+        }
+      />
+    );
   }),
 );
 

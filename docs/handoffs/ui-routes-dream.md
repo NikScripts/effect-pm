@@ -61,9 +61,9 @@ Query is UI navigation only (no HTTP body).
 | `Route.group` / `topLevel` | Nest / flatten URL builders |
 | `Route.addHttpApi` | Reuse Effect HttpApi paths |
 | `Group.asRoutes` + `fromEffect` | Generate destinations from a Group tree — **typed** UrlBuilder (`urls.Nwsl.HttpApi()`, `urls.nodeHealth(id)`) |
-| `Route.Target` / `DashboardRoot` | Dashboard metadata (`selected` / `view`) — optional |
+| `Route.Target` / `GroupNav` | Optional Group dashboard state and URL helpers over a core Router |
 
-Group dashboards may still use Target + View skins in `DashboardShell`; ordinary apps use `handle` + `Outlet`.
+Group dashboards use `GroupNav.use(root)` with Target + View skins in `DashboardShell`; ordinary apps use `handle` + `Outlet`.
 
 ## Docs site
 
@@ -73,8 +73,9 @@ Same API. Waku file routes are **render SSOT**; `siteRoutes.catalog` is the type
 
 | Method | History |
 |--------|---------|
-| `go` / `to` / `open*` | **push** (default); `{ replace: true }` ok — href may include `?query` |
-| `up` / `toRoot` | **replace** |
+| `Router.go` / `to` | **push** (default); `{ replace: true }` ok — href may include `?query` |
+| `GroupNav.open*` | **push** to Group and health URLs |
+| `GroupNav.up` / `Router.toRoot` | **replace** |
 | `back` | memory stack / `history.back()` |
 
 `Router.memory` / `history` / `make` take a **Route catalog only**.

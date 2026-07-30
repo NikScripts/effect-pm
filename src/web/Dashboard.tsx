@@ -63,6 +63,7 @@ export const DashboardView = <R, ER>(props: {
           views: props.views,
         }),
         router: Router.history(routesFor(props.group)),
+        group: props.group,
       }),
     [props.group, props.views],
   );

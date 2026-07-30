@@ -48,7 +48,6 @@ import {
 } from "../ui/data";
 import { dateFromMillis, fmtClock, fmtDayLabel, millisFromLocalInput, now, startOfDayMillis, toLocalInput } from "../ui/now";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
-import * as Router from "../ui/Router";
 import * as View from "../ui/View";
 import { kindOf as hyperlinkKindOf, kind as hyperlinkKind } from "../Hyperlink";
 import type { NodeReport } from "../FleetHealth";
@@ -382,14 +381,10 @@ export const GroupCard = (props: {
   readonly node: GroupNode;
   /** Display name — the member key under which the parent group holds this subgroup. */
   readonly name: string;
-  /**
-   * Optional — prefer {@link Router} (`useRouter().open`). Kept for shells that
-   * have not mounted a Router Provider yet.
-   */
+  /** Open through the owning shell's Group navigation. */
   readonly onOpen?: (g: GroupNode) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`grp-${props.node.key}`);
-  const nav = Router.useRouterOption();
   const members = Object.values(Group.members(props.node));
   const leaves = queueLeaves(props.node).slice(0, 4);
   const subs = members.filter((m): m is GroupNode => Group.isGroup(m));
@@ -412,13 +407,7 @@ export const GroupCard = (props: {
     });
   }, []);
   const degraded = nodes.reduce((sum, node) => sum + (counts.get(node.id) ?? 0), 0);
-  const open = (): void => {
-    if (nav !== null) {
-      nav.open(props.node);
-      return;
-    }
-    props.onOpen?.(props.node);
-  };
+  const open = (): void => props.onOpen?.(props.node);
   return (
     <button
       type="button"
@@ -467,7 +456,6 @@ export const Cell = (props: {
   readonly onOpenGroup: (g: GroupNode) => void;
 }): React.ReactElement => {
   const registry = useWidgets();
-  const nav = Router.useRouterOption();
   const isGroup = Group.isGroup(props.member);
   const leaf = isLeafTag(props.member) ? props.member : null;
   const viewTag = isGroup ? props.member : leaf;
@@ -480,10 +468,6 @@ export const Cell = (props: {
         type="button"
         className="contents text-left"
         onClick={() => {
-          if (nav !== null) {
-            nav.open(viewTag);
-            return;
-          }
           if (isGroup) props.onOpenGroup(props.member);
           else if (leaf !== null) props.onOpenLeaf(leaf);
         }}

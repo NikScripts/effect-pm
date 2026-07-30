@@ -11,16 +11,10 @@ import type { Simplify } from "effect/Types";
 import { HttpApi } from "effect/unstable/httpapi";
 import type { HttpApiGroup } from "effect/unstable/httpapi";
 import type * as Schema from "effect/Schema";
-import {
-  AsRoutesTypeId,
-  DashboardRoot,
-  isAsRoutesBrand,
-  type AsRoutesEffect,
-} from "./asRoutesBrand";
+import type { AsRoutesEffect } from "./asRoutesBrand";
 import * as uiRoute from "./uiRoute";
 import type { Path } from "./uiRoute";
 
-export { DashboardRoot } from "./asRoutesBrand";
 export type { AsRoutesEffect } from "./asRoutesBrand";
 
 export const TypeId = "~hyperlink-ts/ui/Route/Api" as const;
@@ -274,11 +268,7 @@ const groupProto = {
     effect: Effect.Effect<Iterable<RouteLike>, never, never>,
   ): GroupTop {
     const items = Array.from(Effect.runSync(effect));
-    let next = this.add(...items);
-    if (isAsRoutesBrand(effect)) {
-      next = next.annotate(DashboardRoot, effect[AsRoutesTypeId].root);
-    }
-    return next;
+    return this.add(...items);
   },
 };
 
@@ -336,7 +326,7 @@ const appProto = {
         const id = "__top";
         const existing = groups[id] ?? group(id, { topLevel: true });
         const merged = mergeTopLevel(existing, item);
-        // Keep annotations (e.g. DashboardRoot from fromEffect(Group.asRoutes)).
+        // Keep annotations when merging groups.
         groups = {
           ...groups,
           [id]: makeGroupProto({

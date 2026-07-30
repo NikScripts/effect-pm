@@ -9,6 +9,7 @@ import { Option, Layer } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { useAtomValue } from "../ui/atom-react";
 import { isQueueTag, type QueueTag } from "../ui/data";
+import * as Route from "../ui/Route";
 import * as Router from "../ui/Router";
 import * as View from "../ui/View";
 import * as Observe from "../Observe";
@@ -95,7 +96,7 @@ const PoolPageView: View.View = (props) => {
   const nav = Router.useRouter();
   const bundle = Observe.use(props.tag, WorkPoolView.pack);
   const logsR = useAtomValue(bundle.logs);
-  if (nav.view !== "logs") return null;
+  if (Route.targetOf(nav.match)?.view !== "logs") return null;
   const logs = AsyncResult.isSuccess(logsR) ? logsR.value : [];
   return (
     <Box flexDirection="column">

@@ -118,7 +118,7 @@ export const handleOf = (hit: Match | undefined): Handle | undefined =>
 // =============================================================================
 
 /**
- * Optional destination metadata for Group-built dashboards (`selected` / `view`).
+ * Optional destination metadata from {@link ../Group.asRoutes} (`keys` / `member` / `view`).
  * Not required for ordinary {@link handle} routing.
  *
  * @public
@@ -132,15 +132,6 @@ export class Target extends Context.Service<
     readonly kind: "group" | "leaf" | "leafView" | "health";
   }
 >()("hyperlink-ts/ui/Route/Target") {}
-
-/**
- * Optional dashboard Group root — stamped by
- * `Route.group(…).fromEffect(Group.asRoutes(…))`. Router reads this; it never
- * accepts a Group tag as a constructor argument.
- *
- * @public
- */
-export { DashboardRoot } from "../internal/asRoutesBrand";
 
 /** Absolute pathname template (`/health`, `/users/:id`). @public */
 export type Path = endpoint.Path;
