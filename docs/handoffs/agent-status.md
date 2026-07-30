@@ -30,7 +30,7 @@
 ### Active (owner approval required)
 1. **Agent 4:** Examples Ideas 1–9 + Related notes Eng’d. **Release-prep cleanup Eng’d** (archive completed handoffs/plans, dead scripts, npmignore, legacy example aliases). Idea 10 Apps/E5 still owner-gated. Owner still: changeset consolidate before `version`/publish.
 2. **Agent G / TUI:** Router dream — splat `*param` + `nodeHealth` + docs `destinations` SSOT on tip via `integration` merge ([`ui-routes-dream.md`](./ui-routes-dream.md)). Align work branch to tip if still ahead.
-3. **Agent 5 (Launcher + handoff):** #39 + Ink + Track D + **Policy Eng’d** + docs/examples pass — tip-syncing to `integration` (teaching forms + main-book wiring). Next: `restartSuccessor` / #35–37. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
+3. **Agent 5 (Launcher + handoff):** #39 + Ink + Track D + **Policy Eng’d** + docs/examples pass — **tip-synced** to `integration`. Next: `restartSuccessor` / #35–37. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
 4. **Docs site:** Live — apex coming-soon (inlined CSS + `(book)` chrome); docs on `dev`. Origin host-gate via `serve-production.mjs` (before Waku static). Islands: `hyperlink-ts` alias + `.hl-dashboard`. Getting Started em-dash/voice polish.
 
 ### Frozen / dead (do not assign)
