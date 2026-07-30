@@ -82,7 +82,7 @@ The 17 node-transport test failures once on integration's tip are **RESOLVED** (
 `63b51ea1a`, 2026-07-22). Cause: default-on client verify probes real sockets with real-time
 `Effect.sleep`/`Effect.timeout`, which deadlock under `@effect/vitest`'s `it.effect` virtual
 `TestClock`. Fix: real-transport verify tests use `it.live`; the browser-guard `ws` test opts out
-via `Hyperlink.clientVerify(false)`. **House rule for this sweep:** any test that builds a real
+via `Policy.verifyOff` (was `Hyperlink.clientVerify(false)`). **House rule for this sweep:** any test that builds a real
 client+server (thus hits default-on verify) MUST use `it.live`, never `it.effect`.
 
 ## Open questions for the owner (ask, don't assume)

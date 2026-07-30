@@ -206,8 +206,9 @@ plain struct value for **inline or anonymous** shapes, where a class is just cer
 ## Layers read as layers
 
 Layers are camelCase. The canonical toolkit entrypoint is `layer` (and `layer*` variants like
-`layerMemory`); a composed or auxiliary layer takes a `*Layer` suffix (`clientVerify`, `peersLayer`).
-Either way the name says "layer."
+`layerMemory`); a composed or auxiliary layer takes a `*Layer` suffix (`peersLayer`). Policy
+fragments are values on `Policy` (`Policy.verifyOff`, `Policy.askIncumbent`) composed with
+`Policy.provide` / `Policy.layer`. Either way the name says "layer."
 
 {#discriminant-tags-pascalcase .must appliesTo="src examples"}
 ## Discriminant tags are PascalCase

@@ -26,17 +26,13 @@ Building an addressed client Layer probes the peer before the handle is usable:
 
 ```ts
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
-import { Layer } from "effect"
+import * as Policy from "hyperlink-ts/Policy"
 
 // Opt out for a nested/bootstrap client (Lookup.client / identity ping do this internally):
-Hyperlink.client(Emails, WorkerNode).pipe(
-  Layer.provide(Hyperlink.clientVerify(false)),
-)
+Hyperlink.client(Emails, WorkerNode).pipe(Policy.provide(Policy.verifyOff))
 
 // Soft: probe but don't fail the Layer
-Hyperlink.client(Emails, WorkerNode).pipe(
-  Layer.provide(Hyperlink.clientVerify("status")),
-)
+Hyperlink.client(Emails, WorkerNode).pipe(Policy.provide(Policy.verifyStatus))
 ```
 
 Tag-aware addressed clients escalate to **deep** verify (node-handle status RPC + service readiness +
