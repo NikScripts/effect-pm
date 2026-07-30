@@ -15,8 +15,8 @@
 **Hub:** [Examples → node](/docs/examples#node)  
 
 > [!NOTE]
-> **Related examples:** [Apps A→B handoff live](/docs/apps-tui-handoff-ab-live) · [Launcher minimal up](/docs/launcher-minimal-up)
-**Guide:** [Identity coordinator — A→B cutover](/docs/identity-coordinator#ab-cutover-recipe-state-transfer)
+> **Related examples:** [Policy lookup cutover](/docs/node-policy-lookup-cutover) · [Apps A→B handoff live](/docs/apps-tui-handoff-ab-live) · [Launcher minimal up](/docs/launcher-minimal-up)  
+> **Guide:** [Identity coordinator — A→B cutover](/docs/identity-coordinator#ab-cutover-recipe-state-transfer) · [Policy](/docs/policy)
 
 Fence body `// @noErrors` covers `process` under the docs Twoslash host.
 
@@ -24,6 +24,9 @@ Fence body `// @noErrors` covers `process` under the docs Twoslash host.
 
 Locked #39 live cutover: B is Directory-visible first; A enqueues WorkPool jobs; `Node.shutdown(A)`
 runs baked `WorkPool.releaseEnqueueHandoff`; pending lands on B; Directory drops A.
+
+This is **WorkPool’s baked** migration handoff — not custom `serve(…, { handoff })`
+([serve handoff](/docs/node-serve-handoff)) and not Launcher custody `Handle.handoff`.
 
 {.twoslash include="examples/node/handoff-ab-cutover.ts"}
 ``` ts

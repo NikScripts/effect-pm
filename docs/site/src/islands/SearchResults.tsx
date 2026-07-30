@@ -10,6 +10,7 @@ import {
   type SearchDoc,
   type SearchIndex,
 } from "../lib/search-core.js";
+import * as Router from "../ui/Router.js";
 import { loadSearchIndex } from "./search-client.js";
 import { HitRow } from "./SearchHit.js";
 
@@ -50,9 +51,12 @@ export function SearchResults(): React.ReactElement {
           <section className="search-section">
             <div className="search-section-head">
               <span>{sectionMeta.find((s) => s.type === only)?.label}</span>
-              <a href={`/search?q=${encodeURIComponent(q)}`} onClick={() => setOnly(undefined)}>
+              <Router.Link
+                to={(u) => u.search({ query: { q } })}
+                onClick={() => setOnly(undefined)}
+              >
                 all sections
-              </a>
+              </Router.Link>
             </div>
             {searchType(index, q, only, 50).map((hit) => (
               <HitRow hit={hit} query={q} showPkg key={hit.doc.id} />
@@ -70,7 +74,9 @@ export function SearchResults(): React.ReactElement {
                 <section className="search-section" key={key}>
                   <div className="search-section-head">
                     <span>{label}</span>
-                    <a href={`/search?q=${encodeURIComponent(q)}&type=${type}`}>show all</a>
+                    <Router.Link to={(u) => u.search({ query: { q, type } })}>
+                      show all
+                    </Router.Link>
                   </div>
                   {hits.map((hit) => (
                     <HitRow hit={hit} query={q} showPkg key={hit.doc.id} />

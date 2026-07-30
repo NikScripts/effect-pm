@@ -48,7 +48,6 @@ import {
 } from "../ui/data";
 import { dateFromMillis, fmtClock, fmtDayLabel, millisFromLocalInput, now, startOfDayMillis, toLocalInput } from "../ui/now";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
-import * as Router from "../ui/Router";
 import * as View from "../ui/View";
 import { kindOf as hyperlinkKindOf, kind as hyperlinkKind } from "../Hyperlink";
 import type { NodeReport } from "../FleetHealth";
@@ -105,14 +104,14 @@ const asyncTag = (r: AsyncResult.AsyncResult<unknown, unknown>): string =>
 
 /** Phase → label + colour. */
 export const STATUS: Record<string, { label: string; color: string }> = {
+  idle: { label: "idle", color: "#94a3b8" },
   running: { label: "running", color: "#22c55e" },
   paused: { label: "paused", color: "#eab308" },
   draining: { label: "draining", color: "#06b6d4" },
   off: { label: "off", color: "#ef4444" },
 };
-/** Resolve the status key from phase + paused. */
-export const statusKey = (phase: string, paused: boolean): string =>
-  phase === "off" ? "off" : phase === "draining" ? "draining" : paused ? "paused" : "running";
+/** Resolve the status key from {@link Lifecycle.State} `_tag`. */
+export const statusKey = (lifecycleTag: string): string => lifecycleTag.toLowerCase();
 
 const PRIO = { high: "#ef4444", normal: "#94a3b8", low: "#3b82f6" } as const;
 const LEVEL: Record<string, string> = {
@@ -123,8 +122,8 @@ const LEVEL: Record<string, string> = {
 };
 
 /** A coloured status pill. */
-export const StatusBadge = (props: { readonly phase: string; readonly paused: boolean }): React.ReactElement => {
-  const s = STATUS[statusKey(props.phase, props.paused)] ?? STATUS.running!;
+export const StatusBadge = (props: { readonly lifecycleTag: string }): React.ReactElement => {
+  const s = STATUS[statusKey(props.lifecycleTag)] ?? STATUS.running!;
   return <Badge color={s.color}>{s.label}</Badge>;
 };
 
@@ -198,8 +197,13 @@ export const QueueCard = (props: {
   readonly onOpen?: (tag: QueueTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
-  const r = useAtomValue(Observe.use(props.tag, WorkPoolView.pack).status);
+  const pack = Observe.use(props.tag, WorkPoolView.pack);
+  const r = useAtomValue(pack.status);
+  const lifecycleR = useAtomValue(pack.lifecycle);
   const s = AsyncResult.isSuccess(r) ? Option.getOrUndefined(r.value) : undefined;
+  const lifecycleTag = AsyncResult.isSuccess(lifecycleR)
+    ? lifecycleR.value._tag ?? "Running"
+    : "Running";
   const sizes = s?.sizes ?? { high: 0, normal: 0, low: 0 };
   const pending = sizes.high + sizes.normal + sizes.low;
   const max = Math.max(sizes.high, sizes.normal, sizes.low, 1);
@@ -213,7 +217,7 @@ export const QueueCard = (props: {
     <>
       <div className="mb-2 flex items-center gap-2">
         <strong className="flex-1 truncate">{props.name}</strong>
-        <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
+        <StatusBadge lifecycleTag={lifecycleTag} />
       </div>
       <div className="mb-2 flex justify-between text-xs text-muted-foreground">
         <span>pending <strong className="text-foreground">{pending}</strong></span>
@@ -256,12 +260,14 @@ export const QueueDetailPanel = (props: {
   readonly tag: QueueTag;
 }): React.ReactElement => {
   const bundle = Observe.use(props.tag, WorkPoolView.pack);
-  const statusR = useAtomValue(bundle.status);
-  const s = AsyncResult.isSuccess(statusR) ? Option.getOrUndefined(statusR.value) : undefined;
+  const lifecycleR = useAtomValue(bundle.lifecycle);
+  const lifecycleTag = AsyncResult.isSuccess(lifecycleR)
+    ? lifecycleR.value._tag ?? "Running"
+    : "Running";
   return (
     <>
       <div className="flex justify-end">
-        <StatusBadge phase={s?.phase ?? "running"} paused={s?.paused ?? false} />
+        <StatusBadge lifecycleTag={lifecycleTag} />
       </div>
       <HyperlinkReadinessBanner tag={props.tag} />
       <QueueStats bundle={bundle} />
@@ -308,12 +314,16 @@ export const PriorityCard = (props: {
   readonly onOpen?: (tag: PriorityTag) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`res-${props.tag.key}`);
-  const r = useAtomValue(Observe.use(props.tag, PriorityView.pack).status);
+  const pack = Observe.use(props.tag, PriorityView.pack);
+  const r = useAtomValue(pack.status);
+  const lifecycleR = useAtomValue(pack.lifecycle);
   const s = AsyncResult.isSuccess(r) ? Option.getOrUndefined(r.value) : undefined;
+  const lifecycleTag = AsyncResult.isSuccess(lifecycleR)
+    ? lifecycleR.value._tag ?? "Running"
+    : "Running";
   const lanes = s !== undefined ? Object.entries(s.sizes) : [];
   const pending = lanes.reduce((sum, [, n]) => sum + n, 0);
   const max = Math.max(1, ...lanes.map(([, n]) => n));
-  const paused = s?.paused === true;
   return (
     <DrillRoot
       onOpen={props.onOpen === undefined ? undefined : () => props.onOpen?.(props.tag)}
@@ -325,8 +335,8 @@ export const PriorityCard = (props: {
     >
       <div className="mb-2 flex items-center gap-2">
         <strong className="flex-1 truncate">{props.name}</strong>
-        <Badge color={paused ? "#eab308" : PRIORITY_PHASE[s?.phase ?? "running"] ?? "#22c55e"}>
-          {paused ? "paused" : s?.phase ?? "running"}
+        <Badge color={PRIORITY_PHASE[statusKey(lifecycleTag)] ?? "#22c55e"}>
+          {statusKey(lifecycleTag)}
         </Badge>
       </div>
       <div className="mb-2 flex justify-between text-xs text-muted-foreground">
@@ -346,9 +356,14 @@ export const PriorityCard = (props: {
 };
 
 const MemberRow = (props: { readonly tag: QueueTag; readonly name: string }): React.ReactElement => {
-  const r = useAtomValue(Observe.use(props.tag, WorkPoolView.pack).status);
+  const pack = Observe.use(props.tag, WorkPoolView.pack);
+  const r = useAtomValue(pack.status);
+  const lifecycleR = useAtomValue(pack.lifecycle);
   const s = AsyncResult.isSuccess(r) ? Option.getOrUndefined(r.value) : undefined;
-  const sk = statusKey(s?.phase ?? "running", s?.paused ?? false);
+  const lifecycleTag = AsyncResult.isSuccess(lifecycleR)
+    ? lifecycleR.value._tag ?? "Running"
+    : "Running";
+  const sk = statusKey(lifecycleTag);
   const pending =
     s === undefined ? 0 : s.sizes.high + s.sizes.normal + s.sizes.low;
   return (
@@ -382,14 +397,10 @@ export const GroupCard = (props: {
   readonly node: GroupNode;
   /** Display name — the member key under which the parent group holds this subgroup. */
   readonly name: string;
-  /**
-   * Optional — prefer {@link Router} (`useRouter().open`). Kept for shells that
-   * have not mounted a Router Provider yet.
-   */
+  /** Open through the owning shell's Group navigation. */
   readonly onOpen?: (g: GroupNode) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`grp-${props.node.key}`);
-  const nav = Router.useRouterOption();
   const members = Object.values(Group.members(props.node));
   const leaves = queueLeaves(props.node).slice(0, 4);
   const subs = members.filter((m): m is GroupNode => Group.isGroup(m));
@@ -412,13 +423,7 @@ export const GroupCard = (props: {
     });
   }, []);
   const degraded = nodes.reduce((sum, node) => sum + (counts.get(node.id) ?? 0), 0);
-  const open = (): void => {
-    if (nav !== null) {
-      nav.open(props.node);
-      return;
-    }
-    props.onOpen?.(props.node);
-  };
+  const open = (): void => props.onOpen?.(props.node);
   return (
     <button
       type="button"
@@ -467,7 +472,6 @@ export const Cell = (props: {
   readonly onOpenGroup: (g: GroupNode) => void;
 }): React.ReactElement => {
   const registry = useWidgets();
-  const nav = Router.useRouterOption();
   const isGroup = Group.isGroup(props.member);
   const leaf = isLeafTag(props.member) ? props.member : null;
   const viewTag = isGroup ? props.member : leaf;
@@ -480,10 +484,6 @@ export const Cell = (props: {
         type="button"
         className="contents text-left"
         onClick={() => {
-          if (nav !== null) {
-            nav.open(viewTag);
-            return;
-          }
           if (isGroup) props.onOpenGroup(props.member);
           else if (leaf !== null) props.onOpenLeaf(leaf);
         }}
@@ -581,9 +581,9 @@ export const QueueStats = (props: { readonly bundle: QueueBundle }): React.React
 };
 
 const METRICS = {
-  throughput: { label: "throughput /s", color: "#22c55e", source: "history" as const },
-  latency: { label: "latency (s)", color: "#eab308", source: "history" as const },
-  pending: { label: "pending", color: "#3b82f6", source: "trend" as const },
+  throughput: { label: "throughput /s", color: "#22c55e", source: "History" as const },
+  latency: { label: "latency (s)", color: "#eab308", source: "History" as const },
+  pending: { label: "pending", color: "#3b82f6", source: "Trend" as const },
 };
 type MetricKey = keyof typeof METRICS;
 
@@ -638,7 +638,7 @@ export const MetricChart = (props: {
   const win = windows.find((w) => w.ms === windowMs) ?? windows[windows.length - 1] ?? WINDOWS[0];
   const cutoff = win.ms === ALL_MS ? Number.NEGATIVE_INFINITY : now() - win.ms;
   const data =
-    def.source === "trend"
+    def.source === "Trend"
       ? trend.map((v, i) => ({ i, value: v }))
       : history
           .filter((p) => p.t >= cutoff)
@@ -657,7 +657,7 @@ export const MetricChart = (props: {
             </option>
           ))}
         </select>
-        {def.source === "history" ? (
+        {def.source === "History" ? (
           // Compact time-window control: tap to cycle through the windows the data reaches.
           // Cheaper on width than a second dropdown, which matters on a phone.
           <button
@@ -860,7 +860,7 @@ export const LockToggle = (props: { readonly locked: boolean; readonly onToggle:
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         title="Unlock controls?"
-        description="This enables the actuating controls (pause, clear, shutdown). Re-lock when you're done."
+        description="This enables the actuating controls (pause, clear, stop). Re-lock when you're done."
         confirmLabel="Unlock"
         onConfirm={props.onToggle}
       />
@@ -883,7 +883,7 @@ export const QueueControls = (props: { readonly bundle: QueueBundle }): React.Re
         <ActionButton atom={props.bundle.pause} label="pause" icon={<Pause className="size-4" />} disabled={locked} />
       )}
       <ActionButton atom={props.bundle.clear} label="clear" icon={<Trash2 className="size-4" />} disabled={locked} confirm />
-      <ActionButton atom={props.bundle.shutdown} label="shutdown" icon={<Power className="size-4" />} disabled={locked} confirm destructive />
+      <ActionButton atom={props.bundle.stop} label="stop" icon={<Power className="size-4" />} disabled={locked} confirm destructive />
       <LockToggle locked={locked} onToggle={() => setLocked((l) => !l)} />
     </div>
   );
@@ -893,7 +893,7 @@ export const QueueControls = (props: { readonly bundle: QueueBundle }): React.Re
 /** Effect log levels, low→high — for the min-level filter. Unknown levels rank as `info`. */
 const LEVEL_RANK: Record<string, number> = { trace: 0, debug: 1, info: 2, warn: 3, warning: 3, error: 4, fatal: 5 };
 const levelRank = (level: string): number => LEVEL_RANK[level.toLowerCase()] ?? 2;
-const MIN_LEVELS = ["all", "info", "warn", "error"] as const;
+const MIN_LEVELS = ["All", "info", "warn", "error"] as const;
 
 export const LogStream = (props: {
   readonly bundle: { readonly logs: QueueBundle["logs"] };
@@ -904,13 +904,13 @@ export const LogStream = (props: {
   const all: ReadonlyArray<LogLine> = AsyncResult.isSuccess(r) ? r.value : [];
   // client-side filter: substring match on the message + a minimum level
   const [query, setQuery] = React.useState("");
-  const [min, setMin] = React.useState<(typeof MIN_LEVELS)[number]>("all");
+  const [min, setMin] = React.useState<(typeof MIN_LEVELS)[number]>("All");
   const needle = query.trim().toLowerCase();
-  const floor = min === "all" ? 0 : levelRank(min);
+  const floor = min === "All" ? 0 : levelRank(min);
   const logs = all.filter(
     (l) => levelRank(l.level) >= floor && (needle === "" || l.message.toLowerCase().includes(needle)),
   );
-  const filtered = needle !== "" || min !== "all";
+  const filtered = needle !== "" || min !== "All";
   const ref = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
     const el = ref.current;
@@ -932,7 +932,7 @@ export const LogStream = (props: {
           aria-label="minimum log level"
         >
           {MIN_LEVELS.map((lvl) => (
-            <option key={lvl} value={lvl}>{lvl === "all" ? "all levels" : `${lvl}+`}</option>
+            <option key={lvl} value={lvl}>{lvl === "All" ? "all levels" : `${lvl}+`}</option>
           ))}
         </select>
         {filtered ? (
@@ -2863,8 +2863,12 @@ export const PriorityDetail = (props: {
 }): React.ReactElement => {
   const bundle = Observe.use(props.tag, PriorityView.pack);
   const statusR = useAtomValue(bundle.status);
+  const lifecycleR = useAtomValue(bundle.lifecycle);
   const s = AsyncResult.isSuccess(statusR) ? Option.getOrUndefined(statusR.value) : undefined;
-  const paused = s?.paused === true;
+  const lifecycleTag = AsyncResult.isSuccess(lifecycleR)
+    ? lifecycleR.value._tag ?? "Running"
+    : "Running";
+  const paused = lifecycleTag === "Paused";
   const lanes = s !== undefined ? Object.entries(s.sizes) : [];
   const pending = lanes.reduce((sum, [, n]) => sum + n, 0);
   const max = Math.max(1, ...lanes.map(([, n]) => n));
@@ -2877,7 +2881,7 @@ export const PriorityDetail = (props: {
           <Stat label="pending" value={String(pending)} />
           <Stat label="done" value={String(s?.completed ?? 0)} />
           <Stat label="lanes" value={String(lanes.length)} />
-          <Stat label="phase" value={paused ? "paused" : s?.phase ?? "running"} />
+          <Stat label="lifecycle" value={statusKey(lifecycleTag)} />
         </div>
       ),
     },
@@ -2906,7 +2910,7 @@ export const PriorityDetail = (props: {
             <ActionButton atom={bundle.pause} label="pause" icon={<Pause className="size-4" />} disabled={locked} />
           )}
           <ActionButton atom={bundle.clear} label="clear" icon={<Trash2 className="size-4" />} disabled={locked} confirm />
-          <ActionButton atom={bundle.shutdown} label="shutdown" icon={<Power className="size-4" />} disabled={locked} confirm destructive />
+          <ActionButton atom={bundle.stop} label="stop" icon={<Power className="size-4" />} disabled={locked} confirm destructive />
           <LockToggle locked={locked} onToggle={() => setLocked((l) => !l)} />
         </div>
       ),
@@ -2931,7 +2935,7 @@ export const PriorityDetail = (props: {
       chrome={props.chrome}
       vtKey={`res-${props.tag.key}`}
       readinessTag={props.tag}
-      badge={<Badge color={paused ? "#eab308" : PRIORITY_PHASE[s?.phase ?? "running"] ?? "#22c55e"}>{paused ? "paused" : s?.phase ?? "running"}</Badge>}
+      badge={<Badge color={PRIORITY_PHASE[statusKey(lifecycleTag)] ?? "#22c55e"}>{statusKey(lifecycleTag)}</Badge>}
       sections={sections}
     />
   );

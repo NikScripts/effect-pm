@@ -148,3 +148,9 @@ client wire from an `RpcClient.Protocol` (build one with `Hyperlink.protocolHttp
 
 Each HyperService kind renders a hand-crafted card, chosen by the tag's **kind** and extensible per
 kind or per exact service — see [React components](react-components).
+
+## Compose stack
+
+How `<Dashboard>` wires Router + GroupNav + View skins:
+[Dashboard compose](/docs/dashboard-compose). Typed navigation:
+[Routing](/docs/routing).

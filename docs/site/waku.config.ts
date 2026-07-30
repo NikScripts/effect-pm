@@ -71,6 +71,7 @@ const watchDocsContent = {
         "../../examples/polling",
         "../../examples/config",
         "../../examples/observe",
+        "../../examples/ui",
         "../../examples/scenarios",
         "../../examples/apps",
         "../../examples/shared",
@@ -98,6 +99,15 @@ export default defineConfig({
       dedupe: ["react", "react-dom", "react/jsx-runtime", "effect"],
       alias: {
         "hyperlink-ts": fileURLToPath(new URL("../../src", import.meta.url)),
+        // Full Router edition (package companion entry → source).
+        "hyperlink-ts/ui/Router/waku": fileURLToPath(
+          new URL("../../src/ui/RouterWaku.ts", import.meta.url),
+        ),
+        // Site skin (default binding + no-op Outlet) when code imports the lite path by mistake.
+        "hyperlink-ts/ui/Router": fileURLToPath(
+          new URL("./src/ui/Router.tsx", import.meta.url),
+        ),
+
         // Node-only deps the package pulls transitively (SQLite storage, CI check).
         // A demo queue is in-memory, so stub them out of the browser bundle.
         "@effect/sql-sqlite-node/SqliteClient": fileURLToPath(new URL("./shims/sqlite-node-stub.js", import.meta.url)),

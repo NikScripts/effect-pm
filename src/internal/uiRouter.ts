@@ -1,80 +1,50 @@
 /**
  * Internal impl for {@link ../ui/Router}.
+ *
+ * Core navigation only — catalog match, `go` / `to` / `back`, history/memory.
+ * Group drill-down helpers live in {@link ../ui/GroupNav}.
  */
-import { Context, Option } from "effect";
-import * as Group from "../Group";
+import { Option } from "effect";
 import * as Route from "../ui/Route";
-import type { LeafTag } from "../ui/widgetRegistry";
-import {
-  formatGroupPath,
-  pathToMember,
-  resolveGroupRoute,
-  type RouteGroup,
-} from "./uiGroupRoutes";
-import { DashboardRoot } from "./asRoutesBrand";
-import type { ApiConstraint, GroupTop } from "./uiRoutes";
+import type { ApiConstraint } from "./uiRoutes";
 
 // =============================================================================
 // Types
 // =============================================================================
 
-export type MemberTag =
-  | LeafTag
-  | { readonly key: string; readonly members: Record<string, unknown> };
-
 export type HistoryAction = "push" | "replace";
 
-/** Live navigation API — provide with memory / history layers. */
+/** Live navigation API — lite (`Memory` / `History`) or Waku layer. */
 export interface Service<A extends ApiConstraint = ApiConstraint> {
   readonly api: A;
-  readonly mode: "memory" | "history";
+  /** Engine discriminant. */
+  readonly _tag: "Memory" | "History" | "Waku";
+  /** Pathname only (`/docs/x`) — no query. */
   readonly pathname: string;
+  /** Search including `?` (`?tab=1`), or `""`. */
+  readonly search: string;
+  /** `pathname` + `search`. */
+  readonly href: string;
   readonly match: Route.Match | undefined;
   readonly urls: Route.UrlBuilder<A>;
   readonly go: (
-    pathname: string,
+    href: string,
     options?: { readonly replace?: boolean },
   ) => void;
   readonly to: (
     build: (urls: Route.UrlBuilder<A>) => string,
     options?: { readonly replace?: boolean },
   ) => void;
-  /** Pop one history / memory entry. */
+  /** Pop one history / memory entry (or Waku back). */
   readonly back: () => void;
   /** Navigate to `/` (replace). */
   readonly toRoot: () => void;
+  /** Prefetch a path when the engine supports it (no-op on lite). */
+  readonly prefetch: (href: string) => void;
   readonly subscribe: (listener: () => void) => () => void;
   /** @internal */
   readonly syncFromLocation: () => void;
-
-  /**
-   * Dashboard Group root when the catalog was built with
-   * `fromEffect(Group.asRoutes(…))` (`Route.DashboardRoot`); otherwise undefined.
-   * Group helpers throw without a root.
-   */
-  readonly root: RouteGroup | undefined;
-  /** Short-name path segments — `["Nwsl", "HttpApi"]`. */
-  readonly path: ReadonlyArray<string>;
-  readonly trail: ReadonlyArray<RouteGroup>;
-  /** Deepest group (grid to render), or root when at `/`. */
-  readonly group: RouteGroup | undefined;
-  readonly selected: unknown | null;
-  /** Leaf sub-view (`"logs"` / `"schedule"`) or root shell page (`"health"`). */
-  readonly view: string | undefined;
-  /** True when {@link up} would change the path. */
-  readonly canUp: boolean;
-  readonly open: (member: MemberTag) => void;
-  readonly openKey: (key: string) => void;
-  /** Pop one short-name segment (replace — keeps history coherent). */
-  readonly up: () => void;
-  readonly openLogs: (tag: LeafTag) => void;
-  readonly openSchedule: (tag: LeafTag) => void;
-  readonly openHealth: () => void;
-  readonly openNode: (nodeId: string) => void;
 }
-
-export const toHref = formatGroupPath;
-export const isGroupMember = Group.isGroup;
 
 // =============================================================================
 // Path helpers
@@ -89,14 +59,29 @@ const normalize = (pathname: string): string => {
   return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
 };
 
-const locationPathname = (): string =>
-  typeof window === "undefined" ? "/" : normalize(window.location.pathname);
+const parseHref = (
+  href: string,
+): { readonly pathname: string; readonly search: string } => {
+  const q = href.indexOf("?");
+  if (q === -1) {
+    return { pathname: normalize(href), search: "" };
+  }
+  return {
+    pathname: normalize(href.slice(0, q)),
+    search: href.slice(q),
+  };
+};
 
-const segmentsOf = (pathname: string): ReadonlyArray<string> =>
-  normalize(pathname)
-    .split("/")
-    .filter((s) => s.length > 0)
-    .map(decodeURIComponent);
+const joinHref = (pathname: string, search: string): string =>
+  search.length === 0 ? pathname : `${pathname}${search}`;
+
+const locationHref = (): { readonly pathname: string; readonly search: string } =>
+  typeof window === "undefined"
+    ? { pathname: "/", search: "" }
+    : {
+        pathname: normalize(window.location.pathname),
+        search: window.location.search,
+      };
 
 const collapseStack = (stack: Array<string>): void => {
   while (
@@ -107,225 +92,92 @@ const collapseStack = (stack: Array<string>): void => {
   }
 };
 
-const requireRoot = (
-  root: RouteGroup | undefined,
-  method: string,
-): RouteGroup => {
-  if (root === undefined) {
-    throw new Error(
-      `Router.${method} requires Route.DashboardRoot (build with Route.group(…).fromEffect(Group.asRoutes(…)))`,
-    );
-  }
-  return root;
-};
-
-const findDashboardRoot = (
-  api: ApiConstraint,
-): RouteGroup | undefined => {
-  const fromApi = Context.getOrUndefined(api.annotations, DashboardRoot);
-  if (fromApi !== undefined) return fromApi;
-  const walk = (group: GroupTop): RouteGroup | undefined => {
-    const here = Context.getOrUndefined(group.annotations, DashboardRoot);
-    if (here !== undefined) return here;
-    for (const child of Object.values(group.groups)) {
-      const found = walk(child);
-      if (found !== undefined) return found;
-    }
-    return undefined;
-  };
-  for (const group of Object.values(api.groups)) {
-    const found = walk(group);
-    if (found !== undefined) return found;
-  }
-  return undefined;
-};
-
-const urlMethod = (
-  urls: Route.UrlBuilderLoose,
-  id: string,
-):
-  | ((request?: { readonly params?: Record<string, string> }) => string)
-  | undefined => {
-  const value = (urls as Record<string, unknown>)[id];
-  return typeof value === "function"
-    ? (value as (request?: {
-        readonly params?: Record<string, string>;
-      }) => string)
-    : undefined;
-};
-
-// =============================================================================
-// Resolve — match Target when present, else Group walk
-// =============================================================================
-
-/** Trail / group from short-name keys — Target is SSOT for selected/view/keys. */
-const trailFromKeys = (
-  root: RouteGroup,
-  keys: ReadonlyArray<string>,
-): {
-  readonly trail: ReadonlyArray<RouteGroup>;
-  readonly group: RouteGroup;
-} => {
-  const walked = resolveGroupRoute(root, keys);
-  return {
-    trail: walked.trail,
-    group: walked.trail[walked.trail.length - 1] ?? root,
-  };
-};
-
-const resolveState = (
-  root: RouteGroup | undefined,
-  api: ApiConstraint,
-  pathname: string,
-): {
-  readonly keys: ReadonlyArray<string>;
-  readonly trail: ReadonlyArray<RouteGroup>;
-  readonly selected: unknown | null;
-  readonly view: string | undefined;
-  readonly group: RouteGroup | undefined;
-  readonly match: Route.Match | undefined;
-} => {
-  const match = Option.getOrUndefined(Route.match(api, pathname));
-  if (root === undefined) {
-    return {
-      keys: segmentsOf(pathname),
-      trail: [],
-      selected: null,
-      view: undefined,
-      group: undefined,
-      match,
-    };
-  }
-
-  if (match !== undefined) {
-    const target = Option.getOrUndefined(
-      Context.getOption(match.annotations, Route.Target),
-    );
-    if (target !== undefined) {
-      const keys =
-        target.kind === "health" && match.params.nodeId !== undefined
-          ? (["health", match.params.nodeId] as const)
-          : target.keys;
-      // Health keys are not Group members — trail stays at root.
-      const { trail, group } =
-        target.kind === "health"
-          ? { trail: [root] as const, group: root }
-          : trailFromKeys(
-              root,
-              keys.filter((k) => k !== "logs" && k !== "schedule"),
-            );
-      return {
-        keys,
-        trail,
-        selected:
-          target.kind === "leaf" || target.kind === "leafView"
-            ? target.member
-            : null,
-        view: target.view,
-        group,
-        match,
-      };
-    }
-  }
-
-  // Unmatched / unannotated URL — fall back to Group walk.
-  const walked = resolveGroupRoute(root, segmentsOf(pathname));
-  return {
-    keys: walked.keys,
-    trail: walked.trail,
-    selected: walked.selected,
-    view: walked.view,
-    group: walked.trail[walked.trail.length - 1] ?? root,
-    match,
-  };
-};
-
 // =============================================================================
 // Construction
 // =============================================================================
 
 export const makeService = <A extends ApiConstraint>(
   api: A,
-  mode: "memory" | "history",
+  engine: "Memory" | "History",
 ): Service<A> => {
-  const root = findDashboardRoot(api);
   const urls = Route.urlBuilder(api);
-  let pathname =
-    mode === "history" ? locationPathname() : (normalize("/") as string);
-  const stack: Array<string> = mode === "memory" ? [pathname] : [];
+  const initial =
+    engine === "History" ? locationHref() : { pathname: "/", search: "" };
+  let pathname = initial.pathname;
+  let search = initial.search;
+  const stack: Array<string> =
+    engine === "Memory" ? [joinHref(pathname, search)] : [];
   const listeners = new Set<() => void>();
 
   const notify = (): void => {
     for (const l of listeners) l();
   };
 
-  const setPathname = (next: string, action: HistoryAction): void => {
-    const normalized = normalize(next);
-    if (normalized === pathname && action === "push") return;
+  const setHref = (next: string, action: HistoryAction): void => {
+    const parsed = parseHref(next);
+    if (
+      parsed.pathname === pathname &&
+      parsed.search === search &&
+      action === "push"
+    ) {
+      return;
+    }
 
-    if (mode === "memory") {
+    pathname = parsed.pathname;
+    search = parsed.search;
+    const href = joinHref(pathname, search);
+
+    if (engine === "Memory") {
       if (action === "push") {
-        pathname = normalized;
-        stack.push(pathname);
+        stack.push(href);
       } else {
-        pathname = normalized;
-        if (stack.length === 0) stack.push(pathname);
-        else stack[stack.length - 1] = pathname;
+        if (stack.length === 0) stack.push(href);
+        else stack[stack.length - 1] = href;
         collapseStack(stack);
       }
-    } else {
-      pathname = normalized;
-      if (typeof window !== "undefined") {
-        if (action === "push") window.history.pushState(null, "", pathname);
-        else window.history.replaceState(null, "", pathname);
-      }
+    } else if (typeof window !== "undefined") {
+      if (action === "push") window.history.pushState(null, "", href);
+      else window.history.replaceState(null, "", href);
     }
     notify();
   };
 
-  const state = () => resolveState(root, api, pathname);
-
-  const setKeys = (
-    next: ReadonlyArray<string>,
-    action: HistoryAction,
-  ): void => {
-    if (root === undefined) {
-      setPathname(toHref(next), action);
-      return;
-    }
-    const keys = resolveGroupRoute(root, next).keys;
-    setPathname(toHref(keys), action);
-  };
-
   return {
     api,
-    mode,
+    _tag: engine,
     urls,
-    root,
     get pathname() {
       return pathname;
     },
+    get search() {
+      return search;
+    },
+    get href() {
+      return joinHref(pathname, search);
+    },
     get match() {
-      return state().match;
+      return Option.getOrUndefined(Route.match(api, pathname));
     },
     go: (next, options) =>
-      setPathname(next, options?.replace === true ? "replace" : "push"),
+      setHref(next, options?.replace === true ? "replace" : "push"),
     to: (build, options) =>
-      setPathname(
-        build(urls),
-        options?.replace === true ? "replace" : "push",
-      ),
+      setHref(build(urls), options?.replace === true ? "replace" : "push"),
     back: () => {
-      if (mode === "history") {
+      if (engine === "History") {
         if (typeof window !== "undefined") window.history.back();
         return;
       }
       if (stack.length <= 1) return;
       stack.pop();
-      pathname = stack[stack.length - 1] ?? "/";
+      const prev = parseHref(stack[stack.length - 1] ?? "/");
+      pathname = prev.pathname;
+      search = prev.search;
       notify();
     },
-    toRoot: () => setPathname("/", "replace"),
+    toRoot: () => setHref("/", "replace"),
+    prefetch: () => {
+      /* lite engines have no prefetch */
+    },
     subscribe: (listener) => {
       listeners.add(listener);
       return () => {
@@ -333,69 +185,12 @@ export const makeService = <A extends ApiConstraint>(
       };
     },
     syncFromLocation: () => {
-      if (mode !== "history") return;
-      const next = locationPathname();
-      if (next === pathname) return;
-      pathname = next;
+      if (engine !== "History") return;
+      const next = locationHref();
+      if (next.pathname === pathname && next.search === search) return;
+      pathname = next.pathname;
+      search = next.search;
       notify();
-    },
-    get path() {
-      return state().keys;
-    },
-    get trail() {
-      return state().trail;
-    },
-    get group() {
-      return state().group;
-    },
-    get selected() {
-      return state().selected;
-    },
-    get view() {
-      return state().view;
-    },
-    get canUp() {
-      return state().keys.length > 0;
-    },
-    open: (member) => {
-      const r = requireRoot(root, "open");
-      const path = pathToMember(r, member);
-      if (path !== undefined) setKeys(path, "push");
-    },
-    openKey: (key) => {
-      requireRoot(root, "openKey");
-      setKeys([...state().keys, key], "push");
-    },
-    up: () => {
-      requireRoot(root, "up");
-      const keys = state().keys;
-      if (keys.length === 0) return;
-      setKeys(keys.slice(0, -1), "replace");
-    },
-    openLogs: (tag) => {
-      const r = requireRoot(root, "openLogs");
-      const path = pathToMember(r, tag);
-      if (path !== undefined) setKeys([...path, "logs"], "push");
-    },
-    openSchedule: (tag) => {
-      const r = requireRoot(root, "openSchedule");
-      const path = pathToMember(r, tag);
-      if (path !== undefined) setKeys([...path, "schedule"], "push");
-    },
-    openHealth: () => {
-      requireRoot(root, "openHealth");
-      const health = urlMethod(urls as Route.UrlBuilderLoose, "health");
-      setPathname(health !== undefined ? health() : "/health", "push");
-    },
-    openNode: (nodeId) => {
-      requireRoot(root, "openNode");
-      const healthNode = urlMethod(urls as Route.UrlBuilderLoose, "healthNode");
-      setPathname(
-        healthNode !== undefined
-          ? healthNode({ params: { nodeId } })
-          : toHref(["health", nodeId]),
-        "push",
-      );
     },
   };
 };

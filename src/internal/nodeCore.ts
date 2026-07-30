@@ -97,67 +97,12 @@ export interface Endpoints {
   readonly IpcSocket?: { readonly path: string };
 }
 
-/**
- * Directory advertise conflict policy when the same `nodeKey` already has a row.
- *
- * - `livenessReplace` — ping incumbent; alive → reject; dead → replace
- * - `askIncumbent` — if alive, Lookup asks the incumbent node-status `yield`; refuse/timeout → reject
- * - `reject` — alive → reject; dead → still replace
- * - `inherit` — continue up the resolve chain (call-site → node → Lookup → hard fallback)
- *
- * @category models
- * @public
- */
-export type OnConflict =
-  | "livenessReplace"
-  | "askIncumbent"
-  | "reject"
-  | "inherit";
+import type { OnConflict, OnConflictResolved } from "../Policy";
+import { resolveOnConflict, onConflictOf } from "../Policy";
 
-/**
- * Concrete advertise conflict policy (no `"inherit"`) — what Lookup runs.
- *
- * @category models
- * @public
- */
-export type OnConflictResolved = Exclude<OnConflict, "inherit">;
-
-/**
- * Walk preference layers (first concrete wins). Hard fallback: `livenessReplace`.
- *
- * @category utils
- * @public
- */
-export const resolveOnConflict = (
-  ...prefs: ReadonlyArray<OnConflict | undefined>
-): OnConflictResolved => {
-  for (const pref of prefs) {
-    if (pref !== undefined && pref !== "inherit") {
-      return pref;
-    }
-  }
-  return "livenessReplace";
-};
-
-/** Read a node's stamped {@link OnConflict}, if any. @internal */
-export const onConflictOf = (node: unknown): OnConflict | undefined => {
-  if (
-    (typeof node === "object" || typeof node === "function") &&
-    node !== null &&
-    "onConflict" in node
-  ) {
-    const value = (node as { readonly onConflict?: unknown }).onConflict;
-    if (
-      value === "livenessReplace" ||
-      value === "askIncumbent" ||
-      value === "reject" ||
-      value === "inherit"
-    ) {
-      return value;
-    }
-  }
-  return undefined;
-};
+/** Re-export Policy conflict types/helpers for Node internals. @public */
+export type { OnConflict, OnConflictResolved };
+export { resolveOnConflict, onConflictOf };
 
 /**
  * A node declared with a bare **port** (`Node.Tag()("x", 3009)`) carries that port here. The eager
@@ -292,8 +237,8 @@ export type ListenOptions = {
   readonly node?: string | { readonly key: string };
   readonly unlink?: boolean;
   /**
-   * Directory advertise conflict policy for this listen (call-site; wins over node stamp).
-   * Omit / `"inherit"` → continue resolve chain.
+   * Directory advertise conflict (call-site; wins over node stamp / {@link Policy.Conflict}).
+   * Prefer ambient `Policy.askIncumbent` etc. Omit / `"inherit"` → continue resolve chain.
    */
   readonly onConflict?: OnConflict;
   /**
@@ -312,12 +257,9 @@ export type ListenOptions = {
    */
   readonly assumeToken?: string | Redacted.Redacted<string>;
   /**
-   * Cooperative directory handoff handler for Lookup {@link OnConflict} `"askIncumbent"` —
-   * wired to the auto-mounted node-status `yield` RPC. `true` = step aside (row may replace);
-   * `false` / timeout → newcomer sees Lookup `IncumbentAlive`. Default when omitted: accept.
-   * While the node is in status `phase: "draining"` ({@link Node.drain}), yield **always
-   * refuses** (fail-closed) regardless of this handler. Does **not** itself drain work or
-   * exit the process — call {@link Node.drain} / later shutdown sequence for that.
+   * Cooperative yield for {@link Policy.askIncumbent} — call-site override of
+   * {@link Policy.Yield} (`Policy.yieldAccept` / `yieldRefuse`). `true` = step aside;
+   * `false` / timeout → `IncumbentAlive`. While `phase: "draining"`, yield always refuses.
    */
   readonly onYield?: Effect.Effect<boolean>;
 };
@@ -1022,11 +964,11 @@ export class ListenTagNodeRequired extends Data.TaggedError(
   "ListenTagNodeRequired",
 )<{
   readonly tag: string;
-  readonly reason: "missing" | "ambiguous";
+  readonly reason: "Missing" | "Ambiguous";
   readonly count: number;
 }> {
   override get message() {
-    if (this.reason === "ambiguous") {
+    if (this.reason === "Ambiguous") {
       return (
         `Tag+impl listen for "${this.tag}" saw ${String(this.count)} Nodes — ` +
         `use Node.unix/http/ws(node, [Hyperlink.serve(${this.tag}, impl)]) to pick one.`

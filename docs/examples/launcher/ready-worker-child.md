@@ -14,11 +14,13 @@
 **Hub:** [Examples → launcher](/docs/examples#launcher)
 
 > [!NOTE]
-> **Related examples:** [minimal up](/docs/launcher-minimal-up) · [token injection](/docs/launcher-token-injection)
+> **Related examples:** [minimal up](/docs/launcher-minimal-up) · [token injection](/docs/launcher-token-injection) · [handle phases](/docs/launcher-handle-phases)  
+> **Guide:** [Launcher](/docs/launcher)
 
 ## What this shows
 
-Child-side `assumeToken` wiring for Launcher examples.
+Shared child for Launcher demos: `serve-env` / `serve-argv` arm `assumeToken`, serve Jobs
+(+ optional Cache), and `Node.launch` the listen so shutdown can end the process.
 
 {.twoslash include="examples/launcher/ready-worker-child.ts"}
 ``` ts

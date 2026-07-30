@@ -8,6 +8,8 @@ const shared = {
   outDir: "dist",
   external: [
     "@effect/sql-sqlite-node",
+    "waku",
+    "waku/router/client",
   ],
 };
 
@@ -38,6 +40,8 @@ export default defineConfig([
       Advice: "src/Advice.ts",
       Directory: "src/Directory.ts",
       Identity: "src/Identity.ts",
+      Policy: "src/Policy.ts",
+      Lifecycle: "src/Lifecycle.ts",
       DynamicConfig: "src/DynamicConfig.ts",
       ApiUsageSchema: "src/ApiUsageSchema.ts",
       Gate: "src/Gate.ts",
@@ -70,6 +74,8 @@ export default defineConfig([
       "ui/NodeView": "src/ui/NodeView.ts",
       "ui/Route": "src/ui/Route.ts",
       "ui/Router": "src/ui/Router.ts",
+      "ui/RouterWaku": "src/ui/RouterWaku.ts",
+      "ui/GroupNav": "src/ui/GroupNav.ts",
       "ui/GroupView": "src/ui/GroupView.ts",
       "ui/DashboardViews": "src/ui/DashboardViews.ts",
       "ui/DashboardLayer": "src/ui/DashboardLayer.ts",

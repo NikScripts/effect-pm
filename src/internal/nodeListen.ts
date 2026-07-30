@@ -82,7 +82,7 @@ export function listen(
     if (bound === undefined) {
       return failListenTagNode({
         tag: tagKey,
-        reason: fleet.length > 1 ? "ambiguous" : "missing",
+        reason: fleet.length > 1 ? "Ambiguous" : "Missing",
         count: fleet.length,
       });
     }

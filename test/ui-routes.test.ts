@@ -67,34 +67,72 @@ describe("Route", () => {
 
     const site = Route.make("site").add(Route.addHttpApi(Wire));
     const urls = Route.urlBuilder(site) as Route.UrlBuilderLoose & {
-      getUser: (r: { params: { id: string } }) => string;
+      getUser: (id: string) => string;
       admin: { stats: () => string };
     };
-    expect(urls.getUser({ params: { id: "1" } })).toBe("/users/1");
+    expect(urls.getUser("1")).toBe("/users/1");
     expect(urls.admin.stats()).toBe("/admin/stats");
   });
 
-  it("typed urlBuilder requires params", () => {
+  it("typed urlBuilder uses positional path args", () => {
     const api = Route.make("site").add(
       Route.get("node", "/health/:nodeId").pipe(
         Route.params(Schema.Struct({ nodeId: Schema.String })),
       ),
+      Route.get("symbol", "/api/:pkg/:module/:symbol").pipe(
+        Route.params(
+          Schema.Struct({
+            pkg: Schema.String,
+            module: Schema.String,
+            symbol: Schema.String,
+          }),
+        ),
+      ),
     );
     const urls = Route.urlBuilder(api);
-    expect(urls.node({ params: { nodeId: "app/NodeA" } })).toBe(
-      "/health/app%2FNodeA",
+    expect(urls.node("app/NodeA")).toBe("/health/app%2FNodeA");
+    expect(urls.symbol("effect", "Effect", "succeed")).toBe(
+      "/api/effect/Effect/succeed",
     );
   });
 
-  it("urlBuilder baseUrl prefixes absolute URLs", () => {
+  it("splat *param keeps unencoded slashes", () => {
+    const api = Route.make("site").add(
+      Route.get("nodeHealth", "/health/*nodeId").pipe(
+        Route.params(Schema.Struct({ nodeId: Schema.String })),
+      ),
+    );
+    const urls = Route.urlBuilder(api);
+    expect(urls.nodeHealth("app/NodeA")).toBe("/health/app/NodeA");
+    expect(urls.nodeHealth("app/Node A")).toBe("/health/app/Node%20A");
+    const hit = Option.getOrThrow(Route.match(api, "/health/app/NodeA"));
+    expect(hit.params.nodeId).toBe("app/NodeA");
+    expect(hit.route.identifier).toBe("nodeHealth");
+  });
+
+  it("urlBuilder appends query and preserves it with baseUrl", () => {
     const api = Route.make("site").add(
       Route.get("home", "/home"),
+      Route.get("node", "/health/:nodeId").pipe(
+        Route.params(Schema.Struct({ nodeId: Schema.String })),
+      ),
       Route.group("app").add(Route.get("dashboard", "/app")),
     );
-    const urls = Route.urlBuilder(api, {
+    const urls = Route.urlBuilder(api);
+    expect(urls.home({ query: { q: "WorkPool", empty: undefined } })).toBe(
+      "/home?q=WorkPool",
+    );
+    expect(urls.node("x", { query: { tab: "logs" } })).toBe(
+      "/health/x?tab=logs",
+    );
+
+    const absolute = Route.urlBuilder(api, {
       baseUrl: "https://example.com",
     });
-    expect(urls.home()).toBe("https://example.com/home");
-    expect(urls.app.dashboard()).toBe("https://example.com/app");
+    expect(absolute.home()).toBe("https://example.com/home");
+    expect(absolute.app.dashboard()).toBe("https://example.com/app");
+    expect(absolute.home({ query: { q: "a" } })).toBe(
+      "https://example.com/home?q=a",
+    );
   });
 });

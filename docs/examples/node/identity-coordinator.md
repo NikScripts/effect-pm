@@ -14,13 +14,15 @@
 **Hub:** [Examples → node](/docs/examples#node)
 
 > [!NOTE]
-> **Related examples:** [asLookup](/docs/node-as-lookup) · [Launcher Lookup membership](/docs/launcher-lookup-membership)
+> **Related examples:** [asLookup](/docs/node-as-lookup) · [Policy lookup cutover](/docs/node-policy-lookup-cutover) · [Launcher Lookup membership](/docs/launcher-lookup-membership)  
+> **Guide:** [Identity coordinator](/docs/identity-coordinator) · [Policy](/docs/policy)
 
 Fence body `// @noErrors` covers `process` under the docs Twoslash host.
 
 ## What this shows
 
-Router + Workers + Lookup placement advice.
+Lookup planes: Identity (Router winner), Directory (workers), Advice prefer. Sibling
+imports — `import * as Advice from "hyperlink-ts/Advice"` — never `Lookup.Advice.*`.
 
 {.twoslash include="examples/node/identity-coordinator.ts"}
 ``` ts

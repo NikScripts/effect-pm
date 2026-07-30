@@ -13,16 +13,20 @@
  *   ),
  * )
  *
- * const router = Router.make(site, "history")
+ * const router = Router.make(site, "History")
  *
  * <Router.Provider value={router}>
  *   <Router.Link to={(u) => u.home()}>Home</Router.Link>
+ *   <Router.Link to={(u) => u.user("42", { query: { tab: "bio" } })}>
+ *     User
+ *   </Router.Link>
  *   <Router.Outlet />
  * </Router.Provider>
  * ```
  *
- * Layers: {@link memory} / {@link history}. Catalog only — never a Group tag
- * (`Group.asRoutes` + `Route.group(…).fromEffect` when you need a Group tree).
+ * **One service.** This entry is the non-Waku layer (`make` / `memory` / `history`).
+ * Waku layer: `hyperlink-ts/ui/Router/waku` (same `Service`, unified `Provider`).
+ * Group drill-down: {@link ./GroupNav} (on top — not inside Router).
  *
  * @see docs/handoffs/ui-routes-dream.md
  */
@@ -36,12 +40,10 @@ import * as Route from "./Route";
 // Types
 // =============================================================================
 
-/** Group or leaf a dashboard router can open (when catalog carries DashboardRoot). @public */
-export type MemberTag = internal.MemberTag;
-
 /**
  * Live navigation API — provide with {@link memory} / {@link history}, or build
- * with {@link make} for a catalog-typed surface.
+ * with {@link make} for a catalog-typed surface. Discriminated by `_tag`
+ * (`"Memory"` / `"History"` / `"Waku"`).
  *
  * @public
  */
@@ -61,28 +63,19 @@ export class Router extends Context.Service<Router, Service>()(
 ) {}
 
 // =============================================================================
-// Path helpers
-// =============================================================================
-
-/** Format short-name path as a URL (`/` or `/Nwsl/HttpApi`). @public */
-export const toHref = internal.toHref;
-
-/** Re-export guard for compose Grid. @public */
-export const isGroupMember = internal.isGroupMember;
-
-// =============================================================================
 // Construction
 // =============================================================================
 
 /**
  * Build a live router value (typed when `api` is a concrete catalog).
+ * `engine` chooses Memory vs History at install; the live field is `_tag`.
  *
  * @public
  */
 export const make = <A extends ApiConstraint>(
   api: A,
-  mode: "memory" | "history",
-): Service<A> => internal.makeService(api, mode);
+  engine: "Memory" | "History",
+): Service<A> => internal.makeService(api, engine);
 
 /**
  * In-memory router — tests, embed, TUI. Path is not bound to `window.history`.
@@ -91,7 +84,7 @@ export const make = <A extends ApiConstraint>(
  * @public
  */
 export const memory = (api: ApiConstraint): Layer.Layer<Router> =>
-  Layer.sync(Router, () => internal.makeService(api, "memory"));
+  Layer.sync(Router, () => internal.makeService(api, "Memory"));
 
 /**
  * Browser History router — `pushState` / `popstate` / `replaceState` against the catalog.
@@ -100,7 +93,7 @@ export const memory = (api: ApiConstraint): Layer.Layer<Router> =>
  * @public
  */
 export const history = (api: ApiConstraint): Layer.Layer<Router> =>
-  Layer.sync(Router, () => internal.makeService(api, "history"));
+  Layer.sync(Router, () => internal.makeService(api, "History"));
 
 // =============================================================================
 // React
@@ -119,7 +112,7 @@ export const Provider = (props: {
 }): React.ReactElement => {
   const { value } = props;
   React.useEffect(() => {
-    if (value.mode !== "history" || typeof window === "undefined") return;
+    if (value._tag !== "History" || typeof window === "undefined") return;
     value.syncFromLocation();
     const onPop = (): void => value.syncFromLocation();
     window.addEventListener("popstate", onPop);
@@ -140,9 +133,7 @@ export const Provider = (props: {
 export const useRouter = (): Service => {
   const router = React.useContext(RouterReactContext);
   if (router === null) {
-    throw new Error(
-      "Router: render inside View.compose(…).Provider (or Router.Provider)",
-    );
+    throw new Error("Router: render inside Router.Provider");
   }
   const [, bump] = React.useReducer((n: number) => n + 1, 0);
   React.useEffect(() => router.subscribe(bump), [router]);
@@ -191,23 +182,31 @@ export const useTarget = (): Route.TargetValue | undefined =>
  *
  * @public
  */
-export const Link = (props: {
-  readonly to: string | ((urls: Route.UrlBuilderLoose) => string);
+export const Link = <A extends ApiConstraint = ApiConstraint>(props: {
+  readonly to: string | ((urls: Route.UrlBuilder<A>) => string);
   readonly replace?: boolean;
   readonly children: React.ReactNode;
   readonly className?: string;
+  readonly title?: string;
+  readonly "data-kind"?: string;
+  readonly onClick?: React.MouseEventHandler<HTMLAnchorElement>;
+  readonly "aria-current"?: React.AriaAttributes["aria-current"];
 }): React.ReactElement => {
   const router = useRouter();
   const href =
     typeof props.to === "function"
-      ? props.to(router.urls as Route.UrlBuilderLoose)
+      ? props.to(router.urls as Route.UrlBuilder<A>)
       : props.to;
   return React.createElement(
     "a",
     {
       href,
       className: props.className,
+      title: props.title,
+      "data-kind": props["data-kind"],
+      "aria-current": props["aria-current"],
       onClick: (event: React.MouseEvent<HTMLAnchorElement>) => {
+        props.onClick?.(event);
         if (
           event.defaultPrevented ||
           event.button !== 0 ||
@@ -238,6 +237,15 @@ export const Link = (props: {
  *
  * @public
  */
+const queryFromSearch = (search: string): Record<string, string> => {
+  if (search.length === 0) return {};
+  const out: Record<string, string> = {};
+  for (const [key, value] of new URLSearchParams(search)) {
+    out[key] = value;
+  }
+  return out;
+};
+
 export const Outlet = (): React.ReactElement | null => {
   const router = useRouter();
   const match = router.match;
@@ -245,7 +253,9 @@ export const Outlet = (): React.ReactElement | null => {
   if (match === undefined || handler === undefined) return null;
   const node = handler({
     params: match.params,
+    query: queryFromSearch(router.search),
     pathname: match.pathname,
+    href: router.href,
   });
   if (node === null || node === undefined || typeof node === "boolean") {
     return null;

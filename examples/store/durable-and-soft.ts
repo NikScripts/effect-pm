@@ -15,6 +15,7 @@ import { runNodeProgramOrExit } from "../shared/demo-harness";
 import { Duration, Effect, Layer, Schema } from "effect";
 import { DurableWorkPoolStore } from "../../src/DurableWorkPoolStore";
 import * as Store from "../../src/Store";
+import * as Hyperlink from "../../src/Hyperlink";
 import * as WorkPool from "../../src/WorkPool";
 import { SQLiteDurableWorkPoolStore } from "../../src/storage/sqlite";
 
@@ -54,9 +55,8 @@ const firstRuntime = Effect.gen(function* () {
   // @effect-diagnostics-next-line strictEffectProvide:off
   Effect.provide(
     WorkPool.layer(DurableQueue, {
-      autoStart: false,
       effect: (job) => Effect.logInfo(`should run after restart: ${job.id}`),
-    }).pipe(Layer.provideMerge(AppStore.layerMemory)),
+    }).pipe(Hyperlink.deferStart, Layer.provideMerge(AppStore.layerMemory)),
   ),
   Effect.scoped,
 );

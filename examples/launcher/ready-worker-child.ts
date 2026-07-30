@@ -14,7 +14,7 @@
 // ---cut---
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Effect, Layer, Schema } from "effect";
+import { Effect, Schema } from "effect";
 import * as Hyperlink from "../../src/Hyperlink";
 import * as Node from "../../src/Node";
 
@@ -69,7 +69,8 @@ const serve = (
             Hyperlink.serve(Jobs, { ping: Effect.succeed("jobs-ready") }),
           ] as const);
 
-    return yield* Layer.launch(
+    return yield* Node.launch(
+      worker,
       Node.http(worker, serves, {
         assumeToken,
       }),

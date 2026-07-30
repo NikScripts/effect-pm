@@ -165,7 +165,7 @@ export function nPipe(
   if (isHyperlinkTagArg(nodeOrServesOrTag)) {
     const tag = nodeOrServesOrTag;
     const resolved = resolveTagListenTarget(tag, options);
-    if (resolved._tag === "tagNodeError") {
+    if (resolved._tag === "TagNodeError") {
       return failListenTagNode({
         tag: resolved.tag,
         reason: resolved.reason,
@@ -176,7 +176,7 @@ export function nPipe(
     const { options: listenOptions, path: listenPath } = coerceIpcListenArg(
       resolved.addressArg as IpcListenArg | undefined,
     );
-    if (resolved._tag === "nameless") {
+    if (resolved._tag === "Nameless") {
       return requireWindows(nPipeNameless(list, listenOptions, listenPath));
     }
     const node = resolved.node;

@@ -8,9 +8,9 @@ link to **related examples** (often more than one). Full demos are under [`apps/
 
 | Layer | Path | Purpose |
 |-------|------|---------|
-| **Topics** | `work-pool/`, `gate/`, `daemon/`, `node/`, `fleet/`, `launcher/`, `readiness/`, `hyperlink/`, `logs/`, `store/`, `schedule/`, `polling/`, `config/`, `observe/` | One API shape per file — same names as the guides |
+| **Topics** | `work-pool/`, `gate/`, `daemon/`, `node/`, `fleet/`, `launcher/`, `readiness/`, `hyperlink/`, `logs/`, `store/`, `schedule/`, `polling/`, `config/`, `observe/`, `ui/` | One API shape per file — same names as the guides |
 | **Scenarios** | [`scenarios/`](./scenarios/) | Multi-file / multi-process compositions |
-| **Apps** | [`apps/`](./apps/) | TUI, web, dashboard, CLI, widgets (not 1:1 Twoslash yet) |
+| **Apps** | [`apps/`](./apps/) | TUI, web, dashboard, CLI, widgets, Router mini-docs (not 1:1 Twoslash yet) |
 | **Shared** | [`shared/`](./shared/) | Harness helpers |
 
 Living book: [docs/index.md](../docs/index.md) · [API Reference](https://hyperlink.cool/api/hyperlink-ts).
@@ -33,21 +33,28 @@ Living book: [docs/index.md](../docs/index.md) · [API Reference](https://hyperl
 | **WorkPool** | `priority-retry` → `named-lanes` → store / serve / durable / refill / metrics |
 | **Gate** | `gate/unit-and-input` → `store-readback` → `runtime-observer` → http-client → http-api |
 | **Daemon + Soft** | `daemon/store-auto-write` → `typed-failed-error` → serve / result / schedule / configure |
-| **Node & discovery** | `node/tag-addressed` → `tag-bound` → `clients` → addressless → nameless unix → `prototype` → `as-lookup` → nameless http/ws → `identity-coordinator` |
+| **Node & discovery** | `tag-addressed` → … → `identity-coordinator` → `ask-incumbent-takeover` → `drain-yield-refuse` → `handoff-ab-cutover` → `serve-handoff` → `policy-lookup-cutover` → `peers-layer-rebind` → `launch-shutdown` |
 | **Fleet glass** | `fleet/telemetry-glass` → `health-glass` → `shardmap-sessions` → edge examples |
-| **Launcher** | `launcher/minimal-up` → `handle-phases` → `lookup-membership` |
+| **Launcher** | `minimal-up` → `handle-phases` → `token-injection` → `ready-services` → `ready-timeout` → `lookup-membership` |
 | **Readiness** | `readiness/with-readiness` → `all-ready` → `monitored-dependency` → `degraded-health` |
 | **Logs** | `logs/live-bus` → `node-journal` → `hyperlink-logs` → `lineage-scope` → `levels` |
 | **Schedule / polling / config** | `pnpm run example:schedule-basics` → `example:schedule-controls` → `example:polling-sports` → `example:config-hot-swap` |
 | **Observe** | `observe-pack-demo` → `observe-recipes` → `observe-work-pool-pack` / daemon / gate packs · guide [Observe](../docs/guides/observe.md) |
 | **Scenarios** | `scenarios/multi-protocol-dual-serve` → `schedule-sync-from-db` → `serve-per-deps` → NWSL |
-| **Apps** | `pnpm run example:apps-tui` · `example:apps-web` (+ `example:apps-web-server`) · `example:apps-dashboard` · `example:apps-cli` |
+| **Apps** | `pnpm run example:apps-tui` · `example:apps-web` (+ `example:apps-web-server`) · `example:apps-dashboard` · `example:apps-cli` · `example:apps-router-docs` |
+| **UI Router** | [`ui/router-mini-docs.ts`](./ui/router-mini-docs.ts) + [`ui/group-nav.ts`](./ui/group-nav.ts) → [hub § UI](../docs/examples.md#ui) · `example:ui-group-nav` · browser `example:apps-router-docs` |
 
 ---
 
 ## Topic catalog
 
 Paths are under `examples/`. Script = `pnpm run example:<topic>-<kebab-file>` (see `package.json`).
+
+### Lifecycle — guide [Lifecycle](../docs/guides/lifecycle.md)
+
+| File | Teaches |
+|------|---------|
+| [`lifecycle/make-and-tools.ts`](./lifecycle/make-and-tools.ts) | `deferStart`, `Lifecycle.from` / `of`, `stop` → Off |
 
 ### WorkPool — guide [Work pools](../docs/guides/work-pools.md)
 
@@ -87,7 +94,7 @@ Paths are under `examples/`. Script = `pnpm run example:<topic>-<kebab-file>` (s
 | [`daemon/tag-schedule.ts`](./daemon/tag-schedule.ts) | `Daemon.schedule` on a tag |
 | [`daemon/configure.ts`](./daemon/configure.ts) | `Daemon.configure` layer patch |
 
-### Node — [Identity coordinator](../docs/guides/identity-coordinator.md) · [Fleets and peers](../docs/services/fleets-and-peers.md)
+### Node — [Identity coordinator](../docs/guides/identity-coordinator.md) · [Policy](../docs/guides/policy.md) · [Fleets and peers](../docs/services/fleets-and-peers.md)
 
 | File | Teaches |
 |------|---------|
@@ -100,7 +107,14 @@ Paths are under `examples/`. Script = `pnpm run example:<topic>-<kebab-file>` (s
 | [`node/prototype.ts`](./node/prototype.ts) | `Node.Prototype.make` |
 | [`node/as-lookup.ts`](./node/as-lookup.ts) | `Node.asLookup` |
 | [`node/identity-coordinator.ts`](./node/identity-coordinator.ts) | Router + workers + Lookup |
-| [`node/verify-connection.ts`](./node/verify-connection.ts) | `Hyperlink.verifyConnection` |
+| [`node/ask-incumbent-takeover.ts`](./node/ask-incumbent-takeover.ts) | Same `nodeKey` dial replace / `yieldRefuse` |
+| [`node/drain-yield-refuse.ts`](./node/drain-yield-refuse.ts) | `Node.drain` + yield refuse + `IncumbentAlive` |
+| [`node/handoff-ab-cutover.ts`](./node/handoff-ab-cutover.ts) | WorkPool baked A→B on `Node.shutdown` |
+| [`node/serve-handoff.ts`](./node/serve-handoff.ts) | Custom `serve(…, { handoff })` / `HandoffDeferred` |
+| [`node/policy-lookup-cutover.ts`](./node/policy-lookup-cutover.ts) | `Policy.provide` sticky + `Advice.prefer` early-move |
+| [`node/peers-layer-rebind.ts`](./node/peers-layer-rebind.ts) | Directory `peersLayer` hot-rebind |
+| [`node/launch-shutdown.ts`](./node/launch-shutdown.ts) | `Node.launch` exits on `Node.shutdown` |
+| [`node/verify-connection.ts`](./node/verify-connection.ts) | `verifyConnection` + `Policy.verify*` · [Client verify](../docs/guides/client-verify.md) |
 
 ### Fleet
 

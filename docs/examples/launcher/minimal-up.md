@@ -14,11 +14,13 @@
 **Hub:** [Examples → launcher](/docs/examples#launcher)
 
 > [!NOTE]
-> **Related examples:** [handle phases](/docs/launcher-handle-phases) · [ready services](/docs/launcher-ready-services) · [Lookup membership](/docs/launcher-lookup-membership)
+> **Related examples:** [handle phases](/docs/launcher-handle-phases) · [token injection](/docs/launcher-token-injection) · [Lookup membership](/docs/launcher-lookup-membership)  
+> **Guide:** [Launcher](/docs/launcher)
 
 ## What this shows
 
-`Launcher.up` performs spawn → Ready → handoff.
+`Launcher.up` = spawn → Ready → `Node.assume` handoff → launcher exits. Custody only —
+Directory membership is the child’s job afterward.
 
 {.twoslash include="examples/launcher/minimal-up.ts"}
 ``` ts

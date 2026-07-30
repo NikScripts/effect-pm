@@ -37,6 +37,9 @@ export const nav: ReadonlyArray<NavGroup> = [
       "fleets-and-peers",
       "readiness",
       "launcher",
+      "identity-coordinator",
+      "policy",
+      "lifecycle",
       "configuration",
     ],
   },
@@ -54,7 +57,7 @@ export const nav: ReadonlyArray<NavGroup> = [
   },
   {
     label: "Guides",
-    slugs: ["stores", "logs", "metrics", "identity-coordinator"],
+    slugs: ["stores", "logs", "metrics", "client-verify", "routing"],
   },
   {
     // Tentative group name — "Observe and Control" per the outline, may change.
@@ -62,6 +65,7 @@ export const nav: ReadonlyArray<NavGroup> = [
     slugs: [
       "observation-and-control",
       "dashboard",
+      "dashboard-compose",
       "react-components",
       "tui-cli",
     ],

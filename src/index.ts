@@ -160,6 +160,8 @@ export * as Lookup from "./Lookup";
 export * as Advice from "./Advice";
 export * as Directory from "./Directory";
 export * as Identity from "./Identity";
+export * as Policy from "./Policy";
+export * as Lifecycle from "./Lifecycle";
 export type {
   AnyDefaultMethod,
   AnyLocalMethod,

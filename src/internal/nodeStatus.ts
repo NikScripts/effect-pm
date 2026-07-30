@@ -30,6 +30,7 @@ import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import { FetchHttpClient } from "effect/unstable/http";
 import type { AddressedNode } from "./nodeCore";
 import * as Hyperlink from "../Hyperlink";
+import * as Policy from "../Policy";
 import { NodeUnreachable, type NodeStatusAccessors } from "./nodeCore";
 import { Relay as LogRelay } from "../Logs";
 import { LogEntrySchema } from "../LogEntry";
@@ -394,10 +395,11 @@ export const buildNodeStatusImpl = (options: {
         yield* options.closeListen;
       }
     }).pipe(Effect.withLogSpan("node.shutdown.handle"));
-    // While draining: always refuse (Locked #31). Otherwise ListenOptions.onYield / default accept.
+    // While draining: always refuse (Locked #31). Else ListenOptions.onYield → Policy.Yield.
+    const yieldPolicy = yield* Policy.Yield;
     const yieldEffect = Effect.gen(function* () {
       if ((yield* Ref.get(phase)) === "draining") return false;
-      return yield* (options.onYield ?? Effect.succeed(true));
+      return yield* (options.onYield ?? yieldPolicy);
     });
     return {
       status: statusSub,
@@ -460,7 +462,7 @@ export const nodeStatusAccessors = (
 ): NodeStatusAccessors => {
   const clientLayer = Hyperlink.client(NodeStatusTag).pipe(
     Layer.provide(Layer.succeed(RpcClient.Protocol, protocol)),
-    Layer.provide(Hyperlink.clientVerify(false)),
+    Policy.provide(Policy.verifyOff),
   );
   const toUnreachable = (cause: unknown) =>
     new NodeUnreachable({ node: NODE_STATUS_KEY, url: "node handle", cause });
@@ -506,5 +508,5 @@ export const httpClient = (url: string): Layer.Layer<NodeStatusTag> =>
 /** A status client for a specific addressed node (verify off — it IS the probe). @internal */
 export const client = (node: AddressedNode<unknown>) =>
   Hyperlink.client(NodeStatusTag, node).pipe(
-    Layer.provide(Hyperlink.clientVerify(false)),
+    Policy.provide(Policy.verifyOff),
   );

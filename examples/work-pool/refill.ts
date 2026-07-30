@@ -12,6 +12,7 @@
 
 // ---cut---
 import { Duration, Effect, Ref, Schema } from "effect";
+import * as Hyperlink from "../../src/Hyperlink";
 import { WorkPool } from "../../src";
 
 const PullJob = Schema.Struct({
@@ -37,7 +38,6 @@ const makeLive = (
   processed: Ref.Ref<ReadonlyArray<string>>,
 ) =>
   WorkPool.layer(PullQueue, {
-    autoStart: false,
     concurrency: 1,
     effect: (job) =>
       Ref.update(processed, (ids) => [...ids, job.id]).pipe(
@@ -60,7 +60,7 @@ const makeLive = (
           yield* queue.add(batch).pipe(Effect.orDie);
         }),
     },
-  });
+  }).pipe(Hyperlink.deferStart);
 
 const program = Effect.gen(function* () {
   const batches = yield* Ref.make<ReadonlyArray<ReadonlyArray<PullJob>>>([

@@ -9,6 +9,7 @@ import { GlossaryHover } from "../../islands/GlossaryHover.js";
 import { CodeCopy } from "../../islands/CodeCopy.js";
 import { ShortcutsHelp } from "../../islands/ShortcutsHelp.js";
 import { HoverGenProgress } from "../../islands/HoverGenProgress.js";
+import { urls } from "../../lib/siteRoutes.js";
 import { Effect } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import * as nodePath from "node:path";
@@ -55,7 +56,7 @@ export default async function BookLayout({ children }: { children: ReactNode }) 
             items: [
               {
                 slug: "",
-                href: "/docs/index",
+                href: urls.docs("index"),
                 title: "← All docs",
               },
             ],

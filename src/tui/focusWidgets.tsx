@@ -38,8 +38,23 @@ const LEVEL_COLOR: Record<string, string> = {
   Fatal: "red",
 };
 
-const statusOf = (phase: string, paused: boolean): Status =>
-  phase === "off" ? "off" : phase === "draining" ? "draining" : paused ? "paused" : "running";
+const statusOf = (lifecycleTag: string): Status =>
+  lifecycleTag === "Idle"
+    ? "idle"
+    : lifecycleTag === "Off"
+      ? "off"
+      : lifecycleTag === "Draining"
+        ? "draining"
+        : lifecycleTag === "Paused"
+          ? "paused"
+          : "running";
+
+const lifecycleTagOf = (
+  lifecycleR: AsyncResult.AsyncResult<{ readonly _tag: string }, unknown>,
+): string =>
+  AsyncResult.isSuccess(lifecycleR)
+    ? lifecycleR.value._tag ?? "Running"
+    : "Running";
 
 /** Node bind mark for focused panes. @public */
 export const NodeMark = (props: { readonly tag: unknown }): React.ReactElement | null => {
@@ -127,6 +142,7 @@ export const FocusedPriority = (props: {
   const renderBar = props.bar ?? ((hint) => hint);
   const bundle = Observe.use(tag, PriorityView.pack);
   const statusR = useAtomValue(bundle.status);
+  const lifecycleR = useAtomValue(bundle.lifecycle);
   const metricsR = useAtomValue(bundle.metrics);
   const logsR = useAtomValue(bundle.logs);
   const trendR = useAtomValue(bundle.trend);
@@ -135,14 +151,14 @@ export const FocusedPriority = (props: {
   const pause = useAtomSet(bundle.pause);
   const resume = useAtomSet(bundle.resume);
   const clear = useAtomSet(bundle.clear);
-  const shutdown = useAtomSet(bundle.shutdown);
+  const stop = useAtomSet(bundle.stop);
   useInput(
     (input) => {
       if (input === "s") start();
       else if (input === "p") pause();
       else if (input === "r") resume();
       else if (input === "c") clear();
-      else if (input === "x") shutdown();
+      else if (input === "x") stop();
     },
     { isActive: editMode && cmd === null },
   );
@@ -156,7 +172,8 @@ export const FocusedPriority = (props: {
   const lanes = s !== undefined ? Object.entries(s.sizes) : [];
   const pending = lanes.reduce((sum, [, n]) => sum + n, 0);
   const max = Math.max(1, ...lanes.map(([, n]) => n));
-  const status = statusOf(s?.phase ?? "running", s?.paused ?? false);
+  const lifecycleTag = lifecycleTagOf(lifecycleR);
+  const status = statusOf(lifecycleTag);
   const visible = Math.max(1, rows - 12 - barRows);
   const barWidth = Math.max(8, cols - 30);
 
@@ -172,7 +189,7 @@ export const FocusedPriority = (props: {
           <ControlKey k="p" label="pause" atom={bundle.pause} />
           <ControlKey k="r" label="resume" atom={bundle.resume} />
           <ControlKey k="c" label="clear" atom={bundle.clear} />
-          <ControlKey k="x" label="shutdown" atom={bundle.shutdown} />
+          <ControlKey k="x" label="stop" atom={bundle.stop} />
         </>
       ) : (
         <Text dimColor>Ctrl+E edit</Text>

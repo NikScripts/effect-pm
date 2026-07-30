@@ -2,7 +2,7 @@
   "name": "hyperlink-ts",
   "version": "0.9.0-beta.0",
   "packageManager": "pnpm@10.33.4",
-  "description": "Effect Hyperlink \u2014 location-transparent services for Effect. Define a Hyperlink once, run it on one runtime, and call it from another over RPC with the same typed Handle. Includes WorkPool, Daemon, Gate, stores, logs, and dashboards.",
+  "description": "Effect Hyperlink — location-transparent services for Effect. Define a Hyperlink once, run it on one runtime, and call it from another over RPC with the same typed Handle. Includes WorkPool, Daemon, Gate, stores, logs, and dashboards.",
   "keywords": [
     "effect",
     "hyperlink",
@@ -124,6 +124,14 @@
       "types": "./dist/Identity.d.ts",
       "default": "./dist/Identity.js"
     },
+    "./Policy": {
+      "types": "./dist/Policy.d.ts",
+      "default": "./dist/Policy.js"
+    },
+    "./Lifecycle": {
+      "types": "./dist/Lifecycle.d.ts",
+      "default": "./dist/Lifecycle.js"
+    },
     "./DynamicConfig": {
       "types": "./dist/DynamicConfig.d.ts",
       "default": "./dist/DynamicConfig.js"
@@ -187,6 +195,14 @@
     "./ui/Router": {
       "types": "./dist/ui/Router.d.ts",
       "default": "./dist/ui/Router.js"
+    },
+    "./ui/Router/waku": {
+      "types": "./dist/ui/RouterWaku.d.ts",
+      "default": "./dist/ui/RouterWaku.js"
+    },
+    "./ui/GroupNav": {
+      "types": "./dist/ui/GroupNav.d.ts",
+      "default": "./dist/ui/GroupNav.js"
     },
     "./ui/GroupView": {
       "types": "./dist/ui/GroupView.d.ts",
@@ -290,6 +306,7 @@
     "example:work-pool-history-metrics": "tsx examples/work-pool/history-metrics.ts",
     "example:work-pool-typed-success": "tsx examples/work-pool/typed-success.ts",
     "example:work-pool-configure": "tsx examples/work-pool/configure.ts",
+    "example:lifecycle-make-and-tools": "tsx examples/lifecycle/make-and-tools.ts",
     "example:daemon-store-auto-write": "tsx examples/daemon/store-auto-write.ts",
     "example:daemon-typed-failed-error": "tsx examples/daemon/typed-failed-error.ts",
     "example:daemon-serve-client": "tsx examples/daemon/serve-client.ts",
@@ -317,6 +334,12 @@
     "example:node-as-lookup": "tsx examples/node/as-lookup.ts",
     "example:node-identity-coordinator": "tsx examples/node/identity-coordinator.ts",
     "example:node-handoff-ab-cutover": "tsx examples/node/handoff-ab-cutover.ts",
+    "example:node-policy-lookup-cutover": "tsx examples/node/policy-lookup-cutover.ts",
+    "example:node-drain-yield-refuse": "tsx examples/node/drain-yield-refuse.ts",
+    "example:node-ask-incumbent-takeover": "tsx examples/node/ask-incumbent-takeover.ts",
+    "example:node-serve-handoff": "tsx examples/node/serve-handoff.ts",
+    "example:node-peers-layer-rebind": "tsx examples/node/peers-layer-rebind.ts",
+    "example:node-launch-shutdown": "tsx examples/node/launch-shutdown.ts",
     "example:handoff-ab-live": "tsx --tsconfig examples/apps/tui/tsconfig.json examples/apps/tui/handoff-ab-live.tsx",
     "example:node-verify-connection": "tsx examples/node/verify-connection.ts",
     "example:fleet-telemetry-glass": "tsx examples/fleet/telemetry-glass.ts",
@@ -380,6 +403,9 @@
     "example:apps-web": "vite --config examples/apps/web/vite.config.ts examples/apps/web",
     "example:apps-web-server": "tsx examples/apps/web/server.ts",
     "example:apps-view-compose": "vite --config examples/apps/view-compose/vite.config.ts",
+    "example:apps-router-docs": "vite --config examples/apps/router-docs/vite.config.ts",
+    "example:ui-router-mini-docs": "tsx examples/ui/router-mini-docs.ts",
+    "example:ui-group-nav": "tsx examples/ui/group-nav.ts",
     "example:apps-cli": "tsx examples/apps/cli/counter-cli.ts",
     "example:apps-cli-manager": "tsx examples/apps/cli/manager-cli.ts",
     "example:apps-tui": "tsx --tsconfig examples/apps/tui/tsconfig.json examples/apps/tui/counter-tui.tsx",
@@ -422,9 +448,13 @@
     "ioredis": "^5.7.0",
     "react": ">=18",
     "react-dom": ">=18",
-    "recharts": ">=2"
+    "recharts": ">=2",
+    "waku": ">=1.0.0-beta.3"
   },
   "peerDependenciesMeta": {
+    "waku": {
+      "optional": true
+    },
     "recharts": {
       "optional": true
     },
@@ -487,6 +517,7 @@
     "typescript-eslint": "^8.59.3",
     "vite": "^6.3.5",
     "vitest": "^4.1.5",
+    "waku": "1.0.0-beta.3",
     "web-tree-sitter": "0.25.10",
     "ws": "^8.21.0"
   },

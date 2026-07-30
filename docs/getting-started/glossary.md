@@ -65,10 +65,59 @@ HyperService runs locally or across a network.
 ## Node
 
 A named runtime endpoint, carrying the address at which its HyperServices can be reached. Served
-HyperServices find one another through the Nodes they share.
+HyperServices find one another through the Nodes they share. Node plane: `Node.drain` /
+`Node.shutdown` / `Node.launch` — see [Identity coordinator](/docs/identity-coordinator#node-lifecycle-drain--shutdown--launch).
+HyperService plane (WorkPool / Daemon badge + `start` / `stop`): [Lifecycle](/docs/lifecycle).
 
 {.draft}
 ## Cross-runtime Service
 
 A Hyperlink Service defined once and reached through the same Tag wherever it runs — in the same
 process, served over RPC, or across the network.
+
+## Lookup
+
+Control-plane Node that hosts Identity, Directory, and Advice. Listens pipe
+`Lookup.client` / `Lookup.layer` to advertise; clients dial with `Hyperlink.lookupClient`.
+Guide: [Identity coordinator](/docs/identity-coordinator).
+
+## Identity
+
+Exclusive claim at Lookup — one live winner for a stamped HyperService (the “brain”). Sibling
+module: `import * as Identity from "hyperlink-ts/Identity"`.
+
+## Directory
+
+Membership table at Lookup — who advertises which HyperServices and on which dial. Sibling
+module: `import * as Directory from "hyperlink-ts/Directory"`.
+
+## Advice
+
+Soft placement hint (`Advice.prefer`) for clients when Identity missed and Directory has
+multiple rows. Sibling module: `import * as Advice from "hyperlink-ts/Advice"` — never
+`Lookup.Advice.*`.
+
+## Policy
+
+Composable Layer fragments for dial sticky / stream gap / cold pick, client verify, advertise
+conflict, and yield. `import * as Policy from "hyperlink-ts/Policy"`. Guide: [Policy](/docs/policy).
+
+## Launcher
+
+Short-lived OS custody bring-up: spawn → Ready → `Node.assume` → exit. Not membership — that
+is Lookup after the child assumes. Guide: [Launcher](/docs/launcher).
+
+## lookupClient
+
+`Hyperlink.lookupClient(Tag)` — client Layer that resolves the dial target from Lookup
+(Directory + Advice + Policy), without naming a Node.
+
+## Handoff
+
+Two different words:
+
+- **Custody** — Launcher `Handle.handoff` / `Node.assume` (“I own myself; launcher may exit”)
+- **Migration** — `Hyperlink.serve(…, { handoff })` / WorkPool `releaseEnqueueHandoff` during
+  `Node.shutdown` (move HyperService work A→B)
+
+Do not collapse them. Guide: [Identity coordinator](/docs/identity-coordinator).

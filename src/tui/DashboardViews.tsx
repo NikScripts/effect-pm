@@ -22,6 +22,7 @@ import {
   isTelemetryTag,
   type QueueTag,
 } from "../ui/data";
+import * as Route from "../ui/Route";
 import * as Router from "../ui/Router";
 import * as View from "../ui/View";
 import * as ApiMetricsView from "../ui/ApiMetricsView";
@@ -63,8 +64,23 @@ import {
   type View as QueueSnapshot,
 } from "./queueWidget";
 
-const statusOf = (phase: string, paused: boolean): Status =>
-  phase === "off" ? "off" : phase === "draining" ? "draining" : paused ? "paused" : "running";
+const statusOf = (lifecycleTag: string): Status =>
+  lifecycleTag === "Idle"
+    ? "idle"
+    : lifecycleTag === "Off"
+      ? "off"
+      : lifecycleTag === "Draining"
+        ? "draining"
+        : lifecycleTag === "Paused"
+          ? "paused"
+          : "running";
+
+const lifecycleTagOf = (
+  lifecycleR: AsyncResult.AsyncResult<{ readonly _tag: string }, unknown>,
+): string =>
+  AsyncResult.isSuccess(lifecycleR)
+    ? lifecycleR.value._tag ?? "Running"
+    : "Running";
 
 // ── cards ───────────────────────────────────────────────────────────────────
 
@@ -207,6 +223,7 @@ const QueueDetailPanel = (props: {
 }): React.ReactElement => {
   const bundle = Observe.use(props.tag, WorkPoolView.pack);
   const statusR = useAtomValue(bundle.status);
+  const lifecycleR = useAtomValue(bundle.lifecycle);
   const metricsR = useAtomValue(bundle.metrics);
   const trendR = useAtomValue(bundle.trend);
   const statusOpt = AsyncResult.isSuccess(statusR) ? statusR.value : Option.none();
@@ -215,9 +232,10 @@ const QueueDetailPanel = (props: {
   const m = Option.isSome(metricsOpt) ? metricsOpt.value : undefined;
   const trend = AsyncResult.isSuccess(trendR) ? trendR.value : [];
   const sizes: Record<Priority, number> = s?.sizes ?? { high: 0, normal: 0, low: 0 };
+  const lifecycleTag = lifecycleTagOf(lifecycleR);
   const snapshot: QueueSnapshot = {
     name: props.name,
-    status: statusOf(s?.phase ?? "running", s?.paused ?? false),
+    status: statusOf(lifecycleTag),
     sizes,
     pending: sizes.high + sizes.normal + sizes.low,
     completed: s?.completed ?? 0,
@@ -283,7 +301,7 @@ const PoolPageView: View.View = (props) => {
   const nav = Router.useRouter();
   const bundle = Observe.use(props.tag, WorkPoolView.pack);
   const logsR = useAtomValue(bundle.logs);
-  if (nav.view !== "logs") return null;
+  if (Route.viewOf(Route.targetOf(nav.match)) !== "logs") return null;
   const logs = AsyncResult.isSuccess(logsR) ? logsR.value : [];
   return (
     <Box flexDirection="column">
@@ -299,7 +317,8 @@ const DaemonPageView: View.View = (props) => {
   const bundle = Observe.use(props.tag, DaemonView.pack);
   const logsR = useAtomValue(bundle.logs);
   const scheduleR = useAtomValue(bundle.schedule);
-  if (nav.view === "logs") {
+  const view = Route.viewOf(Route.targetOf(nav.match));
+  if (view === "logs") {
     const logs = AsyncResult.isSuccess(logsR) ? logsR.value : [];
     return (
       <Box flexDirection="column">
@@ -308,7 +327,7 @@ const DaemonPageView: View.View = (props) => {
       </Box>
     );
   }
-  if (nav.view === "schedule") {
+  if (view === "schedule") {
     const entries = AsyncResult.isSuccess(scheduleR) ? scheduleR.value : [];
     return (
       <Box flexDirection="column">

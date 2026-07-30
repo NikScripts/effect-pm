@@ -13,7 +13,8 @@ How a HyperService is defined, served, and meshed across nodes. Covers the tag/l
 
 A HyperService splits cleanly in two. The **tag** carries the wire contract — the `payload` / `success` /
 `error` schemas — and nothing else; it is the wire SSOT and the thing a client (even a browser)
-imports. The **layer** carries the runtime — the `effect` worker, `polling`, `autoStart`. Never cross
+imports. The **layer** carries the runtime — the `effect` worker, `polling`, optional
+`Hyperlink.deferStart`. Never cross
 them: schemas never move into layer config (that breaks the wire SSOT and RPC safety), and the worker
 never moves onto the tag (that drags the engine into the light contract). Derived UI or observe
 surfaces are helpers that take the tag (*Principles → Handles stay thin*), not methods on it.
@@ -23,7 +24,8 @@ surfaces are helpers that take the tag (*Principles → Handles stay thin*), not
 class Mail extends WorkPool.Tag<Mail>()("@acme/Mail", Job) {}
 
 // runtime — in the layer
-WorkPool.layer(Mail, { effect: handleJob, autoStart: true })
+WorkPool.layer(Mail, { effect: handleJob })
+  .pipe(Hyperlink.deferStart) // optional — idle until `start`
 ```
 
 ``` ts
@@ -238,7 +240,7 @@ into a peer to decide your own readiness cascades one node's failure into its ne
 // ✅ derived from this instance's own status
 class Prices extends WorkPool.Tag<Prices>()("app/Prices", Job)
   .pipe(Hyperlink.withReadiness((svc) =>
-    Effect.map(svc.status.get, (s) => s.phase === "running"),
+    Effect.map(svc.lifecycle.get, (s) => s._tag === "Running"),
   )) {}
 
 // ❌ readiness that hops to peers — a down neighbour drags this node down

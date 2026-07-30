@@ -33,7 +33,6 @@
 import { Context } from "effect";
 import {
   asRoutes as asRoutesImpl,
-  type AsRoutesEffect,
   type AsRoutesOptions,
 } from "./internal/groupAsRoutes";
 
@@ -87,20 +86,20 @@ export const isGroup = (
   (typeof x === "object" || typeof x === "function") && x !== null && "members" in x;
 
 /**
- * Turn a Group tree into an Effect of {@link ./ui/Route} destinations.
- * Compose with `Route.group(…).fromEffect(…)` — Route/Router never take a Group tag:
+ * Turn a Group tree into a **typed** Effect of {@link ./ui/Route} destinations.
+ * Compose with `Route.group(…).fromEffect(…)` — UrlBuilder keeps member paths:
  *
  * ```ts
  * const site = Route.make("site").add(
  *   Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub)),
  * )
- * Router.history(site)
+ * Route.urlBuilder(site).Nwsl.HttpApi()
+ * Router.make(site, "Memory").to((u) => u.nodeHealth("a"))
  * ```
  *
  * @category constructors
  * @public
  */
-export const asRoutes: (
-  root: { readonly key: string; readonly members: Record<string, unknown> },
-  options?: AsRoutesOptions,
-) => AsRoutesEffect = asRoutesImpl;
+export const asRoutes: typeof asRoutesImpl = asRoutesImpl;
+
+export type { AsRoutesOptions };

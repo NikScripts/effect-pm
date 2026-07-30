@@ -219,7 +219,7 @@ const REFS: Record<string, Refs> = {
 /** One row of the fleet table — live status + headline metrics per queue. */
 export interface FleetRow {
   readonly id: string;
-  readonly phase: string;
+  readonly lifecycle: string;
   readonly paused: boolean;
   readonly pending: number;
   readonly completed: number;
@@ -234,7 +234,7 @@ const patchFleet = (id: string, patch: Partial<FleetRow>): Effect.Effect<void> =
   SubscriptionRef.update(fleetRef, (f) => {
     const prev = f[id] ?? {
       id,
-      phase: "running",
+      lifecycle: "running",
       paused: false,
       pending: 0,
       completed: 0,
@@ -285,13 +285,17 @@ const daemonsFor = <Id extends AllQueues>(
       ),
     );
     yield* Effect.forkDetach(
+      Stream.runForEach(q.lifecycle.changes, (lc) =>
+        patchFleet(id, { lifecycle: lc._tag.toLowerCase() }),
+      ),
+    );
+    yield* Effect.forkDetach(
       Stream.runForEach(q.status.changes, (s) =>
         Effect.gen(function* () {
           const pending = s.sizes.high + s.sizes.normal + s.sizes.low;
           yield* SubscriptionRef.set(refs.statusRef, s);
           yield* SubscriptionRef.update(refs.trendRef, (acc) => [...acc, pending].slice(-40));
           yield* patchFleet(id, {
-            phase: s.phase,
             paused: s.paused,
             pending,
             completed: s.completed,
@@ -352,7 +356,7 @@ const bundle = <Id extends AllQueues>(tag: QueueTag<Id>, refs: Refs) => ({
   pause: () => void managed.runFork(Effect.flatMap(tag, (q) => q.pause)),
   resume: () => void managed.runFork(Effect.flatMap(tag, (q) => q.resume)),
   clear: () => void managed.runFork(Effect.flatMap(tag, (q) => q.clear)),
-  shutdown: () => void managed.runFork(Effect.flatMap(tag, (q) => q.shutdown)),
+  stop: () => void managed.runFork(Effect.flatMap(tag, (q) => q.stop)),
 });
 
 export type QueueBundle = ReturnType<typeof bundle>;

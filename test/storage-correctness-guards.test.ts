@@ -198,8 +198,7 @@ describe("storage correctness — WorkPool Soft override parity", () => {
         Effect.gen(function* () {
           const live = WorkPool.layer(Jobs, {
             effect: () => Effect.void,
-            autoStart: true,
-          }).pipe(Layer.provideMerge(QueueStore.layer({ filename })));
+                      }).pipe(Layer.provideMerge(QueueStore.layer({ filename })));
           yield* Effect.gen(function* () {
             const q = yield* Jobs;
             yield* q.add({ id: "j1" });
@@ -235,8 +234,7 @@ describe("storage correctness — WorkPool Soft override parity", () => {
           const live = Layer.merge(
             WorkPool.layer(Jobs, {
               effect: () => Effect.void,
-              autoStart: true,
-            }),
+                          }),
             QueueStore.layer({ filename }),
           );
           yield* Effect.gen(function* () {
@@ -348,8 +346,7 @@ describe("storage correctness — Priority Soft override parity", () => {
               laneCount: 2,
               namedLanes: { interactive: 0, batch: 1 },
               effect: () => Effect.void,
-              autoStart: true,
-            }).pipe(Layer.provideMerge(PriorityStore.layer({ filename })));
+                          }).pipe(Layer.provideMerge(PriorityStore.layer({ filename })));
             yield* Effect.gen(function* () {
               const q = yield* CustomJobs;
               yield* q.add({ id: "c1" }, "interactive");
@@ -394,8 +391,7 @@ describe("storage correctness — Priority Soft override parity", () => {
                 laneCount: 2,
                 namedLanes: { interactive: 0, batch: 1 },
                 effect: () => Effect.void,
-                autoStart: true,
-              }),
+                              }),
               PriorityStore.layer({ filename }),
             );
             yield* Effect.gen(function* () {

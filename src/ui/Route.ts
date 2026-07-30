@@ -25,9 +25,13 @@
  * )
  *
  * Route.urlBuilder(site).home()
+ * Route.urlBuilder(site).user("42", { query: { tab: "bio" } })
  * Router.history(site)
  * // <Router.Outlet /> renders the matched handle
  * ```
+ *
+ * Path params are **positional** on {@link urlBuilder} (`urls.user("42")`);
+ * pass `{ query }` last when you need `?x=y`.
  *
  * @see docs/handoffs/ui-routes-dream.md
  */
@@ -51,7 +55,11 @@ import * as catalog from "../internal/uiRoutes";
  */
 export type HandleArgs = {
   readonly params: Record<string, string>;
+  /** Decoded `?` query pairs (empty object when none). */
+  readonly query: Record<string, string>;
   readonly pathname: string;
+  /** `pathname` + search (`/users/1?tab=bio`). */
+  readonly href: string;
 };
 
 /**
@@ -110,29 +118,47 @@ export const handleOf = (hit: Match | undefined): Handle | undefined =>
 // =============================================================================
 
 /**
- * Optional destination metadata for Group-built dashboards (`selected` / `view`).
+ * Optional destination metadata from {@link ../Group.asRoutes}.
  * Not required for ordinary {@link handle} routing.
  *
- * @public
- */
-export class Target extends Context.Service<
-  Target,
-  {
-    readonly keys: ReadonlyArray<string>;
-    readonly member: unknown | null;
-    readonly view: string | undefined;
-    readonly kind: "group" | "leaf" | "leafView" | "health";
-  }
->()("hyperlink-ts/ui/Route/Target") {}
-
-/**
- * Optional dashboard Group root — stamped by
- * `Route.group(…).fromEffect(Group.asRoutes(…))`. Router reads this; it never
- * accepts a Group tag as a constructor argument.
+ * Discriminated by `_tag`. `view` on {@link LeafView} / {@link Health} is the
+ * URL path segment (`"logs"` / `"schedule"` / `"health"`) — lowercase on purpose.
  *
  * @public
  */
-export { DashboardRoot } from "../internal/asRoutesBrand";
+export type TargetValue =
+  | {
+      readonly _tag: "Group";
+      readonly keys: ReadonlyArray<string>;
+      readonly member: unknown;
+    }
+  | {
+      readonly _tag: "Leaf";
+      readonly keys: ReadonlyArray<string>;
+      readonly member: unknown;
+    }
+  | {
+      readonly _tag: "LeafView";
+      readonly keys: ReadonlyArray<string>;
+      readonly member: unknown;
+      /** Path segment (`logs` / `schedule`). */
+      readonly view: string;
+    }
+  | {
+      readonly _tag: "Health";
+      readonly keys: ReadonlyArray<string>;
+      /** Path segment (`health`) when present. */
+      readonly view?: string | undefined;
+    };
+
+/**
+ * Annotation service for {@link TargetValue} on a matched destination.
+ *
+ * @public
+ */
+export class Target extends Context.Service<Target, TargetValue>()(
+  "hyperlink-ts/ui/Route/Target",
+) {}
 
 /** Absolute pathname template (`/health`, `/users/:id`). @public */
 export type Path = endpoint.Path;
@@ -294,13 +320,6 @@ export const match: (
 ) => Option.Option<Match> = catalog.match;
 
 /**
- * Destination metadata shape stamped via {@link Target}.
- *
- * @public
- */
-export type TargetValue = Context.Service.Shape<typeof Target>;
-
-/**
  * Read {@link Target} from a match hit (Group dashboards / annotated destinations).
  *
  * @public
@@ -311,7 +330,39 @@ export const targetOf = (hit: Match | undefined): TargetValue | undefined =>
     : Context.getOrUndefined(hit.annotations, Target);
 
 /**
- * Typed URL builder for a catalog (`HttpApiClient.urlBuilder` analogue).
+ * Path-segment view on a {@link TargetValue} (`logs` / `schedule` / `health`), if any.
+ *
+ * @public
+ */
+export const viewOf = (target: TargetValue | undefined): string | undefined => {
+  if (target === undefined) return undefined;
+  if (target._tag === "LeafView") return target.view;
+  if (target._tag === "Health") return target.view;
+  return undefined;
+};
+
+/**
+ * Selected **leaf** member on a {@link TargetValue} (`Leaf` / `LeafView`), or
+ * `null` for Group index / Health / missing. Matches GroupNav `selected`.
+ *
+ * @public
+ */
+export const memberOf = (target: TargetValue | undefined): unknown | null => {
+  if (target === undefined) return null;
+  if (target._tag === "Leaf" || target._tag === "LeafView") return target.member;
+  return null;
+};
+
+/**
+ * Typed URL builder for a catalog — path segments as args, optional `{ query }`.
+ *
+ * @example
+ * ```ts
+ * urls.home()
+ * urls.node("app/NodeA")
+ * urls.search({ query: { q: "WorkPool" } })
+ * urls.api.symbol("effect", "Effect", "succeed", { query: { src: "1" } })
+ * ```
  *
  * @public
  */
@@ -321,10 +372,17 @@ export type UrlBuilder<A extends catalog.ApiConstraint = catalog.ApiConstraint> 
 /** Loose builder when the catalog type is erased. @public */
 export type UrlBuilderLoose = catalog.UrlBuilderLoose;
 
+/** Erased url method (`...pathArgs`, optional `{ query }`). @public */
+export type UrlMethodLoose = catalog.UrlMethodLoose;
+
+/** Trailing `{ query }` options for {@link urlBuilder} methods. @public */
+export type UrlQueryOptions = catalog.UrlQueryOptions;
+
 /**
  * Build the typed URL surface for a catalog.
  *
- * Pass `{ baseUrl }` to prefix absolute URLs (`HttpApiClient.urlBuilder` parity).
+ * Path params are positional (template order). Pass `{ query }` last for `?x=y`.
+ * Pass `{ baseUrl }` to prefix absolute URLs.
  *
  * @public
  */

@@ -23,6 +23,7 @@ import { PackageInstall } from "../islands/PackageInstall.js";
 import { CopyButton } from "../islands/CopyButton.js";
 import { type ChapterMeta, expandScopes, parseChapter } from "./standards-manifest.js";
 import { buildTermIndex, slugify } from "./glossary.js";
+import { resolveBookHref, urls } from "./siteRoutes.js";
 
 /** Per-chapter island slots — filled by `loadDemoIslands` before `toReact`. */
 let demoIslands: {
@@ -175,7 +176,12 @@ const linkifyText = (text: string): React.ReactNode => {
     if (slug === undefined || linkedSlugs.has(slug)) continue; // already linked → leave as text
     linkedSlugs.add(slug);
     if (m.index > last) parts.push(text.slice(last, m.index));
-    parts.push(React.createElement("a", { key: keySeq++, href: `/docs/glossary#${slug}` }, m[0]));
+    parts.push(
+      React.createElement("a", {
+        key: keySeq++,
+        href: `${urls.docs("glossary")}#${slug}`,
+      }, m[0]),
+    );
     last = m.index + m[0].length;
   }
   if (parts.length === 0) return text;
@@ -245,7 +251,8 @@ const toReact = (n: any): React.ReactNode => {
       suppress++;
       const inner = kids(n);
       suppress--;
-      return h("a", { key: keySeq++, href: n.destination }, inner);
+      const dest = String(n.destination ?? "");
+      return h("a", { key: keySeq++, href: resolveBookHref(dest) }, inner);
     }
     case "bullet_list": return h("ul", { key: keySeq++ }, kids(n));
     case "ordered_list": return h("ol", { key: keySeq++ }, kids(n));
@@ -358,7 +365,7 @@ export interface NavItem {
 // Book URLs are flat: `docs/guides/queues.md` and `docs/examples/queue/foo.md` become
 // `/docs/queues` and `/docs/foo` (folder is organization only). Basename must be unique
 // site-wide — see the collision guard in `content.ts`.
-const hrefFor = (slug: string, _group: string): string => `/docs/${slug}`;
+const hrefFor = (slug: string, _group: string): string => urls.docs(slug);
 
 // Resolve one slug to a nav item; the title comes from the page's own block (SSOT).
 // A parse error falls back to the slug so one bad file can't blank the nav.
@@ -393,14 +400,28 @@ export const navGroups = async (): Promise<ReadonlyArray<NavGroup>> => {
   for (const g of nav) {
     // A direct-link lone entry (e.g. Examples → /docs/examples): one synthetic item, no slug resolution.
     if (g.href !== undefined) {
-      groups.push({ label: g.label, items: [{ slug: "", href: g.href, title: g.label }], lone: true });
+      groups.push({
+        label: g.label,
+        items: [
+          {
+            slug: "",
+            href: resolveBookHref(g.href),
+            title: g.label,
+          },
+        ],
+        lone: true,
+      });
       continue;
     }
     // A group of direct route links (e.g. API Reference → per-package pages): synthetic items.
     if (g.links !== undefined) {
       groups.push({
         label: g.label,
-        items: g.links.map((l) => ({ slug: "", href: l.href, title: l.label })),
+        items: g.links.map((l) => ({
+          slug: "",
+          href: resolveBookHref(l.href),
+          title: l.label,
+        })),
       });
       continue;
     }

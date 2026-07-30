@@ -11,6 +11,7 @@ import * as Node from "../src/Node";
 import * as Observe from "../src/Observe";
 import * as WorkPool from "../src/WorkPool";
 import * as Daemon from "../src/Daemon";
+import * as GroupNav from "../src/ui/GroupNav";
 import * as Route from "../src/ui/Route";
 import * as Router from "../src/ui/Router";
 import * as View from "../src/ui/View";
@@ -54,12 +55,34 @@ describe("RuntimeProvider + Observe.use", () => {
   });
 
   it("compose accepts a live Router.Service", () => {
-    const router = Router.make(hubSite, "memory");
-    router.open(Jobs);
-    const ui = View.compose({ views, router });
+    const router = Router.make(hubSite, "Memory");
+    GroupNav.open(Hub, router, Jobs);
+    const ui = View.compose({ views, router, group: Hub });
     expect(ui.router).toBe(router);
     expect(ui.router.pathname).toBe("/Jobs");
-    expect(ui.router.selected).toBe(Jobs);
+    expect(GroupNav.state(Hub, ui.router).selected).toBe(Jobs);
+  });
+
+  it("compose without a Group leaves Grid empty and Outlet route-only", () => {
+    const site = Route.make("plain").add(
+      Route.get("handled", "/handled").pipe(
+        Route.handle(() => React.createElement("span", null, "handled")),
+      ),
+    );
+    const ui = View.compose({
+      views,
+      router: Router.memory(site),
+    });
+    ui.router.go("/handled");
+    const html = renderToString(
+      React.createElement(
+        ui.Provider,
+        null,
+        React.createElement(ui.Grid),
+        React.createElement(ui.Outlet),
+      ),
+    );
+    expect(html).toBe("<span>handled</span>");
   });
 
   it("Observe.use reads RuntimeProvider", () => {

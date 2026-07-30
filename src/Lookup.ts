@@ -58,20 +58,18 @@ import {
   ResolveRequest,
   DuplicateIdentity,
 } from "./Identity";
-import type { AnyNode, OnConflict, OnConflictResolved } from "./internal/nodeCore";
-import {
-  asLookup,
-  Tag as NodeTag,
-  onConflictOf,
-  resolveOnConflict,
-} from "./internal/nodeCore";
+import type { AnyNode } from "./internal/nodeCore";
+import { asLookup, Tag as NodeTag } from "./internal/nodeCore";
+import type { OnConflict, OnConflictResolved } from "./Policy";
+import { onConflictOf, resolveOnConflict } from "./Policy";
+import * as Policy from "./Policy";
 import { connectIpc } from "./internal/node";
 import { ipcServer } from "./internal/nodeIpcServer";
 import * as internal from "./internal/lookup";
 
-/** Wire + resolve helpers re-exported for apps that stamp policies on nodes. @public */
-export type { OnConflict, OnConflictResolved };
-export { resolveOnConflict };
+/** Wire + resolve helpers — SSOT is {@link Policy}. @public */
+export type { OnConflict, OnConflictResolved } from "./Policy";
+export { resolveOnConflict } from "./Policy";
 
 // Wire schemas + sugars from sibling modules (Tags stay on Advice/Directory/Identity).
 export {
@@ -250,7 +248,7 @@ const incumbentAlive = (
     );
     const ctx = yield* Layer.build(
       Hyperlink.client(NodeStatusTag, target).pipe(
-        Layer.provide(Hyperlink.clientVerify(false)),
+        Policy.provide(Policy.verifyOff),
       ),
     );
     yield* Effect.gen(function* () {
@@ -291,7 +289,7 @@ const incumbentYield = (
     );
     const ctx = yield* Layer.build(
       Hyperlink.client(NodeStatusTag, target).pipe(
-        Layer.provide(Hyperlink.clientVerify(false)),
+        Policy.provide(Policy.verifyOff),
       ),
     );
     return yield* Effect.gen(function* () {
@@ -518,21 +516,21 @@ export const directoryAdvertiseLayer = (
       if (kind === undefined) {
         return;
       }
-      // Advertiser side: call-site → node stamp; leave `"inherit"` so Lookup finishes.
+      // Advertiser: call-site → node stamp → Policy.Conflict; leave `"inherit"` for Lookup.
       const callSite = options?.onConflict;
       const nodeStamp = onConflictOf(node);
-      const wireOnConflict: OnConflict =
-        callSite !== undefined && callSite !== "inherit"
-          ? callSite
-          : nodeStamp !== undefined && nodeStamp !== "inherit"
-            ? nodeStamp
-            : "inherit";
+      const ambient = yield* Policy.Conflict;
+      const wirePref: OnConflict =
+        [callSite, nodeStamp, ambient].find(
+          (pref): pref is OnConflictResolved =>
+            pref !== undefined && pref !== "inherit",
+        ) ?? "inherit";
       yield* dirOpt.value.advertise(
         new AdvertiseRequest({
           nodeKey: node.key,
           kind,
           serves: [...serves],
-          onConflict: wireOnConflict,
+          onConflict: wirePref,
           ...(typeof node.path === "string" ? { path: node.path } : {}),
           ...(typeof node.url === "string" ? { url: node.url } : {}),
         }),
@@ -579,7 +577,7 @@ export const client = (
   ) as any;
   return clients.pipe(
     Layer.provide(node.pipe(connectIpc(path))),
-    Layer.provide(Hyperlink.clientVerify(false)),
+    Policy.provide(Policy.verifyOff),
   ) as any;
 };
 

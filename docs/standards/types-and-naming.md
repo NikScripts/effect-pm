@@ -108,23 +108,28 @@ that hides a real mismatch.
 ## Classify by a structural field, never a brand
 
 Detect leaf-vs-group (and kind generally) with a narrow, `F`-independent structural check — a `kind`
-field — never a symbol brand or `extends AnyMethod`. No type-level branding.
+field — never a symbol brand or `extends AnyMethod`. No type-level branding. Owned `kind` string
+values are PascalCase (*Owned string literals are PascalCase*).
 
 ``` ts
 // ❌ bad — symbol brand / F-dependent test
 if (node[groupSym]) { /* … */ }
 
-// ✅ good — a plain structural discriminant
-if (node.kind === "group") { /* … */ }
+// ✅ good — a plain structural discriminant (PascalCase owned string)
+if (node.kind === "Group") { /* … */ }
 ```
 
 
 {#pascalcase-types-only .must appliesTo="src examples"}
 ## PascalCase only for types, classes, and namespaces
 
-PascalCase names a class, a type, a namespace, or a namespace-member factory (`Tag`, `Service`,
-`Schedule`). Nothing else. If it's a value you can pass around, it is not PascalCase — the sole
-exception is a factory that stands in for a namespace member.
+PascalCase names a **binding** that is a class, a type, a namespace, or a namespace-member factory
+(`Tag`, `Service`, `Schedule`). Nothing else among identifiers. If it's a value you can pass around,
+its binding is not PascalCase — the sole exception is a factory that stands in for a namespace
+member.
+
+This rule is about **TypeScript names**, not string *contents*. Owned string literals
+(`_tag`, modes, kinds, reasons) are PascalCase under *Owned string literals are PascalCase*.
 
 {#namespaced-short-vs-internal-full .must appliesTo="src examples"}
 ## Namespaced types are short; internal types use the full module prefix
@@ -154,10 +159,13 @@ alias there). Apps never import `src/internal/` directly.
 {#values-are-camelcase .must appliesTo="src examples"}
 ## Values are camelCase; UPPER_SNAKE only for magic constants
 
-Every value is camelCase: layers, schemas, symbol consts, and ordinary module constants and
-defaults. Reserve `UPPER_SNAKE_CASE` for the narrow set of fixed *magic* values Effect itself uses
-it for — external-protocol codes, regex/pattern literals, spec URIs, and low-level algorithmic magic
-numbers. A tunable default is a value, not a magic constant.
+Every **value binding** is camelCase: layers, schemas, symbol consts, and ordinary module constants
+and defaults. Reserve `UPPER_SNAKE_CASE` for the narrow set of fixed *magic* values Effect itself
+uses it for — external-protocol codes, regex/pattern literals, spec URIs, and low-level algorithmic
+magic numbers. A tunable default is a value, not a magic constant.
+
+This is the name of the binding (`defaultPollMs`), not the casing inside string literals — see
+*Owned string literals are PascalCase*.
 
 ``` ts
 // ❌ bad — an ordinary default is just a value
@@ -206,24 +214,64 @@ plain struct value for **inline or anonymous** shapes, where a class is just cer
 ## Layers read as layers
 
 Layers are camelCase. The canonical toolkit entrypoint is `layer` (and `layer*` variants like
-`layerMemory`); a composed or auxiliary layer takes a `*Layer` suffix (`clientVerify`, `peersLayer`).
-Either way the name says "layer."
+`layerMemory`); a composed or auxiliary layer takes a `*Layer` suffix (`peersLayer`). Policy
+fragments are values on `Policy` (`Policy.verifyOff`, `Policy.askIncumbent`) composed with
+`Policy.provide` / `Policy.layer`. Either way the name says "layer."
+
+{#owned-string-literals-pascalcase .must appliesTo="src examples"}
+## Owned string literals are PascalCase
+
+A string the package **owns** as a closed vocabulary is PascalCase: tagged-union `_tag`s, modes,
+kinds, reasons, and the same class of discriminants elsewhere.
+
+``` ts
+// ✅ owned discriminants — prefer `_tag` for closed sums
+{ readonly _tag: "Started" }
+{ readonly _tag: "Memory" | "History" | "Waku" }   // Router.Service
+{ readonly _tag: "Group" | "Leaf" | "LeafView" | "Health" } // Route.TargetValue
+{ readonly reason: "Waiting" | "WaitInterrupted" }
+
+// ❌ owned discriminants in other cases
+{ readonly _tag: "started" }           // camel
+{ readonly _tag: "memory" }            // lower
+{ readonly reason: "wait-interrupted" } // kebab
+{ readonly _tag: "gate.run.started" }  // dotted prefix
+```
+
+**Exception — preserve the referent.** When the string *is* or *embeds* something outside this
+vocabulary, keep that thing's case:
+
+| Referent | Keep as |
+|----------|---------|
+| URL / file path | `"/docs/work-pools"`, `"/health/*nodeId"` |
+| Package / import / subpath | `"waku/router/client"`, `"hyperlink-ts/ui/Router/waku"` |
+| Service / Context key already stamped | `"hyperlink-ts/WorkPool"`, `"app/Prices"` (see *Canonical ids*) |
+| Env / config key | `"SERVICE_URL"`, `"HYPERLINK_ASSUME_TOKEN"` |
+| DOM / HTML attribute | `"data-kind"`, `"aria-current"` |
+| External protocol token | History `"push"` / `"replace"`, HTTP `"GET"` |
+| Path-segment view on Target | `"logs"` / `"schedule"` / `"health"` (URL referent) |
+
+Owning a *mode about* Waku still uses `"Waku"` on our `Service._tag`; the import path and optional
+peer stay `"waku"`. Catalog route ids that become camelCase `urlBuilder` methods (`home`,
+`nodeHealth`) follow *Values are camelCase* — they name bindings, not tag vocabularies.
 
 {#discriminant-tags-pascalcase .must appliesTo="src examples"}
 ## Discriminant tags are PascalCase
 
-A tagged-union `_tag` value is PascalCase: `Started`, `Completed`, `Failed`, `Interrupted` — never
-kebab (`run-started`), dotted prefixes (`gate.run.started`), or a `Run*`-style prefix. The same
-rule applies to store state-transition `reason` strings (`Waiting`, `WaitInterrupted`, …). The
-tag names the case; it reads like the variant it is.
+The `_tag` case of *Owned string literals are PascalCase*: `Started`, `Completed`, `Failed`,
+`Interrupted` — never kebab, dotted prefixes, or a `Run*`-style prefix. Store state-transition
+`reason` strings (`Waiting`, `WaitInterrupted`, …) follow the same rule. The tag names the case; it
+reads like the variant it is.
 
 {#canonical-ids-slash-scoped .must appliesTo="src examples"}
 ## Canonical ids are slash-scoped
 
-A service or contract id is a slash-separated, package-scoped string with PascalCase segments:
-`hyperlink-ts/WorkPool`, `hyperlink-ts/Gate/HttpApiClient`. (CLI and remote
-surfaces additionally accept normalized kebab suffix aliases; an ambiguous suffix errors with the
-candidate list.)
+A service or contract id is a slash-separated, package-scoped string. **Preserve** the package name
+and any path/folder segments as they exist on disk or in `exports`
+(`hyperlink-ts`, `ui`, `Router/waku`). **Owned** type segments are PascalCase (`WorkPool`,
+`HttpApiClient`, `Router`): `hyperlink-ts/WorkPool`, `hyperlink-ts/Gate/HttpApiClient`,
+`hyperlink-ts/ui/Router`. (CLI and remote surfaces additionally accept normalized kebab suffix
+aliases; an ambiguous suffix errors with the candidate list.)
 
 {#name-for-what-it-is .must appliesTo="src examples"}
 ## Name for what a thing is, not who uses it

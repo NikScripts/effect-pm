@@ -89,19 +89,13 @@ const program = Effect.gen(function* () {
 
   yield* Layer.build(
     Node.unix(WorkerB, [
-      WorkPool.serve(Jobs, {
-        effect: () => Effect.void,
-        autoStart: false,
-      }),
+      WorkPool.serve(Jobs, { effect: () => Effect.void }).pipe(Hyperlink.deferStart),
     ]).pipe(Layer.provide(lookupClient)),
   );
 
   const aCtx = yield* Layer.build(
     Node.unix(WorkerA, [
-      WorkPool.serve(Jobs, {
-        effect: () => Effect.void,
-        autoStart: false,
-      }),
+      WorkPool.serve(Jobs, { effect: () => Effect.void }).pipe(Hyperlink.deferStart),
     ]).pipe(Layer.provide(lookupClient)),
   );
 

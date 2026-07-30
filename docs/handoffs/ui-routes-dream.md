@@ -1,6 +1,6 @@
-# UI Route + Router — real router
+# UI Route + Router — dream machine
 
-**Landed on `integration`.** Anyone can use it. Same building blocks for every app.
+**Landed on `integration`.** One vision API for every app — including the docs site (Waku-backed skin).
 
 ## How it works
 
@@ -9,14 +9,19 @@ const site = Route.make("site").add(
   Route.get("home", "/home").pipe(Route.handle(() => <Home />)),
   Route.get("user", "/users/:id").pipe(
     Route.params(Schema.Struct({ id: Schema.String })),
-    Route.handle(({ params }) => <User id={params.id} />),
+    Route.handle(({ params, query }) => (
+      <User id={params.id} tab={query.tab} />
+    )),
   ),
 )
 
-const router = Router.make(site, "history")
+const router = Router.make(site, "History")
 
 <Router.Provider value={router}>
   <Router.Link to={(u) => u.home()}>Home</Router.Link>
+  <Router.Link to={(u) => u.user("42", { query: { tab: "bio" } })}>
+    User
+  </Router.Link>
   <Router.Outlet />   // renders the matched Route.handle
 </Router.Provider>
 ```
@@ -24,15 +29,30 @@ const router = Router.make(site, "history")
 | Piece | Job |
 |--------|-----|
 | `Route.get` + `handle` | Declare path **and** what to render |
-| `Route.urlBuilder` | Typed URLs |
-| `Router` | Location / match / go |
-| `Router.Outlet` | Render the matched handle |
+| `Route.urlBuilder` | Typed URLs — **path segments as args**, optional `{ query }` last |
+| `Router` | Location / match / go (`pathname` + `search` / `href`) |
+| `Router.Outlet` | Render the matched handle (`params` + `query`) |
 
 ```text
-URL → Router.match → Route.handle(args) → React node
+URL → Router.match(pathname) → Route.handle({ params, query, href }) → React node
+urls.user("42", { query: { tab: "bio" } }) → /users/42?tab=bio
 ```
 
 That is the whole product story. No View registry required. No Group tag on Router.
+
+## Call shape (the dream)
+
+```ts
+urls.home()
+urls.docs("work-pools")
+urls.api.symbol("effect", "Effect", "succeed")
+urls.nodeHealth("app/NodeA", { query: { panel: "logs" } })
+// → /health/app/NodeA?panel=logs   (*nodeId splat keeps `/`)
+```
+
+Not `{ params: { chapter } }` — path keys are positional in template order.
+`:name` = one segment; `*name` = rest (slashes ok), must be last.
+Query is UI navigation only (no HTTP body).
 
 ## Catalog extras (optional)
 
@@ -40,17 +60,55 @@ That is the whole product story. No View registry required. No Group tag on Rout
 |------|------|
 | `Route.group` / `topLevel` | Nest / flatten URL builders |
 | `Route.addHttpApi` | Reuse Effect HttpApi paths |
-| `Group.asRoutes` + `fromEffect` | Generate destinations from a Group tree |
-| `Route.Target` / `DashboardRoot` | Dashboard metadata (`selected` / `view`) — optional |
+| `Group.asRoutes` + `fromEffect` | Generate destinations from a Group tree — **typed** UrlBuilder (`urls.Nwsl.HttpApi()`, `urls.nodeHealth(id)`) |
+| `Route.Target` / `GroupNav` | Optional Group dashboard state and URL helpers over a core Router |
 
-Group dashboards may still use Target + View skins in `DashboardShell`; ordinary apps use `handle` + `Outlet`.
+Group dashboards use `GroupNav.use(root)` with Target + View skins in `DashboardShell`; ordinary apps use `handle` + `Outlet`.
+
+## Docs site
+
+Same API. Waku file routes are **render SSOT**; `siteRoutes.catalog` is the typed nav SSOT (paths once; Waku templates derived) and is exhaustively checked against `pages.gen`. `Router.Outlet` is a no-op there. Skin adds `urls.api.symbol("effect", "Effect.succeed")` overload. See [`waku-site-routes-api.md`](./waku-site-routes-api.md).
+
+## One service, two layers
+
+Same typed contract (`Route` catalog, `urls`, `Link` / `to` / `go` / `Outlet`).
+
+| Layer | Entry | Install |
+|-------|-------|---------|
+| **Lite** | `hyperlink-ts/ui/Router` | `Router.make(api, "Memory"\|"History")` — no `waku` peer |
+| **Waku** | `hyperlink-ts/ui/Router/waku` | `Router.waku(api)` / `Router.layer.waku` → same `Service` via unified `Provider` |
+
+Not two routers — one `Service`, Waku adapted in. Companion entry only so lite never pulls optional `waku`. Dashboard uses `GroupNav` on **either** layer — not built into Router. Docs site skins the Waku entry (`setDefault` + no-op Outlet for file routes). Lite `make` is **not** re-exported from `Router/waku`.
+
+## Discriminants (landed)
+
+| Surface | Shape |
+|---------|--------|
+| `Router.Service` | `_tag: "Memory" \| "History" \| "Waku"` (no `mode`) |
+| Waku Provider input | `_tag: "WakuBinding"` + `api` + `urls` |
+| `Route.TargetValue` | `_tag: "Group" \| "Leaf" \| "LeafView" \| "Health"` + `viewOf` / `memberOf` |
+| Path tokens | `_tag: "Lit" \| "Param" \| "Splat"` |
+
+Public guide: [`docs/guides/routing.md`](../guides/routing.md).
 
 ## Runtime
 
 | Method | History |
 |--------|---------|
-| `go` / `to` / `open*` | **push** (default); `{ replace: true }` ok |
-| `up` / `toRoot` | **replace** |
+| `Router.go` / `to` | **push** (default); `{ replace: true }` ok — href may include `?query` |
+| `GroupNav.open*` | **push** to Group and health URLs |
+| `GroupNav.up` / `Router.toRoot` | **replace** |
 | `back` | memory stack / `history.back()` |
 
-`Router.memory` / `history` / `make` take a **Route catalog only**.
+`Router.memory` / `history` / `make` / `waku` take a **Route catalog only**.
+
+## Demo
+
+| Run | What |
+|-----|------|
+| `pnpm run example:ui-router-mini-docs` | Typed catalog + match (Twoslash SSOT) |
+| `pnpm run example:apps-router-docs` | Browser mini-docs on `handle` + `Outlet` (:5189) |
+| `pnpm run example:ui-group-nav` | GroupNav + Target tags |
+
+Doc pages: [`ui-router-mini-docs.md`](../examples/ui/ui-router-mini-docs.md) ·
+[`ui-group-nav.md`](../examples/ui/ui-group-nav.md).

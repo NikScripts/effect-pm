@@ -8,7 +8,9 @@
 import * as React from "react";
 import type { GlossaryEntry } from "../lib/docs-content.js";
 
-const MARK = "/docs/glossary#";
+import { urls } from "../lib/siteRoutes.js";
+
+const MARK = `${urls.docs("glossary")}#`;
 
 const slugOf = (href: string): string | null => {
   const i = href.indexOf(MARK);

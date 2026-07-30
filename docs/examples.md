@@ -12,7 +12,17 @@ Teaching scripts live under `examples/<topic>/`. Each form page Twoslash-`includ
 real `.ts` file (cuts hide harness noise) and carries a **Related examples** note with
 cross-links (often several) into neighboring forms and topics.
 
-Deep-link a topic: `#work-pool`, `#gate`, `#node`, `#observe`, `#logs`, `#store`, …
+Deep-link a topic: `#lifecycle`, `#work-pool`, `#gate`, `#node`, `#observe`, `#logs`, `#store`, `#ui`, …
+
+---
+
+## Lifecycle
+
+Guide: [Lifecycle](/docs/lifecycle)
+
+### [make + tools](/docs/lifecycle-make-and-tools)
+
+`examples/lifecycle/make-and-tools.ts` · `pnpm run example:lifecycle-make-and-tools`
 
 ---
 
@@ -128,7 +138,7 @@ Guide: [Daemon](/docs/daemons)
 
 ## Node & discovery
 
-Guide: [Node & discovery](/docs/identity-coordinator)
+Guides: [Identity coordinator](/docs/identity-coordinator) · [Policy](/docs/policy) · [Client verify](/docs/client-verify)
 
 ### [Tag with address](/docs/node-tag-addressed)
 
@@ -184,7 +194,32 @@ Guide: [Node & discovery](/docs/identity-coordinator)
 
 ### [A→B handoff cutover](/docs/node-handoff-ab-cutover)
 
-`examples/node/handoff-ab-cutover.ts` · `pnpm run example:node-handoff-ab-cutover`
+`examples/node/handoff-ab-cutover.ts` · `pnpm run example:node-handoff-ab-cutover` — WorkPool baked migration
+
+### [serve handoff](/docs/node-serve-handoff)
+
+`examples/node/serve-handoff.ts` · `pnpm run example:node-serve-handoff` — custom `{ handoff }` / `HandoffDeferred`
+
+### [drain yield refuse](/docs/node-drain-yield-refuse)
+
+`examples/node/drain-yield-refuse.ts` · `pnpm run example:node-drain-yield-refuse`
+
+### [askIncumbent takeover](/docs/node-ask-incumbent-takeover)
+
+`examples/node/ask-incumbent-takeover.ts` · `pnpm run example:node-ask-incumbent-takeover`
+
+### [Policy lookup cutover](/docs/node-policy-lookup-cutover)
+
+`examples/node/policy-lookup-cutover.ts` · `pnpm run example:node-policy-lookup-cutover`  
+Guide: [Policy](/docs/policy)
+
+### [peersLayer rebind](/docs/node-peers-layer-rebind)
+
+`examples/node/peers-layer-rebind.ts` · `pnpm run example:node-peers-layer-rebind`
+
+### [launch shutdown](/docs/node-launch-shutdown)
+
+`examples/node/launch-shutdown.ts` · `pnpm run example:node-launch-shutdown` — prefer `Node.launch` over `Layer.launch`
 
 ### [A→B handoff live (Ink TUI)](/docs/apps-tui-handoff-ab-live)
 
@@ -192,7 +227,7 @@ Guide: [Node & discovery](/docs/identity-coordinator)
 
 ### [verifyConnection](/docs/node-verify-connection)
 
-`examples/node/verify-connection.ts` · `pnpm run example:node-verify-connection`
+`examples/node/verify-connection.ts` · `pnpm run example:node-verify-connection` — tiers + `Policy.verify*`
 
 ---
 
@@ -470,6 +505,23 @@ Guide: [Observe recipes](/docs/observe)
 
 ---
 
+## UI
+
+Guide: [Routing](/docs/routing) · compose: [Dashboard compose](/docs/dashboard-compose)  
+Handoff (deep): [`ui-routes-dream.md`](./handoffs/ui-routes-dream.md)
+
+### [Router mini-docs](/docs/ui-router-mini-docs)
+
+`examples/ui/router-mini-docs.ts` · `pnpm run example:ui-router-mini-docs`  
+Browser: `pnpm run example:apps-router-docs` → <http://localhost:5189>
+
+### [GroupNav + Target](/docs/ui-group-nav)
+
+`examples/ui/group-nav.ts` · `pnpm run example:ui-group-nav`  
+Tagged `TargetValue`, `viewOf` / `memberOf`, health / logs / schedule.
+
+---
+
 ## Scenarios
 
 ### [multi-protocol dual serve](/docs/scenario-multi-protocol)
@@ -505,3 +557,4 @@ see [E5 apps plan](../handoffs/examples-apps-e5-plan.md) (handoff). Run via `pnp
 | CLI | `examples/apps/cli` | `example:apps-cli` |
 | Queue widget | `examples/apps/queue-widget` | `example:apps-queue-widget` |
 | View compose | `examples/apps/view-compose` | `example:apps-view-compose` |
+| Router mini-docs | `examples/apps/router-docs` | `example:apps-router-docs` (+ `example:ui-router-mini-docs`) |

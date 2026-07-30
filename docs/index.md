@@ -285,4 +285,20 @@ drop in when you need them:
 - **[`Gate`](/docs/gates)**: concurrency and rate limits at the boundary
 - **[`Telemetry`](/docs/telemetry)** · **[`FleetHealth`](/docs/fleet-health)**: glass over the mesh
 
+## When the fleet has Lookup
+
+Fixed `Hyperlink.nodes([…])` is enough for a known mesh. When **Lookup** owns placement —
+exclusive brains, Directory advertise, Advice prefer, A→B cutover — start here:
+
+| Need | Guide |
+|------|-------|
+| One brain, many hands | [Identity coordinator](/docs/identity-coordinator) |
+| Sticky dial / stream gap / conflict / yield | [Policy](/docs/policy) |
+| Fail-fast addressed clients | [Client verify](/docs/client-verify) |
+| OS spawn → Ready → assume → exit | [Launcher](/docs/launcher) |
+| Fleets, fixed vs Directory peers | [Fleets & Peers](/docs/fleets-and-peers) |
+
+Runnable track: [Examples → Node & discovery](/docs/examples#node) ·
+[Examples → Launcher](/docs/examples#launcher).
+
 Next: [Installation](/docs/install).

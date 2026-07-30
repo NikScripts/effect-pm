@@ -27,7 +27,6 @@ const initialStatus = {
   paused: false,
   inFlight: 0,
   completed: 0,
-  phase: "running" as const,
 };
 const statusRef = Effect.runSync(SubscriptionRef.make(initialStatus));
 const statusSub = Hyperlink.subscribable(statusRef);
@@ -44,9 +43,12 @@ const stub = {
   start: Effect.void,
   pause: Effect.void,
   resume: Effect.void,
-  shutdown: Effect.void,
+  stop: Effect.void,
   clear: Effect.succeed(0),
   status: statusSub,
+  lifecycle: Hyperlink.mapSubscribable(statusSub, () => ({
+    _tag: "Running" as const,
+  })),
   metrics: {
     stream: Stream.empty,
     query: () => Effect.succeed([]),

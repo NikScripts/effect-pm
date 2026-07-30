@@ -135,7 +135,7 @@ export interface QueueBundle {
   readonly pause: CommandAtom;
   readonly resume: CommandAtom;
   readonly clear: CommandAtom;
-  readonly shutdown: CommandAtom;
+  readonly stop: CommandAtom;
 }
 type QueueStatus = QueueSvc["status"] extends Hyperlink.Subscribable<infer S> ? S : never;
 type QueueMetrics = QueueSvc["metrics"] extends {
@@ -271,7 +271,7 @@ export const queueBundle = (tag: LeafTag): QueueBundle => {
     pause: runtime.fn(() => Effect.flatMap(tag, (q) => q.pause)),
     resume: runtime.fn(() => Effect.flatMap(tag, (q) => q.resume)),
     clear: runtime.fn(() => Effect.flatMap(tag, (q) => q.clear)),
-    shutdown: runtime.fn(() => Effect.flatMap(tag, (q) => q.shutdown)),
+    stop: runtime.fn(() => Effect.flatMap(tag, (q) => q.stop)),
   };
   cache.set(tag.key, bundle);
   return bundle;
@@ -322,7 +322,7 @@ export const daemonLeaves = (node: { readonly members: Record<string, unknown> }
 /** One row of the fleet table — headline status + metrics, carrying its tag. */
 export interface FleetRow {
   readonly tag: LeafTag;
-  readonly phase: string;
+  readonly lifecycle: string;
   readonly paused: boolean;
   readonly pending: number;
   readonly completed: number;
@@ -334,7 +334,7 @@ export interface FleetRow {
 /** A blank row for a queue that hasn't reported yet. */
 export const blankRow = (tag: LeafTag): FleetRow => ({
   tag,
-  phase: "running",
+  lifecycle: "running",
   paused: false,
   pending: 0,
   completed: 0,
@@ -347,12 +347,14 @@ export const blankRow = (tag: LeafTag): FleetRow => ({
 // derived straight from the tags — the sortable table reads it.
 interface FleetEvent {
   readonly tag: LeafTag;
-  readonly s: QueueStatus | undefined;
-  readonly m: QueueMetrics | undefined;
+  readonly s?: QueueStatus;
+  readonly m?: QueueMetrics;
+  readonly lc?: { readonly _tag: string };
 }
 const fleetEvents: ReadonlyArray<Stream.Stream<FleetEvent, never, AllQueues>> = queueLeaves(Fleet).flatMap((tag) => [
-  Stream.unwrap(Effect.map(tag, (q) => q.status.changes)).pipe(Stream.map((s): FleetEvent => ({ tag, s, m: undefined }))),
-  Stream.unwrap(Effect.map(tag, (q) => q.metrics.stream)).pipe(Stream.map((m): FleetEvent => ({ tag, s: undefined, m }))),
+  Stream.unwrap(Effect.map(tag, (q) => q.status.changes)).pipe(Stream.map((s): FleetEvent => ({ tag, s }))),
+  Stream.unwrap(Effect.map(tag, (q) => q.lifecycle.changes)).pipe(Stream.map((lc): FleetEvent => ({ tag, lc }))),
+  Stream.unwrap(Effect.map(tag, (q) => q.metrics.stream)).pipe(Stream.map((m): FleetEvent => ({ tag, m }))),
 ]);
 
 /** id → live {@link FleetRow} for every queue in the fleet. */
@@ -364,15 +366,16 @@ export const fleetAtom = runtime.atom(
         ev.s !== undefined
           ? {
               ...prev,
-              phase: ev.s.phase,
               paused: ev.s.paused,
               pending: ev.s.sizes.high + ev.s.sizes.normal + ev.s.sizes.low,
               completed: ev.s.completed,
               inFlight: ev.s.inFlight,
             }
-          : ev.m !== undefined
-            ? { ...prev, throughput: ev.m.throughputPerSec, latency: ev.m.avgTotalMillis ?? 0 }
-            : prev;
+          : ev.lc !== undefined
+            ? { ...prev, lifecycle: ev.lc._tag.toLowerCase() }
+            : ev.m !== undefined
+              ? { ...prev, throughput: ev.m.throughputPerSec, latency: ev.m.avgTotalMillis ?? 0 }
+              : prev;
       return { ...acc, [ev.tag.key]: next };
     }),
   ),

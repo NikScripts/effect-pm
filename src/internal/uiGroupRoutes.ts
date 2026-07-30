@@ -1,6 +1,5 @@
 /**
- * Group path walk for Group-backed dashboard routers (root from
- * {@link ../ui/Route.DashboardRoot} annotation — not a Router constructor arg).
+ * Group path walk for {@link ../ui/GroupNav} (root Group passed explicitly).
  */
 import * as Group from "../Group";
 import type { RouteGroup } from "./asRoutesBrand";
@@ -9,9 +8,13 @@ export type { RouteGroup } from "./asRoutesBrand";
 
 const isGroupNode = (x: unknown): x is RouteGroup => Group.isGroup(x);
 
+/** Encode each `/`-separated piece so keys may embed slashes (node ids). */
+const encodeKey = (key: string): string =>
+  key.split("/").map(encodeURIComponent).join("/");
+
 /** Format resolved keys as a URL pathname. */
 export const formatGroupPath = (keys: ReadonlyArray<string>): string =>
-  keys.length === 0 ? "/" : `/${keys.map(encodeURIComponent).join("/")}`;
+  keys.length === 0 ? "/" : `/${keys.map(encodeKey).join("/")}`;
 
 /**
  * Walk `root` by `segments` (case-insensitive). Trailing segment after a leaf is

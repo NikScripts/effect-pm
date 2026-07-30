@@ -523,7 +523,7 @@
             "src",
             "examples"
           ],
-          "title": "No Module.Tag.member triples"
+          "title": "Sibling Tags — never nest a Tag under another module"
         },
         {
           "id": "modules-and-boundaries.filename-matches-export",
@@ -1008,6 +1008,15 @@
           "title": "Layers read as layers"
         },
         {
+          "id": "types-and-naming.owned-string-literals-pascalcase",
+          "severity": "must",
+          "appliesTo": [
+            "src",
+            "examples"
+          ],
+          "title": "Owned string literals are PascalCase"
+        },
+        {
           "id": "types-and-naming.discriminant-tags-pascalcase",
           "severity": "must",
           "appliesTo": [
@@ -1207,5 +1216,5 @@
       ]
     }
   ],
-  "ruleCount": 132
+  "ruleCount": 134
 }

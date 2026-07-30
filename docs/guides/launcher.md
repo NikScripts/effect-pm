@@ -1,4 +1,4 @@
-{#launcher title="Launcher" status="draft" done="api" appliesTo=node}
+{#launcher title="Launcher" status="stable" done="api" appliesTo=node}
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
@@ -53,6 +53,22 @@ const program = Launcher.up({
 Child listen must arm assume with the same token (`ListenOptions.assumeToken`, or
 `Node.assumeTokenConfig` / `HYPERLINK_ASSUME_TOKEN`). `Launcher.command` defaults to
 `token: "env"`; use `"argv"` / `"both"` when the child reads the token from argv.
+
+**Child sketch** (prefer `Node.launch` so remote shutdown can exit the process):
+
+```ts
+const token = yield* Node.assumeTokenConfig
+yield* Node.launch(
+  worker,
+  Node.http(worker, [Hyperlink.serve(Jobs, impl)], { assumeToken: token }).pipe(
+    // Membership (optional): advertise after custody
+    Layer.provide(Lookup.client(lookupNode)),
+  ),
+)
+```
+
+Teaching child helpers: `examples/launcher/ready-worker-child.ts`,
+`examples/launcher/lookup-membership-child.ts`.
 
 ## Handle phases
 
@@ -137,9 +153,22 @@ Custody = “I own myself; launcher may exit.” Migration = move HyperService w
 outgoing node. See
 [Identity coordinator — A→B cutover](./identity-coordinator.md#ab-cutover-recipe-state-transfer).
 
+## Examples
+
+| Form | Run |
+|------|-----|
+| Minimal `up` | `pnpm run example:launcher-minimal-up` |
+| Handle phases | `pnpm run example:launcher-handle-phases` |
+| Token env/argv | `pnpm run example:launcher-token-injection` |
+| `ready.services` | `pnpm run example:launcher-ready-services` |
+| Ready errors (`_tag`) | `pnpm run example:launcher-ready-timeout` |
+| Custody → Directory | `pnpm run example:launcher-lookup-membership` |
+
+Hub: [Examples → launcher](/docs/examples#launcher).
+
 ## Deferred (not beta Launcher)
 
 - Explicit less-automated A/B launcher (replacement addressing = same `nodeKey` + new dial today)
-- Track D client redirect / dual-serve (`lookupClient` + directory `peersLayer` already rebind on dial swap)
+- Explicit A/B launcher automation (`lookupClient` + `peersLayer` rebind + [Policy](./policy.md) sticky / streams already ship)
 - Blank worker + remote assign; HTTP/WS Lookup; nameless Launcher discovery
 - `Handle.events` Stream; stdout/stderr tap; thin `hl up` CLI

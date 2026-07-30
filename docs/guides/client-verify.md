@@ -8,35 +8,37 @@
 
 Addressed clients should not hang on a dead peer or silently talk past a stale contract.
 `Hyperlink.verifyConnection` is the probe; addressed `Hyperlink.client` (and `Hyperlink.ws`)
-run it **by default**. Nodeless `Hyperlink.connect(tag, protocol)` does not — call the probe
-yourself when you want fail-fast there.
+run it **by default**. Mode is a `hyperlink-ts/Policy` fragment (`Policy.verifyOff` /
+`verifyStatus` / `verifyReject`) — compose with `Policy.provide`. Nodeless
+`Hyperlink.connect(tag, protocol)` does not probe — call verify yourself when you want
+fail-fast there.
 
-Handoff SSOT: [`docs/handoffs/loud-failures-design.md`](../handoffs/loud-failures-design.md) ·
+Living recipe is this page + [Policy](/docs/policy). Design history (may lag Policy fragments):
+[`docs/handoffs/loud-failures-design.md`](../handoffs/loud-failures-design.md) ·
 [`docs/handoffs/verify-connection-classification.md`](../handoffs/verify-connection-classification.md).
 
 ## Default-on (addressed clients)
 
 Building an addressed client Layer probes the peer before the handle is usable:
 
-| Mode | Behavior |
-|------|----------|
-| `"reject"` (**default**) | Probe fails → Layer fails (`NodeUnreachable`, or deep errors below) |
-| `"status"` | Probe runs; failure is ignored (connect proceeds) |
-| `false` | Skip verify |
+| Fragment | Mode | Behavior |
+|----------|------|----------|
+| `Policy.verifyReject` | `"reject"` (**default**) | Probe fails → Layer fails (`NodeUnreachable`, or deep errors below) |
+| `Policy.verifyStatus` | `"status"` | Probe runs; failure is ignored (connect proceeds) |
+| `Policy.verifyOff` | `false` | Skip verify |
 
 ```ts
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
-import { Layer } from "effect"
+import * as Policy from "hyperlink-ts/Policy"
 
 // Opt out for a nested/bootstrap client (Lookup.client / identity ping do this internally):
-Hyperlink.client(Emails, WorkerNode).pipe(
-  Layer.provide(Hyperlink.clientVerify(false)),
-)
+Hyperlink.client(Emails, WorkerNode).pipe(Policy.provide(Policy.verifyOff))
 
 // Soft: probe but don't fail the Layer
-Hyperlink.client(Emails, WorkerNode).pipe(
-  Layer.provide(Hyperlink.clientVerify("status")),
-)
+Hyperlink.client(Emails, WorkerNode).pipe(Policy.provide(Policy.verifyStatus))
+
+// Explicit reject (same as default — useful in a named bundle)
+Hyperlink.client(Emails, WorkerNode).pipe(Policy.provide(Policy.verifyReject))
 ```
 
 Tag-aware addressed clients escalate to **deep** verify (node-handle status RPC + service readiness +
@@ -71,7 +73,16 @@ yield* Hyperlink.verifyConnection(WorkerNode, { all: true }) // every declared e
 
 Catch via `Exit` / `_tag` — remediation messages name the fix.
 
+## Examples
+
+| Form | Run |
+|------|-----|
+| Tiers + `Policy.verify*` | `pnpm run example:node-verify-connection` |
+| Docs page | [Node — verifyConnection](/docs/node-verify-connection) |
+
 ## See also
 
+- [Policy](/docs/policy) — `verifyOff` / `verifyStatus` / `verifyReject` + cutover fragments
 - [Identity coordinator](/docs/identity-coordinator) — Lookup dial paths that nest clients
 - [Readiness](/docs/readiness) — runtime health after the Layer is up
+- [Launcher](/docs/launcher) — Ready poll reuses the same status / verify substrate

@@ -24,6 +24,7 @@ import {
 import * as DashboardLayer from "../ui/DashboardLayer";
 import { RegistryProvider } from "../ui/atom-react";
 import * as Group from "../Group";
+import * as GroupNav from "../ui/GroupNav";
 import * as Route from "../ui/Route";
 import * as Router from "../ui/Router";
 import * as View from "../ui/View";
@@ -64,9 +65,10 @@ export const Dashboard = <R, ER>(props: {
         views: props.views,
       }),
       router: Router.memory(routesFor(props.group)),
+      group: props.group,
     });
     for (const key of props.path ?? []) {
-      composed.router.openKey(key);
+      GroupNav.openKey(props.group, composed.router, key);
     }
     return composed;
   }, [props.group, props.views, props.path]);

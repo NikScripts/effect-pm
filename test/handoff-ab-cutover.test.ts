@@ -136,19 +136,13 @@ describe("A→B cutover — WorkPool baked releaseEnqueueHandoff", () => {
         // B first: Directory has a non-self dial for A's handoff.
         const bCtx = yield* Layer.build(
           Node.unix(WorkerB, [
-            WorkPool.serve(Jobs, {
-              effect: () => Effect.void,
-              autoStart: false,
-            }),
+            WorkPool.serve(Jobs, { effect: () => Effect.void }).pipe(Hyperlink.deferStart),
           ]).pipe(Layer.provide(lookupClient)),
         );
 
         const aCtx = yield* Layer.build(
           Node.unix(WorkerA, [
-            WorkPool.serve(Jobs, {
-              effect: () => Effect.void,
-              autoStart: false,
-            }),
+            WorkPool.serve(Jobs, { effect: () => Effect.void }).pipe(Hyperlink.deferStart),
           ]).pipe(Layer.provide(lookupClient)),
         );
 
@@ -173,7 +167,7 @@ describe("A→B cutover — WorkPool baked releaseEnqueueHandoff", () => {
             rows.length === 1 && rows[0]?.nodeKey === WorkerB.key,
         );
 
-        // Pending landed on B (still autoStart:false).
+        // Pending landed on B (still deferStart — workers not forked).
         const bSnap = yield* Effect.gen(function* () {
           const q = yield* Jobs;
           return yield* q.status.get;
@@ -219,12 +213,12 @@ describe("A→B cutover — WorkPool baked releaseEnqueueHandoff", () => {
 
       yield* Layer.build(
         Node.unix(WorkerB, [
-          WorkPool.serve(Jobs, { effect: () => Effect.void, autoStart: false }),
+          WorkPool.serve(Jobs, { effect: () => Effect.void,  }).pipe(Hyperlink.deferStart),
         ]).pipe(Layer.provide(lookupClient)),
       );
       yield* Layer.build(
         Node.unix(WorkerA, [
-          WorkPool.serve(Jobs, { effect: () => Effect.void, autoStart: false }),
+          WorkPool.serve(Jobs, { effect: () => Effect.void,  }).pipe(Hyperlink.deferStart),
         ]).pipe(Layer.provide(lookupClient)),
       );
 
@@ -271,18 +265,12 @@ describe("A→B cutover — WorkPool baked releaseEnqueueHandoff", () => {
 
         yield* Layer.build(
           Node.unix(WorkerB, [
-            WorkPool.serve(Jobs, {
-              effect: () => Effect.void,
-              autoStart: false,
-            }),
+            WorkPool.serve(Jobs, { effect: () => Effect.void }).pipe(Hyperlink.deferStart),
           ]).pipe(Layer.provide(lookupClient)),
         );
         const aCtx = yield* Layer.build(
           Node.unix(WorkerA, [
-            WorkPool.serve(Jobs, {
-              effect: () => Effect.void,
-              autoStart: false,
-            }),
+            WorkPool.serve(Jobs, { effect: () => Effect.void }).pipe(Hyperlink.deferStart),
           ]).pipe(Layer.provide(lookupClient)),
         );
 
@@ -357,10 +345,7 @@ describe("A→B cutover — same nodeKey + askIncumbent then handoff", () => {
           Node.unix(
             WorkerA,
             [
-              WorkPool.serve(Jobs, {
-                effect: () => Effect.void,
-                autoStart: false,
-              }),
+              WorkPool.serve(Jobs, { effect: () => Effect.void }).pipe(Hyperlink.deferStart),
             ],
             { onYield: Effect.succeed(true) },
           ).pipe(Layer.provide(lookupClient)),
@@ -376,10 +361,7 @@ describe("A→B cutover — same nodeKey + askIncumbent then handoff", () => {
           Node.unix(
             WorkerB,
             [
-              WorkPool.serve(Jobs, {
-                effect: () => Effect.void,
-                autoStart: false,
-              }),
+              WorkPool.serve(Jobs, { effect: () => Effect.void }).pipe(Hyperlink.deferStart),
             ],
             { onConflict: "inherit" },
           ).pipe(Layer.provide(lookupClient)),
@@ -689,7 +671,7 @@ describe("A→B cutover — custom Hyperlink.serve { handoff }", () => {
 
       yield* Layer.build(
         Node.unix(WorkerA, [
-          WorkPool.serve(Jobs, { effect: () => Effect.void, autoStart: false }),
+          WorkPool.serve(Jobs, { effect: () => Effect.void,  }).pipe(Hyperlink.deferStart),
         ]).pipe(Layer.provide(lookupClient)),
       );
 
@@ -1183,10 +1165,7 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
 
         const aCtx = yield* Layer.build(
           Node.unix(WorkerA, [
-            WorkPool.serve(Jobs, {
-              effect: () => Effect.void,
-              autoStart: false,
-            }),
+            WorkPool.serve(Jobs, { effect: () => Effect.void }).pipe(Hyperlink.deferStart),
           ]).pipe(Layer.provide(lookupClient)),
         );
 
@@ -1211,10 +1190,7 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
 
         yield* Layer.build(
           Node.unix(WorkerB, [
-            WorkPool.serve(Jobs, {
-              effect: () => Effect.void,
-              autoStart: false,
-            }),
+            WorkPool.serve(Jobs, { effect: () => Effect.void }).pipe(Hyperlink.deferStart),
           ]).pipe(Layer.provide(lookupClient)),
         );
 
@@ -1394,26 +1370,17 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
 
         yield* Layer.build(
           Node.unix(WorkerB, [
-            WorkPool.serve(Jobs, {
-              effect: () => Effect.void,
-              autoStart: false,
-            }),
+            WorkPool.serve(Jobs, { effect: () => Effect.void }).pipe(Hyperlink.deferStart),
           ]).pipe(Layer.provide(lookupClient)),
         );
         yield* Layer.build(
           Node.unix(WorkerC, [
-            WorkPool.serve(Jobs, {
-              effect: () => Effect.void,
-              autoStart: false,
-            }),
+            WorkPool.serve(Jobs, { effect: () => Effect.void }).pipe(Hyperlink.deferStart),
           ]).pipe(Layer.provide(lookupClient)),
         );
         const aCtx = yield* Layer.build(
           Node.unix(WorkerA, [
-            WorkPool.serve(Jobs, {
-              effect: () => Effect.void,
-              autoStart: false,
-            }),
+            WorkPool.serve(Jobs, { effect: () => Effect.void }).pipe(Hyperlink.deferStart),
           ]).pipe(Layer.provide(lookupClient)),
         );
 
@@ -1479,18 +1446,12 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
 
         yield* Layer.build(
           Node.unix(WorkerB, [
-            WorkPool.serve(Jobs, {
-              effect: () => Effect.void,
-              autoStart: false,
-            }),
+            WorkPool.serve(Jobs, { effect: () => Effect.void }).pipe(Hyperlink.deferStart),
           ]).pipe(Layer.provide(lookupClient)),
         );
         const aCtx = yield* Layer.build(
           Node.unix(WorkerA, [
-            WorkPool.serve(Jobs, {
-              effect: () => Effect.void,
-              autoStart: false,
-            }),
+            WorkPool.serve(Jobs, { effect: () => Effect.void }).pipe(Hyperlink.deferStart),
           ]).pipe(Layer.provide(lookupClient)),
         );
 
@@ -1642,10 +1603,7 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
           Node.unix(
             WorkerA,
             [
-              WorkPool.serve(Jobs, {
-                effect: () => Effect.void,
-                autoStart: false,
-              }),
+              WorkPool.serve(Jobs, { effect: () => Effect.void }).pipe(Hyperlink.deferStart),
             ],
             { onYield: Effect.succeed(true) },
           ).pipe(Layer.provide(lookupClient)),
@@ -1660,10 +1618,7 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
           Node.unix(
             WorkerB,
             [
-              WorkPool.serve(Jobs, {
-                effect: () => Effect.void,
-                autoStart: false,
-              }),
+              WorkPool.serve(Jobs, { effect: () => Effect.void }).pipe(Hyperlink.deferStart),
             ],
             { onConflict: "inherit" },
           ).pipe(Layer.provide(lookupClient)),
@@ -1918,18 +1873,12 @@ describe("A→B cutover — peer identity, dual Done, Advice, serveRemote", () =
 
         yield* Layer.build(
           Node.unix(WorkerB, [
-            WorkPool.serve(Jobs, {
-              effect: () => Effect.void,
-              autoStart: false,
-            }),
+            WorkPool.serve(Jobs, { effect: () => Effect.void }).pipe(Hyperlink.deferStart),
           ]).pipe(Layer.provide(lookupClient)),
         );
         const aCtx = yield* Layer.build(
           Node.unix(WorkerA, [
-            WorkPool.serve(Jobs, {
-              effect: () => Effect.void,
-              autoStart: false,
-            }),
+            WorkPool.serve(Jobs, { effect: () => Effect.void }).pipe(Hyperlink.deferStart),
           ]).pipe(Layer.provide(lookupClient)),
         );
 
@@ -1998,19 +1947,13 @@ describe("A→B cutover — peer identity, dual Done, Advice, serveRemote", () =
         // B keeps a local grant so we can observe pending after transfer.
         yield* Layer.build(
           Node.unix(WorkerB, [
-            WorkPool.serve(Jobs, {
-              effect: () => Effect.void,
-              autoStart: false,
-            }),
+            WorkPool.serve(Jobs, { effect: () => Effect.void }).pipe(Hyperlink.deferStart),
           ]).pipe(Layer.provide(lookupClient)),
         );
         // A is served-only (gateway) — enqueue via addressed client.
         yield* Layer.build(
           Node.unix(WorkerA, [
-            WorkPool.serveRemote(Jobs, {
-              effect: () => Effect.void,
-              autoStart: false,
-            }),
+            WorkPool.serveRemote(Jobs, { effect: () => Effect.void }).pipe(Hyperlink.deferStart),
           ]).pipe(Layer.provide(lookupClient)),
         );
 

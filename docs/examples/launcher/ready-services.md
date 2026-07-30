@@ -14,11 +14,13 @@
 **Hub:** [Examples → launcher](/docs/examples#launcher)
 
 > [!NOTE]
-> **Related examples:** [minimal up](/docs/launcher-minimal-up) · [allReady](/docs/readiness-all-ready)
+> **Related examples:** [minimal up](/docs/launcher-minimal-up) · [Ready timeout](/docs/launcher-ready-timeout) · [withReadiness](/docs/readiness-with-readiness)  
+> **Guide:** [Launcher](/docs/launcher) · [Readiness](/docs/readiness)
 
 ## What this shows
 
-`ready.services` waits on named HyperService Tags.
+`ready.services` narrows `awaitReady` to a named HyperService subset (Tags or wire keys)
+instead of allReady-shaped. Escape hatch for staged bring-up — same readiness substrate.
 
 {.twoslash include="examples/launcher/ready-services.ts"}
 ``` ts

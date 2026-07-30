@@ -6,7 +6,6 @@
  * {@link ./Dashboard} is the public one-liner over compose + this shell.
  */
 import * as React from "react";
-import { Option } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import {
   type ApiTag,
@@ -37,7 +36,7 @@ import { useViewTransition, useViewTransitionStyle } from "./useViewTransition";
 import { Cell, displayName } from "./widgets";
 import { LogBox, LogsPage, SchedulePage } from "./resourcePages";
 import { isLeafTag, type LeafTag } from "../ui/widgetRegistry";
-import * as Router from "../ui/Router";
+import * as GroupNav from "../ui/GroupNav";
 import * as View from "../ui/View";
 import { DashboardDetailChrome, DashboardTopBar } from "./DashboardTopBar";
 import { HealthBoard, NodeBar, NodeDetail } from "./NodeStatus";
@@ -78,8 +77,10 @@ const QueueDetail = (props: {
 }): React.ReactElement => {
   const Match = View.useMatch();
   const bundle = Observe.use(props.tag, WorkPoolView.pack);
-  const statusR = useAtomValue(bundle.status);
-  const s = AsyncResult.isSuccess(statusR) ? Option.getOrUndefined(statusR.value) : undefined;
+  const lifecycleR = useAtomValue(bundle.lifecycle);
+  const lifecycleTag = AsyncResult.isSuccess(lifecycleR)
+    ? lifecycleR.value._tag ?? "?"
+    : "?";
   return (
     <DashboardDetailChrome
       title={displayName(props.tag.key)}
@@ -87,7 +88,7 @@ const QueueDetail = (props: {
       vtKey={`res-${props.tag.key}`}
     >
       <Match.Detail tag={props.tag} />
-      <LogBox bundle={bundle} full={false} onToggle={props.onOpenLogs} meta={<> · phase {s?.phase ?? "?"}</>} />
+      <LogBox bundle={bundle} full={false} onToggle={props.onOpenLogs} meta={<> · {lifecycleTag.toLowerCase()}</>} />
     </DashboardDetailChrome>
   );
 };
@@ -131,12 +132,12 @@ const DashboardInner = (props: {
   readonly group: GroupNode;
   readonly onOpenHealth: () => void;
 }): React.ReactElement => {
-  const nav = Router.useRouter();
+  const groupNav = GroupNav.use(props.group);
   const Match = View.useMatch();
-  const group = nav.group as GroupNode;
-  const selected = nav.selected;
-  const trail = nav.trail;
-  const keys = nav.path;
+  const group = groupNav.group as GroupNode;
+  const selected = groupNav.selected;
+  const trail = groupNav.trail;
+  const keys = groupNav.keys;
   const transition = useViewTransition();
   const pageVt = useViewTransitionStyle(`grp-${group.key}`);
   // ── degraded-first sort state (hoisted above the detail early-return so hook order is constant
@@ -161,9 +162,9 @@ const DashboardInner = (props: {
     // the member key the selected leaf sits under — the display name the grid card used (mesh factory
     // tags share a generic key like "telemetry", so title off the member name, not the tag key).
     const selectedName = keys[trail.length - 1];
-    const toGrid = (id: string) => () => transition(`res-${id}`, () => nav.up());
-    const openLogs = (): void => transition("log-panel", () => nav.openKey("logs"));
-    if (nav.view === "logs" || nav.view === "schedule") {
+    const toGrid = (id: string) => () => transition(`res-${id}`, () => groupNav.up());
+    const openLogs = (): void => transition("log-panel", () => groupNav.openKey("logs"));
+    if (groupNav.view === "logs" || groupNav.view === "schedule") {
       if (isDaemonTag(selected) || isQueueTag(selected)) {
         return <Match.Page tag={selected} />;
       }
@@ -242,7 +243,7 @@ const DashboardInner = (props: {
         root={!canBack}
         onBack={
           canBack
-            ? () => transition(`grp-${group.key}`, () => nav.up())
+            ? () => transition(`grp-${group.key}`, () => groupNav.up())
             : undefined
         }
         trailing={
@@ -278,8 +279,8 @@ const DashboardInner = (props: {
             key={name}
             name={name}
             member={member}
-            onOpenLeaf={(tag) => transition(`res-${tag.key}`, () => nav.openKey(name))}
-            onOpenGroup={() => transition(`grp-${name}`, () => nav.openKey(name))}
+            onOpenLeaf={(tag) => transition(`res-${tag.key}`, () => groupNav.openKey(name))}
+            onOpenGroup={() => transition(`grp-${name}`, () => groupNav.openKey(name))}
           />
         ))}
       </div>
@@ -350,7 +351,7 @@ const NodeHyperlinkView = (props: {
 export const DashboardShell = (props: {
   readonly group: GroupNode;
 }): React.ReactElement => {
-  const nav = Router.useRouter();
+  const groupNav = GroupNav.use(props.group);
   const [nodeTag, setNodeTag] = React.useState<unknown>(null);
   const openHyperlink = React.useCallback(
     (serviceKey: string): void => {
@@ -364,15 +365,16 @@ export const DashboardShell = (props: {
     return <NodeHyperlinkView tag={nodeTag} onBack={() => setNodeTag(null)} />;
   }
 
-  if (nav.view === "health") {
-    const nodeId = nav.path[0] === "health" ? nav.path[1] : undefined;
+  if (groupNav.view === "health") {
+    const nodeId =
+      groupNav.keys[0] === "health" ? groupNav.keys[1] : undefined;
     if (nodeId !== undefined) {
       const node = nodesOf(props.group).find((n) => n.id === nodeId);
       if (node !== undefined) {
         return (
           <NodeDetail
             node={node}
-            onBack={() => nav.up()}
+            onBack={() => groupNav.up()}
             onOpenHyperlink={openHyperlink}
           />
         );
@@ -381,8 +383,8 @@ export const DashboardShell = (props: {
     return (
       <HealthBoard
         group={props.group}
-        onBack={() => nav.up()}
-        onOpenNode={(n) => nav.openNode(n.id)}
+        onBack={() => groupNav.up()}
+        onOpenNode={(n) => groupNav.openNode(n.id)}
         onOpenHyperlink={openHyperlink}
       />
     );
@@ -391,7 +393,7 @@ export const DashboardShell = (props: {
   return (
     <DashboardInner
       group={props.group}
-      onOpenHealth={() => nav.openHealth()}
+      onOpenHealth={() => groupNav.openHealth()}
     />
   );
 };

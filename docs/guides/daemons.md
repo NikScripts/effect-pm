@@ -50,7 +50,8 @@ const layer = Daemon.layer(LiveScores, {
 Provide `Logs.layer` on the Node stack for durable logs; read with `Hyperlink.logs(LiveScores)` —
 see [Logs](/docs/logs).
 
-- **`Daemon.layer(Tag, config)`** — local driver (auto-starts).
+- **`Daemon.layer(Tag, config)`** — local driver (auto-starts; pipe
+  [`Hyperlink.deferStart`](/docs/lifecycle) to wait for `start`).
 - **`Daemon.serve(Tag, config)`** / **`serveRemote`** — host over RPC.
 - **`Hyperlink.client(Tag)`** — remote handle.
 

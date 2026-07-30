@@ -1,5 +1,6 @@
 import { NotFoundSearch } from "../../islands/NotFoundSearch.js";
 import { PageMeta } from "../../components/PageMeta.js";
+import * as Router from "../../ui/Router.js";
 
 // Custom 404 — the dead URL's last segment seeds a live search, so mistyped or moved links land
 // next to what they meant instead of on a blank wall.
@@ -17,7 +18,9 @@ export default function NotFound() {
       </p>
       <NotFoundSearch />
       <p>
-        <a href="/">Back to the docs home</a> · <a href="/api">API reference</a>
+        <Router.Link to={(u) => u.home()}>Back to the docs home</Router.Link>
+        {" · "}
+        <Router.Link to={(u) => u.api.index()}>API reference</Router.Link>
       </p>
     </div>
   );
