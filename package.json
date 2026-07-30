@@ -124,6 +124,10 @@
       "types": "./dist/Identity.d.ts",
       "default": "./dist/Identity.js"
     },
+    "./Policy": {
+      "types": "./dist/Policy.d.ts",
+      "default": "./dist/Policy.js"
+    },
     "./DynamicConfig": {
       "types": "./dist/DynamicConfig.d.ts",
       "default": "./dist/DynamicConfig.js"
@@ -317,6 +321,12 @@
     "example:node-as-lookup": "tsx examples/node/as-lookup.ts",
     "example:node-identity-coordinator": "tsx examples/node/identity-coordinator.ts",
     "example:node-handoff-ab-cutover": "tsx examples/node/handoff-ab-cutover.ts",
+    "example:node-policy-lookup-cutover": "tsx examples/node/policy-lookup-cutover.ts",
+    "example:node-drain-yield-refuse": "tsx examples/node/drain-yield-refuse.ts",
+    "example:node-ask-incumbent-takeover": "tsx examples/node/ask-incumbent-takeover.ts",
+    "example:node-serve-handoff": "tsx examples/node/serve-handoff.ts",
+    "example:node-peers-layer-rebind": "tsx examples/node/peers-layer-rebind.ts",
+    "example:node-launch-shutdown": "tsx examples/node/launch-shutdown.ts",
     "example:handoff-ab-live": "tsx --tsconfig examples/apps/tui/tsconfig.json examples/apps/tui/handoff-ab-live.tsx",
     "example:node-verify-connection": "tsx examples/node/verify-connection.ts",
     "example:fleet-telemetry-glass": "tsx examples/fleet/telemetry-glass.ts",

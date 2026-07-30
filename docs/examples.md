@@ -128,7 +128,7 @@ Guide: [Daemon](/docs/daemons)
 
 ## Node & discovery
 
-Guide: [Node & discovery](/docs/identity-coordinator)
+Guides: [Identity coordinator](/docs/identity-coordinator) · [Policy](/docs/policy) · [Client verify](/docs/client-verify)
 
 ### [Tag with address](/docs/node-tag-addressed)
 
@@ -184,7 +184,32 @@ Guide: [Node & discovery](/docs/identity-coordinator)
 
 ### [A→B handoff cutover](/docs/node-handoff-ab-cutover)
 
-`examples/node/handoff-ab-cutover.ts` · `pnpm run example:node-handoff-ab-cutover`
+`examples/node/handoff-ab-cutover.ts` · `pnpm run example:node-handoff-ab-cutover` — WorkPool baked migration
+
+### [serve handoff](/docs/node-serve-handoff)
+
+`examples/node/serve-handoff.ts` · `pnpm run example:node-serve-handoff` — custom `{ handoff }` / `HandoffDeferred`
+
+### [drain yield refuse](/docs/node-drain-yield-refuse)
+
+`examples/node/drain-yield-refuse.ts` · `pnpm run example:node-drain-yield-refuse`
+
+### [askIncumbent takeover](/docs/node-ask-incumbent-takeover)
+
+`examples/node/ask-incumbent-takeover.ts` · `pnpm run example:node-ask-incumbent-takeover`
+
+### [Policy lookup cutover](/docs/node-policy-lookup-cutover)
+
+`examples/node/policy-lookup-cutover.ts` · `pnpm run example:node-policy-lookup-cutover`  
+Guide: [Policy](/docs/policy)
+
+### [peersLayer rebind](/docs/node-peers-layer-rebind)
+
+`examples/node/peers-layer-rebind.ts` · `pnpm run example:node-peers-layer-rebind`
+
+### [launch shutdown](/docs/node-launch-shutdown)
+
+`examples/node/launch-shutdown.ts` · `pnpm run example:node-launch-shutdown` — prefer `Node.launch` over `Layer.launch`
 
 ### [A→B handoff live (Ink TUI)](/docs/apps-tui-handoff-ab-live)
 
@@ -192,7 +217,7 @@ Guide: [Node & discovery](/docs/identity-coordinator)
 
 ### [verifyConnection](/docs/node-verify-connection)
 
-`examples/node/verify-connection.ts` · `pnpm run example:node-verify-connection`
+`examples/node/verify-connection.ts` · `pnpm run example:node-verify-connection` — tiers + `Policy.verify*`
 
 ---
 

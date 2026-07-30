@@ -28,7 +28,6 @@ export {
   isLookupNode,
   isAddressedNode,
   catalogSym,
-  resolveOnConflict,
   AddressLessClaimLost,
   ListenNode,
   ListenTagNodeRequired,
@@ -60,9 +59,9 @@ export type {
   HttpListenArg,
   WsListenArg,
   IpcListenArg,
-  OnConflict,
-  OnConflictResolved,
 } from "./internal/nodeCore"
+export type { OnConflict, OnConflictResolved } from "./Policy"
+export { resolveOnConflict } from "./Policy"
 export { listen } from "./internal/nodeListen"
 export { unix } from "./internal/nodeUnix"
 export { http } from "./internal/nodeHttp"

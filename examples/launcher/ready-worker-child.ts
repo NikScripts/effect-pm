@@ -69,7 +69,8 @@ const serve = (
             Hyperlink.serve(Jobs, { ping: Effect.succeed("jobs-ready") }),
           ] as const);
 
-    return yield* Layer.launch(
+    return yield* Node.launch(
+      worker,
       Node.http(worker, serves, {
         assumeToken,
       }),

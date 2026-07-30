@@ -7,6 +7,7 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { describe, it } from "@effect/vitest";
 import { WorkPool } from "../src";
 import * as Hyperlink from "../src/Hyperlink";
+import * as Policy from "../src/Policy";
 import * as Node from "../src/Node";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 
@@ -285,7 +286,7 @@ describe("Hyperlink.client default-on verify", () => {
     }).pipe(Effect.timeout(Duration.seconds(15))),
   );
 
-  it.live("clientVerify(false) skips the probe", () =>
+  it.live("Policy.verifyOff skips the probe", () =>
     Effect.gen(function* () {
       class Dead extends Node.Tag<Dead>()("verify/skip-dead", {
         url: "http://127.0.0.1:1/rpc",
@@ -296,7 +297,7 @@ describe("Hyperlink.client default-on verify", () => {
       // Build succeeds; RPC would still fail later — verify was opted out.
       yield* Layer.build(
         Hyperlink.client(Ping, Dead).pipe(
-          Layer.provide(Hyperlink.clientVerify(false)),
+          Policy.provide(Policy.verifyOff),
         ),
       );
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(15))),

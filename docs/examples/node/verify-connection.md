@@ -14,11 +14,13 @@
 **Hub:** [Examples → node](/docs/examples#node)
 
 > [!NOTE]
-> **Related examples:** [tag-bound serve](/docs/node-tag-bound) · [Hyperlink serve + client](/docs/hyperlink-serve-client)
+> **Related examples:** [tag-bound serve](/docs/node-tag-bound) · [Policy lookup cutover](/docs/node-policy-lookup-cutover) · [Launcher minimal up](/docs/launcher-minimal-up)  
+> **Guide:** [Client verify](/docs/client-verify) · [Policy](/docs/policy) (`verifyOff` / `verifyStatus` / `verifyReject`)
 
 ## What this shows
 
-Tier-1 reachability and deep `node.status` checks.
+Tier-1 + deep `Hyperlink.verifyConnection`, then addressed `Hyperlink.client` with
+`Policy.verifyReject` (default fail-closed) and `Policy.verifyOff` (nested/bootstrap opt-out).
 
 {.twoslash include="examples/node/verify-connection.ts"}
 ``` ts

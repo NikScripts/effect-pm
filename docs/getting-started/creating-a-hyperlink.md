@@ -168,6 +168,10 @@ local patches: `Layer.updateService`.
 Serve or client the same Tag without rewriting the program body. Only the Layer at the edge changes.
 That tour is [Managing Layers](/docs/managing-layers).
 
+Multi-node / Lookup cutover: [Fleets & Peers](/docs/fleets-and-peers) ·
+[Identity coordinator](/docs/identity-coordinator) · [Policy](/docs/policy) ·
+[Launcher](/docs/launcher) · [Client verify](/docs/client-verify).
+
 {.note}
 **Sharp edge — browsers.** A dashboard that opens many live streams hits the browser HTTP connection
 cap if you pair `Node.http(…, 3000)` with `connect(tag, protocolHttp(3000))`. Serve with

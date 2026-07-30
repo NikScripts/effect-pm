@@ -141,3 +141,7 @@ a client). The **Handle** you get from the Tag is the same in every case.
 
 Place one with the Layer vocabulary in **[Managing Layers](/docs/managing-layers)**, or build one
 end to end in **[Creating a Hyperlink Service](/docs/creating-a-hyperlink)**.
+
+Multi-node without a fixed address book: **[Fleets & Peers](/docs/fleets-and-peers)** ·
+**[Identity coordinator](/docs/identity-coordinator)** · **[Policy](/docs/policy)** ·
+**[Launcher](/docs/launcher)** · **[Client verify](/docs/client-verify)**.

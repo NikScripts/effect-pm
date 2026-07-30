@@ -14,11 +14,13 @@
 **Hub:** [Examples → launcher](/docs/examples#launcher)
 
 > [!NOTE]
-> **Related examples:** [minimal up](/docs/launcher-minimal-up) · [ready worker child](/docs/launcher-ready-worker-child)
+> **Related examples:** [minimal up](/docs/launcher-minimal-up) · [ready-worker child](/docs/launcher-ready-worker-child)  
+> **Guide:** [Launcher](/docs/launcher) (`Launcher.command` / `token: "env" | "argv" | "both"`)
 
 ## What this shows
 
-`Launcher.command` token injection through env (default) and argv.
+How the assume token reaches the child — `Launcher.command(…, { token: "env" })` (default)
+vs `"argv"` / `"both"`. Wire protocol is still `Node.assume({ token })`; injection is app choice.
 
 {.twoslash include="examples/launcher/token-injection.ts"}
 ``` ts

@@ -616,6 +616,13 @@ pending ⇒ `Done` without touching the peer. No peer / failure ⇒ `HandoffDefe
 
 Recipe + same-`nodeKey` notes:
 [Identity coordinator — A→B cutover](./identity-coordinator.md#ab-cutover-recipe-state-transfer).
+
+| Demo | Run |
+|------|-----|
+| WorkPool A→B cutover | `pnpm run example:node-handoff-ab-cutover` |
+| Watchable Ink TUI | `pnpm run example:handoff-ab-live` |
+| Custom `{ handoff }` / `HandoffDeferred` | `pnpm run example:node-serve-handoff` |
+
 Live suite: `test/handoff-ab-cutover.test.ts`.
 
 ## Reconfiguring (layer patches)

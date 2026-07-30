@@ -55,7 +55,8 @@ const program =
             onYield: Effect.succeed(false),
           },
         ).pipe(Layer.provide(Lookup.clientOptions({ path: lookupArg })));
-        return yield* Layer.launch(live);
+        // Prefer Node.launch over bare Layer.launch so Node.shutdown ends the process.
+        return yield* Node.launch(node, live);
       }).pipe(Effect.provide(NodeServices.layer));
 
 // ---cut-after---
