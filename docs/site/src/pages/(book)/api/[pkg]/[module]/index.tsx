@@ -5,6 +5,7 @@ import { moduleSummary, packages } from "../../../../../lib/api-data.js";
 import { groupSymbols } from "../../../../../lib/api-groups.js";
 import { urls } from "../../../../../lib/siteRoutes.js";
 import { runServer } from "../../../../../lib/runtime.js";
+import * as Router from "../../../../../ui/Router.js";
 
 // A module page — its symbols in sections (no Shiki, so it stays small): curated @category
 // groups where the source tags them, kind buckets otherwise (see lib/api-groups.ts). Loads only
@@ -32,7 +33,7 @@ export default async function ApiModulePage({ pkg, module }: { pkg: string; modu
       />
       <article className="prose">
         <p className="api-back">
-          <a href={urls.api.pkg(pkg)}>← {m.package}</a>
+          <Router.Link to={(u) => u.api.pkg(pkg)}>← {m.package}</Router.Link>
         </p>
         <h1 className="api-ns-title">
           {m.entry}

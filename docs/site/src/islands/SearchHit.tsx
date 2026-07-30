@@ -3,6 +3,7 @@
 
 import * as React from "react";
 import type { SearchHit } from "../lib/search-core.js";
+import * as Router from "../ui/Router.js";
 
 interface Range {
   readonly start: number;
@@ -79,9 +80,9 @@ export const HitRow = ({
   readonly showPkg?: boolean;
   readonly onNavigate?: () => void;
 }): React.ReactElement => (
-  <a
+  <Router.Link
     className={active ? "search-hit is-active" : "search-hit"}
-    href={hit.doc.url}
+    to={hit.doc.url}
     onClick={onNavigate}
   >
     <span className="search-hit-title">
@@ -103,5 +104,5 @@ export const HitRow = ({
         <Highlight text={hit.doc.summary} query={query} />
       </span>
     ) : null}
-  </a>
+  </Router.Link>
 );

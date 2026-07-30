@@ -40,22 +40,23 @@ urls.api.symbol("effect", "Effect.succeed") // overload
 urls.search({ query: { q: "WorkPool" } })
 ```
 
-## Use (parity with pre-router site)
+## Use (soft-nav, no layout Provider)
 
-Typed hrefs only — **native `<a href={urls…}>`** and `location.assign(urls…)` for
-navigation. Same DOM / full-document nav as before the client Router skin.
-No `RouterProvider` around book chrome (avoids a full-tree client boundary).
+In-app nav uses `Router.Link` / `router.to` / `router.go` — Waku soft-nav under
+the hood. `Link` defaults to the docs catalog, so **no `RouterProvider` wrap**
+around book chrome (avoids a full-tree client boundary). Hash / external links
+stay native `<a>`.
 
 ```tsx
-<a href={urls.home()}>Home</a>
-<a href={urls.docs("work-pools")}>Work pools</a>
-<a href={urls.api.symbol("effect", "Effect.succeed")}>Effect.succeed</a>
+<Router.Link to={(u) => u.home()}>Home</Router.Link>
+<Router.Link to={(u) => u.docs("work-pools")}>Work pools</Router.Link>
+<Router.Link to={(u) => u.api.symbol("effect", "Effect.succeed")}>
+  Effect.succeed
+</Router.Link>
 
-window.location.assign(urls.search({ query: { q: "WorkPool" } }))
+const r = Router.useRouter()
+void r.to((u) => u.search({ query: { q: "WorkPool" } }))
 ```
-
-`docs/site/src/ui/Router.tsx` (aliased as `hyperlink-ts/ui/Router`) remains for
-typed tests / optional app-style composition — **not** wired into page chrome.
 
 ## Layers
 
@@ -64,7 +65,8 @@ typed tests / optional app-style composition — **not** wired into page chrome.
 | `catalog` | SSOT path strings |
 | `Route.make(site)` | Typed catalog from `catalog.*` |
 | `Route.urlBuilder` + sugar | Positional href builders (`urls`) |
-| Chrome + API + search | Native anchors / `location.assign` with `urls.*` (not raw `/api/…` strings) |
+| `Router.Link` / `to` / `go` | Soft-nav via Waku (`docs/site/src/ui/Router.tsx`) |
+| Chrome + API + search | In-app hrefs use `Router.Link` / `urls.*` (not raw `/api/…` strings) |
 | Nav + chapter links | `hrefFor` / `resolveBookHref` / `docs/nav.ts` hrefs go through `urls` |
 | `src/pages/` | Real match + RSC/SSG/SSR bodies |
-| Optional `Router.tsx` | Vision API skin (tests); unused by site chrome for appearance/perf parity |
+| `Router.Outlet` | No-op (bodies are file routes) |

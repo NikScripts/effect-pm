@@ -1,7 +1,8 @@
-// Page footer: previous / next links with the real chapter titles. Server component —
-// just links, derived from the flattened book order (crosses group boundaries).
+// Page footer: previous / next links with the real chapter titles. Soft-nav via Router.Link —
+// hrefs from the flattened book order (crosses group boundaries).
 
 import { prevNext } from "../lib/docs-content.js";
+import * as Router from "../ui/Router.js";
 
 export async function PrevNext({ slug }: { readonly slug: string }) {
   const { prev, next } = await prevNext(slug);
@@ -9,18 +10,18 @@ export async function PrevNext({ slug }: { readonly slug: string }) {
   return (
     <nav className="prevnext" aria-label="Previous and next chapter">
       {prev !== undefined ? (
-        <a className="prevnext-link prevnext-prev" href={prev.href}>
+        <Router.Link className="prevnext-link prevnext-prev" to={prev.href}>
           <span className="prevnext-dir">← Previous</span>
           <span className="prevnext-title">{prev.title}</span>
-        </a>
+        </Router.Link>
       ) : (
         <span />
       )}
       {next !== undefined ? (
-        <a className="prevnext-link prevnext-next" href={next.href}>
+        <Router.Link className="prevnext-link prevnext-next" to={next.href}>
           <span className="prevnext-dir">Next →</span>
           <span className="prevnext-title">{next.title}</span>
-        </a>
+        </Router.Link>
       ) : (
         <span />
       )}

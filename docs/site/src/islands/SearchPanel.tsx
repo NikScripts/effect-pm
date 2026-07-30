@@ -10,7 +10,7 @@
 
 import * as React from "react";
 import { searchSections, type SearchHit, type SearchIndex } from "../lib/search-core.js";
-import { urls } from "../lib/siteRoutes.js";
+import * as Router from "../ui/Router.js";
 import { loadSearchIndex } from "./search-client.js";
 import { HitRow } from "./SearchHit.js";
 
@@ -33,6 +33,7 @@ export function SearchPanel({
   readonly onNavigate?: () => void;
   readonly controlRef?: React.MutableRefObject<SearchPanelControl | null>;
 }): React.ReactElement | null {
+  const router = Router.useRouter();
   const [index, setIndex] = React.useState<SearchIndex | undefined>(undefined);
   const [failed, setFailed] = React.useState(false);
   const [active, setActive] = React.useState(-1);
@@ -96,7 +97,7 @@ export function SearchPanel({
           if (hit !== undefined) {
             e.preventDefault();
             onNavigate?.();
-            window.location.assign(hit.doc.url);
+            void router.go(hit.doc.url);
           }
           return true;
         }
@@ -106,7 +107,7 @@ export function SearchPanel({
     return () => {
       controlRef.current = null;
     };
-  }, [controlRef, flat, selected, onNavigate]);
+  }, [controlRef, flat, selected, onNavigate, router]);
 
   if (q === "") return null;
   if (failed) return <p className="search-note">Search index unavailable.</p>;
@@ -125,9 +126,12 @@ export function SearchPanel({
           <section className="search-section" key={key}>
             <div className="search-section-head">
               <span>{label}</span>
-              <a href={urls.search({ query: { q, type } })} onClick={onNavigate}>
+              <Router.Link
+                to={(u) => u.search({ query: { q, type } })}
+                onClick={onNavigate}
+              >
                 more →
-              </a>
+              </Router.Link>
             </div>
             {hits.map((hit, i) => (
               <HitRow
@@ -141,13 +145,13 @@ export function SearchPanel({
           </section>
         );
       })}
-      <a
+      <Router.Link
         className="search-all"
-        href={urls.search({ query: { q } })}
+        to={(u) => u.search({ query: { q } })}
         onClick={onNavigate}
       >
         All results for “{q}” ↵
-      </a>
+      </Router.Link>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { PageMeta } from "../../../../components/PageMeta.js";
 import { moduleSummary, packageBySlug, packages, type ModuleInfo } from "../../../../lib/api-data.js";
 import { urls } from "../../../../lib/siteRoutes.js";
 import { runServer } from "../../../../lib/runtime.js";
+import * as Router from "../../../../ui/Router.js";
 
 // JSDoc emphasis markers don't belong in chrome text.
 const plain = (s: string): string =>
@@ -41,7 +42,11 @@ const HeroLayout = async ({ p }: { p: { slug: string; modules: ReadonlyArray<Mod
       <h2 className="api-pkg-sub">Start here</h2>
       <div className="api-heroes">
         {heroes.map((m, i) => (
-          <a className="api-hero" key={m.slug} href={urls.api.module(p.slug, m.slug)}>
+          <Router.Link
+            className="api-hero"
+            key={m.slug}
+            to={(u) => u.api.module(p.slug, m.slug)}
+          >
             <div className="api-hero-top">
               <span className="api-hero-name">{m.entry}</span>
               <span className="api-index-count">{m.count}</span>
@@ -57,21 +62,21 @@ const HeroLayout = async ({ p }: { p: { slug: string; modules: ReadonlyArray<Mod
                 +{m.count - (chips[i]?.length ?? 0)}
               </span>
             </div>
-          </a>
+          </Router.Link>
         ))}
       </div>
       <h2 className="api-pkg-sub">All modules</h2>
       <div className="api-minis">
         {rest.map((m) => (
-          <a
+          <Router.Link
             className="api-mini"
             key={m.slug}
-            href={urls.api.module(p.slug, m.slug)}
+            to={(u) => u.api.module(p.slug, m.slug)}
             title={m.summary !== undefined ? plain(m.summary) : undefined}
           >
             <span className="api-mini-name">{m.entry}</span>
             <span className="api-index-count">{m.count}</span>
-          </a>
+          </Router.Link>
         ))}
       </div>
     </>
@@ -92,7 +97,7 @@ export default async function ApiPackagePage({ pkg }: { pkg: string }) {
       />
       <article className="prose">
         <p className="api-back">
-          <a href={urls.api.index()}>← API Reference</a>
+          <Router.Link to={(u) => u.api.index()}>← API Reference</Router.Link>
         </p>
         <h1>{p.name}</h1>
         <p className="api-pkg-stats">
@@ -103,15 +108,15 @@ export default async function ApiPackagePage({ pkg }: { pkg: string }) {
         ) : (
           <div className="api-index">
             {p.modules.map((m) => (
-              <a
+              <Router.Link
                 className="api-index-item"
                 key={m.slug}
-                href={urls.api.module(p.slug, m.slug)}
+                to={(u) => u.api.module(p.slug, m.slug)}
                 title={m.summary !== undefined ? plain(m.summary) : undefined}
               >
                 <span className="api-index-name">{m.entry}</span>
                 <span className="api-index-count">{m.count}</span>
-              </a>
+              </Router.Link>
             ))}
           </div>
         )}

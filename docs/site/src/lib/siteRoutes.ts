@@ -8,11 +8,11 @@
  *
  * ```ts
  * import { urls } from "./siteRoutes"
+ * import * as Router from "../ui/Router"
  *
  * urls.docs("work-pools")
  * urls.api.symbol("effect", "Effect.succeed")
- * urls.search({ query: { q: "WorkPool" } })
- * // site chrome: <a href={urls…}> / location.assign(urls…)
+ * // soft-nav (Waku): <Router.Link to={(u) => u.docs("work-pools")}>…
  * ```
  */
 import * as Route from "hyperlink-ts/ui/Route";

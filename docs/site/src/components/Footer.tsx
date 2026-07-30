@@ -1,10 +1,10 @@
 // Site footer — brand + link columns + a legal line. The Glossary lives here (a reference utility,
 // not a chapter in the reading flow) rather than in the sidebar nav.
 //
-// Native anchors; hrefs from the typed catalog (same DOM as pre-router).
+// In-app links soft-nav via Router.Link; external stay native anchors.
 
 import * as React from "react";
-import { urls } from "../lib/siteRoutes.js";
+import * as Router from "../ui/Router.js";
 
 const GITHUB = "https://github.com/nikolasstow/Hyperlink";
 const NPM = "https://www.npmjs.com/package/hyperlink-ts";
@@ -23,9 +23,9 @@ export function Footer(): React.ReactElement {
         <nav className="site-footer-cols" aria-label="Footer">
           <div className="site-footer-col">
             <span className="site-footer-heading">Docs</span>
-            <a href={urls.api.index()}>API Reference</a>
-            <a href={urls.docs("glossary")}>Glossary</a>
-            <a href={urls.releases()}>Releases</a>
+            <Router.Link to={(u) => u.api.index()}>API Reference</Router.Link>
+            <Router.Link to={(u) => u.docs("glossary")}>Glossary</Router.Link>
+            <Router.Link to={(u) => u.releases()}>Releases</Router.Link>
           </div>
           <div className="site-footer-col">
             <span className="site-footer-heading">Project</span>

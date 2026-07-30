@@ -12,10 +12,10 @@
 
 import * as React from "react";
 import type { NavGroup } from "../lib/docs-content.js";
-import { urls } from "../lib/siteRoutes.js";
 import { GroupedNav } from "./GroupedNav.js";
 import { SearchPanel, type SearchPanelControl } from "../islands/SearchPanel.js";
 import { SearchModal } from "../islands/SearchModal.js";
+import * as Router from "../ui/Router.js";
 
 const MENU_ID = "menu-toggle";
 
@@ -80,6 +80,7 @@ export function NavBar({
   groups: ReadonlyArray<NavGroup>;
   version?: string;
 }): React.ReactElement {
+  const router = Router.useRouter();
   const [query, setQuery] = React.useState("");
   const cbRef = React.useRef<HTMLInputElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -130,13 +131,13 @@ export function NavBar({
       />
       <header className="topbar">
         <div className="topbar-inner">
-          <a className="brand" href={urls.home()}>
+          <Router.Link className="brand" to={(u) => u.home()}>
             Hyperlink
-          </a>
+          </Router.Link>
           {version !== undefined && version !== "" ? (
-            <a className="version-badge" href={urls.releases()}>
+            <Router.Link className="version-badge" to={(u) => u.releases()}>
               v{version}
-            </a>
+            </Router.Link>
           ) : null}
           <a
             className="icon-btn gh-btn"
@@ -191,7 +192,7 @@ export function NavBar({
               if (e.key === "Enter" && query.trim() !== "") {
                 const q = query.trim();
                 close();
-                window.location.assign(urls.search({ query: { q } }));
+                void router.to((u) => u.search({ query: { q } }));
               }
             }}
             placeholder="Search docs and API…"
