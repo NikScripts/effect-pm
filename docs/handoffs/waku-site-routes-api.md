@@ -7,21 +7,32 @@ Typed API is the usual hyperlink dream shape. Waku is the engine.
 | Layer | Owns |
 |-------|------|
 | `src/pages/**` + `pages.gen` | Render / Twoslash / RSC-SSR file routes |
-| `destinations` in `siteRoutes.ts` | Typed nav catalog (Route path ↔ Waku `[param]` template) |
+| `catalog` in `siteRoutes.ts` | Typed nav paths (written once) |
 
-`test/site-routes.test-d.ts` fails if a required `pages.gen` path is missing from `destinations` (or vice versa). Excluded on purpose: `/_root`, `/api/hyperlink-ts/…` (static specialize of `api.symbol`).
+Waku `[param]` templates are **derived** from Route paths (`ToWaku` / `toWaku`).  
+`test/site-routes.test-d.ts` fails if a required `pages.gen` path is missing from the catalog (or vice versa). Excluded on purpose: `/_root`, `/api/hyperlink-ts/…` (static specialize of `api.symbol`).
 
 ## Definition (`siteRoutes.ts`)
 
 ```ts
-export const destinations = [
-  { id: "home", path: "/", waku: "/" },
-  { id: "docs", path: "/docs/:chapter", waku: "/docs/[chapter]" },
-  { id: "api.symbol", path: "/api/:pkg/:module/:symbol", waku: "/api/[pkg]/[module]/[symbol]" },
-  // …
-] as const
+export const catalog = {
+  home: "/",
+  docs: "/docs/:chapter",
+  api: {
+    index: "/api",
+    symbol: "/api/:pkg/:module/:symbol",
+    // …
+  },
+} as const
 
-export const site = Route.make("docsSite").add(/* matches destinations */)
+export const site = Route.make("docsSite").add(
+  Route.get("home", catalog.home),
+  Route.get("docs", catalog.docs),
+  Route.group("api").add(
+    Route.get("symbol", catalog.api.symbol),
+    // …
+  ),
+)
 
 urls.docs("work-pools")
 urls.api.symbol("effect", "Effect", "succeed")
@@ -50,8 +61,8 @@ void r.to((u) => u.api.symbol("hyperlink-ts", "WorkPool", "Tag"))
 
 | Piece | Role |
 |-------|------|
-| `destinations` | SSOT bridge (Route ↔ Waku templates) |
-| `Route.make(site)` | Typed catalog |
+| `catalog` | SSOT path strings |
+| `Route.make(site)` | Typed catalog from `catalog.*` |
 | `Route.urlBuilder` + sugar | Positional href builders (`urls`) |
 | `Router.make` / `Link` / `to` | Vision nav API → Waku `Link`/`push` |
 | `src/pages/` | Real match + RSC/SSG/SSR bodies |

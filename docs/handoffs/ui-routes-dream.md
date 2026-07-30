@@ -67,7 +67,7 @@ Group dashboards may still use Target + View skins in `DashboardShell`; ordinary
 
 ## Docs site
 
-Same API. Waku file routes are **render SSOT**; `siteRoutes` destinations table is the typed nav SSOT and is exhaustively checked against `pages.gen` paths. `Router.Outlet` is a no-op there. Skin adds `urls.api.symbol("effect", "Effect.succeed")` overload. See [`waku-site-routes-api.md`](./waku-site-routes-api.md).
+Same API. Waku file routes are **render SSOT**; `siteRoutes.catalog` is the typed nav SSOT (paths once; Waku templates derived) and is exhaustively checked against `pages.gen`. `Router.Outlet` is a no-op there. Skin adds `urls.api.symbol("effect", "Effect.succeed")` overload. See [`waku-site-routes-api.md`](./waku-site-routes-api.md).
 
 ## Runtime
 

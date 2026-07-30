@@ -4,12 +4,14 @@
 import { expectTypeOf } from "vitest";
 import "../src/pages.gen.js";
 import {
+  catalog,
   destinations,
   site,
   urls,
   isSitePath,
   type CatalogWakuPath,
   type SitePath,
+  type ToWaku,
   type WakuFilePath,
   type WakuFilePathRequired,
 } from "../src/lib/siteRoutes";
@@ -35,12 +37,18 @@ const _waku: SitePath = chapter;
 void _waku;
 void isSitePath;
 void destinations;
+void catalog;
 
 // @ts-expect-error junk is not a SitePath
 const _junk: SitePath = "/totally-fake";
 void _junk;
 
-// ----- SSOT: destinations.waku ↔ pages.gen Page.path -----
+// ----- SSOT: catalog paths → Waku templates ↔ pages.gen -----
+
+expectTypeOf<ToWaku<"/docs/:chapter">>().toEqualTypeOf<"/docs/[chapter]">();
+expectTypeOf<
+  ToWaku<"/api/:pkg/:module/:symbol">
+>().toEqualTypeOf<"/api/[pkg]/[module]/[symbol]">();
 
 type MissingFromCatalog = Exclude<WakuFilePathRequired, CatalogWakuPath>;
 type ExtraInCatalog = Exclude<CatalogWakuPath, WakuFilePath>;

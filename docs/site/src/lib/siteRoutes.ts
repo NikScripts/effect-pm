@@ -1,10 +1,10 @@
 /**
  * Typed docs catalog — **same `Route.make` API** as any hyperlink app.
  *
- * **SSOT:** {@link destinations} lists every navigable page — Route path + Waku
- * file-route template. Exhaustively checked against `pages.gen` (see
- * `test/site-routes.test-d.ts`). File routes remain render/Twoslash SSOT;
- * this table is the typed nav SSOT.
+ * **SSOT:** {@link catalog} holds every navigable Route path once. Waku file
+ * templates are derived (`:param` → `[param]`). Exhaustively checked against
+ * `pages.gen` in `test/site-routes.test-d.ts`. File routes remain render /
+ * Twoslash SSOT; this catalog is the typed nav SSOT.
  *
  * ```ts
  * import { site, urls } from "./siteRoutes"
@@ -16,47 +16,87 @@
  * router.urls.search({ query: { q: "WorkPool" } })
  * ```
  */
-import { Schema } from "effect";
 import * as Route from "hyperlink-ts/ui/Route";
 import type { CreatePagesConfig } from "waku/router";
 import type { Unstable_InferredPaths as WakuPath } from "waku/router/client";
 import "../pages.gen.js";
 
 // =============================================================================
-// SSOT — destinations (Route path ↔ Waku file-route template)
+// SSOT — path catalog (one string each; Waku templates derived)
 // =============================================================================
 
 /**
- * Every navigable docs page. `waku` must match a `pages.gen` `Page.path`.
- * Specialized static sibling `/api/hyperlink-ts/…` is covered by `api.symbol`.
- * `/_root` is layout-only — not listed.
+ * Navigable docs paths. Nested `api` → `Route.group("api")`.
+ * Specialized static `/api/hyperlink-ts/…` is covered by `api.symbol`.
+ * `/_root` is layout-only — omitted.
  */
-export const destinations = [
-  { id: "home", path: "/", waku: "/" },
-  { id: "search", path: "/search", waku: "/search" },
-  { id: "releases", path: "/releases", waku: "/releases" },
-  { id: "notFound", path: "/404", waku: "/404" },
-  { id: "docsHyperlinks", path: "/docs/hyperlinks", waku: "/docs/hyperlinks" },
-  { id: "docsResources", path: "/docs/resources", waku: "/docs/resources" },
-  { id: "docs", path: "/docs/:chapter", waku: "/docs/[chapter]" },
-  { id: "api.index", path: "/api", waku: "/api" },
-  { id: "api.pkg", path: "/api/:pkg", waku: "/api/[pkg]" },
-  { id: "api.module", path: "/api/:pkg/:module", waku: "/api/[pkg]/[module]" },
-  {
-    id: "api.symbol",
-    path: "/api/:pkg/:module/:symbol",
-    waku: "/api/[pkg]/[module]/[symbol]",
+export const catalog = {
+  home: "/",
+  search: "/search",
+  releases: "/releases",
+  notFound: "/404",
+  docsHyperlinks: "/docs/hyperlinks",
+  docsResources: "/docs/resources",
+  docs: "/docs/:chapter",
+  api: {
+    index: "/api",
+    pkg: "/api/:pkg",
+    module: "/api/:pkg/:module",
+    symbol: "/api/:pkg/:module/:symbol",
   },
-] as const;
+} as const;
+
+/** `:param` / `*param` → Waku `[param]` (type-level). */
+export type ToWaku<P extends string> = P extends
+  `${infer L}:${infer Param}/${infer R}`
+  ? Param extends `${infer Name}?` ? `${L}[${Name}]/${ToWaku<R>}`
+  : `${L}[${Param}]/${ToWaku<R>}`
+  : P extends `${infer L}:${infer Param}`
+    ? Param extends `${infer Name}?` ? `${L}[${Name}]`
+    : `${L}[${Param}]`
+  : P extends `${infer L}*${infer Splat}` ? `${L}[${Splat}]`
+  : P;
+
+type TopId = Exclude<keyof typeof catalog, "api">;
+type ApiId = keyof typeof catalog.api;
+
+/** Waku templates claimed by {@link catalog}. */
+export type CatalogWakuPath =
+  | ToWaku<(typeof catalog)[TopId]>
+  | ToWaku<(typeof catalog.api)[ApiId]>;
+
+/** Flat list for tooling / docs (derived from {@link catalog}). */
+export const destinations: ReadonlyArray<{
+  readonly id: string;
+  readonly path: string;
+  readonly waku: string;
+}> = [
+  ...(Object.keys(catalog) as Array<TopId | "api">)
+    .filter((id): id is TopId => id !== "api")
+    .map((id) => ({
+      id,
+      path: catalog[id],
+      waku: toWaku(catalog[id]),
+    })),
+  ...(Object.keys(catalog.api) as Array<ApiId>).map((id) => ({
+    id: `api.${id}`,
+    path: catalog.api[id],
+    waku: toWaku(catalog.api[id]),
+  })),
+];
+
+/** Runtime `:param` / `*param` → `[param]`. */
+export const toWaku = (path: string): string =>
+  path
+    .replace(/:(\w+)\?/g, "[$1]")
+    .replace(/:(\w+)/g, "[$1]")
+    .replace(/\/\*(\w+)/g, "/[$1]");
 
 /** Waku `Page.path` union from `pages.gen` module augmentation. */
 export type WakuFilePath = CreatePagesConfig extends { pages: infer P }
   ? P extends { path: infer Path } ? Path
   : never
   : never;
-
-/** Paths this catalog claims to cover. */
-export type CatalogWakuPath = (typeof destinations)[number]["waku"];
 
 /**
  * File routes we intentionally omit from the nav catalog.
@@ -70,41 +110,25 @@ export type WakuFilePathExcluded =
 export type WakuFilePathRequired = Exclude<WakuFilePath, WakuFilePathExcluded>;
 
 // =============================================================================
-// Typed API — Route.make (built to match {@link destinations})
+// Typed API — Route.make from {@link catalog}
 // =============================================================================
 
 /**
- * Docs site catalog. Mirrors Waku `src/pages/` via {@link destinations}.
+ * Docs site catalog — paths from {@link catalog} only.
  */
 export const site = Route.make("docsSite").add(
-  Route.get("home", "/"),
-  Route.get("search", "/search"),
-  Route.get("releases", "/releases"),
-  Route.get("notFound", "/404"),
-  Route.get("docsHyperlinks", "/docs/hyperlinks"),
-  Route.get("docsResources", "/docs/resources"),
-  Route.get("docs", "/docs/:chapter").pipe(
-    Route.params(Schema.Struct({ chapter: Schema.String })),
-  ),
+  Route.get("home", catalog.home),
+  Route.get("search", catalog.search),
+  Route.get("releases", catalog.releases),
+  Route.get("notFound", catalog.notFound),
+  Route.get("docsHyperlinks", catalog.docsHyperlinks),
+  Route.get("docsResources", catalog.docsResources),
+  Route.get("docs", catalog.docs),
   Route.group("api").add(
-    Route.get("index", "/api"),
-    Route.get("pkg", "/api/:pkg").pipe(
-      Route.params(Schema.Struct({ pkg: Schema.String })),
-    ),
-    Route.get("module", "/api/:pkg/:module").pipe(
-      Route.params(
-        Schema.Struct({ pkg: Schema.String, module: Schema.String }),
-      ),
-    ),
-    Route.get("symbol", "/api/:pkg/:module/:symbol").pipe(
-      Route.params(
-        Schema.Struct({
-          pkg: Schema.String,
-          module: Schema.String,
-          symbol: Schema.String,
-        }),
-      ),
-    ),
+    Route.get("index", catalog.api.index),
+    Route.get("pkg", catalog.api.pkg),
+    Route.get("module", catalog.api.module),
+    Route.get("symbol", catalog.api.symbol),
   ),
 );
 
