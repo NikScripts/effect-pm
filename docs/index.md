@@ -287,8 +287,8 @@ drop in when you need them:
 
 ## When the fleet has Lookup
 
-Fixed `Hyperlink.nodes([…])` is enough for a known mesh. When **Lookup** owns placement —
-exclusive brains, Directory advertise, Advice prefer, A→B cutover — start here:
+Fixed `Hyperlink.nodes([…])` is enough for a known mesh. When **Lookup** owns placement
+(exclusive brains, Directory advertise, Advice prefer, A→B cutover), start here:
 
 | Need | Guide |
 |------|-------|
