@@ -1,9 +1,10 @@
 /**
  * Typed docs catalog — **same `Route.make` API** as any hyperlink app.
  *
- * Href builders match the package dream shape (positional path args, optional
- * `{ query }`) via {@link Route.urlBuilder}, with branded path returns for Waku
- * and a `Module.symbol` overload on `api.symbol`.
+ * **SSOT:** {@link destinations} lists every navigable page — Route path + Waku
+ * file-route template. Exhaustively checked against `pages.gen` (see
+ * `test/site-routes.test-d.ts`). File routes remain render/Twoslash SSOT;
+ * this table is the typed nav SSOT.
  *
  * ```ts
  * import { site, urls } from "./siteRoutes"
@@ -17,21 +18,63 @@
  */
 import { Schema } from "effect";
 import * as Route from "hyperlink-ts/ui/Route";
+import type { CreatePagesConfig } from "waku/router";
 import type { Unstable_InferredPaths as WakuPath } from "waku/router/client";
 import "../pages.gen.js";
 
 // =============================================================================
-// Typed API — Route.make (the definition)
+// SSOT — destinations (Route path ↔ Waku file-route template)
 // =============================================================================
 
 /**
- * Docs site catalog. Mirrors Waku `src/pages/` (static + dynamic).
- *
- * | Identifier | Path | Waku page |
- * |------------|------|-----------|
- * | `home` | `/` | `pages/index` (outside book) / book entry |
- * | `docs` | `/docs/:chapter` | `docs/[chapter].tsx` (SSG) |
- * | `api` / `api.symbol` | `/api/:pkg/:module/:symbol` | static `hyperlink-ts/…` or SSR `[pkg]/…` |
+ * Every navigable docs page. `waku` must match a `pages.gen` `Page.path`.
+ * Specialized static sibling `/api/hyperlink-ts/…` is covered by `api.symbol`.
+ * `/_root` is layout-only — not listed.
+ */
+export const destinations = [
+  { id: "home", path: "/", waku: "/" },
+  { id: "search", path: "/search", waku: "/search" },
+  { id: "releases", path: "/releases", waku: "/releases" },
+  { id: "notFound", path: "/404", waku: "/404" },
+  { id: "docsHyperlinks", path: "/docs/hyperlinks", waku: "/docs/hyperlinks" },
+  { id: "docsResources", path: "/docs/resources", waku: "/docs/resources" },
+  { id: "docs", path: "/docs/:chapter", waku: "/docs/[chapter]" },
+  { id: "api.index", path: "/api", waku: "/api" },
+  { id: "api.pkg", path: "/api/:pkg", waku: "/api/[pkg]" },
+  { id: "api.module", path: "/api/:pkg/:module", waku: "/api/[pkg]/[module]" },
+  {
+    id: "api.symbol",
+    path: "/api/:pkg/:module/:symbol",
+    waku: "/api/[pkg]/[module]/[symbol]",
+  },
+] as const;
+
+/** Waku `Page.path` union from `pages.gen` module augmentation. */
+export type WakuFilePath = CreatePagesConfig extends { pages: infer P }
+  ? P extends { path: infer Path } ? Path
+  : never
+  : never;
+
+/** Paths this catalog claims to cover. */
+export type CatalogWakuPath = (typeof destinations)[number]["waku"];
+
+/**
+ * File routes we intentionally omit from the nav catalog.
+ * - `/_root` — layout chrome
+ * - `/api/hyperlink-ts/…` — static specialize of `api.symbol`
+ */
+export type WakuFilePathExcluded =
+  | "/_root"
+  | "/api/hyperlink-ts/[module]/[symbol]";
+
+export type WakuFilePathRequired = Exclude<WakuFilePath, WakuFilePathExcluded>;
+
+// =============================================================================
+// Typed API — Route.make (built to match {@link destinations})
+// =============================================================================
+
+/**
+ * Docs site catalog. Mirrors Waku `src/pages/` via {@link destinations}.
  */
 export const site = Route.make("docsSite").add(
   Route.get("home", "/"),

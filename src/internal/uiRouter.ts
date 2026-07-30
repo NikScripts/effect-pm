@@ -425,10 +425,10 @@ export const makeService = <A extends ApiConstraint>(
     },
     openNode: (nodeId) => {
       requireRoot(root, "openNode");
-      const healthNode = urlMethod(urls as Route.UrlBuilderLoose, "healthNode");
+      const nodeHealth = urlMethod(urls as Route.UrlBuilderLoose, "nodeHealth");
       setHref(
-        healthNode !== undefined
-          ? healthNode(nodeId)
+        nodeHealth !== undefined
+          ? nodeHealth(nodeId)
           : toHref(["health", nodeId]),
         "push",
       );

@@ -46,10 +46,12 @@ That is the whole product story. No View registry required. No Group tag on Rout
 urls.home()
 urls.docs("work-pools")
 urls.api.symbol("effect", "Effect", "succeed")
-urls.healthNode("app/NodeA", { query: { panel: "logs" } })
+urls.nodeHealth("app/NodeA", { query: { panel: "logs" } })
+// → /health/app/NodeA?panel=logs   (*nodeId splat keeps `/`)
 ```
 
 Not `{ params: { chapter } }` — path keys are positional in template order.
+`:name` = one segment; `*name` = rest (slashes ok), must be last.
 Query is UI navigation only (no HTTP body).
 
 ## Catalog extras (optional)
@@ -58,14 +60,14 @@ Query is UI navigation only (no HTTP body).
 |------|------|
 | `Route.group` / `topLevel` | Nest / flatten URL builders |
 | `Route.addHttpApi` | Reuse Effect HttpApi paths |
-| `Group.asRoutes` + `fromEffect` | Generate destinations from a Group tree — **typed** UrlBuilder (`urls.Nwsl.HttpApi()`, `urls.healthNode(id)`) |
+| `Group.asRoutes` + `fromEffect` | Generate destinations from a Group tree — **typed** UrlBuilder (`urls.Nwsl.HttpApi()`, `urls.nodeHealth(id)`) |
 | `Route.Target` / `DashboardRoot` | Dashboard metadata (`selected` / `view`) — optional |
 
 Group dashboards may still use Target + View skins in `DashboardShell`; ordinary apps use `handle` + `Outlet`.
 
 ## Docs site
 
-Same API. Waku owns file-route match + Twoslash SSG/SSR; `Router.Outlet` is a no-op there. Skin adds `urls.api.symbol("effect", "Effect.succeed")` overload. See [`waku-site-routes-api.md`](./waku-site-routes-api.md).
+Same API. Waku file routes are **render SSOT**; `siteRoutes` destinations table is the typed nav SSOT and is exhaustively checked against `pages.gen` paths. `Router.Outlet` is a no-op there. Skin adds `urls.api.symbol("effect", "Effect.succeed")` overload. See [`waku-site-routes-api.md`](./waku-site-routes-api.md).
 
 ## Runtime
 

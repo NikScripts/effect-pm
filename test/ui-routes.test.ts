@@ -96,6 +96,20 @@ describe("Route", () => {
     );
   });
 
+  it("splat *param keeps unencoded slashes", () => {
+    const api = Route.make("site").add(
+      Route.get("nodeHealth", "/health/*nodeId").pipe(
+        Route.params(Schema.Struct({ nodeId: Schema.String })),
+      ),
+    );
+    const urls = Route.urlBuilder(api);
+    expect(urls.nodeHealth("app/NodeA")).toBe("/health/app/NodeA");
+    expect(urls.nodeHealth("app/Node A")).toBe("/health/app/Node%20A");
+    const hit = Option.getOrThrow(Route.match(api, "/health/app/NodeA"));
+    expect(hit.params.nodeId).toBe("app/NodeA");
+    expect(hit.route.identifier).toBe("nodeHealth");
+  });
+
   it("urlBuilder appends query and preserves it with baseUrl", () => {
     const api = Route.make("site").add(
       Route.get("home", "/home"),

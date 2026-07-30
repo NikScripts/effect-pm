@@ -21,7 +21,7 @@ export type { AsRoutesEffect } from "./asRoutesBrand";
 export { AsRoutesTypeId } from "./asRoutesBrand";
 
 export type AsRoutesOptions = {
-  /** Include `/health` + `/health/:nodeId` (default `true`). */
+  /** Include `/health` + `/health/*nodeId` (default `true`). */
   readonly health?: boolean | undefined;
 };
 
@@ -59,10 +59,10 @@ export type MembersRouteLikes<
     }[keyof M & string]
   : never;
 
-/** `/health` + `/health/:nodeId` when `health` is not false. */
+/** `/health` + `/health/*nodeId` when `health` is not false. */
 export type HealthRouteLikes =
   | uiRoute.Route<"health", "/health">
-  | uiRoute.Route<"healthNode", "/health/:nodeId", { readonly nodeId: string }>;
+  | uiRoute.Route<"nodeHealth", "/health/*nodeId", { readonly nodeId: string }>;
 
 export type AsRoutesItemsOf<
   M extends Record<string, unknown>,
@@ -76,9 +76,13 @@ const isGroupNode = (x: unknown): x is RouteGroup =>
   x !== null &&
   "members" in x;
 
+/** Encode each `/`-separated piece so keys may embed slashes (node ids). */
+const encodeKey = (key: string): string =>
+  key.split("/").map(encodeURIComponent).join("/");
+
 const formatPath = (keys: ReadonlyArray<string>): Route.Path => {
   const href =
-    keys.length === 0 ? "/" : `/${keys.map(encodeURIComponent).join("/")}`;
+    keys.length === 0 ? "/" : `/${keys.map(encodeKey).join("/")}`;
   return href as Route.Path;
 };
 
@@ -150,7 +154,7 @@ const healthRoutes = (): Array<Route.RouteLike> => [
     kind: "health",
   }),
   target(
-    Route.get("healthNode", "/health/:nodeId").pipe(
+    Route.get("nodeHealth", "/health/*nodeId").pipe(
       Route.params(Schema.Struct({ nodeId: Schema.String })),
     ),
     {
@@ -180,7 +184,7 @@ export const routesOf = (
  *
  * ```ts
  * Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub))
- * // urls.Nwsl.HttpApi(), urls.healthNode(nodeId), …
+ * // urls.Nwsl.HttpApi(), urls.nodeHealth(nodeId), …
  * ```
  */
 export function asRoutes<

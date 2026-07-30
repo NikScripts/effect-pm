@@ -236,8 +236,8 @@ describe("Group.asRoutes + fromEffect", () => {
       nav.openNode("app/NodeA");
       expect(nav.path).toEqual(["health", "app/NodeA"]);
       expect(nav.view).toBe("health");
-      expect(Router.toHref(nav.path)).toBe("/health/app%2FNodeA");
-      expect(nav.match?.route.identifier).toBe("healthNode");
+      expect(Router.toHref(nav.path)).toBe("/health/app/NodeA");
+      expect(nav.match?.route.identifier).toBe("nodeHealth");
       expect(nav.match?.params.nodeId).toBe("app/NodeA");
 
       nav.up();

@@ -570,7 +570,8 @@ export type UrlBuilderLoose = {
 };
 
 /**
- * Path param names in template order (`/api/:pkg/:module` → `["pkg","module"]`).
+ * Path param names in template order.
+ * `:pkg/:module` → `["pkg","module"]`; `/health/*nodeId` → `["nodeId"]`.
  */
 type PathKeys<S extends string> = S extends
   `${string}:${infer Key}/${infer Rest}`
@@ -579,6 +580,7 @@ type PathKeys<S extends string> = S extends
   : S extends `${string}:${infer Key}`
     ? Key extends `${infer Name}?` ? readonly [Name]
     : readonly [Key]
+  : S extends `${string}*${infer Splat}` ? readonly [Splat]
   : readonly [];
 
 type PathArgTuple<Keys extends readonly string[]> = {

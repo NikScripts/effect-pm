@@ -2,25 +2,27 @@
 
 Typed API is the usual hyperlink dream shape. Waku is the engine.
 
+## SSOT
+
+| Layer | Owns |
+|-------|------|
+| `src/pages/**` + `pages.gen` | Render / Twoslash / RSC-SSR file routes |
+| `destinations` in `siteRoutes.ts` | Typed nav catalog (Route path ↔ Waku `[param]` template) |
+
+`test/site-routes.test-d.ts` fails if a required `pages.gen` path is missing from `destinations` (or vice versa). Excluded on purpose: `/_root`, `/api/hyperlink-ts/…` (static specialize of `api.symbol`).
+
 ## Definition (`siteRoutes.ts`)
 
 ```ts
-export const site = Route.make("docsSite").add(
-  Route.get("home", "/"),
-  Route.get("search", "/search"),
-  Route.get("releases", "/releases"),
-  Route.get("docs", "/docs/:chapter").pipe(
-    Route.params(Schema.Struct({ chapter: Schema.String })),
-  ),
-  Route.group("api").add(
-    Route.get("index", "/api"),
-    Route.get("pkg", "/api/:pkg").pipe(/* … */),
-    Route.get("module", "/api/:pkg/:module").pipe(/* … */),
-    Route.get("symbol", "/api/:pkg/:module/:symbol").pipe(/* … */),
-  ),
-)
+export const destinations = [
+  { id: "home", path: "/", waku: "/" },
+  { id: "docs", path: "/docs/:chapter", waku: "/docs/[chapter]" },
+  { id: "api.symbol", path: "/api/:pkg/:module/:symbol", waku: "/api/[pkg]/[module]/[symbol]" },
+  // …
+] as const
 
-// package Route.urlBuilder(site) + Module.symbol sugar
+export const site = Route.make("docsSite").add(/* matches destinations */)
+
 urls.docs("work-pools")
 urls.api.symbol("effect", "Effect", "succeed")
 urls.api.symbol("effect", "Effect.succeed") // overload
@@ -48,7 +50,8 @@ void r.to((u) => u.api.symbol("hyperlink-ts", "WorkPool", "Tag"))
 
 | Piece | Role |
 |-------|------|
-| `Route.make(site)` | Typed catalog (the definition) |
+| `destinations` | SSOT bridge (Route ↔ Waku templates) |
+| `Route.make(site)` | Typed catalog |
 | `Route.urlBuilder` + sugar | Positional href builders (`urls`) |
 | `Router.make` / `Link` / `to` | Vision nav API → Waku `Link`/`push` |
 | `src/pages/` | Real match + RSC/SSG/SSR bodies |

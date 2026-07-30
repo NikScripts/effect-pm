@@ -10,7 +10,10 @@ import type * as Schema from "effect/Schema";
 
 export const TypeId = "~hyperlink-ts/ui/Route" as const;
 
-/** Pathname template — always absolute (`/health`, `/health/:nodeId`). */
+/**
+ * Pathname template — always absolute.
+ * `:name` = one segment; `*name` = rest (may include `/`) — must be last.
+ */
 export type Path = `/${string}`;
 
 export interface Route<
@@ -132,41 +135,108 @@ export type CompiledPath = {
   readonly match: (pathname: string) => Option.Option<Record<string, string>>;
 };
 
+type PathToken =
+  | { readonly kind: "lit"; readonly value: string }
+  | {
+      readonly kind: "param";
+      readonly key: string;
+      readonly optional: boolean;
+      readonly slash: string;
+    }
+  | { readonly kind: "splat"; readonly key: string; readonly slash: string };
+
 const paramsRegExp = /(\/?):(\w+)(\?)?/g;
 
-export const compilePath = (path: string): CompiledPath => {
+/** Encode a path value; splat values keep `/` (encode each segment). */
+const encodePathValue = (value: string, splat: boolean): string =>
+  splat
+    ? value.split("/").map(encodeURIComponent).join("/")
+    : encodeURIComponent(value);
+
+const decodePathValue = (value: string, splat: boolean): string =>
+  splat
+    ? value.split("/").map(decodeURIComponent).join("/")
+    : decodeURIComponent(value);
+
+const tokenize = (source: string): {
+  readonly tokens: ReadonlyArray<PathToken>;
+  readonly keys: ReadonlyArray<string>;
+  readonly splatKeys: ReadonlySet<string>;
+} => {
+  const tokens: Array<PathToken> = [];
   const keys: Array<string> = [];
+  const splatKeys = new Set<string>();
   paramsRegExp.lastIndex = 0;
-  let patternSource = "^";
   let lastIndex = 0;
   let match: RegExpExecArray | null;
-  const source = path.startsWith("/") ? path : `/${path}`;
   while ((match = paramsRegExp.exec(source)) !== null) {
-    const [whole, slash = "/", key, optional] = match;
-    patternSource += escapeRegex(source.slice(lastIndex, match.index));
+    if (match.index > lastIndex) {
+      tokens.push({ kind: "lit", value: source.slice(lastIndex, match.index) });
+    }
+    const [, slash = "/", key, optional] = match;
     keys.push(key!);
-    patternSource +=
-      optional !== undefined
-        ? `(?:${escapeRegex(slash)}([^/]+))?`
-        : `${escapeRegex(slash)}([^/]+)`;
-    lastIndex = match.index + whole.length;
+    tokens.push({
+      kind: "param",
+      key: key!,
+      optional: optional !== undefined,
+      slash,
+    });
+    lastIndex = match.index + match[0].length;
   }
-  patternSource += escapeRegex(source.slice(lastIndex)) + "$";
+  const remainder = source.slice(lastIndex);
+  const splatMatch = /\/\*(\w+)$/.exec(remainder);
+  if (splatMatch !== null) {
+    const litBefore = remainder.slice(0, splatMatch.index);
+    if (litBefore.length > 0) {
+      tokens.push({ kind: "lit", value: litBefore });
+    }
+    const key = splatMatch[1]!;
+    keys.push(key);
+    splatKeys.add(key);
+    tokens.push({ kind: "splat", key, slash: "/" });
+  } else if (remainder.length > 0) {
+    tokens.push({ kind: "lit", value: remainder });
+  }
+  return { tokens, keys, splatKeys };
+};
+
+export const compilePath = (path: string): CompiledPath => {
+  const source = path.startsWith("/") ? path : `/${path}`;
+  const { tokens, keys, splatKeys } = tokenize(source);
+
+  let patternSource = "^";
+  for (const token of tokens) {
+    if (token.kind === "lit") {
+      patternSource += escapeRegex(token.value);
+      continue;
+    }
+    if (token.kind === "splat") {
+      patternSource += `${escapeRegex(token.slash)}(.+)`;
+      continue;
+    }
+    patternSource +=
+      token.optional
+        ? `(?:${escapeRegex(token.slash)}([^/]+))?`
+        : `${escapeRegex(token.slash)}([^/]+)`;
+  }
+  patternSource += "$";
   const pattern = new RegExp(patternSource, "i");
 
   const build = (params: Record<string, string | undefined>): string => {
-    paramsRegExp.lastIndex = 0;
-    return source.replace(
-      paramsRegExp,
-      (_whole, slash: string, key: string, optional: string | undefined) => {
-        const value = params[key];
-        if (value === undefined) {
-          if (optional !== undefined) return "";
-          throw new Error(`Missing path parameter: ${key}`);
-        }
-        return `${slash}${encodeURIComponent(value)}`;
-      },
-    );
+    let out = "";
+    for (const token of tokens) {
+      if (token.kind === "lit") {
+        out += token.value;
+        continue;
+      }
+      const value = params[token.key];
+      if (value === undefined) {
+        if (token.kind === "param" && token.optional) continue;
+        throw new Error(`Missing path parameter: ${token.key}`);
+      }
+      out += `${token.slash}${encodePathValue(value, token.kind === "splat")}`;
+    }
+    return out;
   };
 
   const matchPath = (
@@ -179,7 +249,9 @@ export const compilePath = (path: string): CompiledPath => {
     for (let i = 0; i < keys.length; i++) {
       const key = keys[i]!;
       const value = found[i + 1];
-      if (value !== undefined) out[key] = decodeURIComponent(value);
+      if (value !== undefined) {
+        out[key] = decodePathValue(value, splatKeys.has(key));
+      }
     }
     return Option.some(out);
   };

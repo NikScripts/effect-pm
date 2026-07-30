@@ -7,7 +7,7 @@
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **4** | `cursor/hyperservice-open-deps-5679` | [gap proposals](./examples-gap-proposals.md) · [E5 apps](./examples-apps-e5-plan.md) · [release cleanup](./release-prep-cleanup.md) | **tip-synced** — examples + release-prep cleanup | same tip as `integration` | Related 97/97; archive pass | Idea 10 E5 owner-gated; changeset consolidate owner | 2026-07-29 |
-| **G / TUI** | `cursor/view-withsize-types-125f` | View compose · [UI Route](./ui-routes-dream.md) | **dream** — positional UrlBuilder + query; docs-site on package builder | same tip as `integration` | ui-routes + router + example + docs-site | F5 flake pre-existing | 2026-07-30 |
+| **G / TUI** | `cursor/view-withsize-types-125f` | View compose · [UI Route](./ui-routes-dream.md) | **dream** — splat `*param` + `nodeHealth`; docs `destinations` SSOT vs pages.gen | tip ahead of `integration` until sync | ui-routes + router + site-routes.test-d | ask before sync | 2026-07-30 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **5**, **G** | 2026-07-26 |
 | **5** | `cursor/peerslayer-d-parity-929b` | [launcher + handoff brief](./launcher-and-handoff-brief.md) · [rename](./rename-hyperlink-handoff.md) | **landed** — peersLayer D parity on `integration` | same tip as `integration` | typecheck green; d3 peers 6/6 | dual-serve / stream replay / `restartSuccessor` / #35–37 deferred | 2026-07-29 |
 | **Docs site** | `cursor/docs-site-edge-cache-dbdc` (ε) | [dev host](./docs-site-dev-host.md) · edge cache · SEO | **tip-synced / live** — apex coming-soon; docs on `dev`; GS polish; origin gate | same tip as `integration` | smoke + host-gate tests; CF + `serve-production.mjs`; islands on `hyperlink-ts` / `.hl-dashboard` | — | 2026-07-29 |
@@ -29,7 +29,7 @@
 
 ### Active (owner approval required)
 1. **Agent 4:** Examples Ideas 1–9 + Related notes Eng’d. **Release-prep cleanup Eng’d** (archive completed handoffs/plans, dead scripts, npmignore, legacy example aliases). Idea 10 Apps/E5 still owner-gated. Owner still: changeset consolidate before `version`/publish.
-2. **Agent G / TUI:** Router dream call shape **landed** — positional path args + `{ query }`; `search`/`href` on Router; docs-site skin uses package `urlBuilder` + `Module.symbol` sugar ([`ui-routes-dream.md`](./ui-routes-dream.md)).
+2. **Agent G / TUI:** Router dream — positional + query **on tip**; next on branch: splat `*nodeId` / `nodeHealth` rename + docs `destinations` SSOT vs `pages.gen` ([`ui-routes-dream.md`](./ui-routes-dream.md)). Ask owner before syncing `integration`.
 3. **Agent 5 (Launcher + handoff):** #39 + Ink + Track D on tip; sibling Tags + **peersLayer D parity landed**. Next: dual-serve / stream replay / `restartSuccessor` / #35–37. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
 4. **Docs site:** Live — apex coming-soon (inlined CSS + `(book)` chrome); docs on `dev`. Origin host-gate via `serve-production.mjs` (before Waku static). Islands: `hyperlink-ts` alias + `.hl-dashboard`. Getting Started em-dash/voice polish.
 

@@ -9,9 +9,13 @@ export type { RouteGroup } from "./asRoutesBrand";
 
 const isGroupNode = (x: unknown): x is RouteGroup => Group.isGroup(x);
 
+/** Encode each `/`-separated piece so keys may embed slashes (node ids). */
+const encodeKey = (key: string): string =>
+  key.split("/").map(encodeURIComponent).join("/");
+
 /** Format resolved keys as a URL pathname. */
 export const formatGroupPath = (keys: ReadonlyArray<string>): string =>
-  keys.length === 0 ? "/" : `/${keys.map(encodeURIComponent).join("/")}`;
+  keys.length === 0 ? "/" : `/${keys.map(encodeKey).join("/")}`;
 
 /**
  * Walk `root` by `segments` (case-insensitive). Trailing segment after a leaf is
