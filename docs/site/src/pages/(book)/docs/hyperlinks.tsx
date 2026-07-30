@@ -1,6 +1,5 @@
 import { PageMeta } from "../../../components/PageMeta.js";
 import { urls } from "../../../lib/siteRoutes.js";
-import * as Router from "../../../ui/Router.js";
 
 /**
  * Redirect for the short-lived `/docs/hyperlinks` slug (renamed to
@@ -22,10 +21,7 @@ export default function HyperlinksRedirect() {
         <h1>Moved</h1>
         <p>
           The Hyperlink Factories standards chapter now lives at{" "}
-          <Router.Link to={(u) => u.docs("hyperlink-services")}>
-            {target}
-          </Router.Link>
-          .
+          <a href={target}>{target}</a>.
         </p>
       </article>
     </>

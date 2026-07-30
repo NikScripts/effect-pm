@@ -4,7 +4,7 @@
 
 import type { ApiSymbol } from "../lib/api-data.js";
 import type { SymbolGroup } from "../lib/api-groups.js";
-import * as Router from "../ui/Router.js";
+import { urls } from "../lib/siteRoutes.js";
 
 export const ModuleAside = ({ groups }: { readonly groups: ReadonlyArray<SymbolGroup> }) =>
   groups.length > 1 ? (
@@ -45,13 +45,11 @@ export const SymbolAside = ({
         </dd>
         <dt>Module</dt>
         <dd>
-          <Router.Link to={(u) => u.api.module(pkg, module)}>
-            {s.entry}
-          </Router.Link>
+          <a href={urls.api.module(pkg, module)}>{s.entry}</a>
         </dd>
         <dt>Package</dt>
         <dd>
-          <Router.Link to={(u) => u.api.pkg(pkg)}>{pkg}</Router.Link>
+          <a href={urls.api.pkg(pkg)}>{pkg}</a>
         </dd>
         <dt>Source</dt>
         <dd className="aside-source">

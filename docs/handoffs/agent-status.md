@@ -7,7 +7,7 @@
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **4** | `cursor/hyperservice-open-deps-5679` | [gap proposals](./examples-gap-proposals.md) · [E5 apps](./examples-apps-e5-plan.md) · [release cleanup](./release-prep-cleanup.md) | **tip-synced** — examples + release-prep cleanup | same tip as `integration` | Related 97/97; archive pass | Idea 10 E5 owner-gated; changeset consolidate owner | 2026-07-29 |
-| **G / TUI** | `cursor/view-withsize-types-125f` | View compose · [UI Route](./ui-routes-dream.md) | **dream** — content/nav hrefs via catalog | tip ahead of `integration` until sync | site typecheck | ask before sync | 2026-07-30 |
+| **G / TUI** | `cursor/view-withsize-types-125f` | View compose · [UI Route](./ui-routes-dream.md) · [site routes](./waku-site-routes-api.md) | **parity** — catalog `urls` + native `<a>` (no client Router chrome) | tip ahead of `integration` until sync | site typecheck | ask before sync | 2026-07-30 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **5**, **G** | 2026-07-26 |
 | **5** | `cursor/launcher-node-examples-929b` | [launcher + handoff brief](./launcher-and-handoff-brief.md) · [rename](./rename-hyperlink-handoff.md) | **tip-synced** — Policy Eng + Track C/D examples + main-book on `integration` | same tip as `integration` | smoke examples | `restartSuccessor` / #35–37 deferred | 2026-07-30 |
 | **Docs site** | `cursor/docs-site-edge-cache-dbdc` (ε) | [dev host](./docs-site-dev-host.md) · edge cache · SEO | **tip-synced / live** — apex coming-soon; docs on `dev`; GS polish; origin gate | same tip as `integration` | smoke + host-gate tests; CF + `serve-production.mjs`; islands on `hyperlink-ts` / `.hl-dashboard` | — | 2026-07-29 |
@@ -29,7 +29,7 @@
 
 ### Active (owner approval required)
 1. **Agent 4:** Examples Ideas 1–9 + Related notes Eng’d. **Release-prep cleanup Eng’d** (archive completed handoffs/plans, dead scripts, npmignore, legacy example aliases). Idea 10 Apps/E5 still owner-gated. Owner still: changeset consolidate before `version`/publish.
-2. **Agent G / TUI:** Router dream — content/nav hrefs via `urls` / `Router.Link` on work branch ([`ui-routes-dream.md`](./ui-routes-dream.md)). Ask before syncing `integration`.
+2. **Agent G / TUI:** Router dream — typed `urls` / catalog SSOT; site nav is native anchors for pre-router appearance/perf ([`waku-site-routes-api.md`](./waku-site-routes-api.md)). Ask before syncing `integration`.
 3. **Agent 5 (Launcher + handoff):** #39 + Ink + Track D + **Policy Eng’d** + docs/examples pass — **tip-synced** to `integration`. Next: `restartSuccessor` / #35–37. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
 4. **Docs site:** Live — apex coming-soon (inlined CSS + `(book)` chrome); docs on `dev`. Origin host-gate via `serve-production.mjs` (before Waku static). Islands: `hyperlink-ts` alias + `.hl-dashboard`. Getting Started em-dash/voice polish.
 

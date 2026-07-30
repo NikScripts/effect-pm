@@ -2,7 +2,6 @@ import { PageMeta } from "../../../components/PageMeta.js";
 import { packages } from "../../../lib/api-data.js";
 import { urls } from "../../../lib/siteRoutes.js";
 import { runServer } from "../../../lib/runtime.js";
-import * as Router from "../../../ui/Router.js";
 
 // The API landing — the list of documented packages. Loads only the tiny top index.
 export default async function ApiIndex() {
@@ -22,14 +21,10 @@ export default async function ApiIndex() {
         </p>
         <div className="api-index">
           {pkgs.map((p) => (
-            <Router.Link
-              className="api-index-item"
-              key={p.slug}
-              to={(u) => u.api.pkg(p.slug)}
-            >
+            <a className="api-index-item" key={p.slug} href={urls.api.pkg(p.slug)}>
               <span className="api-index-name">{p.name}</span>
               <span className="api-index-count">{p.modules.reduce((n, m) => n + m.count, 0)}</span>
-            </Router.Link>
+            </a>
           ))}
         </div>
       </article>

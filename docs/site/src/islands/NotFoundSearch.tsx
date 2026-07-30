@@ -4,7 +4,7 @@
 // the real typeahead over it, so a broken link becomes a near-miss list instead of a dead end.
 
 import * as React from "react";
-import * as Router from "../ui/Router.js";
+import { urls } from "../lib/siteRoutes.js";
 import { SearchPanel, type SearchPanelControl } from "./SearchPanel.js";
 
 const queryFromPath = (pathname: string): string => {
@@ -21,7 +21,6 @@ const queryFromPath = (pathname: string): string => {
 };
 
 export function NotFoundSearch(): React.ReactElement {
-  const router = Router.useRouter();
   const [query, setQuery] = React.useState("");
   const panelRef = React.useRef<SearchPanelControl | null>(null);
 
@@ -40,7 +39,7 @@ export function NotFoundSearch(): React.ReactElement {
           if (panelRef.current?.handleKey(e) === true) return;
           if (e.key === "Enter" && query.trim() !== "") {
             const q = query.trim();
-            void router.to((u) => u.search({ query: { q } }));
+            window.location.assign(urls.search({ query: { q } }));
           }
         }}
         placeholder="Search docs and API…"

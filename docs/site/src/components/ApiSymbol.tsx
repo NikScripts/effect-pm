@@ -11,7 +11,6 @@ import {
 } from "../lib/highlight.js";
 import { declarationTypeLinks } from "../lib/api-source-links.js";
 import { prerenderedHtml } from "../lib/inert-html.js";
-import * as Router from "../ui/Router.js";
 
 // The `file:line` location — a link to the line on GitHub when known, otherwise plain text. External
 // packages get a shortened display path (e.g. `effect/Layer.ts`).
@@ -55,18 +54,13 @@ const firstSentence = (s: string): string => {
 };
 
 export const ApiSymbolRow = ({ s, href }: { s: Row; href: string }): React.ReactElement => (
-  <Router.Link
-    className="api-row"
-    to={href}
-    data-kind={s.kind}
-    title={s.qualifiedName}
-  >
+  <a className="api-row" href={href} data-kind={s.kind} title={s.qualifiedName}>
     <span className="api-row-head">
       <code className="api-row-name">{s.name}</code>
       <span className={`api-kind api-kind-${s.kind}`}>{s.kind}</span>
     </span>
     <span className="api-row-sum">{firstSentence(plain(s.summary))}</span>
-  </Router.Link>
+  </a>
 );
 
 // The signature/type block, with every reference the compiler can prove linked to its page: the
@@ -149,13 +143,9 @@ export const ApiSymbolCard = ({
           <div className="api-chips">
             {chips.map((c, i) =>
               c.href !== undefined ? (
-                <Router.Link
-                  className={`api-chip ${c.cls}`}
-                  to={c.href}
-                  key={i}
-                >
+                <a className={`api-chip ${c.cls}`} href={c.href} key={i}>
                   {c.text}
-                </Router.Link>
+                </a>
               ) : (
                 <span className={`api-chip ${c.cls}`} key={i}>
                   {c.text}

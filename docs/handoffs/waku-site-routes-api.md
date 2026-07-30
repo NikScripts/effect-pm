@@ -40,22 +40,22 @@ urls.api.symbol("effect", "Effect.succeed") // overload
 urls.search({ query: { q: "WorkPool" } })
 ```
 
-## Use (`Router.tsx` — aliased as `hyperlink-ts/ui/Router`)
+## Use (parity with pre-router site)
+
+Typed hrefs only — **native `<a href={urls…}>`** and `location.assign(urls…)` for
+navigation. Same DOM / full-document nav as before the client Router skin.
+No `RouterProvider` around book chrome (avoids a full-tree client boundary).
 
 ```tsx
-const router = Router.make(site)
+<a href={urls.home()}>Home</a>
+<a href={urls.docs("work-pools")}>Work pools</a>
+<a href={urls.api.symbol("effect", "Effect.succeed")}>Effect.succeed</a>
 
-<Router.Provider value={router}>
-  <Router.Link to={(u) => u.home()}>Home</Router.Link>
-  <Router.Link to={(u) => u.docs("work-pools")}>Work pools</Router.Link>
-  <Router.Link to={(u) => u.api.symbol("effect", "Effect.succeed")}>
-    Effect.succeed
-  </Router.Link>
-</Router.Provider>
-
-const r = Router.useRouter()
-void r.to((u) => u.api.symbol("hyperlink-ts", "WorkPool", "Tag"))
+window.location.assign(urls.search({ query: { q: "WorkPool" } }))
 ```
+
+`docs/site/src/ui/Router.tsx` (aliased as `hyperlink-ts/ui/Router`) remains for
+typed tests / optional app-style composition — **not** wired into page chrome.
 
 ## Layers
 
@@ -64,8 +64,7 @@ void r.to((u) => u.api.symbol("hyperlink-ts", "WorkPool", "Tag"))
 | `catalog` | SSOT path strings |
 | `Route.make(site)` | Typed catalog from `catalog.*` |
 | `Route.urlBuilder` + sugar | Positional href builders (`urls`) |
-| `Router.make` / `Link` / `to` | Vision nav API → Waku `Link`/`push` |
-| Chrome + API + search | In-app hrefs use `Router.Link` / `urls.*` (not raw `/api/…` strings) |
+| Chrome + API + search | Native anchors / `location.assign` with `urls.*` (not raw `/api/…` strings) |
 | Nav + chapter links | `hrefFor` / `resolveBookHref` / `docs/nav.ts` hrefs go through `urls` |
 | `src/pages/` | Real match + RSC/SSG/SSR bodies |
-| `Router.Outlet` | No-op (bodies are file routes) |
+| Optional `Router.tsx` | Vision API skin (tests); unused by site chrome for appearance/perf parity |

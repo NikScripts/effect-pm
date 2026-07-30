@@ -4,7 +4,7 @@ import { SymbolAside } from "./ApiAside.js";
 import { readSourceFile, referencedBy, symbolDetail, symbolSourceHtml } from "../lib/api-data.js";
 import { loadHighlighter } from "../lib/highlight.js";
 import { runServer } from "../lib/runtime.js";
-import * as Router from "../ui/Router.js";
+import { urls } from "../lib/siteRoutes.js";
 
 // `/api/<pkg>/<module>/<name>` → a compact display label: `Module.name`, plus the package when it
 // differs from the page's own.
@@ -57,9 +57,7 @@ export async function ApiSymbolPage({
       />
       <article className="prose">
         <p className="api-back">
-          <Router.Link to={(u) => u.api.module(pkg, module)}>
-            ← {s.entry}
-          </Router.Link>
+          <a href={urls.api.module(pkg, module)}>← {s.entry}</a>
         </p>
         <ApiSymbolCard s={s} fileText={fileText} sourceHtml={sourceHtml} />
         {refs.length > 0 ? (
@@ -69,13 +67,9 @@ export async function ApiSymbolPage({
             </div>
             <div className="api-chips">
               {refs.slice(0, MAX_REFS).map((url) => (
-                <Router.Link
-                  className="api-chip api-chip-ref"
-                  to={url}
-                  key={url}
-                >
+                <a className="api-chip api-chip-ref" href={url} key={url}>
                   {refLabel(url, pkg)}
-                </Router.Link>
+                </a>
               ))}
               {refs.length > MAX_REFS ? (
                 <span className="api-chip">+{refs.length - MAX_REFS} more</span>
