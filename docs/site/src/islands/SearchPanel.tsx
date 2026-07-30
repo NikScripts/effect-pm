@@ -10,6 +10,7 @@
 
 import * as React from "react";
 import { searchSections, type SearchHit, type SearchIndex } from "../lib/search-core.js";
+import * as Router from "../ui/Router.js";
 import { loadSearchIndex } from "./search-client.js";
 import { HitRow } from "./SearchHit.js";
 
@@ -124,9 +125,12 @@ export function SearchPanel({
           <section className="search-section" key={key}>
             <div className="search-section-head">
               <span>{label}</span>
-              <a href={`/search?q=${encodeURIComponent(q)}&type=${type}`} onClick={onNavigate}>
+              <Router.Link
+                to={(u) => u.search({ query: { q, type } })}
+                onClick={onNavigate}
+              >
                 more →
-              </a>
+              </Router.Link>
             </div>
             {hits.map((hit, i) => (
               <HitRow
@@ -140,9 +144,13 @@ export function SearchPanel({
           </section>
         );
       })}
-      <a className="search-all" href={`/search?q=${encodeURIComponent(q)}`} onClick={onNavigate}>
+      <Router.Link
+        className="search-all"
+        to={(u) => u.search({ query: { q } })}
+        onClick={onNavigate}
+      >
         All results for “{q}” ↵
-      </a>
+      </Router.Link>
     </div>
   );
 }

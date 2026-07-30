@@ -166,6 +166,8 @@ export const Link = (props: {
   readonly replace?: boolean;
   readonly children: React.ReactNode;
   readonly className?: string;
+  readonly title?: string;
+  readonly "data-kind"?: string;
   readonly onClick?: React.MouseEventHandler<HTMLAnchorElement>;
   readonly "aria-current"?: React.AriaAttributes["aria-current"];
 }): React.ReactElement => {
@@ -175,12 +177,15 @@ export const Link = (props: {
     typeof props.to === "function" ? props.to(catalog.urls) : props.to;
   const wakuTo = siteHref(href) as Parameters<typeof waku.push>[0];
   const ariaCurrent = props["aria-current"];
+  const dataKind = props["data-kind"];
 
   if (props.replace === true) {
     return (
       <a
         href={wakuTo}
         className={props.className}
+        title={props.title}
+        data-kind={dataKind}
         aria-current={ariaCurrent}
         onClick={(event) => {
           props.onClick?.(event);
@@ -207,6 +212,8 @@ export const Link = (props: {
     <WakuLink
       to={wakuTo}
       className={props.className}
+      title={props.title}
+      data-kind={dataKind}
       aria-current={ariaCurrent}
       onClick={props.onClick}
     >

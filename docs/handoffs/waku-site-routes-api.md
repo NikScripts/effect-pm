@@ -65,5 +65,6 @@ void r.to((u) => u.api.symbol("hyperlink-ts", "WorkPool", "Tag"))
 | `Route.make(site)` | Typed catalog from `catalog.*` |
 | `Route.urlBuilder` + sugar | Positional href builders (`urls`) |
 | `Router.make` / `Link` / `to` | Vision nav API → Waku `Link`/`push` |
+| Chrome + API + search | In-app hrefs use `Router.Link` / `urls.*` (not raw `/api/…` strings) |
 | `src/pages/` | Real match + RSC/SSG/SSR bodies |
 | `Router.Outlet` | No-op (bodies are file routes) |

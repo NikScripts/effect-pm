@@ -7,9 +7,11 @@
 
 import * as React from "react";
 import { createPortal } from "react-dom";
+import * as Router from "../ui/Router.js";
 import { SearchPanel, type SearchPanelControl } from "./SearchPanel.js";
 
 export function SearchModal(): React.ReactElement {
+  const router = Router.useRouter();
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const [hint, setHint] = React.useState("");
@@ -95,8 +97,9 @@ export function SearchModal(): React.ReactElement {
                     if (panelRef.current?.handleKey(e) === true) return;
                     // … otherwise Enter → the full results page
                     if (e.key === "Enter" && query.trim() !== "") {
+                      const q = query.trim();
                       navigated();
-                      window.location.assign(`/search?q=${encodeURIComponent(query.trim())}`);
+                      void router.to((u) => u.search({ query: { q } }));
                     }
                   }}
                   placeholder="Search docs and API…"

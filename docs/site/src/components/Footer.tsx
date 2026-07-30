@@ -2,6 +2,7 @@
 // not a chapter in the reading flow) rather than in the sidebar nav.
 
 import * as React from "react";
+import * as Router from "../ui/Router.js";
 
 const GITHUB = "https://github.com/nikolasstow/Hyperlink";
 const NPM = "https://www.npmjs.com/package/hyperlink-ts";
@@ -20,9 +21,9 @@ export function Footer(): React.ReactElement {
         <nav className="site-footer-cols" aria-label="Footer">
           <div className="site-footer-col">
             <span className="site-footer-heading">Docs</span>
-            <a href="/api">API Reference</a>
-            <a href="/docs/glossary">Glossary</a>
-            <a href="/releases">Releases</a>
+            <Router.Link to={(u) => u.api.index()}>API Reference</Router.Link>
+            <Router.Link to={(u) => u.docs("glossary")}>Glossary</Router.Link>
+            <Router.Link to={(u) => u.releases()}>Releases</Router.Link>
           </div>
           <div className="site-footer-col">
             <span className="site-footer-heading">Project</span>
