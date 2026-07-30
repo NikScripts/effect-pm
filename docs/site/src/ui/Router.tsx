@@ -1,23 +1,22 @@
 /**
  * @module ui/Router (docs site)
  *
- * Vision API (`make` / `Provider` / `Link` / `useRouter` / `to` / `go`) with
- * **Waku** as the engine. Same call shape as `hyperlink-ts/ui/Router`.
- *
- * Vite aliases `hyperlink-ts/ui/Router` → this file inside `docs/site`.
+ * Vision nav API on **Waku** (the real router). Path segments are arguments:
  *
  * ```tsx
  * <Router.Provider value={Router.docs}>
- *   <Router.Link to={(u) => u.docs({ params: { chapter: "work-pools" }})}>
- *     Work pools
+ *   <Router.Link to={(u) => u.docs("work-pools")}>Work pools</Router.Link>
+ *   <Router.Link to={(u) => u.api.symbol("effect", "Effect.succeed")}>
+ *     Effect.succeed
  *   </Router.Link>
  * </Router.Provider>
  *
  * const r = Router.useRouter()
- * void r.to((u) =>
- *   u.apiSymbol({ params: { pkg: "effect", module: "Effect", symbol: "succeed" } }),
- * )
+ * void r.to((u) => u.api.symbol("hyperlink-ts", "WorkPool", "Tag"))
+ * void r.to((u) => u.api.symbol("effect", "Effect.succeed"))
  * ```
+ *
+ * Aliased: `hyperlink-ts/ui/Router` → this file. Page bodies stay in `src/pages/`.
  */
 "use client";
 
@@ -33,9 +32,10 @@ import {
   site as defaultSite,
   urls as defaultUrls,
   type Site,
+  type Urls,
 } from "../lib/siteRoutes.js";
 
-export type Urls = Route.UrlBuilder<Site>;
+export type { Urls };
 
 export type Service = {
   readonly api: Site;
@@ -43,13 +43,13 @@ export type Service = {
   readonly urls: Urls;
 };
 
-export const make = (api: Site): Service => ({
+export const make = (api: Site, skin: Urls = defaultUrls): Service => ({
   api,
   mode: "waku",
-  urls: Route.urlBuilder(api),
+  urls: skin,
 });
 
-export const docs: Service = make(defaultSite);
+export const docs: Service = make(defaultSite, defaultUrls);
 
 const CatalogContext = React.createContext<Service | null>(null);
 
@@ -180,7 +180,7 @@ export const Link = (props: {
   );
 };
 
-/** No-op — document bodies stay Waku file routes (Twoslash SSG/SSR). */
+/** No-op — document bodies are Waku file routes. */
 export const Outlet = (): null => null;
 
 export { defaultSite as site, defaultUrls as urls };
