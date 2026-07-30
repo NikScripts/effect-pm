@@ -69,6 +69,17 @@ Group dashboards use `GroupNav.use(root)` with Target + View skins in `Dashboard
 
 Same API. Waku file routes are **render SSOT**; `siteRoutes.catalog` is the typed nav SSOT (paths once; Waku templates derived) and is exhaustively checked against `pages.gen`. `Router.Outlet` is a no-op there. Skin adds `urls.api.symbol("effect", "Effect.succeed")` overload. See [`waku-site-routes-api.md`](./waku-site-routes-api.md).
 
+## Full vs lite
+
+Same typed contract (`Route` catalog, `Href` / `urls`, `Link` / `to` / `go` / `Outlet`).
+
+| Edition | Engine | Role |
+|---------|--------|------|
+| **Full** | `Router.waku` (companion entry; optional `waku` peer) | RSC / SSG / SSR — website, dashboard on Waku. Dogfood. |
+| **Lite** | `Router.memory` / `Router.history` | Effect-only embeds, tests, non-RSC apps — no Waku. |
+
+Full is the product default for web. Lite is the same API without the RSC engine.
+
 ## Runtime
 
 | Method | History |
@@ -78,7 +89,7 @@ Same API. Waku file routes are **render SSOT**; `siteRoutes.catalog` is the type
 | `GroupNav.up` / `Router.toRoot` | **replace** |
 | `back` | memory stack / `history.back()` |
 
-`Router.memory` / `history` / `make` take a **Route catalog only**.
+`Router.memory` / `history` / `make` / `waku` take a **Route catalog only**.
 
 ## Demo
 
