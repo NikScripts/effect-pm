@@ -1,4 +1,4 @@
-{#readiness title="Readiness & Health" status="draft" done="api" appliesTo=all}
+{#readiness title="Readiness & Health" status="stable" done="api" appliesTo=all}
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
@@ -111,3 +111,18 @@ const Host = Node.httpServer([
 ```
 
 One `/rpc`, one `/health`, no second port, no rewrite onto a second host API.
+
+## Ready across processes
+
+Local `/health` and `node.status` are the SSOT. Other surfaces **prove** that readiness
+cross-process — they do not invent a second health system:
+
+| Surface | Role |
+|---------|------|
+| **[Launcher](/docs/launcher) `awaitReady`** | Custody phase: poll node status until Ready (optional `ready.services` subset), then `Node.assume` |
+| **[Client verify](/docs/client-verify)** | Addressed `Hyperlink.client` probes by default (`Policy.verifyReject`); or call `Hyperlink.verifyConnection` yourself |
+| **Deep verify** | Node status RPC + service readiness + optional `contractHash` (F4) |
+
+Ready ≠ ownership (Launcher handoff ack is separate). Draining (`Node.drain` /
+`shutdown`, `phase: "draining"`) is intentional cutover — the node can still answer RPCs;
+yield refuses while draining. See [Identity coordinator](/docs/identity-coordinator).

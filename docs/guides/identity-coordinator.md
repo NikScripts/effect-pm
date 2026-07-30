@@ -9,7 +9,9 @@
 Exclusive HyperServices claim at Lookup. Workers advertise. The winning brain can publish
 placement advice. Clients dial through Lookup — no `Hyperlink.Manager`.
 
-Handoff SSOT: [`docs/handoffs/identity-coordinator.md`](../handoffs/identity-coordinator.md).
+Living recipe is this page. Design history / locks (may lag sibling Tags + Policy):
+[`docs/handoffs/identity-coordinator.md`](../handoffs/identity-coordinator.md) ·
+[`docs/handoffs/launcher-and-handoff-brief.md`](../handoffs/launcher-and-handoff-brief.md).
 Runnable form: [`examples/node/identity-coordinator.ts`](../../examples/node/identity-coordinator.ts).
 
 ## The picture
@@ -101,32 +103,41 @@ Membership Lookup Identity/Directory/Advice   who wins / where clients dial
 - **Launcher** stays custody-only (stable addressed node; exits after assume).
 - **Child** pipes `Lookup.client` / `layerOptions` on listen — advertise + identity claim.
 - Directory-row replace: `Policy.askIncumbent` (or stamp / `ListenOptions.onConflict`) +
-  `Policy.yieldRefuse` / `ListenOptions.onYield` (`false` refuses). While `Node.drain` /
-  `shutdown` has set `phase: "draining"`, yield **always refuses** (draining ≠ dead;
-  Directory row held).
-- **Leave / exit:** `Node.shutdown(node)` = drain → opted-in per-service handoffs
-  (serve `{ handoff }`) → Advice clear → Directory unregister → listen exit.
-  Prefer `Node.launch(node, listenLayer)` over bare `Layer.launch` so shutdown ends the
-  process (no `process.exit`).
-- **Per-service handoff (opt-in, default off):** pass a `handoff` fn in the HyperService's
-  serve options — `Hyperlink.serve(Tag, impl, { handoff })` (or nest `handoff` in a
-  `WorkPool` / `Daemon` / `Gate` config). Signature `(from, to, ctx) => Effect<void | HandoffOutcome>`
-  where `from` is the local handle and `to` is a peer client of the same HyperService (dialed from
-  the Directory, self excluded by dial). Return `ctx.done` / `void` to leave + shut down, `ctx.retry`
-  to re-run (bounded), `ctx.defer` to keep the node up. Any failure / defect — or **no peer** —
-  defers: the node restores `phase: "running"` and `Node.shutdown` fails with `HandoffDeferred`
-  (`_tag: "HandoffDeferred"`; `.reason` PascalCase — `Defer` | `NoPeer` | `RetryExhausted` |
-  `Failed`). Match by `_tag` / `.reason`, never message strings.
-  WorkPool queues bake that in via `WorkPool.serve` / `serveRemote` (`releaseEnqueueHandoff`).
-- **Membership push / dialers:** directory-mode `Hyperlink.peersLayer` and
-  `Hyperlink.lookupClient` **hot-rebind** on Directory membership (dial move / join /
-  leave). Escape hatch: `import * as Directory from "…/Directory"` →
-  `Directory.changes` / `directoryTable()` (or Lookup’s re-exported sugars).
-- **Track D (lookupClient):** build-then-swap dials; Effect RPCs that hit
-  `RpcClientError` **retry once** after rebind; sibling-module **`Advice.changes`**
-  moves the dial when prefer flips (before A leaves / before the first transport
-  error). Keep B Directory-visible. Live streams stay one outer Stream across dial
-  swaps (`Policy.streamGap`, default `"stall"`). See [Policy](/docs/policy).
+  `Policy.yieldRefuse` / `ListenOptions.onYield` (`false` refuses).
+
+Custody API: [Launcher](./launcher.md). Membership demo:
+`pnpm run example:launcher-lookup-membership`.
+
+## Node lifecycle (drain · shutdown · launch)
+
+| API | Role |
+|-----|------|
+| `Node.drain(node)` | Enter `phase: "draining"`; keep answering RPCs; **yield always refuses** (draining ≠ dead; Directory row held) |
+| `Node.shutdown(node)` | drain → per-service `{ handoff }` → Advice clear → Directory unregister → listen exit |
+| `Node.launch(node, listenLayer)` | Prefer over bare `Layer.launch` — races the shutdown latch so the process fiber ends (no `process.exit`) |
+
+**Per-service handoff (opt-in, default off):** `Hyperlink.serve(Tag, impl, { handoff })` (or nest
+`handoff` in a `WorkPool` / `Daemon` / `Gate` config). Signature
+`(from, to, ctx) => Effect<void | HandoffOutcome>` where `from` is the local handle and `to` is a
+peer client of the same HyperService (Directory dial, self excluded by dial). Return
+`ctx.done` / `void` to leave + shut down, `ctx.retry` to re-run (bounded), `ctx.defer` to keep
+the node up. Any failure / defect — or **no peer** — defers: phase restores to `"running"` and
+`Node.shutdown` fails with `HandoffDeferred` (`_tag: "HandoffDeferred"`; `.reason` PascalCase —
+`Defer` | `NoPeer` | `RetryExhausted` | `Failed`). Match by `_tag` / `.reason`, never message
+strings. WorkPool queues bake migration via `WorkPool.serve` / `serveRemote`
+(`releaseEnqueueHandoff`).
+
+## Membership push / dialers
+
+Directory-mode `Hyperlink.peersLayer` and `Hyperlink.lookupClient` **hot-rebind** on Directory
+membership (dial move / join / leave). Escape hatch: `import * as Directory from "…/Directory"` →
+`Directory.changes` / `directoryTable()` (or Lookup’s re-exported sugars).
+
+**Track D (`lookupClient` / peersLayer):** build-then-swap dials; Effect RPCs that hit
+`RpcClientError` **retry once** after rebind; sibling-module **`Advice.changes`** moves the dial
+when prefer flips (before A leaves / before the first transport error). Keep B Directory-visible.
+Live streams stay one outer Stream across dial swaps (`Policy.streamGap`, default `"stall"`).
+See [Policy](/docs/policy).
 
 ### A→B cutover recipe (state transfer)
 

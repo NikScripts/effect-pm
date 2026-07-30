@@ -54,6 +54,22 @@ Child listen must arm assume with the same token (`ListenOptions.assumeToken`, o
 `Node.assumeTokenConfig` / `HYPERLINK_ASSUME_TOKEN`). `Launcher.command` defaults to
 `token: "env"`; use `"argv"` / `"both"` when the child reads the token from argv.
 
+**Child sketch** (prefer `Node.launch` so remote shutdown can exit the process):
+
+```ts
+const token = yield* Node.assumeTokenConfig
+yield* Node.launch(
+  worker,
+  Node.http(worker, [Hyperlink.serve(Jobs, impl)], { assumeToken: token }).pipe(
+    // Membership (optional): advertise after custody
+    Layer.provide(Lookup.client(lookupNode)),
+  ),
+)
+```
+
+Teaching child helpers: `examples/launcher/ready-worker-child.ts`,
+`examples/launcher/lookup-membership-child.ts`.
+
 ## Handle phases
 
 | Phase | API | Notes |

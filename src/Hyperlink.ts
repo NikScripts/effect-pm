@@ -46,6 +46,18 @@
  * status), {@link monitoredDependency} builds the spec and readiness together —
  * still a plain tag, not a new kind. Attach readiness with {@link withReadiness}.
  *
+ * Lookup / cutover (living docs under `docs/guides/`):
+ * - {@link identity} + pipe `Lookup.client` / `Lookup.layer` on listens — Directory advertise
+ * - {@link lookupClient} — dial without a named Node; compose `hyperlink-ts/Policy` for sticky /
+ *   stream gap / cold ambiguous
+ * - Directory-mode {@link peersLayer} — same hot-rebind parity as `lookupClient`
+ * - {@link serve}`(…, { handoff })` + `Node.shutdown` — opt-in per-service migration (WorkPool
+ *   bakes `releaseEnqueueHandoff`)
+ *
+ * @see docs/guides/identity-coordinator.md
+ * @see docs/guides/policy.md
+ * @see docs/guides/client-verify.md
+ *
  * @module Hyperlink
  */
 import {

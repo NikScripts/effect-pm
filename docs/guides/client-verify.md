@@ -13,7 +13,8 @@ run it **by default**. Mode is a `hyperlink-ts/Policy` fragment (`Policy.verifyO
 `Hyperlink.connect(tag, protocol)` does not probe — call verify yourself when you want
 fail-fast there.
 
-Handoff SSOT: [`docs/handoffs/loud-failures-design.md`](../handoffs/loud-failures-design.md) ·
+Living recipe is this page + [Policy](/docs/policy). Design history (may lag Policy fragments):
+[`docs/handoffs/loud-failures-design.md`](../handoffs/loud-failures-design.md) ·
 [`docs/handoffs/verify-connection-classification.md`](../handoffs/verify-connection-classification.md).
 
 ## Default-on (addressed clients)
@@ -72,8 +73,16 @@ yield* Hyperlink.verifyConnection(WorkerNode, { all: true }) // every declared e
 
 Catch via `Exit` / `_tag` — remediation messages name the fix.
 
+## Examples
+
+| Form | Run |
+|------|-----|
+| Tiers + `Policy.verify*` | `pnpm run example:node-verify-connection` |
+| Docs page | [Node — verifyConnection](/docs/node-verify-connection) |
+
 ## See also
 
 - [Policy](/docs/policy) — `verifyOff` / `verifyStatus` / `verifyReject` + cutover fragments
 - [Identity coordinator](/docs/identity-coordinator) — Lookup dial paths that nest clients
 - [Readiness](/docs/readiness) — runtime health after the Layer is up
+- [Launcher](/docs/launcher) — Ready poll reuses the same status / verify substrate

@@ -55,6 +55,23 @@ Advice early-move: `import * as Advice from "hyperlink-ts/Advice"` — prefer fl
 A leaves / before the first transport error. Effect RPCs retry once on `RpcClientError`. Streams /
 `ref.changes` follow dial generations as **one** outer Stream (seam mode from `streamGap`).
 
+### Directory `peersLayer` (same dial story)
+
+Directory-mode `Hyperlink.peersLayer(Tag, ThisNode)` shares Track D parity with `lookupClient`:
+build-then-swap peer dials, one `RpcClientError` retry, stable `peers[nodeKey]` facade, streams
+under `Policy.streamGap`. Compose Policy on the peers layer the same way:
+
+```ts
+Hyperlink.peersLayer(Pool, East).pipe(
+  Policy.provide(Policy.streamGap("stall")),
+  Layer.provide(Lookup.client(lookupNode)),
+)
+```
+
+Runnable: [`examples/node/peers-layer-rebind.ts`](../../examples/node/peers-layer-rebind.ts)
+(`pnpm run example:node-peers-layer-rebind`). Membership push notes:
+[Identity coordinator](/docs/identity-coordinator#custody-vs-membership-launcher--lookup).
+
 ### Client verify (addressed `Hyperlink.client`)
 
 | Fragment | Mode |
@@ -62,6 +79,7 @@ A leaves / before the first transport error. Effect RPCs retry once on `RpcClien
 | `Policy.verifyReject` | `"reject"` (default) — Layer fails on probe error |
 | `Policy.verifyStatus` | `"status"` — probe soft |
 | `Policy.verifyOff` | skip probe |
+| `Policy.verify(mode)` | sugar for any of the above |
 
 See [Client verify](/docs/client-verify). Nested Lookup / status dials use `verifyOff` internally.
 
@@ -73,6 +91,7 @@ See [Client verify](/docs/client-verify). Nested Lookup / status dials use `veri
 | `Policy.askIncumbent` | cooperative yield |
 | `Policy.conflictReject` | alive → reject |
 | `Policy.conflictInherit` | continue chain (ambient default) |
+| `Policy.onConflict(mode)` | sugar for any of the above |
 
 Types + `Policy.resolveOnConflict` live here; `Node` / `Lookup` re-export them. Resolve for
 advertise: call-site `ListenOptions.onConflict` → Node stamp → ambient `Policy.Conflict` →
@@ -134,7 +153,11 @@ Never `import { Advice } from "hyperlink-ts/Lookup"` / `Lookup.Advice.*`.
 ## See also
 
 - [Identity coordinator](/docs/identity-coordinator) — Lookup planes + A→B handoff
+- [Fleets & Peers](/docs/fleets-and-peers) — fixed vs Directory membership
 - [Client verify](/docs/client-verify) — probe ladder
 - [Launcher](/docs/launcher) — custody vs membership
-- Example: [Policy lookup cutover](/docs/node-policy-lookup-cutover)
-- Example: [A→B handoff cutover](/docs/node-handoff-ab-cutover)
+- Examples: [Policy lookup cutover](/docs/node-policy-lookup-cutover) ·
+  [peersLayer rebind](/docs/node-peers-layer-rebind) ·
+  [askIncumbent takeover](/docs/node-ask-incumbent-takeover) ·
+  [drain yield refuse](/docs/node-drain-yield-refuse) ·
+  [A→B handoff cutover](/docs/node-handoff-ab-cutover)
