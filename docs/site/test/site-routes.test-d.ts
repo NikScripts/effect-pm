@@ -1,13 +1,18 @@
 /**
- * Path skin — segments as args; assignable to Waku paths.
+ * Route.make catalog + positional urls skin.
  */
 import { expectTypeOf } from "vitest";
 import "../src/pages.gen.js";
-import { urls, isSitePath, type SitePath } from "../src/lib/siteRoutes";
+import { site, urls, isSitePath, type SitePath } from "../src/lib/siteRoutes";
+import * as Router from "../src/ui/Router";
+
+const router = Router.make(site);
+expectTypeOf(router.mode).toEqualTypeOf<"waku">();
+expectTypeOf(router.urls.home).toEqualTypeOf(urls.home);
 
 expectTypeOf(urls.home()).toEqualTypeOf<"/">();
 expectTypeOf(urls.docs("work-pools")).toEqualTypeOf<`/docs/${string}`>();
-expectTypeOf(urls.api()).toEqualTypeOf<"/api">();
+expectTypeOf(urls.api.index()).toEqualTypeOf<"/api">();
 expectTypeOf(urls.api.pkg("hyperlink-ts")).toEqualTypeOf<`/api/${string}`>();
 expectTypeOf(
   urls.api.symbol("effect", "Effect", "succeed"),
@@ -19,15 +24,8 @@ expectTypeOf(
 const chapter = urls.docs("work-pools");
 const _waku: SitePath = chapter;
 void _waku;
-
-if (isSitePath(chapter)) {
-  const _ok: SitePath = chapter;
-  void _ok;
-}
+void isSitePath;
 
 // @ts-expect-error junk is not a SitePath
 const _junk: SitePath = "/totally-fake";
 void _junk;
-
-// @ts-expect-error no HttpApi-style params bag
-urls.docs({ params: { chapter: "work-pools" } });

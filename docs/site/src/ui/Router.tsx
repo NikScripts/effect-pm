@@ -1,10 +1,17 @@
 /**
  * @module ui/Router (docs site)
  *
- * Vision nav API on **Waku** (the real router). Path segments are arguments:
+ * Same shape as package `hyperlink-ts/ui/Router` — `make` / `Provider` / `Link` /
+ * `useRouter` / `to` / `go` — with Waku as the navigation engine.
  *
  * ```tsx
- * <Router.Provider value={Router.docs}>
+ * import { site } from "../lib/siteRoutes"
+ * import * as Router from "hyperlink-ts/ui/Router"
+ *
+ * const router = Router.make(site)
+ *
+ * <Router.Provider value={router}>
+ *   <Router.Link to={(u) => u.home()}>Home</Router.Link>
  *   <Router.Link to={(u) => u.docs("work-pools")}>Work pools</Router.Link>
  *   <Router.Link to={(u) => u.api.symbol("effect", "Effect.succeed")}>
  *     Effect.succeed
@@ -13,10 +20,10 @@
  *
  * const r = Router.useRouter()
  * void r.to((u) => u.api.symbol("hyperlink-ts", "WorkPool", "Tag"))
- * void r.to((u) => u.api.symbol("effect", "Effect.succeed"))
  * ```
  *
- * Aliased: `hyperlink-ts/ui/Router` → this file. Page bodies stay in `src/pages/`.
+ * Vite aliases `hyperlink-ts/ui/Router` → this file. Page bodies stay in
+ * `src/pages/` (Twoslash SSG/SSR); {@link Outlet} is a no-op here.
  */
 "use client";
 
@@ -35,7 +42,11 @@ import {
   type Urls,
 } from "../lib/siteRoutes.js";
 
-export type { Urls };
+export type { Urls, Site };
+
+// =============================================================================
+// make / Service — vision Router.make(site)
+// =============================================================================
 
 export type Service = {
   readonly api: Site;
@@ -43,13 +54,22 @@ export type Service = {
   readonly urls: Urls;
 };
 
+/**
+ * Bind a {@link Site} catalog — same role as package `Router.make(api, "history")`.
+ * Navigation is Waku; `urls` is the positional path skin for `Link` / `to`.
+ */
 export const make = (api: Site, skin: Urls = defaultUrls): Service => ({
   api,
   mode: "waku",
   urls: skin,
 });
 
-export const docs: Service = make(defaultSite, defaultUrls);
+/** Default docs router — `Router.make(site)`. */
+export const docs: Service = make(defaultSite);
+
+// =============================================================================
+// Provider
+// =============================================================================
 
 const CatalogContext = React.createContext<Service | null>(null);
 
@@ -64,6 +84,10 @@ export const Provider = (props: {
   );
 
 const useCatalog = (): Service => React.useContext(CatalogContext) ?? docs;
+
+// =============================================================================
+// useRouter / Link / Outlet
+// =============================================================================
 
 export type LiveRouter = Service & {
   readonly pathname: string;
@@ -126,6 +150,9 @@ export const useHasRouter = (): boolean =>
 
 export const useMatch = (): Route.Match | undefined => useRouter().match;
 
+/**
+ * In-app link — `to={(u) => u.docs("work-pools")}`. Soft-nav via Waku.
+ */
 export const Link = (props: {
   readonly to: string | ((urls: Urls) => string);
   readonly replace?: boolean;
@@ -180,7 +207,7 @@ export const Link = (props: {
   );
 };
 
-/** No-op — document bodies are Waku file routes. */
+/** No-op — document bodies are Waku file routes (Twoslash SSG/SSR). */
 export const Outlet = (): null => null;
 
 export { defaultSite as site, defaultUrls as urls };
