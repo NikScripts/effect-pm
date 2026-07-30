@@ -128,7 +128,7 @@ Guide: [Daemon](/docs/daemons)
 
 ## Node & discovery
 
-Guide: [Node & discovery](/docs/identity-coordinator)
+Guides: [Identity coordinator](/docs/identity-coordinator) · [Policy](/docs/policy) · [Client verify](/docs/client-verify)
 
 ### [Tag with address](/docs/node-tag-addressed)
 
@@ -185,6 +185,11 @@ Guide: [Node & discovery](/docs/identity-coordinator)
 ### [A→B handoff cutover](/docs/node-handoff-ab-cutover)
 
 `examples/node/handoff-ab-cutover.ts` · `pnpm run example:node-handoff-ab-cutover`
+
+### [Policy lookup cutover](/docs/node-policy-lookup-cutover)
+
+`examples/node/policy-lookup-cutover.ts` · `pnpm run example:node-policy-lookup-cutover`  
+Guide: [Policy](/docs/policy)
 
 ### [A→B handoff live (Ink TUI)](/docs/apps-tui-handoff-ab-live)
 

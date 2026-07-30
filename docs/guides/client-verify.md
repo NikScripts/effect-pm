@@ -20,11 +20,11 @@ Handoff SSOT: [`docs/handoffs/loud-failures-design.md`](../handoffs/loud-failure
 
 Building an addressed client Layer probes the peer before the handle is usable:
 
-| Mode | Behavior |
-|------|----------|
-| `"reject"` (**default**) | Probe fails → Layer fails (`NodeUnreachable`, or deep errors below) |
-| `"status"` | Probe runs; failure is ignored (connect proceeds) |
-| `false` | Skip verify |
+| Fragment | Mode | Behavior |
+|----------|------|----------|
+| `Policy.verifyReject` | `"reject"` (**default**) | Probe fails → Layer fails (`NodeUnreachable`, or deep errors below) |
+| `Policy.verifyStatus` | `"status"` | Probe runs; failure is ignored (connect proceeds) |
+| `Policy.verifyOff` | `false` | Skip verify |
 
 ```ts
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
@@ -35,6 +35,9 @@ Hyperlink.client(Emails, WorkerNode).pipe(Policy.provide(Policy.verifyOff))
 
 // Soft: probe but don't fail the Layer
 Hyperlink.client(Emails, WorkerNode).pipe(Policy.provide(Policy.verifyStatus))
+
+// Explicit reject (same as default — useful in a named bundle)
+Hyperlink.client(Emails, WorkerNode).pipe(Policy.provide(Policy.verifyReject))
 ```
 
 Tag-aware addressed clients escalate to **deep** verify (node-handle status RPC + service readiness +
@@ -71,5 +74,6 @@ Catch via `Exit` / `_tag` — remediation messages name the fix.
 
 ## See also
 
+- [Policy](/docs/policy) — `verifyOff` / `verifyStatus` / `verifyReject` + cutover fragments
 - [Identity coordinator](/docs/identity-coordinator) — Lookup dial paths that nest clients
 - [Readiness](/docs/readiness) — runtime health after the Layer is up

@@ -140,6 +140,6 @@ outgoing node. See
 ## Deferred (not beta Launcher)
 
 - Explicit less-automated A/B launcher (replacement addressing = same `nodeKey` + new dial today)
-- Track D client redirect / dual-serve (`lookupClient` + directory `peersLayer` already rebind on dial swap)
+- Explicit A/B launcher automation (`lookupClient` + `peersLayer` rebind + [Policy](./policy.md) sticky / streams already ship)
 - Blank worker + remote assign; HTTP/WS Lookup; nameless Launcher discovery
 - `Handle.events` Stream; stdout/stderr tap; thin `hl up` CLI

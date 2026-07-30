@@ -321,6 +321,7 @@
     "example:node-as-lookup": "tsx examples/node/as-lookup.ts",
     "example:node-identity-coordinator": "tsx examples/node/identity-coordinator.ts",
     "example:node-handoff-ab-cutover": "tsx examples/node/handoff-ab-cutover.ts",
+    "example:node-policy-lookup-cutover": "tsx examples/node/policy-lookup-cutover.ts",
     "example:handoff-ab-live": "tsx --tsconfig examples/apps/tui/tsconfig.json examples/apps/tui/handoff-ab-live.tsx",
     "example:node-verify-connection": "tsx examples/node/verify-connection.ts",
     "example:fleet-telemetry-glass": "tsx examples/fleet/telemetry-glass.ts",

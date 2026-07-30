@@ -15,8 +15,8 @@
 **Hub:** [Examples → node](/docs/examples#node)  
 
 > [!NOTE]
-> **Related examples:** [Apps A→B handoff live](/docs/apps-tui-handoff-ab-live) · [Launcher minimal up](/docs/launcher-minimal-up)
-**Guide:** [Identity coordinator — A→B cutover](/docs/identity-coordinator#ab-cutover-recipe-state-transfer)
+> **Related examples:** [Policy lookup cutover](/docs/node-policy-lookup-cutover) · [Apps A→B handoff live](/docs/apps-tui-handoff-ab-live) · [Launcher minimal up](/docs/launcher-minimal-up)  
+> **Guide:** [Identity coordinator — A→B cutover](/docs/identity-coordinator#ab-cutover-recipe-state-transfer) · [Policy](/docs/policy)
 
 Fence body `// @noErrors` covers `process` under the docs Twoslash host.
 

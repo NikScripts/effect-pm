@@ -33,7 +33,7 @@ Living book: [docs/index.md](../docs/index.md) · [API Reference](https://hyperl
 | **WorkPool** | `priority-retry` → `named-lanes` → store / serve / durable / refill / metrics |
 | **Gate** | `gate/unit-and-input` → `store-readback` → `runtime-observer` → http-client → http-api |
 | **Daemon + Soft** | `daemon/store-auto-write` → `typed-failed-error` → serve / result / schedule / configure |
-| **Node & discovery** | `node/tag-addressed` → `tag-bound` → `clients` → addressless → nameless unix → `prototype` → `as-lookup` → nameless http/ws → `identity-coordinator` |
+| **Node & discovery** | `node/tag-addressed` → `tag-bound` → `clients` → addressless → nameless unix → `prototype` → `as-lookup` → nameless http/ws → `identity-coordinator` → `handoff-ab-cutover` → `policy-lookup-cutover` |
 | **Fleet glass** | `fleet/telemetry-glass` → `health-glass` → `shardmap-sessions` → edge examples |
 | **Launcher** | `launcher/minimal-up` → `handle-phases` → `lookup-membership` |
 | **Readiness** | `readiness/with-readiness` → `all-ready` → `monitored-dependency` → `degraded-health` |
@@ -88,7 +88,7 @@ Paths are under `examples/`. Script = `pnpm run example:<topic>-<kebab-file>` (s
 | [`daemon/tag-schedule.ts`](./daemon/tag-schedule.ts) | `Daemon.schedule` on a tag |
 | [`daemon/configure.ts`](./daemon/configure.ts) | `Daemon.configure` layer patch |
 
-### Node — [Identity coordinator](../docs/guides/identity-coordinator.md) · [Fleets and peers](../docs/services/fleets-and-peers.md)
+### Node — [Identity coordinator](../docs/guides/identity-coordinator.md) · [Policy](../docs/guides/policy.md) · [Fleets and peers](../docs/services/fleets-and-peers.md)
 
 | File | Teaches |
 |------|---------|
@@ -101,7 +101,9 @@ Paths are under `examples/`. Script = `pnpm run example:<topic>-<kebab-file>` (s
 | [`node/prototype.ts`](./node/prototype.ts) | `Node.Prototype.make` |
 | [`node/as-lookup.ts`](./node/as-lookup.ts) | `Node.asLookup` |
 | [`node/identity-coordinator.ts`](./node/identity-coordinator.ts) | Router + workers + Lookup |
-| [`node/verify-connection.ts`](./node/verify-connection.ts) | `Hyperlink.verifyConnection` |
+| [`node/handoff-ab-cutover.ts`](./node/handoff-ab-cutover.ts) | WorkPool A→B state transfer on `Node.shutdown` |
+| [`node/policy-lookup-cutover.ts`](./node/policy-lookup-cutover.ts) | `Policy.provide` sticky + `Advice.prefer` early-move |
+| [`node/verify-connection.ts`](./node/verify-connection.ts) | `Hyperlink.verifyConnection` · [Client verify](../docs/guides/client-verify.md) |
 
 ### Fleet
 
