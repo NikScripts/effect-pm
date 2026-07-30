@@ -54,6 +54,7 @@ const program = Effect.gen(function* () {
   const lookupPath = yield* tmpSock("lookup");
   const pathA = yield* tmpSock("a");
   const pathB = yield* tmpSock("b");
+  const pathHold = yield* tmpSock("hold");
   const pathRefuse = yield* tmpSock("refuse");
 
   const lookupNode = Node.Tag()("examples/ask-incumbent/Lookup", {
@@ -131,7 +132,7 @@ const program = Effect.gen(function* () {
 
   class WorkerHold extends Node.Tag<WorkerHold, Jobs>()(
     "examples/ask-incumbent/WorkerHold",
-    { path: pathA },
+    { path: pathHold },
   ) {}
 
   yield* Layer.build(
