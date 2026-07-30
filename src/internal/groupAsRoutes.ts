@@ -25,13 +25,11 @@ export type AsRoutesOptions = {
   readonly health?: boolean | undefined;
 };
 
-type Path = uiRoute.Path;
-
 /** Leaf destinations generated for one Group member name. */
 export type LeafRouteLikes<K extends string> =
-  | uiRoute.Route<K, Path>
-  | uiRoute.Route<`${K}Logs`, Path>
-  | uiRoute.Route<`${K}Schedule`, Path>;
+  | uiRoute.Route<K, `/${string}`>
+  | uiRoute.Route<`${K}Logs`, `/${string}`>
+  | uiRoute.Route<`${K}Schedule`, `/${string}`>;
 
 type NestedGroupRouteLike<
   Id extends string,
@@ -39,7 +37,7 @@ type NestedGroupRouteLike<
   Depth extends ReadonlyArray<unknown>,
 > = Group<
   Id,
-  | uiRoute.Route<"index", Path>
+  | uiRoute.Route<"index", `/${string}`>
   | Extract<MembersRouteLikes<M, Depth>, uiRoute.Constraint>,
   Extract<MembersRouteLikes<M, Depth>, GroupTop>,
   false
@@ -63,8 +61,8 @@ export type MembersRouteLikes<
 
 /** `/health` + `/health/:nodeId` when `health` is not false. */
 export type HealthRouteLikes =
-  | uiRoute.Route<"health", Path>
-  | uiRoute.Route<"healthNode", Path, { readonly nodeId: string }>;
+  | uiRoute.Route<"health", "/health">
+  | uiRoute.Route<"healthNode", "/health/:nodeId", { readonly nodeId: string }>;
 
 export type AsRoutesItemsOf<
   M extends Record<string, unknown>,
@@ -182,7 +180,7 @@ export const routesOf = (
  *
  * ```ts
  * Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub))
- * // urls.Nwsl.HttpApi(), urls.healthNode({ params: { nodeId } }), …
+ * // urls.Nwsl.HttpApi(), urls.healthNode(nodeId), …
  * ```
  */
 export function asRoutes<

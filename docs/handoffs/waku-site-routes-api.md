@@ -1,6 +1,6 @@
 # Docs site — `Route.make` + `Router.make` on Waku
 
-Typed API is the usual hyperlink shape. Waku is the engine.
+Typed API is the usual hyperlink dream shape. Waku is the engine.
 
 ## Definition (`siteRoutes.ts`)
 
@@ -19,6 +19,12 @@ export const site = Route.make("docsSite").add(
     Route.get("symbol", "/api/:pkg/:module/:symbol").pipe(/* … */),
   ),
 )
+
+// package Route.urlBuilder(site) + Module.symbol sugar
+urls.docs("work-pools")
+urls.api.symbol("effect", "Effect", "succeed")
+urls.api.symbol("effect", "Effect.succeed") // overload
+urls.search({ query: { q: "WorkPool" } })
 ```
 
 ## Use (`Router.tsx` — aliased as `hyperlink-ts/ui/Router`)
@@ -38,14 +44,12 @@ const r = Router.useRouter()
 void r.to((u) => u.api.symbol("hyperlink-ts", "WorkPool", "Tag"))
 ```
 
-`urls` on the router is a **positional** skin over `site` (segments as args — not `{ params }`).
-
 ## Layers
 
 | Piece | Role |
 |-------|------|
 | `Route.make(site)` | Typed catalog (the definition) |
-| `urls` / `to={(u)=>…}` | Positional href builders |
+| `Route.urlBuilder` + sugar | Positional href builders (`urls`) |
 | `Router.make` / `Link` / `to` | Vision nav API → Waku `Link`/`push` |
 | `src/pages/` | Real match + RSC/SSG/SSR bodies |
 | `Router.Outlet` | No-op (bodies are file routes) |

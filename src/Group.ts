@@ -94,7 +94,7 @@ export const isGroup = (
  *   Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub)),
  * )
  * Route.urlBuilder(site).Nwsl.HttpApi()
- * Router.make(site, "memory").to((u) => u.healthNode({ params: { nodeId: "a" } }))
+ * Router.make(site, "memory").to((u) => u.healthNode("a"))
  * ```
  *
  * @category constructors

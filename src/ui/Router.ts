@@ -17,12 +17,17 @@
  *
  * <Router.Provider value={router}>
  *   <Router.Link to={(u) => u.home()}>Home</Router.Link>
+ *   <Router.Link to={(u) => u.user("42", { query: { tab: "bio" } })}>
+ *     User
+ *   </Router.Link>
  *   <Router.Outlet />
  * </Router.Provider>
  * ```
  *
  * Layers: {@link memory} / {@link history}. Catalog only — never a Group tag
  * (`Group.asRoutes` + `Route.group(…).fromEffect` when you need a Group tree).
+ * `go` / `to` / {@link Link} carry query strings; {@link Outlet} passes them to
+ * {@link Route.handle}.
  *
  * @see docs/handoffs/ui-routes-dream.md
  */
@@ -236,6 +241,15 @@ export const Link = <A extends ApiConstraint = ApiConstraint>(props: {
  *
  * @public
  */
+const queryFromSearch = (search: string): Record<string, string> => {
+  if (search.length === 0) return {};
+  const out: Record<string, string> = {};
+  for (const [key, value] of new URLSearchParams(search)) {
+    out[key] = value;
+  }
+  return out;
+};
+
 export const Outlet = (): React.ReactElement | null => {
   const router = useRouter();
   const match = router.match;
@@ -243,7 +257,9 @@ export const Outlet = (): React.ReactElement | null => {
   if (match === undefined || handler === undefined) return null;
   const node = handler({
     params: match.params,
+    query: queryFromSearch(router.search),
     pathname: match.pathname,
+    href: router.href,
   });
   if (node === null || node === undefined || typeof node === "boolean") {
     return null;

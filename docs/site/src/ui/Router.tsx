@@ -37,6 +37,7 @@ import {
 import {
   requireSitePath,
   site as defaultSite,
+  siteHref,
   urls as defaultUrls,
   type Site,
   type Urls,
@@ -91,9 +92,11 @@ const useCatalog = (): Service => React.useContext(CatalogContext) ?? docs;
 
 export type LiveRouter = Service & {
   readonly pathname: string;
+  readonly search: string;
+  readonly href: string;
   readonly match: Route.Match | undefined;
   readonly go: (
-    pathname: string,
+    href: string,
     options?: { readonly replace?: boolean },
   ) => Promise<void>;
   readonly to: (
@@ -101,13 +104,16 @@ export type LiveRouter = Service & {
     options?: { readonly replace?: boolean },
   ) => Promise<void>;
   readonly back: () => void;
-  readonly prefetch: (pathname: string) => void;
+  readonly prefetch: (href: string) => void;
 };
 
 export const useRouter = (): LiveRouter => {
   const catalog = useCatalog();
   const waku = useWakuRouter();
   const pathname = waku.path || "/";
+  const search =
+    typeof window === "undefined" ? "" : window.location.search;
+  const href = search.length === 0 ? pathname : `${pathname}${search}`;
   const match = Option.getOrUndefined(Route.match(catalog.api, pathname));
 
   const go = React.useCallback(
@@ -115,7 +121,7 @@ export const useRouter = (): LiveRouter => {
       next: string,
       options?: { readonly replace?: boolean },
     ): Promise<void> => {
-      const target = requireSitePath(next);
+      const target = siteHref(next) as Parameters<typeof waku.push>[0];
       if (options?.replace === true) await waku.replace(target);
       else await waku.push(target);
     },
@@ -133,6 +139,8 @@ export const useRouter = (): LiveRouter => {
   return {
     ...catalog,
     pathname,
+    search,
+    href,
     match,
     go,
     to,
@@ -165,7 +173,7 @@ export const Link = (props: {
   const waku = useWakuRouter();
   const href =
     typeof props.to === "function" ? props.to(catalog.urls) : props.to;
-  const wakuTo = requireSitePath(href);
+  const wakuTo = siteHref(href) as Parameters<typeof waku.push>[0];
   const ariaCurrent = props["aria-current"];
 
   if (props.replace === true) {

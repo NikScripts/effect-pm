@@ -28,11 +28,16 @@ export type HistoryAction = "push" | "replace";
 export interface Service<A extends ApiConstraint = ApiConstraint> {
   readonly api: A;
   readonly mode: "memory" | "history";
+  /** Pathname only (`/docs/x`) — no query. */
   readonly pathname: string;
+  /** Search including `?` (`?tab=1`), or `""`. */
+  readonly search: string;
+  /** `pathname` + `search`. */
+  readonly href: string;
   readonly match: Route.Match | undefined;
   readonly urls: Route.UrlBuilder<A>;
   readonly go: (
-    pathname: string,
+    href: string,
     options?: { readonly replace?: boolean },
   ) => void;
   readonly to: (
@@ -89,8 +94,29 @@ const normalize = (pathname: string): string => {
   return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
 };
 
-const locationPathname = (): string =>
-  typeof window === "undefined" ? "/" : normalize(window.location.pathname);
+const parseHref = (
+  href: string,
+): { readonly pathname: string; readonly search: string } => {
+  const q = href.indexOf("?");
+  if (q === -1) {
+    return { pathname: normalize(href), search: "" };
+  }
+  return {
+    pathname: normalize(href.slice(0, q)),
+    search: href.slice(q),
+  };
+};
+
+const joinHref = (pathname: string, search: string): string =>
+  search.length === 0 ? pathname : `${pathname}${search}`;
+
+const locationHref = (): { readonly pathname: string; readonly search: string } =>
+  typeof window === "undefined"
+    ? { pathname: "/", search: "" }
+    : {
+        pathname: normalize(window.location.pathname),
+        search: window.location.search,
+      };
 
 const segmentsOf = (pathname: string): ReadonlyArray<string> =>
   normalize(pathname)
@@ -143,14 +169,10 @@ const findDashboardRoot = (
 const urlMethod = (
   urls: Route.UrlBuilderLoose,
   id: string,
-):
-  | ((request?: { readonly params?: Record<string, string> }) => string)
-  | undefined => {
+): Route.UrlMethodLoose | undefined => {
   const value = (urls as Record<string, unknown>)[id];
   return typeof value === "function"
-    ? (value as (request?: {
-        readonly params?: Record<string, string>;
-      }) => string)
+    ? (value as Route.UrlMethodLoose)
     : undefined;
 };
 
@@ -250,35 +272,43 @@ export const makeService = <A extends ApiConstraint>(
 ): Service<A> => {
   const root = findDashboardRoot(api);
   const urls = Route.urlBuilder(api);
-  let pathname =
-    mode === "history" ? locationPathname() : (normalize("/") as string);
-  const stack: Array<string> = mode === "memory" ? [pathname] : [];
+  const initial =
+    mode === "history" ? locationHref() : { pathname: "/", search: "" };
+  let pathname = initial.pathname;
+  let search = initial.search;
+  const stack: Array<string> =
+    mode === "memory" ? [joinHref(pathname, search)] : [];
   const listeners = new Set<() => void>();
 
   const notify = (): void => {
     for (const l of listeners) l();
   };
 
-  const setPathname = (next: string, action: HistoryAction): void => {
-    const normalized = normalize(next);
-    if (normalized === pathname && action === "push") return;
+  const setHref = (next: string, action: HistoryAction): void => {
+    const parsed = parseHref(next);
+    if (
+      parsed.pathname === pathname &&
+      parsed.search === search &&
+      action === "push"
+    ) {
+      return;
+    }
+
+    pathname = parsed.pathname;
+    search = parsed.search;
+    const href = joinHref(pathname, search);
 
     if (mode === "memory") {
       if (action === "push") {
-        pathname = normalized;
-        stack.push(pathname);
+        stack.push(href);
       } else {
-        pathname = normalized;
-        if (stack.length === 0) stack.push(pathname);
-        else stack[stack.length - 1] = pathname;
+        if (stack.length === 0) stack.push(href);
+        else stack[stack.length - 1] = href;
         collapseStack(stack);
       }
-    } else {
-      pathname = normalized;
-      if (typeof window !== "undefined") {
-        if (action === "push") window.history.pushState(null, "", pathname);
-        else window.history.replaceState(null, "", pathname);
-      }
+    } else if (typeof window !== "undefined") {
+      if (action === "push") window.history.pushState(null, "", href);
+      else window.history.replaceState(null, "", href);
     }
     notify();
   };
@@ -290,11 +320,11 @@ export const makeService = <A extends ApiConstraint>(
     action: HistoryAction,
   ): void => {
     if (root === undefined) {
-      setPathname(toHref(next), action);
+      setHref(toHref(next), action);
       return;
     }
     const keys = resolveGroupRoute(root, next).keys;
-    setPathname(toHref(keys), action);
+    setHref(toHref(keys), action);
   };
 
   return {
@@ -305,16 +335,19 @@ export const makeService = <A extends ApiConstraint>(
     get pathname() {
       return pathname;
     },
+    get search() {
+      return search;
+    },
+    get href() {
+      return joinHref(pathname, search);
+    },
     get match() {
       return state().match;
     },
     go: (next, options) =>
-      setPathname(next, options?.replace === true ? "replace" : "push"),
+      setHref(next, options?.replace === true ? "replace" : "push"),
     to: (build, options) =>
-      setPathname(
-        build(urls),
-        options?.replace === true ? "replace" : "push",
-      ),
+      setHref(build(urls), options?.replace === true ? "replace" : "push"),
     back: () => {
       if (mode === "history") {
         if (typeof window !== "undefined") window.history.back();
@@ -322,10 +355,12 @@ export const makeService = <A extends ApiConstraint>(
       }
       if (stack.length <= 1) return;
       stack.pop();
-      pathname = stack[stack.length - 1] ?? "/";
+      const prev = parseHref(stack[stack.length - 1] ?? "/");
+      pathname = prev.pathname;
+      search = prev.search;
       notify();
     },
-    toRoot: () => setPathname("/", "replace"),
+    toRoot: () => setHref("/", "replace"),
     subscribe: (listener) => {
       listeners.add(listener);
       return () => {
@@ -334,9 +369,10 @@ export const makeService = <A extends ApiConstraint>(
     },
     syncFromLocation: () => {
       if (mode !== "history") return;
-      const next = locationPathname();
-      if (next === pathname) return;
-      pathname = next;
+      const next = locationHref();
+      if (next.pathname === pathname && next.search === search) return;
+      pathname = next.pathname;
+      search = next.search;
       notify();
     },
     get path() {
@@ -385,14 +421,14 @@ export const makeService = <A extends ApiConstraint>(
     openHealth: () => {
       requireRoot(root, "openHealth");
       const health = urlMethod(urls as Route.UrlBuilderLoose, "health");
-      setPathname(health !== undefined ? health() : "/health", "push");
+      setHref(health !== undefined ? health() : "/health", "push");
     },
     openNode: (nodeId) => {
       requireRoot(root, "openNode");
       const healthNode = urlMethod(urls as Route.UrlBuilderLoose, "healthNode");
-      setPathname(
+      setHref(
         healthNode !== undefined
-          ? healthNode({ params: { nodeId } })
+          ? healthNode(nodeId)
           : toHref(["health", nodeId]),
         "push",
       );

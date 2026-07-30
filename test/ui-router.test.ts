@@ -71,6 +71,34 @@ describe("Route.handle + Router.Outlet", () => {
     );
     expect(html).toContain("user:42");
   });
+
+  it("to + Outlet carry query on href / HandleArgs", () => {
+    const app = Route.make("app").add(
+      Route.get("user", "/users/:id").pipe(
+        Route.params(Schema.Struct({ id: Schema.String })),
+        Route.handle(({ params, query, href }) =>
+          createElement(
+            "span",
+            null,
+            `${params.id}:${query.tab ?? ""}:${href}`,
+          ),
+        ),
+      ),
+    );
+    const router = Router.make(app, "memory");
+    router.to((u) => u.user("42", { query: { tab: "bio" } }));
+    expect(router.pathname).toBe("/users/42");
+    expect(router.search).toBe("?tab=bio");
+    expect(router.href).toBe("/users/42?tab=bio");
+
+    const html = renderToString(
+      createElement(Router.Provider, {
+        value: router,
+        children: createElement(Router.Outlet),
+      }),
+    );
+    expect(html).toContain("42:bio:/users/42?tab=bio");
+  });
 });
 
 describe("Router.memory (Route.Api)", () => {

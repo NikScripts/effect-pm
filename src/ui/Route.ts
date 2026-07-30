@@ -25,9 +25,13 @@
  * )
  *
  * Route.urlBuilder(site).home()
+ * Route.urlBuilder(site).user("42", { query: { tab: "bio" } })
  * Router.history(site)
  * // <Router.Outlet /> renders the matched handle
  * ```
+ *
+ * Path params are **positional** on {@link urlBuilder} (`urls.user("42")`);
+ * pass `{ query }` last when you need `?x=y`.
  *
  * @see docs/handoffs/ui-routes-dream.md
  */
@@ -51,7 +55,11 @@ import * as catalog from "../internal/uiRoutes";
  */
 export type HandleArgs = {
   readonly params: Record<string, string>;
+  /** Decoded `?` query pairs (empty object when none). */
+  readonly query: Record<string, string>;
   readonly pathname: string;
+  /** `pathname` + search (`/users/1?tab=bio`). */
+  readonly href: string;
 };
 
 /**
@@ -311,7 +319,15 @@ export const targetOf = (hit: Match | undefined): TargetValue | undefined =>
     : Context.getOrUndefined(hit.annotations, Target);
 
 /**
- * Typed URL builder for a catalog (`HttpApiClient.urlBuilder` analogue).
+ * Typed URL builder for a catalog — path segments as args, optional `{ query }`.
+ *
+ * @example
+ * ```ts
+ * urls.home()
+ * urls.node("app/NodeA")
+ * urls.search({ query: { q: "WorkPool" } })
+ * urls.api.symbol("effect", "Effect", "succeed", { query: { src: "1" } })
+ * ```
  *
  * @public
  */
@@ -321,10 +337,17 @@ export type UrlBuilder<A extends catalog.ApiConstraint = catalog.ApiConstraint> 
 /** Loose builder when the catalog type is erased. @public */
 export type UrlBuilderLoose = catalog.UrlBuilderLoose;
 
+/** Erased url method (`...pathArgs`, optional `{ query }`). @public */
+export type UrlMethodLoose = catalog.UrlMethodLoose;
+
+/** Trailing `{ query }` options for {@link urlBuilder} methods. @public */
+export type UrlQueryOptions = catalog.UrlQueryOptions;
+
 /**
  * Build the typed URL surface for a catalog.
  *
- * Pass `{ baseUrl }` to prefix absolute URLs (`HttpApiClient.urlBuilder` parity).
+ * Path params are positional (template order). Pass `{ query }` last for `?x=y`.
+ * Pass `{ baseUrl }` to prefix absolute URLs.
  *
  * @public
  */

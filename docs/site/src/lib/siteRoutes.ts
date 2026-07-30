@@ -1,9 +1,9 @@
 /**
  * Typed docs catalog — **same `Route.make` API** as any hyperlink app.
  *
- * Call sites navigate with {@link ../ui/Router} (`Link` / `to` / `useRouter`).
- * Path segments are arguments on `urls` (not `{ params }`); Waku owns the real
- * file-route match + RSC/SSG render.
+ * Href builders match the package dream shape (positional path args, optional
+ * `{ query }`) via {@link Route.urlBuilder}, with branded path returns for Waku
+ * and a `Module.symbol` overload on `api.symbol`.
  *
  * ```ts
  * import { site, urls } from "./siteRoutes"
@@ -12,6 +12,7 @@
  * const router = Router.make(site)
  * router.urls.docs("work-pools")
  * router.urls.api.symbol("effect", "Effect.succeed")
+ * router.urls.search({ query: { q: "WorkPool" } })
  * ```
  */
 import { Schema } from "effect";
@@ -67,23 +68,36 @@ export const site = Route.make("docsSite").add(
 export type Site = typeof site;
 
 // =============================================================================
-// urls — positional path skin over `site` (Link / to callbacks)
+// urls — package UrlBuilder + branded returns + Module.symbol sugar
 // =============================================================================
+
+const build = Route.urlBuilder(site);
 
 type ApiSymbolPath = `/api/${string}/${string}/${string}`;
 
-function apiSymbol(pkg: string, module: string, symbol: string): ApiSymbolPath;
+function apiSymbol(
+  pkg: string,
+  module: string,
+  symbol: string,
+  options?: Route.UrlQueryOptions,
+): ApiSymbolPath;
 function apiSymbol(
   pkg: string,
   qualified: `${string}.${string}`,
+  options?: Route.UrlQueryOptions,
 ): ApiSymbolPath;
 function apiSymbol(
   pkg: string,
   moduleOrQualified: string,
-  symbol?: string,
+  symbolOrOptions?: string | Route.UrlQueryOptions,
+  options?: Route.UrlQueryOptions,
 ): ApiSymbolPath {
-  if (symbol !== undefined) {
-    return `/api/${pkg}/${moduleOrQualified}/${symbol}`;
+  if (typeof symbolOrOptions === "string") {
+    return (
+      options === undefined
+        ? build.api.symbol(pkg, moduleOrQualified, symbolOrOptions)
+        : build.api.symbol(pkg, moduleOrQualified, symbolOrOptions, options)
+    ) as ApiSymbolPath;
   }
   const dot = moduleOrQualified.indexOf(".");
   if (dot <= 0 || dot === moduleOrQualified.length - 1) {
@@ -91,28 +105,64 @@ function apiSymbol(
       `urls.api.symbol: expected "Module.symbol", got ${moduleOrQualified}`,
     );
   }
-  return `/api/${pkg}/${moduleOrQualified.slice(0, dot)}/${moduleOrQualified.slice(dot + 1)}`;
+  const module = moduleOrQualified.slice(0, dot);
+  const symbol = moduleOrQualified.slice(dot + 1);
+  return (
+    symbolOrOptions === undefined
+      ? build.api.symbol(pkg, module, symbol)
+      : build.api.symbol(pkg, module, symbol, symbolOrOptions)
+  ) as ApiSymbolPath;
 }
 
 /**
  * Call-site href builders for {@link site}.
- * Same identifiers as the catalog; path params are **positional args**.
+ * Same dream call shape as package {@link Route.urlBuilder}.
  */
 export const urls = {
-  home: (): "/" => "/",
-  search: (): "/search" => "/search",
-  releases: (): "/releases" => "/releases",
-  notFound: (): "/404" => "/404",
-  docsHyperlinks: (): "/docs/hyperlinks" => "/docs/hyperlinks",
-  docsResources: (): "/docs/resources" => "/docs/resources",
-  docs: (chapter: string): `/docs/${string}` => `/docs/${chapter}`,
+  home: (options?: Route.UrlQueryOptions): "/" =>
+    (options === undefined ? build.home() : build.home(options)) as "/",
+  search: (options?: Route.UrlQueryOptions): "/search" =>
+    (options === undefined ? build.search() : build.search(options)) as "/search",
+  releases: (options?: Route.UrlQueryOptions): "/releases" =>
+    (options === undefined
+      ? build.releases()
+      : build.releases(options)) as "/releases",
+  notFound: (options?: Route.UrlQueryOptions): "/404" =>
+    (options === undefined
+      ? build.notFound()
+      : build.notFound(options)) as "/404",
+  docsHyperlinks: (options?: Route.UrlQueryOptions): "/docs/hyperlinks" =>
+    (options === undefined
+      ? build.docsHyperlinks()
+      : build.docsHyperlinks(options)) as "/docs/hyperlinks",
+  docsResources: (options?: Route.UrlQueryOptions): "/docs/resources" =>
+    (options === undefined
+      ? build.docsResources()
+      : build.docsResources(options)) as "/docs/resources",
+  docs: (
+    chapter: string,
+    options?: Route.UrlQueryOptions,
+  ): `/docs/${string}` =>
+    (options === undefined
+      ? build.docs(chapter)
+      : build.docs(chapter, options)) as `/docs/${string}`,
   api: {
-    index: (): "/api" => "/api",
-    pkg: (pkg: string): `/api/${string}` => `/api/${pkg}`,
+    index: (options?: Route.UrlQueryOptions): "/api" =>
+      (options === undefined
+        ? build.api.index()
+        : build.api.index(options)) as "/api",
+    pkg: (pkg: string, options?: Route.UrlQueryOptions): `/api/${string}` =>
+      (options === undefined
+        ? build.api.pkg(pkg)
+        : build.api.pkg(pkg, options)) as `/api/${string}`,
     module: (
       pkg: string,
       module: string,
-    ): `/api/${string}/${string}` => `/api/${pkg}/${module}`,
+      options?: Route.UrlQueryOptions,
+    ): `/api/${string}/${string}` =>
+      (options === undefined
+        ? build.api.module(pkg, module)
+        : build.api.module(pkg, module, options)) as `/api/${string}/${string}`,
     symbol: apiSymbol,
   },
 } as const;
@@ -122,24 +172,38 @@ export type Urls = typeof urls;
 /** Waku `Link` / `push` path union. */
 export type SitePath = WakuPath;
 
+const pathOnly = (href: string): string => {
+  const q = href.indexOf("?");
+  return q === -1 ? href : href.slice(0, q);
+};
+
 export const isSitePath = (href: string): href is SitePath => {
+  const path = pathOnly(href);
   if (
-    href === "/" ||
-    href === "/search" ||
-    href === "/releases" ||
-    href === "/404" ||
-    href === "/api" ||
-    href === "/docs/hyperlinks" ||
-    href === "/docs/resources"
+    path === "/" ||
+    path === "/search" ||
+    path === "/releases" ||
+    path === "/404" ||
+    path === "/api" ||
+    path === "/docs/hyperlinks" ||
+    path === "/docs/resources"
   ) {
     return true;
   }
-  if (href.startsWith("/docs/") && href.length > "/docs/".length) return true;
-  if (href.startsWith("/api/") && href.length > "/api/".length) return true;
+  if (path.startsWith("/docs/") && path.length > "/docs/".length) return true;
+  if (path.startsWith("/api/") && path.length > "/api/".length) return true;
   return false;
 };
 
 export const requireSitePath = (href: string): SitePath => {
-  if (isSitePath(href)) return href;
+  const path = pathOnly(href);
+  if (isSitePath(path)) return path;
   throw new Error(`Router: not a docs site path: ${href}`);
+};
+
+/** Full href for Waku when the skin produced a query string. */
+export const siteHref = (href: string): string => {
+  const path = requireSitePath(href);
+  const q = href.indexOf("?");
+  return q === -1 ? path : `${path}${href.slice(q)}`;
 };

@@ -1,6 +1,6 @@
-# UI Route + Router — real router
+# UI Route + Router — dream machine
 
-**Landed on `integration`.** Anyone can use it. Same building blocks for every app.
+**Landed on `integration`.** One vision API for every app — including the docs site (Waku-backed skin).
 
 ## How it works
 
@@ -9,7 +9,9 @@ const site = Route.make("site").add(
   Route.get("home", "/home").pipe(Route.handle(() => <Home />)),
   Route.get("user", "/users/:id").pipe(
     Route.params(Schema.Struct({ id: Schema.String })),
-    Route.handle(({ params }) => <User id={params.id} />),
+    Route.handle(({ params, query }) => (
+      <User id={params.id} tab={query.tab} />
+    )),
   ),
 )
 
@@ -17,6 +19,9 @@ const router = Router.make(site, "history")
 
 <Router.Provider value={router}>
   <Router.Link to={(u) => u.home()}>Home</Router.Link>
+  <Router.Link to={(u) => u.user("42", { query: { tab: "bio" } })}>
+    User
+  </Router.Link>
   <Router.Outlet />   // renders the matched Route.handle
 </Router.Provider>
 ```
@@ -24,15 +29,28 @@ const router = Router.make(site, "history")
 | Piece | Job |
 |--------|-----|
 | `Route.get` + `handle` | Declare path **and** what to render |
-| `Route.urlBuilder` | Typed URLs |
-| `Router` | Location / match / go |
-| `Router.Outlet` | Render the matched handle |
+| `Route.urlBuilder` | Typed URLs — **path segments as args**, optional `{ query }` last |
+| `Router` | Location / match / go (`pathname` + `search` / `href`) |
+| `Router.Outlet` | Render the matched handle (`params` + `query`) |
 
 ```text
-URL → Router.match → Route.handle(args) → React node
+URL → Router.match(pathname) → Route.handle({ params, query, href }) → React node
+urls.user("42", { query: { tab: "bio" } }) → /users/42?tab=bio
 ```
 
 That is the whole product story. No View registry required. No Group tag on Router.
+
+## Call shape (the dream)
+
+```ts
+urls.home()
+urls.docs("work-pools")
+urls.api.symbol("effect", "Effect", "succeed")
+urls.healthNode("app/NodeA", { query: { panel: "logs" } })
+```
+
+Not `{ params: { chapter } }` — path keys are positional in template order.
+Query is UI navigation only (no HTTP body).
 
 ## Catalog extras (optional)
 
@@ -40,16 +58,20 @@ That is the whole product story. No View registry required. No Group tag on Rout
 |------|------|
 | `Route.group` / `topLevel` | Nest / flatten URL builders |
 | `Route.addHttpApi` | Reuse Effect HttpApi paths |
-| `Group.asRoutes` + `fromEffect` | Generate destinations from a Group tree — **typed** UrlBuilder (`urls.Nwsl.HttpApi()`, health params, nested under `topLevel`) |
+| `Group.asRoutes` + `fromEffect` | Generate destinations from a Group tree — **typed** UrlBuilder (`urls.Nwsl.HttpApi()`, `urls.healthNode(id)`) |
 | `Route.Target` / `DashboardRoot` | Dashboard metadata (`selected` / `view`) — optional |
 
 Group dashboards may still use Target + View skins in `DashboardShell`; ordinary apps use `handle` + `Outlet`.
+
+## Docs site
+
+Same API. Waku owns file-route match + Twoslash SSG/SSR; `Router.Outlet` is a no-op there. Skin adds `urls.api.symbol("effect", "Effect.succeed")` overload. See [`waku-site-routes-api.md`](./waku-site-routes-api.md).
 
 ## Runtime
 
 | Method | History |
 |--------|---------|
-| `go` / `to` / `open*` | **push** (default); `{ replace: true }` ok |
+| `go` / `to` / `open*` | **push** (default); `{ replace: true }` ok — href may include `?query` |
 | `up` / `toRoot` | **replace** |
 | `back` | memory stack / `history.back()` |
 
