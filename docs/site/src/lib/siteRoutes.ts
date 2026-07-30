@@ -239,9 +239,12 @@ export type Urls = typeof urls;
 /** Waku `Link` / `push` path union. */
 export type SitePath = WakuPath;
 
-const pathOnly = (href: string): string => {
-  const q = href.indexOf("?");
-  return q === -1 ? href : href.slice(0, q);
+/** Strip `?query` and `#hash` — pathname only. */
+export const pathOnly = (href: string): string => {
+  const hash = href.indexOf("#");
+  const beforeHash = hash === -1 ? href : href.slice(0, hash);
+  const q = beforeHash.indexOf("?");
+  return q === -1 ? beforeHash : beforeHash.slice(0, q);
 };
 
 export const isSitePath = (href: string): href is SitePath => {
@@ -268,9 +271,57 @@ export const requireSitePath = (href: string): SitePath => {
   throw new Error(`Router: not a docs site path: ${href}`);
 };
 
-/** Full href for Waku when the skin produced a query string. */
+/**
+ * Resolve an in-book href through {@link urls} when it matches a known pattern.
+ * Preserves `?query` and `#hash`. Unknown absolute paths pass through.
+ */
+export const resolveBookHref = (href: string): string => {
+  if (href.startsWith("http://") || href.startsWith("https://") || href.startsWith("//")) {
+    return href;
+  }
+  if (href.startsWith("#") || href === "") return href;
+
+  const hashIdx = href.indexOf("#");
+  const hash = hashIdx === -1 ? "" : href.slice(hashIdx);
+  const beforeHash = hashIdx === -1 ? href : href.slice(0, hashIdx);
+  const qIdx = beforeHash.indexOf("?");
+  const search = qIdx === -1 ? "" : beforeHash.slice(qIdx);
+  const path = qIdx === -1 ? beforeHash : beforeHash.slice(0, qIdx);
+
+  if (path === "/api" || path === "/api/") {
+    return `${urls.api.index()}${search}${hash}`;
+  }
+  if (path === "/releases") return `${urls.releases()}${search}${hash}`;
+  if (path === "/search") return `${urls.search()}${search}${hash}`;
+  if (path === "/" || path === "") return `${urls.home()}${search}${hash}`;
+
+  const apiSymbol = /^\/api\/([^/]+)\/([^/]+)\/([^/]+)$/.exec(path);
+  if (apiSymbol !== null) {
+    return `${urls.api.symbol(apiSymbol[1]!, apiSymbol[2]!, apiSymbol[3]!)}${search}${hash}`;
+  }
+  const apiModule = /^\/api\/([^/]+)\/([^/]+)$/.exec(path);
+  if (apiModule !== null) {
+    return `${urls.api.module(apiModule[1]!, apiModule[2]!)}${search}${hash}`;
+  }
+  const apiPkg = /^\/api\/([^/]+)$/.exec(path);
+  if (apiPkg !== null) {
+    return `${urls.api.pkg(apiPkg[1]!)}${search}${hash}`;
+  }
+  const docs = /^\/docs\/([^/]+)$/.exec(path);
+  if (docs !== null) {
+    return `${urls.docs(docs[1]!)}${search}${hash}`;
+  }
+  return href;
+};
+
+/** Full href for Waku — path via catalog check, keep `?` / `#`. */
 export const siteHref = (href: string): string => {
-  const path = requireSitePath(href);
-  const q = href.indexOf("?");
-  return q === -1 ? path : `${path}${href.slice(q)}`;
+  const resolved = resolveBookHref(href);
+  const path = requireSitePath(resolved);
+  const hashIdx = resolved.indexOf("#");
+  const hash = hashIdx === -1 ? "" : resolved.slice(hashIdx);
+  const beforeHash = hashIdx === -1 ? resolved : resolved.slice(0, hashIdx);
+  const qIdx = beforeHash.indexOf("?");
+  const search = qIdx === -1 ? "" : beforeHash.slice(qIdx);
+  return `${path}${search}${hash}`;
 };

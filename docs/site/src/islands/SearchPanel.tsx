@@ -33,6 +33,7 @@ export function SearchPanel({
   readonly onNavigate?: () => void;
   readonly controlRef?: React.MutableRefObject<SearchPanelControl | null>;
 }): React.ReactElement | null {
+  const router = Router.useRouter();
   const [index, setIndex] = React.useState<SearchIndex | undefined>(undefined);
   const [failed, setFailed] = React.useState(false);
   const [active, setActive] = React.useState(-1);
@@ -96,7 +97,7 @@ export function SearchPanel({
           if (hit !== undefined) {
             e.preventDefault();
             onNavigate?.();
-            window.location.assign(hit.doc.url);
+            void router.go(hit.doc.url);
           }
           return true;
         }
@@ -106,7 +107,7 @@ export function SearchPanel({
     return () => {
       controlRef.current = null;
     };
-  }, [controlRef, flat, selected, onNavigate]);
+  }, [controlRef, flat, selected, onNavigate, router]);
 
   if (q === "") return null;
   if (failed) return <p className="search-note">Search index unavailable.</p>;
