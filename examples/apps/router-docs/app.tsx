@@ -16,7 +16,8 @@ const NavLink = (props: {
   const live = Router.useRouter();
   const href =
     typeof props.to === "function" ? props.to(urls) : props.to;
-  const current = live.pathname === href;
+  const pathOnly = href.split("?")[0] ?? href;
+  const current = live.pathname === pathOnly;
   return (
     <Router.Link
       to={href}
@@ -61,19 +62,15 @@ const Chrome = (): React.ReactElement => {
         <h2>API</h2>
         <ul>
           <li>
-            <NavLink to={(u) => u.api({ params: { symbol: "Route" } })}>
-              Route
-            </NavLink>
+            <NavLink to={(u) => u.api("Route")}>Route</NavLink>
           </li>
           <li>
-            <NavLink to={(u) => u.api({ params: { symbol: "Router" } })}>
-              Router
-            </NavLink>
+            <NavLink to={(u) => u.api("Router")}>Router</NavLink>
           </li>
         </ul>
       </aside>
       <main className="main">
-        <div className="crumb">{live.pathname || "/"}</div>
+        <div className="crumb">{live.href || "/"}</div>
         <Router.Outlet />
         {live.match === undefined ? (
           <p className="empty">No match — pick a page in the nav.</p>

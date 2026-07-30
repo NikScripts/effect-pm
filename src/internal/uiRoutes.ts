@@ -547,30 +547,74 @@ export const match = (
 };
 
 // =============================================================================
-// Typed UrlBuilder (HttpApiClient.urlBuilder pattern + nested groups)
+// Typed UrlBuilder — path segments as positional args + optional query
 // =============================================================================
 
+/**
+ * Optional trailing options for {@link urlBuilder} methods.
+ * Query values that are `undefined` are omitted from the href.
+ */
+export type UrlQueryOptions = {
+  readonly query?: {
+    readonly [key: string]: string | undefined;
+  } | undefined;
+};
+
 /** Loose builder for erased / runtime contexts. */
-export type UrlMethodLoose = (request?: {
-  readonly params?: Record<string, string> | undefined;
-}) => string;
+export type UrlMethodLoose = (
+  ...args: ReadonlyArray<string | UrlQueryOptions>
+) => string;
 
 export type UrlBuilderLoose = {
   readonly [key: string]: UrlBuilderLoose | UrlMethodLoose;
 };
 
-type ParamsOf<E> = E extends uiRoute.Route<string, Path, infer P> ? P : never;
+/**
+ * Path param names in template order.
+ * `:pkg/:module` → `["pkg","module"]`; `/health/*nodeId` → `["nodeId"]`.
+ */
+type PathKeys<S extends string> = S extends
+  `${string}:${infer Key}/${infer Rest}`
+  ? Key extends `${infer Name}?` ? readonly [Name, ...PathKeys<Rest>]
+  : readonly [Key, ...PathKeys<Rest>]
+  : S extends `${string}:${infer Key}`
+    ? Key extends `${infer Name}?` ? readonly [Name]
+    : readonly [Key]
+  : S extends `${string}*${infer Splat}` ? readonly [Splat]
+  : readonly [];
 
-type UrlRequest<E extends uiRoute.Constraint> = [ParamsOf<E>] extends [never]
-  ? void | undefined
-  : { readonly params: Simplify<ParamsOf<E>> };
+type PathArgTuple<Keys extends readonly string[]> = {
+  [I in keyof Keys]: string;
+};
 
-type UrlArgs<Request> = [Request] extends [void | undefined] ? [request?: Request]
-  : [request: Request];
+/** Call args: positional path segments, optional `{ query }` last. */
+type UrlMethodArgs<Keys extends readonly string[]> = Keys extends readonly []
+  ? [] | [options: UrlQueryOptions]
+  : PathArgTuple<Keys> | [...PathArgTuple<Keys>, options: UrlQueryOptions];
 
-type UrlMethod<E extends uiRoute.Constraint> = (
-  ...args: UrlArgs<UrlRequest<E>>
-) => string;
+type UrlMethod<E extends uiRoute.Constraint> = E extends
+  uiRoute.Route<string, infer PathType, infer _Params>
+  ? (...args: UrlMethodArgs<PathKeys<PathType>>) => string
+  : UrlMethodLoose;
+
+const isUrlQueryOptions = (value: unknown): value is UrlQueryOptions =>
+  typeof value === "object" &&
+  value !== null &&
+  !Array.isArray(value) &&
+  Object.keys(value).every((key) => key === "query");
+
+const appendQuery = (
+  path: string,
+  query: UrlQueryOptions["query"],
+): string => {
+  if (query === undefined) return path;
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined) search.set(key, value);
+  }
+  const qs = search.toString();
+  return qs.length === 0 ? path : `${path}?${qs}`;
+};
 
 type EndpointMethods<Routes extends uiRoute.Constraint> = {
   readonly [E in Routes as E["identifier"]]: UrlMethod<E>;
@@ -621,8 +665,9 @@ type TopLevelMethods<Groups extends GroupTop> = EndpointMethods<
 >;
 
 /**
- * Typed URL builder for a catalog — `HttpApiClient.UrlBuilder` analogue.
+ * Typed URL builder for a catalog.
  * Nested {@link Group}s nest on the builder; `topLevel` flattens.
+ * Path params are **positional** (`urls.node("x")`); pass `{ query }` last.
  */
 export type UrlBuilder<A extends ApiConstraint = ApiConstraint> = A extends
   Api<infer _Id, infer Groups> ? Simplify<
@@ -631,16 +676,21 @@ export type UrlBuilder<A extends ApiConstraint = ApiConstraint> = A extends
   >
   : UrlBuilderLoose;
 
-/** Nested URL builder — `HttpApiClient.urlBuilder` shape. */
+/** Nested URL builder — positional path args + optional `{ query }`. */
 export const urlBuilder = <A extends ApiConstraint>(
   self: A,
   options?: { readonly baseUrl?: URL | string | undefined },
 ): UrlBuilder<A> => {
   const root: UrlBuilderLoose = {};
-  const withBase = (url: string): string =>
-    options?.baseUrl === undefined
-      ? url
-      : new URL(url, options.baseUrl.toString()).toString();
+  const withBase = (url: string): string => {
+    if (options?.baseUrl === undefined) return url;
+    const base = options.baseUrl.toString();
+    const q = url.indexOf("?");
+    if (q === -1) return new URL(url, base).toString();
+    const path = url.slice(0, q);
+    const search = url.slice(q);
+    return `${new URL(path, base).toString()}${search}`;
+  };
 
   const ensure = (target: UrlBuilderLoose, id: string): UrlBuilderLoose => {
     const existing = target[id];
@@ -670,8 +720,8 @@ export const urlBuilder = <A extends ApiConstraint>(
       return;
     }
     const fn = Object.assign(
-      ((request?: { readonly params?: Record<string, string> }) =>
-        method(request)) as UrlMethodLoose,
+      ((...args: ReadonlyArray<string | UrlQueryOptions>) =>
+        method(...args)) as UrlMethodLoose,
       existing,
     );
     record[id] = fn as unknown as UrlBuilderLoose;
@@ -685,8 +735,31 @@ export const urlBuilder = <A extends ApiConstraint>(
     }
     const leafId = identifiers[identifiers.length - 1]!;
     const compiled = uiRoute.compilePath(path);
-    const method: UrlMethodLoose = (request) =>
-      withBase(compiled.build(request?.params ?? {}));
+    const method: UrlMethodLoose = (...args) => {
+      const last = args[args.length - 1];
+      const optionsArg =
+        args.length > compiled.keys.length && isUrlQueryOptions(last)
+          ? last
+          : args.length === 1 &&
+              compiled.keys.length === 0 &&
+              isUrlQueryOptions(args[0])
+            ? args[0]
+            : undefined;
+      const pathArgs =
+        optionsArg === undefined
+          ? args
+          : args.slice(0, args.length - 1);
+      const params: Record<string, string> = {};
+      for (let i = 0; i < compiled.keys.length; i++) {
+        const key = compiled.keys[i]!;
+        const value = pathArgs[i];
+        if (typeof value !== "string") {
+          throw new Error(`Missing path parameter: ${key}`);
+        }
+        params[key] = value;
+      }
+      return withBase(appendQuery(compiled.build(params), optionsArg?.query));
+    };
     setCallable(cursor, leafId, method);
   };
 

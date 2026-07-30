@@ -21,10 +21,11 @@
 ## What this shows
 
 A **docs-shaped** site catalog on `Route` + `Router` — typed `urlBuilder` /
-`Router.to`, nested `guides` group, param route for `/api/:symbol`.
+`Router.to`, nested `guides` group, positional `/api/:symbol` (`urls.api("WorkPool")`).
 
-The CLI prints the typed URLs and matches. The Vite app mounts the same destinations
-with `Route.handle` + `Router.Outlet` so you can click through a mini docs chrome.
+The CLI prints the typed URLs and matches (including `?query`). The Vite app mounts
+the same destinations with `Route.handle` + `Router.Outlet` so you can click through
+a mini docs chrome.
 
 {.twoslash include="examples/ui/router-mini-docs.ts"}
 ``` ts

@@ -23,14 +23,15 @@ expectTypeOf(urls.health()).toEqualTypeOf<string>();
 expectTypeOf(urls.Nwsl.HttpApi()).toEqualTypeOf<string>();
 expectTypeOf(urls.Nwsl.HttpApiLogs()).toEqualTypeOf<string>();
 expectTypeOf(urls.Nwsl.index()).toEqualTypeOf<string>();
+expectTypeOf(urls.nodeHealth("app/NodeA")).toEqualTypeOf<string>();
 expectTypeOf(
-  urls.healthNode({ params: { nodeId: "app/NodeA" } }),
+  urls.nodeHealth("app/NodeA", { query: { panel: "logs" } }),
 ).toEqualTypeOf<string>();
 
-// @ts-expect-error healthNode params required
-urls.healthNode();
+// @ts-expect-error nodeHealth path param required
+urls.nodeHealth();
 
 const router = Router.make(site, "memory");
 router.to((u) => u.Nwsl.HttpApi());
-router.to((u) => u.healthNode({ params: { nodeId: "x" } }));
+router.to((u) => u.nodeHealth("x"));
 expectTypeOf(router.urls.Nwsl.HttpApi()).toEqualTypeOf<string>();

@@ -50,21 +50,23 @@ const program = Effect.gen(function* () {
   yield* Effect.logInfo(`  guides    ${urls.guides.index()}`);
   yield* Effect.logInfo(`  workPools ${urls.guides.workPools()}`);
   yield* Effect.logInfo(`  gates     ${urls.guides.gates()}`);
+  yield* Effect.logInfo(`  api       ${urls.api("WorkPool")}`);
   yield* Effect.logInfo(
-    `  api       ${urls.api({ params: { symbol: "WorkPool" } })}`,
+    `  api+q     ${urls.api("WorkPool", { query: { src: "1" } })}`,
   );
 
   router.to((u) => u.guides.workPools());
   yield* Effect.logInfo(
-    `match ${String(router.match?.route.identifier)} → ${router.pathname}`,
+    `match ${String(router.match?.route.identifier)} → ${router.href}`,
   );
 
-  router.to((u) => u.api({ params: { symbol: "Route.handle" } }));
+  router.to((u) => u.api("Route.handle", { query: { src: "twoslash" } }));
   yield* Effect.logInfo(
-    `match ${String(router.match?.route.identifier)} → ${router.pathname}`,
+    `match ${String(router.match?.route.identifier)} → ${router.href}`,
   );
   const symbol = router.match?.params["symbol"] ?? "";
   yield* Effect.logInfo(`params.symbol ${symbol}`);
+  yield* Effect.logInfo(`search ${router.search}`);
 });
 
 

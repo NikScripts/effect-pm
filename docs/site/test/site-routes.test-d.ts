@@ -1,9 +1,18 @@
 /**
- * Route.make catalog + positional urls skin.
+ * Route.make catalog + positional urls + SSOT vs pages.gen.
  */
 import { expectTypeOf } from "vitest";
 import "../src/pages.gen.js";
-import { site, urls, isSitePath, type SitePath } from "../src/lib/siteRoutes";
+import {
+  destinations,
+  site,
+  urls,
+  isSitePath,
+  type CatalogWakuPath,
+  type SitePath,
+  type WakuFilePath,
+  type WakuFilePathRequired,
+} from "../src/lib/siteRoutes";
 import * as Router from "../src/ui/Router";
 
 const router = Router.make(site);
@@ -25,7 +34,16 @@ const chapter = urls.docs("work-pools");
 const _waku: SitePath = chapter;
 void _waku;
 void isSitePath;
+void destinations;
 
 // @ts-expect-error junk is not a SitePath
 const _junk: SitePath = "/totally-fake";
 void _junk;
+
+// ----- SSOT: destinations.waku ↔ pages.gen Page.path -----
+
+type MissingFromCatalog = Exclude<WakuFilePathRequired, CatalogWakuPath>;
+type ExtraInCatalog = Exclude<CatalogWakuPath, WakuFilePath>;
+
+expectTypeOf<MissingFromCatalog>().toEqualTypeOf<never>();
+expectTypeOf<ExtraInCatalog>().toEqualTypeOf<never>();
