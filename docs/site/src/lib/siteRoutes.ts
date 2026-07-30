@@ -1,13 +1,18 @@
 /**
- * Docs site routes — typed **path skin** over Waku file routes.
+ * Typed docs catalog — **same `Route.make` API** as any hyperlink app.
+ *
+ * Call sites navigate with {@link ../ui/Router} (`Link` / `to` / `useRouter`).
+ * Path segments are arguments on `urls` (not `{ params }`); Waku owns the real
+ * file-route match + RSC/SSG render.
  *
  * ```ts
- * urls.docs("work-pools")
- * urls.api.symbol("effect", "Effect", "succeed")
- * urls.api.symbol("effect", "Effect.succeed")
- * ```
+ * import { site, urls } from "./siteRoutes"
+ * import * as Router from "../ui/Router"
  *
- * {@link ../ui/Router} is the vision nav API; Waku is the real router underneath.
+ * const router = Router.make(site)
+ * router.urls.docs("work-pools")
+ * router.urls.api.symbol("effect", "Effect.succeed")
+ * ```
  */
 import { Schema } from "effect";
 import * as Route from "hyperlink-ts/ui/Route";
@@ -15,12 +20,58 @@ import type { Unstable_InferredPaths as WakuPath } from "waku/router/client";
 import "../pages.gen.js";
 
 // =============================================================================
-// Path skin (what call sites use)
+// Typed API — Route.make (the definition)
+// =============================================================================
+
+/**
+ * Docs site catalog. Mirrors Waku `src/pages/` (static + dynamic).
+ *
+ * | Identifier | Path | Waku page |
+ * |------------|------|-----------|
+ * | `home` | `/` | `pages/index` (outside book) / book entry |
+ * | `docs` | `/docs/:chapter` | `docs/[chapter].tsx` (SSG) |
+ * | `api` / `api.symbol` | `/api/:pkg/:module/:symbol` | static `hyperlink-ts/…` or SSR `[pkg]/…` |
+ */
+export const site = Route.make("docsSite").add(
+  Route.get("home", "/"),
+  Route.get("search", "/search"),
+  Route.get("releases", "/releases"),
+  Route.get("notFound", "/404"),
+  Route.get("docsHyperlinks", "/docs/hyperlinks"),
+  Route.get("docsResources", "/docs/resources"),
+  Route.get("docs", "/docs/:chapter").pipe(
+    Route.params(Schema.Struct({ chapter: Schema.String })),
+  ),
+  Route.group("api").add(
+    Route.get("index", "/api"),
+    Route.get("pkg", "/api/:pkg").pipe(
+      Route.params(Schema.Struct({ pkg: Schema.String })),
+    ),
+    Route.get("module", "/api/:pkg/:module").pipe(
+      Route.params(
+        Schema.Struct({ pkg: Schema.String, module: Schema.String }),
+      ),
+    ),
+    Route.get("symbol", "/api/:pkg/:module/:symbol").pipe(
+      Route.params(
+        Schema.Struct({
+          pkg: Schema.String,
+          module: Schema.String,
+          symbol: Schema.String,
+        }),
+      ),
+    ),
+  ),
+);
+
+export type Site = typeof site;
+
+// =============================================================================
+// urls — positional path skin over `site` (Link / to callbacks)
 // =============================================================================
 
 type ApiSymbolPath = `/api/${string}/${string}/${string}`;
 
-/** `/api/:pkg/:module/:symbol` — three segments, or `Module.symbol` sugar. */
 function apiSymbol(pkg: string, module: string, symbol: string): ApiSymbolPath;
 function apiSymbol(
   pkg: string,
@@ -44,32 +95,31 @@ function apiSymbol(
 }
 
 /**
- * Beautifully typed hrefs for every Waku page pattern.
- * Return types are template literals ⊆ Waku `Link` / `push` paths.
+ * Call-site href builders for {@link site}.
+ * Same identifiers as the catalog; path params are **positional args**.
  */
 export const urls = {
   home: (): "/" => "/",
   search: (): "/search" => "/search",
   releases: (): "/releases" => "/releases",
   notFound: (): "/404" => "/404",
-  /** SSG chapter — `/docs/:chapter` */
-  docs: (chapter: string): `/docs/${string}` => `/docs/${chapter}`,
   docsHyperlinks: (): "/docs/hyperlinks" => "/docs/hyperlinks",
   docsResources: (): "/docs/resources" => "/docs/resources",
-  /** `/api` index + nested package / module / symbol segments */
-  api: Object.assign((): "/api" => "/api", {
+  docs: (chapter: string): `/docs/${string}` => `/docs/${chapter}`,
+  api: {
+    index: (): "/api" => "/api",
     pkg: (pkg: string): `/api/${string}` => `/api/${pkg}`,
     module: (
       pkg: string,
       module: string,
     ): `/api/${string}/${string}` => `/api/${pkg}/${module}`,
     symbol: apiSymbol,
-  }),
+  },
 } as const;
 
 export type Urls = typeof urls;
 
-/** Waku `Link` / `push` path union (from `pages.gen.ts`). */
+/** Waku `Link` / `push` path union. */
 export type SitePath = WakuPath;
 
 export const isSitePath = (href: string): href is SitePath => {
@@ -93,39 +143,3 @@ export const requireSitePath = (href: string): SitePath => {
   if (isSitePath(href)) return href;
   throw new Error(`Router: not a docs site path: ${href}`);
 };
-
-// =============================================================================
-// Match catalog (Route.match only — not the call-site API)
-// =============================================================================
-
-export const site = Route.make("docsSite").add(
-  Route.get("home", "/"),
-  Route.get("search", "/search"),
-  Route.get("releases", "/releases"),
-  Route.get("notFound", "/404"),
-  Route.get("api", "/api"),
-  Route.get("docsHyperlinks", "/docs/hyperlinks"),
-  Route.get("docsResources", "/docs/resources"),
-  Route.get("docs", "/docs/:chapter").pipe(
-    Route.params(Schema.Struct({ chapter: Schema.String })),
-  ),
-  Route.get("apiPkg", "/api/:pkg").pipe(
-    Route.params(Schema.Struct({ pkg: Schema.String })),
-  ),
-  Route.get("apiModule", "/api/:pkg/:module").pipe(
-    Route.params(
-      Schema.Struct({ pkg: Schema.String, module: Schema.String }),
-    ),
-  ),
-  Route.get("apiSymbol", "/api/:pkg/:module/:symbol").pipe(
-    Route.params(
-      Schema.Struct({
-        pkg: Schema.String,
-        module: Schema.String,
-        symbol: Schema.String,
-      }),
-    ),
-  ),
-);
-
-export type Site = typeof site;

@@ -1,42 +1,51 @@
-# Docs site — vision Router on Waku
+# Docs site — `Route.make` + `Router.make` on Waku
 
-**One API.** Path segments are **arguments**, not `{ params }`. Waku is the real router; this is a typed skin.
+Typed API is the usual hyperlink shape. Waku is the engine.
 
-## API
+## Definition (`siteRoutes.ts`)
+
+```ts
+export const site = Route.make("docsSite").add(
+  Route.get("home", "/"),
+  Route.get("search", "/search"),
+  Route.get("releases", "/releases"),
+  Route.get("docs", "/docs/:chapter").pipe(
+    Route.params(Schema.Struct({ chapter: Schema.String })),
+  ),
+  Route.group("api").add(
+    Route.get("index", "/api"),
+    Route.get("pkg", "/api/:pkg").pipe(/* … */),
+    Route.get("module", "/api/:pkg/:module").pipe(/* … */),
+    Route.get("symbol", "/api/:pkg/:module/:symbol").pipe(/* … */),
+  ),
+)
+```
+
+## Use (`Router.tsx` — aliased as `hyperlink-ts/ui/Router`)
 
 ```tsx
-import * as Router from "hyperlink-ts/ui/Router" // → docs/site/src/ui/Router.tsx
+const router = Router.make(site)
 
-<Router.Provider value={Router.docs}>
+<Router.Provider value={router}>
+  <Router.Link to={(u) => u.home()}>Home</Router.Link>
   <Router.Link to={(u) => u.docs("work-pools")}>Work pools</Router.Link>
   <Router.Link to={(u) => u.api.symbol("effect", "Effect.succeed")}>
     Effect.succeed
   </Router.Link>
-  <Router.Link to={(u) => u.api.symbol("hyperlink-ts", "WorkPool", "Tag")}>
-    WorkPool.Tag
-  </Router.Link>
 </Router.Provider>
 
 const r = Router.useRouter()
-void r.to((u) => u.releases())
-void r.to((u) => u.api.symbol("effect", "Effect.succeed"))
+void r.to((u) => u.api.symbol("hyperlink-ts", "WorkPool", "Tag"))
 ```
 
-```ts
-urls.home()                                    // "/"
-urls.docs("work-pools")                        // `/docs/${string}`
-urls.api()                                     // "/api"
-urls.api.pkg("hyperlink-ts")                   // `/api/${string}`
-urls.api.module("hyperlink-ts", "WorkPool")    // `/api/${string}/${string}`
-urls.api.symbol("effect", "Effect", "succeed") // `/api/effect/Effect/succeed`
-urls.api.symbol("effect", "Effect.succeed")    // same (Module.symbol sugar)
-```
+`urls` on the router is a **positional** skin over `site` (segments as args — not `{ params }`).
 
-## Mapping
+## Layers
 
-| Call site | Engine |
-|-----------|--------|
-| `urls.*` / `to={(u) => …}` | typed path skin → Waku href |
-| `Router.Link` / `to` / `go` | Waku `Link` / `push` / `replace` |
-| `src/pages/` | RSC / SSG / SSR bodies (Twoslash) |
-| `Router.Outlet` | no-op (bodies are file routes) |
+| Piece | Role |
+|-------|------|
+| `Route.make(site)` | Typed catalog (the definition) |
+| `urls` / `to={(u)=>…}` | Positional href builders |
+| `Router.make` / `Link` / `to` | Vision nav API → Waku `Link`/`push` |
+| `src/pages/` | Real match + RSC/SSG/SSR bodies |
+| `Router.Outlet` | No-op (bodies are file routes) |
