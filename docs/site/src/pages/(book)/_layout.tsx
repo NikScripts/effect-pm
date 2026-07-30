@@ -9,6 +9,7 @@ import { GlossaryHover } from "../../islands/GlossaryHover.js";
 import { CodeCopy } from "../../islands/CodeCopy.js";
 import { ShortcutsHelp } from "../../islands/ShortcutsHelp.js";
 import { HoverGenProgress } from "../../islands/HoverGenProgress.js";
+import { RouterProvider } from "../../islands/RouterProvider.js";
 import { Effect } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import * as nodePath from "node:path";
@@ -66,7 +67,7 @@ export default async function BookLayout({ children }: { children: ReactNode }) 
       : groups;
   const standardsHrefs = standardsGroup?.items.map((i) => i.href) ?? [];
   return (
-    <>
+    <RouterProvider>
       {/* description/og tags are PER-PAGE (PageMeta) — a layout-level description here would
           duplicate them (React 19 hoists but does not dedupe meta by name) */}
       {/* Override Waku's default viewport: `viewport-fit=cover` lets the page paint under
@@ -93,7 +94,7 @@ export default async function BookLayout({ children }: { children: ReactNode }) 
       <CodeCopy />
       <ShortcutsHelp />
       <HoverGenProgress />
-    </>
+    </RouterProvider>
   );
 }
 

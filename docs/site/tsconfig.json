@@ -18,6 +18,9 @@
       "hyperlink-ts": [
         "../../src/index.ts"
       ],
+      "hyperlink-ts/ui/Router": [
+        "./src/ui/Router.tsx"
+      ],
       "hyperlink-ts/*": [
         "../../src/*"
       ]

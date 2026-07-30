@@ -99,6 +99,10 @@ export default defineConfig({
       dedupe: ["react", "react-dom", "react/jsx-runtime", "effect"],
       alias: {
         "hyperlink-ts": fileURLToPath(new URL("../../src", import.meta.url)),
+        // Vision Router API, Waku-backed — one import surface for the docs site.
+        "hyperlink-ts/ui/Router": fileURLToPath(
+          new URL("./src/ui/Router.tsx", import.meta.url),
+        ),
         // Node-only deps the package pulls transitively (SQLite storage, CI check).
         // A demo queue is in-memory, so stub them out of the browser bundle.
         "@effect/sql-sqlite-node/SqliteClient": fileURLToPath(new URL("./shims/sqlite-node-stub.js", import.meta.url)),

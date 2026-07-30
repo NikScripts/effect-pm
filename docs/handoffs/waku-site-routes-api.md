@@ -1,36 +1,51 @@
-# Docs site — typed routes on Waku (prototype API)
+# Docs site — vision Router on Waku
 
-**Status:** prototype on `cursor/view-withsize-types-125f`  
-**Code:** `docs/site/src/lib/siteRoutes.ts`, `SiteLink.tsx`, `useSiteRouter.ts`
+**One API.** Same shape as `hyperlink-ts/ui/Router`. Waku is the engine (SSG/SSR/RSC soft-nav). File routes in `src/pages/` still own page bodies.
 
-Waku keeps pages / SSG / SSR / soft-nav. hyperlink `Route` + thin wrappers type the hrefs.
+## API (what you write)
 
-## API
+```tsx
+import * as Route from "hyperlink-ts/ui/Route"
+import * as Router from "hyperlink-ts/ui/Router"  // aliased → docs/site/src/ui/Router.tsx
+import { site } from "./lib/siteRoutes"
 
-```ts
-import { path, urls, site } from "../lib/siteRoutes"
-import { SiteLink } from "../components/SiteLink"
-import { useSiteRouter } from "../lib/useSiteRouter"
+const router = Router.make(site)
 
-// Static
-path.home()                         // "/"
-path.releases()                     // "/releases"
-path.docs("work-pools")             // `/docs/${string}`  (SSG chapter)
+<Router.Provider value={router}>
+  <Router.Link to={(u) => u.docs({ params: { chapter: "work-pools" }})}>
+    Work pools
+  </Router.Link>
+  <Router.Link
+    to={(u) =>
+      u.apiSymbol({
+        params: { pkg: "effect", module: "Effect", symbol: "succeed" },
+      })
+    }
+  >
+    Effect.succeed
+  </Router.Link>
+</Router.Provider>
 
-// Dynamic (same builder — Waku file route chooses static vs SSR)
-path.apiSymbol("hyperlink-ts", "WorkPool", "Tag")  // own API, SSG
-path.apiSymbol("effect", "Effect", "succeed")      // dep API, SSR
-
-// Soft-nav — still Waku Link under the hood
-<SiteLink to={(p) => p.docs("work-pools")}>Work pools</SiteLink>
-<SiteLink to={path.apiSymbol("effect", "Effect", "succeed")}>succeed</SiteLink>
-
-const router = useSiteRouter()
-void router.push((p) => p.releases())
-
-// Catalog UrlBuilder (hover / tests) — same destinations
-urls.docs({ params: { chapter: "work-pools" } })
+const r = Router.useRouter()
+void r.to((u) => u.releases())
+r.pathname
+r.match
 ```
 
-`path.*` return types are assignable to Waku `Unstable_InferredPaths` (**no casts**).  
-Junk paths like `"/totally-fake"` are **not** assignable to `SitePath`.
+Catalog SSOT: `docs/site/src/lib/siteRoutes.ts` (`Route.make` — static + dynamic).
+
+## Mapping
+
+| Vision | Docs site |
+|--------|-----------|
+| `Route.make` / `urlBuilder` | `site` / `urls` |
+| `Router.make` / `Provider` | catalog bind (`mode: "waku"`) |
+| `Router.Link` / `to` / `go` | Waku `Link` / `push` / `replace` |
+| `Router.Outlet` | **no-op** — bodies are Waku `src/pages/` (keeps Twoslash SSG) |
+| `Router.memory` / `history` | N/A here (apps still use package Router) |
+
+## Wiring
+
+- Alias: `hyperlink-ts/ui/Router` → `src/ui/Router.tsx` (`waku.config.ts` + `tsconfig`)
+- Book layout: `RouterProvider` island
+- Sidebar: `GroupedNav` uses `Router.Link`
