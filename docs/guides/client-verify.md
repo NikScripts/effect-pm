@@ -8,8 +8,10 @@
 
 Addressed clients should not hang on a dead peer or silently talk past a stale contract.
 `Hyperlink.verifyConnection` is the probe; addressed `Hyperlink.client` (and `Hyperlink.ws`)
-run it **by default**. Nodeless `Hyperlink.connect(tag, protocol)` does not — call the probe
-yourself when you want fail-fast there.
+run it **by default**. Mode is a `hyperlink-ts/Policy` fragment (`Policy.verifyOff` /
+`verifyStatus` / `verifyReject`) — compose with `Policy.provide`. Nodeless
+`Hyperlink.connect(tag, protocol)` does not probe — call verify yourself when you want
+fail-fast there.
 
 Handoff SSOT: [`docs/handoffs/loud-failures-design.md`](../handoffs/loud-failures-design.md) ·
 [`docs/handoffs/verify-connection-classification.md`](../handoffs/verify-connection-classification.md).

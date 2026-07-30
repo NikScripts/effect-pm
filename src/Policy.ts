@@ -80,10 +80,10 @@ export const Sticky = Context.Reference<boolean>("hyperlink-ts/Policy/Sticky", {
  * @category references
  * @public
  */
-export const StreamGap: Context.Reference<StreamGap> = Context.Reference<StreamGap>(
-  "hyperlink-ts/Policy/StreamGap",
-  { defaultValue: (): StreamGap => "stall" },
-);
+export const StreamGap: Context.Reference<StreamGap> =
+  Context.Reference<StreamGap>("hyperlink-ts/Policy/StreamGap", {
+    defaultValue: (): StreamGap => "stall",
+  });
 
 /**
  * Cold N&gt;1 without Advice. Default `"fail"`.
@@ -326,6 +326,18 @@ export const layer = (
 
 /**
  * Provide policy fragments onto a Layer (no stacked `Layer.provide`s).
+ * Accepts zero-arg fragments, `Policy.layer(...)` bundles, or a mix — last write
+ * wins per reference.
+ *
+ * ```ts
+ * Hyperlink.lookupClient(Mail).pipe(
+ *   Policy.provide(Policy.sticky, Policy.streamGap("stall")),
+ *   Layer.provide(Lookup.layer),
+ * )
+ *
+ * const cutover = Policy.layer(Policy.sticky, Policy.verifyOff)
+ * client.pipe(Policy.provide(cutover, Policy.streamGap("buffer")))
+ * ```
  *
  * @category layers
  * @public
