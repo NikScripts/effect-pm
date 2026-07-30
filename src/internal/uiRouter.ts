@@ -14,10 +14,10 @@ import type { ApiConstraint } from "./uiRoutes";
 
 export type HistoryAction = "push" | "replace";
 
-/** Live navigation API — provide with memory / history layers. */
+/** Live navigation API — lite (`memory` / `history`) or full (`waku` companion). */
 export interface Service<A extends ApiConstraint = ApiConstraint> {
   readonly api: A;
-  readonly mode: "memory" | "history";
+  readonly mode: "memory" | "history" | "waku";
   /** Pathname only (`/docs/x`) — no query. */
   readonly pathname: string;
   /** Search including `?` (`?tab=1`), or `""`. */
@@ -34,10 +34,12 @@ export interface Service<A extends ApiConstraint = ApiConstraint> {
     build: (urls: Route.UrlBuilder<A>) => string,
     options?: { readonly replace?: boolean },
   ) => void;
-  /** Pop one history / memory entry. */
+  /** Pop one history / memory entry (or Waku back). */
   readonly back: () => void;
   /** Navigate to `/` (replace). */
   readonly toRoot: () => void;
+  /** Prefetch a path when the engine supports it (no-op on lite). */
+  readonly prefetch: (href: string) => void;
   readonly subscribe: (listener: () => void) => () => void;
   /** @internal */
   readonly syncFromLocation: () => void;
@@ -172,6 +174,9 @@ export const makeService = <A extends ApiConstraint>(
       notify();
     },
     toRoot: () => setHref("/", "replace"),
+    prefetch: () => {
+      /* lite engines have no prefetch */
+    },
     subscribe: (listener) => {
       listeners.add(listener);
       return () => {

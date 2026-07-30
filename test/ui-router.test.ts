@@ -103,6 +103,13 @@ describe("Route.handle + Router.Outlet", () => {
 });
 
 describe("Router.memory (Route.Api)", () => {
+  it("matches Route.get home at /", () => {
+    const app = Route.make("app").add(Route.get("home", "/"));
+    const router = Router.make(app, "memory");
+    expect(router.pathname).toBe("/");
+    expect(router.match?.route.identifier).toBe("home");
+  });
+
   it("go / to / match / back", () => {
     run(Router.memory(site), (router) => {
       expect(router.pathname).toBe("/");

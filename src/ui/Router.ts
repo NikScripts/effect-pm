@@ -24,8 +24,9 @@
  * </Router.Provider>
  * ```
  *
- * Layers: {@link memory} / {@link history}. Group drill-down UI helpers are
- * {@link ./GroupNav} (pass the Group root explicitly).
+ * **Lite** edition: {@link make} / {@link memory} / {@link history}.
+ * **Full** (Waku RSC): companion `hyperlink-ts/ui/Router/waku` → {@link ./RouterWaku.waku}.
+ * Group drill-down: {@link ./GroupNav} (on top of either edition).
  *
  * @see docs/handoffs/ui-routes-dream.md
  */

@@ -2,7 +2,7 @@
   "name": "hyperlink-ts",
   "version": "0.9.0-beta.0",
   "packageManager": "pnpm@10.33.4",
-  "description": "Effect Hyperlink \u2014 location-transparent services for Effect. Define a Hyperlink once, run it on one runtime, and call it from another over RPC with the same typed Handle. Includes WorkPool, Daemon, Gate, stores, logs, and dashboards.",
+  "description": "Effect Hyperlink — location-transparent services for Effect. Define a Hyperlink once, run it on one runtime, and call it from another over RPC with the same typed Handle. Includes WorkPool, Daemon, Gate, stores, logs, and dashboards.",
   "keywords": [
     "effect",
     "hyperlink",
@@ -191,6 +191,10 @@
     "./ui/Router": {
       "types": "./dist/ui/Router.d.ts",
       "default": "./dist/ui/Router.js"
+    },
+    "./ui/Router/waku": {
+      "types": "./dist/ui/RouterWaku.d.ts",
+      "default": "./dist/ui/RouterWaku.js"
     },
     "./ui/GroupNav": {
       "types": "./dist/ui/GroupNav.d.ts",
@@ -396,7 +400,6 @@
     "example:apps-view-compose": "vite --config examples/apps/view-compose/vite.config.ts",
     "example:apps-router-docs": "vite --config examples/apps/router-docs/vite.config.ts",
     "example:ui-router-mini-docs": "tsx examples/ui/router-mini-docs.ts",
-
     "example:apps-cli": "tsx examples/apps/cli/counter-cli.ts",
     "example:apps-cli-manager": "tsx examples/apps/cli/manager-cli.ts",
     "example:apps-tui": "tsx --tsconfig examples/apps/tui/tsconfig.json examples/apps/tui/counter-tui.tsx",
@@ -439,9 +442,13 @@
     "ioredis": "^5.7.0",
     "react": ">=18",
     "react-dom": ">=18",
-    "recharts": ">=2"
+    "recharts": ">=2",
+    "waku": ">=1.0.0-beta.3"
   },
   "peerDependenciesMeta": {
+    "waku": {
+      "optional": true
+    },
     "recharts": {
       "optional": true
     },
@@ -504,6 +511,7 @@
     "typescript-eslint": "^8.59.3",
     "vite": "^6.3.5",
     "vitest": "^4.1.5",
+    "waku": "1.0.0-beta.3",
     "web-tree-sitter": "0.25.10",
     "ws": "^8.21.0"
   },

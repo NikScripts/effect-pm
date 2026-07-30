@@ -75,10 +75,10 @@ Same typed contract (`Route` catalog, `Href` / `urls`, `Link` / `to` / `go` / `O
 
 | Edition | Engine | Role |
 |---------|--------|------|
-| **Full** | `Router.waku` (companion entry; optional `waku` peer) | RSC / SSG / SSR — website, dashboard on Waku. Dogfood. |
-| **Lite** | `Router.memory` / `Router.history` | Effect-only embeds, tests, non-RSC apps — no Waku. |
+| **Full** | `hyperlink-ts/ui/Router/waku` → `Router.waku` / `Router.make` | RSC / SSG / SSR — website (+ dashboard on top). Optional `waku` peer. |
+| **Lite** | `hyperlink-ts/ui/Router` → `Router.make(api, "memory"\|"history")` | Effect-only embeds, tests, non-RSC — no Waku. |
 
-Full is the product default for web. Lite is the same API without the RSC engine.
+Same `Service` / `Link` / `to` / `go` / `Outlet`. Dashboard uses `GroupNav` on **either** edition — not built into Router. Docs site skins the full entry (default binding + no-op Outlet for file routes).
 
 ## Runtime
 

@@ -511,8 +511,6 @@ export const match = (
         ? pathname.slice(0, -1)
         : pathname;
 
-  if (normalized === "/") return Option.none();
-
   let best: Match | undefined;
   let bestScore = -1;
 

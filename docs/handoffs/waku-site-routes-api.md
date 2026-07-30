@@ -40,14 +40,15 @@ urls.api.symbol("effect", "Effect.succeed") // overload
 urls.search({ query: { q: "WorkPool" } })
 ```
 
-## Use (soft-nav, no layout Provider)
+## Use (full Router + site skin)
 
-In-app nav uses `Router.Link` / `router.to` / `router.go` — Waku soft-nav under
-the hood. `Link` defaults to the docs catalog, so **no `RouterProvider` wrap**
-around book chrome (avoids a full-tree client boundary). Hash / external links
-stay native `<a>`.
+Package full edition: `hyperlink-ts/ui/Router/waku`. Site
+`docs/site/src/ui/Router.tsx` is a thin skin — branded `urls`, `setDefault(docs)`
+so chrome works without a layout Provider, no-op `Outlet` for file-route bodies.
 
 ```tsx
+import * as Router from "../ui/Router" // site skin → package Router/waku
+
 <Router.Link to={(u) => u.home()}>Home</Router.Link>
 <Router.Link to={(u) => u.docs("work-pools")}>Work pools</Router.Link>
 <Router.Link to={(u) => u.api.symbol("effect", "Effect.succeed")}>
@@ -65,8 +66,8 @@ void r.to((u) => u.search({ query: { q: "WorkPool" } }))
 | `catalog` | SSOT path strings |
 | `Route.make(site)` | Typed catalog from `catalog.*` |
 | `Route.urlBuilder` + sugar | Positional href builders (`urls`) |
-| `Router.Link` / `to` / `go` | Soft-nav via Waku (`docs/site/src/ui/Router.tsx`) |
-| Chrome + API + search | In-app hrefs use `Router.Link` / `urls.*` (not raw `/api/…` strings) |
-| Nav + chapter links | `hrefFor` / `resolveBookHref` / `docs/nav.ts` hrefs go through `urls` |
+| `hyperlink-ts/ui/Router/waku` | Full edition Service / Link / to / go |
+| Site `ui/Router.tsx` | Skin: default binding + no-op Outlet |
+| Chrome + API + search | In-app hrefs use `Router.Link` / `urls.*` |
+| Nav + chapter links | `hrefFor` / `resolveBookHref` / `docs/nav.ts` via `urls` |
 | `src/pages/` | Real match + RSC/SSG/SSR bodies |
-| `Router.Outlet` | No-op (bodies are file routes) |
