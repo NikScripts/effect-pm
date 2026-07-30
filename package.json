@@ -124,6 +124,10 @@
       "types": "./dist/Identity.d.ts",
       "default": "./dist/Identity.js"
     },
+    "./Policy": {
+      "types": "./dist/Policy.d.ts",
+      "default": "./dist/Policy.js"
+    },
     "./DynamicConfig": {
       "types": "./dist/DynamicConfig.d.ts",
       "default": "./dist/DynamicConfig.js"

@@ -1,6 +1,6 @@
 # Brief — Launcher + node handoff (Agent 5)
 
-**Status:** Track A + **Track B Eng'd** on tip. **Track C Locked #27–34 + #39 Eng'd**. **Track D v1 + advice early-move Eng'd** — `lookupClient` build-then-swap + `RpcClientError` retry + `Advice.changes` dial move. **#44 sibling Tags Eng'd**. **#45 peersLayer parity Eng'd** — directory peers build-then-swap + one `RpcClientError` retry (`test/lookup-d3-peers.test.ts`). Dual-serve / stream replay still open. **#35–37** deferred. Explicit A/B launcher / `restartSuccessor` deferred.  
+**Status:** Track A + **Track B Eng'd** on tip. **Track C Locked #27–34 + #39 Eng'd**. **Track D v1 + advice early-move Eng'd** — `lookupClient` build-then-swap + `RpcClientError` retry + `Advice.changes` dial move. **#44 sibling Tags Eng'd**. **#45 peersLayer parity Eng'd**. **#46 Policy Eng'd** — composable `hyperlink-ts/Policy` (sticky / streamGap / coldAmbiguous); warm dual-serve sticky + continuous streams default on. **#35–37** deferred. Explicit A/B launcher / `restartSuccessor` deferred.  
 **Opened:** 2026-07-25 (owner via Agent G).  
 **Audience:** next agent picking up launcher + handoff / migration discussion.
 
@@ -189,7 +189,7 @@ Shipped on tip (owner Eng go + refinements):
 
 Eng defaults: 32-byte hex token; Ready poll `100 millis` with per-dial `2 seconds` bound; outer default `"30 seconds"`.
 
-**Next bake:** Track D remainder (dual-serve sticky, stream replay); explicit A/B launcher / `restartSuccessor`; #35–37 stay deferred.
+**Next bake:** stream resume tokens / dedupe (optional); explicit A/B launcher / `restartSuccessor`; #35–37 stay deferred.
 
 ### Track D v1 — Eng'd (2026-07-29, owner go “make the dream happen”)
 
@@ -200,9 +200,10 @@ North star: `lookupClient` callers never notice A→B. **v1 slice Eng'd:**
 42. **Cutover order** — B Directory-visible (and/or Advice-prefer B) before A leaves so retry has a target. Same recipe as C crown-jewel.
 43. **Advice early move (Eng'd)** — `Advice.changes` (`AdvicePreferred` / `AdviceCleared`) on the existing Advice tag (no new sugar namespace). `lookupClient` watches prefer flips for its service key and re-resolves **before** A leaves / before the first transport error.
 44. **Sibling Tag modules (Eng'd)** — `hyperlink-ts/Advice` / `Directory` / `Identity` are own namespaces (`import * as Advice` → `Advice.Tag` / `Advice.prefer` / `Advice.changes`). Banned: `import { Advice } from "…/Lookup"` and `Lookup.Advice.*`. Standard: [`modules-and-boundaries.md`](../standards/modules-and-boundaries.md#no-tag-triples).
-45. **peersLayer D parity (Eng'd)** — directory-mode `peersLayer` matches `lookupClient`: **build-then-swap** peer dials (prior stays until next succeeds); Effect peer RPCs that hit `RpcClientError` **retry once** after rebind. Streams not auto-retried. Stable `peers[nodeKey]` facade identity across swaps.
+45. **peersLayer D parity (Eng'd)** — directory-mode `peersLayer` matches `lookupClient`: **build-then-swap** peer dials (prior stays until next succeeds); Effect peer RPCs that hit `RpcClientError` **retry once** after rebind. Streams follow dial generations (Policy). Stable `peers[nodeKey]` facade identity across swaps.
+46. **Policy (Eng'd)** — `hyperlink-ts/Policy`: composable Layer fragments (`Policy.sticky` / `unsticky`, `streamGap(...)`, `coldAmbiguous(...)`, `pick(...)`) + `Policy.provide` / `Policy.layer`. Not stamped on Node/Lookup. Defaults on: sticky, stream `"stall"`, cold `"fail"`. `lookupClient` resolve: Identity → Directory → Advice prefer → sticky keep-current → pick → cold. One outer Stream across dial swap (`test/policy-lookup-client.test.ts`).
 
-**Still open for D:** dual-serve window, in-flight stream migrate/replay.
+**Still open for D:** optional stream resume tokens / seam dedupe; not dual-serve sticky (shipped via Policy).
 
 ### Track B — research note (2026-07-27): what already exists
 
@@ -382,8 +383,8 @@ launcher-decisions.md stays reference-only if redesigning Track A further.
 
 Contract drift (contractHash / verify / loud-failures) is solid — reuse it.
 
-Track D v1 + Advice.changes + peersLayer parity Eng'd on tip.
-Next: do NOT Eng #35–37 until re-locked. D remainder (dual-serve / stream
-replay), restartSuccessor, explicit A/B launcher still open.
+Track D v1 + Advice.changes + peersLayer parity + Policy (#46) Eng'd on tip.
+Next: do NOT Eng #35–37 until re-locked. restartSuccessor / explicit A/B
+launcher still open. Optional: stream resume tokens / seam dedupe.
 Plan-first; no new nouns unless really good.
 ```

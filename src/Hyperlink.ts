@@ -95,10 +95,8 @@ import {
 } from "./internal/store/registration";
 // Type-only — avoids a runtime Hyperlink↔Lookup-family cycle; claim path dynamic-imports.
 import type { Tag as LookupAdvice } from "./Advice";
-import type {
-  Tag as LookupDirectory,
-  DirectoryEntry as LookupDirectoryEntry,
-} from "./Directory";
+import type { Tag as LookupDirectory } from "./Directory";
+import * as Policy from "./Policy";
 import type { Tag as LookupIdentity } from "./Identity";
 import {
   AddressedNode,
@@ -2902,21 +2900,17 @@ export class LookupClientError extends Data.TaggedError("LookupClientError")<{
 
 /**
  * Soft pick when {@link lookupClient} sees N&gt;1 directory rows (D4) and no live
- * {@link Lookup.Advice} prefer matches a row. `"first"` = `rows[0]`; custom sync
- * fn returns the dial target.
+ * Advice prefer matches a row. Prefer {@link Policy.pick} — this call-site field
+ * remains for back-compat (wins over the Policy reference when set).
  *
  * @category models
  * @public
  */
-export type LookupClientPick =
-  | "first"
-  | ((
-      rows: ReadonlyArray<LookupDirectoryEntry>,
-    ) => LookupDirectoryEntry);
+export type LookupClientPick = Policy.Pick;
 
 /**
- * Options for {@link lookupClient} — opt-in soft pick when the directory is ambiguous
- * and placement advice is absent or stale.
+ * Options for {@link lookupClient}. Prefer composable {@link Policy} fragments
+ * (`Policy.provide` / `Policy.pick`); `pick` here is call-site sugar.
  *
  * @category models
  * @public
@@ -6009,12 +6003,41 @@ const isLookupDialTransportError = (err: unknown): boolean =>
   Predicate.hasProperty(err, "_tag") && err._tag === "RpcClientError";
 
 /**
+ * One outer Stream across dial generations — transport death does not end the
+ * consumer fold; {@link Policy.StreamGap} chooses stall / drop / buffer.
+ *
+ * @internal
+ */
+const followDialStream = (
+  installGen: SubscriptionRef.SubscriptionRef<number>,
+  streamGap: Policy.StreamGap,
+  getInner: () => Stream.Stream<unknown>,
+): Stream.Stream<unknown> => {
+  const switched = SubscriptionRef.changes(installGen).pipe(
+    Stream.switchMap(() =>
+      Stream.suspend(() => getInner()).pipe(
+        Stream.catch((err) => {
+          if (!isLookupDialTransportError(err)) {
+            return Stream.fail(err);
+          }
+          // Gap until the next successful install (switchMap cancels this branch).
+          return streamGap === "drop" ? Stream.empty : Stream.never;
+        }),
+      ),
+    ),
+  );
+  return streamGap === "buffer"
+    ? switched.pipe(Stream.buffer({ capacity: 64 }))
+    : switched;
+};
+
+/**
  * Stable service facade that always reads {@link holder}.current — so Directory
  * dial swaps can replace the underlying client without changing the Context value.
  *
  * Effect methods (query / mutate) run through {@link withDialRetry} once so a brief
- * A→B rebind gap does not surface `RpcClientError` to the app. Streams / refs are
- * not auto-retried (resubscribe after rebind).
+ * A→B rebind gap does not surface `RpcClientError` to the app. Streams / `ref.changes`
+ * follow dial generations as one outer Stream ({@link followDialStream}).
  *
  * @internal
  */
@@ -6024,6 +6047,9 @@ const makeLiveLookupService = <Self, S extends Spec>(
   withDialRetry: <A, E, R>(
     run: () => Effect.Effect<A, E, R>,
   ) => Effect.Effect<A, E, R>,
+  followStream: (
+    getInner: () => Stream.Stream<unknown>,
+  ) => Stream.Stream<unknown>,
 ): ServiceOf<S, Self> => {
   const service: Record<string, unknown> = {};
   const cap = tag[localCapSym];
@@ -6048,25 +6074,32 @@ const makeLiveLookupService = <Self, S extends Spec>(
           };
           return sub.get;
         }),
-        changes: Stream.unwrap(
-          Effect.sync(() => {
-            const sub = getPath(holder.current, path) as {
-              readonly changes: Stream.Stream<unknown>;
-            };
-            return sub.changes;
-          }),
-        ),
+        changes: followStream(() => {
+          const sub = getPath(holder.current, path) as {
+            readonly changes: Stream.Stream<unknown>;
+          };
+          return sub.changes;
+        }),
       });
     } else if (Predicate.hasProperty(m, "stream") && m.stream === true) {
-      setPath(
-        service,
-        path,
-        Stream.unwrap(
-          Effect.sync(
+      if (m.payload === undefined) {
+        setPath(
+          service,
+          path,
+          followStream(
             () => getPath(holder.current, path) as Stream.Stream<unknown>,
           ),
-        ),
-      );
+        );
+      } else {
+        setPath(service, path, (...args: ReadonlyArray<unknown>) =>
+          followStream(() => {
+            const member = getPath(holder.current, path) as (
+              ...a: ReadonlyArray<unknown>
+            ) => Stream.Stream<unknown>;
+            return member(...args);
+          }),
+        );
+      }
     } else if (m.payload === undefined) {
       setPath(
         service,
@@ -6093,6 +6126,7 @@ const makeLiveLookupService = <Self, S extends Spec>(
  * Stable peer facade (directory {@link peersLayer}) — always reads {@link holder}.current so
  * A→B dial swaps can build-then-swap without changing the `peers[nodeKey]` identity.
  * Effect members retry once on `RpcClientError` (Track D parity with {@link lookupClient}).
+ * Streams follow dial generations ({@link followDialStream}).
  *
  * @internal
  */
@@ -6102,6 +6136,9 @@ const makeLivePeerService = <Self, S extends Spec>(
   withDialRetry: <A, E, R>(
     run: () => Effect.Effect<A, E, R>,
   ) => Effect.Effect<A, E, R>,
+  followStream: (
+    getInner: () => Stream.Stream<unknown>,
+  ) => Stream.Stream<unknown>,
 ): PeerServiceOf<S> => {
   const service: Record<string, unknown> = {};
   for (const [path, m] of Object.entries(tag[specSym])) {
@@ -6117,15 +6154,24 @@ const makeLivePeerService = <Self, S extends Spec>(
         ),
       );
     } else if (Predicate.hasProperty(m, "stream") && m.stream === true) {
-      setPath(
-        service,
-        path,
-        Stream.unwrap(
-          Effect.sync(
+      if (m.payload === undefined) {
+        setPath(
+          service,
+          path,
+          followStream(
             () => getPath(holder.current, path) as Stream.Stream<unknown>,
           ),
-        ),
-      );
+        );
+      } else {
+        setPath(service, path, (...args: ReadonlyArray<unknown>) =>
+          followStream(() => {
+            const member = getPath(holder.current, path) as (
+              ...a: ReadonlyArray<unknown>
+            ) => Stream.Stream<unknown>;
+            return member(...args);
+          }),
+        );
+      }
     } else if (m.payload === undefined) {
       setPath(
         service,
@@ -6155,50 +6201,33 @@ const makeLivePeerService = <Self, S extends Spec>(
  * Resolution order: Identity `resolve(tag.key)`, else Directory `nodesServing`
  * (via {@link Lookup.nodesServing} / the Directory tag as a Context key).
  *
- * **Fail-closed by default:** missing or more than one directory row →
- * {@link LookupClientError}. When N&gt;1, a live Advice prefer that matches a
- * directory row wins before D4 `{ pick }`. Opt into soft pick with
- * `{ pick: "first" }` or a sync `(rows) => DirectoryEntry`. Identity resolve
- * ignores advice / `pick` (unique by key).
+ * **Resolve order:** Identity `resolve` (ignores Policy / Advice / pick) → Directory
+ * rows → live Advice prefer → warm {@link Policy.sticky} keep-current →
+ * {@link Policy.pick} / call-site `{ pick }` → {@link Policy.coldAmbiguous}
+ * (`"fail"` default → {@link LookupClientError} `ambiguous`).
  *
- * **Hot-rebind:** after the initial resolve, watches Directory `changes` and rebuilds
- * the dial when the chosen endpoint moves (`dialChanged`) or membership for this
- * service key changes — same plane as directory {@link peersLayer}. Prefer the flat
- * sugar {@link Lookup.changes} (not `Lookup.Directory.changes`). The prior dial stays
- * live until the next dial builds successfully (no close-first gap).
+ * **Hot-rebind:** watches Directory / Advice `changes`; prior dial stays until the
+ * next dial builds successfully. Effect RPCs retry **once** on `RpcClientError`.
+ * Streams / `ref.changes` stay one outer Stream across dial swaps
+ * ({@link Policy.streamGap}, default `"stall"`).
  *
- * **Transparent retry (Track D v1):** Effect RPCs that fail with `RpcClientError` wait
- * briefly for a successful rebind (or proactively resolve once), then retry **once** on
- * the new dial. Streams are not auto-retried. Mutates retry once too — keep them
- * idempotent when cutover-safe.
- *
- * **Advice early move:** watches Advice `changes` for this service key and re-resolves
- * when prefer flips — dialers move to B when you prefer B, before A leaves and before
- * the first transport error. Apps use the sibling module
- * `import * as Advice from "hyperlink-ts/Advice"` (`Advice.prefer` / `Advice.changes`) —
- * never `import { Advice } from "…/Lookup"` / `Lookup.Advice.*`.
- *
- * Bake name sketch was `unsafeLookupClient` (“trust Lookup or die”); bare
- * `lookupClient(Tag)` keeps that fail-closed contract when advice is absent/stale.
+ * **Policy:** composable Layers — `import * as Policy from "hyperlink-ts/Policy"`.
+ * Defaults apply with zero provide; override via `Policy.provide(...)`.
  *
  * ```ts
  * import * as Lookup from "hyperlink-ts/Lookup"
  * import * as Advice from "hyperlink-ts/Advice"
+ * import * as Policy from "hyperlink-ts/Policy"
  *
- * // Sole endpoint (identity winner or one directory row):
  * Hyperlink.lookupClient(Mail).pipe(Layer.provide(Lookup.layer))
  *
- * // Coordinator published advice — bare client honors prefer:
+ * Hyperlink.lookupClient(Mail).pipe(
+ *   Policy.provide(Policy.sticky, Policy.streamGap("stall")),
+ *   Layer.provide(Lookup.layer),
+ * )
+ *
  * yield* Advice.prefer(Mail, "fleet/Mail#w2")
- * Hyperlink.lookupClient(Mail)
- *
- * // Prefer / clear stream (sibling module — not Lookup.Advice):
- * yield* Advice.changes.pipe(Stream.take(1), Stream.runDrain)
- *
- * // N>1 replicas — opt-in pick when no advice (still fail on 0):
- * Hyperlink.lookupClient(Mail, { pick: "first" })
- *
- * // You already know an addressed Node — client auto-connects:
+ * Hyperlink.lookupClient(Mail, { pick: "first" }) // or Policy.pick("first")
  * Hyperlink.client(Mail, East)
  * ```
  *
@@ -6223,8 +6252,64 @@ export const lookupClient = <Self, S extends Spec>(
       const directory = yield* Directory.Tag;
       const advice = yield* Advice.Tag;
       const serviceKey = tag[wireKeySym];
+      const stickyOn = yield* Policy.Sticky;
+      const streamGap = yield* Policy.StreamGap;
+      const coldAmbiguous = yield* Policy.ColdAmbiguous;
+      const policyPick = yield* Policy.Pick;
 
-      // Closed over Identity/Directory/Advice services so call-time dial retry
+      let clientScope: Scope.Closeable | undefined;
+      const holder: { current: ServiceOf<S, Self> } = {
+        current: null as unknown as ServiceOf<S, Self>,
+      };
+      const generation = yield* Ref.make(0);
+      const installGen = yield* SubscriptionRef.make(0);
+      const installGate = yield* Semaphore.make(1);
+      let currentKey = "";
+      let currentNodeKey = "";
+
+      const waitForAdvisedEntry = (
+        count: number,
+      ): Effect.Effect<LookupDialEndpoint, LookupClientError> => {
+        const tryMatch = Effect.gen(function* () {
+          const prefer = yield* advice.preferred(
+            new Advice.PreferredRequest({ serviceKey: tag.key }),
+          );
+          if (Option.isNone(prefer)) return Option.none();
+          const rows = yield* directory.nodesServing(
+            new Directory.NodesServingRequest({ serviceKey: tag.key }),
+          );
+          const hit = rows.find((row) => row.nodeKey === prefer.value);
+          return hit !== undefined
+            ? Option.some(hit satisfies LookupDialEndpoint)
+            : Option.none();
+        });
+        return Stream.concat(
+          Stream.fromEffect(tryMatch),
+          Stream.merge(advice.changes, directory.changes).pipe(
+            Stream.mapEffect(() => tryMatch),
+          ),
+        ).pipe(
+          Stream.filter(Option.isSome),
+          Stream.map((row) => row.value),
+          Stream.take(1),
+          Stream.runHead,
+          Effect.flatMap(
+            Option.match({
+              onNone: () =>
+                Effect.fail(
+                  new LookupClientError({
+                    tag: tag.key,
+                    reason: "ambiguous",
+                    count,
+                  }),
+                ),
+              onSome: (row) => Effect.succeed(row),
+            }),
+          ),
+        );
+      };
+
+      // Closed over Identity/Directory/Advice + Policy so call-time dial retry
       // does not re-require Lookup tags in the app Effect's R.
       const resolve = Effect.gen(function* () {
         const resolved = yield* identity.resolve(
@@ -6255,24 +6340,28 @@ export const lookupClient = <Self, S extends Spec>(
             return advised;
           }
         }
-        const pick = options?.pick;
-        if (pick === undefined) {
-          return yield* new LookupClientError({
-            tag: tag.key,
-            reason: "ambiguous",
-            count: entries.length,
-          });
+        if (stickyOn && currentNodeKey !== "") {
+          const kept = entries.find((row) => row.nodeKey === currentNodeKey);
+          if (kept !== undefined) {
+            return kept;
+          }
         }
-        return pick === "first" ? entries[0]! : pick(entries);
+        const pick = options?.pick ?? policyPick;
+        if (pick !== undefined) {
+          return pick === "first" ? entries[0]! : pick(entries);
+        }
+        if (coldAmbiguous === "pickFirst") {
+          return entries[0]!;
+        }
+        if (coldAmbiguous === "waitAdvice") {
+          return yield* waitForAdvisedEntry(entries.length);
+        }
+        return yield* new LookupClientError({
+          tag: tag.key,
+          reason: "ambiguous",
+          count: entries.length,
+        });
       });
-
-      let clientScope: Scope.Closeable | undefined;
-      const holder: { current: ServiceOf<S, Self> } = {
-        current: null as unknown as ServiceOf<S, Self>,
-      };
-      const generation = yield* Ref.make(0);
-      const installGen = yield* SubscriptionRef.make(0);
-      const installGate = yield* Semaphore.make(1);
 
       /** Build next dial first; swap + close prior only on success (real keep-prior). */
       const install = (
@@ -6305,8 +6394,8 @@ export const lookupClient = <Self, S extends Spec>(
 
       const endpoint = yield* resolve;
       yield* install(endpoint);
-      let currentKey = lookupDialKey(endpoint);
-      let currentNodeKey = endpoint.nodeKey;
+      currentKey = lookupDialKey(endpoint);
+      currentNodeKey = endpoint.nodeKey;
 
       const tryResolveAdopt = Effect.gen(function* () {
         const next = yield* Effect.option(resolve);
@@ -6399,7 +6488,10 @@ export const lookupClient = <Self, S extends Spec>(
           : Scope.close(clientScope, Exit.void),
       );
 
-      return makeLiveLookupService(tag, holder, withDialRetry);
+      const followStream = (getInner: () => Stream.Stream<unknown>) =>
+        followDialStream(installGen, streamGap, getInner);
+
+      return makeLiveLookupService(tag, holder, withDialRetry, followStream);
     }),
   ) as Layer.Layer<
     Self,
@@ -6948,10 +7040,13 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
                 const generation = yield* Ref.make(0);
                 const installGen = yield* SubscriptionRef.make(0);
                 const gate = yield* Semaphore.make(1);
+                const streamGap = yield* Policy.StreamGap;
                 const facade = makeLivePeerService(
                   tag,
                   holder,
                   withDialRetryFor(row.nodeKey),
+                  (getInner) =>
+                    followDialStream(installGen, streamGap, getInner),
                 );
                 slot = {
                   holder,
