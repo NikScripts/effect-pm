@@ -14,11 +14,13 @@
 **Hub:** [Examples → launcher](/docs/examples#launcher)
 
 > [!NOTE]
-> **Related examples:** [minimal up](/docs/launcher-minimal-up) · [Ready errors](/docs/launcher-ready-timeout)
+> **Related examples:** [minimal up](/docs/launcher-minimal-up) · [Ready timeout errors](/docs/launcher-ready-timeout) · [token injection](/docs/launcher-token-injection)  
+> **Guide:** [Launcher — Handle phases](/docs/launcher#handle-phases)
 
 ## What this shows
 
-Explicit `spawn`, `awaitReady`, `handoff`, and `kill` handle phases.
+Explicit `Launcher.spawn` → `Handle.awaitReady` → `Handle.handoff` / `Handle.kill`.
+Phases are single-flight; after handoff or kill the handle is spent (`HandleSpent`).
 
 {.twoslash include="examples/launcher/handle-phases.ts"}
 ``` ts

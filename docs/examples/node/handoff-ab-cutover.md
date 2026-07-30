@@ -25,6 +25,9 @@ Fence body `// @noErrors` covers `process` under the docs Twoslash host.
 Locked #39 live cutover: B is Directory-visible first; A enqueues WorkPool jobs; `Node.shutdown(A)`
 runs baked `WorkPool.releaseEnqueueHandoff`; pending lands on B; Directory drops A.
 
+This is **WorkPool’s baked** migration handoff — not custom `serve(…, { handoff })`
+([serve handoff](/docs/node-serve-handoff)) and not Launcher custody `Handle.handoff`.
+
 {.twoslash include="examples/node/handoff-ab-cutover.ts"}
 ``` ts
 // @noErrors

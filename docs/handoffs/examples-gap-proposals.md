@@ -84,19 +84,17 @@ Prefer **guide-aligned topic folders**. One teachable recipe per file.
 
 ---
 
-### Idea 5 — Launcher
+### Idea 5 — Launcher ← **covered**
 
 **Why next:** Guide’s minimal `Launcher.up` isn’t a standalone form; only Lookup compound exists.
 
-| Missing | Teach |
-|---------|--------|
-| `minimal-up.ts` | spawn → Ready → handoff → exit |
-| `handle-phases.ts` | spawn / awaitReady / handoff / kill |
-| `token-injection.ts` | `Launcher.command` env vs argv |
-| `ready-services.ts` | `ready.services` named Tags |
-| `ready-timeout.ts` | `ReadyTimedOut` / `ChildExited` by `_tag` |
+| Status | File |
+|--------|------|
+| **Eng’d** | `minimal-up` · `handle-phases` · `token-injection` · `ready-services` · `ready-timeout` · `lookup-membership` (+ children) |
 
-**Blocked:** none for beta surface (Agent 5 deferred nameless / `Handle.events` stay out).
+**Covered:** yes (Track A + membership bridge).  
+**Follow-on (Agent 5 Track C/D forms):** `node/drain-yield-refuse`, `ask-incumbent-takeover`, `serve-handoff`, `peers-layer-rebind`, `launch-shutdown`, `policy-lookup-cutover` — see hub Node section.  
+**Blocked:** nameless / `Handle.events` / explicit A/B launcher stay deferred.
 
 ---
 

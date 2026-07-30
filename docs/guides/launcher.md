@@ -1,4 +1,4 @@
-{#launcher title="Launcher" status="draft" done="api" appliesTo=node}
+{#launcher title="Launcher" status="stable" done="api" appliesTo=node}
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
@@ -136,6 +136,19 @@ schema’d request. See:
 Custody = “I own myself; launcher may exit.” Migration = move HyperService work A→B on the
 outgoing node. See
 [Identity coordinator — A→B cutover](./identity-coordinator.md#ab-cutover-recipe-state-transfer).
+
+## Examples
+
+| Form | Run |
+|------|-----|
+| Minimal `up` | `pnpm run example:launcher-minimal-up` |
+| Handle phases | `pnpm run example:launcher-handle-phases` |
+| Token env/argv | `pnpm run example:launcher-token-injection` |
+| `ready.services` | `pnpm run example:launcher-ready-services` |
+| Ready errors (`_tag`) | `pnpm run example:launcher-ready-timeout` |
+| Custody → Directory | `pnpm run example:launcher-lookup-membership` |
+
+Hub: [Examples → launcher](/docs/examples#launcher).
 
 ## Deferred (not beta Launcher)
 

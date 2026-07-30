@@ -147,9 +147,24 @@ Mid-handoff, draining A **refuses** a further `askIncumbent` yield (`IncumbentAl
 **Runnable demos:**
 - WorkPool state transfer — [`examples/node/handoff-ab-cutover.ts`](../../examples/node/handoff-ab-cutover.ts)
   (`pnpm run example:node-handoff-ab-cutover`)
+- Custom `{ handoff }` / `HandoffDeferred` —
+  [`examples/node/serve-handoff.ts`](../../examples/node/serve-handoff.ts)
+  (`pnpm run example:node-serve-handoff`)
+- Drain + yield refuse —
+  [`examples/node/drain-yield-refuse.ts`](../../examples/node/drain-yield-refuse.ts)
+  (`pnpm run example:node-drain-yield-refuse`)
+- askIncumbent accept / refuse —
+  [`examples/node/ask-incumbent-takeover.ts`](../../examples/node/ask-incumbent-takeover.ts)
+  (`pnpm run example:node-ask-incumbent-takeover`)
 - Client Policy sticky + Advice prefer —
   [`examples/node/policy-lookup-cutover.ts`](../../examples/node/policy-lookup-cutover.ts)
   (`pnpm run example:node-policy-lookup-cutover`)
+- peersLayer hot-rebind —
+  [`examples/node/peers-layer-rebind.ts`](../../examples/node/peers-layer-rebind.ts)
+  (`pnpm run example:node-peers-layer-rebind`)
+- `Node.launch` + shutdown —
+  [`examples/node/launch-shutdown.ts`](../../examples/node/launch-shutdown.ts)
+  (`pnpm run example:node-launch-shutdown`)
 - **Watchable Ink TUI** — [`examples/apps/tui/handoff-ab-live.tsx`](../../examples/apps/tui/handoff-ab-live.tsx)
   (`pnpm run example:handoff-ab-live`, real TTY)
 

@@ -33,9 +33,9 @@ Living book: [docs/index.md](../docs/index.md) · [API Reference](https://hyperl
 | **WorkPool** | `priority-retry` → `named-lanes` → store / serve / durable / refill / metrics |
 | **Gate** | `gate/unit-and-input` → `store-readback` → `runtime-observer` → http-client → http-api |
 | **Daemon + Soft** | `daemon/store-auto-write` → `typed-failed-error` → serve / result / schedule / configure |
-| **Node & discovery** | `node/tag-addressed` → `tag-bound` → `clients` → addressless → nameless unix → `prototype` → `as-lookup` → nameless http/ws → `identity-coordinator` → `handoff-ab-cutover` → `policy-lookup-cutover` |
+| **Node & discovery** | `tag-addressed` → … → `identity-coordinator` → `ask-incumbent-takeover` → `drain-yield-refuse` → `handoff-ab-cutover` → `serve-handoff` → `policy-lookup-cutover` → `peers-layer-rebind` → `launch-shutdown` |
 | **Fleet glass** | `fleet/telemetry-glass` → `health-glass` → `shardmap-sessions` → edge examples |
-| **Launcher** | `launcher/minimal-up` → `handle-phases` → `lookup-membership` |
+| **Launcher** | `minimal-up` → `handle-phases` → `token-injection` → `ready-services` → `ready-timeout` → `lookup-membership` |
 | **Readiness** | `readiness/with-readiness` → `all-ready` → `monitored-dependency` → `degraded-health` |
 | **Logs** | `logs/live-bus` → `node-journal` → `hyperlink-logs` → `lineage-scope` → `levels` |
 | **Schedule / polling / config** | `pnpm run example:schedule-basics` → `example:schedule-controls` → `example:polling-sports` → `example:config-hot-swap` |
@@ -101,9 +101,14 @@ Paths are under `examples/`. Script = `pnpm run example:<topic>-<kebab-file>` (s
 | [`node/prototype.ts`](./node/prototype.ts) | `Node.Prototype.make` |
 | [`node/as-lookup.ts`](./node/as-lookup.ts) | `Node.asLookup` |
 | [`node/identity-coordinator.ts`](./node/identity-coordinator.ts) | Router + workers + Lookup |
-| [`node/handoff-ab-cutover.ts`](./node/handoff-ab-cutover.ts) | WorkPool A→B state transfer on `Node.shutdown` |
+| [`node/ask-incumbent-takeover.ts`](./node/ask-incumbent-takeover.ts) | Same `nodeKey` dial replace / `yieldRefuse` |
+| [`node/drain-yield-refuse.ts`](./node/drain-yield-refuse.ts) | `Node.drain` + yield refuse + `IncumbentAlive` |
+| [`node/handoff-ab-cutover.ts`](./node/handoff-ab-cutover.ts) | WorkPool baked A→B on `Node.shutdown` |
+| [`node/serve-handoff.ts`](./node/serve-handoff.ts) | Custom `serve(…, { handoff })` / `HandoffDeferred` |
 | [`node/policy-lookup-cutover.ts`](./node/policy-lookup-cutover.ts) | `Policy.provide` sticky + `Advice.prefer` early-move |
-| [`node/verify-connection.ts`](./node/verify-connection.ts) | `Hyperlink.verifyConnection` · [Client verify](../docs/guides/client-verify.md) |
+| [`node/peers-layer-rebind.ts`](./node/peers-layer-rebind.ts) | Directory `peersLayer` hot-rebind |
+| [`node/launch-shutdown.ts`](./node/launch-shutdown.ts) | `Node.launch` exits on `Node.shutdown` |
+| [`node/verify-connection.ts`](./node/verify-connection.ts) | `verifyConnection` + `Policy.verify*` · [Client verify](../docs/guides/client-verify.md) |
 
 ### Fleet
 
