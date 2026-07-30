@@ -32,6 +32,7 @@ import {
   ChildProcessSpawner,
 } from "effect/unstable/process";
 import * as Hyperlink from "../Hyperlink";
+import * as Policy from "../Policy";
 import {
   AssumeNotReady,
   AssumeTokenMismatch,
@@ -595,7 +596,7 @@ const probeReady = (
     const { NodeStatusTag } = yield* Effect.promise(() => import("./nodeStatus"));
     const ctx = yield* Layer.build(
       Hyperlink.client(NodeStatusTag, node).pipe(
-        Layer.provide(Hyperlink.clientVerify(false)),
+        Policy.provide(Policy.verifyOff),
       ),
     );
     const snap = yield* Effect.gen(function* () {

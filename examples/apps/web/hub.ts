@@ -14,6 +14,7 @@
 import { Effect, Layer, Schema } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import * as Hyperlink from "../../../src/Hyperlink";
+import * as Policy from "../../../src/Policy";
 import * as WorkPool from "../../../src/WorkPool";
 import * as Daemon from "../../../src/Daemon";
 import * as Group from "../../../src/Group";
@@ -215,5 +216,5 @@ const appLayer = Layer.mergeAll(
  *  fail Layer build during those windows and take the whole dashboard down. Reachability still
  *  runs; failures are ignored so degraded cards stay mountable. */
 export const runtime = Atom.runtime(
-  appLayer.pipe(Layer.provide(Hyperlink.clientVerify("status"))),
+  appLayer.pipe(Policy.provide(Policy.verifyStatus)),
 );

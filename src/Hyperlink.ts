@@ -363,22 +363,8 @@ export class MissingClientProtocol extends Data.TaggedError("MissingClientProtoc
 }
 
 /**
- * Default-on verify mode for addressed {@link client} Layers (and {@link ws}).
- * - `"reject"` (default) — layer build runs {@link verifyConnection}; peer down → {@link NodeUnreachable}
- *   (tag-aware clients also deep-check the HyperService + F4 {@link contractHash})
- * - `"status"` — probe runs but failure is ignored (connect proceeds)
- * - `false` — skip verify
- *
- * Opt out: `Hyperlink.client(Tag).pipe(Layer.provide(Hyperlink.clientVerify(false)))`.
- * Nodeless {@link connect}`(tag, protocol)` does not probe — call {@link verifyConnection} yourself.
- *
- * @category models
- * @public
- */
-export type ClientVerifyMode = false | "reject" | "status";
-
-/**
  * Errors default-on / deep client verify may surface on addressed client Layers.
+ * Mode lives on {@link Policy.Verify} (`Policy.verifyOff` / `verifyStatus` / `verifyReject`).
  *
  * @category models
  * @public
@@ -390,26 +376,6 @@ export type ClientVerifyError =
   | ServiceNotServed
   | ServiceNotReady
   | ContractMismatch;
-
-/**
- * Ambient default-on client verify mode (§8.6). Defaults to `"reject"`.
- *
- * @category services
- * @public
- */
-export const ClientVerify = Context.Reference<ClientVerifyMode>(
-  "hyperlink-ts/Hyperlink/ClientVerify",
-  { defaultValue: (): ClientVerifyMode => "reject" },
-);
-
-/**
- * Override {@link ClientVerify} for addressed client layers.
- *
- * @category layers & serving
- * @public
- */
-export const clientVerify = (mode: ClientVerifyMode): Layer.Layer<never> =>
-  Layer.succeed(ClientVerify, mode);
 
 /**
  * Effect's http RPC client surfaces a wrong-protocol peer as `RpcClientDefect` with these
@@ -4171,7 +4137,7 @@ const clientLayerForEndpoint = <Self, S extends Spec>(
   // Opt out of default-on verify: this helper runs inside Layer.unwrap (identity
   // claim / lookupClient), and nested deep verify deadlocks on the peer dial.
   return clientLayer(tag, node).pipe(
-    Layer.provide(clientVerify(false)),
+    Policy.provide(Policy.verifyOff),
   ) as any;
 };
 
@@ -5510,7 +5476,7 @@ const probeEndpointDeep = (
     // Skip default-on verify on this nested status client (we *are* the verify probe).
     const ctx = yield* Layer.build(
       clientLayer(NodeStatusTag, dialTarget).pipe(
-        Layer.provide(clientVerify(false)),
+        Policy.provide(Policy.verifyOff),
       ),
     );
     const snap = yield* Effect.gen(function* () {
@@ -5675,7 +5641,7 @@ type ClientVerifyProbeOptions = VerifyConnectionOptions & {
 };
 
 /**
- * Default-on client verify (§8.6) — `"reject"` unless {@link ClientVerify} overrides.
+ * Default-on client verify (§8.6) — `"reject"` unless {@link Policy.Verify} overrides.
  * When `serviceKey` + `contractHash` are set (tag-aware clients), escalates to deep F3/F4.
  * @internal
  */
@@ -5684,7 +5650,7 @@ const applyClientVerify = (
   options?: ClientVerifyProbeOptions,
 ): Effect.Effect<void, ClientVerifyError> =>
   Effect.gen(function* () {
-    const mode = yield* ClientVerify;
+    const mode = yield* Policy.Verify;
     if (mode === false) {
       return;
     }
@@ -7356,7 +7322,7 @@ function clientLayer<Self, S extends Spec>(
   // Dialable node (explicit 2nd arg *or* tag-bound): bake the canonical connect Layer
   // (WeakMap-memoized per Node class) so multiple clients share one MemoMap transport.
   // Default-on verify (reject): peer down / wrong-or-stale contract fails Layer build —
-  // opt out via {@link clientVerify}. Reserved node-status is auto-served and absent from
+  // opt out via {@link Policy.verifyOff}. Reserved node-status is auto-served and absent from
   // `status.services`, so it stays tier-1 (reachability only).
   if (isAddressedNode(nodeKey as AnyNode)) {
     const addressed = nodeKey as AddressedNode<unknown>;

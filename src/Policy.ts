@@ -1,11 +1,9 @@
 /**
- * Policy — composable client cutover / dial behaviour for {@link Hyperlink.lookupClient}.
+ * Policy — composable behaviour fragments (client dial, verify, advertise conflict, yield).
  *
- * Fragments are thin {@link Layer}s (Context references with defaults). Pipe them with
- * {@link provide} / {@link layer} — not stamped on Node / Lookup / Prototype.
- *
- * Defaults (when you provide nothing): sticky on, stream gap `"stall"`, cold ambiguous
- * `"fail"`.
+ * Fragments are thin {@link Layer}s over Context references with defaults. Compose with
+ * {@link provide} / {@link layer} — not a second control plane. Node / Listen call-site
+ * stamps (`onConflict`, `onYield`) remain overrides that win over ambient Policy.
  *
  * ```ts
  * import * as Policy from "hyperlink-ts/Policy"
@@ -14,24 +12,22 @@
  *   Policy.provide(
  *     Policy.sticky,
  *     Policy.streamGap("stall"),
- *     Policy.coldAmbiguous("fail"),
+ *     Policy.verifyOff,
  *   ),
  *   Layer.provide(Lookup.layer),
  * )
  *
- * const cutover = Policy.layer(
- *   Policy.sticky,
- *   Policy.streamGap("stall"),
- * )
+ * const fleet = Policy.layer(Policy.askIncumbent, Policy.yieldAccept)
+ * Node.unix(Worker, serves).pipe(Policy.provide(fleet))
  * ```
  *
  * @module Policy
  */
-import { Context, Layer } from "effect";
+import { Context, Effect, Layer } from "effect";
 import type { DirectoryEntry } from "./Directory";
 
 // =============================================================================
-// Models
+// Dial / cutover
 // =============================================================================
 
 /**
@@ -45,7 +41,7 @@ export type Pick =
   | ((rows: ReadonlyArray<DirectoryEntry>) => DirectoryEntry);
 
 /**
- * How a live client {@link Stream} behaves across a dial swap / transport gap.
+ * How a live client Stream behaves across a dial swap / transport gap.
  *
  * - `"stall"` — outer stream stays open; no elements until the next dial is live
  * - `"drop"` — skip the gap (inner completes empty); resume on next dial
@@ -68,13 +64,8 @@ export type StreamGap = "stall" | "drop" | "buffer";
  */
 export type ColdAmbiguous = "fail" | "pickFirst" | "waitAdvice";
 
-// =============================================================================
-// Context references (defaults = lean cutover)
-// =============================================================================
-
 /**
- * Warm dual-serve stickiness — keep current `nodeKey` while it remains Directory-visible
- * and Advice has not preferred another row. Default `true`.
+ * Warm dual-serve stickiness. Default `true`.
  *
  * @category references
  * @public
@@ -117,52 +108,202 @@ export const Pick: Context.Reference<Pick | undefined> = Context.Reference<
   defaultValue: (): undefined => undefined,
 });
 
-// =============================================================================
-// Fragments
-// =============================================================================
-
-/**
- * Keep the current dial across dual-serve (default on — provide to be explicit).
- *
- * @category layers
- * @public
- */
+/** Keep the current dial across dual-serve (default on). @category layers @public */
 export const sticky: Layer.Layer<never> = Layer.succeed(Sticky, true);
 
-/**
- * Disable warm stickiness — re-resolve on every membership change.
- *
- * @category layers
- * @public
- */
+/** Disable warm stickiness. @category layers @public */
 export const unsticky: Layer.Layer<never> = Layer.succeed(Sticky, false);
 
-/**
- * Stream seam mode for live streams / `ref.changes` across dial swap.
- *
- * @category layers
- * @public
- */
+/** Stream seam mode. @category layers @public */
 export const streamGap = (mode: StreamGap): Layer.Layer<never> =>
   Layer.succeed(StreamGap, mode);
 
-/**
- * Cold N&gt;1 behaviour when Advice does not resolve a row.
- *
- * @category layers
- * @public
- */
+/** Cold N&gt;1 behaviour. @category layers @public */
 export const coldAmbiguous = (mode: ColdAmbiguous): Layer.Layer<never> =>
   Layer.succeed(ColdAmbiguous, mode);
 
-/**
- * Soft pick when N&gt;1 and Advice misses (before {@link coldAmbiguous}).
- *
- * @category layers
- * @public
- */
+/** Soft pick when N&gt;1 and Advice misses. @category layers @public */
 export const pick = (mode: Pick): Layer.Layer<never> =>
   Layer.succeed(Pick, mode);
+
+// =============================================================================
+// Client verify (was Hyperlink.ClientVerify)
+// =============================================================================
+
+/**
+ * Default-on client connection verify mode.
+ *
+ * - `"reject"` — probe and fail the client Layer on verify errors (default)
+ * - `"status"` — probe; record status without failing the Layer build
+ * - `false` — skip the probe
+ *
+ * @category models
+ * @public
+ */
+export type Verify = false | "reject" | "status";
+
+/**
+ * Ambient client-verify mode. Default `"reject"`.
+ *
+ * @category references
+ * @public
+ */
+export const Verify: Context.Reference<Verify> = Context.Reference<Verify>(
+  "hyperlink-ts/Policy/Verify",
+  { defaultValue: (): Verify => "reject" },
+);
+
+/** Verify and reject on failure (default). @category layers @public */
+export const verifyReject: Layer.Layer<never> = Layer.succeed(Verify, "reject");
+
+/** Verify; keep status without failing Layer build. @category layers @public */
+export const verifyStatus: Layer.Layer<never> = Layer.succeed(Verify, "status");
+
+/** Skip client verify probe. @category layers @public */
+export const verifyOff: Layer.Layer<never> = Layer.succeed(Verify, false);
+
+/** Set client verify mode. @category layers @public */
+export const verify = (mode: Verify): Layer.Layer<never> =>
+  Layer.succeed(Verify, mode);
+
+// =============================================================================
+// Advertise conflict (was Node / Lookup OnConflict)
+// =============================================================================
+
+/**
+ * Directory advertise conflict preference.
+ *
+ * - `livenessReplace` — ping incumbent; dead → replace; alive → `IncumbentAlive`
+ * - `askIncumbent` — cooperative yield ask on a live incumbent
+ * - `reject` — alive → reject; dead → still replace
+ * - `inherit` — continue up the resolve chain
+ *
+ * @category models
+ * @public
+ */
+export type OnConflict =
+  | "livenessReplace"
+  | "askIncumbent"
+  | "reject"
+  | "inherit";
+
+/**
+ * Concrete advertise conflict policy (no `"inherit"`) — what Lookup runs.
+ *
+ * @category models
+ * @public
+ */
+export type OnConflictResolved = Exclude<OnConflict, "inherit">;
+
+/**
+ * Ambient advertise conflict preference (call-site / node stamp still win).
+ * Default `"inherit"`.
+ *
+ * @category references
+ * @public
+ */
+export const Conflict: Context.Reference<OnConflict> =
+  Context.Reference<OnConflict>("hyperlink-ts/Policy/Conflict", {
+    defaultValue: (): OnConflict => "inherit",
+  });
+
+/**
+ * Walk preference layers (first concrete wins). Hard fallback: `livenessReplace`.
+ *
+ * @category utils
+ * @public
+ */
+export const resolveOnConflict = (
+  ...prefs: ReadonlyArray<OnConflict | undefined>
+): OnConflictResolved => {
+  for (const pref of prefs) {
+    if (pref !== undefined && pref !== "inherit") {
+      return pref;
+    }
+  }
+  return "livenessReplace";
+};
+
+/** Read a node's stamped {@link OnConflict}, if any. @internal */
+export const onConflictOf = (node: unknown): OnConflict | undefined => {
+  if (
+    (typeof node === "object" || typeof node === "function") &&
+    node !== null &&
+    "onConflict" in node
+  ) {
+    const value = (node as { readonly onConflict?: unknown }).onConflict;
+    if (
+      value === "livenessReplace" ||
+      value === "askIncumbent" ||
+      value === "reject" ||
+      value === "inherit"
+    ) {
+      return value;
+    }
+  }
+  return undefined;
+};
+
+/** Advertise: liveness ping replace. @category layers @public */
+export const livenessReplace: Layer.Layer<never> = Layer.succeed(
+  Conflict,
+  "livenessReplace",
+);
+
+/** Advertise: ask incumbent to yield. @category layers @public */
+export const askIncumbent: Layer.Layer<never> = Layer.succeed(
+  Conflict,
+  "askIncumbent",
+);
+
+/** Advertise: reject when incumbent alive. @category layers @public */
+export const conflictReject: Layer.Layer<never> = Layer.succeed(
+  Conflict,
+  "reject",
+);
+
+/** Advertise: inherit up the chain (default ambient). @category layers @public */
+export const conflictInherit: Layer.Layer<never> = Layer.succeed(
+  Conflict,
+  "inherit",
+);
+
+/** Set advertise conflict preference. @category layers @public */
+export const onConflict = (mode: OnConflict): Layer.Layer<never> =>
+  Layer.succeed(Conflict, mode);
+
+// =============================================================================
+// Yield (askIncumbent cooperative accept / refuse)
+// =============================================================================
+
+/**
+ * Cooperative yield handler for `"askIncumbent"` — `true` = step aside.
+ * Default accept. ListenOptions.`onYield` wins when set.
+ *
+ * @category references
+ * @public
+ */
+export const Yield: Context.Reference<Effect.Effect<boolean>> =
+  Context.Reference<Effect.Effect<boolean>>("hyperlink-ts/Policy/Yield", {
+    defaultValue: (): Effect.Effect<boolean> => Effect.succeed(true),
+  });
+
+/** Accept askIncumbent yield (default). @category layers @public */
+export const yieldAccept: Layer.Layer<never> = Layer.succeed(
+  Yield,
+  Effect.succeed(true),
+);
+
+/** Refuse askIncumbent yield. @category layers @public */
+export const yieldRefuse: Layer.Layer<never> = Layer.succeed(
+  Yield,
+  Effect.succeed(false),
+);
+
+/** Custom yield handler. @category layers @public */
+export const onYield = (
+  handler: Effect.Effect<boolean>,
+): Layer.Layer<never> => Layer.succeed(Yield, handler);
 
 // =============================================================================
 // Helpers
@@ -184,14 +325,7 @@ export const layer = (
       : Layer.mergeAll(policies[0]!, policies[1]!, ...policies.slice(2));
 
 /**
- * Provide policy fragments onto a client Layer (no stacked `Layer.provide`s).
- *
- * ```ts
- * Hyperlink.lookupClient(Mail).pipe(
- *   Policy.provide(Policy.sticky, Policy.streamGap("stall")),
- *   Layer.provide(Lookup.layer),
- * )
- * ```
+ * Provide policy fragments onto a Layer (no stacked `Layer.provide`s).
  *
  * @category layers
  * @public
