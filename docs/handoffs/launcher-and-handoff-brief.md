@@ -258,9 +258,10 @@ Owner locked #22–26; Eng on tip:
 
 **No Eng on #35–37 until re-locked** (gate #2). #28–34 are Locked above. Owner rubber-stamped deferral 2026-07-29.
 
-35. **Version / contract gate = reuse `contractHash` + `ContractMismatch` (binary); no negotiation ranges in C v1.** *(deferred — reuse shipped drift detect; no C Eng needed until ranges are wanted)*
-    - Drift detect stays the loud-failures ladder (`ContractMismatch` — redeploy the stale side).
-    - C does **not** invent compatibility windows or multi-hash negotiation.
+35. **Version / contract gate — superseded by Versioned schema bake (2026-07-30).** *(design locked, not Eng'd)*
+    - Binary `contractHash` / `ContractMismatch` stays for non-Versioned / whole-Spec drift.
+    - Cross-version **payload** path: [`versioned-schema-decisions.md`](./versioned-schema-decisions.md) — `hyperlink-ts/Versioned` chain on the Schema value; auto-apply on seams; no negotiation ranges.
+    - **Do not Eng** Versioned until owner go on that decisions file.
 
 36. **Lookup-node handoff = explicitly deferred (not special-cased in C v1).**
     - Soft-bake / IPC Lookup topology stays B.
@@ -384,7 +385,8 @@ launcher-decisions.md stays reference-only if redesigning Track A further.
 Contract drift (contractHash / verify / loud-failures) is solid — reuse it.
 
 Track D v1 + Advice.changes + peersLayer parity + Policy (#46) Eng'd on tip.
-Next: do NOT Eng #35–37 until re-locked. restartSuccessor / explicit A/B
+Versioned schema bake: docs/handoffs/versioned-schema-decisions.md (#35 superseded).
+Do NOT Eng Versioned / #36–37 until owner go. restartSuccessor / explicit A/B
 launcher still open. Optional: stream resume tokens / seam dedupe.
 Plan-first; no new nouns unless really good.
 ```
