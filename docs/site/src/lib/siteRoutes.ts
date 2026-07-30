@@ -1,12 +1,10 @@
 /**
  * Docs site routes — typed **path skin** over Waku file routes.
  *
- * Segments are arguments (part of the path), not `{ params: … }`:
- *
  * ```ts
- * urls.home()
  * urls.docs("work-pools")
  * urls.api.symbol("effect", "Effect", "succeed")
+ * urls.api.symbol("effect", "Effect.succeed")
  * ```
  *
  * {@link ../ui/Router} is the vision nav API; Waku is the real router underneath.
@@ -19,6 +17,31 @@ import "../pages.gen.js";
 // =============================================================================
 // Path skin (what call sites use)
 // =============================================================================
+
+type ApiSymbolPath = `/api/${string}/${string}/${string}`;
+
+/** `/api/:pkg/:module/:symbol` — three segments, or `Module.symbol` sugar. */
+function apiSymbol(pkg: string, module: string, symbol: string): ApiSymbolPath;
+function apiSymbol(
+  pkg: string,
+  qualified: `${string}.${string}`,
+): ApiSymbolPath;
+function apiSymbol(
+  pkg: string,
+  moduleOrQualified: string,
+  symbol?: string,
+): ApiSymbolPath {
+  if (symbol !== undefined) {
+    return `/api/${pkg}/${moduleOrQualified}/${symbol}`;
+  }
+  const dot = moduleOrQualified.indexOf(".");
+  if (dot <= 0 || dot === moduleOrQualified.length - 1) {
+    throw new Error(
+      `urls.api.symbol: expected "Module.symbol", got ${moduleOrQualified}`,
+    );
+  }
+  return `/api/${pkg}/${moduleOrQualified.slice(0, dot)}/${moduleOrQualified.slice(dot + 1)}`;
+}
 
 /**
  * Beautifully typed hrefs for every Waku page pattern.
@@ -40,13 +63,7 @@ export const urls = {
       pkg: string,
       module: string,
     ): `/api/${string}/${string}` => `/api/${pkg}/${module}`,
-    /** Own package (SSG) or dep (SSR) — same path shape; Waku picks the page. */
-    symbol: (
-      pkg: string,
-      module: string,
-      symbol: string,
-    ): `/api/${string}/${string}/${string}` =>
-      `/api/${pkg}/${module}/${symbol}`,
+    symbol: apiSymbol,
   }),
 } as const;
 
@@ -78,13 +95,9 @@ export const requireSitePath = (href: string): SitePath => {
 };
 
 // =============================================================================
-// Match catalog (Route.match) — mirrors the same paths; not the call-site API
+// Match catalog (Route.match only — not the call-site API)
 // =============================================================================
 
-/**
- * Internal catalog for pathname → match. Call sites use {@link urls}, not
- * `Route.urlBuilder`’s `{ params }` shape.
- */
 export const site = Route.make("docsSite").add(
   Route.get("home", "/"),
   Route.get("search", "/search"),

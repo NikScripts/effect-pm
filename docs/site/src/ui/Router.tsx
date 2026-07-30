@@ -6,13 +6,14 @@
  * ```tsx
  * <Router.Provider value={Router.docs}>
  *   <Router.Link to={(u) => u.docs("work-pools")}>Work pools</Router.Link>
- *   <Router.Link to={(u) => u.api.symbol("effect", "Effect", "succeed")}>
+ *   <Router.Link to={(u) => u.api.symbol("effect", "Effect.succeed")}>
  *     Effect.succeed
  *   </Router.Link>
  * </Router.Provider>
  *
  * const r = Router.useRouter()
  * void r.to((u) => u.api.symbol("hyperlink-ts", "WorkPool", "Tag"))
+ * void r.to((u) => u.api.symbol("effect", "Effect.succeed"))
  * ```
  *
  * Aliased: `hyperlink-ts/ui/Router` → this file. Page bodies stay in `src/pages/`.

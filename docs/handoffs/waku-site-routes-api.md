@@ -9,7 +9,7 @@ import * as Router from "hyperlink-ts/ui/Router" // → docs/site/src/ui/Router.
 
 <Router.Provider value={Router.docs}>
   <Router.Link to={(u) => u.docs("work-pools")}>Work pools</Router.Link>
-  <Router.Link to={(u) => u.api.symbol("effect", "Effect", "succeed")}>
+  <Router.Link to={(u) => u.api.symbol("effect", "Effect.succeed")}>
     Effect.succeed
   </Router.Link>
   <Router.Link to={(u) => u.api.symbol("hyperlink-ts", "WorkPool", "Tag")}>
@@ -19,7 +19,7 @@ import * as Router from "hyperlink-ts/ui/Router" // → docs/site/src/ui/Router.
 
 const r = Router.useRouter()
 void r.to((u) => u.releases())
-void r.to((u) => u.api.pkg("hyperlink-ts"))
+void r.to((u) => u.api.symbol("effect", "Effect.succeed"))
 ```
 
 ```ts
@@ -28,7 +28,8 @@ urls.docs("work-pools")                        // `/docs/${string}`
 urls.api()                                     // "/api"
 urls.api.pkg("hyperlink-ts")                   // `/api/${string}`
 urls.api.module("hyperlink-ts", "WorkPool")    // `/api/${string}/${string}`
-urls.api.symbol("effect", "Effect", "succeed") // `/api/${string}/${string}/${string}`
+urls.api.symbol("effect", "Effect", "succeed") // `/api/effect/Effect/succeed`
+urls.api.symbol("effect", "Effect.succeed")    // same (Module.symbol sugar)
 ```
 
 ## Mapping

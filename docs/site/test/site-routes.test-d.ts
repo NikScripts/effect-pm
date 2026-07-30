@@ -12,6 +12,9 @@ expectTypeOf(urls.api.pkg("hyperlink-ts")).toEqualTypeOf<`/api/${string}`>();
 expectTypeOf(
   urls.api.symbol("effect", "Effect", "succeed"),
 ).toEqualTypeOf<`/api/${string}/${string}/${string}`>();
+expectTypeOf(
+  urls.api.symbol("effect", "Effect.succeed"),
+).toEqualTypeOf<`/api/${string}/${string}/${string}`>();
 
 const chapter = urls.docs("work-pools");
 const _waku: SitePath = chapter;
