@@ -14,6 +14,11 @@ badge. **State, Event, and errors are all `_tag` ADTs** — match with `Match`,
 This is the **HyperService** plane (WorkPool / Daemon). Node cutover uses a separate
 `Node.status.phase` (`draining` / …) — see [Identity coordinator](/docs/identity-coordinator).
 
+**Handoff is orthogonal.** A serve-site `handoff` is just `(from, to, ctx)` over two
+identical handles. Lifecycle does not gate it; the handoff Effect may observe
+`lifecycle` if it wants. Without a handoff fn, shutdown only **stops** the service so
+Scope `addFinalizer` runs (Lifecycle `stop`).
+
 ## The handle
 
 ```ts

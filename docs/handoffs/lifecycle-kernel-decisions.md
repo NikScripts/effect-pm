@@ -79,11 +79,11 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 - **Reject:** Idle ⇒ not ready (breaks A→B pending queues).
 - **Blocks:** L1.
 
-### P7 — Handoff / drain — Locked (no Lifecycle State gate)
+### P7 — Handoff / drain — Locked (orthogonal to Lifecycle)
 
-- **Choose:** Node `phase: "draining"` remains **node** lifecycle; HyperService may enter `Draining` separately. Document both planes.
-- **Choose:** **Do not gate handoff on Lifecycle State.** Migration ownership stays on the serve-site {@linkcode Hyperlink.HandoffFn} (`ctx.done` / `retry` / `defer`) run during `Node.shutdown` after drain. Lifecycle is observable badge only for tools — not a precondition filter for handoff.
-- **Reject:** Requiring Idle / Running / stop-first before handoff runner proceeds.
+- **Choose:** **Handoff and Lifecycle are unrelated planes.** Handoff is only two identical handles (`from` / `to`) plus a serve-site `HandoffFn` (`ctx.done` / `retry` / `defer`). That Effect may *read* Lifecycle State if the author wants — Lifecycle never gates or owns handoff.
+- **Choose:** **No handoff fn ⇒ no migrate.** Shutdown path should only **stop** the HyperService so Scope `addFinalizer` (Lifecycle `stop`) runs. Node `phase: "draining"` stays the node plane.
+- **Reject:** Lifecycle State as a precondition for handoff; conflating Node drain with HyperService Lifecycle; inventing a Lifecycle↔handoff bridge API.
 - **Blocks:** L6 (docs clarity; no Lifecycle gate Eng).
 
 ### P8 — Remote parity — Proposed
