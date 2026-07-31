@@ -127,24 +127,28 @@ const FocusedQueue = (props: {
   const { name, tag, cols, rows, editMode } = props;
   const bundle = Observe.use(tag, WorkPoolView.pack);
   const statusR = useAtomValue(bundle.status);
+  const lifecycleR = useAtomValue(bundle.lifecycle);
   const logsR = useAtomValue(bundle.logs);
 
   const pause = useAtomSet(bundle.pause);
   const resume = useAtomSet(bundle.resume);
   const clear = useAtomSet(bundle.clear);
-  const shutdown = useAtomSet(bundle.shutdown);
+  const stop = useAtomSet(bundle.stop);
   useInput(
     (input) => {
       if (input === "p") pause();
       else if (input === "r") resume();
       else if (input === "c") clear();
-      else if (input === "x") shutdown();
+      else if (input === "x") stop();
     },
     { isActive: editMode && props.cmd === null },
   );
 
   const statusOpt = AsyncResult.isSuccess(statusR) ? statusR.value : Option.none();
   const s = Option.isSome(statusOpt) ? statusOpt.value : undefined;
+  const lifecycleTag = AsyncResult.isSuccess(lifecycleR)
+    ? lifecycleR.value._tag ?? "?"
+    : "?";
   const logs = AsyncResult.isSuccess(logsR) ? logsR.value : [];
   const visible = Math.max(1, rows - PAGE_HEIGHT - 3 - props.barRows);
 
@@ -159,7 +163,7 @@ const FocusedQueue = (props: {
           <ControlKey k="p" label="pause" atom={bundle.pause} />
           <ControlKey k="r" label="resume" atom={bundle.resume} />
           <ControlKey k="c" label="clear" atom={bundle.clear} />
-          <ControlKey k="x" label="shutdown" atom={bundle.shutdown} />
+          <ControlKey k="x" label="stop" atom={bundle.stop} />
         </>
       ) : (
         <Text dimColor>Ctrl+E edit</Text>
@@ -188,7 +192,7 @@ const FocusedQueue = (props: {
             <Text dimColor> · in-flight {s?.inFlight ?? 0}</Text>
             <NodeMark tag={tag} />
           </Box>
-          <Text dimColor>phase {s?.phase ?? "?"}</Text>
+          <Text dimColor>{lifecycleTag.toLowerCase()}</Text>
         </Box>
         <LogTail logs={logs} visible={visible} />
       </Box>

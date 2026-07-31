@@ -4,7 +4,10 @@ import { Context, Duration, Effect, Layer, Ref, Schema, Scope } from "effect";
 import { SqlClient } from "effect/unstable/sql/SqlClient";
 import { DurableWorkPoolStore } from "../src/DurableWorkPoolStore";
 import * as WorkPool from "../src/WorkPool";
+import * as Hyperlink from "../src/Hyperlink";
 import { SQLiteDurableWorkPoolStore } from "../src/storage/sqlite";
+
+const deferStart = Effect.provideService(Hyperlink.DeferStart, true);
 
 // A DurableWorkPoolStore over a shared in-memory SQLite client — the same store can back two queue
 // instances (to simulate a restart).
@@ -53,11 +56,10 @@ describe("WorkPool persist (SQLite durability)", () => {
           name: "dq-recover",
           itemSchema: Schema.Number,
           effect: (_n: number) => Effect.void,
-          autoStart: false,
         });
         yield* queue.add([10, 20, 30]);
         expect(yield* queue.size.get).toBe(3); // persisted, pending
-      }).pipe(Effect.provide(storeLayer), Effect.scoped);
+      }).pipe(Effect.provide(storeLayer), deferStart, Effect.scoped);
 
       // Instance 2: same store, fresh runtime — recovers + processes the leftover work.
       const results = yield* Ref.make<Array<number>>([]);
@@ -67,6 +69,7 @@ describe("WorkPool persist (SQLite durability)", () => {
           itemSchema: Schema.Number,
           effect: (n: number) => Ref.update(results, (a) => [...a, n]),
         });
+        
         yield* waitUntil(Effect.map(queue.completed, (c) => c >= 3));
       }).pipe(Effect.provide(storeLayer), Effect.scoped);
 
@@ -105,13 +108,12 @@ describe("WorkPool persist (SQLite durability)", () => {
           name: "dq-release",
           itemSchema: Schema.Number,
           effect: (_n: number) => Effect.void,
-          autoStart: false, // keep the backlog available (not leased) for release
         });
         yield* queue.add([1, 2, 3]);
         const released = yield* queue.release({});
         expect(released.map((e) => e.item).sort()).toEqual([1, 2, 3]);
         expect(yield* queue.size.get).toBe(0); // store drained
-      }).pipe(Effect.provide(storeLayer), Effect.scoped);
+      }).pipe(Effect.provide(storeLayer), deferStart, Effect.scoped);
     }),
   );
 
@@ -124,7 +126,6 @@ describe("WorkPool persist (SQLite durability)", () => {
           itemSchema: Schema.Number,
           key: (n: number) => String(n),
           effect: (_n: number) => Effect.void,
-          autoStart: false,
         });
         yield* queue.add([1, 2, 3]);
         yield* queue.deadLetter({ key: "1" }, { reason: "test" });
@@ -132,7 +133,7 @@ describe("WorkPool persist (SQLite durability)", () => {
         expect(yield* queue.size.get).toBe(1); // only item 3 remains in the store
         const left = yield* queue.release({});
         expect(left.map((e) => e.item)).toEqual([3]);
-      }).pipe(Effect.provide(storeLayer), Effect.scoped);
+      }).pipe(Effect.provide(storeLayer), deferStart, Effect.scoped);
     }),
   );
 });

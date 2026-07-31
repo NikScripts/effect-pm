@@ -1,6 +1,7 @@
 import { Context, Effect, Fiber, Layer, Schema, Stream } from "effect";
 import { expect, it } from "vitest";
 import { WorkPool } from "../src";
+import * as Hyperlink from "../src/Hyperlink";
 
 // A refill loader that needs its OWN service dependency (like wow's Prisma repo) — distinct from
 // the worker, which needs nothing. Probes whether the refill's R is surfaced + provided.
@@ -14,9 +15,8 @@ class Q extends WorkPool.Tag<Q>()("queue-refill-deps/Q", { payload: Item }) {}
 
 const queueLayer = WorkPool.layerMemory(Q, {
   effect: (_item: { n: number }) => Effect.void, // worker needs nothing
-  // autoStart:false so the test can subscribe to the live status before the refill runs (the
+  // deferStart so the test can subscribe to the live status before the refill runs (the
   // refill fires when the worker pool starts, which we trigger explicitly via `start`).
-  autoStart: false,
   refill: {
     onStart: true,
     load: (q) =>
@@ -26,7 +26,7 @@ const queueLayer = WorkPool.layerMemory(Q, {
         Effect.orDie,
       ),
   },
-});
+}).pipe(Hyperlink.deferStart);
 
 it("refill loader gets its own service dependency", () =>
   Effect.runPromise(

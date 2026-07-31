@@ -145,8 +145,7 @@ Crown-jewel path — **B is Directory-visible before A shuts down** (peer pick e
 **dial**, not `nodeKey`):
 
 1. Start Lookup + **B** serving the HyperService (WorkPool:
-   `.pipe(Hyperlink.deferStart)` / `autoStart: false` if you want pending
-   to stay queued).
+   `.pipe(Hyperlink.deferStart)` if you want pending to stay queued).
 2. Start **A** with the same HyperService; enqueue / store state on A.
 3. `Node.shutdown(A)` → drain → handoff → Advice clear → unregister → listen exit.
 4. Pending / moved state is on B; Directory lists B only; `lookupClient` keeps dialing B when

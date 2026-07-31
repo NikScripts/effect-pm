@@ -32,10 +32,12 @@ const httpProtocol = (port: number) =>
 const withServer = <A, E>(
   config: QueueLayerConfig<NumberItem, void, never, never>,
   use: (port: number) => Effect.Effect<A, E, RemoteQueue>,
+  options?: { readonly deferStart?: boolean },
 ) => {
-  const server = Node.httpServer([
-    WorkPool.serveMemory(RemoteQueue, config),
-  ]).pipe(
+  const serve = options?.deferStart === true
+    ? WorkPool.serveMemory(RemoteQueue, config).pipe(Hyperlink.deferStart)
+    : WorkPool.serveMemory(RemoteQueue, config);
+  const server = Node.httpServer([serve]).pipe(
     // server-side history backend for metrics backfill
     Layer.provide(HistoryStore.layerMemory()),
     Layer.provideMerge(NodeHttpServer.layerTest),
@@ -72,7 +74,7 @@ it("add (single + batch) over http → real engine processes → completed/statu
         const snap = Option.getOrThrow(drained);
         expect(snap.completed).toBe(3);
         expect(snap.sizes).toEqual({ high: 0, normal: 0, low: 0 });
-        expect(snap.phase).toBe("running");
+        expect((yield* queue.lifecycle.get)._tag).toBe("Running");
       }),
     )));
 
@@ -99,9 +101,9 @@ it("metricsHistory crosses http (the dashboard's backfill path)", () =>
     )));
 
 it("release handoff round-trips full entries (item + metadata) over http", () =>
-  // autoStart:false → no workers, so added items stay PENDING for release to export.
+  // deferStart → no workers, so added items stay PENDING for release to export.
   Effect.runPromise(
-    withServer({ effect: (_item) => Effect.void, autoStart: false }, (_port) =>
+    withServer({ effect: (_item) => Effect.void }, (_port) =>
       Effect.gen(function* () {
         const queue = yield* RemoteQueue;
         yield* queue.add([{ n: 10 }, { n: 11 }]);
@@ -116,11 +118,11 @@ it("release handoff round-trips full entries (item + metadata) over http", () =>
           released.every((e) => e.timestamps.enqueuedAt !== undefined),
         ).toBe(true);
       }),
-    )));
+    ), { deferStart: true }));
 
 it("the status stream flows over http from the real engine", () =>
   Effect.runPromise(
-    withServer({ effect: (_item) => Effect.void, autoStart: false }, (_port) =>
+    withServer({ effect: (_item) => Effect.void }, (_port) =>
       Effect.gen(function* () {
         const queue = yield* RemoteQueue;
         const collected = yield* Effect.forkChild(
@@ -139,4 +141,4 @@ it("the status stream flows over http from the real engine", () =>
         const snap = Array.from(yield* Fiber.join(collected))[0];
         expect(snap?.sizes.normal).toBeGreaterThanOrEqual(2);
       }),
-    )));
+    ), { deferStart: true }));

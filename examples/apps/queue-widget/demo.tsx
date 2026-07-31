@@ -88,7 +88,7 @@ const ConnectedWidget = (): React.ReactElement => {
   const resume = useAtomSet(atoms.resume);
   const clear = useAtomSet(atoms.clear);
   const release = useAtomSet(atoms.release);
-  const shutdown = useAtomSet(atoms.shutdown);
+  const stop = useAtomSet(atoms.stop);
   const drop = useAtomSet(atoms.drop);
   const deadLetter = useAtomSet(atoms.deadLetter);
   const refresh = useAtomRefresh(atoms.stats);
@@ -138,9 +138,9 @@ const ConnectedWidget = (): React.ReactElement => {
         }}
         onClear={() => clear(undefined)}
         onRelease={() => release(undefined)}
-        onShutdown={() => {
-          shutdown(undefined);
-          setStatus("shutdown");
+        onStop={() => {
+          stop(undefined);
+          setStatus("off");
         }}
         onRefresh={refresh}
         onDrop={(item) => drop(item)}

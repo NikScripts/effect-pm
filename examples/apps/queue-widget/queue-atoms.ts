@@ -81,7 +81,7 @@ export const makeQueueAtoms = <
   const pause = command((handle) => handle.pause);
   const resume = command((handle) => handle.resume);
   const clear = command((handle) => handle.clear);
-  const shutdown = command((handle) => handle.shutdown);
+  const stop = command((handle) => handle.stop);
   const release = command((handle) => handle.release({}));
 
   // Routing targets pending entries by selector (here the item key / text). No
@@ -103,7 +103,7 @@ export const makeQueueAtoms = <
     pause,
     resume,
     clear,
-    shutdown,
+    stop,
     release,
     drop,
     deadLetter,

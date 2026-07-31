@@ -13,7 +13,6 @@ export interface QueueStatusContext {
   readonly paused: boolean;
   readonly inFlight: number;
   readonly completed: number;
-  readonly phase: QueueStatus["phase"];
 }
 
 /** @internal */
@@ -48,7 +47,6 @@ export const defaultQueueProjection: QueueRuntimeProjection<{
     paused: ctx.paused,
     inFlight: ctx.inFlight,
     completed: ctx.completed,
-    phase: ctx.phase,
   }),
 };
 
@@ -75,7 +73,6 @@ export interface WorkPoolPriorityStatus {
   readonly paused: boolean;
   readonly inFlight: number;
   readonly completed: number;
-  readonly phase: QueueStatus["phase"];
 }
 
 /**
@@ -115,7 +112,6 @@ export const buildPriorityProjection = (options: {
       paused: ctx.paused,
       inFlight: ctx.inFlight,
       completed: ctx.completed,
-      phase: ctx.phase,
     }),
   };
 };

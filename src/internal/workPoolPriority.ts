@@ -117,7 +117,7 @@ export interface WorkPoolPriorityHandleApi<
   readonly start: Effect.Effect<void, never, R>;
   readonly pause: Effect.Effect<void>;
   readonly resume: Effect.Effect<void>;
-  readonly shutdown: Effect.Effect<void>;
+  readonly stop: Effect.Effect<void>;
   readonly clear: Effect.Effect<number, never, R>;
   readonly release: (
     options?: QueueReleaseOptions,
@@ -262,7 +262,7 @@ const wrapWorkPoolPriorityHandle = <T, E, EEnqueue, R>(
     start: engine.start,
     pause: engine.pause,
     resume: engine.resume,
-    shutdown: engine.shutdown,
+    stop: engine.stop,
     clear: engine.clear,
     release: engine.release,
     releaseEncoded: engine.releaseEncoded,

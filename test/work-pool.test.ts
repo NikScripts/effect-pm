@@ -39,6 +39,7 @@ const WorkPool = {
 import * as Hyperlink from "../src/Hyperlink";
 import { testLogsEnv } from "./fixtures/logsEnv";
 
+const deferStart = Effect.provideService(Hyperlink.DeferStart, true);
 const fastConfig = { concurrency: 2 };
 
 const waitUntilCompleted = <T, E, EE = never, R = never>(
@@ -65,7 +66,7 @@ const waitUntilCount = (
   });
 
 // Counts `Drained` events off the queue's events stream — the replacement for the old
-// `onDrained` hook probe used by the autoStart cold-start tests.
+// `onDrained` hook probe used by the deferStart cold-start tests.
 const forkDrainCounter = <T, E, EE, R>(
   queue: QueueHandle<T, E, EE, R>,
   ref: Ref.Ref<number>,
@@ -89,7 +90,7 @@ describe("QueueHandle — status ref shape", () => {
       expect("changes" in queue.status).toBe(true);
       expect("statusNow" in queue).toBe(false);
       const snap = yield* queue.status.get;
-      expect(snap.phase).toBe("running");
+      expect((yield* queue.lifecycle.get)._tag).toBe("Running");
       const collected = yield* Effect.forkChild(
         Stream.runCollect(
           Stream.takeUntil(queue.status.changes, (s) => s.sizes.normal === 1),
@@ -682,12 +683,11 @@ describe("WorkPool.make — events", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.live("start is idempotent (manual autoStart)", () =>
+  it.live("start is idempotent (manual deferStart)", () =>
     Effect.gen(function* () {
       const handled = yield* Ref.make<ReadonlyArray<number>>([]);
       const queue = yield* WorkPool.make({
         name: "test-start-idempotent",
-        autoStart: false,
         effect: (n: number) => Ref.update(handled, (values) => [...values, n]),
         concurrency: 1,
       });
@@ -697,7 +697,7 @@ describe("WorkPool.make — events", () => {
       yield* waitUntilCompleted(queue, 2);
       yield* Effect.sleep(Duration.millis(20));
       expect([...(yield* Ref.get(handled))].sort()).toEqual([1, 2]);
-    }).pipe(Effect.scoped),
+    }).pipe(deferStart, Effect.scoped),
   );
 });
 
@@ -754,13 +754,12 @@ describe("WorkPool.make — self-enqueue guard", () => {
   );
 });
 
-describe("WorkPool.make — autoStart", () => {
-  it.live("does not process until start when autoStart is false", () =>
+describe("WorkPool.make — deferStart", () => {
+  it.live("does not process until start when DeferStart is set", () =>
     Effect.gen(function* () {
       const results = yield* Ref.make<Array<number>>([]);
       const queue = yield* WorkPool.make({
         name: "test-autostart-deferred",
-        autoStart: false,
         effect: (n: number) => Ref.update(results, (arr) => [...arr, n]),
         concurrency: 1,
       });
@@ -773,7 +772,7 @@ describe("WorkPool.make — autoStart", () => {
       yield* waitUntilCompleted(queue, 2);
       const after = yield* Ref.get(results);
       expect(after.sort()).toEqual([1, 2]);
-    }).pipe(Effect.scoped),
+    }).pipe(deferStart, Effect.scoped),
   );
 
   it.live("start is idempotent", () =>
@@ -781,7 +780,6 @@ describe("WorkPool.make — autoStart", () => {
       const results = yield* Ref.make<Array<number>>([]);
       const queue = yield* WorkPool.make({
         name: "test-autostart-idempotent",
-        autoStart: false,
         effect: (n: number) => Ref.update(results, (arr) => [...arr, n]),
         concurrency: 2,
       });
@@ -791,28 +789,27 @@ describe("WorkPool.make — autoStart", () => {
       yield* waitUntilCompleted(queue, 1);
       const final = yield* Ref.get(results);
       expect(final).toEqual([1]);
-    }).pipe(Effect.scoped),
+    }).pipe(deferStart, Effect.scoped),
   );
 
-  it.live("start after shutdown does not process queued items", () =>
+  it.live("start after stop does not process queued items", () =>
     Effect.gen(function* () {
       const results = yield* Ref.make<Array<number>>([]);
       const queue = yield* WorkPool.make({
         name: "test-autostart-shutdown-first",
-        autoStart: false,
         effect: (n: number) => Ref.update(results, (arr) => [...arr, n]),
         concurrency: 1,
       });
-      yield* queue.shutdown;
+      yield* queue.stop;
       yield* queue.start;
       yield* queue.add([1]);
       yield* Effect.sleep(Duration.millis(30));
       const r = yield* Ref.get(results);
       expect(r).toHaveLength(0);
-    }).pipe(Effect.scoped),
+    }).pipe(deferStart, Effect.scoped),
   );
 
-  it.live("shutdown (drain, default) processes queued items, then phase → off", () =>
+  it.live("stop (drain, default) processes queued items, then lifecycle → Off", () =>
     Effect.gen(function* () {
       const processed = yield* Ref.make<Array<number>>([]);
       const events = yield* Ref.make<Array<string>>([]);
@@ -828,9 +825,9 @@ describe("WorkPool.make — autoStart", () => {
       );
       yield* Effect.sleep(Duration.millis(20));
       yield* queue.add([1, 2, 3, 4]);
-      yield* queue.shutdown;
+      yield* queue.stop;
       // drain finalizes in the background — wait until it reaches the terminal phase
-      while ((yield* queue.status.get).phase !== "off") {
+      while ((yield* queue.lifecycle.get)._tag !== "Off") {
         yield* Effect.sleep(Duration.millis(5));
       }
       // drain mode processed every queued item before going off
@@ -840,13 +837,13 @@ describe("WorkPool.make — autoStart", () => {
       const ev = yield* Ref.get(events);
       expect(ev).toContain("ShutdownRequested");
       expect(ev).toContain("ShutdownComplete");
-      // adds after shutdown are rejected (queue is off)
+      // adds after stop are rejected (queue is off)
       yield* queue.add([5]);
       expect(yield* queue.size.get).toBe(0);
     }).pipe(Effect.scoped),
   );
 
-  it.live("shutdown (finishActive) discards queued items, then phase → off", () =>
+  it.live("stop (finishActive) discards queued items, then lifecycle → Off", () =>
     Effect.gen(function* () {
       const processed = yield* Ref.make<Array<number>>([]);
       const dropped = yield* Ref.make<Array<number>>([]);
@@ -868,8 +865,8 @@ describe("WorkPool.make — autoStart", () => {
       yield* Effect.sleep(Duration.millis(20));
       yield* queue.add([1, 2, 3]);
       expect(yield* queue.size.get).toBe(3);
-      yield* queue.shutdown;
-      while ((yield* queue.status.get).phase !== "off") {
+      yield* queue.stop;
+      while ((yield* queue.lifecycle.get)._tag !== "Off") {
         yield* Effect.sleep(Duration.millis(5));
       }
       // finishActive discarded the queued items (none processed) and emitted a Dropped event
@@ -880,7 +877,7 @@ describe("WorkPool.make — autoStart", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.live("shutdown is idempotent and reports the draining phase", () =>
+  it.live("stop is idempotent and reports the Draining lifecycle", () =>
     Effect.gen(function* () {
       // worker blocks on a gate so the item stays in-flight → queue stays "draining"
       const gate = yield* Deferred.make<void>();
@@ -892,12 +889,12 @@ describe("WorkPool.make — autoStart", () => {
       yield* Effect.sleep(Duration.millis(20));
       yield* queue.add([1]);
       yield* Effect.sleep(Duration.millis(20)); // let the worker pick it up (in-flight)
-      yield* queue.shutdown;
-      expect((yield* queue.status.get).phase).toBe("draining"); // in-flight not done yet
-      yield* queue.shutdown; // second call is a no-op (no throw, phase unchanged)
-      expect((yield* queue.status.get).phase).toBe("draining");
+      yield* queue.stop;
+      expect((yield* queue.lifecycle.get)._tag).toBe("Draining"); // in-flight not done yet
+      yield* queue.stop; // second call is a no-op (no throw, phase unchanged)
+      expect((yield* queue.lifecycle.get)._tag).toBe("Draining");
       yield* Deferred.succeed(gate, undefined); // release → item finishes → off
-      while ((yield* queue.status.get).phase !== "off") {
+      while ((yield* queue.lifecycle.get)._tag !== "Off") {
         yield* Effect.sleep(Duration.millis(5));
       }
     }).pipe(Effect.scoped),
@@ -908,7 +905,6 @@ describe("WorkPool.make — autoStart", () => {
       const drains = yield* Ref.make(0);
       const queue = yield* WorkPool.make({
         name: "test-autostart-drained",
-        autoStart: false,
         effect: (_n: number) => Effect.void,
         concurrency: 1,
       });
@@ -925,10 +921,8 @@ describe("WorkPool.make — autoStart", () => {
       yield* waitUntilCount(drains, 1);
       expect(yield* Ref.get(drains)).toBeGreaterThanOrEqual(1);
       void queue;
-    }).pipe(Effect.scoped),
+    }).pipe(deferStart, Effect.scoped),
   );
-
-  it.live("no Drained event with default autoStart and no work", () =>
     Effect.gen(function* () {
       const drains = yield* Ref.make(0);
       const queue = yield* WorkPool.make({
@@ -943,7 +937,7 @@ describe("WorkPool.make — autoStart", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.live("Drained event fires only after processed work drains empty (default autoStart)", () =>
+  it.live("Drained event fires only after processed work drains empty (default start)", () =>
     Effect.gen(function* () {
       const drains = yield* Ref.make(0);
       const handled = yield* Ref.make<ReadonlyArray<number>>([]);
@@ -992,7 +986,7 @@ describe("WorkPool.make — autoStart", () => {
     }),
   );
 
-  it.live("service-layer queue with autoStart false waits for start and still does not cold-start onDrained", () =>
+  it.live("service-layer queue with deferStart waits for start and still does not cold-start onDrained", () =>
     Effect.gen(function* () {
       const drains = yield* Ref.make(0);
       const handled = yield* Ref.make<ReadonlyArray<number>>([]);
@@ -1000,7 +994,6 @@ describe("WorkPool.make — autoStart", () => {
       class DrainedQueue extends WorkPool.Service<DrainedQueue, number, never>()(
         "@test/DrainedLayerManualStartQueue",
         {
-          autoStart: false,
           effect: (n: number) => Ref.update(handled, (values) => [...values, n]),
           concurrency: 1,
         },
@@ -1022,7 +1015,7 @@ describe("WorkPool.make — autoStart", () => {
         yield* waitUntilCount(drains, 1);
         expect(yield* Ref.get(handled)).toEqual([1]);
         expect(yield* Ref.get(drains)).toBeGreaterThanOrEqual(1);
-      }).pipe(Effect.provide(DrainedQueue.layer));
+      }).pipe(Effect.provide(DrainedQueue.layer.pipe(Hyperlink.deferStart)));
     }),
   );
 
@@ -1055,7 +1048,6 @@ describe("WorkPool.make — autoStart", () => {
       const drains = yield* Ref.make(0);
       const queue = yield* WorkPool.make({
         name: "test-clear-drained-after-start",
-        autoStart: false,
         paused: true,
         effect: (_n: number) => Effect.void,
         concurrency: 1,
@@ -1072,7 +1064,7 @@ describe("WorkPool.make — autoStart", () => {
       expect(yield* queue.clear).toBe(1);
       yield* waitUntilCount(drains, 1);
       expect(yield* Ref.get(drains)).toBeGreaterThanOrEqual(1);
-    }).pipe(Effect.scoped),
+    }).pipe(deferStart, Effect.scoped),
   );
 });
 
@@ -1499,7 +1491,7 @@ describe("WorkPool.make — Hyperlink.logs", () => {
         ),
       );
       yield* Effect.sleep(Duration.millis(20));
-      yield* queue.shutdown;
+      yield* queue.stop;
       const entry = Array.from(yield* Fiber.join(collected))[0];
       expect(entry?.message).toContain("shutting down");
       expect(entry?.level).toBe("Info");

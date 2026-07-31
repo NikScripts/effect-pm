@@ -22,7 +22,7 @@ type QueueControls = {
   readonly pause: EffectT.Effect<void>;
   readonly resume: EffectT.Effect<void>;
   readonly clear: EffectT.Effect<void>;
-  readonly shutdown: EffectT.Effect<void>;
+  readonly stop: EffectT.Effect<void>;
 };
 
 /** Structural queue service — select against this, not a concrete Tag class. */
@@ -30,6 +30,10 @@ type Queue = QueueControls & {
   readonly status: {
     readonly get: EffectT.Effect<QueueStatus>;
     readonly changes: StreamT.Stream<QueueStatus>;
+  };
+  readonly lifecycle: {
+    readonly get: EffectT.Effect<{ readonly _tag: string }>;
+    readonly changes: StreamT.Stream<{ readonly _tag: string }>;
   };
   readonly metrics: {
     readonly stream: StreamT.Stream<QueueMetrics>;
@@ -116,7 +120,7 @@ const metricsHistory = Observe.fold(
 );
 
 /**
- * Pause / resume / clear / shutdown commands.
+ * Pause / resume / clear / stop commands.
  *
  * @public
  */
@@ -124,7 +128,7 @@ export const queueControls = Observe.struct({
   pause: Observe.fn((q: QueueControls) => q.pause),
   resume: Observe.fn((q: QueueControls) => q.resume),
   clear: Observe.fn((q: QueueControls) => q.clear),
-  shutdown: Observe.fn((q: QueueControls) => q.shutdown),
+  stop: Observe.fn((q: QueueControls) => q.stop),
 });
 
 /**
@@ -167,6 +171,7 @@ export const pack = Observe.named(
     Observe.struct({
       status: Observe.map(statusTrend, (a) => a.latest),
       trend: Observe.map(statusTrend, (a) => a.trend),
+      lifecycle: Observe.atom((q: Queue) => q.lifecycle),
     }),
     Observe.and(queueControls),
     Observe.and(queueMetricsHistory),

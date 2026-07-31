@@ -63,16 +63,23 @@ import {
   type View as QueueSnapshot,
 } from "./queueWidget";
 
-const statusOf = (phase: string, paused: boolean): Status =>
-  phase === "idle"
+const statusOf = (lifecycleTag: string): Status =>
+  lifecycleTag === "Idle"
     ? "idle"
-    : phase === "off"
+    : lifecycleTag === "Off"
       ? "off"
-      : phase === "draining"
+      : lifecycleTag === "Draining"
         ? "draining"
-        : paused
+        : lifecycleTag === "Paused"
           ? "paused"
           : "running";
+
+const lifecycleTagOf = (
+  lifecycleR: AsyncResult.AsyncResult<Option.Option<{ readonly _tag: string }>, unknown>,
+): string =>
+  AsyncResult.isSuccess(lifecycleR)
+    ? lifecycleR.value._tag ?? "Running"
+    : "Running";
 
 // ── cards ───────────────────────────────────────────────────────────────────
 
@@ -215,6 +222,7 @@ const QueueDetailPanel = (props: {
 }): React.ReactElement => {
   const bundle = Observe.use(props.tag, WorkPoolView.pack);
   const statusR = useAtomValue(bundle.status);
+  const lifecycleR = useAtomValue(bundle.lifecycle);
   const metricsR = useAtomValue(bundle.metrics);
   const trendR = useAtomValue(bundle.trend);
   const statusOpt = AsyncResult.isSuccess(statusR) ? statusR.value : Option.none();
@@ -225,7 +233,7 @@ const QueueDetailPanel = (props: {
   const sizes: Record<Priority, number> = s?.sizes ?? { high: 0, normal: 0, low: 0 };
   const snapshot: QueueSnapshot = {
     name: props.name,
-    status: statusOf(s?.phase ?? "running", s?.paused ?? false),
+    status: statusOf(lifecycleTagOf(lifecycleR)),
     sizes,
     pending: sizes.high + sizes.normal + sizes.low,
     completed: s?.completed ?? 0,

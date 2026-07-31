@@ -1,6 +1,9 @@
 import { describe, expect, it } from "@effect/vitest";
 import { Duration, Effect, Fiber, Ref, Stream } from "effect";
+import * as Hyperlink from "../src/Hyperlink";
 import * as WorkPool from "../src/WorkPool";
+
+const deferStart = Effect.provideService(Hyperlink.DeferStart, true);
 
 const waitUntilCompleted = (
   queue: { readonly completed: Effect.Effect<number> },
@@ -23,7 +26,6 @@ describe("WorkPool.makePriority", () => {
         takeAlgorithm: "strict-descending",
         effect: (n: number) => Ref.update(seen, (arr) => [...arr, n]),
         concurrency: 1,
-        autoStart: false,
       });
       yield* queue.add(1, 0);
       yield* queue.add(2, 4);
@@ -31,7 +33,7 @@ describe("WorkPool.makePriority", () => {
       yield* queue.start;
       yield* waitUntilCompleted(queue, 3);
       expect(yield* Ref.get(seen)).toEqual([2, 3, 1]);
-    }).pipe(Effect.scoped),
+    }).pipe(deferStart, Effect.scoped),
   );
 
   it.live("resolves named levels and reports Record sizes", () =>
@@ -42,7 +44,6 @@ describe("WorkPool.makePriority", () => {
         namedLanes: { urgent: 0, batch: 3 },
         defaultLevel: 1,
         effect: (_item: string) => Effect.void,
-        autoStart: false,
       });
       yield* queue.add("a", "urgent");
       yield* queue.add("b");
@@ -53,8 +54,8 @@ describe("WorkPool.makePriority", () => {
       expect(sizes).toEqual({ urgent: 1, "1": 1, "2": 0, batch: 1 });
       const status = yield* queue.status.get;
       expect(status.sizes).toEqual(sizes);
-      expect(status.phase).toBe("idle");
-    }).pipe(Effect.scoped),
+      expect((yield* queue.lifecycle.get)._tag).toBe("Idle");
+    }).pipe(deferStart, Effect.scoped),
   );
 
   it.live("weighted take algorithm favors higher level indices", () =>
@@ -75,7 +76,6 @@ describe("WorkPool.makePriority", () => {
             }));
           }),
         concurrency: 1,
-        autoStart: false,
       });
       for (let i = 0; i < 100; i++) {
         yield* queue.add(1, 1);
@@ -86,7 +86,7 @@ describe("WorkPool.makePriority", () => {
       const { g1, g3 } = yield* Ref.get(samples);
       expect(g1).toBeGreaterThan(0);
       expect(g3).toBeGreaterThan(g1 * 2);
-    }).pipe(Effect.scoped),
+    }).pipe(deferStart, Effect.scoped),
   );
 
   it.live("status stream emits PriorityStatus snapshots", () =>
@@ -95,7 +95,6 @@ describe("WorkPool.makePriority", () => {
         name: "custom-status",
         laneCount: 3,
         effect: (_n: number) => Effect.void,
-        autoStart: false,
       });
       const collected = yield* Effect.forkChild(
         Stream.runCollect(Stream.take(queue.status.changes, 2)),
@@ -105,6 +104,6 @@ describe("WorkPool.makePriority", () => {
       const snapshots = yield* Fiber.join(collected);
       expect(snapshots).toHaveLength(2);
       expect(snapshots[1]?.sizes["2"]).toBe(1);
-    }).pipe(Effect.scoped),
+    }).pipe(deferStart, Effect.scoped),
   );
 });

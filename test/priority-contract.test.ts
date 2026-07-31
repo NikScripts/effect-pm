@@ -1,6 +1,7 @@
 import { Effect, Option, Schema, Stream } from "effect";
 import { expect, it } from "@effect/vitest";
 import { WorkPool } from "../src";
+import * as Hyperlink from "../src/Hyperlink";
 import { methodMeta, specOf } from "../src/Hyperlink";
 
 const JobSchema = Schema.Struct({ id: Schema.String });
@@ -56,8 +57,7 @@ it.live("WorkPool.layer drives add(item, lane)", () =>
           laneCount: 3,
           namedLanes: { fast: 2 },
           effect: () => Effect.void,
-          autoStart: false,
-        }),
+        }).pipe(Hyperlink.deferStart),
       ),
     );
   }).pipe(Effect.scoped),

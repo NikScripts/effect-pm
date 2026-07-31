@@ -48,7 +48,6 @@ Effect.runPromise(
         takeAlgorithm: "weighted",
         concurrency: 2,
         effect: (job) => Effect.logInfo(`processed ${job.id} (${job.kind})`),
-        autoStart: true,
       }),
     ),
     Effect.scoped,

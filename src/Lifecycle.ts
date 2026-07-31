@@ -256,8 +256,6 @@ export interface Participating<R = never> {
   readonly pause?: Effect.Effect<void, never, R>;
   readonly resume?: Effect.Effect<void, never, R>;
   readonly stop?: Effect.Effect<void, never, R>;
-  /** WorkPool alias for stop (transitional until rename lands). */
-  readonly shutdown?: Effect.Effect<void, never, R>;
 }
 
 /**
@@ -268,9 +266,7 @@ export interface Participating<R = never> {
  */
 export const of = <R = never>(svc: Participating<R>): Service<R> => {
   const stopFx =
-    svc.stop ??
-    svc.shutdown ??
-    Effect.die(new Unsupported({ role: "Stop" }));
+    svc.stop ?? Effect.die(new Unsupported({ role: "Stop" }));
   return {
     state: svc.lifecycle,
     changes: svc.lifecycle.changes,

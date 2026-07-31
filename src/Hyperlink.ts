@@ -4845,8 +4845,7 @@ export const servedKeyOf = (layer: unknown): string | undefined => {
 /**
  * When `true`, WorkPool / Daemon layers skip engine start until the service `start` command
  * runs. Default `false` (auto-start). Pipe {@link deferStart} onto the HyperService layer —
- * WorkPool still honors call-site `autoStart` when set (`config.autoStart ?? !DeferStart`);
- * prefer this Layer pipe over the flag.
+ * prefer this Layer pipe over a removed `autoStart` config flag.
  *
  * @category references
  * @public

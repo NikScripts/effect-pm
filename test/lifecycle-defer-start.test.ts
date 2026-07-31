@@ -10,7 +10,7 @@ describe("Lifecycle building blocks", () => {
     expect(methodMeta(queueControlSpec.start).lifecycle).toBe("Start");
     expect(methodMeta(queueControlSpec.pause).lifecycle).toBe("Pause");
     expect(methodMeta(queueControlSpec.resume).lifecycle).toBe("Resume");
-    expect(methodMeta(queueControlSpec.shutdown).lifecycle).toBe("Stop");
+    expect(methodMeta(queueControlSpec.stop).lifecycle).toBe("Stop");
   });
 
   it("stamps PascalCase roles on Daemon control verbs", () => {

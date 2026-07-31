@@ -95,15 +95,13 @@ const snapA = {
   paused: false,
   inFlight: 1,
   completed: 0,
-  phase: "running" as const,
-};
+  };
 const snapB = {
   sizes: { high: 0, normal: 0, low: 0 },
   paused: true,
   inFlight: 0,
   completed: 4,
-  phase: "running" as const,
-};
+  };
 
 const QueueWatchServer = Node.httpServer([
   Hyperlink.serve(QueueWatch, {

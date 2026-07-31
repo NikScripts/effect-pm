@@ -37,13 +37,13 @@ const makeImpl = () => {
     readonly paused: boolean;
     readonly inFlight: number;
     readonly completed: number;
-    readonly phase: "idle" | "running" | "draining" | "off";
+    readonly lifecycleTag: "Idle" | "Running" | "Paused" | "Draining" | "Off";
   } = {
     sizes: { high: 0, normal: 3, low: 0 },
     paused: false,
     inFlight: 0,
     completed: 0,
-    phase: "running",
+    lifecycleTag: "Running",
   };
   const statusRef = Effect.runSync(SubscriptionRef.make(initial));
   const patch = (f: (s: typeof initial) => typeof initial) =>
@@ -51,13 +51,18 @@ const makeImpl = () => {
   const statusSub = Hyperlink.subscribable(statusRef);
   return {
     // live current state — `status` is the SSOT Subscribable; the scalars are mapped views (`ref` impls).
-    status: statusSub,
+    status: Hyperlink.mapSubscribable(statusSub, (s) => ({
+      sizes: s.sizes,
+      paused: s.paused,
+      inFlight: s.inFlight,
+      completed: s.completed,
+    })),
     lifecycle: Hyperlink.mapSubscribable(statusSub, (s) =>
-      s.phase === "idle"
+      s.lifecycleTag === "Idle"
         ? ({ _tag: "Idle" } as const)
-        : s.phase === "draining"
+        : s.lifecycleTag === "Draining"
           ? ({ _tag: "Draining" } as const)
-          : s.phase === "off"
+          : s.lifecycleTag === "Off"
             ? ({ _tag: "Off" } as const)
             : s.paused
               ? ({ _tag: "Paused" } as const)
@@ -72,10 +77,10 @@ const makeImpl = () => {
       (s) => s.sizes.high + s.sizes.normal + s.sizes.low === 0,
     ),
     start: Effect.void,
-    pause: Effect.sync(() => patch((s) => ({ ...s, paused: true }))),
-    resume: Effect.sync(() => patch((s) => ({ ...s, paused: false }))),
-    shutdown: Effect.sync(() =>
-      patch((s) => ({ ...s, sizes: { high: 0, normal: 0, low: 0 } })),
+    pause: Effect.sync(() => patch((s) => ({ ...s, paused: true, lifecycleTag: "Paused" }))),
+    resume: Effect.sync(() => patch((s) => ({ ...s, paused: false, lifecycleTag: "Running" }))),
+    stop: Effect.sync(() =>
+      patch((s) => ({ ...s, sizes: { high: 0, normal: 0, low: 0 }, lifecycleTag: "Off" })),
     ),
     clear: Effect.sync(() => {
       const s = Effect.runSync(SubscriptionRef.get(statusRef));
@@ -129,7 +134,6 @@ it("drives a queue's control surface remotely, routed by instance id", () => {
       paused: false,
       inFlight: 0,
       completed: 0,
-      phase: "running",
     });
 
     // control verbs hit the right solo tag (own RpcGroup)
@@ -160,7 +164,7 @@ it("exposes the expected control verbs", () => {
       "metrics",
       "pause",
       "resume",
-      "shutdown",
+      "stop",
       "size",
       "start",
       "status",
@@ -176,7 +180,7 @@ it("exposes the expected control verbs", () => {
 // Tool metadata (query/mutate/destructive/description) drives CLI/TUI/dashboard rendering.
 it("marks each verb query vs mutate, with destructive hints", () => {
   // the direct (non-group) verbs — `metrics`/`logs` are nested groups, not methods.
-  type MethodKey = "size" | "isEmpty" | "pause" | "start" | "shutdown" | "clear";
+  type MethodKey = "size" | "isEmpty" | "pause" | "start" | "stop" | "clear";
   const meta = (k: MethodKey) => methodMeta(queueControlSpec[k]);
 
   // reads are queries
@@ -190,7 +194,7 @@ it("marks each verb query vs mutate, with destructive hints", () => {
   expect(isVoidCommand(queueControlSpec.start)).toBe(true);
 
   // state-losing commands are flagged destructive
-  expect(meta("shutdown")).toMatchObject({ kind: "query", destructive: true });
+  expect(meta("stop")).toMatchObject({ kind: "query", destructive: true });
   expect(meta("clear")).toMatchObject({ kind: "query", destructive: true });
   expect(meta("pause").destructive).toBe(false);
 
