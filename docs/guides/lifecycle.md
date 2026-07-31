@@ -77,9 +77,9 @@ yield* Lifecycle.start(jobs)
 yield* Lifecycle.pause(jobs)
 yield* jobs.lifecycle.get
 
-// or against the Tag Effect:
-yield* Lifecycle.startFrom(Jobs)
-yield* Lifecycle.stopFrom(Jobs)
+// same duals accept the Tag Effect:
+yield* Lifecycle.start(Jobs)
+yield* Lifecycle.stop(Jobs)
 ```
 
 WorkPool / Priority expose the badge as `jobs.lifecycle` (`Subscribable<Lifecycle.State>`).

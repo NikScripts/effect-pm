@@ -42,6 +42,14 @@ declare const participating: Lifecycle.Participating;
 // @ts-expect-error Participating has stop only — no shutdown alias
 participating.shutdown;
 
+declare const jobsTag: Effect.Effect<Lifecycle.Participating>;
+const _startHandle: Effect.Effect<void, Lifecycle.Illegal> =
+  Lifecycle.start(participating);
+const _startTag: Effect.Effect<void, Lifecycle.Illegal> =
+  Lifecycle.start(jobsTag);
+void _startHandle;
+void _startTag;
+
 declare const core: Lifecycle.LifecycleCore;
 declare const pausable: Lifecycle.LifecyclePausable;
 // Structural caps: no Latch ⇒ latch is undefined; Pausable carries Latch.

@@ -10,7 +10,7 @@ import * as Node from "../src/Node";
 
 /**
  * P8 proof — Participating duals over `Hyperlink.client` against a real served
- * WorkPool / Daemon. Same `Lifecycle.startFrom(Tag)` / `start(jobs)` surface as local.
+ * WorkPool / Daemon. Same `Lifecycle.start(Tag)` / `start(jobs)` surface as local.
  */
 
 const NumberItem = Schema.Struct({ n: Schema.Number });
@@ -101,7 +101,7 @@ const withDaemonServer = <A, E>(
   }).pipe(Effect.provide(server), Effect.scoped);
 };
 
-it("WorkPool client — startFrom / pause / resume / stop via Lifecycle duals", () =>
+it("WorkPool client — start(Tag) / pause / resume / stop via Lifecycle duals", () =>
   Effect.runPromise(
     withQueueServer(
       { effect: () => Effect.void },
@@ -111,7 +111,7 @@ it("WorkPool client — startFrom / pause / resume / stop via Lifecycle duals", 
           "Idle",
         );
 
-        yield* Lifecycle.startFrom(RemoteJobs);
+        yield* Lifecycle.start(RemoteJobs);
         expect((yield* awaitTag(jobs.lifecycle.changes, "Running"))._tag).toBe(
           "Running",
         );
@@ -126,7 +126,7 @@ it("WorkPool client — startFrom / pause / resume / stop via Lifecycle duals", 
           "Running",
         );
 
-        yield* Lifecycle.stopFrom(RemoteJobs);
+        yield* Lifecycle.stop(RemoteJobs);
         expect((yield* awaitTag(jobs.lifecycle.changes, "Off"))._tag).toBe(
           "Off",
         );
@@ -135,7 +135,7 @@ it("WorkPool client — startFrom / pause / resume / stop via Lifecycle duals", 
     ),
   ));
 
-it("WorkPool client — Lifecycle.start(jobs) matches startFrom(Tag)", () =>
+it("WorkPool client — Lifecycle.start(jobs) matches Lifecycle.start(Tag)", () =>
   Effect.runPromise(
     withQueueServer(
       { effect: () => Effect.void },
@@ -148,7 +148,7 @@ it("WorkPool client — Lifecycle.start(jobs) matches startFrom(Tag)", () =>
         expect((yield* awaitTag(jobs.lifecycle.changes, "Running"))._tag).toBe(
           "Running",
         );
-        yield* Lifecycle.startFrom(RemoteJobs); // idempotent
+        yield* Lifecycle.start(RemoteJobs); // idempotent
         expect((yield* jobs.lifecycle.get)._tag).toBe("Running");
       }),
       { deferStart: true },
@@ -176,7 +176,7 @@ it("WorkPool client — start from Off fails LifecycleIllegal", () =>
     ),
   ));
 
-it("Daemon client — startFrom / stopFrom (Idle → Running → Idle)", () =>
+it("Daemon client — start(Tag) / stop(Tag) (Idle → Running → Idle)", () =>
   Effect.runPromise(
     withDaemonServer(
       { effect: Effect.void },
@@ -185,11 +185,11 @@ it("Daemon client — startFrom / stopFrom (Idle → Running → Idle)", () =>
         expect((yield* awaitTag(sweeper.lifecycle.changes, "Idle"))._tag).toBe(
           "Idle",
         );
-        yield* Lifecycle.startFrom(RemoteSweeper);
+        yield* Lifecycle.start(RemoteSweeper);
         expect(
           (yield* awaitTag(sweeper.lifecycle.changes, "Running"))._tag,
         ).toBe("Running");
-        yield* Lifecycle.stopFrom(RemoteSweeper);
+        yield* Lifecycle.stop(RemoteSweeper);
         expect((yield* awaitTag(sweeper.lifecycle.changes, "Idle"))._tag).toBe(
           "Idle",
         );

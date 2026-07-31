@@ -24,8 +24,9 @@
  * ## Tools
  *
  * ```ts
+ * yield* Lifecycle.start(Jobs)       // Tag (Effect)
  * const jobs = yield* Jobs
- * yield* Lifecycle.start(jobs)
+ * yield* Lifecycle.start(jobs)       // Participating handle
  * yield* jobs.lifecycle.get
  * yield* Lifecycle.events(jobs).pipe(Hyperlink.runForEachTag({
  *   Started: () => Effect.log("up"),
@@ -161,15 +162,25 @@ export const events = <R>(
     : engine.events(self);
 
 /**
- * Start — FiberHandle.run on a Lifecycle handle, or the wire `start` on Participating
- * (re-checks Off/Draining → {@link Illegal}).
+ * Start — FiberHandle.run on a Lifecycle handle, wire `start` on Participating,
+ * or `Effect.flatMap(tag, start)` when given a Tag Effect
+ * (`yield* Lifecycle.start(Jobs)`). Re-checks Off/Draining → {@link Illegal}.
  *
  * @category combinators
  * @public
  */
-export const start = <R>(
+export function start<R>(
   self: Controllable<R>,
-): Effect.Effect<void, model.Illegal, R> => {
+): Effect.Effect<void, model.Illegal, R>;
+export function start<RR, E, R>(
+  tag: Effect.Effect<Participating<RR>, E, R>,
+): Effect.Effect<void, E | model.Illegal, R | RR>;
+export function start<RR, E, R>(
+  self: Controllable<RR> | Effect.Effect<Participating<RR>, E, R>,
+): Effect.Effect<void, E | model.Illegal, R | RR> {
+  if (Effect.isEffect(self)) {
+    return Effect.flatMap(self, (p) => start(p));
+  }
   if (isParticipating(self)) {
     return Effect.gen(function* () {
       const cur = yield* self.lifecycle.get;
@@ -180,17 +191,27 @@ export const start = <R>(
     });
   }
   return engine.start(self);
-};
+}
 
 /**
- * Pause — Latch.close on a Lifecycle handle, or wire `pause` on Participating.
+ * Pause — Latch.close on a Lifecycle handle, wire `pause` on Participating,
+ * or against a Tag Effect (`yield* Lifecycle.pause(Jobs)`).
  *
  * @category combinators
  * @public
  */
-export const pause = <R>(
+export function pause<R>(
   self: Controllable<R>,
-): Effect.Effect<void, model.Unsupported | model.Illegal, R> => {
+): Effect.Effect<void, model.Unsupported | model.Illegal, R>;
+export function pause<RR, E, R>(
+  tag: Effect.Effect<Participating<RR>, E, R>,
+): Effect.Effect<void, E | model.Unsupported | model.Illegal, R | RR>;
+export function pause<RR, E, R>(
+  self: Controllable<RR> | Effect.Effect<Participating<RR>, E, R>,
+): Effect.Effect<void, E | model.Unsupported | model.Illegal, R | RR> {
+  if (Effect.isEffect(self)) {
+    return Effect.flatMap(self, (p) => pause(p));
+  }
   if (isParticipating(self)) {
     return Effect.gen(function* () {
       if (self.pause === undefined) {
@@ -200,17 +221,27 @@ export const pause = <R>(
     });
   }
   return engine.pause(self);
-};
+}
 
 /**
- * Resume — Latch.open on a Lifecycle handle, or wire `resume` on Participating.
+ * Resume — Latch.open on a Lifecycle handle, wire `resume` on Participating,
+ * or against a Tag Effect (`yield* Lifecycle.resume(Jobs)`).
  *
  * @category combinators
  * @public
  */
-export const resume = <R>(
+export function resume<R>(
   self: Controllable<R>,
-): Effect.Effect<void, model.Unsupported | model.Illegal, R> => {
+): Effect.Effect<void, model.Unsupported | model.Illegal, R>;
+export function resume<RR, E, R>(
+  tag: Effect.Effect<Participating<RR>, E, R>,
+): Effect.Effect<void, E | model.Unsupported | model.Illegal, R | RR>;
+export function resume<RR, E, R>(
+  self: Controllable<RR> | Effect.Effect<Participating<RR>, E, R>,
+): Effect.Effect<void, E | model.Unsupported | model.Illegal, R | RR> {
+  if (Effect.isEffect(self)) {
+    return Effect.flatMap(self, (p) => resume(p));
+  }
   if (isParticipating(self)) {
     return Effect.gen(function* () {
       if (self.resume === undefined) {
@@ -220,50 +251,32 @@ export const resume = <R>(
     });
   }
   return engine.resume(self);
-};
+}
 
 /**
- * Stop — clear fibers / finalizer path on a Lifecycle handle, or wire `stop`.
+ * Stop — clear fibers / finalizer path on a Lifecycle handle, wire `stop` on
+ * Participating, or against a Tag Effect (`yield* Lifecycle.stop(Jobs)`).
  *
  * @category combinators
  * @public
  */
-export const stop = <R>(
+export function stop<R>(
   self: Controllable<R>,
-): Effect.Effect<void, never, R> => {
+): Effect.Effect<void, never, R>;
+export function stop<RR, E, R>(
+  tag: Effect.Effect<Participating<RR>, E, R>,
+): Effect.Effect<void, E, R | RR>;
+export function stop<RR, E, R>(
+  self: Controllable<RR> | Effect.Effect<Participating<RR>, E, R>,
+): Effect.Effect<void, E, R | RR> {
+  if (Effect.isEffect(self)) {
+    return Effect.flatMap(self, (p) => stop(p));
+  }
   if (isParticipating(self)) {
     return self.stop ?? Effect.die(new model.Unsupported({ role: "Stop" }));
   }
   return engine.stop(self);
-};
-
-/**
- * `Effect.flatMap(tag, start)` — `yield* Lifecycle.startFrom(Jobs)`.
- *
- * @category constructors
- * @public
- */
-export const startFrom = <RR, E, R>(
-  tag: Effect.Effect<Participating<RR>, E, R>,
-): Effect.Effect<void, E | model.Illegal, R | RR> =>
-  Effect.flatMap(tag, start);
-
-/** @category constructors @public */
-export const pauseFrom = <RR, E, R>(
-  tag: Effect.Effect<Participating<RR>, E, R>,
-): Effect.Effect<void, E | model.Unsupported | model.Illegal, R | RR> =>
-  Effect.flatMap(tag, pause);
-
-/** @category constructors @public */
-export const resumeFrom = <RR, E, R>(
-  tag: Effect.Effect<Participating<RR>, E, R>,
-): Effect.Effect<void, E | model.Unsupported | model.Illegal, R | RR> =>
-  Effect.flatMap(tag, resume);
-
-/** @category constructors @public */
-export const stopFrom = <RR, E, R>(
-  tag: Effect.Effect<Participating<RR>, E, R>,
-): Effect.Effect<void, E, R | RR> => Effect.flatMap(tag, stop);
+}
 
 // =============================================================================
 // Spec / impl sugar

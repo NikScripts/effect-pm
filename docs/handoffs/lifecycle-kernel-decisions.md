@@ -14,7 +14,7 @@ This file is the **lock register**. Do not batch-lock. Present → go → mark L
 
 One **Lifecycle** handle (compose FiberHandle/Latch) plus **Participating** duals is the SSOT for
 HyperService runtime lifecycle — badge + commands — that any HyperService adopts the same way,
-and that generic tools consume without kind switches (`Lifecycle.start(jobs)` / `startFrom(Tag)`).
+and that generic tools consume without kind switches (`Lifecycle.start(jobs)` / `start(Tag)`).
 
 ---
 
@@ -27,7 +27,7 @@ and that generic tools consume without kind switches (`Lifecycle.start(jobs)` / 
 | S3 | Spec Role stamps | `.pipe(Lifecycle.asPause)` / `asStart` / … — dual ops are `Lifecycle.pause(lc)`; preserve `Marked`/`ref` |
 | S4 | `Lifecycle.State` Schema | Wire success of Role `"State"` field |
 | S5 | No kind helpers in Lifecycle | No `fromWorkPool` / `fromDaemon` |
-| S6 | `Lifecycle` handle + Participating duals | `make` / `start(lc\|jobs)` / `startFrom(Tag)` — no projected Service bag |
+| S6 | `Lifecycle` handle + Participating duals | `make` / `start(lc\|jobs\|Tag)` — no projected Service bag / `*From` |
 | S7 | `Hyperlink.deferStart` | Layer pipe (Policy-shaped, HyperService layers only); not Tag; not Policy |
 | S8 | Daemon uses `make` | Restartable `restartable: true` → Idle |
 | S9 | WorkPool on `make` | Badge SSOT `lifecycle`; no `status.phase`; control verb `stop` |
@@ -47,7 +47,7 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 
 ### P2 — Structural capability typing — Locked (Eng’d; B amended)
 
-- **Choose:** Caps from structure — Latch present ⇒ `LifecyclePausable` (pause/resume on the type); no Latch ⇒ `LifecycleCore` (absent members). Tools use Participating duals (`start(jobs)` / `startFrom(Tag)`); no projected `Service` / `of` / `from`. `afterStop` ⇒ Idle vs Off after stop.
+- **Choose:** Caps from structure — Latch present ⇒ `LifecyclePausable` (pause/resume on the type); no Latch ⇒ `LifecycleCore` (absent members). Tools use Participating duals (`start(jobs)` / `start(Tag)`); no projected `Service` / `of` / `from`. `afterStop` ⇒ Idle vs Off after stop.
 - **Keep:** `Unsupported` when Participating members absent (e.g. pause on non-pausable).
 - **Reject:** Primary API as stringly `caps: ["Start","Stop"]` bag (sugar OK if derived from structure); projected Service bag.
 - **Blocks:** L3.
@@ -89,7 +89,7 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 
 ### P8 — Remote parity — Proposed (acceptance Eng’d; await owner Locked)
 
-- **Choose:** `Lifecycle.startFrom(clientTag)` / Participating duals identical when Tag is `Hyperlink.client`.
+- **Choose:** `Lifecycle.start(clientTag)` / Participating duals identical when Tag is `Hyperlink.client`.
 - **Reject:** Separate “lifecycle client” API; resurrecting projected `from`.
 - **Proof:** `test/lifecycle-remote-http.test.ts` — WorkPool + Daemon over http; duals + Illegal from Off.
 - **Blocks:** L6.
@@ -169,4 +169,4 @@ Full table + acceptance criteria: [plan §8](../plans/lifecycle-kernel.md#8-eng-
 | Lifecycle as served HyperService Tag | Protocol, not sibling resource |
 | Conflating Node `phase` with HyperService State | Two planes |
 | Annotation-only without Participating duals | Tools need typed start/stop on the handle |
-| Projected `Lifecycle.Service` / `of` / `from` | Lean Participating duals (`start(jobs)` / `startFrom`) |
+| Projected `Lifecycle.Service` / `of` / `from` / `*From` | Lean duals: `start(lc\|jobs\|Tag)` overloads |

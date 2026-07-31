@@ -183,7 +183,7 @@ describe("Lifecycle duals on Participating (tools)", () => {
     payload: Schema.Struct({ n: Schema.Number }),
   }) {}
 
-  it.effect("startFrom(Tag) / pause / resume on wire handle", () =>
+  it.effect("Lifecycle.start(Tag) / pause / resume on wire handle", () =>
     Effect.gen(function* () {
       const layer = WorkPool.layer(Jobs, {
         effect: () => Effect.void,
@@ -192,7 +192,7 @@ describe("Lifecycle duals on Participating (tools)", () => {
       yield* Effect.gen(function* () {
         const jobs = yield* Jobs;
         expect(yield* jobs.lifecycle.get).toEqual({ _tag: "Idle" });
-        yield* Lifecycle.startFrom(Jobs);
+        yield* Lifecycle.start(Jobs);
         expect(yield* jobs.lifecycle.get).toEqual({ _tag: "Running" });
         yield* Lifecycle.pause(jobs);
         expect(yield* jobs.lifecycle.get).toEqual({ _tag: "Paused" });
@@ -202,7 +202,7 @@ describe("Lifecycle duals on Participating (tools)", () => {
     }),
   );
 
-  it.effect("Lifecycle.start(jobs) matches startFrom(Tag)", () =>
+  it.effect("Lifecycle.start(jobs) matches Lifecycle.start(Tag)", () =>
     Effect.gen(function* () {
       const layer = WorkPool.layer(Jobs, {
         effect: () => Effect.void,
@@ -212,6 +212,7 @@ describe("Lifecycle duals on Participating (tools)", () => {
         const jobs = yield* Jobs;
         expect(yield* jobs.lifecycle.get).toEqual({ _tag: "Running" });
         yield* Lifecycle.start(jobs); // idempotent
+        yield* Lifecycle.start(Jobs);
         expect(yield* jobs.lifecycle.get).toEqual({ _tag: "Running" });
       }).pipe(Effect.provide(layer), Effect.scoped);
     }),
@@ -264,7 +265,7 @@ describe("Lifecycle duals on Participating (tools)", () => {
 describe("Hyperlink.deferStart + Daemon make", () => {
   class Sweeper extends Daemon.Tag<Sweeper>()("test/LifecycleService/Sweeper") {}
 
-  it.effect("Daemon layer — startFrom / stopFrom (Idle → Running → Idle)", () =>
+  it.effect("Daemon layer — start(Tag) / stop(Tag) (Idle → Running → Idle)", () =>
     Effect.gen(function* () {
       const layer = Daemon.layer(Sweeper, {
         effect: Effect.void,
@@ -273,9 +274,9 @@ describe("Hyperlink.deferStart + Daemon make", () => {
       yield* Effect.gen(function* () {
         const sweeper = yield* Sweeper;
         expect(yield* sweeper.lifecycle.get).toEqual({ _tag: "Idle" });
-        yield* Lifecycle.startFrom(Sweeper);
+        yield* Lifecycle.start(Sweeper);
         expect(yield* sweeper.lifecycle.get).toEqual({ _tag: "Running" });
-        yield* Lifecycle.stopFrom(Sweeper);
+        yield* Lifecycle.stop(Sweeper);
         expect(yield* sweeper.lifecycle.get).toEqual({ _tag: "Idle" });
 
         const role = yield* Lifecycle.pause(sweeper).pipe(

@@ -4,7 +4,7 @@
  * Effect-shaped Lifecycle on a WorkPool: `Hyperlink.deferStart`, Participating
  * duals (`Lifecycle.start(jobs)`), `lifecycle._tag` badge, and `stop` → Off.
  *
- * Tip surface: `Lifecycle.start` / `startFrom`, `Hyperlink.deferStart`, WorkPool `stop`.
+ * Tip surface: `Lifecycle.start(jobs|Tag)`, `Hyperlink.deferStart`, WorkPool `stop`.
  * Run: `pnpm run example:lifecycle-make-and-tools`
  *
  * Docs: `docs/examples/lifecycle/make-and-tools.md` includes this file via Twoslash;
@@ -52,8 +52,8 @@ const program = Effect.gen(function* () {
   yield* Lifecycle.resume(jobs);
   yield* assertTag(yield* jobs.lifecycle.get, "Running");
 
-  // Tag-shaped dual (same as Lifecycle.start(yield* Jobs)).
-  yield* Lifecycle.startFrom(Jobs);
+  // Tag overload (same as Lifecycle.start(jobs)).
+  yield* Lifecycle.start(Jobs);
 
   // stop awaits Off (graceful drain).
   yield* jobs.stop;
