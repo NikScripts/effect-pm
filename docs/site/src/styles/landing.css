@@ -1,8 +1,11 @@
 /**
  * Coming-soon brand lockup (WIP). Inlined on `/` so paint never depends on /assets.
  *
- * Wash on `html` (root canvas). Paint box locked to `100lvh` (full screen);
- * content stage (`.landing`) locked to `100dvh`. `overflow: hidden` throughout.
+ * Wash on `html` (root canvas). Paint box OVERSHOOTS the glass (`115lvh`,
+ * `overflow: hidden` = no user scroll) because iOS paints the document surface
+ * past `100lvh` but hard-clips fixed layers at the dvh line — so the
+ * atmosphere is `absolute` (document-anchored), never `fixed`. Gradient
+ * geometry pinned in `lvh`; content stage (`.landing`) locked to `100dvh`.
  * Opaque gradient stops (canvas, not transparent). `background-repeat: no-repeat`
  * only — never `background-size: %` (collapses the wash on iOS).
  */
@@ -72,41 +75,60 @@
    transparent fades compositing to black in the chrome/overscroll bands. */
 html {
   -webkit-text-size-adjust: 100%;
-  /* Paint box = LARGE viewport: the wash and the clip boundary must cover the
-     full screen (toolbar-collapsed height), not the dynamic 100dvh line —
-     otherwise the bottom band behind Safari's bar shows flat canvas and clips
-     the orb on a hard edge. Content stage (.landing) stays 100dvh. */
+  /* OVERSHOOT paint box (device-verified): on iOS the physical screen extends
+     past 100lvh while the toolbar is up, and only the DOCUMENT surface paints
+     down there — so the box overshoots the glass by a wide margin. overflow:
+     hidden means there is nothing to scroll; the overshoot is invisible. */
   height: 100dvh;
-  height: 100lvh;
+  /* 115lvh: covers the physical bottom (~lvh + 7lvh measured) with 2x headroom,
+     while capping the programmatic-only scroll range (gestures are blocked by
+     overflow:hidden; scripts/UA drift is bounded at ~15lvh and the region below
+     110lvh is flat canvas, so drift is non-catastrophic). */
+  height: 115lvh;
   overflow: hidden;
   background-color: var(--landing-canvas);
   /* Offset lives in the gradient `at` coords — never in background-position/size
-     (both are iOS-hostile on the root wash). */
+     (both are iOS-hostile on the root wash). Vertical geometry is pinned in lvh
+     (screen units) so the 140lvh box does not stretch the design; the % fallback
+     line covers browsers without lvh. */
   background-image:
     radial-gradient(ellipse 160% 70% at 30% -12%, var(--landing-glow), var(--landing-canvas) 72%),
     radial-gradient(ellipse 100% 55% at 100% 110%, var(--landing-bg-deep), var(--landing-canvas) 68%),
     radial-gradient(ellipse 90% 50% at 0% 110%, var(--landing-bg-deep), var(--landing-canvas) 65%);
+  background-image:
+    radial-gradient(ellipse 160% 70lvh at 30% -12lvh, var(--landing-glow), var(--landing-canvas) 72%),
+    radial-gradient(ellipse 100% 55lvh at 100% 110lvh, var(--landing-bg-deep), var(--landing-canvas) 68%),
+    radial-gradient(ellipse 90% 50lvh at 0% 110lvh, var(--landing-bg-deep), var(--landing-canvas) 65%);
   /* Stop tile seams. Do NOT set background-size — % size collapses the wash on iOS. */
   background-repeat: no-repeat;
 }
 body {
   margin: 0;
   padding: 0;
-  /* Match html: body overflow:hidden clips descendants (incl. the orb) at its
-     own box — that box must reach the full screen, not the 100dvh line. */
+  /* Match html: body overflow:hidden clips descendants (incl. the orb tail) at
+     its own box — the box must overshoot the glass, same as html. */
   height: 100dvh;
-  height: 100lvh;
+  height: 115lvh;
   overflow: hidden;
+  position: relative;
   color: var(--landing-fg);
   font-family: var(--landing-sans);
   -webkit-font-smoothing: antialiased;
   background-color: var(--landing-canvas);
 }
 
-/* Decorative orb only — base wash lives on html. */
+/* Decorative orb only — base wash lives on html.
+   ABSOLUTE, not fixed (device-verified): iOS hard-clips fixed layers at the
+   dynamic-viewport line, but document-anchored paint reaches the physical
+   bottom. Box spans one screen (100lvh); the orb tail bleeds below it into
+   the body's overshoot. Nothing scrolls, so absolute ≡ fixed visually. */
 .landing-atmosphere {
-  position: fixed;
-  inset: 0;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100dvh;
+  height: 100lvh;
   z-index: 0;
   pointer-events: none;
   background: transparent;
