@@ -21,31 +21,35 @@ referent). Options:
 | **C** | Drop `view`; derive from last path key only |
 
 Same dual-use in `groupAsRoutes`, `uiGroupRoutes`, `GroupNav`, `View` / shells.
+Also `web/DashboardShell` `view: "main" \| "logs" \| "schedule"`.
 
-### 2. Dashboard local UI unions (not `_tag` / `mode` / `kind` / `reason`)
+### 2. Presentation / domain-echo unions
 
-- `web/DashboardShell` `view: "main" \| "logs" \| "schedule"`
-- `web/debug-console` `copyState: "idle" \| "ok" \| "fail"`
 - `web/widgets` chart `source: "history" \| "trend"`, log `min` levels
-- TUI `Status` / `Priority` mirrors that may echo domain WorkPool phases
+- TUI `Status` / `Priority` mirrors that may echo WorkPool phases
 
 Recommend: rename fields to `_tag` / `mode` when they are true discriminants, then
 PascalCase — or explicitly exempt “presentation labels” in the standard.
 
-### 3. Large domain renames (public wire / schemas)
+### 3. Large domain renames (wire / Spec)
 
-Clear owned `_tag`s still lowercase/camel in core (out of UI track; high blast):
-
-- `Daemon.ScheduleMode`: `"inline" \| "reference"`
-- Hyperlink value/ref markers: `"value" \| "ref"`
+- Hyperlink value/ref markers: `"value" \| "ref"` (type-level Spec — huge blast)
 - WorkPool modes/reasons: `"drain"`, `"finishActive"`, `"dead-lettered"`, …
-Do **not** Eng without a dedicated cutover — wire compatibility / store rows may
-encode these strings.
+  (engine / store rows may persist these)
+
+Do **not** Eng without a dedicated cutover.
+
+### 4. `Route.Href` brand
+
+Tried `effect/Brand` on `urlBuilder` returns — UrlBuilder types collapsed to
+`never` in `.test-d.ts`. Reverted. Next: hand-rolled brand or Brand after proving
+UrlMethod inference, then tighten `go` / `Link` off bare `string`.
 
 ## Done this track
 
 **UI:** Router `Memory`/`History`/`Waku`; Target `kind`; path tokens; WidgetEntry;
-MemberKind `Group`/`Unknown`; TUI chrome `Normal`/`Command`.
+MemberKind `Group`/`Unknown`; TUI chrome `Normal`/`Command`; debug-console
+`Idle`/`Ok`/`Fail`.
 
 **Also Eng'd (clear owned reasons / tags):**
 
@@ -55,9 +59,5 @@ MemberKind `Group`/`Unknown`; TUI chrome `Normal`/`Command`.
 - `EffectFnMissingPayload.reason` `Missing` / `Void` / `EmptyFields`
 - `SharedRoutingError.reason` `MissingKey` / `UnknownKey`
 - `Daemon.ScheduleMode` `Inline` / `Reference`
-- TUI chrome `Normal` / `Command`; web debug-console `Idle` / `Ok` / `Fail`
 - `scripts/mark-the-surface-check` reasons `Missing` / `Both` (`public`/`internal`
   kept — they name the JSDoc tags)
-
-**Still parked:** Hyperlink `"value"`/`"ref"`; WorkPool drain modes & kebab
-reasons; `Target.view` path dual-use; `Route.Href` brand (inference).
