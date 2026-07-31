@@ -9,7 +9,7 @@ Two **layers** install the same service — memory/history (lite) or Waku (full)
 ```tsx
 import * as Route from "hyperlink-ts/ui/Route"
 import * as Router from "hyperlink-ts/ui/Router" // lite layer
-// Waku layer: import * as Router from "hyperlink-ts/ui/Router/waku"
+// Waku layer: import { waku, Provider, Link } from "hyperlink-ts/ui/Router/waku"
 
 const site = Route.make("site").add(
   Route.get("home", "/").pipe(Route.handle(() => <Home />)),
@@ -20,7 +20,7 @@ const site = Route.make("site").add(
 )
 
 const router = Router.make(site, "History") // lite
-// Waku: const router = Router.waku(site)
+// Waku: const binding = waku(site)
 
 <Router.Provider value={router}>
   <Router.Link to={(u) => u.home()}>Home</Router.Link>
@@ -34,8 +34,8 @@ const router = Router.make(site, "History") // lite
 | Piece | Import | Job |
 |-------|--------|-----|
 | Catalog | `hyperlink-ts/ui/Route` | Paths, groups, `handle`, `urlBuilder` |
-| Lite layer | `hyperlink-ts/ui/Router` | `make` / `memory` / `history` — `_tag` `"Memory"` / `"History"`; no `waku` peer |
-| Waku layer | `hyperlink-ts/ui/Router/waku` | `waku` / unified `Provider` — live `_tag` `"Waku"`; same `Service` |
+| Lite layer | `hyperlink-ts/ui/Router` | `make` / `memory` / `history` / `Outlet` — `_tag` `"Memory"` / `"History"`; no `waku` peer |
+| Waku layer | `hyperlink-ts/ui/Router/waku` | **layer only** — `waku` / `Provider` / `Link` / `useRouter` (not a Router mirror) |
 | GroupNav | `hyperlink-ts/ui/GroupNav` | Group tree open/up/health **on top of** Router |
 | Dashboard | `hyperlink-ts/web` / `tui` | Shell built **on** Router + GroupNav — not inside them |
 
@@ -61,10 +61,12 @@ import * as Router from "hyperlink-ts/ui/Router"
 const router = Router.make(site, "History")
 // or Router.history(site) / Router.memory(site)
 
-// Waku layer — adapts Waku into the same Service
-import * as Router from "hyperlink-ts/ui/Router/waku"
-const binding = Router.waku(site) // === Router.layer.waku(site)
-<Router.Provider value={binding}>…</Router.Provider>
+// Waku layer — same Service; entry exports the layer + adapters only
+import { waku, Provider, Link } from "hyperlink-ts/ui/Router/waku"
+const binding = waku(site) // === layer.waku(site)
+<Provider value={binding}>
+  <Link to={(u) => u.home()}>Home</Link>
+</Provider>
 ```
 
 Dashboard and chrome call the same `to` / `Link` / `GroupNav` APIs on whichever

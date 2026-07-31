@@ -1,13 +1,18 @@
 /**
  * @module ui/Router (docs site)
  *
- * Skin over the **one** Router service with the Waku layer
- * (`hyperlink-ts/ui/Router/waku`): site catalog + branded `urls`,
- * `setDefault` (no layout Provider), no-op {@link Outlet} for file routes.
+ * Skin: branded `urls` + Waku **layer** (`hyperlink-ts/ui/Router/waku`) +
+ * `setDefault` (no layout Provider) + no-op {@link Outlet} for file routes.
+ * Lite Memory/History stay on `hyperlink-ts/ui/Router` — this skin only wires
+ * the Waku layer.
+ *
+ * RSC note: pass **string** `to` values into {@link Link} from Server Components
+ * (`urls.docs("routing")`). Function builders are client-only.
  */
 "use client";
 
-import * as Router from "hyperlink-ts/ui/Router/waku";
+import type { Service as RouterService } from "hyperlink-ts/ui/Router";
+import * as Waku from "hyperlink-ts/ui/Router/waku";
 import {
   site as defaultSite,
   urls as defaultUrls,
@@ -16,14 +21,14 @@ import {
 } from "../lib/siteRoutes.js";
 
 export type { Urls, Site };
-export type Service = Router.Service<Site>;
-export type LiveRouter = Router.LiveRouter<Site>;
+export type Service = RouterService<Site>;
+export type LiveRouter = Service;
 
 /** Waku layer binding for the docs catalog (branded {@link Urls} skin). */
 export const waku = (
   api: Site = defaultSite,
   skin: Urls = defaultUrls,
-): Router.WakuBinding<Site, Urls> => Router.waku(api, skin);
+): Waku.WakuBinding<Site, Urls> => Waku.waku(api, skin);
 
 /**
  * @deprecated Site-skin alias for {@link waku} only — **not** package
@@ -31,16 +36,17 @@ export const waku = (
  */
 export const make = waku;
 
-/** Default Waku binding (+ {@link Router.setDefault}). */
+/** Default Waku binding (+ {@link Waku.setDefault}). */
 export const docs = waku();
-Router.setDefault(docs);
+Waku.setDefault(docs);
 
-export const Provider = Router.Provider;
-export const useRouter = Router.useRouter as () => LiveRouter;
-export const useHasRouter = Router.useHasRouter;
-export const useMatch = Router.useMatch;
-export const Link = Router.Link;
-export const layer = Router.layer;
+export const Provider = Waku.Provider;
+export const useRouter = Waku.useRouter as () => LiveRouter;
+export const useHasRouter = Waku.useHasRouter;
+export const useMatch = Waku.useMatch;
+export const Link = Waku.Link;
+/** Waku layer only (`layer.waku`). */
+export const layer = Waku.layer;
 
 /** No-op — document bodies are Waku file routes (Twoslash SSG/SSR). */
 export const Outlet = (): null => null;

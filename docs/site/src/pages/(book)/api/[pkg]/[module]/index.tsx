@@ -33,7 +33,7 @@ export default async function ApiModulePage({ pkg, module }: { pkg: string; modu
       />
       <article className="prose">
         <p className="api-back">
-          <Router.Link to={(u) => u.api.pkg(pkg)}>← {m.package}</Router.Link>
+          <Router.Link to={urls.api.pkg(pkg)}>← {m.package}</Router.Link>
         </p>
         <h1 className="api-ns-title">
           {m.entry}

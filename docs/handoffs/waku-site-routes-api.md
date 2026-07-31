@@ -43,20 +43,17 @@ urls.search({ query: { q: "WorkPool" } })
 
 ## Use (Waku layer + site skin)
 
-Package Waku layer: `hyperlink-ts/ui/Router/waku` (same `Service` as lite). Site
-`docs/site/src/ui/Router.tsx` is a thin skin — branded `urls`, `setDefault(docs)`
-so chrome works without a layout Provider, no-op `Outlet` for file-route bodies.
+Package Waku **layer** (`hyperlink-ts/ui/Router/waku`) — binding + adapters only,
+not a mirror of `ui/Router`. Site `docs/site/src/ui/Router.tsx` is a thin skin —
+branded `urls`, `setDefault(docs)`, no-op `Outlet` for file-route bodies.
 
 ```tsx
-import * as Router from "../ui/Router" // site skin → package Router/waku
+import * as Router from "../ui/Router" // site skin → Waku layer
 
 const binding = Router.waku(site) // preferred; site `make` is a deprecated alias
 
-<Router.Link to={(u) => u.home()}>Home</Router.Link>
-<Router.Link to={(u) => u.docs("work-pools")}>Work pools</Router.Link>
-<Router.Link to={(u) => u.api.symbol("effect", "Effect.succeed")}>
-  Effect.succeed
-</Router.Link>
+<Router.Link to={urls.home()}>Home</Router.Link>
+<Router.Link to={urls.docs("work-pools")}>Work pools</Router.Link>
 
 const r = Router.useRouter()
 void r.to((u) => u.search({ query: { q: "WorkPool" } }))
@@ -70,7 +67,7 @@ void r.to((u) => u.search({ query: { q: "WorkPool" } }))
 | `catalog` | SSOT path strings |
 | `Route.make(site)` | Typed catalog from `catalog.*` |
 | `Route.urlBuilder` + sugar | Positional href builders (`urls`) |
-| `hyperlink-ts/ui/Router/waku` | Waku layer — `Router.waku` / same Service / Link / to / go |
+| `hyperlink-ts/ui/Router/waku` | Waku layer — `waku` / `Provider` / `Link` / `useRouter` |
 | Site `ui/Router.tsx` | Skin: default binding + no-op Outlet |
 | Chrome + API + search | In-app hrefs use `Router.Link` / `urls.*` |
 | Nav + chapter links | `hrefFor` / `resolveBookHref` / `docs/nav.ts` via `urls` |

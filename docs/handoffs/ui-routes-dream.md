@@ -76,9 +76,9 @@ Same typed contract (`Route` catalog, `urls`, `Link` / `to` / `go` / `Outlet`).
 | Layer | Entry | Install |
 |-------|-------|---------|
 | **Lite** | `hyperlink-ts/ui/Router` | `Router.make(api, "Memory"\|"History")` — no `waku` peer |
-| **Waku** | `hyperlink-ts/ui/Router/waku` | `Router.waku(api)` / `Router.layer.waku` → same `Service` via unified `Provider` |
+| **Waku** | `hyperlink-ts/ui/Router/waku` | Layer only: `waku` / `layer.waku` + `Provider` / `Link` / `useRouter` — **not** a Router namespace mirror |
 
-Not two routers — one `Service`, Waku adapted in. Companion entry only so lite never pulls optional `waku`. Dashboard uses `GroupNav` on **either** layer — not built into Router. Docs site skins the Waku entry (`setDefault` + no-op Outlet for file routes). Lite `make` is **not** re-exported from `Router/waku`.
+Not two routers — one `Service`, Waku adapted in. Companion entry only so lite never pulls optional `waku`. Dashboard uses `GroupNav` on **either** layer — not built into Router. Docs site skins the Waku layer (`setDefault` + no-op Outlet for file routes).
 
 ## Discriminants (landed)
 

@@ -64,6 +64,13 @@ export type CatalogWakuPath =
   | ToWaku<(typeof catalog)[TopId]>
   | ToWaku<(typeof catalog.api)[ApiId]>;
 
+/** Runtime `:param` / `*param` → `[param]`. */
+export const toWaku = (path: string): string =>
+  path
+    .replace(/:(\w+)\?/g, "[$1]")
+    .replace(/:(\w+)/g, "[$1]")
+    .replace(/\/\*(\w+)/g, "/[$1]");
+
 /** Flat list for tooling / docs (derived from {@link catalog}). */
 export const destinations: ReadonlyArray<{
   readonly id: string;
@@ -83,13 +90,6 @@ export const destinations: ReadonlyArray<{
     waku: toWaku(catalog.api[id]),
   })),
 ];
-
-/** Runtime `:param` / `*param` → `[param]`. */
-export const toWaku = (path: string): string =>
-  path
-    .replace(/:(\w+)\?/g, "[$1]")
-    .replace(/:(\w+)/g, "[$1]")
-    .replace(/\/\*(\w+)/g, "/[$1]");
 
 /** Waku `Page.path` union from `pages.gen` module augmentation. */
 export type WakuFilePath = CreatePagesConfig extends { pages: infer P }
