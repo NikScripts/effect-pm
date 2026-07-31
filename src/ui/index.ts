@@ -30,10 +30,12 @@ export * as View from "./View";
 /** UI routing toolkit — HttpApi-shaped make/group/get/match/urlBuilder. */
 export * as Route from "./Route";
 /**
- * Runtime navigation over a Route catalog (`memory` / `history`); Group dashboards
- * pass a Group and get short-name `open` / `up` / `path` helpers too.
+ * Lite runtime navigation over a Route catalog (`make` / `memory` / `history`).
+ * Full Waku edition: `import * as Router from "hyperlink-ts/ui/Router/waku"`.
  */
 export * as Router from "./Router";
+/** Group-tree state and navigation bound to a core Router (either edition). */
+export * as GroupNav from "./GroupNav";
 /** Shared Group card View handle + contribution Layer (no platform TSX). */
 export * as GroupView from "./GroupView";
 /** Shared WorkPool View handles + observe pack (no platform TSX). */

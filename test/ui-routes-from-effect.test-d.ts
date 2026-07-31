@@ -31,7 +31,7 @@ expectTypeOf(
 // @ts-expect-error nodeHealth path param required
 urls.nodeHealth();
 
-const router = Router.make(site, "memory");
+const router = Router.make(site, "Memory");
 router.to((u) => u.Nwsl.HttpApi());
 router.to((u) => u.nodeHealth("x"));
 expectTypeOf(router.urls.Nwsl.HttpApi()).toEqualTypeOf<string>();

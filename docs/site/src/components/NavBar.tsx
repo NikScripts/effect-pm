@@ -12,10 +12,10 @@
 
 import * as React from "react";
 import type { NavGroup } from "../lib/docs-content.js";
-import * as Router from "../ui/Router.js";
 import { GroupedNav } from "./GroupedNav.js";
 import { SearchPanel, type SearchPanelControl } from "../islands/SearchPanel.js";
 import { SearchModal } from "../islands/SearchModal.js";
+import * as Router from "../ui/Router.js";
 
 const MENU_ID = "menu-toggle";
 

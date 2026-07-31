@@ -7,13 +7,12 @@
  * Twoslash SSOT; this catalog is the typed nav SSOT.
  *
  * ```ts
- * import { site, urls } from "./siteRoutes"
+ * import { urls } from "./siteRoutes"
  * import * as Router from "../ui/Router"
  *
- * const router = Router.make(site)
- * router.urls.docs("work-pools")
- * router.urls.api.symbol("effect", "Effect.succeed")
- * router.urls.search({ query: { q: "WorkPool" } })
+ * urls.docs("work-pools")
+ * urls.api.symbol("effect", "Effect.succeed")
+ * // soft-nav (Waku): <Router.Link to={(u) => u.docs("work-pools")}>…
  * ```
  */
 import * as Route from "hyperlink-ts/ui/Route";

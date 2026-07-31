@@ -57,9 +57,7 @@ export async function ApiSymbolPage({
       />
       <article className="prose">
         <p className="api-back">
-          <Router.Link to={(u) => u.api.module(pkg, module)}>
-            ← {s.entry}
-          </Router.Link>
+          <Router.Link to={(u) => u.api.module(pkg, module)}>← {s.entry}</Router.Link>
         </p>
         <ApiSymbolCard s={s} fileText={fileText} sourceHtml={sourceHtml} />
         {refs.length > 0 ? (
@@ -69,11 +67,7 @@ export async function ApiSymbolPage({
             </div>
             <div className="api-chips">
               {refs.slice(0, MAX_REFS).map((url) => (
-                <Router.Link
-                  className="api-chip api-chip-ref"
-                  to={url}
-                  key={url}
-                >
+                <Router.Link className="api-chip api-chip-ref" to={url} key={url}>
                   {refLabel(url, pkg)}
                 </Router.Link>
               ))}

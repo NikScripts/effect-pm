@@ -21,6 +21,7 @@
  *       Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub)),
  *     ),
  *   ),
+ *   group: ServicesHub,
  * })
  * ```
  */

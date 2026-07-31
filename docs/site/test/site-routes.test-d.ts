@@ -17,9 +17,11 @@ import {
 } from "../src/lib/siteRoutes";
 import * as Router from "../src/ui/Router";
 
-const router = Router.make(site);
-expectTypeOf(router.mode).toEqualTypeOf<"waku">();
-expectTypeOf(router.urls.home).toEqualTypeOf(urls.home);
+const binding = Router.waku(site);
+expectTypeOf(binding._tag).toEqualTypeOf<"WakuBinding">();
+expectTypeOf(binding.urls.home).toEqualTypeOf(urls.home);
+// @ts-expect-error site skin WakuBinding has no mode field
+binding.mode;
 
 expectTypeOf(urls.home()).toEqualTypeOf<"/">();
 expectTypeOf(urls.docs("work-pools")).toEqualTypeOf<`/docs/${string}`>();

@@ -94,7 +94,7 @@ export const DebugConsole = (): React.ReactElement | null => {
   patchConsole();
   const [open, setOpen] = React.useState(false);
   const [enabled, setEnabled] = React.useState(() => debugEnabled());
-  const [copyState, setCopyState] = React.useState<"idle" | "ok" | "fail">("idle");
+  const [copyState, setCopyState] = React.useState<"Idle" | "Ok" | "Fail">("Idle");
   const all = useLines();
   // Copy the whole log (no devtools on mobile) — `[clock] [level] text` per line. The async clipboard
   // API is absent over a non-secure origin (http on a LAN/Tailscale IP), so fall back to a hidden
@@ -127,8 +127,8 @@ export const DebugConsole = (): React.ReactElement | null => {
         ok = false;
       }
     }
-    setCopyState(ok ? "ok" : "fail");
-    setTimeout(() => setCopyState("idle"), 1500);
+    setCopyState(ok ? "Ok" : "Fail");
+    setTimeout(() => setCopyState("Idle"), 1500);
   };
   // fully turn debug off: clear the persisted flag AND the ?debug URL param, then hide
   const disable = (): void => {
@@ -165,14 +165,14 @@ export const DebugConsole = (): React.ReactElement | null => {
             <strong className="flex-1">debug console · {all.length}</strong>
             <button
               type="button"
-              aria-label={copyState === "ok" ? "copied" : copyState === "fail" ? "copy failed" : "copy log"}
-              title={copyState === "fail" ? "copy failed" : "copy"}
+              aria-label={copyState === "Ok" ? "copied" : copyState === "Fail" ? "copy failed" : "copy log"}
+              title={copyState === "Fail" ? "copy failed" : "copy"}
               onClick={() => void copy()}
               className="rounded border p-1"
             >
-              {copyState === "ok" ? (
+              {copyState === "Ok" ? (
                 <Check size={14} className="text-green-500" />
-              ) : copyState === "fail" ? (
+              ) : copyState === "Fail" ? (
                 <X size={14} className="text-red-500" />
               ) : (
                 <Copy size={14} />

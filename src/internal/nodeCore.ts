@@ -964,11 +964,11 @@ export class ListenTagNodeRequired extends Data.TaggedError(
   "ListenTagNodeRequired",
 )<{
   readonly tag: string;
-  readonly reason: "missing" | "ambiguous";
+  readonly reason: "Missing" | "Ambiguous";
   readonly count: number;
 }> {
   override get message() {
-    if (this.reason === "ambiguous") {
+    if (this.reason === "Ambiguous") {
       return (
         `Tag+impl listen for "${this.tag}" saw ${String(this.count)} Nodes — ` +
         `use Node.unix/http/ws(node, [Hyperlink.serve(${this.tag}, impl)]) to pick one.`

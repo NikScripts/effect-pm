@@ -101,15 +101,15 @@ export const tagKeyOf = (tag: Hyperlink.PipeableTag): string => {
  */
 export type ResolvedTagListenTarget =
   | {
-      readonly _tag: "node";
+      readonly _tag: "Node";
       readonly node: AnyNode;
       readonly addressArg: unknown;
     }
-  | { readonly _tag: "nameless"; readonly addressArg: unknown }
+  | { readonly _tag: "Nameless"; readonly addressArg: unknown }
   | {
-      readonly _tag: "tagNodeError";
+      readonly _tag: "TagNodeError";
       readonly tag: string;
-      readonly reason: "missing" | "ambiguous";
+      readonly reason: "Missing" | "Ambiguous";
       readonly count: number;
     };
 
@@ -118,7 +118,7 @@ export const resolveTagListenTarget = (
   third: unknown,
 ): ResolvedTagListenTarget => {
   if (isAnyNodeArg(third)) {
-    return { _tag: "node", node: third, addressArg: undefined };
+    return { _tag: "Node", node: third, addressArg: undefined };
   }
   const bound = Hyperlink.nodeOf(tag);
   const fleet = Hyperlink.nodesOf(
@@ -126,20 +126,20 @@ export const resolveTagListenTarget = (
   );
   if (bound !== undefined) {
     return {
-      _tag: "node",
+      _tag: "Node",
       node: bound as AnyNode,
       addressArg: third,
     };
   }
   if (fleet.length > 1) {
     return {
-      _tag: "tagNodeError",
+      _tag: "TagNodeError",
       tag: tagKeyOf(tag),
-      reason: "ambiguous",
+      reason: "Ambiguous",
       count: fleet.length,
     };
   }
-  return { _tag: "nameless", addressArg: third };
+  return { _tag: "Nameless", addressArg: third };
 };
 
 /** One-serve list from Tag+impl (erased serve for listen dispatch). @internal */
@@ -206,7 +206,7 @@ export const failUseProtocol = (
 /** A Layer that fails with a tag-node resolution error (missing / ambiguous bound node). @internal */
 export const failListenTagNode = (fields: {
   readonly tag: string;
-  readonly reason: "missing" | "ambiguous";
+  readonly reason: "Missing" | "Ambiguous";
   readonly count: number;
 }): Layer.Layer<never, ListenTagNodeRequired> =>
   failLayer(new ListenTagNodeRequired(fields));

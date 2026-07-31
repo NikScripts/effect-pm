@@ -4,14 +4,15 @@
  * Public **node status** chrome for the web dashboard — die, health board, node detail.
  *
  * Batteries {@link ./DashboardShell} uses **Router pages** (`/health`, `/health/<nodeId>`
- * via `Router.openHealth` / `.openNode`). {@link NodeStatusHost} remains for overlay embeds
+ * via `GroupNav.openHealth` / `.openNode`). {@link NodeStatusHost} remains for overlay embeds
  * without a Router.
  *
  * @example
  * ```tsx
  * // Batteries path (URL-backed):
- * nav.openHealth()
- * nav.openNode(node.id)
+ * const groupNav = GroupNav.use(ServicesHub)
+ * groupNav.openHealth()
+ * groupNav.openNode(node.id)
  *
  * // Overlay embed (no Router):
  * <NodeStatusHost group={ServicesHub}>

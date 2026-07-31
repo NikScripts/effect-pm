@@ -1,6 +1,7 @@
-# Docs site — `Route.make` + `Router.make` on Waku
+# Docs site — `Route.make` + Waku layer (`Router.waku`)
 
-Typed API is the usual hyperlink dream shape. Waku is the engine.
+Typed API is the usual hyperlink dream shape. Waku is the engine via
+`hyperlink-ts/ui/Router/waku` — **not** lite `Router.make` (Memory/History).
 
 ## SSOT
 
@@ -40,21 +41,26 @@ urls.api.symbol("effect", "Effect.succeed") // overload
 urls.search({ query: { q: "WorkPool" } })
 ```
 
-## Use (`Router.tsx` — aliased as `hyperlink-ts/ui/Router`)
+## Use (Waku layer + site skin)
+
+Package Waku layer: `hyperlink-ts/ui/Router/waku` (same `Service` as lite). Site
+`docs/site/src/ui/Router.tsx` is a thin skin — branded `urls`, `setDefault(docs)`
+so chrome works without a layout Provider, no-op `Outlet` for file-route bodies.
 
 ```tsx
-const router = Router.make(site)
+import * as Router from "../ui/Router" // site skin → package Router/waku
 
-<Router.Provider value={router}>
-  <Router.Link to={(u) => u.home()}>Home</Router.Link>
-  <Router.Link to={(u) => u.docs("work-pools")}>Work pools</Router.Link>
-  <Router.Link to={(u) => u.api.symbol("effect", "Effect.succeed")}>
-    Effect.succeed
-  </Router.Link>
-</Router.Provider>
+const binding = Router.waku(site) // preferred; site `make` is a deprecated alias
+
+<Router.Link to={(u) => u.home()}>Home</Router.Link>
+<Router.Link to={(u) => u.docs("work-pools")}>Work pools</Router.Link>
+<Router.Link to={(u) => u.api.symbol("effect", "Effect.succeed")}>
+  Effect.succeed
+</Router.Link>
 
 const r = Router.useRouter()
-void r.to((u) => u.api.symbol("hyperlink-ts", "WorkPool", "Tag"))
+void r.to((u) => u.search({ query: { q: "WorkPool" } }))
+// live service: r._tag === "Waku"
 ```
 
 ## Layers
@@ -64,8 +70,8 @@ void r.to((u) => u.api.symbol("hyperlink-ts", "WorkPool", "Tag"))
 | `catalog` | SSOT path strings |
 | `Route.make(site)` | Typed catalog from `catalog.*` |
 | `Route.urlBuilder` + sugar | Positional href builders (`urls`) |
-| `Router.make` / `Link` / `to` | Vision nav API → Waku `Link`/`push` |
-| Chrome + API + search | In-app hrefs use `Router.Link` / `urls.*` (not raw `/api/…` strings) |
-| Nav + chapter links | `hrefFor` / `resolveBookHref` / `docs/nav.ts` hrefs go through `urls` |
+| `hyperlink-ts/ui/Router/waku` | Waku layer — `Router.waku` / same Service / Link / to / go |
+| Site `ui/Router.tsx` | Skin: default binding + no-op Outlet |
+| Chrome + API + search | In-app hrefs use `Router.Link` / `urls.*` |
+| Nav + chapter links | `hrefFor` / `resolveBookHref` / `docs/nav.ts` via `urls` |
 | `src/pages/` | Real match + RSC/SSG/SSR bodies |
-| `Router.Outlet` | No-op (bodies are file routes) |

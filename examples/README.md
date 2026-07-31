@@ -42,7 +42,7 @@ Living book: [docs/index.md](../docs/index.md) · [API Reference](https://hyperl
 | **Observe** | `observe-pack-demo` → `observe-recipes` → `observe-work-pool-pack` / daemon / gate packs · guide [Observe](../docs/guides/observe.md) |
 | **Scenarios** | `scenarios/multi-protocol-dual-serve` → `schedule-sync-from-db` → `serve-per-deps` → NWSL |
 | **Apps** | `pnpm run example:apps-tui` · `example:apps-web` (+ `example:apps-web-server`) · `example:apps-dashboard` · `example:apps-cli` · `example:apps-router-docs` |
-| **UI Router** | [`ui/router-mini-docs.ts`](./ui/router-mini-docs.ts) → [hub § UI](../docs/examples.md#ui) · browser `example:apps-router-docs` |
+| **UI Router** | [`ui/router-mini-docs.ts`](./ui/router-mini-docs.ts) + [`ui/group-nav.ts`](./ui/group-nav.ts) → [hub § UI](../docs/examples.md#ui) · `example:ui-group-nav` · browser `example:apps-router-docs` |
 
 ---
 

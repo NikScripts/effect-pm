@@ -48,7 +48,6 @@ import {
 } from "../ui/data";
 import { dateFromMillis, fmtClock, fmtDayLabel, millisFromLocalInput, now, startOfDayMillis, toLocalInput } from "../ui/now";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
-import * as Router from "../ui/Router";
 import * as View from "../ui/View";
 import { kindOf as hyperlinkKindOf, kind as hyperlinkKind } from "../Hyperlink";
 import type { NodeReport } from "../FleetHealth";
@@ -398,14 +397,10 @@ export const GroupCard = (props: {
   readonly node: GroupNode;
   /** Display name — the member key under which the parent group holds this subgroup. */
   readonly name: string;
-  /**
-   * Optional — prefer {@link Router} (`useRouter().open`). Kept for shells that
-   * have not mounted a Router Provider yet.
-   */
+  /** Open through the owning shell's Group navigation. */
   readonly onOpen?: (g: GroupNode) => void;
 }): React.ReactElement => {
   const vt = useViewTransitionStyle(`grp-${props.node.key}`);
-  const nav = Router.useRouterOption();
   const members = Object.values(Group.members(props.node));
   const leaves = queueLeaves(props.node).slice(0, 4);
   const subs = members.filter((m): m is GroupNode => Group.isGroup(m));
@@ -428,13 +423,7 @@ export const GroupCard = (props: {
     });
   }, []);
   const degraded = nodes.reduce((sum, node) => sum + (counts.get(node.id) ?? 0), 0);
-  const open = (): void => {
-    if (nav !== null) {
-      nav.open(props.node);
-      return;
-    }
-    props.onOpen?.(props.node);
-  };
+  const open = (): void => props.onOpen?.(props.node);
   return (
     <button
       type="button"
@@ -483,7 +472,6 @@ export const Cell = (props: {
   readonly onOpenGroup: (g: GroupNode) => void;
 }): React.ReactElement => {
   const registry = useWidgets();
-  const nav = Router.useRouterOption();
   const isGroup = Group.isGroup(props.member);
   const leaf = isLeafTag(props.member) ? props.member : null;
   const viewTag = isGroup ? props.member : leaf;
@@ -496,10 +484,6 @@ export const Cell = (props: {
         type="button"
         className="contents text-left"
         onClick={() => {
-          if (nav !== null) {
-            nav.open(viewTag);
-            return;
-          }
           if (isGroup) props.onOpenGroup(props.member);
           else if (leaf !== null) props.onOpenLeaf(leaf);
         }}
@@ -597,9 +581,9 @@ export const QueueStats = (props: { readonly bundle: QueueBundle }): React.React
 };
 
 const METRICS = {
-  throughput: { label: "throughput /s", color: "#22c55e", source: "history" as const },
-  latency: { label: "latency (s)", color: "#eab308", source: "history" as const },
-  pending: { label: "pending", color: "#3b82f6", source: "trend" as const },
+  throughput: { label: "throughput /s", color: "#22c55e", source: "History" as const },
+  latency: { label: "latency (s)", color: "#eab308", source: "History" as const },
+  pending: { label: "pending", color: "#3b82f6", source: "Trend" as const },
 };
 type MetricKey = keyof typeof METRICS;
 
@@ -654,7 +638,7 @@ export const MetricChart = (props: {
   const win = windows.find((w) => w.ms === windowMs) ?? windows[windows.length - 1] ?? WINDOWS[0];
   const cutoff = win.ms === ALL_MS ? Number.NEGATIVE_INFINITY : now() - win.ms;
   const data =
-    def.source === "trend"
+    def.source === "Trend"
       ? trend.map((v, i) => ({ i, value: v }))
       : history
           .filter((p) => p.t >= cutoff)
@@ -673,7 +657,7 @@ export const MetricChart = (props: {
             </option>
           ))}
         </select>
-        {def.source === "history" ? (
+        {def.source === "History" ? (
           // Compact time-window control: tap to cycle through the windows the data reaches.
           // Cheaper on width than a second dropdown, which matters on a phone.
           <button
@@ -909,7 +893,7 @@ export const QueueControls = (props: { readonly bundle: QueueBundle }): React.Re
 /** Effect log levels, low→high — for the min-level filter. Unknown levels rank as `info`. */
 const LEVEL_RANK: Record<string, number> = { trace: 0, debug: 1, info: 2, warn: 3, warning: 3, error: 4, fatal: 5 };
 const levelRank = (level: string): number => LEVEL_RANK[level.toLowerCase()] ?? 2;
-const MIN_LEVELS = ["all", "info", "warn", "error"] as const;
+const MIN_LEVELS = ["All", "info", "warn", "error"] as const;
 
 export const LogStream = (props: {
   readonly bundle: { readonly logs: QueueBundle["logs"] };
@@ -920,13 +904,13 @@ export const LogStream = (props: {
   const all: ReadonlyArray<LogLine> = AsyncResult.isSuccess(r) ? r.value : [];
   // client-side filter: substring match on the message + a minimum level
   const [query, setQuery] = React.useState("");
-  const [min, setMin] = React.useState<(typeof MIN_LEVELS)[number]>("all");
+  const [min, setMin] = React.useState<(typeof MIN_LEVELS)[number]>("All");
   const needle = query.trim().toLowerCase();
-  const floor = min === "all" ? 0 : levelRank(min);
+  const floor = min === "All" ? 0 : levelRank(min);
   const logs = all.filter(
     (l) => levelRank(l.level) >= floor && (needle === "" || l.message.toLowerCase().includes(needle)),
   );
-  const filtered = needle !== "" || min !== "all";
+  const filtered = needle !== "" || min !== "All";
   const ref = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
     const el = ref.current;
@@ -948,7 +932,7 @@ export const LogStream = (props: {
           aria-label="minimum log level"
         >
           {MIN_LEVELS.map((lvl) => (
-            <option key={lvl} value={lvl}>{lvl === "all" ? "all levels" : `${lvl}+`}</option>
+            <option key={lvl} value={lvl}>{lvl === "All" ? "all levels" : `${lvl}+`}</option>
           ))}
         </select>
         {filtered ? (

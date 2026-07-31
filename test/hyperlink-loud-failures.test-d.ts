@@ -24,12 +24,12 @@ const identitySelf = new IdentitySelfRequired({ tag: "app/Mail" });
 const identityMulti = new IdentityMultiNode({ tag: "app/Mail", nodeCount: 2 });
 const lookupMissing = new LookupClientError({
   tag: "app/Worker",
-  reason: "missing",
+  reason: "Missing",
   count: 0,
 });
 const lookupAmbiguous = new LookupClientError({
   tag: "app/Worker",
-  reason: "ambiguous",
+  reason: "Ambiguous",
   count: 3,
 });
 
@@ -48,7 +48,7 @@ void (identitySelf.tag satisfies string);
 void (identityMulti.tag satisfies string);
 void (identityMulti.nodeCount satisfies number);
 void (lookupMissing.tag satisfies string);
-void (lookupMissing.reason satisfies "missing" | "ambiguous");
+void (lookupMissing.reason satisfies "Missing" | "Ambiguous");
 void (lookupMissing.count satisfies number);
 
 // Constructor arg shapes — forbid silent field renames / drops.
@@ -56,7 +56,7 @@ new MissingClientProtocol({ serviceKey: "x" });
 new ProtocolMismatch({ serviceKey: "x", method: "y", cause: "z" });
 new IdentitySelfRequired({ tag: "x" });
 new IdentityMultiNode({ tag: "x", nodeCount: 2 });
-new LookupClientError({ tag: "x", reason: "missing", count: 0 });
+new LookupClientError({ tag: "x", reason: "Missing", count: 0 });
 
 // @ts-expect-error - serviceKey is required
 new MissingClientProtocol({});

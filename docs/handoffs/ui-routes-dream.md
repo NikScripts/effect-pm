@@ -15,7 +15,7 @@ const site = Route.make("site").add(
   ),
 )
 
-const router = Router.make(site, "history")
+const router = Router.make(site, "History")
 
 <Router.Provider value={router}>
   <Router.Link to={(u) => u.home()}>Home</Router.Link>
@@ -61,23 +61,46 @@ Query is UI navigation only (no HTTP body).
 | `Route.group` / `topLevel` | Nest / flatten URL builders |
 | `Route.addHttpApi` | Reuse Effect HttpApi paths |
 | `Group.asRoutes` + `fromEffect` | Generate destinations from a Group tree — **typed** UrlBuilder (`urls.Nwsl.HttpApi()`, `urls.nodeHealth(id)`) |
-| `Route.Target` / `DashboardRoot` | Dashboard metadata (`selected` / `view`) — optional |
+| `Route.Target` / `GroupNav` | Optional Group dashboard state and URL helpers over a core Router |
 
-Group dashboards may still use Target + View skins in `DashboardShell`; ordinary apps use `handle` + `Outlet`.
+Group dashboards use `GroupNav.use(root)` with Target + View skins in `DashboardShell`; ordinary apps use `handle` + `Outlet`.
 
 ## Docs site
 
 Same API. Waku file routes are **render SSOT**; `siteRoutes.catalog` is the typed nav SSOT (paths once; Waku templates derived) and is exhaustively checked against `pages.gen`. `Router.Outlet` is a no-op there. Skin adds `urls.api.symbol("effect", "Effect.succeed")` overload. See [`waku-site-routes-api.md`](./waku-site-routes-api.md).
 
+## One service, two layers
+
+Same typed contract (`Route` catalog, `urls`, `Link` / `to` / `go` / `Outlet`).
+
+| Layer | Entry | Install |
+|-------|-------|---------|
+| **Lite** | `hyperlink-ts/ui/Router` | `Router.make(api, "Memory"\|"History")` — no `waku` peer |
+| **Waku** | `hyperlink-ts/ui/Router/waku` | `Router.waku(api)` / `Router.layer.waku` → same `Service` via unified `Provider` |
+
+Not two routers — one `Service`, Waku adapted in. Companion entry only so lite never pulls optional `waku`. Dashboard uses `GroupNav` on **either** layer — not built into Router. Docs site skins the Waku entry (`setDefault` + no-op Outlet for file routes). Lite `make` is **not** re-exported from `Router/waku`.
+
+## Discriminants (landed)
+
+| Surface | Shape |
+|---------|--------|
+| `Router.Service` | `_tag: "Memory" \| "History" \| "Waku"` (no `mode`) |
+| Waku Provider input | `_tag: "WakuBinding"` + `api` + `urls` |
+| `Route.TargetValue` | `_tag: "Group" \| "Leaf" \| "LeafView" \| "Health"` + `viewOf` / `memberOf` |
+| Path tokens | `_tag: "Lit" \| "Param" \| "Splat"` |
+
+Public guide: [`docs/guides/routing.md`](../guides/routing.md).
+
 ## Runtime
 
 | Method | History |
 |--------|---------|
-| `go` / `to` / `open*` | **push** (default); `{ replace: true }` ok — href may include `?query` |
-| `up` / `toRoot` | **replace** |
+| `Router.go` / `to` | **push** (default); `{ replace: true }` ok — href may include `?query` |
+| `GroupNav.open*` | **push** to Group and health URLs |
+| `GroupNav.up` / `Router.toRoot` | **replace** |
 | `back` | memory stack / `history.back()` |
 
-`Router.memory` / `history` / `make` take a **Route catalog only**.
+`Router.memory` / `history` / `make` / `waku` take a **Route catalog only**.
 
 ## Demo
 
@@ -85,5 +108,7 @@ Same API. Waku file routes are **render SSOT**; `siteRoutes.catalog` is the type
 |-----|------|
 | `pnpm run example:ui-router-mini-docs` | Typed catalog + match (Twoslash SSOT) |
 | `pnpm run example:apps-router-docs` | Browser mini-docs on `handle` + `Outlet` (:5189) |
+| `pnpm run example:ui-group-nav` | GroupNav + Target tags |
 
-Doc page: [`docs/examples/ui/router-mini-docs.md`](../examples/ui/router-mini-docs.md).
+Doc pages: [`ui-router-mini-docs.md`](../examples/ui/ui-router-mini-docs.md) ·
+[`ui-group-nav.md`](../examples/ui/ui-group-nav.md).

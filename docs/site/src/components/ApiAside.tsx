@@ -45,9 +45,7 @@ export const SymbolAside = ({
         </dd>
         <dt>Module</dt>
         <dd>
-          <Router.Link to={(u) => u.api.module(pkg, module)}>
-            {s.entry}
-          </Router.Link>
+          <Router.Link to={(u) => u.api.module(pkg, module)}>{s.entry}</Router.Link>
         </dd>
         <dt>Package</dt>
         <dd>

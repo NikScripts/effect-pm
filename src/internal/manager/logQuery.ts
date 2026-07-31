@@ -104,9 +104,9 @@ const scopeToQueryFields = (
   scope: LogScope,
 ): Pick<LogQuery, "wireKey" | "key"> => {
   switch (scope._tag) {
-    case "all":
+    case "All":
       return {};
-    case "group":
+    case "Group":
       return { wireKey: scope.wireKey };
     case daemonKind:
     case workPoolKind:

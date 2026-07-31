@@ -28,7 +28,7 @@ import {
   type QueueTag,
 } from "../ui/data";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
-import * as Router from "../ui/Router";
+import * as GroupNav from "../ui/GroupNav";
 import * as View from "../ui/View";
 import { Cell } from "./cellWidgets";
 import { DashboardTopBar } from "./DashboardTopBar";
@@ -206,15 +206,14 @@ export const DashboardShell = (props: {
   readonly group: GroupNode;
 }): React.ReactElement => {
   const { cols, rows } = useTerminalSize();
-  const nav = Router.useRouter();
+  const nav = GroupNav.use(props.group);
   const [sel, setSel] = React.useState(0);
   const [editMode, setEditMode] = React.useState(false);
   const [cmd, setCmd] = React.useState<string | null>(null);
   const [cmdSel, setCmdSel] = React.useState(0);
   const [scroll, setScroll] = React.useState(0);
 
-  // Bare catalogs leave `nav.group` undefined — fall back to the shell prop root.
-  const activeGroup = nav.group ?? props.group;
+  const activeGroup = nav.group;
   const members = Object.entries(Group.members(activeGroup));
   const allLeaves: ReadonlyArray<QueueTag | DaemonTag> = [
     ...queueLeaves(props.group),
@@ -254,6 +253,7 @@ export const DashboardShell = (props: {
   const maxScroll = Math.max(0, totalRows - visibleRows);
   const selRow = Math.floor(sel / perRow);
   const effScroll = Math.min(scroll, maxScroll);
+  const keyPath = nav.keys.join("/");
   layoutRef.current = {
     perRow,
     cellWidth,
@@ -267,7 +267,7 @@ export const DashboardShell = (props: {
   React.useEffect(() => {
     setSel(0);
     setScroll(0);
-  }, [activeGroup.key, nav.path.join("/")]);
+  }, [activeGroup.key, keyPath]);
 
   React.useEffect(() => {
     setScroll((sc) => {
@@ -390,7 +390,7 @@ export const DashboardShell = (props: {
 
   const Match = View.useMatch();
   const focused = nav.selected;
-  const focusName = nav.path[nav.path.length - 1] ?? displayName(idOf(focused));
+  const focusName = nav.keys[nav.keys.length - 1] ?? displayName(idOf(focused));
   if (focused !== null) {
     if (isDaemonTag(focused)) {
       return (
@@ -489,8 +489,8 @@ export const DashboardShell = (props: {
   const start = effScroll * perRow;
   const visibleCells = members.slice(start, start + visibleRows * perRow);
   const more = totalRows - (effScroll + visibleRows);
-  // Root uses the group's tag short name; deeper segments are member nicknames (`nav.path`).
-  const crumb = [displayName(props.group.key), ...nav.path].join(" / ");
+  // Root uses the group's tag short name; deeper segments are member nicknames (`nav.keys`).
+  const crumb = [displayName(props.group.key), ...nav.keys].join(" / ");
 
   return (
     <Box

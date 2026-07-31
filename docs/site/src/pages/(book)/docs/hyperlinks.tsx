@@ -22,10 +22,7 @@ export default function HyperlinksRedirect() {
         <h1>Moved</h1>
         <p>
           The Hyperlink Factories standards chapter now lives at{" "}
-          <Router.Link to={(u) => u.docs("hyperlink-services")}>
-            {target}
-          </Router.Link>
-          .
+          <Router.Link to={target}>{target}</Router.Link>.
         </p>
       </article>
     </>

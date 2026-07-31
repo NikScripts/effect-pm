@@ -2069,15 +2069,15 @@ const buildDaemonTag = <Self>(
 
 /** How a daemon is scheduled — read by the runtime to build the right impl. @internal */
 type ScheduleMode =
-  | { readonly _tag: "inline"; readonly windows: ReadonlyArray<ScheduleWindow> }
-  | { readonly _tag: "reference"; readonly source: HyperlinkTag<unknown, ScheduleHyperlinkSpec> };
+  | { readonly _tag: "Inline"; readonly windows: ReadonlyArray<ScheduleWindow> }
+  | { readonly _tag: "Reference"; readonly source: HyperlinkTag<unknown, ScheduleHyperlinkSpec> };
 
 /** Runtime guard for a stamped {@link ScheduleMode} — its `_tag` discriminant. @internal */
 const isScheduleMode = (value: unknown): value is ScheduleMode =>
   typeof value === "object" &&
   value !== null &&
   "_tag" in value &&
-  (value._tag === "inline" || value._tag === "reference");
+  (value._tag === "Inline" || value._tag === "Reference");
 
 /** Read a daemon tag's {@link ScheduleMode}, if any (set by {@link schedule}). @internal */
 const scheduleModeOf = (tag: unknown): ScheduleMode | undefined => {
@@ -2154,10 +2154,10 @@ export function schedule(
     x: ReadonlyArray<ScheduleWindow> | HyperlinkTag<any, any, any>,
   ): x is ReadonlyArray<ScheduleWindow> => Array.isArray(x);
   if (isWindows(windowsOrSource)) {
-    const mode: ScheduleMode = { _tag: "inline", windows: windowsOrSource };
+    const mode: ScheduleMode = { _tag: "Inline", windows: windowsOrSource };
     return (tag) => augmentTag(tag, scheduleGroupFlat, { [scheduleModeSym]: mode });
   }
-  const mode: ScheduleMode = { _tag: "reference", source: windowsOrSource };
+  const mode: ScheduleMode = { _tag: "Reference", source: windowsOrSource };
   // reference form: shape is unchanged — just stamp the mode (identity, like `distributed`).
   return (tag) => Object.assign(tag, { [scheduleModeSym]: mode });
 }
@@ -2476,7 +2476,7 @@ const buildDaemonImpl = <A, E, R>(
     const config = yield* foldConfiguredSpec<DaemonLayerConfig<A, E, R>>(tag.key, baseConfig);
 
     const mode = scheduleModeOf(tag);
-    if (mode?._tag === "reference") {
+    if (mode?._tag === "Reference") {
       return yield* Effect.die(new ReferenceScheduleNotWired({ daemon: tag.key }));
     }
 
@@ -2499,7 +2499,7 @@ const buildDaemonImpl = <A, E, R>(
 
     // ── schedule: inline windows own an in-memory store; otherwise always-armed ──
     const baseScheduleLayer =
-      mode?._tag === "inline"
+      mode?._tag === "Inline"
         ? DaemonSchedule.inMemory(mode.windows.map(fromWindow))
         : DaemonSchedule.alwaysArmed;
     const scheduleCtx = yield* Layer.build(baseScheduleLayer);
@@ -2543,7 +2543,7 @@ const buildDaemonImpl = <A, E, R>(
       Stream.mapEffect(() => readStatus),
     );
     const scheduleMembers =
-      mode?._tag === "inline"
+      mode?._tag === "Inline"
         ? {
             schedule: {
               entries: entriesSubscribable(scheduleSvc),

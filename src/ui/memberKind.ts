@@ -17,7 +17,7 @@ import { kind as gateKind } from "../Gate";
 
 /** Kind bucket for a group member (subgroup or HyperService leaf). @public */
 export type MemberKind =
-  | "group"
+  | "Group"
   | typeof queueKind
   | typeof priorityKind
   | typeof daemonKind
@@ -26,10 +26,10 @@ export type MemberKind =
   | typeof telemetryKind
   | typeof shardMapKind
   | typeof gateKind
-  | "unknown";
+  | "Unknown";
 
-/** Leaf buckets that have dedicated dashboard chrome (excludes `group` / `unknown`). @public */
-export type LeafMemberKind = Exclude<MemberKind, "group" | "unknown">;
+/** Leaf buckets that have dedicated dashboard chrome (excludes `Group` / `Unknown`). @public */
+export type LeafMemberKind = Exclude<MemberKind, "Group" | "Unknown">;
 
 /** Stable list of leaf stamped kinds — coverage checks iterate this. @public */
 export const leafMemberKinds = [
@@ -71,10 +71,10 @@ const leafSet: ReadonlySet<string> = new Set(leafMemberKinds);
  * @public
  */
 export const memberKindOf = (member: unknown): MemberKind => {
-  if (Group.isGroup(member)) return "group";
+  if (Group.isGroup(member)) return "Group";
   const stamped = kindOf(member);
   if (typeof stamped === "string" && leafSet.has(stamped)) {
     return stamped as LeafMemberKind;
   }
-  return "unknown";
+  return "Unknown";
 };

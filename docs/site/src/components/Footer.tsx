@@ -1,5 +1,7 @@
 // Site footer — brand + link columns + a legal line. The Glossary lives here (a reference utility,
 // not a chapter in the reading flow) rather than in the sidebar nav.
+//
+// In-app links soft-nav via Router.Link; external stay native anchors.
 
 import * as React from "react";
 import * as Router from "../ui/Router.js";

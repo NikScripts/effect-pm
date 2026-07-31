@@ -25,6 +25,8 @@ import * as FleetHealthView from "../ui/FleetHealthView";
 import * as GateView from "../ui/GateView";
 import * as GroupView from "../ui/GroupView";
 import * as HyperlinkView from "../ui/HyperlinkView";
+import * as GroupNav from "../ui/GroupNav";
+import * as Route from "../ui/Route";
 import * as Router from "../ui/Router";
 import * as PriorityView from "../ui/PriorityView";
 import * as ShardMapView from "../ui/ShardMapView";
@@ -159,6 +161,18 @@ const HyperlinkCardView: View.View = (props) => (
 
 // ── details ─────────────────────────────────────────────────────────────────
 
+const openView = (router: Router.Service, view: string): void => {
+  const target = Route.targetOf(router.match);
+  if (target === undefined) return;
+  router.go(GroupNav.toHref([...target.keys, view]));
+};
+
+const closeView = (router: Router.Service): void => {
+  const target = Route.targetOf(router.match);
+  if (target === undefined) return;
+  router.go(GroupNav.toHref(target.keys.slice(0, -1)), { replace: true });
+};
+
 const PoolDetailView: View.View = (props) => {
   if (!isQueueTag(props.tag)) return null;
   return <QueueDetailPanel tag={props.tag} />;
@@ -200,7 +214,7 @@ const DaemonDetailView: View.View = (props) => {
         bundle={bundle}
         onOpenFull={
           nav !== null && isDaemonTag(props.tag)
-            ? () => nav.openSchedule(props.tag)
+            ? () => openView(nav, "schedule")
             : undefined
         }
       />
@@ -280,19 +294,20 @@ const GateDetailView: View.View = (props) => {
 const PoolPageView: View.View = (props) => {
   if (!isQueueTag(props.tag)) return null;
   const nav = Router.useRouter();
-  if (nav.view !== "logs") return null;
-  return <LogsPage tag={props.tag} onClose={() => nav.up()} />;
+  if (Route.viewOf(Route.targetOf(nav.match)) !== "logs") return null;
+  return <LogsPage tag={props.tag} onClose={() => closeView(nav)} />;
 };
 
 /** Daemon page — `/…/logs` or `/…/schedule`. */
 const DaemonPageView: View.View = (props) => {
   if (!isDaemonTag(props.tag)) return null;
   const nav = Router.useRouter();
-  if (nav.view === "logs") {
-    return <LogsPage tag={props.tag} onClose={() => nav.up()} />;
+  const view = Route.viewOf(Route.targetOf(nav.match));
+  if (view === "logs") {
+    return <LogsPage tag={props.tag} onClose={() => closeView(nav)} />;
   }
-  if (nav.view === "schedule") {
-    return <SchedulePage tag={props.tag} onClose={() => nav.up()} />;
+  if (view === "schedule") {
+    return <SchedulePage tag={props.tag} onClose={() => closeView(nav)} />;
   }
   return null;
 };

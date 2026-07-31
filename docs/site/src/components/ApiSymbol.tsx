@@ -149,11 +149,7 @@ export const ApiSymbolCard = ({
           <div className="api-chips">
             {chips.map((c, i) =>
               c.href !== undefined ? (
-                <Router.Link
-                  className={`api-chip ${c.cls}`}
-                  to={c.href}
-                  key={i}
-                >
+                <Router.Link className={`api-chip ${c.cls}`} to={c.href} key={i}>
                   {c.text}
                 </Router.Link>
               ) : (

@@ -136,14 +136,14 @@ export type CompiledPath = {
 };
 
 type PathToken =
-  | { readonly kind: "lit"; readonly value: string }
+  | { readonly _tag: "Lit"; readonly value: string }
   | {
-      readonly kind: "param";
+      readonly _tag: "Param";
       readonly key: string;
       readonly optional: boolean;
       readonly slash: string;
     }
-  | { readonly kind: "splat"; readonly key: string; readonly slash: string };
+  | { readonly _tag: "Splat"; readonly key: string; readonly slash: string };
 
 const paramsRegExp = /(\/?):(\w+)(\?)?/g;
 
@@ -171,12 +171,12 @@ const tokenize = (source: string): {
   let match: RegExpExecArray | null;
   while ((match = paramsRegExp.exec(source)) !== null) {
     if (match.index > lastIndex) {
-      tokens.push({ kind: "lit", value: source.slice(lastIndex, match.index) });
+      tokens.push({ _tag: "Lit", value: source.slice(lastIndex, match.index) });
     }
     const [, slash = "/", key, optional] = match;
     keys.push(key!);
     tokens.push({
-      kind: "param",
+      _tag: "Param",
       key: key!,
       optional: optional !== undefined,
       slash,
@@ -188,14 +188,14 @@ const tokenize = (source: string): {
   if (splatMatch !== null) {
     const litBefore = remainder.slice(0, splatMatch.index);
     if (litBefore.length > 0) {
-      tokens.push({ kind: "lit", value: litBefore });
+      tokens.push({ _tag: "Lit", value: litBefore });
     }
     const key = splatMatch[1]!;
     keys.push(key);
     splatKeys.add(key);
-    tokens.push({ kind: "splat", key, slash: "/" });
+    tokens.push({ _tag: "Splat", key, slash: "/" });
   } else if (remainder.length > 0) {
-    tokens.push({ kind: "lit", value: remainder });
+    tokens.push({ _tag: "Lit", value: remainder });
   }
   return { tokens, keys, splatKeys };
 };
@@ -206,11 +206,11 @@ export const compilePath = (path: string): CompiledPath => {
 
   let patternSource = "^";
   for (const token of tokens) {
-    if (token.kind === "lit") {
+    if (token._tag === "Lit") {
       patternSource += escapeRegex(token.value);
       continue;
     }
-    if (token.kind === "splat") {
+    if (token._tag === "Splat") {
       patternSource += `${escapeRegex(token.slash)}(.+)`;
       continue;
     }
@@ -225,16 +225,16 @@ export const compilePath = (path: string): CompiledPath => {
   const build = (params: Record<string, string | undefined>): string => {
     let out = "";
     for (const token of tokens) {
-      if (token.kind === "lit") {
+      if (token._tag === "Lit") {
         out += token.value;
         continue;
       }
       const value = params[token.key];
       if (value === undefined) {
-        if (token.kind === "param" && token.optional) continue;
+        if (token._tag === "Param" && token.optional) continue;
         throw new Error(`Missing path parameter: ${token.key}`);
       }
-      out += `${token.slash}${encodePathValue(value, token.kind === "splat")}`;
+      out += `${token.slash}${encodePathValue(value, token._tag === "Splat")}`;
     }
     return out;
   };
