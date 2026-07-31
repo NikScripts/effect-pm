@@ -8,16 +8,16 @@
 
 **Define once. Run anywhere. `yield*` everywhere.**
 
-An Effect Service lives in one runtime. A *Hyperlink Service* is still a Service, same Tag,
-same `yield*`, but its Contract is schema-typed, so callers can span processes, not only
+An Effect service lives in one runtime. A *hyperlink service* is still a service, same tag,
+same `yield*`, but its contract is schema-typed, so callers can span processes, not only
 modules. You define it once; you decide later whether it runs in-process, on another core, or across
 the network. The call site does not change.
 
-What you `yield*` is a typed **Handle**: call methods, observe live state, steer the service at
-runtime. Local and remote are the same type. Change the Contract and TypeScript flags every caller
-in every process that imports the Tag.
+What you `yield*` is a typed handle: call methods, observe live state, steer the service at
+runtime. Local and remote share one handle. Change the contract and the first typecheck
+raises every conflict.
 
-Same Tag, two runtimes:
+Same tag, two runtimes:
 
 ## Two runtimes, one program
 
