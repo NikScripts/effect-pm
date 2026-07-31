@@ -8,20 +8,15 @@ Items below need an owner decision before Eng.
 
 ## Parked
 
-### 1. `Target.view` vs URL path segments
+### 1. `Target.view` vs URL path segments — **locked A**
 
-Today `view: "logs" | "schedule" | "health"` is both a UI discriminant **and** the
-literal path segment (`/Nwsl/HttpApi/logs`). Paths must stay lowercase (preserve
-referent). Options:
+`Route.TargetValue` is a tagged sum (`_tag: Group|Leaf|LeafView|Health`).
+`view` on `LeafView` / `Health` stays the **lowercase path segment**
+(`"logs"` / `"schedule"` / `"health"`) — preserve referent, not under the
+PascalCase rule. Helpers: `Route.viewOf` / `Route.memberOf`.
 
-| Option | Meaning |
-|--------|---------|
-| **A** | Keep `view` as path segment (lowercase) — not under the PascalCase rule |
-| **B** | Split: `view: "Logs" \| …` + separate path token / key |
-| **C** | Drop `view`; derive from last path key only |
-
-Same dual-use in `groupAsRoutes`, `uiGroupRoutes`, `GroupNav`, `View` / shells.
-Also `web/DashboardShell` `view: "main" \| "logs" \| "schedule"`.
+Same dual-use in shells (`web/DashboardShell` `view: "main" | "logs" | …`)
+stays lowercase path/UI segments.
 
 ### 2. Presentation / domain-echo unions
 
@@ -48,9 +43,9 @@ UrlMethod inference, then tighten `go` / `Link` off bare `string`.
 
 ## Done this track
 
-**UI:** Router `Memory`/`History`/`Waku`; Target `kind`; path tokens; WidgetEntry;
-MemberKind `Group`/`Unknown`; TUI chrome `Normal`/`Command`; debug-console
-`Idle`/`Ok`/`Fail`.
+**UI:** Router `Service._tag` `Memory`/`History`/`Waku`; `Route.TargetValue` /
+PathToken / WidgetEntry as `_tag` sums; MemberKind `Group`/`Unknown`; TUI chrome
+`Normal`/`Command`; debug-console `Idle`/`Ok`/`Fail`. Target.view locked **A**.
 
 **Also Eng'd (clear owned reasons / tags):**
 

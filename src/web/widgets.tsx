@@ -916,7 +916,7 @@ export const LogStream = (props: {
           aria-label="minimum log level"
         >
           {MIN_LEVELS.map((lvl) => (
-            <option key={lvl} value={lvl}>{lvl === "all" ? "all levels" : `${lvl}+`}</option>
+            <option key={lvl} value={lvl}>{lvl === "All" ? "all levels" : `${lvl}+`}</option>
           ))}
         </select>
         {filtered ? (

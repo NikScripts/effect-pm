@@ -177,8 +177,8 @@ describe("Group.asRoutes + fromEffect", () => {
       expect(router.pathname).toBe("/Nwsl/HttpApi");
       expect(router.match?.route.identifier).toBe("HttpApi");
       const target = Route.targetOf(router.match);
-      expect(target?.kind).toBe("Leaf");
-      expect(target?.member).toBe(HttpApi);
+      expect(target?._tag).toBe("Leaf");
+      expect(Route.memberOf(target)).toBe(HttpApi);
     });
   });
 
@@ -256,8 +256,8 @@ describe("Group.asRoutes + fromEffect", () => {
       expect(nav.selected).toBe(HttpApi);
       expect(router.match?.route.identifier).toBe("HttpApiLogs");
       const target = Route.targetOf(router.match);
-      expect(target?.kind).toBe("LeafView");
-      expect(target?.view).toBe("logs");
+      expect(target?._tag).toBe("LeafView");
+      expect(Route.viewOf(target)).toBe("logs");
     });
   });
 
@@ -265,6 +265,6 @@ describe("Group.asRoutes + fromEffect", () => {
     const router = Router.make(hubSite, "Memory");
     GroupNav.open(Hub, router, HttpApi);
     expect(Route.targetOf(undefined)).toBeUndefined();
-    expect(Route.targetOf(router.match)?.member).toBe(HttpApi);
+    expect(Route.memberOf(Route.targetOf(router.match))).toBe(HttpApi);
   });
 });

@@ -38,7 +38,7 @@ export const skins: Layer.Layer<
     if (!isQueueTag(props.tag)) return null;
     const nav = Router.useRouter();
     const target = Route.targetOf(nav.match);
-    if (target?.view !== "logs") return null;
+    if (target === undefined || Route.viewOf(target) !== "logs") return null;
     return (
       <LogsPage
         tag={props.tag}

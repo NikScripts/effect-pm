@@ -34,8 +34,8 @@ const router = Router.make(site, "History") // lite
 | Piece | Import | Job |
 |-------|--------|-----|
 | Catalog | `hyperlink-ts/ui/Route` | Paths, groups, `handle`, `urlBuilder` |
-| Lite layer | `hyperlink-ts/ui/Router` | `make` / `memory` / `history` — modes `"Memory"` / `"History"`; no `waku` peer |
-| Waku layer | `hyperlink-ts/ui/Router/waku` | `waku` / unified `Provider` — mode `"Waku"`; same `Service` |
+| Lite layer | `hyperlink-ts/ui/Router` | `make` / `memory` / `history` — `_tag` `"Memory"` / `"History"`; no `waku` peer |
+| Waku layer | `hyperlink-ts/ui/Router/waku` | `waku` / unified `Provider` — live `_tag` `"Waku"`; same `Service` |
 | GroupNav | `hyperlink-ts/ui/GroupNav` | Group tree open/up/health **on top of** Router |
 | Dashboard | `hyperlink-ts/web` / `tui` | Shell built **on** Router + GroupNav — not inside them |
 
@@ -124,8 +124,10 @@ nav.openHealth()            // → urls.health() when present
 nav.openNode("app/NodeA")   // → urls.nodeHealth(…)
 ```
 
-`Route.Target` annotations from `Group.asRoutes` feed selected member / view.
-Works with either Router layer underneath. See [Dashboard](/docs/dashboard).
+`Route.Target` annotations from `Group.asRoutes` are a tagged
+`TargetValue` (`Group` / `Leaf` / `LeafView` / `Health`) — `Route.viewOf` /
+`Route.memberOf` feed GroupNav selected member / view. Works with either Router
+layer underneath. See [Dashboard](/docs/dashboard).
 
 ## Docs site (Waku dogfood)
 

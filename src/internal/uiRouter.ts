@@ -14,10 +14,11 @@ import type { ApiConstraint } from "./uiRoutes";
 
 export type HistoryAction = "push" | "replace";
 
-/** Live navigation API — lite (`memory` / `history`) or full (`waku` companion). */
+/** Live navigation API — lite (`Memory` / `History`) or Waku layer. */
 export interface Service<A extends ApiConstraint = ApiConstraint> {
   readonly api: A;
-  readonly mode: "Memory" | "History" | "Waku";
+  /** Engine discriminant. */
+  readonly _tag: "Memory" | "History" | "Waku";
   /** Pathname only (`/docs/x`) — no query. */
   readonly pathname: string;
   /** Search including `?` (`?tab=1`), or `""`. */
@@ -143,7 +144,7 @@ export const makeService = <A extends ApiConstraint>(
 
   return {
     api,
-    mode,
+    _tag: mode,
     urls,
     get pathname() {
       return pathname;

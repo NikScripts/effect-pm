@@ -225,15 +225,15 @@ A string the package **owns** as a closed vocabulary is PascalCase: tagged-union
 kinds, reasons, and the same class of discriminants elsewhere.
 
 ``` ts
-// ✅ owned discriminants
+// ✅ owned discriminants — prefer `_tag` for closed sums
 { readonly _tag: "Started" }
-{ readonly mode: "Memory" | "History" | "Waku" }
-{ readonly kind: "Group" | "Leaf" }
+{ readonly _tag: "Memory" | "History" | "Waku" }   // Router.Service
+{ readonly _tag: "Group" | "Leaf" | "LeafView" | "Health" } // Route.TargetValue
 { readonly reason: "Waiting" | "WaitInterrupted" }
 
 // ❌ owned discriminants in other cases
 { readonly _tag: "started" }           // camel
-{ readonly mode: "memory" }            // lower
+{ readonly _tag: "memory" }            // lower
 { readonly reason: "wait-interrupted" } // kebab
 { readonly _tag: "gate.run.started" }  // dotted prefix
 ```
@@ -249,8 +249,9 @@ vocabulary, keep that thing's case:
 | Env / config key | `"SERVICE_URL"`, `"HYPERLINK_ASSUME_TOKEN"` |
 | DOM / HTML attribute | `"data-kind"`, `"aria-current"` |
 | External protocol token | History `"push"` / `"replace"`, HTTP `"GET"` |
+| Path-segment view on Target | `"logs"` / `"schedule"` / `"health"` (URL referent) |
 
-Owning a *mode about* Waku still uses `"Waku"` on our `Service.mode`; the import path and optional
+Owning a *mode about* Waku still uses `"Waku"` on our `Service._tag`; the import path and optional
 peer stay `"waku"`. Catalog route ids that become camelCase `urlBuilder` methods (`home`,
 `nodeHealth`) follow *Values are camelCase* — they name bindings, not tag vocabularies.
 

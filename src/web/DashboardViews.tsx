@@ -294,7 +294,7 @@ const GateDetailView: View.View = (props) => {
 const PoolPageView: View.View = (props) => {
   if (!isQueueTag(props.tag)) return null;
   const nav = Router.useRouter();
-  if (Route.targetOf(nav.match)?.view !== "logs") return null;
+  if (Route.viewOf(Route.targetOf(nav.match)) !== "logs") return null;
   return <LogsPage tag={props.tag} onClose={() => closeView(nav)} />;
 };
 
@@ -302,7 +302,7 @@ const PoolPageView: View.View = (props) => {
 const DaemonPageView: View.View = (props) => {
   if (!isDaemonTag(props.tag)) return null;
   const nav = Router.useRouter();
-  const view = Route.targetOf(nav.match)?.view;
+  const view = Route.viewOf(Route.targetOf(nav.match));
   if (view === "logs") {
     return <LogsPage tag={props.tag} onClose={() => closeView(nav)} />;
   }

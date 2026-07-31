@@ -96,7 +96,7 @@ const PoolPageView: View.View = (props) => {
   const nav = Router.useRouter();
   const bundle = Observe.use(props.tag, WorkPoolView.pack);
   const logsR = useAtomValue(bundle.logs);
-  if (Route.targetOf(nav.match)?.view !== "logs") return null;
+  if (Route.viewOf(Route.targetOf(nav.match)) !== "logs") return null;
   const logs = AsyncResult.isSuccess(logsR) ? logsR.value : [];
   return (
     <Box flexDirection="column">

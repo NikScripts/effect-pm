@@ -40,15 +40,8 @@ export {
 } from "./Router";
 
 /**
- * Lite live service — `make(api, "Memory" | "History")`.
- * For the Waku layer use {@link waku}.
- *
- * @public
- */
-export const make = Router.make;
-
-/**
  * Waku layer input — provide with {@link Provider}. Same typed catalog as lite.
+ * Lite `make(api, "Memory" | "History")` stays on `hyperlink-ts/ui/Router`.
  *
  * @public
  */

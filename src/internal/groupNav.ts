@@ -71,11 +71,11 @@ export const state = (
     );
     if (target !== undefined) {
       const keys =
-        target.kind === "Health" && match.params.nodeId !== undefined
+        target._tag === "Health" && match.params.nodeId !== undefined
           ? (["health", match.params.nodeId] as const)
           : target.keys;
       const { trail, group } =
-        target.kind === "Health"
+        target._tag === "Health"
           ? { trail: [root] as const, group: root }
           : trailFromKeys(
               root,
@@ -84,11 +84,8 @@ export const state = (
       return {
         keys,
         trail,
-        selected:
-          target.kind === "Leaf" || target.kind === "LeafView"
-            ? target.member
-            : null,
-        view: target.view,
+        selected: Route.memberOf(target),
+        view: Route.viewOf(target),
         group,
         canUp: keys.length > 0,
         match,

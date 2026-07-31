@@ -110,7 +110,7 @@ export const Provider = (props: {
 }): React.ReactElement => {
   const { value } = props;
   React.useEffect(() => {
-    if (value.mode !== "History" || typeof window === "undefined") return;
+    if (value._tag !== "History" || typeof window === "undefined") return;
     value.syncFromLocation();
     const onPop = (): void => value.syncFromLocation();
     window.addEventListener("popstate", onPop);

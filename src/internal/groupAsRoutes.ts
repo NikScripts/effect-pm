@@ -88,19 +88,9 @@ const formatPath = (keys: ReadonlyArray<string>): Route.Path => {
 
 const target = <Id extends string, PathType extends Route.Path, Params>(
   endpoint: Route.Endpoint<Id, PathType, Params>,
-  value: {
-    readonly keys: ReadonlyArray<string>;
-    readonly member: unknown | null;
-    readonly view?: string | undefined;
-    readonly kind: "Group" | "Leaf" | "LeafView" | "Health";
-  },
+  value: Route.TargetValue,
 ): Route.Endpoint<Id, PathType, Params> =>
-  Route.annotate(endpoint, Route.Target, {
-    keys: value.keys,
-    member: value.member,
-    view: value.view,
-    kind: value.kind,
-  });
+  Route.annotate(endpoint, Route.Target, value);
 
 const membersToRoutes = (
   node: RouteGroup,
@@ -114,9 +104,9 @@ const membersToRoutes = (
       out.push(
         Route.group(name).add(
           target(Route.get("index", path), {
+            _tag: "Group",
             keys,
             member,
-            kind: "Group",
           }),
           ...membersToRoutes(member, keys),
         ),
@@ -124,21 +114,21 @@ const membersToRoutes = (
     } else {
       out.push(
         target(Route.get(name, path), {
+          _tag: "Leaf",
           keys,
           member,
-          kind: "Leaf",
         }),
         target(Route.get(`${name}Logs`, formatPath([...keys, "logs"])), {
+          _tag: "LeafView",
           keys: [...keys, "logs"],
           member,
           view: "logs",
-          kind: "LeafView",
         }),
         target(Route.get(`${name}Schedule`, formatPath([...keys, "schedule"])), {
+          _tag: "LeafView",
           keys: [...keys, "schedule"],
           member,
           view: "schedule",
-          kind: "LeafView",
         }),
       );
     }
@@ -148,20 +138,18 @@ const membersToRoutes = (
 
 const healthRoutes = (): Array<Route.RouteLike> => [
   target(Route.get("health", "/health"), {
+    _tag: "Health",
     keys: ["health"],
-    member: null,
     view: "health",
-    kind: "Health",
   }),
   target(
     Route.get("nodeHealth", "/health/*nodeId").pipe(
       Route.params(Schema.Struct({ nodeId: Schema.String })),
     ),
     {
+      _tag: "Health",
       keys: ["health"],
-      member: null,
       view: "health",
-      kind: "Health",
     },
   ),
 ];
