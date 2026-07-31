@@ -1,6 +1,6 @@
 # Lifecycle kernel — decisions & lock register
 
-**Status:** L0–L5 + A/C tip-synced; **B** (Participating duals, no `Service`/`of`/`from`) + **P11** (internal split) Eng’d on work branch.  
+**Status:** L0–L5 + A/C + **B** (Participating duals) + **P11** (internal split) tip-synced to `integration`.  
 **Owner:** Agent 5.  
 **Full Eng plan (SSOT for architecture / slices / acceptance):** [`docs/plans/lifecycle-kernel.md`](../plans/lifecycle-kernel.md).  
 **Guide:** [`docs/guides/lifecycle.md`](../guides/lifecycle.md).  
@@ -153,7 +153,7 @@ Full table + acceptance criteria: [plan §8](../plans/lifecycle-kernel.md#8-eng-
 ## 5. Immediate next step
 
 1. P5 chrome → Agent G; P7 → no Lifecycle gate (Locked); L6 handoff prose in guide.  
-2. Next Eng: P8 remote Participating dual parity when owner wants; tip-sync B/P11 on ask.  
+2. Next Eng: P8 remote Participating dual parity.  
 3. Open questions: §3.
 
 ---

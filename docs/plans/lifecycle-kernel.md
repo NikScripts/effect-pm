@@ -1,6 +1,6 @@
 # Plan: Lifecycle kernel
 
-**Status:** L0–L5 + A/C tip-synced; **B** (Participating duals) + **P11** (internal split) Eng’d on work branch.  
+**Status:** L0–L5 + A/C + **B** (Participating duals) + **P11** (internal split) tip-synced.  
 **Agent:** 5.  
 **Decisions / lock register:** [`../handoffs/lifecycle-kernel-decisions.md`](../handoffs/lifecycle-kernel-decisions.md) (approve P-locks item-by-item before Eng).  
 **Shipped guide (substrate):** [`../guides/lifecycle.md`](../guides/lifecycle.md).  
