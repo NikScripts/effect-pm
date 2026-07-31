@@ -165,6 +165,35 @@ body {
   background: transparent;
 }
 
+/* SHORT viewports (phone landscape, tiny windows): the lockup cannot fit one
+   screen, and a locked stage would clip it with no way to reach it — release
+   the scroll lock and become a normal page. The wash reverts to box-relative
+   geometry (top glow at the top, deep washes at the document bottom) and the
+   atmosphere spans the document so the orb rides near the end of the page. */
+@media (max-height: 30rem) {
+  html,
+  body {
+    height: auto;
+    min-height: 100lvh;
+    overflow: visible;
+  }
+  html {
+    background-image:
+      radial-gradient(ellipse 160% 70% at 30% -12%, var(--landing-glow), var(--landing-canvas) 72%),
+      radial-gradient(ellipse 100% 55% at 100% 110%, var(--landing-bg-deep), var(--landing-canvas) 68%),
+      radial-gradient(ellipse 90% 50% at 0% 110%, var(--landing-bg-deep), var(--landing-canvas) 65%);
+  }
+  .landing-atmosphere {
+    height: auto;
+    inset: 0;
+  }
+  .landing {
+    height: auto;
+    min-height: 100lvh;
+    overflow: visible;
+  }
+}
+
 .landing-inner {
   position: relative;
   z-index: 1;
