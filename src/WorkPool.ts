@@ -576,14 +576,29 @@ export const historyQuery = {
  * @category wire schemas
  * @public
  */
+/** Map queue snapshot fields → shared {@link Lifecycle.State} (service-local; not a Lifecycle helper). */
+const queueLifecycleState = (status: {
+  readonly phase: "idle" | "running" | "draining" | "off";
+  readonly paused: boolean;
+}): typeof Lifecycle.State.Type => {
+  if (status.phase === "idle") return "Idle";
+  if (status.phase === "draining") return "Draining";
+  if (status.phase === "off") return "Off";
+  return status.paused ? "Paused" : "Running";
+};
+
 export const queueControlSpec = {
   // ── live current state — one SubscriptionRef-backed source of truth ──
   // `status` is the whole snapshot; the scalars are `Stream.map` derivations of it (SSOT). All are
   // plain reads (`p.size`) and subscribable (`Hyperlink.changes(p, (s) => s.size)`).
-  status: Hyperlink.ref(queueStatus)
+  status: Hyperlink.ref(queueStatus).annotate({
+    description:
+      "Live current-state snapshot: per-priority sizes, paused, in-flight, completed, phase.",
+  }),
+  // Shared Lifecycle protocol — tools read this via methodMeta(…).lifecycle === "State".
+  lifecycle: Hyperlink.ref(Lifecycle.State)
     .annotate({
-      description:
-        "Live current-state snapshot: per-priority sizes, paused, in-flight, completed, phase.",
+      description: "Lifecycle badge (Idle / Running / Paused / Draining / Off).",
     })
     .pipe(Lifecycle.state),
   size: Hyperlink.ref(Schema.Number).annotate({
@@ -932,6 +947,8 @@ export interface WorkPool<
 > {
   /** Live current-state snapshot (per-priority sizes, paused, in-flight, completed, phase). */
   readonly status: Hyperlink.Subscribable<QueueStatus>;
+  /** Shared {@link Lifecycle.State} badge — Role `"State"` for generic tools. */
+  readonly lifecycle: Hyperlink.Subscribable<Lifecycle.State>;
   /** Total pending items across all priority lanes. */
   readonly size: Hyperlink.Subscribable<number>;
   /** Whether all priority queues are empty. */
@@ -1433,6 +1450,7 @@ const buildQueueImpl = <
       // through. The adapter only *adds* cross-cutting concerns: `metrics.query` (history),
       // `orDie` on the enqueue verbs (impossible-failure → defect), and RPC wiring.
       status: handle.status,
+      lifecycle: Hyperlink.mapSubscribable(handle.status, queueLifecycleState),
       size: handle.size,
       isEmpty: handle.isEmpty,
       start: handle.start,
@@ -1600,10 +1618,13 @@ export const priorityControlSpec = {
   // ── live current state — one SubscriptionRef-backed source of truth ──
   // `status` is the whole snapshot; `size`/`isEmpty` are `Stream.map` derivations of it (SSOT). Plain
   // reads (`p.size`) and subscribable (`Hyperlink.changes(p, (s) => s.size)`).
-  status: Hyperlink.ref(priorityStatus)
+  status: Hyperlink.ref(priorityStatus).annotate({
+    description:
+      "Live current-state snapshot: per-lane sizes, paused, in-flight, completed, phase.",
+  }),
+  lifecycle: Hyperlink.ref(Lifecycle.State)
     .annotate({
-      description:
-        "Live current-state snapshot: per-lane sizes, paused, in-flight, completed, phase.",
+      description: "Lifecycle badge (Idle / Running / Paused / Draining / Off).",
     })
     .pipe(Lifecycle.state),
   size: Hyperlink.ref(Schema.Number).annotate({
@@ -1949,6 +1970,7 @@ const buildPriorityImpl = <Self, F extends PriorityItemFields, E, R, RR = never>
       R | RR
     > = {
       status: handle.status,
+      lifecycle: Hyperlink.mapSubscribable(handle.status, queueLifecycleState),
       size: Hyperlink.mapSubscribable(handle.status, (s) => sumLaneSizes(s.sizes)),
       isEmpty: Hyperlink.mapSubscribable(handle.status, (s) => sumLaneSizes(s.sizes) === 0),
       levelSizes: handle.levelSizes,

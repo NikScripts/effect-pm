@@ -32,12 +32,18 @@ class Mail extends Hyperlink.Tag<Mail>()("@app/Mail", queueControlSpec) {}
 // from it (their impls are the backing streams). Mutating verbs push a new snapshot so the live
 // `value`s stay current on the client after a round-trip.
 const makeImpl = () => {
-  const initial = {
+  const initial: {
+    readonly sizes: { high: number; normal: number; low: number };
+    readonly paused: boolean;
+    readonly inFlight: number;
+    readonly completed: number;
+    readonly phase: "idle" | "running" | "draining" | "off";
+  } = {
     sizes: { high: 0, normal: 3, low: 0 },
     paused: false,
     inFlight: 0,
     completed: 0,
-    phase: "running" as const,
+    phase: "running",
   };
   const statusRef = Effect.runSync(SubscriptionRef.make(initial));
   const patch = (f: (s: typeof initial) => typeof initial) =>
@@ -46,6 +52,17 @@ const makeImpl = () => {
   return {
     // live current state — `status` is the SSOT Subscribable; the scalars are mapped views (`ref` impls).
     status: statusSub,
+    lifecycle: Hyperlink.mapSubscribable(statusSub, (s) =>
+      s.phase === "idle"
+        ? ("Idle" as const)
+        : s.phase === "draining"
+          ? ("Draining" as const)
+          : s.phase === "off"
+            ? ("Off" as const)
+            : s.paused
+              ? ("Paused" as const)
+              : ("Running" as const),
+    ),
     size: Hyperlink.mapSubscribable(
       statusSub,
       (s) => s.sizes.high + s.sizes.normal + s.sizes.low,
@@ -139,6 +156,7 @@ it("exposes the expected control verbs", () => {
     [
       "clear",
       "isEmpty",
+      "lifecycle",
       "metrics",
       "pause",
       "resume",

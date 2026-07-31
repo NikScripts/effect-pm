@@ -47,6 +47,7 @@ const stub = {
   shutdown: Effect.void,
   clear: Effect.succeed(0),
   status: statusSub,
+  lifecycle: Hyperlink.mapSubscribable(statusSub, () => "Running" as const),
   metrics: {
     stream: Stream.empty,
     query: () => Effect.succeed([]),

@@ -4,34 +4,28 @@ import { Daemon, Hyperlink, Lifecycle, WorkPool, methodMeta } from "../src/index
 import { daemonControlSpec } from "../src/Daemon";
 import { queueControlSpec } from "../src/WorkPool";
 
-describe("Lifecycle method roles", () => {
-  it("stamps WorkPool control verbs for generic tools", () => {
-    expect(methodMeta(queueControlSpec.status).lifecycle).toBe("state");
-    expect(methodMeta(queueControlSpec.start).lifecycle).toBe("start");
-    expect(methodMeta(queueControlSpec.pause).lifecycle).toBe("pause");
-    expect(methodMeta(queueControlSpec.resume).lifecycle).toBe("resume");
-    expect(methodMeta(queueControlSpec.shutdown).lifecycle).toBe("stop");
+describe("Lifecycle building blocks", () => {
+  it("stamps PascalCase roles on WorkPool control verbs", () => {
+    expect(methodMeta(queueControlSpec.lifecycle).lifecycle).toBe("State");
+    expect(methodMeta(queueControlSpec.start).lifecycle).toBe("Start");
+    expect(methodMeta(queueControlSpec.pause).lifecycle).toBe("Pause");
+    expect(methodMeta(queueControlSpec.resume).lifecycle).toBe("Resume");
+    expect(methodMeta(queueControlSpec.shutdown).lifecycle).toBe("Stop");
+    expect(methodMeta(queueControlSpec.status).lifecycle).toBeUndefined();
     expect(methodMeta(queueControlSpec.clear).lifecycle).toBeUndefined();
   });
 
-  it("stamps Daemon control verbs for generic tools", () => {
-    expect(methodMeta(daemonControlSpec.status).lifecycle).toBe("state");
-    expect(methodMeta(daemonControlSpec.start).lifecycle).toBe("start");
-    expect(methodMeta(daemonControlSpec.stop).lifecycle).toBe("stop");
+  it("stamps PascalCase roles on Daemon control verbs", () => {
+    expect(methodMeta(daemonControlSpec.lifecycle).lifecycle).toBe("State");
+    expect(methodMeta(daemonControlSpec.start).lifecycle).toBe("Start");
+    expect(methodMeta(daemonControlSpec.stop).lifecycle).toBe("Stop");
+    expect(methodMeta(daemonControlSpec.status).lifecycle).toBeUndefined();
   });
 
-  it("projects kind-native status into Lifecycle.State", () => {
-    expect(
-      Lifecycle.fromWorkPool({ phase: "idle", paused: false }),
-    ).toBe("idle");
-    expect(
-      Lifecycle.fromWorkPool({ phase: "running", paused: true }),
-    ).toBe("paused");
-    expect(
-      Lifecycle.fromWorkPool({ phase: "running", paused: false }),
-    ).toBe("running");
-    expect(Lifecycle.fromDaemon({ supervising: false })).toBe("idle");
-    expect(Lifecycle.fromDaemon({ supervising: true })).toBe("running");
+  it("Lifecycle.State is the shared wire schema", () => {
+    expect(Schema.decodeUnknownSync(Lifecycle.State)("Idle")).toBe("Idle");
+    expect(Schema.decodeUnknownSync(Lifecycle.State)("Paused")).toBe("Paused");
+    expect(() => Schema.decodeUnknownSync(Lifecycle.State)("idle")).toThrow();
   });
 
   it("accepts .pipe(Lifecycle.pause) on a Spec method", () => {
@@ -40,7 +34,7 @@ describe("Lifecycle method roles", () => {
       .pipe(Lifecycle.pause);
     expect(methodMeta(method)).toMatchObject({
       description: "Hold.",
-      lifecycle: "pause",
+      lifecycle: "Pause",
     });
   });
 });
@@ -52,7 +46,7 @@ describe("Hyperlink.deferStart", () => {
 
   class Sweeper extends Daemon.Tag<Sweeper>()("test/LifecycleDefer/Sweeper") {}
 
-  it.effect("WorkPool layer stays idle until start", () =>
+  it.effect("WorkPool exposes Lifecycle.State Idle until start", () =>
     Effect.gen(function* () {
       const layer = WorkPool.layer(Jobs, {
         effect: () => Effect.void,
@@ -60,11 +54,10 @@ describe("Hyperlink.deferStart", () => {
 
       yield* Effect.gen(function* () {
         const jobs = yield* Jobs;
-        const before = yield* jobs.status.get;
-        expect(before.phase).toBe("idle");
-        expect(Lifecycle.fromWorkPool(before)).toBe("idle");
+        expect(yield* jobs.lifecycle.get).toBe("Idle");
+        expect((yield* jobs.status.get).phase).toBe("idle");
         yield* jobs.start;
-        expect((yield* jobs.status.get).phase).toBe("running");
+        expect(yield* jobs.lifecycle.get).toBe("Running");
       }).pipe(Effect.provide(layer), Effect.scoped);
     }),
   );
@@ -78,12 +71,12 @@ describe("Hyperlink.deferStart", () => {
 
       yield* Effect.gen(function* () {
         const jobs = yield* Jobs;
-        expect((yield* jobs.status.get).phase).toBe("running");
+        expect(yield* jobs.lifecycle.get).toBe("Running");
       }).pipe(Effect.provide(layer), Effect.scoped);
     }),
   );
 
-  it.effect("Daemon layer waits for start when deferred", () =>
+  it.effect("Daemon exposes Lifecycle.State Idle when deferred", () =>
     Effect.gen(function* () {
       const layer = Daemon.layer(Sweeper, {
         effect: Effect.void,
@@ -91,11 +84,9 @@ describe("Hyperlink.deferStart", () => {
 
       yield* Effect.gen(function* () {
         const sweeper = yield* Sweeper;
-        const before = yield* sweeper.status.get;
-        expect(before.supervising).toBe(false);
-        expect(Lifecycle.fromDaemon(before)).toBe("idle");
+        expect(yield* sweeper.lifecycle.get).toBe("Idle");
         yield* sweeper.start;
-        expect((yield* sweeper.status.get).supervising).toBe(true);
+        expect(yield* sweeper.lifecycle.get).toBe("Running");
       }).pipe(Effect.provide(layer), Effect.scoped);
     }),
   );

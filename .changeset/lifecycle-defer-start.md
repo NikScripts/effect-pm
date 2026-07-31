@@ -2,12 +2,11 @@
 "hyperlink-ts": minor
 ---
 
-Lifecycle roles + deferred HyperService start.
+Lifecycle building blocks + deferred HyperService start.
 
-- **`hyperlink-ts/Lifecycle`** — Spec method pipes (`Lifecycle.pause` / `start` / `resume` /
-  `stop` / `state`) for generic management tools via `methodMeta.lifecycle`
-- Shared **`Lifecycle.State`** badge + `fromWorkPool` / `fromDaemon` projections
-- WorkPool + Daemon control Specs stamped with lifecycle roles
-- **`Hyperlink.deferStart`** — Layer pipe (Policy-shaped, HyperService layers only); WorkPool /
-  Daemon honor ambient `DeferStart` (call-site `autoStart` still wins when set)
-- WorkPool `phase` gains `"idle"` when start is deferred
+- **`hyperlink-ts/Lifecycle`** — service-agnostic protocol: PascalCase `Role` / `State` Schema,
+  Spec pipes (`Lifecycle.pause` → `"Pause"`, …). No kind-specific helpers.
+- Tools discover controls + badge via `methodMeta.lifecycle` (`"State"` field success =
+  `Lifecycle.State`).
+- WorkPool + Daemon **consume** the blocks (expose `lifecycle` ref + stamp commands).
+- **`Hyperlink.deferStart`** — Layer pipe; deferred WorkPools report `lifecycle: "Idle"`.

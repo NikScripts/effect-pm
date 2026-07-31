@@ -1599,15 +1599,24 @@ export const scheduleKind = "hyperlink-ts/Daemon/Schedule";
  * @category wire schemas
  * @public
  */
+/** Map daemon snapshot → shared {@link Lifecycle.State} (service-local; not a Lifecycle helper). */
+const daemonLifecycleState = (status: {
+  readonly supervising: boolean;
+}): typeof Lifecycle.State.Type => (status.supervising ? "Running" : "Idle");
+
 export const daemonControlSpec = {
   // ── live current state — one SubscriptionRef-backed source of truth ──
   // `status` is the whole snapshot; `status.get` reads it once, `status.changes` streams every
   // change (uniform local + remote), mirroring the queue's `status` ref.
-  status: Hyperlink.ref(daemonStatus)
+  status: Hyperlink.ref(daemonStatus).annotate({
+    description:
+      "Live current-state snapshot: supervising, armed, active instances, next trigger/transition, " +
+      "poll cadence, and cumulative run metrics.",
+  }),
+  // Shared Lifecycle protocol — tools read this via methodMeta(…).lifecycle === "State".
+  lifecycle: Hyperlink.ref(Lifecycle.State)
     .annotate({
-      description:
-        "Live current-state snapshot: supervising, armed, active instances, next trigger/transition, " +
-        "poll cadence, and cumulative run metrics.",
+      description: "Lifecycle badge (Idle / Running / Paused / Draining / Off).",
     })
     .pipe(Lifecycle.state),
 
@@ -2566,8 +2575,10 @@ const buildDaemonImpl = <A, E, R>(
 
     // Worker methods are built unwrapped (each still carrying `R`); `provideContext` discharges them.
     // Erased to the base `DaemonSpec` here (same as `run`) — stamped event schemas live on the tag wire.
+    const statusSub = { get: readStatus, changes: statusChanges };
     const impl = {
-      status: { get: readStatus, changes: statusChanges },
+      status: statusSub,
+      lifecycle: Hyperlink.mapSubscribable(statusSub, daemonLifecycleState),
       start,
       stop,
       wake: handle.polling.wake,

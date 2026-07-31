@@ -1,49 +1,49 @@
 /**
- * Lifecycle — contract roles + shared state projection for HyperService management tools.
+ * Lifecycle — building blocks for HyperService lifecycle that **any** service can adopt
+ * and that generic tools (CLI / TUI / dashboard) can discover without kind switches.
  *
- * **Controls** are stamped on Spec methods (same grain as `.annotate`):
+ * ## Blocks
+ *
+ * 1. **{@link Role}** — PascalCase method annotation (`"Start"`, `"Pause"`, …). Stamp Spec
+ *    methods with {@link start} / {@link pause} / {@link resume} / {@link stop} / {@link state}.
+ * 2. **{@link State}** — PascalCase wire vocabulary + Schema (`"Idle"`, `"Running"`, …).
+ *    A service that participates exposes a reactive field whose success schema **is**
+ *    {@link State}, stamped with {@link state}.
+ * 3. **{@link Hyperlink.deferStart}** (on Hyperlink, not here) — Layer pipe to stay Idle until
+ *    `Start`.
  *
  * ```ts
  * import * as Lifecycle from "hyperlink-ts/Lifecycle"
+ * import * as Hyperlink from "hyperlink-ts/Hyperlink"
  *
+ * // Contract — tools find these via methodMeta(m).lifecycle
+ * lifecycle: Hyperlink.ref(Lifecycle.State)
+ *   .annotate({ description: "Lifecycle badge." })
+ *   .pipe(Lifecycle.state),
  * pause: Hyperlink.effect(Schema.Void)
- *   .annotate({ description: "Pause processing." })
+ *   .annotate({ description: "Pause." })
  *   .pipe(Lifecycle.pause),
  * ```
  *
- * Generic CLI / TUI / dashboard code discovers them via `methodMeta`
- * (`meta.lifecycle === "pause"`), without hardcoding WorkPool vs Daemon method names.
- *
- * **State** is a shared badge vocabulary ({@link State}); project kind-native snapshots with
- * {@link fromWorkPool} / {@link fromDaemon}. Mark the status field with {@link state}.
- *
- * Deferred engine bring-up is **not** here — pipe `Hyperlink.deferStart` onto the
- * HyperService **layer** (`WorkPool.serve(…).pipe(Hyperlink.deferStart)`).
+ * Toolkit kinds (WorkPool, Daemon) are **consumers** of these blocks — same as an app
+ * HyperService. There is no `fromWorkPool` / kind projection in this module.
  *
  * @module Lifecycle
  */
+import { Schema } from "effect";
 
 // =============================================================================
-// Roles (method annotations)
+// Role (method annotations — tools)
 // =============================================================================
 
 /**
- * Lifecycle role on a contract method — inert to the wire; tools read it via
+ * Lifecycle **role** on a Spec method — PascalCase, inert to the wire. Tools read it via
  * `Hyperlink.methodMeta`.
  *
  * @category models
  * @public
  */
-export type Role = "state" | "start" | "pause" | "resume" | "stop";
-
-/**
- * Shared lifecycle badge for management UIs. Kind-native fields (WorkPool `phase` + `paused`,
- * Daemon `supervising`) project into this via {@link fromWorkPool} / {@link fromDaemon}.
- *
- * @category models
- * @public
- */
-export type State = "idle" | "running" | "paused" | "draining" | "off";
+export type Role = "State" | "Start" | "Pause" | "Resume" | "Stop";
 
 /**
  * Annotatable Spec leaf — `annotate` return type is preserved so `Hyperlink.ref` markers
@@ -58,23 +58,23 @@ const role =
   <Out>(method: Annotatable<R, Out>): Out =>
     method.annotate({ lifecycle });
 
-/** Mark a status / snapshot field as the lifecycle state source. @category combinators @public */
-export const state = role("state");
+/** Mark the reactive {@link State} field. @category combinators @public */
+export const state = role("State");
 
-/** Mark a start / begin-supervising command. @category combinators @public */
-export const start = role("start");
+/** Mark the start command. @category combinators @public */
+export const start = role("Start");
 
-/** Mark a pause command. @category combinators @public */
-export const pause = role("pause");
+/** Mark the pause command. @category combinators @public */
+export const pause = role("Pause");
 
-/** Mark a resume command. @category combinators @public */
-export const resume = role("resume");
+/** Mark the resume command. @category combinators @public */
+export const resume = role("Resume");
 
-/** Mark a stop / shutdown command (terminal or restartable per kind). @category combinators @public */
-export const stop = role("stop");
+/** Mark the stop / shutdown command. @category combinators @public */
+export const stop = role("Stop");
 
 /**
- * Sugar: `.pipe(Lifecycle.lifecycle("pause"))` — prefer the named combinators above.
+ * Sugar: `.pipe(Lifecycle.lifecycle("Pause"))` — prefer the named combinators above.
  *
  * @category combinators
  * @public
@@ -82,32 +82,28 @@ export const stop = role("stop");
 export const lifecycle = <R extends Role>(lifecycleRole: R) => role(lifecycleRole);
 
 // =============================================================================
-// State projection
+// State (wire vocabulary — services + tools)
 // =============================================================================
 
 /**
- * Project a WorkPool (or priority) status snapshot into {@link State}.
- * `paused` collapses into `"paused"` only while `phase === "running"`.
+ * Shared lifecycle badge on the wire. A participating service exposes this as a
+ * `Hyperlink.ref(Lifecycle.State)` (or equivalent) stamped with {@link state}.
  *
- * @category constructors
+ * @category models
  * @public
  */
-export const fromWorkPool = (status: {
-  readonly phase: "idle" | "running" | "draining" | "off";
-  readonly paused: boolean;
-}): State => {
-  if (status.phase === "idle") return "idle";
-  if (status.phase === "draining") return "draining";
-  if (status.phase === "off") return "off";
-  return status.paused ? "paused" : "running";
-};
+export type State = "Idle" | "Running" | "Paused" | "Draining" | "Off";
 
 /**
- * Project a Daemon status snapshot into {@link State}.
+ * Wire schema for {@link State} — the success schema of a Role `"State"` field.
  *
- * @category constructors
+ * @category schemas
  * @public
  */
-export const fromDaemon = (status: {
-  readonly supervising: boolean;
-}): State => (status.supervising ? "running" : "idle");
+export const State = Schema.Literals([
+  "Idle",
+  "Running",
+  "Paused",
+  "Draining",
+  "Off",
+]);
