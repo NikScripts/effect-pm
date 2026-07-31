@@ -17,7 +17,7 @@ Pre-1.0: breaking changes land as minor bumps.
 - **Non-serializable queue items** — local-only enqueue for function/`Effect` items; wire control + observability stay served. [queue-nonserializable-items.md](./queue-nonserializable-items.md).
 - **Standalone spawns** — `Daemon.spawn` / `WorkPool.open`: multi-instance ergonomics where spawned handles are plain caller-scoped Effects (alongside `Group`).
 - **Runtime identity & singleton runs** — in-process registry + a durable cross-runtime lease to prevent duplicate runs of the same logical process across hosts.
-- **Lifecycle kernel** — Effect-native Lifecycle (FiberHandle/Latch + Participating duals); tools via `start(lc|jobs|Tag)` without kind switches. L0–L5 + A/C + B + P11 tip-synced; Tag overloads on work branch. Plan: [lifecycle-kernel.md](./lifecycle-kernel.md) · locks: [lifecycle-kernel-decisions.md](../handoffs/lifecycle-kernel-decisions.md).
+- **Lifecycle kernel** — Effect-native Lifecycle (FiberHandle/Latch + Participating duals); tools via `start(lc|jobs|Tag)` without kind switches. L0–L6 tip-synced; L7 await P10/P12. Plan: [lifecycle-kernel.md](./lifecycle-kernel.md) · locks: [lifecycle-kernel-decisions.md](../handoffs/lifecycle-kernel-decisions.md).
 
 ## Persistence & storage
 

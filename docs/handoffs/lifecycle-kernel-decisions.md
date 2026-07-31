@@ -1,6 +1,6 @@
 # Lifecycle kernel — decisions & lock register
 
-**Status:** L0–L5 + A/C + **B** (Participating duals) + **P11** (internal split) tip-synced to `integration`.  
+**Status:** L0–L6 tip-synced — A/C + B (Participating duals / Tag overloads) + P8 remote parity + P11 internal split.  
 **Owner:** Agent 5.  
 **Full Eng plan (SSOT for architecture / slices / acceptance):** [`docs/plans/lifecycle-kernel.md`](../plans/lifecycle-kernel.md).  
 **Guide:** [`docs/guides/lifecycle.md`](../guides/lifecycle.md).  
@@ -87,9 +87,9 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 - **Reject:** Lifecycle State as a precondition for handoff; conflating Node drain with HyperService Lifecycle; inventing a Lifecycle↔handoff bridge API.
 - **Blocks:** L6 (docs clarity; no Lifecycle gate Eng).
 
-### P8 — Remote parity — Proposed (acceptance Eng’d; await owner Locked)
+### P8 — Remote parity — Locked (Eng’d)
 
-- **Choose:** `Lifecycle.start(clientTag)` / Participating duals identical when Tag is `Hyperlink.client`.
+- **Choose:** `Lifecycle.start(clientTag)` / Participating duals identical when Tag is `Hyperlink.client` (Tag overload on `start` / `pause` / `resume` / `stop` — no `*From`).
 - **Reject:** Separate “lifecycle client” API; resurrecting projected `from`.
 - **Proof:** `test/lifecycle-remote-http.test.ts` — WorkPool + Daemon over http; duals + Illegal from Off.
 - **Blocks:** L6.
@@ -130,7 +130,7 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 ## 3. Open questions (need owner before locking)
 
 1. **Versioned schema** — orthogonal; keep on its own decisions doc / owner go.
-2. Tip-sync L0–L5 + A/C reshape when owner asks.
+2. **P10 / P12** — Gate opt-in wording + which Lifecycle symbols get `@locked` (L7).
 
 ---
 
@@ -146,15 +146,15 @@ Full table + acceptance criteria: [plan §8](../plans/lifecycle-kernel.md#8-eng-
 | **L3** | P2 | Capability-typed `LifecycleCore` / `LifecyclePausable` — Eng’d (A) |
 | **L4** | P4 | `Event` + `lifecycleEvents` — Eng’d |
 | **L5** | P5 | `ui/LifecycleView` pack — Eng’d (chrome follow-up) |
-| **L6** | P7, P8 | Handoff docs (Eng’d in guide) + remote Participating duals |
-| **L7** | P10+ | Docs + `@locked` candidates |
+| **L6** | P7, P8 | Handoff docs + remote Participating duals — **Eng’d** |
+| **L7** | P10+ | Docs + `@locked` candidates — await owner |
 
 ---
 
 ## 5. Immediate next step
 
-1. P5 chrome → Agent G; P7 → no Lifecycle gate (Locked); L6 handoff prose in guide.  
-2. P8 acceptance Eng’d — owner `@locked` to close L6; then L7 / `@locked` candidates.  
+1. L6 closed (P7 + P8 Locked Eng’d). P5 chrome → Agent G.  
+2. Next: owner on **P10** / **P12** before L7 Eng.  
 3. Open questions: §3.
 
 ---

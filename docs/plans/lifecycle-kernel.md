@@ -1,6 +1,6 @@
 # Plan: Lifecycle kernel
 
-**Status:** L0–L5 + A/C + **B** (Participating duals) + **P11** (internal split) tip-synced.  
+**Status:** L0–L6 tip-synced (Tag overloads + P8 remote duals + P11). L7 await owner P10/P12.  
 **Agent:** 5.  
 **Decisions / lock register:** [`../handoffs/lifecycle-kernel-decisions.md`](../handoffs/lifecycle-kernel-decisions.md) (approve P-locks item-by-item before Eng).  
 **Shipped guide (substrate):** [`../guides/lifecycle.md`](../guides/lifecycle.md).  
@@ -344,7 +344,7 @@ are Locked.** Substrate-only fixes OK on the work branch.
 | **L4** | P4 | Events stream | **Eng’d (C)** — derived from `state` changes; Spec `lifecycleEvents`; no Event PubSub |
 | **L5** | P5 | `ui/LifecycleView` pack + generic chrome | **Eng’d pack** (`pack` / `pausable`); chrome → Agent G; Lifecycle core tree-shake |
 | **P11** | — | Module layout split | **Eng’d** — shell + `lifecycleModel` + engine |
-| **L6** | P7, P8 | Handoff docs (no Lifecycle State gate) + remote duals | Guide handoff prose Eng’d; P8 remote dual acceptance Eng’d (`lifecycle-remote-http`); await owner Locked |
+| **L6** | P7, P8 | Handoff docs (no Lifecycle State gate) + remote duals | **Eng’d** — guide handoff prose; `lifecycle-remote-http`; Tag overloads local/remote |
 | **L7** | P10+ | Docs polish; `@locked` candidates; archive exploratory wording | Guide = dream truth; decisions P-locks Closed |
 
 Each slice: all tsconfigs typecheck; `@effect/vitest` + `TestClock`; public type/error-channel
