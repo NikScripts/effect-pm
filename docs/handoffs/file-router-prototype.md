@@ -29,72 +29,39 @@ Route.fileRoot()                 // root + "/" + topLevel
 Route.fileRoot({ dir: "./pages" })
 ```
 
-## Page mark — `View.static` / `View.dynamic` / `View.build` (locked)
+## Page mark — `Page.*` + `Page.Tag` (locked direction)
 
-**Not** named functions, **not** Waku `getConfig`, **not** JSX wrappers for SSG mode.
-Path string is the key; pass the component (or prefer a page **class**).
+Naming detail: [`view-page-naming.md`](./view-page-naming.md) — **not**
+`View.Page.Tag` (collides with dashboard size chrome). Kill the word **skin**;
+use **`provides`**.
 
-Values are camelCase (helpers). Prefer a **class** page when metadata / DI matter.
+Static/Dynamic/Build exist largely **because** file routing + codegen are
+priorities: mark on the module → engine registration; codegen → typed paths.
 
 ```ts
-// Bare component — helper (camelCase)
-export default View.dynamic("/docs/:chapter", Chapter)
-export default View.static("/about", About)
-export default View.build("/docs/:chapter", Chapter, {
-  paths: () => chapters.map((c) => c.slug),
+import * as Page from "hyperlink-ts/ui/Page"
+
+export default Page.dynamic("/search", SearchView)
+export default Page.build("/docs/:chapter", ChapterView, {
+  paths: listChapterSlugs, // Effect
 })
 
-// Preferred — page class (PascalCase Tag-shaped), metadata on the class
-class DocsChapter extends View.Page.Tag<DocsChapter, ChapterProps>()(
+class DocsChapter extends Page.Tag<DocsChapter, ChapterProps>()(
   "app/page/docs-chapter",
   {
     path: "/docs/:chapter",
-    render: "build", // or static | dynamic — owned discriminant PascalCase
-    // …title, crumbs, og, … see Metadata
+    render: Page.Render.Build(),
+    title: "Docs",
+    paths: listChapterSlugs,
   },
 ) {}
-export default View.build(DocsChapter) // path/render/paths from class statics
+export default Page.build(DocsChapter)
 ```
 
-| Form | When |
-|------|------|
-| `View.dynamic(path, Comp)` | Page is just a component — no class yet |
-| `View.static` / `View.build` | Same, other render modes |
-| Page **class** | Preferred — room for metadata, nested `View.Tag`, Layer skins |
+`Page.Tag` still needs work (statics schema, `Page.build(Tag)`, param Schema, …).
 
-Default when unmarked: **static** (fixed paths). Param routes must mark
-`build` (+ `paths`) or `dynamic` — fail loud if missing.
-
-`View.static` / `.dynamic` / `.build` stamp module metadata the file-router
-reads at load → internal `createPages({ render, staticPaths })`. Apps never
-see Waku’s shape.
-
-**No** Layer-shaped deps on the page mark — pass the component. Need DI inside
-the page → nest normal `View.Tag` + `View.provide` (Layer `R` stacks as usual).
-
-## Metadata (where it lives)
-
-Pages need more than render mode (title, description, crumbs, OG, …).
-
-| Home | Use |
-|------|-----|
-| **Page class statics** (preferred) | SSOT next to path/render — same bag as `View.*.Tag` statics |
-| Options on `View.build(path, Comp, opts)` | Bare-component escape hatch |
-| Not a second sidecar file per route | Avoid drift |
-
-Exact schema TBD at Eng; keep it Schema-first and optional fields.
-
-## `View.layout` (planned)
-
-Waku/file layouts (`_layout.tsx`) need a Hyperlink mark too.
-
-- **Value helper (camelCase):** `View.layout(path, LayoutComp)` — default until we
-  need class semantics.
-- **Class later if useful:** `View.Layout` (PascalCase) only if it earns Tag-like
-  metadata / provide — same bar as preferring page classes.
-
-Layouts share render defaults with pages (unmarked → static) unless marked
-dynamic.
+Default unmarked fixed path → Static. Param routes must mark Build (+ paths) or
+Dynamic. Layout: `Page.layout` (camelCase); `Page.Layout` class only if earned.
 
 ## Codegen (invisible)
 

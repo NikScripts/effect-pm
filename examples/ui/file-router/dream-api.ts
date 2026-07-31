@@ -12,13 +12,14 @@
  *
  * ## Three layers (keep them straight)
  *
- * 1. **Page mark** — `View.static` / `.dynamic` / `.build` (camelCase helpers) or a
- *    preferred **page class** (`View.Page.Tag`) with path/render/meta on statics.
+ * 1. **Page mark** — `Page.static` / `.dynamic` / `.build` (camelCase) or preferred
+ *    **`Page.Tag`** class with path/render/meta on statics. Not `View.Page.Tag`
+ *    (that name collides with dashboard size chrome). See
+ *    `docs/handoffs/view-page-naming.md`.
  * 2. **Route catalog** — typed urls (`Route.fileRoot` / `fromEffect`) so `urls.chapter("x")`
  *    is a closed builder, not a stringly href.
- * 3. **View skins** — normal `View.provide` + camelCase `layer` / `skins`. Nested UI
- *    Tags inside a page are ordinary DI (`R` stacks on Layers); the page mark itself
- *    is not a Layer factory.
+ * 3. **View provides** — `View.provide` + camelCase `provides` / `layer` (never “skins”).
+ *    Nested UI Tags inside a page are ordinary DI; the page mark is not a Layer factory.
  *
  * ## Render modes (owned PascalCase discriminants)
  *
@@ -62,7 +63,7 @@ const PageStampId = "~hyperlink-ts/View/page" as const;
 
 /**
  * Metadata + render plan attached to a page module.
- * Prefer putting this on a {@link View.Page.Tag} class; helpers stamp the same bag
+ * Prefer putting this on a `Page.Tag` class; helpers stamp the same bag
  * onto a bare component for the escape hatch.
  *
  * @internal sketch — lands on View once Eng’d
@@ -97,16 +98,16 @@ export const pageStampOf = (comp: object): PageStamp | undefined => {
 };
 
 // =============================================================================
-// View.static / .dynamic / .build / .layout — camelCase helpers (stand-in)
+// Page.static / .dynamic / .build / .layout — camelCase helpers (stand-in)
 // =============================================================================
 
 /**
- * Stand-in for the public `View` page helpers. Path string is the route key —
- * never a function `name`.
+ * Stand-in for public `Page.*` helpers (module `hyperlink-ts/ui/Page` when Eng’d).
+ * Path string is the route key — never a function `name`.
  *
  * @internal sketch
  */
-export const viewPage = {
+export const Page = {
   /**
    * SSG. Fixed routes can omit a mark (default Static); spelling it out documents intent.
    */
@@ -186,21 +187,21 @@ export const listChapterSlugs: Effect.Effect<ReadonlyArray<string>> =
  * Fixed marketing page. Helper makes the Static mark explicit; default would be
  * the same if unmarked.
  */
-export const About = viewPage.static(
+export const About = Page.static(
   "/about",
   (_props: {}) => React.createElement("main", null, "About"),
   { title: "About", description: "Who we are" },
 );
 
 /** Search hits the index every request — Dynamic. */
-export const Search = viewPage.dynamic(
+export const Search = Page.dynamic(
   "/search",
   (_props: {}) => React.createElement("main", null, "Search"),
   { title: "Search" },
 );
 
 // =============================================================================
-// Preferred — page class (View.Page.Tag) + nested View.Tag + camelCase layers
+// Preferred — Page.Tag (+ nested View.Tag) + camelCase `provides` layer
 // =============================================================================
 
 /**
@@ -213,8 +214,8 @@ export class ChapterParams extends Schema.Class<ChapterParams>("ChapterParams")(
 ) {}
 
 /**
- * Nested chrome inside the page — ordinary View Tag (DI), **not** part of the
- * file-router stamp. Provide via `View.provide` on a camelCase `skins` layer.
+ * Nested chrome inside the page — ordinary {@link View.Tag} (DI), **not** part of
+ * the file-router stamp. Pay with `View.provide` on a camelCase `provides` layer.
  */
 export class ChapterAside extends View.Tag<
   ChapterAside,
@@ -222,13 +223,15 @@ export class ChapterAside extends View.Tag<
 >()("examples/file-router/chapter-aside") {}
 
 /**
- * The page itself — size chrome `Page`, path/render/meta on statics (SSOT).
+ * File-router page — **`Page.Tag`**, not `View.Page.Tag` (dashboard size chrome).
  *
- * File-router Eng reads `path` / `render` / `paths` / title from this bag.
- * Nested Tags (Aside) stack Layer `R` until `skins` provides them — same story as
- * Dashboard compose, unrelated to SSG mode.
+ * Statics hold path / render / paths / title. Eng: `Page.build(DocsChapter)` reads
+ * this bag. Nested View Tags stack Layer `R` until `provides` pays them — unrelated
+ * to SSG mode. `Page.Tag` still needs work (schema of statics, build(Tag), …).
+ *
+ * Stand-in mint: View.Tag + page statics until `hyperlink-ts/ui/Page` exists.
  */
-export class DocsChapter extends View.Page.Tag<
+export class DocsChapter extends View.Tag<
   DocsChapter,
   { readonly chapter: string }
 >()("examples/file-router/docs-chapter", {
@@ -241,10 +244,9 @@ export class DocsChapter extends View.Page.Tag<
 }) {}
 
 /**
- * Skin for the page Tag — camelCase layer binding (types-and-naming).
- * Inside: yield-style DI is Layer provide, not Effect.gen in the component.
+ * Implementations for Tags used by pages — camelCase `provides` (not “skins”).
  */
-export const docsChapterSkins = Layer.mergeAll(
+export const docsChapterProvides = Layer.mergeAll(
   View.provide(ChapterAside, ({ chapter }) =>
     React.createElement("aside", null, `On this page · ${chapter}`),
   ),
@@ -253,17 +255,15 @@ export const docsChapterSkins = Layer.mergeAll(
       "article",
       null,
       React.createElement("h1", null, chapter),
-      // Nested Tag usage once a matcher/kit exists — debt paid by pagesLayer
       React.createElement("p", null, `Chapter: ${chapter}`),
     ),
   ),
 );
 
 /**
- * Default export shape the file module would use once `View.build(Tag)` lands:
- * stamp mirrors the class statics so the loader has one read path.
+ * Default export once `Page.build(Tag)` lands — stamp mirrors class statics.
  */
-export const DocsChapterPage = viewPage.build(
+export const DocsChapterPage = Page.build(
   "/docs/:chapter",
   (props: { readonly chapter: string }) =>
     React.createElement("article", null, props.chapter),
@@ -275,10 +275,10 @@ export const DocsChapterPage = viewPage.build(
 );
 
 // =============================================================================
-// Layout
+// Layout — Page.layout (camelCase); Page.Layout class only if earned
 // =============================================================================
 
-export const BookLayout = viewPage.layout("/", (props) =>
+export const BookLayout = Page.layout("/", (props) =>
   React.createElement("div", { className: "book" }, props.children),
 );
 
@@ -302,8 +302,8 @@ export const site = Route.make("fileRouterDream").add(
 
 export const urls = Route.urlBuilder(site);
 
-/** App pages Layer — still camelCase; merge into compose at the OS edge. */
-export const pagesLayer = Layer.mergeAll(docsChapterSkins);
+/** App provides Layer — camelCase; merge at the OS edge. */
+export const pagesLayer = Layer.mergeAll(docsChapterProvides);
 
 // =============================================================================
 // Demo — Effect program (no console.*, no raw promises)
@@ -332,7 +332,7 @@ const program = Effect.gen(function* () {
   yield* Effect.logInfo(`  ${urls.chapter("routing")}`);
 
   yield* Effect.logInfo(
-    "layers: pagesLayer is camelCase; skins pay View.Tag R at compose",
+    "layers: pagesLayer / provides are camelCase; View.provide pays Tag R",
   );
   void pagesLayer;
   void DocsChapter;
