@@ -75,7 +75,7 @@ Same typed contract (`Route` catalog, `urls`, `Link` / `to` / `go` / `Outlet`).
 
 | Layer | Entry | Install |
 |-------|-------|---------|
-| **Lite** | `hyperlink-ts/ui/Router` | `Router.make(api, "memory"\|"history")` — no `waku` peer |
+| **Lite** | `hyperlink-ts/ui/Router` | `Router.make(api, "Memory"\|"History")` — no `waku` peer |
 | **Waku** | `hyperlink-ts/ui/Router/waku` | `Router.waku(api)` / `Router.layer.waku` → same `Service` via unified `Provider` |
 
 Not two routers — one `Service`, Waku adapted in. Companion entry only so lite never pulls optional `waku`. Dashboard uses `GroupNav` on **either** layer — not built into Router. Docs site skins the Waku entry (`setDefault` + no-op Outlet for file routes).

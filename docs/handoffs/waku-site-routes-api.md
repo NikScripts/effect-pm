@@ -40,9 +40,9 @@ urls.api.symbol("effect", "Effect.succeed") // overload
 urls.search({ query: { q: "WorkPool" } })
 ```
 
-## Use (full Router + site skin)
+## Use (Waku layer + site skin)
 
-Package full edition: `hyperlink-ts/ui/Router/waku`. Site
+Package Waku layer: `hyperlink-ts/ui/Router/waku` (same `Service` as lite). Site
 `docs/site/src/ui/Router.tsx` is a thin skin — branded `urls`, `setDefault(docs)`
 so chrome works without a layout Provider, no-op `Outlet` for file-route bodies.
 
@@ -66,7 +66,7 @@ void r.to((u) => u.search({ query: { q: "WorkPool" } }))
 | `catalog` | SSOT path strings |
 | `Route.make(site)` | Typed catalog from `catalog.*` |
 | `Route.urlBuilder` + sugar | Positional href builders (`urls`) |
-| `hyperlink-ts/ui/Router/waku` | Full edition Service / Link / to / go |
+| `hyperlink-ts/ui/Router/waku` | Waku layer — same Service / Link / to / go |
 | Site `ui/Router.tsx` | Skin: default binding + no-op Outlet |
 | Chrome + API + search | In-app hrefs use `Router.Link` / `urls.*` |
 | Nav + chapter links | `hrefFor` / `resolveBookHref` / `docs/nav.ts` via `urls` |

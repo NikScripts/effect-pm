@@ -281,7 +281,7 @@ export class DuplicateSharedInstance extends Data.TaggedError(
  */
 export class SharedRoutingError extends Data.TaggedError("SharedRoutingError")<{
   readonly method: string;
-  readonly reason: "missing-key" | "unknown-key";
+  readonly reason: "MissingKey" | "UnknownKey";
   readonly key?: string;
 }> {}
 
@@ -324,7 +324,7 @@ export class LocalOnlyMethod extends Data.TaggedError("LocalOnlyMethod")<{
  * @public
  */
 export class EffectFnMissingPayload extends Data.TaggedError("EffectFnMissingPayload")<{
-  readonly reason?: "missing" | "void" | "empty-fields";
+  readonly reason?: "Missing" | "Void" | "EmptyFields";
 }> {}
 
 /**
@@ -1269,13 +1269,13 @@ const assertEffectFnPayload = (
   payload: EffectFnPayload | undefined,
 ): EffectFnPayload => {
   if (payload === undefined) {
-    throw new EffectFnMissingPayload({ reason: "missing" });
+    throw new EffectFnMissingPayload({ reason: "Missing" });
   }
   if (payload === Schema.Void) {
-    throw new EffectFnMissingPayload({ reason: "void" });
+    throw new EffectFnMissingPayload({ reason: "Void" });
   }
   if (isPlainConfigObject(payload) && Object.keys(payload).length === 0) {
-    throw new EffectFnMissingPayload({ reason: "empty-fields" });
+    throw new EffectFnMissingPayload({ reason: "EmptyFields" });
   }
   return payload;
 };
@@ -2872,7 +2872,7 @@ export class IdentityMultiNode extends Data.TaggedError("IdentityMultiNode")<{
  */
 export class LookupClientError extends Data.TaggedError("LookupClientError")<{
   readonly tag: string;
-  readonly reason: "missing" | "ambiguous";
+  readonly reason: "Missing" | "Ambiguous";
   readonly count: number;
 }> {}
 
@@ -4488,7 +4488,7 @@ const getOrCreateSharedHandlerLayer = (
       );
       if (instanceKey === undefined) {
         return Effect.die(
-          new SharedRoutingError({ method, reason: "missing-key" }),
+          new SharedRoutingError({ method, reason: "MissingKey" }),
         );
       }
       const flatImpl = state.table.get(instanceKey);
@@ -4496,7 +4496,7 @@ const getOrCreateSharedHandlerLayer = (
         return Effect.die(
           new SharedRoutingError({
             method,
-            reason: "unknown-key",
+            reason: "UnknownKey",
             key: instanceKey,
           }),
         );
@@ -6277,7 +6277,7 @@ export const lookupClient = <Self, S extends Spec>(
                 Effect.fail(
                   new LookupClientError({
                     tag: tag.key,
-                    reason: "ambiguous",
+                    reason: "Ambiguous",
                     count,
                   }),
                 ),
@@ -6302,7 +6302,7 @@ export const lookupClient = <Self, S extends Spec>(
         if (entries.length === 0) {
           return yield* new LookupClientError({
             tag: tag.key,
-            reason: "missing",
+            reason: "Missing",
             count: 0,
           });
         }
@@ -6336,7 +6336,7 @@ export const lookupClient = <Self, S extends Spec>(
         }
         return yield* new LookupClientError({
           tag: tag.key,
-          reason: "ambiguous",
+          reason: "Ambiguous",
           count: entries.length,
         });
       });
@@ -6355,7 +6355,7 @@ export const lookupClient = <Self, S extends Spec>(
               yield* Scope.close(scope, Exit.void);
               return yield* new LookupClientError({
                 tag: tag.key,
-                reason: "missing",
+                reason: "Missing",
                 count: 0,
               });
             }

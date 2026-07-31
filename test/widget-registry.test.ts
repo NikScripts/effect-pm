@@ -51,14 +51,21 @@ it("isLeafTag accepts a keyed tag, rejects groups and non-tags", () => {
   expect(isLeafTag({ key: 42 })).toBe(false); // key must be a string
 });
 
-it("web base registry covers every leaf MemberKind wire stamp", () => {
+it("wireKindOf is identity over every leaf MemberKind", () => {
+  expect(leafMemberKinds.length).toBeGreaterThan(0);
   for (const leaf of leafMemberKinds) {
-    expect(HashMap.has(webBase.byKind, wireKindOf[leaf])).toBe(true);
+    expect(wireKindOf[leaf]).toBe(leaf);
   }
 });
 
-it("tui base registry covers every leaf MemberKind wire stamp", () => {
-  for (const leaf of leafMemberKinds) {
-    expect(HashMap.has(tuiBase.byKind, wireKindOf[leaf])).toBe(true);
-  }
+it("web base registry is fallback-only (View.react owns kind chrome)", () => {
+  expect(HashMap.size(webBase.byKind)).toBe(0);
+  expect(HashMap.size(webBase.byKey)).toBe(0);
+  expect(webBase.fallback).toBeTypeOf("function");
+});
+
+it("tui base registry is fallback-only (View.react owns kind chrome)", () => {
+  expect(HashMap.size(tuiBase.byKind)).toBe(0);
+  expect(HashMap.size(tuiBase.byKey)).toBe(0);
+  expect(tuiBase.fallback).toBeTypeOf("function");
 });

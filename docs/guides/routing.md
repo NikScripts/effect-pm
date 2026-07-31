@@ -34,8 +34,8 @@ const router = Router.make(site, "History") // lite
 | Piece | Import | Job |
 |-------|--------|-----|
 | Catalog | `hyperlink-ts/ui/Route` | Paths, groups, `handle`, `urlBuilder` |
-| Lite layer | `hyperlink-ts/ui/Router` | `make` / `memory` / `history` — no `waku` peer |
-| Waku layer | `hyperlink-ts/ui/Router/waku` | `waku` / unified `Provider` — same `Service` |
+| Lite layer | `hyperlink-ts/ui/Router` | `make` / `memory` / `history` — modes `"Memory"` / `"History"`; no `waku` peer |
+| Waku layer | `hyperlink-ts/ui/Router/waku` | `waku` / unified `Provider` — mode `"Waku"`; same `Service` |
 | GroupNav | `hyperlink-ts/ui/GroupNav` | Group tree open/up/health **on top of** Router |
 | Dashboard | `hyperlink-ts/web` / `tui` | Shell built **on** Router + GroupNav — not inside them |
 
@@ -52,7 +52,7 @@ only so lite apps never pull the optional `waku` peer.
 
 | Layer | Entry | Install | Use when |
 |-------|-------|---------|----------|
-| **Lite** | `hyperlink-ts/ui/Router` | `make` / `memory` / `history` | Tests, embeds, non-RSC |
+| **Lite** | `hyperlink-ts/ui/Router` | `make(site, "Memory"\|"History")` | Tests, embeds, non-RSC |
 | **Waku** | `hyperlink-ts/ui/Router/waku` | `waku(site)` → `Provider` | Website, RSC/SSG/SSR |
 
 ```ts

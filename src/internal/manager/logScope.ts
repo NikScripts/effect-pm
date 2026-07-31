@@ -25,26 +25,26 @@ import {
  * @internal
  */
 export type LogScope =
-  | { readonly _tag: "all" }
-  | { readonly _tag: "group"; readonly wireKey: string }
+  | { readonly _tag: "All" }
+  | { readonly _tag: "Group"; readonly wireKey: string }
   | { readonly _tag: typeof daemonKind; readonly wireKey: string; readonly key: string }
   | { readonly _tag: typeof workPoolKind; readonly wireKey: string; readonly key: string };
 
 /** @internal */
 export const logScopeWireKey = (scope: LogScope): string | undefined =>
-  scope._tag === "all" ? undefined : scope.wireKey;
+  scope._tag === "All" ? undefined : scope.wireKey;
 
 /** @internal */
 export const logEntryMatchesScope = (
   entry: LogEntry,
   scope: LogScope,
 ): boolean => {
-  if (scope._tag === "all") {
+  if (scope._tag === "All") {
     return true;
   }
-  // "group" is legacy CLI scoping (groups were removed) — no per-entry group annotation remains, so it
+  // "Group" is legacy CLI scoping (groups were removed) — no per-entry group annotation remains, so it
   // matches every line. Hyperlink scopes filter by lineage key.
-  if (scope._tag === "group") {
+  if (scope._tag === "Group") {
     return true;
   }
   return LogEntryModule.hasKey(scope.key)(entry);
@@ -81,12 +81,12 @@ export const resolveLogScope = <G extends GroupCatalogEntry>(
   { readonly reason: string }
 > =>
   Option.match(input, {
-    onNone: () => Effect.succeed({ _tag: "all" }),
+    onNone: () => Effect.succeed({ _tag: "All" }),
     onSome: (value) =>
       Effect.gen(function* () {
         const asGroup = resolveGroupFromInput(groups, value);
         if (Option.isSome(asGroup)) {
-          return { _tag: "group", wireKey: asGroup.value.key };
+          return { _tag: "Group", wireKey: asGroup.value.key };
         }
         const resolution = resolveDaemonManagerTarget(value, candidates);
         if (resolution._tag === "Resolved") {

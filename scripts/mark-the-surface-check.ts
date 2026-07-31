@@ -82,7 +82,7 @@ interface Unmarked {
   readonly path: string;
   readonly line: number;
   readonly name: string;
-  readonly reason: "missing" | "both";
+  readonly reason: "Missing" | "Both";
 }
 
 // A statement is an exported declaration when it carries the `export` keyword.
@@ -95,13 +95,13 @@ const isExported = (node: ts.Node): boolean =>
 const markerVerdict = (
   node: ts.Node,
   full: string,
-): "public" | "internal" | "both" | "missing" => {
+): "public" | "internal" | "Both" | "Missing" => {
   const lead = full.slice(node.getFullStart(), node.getStart());
   const isPublic = lead.includes("@public");
   const isInternal = lead.includes("@internal");
-  if (isPublic && isInternal) return "both";
+  if (isPublic && isInternal) return "Both";
   if (isPublic || isInternal) return isPublic ? "public" : "internal";
-  return "missing";
+  return "Missing";
 };
 
 // Exported declaration names in one file, each mapped to its marker verdict. Overload sets collapse
@@ -190,7 +190,7 @@ const program = Effect.gen(function* () {
   for (const [file, items] of byFile) {
     yield* Console.error(`  ${file}`);
     for (const u of items) {
-      const why = u.reason === "both" ? "has BOTH @public and @internal" : "no marker";
+      const why = u.reason === "Both" ? "has BOTH @public and @internal" : "no marker";
       yield* Console.error(`    L${u.line}  ${u.name} — ${why}`);
     }
   }

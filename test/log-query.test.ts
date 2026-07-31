@@ -8,7 +8,7 @@ describe("logQuery", () => {
   it("builds an open query with defaults when no filters are set", () =>
     Effect.gen(function* () {
       const query = yield* buildLogQuery({
-        scope: { _tag: "all" },
+        scope: { _tag: "All" },
         from: Option.none(),
         to: Option.none(),
         after: Option.none(),
@@ -26,7 +26,7 @@ describe("logQuery", () => {
   it("rejects an inverted date range", () =>
     Effect.gen(function* () {
       const result = yield* buildLogQuery({
-        scope: { _tag: "all" },
+        scope: { _tag: "All" },
         from: Option.some("2026-05-22T20:00:00.000Z"),
         to: Option.some("2026-05-22T19:00:00.000Z"),
         after: Option.none(),

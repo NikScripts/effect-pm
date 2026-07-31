@@ -231,7 +231,7 @@ export const make = <R, ER>(
     const rows = stdout?.rows ?? 24;
 
     const [sel, setSel] = React.useState(0);
-    const [mode, setMode] = React.useState<"normal" | "command">("normal");
+    const [mode, setMode] = React.useState<"Normal" | "Command">("Normal");
     const [cmd, setCmd] = React.useState("");
     const [msg, setMsg] = React.useState("press a number to act · : for command");
 
@@ -271,14 +271,14 @@ export const make = <R, ER>(
     };
 
     useInput((input, key) => {
-      if (mode === "command") {
+      if (mode === "Command") {
         if (key.return) {
           runCommand(cmd);
           setCmd("");
-          setMode("normal");
+          setMode("Normal");
         } else if (key.escape) {
           setCmd("");
-          setMode("normal");
+          setMode("Normal");
         } else if (key.backspace || key.delete) {
           setCmd((c) => c.slice(0, -1));
         } else if (input.length > 0 && !key.ctrl && !key.meta) {
@@ -287,7 +287,7 @@ export const make = <R, ER>(
         return;
       }
       if (input === ":") {
-        setMode("command");
+        setMode("Command");
         setCmd("");
       } else if (key.leftArrow || input === "h") {
         setSel((s) => Math.max(0, s - 1));
@@ -302,7 +302,7 @@ export const make = <R, ER>(
         if (action !== undefined && setter !== undefined) {
           if (action.fields.length > 0) {
             // needs args → open the command bar prefilled
-            setMode("command");
+            setMode("Command");
             setCmd(`${action.name} `);
             setMsg(`args: ${action.fields.map(([f, k]) => `${f}=<${k}>`).join(" ")}`);
           } else {
@@ -331,7 +331,7 @@ export const make = <R, ER>(
 
         <Box flexDirection="column">
           <Box borderStyle="round" borderColor="gray" paddingX={1}>
-            {mode === "command" ? (
+            {mode === "Command" ? (
               <Text color="yellowBright">
                 :{cmd}
                 <Text inverse> </Text>

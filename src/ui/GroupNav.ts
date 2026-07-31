@@ -16,22 +16,47 @@ import * as internal from "../internal/groupNav";
 import type { LeafTag } from "./widgetRegistry";
 import * as Router from "./Router";
 
+/** Group or leaf member accepted by {@link open}. @public */
 export type MemberTag = internal.MemberTag;
+
+/** Root Group shape GroupNav walks. @public */
 export type RouteGroup = internal.RouteGroup;
+
+/** Snapshot of keys / trail / selection for the current location. @public */
 export type State = internal.State;
 
+/** Resolve {@link State} from a root Group + live Router. @public */
 export const state: typeof internal.state = internal.state;
+
+/** Push-navigate to a Group or leaf member. @public */
 export const open: typeof internal.open = internal.open;
+
+/** Push-navigate by a short-name path key under the current group. @public */
 export const openKey: typeof internal.openKey = internal.openKey;
+
+/** Replace-navigate one segment up. @public */
 export const up: typeof internal.up = internal.up;
+
+/** Open the logs view for a leaf under the root. @public */
 export const openLogs: typeof internal.openLogs = internal.openLogs;
+
+/** Open the schedule view for a leaf under the root. @public */
 export const openSchedule: typeof internal.openSchedule = internal.openSchedule;
+
+/** Navigate to the catalog health index (`urls.health()` or `/health`). @public */
 export const openHealth: typeof internal.openHealth = internal.openHealth;
+
+/** Navigate to a node health URL (`urls.nodeHealth(id)` or `/health/<id>`). @public */
 export const openNode: typeof internal.openNode = internal.openNode;
+
+/** Format short-name keys as an href (`["Nwsl","HttpApi"]` → `/Nwsl/HttpApi`). @public */
 export const toHref: typeof internal.toHref = internal.toHref;
+
+/** `Group.isGroup` re-export for member discrimination. @public */
 export const isGroupMember: typeof internal.isGroupMember =
   internal.isGroupMember;
 
+/** {@link State} plus bound actions for the current Router. @public */
 export type Live = State & {
   readonly router: Router.Service;
   readonly open: (member: MemberTag) => void;

@@ -161,7 +161,7 @@ export function ws(
   if (isHyperlinkTagArg(nodeOrServesOrTag)) {
     const tag = nodeOrServesOrTag;
     const resolved = resolveTagListenTarget(tag, options);
-    if (resolved._tag === "tagNodeError") {
+    if (resolved._tag === "TagNodeError") {
       return failListenTagNode({
         tag: resolved.tag,
         reason: resolved.reason,
@@ -172,7 +172,7 @@ export function ws(
     const listenOptions = coerceWsListenOptions(
       resolved.addressArg as WsListenArg | undefined,
     );
-    if (resolved._tag === "nameless") {
+    if (resolved._tag === "Nameless") {
       return wsNameless(list, listenOptions);
     }
     const node = resolved.node;
