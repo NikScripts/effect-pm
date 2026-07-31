@@ -2532,7 +2532,8 @@ const buildDaemonImpl = <A, E, R>(
     });
     const readStatus = Effect.gen(function* () {
       const badge = yield* lifecycle.state.get;
-      const supervising = badge === "Running" || badge === "Paused";
+      const supervising =
+        badge._tag === "Running" || badge._tag === "Paused";
       return toWireStatus(yield* handle.snapshot, supervising);
     });
 

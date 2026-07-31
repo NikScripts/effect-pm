@@ -2,7 +2,9 @@
  * Lifecycle — Effect-shaped control panel for HyperService runtime lifetime.
  *
  * Composes {@link FiberHandle} / {@link FiberSet}, optional {@link Latch}, and a
- * {@link SubscriptionRef} badge. Not a second Scope; not a callback FSM.
+ * {@link SubscriptionRef} badge. Discriminated unions use `_tag` everywhere — State,
+ * Event, and errors — so tools match with `Match` / {@link Hyperlink.runForEachTag} /
+ * `Effect.catchTag`.
  *
  * ## Implementation
  *
@@ -10,9 +12,9 @@
  * const latch = yield* Latch.make(true)
  * const lc = yield* Lifecycle.make({
  *   run: workerLoop,
- *   latch,                 // ⇒ pause / resume on the type
- *   release: windDown,     // drain before interrupt
- *   restartable: false,    // stop → Off
+ *   latch,
+ *   release: windDown,
+ *   restartable: false,
  * })
  * ```
  *
@@ -20,16 +22,15 @@
  *
  * ```ts
  * const lc = yield* Lifecycle.from(Jobs)
- * yield* lc.state.get
- * yield* lc.start
+ * yield* lc.state.get                    // { _tag: "Idle" } | …
+ * yield* lc.events.pipe(Hyperlink.runForEachTag({
+ *   Started: () => Effect.log("up"),
+ *   Stopped: (e) => Effect.log(e.to._tag),
+ * }))
  * yield* lc.pause.pipe(
- *   Effect.catchTag("LifecycleUnsupported", () => Effect.void),
+ *   Effect.catchTag("LifecycleUnsupported", (e) => Effect.log(e.role)),
  * )
  * ```
- *
- * Spec stamps (`Lifecycle.pause` → Role `"Pause"`) keep the wire introspectable via
- * `methodMeta`. Deferred bring-up: pipe {@link Hyperlink.deferStart} onto the layer —
- * `make` reads {@link Hyperlink.DeferStart} and stays `Idle` until `start`.
  *
  * @module Lifecycle
  */
@@ -69,7 +70,7 @@ const role =
   <Out>(method: Annotatable<R, Out>): Out =>
     method.annotate({ lifecycle });
 
-/** Mark the reactive {@link State} field (`lifecycle` / equivalent). @category combinators @public */
+/** Mark the reactive {@link State} field. @category combinators @public */
 export const state = role("State");
 
 /** Mark the start command. @category combinators @public */
@@ -81,7 +82,7 @@ export const pause = role("Pause");
 /** Mark the resume command. @category combinators @public */
 export const resume = role("Resume");
 
-/** Mark the stop / shutdown command. @category combinators @public */
+/** Mark the stop command. @category combinators @public */
 export const stop = role("Stop");
 
 /**
@@ -93,49 +94,87 @@ export const stop = role("Stop");
 export const lifecycle = <R extends Role>(lifecycleRole: R) => role(lifecycleRole);
 
 // =============================================================================
-// State (wire vocabulary)
+// State — tagged ADT (wire + runtime)
 // =============================================================================
 
-/**
- * Shared lifecycle badge. Success schema of a Role `"State"` field; element of
- * {@link Service.state}.
- *
- * @category models
- * @public
- */
-export type State = "Idle" | "Running" | "Paused" | "Draining" | "Off";
+/** @category schemas @public */
+export const Idle = Schema.TaggedStruct("Idle", {});
+/** @category schemas @public */
+export const Running = Schema.TaggedStruct("Running", {});
+/** @category schemas @public */
+export const Paused = Schema.TaggedStruct("Paused", {});
+/** @category schemas @public */
+export const Draining = Schema.TaggedStruct("Draining", {});
+/** @category schemas @public */
+export const Off = Schema.TaggedStruct("Off", {});
 
 /**
- * Wire schema for {@link State}.
+ * Shared lifecycle badge — tagged union. Match on `_tag`.
  *
  * @category schemas
  * @public
  */
-export const State = Schema.Literals([
-  "Idle",
-  "Running",
-  "Paused",
-  "Draining",
-  "Off",
-]);
-
-// =============================================================================
-// Events
-// =============================================================================
+export const State = Schema.Union([Idle, Running, Paused, Draining, Off]);
 
 /**
- * Transition facts on {@link Service.events}. Separate from WorkPool item/queue events.
- * Match with `_tag` / `Effect.catchTag` is N/A (stream elements, not errors).
+ * Shared lifecycle badge. Success schema of a Role `"State"` field.
  *
  * @category models
  * @public
  */
-export type Event =
-  | { readonly _tag: "Started" }
-  | { readonly _tag: "Paused" }
-  | { readonly _tag: "Resumed" }
-  | { readonly _tag: "StopRequested" }
-  | { readonly _tag: "Stopped"; readonly to: "Off" | "Idle" };
+export type State = typeof State.Type;
+
+/** @category constructors @public */
+export const idle = (): typeof Idle.Type => ({ _tag: "Idle" });
+/** @category constructors @public */
+export const running = (): typeof Running.Type => ({ _tag: "Running" });
+/** @category constructors @public */
+export const paused = (): typeof Paused.Type => ({ _tag: "Paused" });
+/** @category constructors @public */
+export const draining = (): typeof Draining.Type => ({ _tag: "Draining" });
+/** @category constructors @public */
+export const off = (): typeof Off.Type => ({ _tag: "Off" });
+
+/** Terminal badge after stop — Idle (restartable) or Off. @category models @public */
+export type Terminal = typeof Idle.Type | typeof Off.Type;
+
+// =============================================================================
+// Events — tagged ADT (wire + runtime)
+// =============================================================================
+
+/** @category schemas @public */
+export const Started = Schema.TaggedStruct("Started", {});
+/** @category schemas @public */
+export const EventPaused = Schema.TaggedStruct("Paused", {});
+/** @category schemas @public */
+export const Resumed = Schema.TaggedStruct("Resumed", {});
+/** @category schemas @public */
+export const StopRequested = Schema.TaggedStruct("StopRequested", {});
+/** @category schemas @public */
+export const Stopped = Schema.TaggedStruct("Stopped", {
+  to: Schema.Union([Idle, Off]),
+});
+
+/**
+ * Transition facts on {@link Service.events}. Match with `_tag` /
+ * {@link Hyperlink.runForEachTag}. Separate from WorkPool item/queue events.
+ *
+ * @category schemas
+ * @public
+ */
+export const Event = Schema.Union([
+  Started,
+  EventPaused,
+  Resumed,
+  StopRequested,
+  Stopped,
+]);
+
+/**
+ * @category models
+ * @public
+ */
+export type Event = typeof Event.Type;
 
 // =============================================================================
 // Errors — Data.TaggedError so Effect.catchTag works
@@ -153,15 +192,17 @@ export type Event =
  * @public
  */
 export class Unsupported extends Data.TaggedError("LifecycleUnsupported")<{
-  readonly role: "Pause" | "Resume" | "Start" | "Stop";
+  readonly role: Role;
 }> {}
 
 /**
- * Illegal transition for the current {@link State} (e.g. `start` while `Off`).
+ * Illegal transition for the current {@link State}.
  *
  * @example
  * lc.start.pipe(
- *   Effect.catchTag("LifecycleIllegal", (e) => Effect.log(`${e.op} from ${e.from}`)),
+ *   Effect.catchTag("LifecycleIllegal", (e) =>
+ *     Effect.log(`${e.op} from ${e.from._tag}`),
+ *   ),
  * )
  *
  * @category errors
@@ -169,7 +210,7 @@ export class Unsupported extends Data.TaggedError("LifecycleUnsupported")<{
  */
 export class Illegal extends Data.TaggedError("LifecycleIllegal")<{
   readonly from: State;
-  readonly op: "Start" | "Pause" | "Resume" | "Stop";
+  readonly op: Role;
 }> {}
 
 // =============================================================================
@@ -180,17 +221,15 @@ export class Illegal extends Data.TaggedError("LifecycleIllegal")<{
  * First-class lifecycle handle — what {@link make} builds and what {@link of} / {@link from}
  * project from a participating HyperService.
  *
- * @typeParam R - requirements on the command Effects (engine / worker context)
- *
  * @category models
  * @public
  */
 export interface Service<R = never> {
-  /** Live badge (`get` + `changes`). */
+  /** Live badge (`get` + `changes`) — elements are tagged {@link State}. */
   readonly state: Hyperlink.Subscribable<State>;
   /** Badge stream — same as `state.changes`. */
   readonly changes: Stream.Stream<State>;
-  /** Transition events (`_tag`: Started / Paused / …). */
+  /** Transition events — match with {@link Hyperlink.runForEachTag}. */
   readonly events: Stream.Stream<Event>;
   /**
    * Idle → Running (or Paused if latch starts closed). Idempotent when already Running/Paused.
@@ -206,8 +245,7 @@ export interface Service<R = never> {
 }
 
 /**
- * A HyperService (or handle) that participates in the Lifecycle protocol — enough surface
- * for {@link of} to build a {@link Service}.
+ * A HyperService (or handle) that participates in the Lifecycle protocol.
  *
  * @category models
  * @public
@@ -217,7 +255,6 @@ export interface Participating<R = never> {
   readonly start: Effect.Effect<void, never, R>;
   readonly pause?: Effect.Effect<void, never, R>;
   readonly resume?: Effect.Effect<void, never, R>;
-  /** Preferred stop verb. */
   readonly stop?: Effect.Effect<void, never, R>;
   /** WorkPool alias for stop (transitional until rename lands). */
   readonly shutdown?: Effect.Effect<void, never, R>;
@@ -240,7 +277,7 @@ export const of = <R = never>(svc: Participating<R>): Service<R> => {
     events: Stream.empty,
     start: Effect.mapError(
       svc.start,
-      (_: never) => new Illegal({ from: "Idle", op: "Start" }),
+      (_: never) => new Illegal({ from: idle(), op: "Start" }),
     ),
     pause: Effect.gen(function* () {
       if (svc.pause === undefined) {
@@ -286,7 +323,7 @@ export interface MakeOptions<R = never> {
   readonly run: Effect.Effect<void, never, R>;
   /**
    * Pause gate. When present, {@link Service.pause} / {@link Service.resume} close / open it.
-   * When omitted, those methods fail {@link Unsupported} (`_tag: "LifecycleUnsupported"`).
+   * When omitted, those methods fail {@link Unsupported}.
    */
   readonly latch?: Latch.Latch;
   /**
@@ -294,12 +331,12 @@ export interface MakeOptions<R = never> {
    */
   readonly release?: Effect.Effect<void, never, R>;
   /**
-   * Optional second wait after {@link release} (e.g. await queue empty → Off) before clearing
+   * Optional second wait after {@link release} (e.g. await queue empty) before clearing
    * fibers and publishing the terminal badge.
    */
   readonly awaitBeforeTerminal?: Effect.Effect<void, never, R>;
   /**
-   * After stop: `true` → `Idle` (restartable, Daemon); `false` → `Off` (WorkPool). Default `false`.
+   * After stop: `true` → Idle (restartable, Daemon); `false` → Off (WorkPool). Default `false`.
    */
   readonly restartable?: boolean;
   /**
@@ -312,7 +349,7 @@ export interface MakeOptions<R = never> {
 /**
  * Build a {@link Service} from Effect concurrency primitives.
  *
- * Reads ambient {@link Hyperlink.DeferStart}: when `true`, stays `Idle` until {@link Service.start};
+ * Reads ambient {@link Hyperlink.DeferStart}: when `true`, stays Idle until {@link Service.start};
  * otherwise runs `run` during `make`. Scope close runs {@link Service.stop}.
  *
  * @category constructors
@@ -323,12 +360,12 @@ export const make = <R = never>(
 ): Effect.Effect<Service<R>, never, R | Scope.Scope> =>
   Effect.gen(function* () {
     const restartable = options.restartable ?? false;
-    const afterStop: "Off" | "Idle" = restartable ? "Idle" : "Off";
+    const afterStop: Terminal = restartable ? idle() : off();
     const fiberMode = options.fiber ?? "handle";
     const deferred = yield* Hyperlink.DeferStart;
     const context = yield* Effect.context<R>();
 
-    const stateRef = yield* SubscriptionRef.make<State>("Idle");
+    const stateRef = yield* SubscriptionRef.make<State>(idle());
     const eventsHub = yield* PubSub.unbounded<Event>();
     const publish = (event: Event) =>
       PubSub.publish(eventsHub, event).pipe(Effect.asVoid);
@@ -365,15 +402,15 @@ export const make = <R = never>(
 
     const startFx: Effect.Effect<void, Illegal, R> = Effect.gen(function* () {
       const cur = yield* SubscriptionRef.get(stateRef);
-      if (cur === "Running" || cur === "Paused") return;
-      if (cur === "Draining" || cur === "Off") {
+      if (cur._tag === "Running" || cur._tag === "Paused") return;
+      if (cur._tag === "Draining" || cur._tag === "Off") {
         return yield* new Illegal({ from: cur, op: "Start" });
       }
       yield* installRun;
       if (options.latch !== undefined) {
-        yield* setState(options.latch.isOpen() ? "Running" : "Paused");
+        yield* setState(options.latch.isOpen() ? running() : paused());
       } else {
-        yield* setState("Running");
+        yield* setState(running());
       }
       yield* publish({ _tag: "Started" });
     });
@@ -384,12 +421,12 @@ export const make = <R = never>(
         ? Effect.fail(new Unsupported({ role: "Pause" }))
         : Effect.gen(function* () {
             const cur = yield* SubscriptionRef.get(stateRef);
-            if (cur === "Paused") return;
-            if (cur !== "Running") {
+            if (cur._tag === "Paused") return;
+            if (cur._tag !== "Running") {
               return yield* new Illegal({ from: cur, op: "Pause" });
             }
             yield* gate.close;
-            yield* setState("Paused");
+            yield* setState(paused());
             yield* publish({ _tag: "Paused" });
           });
 
@@ -398,24 +435,24 @@ export const make = <R = never>(
         ? Effect.fail(new Unsupported({ role: "Resume" }))
         : Effect.gen(function* () {
             const cur = yield* SubscriptionRef.get(stateRef);
-            if (cur === "Running") return;
-            if (cur !== "Paused") {
+            if (cur._tag === "Running") return;
+            if (cur._tag !== "Paused") {
               return yield* new Illegal({ from: cur, op: "Resume" });
             }
             yield* gate.open;
-            yield* setState("Running");
+            yield* setState(running());
             yield* publish({ _tag: "Resumed" });
           });
 
     const stopFx: Effect.Effect<void, never, R> = Effect.gen(function* () {
       const cur = yield* SubscriptionRef.get(stateRef);
-      if (cur === "Off" || cur === "Draining") return;
-      if (cur === "Idle" && !installed) {
+      if (cur._tag === "Off" || cur._tag === "Draining") return;
+      if (cur._tag === "Idle" && !installed) {
         yield* setState(afterStop);
         yield* publish({ _tag: "Stopped", to: afterStop });
         return;
       }
-      yield* setState("Draining");
+      yield* setState(draining());
       yield* publish({ _tag: "StopRequested" });
       if (options.release !== undefined) {
         yield* options.release;
@@ -473,7 +510,8 @@ export const spec = (options?: { readonly pausable?: boolean }) => {
   const base = {
     lifecycle: Hyperlink.ref(State)
       .annotate({
-        description: "Lifecycle badge (Idle / Running / Paused / Draining / Off).",
+        description:
+          "Lifecycle badge ({ _tag: Idle | Running | Paused | Draining | Off }).",
       })
       .pipe(state),
     start: Hyperlink.effect(Schema.Void)

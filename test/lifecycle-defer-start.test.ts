@@ -19,9 +19,20 @@ describe("Lifecycle building blocks", () => {
     expect(methodMeta(daemonControlSpec.stop).lifecycle).toBe("Stop");
   });
 
-  it("Lifecycle.State is the shared wire schema", () => {
-    expect(Schema.decodeUnknownSync(Lifecycle.State)("Idle")).toBe("Idle");
-    expect(() => Schema.decodeUnknownSync(Lifecycle.State)("idle")).toThrow();
+  it("Lifecycle.State is a tagged wire schema", () => {
+    expect(Schema.decodeUnknownSync(Lifecycle.State)({ _tag: "Idle" })).toEqual({
+      _tag: "Idle",
+    });
+    expect(() => Schema.decodeUnknownSync(Lifecycle.State)("Idle")).toThrow();
+  });
+
+  it("Lifecycle.Event is a tagged wire schema", () => {
+    expect(
+      Schema.decodeUnknownSync(Lifecycle.Event)({
+        _tag: "Stopped",
+        to: { _tag: "Idle" },
+      }),
+    ).toEqual({ _tag: "Stopped", to: { _tag: "Idle" } });
   });
 });
 
@@ -39,19 +50,19 @@ describe("Lifecycle.make — Effect-shaped", () => {
         restartable: true,
       }).pipe(Effect.provideService(Hyperlink.DeferStart, false));
 
-      expect(yield* lc.state.get).toBe("Running");
+      expect(yield* lc.state.get).toEqual({ _tag: "Running" });
       expect(yield* Ref.get(ticks)).toBe(1);
 
       yield* lc.pause;
-      expect(yield* lc.state.get).toBe("Paused");
+      expect(yield* lc.state.get).toEqual({ _tag: "Paused" });
       yield* lc.resume;
-      expect(yield* lc.state.get).toBe("Running");
+      expect(yield* lc.state.get).toEqual({ _tag: "Running" });
 
       yield* lc.stop;
-      expect(yield* lc.state.get).toBe("Idle");
+      expect(yield* lc.state.get).toEqual({ _tag: "Idle" });
 
       yield* lc.start;
-      expect(yield* lc.state.get).toBe("Running");
+      expect(yield* lc.state.get).toEqual({ _tag: "Running" });
     }).pipe(Effect.scoped),
   );
 
@@ -62,9 +73,9 @@ describe("Lifecycle.make — Effect-shaped", () => {
         restartable: true,
       }).pipe(Effect.provideService(Hyperlink.DeferStart, true));
 
-      expect(yield* lc.state.get).toBe("Idle");
+      expect(yield* lc.state.get).toEqual({ _tag: "Idle" });
       yield* lc.start;
-      expect(yield* lc.state.get).toBe("Running");
+      expect(yield* lc.state.get).toEqual({ _tag: "Running" });
     }).pipe(Effect.scoped),
   );
 
@@ -79,11 +90,10 @@ describe("Lifecycle.make — Effect-shaped", () => {
         Effect.catchTag("LifecycleUnsupported", (e) => Effect.succeed(e.role)),
       );
       expect(role).toBe("Pause");
-      expect(role === "Pause").toBe(true);
     }).pipe(Effect.scoped),
   );
 
-  it.effect("start from Off fails LifecycleIllegal — catchTag on _tag", () =>
+  it.effect("start from Off fails LifecycleIllegal — catchTag; from._tag", () =>
     Effect.gen(function* () {
       const lc = yield* Lifecycle.make({
         run: Effect.never,
@@ -91,16 +101,16 @@ describe("Lifecycle.make — Effect-shaped", () => {
       }).pipe(Effect.provideService(Hyperlink.DeferStart, false));
 
       yield* lc.stop;
-      expect(yield* lc.state.get).toBe("Off");
+      expect(yield* lc.state.get).toEqual({ _tag: "Off" });
 
-      const from = yield* lc.start.pipe(
-        Effect.catchTag("LifecycleIllegal", (e) => Effect.succeed(e.from)),
+      const fromTag = yield* lc.start.pipe(
+        Effect.catchTag("LifecycleIllegal", (e) => Effect.succeed(e.from._tag)),
       );
-      expect(from).toBe("Off");
+      expect(fromTag).toBe("Off");
     }).pipe(Effect.scoped),
   );
 
-  it.effect("events stream uses _tag discriminators", () =>
+  it.effect("events stream uses _tag; runForEachTag dispatches", () =>
     Effect.gen(function* () {
       const lc = yield* Lifecycle.make({
         run: Effect.never,
@@ -108,12 +118,16 @@ describe("Lifecycle.make — Effect-shaped", () => {
         restartable: true,
       }).pipe(Effect.provideService(Hyperlink.DeferStart, true));
 
-      // Subscribe before publishing so PubSub doesn't drop the first events.
-      const done = yield* Deferred.make<ReadonlyArray<Lifecycle.Event>>();
+      const done = yield* Deferred.make<ReadonlyArray<string>>();
       yield* lc.events.pipe(
         Stream.take(3),
         Stream.runCollect,
-        Effect.flatMap((chunk) => Deferred.succeed(done, [...chunk])),
+        Effect.flatMap((chunk) =>
+          Deferred.succeed(
+            done,
+            [...chunk].map((e) => e._tag),
+          ),
+        ),
         Effect.forkScoped,
       );
       yield* Effect.yieldNow;
@@ -122,12 +136,34 @@ describe("Lifecycle.make — Effect-shaped", () => {
       yield* lc.pause;
       yield* lc.resume;
 
-      const events = yield* Deferred.await(done);
-      expect(events.map((e) => e._tag)).toEqual([
+      expect(yield* Deferred.await(done)).toEqual([
         "Started",
         "Paused",
         "Resumed",
       ]);
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("state changes match on _tag via runForEachTag", () =>
+    Effect.gen(function* () {
+      const lc = yield* Lifecycle.make({
+        run: Effect.never,
+        restartable: true,
+      }).pipe(Effect.provideService(Hyperlink.DeferStart, true));
+
+      const seen = yield* Ref.make<ReadonlyArray<string>>([]);
+      yield* lc.changes.pipe(
+        Stream.take(2),
+        Hyperlink.runForEachTag({
+          Idle: () => Ref.update(seen, (xs) => [...xs, "Idle"]),
+          Running: () => Ref.update(seen, (xs) => [...xs, "Running"]),
+        }),
+        Effect.forkScoped,
+      );
+      yield* Effect.yieldNow;
+
+      yield* lc.start;
+      expect(yield* Ref.get(seen)).toEqual(["Idle", "Running"]);
     }).pipe(Effect.scoped),
   );
 });
@@ -145,13 +181,13 @@ describe("Lifecycle.of / from — tool end", () => {
 
       yield* Effect.gen(function* () {
         const lc = yield* Lifecycle.from(Jobs);
-        expect(yield* lc.state.get).toBe("Idle");
+        expect(yield* lc.state.get).toEqual({ _tag: "Idle" });
         yield* lc.start;
-        expect(yield* lc.state.get).toBe("Running");
+        expect(yield* lc.state.get).toEqual({ _tag: "Running" });
         yield* lc.pause;
-        expect(yield* lc.state.get).toBe("Paused");
+        expect(yield* lc.state.get).toEqual({ _tag: "Paused" });
         yield* lc.resume;
-        expect(yield* lc.state.get).toBe("Running");
+        expect(yield* lc.state.get).toEqual({ _tag: "Running" });
       }).pipe(Effect.provide(layer), Effect.scoped);
     }),
   );
@@ -165,8 +201,8 @@ describe("Lifecycle.of / from — tool end", () => {
       yield* Effect.gen(function* () {
         const jobs = yield* Jobs;
         const lc = Lifecycle.of(jobs);
-        expect(yield* lc.state.get).toBe("Running");
-        expect(yield* jobs.lifecycle.get).toBe("Running");
+        expect(yield* lc.state.get).toEqual({ _tag: "Running" });
+        expect(yield* jobs.lifecycle.get).toEqual({ _tag: "Running" });
       }).pipe(Effect.provide(layer), Effect.scoped);
     }),
   );
@@ -183,11 +219,11 @@ describe("Hyperlink.deferStart + Daemon make", () => {
 
       yield* Effect.gen(function* () {
         const lc = yield* Lifecycle.from(Sweeper);
-        expect(yield* lc.state.get).toBe("Idle");
+        expect(yield* lc.state.get).toEqual({ _tag: "Idle" });
         yield* lc.start;
-        expect(yield* lc.state.get).toBe("Running");
+        expect(yield* lc.state.get).toEqual({ _tag: "Running" });
         yield* lc.stop;
-        expect(yield* lc.state.get).toBe("Idle");
+        expect(yield* lc.state.get).toEqual({ _tag: "Idle" });
 
         const role = yield* lc.pause.pipe(
           Effect.catchTag("LifecycleUnsupported", (e) => Effect.succeed(e.role)),

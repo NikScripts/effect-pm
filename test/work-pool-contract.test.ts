@@ -54,14 +54,14 @@ const makeImpl = () => {
     status: statusSub,
     lifecycle: Hyperlink.mapSubscribable(statusSub, (s) =>
       s.phase === "idle"
-        ? ("Idle" as const)
+        ? ({ _tag: "Idle" } as const)
         : s.phase === "draining"
-          ? ("Draining" as const)
+          ? ({ _tag: "Draining" } as const)
           : s.phase === "off"
-            ? ("Off" as const)
+            ? ({ _tag: "Off" } as const)
             : s.paused
-              ? ("Paused" as const)
-              : ("Running" as const),
+              ? ({ _tag: "Paused" } as const)
+              : ({ _tag: "Running" } as const),
     ),
     size: Hyperlink.mapSubscribable(
       statusSub,

@@ -124,6 +124,7 @@ import type {
   OfferResult,
 } from "../DurableWorkPoolStore";
 import * as Hyperlink from "../Hyperlink";
+import * as Lifecycle from "../Lifecycle";
 import {
   configureLayer,
   configureWrapEffectField,
@@ -458,6 +459,12 @@ export interface QueueHandleApi<
   readonly metrics: Stream.Stream<QueueMetrics>;
 
   /**
+   * Shared {@link Lifecycle.State} badge (`_tag`) — SSOT from {@link Lifecycle.make}.
+   * Prefer this over projecting {@link QueueHandleApi.status}.phase.
+   */
+  readonly lifecycle: Hyperlink.Subscribable<Lifecycle.State>;
+
+  /**
    * Fork the worker pool. Idempotent — safe to call multiple times.
    * Only needed when {@link WorkPoolConfigBase.autoStart} was `false`; otherwise workers already started at acquisition.
    *
@@ -476,13 +483,11 @@ export interface QueueHandleApi<
    */
   readonly resume: Effect.Effect<void>;
   /**
-   * Permanently stop the queue (graceful). Returns immediately after **initiating** shutdown:
-   * status `phase` → `"draining"`, new enqueues are rejected (logged + dropped), and once the
-   * queue is empty + idle it emits `ShutdownComplete` and `phase` → `"off"`. How already-queued
-   * items are handled is set by {@link WorkPoolConfigBase.shutdownMode} (`"drain"` processes
-   * them, the default; `"finishActive"` discards them, emitting a `Dropped` event). In-flight
-   * items always finish. Idempotent — a second call is a no-op. Emits `ShutdownRequested` /
-   * `ShutdownComplete` on the {@link QueueHandleApi.events} stream.
+   * Permanently stop the queue (graceful). Awaits Off: initiates drain, waits until empty +
+   * idle, then terminal. New enqueues are rejected; in-flight finish; queued items drain or
+   * discard per {@link WorkPoolConfigBase.shutdownMode}. Idempotent. Emits `ShutdownRequested` /
+   * `ShutdownComplete` on the {@link QueueHandleApi.events} stream. Lifecycle badge:
+   * Draining → Off (`_tag`).
    */
   readonly shutdown: Effect.Effect<void>;
   /**
@@ -1871,6 +1876,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
   > = defaultQueueProjection,
 ): Effect.Effect<QueueEngineHandle<T, E, EEnqueue, R, A>, never, Scope.Scope | R> =>
   Effect.gen(function* () {
+    const workerContext = yield* Effect.context<R>();
     const queueName = config.name ?? "anonymous";
     const concurrency = config.concurrency ?? 5;
     const shutdownMode = config.shutdownMode ?? "drain";
@@ -2291,11 +2297,13 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
     const pausedRef = yield* Ref.make(config.paused ?? false);
     const inFlightRef = yield* Ref.make(0);
     // Prefer call-site `autoStart`; else ambient {@link Hyperlink.DeferStart}; else true.
+    // Lifecycle.make reads DeferStart — we project that dial here (flag still wins when set).
     const autoStart = config.autoStart ?? !(yield* Hyperlink.DeferStart);
-    // Lifecycle phase, orthogonal to paused. Deferred → idle; `shutdown` → draining → off.
+    // Domain snapshot `phase` mirrors Lifecycle.State._tag (SSOT is Lifecycle.make below).
     const phaseRef = yield* Ref.make<"idle" | "running" | "draining" | "off">(
-      autoStart ? "running" : "idle",
+      "idle",
     );
+    const offDone = yield* Deferred.make<void>();
     const computeStatus = Effect.gen(function* () {
       const levels = yield* levelSizes;
       return projection.buildStatus({
@@ -2321,18 +2329,20 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
     // `phase` reads `"off"`. Called after each item finishes and at shutdown initiation (covers
     // the already-idle case). The `getAndSet` guard makes the transition idempotent.
     const finalizeShutdownIfDrained: Effect.Effect<void> = Effect.gen(function* () {
-      if ((yield* Ref.get(phaseRef)) !== "draining") return;
+      // Use isShutdownRef (set synchronously in initiateShutdown) — not phaseRef, which
+      // mirrors Lifecycle.State asynchronously via state.changes.
+      if (!(yield* Ref.get(isShutdownRef))) return;
       const pending = yield* totalPendingEffect;
       const inFlight = yield* Ref.get(inFlightRef);
       if (pending > 0 || inFlight > 0) return;
-      const previous = yield* Ref.getAndSet(phaseRef, "off");
-      if (previous !== "draining") return; // another fiber finalized first
+      // Signal Lifecycle.awaitBeforeTerminal; badge Off is published by Lifecycle.make.
+      const won = yield* Deferred.succeed(offDone, undefined);
+      if (!won) return; // another fiber already finalized
       yield* publishEvent({
         _tag: "ShutdownComplete",
         key: queueName,
         completed: yield* Ref.get(completedCount),
       });
-      yield* refreshStatus;
       yield* Effect.logInfo(`Queue "${queueName}" shut down (off)`);
     });
     // One fiber recomputes the snapshot on each lifecycle event (covers enqueue/start/exit/
@@ -3000,10 +3010,6 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
 
       if (!claimed) return;
 
-      // idle → running once workers are claimed (no-op when already running).
-      yield* Ref.update(phaseRef, (phase) => (phase === "idle" ? "running" : phase));
-      yield* refreshStatus;
-
       // Reclaim work whose lease survived a previous crash/restart before feeding resumes.
       if (persist !== undefined) {
         yield* persist.store
@@ -3301,6 +3307,66 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
         return entries;
       });
 
+    // ─── Lifecycle.make — badge SSOT (Effect-shaped) ───
+    const initiateShutdown: Effect.Effect<void> = Effect.gen(function* () {
+      if (yield* Ref.get(isShutdownRef)) return;
+      yield* Ref.set(isShutdownRef, true);
+      yield* Ref.set(phaseRef, "draining");
+      const pending = yield* totalPendingEffect;
+      yield* publishEvent({
+        _tag: "ShutdownRequested",
+        key: queueName,
+        mode: shutdownMode,
+        pending,
+      });
+      yield* Effect.logInfo(
+        `Queue "${queueName}" shutting down (${shutdownMode})`,
+      );
+      if (shutdownMode === "finishActive") {
+        yield* discardPendingOnShutdown;
+      } else {
+        // drain: open the latch so a paused queue still drains its backlog
+        yield* latch.open;
+        yield* Ref.set(pausedRef, false);
+      }
+      yield* signalShutdownWake;
+      yield* requestMetricsFlush;
+      yield* finalizeShutdownIfDrained;
+    });
+
+    // Always defer inside the engine — `queueHandleSlot` must be set before workers fork.
+    // Call-site / layer `autoStart` / `DeferStart` is applied after the handle is wired.
+    const lifecycle = yield* Lifecycle.make({
+      run: Effect.gen(function* () {
+        yield* forkDaemoningFibers;
+        return yield* Effect.never;
+      }),
+      latch,
+      release: initiateShutdown,
+      awaitBeforeTerminal: Deferred.await(offDone),
+      restartable: false,
+      fiber: "handle",
+    }).pipe(Effect.provideService(Hyperlink.DeferStart, true));
+
+    // Mirror Lifecycle.State._tag into domain status.phase / paused (UI + status schema).
+    yield* Effect.forkScoped(
+      Stream.runForEach(lifecycle.state.changes, (s) =>
+        Effect.gen(function* () {
+          const phase =
+            s._tag === "Idle"
+              ? ("idle" as const)
+              : s._tag === "Draining"
+                ? ("draining" as const)
+                : s._tag === "Off"
+                  ? ("off" as const)
+                  : ("running" as const); // Running | Paused
+          yield* Ref.set(phaseRef, phase);
+          yield* Ref.set(pausedRef, s._tag === "Paused");
+          yield* refreshStatus;
+        }),
+      ),
+    );
+
     // ─── Build public handle ───
 
     const queueHandle: QueueEngineHandle<T, E, EEnqueue, R, A> = {
@@ -3345,53 +3411,31 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
       // Windowed metrics stream (dynamic windows)
       metrics: Stream.fromPubSub(metricsHub),
 
-      start: tapLogs(forkDaemoningFibers).pipe(Effect.asVoid),
+      lifecycle: lifecycle.state,
 
-      // Close latch → workers block on next iteration before taking items
-      pause: latch.close.pipe(
-        Effect.andThen(Ref.set(pausedRef, true)),
-        Effect.andThen(refreshStatus),
-        Effect.asVoid,
+      start: tapLogs(
+        lifecycle.start.pipe(
+          Effect.catchTag("LifecycleIllegal", () => Effect.void),
+          Effect.provide(workerContext),
+        ),
+      ).pipe(Effect.asVoid),
+
+      pause: lifecycle.pause.pipe(
+        Effect.catchTag("LifecycleUnsupported", () => Effect.void),
+        Effect.catchTag("LifecycleIllegal", () => Effect.void),
+        Effect.provide(workerContext),
       ),
 
-      // Open latch → blocked workers proceed to take + process
-      resume: latch.open.pipe(
-        Effect.andThen(Ref.set(pausedRef, false)),
-        Effect.andThen(refreshStatus),
-        Effect.asVoid,
+      resume: lifecycle.resume.pipe(
+        Effect.catchTag("LifecycleUnsupported", () => Effect.void),
+        Effect.catchTag("LifecycleIllegal", () => Effect.void),
+        Effect.provide(workerContext),
       ),
 
-      // Graceful shutdown: stop accepting items (phase → draining), wind down per `shutdownMode`,
-      // and once empty + idle finalize to "off" (see `finalizeShutdownIfDrained`). Idempotent —
-      // only the first call (running → draining) does the work.
-      shutdown: tapLogs(Effect.gen(function* () {
-        const previous = yield* Ref.getAndSet(phaseRef, "draining");
-        if (previous === "draining" || previous === "off") return;
-        yield* Ref.set(isShutdownRef, true);
-        const pending = yield* totalPendingEffect;
-        yield* publishEvent({
-          _tag: "ShutdownRequested",
-          key: queueName,
-          mode: shutdownMode,
-          pending,
-        });
-        yield* Effect.logInfo(
-          `Queue "${queueName}" shutting down (${shutdownMode})`,
-        );
-        if (shutdownMode === "finishActive") {
-          // discard the queued items up front so only in-flight remain.
-          yield* discardPendingOnShutdown;
-        } else {
-          // drain: open the latch (and clear paused) so a paused queue still drains its backlog,
-          // rather than hanging in "draining" forever.
-          yield* latch.open;
-          yield* Ref.set(pausedRef, false);
-        }
-        yield* signalShutdownWake; // unblock takeNext waiters + the drain monitor
-        yield* requestMetricsFlush;
-        yield* refreshStatus; // snapshot now reads phase = "draining"
-        yield* finalizeShutdownIfDrained; // already empty + idle? straight to "off"
-      })),
+      // Awaits Off (Lifecycle.stop + drain). Domain phase mirrors via state.changes.
+      shutdown: tapLogs(
+        lifecycle.stop.pipe(Effect.provide(workerContext)),
+      ),
 
       clear: tapLogs(Effect.gen(function* () {
         // Durable: the store is the truth — clear it (count = removed), then purge the stale
@@ -3438,7 +3482,12 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
     queueHandleSlot.current = queueHandle;
 
     if (autoStart) {
-      yield* tapLogs(forkDaemoningFibers);
+      yield* tapLogs(
+        lifecycle.start.pipe(
+          Effect.catchTag("LifecycleIllegal", () => Effect.void),
+          Effect.provide(workerContext),
+        ),
+      );
     }
 
     return queueHandle;

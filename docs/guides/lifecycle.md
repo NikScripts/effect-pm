@@ -8,16 +8,16 @@
 
 `hyperlink-ts/Lifecycle` is a **control panel** over Effect structured concurrency:
 {@link FiberHandle} / {@link FiberSet}, optional {@link Latch}, and a {@link SubscriptionRef}
-badge. Toolkit kinds and app HyperServices adopt the same {@link Lifecycle.Service} — tools
-never switch on WorkPool vs Daemon.
+badge. **State, Event, and errors are all `_tag` ADTs** — match with `Match`,
+[`Hyperlink.runForEachTag`](/docs/observe), or `Effect.catchTag`.
 
 ## The handle
 
 ```ts
 interface Service {
-  readonly state: Subscribable<State>  // Idle | Running | Paused | Draining | Off
+  readonly state: Subscribable<State>  // { _tag: "Idle" | "Running" | … }
   readonly changes: Stream<State>
-  readonly events: Stream<Event>       // _tag: Started | Paused | …
+  readonly events: Stream<Event>       // { _tag: "Started" | "Paused" | … }
   readonly start: Effect<void, Illegal>
   readonly pause: Effect<void, Unsupported | Illegal>
   readonly resume: Effect<void, Unsupported | Illegal>
@@ -25,59 +25,46 @@ interface Service {
 }
 ```
 
-Errors are `Data.TaggedError` — match with `_tag` / `Effect.catchTag`:
-
 ```ts
+yield* lc.state.get                         // { _tag: "Running" }
+yield* lc.events.pipe(Hyperlink.runForEachTag({
+  Started: () => Effect.log("up"),
+  Stopped: (e) => Effect.log(e.to._tag),   // "Off" | "Idle"
+}))
 yield* lc.pause.pipe(
   Effect.catchTag("LifecycleUnsupported", (e) => Effect.log(e.role)),
-  Effect.catchTag("LifecycleIllegal", (e) => Effect.log(`${e.op} from ${e.from}`)),
+  Effect.catchTag("LifecycleIllegal", (e) => Effect.log(e.from._tag)),
 )
 ```
 
 ## Implementation — `Lifecycle.make`
 
-Compose primitives; do not pass callback hooks:
-
 ```ts
 const latch = yield* Latch.make(true)
 const lifecycle = yield* Lifecycle.make({
-  run: workerLoop,           // FiberHandle (default) or fiber: "set"
-  latch,                     // omit ⇒ pause/resume fail Unsupported
-  release: windDown,         // optional drain before fiber clear
-  restartable: false,        // false → Off; true → Idle (Daemon)
-})
-
-// Spec impl
-({
-  ...Lifecycle.impl(lifecycle),
-  // or: lifecycle: lifecycle.state, start, pause, resume, stop
+  run: workerLoop,
+  latch,
+  release: windDown,
+  awaitBeforeTerminal: Deferred.await(offDone), // optional
+  restartable: false,
 })
 ```
 
-Daemon's toolkit layer already does this (`restartable: true`, no latch). WorkPool still
-projects its engine into `Lifecycle.of(…)` until the queue engine adopts `make` directly.
-
-Deferred bring-up: pipe [`Hyperlink.deferStart`](/docs/lifecycle) onto the HyperService
-**layer** — `make` reads `DeferStart` and stays `Idle` until `start`.
+Daemon and WorkPool toolkit layers both use this. Deferred bring-up: pipe
+[`Hyperlink.deferStart`](/docs/lifecycle) onto the HyperService **layer**.
 
 ## Tool end — `Lifecycle.of` / `from`
 
 ```ts
-import * as Lifecycle from "hyperlink-ts/Lifecycle"
-
 const lc = yield* Lifecycle.from(Jobs)
 yield* lc.state.get
 yield* lc.start
 ```
-
-Generic UIs that only have a Spec still use `methodMeta(m).lifecycle`
-(`"State"` / `"Pause"` / …).
 
 ## Spec sugar
 
 ```ts
 const MySpec = {
   ...Lifecycle.spec({ pausable: true }),
-  // domain methods…
 }
 ```

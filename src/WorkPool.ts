@@ -576,17 +576,6 @@ export const historyQuery = {
  * @category wire schemas
  * @public
  */
-/** Map queue snapshot fields → shared {@link Lifecycle.State} (service-local; not a Lifecycle helper). */
-const queueLifecycleState = (status: {
-  readonly phase: "idle" | "running" | "draining" | "off";
-  readonly paused: boolean;
-}): typeof Lifecycle.State.Type => {
-  if (status.phase === "idle") return "Idle";
-  if (status.phase === "draining") return "Draining";
-  if (status.phase === "off") return "Off";
-  return status.paused ? "Paused" : "Running";
-};
-
 export const queueControlSpec = {
   // ── live current state — one SubscriptionRef-backed source of truth ──
   // `status` is the whole snapshot; the scalars are `Stream.map` derivations of it (SSOT). All are
@@ -1443,7 +1432,7 @@ const buildQueueImpl = <
     // (`status`/`size`/`isEmpty`/`*.stream`/`events`) pass through untouched.
     // First-class Lifecycle.Service — tools use `Lifecycle.of(queue)` / `Lifecycle.from(Tag)`.
     const lifecycle = Lifecycle.of({
-      lifecycle: Hyperlink.mapSubscribable(handle.status, queueLifecycleState),
+      lifecycle: handle.lifecycle,
       start: handle.start,
       pause: handle.pause,
       resume: handle.resume,
@@ -1976,7 +1965,7 @@ const buildPriorityImpl = <Self, F extends PriorityItemFields, E, R, RR = never>
     // Worker methods are built unwrapped (each still carrying `R | RR`); `grantLocal` / wire invoke
     // discharge `context` into every Effect method uniformly — same bundle pattern as WorkPool.
     const lifecycle = Lifecycle.of({
-      lifecycle: Hyperlink.mapSubscribable(handle.status, queueLifecycleState),
+      lifecycle: handle.lifecycle,
       start: handle.start,
       pause: handle.pause,
       resume: handle.resume,

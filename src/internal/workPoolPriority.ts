@@ -18,6 +18,7 @@ import {
   Types,
 } from "effect";
 import * as Hyperlink from "../Hyperlink";
+import type * as Lifecycle from "../Lifecycle";
 import { isJsonValue } from "./json";
 import { resolvePriorityLane } from "./workPoolLanes";
 import { levelToDefaultPriority } from "./priorityMapping";
@@ -112,6 +113,7 @@ export interface WorkPoolPriorityHandleApi<
   readonly events: Stream.Stream<QueueEvent<T, E>>;
   readonly status: Hyperlink.Subscribable<WorkPoolPriorityStatus>;
   readonly metrics: Stream.Stream<QueueMetrics>;
+  readonly lifecycle: Hyperlink.Subscribable<Lifecycle.State>;
   readonly start: Effect.Effect<void, never, R>;
   readonly pause: Effect.Effect<void>;
   readonly resume: Effect.Effect<void>;
@@ -256,6 +258,7 @@ const wrapWorkPoolPriorityHandle = <T, E, EEnqueue, R>(
     events: engine.events,
     status: engine.status,
     metrics: engine.metrics,
+    lifecycle: engine.lifecycle,
     start: engine.start,
     pause: engine.pause,
     resume: engine.resume,
