@@ -290,9 +290,14 @@ export interface MakeOptions<R = never> {
    */
   readonly latch?: Latch.Latch;
   /**
-   * Wind-down before fiber clear (e.g. WorkPool drain). Awaited during {@link Service.stop}.
+   * Wind-down before fiber clear (e.g. initiate WorkPool drain). Awaited during {@link Service.stop}.
    */
   readonly release?: Effect.Effect<void, never, R>;
+  /**
+   * Optional second wait after {@link release} (e.g. await queue empty → Off) before clearing
+   * fibers and publishing the terminal badge.
+   */
+  readonly awaitBeforeTerminal?: Effect.Effect<void, never, R>;
   /**
    * After stop: `true` → `Idle` (restartable, Daemon); `false` → `Off` (WorkPool). Default `false`.
    */
@@ -414,6 +419,9 @@ export const make = <R = never>(
       yield* publish({ _tag: "StopRequested" });
       if (options.release !== undefined) {
         yield* options.release;
+      }
+      if (options.awaitBeforeTerminal !== undefined) {
+        yield* options.awaitBeforeTerminal;
       }
       yield* clearFibers;
       yield* setState(afterStop);

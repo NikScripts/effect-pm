@@ -28,7 +28,7 @@ any HyperService adopts the same way, and that generic tools consume without kin
 | S5 | No kind helpers in Lifecycle | No `fromWorkPool` / `fromDaemon` |
 | S6 | `Lifecycle.Service` + `make` / `of` / `from` | Impl + tool ends |
 | S7 | `Hyperlink.deferStart` | Layer pipe (Policy-shaped, HyperService layers only); not Tag; not Policy |
-| S8 | Daemon uses `make` | Restartable `afterStop: "Idle"` |
+| S8 | Daemon uses `make` | Restartable `restartable: true` → Idle |
 | S9 | WorkPool **projects** today | Engine still owns `phase`/`paused`; adapter `Lifecycle.of(…)` — **temporary** until plan L1 |
 
 ---

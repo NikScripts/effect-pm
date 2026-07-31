@@ -1,6 +1,6 @@
 # Plan: Lifecycle kernel
 
-**Status:** designed — substrate Eng’d on `cursor/lifecycle-defer-start-929b`; dream not Eng’d.  
+**Status:** Effect-shaped `make` Eng’d (Daemon + core + P13); WorkPool still projects via `of` (L1).  
 **Agent:** 5.  
 **Decisions / lock register:** [`../handoffs/lifecycle-kernel-decisions.md`](../handoffs/lifecycle-kernel-decisions.md) (approve P-locks item-by-item before Eng).  
 **Shipped guide (substrate):** [`../guides/lifecycle.md`](../guides/lifecycle.md).  
@@ -61,7 +61,7 @@ Do not re-litigate. Detail + table: [lifecycle-kernel-decisions.md §1](../hando
 | Impl | `Lifecycle.make({ initial, onStart, onPause?, onResume?, onStop, afterStop })` |
 | Tools | `Lifecycle.of(handle)` / `Lifecycle.from(Tag)` |
 | Defer | `Hyperlink.deferStart` on HyperService **layers** only |
-| Daemon | Uses `make` (`afterStop: "Idle"`) |
+| Daemon | Uses Effect-shaped `make` (`restartable: true`) |
 | WorkPool | Still projects via `of` — **temporary** until L1 |
 
 ---
