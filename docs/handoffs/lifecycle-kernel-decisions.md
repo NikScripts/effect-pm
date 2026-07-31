@@ -1,6 +1,6 @@
 # Lifecycle kernel — decisions & lock register
 
-**Status:** L0–L5 + **A/C reshape** Eng’d on work branch (compose FiberHandle/Latch, dual ops, derived events). Tip-sync only when owner asks.  
+**Status:** L0–L5 + **A/C reshape** tip-synced to `integration` (compose FiberHandle/Latch, dual ops, derived events).  
 **Owner:** Agent 5.  
 **Full Eng plan (SSOT for architecture / slices / acceptance):** [`docs/plans/lifecycle-kernel.md`](../plans/lifecycle-kernel.md).  
 **Guide:** [`docs/guides/lifecycle.md`](../guides/lifecycle.md).  
