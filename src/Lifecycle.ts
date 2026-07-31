@@ -124,16 +124,22 @@ export const State = Schema.Union([Idle, Running, Paused, Draining, Off]);
  */
 export type State = typeof State.Type;
 
+/**
+ * State values — plain constants (empty tagged structs; no constructor args).
+ * Schemas above are `Idle` / `Running` / …; these lowercase bindings are runtime badges.
+ *
+ * @category constructors
+ * @public
+ */
+export const idle: typeof Idle.Type = { _tag: "Idle" };
 /** @category constructors @public */
-export const idle = (): typeof Idle.Type => ({ _tag: "Idle" });
+export const running: typeof Running.Type = { _tag: "Running" };
 /** @category constructors @public */
-export const running = (): typeof Running.Type => ({ _tag: "Running" });
+export const paused: typeof Paused.Type = { _tag: "Paused" };
 /** @category constructors @public */
-export const paused = (): typeof Paused.Type => ({ _tag: "Paused" });
+export const draining: typeof Draining.Type = { _tag: "Draining" };
 /** @category constructors @public */
-export const draining = (): typeof Draining.Type => ({ _tag: "Draining" });
-/** @category constructors @public */
-export const off = (): typeof Off.Type => ({ _tag: "Off" });
+export const off: typeof Off.Type = { _tag: "Off" };
 
 /** Terminal badge after stop — Idle (restartable) or Off. @category models @public */
 export type Terminal = typeof Idle.Type | typeof Off.Type;
@@ -273,7 +279,7 @@ export const of = <R = never>(svc: Participating<R>): Service<R> => {
     events: Stream.empty,
     start: Effect.mapError(
       svc.start,
-      (_: never) => new Illegal({ from: idle(), op: "Start" }),
+      (_: never) => new Illegal({ from: idle, op: "Start" }),
     ),
     pause: Effect.gen(function* () {
       if (svc.pause === undefined) {
@@ -356,12 +362,12 @@ export const make = <R = never>(
 ): Effect.Effect<Service<R>, never, R | Scope.Scope> =>
   Effect.gen(function* () {
     const restartable = options.restartable ?? false;
-    const afterStop: Terminal = restartable ? idle() : off();
+    const afterStop: Terminal = restartable ? idle : off;
     const fiberMode = options.fiber ?? "handle";
     const deferred = yield* Hyperlink.DeferStart;
     const context = yield* Effect.context<R>();
 
-    const stateRef = yield* SubscriptionRef.make<State>(idle());
+    const stateRef = yield* SubscriptionRef.make<State>(idle);
     const eventsHub = yield* PubSub.unbounded<Event>();
     const publish = (event: Event) =>
       PubSub.publish(eventsHub, event).pipe(Effect.asVoid);
@@ -404,9 +410,9 @@ export const make = <R = never>(
       }
       yield* installRun;
       if (options.latch !== undefined) {
-        yield* setState(options.latch.isOpen() ? running() : paused());
+        yield* setState(options.latch.isOpen() ? running : paused);
       } else {
-        yield* setState(running());
+        yield* setState(running);
       }
       yield* publish({ _tag: "Started" });
     });
@@ -422,7 +428,7 @@ export const make = <R = never>(
               return yield* new Illegal({ from: cur, op: "Pause" });
             }
             yield* gate.close;
-            yield* setState(paused());
+            yield* setState(paused);
             yield* publish({ _tag: "Paused" });
           });
 
@@ -436,7 +442,7 @@ export const make = <R = never>(
               return yield* new Illegal({ from: cur, op: "Resume" });
             }
             yield* gate.open;
-            yield* setState(running());
+            yield* setState(running);
             yield* publish({ _tag: "Resumed" });
           });
 
@@ -448,7 +454,7 @@ export const make = <R = never>(
         yield* publish({ _tag: "Stopped", to: afterStop });
         return;
       }
-      yield* setState(draining());
+      yield* setState(draining);
       yield* publish({ _tag: "StopRequested" });
       if (options.release !== undefined) {
         yield* options.release;

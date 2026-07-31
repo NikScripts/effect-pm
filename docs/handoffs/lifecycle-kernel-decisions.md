@@ -1,9 +1,9 @@
 # Lifecycle kernel — decisions & lock register
 
-**Status:** Effect-shaped `make` Eng’d (Daemon + core); WorkPool still projects via `of` (L1 remainder).  
+**Status:** L0–L2 Eng’d + tip-synced (`make` / WorkPool `stop` / `lifecycle._tag` / `deferStart`). Next: P2→L3.  
 **Owner:** Agent 5.  
 **Full Eng plan (SSOT for architecture / slices / acceptance):** [`docs/plans/lifecycle-kernel.md`](../plans/lifecycle-kernel.md).  
-**Guide (shipped substrate):** [`docs/guides/lifecycle.md`](../guides/lifecycle.md).  
+**Guide:** [`docs/guides/lifecycle.md`](../guides/lifecycle.md).  
 **Standards:** [`docs/standards/`](../standards/) — especially hyperlink-services, types-and-naming, effect-style, modules-and-boundaries, no-backward-compat, working-agreement (approve-before-lock).
 
 This file is the **lock register**. Do not batch-lock. Present → go → mark Locked. Eng detail lives in the plan.
@@ -29,7 +29,7 @@ any HyperService adopts the same way, and that generic tools consume without kin
 | S6 | `Lifecycle.Service` + `make` / `of` / `from` | Impl + tool ends |
 | S7 | `Hyperlink.deferStart` | Layer pipe (Policy-shaped, HyperService layers only); not Tag; not Policy |
 | S8 | Daemon uses `make` | Restartable `restartable: true` → Idle |
-| S9 | WorkPool **projects** today | Engine still owns `phase`/`paused`; adapter `Lifecycle.of(…)` — **temporary** until plan L1 |
+| S9 | WorkPool on `make` | Badge SSOT `lifecycle`; no `status.phase`; control verb `stop` |
 
 ---
 
@@ -154,9 +154,9 @@ Until P-locks land: **no dream Eng**; substrate-only fixes OK on the work branch
 
 ## 5. Immediate next step
 
-1. Owner walks **P1 → P12** (approve / amend / reject) item-by-item.  
-2. Agent lands **L0** when owner says.  
-3. First dream Eng = **L1** after P1/P9/P6 Locked.
+1. Owner lock **P2** (structural caps) → Eng **L3**.  
+2. Then **P4** / **P5** / **P7** as needed for L4–L6.  
+3. Open questions: §3.
 
 ---
 

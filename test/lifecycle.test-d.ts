@@ -10,7 +10,7 @@ import type { WorkPool } from "../src/WorkPool";
 type AssertExact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 
 const unsupported = new Lifecycle.Unsupported({ role: "Pause" });
-const illegal = new Lifecycle.Illegal({ from: Lifecycle.off(), op: "Start" });
+const illegal = new Lifecycle.Illegal({ from: Lifecycle.off, op: "Start" });
 true satisfies AssertExact<typeof unsupported._tag, "LifecycleUnsupported">;
 true satisfies AssertExact<typeof illegal._tag, "LifecycleIllegal">;
 
