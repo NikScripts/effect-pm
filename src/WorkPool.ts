@@ -588,6 +588,10 @@ export const queueControlSpec = {
       description: "Lifecycle badge (Idle / Running / Paused / Draining / Off).",
     })
     .pipe(Lifecycle.state),
+  lifecycleEvents: Hyperlink.stream(Lifecycle.Event).annotate({
+    description:
+      "Lifecycle transition events (Started / Paused / Resumed / StopRequested / Stopped).",
+  }),
   size: Hyperlink.ref(Schema.Number).annotate({
     description: "Total pending items across all priority lanes.",
   }),
@@ -939,6 +943,8 @@ export interface WorkPool<
   readonly status: Hyperlink.Subscribable<QueueStatus>;
   /** Shared {@link Lifecycle.State} badge — Role `"State"` for generic tools. */
   readonly lifecycle: Hyperlink.Subscribable<Lifecycle.State>;
+  /** Lifecycle transition stream — not {@link WorkPool.events} (queue domain). */
+  readonly lifecycleEvents: Stream.Stream<Lifecycle.Event>;
   /** Total pending items across all priority lanes. */
   readonly size: Hyperlink.Subscribable<number>;
   /** Whether all priority queues are empty. */
@@ -1434,6 +1440,7 @@ const buildQueueImpl = <
     // First-class Lifecycle.Service — tools use `Lifecycle.of(queue)` / `Lifecycle.from(Tag)`.
     const lifecycle = Lifecycle.of({
       lifecycle: handle.lifecycle,
+      lifecycleEvents: handle.lifecycleEvents,
       start: handle.start,
       pause: handle.pause,
       resume: handle.resume,
@@ -1449,6 +1456,7 @@ const buildQueueImpl = <
       // `orDie` on the enqueue verbs (impossible-failure → defect), and RPC wiring.
       status: handle.status,
       lifecycle: lifecycle.state,
+      lifecycleEvents: lifecycle.events,
       start: lifecycle.start.pipe(
         Effect.catchTag("LifecycleIllegal", () => Effect.void),
       ),
@@ -1626,6 +1634,10 @@ export const priorityControlSpec = {
       description: "Lifecycle badge (Idle / Running / Paused / Draining / Off).",
     })
     .pipe(Lifecycle.state),
+  lifecycleEvents: Hyperlink.stream(Lifecycle.Event).annotate({
+    description:
+      "Lifecycle transition events (Started / Paused / Resumed / StopRequested / Stopped).",
+  }),
   size: Hyperlink.ref(Schema.Number).annotate({
     description: "Total pending items across all lanes.",
   }),
@@ -1969,6 +1981,7 @@ const buildPriorityImpl = <Self, F extends PriorityItemFields, E, R, RR = never>
     // discharge `context` into every Effect method uniformly — same bundle pattern as WorkPool.
     const lifecycle = Lifecycle.of({
       lifecycle: handle.lifecycle,
+      lifecycleEvents: handle.lifecycleEvents,
       start: handle.start,
       pause: handle.pause,
       resume: handle.resume,
@@ -1980,6 +1993,7 @@ const buildPriorityImpl = <Self, F extends PriorityItemFields, E, R, RR = never>
     > = {
       status: handle.status,
       lifecycle: lifecycle.state,
+      lifecycleEvents: lifecycle.events,
       start: lifecycle.start.pipe(
         Effect.catchTag("LifecycleIllegal", () => Effect.void),
       ),

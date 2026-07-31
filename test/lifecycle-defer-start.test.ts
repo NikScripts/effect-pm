@@ -79,14 +79,24 @@ describe("Lifecycle.make — Effect-shaped", () => {
     }).pipe(Effect.scoped),
   );
 
-  it.effect("pause without Latch fails LifecycleUnsupported — catchTag on _tag", () =>
+  it.effect("pause without Latch — of() fails LifecycleUnsupported", () =>
     Effect.gen(function* () {
+      // ServiceCore (no latch) has no pause/resume members; tools project via of().
       const lc = yield* Lifecycle.make({
         run: Effect.never,
         restartable: false,
       }).pipe(Effect.provideService(Hyperlink.DeferStart, false));
 
-      const role = yield* lc.pause.pipe(
+      const tools = Lifecycle.of({
+        lifecycle: lc.state,
+        lifecycleEvents: lc.events,
+        start: lc.start.pipe(
+          Effect.catchTag("LifecycleIllegal", () => Effect.void),
+        ),
+        stop: lc.stop,
+      });
+
+      const role = yield* tools.pause.pipe(
         Effect.catchTag("LifecycleUnsupported", (e) => Effect.succeed(e.role)),
       );
       expect(role).toBe("Pause");
@@ -206,6 +216,51 @@ describe("Lifecycle.of / from — tool end", () => {
       }).pipe(Effect.provide(layer), Effect.scoped);
     }),
   );
+
+  it.effect("from projects lifecycleEvents (_tag Started)", () =>
+    Effect.gen(function* () {
+      const layer = WorkPool.layer(Jobs, {
+        effect: () => Effect.void,
+      }).pipe(Hyperlink.deferStart);
+
+      yield* Effect.gen(function* () {
+        const lc = yield* Lifecycle.from(Jobs);
+        const done = yield* Deferred.make<string>();
+        yield* lc.events.pipe(
+          Stream.take(1),
+          Stream.runCollect,
+          Effect.flatMap((chunk) =>
+            Deferred.succeed(done, [...chunk][0]!._tag),
+          ),
+          Effect.forkScoped,
+        );
+        yield* Effect.yieldNow;
+        yield* lc.start;
+        expect(yield* Deferred.await(done)).toBe("Started");
+      }).pipe(Effect.provide(layer), Effect.scoped);
+    }),
+  );
+
+  it.effect("of() start from Off fails LifecycleIllegal (handle swallows)", () =>
+    Effect.gen(function* () {
+      const layer = WorkPool.layer(Jobs, {
+        effect: () => Effect.void,
+      });
+
+      yield* Effect.gen(function* () {
+        const jobs = yield* Jobs;
+        yield* jobs.stop;
+        expect(yield* jobs.lifecycle.get).toEqual({ _tag: "Off" });
+
+        // Wire start is never-failing; of() re-checks badge → Illegal.
+        const lc = Lifecycle.of(jobs);
+        const fromTag = yield* lc.start.pipe(
+          Effect.catchTag("LifecycleIllegal", (e) => Effect.succeed(e.from._tag)),
+        );
+        expect(fromTag).toBe("Off");
+      }).pipe(Effect.provide(layer), Effect.scoped);
+    }),
+  );
 });
 
 describe("Hyperlink.deferStart + Daemon make", () => {
@@ -235,11 +290,12 @@ describe("Hyperlink.deferStart + Daemon make", () => {
 });
 
 describe("Lifecycle.spec / impl", () => {
-  it("spec(pausable) includes pause/resume roles", () => {
+  it("spec(pausable) includes pause/resume roles + lifecycleEvents", () => {
     const s = Lifecycle.spec({ pausable: true });
     expect(methodMeta(s.lifecycle).lifecycle).toBe("State");
     expect(methodMeta(s.start).lifecycle).toBe("Start");
     expect(methodMeta(s.stop).lifecycle).toBe("Stop");
+    expect("lifecycleEvents" in s).toBe(true);
     expect("pause" in s && "resume" in s).toBe(true);
     if ("pause" in s && "resume" in s) {
       expect(methodMeta(s.pause).lifecycle).toBe("Pause");
@@ -251,5 +307,16 @@ describe("Lifecycle.spec / impl", () => {
     const s = Lifecycle.spec({ pausable: false });
     expect("pause" in s).toBe(false);
     expect("resume" in s).toBe(false);
+    expect("lifecycleEvents" in s).toBe(true);
+  });
+});
+
+describe("Lifecycle control Spec keys", () => {
+  it("queueControlSpec includes lifecycleEvents", () => {
+    expect("lifecycleEvents" in queueControlSpec).toBe(true);
+  });
+
+  it("daemonControlSpec includes lifecycleEvents", () => {
+    expect("lifecycleEvents" in daemonControlSpec).toBe(true);
   });
 });

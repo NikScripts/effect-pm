@@ -17,6 +17,9 @@ This is the **HyperService** plane (WorkPool / Daemon). Node cutover uses a sepa
 ## The handle
 
 ```ts
+// make({ latch }) → ServicePausable (pause/resume on the type)
+// make()         → ServiceCore (no pause/resume members)
+// of / from      → Service (tools end; pause/resume always present, may fail Unsupported)
 interface Service {
   readonly state: Subscribable<State>  // { _tag: "Idle" | "Running" | … }
   readonly changes: Stream<State>
@@ -27,6 +30,9 @@ interface Service {
   readonly stop: Effect<void>
 }
 ```
+
+Participating HyperServices expose the badge as `lifecycle` and the transition stream as
+`lifecycleEvents` (named distinctly from domain `events` on WorkPool / Daemon).
 
 ```ts
 yield* lc.state.get                         // { _tag: "Running" }
@@ -88,7 +94,18 @@ const MySpec = {
 ```
 
 Roles stamp as PascalCase (`"State"` / `"Start"` / `"Pause"` / `"Resume"` / `"Stop"`) for
-generic tools via `methodMeta`.
+generic tools via `methodMeta`. Spec includes `lifecycleEvents` alongside `lifecycle`.
+
+## Observe pack
+
+```ts
+import * as LifecycleView from "hyperlink-ts/ui/LifecycleView"
+
+const box = Observe.use(Jobs, LifecycleView.pausable) // badge + start/stop/pause/resume
+// Daemon (no Latch): Observe.use(Sweeper, LifecycleView.pack)
+```
+
+Lifecycle core does not import Observe — the pack lives under `ui/LifecycleView`.
 
 ## Deferred start
 

@@ -1,6 +1,6 @@
 # Lifecycle kernel — decisions & lock register
 
-**Status:** L0–L2 Eng’d + tip-synced (`make` / WorkPool `stop` / `lifecycle._tag` / `deferStart`). Next: P2→L3.  
+**Status:** L0–L5 Eng’d on work branch (`make` / caps / `lifecycleEvents` / `ui/LifecycleView`). Tip-sync only when owner asks.  
 **Owner:** Agent 5.  
 **Full Eng plan (SSOT for architecture / slices / acceptance):** [`docs/plans/lifecycle-kernel.md`](../plans/lifecycle-kernel.md).  
 **Guide:** [`docs/guides/lifecycle.md`](../guides/lifecycle.md).  
@@ -44,10 +44,10 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 - **Reject:** Keeping `phase` forever alongside `Lifecycle.State`.
 - **Blocks:** L1.
 
-### P2 — Structural capability typing — Proposed
+### P2 — Structural capability typing — Locked (Eng’d)
 
-- **Choose:** Caps from structure — Latch present ⇒ Pause/Resume on the type; no Latch ⇒ absent members. `restartable` ⇒ Idle vs Off after stop.
-- **Keep:** `Unsupported` only for dynamic Spec walks.
+- **Choose:** Caps from structure — Latch present ⇒ `ServicePausable` (pause/resume on the type); no Latch ⇒ `ServiceCore` (absent members). `of` / `from` → tool `Service` (pause/resume always present; `Unsupported` when no Latch). `restartable` ⇒ Idle vs Off after stop.
+- **Keep:** `Unsupported` only for dynamic / tool projection when members absent.
 - **Reject:** Primary API as stringly `caps: ["Start","Stop"]` bag (sugar OK if derived from structure).
 - **Blocks:** L3.
 
@@ -58,18 +58,19 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 - **Reject:** Forever mapping `shutdown`↔`stop` in `of()`.
 - **Blocks:** L2.
 
-### P4 — Lifecycle events — Proposed
+### P4 — Lifecycle events — Locked (Eng’d)
 
 - **Choose:** `Lifecycle.Event` union — `Started` / `Paused` / `Resumed` / `StopRequested` / `Stopped`. Fan-out `Stream` on `Service.events`.
+- **Choose:** Participating / Spec field `lifecycleEvents` (distinct from domain `events` on WorkPool / Daemon).
 - **Align:** WorkPool queue `events` stay item/queue domain; do not merge.
 - **Reject:** Reusing WorkPool `Start` / `ShutdownComplete` as the Lifecycle protocol.
 - **Blocks:** L4.
 
-### P5 — Observe pack + generic widgets — Proposed
+### P5 — Observe pack + generic widgets — Locked (Eng’d pack; chrome follow-up)
 
-- **Choose:** Pack under `ui/LifecycleView` (or Observe consumer). **Lifecycle must not import Observe**.
-- **Choose:** Default dashboard/TUI control chrome via Role discovery + typed `from`.
-- **Retire:** Kind-hardcoded pause/start buttons as the only path.
+- **Choose:** Pack under `ui/LifecycleView` (`pack` = badge+start/stop; `pausable` adds pause/resume). **Lifecycle must not import Observe**.
+- **Choose:** Default dashboard/TUI control chrome via Role discovery + typed `from` — Agent G may adopt pack; kind-hardcoded buttons not the only path.
+- **Retire:** Kind-hardcoded pause/start buttons as the only path (incremental with Agent G).
 - **Blocks:** L5.
 
 ### P6 — Readiness integration — Locked (Eng’d)
@@ -125,11 +126,10 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 
 ## 3. Open questions (need owner before locking)
 
-1. **P2:** Structural caps via conditional types on `make` options vs `Service.Pausable` interfaces?
-2. **P5:** Who owns generic chrome — Agent 5 (Lifecycle) or Agent G (TUI/dashboard)?
-3. **P7:** Exact handoff × Lifecycle gate (must be Idle? may be Running? drain first?) — align with launcher brief Track C.
-4. **P13 follow-up:** FiberSet ownership refinements beyond current `fiber: "handle"|"set"`.
-5. **Versioned schema** — orthogonal; keep on its own decisions doc / owner go.
+1. **P5 chrome:** Pack is Eng’d — who owns wiring generic dashboard/TUI chrome onto `LifecycleView` (Agent 5 vs Agent G)?
+2. **P7:** Exact handoff × Lifecycle gate (must be Idle? may be Running? drain first?) — align with launcher brief Track C.
+3. **P13 follow-up:** FiberSet ownership refinements beyond current `fiber: "handle"|"set"`.
+4. **Versioned schema** — orthogonal; keep on its own decisions doc / owner go.
 
 ---
 
@@ -140,22 +140,20 @@ Full table + acceptance criteria: [plan §8](../plans/lifecycle-kernel.md#8-eng-
 | Slice | Depends | One-liner |
 |-------|---------|-----------|
 | **L0** | — | Land substrate on `integration` |
-| **L1** | P1, P9, P6 | WorkPool engine on `make` |
-| **L2** | P3 | `spec` / `impl`; `shutdown`→`stop` |
-| **L3** | P2 | Capability-typed `Service` |
-| **L4** | P4 | `Event` + `events` |
-| **L5** | P5 | `ui/LifecycleView` pack |
+| **L1** | P1, P9, P6 | WorkPool engine on `make` — Eng’d |
+| **L2** | P3 | `spec` / `impl`; `shutdown`→`stop` — Eng’d |
+| **L3** | P2 | Capability-typed `ServiceCore` / `ServicePausable` — Eng’d |
+| **L4** | P4 | `Event` + `lifecycleEvents` — Eng’d |
+| **L5** | P5 | `ui/LifecycleView` pack — Eng’d (chrome follow-up) |
 | **L6** | P7, P8 | Handoff + remote `from` |
 | **L7** | P10+ | Docs + `@locked` candidates |
-
-Until P-locks land: **no dream Eng**; substrate-only fixes OK on the work branch.
 
 ---
 
 ## 5. Immediate next step
 
-1. Owner lock **P2** (structural caps) → Eng **L3**.  
-2. Then **P4** / **P5** / **P7** as needed for L4–L6.  
+1. Owner: tip-sync when ready; answer P5 chrome ownership + P7 handoff gate.  
+2. Next Eng: L6 (P7/P8) when locked.  
 3. Open questions: §3.
 
 ---

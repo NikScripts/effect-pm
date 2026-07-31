@@ -1613,6 +1613,10 @@ export const daemonControlSpec = {
       description: "Lifecycle badge (Idle / Running / Paused / Draining / Off).",
     })
     .pipe(Lifecycle.state),
+  lifecycleEvents: Hyperlink.stream(Lifecycle.Event).annotate({
+    description:
+      "Lifecycle transition events (Started / Paused / Resumed / StopRequested / Stopped).",
+  }),
 
   // ── lifecycle commands ──
   start: Hyperlink.effect(Schema.Void)
@@ -2563,6 +2567,7 @@ const buildDaemonImpl = <A, E, R>(
     const impl = {
       status: statusSub,
       lifecycle: lifecycle.state,
+      lifecycleEvents: lifecycle.events,
       start: lifecycle.start.pipe(
         Effect.catchTag("LifecycleIllegal", () => Effect.void),
       ),

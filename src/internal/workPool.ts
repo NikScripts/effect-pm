@@ -464,6 +464,11 @@ export interface QueueHandleApi<
   readonly lifecycle: Hyperlink.Subscribable<Lifecycle.State>;
 
   /**
+   * Lifecycle transition stream ({@link Lifecycle.Event}) — not {@link QueueHandleApi.events}.
+   */
+  readonly lifecycleEvents: Stream.Stream<Lifecycle.Event>;
+
+  /**
    * Fork the worker pool. Idempotent — safe to call multiple times.
    * Only needed when the HyperService layer was piped with {@link Hyperlink.deferStart};
    * otherwise workers already started at acquisition.
@@ -3382,6 +3387,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
       metrics: Stream.fromPubSub(metricsHub),
 
       lifecycle: lifecycle.state,
+      lifecycleEvents: lifecycle.events,
 
       start: tapLogs(
         lifecycle.start.pipe(
@@ -3391,13 +3397,11 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
       ).pipe(Effect.asVoid),
 
       pause: lifecycle.pause.pipe(
-        Effect.catchTag("LifecycleUnsupported", () => Effect.void),
         Effect.catchTag("LifecycleIllegal", () => Effect.void),
         Effect.provide(workerContext),
       ),
 
       resume: lifecycle.resume.pipe(
-        Effect.catchTag("LifecycleUnsupported", () => Effect.void),
         Effect.catchTag("LifecycleIllegal", () => Effect.void),
         Effect.provide(workerContext),
       ),

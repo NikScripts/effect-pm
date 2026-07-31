@@ -41,9 +41,25 @@ declare const participating: Lifecycle.Participating;
 // @ts-expect-error Participating has stop only — no shutdown alias
 participating.shutdown;
 
+declare const core: Lifecycle.ServiceCore;
+declare const pausable: Lifecycle.ServicePausable;
+declare const tools: Lifecycle.Service;
+// Structural caps: make() without latch → ServiceCore has no pause/resume members.
+// @ts-expect-error ServiceCore has no pause
+core.pause;
+// @ts-expect-error ServiceCore has no resume
+core.resume;
+pausable.pause;
+pausable.resume;
+tools.pause;
+tools.resume;
+
 void unsupported;
 void illegal;
 void state;
 void event;
 void pool;
 void participating;
+void core;
+void pausable;
+void tools;

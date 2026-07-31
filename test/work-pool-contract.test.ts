@@ -161,6 +161,7 @@ it("exposes the expected control verbs", () => {
       "clear",
       "isEmpty",
       "lifecycle",
+      "lifecycleEvents",
       "metrics",
       "pause",
       "resume",

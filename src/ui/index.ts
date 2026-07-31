@@ -44,8 +44,11 @@ export * as WorkPoolView from "./WorkPoolView";
 export * as PriorityView from "./PriorityView";
 /** Shared Daemon View handles + observe pack. */
 export * as DaemonView from "./DaemonView";
+/** Shared Lifecycle observe pack (badge + start/stop / pause/resume). */
+export * as LifecycleView from "./LifecycleView";
 /** Shared Gate View handles + observe pack. */
 export * as GateView from "./GateView";
+
 /** Shared ApiMetrics View handles + observe pack. */
 export * as ApiMetricsView from "./ApiMetricsView";
 /** Shared FleetHealth View handles + observe pack. */
