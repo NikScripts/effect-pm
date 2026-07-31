@@ -36,12 +36,12 @@ export const urls = Route.urlBuilder(site);
 
 /** Live router over this catalog (`memory` for CLI; browser app uses `history`). */
 export const makeDocsRouter = (
-  mode: "memory" | "history" = "memory",
+  mode: "Memory" | "History" = "Memory",
 ): Router.Service<typeof site> => Router.make(site, mode);
 
 // ---cut-after---
 const program = Effect.gen(function* () {
-  const router = makeDocsRouter("memory");
+  const router = makeDocsRouter("Memory");
 
   yield* Effect.logInfo("typed urls");
   yield* Effect.logInfo(`  home      ${urls.home()}`);

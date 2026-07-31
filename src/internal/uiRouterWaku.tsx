@@ -29,7 +29,7 @@ export type WakuBinding<
 > = {
   readonly _tag: "WakuBinding";
   readonly api: A;
-  readonly mode: "waku";
+  readonly mode: "Waku";
   readonly urls: U;
 };
 
@@ -46,14 +46,14 @@ export function isWakuBinding(u: unknown): u is WakuBinding {
   );
 }
 
-/** Bind a catalog to the Waku layer — same role as `Router.make(api, "history")`. */
+/** Bind a catalog to the Waku layer — same role as `Router.make(api, "History")`. */
 export const waku = <A extends ApiConstraint, U = Route.UrlBuilder<A>>(
   api: A,
   urls?: U,
 ): WakuBinding<A, U> => ({
   _tag: "WakuBinding",
   api,
-  mode: "waku",
+  mode: "Waku",
   urls: (urls ?? Route.urlBuilder(api)) as U,
 });
 
@@ -108,7 +108,7 @@ export const liveService = <A extends ApiConstraint>(
 
   return {
     api: binding.api,
-    mode: "waku",
+    mode: "Waku",
     pathname,
     search,
     href,
@@ -222,7 +222,7 @@ const softNavClick = (
 };
 
 /**
- * Soft-nav link — Waku `Link` when `mode === "waku"` (push); else `<a>` + {@link Service.go}.
+ * Soft-nav link — Waku `Link` when `mode === "Waku"` (push); else `<a>` + {@link Service.go}.
  */
 export const Link = <A extends ApiConstraint = ApiConstraint>(props: {
   readonly to: string | ((urls: Route.UrlBuilder<A>) => string);
@@ -243,7 +243,7 @@ export const Link = <A extends ApiConstraint = ApiConstraint>(props: {
     ReturnType<typeof useWakuRouter>["push"]
   >[0];
 
-  if (router.mode === "waku" && props.replace !== true) {
+  if (router.mode === "Waku" && props.replace !== true) {
     return (
       <WakuLink
         to={wakuTo}
@@ -260,7 +260,7 @@ export const Link = <A extends ApiConstraint = ApiConstraint>(props: {
 
   return (
     <a
-      href={router.mode === "waku" ? wakuTo : href}
+      href={router.mode === "Waku" ? wakuTo : href}
       className={props.className}
       title={props.title}
       data-kind={props["data-kind"]}

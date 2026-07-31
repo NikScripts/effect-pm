@@ -40,7 +40,7 @@ export {
 } from "./Router";
 
 /**
- * Lite live service — `make(api, "memory" | "history")`.
+ * Lite live service — `make(api, "Memory" | "History")`.
  * For the Waku layer use {@link waku}.
  *
  * @public

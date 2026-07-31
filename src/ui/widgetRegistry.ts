@@ -35,19 +35,19 @@ export interface WidgetRegistry<W> {
 
 /** One registry addition — bind a widget to a **kind** or an exact **key**. @public */
 export type WidgetEntry<W> =
-  | { readonly _tag: "kind"; readonly kind: string; readonly widget: W }
-  | { readonly _tag: "key"; readonly key: string; readonly widget: W };
+  | { readonly _tag: "Kind"; readonly kind: string; readonly widget: W }
+  | { readonly _tag: "Key"; readonly key: string; readonly widget: W };
 
 /** Bind a widget to every HyperService of a kind — e.g. `forKind(WorkPool.kind, MyQueueCard)`. @public */
 export const forKind = <W>(kind: string, widget: W): WidgetEntry<W> => ({
-  _tag: "kind",
+  _tag: "Kind",
   kind,
   widget,
 });
 
 /** Bind a widget to one exact resource key — overrides that HyperService's kind widget. @public */
 export const forKey = <W>(key: string, widget: W): WidgetEntry<W> => ({
-  _tag: "key",
+  _tag: "Key",
   key,
   widget,
 });
@@ -60,11 +60,11 @@ export const withEntries = <W>(
   entries.reduce(
     (reg, entry) =>
       Match.value(entry).pipe(
-        Match.tag("kind", ({ kind, widget }) => ({
+        Match.tag("Kind", ({ kind, widget }) => ({
           ...reg,
           byKind: HashMap.set(reg.byKind, kind, widget),
         })),
-        Match.tag("key", ({ key, widget }) => ({
+        Match.tag("Key", ({ key, widget }) => ({
           ...reg,
           byKey: HashMap.set(reg.byKey, key, widget),
         })),

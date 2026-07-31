@@ -55,7 +55,7 @@ describe("RuntimeProvider + Observe.use", () => {
   });
 
   it("compose accepts a live Router.Service", () => {
-    const router = Router.make(hubSite, "memory");
+    const router = Router.make(hubSite, "Memory");
     GroupNav.open(Hub, router, Jobs);
     const ui = View.compose({ views, router, group: Hub });
     expect(ui.router).toBe(router);

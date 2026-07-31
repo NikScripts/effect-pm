@@ -16,6 +16,6 @@ expectTypeOf(
 // @ts-expect-error api path param required
 urls.api();
 
-const router = Router.make(site, "memory");
+const router = Router.make(site, "Memory");
 router.to((u) => u.guides.gates());
 expectTypeOf(Route.urlBuilder(site).install()).toEqualTypeOf<string>();

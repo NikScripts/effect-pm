@@ -92,7 +92,7 @@ const target = <Id extends string, PathType extends Route.Path, Params>(
     readonly keys: ReadonlyArray<string>;
     readonly member: unknown | null;
     readonly view?: string | undefined;
-    readonly kind: "group" | "leaf" | "leafView" | "health";
+    readonly kind: "Group" | "Leaf" | "LeafView" | "Health";
   },
 ): Route.Endpoint<Id, PathType, Params> =>
   Route.annotate(endpoint, Route.Target, {
@@ -116,7 +116,7 @@ const membersToRoutes = (
           target(Route.get("index", path), {
             keys,
             member,
-            kind: "group",
+            kind: "Group",
           }),
           ...membersToRoutes(member, keys),
         ),
@@ -126,19 +126,19 @@ const membersToRoutes = (
         target(Route.get(name, path), {
           keys,
           member,
-          kind: "leaf",
+          kind: "Leaf",
         }),
         target(Route.get(`${name}Logs`, formatPath([...keys, "logs"])), {
           keys: [...keys, "logs"],
           member,
           view: "logs",
-          kind: "leafView",
+          kind: "LeafView",
         }),
         target(Route.get(`${name}Schedule`, formatPath([...keys, "schedule"])), {
           keys: [...keys, "schedule"],
           member,
           view: "schedule",
-          kind: "leafView",
+          kind: "LeafView",
         }),
       );
     }
@@ -151,7 +151,7 @@ const healthRoutes = (): Array<Route.RouteLike> => [
     keys: ["health"],
     member: null,
     view: "health",
-    kind: "health",
+    kind: "Health",
   }),
   target(
     Route.get("nodeHealth", "/health/*nodeId").pipe(
@@ -161,7 +161,7 @@ const healthRoutes = (): Array<Route.RouteLike> => [
       keys: ["health"],
       member: null,
       view: "health",
-      kind: "health",
+      kind: "Health",
     },
   ),
 ];

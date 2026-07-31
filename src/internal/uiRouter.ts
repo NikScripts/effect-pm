@@ -17,7 +17,7 @@ export type HistoryAction = "push" | "replace";
 /** Live navigation API — lite (`memory` / `history`) or full (`waku` companion). */
 export interface Service<A extends ApiConstraint = ApiConstraint> {
   readonly api: A;
-  readonly mode: "memory" | "history" | "waku";
+  readonly mode: "Memory" | "History" | "Waku";
   /** Pathname only (`/docs/x`) — no query. */
   readonly pathname: string;
   /** Search including `?` (`?tab=1`), or `""`. */
@@ -97,15 +97,15 @@ const collapseStack = (stack: Array<string>): void => {
 
 export const makeService = <A extends ApiConstraint>(
   api: A,
-  mode: "memory" | "history",
+  mode: "Memory" | "History",
 ): Service<A> => {
   const urls = Route.urlBuilder(api);
   const initial =
-    mode === "history" ? locationHref() : { pathname: "/", search: "" };
+    mode === "History" ? locationHref() : { pathname: "/", search: "" };
   let pathname = initial.pathname;
   let search = initial.search;
   const stack: Array<string> =
-    mode === "memory" ? [joinHref(pathname, search)] : [];
+    mode === "Memory" ? [joinHref(pathname, search)] : [];
   const listeners = new Set<() => void>();
 
   const notify = (): void => {
@@ -126,7 +126,7 @@ export const makeService = <A extends ApiConstraint>(
     search = parsed.search;
     const href = joinHref(pathname, search);
 
-    if (mode === "memory") {
+    if (mode === "Memory") {
       if (action === "push") {
         stack.push(href);
       } else {
@@ -162,7 +162,7 @@ export const makeService = <A extends ApiConstraint>(
     to: (build, options) =>
       setHref(build(urls), options?.replace === true ? "replace" : "push"),
     back: () => {
-      if (mode === "history") {
+      if (mode === "History") {
         if (typeof window !== "undefined") window.history.back();
         return;
       }
@@ -184,7 +184,7 @@ export const makeService = <A extends ApiConstraint>(
       };
     },
     syncFromLocation: () => {
-      if (mode !== "history") return;
+      if (mode !== "History") return;
       const next = locationHref();
       if (next.pathname === pathname && next.search === search) return;
       pathname = next.pathname;

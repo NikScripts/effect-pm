@@ -18,7 +18,7 @@ import {
 import * as Router from "../src/ui/Router";
 
 const router = Router.make(site);
-expectTypeOf(router.mode).toEqualTypeOf<"waku">();
+expectTypeOf(router.mode).toEqualTypeOf<"Waku">();
 expectTypeOf(router.urls.home).toEqualTypeOf(urls.home);
 
 expectTypeOf(urls.home()).toEqualTypeOf<"/">();

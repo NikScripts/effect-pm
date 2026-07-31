@@ -129,7 +129,7 @@ export class Target extends Context.Service<
     readonly keys: ReadonlyArray<string>;
     readonly member: unknown | null;
     readonly view: string | undefined;
-    readonly kind: "group" | "leaf" | "leafView" | "health";
+    readonly kind: "Group" | "Leaf" | "LeafView" | "Health";
   }
 >()("hyperlink-ts/ui/Route/Target") {}
 

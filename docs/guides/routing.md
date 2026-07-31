@@ -19,7 +19,7 @@ const site = Route.make("site").add(
   ),
 )
 
-const router = Router.make(site, "history") // lite
+const router = Router.make(site, "History") // lite
 // Waku: const router = Router.waku(site)
 
 <Router.Provider value={router}>
@@ -58,7 +58,7 @@ only so lite apps never pull the optional `waku` peer.
 ```ts
 // Lite layer
 import * as Router from "hyperlink-ts/ui/Router"
-const router = Router.make(site, "history")
+const router = Router.make(site, "History")
 // or Router.history(site) / Router.memory(site)
 
 // Waku layer — adapts Waku into the same Service

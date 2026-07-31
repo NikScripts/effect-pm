@@ -40,7 +40,7 @@ const run = <A>(
 
 describe("Router.make (typed)", () => {
   it("to / urls are catalog-typed", () => {
-    const router = Router.make(site, "memory");
+    const router = Router.make(site, "Memory");
     router.to((urls) => urls.app.dashboard());
     expect(router.pathname).toBe("/app");
     expect(router.urls.home()).toBe("/home");
@@ -60,7 +60,7 @@ describe("Route.handle + Router.Outlet", () => {
         ),
       ),
     );
-    const router = Router.make(app, "memory");
+    const router = Router.make(app, "Memory");
     router.go("/users/42");
     expect(Route.handleOf(router.match)).toBeDefined();
 
@@ -86,7 +86,7 @@ describe("Route.handle + Router.Outlet", () => {
         ),
       ),
     );
-    const router = Router.make(app, "memory");
+    const router = Router.make(app, "Memory");
     router.to((u) => u.user("42", { query: { tab: "bio" } }));
     expect(router.pathname).toBe("/users/42");
     expect(router.search).toBe("?tab=bio");
@@ -105,7 +105,7 @@ describe("Route.handle + Router.Outlet", () => {
 describe("Router.memory (Route.Api)", () => {
   it("matches Route.get home at /", () => {
     const app = Route.make("app").add(Route.get("home", "/"));
-    const router = Router.make(app, "memory");
+    const router = Router.make(app, "Memory");
     expect(router.pathname).toBe("/");
     expect(router.match?.route.identifier).toBe("home");
   });
@@ -177,7 +177,7 @@ describe("Group.asRoutes + fromEffect", () => {
       expect(router.pathname).toBe("/Nwsl/HttpApi");
       expect(router.match?.route.identifier).toBe("HttpApi");
       const target = Route.targetOf(router.match);
-      expect(target?.kind).toBe("leaf");
+      expect(target?.kind).toBe("Leaf");
       expect(target?.member).toBe(HttpApi);
     });
   });
@@ -256,13 +256,13 @@ describe("Group.asRoutes + fromEffect", () => {
       expect(nav.selected).toBe(HttpApi);
       expect(router.match?.route.identifier).toBe("HttpApiLogs");
       const target = Route.targetOf(router.match);
-      expect(target?.kind).toBe("leafView");
+      expect(target?.kind).toBe("LeafView");
       expect(target?.view).toBe("logs");
     });
   });
 
   it("Route.targetOf reads Target from match annotations", () => {
-    const router = Router.make(hubSite, "memory");
+    const router = Router.make(hubSite, "Memory");
     GroupNav.open(Hub, router, HttpApi);
     expect(Route.targetOf(undefined)).toBeUndefined();
     expect(Route.targetOf(router.match)?.member).toBe(HttpApi);

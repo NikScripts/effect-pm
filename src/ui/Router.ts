@@ -13,7 +13,7 @@
  *   ),
  * )
  *
- * const router = Router.make(site, "history")
+ * const router = Router.make(site, "History")
  *
  * <Router.Provider value={router}>
  *   <Router.Link to={(u) => u.home()}>Home</Router.Link>
@@ -72,7 +72,7 @@ export class Router extends Context.Service<Router, Service>()(
  */
 export const make = <A extends ApiConstraint>(
   api: A,
-  mode: "memory" | "history",
+  mode: "Memory" | "History",
 ): Service<A> => internal.makeService(api, mode);
 
 /**
@@ -82,7 +82,7 @@ export const make = <A extends ApiConstraint>(
  * @public
  */
 export const memory = (api: ApiConstraint): Layer.Layer<Router> =>
-  Layer.sync(Router, () => internal.makeService(api, "memory"));
+  Layer.sync(Router, () => internal.makeService(api, "Memory"));
 
 /**
  * Browser History router — `pushState` / `popstate` / `replaceState` against the catalog.
@@ -91,7 +91,7 @@ export const memory = (api: ApiConstraint): Layer.Layer<Router> =>
  * @public
  */
 export const history = (api: ApiConstraint): Layer.Layer<Router> =>
-  Layer.sync(Router, () => internal.makeService(api, "history"));
+  Layer.sync(Router, () => internal.makeService(api, "History"));
 
 // =============================================================================
 // React
@@ -110,7 +110,7 @@ export const Provider = (props: {
 }): React.ReactElement => {
   const { value } = props;
   React.useEffect(() => {
-    if (value.mode !== "history" || typeof window === "undefined") return;
+    if (value.mode !== "History" || typeof window === "undefined") return;
     value.syncFromLocation();
     const onPop = (): void => value.syncFromLocation();
     window.addEventListener("popstate", onPop);

@@ -15,7 +15,7 @@ const site = Route.make("site").add(
   ),
 )
 
-const router = Router.make(site, "history")
+const router = Router.make(site, "History")
 
 <Router.Provider value={router}>
   <Router.Link to={(u) => u.home()}>Home</Router.Link>

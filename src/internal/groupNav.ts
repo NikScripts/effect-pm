@@ -71,11 +71,11 @@ export const state = (
     );
     if (target !== undefined) {
       const keys =
-        target.kind === "health" && match.params.nodeId !== undefined
+        target.kind === "Health" && match.params.nodeId !== undefined
           ? (["health", match.params.nodeId] as const)
           : target.keys;
       const { trail, group } =
-        target.kind === "health"
+        target.kind === "Health"
           ? { trail: [root] as const, group: root }
           : trailFromKeys(
               root,
@@ -85,7 +85,7 @@ export const state = (
         keys,
         trail,
         selected:
-          target.kind === "leaf" || target.kind === "leafView"
+          target.kind === "Leaf" || target.kind === "LeafView"
             ? target.member
             : null,
         view: target.view,
