@@ -31,10 +31,10 @@ export * as View from "./View";
 export * as Route from "./Route";
 /**
  * Lite runtime navigation over a Route catalog (`make` / `memory` / `history`).
- * Full Waku edition: `import * as Router from "hyperlink-ts/ui/Router/waku"`.
+ * Waku layer (not a second Router): `hyperlink-ts/ui/Router/waku`.
  */
 export * as Router from "./Router";
-/** Group-tree state and navigation bound to a core Router (either edition). */
+/** Group-tree state and navigation bound to a core Router (either layer). */
 export * as GroupNav from "./GroupNav";
 /** Shared Group card View handle + contribution Layer (no platform TSX). */
 export * as GroupView from "./GroupView";

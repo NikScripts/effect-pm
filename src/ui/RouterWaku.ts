@@ -1,16 +1,19 @@
 /**
  * @module ui/RouterWaku
  *
- * **Waku layer** for the one {@link ./Router} service. Same `Service` / `Link` /
- * `to` / `go` as lite — this entry adapts Waku into that service (optional `waku`
- * peer). Non-Waku apps import `hyperlink-ts/ui/Router` instead so they never
- * pull Waku.
+ * **Waku layer only** for the one {@link ./Router} service — not a second Router
+ * namespace. Install with {@link waku} / {@link layer.waku}; React adapters
+ * ({@link Provider}, {@link Link}, {@link useRouter}) pull the optional `waku`
+ * peer. Lite Memory / History / Outlet / `make` stay on `hyperlink-ts/ui/Router`.
  *
  * ```tsx
- * import * as Router from "hyperlink-ts/ui/Router/waku"
+ * import * as Router from "hyperlink-ts/ui/Router"
+ * import { waku, Provider, Link } from "hyperlink-ts/ui/Router/waku"
  *
- * const binding = Router.waku(site) // or Router.layer.waku(site)
- * <Router.Provider value={binding}>…</Router.Provider>
+ * const binding = waku(site) // or layer.waku(site)
+ * <Provider value={binding}>
+ *   <Link to={(u) => u.home()}>Home</Link>
+ * </Provider>
  * ```
  *
  * Hooks require Waku's router in the tree (every Waku app has one).
@@ -21,70 +24,73 @@
 
 import * as internal from "../internal/uiRouterWaku";
 import type { ApiConstraint } from "../internal/uiRoutes";
-import * as Route from "./Route";
-import * as Router from "./Router";
+import type * as Route from "./Route";
 
 // =============================================================================
-// One service — re-export lite surface
+// Layer
 // =============================================================================
 
-export type { Service, ForApi } from "./Router";
 export type { WakuBinding } from "../internal/uiRouterWaku";
 
-export {
-  Router,
-  memory,
-  history,
-  useTarget,
-  Outlet,
-} from "./Router";
-
 /**
- * Waku layer input — provide with {@link Provider}. Same typed catalog as lite.
- * Lite `make(api, "Memory" | "History")` stays on `hyperlink-ts/ui/Router`.
+ * Waku layer input — provide with {@link Provider}.
  *
  * @public
  */
 export const waku: typeof internal.waku = internal.waku;
 
-/** @public */
+/**
+ * Waku layer only — Memory / History live on {@link ./Router.layer}.
+ *
+ * @public
+ */
+export const layer = {
+  /**
+   * Waku binding for {@link Provider}.
+   *
+   * @public
+   */
+  waku: <A extends ApiConstraint, U = Route.UrlBuilder<A>>(
+    api: A,
+    urls?: U,
+  ): internal.WakuBinding<A, U> => internal.waku(api, urls),
+} as const;
+
+/** Optional default binding when no Provider is mounted (docs chrome). @public */
 export const setDefault: typeof internal.setDefault = internal.setDefault;
 
 /** @public */
 export const isWakuBinding: typeof internal.isWakuBinding =
   internal.isWakuBinding;
 
+// =============================================================================
+// React adapters (Waku peer)
+// =============================================================================
+
 /**
- * One Provider: lite {@link Service} **or** {@link waku} binding → one Service context.
+ * One Provider: lite {@link ./Router.Service} **or** {@link waku} binding.
  *
  * @public
  */
 export const Provider: typeof internal.Provider = internal.Provider;
 
 /**
- * The one live {@link Service} (context or default Waku binding).
+ * Live {@link ./Router.Service} from context or {@link setDefault}.
  *
  * @public
  */
 export const useRouter: typeof internal.useRouter = internal.useRouter;
 
+/** @public */
 export const useHasRouter: typeof internal.useHasRouter =
   internal.useHasRouter;
 
+/** @public */
 export const useMatch: typeof internal.useMatch = internal.useMatch;
 
+/**
+ * Soft-nav link — Waku `Link` when the live service is `_tag: "Waku"`.
+ *
+ * @public
+ */
 export const Link: typeof internal.Link = internal.Link;
-
-/** @public */
-export type LiveRouter<A extends ApiConstraint = ApiConstraint> =
-  Router.Service<A>;
-
-/** Convenience: `waku(api, urls?)` when you only pass a catalog. @public */
-export const layer = {
-  memory: Router.memory,
-  history: Router.history,
-  waku: <A extends ApiConstraint, U = Route.UrlBuilder<A>>(
-    api: A,
-    urls?: U,
-  ): internal.WakuBinding<A, U> => internal.waku(api, urls),
-} as const;

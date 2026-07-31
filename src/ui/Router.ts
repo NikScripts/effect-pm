@@ -24,9 +24,9 @@
  * </Router.Provider>
  * ```
  *
- * **One service.** This entry is the non-Waku layer (`make` / `memory` / `history`).
- * Waku layer: `hyperlink-ts/ui/Router/waku` (same `Service`, unified `Provider`).
- * Group drill-down: {@link ./GroupNav} (on top — not inside Router).
+ * **One service.** This entry is the lite layer (`make` / `memory` / `history`).
+ * Waku layer (binding + React adapters only — not a Router mirror):
+ * `hyperlink-ts/ui/Router/waku`. Group drill-down: {@link ./GroupNav} (on top).
  *
  * @see docs/handoffs/ui-routes-dream.md
  */
