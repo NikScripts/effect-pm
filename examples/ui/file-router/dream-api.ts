@@ -1,168 +1,346 @@
 /**
  * @module examples/ui/file-router/dream-api
  *
- * **Sketch** of the locked page/layout mark API (not package exports yet).
+ * Teaching sketch of the **Hyperlink-owned file router** page mark — Effect-shaped,
+ * same vocabulary as {@link View} Tags / Layers / {@link Route}.
  *
- * - Helpers: `View.static` / `View.dynamic` / `View.build` / `View.layout` (camelCase)
- * - Prefer page **class** for metadata; bare component → `View.dynamic` etc.
- * - Layers: camelCase (`skins`, `pagesLayer`, …)
+ * ## What problem this solves
+ *
+ * Waku wants `export const getConfig = () => ({ render, staticPaths })`. We do **not**
+ * teach that. Render mode + SSG paths + page metadata are Hyperlink marks the file
+ * router reads, then maps internally to `createPages`.
+ *
+ * ## Three layers (keep them straight)
+ *
+ * 1. **Page mark** — `View.static` / `.dynamic` / `.build` (camelCase helpers) or a
+ *    preferred **page class** (`View.Page.Tag`) with path/render/meta on statics.
+ * 2. **Route catalog** — typed urls (`Route.fileRoot` / `fromEffect`) so `urls.chapter("x")`
+ *    is a closed builder, not a stringly href.
+ * 3. **View skins** — normal `View.provide` + camelCase `layer` / `skins`. Nested UI
+ *    Tags inside a page are ordinary DI (`R` stacks on Layers); the page mark itself
+ *    is not a Layer factory.
+ *
+ * ## Render modes (owned PascalCase discriminants)
+ *
+ * | Mark | Meaning |
+ * |------|---------|
+ * | `Static` | SSG this path |
+ * | `Dynamic` | SSR every request |
+ * | `Build` | DEV → dynamic (any slug); production → static + `paths` |
+ *
+ * Unmarked fixed path → `Static`. Param routes must mark `Build` (+ paths) or `Dynamic`.
+ *
+ * Run: `pnpm exec tsx examples/ui/file-router/dream-api.ts`
+ * Handoff: `docs/handoffs/file-router-prototype.md`
  */
-
-import type * as React from "react";
-import { Layer } from "effect";
+import * as React from "react";
+import { Data, Effect, Layer, Schema } from "effect";
 import * as Route from "../../../src/ui/Route";
 import * as View from "../../../src/ui/View";
 
 // =============================================================================
-// Stamp helpers (stand-in for future View.static / .dynamic / .build / .layout)
+// Owned vocabulary — PascalCase discriminants (types-and-naming)
 // =============================================================================
 
-const PageStamp = "~hyperlink-ts/View/page" as const;
+/**
+ * How the file router registers the page with the web engine.
+ * Not Waku’s `"static" | "dynamic"` strings in app code — we lowercase only at the wire.
+ */
+export type PageRender = Data.TaggedEnum<{
+  Static: {};
+  Dynamic: {};
+  Build: {};
+}>;
 
-type PageRender = "Static" | "Dynamic" | "Build";
+export const PageRender = Data.taggedEnum<PageRender>();
 
-type PageStampValue = {
-  readonly path: string;
+// =============================================================================
+// Page stamp — what the file-router loader reads off a default export
+// =============================================================================
+
+const PageStampId = "~hyperlink-ts/View/page" as const;
+
+/**
+ * Metadata + render plan attached to a page module.
+ * Prefer putting this on a {@link View.Page.Tag} class; helpers stamp the same bag
+ * onto a bare component for the escape hatch.
+ *
+ * @internal sketch — lands on View once Eng’d
+ */
+export type PageStamp = {
+  readonly path: `/${string}` | "/";
   readonly render: PageRender;
   readonly title?: string;
   readonly description?: string;
-  readonly paths?: () => ReadonlyArray<string> | Promise<ReadonlyArray<string>>;
+  /**
+   * SSG path args for `Build` / param routes — Effect so listing chapters can use
+   * FileSystem / services later without a raw Promise in app code.
+   */
+  readonly paths?: Effect.Effect<ReadonlyArray<string>>;
 };
 
 type PageComponent<P extends object = {}> = (
   props: P,
 ) => React.ReactElement | null;
 
-const stamp = <C extends PageComponent<any>>(
+const stampPage = <C extends PageComponent<any>>(
   Comp: C,
-  value: PageStampValue,
-): C => Object.assign(Comp, { [PageStamp]: value });
+  value: PageStamp,
+): C & { readonly [PageStampId]: PageStamp } =>
+  Object.assign(Comp, { [PageStampId]: value });
 
-/** @internal sketch — becomes View.static */
-const viewStatic = <P extends object>(
-  path: string,
-  Comp: PageComponent<P>,
-  meta?: { readonly title?: string; readonly description?: string },
-): PageComponent<P> =>
-  stamp(Comp, { path, render: "Static", ...meta });
+export const pageStampOf = (comp: object): PageStamp | undefined => {
+  if (PageStampId in comp) {
+    return (comp as Record<typeof PageStampId, PageStamp>)[PageStampId];
+  }
+  return undefined;
+};
 
-/** @internal sketch — becomes View.dynamic */
-const viewDynamic = <P extends object>(
-  path: string,
-  Comp: PageComponent<P>,
-  meta?: { readonly title?: string; readonly description?: string },
-): PageComponent<P> =>
-  stamp(Comp, { path, render: "Dynamic", ...meta });
+// =============================================================================
+// View.static / .dynamic / .build / .layout — camelCase helpers (stand-in)
+// =============================================================================
 
-/** @internal sketch — becomes View.build */
-const viewBuild = <P extends object>(
-  path: string,
-  Comp: PageComponent<P>,
-  meta: {
-    readonly title?: string;
-    readonly description?: string;
-    readonly paths: () => ReadonlyArray<string> | Promise<ReadonlyArray<string>>;
-  },
-): PageComponent<P> =>
-  stamp(Comp, { path, render: "Build", ...meta });
+/**
+ * Stand-in for the public `View` page helpers. Path string is the route key —
+ * never a function `name`.
+ *
+ * @internal sketch
+ */
+export const viewPage = {
+  /**
+   * SSG. Fixed routes can omit a mark (default Static); spelling it out documents intent.
+   */
+  static: <P extends object>(
+    path: PageStamp["path"],
+    Comp: PageComponent<P>,
+    meta?: {
+      readonly title?: string;
+      readonly description?: string;
+    },
+  ) =>
+    stampPage(Comp, {
+      path,
+      render: PageRender.Static(),
+      ...meta,
+    }),
 
-/** @internal sketch — becomes View.layout */
-const viewLayout = (
-  path: string,
-  Comp: PageComponent<{ readonly children: React.ReactNode }>,
-): PageComponent<{ readonly children: React.ReactNode }> =>
-  stamp(Comp, { path, render: "Static" });
+  /** SSR every request. */
+  dynamic: <P extends object>(
+    path: PageStamp["path"],
+    Comp: PageComponent<P>,
+    meta?: {
+      readonly title?: string;
+      readonly description?: string;
+    },
+  ) =>
+    stampPage(Comp, {
+      path,
+      render: PageRender.Dynamic(),
+      ...meta,
+    }),
 
-// How it reads once hung on View:
-const ViewPage = {
-  static: viewStatic,
-  dynamic: viewDynamic,
-  build: viewBuild,
-  layout: viewLayout,
+  /**
+   * Param / build-time path set — dynamic while developing, static + `paths` in production.
+   */
+  build: <P extends object>(
+    path: PageStamp["path"],
+    Comp: PageComponent<P>,
+    meta: {
+      readonly title?: string;
+      readonly description?: string;
+      readonly paths: Effect.Effect<ReadonlyArray<string>>;
+    },
+  ) =>
+    stampPage(Comp, {
+      path,
+      render: PageRender.Build(),
+      ...meta,
+    }),
+
+  /**
+   * Layout chrome (`_layout`). camelCase value until a `View.Layout` class earns Tag semantics.
+   */
+  layout: (
+    path: PageStamp["path"],
+    Comp: PageComponent<{ readonly children: React.ReactNode }>,
+  ) =>
+    stampPage(Comp, {
+      path,
+      render: PageRender.Static(),
+    }),
 } as const;
 
 // =============================================================================
-// 1) Bare component → View.dynamic / .static / .build
+// Content SSOT — Effect, not a bare array hidden in getConfig
 // =============================================================================
 
-export const About = ViewPage.static(
+/** Chapter slugs the docs tree can SSG. Real apps: FileSystem / content index. */
+export const listChapterSlugs: Effect.Effect<ReadonlyArray<string>> =
+  Effect.succeed(["routing", "stores", "view-tag-types"] as const);
+
+// =============================================================================
+// Escape hatch — bare components (no class yet)
+// =============================================================================
+
+/**
+ * Fixed marketing page. Helper makes the Static mark explicit; default would be
+ * the same if unmarked.
+ */
+export const About = viewPage.static(
   "/about",
-  (_props: {}) => null as unknown as React.ReactElement,
-  { title: "About" },
+  (_props: {}) => React.createElement("main", null, "About"),
+  { title: "About", description: "Who we are" },
 );
 
-export const Search = ViewPage.dynamic(
+/** Search hits the index every request — Dynamic. */
+export const Search = viewPage.dynamic(
   "/search",
-  (_props: {}) => null as unknown as React.ReactElement,
+  (_props: {}) => React.createElement("main", null, "Search"),
   { title: "Search" },
 );
 
-const chapters = ["routing", "stores"] as const;
+// =============================================================================
+// Preferred — page class (View.Page.Tag) + nested View.Tag + camelCase layers
+// =============================================================================
 
-export const Chapter = ViewPage.build(
-  "/docs/:chapter",
-  (_props: { readonly chapter: string }) =>
-    null as unknown as React.ReactElement,
+/**
+ * Path params for `/docs/:chapter` — Schema-first like every other Hyperlink edge.
+ */
+export class ChapterParams extends Schema.Class<ChapterParams>("ChapterParams")(
   {
-    title: "Docs",
-    paths: () => [...chapters],
+    chapter: Schema.String,
   },
-);
+) {}
 
-// =============================================================================
-// 2) Preferred — page class + metadata on statics + camelCase skins layer
-// =============================================================================
+/**
+ * Nested chrome inside the page — ordinary View Tag (DI), **not** part of the
+ * file-router stamp. Provide via `View.provide` on a camelCase `skins` layer.
+ */
+export class ChapterAside extends View.Tag<
+  ChapterAside,
+  { readonly chapter: string }
+>()("examples/file-router/chapter-aside") {}
 
-class DocsChapter extends View.Page.Tag<
+/**
+ * The page itself — size chrome `Page`, path/render/meta on statics (SSOT).
+ *
+ * File-router Eng reads `path` / `render` / `paths` / title from this bag.
+ * Nested Tags (Aside) stack Layer `R` until `skins` provides them — same story as
+ * Dashboard compose, unrelated to SSG mode.
+ */
+export class DocsChapter extends View.Page.Tag<
   DocsChapter,
   { readonly chapter: string }
->()("app/page/docs-chapter", {
-  // Eng: file-router reads these (path / render / paths / title / …)
+>()("examples/file-router/docs-chapter", {
   path: "/docs/:chapter",
   render: "Build",
   title: "Docs",
   description: "Guide chapter",
-  paths: () => [...chapters],
-  spec: { kind: "app/page/docs" } as const,
+  paths: listChapterSlugs,
+  spec: { kind: "examples/file-router/docs" } as const,
 }) {}
 
-export const docsChapterSkins = View.provide(DocsChapter, ({ chapter }) => {
-  void chapter;
-  return null;
-});
+/**
+ * Skin for the page Tag — camelCase layer binding (types-and-naming).
+ * Inside: yield-style DI is Layer provide, not Effect.gen in the component.
+ */
+export const docsChapterSkins = Layer.mergeAll(
+  View.provide(ChapterAside, ({ chapter }) =>
+    React.createElement("aside", null, `On this page · ${chapter}`),
+  ),
+  View.provide(DocsChapter, ({ chapter }) =>
+    React.createElement(
+      "article",
+      null,
+      React.createElement("h1", null, chapter),
+      // Nested Tag usage once a matcher/kit exists — debt paid by pagesLayer
+      React.createElement("p", null, `Chapter: ${chapter}`),
+    ),
+  ),
+);
 
-// Dream one-liner once Eng’d: export default View.build(DocsChapter)
+/**
+ * Default export shape the file module would use once `View.build(Tag)` lands:
+ * stamp mirrors the class statics so the loader has one read path.
+ */
+export const DocsChapterPage = viewPage.build(
+  "/docs/:chapter",
+  (props: { readonly chapter: string }) =>
+    React.createElement("article", null, props.chapter),
+  {
+    title: "Docs",
+    description: "Guide chapter",
+    paths: listChapterSlugs,
+  },
+);
 
 // =============================================================================
-// 3) Layout — View.layout (camelCase); View.Layout class only if earned later
+// Layout
 // =============================================================================
 
-export const BookLayout = ViewPage.layout("/", (props) => {
-  void props.children;
-  return null as unknown as React.ReactElement;
-});
+export const BookLayout = viewPage.layout("/", (props) =>
+  React.createElement("div", { className: "book" }, props.children),
+);
 
 // =============================================================================
-// 4) Catalog + camelCase app layer
+// Route catalog — typed urls (fileRoot dream); soft-nav stays Router
 // =============================================================================
 
-export const site = Route.make("app").add(
-  // Dream: Route.fileRoot({ dir: "./pages" })
+/**
+ * Until `Route.fileRoot` ships, the catalog is spelled explicitly — same urls the
+ * codegen table will feed. `topLevel: true` flattens builders onto `urls.*`.
+ */
+export const site = Route.make("fileRouterDream").add(
   Route.group("root", { topLevel: true }).add(
     Route.get("about", "/about"),
     Route.get("search", "/search"),
-    Route.get("chapter", "/docs/:chapter"),
+    Route.get("chapter", "/docs/:chapter").pipe(
+      Route.params(ChapterParams),
+    ),
   ),
 );
 
 export const urls = Route.urlBuilder(site);
-// urls.about() · urls.search() · urls.chapter("routing")
 
+/** App pages Layer — still camelCase; merge into compose at the OS edge. */
 export const pagesLayer = Layer.mergeAll(docsChapterSkins);
 
-export const pageStampOf = (comp: object): PageStampValue | undefined => {
-  if (PageStamp in comp) {
-    return (comp as Record<typeof PageStamp, PageStampValue>)[PageStamp];
-  }
-  return undefined;
+// =============================================================================
+// Demo — Effect program (no console.*, no raw promises)
+// =============================================================================
+
+const describeStamp = (name: string, comp: object): string => {
+  const stamp = pageStampOf(comp);
+  if (stamp === undefined) return `${name}: (no stamp)`;
+  return `${name}: path=${stamp.path} render=${stamp.render._tag} title=${stamp.title ?? "—"}`;
 };
+
+const program = Effect.gen(function* () {
+  yield* Effect.logInfo("page marks (file-router stamps)");
+  yield* Effect.logInfo(`  ${describeStamp("About", About)}`);
+  yield* Effect.logInfo(`  ${describeStamp("Search", Search)}`);
+  yield* Effect.logInfo(`  ${describeStamp("DocsChapterPage", DocsChapterPage)}`);
+  yield* Effect.logInfo(`  ${describeStamp("BookLayout", BookLayout)}`);
+
+  yield* Effect.logInfo("Build paths (Effect)");
+  const slugs = yield* listChapterSlugs;
+  yield* Effect.logInfo(`  chapters → ${slugs.join(", ")}`);
+
+  yield* Effect.logInfo("typed urls (catalog)");
+  yield* Effect.logInfo(`  ${urls.about()}`);
+  yield* Effect.logInfo(`  ${urls.search()}`);
+  yield* Effect.logInfo(`  ${urls.chapter("routing")}`);
+
+  yield* Effect.logInfo(
+    "layers: pagesLayer is camelCase; skins pay View.Tag R at compose",
+  );
+  void pagesLayer;
+  void DocsChapter;
+  void ChapterAside;
+});
+
+void Effect.runPromise(
+  program.pipe(
+    Effect.tap(() => Effect.logInfo("example:file-router dream-api OK")),
+  ),
+);
