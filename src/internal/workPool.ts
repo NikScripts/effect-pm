@@ -2284,6 +2284,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
     // {@link Hyperlink.deferStart} onto the HyperService layer.
     const autoStart = !(yield* Hyperlink.DeferStart);
     const offDone = yield* Deferred.make<void>();
+    const shutdownFinalizedRef = yield* Ref.make(false);
     const computeStatus = Effect.gen(function* () {
       const levels = yield* levelSizes;
       return projection.buildStatus({
@@ -2312,15 +2313,17 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
       const pending = yield* totalPendingEffect;
       const inFlight = yield* Ref.get(inFlightRef);
       if (pending > 0 || inFlight > 0) return;
-      // Signal Lifecycle.awaitBeforeTerminal; badge Off is published by Lifecycle.make.
-      const won = yield* Deferred.succeed(offDone, undefined);
-      if (!won) return; // another fiber already finalized
+      // Claim finalization before waking Lifecycle.stop (it awaits offDone and may
+      // race to Off). Publish ShutdownComplete first so observers never miss it.
+      const already = yield* Ref.getAndSet(shutdownFinalizedRef, true);
+      if (already) return;
       yield* publishEvent({
         _tag: "ShutdownComplete",
         key: queueName,
         completed: yield* Ref.get(completedCount),
       });
       yield* Effect.logInfo(`Queue "${queueName}" shut down (off)`);
+      yield* Deferred.succeed(offDone, undefined);
     });
     // One fiber recomputes the snapshot on each lifecycle event (covers enqueue/start/exit/
     // drain/release/clear); pause/resume refresh inline (they emit no event). Tied to the

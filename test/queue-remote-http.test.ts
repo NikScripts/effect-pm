@@ -118,27 +118,33 @@ it("release handoff round-trips full entries (item + metadata) over http", () =>
           released.every((e) => e.timestamps.enqueuedAt !== undefined),
         ).toBe(true);
       }),
-    ), { deferStart: true }));
+      { deferStart: true },
+    ),
+  ));
 
 it("the status stream flows over http from the real engine", () =>
   Effect.runPromise(
-    withServer({ effect: (_item) => Effect.void }, (_port) =>
-      Effect.gen(function* () {
-        const queue = yield* RemoteQueue;
-        const collected = yield* Effect.forkChild(
-          Stream.runCollect(
-            Stream.take(
-              Stream.filter(
-                queue.status.changes,
-                (s) => s.sizes.normal >= 2,
+    withServer(
+      { effect: (_item) => Effect.void },
+      (_port) =>
+        Effect.gen(function* () {
+          const queue = yield* RemoteQueue;
+          const collected = yield* Effect.forkChild(
+            Stream.runCollect(
+              Stream.take(
+                Stream.filter(
+                  queue.status.changes,
+                  (s) => s.sizes.normal >= 2,
+                ),
+                1,
               ),
-              1,
             ),
-          ),
-        );
-        yield* Effect.sleep(Duration.millis(20));
-        yield* queue.add([{ n: 1 }, { n: 2 }]); // no workers → stay pending → normal:2
-        const snap = Array.from(yield* Fiber.join(collected))[0];
-        expect(snap?.sizes.normal).toBeGreaterThanOrEqual(2);
-      }),
-    ), { deferStart: true }));
+          );
+          yield* Effect.sleep(Duration.millis(20));
+          yield* queue.add([{ n: 1 }, { n: 2 }]); // no workers → stay pending → normal:2
+          const snap = Array.from(yield* Fiber.join(collected))[0];
+          expect(snap?.sizes.normal).toBeGreaterThanOrEqual(2);
+        }),
+      { deferStart: true },
+    ),
+  ));

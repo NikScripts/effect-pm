@@ -6,7 +6,6 @@
  * {@link ./Dashboard} is the public one-liner over compose + this shell.
  */
 import * as React from "react";
-import { Option } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import {
   type ApiTag,
@@ -78,9 +77,7 @@ const QueueDetail = (props: {
 }): React.ReactElement => {
   const Match = View.useMatch();
   const bundle = Observe.use(props.tag, WorkPoolView.pack);
-  const statusR = useAtomValue(bundle.status);
   const lifecycleR = useAtomValue(bundle.lifecycle);
-  const s = AsyncResult.isSuccess(statusR) ? Option.getOrUndefined(statusR.value) : undefined;
   const lifecycleTag = AsyncResult.isSuccess(lifecycleR)
     ? lifecycleR.value._tag ?? "?"
     : "?";

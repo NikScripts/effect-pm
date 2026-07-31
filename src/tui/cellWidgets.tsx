@@ -62,7 +62,7 @@ const statusOf = (lifecycleTag: string): Status =>
           : "running";
 
 const lifecycleTagOf = (
-  lifecycleR: AsyncResult.AsyncResult<Option.Option<{ readonly _tag: string }>, unknown>,
+  lifecycleR: AsyncResult.AsyncResult<{ readonly _tag: string }, unknown>,
 ): string =>
   AsyncResult.isSuccess(lifecycleR)
     ? lifecycleR.value._tag ?? "Running"
@@ -134,7 +134,8 @@ export const QueueCell = (props: {
   const opt = AsyncResult.isSuccess(r) ? r.value : Option.none();
   const s = Option.isSome(opt) ? opt.value : undefined;
   const sizes = s?.sizes ?? { high: 0, normal: 0, low: 0 };
-  const status = statusOf(lifecycleTagOf(lifecycleR));
+  const lifecycleTag = lifecycleTagOf(lifecycleR);
+  const status = statusOf(lifecycleTag);
   const pending = sizes.high + sizes.normal + sizes.low;
   const max = Math.max(sizes.high, sizes.normal, sizes.low, 1);
   const barWidth = Math.max(4, width - 4 - 2 - 1 - 5);
@@ -187,7 +188,8 @@ export const PriorityCell = (props: {
   const lanes = s !== undefined ? Object.entries(s.sizes) : [];
   const pending = lanes.reduce((sum, [, n]) => sum + n, 0);
   const max = Math.max(1, ...lanes.map(([, n]) => n));
-  const status = statusOf(lifecycleTagOf(lifecycleR));
+  const lifecycleTag = lifecycleTagOf(lifecycleR);
+  const status = statusOf(lifecycleTag);
   const barWidth = Math.max(4, width - 4 - 2 - 1 - 5);
   return (
     <Box

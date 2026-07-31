@@ -89,8 +89,9 @@ describe("QueueHandle — status ref shape", () => {
       expect("get" in queue.status).toBe(true);
       expect("changes" in queue.status).toBe(true);
       expect("statusNow" in queue).toBe(false);
-      const snap = yield* queue.status.get;
-      expect((yield* queue.lifecycle.get)._tag).toBe("Running");
+      yield* queue.status.get;
+      // `paused: true` → Lifecycle badge is Paused (not Running).
+      expect((yield* queue.lifecycle.get)._tag).toBe("Paused");
       const collected = yield* Effect.forkChild(
         Stream.runCollect(
           Stream.takeUntil(queue.status.changes, (s) => s.sizes.normal === 1),
@@ -447,13 +448,15 @@ describe("WorkPool.make — size and status", () => {
     Effect.gen(function* () {
       const queue = yield* WorkPool.make({
         name: "test-clear",
-        effect: (_n: number) => Effect.sleep(Duration.seconds(10)),
+        // Paused so nothing is in-flight — scope-close `stop` would otherwise await
+        // a long-running worker (drain) past the test timeout.
+        paused: true,
+        effect: (_n: number) => Effect.void,
         concurrency: 1,
       });
       yield* queue.add([1, 2, 3, 4, 5]);
-      yield* Effect.sleep(Duration.millis(20));
       const cleared = yield* queue.clear;
-      expect(cleared).toBeGreaterThan(0);
+      expect(cleared).toBe(5);
       const c = yield* queue.completed;
       expect(c).toBe(0);
     }).pipe(Effect.scoped),
@@ -879,7 +882,7 @@ describe("WorkPool.make — deferStart", () => {
 
   it.live("stop is idempotent and reports the Draining lifecycle", () =>
     Effect.gen(function* () {
-      // worker blocks on a gate so the item stays in-flight → queue stays "draining"
+      // worker blocks on a gate so the item stays in-flight → queue stays Draining
       const gate = yield* Deferred.make<void>();
       const queue = yield* WorkPool.make({
         name: "test-shutdown-idempotent",
@@ -889,14 +892,15 @@ describe("WorkPool.make — deferStart", () => {
       yield* Effect.sleep(Duration.millis(20));
       yield* queue.add([1]);
       yield* Effect.sleep(Duration.millis(20)); // let the worker pick it up (in-flight)
-      yield* queue.stop;
-      expect((yield* queue.lifecycle.get)._tag).toBe("Draining"); // in-flight not done yet
-      yield* queue.stop; // second call is a no-op (no throw, phase unchanged)
+      // `stop` awaits Off — fork so we can observe Draining and a second stop while in-flight.
+      const stopFiber = yield* Effect.forkChild(queue.stop);
+      yield* Effect.sleep(Duration.millis(20));
+      expect((yield* queue.lifecycle.get)._tag).toBe("Draining");
+      yield* queue.stop; // second call is a no-op (already Draining)
       expect((yield* queue.lifecycle.get)._tag).toBe("Draining");
       yield* Deferred.succeed(gate, undefined); // release → item finishes → off
-      while ((yield* queue.lifecycle.get)._tag !== "Off") {
-        yield* Effect.sleep(Duration.millis(5));
-      }
+      yield* Fiber.join(stopFiber);
+      expect((yield* queue.lifecycle.get)._tag).toBe("Off");
     }).pipe(Effect.scoped),
   );
 
@@ -922,19 +926,6 @@ describe("WorkPool.make — deferStart", () => {
       expect(yield* Ref.get(drains)).toBeGreaterThanOrEqual(1);
       void queue;
     }).pipe(deferStart, Effect.scoped),
-  );
-    Effect.gen(function* () {
-      const drains = yield* Ref.make(0);
-      const queue = yield* WorkPool.make({
-        name: "test-drained-no-auto-layer-only",
-        effect: (_n: number) => Effect.void,
-        concurrency: 4,
-      });
-      yield* forkDrainCounter(queue, drains);
-      yield* Effect.sleep(Duration.millis(120));
-      expect(yield* Ref.get(drains)).toBe(0);
-      void queue;
-    }).pipe(Effect.scoped),
   );
 
   it.live("Drained event fires only after processed work drains empty (default start)", () =>

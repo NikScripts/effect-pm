@@ -50,7 +50,7 @@ const statusOf = (lifecycleTag: string): Status =>
           : "running";
 
 const lifecycleTagOf = (
-  lifecycleR: AsyncResult.AsyncResult<Option.Option<{ readonly _tag: string }>, unknown>,
+  lifecycleR: AsyncResult.AsyncResult<{ readonly _tag: string }, unknown>,
 ): string =>
   AsyncResult.isSuccess(lifecycleR)
     ? lifecycleR.value._tag ?? "Running"
@@ -172,7 +172,8 @@ export const FocusedPriority = (props: {
   const lanes = s !== undefined ? Object.entries(s.sizes) : [];
   const pending = lanes.reduce((sum, [, n]) => sum + n, 0);
   const max = Math.max(1, ...lanes.map(([, n]) => n));
-  const status = statusOf(lifecycleTagOf(lifecycleR));
+  const lifecycleTag = lifecycleTagOf(lifecycleR);
+  const status = statusOf(lifecycleTag);
   const visible = Math.max(1, rows - 12 - barRows);
   const barWidth = Math.max(8, cols - 30);
 

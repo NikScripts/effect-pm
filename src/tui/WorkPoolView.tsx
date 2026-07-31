@@ -35,7 +35,7 @@ const statusOf = (lifecycleTag: string): Status =>
           : "running";
 
 const lifecycleTagOf = (
-  lifecycleR: AsyncResult.AsyncResult<Option.Option<{ readonly _tag: string }>, unknown>,
+  lifecycleR: AsyncResult.AsyncResult<{ readonly _tag: string }, unknown>,
 ): string =>
   AsyncResult.isSuccess(lifecycleR)
     ? lifecycleR.value._tag ?? "Running"
@@ -71,9 +71,10 @@ const QueueDetailPanel = (props: {
   const m = Option.isSome(metricsOpt) ? metricsOpt.value : undefined;
   const trend = AsyncResult.isSuccess(trendR) ? trendR.value : [];
   const sizes: Record<Priority, number> = s?.sizes ?? { high: 0, normal: 0, low: 0 };
+  const lifecycleTag = lifecycleTagOf(lifecycleR);
   const snapshot: QueueSnapshot = {
     name: props.name,
-    status: statusOf(lifecycleTagOf(lifecycleR)),
+    status: statusOf(lifecycleTag),
     sizes,
     pending: sizes.high + sizes.normal + sizes.low,
     completed: s?.completed ?? 0,

@@ -261,8 +261,10 @@ export const QueueDetailPanel = (props: {
   readonly tag: QueueTag;
 }): React.ReactElement => {
   const bundle = Observe.use(props.tag, WorkPoolView.pack);
-  const statusR = useAtomValue(bundle.status);
-  const s = AsyncResult.isSuccess(statusR) ? Option.getOrUndefined(statusR.value) : undefined;
+  const lifecycleR = useAtomValue(bundle.lifecycle);
+  const lifecycleTag = AsyncResult.isSuccess(lifecycleR)
+    ? lifecycleR.value._tag ?? "Running"
+    : "Running";
   return (
     <>
       <div className="flex justify-end">
