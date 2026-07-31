@@ -68,6 +68,7 @@ const makeImpl = () => {
               ? ({ _tag: "Paused" } as const)
               : ({ _tag: "Running" } as const),
     ),
+    lifecycleEvents: Stream.empty,
     size: Hyperlink.mapSubscribable(
       statusSub,
       (s) => s.sizes.high + s.sizes.normal + s.sizes.low,

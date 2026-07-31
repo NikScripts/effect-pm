@@ -42,17 +42,21 @@ declare const participating: Lifecycle.Participating;
 participating.shutdown;
 
 declare const core: Lifecycle.ServiceCore;
-declare const pausable: Lifecycle.ServicePausable;
-declare const tools: Lifecycle.Service;
 // Structural caps: make() without latch → ServiceCore has no pause/resume members.
 // @ts-expect-error ServiceCore has no pause
 core.pause;
 // @ts-expect-error ServiceCore has no resume
 core.resume;
-pausable.pause;
-pausable.resume;
-tools.pause;
-tools.resume;
+true satisfies AssertExact<
+  "pause" extends keyof Lifecycle.ServicePausable ? true : false,
+  true
+>;
+true satisfies AssertExact<
+  "resume" extends keyof Lifecycle.ServicePausable ? true : false,
+  true
+>;
+true satisfies AssertExact<"pause" extends keyof Lifecycle.Service ? true : false, true>;
+true satisfies AssertExact<"pause" extends keyof Lifecycle.ServiceCore ? true : false, false>;
 
 void unsupported;
 void illegal;
@@ -61,5 +65,3 @@ void event;
 void pool;
 void participating;
 void core;
-void pausable;
-void tools;

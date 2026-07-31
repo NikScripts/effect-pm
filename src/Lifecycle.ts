@@ -407,20 +407,19 @@ export interface MakeOptions<R = never> {
  * @category constructors
  * @public
  */
-export const make: {
-  <R = never>(
-    options: MakeOptions<R> & { readonly latch: Latch.Latch },
-  ): Effect.Effect<ServicePausable<R>, never, R | Scope.Scope>;
-  <R = never>(
-    options: MakeOptions<R> & { readonly latch?: undefined },
-  ): Effect.Effect<ServiceCore<R>, never, R | Scope.Scope>;
-  <R = never>(
-    options: MakeOptions<R>,
-  ): Effect.Effect<ServiceCore<R> | ServicePausable<R>, never, R | Scope.Scope>;
-} = <R = never>(
+export function make<R = never>(
+  options: MakeOptions<R> & { readonly latch: Latch.Latch },
+): Effect.Effect<ServicePausable<R>, never, R | Scope.Scope>;
+export function make<R = never>(
+  options: MakeOptions<R> & { readonly latch?: undefined },
+): Effect.Effect<ServiceCore<R>, never, R | Scope.Scope>;
+export function make<R = never>(
   options: MakeOptions<R>,
-): Effect.Effect<ServiceCore<R> | ServicePausable<R>, never, R | Scope.Scope> =>
-  Effect.gen(function* () {
+): Effect.Effect<ServiceCore<R> | ServicePausable<R>, never, R | Scope.Scope>;
+export function make<R = never>(
+  options: MakeOptions<R>,
+): Effect.Effect<ServiceCore<R> | ServicePausable<R>, never, R | Scope.Scope> {
+  return Effect.gen(function* () {
     const restartable = options.restartable ?? false;
     const afterStop: Terminal = restartable ? idle : off;
     const fiberMode = options.fiber ?? "handle";
@@ -563,6 +562,7 @@ export const make: {
       resume: resumeFx,
     } satisfies ServicePausable<R>;
   });
+}
 
 // =============================================================================
 // Spec / impl sugar
