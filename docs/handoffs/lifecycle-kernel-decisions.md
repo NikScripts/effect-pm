@@ -87,10 +87,11 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 - **Reject:** Lifecycle State as a precondition for handoff; conflating Node drain with HyperService Lifecycle; inventing a Lifecycle↔handoff bridge API.
 - **Blocks:** L6 (docs clarity; no Lifecycle gate Eng).
 
-### P8 — Remote parity — Proposed
+### P8 — Remote parity — Proposed (acceptance Eng’d; await owner Locked)
 
 - **Choose:** `Lifecycle.startFrom(clientTag)` / Participating duals identical when Tag is `Hyperlink.client`.
 - **Reject:** Separate “lifecycle client” API; resurrecting projected `from`.
+- **Proof:** `test/lifecycle-remote-http.test.ts` — WorkPool + Daemon over http; duals + Illegal from Off.
 - **Blocks:** L6.
 
 ### P9 — `deferStart` composition — Locked (Eng’d)
@@ -153,7 +154,7 @@ Full table + acceptance criteria: [plan §8](../plans/lifecycle-kernel.md#8-eng-
 ## 5. Immediate next step
 
 1. P5 chrome → Agent G; P7 → no Lifecycle gate (Locked); L6 handoff prose in guide.  
-2. Next Eng: P8 remote Participating dual parity.  
+2. P8 acceptance Eng’d — owner `@locked` to close L6; then L7 / `@locked` candidates.  
 3. Open questions: §3.
 
 ---

@@ -85,6 +85,10 @@ yield* Lifecycle.stopFrom(Jobs)
 WorkPool / Priority expose the badge as `jobs.lifecycle` (`Subscribable<Lifecycle.State>`).
 Prefer `lifecycle._tag` for UI badges and readiness — there is **no** `status.phase`.
 
+The same duals work when the Tag is provided by [`Hyperlink.client`](/docs/hyperlink)
+(local layer vs client layer — only the Layer differs). Over RPC, observe badge transitions
+via `lifecycle.changes` (the client `.get` cache is fed by that stream).
+
 ## Spec sugar
 
 ```ts

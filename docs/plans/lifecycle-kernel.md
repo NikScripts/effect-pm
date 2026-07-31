@@ -295,9 +295,9 @@ Gate / plain Rpc: **opt-in only** (P10).
 ### 6.4 Generic tool
 
 ```ts
-const lc = yield* Lifecycle.from(tag)
-const s = yield* lc.state.get
-if (s === "Idle") yield* lc.start
+const service = yield* tag
+const s = yield* service.lifecycle.get
+if (s._tag === "Idle") yield* Lifecycle.start(service)
 ```
 
 Untyped catalog walk: filter methods by `methodMeta(m).lifecycle`.
@@ -318,7 +318,7 @@ batch-lock. Summary:
 | **P5** | `ui/LifecycleView` pack (Lifecycle ↛ Observe) | L5 |
 | **P6** | Readiness from State (Idle dialable) | L1 |
 | **P7** | Handoff × Lifecycle; Node plane separate | L6 |
-| **P8** | Remote `from` parity | L6 |
+| **P8** | Remote Participating dual parity | L6 |
 | **P9** | `DeferStart` ⇒ don’t run until `start` | L1 |
 | **P10** | Gate / Rpc opt-in only | L7 |
 | **P11** | Module layout; compose Handle/Set/Latch — not a HyperService kind | all |
@@ -343,7 +343,7 @@ are Locked.** Substrate-only fixes OK on the work branch.
 | **L4** | P4 | Events stream | **Eng’d (C)** — derived from `state` changes; Spec `lifecycleEvents`; no Event PubSub |
 | **L5** | P5 | `ui/LifecycleView` pack + generic chrome | **Eng’d pack** (`pack` / `pausable`); chrome → Agent G; Lifecycle core tree-shake |
 | **P11** | — | Module layout split | **Eng’d** — shell + `lifecycleModel` + engine |
-| **L6** | P7, P8 | Handoff docs (no Lifecycle State gate) + remote duals | Guide handoff prose Eng’d; P8 remote `startFrom` still Proposed |
+| **L6** | P7, P8 | Handoff docs (no Lifecycle State gate) + remote duals | Guide handoff prose Eng’d; P8 remote dual acceptance Eng’d (`lifecycle-remote-http`); await owner Locked |
 | **L7** | P10+ | Docs polish; `@locked` candidates; archive exploratory wording | Guide = dream truth; decisions P-locks Closed |
 
 Each slice: all tsconfigs typecheck; `@effect/vitest` + `TestClock`; public type/error-channel
