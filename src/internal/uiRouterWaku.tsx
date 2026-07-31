@@ -1,6 +1,6 @@
 /**
- * Waku engine for {@link ../ui/Router/waku} — full RSC edition.
- * Same {@link ./uiRouter.Service} contract as {@link ./uiRouter.makeService}.
+ * Waku **layer** for {@link ../ui/Router} — adapts Waku into the same
+ * {@link ./uiRouter.Service}. Not a second router.
  */
 "use client";
 
@@ -11,128 +11,68 @@ import {
   useRouter as useWakuRouter,
 } from "waku/router/client";
 import * as Route from "../ui/Route";
+import * as Router from "../ui/Router";
 import type { ApiConstraint } from "./uiRoutes";
 import type { Service } from "./uiRouter";
 
 // =============================================================================
-// Catalog binding (make / waku)
+// Layer input — catalog binding (provided into the one Router.Service)
 // =============================================================================
 
-export type WakuBinding<A extends ApiConstraint = ApiConstraint> = {
+/**
+ * Catalog + url skin for the Waku layer.
+ * `U` defaults to {@link Route.UrlBuilder} — docs may pass a branded skin.
+ */
+export type WakuBinding<
+  A extends ApiConstraint = ApiConstraint,
+  U = Route.UrlBuilder<A>,
+> = {
+  readonly _tag: "WakuBinding";
   readonly api: A;
   readonly mode: "waku";
-  readonly urls: Route.UrlBuilder<A>;
+  readonly urls: U;
 };
 
-/** Bind a catalog for the Waku engine — same role as lite `Router.make`. */
-export const waku = <A extends ApiConstraint>(
+export function isWakuBinding(
+  u: Service | WakuBinding<ApiConstraint, unknown>,
+): u is WakuBinding<ApiConstraint, unknown>;
+export function isWakuBinding(u: unknown): u is WakuBinding;
+export function isWakuBinding(u: unknown): u is WakuBinding {
+  return (
+    typeof u === "object" &&
+    u !== null &&
+    "_tag" in u &&
+    (u as { _tag: unknown })._tag === "WakuBinding"
+  );
+}
+
+/** Bind a catalog to the Waku layer — same role as `Router.make(api, "history")`. */
+export const waku = <A extends ApiConstraint, U = Route.UrlBuilder<A>>(
   api: A,
-  urls: Route.UrlBuilder<A> = Route.urlBuilder(api),
-): WakuBinding<A> => ({
+  urls?: U,
+): WakuBinding<A, U> => ({
+  _tag: "WakuBinding",
   api,
   mode: "waku",
-  urls,
+  urls: (urls ?? Route.urlBuilder(api)) as U,
 });
 
-/**
- * Optional app-wide default binding so `Link` / `useRouter` work without a
- * Provider (docs site chrome). Prefer {@link Provider} when composing apps.
- */
-let defaultBinding: WakuBinding | null = null;
+let defaultBinding: WakuBinding<ApiConstraint, unknown> | null = null;
 
-export const setDefault = (binding: WakuBinding | null): void => {
+/** Optional default Waku binding when no Provider is mounted (docs chrome). */
+export const setDefault = <A extends ApiConstraint, U>(
+  binding: WakuBinding<A, U> | null,
+): void => {
   defaultBinding = binding;
 };
 
+export const getDefault = (): WakuBinding<ApiConstraint, unknown> | null =>
+  defaultBinding;
+
 // =============================================================================
-// React — Provider / useRouter / Link / Outlet
+// Adapt Waku → Service
 // =============================================================================
 
-const CatalogContext = React.createContext<WakuBinding | null>(null);
-
-export const Provider = (props: {
-  readonly value: WakuBinding;
-  readonly children: React.ReactNode;
-}): React.ReactElement =>
-  React.createElement(
-    CatalogContext.Provider,
-    { value: props.value },
-    props.children,
-  );
-
-const useBinding = (): WakuBinding => {
-  const binding = React.useContext(CatalogContext) ?? defaultBinding;
-  if (binding === null) {
-    throw new Error(
-      "Router.waku: provide via Provider or setDefault (hyperlink-ts/ui/Router/waku)",
-    );
-  }
-  return binding;
-};
-
-export const useHasRouter = (): boolean =>
-  React.useContext(CatalogContext) !== null;
-
-/**
- * Live {@link Service} over Waku — same fields as lite `Router.make`.
- */
-export const useRouter = <A extends ApiConstraint = ApiConstraint>(): Service<A> => {
-  const binding = useBinding() as WakuBinding<A>;
-  const wakuNav = useWakuRouter();
-  const pathname = wakuNav.path || "/";
-  const search =
-    typeof window === "undefined" ? "" : window.location.search;
-  const href = search.length === 0 ? pathname : `${pathname}${search}`;
-  const match = Option.getOrUndefined(Route.match(binding.api, pathname));
-
-  const go = React.useCallback(
-    (next: string, options?: { readonly replace?: boolean }): void => {
-      const target = pathOnly(next) as Parameters<typeof wakuNav.push>[0];
-      if (options?.replace === true) void wakuNav.replace(target);
-      else void wakuNav.push(target);
-    },
-    [wakuNav],
-  );
-
-  const to = React.useCallback(
-    (
-      build: (urls: Route.UrlBuilder<A>) => string,
-      options?: { readonly replace?: boolean },
-    ): void => go(build(binding.urls), options),
-    [binding.urls, go],
-  );
-
-  return {
-    api: binding.api,
-    mode: "waku",
-    pathname,
-    search,
-    href,
-    match,
-    urls: binding.urls,
-    go,
-    to,
-    back: () => {
-      wakuNav.back();
-    },
-    toRoot: () => {
-      go("/", { replace: true });
-    },
-    prefetch: (next: string) => {
-      wakuNav.prefetch(pathOnly(next) as Parameters<typeof wakuNav.prefetch>[0]);
-    },
-    subscribe: () => () => {
-      /* Waku drives re-renders via useRouter */
-    },
-    syncFromLocation: () => {
-      /* Waku owns location */
-    },
-  };
-};
-
-export const useMatch = (): Route.Match | undefined => useRouter().match;
-
-/** Strip query/hash for Waku `push` / `Link` path union. */
 const pathOnly = (href: string): string => {
   const q = href.indexOf("?");
   const h = href.indexOf("#");
@@ -143,8 +83,146 @@ const pathOnly = (href: string): string => {
   return path === "" ? "/" : path;
 };
 
+type WakuNav = ReturnType<typeof useWakuRouter>;
+
+/** Build the one {@link Service} over a live Waku router handle. */
+export const liveService = <A extends ApiConstraint>(
+  binding: WakuBinding<A, unknown>,
+  wakuNav: WakuNav,
+): Service<A> => {
+  const pathname = wakuNav.path || "/";
+  const search =
+    typeof window === "undefined" ? "" : window.location.search;
+  const href = search.length === 0 ? pathname : `${pathname}${search}`;
+  const match = Option.getOrUndefined(Route.match(binding.api, pathname));
+  const urls = binding.urls as Route.UrlBuilder<A>;
+
+  const go = (
+    next: string,
+    options?: { readonly replace?: boolean },
+  ): void => {
+    const target = pathOnly(next) as Parameters<typeof wakuNav.push>[0];
+    if (options?.replace === true) void wakuNav.replace(target);
+    else void wakuNav.push(target);
+  };
+
+  return {
+    api: binding.api,
+    mode: "waku",
+    pathname,
+    search,
+    href,
+    match,
+    urls,
+    go,
+    to: (build, options) => go(build(urls), options),
+    back: () => {
+      wakuNav.back();
+    },
+    toRoot: () => {
+      go("/", { replace: true });
+    },
+    prefetch: (next: string) => {
+      wakuNav.prefetch(
+        pathOnly(next) as Parameters<typeof wakuNav.prefetch>[0],
+      );
+    },
+    subscribe: () => () => {
+      /* re-render via useWakuRouter in the Provider / useRouter hook */
+    },
+    syncFromLocation: () => {
+      /* Waku owns location */
+    },
+  };
+};
+
+const useLiveFromBinding = (
+  binding: WakuBinding<ApiConstraint, unknown>,
+): Service => {
+  const wakuNav = useWakuRouter();
+  return liveService(binding, wakuNav);
+};
+
+// =============================================================================
+// Provider — installs the one Service into Router's React context
+// =============================================================================
+
+const WakuServiceProvider = (props: {
+  readonly binding: WakuBinding<ApiConstraint, unknown>;
+  readonly children: React.ReactNode;
+}): React.ReactElement => {
+  const service = useLiveFromBinding(props.binding);
+  return (
+    <Router.Provider value={service}>{props.children}</Router.Provider>
+  );
+};
+
 /**
- * Soft-nav link via Waku — same call shape as lite {@link ../ui/Router.Link}.
+ * One Provider for both layers: pass a lite {@link Service} or a {@link WakuBinding}.
+ */
+export const Provider = (props: {
+  readonly value: Service | WakuBinding<ApiConstraint, unknown>;
+  readonly children: React.ReactNode;
+}): React.ReactElement => {
+  const value = props.value;
+  if (isWakuBinding(value)) {
+    return (
+      <WakuServiceProvider binding={value}>
+        {props.children}
+      </WakuServiceProvider>
+    );
+  }
+  return (
+    <Router.Provider value={value}>{props.children}</Router.Provider>
+  );
+};
+
+/**
+ * The one {@link Service} — from Provider context, or default Waku binding.
+ *
+ * This entry always runs under Waku's router (companion pulls `waku`). Prefer
+ * context from {@link Provider}; `setDefault` is for chrome without a local Provider.
+ */
+export const useRouter = <A extends ApiConstraint = ApiConstraint>(): Service<A> => {
+  const fromCtx = Router.useRouterOption();
+  const wakuNav = useWakuRouter();
+  if (fromCtx !== null) return fromCtx as Service<A>;
+  const binding = defaultBinding as WakuBinding<A> | null;
+  if (binding === null) {
+    throw new Error(
+      "Router: provide via Provider (Service or waku binding) or setDefault",
+    );
+  }
+  return liveService(binding, wakuNav);
+};
+
+export const useHasRouter = (): boolean =>
+  Router.useHasRouter() || defaultBinding !== null;
+
+export const useMatch = (): Route.Match | undefined => useRouter().match;
+
+const softNavClick = (
+  event: React.MouseEvent<HTMLAnchorElement>,
+  go: () => void,
+  onClick?: React.MouseEventHandler<HTMLAnchorElement>,
+): void => {
+  onClick?.(event);
+  if (
+    event.defaultPrevented ||
+    event.button !== 0 ||
+    event.metaKey ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.shiftKey
+  ) {
+    return;
+  }
+  event.preventDefault();
+  go();
+};
+
+/**
+ * Soft-nav link — Waku `Link` when `mode === "waku"` (push); else `<a>` + {@link Service.go}.
  */
 export const Link = <A extends ApiConstraint = ApiConstraint>(props: {
   readonly to: string | ((urls: Route.UrlBuilder<A>) => string);
@@ -156,85 +234,48 @@ export const Link = <A extends ApiConstraint = ApiConstraint>(props: {
   readonly onClick?: React.MouseEventHandler<HTMLAnchorElement>;
   readonly "aria-current"?: React.AriaAttributes["aria-current"];
 }): React.ReactElement => {
-  const binding = useBinding() as WakuBinding<A>;
-  const wakuNav = useWakuRouter();
+  const router = useRouter<A>();
   const href =
     typeof props.to === "function"
-      ? props.to(binding.urls)
+      ? props.to(router.urls as Route.UrlBuilder<A>)
       : props.to;
-  const wakuTo = pathOnly(href) as Parameters<typeof wakuNav.push>[0];
+  const wakuTo = pathOnly(href) as Parameters<
+    ReturnType<typeof useWakuRouter>["push"]
+  >[0];
 
-  if (props.replace === true) {
+  if (router.mode === "waku" && props.replace !== true) {
     return (
-      <a
-        href={wakuTo}
+      <WakuLink
+        to={wakuTo}
         className={props.className}
         title={props.title}
         data-kind={props["data-kind"]}
         aria-current={props["aria-current"]}
-        onClick={(event) => {
-          props.onClick?.(event);
-          if (
-            event.defaultPrevented ||
-            event.button !== 0 ||
-            event.metaKey ||
-            event.altKey ||
-            event.ctrlKey ||
-            event.shiftKey
-          ) {
-            return;
-          }
-          event.preventDefault();
-          void wakuNav.replace(wakuTo);
-        }}
+        onClick={props.onClick}
       >
         {props.children}
-      </a>
+      </WakuLink>
     );
   }
 
   return (
-    <WakuLink
-      to={wakuTo}
+    <a
+      href={router.mode === "waku" ? wakuTo : href}
       className={props.className}
       title={props.title}
       data-kind={props["data-kind"]}
       aria-current={props["aria-current"]}
-      onClick={props.onClick}
+      onClick={(event) =>
+        softNavClick(
+          event,
+          () => {
+            router.go(href, { replace: props.replace });
+          },
+          props.onClick,
+        )
+      }
     >
       {props.children}
-    </WakuLink>
+    </a>
   );
-};
-
-/**
- * Render the matched route’s {@link Route.handle}.
- * Returns `null` when there is no match or no handler (file-route apps often
- * leave handles empty and use Waku page modules instead).
- */
-const queryFromSearch = (search: string): Record<string, string> => {
-  if (search.length === 0) return {};
-  const out: Record<string, string> = {};
-  for (const [key, value] of new URLSearchParams(search)) {
-    out[key] = value;
-  }
-  return out;
-};
-
-export const Outlet = (): React.ReactElement | null => {
-  const router = useRouter();
-  const match = router.match;
-  const handler = Route.handleOf(match);
-  if (match === undefined || handler === undefined) return null;
-  const node = handler({
-    params: match.params,
-    query: queryFromSearch(router.search),
-    pathname: match.pathname,
-    href: router.href,
-  });
-  if (node === null || node === undefined || typeof node === "boolean") {
-    return null;
-  }
-  if (React.isValidElement(node)) return node;
-  return React.createElement(React.Fragment, null, node);
 };

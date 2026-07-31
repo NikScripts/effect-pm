@@ -69,16 +69,16 @@ Group dashboards use `GroupNav.use(root)` with Target + View skins in `Dashboard
 
 Same API. Waku file routes are **render SSOT**; `siteRoutes.catalog` is the typed nav SSOT (paths once; Waku templates derived) and is exhaustively checked against `pages.gen`. `Router.Outlet` is a no-op there. Skin adds `urls.api.symbol("effect", "Effect.succeed")` overload. See [`waku-site-routes-api.md`](./waku-site-routes-api.md).
 
-## Full vs lite
+## One service, two layers
 
-Same typed contract (`Route` catalog, `Href` / `urls`, `Link` / `to` / `go` / `Outlet`).
+Same typed contract (`Route` catalog, `urls`, `Link` / `to` / `go` / `Outlet`).
 
-| Edition | Engine | Role |
-|---------|--------|------|
-| **Full** | `hyperlink-ts/ui/Router/waku` → `Router.waku` / `Router.make` | RSC / SSG / SSR — website (+ dashboard on top). Optional `waku` peer. |
-| **Lite** | `hyperlink-ts/ui/Router` → `Router.make(api, "memory"\|"history")` | Effect-only embeds, tests, non-RSC — no Waku. |
+| Layer | Entry | Install |
+|-------|-------|---------|
+| **Lite** | `hyperlink-ts/ui/Router` | `Router.make(api, "memory"\|"history")` — no `waku` peer |
+| **Waku** | `hyperlink-ts/ui/Router/waku` | `Router.waku(api)` / `Router.layer.waku` → same `Service` via unified `Provider` |
 
-Same `Service` / `Link` / `to` / `go` / `Outlet`. Dashboard uses `GroupNav` on **either** edition — not built into Router. Docs site skins the full entry (default binding + no-op Outlet for file routes).
+Not two routers — one `Service`, Waku adapted in. Companion entry only so lite never pulls optional `waku`. Dashboard uses `GroupNav` on **either** layer — not built into Router. Docs site skins the Waku entry (`setDefault` + no-op Outlet for file routes).
 
 ## Runtime
 

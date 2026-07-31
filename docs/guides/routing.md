@@ -2,14 +2,14 @@
 
 # Routing
 
-Typed navigation for Hyperlink web apps: a **Route catalog**, a **Router** over
-that catalog, and optional **GroupNav** for Group drill-down. The same API runs
-as a **lite** Effect engine or a **full** Waku (RSC/SSG/SSR) edition.
+Typed navigation for Hyperlink web apps: a **Route catalog**, **one Router
+service** over that catalog, and optional **GroupNav** for Group drill-down.
+Two **layers** install the same service — memory/history (lite) or Waku (full).
 
 ```tsx
 import * as Route from "hyperlink-ts/ui/Route"
-import * as Router from "hyperlink-ts/ui/Router" // lite
-// full: import * as Router from "hyperlink-ts/ui/Router/waku"
+import * as Router from "hyperlink-ts/ui/Router" // lite layer
+// Waku layer: import * as Router from "hyperlink-ts/ui/Router/waku"
 
 const site = Route.make("site").add(
   Route.get("home", "/").pipe(Route.handle(() => <Home />)),
@@ -20,7 +20,7 @@ const site = Route.make("site").add(
 )
 
 const router = Router.make(site, "history") // lite
-// full: const router = Router.waku(site)
+// Waku: const router = Router.waku(site)
 
 <Router.Provider value={router}>
   <Router.Link to={(u) => u.home()}>Home</Router.Link>
@@ -34,9 +34,9 @@ const router = Router.make(site, "history") // lite
 | Piece | Import | Job |
 |-------|--------|-----|
 | Catalog | `hyperlink-ts/ui/Route` | Paths, groups, `handle`, `urlBuilder` |
-| Lite Router | `hyperlink-ts/ui/Router` | `make` / `memory` / `history` — Effect location |
-| Full Router | `hyperlink-ts/ui/Router/waku` | `waku` / `make` — Waku soft-nav (optional `waku` peer) |
-| GroupNav | `hyperlink-ts/ui/GroupNav` | Group tree open/up/health **on top of** either Router |
+| Lite layer | `hyperlink-ts/ui/Router` | `make` / `memory` / `history` — no `waku` peer |
+| Waku layer | `hyperlink-ts/ui/Router/waku` | `waku` / unified `Provider` — same `Service` |
+| GroupNav | `hyperlink-ts/ui/GroupNav` | Group tree open/up/health **on top of** Router |
 | Dashboard | `hyperlink-ts/web` / `tui` | Shell built **on** Router + GroupNav — not inside them |
 
 ```text
@@ -44,29 +44,31 @@ URL → Router.match(pathname) → Route.handle({ params, query, href }) → Rea
 urls.docs("work-pools", { query: { tab: "api" } }) → /docs/work-pools?tab=api
 ```
 
-## Full vs lite
+## One service, two layers
 
-Same typed contract: catalog, `urls`, `Link` / `to` / `go` / `back` / `Outlet`,
-`pathname` / `search` / `href` / `match`.
+Same `Service`: catalog, `urls`, `Link` / `to` / `go` / `back` / `Outlet`,
+`pathname` / `search` / `href` / `match`, `prefetch`. Companion entry exists
+only so lite apps never pull the optional `waku` peer.
 
-| Edition | Entry | Engine | Use when |
-|---------|-------|--------|----------|
-| **Full** | `hyperlink-ts/ui/Router/waku` | Waku | Website, RSC/SSG/SSR, dogfood |
-| **Lite** | `hyperlink-ts/ui/Router` | `memory` / `history` | Tests, embeds, non-RSC apps |
+| Layer | Entry | Install | Use when |
+|-------|-------|---------|----------|
+| **Lite** | `hyperlink-ts/ui/Router` | `make` / `memory` / `history` | Tests, embeds, non-RSC |
+| **Waku** | `hyperlink-ts/ui/Router/waku` | `waku(site)` → `Provider` | Website, RSC/SSG/SSR |
 
 ```ts
-// Lite
+// Lite layer
 import * as Router from "hyperlink-ts/ui/Router"
 const router = Router.make(site, "history")
-// or Layer: Router.history(site) / Router.memory(site)
+// or Router.history(site) / Router.memory(site)
 
-// Full
+// Waku layer — adapts Waku into the same Service
 import * as Router from "hyperlink-ts/ui/Router/waku"
-const router = Router.waku(site) // === Router.make(site)
+const binding = Router.waku(site) // === Router.layer.waku(site)
+<Router.Provider value={binding}>…</Router.Provider>
 ```
 
-Dashboard and other chrome call the same `to` / `Link` / `GroupNav` APIs on
-whichever edition you provide.
+Dashboard and chrome call the same `to` / `Link` / `GroupNav` APIs on whichever
+layer you installed.
 
 ## Catalog and URLs
 
@@ -102,10 +104,10 @@ behavior onto Router.
 |-----|----------|
 | `router.to((u) => u.docs("x"))` | Push (default); `{ replace: true }` ok |
 | `router.go("/path?q=1")` | Push/replace raw href |
-| `Router.Link to={(u) => …}` | Soft-nav link (lite: history; full: Waku `Link`) |
+| `Router.Link to={(u) => …}` | Soft-nav link (lite: `<a>`; Waku: Waku `Link`) |
 | `router.back()` | Memory stack or `history.back()` / Waku back |
 | `router.toRoot()` | Replace to `/` |
-| `router.prefetch(href)` | Full edition; no-op on lite |
+| `router.prefetch(href)` | Waku layer; no-op on lite |
 | `Router.Outlet` | Renders matched `Route.handle` (or `null`) |
 
 ## GroupNav (on top)
@@ -123,11 +125,11 @@ nav.openNode("app/NodeA")   // → urls.nodeHealth(…)
 ```
 
 `Route.Target` annotations from `Group.asRoutes` feed selected member / view.
-Works with lite or full Router underneath. See [Dashboard](/docs/dashboard).
+Works with either Router layer underneath. See [Dashboard](/docs/dashboard).
 
 ## Docs site (Waku dogfood)
 
-The public docs app uses the **full** edition:
+The public docs app uses the **Waku** layer:
 
 | Layer | Owns |
 |-------|------|

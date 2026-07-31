@@ -24,9 +24,9 @@
  * </Router.Provider>
  * ```
  *
- * **Lite** edition: {@link make} / {@link memory} / {@link history}.
- * **Full** (Waku RSC): companion `hyperlink-ts/ui/Router/waku` → {@link ./RouterWaku.waku}.
- * Group drill-down: {@link ./GroupNav} (on top of either edition).
+ * **One service.** This entry is the non-Waku layer (`make` / `memory` / `history`).
+ * Waku layer: `hyperlink-ts/ui/Router/waku` (same `Service`, unified `Provider`).
+ * Group drill-down: {@link ./GroupNav} (on top — not inside Router).
  *
  * @see docs/handoffs/ui-routes-dream.md
  */
@@ -185,6 +185,10 @@ export const Link = <A extends ApiConstraint = ApiConstraint>(props: {
   readonly replace?: boolean;
   readonly children: React.ReactNode;
   readonly className?: string;
+  readonly title?: string;
+  readonly "data-kind"?: string;
+  readonly onClick?: React.MouseEventHandler<HTMLAnchorElement>;
+  readonly "aria-current"?: React.AriaAttributes["aria-current"];
 }): React.ReactElement => {
   const router = useRouter();
   const href =
@@ -196,7 +200,11 @@ export const Link = <A extends ApiConstraint = ApiConstraint>(props: {
     {
       href,
       className: props.className,
+      title: props.title,
+      "data-kind": props["data-kind"],
+      "aria-current": props["aria-current"],
       onClick: (event: React.MouseEvent<HTMLAnchorElement>) => {
+        props.onClick?.(event);
         if (
           event.defaultPrevented ||
           event.button !== 0 ||

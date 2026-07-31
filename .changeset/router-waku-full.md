@@ -2,4 +2,4 @@
 "hyperlink-ts": minor
 ---
 
-Add full Router edition at `hyperlink-ts/ui/Router/waku` (`Router.waku` / `Router.make`) with the same Service contract as lite `Router.make`/`memory`/`history`. Optional `waku` peer. Fix catalog `match("/")` for home routes. Dashboard/GroupNav stay on top of either edition.
+One Router `Service`, two layers: lite `make`/`memory`/`history` and Waku (`hyperlink-ts/ui/Router/waku` → `Router.waku` + unified `Provider` that accepts a lite `Service` or Waku binding). Optional `waku` peer. Fix catalog `match("/")` for home routes. GroupNav stays on top — not inside Router.
