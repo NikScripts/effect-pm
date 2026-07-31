@@ -565,9 +565,9 @@ export const QueueStats = (props: { readonly bundle: QueueBundle }): React.React
 };
 
 const METRICS = {
-  throughput: { label: "throughput /s", color: "#22c55e", source: "history" as const },
-  latency: { label: "latency (s)", color: "#eab308", source: "history" as const },
-  pending: { label: "pending", color: "#3b82f6", source: "trend" as const },
+  throughput: { label: "throughput /s", color: "#22c55e", source: "History" as const },
+  latency: { label: "latency (s)", color: "#eab308", source: "History" as const },
+  pending: { label: "pending", color: "#3b82f6", source: "Trend" as const },
 };
 type MetricKey = keyof typeof METRICS;
 
@@ -622,7 +622,7 @@ export const MetricChart = (props: {
   const win = windows.find((w) => w.ms === windowMs) ?? windows[windows.length - 1] ?? WINDOWS[0];
   const cutoff = win.ms === ALL_MS ? Number.NEGATIVE_INFINITY : now() - win.ms;
   const data =
-    def.source === "trend"
+    def.source === "Trend"
       ? trend.map((v, i) => ({ i, value: v }))
       : history
           .filter((p) => p.t >= cutoff)
@@ -641,7 +641,7 @@ export const MetricChart = (props: {
             </option>
           ))}
         </select>
-        {def.source === "history" ? (
+        {def.source === "History" ? (
           // Compact time-window control: tap to cycle through the windows the data reaches.
           // Cheaper on width than a second dropdown, which matters on a phone.
           <button
@@ -877,7 +877,7 @@ export const QueueControls = (props: { readonly bundle: QueueBundle }): React.Re
 /** Effect log levels, low→high — for the min-level filter. Unknown levels rank as `info`. */
 const LEVEL_RANK: Record<string, number> = { trace: 0, debug: 1, info: 2, warn: 3, warning: 3, error: 4, fatal: 5 };
 const levelRank = (level: string): number => LEVEL_RANK[level.toLowerCase()] ?? 2;
-const MIN_LEVELS = ["all", "info", "warn", "error"] as const;
+const MIN_LEVELS = ["All", "info", "warn", "error"] as const;
 
 export const LogStream = (props: {
   readonly bundle: { readonly logs: QueueBundle["logs"] };
@@ -888,13 +888,13 @@ export const LogStream = (props: {
   const all: ReadonlyArray<LogLine> = AsyncResult.isSuccess(r) ? r.value : [];
   // client-side filter: substring match on the message + a minimum level
   const [query, setQuery] = React.useState("");
-  const [min, setMin] = React.useState<(typeof MIN_LEVELS)[number]>("all");
+  const [min, setMin] = React.useState<(typeof MIN_LEVELS)[number]>("All");
   const needle = query.trim().toLowerCase();
-  const floor = min === "all" ? 0 : levelRank(min);
+  const floor = min === "All" ? 0 : levelRank(min);
   const logs = all.filter(
     (l) => levelRank(l.level) >= floor && (needle === "" || l.message.toLowerCase().includes(needle)),
   );
-  const filtered = needle !== "" || min !== "all";
+  const filtered = needle !== "" || min !== "All";
   const ref = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
     const el = ref.current;
