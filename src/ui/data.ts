@@ -84,6 +84,7 @@ export interface ApiPoint {
  *  reactive `ref`s (`Subscribable`: `.get` / `.changes`); `metrics`/`logs` are `{ stream, query }`. */
 interface QueueService {
   readonly status: Subscribable<QueueStatus>;
+  readonly lifecycle: Subscribable<{ readonly _tag: string }>;
   readonly size: Subscribable<number>;
   readonly isEmpty: Subscribable<boolean>;
   readonly metrics: {
@@ -99,7 +100,7 @@ interface QueueService {
   readonly pause: Effect.Effect<void>;
   readonly resume: Effect.Effect<void>;
   readonly clear: Effect.Effect<void>;
-  readonly shutdown: Effect.Effect<void>;
+  readonly stop: Effect.Effect<void>;
 }
 /** A reactive `ref` field on the wire: read once (`get`) or subscribe (`changes`). */
 interface RefLike<A> {
@@ -141,6 +142,7 @@ interface ApiService {
  *  identical. */
 interface PriorityService {
   readonly status: Subscribable<PriorityStatus>;
+  readonly lifecycle: Subscribable<{ readonly _tag: string }>;
   readonly size: Subscribable<number>;
   readonly isEmpty: Subscribable<boolean>;
   readonly levelSizes: Effect.Effect<ReadonlyArray<number>>;
@@ -158,7 +160,7 @@ interface PriorityService {
   readonly pause: Effect.Effect<void>;
   readonly resume: Effect.Effect<void>;
   readonly clear: Effect.Effect<void>;
-  readonly shutdown: Effect.Effect<void>;
+  readonly stop: Effect.Effect<void>;
 }
 
 /** A queue tag — yieldable for its live service. Requirement `R` is provided by the runtime. */
@@ -228,6 +230,7 @@ export type DashboardRuntime<R = never, ER = never> = Atom.AtomRuntime<R, ER>;
 /** The atoms + controls one queue card needs — all derived from the tag. */
 export interface QueueBundle {
   readonly status: ValueAtom<Option.Option<QueueStatus>>;
+  readonly lifecycle: ValueAtom<{ readonly _tag: string }>;
   readonly metrics: ValueAtom<Option.Option<QueueMetrics>>;
   readonly history: ValueAtom<ReadonlyArray<MetricPoint>>;
   readonly trend: ValueAtom<ReadonlyArray<number>>;
@@ -235,12 +238,13 @@ export interface QueueBundle {
   readonly pause: CommandAtom;
   readonly resume: CommandAtom;
   readonly clear: CommandAtom;
-  readonly shutdown: CommandAtom;
+  readonly stop: CommandAtom;
 }
 /** The atoms + controls one `WorkPool.priority` card needs — like {@link QueueBundle} (named-lane
  *  status) plus a `start` command. @public */
 export interface PriorityBundle {
   readonly status: ValueAtom<Option.Option<PriorityStatus>>;
+  readonly lifecycle: ValueAtom<{ readonly _tag: string }>;
   readonly metrics: ValueAtom<Option.Option<QueueMetrics>>;
   readonly history: ValueAtom<ReadonlyArray<MetricPoint>>;
   readonly trend: ValueAtom<ReadonlyArray<number>>;
@@ -249,7 +253,7 @@ export interface PriorityBundle {
   readonly pause: CommandAtom;
   readonly resume: CommandAtom;
   readonly clear: CommandAtom;
-  readonly shutdown: CommandAtom;
+  readonly stop: CommandAtom;
 }
 /** The atoms one **fleet-health** card needs — a polled per-node health map + rollup status. @public */
 export interface FleetHealthBundle {

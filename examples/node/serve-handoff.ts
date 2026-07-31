@@ -67,7 +67,15 @@ const program = Effect.gen(function* () {
             Ref.update(store, (a) => [...a, ...items]),
         },
         {
-          handoff: (from, to, ctx) =>
+          handoff: (
+            from: { readonly take: Effect.Effect<ReadonlyArray<string>> },
+            to: {
+              readonly give: (
+                items: ReadonlyArray<string>,
+              ) => Effect.Effect<void>;
+            },
+            ctx,
+          ) =>
             Effect.gen(function* () {
               const items = yield* from.take;
               if (items.length === 0) return yield* ctx.done;

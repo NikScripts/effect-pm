@@ -50,8 +50,23 @@ const SYM: Record<Priority, { symbol: string; color: string }> = {
   low: { symbol: "▼", color: "blue" },
 };
 
-const statusOf = (phase: string, paused: boolean): Status =>
-  phase === "off" ? "off" : phase === "draining" ? "draining" : paused ? "paused" : "running";
+const statusOf = (lifecycleTag: string): Status =>
+  lifecycleTag === "Idle"
+    ? "idle"
+    : lifecycleTag === "Off"
+      ? "off"
+      : lifecycleTag === "Draining"
+        ? "draining"
+        : lifecycleTag === "Paused"
+          ? "paused"
+          : "running";
+
+const lifecycleTagOf = (
+  lifecycleR: AsyncResult.AsyncResult<{ readonly _tag: string }, unknown>,
+): string =>
+  AsyncResult.isSuccess(lifecycleR)
+    ? lifecycleR.value._tag ?? "Running"
+    : "Running";
 
 const leafCountOf = (node: GroupNode): number =>
   Object.values(Group.members(node)).reduce<number>(
@@ -113,11 +128,14 @@ export const QueueCell = (props: {
   const { name, tag } = props;
   const width = props.width ?? 24;
   const selected = props.selected === true;
-  const r = useAtomValue(Observe.use(tag, WorkPoolView.pack).status);
+  const pack = Observe.use(tag, WorkPoolView.pack);
+  const r = useAtomValue(pack.status);
+  const lifecycleR = useAtomValue(pack.lifecycle);
   const opt = AsyncResult.isSuccess(r) ? r.value : Option.none();
   const s = Option.isSome(opt) ? opt.value : undefined;
   const sizes = s?.sizes ?? { high: 0, normal: 0, low: 0 };
-  const status = statusOf(s?.phase ?? "running", s?.paused ?? false);
+  const lifecycleTag = lifecycleTagOf(lifecycleR);
+  const status = statusOf(lifecycleTag);
   const pending = sizes.high + sizes.normal + sizes.low;
   const max = Math.max(sizes.high, sizes.normal, sizes.low, 1);
   const barWidth = Math.max(4, width - 4 - 2 - 1 - 5);
@@ -162,13 +180,16 @@ export const PriorityCell = (props: {
   readonly selected: boolean;
 }): React.ReactElement => {
   const { name, tag, width, selected } = props;
-  const r = useAtomValue(Observe.use(tag, PriorityView.pack).status);
+  const pack = Observe.use(tag, PriorityView.pack);
+  const r = useAtomValue(pack.status);
+  const lifecycleR = useAtomValue(pack.lifecycle);
   const opt = AsyncResult.isSuccess(r) ? r.value : Option.none();
   const s = Option.isSome(opt) ? opt.value : undefined;
   const lanes = s !== undefined ? Object.entries(s.sizes) : [];
   const pending = lanes.reduce((sum, [, n]) => sum + n, 0);
   const max = Math.max(1, ...lanes.map(([, n]) => n));
-  const status = statusOf(s?.phase ?? "running", s?.paused ?? false);
+  const lifecycleTag = lifecycleTagOf(lifecycleR);
+  const status = statusOf(lifecycleTag);
   const barWidth = Math.max(4, width - 4 - 2 - 1 - 5);
   return (
     <Box

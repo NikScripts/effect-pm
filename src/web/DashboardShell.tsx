@@ -6,7 +6,6 @@
  * {@link ./Dashboard} is the public one-liner over compose + this shell.
  */
 import * as React from "react";
-import { Option } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import {
   type ApiTag,
@@ -78,8 +77,10 @@ const QueueDetail = (props: {
 }): React.ReactElement => {
   const Match = View.useMatch();
   const bundle = Observe.use(props.tag, WorkPoolView.pack);
-  const statusR = useAtomValue(bundle.status);
-  const s = AsyncResult.isSuccess(statusR) ? Option.getOrUndefined(statusR.value) : undefined;
+  const lifecycleR = useAtomValue(bundle.lifecycle);
+  const lifecycleTag = AsyncResult.isSuccess(lifecycleR)
+    ? lifecycleR.value._tag ?? "?"
+    : "?";
   return (
     <DashboardDetailChrome
       title={displayName(props.tag.key)}
@@ -87,7 +88,7 @@ const QueueDetail = (props: {
       vtKey={`res-${props.tag.key}`}
     >
       <Match.Detail tag={props.tag} />
-      <LogBox bundle={bundle} full={false} onToggle={props.onOpenLogs} meta={<> · phase {s?.phase ?? "?"}</>} />
+      <LogBox bundle={bundle} full={false} onToggle={props.onOpenLogs} meta={<> · {lifecycleTag.toLowerCase()}</>} />
     </DashboardDetailChrome>
   );
 };

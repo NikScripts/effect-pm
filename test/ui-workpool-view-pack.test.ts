@@ -12,7 +12,7 @@ class ControlSvc extends Hyperlink.Tag<ControlSvc>()("observe-pack/ControlSvc", 
   pause: Hyperlink.effect(Schema.Void),
   resume: Hyperlink.effect(Schema.Void),
   clear: Hyperlink.effect(Schema.Void),
-  shutdown: Hyperlink.effect(Schema.Void),
+  stop: Hyperlink.effect(Schema.Void),
 }) {}
 
 const makeControlLayer = () =>
@@ -22,7 +22,7 @@ const makeControlLayer = () =>
       pause: Effect.void,
       resume: Effect.void,
       clear: Effect.void,
-      shutdown: Effect.void,
+      stop: Effect.void,
     }),
   );
 
@@ -44,7 +44,7 @@ describe("WorkPoolView.queueControls", () => {
     expect(a.pause).toBe(b.pause);
     expect(a.resume).toBeDefined();
     expect(a.clear).toBeDefined();
-    expect(a.shutdown).toBeDefined();
+    expect(a.stop).toBeDefined();
   });
 });
 

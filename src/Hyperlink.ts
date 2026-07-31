@@ -476,6 +476,11 @@ export interface MethodAnnotations {
    * instead of a single tuple (used by priority-queue `add(item, lane?)`).
    */
   readonly callStyle?: "pair";
+  /**
+   * Lifecycle role for management tools — stamp with `Lifecycle.pause` / `start` / … on the
+   * Spec method (see `hyperlink-ts/Lifecycle`). PascalCase (`"Pause"`, …). Inert to the wire.
+   */
+  readonly lifecycle?: "State" | "Start" | "Pause" | "Resume" | "Stop";
 }
 
 /** Identity brand for a {@link Method} (Effect-style string `TypeId`) — distinguishes a spec leaf from a
@@ -1113,11 +1118,17 @@ export interface MethodMeta {
   readonly destructive: boolean;
   /** A streaming read (a live "watch" source) rather than a one-shot value. */
   readonly streaming: boolean;
+  /**
+   * Lifecycle role when the Spec method was stamped with `Lifecycle.*` /
+   * `.annotate({ lifecycle })` — used by generic management widgets.
+   */
+  readonly lifecycle: MethodAnnotations["lifecycle"];
 }
 
 /**
  * Read the tool metadata for a {@link Method}: its `kind`, `description`, `destructive`
- * flag, and whether it `streaming`s. Pure annotation — does not touch the wire contract.
+ * flag, whether it `streaming`s, and optional {@link MethodAnnotations.lifecycle} role.
+ * Pure annotation — does not touch the wire contract.
  *
  * @category introspection
  * @public
@@ -1127,6 +1138,7 @@ export const methodMeta = (m: AnyMethod): MethodMeta => ({
   description: m.annotations.description,
   destructive: m.annotations.destructive ?? false,
   streaming: m.stream,
+  lifecycle: m.annotations.lifecycle,
 });
 
 /**
@@ -4829,6 +4841,38 @@ export const servedKeyOf = (layer: unknown): string | undefined => {
   }
   return undefined;
 };
+
+/**
+ * When `true`, WorkPool / Daemon layers skip engine start until the service `start` command
+ * runs. Default `false` (auto-start). Pipe {@link deferStart} onto the HyperService layer —
+ * prefer this Layer pipe over a removed `autoStart` config flag.
+ *
+ * @category references
+ * @public
+ */
+export const DeferStart = Context.Reference<boolean>(
+  "hyperlink-ts/Hyperlink/DeferStart",
+  {
+    defaultValue: (): boolean => false,
+  },
+);
+
+/**
+ * Defer engine start until `start` — Policy-shaped Layer pipe for HyperService layers only
+ * (WorkPool / Daemon). Not a Tag stamp; not {@link Policy}.
+ *
+ * ```ts
+ * WorkPool.serve(Jobs, { effect }).pipe(Hyperlink.deferStart)
+ * Daemon.layer(Sweeper, { effect }).pipe(Hyperlink.deferStart)
+ * ```
+ *
+ * @category layers
+ * @public
+ */
+export const deferStart = <A, E, R>(
+  self: Layer.Layer<A, E, R>,
+): Layer.Layer<A, E, R> =>
+  self.pipe(Layer.provide(Layer.succeed(DeferStart, true)));
 
 /**
  * Expose a {@link Tag}'s implementation as an RPC **server** layer — the served counterpart of

@@ -64,7 +64,6 @@ import {
   MutableRef,
   Option,
   PubSub,
-  Ref,
   Schema,
   Scope,
   Stream,
@@ -101,6 +100,7 @@ import type {
 // ── toolkit (Hyperlink) surface — the light contract + heavy layers assembled into `Daemon` ──
 import * as Hyperlink from "./Hyperlink";
 import { buildRpcGroup, groupSym, specSym, wireKeySym } from "./Hyperlink";
+import * as Lifecycle from "./Lifecycle";
 import type {
   FlatSpec,
   HandlerContextOf,
@@ -1607,15 +1607,25 @@ export const daemonControlSpec = {
       "Live current-state snapshot: supervising, armed, active instances, next trigger/transition, " +
       "poll cadence, and cumulative run metrics.",
   }),
+  // Shared Lifecycle protocol — tools read this via methodMeta(…).lifecycle === "State".
+  lifecycle: Hyperlink.ref(Lifecycle.State)
+    .annotate({
+      description: "Lifecycle badge (Idle / Running / Paused / Draining / Off).",
+    })
+    .pipe(Lifecycle.state),
 
   // ── lifecycle commands ──
-  start: Hyperlink.effect(Schema.Void).annotate({
-    description: "Begin supervising — fork the trigger driver (idempotent).",
-  }),
-  stop: Hyperlink.effect(Schema.Void).annotate({
-    description: "Stop supervising — interrupt the driver and any active run instances.",
-    destructive: true,
-  }),
+  start: Hyperlink.effect(Schema.Void)
+    .annotate({
+      description: "Begin supervising — fork the trigger driver (idempotent).",
+    })
+    .pipe(Lifecycle.start),
+  stop: Hyperlink.effect(Schema.Void)
+    .annotate({
+      description: "Stop supervising — interrupt the driver and any active run instances.",
+      destructive: true,
+    })
+    .pipe(Lifecycle.stop),
 
   // ── cadence commands (no-ops while not supervising / no polling layer) ──
   wake: Hyperlink.effect(Schema.Void).annotate({
@@ -2462,7 +2472,6 @@ const buildDaemonImpl = <A, E, R>(
 ): Effect.Effect<Hyperlink.Driver<DaemonSpec, R>, never, R | Scope.Scope | Store.Storage> =>
   Effect.gen(function* () {
     const context = yield* Effect.context<R>();
-    const scope = yield* Effect.scope;
 
     const config = yield* foldConfiguredSpec<DaemonLayerConfig<A, E, R>>(tag.key, baseConfig);
 
@@ -2515,24 +2524,18 @@ const buildDaemonImpl = <A, E, R>(
       _resultRef: resultRef,
     });
 
-    const fiberRef = yield* Ref.make<Fiber.Fiber<void, never> | null>(null);
-    const start = Effect.gen(function* () {
-      if ((yield* Ref.get(fiberRef)) !== null) return;
-      const fiber = yield* Effect.forkIn(handle.effect.pipe(tapLogs), scope);
-      yield* Ref.set(fiberRef, fiber);
-    });
-    const stop = Effect.gen(function* () {
-      const fiber = yield* Ref.get(fiberRef);
-      if (fiber === null) return;
-      yield* Fiber.interrupt(fiber);
-      yield* Ref.set(fiberRef, null);
+    // Effect-shaped Lifecycle — FiberHandle owns the driver; restartable → Idle after stop.
+    const lifecycle = yield* Lifecycle.make({
+      run: handle.effect.pipe(tapLogs, Effect.asVoid),
+      fiber: "handle",
+      restartable: true,
     });
     const readStatus = Effect.gen(function* () {
-      const supervising = (yield* Ref.get(fiberRef)) !== null;
+      const badge = yield* lifecycle.state.get;
+      const supervising =
+        badge._tag === "Running" || badge._tag === "Paused";
       return toWireStatus(yield* handle.snapshot, supervising);
     });
-
-    yield* start; // auto-start the driver on build
 
     // `status` is a reactive `ref`: `get` reads the snapshot on demand; `changes` polls it (the
     // engine mirror is a set of MutableRefs with no native subscription), one SSOT for both.
@@ -2556,10 +2559,14 @@ const buildDaemonImpl = <A, E, R>(
 
     // Worker methods are built unwrapped (each still carrying `R`); `provideContext` discharges them.
     // Erased to the base `DaemonSpec` here (same as `run`) — stamped event schemas live on the tag wire.
+    const statusSub = { get: readStatus, changes: statusChanges };
     const impl = {
-      status: { get: readStatus, changes: statusChanges },
-      start,
-      stop,
+      status: statusSub,
+      lifecycle: lifecycle.state,
+      start: lifecycle.start.pipe(
+        Effect.catchTag("LifecycleIllegal", () => Effect.void),
+      ),
+      stop: lifecycle.stop,
       wake: handle.polling.wake,
       resetCadence: handle.polling.resetCadence,
       events: handle.events,
@@ -2600,7 +2607,8 @@ const withDefaultMemory = <A, E, R>(
 ): Layer.Layer<A | Store.Storage, E, R> => Store.withDefaultStorage(layer);
 
 /**
- * The **local** layer for a daemon: build its driver (auto-started) and provide its service.
+ * The **local** layer for a daemon: build its driver (auto-started unless
+ * {@link Hyperlink.deferStart} is piped onto the layer) and provide its service.
  *
  * Soft-defaults an in-memory {@link Store.Storage} (R fulfilled). Override with your app store:
  *

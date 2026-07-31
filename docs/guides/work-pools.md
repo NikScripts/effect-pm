@@ -103,7 +103,7 @@ The handle groups its members by what they're *for*:
 
 - **Enqueue** — `add`, `prioritize`, `defer`, `enqueue`.
 - **Observe** — `size`, `isEmpty`, `status`, `events`, `metrics`.
-- **Control** — `start`, `pause`, `resume`, `shutdown`, `clear`.
+- **Control** — `start`, `pause`, `resume`, `stop`, `clear`.
 - **Route** — `release`, `deadLetter`, `drop`.
 
 The rest of this guide walks those groups.
@@ -277,7 +277,7 @@ keeps the queue O(1) to observe at any depth.
 ## Controlling
 
 The same handle steers the queue. `pause` stops draining (items still enqueue and
-accumulate); `resume` starts again; `shutdown` drains gracefully and stops; `clear`
+accumulate); `resume` starts again; `stop` drains gracefully and winds down; `clear`
 empties the pending items and returns how many it cleared; `start` forks the worker
 pool (idempotent — layers do this for you).
 
@@ -412,6 +412,31 @@ Nodes — that yields N× the limit. Live Redis proof:
 `test/rate-limit-redis.test.ts` (shared store across two queues + Gate
 child-process peer). Local Redis: `docker compose -f docker-compose.redis.yml up -d`.
 
+## Bootstrapping: defer start
+
+Workers fork on layer acquire by default. To keep the pool **idle** until you call
+`start`, pipe [`Hyperlink.deferStart`](/docs/lifecycle) onto the layer:
+
+{.twoslash}
+``` ts
+import { Hyperlink, WorkPool } from "hyperlink-ts"
+import { Effect, Schema } from "effect"
+const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
+class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+const EmailsLive = WorkPool.layer(Emails, {
+  effect: (job) => Effect.log(job.to),
+}).pipe(Hyperlink.deferStart)
+const program = Effect.gen(function* () {
+const emails = yield* Emails
+// ---cut---
+yield* emails.add({ to: "a@b.c", subject: "queued while idle" })
+yield* emails.start  // forks workers; lifecycle was Idle
+})
+```
+
+Lifecycle roles on the control Spec (`start` / `pause` / …) are stamped for generic
+tools — see [Lifecycle](/docs/lifecycle).
+
 ## Bootstrapping: start paused
 
 Sometimes you want to load a queue *before* it drains — seed a backlog, wire up a
@@ -479,8 +504,9 @@ You never handle all of them — pick the tags you care about with
 
 **`status`** is the current-state snapshot (a `Subscribable`): per-priority pending
 `sizes`, how many are `inFlight`, the running `completed` count, whether it's
-`paused`, and its `phase` — `running`, then `draining` after a shutdown request,
-then `off`. It's the one value a dashboard renders.
+`paused`. For lifecycle badge / controls, prefer {@link Lifecycle.State} via
+`lifecycle` (`Idle`, `Running`, `Paused`, `Draining`, `Off`) — the dashboard reads that,
+not a parallel `phase` field on `status`.
 
 **`metrics`** is the aggregate view: `metrics.stream` emits one windowed summary per
 window (throughput, average wait and execution time, per-window counts);

@@ -50,6 +50,12 @@ Living book: [docs/index.md](../docs/index.md) · [API Reference](https://hyperl
 
 Paths are under `examples/`. Script = `pnpm run example:<topic>-<kebab-file>` (see `package.json`).
 
+### Lifecycle — guide [Lifecycle](../docs/guides/lifecycle.md)
+
+| File | Teaches |
+|------|---------|
+| [`lifecycle/make-and-tools.ts`](./lifecycle/make-and-tools.ts) | `deferStart`, `Lifecycle.from` / `of`, `stop` → Off |
+
 ### WorkPool — guide [Work pools](../docs/guides/work-pools.md)
 
 | File | Teaches |

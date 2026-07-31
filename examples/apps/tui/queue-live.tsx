@@ -12,7 +12,7 @@
  * swapping in `Hyperlink.client(tag)` (remote) changes nothing else.
  *
  * Ctrl+E enters edit mode (red border) for [p] pause [r] resume [c] clear
- * [x] shutdown. Quit with Ctrl+C.
+ * [x] stop. Quit with Ctrl+C.
  *
  *   pnpm run example:queue-live
  */
@@ -103,6 +103,7 @@ const runtime = Atom.runtime(AppLayer);
 
 // ── live atoms off the real streams ──────────────────────────────────────────
 const statusAtom = runtime.atom(Stream.unwrap(Effect.map(MailQueue, (q) => q.status.changes)));
+const lifecycleAtom = runtime.atom(Stream.unwrap(Effect.map(MailQueue, (q) => q.lifecycle.changes)));
 const metricsAtom = runtime.atom(Stream.unwrap(Effect.map(MailQueue, (q) => q.metrics)));
 const trendAtom = runtime.atom(
   Stream.unwrap(Effect.map(MailQueue, (q) => q.status.changes)).pipe(
@@ -147,7 +148,7 @@ const logsAtom = runtime.atom(
 const pauseFn = runtime.fn((_: void) => Effect.flatMap(MailQueue, (q) => q.pause));
 const resumeFn = runtime.fn((_: void) => Effect.flatMap(MailQueue, (q) => q.resume));
 const clearFn = runtime.fn((_: void) => Effect.flatMap(MailQueue, (q) => q.clear));
-const shutdownFn = runtime.fn((_: void) => Effect.flatMap(MailQueue, (q) => q.shutdown));
+const stopFn = runtime.fn((_: void) => Effect.flatMap(MailQueue, (q) => q.stop));
 
 const WAIT0 = { high: 0, normal: 0, low: 0 };
 
@@ -175,6 +176,7 @@ const App = (): React.ReactElement => {
   const [editMode, setEditMode] = React.useState(false);
 
   const statusR = useAtomValue(statusAtom);
+  const lifecycleR = useAtomValue(lifecycleAtom);
   const metricsR = useAtomValue(metricsAtom);
   const trendR = useAtomValue(trendAtom);
   const logsR = useAtomValue(logsAtom);
@@ -182,7 +184,7 @@ const App = (): React.ReactElement => {
   const pause = useAtomSet(pauseFn);
   const resume = useAtomSet(resumeFn);
   const clear = useAtomSet(clearFn);
-  const shutdown = useAtomSet(shutdownFn);
+  const stop = useAtomSet(stopFn);
 
   useInput((input, key) => {
     if (key.ctrl && input === "e") {
@@ -199,26 +201,27 @@ const App = (): React.ReactElement => {
     } else if (input === "c") {
       clear();
     } else if (input === "x") {
-      shutdown();
+      stop();
     }
   });
 
   const status = AsyncResult.isSuccess(statusR) ? statusR.value : undefined;
+  const lifecycleTag = AsyncResult.isSuccess(lifecycleR) ? lifecycleR.value?._tag ?? "Running" : "Running";
   const metrics = AsyncResult.isSuccess(metricsR) ? metricsR.value : undefined;
   const trend = AsyncResult.isSuccess(trendR) ? trendR.value : [];
   const logs = AsyncResult.isSuccess(logsR) ? logsR.value : [];
 
   const sizes: Record<Priority, number> = status?.sizes ?? WAIT0;
-  const paused = status?.paused ?? false;
-  const phase = status?.phase ?? "running";
   const displayStatus: Status =
-    phase === "off"
+    lifecycleTag === "Off"
       ? "off"
-      : phase === "draining"
+      : lifecycleTag === "Draining"
         ? "draining"
-        : paused
+        : lifecycleTag === "Paused"
           ? "paused"
-          : "running";
+          : lifecycleTag === "Idle"
+            ? "idle"
+            : "running";
   const view: View = {
     name: NAME,
     status: displayStatus,
@@ -258,7 +261,7 @@ const App = (): React.ReactElement => {
             <Text color="green">live</Text>
             <Text dimColor> · in-flight {status?.inFlight ?? 0}</Text>
           </Box>
-          <Text dimColor>phase {phase}</Text>
+          <Text dimColor>{lifecycleTag.toLowerCase()}</Text>
         </Box>
         <Box flexGrow={1} flexDirection="column" justifyContent="flex-end">
           {tail.map((l) => (
@@ -281,7 +284,7 @@ const App = (): React.ReactElement => {
         <Text color={editMode ? "red" : "gray"}>{editMode ? "EDIT MODE" : "view"}</Text>
         <Text dimColor>
           {editMode
-            ? " · Ctrl+E exit · [p] pause [r] resume [c] clear [x] shutdown"
+            ? " · Ctrl+E exit · [p] pause [r] resume [c] clear [x] stop"
             : " · Ctrl+E edit"}
         </Text>
       </Box>

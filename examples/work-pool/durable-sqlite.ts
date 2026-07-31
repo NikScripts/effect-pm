@@ -12,6 +12,7 @@
 
 // ---cut---
 import { Clock, Duration, Effect, Layer, Ref, Schema } from "effect";
+import * as Hyperlink from "../../src/Hyperlink";
 import { WorkPool } from "../../src";
 import { SQLiteDurableWorkPoolStore } from "../../src/storage/sqlite";
 
@@ -39,10 +40,9 @@ const sqliteLayer = (filename: string) =>
 const queueLayer = (
   filename: string,
   processed: Ref.Ref<ReadonlyArray<string>>,
-  autoStart: boolean,
-) =>
-  WorkPool.layer(DurableQueue, {
-    autoStart,
+  defer: boolean,
+) => {
+  const base = WorkPool.layer(DurableQueue, {
     concurrency: 1,
     key: (job) => job.id,
     effect: (job) =>
@@ -50,6 +50,8 @@ const queueLayer = (
         Effect.tap(() => Effect.logInfo(`drained durable job ${job.id}`)),
       ),
   }).pipe(Layer.provideMerge(sqliteLayer(filename)));
+  return defer ? base.pipe(Hyperlink.deferStart) : base;
+};
 
 const program = Effect.gen(function* () {
   const now = yield* Clock.currentTimeMillis;
@@ -66,7 +68,7 @@ const program = Effect.gen(function* () {
     const pending = yield* queue.size.get;
     yield* Effect.logInfo(`first runtime persisted pending=${String(pending)}`);
   }).pipe(
-    Effect.provide(queueLayer(filename, processed, false)),
+    Effect.provide(queueLayer(filename, processed, true)),
     Effect.scoped,
   );
 
@@ -78,7 +80,7 @@ const program = Effect.gen(function* () {
     const pending = yield* queue.size.get;
     yield* Effect.logInfo(`pending after recovery: ${String(pending)}`);
   }).pipe(
-    Effect.provide(queueLayer(filename, processed, true)),
+    Effect.provide(queueLayer(filename, processed, false)),
     Effect.scoped,
   );
 });

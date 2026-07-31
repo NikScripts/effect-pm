@@ -3,7 +3,7 @@
  *
  * Interactive presentation of (almost) the whole `WorkPool` surface: every
  * read (`size` / `sizes` / `completed` / `isEmpty`), every lifecycle control
- * (`start` / `pause` / `resume` / `clear` / `shutdown` / `release`), and enqueue
+ * (`start` / `pause` / `resume` / `clear` / `stop` / `release`), and enqueue
  * by priority (`add` / `prioritize` / `defer`). It knows nothing about atoms —
  * the demo wires these callbacks.
  *
@@ -16,7 +16,7 @@ import * as React from "react";
 import type { QueueStats } from "./queue-atoms";
 
 export type QueuePriority = "normal" | "high" | "low";
-export type QueueStatus = "paused" | "running" | "shutdown";
+export type QueueStatus = "paused" | "running" | "off";
 
 export interface QueueWidgetProps {
   readonly title?: string;
@@ -29,7 +29,7 @@ export interface QueueWidgetProps {
   readonly onPause: () => void;
   readonly onClear: () => void;
   readonly onRelease: () => void;
-  readonly onShutdown: () => void;
+  readonly onStop: () => void;
   readonly onRefresh: () => void;
   readonly onDrop: (item: string) => void;
   readonly onDeadLetter: (item: string) => void;
@@ -50,7 +50,7 @@ export const QueueWidget = (props: QueueWidgetProps): React.ReactElement => {
     setText("");
   };
 
-  const down = status === "shutdown";
+  const down = status === "off";
 
   return (
     <section style={styles.card}>
@@ -121,9 +121,9 @@ export const QueueWidget = (props: QueueWidgetProps): React.ReactElement => {
           type="button"
           title="permanent stop"
           style={styles.danger}
-          onClick={props.onShutdown}
+          onClick={props.onStop}
         >
-          Shutdown
+          Stop
         </button>
         <button type="button" title="refresh now" onClick={props.onRefresh}>
           ↻
@@ -174,7 +174,7 @@ const Stat = (props: {
 const statusStyle: Record<QueueStatus, React.CSSProperties> = {
   running: { background: "#e6f4ea", color: "#137333" },
   paused: { background: "#fef7e0", color: "#b06000" },
-  shutdown: { background: "#fce8e6", color: "#c5221f" },
+  off: { background: "#fce8e6", color: "#c5221f" },
 };
 
 const styles = {

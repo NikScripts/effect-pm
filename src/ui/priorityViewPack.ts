@@ -19,6 +19,10 @@ type Priority = {
     readonly get: EffectT.Effect<PriorityStatus>;
     readonly changes: StreamT.Stream<PriorityStatus>;
   };
+  readonly lifecycle: {
+    readonly get: EffectT.Effect<{ readonly _tag: string }>;
+    readonly changes: StreamT.Stream<{ readonly _tag: string }>;
+  };
   readonly metrics: {
     readonly stream: StreamT.Stream<QueueMetrics>;
     readonly query: (o: {
@@ -29,7 +33,7 @@ type Priority = {
   readonly pause: EffectT.Effect<void>;
   readonly resume: EffectT.Effect<void>;
   readonly clear: EffectT.Effect<void>;
-  readonly shutdown: EffectT.Effect<void>;
+  readonly stop: EffectT.Effect<void>;
 };
 
 const pendingOf = (s: PriorityStatus): number =>
@@ -80,6 +84,7 @@ export const pack = Observe.named(
     Observe.struct({
       status: Observe.map(statusTrend, (a) => a.latest),
       trend: Observe.map(statusTrend, (a) => a.trend),
+      lifecycle: Observe.atom((q: Priority) => q.lifecycle),
     }),
     Observe.and(priorityStart),
     Observe.and(queueControls),

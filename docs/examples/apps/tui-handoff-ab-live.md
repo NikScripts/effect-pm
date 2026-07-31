@@ -21,7 +21,7 @@
 ## What this shows
 
 Dual-pane Ink TUI over Locked #39: Worker A (outgoing) vs Worker B (Directory peer).
-Autoplay enqueues pending jobs on A (`autoStart: false`), then `Node.shutdown(A)` runs
+Autoplay enqueues pending jobs on A (`.pipe(Hyperlink.deferStart)`), then `Node.shutdown(A)` runs
 baked `WorkPool.releaseEnqueueHandoff` — watch pending jump A → B and Directory drop A.
 
 Keys: **a** enqueue · **h** handoff · Ctrl+C quit.

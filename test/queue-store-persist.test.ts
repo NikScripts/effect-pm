@@ -50,8 +50,7 @@ describe("WorkPool → baked store persistence", () => {
       Effect.provide(
         WorkPool.layerMemory(EmailQueue, {
           effect: () => Effect.void,
-          autoStart: true,
-        }),
+                  }),
       ),
       Effect.scoped,
     ),
@@ -87,8 +86,7 @@ describe("WorkPool → baked store persistence", () => {
         WorkPool.layerMemory(FailingQueue, {
           effect: () => Effect.fail("boom" as const),
           attempts: 1,
-          autoStart: true,
-        }),
+                  }),
       ),
       Effect.scoped,
     ),

@@ -17,15 +17,15 @@ the browser:
   `prioritize` / `defer`), Enter or **Add**;
 - **Controls** — **Start** (`start`, fork workers), **Resume** (`resume`),
   **Pause** (`pause`), **Clear** (`clear`), **Release** (`release`, export +
-  remove pending), **Shutdown** (`shutdown`, permanent), **↻** (manual refresh);
+  remove pending), **Stop** (`stop`, permanent), **↻** (manual refresh);
 - **Route** — a "target by text" box → **Drop** (`drop`) / **Dead-letter**
   (`deadLetter`): remove/route the pending entries whose item matches. No "list
   pending" read is needed (Effect queues can't enumerate) — you target what you
   know, the queue matches internally;
 - **Reads** — `size` (pending), per-priority `sizes`, `completed`, `isEmpty`,
   plus the `clear` / `release` / `drop` / `deadLetter` return counts;
-- a **status** badge (running / paused / shutdown) — tracked client-side for now
-  (the handle has no status read yet).
+- a **status** badge (running / paused / off) — tracked client-side for now
+  (prefer the live `lifecycle` Subscribable in production UI).
 
 Live counts: the worker (concurrency 1, 1.2 s/item) invalidates the reactivity
 key on each completion, so they move as items drain — event-driven, **no polling**.

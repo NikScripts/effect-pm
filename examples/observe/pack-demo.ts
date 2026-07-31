@@ -30,13 +30,11 @@ const Status = Schema.Struct({
     low: Schema.Number,
   }),
   paused: Schema.Boolean,
-  phase: Schema.Literals(["idle", "running", "paused"]),
 });
-type Phase = "idle" | "running" | "paused";
 type DemoStatus = {
   sizes: { high: number; normal: number; low: number };
   paused: boolean;
-  phase: Phase;
+  lifecycleTag: "Idle" | "Running" | "Paused";
 };
 
 class Jobs extends Hyperlink.Tag<Jobs>()("demo/observe/Jobs", {
@@ -44,7 +42,7 @@ class Jobs extends Hyperlink.Tag<Jobs>()("demo/observe/Jobs", {
   pause: Hyperlink.effect(Schema.Void),
   resume: Hyperlink.effect(Schema.Void),
   clear: Hyperlink.effect(Schema.Void),
-  shutdown: Hyperlink.effect(Schema.Void),
+  stop: Hyperlink.effect(Schema.Void),
 }) {}
 
 /** Card surface without node-scoped logs (local demo Tag has no Node). */
@@ -64,24 +62,24 @@ const layer = Hyperlink.layer(
     const cell = yield* SubscriptionRef.make<DemoStatus>({
       sizes: { high: 2, normal: 5, low: 1 },
       paused: false,
-      phase: "running",
+      lifecycleTag: "Running",
     });
     const paused: DemoStatus = {
       sizes: { high: 2, normal: 5, low: 1 },
       paused: true,
-      phase: "paused",
+      lifecycleTag: "Paused",
     };
     const running: DemoStatus = {
       sizes: { high: 2, normal: 5, low: 1 },
       paused: false,
-      phase: "running",
+      lifecycleTag: "Running",
     };
     return {
       status: Hyperlink.subscribable(cell),
       pause: SubscriptionRef.set(cell, paused),
       resume: SubscriptionRef.set(cell, running),
       clear: Effect.void,
-      shutdown: Effect.void,
+      stop: Effect.void,
     };
   }),
 );
@@ -122,13 +120,13 @@ await Effect.runPromise(
     yield* Effect.log(`shipped pack: ${WorkPoolView.pack.id}`);
 
     const s0 = readStatus();
-    yield* Effect.log(`status:       ${s0?.phase} pending=${pendingOf(s0)}`);
+    yield* Effect.log(`status:       ${s0?.lifecycleTag} pending=${pendingOf(s0)}`);
 
     registry.set(box.pause, undefined as void);
     yield* Effect.sleep("80 millis");
 
     const s1 = readStatus();
-    yield* Effect.log(`after pause:  ${s1?.phase} paused=${String(s1?.paused)}`);
+    yield* Effect.log(`after pause:  ${s1?.lifecycleTag} paused=${String(s1?.paused)}`);
 
     yield* Effect.log("");
     yield* Effect.log("React (same discharge under RuntimeProvider):");

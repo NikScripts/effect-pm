@@ -15,18 +15,17 @@ the network. The call site does not change.
 
 What you `yield*` is a typed **Handle**: call methods, observe live state, steer the service at
 runtime. Local and remote are the same type. Change the Contract and TypeScript flags every caller
-in every process that imports the Tag. One surface.
+in every process that imports the Tag.
 
-The rest of this page is that idea under load: two runtimes sharing a queue, the same Handle
-operating it live, building your own HyperService, then peers across a fleet.
+Same Tag, two runtimes:
 
 ## Two runtimes, one program
 
 A worker drains a queue; a scheduler fills it. Two runtimes, one Tag, no hand-rolled client on the
 scheduler side.
 
-Define two HyperServices once, a priority queue and a scheduled daemon (included tools, used here
-as the demo):
+Define two HyperServices: a priority queue and a scheduled daemon (included factories, used here as
+the demo):
 
 {.twoslash}
 ``` ts
@@ -39,8 +38,8 @@ class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob })
 class Digest extends Daemon.Tag<Digest>()("app/Digest") {}
 ```
 
-Same-machine, nameless: `Node.unix` mints a Node when you don't pass one (no `Node.Tag`, no path,
-no port). Discovery is built in:
+Same-machine, nameless: `Node.unix` mints a Node when you omit one (no `Node.Tag`, no path, no port).
+Discovery is built in:
 
 {.twoslash}
 ``` ts
@@ -81,11 +80,11 @@ const scheduler = Daemon.layer(Digest, {
 ```
 
 `Digest` runs on the scheduler, `Emails` on the worker, yet `emails.add(…)` looks like one process.
-**Two HyperServices, two runtimes, one program.** (Named Node: `Node.unix(Worker, …)` pairs with
-`Hyperlink.unix(Worker)`; nameless: `Node.unix([serve…])` pairs with `Hyperlink.unix(Tag)`.)
+**Two HyperServices, two runtimes, one program.** Named Node: `Node.unix(Worker, …)` pairs with
+`Hyperlink.unix(Worker)`. Nameless: `Node.unix([serve…])` pairs with `Hyperlink.unix(Tag)`.
 
-When you need another machine (or a browser), step up to HTTP. Same worker, same Tag, only the
-listen changes:
+When you need another machine (or a browser), step up to HTTP. Same worker, same Tag; only the listen
+changes:
 
 {.twoslash}
 ``` ts
@@ -129,8 +128,8 @@ yield* emails.events.pipe(Stream.runForEach(onChange))
 })
 ```
 
-Dashboards ride the same Tag, a **CLI**, a **TUI**, and a **web** dashboard, without touching
-the Implementation.
+A **CLI**, **TUI**, or **web** dashboard rides that same Tag. None of them need a second client, and
+none of them touch the Implementation.
 
 ## Build your own
 
@@ -169,7 +168,7 @@ const counterImpl = Effect.gen(function* () {
 })
 ```
 
-Same Tag, three placements, in-process, served, or connected:
+Same Tag, three placements (in-process, served, or connected):
 
 {.twoslash}
 ``` ts
@@ -195,12 +194,12 @@ Node.http(Hyperlink.serve(Counter, counterImpl), 4000)           // served over 
 Hyperlink.connect(Counter, Hyperlink.protocolHttp(4000))         // from another runtime
 ```
 
-It gets operability and dashboard slots for free, because it is the same kind of thing `Emails` is.
-Walk through this end to end in [Creating a Hyperlink Service](/docs/creating-a-hyperlink).
+Operability and dashboard slots come with the Contract. Walk through this end to end in
+[Creating a Hyperlink Service](/docs/creating-a-hyperlink).
 
 ## Working with peers
 
-The same Tag can reach its **peers**, other instances of itself, and coordinate. Sessions sharded
+The same Tag can reach its **peers** (other instances of itself) and coordinate. Sessions sharded
 across droplets: each Node holds what it owns; a lookup for someone else's session is **forwarded to
 the owner**. [`ShardMap`](/docs/shardmap) is that pattern as an included HyperService factory:
 
@@ -225,7 +224,7 @@ class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
 ) {}
 ```
 
-Serve a droplet, local shard + peer clients from one materialization:
+Serve a droplet (local shard plus peer clients) from one materialization:
 
 {.twoslash}
 ``` ts
@@ -283,13 +282,13 @@ drop in when you need them:
 - **[`WorkPool`](/docs/work-pools)**: priority work queue (enqueue, drain, dedup, retry, concurrency)
 - **[`Daemon`](/docs/daemons)**: continuous or recurring work (polling, schedules, run history)
 - **[`ShardMap`](/docs/shardmap)**: partitioned key/value across a fleet, with peer routing
-- **[`Gate`](/docs/gates)** · **[`Telemetry`](/docs/telemetry)** · **[`FleetHealth`](/docs/fleet-health)**:
-  concurrency gates and glass over the mesh
+- **[`Gate`](/docs/gates)**: concurrency and rate limits at the boundary
+- **[`Telemetry`](/docs/telemetry)** · **[`FleetHealth`](/docs/fleet-health)**: glass over the mesh
 
 ## When the fleet has Lookup
 
-Fixed `Hyperlink.nodes([…])` is enough for a known mesh. When **Lookup** owns placement —
-exclusive brains, Directory advertise, Advice prefer, A→B cutover — start here:
+Fixed `Hyperlink.nodes([…])` is enough for a known mesh. When **Lookup** owns placement
+(exclusive brains, Directory advertise, Advice prefer, A→B cutover), start here:
 
 | Need | Guide |
 |------|-------|
@@ -301,3 +300,5 @@ exclusive brains, Directory advertise, Advice prefer, A→B cutover — start he
 
 Runnable track: [Examples → Node & discovery](/docs/examples#node) ·
 [Examples → Launcher](/docs/examples#launcher).
+
+Next: [Installation](/docs/install).

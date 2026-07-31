@@ -4,7 +4,7 @@
  * **Watchable A→B handoff** — dual-pane Ink TUI over the real Locked #39 cutover.
  *
  * Left = Worker A (outgoing), right = Worker B (Directory peer). Pending jobs sit with
- * `autoStart: false`. Autoplay enqueues on A, then `Node.shutdown(A)` — watch the count
+ * `Hyperlink.deferStart` on both WorkPool layers. Autoplay enqueues on A, then `Node.shutdown(A)` — watch the count
  * jump A → B as baked `releaseEnqueueHandoff` runs.
  *
  * Needs a real TTY (alt-screen). In your terminal:
@@ -162,18 +162,12 @@ const boot = Effect.gen(function* () {
   // B first — Directory peer for A's handoff (exclude self by dial).
   yield* Layer.build(
     Node.unix(WorkerB, [
-      WorkPool.serve(Jobs, {
-        effect: () => Effect.void,
-        autoStart: false,
-      }),
+      WorkPool.serve(Jobs, { effect: () => Effect.void }).pipe(Hyperlink.deferStart),
     ]).pipe(Layer.provide(lookupClient)),
   );
   const aCtx = yield* Layer.build(
     Node.unix(WorkerA, [
-      WorkPool.serve(Jobs, {
-        effect: () => Effect.void,
-        autoStart: false,
-      }),
+      WorkPool.serve(Jobs, { effect: () => Effect.void }).pipe(Hyperlink.deferStart),
     ]).pipe(Layer.provide(lookupClient)),
   );
 

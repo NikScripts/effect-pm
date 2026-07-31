@@ -247,7 +247,7 @@ Owner locked #22–26; Eng on tip:
 - B Directory `askIncumbent` + NodeStatus `yield` / `ListenOptions.onYield` — **directory-row** replace only (AI.4: no in-flight drain).
 - A Launcher custody + `Node.assume` + Ready / `withReadiness` / `Node.status`.
 - F4 `contractHash` + deep `verifyConnection` → `ContractMismatch` (binary; redeploy stale side).
-- WorkPool local `shutdown` / `phase: "draining"` + `release` / `enqueue` / `releaseEncoded` (app-level queue transfer primitives).
+- WorkPool local `stop` + `lifecycle._tag` (`Draining` / `Off`) + `release` / `enqueue` / `releaseEncoded` (app-level queue transfer primitives).
 - Stores: **one store per Node** (not shared cross-node durability) — [`stores.md`](../guides/stores.md).
 
 **Gone / do not invent lightly:** `HandoffManager`, parallel Directory, launcher-owned migration, Lookup.assign / blank-worker migrate.

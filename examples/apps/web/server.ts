@@ -386,7 +386,6 @@ const statsNode = Node.wsServer([
     namedLanes: { hot: 0, warm: 1, cold: 2 },
     concurrency: 1, // drain slower than we fill, so the named lanes carry a visible backlog
     effect: importWorker,
-    autoStart: true,
   }),
   Hyperlink.serve(WorkerPool, workerPoolImpl(4)),
   FleetHealth.serve(MeshHealth),

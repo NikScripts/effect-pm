@@ -7,7 +7,7 @@
  * @remarks
  * This is the first slice of porting `WorkPool` onto the toolkit. It covers the
  * **control / observation** verbs only — `size`, `sizes`, `isEmpty`, `completed`, `start`,
- * `pause`, `resume`, `shutdown`, `clear` — all of which have fixed schemas (no item type).
+ * `pause`, `resume`, `stop`, `clear` — all of which have fixed schemas (no item type).
  *
  * The **data-plane** verbs involve the per-queue item type `T` and its `itemSchema`: the
  * enqueue verbs (`add` / `prioritize` / `defer` / `enqueue`) and the entry-returning verbs
@@ -35,6 +35,7 @@
 import { DateTime, Effect, Layer, Option, Schema, Scope, Stream } from "effect";
 import * as Hyperlink from "./Hyperlink";
 import { specSym } from "./Hyperlink";
+import * as Lifecycle from "./Lifecycle";
 import { HistoryStore } from "./HistoryStore";
 import type { HistoryReadOptions, HistoryStoreShape } from "./HistoryStore";
 import type {
@@ -185,8 +186,6 @@ export const queueStatus = Schema.Struct({
   paused: Schema.Boolean,
   inFlight: Schema.Number,
   completed: Schema.Number,
-  // lifecycle phase (orthogonal to `paused`): running → draining (on shutdown) → off (terminal).
-  phase: Schema.Literals(["running", "draining", "off"]),
 });
 
 /**
@@ -581,8 +580,14 @@ export const queueControlSpec = {
   // plain reads (`p.size`) and subscribable (`Hyperlink.changes(p, (s) => s.size)`).
   status: Hyperlink.ref(queueStatus).annotate({
     description:
-      "Live current-state snapshot: per-priority sizes, paused, in-flight, completed, phase.",
+      "Live current-state snapshot: per-priority sizes, paused, in-flight, completed.",
   }),
+  // Shared Lifecycle protocol — tools read this via methodMeta(…).lifecycle === "State".
+  lifecycle: Hyperlink.ref(Lifecycle.State)
+    .annotate({
+      description: "Lifecycle badge (Idle / Running / Paused / Draining / Off).",
+    })
+    .pipe(Lifecycle.state),
   size: Hyperlink.ref(Schema.Number).annotate({
     description: "Total pending items across all priority lanes.",
   }),
@@ -591,22 +596,30 @@ export const queueControlSpec = {
   }),
 
   // ── lifecycle commands ──
-  start: Hyperlink.effect(Schema.Void).annotate({
-    description:
-      "Fork the worker pool + lifecycle monitor (idempotent; no-op after shutdown).",
-  }),
-  pause: Hyperlink.effect(Schema.Void).annotate({
-    description: "Pause processing; items can still be enqueued and accumulate.",
-  }),
-  resume: Hyperlink.effect(Schema.Void).annotate({
-    description: "Resume processing after a pause.",
-  }),
-  shutdown: Hyperlink.effect(Schema.Void).annotate({
-    description:
-      "Permanently stop the queue (graceful): phase → draining, later enqueues dropped, " +
-      "in-flight finishes, queued items drained or discarded per shutdownMode, then phase → off.",
-    destructive: true,
-  }),
+  start: Hyperlink.effect(Schema.Void)
+    .annotate({
+      description:
+        "Fork the worker pool + lifecycle monitor (idempotent; no-op after stop).",
+    })
+    .pipe(Lifecycle.start),
+  pause: Hyperlink.effect(Schema.Void)
+    .annotate({
+      description: "Pause processing; items can still be enqueued and accumulate.",
+    })
+    .pipe(Lifecycle.pause),
+  resume: Hyperlink.effect(Schema.Void)
+    .annotate({
+      description: "Resume processing after a pause.",
+    })
+    .pipe(Lifecycle.resume),
+  stop: Hyperlink.effect(Schema.Void)
+    .annotate({
+      description:
+        "Permanently stop the queue (graceful): Lifecycle → Draining, later enqueues dropped, " +
+        "in-flight finishes, queued items drained or discarded per shutdownMode, then Off.",
+      destructive: true,
+    })
+    .pipe(Lifecycle.stop),
   clear: Hyperlink.effect(Schema.Number).annotate({
     description:
       "Drain all pending items and reset the completed counter; returns the count cleared.",
@@ -881,11 +894,15 @@ const materializeQueueTag = <
       ? Hyperlink.Tag<Self>()(key, spec, tagOptions)
       : Hyperlink.Tag<Self>()(key, spec, { ...tagOptions, node: resolved.node });
   const ready = Hyperlink.withReadiness(base, (svc) =>
-    Effect.map(svc.status.get, (status) => ({
-      ready: status.phase === "running",
-      ...(status.phase === "running"
+    Effect.map(svc.lifecycle.get, (state) => ({
+      // Idle (deferred start) and Paused stay dialable — workers just aren't forked / latch closed.
+      ready:
+        state._tag === "Running" ||
+        state._tag === "Idle" ||
+        state._tag === "Paused",
+      ...(state._tag === "Running"
         ? {}
-        : { detail: `phase: ${status.phase}` }),
+        : { detail: `lifecycle: ${state._tag}` }),
     })),
   );
   return stampQueueItemSchema(
@@ -918,20 +935,22 @@ export interface WorkPool<
   Error = never,
   Requirements = never,
 > {
-  /** Live current-state snapshot (per-priority sizes, paused, in-flight, completed, phase). */
+  /** Live current-state snapshot (per-priority sizes, paused, in-flight, completed). */
   readonly status: Hyperlink.Subscribable<QueueStatus>;
+  /** Shared {@link Lifecycle.State} badge — Role `"State"` for generic tools. */
+  readonly lifecycle: Hyperlink.Subscribable<Lifecycle.State>;
   /** Total pending items across all priority lanes. */
   readonly size: Hyperlink.Subscribable<number>;
   /** Whether all priority queues are empty. */
   readonly isEmpty: Hyperlink.Subscribable<boolean>;
-  /** Fork the worker pool + lifecycle monitor (idempotent; no-op after shutdown). */
+  /** Fork the worker pool + lifecycle monitor (idempotent; no-op after stop). */
   readonly start: Effect.Effect<void, never, Requirements>;
   /** Pause processing; items can still be enqueued and accumulate. */
   readonly pause: Effect.Effect<void>;
   /** Resume processing after a pause. */
   readonly resume: Effect.Effect<void>;
   /** Permanently stop the queue (graceful drain). */
-  readonly shutdown: Effect.Effect<void>;
+  readonly stop: Effect.Effect<void>;
   /** Drain all pending items and reset the completed counter; returns the count cleared. */
   readonly clear: Effect.Effect<number, never, Requirements>;
   /** Windowed metrics: the live `stream` plus a historical `query` (needs a HistoryStore). */
@@ -1408,10 +1427,18 @@ const buildQueueImpl = <
     // `status` is the SSOT Subscribable on the handle; scalars are mapped views of it.
     // Worker methods are built UNWRAPPED (each still carrying the worker `R | RR` in its requirement);
     // `Hyperlink.provideContext` below discharges `context` into every Effect method uniformly (a no-op
-    // on the ones that carry no `R`, like pause/resume/shutdown) — a single subtractive
+    // on the ones that carry no `R`, like pause/resume/stop) — a single subtractive
     // `Effect.provideContext` per method instead of any per-method wrapping — and its `ProvidedContext`
     // result strips `R` so the impl satisfies `ImplOf`. Stream / Subscribable members
     // (`status`/`size`/`isEmpty`/`*.stream`/`events`) pass through untouched.
+    // First-class Lifecycle.Service — tools use `Lifecycle.of(queue)` / `Lifecycle.from(Tag)`.
+    const lifecycle = Lifecycle.of({
+      lifecycle: handle.lifecycle,
+      start: handle.start,
+      pause: handle.pause,
+      resume: handle.resume,
+      stop: handle.stop,
+    });
     const impl: Hyperlink.WithRequirement<
       ImplOf<QueueInstanceSpec<F, Success, Error>>,
       R | RR
@@ -1421,12 +1448,15 @@ const buildQueueImpl = <
       // through. The adapter only *adds* cross-cutting concerns: `metrics.query` (history),
       // `orDie` on the enqueue verbs (impossible-failure → defect), and RPC wiring.
       status: handle.status,
+      lifecycle: lifecycle.state,
+      start: lifecycle.start.pipe(
+        Effect.catchTag("LifecycleIllegal", () => Effect.void),
+      ),
+      pause: lifecycle.pause.pipe(Effect.orDie),
+      resume: lifecycle.resume.pipe(Effect.orDie),
+      stop: lifecycle.stop,
       size: handle.size,
       isEmpty: handle.isEmpty,
-      start: handle.start,
-      pause: handle.pause,
-      resume: handle.resume,
-      shutdown: handle.shutdown,
       clear: handle.clear,
       metrics: {
         stream: handle.metrics,
@@ -1515,7 +1545,6 @@ export const priorityStatus = Schema.Struct({
   paused: Schema.Boolean,
   inFlight: Schema.Number,
   completed: Schema.Number,
-  phase: Schema.Literals(["running", "draining", "off"]),
 });
 
 /**
@@ -1590,8 +1619,13 @@ export const priorityControlSpec = {
   // reads (`p.size`) and subscribable (`Hyperlink.changes(p, (s) => s.size)`).
   status: Hyperlink.ref(priorityStatus).annotate({
     description:
-      "Live current-state snapshot: per-lane sizes, paused, in-flight, completed, phase.",
+      "Live current-state snapshot: per-lane sizes, paused, in-flight, completed.",
   }),
+  lifecycle: Hyperlink.ref(Lifecycle.State)
+    .annotate({
+      description: "Lifecycle badge (Idle / Running / Paused / Draining / Off).",
+    })
+    .pipe(Lifecycle.state),
   size: Hyperlink.ref(Schema.Number).annotate({
     description: "Total pending items across all lanes.",
   }),
@@ -1605,22 +1639,30 @@ export const priorityControlSpec = {
   }),
 
   // ── lifecycle commands ──
-  start: Hyperlink.effect(Schema.Void).annotate({
-    description:
-      "Fork the worker pool + lifecycle monitor (idempotent; no-op after shutdown).",
-  }),
-  pause: Hyperlink.effect(Schema.Void).annotate({
-    description: "Pause processing; items can still be enqueued and accumulate.",
-  }),
-  resume: Hyperlink.effect(Schema.Void).annotate({
-    description: "Resume processing after a pause.",
-  }),
-  shutdown: Hyperlink.effect(Schema.Void).annotate({
-    description:
-      "Permanently stop the queue (graceful): phase → draining, later enqueues dropped, " +
-      "in-flight finishes, queued items drained or discarded per shutdownMode, then phase → off.",
-    destructive: true,
-  }),
+  start: Hyperlink.effect(Schema.Void)
+    .annotate({
+      description:
+        "Fork the worker pool + lifecycle monitor (idempotent; no-op after stop).",
+    })
+    .pipe(Lifecycle.start),
+  pause: Hyperlink.effect(Schema.Void)
+    .annotate({
+      description: "Pause processing; items can still be enqueued and accumulate.",
+    })
+    .pipe(Lifecycle.pause),
+  resume: Hyperlink.effect(Schema.Void)
+    .annotate({
+      description: "Resume processing after a pause.",
+    })
+    .pipe(Lifecycle.resume),
+  stop: Hyperlink.effect(Schema.Void)
+    .annotate({
+      description:
+        "Permanently stop the queue (graceful): Lifecycle → Draining, later enqueues dropped, " +
+        "in-flight finishes, queued items drained or discarded per shutdownMode, then Off.",
+      destructive: true,
+    })
+    .pipe(Lifecycle.stop),
   clear: Hyperlink.effect(Schema.Number).annotate({
     description:
       "Drain all pending items and reset the completed counter; returns the count cleared.",
@@ -1821,11 +1863,15 @@ export const priority = <Self>() => {
             node: config.node,
           });
     const ready = Hyperlink.withReadiness(base, (svc) =>
-      Effect.map(svc.status.get, (status) => ({
-        ready: status.phase === "running",
-        ...(status.phase === "running"
+      Effect.map(svc.lifecycle.get, (state) => ({
+        // Idle (deferred start) and Paused stay dialable — workers just aren't forked / latch closed.
+        ready:
+          state._tag === "Running" ||
+          state._tag === "Idle" ||
+          state._tag === "Paused",
+        ...(state._tag === "Running"
           ? {}
-          : { detail: `phase: ${status.phase}` }),
+          : { detail: `lifecycle: ${state._tag}` }),
       })),
     );
     return stampQueueWireSchemas(ready, {
@@ -1921,18 +1967,28 @@ const buildPriorityImpl = <Self, F extends PriorityItemFields, E, R, RR = never>
     // `status` is the SSOT Subscribable on the handle; scalars are mapped views of it.
     // Worker methods are built unwrapped (each still carrying `R | RR`); `grantLocal` / wire invoke
     // discharge `context` into every Effect method uniformly — same bundle pattern as WorkPool.
+    const lifecycle = Lifecycle.of({
+      lifecycle: handle.lifecycle,
+      start: handle.start,
+      pause: handle.pause,
+      resume: handle.resume,
+      stop: handle.stop,
+    });
     const impl: Hyperlink.WithRequirement<
       ImplOf<PriorityInstanceSpec<F>>,
       R | RR
     > = {
       status: handle.status,
+      lifecycle: lifecycle.state,
+      start: lifecycle.start.pipe(
+        Effect.catchTag("LifecycleIllegal", () => Effect.void),
+      ),
+      pause: lifecycle.pause.pipe(Effect.orDie),
+      resume: lifecycle.resume.pipe(Effect.orDie),
+      stop: lifecycle.stop,
       size: Hyperlink.mapSubscribable(handle.status, (s) => sumLaneSizes(s.sizes)),
       isEmpty: Hyperlink.mapSubscribable(handle.status, (s) => sumLaneSizes(s.sizes) === 0),
       levelSizes: handle.levelSizes,
-      start: handle.start,
-      pause: handle.pause,
-      resume: handle.resume,
-      shutdown: handle.shutdown,
       clear: handle.clear,
       metrics: {
         stream: handle.metrics,
