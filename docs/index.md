@@ -9,7 +9,7 @@
 **Define once. Run anywhere. `yield*` everywhere.**
 
 An Effect Service lives in one runtime. A *Hyperlink Service* is still a Service, same Tag,
-same `yield*`, but its Contract is schema-typed, so the seam can sit between processes, not just
+same `yield*`, but its Contract is schema-typed, so callers can span processes, not only
 modules. You define it once; you decide later whether it runs in-process, on another core, or across
 the network. The call site does not change.
 
