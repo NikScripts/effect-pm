@@ -1,6 +1,6 @@
 # Lifecycle kernel — decisions & lock register
 
-**Status:** L0–L5 + **A/C reshape** tip-synced to `integration` (compose FiberHandle/Latch, dual ops, derived events).  
+**Status:** L0–L5 + A/C tip-synced; **B** (Participating duals, no `Service`/`of`/`from`) + **P11** (internal split) Eng’d on work branch.  
 **Owner:** Agent 5.  
 **Full Eng plan (SSOT for architecture / slices / acceptance):** [`docs/plans/lifecycle-kernel.md`](../plans/lifecycle-kernel.md).  
 **Guide:** [`docs/guides/lifecycle.md`](../guides/lifecycle.md).  
@@ -12,8 +12,9 @@ This file is the **lock register**. Do not batch-lock. Present → go → mark L
 
 ## 0. Mission (one line)
 
-One **Lifecycle.Service** is the SSOT for HyperService runtime lifecycle — badge + commands — that
-any HyperService adopts the same way, and that generic tools consume without kind switches.
+One **Lifecycle** handle (compose FiberHandle/Latch) plus **Participating** duals is the SSOT for
+HyperService runtime lifecycle — badge + commands — that any HyperService adopts the same way,
+and that generic tools consume without kind switches (`Lifecycle.start(jobs)` / `startFrom(Tag)`).
 
 ---
 
@@ -26,7 +27,7 @@ any HyperService adopts the same way, and that generic tools consume without kin
 | S3 | Spec Role stamps | `.pipe(Lifecycle.asPause)` / `asStart` / … — dual ops are `Lifecycle.pause(lc)`; preserve `Marked`/`ref` |
 | S4 | `Lifecycle.State` Schema | Wire success of Role `"State"` field |
 | S5 | No kind helpers in Lifecycle | No `fromWorkPool` / `fromDaemon` |
-| S6 | `Lifecycle.Service` + `make` / `of` / `from` | Impl + tool ends |
+| S6 | `Lifecycle` handle + Participating duals | `make` / `start(lc\|jobs)` / `startFrom(Tag)` — no projected Service bag |
 | S7 | `Hyperlink.deferStart` | Layer pipe (Policy-shaped, HyperService layers only); not Tag; not Policy |
 | S8 | Daemon uses `make` | Restartable `restartable: true` → Idle |
 | S9 | WorkPool on `make` | Badge SSOT `lifecycle`; no `status.phase`; control verb `stop` |
@@ -44,11 +45,11 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 - **Reject:** Keeping `phase` forever alongside `Lifecycle.State`.
 - **Blocks:** L1.
 
-### P2 — Structural capability typing — Locked (Eng’d)
+### P2 — Structural capability typing — Locked (Eng’d; B amended)
 
-- **Choose:** Caps from structure — Latch present ⇒ `ServicePausable` (pause/resume on the type); no Latch ⇒ `ServiceCore` (absent members). `of` / `from` → tool `Service` (pause/resume always present; `Unsupported` when no Latch). `restartable` ⇒ Idle vs Off after stop.
-- **Keep:** `Unsupported` only for dynamic / tool projection when members absent.
-- **Reject:** Primary API as stringly `caps: ["Start","Stop"]` bag (sugar OK if derived from structure).
+- **Choose:** Caps from structure — Latch present ⇒ `LifecyclePausable` (pause/resume on the type); no Latch ⇒ `LifecycleCore` (absent members). Tools use Participating duals (`start(jobs)` / `startFrom(Tag)`); no projected `Service` / `of` / `from`. `afterStop` ⇒ Idle vs Off after stop.
+- **Keep:** `Unsupported` when Participating members absent (e.g. pause on non-pausable).
+- **Reject:** Primary API as stringly `caps: ["Start","Stop"]` bag (sugar OK if derived from structure); projected Service bag.
 - **Blocks:** L3.
 
 ### P3 — Spec / impl sugar — Locked (Eng’d)
@@ -88,8 +89,8 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 
 ### P8 — Remote parity — Proposed
 
-- **Choose:** `Lifecycle.from(clientTag)` identical when Tag is `Hyperlink.client`.
-- **Reject:** Separate “lifecycle client” API.
+- **Choose:** `Lifecycle.startFrom(clientTag)` / Participating duals identical when Tag is `Hyperlink.client`.
+- **Reject:** Separate “lifecycle client” API; resurrecting projected `from`.
 - **Blocks:** L6.
 
 ### P9 — `deferStart` composition — Locked (Eng’d)
@@ -104,15 +105,15 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 - **Reject:** Implicit Lifecycle on every HyperService.
 - **Blocks:** L7 docs clarity.
 
-### P11 — Module layout — Proposed
+### P11 — Module layout — Locked (Eng’d)
 
-- **Choose:** `src/Lifecycle.ts` shell; Handle/Set/Latch wiring → `src/internal/lifecycle.ts`.
+- **Choose:** `src/Lifecycle.ts` shell; model → `internal/lifecycleModel.ts`; engine → `internal/lifecycle.ts`.
 - **Reject:** Lifecycle as its own served HyperService Tag kind; naming it `Resource`.
 - **Blocks:** all slices (layout invariant).
 
 ### P12 — Lock / semver — Proposed
 
-- **Choose:** Substrate + dream unlocked until owner `@locked` on `Lifecycle.Service` / `State` / `Role`. Pre-1.0 breaking renames are minors with changeset.
+- **Choose:** Substrate + dream unlocked until owner `@locked` on `Lifecycle` / `State` / `Role` / Participating duals. Pre-1.0 breaking renames are minors with changeset.
 - **Blocks:** L7.
 
 ### P13 — Effect-shaped `make` (run + Latch + release) — Locked (Eng’d; A/C amended)
@@ -144,15 +145,15 @@ Full table + acceptance criteria: [plan §8](../plans/lifecycle-kernel.md#8-eng-
 | **L3** | P2 | Capability-typed `LifecycleCore` / `LifecyclePausable` — Eng’d (A) |
 | **L4** | P4 | `Event` + `lifecycleEvents` — Eng’d |
 | **L5** | P5 | `ui/LifecycleView` pack — Eng’d (chrome follow-up) |
-| **L6** | P7, P8 | Handoff + remote `from` |
+| **L6** | P7, P8 | Handoff docs (Eng’d in guide) + remote Participating duals |
 | **L7** | P10+ | Docs + `@locked` candidates |
 
 ---
 
 ## 5. Immediate next step
 
-1. P5 chrome → Agent G; P7 → no Lifecycle gate (Locked).  
-2. Next Eng: L6 docs clarity + P8 remote `from` when owner wants; tip-sync on ask.  
+1. P5 chrome → Agent G; P7 → no Lifecycle gate (Locked); L6 handoff prose in guide.  
+2. Next Eng: P8 remote Participating dual parity when owner wants; tip-sync B/P11 on ask.  
 3. Open questions: §3.
 
 ---
@@ -166,4 +167,5 @@ Full table + acceptance criteria: [plan §8](../plans/lifecycle-kernel.md#8-eng-
 | `fromWorkPool` / `fromDaemon` | Kind privilege |
 | Lifecycle as served HyperService Tag | Protocol, not sibling resource |
 | Conflating Node `phase` with HyperService State | Two planes |
-| Annotation-only without Service | Tools need a typed handle |
+| Annotation-only without Participating duals | Tools need typed start/stop on the handle |
+| Projected `Lifecycle.Service` / `of` / `from` | Lean Participating duals (`start(jobs)` / `startFrom`) |

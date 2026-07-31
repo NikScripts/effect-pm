@@ -1,6 +1,6 @@
 # Plan: Lifecycle kernel
 
-**Status:** Effect-shaped `make` Eng’d (Daemon + core + P13); WorkPool still projects via `of` (L1).  
+**Status:** L0–L5 + A/C tip-synced; **B** (Participating duals) + **P11** (internal split) Eng’d on work branch.  
 **Agent:** 5.  
 **Decisions / lock register:** [`../handoffs/lifecycle-kernel-decisions.md`](../handoffs/lifecycle-kernel-decisions.md) (approve P-locks item-by-item before Eng).  
 **Shipped guide (substrate):** [`../guides/lifecycle.md`](../guides/lifecycle.md).  
@@ -12,21 +12,22 @@ Supersedes the roadmap bullet “Lifecycle kernel (exploratory)” in [`README.m
 
 ## 0. Mission
 
-One **`Lifecycle.Service`** is the SSOT for HyperService **runtime lifecycle** — badge + commands —
-that **any** HyperService adopts the same way, and that **generic tools** (CLI / TUI / dashboard /
-handoff) consume **without kind switches**.
+One **Lifecycle** handle (compose FiberHandle/Latch) plus **Participating** duals is the SSOT for
+HyperService **runtime lifecycle** — badge + commands — that **any** HyperService adopts the same
+way, and that **generic tools** (CLI / TUI / dashboard / handoff) consume **without kind switches**.
 
 | Is | Is not |
 |----|--------|
-| Protocol + typed Service handle | A peer HyperService Tag / served resource |
-| Spec Role stamps + `make` / `of` / `from` | Policy (dial / verify / conflict / yield) |
+| Protocol + typed handle + Participating duals | A peer HyperService Tag / served resource |
+| Spec Role stamps + `make` / `start(jobs)` / `startFrom(Tag)` | Policy (dial / verify / conflict / yield); projected `Service`/`of`/`from` |
 | Building blocks every service can use | WorkPool- or Daemon-privileged helpers |
 | Layer `Hyperlink.deferStart` for deferred bring-up | Tag-stamped `autoStart` / `Policy.autoStart` |
 | One badge enum for tools | A second control plane beside Node / Policy |
 
-**Success looks like:** a dashboard or handoff runner that only knows `Lifecycle.from(tag)` can
-start / pause / stop / read State for WorkPool, Daemon, and any app HyperService that opted in —
-with capability typing so Pause is absent (not “try and fail”) when the service never offered it.
+**Success looks like:** a dashboard or handoff runner that only knows `Lifecycle.startFrom(tag)` /
+`Lifecycle.start(jobs)` can start / pause / stop / read State for WorkPool, Daemon, and any app
+HyperService that opted in — with capability typing so Pause is absent (not “try and fail”) when
+the service never offered it.
 
 ---
 
@@ -57,12 +58,13 @@ Do not re-litigate. Detail + table: [lifecycle-kernel-decisions.md §1](../hando
 | Module | `src/Lifecycle.ts` → `hyperlink-ts/Lifecycle` |
 | Roles | `"State" \| "Start" \| "Pause" \| "Resume" \| "Stop"` |
 | States | `"Idle" \| "Running" \| "Paused" \| "Draining" \| "Off"` |
-| Spec stamps | `.pipe(Lifecycle.pause)` (preserve `Marked` / `ref`) |
-| Impl | `Lifecycle.make({ initial, onStart, onPause?, onResume?, onStop, afterStop })` |
-| Tools | `Lifecycle.of(handle)` / `Lifecycle.from(Tag)` |
+| Spec stamps | `.pipe(Lifecycle.asPause)` / `asStart` / … (preserve `Marked` / `ref`) |
+| Impl | `Lifecycle.make({ run, latch?, release?, afterStop?, fibers? })` |
+| Tools | `Lifecycle.start(lc\|jobs)` / `startFrom(Tag)` — no projected Service bag |
 | Defer | `Hyperlink.deferStart` on HyperService **layers** only |
-| Daemon | Uses Effect-shaped `make` (`restartable: true`) |
-| WorkPool | Still projects via `of` — **temporary** until L1 |
+| Daemon | Uses Effect-shaped `make` (`afterStop: Idle`) |
+| WorkPool | On `make`; Participating fields pass through; no `status.phase` |
+| Layout | `Lifecycle.ts` shell; `internal/lifecycleModel.ts` + `internal/lifecycle.ts` |
 
 ---
 
@@ -94,7 +96,7 @@ It is a **control panel** over Effect structured concurrency:
 └──────────────────────────────▲──────────────────────────────────┘
                                │ yield* / client
 ┌─ Tools ──────────────────────┴──────────────────────────────────┐
-│  Lifecycle.from(Tag) → Service   ui/LifecycleView.pack          │
+│  Lifecycle.start(jobs) / startFrom(Tag)   ui/LifecycleView.pack │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -335,13 +337,13 @@ are Locked.** Substrate-only fixes OK on the work branch.
 | Slice | Depends | Deliverable | Acceptance |
 |-------|---------|-------------|------------|
 | **L0** | — | Land substrate on `integration` | Guide + Daemon `make` + stamps + `deferStart` on tip; typecheck/tests green |
-| **L1** | P1, P6, P9 | WorkPool on `make`; retire `autoStart`; readiness from State; widgets/`lifecycle` | **Eng’d** — no `phase`; `Lifecycle.from(Jobs)`; Idle dialable; changeset |
+| **L1** | P1, P6, P9 | WorkPool on `make`; retire `autoStart`; readiness from State; widgets/`lifecycle` | **Eng’d** — no `phase`; Idle dialable; changeset |
 | **L2** | P3 | `Lifecycle.spec` / `impl`; WorkPool `stop` | **Eng’d** — Spec/impl + `stop`; `.test-d.ts` locks |
-| **L3** | P2 | Caps on `Service` / `make` | **Eng’d (A)** — `LifecycleCore` / `LifecyclePausable`; real Latch/fibers; dual ops |
+| **L3** | P2 | Caps on `make` + Participating duals | **Eng’d (A+B)** — `LifecycleCore` / `LifecyclePausable`; `start(jobs)` / `startFrom`; no Service bag |
 | **L4** | P4 | Events stream | **Eng’d (C)** — derived from `state` changes; Spec `lifecycleEvents`; no Event PubSub |
 | **L5** | P5 | `ui/LifecycleView` pack + generic chrome | **Eng’d pack** (`pack` / `pausable`); chrome → Agent G; Lifecycle core tree-shake |
-
-| **L6** | P7, P8 | Handoff docs (no Lifecycle State gate) + client `from` | Same Service API local/remote; handoff fn owns migrate; Track C aligned |
+| **P11** | — | Module layout split | **Eng’d** — shell + `lifecycleModel` + engine |
+| **L6** | P7, P8 | Handoff docs (no Lifecycle State gate) + remote duals | Guide handoff prose Eng’d; P8 remote `startFrom` still Proposed |
 | **L7** | P10+ | Docs polish; `@locked` candidates; archive exploratory wording | Guide = dream truth; decisions P-locks Closed |
 
 Each slice: all tsconfigs typecheck; `@effect/vitest` + `TestClock`; public type/error-channel
@@ -355,7 +357,7 @@ changes ship `.test-d.ts`; changeset when public API/behavior changes; **no** `a
 | Standard | Application |
 |----------|-------------|
 | **Composition over inheritance** | Caps and hooks compose; no Lifecycle base class hierarchy |
-| **Handles stay thin** | No `Jobs.lifecycleMenu()`; tools use `Lifecycle.from` + Observe packs |
+| **Handles stay thin** | No `Jobs.lifecycleMenu()`; tools use Participating duals + Observe packs |
 | **Single source of truth** | One badge (`make`); status/domain derive; no `phase` mirror forever |
 | **Don't fight the framework** | FiberHandle/Set, Latch, Scope finalizers, SubscriptionRef — not a parallel fiber runtime |
 | **Tag = contract, layer = runtime** | Schemas/Roles on Spec; `make` in engine |
@@ -396,7 +398,7 @@ changes ship `.test-d.ts`; changeset when public API/behavior changes; **no** `a
 |------|------|
 | Runtime (`@effect/vitest`) | `make` transitions; deferStart → Idle → start → Running; pause/resume; stop → Draining → Off/Idle; illegal transition `_tag` |
 | WorkPool L1 | Engine uses `make`; no dual badge drift under concurrent pause+enqueue; shutdownMode still honored |
-| Remote L6 | `Hyperlink.client` + `Lifecycle.from` same as local |
+| Remote L6 | `Hyperlink.client` + `Lifecycle.startFrom` / Participating duals same as local |
 | Type (`.test-d.ts`) | Caps: Daemon `pause` is error; WorkPool `pause` ok; `spec`/`impl` fragment types |
 | Conformance | Optional shared suite for “participating HyperService” once Gate opts in |
 | Clock | Any debounce / drain polling via `TestClock` — never real timers |

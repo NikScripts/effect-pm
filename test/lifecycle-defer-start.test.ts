@@ -178,31 +178,31 @@ describe("Lifecycle.make — Effect-native dual ops", () => {
   );
 });
 
-describe("Lifecycle.of / from — tool end", () => {
+describe("Lifecycle duals on Participating (tools)", () => {
   class Jobs extends WorkPool.Tag<Jobs>()("test/LifecycleService/Jobs", {
     payload: Schema.Struct({ n: Schema.Number }),
   }) {}
 
-  it.effect("from(Tag) projects the first-class Service", () =>
+  it.effect("startFrom(Tag) / pause / resume on wire handle", () =>
     Effect.gen(function* () {
       const layer = WorkPool.layer(Jobs, {
         effect: () => Effect.void,
       }).pipe(Hyperlink.deferStart);
 
       yield* Effect.gen(function* () {
-        const lc = yield* Lifecycle.from(Jobs);
-        expect(yield* lc.state.get).toEqual({ _tag: "Idle" });
-        yield* lc.start;
-        expect(yield* lc.state.get).toEqual({ _tag: "Running" });
-        yield* lc.pause;
-        expect(yield* lc.state.get).toEqual({ _tag: "Paused" });
-        yield* lc.resume;
-        expect(yield* lc.state.get).toEqual({ _tag: "Running" });
+        const jobs = yield* Jobs;
+        expect(yield* jobs.lifecycle.get).toEqual({ _tag: "Idle" });
+        yield* Lifecycle.startFrom(Jobs);
+        expect(yield* jobs.lifecycle.get).toEqual({ _tag: "Running" });
+        yield* Lifecycle.pause(jobs);
+        expect(yield* jobs.lifecycle.get).toEqual({ _tag: "Paused" });
+        yield* Lifecycle.resume(jobs);
+        expect(yield* jobs.lifecycle.get).toEqual({ _tag: "Running" });
       }).pipe(Effect.provide(layer), Effect.scoped);
     }),
   );
 
-  it.effect("of(handle) matches from(Tag)", () =>
+  it.effect("Lifecycle.start(jobs) matches startFrom(Tag)", () =>
     Effect.gen(function* () {
       const layer = WorkPool.layer(Jobs, {
         effect: () => Effect.void,
@@ -210,23 +210,23 @@ describe("Lifecycle.of / from — tool end", () => {
 
       yield* Effect.gen(function* () {
         const jobs = yield* Jobs;
-        const lc = Lifecycle.of(jobs);
-        expect(yield* lc.state.get).toEqual({ _tag: "Running" });
+        expect(yield* jobs.lifecycle.get).toEqual({ _tag: "Running" });
+        yield* Lifecycle.start(jobs); // idempotent
         expect(yield* jobs.lifecycle.get).toEqual({ _tag: "Running" });
       }).pipe(Effect.provide(layer), Effect.scoped);
     }),
   );
 
-  it.effect("from projects lifecycleEvents (_tag Started)", () =>
+  it.effect("events(jobs) projects lifecycleEvents (_tag Started)", () =>
     Effect.gen(function* () {
       const layer = WorkPool.layer(Jobs, {
         effect: () => Effect.void,
       }).pipe(Hyperlink.deferStart);
 
       yield* Effect.gen(function* () {
-        const lc = yield* Lifecycle.from(Jobs);
+        const jobs = yield* Jobs;
         const done = yield* Deferred.make<string>();
-        yield* lc.events.pipe(
+        yield* Lifecycle.events(jobs).pipe(
           Stream.take(1),
           Stream.runCollect,
           Effect.flatMap((chunk) =>
@@ -235,13 +235,13 @@ describe("Lifecycle.of / from — tool end", () => {
           Effect.forkScoped,
         );
         yield* Effect.yieldNow;
-        yield* lc.start;
+        yield* Lifecycle.start(jobs);
         expect(yield* Deferred.await(done)).toBe("Started");
       }).pipe(Effect.provide(layer), Effect.scoped);
     }),
   );
 
-  it.effect("of() start from Off fails LifecycleIllegal (handle swallows)", () =>
+  it.effect("start(jobs) from Off fails LifecycleIllegal (handle swallows)", () =>
     Effect.gen(function* () {
       const layer = WorkPool.layer(Jobs, {
         effect: () => Effect.void,
@@ -252,8 +252,7 @@ describe("Lifecycle.of / from — tool end", () => {
         yield* jobs.stop;
         expect(yield* jobs.lifecycle.get).toEqual({ _tag: "Off" });
 
-        const lc = Lifecycle.of(jobs);
-        const fromTag = yield* lc.start.pipe(
+        const fromTag = yield* Lifecycle.start(jobs).pipe(
           Effect.catchTag("LifecycleIllegal", (e) => Effect.succeed(e.from._tag)),
         );
         expect(fromTag).toBe("Off");
@@ -265,21 +264,21 @@ describe("Lifecycle.of / from — tool end", () => {
 describe("Hyperlink.deferStart + Daemon make", () => {
   class Sweeper extends Daemon.Tag<Sweeper>()("test/LifecycleService/Sweeper") {}
 
-  it.effect("Daemon layer uses Lifecycle.make (Idle → Running → Idle)", () =>
+  it.effect("Daemon layer — startFrom / stopFrom (Idle → Running → Idle)", () =>
     Effect.gen(function* () {
       const layer = Daemon.layer(Sweeper, {
         effect: Effect.void,
       }).pipe(Hyperlink.deferStart);
 
       yield* Effect.gen(function* () {
-        const lc = yield* Lifecycle.from(Sweeper);
-        expect(yield* lc.state.get).toEqual({ _tag: "Idle" });
-        yield* lc.start;
-        expect(yield* lc.state.get).toEqual({ _tag: "Running" });
-        yield* lc.stop;
-        expect(yield* lc.state.get).toEqual({ _tag: "Idle" });
+        const sweeper = yield* Sweeper;
+        expect(yield* sweeper.lifecycle.get).toEqual({ _tag: "Idle" });
+        yield* Lifecycle.startFrom(Sweeper);
+        expect(yield* sweeper.lifecycle.get).toEqual({ _tag: "Running" });
+        yield* Lifecycle.stopFrom(Sweeper);
+        expect(yield* sweeper.lifecycle.get).toEqual({ _tag: "Idle" });
 
-        const role = yield* lc.pause.pipe(
+        const role = yield* Lifecycle.pause(sweeper).pipe(
           Effect.catchTag("LifecycleUnsupported", (e) => Effect.succeed(e.role)),
         );
         expect(role).toBe("Pause");

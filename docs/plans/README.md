@@ -17,7 +17,7 @@ Pre-1.0: breaking changes land as minor bumps.
 - **Non-serializable queue items** — local-only enqueue for function/`Effect` items; wire control + observability stay served. [queue-nonserializable-items.md](./queue-nonserializable-items.md).
 - **Standalone spawns** — `Daemon.spawn` / `WorkPool.open`: multi-instance ergonomics where spawned handles are plain caller-scoped Effects (alongside `Group`).
 - **Runtime identity & singleton runs** — in-process registry + a durable cross-runtime lease to prevent duplicate runs of the same logical process across hosts.
-- **Lifecycle kernel** — first-class `Lifecycle.Service` (badge + commands) any HyperService adopts; tools via `of`/`from` without kind switches. Substrate Eng’d on Agent 5 branch; dream gated on P-locks. Plan: [lifecycle-kernel.md](./lifecycle-kernel.md) · locks: [lifecycle-kernel-decisions.md](../handoffs/lifecycle-kernel-decisions.md).
+- **Lifecycle kernel** — Effect-native Lifecycle (FiberHandle/Latch + Participating duals); tools via `start(jobs)` / `startFrom(Tag)` without kind switches. L0–L5 + A/C tip-synced; B + P11 on work branch. Plan: [lifecycle-kernel.md](./lifecycle-kernel.md) · locks: [lifecycle-kernel-decisions.md](../handoffs/lifecycle-kernel-decisions.md).
 
 ## Persistence & storage
 

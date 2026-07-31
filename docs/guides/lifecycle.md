@@ -8,17 +8,20 @@
 
 `hyperlink-ts/Lifecycle` composes real Effect concurrency primitives:
 {@link FiberHandle} / {@link FiberSet}, optional {@link Latch}, and a {@link SubscriptionRef}
-badge. Drive them with dual ops (`Lifecycle.start(lc)`). **State, Event, and errors are
-`_tag` ADTs** — match with `Match`, [`Hyperlink.runForEachTag`](/docs/observe), or
-`Effect.catchTag`. Transition events are **derived** from badge changes (no parallel PubSub).
+badge. Drive them with dual ops (`Lifecycle.start(lc)`). The **same duals** accept a wire
+Participating HyperService (`Lifecycle.start(jobs)`). **State, Event, and errors are
+`_tag` ADTs**. Transition events are **derived** from badge changes (no parallel PubSub).
+
+Heavy engine lives in `internal/lifecycle` — the public module is the namespace + Spec sugar.
 
 This is the **HyperService** plane (WorkPool / Daemon). Node cutover uses a separate
 `Node.status.phase` (`draining` / …) — see [Identity coordinator](/docs/identity-coordinator).
 
-**Handoff is orthogonal.** A serve-site `handoff` is just `(from, to, ctx)` over two
-identical handles. Lifecycle does not gate it; the handoff Effect may observe
-`lifecycle` if it wants. Without a handoff fn, shutdown only **stops** the service so
-Scope `addFinalizer` runs (`Lifecycle.stop`).
+## Handoff is orthogonal
+
+A serve-site `handoff` is just `(from, to, ctx)` over two identical handles. Lifecycle does
+not gate it; the handoff Effect may observe `lifecycle` if it wants. **Without a handoff
+fn**, shutdown only **stops** the service so Scope `addFinalizer` runs (`Lifecycle.stop`).
 
 ## Implementation — compose + dual
 
@@ -52,7 +55,7 @@ yield* Lifecycle.events(lc).pipe(     // derived from state.changes
 | no latch | `LifecycleCore` | `pause` fails `LifecycleUnsupported` |
 
 Deferred bring-up: pipe [`Hyperlink.deferStart`](/docs/lifecycle#deferred-start) onto the
-HyperService **layer** (not a config flag). Ambient `DeferStart` keeps Idle until `start`.
+HyperService **layer**. Ambient `DeferStart` keeps Idle until `start`.
 
 ### State tags
 
@@ -64,15 +67,19 @@ HyperService **layer** (not a config flag). Ambient `DeferStart` keeps Idle unti
 | `Draining` | `stop` in progress; later enqueues dropped |
 | `Off` | Terminal (WorkPool); Daemon uses `afterStop: Idle` |
 
-## Tool end — `Lifecycle.of` / `from`
+## Tools — duals on Participating
 
-Wire HyperServices still expose Participating fields (`lifecycle`, `start`, …). Tools project:
+No projected `Service` bag. Operate on the Tag handle (or `*From` helpers):
 
 ```ts
-const lc = yield* Lifecycle.from(Jobs)
-yield* lc.state.get
-yield* lc.start
-yield* lc.stop
+const jobs = yield* Jobs
+yield* Lifecycle.start(jobs)
+yield* Lifecycle.pause(jobs)
+yield* jobs.lifecycle.get
+
+// or against the Tag Effect:
+yield* Lifecycle.startFrom(Jobs)
+yield* Lifecycle.stopFrom(Jobs)
 ```
 
 WorkPool / Priority expose the badge as `jobs.lifecycle` (`Subscribable<Lifecycle.State>`).
@@ -86,17 +93,15 @@ const MySpec = {
 }
 ```
 
-Roles stamp as PascalCase via `.pipe(Lifecycle.asStart)` / `asPause` / `asResume` /
-`asStop` (dual ops stay `Lifecycle.start(lc)` etc.). Spec includes `lifecycleEvents`
-(derived stream on the wire).
+Roles stamp via `.pipe(Lifecycle.asStart)` / `asPause` / `asResume` / `asStop`. Spec includes
+`lifecycleEvents` (derived stream on the wire).
 
 ## Observe pack
 
 ```ts
 import * as LifecycleView from "hyperlink-ts/ui/LifecycleView"
 
-const box = Observe.use(Jobs, LifecycleView.pausable) // badge + start/stop/pause/resume
-// Daemon (no Latch): Observe.use(Sweeper, LifecycleView.pack)
+const box = Observe.use(Jobs, LifecycleView.pausable)
 ```
 
 Lifecycle core does not import Observe — the pack lives under `ui/LifecycleView` (Agent G owns chrome).
@@ -106,11 +111,8 @@ Lifecycle core does not import Observe — the pack lives under `ui/LifecycleVie
 ```ts
 WorkPool.layer(Jobs, { effect }).pipe(Hyperlink.deferStart)
 // Idle until:
-yield* jobs.start
+yield* Lifecycle.start(jobs)
 ```
-
-Ambient `Hyperlink.DeferStart` defaults to `false` (auto-start on acquire). There is no
-`autoStart` config field.
 
 ## WorkPool control
 

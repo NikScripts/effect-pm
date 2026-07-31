@@ -1437,15 +1437,7 @@ const buildQueueImpl = <
     // `Effect.provideContext` per method instead of any per-method wrapping — and its `ProvidedContext`
     // result strips `R` so the impl satisfies `ImplOf`. Stream / Subscribable members
     // (`status`/`size`/`isEmpty`/`*.stream`/`events`) pass through untouched.
-    // First-class Lifecycle.Service — tools use `Lifecycle.of(queue)` / `Lifecycle.from(Tag)`.
-    const lifecycle = Lifecycle.of({
-      lifecycle: handle.lifecycle,
-      lifecycleEvents: handle.lifecycleEvents,
-      start: handle.start,
-      pause: handle.pause,
-      resume: handle.resume,
-      stop: handle.stop,
-    });
+    // Participating fields pass through; tools use `Lifecycle.start(jobs)` duals.
     const impl: Hyperlink.WithRequirement<
       ImplOf<QueueInstanceSpec<F, Success, Error>>,
       R | RR
@@ -1455,14 +1447,12 @@ const buildQueueImpl = <
       // through. The adapter only *adds* cross-cutting concerns: `metrics.query` (history),
       // `orDie` on the enqueue verbs (impossible-failure → defect), and RPC wiring.
       status: handle.status,
-      lifecycle: lifecycle.state,
-      lifecycleEvents: lifecycle.events,
-      start: lifecycle.start.pipe(
-        Effect.catchTag("LifecycleIllegal", () => Effect.void),
-      ),
-      pause: lifecycle.pause.pipe(Effect.orDie),
-      resume: lifecycle.resume.pipe(Effect.orDie),
-      stop: lifecycle.stop,
+      lifecycle: handle.lifecycle,
+      lifecycleEvents: handle.lifecycleEvents,
+      start: handle.start,
+      pause: handle.pause,
+      resume: handle.resume,
+      stop: handle.stop,
       size: handle.size,
       isEmpty: handle.isEmpty,
       clear: handle.clear,
@@ -1979,27 +1969,17 @@ const buildPriorityImpl = <Self, F extends PriorityItemFields, E, R, RR = never>
     // `status` is the SSOT Subscribable on the handle; scalars are mapped views of it.
     // Worker methods are built unwrapped (each still carrying `R | RR`); `grantLocal` / wire invoke
     // discharge `context` into every Effect method uniformly — same bundle pattern as WorkPool.
-    const lifecycle = Lifecycle.of({
+    const impl: Hyperlink.WithRequirement<
+      ImplOf<PriorityInstanceSpec<F>>,
+      R | RR
+    > = {
+      status: handle.status,
       lifecycle: handle.lifecycle,
       lifecycleEvents: handle.lifecycleEvents,
       start: handle.start,
       pause: handle.pause,
       resume: handle.resume,
       stop: handle.stop,
-    });
-    const impl: Hyperlink.WithRequirement<
-      ImplOf<PriorityInstanceSpec<F>>,
-      R | RR
-    > = {
-      status: handle.status,
-      lifecycle: lifecycle.state,
-      lifecycleEvents: lifecycle.events,
-      start: lifecycle.start.pipe(
-        Effect.catchTag("LifecycleIllegal", () => Effect.void),
-      ),
-      pause: lifecycle.pause.pipe(Effect.orDie),
-      resume: lifecycle.resume.pipe(Effect.orDie),
-      stop: lifecycle.stop,
       size: Hyperlink.mapSubscribable(handle.status, (s) => sumLaneSizes(s.sizes)),
       isEmpty: Hyperlink.mapSubscribable(handle.status, (s) => sumLaneSizes(s.sizes) === 0),
       levelSizes: handle.levelSizes,
