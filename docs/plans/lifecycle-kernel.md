@@ -204,10 +204,11 @@ Wire verb: WorkPool `shutdown` → `stop`.
 ### 4.4 Tools
 
 ```ts
-const lc = yield* Lifecycle.from(Jobs)
-yield* lc.state.get
-yield* lc.start
-yield* lc.pause          // typed only if Latch was in make
+const jobs = yield* Jobs
+yield* jobs.lifecycle.get
+yield* Lifecycle.start(jobs)
+yield* Lifecycle.pause(jobs)   // Unsupported when no Latch / no pause member
+// or: yield* Lifecycle.startFrom(Jobs)
 Observe.use(Jobs, LifecycleView.pack)
 ```
 
