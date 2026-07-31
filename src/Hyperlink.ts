@@ -477,7 +477,7 @@ export interface MethodAnnotations {
    */
   readonly callStyle?: "pair";
   /**
-   * Lifecycle role for management tools — stamp with `Lifecycle.pause` / `start` / … on the
+   * Lifecycle role for management tools — stamp with `Lifecycle.asPause` / `asStart` / … on the
    * Spec method (see `hyperlink-ts/Lifecycle`). PascalCase (`"Pause"`, …). Inert to the wire.
    */
   readonly lifecycle?: "State" | "Start" | "Pause" | "Resume" | "Stop";

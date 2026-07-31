@@ -1,6 +1,6 @@
 # Lifecycle kernel — decisions & lock register
 
-**Status:** L0–L5 Eng’d on work branch (`make` / caps / `lifecycleEvents` / `ui/LifecycleView`). Tip-sync only when owner asks.  
+**Status:** L0–L5 + **A/C reshape** Eng’d on work branch (compose FiberHandle/Latch, dual ops, derived events). Tip-sync only when owner asks.  
 **Owner:** Agent 5.  
 **Full Eng plan (SSOT for architecture / slices / acceptance):** [`docs/plans/lifecycle-kernel.md`](../plans/lifecycle-kernel.md).  
 **Guide:** [`docs/guides/lifecycle.md`](../guides/lifecycle.md).  
@@ -23,7 +23,7 @@ any HyperService adopts the same way, and that generic tools consume without kin
 |---|------|--------|
 | S1 | Own module `hyperlink-ts/Lifecycle` | Flat Effect-true namespace; heavy bits → `internal/lifecycle*` if needed |
 | S2 | PascalCase **Role** / **State** strings | `"State"` / `"Start"` / `"Pause"` / `"Resume"` / `"Stop"`; `"Idle"` / `"Running"` / `"Paused"` / `"Draining"` / `"Off"` |
-| S3 | Spec Role stamps | `.pipe(Lifecycle.pause)` etc. — same grain as `.annotate`; preserve `Marked`/`ref` |
+| S3 | Spec Role stamps | `.pipe(Lifecycle.asPause)` / `asStart` / … — dual ops are `Lifecycle.pause(lc)`; preserve `Marked`/`ref` |
 | S4 | `Lifecycle.State` Schema | Wire success of Role `"State"` field |
 | S5 | No kind helpers in Lifecycle | No `fromWorkPool` / `fromDaemon` |
 | S6 | `Lifecycle.Service` + `make` / `of` / `from` | Impl + tool ends |
@@ -115,21 +115,20 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 - **Choose:** Substrate + dream unlocked until owner `@locked` on `Lifecycle.Service` / `State` / `Role`. Pre-1.0 breaking renames are minors with changeset.
 - **Blocks:** L7.
 
-### P13 — Effect-shaped `make` (run + Latch + release) — Locked (Eng’d)
+### P13 — Effect-shaped `make` (run + Latch + release) — Locked (Eng’d; A/C amended)
 
-- **Choose:** Public `make` is `run` + optional `latch` / `release` / `fiber: "handle"|"set"` (+ `restartable`). Scope finalizer = `stop`.
+- **Choose:** Public `make` composes real `fibers` (FiberHandle \| FiberSet) + optional `latch` + `release` + `afterStop: Idle|Off`. Dual ops: `Lifecycle.start(lc)` / `pause` / `resume` / `stop`. Scope finalizer = `stop`.
+- **Choose (C):** `Lifecycle.events(lc)` derived from `SubscriptionRef.changes` — no parallel Event PubSub.
 - **Errors:** `LifecycleUnsupported` / `LifecycleIllegal` — `Effect.catchTag` / `_tag`.
-- **Retire:** hook-centric `onStart` / `onPause` / `onResume` / `onStop`.
+- **Retire:** hook-centric `onStart`…; `fiber: "handle"|"set"` string mode; `restartable: boolean` (→ `afterStop`); Event PubSub SSOT.
 - **Reject:** Custom FiberStatus; pause-via-interrupt; `forkDetach` for layer-owned services; Layer rebuild as start/stop.
-- **Remaining:** none for L1 (WorkPool on `make`; badge SSOT `lifecycle`).
 
 ---
 
 ## 3. Open questions (need owner before locking)
 
-1. **P13 follow-up:** FiberSet ownership refinements beyond current `fiber: "handle"|"set"`.
-2. **Versioned schema** — orthogonal; keep on its own decisions doc / owner go.
-3. Tip-sync L0–L5 work branch when owner asks.
+1. **Versioned schema** — orthogonal; keep on its own decisions doc / owner go.
+2. Tip-sync L0–L5 + A/C reshape when owner asks.
 
 ---
 
@@ -142,7 +141,7 @@ Full table + acceptance criteria: [plan §8](../plans/lifecycle-kernel.md#8-eng-
 | **L0** | — | Land substrate on `integration` |
 | **L1** | P1, P9, P6 | WorkPool engine on `make` — Eng’d |
 | **L2** | P3 | `spec` / `impl`; `shutdown`→`stop` — Eng’d |
-| **L3** | P2 | Capability-typed `ServiceCore` / `ServicePausable` — Eng’d |
+| **L3** | P2 | Capability-typed `LifecycleCore` / `LifecyclePausable` — Eng’d (A) |
 | **L4** | P4 | `Event` + `lifecycleEvents` — Eng’d |
 | **L5** | P5 | `ui/LifecycleView` pack — Eng’d (chrome follow-up) |
 | **L6** | P7, P8 | Handoff + remote `from` |

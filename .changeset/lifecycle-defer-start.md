@@ -2,15 +2,13 @@
 "hyperlink-ts": minor
 ---
 
-Effect-shaped `Lifecycle.Service` — FiberHandle/Set + Latch + SubscriptionRef.
+Effect-native `Lifecycle` — compose FiberHandle/Set + Latch; dual ops; derived events.
 
-- **`Lifecycle.make({ run, latch?, release?, awaitBeforeTerminal?, restartable?, fiber? })`**
-  - with `latch` → `ServicePausable`; without → `ServiceCore` (no pause/resume members)
-- **`_tag` everywhere:** `State`, `Event`, and errors (`LifecycleUnsupported` /
-  `LifecycleIllegal`) — match with `runForEachTag` / `Effect.catchTag`
-- **`Lifecycle.spec` / `impl`** Spec fragments; tools via `of` / `from` (re-check Off/Draining → Illegal)
-- Participating / Spec field **`lifecycleEvents`** (distinct from domain `events`)
-- Daemon + WorkPool engines use `make`; WorkPool exposes `lifecycle` (`Lifecycle.State`) as badge SSOT
-- **`Hyperlink.deferStart`** — Layer pipe; Idle until `start` (retires `autoStart` config)
-- WorkPool control verb **`shutdown` → `stop`**; drop `status.phase` (use `lifecycle._tag`)
-- **`ui/LifecycleView`** Observe pack (`pack` / `pausable`) — Lifecycle core does not import Observe
+- **`Lifecycle.make({ run, latch?, release?, awaitBeforeTerminal?, afterStop?, fibers? })`**
+  - returns `LifecyclePausable` (with latch) or `LifecycleCore`
+  - `state` is a `SubscriptionRef`; `fibers` is a real Handle or Set
+- **Dual ops:** `Lifecycle.start(lc)` / `pause` / `resume` / `stop` (same names overload as Spec Role stamps)
+- **`Lifecycle.events(lc)`** derived from badge changes — no parallel PubSub
+- Scope `addFinalizer` → `stop`; tools via `of` / `from`; Spec `lifecycleEvents`
+- WorkPool / Daemon engines updated; `afterStop: Idle|Off` replaces `restartable`
+- **`ui/LifecycleView`** Observe pack (`pack` / `pausable`) — chrome is Agent G

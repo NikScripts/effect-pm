@@ -2,8 +2,9 @@
  * Type-level lock: Lifecycle State / Event / errors keep stable `_tag` so
  * `Match`, `Hyperlink.runForEachTag`, and `Effect.catchTag` stay dependable.
  * WorkPool control verb is `stop` (no `shutdown`); Participating has no shutdown alias.
+ * Caps: LifecycleCore has no Latch; LifecyclePausable has latch.
  */
-import type { Effect } from "effect";
+import type { Effect, Latch, SubscriptionRef } from "effect";
 import * as Lifecycle from "../src/Lifecycle";
 import type { WorkPool } from "../src/WorkPool";
 
@@ -41,22 +42,20 @@ declare const participating: Lifecycle.Participating;
 // @ts-expect-error Participating has stop only — no shutdown alias
 participating.shutdown;
 
-declare const core: Lifecycle.ServiceCore;
-// Structural caps: make() without latch → ServiceCore has no pause/resume members.
-// @ts-expect-error ServiceCore has no pause
-core.pause;
-// @ts-expect-error ServiceCore has no resume
-core.resume;
+declare const core: Lifecycle.LifecycleCore;
+declare const pausable: Lifecycle.LifecyclePausable;
+// Structural caps: no Latch ⇒ latch is undefined; Pausable carries Latch.
+true satisfies AssertExact<Lifecycle.LifecycleCore["latch"], undefined>;
 true satisfies AssertExact<
-  "pause" extends keyof Lifecycle.ServicePausable ? true : false,
-  true
+  Lifecycle.LifecyclePausable["latch"],
+  Latch.Latch
 >;
 true satisfies AssertExact<
-  "resume" extends keyof Lifecycle.ServicePausable ? true : false,
-  true
+  Lifecycle.LifecycleCore["state"],
+  SubscriptionRef.SubscriptionRef<Lifecycle.State>
 >;
-true satisfies AssertExact<"pause" extends keyof Lifecycle.Service ? true : false, true>;
-true satisfies AssertExact<"pause" extends keyof Lifecycle.ServiceCore ? true : false, false>;
+// Fibers are real Handle | Set, not a string mode.
+true satisfies AssertExact<Lifecycle.Fibers["_tag"], "Handle" | "Set">;
 
 void unsupported;
 void illegal;
@@ -65,3 +64,4 @@ void event;
 void pool;
 void participating;
 void core;
+void pausable;

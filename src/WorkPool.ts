@@ -605,17 +605,17 @@ export const queueControlSpec = {
       description:
         "Fork the worker pool + lifecycle monitor (idempotent; no-op after stop).",
     })
-    .pipe(Lifecycle.start),
+    .pipe(Lifecycle.asStart),
   pause: Hyperlink.effect(Schema.Void)
     .annotate({
       description: "Pause processing; items can still be enqueued and accumulate.",
     })
-    .pipe(Lifecycle.pause),
+    .pipe(Lifecycle.asPause),
   resume: Hyperlink.effect(Schema.Void)
     .annotate({
       description: "Resume processing after a pause.",
     })
-    .pipe(Lifecycle.resume),
+    .pipe(Lifecycle.asResume),
   stop: Hyperlink.effect(Schema.Void)
     .annotate({
       description:
@@ -623,7 +623,7 @@ export const queueControlSpec = {
         "in-flight finishes, queued items drained or discarded per shutdownMode, then Off.",
       destructive: true,
     })
-    .pipe(Lifecycle.stop),
+    .pipe(Lifecycle.asStop),
   clear: Hyperlink.effect(Schema.Number).annotate({
     description:
       "Drain all pending items and reset the completed counter; returns the count cleared.",
@@ -1656,17 +1656,17 @@ export const priorityControlSpec = {
       description:
         "Fork the worker pool + lifecycle monitor (idempotent; no-op after stop).",
     })
-    .pipe(Lifecycle.start),
+    .pipe(Lifecycle.asStart),
   pause: Hyperlink.effect(Schema.Void)
     .annotate({
       description: "Pause processing; items can still be enqueued and accumulate.",
     })
-    .pipe(Lifecycle.pause),
+    .pipe(Lifecycle.asPause),
   resume: Hyperlink.effect(Schema.Void)
     .annotate({
       description: "Resume processing after a pause.",
     })
-    .pipe(Lifecycle.resume),
+    .pipe(Lifecycle.asResume),
   stop: Hyperlink.effect(Schema.Void)
     .annotate({
       description:
@@ -1674,7 +1674,7 @@ export const priorityControlSpec = {
         "in-flight finishes, queued items drained or discarded per shutdownMode, then Off.",
       destructive: true,
     })
-    .pipe(Lifecycle.stop),
+    .pipe(Lifecycle.asStop),
   clear: Hyperlink.effect(Schema.Number).annotate({
     description:
       "Drain all pending items and reset the completed counter; returns the count cleared.",

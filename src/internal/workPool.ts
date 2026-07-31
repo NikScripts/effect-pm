@@ -3328,13 +3328,12 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
       latch,
       release: initiateShutdown,
       awaitBeforeTerminal: Deferred.await(offDone),
-      restartable: false,
-      fiber: "handle",
+      afterStop: Lifecycle.off,
     }).pipe(Effect.provideService(Hyperlink.DeferStart, true));
 
     // Mirror Lifecycle.State into status.paused (sizes/inFlight stay authoritative).
     yield* Effect.forkScoped(
-      Stream.runForEach(lifecycle.state.changes, (s) =>
+      Stream.runForEach(SubscriptionRef.changes(lifecycle.state), (s) =>
         Effect.gen(function* () {
           yield* Ref.set(pausedRef, s._tag === "Paused");
           yield* refreshStatus;
@@ -3386,29 +3385,31 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
       // Windowed metrics stream (dynamic windows)
       metrics: Stream.fromPubSub(metricsHub),
 
-      lifecycle: lifecycle.state,
-      lifecycleEvents: lifecycle.events,
+      lifecycle: Hyperlink.subscribable(lifecycle.state),
+      lifecycleEvents: Lifecycle.events(lifecycle),
 
       start: tapLogs(
-        lifecycle.start.pipe(
+        Lifecycle.start(lifecycle).pipe(
           Effect.catchTag("LifecycleIllegal", () => Effect.void),
           Effect.provide(workerContext),
         ),
       ).pipe(Effect.asVoid),
 
-      pause: lifecycle.pause.pipe(
+      pause: Lifecycle.pause(lifecycle).pipe(
         Effect.catchTag("LifecycleIllegal", () => Effect.void),
+        Effect.catchTag("LifecycleUnsupported", () => Effect.void),
         Effect.provide(workerContext),
       ),
 
-      resume: lifecycle.resume.pipe(
+      resume: Lifecycle.resume(lifecycle).pipe(
         Effect.catchTag("LifecycleIllegal", () => Effect.void),
+        Effect.catchTag("LifecycleUnsupported", () => Effect.void),
         Effect.provide(workerContext),
       ),
 
       // Awaits Off (Lifecycle.stop + drain).
       stop: tapLogs(
-        lifecycle.stop.pipe(Effect.provide(workerContext)),
+        Lifecycle.stop(lifecycle).pipe(Effect.provide(workerContext)),
       ),
 
       clear: tapLogs(Effect.gen(function* () {
@@ -3457,7 +3458,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
 
     if (autoStart) {
       yield* tapLogs(
-        lifecycle.start.pipe(
+        Lifecycle.start(lifecycle).pipe(
           Effect.catchTag("LifecycleIllegal", () => Effect.void),
           Effect.provide(workerContext),
         ),
