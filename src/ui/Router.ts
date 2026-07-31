@@ -42,7 +42,8 @@ import * as Route from "./Route";
 
 /**
  * Live navigation API — provide with {@link memory} / {@link history}, or build
- * with {@link make} for a catalog-typed surface.
+ * with {@link make} for a catalog-typed surface. Discriminated by `_tag`
+ * (`"Memory"` / `"History"` / `"Waku"`).
  *
  * @public
  */
@@ -67,6 +68,7 @@ export class Router extends Context.Service<Router, Service>()(
 
 /**
  * Build a live router value (typed when `api` is a concrete catalog).
+ * `engine` chooses Memory vs History at install; the live field is `_tag`.
  *
  * @public
  */

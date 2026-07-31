@@ -12,7 +12,7 @@ Teaching scripts live under `examples/<topic>/`. Each form page Twoslash-`includ
 real `.ts` file (cuts hide harness noise) and carries a **Related examples** note with
 cross-links (often several) into neighboring forms and topics.
 
-Deep-link a topic: `#work-pool`, `#gate`, `#node`, `#observe`, `#logs`, `#store`, …
+Deep-link a topic: `#work-pool`, `#gate`, `#node`, `#observe`, `#logs`, `#store`, `#ui`, …
 
 ---
 
@@ -548,4 +548,3 @@ see [E5 apps plan](../handoffs/examples-apps-e5-plan.md) (handoff). Run via `pnp
 | Queue widget | `examples/apps/queue-widget` | `example:apps-queue-widget` |
 | View compose | `examples/apps/view-compose` | `example:apps-view-compose` |
 | Router mini-docs | `examples/apps/router-docs` | `example:apps-router-docs` (+ `example:ui-router-mini-docs`) |
-| GroupNav + Target | `examples/ui/group-nav.ts` | `example:ui-group-nav` |

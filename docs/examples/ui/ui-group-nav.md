@@ -15,7 +15,7 @@
 
 ## What this shows
 
-`Group.asRoutes` → typed catalog, then {@link GroupNav} over a Memory router.
+`Group.asRoutes` → typed catalog, then `GroupNav` over a Memory router.
 Each step logs the tagged `Route.TargetValue` (`_tag`, `viewOf`, `memberOf`).
 
 {.twoslash include="examples/ui/group-nav.ts"}
