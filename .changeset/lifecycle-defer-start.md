@@ -2,11 +2,11 @@
 "hyperlink-ts": minor
 ---
 
-Lifecycle building blocks + deferred HyperService start.
+First-class Lifecycle.Service + deferred HyperService start.
 
-- **`hyperlink-ts/Lifecycle`** — service-agnostic protocol: PascalCase `Role` / `State` Schema,
-  Spec pipes (`Lifecycle.pause` → `"Pause"`, …). No kind-specific helpers.
-- Tools discover controls + badge via `methodMeta.lifecycle` (`"State"` field success =
-  `Lifecycle.State`).
-- WorkPool + Daemon **consume** the blocks (expose `lifecycle` ref + stamp commands).
-- **`Hyperlink.deferStart`** — Layer pipe; deferred WorkPools report `lifecycle: "Idle"`.
+- **`Lifecycle.Service`** — `state` / `start` / `pause` / `resume` / `stop`
+- **Impl:** `Lifecycle.make({ onStart, onPause?, onResume?, onStop, afterStop })`
+- **Tools:** `Lifecycle.of(handle)` / `Lifecycle.from(Tag)`
+- PascalCase `Role` / `State` + Spec stamps; `methodMeta` for wire discovery
+- Daemon toolkit layer uses `make`; WorkPool projects via `of`
+- **`Hyperlink.deferStart`** — Layer pipe → `initial: "Idle"`

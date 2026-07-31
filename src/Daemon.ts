@@ -1599,11 +1599,6 @@ export const scheduleKind = "hyperlink-ts/Daemon/Schedule";
  * @category wire schemas
  * @public
  */
-/** Map daemon snapshot → shared {@link Lifecycle.State} (service-local; not a Lifecycle helper). */
-const daemonLifecycleState = (status: {
-  readonly supervising: boolean;
-}): typeof Lifecycle.State.Type => (status.supervising ? "Running" : "Idle");
-
 export const daemonControlSpec = {
   // ── live current state — one SubscriptionRef-backed source of truth ──
   // `status` is the whole snapshot; `status.get` reads it once, `status.changes` streams every
@@ -2532,26 +2527,26 @@ const buildDaemonImpl = <A, E, R>(
     });
 
     const fiberRef = yield* Ref.make<Fiber.Fiber<void, never> | null>(null);
-    const start = Effect.gen(function* () {
-      if ((yield* Ref.get(fiberRef)) !== null) return;
-      const fiber = yield* Effect.forkIn(handle.effect.pipe(tapLogs), scope);
-      yield* Ref.set(fiberRef, fiber);
-    });
-    const stop = Effect.gen(function* () {
-      const fiber = yield* Ref.get(fiberRef);
-      if (fiber === null) return;
-      yield* Fiber.interrupt(fiber);
-      yield* Ref.set(fiberRef, null);
+    // First-class Lifecycle.Service — Own the Idle/Running badge; driver hooks below.
+    const lifecycle = yield* Lifecycle.make({
+      initial: (yield* Hyperlink.DeferStart) ? "Idle" : "Running",
+      onStart: Effect.gen(function* () {
+        if ((yield* Ref.get(fiberRef)) !== null) return;
+        const fiber = yield* Effect.forkIn(handle.effect.pipe(tapLogs), scope);
+        yield* Ref.set(fiberRef, fiber);
+      }),
+      onStop: Effect.gen(function* () {
+        const fiber = yield* Ref.get(fiberRef);
+        if (fiber === null) return;
+        yield* Fiber.interrupt(fiber);
+        yield* Ref.set(fiberRef, null);
+      }),
+      afterStop: "Idle",
     });
     const readStatus = Effect.gen(function* () {
       const supervising = (yield* Ref.get(fiberRef)) !== null;
       return toWireStatus(yield* handle.snapshot, supervising);
     });
-
-    // Auto-start unless {@link Hyperlink.deferStart} was piped onto the layer.
-    if (!(yield* Hyperlink.DeferStart)) {
-      yield* start;
-    }
 
     // `status` is a reactive `ref`: `get` reads the snapshot on demand; `changes` polls it (the
     // engine mirror is a set of MutableRefs with no native subscription), one SSOT for both.
@@ -2578,9 +2573,9 @@ const buildDaemonImpl = <A, E, R>(
     const statusSub = { get: readStatus, changes: statusChanges };
     const impl = {
       status: statusSub,
-      lifecycle: Hyperlink.mapSubscribable(statusSub, daemonLifecycleState),
-      start,
-      stop,
+      lifecycle: lifecycle.state,
+      start: lifecycle.start,
+      stop: lifecycle.stop,
       wake: handle.polling.wake,
       resetCadence: handle.polling.resetCadence,
       events: handle.events,
