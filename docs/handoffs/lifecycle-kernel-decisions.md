@@ -37,19 +37,18 @@ any HyperService adopts the same way, and that generic tools consume without kin
 
 Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 
-### P1 — WorkPool engine SSOT on `Lifecycle.make` — Proposed
+### P1 — WorkPool engine SSOT on Effect-shaped `Lifecycle.make` — Proposed
 
-- **Choose:** Retire dual `phase` + projected badge. Engine latch/pause/`shutdownMode` remain; badge transitions go through `make`.
-- **Retire:** Public reliance on `status.phase` for lifecycle badge; `autoStart` config flag → only `Hyperlink.deferStart` + `make({ initial })`.
-- **Reject:** Keeping `phase: "idle"|"running"|…` forever alongside `Lifecycle.State`.
+- **Choose:** Retire dual `phase` + projected badge. Engine uses `Lifecycle.make({ run, latch, release, fiber })`; `shutdownMode` lives in `release`.
+- **Retire:** `status.phase` as badge; `autoStart` → only `DeferStart` + deferred `run`.
+- **Reject:** Keeping `phase` forever alongside `Lifecycle.State`.
 - **Blocks:** L1.
 
-### P2 — Capability typing — Proposed
+### P2 — Structural capability typing — Proposed
 
-- **Choose:** Type-level caps so Daemon’s `Service` has no `pause`/`resume` members; not `Effect.fail(Unsupported)` as the happy path for tools.
-- **Keep:** `Unsupported` only for dynamic/partial discovery, or drop if caps always known.
-- **Propose:** `Lifecycle.make({ caps: ["Start", "Stop"], … })` + `Service<R, Caps>`.
-- **Reject:** Stringly optional methods with no type distinction.
+- **Choose:** Caps from structure — Latch present ⇒ Pause/Resume on the type; no Latch ⇒ absent members. `restartable` ⇒ Idle vs Off after stop.
+- **Keep:** `Unsupported` only for dynamic Spec walks.
+- **Reject:** Primary API as stringly `caps: ["Start","Stop"]` bag (sugar OK if derived from structure).
 - **Blocks:** L3.
 
 ### P3 — Spec / impl sugar — Proposed

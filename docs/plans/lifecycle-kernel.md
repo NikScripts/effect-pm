@@ -66,111 +66,138 @@ Do not re-litigate. Detail + table: [lifecycle-kernel-decisions.md §1](../hando
 
 ---
 
-## 3. Target architecture
+## 3. Target architecture — Effect / ZIO shaped
+
+Lifecycle is **not** a second Scope and **not** a custom FSM with callback hooks.
+It is a **control panel** over Effect structured concurrency:
+
+| Concern | Effect / ZIO primitive | Lifecycle face |
+|---------|------------------------|----------------|
+| Process / layer lifetime | `Scope` + `acquireRelease` / Layer build scope | Layer close ⇒ `stop` |
+| One run loop (Daemon) | `FiberHandle` | `start` = `FiberHandle.run`; `stop` = clear/await |
+| N workers (WorkPool) | `FiberSet` (or domain pool under the same Scope) | same verbs |
+| Pause / resume | `Latch` | presence of Latch ⇒ Pause/Resume caps |
+| Observable badge | `SubscriptionRef` + `changes` | `state` / wire `ref` |
+| Teardown | interrupt + await (+ optional drain `release`) | `Draining` → `Off` \| `Idle` |
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│ Spec (contract)                                                 │
-│   lifecycle: ref(State).pipe(Lifecycle.state)                    │
-│   start / pause? / resume? / stop .pipe(Lifecycle.<role>)       │
-│   — optional sugar: ...Lifecycle.spec({ caps })                 │
-└────────────────────────────▲────────────────────────────────────┘
-                             │ Hyperlink.serve / toolkit serve
-┌────────────────────────────┴────────────────────────────────────┐
-│ Layer / engine                                                  │
-│   const lc = yield* Lifecycle.make({ …hooks… })  ← badge SSOT   │
-│   Hyperlink.DeferStart → initial Idle when omitted              │
-│   domain refs (sizes, latch) stay domain — not a second badge   │
-└────────────────────────────▲────────────────────────────────────┘
-                             │ yield* Tag / client
-┌────────────────────────────┴────────────────────────────────────┐
-│ Tools                                                           │
-│   Lifecycle.from(Tag) → Service  (local = remote)               │
-│   ui/LifecycleView.pack → Observe (core Lifecycle ↛ Observe)    │
-│   handoff: gate on State; Node.phase stays node-plane           │
+┌─ Spec ──────────────────────────────────────────────────────────┐
+│  Role stamps + State schema  (± Lifecycle.spec sugar)           │
+└──────────────────────────────▲──────────────────────────────────┘
+                               │ serve
+┌─ Layer (Scope) ──────────────┴──────────────────────────────────┐
+│  FiberHandle | FiberSet   ← run body                            │
+│  Latch?                   ← pause gate (caps from structure)    │
+│  SubscriptionRef<State>   ← badge (derived + published)         │
+│  acquireRelease / finalizer ← stop on scope close               │
+│  Hyperlink.DeferStart     ← skip run until start()              │
+└──────────────────────────────▲──────────────────────────────────┘
+                               │ yield* / client
+┌─ Tools ──────────────────────┴──────────────────────────────────┐
+│  Lifecycle.from(Tag) → Service   ui/LifecycleView.pack          │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+**Fighting Effect (rejected):** inventing FiberStatus; owning fibers outside Scope;
+naming this `Resource` (clashes with Effect’s refreshable Resource); `forkDetach` for
+HyperServices that the layer owns; encoding pause as interrupt+restart; rebuilding Layers
+to start/stop.
 
 ### 3.1 Two planes (never conflate)
 
 | Plane | Vocabulary | Owner |
 |-------|------------|--------|
 | **Node** | `phase: "draining"` (and friends) on node status | Launcher / handoff / Node |
-| **HyperService** | `Lifecycle.State` on each participating Tag | That service’s engine via `make` |
+| **HyperService** | `Lifecycle.State` on each participating Tag | Engine via `Lifecycle.make` |
 
-Handoff may *observe* HyperService State; it must not reuse Node enums as Lifecycle, or vice versa.
-
-### 3.2 Tag vs layer (hyperlink-services)
+### 3.2 Tag vs layer
 
 | On the Tag / Spec | In the layer / engine |
 |-------------------|------------------------|
-| Role stamps, `Lifecycle.State` schema, method names | `Lifecycle.make`, hooks, `DeferStart` read |
-| Capability set (which Roles exist) | Transition enforcement, PubSub events |
-
-Never put worker / latch / auto-start mode on the Tag. Never put wire schemas only in layer bags.
+| Role stamps, `Lifecycle.State` schema | `make` over Handle/Set + Latch; `DeferStart` |
+| Caps = which Roles exist (from structure) | Scope finalizer = stop |
 
 ### 3.3 Composition grain
 
 | Concern | Shape | Rejected |
 |---------|-------|----------|
-| Deferred start | Layer pipe `Hyperlink.deferStart` | Tag pipe, Policy fragment, constructor flag alone |
-| Role marking | Method pipe `Lifecycle.pause` | Kind-specific annotate helpers |
-| Readiness | Existing `withReadiness` / defaults derived from State | Second readiness system |
-| Observe chrome | Pack under `ui/LifecycleView` | Methods on Tag / `Jobs.observe()` |
+| Deferred start | Layer pipe `Hyperlink.deferStart` | Tag pipe / Policy / flag-only |
+| Role marking | Method pipe `Lifecycle.pause` | Kind helpers |
+| Pause | `Latch` in `make` | Callback `onPause` as the model |
+| Stop | interrupt / `FiberHandle.clear` + optional drain `release` | Parallel `phase` enum |
+| Observe | `ui/LifecycleView` | Methods on Tag |
 
 ---
 
-## 4. Target API (dream)
+## 4. Target API (dream) — Effect-shaped
 
-### 4.1 Capability-parameterized Service
+### 4.1 Service (tool face — still the wire verbs)
 
 ```ts
-type Role = "State" | "Start" | "Pause" | "Resume" | "Stop"
-// Caps row TBD under P2 — union of Roles or branded With<"Start" | "Stop">
-
 interface Service<R = never, C extends Caps = FullCaps> {
   readonly state: Subscribable<State>
-  readonly start: Effect<void, never, R>    // present when "Start" ∈ C
-  readonly pause: Effect<void, never, R>   // absent when Pause not in C
+  readonly start: Effect<void, never, R>
+  readonly pause: Effect<void, never, R>   // absent if no Latch
   readonly resume: Effect<void, never, R>
   readonly stop: Effect<void, never, R>
-  readonly events: Stream<Lifecycle.Event> // L4
+  readonly changes: Stream<State>          // = state.changes (ZIO-ish)
+  readonly events: Stream<Lifecycle.Event> // L4 — transition facts
 }
 ```
 
-**Principle:** Prefer **absent members** (or impossible branded types) over
-`Effect.fail(Unsupported)` as the happy path for typed tools. Keep `Unsupported` only for
-dynamic Spec walks where caps are unknown.
+Caps come **from structure** (Latch present? restartable?) — not a stringly `caps: []` bag
+as the primary API (P2 amended toward structural caps).
 
-### 4.2 `make` — sole badge SSOT
+### 4.2 `make` — compose primitives (not hooks)
 
 ```ts
+// Daemon — one fiber, restartable, not pausable
 const lifecycle = yield* Lifecycle.make({
-  initial: "Idle", // or omit → DeferStart ? Idle : Running
-  caps: ["Start", "Pause", "Resume", "Stop"], // Daemon: Start + Stop
-  onStart,
-  onPause?,
-  onResume?,
-  onStop,
-  afterStop: "Off" | "Idle",
+  run: driverLoop,                    // Effect body
+  fiber: "handle",                    // FiberHandle (default)
+  restartable: true,                  // afterStop → Idle (else Off)
+  // no latch ⇒ no pause/resume on the type
+})
+
+// WorkPool — many workers, pausable, drain on stop
+const latch = yield* Latch.make(!(cfg.paused ?? false))
+const lifecycle = yield* Lifecycle.make({
+  run: workersEffect,                 // or run into an existing FiberSet you pass
+  fiber: "set",                       // FiberSet
+  latch,                              // ⇒ Pause/Resume
+  release: windDown,                  // drain / finishActive *before* interrupt await
+  restartable: false,                 // → Off
 })
 ```
 
-Engines **do not** keep a parallel `phase` enum after L1. Latch / `shutdownMode` / sizes remain
-**domain** machinery; they drive hooks that update Lifecycle State, they are not the badge.
+ZIO mental model: **`ZIO.acquireRelease` + `Fiber` + optional gate**, with a published status.
+Effect vocabulary we mirror: `acquireRelease`, `FiberHandle` / `FiberSet`, `Latch`,
+`SubscriptionRef`, Scope finalizer.
+
+**Badge derivation (SSOT still published on SubscriptionRef):**
+
+| Condition | State |
+|-----------|--------|
+| Not yet `run` / cleared + restartable | `Idle` |
+| Fiber(s) live, latch open (or no latch) | `Running` |
+| Fiber(s) live, latch closed | `Paused` |
+| `stop` in progress (release / await) | `Draining` |
+| Cleared + not restartable | `Off` |
+
+Engines may still own **domain** machinery (queue sizes, `shutdownMode`) inside `run` /
+`release` — not a second badge enum.
+
+**Amends substrate `make({ onStart, onPause, … })`:** that shape is the transitional
+substrate; dream `make` takes `run` + optional `latch` + optional `release`.
 
 ### 4.3 Spec / impl sugar (P3)
 
 ```ts
-// Contract
-...Lifecycle.spec({ caps: ["Start", "Pause", "Resume", "Stop"] })
-
-// Impl
+...Lifecycle.spec({ pausable: true, restartable: false })
 ...Lifecycle.impl(lifecycle)
 ```
 
-**Wire verb:** Prefer rename WorkPool `shutdown` → `stop` (one Role, one method name). Reject
-forever-mapping `shutdown`↔`stop` inside `of()`.
+Wire verb: WorkPool `shutdown` → `stop`.
 
 ### 4.4 Tools
 
@@ -178,14 +205,15 @@ forever-mapping `shutdown`↔`stop` inside `of()`.
 const lc = yield* Lifecycle.from(Jobs)
 yield* lc.state.get
 yield* lc.start
-Observe.use(Jobs, LifecycleView.pack) // ui/ — not in Lifecycle core
+yield* lc.pause          // typed only if Latch was in make
+Observe.use(Jobs, LifecycleView.pack)
 ```
 
 ### 4.5 Deferred start
 
 ```ts
 WorkPool.serve(Jobs, cfg).pipe(Hyperlink.deferStart)
-// make({ initial }) / DeferStart ambient; call-site autoStart retires (P1/P9)
+// ≡ make does not FiberHandle.run until start(); State = Idle
 ```
 
 ---
@@ -202,21 +230,19 @@ WorkPool.serve(Jobs, cfg).pipe(Hyperlink.deferStart)
 | `Draining` | Stop requested; winding down | No |
 | `Off` | Terminal for this acquire (WorkPool); Daemon may return to Idle | No |
 
-### 5.2 Legal transitions (normative for `make`)
+### 5.2 Transitions as Effect operations (normative)
 
 ```text
-Idle ──start──► Running
-Running ──pause──► Paused
-Paused ──resume──► Running
-Running|Paused|Idle ──stop──► Draining ──(hooks complete)──► Off | Idle(afterStop)
-Off ── (no start; re-acquire / new layer) ──
+start  = FiberHandle.run | FiberSet.run*   (no-op if already live)
+pause  = Latch.close                       (only if latch)
+resume = Latch.open                        (only if latch)
+stop   = set Draining → release? → clear/await fibers → Off | Idle
+scope close = stop                         (acquireRelease / finalizer)
 ```
 
-- Idempotent `start` while `Running`: no-op success.
-- `pause` / `resume` when caps omit them: **not on the type** (P2); dynamic path → `Unsupported`.
-- `stop` while `Draining` / `Off`: idempotent.
-- Illegal jumps (e.g. `Off` → `Paused`) fail loud with a tagged error — never silent no-op that
-  lies about State.
+- Idempotent `start` / `stop`.
+- No Latch ⇒ Pause/Resume **absent** from the type (structural P2).
+- Illegal ops (e.g. pause while `Off`) fail loud — tagged error, not a lying badge.
 
 ### 5.3 Events (P4 / L4)
 
@@ -237,33 +263,32 @@ PubSub, lossy OK for v1. Durable lifecycle journal is **out of scope** (Stores s
 
 ### 6.1 Toolkit engine (WorkPool — L1 credibility test)
 
-1. Replace `phaseRef` + dual projection with `Lifecycle.make` inside `internal/workPool`.
-2. Hooks: `onStart` fork workers; `onPause`/`onResume` latch; `onStop` existing shutdown /
-   `shutdownMode` path; `afterStop: "Off"`.
-3. `status` keeps **domain** fields (`sizes`, `inFlight`, `completed`); drop `phase` once tools
-   use `lifecycle` (P1). Fold “paused” into State === `"Paused"` or keep boolean only if queue UX
-   still needs a domain shortcut — prefer derive.
-4. Retire `autoStart`; honor only `DeferStart` + `make` initial.
-5. Named handle exposes `lifecycle` + `stop` (after P3 rename).
+1. Replace `phaseRef` + `Lifecycle.of` projection with Effect-shaped `Lifecycle.make`
+   (`fiber: "set"` or pass the pool’s FiberSet, `latch`, `release: windDown`).
+2. `shutdownMode` lives inside `release` (drain vs finishActive) — then await empty.
+3. `status` keeps domain fields; drop `phase` (P1). Prefer State over a parallel `paused` bool.
+4. Retire `autoStart`; `DeferStart` ⇒ don’t run until `start()`.
+5. Named handle: `lifecycle` + `stop`.
 
-### 6.2 Toolkit engine (Daemon — already close)
+### 6.2 Toolkit engine (Daemon)
 
-Already on `make`. L2/L3: `Lifecycle.spec` / caps without Pause; typed Service has no `pause`.
+Move from hook `make` to `Lifecycle.make({ run: driver, fiber: "handle", restartable: true })`.
+No latch ⇒ no pause on the type.
 
 ### 6.3 App HyperService (opt-in)
 
 ```ts
-const MySpec = {
-  ...Lifecycle.spec({ caps: ["Start", "Stop"] }),
-  // domain methods…
-}
+...Lifecycle.spec({ pausable: false, restartable: true })
 
-// layer
-const lc = yield* Lifecycle.make({ caps: ["Start", "Stop"], … })
+const lc = yield* Lifecycle.make({
+  run: myLoop,
+  fiber: "handle",
+  restartable: true,
+})
 Hyperlink.serve(Tag, { ...Lifecycle.impl(lc), … })
 ```
 
-Gate / plain Rpc: **opt-in only** (P10). No implicit Lifecycle on every HyperService.
+Gate / plain Rpc: **opt-in only** (P10).
 
 ### 6.4 Generic tool
 
@@ -284,18 +309,19 @@ batch-lock. Summary:
 
 | ID | Lock | Dream Eng blocked without it |
 |----|------|------------------------------|
-| **P1** | WorkPool engine SSOT on `make`; retire dual `phase` + `autoStart` | L1 |
-| **P2** | Capability typing (absent Pause on Daemon) | L3 |
-| **P3** | `spec` / `impl` sugar; `shutdown` → `stop` | L2 |
-| **P4** | `Lifecycle.Event` + `Service.events` | L4 |
-| **P5** | Observe pack in `ui/LifecycleView` (Lifecycle ↛ Observe) | L5 |
-| **P6** | Readiness: Idle/Running/Paused ready; Draining/Off not | L1 |
-| **P7** | Handoff × Lifecycle gates; Node plane separate | L6 |
-| **P8** | Remote `from(clientTag)` parity | L6 |
-| **P9** | `deferStart` + `make` read `DeferStart` when `initial` omitted | L1 |
-| **P10** | Gate / plain Rpc opt-in only | L7 docs |
-| **P11** | `Lifecycle.ts` + `internal/lifecycle.ts`; not a HyperService kind | all |
-| **P12** | Semver / `@locked` when dream settles; minors pre-1.0 | L7 |
+| **P1** | WorkPool on Effect-shaped `make`; retire `phase` + `autoStart` | L1 |
+| **P2** | Structural caps (Latch ⇒ Pause; `restartable` ⇒ Idle vs Off) | L3 |
+| **P3** | `spec` / `impl`; `shutdown` → `stop` | L2 |
+| **P4** | Transition `events` (+ `state.changes` as badge stream) | L4 |
+| **P5** | `ui/LifecycleView` pack (Lifecycle ↛ Observe) | L5 |
+| **P6** | Readiness from State (Idle dialable) | L1 |
+| **P7** | Handoff × Lifecycle; Node plane separate | L6 |
+| **P8** | Remote `from` parity | L6 |
+| **P9** | `DeferStart` ⇒ don’t run until `start` | L1 |
+| **P10** | Gate / Rpc opt-in only | L7 |
+| **P11** | Module layout; compose Handle/Set/Latch — not a HyperService kind | all |
+| **P12** | Semver / `@locked` | L7 |
+| **P13** | **Effect-shaped `make`:** `run` + optional `latch`/`release`/`fiber`; retire hook-centric `onStart`/`onPause` as the public model (substrate may keep hooks until L1/L2) | L1–L2 |
 
 Open questions that block specific P-locks: decisions doc §7.
 
@@ -330,7 +356,7 @@ changes ship `.test-d.ts`; changeset when public API/behavior changes; **no** `a
 | **Composition over inheritance** | Caps and hooks compose; no Lifecycle base class hierarchy |
 | **Handles stay thin** | No `Jobs.lifecycleMenu()`; tools use `Lifecycle.from` + Observe packs |
 | **Single source of truth** | One badge (`make`); status/domain derive; no `phase` mirror forever |
-| **Don't fight the framework** | Layer pipes, Spec stamps, Effect services — not plugin arrays |
+| **Don't fight the framework** | FiberHandle/Set, Latch, Scope finalizers, SubscriptionRef — not a parallel fiber runtime |
 | **Tag = contract, layer = runtime** | Schemas/Roles on Spec; `make` in engine |
 | **Piped combinators** | `deferStart`, Role stamps, readiness — not constructor-only flags |
 | **No casts** | Caps + Schema; mapping domain→State disappears when `make` is SSOT |
@@ -403,9 +429,13 @@ UI agents own React/TUI chrome. Agent 5 owns protocol, Service, toolkit adoption
 | Lifecycle as its own served HyperService Tag | Protocol on the service, not a sibling resource |
 | Conflating Node `phase` with HyperService State | Two planes |
 | Annotation-only without Service | Tools need a typed handle |
-| External statechart engine | Projection-friendly events + small `make` machine suffice |
-| Merging Lifecycle events into WorkPool item `events` | Different domains; keep streams separate |
-| Implicit Lifecycle on every Rpc/Gate | Opt-in (P10); Gate has no background engine in v1 |
+| External statechart engine | Compose Effect primitives; publish a badge |
+| Hook-only `onStart`/`onPause` as the dream API | Transitional substrate; dream is `run`+Latch+release |
+| Inventing FiberStatus / polling fibers for control | Latch + Handle; badge on SubscriptionRef |
+| Naming Lifecycle `Resource` | Clashes with Effect refreshable Resource |
+| `forkDetach` for layer-owned HyperServices | `forkScoped` / FiberHandle under Layer Scope |
+| Merging Lifecycle events into WorkPool item `events` | Different domains |
+| Implicit Lifecycle on every Rpc/Gate | Opt-in (P10) |
 
 ---
 
