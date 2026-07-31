@@ -54,8 +54,10 @@ MemberKind `Group`/`Unknown`; TUI chrome `Normal`/`Command`.
 - `LookupClientError.reason` + listen-tag reasons `Missing` / `Ambiguous`
 - `EffectFnMissingPayload.reason` `Missing` / `Void` / `EmptyFields`
 - `SharedRoutingError.reason` `MissingKey` / `UnknownKey`
+- `Daemon.ScheduleMode` `Inline` / `Reference`
+- TUI chrome `Normal` / `Command`; web debug-console `Idle` / `Ok` / `Fail`
 - `scripts/mark-the-surface-check` reasons `Missing` / `Both` (`public`/`internal`
   kept — they name the JSDoc tags)
 
-**Still parked (high blast / wire):** Hyperlink `"value"`/`"ref"`; Daemon
-`ScheduleMode` `"inline"`/`"reference"`; WorkPool drain modes & kebab reasons.
+**Still parked:** Hyperlink `"value"`/`"ref"`; WorkPool drain modes & kebab
+reasons; `Target.view` path dual-use; `Route.Href` brand (inference).

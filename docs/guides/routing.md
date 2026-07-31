@@ -179,6 +179,7 @@ Guide page: [UI — Router mini-docs](/docs/ui-router-mini-docs).
 
 Held to the same standards as the rest of the package; in flight or next:
 
-- Branded `Route.Href` (no bare strings at Router boundaries)
+- Branded `Route.Href` (parked — Brand + UrlBuilder inference; see
+  [`owned-string-casing-park.md`](../handoffs/owned-string-casing-park.md))
 - Schema encode/decode on `params` / query for `urls` + `handle`
 - Deeper exhaustiveness for runtime href fulfillment beyond catalog ↔ `pages.gen`
