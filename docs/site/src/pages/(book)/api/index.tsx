@@ -25,7 +25,7 @@ export default async function ApiIndex() {
             <Router.Link
               className="api-index-item"
               key={p.slug}
-              to={(u) => u.api.pkg(p.slug)}
+              to={urls.api.pkg(p.slug)}
             >
               <span className="api-index-name">{p.name}</span>
               <span className="api-index-count">{p.modules.reduce((n, m) => n + m.count, 0)}</span>

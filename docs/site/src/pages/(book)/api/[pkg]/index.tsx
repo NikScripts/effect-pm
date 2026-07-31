@@ -45,7 +45,7 @@ const HeroLayout = async ({ p }: { p: { slug: string; modules: ReadonlyArray<Mod
           <Router.Link
             className="api-hero"
             key={m.slug}
-            to={(u) => u.api.module(p.slug, m.slug)}
+            to={urls.api.module(p.slug, m.slug)}
           >
             <div className="api-hero-top">
               <span className="api-hero-name">{m.entry}</span>
@@ -71,7 +71,7 @@ const HeroLayout = async ({ p }: { p: { slug: string; modules: ReadonlyArray<Mod
           <Router.Link
             className="api-mini"
             key={m.slug}
-            to={(u) => u.api.module(p.slug, m.slug)}
+            to={urls.api.module(p.slug, m.slug)}
             title={m.summary !== undefined ? plain(m.summary) : undefined}
           >
             <span className="api-mini-name">{m.entry}</span>
@@ -97,7 +97,7 @@ export default async function ApiPackagePage({ pkg }: { pkg: string }) {
       />
       <article className="prose">
         <p className="api-back">
-          <Router.Link to={(u) => u.api.index()}>← API Reference</Router.Link>
+          <Router.Link to={urls.api.index()}>← API Reference</Router.Link>
         </p>
         <h1>{p.name}</h1>
         <p className="api-pkg-stats">
@@ -111,7 +111,7 @@ export default async function ApiPackagePage({ pkg }: { pkg: string }) {
               <Router.Link
                 className="api-index-item"
                 key={m.slug}
-                to={(u) => u.api.module(p.slug, m.slug)}
+                to={urls.api.module(p.slug, m.slug)}
                 title={m.summary !== undefined ? plain(m.summary) : undefined}
               >
                 <span className="api-index-name">{m.entry}</span>

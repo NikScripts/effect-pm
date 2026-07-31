@@ -4,6 +4,7 @@
 // In-app links soft-nav via Router.Link; external stay native anchors.
 
 import * as React from "react";
+import { urls } from "../lib/siteRoutes.js";
 import * as Router from "../ui/Router.js";
 
 const GITHUB = "https://github.com/nikolasstow/Hyperlink";
@@ -23,9 +24,9 @@ export function Footer(): React.ReactElement {
         <nav className="site-footer-cols" aria-label="Footer">
           <div className="site-footer-col">
             <span className="site-footer-heading">Docs</span>
-            <Router.Link to={(u) => u.api.index()}>API Reference</Router.Link>
-            <Router.Link to={(u) => u.docs("glossary")}>Glossary</Router.Link>
-            <Router.Link to={(u) => u.releases()}>Releases</Router.Link>
+            <Router.Link to={urls.api.index()}>API Reference</Router.Link>
+            <Router.Link to={urls.docs("glossary")}>Glossary</Router.Link>
+            <Router.Link to={urls.releases()}>Releases</Router.Link>
           </div>
           <div className="site-footer-col">
             <span className="site-footer-heading">Project</span>

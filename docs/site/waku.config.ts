@@ -96,16 +96,21 @@ export default defineConfig({
     resolve: {
       // Source-imported package widgets pull react/lucide/recharts from the repo's
       // node_modules; dedupe forces ONE react instance (else "Invalid hook call").
-      dedupe: ["react", "react-dom", "react/jsx-runtime", "effect"],
+      dedupe: ["react", "react-dom", "react/jsx-runtime", "effect", "waku"],
       alias: {
-        "hyperlink-ts": fileURLToPath(new URL("../../src", import.meta.url)),
-        // Full Router edition (package companion entry → source).
+        // More-specific Router entries BEFORE the package root alias (first match wins).
         "hyperlink-ts/ui/Router/waku": fileURLToPath(
           new URL("../../src/ui/RouterWaku.ts", import.meta.url),
         ),
         // Site skin (default binding + no-op Outlet) when code imports the lite path by mistake.
         "hyperlink-ts/ui/Router": fileURLToPath(
           new URL("./src/ui/Router.tsx", import.meta.url),
+        ),
+        "hyperlink-ts": fileURLToPath(new URL("../../src", import.meta.url)),
+        // Package source pulls `waku/router/client` via repo root — pin to THIS
+        // app's waku so hooks share the site's Router context (no dual instance).
+        "waku/router/client": fileURLToPath(
+          new URL("./node_modules/waku/dist/router/client.js", import.meta.url),
         ),
 
         // Node-only deps the package pulls transitively (SQLite storage, CI check).

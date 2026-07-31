@@ -4,6 +4,9 @@
  * Skin over the **one** Router service with the Waku layer
  * (`hyperlink-ts/ui/Router/waku`): site catalog + branded `urls`,
  * `setDefault` (no layout Provider), no-op {@link Outlet} for file routes.
+ *
+ * RSC note: pass **string** `to` values into {@link Link} from Server Components
+ * (`urls.docs("routing")`). Function builders are client-only.
  */
 "use client";
 

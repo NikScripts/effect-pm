@@ -4,6 +4,7 @@ import { SymbolAside } from "./ApiAside.js";
 import { readSourceFile, referencedBy, symbolDetail, symbolSourceHtml } from "../lib/api-data.js";
 import { loadHighlighter } from "../lib/highlight.js";
 import { runServer } from "../lib/runtime.js";
+import { urls } from "../lib/siteRoutes.js";
 import * as Router from "../ui/Router.js";
 
 // `/api/<pkg>/<module>/<name>` → a compact display label: `Module.name`, plus the package when it
@@ -57,7 +58,7 @@ export async function ApiSymbolPage({
       />
       <article className="prose">
         <p className="api-back">
-          <Router.Link to={(u) => u.api.module(pkg, module)}>← {s.entry}</Router.Link>
+          <Router.Link to={urls.api.module(pkg, module)}>← {s.entry}</Router.Link>
         </p>
         <ApiSymbolCard s={s} fileText={fileText} sourceHtml={sourceHtml} />
         {refs.length > 0 ? (
