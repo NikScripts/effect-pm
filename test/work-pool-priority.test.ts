@@ -53,7 +53,7 @@ describe("WorkPool.makePriority", () => {
       expect(sizes).toEqual({ urgent: 1, "1": 1, "2": 0, batch: 1 });
       const status = yield* queue.status.get;
       expect(status.sizes).toEqual(sizes);
-      expect(status.phase).toBe("running");
+      expect(status.phase).toBe("idle");
     }).pipe(Effect.scoped),
   );
 

@@ -39,7 +39,15 @@ const LEVEL_COLOR: Record<string, string> = {
 };
 
 const statusOf = (phase: string, paused: boolean): Status =>
-  phase === "off" ? "off" : phase === "draining" ? "draining" : paused ? "paused" : "running";
+  phase === "idle"
+    ? "idle"
+    : phase === "off"
+      ? "off"
+      : phase === "draining"
+        ? "draining"
+        : paused
+          ? "paused"
+          : "running";
 
 /** Node bind mark for focused panes. @public */
 export const NodeMark = (props: { readonly tag: unknown }): React.ReactElement | null => {

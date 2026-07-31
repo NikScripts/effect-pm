@@ -7,10 +7,11 @@
  */
 
 /** A HyperService's folded lifecycle state — the key of the default status theme. */
-export type Status = "running" | "paused" | "draining" | "off";
+export type Status = "idle" | "running" | "paused" | "draining" | "off";
 
 /** Terminal color per {@link Status} (Ink color names). */
 export const statusColor: Record<Status, string> = {
+  idle: "gray",
   running: "green",
   paused: "yellow",
   draining: "cyan",
@@ -19,6 +20,7 @@ export const statusColor: Record<Status, string> = {
 
 /** Glyph per {@link Status}. */
 export const statusIcon: Record<Status, string> = {
+  idle: "○",
   running: "►",
   paused: "‖",
   draining: "↓",

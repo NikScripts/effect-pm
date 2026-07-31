@@ -128,6 +128,10 @@
       "types": "./dist/Policy.d.ts",
       "default": "./dist/Policy.js"
     },
+    "./Lifecycle": {
+      "types": "./dist/Lifecycle.d.ts",
+      "default": "./dist/Lifecycle.js"
+    },
     "./DynamicConfig": {
       "types": "./dist/DynamicConfig.d.ts",
       "default": "./dist/DynamicConfig.js"

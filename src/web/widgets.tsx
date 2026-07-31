@@ -105,6 +105,7 @@ const asyncTag = (r: AsyncResult.AsyncResult<unknown, unknown>): string =>
 
 /** Phase → label + colour. */
 export const STATUS: Record<string, { label: string; color: string }> = {
+  idle: { label: "idle", color: "#94a3b8" },
   running: { label: "running", color: "#22c55e" },
   paused: { label: "paused", color: "#eab308" },
   draining: { label: "draining", color: "#06b6d4" },
@@ -112,7 +113,15 @@ export const STATUS: Record<string, { label: string; color: string }> = {
 };
 /** Resolve the status key from phase + paused. */
 export const statusKey = (phase: string, paused: boolean): string =>
-  phase === "off" ? "off" : phase === "draining" ? "draining" : paused ? "paused" : "running";
+  phase === "idle"
+    ? "idle"
+    : phase === "off"
+      ? "off"
+      : phase === "draining"
+        ? "draining"
+        : paused
+          ? "paused"
+          : "running";
 
 const PRIO = { high: "#ef4444", normal: "#94a3b8", low: "#3b82f6" } as const;
 const LEVEL: Record<string, string> = {

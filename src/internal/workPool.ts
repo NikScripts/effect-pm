@@ -682,12 +682,13 @@ export interface QueueStatus {
   readonly completed: number;
   /**
    * Lifecycle phase — orthogonal to `paused` (a running queue can be paused):
+   * - `"idle"` — acquired but workers not forked yet (`autoStart: false` / {@link Hyperlink.deferStart}).
    * - `"running"` — accepting and processing items.
    * - `"draining"` — `shutdown` was called; not accepting new items, winding down in-flight (and,
    *   in `"drain"` mode, the remaining queued items).
    * - `"off"` — fully shut down (empty + idle); the terminal state a UI renders as stopped.
    */
-  readonly phase: "running" | "draining" | "off";
+  readonly phase: "idle" | "running" | "draining" | "off";
 }
 
 /**
@@ -982,6 +983,9 @@ export interface WorkPoolConfigBase<T> {
    * When `false`, worker fibers are **not** forked until
    * {@link QueueHandleApi.start} runs. Enqueue still succeeds; items accumulate until workers exist.
    * `pause` / `resume` update the latch before or after `start` — workers observe it once forked.
+   *
+   * Prefer piping {@link Hyperlink.deferStart} onto the HyperService layer when composing;
+   * this call-site flag still wins when set (`config.autoStart ?? !DeferStart`).
    *
    * @default true (preserve historic behavior: fork workers as soon as the queue scope acquires).
    */
@@ -2286,8 +2290,12 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
     // lossy. `paused`/`inFlight` are tracked here because the latch/semaphore don't expose them.
     const pausedRef = yield* Ref.make(config.paused ?? false);
     const inFlightRef = yield* Ref.make(0);
-    // Lifecycle phase, orthogonal to paused. `shutdown` advances running → draining → off.
-    const phaseRef = yield* Ref.make<"running" | "draining" | "off">("running");
+    // Prefer call-site `autoStart`; else ambient {@link Hyperlink.DeferStart}; else true.
+    const autoStart = config.autoStart ?? !(yield* Hyperlink.DeferStart);
+    // Lifecycle phase, orthogonal to paused. Deferred → idle; `shutdown` → draining → off.
+    const phaseRef = yield* Ref.make<"idle" | "running" | "draining" | "off">(
+      autoStart ? "running" : "idle",
+    );
     const computeStatus = Effect.gen(function* () {
       const levels = yield* levelSizes;
       return projection.buildStatus({
@@ -2887,7 +2895,6 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
         ),
       );
 
-    const autoStart = config.autoStart ?? true;
     const workersStartedRef = yield* Ref.make(false);
 
     // Resolve RateLimiter once into the queue scope (Context, not a per-call Layer
@@ -2992,6 +2999,10 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
         started ? ([false, started] as const) : ([true, true] as const));
 
       if (!claimed) return;
+
+      // idle → running once workers are claimed (no-op when already running).
+      yield* Ref.update(phaseRef, (phase) => (phase === "idle" ? "running" : phase));
+      yield* refreshStatus;
 
       // Reclaim work whose lease survived a previous crash/restart before feeding resumes.
       if (persist !== undefined) {
@@ -3355,7 +3366,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
       // only the first call (running → draining) does the work.
       shutdown: tapLogs(Effect.gen(function* () {
         const previous = yield* Ref.getAndSet(phaseRef, "draining");
-        if (previous !== "running") return; // already draining or off
+        if (previous === "draining" || previous === "off") return;
         yield* Ref.set(isShutdownRef, true);
         const pending = yield* totalPendingEffect;
         yield* publishEvent({

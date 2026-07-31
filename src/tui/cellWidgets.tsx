@@ -51,7 +51,15 @@ const SYM: Record<Priority, { symbol: string; color: string }> = {
 };
 
 const statusOf = (phase: string, paused: boolean): Status =>
-  phase === "off" ? "off" : phase === "draining" ? "draining" : paused ? "paused" : "running";
+  phase === "idle"
+    ? "idle"
+    : phase === "off"
+      ? "off"
+      : phase === "draining"
+        ? "draining"
+        : paused
+          ? "paused"
+          : "running";
 
 const leafCountOf = (node: GroupNode): number =>
   Object.values(Group.members(node)).reduce<number>(

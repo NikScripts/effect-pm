@@ -38,6 +38,8 @@ export default defineConfig([
       Advice: "src/Advice.ts",
       Directory: "src/Directory.ts",
       Identity: "src/Identity.ts",
+      Policy: "src/Policy.ts",
+      Lifecycle: "src/Lifecycle.ts",
       DynamicConfig: "src/DynamicConfig.ts",
       ApiUsageSchema: "src/ApiUsageSchema.ts",
       Gate: "src/Gate.ts",
