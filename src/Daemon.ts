@@ -64,7 +64,6 @@ import {
   MutableRef,
   Option,
   PubSub,
-  Ref,
   Schema,
   Scope,
   Stream,
@@ -2473,7 +2472,6 @@ const buildDaemonImpl = <A, E, R>(
 ): Effect.Effect<Hyperlink.Driver<DaemonSpec, R>, never, R | Scope.Scope | Store.Storage> =>
   Effect.gen(function* () {
     const context = yield* Effect.context<R>();
-    const scope = yield* Effect.scope;
 
     const config = yield* foldConfiguredSpec<DaemonLayerConfig<A, E, R>>(tag.key, baseConfig);
 
@@ -2526,25 +2524,15 @@ const buildDaemonImpl = <A, E, R>(
       _resultRef: resultRef,
     });
 
-    const fiberRef = yield* Ref.make<Fiber.Fiber<void, never> | null>(null);
-    // First-class Lifecycle.Service — Own the Idle/Running badge; driver hooks below.
+    // Effect-shaped Lifecycle — FiberHandle owns the driver; restartable → Idle after stop.
     const lifecycle = yield* Lifecycle.make({
-      initial: (yield* Hyperlink.DeferStart) ? "Idle" : "Running",
-      onStart: Effect.gen(function* () {
-        if ((yield* Ref.get(fiberRef)) !== null) return;
-        const fiber = yield* Effect.forkIn(handle.effect.pipe(tapLogs), scope);
-        yield* Ref.set(fiberRef, fiber);
-      }),
-      onStop: Effect.gen(function* () {
-        const fiber = yield* Ref.get(fiberRef);
-        if (fiber === null) return;
-        yield* Fiber.interrupt(fiber);
-        yield* Ref.set(fiberRef, null);
-      }),
-      afterStop: "Idle",
+      run: handle.effect.pipe(tapLogs, Effect.asVoid),
+      fiber: "handle",
+      restartable: true,
     });
     const readStatus = Effect.gen(function* () {
-      const supervising = (yield* Ref.get(fiberRef)) !== null;
+      const badge = yield* lifecycle.state.get;
+      const supervising = badge === "Running" || badge === "Paused";
       return toWireStatus(yield* handle.snapshot, supervising);
     });
 
@@ -2574,7 +2562,9 @@ const buildDaemonImpl = <A, E, R>(
     const impl = {
       status: statusSub,
       lifecycle: lifecycle.state,
-      start: lifecycle.start,
+      start: lifecycle.start.pipe(
+        Effect.catchTag("LifecycleIllegal", () => Effect.void),
+      ),
       stop: lifecycle.stop,
       wake: handle.polling.wake,
       resetCadence: handle.polling.resetCadence,

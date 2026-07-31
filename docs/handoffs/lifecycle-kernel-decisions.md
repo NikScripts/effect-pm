@@ -1,6 +1,6 @@
 # Lifecycle kernel — decisions & lock register
 
-**Status:** plan baked — substrate Eng’d on `cursor/lifecycle-defer-start-929b`; dream not Eng’d.  
+**Status:** Effect-shaped `make` Eng’d (Daemon + core); WorkPool still projects via `of` (L1 remainder).  
 **Owner:** Agent 5.  
 **Full Eng plan (SSOT for architecture / slices / acceptance):** [`docs/plans/lifecycle-kernel.md`](../plans/lifecycle-kernel.md).  
 **Guide (shipped substrate):** [`docs/guides/lifecycle.md`](../guides/lifecycle.md).  
@@ -92,7 +92,7 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 
 ### P9 — `deferStart` composition — Proposed
 
-- **Choose:** Keep Layer pipe. `make` reads `Hyperlink.DeferStart` when `initial` omitted.
+- **Choose:** Keep Layer pipe. `DeferStart` ⇒ `make` does not `FiberHandle.run` until `start()` (State `Idle`).
 - **Retire:** WorkPool `autoStart?: boolean` after P1.
 - **Blocks:** L1.
 
@@ -104,8 +104,8 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 
 ### P11 — Module layout — Proposed
 
-- **Choose:** `src/Lifecycle.ts` shell; machine / events → `src/internal/lifecycle.ts` when grown.
-- **Reject:** Lifecycle as its own served HyperService Tag kind.
+- **Choose:** `src/Lifecycle.ts` shell; Handle/Set/Latch wiring → `src/internal/lifecycle.ts`.
+- **Reject:** Lifecycle as its own served HyperService Tag kind; naming it `Resource`.
 - **Blocks:** all slices (layout invariant).
 
 ### P12 — Lock / semver — Proposed
@@ -113,16 +113,25 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 - **Choose:** Substrate + dream unlocked until owner `@locked` on `Lifecycle.Service` / `State` / `Role`. Pre-1.0 breaking renames are minors with changeset.
 - **Blocks:** L7.
 
+### P13 — Effect-shaped `make` (run + Latch + release) — Locked (Eng’d)
+
+- **Choose:** Public `make` is `run` + optional `latch` / `release` / `fiber: "handle"|"set"` (+ `restartable`). Scope finalizer = `stop`.
+- **Errors:** `LifecycleUnsupported` / `LifecycleIllegal` — `Effect.catchTag` / `_tag`.
+- **Retire:** hook-centric `onStart` / `onPause` / `onResume` / `onStop`.
+- **Reject:** Custom FiberStatus; pause-via-interrupt; `forkDetach` for layer-owned services; Layer rebuild as start/stop.
+- **Remaining:** WorkPool engine on `make` (still `Lifecycle.of` projection) — L1.
+
 ---
 
 ## 3. Open questions (need owner before locking)
 
 1. **P1:** Drop `status.phase` entirely, or keep as deprecated mirror of State for one cycle?
 2. **P3:** Rename WorkPool `shutdown`→`stop` in the same slice as spec sugar, or two steps?
-3. **P2:** Caps as type param union vs separate `Service.StartStop` / `Service.Pausable` interfaces?
+3. **P2:** Structural caps via conditional types on `make` options vs `Service.Pausable` interfaces?
 4. **P5:** Who owns generic chrome — Agent 5 (Lifecycle) or Agent G (TUI/dashboard)?
 5. **P7:** Exact handoff × Lifecycle gate (must be Idle? may be Running? drain first?) — align with launcher brief Track C.
-6. **Versioned schema** — orthogonal; keep on its own decisions doc / owner go.
+6. **P13:** Does WorkPool pass an existing FiberSet into `make`, or does `make` own the Set and `run` is “how to add workers”?
+7. **Versioned schema** — orthogonal; keep on its own decisions doc / owner go.
 
 ---
 

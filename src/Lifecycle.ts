@@ -1,51 +1,51 @@
 /**
- * Lifecycle — first-class lifecycle **service** any HyperService can adopt, plus Spec stamps
- * so tools discover the same surface over the wire.
+ * Lifecycle — Effect-shaped control panel for HyperService runtime lifetime.
  *
- * ## Two ends, one Service
+ * Composes {@link FiberHandle} / {@link FiberSet}, optional {@link Latch}, and a
+ * {@link SubscriptionRef} badge. Not a second Scope; not a callback FSM.
  *
- * **Implementation** — build a {@link Service} with {@link make} (state machine + hooks), then
- * wire its members onto your Spec:
+ * ## Implementation
  *
  * ```ts
- * const lifecycle = yield* Lifecycle.make({
- *   initial: "Idle",
- *   onStart: forkWorkers,
- *   onPause: latch.close,
- *   onResume: latch.open,
- *   onStop: beginShutdown,
- *   afterStop: "Off",
- * })
- * // Spec impl
- * ({
- *   lifecycle: lifecycle.state,
- *   start: lifecycle.start,
- *   pause: lifecycle.pause,
- *   resume: lifecycle.resume,
- *   shutdown: lifecycle.stop,
+ * const latch = yield* Latch.make(true)
+ * const lc = yield* Lifecycle.make({
+ *   run: workerLoop,
+ *   latch,                 // ⇒ pause / resume on the type
+ *   release: windDown,     // drain before interrupt
+ *   restartable: false,    // stop → Off
  * })
  * ```
  *
- * **Tools / co-located code** — project any participating handle with {@link of} /
- * {@link from}:
+ * ## Tools
  *
  * ```ts
- * const lc = yield* Lifecycle.from(Jobs) // or Lifecycle.of(yield* Jobs)
- * yield* lc.state.get                     // "Idle" | "Running" | …
+ * const lc = yield* Lifecycle.from(Jobs)
+ * yield* lc.state.get
  * yield* lc.start
- * yield* lc.pause
+ * yield* lc.pause.pipe(
+ *   Effect.catchTag("LifecycleUnsupported", () => Effect.void),
+ * )
  * ```
  *
  * Spec stamps (`Lifecycle.pause` → Role `"Pause"`) keep the wire introspectable via
- * `methodMeta` for generic UIs that don't hold a typed handle.
- *
- * Deferred bring-up: pipe {@link Hyperlink.deferStart} onto the HyperService layer, then
- * {@link make} with `initial: "Idle"`.
+ * `methodMeta`. Deferred bring-up: pipe {@link Hyperlink.deferStart} onto the layer —
+ * `make` reads {@link Hyperlink.DeferStart} and stays `Idle` until `start`.
  *
  * @module Lifecycle
  */
-import { Data, Effect, Schema, SubscriptionRef } from "effect";
-import type * as Hyperlink from "./Hyperlink";
+import {
+  Data,
+  Effect,
+  FiberHandle,
+  FiberSet,
+  type Latch,
+  PubSub,
+  Schema,
+  Scope,
+  Stream,
+  SubscriptionRef,
+} from "effect";
+import * as Hyperlink from "./Hyperlink";
 
 // =============================================================================
 // Role (method annotations — wire introspection)
@@ -120,7 +120,60 @@ export const State = Schema.Literals([
 ]);
 
 // =============================================================================
-// Service (first-class handle — impl + tools)
+// Events
+// =============================================================================
+
+/**
+ * Transition facts on {@link Service.events}. Separate from WorkPool item/queue events.
+ * Match with `_tag` / `Effect.catchTag` is N/A (stream elements, not errors).
+ *
+ * @category models
+ * @public
+ */
+export type Event =
+  | { readonly _tag: "Started" }
+  | { readonly _tag: "Paused" }
+  | { readonly _tag: "Resumed" }
+  | { readonly _tag: "StopRequested" }
+  | { readonly _tag: "Stopped"; readonly to: "Off" | "Idle" };
+
+// =============================================================================
+// Errors — Data.TaggedError so Effect.catchTag works
+// =============================================================================
+
+/**
+ * Role not supported by this service (e.g. Daemon has no Pause).
+ *
+ * @example
+ * lc.pause.pipe(
+ *   Effect.catchTag("LifecycleUnsupported", (e) => Effect.log(e.role)),
+ * )
+ *
+ * @category errors
+ * @public
+ */
+export class Unsupported extends Data.TaggedError("LifecycleUnsupported")<{
+  readonly role: "Pause" | "Resume" | "Start" | "Stop";
+}> {}
+
+/**
+ * Illegal transition for the current {@link State} (e.g. `start` while `Off`).
+ *
+ * @example
+ * lc.start.pipe(
+ *   Effect.catchTag("LifecycleIllegal", (e) => Effect.log(`${e.op} from ${e.from}`)),
+ * )
+ *
+ * @category errors
+ * @public
+ */
+export class Illegal extends Data.TaggedError("LifecycleIllegal")<{
+  readonly from: State;
+  readonly op: "Start" | "Pause" | "Resume" | "Stop";
+}> {}
+
+// =============================================================================
+// Service
 // =============================================================================
 
 /**
@@ -135,13 +188,20 @@ export const State = Schema.Literals([
 export interface Service<R = never> {
   /** Live badge (`get` + `changes`). */
   readonly state: Hyperlink.Subscribable<State>;
-  /** Idle → Running (idempotent when already Running). */
-  readonly start: Effect.Effect<void, never, R>;
-  /** Running → Paused. Fails {@link Unsupported} when the service has no pause. */
-  readonly pause: Effect.Effect<void, Unsupported, R>;
-  /** Paused → Running. Fails {@link Unsupported} when the service has no resume. */
-  readonly resume: Effect.Effect<void, Unsupported, R>;
-  /** → Draining → {@link MakeOptions.afterStop} (`Off` or restartable `Idle`). */
+  /** Badge stream — same as `state.changes`. */
+  readonly changes: Stream.Stream<State>;
+  /** Transition events (`_tag`: Started / Paused / …). */
+  readonly events: Stream.Stream<Event>;
+  /**
+   * Idle → Running (or Paused if latch starts closed). Idempotent when already Running/Paused.
+   * Fails {@link Illegal} from Draining/Off.
+   */
+  readonly start: Effect.Effect<void, Illegal, R>;
+  /** Running → Paused. Fails {@link Unsupported} when no Latch; {@link Illegal} from other states. */
+  readonly pause: Effect.Effect<void, Unsupported | Illegal, R>;
+  /** Paused → Running. Fails {@link Unsupported} when no Latch; {@link Illegal} from other states. */
+  readonly resume: Effect.Effect<void, Unsupported | Illegal, R>;
+  /** → Draining → `release` → clear fibers → Off or Idle (`restartable`). Idempotent. */
   readonly stop: Effect.Effect<void, never, R>;
 }
 
@@ -157,55 +217,46 @@ export interface Participating<R = never> {
   readonly start: Effect.Effect<void, never, R>;
   readonly pause?: Effect.Effect<void, never, R>;
   readonly resume?: Effect.Effect<void, never, R>;
-  /** Preferred stop verb (Daemon). */
+  /** Preferred stop verb. */
   readonly stop?: Effect.Effect<void, never, R>;
-  /** WorkPool alias for stop. */
+  /** WorkPool alias for stop (transitional until rename lands). */
   readonly shutdown?: Effect.Effect<void, never, R>;
 }
 
 /**
- * Role not supported by this service (e.g. Daemon has no Pause).
- *
- * @category errors
- * @public
- */
-export class Unsupported extends Data.TaggedError("LifecycleUnsupported")<{
-  readonly role: "Pause" | "Resume" | "Start" | "Stop";
-}> {}
-
-/**
  * Project a participating handle into {@link Service} — the **tool / co-located** end.
- *
- * ```ts
- * const jobs = yield* Jobs
- * const lc = Lifecycle.of(jobs)
- * yield* lc.state.get
- * yield* lc.start
- * ```
  *
  * @category constructors
  * @public
  */
-export const of = <R = never>(svc: Participating<R>): Service<R> => ({
-  state: svc.lifecycle,
-  start: svc.start,
-  pause: Effect.gen(function* () {
-    if (svc.pause === undefined) {
-      return yield* new Unsupported({ role: "Pause" });
-    }
-    yield* svc.pause;
-  }),
-  resume: Effect.gen(function* () {
-    if (svc.resume === undefined) {
-      return yield* new Unsupported({ role: "Resume" });
-    }
-    yield* svc.resume;
-  }),
-  stop:
+export const of = <R = never>(svc: Participating<R>): Service<R> => {
+  const stopFx =
     svc.stop ??
     svc.shutdown ??
-    Effect.die(new Unsupported({ role: "Stop" })),
-});
+    Effect.die(new Unsupported({ role: "Stop" }));
+  return {
+    state: svc.lifecycle,
+    changes: svc.lifecycle.changes,
+    events: Stream.empty,
+    start: Effect.mapError(
+      svc.start,
+      (_: never) => new Illegal({ from: "Idle", op: "Start" }),
+    ),
+    pause: Effect.gen(function* () {
+      if (svc.pause === undefined) {
+        return yield* new Unsupported({ role: "Pause" });
+      }
+      yield* svc.pause;
+    }),
+    resume: Effect.gen(function* () {
+      if (svc.resume === undefined) {
+        return yield* new Unsupported({ role: "Resume" });
+      }
+      yield* svc.resume;
+    }),
+    stop: stopFx,
+  };
+};
 
 /**
  * `Effect.map(tag, of)` — `yield* Lifecycle.from(Jobs)`.
@@ -218,112 +269,251 @@ export const from = <RR, E, R>(
 ): Effect.Effect<Service<RR>, E, R> => Effect.map(tag, of);
 
 // =============================================================================
-// make — implementation end
+// make — Effect-shaped implementation end
 // =============================================================================
 
 /**
- * Hooks + policy for {@link make}.
+ * Options for {@link make}.
  *
  * @category models
  * @public
  */
 export interface MakeOptions<R = never> {
-  /** Starting badge. Default `"Running"` (and {@link onStart} runs during make). */
-  readonly initial?: State;
-  /** Fork / arm the engine. Invoked by {@link Service.start} and when `initial` is `"Running"`. */
-  readonly onStart: Effect.Effect<void, never, R>;
-  /** Optional soft hold. Omit ⇒ {@link Service.pause} fails {@link Unsupported}. */
-  readonly onPause?: Effect.Effect<void, never, R>;
-  /** Optional resume. Omit ⇒ {@link Service.resume} fails {@link Unsupported}. */
-  readonly onResume?: Effect.Effect<void, never, R>;
-  /** Wind down. Invoked by {@link Service.stop}. */
-  readonly onStop: Effect.Effect<void, never, R>;
   /**
-   * Badge after stop completes. `"Off"` = terminal (WorkPool); `"Idle"` = restartable (Daemon).
-   * Default `"Off"`.
+   * Effect body installed into a {@link FiberHandle} (default) or {@link FiberSet}.
+   * `start` runs it; `stop` clears the fiber(s) after optional {@link release}.
    */
-  readonly afterStop?: "Off" | "Idle";
+  readonly run: Effect.Effect<void, never, R>;
+  /**
+   * Pause gate. When present, {@link Service.pause} / {@link Service.resume} close / open it.
+   * When omitted, those methods fail {@link Unsupported} (`_tag: "LifecycleUnsupported"`).
+   */
+  readonly latch?: Latch.Latch;
+  /**
+   * Wind-down before fiber clear (e.g. WorkPool drain). Awaited during {@link Service.stop}.
+   */
+  readonly release?: Effect.Effect<void, never, R>;
+  /**
+   * After stop: `true` → `Idle` (restartable, Daemon); `false` → `Off` (WorkPool). Default `false`.
+   */
+  readonly restartable?: boolean;
+  /**
+   * `"handle"` (default) — one supervisor fiber via {@link FiberHandle}.
+   * `"set"` — install `run` once into a {@link FiberSet}.
+   */
+  readonly fiber?: "handle" | "set";
 }
 
 /**
- * Build a {@link Service} — the **implementation** end. Owns the {@link State} machine;
- * your engine supplies hooks.
+ * Build a {@link Service} from Effect concurrency primitives.
  *
- * ```ts
- * const lifecycle = yield* Lifecycle.make({
- *   initial: defer ? "Idle" : "Running",
- *   onStart: forkDriver,
- *   onStop: interruptDriver,
- *   afterStop: "Idle",
- * })
- * ```
+ * Reads ambient {@link Hyperlink.DeferStart}: when `true`, stays `Idle` until {@link Service.start};
+ * otherwise runs `run` during `make`. Scope close runs {@link Service.stop}.
  *
  * @category constructors
  * @public
  */
 export const make = <R = never>(
   options: MakeOptions<R>,
-): Effect.Effect<Service<R>, never, R> =>
+): Effect.Effect<Service<R>, never, R | Scope.Scope> =>
   Effect.gen(function* () {
-    const initial = options.initial ?? "Running";
-    const afterStop = options.afterStop ?? "Off";
-    const stateRef = yield* SubscriptionRef.make<State>(
-      initial === "Running" ? "Idle" : initial,
-    );
+    const restartable = options.restartable ?? false;
+    const afterStop: "Off" | "Idle" = restartable ? "Idle" : "Off";
+    const fiberMode = options.fiber ?? "handle";
+    const deferred = yield* Hyperlink.DeferStart;
+    const context = yield* Effect.context<R>();
 
+    const stateRef = yield* SubscriptionRef.make<State>("Idle");
+    const eventsHub = yield* PubSub.unbounded<Event>();
+    const publish = (event: Event) =>
+      PubSub.publish(eventsHub, event).pipe(Effect.asVoid);
     const setState = (next: State) => SubscriptionRef.set(stateRef, next);
 
-    const start: Effect.Effect<void, never, R> = Effect.gen(function* () {
-      const cur = yield* SubscriptionRef.get(stateRef);
-      if (cur === "Running" || cur === "Paused" || cur === "Draining") return;
-      if (cur === "Off") return;
-      yield* options.onStart;
-      yield* setState("Running");
-    });
+    const handle =
+      fiberMode === "handle"
+        ? yield* FiberHandle.make<void, never>()
+        : undefined;
+    const fiberSet =
+      fiberMode === "set" ? yield* FiberSet.make<void, never>() : undefined;
 
-    const pause: Effect.Effect<void, Unsupported, R> = Effect.gen(function* () {
-      if (options.onPause === undefined) {
-        return yield* new Unsupported({ role: "Pause" });
+    let installed = false;
+
+    const installRun: Effect.Effect<void, never, R> = Effect.gen(function* () {
+      if (installed) return;
+      installed = true;
+      if (handle !== undefined) {
+        yield* FiberHandle.run(handle, options.run);
+      } else if (fiberSet !== undefined) {
+        yield* FiberSet.run(fiberSet, options.run);
       }
-      const cur = yield* SubscriptionRef.get(stateRef);
-      if (cur !== "Running") return;
-      yield* options.onPause;
-      yield* setState("Paused");
     });
 
-    const resume: Effect.Effect<void, Unsupported, R> = Effect.gen(function* () {
-      if (options.onResume === undefined) {
-        return yield* new Unsupported({ role: "Resume" });
+    const clearFibers: Effect.Effect<void> = Effect.gen(function* () {
+      if (handle !== undefined) {
+        yield* FiberHandle.clear(handle);
+      } else if (fiberSet !== undefined) {
+        yield* FiberSet.clear(fiberSet);
+        yield* FiberSet.awaitEmpty(fiberSet);
       }
-      const cur = yield* SubscriptionRef.get(stateRef);
-      if (cur !== "Paused") return;
-      yield* options.onResume;
-      yield* setState("Running");
+      installed = false;
     });
 
-    const stop: Effect.Effect<void, never, R> = Effect.gen(function* () {
+    const startFx: Effect.Effect<void, Illegal, R> = Effect.gen(function* () {
+      const cur = yield* SubscriptionRef.get(stateRef);
+      if (cur === "Running" || cur === "Paused") return;
+      if (cur === "Draining" || cur === "Off") {
+        return yield* new Illegal({ from: cur, op: "Start" });
+      }
+      yield* installRun;
+      if (options.latch !== undefined) {
+        yield* setState(options.latch.isOpen() ? "Running" : "Paused");
+      } else {
+        yield* setState("Running");
+      }
+      yield* publish({ _tag: "Started" });
+    });
+
+    const gate = options.latch;
+    const pauseFx: Effect.Effect<void, Unsupported | Illegal, R> =
+      gate === undefined
+        ? Effect.fail(new Unsupported({ role: "Pause" }))
+        : Effect.gen(function* () {
+            const cur = yield* SubscriptionRef.get(stateRef);
+            if (cur === "Paused") return;
+            if (cur !== "Running") {
+              return yield* new Illegal({ from: cur, op: "Pause" });
+            }
+            yield* gate.close;
+            yield* setState("Paused");
+            yield* publish({ _tag: "Paused" });
+          });
+
+    const resumeFx: Effect.Effect<void, Unsupported | Illegal, R> =
+      gate === undefined
+        ? Effect.fail(new Unsupported({ role: "Resume" }))
+        : Effect.gen(function* () {
+            const cur = yield* SubscriptionRef.get(stateRef);
+            if (cur === "Running") return;
+            if (cur !== "Paused") {
+              return yield* new Illegal({ from: cur, op: "Resume" });
+            }
+            yield* gate.open;
+            yield* setState("Running");
+            yield* publish({ _tag: "Resumed" });
+          });
+
+    const stopFx: Effect.Effect<void, never, R> = Effect.gen(function* () {
       const cur = yield* SubscriptionRef.get(stateRef);
       if (cur === "Off" || cur === "Draining") return;
+      if (cur === "Idle" && !installed) {
+        yield* setState(afterStop);
+        yield* publish({ _tag: "Stopped", to: afterStop });
+        return;
+      }
       yield* setState("Draining");
-      yield* options.onStop;
+      yield* publish({ _tag: "StopRequested" });
+      if (options.release !== undefined) {
+        yield* options.release;
+      }
+      yield* clearFibers;
       yield* setState(afterStop);
+      yield* publish({ _tag: "Stopped", to: afterStop });
     });
 
-    if (initial === "Running") {
-      yield* start;
+    yield* Effect.addFinalizer(() =>
+      stopFx.pipe(Effect.provide(context), Effect.orDie),
+    );
+
+    if (!deferred) {
+      yield* startFx.pipe(
+        Effect.catchTag("LifecycleIllegal", () => Effect.void),
+      );
     }
 
-    const state: Hyperlink.Subscribable<State> = {
+    const stateSub: Hyperlink.Subscribable<State> = {
       get: SubscriptionRef.get(stateRef),
       changes: SubscriptionRef.changes(stateRef),
     };
 
-    return { state, start, pause, resume, stop } satisfies Service<R>;
+    return {
+      state: stateSub,
+      changes: stateSub.changes,
+      events: Stream.unwrap(
+        PubSub.subscribe(eventsHub).pipe(
+          Effect.map((sub) => Stream.fromSubscription(sub)),
+        ),
+      ),
+      start: startFx,
+      pause: pauseFx,
+      resume: resumeFx,
+      stop: stopFx,
+    } satisfies Service<R>;
   });
+
+// =============================================================================
+// Spec / impl sugar
+// =============================================================================
+
+/**
+ * Spec fragment for Lifecycle participation.
+ *
+ * @category constructors
+ * @public
+ */
+export const spec = (options?: { readonly pausable?: boolean }) => {
+  const pausable = options?.pausable ?? false;
+  const base = {
+    lifecycle: Hyperlink.ref(State)
+      .annotate({
+        description: "Lifecycle badge (Idle / Running / Paused / Draining / Off).",
+      })
+      .pipe(state),
+    start: Hyperlink.effect(Schema.Void)
+      .annotate({ description: "Start the service (Idle → Running)." })
+      .pipe(start),
+    stop: Hyperlink.effect(Schema.Void)
+      .annotate({
+        description: "Stop the service (→ Draining → Off or Idle).",
+        destructive: true,
+      })
+      .pipe(stop),
+  };
+  if (!pausable) return base;
+  return {
+    ...base,
+    pause: Hyperlink.effect(Schema.Void)
+      .annotate({ description: "Pause processing (Latch.close)." })
+      .pipe(pause),
+    resume: Hyperlink.effect(Schema.Void)
+      .annotate({ description: "Resume processing (Latch.open)." })
+      .pipe(resume),
+  };
+};
+
+/**
+ * Impl fragment from a {@link Service} — spread into `Hyperlink.serve` / toolkit impls.
+ *
+ * @category constructors
+ * @public
+ */
+export const impl = <R = never>(
+  lc: Service<R>,
+): {
+  readonly lifecycle: Hyperlink.Subscribable<State>;
+  readonly start: Effect.Effect<void, Illegal, R>;
+  readonly pause: Effect.Effect<void, Unsupported | Illegal, R>;
+  readonly resume: Effect.Effect<void, Unsupported | Illegal, R>;
+  readonly stop: Effect.Effect<void, never, R>;
+} => ({
+  lifecycle: lc.state,
+  start: lc.start,
+  pause: lc.pause,
+  resume: lc.resume,
+  stop: lc.stop,
+});
 
 /**
  * Spec-field helpers: stamp + schema for the Role `"State"` member.
- * Prefer wiring `lifecycle: lifecycle.state` from {@link make} / {@link of}.
  *
  * @category constructors
  * @public

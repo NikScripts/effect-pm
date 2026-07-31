@@ -1459,7 +1459,9 @@ const buildQueueImpl = <
       // `orDie` on the enqueue verbs (impossible-failure → defect), and RPC wiring.
       status: handle.status,
       lifecycle: lifecycle.state,
-      start: lifecycle.start,
+      start: lifecycle.start.pipe(
+        Effect.catchTag("LifecycleIllegal", () => Effect.void),
+      ),
       pause: lifecycle.pause.pipe(Effect.orDie),
       resume: lifecycle.resume.pipe(Effect.orDie),
       shutdown: lifecycle.stop,
@@ -1986,7 +1988,9 @@ const buildPriorityImpl = <Self, F extends PriorityItemFields, E, R, RR = never>
     > = {
       status: handle.status,
       lifecycle: lifecycle.state,
-      start: lifecycle.start,
+      start: lifecycle.start.pipe(
+        Effect.catchTag("LifecycleIllegal", () => Effect.void),
+      ),
       pause: lifecycle.pause.pipe(Effect.orDie),
       resume: lifecycle.resume.pipe(Effect.orDie),
       shutdown: lifecycle.stop,

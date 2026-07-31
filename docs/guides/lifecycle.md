@@ -4,87 +4,80 @@
 > You're reading this page's **source**. The rendered version — with navigation, search,
 > and live type previews — is at <https://dev.hyperlink.cool/docs/lifecycle>.
 <!-- docs-site-link:end -->
-# Lifecycle — first-class service for impl + tools
+# Lifecycle — Effect-shaped service for impl + tools
 
-`hyperlink-ts/Lifecycle` is a **Service** (`Lifecycle.Service`) with a shared State badge
-and start / pause / resume / stop commands. Toolkit kinds and app HyperServices adopt the
-same type — tools never switch on WorkPool vs Daemon.
+`hyperlink-ts/Lifecycle` is a **control panel** over Effect structured concurrency:
+{@link FiberHandle} / {@link FiberSet}, optional {@link Latch}, and a {@link SubscriptionRef}
+badge. Toolkit kinds and app HyperServices adopt the same {@link Lifecycle.Service} — tools
+never switch on WorkPool vs Daemon.
 
 ## The handle
 
 ```ts
 interface Service {
   readonly state: Subscribable<State>  // Idle | Running | Paused | Draining | Off
-  readonly start: Effect<void>
-  readonly pause: Effect<void, Unsupported>
-  readonly resume: Effect<void, Unsupported>
+  readonly changes: Stream<State>
+  readonly events: Stream<Event>       // _tag: Started | Paused | …
+  readonly start: Effect<void, Illegal>
+  readonly pause: Effect<void, Unsupported | Illegal>
+  readonly resume: Effect<void, Unsupported | Illegal>
   readonly stop: Effect<void>
 }
 ```
 
-## Implementation end — `Lifecycle.make`
-
-Own the state machine; pass engine hooks:
+Errors are `Data.TaggedError` — match with `_tag` / `Effect.catchTag`:
 
 ```ts
+yield* lc.pause.pipe(
+  Effect.catchTag("LifecycleUnsupported", (e) => Effect.log(e.role)),
+  Effect.catchTag("LifecycleIllegal", (e) => Effect.log(`${e.op} from ${e.from}`)),
+)
+```
+
+## Implementation — `Lifecycle.make`
+
+Compose primitives; do not pass callback hooks:
+
+```ts
+const latch = yield* Latch.make(true)
 const lifecycle = yield* Lifecycle.make({
-  initial: defer ? "Idle" : "Running",
-  onStart: forkWorkers,
-  onPause: latch.close,
-  onResume: latch.open,
-  onStop: beginShutdown,
-  afterStop: "Off", // or "Idle" when restartable (Daemon)
+  run: workerLoop,           // FiberHandle (default) or fiber: "set"
+  latch,                     // omit ⇒ pause/resume fail Unsupported
+  release: windDown,         // optional drain before fiber clear
+  restartable: false,        // false → Off; true → Idle (Daemon)
 })
 
-// Wire onto the Spec impl (Role stamps on the contract)
+// Spec impl
 ({
-  lifecycle: lifecycle.state,   // Hyperlink.ref(Lifecycle.State).pipe(Lifecycle.state)
-  start: lifecycle.start,      // .pipe(Lifecycle.start)
-  pause: lifecycle.pause,
-  resume: lifecycle.resume,
-  shutdown: lifecycle.stop,    // or `stop:` — Role "Stop"
+  ...Lifecycle.impl(lifecycle),
+  // or: lifecycle: lifecycle.state, start, pause, resume, stop
 })
 ```
 
-Daemon's toolkit layer already does this. WorkPool currently projects its engine into
-`Lifecycle.of(…)` until the queue engine adopts `make` directly.
+Daemon's toolkit layer already does this (`restartable: true`, no latch). WorkPool still
+projects its engine into `Lifecycle.of(…)` until the queue engine adopts `make` directly.
 
 Deferred bring-up: pipe [`Hyperlink.deferStart`](/docs/lifecycle) onto the HyperService
-**layer**, and pass `initial: "Idle"` into `make`.
+**layer** — `make` reads `DeferStart` and stays `Idle` until `start`.
 
 ## Tool end — `Lifecycle.of` / `from`
 
 ```ts
 import * as Lifecycle from "hyperlink-ts/Lifecycle"
 
-// From a yield* handle
-const jobs = yield* Jobs
-const lc = Lifecycle.of(jobs)
-yield* lc.state.get          // "Idle"
+const lc = yield* Lifecycle.from(Jobs)
+yield* lc.state.get
 yield* lc.start
-yield* lc.pause
-
-// Or map the Tag Effect
-const lc2 = yield* Lifecycle.from(Jobs)
 ```
 
-Generic UIs that only have a Spec (no typed handle) still use `methodMeta(m).lifecycle`
-(`"State"` / `"Pause"` / …) — same Roles the Spec stamps use.
+Generic UIs that only have a Spec still use `methodMeta(m).lifecycle`
+(`"State"` / `"Pause"` / …).
 
-## Contract stamps (wire)
+## Spec sugar
 
 ```ts
-lifecycle: Hyperlink.ref(Lifecycle.State)
-  .annotate({ description: "Lifecycle badge." })
-  .pipe(Lifecycle.state),
-pause: Hyperlink.effect(Schema.Void)
-  .annotate({ description: "Hold." })
-  .pipe(Lifecycle.pause),
+const MySpec = {
+  ...Lifecycle.spec({ pausable: true }),
+  // domain methods…
+}
 ```
-
-Combinators are camelCase; **Role / State strings are PascalCase**.
-
-## See also
-
-- [Policy](/docs/policy) — dial / verify / conflict / yield (different grain)
-- [WorkPool](/docs/work-pools) · [Daemons](/docs/daemons)
