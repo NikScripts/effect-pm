@@ -335,8 +335,8 @@ are Locked.** Substrate-only fixes OK on the work branch.
 | Slice | Depends | Deliverable | Acceptance |
 |-------|---------|-------------|------------|
 | **L0** | — | Land substrate on `integration` | Guide + Daemon `make` + stamps + `deferStart` on tip; typecheck/tests green |
-| **L1** | P1, P6, P9 | WorkPool on `make`; retire `autoStart`; readiness from State; widgets/`lifecycle` | No `phase` dual as badge SSOT; `Lifecycle.from(Jobs)` drives start/stop; Idle dialable; changeset |
-| **L2** | P3 | `Lifecycle.spec` / `impl`; WorkPool `stop` | Spec fragment compiles; named handle + control Spec use `stop`; `.test-d.ts` |
+| **L1** | P1, P6, P9 | WorkPool on `make`; retire `autoStart`; readiness from State; widgets/`lifecycle` | **Eng’d** — no `phase`; `Lifecycle.from(Jobs)`; Idle dialable; changeset |
+| **L2** | P3 | `Lifecycle.spec` / `impl`; WorkPool `stop` | **Eng’d** — Spec/impl + `stop`; `.test-d.ts` locks |
 | **L3** | P2 | Caps on `Service` / `make` | Daemon Service type has no `pause`; WorkPool has pause; Unsupported only dynamic |
 | **L4** | P4 | Events stream | Tests assert `_tag`; domain queue events unchanged |
 | **L5** | P5 | `ui/LifecycleView` pack + generic chrome | Coordinate Agent G; Lifecycle core tree-shake (no Observe/React) |

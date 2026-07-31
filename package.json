@@ -298,6 +298,7 @@
     "example:work-pool-history-metrics": "tsx examples/work-pool/history-metrics.ts",
     "example:work-pool-typed-success": "tsx examples/work-pool/typed-success.ts",
     "example:work-pool-configure": "tsx examples/work-pool/configure.ts",
+    "example:lifecycle-make-and-tools": "tsx examples/lifecycle/make-and-tools.ts",
     "example:daemon-store-auto-write": "tsx examples/daemon/store-auto-write.ts",
     "example:daemon-typed-failed-error": "tsx examples/daemon/typed-failed-error.ts",
     "example:daemon-serve-client": "tsx examples/daemon/serve-client.ts",

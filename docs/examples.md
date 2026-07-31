@@ -12,7 +12,17 @@ Teaching scripts live under `examples/<topic>/`. Each form page Twoslash-`includ
 real `.ts` file (cuts hide harness noise) and carries a **Related examples** note with
 cross-links (often several) into neighboring forms and topics.
 
-Deep-link a topic: `#work-pool`, `#gate`, `#node`, `#observe`, `#logs`, `#store`, …
+Deep-link a topic: `#lifecycle`, `#work-pool`, `#gate`, `#node`, `#observe`, `#logs`, `#store`, …
+
+---
+
+## Lifecycle
+
+Guide: [Lifecycle](/docs/lifecycle)
+
+### [make + tools](/docs/lifecycle-make-and-tools)
+
+`examples/lifecycle/make-and-tools.ts` · `pnpm run example:lifecycle-make-and-tools`
 
 ---
 

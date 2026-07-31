@@ -1,8 +1,11 @@
 /**
  * Type-level lock: Lifecycle State / Event / errors keep stable `_tag` so
  * `Match`, `Hyperlink.runForEachTag`, and `Effect.catchTag` stay dependable.
+ * WorkPool control verb is `stop` (no `shutdown`); Participating has no shutdown alias.
  */
+import type { Effect } from "effect";
 import * as Lifecycle from "../src/Lifecycle";
+import type { WorkPool } from "../src/WorkPool";
 
 type AssertExact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 
@@ -26,7 +29,21 @@ true satisfies AssertExact<
   "Started" | "Paused" | "Resumed" | "StopRequested" | "Stopped"
 >;
 
+declare const pool: WorkPool<{ readonly id: string }>;
+true satisfies AssertExact<
+  WorkPool<{ readonly id: string }>["stop"],
+  Effect.Effect<void>
+>;
+// @ts-expect-error WorkPool control verb is stop — no shutdown
+pool.shutdown;
+
+declare const participating: Lifecycle.Participating;
+// @ts-expect-error Participating has stop only — no shutdown alias
+participating.shutdown;
+
 void unsupported;
 void illegal;
 void state;
 void event;
+void pool;
+void participating;

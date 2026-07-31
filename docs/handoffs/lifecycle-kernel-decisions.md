@@ -37,10 +37,10 @@ any HyperService adopts the same way, and that generic tools consume without kin
 
 Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 
-### P1 — WorkPool engine SSOT on Effect-shaped `Lifecycle.make` — Proposed
+### P1 — WorkPool engine SSOT on Effect-shaped `Lifecycle.make` — Locked (Eng’d)
 
 - **Choose:** Retire dual `phase` + projected badge. Engine uses `Lifecycle.make({ run, latch, release, fiber })`; `shutdownMode` lives in `release`.
-- **Retire:** `status.phase` as badge; `autoStart` → only `DeferStart` + deferred `run`.
+- **Retire:** `status.phase` entirely; `autoStart` → only `DeferStart` + deferred `run`.
 - **Reject:** Keeping `phase` forever alongside `Lifecycle.State`.
 - **Blocks:** L1.
 
@@ -51,10 +51,10 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 - **Reject:** Primary API as stringly `caps: ["Start","Stop"]` bag (sugar OK if derived from structure).
 - **Blocks:** L3.
 
-### P3 — Spec / impl sugar — Proposed
+### P3 — Spec / impl sugar — Locked (Eng’d)
 
 - **Choose:** `Lifecycle.spec(caps?)` + `Lifecycle.impl(service)`.
-- **Propose (prefer):** Rename WorkPool control verb `shutdown` → `stop` (Role `"Stop"`).
+- **Choose:** WorkPool control verb `shutdown` → `stop` (Role `"Stop"`).
 - **Reject:** Forever mapping `shutdown`↔`stop` in `of()`.
 - **Blocks:** L2.
 
@@ -72,7 +72,7 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 - **Retire:** Kind-hardcoded pause/start buttons as the only path.
 - **Blocks:** L5.
 
-### P6 — Readiness integration — Proposed
+### P6 — Readiness integration — Locked (Eng’d)
 
 - **Choose:** Ready when State ∈ {`Running`, `Paused`, `Idle`}; not ready for `Draining` / `Off`.
 - **Reject:** Idle ⇒ not ready (breaks A→B pending queues).
@@ -90,10 +90,10 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 - **Reject:** Separate “lifecycle client” API.
 - **Blocks:** L6.
 
-### P9 — `deferStart` composition — Proposed
+### P9 — `deferStart` composition — Locked (Eng’d)
 
 - **Choose:** Keep Layer pipe. `DeferStart` ⇒ `make` does not `FiberHandle.run` until `start()` (State `Idle`).
-- **Retire:** WorkPool `autoStart?: boolean` after P1.
+- **Retire:** WorkPool `autoStart?: boolean`.
 - **Blocks:** L1.
 
 ### P10 — Gate / plain Rpc — Proposed
@@ -119,19 +119,17 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 - **Errors:** `LifecycleUnsupported` / `LifecycleIllegal` — `Effect.catchTag` / `_tag`.
 - **Retire:** hook-centric `onStart` / `onPause` / `onResume` / `onStop`.
 - **Reject:** Custom FiberStatus; pause-via-interrupt; `forkDetach` for layer-owned services; Layer rebuild as start/stop.
-- **Remaining:** WorkPool engine on `make` (still `Lifecycle.of` projection) — L1.
+- **Remaining:** none for L1 (WorkPool on `make`; badge SSOT `lifecycle`).
 
 ---
 
 ## 3. Open questions (need owner before locking)
 
-1. **P1:** Drop `status.phase` entirely, or keep as deprecated mirror of State for one cycle?
-2. **P3:** Rename WorkPool `shutdown`→`stop` in the same slice as spec sugar, or two steps?
-3. **P2:** Structural caps via conditional types on `make` options vs `Service.Pausable` interfaces?
-4. **P5:** Who owns generic chrome — Agent 5 (Lifecycle) or Agent G (TUI/dashboard)?
-5. **P7:** Exact handoff × Lifecycle gate (must be Idle? may be Running? drain first?) — align with launcher brief Track C.
-6. **P13:** Does WorkPool pass an existing FiberSet into `make`, or does `make` own the Set and `run` is “how to add workers”?
-7. **Versioned schema** — orthogonal; keep on its own decisions doc / owner go.
+1. **P2:** Structural caps via conditional types on `make` options vs `Service.Pausable` interfaces?
+2. **P5:** Who owns generic chrome — Agent 5 (Lifecycle) or Agent G (TUI/dashboard)?
+3. **P7:** Exact handoff × Lifecycle gate (must be Idle? may be Running? drain first?) — align with launcher brief Track C.
+4. **P13 follow-up:** FiberSet ownership refinements beyond current `fiber: "handle"|"set"`.
+5. **Versioned schema** — orthogonal; keep on its own decisions doc / owner go.
 
 ---
 
