@@ -341,7 +341,7 @@ are Locked.** Substrate-only fixes OK on the work branch.
 | **L4** | P4 | Events stream | **Eng’d** — `lifecycleEvents` on Spec/handles; `Service.events`; domain queue events unchanged |
 | **L5** | P5 | `ui/LifecycleView` pack + generic chrome | **Eng’d pack** (`pack` / `pausable`); chrome adopt with Agent G; Lifecycle core tree-shake |
 
-| **L6** | P7, P8 | Handoff gates + client `from` conformance | Same Service API local/remote; handoff brief Track C aligned |
+| **L6** | P7, P8 | Handoff docs (no Lifecycle State gate) + client `from` | Same Service API local/remote; handoff fn owns migrate; Track C aligned |
 | **L7** | P10+ | Docs polish; `@locked` candidates; archive exploratory wording | Guide = dream truth; decisions P-locks Closed |
 
 Each slice: all tsconfigs typecheck; `@effect/vitest` + `TestClock`; public type/error-channel

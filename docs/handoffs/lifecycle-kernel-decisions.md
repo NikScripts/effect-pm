@@ -66,11 +66,11 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 - **Reject:** Reusing WorkPool `Start` / `ShutdownComplete` as the Lifecycle protocol.
 - **Blocks:** L4.
 
-### P5 — Observe pack + generic widgets — Locked (Eng’d pack; chrome follow-up)
+### P5 — Observe pack + generic widgets — Locked (Eng’d pack; chrome → Agent G)
 
 - **Choose:** Pack under `ui/LifecycleView` (`pack` = badge+start/stop; `pausable` adds pause/resume). **Lifecycle must not import Observe**.
-- **Choose:** Default dashboard/TUI control chrome via Role discovery + typed `from` — Agent G may adopt pack; kind-hardcoded buttons not the only path.
-- **Retire:** Kind-hardcoded pause/start buttons as the only path (incremental with Agent G).
+- **Choose:** All UI / web / TUI chrome adoption of the pack is **Agent G** — Agent 5 does not wire dashboard widgets.
+- **Retire:** Kind-hardcoded pause/start buttons as the only path (G incremental).
 - **Blocks:** L5.
 
 ### P6 — Readiness integration — Locked (Eng’d)
@@ -79,11 +79,12 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 - **Reject:** Idle ⇒ not ready (breaks A→B pending queues).
 - **Blocks:** L1.
 
-### P7 — Handoff / drain — Proposed
+### P7 — Handoff / drain — Locked (no Lifecycle State gate)
 
 - **Choose:** Node `phase: "draining"` remains **node** lifecycle; HyperService may enter `Draining` separately. Document both planes.
-- **Propose:** Handoff runner may `Lifecycle.from(Tag)` and require State compatible with migrate. Exact gate TBD with Track C.
-- **Blocks:** L6.
+- **Choose:** **Do not gate handoff on Lifecycle State.** Migration ownership stays on the serve-site {@linkcode Hyperlink.HandoffFn} (`ctx.done` / `retry` / `defer`) run during `Node.shutdown` after drain. Lifecycle is observable badge only for tools — not a precondition filter for handoff.
+- **Reject:** Requiring Idle / Running / stop-first before handoff runner proceeds.
+- **Blocks:** L6 (docs clarity; no Lifecycle gate Eng).
 
 ### P8 — Remote parity — Proposed
 
@@ -126,10 +127,9 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 
 ## 3. Open questions (need owner before locking)
 
-1. **P5 chrome:** Pack is Eng’d — who owns wiring generic dashboard/TUI chrome onto `LifecycleView` (Agent 5 vs Agent G)?
-2. **P7:** Exact handoff × Lifecycle gate (must be Idle? may be Running? drain first?) — align with launcher brief Track C.
-3. **P13 follow-up:** FiberSet ownership refinements beyond current `fiber: "handle"|"set"`.
-4. **Versioned schema** — orthogonal; keep on its own decisions doc / owner go.
+1. **P13 follow-up:** FiberSet ownership refinements beyond current `fiber: "handle"|"set"`.
+2. **Versioned schema** — orthogonal; keep on its own decisions doc / owner go.
+3. Tip-sync L0–L5 work branch when owner asks.
 
 ---
 
@@ -152,8 +152,8 @@ Full table + acceptance criteria: [plan §8](../plans/lifecycle-kernel.md#8-eng-
 
 ## 5. Immediate next step
 
-1. Owner: tip-sync when ready; answer P5 chrome ownership + P7 handoff gate.  
-2. Next Eng: L6 (P7/P8) when locked.  
+1. P5 chrome → Agent G; P7 → no Lifecycle gate (Locked).  
+2. Next Eng: L6 docs clarity + P8 remote `from` when owner wants; tip-sync on ask.  
 3. Open questions: §3.
 
 ---
