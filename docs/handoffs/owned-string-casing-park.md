@@ -25,11 +25,12 @@ Also `web/DashboardShell` `view: "main" \| "logs" \| "schedule"`.
 
 ### 2. Presentation / domain-echo unions
 
-- `web/widgets` chart `source: "history" \| "trend"`, log `min` levels
-- TUI `Status` / `Priority` mirrors that may echo WorkPool phases
+- TUI `Status` / `Priority` echo WorkPool `phase` strings (`running` / `off` / …) —
+  **preserve** until WorkPool phases themselves PascalCase
+- Effect log level names in filters (`info` / `warn` / `error`) — preserve referent
+- Chart window **labels** (`"1m"`, `"all"`) — user-facing display strings
 
-Recommend: rename fields to `_tag` / `mode` when they are true discriminants, then
-PascalCase — or explicitly exempt “presentation labels” in the standard.
+`web/widgets` chart `source` Eng'd to `History` / `Trend`; log min sentinel `All`.
 
 ### 3. Large domain renames (wire / Spec)
 
