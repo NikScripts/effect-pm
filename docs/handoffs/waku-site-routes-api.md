@@ -1,6 +1,7 @@
-# Docs site — `Route.make` + `Router.make` on Waku
+# Docs site — `Route.make` + Waku layer (`Router.waku`)
 
-Typed API is the usual hyperlink dream shape. Waku is the engine.
+Typed API is the usual hyperlink dream shape. Waku is the engine via
+`hyperlink-ts/ui/Router/waku` — **not** lite `Router.make` (Memory/History).
 
 ## SSOT
 
@@ -49,6 +50,8 @@ so chrome works without a layout Provider, no-op `Outlet` for file-route bodies.
 ```tsx
 import * as Router from "../ui/Router" // site skin → package Router/waku
 
+const binding = Router.waku(site) // preferred; site `make` is a deprecated alias
+
 <Router.Link to={(u) => u.home()}>Home</Router.Link>
 <Router.Link to={(u) => u.docs("work-pools")}>Work pools</Router.Link>
 <Router.Link to={(u) => u.api.symbol("effect", "Effect.succeed")}>
@@ -57,6 +60,7 @@ import * as Router from "../ui/Router" // site skin → package Router/waku
 
 const r = Router.useRouter()
 void r.to((u) => u.search({ query: { q: "WorkPool" } }))
+// live service: r._tag === "Waku"
 ```
 
 ## Layers
@@ -66,7 +70,7 @@ void r.to((u) => u.search({ query: { q: "WorkPool" } }))
 | `catalog` | SSOT path strings |
 | `Route.make(site)` | Typed catalog from `catalog.*` |
 | `Route.urlBuilder` + sugar | Positional href builders (`urls`) |
-| `hyperlink-ts/ui/Router/waku` | Waku layer — same Service / Link / to / go |
+| `hyperlink-ts/ui/Router/waku` | Waku layer — `Router.waku` / same Service / Link / to / go |
 | Site `ui/Router.tsx` | Skin: default binding + no-op Outlet |
 | Chrome + API + search | In-app hrefs use `Router.Link` / `urls.*` |
 | Nav + chapter links | `hrefFor` / `resolveBookHref` / `docs/nav.ts` via `urls` |

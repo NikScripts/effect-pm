@@ -12,10 +12,10 @@
 **Source:** [`examples/ui/router-mini-docs.ts`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/ui/router-mini-docs.ts)  
 **Run (CLI / types):** `pnpm run example:ui-router-mini-docs`  
 **Run (browser):** `pnpm run example:apps-router-docs` → <http://localhost:5189>  
-**Hub:** [Examples → UI](/docs/examples#ui) · [Apps](/docs/examples#apps)
+**Hub:** [Examples → UI](/docs/examples#ui) · [Routing](/docs/routing) · [Apps](/docs/examples#apps)
 
 > [!NOTE]
-> **Related examples:** [Apps run matrix](/docs/examples#apps) · browser shell
+> **Related:** [GroupNav + Target](/docs/ui-group-nav) · browser shell
 > `examples/apps/router-docs` (`example:apps-router-docs`)
 
 ## What this shows

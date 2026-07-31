@@ -25,7 +25,10 @@ export const waku = (
   skin: Urls = defaultUrls,
 ): Router.WakuBinding<Site, Urls> => Router.waku(api, skin);
 
-/** @deprecated Prefer {@link waku} — same binding. */
+/**
+ * @deprecated Site-skin alias for {@link waku} only — **not** package
+ * `hyperlink-ts/ui/Router.make` (lite Memory/History). Prefer {@link waku}.
+ */
 export const make = waku;
 
 /** Default Waku binding (+ {@link Router.setDefault}). */

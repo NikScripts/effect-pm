@@ -98,15 +98,15 @@ const collapseStack = (stack: Array<string>): void => {
 
 export const makeService = <A extends ApiConstraint>(
   api: A,
-  mode: "Memory" | "History",
+  engine: "Memory" | "History",
 ): Service<A> => {
   const urls = Route.urlBuilder(api);
   const initial =
-    mode === "History" ? locationHref() : { pathname: "/", search: "" };
+    engine === "History" ? locationHref() : { pathname: "/", search: "" };
   let pathname = initial.pathname;
   let search = initial.search;
   const stack: Array<string> =
-    mode === "Memory" ? [joinHref(pathname, search)] : [];
+    engine === "Memory" ? [joinHref(pathname, search)] : [];
   const listeners = new Set<() => void>();
 
   const notify = (): void => {
@@ -127,7 +127,7 @@ export const makeService = <A extends ApiConstraint>(
     search = parsed.search;
     const href = joinHref(pathname, search);
 
-    if (mode === "Memory") {
+    if (engine === "Memory") {
       if (action === "push") {
         stack.push(href);
       } else {
@@ -144,7 +144,7 @@ export const makeService = <A extends ApiConstraint>(
 
   return {
     api,
-    _tag: mode,
+    _tag: engine,
     urls,
     get pathname() {
       return pathname;
@@ -163,7 +163,7 @@ export const makeService = <A extends ApiConstraint>(
     to: (build, options) =>
       setHref(build(urls), options?.replace === true ? "replace" : "push"),
     back: () => {
-      if (mode === "History") {
+      if (engine === "History") {
         if (typeof window !== "undefined") window.history.back();
         return;
       }
@@ -185,7 +185,7 @@ export const makeService = <A extends ApiConstraint>(
       };
     },
     syncFromLocation: () => {
-      if (mode !== "History") return;
+      if (engine !== "History") return;
       const next = locationHref();
       if (next.pathname === pathname && next.search === search) return;
       pathname = next.pathname;

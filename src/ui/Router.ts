@@ -72,8 +72,8 @@ export class Router extends Context.Service<Router, Service>()(
  */
 export const make = <A extends ApiConstraint>(
   api: A,
-  mode: "Memory" | "History",
-): Service<A> => internal.makeService(api, mode);
+  engine: "Memory" | "History",
+): Service<A> => internal.makeService(api, engine);
 
 /**
  * In-memory router — tests, embed, TUI. Path is not bound to `window.history`.

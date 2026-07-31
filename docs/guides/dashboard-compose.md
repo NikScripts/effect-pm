@@ -1,9 +1,10 @@
-{#dashboard title="Dashboard" status="stable" appliesTo=all}
+{#dashboard-compose title="Dashboard compose" status="stable" appliesTo=all}
 
-# Dashboard
+# Dashboard compose
 
-Batteries-included Group drill-down for **web** and **TUI**. Point it at a reactive
-`Atom.runtime(layer)` and a root `Group`.
+How the batteries `<Dashboard>` is assembled from Router + GroupNav + View.
+For browser transport (WebSocket) and the one-liner, see [Dashboard](/docs/dashboard).
+For catalogs and navigation, see [Routing](/docs/routing).
 
 ```tsx
 import { Dashboard } from "hyperlink-ts/web"
@@ -50,6 +51,14 @@ const ui = View.compose({
 ```
 
 Bare `ui.Grid` / `ui.Outlet` stay available but omit Cell / NodeBar / HealthBoard / LogBox.
+
+## Targets and pages
+
+`Group.asRoutes` stamps a tagged `Route.TargetValue` on each destination
+(`Group` / `Leaf` / `LeafView` / `Health`). Skins read path segments with
+`Route.viewOf` (`"logs"` / `"schedule"` / `"health"` — lowercase URL referents)
+and leaf selection with `Route.memberOf`. Live engine is `router._tag`
+(`"Memory"` / `"History"` / `"Waku"`) — not a separate mode field.
 
 ## Public chrome
 

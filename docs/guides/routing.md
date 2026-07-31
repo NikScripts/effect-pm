@@ -1,4 +1,4 @@
-{#routing title="Routing" status="draft" appliesTo=all}
+{#routing title="Routing" status="stable" appliesTo=all}
 
 # Routing
 
@@ -70,6 +70,21 @@ const binding = Router.waku(site) // === Router.layer.waku(site)
 Dashboard and chrome call the same `to` / `Link` / `GroupNav` APIs on whichever
 layer you installed.
 
+## Discriminants
+
+Owned closed vocabularies use `_tag` (PascalCase). Strings that *are* URL path
+segments stay lowercase (preserve referent).
+
+| Value | Discriminant | Notes |
+|-------|--------------|-------|
+| Live `Router.Service` | `_tag: "Memory" \| "History" \| "Waku"` | Lite `make(api, engine)`’s **2nd argument** chooses the engine at install; the live field is `_tag` (there is no `mode`) |
+| Waku Provider input | `_tag: "WakuBinding"` | Catalog + urls only — no redundant engine field; live service becomes `_tag: "Waku"` |
+| `Route.TargetValue` | `_tag: "Group" \| "Leaf" \| "LeafView" \| "Health"` | From `Group.asRoutes`; helpers `Route.viewOf` / `Route.memberOf` |
+| Path templates (internal) | `_tag: "Lit" \| "Param" \| "Splat"` | Compiler tokens for `:name` / `*name` |
+
+`view` on `LeafView` / `Health` is the path segment (`"logs"` / `"schedule"` /
+`"health"`). Do not PascalCase it.
+
 ## Catalog and URLs
 
 Declare destinations once with `Route.make` / `Route.get` / `Route.group`.
@@ -127,7 +142,16 @@ nav.openNode("app/NodeA")   // → urls.nodeHealth(…)
 `Route.Target` annotations from `Group.asRoutes` are a tagged
 `TargetValue` (`Group` / `Leaf` / `LeafView` / `Health`) — `Route.viewOf` /
 `Route.memberOf` feed GroupNav selected member / view. Works with either Router
-layer underneath. See [Dashboard](/docs/dashboard).
+layer underneath.
+
+| Helper | `Group` | `Leaf` / `LeafView` | `Health` |
+|--------|---------|---------------------|----------|
+| `viewOf` | `undefined` | path segment or `undefined` | `"health"` when stamped |
+| `memberOf` | `null` (index) | leaf tag | `null` |
+
+See [Dashboard](/docs/dashboard) (batteries + transport) and
+[Dashboard compose](/docs/dashboard-compose) (stack). Runnable:
+[GroupNav + Target](/docs/ui-group-nav).
 
 ## Docs site (Waku dogfood)
 
@@ -174,12 +198,15 @@ Literal segments beat params (e.g. static `/api/hyperlink-ts/…` vs dynamic
 |-----|------|
 | `pnpm run example:ui-router-mini-docs` | Typed catalog + match |
 | `pnpm run example:apps-router-docs` | Browser mini-docs on `handle` + `Outlet` (:5189) |
+| `pnpm run example:ui-group-nav` | GroupNav + Target `_tag` / viewOf / memberOf |
+| `pnpm run example:apps-dashboard` | Batteries web Dashboard |
 
-Guide page: [UI — Router mini-docs](/docs/ui-router-mini-docs).
+Guide pages: [Router mini-docs](/docs/ui-router-mini-docs) ·
+[GroupNav + Target](/docs/ui-group-nav).
 
 ## Still tightening
 
-Held to the same standards as the rest of the package; in flight or next:
+Held to the same standards as the rest of the package; parked / next:
 
 - Branded `Route.Href` (parked — Brand + UrlBuilder inference; see
   [`owned-string-casing-park.md`](../handoffs/owned-string-casing-park.md))

@@ -41,9 +41,16 @@ const run = <A>(
 describe("Router.make (typed)", () => {
   it("to / urls are catalog-typed", () => {
     const router = Router.make(site, "Memory");
+    expect(router._tag).toBe("Memory");
     router.to((urls) => urls.app.dashboard());
     expect(router.pathname).toBe("/app");
     expect(router.urls.home()).toBe("/home");
+  });
+
+  it("history layer stamps _tag History", () => {
+    run(Router.history(site), (router) => {
+      expect(router._tag).toBe("History");
+    });
   });
 });
 
@@ -261,8 +268,48 @@ describe("Group.asRoutes + fromEffect", () => {
     });
   });
 
+  it("openSchedule stamps LeafView schedule Target", () => {
+    run(Router.memory(hubSite), (router) => {
+      GroupNav.openSchedule(Hub, router, HttpApi);
+      const nav = GroupNav.state(Hub, router);
+      expect(nav.keys).toEqual(["Nwsl", "HttpApi", "schedule"]);
+      expect(nav.view).toBe("schedule");
+      expect(nav.selected).toBe(HttpApi);
+      const target = Route.targetOf(router.match);
+      expect(target?._tag).toBe("LeafView");
+      expect(Route.viewOf(target)).toBe("schedule");
+      expect(Route.memberOf(target)).toBe(HttpApi);
+    });
+  });
+
+  it("TargetValue matrix — Group / Leaf / LeafView / Health helpers", () => {
+    run(Router.memory(hubSite), (router) => {
+      expect(Route.viewOf(undefined)).toBeUndefined();
+      expect(Route.memberOf(undefined)).toBeNull();
+
+      GroupNav.openKey(Hub, router, "Nwsl");
+      const groupTarget = Route.targetOf(router.match);
+      expect(groupTarget?._tag).toBe("Group");
+      expect(Route.viewOf(groupTarget)).toBeUndefined();
+      expect(Route.memberOf(groupTarget)).toBeNull();
+
+      GroupNav.open(Hub, router, HttpApi);
+      const leafTarget = Route.targetOf(router.match);
+      expect(leafTarget?._tag).toBe("Leaf");
+      expect(Route.viewOf(leafTarget)).toBeUndefined();
+      expect(Route.memberOf(leafTarget)).toBe(HttpApi);
+
+      GroupNav.openHealth(router);
+      const healthTarget = Route.targetOf(router.match);
+      expect(healthTarget?._tag).toBe("Health");
+      expect(Route.viewOf(healthTarget)).toBe("health");
+      expect(Route.memberOf(healthTarget)).toBeNull();
+    });
+  });
+
   it("Route.targetOf reads Target from match annotations", () => {
     const router = Router.make(hubSite, "Memory");
+    expect(router._tag).toBe("Memory");
     GroupNav.open(Hub, router, HttpApi);
     expect(Route.targetOf(undefined)).toBeUndefined();
     expect(Route.memberOf(Route.targetOf(router.match))).toBe(HttpApi);

@@ -5,7 +5,7 @@
  * Browser shell (handles + Outlet): `pnpm run example:apps-router-docs`.
  *
  * Run: `pnpm run example:ui-router-mini-docs`
- * Docs: `docs/examples/ui/router-mini-docs.md` Twoslash-includes this file.
+ * Docs: `docs/examples/ui/ui-router-mini-docs.md` Twoslash-includes this file.
  */
 
 // ---cut---
@@ -34,10 +34,13 @@ export const site = Route.make("docs").add(
 /** Typed URL builder — hover `urls.guides.workPools` in the docs / IDE. */
 export const urls = Route.urlBuilder(site);
 
-/** Live router over this catalog (`memory` for CLI; browser app uses `history`). */
+/**
+ * Live router over this catalog (`Memory` for CLI; browser app uses `History`).
+ * 2nd arg chooses the engine at install; the live field is `router._tag`.
+ */
 export const makeDocsRouter = (
-  mode: "Memory" | "History" = "Memory",
-): Router.Service<typeof site> => Router.make(site, mode);
+  engine: "Memory" | "History" = "Memory",
+): Router.Service<typeof site> => Router.make(site, engine);
 
 // ---cut-after---
 const program = Effect.gen(function* () {
