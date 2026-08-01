@@ -9,7 +9,7 @@
     "./*": "./src/*.ts"
   },
   "peerDependencies": {
-    "effect": "4.0.0-beta.98",
+    "effect": "4.0.0-beta.102",
     "prettier": ">=2",
     "shiki": "^4.3.1",
     "typescript": "^5.9.0"

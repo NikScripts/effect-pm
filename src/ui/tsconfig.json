@@ -103,7 +103,16 @@
     "../../test/ui-routes-from-effect.test-d.ts",
     "../../test/ui-router.test.ts",
     "../../test/ui-router.test-d.ts",
-    "../../test/ui-router-mini-docs.test-d.ts"
+    "../../test/ui-router-mini-docs.test-d.ts",
+    "../../test/ui-file-router-proto.test-d.ts",
+    "../../test/ui-file-router.test.ts",
+    "../../test/ui-file-router.test-d.ts",
+    "../../test/ui-page.test-d.ts",
+    "../../examples/ui/file-router/**/*.ts",
+    "./Page.ts",
+    "../vite/fileRouter.ts",
+    "../internal/fileRouterPaths.ts",
+    "../internal/uiFileRouter.ts"
   ],
   "exclude": ["../../node_modules", "../../dist"]
 }

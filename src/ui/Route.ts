@@ -42,6 +42,7 @@ import type * as Schema from "effect/Schema";
 import type { HttpApi, HttpApiGroup } from "effect/unstable/httpapi";
 import type { ReactNode } from "react";
 import * as endpoint from "../internal/uiRoute";
+import * as fileRouter from "../internal/uiFileRouter";
 import * as catalog from "../internal/uiRoutes";
 
 // =============================================================================
@@ -396,3 +397,30 @@ export const reflect: typeof catalog.reflect = catalog.reflect;
 
 /** Flat list of navigable paths (tests / debugging). @public */
 export const flatten: typeof catalog.flatten = catalog.flatten;
+
+// =============================================================================
+// File router (codegen path table → catalog)
+// =============================================================================
+
+/**
+ * Named group over a typed file-router table (`paths.gen` entries).
+ *
+ * ```ts
+ * Route.fileSystem("docs", fileEntries, { topLevel: true })
+ * ```
+ *
+ * @public
+ */
+export const fileSystem: typeof fileRouter.routeFileSystem =
+  fileRouter.routeFileSystem;
+
+/**
+ * `root` + `topLevel: true` over a typed file-router table.
+ *
+ * ```ts
+ * Route.make("app").add(Route.fileRoot(fileEntries))
+ * ```
+ *
+ * @public
+ */
+export const fileRoot: typeof fileRouter.fileRoot = fileRouter.fileRoot;

@@ -16,7 +16,10 @@ import { Dashboard } from "hyperlink-ts/web"
 ## Stack
 
 ```text
-DashboardLayer.forCompose({ skins, views? })
+Layer.mergeAll(DashboardViews.layer, appViews?).pipe(
+  Layer.provideMerge(Dashboard.componentsLayer),
+  Layer.provideMerge(View.base),
+)
   → View.compose({ views, router, group })
   → platform DashboardShell
 ```
@@ -24,7 +27,8 @@ DashboardLayer.forCompose({ skins, views? })
 | Piece | Import |
 |------|--------|
 | One-liner | `hyperlink-ts/web` / `hyperlink-ts/tui` → `Dashboard` |
-| Layer merge | `hyperlink-ts/ui/DashboardLayer` → `forCompose` |
+| Contributions | `import * as DashboardViews from "hyperlink-ts/ui/DashboardViews"` |
+| Platform | `import * as Dashboard from "hyperlink-ts/web\|tui/Dashboard"` (`componentsLayer` / `layer`) |
 | Compose kit | `hyperlink-ts/ui` → `View.compose` |
 | Shell | `DashboardShell` (same platform package) |
 | Observe | `Observe.use(tag, *View.pack)` / `NodeView.use` |
@@ -35,11 +39,13 @@ Escape hatch (same stack the one-liner uses):
 const site = Route.make("dashboard").add(
   Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub)),
 )
+import * as Dashboard from "hyperlink-ts/web/Dashboard"
+const views = Layer.mergeAll(DashboardViews.layer, appViews).pipe(
+  Layer.provideMerge(Dashboard.componentsLayer),
+  Layer.provideMerge(View.base),
+)
 const ui = View.compose({
-  views: DashboardLayer.forCompose({
-    skins: WebDashboardViews.skins,
-    views: appViews,
-  }),
+  views,
   router: Router.history(site),
   group: ServicesHub,
 })
@@ -55,7 +61,7 @@ Bare `ui.Grid` / `ui.Outlet` stay available but omit Cell / NodeBar / HealthBoar
 ## Targets and pages
 
 `Group.asRoutes` stamps a tagged `Route.TargetValue` on each destination
-(`Group` / `Leaf` / `LeafView` / `Health`). Skins read path segments with
+(`Group` / `Leaf` / `LeafView` / `Health`). View provides read path segments with
 `Route.viewOf` (`"logs"` / `"schedule"` / `"health"` — lowercase URL referents)
 and leaf selection with `Route.memberOf`. Live engine is `router._tag`
 (`"Memory"` / `"History"` / `"Waku"`) — not a separate mode field.

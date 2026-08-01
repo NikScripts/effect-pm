@@ -29,6 +29,8 @@ export {
 export * as View from "./View";
 /** UI routing toolkit — HttpApi-shaped make/group/get/match/urlBuilder. */
 export * as Route from "./Route";
+/** File-router page marks (`static` / `dynamic` / `build` / `layout`). */
+export * as Page from "./Page";
 /**
  * Lite runtime navigation over a Route catalog (`make` / `memory` / `history`).
  * Waku layer (not a second Router): `hyperlink-ts/ui/Router/waku`.
@@ -61,7 +63,5 @@ export * as ShardMapView from "./ShardMapView";
 export * as NodeView from "./NodeView";
 /** Merged Dashboard View contribution Layers (no platform TSX). */
 export * as DashboardViews from "./DashboardViews";
-/** Layer recipe: contributions + skins + View.base for {@link ./View.compose}. */
-export * as DashboardLayer from "./DashboardLayer";
 /** Provider only — renderers expose a typed `useWidgets` (web cards vs TUI cells). */
 export { WidgetsProvider } from "./widgetsContext";

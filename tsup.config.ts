@@ -10,6 +10,7 @@ const shared = {
     "@effect/sql-sqlite-node",
     "waku",
     "waku/router/client",
+    "vite",
   ],
 };
 
@@ -78,7 +79,8 @@ export default defineConfig([
       "ui/GroupNav": "src/ui/GroupNav.ts",
       "ui/GroupView": "src/ui/GroupView.ts",
       "ui/DashboardViews": "src/ui/DashboardViews.ts",
-      "ui/DashboardLayer": "src/ui/DashboardLayer.ts",
+      "ui/Page": "src/ui/Page.ts",
+      "vite/fileRouter": "src/vite/fileRouter.ts",
     },
     tsconfig: "src/ui/tsconfig.json",
     dts: true,
@@ -92,7 +94,7 @@ export default defineConfig([
     entry: {
       web: "src/web/index.ts",
       "web/WorkPoolView": "src/web/WorkPoolView.tsx",
-      "web/DashboardViews": "src/web/DashboardViews.tsx",
+      "web/Dashboard": "src/web/Dashboard.tsx",
       "web/NodeStatus": "src/web/NodeStatus.tsx",
     },
     tsconfig: "src/web/tsconfig.json",
@@ -107,7 +109,7 @@ export default defineConfig([
     entry: {
       tui: "src/tui/index.ts",
       "tui/WorkPoolView": "src/tui/WorkPoolView.tsx",
-      "tui/DashboardViews": "src/tui/DashboardViews.tsx",
+      "tui/Dashboard": "src/tui/Dashboard.tsx",
     },
     tsconfig: "src/tui/tsconfig.json",
     dts: true,

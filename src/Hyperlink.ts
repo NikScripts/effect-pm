@@ -87,6 +87,7 @@ import {
   HttpClient,
   HttpRouter,
 } from "effect/unstable/http";
+import * as SchemaAST from "effect/SchemaAST";
 import * as Socket from "effect/unstable/socket/Socket";
 import type { Simplify } from "effect/Types";
 import {
@@ -1152,16 +1153,7 @@ export const isVoidCommand = (m: AnyMethod): boolean => {
   if (m.payload !== undefined) {
     return false;
   }
-  return (
-    m.success === Schema.Void ||
-    (typeof m.success === "object" &&
-      m.success !== null &&
-      "ast" in m.success &&
-      typeof m.success.ast === "object" &&
-      m.success.ast !== null &&
-      "_tag" in m.success.ast &&
-      m.success.ast._tag === "Void")
-  );
+  return m.success === Schema.Void || SchemaAST.isVoid(m.success.ast);
 };
 
 /**

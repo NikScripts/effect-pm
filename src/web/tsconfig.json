@@ -105,8 +105,9 @@
     "../../test/view-effect-service-poc.test-d.ts",
     "../../examples/apps/view-scratch/**/*.ts",
     "../tui/cellWidgets.tsx",
-    // DashboardViews skins (imported by ui-dashboard-views tests).
-    "../tui/DashboardViews.tsx",
+    // TUI Dashboard + internals (imported by ui-dashboard-views tests).
+    "../tui/Dashboard.tsx",
+    "../internal/tuiDashboard.tsx",
     "../tui/focusWidgets.tsx"
   ],
   "exclude": ["../../node_modules", "../../dist"]

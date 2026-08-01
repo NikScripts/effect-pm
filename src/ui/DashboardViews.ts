@@ -1,8 +1,20 @@
 /**
  * @module ui/DashboardViews
  *
- * Merged View contribution Layers for the batteries-included Dashboard families.
- * Platform packages merge skins + {@link View.base} into a ready `layer` for {@link View.react}.
+ * Merged View contribution Layers for the batteries-included Dashboard families
+ * (`View.bind` / `only` — no platform TSX). This is the **only** `DashboardViews`
+ * namespace; web/TUI implementations live on `hyperlink-ts/web|tui/Dashboard`.
+ *
+ * ```ts
+ * import * as DashboardViews from "hyperlink-ts/ui/DashboardViews"
+ * import * as Dashboard from "hyperlink-ts/web/Dashboard"
+ *
+ * Layer.mergeAll(DashboardViews.layer, appViews).pipe(
+ *   Layer.provideMerge(Dashboard.componentsLayer),
+ *   Layer.provideMerge(View.base),
+ * )
+ * // no app contributions: Dashboard.layer
+ * ```
  */
 import { Layer } from "effect";
 import * as ApiMetricsView from "./ApiMetricsView";

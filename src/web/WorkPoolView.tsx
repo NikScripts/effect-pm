@@ -1,7 +1,7 @@
 /**
  * @module web/WorkPoolView
  *
- * Web (DOM) skins for shared {@link WorkPoolView} handles — {@link View.provide} only.
+ * Web (DOM) implementations for shared {@link WorkPoolView} handles — {@link View.provide} only.
  */
 import { Layer } from "effect";
 import { isQueueTag } from "../ui/data";
@@ -14,11 +14,11 @@ import { LogsPage } from "./resourcePages";
 import { displayName, QueueCard, QueueDetailPanel } from "./widgets";
 
 /**
- * Web TSX provides for {@link WorkPoolView.PoolCard} / {@link WorkPoolView.PoolDetail}.
+ * Web TSX implementations for {@link WorkPoolView.PoolCard} / {@link WorkPoolView.PoolDetail}.
  *
  * @public
  */
-export const skins: Layer.Layer<
+export const componentsLayer: Layer.Layer<
   WorkPoolView.PoolCard | WorkPoolView.PoolDetail | WorkPoolView.PoolPage
 > = Layer.mergeAll(
   View.provide(WorkPoolView.PoolCard, (props) => {
@@ -56,7 +56,7 @@ export const skins: Layer.Layer<
  * @public
  */
 export const layer = WorkPoolView.layer.pipe(
-  Layer.provideMerge(skins),
+  Layer.provideMerge(componentsLayer),
   Layer.provideMerge(View.base),
 );
 

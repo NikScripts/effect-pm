@@ -34,12 +34,12 @@
   },
   "dependencies": {
     "@djot/djot": "^0.3.2",
-    "@effect/platform-node": "4.0.0-beta.98",
+    "@effect/platform-node": "4.0.0-beta.102",
     "@nikscripts/docgen": "file:../docgen",
     "@shikijs/twoslash": "^4.3.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "effect": "4.0.0-beta.98",
+    "effect": "4.0.0-beta.102",
     "hono": "^4.12.14",
     "lucide-react": "^1.24.0",
     "mdast-util-from-markdown": "^2.0.3",
@@ -60,7 +60,7 @@
   "devDependencies": {
     "@dotenvx/dotenvx": "^2.19.0",
     "@effect/language-service": "^0.86.2",
-    "@effect/vitest": "4.0.0-beta.98",
+    "@effect/vitest": "4.0.0-beta.102",
     "@tailwindcss/vite": "^4.3.2",
     "@types/compression": "^1.8.1",
     "@types/node": "^22.10.0",

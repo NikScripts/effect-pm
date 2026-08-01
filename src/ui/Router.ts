@@ -32,6 +32,7 @@
  */
 import * as React from "react";
 import { Context, Layer } from "effect";
+import * as fileRouter from "../internal/uiFileRouter";
 import * as internal from "../internal/uiRouter";
 import type { ApiConstraint } from "../internal/uiRoutes";
 import * as Route from "./Route";
@@ -95,6 +96,14 @@ export const memory = (api: ApiConstraint): Layer.Layer<Router> =>
 export const history = (api: ApiConstraint): Layer.Layer<Router> =>
   Layer.sync(Router, () => internal.makeService(api, "History"));
 
+/**
+ * Typed destinations from a file-router path table — use with
+ * `Route.group(…).fromEffect(Router.fileSystem(fileEntries))` or {@link ./Route.fileRoot}.
+ *
+ * @public
+ */
+export const fileSystem: typeof fileRouter.fileSystem = fileRouter.fileSystem;
+
 // =============================================================================
 // React
 // =============================================================================
@@ -102,7 +111,7 @@ export const history = (api: ApiConstraint): Layer.Layer<Router> =>
 const RouterReactContext = React.createContext<Service | null>(null);
 
 /**
- * Provide a live {@link Service} to descendant skins.
+ * Provide a live {@link Service} to descendant View provides / shells.
  *
  * @public
  */

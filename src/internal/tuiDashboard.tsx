@@ -1,8 +1,6 @@
 /**
- * @module tui/DashboardViews
- *
- * TUI (Ink) skins for all default Dashboard View families — `View.provide` only.
- * Ready {@link layer} for {@link View.react}.
+ * Internal eng for {@link ../tui/Dashboard} — View.provide bag, ready `layer`,
+ * and batteries `<Dashboard>` wiring.
  */
 import { Box, Text } from "ink";
 import * as React from "react";
@@ -10,7 +8,7 @@ import { Option, Layer } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import * as Group from "../Group";
 import * as Observe from "../Observe";
-import { useAtomValue } from "../ui/atom-react";
+import { RegistryProvider, useAtomValue } from "../ui/atom-react";
 import {
   isApiTag,
   isDaemonTag,
@@ -20,11 +18,15 @@ import {
   isQueueTag,
   isShardMapTag,
   isTelemetryTag,
+  type DashboardRuntime,
+  type GroupNode,
   type QueueTag,
 } from "../ui/data";
+import * as GroupNav from "../ui/GroupNav";
 import * as Route from "../ui/Route";
 import * as Router from "../ui/Router";
 import * as View from "../ui/View";
+import { WidgetsProvider } from "../ui/widgetsContext";
 import * as ApiMetricsView from "../ui/ApiMetricsView";
 import * as DaemonView from "../ui/DaemonView";
 import * as DashboardViews from "../ui/DashboardViews";
@@ -36,14 +38,18 @@ import * as PriorityView from "../ui/PriorityView";
 import * as ShardMapView from "../ui/ShardMapView";
 import * as TelemetryView from "../ui/TelemetryView";
 import * as WorkPoolView from "../ui/WorkPoolView";
+import { DashboardShell } from "../tui/DashboardShell";
+import { RuntimeProvider } from "../tui/runtime";
 import {
+  base,
   DaemonCell,
   FallbackCell,
   GroupCell,
   PriorityCell,
   QueueCell,
-} from "./cellWidgets";
-import { FocusedDaemon, FocusedPriority, LogTail } from "./focusWidgets";
+  type TuiWidgetRegistry,
+} from "../tui/cellWidgets";
+import { FocusedDaemon, FocusedPriority, LogTail } from "../tui/focusWidgets";
 import {
   ApiCell,
   FocusedApi,
@@ -55,14 +61,14 @@ import {
   GateCell,
   ShardMapCell,
   TelemetryCell,
-} from "./kindCells";
+} from "../tui/kindCells";
 import {
   displayName,
   PageXL,
   type Priority,
   type Status,
   type View as QueueSnapshot,
-} from "./queueWidget";
+} from "../tui/queueWidget";
 
 const statusOf = (lifecycleTag: string): Status =>
   lifecycleTag === "Idle"
@@ -405,11 +411,11 @@ const GateDetailView: View.View = (props) => {
 };
 
 /**
- * TUI TSX provides for all {@link DashboardViews} handles.
+ * TUI TSX implementations for all {@link DashboardViews} handles.
  *
- * @public
+ * @internal
  */
-export const skins = Layer.mergeAll(
+export const componentsLayer = Layer.mergeAll(
   View.provide(GroupView.GroupCard, GroupCardView),
   View.provide(WorkPoolView.PoolCard, PoolCardView),
   View.provide(WorkPoolView.PoolDetail, PoolDetailView),
@@ -435,9 +441,58 @@ export const skins = Layer.mergeAll(
 /**
  * Fully provided Dashboard View Layer for the TUI (`R = never`) — ready for {@link View.react}.
  *
- * @public
+ * @internal
  */
 export const layer = DashboardViews.layer.pipe(
-  Layer.provideMerge(skins),
+  Layer.provideMerge(componentsLayer),
   Layer.provideMerge(View.base),
 );
+
+const routesFor = (group: GroupNode) =>
+  Route.make("dashboard").add(
+    Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(group)),
+  );
+
+/**
+ * Batteries-included terminal dashboard wiring.
+ *
+ * @internal
+ */
+export const Dashboard = <R, ER>(props: {
+  readonly runtime: DashboardRuntime<R, ER>;
+  readonly group: GroupNode;
+  readonly path?: ReadonlyArray<string>;
+  readonly views?: Layer.Layer<never, never, View.Registry>;
+  readonly widgets?: TuiWidgetRegistry;
+}): React.ReactElement => {
+  const ui = React.useMemo(() => {
+    const views = Layer.mergeAll(
+      DashboardViews.layer,
+      props.views ?? Layer.empty,
+    ).pipe(
+      Layer.provideMerge(componentsLayer),
+      Layer.provideMerge(View.base),
+    );
+    const composed = View.compose({
+      views,
+      router: Router.memory(routesFor(props.group)),
+      group: props.group,
+    });
+    for (const key of props.path ?? []) {
+      GroupNav.openKey(props.group, composed.router, key);
+    }
+    return composed;
+  }, [props.group, props.views, props.path]);
+
+  return (
+    <RegistryProvider>
+      <ui.Provider>
+        <WidgetsProvider registry={props.widgets ?? base}>
+          <RuntimeProvider runtime={props.runtime}>
+            <DashboardShell group={props.group} />
+          </RuntimeProvider>
+        </WidgetsProvider>
+      </ui.Provider>
+    </RegistryProvider>
+  );
+};
