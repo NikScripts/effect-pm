@@ -18,8 +18,9 @@
 
 ## What this shows
 
-`Hyperlink.deferStart` keeps a WorkPool Idle; `Lifecycle.from` / `of` drive start /
-pause / resume; badge SSOT is `lifecycle._tag`; control verb `stop` awaits Off.
+`Hyperlink.deferStart` keeps a WorkPool Idle; `Lifecycle.start(jobs)` / `pause` /
+`resume` duals drive the Participating handle; badge SSOT is `lifecycle._tag`;
+control verb `stop` awaits Off.
 
 {.twoslash include="examples/lifecycle/make-and-tools.ts"}
 ``` ts

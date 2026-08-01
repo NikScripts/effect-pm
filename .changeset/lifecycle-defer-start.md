@@ -2,12 +2,12 @@
 "hyperlink-ts": minor
 ---
 
-Effect-shaped `Lifecycle.Service` — FiberHandle/Set + Latch + SubscriptionRef.
+Effect-native `Lifecycle` — compose FiberHandle/Set + Latch; dual ops; derived events.
 
-- **`Lifecycle.make({ run, latch?, release?, awaitBeforeTerminal?, restartable?, fiber? })`**
-- **`_tag` everywhere:** `State`, `Event`, and errors (`LifecycleUnsupported` /
-  `LifecycleIllegal`) — match with `runForEachTag` / `Effect.catchTag`
-- **`Lifecycle.spec` / `impl`** Spec fragments; tools via `of` / `from`
-- Daemon + WorkPool engines use `make`; WorkPool exposes `lifecycle` (`Lifecycle.State`) as badge SSOT
-- **`Hyperlink.deferStart`** — Layer pipe; Idle until `start` (retires `autoStart` config)
-- WorkPool control verb **`shutdown` → `stop`**; drop `status.phase` (use `lifecycle._tag`)
+- **`Lifecycle.make({ run, latch?, release?, awaitBeforeTerminal?, afterStop?, fibers? })`**
+- **Dual ops** on handles, Participating, *and* Tag Effects: `Lifecycle.start(lc|jobs|Jobs)` / `pause` / `resume` / `stop` / `events`
+- Spec Subscribable badge: **`Lifecycle.stateRef`** / **`eventStream`**; Role stamps **`asState`** / `asStart` / …
+- **`Lifecycle.impl`** wire-ready (`never` errors); duals re-check Illegal
+- No projected `Service` / `of` / `from` / `*From` helpers
+- Engine in `internal/lifecycle` (+ `lifecycleModel`); Scope `addFinalizer` → `stop`
+- `ui/LifecycleView` pack (chrome → Agent G)

@@ -114,6 +114,7 @@ export interface WorkPoolPriorityHandleApi<
   readonly status: Hyperlink.Subscribable<WorkPoolPriorityStatus>;
   readonly metrics: Stream.Stream<QueueMetrics>;
   readonly lifecycle: Hyperlink.Subscribable<Lifecycle.State>;
+  readonly lifecycleEvents: Stream.Stream<Lifecycle.Event>;
   readonly start: Effect.Effect<void, never, R>;
   readonly pause: Effect.Effect<void>;
   readonly resume: Effect.Effect<void>;
@@ -259,6 +260,7 @@ const wrapWorkPoolPriorityHandle = <T, E, EEnqueue, R>(
     status: engine.status,
     metrics: engine.metrics,
     lifecycle: engine.lifecycle,
+    lifecycleEvents: engine.lifecycleEvents,
     start: engine.start,
     pause: engine.pause,
     resume: engine.resume,

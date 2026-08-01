@@ -164,6 +164,10 @@
       "types": "./dist/ui/DaemonView.d.ts",
       "default": "./dist/ui/DaemonView.js"
     },
+    "./ui/LifecycleView": {
+      "types": "./dist/ui/LifecycleView.d.ts",
+      "default": "./dist/ui/LifecycleView.js"
+    },
     "./ui/GateView": {
       "types": "./dist/ui/GateView.d.ts",
       "default": "./dist/ui/GateView.js"

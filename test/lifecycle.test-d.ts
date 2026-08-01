@@ -2,8 +2,9 @@
  * Type-level lock: Lifecycle State / Event / errors keep stable `_tag` so
  * `Match`, `Hyperlink.runForEachTag`, and `Effect.catchTag` stay dependable.
  * WorkPool control verb is `stop` (no `shutdown`); Participating has no shutdown alias.
+ * Caps: LifecycleCore has no Latch; LifecyclePausable has latch.
  */
-import type { Effect } from "effect";
+import type { Effect, Latch, SubscriptionRef } from "effect";
 import * as Lifecycle from "../src/Lifecycle";
 import type { WorkPool } from "../src/WorkPool";
 
@@ -41,9 +42,34 @@ declare const participating: Lifecycle.Participating;
 // @ts-expect-error Participating has stop only — no shutdown alias
 participating.shutdown;
 
+declare const jobsTag: Effect.Effect<Lifecycle.Participating>;
+const _startHandle: Effect.Effect<void, Lifecycle.Illegal> =
+  Lifecycle.start(participating);
+const _startTag: Effect.Effect<void, Lifecycle.Illegal> =
+  Lifecycle.start(jobsTag);
+void _startHandle;
+void _startTag;
+
+declare const core: Lifecycle.LifecycleCore;
+declare const pausable: Lifecycle.LifecyclePausable;
+// Structural caps: no Latch ⇒ latch is undefined; Pausable carries Latch.
+true satisfies AssertExact<Lifecycle.LifecycleCore["latch"], undefined>;
+true satisfies AssertExact<
+  Lifecycle.LifecyclePausable["latch"],
+  Latch.Latch
+>;
+true satisfies AssertExact<
+  Lifecycle.LifecycleCore["state"],
+  SubscriptionRef.SubscriptionRef<Lifecycle.State>
+>;
+// Fibers are real Handle | Set, not a string mode.
+true satisfies AssertExact<Lifecycle.Fibers["_tag"], "Handle" | "Set">;
+
 void unsupported;
 void illegal;
 void state;
 void event;
 void pool;
 void participating;
+void core;
+void pausable;

@@ -49,6 +49,7 @@ const stub = {
   lifecycle: Hyperlink.mapSubscribable(statusSub, () => ({
     _tag: "Running" as const,
   })),
+  lifecycleEvents: Stream.empty,
   metrics: {
     stream: Stream.empty,
     query: () => Effect.succeed([]),

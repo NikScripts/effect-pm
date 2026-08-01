@@ -18,7 +18,8 @@
 
 ## What this shows
 
-A first Counter Tag, local implementation, `Hyperlink.layer`, and `yield* Counter` call site.
+Counter Tag with `Lifecycle.stateRef` / `eventStream`, domain `reset` kept, one
+`SubscriptionRef` for the value, provided via `Hyperlink.layer` (not a `*Live` alias).
 
 {.twoslash include="examples/hyperlink/counter-layer.ts"}
 ``` ts

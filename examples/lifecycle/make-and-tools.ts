@@ -1,10 +1,10 @@
 /**
  * @module examples/lifecycle/make-and-tools
  *
- * Effect-shaped Lifecycle on a WorkPool: `Hyperlink.deferStart`, `Lifecycle.from`,
- * `lifecycle._tag` badge, and control verb `stop` → Off.
+ * Effect-shaped Lifecycle on a WorkPool: `Hyperlink.deferStart`, Participating
+ * duals (`Lifecycle.start(jobs)`), `lifecycle._tag` badge, and `stop` → Off.
  *
- * Tip surface: `Lifecycle.from` / `of`, `Hyperlink.deferStart`, WorkPool `stop`.
+ * Tip surface: `Lifecycle.start(jobs|Tag)`, `Hyperlink.deferStart`, WorkPool `stop`.
  * Run: `pnpm run example:lifecycle-make-and-tools`
  *
  * Docs: `docs/examples/lifecycle/make-and-tools.md` includes this file via Twoslash;
@@ -23,7 +23,7 @@ class Jobs extends WorkPool.Tag<Jobs>()("examples/lifecycle/Jobs", {
   payload: Job,
 }) {}
 
-const Live = WorkPool.layer(Jobs, {
+const layer = WorkPool.layer(Jobs, {
   concurrency: 1,
   effect: (job) => Effect.logInfo(`handled ${job.id}`),
 }).pipe(Hyperlink.deferStart);
@@ -35,34 +35,31 @@ const assertTag = (state: { readonly _tag: string }, tag: string) =>
 
 const program = Effect.gen(function* () {
   const jobs = yield* Jobs;
-  const lc = yield* Lifecycle.from(Jobs);
 
   // Deferred layer → Idle until start.
-  yield* assertTag(yield* lc.state.get, "Idle");
   yield* assertTag(yield* jobs.lifecycle.get, "Idle");
 
-  yield* lc.start;
-  yield* assertTag(yield* lc.state.get, "Running");
+  yield* Lifecycle.start(jobs);
+  yield* assertTag(yield* jobs.lifecycle.get, "Running");
 
   yield* jobs.add({ id: "a" });
   while ((yield* jobs.status.get).completed < 1) {
     yield* Effect.sleep(Duration.millis(10));
   }
 
-  yield* lc.pause;
+  yield* Lifecycle.pause(jobs);
   yield* assertTag(yield* jobs.lifecycle.get, "Paused");
-  yield* lc.resume;
+  yield* Lifecycle.resume(jobs);
   yield* assertTag(yield* jobs.lifecycle.get, "Running");
 
-  // Tool projection matches the handle badge.
-  const viaOf = Lifecycle.of(jobs);
-  yield* assertTag(yield* viaOf.state.get, "Running");
+  // Tag overload (same as Lifecycle.start(jobs)).
+  yield* Lifecycle.start(Jobs);
 
   // stop awaits Off (graceful drain).
   yield* jobs.stop;
   yield* assertTag(yield* jobs.lifecycle.get, "Off");
   yield* Effect.logInfo("Jobs stopped — lifecycle Off");
-}).pipe(Effect.provide(Live), Effect.scoped);
+}).pipe(Effect.provide(layer), Effect.scoped);
 
 void Effect.runPromise(
   program.pipe(

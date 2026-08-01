@@ -583,11 +583,8 @@ export const queueControlSpec = {
       "Live current-state snapshot: per-priority sizes, paused, in-flight, completed.",
   }),
   // Shared Lifecycle protocol — tools read this via methodMeta(…).lifecycle === "State".
-  lifecycle: Hyperlink.ref(Lifecycle.State)
-    .annotate({
-      description: "Lifecycle badge (Idle / Running / Paused / Draining / Off).",
-    })
-    .pipe(Lifecycle.state),
+  lifecycle: Lifecycle.stateRef,
+  lifecycleEvents: Lifecycle.eventStream,
   size: Hyperlink.ref(Schema.Number).annotate({
     description: "Total pending items across all priority lanes.",
   }),
@@ -601,17 +598,17 @@ export const queueControlSpec = {
       description:
         "Fork the worker pool + lifecycle monitor (idempotent; no-op after stop).",
     })
-    .pipe(Lifecycle.start),
+    .pipe(Lifecycle.asStart),
   pause: Hyperlink.effect(Schema.Void)
     .annotate({
       description: "Pause processing; items can still be enqueued and accumulate.",
     })
-    .pipe(Lifecycle.pause),
+    .pipe(Lifecycle.asPause),
   resume: Hyperlink.effect(Schema.Void)
     .annotate({
       description: "Resume processing after a pause.",
     })
-    .pipe(Lifecycle.resume),
+    .pipe(Lifecycle.asResume),
   stop: Hyperlink.effect(Schema.Void)
     .annotate({
       description:
@@ -619,7 +616,7 @@ export const queueControlSpec = {
         "in-flight finishes, queued items drained or discarded per shutdownMode, then Off.",
       destructive: true,
     })
-    .pipe(Lifecycle.stop),
+    .pipe(Lifecycle.asStop),
   clear: Hyperlink.effect(Schema.Number).annotate({
     description:
       "Drain all pending items and reset the completed counter; returns the count cleared.",
@@ -939,6 +936,8 @@ export interface WorkPool<
   readonly status: Hyperlink.Subscribable<QueueStatus>;
   /** Shared {@link Lifecycle.State} badge — Role `"State"` for generic tools. */
   readonly lifecycle: Hyperlink.Subscribable<Lifecycle.State>;
+  /** Lifecycle transition stream — not {@link WorkPool.events} (queue domain). */
+  readonly lifecycleEvents: Stream.Stream<Lifecycle.Event>;
   /** Total pending items across all priority lanes. */
   readonly size: Hyperlink.Subscribable<number>;
   /** Whether all priority queues are empty. */
@@ -1432,14 +1431,7 @@ const buildQueueImpl = <
     // `Effect.provideContext` per method instead of any per-method wrapping — and its `ProvidedContext`
     // result strips `R` so the impl satisfies `ImplOf`. Stream / Subscribable members
     // (`status`/`size`/`isEmpty`/`*.stream`/`events`) pass through untouched.
-    // First-class Lifecycle.Service — tools use `Lifecycle.of(queue)` / `Lifecycle.from(Tag)`.
-    const lifecycle = Lifecycle.of({
-      lifecycle: handle.lifecycle,
-      start: handle.start,
-      pause: handle.pause,
-      resume: handle.resume,
-      stop: handle.stop,
-    });
+    // Participating fields pass through; tools use `Lifecycle.start(jobs)` duals.
     const impl: Hyperlink.WithRequirement<
       ImplOf<QueueInstanceSpec<F, Success, Error>>,
       R | RR
@@ -1449,13 +1441,12 @@ const buildQueueImpl = <
       // through. The adapter only *adds* cross-cutting concerns: `metrics.query` (history),
       // `orDie` on the enqueue verbs (impossible-failure → defect), and RPC wiring.
       status: handle.status,
-      lifecycle: lifecycle.state,
-      start: lifecycle.start.pipe(
-        Effect.catchTag("LifecycleIllegal", () => Effect.void),
-      ),
-      pause: lifecycle.pause.pipe(Effect.orDie),
-      resume: lifecycle.resume.pipe(Effect.orDie),
-      stop: lifecycle.stop,
+      lifecycle: handle.lifecycle,
+      lifecycleEvents: handle.lifecycleEvents,
+      start: handle.start,
+      pause: handle.pause,
+      resume: handle.resume,
+      stop: handle.stop,
       size: handle.size,
       isEmpty: handle.isEmpty,
       clear: handle.clear,
@@ -1622,11 +1613,8 @@ export const priorityControlSpec = {
     description:
       "Live current-state snapshot: per-lane sizes, paused, in-flight, completed.",
   }),
-  lifecycle: Hyperlink.ref(Lifecycle.State)
-    .annotate({
-      description: "Lifecycle badge (Idle / Running / Paused / Draining / Off).",
-    })
-    .pipe(Lifecycle.state),
+  lifecycle: Lifecycle.stateRef,
+  lifecycleEvents: Lifecycle.eventStream,
   size: Hyperlink.ref(Schema.Number).annotate({
     description: "Total pending items across all lanes.",
   }),
@@ -1645,17 +1633,17 @@ export const priorityControlSpec = {
       description:
         "Fork the worker pool + lifecycle monitor (idempotent; no-op after stop).",
     })
-    .pipe(Lifecycle.start),
+    .pipe(Lifecycle.asStart),
   pause: Hyperlink.effect(Schema.Void)
     .annotate({
       description: "Pause processing; items can still be enqueued and accumulate.",
     })
-    .pipe(Lifecycle.pause),
+    .pipe(Lifecycle.asPause),
   resume: Hyperlink.effect(Schema.Void)
     .annotate({
       description: "Resume processing after a pause.",
     })
-    .pipe(Lifecycle.resume),
+    .pipe(Lifecycle.asResume),
   stop: Hyperlink.effect(Schema.Void)
     .annotate({
       description:
@@ -1663,7 +1651,7 @@ export const priorityControlSpec = {
         "in-flight finishes, queued items drained or discarded per shutdownMode, then Off.",
       destructive: true,
     })
-    .pipe(Lifecycle.stop),
+    .pipe(Lifecycle.asStop),
   clear: Hyperlink.effect(Schema.Number).annotate({
     description:
       "Drain all pending items and reset the completed counter; returns the count cleared.",
@@ -1968,25 +1956,17 @@ const buildPriorityImpl = <Self, F extends PriorityItemFields, E, R, RR = never>
     // `status` is the SSOT Subscribable on the handle; scalars are mapped views of it.
     // Worker methods are built unwrapped (each still carrying `R | RR`); `grantLocal` / wire invoke
     // discharge `context` into every Effect method uniformly — same bundle pattern as WorkPool.
-    const lifecycle = Lifecycle.of({
-      lifecycle: handle.lifecycle,
-      start: handle.start,
-      pause: handle.pause,
-      resume: handle.resume,
-      stop: handle.stop,
-    });
     const impl: Hyperlink.WithRequirement<
       ImplOf<PriorityInstanceSpec<F>>,
       R | RR
     > = {
       status: handle.status,
-      lifecycle: lifecycle.state,
-      start: lifecycle.start.pipe(
-        Effect.catchTag("LifecycleIllegal", () => Effect.void),
-      ),
-      pause: lifecycle.pause.pipe(Effect.orDie),
-      resume: lifecycle.resume.pipe(Effect.orDie),
-      stop: lifecycle.stop,
+      lifecycle: handle.lifecycle,
+      lifecycleEvents: handle.lifecycleEvents,
+      start: handle.start,
+      pause: handle.pause,
+      resume: handle.resume,
+      stop: handle.stop,
       size: Hyperlink.mapSubscribable(handle.status, (s) => sumLaneSizes(s.sizes)),
       isEmpty: Hyperlink.mapSubscribable(handle.status, (s) => sumLaneSizes(s.sizes) === 0),
       levelSizes: handle.levelSizes,
