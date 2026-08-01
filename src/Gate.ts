@@ -70,8 +70,9 @@
  * @module Gate
  */
 
-import { Context, Effect, Layer, Schema, Scope } from "effect";
+import { Context, Effect, Layer, Schema, Scope, Stream } from "effect";
 import * as Hyperlink from "./Hyperlink";
+import * as Lifecycle from "./Lifecycle";
 import type {
   Driver,
   HandlerContextOf,
@@ -103,6 +104,7 @@ import * as Store from "./Store";
 import {
   gateStatus,
   gateSpec,
+  gateSetRateLimitPayload,
   type GateInstanceSpec,
 } from "./internal/gateSchema";
 
@@ -158,6 +160,36 @@ export type InstanceSpec<
  * @public
  */
 export type Status = internal.GateStatus;
+
+/**
+ * Failure when a call is admitted to a **stopped** gate (Lifecycle `Draining` / `Off`),
+ * or a waiting call is failed by a `stopMode: "failWaiting"` stop. In-flight bodies always
+ * finish. Match with `Effect.catchTag("GateStopped", …)`.
+ *
+ * @category errors
+ * @public
+ */
+export const GateStopped = internal.GateStopped;
+
+/**
+ * The {@link GateStopped} error type ({@link https://effect.website | Effect} tagged error).
+ *
+ * @category errors
+ * @public
+ */
+export type GateStopped = internal.GateStopped;
+
+/**
+ * How a `stop` treats calls already **waiting** for a permit / resume:
+ * - `"failWaiting"` (default) — fail them with {@link GateStopped}.
+ * - `"finishWaiting"` — let them acquire + run; only new calls are rejected.
+ *
+ * In-flight bodies always finish regardless.
+ *
+ * @category models
+ * @public
+ */
+export type StopMode = internal.GateStopMode;
 
 /**
  * Minimal handle from {@link Gate.make} — `.run` only.
@@ -231,6 +263,27 @@ export interface Gate<
   readonly run: [Payload] extends [void]
     ? Effect.Effect<Success, Error, Requirements>
     : (input: Payload) => Effect.Effect<Success, Error, Requirements>;
+  /** Shared {@link Lifecycle.State} badge (`_tag`) — SSOT from the gate's {@link Lifecycle}. */
+  readonly lifecycle: Hyperlink.Subscribable<Lifecycle.State>;
+  /** Lifecycle transition stream ({@link Lifecycle.Event}). */
+  readonly lifecycleEvents: Stream.Stream<Lifecycle.Event>;
+  /** Start the gate (Idle → Running). No-op once past Idle; idempotent. */
+  readonly start: Effect.Effect<void>;
+  /** Pause admission — new calls latch-block (including waiters) until {@link resume}. */
+  readonly pause: Effect.Effect<void>;
+  /** Resume after {@link pause} — latch opens, held callers proceed. */
+  readonly resume: Effect.Effect<void>;
+  /**
+   * Stop the gate (graceful). New calls fail {@link GateStopped}; in-flight always finishes.
+   * Waiting calls fail or finish per `stopMode`. Awaits drain, then Off.
+   */
+  readonly stop: Effect.Effect<void>;
+  /** Live-resize the concurrency limit (`Semaphore.resize` + bump `configVersion`). */
+  readonly setConcurrency: (concurrency: number) => Effect.Effect<void>;
+  /** Live-reconfigure the rate limit (bumps `configVersion`); `null` clears it. */
+  readonly setRateLimit: (
+    rateLimit: Hyperlink.Decoded<typeof gateSetRateLimitPayload>,
+  ) => Effect.Effect<void>;
 }
 
 /**
@@ -411,6 +464,11 @@ export interface ServiceConfig<
    * Omitted = no rate limit (only {@link concurrency}).
    */
   readonly rateLimit?: RateLimitOptions;
+  /**
+   * How `stop` treats calls already waiting for a permit / resume.
+   * @default "failWaiting"
+   */
+  readonly stopMode?: StopMode;
 }
 
 /**
@@ -435,6 +493,11 @@ export interface LayerConfig<I, A, E, R> {
    */
   readonly rateLimit?: RateLimitOptions;
   /**
+   * How `stop` treats calls already waiting for a permit / resume.
+   * @default "failWaiting"
+   */
+  readonly stopMode?: StopMode;
+  /**
    * Node handoff (Locked #39) — run on the OUTGOING node during {@link Node.shutdown} after drain.
    * `(from, to, ctx) => Effect<void | HandoffOutcome>`. Gates default to non-transferable (#34), so
    * this is opt-in; omit ⇒ not migrated. Threaded to {@link Hyperlink.serve}'s options.
@@ -457,6 +520,11 @@ export interface Config<T, A, E> {
    * Omitted = no rate limit (only {@link concurrency}).
    */
   readonly rateLimit?: RateLimitOptions;
+  /**
+   * How `stop` treats calls already waiting for a permit / resume.
+   * @default "failWaiting"
+   */
+  readonly stopMode?: StopMode;
 }
 
 /**
@@ -645,7 +713,16 @@ const materializeGateTag = <Self>() =>
       kind,
     });
     const ready = Hyperlink.withReadiness(tag, (svc) =>
-      Effect.map(svc.status.get, () => ({ ready: true })),
+      Effect.map(svc.lifecycle.get, (state) => ({
+        // Idle (deferred start) / Running / Paused stay dialable; Draining / Off do not.
+        ready:
+          state._tag === "Running" ||
+          state._tag === "Idle" ||
+          state._tag === "Paused",
+        ...(state._tag === "Running"
+          ? {}
+          : { detail: `lifecycle: ${state._tag}` }),
+      })),
     );
     const stamped = stampGateWireSchemas(ready, {
       success: config.success,
@@ -848,6 +925,7 @@ const buildRunImpl = <
         provideR(toRunFn(effectiveConfig.effect)(input)),
       concurrency: effectiveConfig.concurrency,
       rateLimit: effectiveConfig.rateLimit,
+      stopMode: effectiveConfig.stopMode,
     });
 
     const statusSub = {
@@ -878,6 +956,10 @@ const buildRunImpl = <
       failed: handle.failed,
       interrupted: handle.interrupted,
       metrics: handle.metrics,
+      // Shared Lifecycle protocol (badge + events + start/pause/resume/stop) from the engine handle.
+      ...Lifecycle.impl(handle.lifecycle),
+      setConcurrency: handle.setConcurrency,
+      setRateLimit: handle.setRateLimit,
       run: runImpl,
     } as unknown as Hyperlink.WithRequirement<ImplOf<InstanceSpec<I, A, E>>, R>;
     return Hyperlink.driver(tag, impl, context);
@@ -1088,6 +1170,7 @@ export const Service = <Self>() => {
       effect: config.effect,
       concurrency: config.concurrency,
       rateLimit: config.rateLimit,
+      stopMode: config.stopMode,
       name,
     };
     return Object.assign(tag, {

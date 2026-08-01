@@ -8,6 +8,7 @@
 import { Schema } from "effect";
 import * as Hyperlink from "../Hyperlink";
 import type { Method, RefField } from "../Hyperlink";
+import * as Lifecycle from "../Lifecycle";
 
 /** Live gate counters on the wire — element of the reactive `status` ref. @internal */
 export const gateStatus = Schema.Struct({
@@ -93,7 +94,65 @@ export const gateMetricsNestSpec = {
 /** Default nest path for limiter observation (rename via Tag/Service `metricsKey` later). @internal */
 export const DEFAULT_METRICS_KEY = "metrics" as const;
 
-/** Instance spec for a gate typed by its wire schemas. @internal */
+// ── Live reconfig verbs (wire) ───────────────────────────────────────────────
+
+/**
+ * Reconfigurable rate-limit options over the wire — `window` as a {@link Schema.Duration};
+ * `key` inherits the gate id. Minimal reconfig surface (not the full consume-options bag).
+ *
+ * @internal
+ */
+export const gateRateLimitReconfig = Schema.Struct({
+  limit: Schema.Number,
+  window: Schema.Duration,
+  tokens: Schema.optional(Schema.Number),
+  onExceeded: Schema.optional(Schema.Literals(["delay", "fail"])),
+});
+
+/** `setRateLimit` payload — reconfig options, or `null` to clear the limit. @internal */
+export const gateSetRateLimitPayload = Schema.NullOr(gateRateLimitReconfig);
+
+/** Decoded `setRateLimit` input (reconfig struct or `null`). @internal */
+export type GateSetRateLimitInput = Schema.Schema.Type<
+  typeof gateSetRateLimitPayload
+>;
+
+const setConcurrencyMethod = Hyperlink.effectFn(
+  Schema.Number,
+  Schema.Void,
+).annotate({
+  description: "Live-resize the concurrency limit (Semaphore.resize).",
+});
+
+const setRateLimitMethod = Hyperlink.effectFn(
+  gateSetRateLimitPayload,
+  Schema.Void,
+).annotate({
+  description:
+    "Live-reconfigure the rate limit (bumps configVersion); null clears it.",
+});
+
+/**
+ * Live reconfig verbs mixed into the gate spec. A **type alias** (not an interface) so the
+ * {@link GateInstanceSpec} intersection keeps its implicit string index signature and still
+ * satisfies the {@link Hyperlink.Spec} constraint. @internal
+ */
+export type GateReconfigSpec = {
+  readonly setConcurrency: typeof setConcurrencyMethod;
+  readonly setRateLimit: typeof setRateLimitMethod;
+};
+
+/** Pausable Lifecycle participation shared by every gate spec. @internal */
+const gateLifecycleSpec: Lifecycle.SpecPausable = Lifecycle.spec({
+  pausable: true,
+});
+
+/**
+ * Instance spec for a gate typed by its wire schemas. Written as a **single object literal** (the
+ * Lifecycle + reconfig members spliced in via indexed access, not an `&` intersection) so it keeps
+ * the implicit string index signature that satisfies {@link Hyperlink.Spec} and the lenient
+ * per-member assignability the {@link gateSpec} overloads rely on. @internal
+ */
 export type GateInstanceSpec<
   I extends Schema.Top,
   A extends Schema.Top,
@@ -107,6 +166,14 @@ export type GateInstanceSpec<
   readonly interrupted: GateCountRef;
   readonly metrics: typeof gateMetricsNestSpec;
   readonly run: GateWireMember<I, A, E>;
+  readonly lifecycle: Lifecycle.SpecPausable["lifecycle"];
+  readonly lifecycleEvents: Lifecycle.SpecPausable["lifecycleEvents"];
+  readonly start: Lifecycle.SpecPausable["start"];
+  readonly pause: Lifecycle.SpecPausable["pause"];
+  readonly resume: Lifecycle.SpecPausable["resume"];
+  readonly stop: Lifecycle.SpecPausable["stop"];
+  readonly setConcurrency: GateReconfigSpec["setConcurrency"];
+  readonly setRateLimit: GateReconfigSpec["setRateLimit"];
 };
 
 const withMetricsNest = <T extends object>(spec: T) => ({
@@ -114,30 +181,42 @@ const withMetricsNest = <T extends object>(spec: T) => ({
   metrics: gateMetricsNestSpec,
 });
 
+/** Mix Lifecycle participation (`pausable`) + live reconfig verbs into a gate spec. @internal */
+const withControls = <T extends object>(spec: T) => ({
+  ...spec,
+  ...gateLifecycleSpec,
+  setConcurrency: setConcurrencyMethod,
+  setRateLimit: setRateLimitMethod,
+});
+
 const gateSpecVoid = <A extends Schema.Top>(
   success: A,
 ): GateInstanceSpec<Void, A, typeof Schema.Never> =>
-  withMetricsNest({
-    ...gateObservationRefs(),
-    run: Hyperlink.effect(success).annotate({ description: RUN_DESCRIPTION }) as GateWireMember<
-      Void,
-      A,
-      typeof Schema.Never
-    >,
-  });
+  withControls(
+    withMetricsNest({
+      ...gateObservationRefs(),
+      run: Hyperlink.effect(success).annotate({ description: RUN_DESCRIPTION }) as GateWireMember<
+        Void,
+        A,
+        typeof Schema.Never
+      >,
+    }),
+  );
 
 const gateSpecVoidWithError = <A extends Schema.Top, E extends Schema.Top>(
   success: A,
   error: E,
 ): GateInstanceSpec<Void, A, E> =>
-  withMetricsNest({
-    ...gateObservationRefs(),
-    run: Hyperlink.effect(success, error).annotate({ description: RUN_DESCRIPTION }) as GateWireMember<
-      Void,
-      A,
-      E
-    >,
-  });
+  withControls(
+    withMetricsNest({
+      ...gateObservationRefs(),
+      run: Hyperlink.effect(success, error).annotate({ description: RUN_DESCRIPTION }) as GateWireMember<
+        Void,
+        A,
+        E
+      >,
+    }),
+  );
 
 const gateSpecWithPayload = <
   I extends Exclude<Schema.Top, Void>,
@@ -148,12 +227,14 @@ const gateSpecWithPayload = <
   success: A,
   error: E,
 ): GateInstanceSpec<I, A, E> =>
-  withMetricsNest({
-    ...gateObservationRefs(),
-    run: Hyperlink.effectFn({ payload, success, error }).annotate({
-      description: RUN_DESCRIPTION,
-    }) as unknown as GateWireMember<I, A, E>,
-  });
+  withControls(
+    withMetricsNest({
+      ...gateObservationRefs(),
+      run: Hyperlink.effectFn({ payload, success, error }).annotate({
+        description: RUN_DESCRIPTION,
+      }) as unknown as GateWireMember<I, A, E>,
+    }),
+  );
 
 /**
  * Build a gate **instance** spec: observation refs plus the gated `run` mutation.
