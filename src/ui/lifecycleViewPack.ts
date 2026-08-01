@@ -1,16 +1,15 @@
 /**
  * Observe pack for Lifecycle participation — badge + start/stop, optional pause/resume.
  *
- * Selects against Participating handles (WorkPool / Daemon Tags). Lifecycle core does
- * not import Observe; this pack lives under `ui/`.
+ * Selects against Participating handles (WorkPool / Daemon / Gate Tags). Lifecycle
+ * core does not import Observe; this pack lives under `ui/`.
  *
- * @since 0.5.0
  * @internal
  */
 import { pipe, type Effect as EffectT, type Stream as StreamT } from "effect";
 import * as Observe from "../Observe";
 
-/** Structural Lifecycle surface shared by WorkPool / Daemon handles. */
+/** Structural Lifecycle surface shared by WorkPool / Daemon / Gate handles. */
 type LifecycleSurface = {
   readonly lifecycle: {
     readonly get: EffectT.Effect<{ readonly _tag: string }>;
@@ -20,7 +19,7 @@ type LifecycleSurface = {
   readonly stop: EffectT.Effect<void>;
 };
 
-/** Pausable surface — Latch-backed WorkPool (and any handle with pause/resume). */
+/** Pausable surface — Latch-backed toolkit handles (WorkPool / Gate, …). */
 type PausableLifecycleSurface = LifecycleSurface & {
   readonly pause: EffectT.Effect<void>;
   readonly resume: EffectT.Effect<void>;

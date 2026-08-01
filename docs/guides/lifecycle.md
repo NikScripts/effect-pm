@@ -14,8 +14,9 @@ Participating HyperService (`Lifecycle.start(jobs)`). **State, Event, and errors
 
 Heavy engine lives in `internal/lifecycle` — the public module is the namespace + Spec sugar.
 
-This is the **HyperService** plane (WorkPool / Daemon today; apps opt in via Spec).
-Node cutover uses a separate `Node.status.phase` (`draining` / …) — see
+This is the **HyperService** plane (toolkit kinds **WorkPool / Daemon / Gate**
+participate; apps opt in via Spec). Node cutover uses a separate
+`Node.status.phase` (`draining` / …) — see
 [Identity coordinator](/docs/identity-coordinator).
 
 ## Handoff is orthogonal

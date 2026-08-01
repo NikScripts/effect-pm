@@ -54,8 +54,9 @@ export function withGateStopped<E extends Schema.Top>(
 export function withGateStopped<E extends Schema.Top>(
   error: E,
 ): typeof GateStopped | Schema.Union<[E, typeof GateStopped]> {
-  // Runtime identity check (same as `gateSpec` / `withNeverDefault`); the generic
-  // param `E` is not known to overlap `Never` at the type level.
+  // SAFE: runtime schema identity vs `Schema.Never` (same as `gateSpec`);
+  // generic `E` is not known to overlap `Never` at the type level. Nothing further
+  // to validate — `Object.is` / `===` on the schema singleton is the check.
   return (error as Schema.Top) === Schema.Never
     ? GateStopped
     : Schema.Union([error, GateStopped]);
@@ -252,6 +253,9 @@ const gateSpecVoid = <A extends Schema.Top>(
   withControls(
     withMetricsNest({
       ...gateObservationRefs(),
+      // SAFE: `effect(success, GateStopped).annotate` is Method<undefined, A, GateStopped>;
+      // GateWireMember is that Method alias — annotate's extra type params don't reduce
+      // under generic `A`. Nothing to validate at runtime.
       run: Hyperlink.effect(success, GateStopped).annotate({
         description: RUN_DESCRIPTION,
       }) as GateWireMember<Void, A, typeof GateStopped>,
@@ -266,6 +270,7 @@ const gateSpecVoidWithError = <A extends Schema.Top, E extends Schema.Top>(
   return withControls(
     withMetricsNest({
       ...gateObservationRefs(),
+      // SAFE: same Method⇄GateWireMember annotate opacity as gateSpecVoid.
       run: Hyperlink.effect(success, wireError).annotate({
         description: RUN_DESCRIPTION,
       }) as GateWireMember<Void, A, WithGateStopped<E>>,
@@ -286,6 +291,9 @@ const gateSpecWithPayload = <
   return withControls(
     withMetricsNest({
       ...gateObservationRefs(),
+      // SAFE: `effectFn({ payload, success, error }).annotate` is Method<I, A, WireE>;
+      // GateWireMember is that alias — deferred Schema.Top params + annotate erase the
+      // overlap. Nothing to validate at runtime.
       run: Hyperlink.effectFn({
         payload,
         success,
