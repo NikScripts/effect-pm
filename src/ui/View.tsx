@@ -152,11 +152,11 @@ export type View<Props extends object = ViewProps> = (
  *
  * @example
  * ```ts
- * export const provides = Layer.mergeAll(
+ * export const componentsLayer = Layer.mergeAll(
  *   View.provide(PoolCard, ({ tag, name }) => <Card tag={tag} name={name} />),
  *   View.provide(PoolDetail, ({ tag }) => <Detail tag={tag} />),
  * )
- * // pipe: contrib.pipe(DashboardLayer.provide(provides))
+ * // pipe: contrib.pipe(Layer.provideMerge(componentsLayer), Layer.provideMerge(View.base))
  * ```
  *
  * @public

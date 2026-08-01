@@ -405,11 +405,11 @@ const GateDetailView: View.View = (props) => {
 };
 
 /**
- * TUI TSX provides for all {@link DashboardViews} handles.
+ * TUI TSX implementations for all {@link DashboardViews} handles.
  *
  * @public
  */
-export const provides = Layer.mergeAll(
+export const componentsLayer = Layer.mergeAll(
   View.provide(GroupView.GroupCard, GroupCardView),
   View.provide(WorkPoolView.PoolCard, PoolCardView),
   View.provide(WorkPoolView.PoolDetail, PoolDetailView),
@@ -438,6 +438,6 @@ export const provides = Layer.mergeAll(
  * @public
  */
 export const layer = DashboardViews.layer.pipe(
-  Layer.provideMerge(provides),
+  Layer.provideMerge(componentsLayer),
   Layer.provideMerge(View.base),
 );

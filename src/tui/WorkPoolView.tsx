@@ -126,11 +126,11 @@ const PoolPageView: View.View = (props) => {
 };
 
 /**
- * TUI TSX provides for {@link WorkPoolView} card / detail / page.
+ * TUI TSX implementations for {@link WorkPoolView} card / detail / page.
  *
  * @public
  */
-export const provides: Layer.Layer<
+export const componentsLayer: Layer.Layer<
   WorkPoolView.PoolCard | WorkPoolView.PoolDetail | WorkPoolView.PoolPage
 > = Layer.mergeAll(
   View.provide(WorkPoolView.PoolCard, PoolCardView),
@@ -144,7 +144,7 @@ export const provides: Layer.Layer<
  * @public
  */
 export const layer = WorkPoolView.layer.pipe(
-  Layer.provideMerge(provides),
+  Layer.provideMerge(componentsLayer),
   Layer.provideMerge(View.base),
 );
 

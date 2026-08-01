@@ -17,7 +17,8 @@ import { Dashboard } from "hyperlink-ts/web"
 
 ```text
 Layer.mergeAll(DashboardLayer.layer, appViews?).pipe(
-  DashboardLayer.provide(WebDashboardViews.provides),
+  Layer.provideMerge(WebDashboardViews.componentsLayer),
+  Layer.provideMerge(View.base),
 )
   → View.compose({ views, router, group })
   → platform DashboardShell
@@ -27,7 +28,7 @@ Layer.mergeAll(DashboardLayer.layer, appViews?).pipe(
 |------|--------|
 | One-liner | `hyperlink-ts/web` / `hyperlink-ts/tui` → `Dashboard` |
 | Contributions | `DashboardLayer.layer` |
-| Implementations | `*.provides` → `DashboardLayer.provide` |
+| Implementations | `*.componentsLayer` via `Layer.provideMerge` |
 | Ready platform Layer | `WebDashboardViews.layer` / `TuiDashboardViews.layer` |
 | Compose kit | `hyperlink-ts/ui` → `View.compose` |
 | Shell | `DashboardShell` (same platform package) |
@@ -40,7 +41,8 @@ const site = Route.make("dashboard").add(
   Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub)),
 )
 const views = Layer.mergeAll(DashboardLayer.layer, appViews).pipe(
-  DashboardLayer.provide(WebDashboardViews.provides),
+  Layer.provideMerge(WebDashboardViews.componentsLayer),
+  Layer.provideMerge(View.base),
 )
 const ui = View.compose({
   views,

@@ -15,9 +15,9 @@
  * <Dashboard runtime={runtime} group={ServicesHub} />
  * ```
  *
- * Or compose: `DashboardLayer.provide` + `View.compose` + `DashboardShell`
- * under `RegistryProvider` + `RuntimeProvider` + `ViewTransitionProvider`. Prefer
- * `Observe.use(tag, *View.pack)` / `NodeView.use`.
+ * Or compose: `Layer.provideMerge(WebDashboardViews.componentsLayer)` +
+ * `View.compose` + `DashboardShell` under `RegistryProvider` + `RuntimeProvider` +
+ * `ViewTransitionProvider`. Prefer `Observe.use(tag, *View.pack)` / `NodeView.use`.
  *
  * Peers: `react`, `react-dom`, `recharts`. Styled with Tailwind utility classes + shadcn theme
  * tokens (`@source` + theme wiring in the consuming app).

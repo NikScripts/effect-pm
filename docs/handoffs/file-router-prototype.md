@@ -4,8 +4,8 @@
 **Status:** Eng in progress — `Page.*` helpers, `Route.fileRoot`, Vite plugin + `hyp file-router`; **`Page.Tag` deferred**  
 **Naming:** Layers are always **camelCase** — already `.must` in
 [`types-and-naming.md`](../standards/types-and-naming.md#layers-read-as-layers)
-(`layer`, `layerMemory`, `provides`, `peersLayer`, …). No PascalCase layer values.
-Dashboard `skins` → `provides`; `forCompose` options bag → `DashboardLayer.provide` pipe.
+(`layer`, `layerMemory`, `componentsLayer`, `peersLayer`, …). No PascalCase layer values.
+Dashboard: no `Domain.provide` helper — plain `Layer.provideMerge(*.componentsLayer)`.
 
 ## Question
 
@@ -34,7 +34,7 @@ Route.fileRoot({ dir: "./pages" })
 
 Naming detail: [`view-page-naming.md`](./view-page-naming.md) — **not**
 `View.Page.Tag` (collides with dashboard size chrome). Kill the word **skin**;
-use **`provides`**.
+use **`componentsLayer`** (or `layer`) for View.provide bags.
 
 Static/Dynamic/Build exist largely **because** file routing + codegen are
 priorities: mark on the module → engine registration; codegen → typed paths.

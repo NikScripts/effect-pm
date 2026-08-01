@@ -14,11 +14,11 @@ import { LogsPage } from "./resourcePages";
 import { displayName, QueueCard, QueueDetailPanel } from "./widgets";
 
 /**
- * Web TSX provides for {@link WorkPoolView.PoolCard} / {@link WorkPoolView.PoolDetail}.
+ * Web TSX implementations for {@link WorkPoolView.PoolCard} / {@link WorkPoolView.PoolDetail}.
  *
  * @public
  */
-export const provides: Layer.Layer<
+export const componentsLayer: Layer.Layer<
   WorkPoolView.PoolCard | WorkPoolView.PoolDetail | WorkPoolView.PoolPage
 > = Layer.mergeAll(
   View.provide(WorkPoolView.PoolCard, (props) => {
@@ -56,7 +56,7 @@ export const provides: Layer.Layer<
  * @public
  */
 export const layer = WorkPoolView.layer.pipe(
-  Layer.provideMerge(provides),
+  Layer.provideMerge(componentsLayer),
   Layer.provideMerge(View.base),
 );
 

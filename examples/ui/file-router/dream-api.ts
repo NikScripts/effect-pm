@@ -18,8 +18,9 @@
  *    `docs/handoffs/view-page-naming.md`.
  * 2. **Route catalog** — typed urls (`Route.fileRoot` / `fromEffect`) so `urls.chapter("x")`
  *    is a closed builder, not a stringly href.
- * 3. **View provides** — `View.provide` + camelCase `provides` / `layer` (never “skins”).
- *    Nested UI Tags inside a page are ordinary DI; the page mark is not a Layer factory.
+ * 3. **View components** — `View.provide` + camelCase `componentsLayer` / `layer`
+ *    (never “skins” / Domain.provide helpers). Nested UI Tags inside a page are
+ *    ordinary DI; the page mark is not a Layer factory.
  *
  * ## Render modes (owned PascalCase discriminants)
  *
@@ -244,9 +245,9 @@ export class DocsChapter extends View.Tag<
 }) {}
 
 /**
- * Implementations for Tags used by pages — camelCase `provides` (not “skins”).
+ * Implementations for Tags used by pages — camelCase `componentsLayer` (not “skins”).
  */
-export const docsChapterProvides = Layer.mergeAll(
+export const docsChapterComponentsLayer = Layer.mergeAll(
   View.provide(ChapterAside, ({ chapter }) =>
     React.createElement("aside", null, `On this page · ${chapter}`),
   ),
@@ -303,7 +304,7 @@ export const site = Route.make("fileRouterDream").add(
 export const urls = Route.urlBuilder(site);
 
 /** App provides Layer — camelCase; merge at the OS edge. */
-export const pagesLayer = Layer.mergeAll(docsChapterProvides);
+export const pagesLayer = Layer.mergeAll(docsChapterComponentsLayer);
 
 // =============================================================================
 // Demo — Effect program (no console.*, no raw promises)

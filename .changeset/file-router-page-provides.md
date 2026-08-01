@@ -2,7 +2,7 @@
 "hyperlink-ts": minor
 ---
 
-**Dashboard Layers:** rename `skins` → `provides`; replace `DashboardLayer.forCompose({ skins, views })` with pipe — `Layer.mergeAll(DashboardLayer.layer, appViews).pipe(DashboardLayer.provide(platform.provides))`.
+**Dashboard Layers:** drop `DashboardLayer.forCompose` / `.provide` / `skins` / `provides`. Platform TSX is `componentsLayer`; compose with ordinary Effect — `Layer.mergeAll(DashboardLayer.layer, appViews).pipe(Layer.provideMerge(platform.componentsLayer), Layer.provideMerge(View.base))`.
 
 **Page marks:** add `hyperlink-ts/ui/Page` — `Page.static` / `.dynamic` / `.build` / `.layout` (path-keyed stamps for the file router; `Page.Tag` later).
 
