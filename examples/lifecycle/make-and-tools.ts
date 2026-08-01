@@ -23,7 +23,7 @@ class Jobs extends WorkPool.Tag<Jobs>()("examples/lifecycle/Jobs", {
   payload: Job,
 }) {}
 
-const Live = WorkPool.layer(Jobs, {
+const layer = WorkPool.layer(Jobs, {
   concurrency: 1,
   effect: (job) => Effect.logInfo(`handled ${job.id}`),
 }).pipe(Hyperlink.deferStart);
@@ -59,7 +59,7 @@ const program = Effect.gen(function* () {
   yield* jobs.stop;
   yield* assertTag(yield* jobs.lifecycle.get, "Off");
   yield* Effect.logInfo("Jobs stopped — lifecycle Off");
-}).pipe(Effect.provide(Live), Effect.scoped);
+}).pipe(Effect.provide(layer), Effect.scoped);
 
 void Effect.runPromise(
   program.pipe(

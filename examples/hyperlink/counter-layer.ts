@@ -1,8 +1,9 @@
 /**
  * @module examples/hyperlink/counter-layer
  *
- * First custom Hyperlink service: declare a Counter Tag, implement it locally with
- * a SubscriptionRef, provide it with Hyperlink.layer, then consume it with `yield* Counter`.
+ * Custom Hyperlink service with Lifecycle participation: one SubscriptionRef for
+ * the counter, badge via `lifecycle` ref, domain `reset` kept separate from stop.
+ * Provided with {@link Hyperlink.layer} (never a `*Live` alias).
  *
  * ```bash
  * pnpm run example:hyperlink-counter-layer
@@ -12,19 +13,29 @@
 // ---cut---
 import { Effect, Schema, SubscriptionRef } from "effect";
 import * as Hyperlink from "../../src/Hyperlink";
+import * as Lifecycle from "../../src/Lifecycle";
 
 class Counter extends Hyperlink.Tag<Counter>()("examples/CounterLayer/Counter", {
+  lifecycle: Hyperlink.ref(Lifecycle.State).pipe(Lifecycle.state),
+  lifecycleEvents: Hyperlink.stream(Lifecycle.Event),
+  start: Hyperlink.effect(Schema.Void).pipe(Lifecycle.asStart),
+  stop: Hyperlink.effect(Schema.Void).pipe(Lifecycle.asStop),
   value: Hyperlink.ref(Schema.Number),
   current: Hyperlink.effect(Schema.Number),
   increment: Hyperlink.effectFn({ by: Schema.Number }, Schema.Number),
   reset: Hyperlink.effect(Schema.Void),
 }) {}
 
-const CounterLive = Hyperlink.layer(
+const layer = Hyperlink.layer(
   Counter,
   Effect.gen(function* () {
     const value = yield* SubscriptionRef.make(0);
+    const lc = yield* Lifecycle.make({
+      run: Effect.never,
+      afterStop: Lifecycle.idle,
+    });
     return {
+      ...Lifecycle.impl(lc),
       value: Hyperlink.subscribable(value),
       current: SubscriptionRef.get(value),
       increment: ({ by }: { readonly by: number }) =>
@@ -38,17 +49,28 @@ const CounterLive = Hyperlink.layer(
 
 const program = Effect.gen(function* () {
   const counter = yield* Counter;
+  yield* Lifecycle.start(Counter);
   const one = yield* counter.increment({ by: 1 });
   const two = yield* counter.increment({ by: 1 });
   yield* Effect.logInfo(`counter values: ${String(one)} -> ${String(two)}`);
 
-  const current = yield* counter.current;
-  if (current !== 2) {
-    return yield* Effect.die(new Error(`expected 2, got ${String(current)}`));
+  yield* counter.reset;
+  const afterReset = yield* counter.current;
+  if (afterReset !== 0) {
+    return yield* Effect.die(
+      new Error(`expected 0 after reset, got ${String(afterReset)}`),
+    );
   }
-}).pipe(Effect.provide(CounterLive), Effect.scoped);
+
+  yield* Lifecycle.stop(Counter);
+  yield* Effect.logInfo(
+    `lifecycle after stop: ${(yield* counter.lifecycle.get)._tag}`,
+  );
+}).pipe(Effect.provide(layer), Effect.scoped);
 
 // ---cut-after---
 await Effect.runPromise(
-  program.pipe(Effect.tap(() => Effect.logInfo("example:hyperlink-counter-layer finished OK"))),
+  program.pipe(
+    Effect.tap(() => Effect.logInfo("example:hyperlink-counter-layer finished OK")),
+  ),
 );
