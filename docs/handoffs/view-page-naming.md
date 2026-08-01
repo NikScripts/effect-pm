@@ -16,22 +16,21 @@ for the docs-site adapter module — a second meaning.
 
 | Old slang | What it actually is | Better names |
 |-----------|---------------------|--------------|
-| `skins` / `provides` / `DashboardLayer.provide` | `Layer` of `View.provide(Tag, Comp)` | **`componentsLayer`** (`*Layer` suffix — see types-and-naming) |
+| `skins` / `provides` / `DashboardLayer.*` | `Layer` of `View.provide(Tag, Comp)` | **`componentsLayer`** on platform `DashboardViews` (`*Layer` suffix) |
 | “provide a skin” | `View.provide` / `Tag.provide` | just **provide** (Effect vocabulary) |
 | Docs “Router skin” | App module wrapping Waku layer | **adapter** / **site Router module** — never “skin” |
 
-**Recommendation:** platform TSX bags are **`componentsLayer`**. Compose with
-`Layer.provideMerge` — no `DashboardLayer.provide` dual. Keep verb `View.provide`.
-Kill “skin” in guides.
+**Recommendation:** one shared module `ui/DashboardViews` (contributions) +
+platform `web|tui/DashboardViews` (`componentsLayer` / ready `layer`). No
+`DashboardLayer` alias. Compose with `Layer.provideMerge`. Keep verb
+`View.provide`. Kill “skin” in guides.
 
 ```ts
-Layer.mergeAll(DashboardLayer.layer, appViews).pipe(
+Layer.mergeAll(DashboardViews.layer, appViews).pipe(
   Layer.provideMerge(WebDashboardViews.componentsLayer),
   Layer.provideMerge(View.base),
 )
 ```
-
-(`DashboardLayer.layer` = registry contributions / binds — a different Layer.)
 
 ## `View.Page.Tag` is the wrong shape
 
@@ -93,7 +92,7 @@ bag, param Schema, layout class-or-helper, rename off `skins`, cutover from
 
 ## Open
 
-1. ~~Public rename off `skins` / Domain.provide~~ — Eng’d as `componentsLayer` + `Layer.provideMerge`
+1. ~~Public rename off `skins` / Domain.provide / `DashboardLayer`~~ — Eng’d as `DashboardViews` + `componentsLayer` + `Layer.provideMerge`
 2. New `Page` module vs hang helpers on `View` — `ui/Page` helpers Eng’d; `Page.Tag` deferred
 3. Disambiguate dashboard size-`Page` naming when `Page.Tag` lands
 4. Finish `Page.Tag` statics + file-router loader contract

@@ -6,7 +6,7 @@
  * root `Group`, and it renders the responsive drill-down. Navigation is URL-backed and
  * animated with view transitions.
  *
- * Stack (Effect-shaped): `DashboardLayer.layer` →
+ * Stack (Effect-shaped): `DashboardViews.layer` →
  * `Layer.provideMerge(WebDashboardViews.componentsLayer)` → {@link View.base} →
  * {@link ../ui/View.compose} → {@link ./DashboardShell}. Public kit one-liner.
  *
@@ -18,7 +18,7 @@ import {
   type DashboardRuntime,
   type GroupNode,
 } from "../ui/data";
-import * as DashboardLayer from "../ui/DashboardLayer";
+import * as DashboardViews from "../ui/DashboardViews";
 import { RegistryProvider } from "../ui/atom-react";
 import { RuntimeProvider } from "./runtime";
 import { ViewTransitionProvider } from "./useViewTransition";
@@ -58,7 +58,7 @@ export const DashboardView = <R, ER>(props: {
 }): React.ReactElement => {
   const ui = React.useMemo(() => {
     const views = Layer.mergeAll(
-      DashboardLayer.layer,
+      DashboardViews.layer,
       props.views ?? Layer.empty,
     ).pipe(
       Layer.provideMerge(WebDashboardViews.componentsLayer),

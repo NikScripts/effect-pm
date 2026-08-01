@@ -1,8 +1,18 @@
 /**
  * @module ui/DashboardViews
  *
- * Merged View contribution Layers for the batteries-included Dashboard families.
- * Platform packages merge provides + {@link View.base} into a ready `layer` for {@link View.react}.
+ * Merged View contribution Layers for the batteries-included Dashboard families
+ * (`View.bind` / `only` — no platform TSX).
+ *
+ * Compose with a platform `componentsLayer` via ordinary Effect combinators:
+ *
+ * ```ts
+ * Layer.mergeAll(DashboardViews.layer, appViews).pipe(
+ *   Layer.provideMerge(WebDashboardViews.componentsLayer),
+ *   Layer.provideMerge(View.base),
+ * )
+ * // no app contributions: WebDashboardViews.layer
+ * ```
  */
 import { Layer } from "effect";
 import * as ApiMetricsView from "./ApiMetricsView";

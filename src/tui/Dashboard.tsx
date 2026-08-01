@@ -2,7 +2,7 @@
  * @module tui/Dashboard
  *
  * The Ink Group dashboard — terminal counterpart to `<Dashboard runtime group />` from
- * `hyperlink-ts/web`. Stack: `DashboardLayer.layer` →
+ * `hyperlink-ts/web`. Stack: `DashboardViews.layer` →
  * `Layer.provideMerge(TuiDashboardViews.componentsLayer)` → {@link View.base} →
  * {@link ../ui/View.compose} → {@link ./DashboardShell}. Public kit one-liner.
  *
@@ -22,7 +22,7 @@ import {
   type DashboardRuntime,
   type GroupNode,
 } from "../ui/data";
-import * as DashboardLayer from "../ui/DashboardLayer";
+import * as DashboardViews from "../ui/DashboardViews";
 import { RegistryProvider } from "../ui/atom-react";
 import * as Group from "../Group";
 import * as GroupNav from "../ui/GroupNav";
@@ -61,7 +61,7 @@ export const Dashboard = <R, ER>(props: {
 }): React.ReactElement => {
   const ui = React.useMemo(() => {
     const views = Layer.mergeAll(
-      DashboardLayer.layer,
+      DashboardViews.layer,
       props.views ?? Layer.empty,
     ).pipe(
       Layer.provideMerge(TuiDashboardViews.componentsLayer),

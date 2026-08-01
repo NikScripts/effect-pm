@@ -212,10 +212,6 @@
       "types": "./dist/ui/DashboardViews.d.ts",
       "default": "./dist/ui/DashboardViews.js"
     },
-    "./ui/DashboardLayer": {
-      "types": "./dist/ui/DashboardLayer.d.ts",
-      "default": "./dist/ui/DashboardLayer.js"
-    },
     "./ui/Page": {
       "types": "./dist/ui/Page.d.ts",
       "default": "./dist/ui/Page.js"

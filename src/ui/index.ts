@@ -60,7 +60,5 @@ export * as ShardMapView from "./ShardMapView";
 export * as NodeView from "./NodeView";
 /** Merged Dashboard View contribution Layers (no platform TSX). */
 export * as DashboardViews from "./DashboardViews";
-/** Family contributions; compose with `Layer.provideMerge(*.componentsLayer)` + {@link View.base}. */
-export * as DashboardLayer from "./DashboardLayer";
 /** Provider only — renderers expose a typed `useWidgets` (web cards vs TUI cells). */
 export { WidgetsProvider } from "./widgetsContext";
