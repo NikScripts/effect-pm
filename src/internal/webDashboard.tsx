@@ -1,5 +1,6 @@
 /**
- * Internal eng for {@link ../web/Dashboard} — View.provide bag + ready `layer`.
+ * Internal eng for {@link ../web/Dashboard} — View.provide bag, ready `layer`,
+ * and batteries `<Dashboard>` / `<DashboardView>` wiring.
  */
 import * as React from "react";
 import { Layer } from "effect";
@@ -12,6 +13,8 @@ import {
   isQueueTag,
   isShardMapTag,
   isTelemetryTag,
+  type DashboardRuntime,
+  type GroupNode,
 } from "../ui/data";
 import * as Group from "../Group";
 import * as View from "../ui/View";
@@ -29,15 +32,23 @@ import * as PriorityView from "../ui/PriorityView";
 import * as ShardMapView from "../ui/ShardMapView";
 import * as TelemetryView from "../ui/TelemetryView";
 import * as WorkPoolView from "../ui/WorkPoolView";
+import { type WidgetRegistry } from "../ui/widgetRegistry";
+import { RegistryProvider, useAtomValue } from "../ui/atom-react";
+import { WidgetsProvider } from "../ui/widgetsContext";
 import { AsyncResult } from "effect/unstable/reactivity";
-import { useAtomValue } from "../ui/atom-react";
 import * as Observe from "../Observe";
+import { RuntimeProvider } from "../web/runtime";
+import { ViewTransitionProvider } from "../web/useViewTransition";
+import type { Widget } from "../web/widget-registry";
+import { DebugConsole } from "../web/debug-console";
+import { DashboardShell } from "../web/DashboardShell";
 import {
   ApiCard,
   ApiEndpointTable,
   ApiMetricChart,
   ApiStats,
   ApiStatusBadge,
+  base,
   DaemonCard,
   DaemonControls,
   DaemonStats,
@@ -312,7 +323,7 @@ const DaemonPageView: View.View = (props) => {
 /**
  * Web TSX implementations for all {@link DashboardViews} handles.
  *
- * @public
+ * @internal
  */
 export const componentsLayer = Layer.mergeAll(
   View.provide(GroupView.GroupCard, GroupCardView),
@@ -340,9 +351,74 @@ export const componentsLayer = Layer.mergeAll(
 /**
  * Fully provided Dashboard View Layer for the web (`R = never`) — ready for {@link View.react}.
  *
- * @public
+ * @internal
  */
 export const layer = DashboardViews.layer.pipe(
   Layer.provideMerge(componentsLayer),
   Layer.provideMerge(View.base),
+);
+
+const routesFor = (group: GroupNode) =>
+  Route.make("dashboard").add(
+    Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(group)),
+  );
+
+/**
+ * Drill-down view + runtime (no outer registry / view-transition providers).
+ *
+ * @internal
+ */
+export const DashboardView = <R, ER>(props: {
+  readonly runtime: DashboardRuntime<R, ER>;
+  readonly group: GroupNode;
+  readonly views?: Layer.Layer<never, never, View.Registry>;
+}): React.ReactElement => {
+  const ui = React.useMemo(() => {
+    const views = Layer.mergeAll(
+      DashboardViews.layer,
+      props.views ?? Layer.empty,
+    ).pipe(
+      Layer.provideMerge(componentsLayer),
+      Layer.provideMerge(View.base),
+    );
+    return View.compose({
+      views,
+      router: Router.history(routesFor(props.group)),
+      group: props.group,
+    });
+  }, [props.group, props.views]);
+  return (
+    <ui.Provider>
+      <RuntimeProvider runtime={props.runtime}>
+        <div className="font-mono">
+          <DashboardShell group={props.group} />
+        </div>
+      </RuntimeProvider>
+    </ui.Provider>
+  );
+};
+
+/**
+ * Batteries-included web dashboard wiring.
+ *
+ * @internal
+ */
+export const Dashboard = <R, ER>(props: {
+  readonly runtime: DashboardRuntime<R, ER>;
+  readonly group: GroupNode;
+  readonly views?: Layer.Layer<never, never, View.Registry>;
+  readonly widgets?: WidgetRegistry<Widget>;
+}): React.ReactElement => (
+  <RegistryProvider>
+    <WidgetsProvider registry={props.widgets ?? base}>
+      <ViewTransitionProvider>
+        <DashboardView
+          runtime={props.runtime}
+          group={props.group}
+          views={props.views}
+        />
+        <DebugConsole />
+      </ViewTransitionProvider>
+    </WidgetsProvider>
+  </RegistryProvider>
 );
