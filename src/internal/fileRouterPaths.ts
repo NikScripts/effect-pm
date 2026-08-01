@@ -4,8 +4,11 @@
  *
  * Used by the Vite plugin (watch) and `hyp` `--check` (CI).
  */
-import * as NodeFs from "node:fs";
-import * as NodePath from "node:path";
+import { Data, Effect, Layer } from "effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
+import type { PlatformError } from "effect/PlatformError";
+import { NodeFileSystem, NodePath } from "@effect/platform-node";
 
 const EXT = /\.(tsx|ts|jsx|js)$/;
 
@@ -22,20 +25,55 @@ export type EmitOptions = {
   readonly outFile: string;
 };
 
-const walkFiles = (abs: string): ReadonlyArray<string> => {
-  const out: Array<string> = [];
-  for (const ent of NodeFs.readdirSync(abs, { withFileTypes: true })) {
-    if (ent.name.startsWith(".") || ent.name.startsWith("_")) continue;
-    const next = NodePath.join(abs, ent.name);
-    if (ent.isDirectory()) out.push(...walkFiles(next));
-    else if (EXT.test(ent.name)) out.push(next);
-  }
-  return out;
-};
+/** Missing generated module — run emit / Vite plugin. */
+export class PathsMissingError extends Data.TaggedError("PathsMissingError")<{
+  readonly path: string;
+}> {}
+
+/** Generated module out of date vs pages tree. */
+export class PathsStaleError extends Data.TaggedError("PathsStaleError")<{
+  readonly path: string;
+}> {}
+
+/** Node Path + FileSystem for OS-edge sync runners (Vite / hyp). */
+export const nodeLayer: Layer.Layer<FileSystem.FileSystem | Path.Path> =
+  Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
+
+export type FileRouterServices = FileSystem.FileSystem | Path.Path;
+
+/** Run a file-router Effect at an OS edge (Vite hooks, scripts). */
+export const runSync = <A, E>(
+  effect: Effect.Effect<A, E, FileRouterServices>,
+): A => Effect.runSync(effect.pipe(Effect.provide(nodeLayer)));
+
+const walkFiles = (
+  abs: string,
+): Effect.Effect<ReadonlyArray<string>, PlatformError, FileRouterServices> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const names = yield* fs.readDirectory(abs);
+    const out: Array<string> = [];
+    for (const name of names) {
+      if (name.startsWith(".") || name.startsWith("_")) continue;
+      const next = path.join(abs, name);
+      const info = yield* fs.stat(next);
+      if (info.type === "Directory") {
+        out.push(...(yield* walkFiles(next)));
+      } else if (EXT.test(name)) {
+        out.push(next);
+      }
+    }
+    return out;
+  });
 
 /** `[chapter].tsx` under docs → `/docs/[chapter]` */
-export const toFilePath = (pagesDir: string, absFile: string): string => {
-  const rel = NodePath.relative(pagesDir, absFile).replace(/\\/g, "/");
+export const toFilePath = (
+  pagesDir: string,
+  absFile: string,
+  path: Path.Path,
+): string => {
+  const rel = path.relative(pagesDir, absFile).replace(/\\/g, "/");
   const noExt = rel.replace(EXT, "");
   const segs = noExt.split("/").filter((s) => s.length > 0);
   if (segs[segs.length - 1] === "index") segs.pop();
@@ -56,24 +94,29 @@ export const toRouteId = (filePath: string): string => {
 };
 
 /** Discover destination files under a pages directory. */
-export const discover = (pagesDir: string): ReadonlyArray<FileEntry> => {
-  const root = NodePath.resolve(pagesDir);
-  if (!NodeFs.existsSync(root)) return [];
-  const seen = new Set<string>();
-  const entries: Array<FileEntry> = [];
-  for (const absFile of walkFiles(root)) {
-    const filePath = toFilePath(root, absFile);
-    if (seen.has(filePath)) continue;
-    seen.add(filePath);
-    entries.push({
-      id: toRouteId(filePath),
-      filePath,
-      routePath: toRoutePath(filePath),
-      absFile,
-    });
-  }
-  return entries.sort((a, b) => a.filePath.localeCompare(b.filePath));
-};
+export const discover = (
+  pagesDir: string,
+): Effect.Effect<ReadonlyArray<FileEntry>, PlatformError, FileRouterServices> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const root = path.resolve(pagesDir);
+    if (!(yield* fs.exists(root))) return [];
+    const seen = new Set<string>();
+    const entries: Array<FileEntry> = [];
+    for (const absFile of yield* walkFiles(root)) {
+      const filePath = toFilePath(root, absFile, path);
+      if (seen.has(filePath)) continue;
+      seen.add(filePath);
+      entries.push({
+        id: toRouteId(filePath),
+        filePath,
+        routePath: toRoutePath(filePath),
+        absFile,
+      });
+    }
+    return entries.sort((a, b) => a.filePath.localeCompare(b.filePath));
+  });
 
 /** Source text for `paths.gen.ts`. */
 export const formatPathsModule = (
@@ -119,49 +162,67 @@ export type FileEntry = (typeof fileEntries)[number];
 };
 
 /** Atomic write (temp + rename). */
-export const writeAtomic = (outFile: string, body: string): void => {
-  const abs = NodePath.resolve(outFile);
-  NodeFs.mkdirSync(NodePath.dirname(abs), { recursive: true });
-  const tmp = `${abs}.tmp`;
-  NodeFs.writeFileSync(tmp, body, "utf8");
-  NodeFs.renameSync(tmp, abs);
-};
+export const writeAtomic = (
+  outFile: string,
+  body: string,
+): Effect.Effect<void, PlatformError, FileRouterServices> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const abs = path.resolve(outFile);
+    yield* fs.makeDirectory(path.dirname(abs), { recursive: true });
+    const tmp = `${abs}.tmp`;
+    yield* fs.writeFileString(tmp, body);
+    yield* fs.rename(tmp, abs);
+  });
 
 /**
  * Discover + emit. Returns whether the file content changed.
  */
 export const emitPaths = (
   options: EmitOptions,
-): { readonly changed: boolean; readonly entries: ReadonlyArray<FileEntry> } => {
-  const entries = discover(options.pagesDir);
-  const body = formatPathsModule(entries);
-  const abs = NodePath.resolve(options.outFile);
-  const prev = NodeFs.existsSync(abs)
-    ? NodeFs.readFileSync(abs, "utf8")
-    : undefined;
-  if (prev === body) {
-    return { changed: false, entries };
-  }
-  writeAtomic(abs, body);
-  return { changed: true, entries };
-};
+): Effect.Effect<
+  { readonly changed: boolean; readonly entries: ReadonlyArray<FileEntry> },
+  PlatformError,
+  FileRouterServices
+> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const entries = yield* discover(options.pagesDir);
+    const body = formatPathsModule(entries);
+    const abs = path.resolve(options.outFile);
+    const prev = (yield* fs.exists(abs))
+      ? yield* fs.readFileString(abs)
+      : undefined;
+    if (prev === body) {
+      return { changed: false, entries };
+    }
+    yield* writeAtomic(abs, body);
+    return { changed: true, entries };
+  });
 
 /**
  * CI / hyp check — fail if emit would change the file.
  */
-export const checkPaths = (options: EmitOptions): void => {
-  const entries = discover(options.pagesDir);
-  const body = formatPathsModule(entries);
-  const abs = NodePath.resolve(options.outFile);
-  if (!NodeFs.existsSync(abs)) {
-    throw new Error(
-      `file-router paths missing: ${abs} (run dev/build or hyp file-router emit)`,
-    );
-  }
-  const prev = NodeFs.readFileSync(abs, "utf8");
-  if (prev !== body) {
-    throw new Error(
-      `file-router paths stale: ${abs} — regenerate (Vite plugin / hyp file-router emit)`,
-    );
-  }
-};
+export const checkPaths = (
+  options: EmitOptions,
+): Effect.Effect<
+  void,
+  PathsMissingError | PathsStaleError | PlatformError,
+  FileRouterServices
+> =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const entries = yield* discover(options.pagesDir);
+    const body = formatPathsModule(entries);
+    const abs = path.resolve(options.outFile);
+    if (!(yield* fs.exists(abs))) {
+      return yield* new PathsMissingError({ path: abs });
+    }
+    const prev = yield* fs.readFileString(abs);
+    if (prev !== body) {
+      return yield* new PathsStaleError({ path: abs });
+    }
+  });

@@ -3,10 +3,11 @@
  */
 import { Effect } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
-import * as NodePath from "node:path";
+import * as Path from "effect/Path";
 import {
   checkPaths,
   emitPaths,
+  nodeLayer,
 } from "../../src/internal/fileRouterPaths";
 
 const pagesFlag = Flag.string("pages").pipe(
@@ -26,15 +27,16 @@ const emit = Command.make("emit", {
   Command.withDescription("Write paths.gen.ts from the pages tree."),
   Command.withHandler(({ pages, out }) =>
     Effect.gen(function* () {
-      const pagesDir = NodePath.resolve(pages);
-      const outFile = NodePath.resolve(out);
-      const result = emitPaths({ pagesDir, outFile });
+      const path = yield* Path.Path;
+      const pagesDir = path.resolve(pages);
+      const outFile = path.resolve(out);
+      const result = yield* emitPaths({ pagesDir, outFile });
       yield* Effect.logInfo(
         result.changed
           ? `file-router: wrote ${outFile} (${result.entries.length} paths)`
           : `file-router: up to date ${outFile} (${result.entries.length} paths)`,
       );
-    }),
+    }).pipe(Effect.provide(nodeLayer)),
   ),
 );
 
@@ -45,12 +47,14 @@ const check = Command.make("check", {
   Command.withDescription("Fail if paths.gen.ts is missing or stale."),
   Command.withHandler(({ pages, out }) =>
     Effect.gen(function* () {
-      checkPaths({
-        pagesDir: NodePath.resolve(pages),
-        outFile: NodePath.resolve(out),
+      const path = yield* Path.Path;
+      const outFile = path.resolve(out);
+      yield* checkPaths({
+        pagesDir: path.resolve(pages),
+        outFile,
       });
-      yield* Effect.logInfo(`file-router: check OK ${NodePath.resolve(out)}`);
-    }),
+      yield* Effect.logInfo(`file-router: check OK ${outFile}`);
+    }).pipe(Effect.provide(nodeLayer)),
   ),
 );
 

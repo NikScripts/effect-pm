@@ -1,22 +1,24 @@
 /**
  * File-router path discover / emit / Route.fileRoot.
  */
-import * as NodeFs from "node:fs";
-import * as NodeOs from "node:os";
-import * as NodePath from "node:path";
 import { describe, expect, it } from "@effect/vitest";
+import { Effect } from "effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import * as Route from "../src/ui/Route";
 import * as Router from "../src/ui/Router";
 import {
   checkPaths,
   discover,
   emitPaths,
+  nodeLayer,
   toRoutePath,
 } from "../src/internal/fileRouterPaths";
 
-const fixturePages = NodePath.resolve(
-  "examples/ui/file-router/fixtures/pages",
-);
+const fixturePagesEffect = Effect.gen(function* () {
+  const path = yield* Path.Path;
+  return path.resolve("examples/ui/file-router/fixtures/pages");
+});
 
 const table = [
   { id: "index", routePath: "/" },
@@ -31,32 +33,40 @@ describe("fileRouterPaths", () => {
     expect(toRoutePath("/api/[pkg]")).toBe("/api/:pkg");
   });
 
-  it("discovers fixture pages", () => {
-    const entries = discover(fixturePages);
-    expect(entries.map((e) => e.filePath)).toEqual([
-      "/",
-      "/api/[pkg]",
-      "/docs/[chapter]",
-      "/search",
-    ]);
-    expect(entries.map((e) => e.routePath)).toEqual([
-      "/",
-      "/api/:pkg",
-      "/docs/:chapter",
-      "/search",
-    ]);
-  });
+  it.effect("discovers fixture pages", () =>
+    Effect.gen(function* () {
+      const fixturePages = yield* fixturePagesEffect;
+      const entries = yield* discover(fixturePages);
+      expect(entries.map((e) => e.filePath)).toEqual([
+        "/",
+        "/api/[pkg]",
+        "/docs/[chapter]",
+        "/search",
+      ]);
+      expect(entries.map((e) => e.routePath)).toEqual([
+        "/",
+        "/api/:pkg",
+        "/docs/:chapter",
+        "/search",
+      ]);
+    }).pipe(Effect.provide(nodeLayer)),
+  );
 
-  it("emit is idempotent and check passes", () => {
-    const dir = NodeFs.mkdtempSync(NodePath.join(NodeOs.tmpdir(), "hl-fr-"));
-    const outFile = NodePath.join(dir, "paths.gen.ts");
-    const first = emitPaths({ pagesDir: fixturePages, outFile });
-    expect(first.changed).toBe(true);
-    const second = emitPaths({ pagesDir: fixturePages, outFile });
-    expect(second.changed).toBe(false);
-    expect(() => checkPaths({ pagesDir: fixturePages, outFile })).not.toThrow();
-    NodeFs.rmSync(dir, { recursive: true, force: true });
-  });
+  it.effect("emit is idempotent and check passes", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const fixturePages = yield* fixturePagesEffect;
+      const dir = yield* fs.makeTempDirectory({ prefix: "hl-fr-" });
+      const outFile = path.join(dir, "paths.gen.ts");
+      const first = yield* emitPaths({ pagesDir: fixturePages, outFile });
+      expect(first.changed).toBe(true);
+      const second = yield* emitPaths({ pagesDir: fixturePages, outFile });
+      expect(second.changed).toBe(false);
+      yield* checkPaths({ pagesDir: fixturePages, outFile });
+      yield* fs.remove(dir, { recursive: true, force: true });
+    }).pipe(Effect.provide(nodeLayer)),
+  );
 });
 
 describe("Route.fileRoot / Router.fileSystem", () => {

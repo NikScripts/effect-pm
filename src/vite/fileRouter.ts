@@ -20,8 +20,13 @@
  * CI: `hyp file-router check --pages … --out …` (same emit, fail if dirty).
  */
 import type { Plugin } from "vite";
-import * as NodePath from "node:path";
-import { checkPaths, emitPaths } from "../internal/fileRouterPaths";
+import { Effect } from "effect";
+import * as Path from "effect/Path";
+import {
+  checkPaths,
+  emitPaths,
+  runSync,
+} from "../internal/fileRouterPaths";
 
 export type FileRouterPluginOptions = {
   /** Pages directory to walk (relative to Vite root or absolute). */
@@ -36,7 +41,12 @@ export type FileRouterPluginOptions = {
 };
 
 const resolveFromRoot = (root: string, p: string): string =>
-  NodePath.isAbsolute(p) ? p : NodePath.resolve(root, p);
+  runSync(
+    Effect.gen(function* () {
+      const path = yield* Path.Path;
+      return path.isAbsolute(p) ? p : path.resolve(root, p);
+    }),
+  );
 
 /**
  * Vite plugin — watch + atomic `paths.gen.ts` emit.
@@ -44,15 +54,21 @@ const resolveFromRoot = (root: string, p: string): string =>
  * @public
  */
 export const fileRouter = (options: FileRouterPluginOptions): Plugin => {
-  let root = process.cwd();
+  let root = ".";
   let pagesDir = options.pagesDir;
   let outFile = options.outFile;
 
   const runEmit = (log: (msg: string) => void): void => {
-    const result = emitPaths({ pagesDir, outFile });
+    const result = runSync(emitPaths({ pagesDir, outFile }));
     if (result.changed) {
+      const rel = runSync(
+        Effect.gen(function* () {
+          const path = yield* Path.Path;
+          return path.relative(root, outFile);
+        }),
+      );
       log(
-        `[hyperlink-ts] file-router: wrote ${NodePath.relative(root, outFile)} (${result.entries.length} paths)`,
+        `[hyperlink-ts] file-router: wrote ${rel} (${result.entries.length} paths)`,
       );
     }
   };
@@ -66,7 +82,7 @@ export const fileRouter = (options: FileRouterPluginOptions): Plugin => {
     },
     buildStart() {
       if (options.check === true) {
-        checkPaths({ pagesDir, outFile });
+        runSync(checkPaths({ pagesDir, outFile }));
         return;
       }
       runEmit((msg) => {
@@ -77,10 +93,20 @@ export const fileRouter = (options: FileRouterPluginOptions): Plugin => {
       runEmit((msg) => {
         server.config.logger.info(msg);
       });
-      const watchGlob = NodePath.join(pagesDir, "**/*");
+      const watchGlob = runSync(
+        Effect.gen(function* () {
+          const path = yield* Path.Path;
+          return path.join(pagesDir, "**/*");
+        }),
+      );
       server.watcher.add(watchGlob);
       const onFs = (file: string): void => {
-        const abs = NodePath.resolve(file);
+        const abs = runSync(
+          Effect.gen(function* () {
+            const path = yield* Path.Path;
+            return path.resolve(file);
+          }),
+        );
         if (!abs.startsWith(pagesDir)) return;
         if (abs === outFile) return;
         runEmit((msg) => {
@@ -94,4 +120,10 @@ export const fileRouter = (options: FileRouterPluginOptions): Plugin => {
   };
 };
 
-export { checkPaths, discover, emitPaths } from "../internal/fileRouterPaths";
+export {
+  checkPaths,
+  discover,
+  emitPaths,
+  nodeLayer,
+  runSync,
+} from "../internal/fileRouterPaths";
