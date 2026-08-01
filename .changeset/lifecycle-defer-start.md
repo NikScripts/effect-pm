@@ -5,8 +5,9 @@
 Effect-native `Lifecycle` — compose FiberHandle/Set + Latch; dual ops; derived events.
 
 - **`Lifecycle.make({ run, latch?, release?, awaitBeforeTerminal?, afterStop?, fibers? })`**
-- **Dual ops** on handles, Participating, *and* Tag Effects: `Lifecycle.start(lc|jobs|Jobs)` / `pause` / `resume` / `stop`
+- **Dual ops** on handles, Participating, *and* Tag Effects: `Lifecycle.start(lc|jobs|Jobs)` / `pause` / `resume` / `stop` / `events`
+- Spec Subscribable badge: **`Lifecycle.stateRef`** / **`eventStream`**; Role stamps **`asState`** / `asStart` / …
+- **`Lifecycle.impl`** wire-ready (`never` errors); duals re-check Illegal
 - No projected `Service` / `of` / `from` / `*From` helpers
-- **`Lifecycle.events`** derived from badge changes — no parallel PubSub
-- Engine in `internal/lifecycle` (+ `lifecycleModel`); Spec stamps `asStart` / `asPause` / …
-- Scope `addFinalizer` → `stop`; `ui/LifecycleView` pack (chrome → Agent G)
+- Engine in `internal/lifecycle` (+ `lifecycleModel`); Scope `addFinalizer` → `stop`
+- `ui/LifecycleView` pack (chrome → Agent G)

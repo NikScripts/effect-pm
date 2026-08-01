@@ -26,6 +26,12 @@ describe("Lifecycle building blocks", () => {
     expect(() => Schema.decodeUnknownSync(Lifecycle.State)("Idle")).toThrow();
   });
 
+  it("stateRef / eventStream stamp Role State and carry schemas", () => {
+    expect(methodMeta(Lifecycle.stateRef).lifecycle).toBe("State");
+    expect(methodMeta(Lifecycle.spec().lifecycle).lifecycle).toBe("State");
+    expect("lifecycleEvents" in Lifecycle.spec()).toBe(true);
+  });
+
   it("Lifecycle.Event is a tagged wire schema", () => {
     expect(
       Schema.decodeUnknownSync(Lifecycle.Event)({

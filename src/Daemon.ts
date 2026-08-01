@@ -1608,15 +1608,8 @@ export const daemonControlSpec = {
       "poll cadence, and cumulative run metrics.",
   }),
   // Shared Lifecycle protocol — tools read this via methodMeta(…).lifecycle === "State".
-  lifecycle: Hyperlink.ref(Lifecycle.State)
-    .annotate({
-      description: "Lifecycle badge (Idle / Running / Paused / Draining / Off).",
-    })
-    .pipe(Lifecycle.state),
-  lifecycleEvents: Hyperlink.stream(Lifecycle.Event).annotate({
-    description:
-      "Lifecycle transition events (Started / Paused / Resumed / StopRequested / Stopped).",
-  }),
+  lifecycle: Lifecycle.stateRef,
+  lifecycleEvents: Lifecycle.eventStream,
 
   // ── lifecycle commands ──
   start: Hyperlink.effect(Schema.Void)
@@ -2566,10 +2559,6 @@ const buildDaemonImpl = <A, E, R>(
     const impl = {
       status: statusSub,
       ...Lifecycle.impl(lifecycle),
-      start: Lifecycle.start(lifecycle).pipe(
-        Effect.catchTag("LifecycleIllegal", () => Effect.void),
-      ),
-      stop: Lifecycle.stop(lifecycle),
       wake: handle.polling.wake,
       resetCadence: handle.polling.resetCadence,
       events: handle.events,

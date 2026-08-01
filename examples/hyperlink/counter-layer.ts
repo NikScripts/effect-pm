@@ -2,8 +2,8 @@
  * @module examples/hyperlink/counter-layer
  *
  * Custom Hyperlink service with Lifecycle participation: one SubscriptionRef for
- * the counter, badge via `lifecycle` ref, domain `reset` kept separate from stop.
- * Provided with {@link Hyperlink.layer} (never a `*Live` alias).
+ * the counter, badge via {@link Lifecycle.stateRef}, domain `reset` kept separate
+ * from stop. Provided with {@link Hyperlink.layer} (never a `*Live` alias).
  *
  * ```bash
  * pnpm run example:hyperlink-counter-layer
@@ -16,8 +16,8 @@ import * as Hyperlink from "../../src/Hyperlink";
 import * as Lifecycle from "../../src/Lifecycle";
 
 class Counter extends Hyperlink.Tag<Counter>()("examples/CounterLayer/Counter", {
-  lifecycle: Hyperlink.ref(Lifecycle.State).pipe(Lifecycle.state),
-  lifecycleEvents: Hyperlink.stream(Lifecycle.Event),
+  lifecycle: Lifecycle.stateRef,
+  lifecycleEvents: Lifecycle.eventStream,
   start: Hyperlink.effect(Schema.Void).pipe(Lifecycle.asStart),
   stop: Hyperlink.effect(Schema.Void).pipe(Lifecycle.asStop),
   value: Hyperlink.ref(Schema.Number),

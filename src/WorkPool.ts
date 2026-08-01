@@ -583,15 +583,8 @@ export const queueControlSpec = {
       "Live current-state snapshot: per-priority sizes, paused, in-flight, completed.",
   }),
   // Shared Lifecycle protocol — tools read this via methodMeta(…).lifecycle === "State".
-  lifecycle: Hyperlink.ref(Lifecycle.State)
-    .annotate({
-      description: "Lifecycle badge (Idle / Running / Paused / Draining / Off).",
-    })
-    .pipe(Lifecycle.state),
-  lifecycleEvents: Hyperlink.stream(Lifecycle.Event).annotate({
-    description:
-      "Lifecycle transition events (Started / Paused / Resumed / StopRequested / Stopped).",
-  }),
+  lifecycle: Lifecycle.stateRef,
+  lifecycleEvents: Lifecycle.eventStream,
   size: Hyperlink.ref(Schema.Number).annotate({
     description: "Total pending items across all priority lanes.",
   }),
@@ -1619,15 +1612,8 @@ export const priorityControlSpec = {
     description:
       "Live current-state snapshot: per-lane sizes, paused, in-flight, completed.",
   }),
-  lifecycle: Hyperlink.ref(Lifecycle.State)
-    .annotate({
-      description: "Lifecycle badge (Idle / Running / Paused / Draining / Off).",
-    })
-    .pipe(Lifecycle.state),
-  lifecycleEvents: Hyperlink.stream(Lifecycle.Event).annotate({
-    description:
-      "Lifecycle transition events (Started / Paused / Resumed / StopRequested / Stopped).",
-  }),
+  lifecycle: Lifecycle.stateRef,
+  lifecycleEvents: Lifecycle.eventStream,
   size: Hyperlink.ref(Schema.Number).annotate({
     description: "Total pending items across all lanes.",
   }),

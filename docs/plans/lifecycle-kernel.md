@@ -281,17 +281,21 @@ No latch ⇒ no pause on the type.
 ### 6.3 App HyperService (opt-in)
 
 ```ts
-...Lifecycle.spec({ pausable: false, restartable: true })
+class Runner extends Hyperlink.Tag<Runner>()("app/Runner", {
+  lifecycle: Lifecycle.stateRef,
+  lifecycleEvents: Lifecycle.eventStream,
+  start: Hyperlink.effect(Schema.Void).pipe(Lifecycle.asStart),
+  stop: Hyperlink.effect(Schema.Void).pipe(Lifecycle.asStop),
+  // or: ...Lifecycle.spec({ pausable: false })
+}) {}
 
-const lc = yield* Lifecycle.make({
-  run: myLoop,
-  fiber: "handle",
-  restartable: true,
-})
-Hyperlink.serve(Tag, { ...Lifecycle.impl(lc), … })
+const layer = Hyperlink.layer(Runner, Effect.gen(function* () {
+  const lc = yield* Lifecycle.make({ run: myLoop, afterStop: Lifecycle.off })
+  return { ...Lifecycle.impl(lc), /* domain */ }
+}))
 ```
 
-Gate / plain Rpc: **opt-in only** (P10).
+P10: opt-in for arbitrary Tags; toolkit kinds (WorkPool / Daemon / Gate-to-Eng) participate.
 
 ### 6.4 Generic tool
 

@@ -1,6 +1,6 @@
 # Lifecycle kernel — decisions & lock register
 
-**Status:** L0–L6 tip-synced — A/C + B (Participating duals / Tag overloads) + P8 remote parity + P11 internal split.  
+**Status:** L0–L6 tip-synced; Spec Subscribable helpers (`stateRef` / `eventStream` / `asState`) + wire-ready `impl` on tip after this sync.  
 **Owner:** Agent 5.  
 **Full Eng plan (SSOT for architecture / slices / acceptance):** [`docs/plans/lifecycle-kernel.md`](../plans/lifecycle-kernel.md).  
 **Guide:** [`docs/guides/lifecycle.md`](../guides/lifecycle.md).  
@@ -24,7 +24,7 @@ and that generic tools consume without kind switches (`Lifecycle.start(jobs)` / 
 |---|------|--------|
 | S1 | Own module `hyperlink-ts/Lifecycle` | Flat Effect-true namespace; heavy bits → `internal/lifecycle*` if needed |
 | S2 | PascalCase **Role** / **State** strings | `"State"` / `"Start"` / `"Pause"` / `"Resume"` / `"Stop"`; `"Idle"` / `"Running"` / `"Paused"` / `"Draining"` / `"Off"` |
-| S3 | Spec Role stamps | `.pipe(Lifecycle.asPause)` / `asStart` / … — dual ops are `Lifecycle.pause(lc)`; preserve `Marked`/`ref` |
+| S3 | Spec Role stamps | `.pipe(Lifecycle.asState)` / `asStart` / …; Spec helpers `stateRef` / `eventStream`; duals `Lifecycle.pause(lc)` |
 | S4 | `Lifecycle.State` Schema | Wire success of Role `"State"` field |
 | S5 | No kind helpers in Lifecycle | No `fromWorkPool` / `fromDaemon` |
 | S6 | `Lifecycle` handle + Participating duals | `make` / `start(lc\|jobs\|Tag)` — no projected Service bag / `*From` |
@@ -100,11 +100,12 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 - **Retire:** WorkPool `autoStart?: boolean`.
 - **Blocks:** L1.
 
-### P10 — Gate / plain Rpc — Proposed
+### P10 — Opt-in participation (+ Gate) — Proposed (amended; Gate Eng pending)
 
-- **Choose:** Opt-in only. Gate stays out of v1 dream Eng.
-- **Reject:** Implicit Lifecycle on every HyperService.
-- **Blocks:** L7 docs clarity.
+- **Choose:** Lifecycle is **opt-in per HyperService** — not every Tag must participate. Toolkit kinds we ship (**WorkPool, Daemon**, and **Gate** once Eng’d) **do** participate. Apps spread `Lifecycle.stateRef` / `eventStream` / verbs (or `Lifecycle.spec`) when they want tools/UI.
+- **Choose (Gate, pending Eng):** Gate gets Lifecycle. Pause = admit new calls but latch-block (default hold waiting too). Stop = new calls error; waiting policy still open (fail vs finish vs configurable). Live `concurrency` / `rateLimit` reconfig in the same slice.
+- **Reject:** Implicit Lifecycle on every bare Rpc; forcing Gate to stay non-Participating forever.
+- **Blocks:** L7 docs; Gate Eng needs owner lock on stop-waiting mode.
 
 ### P11 — Module layout — Locked (Eng’d)
 
@@ -130,7 +131,8 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 ## 3. Open questions (need owner before locking)
 
 1. **Versioned schema** — orthogonal; keep on its own decisions doc / owner go.
-2. **P10 / P12** — Gate opt-in wording + which Lifecycle symbols get `@locked` (L7).
+2. **P10 Gate Eng** — stop waiting: fail / finish / configurable (default?); expose pause `newOnly`?; live config wire shape.
+3. **P12** — which Lifecycle symbols get `@locked` (L7).
 
 ---
 
@@ -153,9 +155,9 @@ Full table + acceptance criteria: [plan §8](../plans/lifecycle-kernel.md#8-eng-
 
 ## 5. Immediate next step
 
-1. L6 closed (P7 + P8 Locked Eng’d). P5 chrome → Agent G.  
-2. Next: owner on **P10** / **P12** before L7 Eng.  
-3. Open questions: §3.
+1. L6 closed. Spec Subscribable helpers (`stateRef` / `eventStream` / `asState`) Eng’d.  
+2. Owner: Gate stop-waiting mode (+ P10 lock) and **P12** `@locked` set before Gate/L7 Eng.  
+3. P5 chrome → Agent G. Open questions: §3.
 
 ---
 

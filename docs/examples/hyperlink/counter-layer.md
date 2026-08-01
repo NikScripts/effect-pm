@@ -18,9 +18,8 @@
 
 ## What this shows
 
-Counter Tag with Lifecycle badge (`lifecycle` ref + `lifecycleEvents`), domain
-`reset` kept, one `SubscriptionRef` for the value, provided via `Hyperlink.layer`
-(not a `*Live` alias).
+Counter Tag with `Lifecycle.stateRef` / `eventStream`, domain `reset` kept, one
+`SubscriptionRef` for the value, provided via `Hyperlink.layer` (not a `*Live` alias).
 
 {.twoslash include="examples/hyperlink/counter-layer.ts"}
 ``` ts

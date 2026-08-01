@@ -2,9 +2,23 @@
  * Lifecycle — Effect-native control panel over FiberHandle / FiberSet + optional Latch.
  *
  * Compose real concurrency primitives; drive them with dual ops (`Lifecycle.start(lc)`).
- * The same duals accept a wire {@link Participating} handle (`Lifecycle.start(jobs)`).
- * Badge is a {@link SubscriptionRef}; transition {@link Event}s are derived from
- * `state` changes (no parallel PubSub). Heavy engine: `internal/lifecycle`.
+ * The same duals accept a wire {@link Participating} handle or Tag
+ * (`Lifecycle.start(jobs)` / `Lifecycle.start(Jobs)`). Wire badge is a
+ * {@link Hyperlink.ref} / Subscribable of {@link State}; transition {@link Event}s
+ * are derived from badge changes (no parallel PubSub). Heavy engine:
+ * `internal/lifecycle`.
+ *
+ * ## Spec (Subscribable badge)
+ *
+ * ```ts
+ * class Runner extends Hyperlink.Tag<Runner>()("app/Runner", {
+ *   lifecycle: Lifecycle.stateRef,           // ≡ Hyperlink.ref(State).pipe(asState)
+ *   lifecycleEvents: Lifecycle.eventStream,
+ *   start: Hyperlink.effect(Schema.Void).pipe(Lifecycle.asStart),
+ *   stop: Hyperlink.effect(Schema.Void).pipe(Lifecycle.asStop),
+ *   // domain…
+ * }) {}
+ * ```
  *
  * ## Implementation
  *
@@ -24,9 +38,8 @@
  * ## Tools
  *
  * ```ts
- * yield* Lifecycle.start(Jobs)       // Tag (Effect)
+ * yield* Lifecycle.start(Jobs)
  * const jobs = yield* Jobs
- * yield* Lifecycle.start(jobs)       // Participating handle
  * yield* jobs.lifecycle.get
  * yield* Lifecycle.events(jobs).pipe(Hyperlink.runForEachTag({
  *   Started: () => Effect.log("up"),
@@ -103,9 +116,8 @@ const role =
   <Out>(method: Annotatable<R, Out>): Out =>
     method.annotate({ lifecycle });
 
-/** Mark the reactive State field. @category combinators @public */
-export const state = role("State");
-
+/** Spec Role stamp — `.pipe(Lifecycle.asState)` on a {@link Hyperlink.ref}. @category combinators @public */
+export const asState = role("State");
 /** Spec Role stamp — `.pipe(Lifecycle.asStart)`. @category combinators @public */
 export const asStart = role("Start");
 /** Spec Role stamp — `.pipe(Lifecycle.asPause)`. @category combinators @public */
@@ -122,6 +134,32 @@ export const asStop = role("Stop");
  * @public
  */
 export const lifecycle = <R extends Role>(lifecycleRole: R) => role(lifecycleRole);
+
+/**
+ * Wire Spec member — Subscribable {@link State} badge with Role `"State"`.
+ *
+ * Prefer this over hand-rolling `Hyperlink.ref(Lifecycle.State).pipe(Lifecycle.asState)`.
+ *
+ * @category constructors
+ * @public
+ */
+export const stateRef = Hyperlink.ref(model.State)
+  .annotate({
+    description:
+      "Lifecycle badge ({ _tag: Idle | Running | Paused | Draining | Off }).",
+  })
+  .pipe(asState);
+
+/**
+ * Wire Spec member — transition {@link Event} stream (derived from badge changes).
+ *
+ * @category constructors
+ * @public
+ */
+export const eventStream = Hyperlink.stream(model.Event).annotate({
+  description:
+    "Lifecycle transition events derived from badge changes (Started / Paused / Resumed / StopRequested / Stopped).",
+});
 
 // =============================================================================
 // Participating — wire HyperService surface (tools)
@@ -149,17 +187,29 @@ const isParticipating = <R>(self: Controllable<R>): self is Participating<R> =>
 
 /**
  * Transition events — derived from badge changes on a {@link Lifecycle} handle,
- * or the wire `lifecycleEvents` stream on a {@link Participating} service.
+ * the wire `lifecycleEvents` stream on a {@link Participating} service, or a Tag
+ * Effect (`Lifecycle.events(Jobs)`).
  *
  * @category observers
  * @public
  */
-export const events = <R>(
+export function events<R>(
   self: Controllable<R>,
-): Stream.Stream<model.Event> =>
-  isParticipating(self)
-    ? (self.lifecycleEvents ?? Stream.empty)
-    : engine.events(self);
+): Stream.Stream<model.Event>;
+export function events<RR, E, R>(
+  tag: Effect.Effect<Participating<RR>, E, R>,
+): Stream.Stream<model.Event, E, R | RR>;
+export function events<RR, E, R>(
+  self: Controllable<RR> | Effect.Effect<Participating<RR>, E, R>,
+): Stream.Stream<model.Event, E, R | RR> {
+  if (Effect.isEffect(self)) {
+    return Stream.unwrap(Effect.map(self, (p) => events(p)));
+  }
+  if (isParticipating(self)) {
+    return self.lifecycleEvents ?? Stream.empty;
+  }
+  return engine.events(self);
+}
 
 /**
  * Start — FiberHandle.run on a Lifecycle handle, wire `start` on Participating,
@@ -283,7 +333,7 @@ export function stop<RR, E, R>(
 // =============================================================================
 
 /**
- * Spec fragment for Lifecycle participation.
+ * Spec fragment for Lifecycle participation (`stateRef` + `eventStream` + verbs).
  *
  * @category constructors
  * @public
@@ -291,16 +341,8 @@ export function stop<RR, E, R>(
 export const spec = (options?: { readonly pausable?: boolean }) => {
   const pausable = options?.pausable ?? false;
   const base = {
-    lifecycle: Hyperlink.ref(model.State)
-      .annotate({
-        description:
-          "Lifecycle badge ({ _tag: Idle | Running | Paused | Draining | Off }).",
-      })
-      .pipe(state),
-    lifecycleEvents: Hyperlink.stream(model.Event).annotate({
-      description:
-        "Lifecycle transition events derived from badge changes (Started / Paused / Resumed / StopRequested / Stopped).",
-    }),
+    lifecycle: stateRef,
+    lifecycleEvents: eventStream,
     start: Hyperlink.effect(Schema.Void)
       .annotate({ description: "Start the service (Idle → Running)." })
       .pipe(asStart),
@@ -324,7 +366,9 @@ export const spec = (options?: { readonly pausable?: boolean }) => {
 };
 
 /**
- * Impl fragment from a Lifecycle handle — spread into toolkit / serve impls.
+ * Impl fragment from a Lifecycle handle — spread into toolkit / {@link Hyperlink.layer}
+ * impls. Wire verbs use `never` error (Illegal / Unsupported swallowed); tools that need
+ * those channels use {@link start} / {@link pause} duals (they re-check the badge).
  *
  * @category constructors
  * @public
@@ -334,27 +378,28 @@ export const impl = <R = never>(
 ): {
   readonly lifecycle: Hyperlink.Subscribable<model.State>;
   readonly lifecycleEvents: Stream.Stream<model.Event>;
-  readonly start: Effect.Effect<void, model.Illegal, R>;
-  readonly pause?: Effect.Effect<void, model.Illegal | model.Unsupported, R>;
-  readonly resume?: Effect.Effect<void, model.Illegal | model.Unsupported, R>;
+  readonly start: Effect.Effect<void, never, R>;
+  readonly pause?: Effect.Effect<void, never, R>;
+  readonly resume?: Effect.Effect<void, never, R>;
   readonly stop: Effect.Effect<void, never, R>;
 } => ({
   lifecycle: Hyperlink.subscribable(lc.state),
   lifecycleEvents: engine.events(lc),
-  start: engine.start(lc),
+  start: engine.start(lc).pipe(
+    Effect.catchTag("LifecycleIllegal", () => Effect.void),
+  ),
   ...(lc.latch !== undefined
     ? {
-        pause: engine.pause(lc),
-        resume: engine.resume(lc),
+        pause: engine.pause(lc).pipe(
+          Effect.catchTag("LifecycleIllegal", () => Effect.void),
+          Effect.catchTag("LifecycleUnsupported", () => Effect.void),
+        ),
+        resume: engine.resume(lc).pipe(
+          Effect.catchTag("LifecycleIllegal", () => Effect.void),
+          Effect.catchTag("LifecycleUnsupported", () => Effect.void),
+        ),
       }
     : {}),
   stop: engine.stop(lc),
 });
 
-/**
- * Spec-field helpers: stamp + schema for the Role `"State"` member.
- *
- * @category constructors
- * @public
- */
-export const stateSchema = model.State;

@@ -14,8 +14,9 @@ Participating HyperService (`Lifecycle.start(jobs)`). **State, Event, and errors
 
 Heavy engine lives in `internal/lifecycle` — the public module is the namespace + Spec sugar.
 
-This is the **HyperService** plane (WorkPool / Daemon). Node cutover uses a separate
-`Node.status.phase` (`draining` / …) — see [Identity coordinator](/docs/identity-coordinator).
+This is the **HyperService** plane (WorkPool / Daemon today; apps opt in via Spec).
+Node cutover uses a separate `Node.status.phase` (`draining` / …) — see
+[Identity coordinator](/docs/identity-coordinator).
 
 ## Handoff is orthogonal
 
@@ -69,36 +70,47 @@ HyperService **layer**. Ambient `DeferStart` keeps Idle until `start`.
 
 ## Tools — duals on Participating
 
-No projected `Service` bag. Operate on the Tag handle (or `*From` helpers):
+No projected `Service` bag. Duals accept a Lifecycle handle, a Participating service, or a Tag:
 
 ```ts
 const jobs = yield* Jobs
 yield* Lifecycle.start(jobs)
 yield* Lifecycle.pause(jobs)
-yield* jobs.lifecycle.get
+yield* jobs.lifecycle.get                 // Subscribable<Lifecycle.State>
 
-// same duals accept the Tag Effect:
-yield* Lifecycle.start(Jobs)
+yield* Lifecycle.start(Jobs)              // Tag Effect overload
 yield* Lifecycle.stop(Jobs)
 ```
 
-WorkPool / Priority expose the badge as `jobs.lifecycle` (`Subscribable<Lifecycle.State>`).
-Prefer `lifecycle._tag` for UI badges and readiness — there is **no** `status.phase`.
+WorkPool / Priority expose the badge as `jobs.lifecycle`. Prefer `lifecycle._tag` for UI
+badges and readiness — there is **no** `status.phase`.
 
 The same duals work when the Tag is provided by [`Hyperlink.client`](/docs/hyperlink)
 (local layer vs client layer — only the Layer differs). Over RPC, observe badge transitions
 via `lifecycle.changes` (the client `.get` cache is fed by that stream).
 
-## Spec sugar
+## Spec — Subscribable badge
+
+Wire the badge as a {@link Hyperlink.ref} of {@link Lifecycle.State} (Role `"State"`). Prefer
+the stamped helpers:
 
 ```ts
+class Runner extends Hyperlink.Tag<Runner>()("app/Runner", {
+  lifecycle: Lifecycle.stateRef,              // Hyperlink.ref(State).pipe(asState)
+  lifecycleEvents: Lifecycle.eventStream,
+  start: Hyperlink.effect(Schema.Void).pipe(Lifecycle.asStart),
+  stop: Hyperlink.effect(Schema.Void).pipe(Lifecycle.asStop),
+  // domain…
+}) {}
+
+// or spread:
 const MySpec = {
   ...Lifecycle.spec({ pausable: true }),
 }
 ```
 
-Roles stamp via `.pipe(Lifecycle.asStart)` / `asPause` / `asResume` / `asStop`. Spec includes
-`lifecycleEvents` (derived stream on the wire).
+Impl side: `...Lifecycle.impl(lc)` (wire verbs use `never` error; duals re-check Illegal).
+Provide with `Hyperlink.layer` / toolkit `.layer` — never a `*Live` alias.
 
 ## Observe pack
 
