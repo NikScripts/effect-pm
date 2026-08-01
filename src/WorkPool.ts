@@ -1170,18 +1170,15 @@ const queueTag = <Self>() => {
     key: string,
     config: QueueTagConfig<F, Success, Error>,
   ): QueueTagCarriers<Self, F, Success, Error>;
-  // Implementation signature — intentionally loose (`any` wire slots): the tag's real `Success`/
-  // `Error` are fixed by the overload selected above. The runtime resolves them from the config /
-  // positional args below; the phantom carriers are type-only.
-  function build<F extends Schema.Struct.Fields>(
+  // Implementation signature — intentionally loose: overloads are the typed surface; the
+  // runtime resolves Success/Error/node/defaults from config / positional args below.
+  // Return is `any` so every overload return (incl. TagWithDefaults / NodeBound) is compatible.
+  function build(
     key: string,
-    second: Schema.Struct<F> | QueueTagConfig<F, Schema.Top, Schema.Top>,
+    second: Schema.Struct<Schema.Struct.Fields> | QueueTagConfig<Schema.Struct.Fields, Schema.Top, Schema.Top>,
     third?: Schema.Top | (QueueTagPositionalOptions & QueueTagDefaultsRuntime),
     fourth?: Schema.Top,
-  ): QueueTag<Self, F, any, any> &
-    QueueSuccessCarrier<any> &
-    QueueErrorCarrier<any> &
-    QueueItemSchemaCarrier<F> {
+  ): any {
     const resolved = isQueueTagConfig(second)
       ? {
           payload: second.payload,
@@ -1189,7 +1186,8 @@ const queueTag = <Self>() => {
           error: second.error,
           description: second.description,
           node: second.node,
-          defaults: (second as QueueTagConfig<F> & QueueTagDefaultsRuntime).defaults,
+          defaults: (second as QueueTagConfig<Schema.Struct.Fields> & QueueTagDefaultsRuntime)
+            .defaults,
         }
       : Schema.isSchema(third)
         ? {
@@ -1210,7 +1208,10 @@ const queueTag = <Self>() => {
           };
     // defaults **after** nameQueueService — naming remaps Svc to WorkPool and would wipe a prior bag.
     const named = nameQueueService(
-      materializeQueueTag<Self, F, Schema.Top, Schema.Top>(key, resolved),
+      materializeQueueTag<Self, Schema.Struct.Fields, Schema.Top, Schema.Top>(
+        key,
+        resolved,
+      ),
     );
     return Hyperlink.applyTagDefaults(named, resolved.defaults) as typeof named;
   }

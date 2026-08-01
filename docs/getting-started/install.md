@@ -16,7 +16,7 @@ can still change between betas. Nothing is frozen until 1.0 (there's no `@since`
 ## Requirements
 
 - **Node.js ≥ 20.19**
-- **Effect** `^4.0.0-beta.98` (peer dependency, installed alongside below)
+- **Effect** `^4.0.0-beta.102` (peer dependency, installed alongside below)
 
 ## Install
 

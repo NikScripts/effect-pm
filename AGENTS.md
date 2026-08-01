@@ -63,10 +63,13 @@ Start with [`docs/handoffs/agent-status.md`](./docs/handoffs/agent-status.md) fo
 
 External repositories live under `repos/` as read-only reference material, tracked as **git submodules**.
 
-- `repos/effect` is a submodule of **effect-smol** (Effect **v4**), tracking `main`. The Effect source
-  is at `repos/effect/packages/effect/src/`. NOT v3 — do not trust any "stale v3" assumption.
+- `repos/effect` is a submodule of the official **[`Effect-TS/effect`](https://github.com/Effect-TS/effect)**
+  repo (Effect **v4** on `main`; v3 lives on the `v3` branch). Pinned near the same beta as
+  `package.json` (`effect@4.0.0-beta.*`). Source: `repos/effect/packages/effect/src/`.
+  The old `effect-smol` repo is archived — do not clone or cite it as current.
 - **Init after clone:** `git submodule update --init --depth 1`.
-- **Pull latest upstream:** `git submodule update --remote repos/effect` (then commit the bumped pointer).
+- **Pull latest upstream:** `git submodule update --remote repos/effect` (then commit the bumped pointer),
+  or check out a release tag such as `effect@4.0.0-beta.102` when aligning with a dep bump.
 - Use the submodule to inspect idiomatic upstream source, tests, module structure, and API design — when
   writing Effect code, read `repos/effect/packages/effect/src/` (or the installed `node_modules/effect/src/`
   for the exact pinned version) before guessing from memory.
