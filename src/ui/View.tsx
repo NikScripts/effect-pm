@@ -5,7 +5,7 @@
  * Notes: `docs/handoffs/view-tag-prototype.md`. Design: `docs/handoffs/client-adapters-design.md`.
  *
  * - Mint: `View.Card.Tag<Self, Props?>()(key, statics?)` — Effect-shaped.
- * - Skins: {@link provide}`(Tag, impl)` (or `Tag.provide(impl)`) — props infer from the Tag.
+ * - Provide: {@link provide}`(Tag, impl)` (or `Tag.provide(impl)`) — props infer from the Tag.
  * - Open debt: {@link SizeChrome} / {@link Prototype}`<Props, Requirement>` then fulfill size.
  * - Svc type is {@link View}`<Props>` (props in → element out). Defaults to {@link ViewProps}.
  * - Matchers on {@link react} / {@link compose} kits (`ui.Card`) and {@link useMatch}.
@@ -152,10 +152,11 @@ export type View<Props extends object = ViewProps> = (
  *
  * @example
  * ```ts
- * export const skins = Layer.mergeAll(
+ * export const provides = Layer.mergeAll(
  *   View.provide(PoolCard, ({ tag, name }) => <Card tag={tag} name={name} />),
  *   View.provide(PoolDetail, ({ tag }) => <Detail tag={tag} />),
  * )
+ * // pipe: contrib.pipe(DashboardLayer.provide(provides))
  * ```
  *
  * @public

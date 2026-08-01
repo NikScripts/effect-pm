@@ -2,8 +2,8 @@
  * @module tui/Dashboard
  *
  * The Ink Group dashboard — terminal counterpart to `<Dashboard runtime group />` from
- * `hyperlink-ts/web`. Stack: {@link ../ui/DashboardLayer.forCompose} → {@link ../ui/View.compose}
- * → {@link ./DashboardShell}. Public kit one-liner.
+ * `hyperlink-ts/web`. Stack: `DashboardLayer.layer` → {@link ../ui/DashboardLayer.provide}
+ * → {@link ../ui/View.compose} → {@link ./DashboardShell}. Public kit one-liner.
  *
  * ```tsx
  * <Dashboard runtime={Atom.runtime(appLayer)} group={Fleet} />
@@ -59,11 +59,12 @@ export const Dashboard = <R, ER>(props: {
   readonly widgets?: TuiWidgetRegistry;
 }): React.ReactElement => {
   const ui = React.useMemo(() => {
+    const views = Layer.mergeAll(
+      DashboardLayer.layer,
+      props.views ?? Layer.empty,
+    ).pipe(DashboardLayer.provide(TuiDashboardViews.provides));
     const composed = View.compose({
-      views: DashboardLayer.forCompose({
-        skins: TuiDashboardViews.skins,
-        views: props.views,
-      }),
+      views,
       router: Router.memory(routesFor(props.group)),
       group: props.group,
     });

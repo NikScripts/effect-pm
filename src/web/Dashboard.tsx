@@ -6,11 +6,10 @@
  * root `Group`, and it renders the responsive drill-down. Navigation is URL-backed and
  * animated with view transitions.
  *
- * Stack (Effect-shaped): {@link ../ui/DashboardLayer.forCompose} → {@link ../ui/View.compose}
- * → {@link ./DashboardShell}. Public kit one-liner — thin wiring over that stack.
+ * Stack (Effect-shaped): `DashboardLayer.layer` → {@link ../ui/DashboardLayer.provide}
+ * → {@link ../ui/View.compose} → {@link ./DashboardShell}. Public kit one-liner.
  *
- * Use `<Dashboard runtime group />` for the one-liner, or compose `DashboardView` /
- * `DashboardLayer.forCompose` + `View.compose` + `DashboardShell` yourself.
+ * Use `<Dashboard runtime group />`, or pipe Layers + `View.compose` + `DashboardShell`.
  */
 import * as React from "react";
 import { Layer } from "effect";
@@ -51,22 +50,21 @@ export const DashboardView = <R, ER>(props: {
   /**
    * App View contributions (`R = View.Registry`). Prefer
    * `View.only(Tag, Card).pipe(Layer.provide(View.provide(Card, Comp)))`.
-   * Merged with shipped family contributions, then skins + {@link View.base}.
+   * Merged with shipped family contributions, then platform provides + {@link View.base}.
    */
   readonly views?: Layer.Layer<never, never, View.Registry>;
 }): React.ReactElement => {
-  const ui = React.useMemo(
-    () =>
-      View.compose({
-        views: DashboardLayer.forCompose({
-          skins: WebDashboardViews.skins,
-          views: props.views,
-        }),
-        router: Router.history(routesFor(props.group)),
-        group: props.group,
-      }),
-    [props.group, props.views],
-  );
+  const ui = React.useMemo(() => {
+    const views = Layer.mergeAll(
+      DashboardLayer.layer,
+      props.views ?? Layer.empty,
+    ).pipe(DashboardLayer.provide(WebDashboardViews.provides));
+    return View.compose({
+      views,
+      router: Router.history(routesFor(props.group)),
+      group: props.group,
+    });
+  }, [props.group, props.views]);
   return (
     <ui.Provider>
       <RuntimeProvider runtime={props.runtime}>

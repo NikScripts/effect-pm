@@ -32,6 +32,6 @@ export { base, Cell, DaemonCell, FallbackCell, GroupCell, PriorityCell, QueueCel
 export { RuntimeProvider, useRuntime } from "./runtime";
 export { Tui, TuiNotConfigured } from "../cli/index";
 export type { TuiOpenInput } from "../cli/Tui";
-// Platform skins: `import * as WorkPoolView from "hyperlink-ts/tui/WorkPoolView"`
+// Platform provides: `import * as WorkPoolView from "hyperlink-ts/tui/WorkPoolView"`
 // / `import * as DashboardViews from "hyperlink-ts/tui/DashboardViews"`
 // (not re-exported here — would clash with `hyperlink-ts/ui` handles).

@@ -2,7 +2,7 @@
  * @module ui/WorkPoolView
  *
  * Shared WorkPool View **handles** + contribution Layer + observe **pack** — no platform TSX.
- * Provide skins with `View.provide` in `web/WorkPoolView` / `tui/WorkPoolView`.
+ * Provide implementations with `View.provide` in `web/WorkPoolView` / `tui/WorkPoolView`.
  *
  * @example
  * ```ts
@@ -56,7 +56,7 @@ export class PoolPage extends View.Page.Tag<PoolPage>()(
 
 /**
  * Contribution Layer: stamped {@link WorkPool.kind} → card + detail + page (append).
- * Merge with platform skins + {@link View.base}, then {@link View.react}.
+ * Merge with platform provides + {@link View.base}, then {@link View.react}.
  *
  * @public
  */

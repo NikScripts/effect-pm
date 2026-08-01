@@ -1,7 +1,7 @@
 /**
  * @module web/DashboardViews
  *
- * Web (DOM) skins for all default Dashboard View families — `View.provide` only.
+ * Web (DOM) View Tag implementations — `View.provide` only.
  * Ready {@link layer} for {@link View.react}.
  */
 import * as React from "react";
@@ -317,7 +317,7 @@ const DaemonPageView: View.View = (props) => {
  *
  * @public
  */
-export const skins = Layer.mergeAll(
+export const provides = Layer.mergeAll(
   View.provide(GroupView.GroupCard, GroupCardView),
   View.provide(WorkPoolView.PoolCard, PoolCardView),
   View.provide(WorkPoolView.PoolDetail, PoolDetailView),
@@ -346,6 +346,6 @@ export const skins = Layer.mergeAll(
  * @public
  */
 export const layer = DashboardViews.layer.pipe(
-  Layer.provideMerge(skins),
+  Layer.provideMerge(provides),
   Layer.provideMerge(View.base),
 );

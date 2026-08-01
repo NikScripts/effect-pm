@@ -2,7 +2,7 @@
  * @module ui/DashboardViews
  *
  * Merged View contribution Layers for the batteries-included Dashboard families.
- * Platform packages merge skins + {@link View.base} into a ready `layer` for {@link View.react}.
+ * Platform packages merge provides + {@link View.base} into a ready `layer` for {@link View.react}.
  */
 import { Layer } from "effect";
 import * as ApiMetricsView from "./ApiMetricsView";

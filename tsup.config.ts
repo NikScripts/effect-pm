@@ -10,6 +10,7 @@ const shared = {
     "@effect/sql-sqlite-node",
     "waku",
     "waku/router/client",
+    "vite",
   ],
 };
 
@@ -79,6 +80,8 @@ export default defineConfig([
       "ui/GroupView": "src/ui/GroupView.ts",
       "ui/DashboardViews": "src/ui/DashboardViews.ts",
       "ui/DashboardLayer": "src/ui/DashboardLayer.ts",
+      "ui/Page": "src/ui/Page.ts",
+      "vite/fileRouter": "src/vite/fileRouter.ts",
     },
     tsconfig: "src/ui/tsconfig.json",
     dts: true,

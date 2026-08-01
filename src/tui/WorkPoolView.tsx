@@ -1,7 +1,7 @@
 /**
  * @module tui/WorkPoolView
  *
- * TUI (Ink) skins for shared {@link WorkPoolView} handles — `View.provide` only.
+ * TUI (Ink) implementations for shared {@link WorkPoolView} handles — `View.provide` only.
  */
 import { Box, Text } from "ink";
 import * as React from "react";
@@ -130,7 +130,7 @@ const PoolPageView: View.View = (props) => {
  *
  * @public
  */
-export const skins: Layer.Layer<
+export const provides: Layer.Layer<
   WorkPoolView.PoolCard | WorkPoolView.PoolDetail | WorkPoolView.PoolPage
 > = Layer.mergeAll(
   View.provide(WorkPoolView.PoolCard, PoolCardView),
@@ -144,7 +144,7 @@ export const skins: Layer.Layer<
  * @public
  */
 export const layer = WorkPoolView.layer.pipe(
-  Layer.provideMerge(skins),
+  Layer.provideMerge(provides),
   Layer.provideMerge(View.base),
 );
 

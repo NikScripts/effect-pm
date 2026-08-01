@@ -15,7 +15,7 @@
  * <Dashboard runtime={runtime} group={ServicesHub} />
  * ```
  *
- * Or compose the pieces: `DashboardLayer.forCompose` + `View.compose` + `DashboardShell`
+ * Or compose: `DashboardLayer.provide` + `View.compose` + `DashboardShell`
  * under `RegistryProvider` + `RuntimeProvider` + `ViewTransitionProvider`. Prefer
  * `Observe.use(tag, *View.pack)` / `NodeView.use`.
  *
@@ -39,6 +39,6 @@ export { NodeStatusHost } from "./NodeStatus";
 export { LogBox, LogsPage, SchedulePage } from "./resourcePages";
 export * from "./debug-console";
 export { cn } from "./cn";
-// Platform skins: `import * as WorkPoolView from "hyperlink-ts/web/WorkPoolView"`
+// Platform provides: `import * as WorkPoolView from "hyperlink-ts/web/WorkPoolView"`
 // / `import * as DashboardViews from "hyperlink-ts/web/DashboardViews"`
 // (not re-exported here — would clash with `hyperlink-ts/ui` handles).

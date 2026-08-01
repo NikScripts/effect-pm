@@ -71,10 +71,10 @@ describe("DashboardViews packaging", () => {
     ]);
   });
 
-  it("shared contribution layer has no platform skins (open R)", () => {
+  it("shared contribution layer has no platform provides (open R)", () => {
     expect(PriorityView.PriorityCard.key).toBe("hyperlink/view/priority-card");
     expect(DaemonView.DaemonDetail.key).toBe("hyperlink/view/daemon-detail");
-    // Compiles as a Layer; platform packages close R via skins + View.base.
+    // Compiles as a Layer; platform packages close R via provides + View.base.
     void DashboardViews.layer;
   });
 });

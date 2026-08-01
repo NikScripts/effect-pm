@@ -1,10 +1,11 @@
 # File-router prototype
 
 **Branch:** `cursor/file-router-prototype-125f`  
-**Status:** prototype — typed path union verified; page mark / layout design locked below  
+**Status:** Eng in progress — `Page.*` helpers, `Route.fileRoot`, Vite plugin + `hyp file-router`; **`Page.Tag` deferred**  
 **Naming:** Layers are always **camelCase** — already `.must` in
 [`types-and-naming.md`](../standards/types-and-naming.md#layers-read-as-layers)
-(`layer`, `layerMemory`, `skins`, `peersLayer`, …). No PascalCase layer values.
+(`layer`, `layerMemory`, `provides`, `peersLayer`, …). No PascalCase layer values.
+Dashboard `skins` → `provides`; `forCompose` options bag → `DashboardLayer.provide` pipe.
 
 ## Question
 
@@ -69,11 +70,15 @@ Dynamic. Layout: `Page.layout` (camelCase); `Page.Layout` class only if earned.
 - `hyp … --check` in CI
 - Soft-nav: existing `Router/waku`; file table → `createPages` internally
 
-## Next Eng
+## Landed (this branch)
 
-1. Plugin + emit + `--check`
-2. Public `Router.fileSystem` / `Route.fileRoot`
-3. `View.static` / `View.dynamic` / `View.build` (+ page-class path)
-4. Metadata schema on page statics
-5. `View.layout`
-6. Docs-site cutover off Waku fs-router
+- `hyperlink-ts/ui/Page` — `static` / `dynamic` / `build` / `layout` (+ `Render` tagged enum)
+- `Route.fileRoot` / `Route.fileSystem` / `Router.fileSystem`
+- `hyperlink-ts/vite` — `fileRouter({ pagesDir, outFile })` watch + atomic emit
+- `hyp file-router emit|check`
+
+## Still open
+
+1. **`Page.Tag`** (owner) — class mint + `Page.build(Tag)` reading statics
+2. Docs-site cutover off Waku fs-router → `createPages` adapter
+3. Wire docs `waku.config.ts` to `fileRouter` plugin (optional dogfood)
