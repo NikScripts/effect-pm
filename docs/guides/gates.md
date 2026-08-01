@@ -162,6 +162,68 @@ warn; not fail-loud in v1).
 — same model as WorkPool / Daemon (`Layer.provideMerge`). Not hot reload. See
 [WorkPool → Reconfiguring](/docs/work-pools#reconfiguring-layer-patches).
 
+## Lifecycle (pause / stop / live reconfig)
+
+Every Gate participates in the shared **`Lifecycle`** protocol (same badge + verbs as
+WorkPool / Daemon). The handle carries a `lifecycle` state badge, a `lifecycleEvents`
+stream, and `start` / `pause` / `resume` / `stop` verbs, plus live `setConcurrency` /
+`setRateLimit`.
+
+```ts
+const gate = yield* Double
+yield* gate.pause     // admit new calls, but hold them (and any waiters) at the latch
+yield* gate.resume    // release held callers
+const state = yield* gate.lifecycle.get   // { _tag: "Running" | "Paused" | "Draining" | "Off" | "Idle" }
+```
+
+| Transition | Behavior |
+|------------|----------|
+| **pause** | New calls are admitted but latch-block; callers already **waiting** for a permit hold too. No `newOnly` knob. |
+| **resume** | Latch opens; held callers proceed in order. |
+| **stop** | New calls fail **`Gate.GateStopped`**; in-flight bodies **always finish**; awaits drain, then `Off`. |
+
+Readiness follows the badge: `Idle` / `Running` / `Paused` stay dialable; `Draining` /
+`Off` are not.
+
+### `stopMode` — waiting callers at stop
+
+`stopMode` decides what happens to calls already **waiting** for a permit (or a resume)
+when `stop` is invoked. In-flight bodies always finish regardless.
+
+| `stopMode` | Waiting callers |
+|------------|-----------------|
+| `"failWaiting"` (**default**) | Fail immediately with `Gate.GateStopped`. |
+| `"finishWaiting"` | Keep their place — acquire a permit and run; only **new** admits are rejected. |
+
+```ts
+class Backup extends Gate.Service<Backup>()("app/Backup", {
+  payload: Schema.String,
+  concurrency: 1,
+  stopMode: "finishWaiting",  // let queued callers drain on stop
+  effect: (path) => archive(path),
+}) {}
+
+// new calls after stop:
+yield* gate.run("x").pipe(
+  Effect.catchTag("GateStopped", () => Effect.logInfo("gate is stopped")),
+)
+```
+
+### Live reconfiguration
+
+`setConcurrency` / `setRateLimit` retune a **running** gate (each bumps
+`status.configVersion` for observers):
+
+```ts
+yield* gate.setConcurrency(8)                 // Semaphore.resize + status.concurrency
+yield* gate.setRateLimit({ limit: 50, window: Duration.seconds(1) })
+yield* gate.setRateLimit(null)                // clear the limit entirely
+```
+
+`setConcurrency` resizes the underlying `Semaphore` — grows admit new permits at once;
+shrinks apply as in-flight bodies release. `setRateLimit` swaps the consume policy for the
+next call (`window` as a `Duration`); `null` removes rate limiting.
+
 ## Call it
 
 `run` invokes the gate. There's an instance form (after `yield*`) and a static
