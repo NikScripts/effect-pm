@@ -10,6 +10,57 @@ import * as Hyperlink from "../Hyperlink";
 import type { Method, RefField } from "../Hyperlink";
 import * as Lifecycle from "../Lifecycle";
 
+/**
+ * Failure when a call is admitted to a **stopped** gate (Lifecycle `Draining` /
+ * `Off`), or a waiting call is failed by a `stopMode: "failWaiting"` stop.
+ * In-flight bodies always finish.
+ *
+ * `Schema.TaggedErrorClass` so it is both yieldable **and** wire-encodable — part of
+ * every Gate's `run` RPC error channel (see {@link withGateStopped}).
+ *
+ * @category errors
+ * @public
+ */
+export class GateStopped extends Schema.TaggedErrorClass<GateStopped>()(
+  "GateStopped",
+  {
+    resourceId: Schema.String,
+  },
+) {}
+
+/**
+ * Effective wire `run` error schema — user `error` (default {@link Schema.Never}) always
+ * carries {@link GateStopped}. `Never` collapses to `GateStopped` alone (no useless union).
+ *
+ * @internal
+ */
+export type WithGateStopped<E extends Schema.Top> = [E] extends [
+  typeof Schema.Never,
+]
+  ? typeof GateStopped
+  : Schema.Union<[E, typeof GateStopped]>;
+
+/**
+ * Union {@link GateStopped} into a gate's declared `run` error schema.
+ *
+ * @internal
+ */
+export function withGateStopped(
+  error: typeof Schema.Never,
+): typeof GateStopped;
+export function withGateStopped<E extends Schema.Top>(
+  error: E,
+): WithGateStopped<E>;
+export function withGateStopped<E extends Schema.Top>(
+  error: E,
+): typeof GateStopped | Schema.Union<[E, typeof GateStopped]> {
+  // Runtime identity check (same as `gateSpec` / `withNeverDefault`); the generic
+  // param `E` is not known to overlap `Never` at the type level.
+  return (error as Schema.Top) === Schema.Never
+    ? GateStopped
+    : Schema.Union([error, GateStopped]);
+}
+
 /** Live gate counters on the wire — element of the reactive `status` ref. @internal */
 export const gateStatus = Schema.Struct({
   resourceId: Schema.String,
@@ -34,16 +85,18 @@ type GateCountRef = RefField<
   Method<undefined, typeof Schema.Number, typeof Schema.Never, true>
 >;
 
-/** `run` wire member — inputless {@link Hyperlink.effect} for unit gates, {@link Hyperlink.effectFn} otherwise. @internal */
+/**
+ * `run` wire member — inputless {@link Hyperlink.effect} for unit gates,
+ * {@link Hyperlink.effectFn} otherwise. `E` is the **effective** wire error
+ * ({@link WithGateStopped} of the Tag's declared error).
+ *
+ * @internal
+ */
 export type GateWireMember<
   I extends Schema.Top,
   A extends Schema.Top,
   E extends Schema.Top,
-> = [I] extends [Void]
-  ? [E] extends [typeof Schema.Never]
-    ? Method<undefined, A, typeof Schema.Never>
-    : Method<undefined, A, E>
-  : Method<I, A, E>;
+> = [I] extends [Void] ? Method<undefined, A, E> : Method<I, A, E>;
 
 const RUN_DESCRIPTION =
   "Acquire a permit, run the gated effect, release the permit — returns the effect result.";
@@ -148,10 +201,14 @@ const gateLifecycleSpec: Lifecycle.SpecPausable = Lifecycle.spec({
 });
 
 /**
- * Instance spec for a gate typed by its wire schemas. Written as a **single object literal** (the
- * Lifecycle + reconfig members spliced in via indexed access, not an `&` intersection) so it keeps
- * the implicit string index signature that satisfies {@link Hyperlink.Spec} and the lenient
- * per-member assignability the {@link gateSpec} overloads rely on. @internal
+ * Instance spec typed by the Tag's **declared** schemas. Written as a **single object
+ * literal** (Lifecycle + reconfig members spliced via indexed access, not an `&`
+ * intersection) so it keeps the implicit string index signature that satisfies
+ * {@link Hyperlink.Spec}. `E` is the user error schema (default {@link Schema.Never});
+ * `run`'s wire error is always {@link WithGateStopped}`<E>` so `GateStopped` is
+ * catchable on Tag/Service.
+ *
+ * @internal
  */
 export type GateInstanceSpec<
   I extends Schema.Top,
@@ -165,7 +222,7 @@ export type GateInstanceSpec<
   readonly failed: GateCountRef;
   readonly interrupted: GateCountRef;
   readonly metrics: typeof gateMetricsNestSpec;
-  readonly run: GateWireMember<I, A, E>;
+  readonly run: GateWireMember<I, A, WithGateStopped<E>>;
   readonly lifecycle: Lifecycle.SpecPausable["lifecycle"];
   readonly lifecycleEvents: Lifecycle.SpecPausable["lifecycleEvents"];
   readonly start: Lifecycle.SpecPausable["start"];
@@ -195,28 +252,26 @@ const gateSpecVoid = <A extends Schema.Top>(
   withControls(
     withMetricsNest({
       ...gateObservationRefs(),
-      run: Hyperlink.effect(success).annotate({ description: RUN_DESCRIPTION }) as GateWireMember<
-        Void,
-        A,
-        typeof Schema.Never
-      >,
+      run: Hyperlink.effect(success, GateStopped).annotate({
+        description: RUN_DESCRIPTION,
+      }) as GateWireMember<Void, A, typeof GateStopped>,
     }),
   );
 
 const gateSpecVoidWithError = <A extends Schema.Top, E extends Schema.Top>(
   success: A,
   error: E,
-): GateInstanceSpec<Void, A, E> =>
-  withControls(
+): GateInstanceSpec<Void, A, E> => {
+  const wireError = withGateStopped(error);
+  return withControls(
     withMetricsNest({
       ...gateObservationRefs(),
-      run: Hyperlink.effect(success, error).annotate({ description: RUN_DESCRIPTION }) as GateWireMember<
-        Void,
-        A,
-        E
-      >,
+      run: Hyperlink.effect(success, wireError).annotate({
+        description: RUN_DESCRIPTION,
+      }) as GateWireMember<Void, A, WithGateStopped<E>>,
     }),
   );
+};
 
 const gateSpecWithPayload = <
   I extends Exclude<Schema.Top, Void>,
@@ -226,15 +281,21 @@ const gateSpecWithPayload = <
   payload: I,
   success: A,
   error: E,
-): GateInstanceSpec<I, A, E> =>
-  withControls(
+): GateInstanceSpec<I, A, E> => {
+  const wireError = withGateStopped(error);
+  return withControls(
     withMetricsNest({
       ...gateObservationRefs(),
-      run: Hyperlink.effectFn({ payload, success, error }).annotate({
+      run: Hyperlink.effectFn({
+        payload,
+        success,
+        error: wireError,
+      }).annotate({
         description: RUN_DESCRIPTION,
-      }) as unknown as GateWireMember<I, A, E>,
+      }) as unknown as GateWireMember<I, A, WithGateStopped<E>>,
     }),
   );
+};
 
 /**
  * Build a gate **instance** spec: observation refs plus the gated `run` mutation.

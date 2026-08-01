@@ -1,12 +1,10 @@
 import { describe, expect, it } from "@effect/vitest";
 import {
-  Cause,
   Deferred,
   Duration,
   Effect,
   Exit,
   Fiber,
-  Option,
   Ref,
   Schema,
   Stream,
@@ -132,14 +130,14 @@ describe("Gate — Lifecycle stop", () => {
         yield* gate.stop;
         expect((yield* gate.lifecycle.get)._tag).toBe("Off");
 
-        // `GateStopped` is raised by the engine but erased from the wire `run` error channel
-        // (declared error schema only), so match it through the runtime cause.
-        const exit = yield* Effect.exit(gate.run(21));
-        expect(Exit.isFailure(exit)).toBe(true);
-        if (Exit.isFailure(exit)) {
-          const err = Option.getOrThrow(Cause.findErrorOption(exit.cause));
-          expect(err).toBeInstanceOf(Gate.GateStopped);
-        }
+        // Wire `run` includes `GateStopped` — typed `catchTag` works on Tag/Service.
+        const result = yield* gate.run(21).pipe(
+          Effect.catchTag("GateStopped", (err) => {
+            expect(err).toBeInstanceOf(Gate.GateStopped);
+            return Effect.succeed(-1);
+          }),
+        );
+        expect(result).toBe(-1);
       }).pipe(Effect.provide(StoppableGate.layer), Effect.scoped);
     }),
   );
@@ -174,19 +172,18 @@ describe("Gate — Lifecycle stop", () => {
         expect(yield* gate.inFlight.get).toBe(1);
 
         // run(2) can't get the permit → parks in the waiting phase.
-        const waiter = yield* Effect.forkChild(Effect.exit(gate.run(2)));
+        // Wire `run` includes `GateStopped`, so typed catchTag recovers the waiter.
+        const waiter = yield* Effect.forkChild(
+          gate.run(2).pipe(
+            Effect.catchTag("GateStopped", (err) => Effect.succeed(err)),
+          ),
+        );
         yield* awaitCount(gate.waiting, 1);
 
         // stop (failWaiting) fails the waiter, then blocks on the in-flight body.
         const stopFiber = yield* Effect.forkChild(gate.stop);
-        const waiterExit = yield* Fiber.join(waiter);
-        expect(Exit.isFailure(waiterExit)).toBe(true);
-        if (Exit.isFailure(waiterExit)) {
-          const err = Option.getOrThrow(
-            Cause.findErrorOption(waiterExit.cause),
-          );
-          expect(err).toBeInstanceOf(Gate.GateStopped);
-        }
+        const waiterErr = yield* Fiber.join(waiter);
+        expect(waiterErr).toBeInstanceOf(Gate.GateStopped);
 
         // Release the in-flight body → drain completes → Off.
         yield* Deferred.succeed(release, undefined);

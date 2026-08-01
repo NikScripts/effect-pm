@@ -108,7 +108,7 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
   - Stop: new calls error (`GateStopped`). Waiting policy **`stopMode: "failWaiting" | "finishWaiting"`**, default **`"failWaiting"`**.
   - In-flight always finishes. Live `concurrency` / `rateLimit` reconfig in the same slice.
 - **Reject:** Implicit Lifecycle on every bare Rpc; Gate forever non-Participating.
-- **Eng’d:** Gate participates via `Lifecycle.make({ run: Effect.never, latch, release, awaitBeforeTerminal, afterStop: Lifecycle.off })`. `Gate.GateStopped` + `stopMode` (default `failWaiting`) shipped; live `setConcurrency` / `setRateLimit` wire verbs (bump `configVersion`); readiness from the Lifecycle badge. Tests: `test/gate-lifecycle.test.ts`.
+- **Eng’d:** Gate participates via `Lifecycle.make({ run: Effect.never, latch, release, awaitBeforeTerminal, afterStop: Lifecycle.off })`. `Gate.GateStopped` (`Schema.TaggedErrorClass`, always unioned into wire `run`) + `stopMode` (default `failWaiting`) shipped; live `setConcurrency` / `setRateLimit` wire verbs (bump `configVersion`); readiness from the Lifecycle badge. Tests: `test/gate-lifecycle.test.ts` + `test/gate-handle.test-d.ts`.
 - **Blocks:** — (L7 docs shipped; Gate Eng’d).
 
 ### P11 — Module layout — Locked (Eng’d)

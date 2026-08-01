@@ -106,6 +106,8 @@ import {
   gateSpec,
   gateSetRateLimitPayload,
   type GateInstanceSpec,
+  type WithGateStopped,
+  GateStopped as GateStoppedSchema,
 } from "./internal/gateSchema";
 
 // ============================================================================
@@ -167,15 +169,14 @@ export type Status = internal.GateStatus;
  * finish.
  *
  * @remarks
- * On a local {@link make} handle, `GateStopped` is in the `run` error channel
- * (`Effect.catchTag("GateStopped", …)`). On Tag / Service wire `run`, the declared
- * error schema wins — match via `Cause.findErrorOption` (same erasure as rate-limit
- * failures).
+ * Wire-encodable (`Schema.TaggedErrorClass`) and always present on Tag / Service `run`
+ * (`Effect.catchTag("GateStopped", …)`). Also on local {@link make} handles. Rate-limit
+ * failures (`RateLimiterError`) stay engine-only (not in the declared wire channel).
  *
  * @category errors
  * @public
  */
-export const GateStopped = internal.GateStopped;
+export const GateStopped = GateStoppedSchema;
 
 /**
  * The {@link GateStopped} error type ({@link https://effect.website | Effect} tagged error).
@@ -183,7 +184,7 @@ export const GateStopped = internal.GateStopped;
  * @category errors
  * @public
  */
-export type GateStopped = internal.GateStopped;
+export type GateStopped = GateStoppedSchema;
 
 /**
  * How a `stop` treats calls already **waiting** for a permit / resume:
@@ -222,7 +223,7 @@ export type Handle<T, A, E> = internal.GateHandle<T, A, E>;
  *
  * @typeParam Payload - the decoded gate input (`run(input)`; `void` → the gate is a bare {@link Effect})
  * @typeParam Success - the gated effect's success value
- * @typeParam Error - the gated effect's failure channel
+ * @typeParam Error - the wire `run` failure channel (declared effect errors **plus** {@link GateStopped})
  * @typeParam Requirements - the transport requirement (`never` for a local `yield*`, the `Protocol` for
  *   a remote {@link Hyperlink.client})
  *
@@ -350,6 +351,9 @@ export interface ServiceDefinition<
  * `Svc` seam on {@link HyperlinkTag}), so `yield* MyGate` hovers as `Gate<Ticket, Price>` rather
  * than the expanded `ServiceOf<…>` wall. @internal
  */
+/** Decoded wire `run` error for a Tag's declared error schema `E`. @internal */
+type WireRunErrorOf<E extends Schema.Top> = Schema.Schema.Type<WithGateStopped<E>>;
+
 type GateTagWithStaticRun<
   Self,
   I extends Schema.Top,
@@ -358,9 +362,9 @@ type GateTagWithStaticRun<
 > = HyperlinkTag<
   Self,
   InstanceSpec<I, A, E>,
-  Gate<Hyperlink.Decoded<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>>
+  Gate<Hyperlink.Decoded<I>, Schema.Schema.Type<A>, WireRunErrorOf<E>>
 > & {
-  readonly run: StaticRun<I, A, E, Self>;
+  readonly run: StaticRun<I, Schema.Schema.Type<A>, WireRunErrorOf<E>, Self>;
 };
 
 /**
@@ -646,12 +650,12 @@ const makeStaticRun = <
   tag: HyperlinkTag<Self, InstanceSpec<I, A, E>, any>,
   payload: Schema.Top,
 ):
-  | Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>, Self>
+  | Effect.Effect<Schema.Schema.Type<A>, WireRunErrorOf<E>, Self>
   | ((
       input: Schema.Schema.Type<I>,
-    ) => Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>, Self>) => {
+    ) => Effect.Effect<Schema.Schema.Type<A>, WireRunErrorOf<E>, Self>) => {
   type Out = Schema.Schema.Type<A>;
-  type Err = Schema.Schema.Type<E>;
+  type Err = WireRunErrorOf<E>;
   // The gate's `run` is a deferred `[void] extends …` conditional — a bare Effect (unit) or an input
   // function (parameterized) — that TS can't reduce for generic params, so it is read through this one
   // documented boundary. The `Effect.isEffect` guard picks the runtime form, so both callers are safe.
@@ -679,7 +683,7 @@ const isGateTagSchemaConfig = (value: unknown): value is TagSchemas =>
 /**
  * Name the built gate tag's service as {@link Gate}. The single deliberate cast in this
  * module: `ServiceOf<InstanceSpec<I, A, E>>` and
- * `Gate<Decoded<I>, A["Type"], E["Type"], never>` are **mutually assignable** — proven
+ * `Gate<Decoded<I>, A["Type"], WireRunErrorOf<E>, never>` are **mutually assignable** — proven
  * bidirectionally in `test/gate-handle.test-d.ts` — but TS can't verify that equality for *generic*
  * params at the invariant service-`Shape` position, so the generic factory needs one assertion here.
  * The `.test-d.ts` is the soundness guard: if the shapes ever drift, it fails the build. @internal
@@ -945,7 +949,10 @@ const buildRunImpl = <
     // {@link runVerbIsInputless}.
     const runImpl = runVerbIsInputless(tag)
       ? Effect.suspend(
-          handle.run as () => Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>>,
+          handle.run as () => Effect.Effect<
+            Schema.Schema.Type<A>,
+            WireRunErrorOf<E>
+          >,
         )
       : handle.run;
 

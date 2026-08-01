@@ -9,7 +9,6 @@ import * as Context from "effect/Context";
 import {
   Cause,
   Clock,
-  Data,
   Deferred,
   Duration,
   Effect,
@@ -24,6 +23,7 @@ import {
   SubscriptionRef,
 } from "effect";
 import * as Lifecycle from "../Lifecycle";
+import { GateStopped } from "./gateSchema";
 import {
   RateLimitExceeded,
   RateLimiter as RateLimiterTag,
@@ -85,23 +85,8 @@ export type GateRateLimitOptions = Omit<RateLimiterConsumeOptions, "key"> & {
 /** @public Re-export of Effect rate-limiter consume metadata. */
 export type { ConsumeResult };
 
-/**
- * Failure when a call is admitted to a **stopped** gate (Lifecycle `Draining` /
- * `Off`), or a waiting call is failed by a `stopMode: "failWaiting"` stop.
- * In-flight bodies always finish.
- *
- * @remarks
- * Present on the local {@link makeGateRunHandleEffect} / {@link makeGateHandleEffect}
- * `run` error channel (so `Effect.catchTag("GateStopped", …)` typechecks there). On
- * Tag / Service wire `run`, the declared error schema wins — match through
- * `Cause.findErrorOption` (same erasure pattern as {@link RateLimiterError}).
- *
- * @category errors
- * @public
- */
-export class GateStopped extends Data.TaggedError("GateStopped")<{
-  readonly resourceId: string;
-}> {}
+/** Wire-encodable stop failure — defined in {@link ./gateSchema}. @public */
+export { GateStopped };
 
 /**
  * How a `stop` treats calls already **waiting** for a permit / resume:
