@@ -30,7 +30,7 @@
 ### Active (owner approval required)
 1. **Agent 4:** Examples Ideas 1–9 + Related notes Eng’d. **Release-prep cleanup Eng’d** (archive completed handoffs/plans, dead scripts, npmignore, legacy example aliases). Idea 10 Apps/E5 still owner-gated. Owner still: changeset consolidate before `version`/publish.
 2. **Agent G / TUI:** Router/Target `_tag` cutover + routing guide in nav + GroupNav example/tests — **tip-synced**. Park: [`owned-string-casing-park.md`](./owned-string-casing-park.md).
-3. **Agent 5 (Launcher + handoff):** Lifecycle tip-synced (`stateRef` / `eventStream` / `asState`; wire-ready `impl`). **P10 Eng’d — Gate participates:** `Gate.GateStopped` + `stopMode` (default `failWaiting`), pause hold-all, live `setConcurrency` / `setRateLimit` (bump `configVersion`), readiness from the Lifecycle badge; tests in `test/gate-lifecycle.test.ts`. Next: owner P12; Agent G chrome. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
+3. **Agent 5 (Launcher + handoff):** Lifecycle + **P10 Gate Eng’d** tip-synced (`GateStopped`, `stopMode` default `failWaiting`, pause hold-all, live `setConcurrency`/`setRateLimit`). **P12 Rejected** — nothing `@locked` anywhere (fluid per standards). Next: Agent G chrome; launcher `#35–37` / `restartSuccessor` deferred. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
 4. **Docs site:** Live — apex coming-soon (inlined CSS + `(book)` chrome); docs on `dev`. Origin host-gate via `serve-production.mjs` (before Waku static). Islands: `hyperlink-ts` alias + `.hl-dashboard`. Getting Started em-dash/voice polish.
 
 ### Frozen / dead (do not assign)
