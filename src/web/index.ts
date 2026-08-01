@@ -15,10 +15,10 @@
  * <Dashboard runtime={runtime} group={ServicesHub} />
  * ```
  *
- * Or compose: `DashboardViews.layer` +
- * `Layer.provideMerge(componentsLayer)` + `View.compose` + `DashboardShell`
- * under `RegistryProvider` + `RuntimeProvider` + `ViewTransitionProvider`.
- * Prefer `Observe.use(tag, *View.pack)` / `NodeView.use`.
+ * Compose escape hatch:
+ * `import * as Dashboard from "hyperlink-ts/web/Dashboard"` — `Dashboard.layer` /
+ * `Dashboard.componentsLayer` (Effect `layer` / `*Layer` naming). Prefer
+ * `Observe.use(tag, *View.pack)` / `NodeView.use`.
  *
  * Peers: `react`, `react-dom`, `recharts`. Styled with Tailwind utility classes + shadcn theme
  * tokens (`@source` + theme wiring in the consuming app).
@@ -30,12 +30,7 @@ export * from "./runtime";
 export * from "./widgets";
 export type { Widget, WidgetProps } from "./widget-registry";
 export { useWidgets } from "./widget-registry";
-export {
-  Dashboard,
-  DashboardView,
-  componentsLayer,
-  layer as dashboardLayer,
-} from "./Dashboard";
+export { Dashboard, DashboardView } from "./Dashboard";
 export { DashboardShell } from "./DashboardShell";
 export { DashboardDetailChrome, DashboardTopBar } from "./DashboardTopBar";
 export { NodeStatusHost } from "./NodeStatus";
@@ -45,5 +40,5 @@ export { NodeStatusHost } from "./NodeStatus";
 export { LogBox, LogsPage, SchedulePage } from "./resourcePages";
 export * from "./debug-console";
 export { cn } from "./cn";
-// Ready View Layer: `import { layer, componentsLayer } from "hyperlink-ts/web/Dashboard"`
+// Layers: `import * as Dashboard from "hyperlink-ts/web/Dashboard"`
 // Family skins: `import * as WorkPoolView from "hyperlink-ts/web/WorkPoolView"`.

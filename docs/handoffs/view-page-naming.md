@@ -25,9 +25,9 @@ TSX + ready `layer` live on `web|tui/Dashboard` — never a second
 `DashboardViews`. Compose with `Layer.provideMerge`. Keep verb `View.provide`.
 
 ```ts
-import { componentsLayer } from "hyperlink-ts/web/Dashboard"
+import * as Dashboard from "hyperlink-ts/web/Dashboard"
 Layer.mergeAll(DashboardViews.layer, appViews).pipe(
-  Layer.provideMerge(componentsLayer),
+  Layer.provideMerge(Dashboard.componentsLayer),
   Layer.provideMerge(View.base),
 )
 ```
@@ -92,7 +92,7 @@ bag, param Schema, layout class-or-helper, rename off `skins`, cutover from
 
 ## Open
 
-1. ~~Public rename off `skins` / Domain.provide / `DashboardLayer`~~ — Eng’d as `DashboardViews` + `componentsLayer` + `Layer.provideMerge`
+1. ~~Public rename off `skins` / Domain.provide / `DashboardLayer` / triple `DashboardViews`~~ — Eng’d as one `ui/DashboardViews` + `web|tui/Dashboard.componentsLayer`
 2. New `Page` module vs hang helpers on `View` — `ui/Page` helpers Eng’d; `Page.Tag` deferred
 3. Disambiguate dashboard size-`Page` naming when `Page.Tag` lands
 4. Finish `Page.Tag` statics + file-router loader contract

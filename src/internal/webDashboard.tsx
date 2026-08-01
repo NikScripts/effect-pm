@@ -1,6 +1,5 @@
 /**
- * Web (DOM) View Tag implementations for batteries Dashboard.
- * Public surface: {@link ../web/Dashboard.componentsLayer} / {@link ../web/Dashboard.layer}.
+ * Internal eng for {@link ../web/Dashboard} — View.provide bag + ready `layer`.
  */
 import * as React from "react";
 import { Layer } from "effect";

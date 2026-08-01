@@ -34,12 +34,15 @@ import { WidgetsProvider } from "../ui/widgetsContext";
 import { base, type TuiWidgetRegistry } from "./cellWidgets";
 import { RuntimeProvider } from "./runtime";
 import { DashboardShell } from "./DashboardShell";
-import {
-  componentsLayer,
-  layer as readyLayer,
-} from "../internal/tuiDashboardComponents";
+import * as internal from "../internal/tuiDashboard";
 
-export { componentsLayer } from "../internal/tuiDashboardComponents";
+/**
+ * Ink implementations for dashboard View Tags.
+ *
+ * @public
+ */
+export const componentsLayer: typeof internal.componentsLayer =
+  internal.componentsLayer;
 
 /**
  * Fully provided TUI Dashboard View Layer (`R = never`) — contributions +
@@ -47,7 +50,7 @@ export { componentsLayer } from "../internal/tuiDashboardComponents";
  *
  * @public
  */
-export const layer: typeof readyLayer = readyLayer;
+export const layer: typeof internal.layer = internal.layer;
 
 const routesFor = (group: GroupNode) =>
   Route.make("dashboard").add(
@@ -78,7 +81,7 @@ export const Dashboard = <R, ER>(props: {
       DashboardViews.layer,
       props.views ?? Layer.empty,
     ).pipe(
-      Layer.provideMerge(componentsLayer),
+      Layer.provideMerge(internal.componentsLayer),
       Layer.provideMerge(View.base),
     );
     const composed = View.compose({

@@ -107,7 +107,7 @@
     "../tui/cellWidgets.tsx",
     // TUI Dashboard + internals (imported by ui-dashboard-views tests).
     "../tui/Dashboard.tsx",
-    "../internal/tuiDashboardComponents.tsx",
+    "../internal/tuiDashboard.tsx",
     "../tui/focusWidgets.tsx"
   ],
   "exclude": ["../../node_modules", "../../dist"]

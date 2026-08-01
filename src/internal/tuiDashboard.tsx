@@ -1,6 +1,5 @@
 /**
- * TUI (Ink) View Tag implementations for batteries Dashboard.
- * Public surface: {@link ../tui/Dashboard.componentsLayer} / {@link ../tui/Dashboard.layer}.
+ * Internal eng for {@link ../tui/Dashboard} — View.provide bag + ready `layer`.
  */
 import { Box, Text } from "ink";
 import * as React from "react";

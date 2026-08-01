@@ -33,12 +33,15 @@ import { WidgetsProvider } from "../ui/widgetsContext";
 import type { Widget } from "./widget-registry";
 import { DebugConsole } from "./debug-console";
 import { DashboardShell } from "./DashboardShell";
-import {
-  componentsLayer,
-  layer as readyLayer,
-} from "../internal/webDashboardComponents";
+import * as internal from "../internal/webDashboard";
 
-export { componentsLayer } from "../internal/webDashboardComponents";
+/**
+ * Web TSX implementations for dashboard View Tags.
+ *
+ * @public
+ */
+export const componentsLayer: typeof internal.componentsLayer =
+  internal.componentsLayer;
 
 /**
  * Fully provided web Dashboard View Layer (`R = never`) — contributions +
@@ -46,7 +49,7 @@ export { componentsLayer } from "../internal/webDashboardComponents";
  *
  * @public
  */
-export const layer: typeof readyLayer = readyLayer;
+export const layer: typeof internal.layer = internal.layer;
 
 const routesFor = (group: GroupNode) =>
   Route.make("dashboard").add(
@@ -75,7 +78,7 @@ export const DashboardView = <R, ER>(props: {
       DashboardViews.layer,
       props.views ?? Layer.empty,
     ).pipe(
-      Layer.provideMerge(componentsLayer),
+      Layer.provideMerge(internal.componentsLayer),
       Layer.provideMerge(View.base),
     );
     return View.compose({

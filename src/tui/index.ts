@@ -24,7 +24,7 @@ export * from "../ui";
 export * from "./chrome";
 export { make, type AnyTag } from "./make";
 export { layer } from "./layer";
-export { Dashboard, componentsLayer } from "./Dashboard";
+export { Dashboard } from "./Dashboard";
 export { DashboardShell } from "./DashboardShell";
 export { DashboardTopBar } from "./DashboardTopBar";
 export { ControlKey, FocusedDaemon, FocusedPriority, LogTail, NodeMark } from "./focusWidgets";
@@ -32,6 +32,6 @@ export { base, Cell, DaemonCell, FallbackCell, GroupCell, PriorityCell, QueueCel
 export { RuntimeProvider, useRuntime } from "./runtime";
 export { Tui, TuiNotConfigured } from "../cli/index";
 export type { TuiOpenInput } from "../cli/Tui";
-// Platform View Layer: `import { layer, componentsLayer } from "hyperlink-ts/tui/Dashboard"`
-// (ready `layer` not on this barrel — clashes with CLI {@link layer}).
+// Layers: `import * as Dashboard from "hyperlink-ts/tui/Dashboard"`
+// (`Dashboard.layer` — not this barrel’s CLI {@link layer}).
 // Family skins: `import * as WorkPoolView from "hyperlink-ts/tui/WorkPoolView"`.

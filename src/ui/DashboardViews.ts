@@ -7,13 +7,13 @@
  *
  * ```ts
  * import * as DashboardViews from "hyperlink-ts/ui/DashboardViews"
- * import { componentsLayer, layer } from "hyperlink-ts/web/Dashboard"
+ * import * as Dashboard from "hyperlink-ts/web/Dashboard"
  *
  * Layer.mergeAll(DashboardViews.layer, appViews).pipe(
- *   Layer.provideMerge(componentsLayer),
+ *   Layer.provideMerge(Dashboard.componentsLayer),
  *   Layer.provideMerge(View.base),
  * )
- * // no app contributions: layer
+ * // no app contributions: Dashboard.layer
  * ```
  */
 import { Layer } from "effect";
