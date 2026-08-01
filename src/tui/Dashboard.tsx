@@ -3,8 +3,8 @@
  *
  * The Ink Group dashboard — terminal counterpart to `<Dashboard runtime group />` from
  * `hyperlink-ts/web`. Stack: `DashboardViews.layer` →
- * `Layer.provideMerge(TuiDashboardViews.componentsLayer)` → {@link View.base} →
- * {@link ../ui/View.compose} → {@link ./DashboardShell}. Public kit one-liner.
+ * `Layer.provideMerge(componentsLayer)` → {@link View.base} →
+ * {@link ../ui/View.compose} → {@link ./DashboardShell}.
  *
  * ```tsx
  * <Dashboard runtime={Atom.runtime(appLayer)} group={Fleet} />
@@ -15,6 +15,7 @@
  *   mouse  wheel scrolls, click selects, click again opens
  *   :  command bar · Ctrl+E edit mode · Ctrl+C quit
  *
+ * Ready platform Layer without app contrib: {@link layer}.
  */
 import * as React from "react";
 import { Layer } from "effect";
@@ -31,9 +32,22 @@ import * as Router from "../ui/Router";
 import * as View from "../ui/View";
 import { WidgetsProvider } from "../ui/widgetsContext";
 import { base, type TuiWidgetRegistry } from "./cellWidgets";
-import * as TuiDashboardViews from "./DashboardViews";
 import { RuntimeProvider } from "./runtime";
 import { DashboardShell } from "./DashboardShell";
+import {
+  componentsLayer,
+  layer as readyLayer,
+} from "../internal/tuiDashboardComponents";
+
+export { componentsLayer } from "../internal/tuiDashboardComponents";
+
+/**
+ * Fully provided TUI Dashboard View Layer (`R = never`) — contributions +
+ * {@link componentsLayer} + {@link View.base}. Ready for {@link View.react}.
+ *
+ * @public
+ */
+export const layer: typeof readyLayer = readyLayer;
 
 const routesFor = (group: GroupNode) =>
   Route.make("dashboard").add(
@@ -64,7 +78,7 @@ export const Dashboard = <R, ER>(props: {
       DashboardViews.layer,
       props.views ?? Layer.empty,
     ).pipe(
-      Layer.provideMerge(TuiDashboardViews.componentsLayer),
+      Layer.provideMerge(componentsLayer),
       Layer.provideMerge(View.base),
     );
     const composed = View.compose({

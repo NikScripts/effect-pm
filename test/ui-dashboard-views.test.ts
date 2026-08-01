@@ -1,5 +1,5 @@
 /**
- * DashboardViews packaging — merged contributions + platform ready Layers (R = never).
+ * DashboardViews packaging — shared contributions + platform ready Layers (R = never).
  */
 import { describe, expect, it } from "@effect/vitest";
 import { Schema } from "effect";
@@ -8,8 +8,8 @@ import * as View from "../src/ui/View";
 import * as DashboardViews from "../src/ui/DashboardViews";
 import * as PriorityView from "../src/ui/PriorityView";
 import * as DaemonView from "../src/ui/DaemonView";
-import * as WebDashboardViews from "../src/web/DashboardViews";
-import * as TuiDashboardViews from "../src/tui/DashboardViews";
+import * as WebDashboard from "../src/web/Dashboard";
+import * as TuiDashboard from "../src/tui/Dashboard";
 import * as WorkPool from "../src/WorkPool";
 import * as Daemon from "../src/Daemon";
 import * as Gate from "../src/Gate";
@@ -37,7 +37,7 @@ class HttpTap extends Gate.HttpApiClient<HttpTap>()("app/HttpTap", TapApi) {}
 
 describe("DashboardViews packaging", () => {
   it("web ready layer resolves default family cards + details", () => {
-    const { resolve } = View.react(WebDashboardViews.layer);
+    const { resolve } = View.react(WebDashboard.layer);
     expect(resolve(Jobs, View.ViewKind.Card()).map((r) => r.key)).toEqual([
       "hyperlink/view/pool-card",
     ]);
@@ -62,7 +62,7 @@ describe("DashboardViews packaging", () => {
   });
 
   it("tui ready layer resolves the same handles", () => {
-    const { resolve } = View.react(TuiDashboardViews.layer);
+    const { resolve } = View.react(TuiDashboard.layer);
     expect(resolve(Jobs, View.ViewKind.Card()).map((r) => r.key)).toEqual([
       "hyperlink/view/pool-card",
     ]);
@@ -74,7 +74,9 @@ describe("DashboardViews packaging", () => {
   it("shared contribution layer has no platform provides (open R)", () => {
     expect(PriorityView.PriorityCard.key).toBe("hyperlink/view/priority-card");
     expect(DaemonView.DaemonDetail.key).toBe("hyperlink/view/daemon-detail");
-    // Compiles as a Layer; platform packages close R via provides + View.base.
+    // Compiles as a Layer; platform packages close R via componentsLayer + View.base.
     void DashboardViews.layer;
+    void WebDashboard.componentsLayer;
+    void TuiDashboard.componentsLayer;
   });
 });

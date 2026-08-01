@@ -94,7 +94,7 @@ export default defineConfig([
     entry: {
       web: "src/web/index.ts",
       "web/WorkPoolView": "src/web/WorkPoolView.tsx",
-      "web/DashboardViews": "src/web/DashboardViews.tsx",
+      "web/Dashboard": "src/web/Dashboard.tsx",
       "web/NodeStatus": "src/web/NodeStatus.tsx",
     },
     tsconfig: "src/web/tsconfig.json",
@@ -109,7 +109,7 @@ export default defineConfig([
     entry: {
       tui: "src/tui/index.ts",
       "tui/WorkPoolView": "src/tui/WorkPoolView.tsx",
-      "tui/DashboardViews": "src/tui/DashboardViews.tsx",
+      "tui/Dashboard": "src/tui/Dashboard.tsx",
     },
     tsconfig: "src/tui/tsconfig.json",
     dts: true,

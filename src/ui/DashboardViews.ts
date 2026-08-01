@@ -2,16 +2,18 @@
  * @module ui/DashboardViews
  *
  * Merged View contribution Layers for the batteries-included Dashboard families
- * (`View.bind` / `only` — no platform TSX).
- *
- * Compose with a platform `componentsLayer` via ordinary Effect combinators:
+ * (`View.bind` / `only` — no platform TSX). This is the **only** `DashboardViews`
+ * namespace; web/TUI implementations live on `hyperlink-ts/web|tui/Dashboard`.
  *
  * ```ts
+ * import * as DashboardViews from "hyperlink-ts/ui/DashboardViews"
+ * import { componentsLayer, layer } from "hyperlink-ts/web/Dashboard"
+ *
  * Layer.mergeAll(DashboardViews.layer, appViews).pipe(
- *   Layer.provideMerge(WebDashboardViews.componentsLayer),
+ *   Layer.provideMerge(componentsLayer),
  *   Layer.provideMerge(View.base),
  * )
- * // no app contributions: WebDashboardViews.layer
+ * // no app contributions: layer
  * ```
  */
 import { Layer } from "effect";

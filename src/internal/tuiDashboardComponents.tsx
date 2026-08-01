@@ -1,8 +1,6 @@
 /**
- * @module tui/DashboardViews
- *
- * TUI (Ink) View Tag implementations — `View.provide` only.
- * Ready {@link layer} for {@link View.react}.
+ * TUI (Ink) View Tag implementations for batteries Dashboard.
+ * Public surface: {@link ../tui/Dashboard.componentsLayer} / {@link ../tui/Dashboard.layer}.
  */
 import { Box, Text } from "ink";
 import * as React from "react";
@@ -42,8 +40,8 @@ import {
   GroupCell,
   PriorityCell,
   QueueCell,
-} from "./cellWidgets";
-import { FocusedDaemon, FocusedPriority, LogTail } from "./focusWidgets";
+} from "../tui/cellWidgets";
+import { FocusedDaemon, FocusedPriority, LogTail } from "../tui/focusWidgets";
 import {
   ApiCell,
   FocusedApi,
@@ -55,14 +53,14 @@ import {
   GateCell,
   ShardMapCell,
   TelemetryCell,
-} from "./kindCells";
+} from "../tui/kindCells";
 import {
   displayName,
   PageXL,
   type Priority,
   type Status,
   type View as QueueSnapshot,
-} from "./queueWidget";
+} from "../tui/queueWidget";
 
 const statusOf = (lifecycleTag: string): Status =>
   lifecycleTag === "Idle"

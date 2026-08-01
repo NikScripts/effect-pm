@@ -2,7 +2,7 @@
  * @module tui/focusWidgets
  *
  * Focused Priority / Daemon detail panes (Ink) — shared by {@link Dashboard} and
- * {@link ./DashboardViews} skins so View detail bodies avoid circular imports.
+ * Dashboard View detail bodies (via internal components) avoid circular imports.
  */
 import { Box, Text, useInput } from "ink";
 import * as React from "react";

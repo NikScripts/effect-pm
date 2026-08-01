@@ -16,18 +16,18 @@ for the docs-site adapter module — a second meaning.
 
 | Old slang | What it actually is | Better names |
 |-----------|---------------------|--------------|
-| `skins` / `provides` / `DashboardLayer.*` | `Layer` of `View.provide(Tag, Comp)` | **`componentsLayer`** on platform `DashboardViews` (`*Layer` suffix) |
+| `skins` / `provides` / `DashboardLayer.*` / platform `DashboardViews` | `Layer` of `View.provide(Tag, Comp)` | **`componentsLayer`** on `web\|tui/Dashboard` |
 | “provide a skin” | `View.provide` / `Tag.provide` | just **provide** (Effect vocabulary) |
 | Docs “Router skin” | App module wrapping Waku layer | **adapter** / **site Router module** — never “skin” |
 
-**Recommendation:** one shared module `ui/DashboardViews` (contributions) +
-platform `web|tui/DashboardViews` (`componentsLayer` / ready `layer`). No
-`DashboardLayer` alias. Compose with `Layer.provideMerge`. Keep verb
-`View.provide`. Kill “skin” in guides.
+**Recommendation:** **one** `ui/DashboardViews` (contributions only). Platform
+TSX + ready `layer` live on `web|tui/Dashboard` — never a second
+`DashboardViews`. Compose with `Layer.provideMerge`. Keep verb `View.provide`.
 
 ```ts
+import { componentsLayer } from "hyperlink-ts/web/Dashboard"
 Layer.mergeAll(DashboardViews.layer, appViews).pipe(
-  Layer.provideMerge(WebDashboardViews.componentsLayer),
+  Layer.provideMerge(componentsLayer),
   Layer.provideMerge(View.base),
 )
 ```

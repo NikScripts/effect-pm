@@ -1081,7 +1081,7 @@ const resolveComposeRouter = (
  * import * as WorkPoolView from "hyperlink-ts/ui/WorkPoolView"
  * import * as DaemonView from "hyperlink-ts/ui/DaemonView"
  * const ui = View.compose({
- *   views: Layer.mergeAll(View.bind(Group.kind, GroupCard), WebDashboardViews.layer),
+ *   views: Layer.mergeAll(View.bind(Group.kind, GroupCard), webDashboard.layer),
  *   group: ServicesHub,
  *   router: Router.history(
  *     Route.make("dash").add(

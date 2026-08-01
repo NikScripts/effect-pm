@@ -17,7 +17,7 @@ import { Dashboard } from "hyperlink-ts/web"
 
 ```text
 Layer.mergeAll(DashboardViews.layer, appViews?).pipe(
-  Layer.provideMerge(WebDashboardViews.componentsLayer),
+  Layer.provideMerge(componentsLayer), // hyperlink-ts/web|tui/Dashboard
   Layer.provideMerge(View.base),
 )
   → View.compose({ views, router, group })
@@ -27,9 +27,9 @@ Layer.mergeAll(DashboardViews.layer, appViews?).pipe(
 | Piece | Import |
 |------|--------|
 | One-liner | `hyperlink-ts/web` / `hyperlink-ts/tui` → `Dashboard` |
-| Contributions | `hyperlink-ts/ui/DashboardViews` → `layer` |
-| Implementations | `web|tui/DashboardViews.componentsLayer` via `Layer.provideMerge` |
-| Ready platform Layer | `WebDashboardViews.layer` / `TuiDashboardViews.layer` |
+| Contributions | `hyperlink-ts/ui/DashboardViews` → `layer` (only `DashboardViews`) |
+| Implementations | `hyperlink-ts/web\|tui/Dashboard` → `componentsLayer` |
+| Ready platform Layer | same → `layer` |
 | Compose kit | `hyperlink-ts/ui` → `View.compose` |
 | Shell | `DashboardShell` (same platform package) |
 | Observe | `Observe.use(tag, *View.pack)` / `NodeView.use` |
@@ -40,8 +40,9 @@ Escape hatch (same stack the one-liner uses):
 const site = Route.make("dashboard").add(
   Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub)),
 )
+import { componentsLayer } from "hyperlink-ts/web/Dashboard"
 const views = Layer.mergeAll(DashboardViews.layer, appViews).pipe(
-  Layer.provideMerge(WebDashboardViews.componentsLayer),
+  Layer.provideMerge(componentsLayer),
   Layer.provideMerge(View.base),
 )
 const ui = View.compose({

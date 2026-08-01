@@ -1,8 +1,6 @@
 /**
- * @module web/DashboardViews
- *
- * Web (DOM) View Tag implementations — `View.provide` only.
- * Ready {@link layer} for {@link View.react}.
+ * Web (DOM) View Tag implementations for batteries Dashboard.
+ * Public surface: {@link ../web/Dashboard.componentsLayer} / {@link ../web/Dashboard.layer}.
  */
 import * as React from "react";
 import { Layer } from "effect";
@@ -62,8 +60,8 @@ import {
   ShardMapDetail as ShardMapDetailWidget,
   TelemetryCard,
   TelemetryDetail as TelemetryDetailWidget,
-} from "./widgets";
-import { LogsPage, SchedulePage } from "./resourcePages";
+} from "../web/widgets";
+import { LogsPage, SchedulePage } from "../web/resourcePages";
 
 // ── cards (presentational — Cell wraps with button) ─────────────────────────
 

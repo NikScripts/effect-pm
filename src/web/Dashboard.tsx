@@ -6,11 +6,12 @@
  * root `Group`, and it renders the responsive drill-down. Navigation is URL-backed and
  * animated with view transitions.
  *
- * Stack (Effect-shaped): `DashboardViews.layer` →
- * `Layer.provideMerge(WebDashboardViews.componentsLayer)` → {@link View.base} →
- * {@link ../ui/View.compose} → {@link ./DashboardShell}. Public kit one-liner.
+ * Stack (Effect-shaped): `DashboardViews.layer` (shared contributions) →
+ * `Layer.provideMerge(componentsLayer)` → {@link View.base} →
+ * {@link ../ui/View.compose} → {@link ./DashboardShell}.
  *
  * Use `<Dashboard runtime group />`, or pipe Layers + `View.compose` + `DashboardShell`.
+ * Ready platform Layer without app contrib: {@link layer}.
  */
 import * as React from "react";
 import { Layer } from "effect";
@@ -31,8 +32,21 @@ import * as View from "../ui/View";
 import { WidgetsProvider } from "../ui/widgetsContext";
 import type { Widget } from "./widget-registry";
 import { DebugConsole } from "./debug-console";
-import * as WebDashboardViews from "./DashboardViews";
 import { DashboardShell } from "./DashboardShell";
+import {
+  componentsLayer,
+  layer as readyLayer,
+} from "../internal/webDashboardComponents";
+
+export { componentsLayer } from "../internal/webDashboardComponents";
+
+/**
+ * Fully provided web Dashboard View Layer (`R = never`) — contributions +
+ * {@link componentsLayer} + {@link View.base}. Ready for {@link View.react}.
+ *
+ * @public
+ */
+export const layer: typeof readyLayer = readyLayer;
 
 const routesFor = (group: GroupNode) =>
   Route.make("dashboard").add(
@@ -51,8 +65,8 @@ export const DashboardView = <R, ER>(props: {
   /**
    * App View contributions (`R = View.Registry`). Prefer
    * `View.only(Tag, Card).pipe(Layer.provide(View.provide(Card, Comp)))`.
-   * Merged with shipped family contributions, then platform
-   * {@link WebDashboardViews.componentsLayer} + {@link View.base}.
+   * Merged with shipped family contributions, then {@link componentsLayer} +
+   * {@link View.base}.
    */
   readonly views?: Layer.Layer<never, never, View.Registry>;
 }): React.ReactElement => {
@@ -61,7 +75,7 @@ export const DashboardView = <R, ER>(props: {
       DashboardViews.layer,
       props.views ?? Layer.empty,
     ).pipe(
-      Layer.provideMerge(WebDashboardViews.componentsLayer),
+      Layer.provideMerge(componentsLayer),
       Layer.provideMerge(View.base),
     );
     return View.compose({
