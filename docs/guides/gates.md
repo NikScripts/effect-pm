@@ -203,10 +203,19 @@ class Backup extends Gate.Service<Backup>()("app/Backup", {
   effect: (path) => archive(path),
 }) {}
 
-// new calls after stop:
-yield* gate.run("x").pipe(
-  Effect.catchTag("GateStopped", () => Effect.logInfo("gate is stopped")),
-)
+// Wire `run` declares only your configured error schema — `GateStopped` (like
+// `RateLimiterError`) is raised by the engine but erased from that channel.
+// Match it through the runtime cause:
+const exit = yield* Effect.exit(gate.run("x"))
+if (Exit.isFailure(exit)) {
+  const err = Option.getOrUndefined(Cause.findErrorOption(exit.cause))
+  if (err instanceof Gate.GateStopped) {
+    yield* Effect.logInfo("gate is stopped")
+  }
+}
+
+// Local `Gate.make` handles keep `GateStopped` in the typed `run` error channel,
+// so `Effect.catchTag("GateStopped", …)` typechecks there.
 ```
 
 ### Live reconfiguration

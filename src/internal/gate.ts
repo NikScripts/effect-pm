@@ -88,7 +88,13 @@ export type { ConsumeResult };
 /**
  * Failure when a call is admitted to a **stopped** gate (Lifecycle `Draining` /
  * `Off`), or a waiting call is failed by a `stopMode: "failWaiting"` stop.
- * In-flight bodies always finish. Match with `Effect.catchTag("GateStopped", …)`.
+ * In-flight bodies always finish.
+ *
+ * @remarks
+ * Present on the local {@link makeGateRunHandleEffect} / {@link makeGateHandleEffect}
+ * `run` error channel (so `Effect.catchTag("GateStopped", …)` typechecks there). On
+ * Tag / Service wire `run`, the declared error schema wins — match through
+ * `Cause.findErrorOption` (same erasure pattern as {@link RateLimiterError}).
  *
  * @category errors
  * @public
@@ -657,7 +663,9 @@ const makeObservedRun = <T, A, E>(
       }),
     );
 
-  return ((input?: T) => runBody(input as T)) as GateRunFn<
+  // Boundary cast: `GateRunFn` is a void-vs-payload conditional TS can't reduce for
+  // generic `T`. The implementation always takes `T`; unit gates pass `undefined`.
+  return ((input: T) => runBody(input)) as GateRunFn<
     T,
     A,
     E | RateLimiterError | GateStopped

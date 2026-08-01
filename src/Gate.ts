@@ -164,7 +164,13 @@ export type Status = internal.GateStatus;
 /**
  * Failure when a call is admitted to a **stopped** gate (Lifecycle `Draining` / `Off`),
  * or a waiting call is failed by a `stopMode: "failWaiting"` stop. In-flight bodies always
- * finish. Match with `Effect.catchTag("GateStopped", …)`.
+ * finish.
+ *
+ * @remarks
+ * On a local {@link make} handle, `GateStopped` is in the `run` error channel
+ * (`Effect.catchTag("GateStopped", …)`). On Tag / Service wire `run`, the declared
+ * error schema wins — match via `Cause.findErrorOption` (same erasure as rate-limit
+ * failures).
  *
  * @category errors
  * @public
