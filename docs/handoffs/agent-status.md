@@ -30,7 +30,7 @@
 ### Active (owner approval required)
 1. **Agent 4:** Examples Ideas 1–9 + Related notes Eng’d. **Release-prep cleanup Eng’d** (archive completed handoffs/plans, dead scripts, npmignore, legacy example aliases). Idea 10 Apps/E5 still owner-gated. Owner still: changeset consolidate before `version`/publish.
 2. **Agent G / TUI:** Dashboard Effect-true layout + file-router/`Page.*` + Effect beta.102 — **tip-synced**. Next: Page.Tag + docs-site createPages. Park: [`owned-string-casing-park.md`](./owned-string-casing-park.md).
-3. **Agent 5 (Launcher + handoff):** Lifecycle kernel **L0–L7 Eng’d** + Gate polish tip-synced (docs honesty, duals/readiness/deferStart/remote `GateStopped`, `RateLimiterError` value export). P12 Rejected. Next: Agent G chrome; launcher `#35–37` deferred (no Eng until API locked). Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
+3. **Agent 5 (Launcher + handoff):** **Lifecycle L0–L7 closed** tip-synced (P10 Gate + honest wire errors; P12 Rejected). Chrome → **Agent G**. Back on launcher brief: Tracks A–D v1 Eng’d; remaining owner-gated — explicit A/B launcher, `#35–37`, `restartSuccessor`, Track D redirect/dual-serve; orthogonal: versioned schema. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
 4. **Docs site:** Live — apex coming-soon (inlined CSS + `(book)` chrome); docs on `dev`. Origin host-gate via `serve-production.mjs` (before Waku static). Islands: `hyperlink-ts` alias + `.hl-dashboard`. Getting Started em-dash/voice polish.
 
 ### Frozen / dead (do not assign)
