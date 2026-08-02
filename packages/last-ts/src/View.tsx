@@ -1,7 +1,7 @@
 /**
  * @module View
  *
- * View **DI** kernel (Context) — Tag, Prototype, provide, Registry.
+ * View **DI** kernel (Context) — Tag, Prototype, provide.
  * Sized chrome (card/detail/page) lives in Hyperlink `Ui`, not here.
  *
  * - Mint: `View.Tag<Self, Props?>()(key, statics?)` — Effect-shaped.
@@ -10,7 +10,7 @@
  * - Svc type is {@link View}`<Props>` (props in → element out).
  */
 import * as React from "react";
-import { Context, Effect, Layer, Option } from "effect";
+import { Context, Layer } from "effect";
 import type * as Types from "effect/Types";
 
 // =============================================================================
@@ -20,26 +20,11 @@ import type * as Types from "effect/Types";
 /** Flatten `&` nests so Prototype / Tag hovers stay readable. @internal */
 type Flat<T extends object> = { readonly [K in keyof T]: T[K] } & {};
 
-/** Stable view id — prefer `app/view/<name>`. @public */
+/** Stable view id — prefer `hyperlink/view/<name>`. @public */
 export type ViewKey = string;
 
 /**
- * Generic size discriminant for registry matching.
- * Hosts (e.g. Hyperlink `Ui`) supply concrete tagged enums.
- *
- * @public
- */
-export type SizeTag = { readonly _tag: string };
-
-/**
- * Tag a View skin may receive — structural key only (hosts may pass richer tags).
- *
- * @public
- */
-export type ViewTag = { readonly key: string };
-
-/**
- * Layout / shell hints for View skins. Navigation is not here.
+ * Layout / shell hints for View skins. Navigation stays with the parent.
  *
  * @public
  */
@@ -69,10 +54,17 @@ export const ChromeProvider = (props: {
 export const useChrome = (): Chrome => React.useContext(ChromeContext);
 
 /**
- * Component Svc for a View tag — **props in, element out** (reversed vs service APIs).
+ * Component Svc for a View tag — **props in, element out** (reversed vs Hyperlink service APIs).
+ * Defaults to `{}`; pass a props bag for custom Prototypes.
  *
  * Prefer {@link provide} at the Layer boundary (props infer). Reach for `Tag["Service"]` only when
  * you need a named binding before provide.
+ *
+ * @example
+ * ```ts
+ * View.provide(PoolCard, (props) => null)
+ * const chrome: View.View = (props) => null
+ * ```
  *
  * @public
  */
@@ -85,6 +77,14 @@ export type View<Props extends object = {}> = (
  *
  * Dual: `View.provide(PoolCard, impl)` or `View.provide(PoolCard)(impl)`.
  * Minted Tags also expose {@link ViewHandle.provide} as `PoolCard.provide(impl)`.
+ *
+ * @example
+ * ```ts
+ * export const componentsLayer = Layer.mergeAll(
+ *   View.provide(PoolCard, ({ tag, name }) => <Card tag={tag} name={name} />),
+ *   View.provide(PoolDetail, ({ tag }) => <Detail tag={tag} />),
+ * )
+ * ```
  *
  * @public
  */
@@ -103,17 +103,6 @@ export function provide<I, P extends object>(
     return (resource) => Layer.succeed(tag, resource);
   }
   return Layer.succeed(tag, impl);
-}
-
-/**
- * A matched view ready to render.
- *
- * @public
- */
-export interface Resolved {
-  readonly key: ViewKey;
-  readonly kind: SizeTag;
-  readonly Component: View;
 }
 
 // =============================================================================
@@ -193,6 +182,12 @@ export type FulfilledPrototype<
 /**
  * Constructable View handle from {@link Prototype.Tag}.
  *
+ * - **Self** — Context identity (the class)
+ * - **Props** — component input (reversed service shape) from the Prototype chain
+ * - **Svc** — {@link View}`<Props>` (provide with {@link provide} / {@link ViewHandle.provide})
+ *
+ * Phantom {@link Type} remains for `View.Type<typeof PoolCard>` / {@link PropsOf}.
+ *
  * @public
  */
 export type ViewHandle<
@@ -222,6 +217,14 @@ export type Type<T> = T extends { readonly Type: infer P } ? P : never;
 /**
  * Props + statics + an R-style **Requirement** type param (debt until discharged).
  *
+ * - `Props` — component props (accumulated, additive)
+ * - `Requirement` — type param; may be open while statics are still empty
+ * - `Statics` — runtime statics (additive); when `Statics extends Requirement`, Requirement
+ *   becomes `{}` (fulfilled), like Effect `R → never`
+ *
+ * Fulfill size via `.Prototype()({ size })` while open, or one-shot
+ * `Ui.Card.Tag()(key, { spec })` on an already-fulfilled size chrome.
+ *
  * @public
  */
 export interface Prototype<
@@ -230,6 +233,10 @@ export interface Prototype<
   out Statics extends AnyStatics = {},
 > {
   readonly statics: Statics;
+  /**
+   * Extend props (type arg) and/or statics (value). Both additive.
+   * Requirement discharges when merged statics satisfy it.
+   */
   readonly Prototype: <NewProps extends object = {},>() => <
     const NewStatics extends AnyStatics = {},
   >(
@@ -239,6 +246,17 @@ export interface Prototype<
     NextRequirement<Requirement, Flat<Statics & NewStatics>>,
     Flat<Statics & NewStatics>
   >;
+  /**
+   * Mint a Context.Service **class** handle (Effect `Service<Self, View<Props>>()("key")`).
+   *
+   * - `NewProps` — extra component props (additive)
+   * - `statics` — optional runtime statics (`spec`, …); merged onto the class
+   * - Skins via {@link provide} / returned handle's `.provide` (props infer)
+   *
+   * Does **not** change this Prototype's Requirement type — returns a class.
+   * For `bind`, the class still needs `.size` (use {@link Ui.Card} / {@link Ui.Detail} /
+   * {@link Ui.Page}, or pass `size` in statics / fulfill via `.Prototype()` first).
+   */
   readonly Tag: <Self, NewProps extends object = {}>() => <
     const K extends string,
     const NewStatics extends AnyStatics = {},
@@ -279,6 +297,7 @@ const makePrototype = <
         ...statics,
         ...(next ?? ({} as NewStatics)),
       } as NextStatics;
+      // Infer Object.assign like Group.Tag so class-extends keeps static accessors.
       const base = Context.Service<Self, View<NextProps>>()(key);
       return Object.assign(base, merged, {
         Type: undefined as unknown as NextProps,
@@ -290,6 +309,16 @@ const makePrototype = <
 
 /**
  * Start a prototype chain: `View.Prototype<Props, Requirement>()(statics?)`.
+ *
+ * **Requirement** may be declared without fulfilling — pass empty statics, then
+ * `.Prototype()({ size: ViewKind.Card() })` later. Discharges to `{}` when statics satisfy it.
+ *
+ * @example
+ * ```ts
+ * View.Prototype<{ name: string }>()()
+ * View.Prototype<ViewProps, WithSize>()()                      // open
+ * View.Prototype<ViewProps, WithSize>()().Prototype()({ size: ViewKind.Card() })
+ * ```
  *
  * @public
  */
@@ -308,13 +337,23 @@ export const Prototype =
 
 /**
  * Naked View Tag — DI component handle with **no** size chrome.
+ * Prefer sized add-ons (`Ui.Card.Tag`, …) for dashboard skins.
+ *
+ * @example
+ * ```ts
+ * class Greeter extends View.Tag<Greeter, { readonly name: string }>()(
+ *   "app/view/greeter",
+ * ) {}
+ * View.provide(Greeter, ({ name }) => <h1>{name}</h1>)
+ * // or: Greeter.provide(({ name }) => <h1>{name}</h1>)
+ * ```
  *
  * @public
  */
 export const Tag = Prototype()().Tag;
 
 /**
- * A View service handle (sized or naked). Sized chrome handles may carry a `size` static.
+ * A View service handle (sized or naked). Sized chrome handles carry `size`.
  *
  * @public
  */
@@ -323,206 +362,6 @@ export type AnyView<Self extends object = object> = Context.Service<
   View<Self>
 > & {
   readonly key: ViewKey;
-  readonly size?: SizeTag;
+  readonly size?: unknown;
   readonly spec?: unknown;
-};
-
-// =============================================================================
-// Registry service
-// =============================================================================
-
-/** Bound chrome captured when a contribution Layer built (View service was provided). @internal */
-type Bound = {
-  readonly key: ViewKey;
-  readonly kind: SizeTag;
-  readonly Component: View;
-};
-
-/** @public */
-export interface RegistryService {
-  /** Append a view for one tag `.key` (multi-match). */
-  readonly addTag: (tagKey: string, bound: Bound) => void;
-  /** Append a view for a stamped kind string (multi-match). */
-  readonly addKind: (kind: string, bound: Bound) => void;
-  /**
-   * Allowlist for one tag — **replaces** any prior `only` for that tag (last wins).
-   * At match time, kinds present in the list are exclusive; other kinds still use add tables.
-   */
-  readonly setOnly: (tagKey: string, bounds: ReadonlyArray<Bound>) => void;
-  readonly match: (
-    tag: ViewTag,
-    size: SizeTag,
-    kindHints?: ReadonlyArray<string>,
-  ) => ReadonlyArray<Resolved>;
-  readonly keys: () => ReadonlyArray<ViewKey>;
-}
-
-/**
- * View registry — contribution tables + match.
- *
- * @public
- */
-export class Registry extends Context.Service<Registry, RegistryService>()(
-  "last-ts/View/Registry",
-) {}
-
-/** Structural equality for tagged sizes. @internal */
-const sameSizeTag = (a: SizeTag, b: SizeTag): boolean => a._tag === b._tag;
-
-const pushBound = (map: Map<string, Bound[]>, key: string, bound: Bound): void => {
-  const list = map.get(key);
-  if (list === undefined) {
-    map.set(key, [bound]);
-    return;
-  }
-  if (!list.some((b) => b.key === bound.key)) list.push(bound);
-};
-
-/**
- * Build a registry service. Hosts pass {@link resolveKinds} to map tags to kind strings
- * for `byKind` lookup (default: none).
- *
- * @public
- */
-export const makeRegistryService = (
-  resolveKinds: (tag: ViewTag) => ReadonlyArray<string> = () => [],
-): RegistryService => {
-  const byTagKey = new Map<string, Bound[]>();
-  const byKind = new Map<string, Bound[]>();
-  const onlyByTagKey = new Map<string, Bound[]>();
-
-  const fromBounds = (bounds: ReadonlyArray<Bound> | undefined, size: SizeTag): Resolved[] => {
-    if (bounds === undefined) return [];
-    const out: Resolved[] = [];
-    for (const bound of bounds) {
-      if (!sameSizeTag(bound.kind, size)) continue;
-      if (out.some((r) => r.key === bound.key)) continue;
-      out.push({ key: bound.key, kind: bound.kind, Component: bound.Component });
-    }
-    return out;
-  };
-
-  return {
-    addTag(tagKey, bound) {
-      pushBound(byTagKey, tagKey, bound);
-    },
-    addKind(kind, bound) {
-      pushBound(byKind, kind, bound);
-    },
-    setOnly(tagKey, bounds) {
-      onlyByTagKey.set(tagKey, [...bounds]);
-    },
-    match(tag, size, kindHints) {
-      const allowlist = onlyByTagKey.get(tag.key);
-      if (allowlist !== undefined) {
-        const kindsPresent = new Set(allowlist.map((b) => b.kind._tag));
-        if (kindsPresent.has(size._tag)) {
-          return fromBounds(allowlist, size);
-        }
-      }
-
-      const hints = kindHints ?? resolveKinds(tag);
-      const out: Resolved[] = [];
-      const seen = new Set<ViewKey>();
-      const add = (list: ReadonlyArray<Resolved>) => {
-        for (const r of list) {
-          if (seen.has(r.key)) continue;
-          seen.add(r.key);
-          out.push(r);
-        }
-      };
-      add(fromBounds(byTagKey.get(tag.key), size));
-      for (const kind of hints) {
-        add(fromBounds(byKind.get(kind), size));
-      }
-      return out;
-    },
-    keys() {
-      const keys = new Set<ViewKey>();
-      for (const list of byTagKey.values()) for (const b of list) keys.add(b.key);
-      for (const list of byKind.values()) for (const b of list) keys.add(b.key);
-      for (const list of onlyByTagKey.values()) for (const b of list) keys.add(b.key);
-      return [...keys];
-    },
-  };
-};
-
-/**
- * Empty registry Layer — provide under contribution layers.
- *
- * @public
- */
-export const layer: Layer.Layer<Registry> = Layer.sync(Registry, () =>
-  makeRegistryService(),
-);
-
-/**
- * Shipped registry shell (no kind resolver).
- *
- * @public
- */
-export const base: Layer.Layer<Registry> = layer;
-
-// =============================================================================
-// Thin generic react kit (no size matchers)
-// =============================================================================
-
-type KitContext = {
-  readonly registry: RegistryService;
-  readonly resolve: (tag: ViewTag, size: SizeTag) => ReadonlyArray<Resolved>;
-};
-
-const RegistryReactContext = React.createContext<KitContext | null>(null);
-
-const useKit = (): KitContext => {
-  const value = React.useContext(RegistryReactContext);
-  if (value === null) {
-    throw new Error("View: render inside View.react(…).Provider");
-  }
-  return value;
-};
-
-/**
- * Build registry resolver from a **fully provided** view Layer (`R = never`).
- *
- * @internal
- */
-const buildKit = <ROut, E,>(viewLayer: Layer.Layer<ROut, E, never>): KitContext =>
-  Effect.runSync(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const ctx = yield* Layer.build(viewLayer);
-        const registry = Option.getOrThrow(Context.getOption(ctx, Registry));
-        return {
-          registry,
-          resolve: (tag: ViewTag, size: SizeTag) => registry.match(tag, size),
-        };
-      }),
-    ),
-  );
-
-/**
- * Minimal React kit from a fully provided view Layer (`R` must be `never`).
- * Size matchers (Card/Detail/Page) live in Hyperlink `Ui`.
- *
- * @public
- */
-export const react = <ROut, E,>(viewLayer: Layer.Layer<ROut, E, never>) => {
-  const kit = buildKit(viewLayer);
-
-  const Provider = (props: {
-    readonly children: React.ReactNode;
-  }): React.ReactElement =>
-    React.createElement(RegistryReactContext.Provider, { value: kit }, props.children);
-
-  const resolve = (tag: ViewTag, size: SizeTag): ReadonlyArray<Resolved> =>
-    kit.resolve(tag, size);
-
-  return {
-    Provider,
-    useView: () => useKit().registry,
-    resolve,
-    keys: () => kit.registry.keys(),
-    registry: kit.registry,
-  };
 };

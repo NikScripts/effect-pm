@@ -37,6 +37,7 @@ import { Cell, displayName } from "./widgets";
 import { LogBox, LogsPage, SchedulePage } from "./resourcePages";
 import { isLeafTag, type LeafTag } from "../ui/widgetRegistry";
 import * as GroupNav from "../ui/GroupNav";
+import * as Ui from "../ui/Ui";
 import * as View from "../ui/View";
 import { DashboardDetailChrome, DashboardTopBar } from "./DashboardTopBar";
 import { HealthBoard, NodeBar, NodeDetail } from "./NodeStatus";
@@ -46,7 +47,7 @@ const ViewDetailScreen = (props: {
   readonly tag: LeafTag;
   readonly name?: string;
 }): React.ReactElement => {
-  const Match = View.useMatch();
+  const Match = Ui.useMatch();
   return <Match.Detail tag={props.tag} name={props.name} />;
 };
 
@@ -75,7 +76,7 @@ const QueueDetail = (props: {
   readonly onBack: () => void;
   readonly onOpenLogs: () => void;
 }): React.ReactElement => {
-  const Match = View.useMatch();
+  const Match = Ui.useMatch();
   const bundle = Observe.use(props.tag, WorkPoolView.pack);
   const lifecycleR = useAtomValue(bundle.lifecycle);
   const lifecycleTag = AsyncResult.isSuccess(lifecycleR)
@@ -99,7 +100,7 @@ const DaemonDetail = (props: {
   readonly onBack: () => void;
   readonly onOpenLogs: () => void;
 }): React.ReactElement => {
-  const Match = View.useMatch();
+  const Match = Ui.useMatch();
   const bundle = Observe.use(props.tag, DaemonView.pack);
   return (
     <DashboardDetailChrome
@@ -115,7 +116,7 @@ const DaemonDetail = (props: {
 
 /** API detail route — shell owns back/title; badge + body in Detail skin. */
 const ApiDetail = (props: { readonly tag: ApiTag; readonly onBack: () => void }): React.ReactElement => {
-  const Match = View.useMatch();
+  const Match = Ui.useMatch();
   return (
     <DashboardDetailChrome
       title={`🌐 ${displayName(props.tag.key)}`}
@@ -133,7 +134,7 @@ const DashboardInner = (props: {
   readonly onOpenHealth: () => void;
 }): React.ReactElement => {
   const groupNav = GroupNav.use(props.group);
-  const Match = View.useMatch();
+  const Match = Ui.useMatch();
   const group = groupNav.group as GroupNode;
   const selected = groupNav.selected;
   const trail = groupNav.trail;

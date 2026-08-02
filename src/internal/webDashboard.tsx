@@ -372,7 +372,7 @@ const routesFor = (group: GroupNode) =>
 export const DashboardView = <R, ER>(props: {
   readonly runtime: DashboardRuntime<R, ER>;
   readonly group: GroupNode;
-  readonly views?: Layer.Layer<never, never, View.Registry>;
+  readonly views?: Layer.Layer<never, never, Ui.Registry>;
 }): React.ReactElement => {
   const ui = React.useMemo(() => {
     const views = Layer.mergeAll(
@@ -407,7 +407,7 @@ export const DashboardView = <R, ER>(props: {
 export const Dashboard = <R, ER>(props: {
   readonly runtime: DashboardRuntime<R, ER>;
   readonly group: GroupNode;
-  readonly views?: Layer.Layer<never, never, View.Registry>;
+  readonly views?: Layer.Layer<never, never, Ui.Registry>;
   readonly widgets?: WidgetRegistry<Widget>;
 }): React.ReactElement => (
   <RegistryProvider>

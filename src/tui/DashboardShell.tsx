@@ -29,6 +29,7 @@ import {
 } from "../ui/data";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
 import * as GroupNav from "../ui/GroupNav";
+import * as Ui from "../ui/Ui";
 import * as View from "../ui/View";
 import { Cell } from "./cellWidgets";
 import { DashboardTopBar } from "./DashboardTopBar";
@@ -123,7 +124,7 @@ const FocusedQueue = (props: {
   readonly bar: (hint: React.ReactElement) => React.ReactElement;
   readonly barRows: number;
 }): React.ReactElement => {
-  const Match = View.useMatch();
+  const Match = Ui.useMatch();
   const { name, tag, cols, rows, editMode } = props;
   const bundle = Observe.use(tag, WorkPoolView.pack);
   const statusR = useAtomValue(bundle.status);
@@ -388,7 +389,7 @@ export const DashboardShell = (props: {
     <Bar cmd={cmd} suggestions={suggestions} cmdSel={cmdSel} hint={hint} />
   );
 
-  const Match = View.useMatch();
+  const Match = Ui.useMatch();
   const focused = nav.selected;
   const focusName = nav.keys[nav.keys.length - 1] ?? displayName(idOf(focused));
   if (focused !== null) {

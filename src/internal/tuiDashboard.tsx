@@ -463,7 +463,7 @@ export const Dashboard = <R, ER>(props: {
   readonly runtime: DashboardRuntime<R, ER>;
   readonly group: GroupNode;
   readonly path?: ReadonlyArray<string>;
-  readonly views?: Layer.Layer<never, never, View.Registry>;
+  readonly views?: Layer.Layer<never, never, Ui.Registry>;
   readonly widgets?: TuiWidgetRegistry;
 }): React.ReactElement => {
   const ui = React.useMemo(() => {

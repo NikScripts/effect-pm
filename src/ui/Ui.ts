@@ -2,7 +2,7 @@
  * @module ui/Ui
  *
  * Hyperlink dashboard chrome — size variants (Card/Detail/Page), bind/only,
- * react matchers, Group-aware compose, and kind-aware registry base.
+ * react matchers, Group-aware compose, and kind-aware registry.
  * Built on `last-ts/View` DI kernel.
  */
 import * as React from "react";
@@ -15,12 +15,15 @@ import type { LeafTag } from "./widgetRegistry";
 import * as View from "last-ts/View";
 
 // =============================================================================
-// Sizes / props
+// Keys / kinds / props
 // =============================================================================
 
 /**
- * Building-block **sizes** as Effect tagged variants.
+ * Building-block **sizes** (W8 / lock F1) as Effect tagged variants.
  * Content fills these — not separate kinds named after content.
+ *
+ * Construct with {@link ViewKind}.Card() / `.Detail()` / `.Page()`; match with
+ * `Match.tag` (same `_tag` style as {@link WidgetEntry}).
  *
  * @public
  */
@@ -30,7 +33,11 @@ export type ViewKind = Data.TaggedEnum<{
   Page: {};
 }>;
 
-/** Constructors / `$is` / `$match` for {@link ViewKind}. @public */
+/**
+ * Constructors / `$is` / `$match` for {@link ViewKind}.
+ *
+ * @public
+ */
 export const ViewKind = Data.taggedEnum<ViewKind>();
 
 /** `_tag` string of a {@link ViewKind} — `"Card" | "Detail" | "Page"`. @public */
@@ -55,7 +62,14 @@ export type WithSize<S extends ViewKind = ViewKind> = {
   readonly size: S;
 };
 
-/** Hyperlink View tag — leaf service or Group member. @public */
+/** Structural equality for tagged sizes. @internal */
+const sameViewKind = (a: ViewKind, b: ViewKind): boolean => a._tag === b._tag;
+
+/**
+ * Tag a View skin may receive — leaf HyperService **or** Group (Group family card).
+ *
+ * @public
+ */
 export type ViewTag = LeafTag | GroupNav.MemberTag;
 
 /**
@@ -69,7 +83,35 @@ export interface ViewProps {
 }
 
 /**
+ * A matched view ready to render (size chrome).
+ *
+ * @public
+ */
+export interface Resolved {
+  readonly key: View.ViewKey;
+  readonly kind: ViewKind;
+  readonly Component: View.View;
+}
+
+/**
  * Shared size-chrome shell — {@link WithSize} Requirement open (not fulfilled).
+ * Chain `.Prototype()` for props/statics, then fulfill with `{ size: ViewKind.Card() }`.
+ * (Named `SizeChrome` — layout hints stay {@link View.Chrome}.)
+ *
+ * @example
+ * ```ts
+ * // Prefer one-shot on Card / Detail / Page
+ * class X extends Ui.Card.Tag<X, { readonly dense?: boolean }>()(
+ *   "app/view/x",
+ *   { spec: { kind: "app/x" } as const },
+ * ) {}
+ *
+ * // Or chain while SizeChrome is still open
+ * const Proto = Ui.SizeChrome
+ *   .Prototype<{ readonly dense?: boolean }>()({ spec: { kind: "app/x" } as const })
+ *   .Prototype()({ size: Ui.ViewKind.Card() })
+ * class Y extends Proto.Tag<Y>()("app/view/y") {}
+ * ```
  *
  * @public
  */
@@ -80,6 +122,8 @@ export const SizeChrome: View.OpenPrototype<ViewProps, WithSize> = View.Prototyp
 
 /**
  * Size-chrome add-ons — {@link SizeChrome} with size fulfilled.
+ * Mint with `Ui.Card.Tag<Self, Props?>()(key, statics?)`.
+ * Matcher components are **not** these — use `Ui.react(…).Card` or {@link useMatch}.
  *
  * @public
  */
@@ -101,15 +145,129 @@ export const Page: View.FulfilledPrototype<
 > = SizeChrome.Prototype()({ size: ViewKind.Page() });
 
 // =============================================================================
-// Registry contributions (bind / only)
+// Registry service
 // =============================================================================
 
-/** Bound chrome captured when a contribution Layer built. @internal */
+/** Bound chrome captured when a contribution Layer built (View service was provided). @internal */
 type Bound = {
   readonly key: View.ViewKey;
   readonly kind: ViewKind;
   readonly Component: View.View;
 };
+
+/** @public */
+export interface RegistryService {
+  /** Append a view for one Hyperlink tag `.key` (multi-match). */
+  readonly addTag: (tagKey: string, bound: Bound) => void;
+  /** Append a view for a stamped Hyperlink kind (multi-match). */
+  readonly addKind: (kind: string, bound: Bound) => void;
+  /**
+   * Allowlist for one tag — **replaces** any prior `only` for that tag (last wins).
+   * At match time, kinds present in the list are exclusive; other kinds still use add tables.
+   */
+  readonly setOnly: (tagKey: string, bounds: ReadonlyArray<Bound>) => void;
+  readonly match: (tag: ViewTag, viewKind: ViewKind) => ReadonlyArray<Resolved>;
+  readonly keys: () => ReadonlyArray<View.ViewKey>;
+}
+
+/**
+ * View registry — contribution tables + match.
+ *
+ * @public
+ */
+export class Registry extends Context.Service<Registry, RegistryService>()(
+  "hyperlink-ts/ui/View/Registry",
+) {}
+
+const pushBound = (map: Map<string, Bound[]>, key: string, bound: Bound): void => {
+  const list = map.get(key);
+  if (list === undefined) {
+    map.set(key, [bound]);
+    return;
+  }
+  if (!list.some((b) => b.key === bound.key)) list.push(bound);
+};
+
+const makeRegistryService = (): RegistryService => {
+  const byTagKey = new Map<string, Bound[]>();
+  const byKind = new Map<string, Bound[]>();
+  /** tag.key → full allowlist from last `Ui.only` for that tag */
+  const onlyByTagKey = new Map<string, Bound[]>();
+
+  const fromBounds = (bounds: ReadonlyArray<Bound> | undefined, viewKind: ViewKind): Resolved[] => {
+    if (bounds === undefined) return [];
+    const out: Resolved[] = [];
+    for (const bound of bounds) {
+      if (!sameViewKind(bound.kind, viewKind)) continue;
+      if (out.some((r) => r.key === bound.key)) continue;
+      out.push({ key: bound.key, kind: bound.kind, Component: bound.Component });
+    }
+    return out;
+  };
+
+  return {
+    addTag(tagKey, bound) {
+      pushBound(byTagKey, tagKey, bound);
+    },
+    addKind(kind, bound) {
+      pushBound(byKind, kind, bound);
+    },
+    setOnly(tagKey, bounds) {
+      onlyByTagKey.set(tagKey, [...bounds]);
+    },
+    match(tag, viewKind) {
+      const allowlist = onlyByTagKey.get(tag.key);
+      if (allowlist !== undefined) {
+        const kindsPresent = new Set(allowlist.map((b) => b.kind._tag));
+        if (kindsPresent.has(viewKind._tag)) {
+          return fromBounds(allowlist, viewKind);
+        }
+      }
+
+      const out: Resolved[] = [];
+      const seen = new Set<View.ViewKey>();
+      const add = (list: ReadonlyArray<Resolved>) => {
+        for (const r of list) {
+          if (seen.has(r.key)) continue;
+          seen.add(r.key);
+          out.push(r);
+        }
+      };
+      add(fromBounds(byTagKey.get(tag.key), viewKind));
+      // Group tags stamp `Group.kind` as a data prop (not Hyperlink kindSym).
+      if (Group.isGroup(tag)) {
+        add(fromBounds(byKind.get(Group.kind), viewKind));
+      } else {
+        const stamped = kindOf(tag as never);
+        if (typeof stamped === "string") {
+          add(fromBounds(byKind.get(stamped), viewKind));
+        }
+      }
+      return out;
+    },
+    keys() {
+      const keys = new Set<View.ViewKey>();
+      for (const list of byTagKey.values()) for (const b of list) keys.add(b.key);
+      for (const list of byKind.values()) for (const b of list) keys.add(b.key);
+      for (const list of onlyByTagKey.values()) for (const b of list) keys.add(b.key);
+      return [...keys];
+    },
+  };
+};
+
+/**
+ * Empty registry Layer — provide under contribution layers.
+ *
+ * @public
+ */
+export const layer: Layer.Layer<Registry> = Layer.sync(Registry, makeRegistryService);
+
+/**
+ * Shipped registry shell.
+ *
+ * @public
+ */
+export const base: Layer.Layer<Registry> = layer;
 
 /** Sized View handle — {@link WithSize} required for {@link bind} / {@link only}. @internal */
 type ViewService<Id> = WithSize & {
@@ -118,11 +276,17 @@ type ViewService<Id> = WithSize & {
 } & Context.Key<Id, View.View>;
 
 /** Avoid `Foo<Id>>` in .tsx return positions (parsed as JSX). */
-type ContribLayer<R> = Layer.Layer<never, never, View.Registry | R>;
+type ContribLayer<R> = Layer.Layer<never, never, Registry | R>;
 
 /**
- * Append one View for a stamped **kind** string or a concrete **tag**
+ * Append one View for a stamped Hyperlink **kind** string or a concrete **tag**
  * (matched by `.key`). Multi-match / pager — merge with `Layer.mergeAll`.
+ *
+ * @example
+ * ```ts
+ * Ui.bind(WorkPool.kind, PoolCard) // family kind
+ * Ui.bind(Special, PoolCard)       // one tag key
+ * ```
  *
  * @public
  */
@@ -138,9 +302,9 @@ export const bind: {
 ): ContribLayer<Id> =>
   Layer.effectDiscard(
     Effect.gen(function* () {
-      const reg = yield* View.Registry;
+      const reg = yield* Registry;
       const Component = yield* view;
-      const bound: Bound = { key: view.key, kind: view.size, Component };
+      const bound = { key: view.key, kind: view.size, Component };
       if (typeof targetOrKind === "string") {
         reg.addKind(targetOrKind, bound);
       } else {
@@ -150,7 +314,7 @@ export const bind: {
   );
 
 /**
- * Allowlist for one tag. Kinds present are exclusive (defaults do not apply for
+ * Allowlist for one Hyperlink tag. Kinds present are exclusive (defaults do not apply for
  * those kinds). Optional extra views share one allowlist (precise `R`). A later `only` for
  * the same tag **replaces** the whole allowlist (`Layer.mergeAll` → last wins).
  *
@@ -164,7 +328,7 @@ export const only = <Id1, Id2 = never, Id3 = never>(
 ): ContribLayer<Id1 | Id2 | Id3> =>
   Layer.effectDiscard(
     Effect.gen(function* () {
-      const reg = yield* View.Registry;
+      const reg = yield* Registry;
       const bounds: Bound[] = [];
       const c1 = yield* v1;
       bounds.push({ key: v1.key, kind: v1.size, Component: c1 });
@@ -180,21 +344,71 @@ export const only = <Id1, Id2 = never, Id3 = never>(
     }),
   );
 
+// =============================================================================
+// Lightweight Group dash (W20)
+// =============================================================================
+
+/** Group-shaped root for {@link group}. @public */
+export type GroupLike = {
+  readonly key: string;
+  readonly members: Record<string, unknown>;
+};
+
+/** Leaf tags collected from a Group tree. @public */
+export type GroupLeaf = LeafTag;
+
+const collectLeaves = (node: unknown): ReadonlyArray<GroupLeaf> => {
+  if (!Group.isGroup(node)) {
+    if (
+      (typeof node === "object" || typeof node === "function") &&
+      node !== null &&
+      "key" in node &&
+      typeof (node as { readonly key: unknown }).key === "string"
+    ) {
+      return [node as GroupLeaf];
+    }
+    return [];
+  }
+  return Object.values(Group.members(node)).flatMap(collectLeaves);
+};
+
 /**
- * Registry Layer with Hyperlink kind resolution for {@link bind} by kind.
+ * Lightweight Group dash handle — stashed by {@link group} for {@link react}.
  *
  * @public
  */
-export const base: Layer.Layer<View.Registry> = Layer.sync(View.Registry, () =>
-  View.makeRegistryService((tag) => {
-    if (Group.isGroup(tag)) return [Group.kind];
-    const k = kindOf(tag as never);
-    return typeof k === "string" ? [k] : [];
-  }),
-);
+export class GroupDash extends Context.Service<
+  GroupDash,
+  {
+    readonly group: GroupLike;
+    readonly leaves: ReadonlyArray<GroupLeaf>;
+  }
+>()("hyperlink-ts/ui/View/GroupDash") {}
+
+/**
+ * BYO-chrome Group kit contribution (W20). Records the Group + leaves for the react kit.
+ * Chrome `R` comes from `Ui.bind` / `Ui.only` layers you merge.
+ *
+ * @example
+ * ```ts
+ * const ready = Layer.mergeAll(
+ *   Ui.group(AppGroup),
+ *   Ui.bind(WorkPool.kind, PoolCard),
+ *   Ui.only(Special, CustomCard),
+ * ).pipe(Layer.provideMerge(chrome), Layer.provideMerge(Ui.base))
+ * const { for: bound, Provider } = Ui.react(ready)
+ * ```
+ *
+ * @public
+ */
+export const group = (appGroup: GroupLike): Layer.Layer<GroupDash> =>
+  Layer.sync(GroupDash, () => ({
+    group: appGroup,
+    leaves: collectLeaves(appGroup),
+  }));
 
 // =============================================================================
-// React kit — size matchers
+// Fallbacks + react kit
 // =============================================================================
 
 const FallbackCard: View.View<ViewProps> = (props) =>
@@ -227,16 +441,20 @@ const fallbackFor = (viewKind: ViewKind): View.View<ViewProps> =>
   );
 
 type KitContext = {
-  readonly registry: View.RegistryService;
-  readonly resolve: (tag: ViewTag, viewKind: ViewKind) => ReadonlyArray<View.Resolved>;
+  readonly registry: RegistryService;
+  readonly resolve: (tag: ViewTag, viewKind: ViewKind) => ReadonlyArray<Resolved>;
+  readonly groupDash: Option.Option<{
+    readonly group: GroupLike;
+    readonly leaves: ReadonlyArray<GroupLeaf>;
+  }>;
 };
 
 const RegistryReactContext = React.createContext<KitContext | null>(null);
 
-/** Multi-match host — pager stub (first page); desktop tabs later. @internal */
+/** Multi-match host — pager stub (first page); desktop tabs later (W8). @internal */
 const MatchHost = (props: {
   readonly viewKind: ViewKind;
-  readonly resolved: ReadonlyArray<View.Resolved>;
+  readonly resolved: ReadonlyArray<Resolved>;
   readonly tag: ViewTag;
   readonly name?: string;
 }): React.ReactElement | null => {
@@ -278,13 +496,13 @@ export interface BoundViewProps {
 const useKit = (): KitContext => {
   const value = React.useContext(RegistryReactContext);
   if (value === null) {
-    throw new Error("Ui: render inside Ui.react(…).Provider");
+    throw new Error("View: render inside View.react(…).Provider");
   }
   return value;
 };
 
 /**
- * Whether the mounted Ui Provider has a match for this tag + kind.
+ * Whether the mounted View Provider has a match for this tag + kind.
  * `false` when no Provider or `tag` is null (safe before leaf narrowing).
  *
  * @public
@@ -295,7 +513,7 @@ export const useHasMatch = (
 ): boolean => {
   const kit = React.useContext(RegistryReactContext);
   if (kit === null || tag === null) return false;
-  return kit.resolve(tag, viewKind).length > 0;
+  return kit.resolve(tag as LeafTag, viewKind).length > 0;
 };
 
 /** Kit matcher — card size. @internal */
@@ -326,7 +544,8 @@ const MatchPage = (props: ViewProps): React.ReactElement | null =>
   });
 
 /**
- * Size matchers for descendants of {@link react}`(…).Provider`.
+ * Size matchers for descendants of {@link react}`(…).Provider` / {@link compose}`(…).Provider`.
+ * Prefer `const ui = Ui.react(…); <ui.Card …/>` at the shell; use this in deep widgets.
  *
  * @public
  */
@@ -335,10 +554,12 @@ export const useMatch = (): {
   readonly Detail: View.View<ViewProps>;
   readonly Page: View.View<ViewProps>;
 } =>
+  // Stable matcher components — they require Provider when *rendered* (via useKit).
   ({ Card: MatchCard, Detail: MatchDetail, Page: MatchPage });
 
 /**
  * Build registry resolver from a **fully provided** view Layer (`R = never`).
+ * Runs the Layer (`Effect.runSync` + `Layer.build`) so usable components can be returned.
  *
  * @internal
  */
@@ -347,10 +568,12 @@ const buildKit = <ROut, E,>(viewLayer: Layer.Layer<ROut, E, never>): KitContext 
     Effect.scoped(
       Effect.gen(function* () {
         const ctx = yield* Layer.build(viewLayer);
-        const registry = Option.getOrThrow(Context.getOption(ctx, View.Registry));
+        const registry = Option.getOrThrow(Context.getOption(ctx, Registry));
+        const groupDash = Context.getOption(ctx, GroupDash);
         return {
           registry,
           resolve: (tag: ViewTag, viewKind: ViewKind) => registry.match(tag, viewKind),
+          groupDash,
         };
       }),
     ),
@@ -358,29 +581,25 @@ const buildKit = <ROut, E,>(viewLayer: Layer.Layer<ROut, E, never>): KitContext 
 
 /**
  * React kit from a fully provided view Layer (`R` must be `never`).
- * Matchers `Card` / `Detail` / `Page` are **on this kit**.
+ * Matchers `Card` / `Detail` / `Page` are **on this kit** (not on the `View` namespace).
  *
  * @public
  */
 export const react = <ROut, E,>(viewLayer: Layer.Layer<ROut, E, never>) => {
   const kit = buildKit(viewLayer);
-  const groupDash = Effect.runSync(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const ctx = yield* Layer.build(viewLayer);
-        return Context.getOption(ctx, GroupDash);
-      }),
-    ),
-  );
 
   const Provider = (props: {
     readonly children: React.ReactNode;
   }): React.ReactElement =>
     React.createElement(RegistryReactContext.Provider, { value: kit }, props.children);
 
-  const resolve = (tag: ViewTag, viewKind: ViewKind): ReadonlyArray<View.Resolved> =>
+  const resolve = (tag: ViewTag, viewKind: ViewKind): ReadonlyArray<Resolved> =>
     kit.resolve(tag, viewKind);
 
+  /**
+   * Flip: bind Card/Detail/Page to one Hyperlink tag (no `tag` prop).
+   * Still render inside {@link Provider}.
+   */
   const forTag = (tag: ViewTag) => ({
     Card: (props: BoundViewProps): React.ReactElement | null =>
       React.createElement(MatchHost, {
@@ -410,66 +629,20 @@ export const react = <ROut, E,>(viewLayer: Layer.Layer<ROut, E, never>) => {
     Detail: MatchDetail,
     Page: MatchPage,
     Provider,
+    /** Bound matchers for one service — `{ Card, Detail, Page }` without `tag` props. */
     for: forTag,
+    /** Present when the layer included {@link group}. */
+    groupDash: Option.getOrUndefined(kit.groupDash),
     useView: () => useKit().registry,
     resolve,
     keys: () => kit.registry.keys(),
     registry: kit.registry,
-    groupDash: Option.getOrUndefined(groupDash),
   };
 };
 
 // =============================================================================
-// Group dash + compose
+// compose — thin sugar over react + Router (lock C)
 // =============================================================================
-
-/** Group-shaped root for {@link group}. @public */
-export type GroupLike = {
-  readonly key: string;
-  readonly members: Record<string, unknown>;
-};
-
-/** Leaf tags collected from a Group tree. @public */
-export type GroupLeaf = ViewTag;
-
-const collectLeaves = (node: unknown): ReadonlyArray<GroupLeaf> => {
-  if (!Group.isGroup(node)) {
-    if (
-      (typeof node === "object" || typeof node === "function") &&
-      node !== null &&
-      "key" in node &&
-      typeof (node as { readonly key: unknown }).key === "string"
-    ) {
-      return [node as GroupLeaf];
-    }
-    return [];
-  }
-  return Object.values(Group.members(node)).flatMap(collectLeaves);
-};
-
-/**
- * Lightweight Group dash handle — stashed by {@link group} for {@link react}.
- *
- * @public
- */
-export class GroupDash extends Context.Service<
-  GroupDash,
-  {
-    readonly group: GroupLike;
-    readonly leaves: ReadonlyArray<GroupLeaf>;
-  }
->()("hyperlink-ts/ui/Ui/GroupDash") {}
-
-/**
- * BYO-chrome Group kit contribution. Records the Group + leaves for the react kit.
- *
- * @public
- */
-export const group = (appGroup: GroupLike): Layer.Layer<GroupDash> =>
-  Layer.sync(GroupDash, () => ({
-    group: appGroup,
-    leaves: collectLeaves(appGroup),
-  }));
 
 const displayNameOf = (tag: ViewTag, fallback: string): string => {
   if (typeof tag === "object" || typeof tag === "function") {
@@ -532,6 +705,34 @@ const resolveComposeRouter = (
  * {@link Router.Service}. No second registry; no `Atom.runtime` inside — wrap
  * with {@link ./runtime.RuntimeProvider} outside.
  *
+ * Observe via `Observe.use(tag, *View.pack)` / `NodeView.use` under `RuntimeProvider`.
+ *
+ * @example
+ * ```tsx
+ * import * as Observe from "hyperlink-ts/Observe"
+ * import * as WorkPoolView from "hyperlink-ts/ui/WorkPoolView"
+ * import * as DaemonView from "hyperlink-ts/ui/DaemonView"
+ * const ui = Ui.compose({
+ *   views: Layer.mergeAll(Ui.bind(Group.kind, GroupCard), webDashboard.layer),
+ *   group: ServicesHub,
+ *   router: Router.history(
+ *     Route.make("dash").add(
+ *       Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub)),
+ *     ),
+ *   ),
+ * })
+ * <RuntimeProvider runtime={runtime}>
+ *   <ui.Provider>
+ *     <ui.Grid />
+ *     <ui.Outlet />
+ *   </ui.Provider>
+ * </RuntimeProvider>
+ *
+ * // in a skin / shell component:
+ * const queue = Observe.use(Jobs, WorkPoolView.pack)
+ * const daemon = Observe.use(Nightly, DaemonView.pack)
+ * ```
+ *
  * @public
  */
 export const compose = <VR, VE,>(options: {
@@ -581,7 +782,7 @@ export const compose = <VR, VE,>(options: {
               if (group !== undefined) GroupNav.open(group, navigation, tag);
             },
           },
-          React.createElement(viewKit.Card, { tag, name }),
+          React.createElement(MatchCard, { tag, name }),
         ),
       ),
     );
@@ -619,7 +820,7 @@ export const compose = <VR, VE,>(options: {
           back,
           React.createElement("strong", null, `${title} · ${state.view}`),
         ),
-        React.createElement(viewKit.Page, { tag, name: title }),
+        React.createElement(MatchPage, { tag, name: title }),
       );
     }
 
@@ -632,7 +833,7 @@ export const compose = <VR, VE,>(options: {
         back,
         React.createElement("strong", null, title),
       ),
-      React.createElement(viewKit.Detail, { tag, name: title }),
+      React.createElement(MatchDetail, { tag, name: title }),
     );
   };
 
