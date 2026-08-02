@@ -1,4 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { Duration, Schema } from "effect";
+import {
+  RateLimitExceeded,
+  RateLimiterError,
+} from "effect/unstable/persistence/RateLimiter";
 import {
   completeRun,
   enterWaiting,
@@ -15,6 +20,10 @@ import {
   toHyperlinkState,
 } from "../src/internal/gateFacts";
 import type { GateStatus } from "../src/internal/gate";
+import {
+  GateStopped,
+  gateEngineRunError,
+} from "../src/internal/gateSchema";
 
 const baseStatus = (patch: Partial<GateStatus> = {}): GateStatus => ({
   resourceId: "@test/Gate",
@@ -112,5 +121,30 @@ describe("gateFacts", () => {
     });
     expect(change.previous).toBeNull();
     expect(change.current).toEqual(toHyperlinkState(current));
+  });
+});
+
+describe("gateEngineRunError wire schemas", () => {
+  it("round-trips GateStopped", () => {
+    const err = new GateStopped({ resourceId: "@test/Gate" });
+    const encoded = Schema.encodeSync(gateEngineRunError)(err);
+    const decoded = Schema.decodeSync(gateEngineRunError)(encoded);
+    expect(decoded).toBeInstanceOf(GateStopped);
+    expect(decoded._tag).toBe("GateStopped");
+  });
+
+  it("round-trips RateLimiterError", () => {
+    const limited = new RateLimiterError({
+      reason: new RateLimitExceeded({
+        key: "k",
+        limit: 1,
+        remaining: 0,
+        retryAfter: Duration.seconds(1),
+      }),
+    });
+    const encoded = Schema.encodeSync(gateEngineRunError)(limited);
+    const decoded = Schema.decodeSync(gateEngineRunError)(encoded);
+    expect(decoded).toBeInstanceOf(RateLimiterError);
+    expect(decoded._tag).toBe("RateLimiterError");
   });
 });

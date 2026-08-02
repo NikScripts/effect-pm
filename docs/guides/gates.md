@@ -1,13 +1,10 @@
-{#gates title="Gate" status="draft" appliesTo=all}
+{#gates title="Gate" status="stable" done="api" appliesTo=all}
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
 > and live type previews — is at <https://dev.hyperlink.cool/docs/gates>.
 <!-- docs-site-link:end -->
 # Gate
-
-{.note}
-**⚠️ Example only** — placeholder content that demonstrates the docs platform. **Not final**; to be replaced by Agent A. Do not treat as canonical.
 
 A `Gate` wraps an effect behind a **concurrency gate** with typed input
 and output. Where a queue drains items in the background, a gate is
@@ -164,16 +161,23 @@ warn; not fail-loud in v1).
 
 ## Lifecycle (pause / stop / live reconfig)
 
-Every Gate participates in the shared **`Lifecycle`** protocol (same badge + verbs as
-WorkPool / Daemon). The handle carries a `lifecycle` state badge, a `lifecycleEvents`
-stream, and `start` / `pause` / `resume` / `stop` verbs, plus live `setConcurrency` /
-`setRateLimit`.
+**Tag / Service / `layer` / `serve`** gates participate in the shared **`Lifecycle`**
+protocol (same badge + verbs as WorkPool / Daemon). The handle carries a `lifecycle`
+badge, `lifecycleEvents`, and `start` / `pause` / `resume` / `stop`, plus live
+`setConcurrency` / `setRateLimit`.
+
+`Gate.make` / `Gate.makeRunner` are **local run-only** helpers — no Lifecycle surface.
+Prefer Tag/Service when you want pause, stop, readiness, or RPC.
 
 ```ts
 const gate = yield* Double
 yield* gate.pause     // admit new calls, but hold them (and any waiters) at the latch
 yield* gate.resume    // release held callers
 const state = yield* gate.lifecycle.get   // { _tag: "Running" | "Paused" | "Draining" | "Off" | "Idle" }
+
+// Same duals as WorkPool / Daemon — handle, Participating, or Tag:
+yield* Lifecycle.pause(gate)
+yield* Lifecycle.pause(Double)
 ```
 
 | Transition | Behavior |
@@ -183,7 +187,9 @@ const state = yield* gate.lifecycle.get   // { _tag: "Running" | "Paused" | "Dra
 | **stop** | New calls fail **`Gate.GateStopped`**; in-flight bodies **always finish**; awaits drain, then `Off`. |
 
 Readiness follows the badge: `Idle` / `Running` / `Paused` stay dialable; `Draining` /
-`Off` are not.
+`Off` are not. Pipe `Hyperlink.deferStart` onto the layer to mint in `Idle` until
+`Lifecycle.start` (admits still run while Idle — the badge is control/readiness, not a
+hard admit reject).
 
 ### `stopMode` — waiting callers at stop
 

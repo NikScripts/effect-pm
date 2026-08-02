@@ -19,6 +19,13 @@ participate; apps opt in via Spec). Node cutover uses a separate
 `Node.status.phase` (`draining` / …) — see
 [Identity coordinator](/docs/identity-coordinator).
 
+### Gate (toolkit)
+
+Tag / Service / `layer` / `serve` gates are Participating (pausable Latch). Pause holds
+new admits **and** waiters; stop fails new calls with `Gate.GateStopped` (wire-encodable
+with Effect `RateLimiterError` on `run`); `stopMode` chooses fail- vs finish-waiting.
+`Gate.make` is run-only — no Lifecycle. Details: [Gates](/docs/gates#lifecycle-pause--stop--live-reconfig).
+
 ## Handoff is orthogonal
 
 A serve-site `handoff` is just `(from, to, ctx)` over two identical handles. Lifecycle does

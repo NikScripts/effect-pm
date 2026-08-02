@@ -19,9 +19,9 @@ Effect-native `Lifecycle` — compose FiberHandle/Set + Latch; dual ops; derived
 - **Pause** admits new calls but latch-holds them (and any waiters); **stop** fails new calls with
   **`Gate.GateStopped`** while in-flight bodies always finish, then drains → `Off`.
 - **Engine `run` errors on the wire:** **`GateStopped`** (`Schema.TaggedErrorClass`) and
-  Effect **`RateLimiterError`** (`Schema.ErrorClass`) are **always** on Tag/Service `run`
-  (alone when `error` is omitted; else unioned with the declared error) — no silent erase.
-  `Effect.catchTag("GateStopped" | "RateLimiterError", …)` typechecks.
+  Effect **`RateLimiterError`** (re-exported from `Gate`) are **always** on Tag/Service
+  `run` (alone when `error` is omitted; else unioned) — no silent erase.
+  `Gate.make` / `makeRunner` stay run-only (no Lifecycle).
 - **`stopMode: "failWaiting" | "finishWaiting"`** (default `"failWaiting"`) — waiting callers either
   fail with `GateStopped` or keep their place and run.
 - Live **`setConcurrency`** (`Semaphore.resize`) and **`setRateLimit`** (`null` clears) verbs, each

@@ -549,7 +549,7 @@ describe("Gate metrics nest — onExceeded fail", () => {
       const err = yield* gate.run.pipe(
         Effect.catchTag("RateLimiterError", (e) => Effect.succeed(e)),
       );
-      expect(err).toBeInstanceOf(RateLimiterError);
+      expect(err).toBeInstanceOf(Gate.RateLimiterError);
       expect(yield* gate.metrics.exceeded.get).toBe(1);
       expect(yield* gate.metrics.remaining.get).toBe(0);
     }).pipe(Effect.provide(StrictLimit.layer), Effect.scoped),

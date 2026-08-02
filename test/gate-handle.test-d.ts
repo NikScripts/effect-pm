@@ -1,5 +1,4 @@
 import { Effect, Schema } from "effect";
-import type { RateLimiterError } from "effect/unstable/persistence/RateLimiter";
 import * as Gate from "../src/Gate";
 import { gateSpec } from "../src/internal/gateSchema";
 import * as Hyperlink from "../src/Hyperlink";
@@ -14,7 +13,7 @@ import * as Hyperlink from "../src/Hyperlink";
 // Wire `run` always includes engine errors: GateStopped | RateLimiterError
 // (Never → that union alone; else Union(declared, …)).
 
-type EngineRunError = Gate.GateStopped | RateLimiterError;
+type EngineRunError = Gate.GateStopped | Gate.RateLimiterError;
 
 // ── param gate with a typed error: bidirectional Contract ⇄ Handle ───────────
 type ContractIE = Hyperlink.ShapeOf<

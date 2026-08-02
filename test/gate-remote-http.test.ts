@@ -6,6 +6,7 @@ import { NodeHttpServer } from "@effect/platform-node";
 import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Gate from "../src/Gate";
+import * as Lifecycle from "../src/Lifecycle";
 import * as Node from "../src/Node";
 
 class RemoteGate extends Gate.Tag<RemoteGate>()("run-remote/G", {
@@ -20,16 +21,39 @@ const httpProtocol = (port: number) =>
     Layer.provide(FetchHttpClient.layer),
   );
 
+const awaitTag = <A extends { readonly _tag: string }>(
+  changes: Stream.Stream<A>,
+  tag: A["_tag"],
+) =>
+  Stream.runHead(Stream.filter(changes, (s) => s._tag === tag)).pipe(
+    Effect.flatMap(
+      Option.match({
+        onNone: () => Effect.never,
+        onSome: Effect.succeed,
+      }),
+    ),
+    Effect.timeout(Duration.seconds(2)),
+  );
+
 const withServer = <A, E>(
   use: (port: number) => Effect.Effect<A, E, RemoteGate>,
+  options?: { readonly deferStart?: boolean },
 ): Effect.Effect<A, E | ServeError, never> => {
-  const server = Node.httpServer([
-    Gate.serveMemory(RemoteGate, {
-      effect: (n: number) =>
-        n >= 0 ? Effect.succeed(n * 2) : Effect.fail("negative"),
-      concurrency: 2,
-    }),
-  ]).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
+  const serve =
+    options?.deferStart === true
+      ? Gate.serveMemory(RemoteGate, {
+          effect: (n: number) =>
+            n >= 0 ? Effect.succeed(n * 2) : Effect.fail("negative"),
+          concurrency: 2,
+        }).pipe(Hyperlink.deferStart)
+      : Gate.serveMemory(RemoteGate, {
+          effect: (n: number) =>
+            n >= 0 ? Effect.succeed(n * 2) : Effect.fail("negative"),
+          concurrency: 2,
+        });
+  const server = Node.httpServer([serve]).pipe(
+    Layer.provideMerge(NodeHttpServer.layerTest),
+  );
 
   return Effect.gen(function* () {
     const address = yield* HttpServer.HttpServer.pipe(
@@ -90,6 +114,61 @@ it("static run accessor works over the remote client layer", () =>
       Effect.gen(function* () {
         const result = yield* RemoteGate.run(3);
         expect(result).toBe(6);
+      }),
+    ),
+  ));
+
+it("Lifecycle duals over http — pause / resume / stop(Tag)", () =>
+  Effect.runPromise(
+    withServer(
+      (_port) =>
+        Effect.gen(function* () {
+          const gate = yield* RemoteGate;
+          expect((yield* awaitTag(gate.lifecycle.changes, "Idle"))._tag).toBe(
+            "Idle",
+          );
+
+          yield* Lifecycle.start(RemoteGate);
+          expect(
+            (yield* awaitTag(gate.lifecycle.changes, "Running"))._tag,
+          ).toBe("Running");
+
+          yield* Lifecycle.pause(gate);
+          expect((yield* awaitTag(gate.lifecycle.changes, "Paused"))._tag).toBe(
+            "Paused",
+          );
+
+          yield* Lifecycle.resume(RemoteGate);
+          expect(
+            (yield* awaitTag(gate.lifecycle.changes, "Running"))._tag,
+          ).toBe("Running");
+
+          yield* Lifecycle.stop(RemoteGate);
+          expect((yield* awaitTag(gate.lifecycle.changes, "Off"))._tag).toBe(
+            "Off",
+          );
+        }),
+      { deferStart: true },
+    ),
+  ));
+
+it("GateStopped crosses the wire after remote stop", () =>
+  Effect.runPromise(
+    withServer((_port) =>
+      Effect.gen(function* () {
+        const gate = yield* RemoteGate;
+        yield* Lifecycle.stop(gate);
+        expect((yield* awaitTag(gate.lifecycle.changes, "Off"))._tag).toBe(
+          "Off",
+        );
+
+        const result = yield* gate.run(1).pipe(
+          Effect.catchTag("GateStopped", (err) => {
+            expect(err).toBeInstanceOf(Gate.GateStopped);
+            return Effect.succeed(-1);
+          }),
+        );
+        expect(result).toBe(-1);
       }),
     ),
   ));
