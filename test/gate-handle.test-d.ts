@@ -10,13 +10,16 @@ import * as Hyperlink from "../src/Hyperlink";
 // (invariant service Shape), so we prove it here for concrete representative schemas. If the
 // shapes ever drift, THIS FAILS THE BUILD — which is what licenses the cast.
 //
-// Wire `run` always includes `GateStopped` (Never → GateStopped alone; else Union).
+// Wire `run` always includes engine errors: GateStopped | RateLimiterError
+// (Never → that union alone; else Union(declared, …)).
+
+type EngineRunError = Gate.GateStopped | Gate.RateLimiterError;
 
 // ── param gate with a typed error: bidirectional Contract ⇄ Handle ───────────
 type ContractIE = Hyperlink.ShapeOf<
   ReturnType<typeof gateSpec<typeof Schema.Number, typeof Schema.String, typeof Schema.Boolean>>
 >;
-type HandleIE = Gate.Gate<number, string, boolean | Gate.GateStopped>;
+type HandleIE = Gate.Gate<number, string, boolean | EngineRunError>;
 
 declare const contractIE: ContractIE;
 declare const handleIE: HandleIE;
@@ -30,7 +33,7 @@ void [_handleToContractIE, _contractToHandleIE];
 type ContractUnit = Hyperlink.ShapeOf<
   ReturnType<typeof gateSpec<typeof Schema.Void, typeof Schema.Number>>
 >;
-type HandleUnit = Gate.Gate<void, number, Gate.GateStopped>;
+type HandleUnit = Gate.Gate<void, number, EngineRunError>;
 declare const contractUnit: ContractUnit;
 declare const handleUnit: HandleUnit;
 const _handleToContractUnit: ContractUnit = handleUnit;
@@ -48,18 +51,18 @@ const _yieldToHandle: HandleIE = fetchService;
 const _handleToYield: Hyperlink.Shape<typeof Fetch> = handleIE;
 void [_yieldToHandle, _handleToYield];
 
-// ── DoD: hover exactness. Declared `error: Boolean` wires as `boolean | GateStopped`.
+// ── DoD: hover exactness. Declared `error: Boolean` wires as `boolean | engine`.
 type Exact<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 const assertExact = <_ extends true>(): void => {};
 assertExact<
   Exact<
     Hyperlink.Shape<typeof Fetch>,
-    Gate.Gate<number, string, boolean | Gate.GateStopped, never>
+    Gate.Gate<number, string, boolean | EngineRunError, never>
   >
 >();
 
-// ── DoD: a unit gate declaring only `success` hovers as `Gate<void, number, GateStopped, never>` ────
+// ── DoD: unit gate declaring only `success` → `Gate<void, number, EngineRunError, never>` ────
 class Tick extends Gate.Service<Tick>()("test/run-handle/Tick", {
   success: Schema.Number,
   effect: () => Effect.succeed(1),
@@ -67,18 +70,23 @@ class Tick extends Gate.Service<Tick>()("test/run-handle/Tick", {
 assertExact<
   Exact<
     Hyperlink.Shape<typeof Tick>,
-    Gate.Gate<void, number, Gate.GateStopped, never>
+    Gate.Gate<void, number, EngineRunError, never>
   >
 >();
 
-// ── DoD: Tag/Service `run` typechecks `Effect.catchTag("GateStopped", …)` ────
+// ── DoD: Tag/Service `run` typechecks catchTag for both engine errors ────
 declare const tick: Hyperlink.Shape<typeof Tick>;
 const _catchStopped = tick.run.pipe(
   Effect.catchTag("GateStopped", () => Effect.succeed(0)),
 );
 void _catchStopped;
+const _catchRateLimit = tick.run.pipe(
+  Effect.catchTag("RateLimiterError", () => Effect.succeed(0)),
+);
+void _catchRateLimit;
 const _staticCatch = Tick.run.pipe(
   Effect.catchTag("GateStopped", () => Effect.succeed(0)),
+  Effect.catchTag("RateLimiterError", () => Effect.succeed(0)),
 );
 void _staticCatch;
 

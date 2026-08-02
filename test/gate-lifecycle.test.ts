@@ -5,15 +5,17 @@ import {
   Effect,
   Exit,
   Fiber,
+  Option,
   Ref,
   Schema,
   Stream,
 } from "effect";
 import * as Gate from "../src/Gate";
+import * as Hyperlink from "../src/Hyperlink";
+import * as Lifecycle from "../src/Lifecycle";
 
-// Focused Lifecycle coverage for Gate (P10): pause holds new calls *and* existing waiters,
-// stop rejects new calls with `GateStopped`, `stopMode` failWaiting vs finishWaiting, and
-// live `setConcurrency` / `setRateLimit`.
+// Focused Lifecycle coverage for Gate (P10): pause hold-all, stop / stopMode,
+// live reconfig, readiness, Participating duals, deferStart, lifecycleEvents.
 
 /** Await until a count Subscribable reaches `want` (does not replay current — seed first). */
 const awaitCount = (
@@ -29,6 +31,21 @@ const awaitCount = (
       ),
     );
   });
+
+const awaitTag = <A extends { readonly _tag: string }>(
+  changes: Stream.Stream<A>,
+  tag: A["_tag"],
+): Effect.Effect<A, never> =>
+  Stream.runHead(Stream.filter(changes, (s) => s._tag === tag)).pipe(
+    Effect.flatMap(
+      Option.match({
+        onNone: () => Effect.never,
+        onSome: Effect.succeed,
+      }),
+    ),
+    Effect.timeout(Duration.seconds(2)),
+    Effect.orDie,
+  );
 
 describe("Gate — Lifecycle pause", () => {
   it.live("pause holds new calls until resume", () =>
@@ -86,21 +103,17 @@ describe("Gate — Lifecycle pause", () => {
       yield* Effect.gen(function* () {
         const gate = yield* HoldWaitingGate;
 
-        // run(1) holds the only permit; run(2) parks in the waiting phase.
         const inFlight = yield* Effect.forkChild(gate.run(1));
         yield* Deferred.await(started);
         const waiter = yield* Effect.forkChild(gate.run(2));
         yield* awaitCount(gate.waiting, 1);
 
-        // Pause while the waiter is already queued — then free the permit.
-        // P10: the waiter must NOT run its body until resume (second latch hold).
         yield* gate.pause;
         expect((yield* gate.lifecycle.get)._tag).toBe("Paused");
         yield* Deferred.succeed(release, undefined);
         yield* Fiber.join(inFlight);
 
-        // Permit is free; waiter may have acquired it but must still be latch-held.
-        yield* Effect.sleep(Duration.millis(50));
+        // Still paused — body of run(2) cannot enter (second latch).
         expect(yield* Ref.get(executed)).toEqual([1]);
 
         yield* gate.resume;
@@ -126,11 +139,9 @@ describe("Gate — Lifecycle stop", () => {
 
       yield* Effect.gen(function* () {
         const gate = yield* StoppableGate;
-        // Nothing in-flight: stop drains immediately then flips to Off.
         yield* gate.stop;
         expect((yield* gate.lifecycle.get)._tag).toBe("Off");
 
-        // Wire `run` includes `GateStopped` — typed `catchTag` works on Tag/Service.
         const result = yield* gate.run(21).pipe(
           Effect.catchTag("GateStopped", (err) => {
             expect(err).toBeInstanceOf(Gate.GateStopped);
@@ -166,13 +177,10 @@ describe("Gate — Lifecycle stop", () => {
       yield* Effect.gen(function* () {
         const gate = yield* FailWaitingGate;
 
-        // run(1) grabs the single permit and blocks in-flight.
         const inFlight = yield* Effect.forkChild(gate.run(1));
         yield* Deferred.await(started);
         expect(yield* gate.inFlight.get).toBe(1);
 
-        // run(2) can't get the permit → parks in the waiting phase.
-        // Wire `run` includes `GateStopped`, so typed catchTag recovers the waiter.
         const waiter = yield* Effect.forkChild(
           gate.run(2).pipe(
             Effect.catchTag("GateStopped", (err) => Effect.succeed(err)),
@@ -180,12 +188,10 @@ describe("Gate — Lifecycle stop", () => {
         );
         yield* awaitCount(gate.waiting, 1);
 
-        // stop (failWaiting) fails the waiter, then blocks on the in-flight body.
         const stopFiber = yield* Effect.forkChild(gate.stop);
         const waiterErr = yield* Fiber.join(waiter);
         expect(waiterErr).toBeInstanceOf(Gate.GateStopped);
 
-        // Release the in-flight body → drain completes → Off.
         yield* Deferred.succeed(release, undefined);
         yield* Fiber.join(inFlight);
         yield* Fiber.join(stopFiber);
@@ -225,10 +231,11 @@ describe("Gate — Lifecycle stop", () => {
         const waiter = yield* Effect.forkChild(Effect.exit(gate.run(2)));
         yield* awaitCount(gate.waiting, 1);
 
-        // stop (finishWaiting) drains in-flight AND the waiter before flipping Off.
+        const draining = yield* Effect.forkChild(
+          awaitTag(gate.lifecycle.changes, "Draining"),
+        );
         const stopFiber = yield* Effect.forkChild(gate.stop);
-        // Give stop time to enter Draining and open the latch before releasing the body.
-        yield* Effect.sleep(Duration.millis(50));
+        yield* Fiber.join(draining);
         yield* Deferred.succeed(release, undefined);
 
         yield* Fiber.join(inFlight);
@@ -249,6 +256,7 @@ describe("Gate — live reconfig", () => {
       const active = yield* Ref.make(0);
       const peak = yield* Ref.make(0);
       const gate1 = yield* Deferred.make<void>();
+      const reachedPeak = yield* Deferred.make<void>();
       class ResizableGate extends Gate.Service<ResizableGate>()(
         "@test/lifecycle/ResizableGate",
         {
@@ -259,6 +267,7 @@ describe("Gate — live reconfig", () => {
               const n = yield* Ref.updateAndGet(active, (x) => x + 1);
               const p = yield* Ref.get(peak);
               if (n > p) yield* Ref.set(peak, n);
+              if (n === 3) yield* Deferred.succeed(reachedPeak, undefined);
               yield* Deferred.await(gate1);
               yield* Ref.update(active, (x) => x - 1);
             }),
@@ -277,11 +286,10 @@ describe("Gate — live reconfig", () => {
         expect(after.concurrency).toBe(3);
         expect(after.configVersion).toBe(2);
 
-        // Functionally: with 3 permits, three bodies run concurrently.
         const f1 = yield* Effect.forkChild(gate.run(1));
         const f2 = yield* Effect.forkChild(gate.run(2));
         const f3 = yield* Effect.forkChild(gate.run(3));
-        yield* Effect.sleep(Duration.millis(50));
+        yield* Deferred.await(reachedPeak);
         expect(yield* Ref.get(peak)).toBe(3);
         yield* Deferred.succeed(gate1, undefined);
         yield* Fiber.join(f1);
@@ -317,10 +325,108 @@ describe("Gate — live reconfig", () => {
         expect(after.configVersion).toBe(2);
         expect(yield* gate.metrics.remaining.get).toBe(5);
 
-        // Clearing (null) bumps configVersion again.
         yield* gate.setRateLimit(null);
         expect((yield* gate.status.get).configVersion).toBe(3);
       }).pipe(Effect.provide(RateGate.layer), Effect.scoped);
     }),
+  );
+});
+
+describe("Gate — Lifecycle duals, events, readiness, deferStart", () => {
+  class DualGate extends Gate.Service<DualGate>()("@test/lifecycle/DualGate", {
+    payload: Schema.Number,
+    success: Schema.Number,
+    effect: (n: number) => Effect.succeed(n),
+    concurrency: 2,
+  }) {}
+
+  it.live("Lifecycle.pause/resume/stop duals on handle and Tag", () =>
+    Effect.gen(function* () {
+      const gate = yield* DualGate;
+      expect((yield* gate.lifecycle.get)._tag).toBe("Running");
+
+      yield* Lifecycle.pause(DualGate);
+      expect((yield* gate.lifecycle.get)._tag).toBe("Paused");
+
+      yield* Lifecycle.resume(gate);
+      expect((yield* gate.lifecycle.get)._tag).toBe("Running");
+
+      yield* Lifecycle.stop(DualGate);
+      expect((yield* gate.lifecycle.get)._tag).toBe("Off");
+    }).pipe(Effect.provide(DualGate.layer), Effect.scoped),
+  );
+
+  it.live("lifecycleEvents derive Paused / Stopped from badge changes", () =>
+    Effect.gen(function* () {
+      const gate = yield* DualGate;
+      const sawPaused = yield* Deferred.make<string>();
+      yield* Lifecycle.events(gate).pipe(
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.flatMap((chunk) =>
+          Deferred.succeed(sawPaused, [...chunk][0]!._tag),
+        ),
+        Effect.forkChild,
+      );
+      yield* Effect.yieldNow;
+      yield* gate.pause;
+      expect(yield* Deferred.await(sawPaused)).toBe("Paused");
+
+      const sawStopped = yield* Deferred.make<Lifecycle.Event>();
+      yield* Lifecycle.events(gate).pipe(
+        Stream.filter((e) => e._tag === "Stopped"),
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.flatMap((chunk) =>
+          Deferred.succeed(sawStopped, [...chunk][0]!),
+        ),
+        Effect.forkChild,
+      );
+      yield* Effect.yieldNow;
+      yield* gate.stop;
+      const event = yield* Deferred.await(sawStopped);
+      expect(event._tag).toBe("Stopped");
+      if (event._tag === "Stopped") {
+        expect(event.to._tag).toBe("Off");
+      }
+    }).pipe(Effect.provide(DualGate.layer), Effect.scoped),
+  );
+
+  it.live("readiness follows the Lifecycle badge", () =>
+    Effect.gen(function* () {
+      const gate = yield* DualGate;
+      expect(
+        (yield* Hyperlink.readinessCheck(DualGate, gate)).ready,
+      ).toBe(true);
+
+      yield* gate.pause;
+      expect(
+        (yield* Hyperlink.readinessCheck(DualGate, gate)).ready,
+      ).toBe(true);
+
+      yield* gate.stop;
+      expect(
+        (yield* Hyperlink.readinessCheck(DualGate, gate)).ready,
+      ).toBe(false);
+    }).pipe(Effect.provide(DualGate.layer), Effect.scoped),
+  );
+
+  it.live("Hyperlink.deferStart mints Idle until Lifecycle.start", () =>
+    Effect.gen(function* () {
+      const gate = yield* DualGate;
+      expect((yield* gate.lifecycle.get)._tag).toBe("Idle");
+      expect(
+        (yield* Hyperlink.readinessCheck(DualGate, gate)).ready,
+      ).toBe(true);
+
+      // Idle still admits (badge / readiness, not a hard reject).
+      expect(yield* gate.run(7)).toBe(7);
+
+      yield* Lifecycle.start(DualGate);
+      expect((yield* gate.lifecycle.get)._tag).toBe("Running");
+    }).pipe(
+      Effect.provide(DualGate.layer.pipe(Hyperlink.deferStart)),
+      Effect.scoped,
+    ),
   );
 });

@@ -67,7 +67,7 @@ HyperService runs locally or across a network.
 A named runtime endpoint, carrying the address at which its HyperServices can be reached. Served
 HyperServices find one another through the Nodes they share. Node plane: `Node.drain` /
 `Node.shutdown` / `Node.launch` — see [Identity coordinator](/docs/identity-coordinator#node-lifecycle-drain--shutdown--launch).
-HyperService plane (WorkPool / Daemon badge + `start` / `stop`): [Lifecycle](/docs/lifecycle).
+HyperService plane (WorkPool / Daemon / Gate badge + `start` / `stop`): [Lifecycle](/docs/lifecycle).
 
 {.draft}
 ## Cross-runtime Service

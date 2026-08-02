@@ -20,14 +20,12 @@
  *
  * | Function | Purpose |
  * |----------|---------|
- * | `Gate.make` | Scoped handle with `.run` only (no Subscribables exposed) |
- * | `Gate.layer` | Builds a `Layer` from tag + config (observable handle) |
- * | `Gate.serve` / `serveRemote` | RPC server layers (same config as {@link layer}) |
- * | `Gate.Service` | Tag + baked-in `.layer` + `.configure` |
- * | `Gate.Tag` | Identity tag + wire schemas — pair with {@link layer} |
+ * | `Gate.Tag` / `Gate.Service` | Participating handle — Lifecycle + observation + wire `run` |
+ * | `Gate.layer` / `serve` / `serveRemote` | Layers from a Tag (Lifecycle + RPC) |
  * | `Gate.configure` | Config patch layer for a tag (Tag path) |
  * | `Gate.store` | Register built-in run facts + state history on an app {@link Store.Service} |
- * | `Gate.makeRunner` | Generic runner (wraps arbitrary effects) |
+ * | `Gate.make` | Local scoped `.run` only — **no** Lifecycle / Subscribables |
+ * | `Gate.makeRunner` | Generic semaphore runner (wraps arbitrary effects; no Lifecycle) |
  *
  * ## Store provision
  *
@@ -106,9 +104,10 @@ import {
   gateSpec,
   gateSetRateLimitPayload,
   type GateInstanceSpec,
-  type WithGateStopped,
+  type WithGateRunErrors,
   GateStopped as GateStoppedSchema,
 } from "./internal/gateSchema";
+import { RateLimiterError } from "effect/unstable/persistence/RateLimiter";
 
 // ============================================================================
 // Public wire schemas + spec
@@ -170,8 +169,8 @@ export type Status = internal.GateStatus;
  *
  * @remarks
  * Wire-encodable (`Schema.TaggedErrorClass`) and always present on Tag / Service `run`
- * (`Effect.catchTag("GateStopped", …)`). Also on local {@link make} handles. Rate-limit
- * failures (`RateLimiterError`) stay engine-only (not in the declared wire channel).
+ * alongside Effect's {@link RateLimiterError} (`Effect.catchTag("GateStopped", …)`).
+ * Also on local {@link make} handles.
  *
  * @category errors
  * @public
@@ -223,7 +222,8 @@ export type Handle<T, A, E> = internal.GateHandle<T, A, E>;
  *
  * @typeParam Payload - the decoded gate input (`run(input)`; `void` → the gate is a bare {@link Effect})
  * @typeParam Success - the gated effect's success value
- * @typeParam Error - the wire `run` failure channel (declared effect errors **plus** {@link GateStopped})
+ * @typeParam Error - the wire `run` failure channel (declared effect errors **plus**
+ *   {@link GateStopped} and Effect {@link RateLimiterError})
  * @typeParam Requirements - the transport requirement (`never` for a local `yield*`, the `Protocol` for
  *   a remote {@link Hyperlink.client})
  *
@@ -352,7 +352,16 @@ export interface ServiceDefinition<
  * than the expanded `ServiceOf<…>` wall. @internal
  */
 /** Decoded wire `run` error for a Tag's declared error schema `E`. @internal */
-type WireRunErrorOf<E extends Schema.Top> = Schema.Schema.Type<WithGateStopped<E>>;
+type WireRunErrorOf<E extends Schema.Top> = Schema.Schema.Type<WithGateRunErrors<E>>;
+
+/**
+ * Effect rate-limit failure — always on Tag/Service wire `run` (with {@link GateStopped}).
+ * Re-exported so apps `catchTag` / `instanceof` without a deep Effect import.
+ *
+ * @category errors
+ * @public
+ */
+export { RateLimiterError };
 
 type GateTagWithStaticRun<
   Self,
@@ -866,7 +875,7 @@ const runTag = <Self>() => {
         : maybeOptions;
     return materializeGateTag<Self>()(key, {
       payload,
-      success: success!,
+      success: withVoidDefault(success),
       ...(error !== undefined ? { error } : {}),
       description: options?.description,
       defaults: options?.defaults,

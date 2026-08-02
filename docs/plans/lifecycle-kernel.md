@@ -1,9 +1,9 @@
 # Plan: Lifecycle kernel
 
-**Status:** L0–L6 tip-synced (Tag overloads + P8 remote duals + P11). L7 await owner P10/P12.  
+**Status:** L0–L7 tip-synced. P10 Gate Lifecycle Eng’d; P12 `@locked` Rejected (surface stays fluid).  
 **Agent:** 5.  
-**Decisions / lock register:** [`../handoffs/lifecycle-kernel-decisions.md`](../handoffs/lifecycle-kernel-decisions.md) (approve P-locks item-by-item before Eng).  
-**Shipped guide (substrate):** [`../guides/lifecycle.md`](../guides/lifecycle.md).  
+**Decisions / lock register:** [`../handoffs/lifecycle-kernel-decisions.md`](../handoffs/lifecycle-kernel-decisions.md) (SSOT for P-locks).  
+**Shipped guide:** [`../guides/lifecycle.md`](../guides/lifecycle.md) · Gate: [`../guides/gates.md`](../guides/gates.md).  
 **Standards:** [`../standards/`](../standards/) — principles, hyperlink-services, types-and-naming, effect-style, modules-and-boundaries, no-backward-compat, working-agreement, error-handling.
 
 Supersedes the roadmap bullet “Lifecycle kernel (exploratory)” in [`README.md`](./README.md).
@@ -295,7 +295,7 @@ const layer = Hyperlink.layer(Runner, Effect.gen(function* () {
 }))
 ```
 
-P10: opt-in for arbitrary Tags; toolkit kinds (WorkPool / Daemon / Gate-to-Eng) participate.
+P10: opt-in for arbitrary Tags; toolkit kinds (WorkPool / Daemon / Gate) participate.
 
 ### 6.4 Generic tool
 
@@ -449,8 +449,8 @@ UI agents own React/TUI chrome. Agent 5 owns protocol, Service, toolkit adoption
 
 ## 14. Immediate next step
 
-1. Owner walks **P1 → P12** in the [decisions doc](../handoffs/lifecycle-kernel-decisions.md) (approve / amend / reject) — item-by-item.  
-2. Agent lands **L0** when owner says (substrate → `integration`).  
-3. First dream Eng = **L1** after P1 / P6 / P9 Locked — WorkPool SSOT is the credibility test.
+Kernel Eng slices **L0–L7 done** (see [decisions §5](../handoffs/lifecycle-kernel-decisions.md#5-immediate-next-step)).
 
-Until P-locks land: **no dream Eng**; substrate-only fixes OK on `cursor/lifecycle-defer-start-929b`.
+1. **P5 chrome** → Agent G (`ui/LifecycleView` pack shipped; dashboard/TUI adoption).  
+2. **Launcher** `#35–37` / `restartSuccessor` — deferred; no Eng until API locked ([brief](../handoffs/launcher-and-handoff-brief.md)).  
+3. Open question: versioned schema (orthogonal; owner go).

@@ -230,16 +230,30 @@ export function make<R = never>(
         handle: yield* FiberHandle.make<void, never>(),
       } as const);
 
-    const self = {
-      [TypeId]: TypeId,
-      fibers,
-      latch: options.latch,
-      state: stateRef,
-      run: options.run,
-      release: options.release,
-      awaitBeforeTerminal: options.awaitBeforeTerminal,
-      afterStop,
-    } as Lifecycle<R>;
+    // Discriminate Core vs Pausable by latch presence — `latch?: Latch` is not
+    // assignable to `latch: undefined | Latch` union arms without a branch.
+    const self: Lifecycle<R> =
+      options.latch !== undefined
+        ? {
+            [TypeId]: TypeId,
+            fibers,
+            latch: options.latch,
+            state: stateRef,
+            run: options.run,
+            release: options.release,
+            awaitBeforeTerminal: options.awaitBeforeTerminal,
+            afterStop,
+          }
+        : {
+            [TypeId]: TypeId,
+            fibers,
+            latch: undefined,
+            state: stateRef,
+            run: options.run,
+            release: options.release,
+            awaitBeforeTerminal: options.awaitBeforeTerminal,
+            afterStop,
+          };
 
     installedFlags.set(self, { installed: false });
 

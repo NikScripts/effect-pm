@@ -6,6 +6,7 @@
  */
 
 import { Schema } from "effect";
+import { RateLimiterError } from "effect/unstable/persistence/RateLimiter";
 import * as Hyperlink from "../Hyperlink";
 import type { Method, RefField } from "../Hyperlink";
 import * as Lifecycle from "../Lifecycle";
@@ -16,7 +17,7 @@ import * as Lifecycle from "../Lifecycle";
  * In-flight bodies always finish.
  *
  * `Schema.TaggedErrorClass` so it is both yieldable **and** wire-encodable — part of
- * every Gate's `run` RPC error channel (see {@link withGateStopped}).
+ * every Gate's `run` RPC error channel (see {@link withGateRunErrors}).
  *
  * @category errors
  * @public
@@ -29,36 +30,51 @@ export class GateStopped extends Schema.TaggedErrorClass<GateStopped>()(
 ) {}
 
 /**
- * Effective wire `run` error schema — user `error` (default {@link Schema.Never}) always
- * carries {@link GateStopped}. `Never` collapses to `GateStopped` alone (no useless union).
+ * Engine failures always present on Gate wire `run` — stop + rate-limit (Effect's
+ * {@link RateLimiterError} is already a `Schema.ErrorClass`).
+ *
+ * Always-on (not gated on initial `rateLimit`): live {@link setRateLimit} can enable
+ * limiting after mint, so the channel must admit the error from day one.
  *
  * @internal
  */
-export type WithGateStopped<E extends Schema.Top> = [E] extends [
-  typeof Schema.Never,
-]
-  ? typeof GateStopped
-  : Schema.Union<[E, typeof GateStopped]>;
+export const gateEngineRunError = Schema.Union([GateStopped, RateLimiterError]);
 
 /**
- * Union {@link GateStopped} into a gate's declared `run` error schema.
+ * Effective wire `run` error schema — user `error` (default {@link Schema.Never}) always
+ * carries the engine union. `Never` collapses to {@link gateEngineRunError} alone.
  *
  * @internal
  */
-export function withGateStopped(
+export type WithGateRunErrors<E extends Schema.Top> = [E] extends [
+  typeof Schema.Never,
+]
+  ? typeof gateEngineRunError
+  : Schema.Union<[E, typeof GateStopped, typeof RateLimiterError]>;
+
+/**
+ * Union engine `run` errors ({@link GateStopped}, {@link RateLimiterError}) into a
+ * gate's declared `run` error schema. Failures that can happen are typed — never erased.
+ *
+ * @internal
+ */
+export function withGateRunErrors(
   error: typeof Schema.Never,
-): typeof GateStopped;
-export function withGateStopped<E extends Schema.Top>(
+): typeof gateEngineRunError;
+export function withGateRunErrors<E extends Schema.Top>(
   error: E,
-): WithGateStopped<E>;
-export function withGateStopped<E extends Schema.Top>(
+): WithGateRunErrors<E>;
+export function withGateRunErrors<E extends Schema.Top>(
   error: E,
-): typeof GateStopped | Schema.Union<[E, typeof GateStopped]> {
-  // Runtime identity check (same as `gateSpec` / `withNeverDefault`); the generic
-  // param `E` is not known to overlap `Never` at the type level.
-  return (error as Schema.Top) === Schema.Never
-    ? GateStopped
-    : Schema.Union([error, GateStopped]);
+): WithGateRunErrors<E> {
+  // SAFE: runtime schema identity vs `Schema.Never` (same as `gateSpec`);
+  // generic `E` is not known to overlap `Never` at the type level. Schema.Union's
+  // `readonly` tuple vs WithGateRunErrors' tuple form doesn't reduce — same schemas.
+  return (
+    (error as Schema.Top) === Schema.Never
+      ? gateEngineRunError
+      : Schema.Union([error, GateStopped, RateLimiterError])
+  ) as WithGateRunErrors<E>;
 }
 
 /** Live gate counters on the wire — element of the reactive `status` ref. @internal */
@@ -88,7 +104,7 @@ type GateCountRef = RefField<
 /**
  * `run` wire member — inputless {@link Hyperlink.effect} for unit gates,
  * {@link Hyperlink.effectFn} otherwise. `E` is the **effective** wire error
- * ({@link WithGateStopped} of the Tag's declared error).
+ * ({@link WithGateRunErrors} of the Tag's declared error).
  *
  * @internal
  */
@@ -205,8 +221,8 @@ const gateLifecycleSpec: Lifecycle.SpecPausable = Lifecycle.spec({
  * literal** (Lifecycle + reconfig members spliced via indexed access, not an `&`
  * intersection) so it keeps the implicit string index signature that satisfies
  * {@link Hyperlink.Spec}. `E` is the user error schema (default {@link Schema.Never});
- * `run`'s wire error is always {@link WithGateStopped}`<E>` so `GateStopped` is
- * catchable on Tag/Service.
+ * `run`'s wire error is always {@link WithGateRunErrors}`<E>` so engine failures
+ * (`GateStopped`, `RateLimiterError`) stay catchable on Tag/Service.
  *
  * @internal
  */
@@ -222,7 +238,7 @@ export type GateInstanceSpec<
   readonly failed: GateCountRef;
   readonly interrupted: GateCountRef;
   readonly metrics: typeof gateMetricsNestSpec;
-  readonly run: GateWireMember<I, A, WithGateStopped<E>>;
+  readonly run: GateWireMember<I, A, WithGateRunErrors<E>>;
   readonly lifecycle: Lifecycle.SpecPausable["lifecycle"];
   readonly lifecycleEvents: Lifecycle.SpecPausable["lifecycleEvents"];
   readonly start: Lifecycle.SpecPausable["start"];
@@ -252,9 +268,12 @@ const gateSpecVoid = <A extends Schema.Top>(
   withControls(
     withMetricsNest({
       ...gateObservationRefs(),
-      run: Hyperlink.effect(success, GateStopped).annotate({
+      // SAFE: `effect(success, gateEngineRunError).annotate` is Method<undefined, A, EngineE>;
+      // GateWireMember is that Method alias — annotate's extra type params don't reduce
+      // under generic `A`. Nothing to validate at runtime.
+      run: Hyperlink.effect(success, gateEngineRunError).annotate({
         description: RUN_DESCRIPTION,
-      }) as GateWireMember<Void, A, typeof GateStopped>,
+      }) as GateWireMember<Void, A, typeof gateEngineRunError>,
     }),
   );
 
@@ -262,13 +281,14 @@ const gateSpecVoidWithError = <A extends Schema.Top, E extends Schema.Top>(
   success: A,
   error: E,
 ): GateInstanceSpec<Void, A, E> => {
-  const wireError = withGateStopped(error);
+  const wireError = withGateRunErrors(error);
   return withControls(
     withMetricsNest({
       ...gateObservationRefs(),
+      // SAFE: same Method⇄GateWireMember annotate opacity as gateSpecVoid.
       run: Hyperlink.effect(success, wireError).annotate({
         description: RUN_DESCRIPTION,
-      }) as GateWireMember<Void, A, WithGateStopped<E>>,
+      }) as GateWireMember<Void, A, WithGateRunErrors<E>>,
     }),
   );
 };
@@ -282,17 +302,20 @@ const gateSpecWithPayload = <
   success: A,
   error: E,
 ): GateInstanceSpec<I, A, E> => {
-  const wireError = withGateStopped(error);
+  const wireError = withGateRunErrors(error);
   return withControls(
     withMetricsNest({
       ...gateObservationRefs(),
+      // SAFE: `effectFn({ payload, success, error }).annotate` is Method<I, A, WireE>;
+      // GateWireMember is that alias — deferred Schema.Top params + annotate erase the
+      // overlap. Nothing to validate at runtime.
       run: Hyperlink.effectFn({
         payload,
         success,
         error: wireError,
       }).annotate({
         description: RUN_DESCRIPTION,
-      }) as unknown as GateWireMember<I, A, WithGateStopped<E>>,
+      }) as unknown as GateWireMember<I, A, WithGateRunErrors<E>>,
     }),
   );
 };

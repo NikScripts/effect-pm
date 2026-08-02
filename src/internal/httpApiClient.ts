@@ -313,11 +313,7 @@ const applyTransportMiddleware = (
   options: {
     readonly runner: GateRunner;
     readonly withInFlight: InFlightTransform;
-    readonly withAdaptive?:
-      | (<E, R>(
-          client: HttpClient.HttpClient.With<E, R>,
-        ) => HttpClient.HttpClient.With<E, R>)
-      | undefined;
+    readonly withAdaptive?: AdaptiveTransform | undefined;
     readonly transformClient?: HttpApiClientConfig<string, HttpApiGroup.Top, string>["transformClient"];
   },
 ): HttpClient.HttpClient => {
@@ -328,7 +324,11 @@ const applyTransportMiddleware = (
   const gated = HttpClientGate.withRunner(options.runner)(userTransformed);
   const adaptive =
     options.withAdaptive !== undefined ? options.withAdaptive(gated) : gated;
-  return options.withInFlight(adaptive);
+  const instrumented = options.withInFlight(adaptive);
+  // SAFE: Effect `HttpApiClient.transformClient` / `HttpClient.HttpClient` service tag is
+  // monomorphic on `HttpClientError`. RateLimiterError is typed on Gate Tag/Service `run`
+  // and on `HttpClientGate.withRunner` when used directly. Nothing further to validate.
+  return instrumented as HttpClient.HttpClient;
 };
 
 const maybeInstrumentEndpoints = <
@@ -701,8 +701,7 @@ const withRateLimitRunner = (
     key: rateLimit.key ?? resourceId,
     onExceeded: rateLimit.onExceeded ?? ("delay" as const),
   };
-  // GateRunner erases RateLimiterError; it still surfaces on the HTTP execute channel.
-  return (<A, E, R>(
+  return <A, E, R>(
     effect: Effect.Effect<A, E, R>,
   ): Effect.Effect<A, E | RateLimiterError, R> => {
     const consume =
@@ -733,12 +732,12 @@ const withRateLimitRunner = (
             }
           });
     return consume.pipe(Effect.andThen(runner(effect)));
-  }) as GateRunner;
+  };
 };
 
 type AdaptiveTransform = <E, R>(
   client: HttpClient.HttpClient.With<E, R>,
-) => HttpClient.HttpClient.With<E, R>;
+) => HttpClient.HttpClient.With<E | RateLimiterError, R>;
 
 /**
  * Opt-in upstream adaptive limiter: `adaptiveConsume` before the round-trip,
@@ -751,9 +750,9 @@ const makeAdaptiveTransform = (
 ): AdaptiveTransform => {
   const fallbackWindow = Duration.fromInputUnsafe(rateLimit.window);
   const tokens = rateLimit.tokens ?? 1;
-  const wrap: AdaptiveTransform = <E, R>(
+  return <E, R>(
     client: HttpClient.HttpClient.With<E, R>,
-  ) =>
+  ): HttpClient.HttpClient.With<E | RateLimiterError, R> =>
     HttpClient.transform(client, (effect, _request) =>
       Effect.gen(function* () {
         const consumed = yield* limiter.adaptiveConsume({
@@ -783,8 +782,7 @@ const makeAdaptiveTransform = (
           onSuccess: Effect.succeed,
         });
       }),
-    ) as HttpClient.HttpClient.With<E, R>;
-  return wrap;
+    );
 };
 
 /**

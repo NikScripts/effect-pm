@@ -4835,9 +4835,9 @@ export const servedKeyOf = (layer: unknown): string | undefined => {
 };
 
 /**
- * When `true`, WorkPool / Daemon layers skip engine start until the service `start` command
- * runs. Default `false` (auto-start). Pipe {@link deferStart} onto the HyperService layer —
- * prefer this Layer pipe over a removed `autoStart` config flag.
+ * When `true`, WorkPool / Daemon / Gate layers skip engine start until the service `start`
+ * command runs. Default `false` (auto-start). Pipe {@link deferStart} onto the HyperService
+ * layer — prefer this Layer pipe over a removed `autoStart` config flag.
  *
  * @category references
  * @public
@@ -4850,12 +4850,13 @@ export const DeferStart = Context.Reference<boolean>(
 );
 
 /**
- * Defer engine start until `start` — Policy-shaped Layer pipe for HyperService layers only
- * (WorkPool / Daemon). Not a Tag stamp; not {@link Policy}.
+ * Defer engine start until `start` — Policy-shaped Layer pipe for HyperService layers
+ * (WorkPool / Daemon / Gate). Not a Tag stamp; not {@link Policy}.
  *
  * ```ts
  * WorkPool.serve(Jobs, { effect }).pipe(Hyperlink.deferStart)
  * Daemon.layer(Sweeper, { effect }).pipe(Hyperlink.deferStart)
+ * Gate.layer(Double, { effect, concurrency: 4 }).pipe(Hyperlink.deferStart)
  * ```
  *
  * @category layers
