@@ -1,47 +1,56 @@
 # File-router prototype
 
-Hyperlink-owned file router (not Waku `fs-router`). Proves we can get a **typed
-path union** from a pages tree via a small codegen emit.
+Hyperlink-owned file router path table (not Waku `fs-router`). Walks
+`fixtures/pages`, emits typed `paths.gen.ts`, feeds `Route.fileRoot`.
 
-## Typed union — yes, with codegen
-
-TypeScript cannot glob the filesystem at typecheck time. `import.meta.glob`
-keys also collapse to `string` without a typegen plugin.
-
-This prototype walks `fixtures/pages` and emits `paths.gen.ts`:
-
-```ts
-export type FilePath = "/" | "/api/[pkg]" | "/docs/[chapter]" | "/search"
-export type RoutePath = "/" | "/api/:pkg" | "/docs/:chapter" | "/search"
-```
-
-`[param]` on disk → `:param` for Hyperlink `Route` templates.
+## Demo
 
 ```bash
+pnpm run example:ui-file-router-codegen
+```
+
+Guide: [`docs/guides/file-router.md`](../../../docs/guides/file-router.md)  
+Type lock: `test/ui-file-router-proto.test-d.ts`
+
+## Regenerate
+
+```bash
+hyp file-router emit \
+  --pages examples/ui/file-router/fixtures/pages \
+  --out examples/ui/file-router/paths.gen.ts
+
+# or the legacy one-shot script:
 node examples/ui/file-router/scripts/gen-paths.mjs
 ```
 
-Lock: `test/ui-file-router-proto.test-d.ts` (via `src/ui/tsconfig.json`).
+`paths.gen.ts` is **committed** so clone/typecheck works without Vite.
 
-## Dream API (sketched in `api.ts`)
-
-```ts
-Route.group("docs").fromEffect(Router.fileSystem("./pages/docs"))
-Route.fileSystem("root", "/", { topLevel: true, dir: "./pages" })
-Route.fileRoot()                      // ≡ id root + "/" + topLevel
-Route.fileRoot({ dir: "./pages" })
-```
-
-Not on package exports yet — compose proof only:
+## Vite plugin
 
 ```ts
-Route.make("app").add(fileRoot())
-// urls.index() / urls.docs_chapter("routing") / …
+import { fileRouter } from "hyperlink-ts/vite"
+
+plugins: [
+  fileRouter({
+    pagesDir: "src/pages",
+    outFile: "src/paths.gen.ts",
+  }),
+]
 ```
 
-## Next (when Eng’d)
+Opt-in — not wired into the docs site yet. See the guide for the DX contract
+(committed gen + watch + `hyp file-router check`).
 
-1. Vite (or `hyp`) plugin that regenerates `paths.gen.ts` on file add/remove
-2. Land `Router.fileSystem` / `Route.fileRoot` on public modules
-3. Docs-site adapter: our file router → Waku `createPages` (no public `getConfig`)
-4. Optional: `page.static` / `page.build` render overlay per file
+## Package APIs (Eng’d)
+
+```ts
+import * as Route from "hyperlink-ts/ui/Route"
+import * as Router from "hyperlink-ts/ui/Router"
+import { fileEntries } from "./paths.gen"
+
+Route.make("app").add(Route.fileRoot(fileEntries))
+Router.fileSystem(fileEntries)
+```
+
+Page marks: `hyperlink-ts/ui/Page` (`static` / `dynamic` / `build` / `layout`).
+`Page.Tag` + `createPages` adapter still open.

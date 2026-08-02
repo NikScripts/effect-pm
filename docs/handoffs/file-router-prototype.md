@@ -77,6 +77,12 @@ Dynamic. Layout: `Page.layout` (camelCase); `Page.Layout` class only if earned.
 - `hyperlink-ts/vite` — `fileRouter({ pagesDir, outFile })` watch + atomic emit
 - `hyp file-router emit|check`
 
+## Docs
+
+- Guide + demo: [`docs/guides/file-router.md`](../guides/file-router.md) ·
+  `pnpm run example:ui-file-router-codegen`
+- Dream Page marks: [`docs/examples/ui/ui-file-router-dream.md`](../examples/ui/ui-file-router-dream.md)
+
 ## Still open
 
 1. **`Page.Tag`** (owner) — class mint + `Page.build(Tag)` reading statics

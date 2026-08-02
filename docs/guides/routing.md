@@ -194,6 +194,13 @@ export const getConfig = async () =>
 Literal segments beat params (e.g. static `/api/hyperlink-ts/…` vs dynamic
 `/api/[pkg]/…`). See the docs site’s API symbol routes for the mix.
 
+## File-router path table
+
+For **typed unions from `pages/**`**, see [File router](/docs/file-router) —
+Vite plugin `fileRouter`, `paths.gen.ts`, `Route.fileRoot`, and the DX contract
+when codegen is missing or stale. Soft-nav still uses this Router; the path table
+only fills the catalog.
+
 ## Examples
 
 | Run | What |
@@ -201,10 +208,11 @@ Literal segments beat params (e.g. static `/api/hyperlink-ts/…` vs dynamic
 | `pnpm run example:ui-router-mini-docs` | Typed catalog + match |
 | `pnpm run example:apps-router-docs` | Browser mini-docs on `handle` + `Outlet` (:5189) |
 | `pnpm run example:ui-group-nav` | GroupNav + Target `_tag` / viewOf / memberOf |
+| `pnpm run example:ui-file-router-codegen` | Codegen unions + `Route.fileRoot` urls |
 | `pnpm run example:apps-dashboard` | Batteries web Dashboard |
 
 Guide pages: [Router mini-docs](/docs/ui-router-mini-docs) ·
-[GroupNav + Target](/docs/ui-group-nav).
+[GroupNav + Target](/docs/ui-group-nav) · [File router](/docs/file-router).
 
 ## Still tightening
 
@@ -214,3 +222,5 @@ Held to the same standards as the rest of the package; parked / next:
   [`owned-string-casing-park.md`](../handoffs/owned-string-casing-park.md))
 - Schema encode/decode on `params` / query for `urls` + `handle`
 - Deeper exhaustiveness for runtime href fulfillment beyond catalog ↔ `pages.gen`
+- Docs-site cutover onto Hyperlink `fileRouter` + `Page` marks (see
+  [File router](/docs/file-router))

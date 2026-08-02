@@ -507,7 +507,7 @@ Guide: [Observe recipes](/docs/observe)
 
 ## UI
 
-Guide: [Routing](/docs/routing) · compose: [Dashboard compose](/docs/dashboard-compose)  
+Guide: [Routing](/docs/routing) · [File router](/docs/file-router) · compose: [Dashboard compose](/docs/dashboard-compose)  
 Handoff (deep): [`ui-routes-dream.md`](./handoffs/ui-routes-dream.md)
 
 ### [Router mini-docs](/docs/ui-router-mini-docs)
@@ -519,6 +519,11 @@ Browser: `pnpm run example:apps-router-docs` → <http://localhost:5189>
 
 `examples/ui/group-nav.ts` · `pnpm run example:ui-group-nav`  
 Tagged `TargetValue`, `viewOf` / `memberOf`, health / logs / schedule.
+
+### [File-router codegen](/docs/file-router)
+
+`examples/ui/file-router/codegen-demo.ts` · `pnpm run example:ui-file-router-codegen`  
+Closed `FilePath` / `RoutePath` unions → `Route.fileRoot` → typed `urls.*`.
 
 ---
 

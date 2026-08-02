@@ -414,6 +414,7 @@
     "example:apps-router-docs": "vite --config examples/apps/router-docs/vite.config.ts",
     "example:ui-router-mini-docs": "tsx examples/ui/router-mini-docs.ts",
     "example:ui-group-nav": "tsx examples/ui/group-nav.ts",
+    "example:ui-file-router-codegen": "tsx examples/ui/file-router/codegen-demo.ts",
     "example:apps-cli": "tsx examples/apps/cli/counter-cli.ts",
     "example:apps-cli-manager": "tsx examples/apps/cli/manager-cli.ts",
     "example:apps-tui": "tsx --tsconfig examples/apps/tui/tsconfig.json examples/apps/tui/counter-tui.tsx",
