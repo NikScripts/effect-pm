@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "Effect-native TypeScript docgen: compiler-accurate extraction, symbol indexing, link resolution, and hover/source rendering.",
+  "description": "Compat shim — docgen lives in last-ts/docgen. Prefer last-ts/docgen/*.",
   "exports": {
     ".": "./src/index.ts",
     "./*": "./src/*.ts"
@@ -13,5 +13,8 @@
     "prettier": ">=2",
     "shiki": "^4.3.1",
     "typescript": "^5.9.0"
+  },
+  "dependencies": {
+    "last-ts": "file:../../packages/last-ts"
   }
 }

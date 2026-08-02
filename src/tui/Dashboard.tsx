@@ -4,7 +4,7 @@
  * The Ink Group dashboard — terminal counterpart to `<Dashboard runtime group />` from
  * `hyperlink-ts/web`. Stack: `DashboardViews.layer` →
  * `Layer.provideMerge(componentsLayer)` → {@link View.base} →
- * {@link ../ui/View.compose} → {@link ./DashboardShell}.
+ * {@link ../ui/Ui.compose} → {@link ./DashboardShell}.
  *
  * ```tsx
  * <Dashboard runtime={Atom.runtime(appLayer)} group={Fleet} />

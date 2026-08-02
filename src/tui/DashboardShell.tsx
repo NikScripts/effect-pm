@@ -1,7 +1,7 @@
 /**
  * @module tui/DashboardShell
  *
- * Ink batteries shell over {@link ../ui/View.compose} — grid, focus panes, command bar.
+ * Ink batteries shell over {@link ../ui/Ui.compose} — grid, focus panes, command bar.
  * {@link ./Dashboard} is thin wiring (compose + this shell).
  */
 import { Box, Text, useInput, useStdout } from "ink";

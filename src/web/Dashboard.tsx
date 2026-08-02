@@ -8,9 +8,9 @@
  *
  * Stack (Effect-shaped): `DashboardViews.layer` (shared contributions) →
  * `Layer.provideMerge(componentsLayer)` → {@link View.base} →
- * {@link ../ui/View.compose} → {@link ./DashboardShell}.
+ * {@link ../ui/Ui.compose} → {@link ./DashboardShell}.
  *
- * Use `<Dashboard runtime group />`, or pipe Layers + `View.compose` + `DashboardShell`.
+ * Use `<Dashboard runtime group />`, or pipe Layers + `Ui.compose` + `DashboardShell`.
  * Ready platform Layer without app contrib: {@link layer}.
  *
  * Heavy eng lives in `../internal/webDashboard` (Effect thin-shell mirror).

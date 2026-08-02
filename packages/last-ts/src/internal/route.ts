@@ -8,7 +8,7 @@ import { dual } from "effect/Function";
 import { type Pipeable, pipeArguments } from "effect/Pipeable";
 import type * as Schema from "effect/Schema";
 
-export const TypeId = "~hyperlink-ts/ui/Route" as const;
+export const TypeId = "~last-ts/Route" as const;
 
 /**
  * Pathname template — always absolute.

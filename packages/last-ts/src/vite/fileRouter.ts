@@ -68,13 +68,13 @@ export const fileRouter = (options: FileRouterPluginOptions): Plugin => {
         }),
       );
       log(
-        `[hyperlink-ts] file-router: wrote ${rel} (${result.entries.length} paths)`,
+        `[last-ts] file-router: wrote ${rel} (${result.entries.length} paths)`,
       );
     }
   };
 
   return {
-    name: "hyperlink-ts-file-router",
+    name: "last-ts-file-router",
     configResolved(config) {
       root = config.root;
       pagesDir = resolveFromRoot(root, options.pagesDir);

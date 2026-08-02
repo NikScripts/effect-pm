@@ -3,8 +3,8 @@
  * (usually codegen `paths.gen.ts`).
  */
 import { Effect } from "effect";
-import type { Path } from "../ui/Route";
-import * as Route from "../ui/Route";
+import type { Path } from "../Route";
+import * as Route from "../Route";
 import {
   AsRoutesTypeId,
   type AsRoutesEffect,

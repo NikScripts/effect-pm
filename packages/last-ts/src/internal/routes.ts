@@ -12,13 +12,13 @@ import { HttpApi } from "effect/unstable/httpapi";
 import type { HttpApiGroup } from "effect/unstable/httpapi";
 import type * as Schema from "effect/Schema";
 import type { AsRoutesEffect } from "./asRoutesBrand";
-import * as uiRoute from "./uiRoute";
-import type { Path } from "./uiRoute";
+import * as uiRoute from "./route";
+import type { Path } from "./route";
 
 export type { AsRoutesEffect } from "./asRoutesBrand";
 
-export const TypeId = "~hyperlink-ts/ui/Route/Api" as const;
-export const GroupTypeId = "~hyperlink-ts/ui/Route/Group" as const;
+export const TypeId = "~last-ts/Route/Api" as const;
+export const GroupTypeId = "~last-ts/Route/Group" as const;
 
 // =============================================================================
 // Typed models (HttpApi / HttpApiGroup shape + nested groups)

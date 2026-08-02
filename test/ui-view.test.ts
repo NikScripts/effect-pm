@@ -5,6 +5,7 @@ import { describe, expect, it } from "@effect/vitest";
 import { Layer, Schema } from "effect";
 import * as Group from "../src/Group";
 import * as View from "../src/ui/View";
+import * as Ui from "../src/ui/Ui";
 import * as WorkPool from "../src/WorkPool";
 
 const Item = Schema.Struct({ n: Schema.Number });
@@ -122,12 +123,12 @@ describe("View registry", () => {
   });
 });
 
-describe("View.group + kit.for", () => {
+describe("Ui.group + kit.for", () => {
   it("collects nested leaves and exposes groupDash", () => {
     const viewLayer = withChrome(
-      Layer.mergeAll(View.group(AppGroup), View.bind(WorkPool.kind, PoolCard)),
+      Layer.mergeAll(Ui.group(AppGroup), View.bind(WorkPool.kind, PoolCard)),
     );
-    const kit = View.react(viewLayer);
+    const kit = Ui.react(viewLayer);
     expect(kit.groupDash?.group.key).toBe("app/AppGroup");
     expect(kit.groupDash?.leaves.map((l) => l.key).sort()).toEqual([
       "app/Jobs",

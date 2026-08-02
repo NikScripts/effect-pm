@@ -31,15 +31,39 @@
       "types": "./src/Page.ts",
       "default": "./src/Page.ts"
     },
+    "./Route": {
+      "types": "./src/Route.ts",
+      "default": "./src/Route.ts"
+    },
+    "./Router": {
+      "types": "./src/Router.ts",
+      "default": "./src/Router.ts"
+    },
+    "./Router/waku": {
+      "types": "./src/Router/waku.ts",
+      "default": "./src/Router/waku.ts"
+    },
     "./AtomReact": {
       "types": "./src/AtomReact.tsx",
       "default": "./src/AtomReact.tsx"
+    },
+    "./View": {
+      "types": "./src/View.tsx",
+      "default": "./src/View.tsx"
     },
     "./vite": {
       "types": "./src/vite/fileRouter.ts",
       "default": "./src/vite/fileRouter.ts"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./docgen": {
+      "types": "./src/docgen/index.ts",
+      "default": "./src/docgen/index.ts"
+    },
+    "./docgen/*": {
+      "types": "./src/docgen/*.ts",
+      "default": "./src/docgen/*.ts"
+    }
   },
   "files": [
     "src",
@@ -52,8 +76,12 @@
   "peerDependencies": {
     "@effect/platform-node": "^4.0.0-beta.102",
     "effect": "^4.0.0-beta.102",
+    "prettier": ">=2",
     "react": ">=18",
-    "vite": "^6.0.0 || ^7.0.0"
+    "shiki": "^4.3.1",
+    "typescript": "^5.9.0",
+    "vite": "^6.0.0 || ^7.0.0",
+    "waku": ">=1.0.0-beta.3"
   },
   "peerDependenciesMeta": {
     "vite": {
@@ -61,15 +89,31 @@
     },
     "@effect/platform-node": {
       "optional": true
+    },
+    "waku": {
+      "optional": true
+    },
+    "typescript": {
+      "optional": true
+    },
+    "prettier": {
+      "optional": true
+    },
+    "shiki": {
+      "optional": true
     }
   },
   "devDependencies": {
     "@effect/platform-node": "4.0.0-beta.102",
+    "@types/prettier": "2.7.3",
     "@types/react": "^19.2.0",
     "effect": "4.0.0-beta.102",
+    "prettier": "2.8.8",
     "react": "^19.2.0",
+    "shiki": "^4.3.1",
     "typescript": "^5.9.0",
-    "vite": "^7.0.0"
+    "vite": "^7.0.0",
+    "waku": "1.0.0-beta.3"
   },
   "publishConfig": {
     "access": "public"

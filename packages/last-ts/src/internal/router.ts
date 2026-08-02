@@ -5,8 +5,8 @@
  * Group drill-down helpers live in {@link ../ui/GroupNav}.
  */
 import { Option } from "effect";
-import * as Route from "../ui/Route";
-import type { ApiConstraint } from "./uiRoutes";
+import * as Route from "../Route";
+import type { ApiConstraint } from "./routes";
 
 // =============================================================================
 // Types

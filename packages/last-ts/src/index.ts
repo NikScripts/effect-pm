@@ -10,4 +10,7 @@
  * @see docs/plans/last-ts-codesplit.md
  */
 export * as Page from "./Page";
+export * as Route from "./Route";
+export * as Router from "./Router";
+export * as View from "./View";
 export * as AtomReact from "./AtomReact";

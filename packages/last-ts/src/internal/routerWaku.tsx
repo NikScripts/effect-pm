@@ -10,10 +10,10 @@ import {
   Link as WakuLink,
   useRouter as useWakuRouter,
 } from "waku/router/client";
-import * as Route from "../ui/Route";
-import * as Router from "../ui/Router";
-import type { ApiConstraint } from "./uiRoutes";
-import type { Service } from "./uiRouter";
+import * as Route from "../Route";
+import * as Router from "../Router";
+import type { ApiConstraint } from "./routes";
+import type { Service } from "./router";
 
 // =============================================================================
 // Layer input — catalog binding (provided into the one Router.Service)

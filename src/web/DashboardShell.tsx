@@ -1,7 +1,7 @@
 /**
  * @module web/DashboardShell
  *
- * Web batteries shell over {@link ../ui/View.compose} — Cell grid, Router `/health`
+ * Web batteries shell over {@link ../ui/Ui.compose} — Cell grid, Router `/health`
  * node-status pages, {@link ./DashboardTopBar.DashboardDetailChrome}, LogBox / schedule.
  * {@link ./Dashboard} is the public one-liner over compose + this shell.
  */

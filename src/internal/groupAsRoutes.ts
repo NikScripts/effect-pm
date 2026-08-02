@@ -13,9 +13,6 @@ import {
   type AsRoutesEffect,
   type RouteGroup,
 } from "./asRoutesBrand";
-import type { Group, GroupTop } from "./uiRoutes";
-import type * as uiRoute from "./uiRoute";
-
 export type { RouteGroup } from "./asRoutesBrand";
 export type { AsRoutesEffect } from "./asRoutesBrand";
 export { AsRoutesTypeId } from "./asRoutesBrand";
@@ -27,19 +24,19 @@ export type AsRoutesOptions = {
 
 /** Leaf destinations generated for one Group member name. */
 export type LeafRouteLikes<K extends string> =
-  | uiRoute.Route<K, `/${string}`>
-  | uiRoute.Route<`${K}Logs`, `/${string}`>
-  | uiRoute.Route<`${K}Schedule`, `/${string}`>;
+  | Route.Endpoint<K, `/${string}`>
+  | Route.Endpoint<`${K}Logs`, `/${string}`>
+  | Route.Endpoint<`${K}Schedule`, `/${string}`>;
 
 type NestedGroupRouteLike<
   Id extends string,
   M extends Record<string, unknown>,
   Depth extends ReadonlyArray<unknown>,
-> = Group<
+> = Route.Group<
   Id,
-  | uiRoute.Route<"index", `/${string}`>
-  | Extract<MembersRouteLikes<M, Depth>, uiRoute.Constraint>,
-  Extract<MembersRouteLikes<M, Depth>, GroupTop>,
+  | Route.Endpoint<"index", `/${string}`>
+  | Extract<MembersRouteLikes<M, Depth>, Route.Constraint>,
+  Extract<MembersRouteLikes<M, Depth>, Route.GroupTop>,
   false
 >;
 
@@ -61,8 +58,8 @@ export type MembersRouteLikes<
 
 /** `/health` + `/health/*nodeId` when `health` is not false. */
 export type HealthRouteLikes =
-  | uiRoute.Route<"health", "/health">
-  | uiRoute.Route<"nodeHealth", "/health/*nodeId", { readonly nodeId: string }>;
+  | Route.Endpoint<"health", "/health">
+  | Route.Endpoint<"nodeHealth", "/health/*nodeId", { readonly nodeId: string }>;
 
 export type AsRoutesItemsOf<
   M extends Record<string, unknown>,

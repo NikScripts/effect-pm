@@ -16,6 +16,7 @@ import * as Route from "../src/ui/Route";
 import * as Router from "../src/ui/Router";
 import { RuntimeProvider } from "../src/ui/runtime";
 import * as View from "../src/ui/View";
+import * as Ui from "../src/ui/Ui";
 import * as WorkPoolView from "../src/ui/WorkPoolView";
 
 const Item = Schema.Struct({ n: Schema.Number });
@@ -45,7 +46,7 @@ const views = View.bind(WorkPool.kind, PoolCard).pipe(
 
 describe("Observe.use", () => {
   it("returns queue / daemon packs under RuntimeProvider", () => {
-    const ui = View.compose({
+    const ui = Ui.compose({
       views,
       router: Router.memory(hubSite),
     });

@@ -1,6 +1,6 @@
 # last-ts codesplit
 
-**Status:** Eng in progress — P0–P1 landed (Page, AtomReact, vite); P2 Route/Router next  
+**Status:** Eng — P0–P3 landed (Page, AtomReact, vite, Route/Router, View, docgen); P4 shims/docs polish + `Ui.Card` call-site rename remain  
 **Branch:** `cursor/file-router-prototype-125f`  
 **npm:** `last-ts@0.0.0` reserved · code name **Last.ts**  
 **Repo:** same-workspace `packages/last-ts` first; `hyperlink-ts` depends on it  
@@ -106,10 +106,10 @@ Optional temporary re-exports on `hyperlink-ts/ui/Route` etc. during migration �
 
 | Phase | Work |
 |-------|------|
-| **P0** | `packages/last-ts` workspace skeleton; real modules + Effect-style barrel; peers; CI build |
-| **P1** | Page + vite/path codegen + docgen move; example `paths:check`; hyperlink depends |
-| **P2** | Route/Router move; Target helpers stay/move to hyperlink |
-| **P3** | View kernel → last-ts; `Ui` module on hyperlink (Card/Detail/Page + base); rename call sites |
+| **P0** | `packages/last-ts` workspace skeleton; real modules + Effect-style barrel; peers; CI build — **Eng’d** |
+| **P1** | Page + vite/path codegen + docgen move; example `paths:check`; hyperlink depends — **Eng’d** |
+| **P2** | Route/Router move; Target helpers stay on hyperlink — **Eng’d** |
+| **P3** | View kernel → last-ts; `Ui` compose/GroupDash on hyperlink; size chrome still on `last-ts/View` (alias via `Ui`) — **Eng’d**; full `View.Card` → `Ui.Card` call-site rename still open |
 | **P4** | Drop shims; docs/guides; changesets for both packages |
 
 ## Open (next locks)

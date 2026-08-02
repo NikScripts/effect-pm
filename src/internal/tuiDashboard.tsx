@@ -26,6 +26,7 @@ import * as GroupNav from "../ui/GroupNav";
 import * as Route from "../ui/Route";
 import * as Router from "../ui/Router";
 import * as View from "../ui/View";
+import * as Ui from "../ui/Ui";
 import { WidgetsProvider } from "../ui/widgetsContext";
 import * as ApiMetricsView from "../ui/ApiMetricsView";
 import * as DaemonView from "../ui/DaemonView";
@@ -473,7 +474,7 @@ export const Dashboard = <R, ER>(props: {
       Layer.provideMerge(componentsLayer),
       Layer.provideMerge(View.base),
     );
-    const composed = View.compose({
+    const composed = Ui.compose({
       views,
       router: Router.memory(routesFor(props.group)),
       group: props.group,

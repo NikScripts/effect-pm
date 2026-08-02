@@ -1,21 +1,14 @@
 /**
- * A composable, compiler-accurate docgen — extract an API model from TypeScript source and resolve
- * every type reference to its doc page the way an IDE does (`getSymbolAtLocation`, not name-matching).
- *
- * Each capability is an Effect service behind a layer; wire the ones you need. Currently: the API
- * {@link Model} (Schema SSOT), the compiler substrate ({@link TsProgram}), the location→url index
- * ({@link SymbolIndex}), and compiler resolution ({@link LinkResolver}). Extraction and rendering land
- * in later phases.
- *
- * @since 1.0.0
+ * Compatibility package `@nikscripts/docgen` — implementation lives in `last-ts/docgen`.
+ * Prefer `import * as X from "last-ts/docgen/X"`.
  */
-export * as Annotate from "./Annotate.js";
-export * as Extractor from "./Extractor.js";
-export * as HoverRenderer from "./HoverRenderer.js";
-export * as LinkResolver from "./LinkResolver.js";
-export * as Model from "./Model.js";
-export * as Slug from "./Slug.js";
-export * as SourceRenderer from "./SourceRenderer.js";
-export * as SymbolIndex from "./SymbolIndex.js";
-export * as TsProgram from "./TsProgram.js";
-export * as TypePrinter from "./TypePrinter.js";
+export * as Annotate from "last-ts/docgen/Annotate";
+export * as Extractor from "last-ts/docgen/Extractor";
+export * as HoverRenderer from "last-ts/docgen/HoverRenderer";
+export * as LinkResolver from "last-ts/docgen/LinkResolver";
+export * as Model from "last-ts/docgen/Model";
+export * as Slug from "last-ts/docgen/Slug";
+export * as SourceRenderer from "last-ts/docgen/SourceRenderer";
+export * as SymbolIndex from "last-ts/docgen/SymbolIndex";
+export * as TsProgram from "last-ts/docgen/TsProgram";
+export * as TypePrinter from "last-ts/docgen/TypePrinter";
