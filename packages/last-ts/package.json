@@ -1,0 +1,35 @@
+{
+  "name": "last-ts",
+  "version": "0.0.0",
+  "description": "Last.ts — Effect + React building blocks for typed routes, pages, and docs tooling (name reserved).",
+  "type": "module",
+  "license": "MIT",
+  "author": "Nikolas Stow",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nikolasstow/Hyperlink.git",
+    "directory": "packages/last-ts"
+  },
+  "homepage": "https://github.com/nikolasstow/Hyperlink",
+  "bugs": {
+    "url": "https://github.com/nikolasstow/Hyperlink/issues"
+  },
+  "keywords": [
+    "effect",
+    "react",
+    "router",
+    "file-router",
+    "docgen",
+    "last-ts"
+  ],
+  "files": [
+    "README.md",
+    "package.json"
+  ],
+  "exports": {
+    ".": "./README.md"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
