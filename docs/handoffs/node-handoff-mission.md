@@ -45,7 +45,9 @@ Two headline capabilities, in the owner's framing:
 ## Still hard / open (bring to design; do not solve silently)
 
 - **Dual-serve / client redirect** — Track D (C emits signals only: Directory.changes, Advice, status).
-- **Version negotiation ranges** — #35 deferred; reuse binary `contractHash` / `ContractMismatch` for now.
+- **Cross-version payload migration** — design locked: [`versioned-schema-decisions.md`](./versioned-schema-decisions.md)
+  (`Versioned` Schema carrier + auto seam transforms). **Not Eng'd** until owner go. Supersedes
+  vague “negotiation ranges” (#35).
 - **Lookup-node handoff** — #36 deferred (not special-cased in C v1).
 - **`restartSuccessor` / automated A/B launcher** — deferred; replacement addressing today =
   same `nodeKey` + new dial (manual / less-automated).
