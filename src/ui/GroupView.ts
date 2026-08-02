@@ -5,16 +5,16 @@
  * Group is a family like WorkPool; URL segments stay parent member short names.
  */
 import * as Group from "../Group";
-import * as View from "./View";
+import * as Ui from "./Ui";
 
 /** @public */
 export const groupViewSpec = { kind: Group.kind } as const;
 
 /** Group grid card — open via {@link ./Router}. @public */
-export class GroupCard extends View.Card.Tag<GroupCard>()(
+export class GroupCard extends Ui.Card.Tag<GroupCard>()(
   "hyperlink/view/group-card",
   { spec: groupViewSpec },
 ) {}
 
 /** @public */
-export const layer = View.bind(Group.kind, GroupCard);
+export const layer = Ui.bind(Group.kind, GroupCard);

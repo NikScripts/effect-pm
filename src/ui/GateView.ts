@@ -6,7 +6,7 @@
 import { Layer } from "effect";
 import * as Gate from "../Gate";
 import { pack } from "./gateViewPack";
-import * as View from "./View";
+import * as Ui from "./Ui";
 
 export { pack };
 
@@ -14,19 +14,19 @@ export { pack };
 export const gateViewSpec = { kind: Gate.kind } as const;
 
 /** @public */
-export class GateCard extends View.Card.Tag<GateCard>()(
+export class GateCard extends Ui.Card.Tag<GateCard>()(
   "hyperlink/view/gate-card",
   { spec: gateViewSpec },
 ) {}
 
 /** @public */
-export class GateDetail extends View.Detail.Tag<GateDetail>()(
+export class GateDetail extends Ui.Detail.Tag<GateDetail>()(
   "hyperlink/view/gate-detail",
   { spec: gateViewSpec },
 ) {}
 
 /** @public */
 export const layer = Layer.mergeAll(
-  View.bind(Gate.kind, GateCard),
-  View.bind(Gate.kind, GateDetail),
+  Ui.bind(Gate.kind, GateCard),
+  Ui.bind(Gate.kind, GateDetail),
 );

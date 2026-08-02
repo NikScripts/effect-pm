@@ -152,6 +152,10 @@
       "types": "./dist/ui.d.ts",
       "default": "./dist/ui.js"
     },
+    "./ui/Ui": {
+      "types": "./dist/ui/Ui.d.ts",
+      "default": "./dist/ui/Ui.js"
+    },
     "./ui/WorkPoolView": {
       "types": "./dist/ui/WorkPoolView.d.ts",
       "default": "./dist/ui/WorkPoolView.js"

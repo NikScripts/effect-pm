@@ -12,6 +12,7 @@ import { isQueueTag, type QueueTag } from "../ui/data";
 import * as Route from "../ui/Route";
 import * as Router from "../ui/Router";
 import * as View from "../ui/View";
+import * as Ui from "../ui/Ui";
 import * as Observe from "../Observe";
 import * as WorkPoolView from "../ui/WorkPoolView";
 import { QueueCell } from "./cellWidgets";
@@ -139,13 +140,13 @@ export const componentsLayer: Layer.Layer<
 );
 
 /**
- * Fully provided WorkPool View Layer for the TUI (`R = never`) — ready for {@link View.react}.
+ * Fully provided WorkPool View Layer for the TUI (`R = never`) — ready for {@link Ui.react}.
  *
  * @public
  */
 export const layer = WorkPoolView.layer.pipe(
   Layer.provideMerge(componentsLayer),
-  Layer.provideMerge(View.base),
+  Layer.provideMerge(Ui.base),
 );
 
 export { PoolCard, PoolDetail, PoolPage } from "../ui/WorkPoolView";

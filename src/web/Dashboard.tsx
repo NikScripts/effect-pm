@@ -7,7 +7,7 @@
  * animated with view transitions.
  *
  * Stack (Effect-shaped): `DashboardViews.layer` (shared contributions) →
- * `Layer.provideMerge(componentsLayer)` → {@link View.base} →
+ * `Layer.provideMerge(componentsLayer)` → {@link Ui.base} →
  * {@link ../ui/Ui.compose} → {@link ./DashboardShell}.
  *
  * Use `<Dashboard runtime group />`, or pipe Layers + `Ui.compose` + `DashboardShell`.
@@ -27,7 +27,7 @@ export const componentsLayer: typeof internal.componentsLayer =
 
 /**
  * Fully provided web Dashboard View Layer (`R = never`) — contributions +
- * {@link componentsLayer} + {@link View.base}. Ready for {@link View.react}.
+ * {@link componentsLayer} + {@link Ui.base}. Ready for {@link Ui.react}.
  *
  * @public
  */

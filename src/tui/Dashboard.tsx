@@ -3,7 +3,7 @@
  *
  * The Ink Group dashboard — terminal counterpart to `<Dashboard runtime group />` from
  * `hyperlink-ts/web`. Stack: `DashboardViews.layer` →
- * `Layer.provideMerge(componentsLayer)` → {@link View.base} →
+ * `Layer.provideMerge(componentsLayer)` → {@link Ui.base} →
  * {@link ../ui/Ui.compose} → {@link ./DashboardShell}.
  *
  * ```tsx
@@ -31,7 +31,7 @@ export const componentsLayer: typeof internal.componentsLayer =
 
 /**
  * Fully provided TUI Dashboard View Layer (`R = never`) — contributions +
- * {@link componentsLayer} + {@link View.base}. Ready for {@link View.react}.
+ * {@link componentsLayer} + {@link Ui.base}. Ready for {@link Ui.react}.
  *
  * @public
  */

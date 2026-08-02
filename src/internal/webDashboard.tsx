@@ -350,13 +350,13 @@ export const componentsLayer = Layer.mergeAll(
 );
 
 /**
- * Fully provided Dashboard View Layer for the web (`R = never`) — ready for {@link View.react}.
+ * Fully provided Dashboard View Layer for the web (`R = never`) — ready for {@link Ui.react}.
  *
  * @internal
  */
 export const layer = DashboardViews.layer.pipe(
   Layer.provideMerge(componentsLayer),
-  Layer.provideMerge(View.base),
+  Layer.provideMerge(Ui.base),
 );
 
 const routesFor = (group: GroupNode) =>
@@ -380,7 +380,7 @@ export const DashboardView = <R, ER>(props: {
       props.views ?? Layer.empty,
     ).pipe(
       Layer.provideMerge(componentsLayer),
-      Layer.provideMerge(View.base),
+      Layer.provideMerge(Ui.base),
     );
     return Ui.compose({
       views,

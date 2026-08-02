@@ -1,8 +1,6 @@
 /**
  * @module ui/View
  *
- * Hyperlink shell over `last-ts/View` — DI kernel re-export + kind-aware {@link base}.
- * Dashboard compose / Group dash: {@link ./Ui}.
+ * Re-export last-ts View kernel. Sized chrome: `hyperlink-ts/ui/Ui` (`Ui.Card` etc.).
  */
 export * from "last-ts/View";
-export { base } from "./viewBase";

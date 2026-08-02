@@ -13,24 +13,24 @@
 import { Layer } from "effect";
 import * as WorkPool from "../WorkPool";
 import { pack } from "./priorityViewPack";
-import * as View from "./View";
+import * as Ui from "./Ui";
 
 export { pack };
 
 /** @public */
-export class PriorityCard extends View.Card.Tag<PriorityCard>()(
+export class PriorityCard extends Ui.Card.Tag<PriorityCard>()(
   "hyperlink/view/priority-card",
   { spec: WorkPool.priorityControlSpec },
 ) {}
 
 /** @public */
-export class PriorityDetail extends View.Detail.Tag<PriorityDetail>()(
+export class PriorityDetail extends Ui.Detail.Tag<PriorityDetail>()(
   "hyperlink/view/priority-detail",
   { spec: WorkPool.priorityControlSpec },
 ) {}
 
 /** @public */
 export const layer = Layer.mergeAll(
-  View.bind(WorkPool.priorityKind, PriorityCard),
-  View.bind(WorkPool.priorityKind, PriorityDetail),
+  Ui.bind(WorkPool.priorityKind, PriorityCard),
+  Ui.bind(WorkPool.priorityKind, PriorityDetail),
 );

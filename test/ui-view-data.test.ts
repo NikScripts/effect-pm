@@ -38,12 +38,12 @@ const hubSite = Route.make("hub").add(
   Route.group("tree", { topLevel: true }).fromEffect(Group.asRoutes(Hub)),
 );
 
-class PoolCard extends View.Card.Tag<PoolCard>()("hyperlink/view/runtime-pool-card") {}
+class PoolCard extends Ui.Card.Tag<PoolCard>()("hyperlink/view/runtime-pool-card") {}
 
 const chrome = View.provide(PoolCard, () => null);
-const views = View.bind(WorkPool.kind, PoolCard).pipe(
+const views = Ui.bind(WorkPool.kind, PoolCard).pipe(
   Layer.provideMerge(chrome),
-  Layer.provideMerge(View.base),
+  Layer.provideMerge(Ui.base),
 );
 
 describe("RuntimeProvider + Observe.use", () => {

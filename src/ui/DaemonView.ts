@@ -11,18 +11,18 @@
 import { Layer } from "effect";
 import * as Daemon from "../Daemon";
 import { pack } from "./daemonViewPack";
-import * as View from "./View";
+import * as Ui from "./Ui";
 
 export { pack };
 
 /** @public */
-export class DaemonCard extends View.Card.Tag<DaemonCard>()(
+export class DaemonCard extends Ui.Card.Tag<DaemonCard>()(
   "hyperlink/view/daemon-card",
   { spec: Daemon.daemonControlSpec },
 ) {}
 
 /** @public */
-export class DaemonDetail extends View.Detail.Tag<DaemonDetail>()(
+export class DaemonDetail extends Ui.Detail.Tag<DaemonDetail>()(
   "hyperlink/view/daemon-detail",
   { spec: Daemon.daemonControlSpec },
 ) {}
@@ -32,14 +32,14 @@ export class DaemonDetail extends View.Detail.Tag<DaemonDetail>()(
  *
  * @public
  */
-export class DaemonPage extends View.Page.Tag<DaemonPage>()(
+export class DaemonPage extends Ui.Page.Tag<DaemonPage>()(
   "hyperlink/view/daemon-page",
   { spec: Daemon.daemonControlSpec },
 ) {}
 
 /** @public */
 export const layer = Layer.mergeAll(
-  View.bind(Daemon.kind, DaemonCard),
-  View.bind(Daemon.kind, DaemonDetail),
-  View.bind(Daemon.kind, DaemonPage),
+  Ui.bind(Daemon.kind, DaemonCard),
+  Ui.bind(Daemon.kind, DaemonDetail),
+  Ui.bind(Daemon.kind, DaemonPage),
 );

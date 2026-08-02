@@ -10,14 +10,14 @@
 import * as React from "react";
 import { Duration, Effect, Layer, Stream } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
-import { View, displayName, useAtomValue, useRuntime } from "../../../src/web";
+import { Ui, View, displayName, useAtomValue, useRuntime } from "../../../src/web";
 import { WorkerPool } from "./hub";
 
 /** UI Needs placeholder — opaque Tag static (not a Hyperlink wire Spec). */
 export const workerPoolCardSpec = { kind: "examples/worker-pool-card" } as const;
 
 /** Sized View handle (`size: ViewKind.Card()` from `View.Card`). */
-export class WorkerPoolCard extends View.Card.Tag<
+export class WorkerPoolCard extends Ui.Card.Tag<
   WorkerPoolCard,
   { readonly dense?: boolean }
 >()("examples/apps/web/worker-pool-card", {
@@ -61,7 +61,7 @@ const NodeRow = (props: {
  * Contribution Layer for Dashboard `views` — allowlist + skin.
  * `R = View.Registry`; Dashboard closes with `View.base`.
  */
-export const layer = View.only(WorkerPool, WorkerPoolCard).pipe(
+export const layer = Ui.only(WorkerPool, WorkerPoolCard).pipe(
   Layer.provide(
     WorkerPoolCard.provide((props) => {
       const runtime = useRuntime();

@@ -37,11 +37,11 @@ const hubSite = Route.make("hub").add(
   Route.group("tree", { topLevel: true }).fromEffect(Group.asRoutes(Hub)),
 );
 
-class PoolCard extends View.Card.Tag<PoolCard>()("hyperlink/view/observe-use-pool-card") {}
+class PoolCard extends Ui.Card.Tag<PoolCard>()("hyperlink/view/observe-use-pool-card") {}
 
-const views = View.bind(WorkPool.kind, PoolCard).pipe(
+const views = Ui.bind(WorkPool.kind, PoolCard).pipe(
   Layer.provideMerge(View.provide(PoolCard, () => null)),
-  Layer.provideMerge(View.base),
+  Layer.provideMerge(Ui.base),
 );
 
 describe("Observe.use", () => {
