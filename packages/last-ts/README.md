@@ -1,7 +1,5 @@
 # last-ts
 
-**Last.ts** — Effect + React building blocks (typed routes, pages, View DI, path codegen, docgen).
+Placeholder `0.0.0` — reserves the npm name for **Last.ts**.
 
-This `0.0.0` publish reserves the npm name. Real surface lands in-repo under `packages/last-ts`.
-
-Not Next.js.
+Real surface will land under `packages/last-ts` in the Hyperlink repo.
