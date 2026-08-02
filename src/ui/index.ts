@@ -29,7 +29,7 @@ export {
 export * as View from "./View";
 /** UI routing toolkit — HttpApi-shaped make/group/get/match/urlBuilder. */
 export * as Route from "./Route";
-/** File-router page marks (`static` / `dynamic` / `build` / `layout`). */
+/** File-router page marks — re-export of `last-ts/Page`. Prefer that subpath. */
 export * as Page from "./Page";
 /**
  * Lite runtime navigation over a Route catalog (`make` / `memory` / `history`).

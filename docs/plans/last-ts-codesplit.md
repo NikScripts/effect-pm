@@ -1,6 +1,7 @@
 # last-ts codesplit
 
-**Status:** plan — owner locks below (2026-08-02)  
+**Status:** Eng in progress — P0–P1 landed (Page, AtomReact, vite); P2 Route/Router next  
+**Branch:** `cursor/file-router-prototype-125f`  
 **npm:** `last-ts@0.0.0` reserved · code name **Last.ts**  
 **Repo:** same-workspace `packages/last-ts` first; `hyperlink-ts` depends on it  
 **Not this plan:** bare `last.ts` / `last-js` (npm similarity blocks); scoped `@nikolasstow/last.ts` was unpublished intent

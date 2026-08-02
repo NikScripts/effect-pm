@@ -1,14 +1,75 @@
 {
   "name": "last-ts",
-  "version": "0.0.0",
-  "description": "Placeholder — reserves the last-ts npm name for Last.ts (Effect + React building blocks).",
+  "version": "0.0.1",
+  "description": "Last.ts — Effect + React building blocks (View DI, Route/Router, Page marks, AtomReact, file-router codegen, docgen).",
+  "type": "module",
   "license": "MIT",
-  "private": false,
   "author": "Nikolas Stow",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/nikolasstow/Hyperlink.git",
     "directory": "packages/last-ts"
+  },
+  "homepage": "https://github.com/nikolasstow/Hyperlink/tree/integration/packages/last-ts",
+  "bugs": {
+    "url": "https://github.com/nikolasstow/Hyperlink/issues"
+  },
+  "keywords": [
+    "effect",
+    "react",
+    "router",
+    "file-router",
+    "last-ts"
+  ],
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./Page": {
+      "types": "./src/Page.ts",
+      "default": "./src/Page.ts"
+    },
+    "./AtomReact": {
+      "types": "./src/AtomReact.tsx",
+      "default": "./src/AtomReact.tsx"
+    },
+    "./vite": {
+      "types": "./src/vite/fileRouter.ts",
+      "default": "./src/vite/fileRouter.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "peerDependencies": {
+    "@effect/platform-node": "^4.0.0-beta.102",
+    "effect": "^4.0.0-beta.102",
+    "react": ">=18",
+    "vite": "^6.0.0 || ^7.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    },
+    "@effect/platform-node": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@effect/platform-node": "4.0.0-beta.102",
+    "@types/react": "^19.2.0",
+    "effect": "4.0.0-beta.102",
+    "react": "^19.2.0",
+    "typescript": "^5.9.0",
+    "vite": "^7.0.0"
   },
   "publishConfig": {
     "access": "public"
