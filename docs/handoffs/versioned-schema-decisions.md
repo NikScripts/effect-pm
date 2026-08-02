@@ -1,6 +1,6 @@
 # Decisions — `Versioned` schema migrations (cross-version handoff)
 
-**Status:** Design locked for owner review — **not Eng'd**. Replaces vague #35 “ranges” with a concrete Schema upcaster chain.  
+**Status:** Design locked (owner chat 2026-08-02 / 2026-08-03) — **not Eng'd**. Replaces vague #35 “ranges” with a concrete Schema upcaster chain.  
 **Mission:** [`node-handoff-mission.md`](./node-handoff-mission.md) (zero-downtime + cross-version skew as normal).  
 **Brief:** [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md) (#35 deferred → this bake).  
 **Opened:** 2026-07-30 (Agent 5 + owner chat).
@@ -16,6 +16,8 @@ origin ──migrate──► … ──migrate──► current
          (typed tip; gap = compile error)
 ```
 
+**One identity system:** `Versioned.schemaVersion(schema) → string` everywhere (status, durable rows, handoff envelopes, RPC seams). Retires `WorkPool.withSchemaVersion` / numeric annotate / integer store column as the public story.
+
 ---
 
 ## Canonical authoring (read this first)
@@ -23,54 +25,45 @@ origin ──migrate──► … ──migrate──► current
 ```ts
 import * as Versioned from "hyperlink-ts/Versioned"
 import * as WorkPool from "hyperlink-ts/WorkPool"
-import * as Hyperlink from "hyperlink-ts/Hyperlink"
-import * as Node from "hyperlink-ts/Node"
 import { Effect, Schema, SchemaTransformation } from "effect"
 
-// --- historical shapes (keep in source; never delete a step you still need to read) ---
-const JobV1 = Schema.Struct({
+// --- tips = Schema.Class with stable identifiers (preferred) ---
+class JobV1 extends Schema.Class<JobV1>("jobs/payload@1")({
   id: Schema.String,
   note: Schema.String,
-})
-const JobV2 = Schema.Struct({
+}) {}
+
+class JobV2 extends Schema.Class<JobV2>("jobs/payload@2")({
   id: Schema.String,
   note: Schema.String,
   priority: Schema.Number,
-})
-const JobV3 = Schema.Struct({
+}) {}
+
+class JobV3 extends Schema.Class<JobV3>("jobs/payload@3")({
   id: Schema.String,
   body: Schema.Struct({
     note: Schema.String,
     priority: Schema.Number,
   }),
-})
+}) {}
 
 const toV2 = SchemaTransformation.transform({
-  decode: (j: typeof JobV1.Type): typeof JobV2.Type => ({
-    ...j,
-    priority: 0,
-  }),
-  encode: ({ priority: _p, ...j }: typeof JobV2.Type): typeof JobV1.Type => j,
+  decode: (j: JobV1): JobV2 => new JobV2({ ...j, priority: 0 }),
+  encode: ({ priority: _p, ...j }: JobV2): JobV1 => new JobV1(j),
 })
 
 const toV3 = SchemaTransformation.transform({
-  decode: (j: typeof JobV2.Type): typeof JobV3.Type => ({
-    id: j.id,
-    body: { note: j.note, priority: j.priority },
-  }),
-  encode: (j: typeof JobV3.Type): typeof JobV2.Type => ({
-    id: j.id,
-    note: j.body.note,
-    priority: j.body.priority,
-  }),
+  decode: (j: JobV2): JobV3 =>
+    new JobV3({ id: j.id, body: { note: j.note, priority: j.priority } }),
+  encode: (j: JobV3): JobV2 =>
+    new JobV2({ id: j.id, note: j.body.note, priority: j.body.priority }),
 })
 
-// One value: Schema for current + executable chain (branded)
-const Job = Versioned.make(JobV1)
-  .migrate(JobV2, toV2)
-  .migrate(JobV3, toV3)
+// Chain composes transforms only — not a separately named entity
+const Job = Versioned.make(JobV1).migrate(JobV2, toV2).migrate(JobV3, toV3)
 // typeof Job.Type === JobV3
-// Versioned.isVersioned(Job) === true
+// Versioned.schemaVersion(Job) === "jobs/payload@3"  (tip Class.identifier)
+// Versioned.schemaVersion(JobV1) === "jobs/payload@1"
 
 class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", {
   payload: Job, // same slot as a plain Schema — no versions: param
@@ -79,20 +72,17 @@ class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", {
 // App always speaks current — no Versioned.upgrade in user code
 const program = Effect.gen(function* () {
   const jobs = yield* Jobs
-  yield* jobs.add({
-    id: "1",
-    body: { note: "hi", priority: 2 },
-  })
+  yield* jobs.add(
+    new JobV3({ id: "1", body: { note: "hi", priority: 2 } }),
+  )
 })
 ```
 
-Optional stable label (Eng default = tip AST content-hash if omitted):
+Plain Schema (no chain) still works — single tip, id = AST hash of that schema:
 
 ```ts
-const Job = Versioned.make(JobV1)
-  .migrate(JobV2, toV2)
-  .migrate(JobV3, toV3)
-  .id("jobs/payload@3") // schemaVersion on the wire
+const LegacyJob = Schema.Struct({ id: Schema.String })
+Versioned.schemaVersion(LegacyJob) // AST hash — no migration path if shape changes
 ```
 
 ---
@@ -108,26 +98,36 @@ const Job = Versioned.make(JobV1)
 ```ts
 import * as Versioned from "hyperlink-ts/Versioned"
 
-// Public surface (sketch)
+// Public surface
 Versioned.make
-// .migrate / .id on the builder
+// .migrate on the builder (no chain-level .id)
 Versioned.isVersioned
-Versioned.schemaVersion // (v: VersionedSchema) => string
+Versioned.schemaVersion // (schema: Schema.Top | VersionedSchema) => string
 // @internal for tests only — not app happy path:
 // Versioned.unsafeComposePath(from, to)
 ```
 
-- **Rejected:** `Hyperlink.Versioned` object bag; `*Contract` / `*Migration` orphan files; annotation-only module.
+- **Rejected:** `Hyperlink.Versioned` object bag; `*Contract` / `*Migration` orphan files; annotation-only module; chain-level `.id()`.
 
-### 2. Carrier = Versioned schema value (same Tag slot — no extra params)
+### 2. Scope = Schema leaves only (not Nodes / Tags / Specs)
+
+| Concern | Home |
+|---------|------|
+| Payload / success / error / event **shapes** | `Versioned` on that Schema leaf |
+| Whole RPC surface drift | `contractHash` / F4 (keep) |
+| Transport / protocol | `ProtocolMismatch` |
+| Membership / dial | Directory + Advice + Policy |
+| Retiring a **method** from the Handle while keeping wire | Proposed: `Hyperlink.deprecated` (below) — orthogonal |
+
+**v1 Eng grain:** WorkPool `payload` only. Later: same pattern on any Schema leaf (`success`, `error`, Daemon `event`, …). No second versioning plane for Node/Tag/deploy.
+
+### 3. Carrier = Versioned schema value (same Tag slot — no extra params)
 
 ```ts
 // ✅ one slot
-class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", {
-  payload: Job,
-}) {}
+class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", { payload: Job }) {}
 
-// ✅ plain Schema still fine (no chain → today's contractHash-only behavior)
+// ✅ plain Schema still fine (single tip → AST-hash schemaVersion; no upcast path)
 class Legacy extends WorkPool.Tag<Legacy>()("app/Legacy", {
   payload: Schema.Struct({ id: Schema.String }),
 }) {}
@@ -135,11 +135,27 @@ class Legacy extends WorkPool.Tag<Legacy>()("app/Legacy", {
 // ❌ rejected — no parallel param
 class Bad extends WorkPool.Tag<Bad>()("app/Bad", {
   payload: JobV3,
-  versions: Job, // not a Tag field
+  versions: Job,
 }) {}
 ```
 
-### 3. Builder typing = contiguous tip (compile error on gaps / wrong order)
+### 4. Identity = per tip schema (one system)
+
+`Versioned.schemaVersion(x) → string` is the **only** public schema-version API.
+
+| Tip kind | Id |
+|----------|-----|
+| `Schema.Class("jobs/payload@3")` (preferred) | `Class.identifier` |
+| Plain `Schema` / Class without usable identifier | AST content-hash of tip (same family as `contractHash` fingerprint) |
+| `Versioned` carrier | Id of **current tip** |
+
+Wire / status / durable / handoff all stamp that same string.
+
+**Retire:** `WorkPool.withSchemaVersion` / `schemaVersionOf` (number) / durable `schema_version INTEGER` as the public story → store column becomes **string** (legacy int rows: one-shot read rule or fail loud).
+
+**Rejected:** labeling the Versioned chain; manual integer bumps as migration; two competing version fields.
+
+### 5. Builder typing = contiguous tip (compile error on gaps / wrong order)
 
 ```ts
 declare namespace Versioned {
@@ -156,107 +172,59 @@ declare namespace Versioned {
         Schema.Schema.Type<Current>
       >,
     ): VersionedSchema<Next, Origin>
-    id(label: string): VersionedSchema<Current, Origin>
   }
 }
 
 export const make: <S extends Schema.Top>(origin: S) => VersionedSchema<S, S>
 ```
 
-**Type-level rejects** (ship as `versioned.test-d.ts`):
+**Type-level rejects** (ship as `versioned.test-d.ts`): skip tip, wrong step for tip, gap.
+
+### 6. Metadata home = wrapper / symbol — not Schema.annotate alone
 
 ```ts
-import type { SchemaTransformation } from "effect"
-
-declare const toV2: SchemaTransformation.Transformation<
-  typeof JobV2.Type,
-  typeof JobV1.Type
->
-declare const toV3: SchemaTransformation.Transformation<
-  typeof JobV3.Type,
-  typeof JobV2.Type
->
-declare const skipToV3: SchemaTransformation.Transformation<
-  typeof JobV3.Type,
-  typeof JobV1.Type
->
-
-const ok = Versioned.make(JobV1).migrate(JobV2, toV2).migrate(JobV3, toV3)
-
-// @ts-expect-error — tip is V1; toV3 expects V2→V3
-Versioned.make(JobV1).migrate(JobV3, toV3)
-
-// @ts-expect-error — skipping the typed tip (no V2 in chain)
-Versioned.make(JobV1).migrate(JobV3, skipToV3)
-
-// @ts-expect-error — wrong step for tip V2
-Versioned.make(JobV1).migrate(JobV2, toV2).migrate(JobV3, toV2)
-```
-
-### 4. Metadata home = wrapper / symbol — not Schema.annotate alone
-
-```ts
-// Load-bearing (executable steps) — brand / symbol on the schema value
 Versioned.isVersioned(Job) // true
-Versioned.isVersioned(JobV3) // false
-
-// Annotate is fine for docs only — not where transforms live
-Job.pipe(
-  Schema.annotate({ title: "Jobs payload", description: "v3 nested body" }),
-)
+Versioned.isVersioned(JobV3) // false — tip alone is not the carrier
 ```
 
-### 5. App surface = always current; transforms are automatic
+Executable steps live on the branded carrier. Annotate is fine for docs only.
+
+`Schema.Class.extend` is **field inheritance**, not migration — do not treat as `migrate`.
+
+### 7. App surface = always current; transforms are automatic
 
 ```ts
-// Client and server — identical call sites; both import Jobs
 const use = Effect.gen(function* () {
   const jobs = yield* Jobs
-  // Argument type is JobV3 — never JobV1 / JobV2
-  yield* jobs.add({
-    id: "1",
-    body: { note: "hi", priority: 2 },
-  })
-  const snap = yield* jobs.status.get
-  return snap
+  yield* jobs.add(new JobV3({ id: "1", body: { note: "hi", priority: 2 } }))
 })
-
-// ❌ not the product API
-// yield* Versioned.upgrade(Job, wireBytes)
+// ❌ not the product API — yield* Versioned.upgrade(Job, wireBytes)
 ```
 
-### 6. Version identity on the wire
+### 8. Version identity on the wire
 
 ```ts
-// Node status / readiness service row (sketch next to today's contractHash)
 type ServiceReadiness = {
   readonly key: string
   readonly kind: string
   readonly ready: boolean
   readonly contractHash: string
-  /** Present when a Versioned leaf is on the Spec (v1: WorkPool payload). */
+  /** Tip id when a Versioned (or any Schema) leaf is present — v1: WorkPool payload. */
   readonly schemaVersion?: string
-}
-
-// After serve — tip advertised automatically
-const row = {
-  key: Jobs.key,
-  kind: "hyperlink-ts/WorkPool",
-  ready: true,
-  contractHash: Hyperlink.contractHash(Jobs),
-  schemaVersion: Versioned.schemaVersion(Job), // "jobs/payload@3" or AST hash
 }
 ```
 
 | Signal | Meaning |
 |--------|---------|
-| `schemaVersion` | Tip id for that Versioned leaf |
-| `contractHash` | F4 fingerprint of the **current whole Spec** |
+| `schemaVersion` | Tip id for that Schema leaf |
+| `contractHash` | F4 fingerprint of the **current whole Spec** (includes deprecated wire methods) |
 
-### 7. Who applies (direction)
+Prefer **status row** next to `contractHash` — not a Directory column.
+
+### 9. Who applies (direction)
 
 ```text
-Local tip vs peer.schemaVersion
+Local tip vs peer/row schemaVersion
   equal     → passthrough
   peer older → upcast inbound to current; downcast outbound to peer
   peer newer → upcast what we still understand; else MigrationPathMissing
@@ -265,152 +233,205 @@ Local tip vs peer.schemaVersion
 
 Receiving current side preferred at handoff (A need not know B’s newer Schema).
 
-### 8. Seams that auto-apply — examples
+### 10. Seams that auto-apply
 
-#### 8a. Client ahead of an outdated server
+- Client ↔ server RPC codecs  
+- WorkPool `releaseEnqueueHandoff` / peer `enqueue` decode  
+- Custom `{ handoff }` (codecs still auto-apply)  
+- Durable store reopen  
 
-```ts
-// Process B (tip v3) dials Process A (still advertising schemaVersion for v1)
-const layer = Hyperlink.client(Jobs, WorkerA).pipe(
-  Layer.provide(transport),
-)
+### 11. Errors (tagged only)
 
-const program = Effect.gen(function* () {
-  const jobs = yield* Jobs
-  // You write v3. Seam downcasts request to v1 for A, upcasts A's v1 response to v3.
-  yield* jobs.add({
-    id: "1",
-    body: { note: "hi", priority: 2 },
-  })
-}).pipe(Effect.provide(layer))
-```
+- `MigrationPathMissing` `{ serviceKey, leaf, from, to }`  
+- `MigrationDecodeFailed` `{ serviceKey, leaf, from, step }`  
+- `ContractMismatch` remains for whole-Spec / non-migratable drift  
+- Path missing is **not** softened by `Policy.verifyOff`
 
-#### 8b. Server ahead of an outdated client
+### 12. Tag owns the chain; Handle stays current API
 
-```ts
-// Server tip v3; old dashboard still speaks v2 on the wire
-Node.unix(Worker, [
-  WorkPool.serve(Jobs, {
-    effect: (job) =>
-      Effect.gen(function* () {
-        // Handler already sees JobV3 — seam upcasted the v2 request
-        yield* Effect.logInfo(job.body.note)
-      }),
-  }),
-])
-// Responses downcast to client's schemaVersion when needed
-```
+Both processes import the same Tag module — chain travels with the Tag. No `jobs.versions` / `jobs.migrate` on the Handle.
 
-#### 8c. Handoff A→B (WorkPool bake — no app upgrade call)
-
-```ts
-// A runs Job at v2 tip; B runs same Tag at v3 tip (same source Tag after deploy skew window)
-// WorkPool.serve always bakes releaseEnqueueHandoff (#39)
-
-// B visible first, then:
-yield* Node.shutdown(WorkerA)
-// Inside bake (sketch):
-//   const raw = yield* from.release({})          // A's native / encoded @ v2
-//   // B's enqueue decode sees schemaVersion=v2 + Versioned Job @ v3
-//   // → auto upcast → JobV3 → enqueue
-```
-
-Custom `{ handoff }` unchanged — codecs still auto-apply:
-
-```ts
-Hyperlink.serve(
-  Mover,
-  impl,
-  {
-    handoff: (from, to, ctx) =>
-      Effect.gen(function* () {
-        const items = yield* from.take // already current on this node
-        yield* to.give(items) // peer decode upcasts if peer tip newer
-        return yield* ctx.done
-      }),
-  },
-)
-```
-
-#### 8d. Durable store reopen
-
-```ts
-// Rows written last month as JobV1 JSON + schemaVersion
-// Process boots with Job tip v3 + Soft/durable store
-WorkPool.layer(Jobs, { effect: handle }).pipe(
-  Layer.provide(AppStore.layer),
-)
-// On load: decode path sees stored schemaVersion → auto upcast to JobV3
-// App handlers never see JobV1
-```
-
-### 9. Errors (tagged only)
-
-```ts
-import { Exit, Effect } from "effect"
-
-class MigrationPathMissing extends Schema.TaggedErrorClass<MigrationPathMissing>()(
-  "MigrationPathMissing",
-  {
-    serviceKey: Schema.String,
-    leaf: Schema.String, // e.g. "payload"
-    from: Schema.String,
-    to: Schema.String,
-  },
-) {}
-
-class MigrationDecodeFailed extends Schema.TaggedErrorClass<MigrationDecodeFailed>()(
-  "MigrationDecodeFailed",
-  {
-    serviceKey: Schema.String,
-    leaf: Schema.String,
-    from: Schema.String,
-    step: Schema.String,
-  },
-) {}
-
-// Call site — match _tag, never message strings
-const exit = yield* Effect.exit(Node.shutdown(WorkerA))
-if (Exit.isFailure(exit)) {
-  // … Cause.failure or fail matching MigrationPathMissing / HandoffDeferred
-}
-```
-
-- `ContractMismatch` remains for whole-Spec / non-Versioned drift.
-- Path missing is **not** softened by `Policy.verifyOff`.
-
-### 10. Tag owns the chain; Handle stays current API
-
-```ts
-// Both processes import the same Tag module — chain travels with the Tag
-import { Jobs } from "./jobs"
-
-const jobs = yield* Jobs
-// jobs.add : (payload: JobV3) => …
-// no jobs.versions / jobs.migrate on the Handle
-```
-
-### 11. Grain / rollout
-
-```ts
-// v1 — WorkPool payload only
-class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", { payload: Job }) {}
-
-// later — same pattern on any Schema leaf
-class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
-  value: Versioned.make(Schema.Number).migrate(Schema.Number, bump),
-}) {}
-```
-
-### 12. Relation to existing tracks
+### 13. Relation to existing tracks
 
 | Track piece | Interaction |
 |-------------|-------------|
 | `#39` serve `{ handoff }` | API unchanged; codecs auto-apply Versioned |
 | WorkPool `releaseEnqueueHandoff` | Auto upcast on peer enqueue decode |
 | `#35` ranges | **Superseded** by this bake |
-| `contractHash` / verify | Kept; + `schemaVersion` when leaf is Versioned |
+| `contractHash` / verify | Kept; + `schemaVersion` for leaf tip |
 | Policy / `lookupClient` | Dial unchanged; decode layer applies Versioned |
+| `Hyperlink.deprecated` (proposed) | Orthogonal — method retirement, not payload migration |
+
+---
+
+## Proposed — `Hyperlink.deprecated` (method retirement; orthogonal to Versioned)
+
+**Status:** Owner-raised 2026-08-03 — **not locked**. Complements Versioned: Versioned evolves a leaf **shape**; deprecated retires a **method** from the typed Handle while keeping it on the wire for skew.
+
+### Problem
+
+Today Spec leaves split Handle vs wire the **opposite** way:
+
+| Leaf | Handle | Wire |
+|------|--------|------|
+| `Method` | yes | yes |
+| `local` / `default` | yes | **no** |
+| **need: deprecated** | **no** | **yes** (+ impl required) |
+
+Old clients still call `rename` during a rollout; new app code must not see `rename` on `yield* Tag`.
+
+### Recommended shape — invert `local`
+
+New leaf brand (mirror of `LocalMethod` / `DefaultMethod`):
+
+```ts
+import * as Hyperlink from "hyperlink-ts/Hyperlink"
+import { Schema } from "effect"
+
+// Wire Method wrapped as deprecated
+const rename = Hyperlink.deprecated(
+  Hyperlink.effectFn({
+    payload: Schema.Struct({ from: Schema.String, to: Schema.String }),
+    success: Schema.Void,
+  }),
+)
+
+class Files extends Hyperlink.Tag("app/Files")({
+  move: Hyperlink.effectFn({
+    payload: Schema.Struct({ from: Schema.String, to: Schema.String }),
+    success: Schema.Void,
+  }),
+  // still in Spec / RpcGroup / contractHash / ServeImpl — NOT on ServiceOf / Handle
+  rename,
+}) {}
+
+// Serve — impl REQUIRED for deprecated (same as wire methods)
+Hyperlink.serve(Files, {
+  move: (p) => Effect.void,
+  rename: (p) => Effect.void, // must provide — old clients still dial this RPC
+})
+
+// New code
+const files = yield* Files
+files.move // ✅
+files.rename // ❌ not on Handle (compile error)
+
+// Old binary client — still has rename on its Handle; hits wire; new server answers
+```
+
+### Filter matrix (Eng target)
+
+| Projection | `deprecated` |
+|------------|--------------|
+| `ServiceOf` / Handle / `buildClientService` / `buildLocalContext` | **omit** |
+| `RpcUnionOf` / `buildRpcGroup` / client forwarder | **include** |
+| `ServeImplOf` / server handlers | **required** |
+| `contractHash` | **include** (skew window: old+new Specs still agree on wire) |
+
+### Why this way (not alternatives)
+
+| Alternative | Why not (first choice) |
+|-------------|------------------------|
+| Annotation flag on `Method` | Easy to miss in `ServiceOf`; brand matches `local`/`default` |
+| Separate `deprecated: { … }` Tag bag | Second Spec map; harder nested groups |
+| Keep on Handle but `@deprecated` TSDoc only | Soft; new code still calls it |
+| Drop from `contractHash` immediately | Breaks old clients mid-rollout (F4) |
+
+### Lifecycle
+
+1. Method is normal wire+Handle.  
+2. Wrap with `Hyperlink.deprecated(…)` — impl stays; Handle hides; wire+hash keep.  
+3. After fleet past skew: **delete** the leaf entirely → `contractHash` changes → remaining old clients fail loud (correct).
+
+### Relation to Versioned
+
+- Prefer **Versioned** when the method stays and the **payload tip** moves.  
+- Prefer **deprecated** when the **verb** itself is leaving the product API.  
+- Can combine: deprecated method whose payload is still a Versioned leaf for the skew window.
+
+### Open (lock before Eng)
+
+- Name: `Hyperlink.deprecated` vs `Hyperlink.wireOnly` vs `Hyperlink.legacy`?  
+- Does CLI/TUI list deprecated methods (hidden vs marked)?  
+- Toolkit fixed Specs (WorkPool `enqueue` etc.) — app Tags only for v1?
+
+---
+
+## Proposed — Launcher update impact (dependent nodes)
+
+**Status:** Owner-raised 2026-08-03 — **not locked**. Explicit A/B / `restartSuccessor` stay deferred until this bake lands as design.
+
+### Problem
+
+Bringing up B as an update of A is not only “spawn B → handoff → shutdown A”. Other nodes may:
+
+- **Serve** the same identity / peer set (must roll in order or together).  
+- **Dial** A’s services (clients) — soft if Versioned+Policy cover skew; hard if `contractHash` breaks or deprecated methods were removed too early.  
+- **Hold durable state** stamped with old `schemaVersion` tips (need chain path on the receiving tip).  
+- Be the **Lookup** node (#36 still deferred — special).
+
+Launcher (spine α) stays dumb spawn→Ready→assume→exit — but **update orchestration** needs an impact set before/around that.
+
+### Impact set (sketch)
+
+Inputs already on tip:
+
+- Directory: who serves which HyperService keys / dials  
+- Status rows: `contractHash`, `schemaVersion`, readiness, phase  
+- Advice: prefer / sticky  
+- Tag modules: Versioned chains + (proposed) deprecated wire surface  
+
+```ts
+// Proposed product shape — names TBD; prefer Node/Lookup nouns over Launcher brain
+type UpdateImpact = {
+  readonly target: Node.Key                     // A being replaced
+  readonly successor: SpawnSpec                 // B
+  /** Peers that serve overlapping keys / must roll with or after target. */
+  readonly coUpdate: ReadonlyArray<Node.Key>
+  /** Dialers that would see ContractMismatch if target flips without them. */
+  readonly clientsAtRisk: ReadonlyArray<{ node: Node.Key; serviceKey: string }>
+  /** Leaves where successor tip cannot read incumbent schemaVersion. */
+  readonly migrationGaps: ReadonlyArray<{
+    serviceKey: string
+    leaf: string
+    from: string
+    to: string
+  }>
+  /** Wire methods present on incumbent Spec missing on successor (removed, not deprecated). */
+  readonly wireRemovals: ReadonlyArray<{ serviceKey: string; method: string }>
+}
+
+// Dry-run before spawn — fail closed if migrationGaps / unsafe wireRemovals
+yield* Lookup.planUpdate(target, successorTagBundle) // name TBD
+yield* Launcher.up(successor) // only after plan says safe (or owner force)
+```
+
+### Rules of thumb (proposed)
+
+1. **Payload tip move with Versioned path** → clients/peers can skew; impact = soft warn.  
+2. **`contractHash` change without deprecated bridge** → every dialer of that service is **must-update** (or accept downtime).  
+3. **Method removed (not deprecated)** → same as (2) for callers of that method.  
+4. **Method deprecated** → dialers can lag; servers must keep impl until Directory shows no old tip.  
+5. **Durable tip without chain path** → block successor Ready / handoff (`MigrationPathMissing`).  
+6. **Lookup node** → out of band (#36); do not special-case in Launcher v1.
+
+### Where the brain lives
+
+| Plane | Role in updates |
+|-------|-----------------|
+| **Lookup** | Membership + impact query (who serves / who is at risk) |
+| **Node** | drain / shutdown / handoff / status advertisements |
+| **Launcher** | spawn → Ready → assume → exit for units in a **plan**; not long-lived supervisor |
+| **Policy / lookupClient** | survive safe skew; not a substitute for impact planning |
+
+Spine α stays: Launcher does not own the fleet forever. **Plan** is Lookup/Node-shaped; Launcher executes spawn units from the plan.
+
+### Open (lock before Eng)
+
+- API home: `Lookup.planUpdate` vs `Node.planUpdate` vs thin `Launcher.updat`e?  
+- Force flag for ops when impact is non-empty?  
+- How clients-at-risk are discovered without a client registry (Directory-only? Advice? optional register?)  
+- Tie-in to explicit A/B launcher / `restartSuccessor`
 
 ---
 
@@ -418,28 +439,16 @@ class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
 
 ```ts
 // shared/jobs.ts — both A and B import this after B's deploy
+export class JobV1 extends Schema.Class<JobV1>("jobs/payload@1")({ /* … */ }) {}
+export class JobV2 extends Schema.Class<JobV2>("jobs/payload@2")({ /* … */ }) {}
+export class JobV3 extends Schema.Class<JobV3>("jobs/payload@3")({ /* … */ }) {}
 export const Job = Versioned.make(JobV1).migrate(JobV2, toV2).migrate(JobV3, toV3)
 export class Jobs extends WorkPool.Tag<Jobs>()("fleet/Jobs", { payload: Job }) {}
 
-// --- Node A (old binary still on tip v2 in an earlier release) ---
-// Advertises schemaVersion for JobV2; pending queue holds v2 rows
-
-// --- Node B (new binary, tip v3) ---
-Node.unix(WorkerB, [
-  WorkPool.serve(Jobs, { effect: handleV3, autoStart: false }),
-]).pipe(Layer.provide(Lookup.client(lookupNode)))
-
-// Dialers on tip v3
-Hyperlink.lookupClient(Jobs).pipe(
-  Policy.provide(Policy.sticky),
-  Layer.provide(Lookup.layer),
-)
-
-// Cutover
-yield* Advice.prefer(Jobs, WorkerB.key)
-yield* Node.shutdown(WorkerA)
-// release @ v2 → B enqueue decode → JobV3 automatically
-// lookupClient already on B; app still adds JobV3 only
+// Node A (old binary tip @2): advertises schemaVersion "jobs/payload@2"
+// Node B (tip @3): Directory-visible first, then Node.shutdown(A)
+// release @2 → B enqueue decode → JobV3 automatically
+// lookupClient on tip @3; app only constructs JobV3
 ```
 
 ---
@@ -453,26 +462,33 @@ yield* Node.shutdown(WorkerA)
 - Silent passthrough when path missing  
 - Replacing F4 `contractHash`  
 - `HandoffManager` / parallel migration control plane  
+- Chain-level `.id()` (identity is per tip schema)  
+- `Schema.Class.extend` as a migration mechanism  
+- Versioning Nodes / Tags / Specs under `Versioned`  
+- Keeping numeric `WorkPool.withSchemaVersion` alongside Versioned  
 - Eng before owner go on this file  
 
 ---
 
 ## Eng gate (when owner says go)
 
-1. `Versioned` module + typed builder + brand + `isVersioned` + `.id`  
-2. Wire `schemaVersion` on status service row for Versioned WorkPool payload  
-3. Client + serve codec hooks  
-4. Handoff / `releaseEnqueueHandoff` + durable reopen hooks  
-5. Tagged errors + `versioned.test-d.ts` contiguous-chain asserts  
-6. Guide + runnable example (old peer and/or store reopen)  
-7. Changeset (minor)  
-8. Brief #35 → “superseded by Versioned” (already pointed here)
+**Versioned v1**
 
-**Out of Eng v1:** non-payload leaves; `restartSuccessor`; Directory column (use status row).
+1. `Versioned` module + typed builder + brand + `isVersioned` + `schemaVersion` (Class.identifier → else AST hash)  
+2. Retire public `withSchemaVersion` / numeric store path → string stamps  
+3. Wire `schemaVersion` on status service row for WorkPool payload  
+4. Client + serve codec hooks  
+5. Handoff / `releaseEnqueueHandoff` + durable reopen hooks  
+6. Tagged errors + `versioned.test-d.ts` contiguous-chain asserts  
+7. Guide + runnable example  
+8. Changeset (minor)  
+9. Brief #35 → superseded (already pointed here)
+
+**Out of Versioned Eng v1:** non-payload leaves; `restartSuccessor`; Directory column; `Hyperlink.deprecated` (separate lock); launcher impact planner (separate lock).
 
 ---
 
 ## Open at Eng only (not product forks)
 
-- Exact `schemaVersion` mint — recommend **AST content hash of tip** + optional `.id("…")` override.  
-- Status `services[].schemaVersion` vs Directory column — prefer **status row** next to `contractHash`.
+- Exact AST-hash algorithm parity with `contractHash` fingerprint helpers (reuse if possible).  
+- Legacy durable INTEGER → string read rule for one release.
