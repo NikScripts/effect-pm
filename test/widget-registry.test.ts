@@ -15,6 +15,7 @@ import {
 import { base as tuiBase } from "../src/tui/cellWidgets";
 import { base as webBase } from "../src/web/widgets";
 
+import * as View from "../src/ui/View";
 // Distinct widgets, compared by reference identity (widgetFor returns the stored one).
 const Box = (label: string): string => label;
 

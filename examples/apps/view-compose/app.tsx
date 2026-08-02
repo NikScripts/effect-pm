@@ -16,6 +16,7 @@
 import * as React from "react";
 import { findById, flatten, hub, seedLogs, type Member } from "./mock";
 
+import * as View from "../../../src/ui/View";
 type Route =
   | { readonly _tag: "grid"; readonly groupId: string }
   | { readonly _tag: "detail"; readonly groupId: string; readonly leafId: string };

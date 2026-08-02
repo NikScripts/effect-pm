@@ -13,11 +13,12 @@ import { AsyncResult } from "effect/unstable/reactivity";
 import { Ui, View, displayName, useAtomValue, useRuntime } from "../../../src/web";
 import { WorkerPool } from "./hub";
 
+import * as View from "../../../src/ui/View";
 /** UI Needs placeholder — opaque Tag static (not a Hyperlink wire Spec). */
 export const workerPoolCardSpec = { kind: "examples/worker-pool-card" } as const;
 
 /** Sized View handle (`size: ViewKind.Card()` from `View.Card`). */
-export class WorkerPoolCard extends Ui.Card.Tag<
+export class WorkerPoolCard extends View.Card.Tag<
   WorkerPoolCard,
   { readonly dense?: boolean }
 >()("examples/apps/web/worker-pool-card", {
@@ -61,7 +62,7 @@ const NodeRow = (props: {
  * Contribution Layer for Dashboard `views` — allowlist + skin.
  * `R = View.Registry`; Dashboard closes with `View.base`.
  */
-export const layer = Ui.only(WorkerPool, WorkerPoolCard).pipe(
+export const layer = View.only(WorkerPool, WorkerPoolCard).pipe(
   Layer.provide(
     WorkerPoolCard.provide((props) => {
       const runtime = useRuntime();

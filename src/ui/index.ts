@@ -25,10 +25,9 @@ export {
   RuntimeProvider,
   useRuntime,
 } from "./runtime";
-/** Keyed Spec-based view registry (`View.Tag` / `Ui.compose`) — prefer `import * as View`. */
+/** Keyed Spec-based view registry (`View.Tag` / `View.compose`) — prefer `import * as View`. */
 export * as View from "./View";
-/** Hyperlink dashboard chrome — `Ui.compose`, size aliases, Group dash. */
-export * as Ui from "./Ui";
+/** Hyperlink dashboard chrome — `View.compose`, size aliases, Group dash. */
 /** UI routing toolkit — HttpApi-shaped make/group/get/match/urlBuilder. */
 export * as Route from "./Route";
 /** File-router page marks — re-export of `last-ts/Page`. Prefer that subpath. */

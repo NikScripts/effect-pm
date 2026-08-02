@@ -1,6 +1,6 @@
 # last-ts codesplit
 
-**Status:** Eng — P0–P3 landed (Page, AtomReact, vite, Route/Router, View, docgen); P4 shims/docs polish + `Ui.Card` call-site rename remain  
+**Status:** Eng — P0–P3 landed correctly (View kernel on last-ts; sizes/bind/Service·Group tags on `Ui`); P4 shims/docs polish remain  
 **Branch:** `cursor/file-router-prototype-125f`  
 **npm:** `last-ts@0.0.0` reserved · code name **Last.ts**  
 **Repo:** same-workspace `packages/last-ts` first; `hyperlink-ts` depends on it  

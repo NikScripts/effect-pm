@@ -16,7 +16,6 @@ import * as Route from "../src/ui/Route";
 import * as Router from "../src/ui/Router";
 import { RuntimeProvider } from "../src/ui/runtime";
 import * as View from "../src/ui/View";
-import * as Ui from "../src/ui/Ui";
 import * as WorkPoolView from "../src/ui/WorkPoolView";
 
 const Item = Schema.Struct({ n: Schema.Number });
@@ -37,16 +36,16 @@ const hubSite = Route.make("hub").add(
   Route.group("tree", { topLevel: true }).fromEffect(Group.asRoutes(Hub)),
 );
 
-class PoolCard extends Ui.Card.Tag<PoolCard>()("hyperlink/view/observe-use-pool-card") {}
+class PoolCard extends View.Card.Tag<PoolCard>()("hyperlink/view/observe-use-pool-card") {}
 
-const views = Ui.bind(WorkPool.kind, PoolCard).pipe(
+const views = View.bind(WorkPool.kind, PoolCard).pipe(
   Layer.provideMerge(View.provide(PoolCard, () => null)),
-  Layer.provideMerge(Ui.base),
+  Layer.provideMerge(View.base),
 );
 
 describe("Observe.use", () => {
   it("returns queue / daemon packs under RuntimeProvider", () => {
-    const ui = Ui.compose({
+    const ui = View.compose({
       views,
       router: Router.memory(hubSite),
     });

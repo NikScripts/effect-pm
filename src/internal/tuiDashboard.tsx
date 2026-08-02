@@ -26,7 +26,6 @@ import * as GroupNav from "../ui/GroupNav";
 import * as Route from "../ui/Route";
 import * as Router from "../ui/Router";
 import * as View from "../ui/View";
-import * as Ui from "../ui/Ui";
 import { WidgetsProvider } from "../ui/widgetsContext";
 import * as ApiMetricsView from "../ui/ApiMetricsView";
 import * as DaemonView from "../ui/DaemonView";
@@ -440,13 +439,13 @@ export const componentsLayer = Layer.mergeAll(
 );
 
 /**
- * Fully provided Dashboard View Layer for the TUI (`R = never`) — ready for {@link Ui.react}.
+ * Fully provided Dashboard View Layer for the TUI (`R = never`) — ready for {@link View.react}.
  *
  * @internal
  */
 export const layer = DashboardViews.layer.pipe(
   Layer.provideMerge(componentsLayer),
-  Layer.provideMerge(Ui.base),
+  Layer.provideMerge(View.base),
 );
 
 const routesFor = (group: GroupNode) =>
@@ -463,7 +462,7 @@ export const Dashboard = <R, ER>(props: {
   readonly runtime: DashboardRuntime<R, ER>;
   readonly group: GroupNode;
   readonly path?: ReadonlyArray<string>;
-  readonly views?: Layer.Layer<never, never, Ui.Registry>;
+  readonly views?: Layer.Layer<never, never, View.Registry>;
   readonly widgets?: TuiWidgetRegistry;
 }): React.ReactElement => {
   const ui = React.useMemo(() => {
@@ -472,9 +471,9 @@ export const Dashboard = <R, ER>(props: {
       props.views ?? Layer.empty,
     ).pipe(
       Layer.provideMerge(componentsLayer),
-      Layer.provideMerge(Ui.base),
+      Layer.provideMerge(View.base),
     );
-    const composed = Ui.compose({
+    const composed = View.compose({
       views,
       router: Router.memory(routesFor(props.group)),
       group: props.group,

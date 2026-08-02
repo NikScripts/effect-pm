@@ -15,7 +15,6 @@ import * as GroupNav from "../src/ui/GroupNav";
 import * as Route from "../src/ui/Route";
 import * as Router from "../src/ui/Router";
 import * as View from "../src/ui/View";
-import * as Ui from "../src/ui/Ui";
 import * as WorkPoolView from "../src/ui/WorkPoolView";
 import * as DaemonView from "../src/ui/DaemonView";
 import { RuntimeProvider, useRuntime } from "../src/ui/runtime";
@@ -38,17 +37,17 @@ const hubSite = Route.make("hub").add(
   Route.group("tree", { topLevel: true }).fromEffect(Group.asRoutes(Hub)),
 );
 
-class PoolCard extends Ui.Card.Tag<PoolCard>()("hyperlink/view/runtime-pool-card") {}
+class PoolCard extends View.Card.Tag<PoolCard>()("hyperlink/view/runtime-pool-card") {}
 
 const chrome = View.provide(PoolCard, () => null);
-const views = Ui.bind(WorkPool.kind, PoolCard).pipe(
+const views = View.bind(WorkPool.kind, PoolCard).pipe(
   Layer.provideMerge(chrome),
-  Layer.provideMerge(Ui.base),
+  Layer.provideMerge(View.base),
 );
 
 describe("RuntimeProvider + Observe.use", () => {
   it("compose has no data door", () => {
-    const ui = Ui.compose({
+    const ui = View.compose({
       views,
       router: Router.memory(hubSite),
     });
@@ -58,7 +57,7 @@ describe("RuntimeProvider + Observe.use", () => {
   it("compose accepts a live Router.Service", () => {
     const router = Router.make(hubSite, "Memory");
     GroupNav.open(Hub, router, Jobs);
-    const ui = Ui.compose({ views, router, group: Hub });
+    const ui = View.compose({ views, router, group: Hub });
     expect(ui.router).toBe(router);
     expect(ui.router.pathname).toBe("/Jobs");
     expect(GroupNav.state(Hub, ui.router).selected).toBe(Jobs);
@@ -70,7 +69,7 @@ describe("RuntimeProvider + Observe.use", () => {
         Route.handle(() => React.createElement("span", null, "handled")),
       ),
     );
-    const ui = Ui.compose({
+    const ui = View.compose({
       views,
       router: Router.memory(site),
     });

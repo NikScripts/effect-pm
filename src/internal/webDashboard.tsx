@@ -18,7 +18,6 @@ import {
 } from "../ui/data";
 import * as Group from "../Group";
 import * as View from "../ui/View";
-import * as Ui from "../ui/Ui";
 import * as ApiMetricsView from "../ui/ApiMetricsView";
 import * as DaemonView from "../ui/DaemonView";
 import * as DashboardViews from "../ui/DashboardViews";
@@ -350,13 +349,13 @@ export const componentsLayer = Layer.mergeAll(
 );
 
 /**
- * Fully provided Dashboard View Layer for the web (`R = never`) — ready for {@link Ui.react}.
+ * Fully provided Dashboard View Layer for the web (`R = never`) — ready for {@link View.react}.
  *
  * @internal
  */
 export const layer = DashboardViews.layer.pipe(
   Layer.provideMerge(componentsLayer),
-  Layer.provideMerge(Ui.base),
+  Layer.provideMerge(View.base),
 );
 
 const routesFor = (group: GroupNode) =>
@@ -372,7 +371,7 @@ const routesFor = (group: GroupNode) =>
 export const DashboardView = <R, ER>(props: {
   readonly runtime: DashboardRuntime<R, ER>;
   readonly group: GroupNode;
-  readonly views?: Layer.Layer<never, never, Ui.Registry>;
+  readonly views?: Layer.Layer<never, never, View.Registry>;
 }): React.ReactElement => {
   const ui = React.useMemo(() => {
     const views = Layer.mergeAll(
@@ -380,9 +379,9 @@ export const DashboardView = <R, ER>(props: {
       props.views ?? Layer.empty,
     ).pipe(
       Layer.provideMerge(componentsLayer),
-      Layer.provideMerge(Ui.base),
+      Layer.provideMerge(View.base),
     );
-    return Ui.compose({
+    return View.compose({
       views,
       router: Router.history(routesFor(props.group)),
       group: props.group,
@@ -407,7 +406,7 @@ export const DashboardView = <R, ER>(props: {
 export const Dashboard = <R, ER>(props: {
   readonly runtime: DashboardRuntime<R, ER>;
   readonly group: GroupNode;
-  readonly views?: Layer.Layer<never, never, Ui.Registry>;
+  readonly views?: Layer.Layer<never, never, View.Registry>;
   readonly widgets?: WidgetRegistry<Widget>;
 }): React.ReactElement => (
   <RegistryProvider>

@@ -5,16 +5,15 @@
  * Card-only (no detail body yet).
  */
 import * as Hyperlink from "../Hyperlink";
-import * as Ui from "./Ui";
-
+import * as View from "./View";
 /** @public */
 export const hyperlinkViewSpec = { kind: Hyperlink.kind } as const;
 
 /** @public */
-export class HyperlinkCard extends Ui.Card.Tag<HyperlinkCard>()(
+export class HyperlinkCard extends View.Card.Tag<HyperlinkCard>()(
   "hyperlink/view/hyperlink-card",
   { spec: hyperlinkViewSpec },
 ) {}
 
 /** @public */
-export const layer = Ui.bind(Hyperlink.kind, HyperlinkCard);
+export const layer = View.bind(Hyperlink.kind, HyperlinkCard);

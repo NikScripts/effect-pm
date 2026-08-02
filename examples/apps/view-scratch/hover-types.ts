@@ -6,7 +6,7 @@
  *
  * Covers:
  * 1. Effect `Context.Service` baseline (what we’re stealing)
- * 2. **Shipped** `Ui.Card` / Prototype tags (already have instance `.Service`)
+ * 2. **Shipped** `View.Card` / Prototype tags (already have instance `.Service`)
  * 3. Annotation styles: `Tag["Service"]` vs `View.Type<typeof Tag>` vs `View.View`
  * 4. POC flat `Card<Self, Props>()` for comparison
  *
@@ -15,7 +15,6 @@
 import type * as React from "react";
 import { Context, Layer } from "effect";
 import * as View from "../../../src/ui/View";
-import * as Ui from "../../../src/ui/Ui";
 import * as Poc from "./effect-service-poc";
 
 // =============================================================================
@@ -54,7 +53,7 @@ export const effect_configLayer = Layer.succeed(Config, { port: 8080 });
 // 2. Shipped View — default chrome card
 // =============================================================================
 
-export class PoolCard extends Ui.Card.Tag<PoolCard>()(
+export class PoolCard extends View.Card.Tag<PoolCard>()(
   "hyperlink-ts/examples/apps/view-scratch/hover-types/PoolCard",
 ) {}
 
@@ -66,7 +65,7 @@ export type Shipped_PoolCard_Ctor = typeof PoolCard;
 
 /**
  * ★ Prefer this — instance Shape, **no typeof**.
- * Hover: `(props: Ui.ViewProps) => ReactElement | null`
+ * Hover: `(props: View.ViewProps) => ReactElement | null`
  */
 export type Shipped_PoolCard_Service = PoolCard["Service"];
 
@@ -78,7 +77,7 @@ export type Shipped_PoolCard_CtorService = (typeof PoolCard)["Service"];
 
 /**
  * Phantom Props via today’s helper — **needs typeof**.
- * Hover: `Ui.ViewProps`
+ * Hover: `View.ViewProps`
  */
 export type Shipped_PoolCard_TypeOf = View.Type<typeof PoolCard>;
 
@@ -90,7 +89,7 @@ export type Shipped_PoolCard_LongAnnotate = View.View<
   View.Type<typeof PoolCard>
 >;
 
-/** Defaults to ViewProps. Hover: `Ui.ViewProps` fn. */
+/** Defaults to ViewProps. Hover: `View.ViewProps` fn. */
 export type Shipped_View_Default = View.View;
 
 /** Statics on constructor. */
@@ -117,7 +116,7 @@ export const shipped_poolLayer = Layer.succeed(PoolCard, (props) => {
 
 type DenseExtra = { readonly dense?: boolean };
 
-export class DenseCard extends Ui.Card.Tag<DenseCard, DenseExtra>()(
+export class DenseCard extends View.Card.Tag<DenseCard, DenseExtra>()(
   "hyperlink-ts/examples/apps/view-scratch/hover-types/DenseCard",
   { spec: { kind: "hover-dense" } as const },
 ) {}
@@ -135,7 +134,7 @@ export type Shipped_DenseCard_Props = View.PropsOf<DenseCard>;
 export type Shipped_DenseCard_TypeOf = View.Type<typeof DenseCard>;
 
 /** Open-chain Prototype still available for Requirement debt. */
-const DenseOpen = Ui.SizeChrome.Prototype<DenseExtra>()({
+const DenseOpen = View.SizeChrome.Prototype<DenseExtra>()({
   spec: { kind: "hover-dense-open" } as const,
 });
 export type Shipped_DenseOpen_PropsOf = View.PropsOf<typeof DenseOpen>;
@@ -166,14 +165,14 @@ export class Greeter extends View.Tag<
  */
 export type Shipped_Greeter_Service = Greeter["Service"];
 
-export class PoolDetail extends Ui.Detail.Tag<PoolDetail>()(
+export class PoolDetail extends View.Detail.Tag<PoolDetail>()(
   "hyperlink-ts/examples/apps/view-scratch/hover-types/PoolDetail",
 ) {}
 
 export type Shipped_PoolDetail_Service = PoolDetail["Service"];
 export type Shipped_PoolDetail_size = (typeof PoolDetail)["size"];
 
-export class PoolPage extends Ui.Page.Tag<PoolPage>()(
+export class PoolPage extends View.Page.Tag<PoolPage>()(
   "hyperlink-ts/examples/apps/view-scratch/hover-types/PoolPage",
 ) {}
 

@@ -11,7 +11,7 @@
  *
  * Layer.mergeAll(DashboardViews.layer, appViews).pipe(
  *   Layer.provideMerge(Dashboard.componentsLayer),
- *   Layer.provideMerge(Ui.base),
+ *   Layer.provideMerge(View.base),
  * )
  * // no app contributions: Dashboard.layer
  * ```
@@ -28,8 +28,9 @@ import * as ShardMapView from "./ShardMapView";
 import * as TelemetryView from "./TelemetryView";
 import * as WorkPoolView from "./WorkPoolView";
 
+import * as View from "./View";
 /**
- * All default Dashboard View contributions (no platform TSX, no {@link ./Ui.base}).
+ * All default Dashboard View contributions (no platform TSX, no {@link ./View.base}).
  *
  * @public
  */

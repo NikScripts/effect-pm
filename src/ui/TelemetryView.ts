@@ -6,27 +6,26 @@
 import { Layer } from "effect";
 import * as Telemetry from "../Telemetry";
 import { telemetryPack as pack } from "./pollViewPacks";
-import * as Ui from "./Ui";
-
+import * as View from "./View";
 export { pack };
 
 /** @public */
 export const telemetryViewSpec = { kind: Telemetry.kind } as const;
 
 /** @public */
-export class TelemetryCard extends Ui.Card.Tag<TelemetryCard>()(
+export class TelemetryCard extends View.Card.Tag<TelemetryCard>()(
   "hyperlink/view/telemetry-card",
   { spec: telemetryViewSpec },
 ) {}
 
 /** @public */
-export class TelemetryDetail extends Ui.Detail.Tag<TelemetryDetail>()(
+export class TelemetryDetail extends View.Detail.Tag<TelemetryDetail>()(
   "hyperlink/view/telemetry-detail",
   { spec: telemetryViewSpec },
 ) {}
 
 /** @public */
 export const layer = Layer.mergeAll(
-  Ui.bind(Telemetry.kind, TelemetryCard),
-  Ui.bind(Telemetry.kind, TelemetryDetail),
+  View.bind(Telemetry.kind, TelemetryCard),
+  View.bind(Telemetry.kind, TelemetryDetail),
 );

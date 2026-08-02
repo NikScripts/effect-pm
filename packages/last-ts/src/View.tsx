@@ -1,17 +1,14 @@
 /**
  * @module View
  *
- * View **DI** kernel (Context) — Tag, Prototype, provide.
- * Sized chrome (card/detail/page) lives in Hyperlink `Ui`, not here.
- *
- * - Mint: `View.Tag<Self, Props?>()(key, statics?)` — Effect-shaped.
- * - Provide: {@link provide}`(Tag, impl)` (or `Tag.provide(impl)`) — props infer from the Tag.
- * - Open debt: {@link Prototype}`<Props, Requirement>` then fulfill statics.
- * - Svc type is {@link View}`<Props>` (props in → element out).
+ * View **DI** kernel — Tag, Prototype, provide, Chrome.
+ * Hyperlink size chrome (Card/Detail/Page), Registry, bind/only, react, compose
+ * stay on `hyperlink-ts/ui/View` (same `View.*` namespace for apps).
  */
 import * as React from "react";
 import { Context, Layer } from "effect";
 import type * as Types from "effect/Types";
+
 
 // =============================================================================
 // Keys / chrome
@@ -24,7 +21,8 @@ type Flat<T extends object> = { readonly [K in keyof T]: T[K] } & {};
 export type ViewKey = string;
 
 /**
- * Layout / shell hints for View skins. Navigation stays with the parent.
+ * Layout / shell hints for View skins. Navigation is {@link Router} plus
+ * {@link GroupNav} for Group drill-down, not here.
  *
  * @public
  */
@@ -55,7 +53,7 @@ export const useChrome = (): Chrome => React.useContext(ChromeContext);
 
 /**
  * Component Svc for a View tag — **props in, element out** (reversed vs Hyperlink service APIs).
- * Defaults to `{}`; pass a props bag for custom Prototypes.
+ * Pass a props bag for custom Prototypes.
  *
  * Prefer {@link provide} at the Layer boundary (props infer). Reach for `Tag["Service"]` only when
  * you need a named binding before provide.
@@ -63,7 +61,7 @@ export const useChrome = (): Chrome => React.useContext(ChromeContext);
  * @example
  * ```ts
  * View.provide(PoolCard, (props) => null)
- * const chrome: View.View = (props) => null
+ * const chrome: View.View = (props) => null // ViewProps
  * ```
  *
  * @public
@@ -84,6 +82,7 @@ export type View<Props extends object = {}> = (
  *   View.provide(PoolCard, ({ tag, name }) => <Card tag={tag} name={name} />),
  *   View.provide(PoolDetail, ({ tag }) => <Detail tag={tag} />),
  * )
+ * // pipe: contrib.pipe(Layer.provideMerge(componentsLayer), Layer.provideMerge(View.base))
  * ```
  *
  * @public
@@ -121,7 +120,7 @@ type NextRequirement<
 > = Statics extends Requirement ? {} : Requirement;
 
 /**
- * Props bag — from a {@link Prototype}, a handle's {@link Type} phantom, or
+ * Props bag — from a {@link Prototype}, a handle’s {@link Type} phantom, or
  * instance `Service` (`PoolCard["Service"]`) without `typeof`.
  *
  * @public
@@ -200,7 +199,7 @@ export type ViewHandle<
     /** Phantom — component props (`View.Type<typeof PoolCard>` / {@link PropsOf}). */
     readonly Type: Props;
     /**
-     * Provide this Tag's skin — same as {@link provide}`(this, impl)`.
+     * Provide this Tag’s skin — same as {@link provide}`(this, impl)`.
      * Props infer from the handle.
      */
     readonly provide: (impl: View<Props>) => Layer.Layer<Self>;
@@ -218,12 +217,23 @@ export type Type<T> = T extends { readonly Type: infer P } ? P : never;
  * Props + statics + an R-style **Requirement** type param (debt until discharged).
  *
  * - `Props` — component props (accumulated, additive)
- * - `Requirement` — type param; may be open while statics are still empty
+ * - `Requirement` — type param; may be open (`WithSize`) while statics are still empty
  * - `Statics` — runtime statics (additive); when `Statics extends Requirement`, Requirement
  *   becomes `{}` (fulfilled), like Effect `R → never`
  *
  * Fulfill size via `.Prototype()({ size })` while open, or one-shot
- * `Ui.Card.Tag()(key, { spec })` on an already-fulfilled size chrome.
+ * `View.Card.Tag()(key, { spec })` on an already-fulfilled size chrome.
+ *
+ * @example
+ * ```ts
+ * // One-shot (common) — Effect-shaped mint
+ * class PoolCard extends View.Card.Tag<PoolCard>()("…", { spec }) {}
+ * class Dense extends View.Card.Tag<Dense, ViewProps & { dense?: boolean }>()("…") {}
+ *
+ * // Open Requirement chain
+ * const Open = View.SizeChrome.Prototype<{ dense?: boolean }>()({ spec })
+ * class X extends Open.Prototype()({ size: View.ViewKind.Card() }).Tag<X>()("…") {}
+ * ```
  *
  * @public
  */
@@ -251,11 +261,11 @@ export interface Prototype<
    *
    * - `NewProps` — extra component props (additive)
    * - `statics` — optional runtime statics (`spec`, …); merged onto the class
-   * - Skins via {@link provide} / returned handle's `.provide` (props infer)
+   * - Skins via {@link provide} / returned handle’s `.provide` (props infer)
    *
-   * Does **not** change this Prototype's Requirement type — returns a class.
-   * For `bind`, the class still needs `.size` (use {@link Ui.Card} / {@link Ui.Detail} /
-   * {@link Ui.Page}, or pass `size` in statics / fulfill via `.Prototype()` first).
+   * Does **not** change this Prototype’s Requirement type — returns a class.
+   * For `bind`, the class still needs `.size` (use {@link Card} / {@link Detail} /
+   * {@link Page}, or pass `size` in statics / fulfill via `.Prototype()` first).
    */
   readonly Tag: <Self, NewProps extends object = {}>() => <
     const K extends string,
@@ -337,7 +347,7 @@ export const Prototype =
 
 /**
  * Naked View Tag — DI component handle with **no** size chrome.
- * Prefer sized add-ons (`Ui.Card.Tag`, …) for dashboard skins.
+ * Prefer sized add-ons (`View.Card.Tag`, …) for dashboard skins.
  *
  * @example
  * ```ts
@@ -353,15 +363,16 @@ export const Prototype =
 export const Tag = Prototype()().Tag;
 
 /**
- * A View service handle (sized or naked). Sized chrome handles carry `size`.
+ * A View service handle.
  *
  * @public
  */
 export type AnyView<Self extends object = object> = Context.Service<
   Self,
-  View<Self>
+  View
 > & {
   readonly key: ViewKey;
-  readonly size?: unknown;
+  readonly size?: { readonly _tag: string };
   readonly spec?: unknown;
 };
+

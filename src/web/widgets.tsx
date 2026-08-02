@@ -49,7 +49,6 @@ import {
 import { dateFromMillis, fmtClock, fmtDayLabel, millisFromLocalInput, now, startOfDayMillis, toLocalInput } from "../ui/now";
 import { useAtomSet, useAtomValue } from "../ui/atom-react";
 import * as View from "../ui/View";
-import * as Ui from "../ui/Ui";
 import { kindOf as hyperlinkKindOf, kind as hyperlinkKind } from "../Hyperlink";
 import type { NodeReport } from "../FleetHealth";
 import type { MetricDatum } from "../Telemetry";
@@ -476,8 +475,8 @@ export const Cell = (props: {
   const isGroup = Group.isGroup(props.member);
   const leaf = isLeafTag(props.member) ? props.member : null;
   const viewTag = isGroup ? props.member : leaf;
-  const hasViewCard = Ui.useHasMatch(viewTag, Ui.ViewKind.Card());
-  const Match = Ui.useMatch();
+  const hasViewCard = View.useHasMatch(viewTag, View.ViewKind.Card());
+  const Match = View.useMatch();
   // Group + leaf share kit Card when a Group family skin is on the layer (lock B).
   if (hasViewCard && viewTag !== null) {
     return (

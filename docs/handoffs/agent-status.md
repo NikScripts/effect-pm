@@ -29,7 +29,7 @@
 
 ### Active (owner approval required)
 1. **Agent 4:** Examples Ideas 1–9 + Related notes Eng’d. **Release-prep cleanup Eng’d** (archive completed handoffs/plans, dead scripts, npmignore, legacy example aliases). Idea 10 Apps/E5 still owner-gated. Owner still: changeset consolidate before `version`/publish.
-2. **Agent G / TUI:** last-ts P0–P3 (Page/AtomReact/vite/Route/Router/View/docgen) Eng’d; hyperlink `Ui` + Route Target. Next: Page.Tag + docs-site createPages; P4 polish. Park: [`owned-string-casing-park.md`](./owned-string-casing-park.md).
+2. **Agent G / TUI:** last-ts codesplit corrected — View kernel only; `Ui` owns sizes/bind/Service·Group tags. Next: Page.Tag + docs-site createPages; P4 polish. Park: [`owned-string-casing-park.md`](./owned-string-casing-park.md).
 3. **Agent 5 (Launcher + handoff):** **Lifecycle L0–L7 closed** tip-synced (P10 Gate + honest wire errors; P12 Rejected). Chrome → **Agent G**. **Versioned schema decisions** on tip ([`versioned-schema-decisions.md`](./versioned-schema-decisions.md)) — owner go before Eng. Also owner-gated: explicit A/B launcher, `restartSuccessor`, #36–37, Track D redirect/dual-serve. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
 4. **Docs site:** Live — apex coming-soon (inlined CSS + `(book)` chrome); docs on `dev`. Origin host-gate via `serve-production.mjs` (before Waku static). Islands: `hyperlink-ts` alias + `.hl-dashboard`. Getting Started em-dash/voice polish.
 
