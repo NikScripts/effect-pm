@@ -70,8 +70,9 @@
  * @module Gate
  */
 
-import { Context, Effect, Layer, Schema, Scope } from "effect";
+import { Context, Effect, Layer, Schema, Scope, Stream } from "effect";
 import * as Hyperlink from "./Hyperlink";
+import * as Lifecycle from "./Lifecycle";
 import type {
   Driver,
   HandlerContextOf,
@@ -103,7 +104,10 @@ import * as Store from "./Store";
 import {
   gateStatus,
   gateSpec,
+  gateSetRateLimitPayload,
   type GateInstanceSpec,
+  type WithGateStopped,
+  GateStopped as GateStoppedSchema,
 } from "./internal/gateSchema";
 
 // ============================================================================
@@ -160,6 +164,41 @@ export type InstanceSpec<
 export type Status = internal.GateStatus;
 
 /**
+ * Failure when a call is admitted to a **stopped** gate (Lifecycle `Draining` / `Off`),
+ * or a waiting call is failed by a `stopMode: "failWaiting"` stop. In-flight bodies always
+ * finish.
+ *
+ * @remarks
+ * Wire-encodable (`Schema.TaggedErrorClass`) and always present on Tag / Service `run`
+ * (`Effect.catchTag("GateStopped", …)`). Also on local {@link make} handles. Rate-limit
+ * failures (`RateLimiterError`) stay engine-only (not in the declared wire channel).
+ *
+ * @category errors
+ * @public
+ */
+export const GateStopped = GateStoppedSchema;
+
+/**
+ * The {@link GateStopped} error type ({@link https://effect.website | Effect} tagged error).
+ *
+ * @category errors
+ * @public
+ */
+export type GateStopped = GateStoppedSchema;
+
+/**
+ * How a `stop` treats calls already **waiting** for a permit / resume:
+ * - `"failWaiting"` (default) — fail them with {@link GateStopped}.
+ * - `"finishWaiting"` — let them acquire + run; only new calls are rejected.
+ *
+ * In-flight bodies always finish regardless.
+ *
+ * @category models
+ * @public
+ */
+export type StopMode = internal.GateStopMode;
+
+/**
  * Minimal handle from {@link Gate.make} — `.run` only.
  *
  * @category models
@@ -184,7 +223,7 @@ export type Handle<T, A, E> = internal.GateHandle<T, A, E>;
  *
  * @typeParam Payload - the decoded gate input (`run(input)`; `void` → the gate is a bare {@link Effect})
  * @typeParam Success - the gated effect's success value
- * @typeParam Error - the gated effect's failure channel
+ * @typeParam Error - the wire `run` failure channel (declared effect errors **plus** {@link GateStopped})
  * @typeParam Requirements - the transport requirement (`never` for a local `yield*`, the `Protocol` for
  *   a remote {@link Hyperlink.client})
  *
@@ -231,6 +270,27 @@ export interface Gate<
   readonly run: [Payload] extends [void]
     ? Effect.Effect<Success, Error, Requirements>
     : (input: Payload) => Effect.Effect<Success, Error, Requirements>;
+  /** Shared {@link Lifecycle.State} badge (`_tag`) — SSOT from the gate's {@link Lifecycle}. */
+  readonly lifecycle: Hyperlink.Subscribable<Lifecycle.State>;
+  /** Lifecycle transition stream ({@link Lifecycle.Event}). */
+  readonly lifecycleEvents: Stream.Stream<Lifecycle.Event>;
+  /** Start the gate (Idle → Running). No-op once past Idle; idempotent. */
+  readonly start: Effect.Effect<void>;
+  /** Pause admission — new calls latch-block (including waiters) until {@link resume}. */
+  readonly pause: Effect.Effect<void>;
+  /** Resume after {@link pause} — latch opens, held callers proceed. */
+  readonly resume: Effect.Effect<void>;
+  /**
+   * Stop the gate (graceful). New calls fail {@link GateStopped}; in-flight always finishes.
+   * Waiting calls fail or finish per `stopMode`. Awaits drain, then Off.
+   */
+  readonly stop: Effect.Effect<void>;
+  /** Live-resize the concurrency limit (`Semaphore.resize` + bump `configVersion`). */
+  readonly setConcurrency: (concurrency: number) => Effect.Effect<void>;
+  /** Live-reconfigure the rate limit (bumps `configVersion`); `null` clears it. */
+  readonly setRateLimit: (
+    rateLimit: Hyperlink.Decoded<typeof gateSetRateLimitPayload>,
+  ) => Effect.Effect<void>;
 }
 
 /**
@@ -291,6 +351,9 @@ export interface ServiceDefinition<
  * `Svc` seam on {@link HyperlinkTag}), so `yield* MyGate` hovers as `Gate<Ticket, Price>` rather
  * than the expanded `ServiceOf<…>` wall. @internal
  */
+/** Decoded wire `run` error for a Tag's declared error schema `E`. @internal */
+type WireRunErrorOf<E extends Schema.Top> = Schema.Schema.Type<WithGateStopped<E>>;
+
 type GateTagWithStaticRun<
   Self,
   I extends Schema.Top,
@@ -299,9 +362,9 @@ type GateTagWithStaticRun<
 > = HyperlinkTag<
   Self,
   InstanceSpec<I, A, E>,
-  Gate<Hyperlink.Decoded<I>, Schema.Schema.Type<A>, Schema.Schema.Type<E>>
+  Gate<Hyperlink.Decoded<I>, Schema.Schema.Type<A>, WireRunErrorOf<E>>
 > & {
-  readonly run: StaticRun<I, A, E, Self>;
+  readonly run: StaticRun<I, Schema.Schema.Type<A>, WireRunErrorOf<E>, Self>;
 };
 
 /**
@@ -411,6 +474,11 @@ export interface ServiceConfig<
    * Omitted = no rate limit (only {@link concurrency}).
    */
   readonly rateLimit?: RateLimitOptions;
+  /**
+   * How `stop` treats calls already waiting for a permit / resume.
+   * @default "failWaiting"
+   */
+  readonly stopMode?: StopMode;
 }
 
 /**
@@ -435,6 +503,11 @@ export interface LayerConfig<I, A, E, R> {
    */
   readonly rateLimit?: RateLimitOptions;
   /**
+   * How `stop` treats calls already waiting for a permit / resume.
+   * @default "failWaiting"
+   */
+  readonly stopMode?: StopMode;
+  /**
    * Node handoff (Locked #39) — run on the OUTGOING node during {@link Node.shutdown} after drain.
    * `(from, to, ctx) => Effect<void | HandoffOutcome>`. Gates default to non-transferable (#34), so
    * this is opt-in; omit ⇒ not migrated. Threaded to {@link Hyperlink.serve}'s options.
@@ -457,6 +530,11 @@ export interface Config<T, A, E> {
    * Omitted = no rate limit (only {@link concurrency}).
    */
   readonly rateLimit?: RateLimitOptions;
+  /**
+   * How `stop` treats calls already waiting for a permit / resume.
+   * @default "failWaiting"
+   */
+  readonly stopMode?: StopMode;
 }
 
 /**
@@ -572,12 +650,12 @@ const makeStaticRun = <
   tag: HyperlinkTag<Self, InstanceSpec<I, A, E>, any>,
   payload: Schema.Top,
 ):
-  | Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>, Self>
+  | Effect.Effect<Schema.Schema.Type<A>, WireRunErrorOf<E>, Self>
   | ((
       input: Schema.Schema.Type<I>,
-    ) => Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>, Self>) => {
+    ) => Effect.Effect<Schema.Schema.Type<A>, WireRunErrorOf<E>, Self>) => {
   type Out = Schema.Schema.Type<A>;
-  type Err = Schema.Schema.Type<E>;
+  type Err = WireRunErrorOf<E>;
   // The gate's `run` is a deferred `[void] extends …` conditional — a bare Effect (unit) or an input
   // function (parameterized) — that TS can't reduce for generic params, so it is read through this one
   // documented boundary. The `Effect.isEffect` guard picks the runtime form, so both callers are safe.
@@ -605,7 +683,7 @@ const isGateTagSchemaConfig = (value: unknown): value is TagSchemas =>
 /**
  * Name the built gate tag's service as {@link Gate}. The single deliberate cast in this
  * module: `ServiceOf<InstanceSpec<I, A, E>>` and
- * `Gate<Decoded<I>, A["Type"], E["Type"], never>` are **mutually assignable** — proven
+ * `Gate<Decoded<I>, A["Type"], WireRunErrorOf<E>, never>` are **mutually assignable** — proven
  * bidirectionally in `test/gate-handle.test-d.ts` — but TS can't verify that equality for *generic*
  * params at the invariant service-`Shape` position, so the generic factory needs one assertion here.
  * The `.test-d.ts` is the soundness guard: if the shapes ever drift, it fails the build. @internal
@@ -645,7 +723,16 @@ const materializeGateTag = <Self>() =>
       kind,
     });
     const ready = Hyperlink.withReadiness(tag, (svc) =>
-      Effect.map(svc.status.get, () => ({ ready: true })),
+      Effect.map(svc.lifecycle.get, (state) => ({
+        // Idle (deferred start) / Running / Paused stay dialable; Draining / Off do not.
+        ready:
+          state._tag === "Running" ||
+          state._tag === "Idle" ||
+          state._tag === "Paused",
+        ...(state._tag === "Running"
+          ? {}
+          : { detail: `lifecycle: ${state._tag}` }),
+      })),
     );
     const stamped = stampGateWireSchemas(ready, {
       success: config.success,
@@ -848,6 +935,7 @@ const buildRunImpl = <
         provideR(toRunFn(effectiveConfig.effect)(input)),
       concurrency: effectiveConfig.concurrency,
       rateLimit: effectiveConfig.rateLimit,
+      stopMode: effectiveConfig.stopMode,
     });
 
     const statusSub = {
@@ -861,7 +949,10 @@ const buildRunImpl = <
     // {@link runVerbIsInputless}.
     const runImpl = runVerbIsInputless(tag)
       ? Effect.suspend(
-          handle.run as () => Effect.Effect<Schema.Schema.Type<A>, Schema.Schema.Type<E>>,
+          handle.run as () => Effect.Effect<
+            Schema.Schema.Type<A>,
+            WireRunErrorOf<E>
+          >,
         )
       : handle.run;
 
@@ -878,6 +969,10 @@ const buildRunImpl = <
       failed: handle.failed,
       interrupted: handle.interrupted,
       metrics: handle.metrics,
+      // Shared Lifecycle protocol (badge + events + start/pause/resume/stop) from the engine handle.
+      ...Lifecycle.impl(handle.lifecycle),
+      setConcurrency: handle.setConcurrency,
+      setRateLimit: handle.setRateLimit,
       run: runImpl,
     } as unknown as Hyperlink.WithRequirement<ImplOf<InstanceSpec<I, A, E>>, R>;
     return Hyperlink.driver(tag, impl, context);
@@ -1088,6 +1183,7 @@ export const Service = <Self>() => {
       effect: config.effect,
       concurrency: config.concurrency,
       rateLimit: config.rateLimit,
+      stopMode: config.stopMode,
       name,
     };
     return Object.assign(tag, {

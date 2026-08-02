@@ -91,7 +91,7 @@ class Fetch extends Gate.Tag<Fetch>()("defaults-handle/Fetch", {
 ) {}
 
 type FetchSvc = Hyperlink.Shape<typeof Fetch>;
-type FetchHandle = Gate.Gate<number, string, boolean>;
+type FetchHandle = Gate.Gate<number, string, boolean | Gate.GateStopped>;
 type FetchBag = { readonly label: (n: number) => string };
 type FetchWidened = FetchHandle & FetchBag;
 

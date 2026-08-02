@@ -8,6 +8,58 @@
 import { Schema } from "effect";
 import * as Hyperlink from "../Hyperlink";
 import type { Method, RefField } from "../Hyperlink";
+import * as Lifecycle from "../Lifecycle";
+
+/**
+ * Failure when a call is admitted to a **stopped** gate (Lifecycle `Draining` /
+ * `Off`), or a waiting call is failed by a `stopMode: "failWaiting"` stop.
+ * In-flight bodies always finish.
+ *
+ * `Schema.TaggedErrorClass` so it is both yieldable **and** wire-encodable — part of
+ * every Gate's `run` RPC error channel (see {@link withGateStopped}).
+ *
+ * @category errors
+ * @public
+ */
+export class GateStopped extends Schema.TaggedErrorClass<GateStopped>()(
+  "GateStopped",
+  {
+    resourceId: Schema.String,
+  },
+) {}
+
+/**
+ * Effective wire `run` error schema — user `error` (default {@link Schema.Never}) always
+ * carries {@link GateStopped}. `Never` collapses to `GateStopped` alone (no useless union).
+ *
+ * @internal
+ */
+export type WithGateStopped<E extends Schema.Top> = [E] extends [
+  typeof Schema.Never,
+]
+  ? typeof GateStopped
+  : Schema.Union<[E, typeof GateStopped]>;
+
+/**
+ * Union {@link GateStopped} into a gate's declared `run` error schema.
+ *
+ * @internal
+ */
+export function withGateStopped(
+  error: typeof Schema.Never,
+): typeof GateStopped;
+export function withGateStopped<E extends Schema.Top>(
+  error: E,
+): WithGateStopped<E>;
+export function withGateStopped<E extends Schema.Top>(
+  error: E,
+): typeof GateStopped | Schema.Union<[E, typeof GateStopped]> {
+  // Runtime identity check (same as `gateSpec` / `withNeverDefault`); the generic
+  // param `E` is not known to overlap `Never` at the type level.
+  return (error as Schema.Top) === Schema.Never
+    ? GateStopped
+    : Schema.Union([error, GateStopped]);
+}
 
 /** Live gate counters on the wire — element of the reactive `status` ref. @internal */
 export const gateStatus = Schema.Struct({
@@ -33,16 +85,18 @@ type GateCountRef = RefField<
   Method<undefined, typeof Schema.Number, typeof Schema.Never, true>
 >;
 
-/** `run` wire member — inputless {@link Hyperlink.effect} for unit gates, {@link Hyperlink.effectFn} otherwise. @internal */
+/**
+ * `run` wire member — inputless {@link Hyperlink.effect} for unit gates,
+ * {@link Hyperlink.effectFn} otherwise. `E` is the **effective** wire error
+ * ({@link WithGateStopped} of the Tag's declared error).
+ *
+ * @internal
+ */
 export type GateWireMember<
   I extends Schema.Top,
   A extends Schema.Top,
   E extends Schema.Top,
-> = [I] extends [Void]
-  ? [E] extends [typeof Schema.Never]
-    ? Method<undefined, A, typeof Schema.Never>
-    : Method<undefined, A, E>
-  : Method<I, A, E>;
+> = [I] extends [Void] ? Method<undefined, A, E> : Method<I, A, E>;
 
 const RUN_DESCRIPTION =
   "Acquire a permit, run the gated effect, release the permit — returns the effect result.";
@@ -93,7 +147,69 @@ export const gateMetricsNestSpec = {
 /** Default nest path for limiter observation (rename via Tag/Service `metricsKey` later). @internal */
 export const DEFAULT_METRICS_KEY = "metrics" as const;
 
-/** Instance spec for a gate typed by its wire schemas. @internal */
+// ── Live reconfig verbs (wire) ───────────────────────────────────────────────
+
+/**
+ * Reconfigurable rate-limit options over the wire — `window` as a {@link Schema.Duration};
+ * `key` inherits the gate id. Minimal reconfig surface (not the full consume-options bag).
+ *
+ * @internal
+ */
+export const gateRateLimitReconfig = Schema.Struct({
+  limit: Schema.Number,
+  window: Schema.Duration,
+  tokens: Schema.optional(Schema.Number),
+  onExceeded: Schema.optional(Schema.Literals(["delay", "fail"])),
+});
+
+/** `setRateLimit` payload — reconfig options, or `null` to clear the limit. @internal */
+export const gateSetRateLimitPayload = Schema.NullOr(gateRateLimitReconfig);
+
+/** Decoded `setRateLimit` input (reconfig struct or `null`). @internal */
+export type GateSetRateLimitInput = Schema.Schema.Type<
+  typeof gateSetRateLimitPayload
+>;
+
+const setConcurrencyMethod = Hyperlink.effectFn(
+  Schema.Number,
+  Schema.Void,
+).annotate({
+  description: "Live-resize the concurrency limit (Semaphore.resize).",
+});
+
+const setRateLimitMethod = Hyperlink.effectFn(
+  gateSetRateLimitPayload,
+  Schema.Void,
+).annotate({
+  description:
+    "Live-reconfigure the rate limit (bumps configVersion); null clears it.",
+});
+
+/**
+ * Live reconfig verbs mixed into the gate spec. A **type alias** (not an interface) so the
+ * {@link GateInstanceSpec} intersection keeps its implicit string index signature and still
+ * satisfies the {@link Hyperlink.Spec} constraint. @internal
+ */
+export type GateReconfigSpec = {
+  readonly setConcurrency: typeof setConcurrencyMethod;
+  readonly setRateLimit: typeof setRateLimitMethod;
+};
+
+/** Pausable Lifecycle participation shared by every gate spec. @internal */
+const gateLifecycleSpec: Lifecycle.SpecPausable = Lifecycle.spec({
+  pausable: true,
+});
+
+/**
+ * Instance spec typed by the Tag's **declared** schemas. Written as a **single object
+ * literal** (Lifecycle + reconfig members spliced via indexed access, not an `&`
+ * intersection) so it keeps the implicit string index signature that satisfies
+ * {@link Hyperlink.Spec}. `E` is the user error schema (default {@link Schema.Never});
+ * `run`'s wire error is always {@link WithGateStopped}`<E>` so `GateStopped` is
+ * catchable on Tag/Service.
+ *
+ * @internal
+ */
 export type GateInstanceSpec<
   I extends Schema.Top,
   A extends Schema.Top,
@@ -106,7 +222,15 @@ export type GateInstanceSpec<
   readonly failed: GateCountRef;
   readonly interrupted: GateCountRef;
   readonly metrics: typeof gateMetricsNestSpec;
-  readonly run: GateWireMember<I, A, E>;
+  readonly run: GateWireMember<I, A, WithGateStopped<E>>;
+  readonly lifecycle: Lifecycle.SpecPausable["lifecycle"];
+  readonly lifecycleEvents: Lifecycle.SpecPausable["lifecycleEvents"];
+  readonly start: Lifecycle.SpecPausable["start"];
+  readonly pause: Lifecycle.SpecPausable["pause"];
+  readonly resume: Lifecycle.SpecPausable["resume"];
+  readonly stop: Lifecycle.SpecPausable["stop"];
+  readonly setConcurrency: GateReconfigSpec["setConcurrency"];
+  readonly setRateLimit: GateReconfigSpec["setRateLimit"];
 };
 
 const withMetricsNest = <T extends object>(spec: T) => ({
@@ -114,30 +238,40 @@ const withMetricsNest = <T extends object>(spec: T) => ({
   metrics: gateMetricsNestSpec,
 });
 
+/** Mix Lifecycle participation (`pausable`) + live reconfig verbs into a gate spec. @internal */
+const withControls = <T extends object>(spec: T) => ({
+  ...spec,
+  ...gateLifecycleSpec,
+  setConcurrency: setConcurrencyMethod,
+  setRateLimit: setRateLimitMethod,
+});
+
 const gateSpecVoid = <A extends Schema.Top>(
   success: A,
 ): GateInstanceSpec<Void, A, typeof Schema.Never> =>
-  withMetricsNest({
-    ...gateObservationRefs(),
-    run: Hyperlink.effect(success).annotate({ description: RUN_DESCRIPTION }) as GateWireMember<
-      Void,
-      A,
-      typeof Schema.Never
-    >,
-  });
+  withControls(
+    withMetricsNest({
+      ...gateObservationRefs(),
+      run: Hyperlink.effect(success, GateStopped).annotate({
+        description: RUN_DESCRIPTION,
+      }) as GateWireMember<Void, A, typeof GateStopped>,
+    }),
+  );
 
 const gateSpecVoidWithError = <A extends Schema.Top, E extends Schema.Top>(
   success: A,
   error: E,
-): GateInstanceSpec<Void, A, E> =>
-  withMetricsNest({
-    ...gateObservationRefs(),
-    run: Hyperlink.effect(success, error).annotate({ description: RUN_DESCRIPTION }) as GateWireMember<
-      Void,
-      A,
-      E
-    >,
-  });
+): GateInstanceSpec<Void, A, E> => {
+  const wireError = withGateStopped(error);
+  return withControls(
+    withMetricsNest({
+      ...gateObservationRefs(),
+      run: Hyperlink.effect(success, wireError).annotate({
+        description: RUN_DESCRIPTION,
+      }) as GateWireMember<Void, A, WithGateStopped<E>>,
+    }),
+  );
+};
 
 const gateSpecWithPayload = <
   I extends Exclude<Schema.Top, Void>,
@@ -147,13 +281,21 @@ const gateSpecWithPayload = <
   payload: I,
   success: A,
   error: E,
-): GateInstanceSpec<I, A, E> =>
-  withMetricsNest({
-    ...gateObservationRefs(),
-    run: Hyperlink.effectFn({ payload, success, error }).annotate({
-      description: RUN_DESCRIPTION,
-    }) as unknown as GateWireMember<I, A, E>,
-  });
+): GateInstanceSpec<I, A, E> => {
+  const wireError = withGateStopped(error);
+  return withControls(
+    withMetricsNest({
+      ...gateObservationRefs(),
+      run: Hyperlink.effectFn({
+        payload,
+        success,
+        error: wireError,
+      }).annotate({
+        description: RUN_DESCRIPTION,
+      }) as unknown as GateWireMember<I, A, WithGateStopped<E>>,
+    }),
+  );
+};
 
 /**
  * Build a gate **instance** spec: observation refs plus the gated `run` mutation.

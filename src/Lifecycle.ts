@@ -332,38 +332,72 @@ export function stop<RR, E, R>(
 // Spec / impl sugar
 // =============================================================================
 
+const startMethod = Hyperlink.effect(Schema.Void)
+  .annotate({ description: "Start the service (Idle → Running)." })
+  .pipe(asStart);
+const stopMethod = Hyperlink.effect(Schema.Void)
+  .annotate({
+    description: "Stop the service (→ Draining → Off or Idle).",
+    destructive: true,
+  })
+  .pipe(asStop);
+const pauseMethod = Hyperlink.effect(Schema.Void)
+  .annotate({ description: "Pause processing (Latch.close)." })
+  .pipe(asPause);
+const resumeMethod = Hyperlink.effect(Schema.Void)
+  .annotate({ description: "Resume processing (Latch.open)." })
+  .pipe(asResume);
+
+/**
+ * Core (non-pausable) Lifecycle Spec fragment — badge + events + start/stop.
+ *
+ * @category models
+ * @public
+ */
+export type SpecCore = {
+  readonly lifecycle: typeof stateRef;
+  readonly lifecycleEvents: typeof eventStream;
+  readonly start: typeof startMethod;
+  readonly stop: typeof stopMethod;
+};
+
+/**
+ * Pausable Lifecycle Spec fragment — {@link SpecCore} plus pause/resume.
+ *
+ * A **type alias** (not an interface) so it keeps the implicit string index signature that lets a
+ * gate / worker `InstanceSpec` intersection still satisfy the {@link Hyperlink.Spec} constraint.
+ *
+ * @category models
+ * @public
+ */
+export type SpecPausable = SpecCore & {
+  readonly pause: typeof pauseMethod;
+  readonly resume: typeof resumeMethod;
+};
+
 /**
  * Spec fragment for Lifecycle participation (`stateRef` + `eventStream` + verbs).
+ * `pausable: true` adds `pause` / `resume` (typed via {@link SpecPausable}).
  *
  * @category constructors
  * @public
  */
-export const spec = (options?: { readonly pausable?: boolean }) => {
-  const pausable = options?.pausable ?? false;
-  const base = {
+export function spec(options: { readonly pausable: true }): SpecPausable;
+export function spec(options?: {
+  readonly pausable?: boolean;
+}): SpecCore;
+export function spec(options?: {
+  readonly pausable?: boolean;
+}): SpecCore | SpecPausable {
+  const base: SpecCore = {
     lifecycle: stateRef,
     lifecycleEvents: eventStream,
-    start: Hyperlink.effect(Schema.Void)
-      .annotate({ description: "Start the service (Idle → Running)." })
-      .pipe(asStart),
-    stop: Hyperlink.effect(Schema.Void)
-      .annotate({
-        description: "Stop the service (→ Draining → Off or Idle).",
-        destructive: true,
-      })
-      .pipe(asStop),
+    start: startMethod,
+    stop: stopMethod,
   };
-  if (!pausable) return base;
-  return {
-    ...base,
-    pause: Hyperlink.effect(Schema.Void)
-      .annotate({ description: "Pause processing (Latch.close)." })
-      .pipe(asPause),
-    resume: Hyperlink.effect(Schema.Void)
-      .annotate({ description: "Resume processing (Latch.open)." })
-      .pipe(asResume),
-  };
-};
+  if (!(options?.pausable ?? false)) return base;
+  return { ...base, pause: pauseMethod, resume: resumeMethod };
+}
 
 /**
  * Impl fragment from a Lifecycle handle — spread into toolkit / {@link Hyperlink.layer}

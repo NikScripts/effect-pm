@@ -100,12 +100,16 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 - **Retire:** WorkPool `autoStart?: boolean`.
 - **Blocks:** L1.
 
-### P10 — Opt-in participation (+ Gate) — Proposed (amended; Gate Eng pending)
+### P10 — Opt-in participation (+ Gate) — Locked (Eng’d)
 
-- **Choose:** Lifecycle is **opt-in per HyperService** — not every Tag must participate. Toolkit kinds we ship (**WorkPool, Daemon**, and **Gate** once Eng’d) **do** participate. Apps spread `Lifecycle.stateRef` / `eventStream` / verbs (or `Lifecycle.spec`) when they want tools/UI.
-- **Choose (Gate, pending Eng):** Gate gets Lifecycle. Pause = admit new calls but latch-block (default hold waiting too). Stop = new calls error; waiting policy still open (fail vs finish vs configurable). Live `concurrency` / `rateLimit` reconfig in the same slice.
-- **Reject:** Implicit Lifecycle on every bare Rpc; forcing Gate to stay non-Participating forever.
-- **Blocks:** L7 docs; Gate Eng needs owner lock on stop-waiting mode.
+- **Choose:** Lifecycle is **opt-in per HyperService** — not every Tag must participate. Toolkit kinds we ship (**WorkPool, Daemon, Gate**) **do** participate. Apps spread `Lifecycle.stateRef` / `eventStream` / verbs (or `Lifecycle.spec`) when they want tools/UI.
+- **Choose (Gate):**
+  - Pause: admit new calls but latch-block; **hold waiting too** (no `newOnly` knob in v1).
+  - Stop: new calls error (`GateStopped`). Waiting policy **`stopMode: "failWaiting" | "finishWaiting"`**, default **`"failWaiting"`**.
+  - In-flight always finishes. Live `concurrency` / `rateLimit` reconfig in the same slice.
+- **Reject:** Implicit Lifecycle on every bare Rpc; Gate forever non-Participating.
+- **Eng’d:** Gate participates via `Lifecycle.make({ run: Effect.never, latch, release, awaitBeforeTerminal, afterStop: Lifecycle.off })`. `Gate.GateStopped` (`Schema.TaggedErrorClass`, always unioned into wire `run`) + `stopMode` (default `failWaiting`) shipped; live `setConcurrency` / `setRateLimit` wire verbs (bump `configVersion`); readiness from the Lifecycle badge. Tests: `test/gate-lifecycle.test.ts` + `test/gate-handle.test-d.ts`.
+- **Blocks:** — (L7 docs shipped; Gate Eng’d).
 
 ### P11 — Module layout — Locked (Eng’d)
 
@@ -113,10 +117,10 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 - **Reject:** Lifecycle as its own served HyperService Tag kind; naming it `Resource`.
 - **Blocks:** all slices (layout invariant).
 
-### P12 — Lock / semver — Proposed
+### P12 — `@locked` on Lifecycle — Rejected
 
-- **Choose:** Substrate + dream unlocked until owner `@locked` on `Lifecycle` / `State` / `Role` / Participating duals. Pre-1.0 breaking renames are minors with changeset.
-- **Blocks:** L7.
+- **Reject:** Applying `@locked` to Lifecycle (or any) symbols now. Whole surface stays fluid per [Breaking Changes & Stability](../standards/no-backward-compat.md) — `@locked` only by explicit owner decision; owner ruled **nothing is `@locked` anywhere** until they say otherwise (typically 1.0 sweep).
+- **Blocks:** — (L7 docs polish only; no lock annotations).
 
 ### P13 — Effect-shaped `make` (run + Latch + release) — Locked (Eng’d; A/C amended)
 
@@ -131,8 +135,6 @@ Status column: `Proposed` → `Locked` / `Amended` / `Rejected`.
 ## 3. Open questions (need owner before locking)
 
 1. **Versioned schema** — orthogonal; keep on its own decisions doc / owner go.
-2. **P10 Gate Eng** — stop waiting: fail / finish / configurable (default?); expose pause `newOnly`?; live config wire shape.
-3. **P12** — which Lifecycle symbols get `@locked` (L7).
 
 ---
 
@@ -149,14 +151,14 @@ Full table + acceptance criteria: [plan §8](../plans/lifecycle-kernel.md#8-eng-
 | **L4** | P4 | `Event` + `lifecycleEvents` — Eng’d |
 | **L5** | P5 | `ui/LifecycleView` pack — Eng’d (chrome follow-up) |
 | **L6** | P7, P8 | Handoff docs + remote Participating duals — **Eng’d** |
-| **L7** | P10+ | Docs + `@locked` candidates — await owner |
+| **L7** | P10 | Docs polish (no `@locked`) + Gate Lifecycle — **Eng’d** |
 
 ---
 
 ## 5. Immediate next step
 
-1. L6 closed. Spec Subscribable helpers (`stateRef` / `eventStream` / `asState`) Eng’d.  
-2. Owner: Gate stop-waiting mode (+ P10 lock) and **P12** `@locked` set before Gate/L7 Eng.  
+1. P10 Eng’d — Gate Lifecycle shipped (`stopMode` default `failWaiting`; pause hold-all; live `setConcurrency` / `setRateLimit`). Tests: `test/gate-lifecycle.test.ts`.  
+2. P12 Rejected — zero `@locked` annotations.  
 3. P5 chrome → Agent G. Open questions: §3.
 
 ---
@@ -172,3 +174,4 @@ Full table + acceptance criteria: [plan §8](../plans/lifecycle-kernel.md#8-eng-
 | Conflating Node `phase` with HyperService State | Two planes |
 | Annotation-only without Participating duals | Tools need typed start/stop on the handle |
 | Projected `Lifecycle.Service` / `of` / `from` / `*From` | Lean duals: `start(lc\|jobs\|Tag)` overloads |
+| P12 — `@locked` on Lifecycle now | Surface stays fluid; owner: nothing `@locked` anywhere until they say |

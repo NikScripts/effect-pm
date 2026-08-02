@@ -4,17 +4,19 @@ import { gateSpec } from "../src/internal/gateSchema";
 import * as Hyperlink from "../src/Hyperlink";
 
 // ── The soundness guard for the ONE cast in `nameRunService` ─────────────────
-// `yield* MyRun` is asserted to be `Gate<Decoded<I>, A["Type"], E["Type"]>`; that assertion is
-// only sound if the named handle is bidirectionally equal to the raw contract
-// `ServiceOf<GateInstanceSpec<I, A, E>>`. TS can't prove that for generic params (invariant service
-// Shape), so we prove it here for concrete representative schemas. If the shapes ever drift, THIS FAILS
-// THE BUILD — which is what licenses the cast.
+// `yield* MyRun` is asserted to be `Gate<Decoded<I>, A["Type"], WireRunErrorOf<E>>`;
+// that assertion is only sound if the named handle is bidirectionally equal to the raw
+// contract `ServiceOf<GateInstanceSpec<I, A, E>>`. TS can't prove that for generic params
+// (invariant service Shape), so we prove it here for concrete representative schemas. If the
+// shapes ever drift, THIS FAILS THE BUILD — which is what licenses the cast.
+//
+// Wire `run` always includes `GateStopped` (Never → GateStopped alone; else Union).
 
 // ── param gate with a typed error: bidirectional Contract ⇄ Handle ───────────
 type ContractIE = Hyperlink.ShapeOf<
   ReturnType<typeof gateSpec<typeof Schema.Number, typeof Schema.String, typeof Schema.Boolean>>
 >;
-type HandleIE = Gate.Gate<number, string, boolean>;
+type HandleIE = Gate.Gate<number, string, boolean | Gate.GateStopped>;
 
 declare const contractIE: ContractIE;
 declare const handleIE: HandleIE;
@@ -28,7 +30,7 @@ void [_handleToContractIE, _contractToHandleIE];
 type ContractUnit = Hyperlink.ShapeOf<
   ReturnType<typeof gateSpec<typeof Schema.Void, typeof Schema.Number>>
 >;
-type HandleUnit = Gate.Gate<void, number, never>;
+type HandleUnit = Gate.Gate<void, number, Gate.GateStopped>;
 declare const contractUnit: ContractUnit;
 declare const handleUnit: HandleUnit;
 const _handleToContractUnit: ContractUnit = handleUnit;
@@ -46,25 +48,39 @@ const _yieldToHandle: HandleIE = fetchService;
 const _handleToYield: Hyperlink.Shape<typeof Fetch> = handleIE;
 void [_yieldToHandle, _handleToYield];
 
-// ── DoD: hover exactness. A payload/success/error tag types as `Gate<number, string, boolean, never>`.
+// ── DoD: hover exactness. Declared `error: Boolean` wires as `boolean | GateStopped`.
 type Exact<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 const assertExact = <_ extends true>(): void => {};
 assertExact<
   Exact<
     Hyperlink.Shape<typeof Fetch>,
-    Gate.Gate<number, string, boolean, never>
+    Gate.Gate<number, string, boolean | Gate.GateStopped, never>
   >
 >();
 
-// ── DoD: a unit gate declaring only `success` hovers as `Gate<void, number, never, never>` ────
+// ── DoD: a unit gate declaring only `success` hovers as `Gate<void, number, GateStopped, never>` ────
 class Tick extends Gate.Service<Tick>()("test/run-handle/Tick", {
   success: Schema.Number,
   effect: () => Effect.succeed(1),
 }) {}
 assertExact<
-  Exact<Hyperlink.Shape<typeof Tick>, Gate.Gate<void, number, never, never>>
+  Exact<
+    Hyperlink.Shape<typeof Tick>,
+    Gate.Gate<void, number, Gate.GateStopped, never>
+  >
 >();
+
+// ── DoD: Tag/Service `run` typechecks `Effect.catchTag("GateStopped", …)` ────
+declare const tick: Hyperlink.Shape<typeof Tick>;
+const _catchStopped = tick.run.pipe(
+  Effect.catchTag("GateStopped", () => Effect.succeed(0)),
+);
+void _catchStopped;
+const _staticCatch = Tick.run.pipe(
+  Effect.catchTag("GateStopped", () => Effect.succeed(0)),
+);
+void _staticCatch;
 
 // ── DoD: metrics nest is on the named Gate handle (R2) ───────────────────────
 declare const tickHandle: Hyperlink.Shape<typeof Tick>;
