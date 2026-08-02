@@ -109,7 +109,7 @@ Optional temporary re-exports on `hyperlink-ts/ui/Route` etc. during migration �
 | **P0** | `packages/last-ts` workspace skeleton; real modules + Effect-style barrel; peers; CI build — **Eng’d** |
 | **P1** | Page + vite/path codegen + docgen move; example `paths:check`; hyperlink depends — **Eng’d** |
 | **P2** | Route/Router move; Target helpers stay on hyperlink — **Eng’d** |
-| **P3** | View kernel → last-ts; `Ui` compose/GroupDash on hyperlink; size chrome still on `last-ts/View` (alias via `Ui`) — **Eng’d**; full `View.Card` → `Ui.Card` call-site rename still open |
+| **P3** | View kernel → last-ts; sizes/`bind`/`only`/Service·Group tags → `Ui` — **Eng’d** (`Ui.Card` call sites updated) |
 | **P4** | Drop shims; docs/guides; changesets for both packages |
 
 ## Open (next locks)
