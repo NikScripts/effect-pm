@@ -182,9 +182,17 @@ export interface GateRunnerConfig {
   readonly concurrency?: number;
 }
 
-/** @internal */
+/**
+ * Semaphore (+ optional rate-limit) runner. Return channel always admits
+ * {@link RateLimiterError} — present when a limiter is wrapped in; absent otherwise
+ * (narrower success path stays assignable).
+ *
+ * @internal
+ */
 export interface GateRunner {
-  <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R>;
+  <A, E, R>(
+    effect: Effect.Effect<A, E, R>,
+  ): Effect.Effect<A, E | RateLimiterError, R>;
 }
 
 /** Engine-facing store context — `Storage` discharged at the gate boundary. @internal */

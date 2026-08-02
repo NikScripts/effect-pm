@@ -1,5 +1,5 @@
 import { it, describe, expect } from "@effect/vitest";
-import { Cause, Deferred, Duration, Effect, Exit, Fiber, Layer, Option, Ref, Schema } from "effect";
+import { Deferred, Duration, Effect, Fiber, Layer, Ref, Schema } from "effect";
 import { TestClock } from "effect/testing";
 import {
   RateLimiter,
@@ -414,12 +414,11 @@ describe("Gate.make — rateLimit", () => {
         effect: (_: void) => Effect.void,
       });
       yield* gate.run();
-      const exit = yield* Effect.exit(gate.run());
-      expect(Exit.isFailure(exit)).toBe(true);
-      if (Exit.isFailure(exit)) {
-        const err = Option.getOrThrow(Cause.findErrorOption(exit.cause));
-        expect(err).toBeInstanceOf(RateLimiterError);
-      }
+      // Local make handle: RateLimiterError is on the typed `run` channel.
+      const err = yield* gate.run().pipe(
+        Effect.catchTag("RateLimiterError", (e) => Effect.succeed(e)),
+      );
+      expect(err).toBeInstanceOf(RateLimiterError);
     }).pipe(
       Effect.provide(Layer.mergeAll(Store.layerDefaultMemory, TestClock.layer())),
       Effect.scoped,
@@ -546,8 +545,11 @@ describe("Gate metrics nest — onExceeded fail", () => {
       expect(Gate.rateLimitKeyOf(StrictLimit)).toBe("strict/bucket");
       const gate = yield* StrictLimit;
       yield* gate.run;
-      const exit = yield* Effect.exit(gate.run);
-      expect(Exit.isFailure(exit)).toBe(true);
+      // Wire `run` includes RateLimiterError — typed catchTag on Tag/Service.
+      const err = yield* gate.run.pipe(
+        Effect.catchTag("RateLimiterError", (e) => Effect.succeed(e)),
+      );
+      expect(err).toBeInstanceOf(RateLimiterError);
       expect(yield* gate.metrics.exceeded.get).toBe(1);
       expect(yield* gate.metrics.remaining.get).toBe(0);
     }).pipe(Effect.provide(StrictLimit.layer), Effect.scoped),

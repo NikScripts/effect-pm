@@ -203,10 +203,12 @@ class Backup extends Gate.Service<Backup>()("app/Backup", {
   effect: (path) => archive(path),
 }) {}
 
-// `GateStopped` is always on the wire `run` error channel (alone when you omit
-// `error`, else unioned with your declared errors). Typed catchTag works:
+// Engine failures are always on the wire `run` error channel (`GateStopped` +
+// Effect `RateLimiterError`), alone when you omit `error`, else unioned with
+// your declared errors. Typed catchTag works:
 yield* gate.run("x").pipe(
   Effect.catchTag("GateStopped", () => Effect.logInfo("gate is stopped")),
+  Effect.catchTag("RateLimiterError", () => Effect.logInfo("rate limited")),
 )
 ```
 
