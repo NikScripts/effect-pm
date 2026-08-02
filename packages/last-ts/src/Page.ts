@@ -3,7 +3,7 @@
  *
  * File-router page marks — path + Static / Dynamic / Build (+ metadata).
  * Prefer a future {@link Tag} class for rich pages; bare components use these
- * camelCase helpers. Not Hyperlink dashboard size chrome (`Ui.Page`).
+ * camelCase helpers. Not Hyperlink dashboard `Views.Page`.
  *
  * ```ts
  * import * as Page from "last-ts/Page"

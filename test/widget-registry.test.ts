@@ -16,6 +16,7 @@ import { base as tuiBase } from "../src/tui/cellWidgets";
 import { base as webBase } from "../src/web/widgets";
 
 import * as View from "../src/ui/View";
+import * as Views from "../src/ui/Views";
 // Distinct widgets, compared by reference identity (widgetFor returns the stored one).
 const Box = (label: string): string => label;
 
@@ -59,13 +60,13 @@ it("wireKindOf is identity over every leaf MemberKind", () => {
   }
 });
 
-it("web base registry is fallback-only (View.react owns kind chrome)", () => {
+it("web base registry is fallback-only (Views.react owns kind chrome)", () => {
   expect(HashMap.size(webBase.byKind)).toBe(0);
   expect(HashMap.size(webBase.byKey)).toBe(0);
   expect(webBase.fallback).toBeTypeOf("function");
 });
 
-it("tui base registry is fallback-only (View.react owns kind chrome)", () => {
+it("tui base registry is fallback-only (Views.react owns kind chrome)", () => {
   expect(HashMap.size(tuiBase.byKind)).toBe(0);
   expect(HashMap.size(tuiBase.byKey)).toBe(0);
   expect(tuiBase.fallback).toBeTypeOf("function");

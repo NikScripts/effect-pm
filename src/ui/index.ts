@@ -25,9 +25,10 @@ export {
   RuntimeProvider,
   useRuntime,
 } from "./runtime";
-/** Keyed Spec-based view registry (`View.Tag` / `View.compose`) — prefer `import * as View`. */
+/** DI components — re-export of `last-ts/View`. Prefer `import * as View from "last-ts/View"`. */
 export * as View from "./View";
-/** Hyperlink dashboard chrome — `View.compose`, size aliases, Group dash. */
+/** Dashboard chrome — Card/Detail/Page, Registry, bind, compose. */
+export * as Views from "./Views";
 /** UI routing toolkit — HttpApi-shaped make/group/get/match/urlBuilder. */
 export * as Route from "./Route";
 /** File-router page marks — re-export of `last-ts/Page`. Prefer that subpath. */

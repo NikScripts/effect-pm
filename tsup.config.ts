@@ -79,6 +79,8 @@ export default defineConfig([
       "ui/GroupNav": "src/ui/GroupNav.ts",
       "ui/GroupView": "src/ui/GroupView.ts",
       "ui/DashboardViews": "src/ui/DashboardViews.ts",
+      "ui/View": "src/ui/View.tsx",
+      "ui/Views": "src/ui/Views.tsx",
       "ui/Page": "src/ui/Page.ts",
       "vite/fileRouter": "src/vite/fileRouter.ts",
     },

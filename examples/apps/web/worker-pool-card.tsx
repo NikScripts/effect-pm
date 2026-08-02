@@ -2,7 +2,7 @@
  * @module examples/apps/web/worker-pool-card
  *
  * Bring-your-own View for `WorkerPool` — a consumer-defined multi-node Hyperlink with no shipped
- * card. Pattern: `View.Card.Tag` → skin → `View.only` Layer → Dashboard `views`.
+ * card. Pattern: `Views.Card.Tag` → skin → `Views.only` Layer → Dashboard `views`.
  *
  * Fields are plain `Hyperlink.effect`s (not reactive refs): poll on a tick, same idea as the shipped
  * daemon card. One tick reads `active` / `fleetActive` / `activeByNode`.
@@ -10,15 +10,15 @@
 import * as React from "react";
 import { Duration, Effect, Layer, Stream } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
-import { Ui, View, displayName, useAtomValue, useRuntime } from "../../../src/web";
+import { displayName, useAtomValue, useRuntime } from "../../../src/web";
 import { WorkerPool } from "./hub";
+import * as Views from "../../../src/ui/Views";
 
-import * as View from "../../../src/ui/View";
 /** UI Needs placeholder — opaque Tag static (not a Hyperlink wire Spec). */
 export const workerPoolCardSpec = { kind: "examples/worker-pool-card" } as const;
 
-/** Sized View handle (`size: ViewKind.Card()` from `View.Card`). */
-export class WorkerPoolCard extends View.Card.Tag<
+/** Dashboard card handle (`Views.Card` ancestor). */
+export class WorkerPoolCard extends Views.Card.Tag<
   WorkerPoolCard,
   { readonly dense?: boolean }
 >()("examples/apps/web/worker-pool-card", {
@@ -60,9 +60,9 @@ const NodeRow = (props: {
 
 /**
  * Contribution Layer for Dashboard `views` — allowlist + skin.
- * `R = View.Registry`; Dashboard closes with `View.base`.
+ * `R = Views.Registry`; Dashboard closes with `Views.base`.
  */
-export const layer = View.only(WorkerPool, WorkerPoolCard).pipe(
+export const layer = Views.only(WorkerPool, WorkerPoolCard).pipe(
   Layer.provide(
     WorkerPoolCard.provide((props) => {
       const runtime = useRuntime();

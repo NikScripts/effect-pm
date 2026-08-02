@@ -260,6 +260,14 @@
       "types": "./dist/storage/sqlite.d.ts",
       "default": "./dist/storage/sqlite.js"
     },
+    "./ui/View": {
+      "types": "./dist/ui/View.d.ts",
+      "default": "./dist/ui/View.js"
+    },
+    "./ui/Views": {
+      "types": "./dist/ui/Views.d.ts",
+      "default": "./dist/ui/Views.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

@@ -8,16 +8,17 @@ import * as WebWorkPoolView from "../src/web/WorkPoolView";
 import * as WorkPool from "../src/WorkPool";
 
 import * as View from "../src/ui/View";
+import * as Views from "../src/ui/Views";
 const Item = Schema.Struct({ n: Schema.Number });
 class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", { payload: Item }) {}
 
 describe("WorkPoolView packaging", () => {
   it("web ready layer resolves WorkPool card + detail", () => {
-    const { resolve } = View.react(WebWorkPoolView.layer);
-    expect(resolve(Jobs, View.ViewKind.Card()).map((r) => r.key)).toEqual([
+    const { resolve } = Views.react(WebWorkPoolView.layer);
+    expect(resolve(Jobs, Views.ViewKind.Card()).map((r) => r.key)).toEqual([
       "hyperlink/view/pool-card",
     ]);
-    expect(resolve(Jobs, View.ViewKind.Detail()).map((r) => r.key)).toEqual([
+    expect(resolve(Jobs, Views.ViewKind.Detail()).map((r) => r.key)).toEqual([
       "hyperlink/view/pool-detail",
     ]);
   });
@@ -25,7 +26,7 @@ describe("WorkPoolView packaging", () => {
   it("shared handles match WorkPoolView keys", () => {
     expect(WorkPoolView.PoolCard.key).toBe("hyperlink/view/pool-card");
     expect(WorkPoolView.PoolDetail.key).toBe("hyperlink/view/pool-detail");
-    expect(WorkPoolView.PoolCard.size).toEqual(View.ViewKind.Card());
-    expect(WorkPoolView.PoolDetail.size).toEqual(View.ViewKind.Detail());
+    expect(WorkPoolView.PoolCard.size).toEqual(Views.ViewKind.Card());
+    expect(WorkPoolView.PoolDetail.size).toEqual(Views.ViewKind.Detail());
   });
 });

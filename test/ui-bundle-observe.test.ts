@@ -18,6 +18,7 @@ import { RuntimeProvider } from "../src/ui/runtime";
 import * as View from "../src/ui/View";
 import * as WorkPoolView from "../src/ui/WorkPoolView";
 
+import * as Views from "../src/ui/Views";
 const Item = Schema.Struct({ n: Schema.Number });
 class AppNode extends Node.Tag<AppNode>()("app/observe-use/Node", {
   url: "http://127.0.0.1:9/rpc",
@@ -36,16 +37,16 @@ const hubSite = Route.make("hub").add(
   Route.group("tree", { topLevel: true }).fromEffect(Group.asRoutes(Hub)),
 );
 
-class PoolCard extends View.Card.Tag<PoolCard>()("hyperlink/view/observe-use-pool-card") {}
+class PoolCard extends Views.Card.Tag<PoolCard>()("hyperlink/view/observe-use-pool-card") {}
 
-const views = View.bind(WorkPool.kind, PoolCard).pipe(
+const views = Views.bind(WorkPool.kind, PoolCard).pipe(
   Layer.provideMerge(View.provide(PoolCard, () => null)),
-  Layer.provideMerge(View.base),
+  Layer.provideMerge(Views.base),
 );
 
 describe("Observe.use", () => {
   it("returns queue / daemon packs under RuntimeProvider", () => {
-    const ui = View.compose({
+    const ui = Views.compose({
       views,
       router: Router.memory(hubSite),
     });

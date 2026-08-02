@@ -2,7 +2,8 @@
 
 # Dashboard compose
 
-How the batteries `<Dashboard>` is assembled from Router + GroupNav + View.
+How the batteries `<Dashboard>` is assembled from Router + GroupNav + `Views`.
+DI components stay on `View` (`last-ts/View` / `hyperlink-ts/ui/View`).
 For browser transport (WebSocket) and the one-liner, see [Dashboard](/docs/dashboard).
 For catalogs and navigation, see [Routing](/docs/routing).
 
@@ -18,9 +19,9 @@ import { Dashboard } from "hyperlink-ts/web"
 ```text
 Layer.mergeAll(DashboardViews.layer, appViews?).pipe(
   Layer.provideMerge(Dashboard.componentsLayer),
-  Layer.provideMerge(View.base),
+  Layer.provideMerge(Views.base),
 )
-  → View.compose({ views, router, group })
+  → Views.compose({ views, router, group })
   → platform DashboardShell
 ```
 
@@ -29,22 +30,24 @@ Layer.mergeAll(DashboardViews.layer, appViews?).pipe(
 | One-liner | `hyperlink-ts/web` / `hyperlink-ts/tui` → `Dashboard` |
 | Contributions | `import * as DashboardViews from "hyperlink-ts/ui/DashboardViews"` |
 | Platform | `import * as Dashboard from "hyperlink-ts/web\|tui/Dashboard"` (`componentsLayer` / `layer`) |
-| Compose kit | `hyperlink-ts/ui` → `View.compose` |
+| Compose kit | `import * as Views from "hyperlink-ts/ui/Views"` → `Views.compose` |
+| DI | `import * as View from "last-ts/View"` → `View.provide` / `View.Tag` |
 | Shell | `DashboardShell` (same platform package) |
 | Observe | `Observe.use(tag, *View.pack)` / `NodeView.use` |
 
 Escape hatch (same stack the one-liner uses):
 
 ```tsx
+import * as Views from "hyperlink-ts/ui/Views"
 const site = Route.make("dashboard").add(
   Route.group("hub", { topLevel: true }).fromEffect(Group.asRoutes(ServicesHub)),
 )
 import * as Dashboard from "hyperlink-ts/web/Dashboard"
 const views = Layer.mergeAll(DashboardViews.layer, appViews).pipe(
   Layer.provideMerge(Dashboard.componentsLayer),
-  Layer.provideMerge(View.base),
+  Layer.provideMerge(Views.base),
 )
-const ui = View.compose({
+const ui = Views.compose({
   views,
   router: Router.history(site),
   group: ServicesHub,
@@ -101,7 +104,10 @@ import { NodeBar, NodeStatusHost, DashboardTopBar } from "hyperlink-ts/web"
 ## App views
 
 ```ts
-export const layer = View.only(WorkerPool, WorkerPoolCard).pipe(
+import * as View from "last-ts/View"
+import * as Views from "hyperlink-ts/ui/Views"
+
+export const layer = Views.only(WorkerPool, WorkerPoolCard).pipe(
   Layer.provide(View.provide(WorkerPoolCard, WorkerPoolCardView)),
 )
 

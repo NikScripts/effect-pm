@@ -6,26 +6,26 @@
 import { Layer } from "effect";
 import * as ShardMap from "../ShardMap";
 import { shardMapPack as pack } from "./pollViewPacks";
-import * as View from "./View";
+import * as Views from "./Views";
 export { pack };
 
 /** @public */
 export const shardMapViewSpec = { kind: ShardMap.kind } as const;
 
 /** @public */
-export class ShardMapCard extends View.Card.Tag<ShardMapCard>()(
+export class ShardMapCard extends Views.Card.Tag<ShardMapCard>()(
   "hyperlink/view/shardmap-card",
   { spec: shardMapViewSpec },
 ) {}
 
 /** @public */
-export class ShardMapDetail extends View.Detail.Tag<ShardMapDetail>()(
+export class ShardMapDetail extends Views.Detail.Tag<ShardMapDetail>()(
   "hyperlink/view/shardmap-detail",
   { spec: shardMapViewSpec },
 ) {}
 
 /** @public */
 export const layer = Layer.mergeAll(
-  View.bind(ShardMap.kind, ShardMapCard),
-  View.bind(ShardMap.kind, ShardMapDetail),
+  Views.bind(ShardMap.kind, ShardMapCard),
+  Views.bind(ShardMap.kind, ShardMapDetail),
 );

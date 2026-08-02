@@ -14,7 +14,7 @@
  */
 import { Layer } from "effect";
 import * as WorkPool from "../WorkPool";
-import * as View from "./View";
+import * as Views from "./Views";
 export {
   pack,
   queueControls,
@@ -28,7 +28,7 @@ export {
  *
  * @public
  */
-export class PoolCard extends View.Card.Tag<PoolCard>()(
+export class PoolCard extends Views.Card.Tag<PoolCard>()(
   "hyperlink/view/pool-card",
   { spec: WorkPool.queueControlSpec },
 ) {}
@@ -38,7 +38,7 @@ export class PoolCard extends View.Card.Tag<PoolCard>()(
  *
  * @public
  */
-export class PoolDetail extends View.Detail.Tag<PoolDetail>()(
+export class PoolDetail extends Views.Detail.Tag<PoolDetail>()(
   "hyperlink/view/pool-detail",
   { spec: WorkPool.queueControlSpec },
 ) {}
@@ -48,19 +48,19 @@ export class PoolDetail extends View.Detail.Tag<PoolDetail>()(
  *
  * @public
  */
-export class PoolPage extends View.Page.Tag<PoolPage>()(
+export class PoolPage extends Views.Page.Tag<PoolPage>()(
   "hyperlink/view/pool-page",
   { spec: WorkPool.queueControlSpec },
 ) {}
 
 /**
  * Contribution Layer: stamped {@link WorkPool.kind} → card + detail + page (append).
- * Merge with platform provides + {@link View.base}, then {@link View.react}.
+ * Merge with platform provides + {@link Views.base}, then {@link Views.react}.
  *
  * @public
  */
 export const layer = Layer.mergeAll(
-  View.bind(WorkPool.kind, PoolCard),
-  View.bind(WorkPool.kind, PoolDetail),
-  View.bind(WorkPool.kind, PoolPage),
+  Views.bind(WorkPool.kind, PoolCard),
+  Views.bind(WorkPool.kind, PoolDetail),
+  Views.bind(WorkPool.kind, PoolPage),
 );

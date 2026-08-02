@@ -13,9 +13,8 @@
  * ## Three layers (keep them straight)
  *
  * 1. **Page mark** — `Page.static` / `.dynamic` / `.build` (camelCase) or preferred
- *    **`Page.Tag`** class with path/render/meta on statics. Not `View.Page.Tag`
- *    (that name collides with dashboard size chrome). See
- *    `docs/handoffs/view-page-naming.md`.
+ *    **`Page.Tag`** class with path/render/meta on statics. Not dashboard
+ *    `Views.Page` size chrome. See `docs/handoffs/view-page-naming.md`.
  * 2. **Route catalog** — typed urls (`Route.fileRoot` / `fromEffect`) so `urls.chapter("x")`
  *    is a closed builder, not a stringly href.
  * 3. **View components** — `View.provide` + camelCase `componentsLayer` / `layer`
@@ -224,7 +223,7 @@ export class ChapterAside extends View.Tag<
 >()("examples/file-router/chapter-aside") {}
 
 /**
- * File-router page — **`Page.Tag`**, not `View.Page.Tag` (dashboard size chrome).
+ * File-router page — **`Page.Tag`**, not `Views.Page.Tag` (dashboard size chrome).
  *
  * Statics hold path / render / paths / title. Eng: `Page.build(DocsChapter)` reads
  * this bag. Nested View Tags stack Layer `R` until `provides` pays them — unrelated

@@ -3,8 +3,8 @@
  *
  * The Ink Group dashboard — terminal counterpart to `<Dashboard runtime group />` from
  * `hyperlink-ts/web`. Stack: `DashboardViews.layer` →
- * `Layer.provideMerge(componentsLayer)` → {@link View.base} →
- * {@link ../ui/View.compose} → {@link ./DashboardShell}.
+ * `Layer.provideMerge(componentsLayer)` → {@link Views.base} →
+ * {@link ../ui/Views.compose} → {@link ./DashboardShell}.
  *
  * ```tsx
  * <Dashboard runtime={Atom.runtime(appLayer)} group={Fleet} />
@@ -22,6 +22,7 @@
 import * as internal from "../internal/tuiDashboard";
 
 import * as View from "../ui/View";
+import * as Views from "../ui/Views";
 /**
  * Ink implementations for dashboard View Tags.
  *
@@ -32,7 +33,7 @@ export const componentsLayer: typeof internal.componentsLayer =
 
 /**
  * Fully provided TUI Dashboard View Layer (`R = never`) — contributions +
- * {@link componentsLayer} + {@link View.base}. Ready for {@link View.react}.
+ * {@link componentsLayer} + {@link Views.base}. Ready for {@link Views.react}.
  *
  * @public
  */

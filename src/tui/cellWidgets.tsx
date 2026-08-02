@@ -2,8 +2,8 @@
  * @module tui/cellWidgets
  *
  * Ink grid cells + fallback-only {@link base} registry. Default cells come from
- * `View.react` over `tui/Dashboard.layer`. App overrides: Dashboard `views` /
- * `View.only` (not `forKey`).
+ * `Views.react` over `tui/Dashboard.layer`. App overrides: Dashboard `views` /
+ * `Views.only` (not `forKey`).
  *
  */
 import { Box, Text } from "ink";
@@ -33,6 +33,7 @@ import {
 } from "../ui/widgetRegistry";
 import { useWidgets } from "../ui/widgetsContext";
 import { useRuntime, type AnyRuntime } from "./runtime";
+import * as Views from "../ui/Views";
 import {
   bar,
   COLOR,
@@ -361,7 +362,7 @@ const fallbackWidget: TuiCellWidget = ({ name, member, width, selected }) => (
 
 /**
  * Fallback-only TUI cell registry. Default cells come from
- * `View.react` over `tui/Dashboard.layer`. Prefer Dashboard `views` / `View.only`.
+ * `Views.react` over `tui/Dashboard.layer`. Prefer Dashboard `views` / `Views.only`.
  *
  * @public
  */
@@ -379,8 +380,8 @@ export const Cell = (props: {
   const isGroup = Group.isGroup(props.member);
   const leaf = isLeafTag(props.member) ? props.member : null;
   const viewTag = isGroup ? props.member : leaf;
-  const hasViewCard = View.useHasMatch(viewTag, View.ViewKind.Card());
-  const Match = View.useMatch();
+  const hasViewCard = Views.useHasMatch(viewTag, Views.ViewKind.Card());
+  const Match = Views.useMatch();
   // Group + leaf share kit Card when a family skin is on the layer (open stays parent / TUI focus).
   if (hasViewCard && viewTag !== null) {
     return (

@@ -16,7 +16,7 @@
 import type * as React from "react";
 import { Context, Data, Layer } from "effect";
 
-// ── minimal chrome (mirror View.ViewProps / ViewKind) ───────────────────────
+// ── minimal chrome (mirror Views.ViewProps / ViewKind) ───────────────────────
 
 export type ViewKind = Data.TaggedEnum<{
   Card: {};

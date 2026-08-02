@@ -14,6 +14,7 @@ import * as Daemon from "../src/Daemon";
 import * as Gate from "../src/Gate";
 
 import * as View from "../src/ui/View";
+import * as Views from "../src/ui/Views";
 const Item = Schema.Struct({ n: Schema.Number });
 class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", { payload: Item }) {}
 class Lanes extends WorkPool.priority<Lanes>()("app/Lanes", {
@@ -37,36 +38,36 @@ class HttpTap extends Gate.HttpApiClient<HttpTap>()("app/HttpTap", TapApi) {}
 
 describe("DashboardViews packaging", () => {
   it("web ready layer resolves default family cards + details", () => {
-    const { resolve } = View.react(WebDashboard.layer);
-    expect(resolve(Jobs, View.ViewKind.Card()).map((r) => r.key)).toEqual([
+    const { resolve } = Views.react(WebDashboard.layer);
+    expect(resolve(Jobs, Views.ViewKind.Card()).map((r) => r.key)).toEqual([
       "hyperlink/view/pool-card",
     ]);
-    expect(resolve(Jobs, View.ViewKind.Detail()).map((r) => r.key)).toEqual([
+    expect(resolve(Jobs, Views.ViewKind.Detail()).map((r) => r.key)).toEqual([
       "hyperlink/view/pool-detail",
     ]);
-    expect(resolve(Lanes, View.ViewKind.Card()).map((r) => r.key)).toEqual([
+    expect(resolve(Lanes, Views.ViewKind.Card()).map((r) => r.key)).toEqual([
       "hyperlink/view/priority-card",
     ]);
-    expect(resolve(Nightly, View.ViewKind.Card()).map((r) => r.key)).toEqual([
+    expect(resolve(Nightly, Views.ViewKind.Card()).map((r) => r.key)).toEqual([
       "hyperlink/view/daemon-card",
     ]);
-    expect(resolve(Nightly, View.ViewKind.Detail()).map((r) => r.key)).toEqual([
+    expect(resolve(Nightly, Views.ViewKind.Detail()).map((r) => r.key)).toEqual([
       "hyperlink/view/daemon-detail",
     ]);
-    expect(resolve(Limit, View.ViewKind.Detail()).map((r) => r.key)).toEqual([
+    expect(resolve(Limit, Views.ViewKind.Detail()).map((r) => r.key)).toEqual([
       "hyperlink/view/gate-detail",
     ]);
-    expect(resolve(HttpTap, View.ViewKind.Card()).map((r) => r.key)).toEqual([
+    expect(resolve(HttpTap, Views.ViewKind.Card()).map((r) => r.key)).toEqual([
       "hyperlink/view/api-card",
     ]);
   });
 
   it("tui ready layer resolves the same handles", () => {
-    const { resolve } = View.react(TuiDashboard.layer);
-    expect(resolve(Jobs, View.ViewKind.Card()).map((r) => r.key)).toEqual([
+    const { resolve } = Views.react(TuiDashboard.layer);
+    expect(resolve(Jobs, Views.ViewKind.Card()).map((r) => r.key)).toEqual([
       "hyperlink/view/pool-card",
     ]);
-    expect(resolve(Nightly, View.ViewKind.Detail()).map((r) => r.key)).toEqual([
+    expect(resolve(Nightly, Views.ViewKind.Detail()).map((r) => r.key)).toEqual([
       "hyperlink/view/daemon-detail",
     ]);
   });
@@ -74,7 +75,7 @@ describe("DashboardViews packaging", () => {
   it("shared contribution layer has no platform provides (open R)", () => {
     expect(PriorityView.PriorityCard.key).toBe("hyperlink/view/priority-card");
     expect(DaemonView.DaemonDetail.key).toBe("hyperlink/view/daemon-detail");
-    // Compiles as a Layer; platform packages close R via componentsLayer + View.base.
+    // Compiles as a Layer; platform packages close R via componentsLayer + Views.base.
     void DashboardViews.layer;
     void WebDashboard.componentsLayer;
     void TuiDashboard.componentsLayer;

@@ -7,10 +7,10 @@
  * animated with view transitions.
  *
  * Stack (Effect-shaped): `DashboardViews.layer` (shared contributions) →
- * `Layer.provideMerge(componentsLayer)` → {@link View.base} →
- * {@link ../ui/View.compose} → {@link ./DashboardShell}.
+ * `Layer.provideMerge(componentsLayer)` → {@link Views.base} →
+ * {@link ../ui/Views.compose} → {@link ./DashboardShell}.
  *
- * Use `<Dashboard runtime group />`, or pipe Layers + `View.compose` + `DashboardShell`.
+ * Use `<Dashboard runtime group />`, or pipe Layers + `Views.compose` + `DashboardShell`.
  * Ready platform Layer without app contrib: {@link layer}.
  *
  * Heavy eng lives in `../internal/webDashboard` (Effect thin-shell mirror).
@@ -18,6 +18,7 @@
 import * as internal from "../internal/webDashboard";
 
 import * as View from "../ui/View";
+import * as Views from "../ui/Views";
 /**
  * Web TSX implementations for dashboard View Tags.
  *
@@ -28,7 +29,7 @@ export const componentsLayer: typeof internal.componentsLayer =
 
 /**
  * Fully provided web Dashboard View Layer (`R = never`) — contributions +
- * {@link componentsLayer} + {@link View.base}. Ready for {@link View.react}.
+ * {@link componentsLayer} + {@link Views.base}. Ready for {@link Views.react}.
  *
  * @public
  */

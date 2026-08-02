@@ -77,6 +77,7 @@ import { Badge } from "./components/ui/badge";
 import { Button } from "./components/ui/button";
 import { Card, CardContent } from "./components/ui/card";
 import { cn } from "./cn";
+import * as Views from "../ui/Views";
 import {
   Dialog,
   DialogClose,
@@ -475,8 +476,8 @@ export const Cell = (props: {
   const isGroup = Group.isGroup(props.member);
   const leaf = isLeafTag(props.member) ? props.member : null;
   const viewTag = isGroup ? props.member : leaf;
-  const hasViewCard = View.useHasMatch(viewTag, View.ViewKind.Card());
-  const Match = View.useMatch();
+  const hasViewCard = Views.useHasMatch(viewTag, Views.ViewKind.Card());
+  const Match = Views.useMatch();
   // Group + leaf share kit Card when a Group family skin is on the layer (lock B).
   if (hasViewCard && viewTag !== null) {
     return (
@@ -3185,7 +3186,7 @@ export const GateDetail = (props: {
 
 /**
  * Fallback-only widget registry for `<Dashboard>`. Default card/detail chrome comes from
- * `View.react` over `web/Dashboard.layer`. Prefer Dashboard `views` / `View.only` for
+ * `Views.react` over `web/Dashboard.layer`. Prefer Dashboard `views` / `Views.only` for
  * app cards; `forKey` / `withEntries` remain as a legacy escape hatch.
  *
  * @public

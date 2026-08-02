@@ -2,7 +2,7 @@
  * @module ui/DashboardViews
  *
  * Merged View contribution Layers for the batteries-included Dashboard families
- * (`View.bind` / `only` — no platform TSX). This is the **only** `DashboardViews`
+ * (`Views.bind` / `only` — no platform TSX). This is the **only** `DashboardViews`
  * namespace; web/TUI implementations live on `hyperlink-ts/web|tui/Dashboard`.
  *
  * ```ts
@@ -11,7 +11,7 @@
  *
  * Layer.mergeAll(DashboardViews.layer, appViews).pipe(
  *   Layer.provideMerge(Dashboard.componentsLayer),
- *   Layer.provideMerge(View.base),
+ *   Layer.provideMerge(Views.base),
  * )
  * // no app contributions: Dashboard.layer
  * ```
@@ -28,9 +28,8 @@ import * as ShardMapView from "./ShardMapView";
 import * as TelemetryView from "./TelemetryView";
 import * as WorkPoolView from "./WorkPoolView";
 
-import * as View from "./View";
 /**
- * All default Dashboard View contributions (no platform TSX, no {@link ./View.base}).
+ * All default Dashboard View contributions (no platform TSX, no {@link ./Views.base}).
  *
  * @public
  */

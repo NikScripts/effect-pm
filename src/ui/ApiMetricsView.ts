@@ -6,26 +6,26 @@
 import { Layer } from "effect";
 import * as Gate from "../Gate";
 import { pack } from "./apiMetricsViewPack";
-import * as View from "./View";
+import * as Views from "./Views";
 export { pack };
 
 /** Spec stamp for HttpApiClient View handles. @public */
 export const apiMetricsViewSpec = { kind: Gate.httpApiClientKind } as const;
 
 /** @public */
-export class ApiCard extends View.Card.Tag<ApiCard>()(
+export class ApiCard extends Views.Card.Tag<ApiCard>()(
   "hyperlink/view/api-card",
   { spec: apiMetricsViewSpec },
 ) {}
 
 /** @public */
-export class ApiDetail extends View.Detail.Tag<ApiDetail>()(
+export class ApiDetail extends Views.Detail.Tag<ApiDetail>()(
   "hyperlink/view/api-detail",
   { spec: apiMetricsViewSpec },
 ) {}
 
 /** @public */
 export const layer = Layer.mergeAll(
-  View.bind(Gate.httpApiClientKind, ApiCard),
-  View.bind(Gate.httpApiClientKind, ApiDetail),
+  Views.bind(Gate.httpApiClientKind, ApiCard),
+  Views.bind(Gate.httpApiClientKind, ApiDetail),
 );

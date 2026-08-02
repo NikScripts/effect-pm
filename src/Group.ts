@@ -37,7 +37,7 @@ import {
 } from "./internal/groupAsRoutes";
 
 /**
- * Stamped family kind for Group tags — View skins bind with `View.bind(Group.kind, …)`.
+ * Stamped family kind for Group tags — dashboard skins bind with `Views.bind(Group.kind, …)`.
  *
  * @category constructors
  * @public

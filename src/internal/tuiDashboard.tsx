@@ -50,6 +50,7 @@ import {
   type TuiWidgetRegistry,
 } from "../tui/cellWidgets";
 import { FocusedDaemon, FocusedPriority, LogTail } from "../tui/focusWidgets";
+import * as Views from "../ui/Views";
 import {
   ApiCell,
   FocusedApi,
@@ -439,13 +440,13 @@ export const componentsLayer = Layer.mergeAll(
 );
 
 /**
- * Fully provided Dashboard View Layer for the TUI (`R = never`) — ready for {@link View.react}.
+ * Fully provided Dashboard View Layer for the TUI (`R = never`) — ready for {@link Views.react}.
  *
  * @internal
  */
 export const layer = DashboardViews.layer.pipe(
   Layer.provideMerge(componentsLayer),
-  Layer.provideMerge(View.base),
+  Layer.provideMerge(Views.base),
 );
 
 const routesFor = (group: GroupNode) =>
@@ -462,7 +463,7 @@ export const Dashboard = <R, ER>(props: {
   readonly runtime: DashboardRuntime<R, ER>;
   readonly group: GroupNode;
   readonly path?: ReadonlyArray<string>;
-  readonly views?: Layer.Layer<never, never, View.Registry>;
+  readonly views?: Layer.Layer<never, never, Views.Registry>;
   readonly widgets?: TuiWidgetRegistry;
 }): React.ReactElement => {
   const ui = React.useMemo(() => {
@@ -471,9 +472,9 @@ export const Dashboard = <R, ER>(props: {
       props.views ?? Layer.empty,
     ).pipe(
       Layer.provideMerge(componentsLayer),
-      Layer.provideMerge(View.base),
+      Layer.provideMerge(Views.base),
     );
-    const composed = View.compose({
+    const composed = Views.compose({
       views,
       router: Router.memory(routesFor(props.group)),
       group: props.group,

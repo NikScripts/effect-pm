@@ -16,6 +16,7 @@ import * as Observe from "../Observe";
 import * as WorkPoolView from "../ui/WorkPoolView";
 import { QueueCell } from "./cellWidgets";
 import { LogTail } from "./focusWidgets";
+import * as Views from "../ui/Views";
 import {
   displayName,
   PageXL,
@@ -139,13 +140,13 @@ export const componentsLayer: Layer.Layer<
 );
 
 /**
- * Fully provided WorkPool View Layer for the TUI (`R = never`) — ready for {@link View.react}.
+ * Fully provided WorkPool View Layer for the TUI (`R = never`) — ready for {@link Views.react}.
  *
  * @public
  */
 export const layer = WorkPoolView.layer.pipe(
   Layer.provideMerge(componentsLayer),
-  Layer.provideMerge(View.base),
+  Layer.provideMerge(Views.base),
 );
 
 export { PoolCard, PoolDetail, PoolPage } from "../ui/WorkPoolView";

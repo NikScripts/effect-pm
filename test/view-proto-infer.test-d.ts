@@ -1,19 +1,20 @@
 import type * as React from "react";
 import { expectTypeOf } from "vitest";
 import * as View from "../src/ui/View";
-const Handle = View.Card.Tag<{ readonly _brand: "x" }>()("hyperlink/view/tmp");
-expectTypeOf(Handle.size).toEqualTypeOf<View.CardKind>();
+import * as Views from "../src/ui/Views";
+const Handle = Views.Card.Tag<{ readonly _brand: "x" }>()("hyperlink/view/tmp");
+expectTypeOf(Handle.size).toEqualTypeOf<Views.CardKind>();
 
-class PoolCard extends View.Card.Tag<PoolCard>()("hyperlink/view/pool-card") {}
-expectTypeOf(PoolCard.size).toEqualTypeOf<View.CardKind>();
-expectTypeOf<View.Type<typeof PoolCard>>().toEqualTypeOf<View.ViewProps>();
-expectTypeOf<View.PropsOf<PoolCard>>().toEqualTypeOf<View.ViewProps>();
-expectTypeOf<PoolCard["Service"]>().toEqualTypeOf<View.View<View.ViewProps>>();
+class PoolCard extends Views.Card.Tag<PoolCard>()("hyperlink/view/pool-card") {}
+expectTypeOf(PoolCard.size).toEqualTypeOf<Views.CardKind>();
+expectTypeOf<View.Type<typeof PoolCard>>().toEqualTypeOf<Views.ViewProps>();
+expectTypeOf<View.PropsOf<PoolCard>>().toEqualTypeOf<Views.ViewProps>();
+expectTypeOf<PoolCard["Service"]>().toEqualTypeOf<View.View<Views.ViewProps>>();
 
 // Svc type is View.View (defaults to {})
-type ChromeSkin = View.View<View.ViewProps>;
+type ChromeSkin = View.View<Views.ViewProps>;
 type TypedSkin = PoolCard["Service"];
 expectTypeOf<ChromeSkin>().toEqualTypeOf<
-  (props: View.ViewProps) => React.ReactElement | null
+  (props: Views.ViewProps) => React.ReactElement | null
 >();
 expectTypeOf<TypedSkin>().toEqualTypeOf<ChromeSkin>();

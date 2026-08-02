@@ -17,6 +17,7 @@ import * as React from "react";
 import { findById, flatten, hub, seedLogs, type Member } from "./mock";
 
 import * as View from "../../../src/ui/View";
+import * as Views from "../../../src/ui/Views";
 type Route =
   | { readonly _tag: "grid"; readonly groupId: string }
   | { readonly _tag: "detail"; readonly groupId: string; readonly leafId: string };
@@ -89,7 +90,7 @@ const GroupCardView = (props: { readonly member: Member }): React.ReactElement =
         ))}
       </div>
       <div className="card-foot">
-        <span>View.Card · group</span>
+        <span>Views.Card · group</span>
         <Spark spark={props.member.spark} />
       </div>
     </button>
@@ -125,7 +126,7 @@ const LeafCardView = (props: {
         </div>
       </div>
       <div className="card-foot">
-        <span>View.Card · right-click pin</span>
+        <span>Views.Card · right-click pin</span>
         <Spark spark={props.member.spark} />
       </div>
     </button>

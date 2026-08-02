@@ -1,7 +1,7 @@
 /**
  * @module tui/DashboardShell
  *
- * Ink batteries shell over {@link ../ui/View.compose} — grid, focus panes, command bar.
+ * Ink batteries shell over {@link ../ui/Views.compose} — grid, focus panes, command bar.
  * {@link ./Dashboard} is thin wiring (compose + this shell).
  */
 import { Box, Text, useInput, useStdout } from "ink";
@@ -32,6 +32,7 @@ import * as GroupNav from "../ui/GroupNav";
 import * as View from "../ui/View";
 import { Cell } from "./cellWidgets";
 import { DashboardTopBar } from "./DashboardTopBar";
+import * as Views from "../ui/Views";
 import {
   ControlKey,
   FocusedDaemon,
@@ -123,7 +124,7 @@ const FocusedQueue = (props: {
   readonly bar: (hint: React.ReactElement) => React.ReactElement;
   readonly barRows: number;
 }): React.ReactElement => {
-  const Match = View.useMatch();
+  const Match = Views.useMatch();
   const { name, tag, cols, rows, editMode } = props;
   const bundle = Observe.use(tag, WorkPoolView.pack);
   const statusR = useAtomValue(bundle.status);
@@ -388,7 +389,7 @@ export const DashboardShell = (props: {
     <Bar cmd={cmd} suggestions={suggestions} cmdSel={cmdSel} hint={hint} />
   );
 
-  const Match = View.useMatch();
+  const Match = Views.useMatch();
   const focused = nav.selected;
   const focusName = nav.keys[nav.keys.length - 1] ?? displayName(idOf(focused));
   if (focused !== null) {
