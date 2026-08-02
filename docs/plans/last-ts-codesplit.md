@@ -20,6 +20,10 @@
 9. **File-router `Page` (marks) → last-ts.** Unrelated to dashboard size `Ui.Page`.
 10. **GroupNav + Group-aware compose / Target helpers → hyperlink** (v1). last-ts Route is catalog-only.
 11. **Docgen + vite/path codegen** ship with last-ts (tools), not a separate npm package for now.
+12. **`AtomReact` (+ Runtime provider) → last-ts** — Effect Atom ↔ React hooks; not nested under `View`.
+13. **`Hyperlink` module does not move or rename.** `Hyperlink.useQuery` and the other
+    Hyperlink reactive helpers stay on `hyperlink-ts/Hyperlink`; they may only need
+    **dependency updates** (import Atom hooks / types from last-ts instead of `ui/atom-react`).
 
 ## Package graph
 
@@ -46,6 +50,7 @@ Effect-shaped: subpaths are the modules; root `index` re-exports those namespace
 | `./Router/waku` | *(waku module)* | Waku layer adapters |
 | `./Page` | `Page` | File-router marks: static/dynamic/build/layout, stampOf |
 | `./vite` | *(plugin)* | fileRouter emit/watch + check helpers (+ published bin later) |
+| `./AtomReact` | `AtomReact` | `RegistryProvider`, `useAtomValue`, `useAtomSet`, … (+ Runtime provider unless split) |
 | `./docgen` (+ modules) | per-file | Move from `docs/docgen` |
 | `./Last` | `Last` | **Only when** there is a real Last API — not an empty placeholder |
 
@@ -93,6 +98,7 @@ Optional temporary re-exports on `hyperlink-ts/ui/Route` etc. during migration �
 | `src/ui/View` kernel | → last-ts/View |
 | `src/ui/View` sizes + compose/GroupDash/bind/only | → `hyperlink-ts/ui/Ui` |
 | Family views, packs, data, DashboardViews, GroupNav | stay hyperlink |
+| `Hyperlink.ts` (`useQuery`, live/command binders, …) | **stay** — update imports/deps to last-ts only as needed |
 | `web` / `tui` / `cli` | stay hyperlink |
 
 ## Eng phases
@@ -107,10 +113,10 @@ Optional temporary re-exports on `hyperlink-ts/ui/Route` etc. during migration �
 
 ## Open (next locks)
 
-- Whether `atom-react` / RegistryProvider lives under last-ts or hyperlink.
 - Publish cadence for last-ts beyond `0.0.0` placeholder.
 - `Page.Tag` + docs-site createPages (product follow-ons on last-ts/Page).
 - First real API that earns a `Last` module (do not invent one).
+- Fold `RuntimeProvider` into `AtomReact` vs `last-ts/Runtime` (prefer one module unless size hurts).
 
 ## Related
 
