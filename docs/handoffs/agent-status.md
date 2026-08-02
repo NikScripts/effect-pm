@@ -29,7 +29,7 @@
 
 ### Active (owner approval required)
 1. **Agent 4:** Examples Ideas 1–9 + Related notes Eng’d. **Release-prep cleanup Eng’d** (archive completed handoffs/plans, dead scripts, npmignore, legacy example aliases). Idea 10 Apps/E5 still owner-gated. Owner still: changeset consolidate before `version`/publish.
-2. **Agent G / TUI:** Dashboard Effect-true layout + file-router/`Page.*` + Effect beta.102 — **tip-synced**. Next: Page.Tag + docs-site createPages. Park: [`owned-string-casing-park.md`](./owned-string-casing-park.md).
+2. **Agent G / TUI:** File-router **guide + codegen demo** Eng’d (`docs/guides/file-router`, `example:ui-file-router-codegen`). Next: Page.Tag + docs-site createPages; tip-sync when ready. Park: [`owned-string-casing-park.md`](./owned-string-casing-park.md).
 3. **Agent 5 (Launcher + handoff):** Lifecycle + **P10 Gate Eng’d** tip-synced; `GateStopped` now on Tag/Service wire `run` (`catchTag` typechecks). **P12 Rejected** — nothing `@locked` anywhere. Next: Agent G chrome; launcher `#35–37` / `restartSuccessor` deferred. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
 4. **Docs site:** Live — apex coming-soon (inlined CSS + `(book)` chrome); docs on `dev`. Origin host-gate via `serve-production.mjs` (before Waku static). Islands: `hyperlink-ts` alias + `.hl-dashboard`. Getting Started em-dash/voice polish.
 
