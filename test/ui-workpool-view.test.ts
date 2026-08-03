@@ -7,7 +7,6 @@ import * as WorkPoolView from "../src/ui/WorkPoolView";
 import * as WebWorkPoolView from "../src/web/WorkPoolView";
 import * as WorkPool from "../src/WorkPool";
 
-import * as View from "../src/ui/View";
 import * as Views from "../src/ui/Views";
 const Item = Schema.Struct({ n: Schema.Number });
 class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", { payload: Item }) {}
