@@ -42,7 +42,7 @@ const ddl: ReadonlyArray<string> = [
      attempts INTEGER NOT NULL DEFAULT 0,
      locked_until_ms INTEGER,
      status TEXT NOT NULL DEFAULT 'pending',
-     schema_version INTEGER NOT NULL DEFAULT 0,
+     schema_version TEXT NOT NULL DEFAULT '',
      payload_json TEXT NOT NULL,
      enqueued_at_ms INTEGER NOT NULL
    )`,
@@ -77,7 +77,7 @@ const rowToEntry = (row: unknown): DurableEntry => {
     sequence: Number(r["seq"]),
     attempts: Number(r["attempts"]),
     payload: decodePayload(String(r["payload_json"])),
-    schemaVersion: Number(r["schema_version"]),
+    schemaVersion: String(r["schema_version"] ?? ""),
     enqueuedAtMillis: Number(r["enqueued_at_ms"]),
   };
 };
@@ -124,7 +124,7 @@ const makeService = (sql: SqlClient): DurableWorkPoolStoreShape => {
               attempts: 0,
               locked_until_ms: null,
               status: "pending",
-              schema_version: entry.schemaVersion ?? 0,
+              schema_version: entry.schemaVersion ?? "",
               payload_json: encodePayload(entry.payload),
               enqueued_at_ms: now,
             };

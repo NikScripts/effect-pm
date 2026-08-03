@@ -132,6 +132,10 @@
       "types": "./dist/Lifecycle.d.ts",
       "default": "./dist/Lifecycle.js"
     },
+    "./Versioned": {
+      "types": "./dist/Versioned.d.ts",
+      "default": "./dist/Versioned.js"
+    },
     "./DynamicConfig": {
       "types": "./dist/DynamicConfig.d.ts",
       "default": "./dist/DynamicConfig.js"
