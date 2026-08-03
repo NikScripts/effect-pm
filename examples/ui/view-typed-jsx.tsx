@@ -1,52 +1,47 @@
 /**
- * Typed JSX demo — Greeter bubbles Inner → Middle → Outer.
+ * Typed Views — nest child as a value, render with normal JSX.
  *
  * Docs (Tailscale): http://100.67.32.32:5190/docs/view-typed-jsx
- *
- * TypeScript types `<Foo />` as a black-box `JSX.Element`. The typed channel is
- * `jsx` / `jsxs` from `last-ts/jsx-runtime` (same runtime as the JSX transform).
  */
 /** @jsxImportSource last-ts */
-import { Context } from "effect";
-import { jsx, jsxs } from "last-ts/jsx-runtime";
 import * as View from "last-ts/View";
 
-export class Greeter extends Context.Service<Greeter, string>()(
+class Greeter extends View.Tag<Greeter, { readonly name: string }>()(
   "examples/ui/view-typed-jsx/Greeter",
 ) {}
 
 // ---cut---
-/** Needs Greeter (`yield*`). */
-export const Inner = View.gen(function* () {
-  const name = yield* Greeter;
-  return (_props: {}) => <span data-demo="inner">hello {name}</span>;
+/** `yield*` Tag → R includes Greeter. */
+export const Hello = View.gen(function* () {
+  const GreeterView = yield* Greeter;
+  return (props: { readonly who: string }) => (
+    <GreeterView name={props.who} />
+  );
 });
 
-Inner;
+Hello;
 // ^?
 
-/** No yield* — nests Inner via typed `jsx`. */
-export const Middle = View.succeed((_props: {}) =>
-  jsx("aside", {
-    "data-demo": "middle",
-    children: jsx(Inner, {}),
-  }),
-);
+/** Use Hello (no yield) — pass as value, render with JSX. */
+export const Middle = View.nest(Hello, (Hello) => (_props: {}) => (
+  <aside data-demo="middle">
+    <Hello who="nik" />
+  </aside>
+));
 
 Middle;
 // ^?
 
-/** No yield* — nests Middle (which nests Inner). */
-export const Outer = View.succeed((_props: {}) =>
-  jsxs("div", {
-    "data-demo": "outer",
-    children: jsx("section", {
-      children: jsx("article", {
-        children: jsx(Middle, {}),
-      }),
-    }),
-  }),
-);
+/** Use Middle the same way. */
+export const Outer = View.nest(Middle, (Middle) => (_props: {}) => (
+  <div data-demo="outer">
+    <section>
+      <article>
+        <Middle />
+      </article>
+    </section>
+  </div>
+));
 
 Outer;
 // ^?

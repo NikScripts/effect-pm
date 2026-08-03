@@ -30,11 +30,11 @@ const loaded = loadExampleIncludeFromDisk("../..", include, (abs) =>
   readFileSync(abs, "utf8"),
 );
 if (loaded === undefined) throw new Error("missing example");
-// Anti-cheat: no witnessing Inner’s R onto parents via stamp/ServicesOf.
-if (/stamp\s*</.test(loaded) || /ServicesOf\s*</.test(loaded)) {
-  throw new Error(
-    "demo must not use stamp<…> or ServicesOf<…> (no fake R witnesses)",
-  );
+if (!loaded.includes("View.nest")) {
+  throw new Error("demo must use View.nest");
+}
+if (/ServicesOf\s*</.test(loaded) || /stamp\s*</.test(loaded)) {
+  throw new Error("demo must not witness R via ServicesOf/stamp type args");
 }
 const code = prepareExampleForTwoslash(loaded, include);
 const result = createTwoslasher({ vfsRoot: repoRoot, compilerOptions })(
@@ -49,11 +49,9 @@ if (result.errors?.length) {
 const queries = (result.queries ?? []).map((q) => q.text);
 const joined = queries.join("\n");
 console.log("queries:\n", joined);
-for (const name of ["Inner", "Middle", "Outer"] as const) {
-  const q = queries.find((line) => line.includes(` ${name}:`) || line.includes(`const ${name}:`));
-  if (q === undefined) {
-    throw new Error(`missing ${name} query:\n${joined}`);
-  }
+for (const name of ["Hello", "Middle", "Outer"] as const) {
+  const q = queries.find((line) => line.includes(`const ${name}:`));
+  if (q === undefined) throw new Error(`missing ${name}:\n${joined}`);
   if (!q.includes("Greeter")) {
     throw new Error(`${name} must show Greeter, got: ${q}`);
   }

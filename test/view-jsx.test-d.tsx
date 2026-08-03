@@ -173,3 +173,13 @@ const FromFx = View.fromEffect(
   ),
 );
 expectTypeOf<View.ServicesOf<typeof FromFx>>().toEqualTypeOf<Clock>();
+
+// ── View.nest merges child R; render body stays JSX ──────────────────────────
+
+const NestChild = View.nest(Child, (Child) => (_props: {}) => (
+  <section>
+    <Child />
+  </section>
+));
+expectTypeOf<View.ServicesOf<typeof NestChild>>().toEqualTypeOf<Greeter>();
+type _NestChildNotAny = Expect<NotAny<View.ServicesOf<typeof NestChild>>>;

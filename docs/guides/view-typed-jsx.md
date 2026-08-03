@@ -5,11 +5,13 @@
 > live type previews, and the demo island — is at
 > <http://100.67.32.32:5190/docs/view-typed-jsx> (Tailscale).
 <!-- docs-site-link:end -->
-# Typed JSX — nested View requirements
+# Typed Views — nest without re-yielding
 
-Hover **`Inner`**, then **`Middle`**, then **`Outer`**. Only Inner `yield*`s
-`Greeter`. Middle and Outer have no yields — they only nest the child via typed
-`jsx` / `jsxs`. All three should show `Greeter`.
+TypeScript erases services from `<Child />` expressions. **`View.nest`** keeps
+the child as a value (so `R` merges) and lets you render it with normal JSX.
+
+Hover **`Hello`** → **`Middle`** → **`Outer`**: only Hello `yield*`s `Greeter`;
+Middle/Outer only `nest` + JSX. All three should show `Greeter`.
 
 ## Hover these values
 
@@ -17,13 +19,7 @@ Hover **`Inner`**, then **`Middle`**, then **`Outer`**. Only Inner `yield*`s
 ``` tsx
 ```
 
-TypeScript types `<Foo />` as a black-box `JSX.Element`. The `R` channel is the
-`jsx` / `jsxs` call types from `last-ts/jsx-runtime` (what the JSX transform
-emits).
-
 ## Live render
-
-Same Outer → section → article → Middle → Inner, with `Greeter` provided once:
 
 ```view-jsx
 ```

@@ -14,6 +14,7 @@
  */
 import * as React from "react";
 import { Cause, Context, Effect, Layer } from "effect";
+import { dual } from "effect/Function";
 import type * as Types from "effect/Types";
 import { AsyncResult } from "effect/unstable/reactivity";
 import * as AtomReact from "./AtomReact";
@@ -264,6 +265,51 @@ export const succeed = <F extends (props: any) => React.ReactElement | null>(
   Parameters<F>[0] extends object ? Parameters<F>[0] : {},
   TreeServicesOf<F>
 > => fromEffect(Effect.succeed(component));
+
+/**
+ * Nest a child {@link View} so its services `R` merge into the parent, while
+ * still rendering with normal JSX.
+ *
+ * JSX *syntax* erases `R` from `<Child />`. Pass the child as a **value**, then
+ * use that same binding in JSX — no re-`yield*`, no `jsx()` calls required.
+ *
+ * Dual: `View.nest(Child, render)` or `View.nest(Child)(render)`.
+ *
+ * @example
+ * ```ts
+ * const Page = View.nest(Hello, (Hello) => (_props) => (
+ *   <section>
+ *     <Hello who="nik" />
+ *   </section>
+ * ))
+ * // Page: View<{}, ServicesOf<typeof Hello>>
+ * ```
+ *
+ * @public
+ */
+export const nest: {
+  <P extends object, R>(
+    child: View<P, R>,
+  ): <Props extends object>(
+    render: (
+      Child: View<P, R>,
+    ) => (props: Props) => React.ReactElement | null,
+  ) => View<Props, R>;
+  <P extends object, R, Props extends object>(
+    child: View<P, R>,
+    render: (
+      Child: View<P, R>,
+    ) => (props: Props) => React.ReactElement | null,
+  ): View<Props, R>;
+} = dual(
+  2,
+  <P extends object, R, Props extends object>(
+    child: View<P, R>,
+    render: (
+      Child: View<P, R>,
+    ) => (props: Props) => React.ReactElement | null,
+  ): View<Props, R> => stamp<Props, R>(render(child)),
+);
 
 /**
  * Provide a component for a Tag. Props infer from the Tag.

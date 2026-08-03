@@ -1,31 +1,29 @@
 /**
- * Layer + components for the typed-JSX docs island.
- * Runtime mirror of the Twoslash tree (createElement — no last-ts jsx on client).
+ * Runtime mirror of the View.nest Twoslash demo (no last-ts jsx on client).
  */
 import * as React from "react";
 import { Atom } from "effect/unstable/reactivity";
-import { Context, Layer } from "effect";
 import * as View from "last-ts/View";
 
-class Greeter extends Context.Service<Greeter, string>()(
+class Greeter extends View.Tag<Greeter, { readonly name: string }>()(
   "docs/site/view-typed-jsx/Greeter",
 ) {}
 
-export const Inner = View.gen(function* () {
-  const name = yield* Greeter;
-  return (_props: {}) =>
-    React.createElement("span", { "data-demo": "inner" }, `hello ${name}`);
+export const Hello = View.gen(function* () {
+  const GreeterView = yield* Greeter;
+  return (props: { readonly who: string }) =>
+    React.createElement(GreeterView, { name: props.who });
 });
 
-export const Middle = View.succeed((_props: {}) =>
+export const Middle = View.nest(Hello, (Hello) => (_props: {}) =>
   React.createElement(
     "aside",
     { "data-demo": "middle" },
-    React.createElement(Inner, {}),
+    React.createElement(Hello, { who: "nik" }),
   ),
 );
 
-export const Outer = View.succeed((_props: {}) =>
+export const Outer = View.nest(Middle, (Middle) => (_props: {}) =>
   React.createElement(
     "div",
     { "data-demo": "outer" },
@@ -37,5 +35,7 @@ export const Outer = View.succeed((_props: {}) =>
   ),
 );
 
-export const demoLayer = Layer.succeed(Greeter, "nik");
+export const demoLayer = Greeter.provide((props) =>
+  React.createElement("span", { "data-demo": "inner" }, `hello ${props.name}`),
+);
 export const demoRuntime = Atom.runtime(demoLayer);
