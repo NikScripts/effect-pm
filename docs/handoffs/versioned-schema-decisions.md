@@ -449,9 +449,9 @@ yield* Node.shutdown(lookupA) // releases sock
 #### Eng order
 
 1. **`Lookup.follow` + gap Policy** — Soft-bake / same-sock replace suite (parallel `policy-lookup-client` but Lookup process swaps).  
-2. **Orchestrated single-address handoff** recipe (example script; Launcher sugar later).  
-3. **Launcher Lookup-first** spawn (still one address).  
-4. Update-impact / app `restartSuccessor` after.
+2. **Orchestrated single-address ownership handoff** recipe (example script).  
+3. **Launcher ensure-Lookup-first** — detect already-running Lookup; else spawn Lookup-only at operator address or safe default; then app units. (Still one address.)  
+4. Update-impact / app `restartSuccessor` after. Open: Policy when **app** SpawnSpec target is already up (fail / skip / adopt — not auto migration-handoff).
 
 ---
 
