@@ -90,8 +90,9 @@ export const SizeChrome: View.OpenPrototype<ViewProps, WithSize> = View.Prototyp
 >()();
 
 /**
- * Size-chrome add-ons — {@link SizeChrome} with size fulfilled.
- * Mint with `Views.Card.Tag<Self, Props?>()(key, statics?)`.
+ * Size-chrome add-ons — {@link SizeChrome} with `statics.size` fulfilled.
+ * Mint with `Views.Card.Tag<Self, Props?>()(key, statics?)` — bag merges into
+ * `.statics` (not flattened onto the class).
  * Matcher components are **not** these — use `Views.react(…).Card` or {@link useMatch}.
  *
  * @public
@@ -238,10 +239,10 @@ export const layer: Layer.Layer<Registry> = Layer.sync(Registry, makeRegistrySer
  */
 export const base: Layer.Layer<Registry> = layer;
 
-/** Sized View handle — {@link WithSize} required for {@link bind} / {@link only}. @internal */
-type ViewService<Id> = WithSize & {
+/** Sized View handle — {@link WithSize} required on `.statics` for {@link bind} / {@link only}. @internal */
+type ViewService<Id> = {
   readonly key: View.ViewKey;
-  readonly spec?: unknown;
+  readonly statics: WithSize & { readonly spec?: unknown };
 } & Context.Key<Id, Component>;
 
 /** Avoid `Foo<Id>>` in .tsx return positions (parsed as JSX). */
@@ -273,7 +274,7 @@ export const bind: {
     Effect.gen(function* () {
       const reg = yield* Registry;
       const Component = yield* view;
-      const bound = { key: view.key, kind: view.size, Component };
+      const bound = { key: view.key, kind: view.statics.size, Component };
       if (typeof targetOrKind === "string") {
         reg.addKind(targetOrKind, bound);
       } else {
@@ -300,14 +301,14 @@ export const only = <Id1, Id2 = never, Id3 = never>(
       const reg = yield* Registry;
       const bounds: Bound[] = [];
       const c1 = yield* v1;
-      bounds.push({ key: v1.key, kind: v1.size, Component: c1 });
+      bounds.push({ key: v1.key, kind: v1.statics.size, Component: c1 });
       if (v2 !== undefined) {
         const c2 = yield* v2;
-        bounds.push({ key: v2.key, kind: v2.size, Component: c2 });
+        bounds.push({ key: v2.key, kind: v2.statics.size, Component: c2 });
       }
       if (v3 !== undefined) {
         const c3 = yield* v3;
-        bounds.push({ key: v3.key, kind: v3.size, Component: c3 });
+        bounds.push({ key: v3.key, kind: v3.statics.size, Component: c3 });
       }
       reg.setOnly(target.key, bounds);
     }),

@@ -7,35 +7,41 @@
 # View Tag types
 
 A View Tag is a class — same shape as Effect’s `Context.Service`.
-Mint with `View.Card.Tag` (etc.), provide a skin with `View.provide` (props infer), export `layer`.
+DI mint/`provide` live on `last-ts/View` (or `hyperlink-ts/ui/View`). Dashboard
+size chrome + bind live on `hyperlink-ts/ui/Views`.
+
+Prototype-managed metadata is a **single `.statics` bag** (any keys). The class
+surface stays free for app statics (`static foo = …`).
 
 ## One-shot mint (common path)
 
-`View.Card` / `Detail` / `Page` are size chrome already fulfilled
-(`size: ViewKind.Card()` …). Stamp `spec`, optional extra props, mint:
+`Views.Card` / `Detail` / `Page` are size chrome already fulfilled
+(`statics.size: ViewKind.Card()` …). Stamp `spec` into the bag, optional extra
+props, mint:
 
 {.twoslash}
 ``` ts
 import { Layer } from "effect"
-import { View } from "hyperlink-ts/ui"
+import * as View from "hyperlink-ts/ui/View"
+import * as Views from "hyperlink-ts/ui/Views"
 
-class PoolCard extends View.Card.Tag<PoolCard>()(
+class PoolCard extends Views.Card.Tag<PoolCard>()(
   "app/view/pool-card",
   { spec: { kind: "app/queue" } as const },
 ) {}
-class PoolDetail extends View.Detail.Tag<PoolDetail>()(
+class PoolDetail extends Views.Detail.Tag<PoolDetail>()(
   "app/view/pool-detail",
   { spec: { kind: "app/queue" } as const },
 ) {}
-class PoolPage extends View.Page.Tag<PoolPage>()(
+class PoolPage extends Views.Page.Tag<PoolPage>()(
   "app/view/pool-page",
   { spec: { kind: "app/queue" } as const },
 ) {}
 
-PoolCard.size
-//         ^?
-PoolCard.size._tag
-//              ^?
+PoolCard.statics.size
+//               ^?
+PoolCard.statics.size._tag
+//                    ^?
 
 export const layer = Layer.mergeAll(
   View.provide(PoolCard, (props) => {
@@ -47,8 +53,8 @@ export const layer = Layer.mergeAll(
   PoolPage.provide((_props) => null),
 )
 
-const kind: View.ViewKind = View.ViewKind.Card()
-const label = View.ViewKind.$match(kind, {
+const kind: Views.ViewKind = Views.ViewKind.Card()
+const label = Views.ViewKind.$match(kind, {
   Card: () => "card chrome",
   Detail: () => "detail chrome",
   Page: () => "page chrome",
@@ -59,22 +65,27 @@ void label
 Provide skins with **`View.provide(Tag, impl)`** or **`Tag.provide(impl)`**. Props infer from
 the Tag. Annotate skins with **`PoolCard["Service"]`** (no `typeof`). Sizes are
 `Data.TaggedEnum` — match with `ViewKind.$match` (or `Match.tag` on a
-`View.ViewKind`-typed value).
+`Views.ViewKind`-typed value). Read size/spec via **`Tag.statics`**.
 
 ## Extra props
 
-Second type arg on `Tag` — additive props; statics as the value arg:
+Second type arg on `Tag` — additive props; Prototype statics as the value arg
+(merged into `.statics`):
 
 {.twoslash}
 ``` ts
-import { View } from "hyperlink-ts/ui"
+import * as View from "hyperlink-ts/ui/View"
+import * as Views from "hyperlink-ts/ui/Views"
 
-class DenseCard extends View.Card.Tag<
+class DenseCard extends Views.Card.Tag<
   DenseCard,
   { readonly dense?: boolean }
 >()("app/view/dense-card", {
   spec: { kind: "app/dense-card" } as const,
-}) {}
+}) {
+  /** App-owned class static — not in the Prototype bag. */
+  static readonly region = "us" as const
+}
 
 export const layer = View.provide(DenseCard, (props) => {
   props
@@ -89,8 +100,9 @@ Naked (no size): `View.Tag<Greeter, { name: string }>()("…")`.
 
 Statics **Requirement** debt can be declared on the root
 `View.Prototype<Props, Requirement>()` **or** on any later
-`.Prototype<NewProps, NewRequirement>()` step (additive). Statics discharge it
-when they satisfy the merged debt.
+`.Prototype<NewProps, NewRequirement>()` step (additive). The Requirement
+describes keys **inside the statics bag**; statics discharge it when the bag
+satisfies the merged debt.
 
 Dashboard size chrome uses Hyperlink `Views` (`SizeChrome` / `Card` / …):
 
@@ -111,25 +123,26 @@ const Base = View.Prototype<{ readonly label: string }>()()
 const Open = Base.Prototype<{}, Views.WithSize>()()
 const Done = Open.Prototype()({ size: Views.ViewKind.Detail() })
 
-PoolCard.size
-//         ^?
+PoolCard.statics.size
+//               ^?
 ```
 
 ## Wire into Dashboard
 
 ```ts
 import { Layer } from "effect"
-import { View } from "hyperlink-ts/ui"
+import * as View from "hyperlink-ts/ui/View"
+import * as Views from "hyperlink-ts/ui/Views"
 import { WorkerPool } from "./hub"
 
-export class WorkerPoolCard extends View.Card.Tag<
+export class WorkerPoolCard extends Views.Card.Tag<
   WorkerPoolCard,
   { readonly dense?: boolean }
 >()("examples/apps/web/worker-pool-card", {
   spec: { kind: "examples/worker-pool-card" } as const,
 }) {}
 
-export const layer = View.only(WorkerPool, WorkerPoolCard).pipe(
+export const layer = Views.only(WorkerPool, WorkerPoolCard).pipe(
   Layer.provide(
     View.provide(WorkerPoolCard, (props) => {
       void props.dense
@@ -138,5 +151,3 @@ export const layer = View.only(WorkerPool, WorkerPoolCard).pipe(
   ),
 )
 ```
-
-Full dogfood: [`examples/apps/web/worker-pool-card.tsx`](../../examples/apps/web/worker-pool-card.tsx).

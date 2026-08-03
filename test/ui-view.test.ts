@@ -151,19 +151,19 @@ describe("Views.group + kit.for", () => {
 
 describe("View.Tag / Prototype", () => {
   it("card prototype stamps size static", () => {
-    expect(PoolCard.size).toEqual(Views.ViewKind.Card());
-    expect(PoolDetail.size).toEqual(Views.ViewKind.Detail());
+    expect(PoolCard.statics.size).toEqual(Views.ViewKind.Card());
+    expect(PoolDetail.statics.size).toEqual(Views.ViewKind.Detail());
     expect(PoolCard.key).toBe("hyperlink/view/pool-card");
   });
 
-  it("Prototype chain merges statics", () => {
+  it("Prototype chain merges statics bag", () => {
     const Base = View.Prototype<{ readonly label: string }, Views.WithSize>()({
       base: true as const,
     });
     const Child = Base.Prototype()({ size: Views.ViewKind.Page() });
     class PageView extends Child.Tag<PageView>()("test/page-view") {}
-    expect(PageView.base).toBe(true);
-    expect(PageView.size).toEqual(Views.ViewKind.Page());
+    expect(PageView.statics.base).toBe(true);
+    expect(PageView.statics.size).toEqual(Views.ViewKind.Page());
     expect(PageView.key).toBe("test/page-view");
   });
 
@@ -174,7 +174,15 @@ describe("View.Tag / Prototype", () => {
     const Open = Base.Prototype<{}, Views.WithSize>()();
     const Done = Open.Prototype()({ size: Views.ViewKind.Card() });
     class MidCard extends Done.Tag<MidCard>()("test/mid-card") {}
-    expect(MidCard.base).toBe(true);
-    expect(MidCard.size).toEqual(Views.ViewKind.Card());
+    expect(MidCard.statics.base).toBe(true);
+    expect(MidCard.statics.size).toEqual(Views.ViewKind.Card());
+  });
+
+  it("class statics stay free of the Prototype bag", () => {
+    class FreeCard extends Views.Card.Tag<FreeCard>()("test/free-card") {
+      static readonly custom = "app" as const;
+    }
+    expect(FreeCard.custom).toBe("app");
+    expect(FreeCard.statics.size).toEqual(Views.ViewKind.Card());
   });
 });

@@ -3,10 +3,10 @@ import { expectTypeOf } from "vitest";
 import * as View from "../src/ui/View";
 import * as Views from "../src/ui/Views";
 const Handle = Views.Card.Tag<{ readonly _brand: "x" }>()("hyperlink/view/tmp");
-expectTypeOf(Handle.size).toEqualTypeOf<Views.CardKind>();
+expectTypeOf(Handle.statics.size).toEqualTypeOf<Views.CardKind>();
 
 class PoolCard extends Views.Card.Tag<PoolCard>()("hyperlink/view/pool-card") {}
-expectTypeOf(PoolCard.size).toEqualTypeOf<Views.CardKind>();
+expectTypeOf(PoolCard.statics.size).toEqualTypeOf<Views.CardKind>();
 expectTypeOf<View.Type<typeof PoolCard>>().toEqualTypeOf<Views.ViewProps>();
 expectTypeOf<View.PropsOf<PoolCard>>().toEqualTypeOf<Views.ViewProps>();
 expectTypeOf<PoolCard["Service"]>().toEqualTypeOf<View.View<Views.ViewProps>>();

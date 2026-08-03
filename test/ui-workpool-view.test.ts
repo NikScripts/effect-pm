@@ -25,7 +25,7 @@ describe("WorkPoolView packaging", () => {
   it("shared handles match WorkPoolView keys", () => {
     expect(WorkPoolView.PoolCard.key).toBe("hyperlink/view/pool-card");
     expect(WorkPoolView.PoolDetail.key).toBe("hyperlink/view/pool-detail");
-    expect(WorkPoolView.PoolCard.size).toEqual(Views.ViewKind.Card());
-    expect(WorkPoolView.PoolDetail.size).toEqual(Views.ViewKind.Detail());
+    expect(WorkPoolView.PoolCard.statics.size).toEqual(Views.ViewKind.Card());
+    expect(WorkPoolView.PoolDetail.statics.size).toEqual(Views.ViewKind.Detail());
   });
 });

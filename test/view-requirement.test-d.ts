@@ -55,8 +55,11 @@ expectTypeOf(Views.Page).toEqualTypeOf<
 class PoolPage extends Views.Page.Tag<PoolPage>()("app/view/pool-page", {
   spec: { kind: "app/queue" } as const,
 }) {}
-expectTypeOf(PoolPage.size).toEqualTypeOf<Views.PageKind>();
-expectTypeOf(PoolPage.spec).toEqualTypeOf<{ readonly kind: "app/queue" }>();
+expectTypeOf(PoolPage.statics.size).toEqualTypeOf<Views.PageKind>();
+expectTypeOf(PoolPage.statics.spec).toEqualTypeOf<{ readonly kind: "app/queue" }>();
+expectTypeOf<View.StaticsOf<typeof PoolPage>>().toEqualTypeOf<
+  typeof PoolPage.statics
+>();
 const _bound = Views.bind("app/queue", PoolPage);
 void _bound;
 
