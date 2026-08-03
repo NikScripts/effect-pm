@@ -1,49 +1,89 @@
-# DI Views — gen as component (draft)
+# DI Views — typed nested JSX (draft)
 
-**Status:** design lean — correct the Layer mistake  
-**Rule:** `View.gen` **is** the component you export and render. Do not wrap it in `.provide` / Layer just to exist.
+**Status:** design locked — **fix JSX erasure** so nested components carry requirements for real.  
+**Not:** invent a parallel compose API that covers up the erase.
 
 ---
 
-## Shape
+## Destination
+
+```tsx
+const Component = () => (
+  <Parent>
+    <Child />
+  </Parent>
+)
+```
+
+Requirement types flow **child → parent → the component function** through real JSX typing. Nesting is normal React nesting; the type channel is not erased.
+
+---
+
+## How (types)
+
+Custom `jsxImportSource` (e.g. `last-ts/jsx`):
 
 ```ts
-import * as View from "last-ts/View"
+// Element carries R; jsx() merges child R into parent Element’s R
+type Element<R = never> = …
 
-// Tag = Context service whose value is a component fn (others can yield* it)
-class Greeter extends View.Tag<Greeter, { readonly name: string }>()(
-  "app/view/greeter",
-) {}
+// Component’s R = what it yields + what its returned tree’s Elements need
+type Component<P, R = never> = (props: P) => Element<R>
 
-// App edge (once): put Greeter's impl in the runtime Layer
-// Greeter.provide(({ name }) => <h1>{name}</h1>)
+// View.gen: Effect R from yield* becomes Component R
+const Child = View.gen(function* () {
+  const GreeterView = yield* Greeter
+  return () => <GreeterView name="x" />
+})
+// Child: Component<{}, Greeter>
 
-// Component = straight View.gen export — NOT Tag.provide(View.gen(…))
+const Parent = View.gen(function* () {
+  return () => (
+    <div>
+      <Child />
+    </div>
+  )
+})
+// Parent: Component<{}, Greeter>  — Child’s R bubbled through JSX
+
+const Page = () => (
+  <Parent>
+    <Child />
+  </Parent>
+)
+// Page’s tree Element R includes Greeter from both children
+```
+
+Runtime can still emit React elements. **Types** stop the erase.
+
+---
+
+## Gen = the component
+
+```ts
 export const Hello = View.gen(function* () {
-  const GreeterView = yield* Greeter // service → component fn
+  const GreeterView = yield* Greeter
   return (props: { readonly who: string }) => (
     <GreeterView name={props.who} />
   )
 })
 
-// Use as a normal component inside another View (under RuntimeProvider)
+// Use nested — types propagate
 export const Page = View.gen(function* () {
-  return () => <Hello who="nik" />
-})
-
-// void / undefined from the generator → treat as () => null
-export const Empty = View.gen(function* () {
-  yield* someSetup
-  // no return / return void  →  component is () => null
+  return () => (
+    <section>
+      <Hello who="nik" />
+    </section>
+  )
 })
 ```
 
 | | Role |
 |--|------|
-| `View.Tag` | Named service identity so `yield* Tag` works |
-| `Tag.provide` / Layer | **App edge only** — fulfill Tags the runtime needs |
-| `View.gen` | **The component** — export it, render `<Hello />` |
-| `yield* SomeTag` | Downward: need that Tag’s impl in the runtime Layer |
+| `View.gen` | The component you export and nest |
+| `yield* Tag` | Downward service need → part of that component’s `R` |
+| Nested JSX | Bubbles child `R` into parent `Element` / enclosing component |
+| `Tag.provide` / Layer | App edge — fulfill the aggregated `R` once |
 | `Last.provide` | Upward values (other direction) |
 
 ---
@@ -51,22 +91,21 @@ export const Empty = View.gen(function* () {
 ## Not this
 
 ```ts
-// WRONG — gen is already the component
+// WRONG — wrapping gen in Layer to “exist”
 Hello.provide(View.gen(…))
-Layer.succeed(Hello, View.gen(…))
+
+// WRONG — invent slots / catalogs / View.el Need brands to bypass JSX
+yield* needs(Hello)
+View.el(Parent, { children: View.el(Child) })
 ```
 
----
-
-## Types vs erasure
-
-`yield* Greeter` already puts `Greeter` in the **Effect**’s `R` while the gen runs (under the runtime). That is enough for “this component needs Greeter provided at the app Layer.”
-
-Pushing the same debt through React JSX types / `MyTag.View` / custom JSX is optional sugar — easy to over-invest for little gain. Prefer: gen + `yield* Tag` + runtime Layer at the root.
+Don’t invent junk type systems to replace what React erased. **Fix the erasure.**
 
 ---
 
-## Open small
+## Eng order (when owner says go)
 
-- `View.gen`: normalize `void` → `() => null` (Eng).
-- Whether a gen export can also be registered as a Tag without forcing Layer-first DX (only if someone needs `yield* Hello`).
+1. `last-ts/jsx` — `Element<R>`, `jsx`/`jsxs` merge child `R`, package `jsxImportSource`.
+2. Wire `View.gen` / `fromEffect` return type to `Component<P, R>`.
+3. `.test-d.ts`: nested `<Parent><Child /></Parent>` surfaces Child’s tags on the tree / parent.
+4. Small: gen `void` → `() => null`.
