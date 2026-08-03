@@ -260,13 +260,14 @@ Both processes import the same Tag module — chain travels with the Tag. No `jo
 | `#35` ranges | **Superseded** by this bake |
 | `contractHash` / verify | Kept; + `schemaVersion` for leaf tip |
 | Policy / `lookupClient` | Dial unchanged; decode layer applies Versioned |
-| `Hyperlink.deprecated` (proposed) | Orthogonal — method retirement, not payload migration |
+| `Hyperlink.deprecated` (planned) | Orthogonal — method retirement, not payload migration; Eng **after** Versioned |
 
 ---
 
-## Proposed — `Hyperlink.deprecated` (method retirement; orthogonal to Versioned)
+## Planned — `Hyperlink.deprecated` (method retirement; Eng after Versioned)
 
-**Status:** Owner-raised 2026-08-03 — **not locked**. Complements Versioned: Versioned evolves a leaf **shape**; deprecated retires a **method** from the typed Handle while keeping it on the wire for skew.
+**Status:** Design direction locked 2026-08-03 — **doc only; no Eng until Versioned v1 finishes**.  
+Complements Versioned: Versioned evolves a leaf **shape**; deprecated retires a **method** from the typed Handle while keeping it on the wire for skew.
 
 ### Problem
 
@@ -276,47 +277,47 @@ Today Spec leaves split Handle vs wire the **opposite** way:
 |------|--------|------|
 | `Method` | yes | yes |
 | `local` / `default` | yes | **no** |
-| **need: deprecated** | **no** | **yes** (+ impl required) |
+| **deprecated** | **no** | **yes** (+ impl required) |
 
 Old clients still call `rename` during a rollout; new app code must not see `rename` on `yield* Tag`.
 
-### Recommended shape — invert `local`
+### Shape — invert `local`, dual (prefer pipe)
 
-New leaf brand (mirror of `LocalMethod` / `DefaultMethod`):
+New leaf brand (mirror of `LocalMethod` / `DefaultMethod`). API is **`Fn.dual`** — data-first and pipeable; **canonical authoring is piped** (cleaner next to other Method combinators).
 
 ```ts
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import { Schema } from "effect"
-
-// Wire Method wrapped as deprecated
-const rename = Hyperlink.deprecated(
-  Hyperlink.effectFn({
-    payload: Schema.Struct({ from: Schema.String, to: Schema.String }),
-    success: Schema.Void,
-  }),
-)
 
 class Files extends Hyperlink.Tag("app/Files")({
   move: Hyperlink.effectFn({
     payload: Schema.Struct({ from: Schema.String, to: Schema.String }),
     success: Schema.Void,
   }),
-  // still in Spec / RpcGroup / contractHash / ServeImpl — NOT on ServiceOf / Handle
-  rename,
+  // Preferred — pipe
+  rename: Hyperlink.effectFn({
+    payload: Schema.Struct({ from: Schema.String, to: Schema.String }),
+    success: Schema.Void,
+  }).pipe(Hyperlink.deprecated),
 }) {}
+
+// Also valid (dual data-first) — same brand
+const legacyRename = Hyperlink.deprecated(
+  Hyperlink.effectFn({
+    payload: Schema.Struct({ from: Schema.String, to: Schema.String }),
+    success: Schema.Void,
+  }),
+)
 
 // Serve — impl REQUIRED for deprecated (same as wire methods)
 Hyperlink.serve(Files, {
   move: (p) => Effect.void,
-  rename: (p) => Effect.void, // must provide — old clients still dial this RPC
+  rename: (p) => Effect.void, // old clients still dial this RPC
 })
 
-// New code
 const files = yield* Files
 files.move // ✅
 files.rename // ❌ not on Handle (compile error)
-
-// Old binary client — still has rename on its Handle; hits wire; new server answers
 ```
 
 ### Filter matrix (Eng target)
@@ -328,20 +329,21 @@ files.rename // ❌ not on Handle (compile error)
 | `ServeImplOf` / server handlers | **required** |
 | `contractHash` | **include** (skew window: old+new Specs still agree on wire) |
 
-### Why this way (not alternatives)
+### Why this way
 
-| Alternative | Why not (first choice) |
-|-------------|------------------------|
-| Annotation flag on `Method` | Easy to miss in `ServiceOf`; brand matches `local`/`default` |
-| Separate `deprecated: { … }` Tag bag | Second Spec map; harder nested groups |
-| Keep on Handle but `@deprecated` TSDoc only | Soft; new code still calls it |
-| Drop from `contractHash` immediately | Breaks old clients mid-rollout (F4) |
+| Alternative | Why not |
+|-------------|---------|
+| Annotation-only / TSDoc `@deprecated` | Soft; still on Handle |
+| Flag on `Method` without brand | Easy to miss in `ServiceOf`; brand matches `local`/`default` |
+| Separate `deprecated: { … }` Tag bag | Second Spec map |
+| Drop from `contractHash` immediately | Breaks old clients mid-rollout |
+| Pipe-only (no dual) | Breaks house `Fn.dual` pattern (`defaults`, `withReadiness`, …) |
 
 ### Lifecycle
 
 1. Method is normal wire+Handle.  
-2. Wrap with `Hyperlink.deprecated(…)` — impl stays; Handle hides; wire+hash keep.  
-3. After fleet past skew: **delete** the leaf entirely → `contractHash` changes → remaining old clients fail loud (correct).
+2. `.pipe(Hyperlink.deprecated)` — impl stays; Handle hides; wire+hash keep.  
+3. After fleet past skew: **delete** the leaf → `contractHash` changes → remaining old clients fail loud.
 
 ### Relation to Versioned
 
@@ -349,55 +351,51 @@ files.rename // ❌ not on Handle (compile error)
 - Prefer **deprecated** when the **verb** itself is leaving the product API.  
 - Can combine: deprecated method whose payload is still a Versioned leaf for the skew window.
 
-### Open (lock before Eng)
+### Deferred open (resolve at Eng, after Versioned)
 
-- Name: `Hyperlink.deprecated` vs `Hyperlink.wireOnly` vs `Hyperlink.legacy`?  
-- Does CLI/TUI list deprecated methods (hidden vs marked)?  
-- Toolkit fixed Specs (WorkPool `enqueue` etc.) — app Tags only for v1?
+- CLI/TUI: hide vs mark deprecated methods  
+- Toolkit fixed Specs (WorkPool verbs) — app Tags only for first Eng slice?
 
 ---
 
-## Proposed — Launcher update impact (dependent nodes)
+## Planned — Launcher / Lookup update impact (dependent nodes)
 
-**Status:** Owner-raised 2026-08-03 — **not locked**. Explicit A/B / `restartSuccessor` stay deferred until this bake lands as design.
+**Status:** Design sketch 2026-08-03 — **doc only; no Eng / no product updates until Versioned (+ then deprecated) land**.  
+Explicit A/B / `restartSuccessor` stay behind this plan.
 
 ### Problem
 
 Bringing up B as an update of A is not only “spawn B → handoff → shutdown A”. Other nodes may:
 
 - **Serve** the same identity / peer set (must roll in order or together).  
-- **Dial** A’s services (clients) — soft if Versioned+Policy cover skew; hard if `contractHash` breaks or deprecated methods were removed too early.  
+- **Dial** A’s services — soft if Versioned+Policy cover skew; hard if `contractHash` breaks or deprecated methods were removed too early.  
 - **Hold durable state** stamped with old `schemaVersion` tips (need chain path on the receiving tip).  
 - Be the **Lookup** node (#36 still deferred — special).
 
-Launcher (spine α) stays dumb spawn→Ready→assume→exit — but **update orchestration** needs an impact set before/around that.
+Launcher (spine α) stays dumb spawn→Ready→assume→exit — **update orchestration** needs an impact set before/around that.
 
 ### Impact set (sketch)
 
-Inputs already on tip:
+Inputs already on tip (plus Versioned / deprecated once Eng’d):
 
 - Directory: who serves which HyperService keys / dials  
 - Status rows: `contractHash`, `schemaVersion`, readiness, phase  
 - Advice: prefer / sticky  
-- Tag modules: Versioned chains + (proposed) deprecated wire surface  
+- Tag modules: Versioned chains + deprecated wire surface  
 
 ```ts
-// Proposed product shape — names TBD; prefer Node/Lookup nouns over Launcher brain
+// Names TBD at Eng — prefer Node/Lookup nouns over Launcher brain
 type UpdateImpact = {
-  readonly target: Node.Key                     // A being replaced
-  readonly successor: SpawnSpec                 // B
-  /** Peers that serve overlapping keys / must roll with or after target. */
+  readonly target: Node.Key
+  readonly successor: SpawnSpec
   readonly coUpdate: ReadonlyArray<Node.Key>
-  /** Dialers that would see ContractMismatch if target flips without them. */
   readonly clientsAtRisk: ReadonlyArray<{ node: Node.Key; serviceKey: string }>
-  /** Leaves where successor tip cannot read incumbent schemaVersion. */
   readonly migrationGaps: ReadonlyArray<{
     serviceKey: string
     leaf: string
     from: string
     to: string
   }>
-  /** Wire methods present on incumbent Spec missing on successor (removed, not deprecated). */
   readonly wireRemovals: ReadonlyArray<{ serviceKey: string; method: string }>
 }
 
@@ -406,31 +404,31 @@ yield* Lookup.planUpdate(target, successorTagBundle) // name TBD
 yield* Launcher.up(successor) // only after plan says safe (or owner force)
 ```
 
-### Rules of thumb (proposed)
+### Rules of thumb
 
-1. **Payload tip move with Versioned path** → clients/peers can skew; impact = soft warn.  
-2. **`contractHash` change without deprecated bridge** → every dialer of that service is **must-update** (or accept downtime).  
+1. **Payload tip move with Versioned path** → clients/peers can skew; soft warn.  
+2. **`contractHash` change without deprecated bridge** → dialers are **must-update** (or accept downtime).  
 3. **Method removed (not deprecated)** → same as (2) for callers of that method.  
-4. **Method deprecated** → dialers can lag; servers must keep impl until Directory shows no old tip.  
-5. **Durable tip without chain path** → block successor Ready / handoff (`MigrationPathMissing`).  
-6. **Lookup node** → out of band (#36); do not special-case in Launcher v1.
+4. **Method deprecated** → dialers can lag; servers keep impl until no old tip remains.  
+5. **Durable tip without chain path** → block successor Ready / handoff.  
+6. **Lookup node** → out of band (#36); not special-cased in Launcher v1.
 
 ### Where the brain lives
 
 | Plane | Role in updates |
 |-------|-----------------|
-| **Lookup** | Membership + impact query (who serves / who is at risk) |
-| **Node** | drain / shutdown / handoff / status advertisements |
-| **Launcher** | spawn → Ready → assume → exit for units in a **plan**; not long-lived supervisor |
-| **Policy / lookupClient** | survive safe skew; not a substitute for impact planning |
+| **Lookup** | Membership + impact query |
+| **Node** | drain / shutdown / handoff / status |
+| **Launcher** | spawn → Ready → assume → exit for units in a **plan** |
+| **Policy / lookupClient** | survive safe skew — not a substitute for impact planning |
 
-Spine α stays: Launcher does not own the fleet forever. **Plan** is Lookup/Node-shaped; Launcher executes spawn units from the plan.
+Spine α stays: Launcher is not a long-lived fleet supervisor. **Plan** is Lookup/Node-shaped; Launcher executes spawn units from the plan.
 
-### Open (lock before Eng)
+### Deferred open (resolve when this bake starts — after Versioned)
 
-- API home: `Lookup.planUpdate` vs `Node.planUpdate` vs thin `Launcher.updat`e?  
-- Force flag for ops when impact is non-empty?  
-- How clients-at-risk are discovered without a client registry (Directory-only? Advice? optional register?)  
+- API home: `Lookup.planUpdate` vs `Node.planUpdate`  
+- Force flag when impact is non-empty  
+- Discovering clients-at-risk without a client registry  
 - Tie-in to explicit A/B launcher / `restartSuccessor`
 
 ---
@@ -484,7 +482,13 @@ export class Jobs extends WorkPool.Tag<Jobs>()("fleet/Jobs", { payload: Job }) {
 8. Changeset (minor)  
 9. Brief #35 → superseded (already pointed here)
 
-**Out of Versioned Eng v1:** non-payload leaves; `restartSuccessor`; Directory column; `Hyperlink.deprecated` (separate lock); launcher impact planner (separate lock).
+**Out of Versioned Eng v1:** non-payload leaves; `restartSuccessor`; Directory column.
+
+**After Versioned (queued, already designed above — do not start early):**
+
+1. `Hyperlink.deprecated` dual (pipe-canonical)  
+2. Update-impact planner (`Lookup`/`Node` + Launcher executes plan)  
+3. Explicit A/B / `restartSuccessor` (behind impact)
 
 ---
 
