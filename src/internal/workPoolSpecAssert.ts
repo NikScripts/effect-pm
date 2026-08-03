@@ -33,10 +33,18 @@ type QueueWire = {
   readonly error?: Schema.Top;
 };
 
+const DeprecatedMethodTypeId = "~hyperlink-ts/Hyperlink/DeprecatedMethod";
+
 const asRpcMethod = (
-  m: AnyMethod | AnyLocalMethod | AnyDefaultMethod | undefined,
-): AnyMethod | undefined =>
-  m !== undefined && "kind" in m ? (m as AnyMethod) : undefined;
+  m: AnyMethod | AnyLocalMethod | AnyDefaultMethod | { readonly method?: AnyMethod } | undefined,
+): AnyMethod | undefined => {
+  if (m === undefined) return undefined;
+  if (DeprecatedMethodTypeId in m) {
+    const inner = (m as { readonly method: AnyMethod }).method;
+    return inner !== undefined && "kind" in inner ? inner : undefined;
+  }
+  return "kind" in m ? (m as AnyMethod) : undefined;
+};
 
 const methodKindKey = (m: AnyMethod): string =>
   `${m.kind}:${m.stream ? "stream" : "effect"}`;

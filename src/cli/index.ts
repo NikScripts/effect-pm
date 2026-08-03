@@ -26,11 +26,17 @@
  * ```
  *
  */
-import { Console, Effect, type Schema } from "effect";
+import { Console, Effect, Predicate, type Schema } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
 import * as Group from "../Group";
 import { methodMeta, specOf } from "../Hyperlink";
-import type { AnyLocalMethod, AnyMethod, AnyDefaultMethod, FlatSpec } from "../Hyperlink";
+import type {
+  AnyDeprecatedMethod,
+  AnyLocalMethod,
+  AnyMethod,
+  AnyDefaultMethod,
+  FlatSpec,
+} from "../Hyperlink";
 import { openTui } from "./Tui";
 import type { TuiNotConfigured } from "./Tui";
 import type { CliHyperlinkTag, CliNode, CliTree } from "./types";
@@ -39,11 +45,17 @@ import { retype } from "../internal/nodeServerCommon";
 export type { CliGroup, CliHyperlinkTag, CliNode, CliTree } from "./types";
 export { openTui, Tui, TuiNotConfigured, type TuiOpenInput } from "./Tui";
 
+const DeprecatedMethodTypeId = "~hyperlink-ts/Hyperlink/DeprecatedMethod";
+
 // A spec entry is a runnable CLI verb when it's a wire method (`kind`: query/mutate) that
-// isn't a streaming read. Streams have no run-and-exit form; local / Tag-baked default
-// members aren't CLI verbs.
-const isCliMethod = (m: AnyMethod | AnyLocalMethod | AnyDefaultMethod): m is AnyMethod =>
-  "kind" in m && m.stream !== true;
+// isn't a streaming read. Streams have no run-and-exit form; local / Tag-baked default /
+// deprecated members aren't CLI verbs (deprecated: hide for now; mark vs hide still open).
+const isCliMethod = (
+  m: AnyMethod | AnyLocalMethod | AnyDefaultMethod | AnyDeprecatedMethod,
+): m is AnyMethod =>
+  !Predicate.hasProperty(m, DeprecatedMethodTypeId) &&
+  "kind" in m &&
+  m.stream !== true;
 
 const isSchema = (x: unknown): x is Schema.Top =>
   typeof x === "object" && x !== null && "ast" in x;

@@ -147,6 +147,19 @@ membership with `Lookup.nodesServing(Jobs)` (Tag or wire key) — sugar over Dir
 schema’d request. See:
 [`examples/launcher/lookup-membership.ts`](../../examples/launcher/lookup-membership.ts).
 
+### Lookup node (planned bring-up)
+
+Prefer an **explicit Lookup node** for multi-node fleets so Lookup has no app services to
+skew when those services A/B. Planned Launcher recipe (not Eng’d yet):
+
+1. Operator provides a Lookup address → use it.  
+2. Protocol has a **safe default** address → Lookup node optional (Soft-bake OK).  
+3. Otherwise → Launcher spawns a **dedicated Lookup node first**, then app nodes.
+
+Independent launch (no Launcher) still uses **first node = Lookup** (Soft-bake) — that path
+must keep Lookup A/B / restart. See
+[`versioned-schema-decisions.md`](../handoffs/versioned-schema-decisions.md#planned--lookup-first-launcher--lookup-ab-owner-2026-08-03).
+
 **Do not confuse** Launcher custody `Handle.handoff` with **node migration** handoff
 (`Hyperlink.serve(…, { handoff })` / WorkPool `releaseEnqueueHandoff` during `Node.shutdown`).
 Custody = “I own myself; launcher may exit.” Migration = move HyperService work A→B on the
@@ -168,6 +181,7 @@ Hub: [Examples → launcher](/docs/examples#launcher).
 
 ## Deferred (not beta Launcher)
 
+- Lookup-first spawn when no address / no safe default; Lookup A/B / restart (#36)
 - Explicit less-automated A/B launcher (replacement addressing = same `nodeKey` + new dial today)
 - Explicit A/B launcher automation (`lookupClient` + `peersLayer` rebind + [Policy](./policy.md) sticky / streams already ship)
 - Blank worker + remote assign; HTTP/WS Lookup; nameless Launcher discovery

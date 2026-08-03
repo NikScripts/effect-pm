@@ -39,10 +39,13 @@ import { retype } from "../internal/nodeServerCommon";
 /** @public */
 export type AnyTag = CliHyperlinkTag;
 
-// Wire RPC only — skip local + Tag-baked default (neither carries `kind`).
+const DeprecatedMethodTypeId = "~hyperlink-ts/Hyperlink/DeprecatedMethod";
+
+// Wire RPC only — skip local + Tag-baked default + deprecated (Handle-omitted; hide for now).
 const isWireMethod = (
-  m: AnyMethod | AnyLocalMethod | AnyDefaultMethod,
-): m is AnyMethod => "kind" in m;
+  m: AnyMethod | AnyLocalMethod | AnyDefaultMethod | { readonly method?: AnyMethod },
+): m is AnyMethod =>
+  !(DeprecatedMethodTypeId in m) && "kind" in m;
 
 interface QueryField {
   readonly name: string;

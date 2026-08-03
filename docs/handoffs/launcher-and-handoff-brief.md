@@ -1,6 +1,6 @@
 # Brief — Launcher + node handoff (Agent 5)
 
-**Status:** Track A + **Track B Eng'd** on tip. **Track C Locked #27–34 + #39 Eng'd**. **Track D v1 + advice early-move Eng'd** — `lookupClient` build-then-swap + `RpcClientError` retry + `Advice.changes` dial move. **#44 sibling Tags Eng'd**. **#45 peersLayer parity Eng'd**. **#46 Policy Eng'd** — composable `hyperlink-ts/Policy` (sticky / streamGap / coldAmbiguous); warm dual-serve sticky + continuous streams default on. **#35–37** deferred. Explicit A/B launcher / `restartSuccessor` deferred.  
+**Status:** Track A + **Track B Eng'd** on tip. **Track C Locked #27–34 + #39 Eng'd**. **Track D v1 + advice early-move Eng'd** — `lookupClient` build-then-swap + `RpcClientError` retry + `Advice.changes` dial move. **#44 sibling Tags Eng'd**. **#45 peersLayer parity Eng'd**. **#46 Policy Eng'd**. **#35** superseded (Versioned + `deprecated` Eng'd). **#36 Lookup A/B re-opened (high priority)** + Lookup-first launcher. **#37** deferred. Explicit app-node A/B / `restartSuccessor` behind impact.  
 **Opened:** 2026-07-25 (owner via Agent G).  
 **Audience:** next agent picking up launcher + handoff / migration discussion.
 
@@ -258,15 +258,18 @@ Owner locked #22–26; Eng on tip:
 
 **No Eng on #35–37 until re-locked** (gate #2). #28–34 are Locked above. Owner rubber-stamped deferral 2026-07-29.
 
-35. **Version / contract gate — superseded by Versioned schema bake (2026-07-30; locked 2026-08-03).** *(Versioned design locked, not Eng'd)*
+35. **Version / contract gate — superseded by Versioned schema bake.** *(Versioned + `Hyperlink.deprecated` Eng'd 2026-08-03)*
     - Binary `contractHash` / `ContractMismatch` stays for whole-Spec drift.
-    - Cross-version **payload** path: [`versioned-schema-decisions.md`](./versioned-schema-decisions.md) — per-tip `schemaVersion` (`Schema.Class.identifier` else AST hash); chain has no separate `.id`; retires numeric `withSchemaVersion`.
-    - **Queued after Versioned** (documented, no early Eng): `Hyperlink.deprecated` as `Fn.dual` (prefer `.pipe(Hyperlink.deprecated)`); Lookup/Node **update impact** plan; then explicit A/B / `restartSuccessor`.
-    - **Do not Eng** Versioned until owner go; do not start deprecated/impact until Versioned v1 finishes.
+    - Cross-version **payload** path: [`versioned-schema-decisions.md`](./versioned-schema-decisions.md) — per-tip `schemaVersion`; retires numeric `withSchemaVersion`.
+    - Method retirement: [`docs/guides/deprecated.md`](../guides/deprecated.md) (`Fn.dual`, prefer pipe).
+    - **Next:** Lookup-first launcher bring-up + **Lookup A/B** (high priority); then update-impact; then explicit A/B / `restartSuccessor`.
 
-36. **Lookup-node handoff = explicitly deferred (not special-cased in C v1).**
-    - Soft-bake / IPC Lookup topology stays B.
-    - Migrating the Lookup node itself is out of C v1; treat later as “any node” once C verbs exist.
+36. **Lookup-node handoff — re-opened (high priority; owner 2026-08-03).**
+    - Soft-bake / “first node = Lookup” stays for **independent** launch (no Launcher).
+    - Launcher should spawn a **dedicated Lookup node first** when no Lookup address is provided and there is no safe protocol default — Lookup hosts no app services.
+    - Docs encourage an explicit Lookup node; safe-default protocols may omit Lookup entirely.
+    - Because independent first-node Lookup remains, Lookup **must** support A/B / restart even with dedicated Lookup-first.
+    - Detail: [`versioned-schema-decisions.md`](./versioned-schema-decisions.md#planned--lookup-first-launcher--lookup-ab-owner-2026-08-03).
 
 37. **Track D boundary — C emits signals only; no client redirect API in C.** *(confirmed; `lookupClient` / `peersLayer` rebind already Eng'd on D substrate)*
     - **C ships:** draining status, drain-then-cut, WorkPool peer transfer (#34), Node shutdown sequence, Directory/Advice composition.
@@ -386,10 +389,9 @@ launcher-decisions.md stays reference-only if redesigning Track A further.
 Contract drift (contractHash / verify / loud-failures) is solid — reuse it.
 
 Track D v1 + Advice.changes + peersLayer parity + Policy (#46) Eng'd on tip.
-Versioned schema bake: docs/handoffs/versioned-schema-decisions.md (#35 superseded).
-Eng Versioned on owner go first. After Versioned (doc'd, no early Eng):
-  Hyperlink.deprecated (Fn.dual, prefer pipe); Lookup/Node update impact;
-  then restartSuccessor / explicit A/B. #36–37 stay deferred.
+Versioned + Hyperlink.deprecated Eng'd (#35 superseded).
+Next: Lookup-first launcher + Lookup A/B (#36 re-opened, high priority);
+  then update-impact; then restartSuccessor / explicit A/B for app nodes.
 Optional: stream resume tokens / seam dedupe.
 Plan-first; no new nouns unless really good.
 ```

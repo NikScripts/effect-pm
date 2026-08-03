@@ -64,7 +64,8 @@ Missing path → `MigrationPathMissing` (loud; not softened by Policy).
 ## Not this module
 
 - Whole Spec drift → `contractHash` / F4  
-- Retiring a **method** from the Handle → planned `Hyperlink.deprecated` (after this)  
-- Update impact / A/B launcher → planned after Versioned
+- Retiring a **method** from the Handle → [`deprecated`](./deprecated.md)  
+- Update impact / Lookup-first launcher / Lookup A/B → see
+  [`versioned-schema-decisions.md`](../handoffs/versioned-schema-decisions.md)
 
 See [`docs/handoffs/versioned-schema-decisions.md`](../handoffs/versioned-schema-decisions.md).
