@@ -387,7 +387,9 @@ Contract drift (contractHash / verify / loud-failures) is solid — reuse it.
 
 Track D v1 + Advice.changes + peersLayer parity + Policy (#46) Eng'd on tip.
 Versioned schema bake: docs/handoffs/versioned-schema-decisions.md (#35 superseded).
-Do NOT Eng Versioned / #36–37 until owner go. restartSuccessor / explicit A/B
-launcher still open. Optional: stream resume tokens / seam dedupe.
+Eng Versioned on owner go first. After Versioned (doc'd, no early Eng):
+  Hyperlink.deprecated (Fn.dual, prefer pipe); Lookup/Node update impact;
+  then restartSuccessor / explicit A/B. #36–37 stay deferred.
+Optional: stream resume tokens / seam dedupe.
 Plan-first; no new nouns unless really good.
 ```
