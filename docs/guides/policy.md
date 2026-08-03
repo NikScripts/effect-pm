@@ -72,6 +72,22 @@ Runnable: [`examples/node/peers-layer-rebind.ts`](../../examples/node/peers-laye
 (`pnpm run example:node-peers-layer-rebind`). Membership push notes:
 [Identity coordinator](/docs/identity-coordinator#custody-vs-membership-launcher--lookup).
 
+### `Lookup.follow` (same address, Lookup A→B)
+
+`Lookup.client` is a **static** dial. `Lookup.follow(lookupNode)` is the hot dialer for **one**
+Lookup address across an orchestrated ownership move (A releases sock → B binds the same path).
+Dialers never track two Lookup endpoints — compose gap Policy only:
+
+```ts
+Lookup.follow(lookupNode).pipe(
+  Policy.provide(Policy.streamGap("stall")),
+)
+```
+
+Effect RPCs retry on `RpcClientError` while reinstalling to the same seed; streams follow dial
+generations under `streamGap`. Orchestration (who binds the sock) is outside Policy — see
+[Launcher](/docs/launcher) and the decisions handoff.
+
 ### Client verify (addressed `Hyperlink.client`)
 
 | Fragment | Mode |

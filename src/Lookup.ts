@@ -5,14 +5,21 @@
  * (OS exclusivity; bind-or-dial). Cross-network: {@link layerNode} / {@link client} on an
  * explicit {@link Node.asLookup}-branded node — no self-elect (L1).
  *
+ * **Dialers:** {@link client} is a **static** dial (one install). {@link follow} is the
+ * hot dialer for the **same address** across an orchestrated Lookup A→B ownership move —
+ * holder + `RpcClientError` retry + {@link Policy.streamGap}. Compose gap Policy at the
+ * call site; orchestration (who binds the sock) is outside this module.
+ *
  * **Tags are sibling modules** — not members of this namespace:
  *
  * ```ts
  * import * as Lookup from "hyperlink-ts/Lookup"
  * import * as Advice from "hyperlink-ts/Advice"
  * import * as Directory from "hyperlink-ts/Directory"
+ * import * as Policy from "hyperlink-ts/Policy"
  *
  * Layer.provide(Lookup.layer)
+ * Lookup.follow(lookupNode).pipe(Policy.provide(Policy.streamGap("stall")))
  * yield* Advice.prefer(Mail, "fleet/Mail#w2")
  * yield* Directory.changes.pipe(Stream.runDrain)
  * ```
@@ -66,6 +73,7 @@ import * as Policy from "./Policy";
 import { connectIpc } from "./internal/node";
 import { ipcServer } from "./internal/nodeIpcServer";
 import * as internal from "./internal/lookup";
+import { followLayer } from "./internal/lookupFollow";
 
 /** Wire + resolve helpers — SSOT is {@link Policy}. @public */
 export type { OnConflict, OnConflictResolved } from "./Policy";
@@ -553,6 +561,9 @@ export const directoryAdvertiseLayer = (
 /**
  * Client for {@link Identity} + {@link Directory} via an ipc {@link LookupNode}.
  *
+ * Static dial — one install for the process lifetime. For Lookup A→B on the **same**
+ * address (orchestrated ownership handoff), use {@link follow}.
+ *
  * @category clients
  * @public
  */
@@ -594,6 +605,55 @@ export const clientOptions = (options?: {
   const path = options?.path ?? defaultIpcPath;
   const node = NodeTag()("hyperlink-ts/Lookup/default", { path }).pipe(asLookup);
   return client(node);
+};
+
+/**
+ * Hot dialer for one Lookup address — survives orchestrated A→B ownership moves on the
+ * **same** `path` (build-then-swap; Effect RPCs retry on `RpcClientError`; streams follow
+ * dial generations via {@link Policy.streamGap}).
+ *
+ * Unlike {@link client} (static install), {@link follow} reinstalls to the **same** seed
+ * when the sock owner changes. Dialers never track two Lookup endpoints — orchestration
+ * (start B → shut down A → B binds) is outside Policy.
+ *
+ * ```ts
+ * Lookup.follow(lookupNode).pipe(
+ *   Policy.provide(Policy.streamGap("stall")),
+ * )
+ * ```
+ *
+ * @category clients
+ * @public
+ */
+export const follow = (
+  node: AnyNode & { readonly path?: string },
+): Layer.Layer<Services, LookupUnaddressed> => {
+  if (node.path === undefined) {
+    return lookupUnaddressedLayer(
+      "key" in node && typeof node.key === "string" ? node.key : "lookup",
+    );
+  }
+  return followLayer(
+    node as AnyNode & { readonly path: string },
+  ).pipe(Policy.provide(Policy.verifyOff)) as Layer.Layer<
+    Services,
+    LookupUnaddressed
+  >;
+};
+
+/**
+ * {@link follow} on {@link defaultIpcPath} or `options.path` — options factory beside
+ * {@link follow}, mirroring {@link clientOptions}.
+ *
+ * @category clients
+ * @public
+ */
+export const followOptions = (options?: {
+  readonly path?: string;
+}): Layer.Layer<Services, LookupUnaddressed> => {
+  const path = options?.path ?? defaultIpcPath;
+  const node = NodeTag()("hyperlink-ts/Lookup/default", { path }).pipe(asLookup);
+  return follow(node);
 };
 
 /**

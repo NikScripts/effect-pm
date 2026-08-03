@@ -49,6 +49,7 @@
  *
  * Lookup / cutover (living docs under `docs/guides/`):
  * - {@link identity} + pipe `Lookup.client` / `Lookup.layer` on listens — Directory advertise
+ * - `Lookup.follow` — hot dialer for one Lookup address across A→B ownership replace (gap Policy)
  * - {@link lookupClient} — dial without a named Node; compose `hyperlink-ts/Policy` for sticky /
  *   stream gap / cold ambiguous
  * - Directory-mode {@link peersLayer} — same hot-rebind parity as `lookupClient`
@@ -131,6 +132,10 @@ import {
   UnaddressedNode,
 } from "./internal/nodeCore";
 import { hashContract } from "./internal/contractHash";
+import {
+  followDialStream,
+  isDialTransportError as isLookupDialTransportError,
+} from "./internal/dialFollow";
 import { schemaVersionFromTag } from "./internal/versioned";
 import {
   bindNodeProtocolBuilders,
@@ -6162,54 +6167,14 @@ const definePathGetter = (
 };
 
 /**
- * True when a lookup-client RPC failed on the transport (peer gone / socket closed
- * mid-call). App-declared errors and remapped {@link ProtocolMismatch} stay out.
+ * Stable service facade over a replaceable dial holder — used by {@link lookupClient}
+ * and `Lookup.follow`. Always reads `holder.current` so build-then-swap can replace the
+ * underlying client without changing the Context value. Effect methods retry once on
+ * transport error; streams follow dial generations ({@link followDialStream}).
  *
  * @internal
  */
-const isLookupDialTransportError = (err: unknown): boolean =>
-  Predicate.hasProperty(err, "_tag") && err._tag === "RpcClientError";
-
-/**
- * One outer Stream across dial generations — transport death does not end the
- * consumer fold; {@link Policy.StreamGap} chooses stall / drop / buffer.
- *
- * @internal
- */
-const followDialStream = (
-  installGen: SubscriptionRef.SubscriptionRef<number>,
-  streamGap: Policy.StreamGap,
-  getInner: () => Stream.Stream<unknown>,
-): Stream.Stream<unknown> => {
-  const switched = SubscriptionRef.changes(installGen).pipe(
-    Stream.switchMap(() =>
-      Stream.suspend(() => getInner()).pipe(
-        Stream.catch((err) => {
-          if (!isLookupDialTransportError(err)) {
-            return Stream.fail(err);
-          }
-          // Gap until the next successful install (switchMap cancels this branch).
-          return streamGap === "drop" ? Stream.empty : Stream.never;
-        }),
-      ),
-    ),
-  );
-  return streamGap === "buffer"
-    ? switched.pipe(Stream.buffer({ capacity: 64 }))
-    : switched;
-};
-
-/**
- * Stable service facade that always reads {@link holder}.current — so Directory
- * dial swaps can replace the underlying client without changing the Context value.
- *
- * Effect methods (query / mutate) run through {@link withDialRetry} once so a brief
- * A→B rebind gap does not surface `RpcClientError` to the app. Streams / `ref.changes`
- * follow dial generations as one outer Stream ({@link followDialStream}).
- *
- * @internal
- */
-const makeLiveLookupService = <Self, S extends Spec>(
+export const makeLiveDialService = <Self, S extends Spec>(
   tag: HyperlinkTag<Self, S>,
   holder: { current: ServiceOf<S, Self> },
   withDialRetry: <A, E, R>(
@@ -6660,7 +6625,7 @@ export const lookupClient = <Self, S extends Spec>(
       const followStream = (getInner: () => Stream.Stream<unknown>) =>
         followDialStream(installGen, streamGap, getInner);
 
-      return makeLiveLookupService(tag, holder, withDialRetry, followStream);
+      return makeLiveDialService(tag, holder, withDialRetry, followStream);
     }),
   ) as Layer.Layer<
     Self,

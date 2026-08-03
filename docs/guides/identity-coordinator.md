@@ -52,6 +52,9 @@ Node.unix([Hyperlink.serve(Worker, impl)]).pipe(Layer.provide(lookup)) // advert
 
 Lookup stays **pipe-only** on listens — never bake `lookupPath` into listen options.
 
+When Lookup itself may **restart / A→B** on the same address, dial with `Lookup.follow` (not
+static `client`) and compose `Policy.streamGap` — see [Policy](/docs/policy#lookupfollow-same-address-lookup-ab).
+
 ### 3. Publish prefer (optional, M5)
 
 ```ts
@@ -138,6 +141,10 @@ membership (dial move / join / leave). Escape hatch: `import * as Directory from
 when prefer flips (before A leaves / before the first transport error). Keep B Directory-visible.
 Live streams stay one outer Stream across dial swaps (`Policy.streamGap`, default `"stall"`).
 See [Policy](/docs/policy).
+
+**Lookup A→B (same address):** `Lookup.follow(lookupNode)` — hot dialer for Identity /
+Directory / Advice across an orchestrated sock ownership move. `Lookup.client` stays static.
+Compose `Policy.streamGap`; orchestration (start B → shut down A → B binds) is outside Policy.
 
 ### A→B cutover recipe (state transfer)
 
