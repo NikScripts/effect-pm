@@ -1,144 +1,72 @@
-# DI View Tags — what more (draft)
+# DI Views — gen as component (draft)
 
-**Status:** design draft — **not locked**  
-**Focus:** View Tag = component **service** (same shape as other Effect services; impl is JSX).  
-**Rejected here:** Catalog/slots as the core model — a Tag *is* the slot.
+**Status:** design lean — correct the Layer mistake  
+**Rule:** `View.gen` **is** the component you export and render. Do not wrap it in `.provide` / Layer just to exist.
 
 ---
 
-## Already have
+## Shape
 
 ```ts
+import * as View from "last-ts/View"
+
+// Tag = Context service whose value is a component fn (others can yield* it)
 class Greeter extends View.Tag<Greeter, { readonly name: string }>()(
   "app/view/greeter",
 ) {}
 
-// Fulfill with a JSX impl (Layer)
-Greeter.provide(({ name }) => <h1>{name}</h1>)
-```
+// App edge (once): put Greeter's impl in the runtime Layer
+// Greeter.provide(({ name }) => <h1>{name}</h1>)
 
-Tag = identity. Layer carries the function. That is the product.
-
----
-
-## Gap: use the Tag like a component
-
-Today the Tag is not JSX. Draft:
-
-```ts
-// Fancy: Tag exposes a React component that resolves impl from Context
-;<Greeter.View name="nik" />
-
-// or module helper with same types
-;<View.Use tag={Greeter} name="nik" />
-```
-
-Under the hood: read `Greeter` from React/Effect context (bridge), then `createElement(impl, props)`.  
-Still not “the class is a host component” in React’s sense — it’s a thin resolver component attached to the Tag (`Greeter.View`).
-
-If `Greeter` is missing from the Layer → fail at the **boundary** (see below), not necessarily at first render if we type it.
-
----
-
-## Gap: require other View Tags (Layer R), not value bags
-
-Same *shape* as upward `Last.provide` discharge, but the debt is **services**:
-
-```ts
-// Parent view's impl needs Greeter in scope
-class PageBody extends View.Tag<PageBody, {}>()("app/view/page-body") {}
-
-PageBody.provide(
-  View.gen(function* () {
-    // Building the impl may depend on services…
-    return () => (
-      <div>
-        <Greeter.View name="nik" />
-      </div>
-    )
-  }),
-)
-```
-
-**Typing intent:** using `<Greeter.View />` (or `View.Use(Greeter)`) **adds `Greeter` to the tree’s Requirement** (Effect `R`). That debt bubbles through parent Views until a **Page** (or app root) that `Layer.provide` / `provideMerge`s Greeter — or type error.
-
-```ts
-// Pseudotype
-type Tree = View.Tree<PageBody> // R includes Greeter until provided
-
-Page.mount(PageBody) // error: Greeter not provided
-Page.mount(PageBody).pipe(Layer.provide(Greeter.provide(…))) // ok
-```
-
-Provide **anywhere earlier** in the Layer graph (not only at the leaf). Last Layer wins for a given Tag (normal Effect).
-
-This is **not** Catalog.contribute(slot). The Tag *is* the dependency key.
-
----
-
-## What more we can do with component services
-
-```ts
-// 1) Same Tag, swap impl (web / test / ink) — already Layer-native
-Layer.provide(Greeter.provide(WebImpl))
-Layer.provide(Greeter.provide(TestImpl))
-
-// 2) Mount Tag as component (draft)
-;<Greeter.View name="nik" />
-
-// 3) View depends on View — R accumulates
-class Hello extends View.Tag<Hello, {}>()("app/view/hello") {}
-Hello.provide(() => (
-  <>
-    <Greeter.View name="a" />
-    <Greeter.View name="b" />
-  </>
-))
-// Tree R: Greeter (once)
-
-// 4) Defaults on Tag (like Context.Reference) — draft
-class Greeter2 extends View.Tag<Greeter2, { name: string }>()(
-  "app/view/greeter2",
-  { default: ({ name }) => <span>{name}</span> },
-) {}
-
-// 5) Prototype still owns props + annotations; Requirement can mean
-//    annotation debt OR (later) service debt — keep separate channels if clearer
-
-// 6) View.gen closes over Effect services, returns JSX fn — already
-View.gen(function* () {
-  const cfg = yield* Config
-  return () => <Greeter.View name={cfg.defaultName} />
+// Component = straight View.gen export — NOT Tag.provide(View.gen(…))
+export const Hello = View.gen(function* () {
+  const GreeterView = yield* Greeter // service → component fn
+  return (props: { readonly who: string }) => (
+    <GreeterView name={props.who} />
+  )
 })
 
-// 7) Page / app root = discharge boundary for View R
-Page.body(Hello) // must provide everything Hello's tree requires
+// Use as a normal component inside another View (under RuntimeProvider)
+export const Page = View.gen(function* () {
+  return () => <Hello who="nik" />
+})
 
-// 8) Scoped override
-;<View.Region layer={Greeter.provide(LoudImpl)}>
-  <Hello.View />
-</View.Region>
+// void / undefined from the generator → treat as () => null
+export const Empty = View.gen(function* () {
+  yield* someSetup
+  // no return / return void  →  component is () => null
+})
+```
 
-// 9) Test: provide fake impl, render tree
-Greeter.provide(() => <div data-testid="g" />)
+| | Role |
+|--|------|
+| `View.Tag` | Named service identity so `yield* Tag` works |
+| `Tag.provide` / Layer | **App edge only** — fulfill Tags the runtime needs |
+| `View.gen` | **The component** — export it, render `<Hello />` |
+| `yield* SomeTag` | Downward: need that Tag’s impl in the runtime Layer |
+| `Last.provide` | Upward values (other direction) |
 
-// 10) Lazy / async impl via fromEffect — still one Tag
-Greeter.provide(View.fromEffect(loadRemoteGreeter))
+---
+
+## Not this
+
+```ts
+// WRONG — gen is already the component
+Hello.provide(View.gen(…))
+Layer.succeed(Hello, View.gen(…))
 ```
 
 ---
 
-## Non-goals (this draft)
+## Types vs erasure
 
-- Parallel slot/catalog vocabulary for “where Card goes”.
-- Matching Card/Detail/Page as the DI model.
-- Typing arbitrary JSX children; debt comes from **`.View` / `View.Use(Tag)`** (or explicit `View.need(Tag)`).
+`yield* Greeter` already puts `Greeter` in the **Effect**’s `R` while the gen runs (under the runtime). That is enough for “this component needs Greeter provided at the app Layer.”
+
+Pushing the same debt through React JSX types / `MyTag.View` / custom JSX is optional sugar — easy to over-invest for little gain. Prefer: gen + `yield* Tag` + runtime Layer at the root.
 
 ---
 
-## Open
+## Open small
 
-1. `Greeter.View` vs `View.Use(Greeter)` vs both.
-2. How React context bridges Effect Layer (RuntimeProvider already nearby).
-3. Whether service-Requirement is a second type param beside annotation-Requirement.
-4. Page as hard boundary vs any `View.Root`.
+- `View.gen`: normalize `void` → `() => null` (Eng).
+- Whether a gen export can also be registered as a Tag without forcing Layer-first DX (only if someone needs `yield* Hello`).
