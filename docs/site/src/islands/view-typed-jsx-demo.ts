@@ -1,8 +1,7 @@
 /**
- * Runtime mirror of the View.nest Twoslash demo (no last-ts jsx on client).
+ * Runtime mirror of the bag-compose + mount Twoslash demo.
  */
 import * as React from "react";
-import { Atom } from "effect/unstable/reactivity";
 import * as View from "last-ts/View";
 
 class Greeter extends View.Tag<Greeter, { readonly name: string }>()(
@@ -15,7 +14,7 @@ export const Hello = View.gen(function* () {
     React.createElement(GreeterView, { name: props.who });
 });
 
-export const Middle = View.nest(Hello, (Hello) => (_props: {}) =>
+export const Middle = View.succeed({ Hello }, ({ Hello }) => (_props: {}) =>
   React.createElement(
     "aside",
     { "data-demo": "middle" },
@@ -23,7 +22,7 @@ export const Middle = View.nest(Hello, (Hello) => (_props: {}) =>
   ),
 );
 
-export const Outer = View.nest(Middle, (Middle) => (_props: {}) =>
+export const Outer = View.succeed({ Middle }, ({ Middle }) => (_props: {}) =>
   React.createElement(
     "div",
     { "data-demo": "outer" },
@@ -35,7 +34,10 @@ export const Outer = View.nest(Middle, (Middle) => (_props: {}) =>
   ),
 );
 
-export const demoLayer = Greeter.provide((props) =>
-  React.createElement("span", { "data-demo": "inner" }, `hello ${props.name}`),
+/** Mounted app — JSX-legal (`R` discharged). */
+export const App = View.mount(
+  Outer,
+  Greeter.provide((props) =>
+    React.createElement("span", { "data-demo": "inner" }, `hello ${props.name}`),
+  ),
 );
-export const demoRuntime = Atom.runtime(demoLayer);

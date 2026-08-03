@@ -68,10 +68,8 @@ describe("View.gen / succeed", () => {
       return (props: { readonly name: string }) =>
         React.createElement("h1", null, `${prefix}${props.name}`);
     });
-    const html = renderWithRuntime(
-      React.createElement(Greeter, { name: "nik" }),
-      Layer.succeed(Prefix, "hi "),
-    );
+    const App = View.mount(Greeter, Layer.succeed(Prefix, "hi "));
+    const html = renderToString(React.createElement(App, { name: "nik" }));
     expect(html).toContain("hi nik");
   });
 });

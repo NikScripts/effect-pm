@@ -30,11 +30,10 @@ const loaded = loadExampleIncludeFromDisk("../..", include, (abs) =>
   readFileSync(abs, "utf8"),
 );
 if (loaded === undefined) throw new Error("missing example");
-if (!loaded.includes("View.nest")) {
-  throw new Error("demo must use View.nest");
-}
-if (/ServicesOf\s*</.test(loaded) || /stamp\s*</.test(loaded)) {
-  throw new Error("demo must not witness R via ServicesOf/stamp type args");
+for (const needle of ["View.succeed({ Hello }", "View.mount", "View.succeed({ Middle }"] as const) {
+  if (!loaded.includes(needle)) {
+    throw new Error(`demo must include ${needle}`);
+  }
 }
 const code = prepareExampleForTwoslash(loaded, include);
 const result = createTwoslasher({ vfsRoot: repoRoot, compilerOptions })(
@@ -49,14 +48,27 @@ if (result.errors?.length) {
 const queries = (result.queries ?? []).map((q) => q.text);
 const joined = queries.join("\n");
 console.log("queries:\n", joined);
-for (const name of ["Hello", "Middle", "Outer"] as const) {
-  const q = queries.find((line) => line.includes(`const ${name}:`));
-  if (q === undefined) throw new Error(`missing ${name}:\n${joined}`);
+
+const hello = queries.find((q) => q.includes("const Hello:"));
+const middle = queries.find((q) => q.includes("const Middle:"));
+const outer = queries.find((q) => q.includes("const Outer:"));
+const app = queries.find((q) => q.includes("const App:"));
+if (!hello || !middle || !outer || !app) {
+  throw new Error(`missing Hello/Middle/Outer/App queries:\n${joined}`);
+}
+for (const [name, q] of [
+  ["Hello", hello],
+  ["Middle", middle],
+  ["Outer", outer],
+] as const) {
   if (!q.includes("Greeter")) {
     throw new Error(`${name} must show Greeter, got: ${q}`);
   }
-  if (q.includes("any")) {
-    throw new Error(`${name} must not be any, got: ${q}`);
-  }
+}
+if (app.includes("Greeter")) {
+  throw new Error(`App should have discharged Greeter, got: ${app}`);
+}
+if (joined.includes("<{}, any>") || joined.includes(": any")) {
+  throw new Error(`queries must not show any:\n${joined}`);
 }
 console.log("ok");

@@ -4,19 +4,21 @@
  * View — Effect × React components (Last).
  *
  * - **DI:** {@link Tag} / {@link Prototype} / {@link provide} — Context slots
- * - **Plain export:** {@link fromEffect} / {@link gen} / {@link succeed} — Effect
- *   → component (no Tag); runtime from {@link AtomReact.RuntimeProvider}
- * - **Typed JSX:** {@link View} carries services `R`; with `jsxImportSource`
- *   `last-ts`, nested JSX bubbles child `R` into parent {@link Jsx.Element}s
+ * - **Build:** {@link fromEffect} / {@link gen} / {@link succeed} — Effect → view
+ * - **Compose:** bag form of {@link gen} / {@link succeed} — pass child views as
+ *   values (keeps names), render with JSX; merges child `R`
+ * - **Edge:** {@link mount}`(view, layer)` — discharge `R`, get a JSX component
+ *
+ * Open-`R` views are **not** JSX components (TypeScript). Nest via bag form;
+ * fulfill with {@link mount} (or provide until `R` is `never`).
  *
  * Prototype metadata: {@link annotations} (Effect) / {@link getAnnotations}.
  * Factory brand: {@link kind} via {@link Last.kindSym}.
  */
 import * as React from "react";
 import { Cause, Context, Effect, Layer } from "effect";
-import { dual } from "effect/Function";
 import type * as Types from "effect/Types";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import * as AtomReact from "./AtomReact";
 import type * as Jsx from "./Jsx";
 import * as Last from "./Last";
@@ -79,23 +81,53 @@ export const ChromeProvider = (props: {
 export const useChrome = (): Chrome => React.useContext(ChromeContext);
 
 /**
- * Component — props in, React element out, with type-level services `R`.
+ * Phantom brand for open-`R` views (not a JSX call signature).
  *
- * `R` is Effect Context debt: `yield*` inside {@link gen} **plus** nested JSX
- * child requirements when using `jsxImportSource: "last-ts"`. Render returns a
- * normal `ReactElement` (createElement / Radix / shadcn interop); `R` lives on
- * the function type (see {@link stamp}).
+ * @internal
+ */
+declare const ViewTypeId: unique symbol;
+
+/**
+ * Fulfilled view — legal as a JSX component (`R` is `never`).
  *
  * @public
  */
-export type View<Props extends object = {}, R = never> = ((
+export type Component<Props extends object = {}> = ((
   props: Props,
 ) => React.ReactElement | null) & {
-  readonly "~last-ts/View/services": R;
+  readonly "~last-ts/View/services": never;
 };
 
 /**
- * Services (`R`) carried by a {@link View} component type.
+ * Open requirements — **not** a JSX component. Compose with bag
+ * {@link succeed} / {@link gen}, then {@link mount} (or provide until `R` is
+ * `never`).
+ *
+ * Runtime value is still a render function; the type hides the call signature
+ * so `<View />` is rejected while `R` is open.
+ *
+ * @public
+ */
+export interface Unresolved<Props extends object = {}, R = never> {
+  readonly "~last-ts/View/services": R;
+  readonly "~last-ts/View/props": Props;
+  readonly [ViewTypeId]: typeof ViewTypeId;
+}
+
+/**
+ * View with props and services `R`.
+ *
+ * - `R = never` → {@link Component} (JSX-legal)
+ * - otherwise → {@link Unresolved} (must bag-compose / {@link mount})
+ *
+ * @public
+ */
+export type View<Props extends object = {}, R = never> = [R] extends [never]
+  ? Component<Props>
+  : Unresolved<Props, R>;
+
+/**
+ * Services (`R`) carried by a {@link View} type.
  *
  * @public
  */
@@ -106,12 +138,48 @@ export type ServicesOf<V> = V extends {
   : never;
 
 /**
+ * Props carried by a {@link View} type.
+ *
+ * @public
+ */
+export type ViewPropsOf<V> = V extends {
+  readonly "~last-ts/View/props": infer P extends object;
+}
+  ? P
+  : V extends (props: infer P extends object) => any
+    ? P
+    : {};
+
+/**
+ * Callable binding for bag compose (JSX-legal inside the render/gen callback).
+ *
+ * @internal
+ */
+type BagFn<V> = (props: ViewPropsOf<V>) => React.ReactElement | null;
+
+/**
+ * Object bag → same keys, callable values for JSX.
+ *
+ * @internal
+ */
+type BagFns<Bag extends Record<string, unknown>> = {
+  readonly [K in keyof Bag]: BagFn<Bag[K]>;
+};
+
+/**
+ * Union of `ServicesOf` for each entry in a bag.
+ *
+ * @internal
+ */
+type BagServices<Bag extends Record<string, unknown>> = {
+  [K in keyof Bag]: ServicesOf<Bag[K]>;
+}[keyof Bag];
+
+/**
  * Tree services from a component fn: props.`children` brands ∪ return
  * {@link Jsx.Element}`<R>` (from direct `jsx` / `jsxs` calls).
  *
- * JSX *syntax* (`<Foo />`) is a TypeScript black box (`JSX.Element` / formerly
- * `any`) — it does not contribute `R`. Prefer typed `children` props or
- * `jsx(Child, …)` when nesting must enlarge `View` `R`.
+ * JSX *syntax* does not contribute `R` — use bag {@link succeed} / {@link gen}.
  *
  * @internal
  */
@@ -139,8 +207,8 @@ export function stamp<Props extends object, R = never>(
 ): View<Props, R>;
 export function stamp(
   component: (props: any) => React.ReactElement | null,
-): View<object, never> {
-  return component as View<object, never>;
+): any {
+  return component;
 }
 
 /**
@@ -211,15 +279,25 @@ export const fromEffect = <
  * {@link fromEffect}`(Effect.gen(…))` — generator that **returns** a component.
  *
  * `void` / `undefined` from the generator becomes `() => null`.
- * Services `R` = `yield*` debt ∪ tree `R` from the returned component’s JSX.
+ * Services `R` = `yield*` debt ∪ (bag children, when using the object form).
+ *
+ * **Bag form** — pass child views as a record (names preserved), use them in
+ * JSX inside the generator. Open-`R` children are callable only inside the
+ * callback; the result stays {@link Unresolved} until {@link mount}.
  *
  * @example
  * ```ts
- * import * as View from "last-ts/View"
+ * export const Hello = View.gen(function* () {
+ *   const GreeterView = yield* Greeter
+ *   return (props: { name: string }) => <GreeterView name={props.name} />
+ * })
  *
- * export const Greeter = View.gen(function* () {
- *   const prefix = yield* Config
- *   return (props: { name: string }) => <h1>{prefix}{props.name}</h1>
+ * export const Page = View.gen({ Hello }, function* ({ Hello }) {
+ *   return (_props: {}) => (
+ *     <section>
+ *       <Hello who="nik" />
+ *     </section>
+ *   )
  * })
  * ```
  *
@@ -237,79 +315,121 @@ export function gen<
 export function gen<Eff extends Effect.Effect<any, any, any>>(
   f: () => Generator<Eff, void, never>,
 ): View<{}, Effect.Services<Eff>>;
-export function gen(
-  f: () => Generator<Effect.Effect<any, any, any>, any, never>,
-): View<object, never> {
+export function gen<
+  const Bag extends Record<string, unknown>,
+  Eff extends Effect.Effect<any, any, any>,
+  F extends (props: any) => React.ReactElement | null,
+>(
+  bag: Bag,
+  f: (bag: BagFns<Bag>) => Generator<Eff, F, never>,
+): View<
+  Parameters<F>[0] extends object ? Parameters<F>[0] : {},
+  BagServices<Bag> | Effect.Services<Eff> | TreeServicesOf<F>
+>;
+export function gen<
+  const Bag extends Record<string, unknown>,
+  Eff extends Effect.Effect<any, any, any>,
+>(
+  bag: Bag,
+  f: (bag: BagFns<Bag>) => Generator<Eff, void, never>,
+): View<{}, BagServices<Bag> | Effect.Services<Eff>>;
+export function gen(bagOrFn: any, maybeFn?: any): any {
+  const build =
+    typeof bagOrFn === "function"
+      ? bagOrFn
+      : () => maybeFn(bagOrFn);
   return fromEffect(
-    Effect.map(Effect.gen(f), (component) =>
+    Effect.map(Effect.gen(build), (component) =>
       component === undefined ? () => null : component,
-    ),
-  ) as View<object, never>;
+    ) as Effect.Effect<(props: any) => React.ReactElement | null, any, any>,
+  );
 }
 
 /**
- * {@link fromEffect}`(Effect.succeed(component))` — pure component, no yields.
+ * Pure component, or bag-compose children then render with JSX.
+ *
+ * **Unary** — `succeed(fn)` like {@link fromEffect}`(Effect.succeed(fn))`.
+ *
+ * **Bag** — `succeed({ Hello, Other }, ({ Hello, Other }) => (props) => …)`
+ * merges each child’s `R` and keeps binding names for JSX.
  *
  * @example
  * ```ts
  * export const Greeter = View.succeed((props: { name: string }) => (
  *   <h1>{props.name}</h1>
  * ))
+ *
+ * export const Middle = View.succeed({ Hello }, ({ Hello }) => (_props) => (
+ *   <aside>
+ *     <Hello who="nik" />
+ *   </aside>
+ * ))
  * ```
  *
  * @public
  */
-export const succeed = <F extends (props: any) => React.ReactElement | null>(
+export function succeed<F extends (props: any) => React.ReactElement | null>(
   component: F,
 ): View<
   Parameters<F>[0] extends object ? Parameters<F>[0] : {},
   TreeServicesOf<F>
-> => fromEffect(Effect.succeed(component));
+>;
+export function succeed<
+  const Bag extends Record<string, unknown>,
+  Props extends object,
+>(
+  bag: Bag,
+  render: (bag: BagFns<Bag>) => (props: Props) => React.ReactElement | null,
+): View<Props, BagServices<Bag>>;
+export function succeed(bagOrFn: any, maybeRender?: any): any {
+  if (typeof bagOrFn === "function") {
+    return fromEffect(Effect.succeed(bagOrFn));
+  }
+  return stamp(maybeRender(bagOrFn));
+}
 
 /**
- * Nest a child {@link View} so its services `R` merge into the parent, while
- * still rendering with normal JSX.
+ * Discharge a view’s services `R` with a {@link Layer} and return a JSX-legal
+ * {@link Component} (`R` reduced to the layer’s remaining input, usually
+ * `never`).
  *
- * JSX *syntax* erases `R` from `<Child />`. Pass the child as a **value**, then
- * use that same binding in JSX — no re-`yield*`, no `jsx()` calls required.
- *
- * Dual: `View.nest(Child, render)` or `View.nest(Child)(render)`.
+ * Wraps the view in {@link AtomReact.RegistryProvider} +
+ * {@link AtomReact.RuntimeProvider} built from `layer`.
  *
  * @example
  * ```ts
- * const Page = View.nest(Hello, (Hello) => (_props) => (
- *   <section>
- *     <Hello who="nik" />
- *   </section>
- * ))
- * // Page: View<{}, ServicesOf<typeof Hello>>
+ * const App = View.mount(
+ *   Outer,
+ *   Greeter.provide(({ name }) => <span>{name}</span>),
+ * )
+ * // App: View<{}, never> — render <App />
  * ```
  *
  * @public
  */
-export const nest: {
-  <P extends object, R>(
-    child: View<P, R>,
-  ): <Props extends object>(
-    render: (
-      Child: View<P, R>,
-    ) => (props: Props) => React.ReactElement | null,
-  ) => View<Props, R>;
-  <P extends object, R, Props extends object>(
-    child: View<P, R>,
-    render: (
-      Child: View<P, R>,
-    ) => (props: Props) => React.ReactElement | null,
-  ): View<Props, R>;
-} = dual(
-  2,
-  <P extends object, R, Props extends object>(
-    child: View<P, R>,
-    render: (
-      Child: View<P, R>,
-    ) => (props: Props) => React.ReactElement | null,
-  ): View<Props, R> => stamp<Props, R>(render(child)),
-);
+export const mount = <
+  Props extends object,
+  R,
+  E = never,
+  RIn = never,
+>(
+  view: View<Props, R>,
+  layer: Layer.Layer<R, E, RIn>,
+): View<Props, RIn> => {
+  const Mounted = (props: Props): React.ReactElement | null => {
+    const runtime = React.useMemo(() => Atom.runtime(layer as never), [layer]);
+    return React.createElement(
+      AtomReact.RegistryProvider,
+      null,
+      React.createElement(
+        AtomReact.RuntimeProvider as never,
+        { runtime },
+        React.createElement(view as never, props),
+      ),
+    );
+  };
+  return stamp<Props, RIn>(Mounted);
+};
 
 /**
  * Provide a component for a Tag. Props infer from the Tag.

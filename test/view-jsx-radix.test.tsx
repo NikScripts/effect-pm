@@ -4,11 +4,9 @@
 /** @jsxImportSource last-ts */
 import { describe, expect, it } from "@effect/vitest";
 import { Context, Effect, Layer } from "effect";
-import { Atom } from "effect/unstable/reactivity";
 import type * as React from "react";
 import { Dialog as DialogPrimitive, Label } from "radix-ui";
 import { renderToString } from "react-dom/server";
-import * as AtomReact from "last-ts/AtomReact";
 import * as View from "last-ts/View";
 
 class Greeter extends Context.Service<Greeter, string>()("test/jsx-rt/Greeter") {}
@@ -24,41 +22,27 @@ const DialogTrigger = (
   <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />
 );
 
-const renderWithRuntime = (
-  node: React.ReactElement,
-  layer: Layer.Layer<never, never, never> | Layer.Layer<Greeter, never, never>,
-): string => {
-  // AtomRuntime is invariant in R; stamp through never for the provider prop.
-  const runtime = Atom.runtime(layer) as Atom.AtomRuntime<never>;
-  return renderToString(
-    <AtomReact.RegistryProvider>
-      <AtomReact.RuntimeProvider runtime={runtime}>{node}</AtomReact.RuntimeProvider>
-    </AtomReact.RegistryProvider>,
-  );
-};
-
 describe("View.jsx + Radix", () => {
-  it("renders View.gen nested under Radix Dialog Root + Label (SSR-safe)", () => {
+  it("renders bag-composed View under Radix Dialog Root + Label (SSR-safe)", () => {
     const Child = View.gen(function* () {
       const name = yield* Greeter;
       return (_props: {}) => <span data-testid="child">{name}</span>;
     });
 
-    const Page = View.gen(function* () {
-      return (_props: {}) => (
-        <Dialog open>
-          <DialogTrigger>Open</DialogTrigger>
-          {/* Content portals don't SSR — nest under Root + Label instead */}
-          <div data-slot="dialog-body">
-            <Label.Root>Greeting</Label.Root>
-            <h1>Hello</h1>
-            <Child />
-          </div>
-        </Dialog>
-      );
-    });
+    const Page = View.succeed({ Child }, ({ Child }) => (_props: {}) => (
+      <Dialog open>
+        <DialogTrigger>Open</DialogTrigger>
+        {/* Content portals don't SSR — nest under Root + Label instead */}
+        <div data-slot="dialog-body">
+          <Label.Root>Greeting</Label.Root>
+          <h1>Hello</h1>
+          <Child />
+        </div>
+      </Dialog>
+    ));
 
-    const html = renderWithRuntime(<Page />, Layer.succeed(Greeter, "nik"));
+    const App = View.mount(Page, Layer.succeed(Greeter, "nik"));
+    const html = renderToString(<App />);
     expect(html).toContain("nik");
     expect(html).toContain("Hello");
     expect(html).toContain("Greeting");
@@ -70,7 +54,8 @@ describe("View.jsx + Radix", () => {
     const Empty = View.gen(function* () {
       yield* Effect.void;
     });
-    expect(renderWithRuntime(<Empty />, Layer.empty)).toBe("");
+    const App = View.mount(Empty, Layer.empty);
+    expect(renderToString(<App />)).toBe("");
   });
 
   it("plain outside button still renders under last-ts jsx", () => {
@@ -82,6 +67,7 @@ describe("View.jsx + Radix", () => {
         <Outside label="radix-free" />
       </div>
     ));
-    expect(renderWithRuntime(<Page />, Layer.empty)).toContain("radix-free");
+    const App = View.mount(Page, Layer.empty);
+    expect(renderToString(<App />)).toContain("radix-free");
   });
 });
