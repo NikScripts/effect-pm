@@ -258,10 +258,11 @@ Owner locked #22–26; Eng on tip:
 
 **No Eng on #35–37 until re-locked** (gate #2). #28–34 are Locked above. Owner rubber-stamped deferral 2026-07-29.
 
-35. **Version / contract gate — superseded by Versioned schema bake (2026-07-30).** *(design locked, not Eng'd)*
-    - Binary `contractHash` / `ContractMismatch` stays for non-Versioned / whole-Spec drift.
-    - Cross-version **payload** path: [`versioned-schema-decisions.md`](./versioned-schema-decisions.md) — `hyperlink-ts/Versioned` chain on the Schema value; auto-apply on seams; no negotiation ranges.
-    - **Do not Eng** Versioned until owner go on that decisions file.
+35. **Version / contract gate — superseded by Versioned schema bake (2026-07-30; locked 2026-08-03).** *(Versioned design locked, not Eng'd)*
+    - Binary `contractHash` / `ContractMismatch` stays for whole-Spec drift.
+    - Cross-version **payload** path: [`versioned-schema-decisions.md`](./versioned-schema-decisions.md) — per-tip `schemaVersion` (`Schema.Class.identifier` else AST hash); chain has no separate `.id`; retires numeric `withSchemaVersion`.
+    - **Queued after Versioned** (documented, no early Eng): `Hyperlink.deprecated` as `Fn.dual` (prefer `.pipe(Hyperlink.deprecated)`); Lookup/Node **update impact** plan; then explicit A/B / `restartSuccessor`.
+    - **Do not Eng** Versioned until owner go; do not start deprecated/impact until Versioned v1 finishes.
 
 36. **Lookup-node handoff = explicitly deferred (not special-cased in C v1).**
     - Soft-bake / IPC Lookup topology stays B.
@@ -386,7 +387,9 @@ Contract drift (contractHash / verify / loud-failures) is solid — reuse it.
 
 Track D v1 + Advice.changes + peersLayer parity + Policy (#46) Eng'd on tip.
 Versioned schema bake: docs/handoffs/versioned-schema-decisions.md (#35 superseded).
-Do NOT Eng Versioned / #36–37 until owner go. restartSuccessor / explicit A/B
-launcher still open. Optional: stream resume tokens / seam dedupe.
+Eng Versioned on owner go first. After Versioned (doc'd, no early Eng):
+  Hyperlink.deprecated (Fn.dual, prefer pipe); Lookup/Node update impact;
+  then restartSuccessor / explicit A/B. #36–37 stay deferred.
+Optional: stream resume tokens / seam dedupe.
 Plan-first; no new nouns unless really good.
 ```
