@@ -99,6 +99,15 @@ type NextRequirement<
 > = Statics extends Requirement ? {} : Requirement;
 
 /**
+ * Merge open debt with debt declared on this chain step.
+ * @internal
+ */
+type MergeRequirement<
+  Current extends AnyStatics,
+  Added extends AnyStatics,
+> = Flat<Current & Added>;
+
+/**
  * Props bag — from a {@link Prototype}, a handle’s {@link Type} phantom, or
  * instance `Service` without `typeof`.
  *
@@ -185,6 +194,10 @@ export type Type<T> = T extends { readonly Type: infer P } ? P : never;
 /**
  * Props + statics + an R-style **Requirement** type param (debt until discharged).
  *
+ * Requirement may be declared on the root {@link Prototype} factory **or** on any
+ * later `.Prototype<Props, Requirement>()` step (additive). Statics discharge debt
+ * when they satisfy the merged Requirement (`{}` = fulfilled).
+ *
  * @public
  */
 export interface Prototype<
@@ -194,20 +207,34 @@ export interface Prototype<
 > {
   readonly statics: Statics;
   /**
-   * Extend props (type arg) and/or statics (value). Both additive.
-   * Requirement discharges when merged statics satisfy it.
+   * Extend props / open more Requirement debt (type args) and/or statics (value).
+   * New Requirement merges with any still-open debt; discharges when merged
+   * statics satisfy the result.
+   *
+   * @example
+   * ```ts
+   * const Base = View.Prototype<{ label: string }>()()
+   * // add debt mid-chain
+   * const Open = Base.Prototype<{}, { readonly size: { readonly _tag: "Card" } }>()()
+   * const Done = Open.Prototype()({ size: { _tag: "Card" as const } })
+   * ```
    */
-  readonly Prototype: <NewProps extends object = {},>() => <
-    const NewStatics extends AnyStatics = {},
-  >(
+  readonly Prototype: <
+    NewProps extends object = {},
+    NewRequirement extends AnyStatics = {},
+  >() => <const NewStatics extends AnyStatics = {}>(
     statics?: NewStatics,
   ) => Prototype<
     Flat<Props & NewProps>,
-    NextRequirement<Requirement, Flat<Statics & NewStatics>>,
+    NextRequirement<
+      MergeRequirement<Requirement, NewRequirement>,
+      Flat<Statics & NewStatics>
+    >,
     Flat<Statics & NewStatics>
   >;
   /**
    * Mint a Context.Service **class** handle.
+   * Does **not** discharge Requirement — fulfill via `.Prototype()` first when needed.
    */
   readonly Tag: <Self, NewProps extends object = {}>() => <
     const K extends string,
@@ -227,11 +254,14 @@ const makePrototype = <
 ): Prototype<Props, Requirement, Statics> => ({
   statics,
   Prototype:
-    <NewProps extends object = {},>() =>
+    <NewProps extends object = {}, NewRequirement extends AnyStatics = {}>() =>
     <const NewStatics extends AnyStatics = {},>(next?: NewStatics) => {
       type NextProps = Flat<Props & NewProps>;
       type NextStatics = Flat<Statics & NewStatics>;
-      type NextReq = NextRequirement<Requirement, NextStatics>;
+      type NextReq = NextRequirement<
+        MergeRequirement<Requirement, NewRequirement>,
+        NextStatics
+      >;
       return makePrototype<NextProps, NextReq, NextStatics>({
         ...statics,
         ...(next ?? ({} as NewStatics)),
@@ -260,6 +290,7 @@ const makePrototype = <
 
 /**
  * Start a prototype chain: `View.Prototype<Props, Requirement>()(statics?)`.
+ * Further debt: `.Prototype<NewProps, NewRequirement>()(statics?)` at any step.
  *
  * @public
  */

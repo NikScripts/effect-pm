@@ -87,18 +87,29 @@ Naked (no size): `View.Tag<Greeter, { name: string }>()("…")`.
 
 ## Requirement (open chain)
 
-When you need to declare debt before fulfilling — `SizeChrome` + `.Prototype()`:
+Statics **Requirement** debt can be declared on the root
+`View.Prototype<Props, Requirement>()` **or** on any later
+`.Prototype<NewProps, NewRequirement>()` step (additive). Statics discharge it
+when they satisfy the merged debt.
+
+Dashboard size chrome uses Hyperlink `Views` (`SizeChrome` / `Card` / …):
 
 {.twoslash}
 ``` ts
-import { View } from "hyperlink-ts/ui"
+import * as View from "hyperlink-ts/ui/View"
+import * as Views from "hyperlink-ts/ui/Views"
 
-const Mid = View.SizeChrome.Prototype<{ readonly dense?: boolean }>()({
+const Mid = Views.SizeChrome.Prototype<{ readonly dense?: boolean }>()({
   spec: { kind: "app/queue" } as const,
 })
 // WithSize still open — fulfill last
-const Proto = Mid.Prototype()({ size: View.ViewKind.Card() })
+const Proto = Mid.Prototype()({ size: Views.ViewKind.Card() })
 class PoolCard extends Proto.Tag<PoolCard>()("app/view/pool-card") {}
+
+// Or open debt mid-chain on a fulfilled ancestor:
+const Base = View.Prototype<{ readonly label: string }>()()
+const Open = Base.Prototype<{}, Views.WithSize>()()
+const Done = Open.Prototype()({ size: Views.ViewKind.Detail() })
 
 PoolCard.size
 //         ^?

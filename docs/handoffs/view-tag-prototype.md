@@ -127,14 +127,19 @@ type P = View.PropsOf<PoolCard>
 
 **Branch:** `cursor/view-withsize-types-125f`
 
-`Prototype<Props, Requirement, Statics>` — Requirement is R-style debt:
+`Prototype<Props, Requirement, Statics>` — Requirement is R-style debt. Debt may be
+declared on the root factory **or** any `.Prototype<Props, Requirement>()` step
+(additive); statics discharge the merged Requirement to `{}`.
 
 ```ts
-View.SizeChrome                                      // open WithSize
+Views.SizeChrome                                     // open WithSize
   .Prototype<{ dense?: boolean }>()({ spec: … })     // chain while open
-  .Prototype()({ size: View.ViewKind.Card() })       // fulfill → Requirement {}
+  .Prototype()({ size: Views.ViewKind.Card() })      // fulfill → Requirement {}
 
-View.Card / Detail / Page   // SizeChrome already fulfilled
+// Mid-chain open on a fulfilled ancestor:
+View.Prototype<Props>()().Prototype<{}, Views.WithSize>()()
+
+Views.Card / Detail / Page   // SizeChrome already fulfilled
 ```
 
 `ViewKind` is `Data.TaggedEnum` (`Card` / `Detail` / `Page`) — match with `Match.tag`.

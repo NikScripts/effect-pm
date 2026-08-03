@@ -166,4 +166,15 @@ describe("View.Tag / Prototype", () => {
     expect(PageView.size).toEqual(Views.ViewKind.Page());
     expect(PageView.key).toBe("test/page-view");
   });
+
+  it("Prototype can open Requirement debt mid-chain", () => {
+    const Base = View.Prototype<{ readonly label: string }>()({
+      base: true as const,
+    });
+    const Open = Base.Prototype<{}, Views.WithSize>()();
+    const Done = Open.Prototype()({ size: Views.ViewKind.Card() });
+    class MidCard extends Done.Tag<MidCard>()("test/mid-card") {}
+    expect(MidCard.base).toBe(true);
+    expect(MidCard.size).toEqual(Views.ViewKind.Card());
+  });
 });

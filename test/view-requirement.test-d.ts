@@ -87,6 +87,40 @@ expectTypeOf<View.RequirementOf<typeof Wrong>>().toEqualTypeOf<
 const Right = WantCard.Prototype()({ size: Views.ViewKind.Card() });
 expectTypeOf<View.IsFulfilled<typeof Right>>().toEqualTypeOf<true>();
 
+// ── Add Requirement mid-chain (any step) ────────────────────────────────────
+
+type WithSpec = { readonly spec: { readonly kind: string } };
+
+const Fulfilled = View.Prototype<{ readonly label: string }>()({
+  label: "x" as const,
+});
+expectTypeOf<View.IsFulfilled<typeof Fulfilled>>().toEqualTypeOf<true>();
+
+// reopen debt on a fulfilled ancestor
+const Reopened = Fulfilled.Prototype<{}, Views.WithSize>()();
+expectTypeOf<View.IsFulfilled<typeof Reopened>>().toEqualTypeOf<false>();
+expectTypeOf<View.RequirementOf<typeof Reopened>>().toEqualTypeOf<Views.WithSize>();
+
+// additive debt while already open
+const BothOpen = Reopened.Prototype<{}, WithSpec>()();
+expectTypeOf<View.IsFulfilled<typeof BothOpen>>().toEqualTypeOf<false>();
+type BothReq = View.RequirementOf<typeof BothOpen>;
+type BothExpected = {
+  readonly size: Views.ViewKind;
+  readonly spec: { readonly kind: string };
+};
+expectTypeOf<BothReq>().toEqualTypeOf<BothExpected>();
+
+const BothDone = BothOpen.Prototype()({
+  size: Views.ViewKind.Card(),
+  spec: { kind: "app/queue" },
+});
+expectTypeOf<View.IsFulfilled<typeof BothDone>>().toEqualTypeOf<true>();
+
+// shipped Card is fulfilled — can still open new debt
+const CardPlusSpec = Views.Card.Prototype<{}, WithSpec>()();
+expectTypeOf<View.IsFulfilled<typeof CardPlusSpec>>().toEqualTypeOf<false>();
+expectTypeOf<View.RequirementOf<typeof CardPlusSpec>>().toEqualTypeOf<WithSpec>();
 // ── bind gate ───────────────────────────────────────────────────────────────
 
 class OpenCard extends Open.Tag<OpenCard>()("app/view/open-card") {}
