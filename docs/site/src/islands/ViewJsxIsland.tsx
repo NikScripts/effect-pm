@@ -15,7 +15,7 @@ export function ViewJsxIsland(): React.ReactElement {
     <div className="hl-dashboard grid gap-3 p-4 rounded-xl text-sm">
       <div className="flex items-center justify-between border-b border-border pb-2">
         <span className="font-medium text-card-foreground">
-          Outer nests Inner
+          Outer → Middle → Inner
         </span>
         <span className="text-xs text-muted-foreground">live · RuntimeProvider</span>
       </div>
