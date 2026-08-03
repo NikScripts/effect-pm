@@ -51,6 +51,18 @@
       "types": "./src/View.tsx",
       "default": "./src/View.tsx"
     },
+    "./Jsx": {
+      "types": "./src/Jsx.ts",
+      "default": "./src/Jsx.ts"
+    },
+    "./jsx-runtime": {
+      "types": "./src/jsx-runtime.ts",
+      "default": "./src/jsx-runtime.ts"
+    },
+    "./jsx-dev-runtime": {
+      "types": "./src/jsx-dev-runtime.ts",
+      "default": "./src/jsx-dev-runtime.ts"
+    },
     "./Last": {
       "types": "./src/Last.ts",
       "default": "./src/Last.ts"

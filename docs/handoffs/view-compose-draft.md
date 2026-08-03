@@ -1,6 +1,6 @@
-# DI Views — typed nested JSX (draft)
+# DI Views — typed nested JSX
 
-**Status:** design locked — **fix JSX erasure** so nested components carry requirements for real.  
+**Status:** Eng’d on `cursor/file-router-prototype-125f` — fix JSX erasure so nested components carry requirements for real.  
 **Not:** invent a parallel compose API that covers up the erase.
 
 ---
@@ -8,6 +8,7 @@
 ## Destination
 
 ```tsx
+/** @jsxImportSource last-ts */
 const Component = () => (
   <Parent>
     <Child />
@@ -19,42 +20,37 @@ Requirement types flow **child → parent → the component function** through r
 
 ---
 
-## How (types)
+## How
 
-Custom `jsxImportSource` (e.g. `last-ts/jsx`):
+### `last-ts/jsx-runtime` (+ `jsx-dev-runtime`)
+
+- Runtime delegates to `react/jsx-runtime` / `react/jsx-dev-runtime`.
+- Types: `jsx` / `jsxs` return `Element<R_type | R_children>`.
+- **Do not** export `namespace JSX { type Element = … }` — a non-generic `JSX.Element` collapses `R` and restores erasure. Expression types come from the `jsx` / `jsxs` return types.
+- Host props from React `IntrinsicElements`; outside components (Radix / shadcn) stay valid tags (`ElementType` permissive).
+
+### `View`
 
 ```ts
-// Element carries R; jsx() merges child R into parent Element’s R
-type Element<R = never> = …
+type View<Props, R = never> = ((props: Props) => ReactElement | null) & {
+  readonly "~last-ts/View/services": R
+}
 
-// Component’s R = what it yields + what its returned tree’s Elements need
-type Component<P, R = never> = (props: P) => Element<R>
-
-// View.gen: Effect R from yield* becomes Component R
-const Child = View.gen(function* () {
-  const GreeterView = yield* Greeter
-  return () => <GreeterView name="x" />
-})
-// Child: Component<{}, Greeter>
-
-const Parent = View.gen(function* () {
-  return () => (
-    <div>
-      <Child />
-    </div>
-  )
-})
-// Parent: Component<{}, Greeter>  — Child’s R bubbled through JSX
-
-const Page = () => (
-  <Parent>
-    <Child />
-  </Parent>
-)
-// Page’s tree Element R includes Greeter from both children
+View.gen / fromEffect / succeed  →  View<Props, EffectR | TreeR>
+View.ServicesOf<typeof Comp>     →  R
+View.stamp(fn)                   →  stamp R onto a plain component (provide / fallbacks)
 ```
 
-Runtime can still emit React elements. **Types** stop the erase.
+`R` = `yield*` services ∪ nested JSX child services (when using `jsxImportSource: "last-ts"`).  
+Render returns a normal `ReactElement` so createElement / Radix / shadcn interop.
+
+### Opt-in
+
+```json
+{ "jsx": "react-jsx", "jsxImportSource": "last-ts" }
+```
+
+or per-file `/** @jsxImportSource last-ts */`.
 
 ---
 
@@ -68,7 +64,6 @@ export const Hello = View.gen(function* () {
   )
 })
 
-// Use nested — types propagate
 export const Page = View.gen(function* () {
   return () => (
     <section>
@@ -76,6 +71,7 @@ export const Page = View.gen(function* () {
     </section>
   )
 })
+// Page: View<{}, Greeter> when Greeter is in Hello’s R
 ```
 
 | | Role |
@@ -88,24 +84,18 @@ export const Page = View.gen(function* () {
 
 ---
 
-## Not this
+## Verification
 
-```ts
-// WRONG — wrapping gen in Layer to “exist”
-Hello.provide(View.gen(…))
-
-// WRONG — invent slots / catalogs / View.el Need brands to bypass JSX
-yield* needs(Hello)
-View.el(Parent, { children: View.el(Child) })
-```
-
-Don’t invent junk type systems to replace what React erased. **Fix the erasure.**
+- `test/view-jsx.test-d.tsx` — nesting, View.gen `R`, Radix Dialog + shadcn-style wrappers, negative prop checks
+- `test/view-jsx-radix.test.tsx` — runtime SSR with Radix Dialog Root / Label + View.gen
+- `packages/last-ts` typecheck includes those suites (`jsxImportSource: "last-ts"`)
 
 ---
 
-## Eng order (when owner says go)
+## Not this
 
-1. `last-ts/jsx` — `Element<R>`, `jsx`/`jsxs` merge child `R`, package `jsxImportSource`.
-2. Wire `View.gen` / `fromEffect` return type to `Component<P, R>`.
-3. `.test-d.ts`: nested `<Parent><Child /></Parent>` surfaces Child’s tags on the tree / parent.
-4. Small: gen `void` → `() => null`.
+```ts
+Hello.provide(View.gen(…))
+yield* needs(Hello)
+View.el(Parent, { children: View.el(Child) })
+```

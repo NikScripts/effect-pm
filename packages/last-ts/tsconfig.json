@@ -5,12 +5,20 @@
     "moduleResolution": "Bundler",
     "lib": ["ES2022", "DOM"],
     "jsx": "react-jsx",
+    "jsxImportSource": "last-ts",
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
     "verbatimModuleSyntax": true,
     "types": ["node", "react"]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "test/**/*.ts",
+    "test/**/*.tsx",
+    "../../test/view-jsx.test-d.tsx",
+    "../../test/view-jsx-radix.test.tsx"
+  ],
   "exclude": ["node_modules"]
 }

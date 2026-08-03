@@ -9,17 +9,22 @@ import { renderToString } from "react-dom/server";
 import * as AtomReact from "last-ts/AtomReact";
 import * as View from "last-ts/View";
 
+class Prefix extends Context.Service<Prefix, string>()(
+  "hyperlink-ts/test/view-from-effect.test/Prefix",
+) {}
+
 const renderWithRuntime = (
   node: React.ReactElement,
-  layer: Layer.Layer<any, any, never> = Layer.empty,
+  layer: Layer.Layer<Prefix> | Layer.Layer<never> = Layer.empty,
 ): string => {
   const runtime = Atom.runtime(layer);
   return renderToString(
     React.createElement(
       AtomReact.RegistryProvider,
       null,
-      React.createElement(AtomReact.RuntimeProvider, {
-        runtime,
+      // AtomRuntime is invariant in R; test layers are never | Prefix.
+      React.createElement(AtomReact.RuntimeProvider<never>, {
+        runtime: runtime as Atom.AtomRuntime<never>,
         children: node,
       }),
     ),
@@ -58,7 +63,6 @@ describe("View.gen / succeed", () => {
   });
 
   it("View.gen yields services then returns a component", () => {
-    class Prefix extends Context.Service<Prefix, string>()("test/Prefix") {}
     const Greeter = View.gen(function* () {
       const prefix = yield* Prefix;
       return (props: { readonly name: string }) =>

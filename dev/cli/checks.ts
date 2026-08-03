@@ -22,7 +22,9 @@ export const typecheck = () =>
     yield* run("tsgo", ["--noEmit", "-p", "src/ui/tsconfig.json"]);
     yield* run("tsgo", ["--noEmit", "-p", "src/web/tsconfig.json"]);
     yield* run("tsgo", ["--noEmit", "-p", "src/tui/tsconfig.json"]);
+    yield* run("tsgo", ["--noEmit", "-p", "packages/last-ts/tsconfig.json"]);
     yield* run("tsc", ["--noEmit", "-p", "tsconfig.json"]);
+    yield* run("tsc", ["--noEmit", "-p", "packages/last-ts/tsconfig.json"]);
   });
 
 /** `vitest run` */

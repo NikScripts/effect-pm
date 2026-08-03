@@ -6,6 +6,8 @@
  * - **DI:** {@link Tag} / {@link Prototype} / {@link provide} — Context slots
  * - **Plain export:** {@link fromEffect} / {@link gen} / {@link succeed} — Effect
  *   → component (no Tag); runtime from {@link AtomReact.RuntimeProvider}
+ * - **Typed JSX:** {@link View} carries services `R`; with `jsxImportSource`
+ *   `last-ts`, nested JSX bubbles child `R` into parent {@link Jsx.Element}s
  *
  * Prototype metadata: {@link annotations} (Effect) / {@link getAnnotations}.
  * Factory brand: {@link kind} via {@link Last.kindSym}.
@@ -15,6 +17,7 @@ import { Cause, Context, Effect, Layer } from "effect";
 import type * as Types from "effect/Types";
 import { AsyncResult } from "effect/unstable/reactivity";
 import * as AtomReact from "./AtomReact";
+import type * as Jsx from "./Jsx";
 import * as Last from "./Last";
 
 // =============================================================================
@@ -75,13 +78,49 @@ export const ChromeProvider = (props: {
 export const useChrome = (): Chrome => React.useContext(ChromeContext);
 
 /**
- * Component Svc — **props in, element out** (reversed vs typical service APIs).
+ * Component — props in, React element out, with type-level services `R`.
+ *
+ * `R` is Effect Context debt: `yield*` inside {@link gen} **plus** nested JSX
+ * child requirements when using `jsxImportSource: "last-ts"`. Render returns a
+ * normal `ReactElement` (createElement / Radix / shadcn interop); `R` lives on
+ * the function type (see {@link stamp}).
  *
  * @public
  */
-export type View<Props extends object = {}> = (
+export type View<Props extends object = {}, R = never> = ((
   props: Props,
-) => React.ReactElement | null;
+) => React.ReactElement | null) & {
+  readonly "~last-ts/View/services": R;
+};
+
+/**
+ * Stamp services `R` onto a plain component fn (type-level; no runtime change).
+ *
+ * @public
+ */
+export const stamp = <Props extends object, R = never>(
+  component: (props: Props) => React.ReactElement | null,
+): View<Props, R> => component as View<Props, R>;
+
+/**
+ * Services (`R`) carried by a {@link View} component type.
+ *
+ * @public
+ */
+export type ServicesOf<V> = V extends {
+  readonly "~last-ts/View/services": infer R;
+}
+  ? R
+  : never;
+
+/**
+ * Tree services from a component fn’s return {@link Jsx.Element} (JSX path).
+ *
+ * @internal
+ */
+type TreeServicesOf<F> = F extends (...args: any) => infer Ret
+  ? Jsx.ServicesOf<Exclude<Ret, null | undefined>>
+  : never;
 
 /**
  * Effect that builds a plain React component (no {@link Tag} / DI).
@@ -92,12 +131,15 @@ export type FromEffect<
   Props extends object = {},
   E = never,
   R = never,
-> = Effect.Effect<View<Props>, E, R>;
+> = Effect.Effect<(props: Props) => React.ReactElement | null, E, R>;
 
 /**
  * Turn an Effect-built component into an exportable React component.
  * **Not DI** — for Tags use {@link provide}. Runtime comes from
  * {@link AtomReact.RuntimeProvider} (do not pass a runtime).
+ *
+ * Return type preserves Effect services `R` and the built component’s tree
+ * services as {@link View}`<Props, R | TreeR>`.
  *
  * Client modules that export the result need `"use client"` (or import only
  * from a client parent). Initial/waiting renders `null`; failures throw.
@@ -115,9 +157,17 @@ export type FromEffect<
  *
  * @public
  */
-export const fromEffect = <Props extends object, E = never, R = never>(
-  create: FromEffect<Props, E, R>,
-): View<Props> => {
+export const fromEffect = <
+  F extends (props: any) => React.ReactElement | null,
+  E = never,
+  R = never,
+>(
+  create: Effect.Effect<F, E, R>,
+): View<
+  Parameters<F>[0] extends object ? Parameters<F>[0] : {},
+  R | TreeServicesOf<F>
+> => {
+  type Props = Parameters<F>[0] extends object ? Parameters<F>[0] : {};
   const FromEffect = (props: Props): React.ReactElement | null => {
     const runtime = AtomReact.useRuntime();
     const atom = React.useMemo(
@@ -133,11 +183,14 @@ export const fromEffect = <Props extends object, E = never, R = never>(
     }
     return null;
   };
-  return FromEffect;
+  return stamp<Props, R | TreeServicesOf<F>>(FromEffect);
 };
 
 /**
  * {@link fromEffect}`(Effect.gen(…))` — generator that **returns** a component.
+ *
+ * `void` / `undefined` from the generator becomes `() => null`.
+ * Services `R` = `yield*` debt ∪ tree `R` from the returned component’s JSX.
  *
  * @example
  * ```ts
@@ -151,12 +204,27 @@ export const fromEffect = <Props extends object, E = never, R = never>(
  *
  * @public
  */
-export const gen = <
+export function gen<
   Eff extends Effect.Effect<any, any, any>,
-  Props extends object,
+  F extends (props: any) => React.ReactElement | null,
 >(
-  f: () => Generator<Eff, View<Props>, never>,
-): View<Props> => fromEffect(Effect.gen(f));
+  f: () => Generator<Eff, F, never>,
+): View<
+  Parameters<F>[0] extends object ? Parameters<F>[0] : {},
+  Effect.Services<Eff> | TreeServicesOf<F>
+>;
+export function gen<Eff extends Effect.Effect<any, any, any>>(
+  f: () => Generator<Eff, void, never>,
+): View<{}, Effect.Services<Eff>>;
+export function gen(
+  f: () => Generator<Effect.Effect<any, any, any>, any, never>,
+): View<object, any> {
+  return fromEffect(
+    Effect.map(Effect.gen(f), (component) =>
+      component === undefined ? () => null : component,
+    ),
+  );
+}
 
 /**
  * {@link fromEffect}`(Effect.succeed(component))` — pure component, no yields.
@@ -170,9 +238,12 @@ export const gen = <
  *
  * @public
  */
-export const succeed = <Props extends object>(
-  component: View<Props>,
-): View<Props> => fromEffect(Effect.succeed(component));
+export const succeed = <F extends (props: any) => React.ReactElement | null>(
+  component: F,
+): View<
+  Parameters<F>[0] extends object ? Parameters<F>[0] : {},
+  TreeServicesOf<F>
+> => fromEffect(Effect.succeed(component));
 
 /**
  * Provide a component for a Tag. Props infer from the Tag.
@@ -184,19 +255,25 @@ export const succeed = <Props extends object>(
  */
 export function provide<I, P extends object>(
   tag: Context.Key<I, View<P>>,
-): (impl: Types.NoInfer<View<P>>) => Layer.Layer<I>;
+): (
+  impl: Types.NoInfer<(props: P) => React.ReactElement | null>,
+) => Layer.Layer<I>;
 export function provide<I, P extends object>(
   tag: Context.Key<I, View<P>>,
-  impl: Types.NoInfer<View<P>>,
+  impl: Types.NoInfer<(props: P) => React.ReactElement | null>,
 ): Layer.Layer<I>;
 export function provide<I, P extends object>(
   tag: Context.Key<I, View<P>>,
-  impl?: Types.NoInfer<View<P>>,
-): Layer.Layer<I> | ((impl: Types.NoInfer<View<P>>) => Layer.Layer<I>) {
+  impl?: Types.NoInfer<(props: P) => React.ReactElement | null>,
+):
+  | Layer.Layer<I>
+  | ((
+      impl: Types.NoInfer<(props: P) => React.ReactElement | null>,
+    ) => Layer.Layer<I>) {
   if (impl === undefined) {
-    return (resource) => Layer.succeed(tag, resource);
+    return (resource) => Layer.succeed(tag, stamp<P, never>(resource));
   }
-  return Layer.succeed(tag, impl);
+  return Layer.succeed(tag, stamp<P, never>(impl));
 }
 
 // =============================================================================
@@ -231,7 +308,7 @@ type MergeRequirement<
  */
 export type PropsOf<T> = T extends Prototype<infer Props, infer _R, infer _A>
   ? Props
-  : T extends { readonly Service: View<infer P> }
+  : T extends { readonly Service: View<infer P, infer _Services> }
     ? P
     : T extends { readonly Type: infer P extends object }
       ? P
@@ -342,7 +419,9 @@ export type ViewHandle<
   /** Phantom — component props. */
   readonly Type: Props;
   /** Provide this Tag’s impl — same as {@link provide}`(this, impl)`. */
-  readonly provide: (impl: View<Props>) => Layer.Layer<Self>;
+  readonly provide: (
+    impl: (props: Props) => React.ReactElement | null,
+  ) => Layer.Layer<Self>;
 };
 
 /**
@@ -449,8 +528,9 @@ const makePrototype = <
         [annotationsSym]: merged,
         [Last.kindSym]: kind,
         Type: undefined as unknown as NextProps,
-        provide: (impl: View<NextProps>): Layer.Layer<Self> =>
-          Layer.succeed(base, impl),
+        provide: (
+          impl: (props: NextProps) => React.ReactElement | null,
+        ): Layer.Layer<Self> => Layer.succeed(base, stamp<NextProps, never>(impl)),
       });
     },
 });
