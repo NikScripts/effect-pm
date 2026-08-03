@@ -3,7 +3,8 @@
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
 > live type previews, and the demo island — is at
-> <https://dev.hyperlink.cool/docs/view-typed-jsx>.
+> <https://dev.hyperlink.cool/docs/view-typed-jsx>
+> (local Tailscale: <http://100.67.32.32:5190/docs/view-typed-jsx>).
 <!-- docs-site-link:end -->
 # Typed JSX — nested View requirements
 
