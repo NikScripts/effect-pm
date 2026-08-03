@@ -266,11 +266,11 @@ Owner locked #22–26; Eng on tip:
 
 36. **Lookup-node handoff — re-opened (high priority; owner 2026-08-03).**
     - Soft-bake / “first node = Lookup” stays for **independent** launch (no Launcher).
-    - Launcher should spawn a **dedicated Lookup node first** when no Lookup address is provided and there is no safe protocol default — Lookup hosts no app services.
-    - Docs encourage an explicit Lookup node; safe-default protocols may omit Lookup entirely.
-    - **Single address lock:** Lookup has one endpoint; A/B = successive owners. Orchestrator (Launcher/script) moves ownership; dialers use `Lookup.follow` + Policy for the gap — **not** dual Lookup addresses / `rebind(other)`.
-    - Eng order: `Lookup.follow` + gap → orchestrated handoff → Lookup-first spawn.
-    - Detail: [`versioned-schema-decisions.md`](./versioned-schema-decisions.md#planned--lookup-first-launcher--lookup-ab-owner-2026-08-03).
+    - **Launcher ensure-Lookup-first (locked):** if Lookup not running → spawn Lookup-only first (operator address, else safe default when supported); if already running → use it. No Soft-bake onto app nodes under Launcher. No address + no default → fail closed.
+    - **Already up ≠ always hand off** — custody handoff only for spawned children; migration `{ handoff }` opt-in; Directory conflicts via `Policy.onConflict` / `askIncumbent`; Lookup replace only when orchestrating A→B.
+    - **Single address lock:** one Lookup endpoint; A/B = successive owners; `Lookup.follow` + Policy for the gap.
+    - Eng order: `Lookup.follow` + gap → orchestrated handoff → Launcher ensure-Lookup-first.
+    - Detail: [`versioned-schema-decisions.md`](./versioned-schema-decisions.md#desired-bring-up-launcher--ensure-lookup-first-locked).
 
 37. **Track D boundary — C emits signals only; no client redirect API in C.** *(confirmed; `lookupClient` / `peersLayer` rebind already Eng'd on D substrate)*
     - **C ships:** draining status, drain-then-cut, WorkPool peer transfer (#34), Node shutdown sequence, Directory/Advice composition.

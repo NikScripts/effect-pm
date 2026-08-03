@@ -152,15 +152,20 @@ schema’d request. See:
 Prefer an **explicit Lookup node** for multi-node fleets so Lookup has no app services to
 skew when those services A/B. Planned Launcher recipe (not Eng’d yet):
 
-1. Operator provides a Lookup address → use it.  
-2. Protocol has a **safe default** address → Lookup node optional (Soft-bake OK).  
-3. Otherwise → Launcher spawns a **dedicated Lookup node first**, then app nodes.
+1. Lookup **already up** at the target / default address → use it (no second spawn).  
+2. Lookup **not** up + operator address → spawn Lookup-only there **first**.  
+3. Lookup **not** up + protocol **safe default** → spawn Lookup-only at the default **first**
+   (do not Soft-bake Lookup onto an app node under Launcher).  
+4. No address and no safe default → fail closed.
 
-**Lookup A/B (locked):** Lookup keeps **one** address. A and B are successive owners;
-Launcher (or a script) sequences release→bind. Dialers use planned `Lookup.follow` + Policy
-for the gap — not dual Lookup endpoints. Independent launch still uses **first node =
-Lookup** (Soft-bake). See
-[`versioned-schema-decisions.md`](../handoffs/versioned-schema-decisions.md#lookup-ab--single-address-orchestrator-handoff-locked).
+**Already up ≠ always hand off.** Custody `Handle.handoff` is only for children Launcher
+spawned. Migration `serve { handoff }` is opt-in on shutdown. Directory conflicts use
+`Policy.onConflict` / `askIncumbent` — not automatic replace. Intentional Lookup A→B is an
+orchestrated same-address ownership move.
+
+**Lookup A/B (locked):** one address; A/B = successive owners; `Lookup.follow` + Policy for
+the gap. Independent launch (no Launcher) still Soft-bakes first node = Lookup. See
+[`versioned-schema-decisions.md`](../handoffs/versioned-schema-decisions.md#desired-bring-up-launcher--ensure-lookup-first-locked).
 
 **Do not confuse** Launcher custody `Handle.handoff` with **node migration** handoff
 (`Hyperlink.serve(…, { handoff })` / WorkPool `releaseEnqueueHandoff` during `Node.shutdown`).

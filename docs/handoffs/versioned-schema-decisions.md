@@ -365,15 +365,33 @@ files.rename // ❌ not on Handle (compile error)
 **Status:** Design **locked** owner chat 2026-08-03 (single-address + orchestrator; name `Lookup.follow`) — **doc only; Eng next for Agent 5**. Deprecated already Eng’d.  
 **Why it matters a lot:** Lookup must be able to **restart / A/B update**. A Lookup that also hosts app services couples Lookup lifecycle to those services’ skew and forces Lookup A/B whenever an app Tag moves.
 
-### Desired bring-up (Launcher)
+### Desired bring-up (Launcher) — ensure Lookup first (locked)
 
-1. If the operator **provides** a Lookup address → use it (no extra Lookup spawn).  
-2. Else if the protocol has a **safe default address** the fleet can agree on → **no Lookup node required** (Soft-bake / default path stays valid).  
-3. Else → Launcher **deploys an independent Lookup node first**, then brings up app nodes against it.  
-   - Lookup node runs **Lookup (+ Directory/Identity plumbing) only** — no app HyperServices.  
-   - App-service A/B must not force Lookup restart.
+Launcher **always** makes Lookup available **before** other units — not “first app node becomes Lookup.”
 
-Docs should **encourage** an explicit Lookup node for multi-node fleets even when a default address exists.
+| Situation | Launcher does |
+|-----------|----------------|
+| Lookup **already running** at the target address | **Use it** — do not spawn a second Lookup; do not migration-handoff |
+| Lookup **not** running; operator gave an address | **Spawn** Lookup-only node at that address first, then app units |
+| Lookup **not** running; protocol has a **safe default** address | **Spawn** Lookup-only at the default (e.g. default ipc sock) first — do **not** rely on Soft-bake on an app node |
+| No address and **no** safe default | Fail closed (or require operator address) — cannot invent a Lookup endpoint |
+
+- Lookup node = Lookup (+ Directory/Identity) **only** — no app HyperServices.  
+- Soft-bake stays for **independent** launch (no Launcher). Launcher path does not Soft-bake Lookup onto app nodes.  
+- Docs encourage an explicit Lookup node for multi-node fleets even when a default exists.
+
+### Already up — do we always hand off? **No.**
+
+Different planes; none mean “always migration-handoff”:
+
+| Already up | Default | Policy / control |
+|------------|---------|------------------|
+| **Lookup** at address | Dial / adopt — spawn skipped | Orchestrator only migration-handoffs Lookup when doing an intentional A→B replace (same address ownership move) |
+| **App node** Launcher was going to spawn | Open (not Eng’d) — likely: fail / skip / adopt Ready peer | Not automatic `Handle.handoff` (custody handoff is only for children Launcher spawned) |
+| **Directory identity** conflict (B claims key A holds) | Ambient `Policy.Conflict` inherit → hard `livenessReplace` | `askIncumbent` / `conflictReject` / stamps — cooperative yield, **not** WorkPool/`serve` `{ handoff }` |
+| **Migration** state transfer | Opt-in `serve(…, { handoff })` during `Node.shutdown` | Never implied by “node already up” alone |
+
+**Custody** `Launcher.Handle.handoff` ≠ **migration** `serve { handoff }` ≠ **Lookup ownership** replace. “Already up” defaults to **use / conflict Policy**, not silent replace.
 
 ### Independent launch (no Launcher) — keep first-node = Lookup
 
