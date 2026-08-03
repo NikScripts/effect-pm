@@ -152,8 +152,8 @@ describe("Views.group + kit.for", () => {
 
 describe("View.Tag / Prototype", () => {
   it("card prototype stamps size annotation + Last kind", () => {
-    expect(View.annotationsSync(PoolCard).size).toEqual(Views.ViewKind.Card());
-    expect(View.annotationsSync(PoolDetail).size).toEqual(Views.ViewKind.Detail());
+    expect(View.getAnnotations(PoolCard).size).toEqual(Views.ViewKind.Card());
+    expect(View.getAnnotations(PoolDetail).size).toEqual(Views.ViewKind.Detail());
     expect(PoolCard.key).toBe("hyperlink/view/pool-card");
     expect(Last.kindOf(PoolCard)).toBe(View.kind);
     expect(Last.kindOf(PoolDetail)).toBe("last-ts/View");
@@ -165,8 +165,8 @@ describe("View.Tag / Prototype", () => {
     });
     const Child = Base.Prototype()({ size: Views.ViewKind.Page() });
     class PageView extends Child.Tag<PageView>()("test/page-view") {}
-    expect(View.annotationsSync(PageView).base).toBe(true);
-    expect(View.annotationsSync(PageView).size).toEqual(Views.ViewKind.Page());
+    expect(View.getAnnotations(PageView).base).toBe(true);
+    expect(View.getAnnotations(PageView).size).toEqual(Views.ViewKind.Page());
     expect(PageView.key).toBe("test/page-view");
   });
 
@@ -177,8 +177,8 @@ describe("View.Tag / Prototype", () => {
     const Open = Base.Prototype<{}, Views.WithSize>()();
     const Done = Open.Prototype()({ size: Views.ViewKind.Card() });
     class MidCard extends Done.Tag<MidCard>()("test/mid-card") {}
-    expect(View.annotationsSync(MidCard).base).toBe(true);
-    expect(View.annotationsSync(MidCard).size).toEqual(Views.ViewKind.Card());
+    expect(View.getAnnotations(MidCard).base).toBe(true);
+    expect(View.getAnnotations(MidCard).size).toEqual(Views.ViewKind.Card());
   });
 
   it("class statics stay free of the annotations bag", () => {
@@ -186,6 +186,6 @@ describe("View.Tag / Prototype", () => {
       static readonly custom = "app" as const;
     }
     expect(FreeCard.custom).toBe("app");
-    expect(View.annotationsSync(FreeCard).size).toEqual(Views.ViewKind.Card());
+    expect(View.getAnnotations(FreeCard).size).toEqual(Views.ViewKind.Card());
   });
 });

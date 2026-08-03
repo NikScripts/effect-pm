@@ -12,13 +12,13 @@ size chrome + bind live on `hyperlink-ts/ui/Views`.
 
 Prototype-managed metadata is a single **annotations** bag, stamped under a
 symbol on the Tag (not a public class prop). **`View.annotations` is an Effect**;
-use **`View.annotationsSync`** in client components / sync builders.
+use **`View.getAnnotations`** in client components / sync builders.
 Factory brand via `Last.kindOf` (`View.kind` = `"last-ts/View"`):
 
 ```ts
 const bag = yield* View.annotations(PoolCard)
 bag.size
-View.annotationsSync(PoolCard).spec   // sync peek
+View.getAnnotations(PoolCard).spec   // sync peek
 Last.kindOf(PoolCard)                 // "last-ts/View"
 type Size = View.AnnotationsOf<typeof PoolCard>["size"]
 ```
@@ -50,9 +50,9 @@ class PoolPage extends Views.Page.Tag<PoolPage>()(
   { spec: { kind: "app/queue" } as const },
 ) {}
 
-View.annotationsSync(PoolCard).size
+View.getAnnotations(PoolCard).size
 //                            ^?
-View.annotationsSync(PoolCard).size._tag
+View.getAnnotations(PoolCard).size._tag
 //                                 ^?
 
 export const layer = Layer.mergeAll(
@@ -78,12 +78,12 @@ Provide skins with **`View.provide(Tag, impl)`** or **`Tag.provide(impl)`**. Pro
 the Tag. Annotate skins with **`PoolCard["Service"]`** (no `typeof`). Sizes are
 `Data.TaggedEnum` — match with `ViewKind.$match` (or `Match.tag` on a
 `Views.ViewKind`-typed value). Read size/spec via **`yield* View.annotations(Tag)`**
-or **`View.annotationsSync(Tag)`**.
+or **`View.getAnnotations(Tag)`**.
 
 ## Extra props
 
 Second type arg on `Tag` — additive props; Prototype annotations as the value arg
-(merged into the stamped bag; read with `View.annotations` / `annotationsSync`):
+(merged into the stamped bag; read with `View.annotations` / `getAnnotations`):
 
 {.twoslash}
 ``` ts
@@ -136,7 +136,7 @@ const Base = View.Prototype<{ readonly label: string }>()()
 const Open = Base.Prototype<{}, Views.WithSize>()()
 const Done = Open.Prototype()({ size: Views.ViewKind.Detail() })
 
-View.annotationsSync(PoolCard).size
+View.getAnnotations(PoolCard).size
 //                              ^?
 ```
 

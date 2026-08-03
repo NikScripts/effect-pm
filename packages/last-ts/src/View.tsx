@@ -6,7 +6,7 @@
  * is Hyperlink `Views`.
  *
  * Prototype metadata is stamped under {@link annotationsSym}; read with
- * {@link annotations} (Effect) or {@link annotationsSync} (client / sync).
+ * {@link annotations} (Effect) or {@link getAnnotations} (client / sync).
  * Factory brand is {@link kind} via {@link Last.kindSym}.
  */
 import * as React from "react";
@@ -161,7 +161,7 @@ export type AnnotationsOf<P> = P extends Prototype<infer _P, infer _R, infer A>
 
 /**
  * Annotations bag for a minted Tag — **Effect** (symbol stamp for now; Context later).
- * Not a class prop. For client components / sync builders use {@link annotationsSync}.
+ * Not a class prop. For client components / sync builders use {@link getAnnotations}.
  *
  * @example
  * ```ts
@@ -182,13 +182,13 @@ export const annotations = <A extends AnyAnnotations>(self: {
  *
  * @example
  * ```ts
- * View.annotationsSync(PoolCard).size
+ * View.getAnnotations(PoolCard).size
  * ```
  *
  * @category getters
  * @public
  */
-export const annotationsSync = <A extends AnyAnnotations>(self: {
+export const getAnnotations = <A extends AnyAnnotations>(self: {
   readonly [annotationsSym]: A;
 }): A => self[annotationsSym];
 

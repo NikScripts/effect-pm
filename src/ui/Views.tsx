@@ -93,7 +93,7 @@ export const SizeChrome: View.OpenPrototype<ViewProps, WithSize> = View.Prototyp
  * Size-chrome add-ons — {@link SizeChrome} with `annotations.size` fulfilled.
  * Mint with `Views.Card.Tag<Self, Props?>()(key, annotations?)` — bag stamps under
  * {@link View.annotationsSym}. Read with {@link View.annotations} (Effect) or
- * {@link View.annotationsSync}. Matcher components are **not** these — use
+ * {@link View.getAnnotations}. Matcher components are **not** these — use
  * `Views.react(…).Card` or {@link useMatch}.
  *
  * @public

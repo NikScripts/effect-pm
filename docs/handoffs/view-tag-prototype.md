@@ -56,7 +56,7 @@ const CardSel = Base.Prototype<{ readonly selected?: boolean }>()({
 
 class ScheduleCard extends Card.Tag<ScheduleCard>()("hyperlink/view/schedule-card") {}
 yield* View.annotations(ScheduleCard) // Effect → bag (size, spec, …)
-View.annotationsSync(ScheduleCard).size
+View.getAnnotations(ScheduleCard).size
 ScheduleCard.key                      // Effect identity — "hyperlink/view/schedule-card"
 Last.kindOf(ScheduleCard)             // "last-ts/View"
 ```
@@ -149,7 +149,7 @@ Views.Card / Detail / Page   // SizeChrome already fulfilled
 Helpers: `RequirementOf` / `IsFulfilled` / `PropsOf` / `AnnotationsOf` /
 `OpenPrototype` / `FulfilledPrototype`. Tag does not fulfill — `bind` needs
 `yield* View.annotations(view)`. Prototype metadata stamps under `annotationsSym`
-(`View.annotations` = Effect; `annotationsSync` for client). Class surface free
+(`View.annotations` = Effect; `getAnnotations` for client). Class surface free
 for app `static`s. Factory brand: `Last.kindOf` / `View.kind`. Type the bag with
 `AnnotationsOf`. Guide: [`../guides/view-tag-types.md`](../guides/view-tag-types.md).
 

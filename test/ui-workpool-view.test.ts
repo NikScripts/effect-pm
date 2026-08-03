@@ -27,10 +27,10 @@ describe("WorkPoolView packaging", () => {
   it("shared handles match WorkPoolView keys", () => {
     expect(WorkPoolView.PoolCard.key).toBe("hyperlink/view/pool-card");
     expect(WorkPoolView.PoolDetail.key).toBe("hyperlink/view/pool-detail");
-    expect(View.annotationsSync(WorkPoolView.PoolCard).size).toEqual(
+    expect(View.getAnnotations(WorkPoolView.PoolCard).size).toEqual(
       Views.ViewKind.Card(),
     );
-    expect(View.annotationsSync(WorkPoolView.PoolDetail).size).toEqual(
+    expect(View.getAnnotations(WorkPoolView.PoolDetail).size).toEqual(
       Views.ViewKind.Detail(),
     );
   });

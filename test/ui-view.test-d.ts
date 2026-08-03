@@ -48,7 +48,7 @@ PoolCard.provide((props) => {
   return null;
 });
 
-expectTypeOf(View.annotationsSync(PoolCard).size).toEqualTypeOf<Views.CardKind>();
+expectTypeOf(View.getAnnotations(PoolCard).size).toEqualTypeOf<Views.CardKind>();
 expectTypeOf(View.annotations(PoolCard)).toEqualTypeOf<
   Effect.Effect<{ readonly size: Views.CardKind }>
 >();
