@@ -53,7 +53,7 @@ Effect-shaped: subpaths are the modules; root `index` barrels those namespaces (
 |---------|-----------|------|
 | `.` | *(barrel)* | `export * as View from "./View"` (etc.) — real modules only |
 | `./Last` | `Last` | `kindSym` / `kindOf` — factory brands on stamped handles |
-| `./View` | `View` | DI kernel only: Tag, Prototype, provide, Chrome, `annotations` / `kind` |
+| `./View` | `View` | Tag/Prototype/provide (DI) + `fromEffect` (plain export) + annotations / kind |
 | `./Route` | `Route` | Catalog: make/get/group/match/urlBuilder/fileRoot — **no** Group Target chrome |
 | `./Router` | `Router` | memory/history/Provider/Link/Outlet |
 | `./Router/waku` | *(waku module)* | Waku layer adapters |

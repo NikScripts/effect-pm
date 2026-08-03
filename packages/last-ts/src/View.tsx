@@ -1,17 +1,20 @@
 /**
  * @module View
  *
- * View — Effect service for DI components (React × Effect / Last).
- * Tag, Prototype, provide only. No registry. Dashboard contribution surface
- * is Hyperlink `Views`.
+ * View — Effect × React components (Last).
  *
- * Prototype metadata is stamped under {@link annotationsSym}; read with
- * {@link annotations} (Effect) or {@link getAnnotations} (client / sync).
- * Factory brand is {@link kind} via {@link Last.kindSym}.
+ * - **DI:** {@link Tag} / {@link Prototype} / {@link provide} — Context slots
+ * - **Plain export:** {@link fromEffect} — Effect → component (no Tag); runtime
+ *   from {@link AtomReact.RuntimeProvider} (no runtime arg)
+ *
+ * Prototype metadata: {@link annotations} (Effect) / {@link getAnnotations}.
+ * Factory brand: {@link kind} via {@link Last.kindSym}.
  */
 import * as React from "react";
-import { Context, Effect, Layer } from "effect";
+import { Cause, Context, Effect, Layer } from "effect";
 import type * as Types from "effect/Types";
+import { AsyncResult } from "effect/unstable/reactivity";
+import * as AtomReact from "./AtomReact";
 import * as Last from "./Last";
 
 // =============================================================================
@@ -79,6 +82,59 @@ export const useChrome = (): Chrome => React.useContext(ChromeContext);
 export type View<Props extends object = {}> = (
   props: Props,
 ) => React.ReactElement | null;
+
+/**
+ * Effect that builds a plain React component (no {@link Tag} / DI).
+ *
+ * @public
+ */
+export type FromEffect<
+  Props extends object = {},
+  E = never,
+  R = never,
+> = Effect.Effect<View<Props>, E, R>;
+
+/**
+ * Turn an Effect-built component into an exportable React component.
+ * **Not DI** — for Tags use {@link provide}. Runtime comes from
+ * {@link AtomReact.RuntimeProvider} (do not pass a runtime).
+ *
+ * Client modules that export the result need `"use client"` (or import only
+ * from a client parent). Initial/waiting renders `null`; failures throw.
+ *
+ * @example
+ * ```ts
+ * import * as View from "last-ts/View"
+ *
+ * const greeterFx = Effect.succeed((props: { name: string }) => (
+ *   <h1>{props.name}</h1>
+ * ))
+ *
+ * export const Greeter = View.fromEffect(greeterFx)
+ * ```
+ *
+ * @public
+ */
+export const fromEffect = <Props extends object, E = never, R = never>(
+  create: FromEffect<Props, E, R>,
+): View<Props> => {
+  const FromEffect = (props: Props): React.ReactElement | null => {
+    const runtime = AtomReact.useRuntime();
+    const atom = React.useMemo(
+      () => runtime.atom(create),
+      [runtime, create],
+    );
+    const result = AtomReact.useAtomValue(atom);
+    if (AsyncResult.isSuccess(result)) {
+      return result.value(props);
+    }
+    if (AsyncResult.isFailure(result)) {
+      throw Cause.squash(result.cause);
+    }
+    return null;
+  };
+  return FromEffect;
+};
 
 /**
  * Provide a component for a Tag. Props infer from the Tag.
