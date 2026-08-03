@@ -1,196 +1,138 @@
-# Composable View Tags — first draft
+# Composable View Tags — first draft (generic)
 
 **Status:** design draft — **not locked**, not Eng’d  
-**Branch:** `cursor/file-router-prototype-125f`  
-**Split:** `last-ts/View` = DI kernel · this system = **Hyperlink** (or a thin `last-ts` compose later if earned)  
-**Replaces (spirit):** today’s `Views.bind` / `Registry` / `react().Card|Detail|Page` kit — not a tweak; a different shape  
-**Related:** [view-tag-prototype](./view-tag-prototype.md) · [page-layout-design](./page-layout-design.md)
+**Package:** last-ts shaped (`View`, catalog helpers) — **no product/domain vocabulary**  
+**Kernel:** `View.Tag` / `Prototype` / `provide` stay as they are; this draft is how you **compose** them.
 
 ---
 
-## What’s wrong with v1 match
+## Problem
 
-- API is “pick Card | Detail | Page” — size chrome owns the vocabulary.
-- Global string kind registry (`bind(WorkPool.kind, PoolCard)`) is hard to compose/override locally.
-- DI View Tag is underused: mostly a key into a matcher, not a composable unit.
-- Shell (`compose` + Grid + Outlet) mixed with contribution registry.
+A View Tag is DI identity + a component impl. Matching “kinds” into fixed chrome slots is one app pattern — not the system. We need:
 
-**Goal:** View Tags are first-class units you **contribute**, **nest**, **override**, and **mount into slots**. Size is one annotation/slot among many — not the system.
-
----
-
-## Core ideas
-
-1. **View Tag** (last-ts) — identity + props + annotations + `provide(impl)`.
-2. **Slot** — named mount point with a **props Requirement** (what the shell passes in).
-3. **Contribution** — “this View Tag fills this Slot (for this target)”.
-4. **Catalog** — Layer-built set of contributions; merge / replace / scope.
-5. **Mount** — given catalog + target + slot → render the impl (function), not the Tag class.
-6. **Nest** — shells are Views too; slots can render other slotted trees.
+- contribute View Tags into **named, typed slots**
+- merge / replace contributions as **Layers**
+- **mount** the impl (function), never the Tag class
+- nest: a View can mount other slots
+- stay generic: any props, any slot names
 
 ---
 
-## Draft API (code)
+## Draft API
 
 ```ts
 import { Layer } from "effect"
 import * as View from "last-ts/View"
-import * as Ui from "hyperlink-ts/ui/Ui" // name TBD — today's Views redesign
-import * as WorkPool from "hyperlink-ts/WorkPool"
+import * as Catalog from "last-ts/Catalog" // name TBD — compose surface
 
 // =============================================================================
-// 1) DI View Tag (unchanged last-ts)
+// View Tag (existing)
 // =============================================================================
 
-class PoolCard extends View.Tag<
-  PoolCard,
-  { readonly tag: WorkPool.Any; readonly name?: string }
->()("hyperlink/view/pool-card") {}
+class Greeter extends View.Tag<Greeter, { readonly name: string }>()(
+  "app/view/greeter",
+) {}
 
-PoolCard.provide((props) => <card … />)
+Greeter.provide(({ name }) => <h1>{name}</h1>)
 
-// Optional: annotate role (not a parallel universe of View.Card.Tag)
-class PoolCard2 extends View.Prototype<
-  { readonly tag: WorkPool.Any; readonly name?: string }
->()({
-  slot: "dashboard/card", // or Data.tagged enum — open
-}).Tag<PoolCard2>()("hyperlink/view/pool-card") {}
+class QuietGreeter extends View.Tag<QuietGreeter, { readonly name: string }>()(
+  "app/view/greeter-quiet",
+) {}
+
+QuietGreeter.provide(({ name }) => <p>{name}</p>)
 
 // =============================================================================
-// 2) Slots — shell declares what it can mount
+// Shell = set of slots (typed props each slot will pass)
 // =============================================================================
 
-const Dashboard = Ui.Shell.make({
-  card: Ui.Slot<{ readonly tag: Ui.Leaf; readonly name?: string }>(),
-  detail: Ui.Slot<{ readonly tag: Ui.Leaf; readonly name?: string }>(),
-  page: Ui.Slot<{ readonly tag: Ui.Leaf; readonly name?: string }>(),
+const App = Catalog.shell({
+  hero: Catalog.slot<{ readonly name: string }>(),
+  aside: Catalog.slot<{ readonly name: string }>(),
 })
 
-// Slot is typed: only Views whose Props satisfy the slot may contribute.
-// "card" | "detail" | "page" are *this shell's* names — another shell can invent others.
+// Another shell can use totally different slot names / props — no fixed vocabulary.
 
 // =============================================================================
-// 3) Contributions — composable Layer, not a hidden global registry
+// Contribute Tag → slot (+ optional target)
 // =============================================================================
 
-const poolUi = Ui.contribute(Dashboard.card, PoolCard)
-  .when(WorkPool.kind) // target: family kind, or a concrete tag, or predicate
-  // .when(Jobs)           // single tag
-  // .when(Ui.any)         // fallback
+const base = Layer.mergeAll(
+  Catalog.contribute(App.hero, Greeter),
+  Catalog.contribute(App.aside, Greeter),
+)
 
-const daemonUi = Ui.contribute(Dashboard.card, DaemonCard).when(Daemon.kind)
+// Target: only when some identity matches (generic key / predicate — not domain-specific)
+const override = Catalog.contribute(App.hero, QuietGreeter).when(
+  Catalog.target.key("app/entity/special"),
+)
 
-// Merge — Effect Layer composition
-const catalog = Layer.mergeAll(poolUi, daemonUi, appOverrides)
+const catalog = Layer.mergeAll(base, override)
 
-// Replace / mask (last wins or explicit)
-const catalog2 = catalog.pipe(
-  Ui.replace(Dashboard.card, CustomCard).when(Jobs),
-  Ui.without(Dashboard.card).when(LegacyKind),
+// Replace / remove
+catalog.pipe(
+  Catalog.replace(App.hero, QuietGreeter).when(Catalog.target.key("app/entity/special")),
+  Catalog.without(App.aside).when(Catalog.target.key("app/entity/hidden")),
 )
 
 // =============================================================================
-// 4) Mount — render impl, never the Tag class
+// Mount — resolve contribution, render impl
 // =============================================================================
 
-const ui = Ui.use(catalog) // or Ui.provider(catalog) → hook/kit
+const ui = Catalog.use(catalog)
 
-// Explicit mount into a slot
-<ui.Mount slot={Dashboard.card} tag={Jobs} name="Jobs" />
-
-// Same as: resolve contribution → createElement(Impl, props)
-
-// Optional sugar for a shell (not the only API)
-const Dash = Ui.bindShell(Dashboard, catalog)
-;<Dash.card tag={Jobs} name="Jobs" />
-;<Dash.detail tag={Jobs} />
+// props must satisfy the slot; Tag's Props must be assignable from slot props
+;<ui.Mount slot={App.hero} name="nik" />
+;<ui.Mount
+  slot={App.hero}
+  name="nik"
+  target={Catalog.target.key("app/entity/special")}
+/>
 
 // =============================================================================
-// 5) Nesting — shells are Views; slots mount trees
+// Nest — a View mounts other slots
 // =============================================================================
 
-class FleetPanel extends View.Tag<
-  FleetPanel,
-  { readonly tag: Ui.Leaf }
->()("hyperlink/view/fleet-panel") {}
+class Panel extends View.Tag<Panel, { readonly name: string }>()(
+  "app/view/panel",
+) {}
 
-FleetPanel.provide((props) => (
-  <panel>
-    <ui.Mount slot={Dashboard.card} tag={props.tag} />
-    <ui.Mount slot={Dashboard.detail} tag={props.tag} />
-  </panel>
+Panel.provide((props) => (
+  <section>
+    <ui.Mount slot={App.hero} name={props.name} />
+    <ui.Mount slot={App.aside} name={props.name} />
+  </section>
 ))
 
-// Contribute a *panel* into a denser shell slot
-const ops = Ui.contribute(OpsShell.main, FleetPanel).when(Ui.any)
-
-// =============================================================================
-// 6) Upward values (same Last bag as page-layout draft)
-// =============================================================================
-
-FleetPanel.provide(
-  View.gen(function* () {
-    // optional: read/provide ambient bag while building impl
-    return (props) => {
-      /* runtime Last.context via hook bridge later */
-      return <panel />
-    }
-  }),
+const nested = Catalog.contribute(
+  Catalog.shell({ main: Catalog.slot<{ readonly name: string }>() }).main,
+  Panel,
 )
 
-// Deep child View.provide(Last) — compose Types later (V0 on last-ts)
-
 // =============================================================================
-// 7) Multiple contributions per slot (pager / stack)
+// Many matches (opt-in)
 // =============================================================================
 
-// Default: one match. Opt in to many:
-const cardStack = Ui.contribute(Dashboard.card, PoolCard)
-  .when(WorkPool.kind)
-  .mode("stack") // | "one" | "replace"
+Catalog.contribute(App.hero, Greeter).mode("one")   // default — single impl
+Catalog.contribute(App.hero, Greeter).mode("stack") // all matching; Mount stacks them
 
-// Mount renders stack or first — shell decides presentation
-;<ui.Mount slot={Dashboard.card} tag={Jobs} mode="stack" />
+;<ui.Mount slot={App.hero} name="nik" mode="stack" />
 ```
 
 ---
 
-## Mapping from today
+## Rules
 
-| Today (`Views`) | Draft |
-|-----------------|--------|
-| `Views.Card.Tag` | `View.Tag` + optional `slot` annotation **or** contribute into `Dashboard.card` |
-| `Views.bind(kind, Tag)` | `Ui.contribute(slot, Tag).when(kind)` |
-| `Views.only(tag, …)` | `Ui.replace(slot, Tag).when(tag)` / scoped catalog |
-| `Views.Registry` | Catalog Layer (no ambient singleton) |
-| `Views.react(layer).Card` | `ui.Mount slot={Shell.card}` / `Dash.card` |
-| `Views.compose({ views, router, group })` | Split: **catalog** vs **app chrome** (router/grid stay Hyperlink app) |
-| `View.ChromeProvider` | Shell concern — wrap `Mount` or pass via slot props / Hyperlink chrome |
+1. Tag class is never JSX — only the provided `View` function mounts.
+2. Slot props are the contract; contributing Tag’s Props must accept them.
+3. Catalog is a **Layer** — compose with `Layer.mergeAll`, no ambient singleton.
+4. `.when(target)` scopes a contribution; omit = always eligible for that slot.
+5. Slot names are app-defined strings/symbols — library ships no Card/Detail/Page.
 
 ---
 
-## Non-goals (this draft)
+## Open
 
-- Replacing last-ts `View.Tag` / Prototype.
-- Keeping Card/Detail/Page as the *only* slots forever.
-- JSX-typed children as the contribute mechanism.
-- Moving Hyperlink dashboard into last-ts.
-
----
-
-## Open forks
-
-1. Module name: keep `Views` vs rename (`Ui`, `ViewKit`, `Catalog`).
-2. `.when(kind)` vs target as first arg: `contribute(slot, Tag, target)`.
-3. Size as slot name vs annotation on the View Tag.
-4. How hard to type “Props of Tag ≤ Props of Slot”.
-5. Stack/pager as Mount mode vs separate slot types.
-
----
-
-## Eng sketch (later)
-
-1. Spec + type tests for `contribute` / `Mount` / merge.  
-2. Compatibility shim: `Views.bind` → `contribute(Dashboard.card, …)`.  
-3. Migrate family `*View.ts` one module at a time.  
-4. Delete Registry singleton once catalog Layer is the only path.
+- Module name: `Catalog` vs fold into `View.*`
+- Target model: key string vs `Context.Key` vs predicate
+- Typing `contribute(slot, Tag)` when Props differ by optional fields
+- Whether `shell` is runtime value + types or type-only brands
