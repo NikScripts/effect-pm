@@ -1,13 +1,30 @@
 /**
- * View.fromEffect — plain Effect → component (no Tag); runtime via provider.
+ * View.fromEffect / gen / succeed — plain Effect → component (no Tag).
  */
 import { describe, expect, it } from "@effect/vitest";
-import { Effect, Layer } from "effect";
+import { Context, Effect, Layer } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import * as React from "react";
 import { renderToString } from "react-dom/server";
 import * as AtomReact from "last-ts/AtomReact";
 import * as View from "last-ts/View";
+
+const renderWithRuntime = (
+  node: React.ReactElement,
+  layer: Layer.Layer<any, any, never> = Layer.empty,
+): string => {
+  const runtime = Atom.runtime(layer);
+  return renderToString(
+    React.createElement(
+      AtomReact.RegistryProvider,
+      null,
+      React.createElement(AtomReact.RuntimeProvider, {
+        runtime,
+        children: node,
+      }),
+    ),
+  );
+};
 
 describe("View.fromEffect", () => {
   it("renders Effect-built component under RuntimeProvider", () => {
@@ -15,18 +32,9 @@ describe("View.fromEffect", () => {
       React.createElement("h1", null, props.name),
     );
     const Greeter = View.fromEffect(greeterFx);
-    const runtime = Atom.runtime(Layer.empty);
-    const html = renderToString(
-      React.createElement(
-        AtomReact.RegistryProvider,
-        null,
-        React.createElement(AtomReact.RuntimeProvider, {
-          runtime,
-          children: React.createElement(Greeter, { name: "nik" }),
-        }),
-      ),
+    expect(renderWithRuntime(React.createElement(Greeter, { name: "nik" }))).toContain(
+      "nik",
     );
-    expect(html).toContain("nik");
   });
 
   it("throws without RuntimeProvider", () => {
@@ -36,5 +44,30 @@ describe("View.fromEffect", () => {
     expect(() =>
       renderToString(React.createElement(Greeter, {})),
     ).toThrow(/RuntimeProvider/);
+  });
+});
+
+describe("View.gen / succeed", () => {
+  it("View.succeed is fromEffect(Effect.succeed)", () => {
+    const Greeter = View.succeed((props: { readonly name: string }) =>
+      React.createElement("h1", null, props.name),
+    );
+    expect(renderWithRuntime(React.createElement(Greeter, { name: "ok" }))).toContain(
+      "ok",
+    );
+  });
+
+  it("View.gen yields services then returns a component", () => {
+    class Prefix extends Context.Service<Prefix, string>()("test/Prefix") {}
+    const Greeter = View.gen(function* () {
+      const prefix = yield* Prefix;
+      return (props: { readonly name: string }) =>
+        React.createElement("h1", null, `${prefix}${props.name}`);
+    });
+    const html = renderWithRuntime(
+      React.createElement(Greeter, { name: "nik" }),
+      Layer.succeed(Prefix, "hi "),
+    );
+    expect(html).toContain("hi nik");
   });
 });

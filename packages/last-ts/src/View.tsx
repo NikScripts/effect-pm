@@ -4,8 +4,8 @@
  * View — Effect × React components (Last).
  *
  * - **DI:** {@link Tag} / {@link Prototype} / {@link provide} — Context slots
- * - **Plain export:** {@link fromEffect} — Effect → component (no Tag); runtime
- *   from {@link AtomReact.RuntimeProvider} (no runtime arg)
+ * - **Plain export:** {@link fromEffect} / {@link gen} / {@link succeed} — Effect
+ *   → component (no Tag); runtime from {@link AtomReact.RuntimeProvider}
  *
  * Prototype metadata: {@link annotations} (Effect) / {@link getAnnotations}.
  * Factory brand: {@link kind} via {@link Last.kindSym}.
@@ -135,6 +135,44 @@ export const fromEffect = <Props extends object, E = never, R = never>(
   };
   return FromEffect;
 };
+
+/**
+ * {@link fromEffect}`(Effect.gen(…))` — generator that **returns** a component.
+ *
+ * @example
+ * ```ts
+ * import * as View from "last-ts/View"
+ *
+ * export const Greeter = View.gen(function* () {
+ *   const prefix = yield* Config
+ *   return (props: { name: string }) => <h1>{prefix}{props.name}</h1>
+ * })
+ * ```
+ *
+ * @public
+ */
+export const gen = <
+  Eff extends Effect.Effect<any, any, any>,
+  Props extends object,
+>(
+  f: () => Generator<Eff, View<Props>, never>,
+): View<Props> => fromEffect(Effect.gen(f));
+
+/**
+ * {@link fromEffect}`(Effect.succeed(component))` — pure component, no yields.
+ *
+ * @example
+ * ```ts
+ * export const Greeter = View.succeed((props: { name: string }) => (
+ *   <h1>{props.name}</h1>
+ * ))
+ * ```
+ *
+ * @public
+ */
+export const succeed = <Props extends object>(
+  component: View<Props>,
+): View<Props> => fromEffect(Effect.succeed(component));
 
 /**
  * Provide a component for a Tag. Props infer from the Tag.

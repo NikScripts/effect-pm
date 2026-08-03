@@ -10,9 +10,10 @@ A View Tag is a class — same shape as Effect’s `Context.Service`.
 DI mint/`provide` live on `last-ts/View` (or `hyperlink-ts/ui/View`). Dashboard
 size chrome + bind live on `hyperlink-ts/ui/Views`.
 
-Plain (no Tag) Effect → component: **`View.fromEffect(fx)`** under
-`AtomReact.RuntimeProvider` — no runtime arg. Put `"use client"` on the app
-module that exports the result.
+Plain (no Tag) Effect → component under `AtomReact.RuntimeProvider` (no runtime
+arg). Prefer **`View.gen(function* () { …; return (props) => … })`**, or
+`View.succeed(fn)` / `View.fromEffect(fx)`. Put `"use client"` on the app module
+that exports the result.
 
 Prototype-managed metadata is a single **annotations** bag, stamped under a
 symbol on the Tag (not a public class prop). **`View.annotations` is an Effect**;
