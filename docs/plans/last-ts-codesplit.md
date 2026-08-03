@@ -1,8 +1,8 @@
 # last-ts codesplit
 
-**Status:** Eng — P0–P3 landed (`View` DI on last-ts; size chrome / Registry / bind / compose on Hyperlink `Views`); P4 shims/docs polish remain  
+**Status:** Eng — P0–P3 landed; View annotations/`Last`/`fromEffect`/`gen` on work tip; P4 shims/docs polish remain; tip-sync pending owner  
 **Branch:** `cursor/file-router-prototype-125f`  
-**npm:** `last-ts@0.0.0` reserved · code name **Last.ts**  
+**npm:** `last-ts@0.0.1` · code name **Last.ts**  
 **Repo:** same-workspace `packages/last-ts` first; `hyperlink-ts` depends on it  
 **Not this plan:** bare `last.ts` / `last-js` (npm similarity blocks); scoped `@nikolasstow/last.ts` was unpublished intent
 
@@ -16,8 +16,9 @@
    (`export * as View from "./View"`, …). No hollow `Last` stub “for later.”
 6. **`Last.ts`** — cross-cutting handle introspection (`kindSym` / `kindOf`). Product/npm
    name remains **last-ts** / Last.ts; module subpaths carry the rest of the surface.
-7. **`last-ts/View` = DI only** — `Tag` / `Prototype` / `provide` / generic `Chrome`.
-   **No** `ViewKind`, Card/Detail/Page, Registry, bind/only, react matchers, or compose.
+7. **`last-ts/View`** — DI (`Tag` / `Prototype` / `provide` / `Chrome`) **plus** plain
+   export (`fromEffect` / `gen` / `succeed`). **No** dashboard `ViewKind`, Card/Detail/Page
+   size chrome, Registry, bind/only, react matchers, or compose (those are Hyperlink `Views`).
 8. **Do not compete on the name `View`.** Hyperlink dashboard surface is **`Views`**
    (`hyperlink-ts/ui/Views`): size ancestors (`Card` / `Detail` / `Page`), Registry, bind/only,
    react kit, compose. Apps: `import * as View from "last-ts/View"` (or thin
@@ -125,10 +126,11 @@ Optional temporary re-exports on `hyperlink-ts/ui/Route` etc. during migration �
 
 ## Open (next locks)
 
-- Publish cadence for last-ts beyond `0.0.0` placeholder.
-- `Page.Tag` + docs-site createPages (product follow-ons on last-ts/Page).
-- First real API that earns a `Last` module (do not invent one).
-- Fold `RuntimeProvider` into `AtomReact` vs `last-ts/Runtime` (prefer one module unless size hurts).
+- Publish cadence for last-ts beyond workspace `0.0.1`.
+- **`Page.Tag` + docs-site createPages** — owner go (see file-router prototype).
+- **P4** — drop hyperlink re-export shims once callers on `last-ts/*`; guide polish.
+- `Last` module earned (`kindSym` / `kindOf`) — done; grow only with real cross-cuts.
+- Fold `RuntimeProvider` stays on `AtomReact` unless size hurts.
 
 ## Related
 

@@ -7,7 +7,7 @@
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **4** | `cursor/hyperservice-open-deps-5679` | [gap proposals](./examples-gap-proposals.md) · [E5 apps](./examples-apps-e5-plan.md) · [release cleanup](./release-prep-cleanup.md) | **tip-synced** — examples + release-prep cleanup | same tip as `integration` | Related 97/97; archive pass | Idea 10 E5 owner-gated; changeset consolidate owner | 2026-07-29 |
-| **G / TUI** | `cursor/file-router-prototype-125f` | [last-ts codesplit](../plans/last-ts-codesplit.md) · [view-tag](./view-tag-prototype.md) | **Eng** — `View.annotations` via symbol; `Last.kindOf` / `View.kind`; no public Tag.annotations | work tip | last-ts tsc + ui-view suites | Next: Page.Tag + createPages; P4 shims | 2026-08-03 |
+| **G / TUI** | `cursor/file-router-prototype-125f` | [last-ts codesplit](../plans/last-ts-codesplit.md) · [file-router](./file-router-prototype.md) · [view-tag](./view-tag-prototype.md) | **Eng** — P0–P3 + View annotations/`Last`/`fromEffect`/`gen`; merged `integration` | work tip | last-ts tsc + view suites | Need owner: Page.Tag · createPages cutover · tip-sync; P4 shims remain | 2026-08-03 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **5**, **G** | 2026-07-26 |
 | **5** | `cursor/lifecycle-defer-start-929b` | [launcher brief](./launcher-and-handoff-brief.md) · [Versioned](./versioned-schema-decisions.md) · [Lifecycle](../guides/lifecycle.md) | **Lifecycle closed**; Versioned locked — Eng on go; `.deprecated` (dual/pipe) + update-impact **planned, deferred** | same tip as `integration` | Lifecycle suites green on tip | Next Eng: Versioned only; deprecated + impact after | 2026-08-03 |
 | **Docs site** | `cursor/docs-site-edge-cache-dbdc` (ε) | [dev host](./docs-site-dev-host.md) · edge cache · SEO | **tip-synced / live** — apex coming-soon; docs on `dev`; GS polish; origin gate | same tip as `integration` | smoke + host-gate tests; CF + `serve-production.mjs`; islands on `hyperlink-ts` / `.hl-dashboard` | — | 2026-07-29 |
@@ -29,13 +29,8 @@
 
 ### Active (owner approval required)
 1. **Agent 4:** Examples Ideas 1–9 + Related notes Eng’d. **Release-prep cleanup Eng’d** (archive completed handoffs/plans, dead scripts, npmignore, legacy example aliases). Idea 10 Apps/E5 still owner-gated. Owner still: changeset consolidate before `version`/publish.
-<<<<<<< HEAD
-2. **Agent G / TUI:** last-ts codesplit corrected — `View` DI only; Hyperlink `Views` owns size chrome / Registry / bind / compose (not `Ui.*`). Next: Page.Tag + docs-site createPages; P4 polish. Park: [`owned-string-casing-park.md`](./owned-string-casing-park.md).
-3. **Agent 5 (Launcher + handoff):** **Lifecycle L0–L7 closed** tip-synced (P10 Gate + honest wire errors; P12 Rejected). Chrome → **Agent G**. **Versioned schema decisions** on tip ([`versioned-schema-decisions.md`](./versioned-schema-decisions.md)) — owner go before Eng. Also owner-gated: explicit A/B launcher, `restartSuccessor`, #36–37, Track D redirect/dual-serve. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
-=======
-2. **Agent G / TUI:** last-ts P0–P1 + file-router guide/codegen — **tip-synced**. Next: Page.Tag + docs-site createPages. Park: [`owned-string-casing-park.md`](./owned-string-casing-park.md).
+2. **Agent G / TUI:** last-ts P0–P3 Eng’d + View handle/`fromEffect`/`gen` on work tip; merged latest `integration`. **Need owner:** `Page.Tag` go, docs-site createPages cutover, tip-sync. P4 shims remain. Park: [`owned-string-casing-park.md`](./owned-string-casing-park.md).
 3. **Agent 5 (Launcher + handoff):** **Lifecycle L0–L7 closed**. Chrome → **Agent G**. **Versioned** locked — Eng on go. **Planned after Versioned** (doc only): `Hyperlink.deprecated` as `Fn.dual` (pipe-canonical); Lookup/Node **update impact** then explicit A/B / `restartSuccessor`. Also gated: #36–37, Track D redirect. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
->>>>>>> origin/integration
 4. **Docs site:** Live — apex coming-soon (inlined CSS + `(book)` chrome); docs on `dev`. Origin host-gate via `serve-production.mjs` (before Waku static). Islands: `hyperlink-ts` alias + `.hl-dashboard`. Getting Started em-dash/voice polish.
 
 ### Frozen / dead (do not assign)
