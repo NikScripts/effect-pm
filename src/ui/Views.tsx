@@ -92,8 +92,9 @@ export const SizeChrome: View.OpenPrototype<ViewProps, WithSize> = View.Prototyp
 /**
  * Size-chrome add-ons — {@link SizeChrome} with `annotations.size` fulfilled.
  * Mint with `Views.Card.Tag<Self, Props?>()(key, annotations?)` — bag stamps under
- * {@link View.annotationsSym}. Read with {@link View.annotations}`(tag)`.
- * Matcher components are **not** these — use `Views.react(…).Card` or {@link useMatch}.
+ * {@link View.annotationsSym}. Read with {@link View.annotations} (Effect) or
+ * {@link View.annotationsSync}. Matcher components are **not** these — use
+ * `Views.react(…).Card` or {@link useMatch}.
  *
  * @public
  */
@@ -274,9 +275,10 @@ export const bind: {
     Effect.gen(function* () {
       const reg = yield* Registry;
       const Component = yield* view;
+      const bag = yield* View.annotations(view);
       const bound = {
         key: view.key,
-        kind: View.annotations(view).size,
+        kind: bag.size,
         Component,
       };
       if (typeof targetOrKind === "string") {
@@ -305,24 +307,27 @@ export const only = <Id1, Id2 = never, Id3 = never>(
       const reg = yield* Registry;
       const bounds: Bound[] = [];
       const c1 = yield* v1;
+      const bag1 = yield* View.annotations(v1);
       bounds.push({
         key: v1.key,
-        kind: View.annotations(v1).size,
+        kind: bag1.size,
         Component: c1,
       });
       if (v2 !== undefined) {
         const c2 = yield* v2;
+        const bag2 = yield* View.annotations(v2);
         bounds.push({
           key: v2.key,
-          kind: View.annotations(v2).size,
+          kind: bag2.size,
           Component: c2,
         });
       }
       if (v3 !== undefined) {
         const c3 = yield* v3;
+        const bag3 = yield* View.annotations(v3);
         bounds.push({
           key: v3.key,
-          kind: View.annotations(v3).size,
+          kind: bag3.size,
           Component: c3,
         });
       }

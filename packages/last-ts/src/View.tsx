@@ -6,10 +6,11 @@
  * is Hyperlink `Views`.
  *
  * Prototype metadata is stamped under {@link annotationsSym}; read with
- * {@link annotations}. Factory brand is {@link kind} via {@link Last.kindSym}.
+ * {@link annotations} (Effect) or {@link annotationsSync} (client / sync).
+ * Factory brand is {@link kind} via {@link Last.kindSym}.
  */
 import * as React from "react";
-import { Context, Layer } from "effect";
+import { Context, Effect, Layer } from "effect";
 import type * as Types from "effect/Types";
 import * as Last from "./Last";
 
@@ -159,18 +160,35 @@ export type AnnotationsOf<P> = P extends Prototype<infer _P, infer _R, infer A>
     : never;
 
 /**
- * Get the annotations bag from a minted Tag (symbol slot — not a class prop).
+ * Annotations bag for a minted Tag — **Effect** (symbol stamp for now; Context later).
+ * Not a class prop. For client components / sync builders use {@link annotationsSync}.
  *
  * @example
  * ```ts
- * View.annotations(PoolCard).size
- * View.annotations(PoolCard).spec
+ * const bag = yield* View.annotations(PoolCard)
+ * bag.size
  * ```
  *
  * @category getters
  * @public
  */
 export const annotations = <A extends AnyAnnotations>(self: {
+  readonly [annotationsSym]: A;
+}): Effect.Effect<A> => Effect.succeed(self[annotationsSym]);
+
+/**
+ * Sync peek of the stamped annotations bag — client components and Layer builders
+ * that cannot `yield*`. Prefer {@link annotations} inside Effect.
+ *
+ * @example
+ * ```ts
+ * View.annotationsSync(PoolCard).size
+ * ```
+ *
+ * @category getters
+ * @public
+ */
+export const annotationsSync = <A extends AnyAnnotations>(self: {
   readonly [annotationsSym]: A;
 }): A => self[annotationsSym];
 

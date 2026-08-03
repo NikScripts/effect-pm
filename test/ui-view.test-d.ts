@@ -1,7 +1,7 @@
 /**
  * View.Tag reversed props + Views.react R = never.
  */
-import { Layer, Schema } from "effect";
+import { Effect, Layer, Schema } from "effect";
 import { expectTypeOf } from "vitest";
 import * as View from "../src/ui/View";
 import * as WorkPool from "../src/WorkPool";
@@ -48,7 +48,10 @@ PoolCard.provide((props) => {
   return null;
 });
 
-expectTypeOf(View.annotations(PoolCard).size).toEqualTypeOf<Views.CardKind>();
+expectTypeOf(View.annotationsSync(PoolCard).size).toEqualTypeOf<Views.CardKind>();
+expectTypeOf(View.annotations(PoolCard)).toEqualTypeOf<
+  Effect.Effect<{ readonly size: Views.CardKind }>
+>();
 
 const withOnly = Layer.mergeAll(
   Views.bind(WorkPool.kind, PoolCard),

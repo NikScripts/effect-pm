@@ -55,9 +55,10 @@ const CardSel = Base.Prototype<{ readonly selected?: boolean }>()({
 })
 
 class ScheduleCard extends Card.Tag<ScheduleCard>()("hyperlink/view/schedule-card") {}
-View.annotations(ScheduleCard).size  // ViewKind.Card() — `{ _tag: "Card" }`
-ScheduleCard.key                     // Effect — "hyperlink/view/schedule-card"
-Last.kindOf(ScheduleCard)            // "last-ts/View"
+yield* View.annotations(ScheduleCard) // Effect → bag (size, spec, …)
+View.annotationsSync(ScheduleCard).size
+ScheduleCard.key                      // Effect identity — "hyperlink/view/schedule-card"
+Last.kindOf(ScheduleCard)             // "last-ts/View"
 ```
 
 | Piece | Role |
@@ -75,7 +76,7 @@ Statics are for things we used to jam into Tag args (`size`, later `spec`, etc.)
 ## Chrome add-on (not Tag core)
 
 - Matchers: `ui.Card` / `ui.Detail` / `ui.Page` from `View.react` / `compose`, or `View.useMatch()`.
-- Registry bind still needs a **size** — read `View.annotations(view).size` from sized prototypes.
+- Registry bind still needs a **size** — `yield* View.annotations(view)` (or sync peek) from sized prototypes.
 - `Views.bind` / `Views.only` only accept handles with `size: ViewKind`.
 - Naked `View.Tag` = DI only (no matcher registration without a size annotation).
 
@@ -147,10 +148,10 @@ Views.Card / Detail / Page   // SizeChrome already fulfilled
 
 Helpers: `RequirementOf` / `IsFulfilled` / `PropsOf` / `AnnotationsOf` /
 `OpenPrototype` / `FulfilledPrototype`. Tag does not fulfill — `bind` needs
-`View.annotations(view).size`. Prototype metadata stamps under `annotationsSym`
-(read via `View.annotations`; class surface free for app `static`s). Factory
-brand: `Last.kindOf` / `View.kind`. Type the bag with `AnnotationsOf`.
-Guide: [`../guides/view-tag-types.md`](../guides/view-tag-types.md).
+`yield* View.annotations(view)`. Prototype metadata stamps under `annotationsSym`
+(`View.annotations` = Effect; `annotationsSync` for client). Class surface free
+for app `static`s. Factory brand: `Last.kindOf` / `View.kind`. Type the bag with
+`AnnotationsOf`. Guide: [`../guides/view-tag-types.md`](../guides/view-tag-types.md).
 
 ## Type previews (served docs)
 
