@@ -55,7 +55,7 @@ const CardSel = Base.Prototype<{ readonly selected?: boolean }>()({
 })
 
 class ScheduleCard extends Card.Tag<ScheduleCard>()("hyperlink/view/schedule-card") {}
-ScheduleCard.statics.size  // ViewKind.Card() — `{ _tag: "Card" }`
+ScheduleCard.annotations.size  // ViewKind.Card() — `{ _tag: "Card" }`
 ScheduleCard.key   // "hyperlink/view/schedule-card"
 ```
 
@@ -74,7 +74,7 @@ Statics are for things we used to jam into Tag args (`size`, later `spec`, etc.)
 ## Chrome add-on (not Tag core)
 
 - Matchers: `ui.Card` / `ui.Detail` / `ui.Page` from `View.react` / `compose`, or `View.useMatch()`.
-- Registry bind still needs a **size** — read `view.statics.size` from sized prototypes.
+- Registry bind still needs a **size** — read `view.annotations.size` from sized prototypes.
 - `View.bind` / `View.only` only accept handles with `size: ViewKind`.
 - Naked `View.Tag` = DI only (no matcher registration without a size static).
 
@@ -144,9 +144,10 @@ Views.Card / Detail / Page   // SizeChrome already fulfilled
 
 `ViewKind` is `Data.TaggedEnum` (`Card` / `Detail` / `Page`) — match with `Match.tag`.
 
-Helpers: `RequirementOf` / `IsFulfilled` / `PropsOf` / `StaticsOf` / `OpenPrototype` /
-`FulfilledPrototype`. Tag does not fulfill — `bind` needs `.statics.size` on the handle.
-Prototype statics live under one `.statics` bag (class surface free for app statics).
+Helpers: `RequirementOf` / `IsFulfilled` / `PropsOf` / `AnnotationsOf` /
+`OpenPrototype` / `FulfilledPrototype`. Tag does not fulfill — `bind` needs
+`view.annotations.size`. Prototype metadata lives under one `.annotations` bag
+(class surface free for app `static`s). Type the bag with `AnnotationsOf`.
 Guide: [`../guides/view-tag-types.md`](../guides/view-tag-types.md).
 
 ## Type previews (served docs)

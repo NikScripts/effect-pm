@@ -10,13 +10,14 @@ A View Tag is a class — same shape as Effect’s `Context.Service`.
 DI mint/`provide` live on `last-ts/View` (or `hyperlink-ts/ui/View`). Dashboard
 size chrome + bind live on `hyperlink-ts/ui/Views`.
 
-Prototype-managed metadata is a **single `.statics` bag** (any keys). The class
-surface stays free for app statics (`static foo = …`).
+Prototype-managed metadata is a single **annotations** bag (Effect/ZIO-style —
+any keys): `tag.annotations`. Type it with **`View.AnnotationsOf<typeof Tag>`**
+(the old `StaticsOf` helper). Class surface stays free for app `static` fields.
 
 ## One-shot mint (common path)
 
 `Views.Card` / `Detail` / `Page` are size chrome already fulfilled
-(`statics.size: ViewKind.Card()` …). Stamp `spec` into the bag, optional extra
+(`annotations.size: ViewKind.Card()` …). Stamp `spec` into the bag, optional extra
 props, mint:
 
 {.twoslash}
@@ -38,10 +39,10 @@ class PoolPage extends Views.Page.Tag<PoolPage>()(
   { spec: { kind: "app/queue" } as const },
 ) {}
 
-PoolCard.statics.size
-//               ^?
-PoolCard.statics.size._tag
-//                    ^?
+PoolCard.annotations.size
+//                        ^?
+PoolCard.annotations.size._tag
+//                             ^?
 
 export const layer = Layer.mergeAll(
   View.provide(PoolCard, (props) => {
@@ -65,12 +66,13 @@ void label
 Provide skins with **`View.provide(Tag, impl)`** or **`Tag.provide(impl)`**. Props infer from
 the Tag. Annotate skins with **`PoolCard["Service"]`** (no `typeof`). Sizes are
 `Data.TaggedEnum` — match with `ViewKind.$match` (or `Match.tag` on a
-`Views.ViewKind`-typed value). Read size/spec via **`Tag.statics`**.
+`Views.ViewKind`-typed value). Read size/spec via **`Tag.annotations`** /
+type with **`View.AnnotationsOf<typeof Tag>`**.
 
 ## Extra props
 
-Second type arg on `Tag` — additive props; Prototype statics as the value arg
-(merged into `.statics`):
+Second type arg on `Tag` — additive props; Prototype annotations as the value arg
+(merged into `.annotations`):
 
 {.twoslash}
 ``` ts
@@ -98,11 +100,11 @@ Naked (no size): `View.Tag<Greeter, { name: string }>()("…")`.
 
 ## Requirement (open chain)
 
-Statics **Requirement** debt can be declared on the root
+Annotations **Requirement** debt can be declared on the root
 `View.Prototype<Props, Requirement>()` **or** on any later
 `.Prototype<NewProps, NewRequirement>()` step (additive). The Requirement
-describes keys **inside the statics bag**; statics discharge it when the bag
-satisfies the merged debt.
+describes keys **inside the annotations bag**; annotations discharge it when the
+bag satisfies the merged debt.
 
 Dashboard size chrome uses Hyperlink `Views` (`SizeChrome` / `Card` / …):
 
@@ -123,8 +125,8 @@ const Base = View.Prototype<{ readonly label: string }>()()
 const Open = Base.Prototype<{}, Views.WithSize>()()
 const Done = Open.Prototype()({ size: Views.ViewKind.Detail() })
 
-PoolCard.statics.size
-//               ^?
+PoolCard.annotations.size
+//                        ^?
 ```
 
 ## Wire into Dashboard

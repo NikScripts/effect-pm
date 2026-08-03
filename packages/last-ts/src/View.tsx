@@ -87,24 +87,24 @@ export function provide<I, P extends object>(
 // Prototype + Tag
 // =============================================================================
 
-type AnyStatics = Record<string, unknown>;
+type AnyAnnotations = Record<string, unknown>;
 
 /**
- * Discharge Requirement when statics already satisfy it (`{}` = fulfilled).
+ * Discharge Requirement when annotations already satisfy it (`{}` = fulfilled).
  * @internal
  */
 type NextRequirement<
-  Requirement extends AnyStatics,
-  Statics extends AnyStatics,
-> = Statics extends Requirement ? {} : Requirement;
+  Requirement extends AnyAnnotations,
+  Annotations extends AnyAnnotations,
+> = Annotations extends Requirement ? {} : Requirement;
 
 /**
  * Merge open debt with debt declared on this chain step.
  * @internal
  */
 type MergeRequirement<
-  Current extends AnyStatics,
-  Added extends AnyStatics,
+  Current extends AnyAnnotations,
+  Added extends AnyAnnotations,
 > = Flat<Current & Added>;
 
 /**
@@ -113,7 +113,7 @@ type MergeRequirement<
  *
  * @public
  */
-export type PropsOf<T> = T extends Prototype<infer Props, infer _R, infer _S>
+export type PropsOf<T> = T extends Prototype<infer Props, infer _R, infer _A>
   ? Props
   : T extends { readonly Service: View<infer P> }
     ? P
@@ -122,15 +122,20 @@ export type PropsOf<T> = T extends Prototype<infer Props, infer _R, infer _S>
       : never;
 
 /**
- * Accumulated statics bag — from a {@link Prototype} or a minted Tag’s
- * {@link ViewHandle.statics}.
+ * Annotations bag from a {@link Prototype} or minted Tag
+ * (`Tag.annotations` / {@link ViewHandle.annotations}).
+ *
+ * @example
+ * ```ts
+ * type Size = View.AnnotationsOf<typeof PoolCard>["size"]
+ * ```
  *
  * @public
  */
-export type StaticsOf<P> = P extends Prototype<infer _P, infer _R, infer Statics>
-  ? Statics
-  : P extends { readonly statics: infer S }
-    ? S
+export type AnnotationsOf<P> = P extends Prototype<infer _P, infer _R, infer A>
+  ? A
+  : P extends { readonly annotations: infer A }
+    ? A
     : never;
 
 /**
@@ -138,7 +143,7 @@ export type StaticsOf<P> = P extends Prototype<infer _P, infer _R, infer Statics
  *
  * @public
  */
-export type RequirementOf<P> = P extends Prototype<infer _P, infer Requirement, infer _S>
+export type RequirementOf<P> = P extends Prototype<infer _P, infer Requirement, infer _A>
   ? Requirement
   : never;
 
@@ -150,13 +155,13 @@ export type RequirementOf<P> = P extends Prototype<infer _P, infer Requirement, 
 export type IsFulfilled<P> = [keyof RequirementOf<P>] extends [never] ? true : false;
 
 /**
- * Prototype with an open Requirement (statics may still be empty).
+ * Prototype with an open Requirement (annotations may still be empty).
  *
  * @public
  */
 export type OpenPrototype<
   Props extends object = {},
-  Requirement extends AnyStatics = {},
+  Requirement extends AnyAnnotations = {},
 > = Prototype<Props, Requirement, {}>;
 
 /**
@@ -166,14 +171,14 @@ export type OpenPrototype<
  */
 export type FulfilledPrototype<
   Props extends object = {},
-  Statics extends AnyStatics = {},
-> = Prototype<Props, {}, Statics>;
+  Annotations extends AnyAnnotations = {},
+> = Prototype<Props, {}, Annotations>;
 
 /**
  * Constructable View handle from {@link Prototype.Tag}.
  *
- * Prototype-managed metadata lives under {@link ViewHandle.statics} (any keys).
- * The class surface stays free for app statics (`static foo = …` on the class).
+ * Prototype-managed metadata lives under {@link ViewHandle.annotations}
+ * (Effect/ZIO-style — any keys). Class surface stays free for app `static`s.
  *
  * @public
  */
@@ -181,10 +186,10 @@ export type ViewHandle<
   Self,
   K extends string,
   Props extends object,
-  Statics extends AnyStatics = {},
+  Annotations extends AnyAnnotations = {},
 > = Context.ServiceClass<Self, K, View<Props>> & {
-  /** Prototype-managed statics bag (size, spec, …). Not flattened onto the class. */
-  readonly statics: Statics;
+  /** Prototype-managed annotations bag (size, spec, …). */
+  readonly annotations: Annotations;
   /** Phantom — component props. */
   readonly Type: Props;
   /** Provide this Tag’s impl — same as {@link provide}`(this, impl)`. */
@@ -199,45 +204,45 @@ export type ViewHandle<
 export type Type<T> = T extends { readonly Type: infer P } ? P : never;
 
 /**
- * Props + statics + an R-style **Requirement** type param (debt until discharged).
+ * Props + annotations + an R-style **Requirement** type param (debt until discharged).
  *
  * Requirement may be declared on the root {@link Prototype} factory **or** on any
- * later `.Prototype<Props, Requirement>()` step (additive). Statics discharge debt
- * when they satisfy the merged Requirement (`{}` = fulfilled).
+ * later `.Prototype<Props, Requirement>()` step (additive). Annotations discharge
+ * debt when they satisfy the merged Requirement (`{}` = fulfilled).
  *
  * @public
  */
 export interface Prototype<
   in out Props extends object,
-  in out Requirement extends AnyStatics = {},
-  out Statics extends AnyStatics = {},
+  in out Requirement extends AnyAnnotations = {},
+  out Annotations extends AnyAnnotations = {},
 > {
-  readonly statics: Statics;
+  readonly annotations: Annotations;
   /**
-   * Extend props / open more Requirement debt (type args) and/or statics (value).
+   * Extend props / open more Requirement debt (type args) and/or annotations (value).
    * New Requirement merges with any still-open debt; discharges when merged
-   * statics satisfy the result.
+   * annotations satisfy the result.
    *
    * @example
    * ```ts
    * const Base = View.Prototype<{ label: string }>()()
-   * // add debt mid-chain
    * const Open = Base.Prototype<{}, { readonly size: { readonly _tag: "Card" } }>()()
    * const Done = Open.Prototype()({ size: { _tag: "Card" as const } })
+   * Done.annotations.size
    * ```
    */
   readonly Prototype: <
     NewProps extends object = {},
-    NewRequirement extends AnyStatics = {},
-  >() => <const NewStatics extends AnyStatics = {}>(
-    statics?: NewStatics,
+    NewRequirement extends AnyAnnotations = {},
+  >() => <const NewAnnotations extends AnyAnnotations = {}>(
+    annotations?: NewAnnotations,
   ) => Prototype<
     Flat<Props & NewProps>,
     NextRequirement<
       MergeRequirement<Requirement, NewRequirement>,
-      Flat<Statics & NewStatics>
+      Flat<Annotations & NewAnnotations>
     >,
-    Flat<Statics & NewStatics>
+    Flat<Annotations & NewAnnotations>
   >;
   /**
    * Mint a Context.Service **class** handle.
@@ -245,50 +250,50 @@ export interface Prototype<
    */
   readonly Tag: <Self, NewProps extends object = {}>() => <
     const K extends string,
-    const NewStatics extends AnyStatics = {},
+    const NewAnnotations extends AnyAnnotations = {},
   >(
     key: K,
-    statics?: NewStatics,
-  ) => ViewHandle<Self, K, Flat<Props & NewProps>, Flat<Statics & NewStatics>>;
+    annotations?: NewAnnotations,
+  ) => ViewHandle<Self, K, Flat<Props & NewProps>, Flat<Annotations & NewAnnotations>>;
 }
 
 const makePrototype = <
   Props extends object,
-  Requirement extends AnyStatics,
-  Statics extends AnyStatics,
+  Requirement extends AnyAnnotations,
+  Annotations extends AnyAnnotations,
 >(
-  statics: Statics,
-): Prototype<Props, Requirement, Statics> => ({
-  statics,
+  bag: Annotations,
+): Prototype<Props, Requirement, Annotations> => ({
+  annotations: bag,
   Prototype:
-    <NewProps extends object = {}, NewRequirement extends AnyStatics = {}>() =>
-    <const NewStatics extends AnyStatics = {},>(next?: NewStatics) => {
+    <NewProps extends object = {}, NewRequirement extends AnyAnnotations = {}>() =>
+    <const NewAnnotations extends AnyAnnotations = {},>(next?: NewAnnotations) => {
       type NextProps = Flat<Props & NewProps>;
-      type NextStatics = Flat<Statics & NewStatics>;
+      type NextAnnotations = Flat<Annotations & NewAnnotations>;
       type NextReq = NextRequirement<
         MergeRequirement<Requirement, NewRequirement>,
-        NextStatics
+        NextAnnotations
       >;
-      return makePrototype<NextProps, NextReq, NextStatics>({
-        ...statics,
-        ...(next ?? ({} as NewStatics)),
+      return makePrototype<NextProps, NextReq, NextAnnotations>({
+        ...bag,
+        ...(next ?? ({} as NewAnnotations)),
       });
     },
   Tag:
     <Self, NewProps extends object = {}>() =>
-    <const K extends string, const NewStatics extends AnyStatics = {}>(
+    <const K extends string, const NewAnnotations extends AnyAnnotations = {}>(
       key: K,
-      next?: NewStatics,
+      next?: NewAnnotations,
     ) => {
       type NextProps = Flat<Props & NewProps>;
-      type NextStatics = Flat<Statics & NewStatics>;
-      const bag = {
-        ...statics,
-        ...(next ?? ({} as NewStatics)),
-      } as NextStatics;
+      type NextAnnotations = Flat<Annotations & NewAnnotations>;
+      const merged = {
+        ...bag,
+        ...(next ?? ({} as NewAnnotations)),
+      } as NextAnnotations;
       const base = Context.Service<Self, View<NextProps>>()(key);
       return Object.assign(base, {
-        statics: bag,
+        annotations: merged,
         Type: undefined as unknown as NextProps,
         provide: (impl: View<NextProps>): Layer.Layer<Self> =>
           Layer.succeed(base, impl),
@@ -297,22 +302,22 @@ const makePrototype = <
 });
 
 /**
- * Start a prototype chain: `View.Prototype<Props, Requirement>()(statics?)`.
- * Further debt: `.Prototype<NewProps, NewRequirement>()(statics?)` at any step.
+ * Start a prototype chain: `View.Prototype<Props, Requirement>()(annotations?)`.
+ * Further debt: `.Prototype<NewProps, NewRequirement>()(annotations?)` at any step.
  *
  * @public
  */
 export const Prototype =
-  <Props extends object = {}, Requirement extends AnyStatics = {}>() =>
-  <const Statics extends AnyStatics = {}>(
-    statics?: Statics,
+  <Props extends object = {}, Requirement extends AnyAnnotations = {}>() =>
+  <const Annotations extends AnyAnnotations = {}>(
+    annotations?: Annotations,
   ): Prototype<
     Props,
-    NextRequirement<Requirement, Statics>,
-    Statics
+    NextRequirement<Requirement, Annotations>,
+    Annotations
   > =>
-    makePrototype<Props, NextRequirement<Requirement, Statics>, Statics>(
-      (statics ?? {}) as Statics,
+    makePrototype<Props, NextRequirement<Requirement, Annotations>, Annotations>(
+      (annotations ?? {}) as Annotations,
     );
 
 /**
@@ -332,7 +337,8 @@ export const Tag = Prototype()().Tag;
 
 /**
  * A View service handle (DI identity + key). Prototype metadata is on
- * {@link ViewHandle.statics} when minted from a Prototype.
+ * {@link ViewHandle.annotations} when minted from a Prototype — type it with
+ * {@link AnnotationsOf}.
  *
  * @public
  */

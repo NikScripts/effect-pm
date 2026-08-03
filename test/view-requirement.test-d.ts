@@ -13,7 +13,7 @@ expectTypeOf(Views.SizeChrome).toEqualTypeOf<
 >();
 expectTypeOf<View.RequirementOf<typeof Open>>().toEqualTypeOf<Views.WithSize>();
 expectTypeOf<View.IsFulfilled<typeof Open>>().toEqualTypeOf<false>();
-expectTypeOf<View.StaticsOf<typeof Open>>().toEqualTypeOf<{}>();
+expectTypeOf<View.AnnotationsOf<typeof Open>>().toEqualTypeOf<{}>();
 
 // ── Chain while open ────────────────────────────────────────────────────────
 
@@ -22,7 +22,7 @@ const Mid = Open.Prototype<{ readonly dense?: boolean }>()({
 });
 expectTypeOf<View.IsFulfilled<typeof Mid>>().toEqualTypeOf<false>();
 expectTypeOf<View.RequirementOf<typeof Mid>>().toEqualTypeOf<Views.WithSize>();
-expectTypeOf<View.StaticsOf<typeof Mid>>().toEqualTypeOf<{
+expectTypeOf<View.AnnotationsOf<typeof Mid>>().toEqualTypeOf<{
   readonly spec: { readonly kind: "app/queue" };
 }>();
 
@@ -30,7 +30,7 @@ expectTypeOf<View.StaticsOf<typeof Mid>>().toEqualTypeOf<{
 
 const Done = Mid.Prototype()({ size: Views.ViewKind.Card() });
 expectTypeOf<View.IsFulfilled<typeof Done>>().toEqualTypeOf<true>();
-expectTypeOf(Done.statics).toEqualTypeOf<{
+expectTypeOf(Done.annotations).toEqualTypeOf<{
   readonly size: Views.CardKind;
   readonly spec: { readonly kind: "app/queue" };
 }>();
@@ -55,10 +55,12 @@ expectTypeOf(Views.Page).toEqualTypeOf<
 class PoolPage extends Views.Page.Tag<PoolPage>()("app/view/pool-page", {
   spec: { kind: "app/queue" } as const,
 }) {}
-expectTypeOf(PoolPage.statics.size).toEqualTypeOf<Views.PageKind>();
-expectTypeOf(PoolPage.statics.spec).toEqualTypeOf<{ readonly kind: "app/queue" }>();
-expectTypeOf<View.StaticsOf<typeof PoolPage>>().toEqualTypeOf<
-  typeof PoolPage.statics
+expectTypeOf(PoolPage.annotations.size).toEqualTypeOf<Views.PageKind>();
+expectTypeOf(PoolPage.annotations.spec).toEqualTypeOf<{
+  readonly kind: "app/queue";
+}>();
+expectTypeOf<View.AnnotationsOf<typeof PoolPage>>().toEqualTypeOf<
+  (typeof PoolPage)["annotations"]
 >();
 const _bound = Views.bind("app/queue", PoolPage);
 void _bound;
