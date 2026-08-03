@@ -362,7 +362,7 @@ files.rename // ❌ not on Handle (compile error)
 
 ## Planned — Lookup-first launcher + Lookup A/B (owner 2026-08-03)
 
-**Status:** Design direction locked from owner chat — **doc only; Eng after deprecated** (this section).  
+**Status:** Design **locked** owner chat 2026-08-03 (single-address + orchestrator; name `Lookup.follow`) — **doc only; Eng next for Agent 5**. Deprecated already Eng’d.  
 **Why it matters a lot:** Lookup must be able to **restart / A/B update**. A Lookup that also hosts app services couples Lookup lifecycle to those services’ skew and forces Lookup A/B whenever an app Tag moves.
 
 ### Desired bring-up (Launcher)
@@ -394,6 +394,46 @@ So #36 (“Lookup-node handoff”) is **re-opened as high priority**, not “tre
 ### Relation to Soft-bake
 
 Soft-bake (`Lookup.layer` when Identity absent on nameless listen) stays for independent / single-node / default-address cases. Launcher’s **default multi-node recipe** should prefer dedicated Lookup-first over “first app node becomes Lookup.”
+
+### Lookup A/B — single address, orchestrator handoff (locked)
+
+**Lookup keeps one address** (default sock / fixed `path` / one `asLookup` endpoint). Processes A and B are successive **owners** of that address. Dialers never track two Lookup endpoints. A third party (Launcher or a script) sequences ownership transfer.
+
+```text
+clients ──dial──►  lookup.sock  (one address)
+                      ▲
+         orchestrator │  A releases → B binds
+                   Lookup A  →  Lookup B
+```
+
+**Rejected for Lookup:** dual / A/B address lists on the Lookup dialer; `rebind(otherAddress)` as the Lookup A/B story. (App-node Directory rows + `lookupClient` remain a separate multi-endpoint plane.)
+
+#### Three planes
+
+| Plane | Owns | API sketch |
+|-------|------|------------|
+| **1. Dial (Policy)** | Survive the A-down / B-up **gap** on the **same** address | `Lookup.follow(seed)` — stable `Identity\|Directory\|Advice` Context; holder + `RpcClientError` retry + `Policy.streamGap` (reuse `lookupClient` machinery). `Lookup.client` stays **static**. |
+| **2. Registry** | Optional state | v1: **cold** + apps re-advertise. Later: optional snapshot handoff. Not a Policy fragment. |
+| **3. Orchestration** | Who owns the address | Start B → A `Node.shutdown` / leave sock → B binds **same** path → dialers’ retries land on B. Launcher or DIY. Beyond Policy. |
+
+```ts
+// Dialers — one address forever; Policy shapes the gap only
+Lookup.follow(lookupNode /* same path before & after */).pipe(
+  Policy.provide(Policy.streamGap("stall")),
+)
+
+// Orchestrator (Launcher / script) — not Policy
+yield* Launcher.up({ node: lookupB, process: /* Lookup-only child, same path */ })
+yield* Node.shutdown(lookupA) // releases sock
+// B binds; follow retries succeed
+```
+
+#### Eng order
+
+1. **`Lookup.follow` + gap Policy** — Soft-bake / same-sock replace suite (parallel `policy-lookup-client` but Lookup process swaps).  
+2. **Orchestrated single-address handoff** recipe (example script; Launcher sugar later).  
+3. **Launcher Lookup-first** spawn (still one address).  
+4. Update-impact / app `restartSuccessor` after.
 
 ---
 
@@ -470,7 +510,7 @@ Spine α stays: Launcher is not a long-lived fleet supervisor. **Plan** is Looku
 - Discovering clients-at-risk without a client registry  
 - Tie-in to explicit A/B launcher / `restartSuccessor`  
 - Launcher API for “spawn Lookup first unless address / safe default”  
-- Lookup A/B recipe on Soft-bake first-node vs dedicated Lookup node
+- Registry snapshot handoff (v1 = cold + re-advertise)
 
 ---
 
@@ -528,8 +568,8 @@ export class Jobs extends WorkPool.Tag<Jobs>()("fleet/Jobs", { payload: Job }) {
 **After Versioned (queue):**
 
 1. ~~`Hyperlink.deprecated` dual (pipe-canonical)~~ **Eng'd**  
-2. **Lookup-first launcher bring-up** + docs (encourage Lookup; safe-default omit; else spawn Lookup before apps)  
-3. **Lookup A/B / restart** (first-node Soft-bake path + dedicated Lookup) — high priority  
+2. **`Lookup.follow` + single-address gap Policy** (Soft-bake sock replace) — next Eng  
+3. Orchestrated Lookup ownership handoff (same address); then Launcher Lookup-first  
 4. Update-impact planner (`Lookup`/`Node` + Launcher executes plan)  
 5. Explicit A/B / `restartSuccessor` for app nodes (behind impact + Lookup A/B)
 

@@ -156,9 +156,11 @@ skew when those services A/B. Planned Launcher recipe (not Eng’d yet):
 2. Protocol has a **safe default** address → Lookup node optional (Soft-bake OK).  
 3. Otherwise → Launcher spawns a **dedicated Lookup node first**, then app nodes.
 
-Independent launch (no Launcher) still uses **first node = Lookup** (Soft-bake) — that path
-must keep Lookup A/B / restart. See
-[`versioned-schema-decisions.md`](../handoffs/versioned-schema-decisions.md#planned--lookup-first-launcher--lookup-ab-owner-2026-08-03).
+**Lookup A/B (locked):** Lookup keeps **one** address. A and B are successive owners;
+Launcher (or a script) sequences release→bind. Dialers use planned `Lookup.follow` + Policy
+for the gap — not dual Lookup endpoints. Independent launch still uses **first node =
+Lookup** (Soft-bake). See
+[`versioned-schema-decisions.md`](../handoffs/versioned-schema-decisions.md#lookup-ab--single-address-orchestrator-handoff-locked).
 
 **Do not confuse** Launcher custody `Handle.handoff` with **node migration** handoff
 (`Hyperlink.serve(…, { handoff })` / WorkPool `releaseEnqueueHandoff` during `Node.shutdown`).

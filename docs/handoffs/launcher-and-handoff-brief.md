@@ -268,7 +268,8 @@ Owner locked #22–26; Eng on tip:
     - Soft-bake / “first node = Lookup” stays for **independent** launch (no Launcher).
     - Launcher should spawn a **dedicated Lookup node first** when no Lookup address is provided and there is no safe protocol default — Lookup hosts no app services.
     - Docs encourage an explicit Lookup node; safe-default protocols may omit Lookup entirely.
-    - Because independent first-node Lookup remains, Lookup **must** support A/B / restart even with dedicated Lookup-first.
+    - **Single address lock:** Lookup has one endpoint; A/B = successive owners. Orchestrator (Launcher/script) moves ownership; dialers use `Lookup.follow` + Policy for the gap — **not** dual Lookup addresses / `rebind(other)`.
+    - Eng order: `Lookup.follow` + gap → orchestrated handoff → Lookup-first spawn.
     - Detail: [`versioned-schema-decisions.md`](./versioned-schema-decisions.md#planned--lookup-first-launcher--lookup-ab-owner-2026-08-03).
 
 37. **Track D boundary — C emits signals only; no client redirect API in C.** *(confirmed; `lookupClient` / `peersLayer` rebind already Eng'd on D substrate)*
