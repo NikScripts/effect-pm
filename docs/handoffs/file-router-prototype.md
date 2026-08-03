@@ -85,6 +85,6 @@ Dynamic. Layout: `Page.layout` (camelCase); `Page.Layout` class only if earned.
 
 ## Still open
 
-1. **`Page.Tag`** (owner) — class mint + `Page.build(Tag)` reading statics
+1. **`Page.Tag` + Layout** — design plan (not locked): [`page-layout-design.md`](./page-layout-design.md)
 2. Docs-site cutover off Waku fs-router → `createPages` adapter
 3. Wire docs `waku.config.ts` to `fileRouter` plugin (optional dogfood)
