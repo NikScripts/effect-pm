@@ -3,6 +3,8 @@
 **Branch:** `cursor/file-router-prototype-125f`  
 **Status:** design — **not locked**, not Eng’d (revised 2026-08-03)  
 **Package:** `last-ts` (`Page`, `Layout`, `Last`, `View`) — zero Hyperlink product names inside last-ts  
+**Upward SSOT (V0):** [view-provide-draft.md](./view-provide-draft.md) — Requires / Provides / `Last.provide`  
+**Downward (Eng’d):** [view-compose-draft.md](./view-compose-draft.md) — bag compose + `View.mount`  
 **Related:** [file-router-prototype](./file-router-prototype.md) · [view-page-naming](./view-page-naming.md) · [view-tag-prototype](./view-tag-prototype.md) · [last-ts-codesplit](../plans/last-ts-codesplit.md)
 
 ---
@@ -106,35 +108,35 @@ MyLayout.static(component, values)
 
 ## Phase 0 — Views first (require / provide / context)
 
-Before Page/Layout file-router polish, ship the bag on **View**:
+**Full requirements:** [view-provide-draft.md](./view-provide-draft.md).
+
+Before Page/Layout file-router polish, ship the upward bag on **View**, using the **same bag `gen`/`succeed` shape** as downward compose (not a separate `View.compose`):
 
 ```ts
 import * as View from "last-ts/View"
 import * as Last from "last-ts/Last"
 
-// Parent requires title (debt)
 const Shell = View.Prototype<{ readonly children: React.ReactNode }, { readonly title: string }>()()
 
-// Deep child provides (may be several Views down)
 const TitleBlock = View.gen(function* () {
   yield* Last.provide({ title: "Hello" })
   return () => <h1>…</h1>
 })
 
-// Compose Views (library API — not raw JSX children typing)
-// Closed tree must satisfy Shell's Requirement; TitleBlock contributes Provides
-const PageBody = View.compose(Shell, TitleBlock) // name TBD — prove Provides ⊆ Req
+const Body = View.succeed({ TitleBlock }, ({ TitleBlock }) => () => <TitleBlock />)
+// close/check against Shell.Requires — API name open (see view-provide-draft)
 ```
 
 | API | Role |
 |-----|------|
-| View / Layout **Requirement** | Keys still owed |
+| View / Layout **Requires** | Keys still owed |
 | `Last.provide(partial)` | Merge bag; last wins; adds to **Provides** |
-| `Last.context` | Effect — read current bag (partial or full) anywhere in the tree |
+| `Last.context` | Effect — read current bag |
 | `Last.getContext` | Sync peek (client), mirror `getAnnotations` |
-| Compose / nest helpers | Carry `Requires` / `Provides` type params up the View exports |
+| Bag `succeed` / `gen` | Merge child **Provides** (and downward `R`) |
+| Close helper | Prove Provides ⊆ Requires (name open) |
 
-**Invariant:** every export that participates is a **View** (or Layout built on the same bag). JSX inside a View can call hooks that read `Last.context` at runtime; **type proof** lives on View composition / gen, not on DOM shape.
+**Invariant:** type proof on View bag / close — not DOM shape.
 
 ---
 
@@ -384,7 +386,7 @@ Acceptance (V0): deep provide satisfies parent require at compose; `Last.context
 1. **Eng Views-first (V0)** before Layout/Page — **recommend yes**.
 2. **Outlet name:** `Outlet` vs `children` render-prop — **recommend Outlet**.
 3. **Non-DI `Layout.make` + optional `Layout.Tag`** — **recommend yes**.
-4. **Compose API name** for proving Provides→Requires (`View.compose` / `View.nest` / …) — open.
+4. **Close/check API name** for Provides⊆Requires (`View.fulfill` / `View.close` / Layout `static` only) — open. Bag merge = existing `gen`/`succeed` (see [view-provide-draft](./view-provide-draft.md)).
 5. **`Last.context` Effect + `Last.getContext` sync** — **recommend** (mirror annotations / getAnnotations).
 6. Path source for file-router — implicit from disk + explicit overload.
 

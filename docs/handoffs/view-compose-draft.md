@@ -1,7 +1,8 @@
 # DI Views — bag compose + mount (not JSX `R` bubbling)
 
 **Status:** Eng on `cursor/file-router-prototype-125f`.  
-**Not:** pretending stock TypeScript carries `R` through `<Child />`.
+**Not:** pretending stock TypeScript carries `R` through `<Child />`.  
+**Opposite direction (not Eng’d):** [view-provide-draft.md](./view-provide-draft.md) — Requires / Provides / `Last.provide`.
 
 ---
 

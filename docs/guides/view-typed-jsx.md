@@ -39,7 +39,7 @@ Hover **`Hello`** → **`Middle`** → **`Outer`** → **`App`**.
 
 - **Tag skins:** `View.provide(Greeter, impl)` / `Greeter.provide(impl)` → `Layer`
 - **Open view graph:** compose with bag `gen` / `succeed`, then **`View.mount(view, layer)`** at the page/island edge
-- **Opposite direction:** `Last.provide` (unchanged)
+- **Opposite direction (not Eng’d):** upward value bag — `Last.provide` / Requires / Provides — see [view-provide-draft](../handoffs/view-provide-draft.md)
 
 Do **not** write `<Hello />` while `Hello` still has open `R` — that is a type error. Convert via bag compose and/or `mount` first.
 
