@@ -93,8 +93,8 @@ export type Shipped_PoolCard_LongAnnotate = View.View<
 /** Defaults to ViewProps. Hover: `Views.ViewProps` fn. */
 export type Shipped_View_Default = View.View;
 
-/** Annotations bag on constructor — prefer `PoolCard.annotations.size`. */
-export type Shipped_PoolCard_size = (typeof PoolCard)["annotations"]["size"];
+/** Annotations bag — `View.AnnotationsOf` (was `StaticsOf`). */
+export type Shipped_PoolCard_size = View.AnnotationsOf<typeof PoolCard>["size"];
 export type Shipped_PoolCard_key = (typeof PoolCard)["key"];
 
 /** Instance metadata (ServiceClass.Shape) — hover for key / Service brands. */
@@ -171,14 +171,14 @@ export class PoolDetail extends Views.Detail.Tag<PoolDetail>()(
 ) {}
 
 export type Shipped_PoolDetail_Service = PoolDetail["Service"];
-export type Shipped_PoolDetail_size = (typeof PoolDetail)["annotations"]["size"];
+export type Shipped_PoolDetail_size = View.AnnotationsOf<typeof PoolDetail>["size"];
 
 export class PoolPage extends Views.Page.Tag<PoolPage>()(
   "hyperlink-ts/examples/apps/view-scratch/hover-types/PoolPage",
 ) {}
 
 export type Shipped_PoolPage_Service = PoolPage["Service"];
-export type Shipped_PoolPage_size = (typeof PoolPage)["annotations"]["size"];
+export type Shipped_PoolPage_size = View.AnnotationsOf<typeof PoolPage>["size"];
 
 // =============================================================================
 // 5. POC flat Card<Self, Props>() — compare hover to shipped §3

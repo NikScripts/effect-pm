@@ -11,8 +11,15 @@ DI mint/`provide` live on `last-ts/View` (or `hyperlink-ts/ui/View`). Dashboard
 size chrome + bind live on `hyperlink-ts/ui/Views`.
 
 Prototype-managed metadata is a single **annotations** bag (Effect/ZIO-style —
-any keys): `tag.annotations`. Type it with **`View.AnnotationsOf<typeof Tag>`**
-(the old `StaticsOf` helper). Class surface stays free for app `static` fields.
+any keys). Getter helper (same role as `Group.members`):
+
+```ts
+View.annotations(PoolCard).size
+View.annotations(PoolCard).spec
+type Size = View.AnnotationsOf<typeof PoolCard>["size"] // was StaticsOf
+```
+
+Class surface stays free for app `static` fields.
 
 ## One-shot mint (common path)
 
@@ -39,9 +46,9 @@ class PoolPage extends Views.Page.Tag<PoolPage>()(
   { spec: { kind: "app/queue" } as const },
 ) {}
 
-PoolCard.annotations.size
+View.annotations(PoolCard).size
 //                        ^?
-PoolCard.annotations.size._tag
+View.annotations(PoolCard).size._tag
 //                             ^?
 
 export const layer = Layer.mergeAll(
@@ -66,8 +73,7 @@ void label
 Provide skins with **`View.provide(Tag, impl)`** or **`Tag.provide(impl)`**. Props infer from
 the Tag. Annotate skins with **`PoolCard["Service"]`** (no `typeof`). Sizes are
 `Data.TaggedEnum` — match with `ViewKind.$match` (or `Match.tag` on a
-`Views.ViewKind`-typed value). Read size/spec via **`Tag.annotations`** /
-type with **`View.AnnotationsOf<typeof Tag>`**.
+`Views.ViewKind`-typed value). Read size/spec via **`View.annotations(Tag)`**.
 
 ## Extra props
 

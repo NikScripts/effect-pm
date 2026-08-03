@@ -92,8 +92,7 @@ export const SizeChrome: View.OpenPrototype<ViewProps, WithSize> = View.Prototyp
 /**
  * Size-chrome add-ons — {@link SizeChrome} with `annotations.size` fulfilled.
  * Mint with `Views.Card.Tag<Self, Props?>()(key, annotations?)` — bag merges into
- * `.annotations` (not flattened onto the class). Type the bag with
- * {@link View.AnnotationsOf}.
+ * `.annotations` (not flattened onto the class). Read with {@link View.annotations}.
  * Matcher components are **not** these — use `Views.react(…).Card` or {@link useMatch}.
  *
  * @public
@@ -277,7 +276,7 @@ export const bind: {
       const Component = yield* view;
       const bound = {
         key: view.key,
-        kind: view.annotations.size,
+        kind: View.annotations(view).size,
         Component,
       };
       if (typeof targetOrKind === "string") {
@@ -308,14 +307,14 @@ export const only = <Id1, Id2 = never, Id3 = never>(
       const c1 = yield* v1;
       bounds.push({
         key: v1.key,
-        kind: v1.annotations.size,
+        kind: View.annotations(v1).size,
         Component: c1,
       });
       if (v2 !== undefined) {
         const c2 = yield* v2;
         bounds.push({
           key: v2.key,
-          kind: v2.annotations.size,
+          kind: View.annotations(v2).size,
           Component: c2,
         });
       }
@@ -323,7 +322,7 @@ export const only = <Id1, Id2 = never, Id3 = never>(
         const c3 = yield* v3;
         bounds.push({
           key: v3.key,
-          kind: v3.annotations.size,
+          kind: View.annotations(v3).size,
           Component: c3,
         });
       }

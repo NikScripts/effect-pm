@@ -122,8 +122,7 @@ export type PropsOf<T> = T extends Prototype<infer Props, infer _R, infer _A>
       : never;
 
 /**
- * Annotations bag from a {@link Prototype} or minted Tag
- * (`Tag.annotations` / {@link ViewHandle.annotations}).
+ * Annotations bag type from a {@link Prototype} or minted Tag.
  *
  * @example
  * ```ts
@@ -137,6 +136,22 @@ export type AnnotationsOf<P> = P extends Prototype<infer _P, infer _R, infer A>
   : P extends { readonly annotations: infer A }
     ? A
     : never;
+
+/**
+ * Get the annotations bag back out.
+ *
+ * @example
+ * ```ts
+ * View.annotations(PoolCard).size
+ * View.annotations(PoolCard).spec
+ * ```
+ *
+ * @category getters
+ * @public
+ */
+export const annotations = <A extends AnyAnnotations>(self: {
+  readonly annotations: A;
+}): A => self.annotations;
 
 /**
  * Open {@link Prototype} Requirement (debt). `{}` means fulfilled.

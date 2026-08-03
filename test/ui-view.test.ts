@@ -151,8 +151,8 @@ describe("Views.group + kit.for", () => {
 
 describe("View.Tag / Prototype", () => {
   it("card prototype stamps size annotation", () => {
-    expect(PoolCard.annotations.size).toEqual(Views.ViewKind.Card());
-    expect(PoolDetail.annotations.size).toEqual(Views.ViewKind.Detail());
+    expect(View.annotations(PoolCard).size).toEqual(Views.ViewKind.Card());
+    expect(View.annotations(PoolDetail).size).toEqual(Views.ViewKind.Detail());
     expect(PoolCard.key).toBe("hyperlink/view/pool-card");
   });
 
@@ -162,8 +162,8 @@ describe("View.Tag / Prototype", () => {
     });
     const Child = Base.Prototype()({ size: Views.ViewKind.Page() });
     class PageView extends Child.Tag<PageView>()("test/page-view") {}
-    expect(PageView.annotations.base).toBe(true);
-    expect(PageView.annotations.size).toEqual(Views.ViewKind.Page());
+    expect(View.annotations(PageView).base).toBe(true);
+    expect(View.annotations(PageView).size).toEqual(Views.ViewKind.Page());
     expect(PageView.key).toBe("test/page-view");
   });
 
@@ -174,8 +174,8 @@ describe("View.Tag / Prototype", () => {
     const Open = Base.Prototype<{}, Views.WithSize>()();
     const Done = Open.Prototype()({ size: Views.ViewKind.Card() });
     class MidCard extends Done.Tag<MidCard>()("test/mid-card") {}
-    expect(MidCard.annotations.base).toBe(true);
-    expect(MidCard.annotations.size).toEqual(Views.ViewKind.Card());
+    expect(View.annotations(MidCard).base).toBe(true);
+    expect(View.annotations(MidCard).size).toEqual(Views.ViewKind.Card());
   });
 
   it("class statics stay free of the annotations bag", () => {
@@ -183,6 +183,6 @@ describe("View.Tag / Prototype", () => {
       static readonly custom = "app" as const;
     }
     expect(FreeCard.custom).toBe("app");
-    expect(FreeCard.annotations.size).toEqual(Views.ViewKind.Card());
+    expect(View.annotations(FreeCard).size).toEqual(Views.ViewKind.Card());
   });
 });
