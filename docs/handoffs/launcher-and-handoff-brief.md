@@ -258,11 +258,11 @@ Owner locked #22–26; Eng on tip:
 
 **No Eng on #35–37 until re-locked** (gate #2). #28–34 are Locked above. Owner rubber-stamped deferral 2026-07-29.
 
-35. **Version / contract gate — superseded by Versioned schema bake (2026-07-30; locked 2026-08-03).** *(design locked, not Eng'd)*
+35. **Version / contract gate — superseded by Versioned schema bake (2026-07-30; locked 2026-08-03).** *(Versioned design locked, not Eng'd)*
     - Binary `contractHash` / `ContractMismatch` stays for whole-Spec drift.
     - Cross-version **payload** path: [`versioned-schema-decisions.md`](./versioned-schema-decisions.md) — per-tip `schemaVersion` (`Schema.Class.identifier` else AST hash); chain has no separate `.id`; retires numeric `withSchemaVersion`.
-    - Proposed (orthogonal, not locked): `Hyperlink.deprecated` (wire+impl, not on Handle); Lookup/Node **update impact** before Launcher spawn.
-    - **Do not Eng** Versioned / deprecated / impact until owner go.
+    - **Queued after Versioned** (documented, no early Eng): `Hyperlink.deprecated` as `Fn.dual` (prefer `.pipe(Hyperlink.deprecated)`); Lookup/Node **update impact** plan; then explicit A/B / `restartSuccessor`.
+    - **Do not Eng** Versioned until owner go; do not start deprecated/impact until Versioned v1 finishes.
 
 36. **Lookup-node handoff = explicitly deferred (not special-cased in C v1).**
     - Soft-bake / IPC Lookup topology stays B.
