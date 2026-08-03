@@ -114,6 +114,9 @@ export const layer = View.provide(DenseCard, (props) => {
 
 Naked (no size): `View.Tag<Greeter, { name: string }>()("…")`.
 
+Nested JSX requirements (child → parent → fn) with `jsxImportSource: "last-ts"`:
+[Typed JSX (Views)](/docs/view-typed-jsx) — Twoslash + live Radix demo.
+
 ## Requirement (open chain)
 
 Annotations **Requirement** debt can be declared on the root

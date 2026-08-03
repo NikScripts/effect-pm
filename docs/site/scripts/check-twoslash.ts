@@ -30,7 +30,7 @@ files.sort();
 await loadHighlighter();
 
 const fenceRe =
-  /\{\.twoslash([^}]*)\}\s*\n```\s*ts\n([\s\S]*?)```/g;
+  /\{\.twoslash([^}]*)\}\s*\n```\s*tsx?\n([\s\S]*?)```/g;
 
 const includeFromAttrs = (attrs: string): string | undefined => {
   const m = /\binclude\s*=\s*"([^"]+)"/.exec(attrs);

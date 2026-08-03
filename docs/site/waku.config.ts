@@ -107,6 +107,9 @@ export default defineConfig({
           new URL("./src/ui/Router.tsx", import.meta.url),
         ),
         "hyperlink-ts": fileURLToPath(new URL("../../src", import.meta.url)),
+        "last-ts": fileURLToPath(
+          new URL("../../packages/last-ts/src", import.meta.url),
+        ),
         // Package source pulls `waku/router/client` via repo root — pin to THIS
         // app's waku so hooks share the site's Router context (no dual instance).
         "waku/router/client": fileURLToPath(

@@ -94,9 +94,13 @@ const compilerOptions: ts.CompilerOptions = {
   allowImportingTsExtensions: true, // effect-smol source imports with explicit `.ts` — so the same
   noEmit: true, // twoslasher renders both our package (extension-less) and effect deps (gen-hovers);
   baseUrl: repoRoot, // noEmit is required alongside allowImportingTsExtensions (twoslash never emits)
+  jsx: ts.JsxEmit.ReactJSX,
+  // Per-file `@jsxImportSource last-ts` wins for typed-View demos; default stays React.
   paths: {
     "hyperlink-ts": ["src/index.ts"],
     "hyperlink-ts/*": ["src/*"],
+    "last-ts": ["packages/last-ts/src/index.ts"],
+    "last-ts/*": ["packages/last-ts/src/*"],
   },
 };
 

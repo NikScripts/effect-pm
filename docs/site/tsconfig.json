@@ -26,6 +26,12 @@
       ],
       "hyperlink-ts/*": [
         "../../src/*"
+      ],
+      "last-ts": [
+        "../../packages/last-ts/src/index.ts"
+      ],
+      "last-ts/*": [
+        "../../packages/last-ts/src/*"
       ]
     },
     "plugins": [

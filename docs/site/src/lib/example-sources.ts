@@ -29,6 +29,7 @@ const modules = import.meta.glob(
     "../../../../examples/config/**/*.ts",
     "../../../../examples/observe/**/*.ts",
     "../../../../examples/ui/**/*.ts",
+    "../../../../examples/ui/**/*.tsx",
     "../../../../examples/scenarios/**/*.ts",
     "../../../../examples/shared/**/*.ts",
   ],

@@ -31,6 +31,7 @@ let demoIslands: {
   gate?: React.ComponentType;
   hyperlink?: React.ComponentType;
   listen?: React.ComponentType<{ defaultProto?: string }>;
+  viewJsx?: React.ComponentType;
 } = {};
 
 const collectFenceLangs = (n: any, out: Set<string> = new Set()): Set<string> => {
@@ -53,6 +54,9 @@ const loadDemoIslands = async (doc: any): Promise<void> => {
   }
   if (langs.has("listen")) {
     demoIslands.listen = (await import("../islands/ListenProtocol.js")).ListenProtocol;
+  }
+  if (langs.has("view-jsx")) {
+    demoIslands.viewJsx = (await import("../islands/ViewJsxIsland.js")).ViewJsxIsland;
   }
 }
 
@@ -299,6 +303,11 @@ const toReact = (n: any): React.ReactNode => {
       if (n.lang === "hyperlink") {
         return demoIslands.hyperlink !== undefined
           ? h(demoIslands.hyperlink, { key: keySeq++ })
+          : null;
+      }
+      if (n.lang === "view-jsx") {
+        return demoIslands.viewJsx !== undefined
+          ? h(demoIslands.viewJsx, { key: keySeq++ })
           : null;
       }
       if (n.lang === "install") return h(PackageInstall, { key: keySeq++, packages: n.text });
