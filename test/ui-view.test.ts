@@ -3,6 +3,7 @@
  */
 import { describe, expect, it } from "@effect/vitest";
 import { Layer, Schema } from "effect";
+import * as Last from "last-ts/Last";
 import * as Group from "../src/Group";
 import * as View from "../src/ui/View";
 import * as WorkPool from "../src/WorkPool";
@@ -150,10 +151,12 @@ describe("Views.group + kit.for", () => {
 });
 
 describe("View.Tag / Prototype", () => {
-  it("card prototype stamps size annotation", () => {
+  it("card prototype stamps size annotation + Last kind", () => {
     expect(View.annotations(PoolCard).size).toEqual(Views.ViewKind.Card());
     expect(View.annotations(PoolDetail).size).toEqual(Views.ViewKind.Detail());
     expect(PoolCard.key).toBe("hyperlink/view/pool-card");
+    expect(Last.kindOf(PoolCard)).toBe(View.kind);
+    expect(Last.kindOf(PoolDetail)).toBe("last-ts/View");
   });
 
   it("Prototype chain merges annotations bag", () => {

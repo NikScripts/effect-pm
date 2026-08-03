@@ -10,16 +10,18 @@ A View Tag is a class — same shape as Effect’s `Context.Service`.
 DI mint/`provide` live on `last-ts/View` (or `hyperlink-ts/ui/View`). Dashboard
 size chrome + bind live on `hyperlink-ts/ui/Views`.
 
-Prototype-managed metadata is a single **annotations** bag (Effect/ZIO-style —
-any keys). Getter helper (same role as `Group.members`):
+Prototype-managed metadata is a single **annotations** bag, stamped under a
+symbol on the Tag (not a public class prop). Read with the module getter.
+Factory brand via `Last.kindOf` (`View.kind` = `"last-ts/View"`):
 
 ```ts
 View.annotations(PoolCard).size
 View.annotations(PoolCard).spec
-type Size = View.AnnotationsOf<typeof PoolCard>["size"] // was StaticsOf
+Last.kindOf(PoolCard) // "last-ts/View"
+type Size = View.AnnotationsOf<typeof PoolCard>["size"]
 ```
 
-Class surface stays free for app `static` fields.
+Class surface stays free for app `static` fields. Effect’s `.key` stays on the handle.
 
 ## One-shot mint (common path)
 
@@ -78,7 +80,7 @@ the Tag. Annotate skins with **`PoolCard["Service"]`** (no `typeof`). Sizes are
 ## Extra props
 
 Second type arg on `Tag` — additive props; Prototype annotations as the value arg
-(merged into `.annotations`):
+(merged into the stamped bag; read with `View.annotations`):
 
 {.twoslash}
 ``` ts
@@ -131,8 +133,8 @@ const Base = View.Prototype<{ readonly label: string }>()()
 const Open = Base.Prototype<{}, Views.WithSize>()()
 const Done = Open.Prototype()({ size: Views.ViewKind.Detail() })
 
-PoolCard.annotations.size
-//                        ^?
+View.annotations(PoolCard).size
+//                           ^?
 ```
 
 ## Wire into Dashboard

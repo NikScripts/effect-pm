@@ -7,6 +7,7 @@ import * as WorkPoolView from "../src/ui/WorkPoolView";
 import * as WebWorkPoolView from "../src/web/WorkPoolView";
 import * as WorkPool from "../src/WorkPool";
 
+import * as View from "../src/ui/View";
 import * as Views from "../src/ui/Views";
 
 const Item = Schema.Struct({ n: Schema.Number });
@@ -26,8 +27,10 @@ describe("WorkPoolView packaging", () => {
   it("shared handles match WorkPoolView keys", () => {
     expect(WorkPoolView.PoolCard.key).toBe("hyperlink/view/pool-card");
     expect(WorkPoolView.PoolDetail.key).toBe("hyperlink/view/pool-detail");
-    expect(WorkPoolView.PoolCard.annotations.size).toEqual(Views.ViewKind.Card());
-    expect(WorkPoolView.PoolDetail.annotations.size).toEqual(
+    expect(View.annotations(WorkPoolView.PoolCard).size).toEqual(
+      Views.ViewKind.Card(),
+    );
+    expect(View.annotations(WorkPoolView.PoolDetail).size).toEqual(
       Views.ViewKind.Detail(),
     );
   });

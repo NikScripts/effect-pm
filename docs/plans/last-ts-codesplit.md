@@ -14,8 +14,8 @@
 4. **Module layout (Effect-true):** one file = one namespace. No nested bags (`Last.View` banned).
 5. **Package root like `effect`:** `index` barrels **real** modules only
    (`export * as View from "./View"`, …). No hollow `Last` stub “for later.”
-6. **`Last.ts` lands only when it has a real cross-cutting API** (flat `export const`s).
-   Until then the product/npm name is still **last-ts** / Last.ts; subpaths carry the surface.
+6. **`Last.ts`** — cross-cutting handle introspection (`kindSym` / `kindOf`). Product/npm
+   name remains **last-ts** / Last.ts; module subpaths carry the rest of the surface.
 7. **`last-ts/View` = DI only** — `Tag` / `Prototype` / `provide` / generic `Chrome`.
    **No** `ViewKind`, Card/Detail/Page, Registry, bind/only, react matchers, or compose.
 8. **Do not compete on the name `View`.** Hyperlink dashboard surface is **`Views`**
@@ -52,7 +52,8 @@ Effect-shaped: subpaths are the modules; root `index` barrels those namespaces (
 | Subpath | Namespace | Role |
 |---------|-----------|------|
 | `.` | *(barrel)* | `export * as View from "./View"` (etc.) — real modules only |
-| `./View` | `View` | DI kernel only: Tag, Prototype, provide, Chrome |
+| `./Last` | `Last` | `kindSym` / `kindOf` — factory brands on stamped handles |
+| `./View` | `View` | DI kernel only: Tag, Prototype, provide, Chrome, `annotations` / `kind` |
 | `./Route` | `Route` | Catalog: make/get/group/match/urlBuilder/fileRoot — **no** Group Target chrome |
 | `./Router` | `Router` | memory/history/Provider/Link/Outlet |
 | `./Router/waku` | *(waku module)* | Waku layer adapters |

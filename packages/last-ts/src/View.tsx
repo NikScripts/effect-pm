@@ -4,10 +4,14 @@
  * View — Effect service for DI components (React × Effect / Last).
  * Tag, Prototype, provide only. No registry. Dashboard contribution surface
  * is Hyperlink `Views`.
+ *
+ * Prototype metadata is stamped under {@link annotationsSym}; read with
+ * {@link annotations}. Factory brand is {@link kind} via {@link Last.kindSym}.
  */
 import * as React from "react";
 import { Context, Layer } from "effect";
 import type * as Types from "effect/Types";
+import * as Last from "./Last";
 
 // =============================================================================
 // Keys / layout hints
@@ -18,6 +22,23 @@ type Flat<T extends object> = { readonly [K in keyof T]: T[K] } & {};
 
 /** Stable view id — prefer `app/view/<name>`. @public */
 export type ViewKey = string;
+
+/**
+ * Factory brand stamped on every View Tag (`Last.kindOf(tag)`).
+ *
+ * @public
+ */
+export const kind = "last-ts/View" as const;
+
+/**
+ * Where Prototype-managed metadata (size, spec, …) is stowed on a minted Tag.
+ * Read with {@link annotations} — not a public prop on the class.
+ *
+ * @internal
+ */
+export const annotationsSym: unique symbol = Symbol.for(
+  "last-ts/View/annotations",
+);
 
 /**
  * Layout / shell hints for a provided component (width, selection, …).
@@ -133,12 +154,12 @@ export type PropsOf<T> = T extends Prototype<infer Props, infer _R, infer _A>
  */
 export type AnnotationsOf<P> = P extends Prototype<infer _P, infer _R, infer A>
   ? A
-  : P extends { readonly annotations: infer A }
+  : P extends { readonly [annotationsSym]: infer A }
     ? A
     : never;
 
 /**
- * Get the annotations bag back out.
+ * Get the annotations bag from a minted Tag (symbol slot — not a class prop).
  *
  * @example
  * ```ts
@@ -150,8 +171,8 @@ export type AnnotationsOf<P> = P extends Prototype<infer _P, infer _R, infer A>
  * @public
  */
 export const annotations = <A extends AnyAnnotations>(self: {
-  readonly annotations: A;
-}): A => self.annotations;
+  readonly [annotationsSym]: A;
+}): A => self[annotationsSym];
 
 /**
  * Open {@link Prototype} Requirement (debt). `{}` means fulfilled.
@@ -192,8 +213,9 @@ export type FulfilledPrototype<
 /**
  * Constructable View handle from {@link Prototype.Tag}.
  *
- * Prototype-managed metadata lives under {@link ViewHandle.annotations}
- * (Effect/ZIO-style — any keys). Class surface stays free for app `static`s.
+ * Prototype metadata is under {@link annotationsSym} (read via {@link annotations}).
+ * Factory brand is {@link kind} under {@link Last.kindSym}. Class surface stays
+ * free for app `static`s.
  *
  * @public
  */
@@ -203,8 +225,8 @@ export type ViewHandle<
   Props extends object,
   Annotations extends AnyAnnotations = {},
 > = Context.ServiceClass<Self, K, View<Props>> & {
-  /** Prototype-managed annotations bag (size, spec, …). */
-  readonly annotations: Annotations;
+  readonly [annotationsSym]: Annotations;
+  readonly [Last.kindSym]: typeof kind;
   /** Phantom — component props. */
   readonly Type: Props;
   /** Provide this Tag’s impl — same as {@link provide}`(this, impl)`. */
@@ -225,6 +247,9 @@ export type Type<T> = T extends { readonly Type: infer P } ? P : never;
  * later `.Prototype<Props, Requirement>()` step (additive). Annotations discharge
  * debt when they satisfy the merged Requirement (`{}` = fulfilled).
  *
+ * The builder exposes {@link Prototype.annotations} while chaining; minted Tags
+ * stamp the bag under {@link annotationsSym} instead.
+ *
  * @public
  */
 export interface Prototype<
@@ -232,6 +257,7 @@ export interface Prototype<
   in out Requirement extends AnyAnnotations = {},
   out Annotations extends AnyAnnotations = {},
 > {
+  /** Accumulator while chaining — not present on minted Tags. */
   readonly annotations: Annotations;
   /**
    * Extend props / open more Requirement debt (type args) and/or annotations (value).
@@ -308,7 +334,8 @@ const makePrototype = <
       } as NextAnnotations;
       const base = Context.Service<Self, View<NextProps>>()(key);
       return Object.assign(base, {
-        annotations: merged,
+        [annotationsSym]: merged,
+        [Last.kindSym]: kind,
         Type: undefined as unknown as NextProps,
         provide: (impl: View<NextProps>): Layer.Layer<Self> =>
           Layer.succeed(base, impl),
@@ -351,9 +378,8 @@ export const Prototype =
 export const Tag = Prototype()().Tag;
 
 /**
- * A View service handle (DI identity + key). Prototype metadata is on
- * {@link ViewHandle.annotations} when minted from a Prototype — type it with
- * {@link AnnotationsOf}.
+ * A View service handle (DI identity + key). Prototype metadata via
+ * {@link annotations}; factory brand via {@link Last.kindOf}.
  *
  * @public
  */

@@ -48,7 +48,7 @@ PoolCard.provide((props) => {
   return null;
 });
 
-expectTypeOf(PoolCard.annotations.size).toEqualTypeOf<Views.CardKind>();
+expectTypeOf(View.annotations(PoolCard).size).toEqualTypeOf<Views.CardKind>();
 
 const withOnly = Layer.mergeAll(
   Views.bind(WorkPool.kind, PoolCard),

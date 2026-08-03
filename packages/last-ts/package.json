@@ -51,6 +51,10 @@
       "types": "./src/View.tsx",
       "default": "./src/View.tsx"
     },
+    "./Last": {
+      "types": "./src/Last.ts",
+      "default": "./src/Last.ts"
+    },
     "./vite": {
       "types": "./src/vite/fileRouter.ts",
       "default": "./src/vite/fileRouter.ts"

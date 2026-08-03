@@ -91,8 +91,8 @@ export const SizeChrome: View.OpenPrototype<ViewProps, WithSize> = View.Prototyp
 
 /**
  * Size-chrome add-ons — {@link SizeChrome} with `annotations.size` fulfilled.
- * Mint with `Views.Card.Tag<Self, Props?>()(key, annotations?)` — bag merges into
- * `.annotations` (not flattened onto the class). Read with {@link View.annotations}.
+ * Mint with `Views.Card.Tag<Self, Props?>()(key, annotations?)` — bag stamps under
+ * {@link View.annotationsSym}. Read with {@link View.annotations}`(tag)`.
  * Matcher components are **not** these — use `Views.react(…).Card` or {@link useMatch}.
  *
  * @public
@@ -239,10 +239,10 @@ export const layer: Layer.Layer<Registry> = Layer.sync(Registry, makeRegistrySer
  */
 export const base: Layer.Layer<Registry> = layer;
 
-/** Sized View handle — {@link WithSize} required on `.annotations` for {@link bind} / {@link only}. @internal */
+/** Sized View handle — {@link WithSize} required via {@link View.annotations} for {@link bind} / {@link only}. @internal */
 type ViewService<Id> = {
   readonly key: View.ViewKey;
-  readonly annotations: WithSize & { readonly spec?: unknown };
+  readonly [View.annotationsSym]: WithSize & { readonly spec?: unknown };
 } & Context.Key<Id, Component>;
 
 /** Avoid `Foo<Id>>` in .tsx return positions (parsed as JSX). */
