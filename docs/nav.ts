@@ -40,6 +40,7 @@ export const nav: ReadonlyArray<NavGroup> = [
       "identity-coordinator",
       "policy",
       "lifecycle",
+      "versioned",
       "configuration",
     ],
   },

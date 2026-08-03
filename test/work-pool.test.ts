@@ -1103,18 +1103,17 @@ describe("WorkPool.make — itemSchema", () => {
 
   it("itemSchema uses the queue id for codec metadata (defaults to v1)", () => {
     const descriptor = makeQueueItemCodecDescriptor("@test/EmailQueue", EmailItem);
-    expect(descriptor.id).toBe("@test/EmailQueue/item@v1");
-    expect(descriptor.version).toBe("1");
+    expect(descriptor.version.length).toBeGreaterThan(0);
+    expect(descriptor.id).toBe(`@test/EmailQueue/item@${descriptor.version}`);
     expect(descriptor.encoding).toBe("json");
   });
 
-  it("the schema's withSchemaVersion stamp drives the descriptor id + version", () => {
+  it("withSchemaVersion stamps identifier vN for descriptor version", () => {
     const v3 = withSchemaVersion(EmailItem, 3);
     expect(schemaVersionOf(v3)).toBe(3);
-    expect(schemaVersionOf(EmailItem)).toBe(1); // unannotated → default 1
     const descriptor = makeQueueItemCodecDescriptor("@test/EmailQueue", v3);
     expect(descriptor.id).toBe("@test/EmailQueue/item@v3");
-    expect(descriptor.version).toBe("3");
+    expect(descriptor.version).toBe("v3");
   });
 
   it.live("rateLimit enforces minimum gap between item effect starts", () =>

@@ -66,6 +66,8 @@ export const serviceReadiness = Schema.Struct({
   detail: Schema.optionalKey(Schema.String),
   /** Wire-contract fingerprint (F4) — stamped at serve from the tag Spec. */
   contractHash: Schema.optionalKey(Schema.String),
+  /** Tip id for a Versioned (or plain) WorkPool payload leaf — beside {@link contractHash}. */
+  schemaVersion: Schema.optionalKey(Schema.String),
 });
 
 /** A served HyperService's readiness as reported by its node. @internal */

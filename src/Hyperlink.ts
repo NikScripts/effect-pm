@@ -129,6 +129,7 @@ import {
   UnaddressedNode,
 } from "./internal/nodeCore";
 import { hashContract } from "./internal/contractHash";
+import { schemaVersionFromTag } from "./internal/versioned";
 import {
   bindNodeProtocolBuilders,
   connectAddressed,
@@ -4321,6 +4322,8 @@ export interface ServedHyperlink {
   readonly readiness: Effect.Effect<Readiness>;
   /** F4 wire-contract fingerprint — stamped at serve from the tag Spec. */
   readonly contractHash: string;
+  /** WorkPool payload tip id when the served tag carries an item schema. */
+  readonly schemaVersion?: string;
   /** Opt-in handoff fn (serve `{ handoff }`, Locked #39); materialized in {@link runServedHandoffs}. */
   readonly handoff?: ServedHandoff;
   /** Node log key when the served tag is bound to a {@link Node} (`options.node`). */
@@ -4529,6 +4532,7 @@ const getOrCreateSharedHandlerLayer = (
           onSome: (registry) => {
             const bound = nodeOf(tag);
             const boundKinds = nodeKindsOf(tag);
+            const schemaVersion = schemaVersionFromTag(tag);
             return registry.register({
               wireKey,
               group: retype(group as never),
@@ -4536,6 +4540,7 @@ const getOrCreateSharedHandlerLayer = (
               contractHash: hashContract(wireKey, kind, spec),
               readiness: Effect.suspend(() => allReady(state.readiness)),
               // Shared instance handoffs live on SharedWireState — see {@link runServedHandoffs}.
+              ...(schemaVersion !== undefined ? { schemaVersion } : {}),
               ...(bound !== undefined ? { nodeLogKey: bound.key } : {}),
               ...(boundKinds.length > 0 ? { nodeKinds: boundKinds } : {}),
             });
@@ -4670,6 +4675,7 @@ const serveRemoteHandlers = (
                 : nodeKindsOf(tag);
             const kind = kindOf(tag) ?? "hyperlink";
             const handoff = servedHandoff(tag, wireImpl, handoffFn);
+            const schemaVersion = schemaVersionFromTag(tag);
             return registry.register({
               wireKey: tag[wireKeySym],
               group: retype(group as never),
@@ -4677,6 +4683,7 @@ const serveRemoteHandlers = (
               contractHash: hashContract(tag[wireKeySym], kind, tag[specSym]),
               readiness: readinessCheckServed(tag, wireImpl),
               ...(handoff !== undefined ? { handoff } : {}),
+              ...(schemaVersion !== undefined ? { schemaVersion } : {}),
               ...(bound !== undefined ? { nodeLogKey: bound.key } : {}),
               ...(boundKinds.length > 0 ? { nodeKinds: boundKinds } : {}),
             });

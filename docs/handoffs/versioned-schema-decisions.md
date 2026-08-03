@@ -1,6 +1,6 @@
 # Decisions — `Versioned` schema migrations (cross-version handoff)
 
-**Status:** Design locked (owner chat 2026-08-02 / 2026-08-03) — **not Eng'd**. Replaces vague #35 “ranges” with a concrete Schema upcaster chain.  
+**Status:** Design locked (owner chat 2026-08-02 / 2026-08-03) — **Versioned v1 Eng'd** 2026-08-03. Replaces vague #35 “ranges” with a concrete Schema upcaster chain.  
 **Mission:** [`node-handoff-mission.md`](./node-handoff-mission.md) (zero-downtime + cross-version skew as normal).  
 **Brief:** [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md) (#35 deferred → this bake).  
 **Opened:** 2026-07-30 (Agent 5 + owner chat).

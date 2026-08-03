@@ -13,8 +13,8 @@ const LocalMethodTypeId = "~hyperlink-ts/Hyperlink/LocalMethod";
 const DefaultMethodTypeId = "~hyperlink-ts/Hyperlink/DefaultMethod";
 const MethodTypeId = "~hyperlink-ts/Hyperlink/Method";
 
-/** Strip annotation / encoding noise so two equivalent schemas fingerprint the same. */
-const fingerprintAst = (ast: unknown): unknown => {
+/** Strip annotation / encoding noise so two equivalent schemas fingerprint the same. @internal */
+export const fingerprintAst = (ast: unknown): unknown => {
   const seen = new WeakSet<object>();
   const walk = (node: unknown): unknown => {
     if (node === null || typeof node !== "object") {
