@@ -30,14 +30,11 @@ const loaded = loadExampleIncludeFromDisk("../..", include, (abs) =>
   readFileSync(abs, "utf8"),
 );
 if (loaded === undefined) throw new Error("missing example");
-// Anti-cheat: demo must not witness Inner’s R onto Outer via stamp type args.
-if (/stamp\s*</.test(loaded) || /ServicesOf\s*<\s*typeof\s+Inner/.test(loaded)) {
+// Anti-cheat: no witnessing Inner’s R onto parents via stamp/ServicesOf.
+if (/stamp\s*</.test(loaded) || /ServicesOf\s*</.test(loaded)) {
   throw new Error(
-    "demo must not use View.stamp<…> or ServicesOf<typeof Inner> (no fake R)",
+    "demo must not use stamp<…> or ServicesOf<…> (no fake R witnesses)",
   );
-}
-if (!/function Middle\b/.test(loaded) && !/const Middle\b/.test(loaded)) {
-  throw new Error("demo must include a plain Middle component");
 }
 const code = prepareExampleForTwoslash(loaded, include);
 const result = createTwoslasher({ vfsRoot: repoRoot, compilerOptions })(
@@ -52,16 +49,16 @@ if (result.errors?.length) {
 const queries = (result.queries ?? []).map((q) => q.text);
 const joined = queries.join("\n");
 console.log("queries:\n", joined);
-const innerQ = queries.find((q) => q.includes("Inner"));
-const outerQ = queries.find((q) => q.includes("Outer"));
-if (innerQ === undefined || outerQ === undefined) {
-  throw new Error(`expected Inner/Outer queries, got:\n${joined}`);
-}
-if (!innerQ.includes("Greeter")) {
-  throw new Error(`Inner must show Greeter, got: ${innerQ}`);
-}
-if (joined.includes(": any") || joined.includes("<{}, any>")) {
-  throw new Error(`queries must not show any:\n${joined}`);
+for (const name of ["Inner", "Middle", "Outer"] as const) {
+  const q = queries.find((line) => line.includes(` ${name}:`) || line.includes(`const ${name}:`));
+  if (q === undefined) {
+    throw new Error(`missing ${name} query:\n${joined}`);
+  }
+  if (!q.includes("Greeter")) {
+    throw new Error(`${name} must show Greeter, got: ${q}`);
+  }
+  if (q.includes("any")) {
+    throw new Error(`${name} must not be any, got: ${q}`);
+  }
 }
 console.log("ok");
-console.log("Outer query:", outerQ);

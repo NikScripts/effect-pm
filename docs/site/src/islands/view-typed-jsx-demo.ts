@@ -1,6 +1,6 @@
 /**
  * Layer + components for the typed-JSX docs island.
- * Kept separate from the Twoslash example (no `@jsxImportSource last-ts` here).
+ * Runtime mirror of the Twoslash tree (createElement — no last-ts jsx on client).
  */
 import * as React from "react";
 import { Atom } from "effect/unstable/reactivity";
@@ -11,24 +11,21 @@ class Greeter extends Context.Service<Greeter, string>()(
   "docs/site/view-typed-jsx/Greeter",
 ) {}
 
-/** Same shape as the Twoslash `Inner`. */
 export const Inner = View.gen(function* () {
   const name = yield* Greeter;
   return (_props: {}) =>
     React.createElement("span", { "data-demo": "inner" }, `hello ${name}`);
 });
 
-/** Plain middle — not a View. Nests Inner. */
-export function Middle(_props: {}) {
-  return React.createElement(
+export const Middle = View.succeed((_props: {}) =>
+  React.createElement(
     "aside",
     { "data-demo": "middle" },
     React.createElement(Inner, {}),
-  );
-}
+  ),
+);
 
-/** Outer — View.stamp, no type args; nests Middle. */
-export const Outer = View.stamp((_props: {}) =>
+export const Outer = View.succeed((_props: {}) =>
   React.createElement(
     "div",
     { "data-demo": "outer" },

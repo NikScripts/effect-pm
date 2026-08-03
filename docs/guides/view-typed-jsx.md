@@ -7,14 +7,19 @@
 <!-- docs-site-link:end -->
 # Typed JSX — nested View requirements
 
-Hover **`Inner`** then **`Outer`**. Outer is a plain `View.stamp` (no type
-parameters) around a normal `Middle` function that nests `Inner`.
+Hover **`Inner`**, then **`Middle`**, then **`Outer`**. Only Inner `yield*`s
+`Greeter`. Middle and Outer have no yields — they only nest the child via typed
+`jsx` / `jsxs`. All three should show `Greeter`.
 
 ## Hover these values
 
 {.twoslash include="examples/ui/view-typed-jsx.tsx"}
 ``` tsx
 ```
+
+TypeScript types `<Foo />` as a black-box `JSX.Element`. The `R` channel is the
+`jsx` / `jsxs` call types from `last-ts/jsx-runtime` (what the JSX transform
+emits).
 
 ## Live render
 
