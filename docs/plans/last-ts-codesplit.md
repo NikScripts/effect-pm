@@ -16,9 +16,10 @@
    (`export * as View from "./View"`, …). No hollow `Last` stub “for later.”
 6. **`Last.ts`** — cross-cutting handle introspection (`kindSym` / `kindOf`). Product/npm
    name remains **last-ts** / Last.ts; module subpaths carry the rest of the surface.
-7. **`last-ts/View`** — DI (`Tag` / `Prototype` / `provide` / `Chrome`) **plus** plain
-   export (`fromEffect` / `gen` / `succeed`). **No** dashboard `ViewKind`, Card/Detail/Page
-   size chrome, Registry, bind/only, react matchers, or compose (those are Hyperlink `Views`).
+7. **`last-ts/View`** — DI (`Tag` / `Prototype` / `provide` / annotations) **plus** plain
+   export (`fromEffect` / `gen` / `succeed`). **No** dashboard matchers/Registry/size chrome.
+   **`ChromeProvider` is Hyperlink-shaped** (shell hints) — park/move off last-ts; do not
+   treat it as core Last API. Hyperlink `Views` match/kit is v1 and needs a composable redesign.
 8. **Do not compete on the name `View`.** Hyperlink dashboard surface is **`Views`**
    (`hyperlink-ts/ui/Views`): size ancestors (`Card` / `Detail` / `Page`), Registry, bind/only,
    react kit, compose. Apps: `import * as View from "last-ts/View"` (or thin

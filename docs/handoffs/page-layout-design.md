@@ -223,31 +223,33 @@ export default Page.build(DocsChapter) // reads stamp + layout from Tag
 
 Tag does **not** own title builtins. Values via constructor bag, `Last.provide` in gen, or both (last wins).
 
-### 5. `Page.gen` / `Last.provide` — Effect channel
+### 5. `Last.provide` / `Last.context` — Effect channel
 
 ```ts
-export default Book.static(
-  Page.gen(function* () {
-    yield* Last.provide({ title: "Hello" })
-    // later override — last wins
-    yield* Last.provide({ title: "Hello — overridden" })
-    const chapter = yield* loadChapter
-    return (props: { chapter: string }) => <Article chapter={chapter} />
-  }),
-  // optional seed values (merged, then gen provides win on conflict)
-  { description: "…" },
-)
-```
+// Deep View
+export const ChapterHeading = View.gen(function* () {
+  yield* Last.provide({ title: "Routing" })
+  return () => <h1>Routing</h1>
+})
 
-Semantics:
+// Anywhere between require and provide
+export const Crumb = View.gen(function* () {
+  const { title } = yield* Last.context // or Last.context<Pick<Req, "title">>
+  return () => <span>{title}</span>
+})
+
+// Override later — last wins
+yield* Last.provide({ title: "Routing — edit" })
+```
 
 | Mechanism | Role |
 |-----------|------|
-| `values` arg on `static`/`dynamic`/`build` | Seed bag; must already satisfy Requirement **or** leave debt for gen |
-| `yield* Last.provide(partial)` | Merge into bag; **last wins** per key; narrows type-level Provided |
-| End of `Page.gen` | `Provided` must satisfy Layout Requirement (`{}` debt) |
+| Seed arg on `Page.static(Book, Comp, seed?)` | Optional initial bag |
+| `yield* Last.provide(partial)` | Merge; **last wins**; contributes **Provides** on that View export |
+| `yield* Last.context` | Read bag (partial OK if types allow) |
+| Closed compose against Layout/View Requirement | **Provides** must cover **Requires** |
 
-`Last.provide` is cross-cutting (pages, later views). Storage: fiber/Context bag for the mint; stamp snapshot for the router.
+Runtime bag is ambient (Context / fiber ref) so middle Views can read/write. Types travel on **View exports + compose**, not through JSX.
 
 ### 6. What lives on the stamp (runtime)
 
@@ -365,24 +367,26 @@ export default Book.build(
 
 | Phase | Work |
 |-------|------|
-| **L0** | `Layout` module: Prototype + Requirement discharge + `static`/`dynamic`/`build` on fulfilled layout |
-| **L1** | `Last.provide` / `getValues` + bag merge (last wins); wire into `Page.gen` |
-| **L2** | Demote builtin meta off `Page` stamp; migrate helpers to layout-centric |
-| **L3** | `Page.Tag` mint with layout arg; `Page.build(Tag)` |
-| **L4** | Nested layouts; file-router stamp reads layout+values |
-| **L5** | Docs-site `createPages` cutover (product) |
+| **V0** | **Views first:** Requirement + Provides on View; `Last.provide` / `Last.context` (+ sync peek); compose/nest that carries types; last-wins |
+| **V1** | Type tests: deep child provides for ancestor require; middle `Last.context` reads; override wins |
+| **L0** | `Layout.make` (non-DI, Outlet chrome) + `Layout.Tag` (DI); same bag as Views |
+| **L1** | `Page.static(Book, …)` / class type param; seed optional; closed-tree discharge |
+| **L2** | Demote builtin meta off Page stamp; Build `paths` only |
+| **L3** | Nested layouts; file-router stamp |
+| **L4** | Docs-site `createPages` cutover (product) |
 
-Acceptance: type tests for missing `title`; runtime last-wins; existing codegen demo still green; no Hyperlink imports in last-ts.
+Acceptance (V0): deep provide satisfies parent require at compose; `Last.context` typed; last-wins runtime; no Hyperlink in last-ts.
 
 ---
 
 ## Decision checklist (owner — lock before Eng)
 
-1. **Primary spelling:** Layout-centric `Book.static(Comp, values)` (**recommend**) vs Page-centric only.
-2. **Path source:** file-router implicit vs always-explicit path arg (recommend: implicit in FS modules, explicit overload outside).
-3. **`Page.gen` seed values:** allowed + last-wins with `Last.provide` (**recommend yes**).
-4. **Layout Tag required?** or Prototype value enough for v1 (recommend: Prototype first; Tag optional).
-5. **Sync name:** `Last.getValues` vs `Last.valuesSync` (match View: `getValues`).
+1. **Eng Views-first (V0)** before Layout/Page — **recommend yes**.
+2. **Outlet name:** `Outlet` vs `children` render-prop — **recommend Outlet**.
+3. **Non-DI `Layout.make` + optional `Layout.Tag`** — **recommend yes**.
+4. **Compose API name** for proving Provides→Requires (`View.compose` / `View.nest` / …) — open.
+5. **`Last.context` Effect + `Last.getContext` sync** — **recommend** (mirror annotations / getAnnotations).
+6. Path source for file-router — implicit from disk + explicit overload.
 
 ---
 
@@ -391,20 +395,35 @@ Acceptance: type tests for missing `title`; runtime last-wins; existing codegen 
 ```ts
 import * as Layout from "last-ts/Layout"
 import * as Page from "last-ts/Page"
+import * as View from "last-ts/View"
 import * as Last from "last-ts/Last"
 
-const Book = Layout.Prototype<{ readonly title: string }>()()
+// --- V0: Views ---
+const Shell = View.Prototype<
+  { readonly children?: React.ReactNode },
+  { readonly title: string }
+>()()
 
-export default Book.static(AboutView, { title: "About" })
+const Deep = View.gen(function* () {
+  yield* Last.provide({ title: "Hello" })
+  return () => <span />
+})
 
-export default Book.static(
-  Page.gen(function* () {
-    yield* Last.provide({ title: "Hello" })
-    yield* Last.provide({ title: "Hello — wins" })
-    return AboutView
-  }),
+const Mid = View.gen(function* () {
+  const bag = yield* Last.context
+  return () => <span>{bag.title}</span>
+})
+
+// --- Layout / Page (after V0) ---
+const Book = Layout.make<{ readonly title: string }>()(
+  "app/layout/book",
+  ({ Outlet, values }) => (
+    <>
+      <title>{values.title}</title>
+      <Outlet />
+    </>
+  ),
 )
 
-// aliases
-Page.static(Book, AboutView, { title: "About" })
+export default Page.static(Book, ChapterTree) // Provides come from nested Views
 ```

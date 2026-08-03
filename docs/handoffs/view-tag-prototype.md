@@ -7,11 +7,12 @@
 
 ## Intent
 
-1. **`View.Tag` = THE tool for DI components** (Context.Service). Not chrome-specific.
-2. **Shape is reversed:** Self is the **input props** interface (what the component receives), not a callable service API. `Layer.succeed(PoolCard, Comp)` → `Comp` must accept `PoolCard` as props.
-3. **`View.Prototype`** accumulates **props (type)** + **statics (runtime accessors)** before minting a Tag.
-4. **`card` / `detail` / `page`** are an **add-on** (sized prototypes + matchers). They do **not** own `View.Tag`.
-5. **`View.Card` / `Detail` / `Page` are sized Prototypes.** Matchers live on `View.react` / `compose` kits (`ui.Card`) and `View.useMatch()`.
+1. **`View.Tag` = THE tool for DI components** (Context.Service) on **last-ts**. Not dashboard matchers.
+2. **Shape is reversed:** Self is the **input props** interface (what the component receives), not a callable service API. `Layer.succeed(PoolCard, Comp)` → `Comp` must accept props from the Tag’s Props.
+3. **`View.Prototype`** accumulates **props (type)** + **annotations (runtime bag)** before minting a Tag.
+4. **Dashboard size + Registry + bind + `react` matchers = Hyperlink `Views`.** Not last-ts. Current match/kit is a v1; must be **redesigned into a composable system** later — DI Views are far more than “match Card/Detail/Page.”
+5. **`View.ChromeProvider` / `useChrome`** — shell layout hints (width, selected, …). **Belongs on Hyperlink** (dashboard/TUI shell), not last-ts View core. Move when convenient; do not grow last-ts around it.
+6. **last-ts DI View potential** (beyond match): Layers/`provide`, Prototype Requirement, annotations, `View.gen`/`fromEffect`, upward `Last.provide`/`context`, compose of Requires/Provides, nesting with layouts/pages — matchers are one Hyperlink consumer.
 
 ---
 
