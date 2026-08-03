@@ -88,6 +88,9 @@ Effect RPCs retry on `RpcClientError` while reinstalling to the same seed; strea
 generations under `streamGap`. Orchestration (who binds the sock) is outside Policy — see
 [Launcher](/docs/launcher) and the decisions handoff.
 
+Runnable: [`examples/node/lookup-follow-handoff.ts`](../../examples/node/lookup-follow-handoff.ts)
+(`pnpm run example:node-lookup-follow-handoff`) — fork B bind-retry → release A → follow lands on B.
+
 ### Client verify (addressed `Hyperlink.client`)
 
 | Fragment | Mode |

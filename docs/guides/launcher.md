@@ -164,8 +164,9 @@ spawned. Migration `serve { handoff }` is opt-in on shutdown. Directory conflict
 orchestrated same-address ownership move.
 
 **Lookup A/B (locked):** one address; A/B = successive owners; `Lookup.follow` + Policy for
-the gap (**`Lookup.follow` Eng'd** — compose `Policy.streamGap`). Independent launch (no
-Launcher) still Soft-bakes first node = Lookup. See
+the gap (**follow + ownership handoff recipe Eng'd**). Runnable:
+`pnpm run example:node-lookup-follow-handoff`. Independent launch (no Launcher) still
+Soft-bakes first node = Lookup. See
 [`versioned-schema-decisions.md`](../handoffs/versioned-schema-decisions.md#desired-bring-up-launcher--ensure-lookup-first-locked)
 and [Policy — Lookup.follow](./policy.md#lookupfollow-same-address-lookup-ab).
 

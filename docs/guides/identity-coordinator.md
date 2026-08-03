@@ -145,6 +145,8 @@ See [Policy](/docs/policy).
 **Lookup A→B (same address):** `Lookup.follow(lookupNode)` — hot dialer for Identity /
 Directory / Advice across an orchestrated sock ownership move. `Lookup.client` stays static.
 Compose `Policy.streamGap`; orchestration (start B → shut down A → B binds) is outside Policy.
+Runnable: [`examples/node/lookup-follow-handoff.ts`](../../examples/node/lookup-follow-handoff.ts)
+(`pnpm run example:node-lookup-follow-handoff`).
 
 ### A→B cutover recipe (state transfer)
 

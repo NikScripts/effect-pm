@@ -33,7 +33,7 @@ Living book: [docs/index.md](../docs/index.md) · [API Reference](https://hyperl
 | **WorkPool** | `priority-retry` → `named-lanes` → store / serve / durable / refill / metrics |
 | **Gate** | `gate/unit-and-input` → `store-readback` → `runtime-observer` → http-client → http-api |
 | **Daemon + Soft** | `daemon/store-auto-write` → `typed-failed-error` → serve / result / schedule / configure |
-| **Node & discovery** | `tag-addressed` → … → `identity-coordinator` → `ask-incumbent-takeover` → `drain-yield-refuse` → `handoff-ab-cutover` → `serve-handoff` → `policy-lookup-cutover` → `peers-layer-rebind` → `launch-shutdown` |
+| **Node & discovery** | `tag-addressed` → … → `identity-coordinator` → `ask-incumbent-takeover` → `drain-yield-refuse` → `handoff-ab-cutover` → `serve-handoff` → `policy-lookup-cutover` → `lookup-follow-handoff` → `peers-layer-rebind` → `launch-shutdown` |
 | **Fleet glass** | `fleet/telemetry-glass` → `health-glass` → `shardmap-sessions` → edge examples |
 | **Launcher** | `minimal-up` → `handle-phases` → `token-injection` → `ready-services` → `ready-timeout` → `lookup-membership` |
 | **Readiness** | `readiness/with-readiness` → `all-ready` → `monitored-dependency` → `degraded-health` |
@@ -112,6 +112,7 @@ Paths are under `examples/`. Script = `pnpm run example:<topic>-<kebab-file>` (s
 | [`node/handoff-ab-cutover.ts`](./node/handoff-ab-cutover.ts) | WorkPool baked A→B on `Node.shutdown` |
 | [`node/serve-handoff.ts`](./node/serve-handoff.ts) | Custom `serve(…, { handoff })` / `HandoffDeferred` |
 | [`node/policy-lookup-cutover.ts`](./node/policy-lookup-cutover.ts) | `Policy.provide` sticky + `Advice.prefer` early-move |
+| [`node/lookup-follow-handoff.ts`](./node/lookup-follow-handoff.ts) | Same-address Lookup A→B via `Lookup.follow` |
 | [`node/peers-layer-rebind.ts`](./node/peers-layer-rebind.ts) | Directory `peersLayer` hot-rebind |
 | [`node/launch-shutdown.ts`](./node/launch-shutdown.ts) | `Node.launch` exits on `Node.shutdown` |
 | [`node/verify-connection.ts`](./node/verify-connection.ts) | `verifyConnection` + `Policy.verify*` · [Client verify](../docs/guides/client-verify.md) |

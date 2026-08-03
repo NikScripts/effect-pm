@@ -213,6 +213,11 @@ Guides: [Identity coordinator](/docs/identity-coordinator) · [Policy](/docs/pol
 `examples/node/policy-lookup-cutover.ts` · `pnpm run example:node-policy-lookup-cutover`  
 Guide: [Policy](/docs/policy)
 
+### [Lookup.follow ownership handoff](/docs/node-lookup-follow-handoff)
+
+`examples/node/lookup-follow-handoff.ts` · `pnpm run example:node-lookup-follow-handoff` — same-address Lookup A→B  
+Guide: [Policy — Lookup.follow](/docs/policy#lookupfollow-same-address-lookup-ab)
+
 ### [peersLayer rebind](/docs/node-peers-layer-rebind)
 
 `examples/node/peers-layer-rebind.ts` · `pnpm run example:node-peers-layer-rebind`

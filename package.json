@@ -347,6 +347,7 @@
     "example:node-identity-coordinator": "tsx examples/node/identity-coordinator.ts",
     "example:node-handoff-ab-cutover": "tsx examples/node/handoff-ab-cutover.ts",
     "example:node-policy-lookup-cutover": "tsx examples/node/policy-lookup-cutover.ts",
+    "example:node-lookup-follow-handoff": "tsx examples/node/lookup-follow-handoff.ts",
     "example:node-drain-yield-refuse": "tsx examples/node/drain-yield-refuse.ts",
     "example:node-ask-incumbent-takeover": "tsx examples/node/ask-incumbent-takeover.ts",
     "example:node-serve-handoff": "tsx examples/node/serve-handoff.ts",
