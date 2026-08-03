@@ -94,15 +94,6 @@ export type View<Props extends object = {}, R = never> = ((
 };
 
 /**
- * Stamp services `R` onto a plain component fn (type-level; no runtime change).
- *
- * @public
- */
-export const stamp = <Props extends object, R = never>(
-  component: (props: Props) => React.ReactElement | null,
-): View<Props, R> => component as View<Props, R>;
-
-/**
  * Services (`R`) carried by a {@link View} component type.
  *
  * @public
@@ -127,6 +118,29 @@ type TreeServicesOf<F> = F extends (props: infer P, ...args: any) => infer Ret
   ? | (P extends object ? Jsx.ServicesOfPropsChildren<P> : never)
     | Jsx.ServicesOf<Exclude<Ret, null | undefined>>
   : never;
+
+/**
+ * Stamp services `R` onto a plain component fn (type-level; no runtime change).
+ *
+ * Call as `stamp(fn)` to infer `Props` and tree `R` from the implementation.
+ * Explicit `stamp<Props, R>(fn)` remains for Layer / provide wiring.
+ *
+ * @public
+ */
+export function stamp<F extends (props: any) => React.ReactElement | null>(
+  component: F,
+): View<
+  Parameters<F>[0] extends object ? Parameters<F>[0] : {},
+  TreeServicesOf<F>
+>;
+export function stamp<Props extends object, R = never>(
+  component: (props: Props) => React.ReactElement | null,
+): View<Props, R>;
+export function stamp(
+  component: (props: any) => React.ReactElement | null,
+): View<object, never> {
+  return component as View<object, never>;
+}
 
 /**
  * Effect that builds a plain React component (no {@link Tag} / DI).

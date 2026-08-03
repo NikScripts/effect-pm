@@ -30,6 +30,15 @@ const loaded = loadExampleIncludeFromDisk("../..", include, (abs) =>
   readFileSync(abs, "utf8"),
 );
 if (loaded === undefined) throw new Error("missing example");
+// Anti-cheat: demo must not witness Inner’s R onto Outer via stamp type args.
+if (/stamp\s*</.test(loaded) || /ServicesOf\s*<\s*typeof\s+Inner/.test(loaded)) {
+  throw new Error(
+    "demo must not use View.stamp<…> or ServicesOf<typeof Inner> (no fake R)",
+  );
+}
+if (!/function Middle\b/.test(loaded) && !/const Middle\b/.test(loaded)) {
+  throw new Error("demo must include a plain Middle component");
+}
 const code = prepareExampleForTwoslash(loaded, include);
 const result = createTwoslasher({ vfsRoot: repoRoot, compilerOptions })(
   code,
@@ -43,12 +52,16 @@ if (result.errors?.length) {
 const queries = (result.queries ?? []).map((q) => q.text);
 const joined = queries.join("\n");
 console.log("queries:\n", joined);
-for (const name of ["Inner", "Outer", "Greeter"] as const) {
-  if (!joined.includes(name)) {
-    throw new Error(`expected ${name} in twoslash queries, got:\n${joined}`);
-  }
+const innerQ = queries.find((q) => q.includes("Inner"));
+const outerQ = queries.find((q) => q.includes("Outer"));
+if (innerQ === undefined || outerQ === undefined) {
+  throw new Error(`expected Inner/Outer queries, got:\n${joined}`);
 }
-if (joined.includes("any")) {
+if (!innerQ.includes("Greeter")) {
+  throw new Error(`Inner must show Greeter, got: ${innerQ}`);
+}
+if (joined.includes(": any") || joined.includes("<{}, any>")) {
   throw new Error(`queries must not show any:\n${joined}`);
 }
 console.log("ok");
+console.log("Outer query:", outerQ);

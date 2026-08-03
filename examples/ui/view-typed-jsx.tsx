@@ -1,5 +1,5 @@
 /**
- * Typed JSX demo — two View values; Outer nests Inner deeply.
+ * Typed JSX demo — Inner → plain Middle → Outer.
  *
  * Docs (Tailscale): http://100.67.32.32:5190/docs/view-typed-jsx
  */
@@ -21,23 +21,28 @@ export const Inner = View.gen(function* () {
 Inner;
 // ^?
 
+/** Plain middle — not a View. Nests Inner. */
+export function Middle(_props: {}) {
+  return (
+    <aside data-demo="middle">
+      <Inner />
+    </aside>
+  );
+}
+
 /**
- * Outer — no yield*; nests Inner several levels deep.
- * Hover `Outer` — R includes Greeter from the nested Inner.
+ * Outer — `View.stamp` with no type args; nests Middle (which nests Inner).
+ * Hover `Outer`.
  */
-export const Outer = View.stamp<{}, View.ServicesOf<typeof Inner>>(
-  (_props: {}) => (
-    <div data-demo="outer">
-      <section>
-        <article>
-          <aside>
-            <Inner />
-          </aside>
-        </article>
-      </section>
-    </div>
-  ),
-);
+export const Outer = View.stamp((_props: {}) => (
+  <div data-demo="outer">
+    <section>
+      <article>
+        <Middle />
+      </article>
+    </section>
+  </div>
+));
 
 Outer;
 // ^?

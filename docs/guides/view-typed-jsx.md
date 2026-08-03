@@ -7,11 +7,10 @@
 <!-- docs-site-link:end -->
 # Typed JSX — nested View requirements
 
-With `jsxImportSource: "last-ts"`, View components carry services **R**. Hover the
-two values below: **`Inner`** needs `Greeter`; **`Outer`** has no `yield*` and only
-nests `Inner` deep in the tree — Outer’s type still includes `Greeter`.
+Hover **`Inner`** then **`Outer`**. Outer is a plain `View.stamp` (no type
+parameters) around a normal `Middle` function that nests `Inner`.
 
-## Hover these two values
+## Hover these values
 
 {.twoslash include="examples/ui/view-typed-jsx.tsx"}
 ``` tsx
@@ -19,7 +18,7 @@ nests `Inner` deep in the tree — Outer’s type still includes `Greeter`.
 
 ## Live render
 
-Same Outer → section → article → aside → Inner, with `Greeter` provided once:
+Same Outer → section → article → Middle → Inner, with `Greeter` provided once:
 
 ```view-jsx
 ```
