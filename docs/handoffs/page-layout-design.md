@@ -1,22 +1,21 @@
 # Page + Layout design plan
 
 **Branch:** `cursor/file-router-prototype-125f`  
-**Status:** design — **not locked**, not Eng’d  
-**Package:** `last-ts` (`Page`, `Layout`, `Last`) — zero Hyperlink product names inside last-ts  
+**Status:** design — **not locked**, not Eng’d (revised 2026-08-03)  
+**Package:** `last-ts` (`Page`, `Layout`, `Last`, `View`) — zero Hyperlink product names inside last-ts  
 **Related:** [file-router-prototype](./file-router-prototype.md) · [view-page-naming](./view-page-naming.md) · [view-tag-prototype](./view-tag-prototype.md) · [last-ts-codesplit](../plans/last-ts-codesplit.md)
 
 ---
 
 ## Intent
 
-Own file-router **pages** and **layouts** with:
-
 1. Typed path + Static / Dynamic / Build (codegen stays honest).
-2. **Upward values** (title, crumbs, actions, …) that **layouts require** and **pages provide** — missing ⇒ **type error**.
-3. **`Last.provide`** — Effect channel; **last write wins** on a key (name = override semantics).
-4. Minimalist public surface that stays **adaptable** (Prototype Requirement, Tag DI, plain helpers, `*.gen`).
+2. **Upward values** — a View/Layout **requires** keys; some **descendant View** (or seed bag) **provides** them. Missing when the tree is closed ⇒ **type error**. The page module itself need **not** be the provider.
+3. **`Last.provide`** / **`Last.context`** — write/read the bag; **last write wins**.
+4. **Eng order:** get require/provide working on **Views first**, then Layout/Page file-router.
+5. Layout chrome via a **non-DI constructor** (outlet render-prop); optional **`Layout.Tag`** when DI is wanted.
 
-**Not goals (v1):** inventing JSX child-type proofs for arbitrary `<div>` trees; baking SEO fields into Page core; colliding with Hyperlink dashboard `Views.Page` size chrome.
+**Not goals (v1):** JSX child-type proofs for arbitrary `<div>` trees; builtin Page `title`/`description`; colliding with Hyperlink `Views.Page` size chrome.
 
 ---
 
@@ -36,11 +35,40 @@ Own file-router **pages** and **layouts** with:
 
 ### Upward values (clarified)
 
-- **Not** a nested `<Title>` element.
-- A **value** via helper arg and/or `yield* Last.provide({ title: "Hello" })`.
-- Prefer **override**: provide again later → last wins (name comes from that).
-- Types track **Provided** vs open **Requirement**; gen/mint incomplete ⇒ type error.
-- “Deep” = deep in **composition / gen**, not deep under random JSX.
+- **Not** a nested `<Title>` element — a **value** via arg and/or `yield* Last.provide({ title: "Hello" })`.
+- **Last write wins** (name `provide` = override semantics).
+- **Page need not provide.** Any View in the composed tree may `Last.provide`; debt clears when the **closed composition** satisfies the ancestor’s Requirement.
+- Values readable **anywhere in between** via **`Last.context`** (Effect) / sync peek TBD.
+- “Deep” = deep in **View composition / gen** (each export is a View that carries Requires/Provides), not under random JSX.
+- **Eng first on Views** (require + provide + context); Layout/Page reuse the same bag.
+
+### Layout chrome constructor (non-DI vs Tag)
+
+```ts
+// Non-DI — constructor after key / factory; outlet name TBD (not "Slot"? prefer Outlet)
+const Book = Layout.make<{ readonly title: string }>()(
+  "app/layout/book",
+  ({ Outlet, values }) => (
+    <shell title={values.title}>
+      <Outlet />
+    </shell>
+  ),
+)
+
+// Or Effect-built chrome
+const BookFx = Layout.make<{ readonly title: string }>()(
+  "app/layout/book",
+  ({ Outlet }) => Page.fromEffect(myLayoutEffect(Outlet)), // or View.fromEffect
+)
+
+// DI when wanted — separate constructor
+class BookLayout extends Layout.Tag<BookLayout, { readonly title: string }>()(
+  "app/layout/book",
+) {}
+Layout.provide(BookLayout, ({ Outlet, values }) => …)
+```
+
+Outlet naming: **Outlet** (router-familiar) preferred over Slot; final name open.
 
 ### Metadata
 
@@ -76,11 +104,44 @@ MyLayout.static(component, values)
 
 ---
 
+## Phase 0 — Views first (require / provide / context)
+
+Before Page/Layout file-router polish, ship the bag on **View**:
+
+```ts
+import * as View from "last-ts/View"
+import * as Last from "last-ts/Last"
+
+// Parent requires title (debt)
+const Shell = View.Prototype<{ readonly children: React.ReactNode }, { readonly title: string }>()()
+
+// Deep child provides (may be several Views down)
+const TitleBlock = View.gen(function* () {
+  yield* Last.provide({ title: "Hello" })
+  return () => <h1>…</h1>
+})
+
+// Compose Views (library API — not raw JSX children typing)
+// Closed tree must satisfy Shell's Requirement; TitleBlock contributes Provides
+const PageBody = View.compose(Shell, TitleBlock) // name TBD — prove Provides ⊆ Req
+```
+
+| API | Role |
+|-----|------|
+| View / Layout **Requirement** | Keys still owed |
+| `Last.provide(partial)` | Merge bag; last wins; adds to **Provides** |
+| `Last.context` | Effect — read current bag (partial or full) anywhere in the tree |
+| `Last.getContext` | Sync peek (client), mirror `getAnnotations` |
+| Compose / nest helpers | Carry `Requires` / `Provides` type params up the View exports |
+
+**Invariant:** every export that participates is a **View** (or Layout built on the same bag). JSX inside a View can call hooks that read `Last.context` at runtime; **type proof** lives on View composition / gen, not on DOM shape.
+
+---
+
 ## Recommended API (minimalist, fully featured)
 
-**Layout owns Requirement and the `static` / `dynamic` / `build` helpers.**  
-Page is the body + path/render; Layout is the chrome + required upward bag.  
-`Page.*` remains a thin alias that forwards to the layout (adaptable for people who think “Page first”).
+**Layout = class or `Layout.make` handle** carrying Requirement + chrome.  
+**Page** = path + render + body View. Body (or nested Views) provide values — page module optional seed only.
 
 ### 1. Layout — Requirement + chrome
 
@@ -90,48 +151,49 @@ import * as Page from "last-ts/Page"
 import * as Last from "last-ts/Last"
 import * as View from "last-ts/View"
 
-// Requirement = upward bag the page must fulfill (any keys)
-const Book = Layout.Prototype<{
-  readonly title: string
-  readonly description?: string
-}>()()
+// Non-DI (default)
+const Book = Layout.make<{ readonly title: string }>()(
+  "app/layout/book",
+  ({ Outlet, values }) => (
+    <html>
+      <head><title>{values.title}</title></head>
+      <body><Outlet /></body>
+    </html>
+  ),
+)
 
-// Optional: mint a Layout Tag (DI / kind stamp) when you need identity
-class BookLayout extends Book.Tag<BookLayout>()("app/layout/book") {}
+// DI variant
+class BookLayout extends Layout.Tag<BookLayout, { readonly title: string }>()(
+  "app/layout/book",
+) {}
 ```
 
-Layout component shape (runtime):
+Chrome props (runtime):
 
 ```ts
-type LayoutView<Req extends object> = (props: {
-  readonly outlet: React.ReactNode
-  readonly values: Req  // fulfilled bag (after last-wins merge)
+type LayoutChrome<Req extends object> = (props: {
+  readonly Outlet: React.ComponentType<object> // or children — name open
+  readonly values: Req // fulfilled bag after last-wins (may fill late at runtime)
 }) => React.ReactElement | null
 ```
 
-Provide chrome with `Layout.provide` / `View.provide` on a Layout Tag, or pass the function into Prototype — exact mint bikeshed later; **Requirement on Prototype is the lock.**
-
-### 2. Page under a layout — Layout-centric (preferred)
+### 2. Page under a layout — class as type + value
 
 ```ts
-// values discharge Book's Requirement (type error if title missing)
-export default Book.static(AboutView, { title: "About" })
+import { Book } from "../layouts/Book"
 
-export default Book.dynamic(SearchView, { title: "Search" })
+// Seed values optional — nested Views may Last.provide instead
+export default Page.static(Book, AboutView, { title: "About" })
+export default Page.static<Book>(AboutView) // if AboutView's Provides already cover Req
 
-export default Book.build(ChapterView, {
-  title: "Routing",
-  paths: listChapterSlugs, // Effect — Build only
+export default Page.build(Book, ChapterTree, {
+  paths: listChapterSlugs, // Build only — not meta
 })
 ```
 
-Path comes from **file-router convention** (module path → stamp.path) **or** an explicit overload:
+Path from **file-router** (disk) or explicit overload `Page.static(Book, "/about", Comp, seed?)`.
 
-```ts
-Book.static("/about", AboutView, { title: "About" })  // explicit path when not file-routed
-```
-
-File-router default: path from disk; helpers don’t repeat the string unless override.
+**Type rule:** closed page tree’s **Provides** (seeds ∪ all nested View provides) must satisfy `Layout.RequirementOf<typeof Book>`. Provider need not be the page root.
 
 ### 3. Page-centric aliases (same types)
 
