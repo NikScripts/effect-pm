@@ -1,138 +1,144 @@
-# Composable View Tags — first draft (generic)
+# DI View Tags — what more (draft)
 
-**Status:** design draft — **not locked**, not Eng’d  
-**Package:** last-ts shaped (`View`, catalog helpers) — **no product/domain vocabulary**  
-**Kernel:** `View.Tag` / `Prototype` / `provide` stay as they are; this draft is how you **compose** them.
-
----
-
-## Problem
-
-A View Tag is DI identity + a component impl. Matching “kinds” into fixed chrome slots is one app pattern — not the system. We need:
-
-- contribute View Tags into **named, typed slots**
-- merge / replace contributions as **Layers**
-- **mount** the impl (function), never the Tag class
-- nest: a View can mount other slots
-- stay generic: any props, any slot names
+**Status:** design draft — **not locked**  
+**Focus:** View Tag = component **service** (same shape as other Effect services; impl is JSX).  
+**Rejected here:** Catalog/slots as the core model — a Tag *is* the slot.
 
 ---
 
-## Draft API
+## Already have
 
 ```ts
-import { Layer } from "effect"
-import * as View from "last-ts/View"
-import * as Catalog from "last-ts/Catalog" // name TBD — compose surface
-
-// =============================================================================
-// View Tag (existing)
-// =============================================================================
-
 class Greeter extends View.Tag<Greeter, { readonly name: string }>()(
   "app/view/greeter",
 ) {}
 
+// Fulfill with a JSX impl (Layer)
 Greeter.provide(({ name }) => <h1>{name}</h1>)
+```
 
-class QuietGreeter extends View.Tag<QuietGreeter, { readonly name: string }>()(
-  "app/view/greeter-quiet",
+Tag = identity. Layer carries the function. That is the product.
+
+---
+
+## Gap: use the Tag like a component
+
+Today the Tag is not JSX. Draft:
+
+```ts
+// Fancy: Tag exposes a React component that resolves impl from Context
+;<Greeter.View name="nik" />
+
+// or module helper with same types
+;<View.Use tag={Greeter} name="nik" />
+```
+
+Under the hood: read `Greeter` from React/Effect context (bridge), then `createElement(impl, props)`.  
+Still not “the class is a host component” in React’s sense — it’s a thin resolver component attached to the Tag (`Greeter.View`).
+
+If `Greeter` is missing from the Layer → fail at the **boundary** (see below), not necessarily at first render if we type it.
+
+---
+
+## Gap: require other View Tags (Layer R), not value bags
+
+Same *shape* as upward `Last.provide` discharge, but the debt is **services**:
+
+```ts
+// Parent view's impl needs Greeter in scope
+class PageBody extends View.Tag<PageBody, {}>()("app/view/page-body") {}
+
+PageBody.provide(
+  View.gen(function* () {
+    // Building the impl may depend on services…
+    return () => (
+      <div>
+        <Greeter.View name="nik" />
+      </div>
+    )
+  }),
+)
+```
+
+**Typing intent:** using `<Greeter.View />` (or `View.Use(Greeter)`) **adds `Greeter` to the tree’s Requirement** (Effect `R`). That debt bubbles through parent Views until a **Page** (or app root) that `Layer.provide` / `provideMerge`s Greeter — or type error.
+
+```ts
+// Pseudotype
+type Tree = View.Tree<PageBody> // R includes Greeter until provided
+
+Page.mount(PageBody) // error: Greeter not provided
+Page.mount(PageBody).pipe(Layer.provide(Greeter.provide(…))) // ok
+```
+
+Provide **anywhere earlier** in the Layer graph (not only at the leaf). Last Layer wins for a given Tag (normal Effect).
+
+This is **not** Catalog.contribute(slot). The Tag *is* the dependency key.
+
+---
+
+## What more we can do with component services
+
+```ts
+// 1) Same Tag, swap impl (web / test / ink) — already Layer-native
+Layer.provide(Greeter.provide(WebImpl))
+Layer.provide(Greeter.provide(TestImpl))
+
+// 2) Mount Tag as component (draft)
+;<Greeter.View name="nik" />
+
+// 3) View depends on View — R accumulates
+class Hello extends View.Tag<Hello, {}>()("app/view/hello") {}
+Hello.provide(() => (
+  <>
+    <Greeter.View name="a" />
+    <Greeter.View name="b" />
+  </>
+))
+// Tree R: Greeter (once)
+
+// 4) Defaults on Tag (like Context.Reference) — draft
+class Greeter2 extends View.Tag<Greeter2, { name: string }>()(
+  "app/view/greeter2",
+  { default: ({ name }) => <span>{name}</span> },
 ) {}
 
-QuietGreeter.provide(({ name }) => <p>{name}</p>)
+// 5) Prototype still owns props + annotations; Requirement can mean
+//    annotation debt OR (later) service debt — keep separate channels if clearer
 
-// =============================================================================
-// Shell = set of slots (typed props each slot will pass)
-// =============================================================================
-
-const App = Catalog.shell({
-  hero: Catalog.slot<{ readonly name: string }>(),
-  aside: Catalog.slot<{ readonly name: string }>(),
+// 6) View.gen closes over Effect services, returns JSX fn — already
+View.gen(function* () {
+  const cfg = yield* Config
+  return () => <Greeter.View name={cfg.defaultName} />
 })
 
-// Another shell can use totally different slot names / props — no fixed vocabulary.
+// 7) Page / app root = discharge boundary for View R
+Page.body(Hello) // must provide everything Hello's tree requires
 
-// =============================================================================
-// Contribute Tag → slot (+ optional target)
-// =============================================================================
+// 8) Scoped override
+;<View.Region layer={Greeter.provide(LoudImpl)}>
+  <Hello.View />
+</View.Region>
 
-const base = Layer.mergeAll(
-  Catalog.contribute(App.hero, Greeter),
-  Catalog.contribute(App.aside, Greeter),
-)
+// 9) Test: provide fake impl, render tree
+Greeter.provide(() => <div data-testid="g" />)
 
-// Target: only when some identity matches (generic key / predicate — not domain-specific)
-const override = Catalog.contribute(App.hero, QuietGreeter).when(
-  Catalog.target.key("app/entity/special"),
-)
-
-const catalog = Layer.mergeAll(base, override)
-
-// Replace / remove
-catalog.pipe(
-  Catalog.replace(App.hero, QuietGreeter).when(Catalog.target.key("app/entity/special")),
-  Catalog.without(App.aside).when(Catalog.target.key("app/entity/hidden")),
-)
-
-// =============================================================================
-// Mount — resolve contribution, render impl
-// =============================================================================
-
-const ui = Catalog.use(catalog)
-
-// props must satisfy the slot; Tag's Props must be assignable from slot props
-;<ui.Mount slot={App.hero} name="nik" />
-;<ui.Mount
-  slot={App.hero}
-  name="nik"
-  target={Catalog.target.key("app/entity/special")}
-/>
-
-// =============================================================================
-// Nest — a View mounts other slots
-// =============================================================================
-
-class Panel extends View.Tag<Panel, { readonly name: string }>()(
-  "app/view/panel",
-) {}
-
-Panel.provide((props) => (
-  <section>
-    <ui.Mount slot={App.hero} name={props.name} />
-    <ui.Mount slot={App.aside} name={props.name} />
-  </section>
-))
-
-const nested = Catalog.contribute(
-  Catalog.shell({ main: Catalog.slot<{ readonly name: string }>() }).main,
-  Panel,
-)
-
-// =============================================================================
-// Many matches (opt-in)
-// =============================================================================
-
-Catalog.contribute(App.hero, Greeter).mode("one")   // default — single impl
-Catalog.contribute(App.hero, Greeter).mode("stack") // all matching; Mount stacks them
-
-;<ui.Mount slot={App.hero} name="nik" mode="stack" />
+// 10) Lazy / async impl via fromEffect — still one Tag
+Greeter.provide(View.fromEffect(loadRemoteGreeter))
 ```
 
 ---
 
-## Rules
+## Non-goals (this draft)
 
-1. Tag class is never JSX — only the provided `View` function mounts.
-2. Slot props are the contract; contributing Tag’s Props must accept them.
-3. Catalog is a **Layer** — compose with `Layer.mergeAll`, no ambient singleton.
-4. `.when(target)` scopes a contribution; omit = always eligible for that slot.
-5. Slot names are app-defined strings/symbols — library ships no Card/Detail/Page.
+- Parallel slot/catalog vocabulary for “where Card goes”.
+- Matching Card/Detail/Page as the DI model.
+- Typing arbitrary JSX children; debt comes from **`.View` / `View.Use(Tag)`** (or explicit `View.need(Tag)`).
 
 ---
 
 ## Open
 
-- Module name: `Catalog` vs fold into `View.*`
-- Target model: key string vs `Context.Key` vs predicate
-- Typing `contribute(slot, Tag)` when Props differ by optional fields
-- Whether `shell` is runtime value + types or type-only brands
+1. `Greeter.View` vs `View.Use(Greeter)` vs both.
+2. How React context bridges Effect Layer (RuntimeProvider already nearby).
+3. Whether service-Requirement is a second type param beside annotation-Requirement.
+4. Page as hard boundary vs any `View.Root`.
