@@ -50,11 +50,25 @@ export type ServicesOfViewFn<T> = T extends {
   : never;
 
 /**
- * Services carried by an {@link Element} (or `never` when not an Element).
+ * `true` when `T` is `any` (do not use `T extends any` — that distributes).
  *
  * @internal
  */
-export type ServicesOfElement<E> = E extends Element<infer R> ? R : never;
+export type IsAny<T> = 0 extends 1 & T ? true : false;
+
+/**
+ * Services carried by an {@link Element} (or `never` when not an Element).
+ * `any` → `never` so JSX syntax black-box / error types do not poison `R`.
+ *
+ * @internal
+ */
+export type ServicesOfElement<E> = IsAny<E> extends true
+  ? never
+  : E extends Element<infer R>
+    ? IsAny<R> extends true
+      ? never
+      : R
+    : never;
 
 /**
  * Fold `R` out of a JSX `children` value (element, array, or ReactNode mix).

@@ -4,9 +4,9 @@
  * Typed JSX for Last — `Element<R>` and helpers. Pair with
  * `"jsxImportSource": "last-ts"` (or a per-file `@jsxImportSource last-ts` pragma).
  *
- * **Critical:** do not collapse `JSX.Element` to a non-generic alias — that
- * re-introduces React’s erase. Expression types come from `jsx` / `jsxs`
- * return types in `last-ts/jsx-runtime`.
+ * Direct `jsx` / `jsxs` calls return {@link Element}`<R>`. JSX *syntax* is
+ * typed by TypeScript as `JSX.Element` (black box) — use {@link ServicesOf}
+ * on `jsx(...)` results or {@link View.ServicesOf} on stamped views for `R`.
  *
  * @see docs/handoffs/view-compose-draft.md
  */
@@ -26,6 +26,13 @@ export type Element<R = never> = internal.Element<R>;
  * @public
  */
 export type ServicesOf<E> = internal.ServicesOfElement<E>;
+
+/**
+ * Services contributed by a props bag’s `children` (when branded as {@link Element}).
+ *
+ * @public
+ */
+export type ServicesOfPropsChildren<P> = internal.ServicesOfPropsChildren<P>;
 
 /**
  * Widen a plain React node to {@link Element}`<never>` for mixed trees.

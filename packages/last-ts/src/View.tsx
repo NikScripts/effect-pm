@@ -114,12 +114,18 @@ export type ServicesOf<V> = V extends {
   : never;
 
 /**
- * Tree services from a component fn’s return {@link Jsx.Element} (JSX path).
+ * Tree services from a component fn: props.`children` brands ∪ return
+ * {@link Jsx.Element}`<R>` (from direct `jsx` / `jsxs` calls).
+ *
+ * JSX *syntax* (`<Foo />`) is a TypeScript black box (`JSX.Element` / formerly
+ * `any`) — it does not contribute `R`. Prefer typed `children` props or
+ * `jsx(Child, …)` when nesting must enlarge `View` `R`.
  *
  * @internal
  */
-type TreeServicesOf<F> = F extends (...args: any) => infer Ret
-  ? Jsx.ServicesOf<Exclude<Ret, null | undefined>>
+type TreeServicesOf<F> = F extends (props: infer P, ...args: any) => infer Ret
+  ? | (P extends object ? Jsx.ServicesOfPropsChildren<P> : never)
+    | Jsx.ServicesOf<Exclude<Ret, null | undefined>>
   : never;
 
 /**
@@ -218,12 +224,12 @@ export function gen<Eff extends Effect.Effect<any, any, any>>(
 ): View<{}, Effect.Services<Eff>>;
 export function gen(
   f: () => Generator<Effect.Effect<any, any, any>, any, never>,
-): View<object, any> {
+): View<object, never> {
   return fromEffect(
     Effect.map(Effect.gen(f), (component) =>
       component === undefined ? () => null : component,
     ),
-  );
+  ) as View<object, never>;
 }
 
 /**

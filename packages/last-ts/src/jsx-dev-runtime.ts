@@ -1,7 +1,7 @@
 /**
  * Development automatic JSX runtime (`react-jsxdev`).
  *
- * Same `R` merge as `jsx-runtime`; delegates to `react/jsx-dev-runtime`.
+ * Same typing notes as `jsx-runtime`; delegates to `react/jsx-dev-runtime`.
  *
  * @module
  */
@@ -19,7 +19,7 @@ export type Element<R = never> = internal.Element<R>;
 export const Fragment = ReactFragment;
 
 /**
- * Dev JSX create; `R` = tag services ∪ children services.
+ * Dev JSX create; `R` = tag services ∪ children services on the call type.
  *
  * @public
  */
@@ -47,8 +47,9 @@ export function jsxDEV<T, P>(
  * @public
  */
 export namespace JSX {
-  export type IntrinsicElements = ReactJSX.IntrinsicElements;
-  export type IntrinsicAttributes = ReactJSX.IntrinsicAttributes;
+  export interface Element extends React.ReactElement {}
+  export interface IntrinsicElements extends ReactJSX.IntrinsicElements {}
+  export interface IntrinsicAttributes extends ReactJSX.IntrinsicAttributes {}
   export type ElementChildrenAttribute = ReactJSX.ElementChildrenAttribute;
   export type ElementType = React.ElementType;
 }

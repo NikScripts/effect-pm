@@ -1,10 +1,15 @@
 /**
  * Automatic JSX runtime (`react-jsx`) — types merge child/tag `R` into
- * {@link Element}`<R>`; runtime delegates to `react/jsx-runtime`.
+ * {@link Element}`<R>` on direct `jsx` / `jsxs` calls; runtime delegates to
+ * `react/jsx-runtime`.
  *
- * **Do not** export `namespace JSX { type Element = … }` — a non-generic
- * `JSX.Element` collapses `R` and restores erasure. Leave `JSX.Element`
- * undefined so TypeScript uses these `jsx` / `jsxs` return types.
+ * **TypeScript note:** JSX *syntax* (`<Foo />`) is typed as {@link JSX.Element}
+ * (or `any` if that alias is missing) — the checker does **not** use these
+ * `jsx` / `jsxs` return types for expression types. Keep a non-generic
+ * `JSX.Element` so host tags are not `any`. Per-call `R` still lives on
+ * `jsx(...)` return types and on {@link View} stamps (`View.ServicesOf`).
+ *
+ * `IntrinsicElements` must be an **interface** (not a type alias).
  *
  * @module
  */
@@ -54,17 +59,18 @@ export function jsxs<T, P>(
 /**
  * JSX namespace for `jsxImportSource: "last-ts"`.
  *
- * Host props from React; **no** `Element` alias (preserves `R`).
+ * Host props from React. `Element` is the black-box syntax result type (see
+ * module doc). Prefer {@link Element}`<R>` / {@link View.ServicesOf} for `R`.
  *
  * @public
  */
 export namespace JSX {
-  export type IntrinsicElements = ReactJSX.IntrinsicElements;
-  export type IntrinsicAttributes = ReactJSX.IntrinsicAttributes;
+  export interface Element extends React.ReactElement {}
+  export interface IntrinsicElements extends ReactJSX.IntrinsicElements {}
+  export interface IntrinsicAttributes extends ReactJSX.IntrinsicAttributes {}
   export type ElementChildrenAttribute = ReactJSX.ElementChildrenAttribute;
   /**
    * Valid tags — permissive so Radix / shadcn / plain React components work.
-   * Return-type `R` still flows from our `jsx` / `jsxs` signatures.
    */
   export type ElementType = React.ElementType;
 }

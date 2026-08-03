@@ -3,58 +3,31 @@
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
 > live type previews, and the demo island — is at
-> <https://dev.hyperlink.cool/docs/view-typed-jsx>
-> (local Tailscale: <http://100.67.32.32:5190/docs/view-typed-jsx>).
+> <http://100.67.32.32:5190/docs/view-typed-jsx> (Tailscale).
 <!-- docs-site-link:end -->
 # Typed JSX — nested View requirements
 
-React’s default JSX types erase what a tree needs. With
-`jsxImportSource: "last-ts"`, nested JSX keeps services **R**:
-**child → parent → the component function**.
+With `jsxImportSource: "last-ts"`, View components carry services **R**. Hover the
+two values below: **`Inner`** needs `Greeter`; **`Outer`** has no `yield*` and only
+nests `Inner` deep in the tree — Outer’s type still includes `Greeter`.
 
-No slots, no catalog, no `View.el` — normal nesting:
-
-```tsx
-const Component = () => (
-  <Parent>
-    <Child />
-  </Parent>
-)
-```
-
-## Live demo
-
-Renders `View.gen` children under a shadcn-style Radix `Dialog` wrapper, with
-`Greeter` + `Clock` provided once at the app Layer:
-
-```view-jsx
-```
-
-## Types (hover the queries)
-
-Persistent `^?` queries on the same source as the island. Confirm
-`PageNeeds` / `TreeNeeds` / `ThroughRadixNeeds` include the child Tags — including
-through the outside Radix wrapper:
+## Hover these two values
 
 {.twoslash include="examples/ui/view-typed-jsx.tsx"}
 ``` tsx
 ```
 
-## Opt-in
+## Live render
 
-Per file:
+Same Outer → section → article → aside → Inner, with `Greeter` provided once:
+
+```view-jsx
+```
+
+## Opt-in
 
 ```ts
 /** @jsxImportSource last-ts */
 ```
 
-Or tsconfig:
-
-```json
-{ "jsx": "react-jsx", "jsxImportSource": "last-ts" }
-```
-
-Runtime still emits React elements. Plain / Radix / shadcn components stay valid;
-they contribute `never` to `R`, and **children** still bubble.
-
-See also [View Tag types](/docs/view-tag-types).
+or `"jsxImportSource": "last-ts"` in tsconfig. See also [View Tag types](/docs/view-tag-types).

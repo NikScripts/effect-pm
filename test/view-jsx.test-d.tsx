@@ -1,19 +1,26 @@
 /**
  * Typed JSX — child → parent → component `R` (last-ts/jsx-runtime).
  *
- * Uses real Radix (+ a shadcn-style thin wrapper) so outside components stay valid.
+ * JSX *syntax* is a TS black box (`JSX.Element`). Tree `R` is asserted via
+ * direct `jsx` / `jsxs` calls and stamped `View` / typed `children` props.
+ * Radix / shadcn-style wrappers stay valid tags.
  */
 /** @jsxImportSource last-ts */
 import { expectTypeOf } from "vitest";
 import { Context, Effect } from "effect";
 import type * as React from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
+import { jsx, jsxs } from "last-ts/jsx-runtime";
 import type * as Jsx from "last-ts/Jsx";
 import * as View from "last-ts/View";
 
 type Eq<A, B> =
-  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
+    ? true
+    : false;
 type Expect<T extends true> = T;
+/** Fail if `T` is `any` (false-green guard). */
+type NotAny<T> = 0 extends 1 & T ? false : true;
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -58,41 +65,44 @@ const DialogContent = (
   </DialogPrimitive.Portal>
 );
 
-// ── Nested JSX bubbles R ────────────────────────────────────────────────────
+// ── Direct jsx/jsxs merge R (syntax cannot) ──────────────────────────────────
 
-const nested = (
+const nested = jsxs("div", {
+  children: [jsx(Child, {}), jsx(Other, {})],
+});
+type _NestedNotAny = Expect<NotAny<Jsx.ServicesOf<typeof nested>>>;
+type _Nested = Expect<Eq<Jsx.ServicesOf<typeof nested>, Greeter | Clock>>;
+
+const throughRadix = jsx(Dialog, {
+  open: true,
+  children: [
+    jsx(DialogTrigger, { children: "open" }),
+    jsx(DialogContent, {
+      children: [jsx(Child, {}), jsx(Plain, { label: "ok" })],
+    }),
+  ],
+});
+type _ThroughRadix = Expect<Eq<Jsx.ServicesOf<typeof throughRadix>, Greeter>>;
+
+const onlyOutside = jsx(Dialog, {
+  open: true,
+  children: [
+    jsx(DialogTrigger, { children: "open" }),
+    jsx(DialogContent, {
+      children: [jsx(Plain, { label: "solo" }), jsx("span", { children: "text" })],
+    }),
+  ],
+});
+type _OnlyOutside = Expect<Eq<Jsx.ServicesOf<typeof onlyOutside>, never>>;
+
+// JSX syntax stays black-box (not `any`, but no R)
+const syntax = (
   <div>
     <Child />
-    <Other />
   </div>
 );
-type _Nested = Expect<
-  Eq<Jsx.ServicesOf<typeof nested>, Greeter | Clock>
->;
-
-const throughRadix = (
-  <Dialog open>
-    <DialogTrigger>open</DialogTrigger>
-    <DialogContent>
-      <Child />
-      <Plain label="ok" />
-    </DialogContent>
-  </Dialog>
-);
-type _ThroughRadix = Expect<
-  Eq<Jsx.ServicesOf<typeof throughRadix>, Greeter>
->;
-
-const onlyOutside = (
-  <Dialog open>
-    <DialogTrigger>open</DialogTrigger>
-    <DialogContent>
-      <Plain label="solo" />
-      <span>text</span>
-    </DialogContent>
-  </Dialog>
-);
-type _OnlyOutside = Expect<Eq<Jsx.ServicesOf<typeof onlyOutside>, never>>;
+type _SyntaxNotAny = Expect<NotAny<typeof syntax>>;
+type _SyntaxNoR = Expect<Eq<Jsx.ServicesOf<typeof syntax>, never>>;
 
 // ── View.gen captures yield* R and tree R ────────────────────────────────────
 
@@ -102,23 +112,22 @@ const Parent = View.gen(function* () {
   );
 });
 expectTypeOf<View.ServicesOf<typeof Parent>>().toEqualTypeOf<Greeter>();
+type _ParentNotAny = Expect<NotAny<View.ServicesOf<typeof Parent>>>;
 
 const NestedInBody = View.gen(function* () {
-  return (_props: {}) => (
-    <section>
-      <Child />
-    </section>
-  );
+  return (_props: {}) =>
+    jsx("section", {
+      children: jsx(Child, {}),
+    });
 });
 expectTypeOf<View.ServicesOf<typeof NestedInBody>>().toEqualTypeOf<Greeter>();
 
 const Both = View.gen(function* () {
   const _prefix = yield* Greeter;
-  return (_props: {}) => (
-    <div>
-      <Other />
-    </div>
-  );
+  return (_props: {}) =>
+    jsx("div", {
+      children: jsx(Other, {}),
+    });
 });
 expectTypeOf<View.ServicesOf<typeof Both>>().toEqualTypeOf<Greeter | Clock>();
 
@@ -127,13 +136,12 @@ const Empty = View.gen(function* () {
 });
 expectTypeOf<View.ServicesOf<typeof Empty>>().toEqualTypeOf<Greeter>();
 
-// ── Component function sees tree R via return ────────────────────────────────
+// ── Component tree via typed jsx calls ───────────────────────────────────────
 
-const Component = () => (
-  <Parent>
-    <Child />
-  </Parent>
-);
+const Component = () =>
+  jsx(Parent, {
+    children: jsx(Child, {}),
+  });
 type _Component = Expect<
   Eq<Jsx.ServicesOf<ReturnType<typeof Component>>, Greeter>
 >;
@@ -148,20 +156,20 @@ const _okPlain = <Plain label="x" />;
 // @ts-expect-error Plain requires label
 const _badPlain = <Plain />;
 
-// ── succeed / fromEffect preserve TreeR ─────────────────────────────────────
+// ── succeed / fromEffect preserve TreeR (via jsx calls) ─────────────────────
 
-const Succeeded = View.succeed((_props: {}) => (
-  <div>
-    <Child />
-  </div>
-));
+const Succeeded = View.succeed((_props: {}) =>
+  jsx("div", {
+    children: jsx(Child, {}),
+  }),
+);
 expectTypeOf<View.ServicesOf<typeof Succeeded>>().toEqualTypeOf<Greeter>();
 
 const FromFx = View.fromEffect(
-  Effect.succeed((_props: {}) => (
-    <div>
-      <Other />
-    </div>
-  )),
+  Effect.succeed((_props: {}) =>
+    jsx("div", {
+      children: jsx(Other, {}),
+    }),
+  ),
 );
 expectTypeOf<View.ServicesOf<typeof FromFx>>().toEqualTypeOf<Clock>();

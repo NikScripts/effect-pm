@@ -356,9 +356,10 @@ export const fileRoot: typeof fileRouter.fileRoot = fileRouter.fileRoot;
 
 export {
   AsRoutesTypeId,
-  AsRoutesItems,
   isAsRoutesBrand,
   type AsRoutesBrand,
   type AsRoutesEffect,
   type RouteGroup,
 } from "./internal/asRoutesBrand";
+/** Type-only — `declare const` phantom; must not be a runtime re-export. */
+export type { AsRoutesItems } from "./internal/asRoutesBrand";

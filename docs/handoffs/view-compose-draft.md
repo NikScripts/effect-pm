@@ -25,9 +25,13 @@ Requirement types flow **child → parent → the component function** through r
 ### `last-ts/jsx-runtime` (+ `jsx-dev-runtime`)
 
 - Runtime delegates to `react/jsx-runtime` / `react/jsx-dev-runtime`.
-- Types: `jsx` / `jsxs` return `Element<R_type | R_children>`.
-- **Do not** export `namespace JSX { type Element = … }` — a non-generic `JSX.Element` collapses `R` and restores erasure. Expression types come from the `jsx` / `jsxs` return types.
-- Host props from React `IntrinsicElements`; outside components (Radix / shadcn) stay valid tags (`ElementType` permissive).
+- Types: **direct** `jsx` / `jsxs` calls return `Element<R_type | R_children>`.
+- **Must** export non-generic `JSX.Element` (`interface Element extends React.ReactElement`) —
+  TypeScript types JSX *syntax* as that black box (or `any` if missing). It does **not** use
+  `jsx` / `jsxs` return types for `<Foo />` expressions.
+- Tree `R` for nested Views: View stamps, typed `children?: Element<R>`, and/or direct
+  `jsx(Child, …)` — not JSX syntax alone.
+- Host props: React `IntrinsicElements` as an **interface**; Radix / shadcn stay valid tags.
 
 ### `View`
 

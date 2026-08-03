@@ -107,8 +107,24 @@ export default defineConfig({
           new URL("./src/ui/Router.tsx", import.meta.url),
         ),
         "hyperlink-ts": fileURLToPath(new URL("../../src", import.meta.url)),
-        "last-ts": fileURLToPath(
-          new URL("../../packages/last-ts/src", import.meta.url),
+        // Pin last-ts subpaths (avoid resolving bare `last-ts` → src/index barrel on the client).
+        "last-ts/jsx-runtime": fileURLToPath(
+          new URL("../../packages/last-ts/src/jsx-runtime.ts", import.meta.url),
+        ),
+        "last-ts/jsx-dev-runtime": fileURLToPath(
+          new URL("../../packages/last-ts/src/jsx-dev-runtime.ts", import.meta.url),
+        ),
+        "last-ts/AtomReact": fileURLToPath(
+          new URL("../../packages/last-ts/src/AtomReact.tsx", import.meta.url),
+        ),
+        "last-ts/View": fileURLToPath(
+          new URL("../../packages/last-ts/src/View.tsx", import.meta.url),
+        ),
+        "last-ts/Jsx": fileURLToPath(
+          new URL("../../packages/last-ts/src/Jsx.ts", import.meta.url),
+        ),
+        "last-ts/Last": fileURLToPath(
+          new URL("../../packages/last-ts/src/Last.ts", import.meta.url),
         ),
         // Package source pulls `waku/router/client` via repo root — pin to THIS
         // app's waku so hooks share the site's Router context (no dual instance).
