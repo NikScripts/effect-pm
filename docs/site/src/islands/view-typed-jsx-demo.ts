@@ -1,11 +1,19 @@
 /**
- * Runtime mirror of the gen + mount Twoslash demo.
+ * Runtime mirror of the Service.layer + mount Twoslash demo.
  */
 import * as React from "react";
 import * as View from "last-ts/View";
 
-class Greeter extends View.Tag<Greeter, { readonly name: string }>()(
+class Greeter extends View.Service<Greeter, { readonly name: string }>()(
   "docs/site/view-typed-jsx/Greeter",
+  {
+    default: (props) =>
+      React.createElement(
+        "span",
+        { "data-demo": "inner" },
+        `hello ${props.name}`,
+      ),
+  },
 ) {}
 
 export const Hello = View.gen(function* () {
@@ -14,7 +22,7 @@ export const Hello = View.gen(function* () {
     React.createElement(GreeterView, { name: props.who });
 });
 
-/** Mounted app — JSX-legal (`R` discharged). */
+/** Mounted app — JSX-legal (`R` discharged via Greeter.layer). */
 export const App = View.mount(
   View.gen(function* () {
     const GreeterView = yield* Greeter;
@@ -37,7 +45,5 @@ export const App = View.mount(
         ),
       );
   }),
-  Greeter.provide((props) =>
-    React.createElement("span", { "data-demo": "inner" }, `hello ${props.name}`),
-  ),
+  Greeter.layer,
 );

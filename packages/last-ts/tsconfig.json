@@ -20,7 +20,8 @@
     "../../test/view-jsx.test-d.tsx",
     "../../test/view-jsx-radix.test.tsx",
     "../../test/last-provide.test-d.ts",
-    "../../test/last-provide.test.ts"
+    "../../test/last-provide.test.ts",
+    "../../test/view-service.test-d.ts"
   ],
   "exclude": ["node_modules"]
 }

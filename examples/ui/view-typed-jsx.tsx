@@ -1,17 +1,22 @@
 /**
- * Typed Views — gen + mount (Tags via yield*).
+ * Typed Views — Service.layer + gen + mount.
  *
  * Docs (Tailscale): http://100.67.32.32:5190/docs/view-typed-jsx
  */
 /** @jsxImportSource last-ts */
 import * as View from "last-ts/View";
 
-class Greeter extends View.Tag<Greeter, { readonly name: string }>()(
+class Greeter extends View.Service<Greeter, { readonly name: string }>()(
   "examples/ui/view-typed-jsx/Greeter",
+  {
+    default: (props) => (
+      <span data-demo="inner">hello {props.name}</span>
+    ),
+  },
 ) {}
 
 // ---cut---
-/** Open R from yield* Tag — not legal as JSX until mount. */
+/** Open R from yield* Service — not legal as JSX until mount. */
 export const Hello = View.gen(function* () {
   const GreeterView = yield* Greeter;
   return (props: { readonly who: string }) => (
@@ -22,10 +27,7 @@ export const Hello = View.gen(function* () {
 Hello;
 // ^?
 
-/**
- * Nested chrome around a mounted child — only {@link View.Component}s in JSX.
- * Open-`R` values are mounted at the edge, not bag-composed.
- */
+/** Nested chrome; default layer from {@link Greeter.layer}. */
 export const App = View.mount(
   View.gen(function* () {
     const GreeterView = yield* Greeter;
@@ -41,9 +43,7 @@ export const App = View.mount(
       </div>
     );
   }),
-  Greeter.provide((props) => (
-    <span data-demo="inner">hello {props.name}</span>
-  )),
+  Greeter.layer,
 );
 
 App;

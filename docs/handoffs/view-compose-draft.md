@@ -11,7 +11,10 @@
 
 ```tsx
 /** @jsxImportSource last-ts */
-class Greeter extends View.Tag<Greeter, { readonly name: string }>()("…") {}
+class Greeter extends View.Service<Greeter, { readonly name: string }>()(
+  "…",
+  { default: ({ name }) => <span>{name}</span> },
+) {}
 
 const Hello = View.gen(function* () {
   const GreeterView = yield* Greeter
@@ -30,7 +33,7 @@ const App = View.mount(
       </div>
     )
   }),
-  Greeter.provide(({ name }) => <span>{name}</span>),
+  Greeter.layer,
 )
 // App: Component<{}>
 ```
@@ -45,7 +48,8 @@ const App = View.mount(
 | `View<P, R>` (`R` ≠ `never`) | {@link Unresolved} — **no** JSX call signature |
 | `yield* Effect.all({ A, B })` | Resolve Tags/services; JSX the results |
 | `View.mount(view, layer)` | Discharge `R` via Layer + RuntimeProvider |
-| `Tag.provide` / `View.provide` | Layer for a Tag skin |
+| `View.Service` + `{ default }` | Bakes `.layer` (camelCase; never `*Live`) |
+| `Service.provide` / `View.provide` | Layer when no default |
 | Bag `succeed({ Child }, …)` | **Removed** |
 
 Stock TS types every `<… />` as black-box `JSX.Element`. We do **not** rely on that for `R`.

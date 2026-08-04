@@ -3,7 +3,8 @@
  *
  * View — Effect × React components (Last).
  *
- * - **DI:** {@link Tag} / {@link Prototype} / {@link provide} — Context slots
+ * - **DI:** {@link Service} / {@link Tag} / {@link Prototype} / {@link provide} —
+ *   Context slots (`Service` mirrors `Context.Service`; optional default → `.layer`)
  * - **Build:** {@link fromEffect} / {@link gen} / {@link succeed} — Effect → view
  * - **Compose Tags:** `yield* Effect.all({ A, B })` inside {@link gen}, then JSX
  * - **Edge:** {@link mount}`(view, layer)` — discharge `R`, get a JSX component
@@ -738,14 +739,90 @@ export const Prototype =
     );
 
 /**
- * Naked View Tag — DI component handle.
+ * Options for {@link Service} — optional default impl becomes `.layer`.
+ *
+ * @public
+ */
+export type ServiceOptions<Props extends object> = {
+  readonly default: (props: Props) => React.ReactElement | null;
+};
+
+/**
+ * View service handle with a baked default {@link Layer} (`.layer`).
+ *
+ * @public
+ */
+export type ViewServiceWithLayer<
+  Self,
+  K extends string,
+  Props extends object,
+  Annotations extends AnyAnnotations = {},
+> = ViewHandle<Self, K, Props, Annotations> & {
+  readonly layer: Layer.Layer<Self>;
+};
+
+/**
+ * View {@link Context.Service} — DI component identity + key.
+ *
+ * Pass `{ default }` to bake {@link ViewServiceWithLayer.layer} (camelCase
+ * `*.layer`, never `*Live`).
+ *
+ * @example
+ * ```ts
+ * class Callout extends View.Service<Callout, { readonly text: string }>()(
+ *   "app/view/callout",
+ *   { default: ({ text }) => <aside>{text}</aside> },
+ * ) {}
+ *
+ * Layer.provideMerge(Callout.layer)
+ *
+ * // or without default — provide later
+ * class Greeter extends View.Service<Greeter, { readonly name: string }>()(
+ *   "app/view/greeter",
+ * ) {}
+ * const greeterLayer = Greeter.provide(({ name }) => <h1>{name}</h1>)
+ * ```
+ *
+ * @public
+ */
+export const Service: {
+  <Self, Props extends object = {}>(): {
+    <const K extends string>(
+      key: K,
+      options: ServiceOptions<Props>,
+    ): ViewServiceWithLayer<Self, K, Props>;
+    <const K extends string>(key: K): ViewHandle<Self, K, Props>;
+  };
+} = (<Self, Props extends object = {}>() =>
+  ((
+    key: string,
+    options?: ServiceOptions<Props>,
+  ): ViewHandle<Self, string, Props> | ViewServiceWithLayer<Self, string, Props> => {
+    const handle = Prototype<Props>()().Tag<Self>()(key);
+    if (options?.default !== undefined) {
+      return Object.assign(handle, {
+        layer: handle.provide(options.default),
+      }) as ViewServiceWithLayer<Self, string, Props>;
+    }
+    return handle;
+  }) as {
+    <const K extends string>(
+      key: K,
+      options: ServiceOptions<Props>,
+    ): ViewServiceWithLayer<Self, K, Props>;
+    <const K extends string>(key: K): ViewHandle<Self, K, Props>;
+  }) as typeof Service;
+
+/**
+ * Naked View Tag — alias of {@link Service} without a default layer.
+ * Prefer {@link Service}.
  *
  * @example
  * ```ts
  * class Greeter extends View.Tag<Greeter, { readonly name: string }>()(
  *   "app/view/greeter",
  * ) {}
- * View.provide(Greeter, ({ name }) => <h1>{name}</h1>)
+ * const greeterLayer = Greeter.provide(({ name }) => <h1>{name}</h1>)
  * ```
  *
  * @public

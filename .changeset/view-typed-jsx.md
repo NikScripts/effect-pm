@@ -2,4 +2,4 @@
 "last-ts": minor
 ---
 
-**Views — gen + mount:** Open-`R` views are `Unresolved` (not JSX-legal). Compose Tags with `yield* Effect.all` / `yield* Tag`; discharge with `View.mount(view, layer)`. Bag `View.succeed({ Child }, …)` removed.
+**Views — Service + mount:** `View.Service` mirrors `Context.Service`; `{ default }` bakes `.layer`. Open-`R` views are `Unresolved`; compose with `yield* Effect.all` / `yield* Service`; discharge with `View.mount(view, Service.layer)`. Bag `View.succeed({ Child }, …)` removed. Prefer `View.Service` over `View.Tag`.

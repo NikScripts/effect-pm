@@ -112,7 +112,7 @@ Each block is a **module** with a single job. Apps compose; last-ts does not shi
 │    ├─ Layout     chrome Effect (Outlet + Context R)         │
 │    └─ Page       route + mode + Effect → body (+ layers)    │
 ├─────────────────────────────────────────────────────────────┤
-│  View            Tag / gen / succeed(fn) / mount — no bag compose │
+│  View            Service (+ `.layer`) / gen / mount — no bag compose │
 │  Last            brands + Last.provide → harvested Layer          │
 ├─────────────────────────────────────────────────────────────┤
 │  Context.Service app services + static Layer ctors (Document.title) │
@@ -148,9 +148,9 @@ class Document extends Context.Service<Document, string>()("app/Document") {
 
 ### 4. `View`
 
-- **Down `R`:** `Tag`, unary `gen` / `succeed`, `mount`
-- **Compose Tags:** `yield* Effect.all({ Shell, Hello })` then JSX on resolved views
-- **Open-`R` view values:** `View.mount` to a `Component`, then normal JSX — **no** `succeed({ Child }, …)` bag
+- **Down `R`:** `View.Service` (optional `{ default }` → `.layer`), unary `gen` / `succeed`, `mount`
+- **Compose services:** `yield* Effect.all({ Shell, Hello })` then JSX on resolved views
+- **Open-`R` view values:** `View.mount(view, Service.layer)` — **no** bag `succeed`
 - **Up Provides:** `Last.provide` — [view-provide-draft](./view-provide-draft.md)
 
 ### 5. `Layout`
