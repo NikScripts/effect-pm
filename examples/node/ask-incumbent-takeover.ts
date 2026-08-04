@@ -46,7 +46,7 @@ const waitUntil = <A, E, R>(
     schedule: Schedule.spaced(Duration.millis(25)),
   });
 
-class Jobs extends Hyperlink.Tag<Jobs>()("examples/ask-incumbent/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("examples/ask-incumbent/Jobs", {
   ping: Hyperlink.effect(Schema.String),
 }) {}
 
@@ -57,13 +57,13 @@ const program = Effect.gen(function* () {
   const pathHold = yield* tmpSock("hold");
   const pathRefuse = yield* tmpSock("refuse");
 
-  const lookupNode = Node.Tag()("examples/ask-incumbent/Lookup", {
+  const lookupNode = Node.Service()("examples/ask-incumbent/Lookup", {
     path: lookupPath,
     onConflict: "askIncumbent",
   }).pipe(Node.asLookup);
 
   // Same wire key for A and B — Directory row identity.
-  class Worker extends Node.Tag<Worker, Jobs>()(
+  class Worker extends Node.Service<Worker, Jobs>()(
     "examples/ask-incumbent/Worker",
     { path: pathA },
   ) {}
@@ -88,7 +88,7 @@ const program = Effect.gen(function* () {
   );
 
   yield* Effect.logInfo("2) Newcomer B same nodeKey — askIncumbent replaces row");
-  class WorkerB extends Node.Tag<WorkerB, Jobs>()(
+  class WorkerB extends Node.Service<WorkerB, Jobs>()(
     "examples/ask-incumbent/Worker",
     { path: pathB },
   ) {}
@@ -130,7 +130,7 @@ const program = Effect.gen(function* () {
     (rows) => rows.length === 0,
   );
 
-  class WorkerHold extends Node.Tag<WorkerHold, Jobs>()(
+  class WorkerHold extends Node.Service<WorkerHold, Jobs>()(
     "examples/ask-incumbent/WorkerHold",
     { path: pathHold },
   ) {}
@@ -144,7 +144,7 @@ const program = Effect.gen(function* () {
     ),
   );
 
-  const dir = Context.get(lookupCtx, Directory.Tag);
+  const dir = Context.get(lookupCtx, Directory.Service);
   const blocked = yield* dir
     .advertise(
       new Lookup.AdvertiseRequest({

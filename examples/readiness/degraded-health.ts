@@ -19,7 +19,7 @@ import { FetchHttpClient, HttpClient, HttpServer } from "effect/unstable/http";
 import * as Hyperlink from "../../src/Hyperlink";
 import * as Node from "../../src/Node";
 
-class WarmingCache extends Hyperlink.Tag<WarmingCache>()(
+class WarmingCache extends Hyperlink.Service<WarmingCache>()(
   "examples/readiness/WarmingCache",
   {
     ping: Hyperlink.effect(Schema.String),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Tag } from "../src/internal/nodeCore";
+import { Service as Tag } from "../src/internal/nodeCore";
 import {
   coerceHttpListenOptions,
   coerceIpcListenArg,

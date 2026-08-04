@@ -29,16 +29,16 @@ const withLookup = <A, E>(
     );
   }).pipe(Effect.scoped);
 
-class Jobs extends Hyperlink.Tag<Jobs>()("lookup-id/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("lookup-id/Jobs", {
   jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
 const jobsImpl = { jobs: Effect.succeed(1) };
 
 describe("LookupNode", () => {
-  it("is a Node.Tag with ipc from { path }", () => {
+  it("is a Node.Service with ipc from { path }", () => {
     const path = "/tmp/lookup-example.sock";
-    const node = Node.Tag()("lookup/example", { path }).pipe(Node.asLookup);
+    const node = Node.Service()("lookup/example", { path }).pipe(Node.asLookup);
     expect(Node.isLookupNode(node)).toBe(true);
     expect(node.kind).toBe("IpcSocket");
     expect(node.path).toBe(path);
@@ -50,11 +50,11 @@ describe("Lookup identity claim", () => {
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("claim");
       const winnerPath = yield* tmpSock("claim-winner");
-      const lookupNode = Node.Tag()("lookup/claim", {
+      const lookupNode = Node.Service()("lookup/claim", {
         path: lookupPath,
       }).pipe(Node.asLookup);
 
-      class WinnerNode extends Node.Tag<WinnerNode, Jobs>()(
+      class WinnerNode extends Node.Service<WinnerNode, Jobs>()(
         "lookup-id/Winner",
         { path: winnerPath },
       ) {}
@@ -70,7 +70,7 @@ describe("Lookup identity claim", () => {
         ),
       );
 
-      const id = Context.get(lookupCtx, Identity.Tag);
+      const id = Context.get(lookupCtx, Identity.Service);
       const won = yield* id
         .claim(
           new Lookup.ClaimRequest({
@@ -115,7 +115,7 @@ describe("Lookup identity claim", () => {
   it.effect("same dial target refreshes without DuplicateIdentity", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("claim-refresh");
-      const node = Node.Tag()("lookup/claim-refresh", { path }).pipe(
+      const node = Node.Service()("lookup/claim-refresh", { path }).pipe(
         Node.asLookup,
       );
 
@@ -123,7 +123,7 @@ describe("Lookup identity claim", () => {
         Lookup.layerNode(node),
         Lookup.client(node),
         Effect.gen(function* () {
-          const id = yield* Identity.Tag;
+          const id = yield* Identity.Service;
           const req = new Lookup.ClaimRequest({
             key: "app/Mail",
             nodeKey: "worker-a",
@@ -143,13 +143,13 @@ describe("Lookup identity claim", () => {
   it.live("dead / unreachable incumbent identity is replaced", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("claim-dead");
-      const node = Node.Tag()("lookup/claim-dead", { path }).pipe(Node.asLookup);
+      const node = Node.Service()("lookup/claim-dead", { path }).pipe(Node.asLookup);
 
       yield* withLookup(
         Lookup.layerNode(node),
         Lookup.client(node),
         Effect.gen(function* () {
-          const id = yield* Identity.Tag;
+          const id = yield* Identity.Service;
           yield* id.claim(
             new Lookup.ClaimRequest({
               key: "app/Mail",
@@ -215,7 +215,7 @@ describe("Lookup.layerIpc (path override)", () => {
         Lookup.layerIpc(path),
         Lookup.clientOptions({ path }),
         Effect.gen(function* () {
-          const id = yield* Identity.Tag;
+          const id = yield* Identity.Service;
           const won = yield* id.claim(
             new Lookup.ClaimRequest({
               key: "k",

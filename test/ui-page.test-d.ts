@@ -1,5 +1,5 @@
 /**
- * Page.static / .dynamic / .build stamps — file-router marks (no Page.Tag yet).
+ * Page.static / .dynamic / .build stamps — file-router marks (no Page.Service yet).
  */
 import { Effect } from "effect";
 import { expectTypeOf } from "vitest";

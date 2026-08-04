@@ -10,7 +10,7 @@ import * as Node from "../../src/Node";
 
 /** `Store.Service` with node journal — bakes in Logs.layer + durable tail. */
 export const testLogsEnv = (nodeKey: string = testBillingNodeKey) => {
-  class EnvNode extends Node.Tag<EnvNode>()(nodeKey) {}
+  class EnvNode extends Node.Service<EnvNode>()(nodeKey) {}
   class EnvStore extends Store.Service<EnvStore>(`@test/LogsEnv/${nodeKey}`)(
     EnvNode.logs,
   ) {}

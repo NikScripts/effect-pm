@@ -6,13 +6,13 @@ import * as Node from "../src/Node";
 
 // C1 — unified Node set: nodes overwrite, andNode append, client(Tag) when size === 1.
 
-class NodeA extends Node.Tag<NodeA>()("nodes/A", {
+class NodeA extends Node.Service<NodeA>()("nodes/A", {
   path: "/tmp/hyperlink-ts-nodes-a.sock",
 }) {}
-class NodeB extends Node.Tag<NodeB>()("nodes/B", {
+class NodeB extends Node.Service<NodeB>()("nodes/B", {
   path: "/tmp/hyperlink-ts-nodes-b.sock",
 }) {}
-class NodeC extends Node.Tag<NodeC>()("nodes/C", {
+class NodeC extends Node.Service<NodeC>()("nodes/C", {
   path: "/tmp/hyperlink-ts-nodes-c.sock",
 }) {}
 
@@ -22,7 +22,7 @@ const echoImpl = {
 
 describe("Hyperlink.nodes / andNode (C1)", () => {
   it("{ node } ctor sugar stamps set-of-one", () => {
-    class Mail extends Hyperlink.Tag<Mail>()(
+    class Mail extends Hyperlink.Service<Mail>()(
       "nodes/MailCtor",
       { ping: Hyperlink.effectFn({ n: Schema.Number }, Schema.Number) },
       { node: NodeA },
@@ -32,7 +32,7 @@ describe("Hyperlink.nodes / andNode (C1)", () => {
   });
 
   it("nodes overwrites; size 1 syncs nodeSym for client(Tag)", () => {
-    class Mail extends Hyperlink.Tag<Mail>()("nodes/MailOverwrite", {
+    class Mail extends Hyperlink.Service<Mail>()("nodes/MailOverwrite", {
       ping: Hyperlink.effectFn({ n: Schema.Number }, Schema.Number),
     }).pipe(Hyperlink.nodes([NodeA, NodeB])) {}
 
@@ -45,7 +45,7 @@ describe("Hyperlink.nodes / andNode (C1)", () => {
   });
 
   it("andNode appends one", () => {
-    class Pool extends Hyperlink.Tag<Pool>()("nodes/Pool", {
+    class Pool extends Hyperlink.Service<Pool>()("nodes/Pool", {
       ping: Hyperlink.effectFn({ n: Schema.Number }, Schema.Number),
     }).pipe(Hyperlink.nodes([NodeA])) {}
 
@@ -59,7 +59,7 @@ describe("Hyperlink.nodes / andNode (C1)", () => {
 
   it("distributedOf aliases nodesOf; bare distributed stamps empty set", () => {
     expect(Hyperlink.distributedOf).toBe(Hyperlink.nodesOf);
-    class Mail extends Hyperlink.Tag<Mail>()("nodes/MailBare", {
+    class Mail extends Hyperlink.Service<Mail>()("nodes/MailBare", {
       ping: Hyperlink.effectFn({ n: Schema.Number }, Schema.Number),
     }).pipe(Hyperlink.distributed) {}
     expect(Hyperlink.nodesOf(Mail)).toEqual([]);
@@ -67,7 +67,7 @@ describe("Hyperlink.nodes / andNode (C1)", () => {
   });
 
   it("identity rejects andNode that would exceed one Node", () => {
-    class Solo extends Hyperlink.Tag<Solo>()("nodes/Solo", {
+    class Solo extends Hyperlink.Service<Solo>()("nodes/Solo", {
       ping: Hyperlink.effectFn({ n: Schema.Number }, Schema.Number),
     }).pipe(Hyperlink.identity, Hyperlink.nodes([NodeA])) {}
 
@@ -79,8 +79,8 @@ describe("Hyperlink.nodes / andNode (C1)", () => {
   it.live("client dials the sole node after nodes([X])", () =>
     Effect.gen(function* () {
       const path = `/tmp/hyperlink-ts-nodes-client-${process.pid}.sock`;
-      class Worker extends Node.Tag<Worker>()("nodes/Worker", { path }) {}
-      class Ping extends Hyperlink.Tag<Ping>()("nodes/Ping", {
+      class Worker extends Node.Service<Worker>()("nodes/Worker", { path }) {}
+      class Ping extends Hyperlink.Service<Ping>()("nodes/Ping", {
         ping: Hyperlink.effectFn({ n: Schema.Number }, Schema.Number),
       }).pipe(Hyperlink.nodes([Worker])) {}
 
@@ -102,8 +102,8 @@ describe("Hyperlink.nodes / andNode (C1)", () => {
   it.live("client dials the sole node after andNode(X) from empty", () =>
     Effect.gen(function* () {
       const path = `/tmp/hyperlink-ts-nodes-andnode-${process.pid}.sock`;
-      class Worker extends Node.Tag<Worker>()("nodes/AndWorker", { path }) {}
-      class Ping extends Hyperlink.Tag<Ping>()("nodes/AndPing", {
+      class Worker extends Node.Service<Worker>()("nodes/AndWorker", { path }) {}
+      class Ping extends Hyperlink.Service<Ping>()("nodes/AndPing", {
         ping: Hyperlink.effectFn({ n: Schema.Number }, Schema.Number),
       }).pipe(Hyperlink.andNode(Worker)) {}
 
@@ -124,8 +124,8 @@ describe("Hyperlink.nodes / andNode (C1)", () => {
   it.live("Hyperlink.client(Tag, Worker) auto-connects without Node.connect", () =>
     Effect.gen(function* () {
       const path = `/tmp/hyperlink-ts-nodes-autoconnect-${process.pid}.sock`;
-      class Worker extends Node.Tag<Worker>()("nodes/AutoWorker", { path }) {}
-      class Ping extends Hyperlink.Tag<Ping>()("nodes/AutoPing", {
+      class Worker extends Node.Service<Worker>()("nodes/AutoWorker", { path }) {}
+      class Ping extends Hyperlink.Service<Ping>()("nodes/AutoPing", {
         ping: Hyperlink.effectFn({ n: Schema.Number }, Schema.Number),
       }) {}
 
@@ -147,8 +147,8 @@ describe("Hyperlink.nodes / andNode (C1)", () => {
   it.live("node-bearing client(Tag) auto-connects when { node } is addressed", () =>
     Effect.gen(function* () {
       const path = `/tmp/hyperlink-ts-nodes-hosted-${process.pid}.sock`;
-      class Worker extends Node.Tag<Worker>()("nodes/HostedWorker", { path }) {}
-      class Ping extends Hyperlink.Tag<Ping>()(
+      class Worker extends Node.Service<Worker>()("nodes/HostedWorker", { path }) {}
+      class Ping extends Hyperlink.Service<Ping>()(
         "nodes/HostedPing",
         { ping: Hyperlink.effectFn({ n: Schema.Number }, Schema.Number) },
         { node: Worker },

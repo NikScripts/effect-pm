@@ -18,7 +18,7 @@ const { spec, readiness } = Hyperlink.monitoredDependency({
 });
 
 class Database extends Hyperlink.withReadiness(
-  Hyperlink.Tag<Database>()("monitored/Database", spec),
+  Hyperlink.Service<Database>()("monitored/Database", spec),
   readiness,
 ) {}
 

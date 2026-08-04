@@ -6,7 +6,7 @@ import { Effect, Schema, Stream } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import * as Gate from "hyperlink-ts/Gate";
 
-class Double extends Gate.Service<Double>()("docs/Double", {
+class Double extends Gate.define<Double>()("docs/Double", {
   payload: Schema.Number,
   success: Schema.Number,
   concurrency: 2, // only 2 run at once; extra calls queue behind the gate

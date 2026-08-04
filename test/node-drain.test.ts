@@ -12,7 +12,7 @@ import {
   httpClient as nodeStatusHttpClient,
 } from "../src/internal/nodeStatus";
 
-class Jobs extends Hyperlink.Tag<Jobs>()("drain/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("drain/Jobs", {
   ping: Hyperlink.effect(Schema.String),
 }) {}
 
@@ -34,7 +34,7 @@ describe("Node.drain", () => {
 
       yield* withPort((port) =>
         Effect.gen(function* () {
-          const node = Node.Tag()("drain/ready-node", {
+          const node = Node.Service()("drain/ready-node", {
             url: `http://127.0.0.1:${port}/rpc`,
             kind: "Http",
           });

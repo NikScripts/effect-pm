@@ -8,14 +8,14 @@ import * as Hyperlink from "../src/Hyperlink";
 import * as ShardMap from "../src/ShardMap";
 import * as Node from "../src/Node";
 
-class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
+class DropletEast extends Node.Service<DropletEast>()("app/DropletEast") {}
 
 const Session = Schema.Struct({
   id: Schema.String,
   userId: Schema.String,
 });
 
-class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
+class Sessions extends ShardMap.Service<Sessions>()("app/Sessions", {
   key: Schema.String,
   value: Session,
   keyOf: (s) => s.id,

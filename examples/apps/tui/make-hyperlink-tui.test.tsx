@@ -5,7 +5,7 @@ import { expect, it } from "vitest";
 import * as Hyperlink from "../../../src/Hyperlink";
 import { make } from "../../../src/tui";
 
-class Counter extends Hyperlink.Tag<Counter>()("TuiCounter", {
+class Counter extends Hyperlink.Service<Counter>()("TuiCounter", {
   current: Hyperlink.effect(Schema.Number),
   increment: Hyperlink.effectFn({ by: Schema.Number }),
   reset: Hyperlink.effect(Schema.Void).annotate({ destructive: true }),

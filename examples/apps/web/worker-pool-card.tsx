@@ -2,7 +2,7 @@
  * @module examples/apps/web/worker-pool-card
  *
  * Bring-your-own View for `WorkerPool` — a consumer-defined multi-node Hyperlink with no shipped
- * card. Pattern: `Views.Card.Tag` → skin → `Views.only` Layer → Dashboard `views`.
+ * card. Pattern: `Views.Card.Service` → skin → `Views.only` Layer → Dashboard `views`.
  *
  * Fields are plain `Hyperlink.effect`s (not reactive refs): poll on a tick, same idea as the shipped
  * daemon card. One tick reads `active` / `fleetActive` / `activeByNode`.
@@ -18,7 +18,7 @@ import * as Views from "../../../src/ui/Views";
 export const workerPoolCardSpec = { kind: "examples/worker-pool-card" } as const;
 
 /** Dashboard card handle (`Views.Card` ancestor). */
-export class WorkerPoolCard extends Views.Card.Tag<
+export class WorkerPoolCard extends Views.Card.Service<
   WorkerPoolCard,
   { readonly dense?: boolean }
 >()("examples/apps/web/worker-pool-card", {

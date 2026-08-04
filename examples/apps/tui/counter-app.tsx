@@ -22,7 +22,7 @@ import {
   useAtomValue,
 } from "../../../src/ui/atom-react";
 
-class Counter extends Hyperlink.Tag<Counter>()("Counter", {
+class Counter extends Hyperlink.Service<Counter>()("Counter", {
   current: Hyperlink.effect(Schema.Number),
   reset: Hyperlink.effect(Schema.Void).annotate({ destructive: true }),
   increment: Hyperlink.effectFn({ by: Schema.Number }),

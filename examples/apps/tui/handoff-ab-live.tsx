@@ -127,10 +127,10 @@ const waitUntil = <A, E, R>(
   });
 
 const nodesServing = (
-  lookupCtx: Context.Context<Directory.Tag>,
+  lookupCtx: Context.Context<Directory.Service>,
   serviceKey: string,
 ) =>
-  Context.get(lookupCtx, Directory.Tag)
+  Context.get(lookupCtx, Directory.Service)
     .nodesServing(new Lookup.NodesServingRequest({ serviceKey }))
     .pipe(Effect.provide(lookupCtx));
 
@@ -140,18 +140,18 @@ const boot = Effect.gen(function* () {
   const pathA = `/tmp/hyperlink-ts-handoff-live-a-${String(now)}.sock`;
   const pathB = `/tmp/hyperlink-ts-handoff-live-b-${String(now)}.sock`;
 
-  const lookupNode = Node.Tag()("examples/handoff-live/Lookup", {
+  const lookupNode = Node.Service()("examples/handoff-live/Lookup", {
     path: lookupPath,
   }).pipe(Node.asLookup);
 
-  class Jobs extends WorkPool.Tag<Jobs>()("examples/handoff-live/Jobs", {
+  class Jobs extends WorkPool.Service<Jobs>()("examples/handoff-live/Jobs", {
     payload: Job,
   }) {}
 
-  class WorkerA extends Node.Tag<WorkerA, Jobs>()("examples/handoff-live/WorkerA", {
+  class WorkerA extends Node.Service<WorkerA, Jobs>()("examples/handoff-live/WorkerA", {
     path: pathA,
   }) {}
-  class WorkerB extends Node.Tag<WorkerB, Jobs>()("examples/handoff-live/WorkerB", {
+  class WorkerB extends Node.Service<WorkerB, Jobs>()("examples/handoff-live/WorkerB", {
     path: pathB,
   }) {}
 

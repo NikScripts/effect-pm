@@ -53,4 +53,4 @@ Router.fileSystem(fileEntries)
 ```
 
 Page marks: `hyperlink-ts/ui/Page` (`static` / `dynamic` / `build` / `layout`).
-`Page.Tag` + `createPages` adapter still open.
+`Page.Service` + `createPages` adapter still open.

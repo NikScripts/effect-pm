@@ -21,7 +21,7 @@ const ServedJob = Schema.Struct({
   id: Schema.String,
 });
 
-class ServedQueue extends WorkPool.Tag<ServedQueue>()("examples/ServedQueue", {
+class ServedQueue extends WorkPool.Service<ServedQueue>()("examples/ServedQueue", {
   payload: ServedJob,
 }) {}
 

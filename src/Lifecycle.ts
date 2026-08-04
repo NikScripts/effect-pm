@@ -11,7 +11,7 @@
  * ## Spec (Subscribable badge)
  *
  * ```ts
- * class Runner extends Hyperlink.Tag<Runner>()("app/Runner", {
+ * class Runner extends Hyperlink.Service<Runner>()("app/Runner", {
  *   lifecycle: Lifecycle.stateRef,           // ≡ Hyperlink.ref(State).pipe(asState)
  *   lifecycleEvents: Lifecycle.eventStream,
  *   start: Hyperlink.effect(Schema.Void).pipe(Lifecycle.asStart),

@@ -42,15 +42,15 @@ import { Layer } from "effect"
 import * as View from "hyperlink-ts/ui/View"
 import * as Views from "hyperlink-ts/ui/Views"
 
-class PoolCard extends Views.Card.Tag<PoolCard>()(
+class PoolCard extends Views.Card.Service<PoolCard>()(
   "app/view/pool-card",
   { spec: { kind: "app/queue" } as const },
 ) {}
-class PoolDetail extends Views.Detail.Tag<PoolDetail>()(
+class PoolDetail extends Views.Detail.Service<PoolDetail>()(
   "app/view/pool-detail",
   { spec: { kind: "app/queue" } as const },
 ) {}
-class PoolPage extends Views.Page.Tag<PoolPage>()(
+class PoolPage extends Views.Page.Service<PoolPage>()(
   "app/view/pool-page",
   { spec: { kind: "app/queue" } as const },
 ) {}
@@ -95,7 +95,7 @@ Second type arg on `Tag` — additive props; Prototype annotations as the value 
 import * as View from "hyperlink-ts/ui/View"
 import * as Views from "hyperlink-ts/ui/Views"
 
-class DenseCard extends Views.Card.Tag<
+class DenseCard extends Views.Card.Service<
   DenseCard,
   { readonly dense?: boolean }
 >()("app/view/dense-card", {
@@ -112,7 +112,7 @@ export const layer = View.provide(DenseCard, (props) => {
 })
 ```
 
-Naked (no size): `View.Tag<Greeter, { name: string }>()("…")`.
+Naked (no size): `View.Service<Greeter, { name: string }>()("…")`.
 
 Open-`R` compose + `View.mount` (bag `gen` / `succeed`):
 [Typed Views](/docs/view-typed-jsx) — Twoslash + live demo.
@@ -156,7 +156,7 @@ import * as View from "hyperlink-ts/ui/View"
 import * as Views from "hyperlink-ts/ui/Views"
 import { WorkerPool } from "./hub"
 
-export class WorkerPoolCard extends Views.Card.Tag<
+export class WorkerPoolCard extends Views.Card.Service<
   WorkerPoolCard,
   { readonly dense?: boolean }
 >()("examples/apps/web/worker-pool-card", {

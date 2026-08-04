@@ -41,7 +41,7 @@ const EmailJob = Schema.Struct({
 })
 
 // The tag: the contract. `Self` is the class itself (Effect's two-stage form).
-class Emails extends WorkPool.Tag<Emails>()("app/Emails", {
+class Emails extends WorkPool.Service<Emails>()("app/Emails", {
   payload: EmailJob,
 }) {}
 
@@ -60,7 +60,7 @@ That's a complete, running WorkPool. To use it, `yield* Emails` for the handle a
 import { WorkPool } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
-class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+class Emails extends WorkPool.Service<Emails>()("app/Emails", { payload: EmailJob }) {}
 // ---cut---
 const program = Effect.gen(function* () {
   const emails = yield* Emails
@@ -81,7 +81,7 @@ Hover `emails` and you'll see its type — the named handle:
 import { WorkPool } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
-class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+class Emails extends WorkPool.Service<Emails>()("app/Emails", { payload: EmailJob }) {}
 const program = Effect.gen(function* () {
 // ---cut---
 const emails = yield* Emails
@@ -129,7 +129,7 @@ how it drains:
 import { WorkPool } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
-class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+class Emails extends WorkPool.Service<Emails>()("app/Emails", { payload: EmailJob }) {}
 // ---cut---
 const EmailsLive = WorkPool.layer(Emails, {
   // runs once per item; the second arg is per-attempt context
@@ -171,7 +171,7 @@ import { Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
 
 // declare the failure type on the tag…
-class Emails extends WorkPool.Tag<Emails>()("app/Emails", {
+class Emails extends WorkPool.Service<Emails>()("app/Emails", {
   payload: EmailJob,
   error: Schema.String,     // the worker may fail with a string
 }) {}
@@ -200,7 +200,7 @@ Four verbs put work in. Three map to priority levels (`high` / `normal` / `low`)
 import { WorkPool } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
-class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+class Emails extends WorkPool.Service<Emails>()("app/Emails", { payload: EmailJob }) {}
 const program = Effect.gen(function* () {
 const emails = yield* Emails
 // ---cut---
@@ -228,7 +228,7 @@ stream you can render:
 import { WorkPool } from "hyperlink-ts"
 import { Effect, Schema, Stream } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
-class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+class Emails extends WorkPool.Service<Emails>()("app/Emails", { payload: EmailJob }) {}
 declare const onDepth: (n: number) => Effect.Effect<void>
 const program = Effect.gen(function* () {
 const emails = yield* Emails
@@ -248,7 +248,7 @@ Subscribe once, off-fiber, and dispatch by tag:
 import { WorkPool, Hyperlink } from "hyperlink-ts"
 import { Cause, Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
-class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+class Emails extends WorkPool.Service<Emails>()("app/Emails", { payload: EmailJob }) {}
 const program = Effect.gen(function* () {
 const emails = yield* Emails
 // ---cut---
@@ -299,7 +299,7 @@ import { Effect, Schema } from "effect"
 // ---cut---
 const Job = Schema.Struct({ id: Schema.String })
 
-class Doubler extends WorkPool.Tag<Doubler>()("app/Doubler", {
+class Doubler extends WorkPool.Service<Doubler>()("app/Doubler", {
   payload: Job,
   success: Schema.Number,   // the worker returns a number
 }) {}
@@ -316,7 +316,7 @@ The handle types as `WorkPool<{ id: string }, number, never, never>`, and
 
 `Tag` + `layer` keeps the contract and the worker separate — which is what makes a
 queue location-transparent (the same tag, a different layer, and it runs remotely).
-When you don't need that split, `WorkPool.Service` fuses both into one class — a
+When you don't need that split, `WorkPool.define` fuses both into one class — a
 self-contained [**Service**](/docs/glossary#service):
 
 {.twoslash}
@@ -325,7 +325,7 @@ import { WorkPool } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
 // ---cut---
-class Emails extends WorkPool.Service<Emails, typeof EmailJob.Type, never>()(
+class Emails extends WorkPool.define<Emails, typeof EmailJob.Type, never>()(
   "app/Emails",
   {
     concurrency: 4,
@@ -356,7 +356,7 @@ next — retry, dead-letter, or drop:
 import { WorkPool } from "hyperlink-ts"
 import { Cause, Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
-class Emails extends WorkPool.Tag<Emails>()("app/Emails", {
+class Emails extends WorkPool.Service<Emails>()("app/Emails", {
   payload: EmailJob,
   error: Schema.String,
 }) {}
@@ -391,7 +391,7 @@ ceiling bites:
 import { WorkPool } from "hyperlink-ts"
 import { Duration, Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
-class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+class Emails extends WorkPool.Service<Emails>()("app/Emails", { payload: EmailJob }) {}
 // ---cut---
 const EmailsLive = WorkPool.layer(Emails, {
   effect: (job) => Effect.log(`send ${job.to}`),
@@ -422,7 +422,7 @@ Workers fork on layer acquire by default. To keep the pool **idle** until you ca
 import { Hyperlink, WorkPool } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
-class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+class Emails extends WorkPool.Service<Emails>()("app/Emails", { payload: EmailJob }) {}
 const EmailsLive = WorkPool.layer(Emails, {
   effect: (job) => Effect.log(job.to),
 }).pipe(Hyperlink.deferStart)
@@ -447,7 +447,7 @@ subscriber, then let it rip. Start it paused and `resume` when ready:
 import { WorkPool } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
-class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+class Emails extends WorkPool.Service<Emails>()("app/Emails", { payload: EmailJob }) {}
 const EmailsLive = WorkPool.layer(Emails, {
   effect: (job) => Effect.log(job.to),
   paused: true,        // workers are forked but idle
@@ -472,7 +472,7 @@ queue into a durable poller over an external source (a table, a topic, an inbox)
 import { WorkPool } from "hyperlink-ts"
 import { Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
-class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+class Emails extends WorkPool.Service<Emails>()("app/Emails", { payload: EmailJob }) {}
 declare const nextBatch: Effect.Effect<ReadonlyArray<{ to: string; subject: string }>>
 // ---cut---
 const EmailsLive = WorkPool.layer(Emails, {
@@ -534,7 +534,7 @@ import * as WorkPool from "hyperlink-ts/WorkPool"
 import { Effect, Schema } from "effect"
 
 const Job = Schema.Struct({ id: Schema.String })
-class Jobs extends WorkPool.Tag<Jobs>()("@app/Jobs", { payload: Job }) {}
+class Jobs extends WorkPool.Service<Jobs>()("@app/Jobs", { payload: Job }) {}
 
 class JobsStore extends Store.Service<JobsStore>("@app/JobsStore")(
   WorkPool.store(Jobs),
@@ -582,7 +582,7 @@ import { SQLiteDurableWorkPoolStore } from "hyperlink-ts/storage/sqlite"
 import { Effect, Layer, Schema } from "effect"
 
 const Job = Schema.Struct({ id: Schema.String })
-class Jobs extends WorkPool.Tag<Jobs>()("@app/Jobs", { payload: Job }) {}
+class Jobs extends WorkPool.Service<Jobs>()("@app/Jobs", { payload: Job }) {}
 declare const effect: (job: typeof Job.Type) => Effect.Effect<void>
 
 const live = WorkPool.layer(Jobs, { effect }).pipe(
@@ -605,7 +605,7 @@ import * as WorkPool from "hyperlink-ts/WorkPool"
 import { Effect, Layer, Schema } from "effect"
 
 const Job = Schema.Struct({ id: Schema.String })
-class Jobs extends WorkPool.Tag<Jobs>()("@app/Jobs", { payload: Job }) {}
+class Jobs extends WorkPool.Service<Jobs>()("@app/Jobs", { payload: Job }) {}
 declare const effect: (job: typeof Job.Type) => Effect.Effect<void>
 
 const withHistory = WorkPool.layer(Jobs, { effect }).pipe(
@@ -662,7 +662,7 @@ Live suite: `test/handoff-ab-cutover.test.ts`.
 import { WorkPool } from "hyperlink-ts"
 import { Layer, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String, subject: Schema.String })
-class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+class Emails extends WorkPool.Service<Emails>()("app/Emails", { payload: EmailJob }) {}
 declare const EmailsLive: Layer.Layer<Emails>
 // ---cut---
 const Tuned = EmailsLive.pipe(

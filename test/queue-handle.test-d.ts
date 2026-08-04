@@ -26,7 +26,7 @@ const _contractToHandle: Handle = contract;
 void [_handleToContract, _contractToHandle];
 
 // and confirm the naming actually took effect: `yield* Emails` (= Shape<Emails>) IS the named handle.
-class Emails extends WorkPool.Tag<Emails>()("test/queue-handle/Emails", {
+class Emails extends WorkPool.Service<Emails>()("test/queue-handle/Emails", {
   payload: EmailJob,
 }) {}
 declare const emailsService: Hyperlink.Shape<typeof Emails>;
@@ -64,7 +64,7 @@ assertExact<
 
 // ── DoD #4: a tag declaring `error` surfaces that error type on the named handle (Error param,
 // which flows into `events`' `Cause<E>`). A tag declaring `success` surfaces it likewise. ───────────
-class Failing extends WorkPool.Tag<Failing>()("test/queue-handle/Failing", {
+class Failing extends WorkPool.Service<Failing>()("test/queue-handle/Failing", {
   payload: EmailJob,
   success: Schema.Number,
   error: Schema.String,

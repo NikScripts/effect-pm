@@ -2,7 +2,7 @@
  * @module ui/Views
  *
  * Hyperlink dashboard views — size chrome (Card/Detail/Page), Registry, bind/only,
- * react matchers, and compose. Built on `last-ts/View` DI (Tag/Prototype/provide).
+ * react matchers, and compose. Built on `last-ts/View` DI (Service/Prototype/provide).
  *
  * Size lives on the Card/Detail/Page **ancestor** prototypes — not on View.
  */
@@ -42,7 +42,7 @@ export type PageKind = ReturnType<typeof ViewKind.Page>;
 
 /**
  * Size requirement on a dashboard prototype ancestor — fulfill with
- * `size: ViewKind.Card()` (etc.) before minting a Tag.
+ * `size: ViewKind.Card()` (etc.) before minting a Service.
  *
  * @public
  */
@@ -91,7 +91,7 @@ export const SizeChrome: View.OpenPrototype<ViewProps, WithSize> = View.Prototyp
 
 /**
  * Size-chrome add-ons — {@link SizeChrome} with `annotations.size` fulfilled.
- * Mint with `Views.Card.Tag<Self, Props?>()(key, annotations?)` — bag stamps under
+ * Mint with `Views.Card.Service<Self, Props?>()(key, annotations?)` — bag stamps under
  * {@link View.annotationsSym}. Read with {@link View.annotations} (Effect) or
  * {@link View.getAnnotations}. Matcher components are **not** these — use
  * `Views.react(…).Card` or {@link useMatch}.

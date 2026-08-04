@@ -24,25 +24,25 @@ import type { AnyMethod } from "../src/Hyperlink";
 const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
 
 /** Disarmed so we can subscribe before emitting, then drive with `run`. */
-class LiveEventsProc extends Daemon.Tag<LiveEventsProc>()(
+class LiveEventsProc extends Daemon.Service<LiveEventsProc>()(
   "test/daemon-events/Live",
 ).pipe(Daemon.schedule([])) {}
 
-class TypedFailProc extends Daemon.Tag<TypedFailProc>()("test/daemon-events/TypedFail", {
+class TypedFailProc extends Daemon.Service<TypedFailProc>()("test/daemon-events/TypedFail", {
   error: FetchErr,
 }).pipe(Daemon.schedule([])) {}
 
-class StringFailProc extends Daemon.Tag<StringFailProc>()(
+class StringFailProc extends Daemon.Service<StringFailProc>()(
   "test/daemon-events/StringFail",
 ).pipe(Daemon.schedule([])) {}
 
-class InterruptProc extends Daemon.Tag<InterruptProc>()(
+class InterruptProc extends Daemon.Service<InterruptProc>()(
   "test/daemon-events/Interrupt",
 ).pipe(Daemon.schedule([])) {}
 
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 
-class SuccessEventsProc extends Daemon.Tag<SuccessEventsProc>()(
+class SuccessEventsProc extends Daemon.Service<SuccessEventsProc>()(
   "test/daemon-events/Success",
   { success: Price },
 ).pipe(Daemon.schedule([])) {}

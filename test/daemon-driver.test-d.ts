@@ -10,7 +10,7 @@ class WorkerDep extends Context.Service<WorkerDep, string>()(
   "hyperlink-ts/test/daemon-driver.test-d/WorkerDep",
 ) {}
 
-class TypedProc extends Daemon.Tag<TypedProc>()("test/built-resource/Typed") {}
+class TypedProc extends Daemon.Service<TypedProc>()("test/built-resource/Typed") {}
 
 type Built = Hyperlink.Driver<DaemonSpec, WorkerDep>;
 

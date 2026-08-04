@@ -10,20 +10,20 @@ import { portOf } from "../src/internal/nodeCore";
 
 // Option B: a bare-port node keeps its port as data; the eager `url` is a localhost PREVIEW, and the
 // authoritative dial host resolves from the client `clientHost` Config at the dial boundary. So
-// `Node.Tag(port)` dialed and `protocolHttp(port)` behave identically — Config at the edge, value pure.
+// `Node.Service(port)` dialed and `protocolHttp(port)` behave identically — Config at the edge, value pure.
 
 const PORT = 7813;
 
-class Echo extends Hyperlink.Tag<Echo>()(
+class Echo extends Hyperlink.Service<Echo>()(
   "cfg-dial/Echo",
   { ping: Hyperlink.effect(Schema.String) },
-  { node: Node.Tag<never>()("cfg-dial/node", PORT) },
+  { node: Node.Service<never>()("cfg-dial/node", PORT) },
 ) {}
 
 describe("bare-port node: localhost preview, Config-resolved dial host", () => {
   it("keeps a sync localhost `url` preview but carries the port as data", () => {
-    class W extends Node.Tag<W>()("cfg-dial/w", 3009) {}
-    class U extends Node.Tag<U>()("cfg-dial/u", "http://example.com/rpc") {}
+    class W extends Node.Service<W>()("cfg-dial/w", 3009) {}
+    class U extends Node.Service<U>()("cfg-dial/u", "http://example.com/rpc") {}
     expect(W.url).toBe("http://localhost:3009/rpc"); // preview, unchanged (pure, sync)
     expect(portOf(W)).toBe(3009); // the intent, carried for the dial
     expect(portOf(U)).toBeUndefined(); // a full url has no port to resolve

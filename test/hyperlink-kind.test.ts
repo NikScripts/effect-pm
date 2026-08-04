@@ -9,7 +9,7 @@ import * as FleetHealth from "../src/FleetHealth";
 import * as Telemetry from "../src/Telemetry";
 
 // Each contract stamps its canonical kind on the tag, so `Hyperlink.kindOf` classifies a tag
-// without sniffing its spec. Every tag carries a kind: a bare `Hyperlink.Tag` defaults to
+// without sniffing its spec. Every tag carries a kind: a bare `Hyperlink.Service` defaults to
 // `Hyperlink.kind` (`…/Hyperlink`), so nothing is ever kind-less.
 const Item = Schema.Struct({ n: Schema.Number });
 
@@ -18,17 +18,17 @@ const ping = HttpApiEndpoint.get("ping", "/ping", {
 });
 const api = HttpApi.make("kindtest-api").add(HttpApiGroup.make("g").add(ping));
 
-class Q extends WorkPool.Tag<Q>()("kindtest/Q", { payload: Item }) {}
-class P extends Daemon.Tag<P>()("kindtest/P") {}
+class Q extends WorkPool.Service<Q>()("kindtest/Q", { payload: Item }) {}
+class P extends Daemon.Service<P>()("kindtest/P") {}
 class C extends WorkPool.priority<C>()("kindtest/C", { payload: Item, laneCount: 3 }) {}
 class M extends Gate.HttpApiClient<M>()("kindtest/M", api) {}
-class T extends Telemetry.Tag<T>()() {}
-class F extends FleetHealth.Tag<F>()() {}
-class Bare extends Hyperlink.Tag<Bare>()("kindtest/Bare", {
+class T extends Telemetry.Service<T>()() {}
+class F extends FleetHealth.Service<F>()() {}
+class Bare extends Hyperlink.Service<Bare>()("kindtest/Bare", {
   ping: Hyperlink.effect(Schema.String),
 }) {}
 
-it("each contract stamps its kind; a bare Hyperlink.Tag defaults to Hyperlink.kind", () => {
+it("each contract stamps its kind; a bare Hyperlink.Service defaults to Hyperlink.kind", () => {
   expect(Hyperlink.kindOf(Q)).toBe(WorkPool.kind);
   expect(Hyperlink.kindOf(P)).toBe(Daemon.kind);
   expect(Hyperlink.kindOf(C)).toBe(WorkPool.priorityKind);

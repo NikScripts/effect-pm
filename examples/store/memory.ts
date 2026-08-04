@@ -24,7 +24,7 @@ const contract = Store.contract(
   }),
 );
 
-class LabSensor extends Hyperlink.Tag<LabSensor>()("@examples/LabSensor", {
+class LabSensor extends Hyperlink.Service<LabSensor>()("@examples/LabSensor", {
   temperature: Hyperlink.ref(Schema.Number),
 }).pipe(Hyperlink.withStore(contract)) {}
 

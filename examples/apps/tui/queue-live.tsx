@@ -39,8 +39,8 @@ import * as Node from "../../../src/Node";
 // ── a real queue ────────────────────────────────────────────────────────────
 const NAME = "@acme/queues/MailQueue";
 const Job = Schema.Struct({ id: Schema.String });
-class MailQueue extends WorkPool.Tag<MailQueue>()(NAME, { payload: Job }) {}
-class TuiNode extends Node.Tag<TuiNode>()("acme/tui") {}
+class MailQueue extends WorkPool.Service<MailQueue>()(NAME, { payload: Job }) {}
+class TuiNode extends Node.Service<TuiNode>()("acme/tui") {}
 class TuiStore extends Store.Service<TuiStore>("@examples/apps/tui/queue-live/Store")(
   TuiNode.logs,
   WorkPool.store(MailQueue),
@@ -64,7 +64,7 @@ const timeStr = (t: number): string => new Date(t).toLocaleTimeString();
 
 // worker: variable execution, occasional failure, logging each step. Logs.layer +
 // Hyperlink.logs surfaces those lines on the live log tail (filter relay by resource key).
-class TuiNode extends Node.Tag<TuiNode>()("acme/tui") {}
+class TuiNode extends Node.Service<TuiNode>()("acme/tui") {}
 const QueueLayer = WorkPool.layerMemory(MailQueue, {
   effect: (job: { readonly id: string }) =>
     Effect.gen(function* () {

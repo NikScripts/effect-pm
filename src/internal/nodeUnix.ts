@@ -12,7 +12,7 @@ import {
   ListenNode,
   IpcListenArg,
   ListenOptions,
-  Tag,
+  Service as Tag,
   UnaddressedNode,
 } from "./nodeCore"
 import { unaddressedLayer } from "./nodeConnect"
@@ -279,7 +279,7 @@ const ipcListenOn = (
             ],
           }) as AnyNode & { readonly key: string };
           const Identity = yield* Effect.promise(() => import("../Identity"));
-          const identity = yield* Effect.serviceOption(Identity.Tag);
+          const identity = yield* Effect.serviceOption(Identity.Service);
           if (Option.isNone(identity)) {
             return yield* new Hyperlink.IdentitySelfRequired({ tag: node.key });
           }

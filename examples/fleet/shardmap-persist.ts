@@ -18,14 +18,14 @@ import * as Hyperlink from "../../src/Hyperlink";
 import * as Node from "../../src/Node";
 import * as ShardMap from "../../src/ShardMap";
 
-class SoloNode extends Node.Tag<SoloNode>()("examples/fleet/SoloNode") {}
+class SoloNode extends Node.Service<SoloNode>()("examples/fleet/SoloNode") {}
 
 const Session = Schema.Struct({
   id: Schema.String,
   userId: Schema.String,
 });
 
-class Sessions extends ShardMap.Tag<Sessions>()("examples/fleet/PersistedSessions", {
+class Sessions extends ShardMap.Service<Sessions>()("examples/fleet/PersistedSessions", {
   key: Schema.String,
   value: Session,
   keyOf: (session) => session.id,

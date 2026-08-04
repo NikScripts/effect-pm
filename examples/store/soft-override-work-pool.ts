@@ -18,7 +18,7 @@ import * as WorkPool from "../../src/WorkPool";
 
 const Job = Schema.Struct({ id: Schema.String });
 
-class ImportQueue extends WorkPool.Tag<ImportQueue>()("examples/store/ImportQueue", {
+class ImportQueue extends WorkPool.Service<ImportQueue>()("examples/store/ImportQueue", {
   payload: Job,
 }) {}
 

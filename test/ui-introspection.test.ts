@@ -4,14 +4,14 @@ import { Group, Daemon, specOf, methodMeta } from "../src";
 import * as Node from "../src/Node";
 
 // A dashboard/TUI needs three things from the package, all proven here:
-//  1. walk a Group.Tag tree (members + nesting),
+//  1. walk a Group.Service tree (members + nesting),
 //  2. introspect each resource's contract (specOf + methodMeta → kind/description/destructive/streaming),
 //  3. drive it over the wire (Hyperlink.client / http — proven in the node/topology tests).
-class MiniNode extends Node.Tag<MiniNode>()("ui/miniNode") {}
-class Roster extends Daemon.Tag<Roster>()("ui/Roster") {}
-class Poller extends Daemon.Tag<Poller>()("ui/Poller", { node: MiniNode }) {}
-class Nwsl extends Group.Tag<Nwsl>("ui/Nwsl")({ Roster, Poller }) {}
-class Hub extends Group.Tag<Hub>("ui/Hub")({ Nwsl }) {}
+class MiniNode extends Node.Service<MiniNode>()("ui/miniNode") {}
+class Roster extends Daemon.Service<Roster>()("ui/Roster") {}
+class Poller extends Daemon.Service<Poller>()("ui/Poller", { node: MiniNode }) {}
+class Nwsl extends Group.Service<Nwsl>("ui/Nwsl")({ Roster, Poller }) {}
+class Hub extends Group.Service<Hub>("ui/Hub")({ Nwsl }) {}
 
 // the UI writes its OWN traversal — the package exposes members + the Group.isGroup discriminator
 // (note: tags are classes, so a naive `typeof === "object"` check would wrongly treat a subgroup

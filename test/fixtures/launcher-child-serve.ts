@@ -8,7 +8,7 @@ import { Effect, Layer, Redacted, Schema } from "effect";
 import * as Hyperlink from "../../src/Hyperlink";
 import * as Node from "../../src/Node";
 
-class Jobs extends Hyperlink.Tag<Jobs>()("launcher-child/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("launcher-child/Jobs", {
   ping: Hyperlink.effect(Schema.String),
 }) {}
 
@@ -23,7 +23,7 @@ const program =
   tokenArg.length === 0
     ? Effect.die("launcher-child-serve: need <port> <assume-token>")
     : Effect.gen(function* () {
-        const node = Node.Tag()("launcher/child", {
+        const node = Node.Service()("launcher/child", {
           url: `http://127.0.0.1:${String(port)}/rpc`,
           kind: "Http",
         });

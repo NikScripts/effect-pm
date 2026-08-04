@@ -18,7 +18,7 @@ import * as Hyperlink from "../../src/Hyperlink";
 import * as Launcher from "../../src/Launcher";
 import * as Node from "../../src/Node";
 
-class Jobs extends Hyperlink.Tag<Jobs>()("examples/launcher-ready/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("examples/launcher-ready/Jobs", {
   ping: Hyperlink.effect(Schema.String),
 }) {}
 
@@ -27,7 +27,7 @@ const program = Effect.gen(function* () {
   const entry = `${root}/examples/launcher/ready-worker-child.ts`;
   const now = yield* Clock.currentTimeMillis;
   const port = 29_500 + (now % 200);
-  const worker = Node.Tag()("examples/launcher-ready-services/Worker", {
+  const worker = Node.Service()("examples/launcher-ready-services/Worker", {
     url: `http://127.0.0.1:${String(port)}/rpc`,
     kind: "Http",
   });

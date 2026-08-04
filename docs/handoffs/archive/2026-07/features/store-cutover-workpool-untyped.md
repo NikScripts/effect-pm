@@ -7,10 +7,10 @@ Prereq: `store-cutover-00-store-core.md`.
 ## Tag API — config object only (2026-07-09)
 
 **All wire schemas live on the config object** — no positional schema overloads on any toolkit `Tag`.
-untyped WorkPool takes the same optional `success` / `error` slots as {@link WorkPool.Tag} (plus lane fields).
+untyped WorkPool takes the same optional `success` / `error` slots as {@link WorkPool.Service} (plus lane fields).
 
 ```ts
-WorkPool.Tag /* untyped .Service */<Jobs>()("@app/Jobs", {
+WorkPool.Service /* untyped .Service */<Jobs>()("@app/Jobs", {
   payload: Job,
   levelCount: 3,
   namedLevels: { urgent: 0, normal: 1, bulk: 2 },
@@ -19,7 +19,7 @@ WorkPool.Tag /* untyped .Service */<Jobs>()("@app/Jobs", {
 })
 ```
 
-- [x] Config-object-only `Tag` on WorkPool, Daemon, Gate, WorkPool.Service (untyped).
+- [x] Config-object-only `Tag` on WorkPool, Daemon, Gate, WorkPool.define (untyped).
 - [x] untyped WorkPool optional `success` / `error` — stamped like QR; store wire from tag SSOT.
 - [x] untyped WorkPool `layer` / `serve` / `serveRemote` use `Hyperlink.builtHyperlink` + `grantLocal` (parity with WorkPool / Daemon).
 

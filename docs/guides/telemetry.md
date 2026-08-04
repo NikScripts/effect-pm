@@ -21,11 +21,11 @@ import * as Telemetry from "hyperlink-ts/Telemetry"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import * as Node from "hyperlink-ts/Node"
 // ---cut---
-class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
-class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
-class DropletCentral extends Node.Tag<DropletCentral>()("app/DropletCentral") {}
+class DropletEast extends Node.Service<DropletEast>()("app/DropletEast") {}
+class DropletWest extends Node.Service<DropletWest>()("app/DropletWest") {}
+class DropletCentral extends Node.Service<DropletCentral>()("app/DropletCentral") {}
 
-class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
+class FleetMetrics extends Telemetry.Service<FleetMetrics>()().pipe(
   Hyperlink.nodes([DropletEast, DropletWest, DropletCentral]),
 ) {}
 ```
@@ -43,10 +43,10 @@ import * as Node from "hyperlink-ts/Node"
 import { Duration, Layer } from "effect"
 import { NodeHttpServer } from "@effect/platform-node"
 import { createServer } from "node:http"
-class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
-class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
-class DropletCentral extends Node.Tag<DropletCentral>()("app/DropletCentral") {}
-class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
+class DropletEast extends Node.Service<DropletEast>()("app/DropletEast") {}
+class DropletWest extends Node.Service<DropletWest>()("app/DropletWest") {}
+class DropletCentral extends Node.Service<DropletCentral>()("app/DropletCentral") {}
+class FleetMetrics extends Telemetry.Service<FleetMetrics>()().pipe(
   Hyperlink.nodes([DropletEast, DropletWest, DropletCentral]),
 ) {}
 const nodeServer = (port: number) => <A, E, R>(serviceKey: Layer.Layer<A, E, R>) =>
@@ -69,7 +69,7 @@ A single-node app with no peers uses `Telemetry.alone` instead of `peersLayer`:
 ``` ts
 import * as Telemetry from "hyperlink-ts/Telemetry"
 import { Layer } from "effect"
-class FleetTelemetry extends Telemetry.Tag<FleetTelemetry>()() {}
+class FleetTelemetry extends Telemetry.Service<FleetTelemetry>()() {}
 // ---cut---
 const local = Telemetry.layer(FleetTelemetry).pipe(
   Layer.provide(Telemetry.alone(FleetTelemetry)),
@@ -85,7 +85,7 @@ const local = Telemetry.layer(FleetTelemetry).pipe(
 ``` ts
 import * as Telemetry from "hyperlink-ts/Telemetry"
 import { Effect } from "effect"
-class FleetMetrics extends Telemetry.Tag<FleetMetrics>()() {}
+class FleetMetrics extends Telemetry.Service<FleetMetrics>()() {}
 const program = Effect.gen(function* () {
 // ---cut---
 const glass = yield* FleetMetrics
@@ -105,7 +105,7 @@ recurse). One yield, columns + total:
 ``` ts
 import * as Telemetry from "hyperlink-ts/Telemetry"
 import { Effect } from "effect"
-class FleetMetrics extends Telemetry.Tag<FleetMetrics>()() {}
+class FleetMetrics extends Telemetry.Service<FleetMetrics>()() {}
 const program = Effect.gen(function* () {
 // ---cut---
 const glass = yield* FleetMetrics

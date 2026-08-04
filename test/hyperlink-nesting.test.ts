@@ -10,7 +10,7 @@ import * as PmNode from "../src/Node";
 // A **nested** spec: top-level leaves alongside groups of leaves — an `effect`, a `stream`, and a
 // payload `effectFn` living under `connections` / `admin`. Proves the spec-tree flattens on the wire and
 // nests back in the service (the same `yield* Tag` code, local or remote).
-class Server extends Hyperlink.Tag<Server>()("nest-test/Server", {
+class Server extends Hyperlink.Service<Server>()("nest-test/Server", {
   name: Hyperlink.effect(Schema.String),
   connections: {
     size: Hyperlink.effect(Schema.Number),

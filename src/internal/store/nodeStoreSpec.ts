@@ -1,5 +1,5 @@
 /**
- * Built-in store contract for {@link Node.Tag} registrations — durable log journal only.
+ * Built-in store contract for {@link Node.Service} registrations — durable log journal only.
  *
  * @module internal/store/nodeStoreSpec
  * @internal

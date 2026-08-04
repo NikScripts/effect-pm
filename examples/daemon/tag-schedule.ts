@@ -19,7 +19,7 @@ import * as Daemon from "../../src/Daemon";
 
 const firstRun = DateTime.toDateUtc(DateTime.makeUnsafe(4_102_444_800_000));
 
-class ScheduledReport extends Daemon.Tag<ScheduledReport>()(
+class ScheduledReport extends Daemon.Service<ScheduledReport>()(
   "examples/daemon/ScheduledReport",
 ).pipe(Daemon.schedule([Daemon.at("first-run", firstRun)])) {}
 

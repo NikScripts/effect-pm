@@ -39,11 +39,11 @@ Not wire keys. Not `encodeURIComponent(fullKey)`.
 Parent stamps members by object key; that key is the URL segment:
 
 ```ts
-class ServicesHub extends Group.Tag<ServicesHub>("hub/ServicesHub")({
+class ServicesHub extends Group.Service<ServicesHub>("hub/ServicesHub")({
   Nwsl: NwslGroup,  // ← segment "Nwsl"
 }) {}
 
-class NwslGroup extends Group.Tag<NwslGroup>("app/nwsl/NwslGroup")({
+class NwslGroup extends Group.Service<NwslGroup>("app/nwsl/NwslGroup")({
   HttpApi: NwslHttpApiClient,  // ← segment "HttpApi"
 }) {}
 ```

@@ -1,5 +1,5 @@
 /**
- * Queue instance spec validation — single boundary cast site for {@link WorkPool.Tag}
+ * Queue instance spec validation — single boundary cast site for {@link WorkPool.Service}
  * and {@link WorkPool.priority}.
  *
  * @remarks

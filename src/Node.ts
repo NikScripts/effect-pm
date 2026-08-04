@@ -3,7 +3,7 @@
  *
  * Consume as `import * as Node from "hyperlink-ts/Node"`.
  *
- * - {@link Tag} — declare a named transport endpoint (`class X extends Node.Tag()(…) {}`)
+ * - {@link Service} — declare a named transport endpoint (`class X extends Node.Service()(…) {}`)
  * - {@link Prototype} — address-less template (`.make` / `.instance` / `.listen`)
  * - {@link asLookup} — brand a Tag node as the Lookup-server (`isLookupNode: true`)
  * - {@link listen} — neutral spine (**no transport bind** — use {@link unix} / {@link http} / {@link ws})
@@ -22,7 +22,7 @@
  * @module Node
  */
 export {
-  Tag,
+  Service,
   withProtocol,
   asLookup,
   isLookupNode,

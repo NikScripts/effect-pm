@@ -20,7 +20,7 @@ import * as Lookup from "../src/Lookup";
 import * as Directory from "../src/Directory";
 import * as Node from "../src/Node";
 
-class Jobs extends Hyperlink.Tag<Jobs>()("lc-rebind/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("lc-rebind/Jobs", {
   jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
@@ -37,11 +37,11 @@ describe("Hyperlink.lookupClient hot-rebind", () => {
       const workerAPath = yield* tmpSock("worker-a");
       const workerBPath = yield* tmpSock("worker-b");
 
-      const lookupNode = Node.Tag()("lc-rebind/lookup", {
+      const lookupNode = Node.Service()("lc-rebind/lookup", {
         path: lookupPath,
       }).pipe(Node.asLookup);
 
-      class WorkerA extends Node.Tag<WorkerA, Jobs>()("lc-rebind/Worker", {
+      class WorkerA extends Node.Service<WorkerA, Jobs>()("lc-rebind/Worker", {
         path: workerAPath,
       }) {}
 
@@ -71,7 +71,7 @@ describe("Hyperlink.lookupClient hot-rebind", () => {
 
       yield* Node.shutdown(WorkerA);
 
-      const dir = Context.get(lookupCtx, Directory.Tag);
+      const dir = Context.get(lookupCtx, Directory.Service);
       yield* Effect.repeat(
         dir
           .nodesServing(
@@ -89,7 +89,7 @@ describe("Hyperlink.lookupClient hot-rebind", () => {
         },
       );
 
-      class WorkerB extends Node.Tag<WorkerB, Jobs>()("lc-rebind/Worker", {
+      class WorkerB extends Node.Service<WorkerB, Jobs>()("lc-rebind/Worker", {
         path: workerBPath,
       }) {}
 
@@ -118,14 +118,14 @@ describe("Hyperlink.lookupClient hot-rebind", () => {
         const workerAPath = yield* tmpSock("worker-a-retry");
         const workerBPath = yield* tmpSock("worker-b-retry");
 
-        const lookupNode = Node.Tag()("lc-rebind/lookup-retry", {
+        const lookupNode = Node.Service()("lc-rebind/lookup-retry", {
           path: lookupPath,
         }).pipe(Node.asLookup);
 
-        class WorkerA extends Node.Tag<WorkerA, Jobs>()("lc-rebind/WorkerA", {
+        class WorkerA extends Node.Service<WorkerA, Jobs>()("lc-rebind/WorkerA", {
           path: workerAPath,
         }) {}
-        class WorkerB extends Node.Tag<WorkerB, Jobs>()("lc-rebind/WorkerB", {
+        class WorkerB extends Node.Service<WorkerB, Jobs>()("lc-rebind/WorkerB", {
           path: workerBPath,
         }) {}
 
@@ -204,15 +204,15 @@ describe("Hyperlink.lookupClient hot-rebind", () => {
         const workerAPath = yield* tmpSock("worker-a-advice");
         const workerBPath = yield* tmpSock("worker-b-advice");
 
-        const lookupNode = Node.Tag()("lc-rebind/lookup-advice", {
+        const lookupNode = Node.Service()("lc-rebind/lookup-advice", {
           path: lookupPath,
         }).pipe(Node.asLookup);
 
-        class WorkerA extends Node.Tag<WorkerA, Jobs>()(
+        class WorkerA extends Node.Service<WorkerA, Jobs>()(
           "lc-rebind/AdviceWorkerA",
           { path: workerAPath },
         ) {}
-        class WorkerB extends Node.Tag<WorkerB, Jobs>()(
+        class WorkerB extends Node.Service<WorkerB, Jobs>()(
           "lc-rebind/AdviceWorkerB",
           { path: workerBPath },
         ) {}

@@ -17,9 +17,9 @@ const site = Route.make("site").add(
   Route.group("app").add(Route.get("dashboard", "/app")),
 );
 
-class HttpApi extends Daemon.Tag<HttpApi>()("test/nav/HttpApi") {}
-class Nwsl extends Group.Tag<Nwsl>("test/nav/Nwsl")({ HttpApi }) {}
-class Hub extends Group.Tag<Hub>("test/nav/Hub")({ Nwsl }) {}
+class HttpApi extends Daemon.Service<HttpApi>()("test/nav/HttpApi") {}
+class Nwsl extends Group.Service<Nwsl>("test/nav/Nwsl")({ HttpApi }) {}
+class Hub extends Group.Service<Hub>("test/nav/Hub")({ Nwsl }) {}
 
 const hubSite = Route.make("hub").add(
   Route.group("tree", { topLevel: true }).fromEffect(Group.asRoutes(Hub)),

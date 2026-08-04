@@ -3,13 +3,13 @@ import * as Node from "../src/Node";
 
 // The { http, ws } shorthand declares one node reachable over both transports — same key, same
 // served resources, two endpoints.
-class Droplet extends Node.Tag<Droplet>()("mp/droplet", {
+class Droplet extends Node.Service<Droplet>()("mp/droplet", {
   http: "http://droplet:7777/rpc",
   ws: "ws://droplet:7777/rpc",
 }) {}
 
 // A single-protocol node is just the one-endpoint case.
-class Single extends Node.Tag<Single>()("mp/single", {
+class Single extends Node.Service<Single>()("mp/single", {
   url: "http://x/rpc",
   kind: "Http",
 }) {}

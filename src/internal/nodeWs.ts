@@ -12,7 +12,7 @@ import {
   catalogSym,
   ListenNode,
   ListenOptions,
-  Tag,
+  Service as Tag,
   WsListenArg,
   UnaddressedNode,
   WsListenRequiresWs,
@@ -338,7 +338,7 @@ const ephemeralWsListen = (
             ) as AnyNode & { readonly key: string };
             if (claim?.claimIdentity === true) {
               const Identity = yield* Effect.promise(() => import("../Identity"));
-              const identity = yield* Effect.serviceOption(Identity.Tag);
+              const identity = yield* Effect.serviceOption(Identity.Service);
               if (Option.isNone(identity)) {
                 return yield* new Hyperlink.IdentitySelfRequired({ tag: wireKey });
               }

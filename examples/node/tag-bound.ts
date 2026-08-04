@@ -18,11 +18,11 @@ import { Context, Effect, Layer, Schema } from "effect"
 import * as Node from "../../src/Node"
 import * as Hyperlink from "../../src/Hyperlink"
 
-class Worker extends Node.Tag<Worker>()("bound/Worker", {
+class Worker extends Node.Service<Worker>()("bound/Worker", {
   path: `/tmp/hyperlink-ts-forms-bound-${process.pid}.sock`,
 }) {}
 
-class Jobs extends Hyperlink.Tag<Jobs>()("bound/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("bound/Jobs", {
   jobs: Hyperlink.effect(Schema.Number),
 }).pipe(Hyperlink.andNode(Worker)) {}
 

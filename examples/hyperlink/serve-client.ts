@@ -16,7 +16,7 @@ import { FetchHttpClient, HttpRouter, HttpServer } from "effect/unstable/http";
 import { RpcClient, RpcSerialization, RpcServer } from "effect/unstable/rpc";
 import * as Hyperlink from "../../src/Hyperlink";
 
-class Counter extends Hyperlink.Tag<Counter>()("examples/CounterRpc/Counter", {
+class Counter extends Hyperlink.Service<Counter>()("examples/CounterRpc/Counter", {
   value: Hyperlink.ref(Schema.Number),
   current: Hyperlink.effect(Schema.Number),
   increment: Hyperlink.effectFn({ by: Schema.Number }, Schema.Number),

@@ -8,7 +8,7 @@ import * as Hyperlink from "../src/Hyperlink";
 import * as Observe from "../src/Observe";
 import * as WorkPoolView from "../src/ui/WorkPoolView";
 
-class ControlSvc extends Hyperlink.Tag<ControlSvc>()("observe-pack/ControlSvc", {
+class ControlSvc extends Hyperlink.Service<ControlSvc>()("observe-pack/ControlSvc", {
   pause: Hyperlink.effect(Schema.Void),
   resume: Hyperlink.effect(Schema.Void),
   clear: Hyperlink.effect(Schema.Void),
@@ -57,7 +57,7 @@ describe("WorkPoolView.pack dual status/trend", () => {
         low: Schema.Number,
       }),
     });
-    class StatusSvc extends Hyperlink.Tag<StatusSvc>()("observe-pack/StatusSvc", {
+    class StatusSvc extends Hyperlink.Service<StatusSvc>()("observe-pack/StatusSvc", {
       status: Hyperlink.ref(Status),
     }) {}
 

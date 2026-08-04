@@ -3,7 +3,7 @@ import { Effect, Option, Schema } from "effect";
 import * as Gate from "../src/Gate";
 import * as Store from "../src/Store";
 
-class PriceGate extends Gate.Tag<{ readonly _tag: "PriceGate" }>()("@test/AnalyticsPriceGate", {
+class PriceGate extends Gate.Service<{ readonly _tag: "PriceGate" }>()("@test/AnalyticsPriceGate", {
   payload: Schema.Number,
   success: Schema.Number,
   error: Schema.String,

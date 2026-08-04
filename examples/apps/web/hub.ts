@@ -45,16 +45,16 @@ const hostEndpoints = (port: number) =>
 
 // One identity each, both wire protocols declared (P3 set-membership). Served today via
 // `Node.wsServer`; peers use `layerPeerProtocol(protocolWebsocket)`.
-export class WnbaNode extends Node.Tag<WnbaNode>()("wnba/scores", hostEndpoints(HOST_PORTS.wnba)) {}
-export class LiveNode extends Node.Tag<LiveNode>()("wnba/live", hostEndpoints(HOST_PORTS.live)) {}
-export class StatsNode extends Node.Tag<StatsNode>()("wnba/stats", hostEndpoints(HOST_PORTS.stats)) {}
+export class WnbaNode extends Node.Service<WnbaNode>()("wnba/scores", hostEndpoints(HOST_PORTS.wnba)) {}
+export class LiveNode extends Node.Service<LiveNode>()("wnba/live", hostEndpoints(HOST_PORTS.live)) {}
+export class StatsNode extends Node.Service<StatsNode>()("wnba/stats", hostEndpoints(HOST_PORTS.stats)) {}
 
 // A **multi-node** serviceKey: the SAME WorkerPool served on all three nodes — one class, three
 // instances. `active` is this instance's own count (a leaf field peers can read); `fleetActive` is the
 // total across the fleet — a `fleet`-tagged query the layer folds from `Hyperlink.peers` + its own
 // value (see `server.ts`). Dogfoods `fleet` + `peers` + layer-from-effect end to end across three real
 // servers.
-export class WorkerPool extends Hyperlink.Tag<WorkerPool>()("wnba/WorkerPool", {
+export class WorkerPool extends Hyperlink.Service<WorkerPool>()("wnba/WorkerPool", {
   active: Hyperlink.effect(Schema.Number),
   fleetActive: Hyperlink.effect(Schema.Number).pipe(Hyperlink.fleet),
   // a per-node view (one row per node) — needs `selfNode` to key this instance's own row
@@ -65,19 +65,19 @@ export class WorkerPool extends Hyperlink.Tag<WorkerPool>()("wnba/WorkerPool", {
 
 // A **fleet-health** mesh across the three nodes — each instance reports its own readiness; `byNode`
 // folds every peer's (Reachable / Unreachable), `status` rolls that up. Dogfoods the FleetHealth widget.
-export class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
+export class MeshHealth extends FleetHealth.Service<MeshHealth>()().pipe(
   Hyperlink.nodes([WnbaNode, LiveNode, StatsNode]),
 ) {}
 
 // A **telemetry** mesh — each node's Metric registry (the queues emit `queue_in_flight`). `fleetInFlight`
 // folds every node's in-flight, `inFlightByNode` breaks it down. Dogfoods the Telemetry widget.
-export class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
+export class FleetMetrics extends Telemetry.Service<FleetMetrics>()().pipe(
   Hyperlink.nodes([WnbaNode, LiveNode, StatsNode]),
 ) {}
 
 // A **shard-map** mesh — active game sessions partitioned across the three nodes by `consistentHash`.
 // `sizeLocal` is this node's shard; `sizeByNode` / `size` are fleet folds. Dogfoods the ShardMap widget.
-export class Sessions extends ShardMap.Tag<Sessions>()("wnba/Sessions", {
+export class Sessions extends ShardMap.Service<Sessions>()("wnba/Sessions", {
   key: Schema.String,
   value: session,
   keyOf: (s) => s.id,
@@ -86,7 +86,7 @@ export class Sessions extends ShardMap.Tag<Sessions>()("wnba/Sessions", {
 // A **gate** — a bounded-concurrency gate over an effect (here a simulated box-score fetch). No
 // queues/priorities; each `run` acquires one of `concurrency` permits inline. Served on LiveNode and
 // driven concurrently so the GateCard shows live in-flight / waiting / done counters.
-export class FetchGate extends Gate.Tag<FetchGate>()("wnba/FetchGate", {
+export class FetchGate extends Gate.Service<FetchGate>()("wnba/FetchGate", {
   payload: Schema.String,
   success: Schema.Number,
   error: Schema.String,
@@ -95,7 +95,7 @@ export class FetchGate extends Gate.Tag<FetchGate>()("wnba/FetchGate", {
 // A "scores database" connection, served on WnbaNode. Its readiness reflects a (simulated) physical
 // connection that drops briefly now and then; the box-score queue *depends on* it (below), so when the
 // DB blips the queue cascades to degraded. This dogfoods `readinessOf` + the readiness cascade.
-export class ScoresDb extends Hyperlink.Tag<ScoresDb>()(
+export class ScoresDb extends Hyperlink.Service<ScoresDb>()(
   "wnba/ScoresDb",
   { connected: Hyperlink.effect(Schema.Boolean) },
   { node: WnbaNode },
@@ -107,7 +107,7 @@ export class ScoresDb extends Hyperlink.Tag<ScoresDb>()(
   ),
 ) {}
 
-export class BoxScoreQueue extends WorkPool.Tag<BoxScoreQueue>()(
+export class BoxScoreQueue extends WorkPool.Service<BoxScoreQueue>()(
   "wnba/BoxScoreQueue",
   { payload: importJob, node: WnbaNode },
 ).pipe(
@@ -127,11 +127,11 @@ export class BoxScoreQueue extends WorkPool.Tag<BoxScoreQueue>()(
 ) {}
 // Owns an inline schedule (seeded empty; `server.ts` seeds the live game windows at startup) so the
 // dashboard can read + edit its run windows through the `schedule` verb group.
-export class LiveScorePoller extends Daemon.Tag<LiveScorePoller>()(
+export class LiveScorePoller extends Daemon.Service<LiveScorePoller>()(
   "wnba/LiveScorePoller",
   { node: LiveNode },
 ).pipe(Daemon.schedule([])) {}
-export class PlayByPlayQueue extends WorkPool.Tag<PlayByPlayQueue>()(
+export class PlayByPlayQueue extends WorkPool.Service<PlayByPlayQueue>()(
   "wnba/PlayByPlayQueue",
   { payload: importJob, node: StatsNode },
 ) {}
@@ -144,14 +144,14 @@ export class ImportJobs extends WorkPool.priority<ImportJobs>()("wnba/ImportJobs
   node: StatsNode,
 }) {}
 /** Observe-only fixture: same `metrics` nest as {@link Gate.HttpApiClient} (no outbound client). */
-export class ScoresApi extends Hyperlink.Tag<ScoresApi>()(
+export class ScoresApi extends Hyperlink.Service<ScoresApi>()(
   "@wnba/ScoresApi",
   { metrics: Gate.httpApiMetricsNestSpec },
   { kind: Gate.httpApiClientKind, node: WnbaNode },
 ) {}
 
 /** WNBA league group — a nested group the dashboard drills into. */
-export class Wnba extends Group.Tag<Wnba>("hub/Wnba")({
+export class Wnba extends Group.Service<Wnba>("hub/Wnba")({
   LiveScorePoller,
   ScoresDb,
   BoxScoreQueue,
@@ -166,7 +166,7 @@ export class Wnba extends Group.Tag<Wnba>("hub/Wnba")({
 }) {}
 
 /** The hub the dashboard renders. */
-export class ServicesHub extends Group.Tag<ServicesHub>("hub/ServicesHub")({
+export class ServicesHub extends Group.Service<ServicesHub>("hub/ServicesHub")({
   Wnba,
 }) {}
 

@@ -29,7 +29,7 @@ Keep the two **strict** tiers, diversify the middle into many **weighted** group
 
 ## Packaging — a separate resource type, not a change to every queue
 
-Ship this as its own hyperlink type (`WorkPool.Service` (untyped), name TBD), **not** as a feature added to
+Ship this as its own hyperlink type (`WorkPool.define` (untyped), name TBD), **not** as a feature added to
 the standard `WorkPool`. This is the key decision that de-risks the whole thing:
 
 - The existing `WorkPool` and everything on it (wow, the dashboard) are **untouched** — no wire-
@@ -41,7 +41,7 @@ the standard `WorkPool`. This is the key decision that de-risks the whole thing:
   groups).
 
 **Share the engine, swap only the lane store.** Factor a small internal `LaneStore` interface
-(`offer` / `take` / `sizes` / `drain`); the default wires the 3-FIFO impl, `WorkPool.Service` (untyped)
+(`offer` / `take` / `sizes` / `drain`); the default wires the 3-FIFO impl, `WorkPool.define` (untyped)
 wires the weighted-STM impl. Worker pool, retries, metrics/logs/history, persistence plumbing, and
 lifecycle are shared (written once); only the data structure + scheduler differ — and only the new
 type imports the STM impl.

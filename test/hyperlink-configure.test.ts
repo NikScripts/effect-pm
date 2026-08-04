@@ -29,11 +29,11 @@ describe("HyperlinkConfigure", () => {
     expect(effective.effect(3)).toBe(8);
   });
 
-  it.effect("WorkPool.Service folds configure layer before runtime", () =>
+  it.effect("WorkPool.define folds configure layer before runtime", () =>
     Effect.gen(function* () {
       const handled = yield* Ref.make(0);
 
-      class TestQueue extends WorkPool.Service<TestQueue, number, never>()(
+      class TestQueue extends WorkPool.define<TestQueue, number, never>()(
         "@test/ConfigureQueue",
         {
           effect: (_item: number, _ctx: EffectContext<number, never, never>) =>
@@ -64,11 +64,11 @@ describe("HyperlinkConfigure", () => {
     }),
   );
 
-  it.live("WorkPool.Service configure can patch rateLimit", () =>
+  it.live("WorkPool.define configure can patch rateLimit", () =>
     Effect.gen(function* () {
       const starts = yield* Ref.make(0);
 
-      class RateLimitedQueue extends WorkPool.Service<RateLimitedQueue, number, never>()(
+      class RateLimitedQueue extends WorkPool.define<RateLimitedQueue, number, never>()(
         "@test/ConfigureRateLimitQueue",
         {
           effect: () => Ref.update(starts, (n) => n + 1),
@@ -106,10 +106,10 @@ describe("HyperlinkConfigure", () => {
     }),
   );
 
-  it.effect("Daemon.Service buildConfiguredDaemon applies configure patches", () =>
+  it.effect("Daemon.define buildConfiguredDaemon applies configure patches", () =>
     Effect.scoped(
       Effect.gen(function* () {
-        class Worker extends Daemon.Service<Worker>()("@test/ConfigureDaemon", {
+        class Worker extends Daemon.define<Worker>()("@test/ConfigureDaemon", {
           effect: Effect.succeed("default"),
         }) {}
 

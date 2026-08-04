@@ -13,7 +13,7 @@ const expectExact = <_Check extends true>(): void => {};
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
-class Jobs extends WorkPool.Tag<Jobs>()("@test/WriterJobs", { payload: jobSchema }) {}
+class Jobs extends WorkPool.Service<Jobs>()("@test/WriterJobs", { payload: jobSchema }) {}
 
 type ItemSchema = typeof jobSchema;
 type Writer = MaterializedEngineQueueStore<ItemSchema>;

@@ -109,7 +109,7 @@ describe("Store SQLite layer", () => {
 
   it.effect("Hyperlink.store tag attachment works with sqlite layer", () =>
     Effect.gen(function* () {
-      class Sensor extends Hyperlink.Tag<Sensor>()("@test/Sensor", {
+      class Sensor extends Hyperlink.Service<Sensor>()("@test/Sensor", {
         value: Hyperlink.ref(Schema.Number),
       }).pipe(Hyperlink.withStore(thermometerContract)) {}
 

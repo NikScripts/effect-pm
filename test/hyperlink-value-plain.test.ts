@@ -8,7 +8,7 @@ import * as PmNode from "../src/Node";
 
 // `value` fields are PLAIN values (no yield*), resolved once at acquire — identical local and remote.
 
-class Cfg extends Hyperlink.Tag<Cfg>()("value-plain/Cfg", {
+class Cfg extends Hyperlink.Service<Cfg>()("value-plain/Cfg", {
   maxSize: Hyperlink.value(Schema.Number),
   name: Hyperlink.value(Schema.String),
   current: Hyperlink.effect(Schema.Number),
@@ -59,7 +59,7 @@ it("value fields are plain, resolved once — REMOTE (same shape)", () =>
     }).pipe(Effect.provide(Node), Effect.scoped),
   ));
 
-class Fallible extends Hyperlink.Tag<Fallible>()("value-plain/Fallible", {
+class Fallible extends Hyperlink.Service<Fallible>()("value-plain/Fallible", {
   token: Hyperlink.value(Schema.String, Schema.String),
 }) {}
 

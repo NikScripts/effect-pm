@@ -33,7 +33,7 @@ class SendError extends Schema.TaggedErrorClass<SendError>()("SendError", {
   reason: Schema.String,
 }) {}
 
-class EmailQueue extends WorkPool.Tag<EmailQueue>()("examples/EmailQueue", {
+class EmailQueue extends WorkPool.Service<EmailQueue>()("examples/EmailQueue", {
   payload: EmailJob,
   error: SendError,
 }) {}

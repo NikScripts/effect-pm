@@ -2,10 +2,10 @@ import type * as React from "react";
 import { expectTypeOf } from "vitest";
 import * as View from "../src/ui/View";
 import * as Views from "../src/ui/Views";
-const Handle = Views.Card.Tag<{ readonly _brand: "x" }>()("hyperlink/view/tmp");
+const Handle = Views.Card.Service<{ readonly _brand: "x" }>()("hyperlink/view/tmp");
 expectTypeOf(View.getAnnotations(Handle).size).toEqualTypeOf<Views.CardKind>();
 
-class PoolCard extends Views.Card.Tag<PoolCard>()("hyperlink/view/pool-card") {}
+class PoolCard extends Views.Card.Service<PoolCard>()("hyperlink/view/pool-card") {}
 expectTypeOf(View.getAnnotations(PoolCard).size).toEqualTypeOf<Views.CardKind>();
 expectTypeOf<View.Type<typeof PoolCard>>().toEqualTypeOf<Views.ViewProps>();
 expectTypeOf<View.PropsOf<PoolCard>>().toEqualTypeOf<Views.ViewProps>();

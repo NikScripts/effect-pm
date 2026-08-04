@@ -16,7 +16,7 @@ import { runNodeProgramOrExit } from "../shared/demo-harness";
 import { Effect, Schema } from "effect";
 import * as Hyperlink from "../../src/Hyperlink";
 
-class Cache extends Hyperlink.Tag<Cache>()("examples/readiness/Cache", {
+class Cache extends Hyperlink.Service<Cache>()("examples/readiness/Cache", {
   warm: Hyperlink.effect(Schema.Boolean),
 }).pipe(
   Hyperlink.withReadiness((svc) =>

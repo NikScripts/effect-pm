@@ -1,5 +1,5 @@
 /**
- * Type-level assertions for shared-Spec {@link Hyperlink.Tag}`(wireKey, spec)`.
+ * Type-level assertions for shared-Spec {@link Hyperlink.Service}`(wireKey, spec)`.
  */
 import { Schema } from "effect";
 import { expectTypeOf } from "vitest";
@@ -11,7 +11,7 @@ const counterSpec = {
   label: Hyperlink.effect(Schema.String),
 };
 
-const SharedCounter = Hyperlink.Tag("test-d/shared-counter", counterSpec);
+const SharedCounter = Hyperlink.Service("test-d/shared-counter", counterSpec);
 expectTypeOf(SharedCounter).toMatchTypeOf<SharedTagFactory<typeof counterSpec>>();
 
 class Alpha extends SharedCounter<Alpha>()("test-d/SharedAlpha") {}

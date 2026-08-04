@@ -1,7 +1,7 @@
 /**
  * @module examples/node/tag-addressed
  *
- * **Node.Tag with a fixed address** — `{ path }` ⇒ IpcSocket.
+ * **Node.Service with a fixed address** — `{ path }` ⇒ IpcSocket.
  *
  * ```bash
  * pnpm exec tsx examples/node/tag-addressed.ts
@@ -18,11 +18,11 @@ import { Effect, Layer, Schema } from "effect"
 import * as Node from "../../src/Node"
 import * as Hyperlink from "../../src/Hyperlink"
 
-class Jobs extends Hyperlink.Tag<Jobs>()("Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("Jobs", {
   jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
-class Worker extends Node.Tag<Worker, Jobs>()("Worker", {
+class Worker extends Node.Service<Worker, Jobs>()("Worker", {
   path: `/tmp/hyperlink-ts-forms-node-tag-addressed-${process.pid}.sock`,
 }) {}
 

@@ -87,7 +87,7 @@ import { stampGateMetricsMetadata } from "./gateTagSchemas";
 // ============================================================================
 
 /**
- * Configuration for {@link HttpApiClient.make} / {@link HttpApiClient.Service}.
+ * Configuration for {@link HttpApiClient.make} / {@link HttpApiClient.define}.
  *
  * @category models
  * @public
@@ -464,7 +464,7 @@ function layerEffect<
  *
  * @example
  * ```ts
- * class MyClient extends HttpApiClient.Service<MyClient>()("@app/MyClient", MyApi, {
+ * class MyClient extends HttpApiClient.define<MyClient>()("@app/MyClient", MyApi, {
  *   baseUrl: "https://api.example.com",
  *   concurrency: 5,
  * }) {}
@@ -474,7 +474,7 @@ function layerEffect<
  * @category constructors
  * @public
  */
-export const Service = httpApiClientService;
+export const define = httpApiClientService;
 
 /**
  * Functional equivalent of {@link Service} — returns a tag value with `.layer`.
@@ -812,7 +812,7 @@ export const HttpApiClient = <Self>() =>
     const spec = buildHttpApiClientSpec(api, metricsKey);
     // Licensed boundary: reflect-built Spec matches Client locals + nest — see
     // test/gate-http-api-client.test-d.ts.
-    const tag = Hyperlink.Tag<Self, HttpApiClientShape<Groups, MK>>()(
+    const tag = Hyperlink.Service<Self, HttpApiClientShape<Groups, MK>>()(
       key,
       spec as never,
       { kind: httpApiClientKind, description: config.description },

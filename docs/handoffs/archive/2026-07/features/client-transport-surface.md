@@ -32,7 +32,7 @@ export const clientHost: Config.Config<string> = Config.string(
 - **Prod**: app sets `HYPERLINK_CLIENT_HOST=api.myapp.com` → every port shorthand becomes `http://api.myapp.com:3009/rpc`, automatically, everywhere.
 - No `NODE_ENV` sniffing — "dev vs prod" is simply "did they configure a host?", expressed as a `Config` with a default. Most Effect.
 
-**Phase boundary (important):** `Config` is read in an **Effect/layer** context, so this applies to the **client dialers** that build layers — `protocolHttp` / `protocolWebsocket` (→ `ws://${defaultHost}:port`) / `connect` / and the batteries clients. It does **not** apply to `Node.Tag(name, 3009)`, which resolves synchronously at class-definition (no runtime to read Config); node *declaration* stays `localhost`. Declaration ≠ dialing.
+**Phase boundary (important):** `Config` is read in an **Effect/layer** context, so this applies to the **client dialers** that build layers — `protocolHttp` / `protocolWebsocket` (→ `ws://${defaultHost}:port`) / `connect` / and the batteries clients. It does **not** apply to `Node.Service(name, 3009)`, which resolves synchronously at class-definition (no runtime to read Config); node *declaration* stays `localhost`. Declaration ≠ dialing.
 
 **Consistency:** one shared Config-driven resolver is used by every client-side function that accepts a port — same behavior across `protocolHttp` / `protocolWebsocket` / `connect` / node-facing `http`/`ws`.
 

@@ -21,7 +21,7 @@ const PullJob = Schema.Struct({
 
 type PullJob = typeof PullJob.Type;
 
-class PullQueue extends WorkPool.Tag<PullQueue>()("examples/PullQueue", {
+class PullQueue extends WorkPool.Service<PullQueue>()("examples/PullQueue", {
   payload: PullJob,
 }) {}
 

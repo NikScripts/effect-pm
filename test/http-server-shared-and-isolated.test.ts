@@ -20,13 +20,13 @@ class PrivateDep extends Context.Service<PrivateDep, number>()(
   "hyperlink-ts/test/http-server-shared-and-isolated.test/PrivateDep",
 ) {}
 
-class MajorityA extends Hyperlink.Tag<MajorityA>()("sharedIso/A", {
+class MajorityA extends Hyperlink.Service<MajorityA>()("sharedIso/A", {
   read: Hyperlink.effect(Schema.Number),
 }) {}
-class MajorityB extends Hyperlink.Tag<MajorityB>()("sharedIso/B", {
+class MajorityB extends Hyperlink.Service<MajorityB>()("sharedIso/B", {
   read: Hyperlink.effect(Schema.Number),
 }) {}
-class Outlier extends Hyperlink.Tag<Outlier>()("sharedIso/Outlier", {
+class Outlier extends Hyperlink.Service<Outlier>()("sharedIso/Outlier", {
   read: Hyperlink.effect(Schema.Number),
 }) {}
 

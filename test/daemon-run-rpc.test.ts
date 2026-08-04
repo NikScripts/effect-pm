@@ -6,15 +6,15 @@ import { forwardClient, groupOf, specOf } from "../src/Hyperlink";
 
 const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
 
-class FailingProc extends Daemon.Tag<FailingProc>()("@test/daemon-run-rpc/Failing", {
+class FailingProc extends Daemon.Service<FailingProc>()("@test/daemon-run-rpc/Failing", {
   error: FetchErr,
 }) {}
 
-class OkProc extends Daemon.Tag<OkProc>()("@test/daemon-run-rpc/Ok", {
+class OkProc extends Daemon.Service<OkProc>()("@test/daemon-run-rpc/Ok", {
   success: Schema.Number,
 }) {}
 
-class VoidDaemon extends Daemon.Tag<VoidDaemon>()("@test/daemon-run-rpc/Void") {}
+class VoidDaemon extends Daemon.Service<VoidDaemon>()("@test/daemon-run-rpc/Void") {}
 
 describe("Daemon manual run RPC", () => {
   it.effect("Daemon.make run returns captured success via resultRef", () =>

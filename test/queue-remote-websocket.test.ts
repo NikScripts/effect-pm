@@ -21,7 +21,7 @@ const Item = Schema.Struct({ n: Schema.Number });
 interface Item {
   readonly n: number;
 }
-class WsQueue extends WorkPool.Tag<WsQueue>()("queue-remote-ws/Q", { payload: Item }) {}
+class WsQueue extends WorkPool.Service<WsQueue>()("queue-remote-ws/Q", { payload: Item }) {}
 
 // ws client transport (matches `Hyperlink.ws` / a `{protocol:"websocket"}` server).
 const clientWs = (port: number) =>

@@ -16,7 +16,7 @@ const tmpSock = (label: string) =>
     return `/tmp/hyperlink-ts-d7-${label}-${process.pid}-${now}.sock`;
   });
 
-class Jobs extends Hyperlink.Tag<Jobs>()("d7/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("d7/Jobs", {
   jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
@@ -32,7 +32,7 @@ describe("Lookup.layerOptions", () => {
       const second = yield* Layer.build(
         Lookup.layerOptions({ path, unlink: false }),
       );
-      const id = Context.get(second, Identity.Tag);
+      const id = Context.get(second, Identity.Service);
       const won = yield* id
         .claim(
           new Lookup.ClaimRequest({
@@ -49,15 +49,15 @@ describe("Lookup.layerOptions", () => {
   );
 });
 
-describe("Identity.Tag.resolve", () => {
+describe("Identity.Service.resolve", () => {
   it.effect("returns Some after claim and None when missing", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("resolve");
-      const node = Node.Tag()("d7/resolve", { path }).pipe(Node.asLookup);
+      const node = Node.Service()("d7/resolve", { path }).pipe(Node.asLookup);
       const serverCtx = yield* Layer.build(Lookup.layerNode(node));
       const clientCtx = yield* Layer.build(Lookup.client(node));
       const ctx = Context.merge(serverCtx, clientCtx);
-      const id = Context.get(ctx, Identity.Tag);
+      const id = Context.get(ctx, Identity.Service);
 
       const empty = yield* id
         .resolve(new Lookup.ResolveRequest({ key: "missing" }))
@@ -91,10 +91,10 @@ describe("Hyperlink.lookupClient", () => {
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("lc-lookup");
       const workerPath = yield* tmpSock("lc-worker");
-      const lookupNode = Node.Tag()("d7/lc-lookup", {
+      const lookupNode = Node.Service()("d7/lc-lookup", {
         path: lookupPath,
       }).pipe(Node.asLookup);
-      class Worker extends Node.Tag<Worker, Jobs>()("d7/lc-worker", {
+      class Worker extends Node.Service<Worker, Jobs>()("d7/lc-worker", {
         path: workerPath,
       }) {}
 
@@ -107,7 +107,7 @@ describe("Hyperlink.lookupClient", () => {
         Node.unix(Worker, [Hyperlink.serve(Jobs, jobsImpl)]).pipe(Layer.provide(lookupClient)),
       );
 
-      const dir = Context.get(lookup, Directory.Tag);
+      const dir = Context.get(lookup, Directory.Service);
       const rows = yield* dir
         .nodesServing(
           new Lookup.NodesServingRequest({ serviceKey: "d7/Jobs" }),
@@ -134,10 +134,10 @@ describe("address-less listen", () => {
     () =>
       Effect.gen(function* () {
         const lookupPath = yield* tmpSock("al-lookup");
-        const lookupNode = Node.Tag()("d7/al-lookup", {
+        const lookupNode = Node.Service()("d7/al-lookup", {
           path: lookupPath,
         }).pipe(Node.asLookup);
-        class Worker extends Node.Tag<Worker, Jobs>()("d7/al-worker") {}
+        class Worker extends Node.Service<Worker, Jobs>()("d7/al-worker") {}
 
         const lookupClient = Lookup.client(lookupNode);
         const lookupServer = yield* Layer.build(Lookup.layerNode(lookupNode));
@@ -166,7 +166,7 @@ describe("address-less listen", () => {
     () =>
       Effect.gen(function* () {
         const lookupPath = yield* tmpSock("al2-lookup");
-        class Worker extends Node.Tag<Worker, Jobs>()("d7/al2-worker") {}
+        class Worker extends Node.Service<Worker, Jobs>()("d7/al2-worker") {}
 
         const lookup = Lookup.layerOptions({ path: lookupPath });
         const first = yield* Layer.build(

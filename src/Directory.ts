@@ -9,7 +9,7 @@
  *
  * const rows = yield* Directory.nodesServing(Jobs)
  * yield* Directory.changes.pipe(Stream.runDrain)
- * const dir = yield* Directory.Tag
+ * const dir = yield* Directory.Service
  * ```
  *
  * Never `import { Directory } from "hyperlink-ts/Lookup"`.
@@ -194,7 +194,7 @@ const directorySpec = {
  * @category services
  * @public
  */
-export class Tag extends Hyperlink.Tag<Tag>()(
+export class Service extends Hyperlink.Service<Service>()(
   "hyperlink-ts/Lookup/Directory",
   directorySpec,
   { kind },
@@ -212,8 +212,8 @@ const serviceKeyOf = (service: string | { readonly key: string }): string =>
  */
 export const nodesServing = (
   service: string | { readonly key: string },
-): Effect.Effect<ReadonlyArray<DirectoryEntry>, never, Tag> =>
-  Effect.flatMap(Tag, (svc) =>
+): Effect.Effect<ReadonlyArray<DirectoryEntry>, never, Service> =>
+  Effect.flatMap(Service, (svc) =>
     svc.nodesServing(
       new NodesServingRequest({ serviceKey: serviceKeyOf(service) }),
     ),
@@ -225,8 +225,8 @@ export const nodesServing = (
  * @category constructors
  * @public
  */
-export const changes: Stream.Stream<DirectoryChange, never, Tag> =
-  Stream.unwrap(Effect.map(Tag, (dir) => dir.changes));
+export const changes: Stream.Stream<DirectoryChange, never, Service> =
+  Stream.unwrap(Effect.map(Service, (dir) => dir.changes));
 
 /**
  * Live dial table driven by {@link changes} — for node-level peer rebind.
@@ -242,7 +242,7 @@ export const directoryTable = (): Effect.Effect<
     ) => Effect.Effect<Option.Option<DirectoryEntry>>;
   },
   never,
-  Tag | Scope.Scope
+  Service | Scope.Scope
 > =>
   Effect.gen(function* () {
     const table = yield* Ref.make(new Map<string, DirectoryEntry>());

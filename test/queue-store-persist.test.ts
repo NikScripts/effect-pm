@@ -9,12 +9,12 @@ import { builtInQueueStoreContract } from "../src/internal/store/workPoolStoreSp
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
-class EmailQueue extends WorkPool.Tag<EmailQueue>()("@app/EmailQueue", { payload: jobSchema }) {}
+class EmailQueue extends WorkPool.Service<EmailQueue>()("@app/EmailQueue", { payload: jobSchema }) {}
 
 // Declares an `error` wire schema: its worker fails with a `string`, so the queue's declared error
 // channel is `string` (with no `error` slot the channel would default to `never` — an infallible
 // worker — and `Effect.fail("boom")` would not typecheck).
-class FailingQueue extends WorkPool.Tag<FailingQueue>()("@app/FailingQueue", {
+class FailingQueue extends WorkPool.Service<FailingQueue>()("@app/FailingQueue", {
   payload: jobSchema,
   error: Schema.String,
 }) {}

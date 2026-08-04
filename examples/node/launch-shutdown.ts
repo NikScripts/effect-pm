@@ -33,7 +33,7 @@ const tmpSock = (label: string) =>
     return `/tmp/hyperlink-ts-demo-launch-${label}-${String(now)}.sock`;
   });
 
-class Jobs extends Hyperlink.Tag<Jobs>()("examples/launch-shutdown/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("examples/launch-shutdown/Jobs", {
   ping: Hyperlink.effect(Schema.String),
 }) {}
 
@@ -41,11 +41,11 @@ const program = Effect.gen(function* () {
   const lookupPath = yield* tmpSock("lookup");
   const workerPath = yield* tmpSock("worker");
 
-  const lookupNode = Node.Tag()("examples/launch-shutdown/Lookup", {
+  const lookupNode = Node.Service()("examples/launch-shutdown/Lookup", {
     path: lookupPath,
   }).pipe(Node.asLookup);
 
-  class Worker extends Node.Tag<Worker, Jobs>()(
+  class Worker extends Node.Service<Worker, Jobs>()(
     "examples/launch-shutdown/Worker",
     { path: workerPath },
   ) {}

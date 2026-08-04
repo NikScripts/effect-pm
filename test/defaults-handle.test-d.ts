@@ -17,7 +17,7 @@ import * as Hyperlink from "../src/Hyperlink";
 import * as WorkPool from "../src/WorkPool";
 
 // ── bare Tag + defaults: yield* / Shape IS Spec service & bag ─────────────────
-class Adorned extends Hyperlink.Tag<Adorned>()("defaults-handle/Adorned", {
+class Adorned extends Hyperlink.Service<Adorned>()("defaults-handle/Adorned", {
   current: Hyperlink.effect(Schema.Number),
 }).pipe(
   Hyperlink.defaults({
@@ -54,9 +54,9 @@ expectTypeOf(adornedSvc.current).toEqualTypeOf<
 // WithDefaults stays an identity alias once Service is widened
 expectTypeOf<Hyperlink.WithDefaults<typeof Adorned>>().toEqualTypeOf<AdornedSvc>();
 
-// ── WorkPool.Tag + defaults: named handle ∧ bag ───────────────────────────────
+// ── WorkPool.Service + defaults: named handle ∧ bag ───────────────────────────────
 const Job = Schema.Struct({ id: Schema.String });
-class Jobs extends WorkPool.Tag<Jobs>()("defaults-handle/Jobs", {
+class Jobs extends WorkPool.Service<Jobs>()("defaults-handle/Jobs", {
   payload: Job,
 }).pipe(
   Hyperlink.defaults({
@@ -79,8 +79,8 @@ void [_jobsSvcToWidened, _jobsWidenedToSvc];
 expectTypeOf(jobsSvc.label).toEqualTypeOf<(n: number) => string>();
 expectTypeOf(jobsSvc.add).toEqualTypeOf<JobsHandle["add"]>();
 
-// ── Gate.Tag + defaults: named handle ∧ bag ───────────────────────────────────
-class Fetch extends Gate.Tag<Fetch>()("defaults-handle/Fetch", {
+// ── Gate.Service + defaults: named handle ∧ bag ───────────────────────────────────
+class Fetch extends Gate.Service<Fetch>()("defaults-handle/Fetch", {
   payload: Schema.Number,
   success: Schema.String,
   error: Schema.Boolean,
@@ -112,7 +112,7 @@ expectTypeOf(fetchSvc.run).toEqualTypeOf<FetchHandle["run"]>();
 // ── double-pipe merges bag onto Service ───────────────────────────────────────
 class Double extends Hyperlink.defaults(
   Hyperlink.defaults(
-    Hyperlink.Tag<Double>()("defaults-handle/Double", {
+    Hyperlink.Service<Double>()("defaults-handle/Double", {
       current: Hyperlink.effect(Schema.Number),
     }),
     { a: 1 as const },
@@ -128,7 +128,7 @@ expectTypeOf<DoubleSvc["current"]>().toEqualTypeOf<
 >();
 
 // ── A3 factory `{ defaults }` sugar ≡ pipe (bare Tag) ─────────────────────────
-class FactoryAdorned extends Hyperlink.Tag<FactoryAdorned>()(
+class FactoryAdorned extends Hyperlink.Service<FactoryAdorned>()(
   "defaults-handle/FactoryAdorned",
   { current: Hyperlink.effect(Schema.Number) },
   {
@@ -148,8 +148,8 @@ const _factoryToWidened: AdornedWidened = factorySvc;
 const _widenedToFactory: FactorySvc = adornedWidened;
 void [_factoryToWidened, _widenedToFactory];
 
-// ── A3 WorkPool.Tag config `{ defaults }` keeps WorkPool ∧ bag ────────────────
-class FactoryJobs extends WorkPool.Tag<FactoryJobs>()("defaults-handle/FactoryJobs", {
+// ── A3 WorkPool.Service config `{ defaults }` keeps WorkPool ∧ bag ────────────────
+class FactoryJobs extends WorkPool.Service<FactoryJobs>()("defaults-handle/FactoryJobs", {
   payload: Job,
   defaults: { label: (n: number) => `job=${n}` },
 }) {}
@@ -162,8 +162,8 @@ void [_fjToWidened, _fjFromWidened];
 expectTypeOf(factoryJobsSvc.label).toEqualTypeOf<(n: number) => string>();
 expectTypeOf(factoryJobsSvc.add).toEqualTypeOf<JobsHandle["add"]>();
 
-// ── A3 Gate.Tag config `{ defaults }` keeps Gate ∧ bag ────────────────────────
-class FactoryFetch extends Gate.Tag<FactoryFetch>()("defaults-handle/FactoryFetch", {
+// ── A3 Gate.Service config `{ defaults }` keeps Gate ∧ bag ────────────────────────
+class FactoryFetch extends Gate.Service<FactoryFetch>()("defaults-handle/FactoryFetch", {
   payload: Schema.Number,
   success: Schema.String,
   error: Schema.Boolean,
@@ -179,7 +179,7 @@ expectTypeOf(factoryFetchSvc.label).toEqualTypeOf<(n: number) => string>();
 expectTypeOf(factoryFetchSvc.run).toEqualTypeOf<FetchHandle["run"]>();
 
 declare const asyncFactoryBag: { readonly bad: () => Promise<string> };
-const _asyncFactoryRejected = Hyperlink.Tag()(
+const _asyncFactoryRejected = Hyperlink.Service()(
   "defaults-handle/AsyncBag",
   { current: Hyperlink.effect(Schema.Number) },
   // @ts-expect-error Promise-returning fn rejected in factory defaults too

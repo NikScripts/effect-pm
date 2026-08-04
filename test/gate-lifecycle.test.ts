@@ -51,7 +51,7 @@ describe("Gate — Lifecycle pause", () => {
   it.live("pause holds new calls until resume", () =>
     Effect.gen(function* () {
       const executed = yield* Ref.make(0);
-      class PausableGate extends Gate.Service<PausableGate>()(
+      class PausableGate extends Gate.define<PausableGate>()(
         "@test/lifecycle/PausableGate",
         {
           payload: Schema.Number,
@@ -83,7 +83,7 @@ describe("Gate — Lifecycle pause", () => {
       const started = yield* Deferred.make<void>();
       const release = yield* Deferred.make<void>();
       const executed = yield* Ref.make<ReadonlyArray<number>>([]);
-      class HoldWaitingGate extends Gate.Service<HoldWaitingGate>()(
+      class HoldWaitingGate extends Gate.define<HoldWaitingGate>()(
         "@test/lifecycle/HoldWaitingGate",
         {
           payload: Schema.Number,
@@ -127,7 +127,7 @@ describe("Gate — Lifecycle pause", () => {
 describe("Gate — Lifecycle stop", () => {
   it.live("stop rejects new calls with GateStopped", () =>
     Effect.gen(function* () {
-      class StoppableGate extends Gate.Service<StoppableGate>()(
+      class StoppableGate extends Gate.define<StoppableGate>()(
         "@test/lifecycle/StoppableGate",
         {
           payload: Schema.Number,
@@ -157,7 +157,7 @@ describe("Gate — Lifecycle stop", () => {
     Effect.gen(function* () {
       const started = yield* Deferred.make<void>();
       const release = yield* Deferred.make<void>();
-      class FailWaitingGate extends Gate.Service<FailWaitingGate>()(
+      class FailWaitingGate extends Gate.define<FailWaitingGate>()(
         "@test/lifecycle/FailWaitingGate",
         {
           payload: Schema.Number,
@@ -205,7 +205,7 @@ describe("Gate — Lifecycle stop", () => {
       const started = yield* Deferred.make<void>();
       const release = yield* Deferred.make<void>();
       const completed = yield* Ref.make<ReadonlyArray<number>>([]);
-      class FinishWaitingGate extends Gate.Service<FinishWaitingGate>()(
+      class FinishWaitingGate extends Gate.define<FinishWaitingGate>()(
         "@test/lifecycle/FinishWaitingGate",
         {
           payload: Schema.Number,
@@ -257,7 +257,7 @@ describe("Gate — live reconfig", () => {
       const peak = yield* Ref.make(0);
       const gate1 = yield* Deferred.make<void>();
       const reachedPeak = yield* Deferred.make<void>();
-      class ResizableGate extends Gate.Service<ResizableGate>()(
+      class ResizableGate extends Gate.define<ResizableGate>()(
         "@test/lifecycle/ResizableGate",
         {
           payload: Schema.Number,
@@ -301,7 +301,7 @@ describe("Gate — live reconfig", () => {
 
   it.live("setRateLimit updates the limit and bumps configVersion", () =>
     Effect.gen(function* () {
-      class RateGate extends Gate.Service<RateGate>()(
+      class RateGate extends Gate.define<RateGate>()(
         "@test/lifecycle/RateGate",
         {
           payload: Schema.Number,
@@ -333,7 +333,7 @@ describe("Gate — live reconfig", () => {
 });
 
 describe("Gate — Lifecycle duals, events, readiness, deferStart", () => {
-  class DualGate extends Gate.Service<DualGate>()("@test/lifecycle/DualGate", {
+  class DualGate extends Gate.define<DualGate>()("@test/lifecycle/DualGate", {
     payload: Schema.Number,
     success: Schema.Number,
     effect: (n: number) => Effect.succeed(n),

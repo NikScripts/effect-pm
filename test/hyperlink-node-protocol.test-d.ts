@@ -8,7 +8,7 @@ import * as Node from "../src/Node";
 // So supplying a node where an ambient protocol is required no longer type-checks as fully wired — the
 // dashboard's "connecting… forever" bug is now a compile error. This file is the proof.
 
-class Droplet extends Node.Tag<Droplet>()("np/Droplet", { url: "wss://x/rpc" }) {}
+class Droplet extends Node.Service<Droplet>()("np/Droplet", { url: "wss://x/rpc" }) {}
 const transport = Hyperlink.ws(Droplet, { url: "ws://x/rpc" });
 
 // A sink that only accepts a FULLY-WIRED layer (R = never). E may include

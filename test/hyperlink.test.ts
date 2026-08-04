@@ -69,7 +69,7 @@ it("effectFn rejects void or empty payloads at build time", () => {
 });
 
 // A resource with both a no-payload method (property) and a payload method.
-class Echo extends Hyperlink.Tag<Echo>()("test/Echo", {
+class Echo extends Hyperlink.Service<Echo>()("test/Echo", {
   ping: Hyperlink.effect(Schema.String),
   shout: Hyperlink.effectFn({ msg: Schema.String }, Schema.String),
 }) {}
@@ -103,8 +103,8 @@ const counterSpec = {
   bump: Hyperlink.effectFn({ by: Schema.Number }, Schema.Number),
   label: Hyperlink.effect(Schema.String),
 };
-class Alpha extends Hyperlink.Tag<Alpha>()("test/Alpha", counterSpec) {}
-class Beta extends Hyperlink.Tag<Beta>()("test/Beta", counterSpec) {}
+class Alpha extends Hyperlink.Service<Alpha>()("test/Alpha", counterSpec) {}
+class Beta extends Hyperlink.Service<Beta>()("test/Beta", counterSpec) {}
 
 it("two solo tags with the same Spec coexist; each has its own wire key", () => {
   let alphaTotal = 0;
@@ -144,7 +144,7 @@ it("two solo tags with the same Spec coexist; each has its own wire key", () => 
 });
 
 // ── shared Spec Tag(wireKey, spec) → Factory<Self>()(instanceKey) ──
-const SharedCounter = Hyperlink.Tag("test/shared-counter", counterSpec, {
+const SharedCounter = Hyperlink.Service("test/shared-counter", counterSpec, {
   description: "A shared-Spec counter factory.",
 });
 class SharedAlpha extends SharedCounter<SharedAlpha>()("test/SharedAlpha") {}
@@ -232,12 +232,12 @@ it("shared Tag serve rejects a duplicate instance key", () => {
 });
 
 // ── resource-level description (tools: section help / panel title) ──
-class Described extends Hyperlink.Tag<Described>()("described", {
+class Described extends Hyperlink.Service<Described>()("described", {
   ping: Hyperlink.effect(Schema.String),
 }, {
   description: "A described resource.",
 }) {}
-class FamA extends Hyperlink.Tag<FamA>()(
+class FamA extends Hyperlink.Service<FamA>()(
   "describedFamily/A",
   { tick: Hyperlink.effect(Schema.Void) },
   { description: "A described family.", },
@@ -249,10 +249,10 @@ it("carries a resource-level description on tags", () => {
 });
 
 // ── shared server: two DIFFERENT resource types with a same-named method don't collide ──
-class Widgets extends Hyperlink.Tag<Widgets>()("widgets", {
+class Widgets extends Hyperlink.Service<Widgets>()("widgets", {
   size: Hyperlink.effect(Schema.Number), // same method name as Crates.size, different type
 }) {}
-class Crates extends Hyperlink.Tag<Crates>()("crates", {
+class Crates extends Hyperlink.Service<Crates>()("crates", {
   size: Hyperlink.effect(Schema.String),
 }) {}
 

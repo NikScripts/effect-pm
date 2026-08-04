@@ -36,7 +36,7 @@ import * as Launcher from "hyperlink-ts/Launcher"
 import * as Node from "hyperlink-ts/Node"
 import { Effect } from "effect"
 
-const worker = Node.Tag()("app/Worker", {
+const worker = Node.Service()("app/Worker", {
   url: "http://127.0.0.1:4100/rpc",
   kind: "Http",
 })

@@ -32,7 +32,7 @@ import {
 } from "effect";
 import * as Hyperlink from "./Hyperlink";
 import {
-  Tag as Advice,
+  Service as Advice,
   AdviseRequest,
   ClearAdviceRequest,
   PreferredRequest,
@@ -41,7 +41,7 @@ import {
   type AdviceChange,
 } from "./Advice";
 import {
-  Tag as Directory,
+  Service as Directory,
   DirectoryEntry,
   DirectoryUpserted,
   DirectoryRemoved,
@@ -52,14 +52,14 @@ import {
   type DirectoryChange,
 } from "./Directory";
 import {
-  Tag as Identity,
+  Service as Identity,
   Endpoint,
   ClaimRequest,
   ResolveRequest,
   DuplicateIdentity,
 } from "./Identity";
 import type { AnyNode } from "./internal/nodeCore";
-import { asLookup, Tag as NodeTag } from "./internal/nodeCore";
+import { asLookup, Service as NodeTag } from "./internal/nodeCore";
 import type { OnConflict, OnConflictResolved } from "./Policy";
 import { onConflictOf, resolveOnConflict } from "./Policy";
 import * as Policy from "./Policy";

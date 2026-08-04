@@ -1,4 +1,4 @@
-# View / Page naming — skins, Page.Tag, file router
+# View / Page naming — skins, Page.Service, file router
 
 **Branch:** `cursor/file-router-prototype-125f`  
 **Status:** owner direction — not Eng’d
@@ -32,7 +32,7 @@ Layer.mergeAll(DashboardViews.layer, appViews).pipe(
 )
 ```
 
-## `View.Page.Tag` is the wrong shape
+## `View.Page.Service` is the wrong shape
 
 Triple nest (`View` · `Page` · `Tag`) is noisy and collides two ideas:
 
@@ -40,19 +40,19 @@ Triple nest (`View` · `Page` · `Tag`) is noisy and collides two ideas:
 |-------------------|------------------------------|
 | Dashboard **size chrome** (Card / Detail / **Page**) | Route module: path + Static/Dynamic/Build + metadata |
 | Matched into a shell slot | File default export the router loads |
-| `View.Page.Tag<Self>()("key", { spec })` | Needs path, render, paths Effect, title, … |
+| `View.Page.Service<Self>()("key", { spec })` | Needs path, render, paths Effect, title, … |
 
-So: **do not** mint file routes as `View.Page.Tag`.
+So: **do not** mint file routes as `View.Page.Service`.
 
 ### Preferred API direction
 
-**`Page.Tag`** (own module / namespace) — file-router page identity + metadata.
+**`Page.Service`** (own module / namespace) — file-router page identity + metadata.
 Helpers for bare components stay camelCase on `Page` or `View`:
 
 ```ts
 import * as Page from "hyperlink-ts/ui/Page"
 
-class DocsChapter extends Page.Tag<DocsChapter, { chapter: string }>()(
+class DocsChapter extends Page.Service<DocsChapter, { chapter: string }>()(
   "app/page/docs-chapter",
   {
     path: "/docs/:chapter",
@@ -68,11 +68,11 @@ export default Page.build(DocsChapter)
 ```
 
 Alternative if we insist on View umbrella: **`View.Page`** as the mint
-(`class X extends View.Page<X>()("key", statics)`) — **not** `View.Page.Tag`.
+(`class X extends View.Page<X>()("key", statics)`) — **not** `View.Page.Service`.
 Still rename dashboard size chrome so “Page” isn’t two products (e.g. keep
 `View.Page` = size only **or** move size to `View.Size.Page` / `ViewKind.Page` only).
 
-**Owner lean (this note):** file routing is the priority → **`Page.Tag`** +
+**Owner lean (this note):** file routing is the priority → **`Page.Service`** +
 `Page.static` / `.dynamic` / `.build` / `.layout`. Dashboard size chrome keeps
 `View.Card` / `View.Detail` / size-`Page` under View, named so it doesn’t read as
 a file route.
@@ -86,13 +86,13 @@ Half the point is **file-based routing + codegen**:
 - Catalog / `Route.fileRoot` → typed `urls.*`
 - Soft-nav stays Router; engine wire (`createPages`) stays internal
 
-`Page.Tag` is still unfinished: statics schema, `Page.build(Tag)` reading class
+`Page.Service` is still unfinished: statics schema, `Page.build(Tag)` reading class
 bag, param Schema, layout class-or-helper, rename off `skins`, cutover from
-`View.Page.Tag` examples in the dream file.
+`View.Page.Service` examples in the dream file.
 
 ## Open
 
 1. ~~Public rename off `skins` / Domain.provide / `DashboardLayer` / triple `DashboardViews`~~ — Eng’d as one `ui/DashboardViews` + `web|tui/Dashboard.componentsLayer`
-2. New `Page` module vs hang helpers on `View` — `ui/Page` helpers Eng’d; `Page.Tag` deferred
-3. Disambiguate dashboard size-`Page` naming when `Page.Tag` lands
-4. Finish `Page.Tag` statics + file-router loader contract
+2. New `Page` module vs hang helpers on `View` — `ui/Page` helpers Eng’d; `Page.Service` deferred
+3. Disambiguate dashboard size-`Page` naming when `Page.Service` lands
+4. Finish `Page.Service` statics + file-router loader contract

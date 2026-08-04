@@ -55,7 +55,7 @@ const step = (label: string, actual: number, expected: number) =>
     yield* Effect.logInfo(`${label} → ${String(actual)}`);
   });
 
-class Jobs extends Hyperlink.Tag<Jobs>()("examples/policy-cutover/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("examples/policy-cutover/Jobs", {
   jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
@@ -64,15 +64,15 @@ const program = Effect.gen(function* () {
   const pathA = yield* tmpSock("a");
   const pathB = yield* tmpSock("b");
 
-  const lookupNode = Node.Tag()("examples/policy-cutover/Lookup", {
+  const lookupNode = Node.Service()("examples/policy-cutover/Lookup", {
     path: lookupPath,
   }).pipe(Node.asLookup);
 
-  class WorkerA extends Node.Tag<WorkerA, Jobs>()(
+  class WorkerA extends Node.Service<WorkerA, Jobs>()(
     "examples/policy-cutover/WorkerA",
     { path: pathA },
   ) {}
-  class WorkerB extends Node.Tag<WorkerB, Jobs>()(
+  class WorkerB extends Node.Service<WorkerB, Jobs>()(
     "examples/policy-cutover/WorkerB",
     { path: pathB },
   ) {}

@@ -18,7 +18,7 @@
 
 ## What this shows
 
-Void-payload and parameterized Gate.Service with concurrency.
+Void-payload and parameterized Gate.define with concurrency.
 
 {.twoslash include="examples/gate/unit-and-input.ts"}
 ``` ts

@@ -43,7 +43,7 @@ const _notEffect: Effect.Effect<number> = ss.changes;
 void _notEffect;
 
 // ── Hyperlink.Hyperlink — `yield* Tag` like Effect.Effect ──
-class CounterForHyperlinkType extends Hyperlink.Tag<CounterForHyperlinkType>()("Counter", {
+class CounterForHyperlinkType extends Hyperlink.Service<CounterForHyperlinkType>()("Counter", {
   increment: Hyperlink.effectFn({ by: Schema.Number }),
   reset: Hyperlink.effect(Schema.Void),
   current: Hyperlink.effect(Schema.Number),
@@ -78,7 +78,7 @@ const _tagIsResource: CounterInferred = CounterForHyperlinkType;
 void _tagIsResource;
 
 // ── Slice 2: Tag + `yield*` + local layer ──
-class Counter extends Hyperlink.Tag<Counter>()("Counter", {
+class Counter extends Hyperlink.Service<Counter>()("Counter", {
   increment: Hyperlink.effectFn({ by: Schema.Number }),
   reset: Hyperlink.effect(Schema.Void),
   current: Hyperlink.effect(Schema.Number),
@@ -106,8 +106,8 @@ const tickSpec = {
   tick: Hyperlink.effect(Schema.Void),
   count: Hyperlink.effect(Schema.Number),
 };
-class TickA extends Hyperlink.Tag<TickA>()("test/TickA", tickSpec) {}
-class TickB extends Hyperlink.Tag<TickB>()("test/TickB", tickSpec) {}
+class TickA extends Hyperlink.Service<TickA>()("test/TickA", tickSpec) {}
+class TickB extends Hyperlink.Service<TickB>()("test/TickB", tickSpec) {}
 
 const _factoryA: Effect.Effect<number, never, TickA> = Effect.gen(function* () {
   const a = yield* TickA;
@@ -124,7 +124,7 @@ void _factoryB;
 // ── remote path: the client layer's only requirement is the transport `Protocol` ──
 // (Locks the precise-group typing: a regression that re-leaked `any` into `R` would
 // make this program's `R` non-`never` and fail to satisfy `runPromise`.)
-class Remote extends Hyperlink.Tag<Remote>()("test/Remote", {
+class Remote extends Hyperlink.Service<Remote>()("test/Remote", {
   ping: Hyperlink.effect(Schema.String),
   shout: Hyperlink.effectFn({ msg: Schema.String }, Schema.String),
 }) {}
@@ -144,7 +144,7 @@ void _remoteRun;
 // A method that returns a function can't cross RPC. Declared with Hyperlink.local, it
 // surfaces as `Effect<T, never, Local<Box>>` — callable only when the LOCAL
 // layer (which grants the capability) is provided, a compile error under the client.
-class Box extends Hyperlink.Tag<Box>()("test/Box", {
+class Box extends Hyperlink.Service<Box>()("test/Box", {
   read: Hyperlink.effect(Schema.Number),
   onChange:
     Hyperlink.local<(cb: (n: number) => void) => Effect.Effect<void>>(),
@@ -195,8 +195,8 @@ const daemonControlSpec = {
   start: Hyperlink.effect(Schema.Void),
   drop: Hyperlink.effect(Schema.Void),
 };
-class P1 extends Hyperlink.Tag<P1>()("@app/p1", daemonControlSpec) {}
-class P2 extends Hyperlink.Tag<P2>()("@app/p2", daemonControlSpec) {}
+class P1 extends Hyperlink.Service<P1>()("@app/p1", daemonControlSpec) {}
+class P2 extends Hyperlink.Service<P2>()("@app/p2", daemonControlSpec) {}
 
 const _daemonClients: Layer.Layer<P1 | P2, never, RpcClient.Protocol> =
   Layer.mergeAll(Hyperlink.client(P1), Hyperlink.client(P2));
@@ -204,8 +204,8 @@ void _daemonClients;
 
 // ── node in the tag: ship only the tag; the client resolves where to connect ──
 // Bare bound node → client still requires the node (+ explicit protocol via connect).
-class EdgeNode extends Node.Tag<EdgeNode>()("test/edge") {}
-class Hosted extends Hyperlink.Tag<Hosted>()("test/Hosted",
+class EdgeNode extends Node.Service<EdgeNode>()("test/edge") {}
+class Hosted extends Hyperlink.Service<Hosted>()("test/Hosted",
   { ping: Hyperlink.effect(Schema.String) },
   { node: EdgeNode },
 ) {}
@@ -229,10 +229,10 @@ const _nodeedRun: Promise<string> = Effect.runPromise(
 void _nodeedRun;
 
 // Addressed bound node → client(Tag) auto-connects (fully wired).
-class WireNode extends Node.Tag<WireNode>()("test/wire", {
+class WireNode extends Node.Service<WireNode>()("test/wire", {
   path: "/tmp/test-wire.sock",
 }) {}
-class HostedWire extends Hyperlink.Tag<HostedWire>()(
+class HostedWire extends Hyperlink.Service<HostedWire>()(
   "test/HostedWire",
   { ping: Hyperlink.effect(Schema.String) },
   { node: WireNode },
@@ -247,7 +247,7 @@ const _nodelessClient: Layer.Layer<Counter, never, RpcClient.Protocol> =
 void _nodelessClient;
 
 // ── solo tag with a node: client resolves transport from the tag ──
-class HP1 extends Hyperlink.Tag<HP1>()(
+class HP1 extends Hyperlink.Service<HP1>()(
   "@app/hp1",
   { start: Hyperlink.effect(Schema.Void) },
   { node: EdgeNode },

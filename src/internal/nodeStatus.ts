@@ -4,7 +4,7 @@
  * The reserved **node status** resource — every node that serves a group over
  * {@link Node.httpServer} automatically also serves this, so a client can ask any node
  * "are you up, how long, how many HyperServices, and what are your logs?" without the node author
- * wiring anything. It's a nodeless {@link Hyperlink.Tag} (one reserved group id); a client reaches
+ * wiring anything. It's a nodeless {@link Hyperlink.Service} (one reserved group id); a client reaches
  * a specific node by pointing the ambient transport at that node's url.
  *
  * Kept internal so {@link Hyperlink} can dynamically import it from `httpServer` without a
@@ -118,7 +118,7 @@ export type NodeStatus = typeof nodeStatus.Type;
  *
  * @internal
  */
-export class NodeStatusTag extends Hyperlink.Tag<NodeStatusTag>()(
+export class NodeStatusTag extends Hyperlink.Service<NodeStatusTag>()(
   NODE_STATUS_KEY,
   {
   status: Hyperlink.ref(nodeStatus).annotate({
@@ -341,7 +341,7 @@ export const buildNodeStatusImpl = (options: {
       if (membership === undefined) return;
       const Advice = yield* Effect.promise(() => import("../Advice"));
       const Directory = yield* Effect.promise(() => import("../Directory"));
-      const adviceOpt = yield* Effect.serviceOption(Advice.Tag);
+      const adviceOpt = yield* Effect.serviceOption(Advice.Service);
       if (Option.isSome(adviceOpt)) {
         yield* Effect.forEach(
           membership.serves,
@@ -352,7 +352,7 @@ export const buildNodeStatusImpl = (options: {
           { discard: true },
         );
       }
-      const dirOpt = yield* Effect.serviceOption(Directory.Tag);
+      const dirOpt = yield* Effect.serviceOption(Directory.Service);
       if (Option.isSome(dirOpt)) {
         yield* dirOpt.value
           .unregister(

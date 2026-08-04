@@ -47,7 +47,7 @@ const Item = Schema.Struct({ n: Schema.Number });
 interface Item {
   readonly n: number;
 }
-class ConfQueue extends WorkPool.Tag<ConfQueue>()("conf/Q", { payload: Item }) {}
+class ConfQueue extends WorkPool.Service<ConfQueue>()("conf/Q", { payload: Item }) {}
 const queueServe = WorkPool.serveMemory(ConfQueue, { effect: () => Effect.void });
 const queueOp = Effect.gen(function* () {
   const q = yield* ConfQueue;
@@ -63,7 +63,7 @@ const queueOp = Effect.gen(function* () {
 });
 
 // ── Daemon ──────────────────────────────────────────────────────────────────────────────────────
-class ConfDaemon extends Daemon.Tag<ConfDaemon>()("conf/P").pipe(Daemon.schedule([])) {}
+class ConfDaemon extends Daemon.Service<ConfDaemon>()("conf/P").pipe(Daemon.schedule([])) {}
 const daemonServe = Daemon.serveMemory(ConfDaemon, { effect: Effect.void });
 const daemonOp = Effect.gen(function* () {
   const daemon = yield* ConfDaemon;
@@ -77,7 +77,7 @@ const daemonOp = Effect.gen(function* () {
 });
 
 // ── Gate ──────────────────────────────────────────────────────────────────────────────────
-class ConfGate extends Gate.Tag<ConfGate>()("conf/G", {
+class ConfGate extends Gate.Service<ConfGate>()("conf/G", {
   payload: Schema.Number,
   success: Schema.Number,
 }) {}

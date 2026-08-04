@@ -20,9 +20,9 @@ import * as Hyperlink from "../../src/Hyperlink";
 import * as ShardMap from "../../src/ShardMap";
 import * as Node from "../../src/Node";
 
-class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
-class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
-class DropletCentral extends Node.Tag<DropletCentral>()(
+class DropletEast extends Node.Service<DropletEast>()("app/DropletEast") {}
+class DropletWest extends Node.Service<DropletWest>()("app/DropletWest") {}
+class DropletCentral extends Node.Service<DropletCentral>()(
   "app/DropletCentral",
 ) {}
 
@@ -33,7 +33,7 @@ const Session = Schema.Struct({
   seat: Schema.optionalKey(Schema.String),
 });
 
-class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
+class Sessions extends ShardMap.Service<Sessions>()("app/Sessions", {
   key: SessionId,
   value: Session,
   keyOf: (s) => s.id,

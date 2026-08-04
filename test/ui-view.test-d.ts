@@ -1,5 +1,5 @@
 /**
- * View.Tag reversed props + Views.react R = never.
+ * View.Service reversed props + Views.react R = never.
  */
 import { Effect, Layer, Schema } from "effect";
 import { expectTypeOf } from "vitest";
@@ -7,11 +7,11 @@ import * as View from "../src/ui/View";
 import * as WorkPool from "../src/WorkPool";
 
 import * as Views from "../src/ui/Views";
-class PoolCard extends Views.Card.Tag<PoolCard>()("hyperlink/view/pool-card") {}
-class CustomCard extends Views.Card.Tag<CustomCard>()("hyperlink/view/custom-card") {}
+class PoolCard extends Views.Card.Service<PoolCard>()("hyperlink/view/pool-card") {}
+class CustomCard extends Views.Card.Service<CustomCard>()("hyperlink/view/custom-card") {}
 
 const Item = Schema.Struct({ n: Schema.Number });
-class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", { payload: Item }) {}
+class Jobs extends WorkPool.Service<Jobs>()("app/Jobs", { payload: Item }) {}
 
 declare const runFullyWired: <A, E>(layer: Layer.Layer<A, E, never>) => void;
 

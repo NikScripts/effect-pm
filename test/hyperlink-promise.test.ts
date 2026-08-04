@@ -2,7 +2,7 @@ import { Duration, Effect, Schema, Stream, SubscriptionRef } from "effect";
 import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
 
-class Counter extends Hyperlink.Tag<Counter>()("promise-test/Counter", {
+class Counter extends Hyperlink.Service<Counter>()("promise-test/Counter", {
   current: Hyperlink.effect(Schema.Number),
   add: Hyperlink.effectFn(Schema.Number, Schema.Number),
   maxSize: Hyperlink.value(Schema.Number),
@@ -13,7 +13,7 @@ class Counter extends Hyperlink.Tag<Counter>()("promise-test/Counter", {
   },
 }) {}
 
-class Fallible extends Hyperlink.Tag<Fallible>()("promise-test/Fallible", {
+class Fallible extends Hyperlink.Service<Fallible>()("promise-test/Fallible", {
   go: Hyperlink.effect(Schema.Number, Schema.String),
 }) {}
 

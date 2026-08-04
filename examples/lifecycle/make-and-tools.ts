@@ -19,7 +19,7 @@ import { WorkPool } from "../../src";
 
 const Job = Schema.Struct({ id: Schema.String });
 
-class Jobs extends WorkPool.Tag<Jobs>()("examples/lifecycle/Jobs", {
+class Jobs extends WorkPool.Service<Jobs>()("examples/lifecycle/Jobs", {
   payload: Job,
 }) {}
 

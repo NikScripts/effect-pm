@@ -32,7 +32,7 @@ const program = Effect.gen(function* () {
   const timeoutPort = 29_700 + (now % 200);
   const exitPort = timeoutPort + 1;
 
-  const timeoutNode = Node.Tag()("examples/launcher-timeout/Timeout", {
+  const timeoutNode = Node.Service()("examples/launcher-timeout/Timeout", {
     url: `http://127.0.0.1:${String(timeoutPort)}/rpc`,
     kind: "Http",
   });
@@ -50,7 +50,7 @@ const program = Effect.gen(function* () {
     Effect.map(tagOf),
   );
 
-  const exitNode = Node.Tag()("examples/launcher-timeout/Exit", {
+  const exitNode = Node.Service()("examples/launcher-timeout/Exit", {
     url: `http://127.0.0.1:${String(exitPort)}/rpc`,
     kind: "Http",
   });

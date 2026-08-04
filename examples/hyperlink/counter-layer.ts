@@ -15,7 +15,7 @@ import { Effect, Schema, SubscriptionRef } from "effect";
 import * as Hyperlink from "../../src/Hyperlink";
 import * as Lifecycle from "../../src/Lifecycle";
 
-class Counter extends Hyperlink.Tag<Counter>()("examples/CounterLayer/Counter", {
+class Counter extends Hyperlink.Service<Counter>()("examples/CounterLayer/Counter", {
   lifecycle: Lifecycle.stateRef,
   lifecycleEvents: Lifecycle.eventStream,
   start: Hyperlink.effect(Schema.Void).pipe(Lifecycle.asStart),

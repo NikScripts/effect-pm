@@ -14,7 +14,7 @@ A **Daemon** is a named unit of background work: an `effect` that runs to comple
 repeats while armed) and **schedule** (whether repeats are allowed now). It is a location-transparent
 Hyperlink Service — lifecycle, observation, and schedule control behind one Tag.
 
-`Daemon` is one module: the toolkit contract (`Daemon.Tag` / `Daemon.Schedule`) plus the engine
+`Daemon` is one module: the toolkit contract (`Daemon.Service` / `Daemon.Schedule`) plus the engine
 (`Daemon.make` / `layer` / `serve`) over `Polling` and the schedule primitive. A Tag-only import
 pulls **zero** engine code; the engine loads when you call `make` / `layer` / `serve`.
 
@@ -39,7 +39,7 @@ import { Polling } from "hyperlink-ts"
 
 declare const pollLiveScores: Effect.Effect<void>
 
-class LiveScores extends Daemon.Tag<LiveScores>()("nwsl/LiveScores") {}
+class LiveScores extends Daemon.Service<LiveScores>()("nwsl/LiveScores") {}
 
 const layer = Daemon.layer(LiveScores, {
   effect: pollLiveScores,
@@ -68,13 +68,13 @@ const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number })
 const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number })
 
 // void — no live `result` ref
-class Health extends Daemon.Tag<Health>()("app/Health") {}
+class Health extends Daemon.Service<Health>()("app/Health") {}
 
 // value-returning — gains `result.get` / `result.changes` (Option until first success)
-class Prices extends Daemon.Tag<Prices>()("app/Prices", { success: Price }) {}
+class Prices extends Daemon.Service<Prices>()("app/Prices", { success: Price }) {}
 
 // value + typed fail channel on store rows
-class PricesE extends Daemon.Tag<PricesE>()("app/Prices", {
+class PricesE extends Daemon.Service<PricesE>()("app/Prices", {
   success: Price,
   error: FetchErr,
 }) {}
@@ -93,12 +93,12 @@ import * as Daemon from "hyperlink-ts/Daemon"
 declare const gameStart: Date
 declare const gameEnd: Date
 
-class Matches extends Daemon.Tag<Matches>()("nwsl/Matches").pipe(
+class Matches extends Daemon.Service<Matches>()("nwsl/Matches").pipe(
   Daemon.schedule([Daemon.window(gameStart, gameEnd)]),
 ) {}
 
 // empty inline schedule — disarmed until `schedule.add` / `set`
-class Ingest extends Daemon.Tag<Ingest>()("nwsl/Ingest").pipe(Daemon.schedule([])) {}
+class Ingest extends Daemon.Service<Ingest>()("nwsl/Ingest").pipe(Daemon.schedule([])) {}
 ```
 
 ## Handle surface (`yield* Tag`)
@@ -121,7 +121,7 @@ import * as Store from "hyperlink-ts/Store"
 import * as Daemon from "hyperlink-ts/Daemon"
 import { Effect } from "effect"
 
-class Prices extends Daemon.Tag<Prices>()("app/Prices") {}
+class Prices extends Daemon.Service<Prices>()("app/Prices") {}
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
   Daemon.store(Prices),

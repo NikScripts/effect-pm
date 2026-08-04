@@ -1,4 +1,4 @@
-# View.Tag + Prototype — notes (2026-07-27)
+# View.Service + Prototype — notes (2026-07-27)
 
 **Branch:** `cursor/tui-dashboard-parity-125f`  
 **Status:** Eng’d — Tag/Prototype + size add-ons + Dashboard `views` + WorkerPool `View.only` e2e.
@@ -7,7 +7,7 @@
 
 ## Intent
 
-1. **`View.Tag` = THE tool for DI components** (Context.Service) on **last-ts**. Not dashboard matchers.
+1. **`View.Service` = THE tool for DI components** (Context.Service) on **last-ts**. Not dashboard matchers.
 2. **Shape is reversed:** Self is the **input props** interface (what the component receives), not a callable service API. `Layer.succeed(PoolCard, Comp)` → `Comp` must accept props from the Tag’s Props.
 3. **`View.Prototype`** accumulates **props (type)** + **annotations (runtime bag)** before minting a Tag.
 4. **Dashboard size + Registry + bind + `react` matchers = Hyperlink `Views`.** Not last-ts. Current match/kit is a v1; must be **redesigned into a composable system** later — DI Views are far more than “match Card/Detail/Page.”
@@ -36,7 +36,7 @@ Context.ServiceClass<Self, Key, (props: Props) => ReactElement | null>
 `ServiceClass` instance typing always carries key/Service brands, so **Self cannot also be the clean props bag**. Props live on the Prototype chain; the handle carries a phantom `Type`:
 
 ```ts
-class PoolCard extends View.Card.Tag<PoolCard>()("hyperlink/view/pool-card") {}
+class PoolCard extends View.Card.Service<PoolCard>()("hyperlink/view/pool-card") {}
 
 Layer.succeed(PoolCard, (props) => { … })  // props: ViewProps
 // or explicit: View.Type<typeof PoolCard> / View.PropsOf<typeof View.Card>
@@ -55,7 +55,7 @@ const CardSel = Base.Prototype<{ readonly selected?: boolean }>()({
   size: View.ViewKind.Card(),
 })
 
-class ScheduleCard extends Card.Tag<ScheduleCard>()("hyperlink/view/schedule-card") {}
+class ScheduleCard extends Card.Service<ScheduleCard>()("hyperlink/view/schedule-card") {}
 yield* View.annotations(ScheduleCard) // Effect → bag (size, spec, …)
 View.getAnnotations(ScheduleCard).size
 ScheduleCard.key                      // Effect identity — "hyperlink/view/schedule-card"
@@ -67,7 +67,7 @@ Last.kindOf(ScheduleCard)             // "last-ts/View"
 | `View.Prototype<Props>()(statics?)` | Root proto (curried so Statics infer) |
 | `proto.Prototype<NewProps>()(statics?)` | Extend props + merge statics |
 | `proto.Tag<Self extends Props>()(key)` | Mint Context.Service handle |
-| `View.Tag` | Convenience = empty proto’s Tag (naked DI) |
+| `View.Service` | Convenience = empty proto’s Tag (naked DI) |
 | `View.Card` / `.Detail` / `.Page` | Sized add-on protos (`ViewProps` + `size` static) |
 
 Statics are for things we used to jam into Tag args (`size`, later `spec`, etc.).
@@ -79,7 +79,7 @@ Statics are for things we used to jam into Tag args (`size`, later `spec`, etc.)
 - Matchers: `ui.Card` / `ui.Detail` / `ui.Page` from `View.react` / `compose`, or `View.useMatch()`.
 - Registry bind still needs a **size** — `yield* View.annotations(view)` (or sync peek) from sized prototypes.
 - `Views.bind` / `Views.only` only accept handles with `size: ViewKind`.
-- Naked `View.Tag` = DI only (no matcher registration without a size annotation).
+- Naked `View.Service` = DI only (no matcher registration without a size annotation).
 
 ---
 
@@ -93,9 +93,9 @@ Statics are for things we used to jam into Tag args (`size`, later `spec`, etc.)
 
 ## Acceptance
 
-1. `View.Tag` / `Prototype` have no required `card|detail|page` arg  
+1. `View.Service` / `Prototype` have no required `card|detail|page` arg  
 2. `Layer.succeed(PoolCard, fn)` types `fn` props as `PoolCard`  
-3. `View.Card.Tag` stamps `size: ViewKind.Card()`; matchers still work via bind  
+3. `View.Card.Service` stamps `size: ViewKind.Card()`; matchers still work via bind  
 4. Notes kept here; sync (commit/push) at green checkpoints  
 
 ---
@@ -120,8 +120,8 @@ Shared `src/ui/runtime.tsx` (`RuntimeProvider` + door). Bundles guide: [`../guid
 One-shot mint on shipped size chrome (POC folded in; keep Prototype for open Requirement):
 
 ```ts
-class PoolCard extends View.Card.Tag<PoolCard>()("…", { spec }) {}
-class Dense extends View.Card.Tag<Dense, ViewProps & { dense?: boolean }>()("…") {}
+class PoolCard extends View.Card.Service<PoolCard>()("…", { spec }) {}
+class Dense extends View.Card.Service<Dense, ViewProps & { dense?: boolean }>()("…") {}
 const skin: PoolCard["Service"] = (props) => …  // no typeof
 type P = View.PropsOf<PoolCard>
 ```
@@ -162,7 +162,7 @@ for app `static`s. Factory brand: `Last.kindOf` / `View.kind`. Type the bag with
 ## Effect-faithful Tag POC (archived — baked)
 
 Historical POC: `examples/view/effect-service-poc.ts`. Behavior now on
-shipped `View.Card.Tag` / `PropsOf` / `["Service"]` (see above).
+shipped `View.Card.Service` / `PropsOf` / `["Service"]` (see above).
 
 ## Checkpoint notes (2026-07-27)
 
@@ -176,7 +176,7 @@ shipped `View.Card.Tag` / `PropsOf` / `["Service"]` (see above).
 `examples/hyperlink-web` uses Prototypes + `View.only` (legacy `forKey` / `widgets` dropped):
 
 ```ts
-export class WorkerPoolCard extends View.Card.Tag<
+export class WorkerPoolCard extends View.Card.Service<
   WorkerPoolCard,
   { readonly dense?: boolean }
 >()("examples/apps/web/worker-pool-card", {

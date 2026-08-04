@@ -8,7 +8,7 @@
 
 {.draft}
 **Draft** — path-table codegen + Vite plugin are Eng’d; docs-site cutover off Waku
-`getConfig` / `Page.Tag` still open. Soft-nav stays on [Routing](/docs/routing).
+`getConfig` / `Page.Service` still open. Soft-nav stays on [Routing](/docs/routing).
 
 Hyperlink owns a **typed path table** for file-based routes: walk `pages/**`,
 emit `paths.gen.ts`, feed `Route.fileRoot` so `urls.*` is a closed builder — not
@@ -185,7 +185,7 @@ the type source. Design for three states:
 
 - Docs site not on this plugin yet (Waku `getConfig` + its own `pages.gen`).
 - No loader yet that reads `Page.stampOf` → Waku `createPages`.
-- `Page.Tag` class mint deferred — helpers only.
+- `Page.Service` class mint deferred — helpers only.
 
 ## Related
 

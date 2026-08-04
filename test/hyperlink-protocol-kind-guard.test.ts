@@ -10,8 +10,8 @@ import * as Node from "../src/Node";
 // refuses to boot loudly instead.
 
 // `WsNode` declares WebSocket; `WsRes` is bound to it.
-class WsNode extends Node.Tag<WsNode>()("p3/ws", { url: "/rpc", kind: "WebSocket" }) {}
-class WsRes extends Hyperlink.Tag<WsRes>()(
+class WsNode extends Node.Service<WsNode>()("p3/ws", { url: "/rpc", kind: "WebSocket" }) {}
+class WsRes extends Hyperlink.Service<WsRes>()(
   "p3/WsRes",
   { ping: Hyperlink.effect(Schema.String) },
   { node: WsNode },
@@ -53,11 +53,11 @@ it("the same resource served on wsServer boots fine — the kind matches", () =>
 
 // `DualNode` declares BOTH http and ws (multi-protocol) — set membership means serving it over
 // EITHER transport is fine; only a transport it doesn't declare trips the guard.
-class DualNode extends Node.Tag<DualNode>()("p3/dual", {
+class DualNode extends Node.Service<DualNode>()("p3/dual", {
   http: "http://d/rpc",
   ws: "ws://d/rpc",
 }) {}
-class DualRes extends Hyperlink.Tag<DualRes>()(
+class DualRes extends Hyperlink.Service<DualRes>()(
   "p3/DualRes",
   { ping: Hyperlink.effect(Schema.String) },
   { node: DualNode },

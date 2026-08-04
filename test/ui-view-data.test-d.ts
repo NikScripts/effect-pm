@@ -11,15 +11,15 @@ import * as DaemonView from "../src/ui/DaemonView";
 import * as WorkPoolView from "../src/ui/WorkPoolView";
 
 const Item = Schema.Struct({ n: Schema.Number });
-class AppNode extends Node.Tag<AppNode>()("app/runtime-d/Node", {
+class AppNode extends Node.Service<AppNode>()("app/runtime-d/Node", {
   url: "http://127.0.0.1:9/rpc",
   kind: "Http",
 }) {}
-class Jobs extends WorkPool.Tag<Jobs>()("app/runtime-d/Jobs", {
+class Jobs extends WorkPool.Service<Jobs>()("app/runtime-d/Jobs", {
   payload: Item,
   node: AppNode,
 }) {}
-class Nightly extends Daemon.Tag<Nightly>()("app/runtime-d/Nightly", {
+class Nightly extends Daemon.Service<Nightly>()("app/runtime-d/Nightly", {
   node: AppNode,
 }) {}
 

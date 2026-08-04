@@ -2,13 +2,13 @@ import { Duration, Effect, Schema } from "effect";
 import type { RateLimiter } from "effect/unstable/persistence/RateLimiter";
 import * as Gate from "../src/Gate";
 
-class UnitGate extends Gate.Service<UnitGate>()("@app/UnitGate", {
+class UnitGate extends Gate.define<UnitGate>()("@app/UnitGate", {
   payload: Schema.Void,
   success: Schema.Number,
   effect: () => Effect.succeed(1),
 }) {}
 
-class InputGate extends Gate.Tag<InputGate>()("@app/InputGate", { payload: Schema.Number, success: Schema.Number }) {}
+class InputGate extends Gate.Service<InputGate>()("@app/InputGate", { payload: Schema.Number, success: Schema.Number }) {}
 
 // @ts-expect-error — void gates reject positional input
 void UnitGate.run(1);

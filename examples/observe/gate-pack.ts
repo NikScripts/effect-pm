@@ -17,7 +17,7 @@ import * as Hyperlink from "../../src/Hyperlink";
 import * as Observe from "../../src/Observe";
 import * as GateView from "../../src/ui/GateView";
 
-class DownloadGate extends Gate.Tag<DownloadGate>()("examples/ObserveGate/Download", {
+class DownloadGate extends Gate.Service<DownloadGate>()("examples/ObserveGate/Download", {
   payload: Schema.String,
   success: Schema.String,
 }) {}

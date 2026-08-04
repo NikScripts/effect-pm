@@ -12,19 +12,19 @@ import * as Hyperlink from "../src/Hyperlink";
 // `examples/scenarios/multi-protocol-dual-serve.ts` is the narrated version; this locks it in CI.
 // Real ephemeral ports (NodeHttpServer.layerTest), same as resource-verify-connection.test.ts.
 
-class Fleet extends Node.Tag<Fleet>()("mps/fleet", {
+class Fleet extends Node.Service<Fleet>()("mps/fleet", {
   // urls are placeholders — P3 checks the KIND set, and the client dials the real ephemeral ports.
   http: "http://placeholder/rpc",
   ws: "ws://placeholder/rpc",
 }) {}
 // Bound to Fleet so each server runs the P3 check against Fleet's declared {Http, WebSocket} set.
-class Bound extends Hyperlink.Tag<Bound>()(
+class Bound extends Hyperlink.Service<Bound>()(
   "mps/bound",
   { ping: Hyperlink.effect(Schema.Number) },
   { node: Fleet },
 ) {}
 // The contract a remote dials with an explicit transport (nodeless — no auto-select / no memo).
-class Wire extends Hyperlink.Tag<Wire>()("mps/wire", { ping: Hyperlink.effect(Schema.Number) }) {}
+class Wire extends Hyperlink.Service<Wire>()("mps/wire", { ping: Hyperlink.effect(Schema.Number) }) {}
 
 const noop = { ping: Effect.succeed(0) };
 const portOf = (ctx: Context.Context<HttpServer.HttpServer>): number => {

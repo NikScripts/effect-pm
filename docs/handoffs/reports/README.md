@@ -14,7 +14,7 @@ Historical review reports and session closeouts from the 2026-07 store cutover l
 |--------|-------|
 | [Gate](../archive/2026-07/reports/2026-07-07-agent-report-run-resource.md) | Gate handle, RPC, store tap, docs sweep |
 | [Daemon](../archive/2026-07/reports/2026-07-07-agent-report-process.md) | Tag wire slots, store contract, docs |
-| [WorkPool + WorkPool.Service (untyped)](../archive/2026-07/reports/2026-07-07-agent-report-queue-resource.md) | Engine cutover, triplet |
+| [WorkPool + WorkPool.define (untyped)](../archive/2026-07/reports/2026-07-07-agent-report-queue-resource.md) | Engine cutover, triplet |
 | [Store](../archive/2026-07/reports/2026-07-07-agent-report-store.md) | Bridge typing, engine wiring |
 | [Docs + release](../archive/2026-07/reports/2026-07-07-agent-report-docs-release.md) | Changesets, stale docs, examples |
 

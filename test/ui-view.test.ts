@@ -10,16 +10,16 @@ import * as WorkPool from "../src/WorkPool";
 
 import * as Views from "../src/ui/Views";
 const Item = Schema.Struct({ n: Schema.Number });
-class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", { payload: Item }) {}
-class Special extends WorkPool.Tag<Special>()("app/Special", { payload: Item }) {}
-class Nested extends Group.Tag<Nested>("app/Nested")({ Special }) {}
-class AppGroup extends Group.Tag<AppGroup>("app/AppGroup")({ Jobs, Nested }) {}
+class Jobs extends WorkPool.Service<Jobs>()("app/Jobs", { payload: Item }) {}
+class Special extends WorkPool.Service<Special>()("app/Special", { payload: Item }) {}
+class Nested extends Group.Service<Nested>("app/Nested")({ Special }) {}
+class AppGroup extends Group.Service<AppGroup>("app/AppGroup")({ Jobs, Nested }) {}
 
-class PoolCard extends Views.Card.Tag<PoolCard>()("hyperlink/view/pool-card") {}
+class PoolCard extends Views.Card.Service<PoolCard>()("hyperlink/view/pool-card") {}
 
-class CustomCard extends Views.Card.Tag<CustomCard>()("hyperlink/view/custom-card") {}
+class CustomCard extends Views.Card.Service<CustomCard>()("hyperlink/view/custom-card") {}
 
-class PoolDetail extends Views.Detail.Tag<PoolDetail>()("hyperlink/view/pool-detail") {}
+class PoolDetail extends Views.Detail.Service<PoolDetail>()("hyperlink/view/pool-detail") {}
 
 const chrome = Layer.mergeAll(
   View.provide(PoolCard, () => null),
@@ -150,7 +150,7 @@ describe("Views.group + kit.for", () => {
   });
 });
 
-describe("View.Tag / Prototype", () => {
+describe("View.Service / Prototype", () => {
   it("card prototype stamps size annotation + Last kind", () => {
     expect(View.getAnnotations(PoolCard).size).toEqual(Views.ViewKind.Card());
     expect(View.getAnnotations(PoolDetail).size).toEqual(Views.ViewKind.Detail());
@@ -164,7 +164,7 @@ describe("View.Tag / Prototype", () => {
       base: true as const,
     });
     const Child = Base.Prototype()({ size: Views.ViewKind.Page() });
-    class PageView extends Child.Tag<PageView>()("test/page-view") {}
+    class PageView extends Child.Service<PageView>()("test/page-view") {}
     expect(View.getAnnotations(PageView).base).toBe(true);
     expect(View.getAnnotations(PageView).size).toEqual(Views.ViewKind.Page());
     expect(PageView.key).toBe("test/page-view");
@@ -176,13 +176,13 @@ describe("View.Tag / Prototype", () => {
     });
     const Open = Base.Prototype<{}, Views.WithSize>()();
     const Done = Open.Prototype()({ size: Views.ViewKind.Card() });
-    class MidCard extends Done.Tag<MidCard>()("test/mid-card") {}
+    class MidCard extends Done.Service<MidCard>()("test/mid-card") {}
     expect(View.getAnnotations(MidCard).base).toBe(true);
     expect(View.getAnnotations(MidCard).size).toEqual(Views.ViewKind.Card());
   });
 
   it("class statics stay free of the annotations bag", () => {
-    class FreeCard extends Views.Card.Tag<FreeCard>()("test/free-card") {
+    class FreeCard extends Views.Card.Service<FreeCard>()("test/free-card") {
       static readonly custom = "app" as const;
     }
     expect(FreeCard.custom).toBe("app");

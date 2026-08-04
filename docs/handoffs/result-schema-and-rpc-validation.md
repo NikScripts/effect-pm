@@ -46,7 +46,7 @@ overload). Layer config must not override them (see §3).
 | **Daemon** | `key` | `success` | `error` | `Tag(key, { success?, error?, description?, node? })` |
 | **WorkPool** | `key` + **`payload`** | `success` | `error` | `Tag(key, { payload, success?, error?, description?, node? })` |
 | **Gate** | `key` + **`payload`** | `success` | `error` | `Tag(key, { payload, success, error?, description? })` |
-| **WorkPool.Service (untyped)** | `key` + config object | `payload`, `levelCount`, optional `namedLevels`, optional `success` / `error` | `Tag(key, { payload, levelCount, namedLevels?, success?, error?, description?, node? })` |
+| **WorkPool.define (untyped)** | `key` + config object | `payload`, `levelCount`, optional `namedLevels`, optional `success` / `error` | `Tag(key, { payload, levelCount, namedLevels?, success?, error?, description?, node? })` |
 
 Disambiguation: when the 2nd argument is a **plain object** with `description` / `node` / wire-slot
 keys, it is the **config overload**, not a schema value.
@@ -61,34 +61,34 @@ See conversation summary in repo; full examples in §“Tag factory forms” bel
 **Daemon:**
 
 ```ts
-Daemon.Tag()(key)
-Daemon.Tag()(key, success)
-Daemon.Tag()(key, success, error)
-Daemon.Tag()(key, { success?, error?, description?, node? })
+Daemon.Service()(key)
+Daemon.Service()(key, success)
+Daemon.Service()(key, success, error)
+Daemon.Service()(key, { success?, error?, description?, node? })
 ```
 
 **WorkPool:**
 
 ```ts
-WorkPool.Tag()(key, payload)
-WorkPool.Tag()(key, payload, success)
-WorkPool.Tag()(key, payload, success, error)
-WorkPool.Tag()(key, { payload, success?, error?, description?, node? })
+WorkPool.Service()(key, payload)
+WorkPool.Service()(key, payload, success)
+WorkPool.Service()(key, payload, success, error)
+WorkPool.Service()(key, { payload, success?, error?, description?, node? })
 ```
 
 **Gate:**
 
 ```ts
-Gate.Tag()(key, payload, success)
-Gate.Tag()(key, payload, success, error)
-Gate.Tag()(key, { payload, success, error?, description? })
+Gate.Service()(key, payload, success)
+Gate.Service()(key, payload, success, error)
+Gate.Service()(key, { payload, success, error?, description? })
 ```
 
-**WorkPool.Service (untyped)** — config object only; same optional `success` / `error` wire slots as WorkPool
+**WorkPool.define (untyped)** — config object only; same optional `success` / `error` wire slots as WorkPool
 after required lane fields:
 
 ```ts
-WorkPool.Tag /* untyped .Service */()(key, { payload, levelCount, namedLevels?, success?, error?, description?, node? })
+WorkPool.Service /* untyped .Service */()(key, { payload, levelCount, namedLevels?, success?, error?, description?, node? })
 ```
 
 ### 3. Layer-level schema overrides — internal only, strongly discouraged publicly
@@ -234,16 +234,16 @@ const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
 
 // void — key only
-class Health extends Daemon.Tag<Health>()("app/Health") {}
+class Health extends Daemon.Service<Health>()("app/Health") {}
 
 // value + typed failure
-class PricesPos extends Daemon.Tag<PricesPos>()("app/Prices", Price, FetchErr) {}
+class PricesPos extends Daemon.Service<PricesPos>()("app/Prices", Price, FetchErr) {}
 
 // value only (error channel stays unknown / generic)
-class PricesValue extends Daemon.Tag<PricesValue>()("app/Prices", Price) {}
+class PricesValue extends Daemon.Service<PricesValue>()("app/Prices", Price) {}
 
 // config object (2nd arg) — same semantics
-class PricesCfg extends Daemon.Tag<PricesCfg>()("app/Prices", {
+class PricesCfg extends Daemon.Service<PricesCfg>()("app/Prices", {
   success: Price,
   error: FetchErr,
   description: "Spot quotes",
@@ -258,16 +258,16 @@ const Summary = Schema.Struct({ wordCount: Schema.Number });
 const WorkerErr = Schema.TaggedStruct("WorkerError", { reason: Schema.String });
 
 // payload only (required) — void worker return
-class Mail extends WorkPool.Tag<Mail>()("@app/Mail", Job) {}
+class Mail extends WorkPool.Service<Mail>()("@app/Mail", Job) {}
 
 // payload + success
-class Summarize extends WorkPool.Tag<Summarize>()("@app/Summarize", Job, Summary) {}
+class Summarize extends WorkPool.Service<Summarize>()("@app/Summarize", Job, Summary) {}
 
 // payload + success + error
-class SummarizeE extends WorkPool.Tag<SummarizeE>()("@app/Summarize", Job, Summary, WorkerErr) {}
+class SummarizeE extends WorkPool.Service<SummarizeE>()("@app/Summarize", Job, Summary, WorkerErr) {}
 
 // config object (2nd arg)
-class SummarizeCfg extends WorkPool.Tag<SummarizeCfg>()("@app/Summarize", {
+class SummarizeCfg extends WorkPool.Service<SummarizeCfg>()("@app/Summarize", {
   payload: Job,
   success: Summary,
   error: WorkerErr,
@@ -277,15 +277,15 @@ class SummarizeCfg extends WorkPool.Tag<SummarizeCfg>()("@app/Summarize", {
 ### Gate
 
 ```ts
-class FetchGate extends Gate.Tag<FetchGate>()("@app/FetchGate", Symbol, Price, FetchErr) {}
+class FetchGate extends Gate.Service<FetchGate>()("@app/FetchGate", Symbol, Price, FetchErr) {}
 ```
 
-### WorkPool.Service (untyped) (sketch)
+### WorkPool.define (untyped) (sketch)
 
 Lane arity unchanged; wire slots trail `payload` or sit in options:
 
 ```ts
-class Jobs extends WorkPool.Tag /* untyped .Service */<Jobs>()(
+class Jobs extends WorkPool.Service /* untyped .Service */<Jobs>()(
   "@app/Jobs",
   Job,
   3,

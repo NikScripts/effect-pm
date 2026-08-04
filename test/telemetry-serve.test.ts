@@ -10,7 +10,7 @@ import * as PmNode from "../src/Node";
 // Telemetry serves the whole per-process Metric registry. Emit a labeled counter, serve Telemetry over
 // http, read `snapshot` via Hyperlink.client — the counter round-trips with its label + count.
 
-class FleetTelemetry extends Telemetry.Tag<FleetTelemetry>()() {}
+class FleetTelemetry extends Telemetry.Service<FleetTelemetry>()() {}
 
 const emitProbe = Effect.sync(() =>
   Metric.update(

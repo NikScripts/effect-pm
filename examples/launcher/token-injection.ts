@@ -26,7 +26,7 @@ const launchOne = (options: {
   readonly basePort: number;
 }) =>
   Effect.gen(function* () {
-    const worker = Node.Tag()(`examples/launcher-token/${options.label}`, {
+    const worker = Node.Service()(`examples/launcher-token/${options.label}`, {
       url: `http://127.0.0.1:${String(options.basePort)}/rpc`,
       kind: "Http",
     });

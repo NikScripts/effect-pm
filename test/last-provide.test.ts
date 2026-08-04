@@ -11,12 +11,12 @@ import * as View from "last-ts/View";
 class ShellMeta extends Context.Service<
   ShellMeta,
   { readonly title: string }
->()("test/last-provide-runtime/ShellMeta") {}
+>()("hyperlink-ts/test/last-provide.test/ShellMeta") {}
 
 class ModalMeta extends Context.Service<
   ModalMeta,
   { readonly title: string }
->()("test/last-provide-runtime/ModalMeta") {}
+>()("hyperlink-ts/test/last-provide.test/ModalMeta") {}
 
 describe("yield* Last.provide → Context.Service → View", () => {
   it("deep provide + toLayer supplies yield* in another View", () => {

@@ -43,7 +43,7 @@ export interface NodeProtocol extends NodeStatusAccessors {
   readonly protocol: Context.Service.Shape<typeof RpcClient.Protocol>
 }
 
-/** Late-bound {@link Hyperlink.store} for `Node.Tag()(...).logs`. @internal */
+/** Late-bound {@link Hyperlink.store} for `Node.Service()(...).logs`. @internal */
 type StoreFn = (tag: { readonly key: string }) => unknown
 let storeImpl: StoreFn | undefined
 
@@ -105,7 +105,7 @@ export type { OnConflict, OnConflictResolved };
 export { resolveOnConflict, onConflictOf };
 
 /**
- * A node declared with a bare **port** (`Node.Tag()("x", 3009)`) carries that port here. The eager
+ * A node declared with a bare **port** (`Node.Service()("x", 3009)`) carries that port here. The eager
  * `url` is a `localhost` **preview** (pure, sync at class-definition — no runtime to read a Config);
  * the authoritative dial host is resolved at the dial boundary (an Effect context) via
  * {@link Hyperlink.protocolHttp}`(port)` + the client `Config`. So the port is the SSOT and the effect
@@ -315,7 +315,7 @@ export type WsListenArg =
 export type IpcListenArg = string | ListenOptions;
 
 /**
- * {@link resolveHttpTarget} / a positional `Node.Tag()(name, badString)` got a string that is
+ * {@link resolveHttpTarget} / a positional `Node.Service()(name, badString)` got a string that is
  * neither a port (`":3009"`), a port number, nor an `http(s)://` url. Surfaces on the
  * **Layer / Effect error channel** (same precedent as {@link UnaddressedNode}) — never a
  * sync throw. Catch via `Exit` / `CatchTag` when building `connect` / protocol derivation.
@@ -647,21 +647,21 @@ const isNodeTagValue = <Self, ROut, Addr>(
 /**
  * Declare a **node** — a named transport endpoint a HyperService connects to. **Two-stage** and keyed by
  * a string, mirroring Effect's `Context.Service<Self, Shape>()(key)` (a node *is* a `Context.Key`,
- * resolved by its `key` in the Context map) and every sibling factory (`Hyperlink.Tag<Self>()`, …).
+ * resolved by its `key` in the Context map) and every sibling factory (`Hyperlink.Service<Self>()`, …).
  * The second call infers the target shape, so the `{ http, ws }` shorthand types its
  * {@link ProtocolKind} set precisely. Optional catalog type param `ROut` (C2) — prefer `import type`
  * for those handles (C4). Templates (no address until cloned) live on {@link Node}.Prototype:
  *
  * ```ts
- * class EdgeNode extends Node.Tag<EdgeNode>()("edge") {}                       // no address yet
- * class Worker extends Node.Tag<Worker>()("worker", 3001) {}                   // → http://localhost:3001/rpc, kind "Http"
- * class Mail extends Node.Tag<Mail>()("mail", "https://mail.internal/rpc") {}  // full url, as-is, kind "Http"
- * class Live extends Node.Tag<Live>()("live", { url: "wss://live/rpc" }) {}    // kind "WebSocket" (inferred from ws url)
- * class Push extends Node.Tag<Push>()("push", { url: "/rpc", kind: "WebSocket" }) {} // same-origin path, explicit kind
- * class Local extends Node.Tag<Local>()("local", { path: "/tmp/local.sock" }) {} // kind "IpcSocket" (Unix domain)
- * class Droplet extends Node.Tag<Droplet>()("droplet", { http: "http://d/rpc", ws: "ws://d/rpc" }) {} // multi-protocol
+ * class EdgeNode extends Node.Service<EdgeNode>()("edge") {}                       // no address yet
+ * class Worker extends Node.Service<Worker>()("worker", 3001) {}                   // → http://localhost:3001/rpc, kind "Http"
+ * class Mail extends Node.Service<Mail>()("mail", "https://mail.internal/rpc") {}  // full url, as-is, kind "Http"
+ * class Live extends Node.Service<Live>()("live", { url: "wss://live/rpc" }) {}    // kind "WebSocket" (inferred from ws url)
+ * class Push extends Node.Service<Push>()("push", { url: "/rpc", kind: "WebSocket" }) {} // same-origin path, explicit kind
+ * class Local extends Node.Service<Local>()("local", { path: "/tmp/local.sock" }) {} // kind "IpcSocket" (Unix domain)
+ * class Droplet extends Node.Service<Droplet>()("droplet", { http: "http://d/rpc", ws: "ws://d/rpc" }) {} // multi-protocol
  * import type { Jobs, Emails } from "@app/contracts"
- * class AppWorker extends Node.Tag<AppWorker, Jobs | Emails>()("app/Worker", { path: "/tmp/w.sock" }) {}
+ * class AppWorker extends Node.Service<AppWorker, Jobs | Emails>()("app/Worker", { path: "/tmp/w.sock" }) {}
  * class MailWorker extends Node.Prototype<MailWorker, Mail>("app/MailWorker") {}
  * ```
  *
@@ -673,13 +673,13 @@ const isNodeTagValue = <Self, ROut, Addr>(
  * protocol argument.
  *
  * Dialable targets return an {@link AddressedNode} (`kind: ProtocolKind`) so
- * `Hyperlink.client(Tag, Worker)` can auto-wire {@link connect}. Bare `Node.Tag()("x")`
+ * `Hyperlink.client(Tag, Worker)` can auto-wire {@link connect}. Bare `Node.Service()("x")`
  * stays address-less (`kind: undefined`) — still needs explicit connect / lookup.
  *
  * @category constructors
  * @public
  */
-export const Tag = <Self, ROut = never>() => {
+export const Service = <Self, ROut = never>() => {
   function build(key: string): NodeTagClass<Self, ROut, BareAddress>;
   function build(
     key: string,
@@ -916,8 +916,8 @@ export const withProtocol =
  * ordinary node's `"inherit"` (or none) becomes `"livenessReplace"` — a lookup root never inherits.
  *
  * ```ts
- * class Directory extends Node.Tag<Directory>()("app/Lookup", { path: "/tmp/lookup.sock" }).pipe(Node.asLookup) {}
- * class Dual extends Node.Tag<Dual>()("app/Lookup", { http: "http://l/rpc", ws: "ws://l/rpc" }).pipe(Node.asLookup) {}
+ * class Directory extends Node.Service<Directory>()("app/Lookup", { path: "/tmp/lookup.sock" }).pipe(Node.asLookup) {}
+ * class Dual extends Node.Service<Dual>()("app/Lookup", { http: "http://l/rpc", ws: "ws://l/rpc" }).pipe(Node.asLookup) {}
  * ```
  *
  * @category constructors
@@ -932,7 +932,7 @@ export const asLookup = <N extends AnyNode>(
   });
 
 /**
- * Deriving a transport from a node that never declared one — a bare `Node.Tag()("x")` has no
+ * Deriving a transport from a node that never declared one — a bare `Node.Service()("x")` has no
  * address/`kind`, so `connect` / `listen` can't know how to reach it. Surfaces on the Layer / Effect
  * error channel (never a sync `throw`).
  *
@@ -945,7 +945,7 @@ export class UnaddressedNode extends Data.TaggedError("UnaddressedNode")<{
   override get message() {
     return (
       `Node "${this.node}" declares no address/kind, so a transport can't be derived from it. ` +
-      `Give the node an address (e.g. Node.Tag()("${this.node}", 3001), { url, kind }, or { path }), ` +
+      `Give the node an address (e.g. Node.Service()("${this.node}", 3001), { url, kind }, or { path }), ` +
       `or pass a protocol explicitly: connect(node, protocol).`
     );
   }

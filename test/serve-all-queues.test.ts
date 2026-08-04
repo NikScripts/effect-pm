@@ -9,9 +9,9 @@ import * as Node from "../src/Node";
 // Two REAL queue engines bound to ONE Node, served on ONE port via httpServer + WorkPool.serve —
 // the ControlService.make({ group, port }) replacement for wow's per-league deploy.
 const Item = Schema.Struct({ n: Schema.Number });
-class LeagueNode extends Node.Tag<LeagueNode>()("serveAllQ/node") {}
-class QA extends WorkPool.Tag<QA>()("serveAllQ/A", { payload: Item, node: LeagueNode }) {}
-class QB extends WorkPool.Tag<QB>()("serveAllQ/B", { payload: Item, node: LeagueNode }) {}
+class LeagueNode extends Node.Service<LeagueNode>()("serveAllQ/node") {}
+class QA extends WorkPool.Service<QA>()("serveAllQ/A", { payload: Item, node: LeagueNode }) {}
+class QB extends WorkPool.Service<QB>()("serveAllQ/B", { payload: Item, node: LeagueNode }) {}
 
 const Server = Node.httpServer([
   WorkPool.serveMemory(QA, { effect: (_i: { n: number }) => Effect.void }),

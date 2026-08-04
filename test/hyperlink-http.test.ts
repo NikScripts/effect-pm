@@ -9,7 +9,7 @@ import { groupOf } from "../src/Hyperlink";
 // The toolkit driven over a REAL http transport (not the in-memory RpcTest path): the same
 // `yield* Tag` code, the real `Hyperlink.serveRemote` mounted on an http RpcServer, and the real
 // `Hyperlink.client` forwarding over `RpcClient`'s http protocol.
-class Echo extends Hyperlink.Tag<Echo>()("http/Echo", {
+class Echo extends Hyperlink.Service<Echo>()("http/Echo", {
   ping: Hyperlink.effect(Schema.String),
   shout: Hyperlink.effectFn({ msg: Schema.String }, Schema.String),
 }) {}

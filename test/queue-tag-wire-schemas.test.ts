@@ -6,27 +6,27 @@ const Job = Schema.Struct({ id: Schema.String });
 const Summary = Schema.Struct({ words: Schema.Number });
 const WorkerErr = Schema.TaggedStruct("WorkerError", { reason: Schema.String });
 
-describe("WorkPool.Tag wire schemas (payload / success / error)", () => {
+describe("WorkPool.Service wire schemas (payload / success / error)", () => {
   it("payload only → nothing stamped", () => {
-    class Q extends WorkPool.Tag<Q>()("@app/Q1", Job) {}
+    class Q extends WorkPool.Service<Q>()("@app/Q1", Job) {}
     expect(WorkPool.successOf(Q)).toBeUndefined();
     expect(WorkPool.errorOf(Q)).toBeUndefined();
   });
 
   it("positional success → success stamped, error undefined", () => {
-    class Q extends WorkPool.Tag<Q>()("@app/Q2", Job, Summary) {}
+    class Q extends WorkPool.Service<Q>()("@app/Q2", Job, Summary) {}
     expect(WorkPool.successOf(Q)).toBe(Summary);
     expect(WorkPool.errorOf(Q)).toBeUndefined();
   });
 
   it("positional success + error → both stamped", () => {
-    class Q extends WorkPool.Tag<Q>()("@app/Q3", Job, Summary, WorkerErr) {}
+    class Q extends WorkPool.Service<Q>()("@app/Q3", Job, Summary, WorkerErr) {}
     expect(WorkPool.successOf(Q)).toBe(Summary);
     expect(WorkPool.errorOf(Q)).toBe(WorkerErr);
   });
 
   it("config object → both stamped", () => {
-    class Q extends WorkPool.Tag<Q>()("@app/Q4", {
+    class Q extends WorkPool.Service<Q>()("@app/Q4", {
       payload: Job,
       success: Summary,
       error: WorkerErr,
@@ -36,13 +36,13 @@ describe("WorkPool.Tag wire schemas (payload / success / error)", () => {
   });
 
   it("config object with only payload → nothing stamped", () => {
-    class Q extends WorkPool.Tag<Q>()("@app/Q4b", { payload: Job }) {}
+    class Q extends WorkPool.Service<Q>()("@app/Q4b", { payload: Job }) {}
     expect(WorkPool.successOf(Q)).toBeUndefined();
     expect(WorkPool.errorOf(Q)).toBeUndefined();
   });
 
   it("legacy positional options { description } → not mistaken for success", () => {
-    class Q extends WorkPool.Tag<Q>()("@app/Q5", Job, {
+    class Q extends WorkPool.Service<Q>()("@app/Q5", Job, {
       description: "queue five",
     }) {}
     expect(WorkPool.successOf(Q)).toBeUndefined();

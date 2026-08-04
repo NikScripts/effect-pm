@@ -12,7 +12,7 @@
  * mutations `UPSERT` / `DELETE`. No Store bridge, no event replay.
  *
  * @example
- * class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
+ * class Sessions extends ShardMap.Service<Sessions>()("app/Sessions", {
  *   key: Schema.String,
  *   value: Schema.Struct({ id: Schema.String, userId: Schema.String }),
  *   keyOf: (s) => s.id,
@@ -26,7 +26,7 @@ import { SqlClient } from "effect/unstable/sql/SqlClient";
 import { combineByNode, combineQuery, combineSum } from "./MultiNode";
 import * as Hyperlink from "./Hyperlink";
 import {
-  Tag as resourceTag,
+  Service as resourceTag,
   type Local,
   type NodeBoundTag,
   type PeersId,
@@ -296,7 +296,7 @@ export interface ShardMapSchemas<
  * {@link layer} / {@link serve}.
  *
  * @example
- * class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
+ * class Sessions extends ShardMap.Service<Sessions>()("app/Sessions", {
  *   key: SessionId,
  *   value: Session,
  *   keyOf: (s) => s.id,
@@ -305,7 +305,7 @@ export interface ShardMapSchemas<
  * @category constructors
  * @public
  */
-export const Tag =
+export const Service =
   <Self>() =>
   <
     Key extends Schema.Top,

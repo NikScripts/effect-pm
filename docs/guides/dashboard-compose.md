@@ -31,7 +31,7 @@ Layer.mergeAll(DashboardViews.layer, appViews?).pipe(
 | Contributions | `import * as DashboardViews from "hyperlink-ts/ui/DashboardViews"` |
 | Platform | `import * as Dashboard from "hyperlink-ts/web\|tui/Dashboard"` (`componentsLayer` / `layer`) |
 | Compose kit | `import * as Views from "hyperlink-ts/ui/Views"` → `Views.compose` |
-| DI | `import * as View from "last-ts/View"` → `View.provide` / `View.Tag` |
+| DI | `import * as View from "last-ts/View"` → `View.provide` / `View.Service` |
 | Shell | `DashboardShell` (same platform package) |
 | Observe | `Observe.use(tag, *View.pack)` / `NodeView.use` |
 

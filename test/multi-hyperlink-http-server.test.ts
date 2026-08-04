@@ -14,8 +14,8 @@ class Dep extends Context.Service<Dep, number>()(
   "hyperlink-ts/test/multi-hyperlink-http-server.test/Dep",
 ) {}
 
-class A extends Hyperlink.Tag<A>()("httpserver/A", { read: Hyperlink.effect(Schema.Number) }) {}
-class B extends Hyperlink.Tag<B>()("httpserver/B", { read: Hyperlink.effect(Schema.Number) }) {}
+class A extends Hyperlink.Service<A>()("httpserver/A", { read: Hyperlink.effect(Schema.Number) }) {}
+class B extends Hyperlink.Service<B>()("httpserver/B", { read: Hyperlink.effect(Schema.Number) }) {}
 
 const impl = { read: Effect.map(Dep, (value) => value) };
 

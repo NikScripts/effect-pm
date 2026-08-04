@@ -24,7 +24,7 @@ const tmpSock = (label: string) =>
     return `/tmp/hyperlink-ts-lookup-adv-${label}-${process.pid}-${now}.sock`;
   });
 
-class Jobs extends Hyperlink.Tag<Jobs>()("lookup-adv/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("lookup-adv/Jobs", {
   jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
@@ -32,7 +32,7 @@ describe("Lookup Advice", () => {
   it.effect("advise / preferred / clear are last-write-wins", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("crud");
-      const node = Node.Tag()("lookup/adv-crud", { path }).pipe(Node.asLookup);
+      const node = Node.Service()("lookup/adv-crud", { path }).pipe(Node.asLookup);
 
       const server = yield* Layer.build(Lookup.layerNode(node));
       const client = yield* Layer.build(Lookup.client(node));
@@ -66,7 +66,7 @@ describe("Lookup Advice", () => {
   it.live("Advice.changes fans out prefer / clear", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("changes");
-      const node = Node.Tag()("lookup/adv-changes", { path }).pipe(
+      const node = Node.Service()("lookup/adv-changes", { path }).pipe(
         Node.asLookup,
       );
 
@@ -105,7 +105,7 @@ describe("Lookup Advice", () => {
   it.effect("lookupClient honors advice over bare ambiguous fail-closed", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("honor-lookup");
-      const lookupNode = Node.Tag()("lookup/adv-honor", {
+      const lookupNode = Node.Service()("lookup/adv-honor", {
         path: lookupPath,
       }).pipe(Node.asLookup);
       const lookupClient = Lookup.client(lookupNode);
@@ -165,7 +165,7 @@ describe("Lookup Advice", () => {
   it.effect("stale advice falls through to pick / ambiguous", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("stale-lookup");
-      const lookupNode = Node.Tag()("lookup/adv-stale", {
+      const lookupNode = Node.Service()("lookup/adv-stale", {
         path: lookupPath,
       }).pipe(Node.asLookup);
       const lookupClient = Lookup.client(lookupNode);

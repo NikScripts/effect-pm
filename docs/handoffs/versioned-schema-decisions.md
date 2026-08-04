@@ -65,7 +65,7 @@ const Job = Versioned.make(JobV1).migrate(JobV2, toV2).migrate(JobV3, toV3)
 // Versioned.schemaVersion(Job) === "jobs/payload@3"  (tip Class.identifier)
 // Versioned.schemaVersion(JobV1) === "jobs/payload@1"
 
-class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", {
+class Jobs extends WorkPool.Service<Jobs>()("app/Jobs", {
   payload: Job, // same slot as a plain Schema — no versions: param
 }) {}
 
@@ -125,15 +125,15 @@ Versioned.schemaVersion // (schema: Schema.Top | VersionedSchema) => string
 
 ```ts
 // ✅ one slot
-class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", { payload: Job }) {}
+class Jobs extends WorkPool.Service<Jobs>()("app/Jobs", { payload: Job }) {}
 
 // ✅ plain Schema still fine (single tip → AST-hash schemaVersion; no upcast path)
-class Legacy extends WorkPool.Tag<Legacy>()("app/Legacy", {
+class Legacy extends WorkPool.Service<Legacy>()("app/Legacy", {
   payload: Schema.Struct({ id: Schema.String }),
 }) {}
 
 // ❌ rejected — no parallel param
-class Bad extends WorkPool.Tag<Bad>()("app/Bad", {
+class Bad extends WorkPool.Service<Bad>()("app/Bad", {
   payload: JobV3,
   versions: Job,
 }) {}
@@ -289,7 +289,7 @@ New leaf brand (mirror of `LocalMethod` / `DefaultMethod`). API is **`Fn.dual`**
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import { Schema } from "effect"
 
-class Files extends Hyperlink.Tag("app/Files")({
+class Files extends Hyperlink.Service("app/Files")({
   move: Hyperlink.effectFn({
     payload: Schema.Struct({ from: Schema.String, to: Schema.String }),
     success: Schema.Void,
@@ -441,7 +441,7 @@ export class JobV1 extends Schema.Class<JobV1>("jobs/payload@1")({ /* … */ }) 
 export class JobV2 extends Schema.Class<JobV2>("jobs/payload@2")({ /* … */ }) {}
 export class JobV3 extends Schema.Class<JobV3>("jobs/payload@3")({ /* … */ }) {}
 export const Job = Versioned.make(JobV1).migrate(JobV2, toV2).migrate(JobV3, toV3)
-export class Jobs extends WorkPool.Tag<Jobs>()("fleet/Jobs", { payload: Job }) {}
+export class Jobs extends WorkPool.Service<Jobs>()("fleet/Jobs", { payload: Job }) {}
 
 // Node A (old binary tip @2): advertises schemaVersion "jobs/payload@2"
 // Node B (tip @3): Directory-visible first, then Node.shutdown(A)

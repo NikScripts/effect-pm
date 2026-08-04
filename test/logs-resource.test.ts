@@ -14,13 +14,13 @@ interface NumberItem {
   readonly n: number;
 }
 
-class LogQueue extends WorkPool.Tag<LogQueue>()("test/logs-resource/Q", {
+class LogQueue extends WorkPool.Service<LogQueue>()("test/logs-resource/Q", {
   payload: NumberItem,
 }) {}
 
-class LogDaemon extends Daemon.Tag<LogDaemon>()("test/logs-resource/Daemon").pipe(Daemon.schedule([])) {}
+class LogDaemon extends Daemon.Service<LogDaemon>()("test/logs-resource/Daemon").pipe(Daemon.schedule([])) {}
 
-class EnvNode extends Node.Tag<EnvNode>()(testBillingNodeKey) {}
+class EnvNode extends Node.Service<EnvNode>()(testBillingNodeKey) {}
 
 class AppStore extends Store.Service<AppStore>("@test/logs-resource/Store")(
   EnvNode.logs,

@@ -10,8 +10,8 @@ import * as Node from "../src/Node";
 // node with one `Hyperlink.http`. Ship ONLY the tag — `Hyperlink.client(tag)` resolves
 // where to connect from the node. Serialization defaults to ndjson on BOTH helpers, so the
 // two sides can't disagree on the codec.
-class EdgeNode extends Node.Tag<EdgeNode>()("nodeHttp/edge") {}
-class Echo extends Hyperlink.Tag<Echo>()("nodeHttp/Echo", 
+class EdgeNode extends Node.Service<EdgeNode>()("nodeHttp/edge") {}
+class Echo extends Hyperlink.Service<Echo>()("nodeHttp/Echo", 
   {
     ping: Hyperlink.effect(Schema.String),
     shout: Hyperlink.effectFn({ msg: Schema.String }, Schema.String),

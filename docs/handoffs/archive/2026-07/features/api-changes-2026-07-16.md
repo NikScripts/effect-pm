@@ -63,5 +63,5 @@ The http transport starves at the browser's ~6-connection cap and shipped a blan
 
 ## Not changing (so you don't wonder)
 
-- **Loose-fields payloads were already rejected** — `WorkPool.Tag(...)({ payload: Schema.Struct({...}) })` is required; `{ payload: { …fields } }` and bare `{ …fields }` don't compile. (No change this cycle; noting it because it was on the "impossible" list and turned out already-enforced.)
+- **Loose-fields payloads were already rejected** — `WorkPool.Service(...)({ payload: Schema.Struct({...}) })` is required; `{ payload: { …fields } }` and bare `{ …fields }` don't compile. (No change this cycle; noting it because it was on the "impossible" list and turned out already-enforced.)
 - `connectFleet` was **not** shipped (a cast-free version wasn't reachable; the manual `Layer.mergeAll(transport, client(A).pipe(provide(transport)), …)` stays the blessed, type-safe pattern).

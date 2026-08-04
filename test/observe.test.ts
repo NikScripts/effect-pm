@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Observe from "../src/Observe";
 
-class Counter extends Hyperlink.Tag<Counter>()("observe-test/Counter", {
+class Counter extends Hyperlink.Service<Counter>()("observe-test/Counter", {
   count: Hyperlink.ref(Schema.Number),
   ticks: Hyperlink.stream(Schema.Number),
   bump: Hyperlink.effect(Schema.Void),

@@ -20,12 +20,12 @@ it("renders CLI output by value shape", () => {
   );
 });
 
-class Counter extends Hyperlink.Tag<Counter>()("test/cli/Counter", {
+class Counter extends Hyperlink.Service<Counter>()("test/cli/Counter", {
   current: Hyperlink.effect(Schema.Number),
   pause: Hyperlink.effect(Schema.Void),
 }) {}
 
-class Bundle extends Group.Tag<Bundle>("test/cli/Bundle")({ Counter }) {}
+class Bundle extends Group.Service<Bundle>("test/cli/Bundle")({ Counter }) {}
 
 const counterLayer = Hyperlink.layer(Counter, {
   current: Effect.succeed(1),

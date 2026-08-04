@@ -2,7 +2,7 @@ import { Effect, Schema, Stream } from "effect";
 import { expectTypeOf } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
 
-class Counter extends Hyperlink.Tag<Counter>()("promise-d/Counter", {
+class Counter extends Hyperlink.Service<Counter>()("promise-d/Counter", {
   current: Hyperlink.effect(Schema.Number),
   add: Hyperlink.effectFn(Schema.Number, Schema.Number),
   maxSize: Hyperlink.value(Schema.Number),

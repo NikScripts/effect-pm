@@ -1,11 +1,11 @@
 /**
  * @module Group
  *
- * `Group.Tag` — an organization tool. A real Context tag (built on `Context.Service`,
- * like `Hyperlink.Tag`) that holds named member tags. Pass a record; each member becomes
+ * `Group.Service` — an organization tool. A real Context tag (built on `Context.Service`,
+ * like `Hyperlink.Service`) that holds named member tags. Pass a record; each member becomes
  * an accessor on the class, full tag intact.
  *
- *   class MyGroup extends Group.Tag<MyGroup>("@pkg/MyGroup")({
+ *   class MyGroup extends Group.Service<MyGroup>("@pkg/MyGroup")({
  *     Counter,
  *     QueueManager,
  *   }) {}
@@ -14,10 +14,10 @@
  *   MyGroup.members         // { Counter, QueueManager }
  *   Group.members(MyGroup)  // same, via the namespace
  *
- * Groups nest like any other tag: a member can itself be a `Group.Tag`, and because
+ * Groups nest like any other tag: a member can itself be a `Group.Service`, and because
  * you pass it in under a name, the name is preserved.
  *
- *   class Ops extends Group.Tag<Ops>("@pkg/Ops")({
+ *   class Ops extends Group.Service<Ops>("@pkg/Ops")({
  *     Web,            // a HyperService tag
  *     Jobs: MyGroup,  // a child group — nesting is free
  *   }) {}
@@ -50,7 +50,7 @@ export const kind = "hyperlink-ts/Group" as const;
  * @category constructors
  * @public
  */
-export const Tag =
+export const Service =
   <Self>(key: string) =>
   <const Members extends Record<string, unknown>>(members: Members) => {
     const base = Context.Service<Self, { readonly members: Members }>()(key);

@@ -14,7 +14,7 @@ import {
   ListenTagNodeRequired,
   ListenUseProtocol,
   NPipeListenRequiresIpc,
-  Tag,
+  Service as Tag,
   UnixListenRequiresIpc,
   WsListenRequiresWs,
 } from "./nodeCore"
@@ -51,14 +51,14 @@ export type CatalogROut<Node> = Node extends { readonly [catalogSym]?: infer R }
   ? Exclude<R, undefined>
   : never;
 
-/** True when the first arg is a {@link Hyperlink.Tag} (has {@link Hyperlink.specSym}). @internal */
+/** True when the first arg is a {@link Hyperlink.Service} (has {@link Hyperlink.specSym}). @internal */
 export const isHyperlinkTagArg = (u: unknown): u is Hyperlink.PipeableTag =>
   (typeof u === "object" || typeof u === "function") &&
   u !== null &&
   Hyperlink.specSym in u;
 
 /**
- * True when `u` is a {@link AnyNode} (listen Node / `Node.Tag`), not a Hyperlink tag, Layer, or
+ * True when `u` is a {@link AnyNode} (listen Node / `Node.Service`), not a Hyperlink tag, Layer, or
  * {@link ListenOptions}. Nodes always expose top-level `key` plus `url`/`path`/`kind` fields.
  * @internal
  */
@@ -154,7 +154,7 @@ export const serveListFromTagImpl = (
 };
 
 /**
- * Soft-bake {@link Lookup.layer} when {@link Identity.Tag} is absent — nameless listens
+ * Soft-bake {@link Lookup.layer} when {@link Identity.Service} is absent — nameless listens
  * (http / ws / unix / nPipe) need claim + advertise with no caller Lookup pipe.
  * `Layer.provide(Lookup.layerOptions(…))` still wins when Identity is already in env.
  * @internal
@@ -165,7 +165,7 @@ export const softBakeLookupLayer = <A, E, R>(
   Effect.gen(function* () {
     const Lookup = yield* Effect.promise(() => import("../Lookup"));
     const Identity = yield* Effect.promise(() => import("../Identity"));
-    const identity = yield* Effect.serviceOption(Identity.Tag);
+    const identity = yield* Effect.serviceOption(Identity.Service);
     if (Option.isSome(identity)) {
       return core;
     }
@@ -414,7 +414,7 @@ export const stampListenPath = (
  * plus a random tail, under the full package prefix — e.g.
  * `hyperlink-ts/anonymous-node/Emails#k3f9q`. `Random` (a default Reference, no service to
  * provide) gives the tail; the random keeps it unique per materialization (a generated key is a local,
- * ephemeral identity — a shared identity needs an explicit `Node.Tag` key). @internal
+ * ephemeral identity — a shared identity needs an explicit `Node.Service` key). @internal
  */
 export const anonymousNodeKey = (
   list: ServeLayerList,

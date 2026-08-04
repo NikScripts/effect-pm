@@ -30,7 +30,7 @@ const tmpSock = (label: string) =>
     return `/tmp/hyperlink-ts-demo-serve-handoff-${label}-${String(now)}.sock`;
   });
 
-class Mover extends Hyperlink.Tag<Mover>()("examples/serve-handoff/Mover", {
+class Mover extends Hyperlink.Service<Mover>()("examples/serve-handoff/Mover", {
   take: Hyperlink.effect(Schema.Array(Schema.String)),
   give: Hyperlink.effectFn(Schema.Array(Schema.String), Schema.Void),
 }) {}
@@ -39,11 +39,11 @@ const program = Effect.gen(function* () {
   const lookupPath = yield* tmpSock("lookup");
   const workerPath = yield* tmpSock("worker");
 
-  const lookupNode = Node.Tag()("examples/serve-handoff/Lookup", {
+  const lookupNode = Node.Service()("examples/serve-handoff/Lookup", {
     path: lookupPath,
   }).pipe(Node.asLookup);
 
-  class Worker extends Node.Tag<Worker, Mover>()(
+  class Worker extends Node.Service<Worker, Mover>()(
     "examples/serve-handoff/Worker",
     { path: workerPath },
   ) {}

@@ -19,11 +19,12 @@
  *   service with a `.layer`. `WorkPool.priority` adds named N-lane queues.
  * - **`Store`** — EventJournal-backed execution / queue / gate / log history; daemon stores via
  *   `Daemon.store(tag)` and `Store.Service`.
- * - **Toolkit (location-transparent services)** — **`Hyperlink`** is the foundation: a tag is
- *   driven by the same `yield* Tag` code whether it runs **local or remote** (`Hyperlink.client` /
+ * - **Toolkit (location-transparent services)** — **`Hyperlink`** is the foundation: a service is
+ *   driven by the same `yield* Service` code whether it runs **local or remote** (`Hyperlink.client` /
  *   `serve` / `serveRemote` / `Node` switch only the layer). Batteries-included kinds build on it —
- *   `Daemon.Tag` / `Daemon.Schedule` and `WorkPool.Tag` / `WorkPool.priority` — each with
- *   `Tag` / `layer` / `configure` / `serve` / `serveRemote`. **`Group`** organizes member tags
+ *   `Daemon.Service` / `Daemon.Schedule` and `WorkPool.Service` / `WorkPool.priority` — each with
+ *   `Service` / `layer` / `configure` / `serve` / `serveRemote` (baked config+layer factories are
+ *   `*.define`). **`Group`** organizes member services
  *   (nestable; members may be on the same or different nodes). Contracts are introspectable via
  *   `specOf` + `methodMeta` (build generic UIs). See the live book under `docs/services/` and
  *   `docs/guides/`.
@@ -87,14 +88,14 @@
 // ============================================================================
 
 // The single unified `Daemon` namespace. `export * as` (module namespace, Effect-style) so member
-// access tree-shakes: `Daemon.Tag` pulls zero engine code; `make` / `layer` / `serve` pull the
-// engine only when used. Engine + Hyperlink toolkit are both members (`Daemon.make`, `Daemon.Tag`, …).
+// access tree-shakes: `Daemon.Service` pulls zero engine code; `make` / `layer` / `serve` pull the
+// engine only when used. Engine + Hyperlink toolkit are both members (`Daemon.make`, `Daemon.Service`, …).
 export * as Daemon from "./Daemon";
 export { DaemonMakeInvalidLayerArgument } from "./Daemon";
 export type { DaemonSnapshot } from "./Daemon";
 export * as Polling from "./Polling";
 // The single unified WorkPool namespace. `export * as` (module namespace, Effect-style) so
-// member access tree-shakes: `WorkPool.Tag` pulls zero engine code; `make`/`layer`/`serve`
+// member access tree-shakes: `WorkPool.Service` pulls zero engine code; `make`/`layer`/`serve`
 // pull the engine only when used.
 export * as WorkPool from "./WorkPool";
 export * as Gate from "./Gate";
@@ -148,14 +149,14 @@ export {
   isEffect,
   specOf,
 } from "./Hyperlink";
-// `Hyperlink` as a tree-shakeable module namespace (Effect-style): `Hyperlink.Tag` /
-// `Node.Tag` pull only what's used. Import `* as Hyperlink` / `* as Node` from the subpath.
+// `Hyperlink` as a tree-shakeable module namespace (Effect-style): `Hyperlink.Service` /
+// `Node.Service` pull only what's used. Import `* as Hyperlink` / `* as Node` from the subpath.
 export * as Hyperlink from "./Hyperlink";
 export * as Node from "./Node";
 export * as Launcher from "./Launcher";
 export * as MultiNode from "./MultiNode";
 export * as Lookup from "./Lookup";
-// Sibling Tag modules — `import * as Advice from "hyperlink-ts/Advice"` → `Advice.Tag` /
+// Sibling Tag modules — `import * as Advice from "hyperlink-ts/Advice"` → `Advice.Service` /
 // `Advice.changes`. Never nest Tags under Lookup.
 export * as Advice from "./Advice";
 export * as Directory from "./Directory";
@@ -209,8 +210,8 @@ export type {
 } from "./Node";
 
 /**
- * Layer-composed configure patches for {@link Daemon.Service}, {@link WorkPool.Service},
- * and {@link Gate.Service}.
+ * Layer-composed configure patches for {@link Daemon.define}, {@link WorkPool.define},
+ * and {@link Gate.define}.
  */
 export {
   configureLayer,

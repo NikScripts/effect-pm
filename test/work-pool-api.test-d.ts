@@ -11,18 +11,18 @@ const EmailSchema = Schema.Struct({ to: Schema.String });
 const _invalidMake = WorkPool.make({ concurrency: 1 });
 void _invalidMake;
 
-class EmailQueue extends WorkPool.Service<EmailQueue, Email, never>()(
+class EmailQueue extends WorkPool.define<EmailQueue, Email, never>()(
   "@app/EmailQueue",
   (_email) => Effect.void,
 ) {}
 
-class EmailQueueWithOptions extends WorkPool.Service<EmailQueueWithOptions, Email, never>()(
+class EmailQueueWithOptions extends WorkPool.define<EmailQueueWithOptions, Email, never>()(
   "@app/EmailQueueWithOptions",
   (_email) => Effect.void,
   { concurrency: 3 },
 ) {}
 
-class SchemaEmailQueue extends WorkPool.Service<SchemaEmailQueue, Email, never>()(
+class SchemaEmailQueue extends WorkPool.define<SchemaEmailQueue, Email, never>()(
   "@app/SchemaEmailQueue",
   (_email) => Effect.void,
   { itemSchema: EmailSchema, concurrency: 1 },
@@ -30,7 +30,7 @@ class SchemaEmailQueue extends WorkPool.Service<SchemaEmailQueue, Email, never>(
 
 // Tag/layer are the unified (toolkit) forms: a service tag keyed by id + item schema, and a
 // config-object layer. (make/Service above remain the engine helpers, kept via the spread.)
-class NotificationTag extends WorkPool.Tag<NotificationTag>()("@app/NotificationTag", {
+class NotificationTag extends WorkPool.Service<NotificationTag>()("@app/NotificationTag", {
   payload: EmailSchema,
 }) {}
 

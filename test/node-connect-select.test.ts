@@ -2,11 +2,11 @@ import { expect, it, afterEach } from "vitest";
 import * as Node from "../src/Node";
 import { selectEndpoint } from "../src/internal/nodeConnect";
 
-class Multi extends Node.Tag<Multi>()("cs/multi", {
+class Multi extends Node.Service<Multi>()("cs/multi", {
   http: "http://h/rpc",
   ws: "ws://h/rpc",
 }) {}
-class HttpOnly extends Node.Tag<HttpOnly>()("cs/http", {
+class HttpOnly extends Node.Service<HttpOnly>()("cs/http", {
   url: "http://h/rpc",
   kind: "Http",
 }) {}

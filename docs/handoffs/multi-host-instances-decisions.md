@@ -18,7 +18,7 @@ class NwslHost extends Hyperlink.Host<NwslHost>("nwsl", { url: nwslUrl }) {}
 
 // contract — plain fields; combined fields are plain queries tagged `fleet`. The fleet is piped on
 // with `multiHost([hosts])` — hostless, every instance an equal peer, no "primary" host.
-class Database extends Hyperlink.Tag<Database>()("app/Database", {
+class Database extends Hyperlink.Service<Database>()("app/Database", {
   connections:      Hyperlink.query(Schema.Number),
   totalConnections: Hyperlink.query(Schema.Number).pipe(Hyperlink.fleet),
 }).pipe(

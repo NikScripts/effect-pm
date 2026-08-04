@@ -11,7 +11,7 @@ const tmpSock = (label: string) =>
     return `/tmp/hyperlink-ts-listen-family-${label}-${process.pid}-${now}.sock`;
   });
 
-class Jobs extends Hyperlink.Tag<Jobs>()("listen-family/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("listen-family/Jobs", {
   jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
@@ -53,7 +53,7 @@ describe("listen overload family (aligned siblings)", () => {
   it.effect("http — Tag+impl + Node (no andNode)", () =>
     Effect.gen(function* () {
       const port = 19350 + (process.pid % 400);
-      class Worker extends Node.Tag<Worker>()("listen-family/WorkerHttp", {
+      class Worker extends Node.Service<Worker>()("listen-family/WorkerHttp", {
         url: `http://127.0.0.1:${String(port)}/rpc`,
         kind: "Http",
       }) {}
@@ -116,7 +116,7 @@ describe("listen overload family (aligned siblings)", () => {
     Effect.gen(function* () {
       const path = yield* tmpSock("unix-node");
       const lookupPath = yield* tmpSock("unix-node-lookup");
-      class Worker extends Node.Tag<Worker>()("listen-family/WorkerUnix", {
+      class Worker extends Node.Service<Worker>()("listen-family/WorkerUnix", {
         path,
       }) {}
       const serverCtx = yield* Layer.build(

@@ -21,7 +21,7 @@ import { SQLiteDurableWorkPoolStore } from "../../src/storage/sqlite";
 
 const Job = Schema.Struct({ id: Schema.String });
 
-class DurableQueue extends WorkPool.Tag<DurableQueue>()("examples/store/DurableQueue", {
+class DurableQueue extends WorkPool.Service<DurableQueue>()("examples/store/DurableQueue", {
   payload: Job,
 }) {}
 

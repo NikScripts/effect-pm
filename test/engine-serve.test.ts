@@ -24,8 +24,8 @@ const recorderLayer = Layer.succeed(Recorder, (dep) =>
   }),
 );
 
-class ProcA extends Daemon.Tag<ProcA>()("engine-serve/ProcA") {}
-class ProcB extends Daemon.Tag<ProcB>()("engine-serve/ProcB") {}
+class ProcA extends Daemon.Service<ProcA>()("engine-serve/ProcA") {}
+class ProcB extends Daemon.Service<ProcB>()("engine-serve/ProcB") {}
 
 // one tick body — reads its Dep and records it. R = Dep | Recorder.
 const tick = Effect.gen(function* () {

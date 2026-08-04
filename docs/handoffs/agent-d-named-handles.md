@@ -33,7 +33,7 @@
 
 | Name | Where | Meaning today |
 |------|--------|----------------|
-| **`WorkPool<…>`** | `src/WorkPool.ts` interface | **Contract** named handle — what `WorkPool.Tag` / `yield*` uses |
+| **`WorkPool<…>`** | `src/WorkPool.ts` interface | **Contract** named handle — what `WorkPool.Service` / `yield*` uses |
 | **`QueueHandle`** | `src/internal/workPool.ts` | **Internal-only** TEMP alias → `EngineQueueHandle` (engine path). No longer re-exported from `WorkPool`. **Not** what Tag hovers as. |
 | **`PriorityHandle`** | WorkPool priority | Still engine-shaped (`EEnqueue` param) — not on the `WorkPool<>` contract naming path yet |
 
@@ -65,7 +65,7 @@
 
 ## Follow-ups (accurate residual)
 
-1. **M2 — unify typed `WorkPool.Service` with `WorkPool.Tag`**  
+1. **M2 — unify typed `WorkPool.define` with `WorkPool.Service`**  
    Typed `.Service` should build through the same contract `layer` / handle as `.Tag` so both yield **`WorkPool<…>`** by construction. Engine-only / untyped `.Service` stays a separate path. Surface deltas historically included `size` Effect vs Subscribable, metrics nesting, `logs`.
 
 2. **`QueueHandle` M1b cleanup** — ✅ **public export removed**  

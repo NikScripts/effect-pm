@@ -13,8 +13,8 @@ class Dep extends Context.Service<Dep, number>()(
   "hyperlink-ts/test/multi-hyperlink-isolated-deps.test/Dep",
 ) {}
 
-class A extends Hyperlink.Tag<A>()("proto/A", { read: Hyperlink.effect(Schema.Number) }) {}
-class B extends Hyperlink.Tag<B>()("proto/B", { read: Hyperlink.effect(Schema.Number) }) {}
+class A extends Hyperlink.Service<A>()("proto/A", { read: Hyperlink.effect(Schema.Number) }) {}
+class B extends Hyperlink.Service<B>()("proto/B", { read: Hyperlink.effect(Schema.Number) }) {}
 
 // one impl reading the Dep tag — its requirement `R = Dep` is inferred + preserved by `serve`
 const impl = { read: Effect.map(Dep, (value) => value) };

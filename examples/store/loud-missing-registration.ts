@@ -18,11 +18,11 @@ import * as Node from "../../src/Node";
 import * as Store from "../../src/Store";
 import * as WorkPool from "../../src/WorkPool";
 
-class DemoNode extends Node.Tag<DemoNode>()("examples/store/missing-registration-node") {}
+class DemoNode extends Node.Service<DemoNode>()("examples/store/missing-registration-node") {}
 
 const Job = Schema.Struct({ id: Schema.String });
 
-class MissingQueue extends WorkPool.Tag<MissingQueue>()("examples/store/MissingQueue", {
+class MissingQueue extends WorkPool.Service<MissingQueue>()("examples/store/MissingQueue", {
   payload: Job,
 }) {}
 

@@ -9,12 +9,12 @@ import * as View from "last-ts/View";
 class ShellMeta extends Context.Service<
   ShellMeta,
   { readonly title: string; readonly crumb?: string }
->()("test/last-provide/ShellMeta") {}
+>()("hyperlink-ts/test/last-provide.test-d/ShellMeta") {}
 
 class ModalMeta extends Context.Service<
   ModalMeta,
   { readonly title: string }
->()("test/last-provide/ModalMeta") {}
+>()("hyperlink-ts/test/last-provide.test-d/ModalMeta") {}
 
 const Hello = View.gen(function* () {
   yield* Last.provide(ShellMeta, { title: "uDumb" });

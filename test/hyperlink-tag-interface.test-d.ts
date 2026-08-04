@@ -10,7 +10,7 @@ interface CounterShape {
   readonly add: (by: number) => Effect.Effect<number>; // wired
   readonly label: string; // local raw value
 }
-class Counter extends Hyperlink.Tag<Counter, CounterShape>()("tag-iface-d/Counter", {
+class Counter extends Hyperlink.Service<Counter, CounterShape>()("tag-iface-d/Counter", {
   current: Hyperlink.local,
   add: Hyperlink.effectFn(Schema.Number, Schema.Number),
   label: Hyperlink.local,
@@ -39,7 +39,7 @@ expectTypeOf<
 >().toEqualTypeOf<"add">();
 
 // ── reject: a bare local with no matching interface member is a compile error at the call ──
-export class _Bad extends Hyperlink.Tag<_Bad, CounterShape>()("tag-iface-d/Bad", {
+export class _Bad extends Hyperlink.Service<_Bad, CounterShape>()("tag-iface-d/Bad", {
   current: Hyperlink.local,
   add: Hyperlink.effectFn(Schema.Number, Schema.Number),
   // @ts-expect-error `bogus` is not a member of CounterShape — bare local has no type to resolve.
@@ -47,7 +47,7 @@ export class _Bad extends Hyperlink.Tag<_Bad, CounterShape>()("tag-iface-d/Bad",
 }) {}
 
 // ── reject: a wired member whose success schema disagrees with the interface ──
-export class _BadWire extends Hyperlink.Tag<_BadWire, CounterShape>()("tag-iface-d/BadWire", {
+export class _BadWire extends Hyperlink.Service<_BadWire, CounterShape>()("tag-iface-d/BadWire", {
   current: Hyperlink.local,
   // @ts-expect-error CounterShape.add returns Effect<number>, but the success schema is String.
   add: Hyperlink.effectFn(Schema.Number, Schema.String),
@@ -55,7 +55,7 @@ export class _BadWire extends Hyperlink.Tag<_BadWire, CounterShape>()("tag-iface
 }) {}
 
 // ── reject: bare local on plain Tag<Self>() (needs Tag<Self, I>()) ──
-export class _BareOnPlain extends Hyperlink.Tag<_BareOnPlain>()("tag-iface-d/BareOnPlain", {
+export class _BareOnPlain extends Hyperlink.Service<_BareOnPlain>()("tag-iface-d/BareOnPlain", {
   // @ts-expect-error bare local requires Tag<Self, I>()
   current: Hyperlink.local,
 }) {}

@@ -5,7 +5,7 @@ import * as Node from "../src/Node";
 
 // `Hyperlink.make(tag, impl)` anchors a HOISTED impl to its contract at the definition site — inline impls
 // are already typed by layer/serve, but an extracted const loses that; make infers the tag's spec.
-class Svc extends Hyperlink.Tag<Svc>()("make-test/Svc", {
+class Svc extends Hyperlink.Service<Svc>()("make-test/Svc", {
   name: Hyperlink.effect(Schema.String),
   greet: Hyperlink.effectFn(Schema.Struct({ who: Schema.String }), Schema.String),
 }) {}
@@ -39,11 +39,11 @@ it("Hyperlink.make is runtime identity + type-anchored", () => {
 });
 
 // A SHARED distributed resource is defined node-free (exportable); nodes are supplied at the USE site.
-class Fleet extends Hyperlink.Tag<Fleet>()("make-test/Fleet", {
+class Fleet extends Hyperlink.Service<Fleet>()("make-test/Fleet", {
   n: Hyperlink.effect(Schema.Number),
 }) {} // no `.distributed([…])`
-class NodeA extends Node.Tag<NodeA>()("make-test/A") {}
-class NodeB extends Node.Tag<NodeB>()("make-test/B") {}
+class NodeA extends Node.Service<NodeA>()("make-test/A") {}
+class NodeB extends Node.Service<NodeB>()("make-test/B") {}
 
 it("peersLayer sources the fleet from options.nodes (shared tag has no baked nodes)", () =>
   Effect.runPromise(

@@ -16,7 +16,7 @@ const tmpSock = (label: string) =>
     return `/tmp/hyperlink-ts-identity-${label}-${process.pid}-${now}.sock`;
   });
 
-class Mail extends Hyperlink.Tag<Mail>()("identity/Mail", {
+class Mail extends Hyperlink.Service<Mail>()("identity/Mail", {
   ping: Hyperlink.effectFn({ n: Schema.Number }, Schema.Number),
 }).pipe(Hyperlink.identity) {}
 
@@ -31,19 +31,19 @@ describe("Hyperlink.identity", () => {
 
   it("IdentitySelfRequired message points at Lookup + dialable self", () => {
     const err = new Hyperlink.IdentitySelfRequired({ tag: "app/Mail" });
-    expect(err.message).toContain("Identity.Tag");
+    expect(err.message).toContain("Identity.Service");
     expect(err.message).toContain("dialable self");
     expect(err.message).toContain("Lookup.layer");
   });
 
   it("rejects multi-node distributed on an identity Tag (S1)", () => {
-    class A extends Node.Tag<A>()("identity/multi-a", {
+    class A extends Node.Service<A>()("identity/multi-a", {
       path: "/tmp/identity-multi-a.sock",
     }) {}
-    class B extends Node.Tag<B>()("identity/multi-b", {
+    class B extends Node.Service<B>()("identity/multi-b", {
       path: "/tmp/identity-multi-b.sock",
     }) {}
-    class Solo extends Hyperlink.Tag<Solo>()("identity/Solo", {
+    class Solo extends Hyperlink.Service<Solo>()("identity/Solo", {
       ping: Hyperlink.effectFn({ n: Schema.Number }, Schema.Number),
     }).pipe(Hyperlink.identity) {}
 
@@ -51,7 +51,7 @@ describe("Hyperlink.identity", () => {
       Hyperlink.IdentityMultiNode,
     );
 
-    class Fleet extends Hyperlink.Tag<Fleet>()("identity/Fleet", {
+    class Fleet extends Hyperlink.Service<Fleet>()("identity/Fleet", {
       ping: Hyperlink.effectFn({ n: Schema.Number }, Schema.Number),
     }).pipe(Hyperlink.nodes([A, B])) {}
 
@@ -61,10 +61,10 @@ describe("Hyperlink.identity", () => {
   });
 
   it("allows a single-node fleet overwrite on identity", () => {
-    class One extends Node.Tag<One>()("identity/one", {
+    class One extends Node.Service<One>()("identity/one", {
       path: "/tmp/identity-one.sock",
     }) {}
-    class Solo extends Hyperlink.Tag<Solo>()("identity/SoloOne", {
+    class Solo extends Hyperlink.Service<Solo>()("identity/SoloOne", {
       ping: Hyperlink.effectFn({ n: Schema.Number }, Schema.Number),
     }).pipe(Hyperlink.identity) {}
 
@@ -76,7 +76,7 @@ describe("Hyperlink.identity", () => {
   it.effect("fails closed without a dialable bound Node or ListenNode", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("noself-lookup");
-      const lookupNode = Node.Tag()("identity/noself-lookup", { path }).pipe(Node.asLookup);
+      const lookupNode = Node.Service()("identity/noself-lookup", { path }).pipe(Node.asLookup);
 
       const exit = yield* Effect.exit(
         Layer.build(
@@ -95,13 +95,13 @@ describe("Hyperlink.identity", () => {
       const lookupPath = yield* tmpSock("claim-lookup");
       const winnerPath = yield* tmpSock("claim-winner");
 
-      const lookupNode = Node.Tag()("identity/claim-lookup", {
+      const lookupNode = Node.Service()("identity/claim-lookup", {
         path: lookupPath,
       }).pipe(Node.asLookup);
-      class WinnerNode extends Node.Tag<WinnerNode>()("identity/winner", {
+      class WinnerNode extends Node.Service<WinnerNode>()("identity/winner", {
         path: winnerPath,
       }) {}
-      class LoserNode extends Node.Tag<LoserNode>()("identity/loser", {
+      class LoserNode extends Node.Service<LoserNode>()("identity/loser", {
         path: "/tmp/identity-loser-unused.sock",
       }) {}
 
@@ -139,13 +139,13 @@ describe("Hyperlink.identity", () => {
       const winnerPath = yield* tmpSock("reclaim-winner");
       const nextPath = yield* tmpSock("reclaim-next");
 
-      const lookupNode = Node.Tag()("identity/reclaim-lookup", {
+      const lookupNode = Node.Service()("identity/reclaim-lookup", {
         path: lookupPath,
       }).pipe(Node.asLookup);
-      class WinnerNode extends Node.Tag<WinnerNode>()("identity/reclaim-w", {
+      class WinnerNode extends Node.Service<WinnerNode>()("identity/reclaim-w", {
         path: winnerPath,
       }) {}
-      class NextNode extends Node.Tag<NextNode>()("identity/reclaim-n", {
+      class NextNode extends Node.Service<NextNode>()("identity/reclaim-n", {
         path: nextPath,
       }) {}
 
@@ -174,7 +174,7 @@ describe("Hyperlink.identity", () => {
 
       expect(n).toBe(13);
 
-      const id = Context.get(lookupCtx, Identity.Tag);
+      const id = Context.get(lookupCtx, Identity.Service);
       const resolved = yield* id
         .resolve(new Lookup.ResolveRequest({ key: Mail.key }))
         .pipe(Effect.provide(lookupCtx));

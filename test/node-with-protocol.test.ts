@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import * as Node from "../src/Node";
 
 // same key, one more transport — the derived handle merges the endpoints.
-class Droplet extends Node.Tag<Droplet>()("wp/rt/droplet", { http: "http://d:7/rpc" }) {}
+class Droplet extends Node.Service<Droplet>()("wp/rt/droplet", { http: "http://d:7/rpc" }) {}
 class DropletWs extends Droplet.pipe(Node.withProtocol({ ws: "ws://d:7/rpc" })) {}
 
 it("withProtocol keeps the key and merges the transport set", () => {

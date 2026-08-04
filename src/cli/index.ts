@@ -1,7 +1,7 @@
 /**
  * @module cli
  *
- * Build a **CLI + default TUI** from a `Group.Tag` (or a `{ name: tag }` record) — the
+ * Build a **CLI + default TUI** from a `Group.Service` (or a `{ name: tag }` record) — the
  * control surface counterpart to `<Dashboard group={Fleet} />`.
  *
  * - `hyperlink` → open the TUI at the root
@@ -235,7 +235,7 @@ export type CliRun = (
 
 /**
  * Name a list of leaf tags by the **shortest unique slash-suffix** of each key —
- * `@acme/Mail` → `Mail`; collisions lengthen (`Regional/RegionUS`). Prefer a `Group.Tag`
+ * `@acme/Mail` → `Mail`; collisions lengthen (`Regional/RegionUS`). Prefer a `Group.Service`
  * when you have one — command paths then follow the group.
  *
  * @public

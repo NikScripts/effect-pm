@@ -1,5 +1,5 @@
 /**
- * {@link Store.Service} / {@link Store.Tag} factory — class-based aggregate stores.
+ * {@link Store.Service} / {@link Store.descriptor} factory — class-based aggregate stores.
  *
  * @module internal/store/defineStore
  * @internal

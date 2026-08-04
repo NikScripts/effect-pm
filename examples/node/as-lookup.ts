@@ -24,7 +24,7 @@ import * as Node from "../../src/Node"
 
 const program = Effect.gen(function* () {
   const path = `/tmp/hyperlink-ts-forms-lookup-${process.pid}.sock`
-  const lookupNode = Node.Tag()("Lookup", { path }).pipe(Node.asLookup)
+  const lookupNode = Node.Service()("Lookup", { path }).pipe(Node.asLookup)
 
   // Exclusive serve on the branded node (not bind-or-dial beside it)
   yield* Layer.build(Lookup.layerNode(lookupNode, { unlink: true }))

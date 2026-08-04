@@ -1,7 +1,7 @@
 /**
  * @module examples/node/nameless-unix-serve
  *
- * **(5) Nameless `Node.unix([serve…])`** — serve. No `Node.Tag`. Lookup Soft-baked
+ * **(5) Nameless `Node.unix([serve…])`** — serve. No `Node.Service`. Lookup Soft-baked
  * (override with `Lookup.layerOptions` if you need a custom path). See also #8 http/ws siblings.
  *
  * ```bash
@@ -19,11 +19,11 @@ import { Effect, Layer, Schema } from "effect"
 import * as Node from "../../src/Node"
 import * as Hyperlink from "../../src/Hyperlink"
 
-class Jobs extends Hyperlink.Tag<Jobs>()("nameless/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("nameless/Jobs", {
   jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
-class Emails extends Hyperlink.Tag<Emails>()("nameless/Emails", {
+class Emails extends Hyperlink.Service<Emails>()("nameless/Emails", {
   emails: Hyperlink.effect(Schema.String),
 }) {}
 

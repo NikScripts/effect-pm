@@ -11,9 +11,9 @@ import { builtInDaemonStoreContract } from "../src/internal/store/daemonStoreSpe
 
 const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
 
-class SqliteExec extends Daemon.Tag<SqliteExec>()("test/sqlite/Exec") {}
+class SqliteExec extends Daemon.Service<SqliteExec>()("test/sqlite/Exec") {}
 
-class SqliteTypedFailExec extends Daemon.Tag<SqliteTypedFailExec>()("test/sqlite/TypedFail", {
+class SqliteTypedFailExec extends Daemon.Service<SqliteTypedFailExec>()("test/sqlite/TypedFail", {
   error: FetchErr,
 }) {}
 

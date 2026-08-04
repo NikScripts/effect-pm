@@ -12,7 +12,7 @@ import * as WorkPool from "../src/WorkPool";
 const jobSchema = Schema.Struct({ id: Schema.String });
 
 // queue WITH an error schema — the worker may fail with the declared type
-class Flaky extends WorkPool.Tag<Flaky>()("@test/Flaky", {
+class Flaky extends WorkPool.Service<Flaky>()("@test/Flaky", {
   payload: jobSchema,
   error: Schema.String,
 }) {}

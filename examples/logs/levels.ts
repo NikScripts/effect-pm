@@ -18,11 +18,11 @@ import * as Hyperlink from "../../src/Hyperlink";
 import * as Logs from "../../src/Logs";
 import * as Store from "../../src/Store";
 
-class LiveWarnOnly extends Daemon.Tag<LiveWarnOnly>()("examples/logs/LiveWarnOnly").pipe(
+class LiveWarnOnly extends Daemon.Service<LiveWarnOnly>()("examples/logs/LiveWarnOnly").pipe(
   Hyperlink.logStreamLevelWarn,
 ) {}
 
-class DurableWarnOnly extends Daemon.Tag<DurableWarnOnly>()("examples/logs/DurableWarnOnly") {}
+class DurableWarnOnly extends Daemon.Service<DurableWarnOnly>()("examples/logs/DurableWarnOnly") {}
 
 class AppStore extends Store.Service<AppStore>("@examples/logs/LevelsStore")(
   // Durable level defaults to All; only the live stream is Warn+.

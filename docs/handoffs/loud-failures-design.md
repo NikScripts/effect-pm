@@ -10,7 +10,7 @@
 **Locked naming (Effect-perfect).** `type ProtocolKind = "http" | "socket"` — Effect's *client* vocabulary (`RpcClient.layerProtocolHttp` / `layerProtocolSocket`), consistent with the existing `socketClient`. Connect family: `connect` / `connectHttp` / `connectSocket` (NOT `connectWs`). Deferred alignment (separate pass, touches C's server surface): `protocolWebsocket → protocolSocket` (client helper) and `wsServer → websocketServer` (Effect server = `layerProtocolWebsocket`).
 
 **SHIPPED on `feat/loud-failures`** (each step: full typecheck + effect-LSP 0/0 both configs + full 501-test suite green):
-- **Step 1 — `ProtocolKind` on `Node.Tag`.** `kind` inferred `"socket"` from a `ws(s)://` url / `"http"` from a resolved http target, or explicit `{ url, kind }`. `AnyNode` gains `kind`; new `AddressedNode<HSelf>` type. The node is now SSOT for *where* + *how*.
+- **Step 1 — `ProtocolKind` on `Node.Service`.** `kind` inferred `"socket"` from a `ws(s)://` url / `"http"` from a resolved http target, or explicit `{ url, kind }`. `AnyNode` gains `kind`; new `AddressedNode<HSelf>` type. The node is now SSOT for *where* + *how*.
 - **Step 2 — dual `connect` + `connectHttp`/`connectSocket`.** `MyNode.pipe(Hyperlink.connect)` derives the transport from the node's `kind` → **F1 (http↔socket mismatch) is designed out on the client**; a node with no address fails loudly (`UnaddressedNode`, with a remediation message) at connect, not opaquely at first call. Full form set: bare/derived pipe, `connect(protocol)` data-last, `connect(node)`/`connect(node, protocol)` data-first, and the two kind shortcuts. Proven e2e streaming over a real **ws AND http** server; `Hyperlink.client(tag)` resolves the tag's bound node (so the HealthBoard-class "ambient protocol not threaded" wiring is handled too).
 
 **Key implementation decisions:**
@@ -63,7 +63,7 @@ Building blocks that already exist:
 - Client protocols: `protocolHttp(url)` (Fetch + ndjson), `protocolWebsocket(url)` (one multiplexed ws + ndjson) — each returns `Layer<RpcClient.Protocol>`.
 - Wiring: `connect(node, protocol)`, `client(tag)` (nodeless → requires ambient `RpcClient.Protocol`), `client(tag, node)`, `socketClient(node, {url})`, `clientHttp(tag, target)`.
 - Servers: `httpServer([...])`, `wsServer([...])` → `serverProtocolHttp`/`serverProtocolWebsocket` internally.
-- Eager-loud precedent: bad http target → `InvalidHttpTarget` on the Layer/Effect error channel (`clientHttp` / stamped positional `Node.Tag` → derived `connect`).
+- Eager-loud precedent: bad http target → `InvalidHttpTarget` on the Layer/Effect error channel (`clientHttp` / stamped positional `Node.Service` → derived `connect`).
 
 The gaps:
 
@@ -125,14 +125,14 @@ A one-shot handshake at `connect` that pings the server and returns eagerly with
 
 The framing in §4 treated `verify` as a per-*call* decision ("should this connect check?"). That's wrong. Whether a resource has a counterpart to shake with, who that counterpart is, and how to reach it are all **declared topology**, and the library already declares most of it:
 
-- A tag binds to a node: `WorkPool.Tag(...)({ payload, node: Droplet })`.
-- A node carries its address: `Node.Tag("droplet", 7777)` → `url` via `resolveHttpTarget` (fails loudly on a bad string — `makeNode`, `src/Hyperlink.ts:3346`).
+- A tag binds to a node: `WorkPool.Service(...)({ payload, node: Droplet })`.
+- A node carries its address: `Node.Service("droplet", 7777)` → `url` via `resolveHttpTarget` (fails loudly on a bad string — `makeNode`, `src/Hyperlink.ts:3346`).
 - A fleet is declared: `.pipe(Hyperlink.distributed(NodeA, NodeB, …))`; `peers` reaches the rest.
 
 The **one fact that's missing** is the node's *protocol kind* (http vs ws). Today the kind is chosen at `connect` time (`protocolHttp` vs `protocolWebsocket`), not recorded on the node — which is *exactly* why bug #1 was possible: nothing declared "Droplet speaks ws," so nothing could notice the producer dialed http. Add `kind` to the node and the topology becomes self-describing; verify becomes a *derived behavior* of it, not a flag.
 
 ### 8.1 Stamp `kind` on the `Node`
-`Node.Tag("droplet", { url, kind: "websocket" })` (or inferred — see open question). The node becomes the single source of truth for *where* and *how* to reach it, mirroring how it already owns *where* (and already fails loudly on a bad url).
+`Node.Service("droplet", { url, kind: "websocket" })` (or inferred — see open question). The node becomes the single source of truth for *where* and *how* to reach it, mirroring how it already owns *where* (and already fails loudly on a bad url).
 
 ### 8.2 Design F1 out on the client (don't merely detect it)
 Because the node declares its kind, `connect(node)` / `client(tag)` **derive** the transport from the node instead of the caller picking `protocolHttp`/`protocolWebsocket`. The producer bug becomes **impossible**: `connect(Droplet)` reads `kind: "websocket"` and dials ws. This is the same instinct as `warnHttpClientInBrowser` (the library already nudges on a likely-wrong transport) — promoted from "warn" to "can't express the wrong thing."
@@ -161,13 +161,13 @@ The per-connect flag from §4 is demoted to this *override*, not the primary sur
 
 ### 8.7 The API addition, restated
 The core addition is **not** `{ verify }` on `connect`. It is:
-1. **`kind`** (and later **`contractHash`**) on `Node.Tag` → the topology is self-describing.
+1. **`kind`** (and later **`contractHash`**) on `Node.Service` → the topology is self-describing.
 2. **`connect`/`client` derive transport from the node** → F1 designed out on the client.
 3. **`wsServer`/`httpServer` assert node kind at serve** → F1 loud on the server.
 4. **verify = derived F3/F4 handshake** over the declared counterpart, default-on for remote tags, with a per-connect override.
 
 ### 8.8 New open question
-**`kind`: explicit vs inferred.** Do you write `Node.Tag(..., { kind: "websocket" })` (simplest, explicit SSOT), or does binding a served group to `wsServer([...])` *infer* and stamp the node's kind (less to type, but needs the server and node co-declared, and the client — a separate deploy — must still read it explicitly)? Explicit-on-the-node is my lean: it's the one place both a remote client and the server can read the same fact without sharing server code.
+**`kind`: explicit vs inferred.** Do you write `Node.Service(..., { kind: "websocket" })` (simplest, explicit SSOT), or does binding a served group to `wsServer([...])` *infer* and stamp the node's kind (less to type, but needs the server and node co-declared, and the client — a separate deploy — must still read it explicitly)? Explicit-on-the-node is my lean: it's the one place both a remote client and the server can read the same fact without sharing server code.
 
 ---
 

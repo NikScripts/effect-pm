@@ -346,12 +346,12 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 - **Chose / done:** Agent 4 had Eng’d that surface (`90479552`) and tip-synced it to `integration` without authorization — **process failure**. Owner ordered full reverse: force-reset `cursor/hyperservice-open-deps-5679` and `integration` to **`5a0b42d5`** (W2 tip; Family never on tip). Incident write-up: [`agent-04-w3-incident-2026-07-27.md`](./agent-04-w3-incident-2026-07-27.md).
 - **Rejected:** Public `*Family*` APIs; treating tip-sync language as blanket `integration` push rights; Eng’ing W3 before locking mint shape / ApiMetrics–Gate relationship.
 - **Standing rule:** Agent 4 (and all agents) push **work branch only** unless owner explicitly authorizes an `integration` push.
-- **Design (unlocked, discussion only):** Prefer shared Spec via `Hyperlink.Tag(wireKey, spec)` → `Factory<Self>()(instanceKey)` (class-only), not a new noun; no new serve/client verbs; explore API handle + reserved features nest (metrics) instead of sibling ApiMetrics tag / `httpApiClientService` product name. See incident handoff.
+- **Design (unlocked, discussion only):** Prefer shared Spec via `Hyperlink.Service(wireKey, spec)` → `Factory<Self>()(instanceKey)` (class-only), not a new noun; no new serve/client verbs; explore API handle + reserved features nest (metrics) instead of sibling ApiMetrics tag / `httpApiClientService` product name. See incident handoff.
 
 ## 2026-07-27 — W3 Eng: shared Spec via `Tag(wireKey, spec)` (not Family)
 
 - **Owner said:** Skip metrics for now. Document everything. Build the shared-Spec feature (the one metrics would use), demo it, tests/examples/docs — then stop and wait. Return to `.handle` rename later.
-- **Chose / Eng’d:** `Hyperlink.Tag(wireKey, spec)` → `Factory<Self>()(instanceKey)` (class-only, Effect-shaped `()`). Internal `sharedTagSym`; ordinary `serve` / `serveRemote` / `client` merge by wire key and route on header `key`. Errors: `DuplicateSharedInstance`, `SharedRoutingError`. Demo: `examples/shared-tag-wire.ts`. *(ApiMetrics migrate → R4/R4b.)*
+- **Chose / Eng’d:** `Hyperlink.Service(wireKey, spec)` → `Factory<Self>()(instanceKey)` (class-only, Effect-shaped `()`). Internal `sharedTagSym`; ordinary `serve` / `serveRemote` / `client` merge by wire key and route on header `key`. Errors: `DuplicateSharedInstance`, `SharedRoutingError`. Demo: `examples/shared-tag-wire.ts`. *(ApiMetrics migrate → R4/R4b.)*
 - **Rejected (still):** `Family` / `serveFamily` / `clientFamily` / `member`; pushing `integration` without explicit OK.
 - **Paused next (then):** ApiMetrics/Gate product shape — closed by R4/R4b. (`.handle` rename → Eng’d as `default`/`defaults`; see below.)
 - **Supervisor impact:** Agent 4 on `cursor/hyperservice-open-deps-5679` only — wait for owner before metrics / `integration`.
@@ -412,7 +412,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 
 - **Owner said:** “Okay fine we can do it if it’s clean and typed nice.”
 - **Chose / Eng’d:** Tag options `{ defaults: bag }` on Hyperlink / WorkPool / Gate / Daemon — desugars to `Hyperlink.defaults` **after** named-handle casts (`nameQueueService` / `nameRunService`) so bags are not wiped. Same `TagWithDefaults` / `DefaultsInput` typing as the pipe. Pipe remains the composable core.
-- **Rejected:** Passing defaults through `Hyperlink.Tag` inside toolkit materialize (naming remap would erase Svc widen).
+- **Rejected:** Passing defaults through `Hyperlink.Service` inside toolkit materialize (naming remap would erase Svc widen).
 
 ## 2026-07-27 — Reject Hyperlink-backed `RateLimiterStore` (R5)
 
@@ -483,7 +483,7 @@ Format: see [`supervisor-protocol.md`](./supervisor-protocol.md) § Owner decisi
 ## 2026-07-11 — Queue Phase 1a middle ground (owner + supervisor)
 
 - **Owner said:** PR #19 approach **not OK** — seek safe middle ground; add validation to make boundary cast defensible.
-- **Chose:** **Phase 1a** — mirror **WorkPool.Service (untyped)**: `queueSpec(payload, { success?, error? })`, runtime-correct `buildQueueEvent`, single **`assertQueueInstanceSpec`** boundary cast (not inner `as unknown as Success`). **Validation:** structural `flattenSpec` key/kind match + wire schema smoke; contract RPC round-trip test.
+- **Chose:** **Phase 1a** — mirror **WorkPool.define (untyped)**: `queueSpec(payload, { success?, error? })`, runtime-correct `buildQueueEvent`, single **`assertQueueInstanceSpec`** boundary cast (not inner `as unknown as Success`). **Validation:** structural `flattenSpec` key/kind match + wire schema smoke; contract RPC round-trip test.
 - **Rejected:** PR **#19** (generic `queueSpec` + inner casts), PR **#20** merge until Phase 1a lands; claiming `StreamElement<events>` typing in Phase 1a.
 - **Deferred:** Daemon live `events` — separate session after Queue Phase 1a; owner still picks failure surface (`events` vs store-only vs RPC rebuild).
 - **Supervisor impact:** Do **not** merge #19/#20. Agent 2 → [`agent-02-queue-wire-phase-1a.md`](archive/2026-07/agents/agent-02-queue-wire-phase-1a.md). #17 rebase after Queue wire settled.

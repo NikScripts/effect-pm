@@ -89,8 +89,8 @@ import { Logs, Daemon, Hyperlink, Store } from "hyperlink-ts"
 import * as Node from "hyperlink-ts/Node"
 import { Effect } from "effect"
 
-class BillingNode extends Node.Tag<BillingNode>()("billing/scores") {}
-class Daily extends Daemon.Tag<Daily>()("app/Daily") {}
+class BillingNode extends Node.Service<BillingNode>()("billing/scores") {}
+class Daily extends Daemon.Service<Daily>()("app/Daily") {}
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
   BillingNode.logs,
@@ -136,7 +136,7 @@ Say the identifier kind out loud. Mixing them is the common failure mode.
 
 | Kind | Identifies | Declared as | Used for |
 |------|------------|-------------|----------|
-| **Node log key** | One OS process / runtime host | `Node.Tag(…)` → `.key` | `Node.logs`, `Logs.byNode`, `annotations.node` |
+| **Node log key** | One OS process / runtime host | `Node.Service(…)` → `.key` | `Node.logs`, `Logs.byNode`, `annotations.node` |
 | **Hyperlink key** | One WorkPool, Daemon, Gate, or custom Tag | `Tag(…)` → `.key` | store scope, lineage segments, `byHyperlink` |
 | **Lineage segment** | One hop in ancestry | element of the lineage JSON array | `LogEntry.hasKey` / `atRoot` / `atLeaf` |
 | **Annotation key** | Field name on `LogEntry.annotations` | `LogAnnotationKeys.*` | metadata keys, not buckets |
@@ -150,14 +150,14 @@ LogAnnotationKeys.lineage // annotation key — JSON array of lineage segment ke
 
 ### Node log key rules
 
-1. It **must equal** that process’s `Node.Tag` key — `BillingNode.key`, not an invented
+1. It **must equal** that process’s `Node.Service` key — `BillingNode.key`, not an invented
    `"my-node"`.
 2. Prefer slash-separated paths (`domain/role`): `"billing/scores"`, `"wnba/live"`.
 3. Every node-journal line is stamped with `annotations.node` = that key.
 4. Query with `Logs.byNode(BillingNode)` (or the string key, if unknown statically).
 
 ``` ts
-// ❌ drifts from Node.Tag
+// ❌ drifts from Node.Service
 Logs.byNode("wnba")          // WnbaNode.key is "wnba/scores"
 Logs.byNode("my-node")
 ```
@@ -208,7 +208,7 @@ Prefer `Hyperlink.logs(tag)` for Handle-shaped access — live Stream plus durab
 import { LogEntry, Daemon, Hyperlink } from "hyperlink-ts"
 import { Effect } from "effect"
 
-class Daily extends Daemon.Tag<Daily>()("app/Daily") {}
+class Daily extends Daemon.Service<Daily>()("app/Daily") {}
 
 const program = Effect.gen(function* () {
   const { stream, query } = yield* Hyperlink.logs(Daily)
@@ -225,7 +225,7 @@ const program = Effect.gen(function* () {
 Pipe `Hyperlink.withLogExport` onto a Tag when you want `yield* Tag.logs` as a member:
 
 ``` ts
-class MailQueue extends WorkPool.Tag<MailQueue>()("app/Mail", MailJob).pipe(
+class MailQueue extends WorkPool.Service<MailQueue>()("app/Mail", MailJob).pipe(
   Hyperlink.withLogExport,
 ) {}
 
@@ -254,7 +254,7 @@ class AppStore extends Store.Service<AppStore>("@app/Store")(
 ) {}
 
 // Tag-side live floor (Hyperlink.logs stream)
-class QuietProc extends Daemon.Tag<QuietProc>()("app/Quiet").pipe(
+class QuietProc extends Daemon.Service<QuietProc>()("app/Quiet").pipe(
   Hyperlink.logStreamLevelWarn,
 ) {}
 ```

@@ -20,7 +20,7 @@ import { Effect, Layer, Schema } from "effect";
 import * as Gate from "../../src/Gate";
 import * as Store from "../../src/Store";
 
-class PriceGate extends Gate.Service<PriceGate>()("examples/PriceGate", {
+class PriceGate extends Gate.define<PriceGate>()("examples/PriceGate", {
   payload: Schema.Number,
   success: Schema.Number,
   error: Schema.String,

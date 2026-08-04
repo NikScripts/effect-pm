@@ -168,7 +168,7 @@ Historical “Locked” rows in [`launcher-decisions.md`](./launcher-decisions.m
 - Ready substrate: `withReadiness` / `Readiness` / `allReady` / `Node.status` (per-HyperService readiness rollup) / `Hyperlink.verifyConnection` (deep → `ServiceNotReady`).
 - Identity/placement: `Lookup.Identity` / `Directory` / `Advice`, `Hyperlink.identity` — child’s job after Ready.
 - Ops CLI: `Hyperlink.cli` + TUI — **control surface on running services**, not bring-up.
-- `Group.Tag` / `members` / `isGroup` — handle hierarchy only (`src/Group.ts`).
+- `Group.Service` / `members` / `isGroup` — handle hierarchy only (`src/Group.ts`).
 
 **Gone / do not resurrect:** `ProcessManager`, `ProcessGroup`, legacy `effect-pm-group-child`, `Fleet.launch` (spine β).
 
@@ -199,7 +199,7 @@ North star: `lookupClient` callers never notice A→B. **v1 slice Eng'd:**
 41. **Transparent RPC retry** — Effect methods (`query` / `mutate`) that fail with `RpcClientError` proactively resolve+adopt once, else wait ≤2s for install generation bump, then **retry once**. App errors / `ProtocolMismatch` not retried. Streams not auto-retried.
 42. **Cutover order** — B Directory-visible (and/or Advice-prefer B) before A leaves so retry has a target. Same recipe as C crown-jewel.
 43. **Advice early move (Eng'd)** — `Advice.changes` (`AdvicePreferred` / `AdviceCleared`) on the existing Advice tag (no new sugar namespace). `lookupClient` watches prefer flips for its service key and re-resolves **before** A leaves / before the first transport error.
-44. **Sibling Tag modules (Eng'd)** — `hyperlink-ts/Advice` / `Directory` / `Identity` are own namespaces (`import * as Advice` → `Advice.Tag` / `Advice.prefer` / `Advice.changes`). Banned: `import { Advice } from "…/Lookup"` and `Lookup.Advice.*`. Standard: [`modules-and-boundaries.md`](../standards/modules-and-boundaries.md#no-tag-triples).
+44. **Sibling Tag modules (Eng'd)** — `hyperlink-ts/Advice` / `Directory` / `Identity` are own namespaces (`import * as Advice` → `Advice.Service` / `Advice.prefer` / `Advice.changes`). Banned: `import { Advice } from "…/Lookup"` and `Lookup.Advice.*`. Standard: [`modules-and-boundaries.md`](../standards/modules-and-boundaries.md#no-tag-triples).
 45. **peersLayer D parity (Eng'd)** — directory-mode `peersLayer` matches `lookupClient`: **build-then-swap** peer dials (prior stays until next succeeds); Effect peer RPCs that hit `RpcClientError` **retry once** after rebind. Streams follow dial generations (Policy). Stable `peers[nodeKey]` facade identity across swaps.
 46. **Policy (Eng'd)** — `hyperlink-ts/Policy`: composable Layer fragments for dial (`sticky` / `streamGap` / `coldAmbiguous` / `pick`), verify (`verifyOff` / `verifyStatus` — replaces `Hyperlink.clientVerify`), advertise conflict (`askIncumbent` / `livenessReplace` / `OnConflict` SSOT), and yield (`yieldAccept` / `yieldRefuse`). Helpers: `Policy.provide` / `Policy.layer`. Node/Listen call-site stamps remain overrides. Defaults: sticky + stall + cold fail + verify reject + conflict inherit + yield accept.
 

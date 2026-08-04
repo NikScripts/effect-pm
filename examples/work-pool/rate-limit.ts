@@ -18,7 +18,7 @@ const LimitedJob = Schema.Struct({
   id: Schema.String,
 });
 
-class LimitedQueue extends WorkPool.Tag<LimitedQueue>()(
+class LimitedQueue extends WorkPool.Service<LimitedQueue>()(
   "examples/LimitedQueue",
   { payload: LimitedJob },
 ) {}

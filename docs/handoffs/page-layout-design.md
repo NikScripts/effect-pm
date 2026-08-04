@@ -96,7 +96,7 @@ MyLayout.static(component, values)
 - CamelCase helpers: `Page.static` / `dynamic` / `build` / `layout` + `Render` + `stampOf` (meta currently optional on stamp — to be demoted off Page core).
 - Path codegen: `last-ts/vite` `fileRouter`, `hyp file-router`.
 - View: annotations bag (symbol), `View.annotations` Effect / `getAnnotations`, `Last.kindOf`, `View.fromEffect` / `gen` / `succeed`.
-- `Page.Tag` / Layout class: **not Eng’d**.
+- `Page.Service` / Layout class: **not Eng’d**.
 
 ### Open product follow-ons (out of this design doc’s Eng slice)
 
@@ -205,10 +205,10 @@ Page.static<typeof Book>(AboutView, { title: "About" })  // if we want type-para
 
 These are **pure forwarding** to `Book.static` — one implementation.
 
-### 4. `Page.Tag` — DI identity when earned
+### 4. `Page.Service` — DI identity when earned
 
 ```ts
-class DocsChapter extends Page.Tag<DocsChapter, { chapter: string }>()(
+class DocsChapter extends Page.Service<DocsChapter, { chapter: string }>()(
   "app/page/docs-chapter",
   Book, // layout — Requirement flows in
   {
@@ -344,7 +344,7 @@ export default Book.build(
 | Quick file page | `Book.static(Comp, { title })` |
 | Page-first spelling | `Page.static(Book, Comp, { title })` |
 | Effect mint + overrides | `Page.gen` + `Last.provide` |
-| DI identity | `Page.Tag` / `Layout.Tag` |
+| DI identity | `Page.Service` / `Layout.Tag` |
 | No layout | `Page.static(Comp)` |
 | Nested chrome | `Layout.Prototype` chain |
 | Custom meta keys | whatever Requirement asks |
@@ -358,7 +358,7 @@ export default Book.build(
 |------|-----|
 | JSX deeply nested `<Title>` as type proof | Erased; use values / `Last.provide` |
 | Builtin Page `title`/`description` fields | Layout Requirement owns keys |
-| `View.Page.Tag` for file routes | Collides with size chrome |
+| `View.Page.Service` for file routes | Collides with size chrome |
 | `MyLayout` only as type param without value | Hard to get runtime chrome; prefer Layout value (`Book.static`) |
 | Forbidding override | Last-wins is a feature |
 

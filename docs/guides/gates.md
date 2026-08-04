@@ -22,7 +22,7 @@ concurrency, same split as WorkPool.
 import { Gate } from "hyperlink-ts"
 import { Duration, Effect, Schema } from "effect"
 
-class Double extends Gate.Service<Double>()("app/Double", {
+class Double extends Gate.define<Double>()("app/Double", {
   payload: Schema.Number,
   success: Schema.Number,
   concurrency: 2,
@@ -202,7 +202,7 @@ when `stop` is invoked. In-flight bodies always finish regardless.
 | `"finishWaiting"` | Keep their place — acquire a permit and run; only **new** admits are rejected. |
 
 ```ts
-class Backup extends Gate.Service<Backup>()("app/Backup", {
+class Backup extends Gate.define<Backup>()("app/Backup", {
   payload: Schema.String,
   concurrency: 1,
   stopMode: "finishWaiting",  // let queued callers drain on stop
@@ -254,7 +254,7 @@ A gate with no meaningful input takes `Schema.Void` and is called as `run()` —
 useful for rate-limiting a side-effecting call.
 
 ``` ts
-class Ping extends Gate.Service<Ping>()("app/Ping", {
+class Ping extends Gate.define<Ping>()("app/Ping", {
   payload: Schema.Void,
   success: Schema.Number,
   concurrency: 3,

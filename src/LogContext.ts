@@ -2,7 +2,7 @@
  * Log **annotation keys** + per-scope annotation helpers for hyperlink-ts log capture.
  *
  * Every captured {@link LogEntry} carries annotations keyed by {@link LogAnnotationKeys}. Values are
- * either a **node log key** (`Node.Tag.key`) or **lineage segment keys** (`Hyperlink.Tag.key`).
+ * either a **node log key** (`Node.Service.key`) or **lineage segment keys** (`Hyperlink.Service.key`).
  *
  * Full catalog: `docs/LOGS.md` — Annotation keys.
  *
@@ -18,7 +18,7 @@ import { Effect } from "effect";
  *
  * | Property | Annotation key (field name) | Value is |
  * |----------|----------------------------|----------|
- * | `node` | `"node"` | **node log key** (`Node.Tag.key`) |
+ * | `node` | `"node"` | **node log key** (`Node.Service.key`) |
  * | `lineage` | `"hyperlink-ts/lineage"` | JSON array of **lineage segment keys** |
  * | `lineId` | `"hyperlink-ts/lineId"` | Stable id for one published relay line (memo / dedupe) |
  *
@@ -40,7 +40,7 @@ export const LogAnnotationKeys = {
  * Annotate every log line with a **node log key** value under annotation key {@link LogAnnotationKeys.node}.
  * Applied by node durable tails (`Node.logs` / `Hyperlink.store(Node)` in `apps/web/server.ts`).
  *
- * @param node - **Node log key** value (`Node.Tag.key`).
+ * @param node - **Node log key** value (`Node.Service.key`).
  *
  * @category utils
  * @public

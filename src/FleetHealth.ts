@@ -21,7 +21,7 @@ import { combineByNodeExit, combineQuery } from "./MultiNode";
 import { serviceReadiness, type ServiceReadiness } from "./Node";
 import * as Hyperlink from "./Hyperlink";
 import {
-  Tag as hyperlinkTag,
+  Service as hyperlinkTag,
   layer as hyperlinkLayer,
   serve as hyperlinkServe,
   serveRemote as hyperlinkServeRemote,
@@ -160,7 +160,7 @@ const keyFor = (node: NodeKey<unknown> | undefined): string =>
  * Declare a FleetHealth tag:
  *
  * ```ts
- * class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
+ * class MeshHealth extends FleetHealth.Service<MeshHealth>()().pipe(
  *   Hyperlink.nodes([DropletEast, DropletWest]),
  * ) {}
  * ```
@@ -168,7 +168,7 @@ const keyFor = (node: NodeKey<unknown> | undefined): string =>
  * @category constructors
  * @public
  */
-export const Tag = <Self>() => {
+export const Service = <Self>() => {
   function build(): FleetHealthTag<Self>;
   function build<HSelf>(options: {
     readonly node: NodeKey<HSelf>;
@@ -212,7 +212,7 @@ export interface FleetHealthOptions {
 }
 
 /** Identity node for a **non-meshed** FleetHealth instance. @internal */
-class FleetHealthAloneNode extends Node.Tag<FleetHealthAloneNode>()(
+class FleetHealthAloneNode extends Node.Service<FleetHealthAloneNode>()(
   "hyperlink-ts/FleetHealth/alone",
 ) {}
 

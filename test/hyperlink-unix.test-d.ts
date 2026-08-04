@@ -6,11 +6,11 @@ import { Schema } from "effect";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
-class Jobs extends Hyperlink.Tag<Jobs>()("unix-d/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("unix-d/Jobs", {
   jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
-class Worker extends Node.Tag<Worker>()("unix-d/Worker", {
+class Worker extends Node.Service<Worker>()("unix-d/Worker", {
   path: "/tmp/unix-d.sock",
 }) {}
 

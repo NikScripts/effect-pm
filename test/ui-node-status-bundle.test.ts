@@ -16,17 +16,17 @@ import * as WorkPool from "../src/WorkPool";
 const Item = Schema.Struct({ n: Schema.Number });
 
 /** Override path — tag url dead; explicit connectSocket registers the live dial in the memo. */
-class OverrideNode extends Node.Tag<OverrideNode>()("ui/f5-override", {
+class OverrideNode extends Node.Service<OverrideNode>()("ui/f5-override", {
   url: "http://127.0.0.1:1/rpc",
   kind: "WebSocket",
 }) {}
-class OverrideQ extends WorkPool.Tag<OverrideQ>()("ui/F5OverrideQ", {
+class OverrideQ extends WorkPool.Service<OverrideQ>()("ui/F5OverrideQ", {
   payload: Item,
   node: OverrideNode,
 }) {}
 
 /** Bare-dial path — never receives an explicit override in this file (memo stays tag-url). */
-class BareDeadNode extends Node.Tag<BareDeadNode>()("ui/f5-bare-dead", {
+class BareDeadNode extends Node.Service<BareDeadNode>()("ui/f5-bare-dead", {
   url: "http://127.0.0.1:1/rpc",
   kind: "WebSocket",
 }) {}

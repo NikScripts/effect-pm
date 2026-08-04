@@ -32,7 +32,7 @@ void _changesOk;
 
 // withReadiness accepts the factory readiness on a tag built from its spec.
 class Database extends Hyperlink.withReadiness(
-  Hyperlink.Tag<Database>()("monitored/Database", built.spec),
+  Hyperlink.Service<Database>()("monitored/Database", built.spec),
   built.readiness,
 ) {}
 void Database;

@@ -18,7 +18,7 @@ const RenderJob = Schema.Struct({
   id: Schema.String,
 });
 
-class RenderQueue extends WorkPool.Tag<RenderQueue>()("examples/RenderQueue", {
+class RenderQueue extends WorkPool.Service<RenderQueue>()("examples/RenderQueue", {
   payload: RenderJob,
   success: Schema.Number,
 }) {}

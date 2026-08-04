@@ -30,7 +30,7 @@ it("protocolHttp DIES in a browser context (window defined)", () => {
 
 it("the browser guard covers http (built on protocolHttp)", () => {
   setBrowser();
-  class Edge extends Node.Tag<Edge>()("guard/Edge", "http://x/rpc") {}
+  class Edge extends Node.Service<Edge>()("guard/Edge", "http://x/rpc") {}
   return buildLayer(Edge.pipe(Node.connectHttp)).then((exit) => {
     expect(Exit.isFailure(exit)).toBe(true);
     expect(JSON.stringify(exit)).toContain("HttpClientInBrowser");
@@ -39,7 +39,7 @@ it("the browser guard covers http (built on protocolHttp)", () => {
 
 it("ws is NOT guarded — it's the correct browser transport", () => {
   setBrowser();
-  class Hub extends Node.Tag<Hub>()("guard/Hub", { url: "wss://x/rpc" }) {}
+  class Hub extends Node.Service<Hub>()("guard/Hub", { url: "wss://x/rpc" }) {}
   // This asserts the browser *guard* (no HttpClientInBrowser death), not connectivity — so opt out of
   // default-on client verify, which would otherwise eagerly probe the bogus `wss://x/rpc` and fail.
   return buildLayer(

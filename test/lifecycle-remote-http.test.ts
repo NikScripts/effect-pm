@@ -18,11 +18,11 @@ interface NumberItem {
   readonly n: number;
 }
 
-class RemoteJobs extends WorkPool.Tag<RemoteJobs>()("lifecycle-remote/Jobs", {
+class RemoteJobs extends WorkPool.Service<RemoteJobs>()("lifecycle-remote/Jobs", {
   payload: NumberItem,
 }) {}
 
-class RemoteSweeper extends Daemon.Tag<RemoteSweeper>()(
+class RemoteSweeper extends Daemon.Service<RemoteSweeper>()(
   "lifecycle-remote/Sweeper",
 ) {}
 

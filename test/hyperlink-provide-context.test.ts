@@ -10,7 +10,7 @@ class Dep extends Context.Service<Dep, number>()(
   "hyperlink-ts/test/hyperlink-provide-context.test/Dep",
 ) {}
 
-class T extends Hyperlink.Tag<T>()("provide-context/T", {
+class T extends Hyperlink.Service<T>()("provide-context/T", {
   // ref → Subscribable impl (stream: true) — must be left untouched
   value: Hyperlink.ref(Schema.Number),
   // stream field → Stream impl (stream: true) — must be left untouched

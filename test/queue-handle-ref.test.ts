@@ -4,7 +4,7 @@ import { WorkPool } from "../src";
 
 const Item = Schema.Struct({ n: Schema.Number });
 
-class LiveQueue extends WorkPool.Tag<LiveQueue>()("qr-handle-ref/live", { payload: Item }) {}
+class LiveQueue extends WorkPool.Service<LiveQueue>()("qr-handle-ref/live", { payload: Item }) {}
 
 /** Mirrors `src/web/data.ts` — widgets subscribe via `q.status.changes`. */
 it("Hyperlink.layer handle: status.changes emits live counts on enqueue", () =>

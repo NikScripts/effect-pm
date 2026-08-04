@@ -1,11 +1,11 @@
 // Tree-shaking gate for the tree-shakeable namespace subpaths.
 //
-// A browser/dashboard bundle that imports only the *light* contract tag (`NS.Tag`) must NOT pull the
-// runtime engine (workers, refill, rate limiter, the supervisor loop). We prove that by bundling a
-// `.Tag`-only consumer straight from each namespace ENTRY source with esbuild (relative imports
-// bundled, everything in node_modules externalized), then asserting the engine source contributes
-// **zero bytes** to the output. This reads source, not dist, so it measures the authored structure
-// independent of chunking.
+// A browser/dashboard bundle that imports only the *light* contract handle (`NS.Service`) must NOT
+// pull the runtime engine (workers, refill, rate limiter, the supervisor loop). We prove that by
+// bundling a `.Service`-only consumer straight from each namespace ENTRY source with esbuild
+// (relative imports bundled, everything in node_modules externalized), then asserting the engine
+// source contributes **zero bytes** to the output. This reads source, not dist, so it measures the
+// authored structure independent of chunking.
 //
 // NB: we inspect `metafile.outputs[*].inputs` (files that contribute *retained* bytes), NOT
 // `metafile.inputs` (every file esbuild *parsed*). A namespace that re-exports engine bindings
@@ -25,23 +25,23 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
  * @typedef {object} Case
  * @property {string} name       subpath name (for reporting)
  * @property {string} entry      namespace entry source (what the subpath resolves to)
- * @property {string[]} engine   source files that MUST be dropped for a `.Tag`-only import
+ * @property {string[]} engine   source files that MUST be dropped for a `.Service`-only import
  * @property {string} member     the light member the consumer touches
  */
 
 /** @type {Case[]} */
 const cases = [
   {
-    // A `WorkPool.Tag`-only import must drop BOTH the plain queue engine and the leveled
+    // A `WorkPool.Service`-only import must drop BOTH the plain queue engine and the leveled
     // (priority) engine — the leveled variant folded in as WorkPool.priority but stays tree-shakeable.
     name: "WorkPool",
     entry: "src/WorkPool.ts",
     engine: ["src/internal/workPool.ts", "src/internal/workPoolPriority.ts"],
-    member: "Tag",
+    member: "Service",
   },
   {
-    // `Daemon` is one module carrying both the toolkit contract (`Tag` / `Schedule` / `schedule`
-    // / `window`) and the engine (`make` / `layer` / `serve`). A `Daemon.Tag`-only import must not
+    // `Daemon` is one module carrying both the toolkit contract (`Service` / `Schedule` / `schedule`
+    // / `window`) and the engine (`make` / `layer` / `serve`). A `Daemon.Service`-only import must not
     // retain the engine's separate source files.
     name: "Daemon",
     entry: "src/Daemon.ts",
@@ -50,18 +50,18 @@ const cases = [
       "src/store/daemonExecution.ts",
       "src/Polling.ts",
     ],
-    member: "Tag",
+    member: "Service",
   },
   {
-    // `Gate` carries the light `Tag` (spec + wire schemas + named handle) alongside the gate
-    // engine. A `Gate.Tag`-only import must not retain the engine (`make` / `layer` / `serve`).
+    // `Gate` carries the light `Service` (spec + wire schemas + named handle) alongside the gate
+    // engine. A `Gate.Service`-only import must not retain the engine (`make` / `layer` / `serve`).
     name: "Gate",
     entry: "src/Gate.ts",
     engine: ["src/internal/gate.ts"],
-    member: "Tag",
+    member: "Service",
   },
   {
-    // `Node.Tag` is light (nodeCore). Must not retain listen / unix / *Server / connect engines.
+    // `Node.Service` is light (nodeCore). Must not retain listen / unix / *Server / connect engines.
     name: "Node",
     entry: "src/Node.ts",
     engine: [
@@ -72,7 +72,7 @@ const cases = [
       "src/internal/nodePrototype.ts",
       "src/internal/node.ts",
     ],
-    member: "Tag",
+    member: "Service",
   },
   {
     // Neutral `listen` must not retain protocol batteries (`unix` / `http`).

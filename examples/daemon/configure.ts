@@ -16,7 +16,7 @@ import { runNodeProgramOrExit } from "../shared/demo-harness";
 import { Effect, Layer, Schema } from "effect";
 import * as Daemon from "../../src/Daemon";
 
-class ConfiguredDaemon extends Daemon.Tag<ConfiguredDaemon>()(
+class ConfiguredDaemon extends Daemon.Service<ConfiguredDaemon>()(
   "examples/daemon/Configured",
   { success: Schema.String },
 ).pipe(Daemon.schedule([])) {}

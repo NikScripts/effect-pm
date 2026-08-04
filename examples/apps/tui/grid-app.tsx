@@ -2,7 +2,7 @@
  * @module examples/apps/tui/grid-app
  *
  * A full-screen terminal dashboard: a scrollable grid of resource "widgets", a
- * command bar, and a status/shortcuts bar. Each widget is a solo `Hyperlink.Tag`
+ * command bar, and a status/shortcuts bar. Each widget is a solo `Hyperlink.Service`
  * (wire key = widget name), rendered via the same `makeHyperlinkAtoms` +
  * `atom-react` the web widget uses.
  *
@@ -65,7 +65,7 @@ const PALETTE = [
 // solo Tag (distinct Self + key) reused for its layer + atoms.
 const SPECS = Array.from({ length: 24 }, (_, i) => {
   const name = `w${i + 1}`;
-  class Widget extends Hyperlink.Tag<Widget>()(name, counterSpec) {}
+  class Widget extends Hyperlink.Service<Widget>()(name, counterSpec) {}
   return {
     name,
     color: PALETTE[i % PALETTE.length] ?? "white",

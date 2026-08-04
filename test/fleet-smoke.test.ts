@@ -21,8 +21,8 @@ const Job = Schema.Struct({ id: Schema.String });
 interface Job {
   readonly id: string;
 }
-class Mail extends WorkPool.Tag<Mail>()("smoke/Mail", { payload: Job }) {}
-class Jobs extends WorkPool.Tag<Jobs>()("smoke/Jobs", { payload: Job }) {}
+class Mail extends WorkPool.Service<Mail>()("smoke/Mail", { payload: Job }) {}
+class Jobs extends WorkPool.Service<Jobs>()("smoke/Jobs", { payload: Job }) {}
 
 const server = Node.wsServer([
   WorkPool.serveMemory(Mail, { effect: () => Effect.void }),

@@ -26,8 +26,8 @@
  * |----------|---------|
  * | `WorkPool.make` | Scoped Effect producing a {@link EngineQueueHandle} |
  * | `WorkPool.layer` | Builds a `Layer` from tag + config |
- * | `WorkPool.Service` | Class factory: tag + baked-in `.layer` |
- * | `WorkPool.Tag` | Class factory: pure identity tag (no layer) |
+ * | `WorkPool.define` | Class factory: tag + baked-in `.layer` |
+ * | `WorkPool.Service` | Class factory: pure identity tag (no layer) |
  *
  * ## Usage
  *
@@ -36,7 +36,7 @@
  * import { WorkPool, Hyperlink } from "hyperlink-ts"
  *
  * // Declare service via class factory
- * const EmailQueue = WorkPool.Service<typeof EmailQueue, Email, SmtpError>()(
+ * const EmailQueue = WorkPool.define<typeof EmailQueue, Email, SmtpError>()(
  *   "@app/EmailQueue",
  *   {
  *     effect: (email, ctx) => sendEmail(email).pipe(Effect.asVoid),
@@ -855,7 +855,7 @@ export interface WorkPoolMetadata<
   readonly tag: Context.Service<Id, EngineQueueHandle<T, E, EEnqueue, R>>;
   /**
    * Serializable item codec metadata when {@link WorkPoolConfig.itemSchema}
-   * was provided on {@link WorkPool.Service}. Used by typed Hyperlink contracts
+   * was provided on {@link WorkPool.define}. Used by typed Hyperlink contracts
    * for remote discovery and drift checks.
    */
   readonly item?: QueueItemCodecDescriptor;
@@ -877,7 +877,7 @@ export type WorkPoolDefinition<
   WorkPoolMetadata<Id, T, E, EEnqueue, R>;
 
 /**
- * Class-based queue service declaration from {@link WorkPool.Service}.
+ * Class-based queue service declaration from {@link WorkPool.define}.
  *
  * @category models
  * @public
@@ -1173,7 +1173,7 @@ export type WorkPoolConfig<T, E, R, A = void> =
   | WorkPoolConfigWithItemSchema<T, E, R, A>;
 
 /**
- * @public Config fields for {@link WorkPool.make} / {@link WorkPool.Service} without `effect`.
+ * @public Config fields for {@link WorkPool.make} / {@link WorkPool.define} without `effect`.
  *
  * @category models
  * @public
@@ -3675,14 +3675,14 @@ const workPoolServiceWithSchema = <
 // {@link queueErrorsGroup} → `Errors`, and `queueRateLimiterLayer` → `rateLimiterLayer`.
 // `workPoolLayer` / {@link Tag} are engine primitives kept for internal reuse — the public
 // namespace surfaces the *contract's* `Tag` / `layer` instead. Flat exports (not an object literal)
-// so `import * as WorkPool` member access tree-shakes: `WorkPool.Tag` pulls no engine code.
+// so `import * as WorkPool` member access tree-shakes: `WorkPool.Service` pulls no engine code.
 // ============================================================================
 
 export { makeQueueEffect, workPoolLayer, buildQueueEngine };
 
 /**
  * Engine class factory: creates a Context tag with a baked-in `.layer`. Surfaced publicly as
- * {@link WorkPool.Service}.
+ * {@link WorkPool.define}.
  *
  * The returned value is both a `Context.Service` (yieldable tag) and has a `.layer` property for
  * providing the queue to your program. When `itemSchema` is set, the declaration also exposes
@@ -3690,7 +3690,7 @@ export { makeQueueEffect, workPoolLayer, buildQueueEngine };
  *
  * @internal
  */
-export const Service = <Self, T, E = never>() => {
+export const Service = <Self, T, E = never>() => {  // re-exported as WorkPool.define
     // Callable surface uses overloads; runtime dispatcher is a single function + cast.
     type WorkPoolServiceFactory = {
       <
@@ -3749,12 +3749,12 @@ export const Service = <Self, T, E = never>() => {
   };
 
 /**
- * Engine identity-tag factory (no default layer). The public `WorkPool.Tag` comes from the
+ * Engine identity-tag factory (no default layer). The public `WorkPool.Service` comes from the
  * contract; this engine primitive is kept for internal reuse.
  *
  * @internal
  */
-export const Tag = <Self, T, E = never, R = never>() =>
+export const Tag = <Self, T, E = never, R = never>() =>  // internal identity mint
 <const Name extends string>(name: Name) => {
   const base = Context.Service<Self, EngineQueueHandle<T, E, never, R>>()(name);
   return Object.assign(base, {

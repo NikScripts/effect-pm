@@ -37,7 +37,7 @@ type DemoStatus = {
   lifecycleTag: "Idle" | "Running" | "Paused";
 };
 
-class Jobs extends Hyperlink.Tag<Jobs>()("demo/observe/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("demo/observe/Jobs", {
   status: Hyperlink.ref(Status),
   pause: Hyperlink.effect(Schema.Void),
   resume: Hyperlink.effect(Schema.Void),

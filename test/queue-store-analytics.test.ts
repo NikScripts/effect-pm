@@ -18,7 +18,7 @@ import * as Store from "../src/Store";
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
-class Jobs extends WorkPool.Tag<Jobs>()("@test/AnalyticsJobs", { payload: jobSchema }) {}
+class Jobs extends WorkPool.Service<Jobs>()("@test/AnalyticsJobs", { payload: jobSchema }) {}
 
 const jobsRegistration = WorkPool.store(Jobs);
 

@@ -31,7 +31,7 @@ the winner; hands come and go; Lookup stays the truth.
 ### 1. Stamp the brain
 
 ```ts
-class Router extends Hyperlink.Tag<Router>()("fleet/Router", {
+class Router extends Hyperlink.Service<Router>()("fleet/Router", {
   enqueue: Hyperlink.effectFn({ job: Job }, Schema.Void),
 }).pipe(Hyperlink.identity) {}
 ```

@@ -14,9 +14,9 @@ import * as Node from "../src/Node";
 // Default-on verify may put NodeUnreachable on E — R must still be never when addressed.
 declare const runFullyWired: <A, E>(layer: Layer.Layer<A, E, never>) => void;
 
-class Droplet extends Node.Tag<Droplet>()("ca/Droplet", { url: "wss://x/rpc" }) {}
-class PortNode extends Node.Tag<PortNode>()("ca/Port", 3001) {}
-class Bare extends Node.Tag<Bare>()("ca/Bare") {}
+class Droplet extends Node.Service<Droplet>()("ca/Droplet", { url: "wss://x/rpc" }) {}
+class PortNode extends Node.Service<PortNode>()("ca/Port", 3001) {}
+class Bare extends Node.Service<Bare>()("ca/Bare") {}
 
 // Dialable Tag → AddressedNode → auto-connect, R = never
 runFullyWired(Hyperlink.client(NodeStatusTag, Droplet));
@@ -38,7 +38,7 @@ runFullyWired(
 );
 
 // Node-bearing tag with addressed node → client(Tag) fully wired
-class HostedOk extends Hyperlink.Tag<HostedOk>()(
+class HostedOk extends Hyperlink.Service<HostedOk>()(
   "ca/HostedOk",
   { ping: Hyperlink.effect(Schema.String) },
   { node: Droplet },
@@ -47,7 +47,7 @@ const hostedOkClient = Hyperlink.client(HostedOk);
 runFullyWired(hostedOkClient);
 
 // Node-bearing tag with bare node → still requires Bare
-class HostedBare extends Hyperlink.Tag<HostedBare>()(
+class HostedBare extends Hyperlink.Service<HostedBare>()(
   "ca/HostedBare",
   { ping: Hyperlink.effect(Schema.String) },
   { node: Bare },
@@ -61,14 +61,14 @@ expectTypeOf(PortNode.kind).toEqualTypeOf<"Http">();
 expectTypeOf(Bare.kind).toEqualTypeOf<undefined>();
 
 // `.pipe(nodes([Addressed]))` / `.pipe(andNode(Addressed))` ≡ `{ node }` for client(Tag)
-class PipedNodes extends Hyperlink.Tag<PipedNodes>()(
+class PipedNodes extends Hyperlink.Service<PipedNodes>()(
   "ca/PipedNodes",
   { ping: Hyperlink.effect(Schema.String) },
 ).pipe(Hyperlink.nodes([Droplet])) {}
 const pipedNodesClient = Hyperlink.client(PipedNodes);
 runFullyWired(pipedNodesClient);
 
-class PipedAndNode extends Hyperlink.Tag<PipedAndNode>()(
+class PipedAndNode extends Hyperlink.Service<PipedAndNode>()(
   "ca/PipedAndNode",
   { ping: Hyperlink.effect(Schema.String) },
 ).pipe(Hyperlink.andNode(Droplet)) {}
@@ -76,7 +76,7 @@ const pipedAndNodeClient = Hyperlink.client(PipedAndNode);
 runFullyWired(pipedAndNodeClient);
 
 // Multi-node set (size ≠ 1): client(Tag) is not fully wired (protocol / node choice open)
-class MultiNodes extends Hyperlink.Tag<MultiNodes>()(
+class MultiNodes extends Hyperlink.Service<MultiNodes>()(
   "ca/MultiNodes",
   { ping: Hyperlink.effect(Schema.String) },
 ).pipe(Hyperlink.nodes([Droplet, PortNode])) {}

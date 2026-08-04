@@ -21,24 +21,24 @@ import { RuntimeProvider, useRuntime } from "../src/ui/runtime";
 
 import * as Views from "../src/ui/Views";
 const Item = Schema.Struct({ n: Schema.Number });
-class AppNode extends Node.Tag<AppNode>()("app/runtime/Node", {
+class AppNode extends Node.Service<AppNode>()("app/runtime/Node", {
   url: "http://127.0.0.1:9/rpc",
   kind: "Http",
 }) {}
-class Jobs extends WorkPool.Tag<Jobs>()("app/runtime/Jobs", {
+class Jobs extends WorkPool.Service<Jobs>()("app/runtime/Jobs", {
   payload: Item,
   node: AppNode,
 }) {}
-class Nightly extends Daemon.Tag<Nightly>()("app/runtime/Nightly", {
+class Nightly extends Daemon.Service<Nightly>()("app/runtime/Nightly", {
   node: AppNode,
 }) {}
-class Hub extends Group.Tag<Hub>("app/runtime/Hub")({ Jobs, Nightly }) {}
+class Hub extends Group.Service<Hub>("app/runtime/Hub")({ Jobs, Nightly }) {}
 
 const hubSite = Route.make("hub").add(
   Route.group("tree", { topLevel: true }).fromEffect(Group.asRoutes(Hub)),
 );
 
-class PoolCard extends Views.Card.Tag<PoolCard>()("hyperlink/view/runtime-pool-card") {}
+class PoolCard extends Views.Card.Service<PoolCard>()("hyperlink/view/runtime-pool-card") {}
 
 const chrome = View.provide(PoolCard, () => null);
 const views = Views.bind(WorkPool.kind, PoolCard).pipe(

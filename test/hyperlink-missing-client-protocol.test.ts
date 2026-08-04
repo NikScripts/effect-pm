@@ -5,7 +5,7 @@ import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 
 // Loud-failures §4.1 — nodeless `client(tag)` without ambient RpcClient.Protocol fails as
 // `MissingClientProtocol` (remediation message), not Effect's opaque "Service not found" die.
-class Probe extends Hyperlink.Tag<Probe>()("missing-protocol/Probe", {
+class Probe extends Hyperlink.Service<Probe>()("missing-protocol/Probe", {
   ping: Hyperlink.effect(Schema.String),
 }) {}
 

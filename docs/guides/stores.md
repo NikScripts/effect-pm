@@ -43,8 +43,8 @@ import * as Daemon from "hyperlink-ts/Daemon"
 import * as Store from "hyperlink-ts/Store"
 import * as Node from "hyperlink-ts/Node"
 
-class BillingNode extends Node.Tag<BillingNode>()("billing/scores") {}
-class Daily extends Daemon.Tag<Daily>()("app/Daily") {}
+class BillingNode extends Node.Service<BillingNode>()("billing/scores") {}
+class Daily extends Daemon.Service<Daily>()("app/Daily") {}
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
   BillingNode.logs,

@@ -21,11 +21,11 @@ import * as WorkPoolView from "../../src/ui/WorkPoolView";
 
 const Job = Schema.Struct({ id: Schema.String });
 
-class Worker extends Node.Tag<Worker>()("examples/ObserveWorkPool/Node", {
+class Worker extends Node.Service<Worker>()("examples/ObserveWorkPool/Node", {
   path: `/tmp/hyperlink-ts-observe-work-pool-${process.pid}.sock`,
 }) {}
 
-class Jobs extends WorkPool.Tag<Jobs>()("examples/ObserveWorkPool/Jobs", {
+class Jobs extends WorkPool.Service<Jobs>()("examples/ObserveWorkPool/Jobs", {
   payload: Job,
 }).pipe(Hyperlink.andNode(Worker)) {}
 

@@ -1,5 +1,5 @@
 /**
- * View.Service — Context.Service-shaped mint + default `.layer`.
+ * View.Service — Context.Service-shaped mint; default Layer via `static layer`.
  */
 import { expectTypeOf } from "vitest";
 import { Layer } from "effect";
@@ -7,13 +7,12 @@ import * as View from "last-ts/View";
 
 class Callout extends View.Service<Callout, { readonly text: string }>()(
   "test/view-service/Callout",
-  {
-    default: ({ text }) => {
-      void text;
-      return null;
-    },
-  },
-) {}
+) {
+  static layer = Callout.provide(({ text }) => {
+    void text;
+    return null;
+  });
+}
 
 expectTypeOf(Callout.layer).toEqualTypeOf<Layer.Layer<Callout>>();
 
@@ -27,5 +26,5 @@ const greeterLayer = Greeter.provide(({ name }) => {
 });
 expectTypeOf(greeterLayer).toEqualTypeOf<Layer.Layer<Greeter>>();
 
-// @ts-expect-error no default → no .layer
+// @ts-expect-error no static layer → no .layer on the handle
 const _noLayer: Layer.Layer<Greeter> = Greeter.layer;

@@ -6,7 +6,7 @@ import * as Node from "../src/Node";
 import * as Lookup from "../src/Lookup";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 
-class JobsAnon extends Hyperlink.Tag<JobsAnon>()("npipe/JobsAnon", {
+class JobsAnon extends Hyperlink.Service<JobsAnon>()("npipe/JobsAnon", {
   jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
@@ -32,7 +32,7 @@ describe("Node.nPipe", () => {
 
   it.effect("rejects Http Node with NPipeListenRequiresIpc", () =>
     Effect.gen(function* () {
-      class HttpWorker extends Node.Tag<HttpWorker>()("npipe/HttpWorker", {
+      class HttpWorker extends Node.Service<HttpWorker>()("npipe/HttpWorker", {
         url: "http://127.0.0.1:9",
         kind: "Http",
       }) {}

@@ -29,7 +29,7 @@ everything else hangs from:
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import { Schema } from "effect"
 
-class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
+class Counter extends Hyperlink.Service<Counter>()("app/Counter", {
   value: Hyperlink.ref(Schema.Number),
   increment: Hyperlink.effectFn({ by: Schema.Number }),
   reset: Hyperlink.effect(Schema.Void),
@@ -45,7 +45,7 @@ Return those methods from an Implementation. A `SubscriptionRef` backs the obser
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import { Effect, Schema, SubscriptionRef } from "effect"
 
-class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
+class Counter extends Hyperlink.Service<Counter>()("app/Counter", {
   value: Hyperlink.ref(Schema.Number),
   increment: Hyperlink.effectFn({ by: Schema.Number }),
   reset: Hyperlink.effect(Schema.Void),
@@ -72,7 +72,7 @@ Wire Tag and Implementation with `Hyperlink.layer`:
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import { Effect, Schema, SubscriptionRef } from "effect"
 
-class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
+class Counter extends Hyperlink.Service<Counter>()("app/Counter", {
   value: Hyperlink.ref(Schema.Number),
   increment: Hyperlink.effectFn({ by: Schema.Number }),
   reset: Hyperlink.effect(Schema.Void),
@@ -102,7 +102,7 @@ RPC:
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import { Effect, Schema, SubscriptionRef } from "effect"
 
-class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
+class Counter extends Hyperlink.Service<Counter>()("app/Counter", {
   value: Hyperlink.ref(Schema.Number),
   increment: Hyperlink.effectFn({ by: Schema.Number }),
   reset: Hyperlink.effect(Schema.Void),
@@ -150,7 +150,7 @@ Same value on local and remote, no impl slot, no RPC. One field in the Contract 
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import { Schema } from "effect"
 
-class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
+class Counter extends Hyperlink.Service<Counter>()("app/Counter", {
   value: Hyperlink.ref(Schema.Number),
   label: Hyperlink.default((n: number) => `count=${n}`),
 }, {

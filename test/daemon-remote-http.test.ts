@@ -12,7 +12,7 @@ import * as Node from "../src/Node";
 // (start/stop), observation (`status`), the out-of-band run (run), and the schedule
 // CRUD all cross real RPC. An empty inline schedule keeps the daemon disarmed (so `armed` is
 // observably false) and grants the `schedule` verb group.
-class RemoteProc extends Daemon.Tag<RemoteProc>()("proc-remote/P").pipe(
+class RemoteProc extends Daemon.Service<RemoteProc>()("proc-remote/P").pipe(
   Daemon.schedule([]),
 ) {}
 

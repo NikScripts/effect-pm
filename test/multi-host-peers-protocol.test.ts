@@ -18,10 +18,10 @@ import * as Node from "../src/Node";
 const PORT_A = 7913;
 const PORT_B = 7914;
 
-class NodeA extends Node.Tag<NodeA>()("ws-peers/A", { url: `http://127.0.0.1:${PORT_A}/rpc` }) {}
-class NodeB extends Node.Tag<NodeB>()("ws-peers/B", { url: `http://127.0.0.1:${PORT_B}/rpc` }) {}
+class NodeA extends Node.Service<NodeA>()("ws-peers/A", { url: `http://127.0.0.1:${PORT_A}/rpc` }) {}
+class NodeB extends Node.Service<NodeB>()("ws-peers/B", { url: `http://127.0.0.1:${PORT_B}/rpc` }) {}
 
-class Pool extends Hyperlink.Tag<Pool>()("ws-peers/Pool", {
+class Pool extends Hyperlink.Service<Pool>()("ws-peers/Pool", {
   active: Hyperlink.effect(Schema.Number),
   fleetActive: Hyperlink.effect(Schema.Number).pipe(Hyperlink.fleet),
 }).pipe(Hyperlink.nodes([NodeA, NodeB])) {}

@@ -17,8 +17,8 @@ import * as Daemon from "../../src/Daemon";
 import * as LogEntry from "../../src/LogEntry";
 import * as Logs from "../../src/Logs";
 
-class Parent extends Daemon.Tag<Parent>()("examples/logs/Parent") {}
-class Child extends Daemon.Tag<Child>()("examples/logs/Child") {}
+class Parent extends Daemon.Service<Parent>()("examples/logs/Parent") {}
+class Child extends Daemon.Service<Child>()("examples/logs/Child") {}
 
 const program = Effect.gen(function* () {
   const collected = yield* Effect.forkChild(

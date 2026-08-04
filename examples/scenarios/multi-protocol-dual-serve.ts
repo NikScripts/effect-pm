@@ -42,20 +42,20 @@ const WS_PORT = 7792;
 const RPC_KEY = "mp-proof/rpc";
 
 // One node identity, two transports — the `{ http, ws }` shorthand.
-class Fleet extends Node.Tag<Fleet>()("mp-proof/fleet", {
+class Fleet extends Node.Service<Fleet>()("mp-proof/fleet", {
   http: `http://127.0.0.1:${HTTP_PORT}/rpc`,
   ws: `ws://127.0.0.1:${WS_PORT}/rpc`,
 }) {}
 
 // Bound to Fleet — its presence makes each server run the P3 check against Fleet's declared set.
-class Bound extends Hyperlink.Tag<Bound>()(
+class Bound extends Hyperlink.Service<Bound>()(
   "mp-proof/bound",
   { ping: Hyperlink.effect(Schema.Number) },
   { node: Fleet },
 ) {}
 
 // The wire contract a remote dials with an explicit transport (nodeless — no auto-select).
-class Wire extends Hyperlink.Tag<Wire>()(RPC_KEY, { ping: Hyperlink.effect(Schema.Number) }) {}
+class Wire extends Hyperlink.Service<Wire>()(RPC_KEY, { ping: Hyperlink.effect(Schema.Number) }) {}
 
 const noop = { ping: Effect.succeed(0) };
 

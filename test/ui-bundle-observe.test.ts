@@ -20,24 +20,24 @@ import * as WorkPoolView from "../src/ui/WorkPoolView";
 
 import * as Views from "../src/ui/Views";
 const Item = Schema.Struct({ n: Schema.Number });
-class AppNode extends Node.Tag<AppNode>()("app/observe-use/Node", {
+class AppNode extends Node.Service<AppNode>()("app/observe-use/Node", {
   url: "http://127.0.0.1:9/rpc",
   kind: "Http",
 }) {}
-class Jobs extends WorkPool.Tag<Jobs>()("app/observe-use/Jobs", {
+class Jobs extends WorkPool.Service<Jobs>()("app/observe-use/Jobs", {
   payload: Item,
   node: AppNode,
 }) {}
-class Nightly extends Daemon.Tag<Nightly>()("app/observe-use/Nightly", {
+class Nightly extends Daemon.Service<Nightly>()("app/observe-use/Nightly", {
   node: AppNode,
 }) {}
-class Hub extends Group.Tag<Hub>("app/observe-use/Hub")({ Jobs, Nightly }) {}
+class Hub extends Group.Service<Hub>("app/observe-use/Hub")({ Jobs, Nightly }) {}
 
 const hubSite = Route.make("hub").add(
   Route.group("tree", { topLevel: true }).fromEffect(Group.asRoutes(Hub)),
 );
 
-class PoolCard extends Views.Card.Tag<PoolCard>()("hyperlink/view/observe-use-pool-card") {}
+class PoolCard extends Views.Card.Service<PoolCard>()("hyperlink/view/observe-use-pool-card") {}
 
 const views = Views.bind(WorkPool.kind, PoolCard).pipe(
   Layer.provideMerge(View.provide(PoolCard, () => null)),

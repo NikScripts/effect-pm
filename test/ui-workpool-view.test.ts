@@ -11,7 +11,7 @@ import * as View from "../src/ui/View";
 import * as Views from "../src/ui/Views";
 
 const Item = Schema.Struct({ n: Schema.Number });
-class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", { payload: Item }) {}
+class Jobs extends WorkPool.Service<Jobs>()("app/Jobs", { payload: Item }) {}
 
 describe("WorkPoolView packaging", () => {
   it("web ready layer resolves WorkPool card + detail", () => {

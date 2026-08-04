@@ -13,13 +13,13 @@ export { pack };
 export const fleetHealthViewSpec = { kind: FleetHealth.kind } as const;
 
 /** @public */
-export class FleetCard extends Views.Card.Tag<FleetCard>()(
+export class FleetCard extends Views.Card.Service<FleetCard>()(
   "hyperlink/view/fleet-card",
   { spec: fleetHealthViewSpec },
 ) {}
 
 /** @public */
-export class FleetDetail extends Views.Detail.Tag<FleetDetail>()(
+export class FleetDetail extends Views.Detail.Service<FleetDetail>()(
   "hyperlink/view/fleet-detail",
   { spec: fleetHealthViewSpec },
 ) {}

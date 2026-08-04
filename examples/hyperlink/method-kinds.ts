@@ -12,7 +12,7 @@
 import { Effect, Schema, Stream, SubscriptionRef } from "effect";
 import * as Hyperlink from "../../src/Hyperlink";
 
-class MethodKinds extends Hyperlink.Tag<MethodKinds>()("examples/MethodKinds", {
+class MethodKinds extends Hyperlink.Service<MethodKinds>()("examples/MethodKinds", {
   current: Hyperlink.effect(Schema.Number),
   add: Hyperlink.effectFn({ by: Schema.Number }, Schema.Number),
   value: Hyperlink.ref(Schema.Number),

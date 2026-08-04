@@ -1,5 +1,5 @@
 /**
- * Wire schemas stamped on {@link WorkPool.Tag} factories — the `success` / `error` slots.
+ * Wire schemas stamped on {@link WorkPool.Service} factories — the `success` / `error` slots.
  *
  * The `payload` slot is NOT stamped here: it is the queue's item schema, recovered from the tag's
  * `add` verb spec (see `workPoolStoreSpec.queueItemSchemaFromTag`). `success` (worker return) and

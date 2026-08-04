@@ -11,10 +11,9 @@
 
 ```tsx
 /** @jsxImportSource last-ts */
-class Greeter extends View.Service<Greeter, { readonly name: string }>()(
-  "…",
-  { default: ({ name }) => <span>{name}</span> },
-) {}
+class Greeter extends View.Service<Greeter, { readonly name: string }>()("…") {
+  static layer = Greeter.provide(({ name }) => <span>{name}</span>)
+}
 
 const Hello = View.gen(function* () {
   const GreeterView = yield* Greeter
@@ -46,11 +45,12 @@ const App = View.mount(
 |-------|----------|
 | `View<P, never>` | {@link Component} — JSX call signature |
 | `View<P, R>` (`R` ≠ `never`) | {@link Unresolved} — **no** JSX call signature |
-| `yield* Effect.all({ A, B })` | Resolve Tags/services; JSX the results |
+| `yield* Effect.all({ A, B })` | Resolve Services; JSX the results |
 | `View.mount(view, layer)` | Discharge `R` via Layer + RuntimeProvider |
-| `View.Service` + `{ default }` | Bakes `.layer` (camelCase; never `*Live`) |
-| `Service.provide` / `View.provide` | Layer when no default |
+| `View.Service` + `static layer` | Effect v4 style default Layer (camelCase; never `*Live`) |
+| `Service.provide` / `View.provide` | Layer builder (assign to `static layer` when wanted) |
 | Bag `succeed({ Child }, …)` | **Removed** |
+| `View.Tag` / `{ default }` bake-in | **Removed** — use `View.Service` + `static layer` |
 
 Stock TS types every `<… />` as black-box `JSX.Element`. We do **not** rely on that for `R`.
 
@@ -58,15 +58,5 @@ Stock TS types every `<… />` as black-box `JSX.Element`. We do **not** rely on
 
 ## Verification
 
-- `test/view-jsx.test-d.tsx` — opaque open `R`, Effect.all, mount
-- `examples/ui/view-typed-jsx.tsx` + docs guide Twoslash
-- `packages/last-ts` typecheck
-
----
-
-## Not this
-
-```ts
-View.succeed({ Hello }, ({ Hello }) => () => <Hello />)
-// bare <Hello /> while Hello still has open R
-```
+- `pnpm exec tsc -p packages/last-ts`
+- `test/view-service.test-d.ts`, `test/view-jsx*.tsx`, `examples/ui/view-typed-jsx.tsx`

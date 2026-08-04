@@ -1,7 +1,7 @@
 /**
  * @module examples/node/addressless-serve
  *
- * **Address-less Node.Tag — serve terminal.** Mints ipc + claims at Lookup.
+ * **Address-less Node.Service — serve terminal.** Mints ipc + claims at Lookup.
  * Lookup is **piped** on (not `lookupPath` listen opts).
  *
  * Terminal A:
@@ -24,12 +24,12 @@ import * as Lookup from "../../src/Lookup"
 import * as Node from "../../src/Node"
 import * as Hyperlink from "../../src/Hyperlink"
 
-class Jobs extends Hyperlink.Tag<Jobs>()("Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("Jobs", {
   jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
 /** Address-less — `Node.unix` mints path + claims this key. */
-class Worker extends Node.Tag<Worker, Jobs>()("AddresslessWorker") {}
+class Worker extends Node.Service<Worker, Jobs>()("AddresslessWorker") {}
 
 const lookupSock = Config.string("LOOKUP_SOCK").pipe(
   Config.withDefault("/tmp/hyperlink-ts-forms-addressless.sock"),

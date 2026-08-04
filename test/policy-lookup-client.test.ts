@@ -29,7 +29,7 @@ const tmpSock = (label: string) =>
     return `/tmp/hyperlink-ts-policy-${label}-${process.pid}-${now}.sock`;
   });
 
-class Jobs extends Hyperlink.Tag<Jobs>()("policy/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("policy/Jobs", {
   jobs: Hyperlink.effect(Schema.Number),
   ticks: Hyperlink.stream(Schema.Number),
 }) {}
@@ -41,14 +41,14 @@ describe("Policy + lookupClient", () => {
       const workerAPath = yield* tmpSock("sticky-a");
       const workerBPath = yield* tmpSock("sticky-b");
 
-      const lookupNode = Node.Tag()("policy/sticky-lookup", {
+      const lookupNode = Node.Service()("policy/sticky-lookup", {
         path: lookupPath,
       }).pipe(Node.asLookup);
 
-      class WorkerA extends Node.Tag<WorkerA, Jobs>()("policy/StickyA", {
+      class WorkerA extends Node.Service<WorkerA, Jobs>()("policy/StickyA", {
         path: workerAPath,
       }) {}
-      class WorkerB extends Node.Tag<WorkerB, Jobs>()("policy/StickyB", {
+      class WorkerB extends Node.Service<WorkerB, Jobs>()("policy/StickyB", {
         path: workerBPath,
       }) {}
 
@@ -108,14 +108,14 @@ describe("Policy + lookupClient", () => {
       const workerAPath = yield* tmpSock("cold-a");
       const workerBPath = yield* tmpSock("cold-b");
 
-      const lookupNode = Node.Tag()("policy/cold-lookup", {
+      const lookupNode = Node.Service()("policy/cold-lookup", {
         path: lookupPath,
       }).pipe(Node.asLookup);
 
-      class WorkerA extends Node.Tag<WorkerA, Jobs>()("policy/ColdA", {
+      class WorkerA extends Node.Service<WorkerA, Jobs>()("policy/ColdA", {
         path: workerAPath,
       }) {}
-      class WorkerB extends Node.Tag<WorkerB, Jobs>()("policy/ColdB", {
+      class WorkerB extends Node.Service<WorkerB, Jobs>()("policy/ColdB", {
         path: workerBPath,
       }) {}
 
@@ -154,14 +154,14 @@ describe("Policy + lookupClient", () => {
       const workerAPath = yield* tmpSock("pick-a");
       const workerBPath = yield* tmpSock("pick-b");
 
-      const lookupNode = Node.Tag()("policy/pick-lookup", {
+      const lookupNode = Node.Service()("policy/pick-lookup", {
         path: lookupPath,
       }).pipe(Node.asLookup);
 
-      class WorkerA extends Node.Tag<WorkerA, Jobs>()("policy/PickA", {
+      class WorkerA extends Node.Service<WorkerA, Jobs>()("policy/PickA", {
         path: workerAPath,
       }) {}
-      class WorkerB extends Node.Tag<WorkerB, Jobs>()("policy/PickB", {
+      class WorkerB extends Node.Service<WorkerB, Jobs>()("policy/PickB", {
         path: workerBPath,
       }) {}
 
@@ -209,14 +209,14 @@ describe("Policy + lookupClient", () => {
       const workerAPath = yield* tmpSock("stream-a");
       const workerBPath = yield* tmpSock("stream-b");
 
-      const lookupNode = Node.Tag()("policy/stream-lookup", {
+      const lookupNode = Node.Service()("policy/stream-lookup", {
         path: lookupPath,
       }).pipe(Node.asLookup);
 
-      class WorkerA extends Node.Tag<WorkerA, Jobs>()("policy/StreamA", {
+      class WorkerA extends Node.Service<WorkerA, Jobs>()("policy/StreamA", {
         path: workerAPath,
       }) {}
-      class WorkerB extends Node.Tag<WorkerB, Jobs>()("policy/StreamB", {
+      class WorkerB extends Node.Service<WorkerB, Jobs>()("policy/StreamB", {
         path: workerBPath,
       }) {}
 

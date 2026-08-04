@@ -18,7 +18,7 @@ import { Effect, Layer, Schema } from "effect";
 import { cli, type CliRun, TuiNotConfigured } from "../../../src/cli";
 import * as Hyperlink from "../../../src/Hyperlink";
 
-class Counter extends Hyperlink.Tag<Counter>()("Counter", {
+class Counter extends Hyperlink.Service<Counter>()("Counter", {
   current: Hyperlink.effect(Schema.Number),
   reset: Hyperlink.effect(Schema.Void),
   increment: Hyperlink.effectFn({ by: Schema.Number }),

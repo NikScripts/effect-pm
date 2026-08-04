@@ -14,7 +14,7 @@ import {
   ListenOptions,
   OnConflict,
   ProtocolKind,
-  Tag,
+  Service as Tag,
 } from "./nodeCore"
 import type {
   HttpNodeTagClass,

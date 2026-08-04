@@ -13,7 +13,7 @@ import {
   IpcListenArg,
   ListenOptions,
   NPipeRequiresWindows,
-  Tag,
+  Service as Tag,
   UnaddressedNode,
 } from "./nodeCore"
 import { unaddressedLayer } from "./nodeConnect"
@@ -286,7 +286,7 @@ const nPipeListenOn = (
             ],
           }) as AnyNode & { readonly key: string };
           const Identity = yield* Effect.promise(() => import("../Identity"));
-          const identity = yield* Effect.serviceOption(Identity.Tag);
+          const identity = yield* Effect.serviceOption(Identity.Service);
           if (Option.isNone(identity)) {
             return yield* new Hyperlink.IdentitySelfRequired({ tag: node.key });
           }

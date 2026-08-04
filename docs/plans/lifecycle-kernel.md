@@ -281,7 +281,7 @@ No latch ⇒ no pause on the type.
 ### 6.3 App HyperService (opt-in)
 
 ```ts
-class Runner extends Hyperlink.Tag<Runner>()("app/Runner", {
+class Runner extends Hyperlink.Service<Runner>()("app/Runner", {
   lifecycle: Lifecycle.stateRef,
   lifecycleEvents: Lifecycle.eventStream,
   start: Hyperlink.effect(Schema.Void).pipe(Lifecycle.asStart),

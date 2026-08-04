@@ -10,13 +10,13 @@ class Jobs extends Context.Service<Jobs, { readonly run: () => void }>()(
   "hyperlink-ts/test/group.test/Jobs",
 ) {}
 
-class Inner extends Group.Tag<Inner>(
+class Inner extends Group.Service<Inner>(
   "hyperlink-ts/test/group.test/Inner",
 )({
   Counter,
 }) {}
 
-class Outer extends Group.Tag<Outer>(
+class Outer extends Group.Service<Outer>(
   "hyperlink-ts/test/group.test/Outer",
 )({
   Jobs,

@@ -23,10 +23,10 @@ import * as FleetHealth from "hyperlink-ts/FleetHealth"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import * as Node from "hyperlink-ts/Node"
 // ---cut---
-class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
-class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
+class DropletEast extends Node.Service<DropletEast>()("app/DropletEast") {}
+class DropletWest extends Node.Service<DropletWest>()("app/DropletWest") {}
 
-class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
+class MeshHealth extends FleetHealth.Service<MeshHealth>()().pipe(
   Hyperlink.nodes([DropletEast, DropletWest]),
 ) {}
 ```
@@ -42,9 +42,9 @@ import * as FleetHealth from "hyperlink-ts/FleetHealth"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import * as Node from "hyperlink-ts/Node"
 import { Effect, Layer } from "effect"
-class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
-class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
-class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
+class DropletEast extends Node.Service<DropletEast>()("app/DropletEast") {}
+class DropletWest extends Node.Service<DropletWest>()("app/DropletWest") {}
+class MeshHealth extends FleetHealth.Service<MeshHealth>()().pipe(
   Hyperlink.nodes([DropletEast, DropletWest]),
 ) {}
 // ---cut---
@@ -73,9 +73,9 @@ import * as FleetHealth from "hyperlink-ts/FleetHealth"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import * as Node from "hyperlink-ts/Node"
 import { Effect } from "effect"
-class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
-class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
-class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
+class DropletEast extends Node.Service<DropletEast>()("app/DropletEast") {}
+class DropletWest extends Node.Service<DropletWest>()("app/DropletWest") {}
+class MeshHealth extends FleetHealth.Service<MeshHealth>()().pipe(
   Hyperlink.nodes([DropletEast, DropletWest]),
 ) {}
 const program = Effect.gen(function* () {

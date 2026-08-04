@@ -16,7 +16,7 @@ import { runNodeProgramOrExit } from "../shared/demo-harness";
 import { Effect, Layer, Schema } from "effect";
 import * as Hyperlink from "../../src/Hyperlink";
 
-class Database extends Hyperlink.Tag<Database>()("examples/readiness/Database", {
+class Database extends Hyperlink.Service<Database>()("examples/readiness/Database", {
   connected: Hyperlink.effect(Schema.Boolean),
 }).pipe(
   Hyperlink.withReadiness((svc) =>
@@ -28,7 +28,7 @@ class Database extends Hyperlink.Tag<Database>()("examples/readiness/Database", 
   ),
 ) {}
 
-class Worker extends Hyperlink.Tag<Worker>()("examples/readiness/Worker", {
+class Worker extends Hyperlink.Service<Worker>()("examples/readiness/Worker", {
   running: Hyperlink.effect(Schema.Boolean),
 }).pipe(
   Hyperlink.withReadiness((svc) =>

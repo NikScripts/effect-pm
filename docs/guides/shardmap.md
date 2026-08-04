@@ -24,9 +24,9 @@ import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import * as Node from "hyperlink-ts/Node"
 import { Schema } from "effect"
 // ---cut---
-class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
-class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
-class DropletCentral extends Node.Tag<DropletCentral>()("app/DropletCentral") {}
+class DropletEast extends Node.Service<DropletEast>()("app/DropletEast") {}
+class DropletWest extends Node.Service<DropletWest>()("app/DropletWest") {}
+class DropletCentral extends Node.Service<DropletCentral>()("app/DropletCentral") {}
 
 const SessionId = Schema.String
 const Session = Schema.Struct({
@@ -35,7 +35,7 @@ const Session = Schema.Struct({
   seat: Schema.optionalKey(Schema.String),
 })
 
-class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
+class Sessions extends ShardMap.Service<Sessions>()("app/Sessions", {
   key: SessionId,
   value: Session,
   keyOf: (s) => s.id,
@@ -57,16 +57,16 @@ import * as Node from "hyperlink-ts/Node"
 import { Layer, Schema } from "effect"
 import { NodeHttpServer } from "@effect/platform-node"
 import { createServer } from "node:http"
-class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
-class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
-class DropletCentral extends Node.Tag<DropletCentral>()("app/DropletCentral") {}
+class DropletEast extends Node.Service<DropletEast>()("app/DropletEast") {}
+class DropletWest extends Node.Service<DropletWest>()("app/DropletWest") {}
+class DropletCentral extends Node.Service<DropletCentral>()("app/DropletCentral") {}
 const SessionId = Schema.String
 const Session = Schema.Struct({
   id: SessionId,
   userId: Schema.String,
   seat: Schema.optionalKey(Schema.String),
 })
-class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
+class Sessions extends ShardMap.Service<Sessions>()("app/Sessions", {
   key: SessionId,
   value: Session,
   keyOf: (s) => s.id,
@@ -99,7 +99,7 @@ const Session = Schema.Struct({
   userId: Schema.String,
   seat: Schema.optionalKey(Schema.String),
 })
-class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
+class Sessions extends ShardMap.Service<Sessions>()("app/Sessions", {
   key: SessionId,
   value: Session,
   keyOf: (s) => s.id,
@@ -137,7 +137,7 @@ import * as ShardMap from "hyperlink-ts/ShardMap"
 import { Effect, Schema } from "effect"
 const SessionId = Schema.String
 const Session = Schema.Struct({ id: SessionId, userId: Schema.String })
-class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
+class Sessions extends ShardMap.Service<Sessions>()("app/Sessions", {
   key: SessionId,
   value: Session,
   keyOf: (s) => s.id,
@@ -167,10 +167,10 @@ import * as ShardMap from "hyperlink-ts/ShardMap"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import * as Node from "hyperlink-ts/Node"
 import { Layer, Schema } from "effect"
-class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
+class DropletEast extends Node.Service<DropletEast>()("app/DropletEast") {}
 const SessionId = Schema.String
 const Session = Schema.Struct({ id: SessionId, userId: Schema.String })
-class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
+class Sessions extends ShardMap.Service<Sessions>()("app/Sessions", {
   key: SessionId,
   value: Session,
   keyOf: (s) => s.id,

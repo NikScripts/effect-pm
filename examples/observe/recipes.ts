@@ -15,7 +15,7 @@ import { Atom, AtomRegistry, AsyncResult } from "effect/unstable/reactivity";
 import * as Hyperlink from "../../src/Hyperlink";
 import * as Observe from "../../src/Observe";
 
-class Counter extends Hyperlink.Tag<Counter>()("examples/ObserveRecipes/Counter", {
+class Counter extends Hyperlink.Service<Counter>()("examples/ObserveRecipes/Counter", {
   count: Hyperlink.ref(Schema.Number),
   current: Hyperlink.effect(Schema.Number),
   add: Hyperlink.effectFn({ by: Schema.Number }, Schema.Number),

@@ -33,13 +33,13 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 
 | Key kind | Identifies | Declared on | Stored / queried as |
 |----------|------------|-------------|---------------------|
-| **Node log key** | One OS process / runtime host (durable bucket) | `Node.Tag` constructor arg → `.key` | `Node.logs` scope; `annotations.node` |
-| **Hyperlink key** | One work pool, daemon, or custom tag | `Hyperlink.Tag` / `Daemon.Tag` / `WorkPool.Tag` constructor arg → `.key` | registration scope; lineage JSON |
+| **Node log key** | One OS process / runtime host (durable bucket) | `Node.Service` constructor arg → `.key` | `Node.logs` scope; `annotations.node` |
+| **Hyperlink key** | One work pool, daemon, or custom tag | `Hyperlink.Service` / `Daemon.Service` / `WorkPool.Service` constructor arg → `.key` | registration scope; lineage JSON |
 | **Annotation key** | Name of a field on `LogEntry.annotations` | `LogAnnotationKeys.*` | Not a bucket — metadata field name |
 | **Store scope key** | Journal partition for a registration | Same as node or service key | Durable `_logs` journal (private); read via `Hyperlink.logs` / `Logs.by*` |
 | **Lineage segment key** | One hop in resource ancestry | Each element in lineage JSON array | `LogEntry.hasKey` / `atRoot` / `atLeaf` |
 | **RPC wire key** | Wire routing prefix for multi-host RPC | Solo tag `.key` / `Hyperlink.wireKeyOf(tag)` | **Not** a log key |
-| **Group catalog key** | Dashboard / CLI grouping | `Group.Tag` constructor arg | **Not** a log key — e.g. `hub/Wnba` |
+| **Group catalog key** | Dashboard / CLI grouping | `Group.Service` constructor arg | **Not** a log key — e.g. `hub/Wnba` |
 
 ## Key catalog
 
@@ -91,7 +91,7 @@ This file remains the **lookup SSOT**: every identifier below is labeled by **ke
 
 ## Node log key rules
 
-1. **Must equal** the `Node.Tag` key for that process: `WnbaNode.key` → node log key `"wnba/scores"`.
+1. **Must equal** the `Node.Service` key for that process: `WnbaNode.key` → node log key `"wnba/scores"`.
 2. **Register** `Node.logs` (or `Hyperlink.store(Node)`) on the app `Store.Service`; query with `Logs.byNode(Node)`.
 3. **Stamped** on every node-journal line as annotation key `LogAnnotationKeys.node` → node log key value.
 4. **Two copies OK** — when both `Node.logs` and `Daemon.store` / `WorkPool.store` are registered, the same live line can land in both scopes (one append per active registration). Each scope’s durable tail seeds its `(scopeKey, lineId)` claim from existing `_logs` rows at acquire (rematerialize-safe).
@@ -104,8 +104,8 @@ import * as Logs from "hyperlink-ts/Logs";
 import * as Daemon from "hyperlink-ts/Daemon";
 import * as Store from "hyperlink-ts/Store";
 
-class BillingNode extends Node.Tag<BillingNode>()("billing/scores") {}
-class Daily extends Daemon.Tag<Daily>()("app/Daily") {}
+class BillingNode extends Node.Service<BillingNode>()("billing/scores") {}
+class Daily extends Daemon.Service<Daily>()("app/Daily") {}
 
 class AppStore extends Store.Service<AppStore>("@app/Store")(
   BillingNode.logs,
@@ -117,7 +117,7 @@ const rows = yield* Logs.byNode(BillingNode, { limit: 200 })
 ```
 
 ```ts
-// ❌ wrong — invented node log key, drifts from Node.Tag
+// ❌ wrong — invented node log key, drifts from Node.Service
 Logs.byNode("my-node")
 Logs.byNode("wnba") // WnbaNode.key is "wnba/scores", not "wnba"
 ```
@@ -216,7 +216,7 @@ import * as Hyperlink from "hyperlink-ts/Hyperlink";
 import * as WorkPool from "hyperlink-ts/WorkPool";
 import * as LogEntry from "hyperlink-ts/LogEntry";
 
-class MailQueue extends WorkPool.Tag<MailQueue>()("app/Mail", spec).pipe(
+class MailQueue extends WorkPool.Service<MailQueue>()("app/Mail", spec).pipe(
   Hyperlink.withLogExport,
 ) {}
 

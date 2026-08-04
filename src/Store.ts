@@ -1465,7 +1465,7 @@ export const Service = <Self>(id: string) => {
  * @category constructors
  * @public
  */
-export const Tag = <Self>(id: string) =>
+export const descriptor = <Self>(id: string) =>
   defineStoreTag<Self, typeof id extends string ? typeof id : never>(id);
 
 /**
@@ -1582,7 +1582,7 @@ export const scoped = <
  *
  * @example
  * ```ts
- * class Thermometer extends Hyperlink.Tag<Thermometer>()(key, contract).pipe(
+ * class Thermometer extends Hyperlink.Service<Thermometer>()(key, contract).pipe(
  *   Hyperlink.withStore(thermometerStoreSpec),
  * ) {}
  * ```

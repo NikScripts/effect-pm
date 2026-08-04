@@ -58,7 +58,7 @@ value that passes through them.
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import { Schema } from "effect"
 
-class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
+class Counter extends Hyperlink.Service<Counter>()("app/Counter", {
   value: Hyperlink.ref(Schema.Number),                  // observable state
   increment: Hyperlink.effectFn({ by: Schema.Number }), // a call, with a typed argument
 }) {}
@@ -78,7 +78,7 @@ You declare a HyperService once. Where it runs, you decide later, with the
 ``` ts
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import { Effect, Schema, SubscriptionRef } from "effect"
-class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
+class Counter extends Hyperlink.Service<Counter>()("app/Counter", {
   value: Hyperlink.ref(Schema.Number),
   increment: Hyperlink.effectFn({ by: Schema.Number }),
 }) {}

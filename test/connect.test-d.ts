@@ -1,7 +1,7 @@
 import * as Hyperlink from "../src/Hyperlink";
 import { Layer, Schema } from "effect";
 
-class Emails extends Hyperlink.Tag<Emails>()("app/Emails", {
+class Emails extends Hyperlink.Service<Emails>()("app/Emails", {
   add: Hyperlink.effect(Schema.Void),
 }) {}
 

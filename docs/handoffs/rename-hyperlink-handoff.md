@@ -12,7 +12,7 @@ re-derive the naming from chat history.
   Effect Hyperlink does it for services.*
 - **The primitive `Hyperlink` is REPLACED by `Hyperlink`** — this was an explicit owner
   requirement: the new name names the thing you declare, not just the package.
-  `class Emails extends Hyperlink.Tag<Emails>()("app/Emails", { … }) {}`
+  `class Emails extends Hyperlink.Service<Emails>()("app/Emails", { … }) {}`
 
 ## Kind renames — the `*Resource` types (owner-locked 2026-07-22) — ✅ SHIPPED 2026-07-23
 
@@ -26,11 +26,11 @@ below is the AS-SHIPPED outcome (a couple of the original predictions — `NodeS
 |---|---|---|
 | `Hyperlink` | **`Hyperlink`** | core namespace + the thing you declare |
 | `WorkPool` | **`WorkPool`** | |
-| `WorkPool.Service (untyped)` | **`WorkPool.priority(…)`** | FOLDED IN as a behavior-named **peer constructor** beside `WorkPool.Tag` (Effect's `Queue.bounded`/`dropping` shape). NOT an overload on `.Tag`, NOT `.leveled`, NOT `withLane`, NOT `makeCustom`. Leveled **engine stays its own internal module** (the tree-shake split). Vocab swept to **`lane`** (`laneCount`/`namedLanes`/`add(item, lane?)`; wire field `lane`). |
+| `WorkPool.define (untyped)` | **`WorkPool.priority(…)`** | FOLDED IN as a behavior-named **peer constructor** beside `WorkPool.Service` (Effect's `Queue.bounded`/`dropping` shape). NOT an overload on `.Tag`, NOT `.leveled`, NOT `withLane`, NOT `makeCustom`. Leveled **engine stays its own internal module** (the tree-shake split). Vocab swept to **`lane`** (`laneCount`/`namedLanes`/`add(item, lane?)`; wire field `lane`). |
 | `Gate` | **`Gate`** | it's a concurrency gate for effects, not a process runner |
-| `HttpApiClient` | **`Gate.httpApiClient(…)`** | FOLDED IN — the module *is* a `Semaphore` gate over the HttpClient transport (`HttpClientRunGate.withRunner` wrapping `HttpApiClient.make`) + per-endpoint metrics. Peer constructor beside `Gate.Tag` (+ `httpApiClientService`/`httpApiClientLayer`/`acceptJson`/`instrumentEndpoints`). `HttpClientRunGate` stays the shared internal engine. |
+| `HttpApiClient` | **`Gate.httpApiClient(…)`** | FOLDED IN — the module *is* a `Semaphore` gate over the HttpClient transport (`HttpClientRunGate.withRunner` wrapping `HttpApiClient.make`) + per-endpoint metrics. Peer constructor beside `Gate.Service` (+ `httpApiClientService`/`httpApiClientLayer`/`acceptJson`/`instrumentEndpoints`). `HttpClientRunGate` stays the shared internal engine. |
 | `Daemon` | **`Daemon`** | supervised long-running process |
-| `NodeStatus` | **node-handle accessors** — `(yield* node).status` / `.logs` / `.ping` | SHIPPED as accessors ON THE CONNECTED NODE HANDLE, not a `node.pulse` / `Hyperlink.status(node)` free function. Each node auto-serves its own status/logs/ping; because a node tag *is* its own `Context.Service`, reading node A vs B is `yield* NodeA` vs `yield* NodeB` — no shared slot, no cast. The `NodeStatus` module + `Node.status` namespace are **deleted**; the light snapshot types survive as flat `Node.Status` / `Node.ServiceReadiness` / `Node.serviceReadiness`. Engine is a lazy internal (`Node.Tag` stays light). See [[project-nodestatus-on-handle]]. |
+| `NodeStatus` | **node-handle accessors** — `(yield* node).status` / `.logs` / `.ping` | SHIPPED as accessors ON THE CONNECTED NODE HANDLE, not a `node.pulse` / `Hyperlink.status(node)` free function. Each node auto-serves its own status/logs/ping; because a node tag *is* its own `Context.Service`, reading node A vs B is `yield* NodeA` vs `yield* NodeB` — no shared slot, no cast. The `NodeStatus` module + `Node.status` namespace are **deleted**; the light snapshot types survive as flat `Node.Status` / `Node.ServiceReadiness` / `Node.serviceReadiness`. Engine is a lazy internal (`Node.Service` stays light). See [[project-nodestatus-on-handle]]. |
 | `Driver` / `ServedHyperlink` | **`Driver`** / `ServedHyperlink` **@internal** | `BuiltHyperlink` → **`Hyperlink.Driver`** (+ `driver`/`isDriver`/`driverSym`). Registry was `ServedHyperlinks` → **`ServedHyperServices`** / `servedHyperServicesLayer` (**@internal**; no “Hyperlinks” plural). |
 
 Namespace clash check done before locking: `WorkPool` / `Gate` / `Daemon` clear of Effect's namespace
@@ -62,7 +62,7 @@ Namespace clash check done before locking: `WorkPool` / `Gate` / `Daemon` clear 
 
 ## Precedent & tooling
 
-The `Node.Tag` two-stage break migrated 148 call sites with a regex sweep + full gates —
+The `Node.Service` two-stage break migrated 148 call sites with a regex sweep + full gates —
 see commit 6972d5558 and its migration script pattern. Reuse the approach: regex the call
 forms, then let tsc + docs twoslash find the stragglers.
 

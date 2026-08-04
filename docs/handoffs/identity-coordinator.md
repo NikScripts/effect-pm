@@ -123,11 +123,11 @@ Hyperlink.lookupClient(Worker) // honors advice; pick only if absent/stale
 ## Dream app shape (illustrative)
 
 ```ts
-class Router extends Hyperlink.Tag<Router>()("fleet/Router", {
+class Router extends Hyperlink.Service<Router>()("fleet/Router", {
   enqueue: Hyperlink.effectFn({ job: Job }, Schema.Void),
 }).pipe(Hyperlink.identity) {}
 
-class Worker extends Hyperlink.Tag<Worker>()("fleet/Worker", {
+class Worker extends Hyperlink.Service<Worker>()("fleet/Worker", {
   run: Hyperlink.effectFn({ job: Job }, Schema.Void),
 }) {}
 

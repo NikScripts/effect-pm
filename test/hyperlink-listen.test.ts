@@ -12,11 +12,11 @@ const tmpSock = (label: string) =>
     return `/tmp/hyperlink-ts-listen-${label}-${process.pid}-${now}.sock`;
   });
 
-class Jobs extends Hyperlink.Tag<Jobs>()("listen/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("listen/Jobs", {
   jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
-class Emails extends Hyperlink.Tag<Emails>()("listen/Emails", {
+class Emails extends Hyperlink.Service<Emails>()("listen/Emails", {
   emails: Hyperlink.effect(Schema.String),
 }) {}
 
@@ -27,7 +27,7 @@ describe("Node.unix + clients (C2)", () => {
   it.live("unix serves catalog; clients(node, …tags) dials without repeating connect", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("catalog-rest");
-      class Worker extends Node.Tag<Worker, Jobs | Emails>()(
+      class Worker extends Node.Service<Worker, Jobs | Emails>()(
         "listen/WorkerRest",
         { path },
       ) {}
@@ -53,7 +53,7 @@ describe("Node.unix + clients (C2)", () => {
   it.live("clients(node, [tags]) array form", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("catalog-arr");
-      class Worker extends Node.Tag<Worker, Jobs | Emails>()(
+      class Worker extends Node.Service<Worker, Jobs | Emails>()(
         "listen/WorkerArr",
         { path },
       ) {}
@@ -81,16 +81,16 @@ describe("Node.unix + clients (C2)", () => {
   it.live("clients(…tags) when each tag carries the node", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("catalog-bound");
-      class Worker extends Node.Tag<Worker, Jobs | Emails>()(
+      class Worker extends Node.Service<Worker, Jobs | Emails>()(
         "listen/WorkerBound",
         { path },
       ) {}
 
-      class BoundJobs extends Hyperlink.Tag<BoundJobs>()("listen/BoundJobs", {
+      class BoundJobs extends Hyperlink.Service<BoundJobs>()("listen/BoundJobs", {
         jobs: Hyperlink.effect(Schema.Number),
       }).pipe(Hyperlink.andNode(Worker)) {}
 
-      class BoundEmails extends Hyperlink.Tag<BoundEmails>()(
+      class BoundEmails extends Hyperlink.Service<BoundEmails>()(
         "listen/BoundEmails",
         {
           emails: Hyperlink.effect(Schema.String),
@@ -120,19 +120,19 @@ describe("Node.unix + clients (C2)", () => {
   it.live("clients([tags]) bound array form", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("catalog-bound-arr");
-      class Worker extends Node.Tag<Worker, Jobs | Emails>()(
+      class Worker extends Node.Service<Worker, Jobs | Emails>()(
         "listen/WorkerBoundArr",
         { path },
       ) {}
 
-      class BoundJobs extends Hyperlink.Tag<BoundJobs>()(
+      class BoundJobs extends Hyperlink.Service<BoundJobs>()(
         "listen/BoundJobsArr",
         {
           jobs: Hyperlink.effect(Schema.Number),
         },
       ).pipe(Hyperlink.andNode(Worker)) {}
 
-      class BoundEmails extends Hyperlink.Tag<BoundEmails>()(
+      class BoundEmails extends Hyperlink.Service<BoundEmails>()(
         "listen/BoundEmailsArr",
         {
           emails: Hyperlink.effect(Schema.String),

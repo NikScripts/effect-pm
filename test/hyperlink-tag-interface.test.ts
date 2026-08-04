@@ -19,7 +19,7 @@ interface CounterShape {
   };
   readonly label: string; // local raw value → Effect<string, Local>
 }
-class Counter extends Hyperlink.Tag<Counter, CounterShape>()("tag-iface/Counter", {
+class Counter extends Hyperlink.Service<Counter, CounterShape>()("tag-iface/Counter", {
   current: Hyperlink.local,
   add: Hyperlink.effectFn(Schema.Number, Schema.Number),
   admin: {

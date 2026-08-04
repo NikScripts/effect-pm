@@ -14,7 +14,7 @@
 One Tag → one Effect `RpcGroup` → wire procedures prefixed by **that tag’s key**.
 
 ```ts
-class Mail extends WorkPool.Tag<Mail>()("@app/Mail", { payload: Job }) {}
+class Mail extends WorkPool.Service<Mail>()("@app/Mail", { payload: Job }) {}
 // RpcGroup / wire prefix = "@app/Mail"
 // kindOf(Mail) = "hyperlink-ts/WorkPool"  (classification only — not the RpcGroup name)
 ```
@@ -32,7 +32,7 @@ Several instances, **one identical wire Spec**, one RpcGroup, instances distingu
 - Authors never set a `wireMode` flag — Effect style: **overload of `Tag`** stamps the behavior.
 
 ```ts
-const Counters = Hyperlink.Tag("demo/SharedCounters", { /* shared Spec */ })
+const Counters = Hyperlink.Service("demo/SharedCounters", { /* shared Spec */ })
 class Nwsl extends Counters<Nwsl>()("@app/Nwsl/counters") {}
 class Mls extends Counters<Mls>()("@app/Mls/counters") {}
 
@@ -62,10 +62,10 @@ Share only when every instance has the **same** procedure names and schemas.
 
 | Cannot share **full** instance Spec | Why |
 |-------------------------------------|-----|
-| WorkPool.Tag / priority | Item-typed data plane (`add`, `events`, …); priority also lane schemas |
-| Daemon.Tag with success/error | Typed `run` / `events` / optional `result` |
+| WorkPool.Service / priority | Item-typed data plane (`add`, `events`, …); priority also lane schemas |
+| Daemon.Service with success/error | Typed `run` / `events` / optional `result` |
 | Daemon + schedule graft | Spec **shape** differs from base |
-| Gate.Tag | Typed `run` payload/success/error |
+| Gate.Service | Typed `run` payload/success/error |
 | Arbitrary author Spec (usually) | Prefer solo `Tag<Self>()(key, spec)` |
 
 Never merge different kinds into one group (`WorkPool` ≠ `WorkPool/priority`, `Daemon` ≠ `Daemon/Schedule`).
@@ -76,8 +76,8 @@ Never merge different kinds into one group (`WorkPool` ≠ `WorkPool/priority`, 
 
 | Entry point | Meaning | Wire (internal) |
 |-------------|---------|-----------------|
-| `Hyperlink.Tag<Self>()(key, spec)` / toolkit `.Tag` | One resource | prefix = **tag key** |
-| `Hyperlink.Tag(wireKey, spec)` → `Factory<Self>()(instanceKey)` | Related instances, same Spec | prefix = **wire key**; route by instance key |
+| `Hyperlink.Service<Self>()(key, spec)` / toolkit `.Tag` | One resource | prefix = **tag key** |
+| `Hyperlink.Service(wireKey, spec)` → `Factory<Self>()(instanceKey)` | Related instances, same Spec | prefix = **wire key**; route by instance key |
 
 No public `groupId`. No author-facing `wireMode`. **No** `Family` / `serveFamily` / `clientFamily` / `member`.  
 Internal discriminant: `sharedTagSym`. Existing `serve` / `client` pick the path.  

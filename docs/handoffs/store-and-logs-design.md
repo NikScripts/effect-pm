@@ -54,8 +54,8 @@ definitions should go through **`contract`**.
 
 ### `Store.Service` — app aggregate (class factory)
 
-**Naming:** sketched early as `Store.Tag`; locked name is **`Store.Service`** (Effect-style
-double-call factory — same family as `Hyperlink.Tag`, legacy `DaemonStore.Service`).
+**Naming:** sketched early as `Store.descriptor`; locked name is **`Store.Service`** (Effect-style
+double-call factory — same family as `Hyperlink.Service`, legacy `DaemonStore.Service`).
 
 Apps declare **one store class per deployment / DB file**. That class is the **shared backing**:
 SqlClient (or memory), registration table, migrations, retention — **not** a grab-bag of domain
@@ -130,7 +130,7 @@ persistence (executions, audit) without exposing methods on the shared tag type.
 const publicStoreSpec = Store.contract({ readings: Store.append(readingSchema) });
 const privateStoreSpec = Store.contract({ audit: Store.append(auditSchema) });
 
-class LabThermometer extends Hyperlink.Tag<LabThermometer>()(key, contract).pipe(
+class LabThermometer extends Hyperlink.Service<LabThermometer>()(key, contract).pipe(
   Hyperlink.store(publicStoreSpec),
 ) {}
 
@@ -149,7 +149,7 @@ const thermometerContract = Hyperlink.contract({ … });
 const thermometerStore = Store.contract({
   readings: Store.shape(readingSchema, listReadingsPayload),
 });
-class LabThermometer extends Hyperlink.Tag<LabThermometer>()(key, thermometerContract).pipe(
+class LabThermometer extends Hyperlink.Service<LabThermometer>()(key, thermometerContract).pipe(
   Hyperlink.store(thermometerStore),
 ) {}
 ```
@@ -184,7 +184,7 @@ const store = yield* Hyperlink.store(LabThermometer, thermometerStoreSpec); // P
 **Path A — store spec on tag:**
 
 ```ts
-class LabThermometer extends Hyperlink.Tag<LabThermometer>()(
+class LabThermometer extends Hyperlink.Service<LabThermometer>()(
   "@app/LabThermometer",
   thermometerSpec,
 ).pipe(Hyperlink.store(thermometerStoreSpec)) {}
@@ -266,7 +266,7 @@ logQuery:  Store.query({ payload: logQuery, result: Schema.Array(LogEntrySchema)
 **Per-hyperlink configuration** is on the **tag** (same place as store attachment):
 
 ```ts
-class MyQueue extends WorkPool.Tag<MyQueue>()("…", JobSchema).pipe(
+class MyQueue extends WorkPool.Service<MyQueue>()("…", JobSchema).pipe(
   Hyperlink.logStoreLevel("info"),   // durable append via this tag's registration
   Hyperlink.logStreamLevel("warn"),  // tail relay for this resource only
   Hyperlink.logOutputLevel("debug"), // merged Logger on resource fibers
@@ -418,7 +418,7 @@ Hyperlink.logLevelDebug
 **Examples:**
 
 ```ts
-class MyQueue extends WorkPool.Tag<MyQueue>()("…", JobSchema).pipe(
+class MyQueue extends WorkPool.Service<MyQueue>()("…", JobSchema).pipe(
   Hyperlink.logStoreLevel("none"),      // tail only, no SQLite rows
   Hyperlink.logStreamLevel("warn"),     // tail warns+
   Hyperlink.logExportLevel("info"),     // tail + store info+

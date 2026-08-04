@@ -17,11 +17,11 @@ import * as NodeServices from "@effect/platform-node/NodeServices"
 import { Effect, Schema } from "effect"
 import * as Hyperlink from "../../src/Hyperlink"
 
-class Jobs extends Hyperlink.Tag<Jobs>()("nameless/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("nameless/Jobs", {
   jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
-class Emails extends Hyperlink.Tag<Emails>()("nameless/Emails", {
+class Emails extends Hyperlink.Service<Emails>()("nameless/Emails", {
   emails: Hyperlink.effect(Schema.String),
 }) {}
 

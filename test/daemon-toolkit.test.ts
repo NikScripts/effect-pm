@@ -10,16 +10,16 @@ import * as Daemon from "../src/Daemon";
 const farFuture = DateTime.makeUnsafe(4_102_444_800_000);
 
 // base — observation + lifecycle only; always-armed by default so it runs immediately.
-class BaseDaemon extends Daemon.Tag<BaseDaemon>()("test/toolkit/Base") {}
+class BaseDaemon extends Daemon.Service<BaseDaemon>()("test/toolkit/Base") {}
 
 // owns an inline schedule seeded empty (disarmed) — gains the `schedule` verb group.
-class SchedDaemon extends Daemon.Tag<SchedDaemon>()("test/toolkit/Sched").pipe(
+class SchedDaemon extends Daemon.Service<SchedDaemon>()("test/toolkit/Sched").pipe(
   Daemon.schedule([]),
 ) {}
 
 // value-returning + disarmed inline schedule, so `result` is observable before/after a manual run.
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
-class Priced extends Daemon.Tag<Priced>()("test/toolkit/Priced", { success: Price }).pipe(
+class Priced extends Daemon.Service<Priced>()("test/toolkit/Priced", { success: Price }).pipe(
   Daemon.schedule([]),
 ) {}
 

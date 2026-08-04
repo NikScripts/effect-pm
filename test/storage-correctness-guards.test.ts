@@ -14,9 +14,9 @@ import * as Node from "../src/Node";
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
-class Exec extends Daemon.Tag<Exec>()("test/storage-correctness/Exec") {}
+class Exec extends Daemon.Service<Exec>()("test/storage-correctness/Exec") {}
 
-class Jobs extends WorkPool.Tag<Jobs>()("test/storage-correctness/Jobs", {
+class Jobs extends WorkPool.Service<Jobs>()("test/storage-correctness/Jobs", {
   payload: jobSchema,
 }) {}
 
@@ -29,7 +29,7 @@ class CustomJobs extends WorkPool.priority<CustomJobs>()(
   },
 ) {}
 
-class TestGate extends Gate.Tag<{ readonly _tag: "Gate" }>()(
+class TestGate extends Gate.Service<{ readonly _tag: "Gate" }>()(
   "test/storage-correctness/Gate",
   { payload: Schema.Number, success: Schema.Number },
 ) {}
@@ -54,7 +54,7 @@ class RunStore extends Store.Service<RunStore>("@test/storage-correctness/RunSto
   gateRegistration,
 ) {}
 
-class NodeOnly extends Node.Tag<NodeOnly>()("test/storage-correctness/node") {}
+class NodeOnly extends Node.Service<NodeOnly>()("test/storage-correctness/node") {}
 class NodeOnlyStore extends Store.Service<NodeOnlyStore>("@test/storage-correctness/NodeOnly")(
   NodeOnly.logs,
 ) {}

@@ -2,7 +2,7 @@
  * @module examples/apps/dashboard/fleet
  *
  * The fleet, defined **once, as tags** — shared by the server (which nodes them) and
- * the browser (which reaches them via `Hyperlink.client`). The `Group.Tag` tree IS the
+ * the browser (which reaches them via `Hyperlink.client`). The `Group.Service` tree IS the
  * navigation tree; the leaf tags ARE the registry. No hand-rolled `REGISTRY`/`TREE`.
  */
 import { Duration, Effect, Schema } from "effect";
@@ -13,38 +13,38 @@ import * as Node from "../../../src/Node";
 
 /** The Mini — a second machine (your home server). Resources bound to it run + are
  *  reached there; everything else is on the Droplet. */
-export class MiniNode extends Node.Tag<MiniNode>()("hub/miniNode") {}
+export class MiniNode extends Node.Service<MiniNode>()("hub/miniNode") {}
 
 /** The Droplet — the main node. Every queue is bound to it, so they're served as one
  *  group on one port (`Node.httpServer`) and reached over one client transport. */
-export class Droplet extends Node.Tag<Droplet>()("hub/droplet") {}
+export class Droplet extends Node.Service<Droplet>()("hub/droplet") {}
 
 const Job = Schema.Struct({ id: Schema.String });
 
 // leaf queue tags
-export class Mail extends WorkPool.Tag<Mail>()("@acme/queues/Mail", { payload: Job, node: Droplet }) {}
-export class Jobs extends WorkPool.Tag<Jobs>()("@acme/queues/Jobs", { payload: Job, node: Droplet }) {}
-export class Billing extends WorkPool.Tag<Billing>()("@acme/queues/Billing", { payload: Job, node: Droplet }) {}
-export class Notify extends WorkPool.Tag<Notify>()("@acme/queues/Notify", { payload: Job, node: Droplet }) {}
-export class Worker1 extends WorkPool.Tag<Worker1>()("@acme/queues/Worker1", { payload: Job, node: Droplet }) {}
-export class Worker2 extends WorkPool.Tag<Worker2>()("@acme/queues/Worker2", { payload: Job, node: Droplet }) {}
-export class Worker3 extends WorkPool.Tag<Worker3>()("@acme/queues/Worker3", { payload: Job, node: Droplet }) {}
-export class RegionUS extends WorkPool.Tag<RegionUS>()("@acme/queues/RegionUS", { payload: Job, node: Droplet }) {}
-export class RegionEU extends WorkPool.Tag<RegionEU>()("@acme/queues/RegionEU", { payload: Job, node: Droplet }) {}
-export class Daily extends WorkPool.Tag<Daily>()("@acme/queues/Daily", { payload: Job, node: Droplet }) {}
-export class Weekly extends WorkPool.Tag<Weekly>()("@acme/queues/Weekly", { payload: Job, node: Droplet }) {}
+export class Mail extends WorkPool.Service<Mail>()("@acme/queues/Mail", { payload: Job, node: Droplet }) {}
+export class Jobs extends WorkPool.Service<Jobs>()("@acme/queues/Jobs", { payload: Job, node: Droplet }) {}
+export class Billing extends WorkPool.Service<Billing>()("@acme/queues/Billing", { payload: Job, node: Droplet }) {}
+export class Notify extends WorkPool.Service<Notify>()("@acme/queues/Notify", { payload: Job, node: Droplet }) {}
+export class Worker1 extends WorkPool.Service<Worker1>()("@acme/queues/Worker1", { payload: Job, node: Droplet }) {}
+export class Worker2 extends WorkPool.Service<Worker2>()("@acme/queues/Worker2", { payload: Job, node: Droplet }) {}
+export class Worker3 extends WorkPool.Service<Worker3>()("@acme/queues/Worker3", { payload: Job, node: Droplet }) {}
+export class RegionUS extends WorkPool.Service<RegionUS>()("@acme/queues/RegionUS", { payload: Job, node: Droplet }) {}
+export class RegionEU extends WorkPool.Service<RegionEU>()("@acme/queues/RegionEU", { payload: Job, node: Droplet }) {}
+export class Daily extends WorkPool.Service<Daily>()("@acme/queues/Daily", { payload: Job, node: Droplet }) {}
+export class Weekly extends WorkPool.Service<Weekly>()("@acme/queues/Weekly", { payload: Job, node: Droplet }) {}
 
 // a daemon bound to the Mini node — it runs there, not on the Droplet.
-export class KeyRotation extends Daemon.Tag<KeyRotation>()("@wnba/Mini/KeyRotation", {
+export class KeyRotation extends Daemon.Service<KeyRotation>()("@wnba/Mini/KeyRotation", {
   node: MiniNode,
 }) {}
 
 // the group tree — this is the navigable tree, nothing more is needed
-export class Mini extends Group.Tag<Mini>("@wnba/Mini")({ KeyRotation }) {}
-export class Regional extends Group.Tag<Regional>("@acme/queues/Regional")({ RegionUS, RegionEU }) {}
-export class Workers extends Group.Tag<Workers>("@acme/queues/Workers")({ Worker1, Worker2, Worker3, Regional }) {}
-export class Reports extends Group.Tag<Reports>("@acme/queues/Reports")({ Daily, Weekly }) {}
-export class Fleet extends Group.Tag<Fleet>("@acme/queues/Ops")({
+export class Mini extends Group.Service<Mini>("@wnba/Mini")({ KeyRotation }) {}
+export class Regional extends Group.Service<Regional>("@acme/queues/Regional")({ RegionUS, RegionEU }) {}
+export class Workers extends Group.Service<Workers>("@acme/queues/Workers")({ Worker1, Worker2, Worker3, Regional }) {}
+export class Reports extends Group.Service<Reports>("@acme/queues/Reports")({ Daily, Weekly }) {}
+export class Fleet extends Group.Service<Fleet>("@acme/queues/Ops")({
   Mail,
   Jobs,
   Billing,

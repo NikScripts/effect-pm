@@ -26,15 +26,15 @@ import {
   workPoolLayer,
   Service as engineQueueService,
 } from "../src/internal/workPool";
-// This suite exercises the queue **engine** primitives directly (name-only `Tag`, positional
-// `make`, `layer(tag, config)`) — distinct from the public `WorkPool` namespace whose `Tag`
-// takes an `itemSchema`. Reconstruct the flat engine exports into the historical object shape so
-// the call-sites read `WorkPool.make` / `.Tag` / `.layer` / `.Service`.
+// This suite exercises the queue **engine** primitives directly (name-only identity mint,
+// positional `make`, `layer(tag, config)`) — distinct from the public `WorkPool` namespace whose
+// `Service` takes an `itemSchema`. Reconstruct the flat engine exports into the historical object
+// shape so the call-sites read `WorkPool.make` / `.Service` / `.layer` / `.define`.
 const WorkPool = {
   make: makeQueueEffect,
-  Tag: engineQueueTag,
+  Service: engineQueueTag,
   layer: workPoolLayer,
-  Service: engineQueueService,
+  define: engineQueueService,
 };
 import * as Hyperlink from "../src/Hyperlink";
 import { testLogsEnv } from "./fixtures/logsEnv";
@@ -606,7 +606,7 @@ describe("WorkPool.make — dedup (key)", () => {
 describe("WorkPool.layer + Tag", () => {
   it.live("Tag produces a valid Context.Service key", () =>
     Effect.gen(function* () {
-      const tag = WorkPool.Tag<
+      const tag = WorkPool.Service<
         { readonly _tag: "TestQueue" },
         number,
         never,
@@ -959,7 +959,7 @@ describe("WorkPool.make — deferStart", () => {
     Effect.gen(function* () {
       const drains = yield* Ref.make(0);
 
-      class DrainedQueue extends WorkPool.Service<DrainedQueue, number, never>()(
+      class DrainedQueue extends WorkPool.define<DrainedQueue, number, never>()(
         "@test/DrainedLayerYieldQueue",
         {
           effect: (_n: number) => Effect.void,
@@ -982,7 +982,7 @@ describe("WorkPool.make — deferStart", () => {
       const drains = yield* Ref.make(0);
       const handled = yield* Ref.make<ReadonlyArray<number>>([]);
 
-      class DrainedQueue extends WorkPool.Service<DrainedQueue, number, never>()(
+      class DrainedQueue extends WorkPool.define<DrainedQueue, number, never>()(
         "@test/DrainedLayerManualStartQueue",
         {
           effect: (n: number) => Ref.update(handled, (values) => [...values, n]),
@@ -1013,7 +1013,7 @@ describe("WorkPool.make — deferStart", () => {
   it.live("WorkPool.layer with Tag does not cold-start onDrained", () =>
     Effect.gen(function* () {
       const drains = yield* Ref.make(0);
-      const DrainedQueue = WorkPool.Tag<
+      const DrainedQueue = WorkPool.Service<
         { readonly _tag: "DrainedTagQueue" },
         number,
         never,

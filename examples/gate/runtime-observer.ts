@@ -1,7 +1,7 @@
 /**
  * @module examples/gate/runtime-observer
  *
- * Live observation on {@link Gate.Service} handles via {@link Subscribable}
+ * Live observation on {@link Gate.define} handles via {@link Subscribable}
  * views (`status`, `waiting`, `completed`, …). `Service.layer` already merges the
  * default store bridge — no extra `Store.layerDefaultMemory` is required here.
  *
@@ -15,7 +15,7 @@
 import { Effect, Ref, Schema, Stream } from "effect";
 import { Gate, Store } from "../../src";
 
-const ObservedGate = Gate.Service<{ readonly _tag: "ObservedGate" }>()(
+const ObservedGate = Gate.define<{ readonly _tag: "ObservedGate" }>()(
   "examples/ObservedGate",
   {
     payload: Schema.Number,

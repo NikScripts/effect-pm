@@ -58,7 +58,7 @@ Owner and Agent 4 walked alternatives. Current leanings (unlocked unless noted):
 
 | Topic | Direction under discussion |
 |-------|----------------------------|
-| Shared Spec mint | Prefer **overload of `Hyperlink.Tag`**, not a separate factory noun: `Tag(wireKey, spec)` → factory; then `Factory<Self>()(instanceKey)` class-only |
+| Shared Spec mint | Prefer **overload of `Hyperlink.Service`**, not a separate factory noun: `Tag(wireKey, spec)` → factory; then `Factory<Self>()(instanceKey)` class-only |
 | New serve/client APIs | **Rejected** |
 | ApiMetrics vs Gate | Metrics collection already in Gate instrumentation + registry; separate ApiMetrics tag may be wrong long-term |
 | Handle model | Prefer **one Tag handle** = real API (`effect` / nested groups) + **one reserved nest** for extras (e.g. usage/metrics) — like WorkPool nested `metrics` |
@@ -71,7 +71,7 @@ Owner and Agent 4 walked alternatives. Current leanings (unlocked unless noted):
 ## Aftermath (owner-directed Eng)
 
 Owner later ordered: skip metrics; Eng the shared Spec mint as
-`Hyperlink.Tag(wireKey, spec)` → `Factory<Self>()(instanceKey)`; demo + tests + docs;
+`Hyperlink.Service(wireKey, spec)` → `Factory<Self>()(instanceKey)`; demo + tests + docs;
 **no** `*Family*` verbs. That work landed on the Agent 4 work branch (plan W3), then
 `default` / `defaults` Eng’d (`pure` retired). ApiMetrics migration and Gate reserved nest
 remain paused. Live `cell` still owner-gated.

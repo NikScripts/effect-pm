@@ -18,7 +18,7 @@ import { Effect, Layer } from "effect";
 import * as FleetHealth from "../../src/FleetHealth";
 import type * as Node from "../../src/Node";
 
-class LocalHealth extends FleetHealth.Tag<LocalHealth>()() {}
+class LocalHealth extends FleetHealth.Service<LocalHealth>()() {}
 
 const readinessRows: ReadonlyArray<Node.ServiceReadiness> = [
   {

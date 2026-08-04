@@ -9,7 +9,7 @@ import * as Launcher from "../../src/Launcher";
 export const platform = Launcher.layer;
 
 /** Matches the HyperService served by `launcher-child-serve.ts`. */
-export class ChildJobs extends Hyperlink.Tag<ChildJobs>()(
+export class ChildJobs extends Hyperlink.Service<ChildJobs>()(
   "launcher-child/Jobs",
   {
     ping: Hyperlink.effect(Schema.String),

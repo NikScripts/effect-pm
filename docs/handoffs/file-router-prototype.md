@@ -1,7 +1,7 @@
 # File-router prototype
 
 **Branch:** `cursor/file-router-prototype-125f`  
-**Status:** Eng in progress — `Page.*` helpers, `Route.fileRoot`, Vite plugin + `hyp file-router`; **`Page.Tag` deferred**  
+**Status:** Eng in progress — `Page.*` helpers, `Route.fileRoot`, Vite plugin + `hyp file-router`; **`Page.Service` deferred**  
 **Naming:** Layers are always **camelCase** — already `.must` in
 [`types-and-naming.md`](../standards/types-and-naming.md#layers-read-as-layers)
 (`layer`, `layerMemory`, `componentsLayer`, `peersLayer`, …). No PascalCase layer values.
@@ -30,10 +30,10 @@ Route.fileRoot()                 // root + "/" + topLevel
 Route.fileRoot({ dir: "./pages" })
 ```
 
-## Page mark — `Page.*` + `Page.Tag` (locked direction)
+## Page mark — `Page.*` + `Page.Service` (locked direction)
 
 Naming detail: [`view-page-naming.md`](./view-page-naming.md) — **not**
-`View.Page.Tag` (collides with dashboard size chrome). Kill the word **skin**;
+`View.Page.Service` (collides with dashboard size chrome). Kill the word **skin**;
 use **`componentsLayer`** (or `layer`) for View.provide bags.
 
 Static/Dynamic/Build exist largely **because** file routing + codegen are
@@ -47,7 +47,7 @@ export default Page.build("/docs/:chapter", ChapterView, {
   paths: listChapterSlugs, // Effect
 })
 
-class DocsChapter extends Page.Tag<DocsChapter, ChapterProps>()(
+class DocsChapter extends Page.Service<DocsChapter, ChapterProps>()(
   "app/page/docs-chapter",
   {
     path: "/docs/:chapter",
@@ -59,7 +59,7 @@ class DocsChapter extends Page.Tag<DocsChapter, ChapterProps>()(
 export default Page.build(DocsChapter)
 ```
 
-`Page.Tag` still needs work (statics schema, `Page.build(Tag)`, param Schema, …).
+`Page.Service` still needs work (statics schema, `Page.build(Tag)`, param Schema, …).
 
 Default unmarked fixed path → Static. Param routes must mark Build (+ paths) or
 Dynamic. Layout: `Page.layout` (camelCase); `Page.Layout` class only if earned.
@@ -85,6 +85,6 @@ Dynamic. Layout: `Page.layout` (camelCase); `Page.Layout` class only if earned.
 
 ## Still open
 
-1. **`Page.Tag` + Layout** — design plan (not locked): [`page-layout-design.md`](./page-layout-design.md)
+1. **`Page.Service` + Layout** — design plan (not locked): [`page-layout-design.md`](./page-layout-design.md)
 2. Docs-site cutover off Waku fs-router → `createPages` adapter
 3. Wire docs `waku.config.ts` to `fileRouter` plugin (optional dogfood)

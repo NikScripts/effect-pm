@@ -16,9 +16,9 @@ import * as GroupNav from "../../src/ui/GroupNav";
 import * as Route from "../../src/ui/Route";
 import * as Router from "../../src/ui/Router";
 
-class HttpApi extends Daemon.Tag<HttpApi>()("examples/group-nav/HttpApi") {}
-class Nwsl extends Group.Tag<Nwsl>("examples/group-nav/Nwsl")({ HttpApi }) {}
-class Hub extends Group.Tag<Hub>("examples/group-nav/Hub")({ Nwsl }) {}
+class HttpApi extends Daemon.Service<HttpApi>()("examples/group-nav/HttpApi") {}
+class Nwsl extends Group.Service<Nwsl>("examples/group-nav/Nwsl")({ HttpApi }) {}
+class Hub extends Group.Service<Hub>("examples/group-nav/Hub")({ Nwsl }) {}
 
 /** Catalog generated from the Group — health + leaf logs/schedule included. */
 export const site = Route.make("hub").add(

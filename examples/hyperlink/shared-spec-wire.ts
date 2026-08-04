@@ -5,7 +5,7 @@
  * per-call `key` header. Same mint shape any fixed-Spec kind uses (counters here;
  * `Gate.HttpApiClient` owns API usage + limiter observation under nest `metrics`).
  *
- * Mint with `Hyperlink.Tag(wireKey, spec)` then `Factory<Self>()(instanceKey)`.
+ * Mint with `Hyperlink.Service(wireKey, spec)` then `Factory<Self>()(instanceKey)`.
  * Serve and dial with ordinary {@link Hyperlink.serve} / {@link Hyperlink.client}
  * (no `*Family` verbs). Merging two `serve`s that share a wire key mounts one group.
  *
@@ -34,14 +34,14 @@ const sharedCountersShape = {
  * Shared factory: wire / kind key = `demo/SharedCounters`.
  * Instances differ only by Context identity + routing header.
  */
-const SharedCounters = Hyperlink.Tag("demo/SharedCounters", sharedCountersShape, {
+const SharedCounters = Hyperlink.Service("demo/SharedCounters", sharedCountersShape, {
   description: "Demo stand-in for a kind-keyed shared Spec.",
 });
 
 class NwslCounters extends SharedCounters<NwslCounters>()("@app/Nwsl/counters") {}
 class MlsCounters extends SharedCounters<MlsCounters>()("@app/Mls/counters") {}
 
-class DemoNode extends Node.Tag<DemoNode, NwslCounters | MlsCounters>()(
+class DemoNode extends Node.Service<DemoNode, NwslCounters | MlsCounters>()(
   "shared-tag/Demo",
   {
     path: `/tmp/hyperlink-ts-shared-tag-${process.pid}.sock`,

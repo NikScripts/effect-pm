@@ -3,7 +3,7 @@
 # Handoff: Web dashboard widgets — per-type UI + missing contracts
 
 Wire the shipped **`@nikscripts/effect-pm/web`** dashboard to every toolkit tag consumers put in a
-`Group.Tag` tree — starting with **`ApiMetrics`**, then closing gaps for **custom queues** and
+`Group.Service` tree — starting with **`ApiMetrics`**, then closing gaps for **custom queues** and
 **process schedules**. Branch: `rewrite/resource-toolkit`.
 
 ## Vision (from the user)
@@ -29,7 +29,7 @@ import { Atom } from "effect/unstable/reactivity";
 ```
 
 - `appLayer` = consumer's `Resource.client` / `connectHttp` layers over host-bound tags.
-- `group` = root `Group.Tag` tree (navigation = `Group.members` / drill-down).
+- `group` = root `Group.Service` tree (navigation = `Group.members` / drill-down).
 
 ### Data layer (`src/web/data.ts`, `src/web/runtime.tsx`)
 
@@ -39,7 +39,7 @@ import { Atom } from "effect/unstable/reactivity";
 | `processBundle(runtime, tag)` | Atoms + commands for one **ScheduledProcess** tag |
 | `useQueueBundle` / `useProcessBundle` | Context memo wrappers |
 | `kindOf(member)` | `"queue"` if spec has `enqueue` or `sizes`; else `"process"` |
-| `leafTags` / `queueLeaves` / `processLeaves` | Walk `Group.Tag` trees |
+| `leafTags` / `queueLeaves` / `processLeaves` | Walk `Group.Service` trees |
 
 Bundles assume **fixed contract shapes** (not `specOf` introspection):
 

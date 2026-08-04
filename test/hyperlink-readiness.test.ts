@@ -6,10 +6,10 @@ import * as Hyperlink from "../src/Hyperlink";
 import { NodeStatusTag, httpClient as nodeStatusHttpClient } from "../src/internal/nodeStatus";
 import * as Node from "../src/Node";
 
-// A resource carries its own readiness derivation (here a bare Hyperlink.Tag opts in via
+// A resource carries its own readiness derivation (here a bare Hyperlink.Service opts in via
 // `withReadiness`). When it reports "not ready", the node's `/health` returns 503 and `NodeStatus`
 // reads `degraded` with the per-resource detail — the same aggregate, two faces (SSOT).
-class Warming extends Hyperlink.Tag<Warming>()("readiness/Warming", {
+class Warming extends Hyperlink.Service<Warming>()("readiness/Warming", {
   ping: Hyperlink.effect(Schema.String),
 }).pipe(
   Hyperlink.withReadiness(() => Effect.succeed({ ready: false, detail: "warming up" })),
@@ -63,7 +63,7 @@ it("NodeStatus reports the same per-resource readiness (degraded board)", () =>
 // ── readiness composition: a resource whose readiness depends on another resource ───────────────
 // The DB is a proper resource with its own readiness; a worker extends its base "running" check to
 // also require the DB (via `readinessOf` + `allReady`), reusing — not redefining — both checks.
-class Database extends Hyperlink.Tag<Database>()("dep/Database", {
+class Database extends Hyperlink.Service<Database>()("dep/Database", {
   ping: Hyperlink.effect(Schema.Boolean),
 }).pipe(
   Hyperlink.withReadiness((svc) =>
@@ -71,7 +71,7 @@ class Database extends Hyperlink.Tag<Database>()("dep/Database", {
   ),
 ) {}
 
-class Worker extends Hyperlink.Tag<Worker>()("dep/Worker", {
+class Worker extends Hyperlink.Service<Worker>()("dep/Worker", {
   running: Hyperlink.effect(Schema.Boolean),
 }).pipe(
   // a "factory" base check: ready iff running
@@ -111,8 +111,8 @@ it("the factory/base check still applies — a stopped worker is not ready even 
 // Regression: a node-bound tag must be able to extend readiness via `.pipe`. Data-last duals
 // constrain `T` with a shallow `PipeableTag` brand (spec symbol only) so stock tsc does not expand
 // `ServiceOf<S, Self>` on the still-declaring class (TS2589). See `resource-withreadiness-pipe.test-d.ts`.
-class DepNode extends Node.Tag<DepNode>()("dep/node") {}
-class NodeWorker extends Hyperlink.Tag<NodeWorker>()(
+class DepNode extends Node.Service<DepNode>()("dep/node") {}
+class NodeWorker extends Hyperlink.Service<NodeWorker>()(
   "dep/NodeWorker",
   { running: Hyperlink.effect(Schema.Boolean) },
   { node: DepNode },
@@ -133,7 +133,7 @@ it("a node-bound tag can extend readiness via .pipe (regression)", () =>
 // Regression: data-first `withReadiness(tag, fn)` accepts a fully-defined node-bound CLASS (a
 // `typeof X` constructor). The data-first overloads are inferred (like `client`/`layer`), so the class
 // matches and its node is preserved in the return.
-class DataFirstWorker extends Hyperlink.Tag<DataFirstWorker>()(
+class DataFirstWorker extends Hyperlink.Service<DataFirstWorker>()(
   "dep/DataFirstWorker",
   { running: Hyperlink.effect(Schema.Boolean) },
   { node: DepNode },

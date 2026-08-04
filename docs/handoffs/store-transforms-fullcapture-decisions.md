@@ -66,7 +66,7 @@ The worker's typed result is recorded exactly once (SSOT), no duplication.
   `Failed`). No separate Exit handling.
 - Threads the `success`/`error` schemas via `queueEvent(itemSchema, { success: successOf(tag), error: errorOf(tag) })`,
   `makeQueueStoreContract` gains the wire schemas, `builtInQueueStoreContract`/engine/consumer feed them from the tag.
-  `WorkPool.Service (untyped)` (no triplet) falls back to `Void`/`Unknown`.
+  `WorkPool.define (untyped)` (no triplet) falls back to `Void`/`Unknown`.
 
 ## 4. Nesting demo (honest, not contorted into the queue)
 The queue event log is genuinely flat — do NOT nest it. Demonstrate nesting where natural: a

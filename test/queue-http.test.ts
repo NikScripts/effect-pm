@@ -16,7 +16,7 @@ const NumberItem = Schema.Struct({ n: Schema.Number });
 interface NumberItem {
   readonly n: number;
 }
-class HttpQueue extends WorkPool.Tag<HttpQueue>()("queue-http/Q", { payload: NumberItem }) {}
+class HttpQueue extends WorkPool.Service<HttpQueue>()("queue-http/Q", { payload: NumberItem }) {}
 
 // last entries the server received on `enqueue`, after crossing the wire and decoding.
 const received: Array<QueueEntry<NumberItem>> = [];

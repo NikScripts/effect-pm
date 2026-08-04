@@ -54,7 +54,7 @@ export const effect_configLayer = Layer.succeed(Config, { port: 8080 });
 // 2. Shipped View — default chrome card
 // =============================================================================
 
-export class PoolCard extends Views.Card.Tag<PoolCard>()(
+export class PoolCard extends Views.Card.Service<PoolCard>()(
   "hyperlink-ts/examples/apps/view-scratch/hover-types/PoolCard",
 ) {}
 
@@ -117,7 +117,7 @@ export const shipped_poolLayer = Layer.succeed(PoolCard, (props) => {
 
 type DenseExtra = { readonly dense?: boolean };
 
-export class DenseCard extends Views.Card.Tag<DenseCard, DenseExtra>()(
+export class DenseCard extends Views.Card.Service<DenseCard, DenseExtra>()(
   "hyperlink-ts/examples/apps/view-scratch/hover-types/DenseCard",
   { spec: { kind: "hover-dense" } as const },
 ) {}
@@ -155,7 +155,7 @@ export const shipped_denseLayer = Layer.succeed(DenseCard, (props) => {
 // 4. Shipped View — naked Tag + Detail / Page sizes
 // =============================================================================
 
-export class Greeter extends View.Tag<
+export class Greeter extends View.Service<
   Greeter,
   { readonly name: string }
 >()("hyperlink-ts/examples/apps/view-scratch/hover-types/Greeter") {}
@@ -166,14 +166,14 @@ export class Greeter extends View.Tag<
  */
 export type Shipped_Greeter_Service = Greeter["Service"];
 
-export class PoolDetail extends Views.Detail.Tag<PoolDetail>()(
+export class PoolDetail extends Views.Detail.Service<PoolDetail>()(
   "hyperlink-ts/examples/apps/view-scratch/hover-types/PoolDetail",
 ) {}
 
 export type Shipped_PoolDetail_Service = PoolDetail["Service"];
 export type Shipped_PoolDetail_size = View.AnnotationsOf<typeof PoolDetail>["size"];
 
-export class PoolPage extends Views.Page.Tag<PoolPage>()(
+export class PoolPage extends Views.Page.Service<PoolPage>()(
   "hyperlink-ts/examples/apps/view-scratch/hover-types/PoolPage",
 ) {}
 

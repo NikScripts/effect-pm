@@ -8,12 +8,11 @@ import * as View from "last-ts/View";
 
 class Greeter extends View.Service<Greeter, { readonly name: string }>()(
   "examples/ui/view-typed-jsx/Greeter",
-  {
-    default: (props) => (
-      <span data-demo="inner">hello {props.name}</span>
-    ),
-  },
-) {}
+) {
+  static layer = Greeter.provide((props) => (
+    <span data-demo="inner">hello {props.name}</span>
+  ));
+}
 
 // ---cut---
 /** Open R from yield* Service — not legal as JSX until mount. */

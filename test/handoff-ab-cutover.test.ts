@@ -65,10 +65,10 @@ const waitUntil = <A, E, R>(
   });
 
 const nodesServing = (
-  lookupCtx: Context.Context<Directory.Tag>,
+  lookupCtx: Context.Context<Directory.Service>,
   serviceKey: string,
 ) =>
-  Context.get(lookupCtx, Directory.Tag)
+  Context.get(lookupCtx, Directory.Service)
     .nodesServing(new Lookup.NodesServingRequest({ serviceKey }))
     .pipe(Effect.provide(lookupCtx));
 
@@ -113,19 +113,19 @@ describe("A→B cutover — WorkPool baked releaseEnqueueHandoff", () => {
         const pathA = yield* tmpSock("l1-a");
         const pathB = yield* tmpSock("l1-b");
 
-        const lookupNode = Node.Tag()("ab/l1-lookup", {
+        const lookupNode = Node.Service()("ab/l1-lookup", {
           path: lookupPath,
         }).pipe(Node.asLookup);
 
-        class Jobs extends WorkPool.Tag<Jobs>()("ab/l1/Jobs", {
+        class Jobs extends WorkPool.Service<Jobs>()("ab/l1/Jobs", {
           payload: Item,
         }) {}
 
         // Different nodeKeys so both rows coexist — peer pick is by dial, not key.
-        class WorkerA extends Node.Tag<WorkerA, Jobs>()("ab/l1/WorkerA", {
+        class WorkerA extends Node.Service<WorkerA, Jobs>()("ab/l1/WorkerA", {
           path: pathA,
         }) {}
-        class WorkerB extends Node.Tag<WorkerB, Jobs>()("ab/l1/WorkerB", {
+        class WorkerB extends Node.Service<WorkerB, Jobs>()("ab/l1/WorkerB", {
           path: pathB,
         }) {}
 
@@ -193,17 +193,17 @@ describe("A→B cutover — WorkPool baked releaseEnqueueHandoff", () => {
       const pathA = yield* tmpSock("l1b-a");
       const pathB = yield* tmpSock("l1b-b");
 
-      const lookupNode = Node.Tag()("ab/l1b-lookup", {
+      const lookupNode = Node.Service()("ab/l1b-lookup", {
         path: lookupPath,
       }).pipe(Node.asLookup);
 
-      class Jobs extends WorkPool.Tag<Jobs>()("ab/l1b/Jobs", {
+      class Jobs extends WorkPool.Service<Jobs>()("ab/l1b/Jobs", {
         payload: Item,
       }) {}
-      class WorkerA extends Node.Tag<WorkerA, Jobs>()("ab/l1b/WorkerA", {
+      class WorkerA extends Node.Service<WorkerA, Jobs>()("ab/l1b/WorkerA", {
         path: pathA,
       }) {}
-      class WorkerB extends Node.Tag<WorkerB, Jobs>()("ab/l1b/WorkerB", {
+      class WorkerB extends Node.Service<WorkerB, Jobs>()("ab/l1b/WorkerB", {
         path: pathB,
       }) {}
 
@@ -245,17 +245,17 @@ describe("A→B cutover — WorkPool baked releaseEnqueueHandoff", () => {
         const pathA = yield* tmpSock("l8-a");
         const pathB = yield* tmpSock("l8-b");
 
-        const lookupNode = Node.Tag()("ab/l8-lookup", {
+        const lookupNode = Node.Service()("ab/l8-lookup", {
           path: lookupPath,
         }).pipe(Node.asLookup);
 
-        class Jobs extends WorkPool.Tag<Jobs>()("ab/l8/Jobs", {
+        class Jobs extends WorkPool.Service<Jobs>()("ab/l8/Jobs", {
           payload: Item,
         }) {}
-        class WorkerA extends Node.Tag<WorkerA, Jobs>()("ab/l8/WorkerA", {
+        class WorkerA extends Node.Service<WorkerA, Jobs>()("ab/l8/WorkerA", {
           path: pathA,
         }) {}
-        class WorkerB extends Node.Tag<WorkerB, Jobs>()("ab/l8/WorkerB", {
+        class WorkerB extends Node.Service<WorkerB, Jobs>()("ab/l8/WorkerB", {
           path: pathB,
         }) {}
 
@@ -320,20 +320,20 @@ describe("A→B cutover — same nodeKey + askIncumbent then handoff", () => {
         const pathA = yield* tmpSock("same-a");
         const pathB = yield* tmpSock("same-b");
 
-        const lookupNode = Node.Tag()("ab/same-lookup", {
+        const lookupNode = Node.Service()("ab/same-lookup", {
           path: lookupPath,
           onConflict: "askIncumbent",
         }).pipe(Node.asLookup);
 
-        class Jobs extends WorkPool.Tag<Jobs>()("ab/same/Jobs", {
+        class Jobs extends WorkPool.Service<Jobs>()("ab/same/Jobs", {
           payload: Item,
         }) {}
 
         // Same nodeKey string; different socks.
-        class WorkerA extends Node.Tag<WorkerA, Jobs>()("ab/same/Worker", {
+        class WorkerA extends Node.Service<WorkerA, Jobs>()("ab/same/Worker", {
           path: pathA,
         }) {}
-        class WorkerB extends Node.Tag<WorkerB, Jobs>()("ab/same/Worker", {
+        class WorkerB extends Node.Service<WorkerB, Jobs>()("ab/same/Worker", {
           path: pathB,
         }) {}
 
@@ -397,20 +397,20 @@ describe("A→B cutover — custom Hyperlink.serve { handoff }", () => {
       const pathA = yield* tmpSock("l2-a");
       const pathB = yield* tmpSock("l2-b");
 
-      const lookupNode = Node.Tag()("ab/l2-lookup", {
+      const lookupNode = Node.Service()("ab/l2-lookup", {
         path: lookupPath,
       }).pipe(Node.asLookup);
 
-      class Mover extends Hyperlink.Tag<Mover>()("ab/l2/Mover", {
+      class Mover extends Hyperlink.Service<Mover>()("ab/l2/Mover", {
         take: Hyperlink.effect(Schema.Array(Schema.String)),
         give: Hyperlink.effectFn(Schema.Array(Schema.String), Schema.Void),
         snapshot: Hyperlink.effect(Schema.Array(Schema.String)),
       }) {}
 
-      class WorkerA extends Node.Tag<WorkerA, Mover>()("ab/l2/WorkerA", {
+      class WorkerA extends Node.Service<WorkerA, Mover>()("ab/l2/WorkerA", {
         path: pathA,
       }) {}
-      class WorkerB extends Node.Tag<WorkerB, Mover>()("ab/l2/WorkerB", {
+      class WorkerB extends Node.Service<WorkerB, Mover>()("ab/l2/WorkerB", {
         path: pathB,
       }) {}
 
@@ -485,19 +485,19 @@ describe("A→B cutover — custom Hyperlink.serve { handoff }", () => {
         const pathA = yield* tmpSock("l4-a");
         const pathB = yield* tmpSock("l4-b");
 
-        const lookupNode = Node.Tag()("ab/l4-lookup", {
+        const lookupNode = Node.Service()("ab/l4-lookup", {
           path: lookupPath,
         }).pipe(Node.asLookup);
 
-        class Mover extends Hyperlink.Tag<Mover>()("ab/l4/Mover", {
+        class Mover extends Hyperlink.Service<Mover>()("ab/l4/Mover", {
           take: Hyperlink.effect(Schema.Array(Schema.String)),
           give: Hyperlink.effectFn(Schema.Array(Schema.String), Schema.Void),
         }) {}
 
-        class WorkerA extends Node.Tag<WorkerA, Mover>()("ab/l4/WorkerA", {
+        class WorkerA extends Node.Service<WorkerA, Mover>()("ab/l4/WorkerA", {
           path: pathA,
         }) {}
-        class WorkerB extends Node.Tag<WorkerB, Mover>()("ab/l4/WorkerB", {
+        class WorkerB extends Node.Service<WorkerB, Mover>()("ab/l4/WorkerB", {
           path: pathB,
         }) {}
 
@@ -590,18 +590,18 @@ describe("A→B cutover — custom Hyperlink.serve { handoff }", () => {
       const pathA = yield* tmpSock("l5-a");
       const pathB = yield* tmpSock("l5-b");
 
-      const lookupNode = Node.Tag()("ab/l5-lookup", {
+      const lookupNode = Node.Service()("ab/l5-lookup", {
         path: lookupPath,
       }).pipe(Node.asLookup);
 
-      class Ping extends Hyperlink.Tag<Ping>()("ab/l5/Ping", {
+      class Ping extends Hyperlink.Service<Ping>()("ab/l5/Ping", {
         ping: Hyperlink.effect(Schema.Number),
       }) {}
 
-      class WorkerA extends Node.Tag<WorkerA, Ping>()("ab/l5/WorkerA", {
+      class WorkerA extends Node.Service<WorkerA, Ping>()("ab/l5/WorkerA", {
         path: pathA,
       }) {}
-      class WorkerB extends Node.Tag<WorkerB, Ping>()("ab/l5/WorkerB", {
+      class WorkerB extends Node.Service<WorkerB, Ping>()("ab/l5/WorkerB", {
         path: pathB,
       }) {}
 
@@ -654,14 +654,14 @@ describe("A→B cutover — custom Hyperlink.serve { handoff }", () => {
       const lookupPath = yield* tmpSock("l3-lookup");
       const pathA = yield* tmpSock("l3-a");
 
-      const lookupNode = Node.Tag()("ab/l3-lookup", {
+      const lookupNode = Node.Service()("ab/l3-lookup", {
         path: lookupPath,
       }).pipe(Node.asLookup);
 
-      class Jobs extends WorkPool.Tag<Jobs>()("ab/l3/Jobs", {
+      class Jobs extends WorkPool.Service<Jobs>()("ab/l3/Jobs", {
         payload: Item,
       }) {}
-      class WorkerA extends Node.Tag<WorkerA, Jobs>()("ab/l3/WorkerA", {
+      class WorkerA extends Node.Service<WorkerA, Jobs>()("ab/l3/WorkerA", {
         path: pathA,
       }) {}
 
@@ -698,23 +698,23 @@ describe("A→B cutover — multi-service + membership", () => {
         const pathA = yield* tmpSock("l6-a");
         const pathB = yield* tmpSock("l6-b");
 
-        const lookupNode = Node.Tag()("ab/l6-lookup", {
+        const lookupNode = Node.Service()("ab/l6-lookup", {
           path: lookupPath,
         }).pipe(Node.asLookup);
 
-        class Alpha extends Hyperlink.Tag<Alpha>()("ab/l6/Alpha", {
+        class Alpha extends Hyperlink.Service<Alpha>()("ab/l6/Alpha", {
           take: Hyperlink.effect(Schema.Array(Schema.String)),
           give: Hyperlink.effectFn(Schema.Array(Schema.String), Schema.Void),
         }) {}
-        class Beta extends Hyperlink.Tag<Beta>()("ab/l6/Beta", {
+        class Beta extends Hyperlink.Service<Beta>()("ab/l6/Beta", {
           noop: Hyperlink.effect(Schema.Void),
         }) {}
 
-        class WorkerA extends Node.Tag<WorkerA, Alpha | Beta>()(
+        class WorkerA extends Node.Service<WorkerA, Alpha | Beta>()(
           "ab/l6/WorkerA",
           { path: pathA },
         ) {}
-        class WorkerB extends Node.Tag<WorkerB, Alpha | Beta>()(
+        class WorkerB extends Node.Service<WorkerB, Alpha | Beta>()(
           "ab/l6/WorkerB",
           { path: pathB },
         ) {}
@@ -807,22 +807,22 @@ describe("A→B cutover — multi-service + membership", () => {
         const pathPeer = yield* tmpSock("l7-peer");
         const pathNewcomer = yield* tmpSock("l7-new");
 
-        const lookupNode = Node.Tag()("ab/l7-lookup", {
+        const lookupNode = Node.Service()("ab/l7-lookup", {
           path: lookupPath,
           onConflict: "askIncumbent",
         }).pipe(Node.asLookup);
 
-        class Mover extends Hyperlink.Tag<Mover>()("ab/l7/Mover", {
+        class Mover extends Hyperlink.Service<Mover>()("ab/l7/Mover", {
           take: Hyperlink.effect(Schema.Array(Schema.String)),
           give: Hyperlink.effectFn(Schema.Array(Schema.String), Schema.Void),
         }) {}
 
         // Incumbent nodeKey — askIncumbent newcomers collide on this key.
-        class WorkerA extends Node.Tag<WorkerA, Mover>()("ab/l7/Worker", {
+        class WorkerA extends Node.Service<WorkerA, Mover>()("ab/l7/Worker", {
           path: pathA,
         }) {}
         // Different nodeKey so Directory has a non-self dial for A's handoff fn to enter.
-        class Peer extends Node.Tag<Peer, Mover>()("ab/l7/Peer", {
+        class Peer extends Node.Service<Peer, Mover>()("ab/l7/Peer", {
           path: pathPeer,
         }) {}
 
@@ -904,7 +904,7 @@ describe("A→B cutover — multi-service + membership", () => {
         expect(mid.snapshot.phase).toBe("draining");
         expect(mid.yielded).toBe(false);
 
-        const dir = Context.get(lookupCtx, Directory.Tag);
+        const dir = Context.get(lookupCtx, Directory.Service);
         const conflict = yield* dir
           .advertise(
             new Lookup.AdvertiseRequest({
@@ -958,17 +958,17 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
         const pathA = yield* tmpSock("l9-a");
         const pathB = yield* tmpSock("l9-b");
 
-        const lookupNode = Node.Tag()("ab/l9-lookup", {
+        const lookupNode = Node.Service()("ab/l9-lookup", {
           path: lookupPath,
         }).pipe(Node.asLookup);
 
-        class Ping extends Hyperlink.Tag<Ping>()("ab/l9/Ping", {
+        class Ping extends Hyperlink.Service<Ping>()("ab/l9/Ping", {
           ping: Hyperlink.effect(Schema.Number),
         }) {}
-        class WorkerA extends Node.Tag<WorkerA, Ping>()("ab/l9/WorkerA", {
+        class WorkerA extends Node.Service<WorkerA, Ping>()("ab/l9/WorkerA", {
           path: pathA,
         }) {}
-        class WorkerB extends Node.Tag<WorkerB, Ping>()("ab/l9/WorkerB", {
+        class WorkerB extends Node.Service<WorkerB, Ping>()("ab/l9/WorkerB", {
           path: pathB,
         }) {}
 
@@ -1020,17 +1020,17 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
         const pathA = yield* tmpSock("l10-a");
         const pathB = yield* tmpSock("l10-b");
 
-        const lookupNode = Node.Tag()("ab/l10-lookup", {
+        const lookupNode = Node.Service()("ab/l10-lookup", {
           path: lookupPath,
         }).pipe(Node.asLookup);
 
-        class Ping extends Hyperlink.Tag<Ping>()("ab/l10/Ping", {
+        class Ping extends Hyperlink.Service<Ping>()("ab/l10/Ping", {
           ping: Hyperlink.effect(Schema.Number),
         }) {}
-        class WorkerA extends Node.Tag<WorkerA, Ping>()("ab/l10/WorkerA", {
+        class WorkerA extends Node.Service<WorkerA, Ping>()("ab/l10/WorkerA", {
           path: pathA,
         }) {}
-        class WorkerB extends Node.Tag<WorkerB, Ping>()("ab/l10/WorkerB", {
+        class WorkerB extends Node.Service<WorkerB, Ping>()("ab/l10/WorkerB", {
           path: pathB,
         }) {}
 
@@ -1077,17 +1077,17 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
       const pathA = yield* tmpSock("l11-a");
       const pathB = yield* tmpSock("l11-b");
 
-      const lookupNode = Node.Tag()("ab/l11-lookup", {
+      const lookupNode = Node.Service()("ab/l11-lookup", {
         path: lookupPath,
       }).pipe(Node.asLookup);
 
-      class Ping extends Hyperlink.Tag<Ping>()("ab/l11/Ping", {
+      class Ping extends Hyperlink.Service<Ping>()("ab/l11/Ping", {
         ping: Hyperlink.effect(Schema.Number),
       }) {}
-      class WorkerA extends Node.Tag<WorkerA, Ping>()("ab/l11/WorkerA", {
+      class WorkerA extends Node.Service<WorkerA, Ping>()("ab/l11/WorkerA", {
         path: pathA,
       }) {}
-      class WorkerB extends Node.Tag<WorkerB, Ping>()("ab/l11/WorkerB", {
+      class WorkerB extends Node.Service<WorkerB, Ping>()("ab/l11/WorkerB", {
         path: pathB,
       }) {}
 
@@ -1145,17 +1145,17 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
         const pathA = yield* tmpSock("l12-a");
         const pathB = yield* tmpSock("l12-b");
 
-        const lookupNode = Node.Tag()("ab/l12-lookup", {
+        const lookupNode = Node.Service()("ab/l12-lookup", {
           path: lookupPath,
         }).pipe(Node.asLookup);
 
-        class Jobs extends WorkPool.Tag<Jobs>()("ab/l12/Jobs", {
+        class Jobs extends WorkPool.Service<Jobs>()("ab/l12/Jobs", {
           payload: Item,
         }) {}
-        class WorkerA extends Node.Tag<WorkerA, Jobs>()("ab/l12/WorkerA", {
+        class WorkerA extends Node.Service<WorkerA, Jobs>()("ab/l12/WorkerA", {
           path: pathA,
         }) {}
-        class WorkerB extends Node.Tag<WorkerB, Jobs>()("ab/l12/WorkerB", {
+        class WorkerB extends Node.Service<WorkerB, Jobs>()("ab/l12/WorkerB", {
           path: pathB,
         }) {}
 
@@ -1217,18 +1217,18 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
         const pathA = yield* tmpSock("l4b-a");
         const pathB = yield* tmpSock("l4b-b");
 
-        const lookupNode = Node.Tag()("ab/l4b-lookup", {
+        const lookupNode = Node.Service()("ab/l4b-lookup", {
           path: lookupPath,
         }).pipe(Node.asLookup);
 
-        class Mover extends Hyperlink.Tag<Mover>()("ab/l4b/Mover", {
+        class Mover extends Hyperlink.Service<Mover>()("ab/l4b/Mover", {
           take: Hyperlink.effect(Schema.Array(Schema.String)),
           give: Hyperlink.effectFn(Schema.Array(Schema.String), Schema.Void),
         }) {}
-        class WorkerA extends Node.Tag<WorkerA, Mover>()("ab/l4b/WorkerA", {
+        class WorkerA extends Node.Service<WorkerA, Mover>()("ab/l4b/WorkerA", {
           path: pathA,
         }) {}
-        class WorkerB extends Node.Tag<WorkerB, Mover>()("ab/l4b/WorkerB", {
+        class WorkerB extends Node.Service<WorkerB, Mover>()("ab/l4b/WorkerB", {
           path: pathB,
         }) {}
 
@@ -1347,20 +1347,20 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
         const pathB = yield* tmpSock("l13-b");
         const pathC = yield* tmpSock("l13-c");
 
-        const lookupNode = Node.Tag()("ab/l13-lookup", {
+        const lookupNode = Node.Service()("ab/l13-lookup", {
           path: lookupPath,
         }).pipe(Node.asLookup);
 
-        class Jobs extends WorkPool.Tag<Jobs>()("ab/l13/Jobs", {
+        class Jobs extends WorkPool.Service<Jobs>()("ab/l13/Jobs", {
           payload: Item,
         }) {}
-        class WorkerA extends Node.Tag<WorkerA, Jobs>()("ab/l13/WorkerA", {
+        class WorkerA extends Node.Service<WorkerA, Jobs>()("ab/l13/WorkerA", {
           path: pathA,
         }) {}
-        class WorkerB extends Node.Tag<WorkerB, Jobs>()("ab/l13/WorkerB", {
+        class WorkerB extends Node.Service<WorkerB, Jobs>()("ab/l13/WorkerB", {
           path: pathB,
         }) {}
-        class WorkerC extends Node.Tag<WorkerC, Jobs>()("ab/l13/WorkerC", {
+        class WorkerC extends Node.Service<WorkerC, Jobs>()("ab/l13/WorkerC", {
           path: pathC,
         }) {}
 
@@ -1426,17 +1426,17 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
         const pathA = yield* tmpSock("l14-a");
         const pathB = yield* tmpSock("l14-b");
 
-        const lookupNode = Node.Tag()("ab/l14-lookup", {
+        const lookupNode = Node.Service()("ab/l14-lookup", {
           path: lookupPath,
         }).pipe(Node.asLookup);
 
-        class Jobs extends WorkPool.Tag<Jobs>()("ab/l14/Jobs", {
+        class Jobs extends WorkPool.Service<Jobs>()("ab/l14/Jobs", {
           payload: Item,
         }) {}
-        class WorkerA extends Node.Tag<WorkerA, Jobs>()("ab/l14/WorkerA", {
+        class WorkerA extends Node.Service<WorkerA, Jobs>()("ab/l14/WorkerA", {
           path: pathA,
         }) {}
-        class WorkerB extends Node.Tag<WorkerB, Jobs>()("ab/l14/WorkerB", {
+        class WorkerB extends Node.Service<WorkerB, Jobs>()("ab/l14/WorkerB", {
           path: pathB,
         }) {}
 
@@ -1485,18 +1485,18 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
         const pathA = yield* tmpSock("l15-a");
         const pathB = yield* tmpSock("l15-b");
 
-        const lookupNode = Node.Tag()("ab/l15-lookup", {
+        const lookupNode = Node.Service()("ab/l15-lookup", {
           path: lookupPath,
         }).pipe(Node.asLookup);
 
-        class Mover extends Hyperlink.Tag<Mover>()("ab/l15/Mover", {
+        class Mover extends Hyperlink.Service<Mover>()("ab/l15/Mover", {
           take: Hyperlink.effect(Schema.Array(Schema.String)),
           give: Hyperlink.effectFn(Schema.Array(Schema.String), Schema.Void),
         }) {}
-        class WorkerA extends Node.Tag<WorkerA, Mover>()("ab/l15/WorkerA", {
+        class WorkerA extends Node.Service<WorkerA, Mover>()("ab/l15/WorkerA", {
           path: pathA,
         }) {}
-        class WorkerB extends Node.Tag<WorkerB, Mover>()("ab/l15/WorkerB", {
+        class WorkerB extends Node.Service<WorkerB, Mover>()("ab/l15/WorkerB", {
           path: pathB,
         }) {}
 
@@ -1580,18 +1580,18 @@ describe("A→B cutover — recovery, defects, multi-peer, mid-flight", () => {
         const pathA = yield* tmpSock("l16-a");
         const pathB = yield* tmpSock("l16-b");
 
-        const lookupNode = Node.Tag()("ab/l16-lookup", {
+        const lookupNode = Node.Service()("ab/l16-lookup", {
           path: lookupPath,
           onConflict: "askIncumbent",
         }).pipe(Node.asLookup);
 
-        class Jobs extends WorkPool.Tag<Jobs>()("ab/l16/Jobs", {
+        class Jobs extends WorkPool.Service<Jobs>()("ab/l16/Jobs", {
           payload: Item,
         }) {}
-        class WorkerA extends Node.Tag<WorkerA, Jobs>()("ab/l16/Worker", {
+        class WorkerA extends Node.Service<WorkerA, Jobs>()("ab/l16/Worker", {
           path: pathA,
         }) {}
-        class WorkerB extends Node.Tag<WorkerB, Jobs>()("ab/l16/Worker", {
+        class WorkerB extends Node.Service<WorkerB, Jobs>()("ab/l16/Worker", {
           path: pathB,
         }) {}
 
@@ -1660,19 +1660,19 @@ describe("A→B cutover — peer identity, dual Done, Advice, serveRemote", () =
         const pathA = yield* tmpSock("l17-a");
         const pathB = yield* tmpSock("l17-b");
 
-        const lookupNode = Node.Tag()("ab/l17-lookup", {
+        const lookupNode = Node.Service()("ab/l17-lookup", {
           path: lookupPath,
         }).pipe(Node.asLookup);
 
-        class Mover extends Hyperlink.Tag<Mover>()("ab/l17/Mover", {
+        class Mover extends Hyperlink.Service<Mover>()("ab/l17/Mover", {
           take: Hyperlink.effect(Schema.Array(Schema.String)),
           give: Hyperlink.effectFn(Schema.Array(Schema.String), Schema.Void),
           whoami: Hyperlink.effect(Schema.String),
         }) {}
-        class WorkerA extends Node.Tag<WorkerA, Mover>()("ab/l17/WorkerA", {
+        class WorkerA extends Node.Service<WorkerA, Mover>()("ab/l17/WorkerA", {
           path: pathA,
         }) {}
-        class WorkerB extends Node.Tag<WorkerB, Mover>()("ab/l17/WorkerB", {
+        class WorkerB extends Node.Service<WorkerB, Mover>()("ab/l17/WorkerB", {
           path: pathB,
         }) {}
 
@@ -1750,24 +1750,24 @@ describe("A→B cutover — peer identity, dual Done, Advice, serveRemote", () =
         const pathA = yield* tmpSock("l18-a");
         const pathB = yield* tmpSock("l18-b");
 
-        const lookupNode = Node.Tag()("ab/l18-lookup", {
+        const lookupNode = Node.Service()("ab/l18-lookup", {
           path: lookupPath,
         }).pipe(Node.asLookup);
 
-        class Alpha extends Hyperlink.Tag<Alpha>()("ab/l18/Alpha", {
+        class Alpha extends Hyperlink.Service<Alpha>()("ab/l18/Alpha", {
           take: Hyperlink.effect(Schema.Array(Schema.String)),
           give: Hyperlink.effectFn(Schema.Array(Schema.String), Schema.Void),
         }) {}
-        class Beta extends Hyperlink.Tag<Beta>()("ab/l18/Beta", {
+        class Beta extends Hyperlink.Service<Beta>()("ab/l18/Beta", {
           take: Hyperlink.effect(Schema.Array(Schema.String)),
           give: Hyperlink.effectFn(Schema.Array(Schema.String), Schema.Void),
         }) {}
 
-        class WorkerA extends Node.Tag<WorkerA, Alpha | Beta>()(
+        class WorkerA extends Node.Service<WorkerA, Alpha | Beta>()(
           "ab/l18/WorkerA",
           { path: pathA },
         ) {}
-        class WorkerB extends Node.Tag<WorkerB, Alpha | Beta>()(
+        class WorkerB extends Node.Service<WorkerB, Alpha | Beta>()(
           "ab/l18/WorkerB",
           { path: pathB },
         ) {}
@@ -1853,17 +1853,17 @@ describe("A→B cutover — peer identity, dual Done, Advice, serveRemote", () =
         const pathA = yield* tmpSock("l19-a");
         const pathB = yield* tmpSock("l19-b");
 
-        const lookupNode = Node.Tag()("ab/l19-lookup", {
+        const lookupNode = Node.Service()("ab/l19-lookup", {
           path: lookupPath,
         }).pipe(Node.asLookup);
 
-        class Jobs extends WorkPool.Tag<Jobs>()("ab/l19/Jobs", {
+        class Jobs extends WorkPool.Service<Jobs>()("ab/l19/Jobs", {
           payload: Item,
         }) {}
-        class WorkerA extends Node.Tag<WorkerA, Jobs>()("ab/l19/WorkerA", {
+        class WorkerA extends Node.Service<WorkerA, Jobs>()("ab/l19/WorkerA", {
           path: pathA,
         }) {}
-        class WorkerB extends Node.Tag<WorkerB, Jobs>()("ab/l19/WorkerB", {
+        class WorkerB extends Node.Service<WorkerB, Jobs>()("ab/l19/WorkerB", {
           path: pathB,
         }) {}
 
@@ -1925,18 +1925,18 @@ describe("A→B cutover — peer identity, dual Done, Advice, serveRemote", () =
         const pathA = yield* tmpSock("l20-a");
         const pathB = yield* tmpSock("l20-b");
 
-        const lookupNode = Node.Tag()("ab/l20-lookup", {
+        const lookupNode = Node.Service()("ab/l20-lookup", {
           path: lookupPath,
         }).pipe(Node.asLookup);
 
-        class Jobs extends WorkPool.Tag<Jobs>()("ab/l20/Jobs", {
+        class Jobs extends WorkPool.Service<Jobs>()("ab/l20/Jobs", {
           payload: Item,
         }) {}
         // No Jobs catalog on A — serveRemote grants handlers only (not `yield* Jobs`).
-        class WorkerA extends Node.Tag<WorkerA>()("ab/l20/WorkerA", {
+        class WorkerA extends Node.Service<WorkerA>()("ab/l20/WorkerA", {
           path: pathA,
         }) {}
-        class WorkerB extends Node.Tag<WorkerB, Jobs>()("ab/l20/WorkerB", {
+        class WorkerB extends Node.Service<WorkerB, Jobs>()("ab/l20/WorkerB", {
           path: pathB,
         }) {}
 

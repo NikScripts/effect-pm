@@ -211,12 +211,12 @@ import * as Node from "hyperlink-ts/Node"
 
 const Job = Schema.Struct({ id: Schema.String })
 
-class Edge extends Node.Tag<Edge>()("app/Edge", {
+class Edge extends Node.Service<Edge>()("app/Edge", {
   url: "http://127.0.0.1:3443/rpc",
   kind: "WebSocket",
 }) {}
 
-export class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", {
+export class Jobs extends WorkPool.Service<Jobs>()("app/Jobs", {
   payload: Job,
   node: Edge,
 }) {}

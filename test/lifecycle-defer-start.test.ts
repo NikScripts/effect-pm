@@ -185,7 +185,7 @@ describe("Lifecycle.make — Effect-native dual ops", () => {
 });
 
 describe("Lifecycle duals on Participating (tools)", () => {
-  class Jobs extends WorkPool.Tag<Jobs>()("test/LifecycleService/Jobs", {
+  class Jobs extends WorkPool.Service<Jobs>()("test/LifecycleService/Jobs", {
     payload: Schema.Struct({ n: Schema.Number }),
   }) {}
 
@@ -269,7 +269,7 @@ describe("Lifecycle duals on Participating (tools)", () => {
 });
 
 describe("Hyperlink.deferStart + Daemon make", () => {
-  class Sweeper extends Daemon.Tag<Sweeper>()("test/LifecycleService/Sweeper") {}
+  class Sweeper extends Daemon.Service<Sweeper>()("test/LifecycleService/Sweeper") {}
 
   it.effect("Daemon layer — start(Tag) / stop(Tag) (Idle → Running → Idle)", () =>
     Effect.gen(function* () {

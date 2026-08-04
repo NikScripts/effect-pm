@@ -13,13 +13,13 @@ export { pack };
 export const gateViewSpec = { kind: Gate.kind } as const;
 
 /** @public */
-export class GateCard extends Views.Card.Tag<GateCard>()(
+export class GateCard extends Views.Card.Service<GateCard>()(
   "hyperlink/view/gate-card",
   { spec: gateViewSpec },
 ) {}
 
 /** @public */
-export class GateDetail extends Views.Detail.Tag<GateDetail>()(
+export class GateDetail extends Views.Detail.Service<GateDetail>()(
   "hyperlink/view/gate-detail",
   { spec: gateViewSpec },
 ) {}

@@ -31,22 +31,22 @@ import * as Store from "../../../src/Store";
 import * as Node from "../../../src/Node";
 
 /** Node log key for the local TUI fleet — pairs with `TuiNode.logs` on {@link TuiStore}. */
-class TuiNode extends Node.Tag<TuiNode>()("acme/tui") {}
+class TuiNode extends Node.Service<TuiNode>()("acme/tui") {}
 
 const Job = Schema.Struct({ id: Schema.String });
 
 // the fleet — one tag per queue (unique id + Self)
-class Mail extends WorkPool.Tag<Mail>()("@acme/queues/Mail", { payload: Job }) {}
-class Jobs extends WorkPool.Tag<Jobs>()("@acme/queues/Jobs", { payload: Job }) {}
-class Billing extends WorkPool.Tag<Billing>()("@acme/queues/Billing", { payload: Job }) {}
-class Notify extends WorkPool.Tag<Notify>()("@acme/queues/Notify", { payload: Job }) {}
-class Worker1 extends WorkPool.Tag<Worker1>()("@acme/queues/Worker1", { payload: Job }) {}
-class Worker2 extends WorkPool.Tag<Worker2>()("@acme/queues/Worker2", { payload: Job }) {}
-class Worker3 extends WorkPool.Tag<Worker3>()("@acme/queues/Worker3", { payload: Job }) {}
-class RegionUS extends WorkPool.Tag<RegionUS>()("@acme/queues/RegionUS", { payload: Job }) {}
-class RegionEU extends WorkPool.Tag<RegionEU>()("@acme/queues/RegionEU", { payload: Job }) {}
-class Daily extends WorkPool.Tag<Daily>()("@acme/queues/Daily", { payload: Job }) {}
-class Weekly extends WorkPool.Tag<Weekly>()("@acme/queues/Weekly", { payload: Job }) {}
+class Mail extends WorkPool.Service<Mail>()("@acme/queues/Mail", { payload: Job }) {}
+class Jobs extends WorkPool.Service<Jobs>()("@acme/queues/Jobs", { payload: Job }) {}
+class Billing extends WorkPool.Service<Billing>()("@acme/queues/Billing", { payload: Job }) {}
+class Notify extends WorkPool.Service<Notify>()("@acme/queues/Notify", { payload: Job }) {}
+class Worker1 extends WorkPool.Service<Worker1>()("@acme/queues/Worker1", { payload: Job }) {}
+class Worker2 extends WorkPool.Service<Worker2>()("@acme/queues/Worker2", { payload: Job }) {}
+class Worker3 extends WorkPool.Service<Worker3>()("@acme/queues/Worker3", { payload: Job }) {}
+class RegionUS extends WorkPool.Service<RegionUS>()("@acme/queues/RegionUS", { payload: Job }) {}
+class RegionEU extends WorkPool.Service<RegionEU>()("@acme/queues/RegionEU", { payload: Job }) {}
+class Daily extends WorkPool.Service<Daily>()("@acme/queues/Daily", { payload: Job }) {}
+class Weekly extends WorkPool.Service<Weekly>()("@acme/queues/Weekly", { payload: Job }) {}
 
 type AllQueues =
   | Mail

@@ -10,7 +10,7 @@ import * as Store from "../src/Store";
 const jobSchema = Schema.Struct({ id: Schema.String });
 
 // ── queue WITH a success schema ──────────────────────────────────────────────
-class Doubler extends WorkPool.Tag<Doubler>()("@test/Doubler", {
+class Doubler extends WorkPool.Service<Doubler>()("@test/Doubler", {
   payload: jobSchema,
   success: Schema.Number,
 }) {}
@@ -22,7 +22,7 @@ const doublerLayer = WorkPool.layerMemory(Doubler, {
 });
 
 // ── queue WITHOUT a success schema (historic void channel) ───────────────────
-class Sink extends WorkPool.Tag<Sink>()("@test/Sink", { payload: jobSchema }) {}
+class Sink extends WorkPool.Service<Sink>()("@test/Sink", { payload: jobSchema }) {}
 const sinkLayer = WorkPool.layerMemory(Sink, {
   effect: (_job) => Effect.void,
   concurrency: 1,

@@ -42,7 +42,7 @@ import { Effect, Layer, Schema, Stream } from "effect";
 import * as WorkPool from "hyperlink-ts/WorkPool";
 
 const Job = Schema.Struct({ id: Schema.String });
-class RosterQueue extends WorkPool.Tag<RosterQueue>()("nwsl/RosterQueue", {
+class RosterQueue extends WorkPool.Service<RosterQueue>()("nwsl/RosterQueue", {
   payload: Job,
 }) {}
 
@@ -73,7 +73,7 @@ WorkPool.layer(RosterQueue, {
 ```ts
 import * as Daemon from "hyperlink-ts/Daemon";
 
-class LiveScores extends Daemon.Tag<LiveScores>()("nwsl/LiveScores") {}
+class LiveScores extends Daemon.Service<LiveScores>()("nwsl/LiveScores") {}
 
 const layer = Daemon.layer(LiveScores, {
   effect: pollLiveScores,
@@ -92,7 +92,7 @@ import * as Store from "hyperlink-ts/Store";
 import * as WorkPool from "hyperlink-ts/WorkPool";
 import * as LogEntry from "hyperlink-ts/LogEntry";
 
-class Droplet extends Node.Tag<Droplet>()("hub/droplet") {}
+class Droplet extends Node.Service<Droplet>()("hub/droplet") {}
 class AppStore extends Store.Service<AppStore>("@app/Store")(
   Droplet.logs,
   WorkPool.store(RosterQueue),

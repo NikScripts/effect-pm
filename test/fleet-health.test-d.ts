@@ -7,10 +7,10 @@ import * as MultiNode from "../src/MultiNode";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
-class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
-class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
+class DropletEast extends Node.Service<DropletEast>()("app/DropletEast") {}
+class DropletWest extends Node.Service<DropletWest>()("app/DropletWest") {}
 
-class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
+class MeshHealth extends FleetHealth.Service<MeshHealth>()().pipe(
   Hyperlink.nodes([DropletEast, DropletWest]),
 ) {}
 
@@ -97,7 +97,7 @@ void successes;
 
 // ── Tag construction + layer/serve/alone wiring ──────────────────────────────
 
-class BoundGlass extends FleetHealth.Tag<BoundGlass>()({ node: DropletEast }) {}
+class BoundGlass extends FleetHealth.Service<BoundGlass>()({ node: DropletEast }) {}
 
 // Spec stamped on both unbound (MeshHealth) and node-bound tags is the FleetHealth contract.
 type AloneSpec = Hyperlink.SpecOf<typeof MeshHealth>;

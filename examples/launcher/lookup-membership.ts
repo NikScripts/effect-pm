@@ -30,7 +30,7 @@ const program = Effect.gen(function* () {
   const lookupPath = `/tmp/hyperlink-ts-launcher-membership-${String(now)}.sock`;
   const port = 28_700 + (now % 200);
 
-  const lookupNode = Node.Tag()("examples/launcher-membership/Lookup", {
+  const lookupNode = Node.Service()("examples/launcher-membership/Lookup", {
     path: lookupPath,
   }).pipe(Node.asLookup);
   const lookupServer = yield* Layer.build(
@@ -39,7 +39,7 @@ const program = Effect.gen(function* () {
   const lookupClient = yield* Layer.build(Lookup.client(lookupNode));
   const lookupCtx = Context.merge(lookupServer, lookupClient);
 
-  const worker = Node.Tag()("examples/launcher-membership/Worker", {
+  const worker = Node.Service()("examples/launcher-membership/Worker", {
     url: `http://127.0.0.1:${String(port)}/rpc`,
     kind: "Http",
   });

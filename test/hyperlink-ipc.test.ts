@@ -4,7 +4,7 @@ import { expect } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
-// Unix-domain RPC — Phase 1 ipc transport. Plain Hyperlink.Tag (no Queue/Store).
+// Unix-domain RPC — Phase 1 ipc transport. Plain Hyperlink.Service (no Queue/Store).
 // Build server Context first, then client — mergeAll races listen vs connect (SocketOpenError).
 
 const tmpSock = (label: string) =>
@@ -13,7 +13,7 @@ const tmpSock = (label: string) =>
     return `/tmp/hyperlink-ts-ipc-${label}-${process.pid}-${now}.sock`;
   });
 
-class Echo extends Hyperlink.Tag<Echo>()("ipc/Echo", {
+class Echo extends Hyperlink.Service<Echo>()("ipc/Echo", {
   ping: Hyperlink.effectFn({ n: Schema.Number }, Schema.Number),
 }) {}
 
@@ -39,14 +39,14 @@ const withIpc = <A, E, R, LE = never>(
 describe("Node ProtocolKind — ipc", () => {
   it("infers ipc from { path }, leaves url undefined", () => {
     const path = "/tmp/example.sock";
-    class Local extends Node.Tag<Local>()("ipc/local", { path }) {}
+    class Local extends Node.Service<Local>()("ipc/local", { path }) {}
     expect(Local.kind).toBe("IpcSocket");
     expect(Local.path).toBe(path);
     expect(Local.url).toBeUndefined();
   });
 
   it("honors explicit kind with path", () => {
-    class Explicit extends Node.Tag<Explicit>()("ipc/explicit", {
+    class Explicit extends Node.Service<Explicit>()("ipc/explicit", {
       path: "/tmp/x.sock",
       kind: "IpcSocket",
     }) {}
@@ -59,7 +59,7 @@ describe("Node.ipcServer + connectIpc", () => {
   it.live("round-trips an RPC call over a Unix-domain socket", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("roundtrip");
-      class Worker extends Node.Tag<Worker>()("ipc/worker", { path }) {}
+      class Worker extends Node.Service<Worker>()("ipc/worker", { path }) {}
 
       const n = yield* withIpc(
         Node.ipcServer([Hyperlink.serve(Echo, echoImpl)], { path }),
@@ -79,7 +79,7 @@ describe("Node.ipcServer + connectIpc", () => {
   it.live("Node.connect derives ipc from the node's kind + path", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("derive");
-      class Worker extends Node.Tag<Worker>()("ipc/derive", { path }) {}
+      class Worker extends Node.Service<Worker>()("ipc/derive", { path }) {}
 
       const n = yield* withIpc(
         Node.ipcServer([Hyperlink.serve(Echo, echoImpl)], { path }),
@@ -98,7 +98,7 @@ describe("Node.ipcServer + connectIpc", () => {
   it.live("with unlink:true, a second listen can bind the same path", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("stale");
-      class Worker extends Node.Tag<Worker>()("ipc/stale", { path }) {}
+      class Worker extends Node.Service<Worker>()("ipc/stale", { path }) {}
 
       const serve = () =>
         Node.ipcServer([Hyperlink.serve(Echo, echoImpl)], {

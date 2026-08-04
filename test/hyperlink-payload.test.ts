@@ -3,7 +3,7 @@ import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
 
 // Parameterized reads use `effectFn` (or `stream` for push sources) — `effect` is inputless only.
-class Svc extends Hyperlink.Tag<Svc>()("payload-test/Svc", {
+class Svc extends Hyperlink.Service<Svc>()("payload-test/Svc", {
   find: Hyperlink.effectFn(Schema.Struct({ id: Schema.String }), Schema.String),
   len: Hyperlink.effectFn(Schema.String, Schema.Number),
   since: Hyperlink.stream(Schema.Number, {

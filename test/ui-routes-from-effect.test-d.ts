@@ -7,9 +7,9 @@ import * as Group from "../src/Group";
 import * as Route from "../src/ui/Route";
 import * as Router from "../src/ui/Router";
 
-class HttpApi extends Daemon.Tag<HttpApi>()("test/fromEffect/HttpApi") {}
-class Nwsl extends Group.Tag<Nwsl>("test/fromEffect/Nwsl")({ HttpApi }) {}
-class Hub extends Group.Tag<Hub>("test/fromEffect/Hub")({ Nwsl }) {}
+class HttpApi extends Daemon.Service<HttpApi>()("test/fromEffect/HttpApi") {}
+class Nwsl extends Group.Service<Nwsl>("test/fromEffect/Nwsl")({ HttpApi }) {}
+class Hub extends Group.Service<Hub>("test/fromEffect/Hub")({ Nwsl }) {}
 
 const site = Route.make("site").add(
   Route.get("home", "/home"),

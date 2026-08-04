@@ -14,7 +14,7 @@ import {
   ListenNode,
   HttpListenArg,
   ListenOptions,
-  Tag,
+  Service as Tag,
   UnaddressedNode,
 } from "./nodeCore"
 import { unaddressedLayer } from "./nodeConnect"
@@ -333,7 +333,7 @@ const ephemeralHttpListen = (
             ) as AnyNode & { readonly key: string };
             if (claim?.claimIdentity === true) {
               const Identity = yield* Effect.promise(() => import("../Identity"));
-              const identity = yield* Effect.serviceOption(Identity.Tag);
+              const identity = yield* Effect.serviceOption(Identity.Service);
               if (Option.isNone(identity)) {
                 return yield* new Hyperlink.IdentitySelfRequired({ tag: wireKey });
               }

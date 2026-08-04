@@ -4,7 +4,7 @@ import * as Hyperlink from "../src/Hyperlink";
 
 // A `ref` field surfaces as a `Subscribable`: `.changes` replays the current value then streams every
 // update; `.get` reads the current. Works flat and nested (the spec tree).
-class Live extends Hyperlink.Tag<Live>()("ref-test/Changes", {
+class Live extends Hyperlink.Service<Live>()("ref-test/Changes", {
   count: Hyperlink.ref(Schema.Number),
   stats: {
     online: Hyperlink.ref(Schema.Number),

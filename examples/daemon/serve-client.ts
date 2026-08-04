@@ -23,7 +23,7 @@ import * as Node from "../../src/Node";
 
 const Report = Schema.Struct({ count: Schema.Number });
 
-class RemoteReport extends Daemon.Tag<RemoteReport>()(
+class RemoteReport extends Daemon.Service<RemoteReport>()(
   "examples/daemon/RemoteReport",
   { success: Report },
 ).pipe(Daemon.schedule([])) {}

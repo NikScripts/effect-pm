@@ -1,7 +1,7 @@
 /**
  * @module examples/node/addressless-call
  *
- * **Address-less Node.Tag — call terminal.** Lookup is **piped** onto
+ * **Address-less Node.Service — call terminal.** Lookup is **piped** onto
  * {@link Hyperlink.lookupClient} (same shape as the serve side).
  *
  * Terminal B (after serve is up):
@@ -21,7 +21,7 @@ import { Config, Effect, Layer, Schema } from "effect"
 import * as Lookup from "../../src/Lookup"
 import * as Hyperlink from "../../src/Hyperlink"
 
-class Jobs extends Hyperlink.Tag<Jobs>()("Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("Jobs", {
   jobs: Hyperlink.effect(Schema.Number),
 }) {}
 

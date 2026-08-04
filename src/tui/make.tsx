@@ -11,7 +11,7 @@
  *   **action**: no-payload actions fire on the number key; actions with a payload
  *   open the command bar prefilled (`name field=…`), coerced from the field schema.
  *
- * For a `Group.Tag`, prefer {@link Dashboard} / {@link layer} (Group nav + kind widgets).
+ * For a `Group.Service`, prefer {@link Dashboard} / {@link layer} (Group nav + kind widgets).
  * `make` remains the generic contract-driven grid for a flat `Record` of tags.
  */
 

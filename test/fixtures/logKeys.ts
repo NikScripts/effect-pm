@@ -1,5 +1,5 @@
 /**
- * Canonical **log keys** for tests — same shapes as production `Node.Tag.key` and `Tag.key`.
+ * Canonical **log keys** for tests — same shapes as production `Node.Service.key` and `Tag.key`.
  *
  * | Constant | Key kind | Key value | Used in |
  * |----------|----------|-----------|---------|
@@ -23,5 +23,5 @@ export const testRelayNodeKey = "test/relay" as const;
 /** **Hyperlink key** — daemon tag key paired with {@link testBillingNodeKey}. */
 export const testSyncDaemonKey = "billing/SyncWorker" as const;
 
-/** **Node log key** — TUI example fleet (`Node.Tag` `acme/tui`). */
+/** **Node log key** — TUI example fleet (`Node.Service` `acme/tui`). */
 export const testTuiNodeKey = "acme/tui" as const;

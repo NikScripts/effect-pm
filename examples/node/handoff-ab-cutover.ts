@@ -53,10 +53,10 @@ const waitUntil = <A, E, R>(
   });
 
 const nodesServing = (
-  lookupCtx: Context.Context<Directory.Tag>,
+  lookupCtx: Context.Context<Directory.Service>,
   serviceKey: string,
 ) =>
-  Context.get(lookupCtx, Directory.Tag)
+  Context.get(lookupCtx, Directory.Service)
     .nodesServing(new Lookup.NodesServingRequest({ serviceKey }))
     .pipe(Effect.provide(lookupCtx));
 
@@ -65,19 +65,19 @@ const program = Effect.gen(function* () {
   const pathA = yield* tmpSock("a");
   const pathB = yield* tmpSock("b");
 
-  const lookupNode = Node.Tag()("examples/handoff-ab/Lookup", {
+  const lookupNode = Node.Service()("examples/handoff-ab/Lookup", {
     path: lookupPath,
   }).pipe(Node.asLookup);
 
-  class Jobs extends WorkPool.Tag<Jobs>()("examples/handoff-ab/Jobs", {
+  class Jobs extends WorkPool.Service<Jobs>()("examples/handoff-ab/Jobs", {
     payload: Job,
   }) {}
 
   // Different nodeKeys so both Directory rows coexist; peer pick is by dial.
-  class WorkerA extends Node.Tag<WorkerA, Jobs>()("examples/handoff-ab/WorkerA", {
+  class WorkerA extends Node.Service<WorkerA, Jobs>()("examples/handoff-ab/WorkerA", {
     path: pathA,
   }) {}
-  class WorkerB extends Node.Tag<WorkerB, Jobs>()("examples/handoff-ab/WorkerB", {
+  class WorkerB extends Node.Service<WorkerB, Jobs>()("examples/handoff-ab/WorkerB", {
     path: pathB,
   }) {}
 

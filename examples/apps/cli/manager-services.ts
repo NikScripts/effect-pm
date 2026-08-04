@@ -14,13 +14,13 @@
 import { Effect, Layer, Schema } from "effect";
 import * as Hyperlink from "../../../src/Hyperlink";
 
-export class Counter extends Hyperlink.Tag<Counter>()("Counter", {
+export class Counter extends Hyperlink.Service<Counter>()("Counter", {
   current: Hyperlink.effect(Schema.Number),
   increment: Hyperlink.effectFn({ by: Schema.Number }),
   reset: Hyperlink.effect(Schema.Void).annotate({ destructive: true }),
 }) {}
 
-export class QueueManager extends Hyperlink.Tag<QueueManager>()("QueueManager", {
+export class QueueManager extends Hyperlink.Service<QueueManager>()("QueueManager", {
   list: Hyperlink.effect(Schema.Array(Schema.String)),
   status: Hyperlink.effectFn(
     { id: Schema.String },

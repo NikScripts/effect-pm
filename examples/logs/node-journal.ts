@@ -17,7 +17,7 @@ import * as Logs from "../../src/Logs";
 import * as Node from "../../src/Node";
 import * as Store from "../../src/Store";
 
-class DemoNode extends Node.Tag<DemoNode>()("examples/logs/node-journal") {}
+class DemoNode extends Node.Service<DemoNode>()("examples/logs/node-journal") {}
 
 class AppStore extends Store.Service<AppStore>("@examples/logs/NodeJournalStore")(
   DemoNode.logs,

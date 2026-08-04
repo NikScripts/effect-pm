@@ -12,7 +12,7 @@
  * `.annotate({...})`:
  *
  * ```ts
- * class Counter extends Hyperlink.Tag<Counter>()("@app/Counter", {
+ * class Counter extends Hyperlink.Service<Counter>()("@app/Counter", {
  *   current: Hyperlink.effect(Schema.Number).annotate({ description: "Current value." }),
  *   add: Hyperlink.effectFn({ by: Schema.Number }).annotate({ description: "Increment." }),
  *   reset: Hyperlink.effect(Schema.Void).annotate({ destructive: true }),
@@ -21,7 +21,7 @@
  * const c = yield* Counter;        // { current: Effect<number>; add: (p) => Effect<void>; reset: Effect<void> }
  * ```
  *
- * Define a tag with {@link Hyperlink.Tag}:
+ * Define a tag with {@link Hyperlink.Service}:
  * - **Solo** — `Tag<Self>()(key, spec)`: one HyperService, RpcGroup prefix = `.key`.
  * - **Shared Spec** — `Tag(wireKey, spec)` then `Factory<Self>()(instanceKey)`: many
  *   instances, one Spec / RpcGroup (prefix = `wireKey`), routed by header `key`.
@@ -107,10 +107,10 @@ import {
   type StoreScopeTag,
 } from "./internal/store/registration";
 // Type-only — avoids a runtime Hyperlink↔Lookup-family cycle; claim path dynamic-imports.
-import type { Tag as LookupAdvice } from "./Advice";
-import type { Tag as LookupDirectory } from "./Directory";
+import type { Service as LookupAdvice } from "./Advice";
+import type { Service as LookupDirectory } from "./Directory";
 import * as Policy from "./Policy";
-import type { Tag as LookupIdentity } from "./Identity";
+import type { Service as LookupIdentity } from "./Identity";
 import {
   AddressedNode,
   AnyNode,
@@ -125,7 +125,7 @@ import {
   ProtocolUnanswered,
   ServiceNotReady,
   ServiceNotServed,
-  Tag as makeNode,
+  Service as makeNode,
   UnaddressedNode,
 } from "./internal/nodeCore";
 import { hashContract } from "./internal/contractHash";
@@ -950,14 +950,14 @@ const defaultsCollidesWithSpec = (flat: FlatSpec, key: string): boolean => {
  * for post-hoc local patches.
  *
  * ```ts
- * class Jobs extends WorkPool.Tag<Jobs>()("@app/Jobs", jobSpec).pipe(
+ * class Jobs extends WorkPool.Service<Jobs>()("@app/Jobs", jobSpec).pipe(
  *   Hyperlink.defaults({
  *     label: (n: number) => `job=${n}`,
  *     tags: ["admin", "beta"],
  *   }),
  * ) {}
  * // equivalent factory sugar:
- * class Jobs2 extends WorkPool.Tag<Jobs2>()("@app/Jobs2", {
+ * class Jobs2 extends WorkPool.Service<Jobs2>()("@app/Jobs2", {
  *   payload: JobSchema,
  *   defaults: { label: (n: number) => `job=${n}` },
  * }) {}
@@ -1085,7 +1085,7 @@ export const local: typeof localFn & BareLocal = Object.assign(localFn, {
  * {@link ImplWithDefaultOverrides}); the remote client always installs the Tag-baked value.
  *
  * ```ts
- * class Counter extends Hyperlink.Tag<Counter>()("counter", {
+ * class Counter extends Hyperlink.Service<Counter>()("counter", {
  *   current: Hyperlink.effect(Schema.Number),
  *   label: Hyperlink.default((n: number) => `count=${n}`),
  *   unit: Hyperlink.default("count"),
@@ -2368,7 +2368,7 @@ declare const wireMismatchSym: unique symbol;
  * @category models
  */
 export interface WireMismatch<K extends PropertyKey> {
-  readonly [wireMismatchSym]: `Hyperlink.Tag: wired member '${K &
+  readonly [wireMismatchSym]: `Hyperlink.Service: wired member '${K &
     string}' — its success type disagrees with the service interface`;
 }
 
@@ -2703,7 +2703,7 @@ export const interfaceLocalsSym: unique symbol = Symbol.for(
 );
 /** Where a contract's **kind** (its canonical id, e.g. `hyperlink-ts/WorkPool`) is
  *  stowed on a Tag — set by each contract's `.Tag` factory so consumers (the dashboard) can
- *  classify a tag without sniffing its spec. Absent on a bare {@link Hyperlink.Tag}. @internal */
+ *  classify a tag without sniffing its spec. Absent on a bare {@link Hyperlink.Service}. @internal */
 export const kindSym: unique symbol = Symbol.for(
   "hyperlink-ts/Hyperlink/kind",
 );
@@ -2781,7 +2781,7 @@ const peersSym: unique symbol = Symbol.for("hyperlink-ts/Hyperlink/peers");
 const selfNodeSym: unique symbol = Symbol.for("hyperlink-ts/Hyperlink/selfNode");
 
 /**
- * The type of a HyperService tag carrying spec `S` — what {@link Hyperlink.Tag} produces
+ * The type of a HyperService tag carrying spec `S` — what {@link Hyperlink.Service} produces
  * (and what you extend). Lets a consumer write
  * `<S extends Spec>(tag: HyperlinkTag<Self, S>)` and read the spec through named types
  * ({@link specOf} / {@link groupOf}) instead of a `Parameters<typeof specOf>` workaround.
@@ -2811,7 +2811,7 @@ export interface HyperlinkTag<Self, S extends Spec, Svc = ServiceOf<S, Self>>
    */
   readonly [nodeSym]: NodeKey<unknown> | undefined;
   /** The contract's kind (canonical id) — set by a contract `.Tag` factory, `undefined` for a bare
-   *  {@link Hyperlink.Tag}. Read it with {@link kindOf}. */
+   *  {@link Hyperlink.Service}. Read it with {@link kindOf}. */
   readonly [kindSym]: string | undefined;
   /** The HyperService's readiness derivation, if any (applied by {@link withReadiness}); `undefined`
    *  ⇒ ready by default. Read it via {@link readinessCheck}. */
@@ -2994,7 +2994,7 @@ export type WireOf<T extends TagIdentifier> = Wire<SpecOfTag<T>>;
  * const spec = { current: Hyperlink.effect(Schema.Number) } as const;
  * type Acquire = Hyperlink.Hyperlink<typeof spec>;
  *
- * class Counter extends Hyperlink.Tag<Counter>()("@app/Counter", spec) {}
+ * class Counter extends Hyperlink.Service<Counter>()("@app/Counter", spec) {}
  * type AcquireTag = Hyperlink.Of<Counter>;
  * ```
  *
@@ -3084,7 +3084,7 @@ export interface NodeBoundTag<Self, S extends Spec, HSelf, Svc = ServiceOf<S, Se
   readonly [nodeSym]: NodeKey<HSelf>;
 }
 
-/** The kind stamped on a bare {@link Hyperlink.Tag} that declares none — every HyperService tag carries a
+/** The kind stamped on a bare {@link Hyperlink.Service} that declares none — every HyperService tag carries a
  *  kind, and a plain HyperService's is this. The typed factories stamp their own (e.g.
  *  `hyperlink-ts/WorkPool`); a bare tag defaults to this so nothing is ever kind-less.
  *
@@ -3094,7 +3094,7 @@ export interface NodeBoundTag<Self, S extends Spec, HSelf, Svc = ServiceOf<S, Se
 export const kind = "hyperlink-ts/Hyperlink";
 
 /** The contract kind a tag was built for (e.g. `hyperlink-ts/WorkPool`, or {@link kind}
- *  for a bare {@link Hyperlink.Tag}); `undefined` only for a non-tag. The robust replacement for
+ *  for a bare {@link Hyperlink.Service}); `undefined` only for a non-tag. The robust replacement for
  *  sniffing a tag's spec; accepts `unknown` so a `Group` member can be passed straight in. */
 export const kindOf = (tag: unknown): string | undefined => {
   // A HyperService tag is a class (so `typeof` is "function"), with the kind stamped as a static.
@@ -3214,10 +3214,10 @@ export type PipeableTag = { readonly [specSym]: FlatSpec };
 /**
  * Attach a {@link Readiness} derivation to a tag — the seam the node's `/health` and handle
  * `.status` aggregate over. Each contract applies it from its own status (so readiness can't drift
- * from status); a bare {@link Hyperlink.Tag} can opt in the same way. Dual (data-first or `.pipe`):
+ * from status); a bare {@link Hyperlink.Service} can opt in the same way. Dual (data-first or `.pipe`):
  *
  * ```ts
- * class EdgeCache extends Hyperlink.Tag<EdgeCache>()("edge/Cache", {
+ * class EdgeCache extends Hyperlink.Service<EdgeCache>()("edge/Cache", {
  *   warm: Hyperlink.effect(Schema.Boolean),
  * }).pipe(
  *   Hyperlink.withReadiness((svc) =>
@@ -3368,7 +3368,7 @@ const dialHandoffPeer = (
 ): Effect.Effect<Option.Option<unknown>, never, Scope.Scope> =>
   Effect.gen(function* () {
     const Directory = yield* Effect.promise(() => import("./Directory"));
-    const dirOpt = yield* Effect.serviceOption(Directory.Tag);
+    const dirOpt = yield* Effect.serviceOption(Directory.Service);
     if (Option.isNone(dirOpt)) return Option.none();
     const rows = yield* dirOpt.value.nodesServing(
       new Directory.NodesServingRequest({ serviceKey: wireKey }),
@@ -3597,7 +3597,7 @@ export interface MonitoredDependencyOptions<
 
 /**
  * Spec + readiness from {@link monitoredDependency}. Pass `spec` to
- * {@link Hyperlink.Tag}; attach `readiness` with {@link withReadiness}.
+ * {@link Hyperlink.Service}; attach `readiness` with {@link withReadiness}.
  *
  * @category models
  * @public
@@ -3613,7 +3613,7 @@ export interface MonitoredDependency<
 /**
  * Build the common **monitored dependency** contract: `status` (one-shot read),
  * `changes` (live snapshot stream), and readiness derived from `status`. Still a
- * plain {@link Hyperlink.Tag} shape — **not** a new resource kind.
+ * plain {@link Hyperlink.Service} shape — **not** a new resource kind.
  *
  * Compose behaviour the usual way: tag + {@link withReadiness} (see
  * *Resources → behaviour via piped combinators*).
@@ -3633,7 +3633,7 @@ export interface MonitoredDependency<
  * })
  *
  * export class WnbaDatabase extends Hyperlink.withReadiness(
- *   Hyperlink.Tag<WnbaDatabase>()("@app/wnba/Database", spec, { node: WnbaNode }),
+ *   Hyperlink.Service<WnbaDatabase>()("@app/wnba/Database", spec, { node: WnbaNode }),
  *   readiness,
  * ) {}
  * ```
@@ -3885,7 +3885,7 @@ export interface SharedTagFactory<S extends Spec> {
  * **Solo (schema)** — `Tag<Self>()(key, spec)`: value type inferred from the spec; wire key = `.key`.
  *
  * ```ts
- * class Counter extends Hyperlink.Tag<Counter>()("Counter", {
+ * class Counter extends Hyperlink.Service<Counter>()("Counter", {
  *   increment: Hyperlink.effectFn({ by: Schema.Number }),
  *   current: Hyperlink.effect(Schema.Number),
  * }) {}
@@ -3903,7 +3903,7 @@ export interface SharedTagFactory<S extends Spec> {
  * {@link serveRemote} (merge layers); dial with ordinary {@link client}.
  *
  * ```ts
- * const Counters = Hyperlink.Tag("demo/SharedCounters", {
+ * const Counters = Hyperlink.Service("demo/SharedCounters", {
  *   snapshot: Hyperlink.effect(Schema.Number),
  * });
  * class Nwsl extends Counters<Nwsl>()("@app/Nwsl/counters") {}
@@ -4177,7 +4177,7 @@ const identityClaimLayer = <Self, S extends Spec, A, E, R>(
         return yield* new IdentitySelfRequired({ tag: tag.key });
       }
       const Identity = yield* Effect.promise(() => import("./Identity"));
-      const identity = yield* Identity.Tag;
+      const identity = yield* Identity.Service;
       const outcome = yield* identity
         .claim(
           new Identity.ClaimRequest({
@@ -5772,10 +5772,10 @@ type AndNodeResult<T, N> = T extends {
  * `client(Tag)` is fully wired. {@link andNode}`(X)` from an empty set is the same bind.
  *
  * ```ts
- * class Mail extends Hyperlink.Tag<Mail>()("app/Mail", spec).pipe(
+ * class Mail extends Hyperlink.Service<Mail>()("app/Mail", spec).pipe(
  *   Hyperlink.nodes([WorkerA]), // or Hyperlink.andNode(WorkerA)
  * ) {}
- * class Pool extends Hyperlink.Tag<Pool>()("app/Pool", spec).pipe(
+ * class Pool extends Hyperlink.Service<Pool>()("app/Pool", spec).pipe(
  *   Hyperlink.nodes([A, B, C]),
  * ) {}
  * ```
@@ -5839,7 +5839,7 @@ export const nodes: {
  * Identity Tags refuse a second Node ({@link IdentityMultiNode}).
  *
  * ```ts
- * class Mail extends Hyperlink.Tag<Mail>()("app/Mail", spec).pipe(
+ * class Mail extends Hyperlink.Service<Mail>()("app/Mail", spec).pipe(
  *   Hyperlink.andNode(Worker), // ≡ nodes([Worker]) when starting empty
  * ) {}
  * class PoolPlus extends PoolBase.pipe(Hyperlink.andNode(StatsNode)) {}
@@ -5933,10 +5933,10 @@ export const distributedOf = nodesOf;
  * Pipe onto any Hyperlink / Daemon / Queue tag (same shape as {@link withReadiness}):
  *
  * ```ts
- * class Mail extends Hyperlink.Tag<Mail>()("app/Mail", spec).pipe(Hyperlink.identity) {}
+ * class Mail extends Hyperlink.Service<Mail>()("app/Mail", spec).pipe(Hyperlink.identity) {}
  *
  * // bind a Node on the Tag (or listen with ListenNode) — Lookup decides winner/loser:
- * class Mail extends Hyperlink.Tag<Mail>()("app/Mail", spec, { node: ThisNode }).pipe(
+ * class Mail extends Hyperlink.Service<Mail>()("app/Mail", spec, { node: ThisNode }).pipe(
  *   Hyperlink.identity,
  * ) {}
  * Hyperlink.serve(Mail, impl).pipe(Layer.provide(Lookup.client(lookupNode)))
@@ -6263,9 +6263,9 @@ export const lookupClient = <Self, S extends Spec>(
       const Identity = yield* Effect.promise(() => import("./Identity"));
       const Directory = yield* Effect.promise(() => import("./Directory"));
       const Advice = yield* Effect.promise(() => import("./Advice"));
-      const identity = yield* Identity.Tag;
-      const directory = yield* Directory.Tag;
-      const advice = yield* Advice.Tag;
+      const identity = yield* Identity.Service;
+      const directory = yield* Directory.Service;
+      const advice = yield* Advice.Service;
       const serviceKey = tag[wireKeySym];
       const stickyOn = yield* Policy.Sticky;
       const streamGap = yield* Policy.StreamGap;
@@ -6930,7 +6930,7 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
         // Live rebind on Directory.changes when dial moves / peers appear or leave.
         if (stamped !== undefined && stamped.length === 0) {
           const Directory = yield* Effect.promise(() => import("./Directory"));
-          const dirOpt = yield* Effect.serviceOption(Directory.Tag);
+          const dirOpt = yield* Effect.serviceOption(Directory.Service);
           if (Option.isNone(dirOpt)) {
             return {} as Record<string, PeerServiceOf<S>>;
           }
@@ -7111,7 +7111,7 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
             });
 
           const rows = yield* Directory.nodesServing(tag).pipe(
-            Effect.provideService(Directory.Tag, directory),
+            Effect.provideService(Directory.Service, directory),
           );
           yield* Effect.forEach(rows, upsertPeer, { discard: true });
 
@@ -7576,7 +7576,7 @@ export const runForEachTagScoped: {
  * @public
  */
 export {
-  makeTag as Tag,
+  makeTag as Service,
   // Node module: import * as Node from "hyperlink-ts/Node"
   http,
   ws,
@@ -7587,7 +7587,7 @@ export {
 };
 // `query`, `mutate`, `stream`, `local`, `runForEachTag`, `runForEachTagScoped` are already
 // exported above under their public names. The whole surface is now a tree-shakeable module
-// namespace: **`import * as Hyperlink from "hyperlink-ts/Hyperlink"`** — `Hyperlink.Tag`
+// namespace: **`import * as Hyperlink from "hyperlink-ts/Hyperlink"`** — `Hyperlink.Service`
 // pulls only what's used. Transport nodes: `import * as Node from "hyperlink-ts/Node"`.
 
 /**

@@ -17,13 +17,13 @@ import * as Views from "./Views";
 export { pack };
 
 /** @public */
-export class PriorityCard extends Views.Card.Tag<PriorityCard>()(
+export class PriorityCard extends Views.Card.Service<PriorityCard>()(
   "hyperlink/view/priority-card",
   { spec: WorkPool.priorityControlSpec },
 ) {}
 
 /** @public */
-export class PriorityDetail extends Views.Detail.Tag<PriorityDetail>()(
+export class PriorityDetail extends Views.Detail.Service<PriorityDetail>()(
   "hyperlink/view/priority-detail",
   { spec: WorkPool.priorityControlSpec },
 ) {}

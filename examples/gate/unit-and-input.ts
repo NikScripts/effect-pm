@@ -13,7 +13,7 @@ import { runNodeProgramWithLayer } from "../shared/demo-harness";
 import { Clock, Duration, Effect, Layer, Schema } from "effect";
 import { Gate } from "../../src";
 
-class TimedWorkGate extends Gate.Service<TimedWorkGate>()("examples/TimedWorkGate", {
+class TimedWorkGate extends Gate.define<TimedWorkGate>()("examples/TimedWorkGate", {
   payload: Schema.Void,
   success: Schema.Number,
   effect: () =>
@@ -25,7 +25,7 @@ class TimedWorkGate extends Gate.Service<TimedWorkGate>()("examples/TimedWorkGat
   concurrency: 3,
 }) {}
 
-class DoubleGate extends Gate.Service<DoubleGate>()("examples/DoubleGate", {
+class DoubleGate extends Gate.define<DoubleGate>()("examples/DoubleGate", {
   payload: Schema.Number,
   success: Schema.Number,
   effect: (n: number) =>

@@ -18,7 +18,7 @@ import * as Daemon from "../../src/Daemon";
 
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 
-class Prices extends Daemon.Tag<Prices>()("examples/daemon/PricesResult", {
+class Prices extends Daemon.Service<Prices>()("examples/daemon/PricesResult", {
   success: Price,
 }).pipe(Daemon.schedule([])) {}
 

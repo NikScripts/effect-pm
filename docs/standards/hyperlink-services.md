@@ -21,7 +21,7 @@ surfaces are helpers that take the tag (*Principles → Handles stay thin*), not
 
 ``` ts
 // contract — the wire schema, passed positionally
-class Mail extends WorkPool.Tag<Mail>()("@acme/Mail", Job) {}
+class Mail extends WorkPool.Service<Mail>()("@acme/Mail", Job) {}
 
 // runtime — in the layer
 WorkPool.layer(Mail, { effect: handleJob })
@@ -43,10 +43,10 @@ extra configuration. `WorkPool` always takes the object, because its lane struct
 
 ``` ts
 // ✅ single schema → positional
-class Mail extends WorkPool.Tag<Mail>()("@acme/Mail", Job) {}
+class Mail extends WorkPool.Service<Mail>()("@acme/Mail", Job) {}
 
 // config object — more than one wire slot
-class Ingest extends Daemon.Tag<Ingest>()("app/Ingest", { success: Report, error: PullFailed }) {}
+class Ingest extends Daemon.Service<Ingest>()("app/Ingest", { success: Report, error: PullFailed }) {}
 
 // untyped WorkPool — always the object; lane config rides on the tag
 class Jobs extends WorkPool.priority<Jobs>()("@acme/Jobs", {
@@ -65,7 +65,7 @@ and you add only what you need (this is *Principles → Don't fight the framewor
 
 ``` ts
 // base tag runs immediately; add behaviour by piping
-class Ingest extends Daemon.Tag<Ingest>()("app/Ingest", { success: Report })
+class Ingest extends Daemon.Service<Ingest>()("app/Ingest", { success: Report })
   .pipe(
     Daemon.schedule([Daemon.window(openAt, closeAt)]),  // when it may run
     Hyperlink.withReadiness(isWarm),                        // when it counts as ready
@@ -98,7 +98,7 @@ Two independent axes govern a running Daemon:
 - **The schedule** answers *whether* an instance should be running at all — it arms and disarms.
 - **Polling** answers *how often* an already-armed instance repeats its tick.
 
-A base `Daemon.Tag` is always armed and runs immediately; `.pipe(Daemon.schedule([...]))` gates it
+A base `Daemon.Service` is always armed and runs immediately; `.pipe(Daemon.schedule([...]))` gates it
 to windows, and seeding `Daemon.schedule([])` starts it disarmed. Polling (`Polling.spaced`, …) is
 set separately in the layer. Don't reach for one to do the other's job.
 
@@ -120,7 +120,7 @@ use.
 
 ``` ts
 // default — three fixed lanes; schema positional
-class Mail extends WorkPool.Tag<Mail>()("@acme/Mail", Job) {}
+class Mail extends WorkPool.Service<Mail>()("@acme/Mail", Job) {}
 
 // custom — N named lanes, a distinct type; lane config forces the object form
 class Jobs extends WorkPool.priority<Jobs>()("@acme/Jobs", {
@@ -224,7 +224,7 @@ One class. Each node runs its own instance; `peers` gives you the per-node handl
 
 ``` ts
 // one tag — not one-per-node
-class Prices extends WorkPool.Tag<Prices>()("app/Prices", Job) {}
+class Prices extends WorkPool.Service<Prices>()("app/Prices", Job) {}
 
 const perNode = yield* Hyperlink.peers(Prices)
 // { "node-a": handle, "node-b": handle, … } — keyed by node
@@ -238,7 +238,7 @@ into a peer to decide your own readiness cascades one node's failure into its ne
 
 ``` ts
 // ✅ derived from this instance's own status
-class Prices extends WorkPool.Tag<Prices>()("app/Prices", Job)
+class Prices extends WorkPool.Service<Prices>()("app/Prices", Job)
   .pipe(Hyperlink.withReadiness((svc) =>
     Effect.map(svc.lifecycle.get, (s) => s._tag === "Running"),
   )) {}
@@ -260,7 +260,7 @@ your own node explicitly.
 
 ``` ts
 // a combined field is marked fleet → not re-fanned-out by peers
-class Prices extends WorkPool.Tag<Prices>()("app/Prices", Job) {
+class Prices extends WorkPool.Service<Prices>()("app/Prices", Job) {
   static readonly totalDepth = Hyperlink.fleet(Hyperlink.effect(Schema.Number))
 }
 

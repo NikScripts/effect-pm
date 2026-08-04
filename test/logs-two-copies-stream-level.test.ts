@@ -8,13 +8,13 @@ import * as Hyperlink from "../src/Hyperlink";
 import * as Store from "../src/Store";
 import * as Node from "../src/Node";
 
-class BillingNode extends Node.Tag<BillingNode>()("test/two-copies/node") {}
-class SyncProc extends Daemon.Tag<SyncProc>()("test/two-copies/proc") {}
+class BillingNode extends Node.Service<BillingNode>()("test/two-copies/node") {}
+class SyncProc extends Daemon.Service<SyncProc>()("test/two-copies/proc") {}
 
-class QuietProc extends Daemon.Tag<QuietProc>()("test/stream-level/quiet") {}
+class QuietProc extends Daemon.Service<QuietProc>()("test/stream-level/quiet") {}
 const QuietProcWithStreamLevel = Hyperlink.logStreamLevelWarn(QuietProc);
 
-class RegProc extends Daemon.Tag<RegProc>()("test/stream-level/reg") {}
+class RegProc extends Daemon.Service<RegProc>()("test/stream-level/reg") {}
 
 const syncRegistration = Daemon.store(SyncProc);
 class TwoCopyStore extends Store.Service<TwoCopyStore>("@test/logs-two-copies/Store")(

@@ -3,14 +3,14 @@
  *
  * View — Effect × React components (Last).
  *
- * - **DI:** {@link Service} / {@link Tag} / {@link Prototype} / {@link provide} —
- *   Context slots (`Service` mirrors `Context.Service`; optional default → `.layer`)
+ * - **DI:** {@link Service} / {@link Prototype} / {@link provide} — Context slots
+ *   (`Service` mirrors Effect v4 `Context.Service`; add `static layer` on the class)
  * - **Build:** {@link fromEffect} / {@link gen} / {@link succeed} — Effect → view
- * - **Compose Tags:** `yield* Effect.all({ A, B })` inside {@link gen}, then JSX
+ * - **Compose Services:** `yield* Effect.all({ A, B })` inside {@link gen}, then JSX
  * - **Edge:** {@link mount}`(view, layer)` — discharge `R`, get a JSX component
  * - **Up:** {@link Last.provide} in {@link gen} → Provides; {@link Last.toLayer}
  *
- * Open-`R` views are **not** JSX components. Prefer Tags + `Effect.all`, or
+ * Open-`R` views are **not** JSX components. Prefer Services + `Effect.all`, or
  * {@link mount} a child to a {@link Component} then use normal JSX.
  *
  * Prototype metadata: {@link annotations} (Effect) / {@link getAnnotations}.
@@ -34,21 +34,21 @@ type ProvideTokensOf<Eff> = Extract<
 // Keys / layout hints
 // =============================================================================
 
-/** Flatten `&` nests so Prototype / Tag hovers stay readable. @internal */
+/** Flatten `&` nests so Prototype / Service hovers stay readable. @internal */
 type Flat<T extends object> = { readonly [K in keyof T]: T[K] } & {};
 
 /** Stable view id — prefer `app/view/<name>`. @public */
 export type ViewKey = string;
 
 /**
- * Factory brand stamped on every View Tag (`Last.kindOf(tag)`).
+ * Factory brand stamped on every View Service (`Last.kindOf(service)`).
  *
  * @public
  */
 export const kind = "last-ts/View" as const;
 
 /**
- * Where Prototype-managed metadata (size, spec, …) is stowed on a minted Tag.
+ * Where Prototype-managed metadata (size, spec, …) is stowed on a minted Service.
  * Read with {@link annotations} — not a public prop on the class.
  *
  * @internal
@@ -251,7 +251,7 @@ const stampWithLedger = <Props extends object, R, Provides>(
   >;
 
 /**
- * Effect that builds a plain React component (no {@link Tag} / DI).
+ * Effect that builds a plain React component (no {@link Service} / DI).
  *
  * @public
  */
@@ -263,7 +263,7 @@ export type FromEffect<
 
 /**
  * Turn an Effect-built component into an exportable React component.
- * **Not DI** — for Tags use {@link provide}. Runtime comes from
+ * **Not DI** — for Services use {@link provide}. Runtime comes from
  * {@link AtomReact.RuntimeProvider} (do not pass a runtime).
  *
  * Return type preserves Effect services `R` and the built component’s tree
@@ -324,7 +324,7 @@ export const fromEffect = <
  * {@link fromEffect}`(Effect.gen(…))` — generator that **returns** a component.
  *
  * `void` / `undefined` from the generator becomes `() => null`.
- * Compose Tags with `yield* Effect.all({ A, B })`, then JSX the resolved views.
+ * Compose Services with `yield* Effect.all({ A, B })`, then JSX the resolved views.
  *
  * @example
  * ```ts
@@ -430,10 +430,10 @@ export const mount = <
 };
 
 /**
- * Provide a component for a Tag. Props infer from the Tag.
+ * Provide a component for a Service. Props infer from the Service.
  *
  * Dual: `View.provide(Greeter, impl)` or `View.provide(Greeter)(impl)`.
- * Minted Tags also expose {@link ViewHandle.provide}.
+ * Minted Services also expose {@link ViewHandle.provide}.
  *
  * @public
  */
@@ -461,7 +461,7 @@ export function provide<I, P extends object>(
 }
 
 // =============================================================================
-// Prototype + Tag
+// Prototype + Service
 // =============================================================================
 
 type AnyAnnotations = Record<string, unknown>;
@@ -499,7 +499,7 @@ export type PropsOf<T> = T extends Prototype<infer Props, infer _R, infer _A>
       : never;
 
 /**
- * Annotations bag type from a {@link Prototype} or minted Tag.
+ * Annotations bag type from a {@link Prototype} or minted Service.
  *
  * @example
  * ```ts
@@ -515,7 +515,7 @@ export type AnnotationsOf<P> = P extends Prototype<infer _P, infer _R, infer A>
     : never;
 
 /**
- * Annotations bag for a minted Tag — **Effect** (symbol stamp for now; Context later).
+ * Annotations bag for a minted Service — **Effect** (symbol stamp for now; Context later).
  * Not a class prop. For client components / sync builders use {@link getAnnotations}.
  *
  * @example
@@ -584,11 +584,11 @@ export type FulfilledPrototype<
 > = Prototype<Props, {}, Annotations>;
 
 /**
- * Constructable View handle from {@link Prototype.Tag}.
+ * Constructable View handle from {@link Prototype.Service}.
  *
  * Prototype metadata is under {@link annotationsSym} (read via {@link annotations}).
  * Factory brand is {@link kind} under {@link Last.kindSym}. Class surface stays
- * free for app `static`s.
+ * free for app `static layer` (Effect v4 style).
  *
  * @public
  */
@@ -602,14 +602,14 @@ export type ViewHandle<
   readonly [Last.kindSym]: typeof kind;
   /** Phantom — component props. */
   readonly Type: Props;
-  /** Provide this Tag’s impl — same as {@link provide}`(this, impl)`. */
+  /** Provide this service’s impl — same as {@link provide}`(this, impl)`. */
   readonly provide: (
     impl: (props: Props) => React.ReactElement | null,
   ) => Layer.Layer<Self>;
 };
 
 /**
- * Component props via the Tag phantom (`typeof` path). Prefer {@link PropsOf}.
+ * Component props via the service phantom (`typeof` path). Prefer {@link PropsOf}.
  *
  * @public
  */
@@ -622,7 +622,7 @@ export type Type<T> = T extends { readonly Type: infer P } ? P : never;
  * later `.Prototype<Props, Requirement>()` step (additive). Annotations discharge
  * debt when they satisfy the merged Requirement (`{}` = fulfilled).
  *
- * The builder exposes {@link Prototype.annotations} while chaining; minted Tags
+ * The builder exposes {@link Prototype.annotations} while chaining; minted services
  * stamp the bag under {@link annotationsSym} instead.
  *
  * @public
@@ -632,7 +632,7 @@ export interface Prototype<
   in out Requirement extends AnyAnnotations = {},
   out Annotations extends AnyAnnotations = {},
 > {
-  /** Accumulator while chaining — not present on minted Tags. */
+  /** Accumulator while chaining — not present on minted services. */
   readonly annotations: Annotations;
   /**
    * Extend props / open more Requirement debt (type args) and/or annotations (value).
@@ -661,10 +661,11 @@ export interface Prototype<
     Flat<Annotations & NewAnnotations>
   >;
   /**
-   * Mint a Context.Service **class** handle.
+   * Mint a Context.Service **class** handle (Effect v4 naming).
    * Does **not** discharge Requirement — fulfill via `.Prototype()` first when needed.
+   * Add `static layer = This.provide(…)` on the class for a default Layer.
    */
-  readonly Tag: <Self, NewProps extends object = {}>() => <
+  readonly Service: <Self, NewProps extends object = {}>() => <
     const K extends string,
     const NewAnnotations extends AnyAnnotations = {},
   >(
@@ -695,7 +696,7 @@ const makePrototype = <
         ...(next ?? ({} as NewAnnotations)),
       });
     },
-  Tag:
+  Service:
     <Self, NewProps extends object = {}>() =>
     <const K extends string, const NewAnnotations extends AnyAnnotations = {}>(
       key: K,
@@ -739,95 +740,24 @@ export const Prototype =
     );
 
 /**
- * Options for {@link Service} — optional default impl becomes `.layer`.
+ * View service handle — Effect v4 `Context.Service` naming.
  *
- * @public
- */
-export type ServiceOptions<Props extends object> = {
-  readonly default: (props: Props) => React.ReactElement | null;
-};
-
-/**
- * View service handle with a baked default {@link Layer} (`.layer`).
- *
- * @public
- */
-export type ViewServiceWithLayer<
-  Self,
-  K extends string,
-  Props extends object,
-  Annotations extends AnyAnnotations = {},
-> = ViewHandle<Self, K, Props, Annotations> & {
-  readonly layer: Layer.Layer<Self>;
-};
-
-/**
- * View {@link Context.Service} — DI component identity + key.
- *
- * Pass `{ default }` to bake {@link ViewServiceWithLayer.layer} (camelCase
- * `*.layer`, never `*Live`).
+ * Add a default Layer on the class (camelCase `layer`, never `*Live`):
  *
  * @example
  * ```ts
- * class Callout extends View.Service<Callout, { readonly text: string }>()(
- *   "app/view/callout",
- *   { default: ({ text }) => <aside>{text}</aside> },
- * ) {}
- *
- * Layer.provideMerge(Callout.layer)
- *
- * // or without default — provide later
  * class Greeter extends View.Service<Greeter, { readonly name: string }>()(
  *   "app/view/greeter",
- * ) {}
- * const greeterLayer = Greeter.provide(({ name }) => <h1>{name}</h1>)
+ * ) {
+ *   static layer = Greeter.provide(({ name }) => <h1>{name}</h1>)
+ * }
+ *
+ * View.mount(Hello, Greeter.layer)
  * ```
  *
  * @public
  */
-export const Service: {
-  <Self, Props extends object = {}>(): {
-    <const K extends string>(
-      key: K,
-      options: ServiceOptions<Props>,
-    ): ViewServiceWithLayer<Self, K, Props>;
-    <const K extends string>(key: K): ViewHandle<Self, K, Props>;
-  };
-} = (<Self, Props extends object = {}>() =>
-  ((
-    key: string,
-    options?: ServiceOptions<Props>,
-  ): ViewHandle<Self, string, Props> | ViewServiceWithLayer<Self, string, Props> => {
-    const handle = Prototype<Props>()().Tag<Self>()(key);
-    if (options?.default !== undefined) {
-      return Object.assign(handle, {
-        layer: handle.provide(options.default),
-      }) as ViewServiceWithLayer<Self, string, Props>;
-    }
-    return handle;
-  }) as {
-    <const K extends string>(
-      key: K,
-      options: ServiceOptions<Props>,
-    ): ViewServiceWithLayer<Self, K, Props>;
-    <const K extends string>(key: K): ViewHandle<Self, K, Props>;
-  }) as typeof Service;
-
-/**
- * Naked View Tag — alias of {@link Service} without a default layer.
- * Prefer {@link Service}.
- *
- * @example
- * ```ts
- * class Greeter extends View.Tag<Greeter, { readonly name: string }>()(
- *   "app/view/greeter",
- * ) {}
- * const greeterLayer = Greeter.provide(({ name }) => <h1>{name}</h1>)
- * ```
- *
- * @public
- */
-export const Tag = Prototype()().Tag;
+export const Service = Prototype()().Service;
 
 /**
  * A View service handle (DI identity + key). Prototype metadata via

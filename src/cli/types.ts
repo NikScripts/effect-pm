@@ -8,8 +8,8 @@ import { specOf } from "../Hyperlink";
 
 /**
  * The structural shape the CLI reads from a hyperlink tag: yieldable (→ its service), with
- * `key` / `description` and the stowed contract spec. A `Hyperlink.Tag` / `WorkPool.Tag`
- * / `Daemon.Tag` class satisfies this — pass the classes directly.
+ * `key` / `description` and the stowed contract spec. A `Hyperlink.Service` / `WorkPool.Service`
+ * / `Daemon.Service` class satisfies this — pass the classes directly.
  *
  * @public
  */
@@ -26,7 +26,7 @@ export type CliHyperlinkTag = Effect.Effect<unknown, never, unknown> & {
 export type CliNode = CliHyperlinkTag | CliGroup;
 
 /**
- * A group-shaped node (`Group.Tag` or any `{ key, members }` record).
+ * A group-shaped node (`Group.Service` or any `{ key, members }` record).
  *
  * @public
  */
@@ -36,7 +36,7 @@ export type CliGroup = {
 };
 
 /**
- * What {@link cli} accepts: a `Group.Tag`, or a flat/nested `{ commandName: node }` record.
+ * What {@link cli} accepts: a `Group.Service`, or a flat/nested `{ commandName: node }` record.
  *
  * @public
  */

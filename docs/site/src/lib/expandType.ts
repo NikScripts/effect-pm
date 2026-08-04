@@ -376,7 +376,7 @@ export const makeTypeExpander = (opts: ExpanderOptions) => {
           member.getName() !== "prototype";
         const visible = type.getProperties().filter(isVisible);
 
-        // A SERVICE (Context.Service / Hyperlink.Tag convention): the type carries `key` +
+        // A SERVICE (Context.Service / Hyperlink.Service convention): the type carries `key` +
         // `Service`. Identify it and spell the service SHAPE out one member per line — the key
         // first, so the preview reads `class Random { key: 'app/Random'; Service: { … } }`.
         const serviceMember = visible.find((member) => member.getName() === "Service");

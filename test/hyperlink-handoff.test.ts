@@ -269,16 +269,16 @@ describe("Node.shutdown end-to-end (Locked #39)", () => {
       const lookupPath = yield* tmpSock("lookup");
       const workerPath = yield* tmpSock("worker");
 
-      const lookupNode = Node.Tag()("handoff/lookup2", {
+      const lookupNode = Node.Service()("handoff/lookup2", {
         path: lookupPath,
       }).pipe(Node.asLookup);
 
-      class Mover extends Hyperlink.Tag<Mover>()("handoff/Mover", {
+      class Mover extends Hyperlink.Service<Mover>()("handoff/Mover", {
         take: Hyperlink.effect(Schema.Array(Schema.String)),
         give: Hyperlink.effectFn(Schema.Array(Schema.String), Schema.Void),
       }) {}
 
-      class Worker extends Node.Tag<Worker, Mover>()("handoff/Worker2", {
+      class Worker extends Node.Service<Worker, Mover>()("handoff/Worker2", {
         path: workerPath,
       }) {}
 

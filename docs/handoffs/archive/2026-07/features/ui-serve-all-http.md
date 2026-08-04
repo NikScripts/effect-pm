@@ -56,7 +56,7 @@ const LeagueServer = Resource.serveAllHttp([
    one-port-per-resource to **one `serveAllHttp` per host**, so the dashboard demo mirrors wow's
    production topology (one port per league/host). Then collapse the matching client transports.
 3. **Multi-host dashboard:** model each Host as a served group; the dashboard already walks a
-   `Group.Tag` tree — a group whose members share a `Host` now maps to one served port.
+   `Group.Service` tree — a group whose members share a `Host` now maps to one served port.
 
 ## Reference
 

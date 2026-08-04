@@ -19,11 +19,11 @@ import * as Node from "../../src/Node";
 import * as Observe from "../../src/Observe";
 import * as DaemonView from "../../src/ui/DaemonView";
 
-class Worker extends Node.Tag<Worker>()("examples/ObserveDaemon/Node", {
+class Worker extends Node.Service<Worker>()("examples/ObserveDaemon/Node", {
   path: `/tmp/hyperlink-ts-observe-daemon-${process.pid}.sock`,
 }) {}
 
-class Nightly extends Daemon.Tag<Nightly>()("examples/ObserveDaemon/Nightly", {
+class Nightly extends Daemon.Service<Nightly>()("examples/ObserveDaemon/Nightly", {
   success: Schema.String,
 }).pipe(Hyperlink.andNode(Worker)) {}
 

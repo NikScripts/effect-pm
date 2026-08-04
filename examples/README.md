@@ -98,7 +98,7 @@ Paths are under `examples/`. Script = `pnpm run example:<topic>-<kebab-file>` (s
 
 | File | Teaches |
 |------|---------|
-| [`node/tag-addressed.ts`](./node/tag-addressed.ts) | `Node.Tag` + unix/client |
+| [`node/tag-addressed.ts`](./node/tag-addressed.ts) | `Node.Service` + unix/client |
 | [`node/tag-bound.ts`](./node/tag-bound.ts) | Tag carries node |
 | [`node/clients.ts`](./node/clients.ts) | `Node.clients` catalog |
 | [`node/addressless-serve.ts`](./node/addressless-serve.ts) / [`addressless-call.ts`](./node/addressless-call.ts) | Lookup-piped addressless |

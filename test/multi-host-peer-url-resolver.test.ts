@@ -5,10 +5,10 @@ import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
-class SelfNode extends Node.Tag<SelfNode>()("resolver/SelfNode") {}
+class SelfNode extends Node.Service<SelfNode>()("resolver/SelfNode") {}
 // PeerNode carries NO baked url — its url is a deploy concern the resolver supplies
-class PeerNode extends Node.Tag<PeerNode>()("resolver/PeerNode") {}
-class Fleet extends Hyperlink.Tag<Fleet>()("resolver/Fleet", {
+class PeerNode extends Node.Service<PeerNode>()("resolver/PeerNode") {}
+class Fleet extends Hyperlink.Service<Fleet>()("resolver/Fleet", {
   count: Hyperlink.effect(Schema.Number),
 }).pipe(
   Hyperlink.nodes([SelfNode, PeerNode]),

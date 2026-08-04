@@ -9,7 +9,7 @@ Pre-1.0: breaking changes land as minor bumps.
 - **last-ts codesplit** — Effect+React building blocks package (`Last`, `View`, `Route`/`Router`, `Page`, vite/docgen); Hyperlink keeps `Ui` size chrome + Dashboard. Plan: [last-ts-codesplit.md](./last-ts-codesplit.md).
 - **Service / contract shapes** — taxonomy for materialize vs pull vs Tag-baked / adapters. Draft: [service-shapes.md](./service-shapes.md). Eng’d: `Tag`/`value`/`promise`/`default`/`defaults` + factory `{ defaults }` (`pure` retired); `cell` parked/rejected.
 - **Wire groups & identity** — regular RpcGroup = tag key; shared Spec = `Tag(wireKey, spec)` → `Factory<Self>()(instanceKey)` (kind-keyed wire, ordinary serve/client). W1–W3 Eng’d: [wire-groups-and-identity.md](./wire-groups-and-identity.md).
-- **Guaranteed barrel-namespace tree-shaking** — make `import { WorkPool } from "hyperlink-ts"` + `WorkPool.Tag` tree-shake the engine in *every* bundler (subpath imports already do). Detailed plan: [18-unbundled-build-treeshaking.md](./18-unbundled-build-treeshaking.md).
+- **Guaranteed barrel-namespace tree-shaking** — make `import { WorkPool } from "hyperlink-ts"` + `WorkPool.Service` tree-shake the engine in *every* bundler (subpath imports already do). Detailed plan: [18-unbundled-build-treeshaking.md](./18-unbundled-build-treeshaking.md).
 - **Hyperlink-RPC auth** — a first-class authentication/authorization story for served resources (deployments use an edge gateway / Cloudflare Zero Trust short-term). Spec TBD when scope is locked; stays a roadmap bullet until then.
 
 ## Orchestration

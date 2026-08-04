@@ -25,7 +25,7 @@ const tmpSock = (label: string) =>
     return `/tmp/hyperlink-ts-policy-unit-${label}-${process.pid}-${now}.sock`;
   });
 
-class Jobs extends Hyperlink.Tag<Jobs>()("policy-unit/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("policy-unit/Jobs", {
   jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
@@ -99,7 +99,7 @@ describe("Policy defaults + compose", () => {
   it("resolveOnConflict + onConflictOf stay on Policy (Node re-exports same fn)", () => {
     expect(Node.resolveOnConflict).toBe(Policy.resolveOnConflict);
     expect(Lookup.resolveOnConflict).toBe(Policy.resolveOnConflict);
-    class Worker extends Node.Tag<Worker>()("policy-unit/stamp", {
+    class Worker extends Node.Service<Worker>()("policy-unit/stamp", {
       path: "/tmp/policy-unit-stamp.sock",
       onConflict: "reject",
     }) {}
@@ -115,14 +115,14 @@ describe("Policy dial: unsticky + waitAdvice", () => {
       const workerAPath = yield* tmpSock("unsticky-a");
       const workerBPath = yield* tmpSock("unsticky-b");
 
-      const lookupNode = Node.Tag()("policy-unit/unsticky-lookup", {
+      const lookupNode = Node.Service()("policy-unit/unsticky-lookup", {
         path: lookupPath,
       }).pipe(Node.asLookup);
 
-      class WorkerA extends Node.Tag<WorkerA, Jobs>()("policy-unit/UnstickyA", {
+      class WorkerA extends Node.Service<WorkerA, Jobs>()("policy-unit/UnstickyA", {
         path: workerAPath,
       }) {}
-      class WorkerB extends Node.Tag<WorkerB, Jobs>()("policy-unit/UnstickyB", {
+      class WorkerB extends Node.Service<WorkerB, Jobs>()("policy-unit/UnstickyB", {
         path: workerBPath,
       }) {}
 
@@ -169,14 +169,14 @@ describe("Policy dial: unsticky + waitAdvice", () => {
       const workerAPath = yield* tmpSock("wait-a");
       const workerBPath = yield* tmpSock("wait-b");
 
-      const lookupNode = Node.Tag()("policy-unit/wait-lookup", {
+      const lookupNode = Node.Service()("policy-unit/wait-lookup", {
         path: lookupPath,
       }).pipe(Node.asLookup);
 
-      class WorkerA extends Node.Tag<WorkerA, Jobs>()("policy-unit/WaitA", {
+      class WorkerA extends Node.Service<WorkerA, Jobs>()("policy-unit/WaitA", {
         path: workerAPath,
       }) {}
-      class WorkerB extends Node.Tag<WorkerB, Jobs>()("policy-unit/WaitB", {
+      class WorkerB extends Node.Service<WorkerB, Jobs>()("policy-unit/WaitB", {
         path: workerBPath,
       }) {}
 
@@ -223,12 +223,12 @@ describe("Policy yield + conflict ambient", () => {
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("yield-refuse-lookup");
       const workerPath = yield* tmpSock("yield-refuse-worker");
-      const lookupNode = Node.Tag()("policy-unit/yield-refuse-lookup", {
+      const lookupNode = Node.Service()("policy-unit/yield-refuse-lookup", {
         path: lookupPath,
         onConflict: "askIncumbent",
       }).pipe(Node.asLookup);
 
-      class Worker extends Node.Tag<Worker, Jobs>()(
+      class Worker extends Node.Service<Worker, Jobs>()(
         "policy-unit/YieldRefuseWorker",
         { path: workerPath },
       ) {}
@@ -244,7 +244,7 @@ describe("Policy yield + conflict ambient", () => {
         ),
       );
 
-      const dir = Context.get(lookupCtx, Directory.Tag);
+      const dir = Context.get(lookupCtx, Directory.Service);
       const conflict = yield* dir
         .advertise(
           new Lookup.AdvertiseRequest({
@@ -275,12 +275,12 @@ describe("Policy yield + conflict ambient", () => {
       const lookupPath = yield* tmpSock("ambient-ask-lookup");
       const workerPath = yield* tmpSock("ambient-ask-worker");
       // Lookup stamp askIncumbent so server finishes cooperatively.
-      const lookupNode = Node.Tag()("policy-unit/ambient-ask-lookup", {
+      const lookupNode = Node.Service()("policy-unit/ambient-ask-lookup", {
         path: lookupPath,
         onConflict: "askIncumbent",
       }).pipe(Node.asLookup);
 
-      class Worker extends Node.Tag<Worker, Jobs>()(
+      class Worker extends Node.Service<Worker, Jobs>()(
         "policy-unit/AmbientAskWorker",
         { path: workerPath },
       ) {}
@@ -297,7 +297,7 @@ describe("Policy yield + conflict ambient", () => {
         ),
       );
 
-      const dir = Context.get(lookupCtx, Directory.Tag);
+      const dir = Context.get(lookupCtx, Directory.Service);
       const rows = yield* dir.nodesServing(
         new Lookup.NodesServingRequest({ serviceKey: Jobs.key }),
       );
@@ -323,7 +323,7 @@ describe("Policy yield + conflict ambient", () => {
 describe("Policy.verifyOff on addressed client", () => {
   it.live("dead peer + verifyOff builds; verifyReject fails", () =>
     Effect.gen(function* () {
-      class Ghost extends Node.Tag<Ghost>()("policy-unit/Ghost", {
+      class Ghost extends Node.Service<Ghost>()("policy-unit/Ghost", {
         path: `/tmp/policy-unit-ghost-${process.pid}.sock`,
       }) {}
 

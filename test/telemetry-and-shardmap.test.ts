@@ -6,11 +6,11 @@ import * as ShardMap from "../src/ShardMap";
 import * as Telemetry from "../src/Telemetry";
 import * as Node from "../src/Node";
 
-class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
-class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
+class DropletEast extends Node.Service<DropletEast>()("app/DropletEast") {}
+class DropletWest extends Node.Service<DropletWest>()("app/DropletWest") {}
 
 describe("Telemetry fleet elevation", () => {
-  class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
+  class FleetMetrics extends Telemetry.Service<FleetMetrics>()().pipe(
     Hyperlink.nodes([DropletEast, DropletWest]),
   ) {}
 
@@ -80,7 +80,7 @@ describe("ShardMap", () => {
     userId: Schema.String,
   });
 
-  class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
+  class Sessions extends ShardMap.Service<Sessions>()("app/Sessions", {
     key: SessionId,
     value: Session,
     keyOf: (s) => s.id,
@@ -138,7 +138,7 @@ describe("ShardMap", () => {
   });
 
   it.effect("default :memory: SQLite upserts live rows (no event log)", () => {
-    class MemorySessions extends ShardMap.Tag<MemorySessions>()(
+    class MemorySessions extends ShardMap.Service<MemorySessions>()(
       "@test/MemorySessions",
       {
         key: SessionId,
@@ -164,7 +164,7 @@ describe("ShardMap", () => {
   });
 
   it.effect("file SQLite rehydrates live keys across rematerialization", () => {
-    class FileSessions extends ShardMap.Tag<FileSessions>()("@test/FileSessions", {
+    class FileSessions extends ShardMap.Service<FileSessions>()("@test/FileSessions", {
       key: SessionId,
       value: Session,
       keyOf: (s) => s.id,

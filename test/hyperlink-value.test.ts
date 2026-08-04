@@ -9,7 +9,7 @@ import * as PmNode from "../src/Node";
 // `ref` fields surface as a `Subscribable`: `yield* p.x.get` (current value) + `p.x.changes` (stream),
 // uniform local and remote. The impl owns the `SubscriptionRef` (provided via `Hyperlink.subscribable`).
 
-class Live extends Hyperlink.Tag<Live>()("ref-test/Live", {
+class Live extends Hyperlink.Service<Live>()("ref-test/Live", {
   count: Hyperlink.ref(Schema.Number),
 }) {}
 

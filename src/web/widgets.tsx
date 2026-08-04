@@ -3,7 +3,7 @@
  *
  * Hand-crafted, per-type dashboard widgets — the building blocks the `<Dashboard>` and its
  * mobile/desktop views compose. Each is driven by a **tag** (observe via
- * `Observe.use(tag, *View.pack)` / `NodeView.use` under RuntimeProvider); the tree is a `Group.Tag`
+ * `Observe.use(tag, *View.pack)` / `NodeView.use` under RuntimeProvider); the tree is a `Group.Service`
  * walked with `Group.members` / `Group.isGroup`.
  *
  */
@@ -2577,7 +2577,7 @@ export const FallbackCard = (props: WidgetProps): React.ReactElement => (
 );
 
 /**
- * The card for a plain HyperService — a bare `Hyperlink.Tag` with no richer widget (a dependency like a
+ * The card for a plain HyperService — a bare `Hyperlink.Service` with no richer widget (a dependency like a
  * DB connection, a health gate). There's little beyond identity to show, so it's the readiness LED
  * (its degraded reason on hover, like every card) + name + kind + the node it runs on. @public
  */

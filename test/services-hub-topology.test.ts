@@ -11,25 +11,25 @@ import * as Node from "../src/Node";
 // the Mini (a different node, reached by a client). One runtime, one group tree, mixed provision —
 // reached uniformly through the group accessors. This is the DaemonManager-free deploy shape.
 
-class MiniNode extends Node.Tag<MiniNode>()("hub/miniNode") {}
+class MiniNode extends Node.Service<MiniNode>()("hub/miniNode") {}
 
 // Local on the Droplet (no node) — stands in for a roster import queue.
-class RosterQueue extends Hyperlink.Tag<RosterQueue>()("hub/RosterQueue", {
+class RosterQueue extends Hyperlink.Service<RosterQueue>()("hub/RosterQueue", {
   count: Hyperlink.effect(Schema.Number),
 }) {}
 
 // Remote on the Mini (node-bound) — stands in for the one poller that runs on the mini.
-class LiveScorePoller extends Hyperlink.Tag<LiveScorePoller>()("hub/LiveScorePoller", 
+class LiveScorePoller extends Hyperlink.Service<LiveScorePoller>()("hub/LiveScorePoller", 
   { where: Hyperlink.effect(Schema.String) },
   { node: MiniNode },
 ) {}
 
 // Nested groups: Hub → Nwsl league → members. (Two more leagues would just be more members.)
-class NwslLeague extends Group.Tag<NwslLeague>("hub/Nwsl")({
+class NwslLeague extends Group.Service<NwslLeague>("hub/Nwsl")({
   RosterQueue,
   LiveScorePoller,
 }) {}
-class ServicesHub extends Group.Tag<ServicesHub>("hub/ServicesHub")({
+class ServicesHub extends Group.Service<ServicesHub>("hub/ServicesHub")({
   Nwsl: NwslLeague,
 }) {}
 

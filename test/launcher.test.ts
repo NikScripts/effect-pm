@@ -92,7 +92,7 @@ describe("Launcher.Handle.awaitReady", () => {
     "fails ReadyTimedOut, kill-reaps the child, and spends the handle (TestClock)",
     () =>
       Effect.gen(function* () {
-        const node = Node.Tag()("launcher/unreachable", {
+        const node = Node.Service()("launcher/unreachable", {
           url: "http://127.0.0.1:1/rpc",
           kind: "Http",
         });
@@ -135,7 +135,7 @@ describe("Launcher.Handle.awaitReady", () => {
 
   it.effect("fails UnaddressedNode for a bare (unaddressed) dial target", () =>
     Effect.gen(function* () {
-      const bare = Node.Tag()("launcher/bare");
+      const bare = Node.Service()("launcher/bare");
       const handle = yield* Launcher.spawn({
         node: bare,
         process: ChildProcess.make("sleep", ["30"]),
@@ -151,7 +151,7 @@ describe("Launcher.Handle.awaitReady", () => {
     "fails ChildExited when the OS child dies before Ready",
     () =>
       Effect.gen(function* () {
-        const node = Node.Tag()("launcher/child-exits", {
+        const node = Node.Service()("launcher/child-exits", {
           url: "http://127.0.0.1:1/rpc",
           kind: "Http",
         });
@@ -181,7 +181,7 @@ describe("Launcher.Handle.awaitReady", () => {
         const { root, entry } = childEntryPaths();
         const tokenHex = Redacted.value(yield* Launcher.mintToken);
         const port = ephemeralPort(tokenHex);
-        const node = Node.Tag()("launcher/child", {
+        const node = Node.Service()("launcher/child", {
           url: `http://127.0.0.1:${String(port)}/rpc`,
           kind: "Http",
         });
@@ -215,7 +215,7 @@ describe("Launcher.Handle.awaitReady", () => {
         const { root, entry } = childEntryPaths();
         const tokenHex = Redacted.value(yield* Launcher.mintToken);
         const port = ephemeralPort(tokenHex, 3);
-        const node = Node.Tag()("launcher/child-wire", {
+        const node = Node.Service()("launcher/child-wire", {
           url: `http://127.0.0.1:${String(port)}/rpc`,
           kind: "Http",
         });
@@ -241,7 +241,7 @@ describe("Launcher.Handle.handoff", () => {
     "fails HandleNotReady before awaitReady",
     () =>
       Effect.gen(function* () {
-        const node = Node.Tag()("launcher/not-ready-handoff", {
+        const node = Node.Service()("launcher/not-ready-handoff", {
           url: "http://127.0.0.1:1/rpc",
           kind: "Http",
         });
@@ -265,7 +265,7 @@ describe("Launcher.Handle.handoff", () => {
         const { root, entry } = childEntryPaths();
         const tokenHex = Redacted.value(yield* Launcher.mintToken);
         const port = ephemeralPort(tokenHex, 1);
-        const node = Node.Tag()("launcher/spent", {
+        const node = Node.Service()("launcher/spent", {
           url: `http://127.0.0.1:${String(port)}/rpc`,
           kind: "Http",
         });
@@ -299,7 +299,7 @@ describe("Launcher.Handle.handoff", () => {
         const { root, entry } = childEntryPaths();
         const tokenHex = Redacted.value(yield* Launcher.mintToken);
         const port = ephemeralPort(tokenHex, 4);
-        const node = Node.Tag()("launcher/mismatch", {
+        const node = Node.Service()("launcher/mismatch", {
           url: `http://127.0.0.1:${String(port)}/rpc`,
           kind: "Http",
         });
@@ -338,7 +338,7 @@ describe("Launcher.Handle.kill", () => {
     "SIGTERMs the child and spends the handle",
     () =>
       Effect.gen(function* () {
-        const node = Node.Tag()("launcher/kill", {
+        const node = Node.Service()("launcher/kill", {
           url: "http://127.0.0.1:1/rpc",
           kind: "Http",
         });
@@ -367,7 +367,7 @@ describe("Launcher.Handle.kill", () => {
         const { root, entry } = childEntryPaths();
         const tokenHex = Redacted.value(yield* Launcher.mintToken);
         const port = ephemeralPort(tokenHex, 5);
-        const node = Node.Tag()("launcher/kill-ready", {
+        const node = Node.Service()("launcher/kill-ready", {
           url: `http://127.0.0.1:${String(port)}/rpc`,
           kind: "Http",
         });
@@ -467,7 +467,7 @@ describe("Launcher.up", () => {
         const { root, entry } = childEntryPaths();
         const tokenHex = Redacted.value(yield* Launcher.mintToken);
         const port = ephemeralPort(tokenHex, 2);
-        const node = Node.Tag()("launcher/up", {
+        const node = Node.Service()("launcher/up", {
           url: `http://127.0.0.1:${String(port)}/rpc`,
           kind: "Http",
         });
@@ -484,11 +484,11 @@ describe("Launcher.up", () => {
 
   it.effect("runs a multi-unit array sequentially by default (TestClock)", () =>
     Effect.gen(function* () {
-      const a = Node.Tag()("launcher/up-a", {
+      const a = Node.Service()("launcher/up-a", {
         url: "http://127.0.0.1:1/rpc",
         kind: "Http",
       });
-      const b = Node.Tag()("launcher/up-b", {
+      const b = Node.Service()("launcher/up-b", {
         url: "http://127.0.0.1:1/rpc",
         kind: "Http",
       });
@@ -519,11 +519,11 @@ describe("Launcher.up", () => {
 
   it.effect("honors concurrency > 1 across independent units (TestClock)", () =>
     Effect.gen(function* () {
-      const a = Node.Tag()("launcher/up-conc-a", {
+      const a = Node.Service()("launcher/up-conc-a", {
         url: "http://127.0.0.1:1/rpc",
         kind: "Http",
       });
-      const b = Node.Tag()("launcher/up-conc-b", {
+      const b = Node.Service()("launcher/up-conc-b", {
         url: "http://127.0.0.1:1/rpc",
         kind: "Http",
       });
@@ -557,7 +557,7 @@ describe("Launcher.layer", () => {
     "provides ChildProcessSpawner for spawn",
     () =>
       Effect.gen(function* () {
-        const node = Node.Tag()("launcher/layer", {
+        const node = Node.Service()("launcher/layer", {
           url: "http://127.0.0.1:1/rpc",
           kind: "Http",
         });

@@ -31,7 +31,7 @@ const _pollingThenSchedule = Daemon.make(
   Daemon.scheduleInMemory([]),
 );
 
-class Heartbeat extends Daemon.Service<Heartbeat>()(
+class Heartbeat extends Daemon.define<Heartbeat>()(
   "@app/Heartbeat",
   Effect.void,
   Polling.spaced(Duration.seconds(1)),

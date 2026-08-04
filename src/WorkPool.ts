@@ -18,7 +18,7 @@
  * {@link defineQueueTag} from the shared control spec plus per-instance data procedures
  * whose payload/result schema **is** the instance's `itemSchema`, so Effect RPC validates
  * items natively on both sides (no codec descriptor, no manual encode/decode). Solo
- * {@link Hyperlink.Tag} path: wire prefix = tag `.key`. A future kind-keyed family factory
+ * {@link Hyperlink.Service} path: wire prefix = tag `.key`. A future kind-keyed family factory
  * (wire-groups W3) may share identical control-only Specs across instances.
  *
  * This module is the **public `WorkPool` namespace** — the `hyperlink-ts/WorkPool`
@@ -28,7 +28,7 @@
  * `serveRemote` / `make`). Consume it as a module namespace:
  *
  *   import * as WorkPool from "hyperlink-ts/WorkPool";
- *   class Mail extends WorkPool.Tag<Mail>()("@app/Mail", { payload: JobSchema }) {}
+ *   class Mail extends WorkPool.Service<Mail>()("@app/Mail", { payload: JobSchema }) {}
  *
  * @module WorkPool
  */
@@ -637,16 +637,16 @@ export const queueControlSpec = {
   },
 };
 // Note: no `satisfies Spec` — it contextually widens each method's error channel to
-// `unknown`. The spec is validated (without widening) at the `Hyperlink.Tag` call site.
+// `unknown`. The spec is validated (without widening) at the `Hyperlink.Service` call site.
 
 /**
  * Build a queue **instance** spec (model B): the shared {@link queueControlSpec} plus
  * per-instance data-plane procedures typed by `itemSchema` — the enqueue verbs (`add`,
  * `prioritize`, `defer`, `enqueue`) and the `events` stream. Pass the result to
- * {@link Hyperlink.Tag} — each instance is its own resource (its own RPC group):
+ * {@link Hyperlink.Service} — each instance is its own resource (its own RPC group):
  *
  * ```ts
- * class Jobs extends Hyperlink.Tag<Jobs>()("@app/Jobs", queueSpec(JobSchema)) {}
+ * class Jobs extends Hyperlink.Service<Jobs>()("@app/Jobs", queueSpec(JobSchema)) {}
  * const q = yield* Jobs;
  * yield* q.add(aJob); // the item itself is the payload — validated against JobSchema on both sides
  * ```
@@ -800,7 +800,7 @@ type QueueInstanceSpec<
  * type and `itemSchema` baked in:
  *
  * ```ts
- * class MyQueue extends WorkPool.Tag<MyQueue>()("@app/MyQueue", JobSchema) {}
+ * class MyQueue extends WorkPool.Service<MyQueue>()("@app/MyQueue", JobSchema) {}
  * // or: Tag()(key, { payload: JobSchema, success?, error? })
  * const q = yield* MyQueue;
  * yield* q.add(aJob); // the item itself is the payload — validated against JobSchema on both sides
@@ -808,7 +808,7 @@ type QueueInstanceSpec<
  *
  * `Self` is given explicitly (Effect's `()` two-stage form); the item type is inferred from
  * `itemSchema`, which becomes the rpc payload schema (native wire validation, no codec). Pass
- * `options.node` to bind the queue to a {@link Node.Tag} — the tag then carries its own
+ * `options.node` to bind the queue to a {@link Node.Service} — the tag then carries its own
  * transport (ship only the tag; see {@link Hyperlink.client} / {@link Node.connect}).
  *
  * @public
@@ -888,8 +888,8 @@ const materializeQueueTag = <
   const tagOptions = { description: resolved.description, kind };
   const base =
     resolved.node === undefined
-      ? Hyperlink.Tag<Self>()(key, spec, tagOptions)
-      : Hyperlink.Tag<Self>()(key, spec, { ...tagOptions, node: resolved.node });
+      ? Hyperlink.Service<Self>()(key, spec, tagOptions)
+      : Hyperlink.Service<Self>()(key, spec, { ...tagOptions, node: resolved.node });
   const ready = Hyperlink.withReadiness(base, (svc) =>
     Effect.map(svc.lifecycle.get, (state) => ({
       // Idle (deferred start) and Paused stay dialable — workers just aren't forked / latch closed.
@@ -1001,7 +1001,7 @@ export interface WorkPool<
 type QueueItemOf<F extends Schema.Struct.Fields> = Hyperlink.Decoded<Schema.Struct<F>>;
 
 /**
- * The queue's {@link Hyperlink.Tag} whose service value is the **named** {@link WorkPool} handle
+ * The queue's {@link Hyperlink.Service} whose service value is the **named** {@link WorkPool} handle
  * (via the `Svc` seam on {@link HyperlinkTag}), so `yield* MyQueue` hovers as
  * `WorkPool<EmailJob>` rather than the expanded `ServiceOf<…>` wall. @public
  * @category models
@@ -1058,7 +1058,7 @@ const nameQueueService = <
 
 /**
  * Define a queue as a named service {@link Tag}:
- * `class Mail extends WorkPool.Tag<Mail>()("@app/Mail", { payload: JobSchema }) {}`. The class
+ * `class Mail extends WorkPool.Service<Mail>()("@app/Mail", { payload: JobSchema }) {}`. The class
  * *is* the Tag — `yield* Mail` inside an Effect resolves the {@link WorkPool} handle
  * (enqueue / status / metrics), while {@link layer} provides the running queue and {@link serve}
  * exposes it over RPC. `payload` is the item schema; the {@link QueueTagConfig} overload adds
@@ -1782,7 +1782,7 @@ export const priorityKind = "hyperlink-ts/WorkPool/priority";
 /**
  * `WorkPool.priority` tag config — **config object only** (no positional schemas). `payload` is the
  * item schema; `laneCount` is the number of priority lanes; `namedLanes` maps names → lane indices.
- * Optional `success` / `error` wire slots match {@link WorkPool.Tag} (stamped for engine + store).
+ * Optional `success` / `error` wire slots match {@link WorkPool.Service} (stamped for engine + store).
  *
  * @category models
  * @public
@@ -1845,8 +1845,8 @@ export const priority = <Self>() => {
     );
     const base =
       config.node === undefined
-        ? Hyperlink.Tag<Self>()(key, spec, { description: config.description, kind: priorityKind })
-        : Hyperlink.Tag<Self>()(key, spec, {
+        ? Hyperlink.Service<Self>()(key, spec, { description: config.description, kind: priorityKind })
+        : Hyperlink.Service<Self>()(key, spec, {
             description: config.description,
             kind: priorityKind,
             node: config.node,
@@ -2282,7 +2282,7 @@ export const serveMemory = serve;
 
 /**
  * A **config-patch layer** for the WorkPool `tag` — the toolkit successor to the old
- * `WorkPool.Service(...).configure(...)`. Merge it with the queue's {@link layer} (e.g. per
+ * `WorkPool.define(...).configure(...)`. Merge it with the queue's {@link layer} (e.g. per
  * environment) and its patch (concurrency / rateLimit / attempts / …) folds onto the layer's base
  * config at build. Keyed by `tag.key`; later patches win. Config lives in the layer, not the tag,
  * so `configure` takes the tag and returns a layer rather than being a tag method.
@@ -2357,9 +2357,9 @@ export function store(tag: QueueStoreTag, extended?: StoreShapes) {
     : facetStoreRegistration(tag, contract, extended);
 }
 
-// The light `Tag` lives here (no engine) so `WorkPool.Tag` member access tree-shakes.
-// DX: `import * as WorkPool from "hyperlink-ts/WorkPool"` → `WorkPool.Tag`.
-export { queueTag as Tag };
+// The light `Tag` lives here (no engine) so `WorkPool.Service` member access tree-shakes.
+// DX: `import * as WorkPool from "hyperlink-ts/WorkPool"` → `WorkPool.Service`.
+export { queueTag as Service };
 
 /**
  * Read the `success` / `error` wire schemas stamped on a {@link Tag}, if declared. `undefined` when
@@ -2379,7 +2379,7 @@ export { successOf, errorOf };
 
 export {
   makeQueueEffect as make,
-  Service,
+  Service as define,
   queueSchemaGroup as Schema,
   queueErrorsGroup as Errors,
   queueRateLimiterLayer as rateLimiterLayer,

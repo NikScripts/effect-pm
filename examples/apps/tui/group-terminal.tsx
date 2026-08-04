@@ -21,7 +21,7 @@ import {
   servicesLayer,
 } from "../cli/manager-services";
 
-class MyGroup extends Group.Tag<MyGroup>("hyperlink-ts/MyGroup")({
+class MyGroup extends Group.Service<MyGroup>("hyperlink-ts/MyGroup")({
   Counter,
   QueueManager,
 }) {}

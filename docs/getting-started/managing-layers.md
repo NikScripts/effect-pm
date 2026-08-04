@@ -28,7 +28,7 @@ Run the implementation in the current runtime:
 ``` ts
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import { Effect, Schema, Layer } from "effect"
-class Jobs extends Hyperlink.Tag<Jobs>()("app/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("app/Jobs", {
   run: Hyperlink.effect(Schema.Void),
 }) {}
 declare const jobsImpl: Effect.Effect<{ readonly run: Effect.Effect<void> }>
@@ -73,7 +73,7 @@ common case.
 
 Serving's mirror: a remote HyperService needs the client [Handle](/docs/glossary#handle) for the Tag
 and a **transport** to the [Node](/docs/glossary#node) that runs it. A Node is a named endpoint that
-carries the address. Nameless listens stamp that address for you; a `Node.Tag` makes it
+carries the address. Nameless listens stamp that address for you; a `Node.Service` makes it
 self-describing in source.
 
 ``` ts
@@ -81,7 +81,7 @@ self-describing in source.
 program.pipe(Effect.provide(Hyperlink.connect(Jobs, Hyperlink.protocolHttp(3000))))
 
 // Or declare a node with that port and share the transport across clients
-class JobsNode extends Node.Tag<JobsNode>()("jobs", 3000) {}
+class JobsNode extends Node.Service<JobsNode>()("jobs", 3000) {}
 const transport = Hyperlink.http(JobsNode)
 const appLayer = Layer.mergeAll(
   transport,

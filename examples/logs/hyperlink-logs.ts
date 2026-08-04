@@ -20,7 +20,7 @@ import * as WorkPool from "../../src/WorkPool";
 
 const Job = Schema.Struct({ id: Schema.String });
 
-class MailQueue extends WorkPool.Tag<MailQueue>()("examples/logs/MailQueue", {
+class MailQueue extends WorkPool.Service<MailQueue>()("examples/logs/MailQueue", {
   payload: Job,
 }) {}
 

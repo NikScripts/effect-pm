@@ -8,7 +8,7 @@ import { NodeStatusTag, httpClient as nodeStatusHttpClient } from "../src/intern
 import { buildNodeStatusImpl } from "../src/internal/nodeStatus";
 import * as Node from "../src/Node";
 
-class Echo extends Hyperlink.Tag<Echo>()("nodeStatus-ref/Echo", {
+class Echo extends Hyperlink.Service<Echo>()("nodeStatus-ref/Echo", {
   ping: Hyperlink.effect(Schema.String),
 }) {}
 

@@ -13,13 +13,13 @@ export { pack };
 export const telemetryViewSpec = { kind: Telemetry.kind } as const;
 
 /** @public */
-export class TelemetryCard extends Views.Card.Tag<TelemetryCard>()(
+export class TelemetryCard extends Views.Card.Service<TelemetryCard>()(
   "hyperlink/view/telemetry-card",
   { spec: telemetryViewSpec },
 ) {}
 
 /** @public */
-export class TelemetryDetail extends Views.Detail.Tag<TelemetryDetail>()(
+export class TelemetryDetail extends Views.Detail.Service<TelemetryDetail>()(
   "hyperlink/view/telemetry-detail",
   { spec: telemetryViewSpec },
 ) {}

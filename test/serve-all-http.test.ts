@@ -6,12 +6,12 @@ import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
 // Many resources, one Node, ONE server/port (the ControlService.make({group,port}) replacement).
-class LeagueNode extends Node.Tag<LeagueNode>()("serveAll/node") {}
-class Alpha extends Hyperlink.Tag<Alpha>()("serveAll/Alpha", 
+class LeagueNode extends Node.Service<LeagueNode>()("serveAll/node") {}
+class Alpha extends Hyperlink.Service<Alpha>()("serveAll/Alpha", 
   { where: Hyperlink.effect(Schema.String) },
   { node: LeagueNode },
 ) {}
-class Beta extends Hyperlink.Tag<Beta>()("serveAll/Beta", 
+class Beta extends Hyperlink.Service<Beta>()("serveAll/Beta", 
   { where: Hyperlink.effect(Schema.String), shout: Hyperlink.effectFn({ msg: Schema.String }, Schema.String) },
   { node: LeagueNode },
 ) {}

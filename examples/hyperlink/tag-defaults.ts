@@ -19,7 +19,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Schema } from "effect";
 import * as Hyperlink from "../../src/Hyperlink";
 
-class Counter extends Hyperlink.Tag<Counter>()(
+class Counter extends Hyperlink.Service<Counter>()(
   "default/Counter",
   {
     current: Hyperlink.effect(Schema.Number),

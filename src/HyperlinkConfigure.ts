@@ -1,6 +1,6 @@
 /**
- * Layer-composed configuration for {@link Daemon.Service}, {@link WorkPool.Service},
- * and {@link Gate.Service}.
+ * Layer-composed configuration for {@link Daemon.define}, {@link WorkPool.define},
+ * and {@link Gate.define}.
  *
  * @remarks
  * - **Defaults** live on the service factory (`defaultSpec` / factory config).

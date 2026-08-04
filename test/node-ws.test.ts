@@ -12,7 +12,7 @@ const tmpSock = (label: string) =>
     return `/tmp/hyperlink-ts-ws-${label}-${process.pid}-${now}.sock`;
   });
 
-class JobsAnon extends Hyperlink.Tag<JobsAnon>()("ws/JobsAnon", {
+class JobsAnon extends Hyperlink.Service<JobsAnon>()("ws/JobsAnon", {
   jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
@@ -21,11 +21,11 @@ describe("Node.ws", () => {
     Effect.gen(function* () {
       const port = 20000 + (process.pid % 1000);
       const lookupPath = yield* tmpSock("bound-lookup");
-      class Worker extends Node.Tag<Worker>()("ws/Worker", {
+      class Worker extends Node.Service<Worker>()("ws/Worker", {
         url: `ws://127.0.0.1:${String(port)}/rpc`,
         kind: "WebSocket",
       }) {}
-      class Jobs extends Hyperlink.Tag<Jobs>()("ws/Jobs", {
+      class Jobs extends Hyperlink.Service<Jobs>()("ws/Jobs", {
         jobs: Hyperlink.effect(Schema.Number),
       }).pipe(Hyperlink.andNode(Worker)) {}
 
@@ -100,7 +100,7 @@ describe("Node.ws", () => {
 
   it.effect("rejects Ipc Node with WsListenRequiresWs", () =>
     Effect.gen(function* () {
-      class IpcWorker extends Node.Tag<IpcWorker>()("ws/IpcWorker", {
+      class IpcWorker extends Node.Service<IpcWorker>()("ws/IpcWorker", {
         path: "/tmp/hyperlink-ts-ws-reject.sock",
       }) {}
       const exit = yield* Effect.exit(
@@ -117,7 +117,7 @@ describe("Node.ws", () => {
 
   it.effect("listen on WebSocket Node fails with ListenUseProtocol", () =>
     Effect.gen(function* () {
-      class Worker extends Node.Tag<Worker>()("ws/ListenReject", {
+      class Worker extends Node.Service<Worker>()("ws/ListenReject", {
         url: "ws://127.0.0.1:9/rpc",
         kind: "WebSocket",
       }) {}

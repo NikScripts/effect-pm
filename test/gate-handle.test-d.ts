@@ -41,7 +41,7 @@ const _contractToHandleUnit: HandleUnit = contractUnit;
 void [_handleToContractUnit, _contractToHandleUnit];
 
 // ── the naming actually took effect: `yield* MyRun` (= Shape<MyRun>) IS the named handle ─────────────
-class Fetch extends Gate.Tag<Fetch>()("test/run-handle/Fetch", {
+class Fetch extends Gate.Service<Fetch>()("test/run-handle/Fetch", {
   payload: Schema.Number,
   success: Schema.String,
   error: Schema.Boolean,
@@ -63,7 +63,7 @@ assertExact<
 >();
 
 // ── DoD: unit gate declaring only `success` → `Gate<void, number, EngineRunError, never>` ────
-class Tick extends Gate.Service<Tick>()("test/run-handle/Tick", {
+class Tick extends Gate.define<Tick>()("test/run-handle/Tick", {
   success: Schema.Number,
   effect: () => Effect.succeed(1),
 }) {}

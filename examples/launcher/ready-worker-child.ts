@@ -18,11 +18,11 @@ import { Effect, Schema } from "effect";
 import * as Hyperlink from "../../src/Hyperlink";
 import * as Node from "../../src/Node";
 
-class Jobs extends Hyperlink.Tag<Jobs>()("examples/launcher-ready/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("examples/launcher-ready/Jobs", {
   ping: Hyperlink.effect(Schema.String),
 }) {}
 
-class Cache extends Hyperlink.Tag<Cache>()("examples/launcher-ready/Cache", {
+class Cache extends Hyperlink.Service<Cache>()("examples/launcher-ready/Cache", {
   ping: Hyperlink.effect(Schema.String),
 }).pipe(
   Hyperlink.withReadiness(() =>
@@ -55,7 +55,7 @@ const serve = (
     mode === "env" ? Node.assumeTokenConfig : Effect.succeed(argvToken);
   return Effect.gen(function* () {
     const assumeToken = yield* token;
-    const worker = Node.Tag()(nodeKey, {
+    const worker = Node.Service()(nodeKey, {
       url: `http://127.0.0.1:${String(port)}/rpc`,
       kind: "Http",
     });

@@ -10,7 +10,7 @@ import * as Node from "../src/Node";
 
 // A node serving one ordinary resource over `httpServer` must ALSO auto-serve its node status
 // (status / ping / logs.stream / logs.query) without the author wiring anything — driven over real http.
-class Echo extends Hyperlink.Tag<Echo>()("nodeStatus/Echo", {
+class Echo extends Hyperlink.Service<Echo>()("nodeStatus/Echo", {
   ping: Hyperlink.effect(Schema.String),
 }) {}
 

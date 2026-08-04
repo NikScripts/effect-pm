@@ -6,7 +6,7 @@ import * as Store from "../src/Store";
 import type { StoreHandleFromContract } from "../src/internal/store/spec";
 import { makeDaemonStoreAnalyticsContract } from "../src/internal/store/daemonStoreSpec";
 
-class HideLogsDaemon extends Daemon.Tag<HideLogsDaemon>()("test/store-logs-hide/Daemon") {}
+class HideLogsDaemon extends Daemon.Service<HideLogsDaemon>()("test/store-logs-hide/Daemon") {}
 
 type DaemonStoreHandle = StoreHandleFromContract<
   ReturnType<typeof makeDaemonStoreAnalyticsContract<typeof HideLogsDaemon>>

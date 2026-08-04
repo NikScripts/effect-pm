@@ -21,7 +21,7 @@ import * as Polling from "../../src/Polling";
 
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 
-class PricesDaemon extends Daemon.Tag<PricesDaemon>()("examples/Prices", { success: Price }) {}
+class PricesDaemon extends Daemon.Service<PricesDaemon>()("examples/Prices", { success: Price }) {}
 
 const pricesRegistration = Daemon.store(PricesDaemon);
 class DemoStore extends Store.Service<DemoStore>("@examples/DemoStore")(

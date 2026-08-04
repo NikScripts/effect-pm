@@ -27,7 +27,7 @@ Prose below uses **current** names. Where a milestone says “define `WorkPool`�
 
 ## The invariant (hard requirement)
 
-**`WorkPool.Tag` and `WorkPool.Service` must yield the *same* handle type.**
+**`WorkPool.Service` and `WorkPool.define` must yield the *same* handle type.**
 `Tag` is **canonical** — it carries the correct, location-transparent contract shape (the one that
 already crosses RPC). **`Service` conforms to `Tag`.** Enforced by a bidirectional type test that
 fails the build on drift.
@@ -253,7 +253,7 @@ the contract.
   typed `.Service` (`size`→`Subscribable`, nested metrics, `logs`); update `docs/guides/queues.md`.
   After this, `.Tag ≡ .Service` **by construction** — no test needed for it.
 - **M3 — name the one contract handle.** ✅ **SHIPPED (tip):** `WorkPool<Payload, Success = void, Error = never, Requirements = never>`
-  on `WorkPool.Tag` via `nameQueueService` + `Svc` on `HyperlinkTag`; `test/queue-handle.test-d.ts`
+  on `WorkPool.Service` via `nameQueueService` + `Svc` on `HyperlinkTag`; `test/queue-handle.test-d.ts`
   proves `WorkPool.WorkPool<Decoded<F>, A, E, never> ⇄ ServiceOf<QueueInstanceSpec<F>>`. Hover:
   `yield* Emails` → `WorkPool<EmailJob>`. Gate fan-out also shipped (`Gate<>` + `nameRunService`).
   **Still open from this bake:** M2 `.Service` unify, trailing-default elision polish, prettify
@@ -263,7 +263,7 @@ the contract.
 
 The contract path (`materializeQueueTag` + `layer`) is schema-driven: it needs `success`/`error`
 **schemas** (`Schema.Top`) to validate/encode on the wire and to type `Completed.success` /
-`Failed.cause` on the `events` stream. But `WorkPool.Service`'s config
+`Failed.cause` on the `events` stream. But `WorkPool.define`'s config
 (`WorkPoolConfigWithItemSchema`, `:1077`) has **only** `itemSchema` — it infers `A`/`E` from the
 worker `effect`'s *types*, with no `success`/`error` schema. Confirmed by the doc at `:1080`: `A` "is
 driven by the tag's `success` wire schema (default `void`)."

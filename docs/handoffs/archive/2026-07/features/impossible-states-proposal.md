@@ -63,7 +63,7 @@ Hyperlink.httpServer([WorkPool.serve(LiveQueue, cfg)])
 **Wrong code that compiles today:**
 ```ts
 // loose-fields shorthand for a payload/input — already bit the queues (silent shape drift):
-WorkPool.Tag<Q>()("q", { a: Schema.String, b: Schema.Number })   // vs { payload: Struct }
+WorkPool.Service<Q>()("q", { a: Schema.String, b: Schema.Number })   // vs { payload: Struct }
 ```
 
 **The fix:** require a single `Struct` schema for payloads/inputs; drop the loose-fields form. The illegal state (ambiguous loose fields) becomes unrepresentable.

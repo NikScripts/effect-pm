@@ -21,7 +21,7 @@ import * as Lookup from "../../src/Lookup"
 import * as Node from "../../src/Node"
 import * as Hyperlink from "../../src/Hyperlink"
 
-class Mail extends Hyperlink.Tag<Mail>()("Mail", {
+class Mail extends Hyperlink.Service<Mail>()("Mail", {
   pending: Hyperlink.effect(Schema.Number),
 }) {}
 

@@ -88,12 +88,12 @@ describe("Gate.make", () => {
   );
 });
 
-describe("Gate.Service", () => {
+describe("Gate.define", () => {
   it.live("limits concurrency on parameterized gate", () =>
     Effect.gen(function* () {
       const active = yield* Ref.make(0);
       const peak = yield* Ref.make(0);
-      const SlowGate = Gate.Tag<{ readonly _tag: "SlowGate" }>()("@test/SlowGate", { payload: Schema.String, success: Schema.String });
+      const SlowGate = Gate.Service<{ readonly _tag: "SlowGate" }>()("@test/SlowGate", { payload: Schema.String, success: Schema.String });
       const gateLayer = Gate.layerMemory(SlowGate, {
         effect: (s: string) =>
           Effect.gen(function* () {
@@ -120,7 +120,7 @@ describe("Gate.Service", () => {
     }),
   );
 
-  class SlowGate extends Gate.Service<SlowGate>()("@test/SlowGateService", {
+  class SlowGate extends Gate.define<SlowGate>()("@test/SlowGateService", {
     payload: Schema.String,
     success: Schema.String,
     effect: (s: string) => Effect.succeed(s.toUpperCase()),
@@ -151,8 +151,8 @@ describe("Gate.Service", () => {
   );
 });
 
-describe("Gate.Tag + layer", () => {
-  const TestGate = Gate.Tag<{ readonly _tag: "TestGate" }>()(
+describe("Gate.Service + layer", () => {
+  const TestGate = Gate.Service<{ readonly _tag: "TestGate" }>()(
     "@test/TestGate",
     Schema.Number,
     Schema.Number,
@@ -168,7 +168,7 @@ describe("Gate.Tag + layer", () => {
   });
 
   it("Tag accepts schema config object", () => {
-    const ConfigGate = Gate.Tag<{ readonly _tag: "ConfigGate" }>()("@test/ConfigGate", {
+    const ConfigGate = Gate.Service<{ readonly _tag: "ConfigGate" }>()("@test/ConfigGate", {
       payload: Schema.Number,
       success: Schema.Number,
       description: "config-object tag",
@@ -280,7 +280,7 @@ describe("Gate.make — default store bridge", () => {
 });
 
 describe("Gate.layer — baked default store bridge", () => {
-  const BakedGate = Gate.Tag<{ readonly _tag: "BakedGate" }>()("@test/BakedGate", { payload: Schema.Number, success: Schema.Number });
+  const BakedGate = Gate.Service<{ readonly _tag: "BakedGate" }>()("@test/BakedGate", { payload: Schema.Number, success: Schema.Number });
 
   const bakedLayer = Gate.layerMemory(BakedGate, {
     effect: (n: number) => Effect.succeed(n),
@@ -310,7 +310,7 @@ describe("Gate.layer — baked default store bridge", () => {
 });
 
 describe("Gate.layer — Gate.store records", () => {
-  const StoreGate = Gate.Tag<{ readonly _tag: "StoreGate" }>()("@test/StoreGate", { payload: Schema.Number, success: Schema.Number });
+  const StoreGate = Gate.Service<{ readonly _tag: "StoreGate" }>()("@test/StoreGate", { payload: Schema.Number, success: Schema.Number });
 
   const storeGateRegistration = Gate.store(StoreGate);
 
@@ -342,7 +342,7 @@ describe("Gate.layer — Gate.store records", () => {
 });
 
 describe("Gate.store — persistence fidelity", () => {
-  const FidelityGate = Gate.Tag<{ readonly _tag: "FidelityGate" }>()("@test/FidelityGate", {
+  const FidelityGate = Gate.Service<{ readonly _tag: "FidelityGate" }>()("@test/FidelityGate", {
     payload: Schema.Number,
     success: Schema.Number,
     error: Schema.String,
@@ -489,8 +489,8 @@ describe("Gate.make — rateLimit", () => {
   );
 });
 
-describe("Gate.Service — rateLimit", () => {
-  class Limited extends Gate.Service<Limited>()("@test/LimitedGate", {
+describe("Gate.define — rateLimit", () => {
+  class Limited extends Gate.define<Limited>()("@test/LimitedGate", {
     payload: Schema.Void,
     success: Schema.Void,
     concurrency: 4,
@@ -529,7 +529,7 @@ describe("Gate.Service — rateLimit", () => {
 });
 
 describe("Gate metrics nest — onExceeded fail", () => {
-  class StrictLimit extends Gate.Service<StrictLimit>()("@test/StrictLimitGate", {
+  class StrictLimit extends Gate.define<StrictLimit>()("@test/StrictLimitGate", {
     concurrency: 4,
     rateLimit: {
       key: "strict/bucket",
@@ -579,19 +579,19 @@ describe("Gate.makeRunner", () => {
 });
 
 describe("Gate — unit gates and interrupts", () => {
-  class UnitGate extends Gate.Service<UnitGate>()("@test/UnitGate", {
+  class UnitGate extends Gate.define<UnitGate>()("@test/UnitGate", {
     payload: Schema.Void,
     success: Schema.Number,
     effect: () => Effect.succeed(42),
     concurrency: 1,
   }) {}
 
-  class BareEffectGate extends Gate.Service<BareEffectGate>()("@test/BareEffectGate", {
+  class BareEffectGate extends Gate.define<BareEffectGate>()("@test/BareEffectGate", {
     effect: Effect.void,
     concurrency: 1,
   }) {}
 
-  class BareThunkGate extends Gate.Service<BareThunkGate>()("@test/BareThunkGate", {
+  class BareThunkGate extends Gate.define<BareThunkGate>()("@test/BareThunkGate", {
     success: Schema.Number,
     effect: Effect.succeed(99),
     concurrency: 1,
@@ -626,7 +626,7 @@ describe("Gate — unit gates and interrupts", () => {
   );
 
   const holdLayer = (hold: Deferred.Deferred<void, never>, key: string) => {
-    const HoldGate = Gate.Tag<{ readonly _tag: "HoldGate" }>()(key, {
+    const HoldGate = Gate.Service<{ readonly _tag: "HoldGate" }>()(key, {
       payload: Schema.Void,
       success: Schema.Void,
     });
@@ -665,7 +665,7 @@ describe("Gate — unit gates and interrupts", () => {
 describe("Gate.layer — store failure isolation", () => {
   const scopeKey = "@test/store-failure-gate";
 
-  const FailingBridgeGate = Gate.Tag<{ readonly _tag: "FailingBridgeGate" }>()(scopeKey, {
+  const FailingBridgeGate = Gate.Service<{ readonly _tag: "FailingBridgeGate" }>()(scopeKey, {
     payload: Schema.Number,
     success: Schema.Number,
   });

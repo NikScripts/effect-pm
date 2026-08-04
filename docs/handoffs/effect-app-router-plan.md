@@ -148,9 +148,10 @@ class Document extends Context.Service<Document, string>()("app/Document") {
 
 ### 4. `View`
 
-- **Down `R`:** `View.Service` (optional `{ default }` → `.layer`), unary `gen` / `succeed`, `mount`
+- **Down `R`:** `View.Service` + class `static layer = This.provide(…)` (Effect v4 style; no `{ default }`), unary `gen` / `succeed`, `mount`
 - **Compose services:** `yield* Effect.all({ Shell, Hello })` then JSX on resolved views
 - **Open-`R` view values:** `View.mount(view, Service.layer)` — **no** bag `succeed`
+- **Naming:** handle mint is `*.Service` (not `*.Tag`); baked config+layer factories are `*.define` (`Gate.define` / `WorkPool.define` / `Daemon.define`)
 - **Up Provides:** `Last.provide` — [view-provide-draft](./view-provide-draft.md)
 
 ### 5. `Layout`
@@ -158,7 +159,7 @@ class Document extends Context.Service<Document, string>()("app/Document") {
 ```ts
 Layout.make(effect)           // non-DI chrome; R from yield*
 Layout.Outlet                 // Context.Service → page body component
-Layout.Tag                    // optional DI identity when earned
+Layout.Service                // optional DI identity when earned
 ```
 
 ### 6. `Page`
@@ -167,7 +168,7 @@ Layout.Tag                    // optional DI identity when earned
 Page.make(route, effect)           // effect → body component (Provides via Last.provide)
 Page.params(route)
 Page.static / .dynamic / .build
-Page.Tag / stampOf
+Page.Service / stampOf             // DI identity when earned (v4 naming)
 ```
 
 Effect return = **body only** (`(props) => ReactElement | null` or equivalent View).
@@ -260,7 +261,7 @@ URL → Router.match(chapter)
 | **B4** | `Page.static/dynamic/build` + stamp on Result | modes + Build paths |
 | **B5** | `Route` Schema helpers + `Page.params` | typed href/params |
 | **B6** | File codegen / `createPages` adapter | docs-site cutover path |
-| **B7** | `Page.Tag` / `Layout.Tag` when identity earned | DI optional |
+| **B7** | `Page.Service` / `Layout.Tag` when identity earned | DI optional |
 
 **Do not** Eng Layout chrome before B1–B2 agree on body-only Page + Provide harvest.
 

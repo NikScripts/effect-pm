@@ -20,7 +20,7 @@ Fence body `// @noErrors` covers `process` under the docs Twoslash host.
 
 ## What this shows
 
-`Node.Tag` with fixed `{ path }` IpcSocket.
+`Node.Service` with fixed `{ path }` IpcSocket.
 
 {.twoslash include="examples/node/tag-addressed.ts"}
 ``` ts

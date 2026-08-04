@@ -9,7 +9,7 @@ import * as Gate from "../src/Gate";
 import * as Lifecycle from "../src/Lifecycle";
 import * as Node from "../src/Node";
 
-class RemoteGate extends Gate.Tag<RemoteGate>()("run-remote/G", {
+class RemoteGate extends Gate.Service<RemoteGate>()("run-remote/G", {
   payload: Schema.Number,
   success: Schema.Number,
   error: Schema.String,

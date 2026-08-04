@@ -8,8 +8,8 @@ import * as Node from "../src/Node";
 // A served node exposes a plain HTTP `/health` readiness route alongside `/rpc` — so a dumb probe
 // (deploy gate, load balancer) gets a status code, and the JSON body lists the node's services.
 const Item = Schema.Struct({ n: Schema.Number });
-class HealthNode extends Node.Tag<HealthNode>()("health/node") {}
-class HealthQueue extends WorkPool.Tag<HealthQueue>()("health/Q", { payload: Item, node: HealthNode }) {}
+class HealthNode extends Node.Service<HealthNode>()("health/node") {}
+class HealthQueue extends WorkPool.Service<HealthQueue>()("health/Q", { payload: Item, node: HealthNode }) {}
 
 const Server = Node.httpServer([
   WorkPool.serveMemory(HealthQueue, { effect: (_i: { n: number }) => Effect.void }),

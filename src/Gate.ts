@@ -20,7 +20,7 @@
  *
  * | Function | Purpose |
  * |----------|---------|
- * | `Gate.Tag` / `Gate.Service` | Participating handle — Lifecycle + observation + wire `run` |
+ * | `Gate.Service` / `Gate.define` | Participating handle — Lifecycle + observation + wire `run` |
  * | `Gate.layer` / `serve` / `serveRemote` | Layers from a Tag (Lifecycle + RPC) |
  * | `Gate.configure` | Config patch layer for a tag (Tag path) |
  * | `Gate.store` | Register built-in run facts + state history on an app {@link Store.Service} |
@@ -45,25 +45,25 @@
  * Declare wire schemas on the tag, then serve or connect like {@link WorkPool} / {@link Daemon}:
  *
  * ```ts
- * class FetchGate extends Gate.Tag<FetchGate>()("@app/FetchGate", {
+ * class FetchGate extends Gate.Service<FetchGate>()("@app/FetchGate", {
  *   payload: SymbolSchema,
  *   success: PriceSchema,
  *   error: FetchErrSchema,
  * }) {}
  *
  * // unit gate — bare effect, wire slots default to Void / Never
- * class Tick extends Gate.Service<Tick>()("@app/Tick", {
+ * class Tick extends Gate.define<Tick>()("@app/Tick", {
  *   effect: Effect.sleep("1 second"),
  * }) {}
  * ```
  *
- * ## Observable handles (Tag / Service / layer)
+ * ## Observable handles (Service / define / layer)
  *
- * `yield* Tag` returns a toolkit service with `.run` plus {@link Subscribable} views
+ * `yield* Service` returns a toolkit service with `.run` plus {@link Subscribable} views
  * (`status`, `waiting`, `inFlight`, `completed`, …). Read with `yield* handle.waiting.get`
  * or subscribe via `handle.waiting.changes`.
  *
- * Tag and Service also expose a static `.run` shortcut that requires the tag in `R`.
+ * Service and define also expose a static `.run` shortcut that requires the service in `R`.
  *
  * @module Gate
  */
@@ -129,7 +129,7 @@ export { gateStatus };
 export const kind = "hyperlink-ts/Gate";
 
 /**
- * Build a gate **instance** spec from wire schemas — pass to {@link Hyperlink.Tag} or use via
+ * Build a gate **instance** spec from wire schemas — pass to {@link Hyperlink.Service} or use via
  * {@link Tag} / {@link Service}.
  *
  * @public
@@ -726,8 +726,8 @@ const materializeGateTag = <Self>() =>
   ): GateTagWithStaticRun<Self, I, A, E> => {
     const resolved = resolveRunWireSchemas(config);
     const spec = gateSpec(resolved.payload, resolved.success, resolved.error);
-    // Do not pass `defaults` into Hyperlink.Tag — nameRunService remaps Svc and would wipe them.
-    const tag = Hyperlink.Tag<Self>()(key, spec, {
+    // Do not pass `defaults` into Hyperlink.Service — nameRunService remaps Svc and would wipe them.
+    const tag = Hyperlink.Service<Self>()(key, spec, {
       description: config.description,
       kind,
     });
@@ -768,7 +768,7 @@ const materializeGateTag = <Self>() =>
 
 /**
  * Define a run (concurrency-gated effect) as a named service {@link Tag}:
- * `class Backup extends Gate.Tag<Backup>()("@app/Backup", { payload: ArgsSchema }) {}`. The
+ * `class Backup extends Gate.Service<Backup>()("@app/Backup", { payload: ArgsSchema }) {}`. The
  * class *is* the Tag — `yield* Backup` resolves the {@link Gate} handle (its `.run` applies
  * the bounded-concurrency gate inline), while {@link layer} provides it and {@link serve} exposes it
  * over RPC. `payload` is the argument schema; optional `success` / `error` declare the result and
@@ -1164,7 +1164,7 @@ export const serveMemory = serve;
  * @category constructors
  * @public
  */
-export const Service = <Self>() => {
+export const define = <Self>() => {
   function build<
     const Name extends string,
     I extends Schema.Top = typeof Schema.Void,
@@ -1235,7 +1235,7 @@ export const Service = <Self>() => {
  *
  * @public
  */
-export { runTag as Tag };
+export { runTag as Service };
 
 /**
  * Resolved rate-limit bucket key stamped on a Gate Tag/Service (absent when no
@@ -1313,7 +1313,7 @@ export {
   MetricsKeyCollision,
   AdaptiveRequiresRateLimit,
   make as httpApiClient,
-  Service as httpApiClientService,
+  define as httpApiClientService,
   layerEffect as httpApiClientLayerEffect,
   acceptJson,
   instrumentEndpoints,

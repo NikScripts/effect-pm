@@ -4,7 +4,7 @@
 
 ## The goal
 
-Make `import { WorkPool } from "hyperlink-ts"` + `WorkPool.Tag` (the **barrel
+Make `import { WorkPool } from "hyperlink-ts"` + `WorkPool.Service` (the **barrel
 namespace** access) tree-shake the engine in **every** bundler — the full Effect treatment, where
 `Effect.map` pulls only `map`, not all of `Effect`.
 
@@ -32,7 +32,7 @@ but it’s not guaranteed.
 
 To make it guaranteed everywhere, the package must ship **unbundled / preserve-modules** ESM —
 exactly how Effect ships (per-module `.js` files, `export * as X from "./X.js"` preserved, not
-flattened). Then the consumer’s bundler resolves `WorkPool.Tag` to the real module export and
+flattened). Then the consumer’s bundler resolves `WorkPool.Service` to the real module export and
 drops the rest.
 
 ## The work (package-wide build change)
@@ -40,7 +40,7 @@ drops the rest.
 1. Replace tsup’s bundling for the library entries with a **preserve-modules** build (Rollup
    `output.preserveModules: true`, or `tsc`-emitted ESM, keeping tsup only for `.d.ts` if useful).
 2. Keep `"sideEffects": false`.
-3. Verify with the bundle check below that the **barrel** `WorkPool.Tag` excludes engine
+3. Verify with the bundle check below that the **barrel** `WorkPool.Service` excludes engine
    symbols under both esbuild and Rollup.
 4. Apply the same proof to `Daemon` (and any other heavy barrel namespaces).
 

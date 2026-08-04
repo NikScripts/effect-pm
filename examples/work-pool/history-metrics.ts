@@ -18,7 +18,7 @@ const MetricsJob = Schema.Struct({
   id: Schema.String,
 });
 
-class MetricsQueue extends WorkPool.Tag<MetricsQueue>()(
+class MetricsQueue extends WorkPool.Service<MetricsQueue>()(
   "examples/MetricsQueue",
   { payload: MetricsJob },
 ) {}

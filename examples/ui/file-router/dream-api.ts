@@ -13,7 +13,7 @@
  * ## Three layers (keep them straight)
  *
  * 1. **Page mark** — `Page.static` / `.dynamic` / `.build` (camelCase) or preferred
- *    **`Page.Tag`** class with path/render/meta on statics. Not dashboard
+ *    **`Page.Service`** class with path/render/meta on statics. Not dashboard
  *    `Views.Page` size chrome. See `docs/handoffs/view-page-naming.md`.
  * 2. **Route catalog** — typed urls (`Route.fileRoot` / `fromEffect`) so `urls.chapter("x")`
  *    is a closed builder, not a stringly href.
@@ -63,7 +63,7 @@ const PageStampId = "~hyperlink-ts/View/page" as const;
 
 /**
  * Metadata + render plan attached to a page module.
- * Prefer putting this on a `Page.Tag` class; helpers stamp the same bag
+ * Prefer putting this on a `Page.Service` class; helpers stamp the same bag
  * onto a bare component for the escape hatch.
  *
  * @internal sketch — lands on View once Eng’d
@@ -201,7 +201,7 @@ export const Search = Page.dynamic(
 );
 
 // =============================================================================
-// Preferred — Page.Tag (+ nested View.Tag) + camelCase `provides` layer
+// Preferred — Page.Service (+ nested View.Service) + camelCase `provides` layer
 // =============================================================================
 
 /**
@@ -214,24 +214,24 @@ export class ChapterParams extends Schema.Class<ChapterParams>("ChapterParams")(
 ) {}
 
 /**
- * Nested chrome inside the page — ordinary {@link View.Tag} (DI), **not** part of
+ * Nested chrome inside the page — ordinary {@link View.Service} (DI), **not** part of
  * the file-router stamp. Pay with `View.provide` on a camelCase `provides` layer.
  */
-export class ChapterAside extends View.Tag<
+export class ChapterAside extends View.Service<
   ChapterAside,
   { readonly chapter: string }
 >()("examples/file-router/chapter-aside") {}
 
 /**
- * File-router page — **`Page.Tag`**, not `Views.Page.Tag` (dashboard size chrome).
+ * File-router page — **`Page.Service`**, not `Views.Page.Service` (dashboard size chrome).
  *
  * Statics hold path / render / paths / title. Eng: `Page.build(DocsChapter)` reads
  * this bag. Nested View Tags stack Layer `R` until `provides` pays them — unrelated
- * to SSG mode. `Page.Tag` still needs work (schema of statics, build(Tag), …).
+ * to SSG mode. `Page.Service` still needs work (schema of statics, build(Tag), …).
  *
- * Stand-in mint: View.Tag + page statics until `hyperlink-ts/ui/Page` exists.
+ * Stand-in mint: View.Service + page statics until `hyperlink-ts/ui/Page` exists.
  */
-export class DocsChapter extends View.Tag<
+export class DocsChapter extends View.Service<
   DocsChapter,
   { readonly chapter: string }
 >()("examples/file-router/docs-chapter", {

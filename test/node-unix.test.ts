@@ -12,7 +12,7 @@ const tmpSock = (label: string) =>
     return `/tmp/hyperlink-ts-unix-${label}-${process.pid}-${now}.sock`;
   });
 
-class JobsAnon extends Hyperlink.Tag<JobsAnon>()("unix/JobsAnon", {
+class JobsAnon extends Hyperlink.Service<JobsAnon>()("unix/JobsAnon", {
   jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
@@ -21,8 +21,8 @@ describe("Node.unix", () => {
     Effect.gen(function* () {
       const path = yield* tmpSock("bound");
       const lookupPath = yield* tmpSock("bound-lookup");
-      class Worker extends Node.Tag<Worker>()("unix/Worker", { path }) {}
-      class Jobs extends Hyperlink.Tag<Jobs>()("unix/Jobs", {
+      class Worker extends Node.Service<Worker>()("unix/Worker", { path }) {}
+      class Jobs extends Hyperlink.Service<Jobs>()("unix/Jobs", {
         jobs: Hyperlink.effect(Schema.Number),
       }).pipe(Hyperlink.andNode(Worker)) {}
 
@@ -67,7 +67,7 @@ describe("Node.unix", () => {
 
   it.effect("rejects Http Node with UnixListenRequiresIpc", () =>
     Effect.gen(function* () {
-      class HttpWorker extends Node.Tag<HttpWorker>()("unix/HttpWorker", {
+      class HttpWorker extends Node.Service<HttpWorker>()("unix/HttpWorker", {
         url: "http://127.0.0.1:9",
         kind: "Http",
       }) {}

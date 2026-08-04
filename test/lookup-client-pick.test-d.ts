@@ -4,7 +4,7 @@ import * as Hyperlink from "../src/Hyperlink";
 
 // D4 — lookupClient options: bare fail-closed; pick is "first" | sync DirectoryEntry fn.
 
-class Jobs extends Hyperlink.Tag<Jobs>()("lookup-pick-d/Jobs", {}) {}
+class Jobs extends Hyperlink.Service<Jobs>()("lookup-pick-d/Jobs", {}) {}
 
 const bare: Layer.Layer<
   Jobs,

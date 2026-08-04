@@ -1,5 +1,5 @@
 /**
- * Wire schemas stamped on {@link Gate.Tag} / {@link Gate.Service} factories.
+ * Wire schemas stamped on {@link Gate.Service} / {@link Gate.define} factories.
  *
  * @module internal/gateTagSchemas
  * @internal

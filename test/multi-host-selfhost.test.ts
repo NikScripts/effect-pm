@@ -4,10 +4,10 @@ import { combineByNode, combineQuery } from "../src/MultiNode";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
-class NwslNode extends Node.Tag<NwslNode>()("selfnode/NwslNode") {}
+class NwslNode extends Node.Service<NwslNode>()("selfnode/NwslNode") {}
 
 // a fleet health view: `status` per instance, `fleetStatus` a per-node map (combineByNode)
-class FleetDatabase extends Hyperlink.Tag<FleetDatabase>()("selfnode/FleetDatabase", {
+class FleetDatabase extends Hyperlink.Service<FleetDatabase>()("selfnode/FleetDatabase", {
   status: Hyperlink.effect(Schema.Boolean),
   fleetStatus: Hyperlink.effect(Schema.Record(Schema.String, Schema.Boolean)).pipe(Hyperlink.fleet),
 }) {}

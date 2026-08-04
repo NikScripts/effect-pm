@@ -139,7 +139,7 @@ Match Effect: under a public module namespace the member name is short; outside 
 
 | Where | Form | Example |
 |-------|------|---------|
-| Public module (`src/WorkPool.ts`), consumed as `import * as WorkPool` | Short member | `WorkPool.PriorityConfig`, `WorkPool.Tag` |
+| Public module (`src/WorkPool.ts`), consumed as `import * as WorkPool` | Short member | `WorkPool.PriorityConfig`, `WorkPool.Service` |
 | `src/internal/*` (and any file that is **not** that namespace) | Full prefix | `WorkPoolPriorityConfig`, `WorkPoolPriorityHandle` |
 
 ``` ts
@@ -397,7 +397,7 @@ class DurableWorkPoolStore extends Context.Service<DurableWorkPoolStore, Durable
 ) {}
 
 // HyperService tag — X.Tag
-class Prices extends Daemon.Tag<Prices>()("app/Prices", { success: priceSchema }) {}
+class Prices extends Daemon.Service<Prices>()("app/Prices", { success: priceSchema }) {}
 
 // app journal — Store.Service + registrations (not a retired ProcessStore / LogStore facet)
 class AppStore extends Store.Service<AppStore>("@app/Store")(

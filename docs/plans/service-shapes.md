@@ -192,7 +192,7 @@ Shipped rules:
 Modify the **handle** during Tag construction so `yield* Tag` is typed correctly — **one expression**, no intermediate `const Proto = …`.
 
 ```ts
-class Jobs extends WorkPool.Tag<Jobs>()("@app/Jobs", jobSpec).pipe(
+class Jobs extends WorkPool.Service<Jobs>()("@app/Jobs", jobSpec).pipe(
   Hyperlink.defaults({ label: (n: number) => `job=${n}` }),
 ) {}
 
@@ -224,13 +224,13 @@ Previously `defaults` stamped runtime keys on `defaultsSym` but **did not widen*
 | Soundness | One cast at adornment apply (`remapTagService`); `.test-d.ts` proves `ServiceOf & Bag` ⇄ `Shape` / yield for representatives |
 | Spec vs bag | Spec `default` stays for contract fields; piped `defaults` for extras — both end on `Svc` after adorn |
 | Compose | Adorners chain: each widens/stamps; order defined (defaults → readiness → …) or commutative where possible |
-| Toolkit Tags | `WorkPool.Tag` / `Gate.Tag` / `Daemon.Tag` already return remapped `Svc`; further `.pipe(defaults)` must widen **that** `Svc`, not erase the named handle |
+| Toolkit Tags | `WorkPool.Service` / `Gate.Service` / `Daemon.Service` already return remapped `Svc`; further `.pipe(defaults)` must widen **that** `Svc`, not erase the named handle |
 | Post-construction | Still: new Context key / `Layer.updateService` — not silent mutate of an existing Tag class |
 
 ### Primary API (one-shot pipe)
 
 ```ts
-class Jobs extends WorkPool.Tag<Jobs>()("@app/Jobs", jobSpec).pipe(
+class Jobs extends WorkPool.Service<Jobs>()("@app/Jobs", jobSpec).pipe(
   Hyperlink.defaults({ label: (n: number) => `job=${n}` }),
   // future adorners: same Svc-remap contract
 ) {}
@@ -249,7 +249,7 @@ class Jobs extends WorkPool.Tag<Jobs>()("@app/Jobs", jobSpec).pipe(
 Third-arg / config nest — equivalent to piping `defaults` inside the factory (no second const):
 
 ```ts
-class Jobs extends WorkPool.Tag<Jobs>()("@app/Jobs", jobSpec, {
+class Jobs extends WorkPool.Service<Jobs>()("@app/Jobs", jobSpec, {
   defaults: { label: (n: number) => `job=${n}` },
 }) {}
 ```

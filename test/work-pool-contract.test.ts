@@ -24,8 +24,8 @@ import { forwardClient, groupOf, isVoidCommand, methodMeta, specOf } from "../sr
 import * as Node from "../src/Node";
 
 // Solo tags sharing the control Spec shape — each has its own wire key (= `.key`).
-class Jobs extends Hyperlink.Tag<Jobs>()("@app/Jobs", queueControlSpec) {}
-class Mail extends Hyperlink.Tag<Mail>()("@app/Mail", queueControlSpec) {}
+class Jobs extends Hyperlink.Service<Jobs>()("@app/Jobs", queueControlSpec) {}
+class Mail extends Hyperlink.Service<Mail>()("@app/Mail", queueControlSpec) {}
 
 // Minimal in-memory queue control impl (just enough state to assert the verbs round-trip).
 // `status` is the SSOT live snapshot (a SubscriptionRef); `size`/`isEmpty` are `value`s derived
@@ -204,7 +204,7 @@ it("marks each verb query vs mutate, with destructive hints", () => {
   expect(meta("size").description).toContain("pending items");
 });
 
-// ── data plane (model B): the designed form — WorkPool.Tag<Self>()(id, itemSchema) ──
+// ── data plane (model B): the designed form — WorkPool.Service<Self>()(id, itemSchema) ──
 // The item is a struct; `add`/`prioritize`/`defer` take it DIRECTLY (the whole item schema is
 // the rpc payload), and `enqueue` takes the full entry array directly.
 const NumberItem = Schema.Struct({ n: Schema.Number });
@@ -215,7 +215,7 @@ interface NumberItem {
 type NumberIn = NumberItem | ReadonlyArray<NumberItem>;
 const asItems = (p: NumberIn): ReadonlyArray<NumberItem> =>
   "n" in p ? [p] : p;
-class Numbers extends WorkPool.Tag<Numbers>()("test/Numbers", { payload: NumberItem }) {}
+class Numbers extends WorkPool.Service<Numbers>()("test/Numbers", { payload: NumberItem }) {}
 
 it("queue add round-trips with a per-instance item schema (native validation)", () => {
   const enqueued: number[] = [];
@@ -363,7 +363,7 @@ it("enqueue's wire schema (the server's decode gate) rejects malformed entries",
 });
 
 // ── WorkPool.layer: the engine wired behind the toolkit tag, run locally ──
-class LocalQueue extends WorkPool.Tag<LocalQueue>()("test/LocalQueue", {
+class LocalQueue extends WorkPool.Service<LocalQueue>()("test/LocalQueue", {
   payload: NumberItem,
 }) {}
 
@@ -410,7 +410,7 @@ it("WorkPool.layer runs the engine behind the toolkit tag (local)", () => {
 });
 
 // ── WorkPool.layer scopes worker logs readable via Hyperlink.logs ──
-class LoggingQueue extends WorkPool.Tag<LoggingQueue>()("test/LoggingQueue", {
+class LoggingQueue extends WorkPool.Service<LoggingQueue>()("test/LoggingQueue", {
   payload: NumberItem,
 }) {}
 
@@ -448,8 +448,8 @@ it("WorkPool.layer scopes worker logs via Hyperlink.logs", () => {
 // ── node in the queue tag (type-level): ship only the tag ──
 // A queue bound to a Node carries its own transport; its client requires the node, not the
 // ambient Protocol. (Compile-time proof — the binding's type is what's asserted.)
-class QueueNode extends Node.Tag<QueueNode>()("queue/node") {}
-class NodeNumbers extends WorkPool.Tag<NodeNumbers>()("test/NodeNumbers", {
+class QueueNode extends Node.Service<QueueNode>()("queue/node") {}
+class NodeNumbers extends WorkPool.Service<NodeNumbers>()("test/NodeNumbers", {
   payload: NumberItem,
   node: QueueNode,
 }) {}

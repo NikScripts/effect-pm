@@ -12,8 +12,8 @@ import * as Node from "../src/Node";
 // remote path is heavier (SQL-backed shard + peers/selfNode), so it lives in its own file.
 
 const Session = Schema.Struct({ id: Schema.String, userId: Schema.String });
-class Node1 extends Node.Tag<Node1>()("shardconf/n1") {}
-class SM extends ShardMap.Tag<SM>()("shardconf/SM", {
+class Node1 extends Node.Service<Node1>()("shardconf/n1") {}
+class SM extends ShardMap.Service<SM>()("shardconf/SM", {
   key: Schema.String,
   value: Session,
   keyOf: (s) => s.id,

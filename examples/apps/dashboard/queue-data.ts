@@ -59,7 +59,7 @@ type DaemonSvc = [typeof KeyRotation] extends [Effect.Effect<infer A, infer _E, 
 /** A leaf daemon tag (yieldable for a daemon service). */
 export type DaemonTag = Effect.Effect<DaemonSvc, never, KeyRotation> & { readonly key: string };
 
-/** A node in the `Group.Tag` tree (a group). */
+/** A node in the `Group.Service` tree (a group). */
 export interface GroupNode {
   readonly key: string;
   readonly members: Record<string, unknown>;
@@ -307,7 +307,7 @@ export const daemonBundle = (tag: DaemonTag): DaemonBundle => {
   return bundle;
 };
 
-/** Walk a `Group.Tag` tree to its leaf resource tags (queues + daemons), raw. */
+/** Walk a `Group.Service` tree to its leaf resource tags (queues + daemons), raw. */
 export const leafTags = (node: { readonly members: Record<string, unknown> }): ReadonlyArray<unknown> =>
   Object.values(Group.members(node)).flatMap((m) => (Group.isGroup(m) ? leafTags(m) : [m]));
 

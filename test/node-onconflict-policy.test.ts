@@ -6,7 +6,7 @@ import * as Node from "../src/Node";
 // one helper. These pin the resulting behaviour so the two features stay orthogonal.
 
 it("the { http, ws } shorthand carries an explicit onConflict alongside both endpoints", () => {
-  class Dual extends Node.Tag<Dual>()("policy/dual", {
+  class Dual extends Node.Service<Dual>()("policy/dual", {
     http: "http://d/rpc",
     ws: "ws://d/rpc",
     onConflict: "reject",
@@ -19,7 +19,7 @@ it("the { http, ws } shorthand carries an explicit onConflict alongside both end
 });
 
 it("a shorthand node with no explicit policy defaults to inherit (ordinary node)", () => {
-  class Plain extends Node.Tag<Plain>()("policy/plain", {
+  class Plain extends Node.Service<Plain>()("policy/plain", {
     http: "http://p/rpc",
     ws: "ws://p/rpc",
   }) {}
@@ -27,7 +27,7 @@ it("a shorthand node with no explicit policy defaults to inherit (ordinary node)
 });
 
 it("withProtocol keeps the base node's advertise policy on the derived same-identity handle", () => {
-  class Base extends Node.Tag<Base>()("policy/base", {
+  class Base extends Node.Service<Base>()("policy/base", {
     http: "http://b/rpc",
     onConflict: "askIncumbent",
   }) {}
@@ -41,13 +41,13 @@ it("withProtocol keeps the base node's advertise policy on the derived same-iden
 });
 
 it("Lookup defaults to the concrete livenessReplace policy, never inherit", () => {
-  class L extends Node.Tag<L>()("policy/lookup", { path: "/tmp/l.sock" }).pipe(Node.asLookup) {}
+  class L extends Node.Service<L>()("policy/lookup", { path: "/tmp/l.sock" }).pipe(Node.asLookup) {}
   expect(L.onConflict).toBe("livenessReplace");
   expect(Node.isLookupNode(L)).toBe(true);
 });
 
 it("Lookup honours an explicit resolved policy", () => {
-  class L extends Node.Tag<L>()("policy/lookup-ask", {
+  class L extends Node.Service<L>()("policy/lookup-ask", {
     path: "/tmp/l.sock",
     onConflict: "askIncumbent",
   }).pipe(Node.asLookup) {}
@@ -55,7 +55,7 @@ it("Lookup honours an explicit resolved policy", () => {
 });
 
 it("Lookup accepts the multi-protocol shorthand (uniform with Tag) and stays livenessReplace", () => {
-  class L extends Node.Tag<L>()("policy/lookup-dual", {
+  class L extends Node.Service<L>()("policy/lookup-dual", {
     http: "http://l/rpc",
     ws: "ws://l/rpc",
   }).pipe(Node.asLookup) {}

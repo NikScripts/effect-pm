@@ -8,7 +8,7 @@ class Dep extends Context.Service<Dep, number>()(
   "hyperlink-ts/test/hyperlink-provide-context.test-d/Dep",
 ) {}
 
-class T extends Hyperlink.Tag<T>()("provide-context-d/T", {
+class T extends Hyperlink.Service<T>()("provide-context-d/T", {
   value: Hyperlink.ref(Schema.Number),
   feed: Hyperlink.stream(Schema.Number),
   scaled: Hyperlink.effect(Schema.Number),

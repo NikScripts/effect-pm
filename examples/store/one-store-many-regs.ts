@@ -19,15 +19,15 @@ import * as Node from "../../src/Node";
 import * as Store from "../../src/Store";
 import * as WorkPool from "../../src/WorkPool";
 
-class DemoNode extends Node.Tag<DemoNode>()("examples/store/one-store") {}
+class DemoNode extends Node.Service<DemoNode>()("examples/store/one-store") {}
 
 const Job = Schema.Struct({ id: Schema.String });
 
-class ImportQueue extends WorkPool.Tag<ImportQueue>()("examples/store/OneStoreQueue", {
+class ImportQueue extends WorkPool.Service<ImportQueue>()("examples/store/OneStoreQueue", {
   payload: Job,
 }) {}
 
-class Heartbeat extends Daemon.Tag<Heartbeat>()("examples/store/Heartbeat") {}
+class Heartbeat extends Daemon.Service<Heartbeat>()("examples/store/Heartbeat") {}
 
 /** Custom keys → `yield* AppStore.at("queue")` (tag-keyed `.at(Tag)` is equivalent at runtime). */
 class AppStore extends Store.Service<AppStore>("@examples/store/OneStore")({

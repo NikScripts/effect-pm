@@ -208,7 +208,7 @@ export function clients(
  * address or pass a protocol.
  *
  * Derived connect Layers are WeakMap-memoized per Node class so multiple
- * `Hyperlink.client(Tag, MyNode)` call sites share one MemoMap transport.
+ * `Hyperlink.client(Service as Tag, MyNode)` call sites share one MemoMap transport.
  *
  * @category connect
  * @public

@@ -21,9 +21,9 @@ import * as Node from "../../src/Node"
 import * as Hyperlink from "../../src/Hyperlink"
 import * as Policy from "../../src/Policy"
 
-class Droplet extends Node.Tag<Droplet>()("verify/Droplet") {}
+class Droplet extends Node.Service<Droplet>()("verify/Droplet") {}
 
-class Emails extends Hyperlink.Tag<Emails>()("verify/Emails", {
+class Emails extends Hyperlink.Service<Emails>()("verify/Emails", {
   ping: Hyperlink.effect(Schema.String),
 }) {}
 
@@ -35,7 +35,7 @@ const program = Effect.gen(function* () {
   const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address))
   const port = address._tag === "TcpAddress" ? address.port : 0
   const url = `http://127.0.0.1:${port}/rpc`
-  const node = Node.Tag()("verify/Droplet", { url, kind: "Http" })
+  const node = Node.Service()("verify/Droplet", { url, kind: "Http" })
 
   // Tier 1 — cheap transport probe (default).
   yield* Hyperlink.verifyConnection(Droplet, { url })

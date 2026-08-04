@@ -16,7 +16,7 @@ import { runNodeProgramWithLayer } from "../shared/demo-harness";
 import { Effect, Layer, Metric } from "effect";
 import * as Telemetry from "../../src/Telemetry";
 
-class LocalMetrics extends Telemetry.Tag<LocalMetrics>()() {}
+class LocalMetrics extends Telemetry.Service<LocalMetrics>()() {}
 
 const stampInFlight = (value: number) =>
   Effect.sync(() =>

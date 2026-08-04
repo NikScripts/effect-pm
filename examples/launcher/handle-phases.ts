@@ -24,11 +24,11 @@ const program = Effect.gen(function* () {
   const readyPort = 29_100 + (now % 200);
   const killPort = readyPort + 1;
 
-  const readyWorker = Node.Tag()("examples/launcher-phases/ReadyWorker", {
+  const readyWorker = Node.Service()("examples/launcher-phases/ReadyWorker", {
     url: `http://127.0.0.1:${String(readyPort)}/rpc`,
     kind: "Http",
   });
-  const killWorker = Node.Tag()("examples/launcher-phases/KillWorker", {
+  const killWorker = Node.Service()("examples/launcher-phases/KillWorker", {
     url: `http://127.0.0.1:${String(killPort)}/rpc`,
     kind: "Http",
   });

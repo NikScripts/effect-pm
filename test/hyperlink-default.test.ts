@@ -6,7 +6,7 @@ import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
 import * as PmNode from "../src/Node";
 
-class Counter extends Hyperlink.Tag<Counter>()("default-test/Counter", {
+class Counter extends Hyperlink.Service<Counter>()("default-test/Counter", {
   current: Hyperlink.effect(Schema.Number),
   add: Hyperlink.effectFn(Schema.Number, Schema.Number),
   label: Hyperlink.default((n: number) => `count=${n}`),
@@ -70,7 +70,7 @@ const counterSpec = {
   current: Hyperlink.effect(Schema.Number),
 };
 
-class Adorned extends Hyperlink.Tag<Adorned>()(
+class Adorned extends Hyperlink.Service<Adorned>()(
   "default-test/Adorned",
   counterSpec,
 ).pipe(
@@ -111,7 +111,7 @@ it("defaults key can be overridden in the layer impl (provide-site only)", () =>
   ));
 
 it("defaults pipe rejects Spec key collision", () => {
-  const tag = Hyperlink.Tag()("default-test/Collide", {
+  const tag = Hyperlink.Service()("default-test/Collide", {
     current: Hyperlink.effect(Schema.Number),
   });
   expect(() => Hyperlink.defaults(tag, { current: 1 })).toThrow(
@@ -120,7 +120,7 @@ it("defaults pipe rejects Spec key collision", () => {
 });
 
 it("defaults pipe rejects nested group prefix collision", () => {
-  const tag = Hyperlink.Tag()("default-test/PrefixCollide", {
+  const tag = Hyperlink.Service()("default-test/PrefixCollide", {
     admin: {
       banner: Hyperlink.default("x"),
     },
@@ -131,14 +131,14 @@ it("defaults pipe rejects nested group prefix collision", () => {
 });
 
 it("defaults empty bag is a no-op", () => {
-  const tag = Hyperlink.Tag()("default-test/EmptyBag", {
+  const tag = Hyperlink.Service()("default-test/EmptyBag", {
     current: Hyperlink.effect(Schema.Number),
   }).pipe(Hyperlink.defaults({}));
   expect(tag[Hyperlink.defaultsSym]).toEqual({});
 });
 
 it("defaults double-pipe merges bags; duplicate key is loud", () => {
-  const once = Hyperlink.Tag()("default-test/Double", {
+  const once = Hyperlink.Service()("default-test/Double", {
     current: Hyperlink.effect(Schema.Number),
   }).pipe(Hyperlink.defaults({ a: 1 }));
   const twice = once.pipe(Hyperlink.defaults({ b: 2 }));
@@ -148,7 +148,7 @@ it("defaults double-pipe merges bags; duplicate key is loud", () => {
   );
 });
 
-class Mixed extends Hyperlink.Tag<Mixed>()("default-test/Mixed", {
+class Mixed extends Hyperlink.Service<Mixed>()("default-test/Mixed", {
   current: Hyperlink.effect(Schema.Number),
   unit: Hyperlink.default("count" as const),
 }).pipe(Hyperlink.defaults({ label: (n: number) => `n=${n}` })) {}
@@ -211,7 +211,7 @@ it("client still sees Tag-baked default when server layer overrode locally", () 
     }),
   ));
 
-class FactoryAdorned extends Hyperlink.Tag<FactoryAdorned>()(
+class FactoryAdorned extends Hyperlink.Service<FactoryAdorned>()(
   "default-test/FactoryAdorned",
   counterSpec,
   {

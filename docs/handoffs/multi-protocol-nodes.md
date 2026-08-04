@@ -13,7 +13,7 @@ WebSocket and/or IpcSocket, chosen at connect — not baked into a second copy.
 
 1. **Declaration — the `{ http, ws }` shorthand** (owner's preferred form):
    ```ts
-   class Droplet extends Node.Tag<Droplet>()("droplet", {
+   class Droplet extends Node.Service<Droplet>()("droplet", {
      http: "http://droplet:7777/rpc",
      ws:   "ws://droplet:7777/rpc",
    }) {}

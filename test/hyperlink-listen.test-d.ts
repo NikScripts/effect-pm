@@ -6,15 +6,15 @@ import * as Node from "../src/Node";
 // C2/C3 — listen requires the full ROut; partial omit is a type error.
 // Specs must differ structurally — identical shapes collapse Jobs | Emails in TS.
 
-class Jobs extends Hyperlink.Tag<Jobs>()("listen-d/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("listen-d/Jobs", {
   jobs: Hyperlink.effect(Schema.Number),
 }) {}
 
-class Emails extends Hyperlink.Tag<Emails>()("listen-d/Emails", {
+class Emails extends Hyperlink.Service<Emails>()("listen-d/Emails", {
   emails: Hyperlink.effect(Schema.String),
 }) {}
 
-class Worker extends Node.Tag<Worker, Jobs | Emails>()("listen-d/Worker", {
+class Worker extends Node.Service<Worker, Jobs | Emails>()("listen-d/Worker", {
   path: "/tmp/listen-d.sock",
 }) {}
 
@@ -45,11 +45,11 @@ void clientsPartial;
 const clientsPartialArr = Node.clients(Worker, [Jobs]);
 void clientsPartialArr;
 
-class BoundJobs extends Hyperlink.Tag<BoundJobs>()("listen-d/BoundJobs", {
+class BoundJobs extends Hyperlink.Service<BoundJobs>()("listen-d/BoundJobs", {
   jobs: Hyperlink.effect(Schema.Number),
 }).pipe(Hyperlink.andNode(Worker)) {}
 
-class BoundEmails extends Hyperlink.Tag<BoundEmails>()("listen-d/BoundEmails", {
+class BoundEmails extends Hyperlink.Service<BoundEmails>()("listen-d/BoundEmails", {
   emails: Hyperlink.effect(Schema.String),
 }).pipe(Hyperlink.andNode(Worker)) {}
 

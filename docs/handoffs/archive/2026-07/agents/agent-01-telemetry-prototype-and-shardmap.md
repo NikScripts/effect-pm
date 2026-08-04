@@ -47,7 +47,7 @@ class DropletCentral extends Resource.Node<DropletCentral>("app/DropletCentral",
   url: "https://central.example/rpc",
 }) {}
 
-class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
+class FleetMetrics extends Telemetry.Service<FleetMetrics>()().pipe(
   Resource.distributed([DropletEast, DropletWest, DropletCentral]),
 ) {}
 
@@ -143,7 +143,7 @@ const Session = Schema.Struct({
   seat: Schema.optional(Schema.String), // "section-12-row-A" for the sports story
 })
 
-class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
+class Sessions extends ShardMap.Service<Sessions>()("app/Sessions", {
   key: SessionId,
   value: Session,
 }).pipe(

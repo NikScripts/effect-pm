@@ -1,10 +1,10 @@
 import * as Hyperlink from "../src/Hyperlink";
 
-class WithLogs extends Hyperlink.Tag<WithLogs>()("@test/WithLogs", {}).pipe(
+class WithLogs extends Hyperlink.Service<WithLogs>()("@test/WithLogs", {}).pipe(
   Hyperlink.withLogExport,
 ) {}
 
-class WithoutLogs extends Hyperlink.Tag<WithoutLogs>()("@test/WithoutLogs", {}) {}
+class WithoutLogs extends Hyperlink.Service<WithoutLogs>()("@test/WithoutLogs", {}) {}
 
 void WithLogs.logs;
 

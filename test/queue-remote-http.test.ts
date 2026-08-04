@@ -17,7 +17,7 @@ const NumberItem = Schema.Struct({ n: Schema.Number });
 interface NumberItem {
   readonly n: number;
 }
-class RemoteQueue extends WorkPool.Tag<RemoteQueue>()("queue-remote/Q", {
+class RemoteQueue extends WorkPool.Service<RemoteQueue>()("queue-remote/Q", {
   payload: NumberItem,
 }) {}
 

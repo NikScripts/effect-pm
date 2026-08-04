@@ -13,13 +13,13 @@ export { pack };
 export const apiMetricsViewSpec = { kind: Gate.httpApiClientKind } as const;
 
 /** @public */
-export class ApiCard extends Views.Card.Tag<ApiCard>()(
+export class ApiCard extends Views.Card.Service<ApiCard>()(
   "hyperlink/view/api-card",
   { spec: apiMetricsViewSpec },
 ) {}
 
 /** @public */
-export class ApiDetail extends Views.Detail.Tag<ApiDetail>()(
+export class ApiDetail extends Views.Detail.Service<ApiDetail>()(
   "hyperlink/view/api-detail",
   { spec: apiMetricsViewSpec },
 ) {}

@@ -47,7 +47,7 @@ const waitUntil = <A, E, R>(
 
 const step = (label: string) => Effect.logInfo(label);
 
-class Jobs extends Hyperlink.Tag<Jobs>()("examples/drain-yield/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("examples/drain-yield/Jobs", {
   ping: Hyperlink.effect(Schema.String),
 }) {}
 
@@ -56,12 +56,12 @@ const program = Effect.gen(function* () {
   const workerPath = yield* tmpSock("worker");
   const newcomerPath = yield* tmpSock("newcomer");
 
-  const lookupNode = Node.Tag()("examples/drain-yield/Lookup", {
+  const lookupNode = Node.Service()("examples/drain-yield/Lookup", {
     path: lookupPath,
     onConflict: "askIncumbent",
   }).pipe(Node.asLookup);
 
-  class Worker extends Node.Tag<Worker, Jobs>()(
+  class Worker extends Node.Service<Worker, Jobs>()(
     "examples/drain-yield/Worker",
     { path: workerPath },
   ) {}
@@ -125,7 +125,7 @@ const program = Effect.gen(function* () {
   }
 
   yield* step("3) askIncumbent newcomer → IncumbentAlive (row held)");
-  const dir = Context.get(lookupCtx, Directory.Tag);
+  const dir = Context.get(lookupCtx, Directory.Service);
   const conflict = yield* dir
     .advertise(
       new Lookup.AdvertiseRequest({

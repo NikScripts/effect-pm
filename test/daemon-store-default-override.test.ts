@@ -8,9 +8,9 @@ import { builtInDaemonStoreContract } from "../src/internal/store/daemonStoreSpe
 
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 
-class DefaultExec extends Daemon.Tag<DefaultExec>()("test/store-default/Default") {}
+class DefaultExec extends Daemon.Service<DefaultExec>()("test/store-default/Default") {}
 
-class OverrideExec extends Daemon.Tag<OverrideExec>()("test/store-default/Override", { success: Price }) {}
+class OverrideExec extends Daemon.Service<OverrideExec>()("test/store-default/Override", { success: Price }) {}
 
 class OverrideStore extends Store.Service<OverrideStore>("@test/OverrideStore")(
   Store.register(OverrideExec, builtInDaemonStoreContract(OverrideExec)),

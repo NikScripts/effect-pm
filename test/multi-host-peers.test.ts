@@ -5,7 +5,7 @@ import * as Hyperlink from "../src/Hyperlink";
 
 // combined fields are plain queries, tagged `fleet` (so peers exclude them); the layer implements them
 // via Hyperlink.peers + your own value.
-class Database extends Hyperlink.Tag<Database>()("test/peers/Database", {
+class Database extends Hyperlink.Service<Database>()("test/peers/Database", {
   connections: Hyperlink.effect(Schema.Number),
   totalConnections: Hyperlink.effect(Schema.Number).pipe(Hyperlink.fleet),
 }) {}

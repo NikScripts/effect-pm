@@ -5,7 +5,7 @@ import * as Hyperlink from "../src/Hyperlink";
 import { makeHyperlinkAtoms } from "../examples/apps/atoms/hyperlink-atoms";
 
 // A resource with one query (read atom), one void command, one payload mutate.
-class Counter extends Hyperlink.Tag<Counter>()("ratoms/Counter", {
+class Counter extends Hyperlink.Service<Counter>()("ratoms/Counter", {
   current: Hyperlink.effect(Schema.Number), // value read → READ atom
   reset: Hyperlink.effect(Schema.Void), // void command → action fn
   increment: Hyperlink.effectFn({ by: Schema.Number }), // payload → fn

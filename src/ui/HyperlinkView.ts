@@ -10,7 +10,7 @@ import * as Views from "./Views";
 export const hyperlinkViewSpec = { kind: Hyperlink.kind } as const;
 
 /** @public */
-export class HyperlinkCard extends Views.Card.Tag<HyperlinkCard>()(
+export class HyperlinkCard extends Views.Card.Service<HyperlinkCard>()(
   "hyperlink/view/hyperlink-card",
   { spec: hyperlinkViewSpec },
 ) {}

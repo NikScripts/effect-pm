@@ -9,7 +9,7 @@
 
 | Export | Role |
 |--------|------|
-| `Node.Tag` / `Node.Prototype` / `Node.asLookup` | Node constructors (was `Hyperlink.Node` / `.Prototype` / `Lookup.LookupNode`) |
+| `Node.Service` / `Node.Prototype` / `Node.asLookup` | Node constructors (was `Hyperlink.Node` / `.Prototype` / `Lookup.LookupNode`) |
 | `Node.unix` / `Node.http` / `Node.ws` / `Node.nPipe` | Protocol listen siblings — see [§ Protocol listen siblings](#protocol-listen-siblings-keep-in-sync) |
 | `Node.listen` | Neutral spine — **no transport bind** (`ListenUseProtocol` → use protocol entry) |
 | `httpServer` / `wsServer` / `ipcServer` | Low-level escape hatches (caller provides platform) |
@@ -430,14 +430,14 @@ type OnConflict =
   | "inherit"         // take Lookup node’s concrete policy at advertise time
 
 // 1) Brand a Tag node as the Lookup server; stamp the fleet default
-class AppLookup extends Node.Tag<AppLookup>()("app/Lookup", {
+class AppLookup extends Node.Service<AppLookup>()("app/Lookup", {
   path: "/tmp/app-lookup.sock",
   onConflict: "askIncumbent", // concrete — Lookup should not use "inherit"
 }).pipe(Node.asLookup) {}
 
 // 2) Ordinary nodes default to inherit (unless stamped)
-class Worker extends Node.Tag<Worker>()("app/Worker") {} // onConflict: "inherit"
-class Sticky extends Node.Tag<Sticky>()("app/Sticky", {
+class Worker extends Node.Service<Worker>()("app/Worker") {} // onConflict: "inherit"
+class Sticky extends Node.Service<Sticky>()("app/Sticky", {
   path: "/tmp/sticky.sock",
   onConflict: "reject", // node-definition override
 }) {}
@@ -460,7 +460,7 @@ So: set Lookup → `askIncumbent`, leave workers at default `inherit`, and the w
 | Surface | Default | Notes |
 |---------|---------|--------|
 | `Node.asLookup` | `livenessReplace` (concrete) | Fleet parent; `"inherit"` on Lookup is meaningless / rejected |
-| `Node.Tag` / Prototype / clones / instances | `"inherit"` | Pulls from Lookup at advertise |
+| `Node.Service` / Prototype / clones / instances | `"inherit"` | Pulls from Lookup at advertise |
 | listen / advertise options | omit = inherit chain | Explicit tag short-circuits |
 
 **Not lean:** `Lookup.layerNode(node, { onConflict })` as a second parent — constructor stamp on the Lookup node is enough; layer opts stay for other concerns unless we later need a runtime override.

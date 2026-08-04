@@ -24,36 +24,36 @@ const databaseReadiness = (
     s.connected ? { ready: true as const, detail: `${s.latencyMs}ms` } : { ready: false as const },
   );
 
-class N1 extends Node.Tag<N1>()("pipe-depth/n1") {}
-class N2 extends Node.Tag<N2>()("pipe-depth/n2") {}
-class N3 extends Node.Tag<N3>()("pipe-depth/n3") {}
-class N4 extends Node.Tag<N4>()("pipe-depth/n4") {}
-class N5 extends Node.Tag<N5>()("pipe-depth/n5") {}
-class N6 extends Node.Tag<N6>()("pipe-depth/n6") {}
+class N1 extends Node.Service<N1>()("pipe-depth/n1") {}
+class N2 extends Node.Service<N2>()("pipe-depth/n2") {}
+class N3 extends Node.Service<N3>()("pipe-depth/n3") {}
+class N4 extends Node.Service<N4>()("pipe-depth/n4") {}
+class N5 extends Node.Service<N5>()("pipe-depth/n5") {}
+class N6 extends Node.Service<N6>()("pipe-depth/n6") {}
 
-class D1 extends Hyperlink.Tag<D1>()("pipe-depth/D1", databaseSpec, { node: N1 }).pipe(
+class D1 extends Hyperlink.Service<D1>()("pipe-depth/D1", databaseSpec, { node: N1 }).pipe(
   Hyperlink.withReadiness(databaseReadiness),
 ) {}
-class D2 extends Hyperlink.Tag<D2>()("pipe-depth/D2", databaseSpec, { node: N2 }).pipe(
+class D2 extends Hyperlink.Service<D2>()("pipe-depth/D2", databaseSpec, { node: N2 }).pipe(
   Hyperlink.withReadiness(databaseReadiness),
 ) {}
-class D3 extends Hyperlink.Tag<D3>()("pipe-depth/D3", databaseSpec, { node: N3 }).pipe(
+class D3 extends Hyperlink.Service<D3>()("pipe-depth/D3", databaseSpec, { node: N3 }).pipe(
   Hyperlink.withReadiness(databaseReadiness),
 ) {}
-class D4 extends Hyperlink.Tag<D4>()("pipe-depth/D4", databaseSpec, { node: N4 }).pipe(
+class D4 extends Hyperlink.Service<D4>()("pipe-depth/D4", databaseSpec, { node: N4 }).pipe(
   Hyperlink.withReadiness(databaseReadiness),
 ) {}
-class D5 extends Hyperlink.Tag<D5>()("pipe-depth/D5", databaseSpec, { node: N5 }).pipe(
+class D5 extends Hyperlink.Service<D5>()("pipe-depth/D5", databaseSpec, { node: N5 }).pipe(
   Hyperlink.withReadiness(databaseReadiness),
 ) {}
-class D6 extends Hyperlink.Tag<D6>()("pipe-depth/D6", databaseSpec, { node: N6 }).pipe(
+class D6 extends Hyperlink.Service<D6>()("pipe-depth/D6", databaseSpec, { node: N6 }).pipe(
   Hyperlink.withReadiness(databaseReadiness),
 ) {}
 
 void [D1, D2, D3, D4, D5, D6];
 
 // Inferred svc on a pipe site is precise enough to reject junk fields.
-class Precise extends Hyperlink.Tag<Precise>()("pipe-depth/Precise", databaseSpec, {
+class Precise extends Hyperlink.Service<Precise>()("pipe-depth/Precise", databaseSpec, {
   node: N1,
 }).pipe(
   Hyperlink.withReadiness((svc) => {
@@ -67,20 +67,20 @@ void Precise;
 
 // Data-first control — same readiness, node-bound class.
 class First extends Hyperlink.withReadiness(
-  Hyperlink.Tag<First>()("pipe-depth/First", databaseSpec, { node: N1 }),
+  Hyperlink.Service<First>()("pipe-depth/First", databaseSpec, { node: N1 }),
   databaseReadiness,
 ) {}
 void First;
 
 // Stacked duals: withReadiness then distributed on a node-bound class.
-class FleetNodeA extends Node.Tag<FleetNodeA>()("pipe-depth/fleet-a", {
+class FleetNodeA extends Node.Service<FleetNodeA>()("pipe-depth/fleet-a", {
   url: "http://127.0.0.1:1/rpc",
 }) {}
-class FleetNodeB extends Node.Tag<FleetNodeB>()("pipe-depth/fleet-b", {
+class FleetNodeB extends Node.Service<FleetNodeB>()("pipe-depth/fleet-b", {
   url: "http://127.0.0.1:2/rpc",
 }) {}
 
-class Fleeted extends Hyperlink.Tag<Fleeted>()("pipe-depth/Fleeted", databaseSpec).pipe(
+class Fleeted extends Hyperlink.Service<Fleeted>()("pipe-depth/Fleeted", databaseSpec).pipe(
   Hyperlink.withReadiness(databaseReadiness),
   Hyperlink.nodes([FleetNodeA, FleetNodeB]),
 ) {}

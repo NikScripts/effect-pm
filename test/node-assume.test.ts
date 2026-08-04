@@ -10,11 +10,11 @@ import * as Node from "../src/Node";
 import { NodeStatusTag, httpClient as nodeStatusHttpClient } from "../src/internal/nodeStatus";
 import { expectTaggedFailure } from "./fixtures/expectTaggedFailure";
 
-class Jobs extends Hyperlink.Tag<Jobs>()("assume/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("assume/Jobs", {
   ping: Hyperlink.effect(Schema.String),
 }) {}
 
-class Warming extends Hyperlink.Tag<Warming>()("assume/Warming", {
+class Warming extends Hyperlink.Service<Warming>()("assume/Warming", {
   ping: Hyperlink.effect(Schema.String),
 }).pipe(
   Hyperlink.withReadiness(() => Effect.succeed({ ready: false, detail: "warming" })),
@@ -39,7 +39,7 @@ describe("Node.assume", () => {
 
       yield* withPort((port) =>
         Effect.gen(function* () {
-          const node = Node.Tag()("assume/ready-node", {
+          const node = Node.Service()("assume/ready-node", {
             url: `http://127.0.0.1:${port}/rpc`,
             kind: "Http",
           });
@@ -96,7 +96,7 @@ describe("Node.assume", () => {
 
       yield* withPort((port) =>
         Effect.gen(function* () {
-          const node = Node.Tag()("assume/warming-node", {
+          const node = Node.Service()("assume/warming-node", {
             url: `http://127.0.0.1:${port}/rpc`,
             kind: "Http",
           });
@@ -117,7 +117,7 @@ describe("Node.assume", () => {
 
       yield* withPort((port) =>
         Effect.gen(function* () {
-          const node = Node.Tag()("assume/no-token", {
+          const node = Node.Service()("assume/no-token", {
             url: `http://127.0.0.1:${port}/rpc`,
             kind: "Http",
           });

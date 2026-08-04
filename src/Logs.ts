@@ -5,7 +5,7 @@
  * ## Node log key (durable bucket)
  *
  * The argument to {@link byNode} is the **node log key** — it **must** equal the
- * {@link Node.Tag} `.key` for that OS process (the same string {@link Hyperlink.selfNode}
+ * {@link Node.Service} `.key` for that OS process (the same string {@link Hyperlink.selfNode}
  * returns). Register `Node.logs` on a {@link Store.Service}; the durable tail stamps
  * `annotations.node`. Use slash-separated paths (`billing/scores`).
  *
@@ -31,8 +31,8 @@
  * import * as Daemon from "hyperlink-ts/Daemon";
  * import * as Store from "hyperlink-ts/Store";
  *
- * class BillingNode extends Node.Tag<BillingNode>()("billing/scores") {}
- * class Daily extends Daemon.Tag<Daily>()("app/Daily") {}
+ * class BillingNode extends Node.Service<BillingNode>()("billing/scores") {}
+ * class Daily extends Daemon.Service<Daily>()("app/Daily") {}
  *
  * class AppStore extends Store.Service<AppStore>("@app/Store")(
  *   BillingNode.logs,
@@ -54,7 +54,7 @@ import { withLogScope } from "./internal/logs/scope";
 import * as relay from "./internal/logs/relay";
 
 /**
- * **Node log key** — durable bucket id for one runtime host. Must equal {@link Node.Tag} `.key`
+ * **Node log key** — durable bucket id for one runtime host. Must equal {@link Node.Service} `.key`
  * (same string as {@link Hyperlink.selfNode}). Stored as `annotations.node` on node-journal lines.
  *
  * @see `docs/LOGS.md` — Key catalog → Node log keys
@@ -65,7 +65,7 @@ import * as relay from "./internal/logs/relay";
 export type NodeLogKey = string;
 
 /**
- * **Hyperlink key** — identity of a queue, daemon, or tag (`Hyperlink.Tag.key`). Used in lineage,
+ * **Hyperlink key** — identity of a queue, daemon, or tag (`Hyperlink.Service.key`). Used in lineage,
  * `byHyperlink`, and {@link LogEntry.hasKey}.
  *
  * @see `docs/LOGS.md` — Key catalog → Hyperlink keys
@@ -76,7 +76,7 @@ export type NodeLogKey = string;
 export type HyperlinkLogKey = string;
 
 /**
- * Source carrying a **node log key** (`Node.Tag.key`).
+ * Source carrying a **node log key** (`Node.Service.key`).
  *
  * @category models
  * @public
@@ -84,9 +84,9 @@ export type HyperlinkLogKey = string;
 export type NodeLogKeySource = { readonly key: NodeLogKey };
 
 /**
- * Resolve the **node log key** from a {@link Node.Tag} (or any `{ key }` source).
+ * Resolve the **node log key** from a {@link Node.Service} (or any `{ key }` source).
  *
- * @param node - `Node.Tag` class or `{ key: NodeLogKey }`
+ * @param node - `Node.Service` class or `{ key: NodeLogKey }`
  * @returns The node log key (`node.key`)
  *
  * @category utils
@@ -188,7 +188,7 @@ export const byNode = (
   });
 
 /**
- * Source carrying a **HyperService key** (`Hyperlink.Tag.key` / store registration key).
+ * Source carrying a **HyperService key** (`Hyperlink.Service.key` / store registration key).
  *
  * @category models
  * @public
@@ -204,7 +204,7 @@ const resolveHyperlinkLogKey = (
  * Read durable logs for a **specific HyperService** by **full key** (same string as
  * {@link Hyperlink.logs}`(tag)` / store registration / lineage segment).
  *
- * Pass a scope tag (`Daemon.Tag` / `WorkPool.Tag` / …) or its `.key` string.
+ * Pass a scope tag (`Daemon.Service` / `WorkPool.Service` / …) or its `.key` string.
  * Hyperlink kind is {@link Hyperlink.kindOf} on the tag — not a separate query argument.
  *
  * Requires that HyperService's store registration (`Daemon.store` / `WorkPool.store`, …) on the

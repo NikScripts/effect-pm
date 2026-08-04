@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
 import { channelKeyOf } from "../src/internal/atomHandle";
 
-class Counter extends Hyperlink.Tag<Counter>()("atom-test/Counter", {
+class Counter extends Hyperlink.Service<Counter>()("atom-test/Counter", {
   count: Hyperlink.ref(Schema.Number),
   ticks: Hyperlink.stream(Schema.Number),
   current: Hyperlink.effect(Schema.Number),

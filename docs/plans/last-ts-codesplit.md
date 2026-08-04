@@ -84,7 +84,7 @@ import { fileRouter } from "last-ts/vite"
 | `./ui/View` | `View` | Thin re-export of `last-ts/View` (DI only) |
 | `./ui/Views` | `Views` | Size chrome (`Card`/`Detail`/`Page`), Registry, bind/only, react, compose |
 | `./ui/GroupNav` | `GroupNav` | Group tree nav |
-| `./ui/*View` | family | WorkPoolView, DaemonView, … (`extends Views.Card.Tag` etc.) |
+| `./ui/*View` | family | WorkPoolView, DaemonView, … (`extends Views.Card.Service` etc.) |
 | `./ui/DashboardViews` | `DashboardViews` | Merged contributions |
 | `./web`, `./tui`, `./cli` | platform | Batteries Dashboard, Ink, CLI |
 
@@ -92,7 +92,7 @@ import { fileRouter } from "last-ts/vite"
 import * as View from "last-ts/View"                 // or hyperlink-ts/ui/View
 import * as Views from "hyperlink-ts/ui/Views"
 
-class PoolCard extends Views.Card.Tag<PoolCard>()("…") {}
+class PoolCard extends Views.Card.Service<PoolCard>()("…") {}
 Views.bind(WorkPool.kind, PoolCard)
 Views.compose({ views, router, group })
 ```
@@ -128,7 +128,7 @@ Optional temporary re-exports on `hyperlink-ts/ui/Route` etc. during migration �
 ## Open (next locks)
 
 - Publish cadence for last-ts beyond workspace `0.0.1`.
-- **`Page.Tag` + Layout** — design in [`page-layout-design.md`](../handoffs/page-layout-design.md); lock then Eng. Docs-site createPages after.
+- **`Page.Service` + Layout** — design in [`page-layout-design.md`](../handoffs/page-layout-design.md); lock then Eng. Docs-site createPages after.
 - **P4** — drop hyperlink re-export shims once callers on `last-ts/*`; guide polish.
 - `Last` module earned (`kindSym` / `kindOf`) — done; grow only with real cross-cuts.
 - Fold `RuntimeProvider` stays on `AtomReact` unless size hurts.

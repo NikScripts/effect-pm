@@ -44,7 +44,7 @@
  *   {@link DaemonTagOptions.error} on {@link Tag} (positional or config object). Use
  *   {@link layer} / {@link serve} / {@link serveRemote} / {@link configure} to run it locally or over
  *   toolkit's location-transparent layers (the same `yield* Tag` runs local or remote; only the layer
- *   changes). This mirrors `WorkPool`: the light `Daemon.Tag` path pulls no engine code, and the
+ *   changes). This mirrors `WorkPool`: the light `Daemon.Service` path pulls no engine code, and the
  *   engine loads only when a runtime verb (`make` / `layer` / `serve`) is referenced.
  *
  * @module Daemon
@@ -1478,13 +1478,13 @@ export type DaemonServiceFactory = typeof defineDaemonService;
 //
 // `Daemon` is a module namespace (Effect-style — the barrel does `export * as Daemon`), so the
 // engine helpers here and the Hyperlink toolkit below are all its members: `Daemon.make`,
-// `Daemon.Service`, `Daemon.currentScheduleId`, `Daemon.scheduleControls`, `Daemon.Tag`,
-// `Daemon.schedule`, `Daemon.layer`, … Member access tree-shakes — a `Daemon.Tag`-only consumer
+// `Daemon.define`, `Daemon.currentScheduleId`, `Daemon.scheduleControls`, `Daemon.Service`,
+// `Daemon.schedule`, `Daemon.layer`, … Member access tree-shakes — a `Daemon.Service`-only consumer
 // pulls no engine code, mirroring `WorkPool`.
 // ============================================================================
 
 export { make };
-export { defineDaemonService as Service };
+export { defineDaemonService as define };
 
 /**
  * Engine errors thrown by {@link make}.
@@ -1677,7 +1677,7 @@ export const buildDaemonSpec = <
  */
 export const daemonSpec = buildDaemonSpec();
 // Note: no `satisfies Spec` — it contextually widens each method's error channel to `unknown`.
-// The spec is validated (without widening) at the `Hyperlink.Tag` call site.
+// The spec is validated (without widening) at the `Hyperlink.Service` call site.
 
 /**
  * The base (schedule-less, result-less) daemon spec.
@@ -1785,7 +1785,7 @@ export const scheduleHyperlinkSpec = {
   }),
 };
 // Note: no `satisfies Spec` — it contextually widens each method's error channel to `unknown`.
-// The spec is validated (without widening) at the `Hyperlink.Tag` call site.
+// The spec is validated (without widening) at the `Hyperlink.Service` call site.
 
 /**
  * The standalone {@link Schedule} HyperService's spec.
@@ -1946,7 +1946,7 @@ export type ScheduleReconcileResult = ReconcileResult;
 
 // These re-expose the internal engine schedule constructors for `make`'s `scheduleLayer`. They are
 // deliberately **lazy wrappers** (not `= DaemonSchedule.x`): a direct re-export would reference the
-// engine at module load, defeating tree-shaking so a `Daemon.Tag`-only import would drag the engine
+// engine at module load, defeating tree-shaking so a `Daemon.Service`-only import would drag the engine
 // schedule primitive into the bundle. Wrapping keeps the reference inside an eliminable function body.
 
 /**
@@ -2048,15 +2048,15 @@ const buildDaemonTag = <Self>(
   } = {},
 ): HyperlinkTag<any, any, any> | NodeBoundTag<any, any, unknown, any> => {
   const node = options?.node;
-  // Do not pass `defaults` into Hyperlink.Tag here — apply after readiness (below).
+  // Do not pass `defaults` into Hyperlink.Service here — apply after readiness (below).
   const tagOptions = { description: options?.description, kind };
   const success = positional.success ?? options?.success;
   const error = positional.error ?? options?.error;
   const spec = buildDaemonSpec({ success, error });
   const base: HyperlinkTag<any, any, any> =
     node === undefined
-      ? Hyperlink.Tag<Self>()(key, spec, tagOptions)
-      : Hyperlink.Tag<Self>()(key, spec, { ...tagOptions, node });
+      ? Hyperlink.Service<Self>()(key, spec, tagOptions)
+      : Hyperlink.Service<Self>()(key, spec, { ...tagOptions, node });
   const stamped: HyperlinkTag<any, any, any> =
     success === undefined && error === undefined
       ? base
@@ -2119,7 +2119,7 @@ const scheduleGroupFlat: FlatSpec = Object.fromEntries(
  *   contract gains the `schedule` verb group (`entries` / `set` / `add` / `clear`):
  *
  * ```ts
- * class Matches extends Daemon.Tag<Matches>()("app/Matches").pipe(
+ * class Matches extends Daemon.Service<Matches>()("app/Matches").pipe(
  *   Daemon.schedule([Daemon.window(kickoff, final)]),
  * ) {}
  * ```
@@ -2128,7 +2128,7 @@ const scheduleGroupFlat: FlatSpec = Object.fromEntries(
  *   gains **no** schedule verbs (they live on the HyperService, which can arm many daemons at once):
  *
  * ```ts
- * class IngestScores extends Daemon.Tag<IngestScores>()("app/IngestScores").pipe(
+ * class IngestScores extends Daemon.Service<IngestScores>()("app/IngestScores").pipe(
  *   Daemon.schedule(SeasonSchedule),
  * ) {}
  * ```
@@ -2253,24 +2253,24 @@ export type DaemonTagBuild<Self> = {
  * `.pipe(`{@link schedule}`(…))`. Declare value/error wire schemas on the tag:
  *
  * ```ts
- * class Health extends Daemon.Tag<Health>()("app/Health") {}
+ * class Health extends Daemon.Service<Health>()("app/Health") {}
  *
- * class Prices extends Daemon.Tag<Prices>()("app/Prices", PriceSchema) {}
+ * class Prices extends Daemon.Service<Prices>()("app/Prices", PriceSchema) {}
  *
- * class PricesE extends Daemon.Tag<PricesE>()("app/Prices", PriceSchema, FetchErr) {}
+ * class PricesE extends Daemon.Service<PricesE>()("app/Prices", PriceSchema, FetchErr) {}
  *
- * class PricesCfg extends Daemon.Tag<PricesCfg>()("app/Prices", {
+ * class PricesCfg extends Daemon.Service<PricesCfg>()("app/Prices", {
  *   success: PriceSchema,
  *   error: FetchErr,
  * }) {}
  * ```
  *
- * Pass `options.node` to bind the daemon to a {@link Node.Tag}.
+ * Pass `options.node` to bind the daemon to a {@link Node.Service}.
  *
  * @category constructors
  * @public
  */
-export const Tag = <Self>() => {
+export const Service = <Self>() => {
   function build(
     key: string,
     second?: Schema.Top | DaemonTagOptions,
@@ -2294,14 +2294,14 @@ export const Tag = <Self>() => {
   // call-signature *object* type (`DaemonTagBuild<Self>`) even when it implements exactly those
   // overloads — a known TS limitation (the same class as WorkPool's `nameQueueService` cast).
   // It's soundness-guarded: `daemon-driver` / `daemon-contract-shape` .test-d.ts exercise
-  // `Daemon.Tag()` in every form, so a drift between `build` and `DaemonTagBuild` fails the build.
+  // `Daemon.Service()` in every form, so a drift between `build` and `DaemonTagBuild` fails the build.
   return build as DaemonTagBuild<Self>;
 };
 
 /**
  * Define a standalone {@link Schedule} resource — a reusable, RPC-capable window manager one or more
  * daemons can be gated by (via `.pipe(`{@link schedule}`(ThisSchedule))`). Full CRUD; pass
- * `options.node` to bind it to a {@link Node.Tag}, like {@link Tag}.
+ * `options.node` to bind it to a {@link Node.Service}, like {@link Tag}.
  *
  * ```ts
  * class SeasonSchedule extends Daemon.Schedule<SeasonSchedule>()("app/SeasonSchedule") {}
@@ -2328,8 +2328,8 @@ export const Schedule = <Self>() => {
     const node = options?.node;
     const tagOptions = { description: options?.description, kind: scheduleKind };
     return node === undefined
-      ? Hyperlink.Tag<Self>()(key, scheduleHyperlinkSpec, tagOptions)
-      : Hyperlink.Tag<Self>()(key, scheduleHyperlinkSpec, { ...tagOptions, node });
+      ? Hyperlink.Service<Self>()(key, scheduleHyperlinkSpec, tagOptions)
+      : Hyperlink.Service<Self>()(key, scheduleHyperlinkSpec, { ...tagOptions, node });
   }
   return build;
 };

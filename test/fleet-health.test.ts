@@ -5,8 +5,8 @@ import * as FleetHealth from "../src/FleetHealth";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
-class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
-class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
+class DropletEast extends Node.Service<DropletEast>()("app/DropletEast") {}
+class DropletWest extends Node.Service<DropletWest>()("app/DropletWest") {}
 
 describe("MultiNode.combineByNode vs combineByNodeExit", () => {
   it.effect("combineByNodeExit keeps every peer; combineByNode drops failures", () =>
@@ -47,7 +47,7 @@ describe("FleetHealth.rollup", () => {
 });
 
 describe("FleetHealth", () => {
-  class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
+  class MeshHealth extends FleetHealth.Service<MeshHealth>()().pipe(
     Hyperlink.nodes([DropletEast, DropletWest]),
   ) {}
 
@@ -171,7 +171,7 @@ describe("FleetHealth", () => {
   it("Tag()() is unbound; Tag()({ node }) stamps the droplet", () => {
     // MeshHealth is `Tag()()` (default key already claimed) — still unbound after distributed.
     expect(Hyperlink.nodeOf(MeshHealth)).toBeUndefined();
-    class BoundGlass extends FleetHealth.Tag<BoundGlass>()({ node: DropletEast }) {}
+    class BoundGlass extends FleetHealth.Service<BoundGlass>()({ node: DropletEast }) {}
     expect(Hyperlink.nodeOf(BoundGlass)).toBe(DropletEast);
   });
 });

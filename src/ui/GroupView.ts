@@ -10,7 +10,7 @@ import * as Views from "./Views";
 export const groupViewSpec = { kind: Group.kind } as const;
 
 /** Group grid card — open via {@link ./Router}. @public */
-export class GroupCard extends Views.Card.Tag<GroupCard>()(
+export class GroupCard extends Views.Card.Service<GroupCard>()(
   "hyperlink/view/group-card",
   { spec: groupViewSpec },
 ) {}

@@ -9,8 +9,8 @@ import { LogAnnotationKeys } from "../src/LogContext";
 import * as Logs from "../src/Logs";
 import * as Daemon from "../src/Daemon";
 
-class Parent extends Daemon.Tag<Parent>()("test/lineage/Parent") {}
-class Child extends Daemon.Tag<Child>()("test/lineage/Child") {}
+class Parent extends Daemon.Service<Parent>()("test/lineage/Parent") {}
+class Child extends Daemon.Service<Child>()("test/lineage/Child") {}
 
 const parseLineage = (raw: unknown): ReadonlyArray<string> => {
   if (typeof raw !== "string") return [];

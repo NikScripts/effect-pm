@@ -6,7 +6,7 @@ import { expectTypeOf } from "vitest";
 import type { DefaultMethod, ImplOf, Wire, WithDefaults } from "../src/Hyperlink";
 import * as Hyperlink from "../src/Hyperlink";
 
-class Counter extends Hyperlink.Tag<Counter>()("default-d/Counter", {
+class Counter extends Hyperlink.Service<Counter>()("default-d/Counter", {
   current: Hyperlink.effect(Schema.Number),
   label: Hyperlink.default((n: number) => `count=${n}`),
   unit: Hyperlink.default("count" as const),
@@ -45,7 +45,7 @@ declare const asyncBag: { readonly bad: () => Promise<string> };
 // @ts-expect-error Promise-returning fn rejected in defaults bag too
 Hyperlink.defaults(asyncBag);
 
-class Adorned extends Hyperlink.Tag<Adorned>()("default-d/Adorned", {
+class Adorned extends Hyperlink.Service<Adorned>()("default-d/Adorned", {
   current: Hyperlink.effect(Schema.Number),
 }).pipe(
   Hyperlink.defaults({
@@ -79,7 +79,7 @@ Hyperlink.layer(Counter, {
 // double-pipe merges bag types (data-first to avoid chained `.pipe` diagnostic)
 class Double extends Hyperlink.defaults(
   Hyperlink.defaults(
-    Hyperlink.Tag<Double>()("default-d/Double", {
+    Hyperlink.Service<Double>()("default-d/Double", {
       current: Hyperlink.effect(Schema.Number),
     }),
     { a: 1 as const },

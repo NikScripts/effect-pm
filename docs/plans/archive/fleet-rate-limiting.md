@@ -125,7 +125,7 @@ Examples:
 
 - `gate:httpApi:app/GithubClient` — whole client  
 - `gate:httpApi:app/GithubClient:posts` — per group (optional)  
-- `gate:run:app/Double` — ordinary Gate.Tag  
+- `gate:run:app/Double` — ordinary Gate.Service  
 
 HttpApiClient may also use **upstream adaptive** keys (`upstream:{host}`) via `adaptiveConsume` / `adaptiveFeedback` on 429.
 

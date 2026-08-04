@@ -3,7 +3,7 @@ import { expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
 import { anonymousNodeKey } from "../src/internal/nodeListenCommon";
 
-class Emails extends Hyperlink.Tag<Emails>()("@app/Emails", {
+class Emails extends Hyperlink.Service<Emails>()("@app/Emails", {
   send: Hyperlink.effect(Schema.String),
 }) {}
 

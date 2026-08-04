@@ -14,8 +14,8 @@ import { lineIdFromEntry, makeLineIdClaim } from "../src/internal/logs/lineId";
 
 const nodePlatform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
-class ProcA extends Daemon.Tag<ProcA>()("test/logs-tail/A") {}
-class ProcB extends Daemon.Tag<ProcB>()("test/logs-tail/B") {}
+class ProcA extends Daemon.Service<ProcA>()("test/logs-tail/A") {}
+class ProcB extends Daemon.Service<ProcB>()("test/logs-tail/B") {}
 
 class AppStore extends Store.Service<AppStore>("@test/logs-durable-tail/Store")(
   Daemon.store(ProcA),

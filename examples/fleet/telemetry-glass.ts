@@ -22,13 +22,13 @@ import * as Node from "../../src/Node";
 
 // ── Nodes = Context service keys (machines) ───────────────────────────────────
 
-class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
-class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
-class DropletCentral extends Node.Tag<DropletCentral>()("app/DropletCentral") {}
+class DropletEast extends Node.Service<DropletEast>()("app/DropletEast") {}
+class DropletWest extends Node.Service<DropletWest>()("app/DropletWest") {}
+class DropletCentral extends Node.Service<DropletCentral>()("app/DropletCentral") {}
 
 const fleetNodes = [DropletEast, DropletWest, DropletCentral] as const;
 
-class FleetMetrics extends Telemetry.Tag<FleetMetrics>()().pipe(
+class FleetMetrics extends Telemetry.Service<FleetMetrics>()().pipe(
   Hyperlink.nodes([...fleetNodes]),
 ) {}
 

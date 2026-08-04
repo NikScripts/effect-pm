@@ -7,7 +7,7 @@ import * as Store from "../src/Store";
 
 // A daemon started disarmed (empty inline schedule) so it only runs on `run`; with the logs
 // stack provided, worker lines are scoped by tag key and read back via Hyperlink.logs.
-class LogDaemon extends Daemon.Tag<LogDaemon>()(
+class LogDaemon extends Daemon.Service<LogDaemon>()(
   "test/daemon-log-history/Daemon",
 ).pipe(Daemon.schedule([])) {}
 

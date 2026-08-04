@@ -15,7 +15,7 @@ const expectExact = <_Check extends true>(): void => {};
 const jobSchema = Schema.Struct({ id: Schema.String });
 
 // ── (a) declaring `success: Schema.Number` ──────────────────────────────────
-class NumberQueue extends WorkPool.Tag<NumberQueue>()("@td/NumberQueue", {
+class NumberQueue extends WorkPool.Service<NumberQueue>()("@td/NumberQueue", {
   payload: jobSchema,
   success: Schema.Number,
 }) {}
@@ -55,7 +55,7 @@ expectExact<
 >();
 
 // ── (b) NO success schema → the worker stays `Effect<void, …>` ───────────────
-class VoidQueue extends WorkPool.Tag<VoidQueue>()("@td/VoidQueue", { payload: jobSchema }) {}
+class VoidQueue extends WorkPool.Service<VoidQueue>()("@td/VoidQueue", { payload: jobSchema }) {}
 
 // a `void`-returning worker compiles
 const _voidLayer = WorkPool.layerMemory(VoidQueue, {

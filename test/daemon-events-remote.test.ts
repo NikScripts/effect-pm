@@ -16,15 +16,15 @@ const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 
 /** Disarmed — subscribe to events, then drive with manual `run`. */
-class RemoteEventsProc extends Daemon.Tag<RemoteEventsProc>()(
+class RemoteEventsProc extends Daemon.Service<RemoteEventsProc>()(
   "proc-remote-events/Ok",
 ).pipe(Daemon.schedule([])) {}
 
-class RemoteFailProc extends Daemon.Tag<RemoteFailProc>()("proc-remote-events/Fail", {
+class RemoteFailProc extends Daemon.Service<RemoteFailProc>()("proc-remote-events/Fail", {
   error: FetchErr,
 }).pipe(Daemon.schedule([])) {}
 
-class RemoteSuccessProc extends Daemon.Tag<RemoteSuccessProc>()(
+class RemoteSuccessProc extends Daemon.Service<RemoteSuccessProc>()(
   "proc-remote-events/Success",
   { success: Price },
 ).pipe(Daemon.schedule([])) {}

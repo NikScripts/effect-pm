@@ -31,10 +31,10 @@ class ImportHandlers extends Context.Service<ImportHandlers, { readonly label: s
 const plainHandlers = Layer.succeed(ImportHandlers, { label: "plain" });
 const hookedHandlers = Layer.succeed(ImportHandlers, { label: "hooked" });
 
-class Matches extends Hyperlink.Tag<Matches>()("example/Matches", {
+class Matches extends Hyperlink.Service<Matches>()("example/Matches", {
   handler: Hyperlink.effect(Schema.String),
 }) {}
-class Import extends Hyperlink.Tag<Import>()("example/Import", {
+class Import extends Hyperlink.Service<Import>()("example/Import", {
   handler: Hyperlink.effect(Schema.String),
 }) {}
 

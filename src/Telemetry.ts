@@ -30,7 +30,7 @@ import {
 import { combineByNode, combineQuery, combineSum } from "./MultiNode";
 import * as Hyperlink from "./Hyperlink";
 import {
-  Tag as resourceTag,
+  Service as resourceTag,
   layer as resourceLayer,
   serve as resourceServe,
   serveRemote as resourceServeRemote,
@@ -285,14 +285,14 @@ const keyFor = (node: NodeKey<unknown> | undefined): string =>
   node === undefined ? defaultKey : `${node.key}/${defaultKey}`;
 
 /**
- * Declare a Telemetry tag: `class FleetTelemetry extends Telemetry.Tag<FleetTelemetry>()() {}` (nodeless
+ * Declare a Telemetry tag: `class FleetTelemetry extends Telemetry.Service<FleetTelemetry>()() {}` (nodeless
  * — the dashboard reaches each node via `Hyperlink.client(FleetTelemetry, node)`), or
  * `…Tag<FleetTelemetry>()({ node: MiniNode })` to bind + serve it on a specific node.
  *
  * @category constructors
  * @public
  */
-export const Tag = <Self>() => {
+export const Service = <Self>() => {
   function build(): TelemetryTag<Self>;
   function build<HSelf>(options: {
     readonly node: NodeKey<HSelf>;
@@ -342,7 +342,7 @@ const liveBufferSize = 8;
  *
  * @internal
  */
-class TelemetryAloneNode extends Node.Tag<TelemetryAloneNode>()(
+class TelemetryAloneNode extends Node.Service<TelemetryAloneNode>()(
   "hyperlink-ts/Telemetry/alone",
 ) {}
 

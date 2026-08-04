@@ -26,7 +26,7 @@ const tmpSock = (label: string) =>
     return `/tmp/hyperlink-ts-d3-${label}-${process.pid}-${now}.sock`;
   });
 
-class Pool extends Hyperlink.Tag<Pool>()("d3/Pool", {
+class Pool extends Hyperlink.Service<Pool>()("d3/Pool", {
   active: Hyperlink.effect(Schema.Number),
   fleetActive: Hyperlink.effect(Schema.Number).pipe(Hyperlink.fleet),
 }).pipe(Hyperlink.distributed) {}
@@ -44,7 +44,7 @@ const impl = (own: number) =>
 
 describe("Hyperlink.distributed bare / D3 peersLayer", () => {
   it("bare .pipe(Hyperlink.distributed) stamps an empty Node set", () => {
-    class Bare extends Hyperlink.Tag<Bare>()("d3/Bare", {
+    class Bare extends Hyperlink.Service<Bare>()("d3/Bare", {
       n: Hyperlink.effect(Schema.Number),
     }).pipe(Hyperlink.distributed) {}
 
@@ -54,13 +54,13 @@ describe("Hyperlink.distributed bare / D3 peersLayer", () => {
   });
 
   it("list form still stamps fixed membership", () => {
-    class East extends Node.Tag<East>()("d3/East", {
+    class East extends Node.Service<East>()("d3/East", {
       path: "/tmp/d3-east.sock",
     }) {}
-    class West extends Node.Tag<West>()("d3/West", {
+    class West extends Node.Service<West>()("d3/West", {
       path: "/tmp/d3-west.sock",
     }) {}
-    class Fixed extends Hyperlink.Tag<Fixed>()("d3/Fixed", {
+    class Fixed extends Hyperlink.Service<Fixed>()("d3/Fixed", {
       n: Hyperlink.effect(Schema.Number),
     }).pipe(Hyperlink.nodes([East, West])) {}
 
@@ -75,11 +75,11 @@ describe("Hyperlink.distributed bare / D3 peersLayer", () => {
       const lookupPath = yield* tmpSock("lookup");
       const eastPath = yield* tmpSock("east");
       const westPath = yield* tmpSock("west");
-      const lookupNode = Node.Tag()("d3/lookup", { path: lookupPath }).pipe(Node.asLookup);
-      class East extends Node.Tag<East, Pool>()("d3/East", {
+      const lookupNode = Node.Service()("d3/lookup", { path: lookupPath }).pipe(Node.asLookup);
+      class East extends Node.Service<East, Pool>()("d3/East", {
         path: eastPath,
       }) {}
-      class West extends Node.Tag<West, Pool>()("d3/West", {
+      class West extends Node.Service<West, Pool>()("d3/West", {
         path: westPath,
       }) {}
 
@@ -100,7 +100,7 @@ describe("Hyperlink.distributed bare / D3 peersLayer", () => {
         ).pipe(Layer.provide(lookupClient)),
       );
 
-      const dir = Context.get(lookup, Directory.Tag);
+      const dir = Context.get(lookup, Directory.Service);
       const rows = yield* dir
         .nodesServing(
           new Lookup.NodesServingRequest({ serviceKey: "d3/Pool" }),
@@ -146,10 +146,10 @@ describe("Hyperlink.distributed bare / D3 peersLayer", () => {
 
   it.effect("undeclared tag peersLayer stays empty without Directory (not discoverable)", () =>
     Effect.gen(function* () {
-      class Lonely extends Node.Tag<Lonely>()("d3/Lonely", {
+      class Lonely extends Node.Service<Lonely>()("d3/Lonely", {
         path: "/tmp/d3-lonely.sock",
       }) {}
-      class Undeclared extends Hyperlink.Tag<Undeclared>()("d3/Undeclared", {
+      class Undeclared extends Hyperlink.Service<Undeclared>()("d3/Undeclared", {
         n: Hyperlink.effect(Schema.Number),
       }) {}
 
@@ -166,13 +166,13 @@ describe("Hyperlink.distributed bare / D3 peersLayer", () => {
       const eastPath = yield* tmpSock("rebind-east");
       const westAPath = yield* tmpSock("rebind-west-a");
       const westBPath = yield* tmpSock("rebind-west-b");
-      const lookupNode = Node.Tag()("d3/rebind-lookup", {
+      const lookupNode = Node.Service()("d3/rebind-lookup", {
         path: lookupPath,
       }).pipe(Node.asLookup);
-      class East extends Node.Tag<East, Pool>()("d3/RebindEast", {
+      class East extends Node.Service<East, Pool>()("d3/RebindEast", {
         path: eastPath,
       }) {}
-      class West extends Node.Tag<West, Pool>()("d3/RebindWest", {
+      class West extends Node.Service<West, Pool>()("d3/RebindWest", {
         path: westAPath,
       }) {}
 
@@ -214,7 +214,7 @@ describe("Hyperlink.distributed bare / D3 peersLayer", () => {
       // A exits membership; B advertises same nodeKey on a new dial.
       yield* Node.shutdown(West);
 
-      const dir = Context.get(lookupCtx, Directory.Tag);
+      const dir = Context.get(lookupCtx, Directory.Service);
       yield* Effect.repeat(
         dir
           .nodesServing(
@@ -230,7 +230,7 @@ describe("Hyperlink.distributed bare / D3 peersLayer", () => {
         },
       );
 
-      class WestB extends Node.Tag<WestB, Pool>()("d3/RebindWest", {
+      class WestB extends Node.Service<WestB, Pool>()("d3/RebindWest", {
         path: westBPath,
       }) {}
 
@@ -264,13 +264,13 @@ describe("Hyperlink.distributed bare / D3 peersLayer", () => {
         const eastPath = yield* tmpSock("parity-east");
         const westAPath = yield* tmpSock("parity-west-a");
         const westBPath = yield* tmpSock("parity-west-b");
-        const lookupNode = Node.Tag()("d3/parity-lookup", {
+        const lookupNode = Node.Service()("d3/parity-lookup", {
           path: lookupPath,
         }).pipe(Node.asLookup);
-        class East extends Node.Tag<East, Pool>()("d3/ParityEast", {
+        class East extends Node.Service<East, Pool>()("d3/ParityEast", {
           path: eastPath,
         }) {}
-        class West extends Node.Tag<West, Pool>()("d3/ParityWest", {
+        class West extends Node.Service<West, Pool>()("d3/ParityWest", {
           path: westAPath,
         }) {}
 
@@ -328,7 +328,7 @@ describe("Hyperlink.distributed bare / D3 peersLayer", () => {
           void westA;
         });
 
-        const dir = Context.get(lookupCtx, Directory.Tag);
+        const dir = Context.get(lookupCtx, Directory.Service);
         yield* Effect.repeat(
           dir
             .nodesServing(
@@ -344,7 +344,7 @@ describe("Hyperlink.distributed bare / D3 peersLayer", () => {
           },
         );
 
-        class WestB extends Node.Tag<WestB, Pool>()("d3/ParityWest", {
+        class WestB extends Node.Service<WestB, Pool>()("d3/ParityWest", {
           path: westBPath,
         }) {}
         const westB = yield* Layer.build(

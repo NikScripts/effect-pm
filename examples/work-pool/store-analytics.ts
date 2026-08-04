@@ -19,7 +19,7 @@ const AnalyticsJob = Schema.Struct({
   fail: Schema.Boolean,
 });
 
-class AnalyticsQueue extends WorkPool.Tag<AnalyticsQueue>()(
+class AnalyticsQueue extends WorkPool.Service<AnalyticsQueue>()(
   "examples/AnalyticsQueue",
   {
     payload: AnalyticsJob,

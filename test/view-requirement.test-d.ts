@@ -35,7 +35,7 @@ expectTypeOf(Done.annotations).toEqualTypeOf<{
   readonly spec: { readonly kind: "app/queue" };
 }>();
 
-class DenseCard extends Done.Tag<DenseCard>()("app/view/dense-card") {}
+class DenseCard extends Done.Service<DenseCard>()("app/view/dense-card") {}
 void DenseCard.provide((props) => {
   expectTypeOf(props.dense).toEqualTypeOf<boolean | undefined>();
   return null;
@@ -52,7 +52,7 @@ expectTypeOf(Views.Page).toEqualTypeOf<
   View.FulfilledPrototype<Views.ViewProps, Views.WithSize<Views.PageKind>>
 >();
 
-class PoolPage extends Views.Page.Tag<PoolPage>()("app/view/pool-page", {
+class PoolPage extends Views.Page.Service<PoolPage>()("app/view/pool-page", {
   spec: { kind: "app/queue" } as const,
 }) {}
 expectTypeOf(View.getAnnotations(PoolPage).size).toEqualTypeOf<Views.PageKind>();
@@ -66,7 +66,7 @@ const _bound = Views.bind("app/queue", PoolPage);
 void _bound;
 
 // One-shot Tag with extra props (no Prototype step)
-class OneShot extends Views.Card.Tag<
+class OneShot extends Views.Card.Service<
   OneShot,
   { readonly dense?: boolean }
 >()("app/view/one-shot", { spec: { kind: "app/queue" } as const }) {}
@@ -128,11 +128,11 @@ expectTypeOf<View.IsFulfilled<typeof CardPlusSpec>>().toEqualTypeOf<false>();
 expectTypeOf<View.RequirementOf<typeof CardPlusSpec>>().toEqualTypeOf<WithSpec>();
 // ── bind gate ───────────────────────────────────────────────────────────────
 
-class OpenCard extends Open.Tag<OpenCard>()("app/view/open-card") {}
+class OpenCard extends Open.Service<OpenCard>()("app/view/open-card") {}
 // @ts-expect-error fulfill WithSize before bind
 Views.bind("app/queue", OpenCard);
 
-class Greeter extends View.Tag<Greeter, { readonly name: string }>()(
+class Greeter extends View.Service<Greeter, { readonly name: string }>()(
   "app/view/greeter",
 ) {}
 // @ts-expect-error no size

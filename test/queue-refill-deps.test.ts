@@ -11,7 +11,7 @@ class Source extends Context.Service<Source, { readonly load: () => Effect.Effec
 const SourceLive = Layer.succeed(Source, Source.of({ load: () => Effect.succeed([1, 2, 3]) }));
 
 const Item = Schema.Struct({ n: Schema.Number });
-class Q extends WorkPool.Tag<Q>()("queue-refill-deps/Q", { payload: Item }) {}
+class Q extends WorkPool.Service<Q>()("queue-refill-deps/Q", { payload: Item }) {}
 
 const queueLayer = WorkPool.layerMemory(Q, {
   effect: (_item: { n: number }) => Effect.void, // worker needs nothing

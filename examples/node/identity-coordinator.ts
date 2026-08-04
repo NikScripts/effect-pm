@@ -30,12 +30,12 @@ const Job = Schema.Struct({
 })
 
 /** Exclusive coordinator — only one live winner via Lookup Identity. */
-class Router extends Hyperlink.Tag<Router>()("Router", {
+class Router extends Hyperlink.Service<Router>()("Router", {
   enqueue: Hyperlink.effectFn({ job: Job }, Schema.Void),
 }).pipe(Hyperlink.identity) {}
 
 /** Many hands — advertise via Directory; dial with lookupClient. */
-class Worker extends Hyperlink.Tag<Worker>()("Worker", {
+class Worker extends Hyperlink.Service<Worker>()("Worker", {
   run: Hyperlink.effectFn({ job: Job }, Schema.String),
 }) {}
 
@@ -48,7 +48,7 @@ const program = Effect.gen(function* () {
   const lookup = Lookup.clientOptions({ path: lookupPath })
   const lookupCtx = yield* Layer.build(lookup)
 
-  class RouterNode extends Node.Tag<RouterNode>()("RouterNode", {
+  class RouterNode extends Node.Service<RouterNode>()("RouterNode", {
     path: routerPath,
   }) {}
 
@@ -102,7 +102,7 @@ const program = Effect.gen(function* () {
   yield* Effect.sync(() => workerA)
 
   yield* Effect.logInfo(
-    "identity coordinator ok — Router advised Worker B via Advice.Tag",
+    "identity coordinator ok — Router advised Worker B via Advice.Service",
   )
 }).pipe(Effect.scoped, Effect.provide(NodeServices.layer))
 

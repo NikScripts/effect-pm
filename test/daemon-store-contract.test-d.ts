@@ -9,7 +9,7 @@ import {
 
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 
-class PricedDaemon extends Daemon.Tag<PricedDaemon>()("test/store/Priced", { success: Price }) {}
+class PricedDaemon extends Daemon.Service<PricedDaemon>()("test/store/Priced", { success: Price }) {}
 
 type Contract = BuiltInDaemonContract<typeof PricedDaemon>;
 type Handle = Store.HandleOf<Contract>;

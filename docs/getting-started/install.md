@@ -124,8 +124,8 @@ import { Schema } from "effect"
 
 const EmailJob = Schema.Struct({ to: Schema.String })
 
-export class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
-export class Digest extends Daemon.Tag<Digest>()("app/Digest") {}
+export class Emails extends WorkPool.Service<Emails>()("app/Emails", { payload: EmailJob }) {}
+export class Digest extends Daemon.Service<Digest>()("app/Digest") {}
 ```
 
 ``` ts

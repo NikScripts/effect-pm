@@ -15,13 +15,13 @@ import * as Views from "./Views";
 export { pack };
 
 /** @public */
-export class DaemonCard extends Views.Card.Tag<DaemonCard>()(
+export class DaemonCard extends Views.Card.Service<DaemonCard>()(
   "hyperlink/view/daemon-card",
   { spec: Daemon.daemonControlSpec },
 ) {}
 
 /** @public */
-export class DaemonDetail extends Views.Detail.Tag<DaemonDetail>()(
+export class DaemonDetail extends Views.Detail.Service<DaemonDetail>()(
   "hyperlink/view/daemon-detail",
   { spec: Daemon.daemonControlSpec },
 ) {}
@@ -31,7 +31,7 @@ export class DaemonDetail extends Views.Detail.Tag<DaemonDetail>()(
  *
  * @public
  */
-export class DaemonPage extends Views.Page.Tag<DaemonPage>()(
+export class DaemonPage extends Views.Page.Service<DaemonPage>()(
   "hyperlink/view/daemon-page",
   { spec: Daemon.daemonControlSpec },
 ) {}

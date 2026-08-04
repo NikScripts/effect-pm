@@ -36,7 +36,7 @@ const Job = Schema.Struct({
 // A real WorkPool tag. concurrency 1 + a visible delay so you can watch items
 // queue and drain. The worker invalidates QueueKey on each completion — a demo
 // shim for live stats until the handle exposes `changes` (event-driven, no poll).
-class DemoQueue extends WorkPool.Tag<DemoQueue>()("queue-widget-demo", {
+class DemoQueue extends WorkPool.Service<DemoQueue>()("queue-widget-demo", {
   payload: Job,
 }) {}
 

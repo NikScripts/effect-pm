@@ -20,11 +20,11 @@ import * as FleetHealth from "../../src/FleetHealth";
 import * as Hyperlink from "../../src/Hyperlink";
 import * as Node from "../../src/Node";
 
-class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
-class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
-class DropletCentral extends Node.Tag<DropletCentral>()("app/DropletCentral") {}
+class DropletEast extends Node.Service<DropletEast>()("app/DropletEast") {}
+class DropletWest extends Node.Service<DropletWest>()("app/DropletWest") {}
+class DropletCentral extends Node.Service<DropletCentral>()("app/DropletCentral") {}
 
-class MeshHealth extends FleetHealth.Tag<MeshHealth>()().pipe(
+class MeshHealth extends FleetHealth.Service<MeshHealth>()().pipe(
   Hyperlink.nodes([DropletEast, DropletWest, DropletCentral]),
 ) {}
 

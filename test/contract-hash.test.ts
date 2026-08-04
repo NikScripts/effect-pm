@@ -6,7 +6,7 @@ import {
   hashContract,
 } from "../src/internal/contractHash";
 
-class Probe extends Hyperlink.Tag<Probe>()("hash/Probe", {
+class Probe extends Hyperlink.Service<Probe>()("hash/Probe", {
   ping: Hyperlink.effectFn({ n: Schema.Number }, Schema.Number),
 }) {}
 

@@ -107,7 +107,7 @@ interface RefLike<A> {
   readonly get: Effect.Effect<A>;
   readonly changes: Stream.Stream<A>;
 }
-/** The structural shape of a daemon's live service (the base `Daemon.Tag` contract). The inline
+/** The structural shape of a daemon's live service (the base `Daemon.Service` contract). The inline
  *  `schedule` verb group is present only on a daemon that owns an inline schedule
  *  (`Daemon.schedule([...])`), so it is optional here. */
 interface DaemonService {
@@ -207,10 +207,10 @@ export type DaemonTag<R = never> = Effect.Effect<DaemonService, never, R> & { re
 export type ApiTag<R = never> = Effect.Effect<ApiService, never, R> & { readonly key: string };
 
 /**
- * Erased shape of a {@link Group.isGroup} value — one place in a `Group.Tag` tree
- * (`key` + named `members`). **Not** a Hyperlink transport {@link Node} / `Node.Tag`.
+ * Erased shape of a {@link Group.isGroup} value — one place in a `Group.Service` tree
+ * (`key` + named `members`). **Not** a Hyperlink transport {@link Node} / `Node.Service`.
  *
- * Dashboard props use this when the concrete `Group.Tag` class is irrelevant (walk, route, render).
+ * Dashboard props use this when the concrete `Group.Service` class is irrelevant (walk, route, render).
  *
  * @public
  */
@@ -322,7 +322,7 @@ export interface ApiBundle {
   readonly exceeded: ValueAtom<number>;
 }
 
-/** A node that backs one or more of a group's resources — its id (the `Node.Tag` key) plus the
+/** A node that backs one or more of a group's resources — its id (the `Node.Service` key) plus the
  *  transport key itself. Read straight off the tags (`nodeOf`), so the dashboard's node list is the
  *  distinct nodes its HyperServices are bound to — no separate registry. */
 export interface NodeRef {
@@ -362,7 +362,7 @@ export const tagWireKey = (member: unknown): string | undefined => {
   return undefined;
 };
 
-/** The {@link NodeRef} a HyperService tag is bound to (its `Node.Tag`), or `undefined` for a nodeless
+/** The {@link NodeRef} a HyperService tag is bound to (its `Node.Service`), or `undefined` for a nodeless
  *  tag — lets a HyperService page read its own readiness from its node's status handle. */
 export const serviceNodeRef = (tag: unknown): NodeRef | undefined => {
   const node = nodeOf(tag);
@@ -468,7 +468,7 @@ export const nodeStatusBundle = <R, ER>(
   ref: NodeRef,
 ): NodeBundle => nodeViewBind(runtime)(ref);
 
-/** Walk a `Group.Tag` tree to its leaf resource tags (WorkPools + Daemons), raw. */
+/** Walk a `Group.Service` tree to its leaf resource tags (WorkPools + Daemons), raw. */
 export const leafTags = (node: GroupNode): ReadonlyArray<unknown> =>
   Object.values(Group.members(node)).flatMap((m) => (Group.isGroup(m) ? leafTags(m) : [m]));
 

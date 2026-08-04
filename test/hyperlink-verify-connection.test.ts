@@ -17,10 +17,10 @@ const Item = Schema.Struct({ n: Schema.Number });
 interface Item {
   readonly n: number;
 }
-class VNode extends Node.Tag<VNode>()("verify/node") {} // bare — url supplied per-check at runtime
-class VQueue extends WorkPool.Tag<VQueue>()("verify/Q", { payload: Item, node: VNode }) {}
+class VNode extends Node.Service<VNode>()("verify/node") {} // bare — url supplied per-check at runtime
+class VQueue extends WorkPool.Service<VQueue>()("verify/Q", { payload: Item, node: VNode }) {}
 
-class Warming extends Hyperlink.Tag<Warming>()("verify/Warming", {
+class Warming extends Hyperlink.Service<Warming>()("verify/Warming", {
   ping: Hyperlink.effect(Schema.String),
 }).pipe(
   Hyperlink.withReadiness(() => Effect.succeed({ ready: false, detail: "warming up" })),
@@ -217,7 +217,7 @@ describe("Hyperlink.verifyConnection", () => {
       const address = yield* HttpServer.HttpServer.pipe(Effect.map((s) => s.address));
       const port = address._tag === "TcpAddress" ? address.port : 0;
       // Http+ws declared; only http is live — selectEndpoint (node) prefers Http, so tier-1 ok.
-      class Dual extends Node.Tag<Dual>()("verify/dual", {
+      class Dual extends Node.Service<Dual>()("verify/dual", {
         http: `http://127.0.0.1:${port}/rpc`,
         ws: `ws://127.0.0.1:1/rpc`,
       }) {}
@@ -261,7 +261,7 @@ describe("Hyperlink.ws relative same-origin verify", () => {
         // Dead stamp — if verify fell through to the addressed endpoints or classified
         // "/rpc" as Http GET, Layer build would fail. Relative override must skip (no
         // `location` in Node) while still wiring the dial target.
-        class StampDead extends Node.Tag<StampDead>()("verify/ws-relative", {
+        class StampDead extends Node.Service<StampDead>()("verify/ws-relative", {
           http: "http://127.0.0.1:1/rpc",
           ws: "ws://127.0.0.1:1/rpc",
         }) {}
@@ -273,10 +273,10 @@ describe("Hyperlink.ws relative same-origin verify", () => {
 describe("Hyperlink.client default-on verify", () => {
   it.live("addressed client fails Layer build when the peer is down", () =>
     Effect.gen(function* () {
-      class Dead extends Node.Tag<Dead>()("verify/dead-client", {
+      class Dead extends Node.Service<Dead>()("verify/dead-client", {
         url: "http://127.0.0.1:1/rpc",
       }) {}
-      class Ping extends Hyperlink.Tag<Ping>()("verify/dead-Ping", {
+      class Ping extends Hyperlink.Service<Ping>()("verify/dead-Ping", {
         ping: Hyperlink.effect(Schema.String),
       }) {}
       const exit = yield* Effect.exit(
@@ -288,10 +288,10 @@ describe("Hyperlink.client default-on verify", () => {
 
   it.live("Policy.verifyOff skips the probe", () =>
     Effect.gen(function* () {
-      class Dead extends Node.Tag<Dead>()("verify/skip-dead", {
+      class Dead extends Node.Service<Dead>()("verify/skip-dead", {
         url: "http://127.0.0.1:1/rpc",
       }) {}
-      class Ping extends Hyperlink.Tag<Ping>()("verify/skip-Ping", {
+      class Ping extends Hyperlink.Service<Ping>()("verify/skip-Ping", {
         ping: Hyperlink.effect(Schema.String),
       }) {}
       // Build succeeds; RPC would still fail later — verify was opted out.
@@ -306,7 +306,7 @@ describe("Hyperlink.client default-on verify", () => {
   it.live("addressed client builds when the peer is up", () =>
     onServer(httpSrv, (port) =>
       Effect.gen(function* () {
-        class Live extends Node.Tag<Live>()("verify/live-client", {
+        class Live extends Node.Service<Live>()("verify/live-client", {
           url: `http://127.0.0.1:${port}/rpc`,
         }) {}
         yield* Layer.build(Hyperlink.client(VQueue, Live));

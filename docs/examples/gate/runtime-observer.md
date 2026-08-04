@@ -18,7 +18,7 @@
 
 ## What this shows
 
-Subscribable status / counters on a Gate.Service handle.
+Subscribable status / counters on a Gate.define handle.
 
 {.twoslash include="examples/gate/runtime-observer.ts"}
 ``` ts

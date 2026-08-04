@@ -21,7 +21,7 @@ const DurableJob = Schema.Struct({
   n: Schema.Number,
 });
 
-class DurableQueue extends WorkPool.Tag<DurableQueue>()(
+class DurableQueue extends WorkPool.Service<DurableQueue>()(
   "examples/DurableQueue",
   { payload: DurableJob },
 ) {}

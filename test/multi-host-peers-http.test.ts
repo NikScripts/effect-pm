@@ -6,8 +6,8 @@ import { combineQuery, combineSum } from "../src/MultiNode";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Node from "../src/Node";
 
-class DbNode extends Node.Tag<DbNode>()("peers-http/node") {}
-class Database extends Hyperlink.Tag<Database>()(
+class DbNode extends Node.Service<DbNode>()("peers-http/node") {}
+class Database extends Hyperlink.Service<Database>()(
   "peers-http/Database",
   {
     connections: Hyperlink.effect(Schema.Number),

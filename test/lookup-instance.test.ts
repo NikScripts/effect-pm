@@ -16,7 +16,7 @@ const tmpSock = (label: string) =>
     return `/tmp/hyperlink-ts-inst-${label}-${process.pid}-${now}.sock`;
   });
 
-class Jobs extends Hyperlink.Tag<Jobs>()("inst/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("inst/Jobs", {
   jobs: Hyperlink.effect(Schema.Number),
 }).pipe(Hyperlink.distributed) {}
 
@@ -42,7 +42,7 @@ describe("Node.Prototype.instance / .listen", () => {
   it.effect("Prototype.listen curries serves; ListenNode is in built context", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("proto-listen");
-      const lookupNode = Node.Tag()("inst/proto-listen", {
+      const lookupNode = Node.Service()("inst/proto-listen", {
         path: lookupPath,
       }).pipe(Node.asLookup);
       class MailWorker extends Node.Prototype<MailWorker, Jobs>(
@@ -73,7 +73,7 @@ describe("Node.Prototype.instance / .listen", () => {
   it.effect("listen mints path + suffix, advertises, and serves without claim", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("lookup");
-      const lookupNode = Node.Tag()("inst/lookup", {
+      const lookupNode = Node.Service()("inst/lookup", {
         path: lookupPath,
       }).pipe(Node.asLookup);
       class MailWorker extends Node.Prototype<MailWorker, Jobs>(
@@ -99,7 +99,7 @@ describe("Node.Prototype.instance / .listen", () => {
         workerB().pipe(Layer.provide(lookupClient)),
       );
 
-      const dir = Context.get(lookup, Directory.Tag);
+      const dir = Context.get(lookup, Directory.Service);
       const rows = yield* dir
         .nodesServing(
           new Lookup.NodesServingRequest({ serviceKey: "inst/Jobs" }),
@@ -160,10 +160,10 @@ describe("Node.Prototype.instance / .listen", () => {
   it.live("named instance suffix is stable; peersLayer folds both via directory", () =>
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("peers-lookup");
-      const lookupNode = Node.Tag()("inst/peers-lookup", {
+      const lookupNode = Node.Service()("inst/peers-lookup", {
         path: lookupPath,
       }).pipe(Node.asLookup);
-      class FleetJobs extends Hyperlink.Tag<FleetJobs>()("inst/FleetJobs", {
+      class FleetJobs extends Hyperlink.Service<FleetJobs>()("inst/FleetJobs", {
         jobs: Hyperlink.effect(Schema.Number),
         fleetJobs: Hyperlink.effect(Schema.Number).pipe(Hyperlink.fleet),
       }).pipe(Hyperlink.distributed) {}
@@ -224,7 +224,7 @@ describe("Node.Prototype.instance / .listen", () => {
       );
 
       // instance() is address-less until listen — dial the advertised path.
-      const dir = Context.get(lookup, Directory.Tag);
+      const dir = Context.get(lookup, Directory.Service);
       const rows = yield* dir
         .nodesServing(
           new Lookup.NodesServingRequest({
@@ -234,7 +234,7 @@ describe("Node.Prototype.instance / .listen", () => {
         .pipe(Effect.provide(lookup));
       const eastRow = rows.find((r) => r.nodeKey === east.key);
       expect(eastRow?.path).toBeDefined();
-      const dialEast = Node.Tag()(east.key, {
+      const dialEast = Node.Service()(east.key, {
         path: eastRow?.path as string,
       });
 

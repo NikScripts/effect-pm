@@ -15,13 +15,13 @@ import * as Gate from "../src/Gate";
 
 import * as Views from "../src/ui/Views";
 const Item = Schema.Struct({ n: Schema.Number });
-class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", { payload: Item }) {}
+class Jobs extends WorkPool.Service<Jobs>()("app/Jobs", { payload: Item }) {}
 class Lanes extends WorkPool.priority<Lanes>()("app/Lanes", {
   payload: Item,
   laneCount: 2,
 }) {}
-class Nightly extends Daemon.Tag<Nightly>()("app/Nightly") {}
-class Limit extends Gate.Tag<Limit>()("app/Limit", {
+class Nightly extends Daemon.Service<Nightly>()("app/Nightly") {}
+class Limit extends Gate.Service<Limit>()("app/Limit", {
   payload: Schema.String,
   success: Schema.String,
 }) {}

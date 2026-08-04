@@ -34,11 +34,11 @@ import * as Daemon from "hyperlink-ts/Daemon"
 import { Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String })
 // ---cut---
-class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
-class Digest extends Daemon.Tag<Digest>()("app/Digest") {}
+class Emails extends WorkPool.Service<Emails>()("app/Emails", { payload: EmailJob }) {}
+class Digest extends Daemon.Service<Digest>()("app/Digest") {}
 ```
 
-Same-machine, nameless: `Node.unix` mints a Node when you omit one (no `Node.Tag`, no path, no port).
+Same-machine, nameless: `Node.unix` mints a Node when you omit one (no `Node.Service`, no path, no port).
 Discovery is built in:
 
 {.twoslash}
@@ -47,7 +47,7 @@ import * as WorkPool from "hyperlink-ts/WorkPool"
 import * as Node from "hyperlink-ts/Node"
 import { Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String })
-class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+class Emails extends WorkPool.Service<Emails>()("app/Emails", { payload: EmailJob }) {}
 declare const sendEmail: (job: typeof EmailJob.Type) => Effect.Effect<void>
 // ---cut---
 const worker = Node.unix([
@@ -65,8 +65,8 @@ import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import * as Polling from "hyperlink-ts/Polling"
 import { Effect, Duration, Layer, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String })
-class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
-class Digest extends Daemon.Tag<Digest>()("app/Digest") {}
+class Emails extends WorkPool.Service<Emails>()("app/Emails", { payload: EmailJob }) {}
+class Digest extends Daemon.Service<Digest>()("app/Digest") {}
 declare const nextEmail: Effect.Effect<typeof EmailJob.Type>
 // ---cut---
 const scheduler = Daemon.layer(Digest, {
@@ -92,7 +92,7 @@ import * as WorkPool from "hyperlink-ts/WorkPool"
 import * as Node from "hyperlink-ts/Node"
 import { Effect, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String })
-class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+class Emails extends WorkPool.Service<Emails>()("app/Emails", { payload: EmailJob }) {}
 declare const sendEmail: (job: typeof EmailJob.Type) => Effect.Effect<void>
 // ---cut---
 const worker = Node.http(
@@ -115,7 +115,7 @@ depth, live events) from anywhere the Tag is reached:
 import * as WorkPool from "hyperlink-ts/WorkPool"
 import { Effect, Stream, Schema } from "effect"
 const EmailJob = Schema.Struct({ to: Schema.String })
-class Emails extends WorkPool.Tag<Emails>()("app/Emails", { payload: EmailJob }) {}
+class Emails extends WorkPool.Service<Emails>()("app/Emails", { payload: EmailJob }) {}
 declare const onChange: (e: unknown) => Effect.Effect<void>
 const program = Effect.gen(function* () {
 // ---cut---
@@ -141,7 +141,7 @@ none of them touch the Implementation.
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import { Schema } from "effect"
 // ---cut---
-class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
+class Counter extends Hyperlink.Service<Counter>()("app/Counter", {
   value: Hyperlink.ref(Schema.Number),
   increment: Hyperlink.effectFn({ by: Schema.Number }),
   reset: Hyperlink.effect(Schema.Void),
@@ -152,7 +152,7 @@ class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
 ``` ts
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import { Effect, Schema, SubscriptionRef } from "effect"
-class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
+class Counter extends Hyperlink.Service<Counter>()("app/Counter", {
   value: Hyperlink.ref(Schema.Number),
   increment: Hyperlink.effectFn({ by: Schema.Number }),
   reset: Hyperlink.effect(Schema.Void),
@@ -175,7 +175,7 @@ Same Tag, three placements (in-process, served, or connected):
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import * as Node from "hyperlink-ts/Node"
 import { Effect, Schema, SubscriptionRef } from "effect"
-class Counter extends Hyperlink.Tag<Counter>()("app/Counter", {
+class Counter extends Hyperlink.Service<Counter>()("app/Counter", {
   value: Hyperlink.ref(Schema.Number),
   increment: Hyperlink.effectFn({ by: Schema.Number }),
   reset: Hyperlink.effect(Schema.Void),
@@ -209,13 +209,13 @@ import * as ShardMap from "hyperlink-ts/ShardMap"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import * as Node from "hyperlink-ts/Node"
 import { Schema } from "effect"
-class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
-class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
-class DropletCentral extends Node.Tag<DropletCentral>()("app/DropletCentral") {}
+class DropletEast extends Node.Service<DropletEast>()("app/DropletEast") {}
+class DropletWest extends Node.Service<DropletWest>()("app/DropletWest") {}
+class DropletCentral extends Node.Service<DropletCentral>()("app/DropletCentral") {}
 const SessionId = Schema.String
 const Session = Schema.Struct({ id: SessionId, userId: Schema.String })
 // ---cut---
-class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
+class Sessions extends ShardMap.Service<Sessions>()("app/Sessions", {
   key: SessionId,
   value: Session,
   keyOf: (s) => s.id,
@@ -232,12 +232,12 @@ import * as ShardMap from "hyperlink-ts/ShardMap"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import * as Node from "hyperlink-ts/Node"
 import { Layer, Schema } from "effect"
-class DropletEast extends Node.Tag<DropletEast>()("app/DropletEast") {}
-class DropletWest extends Node.Tag<DropletWest>()("app/DropletWest") {}
-class DropletCentral extends Node.Tag<DropletCentral>()("app/DropletCentral") {}
+class DropletEast extends Node.Service<DropletEast>()("app/DropletEast") {}
+class DropletWest extends Node.Service<DropletWest>()("app/DropletWest") {}
+class DropletCentral extends Node.Service<DropletCentral>()("app/DropletCentral") {}
 const SessionId = Schema.String
 const Session = Schema.Struct({ id: SessionId, userId: Schema.String })
-class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
+class Sessions extends ShardMap.Service<Sessions>()("app/Sessions", {
   key: SessionId,
   value: Session,
   keyOf: (s) => s.id,
@@ -258,7 +258,7 @@ import * as ShardMap from "hyperlink-ts/ShardMap"
 import { Effect, Schema } from "effect"
 const SessionId = Schema.String
 const Session = Schema.Struct({ id: SessionId, userId: Schema.String })
-class Sessions extends ShardMap.Tag<Sessions>()("app/Sessions", {
+class Sessions extends ShardMap.Service<Sessions>()("app/Sessions", {
   key: SessionId,
   value: Session,
   keyOf: (s) => s.id,

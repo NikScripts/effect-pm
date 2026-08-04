@@ -7,7 +7,7 @@
  * ```ts
  * import * as Identity from "hyperlink-ts/Identity"
  *
- * const id = yield* Identity.Tag
+ * const id = yield* Identity.Service
  * yield* id.claim(new Identity.ClaimRequest({ … }))
  * ```
  *
@@ -98,7 +98,7 @@ const identitySpec = {
  * @category services
  * @public
  */
-export class Tag extends Hyperlink.Tag<Tag>()(
+export class Service extends Hyperlink.Service<Service>()(
   "hyperlink-ts/Lookup/Identity",
   identitySpec,
   { kind },

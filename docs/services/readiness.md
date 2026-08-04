@@ -30,7 +30,7 @@ gate.
 import { Effect, Schema } from "effect"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 
-class Cache extends Hyperlink.Tag<Cache>()("app/Cache", {
+class Cache extends Hyperlink.Service<Cache>()("app/Cache", {
   warm: Hyperlink.effect(Schema.Boolean),
 }).pipe(
   Hyperlink.withReadiness((svc) =>
@@ -55,7 +55,7 @@ import * as Hyperlink from "hyperlink-ts/Hyperlink"
 const Job = Schema.Struct({ id: Schema.String })
 // Database — some other HyperService on this node that already has withReadiness
 
-class Jobs extends WorkPool.Tag<Jobs>()("app/Jobs", Job).pipe(
+class Jobs extends WorkPool.Service<Jobs>()("app/Jobs", Job).pipe(
   Hyperlink.withReadiness((_svc, base) =>
     Hyperlink.allReady([base, Hyperlink.readinessOf(Database)]),
   ),
@@ -66,7 +66,7 @@ When `Database` reports not ready, `Jobs` degrades too — one readiness pass, s
 
 ## Monitored dependencies
 
-Many operational deps share the same contract shape: a `status` read, a live `changes` stream, and readiness derived from status. `Hyperlink.monitoredDependency` builds that pair so you don’t re-hand-roll it per league or per dep type. Still a plain `Hyperlink.Tag` — **not** a new kind.
+Many operational deps share the same contract shape: a `status` read, a live `changes` stream, and readiness derived from status. `Hyperlink.monitoredDependency` builds that pair so you don’t re-hand-roll it per league or per dep type. Still a plain `Hyperlink.Service` — **not** a new kind.
 
 ``` ts
 import { Schema } from "effect"
@@ -85,7 +85,7 @@ const { spec, readiness } = Hyperlink.monitoredDependency({
 })
 
 export class WnbaDatabase extends Hyperlink.withReadiness(
-  Hyperlink.Tag<WnbaDatabase>()("@app/wnba/Database", spec, { node: WnbaNode }),
+  Hyperlink.Service<WnbaDatabase>()("@app/wnba/Database", spec, { node: WnbaNode }),
   readiness,
 ) {}
 ```

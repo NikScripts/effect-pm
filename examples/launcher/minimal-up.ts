@@ -22,7 +22,7 @@ const program = Effect.gen(function* () {
   const entry = `${root}/examples/launcher/ready-worker-child.ts`;
   const now = yield* Clock.currentTimeMillis;
   const port = 28_900 + (now % 200);
-  const worker = Node.Tag()("examples/launcher-minimal/Worker", {
+  const worker = Node.Service()("examples/launcher-minimal/Worker", {
     url: `http://127.0.0.1:${String(port)}/rpc`,
     kind: "Http",
   });

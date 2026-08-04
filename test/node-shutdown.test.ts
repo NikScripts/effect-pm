@@ -16,7 +16,7 @@ import * as Lookup from "../src/Lookup";
 import * as Directory from "../src/Directory";
 import * as Node from "../src/Node";
 
-class Jobs extends Hyperlink.Tag<Jobs>()("shutdown/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("shutdown/Jobs", {
   ping: Hyperlink.effect(Schema.String),
 }) {}
 
@@ -31,18 +31,18 @@ describe("Node.shutdown", () => {
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("lookup");
       const workerPath = yield* tmpSock("worker");
-      const lookupNode = Node.Tag()("shutdown/lookup", {
+      const lookupNode = Node.Service()("shutdown/lookup", {
         path: lookupPath,
       }).pipe(Node.asLookup);
 
-      class Worker extends Node.Tag<Worker, Jobs>()("shutdown/Worker", {
+      class Worker extends Node.Service<Worker, Jobs>()("shutdown/Worker", {
         path: workerPath,
       }) {}
 
       const lookupServer = yield* Layer.build(Lookup.layerNode(lookupNode));
       const lookupClient = yield* Layer.build(Lookup.client(lookupNode));
       const lookupCtx = Context.merge(lookupServer, lookupClient);
-      const dir = Context.get(lookupCtx, Directory.Tag);
+      const dir = Context.get(lookupCtx, Directory.Service);
 
       const workerCtx = yield* Layer.build(
         Node.unix(Worker, [
@@ -81,11 +81,11 @@ describe("Node.shutdown", () => {
     Effect.gen(function* () {
       const lookupPath = yield* tmpSock("launch-lookup");
       const workerPath = yield* tmpSock("launch-worker");
-      const lookupNode = Node.Tag()("shutdown/launch-lookup", {
+      const lookupNode = Node.Service()("shutdown/launch-lookup", {
         path: lookupPath,
       }).pipe(Node.asLookup);
 
-      class Worker extends Node.Tag<Worker, Jobs>()("shutdown/LaunchWorker", {
+      class Worker extends Node.Service<Worker, Jobs>()("shutdown/LaunchWorker", {
         path: workerPath,
       }) {}
 

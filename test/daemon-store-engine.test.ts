@@ -13,26 +13,26 @@ const Snapshot = Schema.Struct({
   count: Schema.Number,
 });
 
-class VoidExec extends Daemon.Tag<VoidExec>()("test/engine/Void") {}
+class VoidExec extends Daemon.Service<VoidExec>()("test/engine/Void") {}
 
-class PricedExec extends Daemon.Tag<PricedExec>()("test/engine/Priced", { success: Price }) {}
+class PricedExec extends Daemon.Service<PricedExec>()("test/engine/Priced", { success: Price }) {}
 
-class FailingExec extends Daemon.Tag<FailingExec>()("test/engine/Failing", {
+class FailingExec extends Daemon.Service<FailingExec>()("test/engine/Failing", {
   success: Price,
   error: FetchErr,
 }) {}
 
-class StringFailExec extends Daemon.Tag<StringFailExec>()("test/engine/StringFail") {}
+class StringFailExec extends Daemon.Service<StringFailExec>()("test/engine/StringFail") {}
 
-class RichSuccessExec extends Daemon.Tag<RichSuccessExec>()("test/engine/RichSuccess", {
+class RichSuccessExec extends Daemon.Service<RichSuccessExec>()("test/engine/RichSuccess", {
   success: Snapshot,
 }) {}
 
-class InterruptExec extends Daemon.Tag<InterruptExec>()("test/engine/Interrupt") {}
+class InterruptExec extends Daemon.Service<InterruptExec>()("test/engine/Interrupt") {}
 
-class ServeExec extends Daemon.Tag<ServeExec>()("test/engine/Serve") {}
+class ServeExec extends Daemon.Service<ServeExec>()("test/engine/Serve") {}
 
-class ServeRemoteExec extends Daemon.Tag<ServeRemoteExec>()("test/engine/ServeRemote") {}
+class ServeRemoteExec extends Daemon.Service<ServeRemoteExec>()("test/engine/ServeRemote") {}
 
 class Boom extends Data.TaggedError("Boom")<{ readonly code: number }> {}
 

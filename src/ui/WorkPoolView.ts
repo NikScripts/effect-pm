@@ -28,7 +28,7 @@ export {
  *
  * @public
  */
-export class PoolCard extends Views.Card.Tag<PoolCard>()(
+export class PoolCard extends Views.Card.Service<PoolCard>()(
   "hyperlink/view/pool-card",
   { spec: WorkPool.queueControlSpec },
 ) {}
@@ -38,7 +38,7 @@ export class PoolCard extends Views.Card.Tag<PoolCard>()(
  *
  * @public
  */
-export class PoolDetail extends Views.Detail.Tag<PoolDetail>()(
+export class PoolDetail extends Views.Detail.Service<PoolDetail>()(
   "hyperlink/view/pool-detail",
   { spec: WorkPool.queueControlSpec },
 ) {}
@@ -48,7 +48,7 @@ export class PoolDetail extends Views.Detail.Tag<PoolDetail>()(
  *
  * @public
  */
-export class PoolPage extends Views.Page.Tag<PoolPage>()(
+export class PoolPage extends Views.Page.Service<PoolPage>()(
   "hyperlink/view/pool-page",
   { spec: WorkPool.queueControlSpec },
 ) {}

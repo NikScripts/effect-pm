@@ -2,7 +2,7 @@
  * @module examples/apps/web/app
  *
  * Point the shipped Dashboard at the hub. Family skins come from Dashboard Views;
- * `WorkerPool` brings its own card via `views={workerPoolViews}` (`Views.Card.Tag` +
+ * `WorkerPool` brings its own card via `views={workerPoolViews}` (`Views.Card.Service` +
  * `Views.only` — see `worker-pool-card.tsx`).
  */
 import * as React from "react";

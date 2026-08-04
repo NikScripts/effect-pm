@@ -44,7 +44,7 @@ const waitUntil = <A, E, R>(
     schedule: Schedule.spaced(Duration.millis(25)),
   });
 
-class Pool extends Hyperlink.Tag<Pool>()("examples/peers-rebind/Pool", {
+class Pool extends Hyperlink.Service<Pool>()("examples/peers-rebind/Pool", {
   active: Hyperlink.effect(Schema.Number),
   fleetActive: Hyperlink.effect(Schema.Number).pipe(Hyperlink.fleet),
 }).pipe(Hyperlink.distributed) {}
@@ -66,14 +66,14 @@ const program = Effect.gen(function* () {
   const westAPath = yield* tmpSock("west-a");
   const westBPath = yield* tmpSock("west-b");
 
-  const lookupNode = Node.Tag()("examples/peers-rebind/Lookup", {
+  const lookupNode = Node.Service()("examples/peers-rebind/Lookup", {
     path: lookupPath,
   }).pipe(Node.asLookup);
 
-  class East extends Node.Tag<East, Pool>()("examples/peers-rebind/East", {
+  class East extends Node.Service<East, Pool>()("examples/peers-rebind/East", {
     path: eastPath,
   }) {}
-  class West extends Node.Tag<West, Pool>()("examples/peers-rebind/West", {
+  class West extends Node.Service<West, Pool>()("examples/peers-rebind/West", {
     path: westAPath,
   }) {}
 
@@ -115,7 +115,7 @@ const program = Effect.gen(function* () {
   );
 
   yield* Effect.logInfo("4) West B same nodeKey, new dial, Pool=9");
-  class WestB extends Node.Tag<WestB, Pool>()("examples/peers-rebind/West", {
+  class WestB extends Node.Service<WestB, Pool>()("examples/peers-rebind/West", {
     path: westBPath,
   }) {}
 

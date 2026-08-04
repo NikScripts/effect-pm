@@ -15,7 +15,7 @@ import * as Node from "../src/Node";
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
-class NumberQueue extends WorkPool.Tag<NumberQueue>()("@test/queue-spec-wire/Number", {
+class NumberQueue extends WorkPool.Service<NumberQueue>()("@test/queue-spec-wire/Number", {
   payload: jobSchema,
   success: Schema.Number,
 }) {}

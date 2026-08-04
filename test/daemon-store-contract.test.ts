@@ -7,11 +7,11 @@ import { builtInDaemonStoreContract } from "../src/internal/store/daemonStoreSpe
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
 
-class VoidDaemon extends Daemon.Tag<VoidDaemon>()("test/store/Void") {}
+class VoidDaemon extends Daemon.Service<VoidDaemon>()("test/store/Void") {}
 
-class PricedDaemon extends Daemon.Tag<PricedDaemon>()("test/store/Priced", Price) {}
+class PricedDaemon extends Daemon.Service<PricedDaemon>()("test/store/Priced", Price) {}
 
-class PricedErrDaemon extends Daemon.Tag<PricedErrDaemon>()(
+class PricedErrDaemon extends Daemon.Service<PricedErrDaemon>()(
   "test/store/PricedErr",
   Price,
   FetchErr,

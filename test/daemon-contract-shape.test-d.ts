@@ -14,12 +14,12 @@ declare const stopAt: Date;
 const Price = Schema.Struct({ symbol: Schema.String, usd: Schema.Number });
 
 // base — observation + lifecycle only
-class Health extends Daemon.Tag<Health>()("shape/Health") {}
+class Health extends Daemon.Service<Health>()("shape/Health") {}
 
 // value-returning — gains a reactive `result` via positional success
-class Prices extends Daemon.Tag<Prices>()("shape/Prices", { success: Price }) {}
+class Prices extends Daemon.Service<Prices>()("shape/Prices", { success: Price }) {}
 
-class PricedErr extends Daemon.Tag<PricedErr>()("shape/PricedErr", {
+class PricedErr extends Daemon.Service<PricedErr>()("shape/PricedErr", {
   success: Price,
   error: Schema.TaggedStruct("FetchError", { status: Schema.Number }),
 }) {}
@@ -28,7 +28,7 @@ class PricedErr extends Daemon.Tag<PricedErr>()("shape/PricedErr", {
 void Daemon.errorOf(PricedErr);
 
 // owns an inline schedule — gains the `schedule` verb group (id optional on windows)
-class Matches extends Daemon.Tag<Matches>()("shape/Matches").pipe(
+class Matches extends Daemon.Service<Matches>()("shape/Matches").pipe(
   Daemon.schedule([
     Daemon.window(startAt, stopAt),
     Daemon.window("sun-slate", startAt, stopAt),
@@ -38,7 +38,7 @@ class Matches extends Daemon.Tag<Matches>()("shape/Matches").pipe(
 
 // standalone schedule resource + a daemon gated by it (no schedule verbs on the daemon)
 class SeasonSchedule extends Daemon.Schedule<SeasonSchedule>()("shape/SeasonSchedule") {}
-class Ingest extends Daemon.Tag<Ingest>()("shape/Ingest").pipe(
+class Ingest extends Daemon.Service<Ingest>()("shape/Ingest").pipe(
   Daemon.schedule(SeasonSchedule),
 ) {}
 

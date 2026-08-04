@@ -15,8 +15,8 @@ describe("Node.unix(Tag, impl) sole-bound node", () => {
   it.live("listens on the Tag's node; client(Tag) dials", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("bound");
-      class Worker extends Node.Tag<Worker>()("listen-tag/Worker", { path }) {}
-      class Jobs extends Hyperlink.Tag<Jobs>()("listen-tag/Jobs", {
+      class Worker extends Node.Service<Worker>()("listen-tag/Worker", { path }) {}
+      class Jobs extends Hyperlink.Service<Jobs>()("listen-tag/Jobs", {
         jobs: Hyperlink.effect(Schema.Number),
       }).pipe(Hyperlink.andNode(Worker)) {}
 
@@ -36,7 +36,7 @@ describe("Node.unix(Tag, impl) sole-bound node", () => {
 
   it.effect("unbound Tag+impl mints nameless node (aligned family)", () =>
     Effect.gen(function* () {
-      class Jobs extends Hyperlink.Tag<Jobs>()("listen-tag/MissingJobs", {
+      class Jobs extends Hyperlink.Service<Jobs>()("listen-tag/MissingJobs", {
         jobs: Hyperlink.effect(Schema.Number),
       }) {}
 
@@ -54,8 +54,8 @@ describe("Node.unix(Tag, impl) sole-bound node", () => {
   it.effect("Node.listen on ipc Node fails ListenUseProtocol", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("use-unix");
-      class Worker extends Node.Tag<Worker>()("listen-tag/UseUnix", { path }) {}
-      class Jobs extends Hyperlink.Tag<Jobs>()("listen-tag/UseUnixJobs", {
+      class Worker extends Node.Service<Worker>()("listen-tag/UseUnix", { path }) {}
+      class Jobs extends Hyperlink.Service<Jobs>()("listen-tag/UseUnixJobs", {
         jobs: Hyperlink.effect(Schema.Number),
       }) {}
 

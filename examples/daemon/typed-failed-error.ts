@@ -20,7 +20,7 @@ import * as Polling from "../../src/Polling";
 
 const FetchErr = Schema.TaggedStruct("FetchError", { status: Schema.Number });
 
-class FailingPrices extends Daemon.Tag<FailingPrices>()("examples/FailingPrices", {
+class FailingPrices extends Daemon.Service<FailingPrices>()("examples/FailingPrices", {
   error: FetchErr,
 }) {}
 

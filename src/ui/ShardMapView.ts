@@ -13,13 +13,13 @@ export { pack };
 export const shardMapViewSpec = { kind: ShardMap.kind } as const;
 
 /** @public */
-export class ShardMapCard extends Views.Card.Tag<ShardMapCard>()(
+export class ShardMapCard extends Views.Card.Service<ShardMapCard>()(
   "hyperlink/view/shardmap-card",
   { spec: shardMapViewSpec },
 ) {}
 
 /** @public */
-export class ShardMapDetail extends Views.Detail.Tag<ShardMapDetail>()(
+export class ShardMapDetail extends Views.Detail.Service<ShardMapDetail>()(
   "hyperlink/view/shardmap-detail",
   { spec: shardMapViewSpec },
 ) {}

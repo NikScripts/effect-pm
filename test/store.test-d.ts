@@ -28,19 +28,19 @@ void _readingOnlyHandle.readings.read();
 
 const readingOnlyContract = Store.contract({ readings: readingSchema });
 
-class LabThermometer extends Hyperlink.Tag<LabThermometer>()("@app/LabThermometer", {
+class LabThermometer extends Hyperlink.Service<LabThermometer>()("@app/LabThermometer", {
   temperature: Hyperlink.ref(Schema.Number),
 }).pipe(Hyperlink.withStore(thermometerContract)) {}
 
-class Mail extends Hyperlink.Tag<Mail>()("@app/Mail", {
+class Mail extends Hyperlink.Service<Mail>()("@app/Mail", {
   send: Hyperlink.effect(Schema.Void),
 }) {}
 
 const jobSchema = Schema.Struct({ id: Schema.String });
 
-class MailQueue extends WorkPool.Tag<MailQueue>()("@app/MailQueue", { payload: jobSchema }) {}
+class MailQueue extends WorkPool.Service<MailQueue>()("@app/MailQueue", { payload: jobSchema }) {}
 
-class FetchGate extends Gate.Tag<FetchGate>()("@app/FetchGate", { payload: Schema.String, success: Schema.Number }) {}
+class FetchGate extends Gate.Service<FetchGate>()("@app/FetchGate", { payload: Schema.String, success: Schema.Number }) {}
 
 const mailQueueContract = builtInQueueStoreContract(MailQueue).pipe(
   Store.extend({ campaignAudit: Schema.Struct({ campaignId: Schema.String }) }),

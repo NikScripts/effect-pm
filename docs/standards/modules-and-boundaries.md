@@ -17,7 +17,7 @@ Members are flat top-level `export const` / `function` / `type` — never groupe
 ``` ts
 // consumer
 import * as WorkPool from "hyperlink-ts/WorkPool"
-WorkPool.Tag        // pulls zero engine code
+WorkPool.Service        // pulls zero engine code
 WorkPool.serve      // pulls the engine only when used
 ```
 
@@ -41,7 +41,7 @@ import * as Directory from "hyperlink-ts/Directory"
 yield* Advice.prefer(Mail, "fleet/Mail#w2")
 yield* Advice.changes.pipe(Stream.runDrain)
 yield* Directory.nodesServing(Mail)
-const board = yield* Advice.Tag
+const board = yield* Advice.Service
 ```
 
 {#filename-matches-export .must appliesTo=src}

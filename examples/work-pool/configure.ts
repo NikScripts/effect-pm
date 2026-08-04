@@ -18,7 +18,7 @@ const ConfigJob = Schema.Struct({
   id: Schema.String,
 });
 
-class ConfigQueue extends WorkPool.Tag<ConfigQueue>()(
+class ConfigQueue extends WorkPool.Service<ConfigQueue>()(
   "examples/ConfigQueue",
   { payload: ConfigJob },
 ) {}

@@ -2,7 +2,7 @@
  * @module Last
  *
  * Cross-cutting Last.ts: factory brands + upward value **Provides** toward
- * normal {@link Context.Service} bags (not View.Tag).
+ * normal {@link Context.Service} bags (not View.Service handles).
  *
  * ```ts
  * yield* Last.provide(ShellMeta, { title: "uDumb" }) // partial OK; last wins

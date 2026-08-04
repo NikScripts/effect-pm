@@ -3,12 +3,12 @@ import { expect, it } from "vitest";
 import * as Daemon from "../src/Daemon";
 
 // A managed daemon as a toolkit resource — driven through the same `yield* Tag` surface a
-// remote consumer uses (only the provided layer differs). A base `Daemon.Tag` is armed and runs
+// remote consumer uses (only the provided layer differs). A base `Daemon.Service` is armed and runs
 // immediately (default always-armed); a `.pipe(Daemon.schedule([]))` tag owns an empty inline
 // schedule (disarmed, and gains the `schedule` verb group) so `run` / schedule CRUD can
 // be observed in isolation.
-class ArmedDaemon extends Daemon.Tag<ArmedDaemon>()("test/daemon-contract/Armed") {}
-class ScheduledDaemon extends Daemon.Tag<ScheduledDaemon>()(
+class ArmedDaemon extends Daemon.Service<ArmedDaemon>()("test/daemon-contract/Armed") {}
+class ScheduledDaemon extends Daemon.Service<ScheduledDaemon>()(
   "test/daemon-contract/Scheduled",
 ).pipe(Daemon.schedule([])) {}
 

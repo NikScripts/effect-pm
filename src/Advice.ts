@@ -9,10 +9,10 @@
  *
  * yield* Advice.prefer(Worker, "fleet/Worker#w2")
  * yield* Advice.changes.pipe(Stream.runDrain)
- * const board = yield* Advice.Tag
+ * const board = yield* Advice.Service
  * ```
  *
- * Or name the Tag: `import { Tag as Advice } from "hyperlink-ts/Advice"`.
+ * Or name the Service: `import { Service as Advice } from "hyperlink-ts/Advice"`.
  * Never `import { Advice } from "hyperlink-ts/Lookup"`.
  *
  * @module Advice
@@ -140,7 +140,7 @@ const adviceSpec = {
  * @category services
  * @public
  */
-export class Tag extends Hyperlink.Tag<Tag>()(
+export class Service extends Hyperlink.Service<Service>()(
   "hyperlink-ts/Lookup/Advice",
   adviceSpec,
   { kind },
@@ -151,7 +151,7 @@ const serviceKeyOf = (service: string | { readonly key: string }): string =>
   typeof service === "string" ? service : service.key;
 
 /**
- * Publish placement advice (requires {@link Tag} in context).
+ * Publish placement advice (requires {@link Service} in context).
  *
  * @category constructors
  * @public
@@ -159,8 +159,8 @@ const serviceKeyOf = (service: string | { readonly key: string }): string =>
 export const advise = (input: {
   readonly serviceKey: string;
   readonly prefer: string;
-}): Effect.Effect<string, never, Tag> =>
-  Effect.flatMap(Tag, (svc) =>
+}): Effect.Effect<string, never, Service> =>
+  Effect.flatMap(Service, (svc) =>
     svc.advise(
       new AdviseRequest({
         serviceKey: input.serviceKey,
@@ -178,7 +178,7 @@ export const advise = (input: {
 export const prefer = (
   service: string | { readonly key: string },
   nodeKey: string,
-): Effect.Effect<string, never, Tag> =>
+): Effect.Effect<string, never, Service> =>
   advise({
     serviceKey: serviceKeyOf(service),
     prefer: nodeKey,
@@ -193,7 +193,7 @@ export const prefer = (
 export const preferEntry = (
   service: string | { readonly key: string },
   entry: { readonly nodeKey: string },
-): Effect.Effect<string, never, Tag> =>
+): Effect.Effect<string, never, Service> =>
   advise({ serviceKey: serviceKeyOf(service), prefer: entry.nodeKey });
 
 /**
@@ -204,8 +204,8 @@ export const preferEntry = (
  */
 export const clear = (
   service: string | { readonly key: string },
-): Effect.Effect<boolean, never, Tag> =>
-  Effect.flatMap(Tag, (svc) =>
+): Effect.Effect<boolean, never, Service> =>
+  Effect.flatMap(Service, (svc) =>
     svc.clear(new ClearAdviceRequest({ serviceKey: serviceKeyOf(service) })),
   );
 
@@ -225,8 +225,8 @@ export const clearAdvice = clear;
  */
 export const preferred = (
   service: string | { readonly key: string },
-): Effect.Effect<Option.Option<string>, never, Tag> =>
-  Effect.flatMap(Tag, (svc) =>
+): Effect.Effect<Option.Option<string>, never, Service> =>
+  Effect.flatMap(Service, (svc) =>
     svc.preferred(
       new PreferredRequest({ serviceKey: serviceKeyOf(service) }),
     ),
@@ -238,5 +238,5 @@ export const preferred = (
  * @category constructors
  * @public
  */
-export const changes: Stream.Stream<AdviceChange, never, Tag> =
-  Stream.unwrap(Effect.map(Tag, (board) => board.changes));
+export const changes: Stream.Stream<AdviceChange, never, Service> =
+  Stream.unwrap(Effect.map(Service, (board) => board.changes));
