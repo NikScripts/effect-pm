@@ -3,7 +3,7 @@
 **Branch:** `cursor/file-router-prototype-125f`  
 **Status:** design — **not locked**, not Eng’d (revised 2026-08-03)  
 **Package:** `last-ts` (`Page`, `Layout`, `Last`, `View`) — zero Hyperlink product names inside last-ts  
-**Upward SSOT (V0):** [view-provide-draft.md](./view-provide-draft.md) — Requires / Provides / `Last.provide`  
+**Upward SSOT (spike):** [view-provide-draft.md](./view-provide-draft.md) — Context.Service + `Last.provided` / `toLayer`  
 **Downward (Eng’d):** [view-compose-draft.md](./view-compose-draft.md) — bag compose + `View.mount`  
 **Related:** [file-router-prototype](./file-router-prototype.md) · [view-page-naming](./view-page-naming.md) · [view-tag-prototype](./view-tag-prototype.md) · [last-ts-codesplit](../plans/last-ts-codesplit.md)
 

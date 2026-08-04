@@ -18,7 +18,9 @@
     "test/**/*.ts",
     "test/**/*.tsx",
     "../../test/view-jsx.test-d.tsx",
-    "../../test/view-jsx-radix.test.tsx"
+    "../../test/view-jsx-radix.test.tsx",
+    "../../test/last-provide.test-d.ts",
+    "../../test/last-provide.test.ts"
   ],
   "exclude": ["node_modules"]
 }
