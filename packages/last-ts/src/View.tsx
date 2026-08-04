@@ -8,6 +8,7 @@
  * - **Compose:** bag form of {@link gen} / {@link succeed} — pass child views as
  *   values (keeps names), render with JSX; merges child `R`
  * - **Edge:** {@link mount}`(view, layer)` — discharge `R`, get a JSX component
+ * - **Up:** {@link Last.provide} in {@link gen} → Provides; {@link Last.toLayer}
  *
  * Open-`R` views are **not** JSX components (TypeScript). Nest via bag form;
  * fulfill with {@link mount} (or provide until `R` is `never`).
@@ -22,6 +23,12 @@ import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import * as AtomReact from "./AtomReact";
 import type * as Jsx from "./Jsx";
 import * as Last from "./Last";
+
+/** Provide tokens yielded from {@link Last.provide}. @internal */
+type ProvideTokensOf<Eff> = Extract<
+  Effect.Success<Eff>,
+  Last.ProvideToken<any, any, any>
+>;
 
 // =============================================================================
 // Keys / layout hints
@@ -89,13 +96,16 @@ declare const ViewTypeId: unique symbol;
 
 /**
  * Fulfilled view — legal as a JSX component (`R` is `never`).
+ * May still carry upward {@link ProvidesOf} until {@link Last.toLayer}.
  *
  * @public
  */
-export type Component<Props extends object = {}> = ((
-  props: Props,
-) => React.ReactElement | null) & {
+export type Component<
+  Props extends object = {},
+  Provides = never,
+> = ((props: Props) => React.ReactElement | null) & {
   readonly "~last-ts/View/services": never;
+  readonly "~last-ts/View/provides": Provides;
 };
 
 /**
@@ -108,23 +118,32 @@ export type Component<Props extends object = {}> = ((
  *
  * @public
  */
-export interface Unresolved<Props extends object = {}, R = never> {
+export interface Unresolved<
+  Props extends object = {},
+  R = never,
+  Provides = never,
+> {
   readonly "~last-ts/View/services": R;
+  readonly "~last-ts/View/provides": Provides;
   readonly "~last-ts/View/props": Props;
   readonly [ViewTypeId]: typeof ViewTypeId;
 }
 
 /**
- * View with props and services `R`.
+ * View with props, services `R`, and upward Provides.
  *
  * - `R = never` → {@link Component} (JSX-legal)
  * - otherwise → {@link Unresolved} (must bag-compose / {@link mount})
  *
  * @public
  */
-export type View<Props extends object = {}, R = never> = [R] extends [never]
-  ? Component<Props>
-  : Unresolved<Props, R>;
+export type View<
+  Props extends object = {},
+  R = never,
+  Provides = never,
+> = [R] extends [never]
+  ? Component<Props, Provides>
+  : Unresolved<Props, R, Provides>;
 
 /**
  * Services (`R`) carried by a {@link View} type.
@@ -135,6 +154,17 @@ export type ServicesOf<V> = V extends {
   readonly "~last-ts/View/services": infer R;
 }
   ? R
+  : never;
+
+/**
+ * Upward {@link Last.provide} tokens carried by a {@link View} type.
+ *
+ * @public
+ */
+export type ProvidesOf<V> = V extends {
+  readonly "~last-ts/View/provides": infer P;
+}
+  ? P
   : never;
 
 /**
@@ -176,6 +206,69 @@ type BagServices<Bag extends Record<string, unknown>> = {
 }[keyof Bag];
 
 /**
+ * Union of `ProvidesOf` for each entry in a bag.
+ *
+ * @internal
+ */
+type BagProvides<Bag extends Record<string, unknown>> = {
+  [K in keyof Bag]: ProvidesOf<Bag[K]>;
+}[keyof Bag];
+
+const attachLedger = <A,>(
+  component: A,
+  ledger: Last.ProvideLedger | undefined,
+): A => {
+  if (ledger !== undefined && ledger.size > 0) {
+    Object.assign(component as object, {
+      [Last.provideLedgerSym]: ledger,
+    });
+  }
+  return component;
+};
+
+const tryCollectLedger = (
+  create: Effect.Effect<unknown, unknown, unknown>,
+): Last.ProvideLedger | undefined => {
+  try {
+    return Last.runProvideCollect(
+      create as Effect.Effect<unknown, unknown, never>,
+    );
+  } catch {
+    return undefined;
+  }
+};
+
+const mergeLedgers = (
+  parts: ReadonlyArray<Last.ProvideLedger | undefined>,
+): Last.ProvideLedger | undefined => {
+  const out: Last.ProvideLedger = new Map();
+  for (const part of parts) {
+    if (part === undefined) continue;
+    for (const [key, entry] of part) {
+      const prev = out.get(key);
+      out.set(key, {
+        service: entry.service,
+        bag: { ...(prev?.bag ?? {}), ...entry.bag },
+      });
+    }
+  }
+  return out.size > 0 ? out : undefined;
+};
+
+const ledgerOf = (view: unknown): Last.ProvideLedger | undefined => {
+  if (
+    (typeof view === "object" || typeof view === "function") &&
+    view !== null &&
+    Last.provideLedgerSym in view
+  ) {
+    return (view as { readonly [Last.provideLedgerSym]: Last.ProvideLedger })[
+      Last.provideLedgerSym
+    ];
+  }
+  return undefined;
+};
+
+/**
  * Tree services from a component fn: props.`children` brands ∪ return
  * {@link Jsx.Element}`<R>` (from direct `jsx` / `jsxs` calls).
  *
@@ -210,6 +303,16 @@ export function stamp(
 ): any {
   return component;
 }
+
+const stampWithLedger = <Props extends object, R, Provides>(
+  component: (props: Props) => React.ReactElement | null,
+  ledger: Last.ProvideLedger | undefined,
+): View<Props, R, Provides> =>
+  attachLedger(stamp<Props, R>(component), ledger) as View<
+    Props,
+    R,
+    Provides
+  >;
 
 /**
  * Effect that builds a plain React component (no {@link Tag} / DI).
@@ -250,13 +353,16 @@ export const fromEffect = <
   F extends (props: any) => React.ReactElement | null,
   E = never,
   R = never,
+  Provides = never,
 >(
   create: Effect.Effect<F, E, R>,
 ): View<
   Parameters<F>[0] extends object ? Parameters<F>[0] : {},
-  R | TreeServicesOf<F>
+  R | TreeServicesOf<F>,
+  Provides
 > => {
   type Props = Parameters<F>[0] extends object ? Parameters<F>[0] : {};
+  const ledger = tryCollectLedger(create);
   const FromEffect = (props: Props): React.ReactElement | null => {
     const runtime = AtomReact.useRuntime();
     const atom = React.useMemo(
@@ -272,7 +378,10 @@ export const fromEffect = <
     }
     return null;
   };
-  return stamp<Props, R | TreeServicesOf<F>>(FromEffect);
+  return stampWithLedger<Props, R | TreeServicesOf<F>, Provides>(
+    FromEffect,
+    ledger,
+  );
 };
 
 /**
@@ -310,11 +419,12 @@ export function gen<
   f: () => Generator<Eff, F, never>,
 ): View<
   Parameters<F>[0] extends object ? Parameters<F>[0] : {},
-  Effect.Services<Eff> | TreeServicesOf<F>
+  Effect.Services<Eff> | TreeServicesOf<F>,
+  ProvideTokensOf<Eff>
 >;
 export function gen<Eff extends Effect.Effect<any, any, any>>(
   f: () => Generator<Eff, void, never>,
-): View<{}, Effect.Services<Eff>>;
+): View<{}, Effect.Services<Eff>, ProvideTokensOf<Eff>>;
 export function gen<
   const Bag extends Record<string, unknown>,
   Eff extends Effect.Effect<any, any, any>,
@@ -324,7 +434,8 @@ export function gen<
   f: (bag: BagFns<Bag>) => Generator<Eff, F, never>,
 ): View<
   Parameters<F>[0] extends object ? Parameters<F>[0] : {},
-  BagServices<Bag> | Effect.Services<Eff> | TreeServicesOf<F>
+  BagServices<Bag> | Effect.Services<Eff> | TreeServicesOf<F>,
+  BagProvides<Bag> | ProvideTokensOf<Eff>
 >;
 export function gen<
   const Bag extends Record<string, unknown>,
@@ -332,17 +443,29 @@ export function gen<
 >(
   bag: Bag,
   f: (bag: BagFns<Bag>) => Generator<Eff, void, never>,
-): View<{}, BagServices<Bag> | Effect.Services<Eff>>;
+): View<
+  {},
+  BagServices<Bag> | Effect.Services<Eff>,
+  BagProvides<Bag> | ProvideTokensOf<Eff>
+>;
 export function gen(bagOrFn: any, maybeFn?: any): any {
   const build =
     typeof bagOrFn === "function"
       ? bagOrFn
       : () => maybeFn(bagOrFn);
-  return fromEffect(
+  const bagLedger =
+    typeof bagOrFn === "object" && bagOrFn !== null
+      ? mergeLedgers(
+          Object.values(bagOrFn as Record<string, unknown>).map(ledgerOf),
+        )
+      : undefined;
+  const view = fromEffect(
     Effect.map(Effect.gen(build), (component) =>
       component === undefined ? () => null : component,
     ) as Effect.Effect<(props: any) => React.ReactElement | null, any, any>,
   );
+  const ledger = mergeLedgers([bagLedger, ledgerOf(view)]);
+  return attachLedger(view, ledger);
 }
 
 /**
@@ -380,12 +503,15 @@ export function succeed<
 >(
   bag: Bag,
   render: (bag: BagFns<Bag>) => (props: Props) => React.ReactElement | null,
-): View<Props, BagServices<Bag>>;
+): View<Props, BagServices<Bag>, BagProvides<Bag>>;
 export function succeed(bagOrFn: any, maybeRender?: any): any {
   if (typeof bagOrFn === "function") {
     return fromEffect(Effect.succeed(bagOrFn));
   }
-  return stamp(maybeRender(bagOrFn));
+  const ledger = mergeLedgers(
+    Object.values(bagOrFn as Record<string, unknown>).map(ledgerOf),
+  );
+  return attachLedger(stamp(maybeRender(bagOrFn)), ledger);
 }
 
 /**
@@ -412,8 +538,9 @@ export const mount = <
   R,
   E = never,
   RIn = never,
+  Provides = never,
 >(
-  view: View<Props, R>,
+  view: View<Props, R, Provides>,
   layer: Layer.Layer<R, E, RIn>,
 ): View<Props, RIn> => {
   const Mounted = (props: Props): React.ReactElement | null => {

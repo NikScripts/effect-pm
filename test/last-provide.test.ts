@@ -1,8 +1,8 @@
 /**
- * Last.provided → toLayer → View.mount — Context.Service value bags.
+ * yield* Last.provide → Last.toLayer(Service, view) → View.mount
  */
 import { describe, expect, it } from "@effect/vitest";
-import { Context, Effect, Layer } from "effect";
+import { Context, Layer } from "effect";
 import * as React from "react";
 import { renderToString } from "react-dom/server";
 import * as Last from "last-ts/Last";
@@ -18,36 +18,58 @@ class ModalMeta extends Context.Service<
   { readonly title: string }
 >()("test/last-provide-runtime/ModalMeta") {}
 
-describe("Last.provided → Context.Service → View", () => {
-  it("toLayer supplies yield* service inside View.gen", () => {
+describe("yield* Last.provide → Context.Service → View", () => {
+  it("deep provide + toLayer supplies yield* in another View", () => {
+    const Hello = View.gen(function* () {
+      yield* Last.provide(ShellMeta, { title: "uDumb" });
+      return (_props: {}) => React.createElement("p", null, "body");
+    });
+
     const Shell = View.gen(function* () {
       const meta = yield* ShellMeta;
-      return (_props: {}) => React.createElement("h1", null, meta.title);
+      return (props: { readonly children?: React.ReactNode }) =>
+        React.createElement(
+          "header",
+          null,
+          React.createElement("h1", null, meta.title),
+          props.children,
+        );
     });
 
-    const App = View.mount(
-      Shell,
-      Last.toLayer(Last.provided(ShellMeta, { title: "uDumb" })),
+    const Page = View.succeed({ Shell, Hello }, ({ Shell, Hello }) => () =>
+      React.createElement(Shell, null, React.createElement(Hello)),
     );
 
-    expect(renderToString(React.createElement(App))).toContain("uDumb");
+    const App = View.mount(Page, Last.toLayer(ShellMeta, Hello));
+
+    const html = renderToString(React.createElement(App));
+    expect(html).toContain("uDumb");
+    expect(html).toContain("body");
   });
 
-  it("merge last-wins before toLayer", () => {
-    const ledger = Last.merge(Last.provided(ShellMeta, { title: "first" }), {
-      title: "second",
+  it("last write wins across provide calls", () => {
+    const Hello = View.gen(function* () {
+      yield* Last.provide(ShellMeta, { title: "first" });
+      yield* Last.provide(ShellMeta, { title: "second" });
+      return (_props: {}) => null;
     });
-    expect(ledger.bag.title).toBe("second");
 
     const Shell = View.gen(function* () {
       const meta = yield* ShellMeta;
       return (_props: {}) => React.createElement("span", null, meta.title);
     });
-    const App = View.mount(Shell, Last.toLayer(ledger));
+
+    const App = View.mount(Shell, Last.toLayer(ShellMeta, Hello));
     expect(renderToString(React.createElement(App))).toContain("second");
   });
 
   it("two services keep separate titles", () => {
+    const Meta = View.gen(function* () {
+      yield* Last.provide(ShellMeta, { title: "Shell" });
+      yield* Last.provide(ModalMeta, { title: "Modal" });
+      return (_props: {}) => null;
+    });
+
     const Both = View.gen(function* () {
       const shell = yield* ShellMeta;
       const modal = yield* ModalMeta;
@@ -55,33 +77,21 @@ describe("Last.provided → Context.Service → View", () => {
         React.createElement(
           "div",
           null,
-          React.createElement("span", { "data-shell": true }, shell.title),
-          React.createElement("span", { "data-modal": true }, modal.title),
+          React.createElement("span", null, shell.title),
+          React.createElement("span", null, modal.title),
         );
     });
 
     const App = View.mount(
       Both,
       Layer.mergeAll(
-        Last.toLayer(ShellMeta, { title: "Shell" }),
-        Last.toLayer(ModalMeta, { title: "Modal" }),
+        Last.toLayer(ShellMeta, Meta),
+        Last.toLayer(ModalMeta, Meta),
       ),
     );
 
     const html = renderToString(React.createElement(App));
     expect(html).toContain("Shell");
     expect(html).toContain("Modal");
-  });
-
-  it("provide Effect builds Provided for toLayer", async () => {
-    const ledger = await Effect.runPromise(
-      Last.provide(ShellMeta, { title: "from-effect" }),
-    );
-    const layer = Last.toLayer(ledger);
-    const program = Effect.gen(function* () {
-      const meta = yield* ShellMeta;
-      return meta.title;
-    }).pipe(Effect.provide(layer));
-    expect(await Effect.runPromise(program)).toBe("from-effect");
   });
 });

@@ -1,9 +1,10 @@
 /**
- * Last.provided / merge / toLayer — Context.Service value bags.
+ * yield* Last.provide → View Provides → Last.toLayer(Service, view)
  */
 import { expectTypeOf } from "vitest";
 import { Context, Layer } from "effect";
 import * as Last from "last-ts/Last";
+import * as View from "last-ts/View";
 
 class ShellMeta extends Context.Service<
   ShellMeta,
@@ -15,40 +16,39 @@ class ModalMeta extends Context.Service<
   { readonly title: string }
 >()("test/last-provide/ModalMeta") {}
 
-// ── Complete provide → Layer ─────────────────────────────────────────────────
+const Hello = View.gen(function* () {
+  yield* Last.provide(ShellMeta, { title: "uDumb" });
+  return (_props: {}) => null;
+});
 
-const full = Last.provided(ShellMeta, { title: "Hello" });
-const shellLayer = Last.toLayer(full);
+expectTypeOf<View.ProvidesOf<typeof Hello>>().toMatchTypeOf<
+  Last.ProvideToken<
+    ShellMeta,
+    { readonly title: string; readonly crumb?: string },
+    { readonly title: "uDumb" }
+  >
+>();
+
+const shellLayer = Last.toLayer(ShellMeta, Hello);
 expectTypeOf(shellLayer).toEqualTypeOf<Layer.Layer<ShellMeta>>();
 
-const fullDirect = Last.toLayer(ShellMeta, { title: "Hello" });
-expectTypeOf(fullDirect).toEqualTypeOf<Layer.Layer<ShellMeta>>();
-
-// ── Incomplete → not a Layer ─────────────────────────────────────────────────
-
-const empty = Last.provided(ShellMeta, {});
-const incomplete = Last.toLayer(empty);
-expectTypeOf(incomplete).toMatchTypeOf<{
-  readonly _error: "Last.toLayer: incomplete provide";
-  readonly missing: "title";
-}>();
+const Empty = View.gen(function* () {
+  yield* Last.provide(ShellMeta, {});
+  return (_props: {}) => null;
+});
 
 // @ts-expect-error incomplete provide is not Layer<ShellMeta>
-const _needLayer: Layer.Layer<ShellMeta> = Last.toLayer(
-  Last.provided(ShellMeta, {}),
-);
+const _needLayer: Layer.Layer<ShellMeta> = Last.toLayer(ShellMeta, Empty);
 
-// ── Partial merge, last wins ─────────────────────────────────────────────────
+const Both = View.gen(function* () {
+  yield* Last.provide(ShellMeta, { title: "Shell" });
+  yield* Last.provide(ModalMeta, { title: "Modal" });
+  return (_props: {}) => null;
+});
 
-const step1 = Last.provided(ShellMeta, { title: "A" });
-const step2 = Last.merge(step1, { title: "B", crumb: "home" });
-expectTypeOf(step2.bag.title).toEqualTypeOf<"B">();
-expectTypeOf(step2.bag.crumb).toEqualTypeOf<"home">();
-expectTypeOf(Last.toLayer(step2)).toEqualTypeOf<Layer.Layer<ShellMeta>>();
-
-// ── Two services — titles do not collide ─────────────────────────────────────
-
-const shell = Last.provided(ShellMeta, { title: "Shell" });
-const modal = Last.provided(ModalMeta, { title: "Modal" });
-expectTypeOf(Last.toLayer(shell)).toEqualTypeOf<Layer.Layer<ShellMeta>>();
-expectTypeOf(Last.toLayer(modal)).toEqualTypeOf<Layer.Layer<ModalMeta>>();
+expectTypeOf(Last.toLayer(ShellMeta, Both)).toEqualTypeOf<
+  Layer.Layer<ShellMeta>
+>();
+expectTypeOf(Last.toLayer(ModalMeta, Both)).toEqualTypeOf<
+  Layer.Layer<ModalMeta>
+>();

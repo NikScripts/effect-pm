@@ -1,84 +1,68 @@
-# Upward values — Context.Service + `Last.provide` (spike)
+# Upward values — `yield* Last.provide` → Context.Service
 
-**Status:** spike Eng’d on `cursor/file-router-prototype-125f` (typed ledger → Layer)  
-**Package:** `last-ts` (`Last`)  
-**Sibling (Eng’d):** [view-compose-draft.md](./view-compose-draft.md) — downward `R`  
-**Later:** Layout / Page reuse the same Context bags
+**Status:** spike Eng’d on `cursor/file-router-prototype-125f`  
+**Package:** `last-ts` (`Last`, `View`)  
+**Sibling:** [view-compose-draft.md](./view-compose-draft.md)
 
 ---
 
 ## JSX import
 
-**Not required** for this channel. Proof is Context `R` + `Last.toLayer` completeness, then
-`View.mount`. Stock `react` `jsxImportSource` is fine. `last-ts` jsx runtime stays optional
-(leftover from the failed JSX-`R` experiment).
+**Not required** for this channel. Stock `react` jsx is fine.
 
 ---
 
-## Lean (locked for spike)
+## API (this is the product shape)
 
-Value bags are **normal `Context.Service`s** — not View.Tag, not Prototype annotations.
-
-| Piece | Role |
-|-------|------|
-| `class Foo extends Context.Service<Foo, Bag>()("…")` | Identity + full bag type |
-| `Last.provided(Foo, partial)` / `Last.provide` | Typed partial; last-wins via `Last.merge` |
-| `yield* Foo` | Read (classic Effect) |
-| `Last.toLayer(…)` | **Only** if required keys covered → `Layer<Foo>` |
-| `View.mount(view, layer)` | Discharge `R` as today |
-
-Two services ⇒ two titles never collide (`ShellMeta.title` ≠ `ModalMeta.title`).
-
----
-
-## Verified
-
-```ts
+```tsx
 class ShellMeta extends Context.Service<
   ShellMeta,
   { readonly title: string }
 >()("app/shell-meta") {}
 
-const Shell = View.gen(function* () {
-  const meta = yield* ShellMeta
-  return () => <h1>{meta.title}</h1>
+const Hello = View.gen(function* () {
+  yield* Last.provide(ShellMeta, { title: "uDumb" }) // partial OK
+  return () => <p>body</p>
 })
 
-const App = View.mount(
-  Shell,
-  Last.toLayer(Last.provided(ShellMeta, { title: "uDumb" })),
-)
-// incomplete bag → toLayer is not Layer<ShellMeta> (type error at mount)
+const Shell = View.gen(function* () {
+  const meta = yield* ShellMeta
+  return (props: { readonly children?: React.ReactNode }) => (
+    <header>
+      <h1>{meta.title}</h1>
+      {props.children}
+    </header>
+  )
+})
+
+const Page = View.succeed({ Shell, Hello }, ({ Shell, Hello }) => () => (
+  <Shell>
+    <Hello />
+  </Shell>
+))
+
+const App = View.mount(Page, Last.toLayer(ShellMeta, Hello))
+// incomplete Last.provide → toLayer is not Layer<ShellMeta>
 ```
 
-Tests: `test/last-provide.test-d.ts`, `test/last-provide.test.ts`.
+| Piece | Role |
+|-------|------|
+| `Context.Service` | Bag identity + full shape |
+| `yield* Last.provide(Svc, partial)` | Typed partial; last wins per service |
+| `View.ProvidesOf` | Tokens from `Last.provide` yields |
+| `Last.toLayer(Svc, view)` | Layer only if that view covered required keys |
+| `View.mount` | Discharge `R` as today |
+
+No `Last.provided`. Write path is only `Last.provide` inside gen.
 
 ---
+
+## Verified
+
+`test/last-provide.test-d.ts`, `test/last-provide.test.ts`
 
 ## Not yet
 
-| Gap | Notes |
-|-----|--------|
-| Auto-thread Provides onto `View` from `yield* Last.provide` | Ledger is still an explicit value; gen does not infer Provides |
-| Ambient / deep tree collection | No FiberRef ledger yet — caller merges `Provided` then `toLayer` |
-| Layout / Page | After View wiring feels good |
-| Prototype annotation Requirement | Separate channel — do not merge into this |
-
----
-
-## Annotation Requirement vs this
-
-| | Prototype Requirement | Context.Service Provides |
-|--|----------------------|---------------------------|
-| Subject | Tag mint metadata | Runtime value bag in Context |
-| Discharge | `.Prototype()({ size })` | `Last.toLayer` → Layer |
-| API | `View.annotations` | `yield* Service` / `Last.provided` |
-
-Same *pattern* (typed debt → provide → close). Different bags. Do not overload Prototype’s second type param for titles.
-
----
-
-## Links
-
-- Downward Eng: [view-compose-draft.md](./view-compose-draft.md)
-- Page/Layout (later): [page-layout-design.md](./page-layout-design.md)
+- Layout / Page
+- Auto `Last.layer(Page)` merging every service Page’s Provides cover
+- Prototype annotation Requirement stays separate
