@@ -6,7 +6,7 @@ export default defineConfig({
   root: import.meta.dirname,
   server: {
     host: true,
-    port: 5192,
+    port: 5210,
     strictPort: true,
   },
 });

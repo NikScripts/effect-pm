@@ -1,7 +1,7 @@
 /**
  * Child writes Title (SubscriptionRef) → parent heading live-updates.
  *
- * Run: `pnpm example:apps-title-live` → http://localhost:5192
+ * Run: `pnpm example:apps-title-live` → http://localhost:5210
  */
 import * as React from "react";
 import { Context, Effect, Layer, SubscriptionRef } from "effect";
