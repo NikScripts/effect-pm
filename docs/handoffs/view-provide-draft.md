@@ -26,23 +26,18 @@ const Hello = View.gen(function* () {
   return () => <p>body</p>
 })
 
-const Shell = View.gen(function* () {
-  const meta = yield* ShellMeta
-  return (props: { readonly children?: React.ReactNode }) => (
-    <header>
-      <h1>{meta.title}</h1>
-      {props.children}
-    </header>
-  )
-})
-
-const Page = View.succeed({ Shell, Hello }, ({ Shell, Hello }) => () => (
-  <Shell>
-    <Hello />
-  </Shell>
-))
-
-const App = View.mount(Page, Last.toLayer(ShellMeta, Hello))
+const App = View.mount(
+  View.gen(function* () {
+    const meta = yield* ShellMeta
+    return () => (
+      <header>
+        <h1>{meta.title}</h1>
+        <p>body</p>
+      </header>
+    )
+  }),
+  Last.toLayer(ShellMeta, Hello),
+)
 // incomplete Last.provide → toLayer is not Layer<ShellMeta>
 ```
 

@@ -1,8 +1,9 @@
-# DI Views — bag compose + mount (not JSX `R` bubbling)
+# DI Views — gen + mount (not JSX `R` bubbling, not bag compose)
 
 **Status:** Eng on `cursor/file-router-prototype-125f`.  
 **Not:** pretending stock TypeScript carries `R` through `<Child />`.  
-**Opposite direction (not Eng’d):** [view-provide-draft.md](./view-provide-draft.md) — Requires / Provides / `Last.provide`.
+**Not:** `View.succeed({ Child }, ({ Child }) => …)` bag compose — **removed**.  
+**Opposite direction:** [view-provide-draft.md](./view-provide-draft.md) · spine [effect-app-router-plan.md](./effect-app-router-plan.md).
 
 ---
 
@@ -18,26 +19,20 @@ const Hello = View.gen(function* () {
     <GreeterView name={props.who} />
   )
 })
-// Hello: Unresolved<{ who }, Greeter> — not JSX-legal
-
-const Middle = View.succeed({ Hello }, ({ Hello }) => (_props) => (
-  <aside>
-    <Hello who="nik" />
-  </aside>
-))
-// Middle: Unresolved<{}, Greeter>
-
-const Outer = View.succeed({ Middle }, ({ Middle }) => (_props) => (
-  <div>
-    <Middle />
-  </div>
-))
+// Hello: Unresolved<{ who }, Greeter>
 
 const App = View.mount(
-  Outer,
+  View.gen(function* () {
+    const views = yield* Effect.all({ Greeter })
+    return () => (
+      <div>
+        <views.Greeter name="nik" />
+      </div>
+    )
+  }),
   Greeter.provide(({ name }) => <span>{name}</span>),
 )
-// App: Component<{}> — render <App />
+// App: Component<{}>
 ```
 
 ---
@@ -48,10 +43,10 @@ const App = View.mount(
 |-------|----------|
 | `View<P, never>` | {@link Component} — JSX call signature |
 | `View<P, R>` (`R` ≠ `never`) | {@link Unresolved} — **no** JSX call signature |
-| Bag `succeed` / `gen` | Child views as object values → names preserved; `R` merged; JSX OK **inside** callback |
-| `View.mount(view, layer)` | Provides `R` via Layer + RuntimeProvider; returns view with remaining layer input (usually `never`) |
-| `Tag.provide` / `View.provide` | Layer for a Tag skin (downward DI) |
-| JSX `<OpenView />` | Type error while `R` open |
+| `yield* Effect.all({ A, B })` | Resolve Tags/services; JSX the results |
+| `View.mount(view, layer)` | Discharge `R` via Layer + RuntimeProvider |
+| `Tag.provide` / `View.provide` | Layer for a Tag skin |
+| Bag `succeed({ Child }, …)` | **Removed** |
 
 Stock TS types every `<… />` as black-box `JSX.Element`. We do **not** rely on that for `R`.
 
@@ -59,16 +54,15 @@ Stock TS types every `<… />` as black-box `JSX.Element`. We do **not** rely on
 
 ## Verification
 
-- `test/view-jsx.test-d.tsx` — opaque open `R`, bag compose, mount
+- `test/view-jsx.test-d.tsx` — opaque open `R`, Effect.all, mount
 - `examples/ui/view-typed-jsx.tsx` + docs guide Twoslash
-- `packages/last-ts` typecheck (`jsxImportSource: "last-ts"`)
+- `packages/last-ts` typecheck
 
 ---
 
 ## Not this
 
 ```ts
-yield* needs(Hello)
-View.el(Parent, { children: View.el(Child) })
+View.succeed({ Hello }, ({ Hello }) => () => <Hello />)
 // bare <Hello /> while Hello still has open R
 ```

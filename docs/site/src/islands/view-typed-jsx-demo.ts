@@ -1,5 +1,5 @@
 /**
- * Runtime mirror of the bag-compose + mount Twoslash demo.
+ * Runtime mirror of the gen + mount Twoslash demo.
  */
 import * as React from "react";
 import * as View from "last-ts/View";
@@ -14,29 +14,29 @@ export const Hello = View.gen(function* () {
     React.createElement(GreeterView, { name: props.who });
 });
 
-export const Middle = View.succeed({ Hello }, ({ Hello }) => (_props: {}) =>
-  React.createElement(
-    "aside",
-    { "data-demo": "middle" },
-    React.createElement(Hello, { who: "nik" }),
-  ),
-);
-
-export const Outer = View.succeed({ Middle }, ({ Middle }) => (_props: {}) =>
-  React.createElement(
-    "div",
-    { "data-demo": "outer" },
-    React.createElement(
-      "section",
-      null,
-      React.createElement("article", null, React.createElement(Middle, {})),
-    ),
-  ),
-);
-
 /** Mounted app — JSX-legal (`R` discharged). */
 export const App = View.mount(
-  Outer,
+  View.gen(function* () {
+    const GreeterView = yield* Greeter;
+    return (_props: {}) =>
+      React.createElement(
+        "div",
+        { "data-demo": "outer" },
+        React.createElement(
+          "section",
+          null,
+          React.createElement(
+            "article",
+            null,
+            React.createElement(
+              "aside",
+              { "data-demo": "middle" },
+              React.createElement(GreeterView, { name: "nik" }),
+            ),
+          ),
+        ),
+      );
+  }),
   Greeter.provide((props) =>
     React.createElement("span", { "data-demo": "inner" }, `hello ${props.name}`),
   ),

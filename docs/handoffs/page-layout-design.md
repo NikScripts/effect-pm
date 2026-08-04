@@ -123,8 +123,7 @@ const TitleBlock = View.gen(function* () {
   return () => <h1>…</h1>
 })
 
-const Body = View.succeed({ TitleBlock }, ({ TitleBlock }) => () => <TitleBlock />)
-// close/check against Shell.Requires — API name open (see view-provide-draft)
+// deep provide; close via Last.toLayer / Router harvest — see effect-app-router-plan
 ```
 
 | API | Role |

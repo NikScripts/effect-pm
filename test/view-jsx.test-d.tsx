@@ -1,5 +1,5 @@
 /**
- * View compose — opaque open R, bag succeed/gen, mount.
+ * View compose — opaque open R, Effect.all Tags, mount.
  */
 /** @jsxImportSource last-ts */
 import { expectTypeOf } from "vitest";
@@ -17,11 +17,6 @@ class Clock extends Context.Service<Clock, number>()("test/jsx/Clock") {}
 const Child = View.gen(function* () {
   const name = yield* Greeter;
   return (_props: {}) => <span data-child>{name}</span>;
-});
-
-const Other = View.gen(function* () {
-  const t = yield* Clock;
-  return (_props: {}) => <span data-other>{t}</span>;
 });
 
 const Plain = (props: { readonly label: string }): React.ReactElement => (
@@ -47,31 +42,33 @@ const Empty = View.gen(function* () {
 });
 expectTypeOf<View.ServicesOf<typeof Empty>>().toEqualTypeOf<Greeter>();
 
-// ── Bag succeed / gen merge child R; JSX inside callback ─────────────────────
+// ── Effect.all merges services; JSX uses resolved values ─────────────────────
 
-const Middle = View.succeed({ Child }, ({ Child }) => (_props: {}) => (
-  <section>
-    <Child />
-  </section>
-));
-expectTypeOf<View.ServicesOf<typeof Middle>>().toEqualTypeOf<Greeter>();
-type _MiddleNotAny = Expect<NotAny<View.ServicesOf<typeof Middle>>>;
-
-const Both = View.gen({ Child, Other }, function* ({ Child, Other }) {
+const Both = View.gen(function* () {
+  const services = yield* Effect.all({ Greeter, Clock });
   return (_props: {}) => (
     <div>
-      <Child />
-      <Other />
+      <span data-child>{services.Greeter}</span>
+      <span data-other>{services.Clock}</span>
     </div>
   );
 });
 expectTypeOf<View.ServicesOf<typeof Both>>().toEqualTypeOf<Greeter | Clock>();
+type _BothNotAny = Expect<NotAny<View.ServicesOf<typeof Both>>>;
 
 // ── mount discharges R ───────────────────────────────────────────────────────
 
-const App = View.mount(Middle, Layer.succeed(Greeter, "nik"));
+const App = View.mount(Child, Layer.succeed(Greeter, "nik"));
 expectTypeOf<View.ServicesOf<typeof App>>().toEqualTypeOf<never>();
 const _okAppJsx = <App />;
+
+// Mounted child is JSX-legal inside unary succeed
+const Wrapped = View.succeed((_props: {}) => (
+  <section>
+    <App />
+  </section>
+));
+expectTypeOf<View.ServicesOf<typeof Wrapped>>().toEqualTypeOf<never>();
 
 // ── Outside components keep normal prop checking ─────────────────────────────
 

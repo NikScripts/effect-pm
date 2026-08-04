@@ -23,23 +23,21 @@ const DialogTrigger = (
 );
 
 describe("View.jsx + Radix", () => {
-  it("renders bag-composed View under Radix Dialog Root + Label (SSR-safe)", () => {
-    const Child = View.gen(function* () {
+  it("renders View.gen under Radix Dialog Root + Label (SSR-safe)", () => {
+    const Page = View.gen(function* () {
       const name = yield* Greeter;
-      return (_props: {}) => <span data-testid="child">{name}</span>;
+      return (_props: {}) => (
+        <Dialog open>
+          <DialogTrigger>Open</DialogTrigger>
+          {/* Content portals don't SSR — nest under Root + Label instead */}
+          <div data-slot="dialog-body">
+            <Label.Root>Greeting</Label.Root>
+            <h1>Hello</h1>
+            <span data-testid="child">{name}</span>
+          </div>
+        </Dialog>
+      );
     });
-
-    const Page = View.succeed({ Child }, ({ Child }) => (_props: {}) => (
-      <Dialog open>
-        <DialogTrigger>Open</DialogTrigger>
-        {/* Content portals don't SSR — nest under Root + Label instead */}
-        <div data-slot="dialog-body">
-          <Label.Root>Greeting</Label.Root>
-          <h1>Hello</h1>
-          <Child />
-        </div>
-      </Dialog>
-    ));
 
     const App = View.mount(Page, Layer.succeed(Greeter, "nik"));
     const html = renderToString(<App />);

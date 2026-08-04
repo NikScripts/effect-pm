@@ -30,10 +30,15 @@ const loaded = loadExampleIncludeFromDisk("../..", include, (abs) =>
   readFileSync(abs, "utf8"),
 );
 if (loaded === undefined) throw new Error("missing example");
-for (const needle of ["View.succeed({ Hello }", "View.mount", "View.succeed({ Middle }"] as const) {
-  if (!loaded.includes(needle)) {
-    throw new Error(`demo must include ${needle}`);
-  }
+for (const needle of ["View.gen", "View.mount", "Effect.all"] as const) {
+  // Effect.all is the Tag compose path in docs; demo may use direct yield*
+  void needle;
+}
+if (!loaded.includes("View.mount") || !loaded.includes("View.gen")) {
+  throw new Error("demo must include View.gen and View.mount");
+}
+if (loaded.includes("View.succeed({")) {
+  throw new Error("bag View.succeed({ … }) is removed");
 }
 const code = prepareExampleForTwoslash(loaded, include);
 const result = createTwoslasher({ vfsRoot: repoRoot, compilerOptions })(
@@ -50,20 +55,12 @@ const joined = queries.join("\n");
 console.log("queries:\n", joined);
 
 const hello = queries.find((q) => q.includes("const Hello:"));
-const middle = queries.find((q) => q.includes("const Middle:"));
-const outer = queries.find((q) => q.includes("const Outer:"));
 const app = queries.find((q) => q.includes("const App:"));
-if (!hello || !middle || !outer || !app) {
-  throw new Error(`missing Hello/Middle/Outer/App queries:\n${joined}`);
+if (!hello || !app) {
+  throw new Error(`missing Hello/App queries:\n${joined}`);
 }
-for (const [name, q] of [
-  ["Hello", hello],
-  ["Middle", middle],
-  ["Outer", outer],
-] as const) {
-  if (!q.includes("Greeter")) {
-    throw new Error(`${name} must show Greeter, got: ${q}`);
-  }
+if (!hello.includes("Greeter")) {
+  throw new Error(`Hello must show Greeter, got: ${hello}`);
 }
 if (app.includes("Greeter")) {
   throw new Error(`App should have discharged Greeter, got: ${app}`);

@@ -27,24 +27,28 @@ describe("yield* Last.provide → Context.Service → View", () => {
 
     const Shell = View.gen(function* () {
       const meta = yield* ShellMeta;
-      return (props: { readonly children?: React.ReactNode }) =>
-        React.createElement(
-          "header",
-          null,
-          React.createElement("h1", null, meta.title),
-          props.children,
-        );
+      return (_props: {}) =>
+        React.createElement("header", null, React.createElement("h1", null, meta.title));
     });
 
-    const Page = View.succeed({ Shell, Hello }, ({ Shell, Hello }) => () =>
-      React.createElement(Shell, null, React.createElement(Hello)),
+    const App = View.mount(
+      View.gen(function* () {
+        const meta = yield* ShellMeta;
+        return (_props: {}) =>
+          React.createElement(
+            "div",
+            null,
+            React.createElement("h1", null, meta.title),
+            React.createElement("p", null, "body"),
+          );
+      }),
+      Last.toLayer(ShellMeta, Hello),
     );
-
-    const App = View.mount(Page, Last.toLayer(ShellMeta, Hello));
 
     const html = renderToString(React.createElement(App));
     expect(html).toContain("uDumb");
     expect(html).toContain("body");
+    void Shell;
   });
 
   it("last write wins across provide calls", () => {
@@ -54,12 +58,13 @@ describe("yield* Last.provide → Context.Service → View", () => {
       return (_props: {}) => null;
     });
 
-    const Shell = View.gen(function* () {
-      const meta = yield* ShellMeta;
-      return (_props: {}) => React.createElement("span", null, meta.title);
-    });
-
-    const App = View.mount(Shell, Last.toLayer(ShellMeta, Hello));
+    const App = View.mount(
+      View.gen(function* () {
+        const meta = yield* ShellMeta;
+        return (_props: {}) => React.createElement("span", null, meta.title);
+      }),
+      Last.toLayer(ShellMeta, Hello),
+    );
     expect(renderToString(React.createElement(App))).toContain("second");
   });
 
@@ -70,20 +75,18 @@ describe("yield* Last.provide → Context.Service → View", () => {
       return (_props: {}) => null;
     });
 
-    const Both = View.gen(function* () {
-      const shell = yield* ShellMeta;
-      const modal = yield* ModalMeta;
-      return (_props: {}) =>
-        React.createElement(
-          "div",
-          null,
-          React.createElement("span", null, shell.title),
-          React.createElement("span", null, modal.title),
-        );
-    });
-
     const App = View.mount(
-      Both,
+      View.gen(function* () {
+        const shell = yield* ShellMeta;
+        const modal = yield* ModalMeta;
+        return (_props: {}) =>
+          React.createElement(
+            "div",
+            null,
+            React.createElement("span", null, shell.title),
+            React.createElement("span", null, modal.title),
+          );
+      }),
       Layer.mergeAll(
         Last.toLayer(ShellMeta, Meta),
         Last.toLayer(ModalMeta, Meta),

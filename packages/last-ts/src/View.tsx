@@ -5,13 +5,12 @@
  *
  * - **DI:** {@link Tag} / {@link Prototype} / {@link provide} — Context slots
  * - **Build:** {@link fromEffect} / {@link gen} / {@link succeed} — Effect → view
- * - **Compose:** bag form of {@link gen} / {@link succeed} — pass child views as
- *   values (keeps names), render with JSX; merges child `R`
+ * - **Compose Tags:** `yield* Effect.all({ A, B })` inside {@link gen}, then JSX
  * - **Edge:** {@link mount}`(view, layer)` — discharge `R`, get a JSX component
  * - **Up:** {@link Last.provide} in {@link gen} → Provides; {@link Last.toLayer}
  *
- * Open-`R` views are **not** JSX components (TypeScript). Nest via bag form;
- * fulfill with {@link mount} (or provide until `R` is `never`).
+ * Open-`R` views are **not** JSX components. Prefer Tags + `Effect.all`, or
+ * {@link mount} a child to a {@link Component} then use normal JSX.
  *
  * Prototype metadata: {@link annotations} (Effect) / {@link getAnnotations}.
  * Factory brand: {@link kind} via {@link Last.kindSym}.
@@ -180,40 +179,6 @@ export type ViewPropsOf<V> = V extends {
     ? P
     : {};
 
-/**
- * Callable binding for bag compose (JSX-legal inside the render/gen callback).
- *
- * @internal
- */
-type BagFn<V> = (props: ViewPropsOf<V>) => React.ReactElement | null;
-
-/**
- * Object bag → same keys, callable values for JSX.
- *
- * @internal
- */
-type BagFns<Bag extends Record<string, unknown>> = {
-  readonly [K in keyof Bag]: BagFn<Bag[K]>;
-};
-
-/**
- * Union of `ServicesOf` for each entry in a bag.
- *
- * @internal
- */
-type BagServices<Bag extends Record<string, unknown>> = {
-  [K in keyof Bag]: ServicesOf<Bag[K]>;
-}[keyof Bag];
-
-/**
- * Union of `ProvidesOf` for each entry in a bag.
- *
- * @internal
- */
-type BagProvides<Bag extends Record<string, unknown>> = {
-  [K in keyof Bag]: ProvidesOf<Bag[K]>;
-}[keyof Bag];
-
 const attachLedger = <A,>(
   component: A,
   ledger: Last.ProvideLedger | undefined,
@@ -236,36 +201,6 @@ const tryCollectLedger = (
   } catch {
     return undefined;
   }
-};
-
-const mergeLedgers = (
-  parts: ReadonlyArray<Last.ProvideLedger | undefined>,
-): Last.ProvideLedger | undefined => {
-  const out: Last.ProvideLedger = new Map();
-  for (const part of parts) {
-    if (part === undefined) continue;
-    for (const [key, entry] of part) {
-      const prev = out.get(key);
-      out.set(key, {
-        service: entry.service,
-        bag: { ...(prev?.bag ?? {}), ...entry.bag },
-      });
-    }
-  }
-  return out.size > 0 ? out : undefined;
-};
-
-const ledgerOf = (view: unknown): Last.ProvideLedger | undefined => {
-  if (
-    (typeof view === "object" || typeof view === "function") &&
-    view !== null &&
-    Last.provideLedgerSym in view
-  ) {
-    return (view as { readonly [Last.provideLedgerSym]: Last.ProvideLedger })[
-      Last.provideLedgerSym
-    ];
-  }
-  return undefined;
 };
 
 /**
@@ -388,11 +323,7 @@ export const fromEffect = <
  * {@link fromEffect}`(Effect.gen(…))` — generator that **returns** a component.
  *
  * `void` / `undefined` from the generator becomes `() => null`.
- * Services `R` = `yield*` debt ∪ (bag children, when using the object form).
- *
- * **Bag form** — pass child views as a record (names preserved), use them in
- * JSX inside the generator. Open-`R` children are callable only inside the
- * callback; the result stays {@link Unresolved} until {@link mount}.
+ * Compose Tags with `yield* Effect.all({ A, B })`, then JSX the resolved views.
  *
  * @example
  * ```ts
@@ -401,11 +332,12 @@ export const fromEffect = <
  *   return (props: { name: string }) => <GreeterView name={props.name} />
  * })
  *
- * export const Page = View.gen({ Hello }, function* ({ Hello }) {
- *   return (_props: {}) => (
- *     <section>
- *       <Hello who="nik" />
- *     </section>
+ * export const Page = View.gen(function* () {
+ *   const views = yield* Effect.all({ Shell, Hello })
+ *   return () => (
+ *     <views.Shell>
+ *       <views.Hello who="nik" />
+ *     </views.Shell>
  *   )
  * })
  * ```
@@ -425,94 +357,32 @@ export function gen<
 export function gen<Eff extends Effect.Effect<any, any, any>>(
   f: () => Generator<Eff, void, never>,
 ): View<{}, Effect.Services<Eff>, ProvideTokensOf<Eff>>;
-export function gen<
-  const Bag extends Record<string, unknown>,
-  Eff extends Effect.Effect<any, any, any>,
-  F extends (props: any) => React.ReactElement | null,
->(
-  bag: Bag,
-  f: (bag: BagFns<Bag>) => Generator<Eff, F, never>,
-): View<
-  Parameters<F>[0] extends object ? Parameters<F>[0] : {},
-  BagServices<Bag> | Effect.Services<Eff> | TreeServicesOf<F>,
-  BagProvides<Bag> | ProvideTokensOf<Eff>
->;
-export function gen<
-  const Bag extends Record<string, unknown>,
-  Eff extends Effect.Effect<any, any, any>,
->(
-  bag: Bag,
-  f: (bag: BagFns<Bag>) => Generator<Eff, void, never>,
-): View<
-  {},
-  BagServices<Bag> | Effect.Services<Eff>,
-  BagProvides<Bag> | ProvideTokensOf<Eff>
->;
-export function gen(bagOrFn: any, maybeFn?: any): any {
-  const build =
-    typeof bagOrFn === "function"
-      ? bagOrFn
-      : () => maybeFn(bagOrFn);
-  const bagLedger =
-    typeof bagOrFn === "object" && bagOrFn !== null
-      ? mergeLedgers(
-          Object.values(bagOrFn as Record<string, unknown>).map(ledgerOf),
-        )
-      : undefined;
-  const view = fromEffect(
-    Effect.map(Effect.gen(build), (component) =>
+export function gen(f: any): any {
+  return fromEffect(
+    Effect.map(Effect.gen(f), (component) =>
       component === undefined ? () => null : component,
     ) as Effect.Effect<(props: any) => React.ReactElement | null, any, any>,
   );
-  const ledger = mergeLedgers([bagLedger, ledgerOf(view)]);
-  return attachLedger(view, ledger);
 }
 
 /**
- * Pure component, or bag-compose children then render with JSX.
- *
- * **Unary** — `succeed(fn)` like {@link fromEffect}`(Effect.succeed(fn))`.
- *
- * **Bag** — `succeed({ Hello, Other }, ({ Hello, Other }) => (props) => …)`
- * merges each child’s `R` and keeps binding names for JSX.
+ * Pure component — `succeed(fn)` like {@link fromEffect}`(Effect.succeed(fn))`.
  *
  * @example
  * ```ts
  * export const Greeter = View.succeed((props: { name: string }) => (
  *   <h1>{props.name}</h1>
  * ))
- *
- * export const Middle = View.succeed({ Hello }, ({ Hello }) => (_props) => (
- *   <aside>
- *     <Hello who="nik" />
- *   </aside>
- * ))
  * ```
  *
  * @public
  */
-export function succeed<F extends (props: any) => React.ReactElement | null>(
+export const succeed = <F extends (props: any) => React.ReactElement | null>(
   component: F,
 ): View<
   Parameters<F>[0] extends object ? Parameters<F>[0] : {},
   TreeServicesOf<F>
->;
-export function succeed<
-  const Bag extends Record<string, unknown>,
-  Props extends object,
->(
-  bag: Bag,
-  render: (bag: BagFns<Bag>) => (props: Props) => React.ReactElement | null,
-): View<Props, BagServices<Bag>, BagProvides<Bag>>;
-export function succeed(bagOrFn: any, maybeRender?: any): any {
-  if (typeof bagOrFn === "function") {
-    return fromEffect(Effect.succeed(bagOrFn));
-  }
-  const ledger = mergeLedgers(
-    Object.values(bagOrFn as Record<string, unknown>).map(ledgerOf),
-  );
-  return attachLedger(stamp(maybeRender(bagOrFn)), ledger);
-}
+> => fromEffect(Effect.succeed(component));
 
 /**
  * Discharge a view’s services `R` with a {@link Layer} and return a JSX-legal
@@ -525,7 +395,7 @@ export function succeed(bagOrFn: any, maybeRender?: any): any {
  * @example
  * ```ts
  * const App = View.mount(
- *   Outer,
+ *   Hello,
  *   Greeter.provide(({ name }) => <span>{name}</span>),
  * )
  * // App: View<{}, never> — render <App />

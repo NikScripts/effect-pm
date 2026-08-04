@@ -1,5 +1,5 @@
 /**
- * Typed Views — bag compose + mount.
+ * Typed Views — gen + mount (Tags via yield*).
  *
  * Docs (Tailscale): http://100.67.32.32:5190/docs/view-typed-jsx
  */
@@ -22,34 +22,28 @@ export const Hello = View.gen(function* () {
 Hello;
 // ^?
 
-/** Bag form — keep the name `Hello`, render with JSX; R merges. */
-export const Middle = View.succeed({ Hello }, ({ Hello }) => (_props: {}) => (
-  <aside data-demo="middle">
-    <Hello who="nik" />
-  </aside>
-));
-
-Middle;
-// ^?
-
-/** Same for Middle → Outer. */
-export const Outer = View.succeed({ Middle }, ({ Middle }) => (_props: {}) => (
-  <div data-demo="outer">
-    <section>
-      <article>
-        <Middle />
-      </article>
-    </section>
-  </div>
-));
-
-Outer;
-// ^?
-
-/** Edge — Layer discharges Greeter; result is JSX-legal. */
+/**
+ * Nested chrome around a mounted child — only {@link View.Component}s in JSX.
+ * Open-`R` values are mounted at the edge, not bag-composed.
+ */
 export const App = View.mount(
-  Outer,
-  Greeter.provide((props) => <span data-demo="inner">hello {props.name}</span>),
+  View.gen(function* () {
+    const GreeterView = yield* Greeter;
+    return (_props: {}) => (
+      <div data-demo="outer">
+        <section>
+          <article>
+            <aside data-demo="middle">
+              <GreeterView name="nik" />
+            </aside>
+          </article>
+        </section>
+      </div>
+    );
+  }),
+  Greeter.provide((props) => (
+    <span data-demo="inner">hello {props.name}</span>
+  )),
 );
 
 App;
