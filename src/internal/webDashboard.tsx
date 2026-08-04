@@ -1,5 +1,5 @@
 /**
- * Internal eng for {@link ../web/Dashboard} — View.succeed bag, ready `layer`,
+ * Internal eng for {@link ../web/Dashboard} — Layer.succeed skins, ready `layer`,
  * and batteries `<Dashboard>` / `<DashboardView>` wiring.
  */
 import * as React from "react";
@@ -327,26 +327,26 @@ const DaemonPageView: View.View = (props) => {
  * @internal
  */
 export const componentsLayer = Layer.mergeAll(
-  View.succeed(GroupView.GroupCard, GroupCardView),
-  View.succeed(WorkPoolView.PoolCard, PoolCardView),
-  View.succeed(WorkPoolView.PoolDetail, PoolDetailView),
-  View.succeed(WorkPoolView.PoolPage, PoolPageView),
-  View.succeed(PriorityView.PriorityCard, PriorityCardView),
-  View.succeed(PriorityView.PriorityDetail, PriorityDetailView),
-  View.succeed(DaemonView.DaemonCard, DaemonCardView),
-  View.succeed(DaemonView.DaemonDetail, DaemonDetailView),
-  View.succeed(DaemonView.DaemonPage, DaemonPageView),
-  View.succeed(ApiMetricsView.ApiCard, ApiCardView),
-  View.succeed(ApiMetricsView.ApiDetail, ApiDetailView),
-  View.succeed(FleetHealthView.FleetCard, FleetCardView),
-  View.succeed(FleetHealthView.FleetDetail, FleetDetailView),
-  View.succeed(TelemetryView.TelemetryCard, TelemetryCardView),
-  View.succeed(TelemetryView.TelemetryDetail, TelemetryDetailView),
-  View.succeed(ShardMapView.ShardMapCard, ShardMapCardView),
-  View.succeed(ShardMapView.ShardMapDetail, ShardMapDetailView),
-  View.succeed(GateView.GateCard, GateCardView),
-  View.succeed(GateView.GateDetail, GateDetailView),
-  View.succeed(HyperlinkView.HyperlinkCard, HyperlinkCardView),
+  Layer.succeed(GroupView.GroupCard, GroupCardView),
+  Layer.succeed(WorkPoolView.PoolCard, PoolCardView),
+  Layer.succeed(WorkPoolView.PoolDetail, PoolDetailView),
+  Layer.succeed(WorkPoolView.PoolPage, PoolPageView),
+  Layer.succeed(PriorityView.PriorityCard, PriorityCardView),
+  Layer.succeed(PriorityView.PriorityDetail, PriorityDetailView),
+  Layer.succeed(DaemonView.DaemonCard, DaemonCardView),
+  Layer.succeed(DaemonView.DaemonDetail, DaemonDetailView),
+  Layer.succeed(DaemonView.DaemonPage, DaemonPageView),
+  Layer.succeed(ApiMetricsView.ApiCard, ApiCardView),
+  Layer.succeed(ApiMetricsView.ApiDetail, ApiDetailView),
+  Layer.succeed(FleetHealthView.FleetCard, FleetCardView),
+  Layer.succeed(FleetHealthView.FleetDetail, FleetDetailView),
+  Layer.succeed(TelemetryView.TelemetryCard, TelemetryCardView),
+  Layer.succeed(TelemetryView.TelemetryDetail, TelemetryDetailView),
+  Layer.succeed(ShardMapView.ShardMapCard, ShardMapCardView),
+  Layer.succeed(ShardMapView.ShardMapDetail, ShardMapDetailView),
+  Layer.succeed(GateView.GateCard, GateCardView),
+  Layer.succeed(GateView.GateDetail, GateDetailView),
+  Layer.succeed(HyperlinkView.HyperlinkCard, HyperlinkCardView),
 );
 
 /**

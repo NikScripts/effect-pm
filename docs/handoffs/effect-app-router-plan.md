@@ -17,7 +17,7 @@
 | Nested layout chrome | Outlet; values like `title` for `<head>` |
 | Leaf fills ancestor values | Page (or deep View) supplies what layout `yield*`s |
 | Type error if missing | Close/router won’t typecheck incomplete Document (etc.) |
-| View DI still works | Tag / `View.gen` / `mount` for component services |
+| View DI still works | `View.Service` / `Layer` / `View.mount(Service)` |
 | File modules optional | Codegen from disk later; **types don’t depend on folders** |
 | Composable building blocks | Small Effect-shaped modules; apps assemble Layers |
 | No JSX-as-proof | Stock React JSX; proof on Effects / Layers / View values |
@@ -40,7 +40,7 @@
 **Rejected:**
 - `Page.view({ document, body })` — fake contributor sugar
 - `return { body, layer }` — never pass a Layer through the page result
-- `View.succeed({ A }, ({ A }) => () => …)` — bag compose (gone)
+- `Layer.succeed({ A }, ({ A }) => () => …)` — bag compose (gone)
 
 ### Where does the Document *requirement* get added?
 
@@ -142,16 +142,16 @@ class Document extends Context.Service<Document, string>()("app/Document") {
 ### 3. `Last`
 
 - `kindOf` (existing)
-- `Last.provide(Service, value)` inside page / `View.gen`
-- `Last.toLayer(Service, view)` when Provides cover the service
+- `Last.provide(Service, value)` inside a Provides generator
+- `Last.toLayer(Service, function*)` when Provides cover the service
 - Optional later: sync peek = `Context.get`
 
 ### 4. `View`
 
-- **Down `R`:** Layer-first — `View.succeed(Service, impl)` / `View.gen(Service, function*)` return Layers; `static layer = …`; `yield*` Service to get the component; `View.mount(Service, layer)` is the only JSX edge
-- **Compose services:** `yield* Effect.all({ Shell, Hello })` inside `View.gen(Service, …)`, then JSX on resolved views; satisfy Layer `R` with `Layer.provide`
+- **Down `R`:** `View.Service` + plain `Layer.succeed` / `Layer.effect` + `Effect.gen`; `yield*` Service for the component; `View.mount(Service)` (uses `Service.layer`) is the only JSX edge — no View Layer masks; never `View.mount(Hello, Hello.layer.pipe(…))`
+- **Compose services:** `yield* Effect.all({ Shell, Hello })` inside `Effect.gen`, then JSX on resolved views; satisfy Layer `R` with `Layer.provide` on `static layer`
 - **Naming:** handle mint is `*.Service` (not `*.Tag`); baked config+layer factories are `*.define` (`Gate.define` / `WorkPool.define` / `Daemon.define`)
-- **Up Provides:** `Last.provide` inside `View.gen` → `Last.toLayer(Svc, viewLayer)` — [view-provide-draft](./view-provide-draft.md)
+- **Up Provides:** `Last.provide` → `Last.toLayer(Svc, function*)` — [view-provide-draft](./view-provide-draft.md)
 
 ### 5. `Layout`
 
@@ -245,7 +245,7 @@ URL → Router.match(chapter)
 | `Last.provide` / `toLayer` | Page/view Provides → Layer at close |
 | `Document.title` | Static Layer ctor on the service |
 | Prototype `Requirement` | **Annotations only** — not Document |
-| Bag `View.succeed({…}, …)` | **Removed** |
+| Bag `Layer.succeed({…}, …)` | **Removed** |
 
 ---
 
@@ -274,7 +274,7 @@ URL → Router.match(chapter)
 | Prototype Requirement = title | Wrong bag / wrong close time |
 | Builtin Page.title field | App owns Document (or not) |
 | `Page.view` / `{ body, layer }` | Bad — body only; Layers via service statics / `Last.provide` |
-| `View.succeed({ A }, ({ A }) => …)` | Removed — Tags + `Effect.all`, or `mount` then JSX |
+| `Layer.succeed({ A }, ({ A }) => …)` | Removed — Tags + `Effect.all`, or `mount` then JSX |
 | `Last.provided` | Write path is `yield* Last.provide` |
 | Hyperlink names in last-ts | Product stays outside |
 

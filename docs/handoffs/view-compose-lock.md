@@ -181,7 +181,7 @@ Public chrome (reuse without forking the shell): `DashboardTopBar`, web `Dashboa
 ```tsx
 // worker-pool-card.tsx
 export const layer = View.only(WorkerPool, WorkerPoolCard).pipe(
-  Layer.provide(View.succeed(WorkerPoolCard, WorkerPoolCardView)),
+  Layer.provide(Layer.succeed(WorkerPoolCard, WorkerPoolCardView)),
 )
 
 // app.tsx — public one-liner unchanged

@@ -12,7 +12,7 @@ size chrome + bind live on `hyperlink-ts/ui/Views`.
 
 Plain (no Tag) Effect → component under `AtomReact.RuntimeProvider` (no runtime
 arg). Prefer **`View.gen(function* () { …; return (props) => … })`**, or
-`View.succeed(fn)` / `View.fromEffect(fx)`. Put `"use client"` on the app module
+`Layer.succeed(fn)` / `View.fromEffect(fx)`. Put `"use client"` on the app module
 that exports the result.
 
 Prototype-managed metadata is a single **annotations** bag, stamped under a
@@ -61,12 +61,12 @@ View.getAnnotations(PoolCard).size._tag
 //                                 ^?
 
 export const layer = Layer.mergeAll(
-  View.succeed(PoolCard, (props) => {
+  Layer.succeed(PoolCard, (props) => {
     props
     // ^?
     return null
   }),
-  View.succeed(PoolDetail, (_props) => null),
+  Layer.succeed(PoolDetail, (_props) => null),
   PoolPage.provide((_props) => null),
 )
 
@@ -79,7 +79,7 @@ const label = Views.ViewKind.$match(kind, {
 void label
 ```
 
-Provide skins with **`View.succeed(Tag, impl)`** or **`Tag.provide(impl)`**. Props infer from
+Provide skins with **`Layer.succeed(Tag, impl)`** or **`Tag.provide(impl)`**. Props infer from
 the Tag. Annotate skins with **`PoolCard["Service"]`** (no `typeof`). Sizes are
 `Data.TaggedEnum` — match with `ViewKind.$match` (or `Match.tag` on a
 `Views.ViewKind`-typed value). Read size/spec via **`yield* View.annotations(Tag)`**
@@ -105,7 +105,7 @@ class DenseCard extends Views.Card.Service<
   static readonly region = "us" as const
 }
 
-export const layer = View.succeed(DenseCard, (props) => {
+export const layer = Layer.succeed(DenseCard, (props) => {
   props
   // ^?
   return null
@@ -165,7 +165,7 @@ export class WorkerPoolCard extends Views.Card.Service<
 
 export const layer = Views.only(WorkerPool, WorkerPoolCard).pipe(
   Layer.provide(
-    View.succeed(WorkerPoolCard, (props) => {
+    Layer.succeed(WorkerPoolCard, (props) => {
       void props.dense
       return null
     }),

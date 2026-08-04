@@ -2,7 +2,7 @@
  * @module ui/WorkPoolView
  *
  * Shared WorkPool View **handles** + contribution Layer + observe **pack** — no platform TSX.
- * Provide implementations with `View.succeed` in `web/WorkPoolView` / `tui/WorkPoolView`.
+ * Provide implementations with `Layer.succeed` in `web/WorkPoolView` / `tui/WorkPoolView`.
  *
  * @example
  * ```ts

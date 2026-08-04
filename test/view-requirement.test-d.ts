@@ -2,6 +2,7 @@
  * Prototype Requirement — open, chain, fulfill, helpers, bind gate.
  */
 import { expectTypeOf } from "vitest";
+import { Layer } from "effect";
 import * as View from "../src/ui/View";
 import * as Views from "../src/ui/Views";
 // ── Open ────────────────────────────────────────────────────────────────────
@@ -36,7 +37,7 @@ expectTypeOf(Done.annotations).toEqualTypeOf<{
 }>();
 
 class DenseCard extends Done.Service<DenseCard>()("app/view/dense-card") {}
-void View.succeed(DenseCard, (props) => {
+void Layer.succeed(DenseCard, (props) => {
   expectTypeOf(props.dense).toEqualTypeOf<boolean | undefined>();
   return null;
 });
@@ -74,7 +75,7 @@ expectTypeOf<View.PropsOf<OneShot>["dense"]>().toEqualTypeOf<
   boolean | undefined
 >();
 expectTypeOf<View.PropsOf<OneShot>["tag"]>().toEqualTypeOf<Views.ViewTag>();
-void View.succeed(OneShot, (props) => {
+void Layer.succeed(OneShot, (props) => {
   expectTypeOf(props.dense).toEqualTypeOf<boolean | undefined>();
   return null;
 });

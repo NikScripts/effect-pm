@@ -30,15 +30,11 @@ const loaded = loadExampleIncludeFromDisk("../..", include, (abs) =>
   readFileSync(abs, "utf8"),
 );
 if (loaded === undefined) throw new Error("missing example");
-for (const needle of ["View.gen", "View.mount", "Effect.all"] as const) {
-  // Effect.all is the Tag compose path in docs; demo may use direct yield*
-  void needle;
+if (!loaded.includes("View.mount") || !loaded.includes("Layer.effect")) {
+  throw new Error("demo must include View.mount and Layer.effect");
 }
-if (!loaded.includes("View.mount") || !loaded.includes("View.gen")) {
-  throw new Error("demo must include View.gen and View.mount");
-}
-if (loaded.includes("View.succeed({")) {
-  throw new Error("bag View.succeed({ … }) is removed");
+if (loaded.includes("View.gen(") || loaded.includes("View.succeed(")) {
+  throw new Error("View.gen / View.succeed masks are removed — use Effect/Layer");
 }
 const code = prepareExampleForTwoslash(loaded, include);
 const result = createTwoslasher({ vfsRoot: repoRoot, compilerOptions })(
@@ -54,13 +50,9 @@ const queries = (result.queries ?? []).map((q) => q.text);
 const joined = queries.join("\n");
 console.log("queries:\n", joined);
 
-const hello = queries.find((q) => q.includes("const Hello:"));
 const app = queries.find((q) => q.includes("const App:"));
-if (!hello || !app) {
-  throw new Error(`missing Hello/App queries:\n${joined}`);
-}
-if (!hello.includes("Greeter")) {
-  throw new Error(`Hello must show Greeter, got: ${hello}`);
+if (!app) {
+  throw new Error(`missing App query:\n${joined}`);
 }
 if (app.includes("Greeter")) {
   throw new Error(`App should have discharged Greeter, got: ${app}`);

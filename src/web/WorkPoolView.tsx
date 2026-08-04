@@ -1,7 +1,7 @@
 /**
  * @module web/WorkPoolView
  *
- * Web (DOM) implementations for shared {@link WorkPoolView} handles — {@link View.succeed} only.
+ * Web (DOM) implementations for shared {@link WorkPoolView} handles — `Layer.succeed` only.
  */
 import { Layer } from "effect";
 import { isQueueTag } from "../ui/data";
@@ -22,7 +22,7 @@ import * as Views from "../ui/Views";
 export const componentsLayer: Layer.Layer<
   WorkPoolView.PoolCard | WorkPoolView.PoolDetail | WorkPoolView.PoolPage
 > = Layer.mergeAll(
-  View.succeed(WorkPoolView.PoolCard, (props) => {
+  Layer.succeed(WorkPoolView.PoolCard, (props) => {
     if (!isQueueTag(props.tag)) return null;
     return (
       <QueueCard
@@ -31,11 +31,11 @@ export const componentsLayer: Layer.Layer<
       />
     );
   }),
-  View.succeed(WorkPoolView.PoolDetail, (props) => {
+  Layer.succeed(WorkPoolView.PoolDetail, (props) => {
     if (!isQueueTag(props.tag)) return null;
     return <QueueDetailPanel tag={props.tag} />;
   }),
-  View.succeed(WorkPoolView.PoolPage, (props) => {
+  Layer.succeed(WorkPoolView.PoolPage, (props) => {
     if (!isQueueTag(props.tag)) return null;
     const nav = Router.useRouter();
     const target = Route.targetOf(nav.match);

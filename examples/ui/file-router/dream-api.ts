@@ -247,10 +247,10 @@ export class DocsChapter extends View.Service<
  * Implementations for Tags used by pages — camelCase `componentsLayer` (not “skins”).
  */
 export const docsChapterComponentsLayer = Layer.mergeAll(
-  View.succeed(ChapterAside, ({ chapter }) =>
+  Layer.succeed(ChapterAside, ({ chapter }) =>
     React.createElement("aside", null, `On this page · ${chapter}`),
   ),
-  View.succeed(DocsChapter, ({ chapter }) =>
+  Layer.succeed(DocsChapter, ({ chapter }) =>
     React.createElement(
       "article",
       null,

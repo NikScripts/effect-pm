@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Live render of View.mount(gen, Greeter.layer).
+ * Live render of View.mount(AppRoot).
  */
 import * as React from "react";
 import "../styles/widgets.css";
@@ -12,7 +12,7 @@ export function ViewJsxIsland(): React.ReactElement {
     <div className="hl-dashboard grid gap-3 p-4 rounded-xl text-sm">
       <div className="flex items-center justify-between border-b border-border pb-2">
         <span className="font-medium text-card-foreground">
-          App = View.mount(gen, Greeter.layer)
+          App = View.mount(AppRoot)
         </span>
         <span className="text-xs text-muted-foreground">live · View.mount</span>
       </div>

@@ -1,7 +1,7 @@
 /**
  * @module tui/WorkPoolView
  *
- * TUI (Ink) implementations for shared {@link WorkPoolView} handles — `View.succeed` only.
+ * TUI (Ink) implementations for shared {@link WorkPoolView} handles — `Layer.succeed` only.
  */
 import { Box, Text } from "ink";
 import * as React from "react";
@@ -134,9 +134,9 @@ const PoolPageView: View.View = (props) => {
 export const componentsLayer: Layer.Layer<
   WorkPoolView.PoolCard | WorkPoolView.PoolDetail | WorkPoolView.PoolPage
 > = Layer.mergeAll(
-  View.succeed(WorkPoolView.PoolCard, PoolCardView),
-  View.succeed(WorkPoolView.PoolDetail, PoolDetailView),
-  View.succeed(WorkPoolView.PoolPage, PoolPageView),
+  Layer.succeed(WorkPoolView.PoolCard, PoolCardView),
+  Layer.succeed(WorkPoolView.PoolDetail, PoolDetailView),
+  Layer.succeed(WorkPoolView.PoolPage, PoolPageView),
 );
 
 /**

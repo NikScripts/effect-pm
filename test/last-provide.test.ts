@@ -1,8 +1,8 @@
 /**
- * yield* Last.provide → Last.toLayer(Service, viewLayer) → View.mount
+ * yield* Last.provide → Last.toLayer(Service, gen) → View.mount
  */
 import { describe, expect, it } from "@effect/vitest";
-import { Context, Layer } from "effect";
+import { Context, Effect, Layer } from "effect";
 import * as React from "react";
 import { renderToString } from "react-dom/server";
 import * as Last from "last-ts/Last";
@@ -18,96 +18,85 @@ class ModalMeta extends Context.Service<
   { readonly title: string }
 >()("hyperlink-ts/test/last-provide.test/ModalMeta") {}
 
-class Hello extends View.Service<Hello>()("test/last-provide/Hello") {
-  static layer = View.gen(Hello, function* () {
-    yield* Last.provide(ShellMeta, { title: "uDumb" });
-    return (_props: {}) => React.createElement("p", null, "body");
-  });
+function* helloProvides() {
+  yield* Last.provide(ShellMeta, { title: "uDumb" });
 }
 
 class Page extends View.Service<Page>()("test/last-provide/Page") {
-  static layer = View.gen(Page, function* () {
-    const meta = yield* ShellMeta;
-    return (_props: {}) =>
-      React.createElement(
-        "div",
-        null,
-        React.createElement("h1", null, meta.title),
-        React.createElement("p", null, "body"),
-      );
-  });
+  static layer = Layer.effect(
+    Page,
+    Effect.gen(function* () {
+      const meta = yield* ShellMeta;
+      return (_props: {}) =>
+        React.createElement(
+          "div",
+          null,
+          React.createElement("h1", null, meta.title),
+          React.createElement("p", null, "body"),
+        );
+    }),
+  ).pipe(Layer.provide(Last.toLayer(ShellMeta, helloProvides)));
 }
 
 describe("yield* Last.provide → Context.Service → View", () => {
   it("deep provide + toLayer supplies yield* in another View", () => {
-    const App = View.mount(
-      Page,
-      Page.layer.pipe(Layer.provide(Last.toLayer(ShellMeta, Hello.layer))),
-    );
-
+    const App = View.mount(Page);
     const html = renderToString(React.createElement(App));
     expect(html).toContain("uDumb");
     expect(html).toContain("body");
   });
 
   it("last write wins across provide calls", () => {
-    class Wins extends View.Service<Wins>()("test/last-provide/Wins") {
-      static layer = View.gen(Wins, function* () {
-        yield* Last.provide(ShellMeta, { title: "first" });
-        yield* Last.provide(ShellMeta, { title: "second" });
-        return (_props: {}) => null;
-      });
+    function* winsProvides() {
+      yield* Last.provide(ShellMeta, { title: "first" });
+      yield* Last.provide(ShellMeta, { title: "second" });
     }
 
     class Show extends View.Service<Show>()("test/last-provide/Show") {
-      static layer = View.gen(Show, function* () {
-        const meta = yield* ShellMeta;
-        return (_props: {}) => React.createElement("span", null, meta.title);
-      });
+      static layer = Layer.effect(
+        Show,
+        Effect.gen(function* () {
+          const meta = yield* ShellMeta;
+          return (_props: {}) => React.createElement("span", null, meta.title);
+        }),
+      ).pipe(Layer.provide(Last.toLayer(ShellMeta, winsProvides)));
     }
 
-    const App = View.mount(
-      Show,
-      Show.layer.pipe(Layer.provide(Last.toLayer(ShellMeta, Wins.layer))),
-    );
+    const App = View.mount(Show);
     expect(renderToString(React.createElement(App))).toContain("second");
   });
 
   it("two services keep separate titles", () => {
-    class Meta extends View.Service<Meta>()("test/last-provide/Meta") {
-      static layer = View.gen(Meta, function* () {
-        yield* Last.provide(ShellMeta, { title: "Shell" });
-        yield* Last.provide(ModalMeta, { title: "Modal" });
-        return (_props: {}) => null;
-      });
+    function* metaProvides() {
+      yield* Last.provide(ShellMeta, { title: "Shell" });
+      yield* Last.provide(ModalMeta, { title: "Modal" });
     }
 
     class Both extends View.Service<Both>()("test/last-provide/Both") {
-      static layer = View.gen(Both, function* () {
-        const shell = yield* ShellMeta;
-        const modal = yield* ModalMeta;
-        return (_props: {}) =>
-          React.createElement(
-            "div",
-            null,
-            React.createElement("span", null, shell.title),
-            React.createElement("span", null, modal.title),
-          );
-      });
-    }
-
-    const App = View.mount(
-      Both,
-      Both.layer.pipe(
+      static layer = Layer.effect(
+        Both,
+        Effect.gen(function* () {
+          const shell = yield* ShellMeta;
+          const modal = yield* ModalMeta;
+          return (_props: {}) =>
+            React.createElement(
+              "div",
+              null,
+              React.createElement("span", null, shell.title),
+              React.createElement("span", null, modal.title),
+            );
+        }),
+      ).pipe(
         Layer.provide(
           Layer.mergeAll(
-            Last.toLayer(ShellMeta, Meta.layer),
-            Last.toLayer(ModalMeta, Meta.layer),
+            Last.toLayer(ShellMeta, metaProvides),
+            Last.toLayer(ModalMeta, metaProvides),
           ),
         ),
-      ),
-    );
+      );
+    }
 
+    const App = View.mount(Both);
     const html = renderToString(React.createElement(App));
     expect(html).toContain("Shell");
     expect(html).toContain("Modal");

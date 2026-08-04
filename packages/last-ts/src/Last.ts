@@ -5,14 +5,10 @@
  * normal {@link Context.Service} bags (not View.Service handles).
  *
  * ```ts
- * class Hello extends View.Service<Hello>()("app/Hello") {
- *   static layer = View.gen(Hello, function* () {
- *     yield* Last.provide(ShellMeta, { title: "uDumb" }) // partial OK; last wins
- *     return () => <p />
- *   })
+ * function* helloProvides() {
+ *   yield* Last.provide(ShellMeta, { title: "uDumb" }) // partial OK; last wins
  * }
- * const meta = Last.toLayer(ShellMeta, Hello.layer) // only if Hello covered it
- * View.mount(Page, Page.layer.pipe(Layer.provide(meta)))
+ * const meta = Last.toLayer(ShellMeta, helloProvides)
  * ```
  */
 
@@ -105,7 +101,7 @@ export type IsComplete<S extends object, P extends object> =
     : false;
 
 /**
- * Success value of {@link provide} — View.gen collects these into Provides.
+ * Success value of {@link provide} — generators collect these into Provides.
  *
  * @public
  */
@@ -147,7 +143,7 @@ export type BagForService<Provides, I, S extends object> = [
     : {};
 
 /**
- * {@link toLayer} result from a View’s Provides.
+ * {@link toLayer} result from Provides tokens.
  *
  * @public
  */
@@ -156,6 +152,12 @@ export type ToLayerFromProvides<
   S extends object,
   Provides,
 > = ToLayer<I, S, BagForService<Provides, I, S>>;
+
+/** Tokens yielded from a generator’s `Eff` channel. @internal */
+type ProvideTokensOf<Eff> = Extract<
+  Effect.Success<Eff>,
+  ProvideToken<any, any, any>
+>;
 
 /** @internal */
 export const provideLedgerSym: unique symbol = Symbol.for(
@@ -197,8 +199,8 @@ export const runProvideCollect = (
 
 /**
  * Contribute a **partial** bag toward a {@link Context.Service}.
- * Use inside `View.gen` / `Effect.gen`: `yield* Last.provide(ShellMeta, { title })`.
- * Last write wins per service. Types flow via {@link ProvideToken} → View Provides.
+ * Use inside `Effect.gen`: `yield* Last.provide(ShellMeta, { title })`.
+ * Last write wins per service. Types flow via {@link ProvideToken}.
  *
  * @public
  */
@@ -222,19 +224,16 @@ export const provide = <I, S extends object, const P extends Partial<S>>(
   });
 
 /**
- * Build `Layer.succeed(service, bag)` from a {@link View.gen} / {@link View.effect}
- * Layer that {@link provide}d enough keys. Incomplete Provides ⇒ non-Layer
- * diagnostic type.
+ * Build `Layer.succeed(service, bag)` from an `Effect.gen` body that
+ * {@link provide}d enough keys. Pass the **generator** (not `Effect.gen`) so
+ * Provides infer from yielded tokens. Incomplete ⇒ non-Layer diagnostic type.
  *
  * @example
  * ```ts
- * class Hello extends View.Service<Hello>()("app/Hello") {
- *   static layer = View.gen(Hello, function* () {
- *     yield* Last.provide(ShellMeta, { title: "uDumb" })
- *     return () => <p />
- *   })
+ * function* helloProvides() {
+ *   yield* Last.provide(ShellMeta, { title: "uDumb" })
  * }
- * View.mount(Page, Page.layer.pipe(Layer.provide(Last.toLayer(ShellMeta, Hello.layer))))
+ * const meta = Last.toLayer(ShellMeta, helloProvides)
  * ```
  *
  * @public
@@ -242,26 +241,17 @@ export const provide = <I, S extends object, const P extends Partial<S>>(
 export const toLayer = <
   I,
   S extends object,
-  V extends {
-    readonly "~last-ts/View/provides"?: unknown;
-    readonly [provideLedgerSym]?: ProvideLedger;
-  },
+  Eff extends Effect.Effect<any, any, any>,
 >(
   service: Context.Service<I, S>,
-  viewLayer: V,
-): ToLayerFromProvides<
-  I,
-  S,
-  V extends { readonly "~last-ts/View/provides": infer P } ? P : never
-> => {
-  const ledger = viewLayer[provideLedgerSym];
-  const entry = ledger?.get(service.key);
+  f: () => Generator<Eff, any, never>,
+): ToLayerFromProvides<I, S, ProvideTokensOf<Eff>> => {
+  const ledger = runProvideCollect(
+    Effect.asVoid(Effect.gen(f)) as Effect.Effect<unknown, unknown, never>,
+  );
+  const entry = ledger.get(service.key);
   return Layer.succeed(
     service,
     (entry?.bag ?? {}) as S,
-  ) as ToLayerFromProvides<
-    I,
-    S,
-    V extends { readonly "~last-ts/View/provides": infer P } ? P : never
-  >;
+  ) as ToLayerFromProvides<I, S, ProvideTokensOf<Eff>>;
 };

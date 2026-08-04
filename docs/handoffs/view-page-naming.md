@@ -7,7 +7,7 @@
 
 In View/Dashboard code, **skin** was informal for:
 
-> the **React (or Ink) component** you `View.succeed(Tag, impl)` — i.e. the Layer that
+> the **React (or Ink) component** you `Layer.succeed(Tag, impl)` — i.e. the Layer that
 > *implements* a View Tag’s service.
 
 Same Tag identity; web vs TUI = different provide Layer. That seam is correct.
@@ -16,7 +16,7 @@ for the docs-site adapter module — a second meaning.
 
 | Old slang | What it actually is | Better names |
 |-----------|---------------------|--------------|
-| `skins` / `provides` / `DashboardLayer.*` / platform `DashboardViews` | `Layer` of `View.succeed(Tag, Comp)` | **`componentsLayer`** on `web\|tui/Dashboard` |
+| `skins` / `provides` / `DashboardLayer.*` / platform `DashboardViews` | `Layer` of `Layer.succeed(Tag, Comp)` | **`componentsLayer`** on `web\|tui/Dashboard` |
 | “provide a skin” | `View.succeed` / `Tag.provide` | just **provide** (Effect vocabulary) |
 | Docs “Router skin” | App module wrapping Waku layer | **adapter** / **site Router module** — never “skin” |
 

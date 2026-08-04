@@ -1,5 +1,5 @@
 /**
- * View.succeed / View.gen / View.effect — Layer constructors (Service-first).
+ * Layer.succeed / Layer.effect + View.mount(Service).
  */
 import { describe, expect, it } from "@effect/vitest";
 import { Context, Effect, Layer } from "effect";
@@ -11,56 +11,38 @@ class Prefix extends Context.Service<Prefix, string>()(
   "hyperlink-ts/test/view-from-effect.test/Prefix",
 ) {}
 
-describe("View.succeed / gen / effect → Layer → mount", () => {
-  it("View.succeed(Service, impl) mounts via View.mount", () => {
+describe("Layer + View.mount", () => {
+  it("Layer.succeed(Service, impl) mounts via View.mount(Service)", () => {
     class Greeter extends View.Service<
       Greeter,
       { readonly name: string }
     >()("test/view-fx/Greeter") {
-      static layer = View.succeed(Greeter, (props) =>
+      static layer = Layer.succeed(Greeter, (props) =>
         React.createElement("h1", null, props.name),
       );
     }
-    const App = View.mount(Greeter, Greeter.layer);
+    const App = View.mount(Greeter);
     expect(renderToString(React.createElement(App, { name: "nik" }))).toContain(
       "nik",
     );
   });
 
-  it("View.gen yields services at layer build, then returns a component", () => {
+  it("Layer.effect yields services at layer build", () => {
     class Greeter extends View.Service<
       Greeter,
       { readonly name: string }
     >()("test/view-fx/GreeterGen") {
-      static layer = View.gen(Greeter, function* () {
-        const prefix = yield* Prefix;
-        return (props: { readonly name: string }) =>
-          React.createElement("h1", null, `${prefix}${props.name}`);
-      });
+      static layer = Layer.effect(
+        Greeter,
+        Effect.gen(function* () {
+          const prefix = yield* Prefix;
+          return (props: { readonly name: string }) =>
+            React.createElement("h1", null, `${prefix}${props.name}`);
+        }),
+      ).pipe(Layer.provide(Layer.succeed(Prefix, "hi ")));
     }
-    const App = View.mount(
-      Greeter,
-      Greeter.layer.pipe(Layer.provide(Layer.succeed(Prefix, "hi "))),
-    );
+    const App = View.mount(Greeter);
     const html = renderToString(React.createElement(App, { name: "nik" }));
     expect(html).toContain("hi nik");
-  });
-
-  it("View.effect is Layer.effect for a View Service", () => {
-    class Greeter extends View.Service<
-      Greeter,
-      { readonly name: string }
-    >()("test/view-fx/GreeterEffect") {
-      static layer = View.effect(
-        Greeter,
-        Effect.succeed((props: { readonly name: string }) =>
-          React.createElement("h1", null, props.name),
-        ),
-      );
-    }
-    const App = View.mount(Greeter, Greeter.layer);
-    expect(renderToString(React.createElement(App, { name: "ok" }))).toContain(
-      "ok",
-    );
   });
 });

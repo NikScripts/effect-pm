@@ -8,14 +8,15 @@
 # Typed Views — Service and mount
 
 TypeScript does not carry services `R` through `<Child />` expressions. Last
-keeps `R` on the **view value** instead:
+keeps `R` on **Layers** instead of inventing View-shaped masks:
 
-1. **`View.Service`** — `Context.Service`-shaped DI handle; optional `{ default }` → `.layer`
-2. **`View.gen`** — build a view; open `R` ⇒ not a JSX component
-3. **`View.mount(view, Service.layer)`** — discharge `R` → JSX-legal component
+1. **`View.Service`** — `Context.Service` whose shape is a render fn (`ViewFn`)
+2. **`Layer.succeed` / `Layer.effect` + `Effect.gen`** — build the service Layer
+3. **`static layer`** — compose deps with `Layer.provide` until `R = never`
+4. **`View.mount(Service)`** — only JSX edge; uses `Service.layer`
 
 Compose multiple services with `yield* Effect.all({ A, B })`. There is **no** bag
-`View.succeed({ Child }, …)` form. Layer values are camelCase (`greeter.layer` /
+`Layer.succeed({ Child }, …)` form. Layer values are camelCase (`greeter.layer` /
 `Callout.layer` on the class — never `*Live`).
 
 Hover **`Hello`** → **`App`**.
@@ -28,8 +29,8 @@ Hover **`Hello`** → **`App`**.
 
 | Symbol | Role |
 |--------|------|
-| `Hello` | `View.gen` + `yield* Greeter` → `Unresolved` with `R = Greeter` |
-| `App` | `View.mount(…, Greeter.layer)` → `R = never` (JSX-legal) |
+| `Hello` | `Layer.effect` + `yield* Greeter`; deps on `Hello.layer` |
+| `App` | `View.mount(Hello)` → JSX-legal component |
 
 ## Live render
 
@@ -43,13 +44,25 @@ Hover **`Hello`** → **`App`**.
 ```ts
 class Greeter extends View.Service<Greeter, { readonly name: string }>()(
   "app/view/greeter",
-  { default: ({ name }) => <span>hello {name}</span> },
-) {}
+) {
+  static layer = Layer.succeed(
+    Greeter,
+    ({ name }) => <span>hello {name}</span>,
+  )
+}
 
-View.mount(Hello, Greeter.layer)
+class Hello extends View.Service<Hello, { readonly who: string }>()("app/Hello") {
+  static layer = Layer.effect(
+    Hello,
+    Effect.gen(function* () {
+      const G = yield* Greeter
+      return (props: { readonly who: string }) => <G name={props.who} />
+    }),
+  ).pipe(Layer.provide(Greeter.layer))
+}
+
+const App = View.mount(Hello)
 ```
-
-Without a default: `const greeterLayer = Greeter.provide(impl)`.
 
 Upward values: `yield* Last.provide(Service, value)` — see
 [effect-app-router-plan](../handoffs/effect-app-router-plan.md).
