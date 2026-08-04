@@ -15,6 +15,7 @@ export const DOCS_CONTENT_ROOTS: ReadonlyArray<string> = [
   "getting-started",
   "services",
   "guides",
+  "last",
   "observe",
   "standards",
   "examples",

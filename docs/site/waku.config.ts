@@ -54,6 +54,7 @@ const watchDocsContent = {
         "../getting-started",
         "../services",
         "../guides",
+        "../last",
         "../observe",
         "../standards",
         // Paired Twoslash includes (`include="examples/…"`) — HMR when teaching scripts change.
