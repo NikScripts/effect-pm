@@ -2,6 +2,7 @@
 
 **Status:** spike Eng’d on `cursor/file-router-prototype-125f`  
 **Package:** `last-ts` (`Last`, `View`)  
+**Spine:** [effect-app-router-plan.md](./effect-app-router-plan.md) — `Page.view` / Layout `yield*`  
 **Sibling:** [view-compose-draft.md](./view-compose-draft.md)
 
 ---
