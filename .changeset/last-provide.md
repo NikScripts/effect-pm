@@ -2,4 +2,4 @@
 "last-ts": minor
 ---
 
-Add `Last.provided` / `provide` / `merge` / `toLayer` for typed partial Context.Service value bags (upward Provides → Layer when complete).
+`yield* Last.provide(Service, partial)` tracks Provides on Views; `Last.toLayer(Service, view)` builds a Layer only when required keys are covered.
