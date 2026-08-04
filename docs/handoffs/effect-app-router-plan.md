@@ -35,11 +35,13 @@
 
 ---
 
-## `Page.view` — what it is (and is not)
+## Requires / Provides (no `Page.view`)
+
+**Rejected:** `Page.view({ document, body })` — fake domain sugar, invents contributor keys, hides Layer.
 
 ### Where does the Document *requirement* get added?
 
-**On the Layout (or any ancestor Effect that `yield* Document`).**
+**On the Layout (or any ancestor that `yield* Document`).** Consumers create debt.
 
 ```ts
 class Document extends Context.Service<
@@ -59,57 +61,43 @@ const Book = Layout.make(
     )
   }),
 )
-// Book: needs Layer<Document | Outlet>
 ```
 
-Nothing about `Page.view` adds the requirement. **Consumers create debt.** That’s normal Effect.
+### How does the page provide?
 
-### Is `Page.view` the upward system?
-
-**It’s sugar for the page Effect’s return value** — UI + Layer contributions in one place:
+**Plain Layer + body** (page-level), and/or **`yield* Last.provide`** (deep Views):
 
 ```ts
-const ChapterPage = Page.make(chapterRoute, Effect.gen(function* () {
-  const { chapter } = yield* Page.params(chapterRoute)
-  return Page.view({
-    // PROVIDES Document — becomes Layer.succeed(Document, { title })
-    document: { title: `${chapter} · Docs` },
-    body: () => <article>{chapter}</article>,
-  })
-}))
-```
+const ChapterPage = Page.make(
+  chapterRoute,
+  Effect.gen(function* () {
+    const { chapter } = yield* Page.params(chapterRoute)
+    return {
+      body: () => <article>{chapter}</article>,
+      layer: Layer.succeed(Document, { title: `${chapter} · Docs` }),
+    }
+  }),
+)
 
-Desugars conceptually to:
-
-```ts
-return {
-  body: () => <article>{chapter}</article>,
-  layer: Layer.succeed(Document, { title: `${chapter} · Docs` }),
-}
+// deep child — same system
+const Title = View.gen(function* () {
+  yield* Last.provide(Document, { title: "…" })
+  return () => null
+})
 ```
 
 | Piece | Role |
 |-------|------|
-| `yield* Document` in Layout | **Requires** (adds `Document` to `R`) |
-| `Page.view({ document })` | **Provides** (page’s Layer contributes `Document`) |
-| Router `Layer.provideMerge(page.layer)` | **Close** — Layout’s `R` discharged |
-| Missing `document` / incomplete bag | **Type error** at page↔layout wiring |
-
-Deep child alternative (same system, no `Page.view` field):
-
-```ts
-yield* Last.provide(Document, { title: "…" })  // ledger → Layer at close
-```
-
-`Page.view({ document })` is the **ergonomic page-level form**.  
-`Last.provide` is the **deep View.gen form**.  
-Both end as **`Layer` for a `Context.Service`**. Neither is Prototype annotation debt.
+| `yield* Document` in Layout | **Requires** (`Document` ∈ `R`) |
+| `layer: Layer.succeed(Document, …)` or `Last.provide` | **Provides** |
+| Router merges page (and view) Layers | **Close** |
+| Incomplete / missing Layer | **Type error** at wire |
 
 ### Last-wins / partials / two titles
 
-- Partials: `Last.provide(Document, { title })` then later more keys; merge before `toLayer`.
-- Two titles: **two services** (`Document` vs `ModalMeta`), not one free `{ title }` bag.
-- Override: later provide / later Layer merge wins (app policy).
+- Partials: `Last.provide` merges; `toLayer` when required keys covered.
+- Two titles: two services (`Document` vs `ModalMeta`).
+- Override: later Layer / later provide wins (app policy).
 
 ---
 
@@ -174,23 +162,22 @@ Layout **requires** by yielding services. It does not list a separate “Require
 
 ```ts
 Page.make(route, effect)           // effect → Page.Result
-Page.view({ document?, body, layer? })
 Page.params(route)                 // Effect of params
 Page.static / .dynamic / .build    // render mode + Build paths
 Page.Tag                           // optional file-module identity + stamp
 stampOf                            // runtime adapter (createPages / Vite)
 ```
 
-`Page.Result`:
+`Page.Result` — **no contributor sugar**:
 
 ```ts
 type PageResult = {
   readonly body: (props: {}) => React.ReactElement | null
-  readonly layer: Layer.Layer<any>  // Document | … contributions
+  readonly layer?: Layer.Layer<any>  // app Layers (Document, …)
 }
 ```
 
-`Page.view` builds that. Extra keys (`document`, `og`, …) are **registered contributors** (known Context services or a small registry), not magic React context.
+Apps write `Layer.succeed(Document, …)` / `Layer.mergeAll` themselves.
 
 ### 7. `Router`
 
@@ -237,12 +224,10 @@ const ChapterPage = Page.make(
   chapter,
   Effect.gen(function* () {
     const { chapter } = yield* Page.params(chapter)
-    // deep provide also OK:
-    // yield* Last.provide(Document, { title: `${chapter} · Docs` })
-    return Page.view({
-      document: { title: `${chapter} · Docs` },
+    return {
       body: () => <article>{chapter}</article>,
-    })
+      layer: Layer.succeed(Document, { title: `${chapter} · Docs` }),
+    }
   }),
   { render: Page.Render.Build(), paths: listChapterSlugs },
 )
@@ -279,10 +264,10 @@ URL → Router.match(chapter)
 
 | Phase | Ship | Acceptance |
 |-------|------|------------|
-| **B0** | Lock this doc; demote bag-compose-as-spine in drafts | Owner ack |
-| **B1** | `Page.Result` + `Page.view` contributor registry (`document` → `Document` service) | type tests: missing document fails layout wire |
+| **B0** | Lock this doc; kill `Page.view` sugar | Owner ack |
+| **B1** | `Page.Result` = `{ body, layer? }` — plain Layers only | type tests: missing Document Layer fails layout wire |
 | **B2** | `Layout.make` + `Layout.Outlet` + Router merge layout↔page Layers | runtime title in chrome from page |
-| **B3** | `Last.provide` aligns as same Layer path as `Page.view` contributors | deep child provide satisfies layout |
+| **B3** | `Last.provide` → same Layer merge path as page `layer` | deep child provide satisfies layout |
 | **B4** | `Page.static/dynamic/build` + stamp on Result | modes + Build paths |
 | **B5** | `Route` Schema helpers + `Page.params` | typed href/params |
 | **B6** | File codegen / `createPages` adapter | docs-site cutover path |
@@ -299,7 +284,8 @@ URL → Router.match(chapter)
 | JSX child proofs for title | Erased |
 | Prototype Requirement = title | Wrong bag / wrong close time |
 | Builtin Page.title field | App owns Document (or not) |
-| `Last.provided` sync ledger API | Write path is `yield* Last.provide` / `Page.view` |
+| `Page.view({ document, body })` | Bad sugar — use `Layer` + `body` |
+| `Last.provided` sync ledger API | Write path is `yield* Last.provide` |
 | View.succeed bags as app architecture | Convenience only |
 | Hyperlink names in last-ts | Product stays outside |
 
@@ -307,13 +293,12 @@ URL → Router.match(chapter)
 
 ## Open decisions (owner)
 
-1. **Contributor registry** — hardcode `document: Document` in last-ts vs app-passed `Page.contributors({ document: Document })`.
-2. **Router API name** — `Router.make` vs extend existing `last-ts/Router`.
-3. **Outlet** — Context.Service vs render-prop only on `Layout.make`.
-4. **Partial Document** — require full bag in `Page.view` vs allow `Last.provide` partials only.
-5. **Tip-sync** — when to fold into `integration`.
+1. **Router API name** — `Router.make` vs extend existing `last-ts/Router`.
+2. **Outlet** — Context.Service vs render-prop only on `Layout.make`.
+3. **Page `layer` optional?** — omit when page Provides only via nested `Last.provide` views the router harvests.
+4. **Tip-sync** — when to fold into `integration`.
 
-**Recommend:** app-passed contributors (no builtins); Outlet as Context.Service; full bag in `Page.view`, partials via `Last.provide`; reuse `last-ts/Router` if fit.
+**Recommend:** Outlet as Context.Service; page may omit `layer` if child Provides cover layout `R`; reuse `last-ts/Router` if fit.
 
 ---
 

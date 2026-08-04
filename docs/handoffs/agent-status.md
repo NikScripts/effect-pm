@@ -29,7 +29,7 @@
 
 ### Active (owner approval required)
 1. **Agent 4:** Examples Ideas 1–9 + Related notes Eng’d. **Release-prep cleanup Eng’d** (archive completed handoffs/plans, dead scripts, npmignore, legacy example aliases). Idea 10 Apps/E5 still owner-gated. Owner still: changeset consolidate before `version`/publish.
-2. **Agent G / TUI:** blank-slate plan [`effect-app-router-plan.md`](./effect-app-router-plan.md) — Layout `yield*` = Requires; `Page.view` / `Last.provide` = Layer Provides; Router closes. Spike: `yield* Last.provide`. **Need owner:** lock plan + B1 go, tip-sync. Park: [`owned-string-casing-park.md`](./owned-string-casing-park.md).
+2. **Agent G / TUI:** blank-slate plan [`effect-app-router-plan.md`](./effect-app-router-plan.md) — Layout `yield*` = Requires; page `{ body, layer }` / `Last.provide` = Layer Provides (**no `Page.view`**). **Need owner:** lock plan + B1 go, tip-sync. Park: [`owned-string-casing-park.md`](./owned-string-casing-park.md).
 3. **Agent 5 (Launcher + handoff):** **Lifecycle L0–L7 closed**. Chrome → **Agent G**. **Versioned** locked — Eng on go. **Planned after Versioned** (doc only): `Hyperlink.deprecated` as `Fn.dual` (pipe-canonical); Lookup/Node **update impact** then explicit A/B / `restartSuccessor`. Also gated: #36–37, Track D redirect. Brief: [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md).
 4. **Docs site:** Live — apex coming-soon (inlined CSS + `(book)` chrome); docs on `dev`. Origin host-gate via `serve-production.mjs` (before Waku static). Islands: `hyperlink-ts` alias + `.hl-dashboard`. Getting Started em-dash/voice polish.
 
