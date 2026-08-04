@@ -12,6 +12,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   Config,
+  Context,
   Data,
   Duration,
   Effect,
@@ -32,6 +33,8 @@ import {
   ChildProcessSpawner,
 } from "effect/unstable/process";
 import * as Hyperlink from "../Hyperlink";
+import * as Identity from "../Identity";
+import * as Lookup from "../Lookup";
 import * as Policy from "../Policy";
 import {
   AssumeNotReady,
@@ -40,11 +43,13 @@ import {
 } from "./nodeAssume";
 import { ASSUME_TOKEN_ENV, assume as nodeAssume } from "./nodeAssumeClient";
 import {
+  asLookup,
   isAddressedNode,
   NodeUnreachable,
   ProtocolUnanswered,
   ServiceNotReady,
   ServiceNotServed,
+  Tag as makeNode,
   UnaddressedNode,
   type AnyNode,
 } from "./nodeCore";
@@ -186,6 +191,49 @@ export interface SpawnSpec {
 }
 
 /**
+ * Options for {@link ensureLookup} — resolve an ipc Lookup address, adopt when
+ * already up, otherwise spawn a Lookup-only child under launcher custody.
+ *
+ * @category models
+ * @public
+ */
+export interface EnsureLookupOptions {
+  /**
+   * Unix socket path. Omit ⇒ {@link Lookup.defaultIpcPath} (safe same-machine default).
+   */
+  readonly path?: string;
+  /**
+   * Lookup node. When omitted, a Tag is minted at {@link path} and branded
+   * `Node.asLookup`. Must be ipc-addressed (`path` set) when provided.
+   */
+  readonly node?: AnyNode & { readonly key: string; readonly path?: string };
+  /**
+   * Spawn factory when Lookup is not answering. Receives the minted cleartext
+   * assume token (same as {@link SpawnSpec.process}). Omit ⇒ fail
+   * {@link LookupNotRunning} when not already up.
+   */
+  readonly process?:
+    | ChildProcess.Command
+    | ((token: string) => ChildProcess.Command);
+  readonly ready?: ReadyOptions;
+}
+
+/**
+ * Result of {@link ensureLookup} — dial target for app units (`Lookup.client` /
+ * `Lookup.follow` / child argv).
+ *
+ * @category models
+ * @public
+ */
+export interface EnsureLookupResult {
+  /** Addressed Lookup node (branded `asLookup`). */
+  readonly node: AnyNode & { readonly path: string };
+  readonly path: string;
+  /** True when this call spawned + handed off a Lookup-only child. */
+  readonly spawned: boolean;
+}
+
+/**
  * Options for {@link up} — concurrency across spawn units (default sequential).
  *
  * @category models
@@ -194,6 +242,13 @@ export interface SpawnSpec {
 export interface UpOptions {
   /** `Effect.forEach` concurrency. Default `1` (ordered custody). */
   readonly concurrency?: number | "unbounded";
+  /**
+   * Ensure a Lookup is available **before** app units (ensure-Lookup-first).
+   * Already answering at the path → adopt (no spawn). Otherwise spawn a
+   * Lookup-only child via {@link EnsureLookupOptions.process}, or fail closed.
+   * Does **not** Soft-bake Lookup onto app nodes.
+   */
+  readonly lookup?: EnsureLookupOptions;
 }
 
 // =============================================================================
@@ -264,6 +319,44 @@ export class HandleNotReady extends Data.TaggedError("HandleNotReady")<{
 }> {
   override get message() {
     return `Launcher.Handle for "${this.node}" is not Ready — call awaitReady() before handoff().`;
+  }
+}
+
+/**
+ * {@link ensureLookup} found no answering Lookup and no {@link EnsureLookupOptions.process}
+ * to spawn one — fail closed (do not Soft-bake onto an app node).
+ *
+ * @category errors
+ * @public
+ */
+export class LookupNotRunning extends Data.TaggedError("LookupNotRunning")<{
+  readonly path: string;
+}> {
+  override get message() {
+    return (
+      `Launcher.ensureLookup: nothing answering at "${this.path}" and no ` +
+      `process to spawn a Lookup-only child.`
+    );
+  }
+}
+
+/**
+ * {@link ensureLookup} has no dialable Lookup address (unaddressed node; no path and
+ * no safe default applies).
+ *
+ * @category errors
+ * @public
+ */
+export class LookupAddressRequired extends Data.TaggedError(
+  "LookupAddressRequired",
+)<{
+  readonly node: string;
+}> {
+  override get message() {
+    return (
+      `Launcher.ensureLookup: node "${this.node}" has no ipc path — provide ` +
+      `{ path } or an addressed Lookup node.`
+    );
   }
 }
 
@@ -886,10 +979,140 @@ export const spawn = (
     }),
   );
 
+/** Probe whether Identity answers at the Lookup address (scoped; no Soft-bake). @internal */
+const probeLookupAnswering = (
+  node: AnyNode & { readonly path: string },
+): Effect.Effect<boolean> =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const ctx = yield* Layer.build(
+        Lookup.client(node).pipe(Policy.provide(Policy.verifyOff)),
+      );
+      const id = Context.get(ctx, Identity.Tag);
+      yield* id
+        .resolve(
+          new Identity.ResolveRequest({
+            key: "hyperlink-ts/Launcher/ensureLookup/probe",
+          }),
+        )
+        .pipe(Effect.provide(ctx));
+    }),
+  ).pipe(
+    Effect.timeout(Duration.seconds(1)),
+    Effect.as(true),
+    Effect.catch(() => Effect.succeed(false)),
+  );
+
 /**
- * One-shot bring-up: spawn → awaitReady → handoff per unit, then the launcher may exit.
- * Accepts one {@link SpawnSpec} or a readonly array (not {@link Group}). Units run with
- * {@link UpOptions.concurrency} (default `1`) so custody stays ordered unless opted out.
+ * Ensure a Lookup is available at an ipc path **before** app units (ensure-Lookup-first).
+ *
+ * | Situation | Behaviour |
+ * |-----------|-----------|
+ * | Lookup already answering | Adopt — no spawn, no migration-handoff |
+ * | Not answering + {@link EnsureLookupOptions.process} | Spawn Lookup-only → awaitReady → handoff |
+ * | Not answering + no process | {@link LookupNotRunning} (fail closed) |
+ * | Unaddressed node / no path | {@link LookupAddressRequired} |
+ *
+ * Soft-bake stays for independent launch only — this never pipes `Lookup.layer` onto app nodes.
+ *
+ * ```ts
+ * const lookup = yield* Launcher.ensureLookup({
+ *   path: lookupSock,
+ *   process: Launcher.command("pnpm", ["exec", "tsx", lookupEntry, lookupSock], {
+ *     token: "argv",
+ *   }),
+ * })
+ * yield* Launcher.up({ node: worker, process: … })
+ * // children dial Lookup.clientOptions({ path: lookup.path })
+ * ```
+ *
+ * Or compose via {@link UpOptions.lookup} on {@link up}.
+ *
+ * @category constructors
+ * @public
+ */
+export const ensureLookup = (
+  options?: EnsureLookupOptions,
+): Effect.Effect<
+  EnsureLookupResult,
+  | LookupNotRunning
+  | LookupAddressRequired
+  | ReadyTimedOut
+  | ChildExited
+  | HandleSpent
+  | HandleNotReady
+  | AssumeTokenMismatch
+  | AssumeTokenReused
+  | AssumeNotReady
+  | NodeUnreachable
+  | ProtocolUnanswered
+  | ServiceNotReady
+  | ServiceNotServed
+  | UnaddressedNode
+  | PlatformError
+  | ConfigError,
+  ChildProcessSpawner.ChildProcessSpawner | Scope.Scope
+> =>
+  withLauncherPhase(
+    options?.node?.key ?? "lookup",
+    "ensureLookup",
+    Effect.gen(function* () {
+      const path =
+        options?.path ?? options?.node?.path ?? Lookup.defaultIpcPath;
+      if (
+        options?.node !== undefined &&
+        options.node.path === undefined &&
+        options.path === undefined
+      ) {
+        return yield* new LookupAddressRequired({ node: options.node.key });
+      }
+      const seed = (
+        options?.node !== undefined
+          ? makeNode()(options.node.key, { path }).pipe(asLookup)
+          : makeNode()("hyperlink-ts/Launcher/Lookup", { path }).pipe(asLookup)
+      ) as AnyNode & { readonly path: string };
+
+      yield* Effect.logInfo("ensureLookup probing").pipe(
+        Effect.annotateLogs({
+          "launcher.lookup_path": seed.path,
+          "launcher.lookup_node": seed.key,
+        }),
+      );
+
+      if (yield* probeLookupAnswering(seed)) {
+        yield* Effect.logInfo("ensureLookup adopted live Lookup (no spawn)");
+        return {
+          node: seed,
+          path: seed.path,
+          spawned: false,
+        } satisfies EnsureLookupResult;
+      }
+
+      if (options?.process === undefined) {
+        return yield* new LookupNotRunning({ path: seed.path });
+      }
+
+      yield* Effect.logInfo("ensureLookup spawning Lookup-only child");
+      const handle = yield* spawn({
+        node: seed,
+        process: options.process,
+        ready: options.ready,
+      });
+      yield* handle.awaitReady();
+      yield* handle.handoff();
+      yield* Effect.logInfo("ensureLookup Lookup-only child handed off");
+      return {
+        node: seed,
+        path: seed.path,
+        spawned: true,
+      } satisfies EnsureLookupResult;
+    }),
+  );
+
+/**
+ * One-shot bring-up: optional {@link UpOptions.lookup} (ensure-Lookup-first), then
+ * spawn → awaitReady → handoff per unit. Accepts one {@link SpawnSpec} or a readonly
+ * array (not {@link Group}). Units run with {@link UpOptions.concurrency} (default `1`).
  *
  * @category constructors
  * @public
@@ -899,6 +1122,8 @@ export const up = (
   options?: UpOptions,
 ): Effect.Effect<
   void,
+  | LookupNotRunning
+  | LookupAddressRequired
   | ReadyTimedOut
   | ChildExited
   | HandleSpent
@@ -919,6 +1144,9 @@ export const up = (
     "up",
     "up",
     Effect.gen(function* () {
+      if (options?.lookup !== undefined) {
+        yield* ensureLookup(options.lookup);
+      }
       const units = isSpawnSpec(spec) ? [spec] : spec;
       yield* Effect.logInfo("Launcher.up starting").pipe(
         Effect.annotateLogs({ "launcher.units": String(units.length) }),

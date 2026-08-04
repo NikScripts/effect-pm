@@ -147,26 +147,40 @@ membership with `Lookup.nodesServing(Jobs)` (Tag or wire key) — sugar over Dir
 schema’d request. See:
 [`examples/launcher/lookup-membership.ts`](../../examples/launcher/lookup-membership.ts).
 
-### Lookup node (planned bring-up)
+### Lookup node (ensure-Lookup-first)
 
 Prefer an **explicit Lookup node** for multi-node fleets so Lookup has no app services to
-skew when those services A/B. Planned Launcher recipe (not Eng’d yet):
+skew when those services A/B. Eng'd via `Launcher.ensureLookup` / `UpOptions.lookup`:
 
-1. Lookup **already up** at the target / default address → use it (no second spawn).  
-2. Lookup **not** up + operator address → spawn Lookup-only there **first**.  
-3. Lookup **not** up + protocol **safe default** → spawn Lookup-only at the default **first**
-   (do not Soft-bake Lookup onto an app node under Launcher).  
-4. No address and no safe default → fail closed.
+1. Lookup **already up** at the target / default address → **adopt** (no second spawn).  
+2. Lookup **not** up + `process` → spawn **Lookup-only** child there **first** (Ready → assume).  
+3. Path omitted → `Lookup.defaultIpcPath` (safe same-machine default).  
+4. Not up + no `process` → `LookupNotRunning` (fail closed — never Soft-bake onto app nodes).  
+5. Unaddressed node without path → `LookupAddressRequired`.
+
+```ts
+const lookup = yield* Launcher.ensureLookup({
+  path: lookupSock,
+  process: Launcher.command("pnpm", ["exec", "tsx", lookupEntry, lookupSock], {
+    token: "env",
+  }),
+})
+yield* Launcher.up({ node: worker, process: … })
+// or: Launcher.up(workerSpec, { lookup: { path, process } })
+```
+
+Lookup-only child uses `Lookup.layerNode(node, { assumeToken })` — no app HyperServices.
+App children pipe `Lookup.clientOptions({ path })` themselves.
 
 **Already up ≠ always hand off.** Custody `Handle.handoff` is only for children Launcher
 spawned. Migration `serve { handoff }` is opt-in on shutdown. Directory conflicts use
 `Policy.onConflict` / `askIncumbent` — not automatic replace. Intentional Lookup A→B is an
 orchestrated same-address ownership move.
 
-**Lookup A/B (locked):** one address; A/B = successive owners; `Lookup.follow` + Policy for
-the gap (**follow + ownership handoff recipe Eng'd**). Runnable:
-`pnpm run example:node-lookup-follow-handoff`. Independent launch (no Launcher) still
-Soft-bakes first node = Lookup. See
+**Lookup A/B:** one address; A/B = successive owners; `Lookup.follow` + Policy for the gap.
+Runnable: `pnpm run example:node-lookup-follow-handoff` ·
+`pnpm run example:launcher-ensure-lookup`. Independent launch (no Launcher) still Soft-bakes
+first node = Lookup. See
 [`versioned-schema-decisions.md`](../handoffs/versioned-schema-decisions.md#desired-bring-up-launcher--ensure-lookup-first-locked)
 and [Policy — Lookup.follow](./policy.md#lookupfollow-same-address-lookup-ab).
 
@@ -186,6 +200,7 @@ outgoing node. See
 | `ready.services` | `pnpm run example:launcher-ready-services` |
 | Ready errors (`_tag`) | `pnpm run example:launcher-ready-timeout` |
 | Custody → Directory | `pnpm run example:launcher-lookup-membership` |
+| Ensure Lookup first | `pnpm run example:launcher-ensure-lookup` |
 
 Hub: [Examples → launcher](/docs/examples#launcher).
 

@@ -6,6 +6,8 @@
  * Phases: {@link spawn} → {@link Handle.awaitReady} → {@link Handle.handoff}
  * (convenience {@link up}). Abort with {@link Handle.kill}. Ownership ack is
  * {@link Node.assume} on the child; Ready uses existing `withReadiness` / node status.
+ * Ensure-Lookup-first: {@link ensureLookup} (or {@link UpOptions.lookup}) adopts a live
+ * Lookup or spawns a Lookup-only child before app units — never Soft-bakes onto apps.
  * Node-platform only (`ChildProcessSpawner` + `Scope` at the app edge — provide {@link layer}).
  *
  * Observability: phases log under spans `launcher.spawn` / `launcher.awaitReady` /
@@ -26,6 +28,7 @@ export {
   mintToken,
   spawn,
   up,
+  ensureLookup,
   command,
   entry,
   layer,
@@ -35,6 +38,8 @@ export {
   ChildExited,
   HandleSpent,
   HandleNotReady,
+  LookupNotRunning,
+  LookupAddressRequired,
 } from "./internal/launcher";
 export type {
   Handle,
@@ -46,4 +51,6 @@ export type {
   EntryOptions,
   ServiceRef,
   UpOptions,
+  EnsureLookupOptions,
+  EnsureLookupResult,
 } from "./internal/launcher";

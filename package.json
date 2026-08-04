@@ -362,6 +362,7 @@
     "example:fleet-shardmap-persist": "tsx examples/fleet/shardmap-persist.ts",
     "example:fleet-health-with-readiness": "tsx examples/fleet/health-with-readiness.ts",
     "example:launcher-lookup-membership": "tsx examples/launcher/lookup-membership.ts",
+    "example:launcher-ensure-lookup": "tsx examples/launcher/ensure-lookup.ts",
     "example:launcher-minimal-up": "tsx examples/launcher/minimal-up.ts",
     "example:launcher-handle-phases": "tsx examples/launcher/handle-phases.ts",
     "example:launcher-token-injection": "tsx examples/launcher/token-injection.ts",

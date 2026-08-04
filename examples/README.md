@@ -35,7 +35,7 @@ Living book: [docs/index.md](../docs/index.md) · [API Reference](https://hyperl
 | **Daemon + Soft** | `daemon/store-auto-write` → `typed-failed-error` → serve / result / schedule / configure |
 | **Node & discovery** | `tag-addressed` → … → `identity-coordinator` → `ask-incumbent-takeover` → `drain-yield-refuse` → `handoff-ab-cutover` → `serve-handoff` → `policy-lookup-cutover` → `lookup-follow-handoff` → `peers-layer-rebind` → `launch-shutdown` |
 | **Fleet glass** | `fleet/telemetry-glass` → `health-glass` → `shardmap-sessions` → edge examples |
-| **Launcher** | `minimal-up` → `handle-phases` → `token-injection` → `ready-services` → `ready-timeout` → `lookup-membership` |
+| **Launcher** | `minimal-up` → `handle-phases` → `token-injection` → `ready-services` → `ready-timeout` → `lookup-membership` → `ensure-lookup` |
 | **Readiness** | `readiness/with-readiness` → `all-ready` → `monitored-dependency` → `degraded-health` |
 | **Logs** | `logs/live-bus` → `node-journal` → `hyperlink-logs` → `lineage-scope` → `levels` |
 | **Schedule / polling / config** | `pnpm run example:schedule-basics` → `example:schedule-controls` → `example:polling-sports` → `example:config-hot-swap` |
@@ -133,6 +133,7 @@ Paths are under `examples/`. Script = `pnpm run example:<topic>-<kebab-file>` (s
 | File | Teaches |
 |------|---------|
 | [`launcher/lookup-membership.ts`](./launcher/lookup-membership.ts) | Launcher → Lookup membership |
+| [`launcher/ensure-lookup.ts`](./launcher/ensure-lookup.ts) | `ensureLookup` adopt/spawn then app `up` |
 | [`launcher/minimal-up.ts`](./launcher/minimal-up.ts) | `Launcher.up` spawn → Ready → handoff |
 | [`launcher/handle-phases.ts`](./launcher/handle-phases.ts) | Explicit `spawn` / `awaitReady` / `handoff` / `kill` |
 | [`launcher/token-injection.ts`](./launcher/token-injection.ts) | `Launcher.command` env vs argv tokens |

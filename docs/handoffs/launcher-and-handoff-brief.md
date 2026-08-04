@@ -268,8 +268,8 @@ Owner locked #22–26; Eng on tip:
     - Soft-bake / “first node = Lookup” stays for **independent** launch (no Launcher).
     - **Launcher ensure-Lookup-first (locked):** if Lookup not running → spawn Lookup-only first (operator address, else safe default when supported); if already running → use it. No Soft-bake onto app nodes under Launcher. No address + no default → fail closed.
     - **Already up ≠ always hand off** — custody handoff only for spawned children; migration `{ handoff }` opt-in; Directory conflicts via `Policy.onConflict` / `askIncumbent`; Lookup replace only when orchestrating A→B.
-    - **Single address lock:** one Lookup endpoint; A/B = successive owners; `Lookup.follow` + Policy for the gap (**`Lookup.follow` + handoff recipe Eng'd**).
-    - Eng order: ~~`Lookup.follow` + gap~~ → ~~orchestrated handoff~~ → Launcher ensure-Lookup-first.
+    - **Single address lock:** one Lookup endpoint; A/B = successive owners; `Lookup.follow` + Policy for the gap (**follow + handoff + `ensureLookup` Eng'd**).
+    - Eng order: ~~`Lookup.follow` + gap~~ → ~~orchestrated handoff~~ → ~~Launcher ensure-Lookup-first~~.
     - Detail: [`versioned-schema-decisions.md`](./versioned-schema-decisions.md#desired-bring-up-launcher--ensure-lookup-first-locked).
 
 37. **Track D boundary — C emits signals only; no client redirect API in C.** *(confirmed; `lookupClient` / `peersLayer` rebind already Eng'd on D substrate)*

@@ -103,7 +103,8 @@ Custody    Launcher.up / Node.assume   OS process Ready → self-owned
 Membership Lookup Identity/Directory/Advice   who wins / where clients dial
 ```
 
-- **Launcher** stays custody-only (stable addressed node; exits after assume).
+- **Launcher** stays custody-only (stable addressed node; exits after assume). Use
+  `Launcher.ensureLookup` so Lookup is available before app units (no Soft-bake on apps).
 - **Child** pipes `Lookup.client` / `layerOptions` on listen — advertise + identity claim.
 - Directory-row replace: `Policy.askIncumbent` (or stamp / `ListenOptions.onConflict`) +
   `Policy.yieldRefuse` / `ListenOptions.onYield` (`false` refuses).

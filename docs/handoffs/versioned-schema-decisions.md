@@ -362,7 +362,7 @@ files.rename // ❌ not on Handle (compile error)
 
 ## Planned — Lookup-first launcher + Lookup A/B (owner 2026-08-03)
 
-**Status:** Design **locked** owner chat 2026-08-03 (single-address + orchestrator; name `Lookup.follow`) — **`Lookup.follow` + ownership handoff recipe Eng'd** 2026-08-04. Next: Launcher ensure-Lookup-first.  
+**Status:** Design **locked** owner chat 2026-08-03 (single-address + orchestrator; name `Lookup.follow`) — **follow + handoff recipe + `Launcher.ensureLookup` Eng'd** 2026-08-04. Next: update-impact / app A/B.  
 **Why it matters a lot:** Lookup must be able to **restart / A/B update**. A Lookup that also hosts app services couples Lookup lifecycle to those services’ skew and forces Lookup A/B whenever an app Tag moves.
 
 ### Desired bring-up (Launcher) — ensure Lookup first (locked)
@@ -450,7 +450,7 @@ yield* Node.shutdown(lookupA) // releases sock
 
 1. ~~**`Lookup.follow` + gap Policy**~~ — **Eng'd** (`Lookup.follow` / `followOptions`; same-sock replace suite `test/lookup-follow.test.ts`).  
 2. ~~**Orchestrated single-address ownership handoff**~~ — **Eng'd** (`examples/node/lookup-follow-handoff.ts`, `test/lookup-follow-handoff.test.ts`).  
-3. **Launcher ensure-Lookup-first** — detect already-running Lookup; else spawn Lookup-only at operator address or safe default; then app units. (Still one address.)  
+3. ~~**Launcher ensure-Lookup-first**~~ — **Eng'd** (`Launcher.ensureLookup` / `UpOptions.lookup`; `test/launcher-ensure-lookup.test.ts`; `examples/launcher/ensure-lookup.ts`).  
 4. Update-impact / app `restartSuccessor` after. Open: Policy when **app** SpawnSpec target is already up (fail / skip / adopt — not auto migration-handoff).
 
 ---
@@ -588,7 +588,7 @@ export class Jobs extends WorkPool.Tag<Jobs>()("fleet/Jobs", { payload: Job }) {
 1. ~~`Hyperlink.deprecated` dual (pipe-canonical)~~ **Eng'd**  
 2. ~~`Lookup.follow` + single-address gap Policy~~ **Eng'd**  
 3. ~~Orchestrated Lookup ownership handoff (same address)~~ **Eng'd**  
-4. Launcher Lookup-first (ensure Lookup before app units)  
+4. ~~Launcher Lookup-first (`ensureLookup`)~~ **Eng'd**  
 5. Update-impact planner (`Lookup`/`Node` + Launcher executes plan)  
 6. Explicit A/B / `restartSuccessor` for app nodes (behind impact + Lookup A/B)
 

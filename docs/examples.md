@@ -276,6 +276,11 @@ Guide: [Launcher](/docs/launcher)
 
 Child of [Lookup membership](/docs/launcher-lookup-membership): `examples/launcher/lookup-membership-child.ts`
 
+### [Ensure Lookup first](/docs/launcher-ensure-lookup)
+
+`examples/launcher/ensure-lookup.ts` · `pnpm run example:launcher-ensure-lookup` — `Launcher.ensureLookup` then app `up`  
+Guide: [Launcher — Lookup node](/docs/launcher#lookup-node-ensure-lookup-first)
+
 ### [minimal up](/docs/launcher-minimal-up)
 
 `examples/launcher/minimal-up.ts` · `pnpm run example:launcher-minimal-up`

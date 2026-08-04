@@ -35,6 +35,7 @@ import {
   Exit,
   Layer,
   Option,
+  Redacted,
   Stream,
 } from "effect";
 import * as Hyperlink from "./Hyperlink";
@@ -436,6 +437,9 @@ const lookupServeLayers = (serverOnConflict: OnConflictResolved) =>
 /**
  * Serve {@link Identity} + {@link Directory} + {@link Advice} on a Unix-domain path.
  *
+ * Pass `assumeToken` / `node` when this Lookup is a Launcher-custody child
+ * (`Launcher.ensureLookup`).
+ *
  * @category layers & serving
  * @public
  */
@@ -445,6 +449,12 @@ export const layerIpc = (
     readonly unlink?: boolean;
     /** Fleet-parent conflict policy (concrete). Default `livenessReplace`. */
     readonly onConflict?: OnConflictResolved;
+    /** Node key for auto-mounted node-status / {@link Node.assume}. */
+    readonly node?: string | { readonly key: string };
+    /** Expected launcher ownership-ack token for {@link Node.assume}. */
+    readonly assumeToken?: string | Redacted.Redacted<string>;
+    /** Cooperative `askIncumbent` handler on node-status `yield`. */
+    readonly onYield?: Effect.Effect<boolean>;
   },
 ) =>
   ipcServer(
@@ -458,6 +468,11 @@ export const layerIpc = (
     {
       path,
       ...(options?.unlink === undefined ? {} : { unlink: options.unlink }),
+      ...(options?.node !== undefined ? { node: options.node } : {}),
+      ...(options?.assumeToken !== undefined
+        ? { assumeToken: options.assumeToken }
+        : {}),
+      ...(options?.onYield !== undefined ? { onYield: options.onYield } : {}),
     },
   );
 
@@ -477,12 +492,20 @@ const lookupUnaddressedLayer = <A = never>(
  * Reads concrete {@link OnConflict} from the Lookup node stamp.
  * Same-machine bind-or-dial without a Node: {@link layer} / {@link layerOptions}.
  *
+ * For Launcher custody of a Lookup-only child, pass `assumeToken` (and optionally
+ * `onYield`) — the node's key is forwarded to auto-mounted node-status for
+ * `Node.assume`.
+ *
  * @category layers & serving
  * @public
  */
 export const layerNode = (
   node: AnyNode & { readonly key: string },
-  options?: { readonly unlink?: boolean },
+  options?: {
+    readonly unlink?: boolean;
+    readonly assumeToken?: string | Redacted.Redacted<string>;
+    readonly onYield?: Effect.Effect<boolean>;
+  },
 ): Layer.Layer<never, LookupUnaddressed> => {
   if (node.kind === "IpcSocket" && node.path !== undefined) {
     const stamped = onConflictOf(node);
@@ -490,6 +513,7 @@ export const layerNode = (
     return layerIpc(node.path, {
       ...options,
       onConflict,
+      node: node.key,
     });
   }
   return lookupUnaddressedLayer(node.key);
