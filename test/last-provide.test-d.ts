@@ -1,5 +1,5 @@
 /**
- * yield* Last.provide → View Provides → Last.toLayer(Service, view)
+ * yield* Last.provide → ViewLayer Provides → Last.toLayer(Service, layer)
  */
 import { expectTypeOf } from "vitest";
 import { Context, Layer } from "effect";
@@ -16,39 +16,53 @@ class ModalMeta extends Context.Service<
   { readonly title: string }
 >()("hyperlink-ts/test/last-provide.test-d/ModalMeta") {}
 
-const Hello = View.gen(function* () {
-  yield* Last.provide(ShellMeta, { title: "uDumb" });
-  return (_props: {}) => null;
-});
+class Hello extends View.Service<Hello>()("test/last-provide-d/Hello") {
+  static layer = View.gen(Hello, function* () {
+    yield* Last.provide(ShellMeta, { title: "uDumb" });
+    return (_props: {}) => null;
+  });
+}
 
-expectTypeOf<View.ProvidesOf<typeof Hello>>().toMatchTypeOf<
-  Last.ProvideToken<
-    ShellMeta,
-    { readonly title: string; readonly crumb?: string },
-    { readonly title: "uDumb" }
+expectTypeOf(Hello.layer).toMatchTypeOf<
+  View.ViewLayer<
+    Hello,
+    never,
+    never,
+    Last.ProvideToken<
+      ShellMeta,
+      { readonly title: string; readonly crumb?: string },
+      { readonly title: "uDumb" }
+    >
   >
 >();
 
-const shellLayer = Last.toLayer(ShellMeta, Hello);
+const shellLayer = Last.toLayer(ShellMeta, Hello.layer);
 expectTypeOf(shellLayer).toEqualTypeOf<Layer.Layer<ShellMeta>>();
 
-const Empty = View.gen(function* () {
-  yield* Last.provide(ShellMeta, {});
-  return (_props: {}) => null;
-});
+class Empty extends View.Service<Empty>()("test/last-provide-d/Empty") {
+  static layer = View.gen(Empty, function* () {
+    yield* Last.provide(ShellMeta, {});
+    return (_props: {}) => null;
+  });
+}
 
 // @ts-expect-error incomplete provide is not Layer<ShellMeta>
-const _needLayer: Layer.Layer<ShellMeta> = Last.toLayer(ShellMeta, Empty);
+const _incomplete: Layer.Layer<ShellMeta> = Last.toLayer(
+  ShellMeta,
+  Empty.layer,
+);
 
-const Both = View.gen(function* () {
-  yield* Last.provide(ShellMeta, { title: "Shell" });
-  yield* Last.provide(ModalMeta, { title: "Modal" });
-  return (_props: {}) => null;
-});
+class Both extends View.Service<Both>()("test/last-provide-d/Both") {
+  static layer = View.gen(Both, function* () {
+    yield* Last.provide(ShellMeta, { title: "Shell" });
+    yield* Last.provide(ModalMeta, { title: "Modal" });
+    return (_props: {}) => null;
+  });
+}
 
-expectTypeOf(Last.toLayer(ShellMeta, Both)).toEqualTypeOf<
+expectTypeOf(Last.toLayer(ShellMeta, Both.layer)).toEqualTypeOf<
   Layer.Layer<ShellMeta>
 >();
-expectTypeOf(Last.toLayer(ModalMeta, Both)).toEqualTypeOf<
+expectTypeOf(Last.toLayer(ModalMeta, Both.layer)).toEqualTypeOf<
   Layer.Layer<ModalMeta>
 >();

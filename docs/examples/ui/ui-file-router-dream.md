@@ -20,7 +20,7 @@ Three concerns, three tools — don’t smash them into Waku’s `getConfig`:
 
 1. **Page mark** — is this path Static, Dynamic, or Build (+ SSG paths)? (`hyperlink-ts/ui/Page`)
 2. **Route catalog** — typed `urls.docs_chapter("routing")` from `paths.gen` + `Route.fileRoot`
-3. **View components** — `View.provide` / camelCase `componentsLayer` for Tags used *inside* the page
+3. **View components** — `View.succeed` / camelCase `componentsLayer` for Tags used *inside* the page
 
 {.twoslash include="examples/ui/file-router/dream-api.ts"}
 ``` ts

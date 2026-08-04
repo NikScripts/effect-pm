@@ -36,7 +36,7 @@ expectTypeOf(Done.annotations).toEqualTypeOf<{
 }>();
 
 class DenseCard extends Done.Service<DenseCard>()("app/view/dense-card") {}
-void DenseCard.provide((props) => {
+void View.succeed(DenseCard, (props) => {
   expectTypeOf(props.dense).toEqualTypeOf<boolean | undefined>();
   return null;
 });
@@ -74,7 +74,7 @@ expectTypeOf<View.PropsOf<OneShot>["dense"]>().toEqualTypeOf<
   boolean | undefined
 >();
 expectTypeOf<View.PropsOf<OneShot>["tag"]>().toEqualTypeOf<Views.ViewTag>();
-void View.provide(OneShot, (props) => {
+void View.succeed(OneShot, (props) => {
   expectTypeOf(props.dense).toEqualTypeOf<boolean | undefined>();
   return null;
 });

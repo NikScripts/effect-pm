@@ -17,7 +17,7 @@
  *    `Views.Page` size chrome. See `docs/handoffs/view-page-naming.md`.
  * 2. **Route catalog** — typed urls (`Route.fileRoot` / `fromEffect`) so `urls.chapter("x")`
  *    is a closed builder, not a stringly href.
- * 3. **View components** — `View.provide` + camelCase `componentsLayer` / `layer`
+ * 3. **View components** — `View.succeed` + camelCase `componentsLayer` / `layer`
  *    (never “skins” / Domain.provide helpers). Nested UI Tags inside a page are
  *    ordinary DI; the page mark is not a Layer factory.
  *
@@ -215,7 +215,7 @@ export class ChapterParams extends Schema.Class<ChapterParams>("ChapterParams")(
 
 /**
  * Nested chrome inside the page — ordinary {@link View.Service} (DI), **not** part of
- * the file-router stamp. Pay with `View.provide` on a camelCase `provides` layer.
+ * the file-router stamp. Pay with `View.succeed` on a camelCase `provides` layer.
  */
 export class ChapterAside extends View.Service<
   ChapterAside,
@@ -247,10 +247,10 @@ export class DocsChapter extends View.Service<
  * Implementations for Tags used by pages — camelCase `componentsLayer` (not “skins”).
  */
 export const docsChapterComponentsLayer = Layer.mergeAll(
-  View.provide(ChapterAside, ({ chapter }) =>
+  View.succeed(ChapterAside, ({ chapter }) =>
     React.createElement("aside", null, `On this page · ${chapter}`),
   ),
-  View.provide(DocsChapter, ({ chapter }) =>
+  View.succeed(DocsChapter, ({ chapter }) =>
     React.createElement(
       "article",
       null,
@@ -332,7 +332,7 @@ const program = Effect.gen(function* () {
   yield* Effect.logInfo(`  ${urls.chapter("routing")}`);
 
   yield* Effect.logInfo(
-    "layers: pagesLayer / provides are camelCase; View.provide pays Tag R",
+    "layers: pagesLayer / provides are camelCase; View.succeed pays Tag R",
   );
   void pagesLayer;
   void DocsChapter;

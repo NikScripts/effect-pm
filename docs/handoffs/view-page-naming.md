@@ -7,7 +7,7 @@
 
 In View/Dashboard code, **skin** was informal for:
 
-> the **React (or Ink) component** you `View.provide(Tag, impl)` — i.e. the Layer that
+> the **React (or Ink) component** you `View.succeed(Tag, impl)` — i.e. the Layer that
 > *implements* a View Tag’s service.
 
 Same Tag identity; web vs TUI = different provide Layer. That seam is correct.
@@ -16,13 +16,13 @@ for the docs-site adapter module — a second meaning.
 
 | Old slang | What it actually is | Better names |
 |-----------|---------------------|--------------|
-| `skins` / `provides` / `DashboardLayer.*` / platform `DashboardViews` | `Layer` of `View.provide(Tag, Comp)` | **`componentsLayer`** on `web\|tui/Dashboard` |
-| “provide a skin” | `View.provide` / `Tag.provide` | just **provide** (Effect vocabulary) |
+| `skins` / `provides` / `DashboardLayer.*` / platform `DashboardViews` | `Layer` of `View.succeed(Tag, Comp)` | **`componentsLayer`** on `web\|tui/Dashboard` |
+| “provide a skin” | `View.succeed` / `Tag.provide` | just **provide** (Effect vocabulary) |
 | Docs “Router skin” | App module wrapping Waku layer | **adapter** / **site Router module** — never “skin” |
 
 **Recommendation:** **one** `ui/DashboardViews` (contributions only). Platform
 TSX + ready `layer` live on `web|tui/Dashboard` — never a second
-`DashboardViews`. Compose with `Layer.provideMerge`. Keep verb `View.provide`.
+`DashboardViews`. Compose with `Layer.provideMerge`. Keep verb `View.succeed`.
 
 ```ts
 import * as Dashboard from "hyperlink-ts/web/Dashboard"

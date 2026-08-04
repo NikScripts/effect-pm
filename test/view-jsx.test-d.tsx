@@ -1,5 +1,5 @@
 /**
- * View compose — opaque open R, Effect.all Tags, mount.
+ * View compose — Service Layers, yield*, mount at the edge.
  */
 /** @jsxImportSource last-ts */
 import { expectTypeOf } from "vitest";
@@ -14,10 +14,12 @@ type Expect<T extends true> = T;
 class Greeter extends Context.Service<Greeter, string>()("test/jsx/Greeter") {}
 class Clock extends Context.Service<Clock, number>()("test/jsx/Clock") {}
 
-const Child = View.gen(function* () {
-  const name = yield* Greeter;
-  return (_props: {}) => <span data-child>{name}</span>;
-});
+class Child extends View.Service<Child>()("test/jsx/Child") {
+  static layer = View.gen(Child, function* () {
+    const name = yield* Greeter;
+    return (_props: {}) => <span data-child>{name}</span>;
+  });
+}
 
 const Plain = (props: { readonly label: string }): React.ReactElement => (
   <button type="button">{props.label}</button>
@@ -27,48 +29,58 @@ const Dialog = (
   props: React.ComponentProps<typeof DialogPrimitive.Root>,
 ): React.ReactElement => <DialogPrimitive.Root data-slot="dialog" {...props} />;
 
-// ── Open R is not JSX-legal ──────────────────────────────────────────────────
+// ── Layer carries R; Service itself is not a freestanding View value ─────────
 
-expectTypeOf(Child).toMatchTypeOf<View.Unresolved<object, Greeter>>();
-// @ts-expect-error open-R view is not a JSX component
+expectTypeOf(Child.layer).toMatchTypeOf<Layer.Layer<Child, never, Greeter>>();
+// @ts-expect-error Service class is not a JSX component — mount or yield*
 const _badChildJsx = <Child />;
 
-// ── View.gen yield* R ────────────────────────────────────────────────────────
+// ── Effect.all merges services inside View.gen ───────────────────────────────
 
-expectTypeOf<View.ServicesOf<typeof Child>>().toEqualTypeOf<Greeter>();
+class Both extends View.Service<Both>()("test/jsx/Both") {
+  static layer = View.gen(Both, function* () {
+    const services = yield* Effect.all({ Greeter, Clock });
+    return (_props: {}) => (
+      <div>
+        <span data-child>{services.Greeter}</span>
+        <span data-other>{services.Clock}</span>
+      </div>
+    );
+  });
+}
+expectTypeOf(Both.layer).toMatchTypeOf<
+  Layer.Layer<Both, never, Greeter | Clock>
+>();
+type _BothNotAny = Expect<NotAny<Layer.Services<typeof Both.layer>>>;
 
-const Empty = View.gen(function* () {
-  yield* Greeter;
-});
-expectTypeOf<View.ServicesOf<typeof Empty>>().toEqualTypeOf<Greeter>();
+// ── mount(Service, layer) is the JSX edge ────────────────────────────────────
 
-// ── Effect.all merges services; JSX uses resolved values ─────────────────────
-
-const Both = View.gen(function* () {
-  const services = yield* Effect.all({ Greeter, Clock });
-  return (_props: {}) => (
-    <div>
-      <span data-child>{services.Greeter}</span>
-      <span data-other>{services.Clock}</span>
-    </div>
-  );
-});
-expectTypeOf<View.ServicesOf<typeof Both>>().toEqualTypeOf<Greeter | Clock>();
-type _BothNotAny = Expect<NotAny<View.ServicesOf<typeof Both>>>;
-
-// ── mount discharges R ───────────────────────────────────────────────────────
-
-const App = View.mount(Child, Layer.succeed(Greeter, "nik"));
-expectTypeOf<View.ServicesOf<typeof App>>().toEqualTypeOf<never>();
+const App = View.mount(
+  Child,
+  Child.layer.pipe(Layer.provide(Layer.succeed(Greeter, "nik"))),
+);
+expectTypeOf(App).toMatchTypeOf<View.Component>();
 const _okAppJsx = <App />;
 
-// Mounted child is JSX-legal inside unary succeed
-const Wrapped = View.succeed((_props: {}) => (
-  <section>
-    <App />
-  </section>
-));
-expectTypeOf<View.ServicesOf<typeof Wrapped>>().toEqualTypeOf<never>();
+// Nested: yield* Child after mounting is wrong — compose via Layers instead
+class Wrap extends View.Service<Wrap>()("test/jsx/Wrap") {
+  static layer = View.gen(Wrap, function* () {
+    const C = yield* Child;
+    return (_props: {}) => (
+      <section>
+        <C />
+      </section>
+    );
+  });
+}
+const Wrapped = View.mount(
+  Wrap,
+  Wrap.layer.pipe(
+    Layer.provide(Child.layer),
+    Layer.provide(Layer.succeed(Greeter, "nik")),
+  ),
+);
+expectTypeOf(Wrapped).toMatchTypeOf<View.Component>();
 
 // ── Outside components keep normal prop checking ─────────────────────────────
 
@@ -80,10 +92,13 @@ const _okPlain = <Plain label="x" />;
 // @ts-expect-error Plain requires label
 const _badPlain = <Plain />;
 
-// ── succeed unary (no open R) stays JSX-legal ────────────────────────────────
+// ── View.succeed builds a Layer, not a JSX component ─────────────────────────
 
-const Pure = View.succeed((_props: {}) => <span>ok</span>);
-expectTypeOf<View.ServicesOf<typeof Pure>>().toEqualTypeOf<never>();
-const _okPure = <Pure />;
+class Pure extends View.Service<Pure>()("test/jsx/Pure") {
+  static layer = View.succeed(Pure, (_props: {}) => <span>ok</span>);
+}
+expectTypeOf(Pure.layer).toMatchTypeOf<View.ViewLayer<Pure>>();
+const PureApp = View.mount(Pure, Pure.layer);
+const _okPure = <PureApp />;
 
 void Effect.void;

@@ -34,7 +34,7 @@ Route.fileRoot({ dir: "./pages" })
 
 Naming detail: [`view-page-naming.md`](./view-page-naming.md) — **not**
 `View.Page.Service` (collides with dashboard size chrome). Kill the word **skin**;
-use **`componentsLayer`** (or `layer`) for View.provide bags.
+use **`componentsLayer`** (or `layer`) for View.succeed bags.
 
 Static/Dynamic/Build exist largely **because** file routing + codegen are
 priorities: mark on the module → engine registration; codegen → typed paths.

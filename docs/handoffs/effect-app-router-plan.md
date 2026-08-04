@@ -148,11 +148,10 @@ class Document extends Context.Service<Document, string>()("app/Document") {
 
 ### 4. `View`
 
-- **Down `R`:** `View.Service` + class `static layer = This.provide(…)` (Effect v4 style; no `{ default }`), unary `gen` / `succeed`, `mount`
-- **Compose services:** `yield* Effect.all({ Shell, Hello })` then JSX on resolved views
-- **Open-`R` view values:** `View.mount(view, Service.layer)` — **no** bag `succeed`
+- **Down `R`:** Layer-first — `View.succeed(Service, impl)` / `View.gen(Service, function*)` return Layers; `static layer = …`; `yield*` Service to get the component; `View.mount(Service, layer)` is the only JSX edge
+- **Compose services:** `yield* Effect.all({ Shell, Hello })` inside `View.gen(Service, …)`, then JSX on resolved views; satisfy Layer `R` with `Layer.provide`
 - **Naming:** handle mint is `*.Service` (not `*.Tag`); baked config+layer factories are `*.define` (`Gate.define` / `WorkPool.define` / `Daemon.define`)
-- **Up Provides:** `Last.provide` — [view-provide-draft](./view-provide-draft.md)
+- **Up Provides:** `Last.provide` inside `View.gen` → `Last.toLayer(Svc, viewLayer)` — [view-provide-draft](./view-provide-draft.md)
 
 ### 5. `Layout`
 

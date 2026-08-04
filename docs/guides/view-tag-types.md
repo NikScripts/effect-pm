@@ -61,12 +61,12 @@ View.getAnnotations(PoolCard).size._tag
 //                                 ^?
 
 export const layer = Layer.mergeAll(
-  View.provide(PoolCard, (props) => {
+  View.succeed(PoolCard, (props) => {
     props
     // ^?
     return null
   }),
-  View.provide(PoolDetail, (_props) => null),
+  View.succeed(PoolDetail, (_props) => null),
   PoolPage.provide((_props) => null),
 )
 
@@ -79,7 +79,7 @@ const label = Views.ViewKind.$match(kind, {
 void label
 ```
 
-Provide skins with **`View.provide(Tag, impl)`** or **`Tag.provide(impl)`**. Props infer from
+Provide skins with **`View.succeed(Tag, impl)`** or **`Tag.provide(impl)`**. Props infer from
 the Tag. Annotate skins with **`PoolCard["Service"]`** (no `typeof`). Sizes are
 `Data.TaggedEnum` — match with `ViewKind.$match` (or `Match.tag` on a
 `Views.ViewKind`-typed value). Read size/spec via **`yield* View.annotations(Tag)`**
@@ -105,7 +105,7 @@ class DenseCard extends Views.Card.Service<
   static readonly region = "us" as const
 }
 
-export const layer = View.provide(DenseCard, (props) => {
+export const layer = View.succeed(DenseCard, (props) => {
   props
   // ^?
   return null
@@ -165,7 +165,7 @@ export class WorkerPoolCard extends Views.Card.Service<
 
 export const layer = Views.only(WorkerPool, WorkerPoolCard).pipe(
   Layer.provide(
-    View.provide(WorkerPoolCard, (props) => {
+    View.succeed(WorkerPoolCard, (props) => {
       void props.dense
       return null
     }),

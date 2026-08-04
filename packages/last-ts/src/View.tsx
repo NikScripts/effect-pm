@@ -3,17 +3,18 @@
  *
  * View — Effect × React components (Last).
  *
- * - **DI:** {@link Service} / {@link Prototype} / {@link provide} — Context slots
- *   (`Service` mirrors Effect v4 `Context.Service`; add `static layer` on the class)
- * - **Build:** {@link fromEffect} / {@link gen} / {@link succeed} — Effect → view
- * - **Compose Services:** `yield* Effect.all({ A, B })` inside {@link gen}, then JSX
- * - **Edge:** {@link mount}`(view, layer)` — discharge `R`, get a JSX component
- * - **Up:** {@link Last.provide} in {@link gen} → Provides; {@link Last.toLayer}
+ * Layer-first (Effect v4 shape):
+ * - **Mint:** {@link Service} — Context slot; `yield*` to get the component
+ * - **Build Layers:** {@link succeed} / {@link gen} / {@link effect} — like
+ *   `Layer.succeed` / `Layer.effect` (always take a Service)
+ * - **Default Layer:** `static layer = View.succeed(This, impl)` on the class
+ * - **Edge:** {@link mount}`(Service, layer)` — only JSX-legal output
+ * - **Up:** {@link Last.provide} inside {@link gen} → {@link Last.toLayer}
  *
- * Open-`R` views are **not** JSX components. Prefer Services + `Effect.all`, or
- * {@link mount} a child to a {@link Component} then use normal JSX.
+ * There is no freestanding View value you call as JSX. Always `yield*` a
+ * Service (or {@link mount} one at the app edge).
  *
- * Prototype metadata: {@link annotations} (Effect) / {@link getAnnotations}.
+ * Prototype metadata: {@link annotations} / {@link getAnnotations}.
  * Factory brand: {@link kind} via {@link Last.kindSym}.
  */
 import * as React from "react";
@@ -109,9 +110,8 @@ export type Component<
 };
 
 /**
- * Open requirements — **not** a JSX component. Compose with bag
- * {@link succeed} / {@link gen}, then {@link mount} (or provide until `R` is
- * `never`).
+ * Open requirements — **not** a JSX component. Prefer {@link Service} +
+ * {@link gen} / {@link succeed} Layers, then {@link mount} at the edge.
  *
  * Runtime value is still a render function; the type hides the call signature
  * so `<View />` is rejected while `R` is open.
@@ -132,8 +132,8 @@ export interface Unresolved<
 /**
  * View with props, services `R`, and upward Provides.
  *
- * - `R = never` → {@link Component} (JSX-legal)
- * - otherwise → {@link Unresolved} (must bag-compose / {@link mount})
+ * - `R = never` → {@link Component} (JSX-legal — only after {@link mount} / yield)
+ * - otherwise → {@link Unresolved}
  *
  * @public
  */
@@ -180,18 +180,6 @@ export type ViewPropsOf<V> = V extends {
     ? P
     : {};
 
-const attachLedger = <A,>(
-  component: A,
-  ledger: Last.ProvideLedger | undefined,
-): A => {
-  if (ledger !== undefined && ledger.size > 0) {
-    Object.assign(component as object, {
-      [Last.provideLedgerSym]: ledger,
-    });
-  }
-  return component;
-};
-
 const tryCollectLedger = (
   create: Effect.Effect<unknown, unknown, unknown>,
 ): Last.ProvideLedger | undefined => {
@@ -208,7 +196,7 @@ const tryCollectLedger = (
  * Tree services from a component fn: props.`children` brands ∪ return
  * {@link Jsx.Element}`<R>` (from direct `jsx` / `jsxs` calls).
  *
- * JSX *syntax* does not contribute `R` — use bag {@link succeed} / {@link gen}.
+ * JSX *syntax* does not contribute `R` — yield Services inside {@link gen}.
  *
  * @internal
  */
@@ -240,181 +228,182 @@ export function stamp(
   return component;
 }
 
-const stampWithLedger = <Props extends object, R, Provides>(
-  component: (props: Props) => React.ReactElement | null,
-  ledger: Last.ProvideLedger | undefined,
-): View<Props, R, Provides> =>
-  attachLedger(stamp<Props, R>(component), ledger) as View<
-    Props,
-    R,
-    Provides
-  >;
-
 /**
- * Effect that builds a plain React component (no {@link Service} / DI).
+ * A {@link Layer} that provides a View {@link Service}, optionally carrying
+ * upward {@link Last.provide} tokens (for {@link Last.toLayer}).
  *
  * @public
  */
-export type FromEffect<
-  Props extends object = {},
+export type ViewLayer<
+  A = never,
   E = never,
   R = never,
-> = Effect.Effect<(props: Props) => React.ReactElement | null, E, R>;
+  Provides = never,
+> = Layer.Layer<A, E, R> & {
+  readonly "~last-ts/View/provides": Provides;
+};
+
+const brandViewLayer = <A, E, R, Provides>(
+  layer: Layer.Layer<A, E, R>,
+  ledger: Last.ProvideLedger | undefined,
+): ViewLayer<A, E, R, Provides> => {
+  const branded = layer as ViewLayer<A, E, R, Provides>;
+  if (ledger !== undefined && ledger.size > 0) {
+    Object.assign(branded, { [Last.provideLedgerSym]: ledger });
+  }
+  return branded;
+};
 
 /**
- * Turn an Effect-built component into an exportable React component.
- * **Not DI** — for Services use {@link provide}. Runtime comes from
- * {@link AtomReact.RuntimeProvider} (do not pass a runtime).
+ * Build a Layer that provides `service` with a concrete component.
+ * Effect twin: {@link Layer.succeed}`(Service, impl)`.
  *
- * Return type preserves Effect services `R` and the built component’s tree
- * services as {@link View}`<Props, R | TreeR>`.
- *
- * Client modules that export the result need `"use client"` (or import only
- * from a client parent). Initial/waiting renders `null`; failures throw.
+ * Dual: `View.succeed(Greeter, impl)` or `View.succeed(Greeter)(impl)`.
  *
  * @example
  * ```ts
- * import * as View from "last-ts/View"
- *
- * const greeterFx = Effect.succeed((props: { name: string }) => (
- *   <h1>{props.name}</h1>
- * ))
- *
- * export const Greeter = View.fromEffect(greeterFx)
+ * class Greeter extends View.Service<Greeter, { name: string }>()("app/Greeter") {
+ *   static layer = View.succeed(Greeter, ({ name }) => <span>{name}</span>)
+ * }
  * ```
  *
  * @public
  */
-export const fromEffect = <
-  F extends (props: any) => React.ReactElement | null,
-  E = never,
-  R = never,
-  Provides = never,
->(
-  create: Effect.Effect<F, E, R>,
-): View<
-  Parameters<F>[0] extends object ? Parameters<F>[0] : {},
-  R | TreeServicesOf<F>,
-  Provides
-> => {
-  type Props = Parameters<F>[0] extends object ? Parameters<F>[0] : {};
-  const ledger = tryCollectLedger(create);
-  const FromEffect = (props: Props): React.ReactElement | null => {
-    const runtime = AtomReact.useRuntime();
-    const atom = React.useMemo(
-      () => runtime.atom(create),
-      [runtime, create],
-    );
-    const result = AtomReact.useAtomValue(atom);
-    if (AsyncResult.isSuccess(result)) {
-      return result.value(props);
-    }
-    if (AsyncResult.isFailure(result)) {
-      throw Cause.squash(result.cause);
-    }
-    return null;
-  };
-  return stampWithLedger<Props, R | TreeServicesOf<F>, Provides>(
-    FromEffect,
-    ledger,
-  );
+export const succeed: {
+  <I, P extends object>(
+    service: Context.Key<I, Component<P>>,
+  ): (
+    impl: Types.NoInfer<(props: P) => React.ReactElement | null>,
+  ) => ViewLayer<I>;
+  <I, P extends object>(
+    service: Context.Key<I, Component<P>>,
+    impl: Types.NoInfer<(props: P) => React.ReactElement | null>,
+  ): ViewLayer<I>;
+} = function (
+  service: Context.Key<any, Component<any>>,
+  impl?: (props: any) => React.ReactElement | null,
+): any {
+  if (impl === undefined) {
+    return (resource: (props: any) => React.ReactElement | null) =>
+      brandViewLayer(Layer.succeed(service, stamp(resource)), undefined);
+  }
+  return brandViewLayer(Layer.succeed(service, stamp(impl)), undefined);
 };
 
 /**
- * {@link fromEffect}`(Effect.gen(…))` — generator that **returns** a component.
+ * Build a Layer from an Effect that returns a component — Effect twin:
+ * {@link Layer.effect}`(Service, effect)`.
  *
- * `void` / `undefined` from the generator becomes `() => null`.
- * Compose Services with `yield* Effect.all({ A, B })`, then JSX the resolved views.
+ * Dual: `View.effect(Hello, fx)` or `View.effect(Hello)(fx)`.
+ *
+ * @public
+ */
+export const effect: {
+  <I, P extends object>(
+    service: Context.Key<I, Component<P>>,
+  ): <E, R>(
+    create: Effect.Effect<
+      Types.NoInfer<(props: P) => React.ReactElement | null>,
+      E,
+      R
+    >,
+  ) => ViewLayer<I, E, R>;
+  <I, P extends object, E, R>(
+    service: Context.Key<I, Component<P>>,
+    create: Effect.Effect<
+      Types.NoInfer<(props: P) => React.ReactElement | null>,
+      E,
+      R
+    >,
+  ): ViewLayer<I, E, R>;
+} = function (
+  service: Context.Key<any, Component<any>>,
+  create?: Effect.Effect<(props: any) => React.ReactElement | null, any, any>,
+): any {
+  if (create === undefined) {
+    return (fx: Effect.Effect<(props: any) => React.ReactElement | null, any, any>) =>
+      effect(service, fx);
+  }
+  const stamped = Effect.map(create, (comp) => stamp(comp));
+  const ledger = tryCollectLedger(stamped);
+  return brandViewLayer(Layer.effect(service, stamped), ledger);
+};
+
+/**
+ * {@link effect}`(service, Effect.gen(…))` — generator that **returns** a
+ * component. Yield Services, then return the render fn. `void` → `() => null`.
  *
  * @example
  * ```ts
- * export const Hello = View.gen(function* () {
- *   const GreeterView = yield* Greeter
- *   return (props: { name: string }) => <GreeterView name={props.name} />
- * })
- *
- * export const Page = View.gen(function* () {
- *   const views = yield* Effect.all({ Shell, Hello })
- *   return () => (
- *     <views.Shell>
- *       <views.Hello who="nik" />
- *     </views.Shell>
- *   )
- * })
+ * class Hello extends View.Service<Hello, { who: string }>()("app/Hello") {
+ *   static layer = View.gen(Hello, function* () {
+ *     const G = yield* Greeter
+ *     return (props: { who: string }) => <G name={props.who} />
+ *   })
+ * }
  * ```
  *
  * @public
  */
 export function gen<
+  I,
+  P extends object,
   Eff extends Effect.Effect<any, any, any>,
-  F extends (props: any) => React.ReactElement | null,
+  F extends (props: P) => React.ReactElement | null,
 >(
+  service: Context.Key<I, Component<P>>,
   f: () => Generator<Eff, F, never>,
-): View<
-  Parameters<F>[0] extends object ? Parameters<F>[0] : {},
-  Effect.Services<Eff> | TreeServicesOf<F>,
+): ViewLayer<
+  I,
+  Effect.Error<Eff>,
+  Effect.Services<Eff>,
   ProvideTokensOf<Eff>
 >;
-export function gen<Eff extends Effect.Effect<any, any, any>>(
+export function gen<
+  I,
+  P extends object,
+  Eff extends Effect.Effect<any, any, any>,
+>(
+  service: Context.Key<I, Component<P>>,
   f: () => Generator<Eff, void, never>,
-): View<{}, Effect.Services<Eff>, ProvideTokensOf<Eff>>;
-export function gen(f: any): any {
-  return fromEffect(
+): ViewLayer<
+  I,
+  Effect.Error<Eff>,
+  Effect.Services<Eff>,
+  ProvideTokensOf<Eff>
+>;
+export function gen(
+  service: Context.Key<any, Component<any>>,
+  f: () => Generator<any, any, never>,
+): ViewLayer<any, any, any, any> {
+  return effect(
+    service,
     Effect.map(Effect.gen(f), (component) =>
       component === undefined ? () => null : component,
     ) as Effect.Effect<(props: any) => React.ReactElement | null, any, any>,
-  );
+  ) as ViewLayer<any, any, any, any>;
 }
 
 /**
- * Pure component — `succeed(fn)` like {@link fromEffect}`(Effect.succeed(fn))`.
- *
- * @example
- * ```ts
- * export const Greeter = View.succeed((props: { name: string }) => (
- *   <h1>{props.name}</h1>
- * ))
- * ```
- *
- * @public
- */
-export const succeed = <F extends (props: any) => React.ReactElement | null>(
-  component: F,
-): View<
-  Parameters<F>[0] extends object ? Parameters<F>[0] : {},
-  TreeServicesOf<F>
-> => fromEffect(Effect.succeed(component));
-
-/**
- * Discharge a view’s services `R` with a {@link Layer} and return a JSX-legal
- * {@link Component} (`R` reduced to the layer’s remaining input, usually
- * `never`).
- *
- * Wraps the view in {@link AtomReact.RegistryProvider} +
- * {@link AtomReact.RuntimeProvider} built from `layer`.
+ * App edge: build a runtime from `layer`, `yield*` `service`, render it.
+ * This is the only public path to a JSX-legal component.
  *
  * @example
  * ```ts
  * const App = View.mount(
  *   Hello,
- *   Greeter.provide(({ name }) => <span>{name}</span>),
+ *   Hello.layer.pipe(Layer.provide(Greeter.layer)),
  * )
- * // App: View<{}, never> — render <App />
+ * // render <App who="nik" />
  * ```
  *
  * @public
  */
-export const mount = <
-  Props extends object,
-  R,
-  E = never,
-  RIn = never,
-  Provides = never,
->(
-  view: View<Props, R, Provides>,
-  layer: Layer.Layer<R, E, RIn>,
-): View<Props, RIn> => {
-  const Mounted = (props: Props): React.ReactElement | null => {
+export const mount = <I, P extends object, E = never, RIn = never>(
+  service: Context.Key<I, Component<P>>,
+  layer: Layer.Layer<I, E, RIn>,
+): Component<P> => {
+  const Mounted = (props: P): React.ReactElement | null => {
     const runtime = React.useMemo(() => Atom.runtime(layer as never), [layer]);
     return React.createElement(
       AtomReact.RegistryProvider,
@@ -422,43 +411,38 @@ export const mount = <
       React.createElement(
         AtomReact.RuntimeProvider as never,
         { runtime },
-        React.createElement(view as never, props),
+        React.createElement(ServiceRenderer, {
+          service: service as Context.Key<unknown, Component<object>>,
+          props: props as object,
+        }),
       ),
     );
   };
-  return stamp<Props, RIn>(Mounted);
+  return stamp<P, never>(Mounted);
 };
 
-/**
- * Provide a component for a Service. Props infer from the Service.
- *
- * Dual: `View.provide(Greeter, impl)` or `View.provide(Greeter)(impl)`.
- * Minted Services also expose {@link ViewHandle.provide}.
- *
- * @public
- */
-export function provide<I, P extends object>(
-  tag: Context.Key<I, View<P>>,
-): (
-  impl: Types.NoInfer<(props: P) => React.ReactElement | null>,
-) => Layer.Layer<I>;
-export function provide<I, P extends object>(
-  tag: Context.Key<I, View<P>>,
-  impl: Types.NoInfer<(props: P) => React.ReactElement | null>,
-): Layer.Layer<I>;
-export function provide<I, P extends object>(
-  tag: Context.Key<I, View<P>>,
-  impl?: Types.NoInfer<(props: P) => React.ReactElement | null>,
-):
-  | Layer.Layer<I>
-  | ((
-      impl: Types.NoInfer<(props: P) => React.ReactElement | null>,
-    ) => Layer.Layer<I>) {
-  if (impl === undefined) {
-    return (resource) => Layer.succeed(tag, stamp<P, never>(resource));
+/** Resolve a View Service from the runtime and call it. @internal */
+const ServiceRenderer = (props: {
+  readonly service: Context.Key<unknown, Component<object>>;
+  readonly props: object;
+}): React.ReactElement | null => {
+  const runtime = AtomReact.useRuntime();
+  const atom = React.useMemo(
+    () =>
+      runtime.atom(
+        props.service as unknown as Effect.Effect<Component<object>>,
+      ),
+    [runtime, props.service],
+  );
+  const result = AtomReact.useAtomValue(atom);
+  if (AsyncResult.isSuccess(result)) {
+    return result.value(props.props);
   }
-  return Layer.succeed(tag, stamp<P, never>(impl));
-}
+  if (AsyncResult.isFailure(result)) {
+    throw Cause.squash(result.cause);
+  }
+  return null;
+};
 
 // =============================================================================
 // Prototype + Service
@@ -597,15 +581,11 @@ export type ViewHandle<
   K extends string,
   Props extends object,
   Annotations extends AnyAnnotations = {},
-> = Context.ServiceClass<Self, K, View<Props>> & {
+> = Context.ServiceClass<Self, K, Component<Props>> & {
   readonly [annotationsSym]: Annotations;
   readonly [Last.kindSym]: typeof kind;
   /** Phantom — component props. */
   readonly Type: Props;
-  /** Provide this service’s impl — same as {@link provide}`(this, impl)`. */
-  readonly provide: (
-    impl: (props: Props) => React.ReactElement | null,
-  ) => Layer.Layer<Self>;
 };
 
 /**
@@ -663,7 +643,7 @@ export interface Prototype<
   /**
    * Mint a Context.Service **class** handle (Effect v4 naming).
    * Does **not** discharge Requirement — fulfill via `.Prototype()` first when needed.
-   * Add `static layer = This.provide(…)` on the class for a default Layer.
+   * Add `static layer = View.succeed(This, …)` (or {@link gen}) for a default Layer.
    */
   readonly Service: <Self, NewProps extends object = {}>() => <
     const K extends string,
@@ -708,14 +688,11 @@ const makePrototype = <
         ...bag,
         ...(next ?? ({} as NewAnnotations)),
       } as NextAnnotations;
-      const base = Context.Service<Self, View<NextProps>>()(key);
+      const base = Context.Service<Self, Component<NextProps>>()(key);
       return Object.assign(base, {
         [annotationsSym]: merged,
         [Last.kindSym]: kind,
         Type: undefined as unknown as NextProps,
-        provide: (
-          impl: (props: NextProps) => React.ReactElement | null,
-        ): Layer.Layer<Self> => Layer.succeed(base, stamp<NextProps, never>(impl)),
       });
     },
 });
@@ -741,18 +718,25 @@ export const Prototype =
 
 /**
  * View service handle — Effect v4 `Context.Service` naming.
- *
- * Add a default Layer on the class (camelCase `layer`, never `*Live`):
+ * `yield*` to get the component. Attach a default Layer with
+ * `static layer = View.succeed(This, …)` (camelCase `layer`, never `*Live`).
  *
  * @example
  * ```ts
  * class Greeter extends View.Service<Greeter, { readonly name: string }>()(
  *   "app/view/greeter",
  * ) {
- *   static layer = Greeter.provide(({ name }) => <h1>{name}</h1>)
+ *   static layer = View.succeed(Greeter, ({ name }) => <h1>{name}</h1>)
  * }
  *
- * View.mount(Hello, Greeter.layer)
+ * class Hello extends View.Service<Hello, { who: string }>()("app/Hello") {
+ *   static layer = View.gen(Hello, function* () {
+ *     const G = yield* Greeter
+ *     return (props: { who: string }) => <G name={props.who} />
+ *   })
+ * }
+ *
+ * const App = View.mount(Hello, Hello.layer.pipe(Layer.provide(Greeter.layer)))
  * ```
  *
  * @public

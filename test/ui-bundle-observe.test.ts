@@ -40,7 +40,7 @@ const hubSite = Route.make("hub").add(
 class PoolCard extends Views.Card.Service<PoolCard>()("hyperlink/view/observe-use-pool-card") {}
 
 const views = Views.bind(WorkPool.kind, PoolCard).pipe(
-  Layer.provideMerge(View.provide(PoolCard, () => null)),
+  Layer.provideMerge(View.succeed(PoolCard, () => null)),
   Layer.provideMerge(Views.base),
 );
 

@@ -5,9 +5,14 @@
  * normal {@link Context.Service} bags (not View.Service handles).
  *
  * ```ts
- * yield* Last.provide(ShellMeta, { title: "uDumb" }) // partial OK; last wins
- * const layer = Last.toLayer(ShellMeta, Hello)       // only if Hello covered it
- * View.mount(Page, layer)
+ * class Hello extends View.Service<Hello>()("app/Hello") {
+ *   static layer = View.gen(Hello, function* () {
+ *     yield* Last.provide(ShellMeta, { title: "uDumb" }) // partial OK; last wins
+ *     return () => <p />
+ *   })
+ * }
+ * const meta = Last.toLayer(ShellMeta, Hello.layer) // only if Hello covered it
+ * View.mount(Page, Page.layer.pipe(Layer.provide(meta)))
  * ```
  */
 
@@ -217,16 +222,19 @@ export const provide = <I, S extends object, const P extends Partial<S>>(
   });
 
 /**
- * Build `Layer.succeed(service, bag)` from a View that {@link provide}d enough
- * keys. Incomplete Provides ⇒ non-Layer diagnostic type.
+ * Build `Layer.succeed(service, bag)` from a {@link View.gen} / {@link View.effect}
+ * Layer that {@link provide}d enough keys. Incomplete Provides ⇒ non-Layer
+ * diagnostic type.
  *
  * @example
  * ```ts
- * const Hello = View.gen(function* () {
- *   yield* Last.provide(ShellMeta, { title: "uDumb" })
- *   return () => <p />
- * })
- * View.mount(Page, Last.toLayer(ShellMeta, Hello))
+ * class Hello extends View.Service<Hello>()("app/Hello") {
+ *   static layer = View.gen(Hello, function* () {
+ *     yield* Last.provide(ShellMeta, { title: "uDumb" })
+ *     return () => <p />
+ *   })
+ * }
+ * View.mount(Page, Page.layer.pipe(Layer.provide(Last.toLayer(ShellMeta, Hello.layer))))
  * ```
  *
  * @public
@@ -240,13 +248,13 @@ export const toLayer = <
   },
 >(
   service: Context.Service<I, S>,
-  view: V,
+  viewLayer: V,
 ): ToLayerFromProvides<
   I,
   S,
   V extends { readonly "~last-ts/View/provides": infer P } ? P : never
 > => {
-  const ledger = view[provideLedgerSym];
+  const ledger = viewLayer[provideLedgerSym];
   const entry = ledger?.get(service.key);
   return Layer.succeed(
     service,

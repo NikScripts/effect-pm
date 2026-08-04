@@ -1,8 +1,8 @@
-# DI Views — gen + mount (not JSX `R` bubbling, not bag compose)
+# DI Views — Service Layers + mount (not JSX `R` bubbling)
 
 **Status:** Eng on `cursor/file-router-prototype-125f`.  
-**Not:** pretending stock TypeScript carries `R` through `<Child />`.  
-**Not:** `View.succeed({ Child }, ({ Child }) => …)` bag compose — **removed**.  
+**Not:** freestanding View values you call as JSX.  
+**Not:** `View.succeed({ Child }, …)` bag compose — **removed**.  
 **Opposite direction:** [view-provide-draft.md](./view-provide-draft.md) · spine [effect-app-router-plan.md](./effect-app-router-plan.md).
 
 ---
@@ -12,29 +12,24 @@
 ```tsx
 /** @jsxImportSource last-ts */
 class Greeter extends View.Service<Greeter, { readonly name: string }>()("…") {
-  static layer = Greeter.provide(({ name }) => <span>{name}</span>)
+  static layer = View.succeed(Greeter, ({ name }) => <span>{name}</span>)
 }
 
-const Hello = View.gen(function* () {
-  const GreeterView = yield* Greeter
-  return (props: { readonly who: string }) => (
-    <GreeterView name={props.who} />
-  )
-})
-// Hello: Unresolved<{ who }, Greeter>
+class Hello extends View.Service<Hello, { readonly who: string }>()("…") {
+  static layer = View.gen(Hello, function* () {
+    const GreeterView = yield* Greeter
+    return (props: { readonly who: string }) => (
+      <GreeterView name={props.who} />
+    )
+  })
+}
+// Hello.layer: Layer<Hello, never, Greeter>
 
 const App = View.mount(
-  View.gen(function* () {
-    const views = yield* Effect.all({ Greeter })
-    return () => (
-      <div>
-        <views.Greeter name="nik" />
-      </div>
-    )
-  }),
-  Greeter.layer,
+  Hello,
+  Hello.layer.pipe(Layer.provide(Greeter.layer)),
 )
-// App: Component<{}>
+// App: Component<{ who }> — only JSX-legal edge
 ```
 
 ---
@@ -43,20 +38,21 @@ const App = View.mount(
 
 | Piece | Behavior |
 |-------|----------|
-| `View<P, never>` | {@link Component} — JSX call signature |
-| `View<P, R>` (`R` ≠ `never`) | {@link Unresolved} — **no** JSX call signature |
-| `yield* Effect.all({ A, B })` | Resolve Services; JSX the results |
-| `View.mount(view, layer)` | Discharge `R` via Layer + RuntimeProvider |
-| `View.Service` + `static layer` | Effect v4 style default Layer (camelCase; never `*Live`) |
-| `Service.provide` / `View.provide` | Layer builder (assign to `static layer` when wanted) |
+| `View.Service` | Context slot; `yield*` → component |
+| `View.succeed(Service, impl)` | `Layer.succeed` twin → {@link ViewLayer} |
+| `View.gen(Service, function*)` | `Layer.effect` + gen → {@link ViewLayer} |
+| `View.effect(Service, fx)` | `Layer.effect` twin |
+| `static layer = …` | Effect v4 default Layer (camelCase; never `*Live`) |
+| `View.mount(Service, layer)` | **Only** JSX-legal output |
+| Freestanding `View.gen(function*)` / unary `succeed(fn)` | **Removed** |
+| `View.provide` / `Service.provide` | **Removed** — use `View.succeed` |
 | Bag `succeed({ Child }, …)` | **Removed** |
-| `View.Tag` / `{ default }` bake-in | **Removed** — use `View.Service` + `static layer` |
 
-Stock TS types every `<… />` as black-box `JSX.Element`. We do **not** rely on that for `R`.
+Stock TS types every `<… />` as black-box `JSX.Element`. We do **not** rely on that for `R`. Layer `R` is the compose channel.
 
 ---
 
 ## Verification
 
 - `pnpm exec tsc -p packages/last-ts`
-- `test/view-service.test-d.ts`, `test/view-jsx*.tsx`, `examples/ui/view-typed-jsx.tsx`
+- `test/view-service.test-d.ts`, `test/view-jsx*.tsx`, `test/last-provide.*`, `examples/ui/view-typed-jsx.tsx`
