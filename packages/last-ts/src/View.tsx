@@ -18,7 +18,7 @@
  */
 import * as React from "react";
 import { Cause, Context, Effect, Layer } from "effect";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/unstable/reactivity";
 import * as AtomReact from "./AtomReact";
 import type * as Jsx from "./Jsx";
 import * as Last from "./Last";
@@ -246,21 +246,16 @@ export const mount: {
   readonly layer: Layer.Layer<any, any, never>;
 }) => {
   const { layer } = service;
-  const Mounted = (props: object): React.ReactElement | null => {
-    const runtime = React.useMemo(() => Atom.runtime(layer as never), [layer]);
-    return React.createElement(
-      AtomReact.RegistryProvider,
+  const Shell = Last.app(layer as Layer.Layer<any, any, never>);
+  const Mounted = (props: object): React.ReactElement | null =>
+    React.createElement(
+      Shell.Provider,
       null,
-      React.createElement(
-        AtomReact.RuntimeProvider as never,
-        { runtime },
-        React.createElement(ServiceRenderer, {
-          service: service as unknown as Context.Key<unknown, ViewFn<object>>,
-          props,
-        }),
-      ),
+      React.createElement(ServiceRenderer, {
+        service: service as unknown as Context.Key<unknown, ViewFn<object>>,
+        props,
+      }),
     );
-  };
   return stamp(Mounted);
 }) as typeof mount;
 

@@ -7,6 +7,7 @@ import * as React from "react";
 import { Context, Effect, Layer, SubscriptionRef } from "effect";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import * as AtomReact from "last-ts/AtomReact";
+import * as Last from "last-ts/Last";
 
 class Title extends Context.Service<
   Title,
@@ -81,19 +82,17 @@ const Parent = (): React.ReactElement => {
   return <ParentReady title={titleResult.value} />;
 };
 
-export const App = (): React.ReactElement => {
-  const runtime = React.useMemo(() => Atom.runtime(titleLayer), []);
-  return (
-    <AtomReact.RegistryProvider>
-      <AtomReact.RuntimeProvider runtime={runtime}>
-        <main className="page">
-          <header>
-            <h2>Title live update</h2>
-            <p>SubscriptionRef in Context — child set → parent re-render</p>
-          </header>
-          <Parent />
-        </main>
-      </AtomReact.RuntimeProvider>
-    </AtomReact.RegistryProvider>
-  );
-};
+/** Layer (+ registry/runtime) baked — children only. */
+const Provider = Last.app(titleLayer).Provider;
+
+export const App = (): React.ReactElement => (
+  <Provider>
+    <main className="page">
+      <header>
+        <h2>Title live update</h2>
+        <p>SubscriptionRef in Context — child set → parent re-render</p>
+      </header>
+      <Parent />
+    </main>
+  </Provider>
+);

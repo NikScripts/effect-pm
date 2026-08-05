@@ -1,18 +1,62 @@
 /**
  * @module Last
  *
- * Cross-cutting Last.ts: factory brands + upward value **Provides** toward
- * normal {@link Context.Service} bags (not View.Service handles).
+ * Cross-cutting Last.ts: factory brands, upward **Provides**, and the app
+ * shell that bakes Layer (+ router) into one children-only Provider.
  *
  * ```ts
  * function* helloProvides() {
  *   yield* Last.provide(ShellMeta, { title: "uDumb" }) // partial OK; last wins
  * }
  * const meta = Last.toLayer(ShellMeta, helloProvides)
+ *
+ * export const Provider = Last.app(
+ *   Layer.mergeAll(Title.layer),
+ * ).pipe(
+ *   Last.router(Router.make(site, "Memory")),
+ * ).Provider
+ * // <Provider>…</Provider> — no runtime / binding props
  * ```
  */
 
 import { Context, Effect, Layer } from "effect";
+import * as appInternal from "./internal/app";
+
+// =============================================================================
+// App shell (Layer → children-only Provider)
+// =============================================================================
+
+export type App = appInternal.App;
+
+/**
+ * Start an app shell from a fulfilled Layer.
+ *
+ * @public
+ */
+export const app: typeof appInternal.app = appInternal.app;
+
+/**
+ * Bake a lite Memory / History {@link ./Router.Service} into the shell.
+ *
+ * @public
+ */
+export const router: typeof appInternal.router = appInternal.router;
+
+/**
+ * Install a custom router wrapper (used by `last-ts/Router/waku`).
+ *
+ * @public
+ */
+export const withRouterInstall: typeof appInternal.withRouterInstall =
+  appInternal.withRouterInstall;
+
+/**
+ * One-shot Layer (+ optional lite router) → children-only Provider.
+ *
+ * @public
+ */
+export const toProvider: typeof appInternal.toProvider =
+  appInternal.toProvider;
 
 // =============================================================================
 // Factory brand (existing)

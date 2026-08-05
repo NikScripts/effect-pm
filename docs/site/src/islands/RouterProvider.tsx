@@ -1,16 +1,19 @@
 "use client";
 
-/** Mount {@link ../ui/Router.waku}(`site`) for the book chrome (Waku layer). */
+/** Mount Waku router binding via {@link Last.app} — children-only Provider. */
 import * as React from "react";
+import { Layer } from "effect";
+import * as Waku from "hyperlink-ts/ui/Router/waku";
+import * as Last from "last-ts/Last";
 import { site } from "../lib/siteRoutes.js";
 import * as Router from "../ui/Router.js";
 
-const router = Router.waku(site);
+const Provider = Last.app(Layer.empty).pipe(
+  Waku.router(Router.waku(site)),
+).Provider;
 
 export function RouterProvider(props: {
   readonly children: React.ReactNode;
 }): React.ReactElement {
-  return (
-    <Router.Provider value={router}>{props.children}</Router.Provider>
-  );
+  return <Provider>{props.children}</Provider>;
 }

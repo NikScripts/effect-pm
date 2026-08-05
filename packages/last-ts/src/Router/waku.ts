@@ -2,16 +2,19 @@
  * @module ui/RouterWaku
  *
  * **Waku layer only** for the one {@link ./Router} service — not a second Router
- * namespace. Install with {@link waku} / {@link layer.waku}; React adapters
- * ({@link Provider}, {@link Link}, {@link useRouter}) pull the optional `waku`
- * peer. Lite Memory / History / Outlet / `make` stay on `last-ts/ui/Router`.
+ * namespace. Prefer baking into {@link ../Last.app} via {@link router}; the
+ * paramful {@link Provider} remains for escape hatches.
  *
  * ```tsx
- * import * as Router from "last-ts/Router"
- * import { waku, Provider, Link } from "last-ts/ui/Router/waku"
+ * import * as Last from "last-ts/Last"
+ * import { Layer } from "effect"
+ * import { waku, router, Link } from "last-ts/Router/waku"
  *
- * const binding = waku(site) // or layer.waku(site)
- * <Provider value={binding}>
+ * export const Provider = Last.app(Layer.empty).pipe(
+ *   router(waku(site)),
+ * ).Provider
+ *
+ * <Provider>
  *   <Link to={(u) => u.home()}>Home</Link>
  * </Provider>
  * ```
@@ -22,6 +25,10 @@
  */
 "use client";
 
+import * as React from "react";
+import { Function as Fn } from "effect";
+import type * as Last from "../Last";
+import * as appInternal from "../internal/app";
 import * as internal from "../internal/routerWaku";
 import type { ApiConstraint } from "../internal/routes";
 import type * as Route from "../Route";
@@ -63,12 +70,44 @@ export const setDefault: typeof internal.setDefault = internal.setDefault;
 export const isWakuBinding: typeof internal.isWakuBinding =
   internal.isWakuBinding;
 
+/**
+ * Bake a {@link waku} binding into a {@link Last.App} shell (pipeable).
+ *
+ * @example
+ * ```tsx
+ * export const Provider = Last.app(appLayer).pipe(
+ *   Waku.router(Waku.waku(site)),
+ * ).Provider
+ * ```
+ *
+ * @public
+ */
+export const router: {
+  (
+    binding: internal.WakuBinding<ApiConstraint, unknown>,
+  ): (self: Last.App) => Last.App;
+  (
+    self: Last.App,
+    binding: internal.WakuBinding<ApiConstraint, unknown>,
+  ): Last.App;
+} = Fn.dual(
+  2,
+  (
+    self: Last.App,
+    binding: internal.WakuBinding<ApiConstraint, unknown>,
+  ): Last.App =>
+    appInternal.withRouterInstall(self, (children) =>
+      React.createElement(internal.Provider, { value: binding, children }),
+    ),
+);
+
 // =============================================================================
 // React adapters (Waku peer)
 // =============================================================================
 
 /**
  * One Provider: lite {@link ./Router.Service} **or** {@link waku} binding.
+ * Prefer {@link router} + {@link ../Last.app} so call sites take children only.
  *
  * @public
  */

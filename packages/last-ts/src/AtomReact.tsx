@@ -4,6 +4,17 @@
  * React binding over Effect's native reactive layer (`effect/unstable/reactivity`) —
  * `AtomRegistry` provider + hooks, plus `Atom.AtomRuntime` context for app layers.
  *
+ * Prefer baking the shell with {@link ../Last.app} so call sites take children only:
+ *
+ * ```ts
+ * import * as Last from "last-ts/Last"
+ *
+ * export const Provider = Last.app(appLayer).Provider
+ * // <Provider>…</Provider>
+ * ```
+ *
+ * Low-level escape hatch (paramful):
+ *
  * ```ts
  * import * as AtomReact from "last-ts/AtomReact"
  *

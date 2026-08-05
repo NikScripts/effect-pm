@@ -13,19 +13,22 @@
  *   ),
  * )
  *
- * const router = Router.make(site, "History")
+ * export const Provider = Last.app(Layer.empty).pipe(
+ *   Last.router(Router.make(site, "History")),
+ * ).Provider
  *
- * <Router.Provider value={router}>
+ * <Provider>
  *   <Router.Link to={(u) => u.home()}>Home</Router.Link>
  *   <Router.Link to={(u) => u.user("42", { query: { tab: "bio" } })}>
  *     User
  *   </Router.Link>
  *   <Router.Outlet />
- * </Router.Provider>
+ * </Provider>
  * ```
  *
  * **One service.** This entry is the lite layer (`make` / `memory` / `history`).
- * Waku layer: `last-ts/Router/waku`. Group Target helpers stay on hyperlink-ts.
+ * Waku layer: `last-ts/Router/waku` (`Waku.router` into `Last.app`).
+ * Group Target helpers stay on hyperlink-ts.
  *
  * @see docs/handoffs/ui-routes-dream.md
  */
