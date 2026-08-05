@@ -176,6 +176,20 @@ interface ResolvedReady {
 }
 
 /**
+ * When {@link SpawnSpec.node} is already Ready at its dial address.
+ *
+ * - `"fail"` (default) — {@link NodeAlreadyUp}; `spawn` / `up` stay create-shaped
+ * - `"adopt"` — skip spawn for that unit (no Handle; not custody). Ready-proved only.
+ *
+ * Bare skip without a Ready probe is rejected. Never implies migration-handoff or
+ * Directory replace — membership stays on Lookup.
+ *
+ * @category models
+ * @public
+ */
+export type AlreadyUp = "fail" | "adopt";
+
+/**
  * One spawn unit — dial target + Effect `ChildProcess` command (or a factory that receives the
  * minted cleartext token for open injection into env/argv). Prefer {@link command} / {@link entry}.
  *
@@ -188,6 +202,11 @@ export interface SpawnSpec {
     | ChildProcess.Command
     | ((token: string) => ChildProcess.Command);
   readonly ready?: ReadyOptions;
+  /**
+   * Already-up Policy for this unit (overrides {@link UpOptions.alreadyUp}).
+   * {@link spawn} always treats already-Ready as {@link NodeAlreadyUp} (create-only).
+   */
+  readonly alreadyUp?: AlreadyUp;
 }
 
 /**
@@ -249,6 +268,11 @@ export interface UpOptions {
    * Does **not** Soft-bake Lookup onto app nodes.
    */
   readonly lookup?: EnsureLookupOptions;
+  /**
+   * Default {@link AlreadyUp} for units that omit {@link SpawnSpec.alreadyUp}.
+   * Default `"fail"` — `up` stays create-shaped unless you opt into `"adopt"`.
+   */
+  readonly alreadyUp?: AlreadyUp;
 }
 
 // =============================================================================
@@ -356,6 +380,25 @@ export class LookupAddressRequired extends Data.TaggedError(
     return (
       `Launcher.ensureLookup: node "${this.node}" has no ipc path — provide ` +
       `{ path } or an addressed Lookup node.`
+    );
+  }
+}
+
+/**
+ * Dial target for a {@link SpawnSpec} is already Ready — create refused.
+ * Opt into {@link AlreadyUp} `"adopt"` on {@link up} to skip spawn for that unit
+ * (no Handle). Never means migration-handoff or Directory steal.
+ *
+ * @category errors
+ * @public
+ */
+export class NodeAlreadyUp extends Data.TaggedError("NodeAlreadyUp")<{
+  readonly node: string;
+}> {
+  override get message() {
+    return (
+      `Launcher: node "${this.node}" is already Ready at its dial address — ` +
+      `spawn refused (use alreadyUp: "adopt" on up to ensure without custody).`
     );
   }
 }
@@ -938,10 +981,23 @@ const makeHandle = (options: {
 // Public constructors
 // =============================================================================
 
+/** True when node-status reports Ready for the unit's services. @internal */
+const probePeerReady = (
+  node: AnyNode,
+  services: ReadonlyArray<string> | undefined,
+): Effect.Effect<boolean> =>
+  probeReady(node, services).pipe(
+    Effect.as(true),
+    Effect.catch(() => Effect.succeed(false)),
+  );
+
 /**
  * Spawn one OS child under launcher custody — mints an assume token, resolves Ready Config,
  * runs `process`, returns a {@link Handle}. Requires `ChildProcessSpawner` + `Scope`
  * (provide {@link layer} at the app edge).
+ *
+ * Create-only: if the dial target is already Ready, fails {@link NodeAlreadyUp}.
+ * Ensure-with-adopt is on {@link up} via {@link AlreadyUp} `"adopt"` (no Handle).
  *
  * @category constructors
  * @public
@@ -950,18 +1006,23 @@ export const spawn = (
   spec: SpawnSpec,
 ): Effect.Effect<
   Handle,
-  PlatformError | ConfigError,
+  | NodeAlreadyUp
+  | PlatformError
+  | ConfigError,
   ChildProcessSpawner.ChildProcessSpawner | Scope.Scope
 > =>
   withLauncherPhase(
     spec.node.key,
     "spawn",
     Effect.gen(function* () {
+      const ready = yield* resolveReady(spec.ready);
+      if (yield* probePeerReady(spec.node, ready.services)) {
+        return yield* new NodeAlreadyUp({ node: spec.node.key });
+      }
       const token = yield* mintToken;
       const clear = Redacted.value(token);
       const processCommand =
         typeof spec.process === "function" ? spec.process(clear) : spec.process;
-      const ready = yield* resolveReady(spec.ready);
       const child = yield* processCommand;
       const phase = yield* Ref.make<HandlePhase>("spawned");
       const gate = yield* Semaphore.make(1);
@@ -1037,6 +1098,7 @@ export const ensureLookup = (
   EnsureLookupResult,
   | LookupNotRunning
   | LookupAddressRequired
+  | NodeAlreadyUp
   | ReadyTimedOut
   | ChildExited
   | HandleSpent
@@ -1111,8 +1173,10 @@ export const ensureLookup = (
 
 /**
  * One-shot bring-up: optional {@link UpOptions.lookup} (ensure-Lookup-first), then
- * spawn → awaitReady → handoff per unit. Accepts one {@link SpawnSpec} or a readonly
- * array (not {@link Group}). Units run with {@link UpOptions.concurrency} (default `1`).
+ * per unit either adopt an already-Ready peer ({@link AlreadyUp} `"adopt"`) or
+ * spawn → awaitReady → handoff. Default already-up Policy is `"fail"`
+ * ({@link NodeAlreadyUp}). Accepts one {@link SpawnSpec} or a readonly array
+ * (not {@link Group}). Units run with {@link UpOptions.concurrency} (default `1`).
  *
  * @category constructors
  * @public
@@ -1124,6 +1188,7 @@ export const up = (
   void,
   | LookupNotRunning
   | LookupAddressRequired
+  | NodeAlreadyUp
   | ReadyTimedOut
   | ChildExited
   | HandleSpent
@@ -1148,16 +1213,34 @@ export const up = (
         yield* ensureLookup(options.lookup);
       }
       const units = isSpawnSpec(spec) ? [spec] : spec;
+      const defaultAlreadyUp: AlreadyUp = options?.alreadyUp ?? "fail";
       yield* Effect.logInfo("Launcher.up starting").pipe(
-        Effect.annotateLogs({ "launcher.units": String(units.length) }),
+        Effect.annotateLogs({
+          "launcher.units": String(units.length),
+          "launcher.already_up": defaultAlreadyUp,
+        }),
       );
       yield* Effect.forEach(
         units,
         (unit) =>
-          spawn(unit).pipe(
-            Effect.flatMap((handle) => handle.awaitReady()),
-            Effect.flatMap((handle) => handle.handoff()),
-          ),
+          Effect.gen(function* () {
+            const mode: AlreadyUp = unit.alreadyUp ?? defaultAlreadyUp;
+            if (mode === "adopt") {
+              const ready = yield* resolveReady(unit.ready);
+              if (yield* probePeerReady(unit.node, ready.services)) {
+                yield* Effect.logInfo(
+                  "adopted already-up peer (no spawn / no Handle)",
+                ).pipe(
+                  Effect.annotateLogs({ "launcher.node": unit.node.key }),
+                );
+                return;
+              }
+            }
+            yield* spawn(unit).pipe(
+              Effect.flatMap((handle) => handle.awaitReady()),
+              Effect.flatMap((handle) => handle.handoff()),
+            );
+          }),
         { concurrency: options?.concurrency ?? 1 },
       );
       yield* Effect.logInfo("Launcher.up complete");

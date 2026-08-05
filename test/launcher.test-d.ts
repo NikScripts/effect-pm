@@ -97,6 +97,8 @@ function typeLock(
   > = true;
   const _spawnNeedsScope: AssertExtends<Scope.Scope, SpawnReq> = true;
   const _spawnHasConfigError: AssertExtends<ConfigError, SpawnErr> = true;
+  const _spawnHasAlreadyUp: AssertExtends<Launcher.NodeAlreadyUp, SpawnErr> =
+    true;
 
   type AwaitReadyErr = ErrOf<ReturnType<typeof handle.awaitReady>>;
   const _awaitReadyNoConfig: AssertNotExtends<ConfigError, AwaitReadyErr> =
@@ -128,6 +130,9 @@ function typeLock(
   const _upHasHandleSpent: AssertExtends<Launcher.HandleSpent, UpErr> = true;
   const _upHasAssume: AssertExtends<AssumeTokenMismatch, UpErr> = true;
   const _upHasConfigError: AssertExtends<ConfigError, UpErr> = true;
+  const _upHasAlreadyUp: AssertExtends<Launcher.NodeAlreadyUp, UpErr> = true;
+  const _alreadyUpModes: AssertExtends<"fail" | "adopt", Launcher.AlreadyUp> =
+    true;
 
   const assumed = assume(node, { token: "x" });
   type AssumeErr = ErrOf<typeof assumed>;
@@ -149,6 +154,7 @@ function typeLock(
   void _spawnNeedsSpawner;
   void _spawnNeedsScope;
   void _spawnHasConfigError;
+  void _spawnHasAlreadyUp;
   void _awaitReadyNoConfig;
   void _awaitReadyHasTimedOut;
   void _awaitReadyHasUnaddressed;
@@ -161,6 +167,8 @@ function typeLock(
   void _upHasHandleSpent;
   void _upHasAssume;
   void _upHasConfigError;
+  void _upHasAlreadyUp;
+  void _alreadyUpModes;
   void _assumeMismatch;
   void _assumeReuse;
   void _assumeNotReady;

@@ -387,11 +387,21 @@ Different planes; none mean “always migration-handoff”:
 | Already up | Default | Policy / control |
 |------------|---------|------------------|
 | **Lookup** at address | Dial / adopt — spawn skipped | Orchestrator only migration-handoffs Lookup when doing an intentional A→B replace (same address ownership move) |
-| **App node** Launcher was going to spawn | Open (not Eng’d) — likely: fail / skip / adopt Ready peer | Not automatic `Handle.handoff` (custody handoff is only for children Launcher spawned) |
+| **App node** Launcher was going to spawn | **`fail`** → `NodeAlreadyUp` (Eng'd) | Opt-in `alreadyUp: "adopt"` on `up` (Ready-proved; no Handle). Bare skip rejected. Not automatic `Handle.handoff` |
 | **Directory identity** conflict (B claims key A holds) | Ambient `Policy.Conflict` inherit → hard `livenessReplace` | `askIncumbent` / `conflictReject` / stamps — cooperative yield, **not** WorkPool/`serve` `{ handoff }` |
 | **Migration** state transfer | Opt-in `serve(…, { handoff })` during `Node.shutdown` | Never implied by “node already up” alone |
 
-**Custody** `Launcher.Handle.handoff` ≠ **migration** `serve { handoff }` ≠ **Lookup ownership** replace. “Already up” defaults to **use / conflict Policy**, not silent replace.
+**Custody** `Launcher.Handle.handoff` ≠ **migration** `serve { handoff }` ≠ **Lookup ownership** replace. “Already up” defaults to **fail (create)** for app nodes; Lookup adopts; membership conflicts stay on Lookup Policy.
+
+### Responsibility split (locked owner chat 2026-08-04 / 2026-08-05)
+
+| Plane | Owner | Examples |
+|-------|-------|----------|
+| **Membership / dial truth** | **Lookup** | Directory, Identity, Advice, `lookupClient` / `peersLayer`, conflict / `askIncumbent`, later impact queries |
+| **Custody / exclusive bind** | **Launcher** (or DIY orchestrator) | spawn → Ready → assume; `ensureLookup`; same-address Lookup A→B sequencing (both can’t bind the sock); app `NodeAlreadyUp` / adopt |
+| **Migration state** | **Nodes** during `Node.shutdown` | `serve { handoff }`, WorkPool `releaseEnqueueHandoff` |
+
+Most day-to-day coordination is Lookup. Launcher is the middleman only when an OS child or exclusive bind requires it.
 
 ### Independent launch (no Launcher) — keep first-node = Lookup
 
@@ -451,7 +461,7 @@ yield* Node.shutdown(lookupA) // releases sock
 1. ~~**`Lookup.follow` + gap Policy**~~ — **Eng'd** (`Lookup.follow` / `followOptions`; same-sock replace suite `test/lookup-follow.test.ts`).  
 2. ~~**Orchestrated single-address ownership handoff**~~ — **Eng'd** (`examples/node/lookup-follow-handoff.ts`, `test/lookup-follow-handoff.test.ts`).  
 3. ~~**Launcher ensure-Lookup-first**~~ — **Eng'd** (`Launcher.ensureLookup` / `UpOptions.lookup`; `test/launcher-ensure-lookup.test.ts`; `examples/launcher/ensure-lookup.ts`).  
-4. Update-impact / app `restartSuccessor` after. Open: Policy when **app** SpawnSpec target is already up (fail / skip / adopt — not auto migration-handoff).
+4. Update-impact / app `restartSuccessor` after. ~~App already-up Policy~~ **Eng'd** (`NodeAlreadyUp` default fail; `alreadyUp: "adopt"` on `up`).
 
 ---
 
@@ -589,8 +599,9 @@ export class Jobs extends WorkPool.Tag<Jobs>()("fleet/Jobs", { payload: Job }) {
 2. ~~`Lookup.follow` + single-address gap Policy~~ **Eng'd**  
 3. ~~Orchestrated Lookup ownership handoff (same address)~~ **Eng'd**  
 4. ~~Launcher Lookup-first (`ensureLookup`)~~ **Eng'd**  
-5. Update-impact planner (`Lookup`/`Node` + Launcher executes plan)  
-6. Explicit A/B / `restartSuccessor` for app nodes (behind impact + Lookup A/B)
+5. ~~App already-up Policy (`NodeAlreadyUp` / adopt)~~ **Eng'd**  
+6. Update-impact planner (`Lookup`/`Node` + Launcher executes plan)  
+7. Explicit A/B / `restartSuccessor` for app nodes (behind impact)
 
 ---
 

@@ -96,14 +96,20 @@ describe("Launcher.Handle.awaitReady", () => {
           url: "http://127.0.0.1:1/rpc",
           kind: "Http",
         });
-        const handle = yield* Launcher.spawn({
-          node,
-          process: ChildProcess.make("sleep", ["120"]),
-          ready: {
-            timeout: "30 seconds",
-            services: ["missing/Service"],
-          },
-        });
+        // spawn probes already-up via Ready dial (2s Clock timeout) before custody.
+        const spawnFiber = yield* Effect.forkChild(
+          Launcher.spawn({
+            node,
+            process: ChildProcess.make("sleep", ["120"]),
+            ready: {
+              timeout: "30 seconds",
+              services: ["missing/Service"],
+            },
+          }),
+        );
+        yield* Effect.yieldNow;
+        yield* TestClock.adjust("2 seconds");
+        const handle = yield* Fiber.join(spawnFiber);
         const fiber = yield* Effect.forkChild(
           handle.awaitReady().pipe(Effect.exit),
         );
@@ -510,6 +516,8 @@ describe("Launcher.up", () => {
         ).pipe(Effect.exit),
       );
       yield* Effect.yieldNow;
+      // already-up probe (2s) then Ready timeout on first unit (5s).
+      yield* TestClock.adjust("2 seconds");
       yield* TestClock.adjust("5 seconds");
       const exit = yield* Fiber.join(fiber);
       // First unit times out; sequential so second never starts custody.
@@ -545,6 +553,8 @@ describe("Launcher.up", () => {
         ).pipe(Effect.exit),
       );
       yield* Effect.yieldNow;
+      // concurrent already-up probes (2s) then Ready timeouts (5s).
+      yield* TestClock.adjust("2 seconds");
       yield* TestClock.adjust("5 seconds");
       const exit = yield* Fiber.join(fiber);
       expectTaggedFailure(exit, "ReadyTimedOut");

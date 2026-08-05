@@ -172,10 +172,21 @@ yield* Launcher.up({ node: worker, process: … })
 Lookup-only child uses `Lookup.layerNode(node, { assumeToken })` — no app HyperServices.
 App children pipe `Lookup.clientOptions({ path })` themselves.
 
-**Already up ≠ always hand off.** Custody `Handle.handoff` is only for children Launcher
-spawned. Migration `serve { handoff }` is opt-in on shutdown. Directory conflicts use
-`Policy.onConflict` / `askIncumbent` — not automatic replace. Intentional Lookup A→B is an
-orchestrated same-address ownership move.
+**Already up (app nodes):** `spawn` / default `up` **fail** with `NodeAlreadyUp` when the
+dial target is already Ready (create-shaped). Opt-in ensure:
+
+```ts
+yield* Launcher.up(workerSpec, { alreadyUp: "adopt" }) // Ready-proved; no Handle
+// or per unit: { …workerSpec, alreadyUp: "adopt" }
+```
+
+Bare skip without a Ready probe is rejected. Adopt never means migration-handoff or
+Directory steal. Custody `Handle.handoff` is only for children **this** Launcher spawned.
+Directory conflicts use `Policy.onConflict` / `askIncumbent`. Intentional Lookup A→B is an
+orchestrated same-address ownership move (Launcher/orchestrator as middleman).
+
+**Who owns what:** Lookup = membership + dial truth; Launcher = custody + exclusive-bind
+sequencing; nodes = migration `{ handoff }` on shutdown.
 
 **Lookup A/B:** one address; A/B = successive owners; `Lookup.follow` + Policy for the gap.
 Runnable: `pnpm run example:node-lookup-follow-handoff` ·

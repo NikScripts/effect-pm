@@ -27,6 +27,10 @@ function typeLock(
     Launcher.LookupAddressRequired,
     EnsureErrors
   > = true;
+  const _ensureHasAlreadyUp: AssertExtends<
+    Launcher.NodeAlreadyUp,
+    EnsureErrors
+  > = true;
   const _upHasNotRunning: AssertExtends<Launcher.LookupNotRunning, UpErrors> =
     true;
   const _ensureNeedsSpawner: AssertExtends<
@@ -41,6 +45,7 @@ function typeLock(
 
   void _ensureHasNotRunning;
   void _ensureHasAddressRequired;
+  void _ensureHasAlreadyUp;
   void _upHasNotRunning;
   void _ensureNeedsSpawner;
   void _spawned;
