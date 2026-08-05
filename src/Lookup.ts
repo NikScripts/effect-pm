@@ -10,6 +10,9 @@
  * holder + `RpcClientError` retry + {@link Policy.streamGap}. Compose gap Policy at the
  * call site; orchestration (who binds the sock) is outside this module.
  *
+ * **Updates:** {@link planUpdate} dry-runs Directory / status / Versioned impact before
+ * spawn (Launcher still executes units; Node owns drain/shutdown/handoff).
+ *
  * **Tags are sibling modules** — not members of this namespace:
  *
  * ```ts
@@ -75,6 +78,14 @@ import { connectIpc } from "./internal/node";
 import { ipcServer } from "./internal/nodeIpcServer";
 import * as internal from "./internal/lookup";
 import { followLayer } from "./internal/lookupFollow";
+import {
+  planUpdate as planUpdateInternal,
+  UpdateBlocked,
+  UpdateTargetUnknown,
+  type PlanUpdateOptions,
+  type PlanUpdateTag,
+  type UpdateImpact,
+} from "./internal/lookupPlanUpdate";
 
 /** Wire + resolve helpers — SSOT is {@link Policy}. @public */
 export type { OnConflict, OnConflictResolved } from "./Policy";
@@ -713,3 +724,28 @@ export const layerOptions = (options?: {
  * @public
  */
 export const layer: Layer.Layer<Services> = layerOptions();
+
+// ============================================================================
+// Update impact (dry-run planner)
+// ============================================================================
+
+export type { PlanUpdateOptions, PlanUpdateTag, UpdateImpact };
+export { UpdateBlocked, UpdateTargetUnknown };
+
+/**
+ * Dry-run update impact for replacing Directory `target` with `successor` Tags.
+ *
+ * Membership + impact query on Lookup — does **not** spawn. Fail-closed
+ * ({@link UpdateBlocked}) when gaps / wire removals / contract drifts are present
+ * unless `{ force: true }`. See
+ * `docs/handoffs/versioned-schema-decisions.md` (update impact).
+ *
+ * ```ts
+ * const impact = yield* Lookup.planUpdate("fleet/Worker#a", [WorkerV2])
+ * // then Launcher.up(successorSpec) / Node.shutdown(a)
+ * ```
+ *
+ * @category constructors
+ * @public
+ */
+export const planUpdate = planUpdateInternal;

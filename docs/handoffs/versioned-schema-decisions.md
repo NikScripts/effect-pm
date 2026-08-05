@@ -362,7 +362,7 @@ files.rename // ❌ not on Handle (compile error)
 
 ## Planned — Lookup-first launcher + Lookup A/B (owner 2026-08-03)
 
-**Status:** Design **locked** owner chat 2026-08-03 (single-address + orchestrator; name `Lookup.follow`) — **follow + handoff recipe + `Launcher.ensureLookup` Eng'd** 2026-08-04. Next: update-impact / app A/B.  
+**Status:** Design **locked** owner chat 2026-08-03 (single-address + orchestrator; name `Lookup.follow`) — **follow + handoff + `ensureLookup` + already-up + `Lookup.planUpdate` Eng'd**. Next: `restartSuccessor` / explicit app A/B.  
 **Why it matters a lot:** Lookup must be able to **restart / A/B update**. A Lookup that also hosts app services couples Lookup lifecycle to those services’ skew and forces Lookup A/B whenever an app Tag moves.
 
 ### Desired bring-up (Launcher) — ensure Lookup first (locked)
@@ -461,14 +461,13 @@ yield* Node.shutdown(lookupA) // releases sock
 1. ~~**`Lookup.follow` + gap Policy**~~ — **Eng'd** (`Lookup.follow` / `followOptions`; same-sock replace suite `test/lookup-follow.test.ts`).  
 2. ~~**Orchestrated single-address ownership handoff**~~ — **Eng'd** (`examples/node/lookup-follow-handoff.ts`, `test/lookup-follow-handoff.test.ts`).  
 3. ~~**Launcher ensure-Lookup-first**~~ — **Eng'd** (`Launcher.ensureLookup` / `UpOptions.lookup`; `test/launcher-ensure-lookup.test.ts`; `examples/launcher/ensure-lookup.ts`).  
-4. Update-impact / app `restartSuccessor` after. ~~App already-up Policy~~ **Eng'd** (`NodeAlreadyUp` default fail; `alreadyUp: "adopt"` on `up`).
+4. ~~Update-impact~~ **Eng'd** (`Lookup.planUpdate`). App `restartSuccessor` / explicit A/B next. ~~App already-up Policy~~ **Eng'd** (`NodeAlreadyUp` default fail; `alreadyUp: "adopt"` on `up`).
 
 ---
 
 ## Planned — Launcher / Lookup update impact (dependent nodes)
 
-**Status:** Design sketch 2026-08-03 — **doc only; Eng after deprecated**. Updated for Lookup-first (above).  
-Explicit A/B / `restartSuccessor` stay behind impact + Lookup A/B.
+**Status:** **Eng'd** 2026-08-05 — `Lookup.planUpdate` dry-run. Explicit A/B / `restartSuccessor` still behind this.
 
 ### Problem
 
@@ -491,25 +490,25 @@ Inputs already on tip (plus Versioned / deprecated once Eng’d):
 - Tag modules: Versioned chains + deprecated wire surface  
 
 ```ts
-// Names TBD at Eng — prefer Node/Lookup nouns over Launcher brain
-type UpdateImpact = {
-  readonly target: Node.Key
-  readonly successor: SpawnSpec
-  readonly coUpdate: ReadonlyArray<Node.Key>
-  readonly clientsAtRisk: ReadonlyArray<{ node: Node.Key; serviceKey: string }>
-  readonly migrationGaps: ReadonlyArray<{
-    serviceKey: string
-    leaf: string
-    from: string
-    to: string
-  }>
-  readonly wireRemovals: ReadonlyArray<{ serviceKey: string; method: string }>
-}
-
-// Dry-run before spawn — fail closed if migrationGaps / unsafe wireRemovals
-yield* Lookup.planUpdate(target, successorTagBundle) // name TBD
-yield* Launcher.up(successor) // only after plan says safe (or owner force)
+// Eng'd — Lookup.planUpdate(target, successorTags, options?)
+const impact = yield* Lookup.planUpdate("fleet/Worker#a", [WorkerV2], {
+  incumbent: [WorkerV1], // enables wireRemovals Spec diff
+  // force: true,     // return blocked impact instead of UpdateBlocked
+  // status: false,   // Directory/Advice only (skip status dial)
+})
+// impact.coUpdate / migrationGaps / wireRemovals / contractDrifts / lookupFirst
+yield* Launcher.up(successor) // only after plan says safe (or force)
 ```
+
+**Locked at Eng (was open):**
+
+| Fork | Lock |
+|------|------|
+| API home | **`Lookup.planUpdate`** (not `Node.planUpdate`; Launcher stays spawn-only) |
+| Force | `{ force: true }` returns impact when `blocked`; default fail `UpdateBlocked` |
+| `clientsAtRisk` | Advice `prefer` → target proxy (no dialer registry yet) |
+| Status dial | Default on; `{ status: false }` for Directory-only / TestClock |
+| `restartSuccessor` | Still deferred — plan then DIY `Launcher.up` + `Node.shutdown` |
 
 ### Rules of thumb
 
@@ -531,14 +530,12 @@ yield* Launcher.up(successor) // only after plan says safe (or owner force)
 
 Spine α stays: Launcher is not a long-lived fleet supervisor. **Plan** is Lookup/Node-shaped; Launcher executes spawn units from the plan.
 
-### Deferred open (resolve when this bake starts)
+### Deferred (after planUpdate v1)
 
-- API home: `Lookup.planUpdate` vs `Node.planUpdate`  
-- Force flag when impact is non-empty  
-- Discovering clients-at-risk without a client registry  
-- Tie-in to explicit A/B launcher / `restartSuccessor`  
-- Launcher API for “spawn Lookup first unless address / safe default”  
-- Registry snapshot handoff (v1 = cold + re-advertise)
+- Real dialer registry for `clientsAtRisk` (replace Advice-prefer proxy)  
+- Explicit A/B launcher / `restartSuccessor` (consumes plan)  
+- Registry snapshot handoff (v1 = cold + re-advertise)  
+- Durable tip gaps without live status rows
 
 ---
 
@@ -600,8 +597,8 @@ export class Jobs extends WorkPool.Tag<Jobs>()("fleet/Jobs", { payload: Job }) {
 3. ~~Orchestrated Lookup ownership handoff (same address)~~ **Eng'd**  
 4. ~~Launcher Lookup-first (`ensureLookup`)~~ **Eng'd**  
 5. ~~App already-up Policy (`NodeAlreadyUp` / adopt)~~ **Eng'd**  
-6. Update-impact planner (`Lookup`/`Node` + Launcher executes plan)  
-7. Explicit A/B / `restartSuccessor` for app nodes (behind impact)
+6. ~~Update-impact planner (`Lookup.planUpdate`)~~ **Eng'd**  
+7. Explicit A/B / `restartSuccessor` for app nodes (consumes plan)
 
 ---
 

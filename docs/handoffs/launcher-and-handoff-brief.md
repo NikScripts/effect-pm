@@ -262,7 +262,7 @@ Owner locked #22–26; Eng on tip:
     - Binary `contractHash` / `ContractMismatch` stays for whole-Spec drift.
     - Cross-version **payload** path: [`versioned-schema-decisions.md`](./versioned-schema-decisions.md) — per-tip `schemaVersion`; retires numeric `withSchemaVersion`.
     - Method retirement: [`docs/guides/deprecated.md`](../guides/deprecated.md) (`Fn.dual`, prefer pipe).
-    - **Next:** Lookup-first launcher bring-up + **Lookup A/B** (high priority); then update-impact; then explicit A/B / `restartSuccessor`.
+    - **Next:** ~~Lookup-first + Lookup A/B + update-impact~~ **Eng'd**; then explicit A/B / `restartSuccessor`.
 
 36. **Lookup-node handoff — re-opened (high priority; owner 2026-08-03).**
     - Soft-bake / “first node = Lookup” stays for **independent** launch (no Launcher).

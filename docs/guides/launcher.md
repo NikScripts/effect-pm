@@ -185,8 +185,12 @@ Directory steal. Custody `Handle.handoff` is only for children **this** Launcher
 Directory conflicts use `Policy.onConflict` / `askIncumbent`. Intentional Lookup A→B is an
 orchestrated same-address ownership move (Launcher/orchestrator as middleman).
 
-**Who owns what:** Lookup = membership + dial truth; Launcher = custody + exclusive-bind
-sequencing; nodes = migration `{ handoff }` on shutdown.
+**Who owns what:** Lookup = membership + dial truth (+ `Lookup.planUpdate` dry-run);
+Launcher = custody + exclusive-bind sequencing; nodes = migration `{ handoff }` on shutdown.
+
+**Before an update spawn:** dry-run with `Lookup.planUpdate(target, successorTags)` — fail-closed
+on migration gaps / wire removals / contract drifts (`force: true` to inspect). Launcher does
+not plan; it executes units after the plan says safe.
 
 **Lookup A/B:** one address; A/B = successive owners; `Lookup.follow` + Policy for the gap.
 Runnable: `pnpm run example:node-lookup-follow-handoff` ·
