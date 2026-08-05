@@ -82,6 +82,9 @@ export class Handler extends Context.Service<Handler, Handle>()(
 /**
  * Attach a render function to a destination. Dual.
  *
+ * @deprecated Prefer {@link ./RouterBuilder.group} handlers + layout. Kept for
+ * catalogs that still annotate destinations directly.
+ *
  * ```ts
  * Route.get("home", "/home").pipe(Route.handle(() => <Home />))
  * ```

@@ -86,8 +86,8 @@ export const isGroup = (
   (typeof x === "object" || typeof x === "function") && x !== null && "members" in x;
 
 /**
- * Turn a Group tree into a **typed** Effect of {@link ./ui/Route} destinations.
- * Compose with `Route.group(…).fromEffect(…)` — UrlBuilder keeps member paths:
+ * Turn a Group tree into a **typed** Effect of {@link ./ui/Route} destinations
+ * (flat leaf-only groups). Compose with `Route.group(…).fromEffect(…)`:
  *
  * ```ts
  * const site = Route.make("site").add(

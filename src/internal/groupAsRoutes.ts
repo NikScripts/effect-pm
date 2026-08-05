@@ -2,8 +2,9 @@
  * Build {@link ../ui/Route} destinations from a Group tree — used by
  * {@link ../Group.asRoutes}. Route/Router stay Group-agnostic; Group owns this bridge.
  *
- * Type-level {@link MembersRouteLikes} mirrors the runtime walk so
- * `fromEffect(Group.asRoutes(hub))` keeps {@link UrlBuilder} typed.
+ * Runtime emits **flat** leaf-only groups (nested Group nodes → sibling groups
+ * with full path prefixes). Type-level {@link MembersRouteLikes} keeps the
+ * UrlBuilder surface for `fromEffect(Group.asRoutes(hub))`.
  */
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -89,6 +90,30 @@ const target = <Id extends string, PathType extends Route.Path, Params>(
 ): Route.Endpoint<Id, PathType, Params> =>
   Route.annotate(endpoint, Route.Target, value);
 
+const leafEndpoints = (
+  name: string,
+  keys: ReadonlyArray<string>,
+  member: unknown,
+): Array<Route.Constraint> => [
+  target(Route.get(name, formatPath(keys)), {
+    _tag: "Leaf",
+    keys,
+    member,
+  }),
+  target(Route.get(`${name}Logs`, formatPath([...keys, "logs"])), {
+    _tag: "LeafView",
+    keys: [...keys, "logs"],
+    member,
+    view: "logs",
+  }),
+  target(Route.get(`${name}Schedule`, formatPath([...keys, "schedule"])), {
+    _tag: "LeafView",
+    keys: [...keys, "schedule"],
+    member,
+    view: "schedule",
+  }),
+];
+
 const membersToRoutes = (
   node: RouteGroup,
   prefix: ReadonlyArray<string>,
@@ -98,36 +123,24 @@ const membersToRoutes = (
     const keys = [...prefix, name];
     const path = formatPath(keys);
     if (isGroupNode(member)) {
-      out.push(
-        Route.group(name).add(
-          target(Route.get("index", path), {
-            _tag: "Group",
-            keys,
-            member,
-          }),
-          ...membersToRoutes(member, keys),
-        ),
-      );
-    } else {
-      out.push(
-        target(Route.get(name, path), {
-          _tag: "Leaf",
+      const endpoints: Array<Route.Constraint> = [
+        target(Route.get("index", path), {
+          _tag: "Group",
           keys,
           member,
         }),
-        target(Route.get(`${name}Logs`, formatPath([...keys, "logs"])), {
-          _tag: "LeafView",
-          keys: [...keys, "logs"],
-          member,
-          view: "logs",
-        }),
-        target(Route.get(`${name}Schedule`, formatPath([...keys, "schedule"])), {
-          _tag: "LeafView",
-          keys: [...keys, "schedule"],
-          member,
-          view: "schedule",
-        }),
-      );
+      ];
+      for (const [childName, child] of Object.entries(member.members)) {
+        if (!isGroupNode(child)) {
+          endpoints.push(
+            ...leafEndpoints(childName, [...keys, childName], child),
+          );
+        }
+      }
+      out.push(Route.group(name).add(...endpoints));
+      out.push(...membersToRoutes(member, keys));
+    } else if (prefix.length === 0) {
+      out.push(...leafEndpoints(name, keys, member));
     }
   }
   return out;

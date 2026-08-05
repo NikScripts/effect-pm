@@ -174,6 +174,26 @@ describe("Router.memory (Route.Api)", () => {
 });
 
 describe("Group.asRoutes + fromEffect", () => {
+  it("emits leaf-only groups (no nested route groups)", () => {
+    const site = Route.make("hub").add(
+      Route.group("tree", { topLevel: true }).fromEffect(Group.asRoutes(Hub)),
+    );
+    const tree = (site.groups as Record<string, Route.GroupTop | undefined>)[
+      "tree"
+    ];
+    const nwsl = tree?.groups["Nwsl"];
+    if (nwsl === undefined) {
+      throw new Error("expected Nwsl group");
+    }
+    expect(Object.keys(nwsl.groups)).toEqual([]);
+    expect(Object.keys(nwsl.routes).sort()).toEqual([
+      "HttpApi",
+      "HttpApiLogs",
+      "HttpApiSchedule",
+      "index",
+    ]);
+  });
+
   it("open by member yields short-name path + Target match", () => {
     run(Router.memory(hubSite), (router) => {
       GroupNav.open(Hub, router, HttpApi);

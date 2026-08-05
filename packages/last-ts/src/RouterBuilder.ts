@@ -40,7 +40,8 @@ export const group: typeof internal.group = internal.group;
 
 /**
  * Register the catalog; requires every top-level group Layer
- * (`HttpApiBuilder.layer`). Provides {@link Catalog} + {@link Handlers}.
+ * (`HttpApiBuilder.layer`). Resolves `group.from(Service)` destinations, then
+ * provides {@link Catalog} + {@link Handlers} for the resolved catalog.
  *
  * @public
  */

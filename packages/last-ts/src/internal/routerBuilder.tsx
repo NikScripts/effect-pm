@@ -7,6 +7,7 @@ import * as React from "react";
 import { Context, Effect, Layer } from "effect";
 import type { Layout } from "../Layout";
 import type * as Route from "../Route";
+import * as catalog from "./routes";
 import type { ApiConstraint, GroupTop, Match } from "./routes";
 import type * as uiRoute from "./route";
 
@@ -186,16 +187,17 @@ export const group = <
 
 /**
  * Register catalog; requires every top-level group impl (`HttpApiBuilder.layer`).
- * Provides {@link Catalog} + {@link Handlers}.
+ * Resolves `group.from(Service)` destinations, then provides {@link Catalog} +
+ * {@link Handlers} for the **resolved** catalog.
  */
 export const layer = <A extends ApiConstraint>(
   api: A,
 ): Layer.Layer<Catalog | Handlers> =>
-  Layer.effect(
-    Handlers,
+  Layer.effectContext(
     Effect.gen(function* () {
+      const resolved = yield* catalog.resolveApi(api);
       const groups = new Map<string, GroupImpl>();
-      for (const g of Object.values(api.groups) as Array<GroupTop>) {
+      for (const g of Object.values(resolved.groups) as Array<GroupTop>) {
         const tag = groupServiceTag(api.identifier, g.identifier);
         const impl = yield* tag;
         for (const id of Object.keys(g.routes)) {
@@ -207,10 +209,10 @@ export const layer = <A extends ApiConstraint>(
         }
         groups.set(g.identifier, impl);
       }
-      return { api, groups };
+      return Context.make(Catalog, resolved).pipe(
+        Context.add(Handlers, { api: resolved, groups }),
+      );
     }),
-  ).pipe(
-    Layer.provideMerge(Layer.succeed(Catalog, api)),
   ) as Layer.Layer<Catalog | Handlers>;
 
 /**

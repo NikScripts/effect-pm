@@ -2,7 +2,7 @@
  * RouterBuilder + Memory.layer + Last.provider (HttpApi-shaped lock).
  */
 import { describe, expect, it } from "@effect/vitest";
-import { Layer } from "effect";
+import { Context, Effect, Layer, ManagedRuntime } from "effect";
 import * as React from "react";
 import { renderToString } from "react-dom/server";
 import type { Layout } from "last-ts/Layout";
@@ -90,5 +90,73 @@ describe("RouterBuilder (HttpApi-shaped)", () => {
     );
     // SSR won't re-render after go — assert builder layers construct
     expect(html.length).toBeGreaterThan(0);
+  });
+});
+
+const fileTable = [
+  { id: "index", routePath: "/" },
+  { id: "about", routePath: "/about" },
+] as const;
+
+class FileRoutes extends Context.Service<
+  FileRoutes,
+  ReadonlyArray<Router.RoutesOf<typeof fileTable>>
+>()("test/router-builder/FileRoutes") {}
+
+class FileSite extends Router.make("file-site").add(
+  Router.group("root", { topLevel: true }).from(FileRoutes),
+) {}
+
+const IndexPage = (): React.ReactElement =>
+  React.createElement("span", null, "file-index");
+
+const AboutPage = (): React.ReactElement =>
+  React.createElement("span", null, "file-about");
+
+const filePages = RouterBuilder.group(FileSite, "root", RootLayout, (h) =>
+  h.handle("index", IndexPage).handle("about", AboutPage),
+);
+
+const fileRoutes = RouterBuilder.layer(FileSite).pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      filePages,
+      Router.layerDestinations(FileRoutes, fileTable),
+    ),
+  ),
+);
+
+const fileProvider = Last.provider(
+  Memory.layer.pipe(Layer.provide(fileRoutes)),
+);
+
+describe("RouterBuilder group.from(Service)", () => {
+  it("resolves destinations Layer into Catalog + Outlet", () => {
+    const html = renderToString(
+      React.createElement(
+        fileProvider,
+        null,
+        React.createElement(Router.Outlet),
+      ),
+    );
+    expect(html).toContain("file-index");
+    expect(html).toContain("data-layout=\"root\"");
+  });
+
+  it("UrlBuilder sees resolved file destinations", async () => {
+    const runtime = ManagedRuntime.make(
+      Memory.layer.pipe(Layer.provide(fileRoutes)),
+    );
+    try {
+      const router = await runtime.runPromise(
+        Effect.gen(function* () {
+          return yield* Router.Router;
+        }),
+      );
+      expect(router.urls.index()).toBe("/");
+      expect(router.urls.about()).toBe("/about");
+    } finally {
+      await runtime.dispose();
+    }
   });
 });

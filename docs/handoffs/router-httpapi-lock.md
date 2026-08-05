@@ -26,7 +26,9 @@
 - Layers **camelCase**; never `*Live`.
 - External peer Layers → own namespace (`Waku`).
 - `Last.provider(layer)` → children-only React provider.
-- Generated routes: `group.from(Service)` on contract; provide destinations via Layer.
+- Generated routes: `group.from(Service)` on contract; provide destinations via Layer
+  (`Router.layerDestinations(tag, table)` or `Layer.succeed(tag, …)`).
+  `RouterBuilder.layer` resolves `from(Service)` into the provided {@link Catalog}.
 
 ## Compose
 
@@ -40,5 +42,33 @@ export const provider = Last.provider(
 ```
 
 `Layer.mergeAll(routes, Memory.layer)` is wrong — Memory **requires** Catalog|Handlers that `routes` **provides**; use `Memory.layer.pipe(Layer.provide(routes))`.
+
+### File routes (`from` + destinations Layer)
+
+```ts
+class FileRoutes extends Context.Service<
+  FileRoutes,
+  ReadonlyArray<Router.RoutesOf<typeof table>>
+>()("app/FileRoutes") {}
+
+class Site extends Router.make("site").add(
+  Router.group("root", { topLevel: true }).from(FileRoutes),
+) {}
+
+const routes = RouterBuilder.layer(Site).pipe(
+  Layer.provide(Layer.mergeAll(
+    RouterBuilder.group(Site, "root", Layout, (h) =>
+      h.handle("index", Home).handle("about", About),
+    ),
+    Router.layerDestinations(FileRoutes, table),
+  )),
+)
+```
+
+### Group → routes
+
+- `Group.asRoutes(hub)` — **flat** leaf-only groups for `fromEffect` under a
+  topLevel hub (`urls.Nwsl.HttpApi()` unchanged). Nested Group nodes become
+  sibling route groups (full path prefix kept).
 
 See Eng tests `test/router-builder.test.tsx`.

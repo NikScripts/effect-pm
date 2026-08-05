@@ -14,7 +14,9 @@
  *   h.handle("home", Home),
  * )
  * const routes = RouterBuilder.layer(Site).pipe(Layer.provide(marketing))
- * export const provider = Last.provider(Layer.mergeAll(routes, History.layer))
+ * export const provider = Last.provider(
+ *   History.layer.pipe(Layer.provide(routes)),
+ * )
  * ```
  *
  * @see docs/handoffs/router-httpapi-lock.md
@@ -85,8 +87,36 @@ export const flatten: typeof catalog.flatten = catalog.flatten;
 /** @public */
 export const reflect: typeof catalog.reflect = catalog.reflect;
 
-/** Endpoint list from a file-router table (for `Layer.sync(FileRoutes, …)`). @public */
-export const destinations = fileRouter.fileSystem;
+/**
+ * Effect of endpoints from a file-router table (for `fromEffect` / tooling).
+ * Prefer {@link layerDestinations} with `group.from(Service)`.
+ *
+ * @public
+ */
+export const destinations: typeof fileRouter.fileSystem = fileRouter.fileSystem;
+
+/**
+ * Sync endpoint list from a file-router table.
+ *
+ * @public
+ */
+export const destinationsOf: typeof fileRouter.destinationsOf =
+  fileRouter.destinationsOf;
+
+/**
+ * `Layer.succeed(tag, destinationsOf(entries))` for `group.from(tag)`.
+ *
+ * @public
+ */
+export const layerDestinations: typeof fileRouter.layerDestinations =
+  fileRouter.layerDestinations;
+
+/** @public */
+export type PathEntry = fileRouter.PathEntry;
+
+/** @public */
+export type RoutesOf<Entries extends ReadonlyArray<fileRouter.PathEntry>> =
+  fileRouter.RoutesOf<Entries>;
 
 // =============================================================================
 // Types
@@ -276,8 +306,8 @@ export const Link = <A extends ApiConstraint = ApiConstraint>(props: {
 };
 
 /**
- * Render the matched route’s {@link Route.handle}. Returns `null` when there is
- * no match or the destination has no handler.
+ * Render the matched route’s page. Prefers {@link ./RouterBuilder} handlers
+ * (+ group layout). Falls back to legacy {@link Route.handle} annotations.
  *
  * ```tsx
  * <Router.Provider value={router}>

@@ -1,5 +1,6 @@
 /**
  * Group.asRoutes + fromEffect — UrlBuilder stays typed (member paths + health).
+ * Flat leaf-only groups; `routeGroupsOf` for Api-level add.
  */
 import { expectTypeOf } from "vitest";
 import * as Daemon from "../src/Daemon";

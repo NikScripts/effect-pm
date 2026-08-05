@@ -33,6 +33,27 @@ type GroupMap<Groups extends GroupTop> = {
 };
 
 /**
+ * Annotation: destinations come from a Context service (contract-only until
+ * {@link resolveApi} / {@link ../RouterBuilder.layer} merges them).
+ *
+ * @internal
+ */
+export class FromRoutes extends Context.Service<
+  FromRoutes,
+  Context.Service<any, ReadonlyArray<uiRoute.Constraint>>
+>()("last-ts/Router/FromRoutes") {}
+
+/**
+ * Accumulated path prefix for deferred {@link GroupTop.from} destinations.
+ * Survives `.prefix` while the group’s route map is still empty.
+ *
+ * @internal
+ */
+export class GroupPrefix extends Context.Service<GroupPrefix, Path>()(
+  "last-ts/Router/GroupPrefix",
+) {}
+
+/**
  * Erased group shape (runtime + nested-group bound). Avoids a circular
  * `Group.Constraint` that expands through itself.
  */
@@ -46,10 +67,17 @@ export interface GroupTop extends Pipeable {
   add(...items: ReadonlyArray<uiRoute.Constraint | GroupTop>): GroupTop;
   /**
    * Merge destinations from an Effect (`HttpRouter.addAll` analogue).
-   * Prefer {@link ../Group.asRoutes} — typed UrlBuilder items are preserved.
+   * Prefer {@link from} + Layer for service catalogs.
    */
   fromEffect(
     effect: Effect.Effect<Iterable<RouteLike>, never, never>,
+  ): GroupTop;
+  /**
+   * Declare destinations from a Context service (type only on the contract).
+   * Provide the service via Layer before {@link ../RouterBuilder.layer}.
+   */
+  from(
+    service: Context.Service<any, ReadonlyArray<uiRoute.Constraint>>,
   ): GroupTop;
   prefix(prefix: Path): GroupTop;
   annotate<I, S>(tag: Context.Key<I, S>, value: S): GroupTop;
@@ -91,6 +119,13 @@ export interface Group<
   fromEffect(
     effect: Effect.Effect<Iterable<RouteLike>, never, never>,
   ): GroupTop;
+  /**
+   * Destinations from a service — phantom-typed onto the group; resolved in
+   * {@link ../RouterBuilder.layer}.
+   */
+  from<I, E extends uiRoute.Constraint>(
+    service: Context.Service<I, ReadonlyArray<E>>,
+  ): Group<Id, Routes | E, Groups, TopLevel>;
   prefix(prefix: Path): Group<Id, Routes, Groups, TopLevel>;
   annotate<I, S>(
     tag: Context.Key<I, S>,
@@ -243,12 +278,16 @@ const groupProto = {
     for (const [id, child] of Object.entries(this.groups)) {
       groups[id] = child.prefix(prefix);
     }
+    const prev = Context.getOption(this.annotations, GroupPrefix);
+    const nextPrefix = Option.isSome(prev)
+      ? uiRoute.joinPath(prev.value, prefix)
+      : prefix;
     return makeGroupProto({
       identifier: this.identifier,
       topLevel: this.topLevel,
       routes,
       groups,
-      annotations: this.annotations,
+      annotations: Context.add(this.annotations, GroupPrefix, nextPrefix),
     });
   },
   annotate<I, S>(
@@ -270,6 +309,12 @@ const groupProto = {
   ): GroupTop {
     const items = Array.from(Effect.runSync(effect));
     return this.add(...items);
+  },
+  from(
+    this: GroupTop,
+    service: Context.Service<any, ReadonlyArray<uiRoute.Constraint>>,
+  ): GroupTop {
+    return this.annotate(FromRoutes, service);
   },
 };
 
@@ -798,3 +843,70 @@ export const reflect = (
     walk(g, self.annotations, []);
   }
 };
+
+// =============================================================================
+// Resolve deferred `group.from(Service)` destinations
+// =============================================================================
+
+const stripResolveAnnotations = (
+  annotations: Context.Context<never>,
+): Context.Context<never> =>
+  Context.omit(FromRoutes, GroupPrefix)(annotations) as Context.Context<never>;
+
+/**
+ * Merge `from(Service)` destinations into a group (and nested groups).
+ * Applies accumulated {@link GroupPrefix} to deferred endpoints.
+ *
+ * @internal
+ */
+export const resolveGroup = (
+  g: GroupTop,
+): Effect.Effect<GroupTop, never, unknown> =>
+  Effect.gen(function* () {
+    const children: Record<string, GroupTop> = {};
+    for (const [id, child] of Object.entries(g.groups)) {
+      children[id] = yield* resolveGroup(child);
+    }
+
+    let routes = { ...g.routes } as Record<string, uiRoute.Constraint>;
+    const fromTag = Context.getOption(g.annotations, FromRoutes);
+    if (Option.isSome(fromTag)) {
+      const destinations: ReadonlyArray<uiRoute.Constraint> = yield* fromTag
+        .value;
+      const prefix = Context.getOption(g.annotations, GroupPrefix);
+      for (const route of destinations) {
+        const next =
+          Option.isSome(prefix) ? route.prefix(prefix.value) : route;
+        routes = { ...routes, [next.identifier]: next };
+      }
+    }
+
+    return makeGroupProto({
+      identifier: g.identifier,
+      topLevel: g.topLevel,
+      routes,
+      groups: children,
+      annotations: stripResolveAnnotations(g.annotations),
+    });
+  });
+
+/**
+ * Resolve every `group.from(Service)` on a catalog. Requires the destination
+ * services in `R`. Result is a concrete catalog for match / UrlBuilder.
+ *
+ * @internal
+ */
+export const resolveApi = (
+  api: ApiConstraint,
+): Effect.Effect<ApiConstraint, never, unknown> =>
+  Effect.gen(function* () {
+    const groups: Record<string, GroupTop> = {};
+    for (const [id, g] of Object.entries(api.groups)) {
+      groups[id] = yield* resolveGroup(g);
+    }
+    return makeAppProto({
+      identifier: api.identifier,
+      groups,
+      annotations: api.annotations,
+    });
+  });
