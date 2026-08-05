@@ -29,7 +29,7 @@ expectTypeOf(
 // @ts-expect-error path param required
 urls.node();
 
-const router = Router.make(site, "Memory");
+const router = Router.unsafeService(site, "Memory");
 router.to((u) => u.app.dashboard());
 router.to((u) => u.home());
 router.to((u) => u.node("a", { query: { focus: "1" } }));

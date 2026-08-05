@@ -1,43 +1,92 @@
 /**
  * @module Router
  *
- * **Real UI router** over a {@link ./Route} catalog — match the URL, render the
- * route’s {@link ./Route.handle}, navigate with {@link Link} / `go` / `to`.
+ * UI route **catalog** (`HttpApi` analogue) + live nav React bindings.
  *
- * ```tsx
- * const site = Route.make("site").add(
- *   Route.get("home", "/home").pipe(Route.handle(() => <Home />)),
- *   Route.get("user", "/users/:id").pipe(
- *     Route.params(Schema.Struct({ id: Schema.String })),
- *     Route.handle(({ params }) => <User id={params.id} />),
+ * ```ts
+ * class Site extends Router.make("site").add(
+ *   Router.group("marketing", { topLevel: true }).add(
+ *     Route.get("home", "/"),
  *   ),
+ * ) {}
+ *
+ * const marketing = RouterBuilder.group(Site, "marketing", Layout, (h) =>
+ *   h.handle("home", Home),
  * )
- *
- * export const Provider = Last.app(Layer.empty).pipe(
- *   Last.router(Router.make(site, "History")),
- * ).Provider
- *
- * <Provider>
- *   <Router.Link to={(u) => u.home()}>Home</Router.Link>
- *   <Router.Link to={(u) => u.user("42", { query: { tab: "bio" } })}>
- *     User
- *   </Router.Link>
- *   <Router.Outlet />
- * </Provider>
+ * const routes = RouterBuilder.layer(Site).pipe(Layer.provide(marketing))
+ * export const provider = Last.provider(Layer.mergeAll(routes, History.layer))
  * ```
  *
- * **One service.** This entry is the lite layer (`make` / `memory` / `history`).
- * Waku layer: `last-ts/Router/waku` (`Waku.router` into `Last.app`).
- * Group Target helpers stay on hyperlink-ts.
- *
- * @see docs/handoffs/ui-routes-dream.md
+ * @see docs/handoffs/router-httpapi-lock.md
  */
 import * as React from "react";
 import { Context, Layer } from "effect";
+import type { HttpApi, HttpApiGroup } from "effect/unstable/httpapi";
 import * as fileRouter from "./internal/fileRouter";
 import * as internal from "./internal/router";
+import * as catalog from "./internal/routes";
 import type { ApiConstraint } from "./internal/routes";
 import * as Route from "./Route";
+
+// =============================================================================
+// Catalog (`HttpApi`)
+// =============================================================================
+
+/** @public */
+export type Api<
+  Id extends string = string,
+  Groups extends catalog.GroupTop = never,
+> = catalog.Api<Id, Groups>;
+
+/** @public */
+export type Group<
+  Id extends string = string,
+  Routes extends Route.Constraint = never,
+  Groups extends catalog.GroupTop = never,
+  TopLevel extends boolean = boolean,
+> = catalog.Group<Id, Routes, Groups, TopLevel>;
+
+/** @public */
+export type GroupTop = catalog.GroupTop;
+
+/** @public */
+export type { ApiConstraint };
+
+/** Empty catalog — `HttpApi.make`. @public */
+export const make: typeof catalog.make = catalog.make;
+
+/** Named group — `HttpApiGroup.make`. @public */
+export const group: typeof catalog.group = catalog.group;
+
+/** @public */
+export const isApi: typeof catalog.isApi = catalog.isApi;
+
+/** @public */
+export const isGroup: typeof catalog.isGroup = catalog.isGroup;
+
+/**
+ * Flatten an Effect `HttpApi` into a group bag (`HttpApi.addHttpApi`).
+ *
+ * @public
+ */
+export const addHttpApi: <
+  Id extends string,
+  Groups extends HttpApiGroup.Constraint,
+>(
+  api: HttpApi.HttpApi<Id, Groups>,
+) => catalog.GroupTop = catalog.addHttpApi;
+
+/** @public */
+export const match: typeof catalog.match = catalog.match;
+
+/** @public */
+export const flatten: typeof catalog.flatten = catalog.flatten;
+
+/** @public */
+export const reflect: typeof catalog.reflect = catalog.reflect;
+
+/** Endpoint list from a file-router table (for `Layer.sync(FileRoutes, …)`). @public */
+export const destinations = fileRouter.fileSystem;
 
 // =============================================================================
 // Types
@@ -66,23 +115,22 @@ export class Router extends Context.Service<Router, Service>()(
 ) {}
 
 // =============================================================================
-// Construction
+// Legacy live Layers (prefer Memory.layer / History.layer + RouterBuilder)
 // =============================================================================
 
 /**
- * Build a live router value (typed when `api` is a concrete catalog).
- * `engine` chooses Memory vs History at install; the live field is `_tag`.
+ * Live Memory service value — prefer {@link ./Memory.layer} + {@link ./RouterBuilder}.
  *
  * @public
  */
-export const make = <A extends ApiConstraint>(
+export const unsafeService = <A extends ApiConstraint>(
   api: A,
   engine: "Memory" | "History",
 ): Service<A> => internal.makeService(api, engine);
 
 /**
- * In-memory router — tests, embed, TUI. Path is not bound to `window.history`.
- * Pass a {@link Route.Api} only (use `Group.asRoutes` + `fromEffect` for Groups).
+ * In-memory router Layer from a catalog value (legacy). Prefer
+ * {@link ./Memory.layer} with {@link ./RouterBuilder.layer}.
  *
  * @public
  */
@@ -90,8 +138,8 @@ export const memory = (api: ApiConstraint): Layer.Layer<Router> =>
   Layer.sync(Router, () => internal.makeService(api, "Memory"));
 
 /**
- * Browser History router — `pushState` / `popstate` / `replaceState` against the catalog.
- * Pass a {@link Route.Api} only (use `Group.asRoutes` + `fromEffect` for Groups).
+ * Browser History router Layer from a catalog value (legacy). Prefer
+ * {@link ./History.layer} with {@link ./RouterBuilder.layer}.
  *
  * @public
  */
@@ -99,8 +147,7 @@ export const history = (api: ApiConstraint): Layer.Layer<Router> =>
   Layer.sync(Router, () => internal.makeService(api, "History"));
 
 /**
- * Typed destinations from a file-router path table — use with
- * `Route.group(…).fromEffect(Router.fileSystem(fileEntries))` or {@link ./Route.fileRoot}.
+ * Typed destinations from a file-router path table.
  *
  * @public
  */
@@ -252,14 +299,41 @@ const queryFromSearch = (search: string): Record<string, string> => {
 export const Outlet = (): React.ReactElement | null => {
   const router = useRouter();
   const match = router.match;
-  const handler = Route.handleOf(match);
-  if (match === undefined || handler === undefined) return null;
-  const node = handler({
+  if (match === undefined) return null;
+
+  const args: Route.HandleArgs = {
     params: match.params,
     query: queryFromSearch(router.search),
     pathname: match.pathname,
     href: router.href,
-  });
+  };
+
+  // RouterBuilder handlers (+ optional layout)
+  const bag = router._handlers;
+  if (bag !== undefined) {
+    const resolved = (() => {
+      const impl = bag.groups.get(match.group.identifier);
+      if (impl === undefined) return null;
+      const h = impl.handlers.get(match.route.identifier);
+      if (h === undefined) return null;
+      return {
+        page: h.page,
+        layout: h.layout === false ? null : impl.layout,
+      };
+    })();
+    if (resolved !== null) {
+      const page = React.createElement(resolved.page, args);
+      if (resolved.layout !== null) {
+        return React.createElement(resolved.layout, { children: page });
+      }
+      return page;
+    }
+  }
+
+  // Legacy Route.handle annotation
+  const handler = Route.handleOf(match);
+  if (handler === undefined) return null;
+  const node = handler(args);
   if (node === null || node === undefined || typeof node === "boolean") {
     return null;
   }

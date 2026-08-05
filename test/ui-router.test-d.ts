@@ -8,7 +8,7 @@ import * as RouterWaku from "../src/ui/RouterWaku";
 
 const site = Route.make("site").add(Route.get("home", "/"));
 
-const memory = Router.make(site, "Memory");
+const memory = Router.unsafeService(site, "Memory");
 expectTypeOf(memory._tag).toEqualTypeOf<"Memory" | "History" | "Waku">();
 expectTypeOf(memory._tag).toEqualTypeOf<Router.Service["_tag"]>();
 

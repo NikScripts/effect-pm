@@ -1,8 +1,8 @@
 /**
  * @module Last
  *
- * Cross-cutting Last.ts: factory brands, upward **Provides**, and the app
- * shell that bakes Layer (+ router) into one children-only Provider.
+ * Cross-cutting Last.ts: factory brands, upward **Provides**, and
+ * {@link provider} (Layer → children-only React provider).
  *
  * ```ts
  * function* helloProvides() {
@@ -10,12 +10,10 @@
  * }
  * const meta = Last.toLayer(ShellMeta, helloProvides)
  *
- * export const Provider = Last.app(
- *   Layer.mergeAll(Title.layer),
- * ).pipe(
- *   Last.router(Router.make(site, "Memory")),
- * ).Provider
- * // <Provider>…</Provider> — no runtime / binding props
+ * export const provider = Last.provider(
+ *   History.layer.pipe(Layer.provide(routes)),
+ * )
+ * // <provider>…</provider>
  * ```
  */
 
@@ -23,36 +21,39 @@ import { Context, Effect, Layer } from "effect";
 import * as appInternal from "./internal/app";
 
 // =============================================================================
-// App shell (Layer → children-only Provider)
+// Provider shell (Layer → children-only React component)
 // =============================================================================
 
 export type App = appInternal.App;
 
 /**
- * Start an app shell from a fulfilled Layer.
+ * Bake a fulfilled Layer into a children-only React provider.
  *
+ * @public
+ */
+export const provider: typeof appInternal.provider = appInternal.provider;
+
+/**
+ * @deprecated Prefer {@link provider}.
  * @public
  */
 export const app: typeof appInternal.app = appInternal.app;
 
 /**
- * Bake a lite Memory / History {@link ./Router.Service} into the shell.
- *
+ * @deprecated Prefer {@link ./History.layer} / {@link ./Memory.layer} in the Layer graph.
  * @public
  */
 export const router: typeof appInternal.router = appInternal.router;
 
 /**
- * Install a custom router wrapper (used by `last-ts/Router/waku`).
- *
+ * @deprecated Prefer {@link provider}.
  * @public
  */
 export const withRouterInstall: typeof appInternal.withRouterInstall =
   appInternal.withRouterInstall;
 
 /**
- * One-shot Layer (+ optional lite router) → children-only Provider.
- *
+ * @deprecated Prefer {@link provider}.
  * @public
  */
 export const toProvider: typeof appInternal.toProvider =

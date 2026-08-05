@@ -4,7 +4,15 @@
  * @internal
  */
 import * as React from "react";
-import { Function as Fn, Pipeable, type Layer } from "effect";
+import {
+  Context,
+  Effect,
+  Function as Fn,
+  Layer as Layer_,
+  Option,
+  Pipeable,
+  type Layer,
+} from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import * as AtomReact from "../AtomReact";
 import * as Router from "../Router";
@@ -107,7 +115,7 @@ export const app = <R, E = never>(
  * @example
  * ```tsx
  * export const Provider = Last.app(appLayer).pipe(
- *   Last.router(Router.make(site, "Memory")),
+ *   Last.router(Router.unsafeService(site, "Memory")),
  * ).Provider
  * ```
  *
@@ -140,7 +148,7 @@ export const withRouterInstall: {
  * @example
  * ```tsx
  * export const Provider = Last.toProvider(Title.layer)
- * export const Provider = Last.toProvider(appLayer, Router.make(site, "Memory"))
+ * export const Provider = Last.toProvider(appLayer, Router.unsafeService(site, "Memory"))
  * ```
  *
  * @public
@@ -152,3 +160,71 @@ export const toProvider = <R, E = never>(
   service === undefined
     ? make(layer).Provider
     : make(layer).pipe(router(service)).Provider;
+
+/**
+ * Bake a fulfilled Layer into a children-only React provider. Bridges
+ * {@link ../Router.Router} from the Atom runtime into {@link ../Router.Provider}
+ * when present.
+ *
+ * @example
+ * ```tsx
+ * export const provider = Last.provider(
+ *   Layer.mergeAll(routes, History.layer),
+ * )
+ * // <provider>…</provider>
+ * ```
+ *
+ * @public
+ */
+export const provider = <R, E = never>(
+  layer: Layer.Layer<R, E, never>,
+): ((props: {
+  readonly children: React.ReactNode;
+}) => React.ReactElement) => {
+  const erased = layer as Layer.Layer<any, any, never>;
+  const Provider = (props: {
+    readonly children: React.ReactNode;
+  }): React.ReactElement => {
+    const runtime = React.useMemo(() => Atom.runtime(erased as never), []);
+    const router = React.useMemo(
+      () => readRouterService(erased),
+      [],
+    );
+    const body =
+      router !== null
+        ? React.createElement(Router.Provider, {
+            value: router,
+            children: props.children,
+          })
+        : props.children;
+    return React.createElement(
+      AtomReact.RegistryProvider,
+      null,
+      React.createElement(
+        AtomReact.RuntimeProvider as never,
+        { runtime },
+        body,
+      ),
+    );
+  };
+  Provider.displayName = "Last.provider";
+  return Provider;
+};
+
+/** Sync-read {@link Router.Router} from a fulfilled Layer when present. @internal */
+const readRouterService = (
+  layer: Layer.Layer<any, any, never>,
+): Service | null => {
+  try {
+    return Effect.runSync(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const ctx = yield* Layer_.build(layer);
+          return Option.getOrNull(Context.getOption(ctx, Router.Router));
+        }),
+      ),
+    );
+  } catch {
+    return null;
+  }
+};

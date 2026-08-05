@@ -6,7 +6,7 @@ import * as React from "react";
 import * as Router from "../../../src/ui/Router";
 import { site, urls } from "./site";
 
-const router = Router.make(site, "History");
+const router = Router.unsafeService(site, "History");
 
 const NavLink = (props: {
   readonly to: string | ((u: typeof urls) => string);

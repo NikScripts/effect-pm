@@ -45,7 +45,7 @@ export function isWakuBinding(u: unknown): u is WakuBinding {
   );
 }
 
-/** Bind a catalog to the Waku layer — same role as `Router.make(api, "History")`. */
+/** Bind a catalog to the Waku layer — same role as `Router.unsafeService(api, "History")`. */
 export const waku = <A extends ApiConstraint, U = Route.UrlBuilder<A>>(
   api: A,
   urls?: U,

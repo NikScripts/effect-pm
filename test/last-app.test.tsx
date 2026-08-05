@@ -43,7 +43,7 @@ describe("Last.app", () => {
   });
 
   it("pipe Last.router bakes Memory without Provider value props", () => {
-    const memory = Router.make(site, "Memory");
+    const memory = Router.unsafeService(site, "Memory");
     const Provider = Last.app(Layer.empty).pipe(Last.router(memory)).Provider;
     const ShowPath = (): React.ReactElement => {
       const router = Router.useRouter();

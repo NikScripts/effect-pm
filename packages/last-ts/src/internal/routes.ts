@@ -112,6 +112,7 @@ export interface Api<
   out Id extends string = string,
   in out Groups extends GroupTop = never,
 > extends Pipeable {
+  new(_: never): {};
   readonly [TypeId]: typeof TypeId;
   readonly identifier: Id;
   readonly groups: GroupMap<Groups>;
@@ -278,15 +279,18 @@ const makeGroupProto = (options: {
   readonly routes: Readonly<Record<string, uiRoute.Constraint>>;
   readonly groups: Readonly<Record<string, GroupTop>>;
   readonly annotations: Context.Context<never>;
-}): GroupTop =>
-  Object.assign(Object.create(groupProto), {
+}): GroupTop => {
+  function RouterGroup() {}
+  Object.setPrototypeOf(RouterGroup, groupProto);
+  return Object.assign(RouterGroup, {
     [GroupTypeId]: GroupTypeId,
     identifier: options.identifier,
     topLevel: options.topLevel,
     routes: options.routes,
     groups: options.groups,
     annotations: options.annotations,
-  }) as GroupTop;
+  }) as unknown as GroupTop;
+};
 
 /** `HttpApiGroup.make` analogue. */
 export const group = <
@@ -306,9 +310,6 @@ export const group = <
     annotations: Context.empty(),
   }) as Group<Id, never, never, [TopLevel] extends [true] ? true : false>;
 
-const mergeTopLevel = (existing: GroupTop, item: GroupTop): GroupTop =>
-  existing.add(...Object.values(item.routes), ...Object.values(item.groups));
-
 const appProto = {
   pipe() {
     // Effect Pipeable protocol — `arguments` is required by `pipeArguments`.
@@ -319,25 +320,13 @@ const appProto = {
     let groups = { ...this.groups } as Record<string, GroupTop>;
     for (const item of items) {
       if (uiRoute.isRoute(item)) {
+        // Bare endpoints → synthetic topLevel bag (HttpApi has no bare endpoints).
         const id = "__top";
         const existing = groups[id] ?? group(id, { topLevel: true });
         groups = { ...groups, [id]: existing.add(item) };
-      } else if (item.topLevel) {
-        const id = "__top";
-        const existing = groups[id] ?? group(id, { topLevel: true });
-        const merged = mergeTopLevel(existing, item);
-        // Keep annotations when merging groups.
-        groups = {
-          ...groups,
-          [id]: makeGroupProto({
-            identifier: merged.identifier,
-            topLevel: merged.topLevel,
-            routes: merged.routes,
-            groups: merged.groups,
-            annotations: Context.merge(merged.annotations, item.annotations),
-          }),
-        };
       } else {
+        // Keep group identity (incl. topLevel) — matches HttpApi; urlBuilder
+        // flattens via `topLevel`, RouterBuilder.group keys by identifier.
         groups = { ...groups, [item.identifier]: item };
       }
     }
@@ -381,13 +370,17 @@ const makeAppProto = (options: {
   readonly identifier: string;
   readonly groups: Readonly<Record<string, GroupTop>>;
   readonly annotations: Context.Context<never>;
-}): ApiConstraint =>
-  Object.assign(Object.create(appProto), {
+}): ApiConstraint => {
+  // Constructor-shaped so `class X extends Router.make(…).add(…)` works (HttpApi).
+  function RouterApi() {}
+  Object.setPrototypeOf(RouterApi, appProto);
+  return Object.assign(RouterApi, {
     [TypeId]: TypeId,
     identifier: options.identifier,
     groups: options.groups,
     annotations: options.annotations,
-  }) as ApiConstraint;
+  }) as unknown as ApiConstraint;
+};
 
 /** Empty catalog — `HttpApi.make` analogue. */
 export const make = <const Id extends string>(identifier: Id): Api<Id, never> =>

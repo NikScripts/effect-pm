@@ -7,6 +7,7 @@
 import { Option } from "effect";
 import * as Route from "../Route";
 import type { ApiConstraint } from "./routes";
+import type { GroupImpl } from "./routerBuilder";
 
 // =============================================================================
 // Types
@@ -44,6 +45,16 @@ export interface Service<A extends ApiConstraint = ApiConstraint> {
   readonly subscribe: (listener: () => void) => () => void;
   /** @internal */
   readonly syncFromLocation: () => void;
+  /**
+   * Handler registry from {@link ../RouterBuilder} when installed via
+   * {@link ../Memory.layer} / {@link ../History.layer}.
+   *
+   * @internal
+   */
+  readonly _handlers?: {
+    readonly api: ApiConstraint;
+    readonly groups: ReadonlyMap<string, GroupImpl>;
+  };
 }
 
 // =============================================================================

@@ -8,7 +8,7 @@ import * as Route from "last-ts/Route";
 import * as Router from "last-ts/Router";
 
 const site = Route.make("site").add(Route.get("home", "/home"));
-const memory = Router.make(site, "Memory");
+const memory = Router.unsafeService(site, "Memory");
 
 const Provider = Last.app(Layer.empty).pipe(Last.router(memory)).Provider;
 const _childrenOnly: (props: {

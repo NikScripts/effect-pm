@@ -29,7 +29,7 @@ export const urls = Route.urlBuilder(site);
 
 /** Lite Memory router — live field is `router._tag`, not a separate mode. */
 export const makeHubRouter = (): Router.Service<typeof site> =>
-  Router.make(site, "Memory");
+  Router.unsafeService(site, "Memory");
 
 // ---cut-after---
 const describeTarget = (router: Router.Service): string => {

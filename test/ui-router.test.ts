@@ -40,7 +40,7 @@ const run = <A>(
 
 describe("Router.make (typed)", () => {
   it("to / urls are catalog-typed", () => {
-    const router = Router.make(site, "Memory");
+    const router = Router.unsafeService(site, "Memory");
     expect(router._tag).toBe("Memory");
     router.to((urls) => urls.app.dashboard());
     expect(router.pathname).toBe("/app");
@@ -67,7 +67,7 @@ describe("Route.handle + Router.Outlet", () => {
         ),
       ),
     );
-    const router = Router.make(app, "Memory");
+    const router = Router.unsafeService(app, "Memory");
     router.go("/users/42");
     expect(Route.handleOf(router.match)).toBeDefined();
 
@@ -93,7 +93,7 @@ describe("Route.handle + Router.Outlet", () => {
         ),
       ),
     );
-    const router = Router.make(app, "Memory");
+    const router = Router.unsafeService(app, "Memory");
     router.to((u) => u.user("42", { query: { tab: "bio" } }));
     expect(router.pathname).toBe("/users/42");
     expect(router.search).toBe("?tab=bio");
@@ -112,7 +112,7 @@ describe("Route.handle + Router.Outlet", () => {
 describe("Router.memory (Route.Api)", () => {
   it("matches Route.get home at /", () => {
     const app = Route.make("app").add(Route.get("home", "/"));
-    const router = Router.make(app, "Memory");
+    const router = Router.unsafeService(app, "Memory");
     expect(router.pathname).toBe("/");
     expect(router.match?.route.identifier).toBe("home");
   });
@@ -308,7 +308,7 @@ describe("Group.asRoutes + fromEffect", () => {
   });
 
   it("Route.targetOf reads Target from match annotations", () => {
-    const router = Router.make(hubSite, "Memory");
+    const router = Router.unsafeService(hubSite, "Memory");
     expect(router._tag).toBe("Memory");
     GroupNav.open(Hub, router, HttpApi);
     expect(Route.targetOf(undefined)).toBeUndefined();

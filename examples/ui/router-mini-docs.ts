@@ -40,7 +40,7 @@ export const urls = Route.urlBuilder(site);
  */
 export const makeDocsRouter = (
   engine: "Memory" | "History" = "Memory",
-): Router.Service<typeof site> => Router.make(site, engine);
+): Router.Service<typeof site> => Router.unsafeService(site, engine);
 
 // ---cut-after---
 const program = Effect.gen(function* () {

@@ -39,6 +39,30 @@
       "types": "./src/Router.ts",
       "default": "./src/Router.ts"
     },
+    "./RouterBuilder": {
+      "types": "./src/RouterBuilder.ts",
+      "default": "./src/RouterBuilder.ts"
+    },
+    "./RouterClient": {
+      "types": "./src/RouterClient.ts",
+      "default": "./src/RouterClient.ts"
+    },
+    "./History": {
+      "types": "./src/History.ts",
+      "default": "./src/History.ts"
+    },
+    "./Memory": {
+      "types": "./src/Memory.ts",
+      "default": "./src/Memory.ts"
+    },
+    "./Waku": {
+      "types": "./src/Waku.ts",
+      "default": "./src/Waku.ts"
+    },
+    "./Layout": {
+      "types": "./src/Layout.ts",
+      "default": "./src/Layout.ts"
+    },
     "./Router/waku": {
       "types": "./src/Router/waku.ts",
       "default": "./src/Router/waku.ts"
