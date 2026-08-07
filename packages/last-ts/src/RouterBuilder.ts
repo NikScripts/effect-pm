@@ -10,13 +10,19 @@
  *   "marketing",
  *   RootLayout,
  *   (handlers) =>
- *     handlers.handle("home", Home).handle("pricing", Pricing),
+ *     handlers
+ *       .handle("home", Home) // ComponentType | JSX | Effect → ReactNode
+ *       .handle("pricing", Pricing),
  * )
  *
  * const routes = RouterBuilder.layer(Site).pipe(
  *   Layer.provide(Layer.mergeAll(marketing, docs)),
  * )
  * ```
+ *
+ * Page `handle` accepts a React component (legacy props), a JSX element, or an
+ * Effect that yields `ReactNode`. Nested UI reads {@link ./Page.Request} /
+ * {@link ./Page.Document} under {@link ./Router.Outlet}.
  *
  * @public
  */
@@ -98,6 +104,10 @@ export const group: typeof internal.group = internal.group;
 export const layer: typeof internal.layer = internal.layer;
 
 /** @internal */
+export const resolveHandler: typeof internal.resolveHandler =
+  internal.resolveHandler;
+
+/** @deprecated Use {@link resolveHandler}. @internal */
 export const resolveRender: typeof internal.resolveRender =
   internal.resolveRender;
 

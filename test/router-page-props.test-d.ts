@@ -2,13 +2,13 @@
  * PageProps + typed RouterBuilder.handle — schema-true page components.
  */
 import { describe, expectTypeOf, it } from "@effect/vitest";
-import { Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { HttpApiEndpoint } from "effect/unstable/httpapi";
 import type { Layout } from "last-ts/Layout";
 import * as Route from "last-ts/Route";
 import * as Router from "last-ts/Router";
 import * as RouterBuilder from "last-ts/RouterBuilder";
-import type * as React from "react";
+import * as React from "react";
 
 const RootLayout: Layout = ({ children }) => children as React.ReactElement;
 
@@ -78,6 +78,18 @@ describe("RouterBuilder.handle page props", () => {
           // @ts-expect-error — params.id:number is not chapter:string
           Wrong,
         ),
+    );
+    void _layer;
+  });
+
+  it("accepts Effect → ReactNode and JSX element page handlers", () => {
+    const chapterEffect = Effect.succeed(
+      null as unknown as React.ReactElement,
+    );
+    const chapterJsx = null as unknown as React.ReactElement;
+
+    const _layer = RouterBuilder.group(Site, "docs", RootLayout, (h) =>
+      h.handle("index", chapterJsx).handle("chapter", chapterEffect),
     );
     void _layer;
   });

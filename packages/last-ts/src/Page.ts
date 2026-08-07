@@ -1,9 +1,8 @@
 /**
  * @module Page
  *
- * File-router page marks — path + Static / Dynamic / Build (+ metadata).
- * Prefer a future {@link Tag} class for rich pages; bare components use these
- * camelCase helpers. Not Hyperlink dashboard `Views.Page`.
+ * File-router page marks — path + Static / Dynamic / Build (+ metadata) — plus
+ * live-route bridges {@link Request} / {@link Document} for Outlet trees.
  *
  * ```ts
  * import * as Page from "last-ts/Page"
@@ -14,6 +13,11 @@
  *   paths: listChapterSlugs, // Effect
  * })
  * export const layout = Page.layout("/", BookChrome)
+ *
+ * // In a page Effect / nested component under Router.Outlet:
+ * const req = yield* Page.Request
+ * yield* (yield* Page.Document).set("Home")
+ * const title = Page.useDocument().title
  * ```
  *
  * The file-router reads {@link stampOf} on the default export and maps to the
@@ -21,6 +25,7 @@
  */
 import type * as React from "react";
 import { Data, type Effect } from "effect";
+import type * as pageContext from "./internal/pageContext";
 
 // =============================================================================
 // Render mode (owned PascalCase)
@@ -210,3 +215,24 @@ export const renderModeOf = (
   if (stampValue.render._tag === "Build" && options.dev) return "dynamic";
   return "static";
 };
+
+// =============================================================================
+// Live route bridges (Router.Outlet)
+// =============================================================================
+
+/** Matched request bag (`params` / `query` / `pathname` / `href`). @public */
+export type RequestValue = pageContext.RequestValue;
+
+/** Document chrome bag (title today). @public */
+export type DocumentValue = pageContext.DocumentValue;
+
+/** Effect API for {@link Document}. @public */
+export type DocumentApi = pageContext.DocumentApi;
+
+/** Current match (`yield* Page.Request`) + React bridge. @public */
+export {
+  Request,
+  Document,
+  useRequest,
+  useDocument,
+} from "./internal/pageContext";

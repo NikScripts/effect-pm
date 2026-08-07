@@ -50,13 +50,25 @@ dispatch), not a second router.
 Copy `HttpApiBuilder` shape:
 
 - `Handlers.FromGroup` / `ValidateReturn` / `handle` / `handleAll` / `handleRaw`
-- `handle(id, …)` typed from the endpoint: Page → `ComponentType<PageProps>`;
-  Json/etc. → Effect handler
+- `handle(id, …)` typed from the endpoint:
+  - Page → `ComponentType<PageProps>` | JSX element | `Effect → ReactNode`
+  - Json/etc. → Effect handler
 - `Router.PageProps<typeof Site, "app", "chapter">` (also on `Route` /
   `RouterBuilder`) derives props from params/query schemas
 - Completeness: every endpoint in the group must be handled
 - Mixed groups are normal: one group can hold Page + Json endpoints; one
   `Handlers` bag implements both
+
+### Handlers target shape (locked)
+
+| Piece | Shape |
+|-------|--------|
+| Page handler | `Effect → ReactNode` (plus JSX overload `<Home />`; legacy `ComponentType<PageProps>` still accepted) |
+| Nested regular components | `Page.Request` Effect service + React bridge `Page.useRequest` |
+| Document title | `Page.Document` set-anywhere service + `Page.useDocument` bridge |
+| Layout | component + `children` (no Outlet-as-service) |
+| Baked Effect view | `View.effect(effect)` → `ComponentType` (no `<Run effect={…} />`) |
+| `View.Service` redesign | **Parked for later** |
 
 ```ts
 class Site extends Router.make("site").add(
@@ -71,8 +83,11 @@ class Site extends Router.make("site").add(
   ),
 ) {}
 
-type ChapterProps = Router.PageProps<typeof Site, "app", "chapter">
-const Chapter = (props: ChapterProps) => <h1>{props.params.chapter}</h1>
+const Chapter = Effect.gen(function* () {
+  const req = yield* Page.Request
+  yield* (yield* Page.Document).set(`Chapter ${req.params.chapter}`)
+  return <h1>{req.params.chapter}</h1>
+})
 
 const app = RouterBuilder.group(Site, "app", AppLayout, (h) =>
   h
@@ -112,14 +127,12 @@ export const provider = Last.provider(
 
 ## Eng direction (next)
 
-1. Treat Effect `HttpApi` / `HttpApiEndpoint` / `HttpApiBuilder` /
-   `HttpApiSchema` as the source to copy or thin-wrap.
-2. Add `Page` success (schema/declaration + content-type / React marker).
-3. `Route.get` = endpoint constructor with Page default success; accept the
-   same `options` bag as `HttpApiEndpoint.get`.
-4. `RouterBuilder.Handlers.handle` dispatches on success kind.
-5. Retire URL-only projection (`fromHttpApiEndpoint` → erase to Route).
-6. Migrate tip tests (`router-builder`, `ui-routes`) to the unified model.
+1. ~~Page success + `Route.get` + builder dispatch + PageProps~~ (on tip).
+2. ~~Handlers target shape (Request / Document / Effect→ReactNode /
+   `View.effect` / layout=`children`)~~ — Eng on tip; **`View.Service`
+   redesign parked**.
+3. Catalog shell thin-wrap onto Effect `HttpApi` types (follow-on).
+4. Migrate remaining tip tests / file-router consumers as needed.
 
 ## Tip note
 
@@ -127,7 +140,11 @@ On tip:
 
 - `Route.get` → `HttpApiEndpoint.get` with `success: Route.Page` (`text/html`)
 - Catalog keeps real endpoints (no URL-only projection)
-- `RouterBuilder.handle` dispatches: Page → React, other success → Effect
+- `RouterBuilder.handle` dispatches: Page → React / JSX / Effect→ReactNode;
+  other success → Effect API handler
+- `Page.Request` / `Page.Document` + React bridges under `Router.Outlet`
+- `View.effect(effect)` bakes Effect → `ComponentType`
 - UI `match` / Outlet are Page-only; urlBuilder includes all endpoints
 - Catalog shell (`Router.make` / nested groups / `from(Service)`) still last-ts;
   full thin-wrap onto Effect `HttpApi` types is follow-on
+- **Parked:** `View.Service` redesign

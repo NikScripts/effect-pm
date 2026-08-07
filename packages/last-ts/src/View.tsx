@@ -15,6 +15,9 @@
  *
  * Prototype metadata: {@link annotations} / {@link getAnnotations}.
  * Factory brand: {@link kind} via {@link Last.kindSym}.
+ *
+ * Bake an Effect into a component with {@link effect} (no `<Run effect={…} />`).
+ * {@link Service} redesign is parked — use Layer/`mount` as today.
  */
 import * as React from "react";
 import { Cause, Context, Effect, Layer } from "effect";
@@ -22,6 +25,7 @@ import { AsyncResult } from "effect/unstable/reactivity";
 import * as AtomReact from "./AtomReact";
 import type * as Jsx from "./Jsx";
 import * as Last from "./Last";
+import * as pageContext from "./internal/pageContext";
 
 // =============================================================================
 // Keys / layout hints
@@ -280,6 +284,65 @@ const ServiceRenderer = (props: {
     throw Cause.squash(result.cause);
   }
   return null;
+};
+
+/**
+ * Bake an Effect → ReactNode into a prop-less component (no `<Run effect={…} />`).
+ *
+ * Under {@link ./Router.Outlet}, provides {@link ./Page.Request} /
+ * {@link ./Page.Document} from the React bridges when present.
+ *
+ * @example
+ * ```tsx
+ * const Home = View.effect(
+ *   Effect.gen(function* () {
+ *     const req = yield* Page.Request
+ *     yield* (yield* Page.Document).set("Home")
+ *     return <h1>{req.pathname}</h1>
+ *   }),
+ * )
+ * handlers.handle("home", Home)
+ * ```
+ *
+ * @public
+ */
+export const effect = <E = never, R = never>(
+  program: Effect.Effect<React.ReactNode, E, R>,
+): React.ComponentType<Record<string, never>> => {
+  const Baked = (): React.ReactElement | null => {
+    const runtime = AtomReact.useRuntime();
+    const request = pageContext.useRequestOption();
+    const documentApi = pageContext.useDocumentApiOption();
+    const atom = React.useMemo(() => {
+      let next: Effect.Effect<React.ReactNode, unknown, unknown> = program;
+      if (request !== null) {
+        next = next.pipe(
+          Effect.provideService(pageContext.Request, request),
+        );
+      }
+      if (documentApi !== null) {
+        next = next.pipe(
+          Effect.provideService(pageContext.Document, documentApi),
+        );
+      }
+      return runtime.atom(next);
+    }, [runtime, program, request?.href, documentApi]);
+    const result = AtomReact.useAtomValue(atom);
+    if (AsyncResult.isSuccess(result)) {
+      const node = result.value;
+      if (node === null || node === undefined || typeof node === "boolean") {
+        return null;
+      }
+      if (React.isValidElement(node)) return node;
+      return React.createElement(React.Fragment, null, node);
+    }
+    if (AsyncResult.isFailure(result)) {
+      throw Cause.squash(result.cause);
+    }
+    return null;
+  };
+  Baked.displayName = "View.effect";
+  return Baked;
 };
 
 // =============================================================================

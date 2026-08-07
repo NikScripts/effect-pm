@@ -9,9 +9,11 @@ import { renderToString } from "react-dom/server";
 import type { Layout } from "last-ts/Layout";
 import * as Last from "last-ts/Last";
 import * as Memory from "last-ts/Memory";
+import * as Page from "last-ts/Page";
 import * as Route from "last-ts/Route";
 import * as Router from "last-ts/Router";
 import * as RouterBuilder from "last-ts/RouterBuilder";
+import * as View from "last-ts/View";
 
 const RootLayout: Layout = ({ children }) =>
   React.createElement("div", { "data-layout": "root" }, children);
@@ -216,5 +218,181 @@ describe("RouterBuilder mixed Page + Json handlers", () => {
     } finally {
       await runtime.dispose();
     }
+  });
+});
+
+// =============================================================================
+// Effect / JSX page handlers + Request / Document bridges
+// =============================================================================
+
+class EffectHomeSite extends Router.make("effect-home-site").add(
+  Router.group("app", { topLevel: true }).add(Route.get("home", "/")),
+) {}
+
+class JsxSite extends Router.make("jsx-site").add(
+  Router.group("app", { topLevel: true }).add(Route.get("about", "/")),
+) {}
+
+class NestedSite extends Router.make("nested-site").add(
+  Router.group("app", { topLevel: true }).add(Route.get("nested", "/")),
+) {}
+
+class ViewEffectSite extends Router.make("view-effect-site").add(
+  Router.group("app", { topLevel: true }).add(Route.get("home", "/")),
+) {}
+
+const effectHome = Effect.gen(function* () {
+  const req = yield* Page.Request;
+  const doc = yield* Page.Document;
+  yield* doc.set("Effect Home");
+  return React.createElement(
+    "span",
+    { "data-page": "effect-home", "data-pathname": req.pathname },
+    req.pathname,
+  );
+});
+
+const NestedProbe = (): React.ReactElement => {
+  const req = Page.useRequest();
+  return React.createElement(
+    "span",
+    { "data-nested": "ok" },
+    `nested:${req.pathname}`,
+  );
+};
+
+const nestedPage = Effect.succeed(React.createElement(NestedProbe));
+
+const aboutElement = React.createElement(
+  "span",
+  { "data-page": "about-jsx" },
+  "about",
+);
+
+const ViewEffectPage = View.effect(
+  Effect.gen(function* () {
+    const req = yield* Page.Request;
+    return React.createElement(
+      "span",
+      { "data-page": "view-effect" },
+      `view:${req.pathname}`,
+    );
+  }),
+);
+
+const effectHomeRoutes = RouterBuilder.layer(EffectHomeSite).pipe(
+  Layer.provide(
+    RouterBuilder.group(EffectHomeSite, "app", RootLayout, (h) =>
+      h.handle("home", effectHome),
+    ),
+  ),
+);
+const effectHomeProvider = Last.provider(
+  Memory.layer.pipe(Layer.provide(effectHomeRoutes)),
+);
+
+const jsxRoutes = RouterBuilder.layer(JsxSite).pipe(
+  Layer.provide(
+    RouterBuilder.group(JsxSite, "app", RootLayout, (h) =>
+      h.handle("about", aboutElement),
+    ),
+  ),
+);
+const jsxProvider = Last.provider(Memory.layer.pipe(Layer.provide(jsxRoutes)));
+
+const nestedRoutes = RouterBuilder.layer(NestedSite).pipe(
+  Layer.provide(
+    RouterBuilder.group(NestedSite, "app", RootLayout, (h) =>
+      h.handle("nested", nestedPage),
+    ),
+  ),
+);
+const nestedProvider = Last.provider(
+  Memory.layer.pipe(Layer.provide(nestedRoutes)),
+);
+
+const viewEffectRoutes = RouterBuilder.layer(ViewEffectSite).pipe(
+  Layer.provide(
+    RouterBuilder.group(ViewEffectSite, "app", RootLayout, (h) =>
+      h.handle("home", ViewEffectPage),
+    ),
+  ),
+);
+const viewEffectProvider = Last.provider(
+  Memory.layer.pipe(Layer.provide(viewEffectRoutes)),
+);
+
+describe("RouterBuilder Effect / JSX page handlers", () => {
+  it("registers PageEffect / PageElement / Page (View.effect) runtimes", async () => {
+    const assertTag = async (
+      routes: typeof effectHomeRoutes,
+      id: string,
+      tag: string,
+    ) => {
+      const rt = ManagedRuntime.make(routes);
+      try {
+        const registry = await rt.runPromise(
+          Effect.gen(function* () {
+            return yield* RouterBuilder.Registry;
+          }),
+        );
+        expect(registry.groups.get("app")?.handlers.get(id)?._tag).toBe(tag);
+      } finally {
+        await rt.dispose();
+      }
+    };
+
+    await assertTag(effectHomeRoutes, "home", "PageEffect");
+    await assertTag(jsxRoutes, "about", "PageElement");
+    await assertTag(viewEffectRoutes, "home", "Page");
+  });
+
+  it("Outlet runs Effect page with Page.Request + Document.set", () => {
+    const html = renderToString(
+      React.createElement(
+        effectHomeProvider,
+        null,
+        React.createElement(Router.Outlet),
+      ),
+    );
+    expect(html).toContain("data-layout=\"root\"");
+    expect(html).toContain("data-page=\"effect-home\"");
+    expect(html).toContain("data-pathname=\"/\"");
+  });
+
+  it("Outlet renders JSX element overload", () => {
+    const html = renderToString(
+      React.createElement(
+        jsxProvider,
+        null,
+        React.createElement(Router.Outlet),
+      ),
+    );
+    expect(html).toContain("data-page=\"about-jsx\"");
+    expect(html).toContain("about");
+  });
+
+  it("nested component reads Page.useRequest", () => {
+    const html = renderToString(
+      React.createElement(
+        nestedProvider,
+        null,
+        React.createElement(Router.Outlet),
+      ),
+    );
+    expect(html).toContain("data-nested=\"ok\"");
+    expect(html).toContain("nested:/");
+  });
+
+  it("View.effect bakes Effect → ComponentType page", () => {
+    const html = renderToString(
+      React.createElement(
+        viewEffectProvider,
+        null,
+        React.createElement(Router.Outlet),
+      ),
+    );
+    expect(html).toContain("data-page=\"view-effect\"");
+    expect(html).toContain("view:/");
   });
 });

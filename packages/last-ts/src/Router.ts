@@ -26,8 +26,8 @@ import * as React from "react";
 import { Context, Layer } from "effect";
 import type { HttpApi, HttpApiGroup } from "effect/unstable/httpapi";
 import * as fileRouter from "./internal/fileRouter";
+import * as outlet from "./internal/outlet";
 import * as internal from "./internal/router";
-import * as routerBuilder from "./internal/routerBuilder";
 import * as catalog from "./internal/routes";
 import type { ApiConstraint } from "./internal/routes";
 import * as Route from "./Route";
@@ -330,7 +330,10 @@ export const Link = <A extends ApiConstraint = ApiConstraint>(props: {
 
 /**
  * Render the matched route’s page. Prefers {@link ./RouterBuilder} handlers
- * (+ group layout). Falls back to legacy {@link Route.handle} annotations.
+ * (+ group layout). Provides {@link ./Page.Request} / {@link ./Page.Document}
+ * bridges. Falls back to legacy {@link Route.handle} annotations.
+ *
+ * Layout = component + `children`.
  *
  * ```tsx
  * <Router.Provider value={router}>
@@ -340,47 +343,7 @@ export const Link = <A extends ApiConstraint = ApiConstraint>(props: {
  *
  * @public
  */
-const queryFromSearch = (search: string): Record<string, string> => {
-  if (search.length === 0) return {};
-  const out: Record<string, string> = {};
-  for (const [key, value] of new URLSearchParams(search)) {
-    out[key] = value;
-  }
-  return out;
-};
-
 export const Outlet = (): React.ReactElement | null => {
   const router = useRouter();
-  const match = router.match;
-  if (match === undefined) return null;
-
-  const args: Route.HandleArgs = {
-    params: match.params,
-    query: queryFromSearch(router.search),
-    pathname: match.pathname,
-    href: router.href,
-  };
-
-  // RouterBuilder handlers (+ optional layout) — Page success only
-  const bag = router._handlers;
-  if (bag !== undefined) {
-    const resolved = routerBuilder.resolveRender(bag, match);
-    if (resolved !== null) {
-      const page = React.createElement(resolved.page, args);
-      if (resolved.layout !== null) {
-        return React.createElement(resolved.layout, { children: page });
-      }
-      return page;
-    }
-  }
-
-  // Legacy Route.handle annotation
-  const handler = Route.handleOf(match);
-  if (handler === undefined) return null;
-  const node = handler(args);
-  if (node === null || node === undefined || typeof node === "boolean") {
-    return null;
-  }
-  if (React.isValidElement(node)) return node;
-  return React.createElement(React.Fragment, null, node);
+  return React.createElement(outlet.Outlet, { router });
 };

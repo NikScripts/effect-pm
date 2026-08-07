@@ -108,12 +108,30 @@ export type PagePropsFromEndpoint<E> = {
 };
 
 /**
- * Handler input for one endpoint — Page → React component; else Effect handler.
+ * Page handler success — ReactNode, thunk component, JSX element, or Effect of
+ * those. Legacy: `ComponentType<PageProps>` still accepted.
+ *
+ * @internal
+ */
+export type PageHandlerInput<E> =
+  | React.ReactElement
+  | React.ComponentType<PagePropsFromEndpoint<E>>
+  | React.ComponentType<Record<string, never>>
+  | Effect.Effect<
+    | React.ReactNode
+    | React.ComponentType<Record<string, never>>
+    | React.ComponentType<PagePropsFromEndpoint<E>>,
+    any,
+    any
+  >;
+
+/**
+ * Handler input for one endpoint — Page → UI; else Effect API handler.
  *
  * @internal
  */
 export type HandlerForEndpoint<E> = IsPageEndpoint<E> extends true
-  ? React.ComponentType<PagePropsFromEndpoint<E>>
+  ? PageHandlerInput<E>
   : E extends {
     readonly "~Request": infer Request;
   } ? (request: Request) => Effect.Effect<unknown, unknown, unknown>

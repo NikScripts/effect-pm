@@ -14,6 +14,8 @@ HttpApi-shaped Router aligned with Effect `HttpApi` / `HttpApiBuilder`:
 - Layouts require `children`; `{ layout: false }` opts out on `handle`
 - Mix Effect HttpApi peers into the catalog; `.addHttpApi(api)` spreads groups
 - `Route.Page` success (`text/html`); `Route.get` is `HttpApiEndpoint.get` + Page default
-- `RouterBuilder.handle` dispatches Page → React / other success → Effect handler
+- `RouterBuilder.handle` dispatches Page → React / JSX / Effect→ReactNode; other success → Effect handler
 - `Router.PageProps<Api, GroupId, EndpointId>` — schema-true page props; handle requires them
-- UI match/Outlet are Page-only; urlBuilder includes all endpoints
+- `Page.Request` / `Page.Document` Effect services + `useRequest` / `useDocument` bridges under `Router.Outlet`
+- `View.effect(effect)` bakes Effect → prop-less `ComponentType` (bridges Request/Document when present)
+- Layout = component + `children`; UI match/Outlet are Page-only; urlBuilder includes all endpoints
