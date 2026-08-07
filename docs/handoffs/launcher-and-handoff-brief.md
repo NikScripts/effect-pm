@@ -1,6 +1,6 @@
 # Brief — Launcher + node handoff (Agent 5)
 
-**Status:** Track A + **Track B Eng'd** on tip. **Track C Locked #27–34 + #39 Eng'd**. **Track D v1 + advice early-move Eng'd** — `lookupClient` build-then-swap + `RpcClientError` retry + `Advice.changes` dial move. **#44 sibling Tags Eng'd**. **#45 peersLayer parity Eng'd**. **#46 Policy Eng'd**. **#35** superseded (Versioned + `deprecated` Eng'd). **#36** Lookup A/B + Lookup-first + `planUpdate` + **`restartSuccessor` Eng'd**. **A1+B2** sticky dual-serve + **Dialers** census Eng'd. **#37** deferred. Optional: stream resume tokens; explicit Redirect SDK rejected for v1.  
+**Status:** Track A + **Track B Eng'd** on tip. **Track C Locked #27–34 + #39 Eng'd**. **Track D v1 + advice early-move Eng'd** — `lookupClient` build-then-swap + `RpcClientError` retry + `Advice.changes` dial move. **#44 sibling Tags Eng'd**. **#45 peersLayer parity Eng'd**. **#46 Policy Eng'd**. **#35** superseded (Versioned + `deprecated` Eng'd). **#36** Lookup A/B + Lookup-first + `planUpdate` + **`restartSuccessor` Eng'd** (owner 2026-08-07: **options-bag shape rejected as SSOT** — redesign + main/additional addresses: [`node-addresses-and-update-api.md`](./node-addresses-and-update-api.md)). **A1+B2** sticky dual-serve + **Dialers** census Eng'd. **#37** deferred. Optional: stream resume tokens; client-redirect SDK rejected for v1 (proxy-as-main lean is a separate dock).  
 **Opened:** 2026-07-25 (owner via Agent G).  
 **Audience:** next agent picking up launcher + handoff / migration discussion.
 
