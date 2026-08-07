@@ -7,7 +7,10 @@
 # Launcher — dream redeploy (file-swap v1→v2)
 
 {.draft}
-**Draft** — paired with a runnable example; tip-check before treating as SSOT.
+**Draft / provisional** — proves today’s Eng’d mechanics (file-swap + sticky + WorkPool
+handoff). **Not the desired SSOT.** `Launcher.restartSuccessor({ target, successor, tags, … })`
+is under redesign; address model (main + additional A/B, optional proxy) is design-only.
+See [`docs/handoffs/node-addresses-and-update-api.md`](../../handoffs/node-addresses-and-update-api.md).
 
 **Source:** [`examples/launcher/dream-redeploy.ts`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/launcher/dream-redeploy.ts)  
 **Workers:** [`dream-redeploy-worker.v1.ts`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/launcher/dream-redeploy-worker.v1.ts) · [`dream-redeploy-worker.v2.ts`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/launcher/dream-redeploy-worker.v2.ts)  

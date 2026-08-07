@@ -545,6 +545,15 @@ Spine α stays: Launcher is not a long-lived fleet supervisor. **Plan** is Looku
 - Registry snapshot handoff (v1 = cold + re-advertise)  
 - Durable tip gaps without live status rows  
 - Cross-process dialer identity beyond Lookup Dialers HyperService
+
+### Redesign dock — addresses + `restartSuccessor` shape (owner 2026-08-07)
+
+**Not locked.** Owner: Eng’d `Launcher.restartSuccessor({ target, successor, tags, … })` is
+**bad design / not SSOT** — fix that API in discussion before building on it. Pivot lean:
+**main address + additional A/B addresses** (main often Http; backends often Unix); optional
+**stable main as proxy** to A/B; generate addresses from `nodeKey` (Unix-easy); pipe
+additional addresses so HyperServices see **main only**. Full notes:
+[`node-addresses-and-update-api.md`](./node-addresses-and-update-api.md).
 ---
 
 ## End-to-end skew story (one narrative)

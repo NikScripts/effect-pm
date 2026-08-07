@@ -14,6 +14,7 @@ Pre-1.0: breaking changes land as minor bumps.
 
 ## Orchestration
 
+- **Node main + additional addresses / update API** — design only: stable main dial, role-tagged A/B (often Unix) backends, optional Http→Unix proxy, address-from-`nodeKey`, and replacement for options-bag `Launcher.restartSuccessor`. Notes: [`../handoffs/node-addresses-and-update-api.md`](../handoffs/node-addresses-and-update-api.md).
 - **Weighted middle scheduling** — diversify the queue's middle priority into many weighted numeric/named groups pulled by a non-starving algorithm (DRR / strict), fixing strict-priority starvation. Design spec: [weighted-middle-scheduling.md](./weighted-middle-scheduling.md).
 - **Non-serializable queue items** — local-only enqueue for function/`Effect` items; wire control + observability stay served. [queue-nonserializable-items.md](./queue-nonserializable-items.md).
 - **Standalone spawns** — `Daemon.spawn` / `WorkPool.open`: multi-instance ergonomics where spawned handles are plain caller-scoped Effects (alongside `Group`).
