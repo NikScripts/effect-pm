@@ -214,50 +214,28 @@ only fills the catalog.
 Guide pages: [Router mini-docs](/docs/ui-router-mini-docs) ·
 [GroupNav + Target](/docs/ui-group-nav) · [File router](/docs/file-router).
 
-## last-ts — RouterBuilder + Page handlers
+## last-ts — RSC + Router (canonical demo)
 
-Prototype spine (`last-ts`): **Router ≈ HttpApi**. Page routes are endpoints
-with Page success. Handlers are `Effect → ReactNode`, a JSX element, or a
-legacy component. Nested UI reads `Page.Request` / `Page.Document`.
+**Router ≈ HttpApi.** For Waku RSC apps the split is:
 
-```ts
-import * as Router from "last-ts/Router"
-import * as RouterBuilder from "last-ts/RouterBuilder"
-import * as Page from "last-ts/Page"
-import * as Memory from "last-ts/Memory"
-import * as Last from "last-ts/Last"
+| Piece | Module | Job |
+|-------|--------|-----|
+| File pages | `Page.static` / `build` / `layout` | RSC render SSOT |
+| Catalog | `Router.make` + `Route.urlBuilder` | Typed `urls.*` |
+| Soft-nav | `last-ts/Router/waku` | `Link` / `useRouter` |
+| SPA handlers | `RouterBuilder` + `Outlet` | Memory/History only — not RSC bodies |
 
-class Site extends Router.make("site").add(
-  Router.group("app", { topLevel: true }).add(
-    Route.get("home", "/"),
-    Route.get("about", "/about"),
-  ),
-) {}
+Full walkthrough with **live source includes** from
+`examples/apps/last-ts-site`:
 
-const home = Effect.gen(function* () {
-  const req = yield* Page.Request
-  yield* (yield* Page.Document).set("Effect Home")
-  return <span>{req.pathname}</span>
-})
+→ **[RSC + Router](/docs/rsc-router)** (`docs/last/rsc-router.md`)
 
-const routes = RouterBuilder.layer(Site).pipe(
-  Layer.provide(
-    RouterBuilder.group(Site, "app", Layout, (h) =>
-      h.handle("home", home).handle("about", <About />),
-    ),
-  ),
-)
-
-const App = Last.provider(Memory.layer.pipe(Layer.provide(routes)))
-// <App><Router.Outlet /></App>
+```bash
+pnpm run example:apps-last-ts-site   # http://100.67.32.32:5220/
 ```
 
-Live mini-catalog (Memory transport; does not replace Waku file routes):
-
-```router-page
-```
-
-File-router marks (`Page.static` / `dynamic` / `build`) — see
+`RouterBuilder` + Effect page handlers (SPA / in-process) stay in package tests
+(`test/router-builder.test.tsx`). File-router marks — see
 [File router](/docs/file-router).
 
 ## Still tightening
