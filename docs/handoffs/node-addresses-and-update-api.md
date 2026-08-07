@@ -223,29 +223,57 @@ that separately. This doc is about **app nodes** (and possibly a proxy role in f
 
 ---
 
-## 5. Implications for the update API (discussion fodder — not a proposal lock)
+## 5. Update API shape — owner lean (2026-08-07): compose plan → execute
 
-Whatever replaces `restartSuccessor` should probably:
+**Rejected poles:**
 
-1. Talk in terms of **one Node identity** + **which additional address / role** is coming up,
-   not `nodeA` vs `nodeB` forgeries.
-2. Keep **plan** on Lookup (`planUpdate` or successor) and **custody/spawn** on Launcher —
-   but compose like layers/pipes, not one mega-options struct.
-3. Leave **prefer / sticky / stream gap** on Policy/Advice.
-4. Make the **happy path** for interruption-free updates: main Http + Unix A/B (+ optional
-   proxy), file or image swap behind B’s address, flip main→B, handoff, stop A.
-5. Stop requiring apps to re-pass `tags: [Jobs, Probe]` if the child’s serve set is already
-   knowable (or make plan discover it).
+| Pole | Why not |
+|------|---------|
+| Raw verb salad only (`up` / `prefer` / `shutdown` hand-rolled) | Easy to get wrong; no impact SSOT; dream scripts forever |
+| Mega options bag (`restartSuccessor({ target, successor, tags, … })`) | Trash — not composable, forges `nodeB`, buries prefer/tags |
 
-**Explicit non-goal until discussion:** rewriting the dream example as SSOT. Mark it
-provisional; fix the API design first.
+**Owner lean — middle:** **compose an update plan, then execute it.**
+
+```ts
+// SKETCH — names TBD; spirit only
+const plan = yield* Update.plan(worker, {
+  // composed fragments — not a restart RPC blob
+  // e.g. onto role "b", process, ready, tags/serve discovery, …
+})
+
+// inspect / gate / log impact (today’s planUpdate brain lives here or feeds this)
+if (plan.blocked) { /* … */ }
+
+yield* Update.execute(plan)
+// → spawn successor role → flip (prefer / proxy) → drain incumbent → …
+```
+
+Properties we want from that middle:
+
+1. **Plan is a value** — inspectable impact (co-update, migration gaps, clients at risk),
+   composable from fragments / pipes, not hidden inside execute.
+2. **Execute is dumb-ish** — runs a validated plan (custody/spawn/flip/drain); does not
+   re-encode the whole design as optional flags.
+3. **One Node identity** + **which additional address / role** is coming up — not forged
+   `nodeA` / `nodeB` Tags that only share a string key.
+4. **Lookup keeps impact brain** (`planUpdate` or successor folded into `Update.plan`);
+   **Launcher keeps custody** for spawn units the plan names.
+5. **Prefer / sticky / stream gap** stay Policy/Advice (or plan fragments that *produce*
+   those), not `prefer?: boolean` on execute.
+6. Happy path still aims at main Http + Unix A/B (+ optional proxy).
+
+**Still open inside the lean:** module home (`Update` vs `Launcher.update` vs `Lookup` +
+`Launcher.execute`), whether `plan` is Effect-built Layer-like vs a plain struct +
+schema, and how much of today’s `planUpdate` fields become first-class plan members.
+
+**Explicit non-goal until discussion locks further:** rewriting the dream example as SSOT.
+Mark it provisional; fix the API design first.
 
 ---
 
 ## 6. Open forks (for the discussion — do not resolve in this doc alone)
 
-1. **Fix `restartSuccessor` shape first** vs design addresses first then the verb — owner:
-   fix the trash API in discussion before Enging addresses onto it.
+1. ~~**Compose vs single verb**~~ — **owner lean: compose plan → execute** (§5). Refine names/home next.
 2. **Proxy ownership:** Launcher? dedicated proxy Node? Lookup feature? per-service sidecar?
 3. **Directory advertise:** main only vs main+backends vs proxy row separate from worker key.
 4. **Type model:** extend `endpoints` vs new `addresses: ReadonlyArray<{ role, … }>` vs
@@ -254,6 +282,9 @@ provisional; fix the API design first.
 6. **Http/WS address-from-key** — in scope or Unix-only v1?
 7. **Relation to `Node.withProtocol`** — pipe sibling (`withAddresses`) vs overload.
 8. **Deprecation path** for Eng’d `restartSuccessor` + dream-redeploy docs/example.
+9. **Plan composition surface** — object fragments / `Update.layer`-style / pipe builders?
+10. **What execute may still take** — only `plan`, or plan + narrow runtime overrides (force,
+    dryRun already done, token injection)?
 
 ---
 
@@ -273,8 +304,9 @@ provisional; fix the API design first.
 
 ## 8. Next
 
-1. **Discuss** how to replace the `restartSuccessor` options-bag API (this thread).
-2. Lock address model forks (§6) enough to sketch the new update composition.
-3. Only then Eng: types → Directory/advertise → proxy or dual-dial path → migrate examples.
-4. Demote / rewrite dream-redeploy once the new API exists; until then keep the banner:
+1. ~~Compose vs bag vs verb salad~~ — **lean locked: plan → execute** (§5).
+2. Discuss plan composition surface + module home (§6.1 / §6.9 / §6.10).
+3. Lock address model forks (§6.2–§6.7) enough to sketch plan inputs (roles, main, proxy).
+4. Only then Eng: types → Directory/advertise → proxy or dual-dial path → migrate examples.
+5. Demote / rewrite dream-redeploy once the new API exists; until then keep the banner:
    **provisional, not the desired SSOT.**
