@@ -20,6 +20,10 @@
 
 - Catalog is **data** (`class extends Router.make` or value) — not `yield*`.
 - Flat groups only (`group.add` endpoints only).
+- **Mix HttpApi peers into the catalog (URL surface only):**
+  - `Router.make(...).add(HttpApiGroup.make(...), Router.group(...))`
+  - `Router.group(...).add(Route.get(...), HttpApiEndpoint.get(...))`
+  - `Router.make(...).addHttpApi(api)` spreads each group (same as `.add(...groups)`)
 - No handlers / layouts on the contract.
 - `Layout` must declare `children: React.ReactNode`.
 - Group layout = 3rd arg; handlers last.

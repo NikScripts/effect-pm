@@ -8,9 +8,11 @@ import * as Option from "effect/Option";
 import { type Pipeable, pipeArguments } from "effect/Pipeable";
 import * as Predicate from "effect/Predicate";
 import type { Simplify } from "effect/Types";
-import { HttpApi } from "effect/unstable/httpapi";
-import type { HttpApiGroup } from "effect/unstable/httpapi";
-import type * as Schema from "effect/Schema";
+import {
+  HttpApi,
+  HttpApiEndpoint,
+  HttpApiGroup,
+} from "effect/unstable/httpapi";
 import type { AsRoutesEffect } from "./asRoutesBrand";
 import * as uiRoute from "./route";
 import type { Path } from "./route";
@@ -65,7 +67,11 @@ export interface GroupTop extends Pipeable {
   readonly routes: Readonly<Record<string, uiRoute.Constraint>>;
   readonly groups: Readonly<Record<string, GroupTop>>;
   readonly annotations: Context.Context<never>;
-  add(...items: ReadonlyArray<uiRoute.Constraint | GroupTop>): GroupTop;
+  add(
+    ...items: ReadonlyArray<
+      uiRoute.Constraint | GroupTop | HttpApiEndpoint.Constraint
+    >,
+  ): GroupTop;
   /**
    * Merge destinations from an Effect (`HttpRouter.addAll` analogue).
    * Prefer {@link from} + Layer for service catalogs.
@@ -101,11 +107,15 @@ export interface Group<
   readonly topLevel: TopLevel;
   readonly routes: RouteMap<Routes>;
   readonly groups: GroupMap<Groups>;
-  add<const A extends ReadonlyArray<uiRoute.Constraint | GroupTop>>(
+  add<
+    const A extends ReadonlyArray<
+      uiRoute.Constraint | GroupTop | HttpApiEndpoint.Constraint
+    >
+  >(
     ...items: A
   ): Group<
     Id,
-    Routes | Extract<A[number], uiRoute.Constraint>,
+    Routes | ExtractRouteLikes<A[number]>,
     Groups | Extract<A[number], GroupTop>,
     TopLevel
   >;
@@ -191,9 +201,16 @@ export interface Api<
   readonly identifier: Id;
   readonly groups: GroupMap<Groups>;
   readonly annotations: Context.Context<never>;
-  add<const A extends ReadonlyArray<uiRoute.Constraint | GroupTop>>(
+  add<
+    const A extends ReadonlyArray<
+      | uiRoute.Constraint
+      | GroupTop
+      | HttpApiGroup.Constraint
+      | HttpApiEndpoint.Constraint
+    >
+  >(
     ...items: A
-  ): Api<Id, MergeApiAddsFromTuple<Groups, A>>;
+  ): Api<Id, MergeApiAddsFromTuple<Groups, MapApiAddTuple<A>>>;
   addHttpApi<Id2 extends string, ApiGroups extends HttpApiGroup.Constraint>(
     api: HttpApi.HttpApi<Id2, ApiGroups>,
   ): Api<Id, MergeApiAdds<Groups, GroupTop>>;
@@ -211,7 +228,7 @@ export interface ApiConstraint {
   readonly identifier: string;
   readonly groups: Readonly<Record<string, GroupTop>>;
   readonly annotations: Context.Context<never>;
-  add(...items: ReadonlyArray<RouteLike>): ApiConstraint;
+  add(...items: ReadonlyArray<ApiAddLike>): ApiConstraint;
   addHttpApi<Id2 extends string, ApiGroups extends HttpApiGroup.Constraint>(
     api: HttpApi.HttpApi<Id2, ApiGroups>,
   ): ApiConstraint;
@@ -228,6 +245,53 @@ export declare namespace Api {
 export type AppConstraint = Api.Constraint;
 
 export type RouteLike = uiRoute.Constraint | GroupTop;
+
+/** What {@link GroupTop.add} / {@link Api.add} accept (Router + Effect HttpApi). */
+export type GroupAddLike =
+  | uiRoute.Constraint
+  | GroupTop
+  | HttpApiEndpoint.Constraint;
+
+export type ApiAddLike =
+  | GroupAddLike
+  | HttpApiGroup.Constraint;
+
+/**
+ * URL-surface Route projected from an Effect `HttpApiEndpoint`
+ * (`identifier` + `path` + optional `params`).
+ */
+export type RouteFromHttpApiEndpoint<E> = E extends {
+  readonly identifier: infer Id extends string;
+  readonly path: infer PathType;
+} ? PathType extends Path ? uiRoute.Route<Id, PathType>
+  : never
+  : never;
+
+type ExtractRouteLikes<Item> =
+  | Extract<Item, uiRoute.Constraint>
+  | RouteFromHttpApiEndpoint<Extract<Item, HttpApiEndpoint.Constraint>>;
+
+/**
+ * Router {@link Group} projected from an Effect `HttpApiGroup`
+ * (same identifier / topLevel; endpoints → routes).
+ */
+export type GroupFromHttpApiGroup<G> = G extends HttpApiGroup.HttpApiGroup<
+  infer Id,
+  infer Endpoints,
+  infer Top
+> ? Group<Id, RouteFromHttpApiEndpoint<Endpoints>, never, Top>
+  : never;
+
+type MapApiAddItem<Item> = [Item] extends [HttpApiGroup.Constraint]
+  ? GroupFromHttpApiGroup<Item>
+  : [Item] extends [HttpApiEndpoint.Constraint] ? RouteFromHttpApiEndpoint<Item>
+  : Item;
+
+type MapApiAddTuple<
+  Tuple extends ReadonlyArray<unknown>,
+> = {
+  readonly [I in keyof Tuple]: MapApiAddItem<Tuple[I]>;
+};
 
 // Bare endpoint → `__top` group; topLevel groups merge into `__top`.
 type MergeTopEndpoint<
@@ -294,17 +358,61 @@ const optionsFromGroup = (g: GroupTop) => ({
   annotations: g.annotations,
 });
 
+/**
+ * Effect `HttpApiEndpoint` → Router destination (URL surface only).
+ *
+ * @internal
+ */
+export const fromHttpApiEndpoint = (
+  endpoint: HttpApiEndpoint.Constraint,
+): uiRoute.Constraint | undefined => {
+  const path = endpoint.path;
+  if (typeof path !== "string" || !path.startsWith("/") || path === "*") {
+    return undefined;
+  }
+  return uiRoute.get(endpoint.identifier, path as Path, {
+    params: endpoint.params,
+  });
+};
+
+/**
+ * Effect `HttpApiGroup` → Router {@link Group} (same id / topLevel; endpoints → routes).
+ *
+ * @internal
+ */
+export const fromHttpApiGroup = (
+  httpGroup: HttpApiGroup.Constraint,
+): GroupTop => {
+  const routes: Array<uiRoute.Constraint> = [];
+  for (const endpoint of Object.values(httpGroup.endpoints)) {
+    const route = fromHttpApiEndpoint(endpoint);
+    if (route !== undefined) routes.push(route);
+  }
+  return makeGroupProto({
+    identifier: httpGroup.identifier,
+    topLevel: httpGroup.topLevel,
+    routes: Object.fromEntries(routes.map((r) => [r.identifier, r])),
+    groups: {},
+    annotations: httpGroup.annotations as Context.Context<never>,
+  });
+};
+
 const groupProto = {
   pipe() {
     // Effect Pipeable protocol — `arguments` is required by `pipeArguments`.
     // eslint-disable-next-line prefer-rest-params -- pipeArguments(this, arguments)
     return pipeArguments(this, arguments);
   },
-  add(this: GroupTop, ...items: ReadonlyArray<RouteLike>): GroupTop {
+  add(this: GroupTop, ...items: ReadonlyArray<GroupAddLike>): GroupTop {
     let routes = { ...this.routes } as Record<string, uiRoute.Constraint>;
     let groups = { ...this.groups } as Record<string, GroupTop>;
     for (const item of items) {
-      if (uiRoute.isRoute(item)) {
+      if (HttpApiEndpoint.isHttpApiEndpoint(item)) {
+        const route = fromHttpApiEndpoint(item);
+        if (route !== undefined) {
+          routes = { ...routes, [route.identifier]: route };
+        }
+      } else if (uiRoute.isRoute(item)) {
         routes = { ...routes, [item.identifier]: item };
       } else {
         groups = { ...groups, [item.identifier]: item };
@@ -448,10 +556,16 @@ const appProto = {
     // eslint-disable-next-line prefer-rest-params -- pipeArguments(this, arguments)
     return pipeArguments(this, arguments);
   },
-  add(this: ApiConstraint, ...items: ReadonlyArray<RouteLike>): ApiConstraint {
+  add(this: ApiConstraint, ...items: ReadonlyArray<ApiAddLike>): ApiConstraint {
     let groups = { ...this.groups } as Record<string, GroupTop>;
     for (const item of items) {
-      if (uiRoute.isRoute(item)) {
+      if (HttpApiGroup.isHttpApiGroup(item)) {
+        const converted = fromHttpApiGroup(item);
+        groups = { ...groups, [converted.identifier]: converted };
+      } else if (
+        HttpApiEndpoint.isHttpApiEndpoint(item) ||
+        uiRoute.isRoute(item)
+      ) {
         // Bare endpoints → synthetic topLevel bag (HttpApi has no bare endpoints).
         const id = "__top";
         const existing = groups[id] ?? group(id, { topLevel: true });
@@ -471,8 +585,10 @@ const appProto = {
     this: ApiConstraint,
     api: HttpApi.HttpApi<Id, Groups>,
   ): ApiConstraint {
-    // Prefer annotation-preserving import when the peer is already a Router catalog.
-    return this.add(addHttpApi(api));
+    // Whole HttpApi → mix each HttpApiGroup into this catalog.
+    return this.add(
+      ...(Object.values(api.groups) as Array<HttpApiGroup.Constraint>),
+    );
   },
   prefix(this: ApiConstraint, prefix: Path): ApiConstraint {
     const groups: Record<string, GroupTop> = {};
@@ -530,8 +646,11 @@ export const make = <const Id extends string>(identifier: Id): Api<Id, never> =>
   }) as unknown as Api<Id, never>;
 
 /**
- * Import an Effect `HttpApi` path tree as a top-level {@link group} bundle
- * (`HttpApi.addHttpApi` analogue for URL surface only).
+ * Import an Effect `HttpApi` as a top-level {@link group} bag of converted
+ * groups (`HttpApi.addHttpApi` analogue — URL surface only).
+ *
+ * Prefer mixing groups directly:
+ * `Router.make("site").add(HttpApiGroup.make("users").add(...), Router.group(...))`.
  */
 export const addHttpApi = <
   Id extends string,
@@ -539,41 +658,15 @@ export const addHttpApi = <
 >(
   api: HttpApi.HttpApi<Id, Groups>,
 ): GroupTop => {
-  const buckets = new Map<
-    string,
-    { readonly topLevel: boolean; ends: Array<uiRoute.Constraint> }
-  >();
-
-  HttpApi.reflect(api, {
-    onGroup({ group: g }) {
-      if (!buckets.has(g.identifier)) {
-        buckets.set(g.identifier, { topLevel: g.topLevel, ends: [] });
-      }
-    },
-    onEndpoint({ group: g, endpoint }) {
-      const path = endpoint.path;
-      if (typeof path !== "string" || !path.startsWith("/") || path === "*") {
-        return;
-      }
-      let bucket = buckets.get(g.identifier);
-      if (bucket === undefined) {
-        bucket = { topLevel: g.topLevel, ends: [] };
-        buckets.set(g.identifier, bucket);
-      }
-      const params = endpoint.params as Schema.Top | undefined;
-      bucket.ends.push(
-        uiRoute.get(endpoint.identifier, path as Path, { params }),
-      );
-    },
-  });
-
   let bag: GroupTop = group(api.identifier, { topLevel: true });
-  for (const [id, bucket] of buckets) {
-    if (bucket.ends.length === 0) continue;
-    if (bucket.topLevel) {
-      bag = bag.add(...bucket.ends);
+  for (const httpGroup of Object.values(api.groups) as Array<
+    HttpApiGroup.Constraint
+  >) {
+    const converted = fromHttpApiGroup(httpGroup);
+    if (converted.topLevel) {
+      bag = bag.add(...Object.values(converted.routes));
     } else {
-      bag = bag.add(group(id).add(...bucket.ends));
+      bag = bag.add(converted);
     }
   }
   return bag;

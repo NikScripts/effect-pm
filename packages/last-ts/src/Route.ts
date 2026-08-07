@@ -260,6 +260,11 @@ export const make: typeof catalog.make = catalog.make;
  * Turn an Effect `HttpApi` into a top-level group bundle for {@link Api.add}
  * (`HttpApi.addHttpApi` analogue — **URL surface only**).
  *
+ * Prefer mixing peers on the catalog / group:
+ * - `Router.make("site").add(HttpApiGroup.make(...), Router.group(...))`
+ * - `Router.group("pages").add(Route.get(...), HttpApiEndpoint.get(...))`
+ * - `Router.make("site").addHttpApi(api)` (spreads each `HttpApiGroup`)
+ *
  * @public
  */
 export const addHttpApi: <

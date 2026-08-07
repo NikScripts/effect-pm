@@ -74,6 +74,67 @@ describe("Route", () => {
     expect(urls.admin.stats()).toBe("/admin/stats");
   });
 
+  it("mixes HttpApiGroup with Router.group on Router.make", () => {
+    const site = Route.make("site").add(
+      HttpApiGroup.make("users").add(
+        HttpApiEndpoint.get("getUser", "/users/:id"),
+      ),
+      Route.group("pages", { topLevel: true }).add(
+        Route.get("home", "/"),
+      ),
+    );
+    const urls = Route.urlBuilder(site) as Route.UrlBuilderLoose & {
+      home: () => string;
+      users: { getUser: (id: string) => string };
+    };
+    expect(urls.home()).toBe("/");
+    expect(urls.users.getUser("42")).toBe("/users/42");
+    expect(Option.getOrThrow(Route.match(site, "/users/42")).identifiers).toEqual([
+      "getUser",
+    ]);
+  });
+
+  it("mixes HttpApiEndpoint with Route.get inside a router group", () => {
+    const site = Route.make("site").add(
+      Route.group("app").add(
+        Route.get("dashboard", "/app"),
+        HttpApiEndpoint.get("legacy", "/app/legacy"),
+      ),
+    );
+    const urls = Route.urlBuilder(site) as Route.UrlBuilderLoose & {
+      app: {
+        dashboard: () => string;
+        legacy: () => string;
+      };
+    };
+    expect(urls.app.dashboard()).toBe("/app");
+    expect(urls.app.legacy()).toBe("/app/legacy");
+    expect(Option.getOrThrow(Route.match(site, "/app/legacy")).route.identifier)
+      .toBe("legacy");
+  });
+
+  it("addHttpApi on the catalog spreads HttpApi groups", () => {
+    const Wire = HttpApi.make("wire").add(
+      HttpApiGroup.make("users", { topLevel: true }).add(
+        HttpApiEndpoint.get("getUser", "/users/:id"),
+      ),
+      HttpApiGroup.make("admin").add(
+        HttpApiEndpoint.get("stats", "/admin/stats"),
+      ),
+    );
+    const site = Route.make("site")
+      .addHttpApi(Wire)
+      .add(Route.group("pages", { topLevel: true }).add(Route.get("home", "/")));
+    const urls = Route.urlBuilder(site) as Route.UrlBuilderLoose & {
+      home: () => string;
+      getUser: (id: string) => string;
+      admin: { stats: () => string };
+    };
+    expect(urls.home()).toBe("/");
+    expect(urls.getUser("1")).toBe("/users/1");
+    expect(urls.admin.stats()).toBe("/admin/stats");
+  });
+
   it("typed urlBuilder uses positional path args", () => {
     const api = Route.make("site").add(
       Route.get("node", "/health/:nodeId").pipe(

@@ -7,6 +7,12 @@
  * class Site extends Router.make("site").add(
  *   Router.group("marketing", { topLevel: true }).add(
  *     Route.get("home", "/"),
+ *     // HttpApiEndpoint mixes in as a URL destination alongside Route.get
+ *     HttpApiEndpoint.get("legacy", "/legacy"),
+ *   ),
+ *   // HttpApiGroup mixes in alongside Router.group (URL surface only)
+ *   HttpApiGroup.make("users").add(
+ *     HttpApiEndpoint.get("getUser", "/users/:id"),
  *   ),
  * ) {}
  *
@@ -67,7 +73,12 @@ export const isApi: typeof catalog.isApi = catalog.isApi;
 export const isGroup: typeof catalog.isGroup = catalog.isGroup;
 
 /**
- * Flatten an Effect `HttpApi` into a group bag (`HttpApi.addHttpApi`).
+ * Flatten an Effect `HttpApi` into a top-level group bag for `.add`
+ * (`HttpApi.addHttpApi` analogue — URL surface only).
+ *
+ * Prefer mixing directly on the catalog:
+ * `Router.make("site").add(HttpApiGroup.make("users").add(...), Router.group(...))`
+ * or `Router.make("site").addHttpApi(api)`.
  *
  * @public
  */
