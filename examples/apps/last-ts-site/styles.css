@@ -1,0 +1,237 @@
+:root {
+  color-scheme: light;
+  --bg0: #0a0f0c;
+  --bg1: #122018;
+  --panel: #f3f6f2;
+  --ink: #101612;
+  --muted: #5a6b5e;
+  --line: #d0dcd2;
+  --accent: #1f7a4c;
+  --accent-soft: #e3f2ea;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+  background:
+    linear-gradient(155deg, var(--bg0), var(--bg1) 50%, #1a2e22),
+    var(--bg0);
+  color: var(--ink);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+code {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.9em;
+}
+
+.shell {
+  display: grid;
+  grid-template-columns: minmax(220px, 270px) 1fr;
+  max-width: 1080px;
+  min-height: calc(100vh - 3rem);
+  margin: 1.5rem auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--panel);
+  overflow: hidden;
+}
+
+.nav {
+  padding: 1.5rem 1.1rem 1.5rem 1.25rem;
+  border-right: 1px solid var(--line);
+  background: linear-gradient(180deg, #eaf3ec 0%, var(--panel) 55%);
+}
+
+.brand {
+  display: inline-block;
+  margin-bottom: 1.5rem;
+  padding: 0.35rem 0.55rem;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.nav h2 {
+  margin: 1.35rem 0 0.45rem;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.nav ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nav li a,
+.nav li button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.35rem 0.4rem;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.nav li a:hover,
+.nav li button:hover {
+  background: rgba(31, 122, 76, 0.08);
+}
+
+.nav li a.is-current,
+.nav li button.is-current {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.nav .imports li {
+  padding: 0.2rem 0.4rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.main {
+  padding: 1.5rem 1.75rem 2rem;
+}
+
+.crumb {
+  margin-bottom: 1rem;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+article h1 {
+  margin: 0 0 0.75rem;
+  font-size: 1.65rem;
+  letter-spacing: -0.02em;
+}
+
+article p {
+  margin: 0 0 0.85rem;
+  line-height: 1.55;
+  color: #243028;
+}
+
+.meta {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1.25rem 0 0;
+}
+
+.meta dt {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.meta dd {
+  margin: 0.2rem 0 0;
+}
+
+.toggle {
+  display: flex;
+  gap: 0.4rem;
+  margin: 1rem 0;
+}
+
+.toggle button {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 4px;
+  padding: 0.35rem 0.65rem;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.toggle button.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.slot-shell {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.slot-nav {
+  padding: 0.65rem;
+  border-radius: 6px;
+  background: #eef5f0;
+  font-size: 0.85rem;
+}
+
+.slot-nav.settings {
+  background: #f3efe6;
+}
+
+.slot-label {
+  display: inline-block;
+  margin-bottom: 0.35rem;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.slot-nav p {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.slot-body {
+  display: flex;
+  align-items: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 720px) {
+  .shell {
+    grid-template-columns: 1fr;
+    margin: 0;
+    min-height: 100vh;
+    border: none;
+  }
+
+  .nav {
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+  }
+}

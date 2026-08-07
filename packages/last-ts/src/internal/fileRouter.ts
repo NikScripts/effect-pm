@@ -4,21 +4,22 @@
  * {@link layerDestinations} for RouterBuilder catalogs.
  */
 import { Context, Effect, Layer } from "effect";
-import type { Path } from "../Route";
-import * as Route from "../Route";
 import {
   AsRoutesTypeId,
   type AsRoutesEffect,
 } from "./asRoutesBrand";
+import * as endpoint from "./route";
+import * as catalog from "./routes";
 
 export type PathEntry = {
   readonly id: string;
   readonly routePath: string;
 };
 
-export type EntryRoute<E extends PathEntry> = Route.Constraint & {
+export type EntryRoute<E extends PathEntry> = endpoint.Constraint & {
   readonly identifier: E["id"];
-  readonly path: E["routePath"] extends Path ? E["routePath"] : Path;
+  readonly path: E["routePath"] extends endpoint.Path ? E["routePath"]
+    : endpoint.Path;
 };
 
 export type RoutesOf<Entries extends ReadonlyArray<PathEntry>> = EntryRoute<
@@ -30,7 +31,10 @@ export const destinationsOf = <const Entries extends ReadonlyArray<PathEntry>>(
   entries: Entries,
 ): ReadonlyArray<RoutesOf<Entries>> =>
   entries.map(
-    (entry) => Route.get(entry.id, entry.routePath as Path) as RoutesOf<Entries>,
+    (entry) =>
+      endpoint.get(entry.id, entry.routePath as endpoint.Path) as RoutesOf<
+        Entries
+      >,
   );
 
 /**
@@ -90,8 +94,8 @@ export const routeFileSystem = <
 ) => {
   const effect = fileSystem(entries);
   return options?.topLevel === true
-    ? Route.group(id, { topLevel: true }).fromEffect(effect)
-    : Route.group(id).fromEffect(effect);
+    ? catalog.group(id, { topLevel: true }).fromEffect(effect)
+    : catalog.group(id).fromEffect(effect);
 };
 
 /**

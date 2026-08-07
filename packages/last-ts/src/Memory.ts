@@ -36,10 +36,10 @@ export const layer: Layer.Layer<
     const api = yield* routerBuilder.Catalog;
     const registry = yield* routerBuilder.Registry;
     const service = internal.makeService(api, "Memory");
-    return {
-      ...service,
+    // Assign — do not `{ ...service }` (that snapshots live pathname getters).
+    return Object.assign(service, {
       /** @internal builder registry for Outlet */
       _handlers: registry,
-    } as Router.Service;
+    }) as Router.Service;
   }),
 );

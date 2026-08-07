@@ -166,6 +166,11 @@ export const toProvider = <R, E = never>(
  * {@link ../Router.Router} from the Atom runtime into {@link ../Router.Provider}
  * when present.
  *
+ * Builds the Layer **once**, then feeds that Context to both
+ * `Atom.runtime(Layer.succeedContext(ctx))` and {@link ../Router.Provider}.
+ * A second `Layer.build` would mint a divergent History/Memory service
+ * (soft-nav updates one instance; Outlet reads another).
+ *
  * @example
  * ```tsx
  * export const provider = Last.provider(
@@ -185,15 +190,22 @@ export const provider = <R, E = never>(
   const Provider = (props: {
     readonly children: React.ReactNode;
   }): React.ReactElement => {
-    const runtime = React.useMemo(() => Atom.runtime(erased as never), []);
-    const router = React.useMemo(
-      () => readRouterService(erased),
-      [],
-    );
+    const boot = React.useMemo(() => {
+      const ctx = Effect.runSync(
+        Effect.scoped(Layer_.build(erased)),
+      );
+      const router = Option.getOrNull(
+        Context.getOption(ctx, Router.Router),
+      ) as Service | null;
+      const runtime = Atom.runtime(
+        Layer_.succeedContext(ctx) as Layer.Layer<any, never, never> as never,
+      );
+      return { runtime, router };
+    }, []);
     const body =
-      router !== null
+      boot.router !== null
         ? React.createElement(Router.Provider, {
-            value: router,
+            value: boot.router,
             children: props.children,
           })
         : props.children;
@@ -202,29 +214,11 @@ export const provider = <R, E = never>(
       null,
       React.createElement(
         AtomReact.RuntimeProvider as never,
-        { runtime },
+        { runtime: boot.runtime },
         body,
       ),
     );
   };
   Provider.displayName = "Last.provider";
   return Provider;
-};
-
-/** Sync-read {@link Router.Router} from a fulfilled Layer when present. @internal */
-const readRouterService = (
-  layer: Layer.Layer<any, any, never>,
-): Service | null => {
-  try {
-    return Effect.runSync(
-      Effect.scoped(
-        Effect.gen(function* () {
-          const ctx = yield* Layer_.build(layer);
-          return Option.getOrNull(Context.getOption(ctx, Router.Router));
-        }),
-      ),
-    );
-  } catch {
-    return null;
-  }
 };
