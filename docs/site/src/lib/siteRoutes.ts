@@ -1,5 +1,8 @@
 /**
- * Typed docs catalog — last-ts {@link Router.make} / {@link Route.get}.
+ * Typed docs catalog — last-ts {@link Route.make} / {@link Route.get}.
+ *
+ * Catalog-only: do **not** import `last-ts/Router` here (it pulls AtomReact /
+ * createContext and breaks Waku RSC). Live soft-nav stays on `ui/Router`.
  *
  * **SSOT:** {@link catalog} holds every navigable Route path once. Waku file
  * templates are derived (`:param` → `[param]`). Exhaustively checked against
@@ -16,7 +19,6 @@
  * ```
  */
 import * as Route from "last-ts/Route";
-import * as Router from "last-ts/Router";
 import type { CreatePagesConfig } from "waku/router";
 import type { Unstable_InferredPaths as WakuPath } from "waku/router/client";
 import "../pages.gen.js";
@@ -116,8 +118,9 @@ export type WakuFilePathRequired = Exclude<WakuFilePath, WakuFilePathExcluded>;
 /**
  * Docs site catalog — paths from {@link catalog} only.
  * Bare endpoints land in the synthetic top-level group; `api` stays nested.
+ * (`Route.make` === `Router.make` catalog builder — RSC-safe.)
  */
-export const site = Router.make("docsSite").add(
+export const site = Route.make("docsSite").add(
   Route.get("home", catalog.home),
   Route.get("search", catalog.search),
   Route.get("releases", catalog.releases),
@@ -125,7 +128,7 @@ export const site = Router.make("docsSite").add(
   Route.get("docsHyperlinks", catalog.docsHyperlinks),
   Route.get("docsResources", catalog.docsResources),
   Route.get("docs", catalog.docs),
-  Router.group("api").add(
+  Route.group("api").add(
     Route.get("index", catalog.api.index),
     Route.get("pkg", catalog.api.pkg),
     Route.get("module", catalog.api.module),
