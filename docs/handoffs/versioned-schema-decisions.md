@@ -462,7 +462,7 @@ yield* Node.shutdown(lookupA) // releases sock
 2. ~~**Orchestrated single-address ownership handoff**~~ — **Eng'd** (`examples/node/lookup-follow-handoff.ts`, `test/lookup-follow-handoff.test.ts`).  
 3. ~~**Launcher ensure-Lookup-first**~~ — **Eng'd** (`Launcher.ensureLookup` / `UpOptions.lookup`; `test/launcher-ensure-lookup.test.ts`; `examples/launcher/ensure-lookup.ts`).  
 4. ~~Update-impact~~ **Eng'd** (`Lookup.planUpdate` + ambient `PlanForce` / `PlanStatus`). ~~App already-up Policy~~ **Eng'd** (`AlreadyUpRef` + Layers).  
-5. ~~`Launcher.restartSuccessor`~~ **Eng'd** — plan → `up(B)` → shutdown `A` (capture A dial before up). Dual-serve / redirect still deferred.
+5. ~~`Launcher.restartSuccessor`~~ **Eng'd** — plan → `up(B)` → shutdown `A` (capture A dial before up). Live OS e2e (`test/launcher-restart-successor.test.ts`) covers same-`nodeKey` dial-replace via `askIncumbent`. Dual-serve / redirect still deferred.
 
 ---
 

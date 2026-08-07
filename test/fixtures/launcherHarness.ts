@@ -24,6 +24,15 @@ export const childEntryPaths = () => {
   };
 };
 
+/** Paths for `launcher-restart-child.ts` (Lookup-joined A→B cutover). */
+export const restartChildEntryPaths = () => {
+  const root = new URL("../..", import.meta.url).pathname;
+  return {
+    root,
+    entry: `${root}/test/fixtures/launcher-restart-child.ts`,
+  };
+};
+
 export const ephemeralPort = (tokenHex: string, salt = 0): number =>
   20_000 + ((Number.parseInt(tokenHex.slice(0, 4), 16) + salt) % 10_000);
 
@@ -31,6 +40,15 @@ export const ephemeralPort = (tokenHex: string, salt = 0): number =>
 export const reapLauncherChildren = ChildProcess.make("pkill", [
   "-f",
   "test/fixtures/launcher-child-serve.ts",
+]).pipe(
+  Effect.flatMap((h) => h.exitCode),
+  Effect.ignore,
+);
+
+/** Best-effort reap of restart-successor fixture children. */
+export const reapRestartChildren = ChildProcess.make("pkill", [
+  "-f",
+  "test/fixtures/launcher-restart-child.ts",
 ]).pipe(
   Effect.flatMap((h) => h.exitCode),
   Effect.ignore,

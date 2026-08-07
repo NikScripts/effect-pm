@@ -244,3 +244,6 @@ Hub: [Examples → launcher](/docs/examples#launcher).
 - Explicit A/B launcher automation (`lookupClient` + `peersLayer` rebind + [Policy](./policy.md) sticky / streams already ship)
 - Blank worker + remote assign; HTTP/WS Lookup; nameless Launcher discovery
 - `Handle.events` Stream; stdout/stderr tap; thin `hl up` CLI
+
+Live custody proof for `restartSuccessor` (plan ok → OS `up(B)` → shutdown `A`,
+same-`nodeKey` dial-replace via `askIncumbent`): `test/launcher-restart-successor.test.ts`.
