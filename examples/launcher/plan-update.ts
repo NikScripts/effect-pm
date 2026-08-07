@@ -63,8 +63,11 @@ const program = Effect.gen(function* () {
     const impact = yield* Lookup.planUpdate("worker-a", [jobsNext], {
       incumbent: [Jobs],
     }).pipe(Effect.provide(Lookup.planForce));
+    const removals = impact.wireRemovals
+      .map((r) => `${r.serviceKey}#${r.method}`)
+      .join(", ");
     yield* Effect.logInfo(
-      `   blocked=${String(impact.blocked)} removals=${JSON.stringify(impact.wireRemovals)}`,
+      `   blocked=${String(impact.blocked)} removals=[${removals}]`,
     );
 
     yield* Effect.logInfo(
