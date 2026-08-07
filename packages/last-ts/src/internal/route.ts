@@ -6,6 +6,7 @@ import * as Context from "effect/Context";
 import * as Option from "effect/Option";
 import { dual } from "effect/Function";
 import { type Pipeable, pipeArguments } from "effect/Pipeable";
+import * as Predicate from "effect/Predicate";
 import type * as Schema from "effect/Schema";
 
 export const TypeId = "~last-ts/Route" as const;
@@ -34,9 +35,17 @@ export interface Route<
 export type Constraint = Route<string, Path, any>;
 
 export const isRoute = (u: unknown): u is Constraint =>
-  typeof u === "object" && u !== null && TypeId in u;
+  Predicate.hasProperty(u, TypeId);
+
+const optionsFromRoute = (route: Constraint) => ({
+  identifier: route.identifier,
+  path: route.path,
+  params: route.params,
+  annotations: route.annotations,
+});
 
 const Proto = {
+  [TypeId]: TypeId,
   pipe() {
     // Effect Pipeable protocol — `arguments` is required by `pipeArguments`.
     // eslint-disable-next-line prefer-rest-params -- pipeArguments(this, arguments)
@@ -44,43 +53,39 @@ const Proto = {
   },
   prefix(this: Constraint, prefix: Path) {
     return makeProto({
-      identifier: this.identifier,
+      ...optionsFromRoute(this),
       path: joinPath(prefix, this.path),
-      params: this.params,
-      annotations: this.annotations,
     });
   },
   annotate<I, S>(this: Constraint, tag: Context.Key<I, S>, value: S) {
     return makeProto({
-      identifier: this.identifier,
-      path: this.path,
-      params: this.params,
+      ...optionsFromRoute(this),
       annotations: Context.add(this.annotations, tag, value),
     });
   },
   annotateMerge(this: Constraint, context: Context.Context<never>) {
     return makeProto({
-      identifier: this.identifier,
-      path: this.path,
-      params: this.params,
+      ...optionsFromRoute(this),
       annotations: Context.merge(this.annotations, context),
     });
   },
 };
 
+/** Constructor-shaped like `HttpApiEndpoint` — supports `class X extends Route.get(…)`. */
 const makeProto = <Id extends string, PathType extends Path, Params>(options: {
   readonly identifier: Id;
   readonly path: PathType;
   readonly params: Schema.Top | undefined;
   readonly annotations: Context.Context<never>;
-}): Route<Id, PathType, Params> =>
-  Object.assign(Object.create(Proto), {
-    [TypeId]: TypeId,
-    identifier: options.identifier,
-    path: options.path,
-    params: options.params,
-    annotations: options.annotations,
-  }) as Route<Id, PathType, Params>;
+}): Route<Id, PathType, Params> => {
+  function RouterRoute() {}
+  Object.setPrototypeOf(RouterRoute, Proto);
+  return Object.assign(RouterRoute, options) as unknown as Route<
+    Id,
+    PathType,
+    Params
+  >;
+};
 
 /** Single destination — `HttpApiEndpoint.get` analogue. */
 export const get = <const Id extends string, const PathType extends Path>(

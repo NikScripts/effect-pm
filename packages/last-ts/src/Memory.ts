@@ -3,7 +3,7 @@
  *
  * In-memory location transport for {@link ./Router} — no `window.history`.
  * Provides {@link ./Router.Router} from {@link ./RouterBuilder.Catalog} +
- * {@link ./RouterBuilder.Handlers}.
+ * {@link ./RouterBuilder.Registry}.
  *
  * ```ts
  * const routes = RouterBuilder.layer(Site).pipe(
@@ -22,24 +22,24 @@ import * as routerBuilder from "./internal/routerBuilder";
 import * as internal from "./internal/router";
 
 /**
- * Memory engine Layer — requires catalog + handlers from {@link ./RouterBuilder}.
+ * Memory engine Layer — requires catalog + registry from {@link ./RouterBuilder}.
  *
  * @public
  */
 export const layer: Layer.Layer<
   Router.Router,
   never,
-  routerBuilder.Catalog | routerBuilder.Handlers
+  routerBuilder.Catalog | routerBuilder.Registry
 > = Layer.effect(
   Router.Router,
   Effect.gen(function* () {
     const api = yield* routerBuilder.Catalog;
-    const handlers = yield* routerBuilder.Handlers;
+    const registry = yield* routerBuilder.Registry;
     const service = internal.makeService(api, "Memory");
     return {
       ...service,
-      /** @internal builder handlers for Outlet */
-      _handlers: handlers,
+      /** @internal builder registry for Outlet */
+      _handlers: registry,
     } as Router.Service;
   }),
 );

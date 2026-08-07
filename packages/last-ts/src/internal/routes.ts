@@ -54,12 +54,13 @@ export class GroupPrefix extends Context.Service<GroupPrefix, Path>()(
 ) {}
 
 /**
- * Erased group shape (runtime + nested-group bound). Avoids a circular
- * `Group.Constraint` that expands through itself.
+ * Erased group shape (`HttpApiGroup.Constraint` / `Top` analogue).
  */
 export interface GroupTop extends Pipeable {
   readonly [GroupTypeId]: typeof GroupTypeId;
   readonly identifier: string;
+  /** Context key for {@link ../RouterBuilder.group} (`HttpApiGroup.key`). */
+  readonly key: string;
   readonly topLevel: boolean;
   readonly routes: Readonly<Record<string, uiRoute.Constraint>>;
   readonly groups: Readonly<Record<string, GroupTop>>;
@@ -81,6 +82,10 @@ export interface GroupTop extends Pipeable {
   ): GroupTop;
   prefix(prefix: Path): GroupTop;
   annotate<I, S>(tag: Context.Key<I, S>, value: S): GroupTop;
+  annotateMerge<I>(annotations: Context.Context<I>): GroupTop;
+  /** Annotate every current route (`HttpApiGroup.annotateEndpoints`). */
+  annotateEndpoints<I, S>(tag: Context.Key<I, S>, value: S): GroupTop;
+  annotateEndpointsMerge<I>(annotations: Context.Context<I>): GroupTop;
 }
 
 /**
@@ -131,10 +136,44 @@ export interface Group<
     tag: Context.Key<I, S>,
     value: S,
   ): Group<Id, Routes, Groups, TopLevel>;
+  annotateMerge<I>(
+    annotations: Context.Context<I>,
+  ): Group<Id, Routes, Groups, TopLevel>;
+  annotateEndpoints<I, S>(
+    tag: Context.Key<I, S>,
+    value: S,
+  ): Group<Id, Routes, Groups, TopLevel>;
+  annotateEndpointsMerge<I>(
+    annotations: Context.Context<I>,
+  ): Group<Id, Routes, Groups, TopLevel>;
 }
 
 export declare namespace Group {
   export type Constraint = GroupTop;
+
+  /**
+   * Phantom service produced by {@link ../RouterBuilder.group}
+   * (`HttpApiGroup.Service`).
+   */
+  export interface Service<ApiId extends string, Identifier extends string> {
+    readonly _: unique symbol;
+    readonly apiId: ApiId;
+    readonly identifier: Identifier;
+  }
+
+  /**
+   * Union of group implementation services required by {@link ../RouterBuilder.layer}
+   * (`HttpApiGroup.ToService`).
+   */
+  export type ToService<ApiId extends string, G extends Constraint> =
+    G extends Constraint ? Service<ApiId, G["identifier"]> : never;
+
+  export type Identifier<G> = G extends Constraint ? G["identifier"] : never;
+
+  export type WithIdentifier<G, Id extends string> = Extract<
+    G,
+    { readonly identifier: Id }
+  >;
 }
 
 /** @deprecated Use {@link Group.Constraint} */
@@ -160,6 +199,7 @@ export interface Api<
   ): Api<Id, MergeApiAdds<Groups, GroupTop>>;
   prefix(prefix: Path): Api<Id, Groups>;
   annotate<I, S>(tag: Context.Key<I, S>, value: S): Api<Id, Groups>;
+  annotateMerge<I>(context: Context.Context<I>): Api<Id, Groups>;
 }
 
 /**
@@ -177,6 +217,7 @@ export interface ApiConstraint {
   ): ApiConstraint;
   prefix(prefix: Path): ApiConstraint;
   annotate<I, S>(tag: Context.Key<I, S>, value: S): ApiConstraint;
+  annotateMerge<I>(context: Context.Context<I>): ApiConstraint;
 }
 
 export declare namespace Api {
@@ -245,6 +286,14 @@ export const isApp = isApi;
 // Runtime protos
 // =============================================================================
 
+const optionsFromGroup = (g: GroupTop) => ({
+  identifier: g.identifier,
+  topLevel: g.topLevel,
+  routes: g.routes,
+  groups: g.groups,
+  annotations: g.annotations,
+});
+
 const groupProto = {
   pipe() {
     // Effect Pipeable protocol — `arguments` is required by `pipeArguments`.
@@ -262,11 +311,9 @@ const groupProto = {
       }
     }
     return makeGroupProto({
-      identifier: this.identifier,
-      topLevel: this.topLevel,
+      ...optionsFromGroup(this),
       routes,
       groups,
-      annotations: this.annotations,
     });
   },
   prefix(this: GroupTop, prefix: Path): GroupTop {
@@ -283,8 +330,7 @@ const groupProto = {
       ? uiRoute.joinPath(prev.value, prefix)
       : prefix;
     return makeGroupProto({
-      identifier: this.identifier,
-      topLevel: this.topLevel,
+      ...optionsFromGroup(this),
       routes,
       groups,
       annotations: Context.add(this.annotations, GroupPrefix, nextPrefix),
@@ -296,11 +342,44 @@ const groupProto = {
     value: S,
   ): GroupTop {
     return makeGroupProto({
-      identifier: this.identifier,
-      topLevel: this.topLevel,
-      routes: this.routes,
-      groups: this.groups,
+      ...optionsFromGroup(this),
       annotations: Context.add(this.annotations, tag, value),
+    });
+  },
+  annotateMerge<I>(
+    this: GroupTop,
+    annotations: Context.Context<I>,
+  ): GroupTop {
+    return makeGroupProto({
+      ...optionsFromGroup(this),
+      annotations: Context.merge(this.annotations, annotations),
+    });
+  },
+  annotateEndpointsMerge<I>(
+    this: GroupTop,
+    annotations: Context.Context<I>,
+  ): GroupTop {
+    const routes: Record<string, uiRoute.Constraint> = {};
+    for (const [id, route] of Object.entries(this.routes)) {
+      routes[id] = route.annotateMerge(annotations as Context.Context<never>);
+    }
+    return makeGroupProto({
+      ...optionsFromGroup(this),
+      routes,
+    });
+  },
+  annotateEndpoints<I, S>(
+    this: GroupTop,
+    tag: Context.Key<I, S>,
+    value: S,
+  ): GroupTop {
+    const routes: Record<string, uiRoute.Constraint> = {};
+    for (const [id, route] of Object.entries(this.routes)) {
+      routes[id] = route.annotate(tag, value);
+    }
+    return makeGroupProto({
+      ...optionsFromGroup(this),
+      routes,
     });
   },
   fromEffect(
@@ -327,6 +406,8 @@ const makeGroupProto = (options: {
 }): GroupTop => {
   function RouterGroup() {}
   Object.setPrototypeOf(RouterGroup, groupProto);
+  ;(RouterGroup as { key?: string }).key =
+    `last-ts/Router/Group/${options.identifier}`;
   return Object.assign(RouterGroup, {
     [GroupTypeId]: GroupTypeId,
     identifier: options.identifier,
@@ -355,6 +436,12 @@ export const group = <
     annotations: Context.empty(),
   }) as Group<Id, never, never, [TopLevel] extends [true] ? true : false>;
 
+const optionsFromApi = (api: ApiConstraint) => ({
+  identifier: api.identifier,
+  groups: api.groups,
+  annotations: api.annotations,
+});
+
 const appProto = {
   pipe() {
     // Effect Pipeable protocol — `arguments` is required by `pipeArguments`.
@@ -376,15 +463,15 @@ const appProto = {
       }
     }
     return makeAppProto({
-      identifier: this.identifier,
+      ...optionsFromApi(this),
       groups,
-      annotations: this.annotations,
     });
   },
   addHttpApi<Id extends string, Groups extends HttpApiGroup.Constraint>(
     this: ApiConstraint,
     api: HttpApi.HttpApi<Id, Groups>,
   ): ApiConstraint {
+    // Prefer annotation-preserving import when the peer is already a Router catalog.
     return this.add(addHttpApi(api));
   },
   prefix(this: ApiConstraint, prefix: Path): ApiConstraint {
@@ -393,9 +480,8 @@ const appProto = {
       groups[id] = g.prefix(prefix);
     }
     return makeAppProto({
-      identifier: this.identifier,
+      ...optionsFromApi(this),
       groups,
-      annotations: this.annotations,
     });
   },
   annotate<I, S>(
@@ -404,9 +490,17 @@ const appProto = {
     value: S,
   ): ApiConstraint {
     return makeAppProto({
-      identifier: this.identifier,
-      groups: this.groups,
+      ...optionsFromApi(this),
       annotations: Context.add(this.annotations, tag, value),
+    });
+  },
+  annotateMerge<I>(
+    this: ApiConstraint,
+    annotations: Context.Context<I>,
+  ): ApiConstraint {
+    return makeAppProto({
+      ...optionsFromApi(this),
+      annotations: Context.merge(this.annotations, annotations),
     });
   },
 };

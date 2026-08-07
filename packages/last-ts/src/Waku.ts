@@ -31,7 +31,7 @@ import * as routerBuilder from "./internal/routerBuilder";
 import * as wakuInternal from "./internal/routerWaku";
 
 /**
- * Waku engine Layer — requires catalog + handlers; adapts Waku’s client router.
+ * Waku engine Layer — requires catalog + registry; adapts Waku’s client router.
  * Must render under Waku’s router tree.
  *
  * @public
@@ -39,12 +39,12 @@ import * as wakuInternal from "./internal/routerWaku";
 export const layer: Layer.Layer<
   Router.Router,
   never,
-  routerBuilder.Catalog | routerBuilder.Handlers
+  routerBuilder.Catalog | routerBuilder.Registry
 > = Layer.effect(
   Router.Router,
   Effect.gen(function* () {
     const api = yield* routerBuilder.Catalog;
-    const handlers = yield* routerBuilder.Handlers;
+    const registry = yield* routerBuilder.Registry;
     const binding = wakuInternal.waku(api);
     // Service is completed in React via Waku hooks; expose catalog shell for types.
     const base = {
@@ -62,7 +62,7 @@ export const layer: Layer.Layer<
       prefetch: () => undefined,
       subscribe: () => () => undefined,
       syncFromLocation: () => undefined,
-      _handlers: handlers,
+      _handlers: registry,
     };
     return base as Router.Service;
   }),

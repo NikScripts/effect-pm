@@ -10,9 +10,11 @@
 |--------|------|
 | `HttpApi.make` | `Router.make` |
 | `HttpApiGroup.make` | `Router.group` |
+| `HttpApiGroup.key` / `Service` / `ToService` | `group.key` / `Group.Service` / `Group.ToService` |
 | `HttpApiEndpoint.get` | `Route.get` |
-| `HttpApiBuilder.group` | `RouterBuilder.group(api, id, layout, handlers)` |
-| `HttpApiBuilder.layer` | `RouterBuilder.layer(api)` |
+| `HttpApiBuilder.Handlers` | `RouterBuilder.Handlers` (`.handle` / `.handleAll` record / `.handleEach`) |
+| `HttpApiBuilder.group` | `RouterBuilder.group(api, id, layout, build)` — layout is UI-only 3rd arg |
+| `HttpApiBuilder.layer` | `RouterBuilder.layer(api)` → `Catalog` + `Registry` |
 | `HttpApiClient.urlBuilder` | `RouterClient.urlBuilder` |
 | Node / server Layer | `History.layer` / `Memory.layer` / `Waku.layer` |
 
