@@ -15,3 +15,10 @@ export default function Chapter(props: { readonly slug: string }) {
     </article>
   );
 }
+
+/** Waku engine config — not Page.*; createPages will replace this later. */
+export const getConfig = async () =>
+  ({
+    render: "static",
+    staticPaths: [...guides],
+  }) as const;

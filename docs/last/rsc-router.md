@@ -32,7 +32,8 @@ Link →  Last.provider(Waku.fromApi(…)) ← soft-nav
 
 `Page.Service` / `createPages` (stamp → engine) is not Eng’d yet. Until then,
 pages are ordinary Waku modules — **no** `Page.getConfig`, **no** Stamped
-default-export theater.
+default-export theater. Param SSG still needs Waku’s own `getConfig` /
+`staticPaths` on that one file (engine wire, not a last-ts API).
 
 ## 1. Catalog — `Router.make`
 
