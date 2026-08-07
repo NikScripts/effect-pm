@@ -25,7 +25,7 @@ WorkPool.serve      // pulls the engine only when used
 ## Sibling Tags — never nest a Tag under another module
 
 When several service Tags belong to one product family (Lookup’s Identity / Directory /
-Advice), each Tag is its **own module** (`hyperlink-ts/Advice`, …). Apps do **not** import
+Advice / Dialers), each Tag is its **own module** (`hyperlink-ts/Advice`, …). Apps do **not** import
 Tags from the parent (`import { Advice } from "hyperlink-ts/Lookup"`) or chain
 `Lookup.Advice.changes`. Match Effect: one file = one namespace; flat members on that
 namespace.
@@ -37,10 +37,12 @@ Lookup.Advice.changes
 
 // ✅ sibling module
 import * as Advice from "hyperlink-ts/Advice"
+import * as Dialers from "hyperlink-ts/Dialers"
 import * as Directory from "hyperlink-ts/Directory"
 yield* Advice.prefer(Mail, "fleet/Mail#w2")
 yield* Advice.changes.pipe(Stream.runDrain)
 yield* Directory.nodesServing(Mail)
+yield* Dialers.listForTarget("fleet/Mail#w2")
 const board = yield* Advice.Tag
 ```
 

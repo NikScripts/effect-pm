@@ -6543,10 +6543,18 @@ export const lookupClient = <Self, S extends Spec>(
           }),
         );
 
+      const Dialers = yield* Effect.promise(() => import("./Dialers"));
+      const dialerId = yield* Dialers.mintId;
+
       const endpoint = yield* resolve;
       yield* install(endpoint);
       currentKey = lookupDialKey(endpoint);
       currentNodeKey = endpoint.nodeKey;
+      yield* Dialers.registerOption({
+        dialerId,
+        serviceKey: tag.key,
+        target: endpoint.nodeKey,
+      });
 
       const tryResolveAdopt = Effect.gen(function* () {
         const next = yield* Effect.option(resolve);
@@ -6557,6 +6565,11 @@ export const lookupClient = <Self, S extends Spec>(
         if (Exit.isSuccess(installed)) {
           currentKey = nextKey;
           currentNodeKey = next.value.nodeKey;
+          yield* Dialers.registerOption({
+            dialerId,
+            serviceKey: tag.key,
+            target: next.value.nodeKey,
+          });
           return;
         }
         yield* Effect.logWarning(
@@ -6634,9 +6647,12 @@ export const lookupClient = <Self, S extends Spec>(
         );
 
       yield* Effect.addFinalizer(() =>
-        clientScope === undefined
-          ? Effect.void
-          : Scope.close(clientScope, Exit.void),
+        Effect.gen(function* () {
+          yield* Dialers.unregisterOption(dialerId);
+          if (clientScope !== undefined) {
+            yield* Scope.close(clientScope, Exit.void);
+          }
+        }),
       );
 
       const followStream = (getInner: () => Stream.Stream<unknown>) =>
@@ -7069,6 +7085,7 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
         // Live rebind on Directory.changes when dial moves / peers appear or leave.
         if (stamped !== undefined && stamped.length === 0) {
           const Directory = yield* Effect.promise(() => import("./Directory"));
+          const Dialers = yield* Effect.promise(() => import("./Dialers"));
           const dirOpt = yield* Effect.serviceOption(Directory.Tag);
           if (Option.isNone(dirOpt)) {
             return {} as Record<string, PeerServiceOf<S>>;
@@ -7088,6 +7105,7 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
             readonly generation: Ref.Ref<number>;
             readonly installGen: SubscriptionRef.SubscriptionRef<number>;
             readonly gate: Semaphore.Semaphore;
+            readonly dialerId: string;
           };
           const peersRecord = Object.create(null) as Record<
             string,
@@ -7117,6 +7135,7 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
               if (slot === undefined) return;
               slots.delete(nodeKey);
               delete peersRecord[nodeKey];
+              yield* Dialers.unregisterOption(slot.dialerId);
               if (slot.scope !== undefined) {
                 yield* Scope.close(slot.scope, Exit.void);
               }
@@ -7194,6 +7213,7 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
                 const generation = yield* Ref.make(0);
                 const installGen = yield* SubscriptionRef.make(0);
                 const gate = yield* Semaphore.make(1);
+                const dialerId = yield* Dialers.mintId;
                 const streamGap = yield* Policy.StreamGap;
                 const facade = makeLivePeerService(
                   tag,
@@ -7209,6 +7229,7 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
                   generation,
                   installGen,
                   gate,
+                  dialerId,
                 };
                 slots.set(row.nodeKey, slot);
                 peersRecord[row.nodeKey] = facade;
@@ -7242,6 +7263,11 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
                     (n) => n + 1,
                   );
                   yield* SubscriptionRef.set(active.installGen, gen);
+                  yield* Dialers.registerOption({
+                    dialerId: active.dialerId,
+                    serviceKey: tag.key,
+                    target: row.nodeKey,
+                  });
                   if (prev !== undefined) {
                     yield* Scope.close(prev, Exit.void);
                   }

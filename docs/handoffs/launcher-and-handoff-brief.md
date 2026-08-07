@@ -1,6 +1,6 @@
 # Brief — Launcher + node handoff (Agent 5)
 
-**Status:** Track A + **Track B Eng'd** on tip. **Track C Locked #27–34 + #39 Eng'd**. **Track D v1 + advice early-move Eng'd** — `lookupClient` build-then-swap + `RpcClientError` retry + `Advice.changes` dial move. **#44 sibling Tags Eng'd**. **#45 peersLayer parity Eng'd**. **#46 Policy Eng'd**. **#35** superseded (Versioned + `deprecated` Eng'd). **#36** Lookup A/B + Lookup-first + `planUpdate` + **`restartSuccessor` Eng'd**. **#37** deferred. Next: dual-serve / redirect / live `clientsAtRisk`.  
+**Status:** Track A + **Track B Eng'd** on tip. **Track C Locked #27–34 + #39 Eng'd**. **Track D v1 + advice early-move Eng'd** — `lookupClient` build-then-swap + `RpcClientError` retry + `Advice.changes` dial move. **#44 sibling Tags Eng'd**. **#45 peersLayer parity Eng'd**. **#46 Policy Eng'd**. **#35** superseded (Versioned + `deprecated` Eng'd). **#36** Lookup A/B + Lookup-first + `planUpdate` + **`restartSuccessor` Eng'd**. **A1+B2** sticky dual-serve + **Dialers** census Eng'd. **#37** deferred. Optional: stream resume tokens; explicit Redirect SDK rejected for v1.  
 **Opened:** 2026-07-25 (owner via Agent G).  
 **Audience:** next agent picking up launcher + handoff / migration discussion.
 
@@ -189,7 +189,7 @@ Shipped on tip (owner Eng go + refinements):
 
 Eng defaults: 32-byte hex token; Ready poll `100 millis` with per-dial `2 seconds` bound; outer default `"30 seconds"`.
 
-**Next bake:** stream resume tokens / dedupe (optional); dual-serve / redirect; #37 stays deferred.
+**Next bake:** stream resume tokens / dedupe (optional); #37 stays deferred. Sticky dual-serve + Dialers Eng'd.
 
 ### Track D v1 — Eng'd (2026-07-29, owner go “make the dream happen”)
 
@@ -203,7 +203,7 @@ North star: `lookupClient` callers never notice A→B. **v1 slice Eng'd:**
 45. **peersLayer D parity (Eng'd)** — directory-mode `peersLayer` matches `lookupClient`: **build-then-swap** peer dials (prior stays until next succeeds); Effect peer RPCs that hit `RpcClientError` **retry once** after rebind. Streams follow dial generations (Policy). Stable `peers[nodeKey]` facade identity across swaps.
 46. **Policy (Eng'd)** — `hyperlink-ts/Policy`: composable Layer fragments for dial (`sticky` / `streamGap` / `coldAmbiguous` / `pick`), verify (`verifyOff` / `verifyStatus` — replaces `Hyperlink.clientVerify`), advertise conflict (`askIncumbent` / `livenessReplace` / `OnConflict` SSOT), and yield (`yieldAccept` / `yieldRefuse`). Helpers: `Policy.provide` / `Policy.layer`. Node/Listen call-site stamps remain overrides. Defaults: sticky + stall + cold fail + verify reject + conflict inherit + yield accept.
 
-**Still open for D:** optional stream resume tokens / seam dedupe; not dual-serve sticky (shipped via Policy).
+**Still open for D:** optional stream resume tokens / seam dedupe. Dual-serve sticky + `Advice.prefer` + Dialers census shipped (`restartSuccessor` stamps prefer by default).
 
 ### Track B — research note (2026-07-27): what already exists
 

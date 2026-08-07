@@ -116,6 +116,10 @@
       "types": "./dist/Advice.d.ts",
       "default": "./dist/Advice.js"
     },
+    "./Dialers": {
+      "types": "./dist/Dialers.d.ts",
+      "default": "./dist/Dialers.js"
+    },
     "./Directory": {
       "types": "./dist/Directory.d.ts",
       "default": "./dist/Directory.js"

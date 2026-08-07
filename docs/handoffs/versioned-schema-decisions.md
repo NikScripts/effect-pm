@@ -362,7 +362,7 @@ files.rename // ❌ not on Handle (compile error)
 
 ## Planned — Lookup-first launcher + Lookup A/B (owner 2026-08-03)
 
-**Status:** Design **locked** owner chat 2026-08-03 (single-address + orchestrator; name `Lookup.follow`) — **follow + handoff + `ensureLookup` + already-up + `Lookup.planUpdate` + `Launcher.restartSuccessor` Eng'd**. Next: dual-serve / redirect / live `clientsAtRisk`.  
+**Status:** Design **locked** owner chat 2026-08-03 (single-address + orchestrator; name `Lookup.follow`) — **follow + handoff + `ensureLookup` + already-up + `Lookup.planUpdate` + `Launcher.restartSuccessor` + Dialers / sticky dual-serve Eng'd**. Deferred: explicit client-redirect SDK.  
 **Why it matters a lot:** Lookup must be able to **restart / A/B update**. A Lookup that also hosts app services couples Lookup lifecycle to those services’ skew and forces Lookup A/B whenever an app Tag moves.
 
 ### Desired bring-up (Launcher) — ensure Lookup first (locked)
@@ -462,13 +462,13 @@ yield* Node.shutdown(lookupA) // releases sock
 2. ~~**Orchestrated single-address ownership handoff**~~ — **Eng'd** (`examples/node/lookup-follow-handoff.ts`, `test/lookup-follow-handoff.test.ts`).  
 3. ~~**Launcher ensure-Lookup-first**~~ — **Eng'd** (`Launcher.ensureLookup` / `UpOptions.lookup`; `test/launcher-ensure-lookup.test.ts`; `examples/launcher/ensure-lookup.ts`).  
 4. ~~Update-impact~~ **Eng'd** (`Lookup.planUpdate` + ambient `PlanForce` / `PlanStatus`). ~~App already-up Policy~~ **Eng'd** (`AlreadyUpRef` + Layers).  
-5. ~~`Launcher.restartSuccessor`~~ **Eng'd** — plan → `up(B)` → shutdown `A` (capture A dial before up). Live OS e2e (`test/launcher-restart-successor.test.ts`) covers same-`nodeKey` dial-replace via `askIncumbent`. Dual-serve / redirect still deferred.
+5. ~~`Launcher.restartSuccessor`~~ **Eng'd** — plan → `up(B)` → `Advice.prefer(B)` → shutdown `A` (capture A dial before up). Live OS e2e (`test/launcher-restart-successor.test.ts`) covers same-`nodeKey` dial-replace via `askIncumbent`. Sticky dual-serve + Dialers census Eng'd (no Redirect module).
 
 ---
 
 ## Planned — Launcher / Lookup update impact (dependent nodes)
 
-**Status:** **Eng'd** 2026-08-05 — `Lookup.planUpdate` dry-run. **`Launcher.restartSuccessor` Eng'd** 2026-08-07 (consumes plan). Dual-serve / redirect / live dialer registry still deferred.
+**Status:** **Eng'd** 2026-08-05 — `Lookup.planUpdate` dry-run. **`Launcher.restartSuccessor` Eng'd** 2026-08-07 (consumes plan). **Dialers + sticky dual-serve Eng'd** 2026-08-07 (A1+B2 dream).
 
 ### Problem
 
@@ -499,7 +499,7 @@ const impact = yield* Lookup.planUpdate("fleet/Worker#a", [WorkerV2], {
 })
 // impact.coUpdate / migrationGaps / wireRemovals / contractDrifts / lookupFirst
 
-// Eng'd — plan → up(B) → shutdown(A); captures A's dial before up
+// Eng'd — plan → up(B) → Advice.prefer(B) → shutdown(A); captures A's dial before up
 yield* Launcher.restartSuccessor({
   target: "fleet/Worker#a",
   successor: { node: workerB, process: … },
@@ -514,9 +514,10 @@ yield* Launcher.restartSuccessor({
 |------|------|
 | API home | **`Lookup.planUpdate`** (membership/impact); **`Launcher.restartSuccessor`** executes |
 | Force | Ambient `PlanForce` (`planFailClosed` / `planForce`); per-call `{ force: true }` overrides |
-| `clientsAtRisk` | Advice `prefer` → target proxy (no dialer registry yet) |
+| `clientsAtRisk` | Live **`Dialers.listForTarget`**; Advice-prefer fallback (`dialerId: "advice:…"`) when census empty |
 | Status dial | Ambient `PlanStatus` (`planStatusOn` / `planStatusOff`); per-call `{ status }` overrides |
-| `restartSuccessor` | **Eng'd** — plan → `up(B)` → shutdown `A` (capture A dial before up) |
+| `restartSuccessor` | **Eng'd** — plan → `up(B)` → `Advice.prefer(B)` (default) → shutdown `A` |
+| Dual-serve | **Policy sticky + Advice.prefer + build-then-swap** — no Redirect module |
 
 ### Rules of thumb
 
@@ -538,12 +539,12 @@ yield* Launcher.restartSuccessor({
 
 Spine α stays: Launcher is not a long-lived fleet supervisor. **Plan** is Lookup-shaped; Launcher executes spawn units from the plan.
 
-### Deferred (after planUpdate + restartSuccessor)
+### Deferred (after planUpdate + restartSuccessor + Dialers)
 
-- Real dialer registry for `clientsAtRisk` (replace Advice-prefer proxy)  
-- Dual-serve / redirect during A→B  
+- Explicit client-redirect SDK (rejected for v1 — sticky + Advice is enough)  
 - Registry snapshot handoff (v1 = cold + re-advertise)  
-- Durable tip gaps without live status rows
+- Durable tip gaps without live status rows  
+- Cross-process dialer identity beyond Lookup Dialers HyperService
 ---
 
 ## End-to-end skew story (one narrative)
@@ -606,7 +607,7 @@ export class Jobs extends WorkPool.Tag<Jobs>()("fleet/Jobs", { payload: Job }) {
 5. ~~App already-up Policy (`AlreadyUpRef` / adopt)~~ **Eng'd**  
 6. ~~Update-impact planner (`Lookup.planUpdate`)~~ **Eng'd**  
 7. ~~Explicit A/B / `restartSuccessor` for app nodes~~ **Eng'd**  
-8. Dual-serve / redirect / live `clientsAtRisk` registry
+8. ~~Dual-serve (sticky+Advice) / live `clientsAtRisk` (Dialers)~~ **Eng'd** — explicit Redirect SDK still deferred
 
 ---
 

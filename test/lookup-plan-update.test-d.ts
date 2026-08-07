@@ -3,6 +3,7 @@
  */
 import type { Effect } from "effect";
 import type * as Advice from "../src/Advice";
+import type * as Dialers from "../src/Dialers";
 import type * as Directory from "../src/Directory";
 import type * as Lookup from "../src/Lookup";
 
@@ -23,15 +24,23 @@ function typeLock(
   const _hasUnknown: AssertExtends<Lookup.UpdateTargetUnknown, Errs> = true;
   const _needsDirectory: AssertExtends<Directory.Tag, Ctx> = true;
   const _needsAdvice: AssertExtends<Advice.Tag, Ctx> = true;
+  const _needsDialers: AssertExtends<Dialers.Tag, Ctx> = true;
   const _blockedFlag: boolean = impact.blocked;
   const _lookupFirst: boolean = impact.lookupFirst;
+  const _risk: {
+    readonly dialerId: string;
+    readonly serviceKey: string;
+    readonly target: string;
+  } = impact.clientsAtRisk[0]!;
 
   void _hasBlocked;
   void _hasUnknown;
   void _needsDirectory;
   void _needsAdvice;
+  void _needsDialers;
   void _blockedFlag;
   void _lookupFirst;
+  void _risk;
   void tag;
 }
 

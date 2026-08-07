@@ -341,6 +341,11 @@ export interface RestartSuccessorOptions {
   readonly status?: boolean;
   /** Skip {@link Lookup.planUpdate} (ops escape hatch). */
   readonly skipPlan?: boolean;
+  /**
+   * After `up(B)`, stamp {@link Advice.prefer} for each tag → successor `nodeKey`
+   * so sticky dialers move before A dies (dream dual-serve). Default `true`.
+   */
+  readonly prefer?: boolean;
 }
 
 // =============================================================================
@@ -1333,11 +1338,12 @@ const nodeFromDirectoryEntry = (
 
 /**
  * App-node A→B update: {@link Lookup.planUpdate} → {@link up}(successor) →
- * {@link Node.shutdown}(target).
+ * {@link Advice.prefer}(B) → {@link Node.shutdown}(target).
  *
  * Spine α — still exits when done (not a long-lived fleet supervisor). Lookup
  * same-sock ownership moves stay on the follow/handoff recipe; this is Directory
- * dial-replace for app units (B visible before A leaves).
+ * dial-replace for app units (B visible before A leaves). Prefer stamps (default
+ * on) move sticky `lookupClient` / `peersLayer` dialers while A is still up.
  *
  * ```ts
  * yield* Launcher.restartSuccessor({
@@ -1392,6 +1398,7 @@ export const restartSuccessor = (
           "launcher.target": options.target,
           "launcher.successor": options.successor.node.key,
           "launcher.skip_plan": String(options.skipPlan === true),
+          "launcher.prefer": String(options.prefer !== false),
         }),
       );
 
@@ -1419,6 +1426,18 @@ export const restartSuccessor = (
       }
 
       yield* up(options.successor);
+
+      // Sticky dual-serve: stamp Advice.prefer(B) while A is still up so
+      // lookupClient / peersLayer rebinds before shutdown tears A down.
+      if (options.prefer !== false) {
+        const successorKey = options.successor.node.key;
+        yield* Effect.forEach(
+          options.tags,
+          (tag) => Advice.prefer(tag.key, successorKey),
+          { concurrency: "unbounded", discard: true },
+        );
+      }
+
       yield* nodeShutdown(outgoing);
       yield* Effect.logInfo("restartSuccessor complete").pipe(
         Effect.annotateLogs({ "launcher.target": options.target }),

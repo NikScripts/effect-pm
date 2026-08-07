@@ -1,5 +1,5 @@
 /**
- * Lookup.planUpdate — Directory co-update, Advice proxy, wireRemovals, fail-closed.
+ * Lookup.planUpdate — Directory co-update, Dialers census, Advice fallback, wireRemovals.
  */
 import {
   Clock,
@@ -11,6 +11,7 @@ import {
 } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import * as Advice from "../src/Advice";
+import * as Dialers from "../src/Dialers";
 import * as Directory from "../src/Directory";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Lookup from "../src/Lookup";
@@ -130,7 +131,7 @@ describe("Lookup.planUpdate", () => {
   );
 
   it.effect(
-    "Advice prefer → clientsAtRisk proxy",
+    "Advice prefer → clientsAtRisk fallback when Dialers empty",
     () =>
       Effect.gen(function* () {
         const path = yield* tmpSock("advice");
@@ -154,7 +155,55 @@ describe("Lookup.planUpdate", () => {
 
             const impact = yield* Lookup.planUpdate("worker-a", [Jobs]);
             expect(impact.clientsAtRisk).toEqual([
-              { node: "worker-a", serviceKey: "lookup-plan/Jobs" },
+              {
+                dialerId: "advice:lookup-plan/Jobs",
+                serviceKey: "lookup-plan/Jobs",
+                target: "worker-a",
+              },
+            ]);
+          }),
+        );
+      }),
+    { timeout: 15_000 },
+  );
+
+  it.effect(
+    "Dialers.register → clientsAtRisk live census",
+    () =>
+      Effect.gen(function* () {
+        const path = yield* tmpSock("dialers");
+        const node = Node.Tag()("lookup/plan-dialers", { path }).pipe(
+          Node.asLookup,
+        );
+        yield* withLookup(
+          Lookup.layerNode(node),
+          Lookup.client(node),
+          Effect.gen(function* () {
+            const dir = yield* Directory.Tag;
+            yield* dir.advertise(
+              new Lookup.AdvertiseRequest({
+                nodeKey: "worker-a",
+                kind: "IpcSocket",
+                path: "/tmp/worker-a.sock",
+                serves: ["lookup-plan/Jobs"],
+              }),
+            );
+            // Prefer alone would proxy; live Dialers wins when non-empty.
+            yield* Advice.prefer(Jobs, "worker-a");
+            const dialerId = yield* Dialers.mintId;
+            yield* Dialers.register({
+              dialerId,
+              serviceKey: Jobs.key,
+              target: "worker-a",
+            });
+
+            const impact = yield* Lookup.planUpdate("worker-a", [Jobs]);
+            expect(impact.clientsAtRisk).toEqual([
+              {
+                dialerId,
+                serviceKey: "lookup-plan/Jobs",
+                target: "worker-a",
+              },
             ]);
           }),
         );

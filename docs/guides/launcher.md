@@ -195,8 +195,11 @@ migration `{ handoff }` on shutdown.
 fail-closed on migration gaps / wire removals / contract drifts. Ambient Layers:
 `Lookup.planFailClosed` / `planForce`, `planStatusOn` / `planStatusOff` (per-call
 `force` / `status` still override). Execute with **`Launcher.restartSuccessor`**
-(plan → `up(B)` → shutdown `A`; captures A's Directory dial **before** `up` so
-same-`nodeKey` dial-replace does not hide the outgoing node).
+(plan → `up(B)` → `Advice.prefer(B)` → shutdown `A`; captures A's Directory dial
+**before** `up` so same-`nodeKey` dial-replace does not hide the outgoing node).
+Prefer is on by default (`prefer: false` to skip) — sticky dual-serve while A is
+still up. Live dial census for impact is `hyperlink-ts/Dialers`
+(`planUpdate.clientsAtRisk`).
 
 ```ts
 yield* Launcher.restartSuccessor({
@@ -237,14 +240,22 @@ outgoing node. See
 
 Hub: [Examples → launcher](/docs/examples#launcher).
 
+## Dual-serve (Eng'd — sticky + Advice, not a Redirect module)
+
+A→B dual-serve is **Policy sticky** + **`Advice.prefer`** + `lookupClient` /
+`peersLayer` build-then-swap — not a separate client-redirect SDK. While A and B
+are both Directory-visible, sticky keeps warm dials until prefer (or A's death)
+moves them. `restartSuccessor` stamps prefer(B) after `up(B)` by default.
+`Lookup.planUpdate.clientsAtRisk` reads live **`Dialers`** (soft register from
+`lookupClient` / directory `peersLayer`); Advice-prefer is the empty-census fallback.
+
 ## Deferred (not beta Launcher)
 
 - Lookup-first spawn when no address / no safe default (#36 remainder)
-- Dual-serve / redirect during A→B; live dialer registry for `clientsAtRisk`
+- Explicit client-redirect SDK (rejected for v1 — sticky + Advice is enough)
 - Explicit less-automated A/B launcher (replacement addressing = same `nodeKey` + new dial today)
-- Explicit A/B launcher automation (`lookupClient` + `peersLayer` rebind + [Policy](./policy.md) sticky / streams already ship)
 - Blank worker + remote assign; HTTP/WS Lookup; nameless Launcher discovery
 - `Handle.events` Stream; stdout/stderr tap; thin `hl up` CLI
 
-Live custody proof for `restartSuccessor` (plan ok → OS `up(B)` → shutdown `A`,
+Live custody proof for `restartSuccessor` (plan ok → OS `up(B)` → prefer → shutdown `A`,
 same-`nodeKey` dial-replace via `askIncumbent`): `test/launcher-restart-successor.test.ts`.

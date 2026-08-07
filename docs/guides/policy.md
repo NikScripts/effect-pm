@@ -150,24 +150,26 @@ Node.unix(Worker, serves).pipe(
 ## Cutover recipe (clients)
 
 1. Start Lookup; start **B** so Directory has a target.
-2. Dialers use `lookupClient` (defaults: sticky + stream stall + cold fail).
-3. Optionally `Advice.prefer(Tag, bNodeKey)` so dialers move **before** A dies.
-4. Dual-serve window: A+B both advertised — sticky keeps current until prefer / death.
+2. Clients use `lookupClient` (defaults: sticky + stream stall + cold fail) — soft-registers on **`Dialers`** for `planUpdate.clientsAtRisk`.
+3. `Advice.prefer(Tag, bNodeKey)` (or `Launcher.restartSuccessor` default prefer) so dials move **before** A dies.
+4. Dual-serve window: A+B both advertised — sticky keeps current until prefer / death (no Redirect module).
 5. `Node.shutdown(A)` / handoff — see [Identity coordinator — A→B](/docs/identity-coordinator#ab-cutover-recipe-state-transfer).
 
 ## Sibling Tags (not under Lookup)
 
 ```ts
 import * as Advice from "hyperlink-ts/Advice"
+import * as Dialers from "hyperlink-ts/Dialers"
 import * as Directory from "hyperlink-ts/Directory"
 import * as Identity from "hyperlink-ts/Identity"
 
 yield* Advice.prefer(Mail, "fleet/Mail#w2")
 yield* Directory.nodesServing(Mail)
+yield* Dialers.listForTarget("fleet/Mail#w2")
 yield* Advice.changes.pipe(Stream.runDrain)
 ```
 
-Never `import { Advice } from "hyperlink-ts/Lookup"` / `Lookup.Advice.*`.
+Never `import { Advice } from "hyperlink-ts/Lookup"` / `Lookup.Advice.*` (same for Dialers).
 
 ## See also
 

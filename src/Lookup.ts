@@ -1,5 +1,5 @@
 /**
- * Lookup — bind/dial layers that serve Identity / Directory / Advice Tags together.
+ * Lookup — bind/dial layers that serve Identity / Directory / Advice / Dialers Tags together.
  *
  * Same-machine default: {@link layer} / {@link layerOptions} on a well-known `ipc` path
  * (OS exclusivity; bind-or-dial). Cross-network: {@link layerNode} / {@link client} on an
@@ -18,6 +18,7 @@
  * ```ts
  * import * as Lookup from "hyperlink-ts/Lookup"
  * import * as Advice from "hyperlink-ts/Advice"
+ * import * as Dialers from "hyperlink-ts/Dialers"
  * import * as Directory from "hyperlink-ts/Directory"
  * import * as Policy from "hyperlink-ts/Policy"
  *
@@ -25,6 +26,7 @@
  * Lookup.follow(lookupNode).pipe(Policy.provide(Policy.streamGap("stall")))
  * yield* Advice.prefer(Mail, "fleet/Mail#w2")
  * yield* Directory.changes.pipe(Stream.runDrain)
+ * yield* Dialers.listForTarget("fleet/Worker#a")
  * ```
  *
  * Never `import { Advice } from "hyperlink-ts/Lookup"` / `Lookup.Advice.*`.
@@ -51,6 +53,13 @@ import {
   AdviceCleared,
   type AdviceChange,
 } from "./Advice";
+import {
+  Tag as Dialers,
+  RegisterRequest,
+  UnregisterRequest,
+  ListForTargetRequest,
+  DialerEntry,
+} from "./Dialers";
 import {
   Tag as Directory,
   DirectoryEntry,
@@ -97,7 +106,7 @@ import {
 export type { OnConflict, OnConflictResolved } from "./Policy";
 export { resolveOnConflict } from "./Policy";
 
-// Wire schemas + sugars from sibling modules (Tags stay on Advice/Directory/Identity).
+// Wire schemas + sugars from sibling modules (Tags stay on siblings).
 export {
   Endpoint,
   ClaimRequest,
@@ -130,6 +139,12 @@ export {
   clearAdvice,
   preferred,
 } from "./Advice";
+export {
+  DialerEntry,
+  RegisterRequest as DialersRegisterRequest,
+  UnregisterRequest as DialersUnregisterRequest,
+  ListForTargetRequest as DialersListForTargetRequest,
+} from "./Dialers";
 
 /**
  * Lookup node has no dialable address — need `{ path }` / url, or use {@link layer} /
@@ -151,12 +166,13 @@ export class LookupUnaddressed extends Data.TaggedError("LookupUnaddressed")<{
 export const kind = "hyperlink-ts/Lookup";
 
 /**
- * Services a Lookup client layer provides — identity, directory, and placement advice.
+ * Services a Lookup client layer provides — identity, directory, placement advice,
+ * and live dialer census.
  *
  * @category models
  * @public
  */
-export type Services = Identity | Directory | Advice;
+export type Services = Identity | Directory | Advice | Dialers;
 
 // ============================================================================
 // Defaults (L1) — Lookup node = Tag node branded with {@link Node.asLookup}
@@ -322,7 +338,7 @@ const incumbentYield = (
   );
 };
 
-/** Identity + Directory + Advice impl over one shared in-memory registry. */
+/** Identity + Directory + Advice + Dialers impl over one shared in-memory registry. */
 const lookupServeLayers = (serverOnConflict: OnConflictResolved) =>
   Layer.unwrap(
     Effect.gen(function* () {
@@ -441,12 +457,44 @@ const lookupServeLayers = (serverOnConflict: OnConflictResolved) =>
           Stream.map(toAdviceChange),
         ),
       });
-      return Layer.mergeAll(identity, directory, advice);
+      const dialers = Hyperlink.serve(Dialers, {
+        register: (req: RegisterRequest) =>
+          registries.dialers.register({
+            dialerId: req.dialerId,
+            serviceKey: req.serviceKey,
+            target: req.target,
+          }).pipe(
+            Effect.map(
+              (entry) =>
+                new DialerEntry({
+                  dialerId: entry.dialerId,
+                  serviceKey: entry.serviceKey,
+                  target: entry.target,
+                }),
+            ),
+          ),
+        unregister: (req: UnregisterRequest) =>
+          registries.dialers.unregister(req.dialerId),
+        listForTarget: (req: ListForTargetRequest) =>
+          registries.dialers.listForTarget(req.nodeKey).pipe(
+            Effect.map((entries) =>
+              entries.map(
+                (entry) =>
+                  new DialerEntry({
+                    dialerId: entry.dialerId,
+                    serviceKey: entry.serviceKey,
+                    target: entry.target,
+                  }),
+              ),
+            ),
+          ),
+      });
+      return Layer.mergeAll(identity, directory, advice, dialers);
     }),
   );
 
 /**
- * Serve {@link Identity} + {@link Directory} + {@link Advice} on a Unix-domain path.
+ * Serve {@link Identity} + {@link Directory} + {@link Advice} + {@link Dialers} on a Unix-domain path.
  *
  * Pass `assumeToken` / `node` when this Lookup is a Launcher-custody child
  * (`Launcher.ensureLookup`).
@@ -620,6 +668,7 @@ export const client = (
     Hyperlink.client(Identity, node) as any,
     Hyperlink.client(Directory, node) as any,
     Hyperlink.client(Advice, node) as any,
+    Hyperlink.client(Dialers, node) as any,
   ) as any;
   return clients.pipe(
     Layer.provide(node.pipe(connectIpc(path))),

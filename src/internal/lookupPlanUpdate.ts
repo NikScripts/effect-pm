@@ -2,8 +2,8 @@
  * Lookup update-impact planner — dry-run before spawn / A→B.
  *
  * Membership + impact query only (Lookup plane). Launcher still executes spawn units;
- * Node owns drain / shutdown / handoff. No client registry — `clientsAtRisk` is an
- * Advice-prefer proxy for v1.
+ * Node owns drain / shutdown / handoff. `clientsAtRisk` reads live {@link Dialers}
+ * sessions (Advice-prefer proxy when the census is empty).
  *
  * @module internal/lookupPlanUpdate
  * @internal
@@ -19,6 +19,7 @@ import {
   Schema,
 } from "effect";
 import * as Advice from "../Advice";
+import * as Dialers from "../Dialers";
 import * as Directory from "../Directory";
 import * as Identity from "../Identity";
 import * as Hyperlink from "../Hyperlink";
@@ -60,12 +61,13 @@ export interface UpdateImpact {
   /** Other Directory nodes that serve an overlapping key (same-identity roll set). */
   readonly coUpdate: ReadonlyArray<string>;
   /**
-   * Soft proxy for dialers at risk — v1 lists rows where Advice `prefer` points at
-   * `target` (`node` repeats the preferred key). Real dialer registry is deferred.
+   * Live dial sessions targeting `target` ({@link Dialers.listForTarget}).
+   * Falls back to Advice-prefer proxy when the census is empty.
    */
   readonly clientsAtRisk: ReadonlyArray<{
-    readonly node: string;
+    readonly dialerId: string;
     readonly serviceKey: string;
+    readonly target: string;
   }>;
   /** Peer status tip with no Versioned path to the successor tip. */
   readonly migrationGaps: ReadonlyArray<{
@@ -184,6 +186,7 @@ const LOOKUP_SERVICE_KEYS = new Set([
   Identity.Tag.key,
   Directory.Tag.key,
   Advice.Tag.key,
+  Dialers.Tag.key,
 ]);
 
 /** Wire method path keys still on the Spec (includes deprecated — still on the wire). */
@@ -348,7 +351,7 @@ export const planUpdate = (
 ): Effect.Effect<
   UpdateImpact,
   UpdateBlocked | UpdateTargetUnknown,
-  Directory.Tag | Advice.Tag
+  Directory.Tag | Advice.Tag | Dialers.Tag
 > =>
   Effect.gen(function* () {
     const entry = yield* findTargetEntry(target, successor);
@@ -369,13 +372,30 @@ export const planUpdate = (
     }
     const coUpdate = [...coUpdateSet].sort();
 
-    const clientsAtRisk: Array<UpdateImpact["clientsAtRisk"][number]> = [];
-    for (const key of served) {
-      const prefer = yield* Advice.preferred(key);
-      if (Option.isSome(prefer) && prefer.value === target) {
-        clientsAtRisk.push({ node: prefer.value, serviceKey: key });
-      }
-    }
+    const live = yield* Dialers.listForTarget(target);
+    const clientsAtRisk: Array<UpdateImpact["clientsAtRisk"][number]> =
+      live.length > 0
+        ? live.map((row) => ({
+            dialerId: row.dialerId,
+            serviceKey: row.serviceKey,
+            target: row.target,
+          }))
+        : yield* Effect.gen(function* () {
+            // Soft fallback — Advice prefer still signals placement risk when
+            // no lookupClient / peersLayer has registered yet.
+            const proxy: Array<UpdateImpact["clientsAtRisk"][number]> = [];
+            for (const key of served) {
+              const prefer = yield* Advice.preferred(key);
+              if (Option.isSome(prefer) && prefer.value === target) {
+                proxy.push({
+                  dialerId: `advice:${key}`,
+                  serviceKey: key,
+                  target,
+                });
+              }
+            }
+            return proxy;
+          });
 
     const migrationGaps: Array<UpdateImpact["migrationGaps"][number]> = [];
     const contractDrifts: Array<UpdateImpact["contractDrifts"][number]> = [];

@@ -18,6 +18,7 @@ import {
   SubscriptionRef,
 } from "effect";
 import { Tag as Advice } from "../Advice";
+import { Tag as Dialers } from "../Dialers";
 import { Tag as Directory } from "../Directory";
 import { Tag as Identity } from "../Identity";
 import * as Hyperlink from "../Hyperlink";
@@ -28,8 +29,8 @@ import {
 } from "./dialFollow";
 import * as Policy from "../Policy";
 
-/** Identity + Directory + Advice — same surface as {@link Lookup.client}. @internal */
-export type LookupFollowServices = Identity | Directory | Advice;
+/** Identity + Directory + Advice + Dialers — same surface as {@link Lookup.client}. @internal */
+export type LookupFollowServices = Identity | Directory | Advice | Dialers;
 
 /**
  * Scoped Layer that holds a replaceable dial to `seed` and reinstalls on transport
@@ -54,18 +55,23 @@ export const followLayer = (
       const adviceHolder: { current: Advice["Service"] } = {
         current: null as unknown as Advice["Service"],
       };
+      const dialersHolder: { current: Dialers["Service"] } = {
+        current: null as unknown as Dialers["Service"],
+      };
       const generation = yield* Ref.make(0);
       const installGen = yield* SubscriptionRef.make(0);
       const installGate = yield* Semaphore.make(1);
 
       // Opt out of default-on verify: follow often builds beside / across Lookup listen,
       // and nested deep verify deadlocks on the peer dial (same as clientLayerForEndpoint).
-      const clientsLayer: Layer.Layer<Identity | Directory | Advice> =
-        Layer.mergeAll(
-          Hyperlink.client(Identity, seed) as any,
-          Hyperlink.client(Directory, seed) as any,
-          Hyperlink.client(Advice, seed) as any,
-        ).pipe(Policy.provide(Policy.verifyOff)) as any;
+      const clientsLayer: Layer.Layer<
+        Identity | Directory | Advice | Dialers
+      > = Layer.mergeAll(
+        Hyperlink.client(Identity, seed) as any,
+        Hyperlink.client(Directory, seed) as any,
+        Hyperlink.client(Advice, seed) as any,
+        Hyperlink.client(Dialers, seed) as any,
+      ).pipe(Policy.provide(Policy.verifyOff)) as any;
 
       /** Build-then-swap — prior dial stays until the next install succeeds. */
       const install = () =>
@@ -85,6 +91,7 @@ export const followLayer = (
             identityHolder.current = Context.get(built.value, Identity);
             directoryHolder.current = Context.get(built.value, Directory);
             adviceHolder.current = Context.get(built.value, Advice);
+            dialersHolder.current = Context.get(built.value, Dialers);
             const gen = yield* Ref.updateAndGet(generation, (n) => n + 1);
             yield* SubscriptionRef.set(installGen, gen);
             if (prev !== undefined) {
@@ -154,11 +161,18 @@ export const followLayer = (
         withDialRetry,
         followStream,
       );
+      const dialers = Hyperlink.makeLiveDialService(
+        Dialers,
+        dialersHolder,
+        withDialRetry,
+        followStream,
+      );
 
       return Layer.mergeAll(
         Layer.succeed(Identity, identity),
         Layer.succeed(Directory, directory),
         Layer.succeed(Advice, advice),
+        Layer.succeed(Dialers, dialers),
       );
     }),
   );
