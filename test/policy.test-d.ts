@@ -1,5 +1,5 @@
 /**
- * Policy public types — fragments are Policy.Policy<{…}>; layer expands configs.
+ * Policy public types — real Policy values; layer dual expands configs (pipe + data-first).
  */
 import { Effect, type Layer } from "effect";
 import type {
@@ -11,6 +11,7 @@ import type {
   Config,
   Policy,
   MergePolicyList,
+  ConfigOf,
 } from "../src/Policy";
 import * as PolicyMod from "../src/Policy";
 import type { LookupClientPick } from "../src/Hyperlink";
@@ -54,7 +55,6 @@ const _badGap: StreamGap = "restart";
 // @ts-expect-error — verify mode is a closed union
 const _badVerify: Verify = true;
 
-// make → Policy<C> that is already a Layer
 const cutover = PolicyMod.make({
   Sticky: true,
   StreamGap: "stall",
@@ -62,7 +62,7 @@ const cutover = PolicyMod.make({
   Verify: "reject",
 });
 const _asLayer: Layer.Layer<never> = cutover;
-type _CutoverOk = AssertExtends<
+const _cutoverOk: AssertExtends<
   typeof cutover,
   Policy<{
     Sticky: true;
@@ -70,40 +70,51 @@ type _CutoverOk = AssertExtends<
     ColdAmbiguous: "fail";
     Verify: "reject";
   }>
->;
-const _cutoverOk: _CutoverOk = true;
+> = true;
 
-// layer expands config — last write wins (Verify / StreamGap patched)
-const expanded = PolicyMod.layer(
-  cutover,
-  PolicyMod.verifyOff,
-  PolicyMod.streamGap("buffer"),
+// pipe(Policy.layer(...)) expands config — last write wins
+const piped = cutover.pipe(
+  PolicyMod.layer(PolicyMod.verifyOff),
+  PolicyMod.layer(PolicyMod.streamGap("buffer")),
 );
-type _Expanded = typeof expanded;
-type _ExpandedOk = AssertExtends<
-  _Expanded,
+const _pipedOk: AssertExtends<
+  typeof piped,
   Policy<{
     Sticky: true;
     StreamGap: "buffer";
     ColdAmbiguous: "fail";
     Verify: false;
   }>
->;
-const _expandedOk: _ExpandedOk = true;
+> = true;
+type _PipedCfg = ConfigOf<typeof piped>;
+const _pipedGap: AssertEqual<_PipedCfg["StreamGap"], "buffer"> = true;
 
-// Fragments alone also expand through layer
+// data-first layer also expands
+const expanded = PolicyMod.layer(
+  cutover,
+  PolicyMod.verifyOff,
+  PolicyMod.streamGap("buffer"),
+);
+const _expandedOk: AssertExtends<
+  typeof expanded,
+  Policy<{
+    Sticky: true;
+    StreamGap: "buffer";
+    ColdAmbiguous: "fail";
+    Verify: false;
+  }>
+> = true;
+
 const fragOnly = PolicyMod.layer(
   PolicyMod.sticky,
   PolicyMod.streamGap("stall"),
   PolicyMod.verifyOff,
 );
-type _FragOnlyOk = AssertExtends<
+const _fragOnlyOk: AssertExtends<
   typeof fragOnly,
   Policy<{ Sticky: true; StreamGap: "stall"; Verify: false }>
->;
-const _fragOnlyOk: _FragOnlyOk = true;
+> = true;
 
-// MergePolicyList last-wins
 type _Merged = MergePolicyList<
   [
     Policy<{ StreamGap: "stall"; Verify: "reject" }>,
@@ -111,10 +122,8 @@ type _Merged = MergePolicyList<
     Policy<{ StreamGap: "buffer" }>,
   ]
 >;
-type _MergedGap = AssertEqual<_Merged["StreamGap"], "buffer">;
-type _MergedVerify = AssertEqual<_Merged["Verify"], false>;
-const _mergedGap: _MergedGap = true;
-const _mergedVerify: _MergedVerify = true;
+const _mergedGap: AssertEqual<_Merged["StreamGap"], "buffer"> = true;
+const _mergedVerify: AssertEqual<_Merged["Verify"], false> = true;
 
 const _yieldCfg: Config = { Yield: true };
 const _yieldEffectCfg: Config = { Yield: Effect.succeed(false) };
@@ -141,6 +150,8 @@ void _badGap;
 void _badVerify;
 void _asLayer;
 void _cutoverOk;
+void _pipedOk;
+void _pipedGap;
 void _expandedOk;
 void _fragOnlyOk;
 void _mergedGap;

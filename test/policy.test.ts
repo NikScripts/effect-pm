@@ -58,9 +58,19 @@ describe("Policy defaults + compose", () => {
     }),
   );
 
-  it.effect("make sets refs from object form", () =>
+  it.effect("make sets refs from object form + stamps runtime config", () =>
     Effect.gen(function* () {
       const bundle = Policy.make({
+        Sticky: false,
+        StreamGap: "buffer",
+        ColdAmbiguous: "pickFirst",
+        Pick: "first",
+        Verify: false,
+        Conflict: "askIncumbent",
+        Yield: false,
+      });
+      expect(Policy.isPolicy(bundle)).toBe(true);
+      expect(Policy.config(bundle)).toEqual({
         Sticky: false,
         StreamGap: "buffer",
         ColdAmbiguous: "pickFirst",
@@ -80,9 +90,25 @@ describe("Policy defaults + compose", () => {
     }),
   );
 
-  it.effect("make + fragment Layers compose via layer (last write wins)", () =>
+  it.effect("layer pipe + data-first expand config (last write wins)", () =>
     Effect.gen(function* () {
-      const bundle = Policy.layer(
+      const piped = Policy.make({
+        StreamGap: "stall",
+        Verify: "reject",
+        Sticky: true,
+      }).pipe(
+        Policy.layer(Policy.streamGap("buffer")),
+        Policy.layer(Policy.verifyOff),
+        Policy.layer(Policy.livenessReplace),
+      );
+      expect(Policy.config(piped)).toEqual({
+        StreamGap: "buffer",
+        Verify: false,
+        Sticky: true,
+        Conflict: "livenessReplace",
+      });
+
+      const dataFirst = Policy.layer(
         Policy.make({
           StreamGap: "stall",
           Verify: "reject",
@@ -92,7 +118,9 @@ describe("Policy defaults + compose", () => {
         Policy.verifyOff,
         Policy.livenessReplace,
       );
-      const d = yield* readPolicy.pipe(Effect.provide(bundle));
+      expect(Policy.config(dataFirst)).toEqual(Policy.config(piped));
+
+      const d = yield* readPolicy.pipe(Effect.provide(piped));
       expect(d.sticky).toBe(true);
       expect(d.streamGap).toBe("buffer");
       expect(d.verify).toBe(false);

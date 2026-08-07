@@ -15,29 +15,26 @@ import * as Policy from "hyperlink-ts/Policy"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import * as Lookup from "hyperlink-ts/Lookup"
 
-// Every fragment is Policy.Policy<{…}> — layer merges Layers and expands the type
-const cutover = Policy.layer(
-  Policy.make({ Sticky: true, StreamGap: "stall", Verify: "reject" }),
-  Policy.verifyOff,
-  Policy.streamGap("buffer"),
+// Every fragment is a real Policy (Layer + runtime config). layer is dual:
+const cutover = Policy.make({ Sticky: true, StreamGap: "stall", Verify: "reject" }).pipe(
+  Policy.layer(Policy.verifyOff),
+  Policy.layer(Policy.streamGap("buffer")),
 )
 // Policy.Policy<{ Sticky: true; StreamGap: "buffer"; Verify: false }>
+// Policy.config(cutover) → { Sticky: true, StreamGap: "buffer", Verify: false }
+
+// Same expand, data-first
+Policy.layer(Policy.sticky, Policy.streamGap("stall"), Policy.verifyOff)
 
 Hyperlink.lookupClient(Mail).pipe(
   Policy.provide(cutover),
   Layer.provide(Lookup.layer),
 )
-
-// Fragments alone — same typed merge
-Hyperlink.lookupClient(Mail).pipe(
-  Policy.provide(
-    Policy.layer(Policy.sticky, Policy.streamGap("stall"), Policy.verifyOff),
-  ),
-)
 ```
 
 Zero-arg fragments are **values** (`Policy.sticky`, not `Policy.sticky()`).
-`Policy.make({ … })` is object-form sugar; `Policy.layer` is how configs expand.
+`Policy.make({ … })` stamps the object as runtime config; `Policy.layer` merges
+Layers **and** configs (pipe or data-first) — not a phantom cast.
 
 Runnable demo: [`examples/node/policy-lookup-cutover.ts`](../../examples/node/policy-lookup-cutover.ts)
 (`pnpm run example:node-policy-lookup-cutover`).
@@ -139,18 +136,18 @@ Lookup stamp → hard `livenessReplace`.
 
 ## Compose
 
-### Typed fragments + `Policy.layer`
+### Typed fragments + `Policy.layer` (dual)
 
-Every fragment is `Policy.Policy<{ … }>`. `Policy.layer` merges the Layers and
-**expands the config type** (last write wins per key). `Policy.make({ … })` is
-object-form sugar for the same brand.
+Every fragment is a real `Policy.Policy<{ … }>` (Layer + stamped config).
+`Policy.layer` is Effect-style `dual`: `.pipe(Policy.layer(other))` or
+`Policy.layer(a, b, c)`. Configs merge with last write wins — runtime
+`Policy.config(p)` matches the type.
 
 ```ts
-const cutover = Policy.layer(
-  Policy.make({ Sticky: true, StreamGap: "stall", Verify: "reject" }),
-  Policy.verifyOff,
-  Policy.askIncumbent,
-  Policy.yieldAccept,
+const cutover = Policy.make({ Sticky: true, StreamGap: "stall", Verify: "reject" }).pipe(
+  Policy.layer(Policy.verifyOff),
+  Policy.layer(Policy.askIncumbent),
+  Policy.layer(Policy.yieldAccept),
 )
 // Policy.Policy<{
 //   Sticky: true
@@ -164,14 +161,9 @@ Hyperlink.lookupClient(Mail).pipe(
   Policy.provide(cutover),
   Layer.provide(Lookup.layer),
 )
-
-Node.unix(Worker, serves).pipe(
-  Policy.provide(cutover),
-  Layer.provide(Lookup.client(lookupNode)),
-)
 ```
 
-Fragments alone:
+Data-first:
 
 ```ts
 const cutover = Policy.layer(

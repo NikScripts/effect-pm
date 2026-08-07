@@ -90,11 +90,10 @@ const program = Effect.gen(function* () {
     ]).pipe(Layer.provide(lookupClient)),
   );
 
-  // Typed Policy.layer — fragments are Policy.Policy<{…}>; config expands.
-  const cutover = Policy.layer(
-    Policy.make({ Sticky: true, ColdAmbiguous: "fail" }),
-    Policy.streamGap("stall"),
-    Policy.verifyReject,
+  // Typed Policy — pipe layer to expand config (also Policy.layer(a, b, c)).
+  const cutover = Policy.make({ Sticky: true, ColdAmbiguous: "fail" }).pipe(
+    Policy.layer(Policy.streamGap("stall")),
+    Policy.layer(Policy.verifyReject),
   );
   const clientCtx = yield* Layer.build(
     Hyperlink.lookupClient(Jobs).pipe(
