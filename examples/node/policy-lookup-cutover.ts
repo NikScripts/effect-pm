@@ -2,7 +2,8 @@
  * @module examples/node/policy-lookup-cutover
  *
  * **Policy + lookupClient cutover** — warm sticky dual-serve, Advice prefer early-move,
- * composable `Policy.provide`. Dialers keep one `lookupClient` facade across A→B.
+ * typed `Policy.make({ … })` via `Policy.provide`. Dialers keep one `lookupClient`
+ * facade across A→B.
  *
  * ```bash
  * pnpm run example:node-policy-lookup-cutover
@@ -89,8 +90,13 @@ const program = Effect.gen(function* () {
     ]).pipe(Layer.provide(lookupClient)),
   );
 
-  // Defaults already sticky + stream stall; provide makes the cutover intent explicit.
-  const cutover = Policy.layer(Policy.sticky, Policy.streamGap("stall"));
+  // Typed Policy.make — already a Layer; modes show up on Policy.Policy<{…}>.
+  const cutover = Policy.make({
+    Sticky: true,
+    StreamGap: "stall",
+    ColdAmbiguous: "fail",
+    Verify: "reject",
+  });
   const clientCtx = yield* Layer.build(
     Hyperlink.lookupClient(Jobs).pipe(
       Policy.provide(cutover),

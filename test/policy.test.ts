@@ -58,6 +58,49 @@ describe("Policy defaults + compose", () => {
     }),
   );
 
+  it.effect("make sets refs from object form", () =>
+    Effect.gen(function* () {
+      const bundle = Policy.make({
+        Sticky: false,
+        StreamGap: "buffer",
+        ColdAmbiguous: "pickFirst",
+        Pick: "first",
+        Verify: false,
+        Conflict: "askIncumbent",
+        Yield: false,
+      });
+      const d = yield* readPolicy.pipe(Effect.provide(bundle));
+      expect(d.sticky).toBe(false);
+      expect(d.streamGap).toBe("buffer");
+      expect(d.cold).toBe("pickFirst");
+      expect(d.pick).toBe("first");
+      expect(d.verify).toBe(false);
+      expect(d.conflict).toBe("askIncumbent");
+      expect(yield* d.yield).toBe(false);
+    }),
+  );
+
+  it.effect("merge patches a make bundle (last write wins)", () =>
+    Effect.gen(function* () {
+      const bundle = Policy.make({
+        StreamGap: "stall",
+        Verify: "reject",
+        Sticky: true,
+      }).pipe(
+        Policy.merge({
+          StreamGap: "buffer",
+          Verify: false,
+          Conflict: "livenessReplace",
+        }),
+      );
+      const d = yield* readPolicy.pipe(Effect.provide(bundle));
+      expect(d.sticky).toBe(true);
+      expect(d.streamGap).toBe("buffer");
+      expect(d.verify).toBe(false);
+      expect(d.conflict).toBe("livenessReplace");
+    }),
+  );
+
   it.effect("layer + provide: last fragment wins per reference", () =>
     Effect.gen(function* () {
       const bundle = Policy.layer(

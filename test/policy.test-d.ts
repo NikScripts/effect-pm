@@ -1,9 +1,24 @@
 /**
- * Policy public types — fragments are Layers; LookupClientPick aliases Policy.Pick.
+ * Policy public types — make/merge typed Layers; fragments are Layers;
+ * LookupClientPick aliases Policy.Pick.
  */
-import type { Effect, Layer } from "effect";
-import type { StreamGap, ColdAmbiguous, Verify, OnConflict, Pick } from "../src/Policy";
+import { Effect, type Layer } from "effect";
+import type {
+  StreamGap,
+  ColdAmbiguous,
+  Verify,
+  OnConflict,
+  Pick,
+  Config,
+  MergeConfigs,
+  Policy,
+} from "../src/Policy";
+import * as PolicyMod from "../src/Policy";
 import type { LookupClientPick } from "../src/Hyperlink";
+
+type AssertExtends<A, B> = [A] extends [B] ? true : false;
+type AssertEqual<A, B> =
+  [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 
 type _Sticky = Layer.Layer<never>;
 type _StreamGapFn = (mode: StreamGap) => Layer.Layer<never>;
@@ -28,6 +43,61 @@ const _badGap: StreamGap = "restart";
 // @ts-expect-error — verify mode is a closed union
 const _badVerify: Verify = true;
 
+// make → Policy<C> that is already a Layer
+const cutover = PolicyMod.make({
+  Sticky: true,
+  StreamGap: "stall",
+  ColdAmbiguous: "fail",
+  Verify: "reject",
+});
+const _asLayer: Layer.Layer<never> = cutover;
+type _Cutover = typeof cutover;
+type _CutoverOk = AssertExtends<
+  _Cutover,
+  Policy<{
+    Sticky: true;
+    StreamGap: "stall";
+    ColdAmbiguous: "fail";
+    Verify: "reject";
+  }>
+>;
+const _cutoverOk: _CutoverOk = true;
+
+// merge patches literals into the type
+const patched = cutover.pipe(
+  PolicyMod.merge({ StreamGap: "buffer", Verify: false }),
+);
+type _PatchedCfg = MergeConfigs<
+  {
+    Sticky: true;
+    StreamGap: "stall";
+    ColdAmbiguous: "fail";
+    Verify: "reject";
+  },
+  { StreamGap: "buffer"; Verify: false }
+>;
+type _PatchedOk = AssertEqual<
+  _PatchedCfg["StreamGap"],
+  "buffer"
+>;
+type _PatchedVerify = AssertEqual<_PatchedCfg["Verify"], false>;
+type _PatchedSticky = AssertEqual<_PatchedCfg["Sticky"], true>;
+const _patchedOk: _PatchedOk = true;
+const _patchedVerify: _PatchedVerify = true;
+const _patchedSticky: _PatchedSticky = true;
+const _patchedAsLayer: Layer.Layer<never> = patched;
+
+// Config accepts Yield boolean or Effect
+const _yieldCfg: Config = {
+  Yield: true,
+};
+const _yieldEffectCfg: Config = {
+  Yield: Effect.succeed(false),
+};
+
+// @ts-expect-error — StreamGap closed union in make
+PolicyMod.make({ StreamGap: "restart" });
+
 void _gap;
 void _cold;
 void _verify;
@@ -36,6 +106,14 @@ void _lookupPick;
 void _lookupPickFn;
 void _badGap;
 void _badVerify;
+void _asLayer;
+void _cutoverOk;
+void _patchedOk;
+void _patchedVerify;
+void _patchedSticky;
+void _patchedAsLayer;
+void _yieldCfg;
+void _yieldEffectCfg;
 
 export type {
   _Sticky,

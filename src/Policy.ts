@@ -2,21 +2,28 @@
  * Policy — composable behaviour fragments (client dial, verify, advertise conflict, yield).
  *
  * Fragments are thin {@link Layer}s over Context references with defaults. Compose with
- * {@link provide} / {@link layer} — not a second control plane. Node / Listen call-site
- * stamps (`onConflict`, `onYield`) remain overrides that win over ambient Policy.
+ * {@link make} / {@link merge} / {@link provide} / {@link layer} — not a second control
+ * plane. Node / Listen call-site stamps (`onConflict`, `onYield`) remain overrides that
+ * win over ambient Policy.
  *
  * ```ts
  * import * as Policy from "hyperlink-ts/Policy"
  *
+ * // Typed bundle — already a Layer (no Layer.Layer wrapper)
+ * const cutover = Policy.make({
+ *   Sticky: true,
+ *   StreamGap: "stall",
+ *   ColdAmbiguous: "fail",
+ *   Verify: "reject",
+ * })
+ * // cutover: Policy.Policy<{ Sticky: true; StreamGap: "stall"; … }>
+ *
  * Hyperlink.lookupClient(Mail).pipe(
- *   Policy.provide(
- *     Policy.sticky,
- *     Policy.streamGap("stall"),
- *     Policy.verifyOff,
- *   ),
+ *   Policy.provide(cutover.pipe(Policy.merge({ Verify: false }))),
  *   Layer.provide(Lookup.layer),
  * )
  *
+ * // Or fragment values (untyped Layer.Layer<never>)
  * const fleet = Policy.layer(Policy.askIncumbent, Policy.yieldAccept)
  * Node.unix(Worker, serves).pipe(Policy.provide(fleet))
  * ```
@@ -25,6 +32,9 @@
  */
 import { Context, Effect, Layer } from "effect";
 import type { DirectoryEntry } from "./Directory";
+
+/** Brand for {@link Policy} Layers. @internal */
+const TypeId = "~hyperlink-ts/Policy" as const;
 
 // =============================================================================
 // Dial / cutover
@@ -311,6 +321,7 @@ export const onYield = (
 
 /**
  * Merge policy fragments into one Layer (last write wins per reference).
+ * Prefer {@link make} when you want the modes in the type.
  *
  * @category layers
  * @public
@@ -324,14 +335,151 @@ export const layer = (
       ? policies[0]!
       : Layer.mergeAll(policies[0]!, policies[1]!, ...policies.slice(2));
 
+// =============================================================================
+// Typed make / merge (Policy is already a Layer)
+// =============================================================================
+
+/**
+ * Object form for {@link make} / {@link merge}. Keys match Context references
+ * (PascalCase); omitted keys leave ambient defaults alone.
+ *
+ * `Yield` accepts `true` / `false` (accept / refuse) or a custom
+ * `Effect.Effect<boolean>`.
+ *
+ * @category models
+ * @public
+ */
+export type Config = {
+  readonly Sticky?: boolean;
+  readonly StreamGap?: StreamGap;
+  readonly ColdAmbiguous?: ColdAmbiguous;
+  readonly Pick?: Pick;
+  readonly Verify?: Verify;
+  readonly Conflict?: OnConflict;
+  readonly Yield?: boolean | Effect.Effect<boolean>;
+};
+
+/**
+ * Patch `Prev` with `Patch` — patch keys win; others keep `Prev`.
+ *
+ * @category models
+ * @public
+ */
+export type MergeConfigs<Prev extends Config, Patch extends Config> = {
+  readonly [K in keyof Prev | keyof Patch]: K extends keyof Patch
+    ? Patch[K]
+    : K extends keyof Prev
+      ? Prev[K]
+      : never;
+};
+
+/**
+ * A policy bundle that **is** a `Layer.Layer<never>` — use anywhere a Layer goes
+ * (`Effect.provide`, `Layer.provide`, {@link provide}) without wrapping. The type
+ * parameter records which modes were set (for hover / docs / pipe merges).
+ *
+ * ```ts
+ * const cutover: Policy.Policy<{
+ *   StreamGap: "stall"
+ *   ColdAmbiguous: "fail"
+ *   Verify: "reject"
+ * }> = Policy.make({
+ *   StreamGap: "stall",
+ *   ColdAmbiguous: "fail",
+ *   Verify: "reject",
+ * })
+ * ```
+ *
+ * @category models
+ * @public
+ */
+export interface Policy<out C extends Config = Config>
+  extends Layer.Layer<never>
+{
+  readonly [TypeId]: C;
+}
+
+/**
+ * Build a typed {@link Policy} from an object. Already a Layer — pipe
+ * {@link merge} to swap / add keys; pass to {@link provide} as-is.
+ *
+ * ```ts
+ * const cutover = Policy.make({
+ *   Sticky: true,
+ *   StreamGap: "stall",
+ *   ColdAmbiguous: "fail",
+ *   Verify: "reject",
+ * })
+ *
+ * Hyperlink.lookupClient(Mail).pipe(
+ *   Policy.provide(cutover),
+ *   Layer.provide(Lookup.layer),
+ * )
+ * ```
+ *
+ * @category constructors
+ * @public
+ */
+export const make = <const C extends Config>(config: C): Policy<C> => {
+  const parts: Array<Layer.Layer<never>> = [];
+  if (config.Sticky !== undefined) {
+    parts.push(Layer.succeed(Sticky, config.Sticky));
+  }
+  if (config.StreamGap !== undefined) {
+    parts.push(streamGap(config.StreamGap));
+  }
+  if (config.ColdAmbiguous !== undefined) {
+    parts.push(coldAmbiguous(config.ColdAmbiguous));
+  }
+  if (config.Pick !== undefined) {
+    parts.push(pick(config.Pick));
+  }
+  if (config.Verify !== undefined) {
+    parts.push(verify(config.Verify));
+  }
+  if (config.Conflict !== undefined) {
+    parts.push(onConflict(config.Conflict));
+  }
+  if (config.Yield !== undefined) {
+    const handler =
+      typeof config.Yield === "boolean"
+        ? Effect.succeed(config.Yield)
+        : config.Yield;
+    parts.push(onYield(handler));
+  }
+  return (
+    parts.length === 0 ? Layer.empty : layer(...parts)
+  ) as Policy<C>;
+};
+
+/**
+ * Pipeable patch — swap or add modes onto a {@link Policy} (or any policy Layer).
+ * Last write wins per reference; the returned type merges configs.
+ *
+ * ```ts
+ * const cutover = Policy.make({ StreamGap: "stall", Verify: "reject" })
+ * const nested = cutover.pipe(Policy.merge({ Verify: false, StreamGap: "buffer" }))
+ * // Policy<{ StreamGap: "buffer"; Verify: false }>
+ * ```
+ *
+ * @category constructors
+ * @public
+ */
+export const merge =
+  <const Patch extends Config>(patch: Patch) =>
+  <Prev extends Config = Config>(
+    self: Policy<Prev> | Layer.Layer<never>,
+  ): Policy<MergeConfigs<Prev, Patch>> =>
+    layer(self, make(patch)) as Policy<MergeConfigs<Prev, Patch>>;
+
 /**
  * Provide policy fragments onto a Layer (no stacked `Layer.provide`s).
- * Accepts zero-arg fragments, `Policy.layer(...)` bundles, or a mix — last write
- * wins per reference.
+ * Accepts {@link make} bundles, zero-arg fragments, `Policy.layer(...)`, or a
+ * mix — last write wins per reference.
  *
  * ```ts
  * Hyperlink.lookupClient(Mail).pipe(
- *   Policy.provide(Policy.sticky, Policy.streamGap("stall")),
+ *   Policy.provide(Policy.make({ Sticky: true, StreamGap: "stall" })),
  *   Layer.provide(Lookup.layer),
  * )
  *

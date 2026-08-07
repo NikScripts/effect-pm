@@ -216,7 +216,9 @@ plain struct value for **inline or anonymous** shapes, where a class is just cer
 Layers are camelCase. The canonical toolkit entrypoint is `layer` (and `layer*` variants like
 `layerMemory`); a composed or auxiliary layer takes a `*Layer` suffix (`peersLayer`). Policy
 fragments are values on `Policy` (`Policy.verifyOff`, `Policy.askIncumbent`) composed with
-`Policy.provide` / `Policy.layer`. Either way the name says "layer."
+`Policy.provide` / `Policy.layer`, or typed via `Policy.make({ StreamGap: "stall", … })`
+→ `Policy.Policy<{ StreamGap: "stall"; … }>` (already a Layer — pipe `Policy.merge` to
+patch). Either way the name says "layer."
 
 {#owned-string-literals-pascalcase .must appliesTo="src examples"}
 ## Owned string literals are PascalCase

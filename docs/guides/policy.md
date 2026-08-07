@@ -15,18 +15,27 @@ import * as Policy from "hyperlink-ts/Policy"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import * as Lookup from "hyperlink-ts/Lookup"
 
+// Typed bundle — already a Layer (no Layer.Layer wrapper)
+const cutover = Policy.make({
+  Sticky: true,
+  StreamGap: "stall",
+  ColdAmbiguous: "fail",
+  Verify: "reject",
+})
+// cutover: Policy.Policy<{ Sticky: true; StreamGap: "stall"; … }>
+
 Hyperlink.lookupClient(Mail).pipe(
-  Policy.provide(
-    Policy.sticky,
-    Policy.streamGap("stall"),
-    Policy.verifyOff, // only when you need it (bootstrap / nested dials)
-  ),
+  Policy.provide(cutover),
   Layer.provide(Lookup.layer),
 )
+
+// Pipe merge to swap / add modes (patch wins; other keys keep)
+const nested = cutover.pipe(Policy.merge({ Verify: false, StreamGap: "buffer" }))
 ```
 
-Zero-arg fragments are **values** (`Policy.sticky`, not `Policy.sticky()`). Fragments that need
-a mode keep the call: `Policy.streamGap("stall")`.
+Zero-arg fragments are still **values** (`Policy.sticky`, not `Policy.sticky()`). Prefer
+`Policy.make({ … })` when you want the modes in the type; fragments remain fine for
+one-off overrides.
 
 Runnable demo: [`examples/node/policy-lookup-cutover.ts`](../../examples/node/policy-lookup-cutover.ts)
 (`pnpm run example:node-policy-lookup-cutover`).
@@ -127,6 +136,34 @@ Lookup stamp → hard `livenessReplace`.
 `ListenOptions.onYield` wins when set. While `phase: "draining"`, yield **always refuses**.
 
 ## Compose
+
+### `Policy.make` (typed — preferred)
+
+Object keys match Context references (`Sticky`, `StreamGap`, `ColdAmbiguous`, `Pick`,
+`Verify`, `Conflict`, `Yield`). `Yield` accepts `true` / `false` or a custom
+`Effect<boolean>`. Omitted keys leave ambient defaults alone. The value **is** a
+`Layer.Layer<never>` branded as `Policy.Policy<{ …modes }>`.
+
+```ts
+const cutover = Policy.make({
+  Sticky: true,
+  StreamGap: "stall",
+  Conflict: "askIncumbent",
+  Yield: true,
+})
+
+Hyperlink.lookupClient(Mail).pipe(
+  Policy.provide(cutover),
+  Layer.provide(Lookup.layer),
+)
+
+Node.unix(Worker, serves).pipe(
+  Policy.provide(cutover.pipe(Policy.merge({ Verify: false }))),
+  Layer.provide(Lookup.client(lookupNode)),
+)
+```
+
+### Fragment Layers (still supported)
 
 ```ts
 const cutover = Policy.layer(
