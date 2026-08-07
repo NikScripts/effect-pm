@@ -2,7 +2,7 @@ import "../../styles/docs.css";
 import type { ReactNode } from "react";
 import { navGroups, glossaryEntries } from "../../lib/docs-content.js";
 import { NavBar } from "../../components/NavBar.js";
-import { ContextualNav } from "../../islands/ContextualNav.js";
+import { BookSidebarIsland } from "../../islands/BookSidebarIsland.js";
 import { Footer } from "../../components/Footer.js";
 import { TwoslashHover } from "../../islands/TwoslashHover.js";
 import { GlossaryHover } from "../../islands/GlossaryHover.js";
@@ -26,8 +26,8 @@ const readVersion = Effect.gen(function* () {
 export default async function BookLayout({ children }: { children: ReactNode }) {
   const groups = await navGroups();
   const version = await runServer(readVersion);
-  // Standards is its own book: the desktop sidebar swaps to its chapters while you're inside
-  // (ContextualNav), and the regular sidebar carries a single entry link instead of the group.
+  // Standards is its own book: BookSidebarIsland swaps View.Service chrome (default →
+  // standards override) while you're inside; the regular sidebar carries a single entry link.
   const standardsGroup = groups.find((g) => g.label === "Standards");
   const mainGroups = groups
     .filter((g) => g.label !== "Standards")
@@ -80,7 +80,7 @@ export default async function BookLayout({ children }: { children: ReactNode }) 
       <NavBar groups={groups} version={version} />
       <div className="layout">
         <aside className="sidebar">
-          <ContextualNav
+          <BookSidebarIsland
             main={mainGroups}
             standards={standardsGroups}
             standardsHrefs={standardsHrefs}

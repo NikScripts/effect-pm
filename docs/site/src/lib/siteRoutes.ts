@@ -1,5 +1,5 @@
 /**
- * Typed docs catalog — **same `Route.make` API** as any hyperlink app.
+ * Typed docs catalog — last-ts {@link Router.make} / {@link Route.get}.
  *
  * **SSOT:** {@link catalog} holds every navigable Route path once. Waku file
  * templates are derived (`:param` → `[param]`). Exhaustively checked against
@@ -15,7 +15,8 @@
  * // soft-nav (Waku): <Router.Link to={(u) => u.docs("work-pools")}>…
  * ```
  */
-import * as Route from "hyperlink-ts/ui/Route";
+import * as Route from "last-ts/Route";
+import * as Router from "last-ts/Router";
 import type { CreatePagesConfig } from "waku/router";
 import type { Unstable_InferredPaths as WakuPath } from "waku/router/client";
 import "../pages.gen.js";
@@ -114,8 +115,9 @@ export type WakuFilePathRequired = Exclude<WakuFilePath, WakuFilePathExcluded>;
 
 /**
  * Docs site catalog — paths from {@link catalog} only.
+ * Bare endpoints land in the synthetic top-level group; `api` stays nested.
  */
-export const site = Route.make("docsSite").add(
+export const site = Router.make("docsSite").add(
   Route.get("home", catalog.home),
   Route.get("search", catalog.search),
   Route.get("releases", catalog.releases),
@@ -123,7 +125,7 @@ export const site = Route.make("docsSite").add(
   Route.get("docsHyperlinks", catalog.docsHyperlinks),
   Route.get("docsResources", catalog.docsResources),
   Route.get("docs", catalog.docs),
-  Route.group("api").add(
+  Router.group("api").add(
     Route.get("index", catalog.api.index),
     Route.get("pkg", catalog.api.pkg),
     Route.get("module", catalog.api.module),

@@ -1,11 +1,41 @@
-import { defineConfig } from "vitest/config";
+import path from "node:path"
+import { fileURLToPath } from "node:url"
+import { defineConfig } from "vitest/config"
 
-// The docgen package (@nikscripts/docgen, docs/docgen) is node build tooling — tested in isolation
-// from the Waku app; its tests live in test/docgen and import through the package subpaths.
+const root = path.dirname(fileURLToPath(import.meta.url))
+const lastTsSrc = path.resolve(root, "../../packages/last-ts/src")
+const repoSrc = path.resolve(root, "../../src")
+
+const reactRoot = path.resolve(root, "node_modules/react")
+const reactDomRoot = path.resolve(root, "node_modules/react-dom")
+
 export default defineConfig({
   test: {
-    environment: "node",
     include: ["test/**/*.test.ts"],
-    pool: "forks",
   },
-});
+  resolve: {
+    dedupe: ["react", "react-dom", "react/jsx-runtime", "effect"],
+    // Mirror docs/site/waku.config.ts — more-specific keys first.
+    alias: {
+      "hyperlink-ts/ui/Router/waku": path.join(repoSrc, "ui/RouterWaku.ts"),
+      "hyperlink-ts/ui/Router": path.join(root, "src/ui/Router.tsx"),
+      "hyperlink-ts": repoSrc,
+      "last-ts/AtomReact": path.join(lastTsSrc, "AtomReact.tsx"),
+      "last-ts/View": path.join(lastTsSrc, "View.tsx"),
+      "last-ts/Route": path.join(lastTsSrc, "Route.ts"),
+      "last-ts/Router/waku": path.join(lastTsSrc, "Router/waku.ts"),
+      "last-ts/Router": path.join(lastTsSrc, "Router.ts"),
+      "last-ts/Last": path.join(lastTsSrc, "Last.ts"),
+      "last-ts": path.join(lastTsSrc, "index.ts"),
+      react: reactRoot,
+      "react-dom": reactDomRoot,
+      "react/jsx-runtime": path.join(reactRoot, "jsx-runtime.js"),
+      "react/jsx-dev-runtime": path.join(reactRoot, "jsx-dev-runtime.js"),
+      "waku/router/client": path.join(
+        root,
+        "node_modules/waku/dist/router/client.js",
+      ),
+    },
+  },
+})
+

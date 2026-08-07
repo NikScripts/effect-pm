@@ -11,7 +11,7 @@
  */
 "use client";
 
-import type { Service as RouterService } from "hyperlink-ts/ui/Router";
+import type { Service as LastRouterService } from "last-ts/Router";
 import * as Waku from "hyperlink-ts/ui/Router/waku";
 import {
   site as defaultSite,
@@ -21,7 +21,8 @@ import {
 } from "../lib/siteRoutes.js";
 
 export type { Urls, Site };
-export type Service = RouterService<Site>;
+/** Live router service for the docs catalog (branded {@link Urls}). */
+export type Service = LastRouterService<Site>;
 export type LiveRouter = Service;
 
 /** Waku layer binding for the docs catalog (branded {@link Urls} skin). */
