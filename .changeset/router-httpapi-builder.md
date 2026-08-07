@@ -3,6 +3,12 @@
 "hyperlink-ts": minor
 ---
 
-HttpApi-shaped Router: `Router.make` / `Router.group` catalog, `RouterBuilder.group(api, id, layout, handlers)` + `RouterBuilder.layer`, `Memory.layer` / `History.layer` / `Waku`, `RouterClient.urlBuilder`, `Last.provider`. Layouts require `children`; `{ layout: false }` opts out on `handle`.
+HttpApi-shaped Router aligned with Effect `HttpApi` / `HttpApiBuilder`:
 
-`group.from(Service)` on the contract; `RouterBuilder.layer` resolves destinations from Context (`Router.layerDestinations` / `Router.destinationsOf`). `Group.asRoutes` emits flat leaf-only groups under a topLevel hub.
+- `Router.make` / `Router.group` (+ `group.key`, `annotateMerge`, `annotateEndpoints*`)
+- `RouterBuilder.Handlers` builder (`handle` / `handleAll` record / `handleEach`), `ValidateReturn` string literals
+- `RouterBuilder.group` → `Layer.effectContext` under `group.key`; typed `Group.Service` / `ToService`
+- `RouterBuilder.layer` → `Catalog` + `Registry`; missing-group die lists available keys
+- `Memory` / `History` / `Waku` require `Catalog` | `Registry`
+- `group.from(Service)` + `Router.layerDestinations`; flat `Group.asRoutes`
+- Layouts require `children`; `{ layout: false }` opts out on `handle`
