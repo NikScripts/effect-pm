@@ -451,12 +451,19 @@ export type FulfilledPrototype<
   Annotations extends AnyAnnotations = {},
 > = Prototype<Props, {}, Annotations>;
 
+/** Stamps on every minted View handle. @internal */
+type ViewStamps<
+  Props extends object,
+  Annotations extends AnyAnnotations,
+> = {
+  readonly [annotationsSym]: Annotations;
+  readonly [Last.kindSym]: typeof kind;
+  /** Phantom — component props. */
+  readonly Type: Props;
+};
+
 /**
- * Constructable View handle from {@link Prototype.Service}.
- *
- * Prototype metadata is under {@link annotationsSym} (read via {@link annotations}).
- * Factory brand is {@link kind} under {@link Last.kindSym}. Class surface stays
- * free for app `static layer` (Effect v4 style).
+ * Required View handle — {@link Context.Service} (must be Layer-provided).
  *
  * @public
  */
@@ -465,12 +472,18 @@ export type ViewHandle<
   K extends string,
   Props extends object,
   Annotations extends AnyAnnotations = {},
-> = Context.ServiceClass<Self, K, ViewFn<Props>> & {
-  readonly [annotationsSym]: Annotations;
-  readonly [Last.kindSym]: typeof kind;
-  /** Phantom — component props. */
-  readonly Type: Props;
-};
+> = Context.ServiceClass<Self, K, ViewFn<Props>> & ViewStamps<Props, Annotations>;
+
+/**
+ * Optional View slot — {@link Context.Reference} with a default component.
+ * Override with `Effect.provideService` / Layer; absence is not an error.
+ *
+ * @public
+ */
+export type ViewHandleDefault<
+  Props extends object,
+  Annotations extends AnyAnnotations = {},
+> = Context.Reference<ViewFn<Props>> & ViewStamps<Props, Annotations>;
 
 /**
  * Component props via the service phantom (`typeof` path). Prefer {@link PropsOf}.
@@ -525,17 +538,36 @@ export interface Prototype<
     Flat<Annotations & NewAnnotations>
   >;
   /**
-   * Mint a Context.Service **class** handle (Effect v4 naming).
+   * Mint a View handle (Effect v4 naming).
+   *
+   * - `Service()(key)` — required {@link Context.Service}
+   * - `Service()(key, default)` — optional {@link Context.Reference} (swap via
+   *   `Effect.provideService` / Layer)
+   * - `Service()(key, annotations)` — required + merge annotation bag (Prototype)
+   * - `Service()(key, default, annotations)` — optional + annotations
+   *
    * Does **not** discharge Requirement — fulfill via `.Prototype()` first when needed.
    * Add `static layer = Layer.succeed(This, …)` (or `Layer.effect`) for a default Layer.
    */
-  readonly Service: <Self, NewProps extends object = {}>() => <
-    const K extends string,
-    const NewAnnotations extends AnyAnnotations = {},
-  >(
-    key: K,
-    annotations?: NewAnnotations,
-  ) => ViewHandle<Self, K, Flat<Props & NewProps>, Flat<Annotations & NewAnnotations>>;
+  readonly Service: <Self, NewProps extends object = {}>() => {
+    <const K extends string, const NewAnnotations extends AnyAnnotations = {}>(
+      key: K,
+      defaultView: ViewFn<Flat<Props & NewProps>>,
+      annotations?: NewAnnotations,
+    ): ViewHandleDefault<
+      Flat<Props & NewProps>,
+      Flat<Annotations & NewAnnotations>
+    >;
+    <const K extends string, const NewAnnotations extends AnyAnnotations = {}>(
+      key: K,
+      annotations?: NewAnnotations,
+    ): ViewHandle<
+      Self,
+      K,
+      Flat<Props & NewProps>,
+      Flat<Annotations & NewAnnotations>
+    >;
+  };
 }
 
 const makePrototype = <
@@ -560,25 +592,38 @@ const makePrototype = <
         ...(next ?? ({} as NewAnnotations)),
       });
     },
-  Service:
-    <Self, NewProps extends object = {}>() =>
-    <const K extends string, const NewAnnotations extends AnyAnnotations = {}>(
-      key: K,
-      next?: NewAnnotations,
-    ) => {
+  Service: ((<Self, NewProps extends object = {}>() =>
+    (key: string, second?: unknown, third?: unknown) => {
       type NextProps = Flat<Props & NewProps>;
-      type NextAnnotations = Flat<Annotations & NewAnnotations>;
-      const merged = {
-        ...bag,
-        ...(next ?? ({} as NewAnnotations)),
-      } as NextAnnotations;
-      const base = Context.Service<Self, ViewFn<NextProps>>()(key);
-      return Object.assign(base, {
+      let defaultView: ViewFn<NextProps> | undefined;
+      let extra: AnyAnnotations = {};
+      if (typeof second === "function") {
+        defaultView = second as ViewFn<NextProps>;
+        if (third !== undefined && typeof third === "object" && third !== null) {
+          extra = third as AnyAnnotations;
+        }
+      } else if (
+        second !== undefined &&
+        typeof second === "object" &&
+        second !== null
+      ) {
+        extra = second as AnyAnnotations;
+      }
+      const merged = { ...bag, ...extra };
+      const stamped = {
         [annotationsSym]: merged,
         [Last.kindSym]: kind,
         Type: undefined as unknown as NextProps,
-      });
-    },
+      };
+      if (defaultView !== undefined) {
+        const base = Context.Reference(key, {
+          defaultValue: () => defaultView,
+        });
+        return Object.assign(base, stamped);
+      }
+      const base = Context.Service<Self, ViewFn<NextProps>>()(key);
+      return Object.assign(base, stamped);
+    }) as Prototype<Props, Requirement, Annotations>["Service"]),
 });
 
 /**
@@ -601,9 +646,13 @@ export const Prototype =
     );
 
 /**
- * View service handle — Effect v4 `Context.Service` naming.
+ * View service handle — Effect v4 `Context.Service` / `Context.Reference`.
  * `yield*` to get the {@link ViewFn}. Attach a default Layer with
  * `static layer = Layer.succeed(This, …)` (camelCase `layer`, never `*Live`).
+ *
+ * Pass a default component as the second argument for an optional slot
+ * (Reference) — override with `Effect.provideService` / Layer for themes,
+ * sidebars, nested settings chrome, etc.
  *
  * @example
  * ```ts
@@ -622,6 +671,12 @@ export const Prototype =
  *     }),
  *   ).pipe(Layer.provide(Greeter.layer))
  * }
+ *
+ * // Optional slot — default sidebar; pages can swap
+ * class Sidebar extends View.Service<Sidebar>()(
+ *   "app/Sidebar",
+ *   () => <nav data-sidebar="default">Menu</nav>,
+ * ) {}
  *
  * const App = View.mount(Hello)
  * ```

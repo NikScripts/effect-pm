@@ -32,6 +32,7 @@ let demoIslands: {
   hyperlink?: React.ComponentType;
   listen?: React.ComponentType<{ defaultProto?: string }>;
   viewJsx?: React.ComponentType;
+  viewSidebar?: React.ComponentType;
   titleLive?: React.ComponentType;
 } = {};
 
@@ -58,6 +59,11 @@ const loadDemoIslands = async (doc: any): Promise<void> => {
   }
   if (langs.has("view-jsx")) {
     demoIslands.viewJsx = (await import("../islands/ViewJsxIsland.js")).ViewJsxIsland;
+  }
+  if (langs.has("view-sidebar")) {
+    demoIslands.viewSidebar = (
+      await import("../islands/ViewSidebarIsland.js")
+    ).ViewSidebarIsland;
   }
   if (langs.has("title-live")) {
     demoIslands.titleLive = (await import("../islands/TitleLiveIsland.js")).TitleLiveIsland;
@@ -312,6 +318,11 @@ const toReact = (n: any): React.ReactNode => {
       if (n.lang === "view-jsx") {
         return demoIslands.viewJsx !== undefined
           ? h(demoIslands.viewJsx, { key: keySeq++ })
+          : null;
+      }
+      if (n.lang === "view-sidebar") {
+        return demoIslands.viewSidebar !== undefined
+          ? h(demoIslands.viewSidebar, { key: keySeq++ })
           : null;
       }
       if (n.lang === "title-live") {

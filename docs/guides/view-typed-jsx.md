@@ -68,3 +68,35 @@ Upward values: `yield* Last.provide(Service, value)` — see
 [effect-app-router-plan](../handoffs/effect-app-router-plan.md).
 
 Use normal React JSX (`react/jsx-runtime`). See also [View Tag types](/docs/view-tag-types).
+
+## Optional slots (`default`)
+
+Pass a default component as the second argument — mint becomes a
+`Context.Reference`. Layouts can always `yield*` the slot; pages / themes
+override with `Effect.provideService` or `Layer.provideMerge`.
+
+```ts
+class Sidebar extends View.Service<Sidebar>()(
+  "app/Sidebar",
+  () => <nav data-sidebar="default">Menu</nav>,
+) {}
+
+// Nested settings chrome — swap for this tree only
+Effect.provideService(
+  Sidebar,
+  () => <nav data-sidebar="settings">Settings</nav>,
+)
+
+// Theme / section Layer (Reference is not in R — use provideMerge)
+Layer.effect(Shell, …).pipe(
+  Layer.provideMerge(Layer.succeed(Sidebar, ThemedSidebar)),
+)
+```
+
+Annotations on Prototype mints stay as an **object** second arg:
+`Service()(key, { spec: … })`. Default component is a **function** second arg.
+
+Live toggle (default sidebar ↔ settings override):
+
+```view-sidebar
+```

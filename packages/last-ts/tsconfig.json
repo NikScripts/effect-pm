@@ -21,6 +21,8 @@
     "../../test/last-provide.test-d.ts",
     "../../test/last-provide.test.ts",
     "../../test/view-service.test-d.ts",
+    "../../test/view-service-default.test-d.ts",
+    "../../test/view-service-default.test.ts",
     "../../test/router-page-props.test-d.ts"
   ],
   "exclude": ["node_modules"]

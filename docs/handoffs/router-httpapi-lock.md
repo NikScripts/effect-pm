@@ -147,4 +147,4 @@ On tip:
 - UI `match` / Outlet are Page-only; urlBuilder includes all endpoints
 - Catalog shell (`Router.make` / nested groups / `from(Service)`) still last-ts;
   full thin-wrap onto Effect `HttpApi` types is follow-on
-- **Parked:** `View.Service` redesign
+- `View.Service()(key, default)` — optional Reference slots (Eng’d); no HttpApi-shaped View catalog
