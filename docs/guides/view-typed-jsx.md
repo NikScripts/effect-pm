@@ -67,10 +67,4 @@ const App = View.mount(Hello)
 Upward values: `yield* Last.provide(Service, value)` — see
 [effect-app-router-plan](../handoffs/effect-app-router-plan.md).
 
-## Opt-in
-
-```ts
-/** @jsxImportSource last-ts */
-```
-
-or `"jsxImportSource": "last-ts"` in tsconfig. See also [View Tag types](/docs/view-tag-types).
+Use normal React JSX (`react/jsx-runtime`). See also [View Tag types](/docs/view-tag-types).

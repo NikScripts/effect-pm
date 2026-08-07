@@ -10,7 +10,6 @@
  */
 export * as AtomReact from "./AtomReact";
 export * as History from "./History";
-export * as Jsx from "./Jsx";
 export * as Last from "./Last";
 export * as Layout from "./Layout";
 export * as Memory from "./Memory";

@@ -3,7 +3,6 @@
  *
  * Docs (Tailscale): http://100.67.32.32:5190/docs/view-typed-jsx
  */
-/** @jsxImportSource last-ts */
 import { Effect, Layer } from "effect";
 import * as View from "last-ts/View";
 

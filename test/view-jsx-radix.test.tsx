@@ -1,7 +1,6 @@
 /**
- * Runtime: last-ts JSX + Layer.effect alongside Radix / shadcn-style wrappers.
+ * Runtime: View.Service + Layer.effect alongside Radix / shadcn-style wrappers.
  */
-/** @jsxImportSource last-ts */
 import { describe, expect, it } from "@effect/vitest";
 import { Context, Effect, Layer } from "effect";
 import type * as React from "react";

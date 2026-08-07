@@ -10,7 +10,6 @@
 ## Destination
 
 ```tsx
-/** @jsxImportSource last-ts */
 class Greeter extends View.Service<Greeter, { readonly name: string }>()("…") {
   static layer = Layer.succeed(Greeter, ({ name }) => <span>{name}</span>)
 }

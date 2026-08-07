@@ -1,7 +1,6 @@
 /**
  * View compose — Service + Layer; mount(Service) at the edge.
  */
-/** @jsxImportSource last-ts */
 import { expectTypeOf } from "vitest";
 import { Context, Effect, Layer } from "effect";
 import type * as React from "react";

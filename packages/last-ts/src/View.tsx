@@ -17,13 +17,12 @@
  * Factory brand: {@link kind} via {@link Last.kindSym}.
  *
  * Bake an Effect into a component with {@link effect} (no `<Run effect={…} />`).
- * {@link Service} redesign is parked — use Layer/`mount` as today.
+ * Plain React JSX (`react/jsx-runtime`) — no custom `jsxImportSource`.
  */
 import * as React from "react";
 import { Cause, Context, Effect, Layer } from "effect";
 import { AsyncResult } from "effect/unstable/reactivity";
 import * as AtomReact from "./AtomReact";
-import type * as Jsx from "./Jsx";
 import * as Last from "./Last";
 import * as pageContext from "./internal/pageContext";
 
@@ -187,39 +186,23 @@ export type ViewPropsOf<V> = V extends {
     : {};
 
 /**
- * Tree services from a component fn: props.`children` brands ∪ return
- * {@link Jsx.Element}`<R>` (from direct `jsx` / `jsxs` calls).
- *
- * JSX *syntax* does not contribute `R` — yield Services inside `Effect.gen`.
- *
- * @internal
- */
-type TreeServicesOf<F> = F extends (props: infer P, ...args: any) => infer Ret
-  ? | (P extends object ? Jsx.ServicesOfPropsChildren<P> : never)
-    | Jsx.ServicesOf<Exclude<Ret, null | undefined>>
-  : never;
-
-/**
- * Stamp services `R` onto a plain component fn (type-level; no runtime change).
- *
- * Call as `stamp(fn)` to infer `Props` and tree `R` from the implementation.
- * Explicit `stamp<Props, R>(fn)` remains for wiring.
+ * Brand a plain component fn as a fulfilled {@link Component} (type-level;
+ * no runtime change). Used by {@link mount} and fallbacks.
  *
  * @public
  */
 export function stamp<F extends (props: any) => React.ReactElement | null>(
   component: F,
-): View<
-  Parameters<F>[0] extends object ? Parameters<F>[0] : {},
-  TreeServicesOf<F>
+): Component<
+  Parameters<F>[0] extends object ? Parameters<F>[0] : {}
 >;
-export function stamp<Props extends object, R = never>(
+export function stamp<Props extends object>(
   component: (props: Props) => React.ReactElement | null,
-): View<Props, R>;
+): Component<Props>;
 export function stamp(
   component: (props: any) => React.ReactElement | null,
-): any {
-  return component;
+): Component<any> {
+  return component as Component<any>;
 }
 
 /**
