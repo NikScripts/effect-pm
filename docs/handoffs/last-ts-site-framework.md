@@ -1,7 +1,7 @@
 # Last.ts site — adopt the framework
 
 **Branch:** `cursor/file-router-prototype-125f`  
-**Status:** Eng — phases 1–3 (catalog)  
+**Status:** Eng — phases 1–4 (Page / RouterBuilder demo)  
 **Goal:** Run `docs/site` on last-ts View / Router / Page patterns, then migrate
 hyperlink-ts product UI onto the same spine.
 
@@ -31,8 +31,10 @@ site is green on:
    site `Outlet` remains no-op (file routes = render / Twoslash SSOT).
    **Deferred:** `RouterBuilder` handler registration — only when a demo leaves
    file-route bodies for Effect page handlers.
-4. **Page marks** — file-router stamps where pages are file-based; Effect page
-   handlers for live demos.
+4. **Page marks — Eng’d (demo)** — `router-page` island on Routing guide:
+   Memory + `RouterBuilder` with Effect home (`Page.Request` / `Document`) and
+   JSX about; `Page.static` stamp asserted in vitest. Full Waku cutover onto
+   `Page.*` marks / `fileRouter` still open.
 5. **Hyperlink migrate** — dashboard/TUI consume the same last-ts modules (no
    parallel View masks).
 
@@ -47,5 +49,5 @@ site is green on:
 
 - `pnpm -C packages/last-ts typecheck`
 - `pnpm exec vitest run test/view-service-default.test.ts`
-- `pnpm -C docs/site exec vitest run test/book-chrome.test.ts`
-- `pnpm run docs:serve` — View guide island + book sidebar standards swap
+- `pnpm -C docs/site exec vitest run test/book-chrome.test.ts test/router-page-demo.test.ts`
+- `pnpm run docs:serve` — View sidebar + book chrome + Routing `router-page` island

@@ -118,6 +118,27 @@ export default defineConfig({
         "last-ts/Last": fileURLToPath(
           new URL("../../packages/last-ts/src/Last.ts", import.meta.url),
         ),
+        "last-ts/Page": fileURLToPath(
+          new URL("../../packages/last-ts/src/Page.ts", import.meta.url),
+        ),
+        "last-ts/Route": fileURLToPath(
+          new URL("../../packages/last-ts/src/Route.ts", import.meta.url),
+        ),
+        "last-ts/RouterBuilder": fileURLToPath(
+          new URL("../../packages/last-ts/src/RouterBuilder.ts", import.meta.url),
+        ),
+        "last-ts/Memory": fileURLToPath(
+          new URL("../../packages/last-ts/src/Memory.ts", import.meta.url),
+        ),
+        "last-ts/Layout": fileURLToPath(
+          new URL("../../packages/last-ts/src/Layout.ts", import.meta.url),
+        ),
+        "last-ts/Router/waku": fileURLToPath(
+          new URL("../../packages/last-ts/src/Router/waku.ts", import.meta.url),
+        ),
+        "last-ts/Router": fileURLToPath(
+          new URL("../../packages/last-ts/src/Router.ts", import.meta.url),
+        ),
         // Package source pulls `waku/router/client` via repo root — pin to THIS
         // app's waku so hooks share the site's Router context (no dual instance).
         "waku/router/client": fileURLToPath(

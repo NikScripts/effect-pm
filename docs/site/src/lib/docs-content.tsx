@@ -33,6 +33,7 @@ let demoIslands: {
   listen?: React.ComponentType<{ defaultProto?: string }>;
   viewJsx?: React.ComponentType;
   viewSidebar?: React.ComponentType;
+  routerPage?: React.ComponentType;
   titleLive?: React.ComponentType;
 } = {};
 
@@ -64,6 +65,11 @@ const loadDemoIslands = async (doc: any): Promise<void> => {
     demoIslands.viewSidebar = (
       await import("../islands/ViewSidebarIsland.js")
     ).ViewSidebarIsland;
+  }
+  if (langs.has("router-page")) {
+    demoIslands.routerPage = (
+      await import("../islands/RouterPageIsland.js")
+    ).RouterPageIsland;
   }
   if (langs.has("title-live")) {
     demoIslands.titleLive = (await import("../islands/TitleLiveIsland.js")).TitleLiveIsland;
@@ -323,6 +329,11 @@ const toReact = (n: any): React.ReactNode => {
       if (n.lang === "view-sidebar") {
         return demoIslands.viewSidebar !== undefined
           ? h(demoIslands.viewSidebar, { key: keySeq++ })
+          : null;
+      }
+      if (n.lang === "router-page") {
+        return demoIslands.routerPage !== undefined
+          ? h(demoIslands.routerPage, { key: keySeq++ })
           : null;
       }
       if (n.lang === "title-live") {

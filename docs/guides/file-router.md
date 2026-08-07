@@ -8,7 +8,19 @@
 
 {.draft}
 **Draft** — path-table codegen + Vite plugin are Eng’d; docs-site cutover off Waku
-`getConfig` / `Page.Service` still open. Soft-nav stays on [Routing](/docs/routing).
+`getConfig` still open. Page marks live on `last-ts/Page`
+(`Page.static` / `dynamic` / `build` + `stampOf`); soft-nav stays on
+[Routing](/docs/routing).
+
+```ts
+import * as Page from "last-ts/Page"
+
+export default Page.static("/about", AboutView, { title: "About" })
+export default Page.dynamic("/search", SearchView)
+export default Page.build("/docs/:chapter", ChapterView, {
+  paths: listChapterSlugs, // Effect
+})
+```
 
 Hyperlink owns a **typed path table** for file-based routes: walk `pages/**`,
 emit `paths.gen.ts`, feed `Route.fileRoot` so `urls.*` is a closed builder — not

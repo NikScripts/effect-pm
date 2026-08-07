@@ -214,6 +214,52 @@ only fills the catalog.
 Guide pages: [Router mini-docs](/docs/ui-router-mini-docs) ·
 [GroupNav + Target](/docs/ui-group-nav) · [File router](/docs/file-router).
 
+## last-ts — RouterBuilder + Page handlers
+
+Prototype spine (`last-ts`): **Router ≈ HttpApi**. Page routes are endpoints
+with Page success. Handlers are `Effect → ReactNode`, a JSX element, or a
+legacy component. Nested UI reads `Page.Request` / `Page.Document`.
+
+```ts
+import * as Router from "last-ts/Router"
+import * as RouterBuilder from "last-ts/RouterBuilder"
+import * as Page from "last-ts/Page"
+import * as Memory from "last-ts/Memory"
+import * as Last from "last-ts/Last"
+
+class Site extends Router.make("site").add(
+  Router.group("app", { topLevel: true }).add(
+    Route.get("home", "/"),
+    Route.get("about", "/about"),
+  ),
+) {}
+
+const home = Effect.gen(function* () {
+  const req = yield* Page.Request
+  yield* (yield* Page.Document).set("Effect Home")
+  return <span>{req.pathname}</span>
+})
+
+const routes = RouterBuilder.layer(Site).pipe(
+  Layer.provide(
+    RouterBuilder.group(Site, "app", Layout, (h) =>
+      h.handle("home", home).handle("about", <About />),
+    ),
+  ),
+)
+
+const App = Last.provider(Memory.layer.pipe(Layer.provide(routes)))
+// <App><Router.Outlet /></App>
+```
+
+Live mini-catalog (Memory transport; does not replace Waku file routes):
+
+```router-page
+```
+
+File-router marks (`Page.static` / `dynamic` / `build`) — see
+[File router](/docs/file-router).
+
 ## Still tightening
 
 Held to the same standards as the rest of the package; parked / next:
