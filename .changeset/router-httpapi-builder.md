@@ -15,4 +15,5 @@ HttpApi-shaped Router aligned with Effect `HttpApi` / `HttpApiBuilder`:
 - Mix Effect HttpApi peers into the catalog; `.addHttpApi(api)` spreads groups
 - `Route.Page` success (`text/html`); `Route.get` is `HttpApiEndpoint.get` + Page default
 - `RouterBuilder.handle` dispatches Page → React / other success → Effect handler
+- `Router.PageProps<Api, GroupId, EndpointId>` — schema-true page props; handle requires them
 - UI match/Outlet are Page-only; urlBuilder includes all endpoints

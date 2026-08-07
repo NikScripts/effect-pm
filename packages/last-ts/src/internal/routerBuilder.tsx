@@ -80,19 +80,6 @@ type NotHandledIdentifier<
   HandledIdentifiers extends PropertyKey,
 > = Identifier extends HandledIdentifiers ? never : unknown;
 
-type PageHandleEntry = {
-  readonly page: React.ComponentType<Route.HandleArgs>;
-  readonly options?: HandleOptions | undefined;
-} | React.ComponentType<Route.HandleArgs>;
-
-type ApiHandleEntry = {
-  readonly handler: (
-    request: unknown,
-  ) => Effect.Effect<unknown, unknown, unknown>;
-} | ((
-  request: unknown,
-) => Effect.Effect<unknown, unknown, unknown>);
-
 type HandleAllHandlers<
   EndpointsByIdentifier extends Record<string, uiRoute.Constraint>,
 > = {

@@ -50,8 +50,10 @@ dispatch), not a second router.
 Copy `HttpApiBuilder` shape:
 
 - `Handlers.FromGroup` / `ValidateReturn` / `handle` / `handleAll` / `handleRaw`
-- `handle(id, …)` typed from the endpoint: Page success → React page (or
-  Effect→Page); Json/etc. → `HttpApiEndpoint.Handler`
+- `handle(id, …)` typed from the endpoint: Page → `ComponentType<PageProps>`;
+  Json/etc. → Effect handler
+- `Router.PageProps<typeof Site, "app", "chapter">` (also on `Route` /
+  `RouterBuilder`) derives props from params/query schemas
 - Completeness: every endpoint in the group must be handled
 - Mixed groups are normal: one group can hold Page + Json endpoints; one
   `Handlers` bag implements both
@@ -59,7 +61,9 @@ Copy `HttpApiBuilder` shape:
 ```ts
 class Site extends Router.make("site").add(
   Router.group("app").add(
-    Route.get("dashboard", "/app"), // success: Page (default)
+    Route.get("chapter", "/:chapter", {
+      params: { chapter: Schema.String },
+    }),
     HttpApiEndpoint.get("getUser", "/users/:id", {
       params: { id: Schema.String },
       success: User,
@@ -67,9 +71,12 @@ class Site extends Router.make("site").add(
   ),
 ) {}
 
+type ChapterProps = Router.PageProps<typeof Site, "app", "chapter">
+const Chapter = (props: ChapterProps) => <h1>{props.params.chapter}</h1>
+
 const app = RouterBuilder.group(Site, "app", AppLayout, (h) =>
   h
-    .handle("dashboard", Dashboard)
+    .handle("chapter", Chapter)
     .handle("getUser", (req) => Effect.succeed({ id: req.params.id })),
 )
 ```
