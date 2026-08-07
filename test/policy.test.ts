@@ -80,18 +80,17 @@ describe("Policy defaults + compose", () => {
     }),
   );
 
-  it.effect("merge patches a make bundle (last write wins)", () =>
+  it.effect("make + fragment Layers compose via layer (last write wins)", () =>
     Effect.gen(function* () {
-      const bundle = Policy.make({
-        StreamGap: "stall",
-        Verify: "reject",
-        Sticky: true,
-      }).pipe(
-        Policy.merge({
-          StreamGap: "buffer",
-          Verify: false,
-          Conflict: "livenessReplace",
+      const bundle = Policy.layer(
+        Policy.make({
+          StreamGap: "stall",
+          Verify: "reject",
+          Sticky: true,
         }),
+        Policy.streamGap("buffer"),
+        Policy.verifyOff,
+        Policy.livenessReplace,
       );
       const d = yield* readPolicy.pipe(Effect.provide(bundle));
       expect(d.sticky).toBe(true);

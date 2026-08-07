@@ -1,5 +1,5 @@
 /**
- * Policy public types — make/merge typed Layers; fragments are Layers;
+ * Policy public types — make typed Layers; fragments are Layers;
  * LookupClientPick aliases Policy.Pick.
  */
 import { Effect, type Layer } from "effect";
@@ -10,15 +10,12 @@ import type {
   OnConflict,
   Pick,
   Config,
-  MergeConfigs,
   Policy,
 } from "../src/Policy";
 import * as PolicyMod from "../src/Policy";
 import type { LookupClientPick } from "../src/Hyperlink";
 
 type AssertExtends<A, B> = [A] extends [B] ? true : false;
-type AssertEqual<A, B> =
-  [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 
 type _Sticky = Layer.Layer<never>;
 type _StreamGapFn = (mode: StreamGap) => Layer.Layer<never>;
@@ -63,29 +60,16 @@ type _CutoverOk = AssertExtends<
 >;
 const _cutoverOk: _CutoverOk = true;
 
-// merge patches literals into the type
-const patched = cutover.pipe(
-  PolicyMod.merge({ StreamGap: "buffer", Verify: false }),
+// Fragments are Layers too — layer / provide accept make + fragments mixed
+const _mixed: Layer.Layer<never> = PolicyMod.layer(
+  cutover,
+  PolicyMod.streamGap("buffer"),
+  PolicyMod.verifyOff,
 );
-type _PatchedCfg = MergeConfigs<
-  {
-    Sticky: true;
-    StreamGap: "stall";
-    ColdAmbiguous: "fail";
-    Verify: "reject";
-  },
-  { StreamGap: "buffer"; Verify: false }
->;
-type _PatchedOk = AssertEqual<
-  _PatchedCfg["StreamGap"],
-  "buffer"
->;
-type _PatchedVerify = AssertEqual<_PatchedCfg["Verify"], false>;
-type _PatchedSticky = AssertEqual<_PatchedCfg["Sticky"], true>;
-const _patchedOk: _PatchedOk = true;
-const _patchedVerify: _PatchedVerify = true;
-const _patchedSticky: _PatchedSticky = true;
-const _patchedAsLayer: Layer.Layer<never> = patched;
+const _fragOnly: Layer.Layer<never> = PolicyMod.layer(
+  PolicyMod.sticky,
+  PolicyMod.streamGap("stall"),
+);
 
 // Config accepts Yield boolean or Effect
 const _yieldCfg: Config = {
@@ -108,10 +92,8 @@ void _badGap;
 void _badVerify;
 void _asLayer;
 void _cutoverOk;
-void _patchedOk;
-void _patchedVerify;
-void _patchedSticky;
-void _patchedAsLayer;
+void _mixed;
+void _fragOnly;
 void _yieldCfg;
 void _yieldEffectCfg;
 

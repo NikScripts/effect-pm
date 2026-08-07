@@ -29,13 +29,18 @@ Hyperlink.lookupClient(Mail).pipe(
   Layer.provide(Lookup.layer),
 )
 
-// Pipe merge to swap / add modes (patch wins; other keys keep)
-const nested = cutover.pipe(Policy.merge({ Verify: false, StreamGap: "buffer" }))
+// Same pipe with fragment Layers — mix freely; last write wins per reference
+Hyperlink.lookupClient(Mail).pipe(
+  Policy.provide(cutover, Policy.verifyOff, Policy.streamGap("buffer")),
+)
+Hyperlink.lookupClient(Mail).pipe(
+  Policy.provide(Policy.sticky, Policy.streamGap("stall"), Policy.verifyOff),
+)
 ```
 
-Zero-arg fragments are still **values** (`Policy.sticky`, not `Policy.sticky()`). Prefer
-`Policy.make({ … })` when you want the modes in the type; fragments remain fine for
-one-off overrides.
+Zero-arg fragments are **values** (`Policy.sticky`, not `Policy.sticky()`).
+`Policy.make({ … })` is optional sugar when you want the modes in the type — both are
+just Layers.
 
 Runnable demo: [`examples/node/policy-lookup-cutover.ts`](../../examples/node/policy-lookup-cutover.ts)
 (`pnpm run example:node-policy-lookup-cutover`).
@@ -137,12 +142,13 @@ Lookup stamp → hard `livenessReplace`.
 
 ## Compose
 
-### `Policy.make` (typed — preferred)
+### `Policy.make` (typed object form)
 
 Object keys match Context references (`Sticky`, `StreamGap`, `ColdAmbiguous`, `Pick`,
 `Verify`, `Conflict`, `Yield`). `Yield` accepts `true` / `false` or a custom
 `Effect<boolean>`. Omitted keys leave ambient defaults alone. The value **is** a
-`Layer.Layer<never>` branded as `Policy.Policy<{ …modes }>`.
+`Layer.Layer<never>` branded as `Policy.Policy<{ …modes }>`. Compose with fragment
+Layers via `Policy.provide` / `Policy.layer` — no special merge API.
 
 ```ts
 const cutover = Policy.make({
@@ -158,12 +164,12 @@ Hyperlink.lookupClient(Mail).pipe(
 )
 
 Node.unix(Worker, serves).pipe(
-  Policy.provide(cutover.pipe(Policy.merge({ Verify: false }))),
+  Policy.provide(cutover, Policy.verifyOff), // make + fragment
   Layer.provide(Lookup.client(lookupNode)),
 )
 ```
 
-### Fragment Layers (still supported)
+### Fragment Layers
 
 ```ts
 const cutover = Policy.layer(
