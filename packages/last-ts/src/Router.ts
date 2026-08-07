@@ -125,6 +125,22 @@ export type PathEntry = fileRouter.PathEntry;
 export type RoutesOf<Entries extends ReadonlyArray<fileRouter.PathEntry>> =
   fileRouter.RoutesOf<Entries>;
 
+/**
+ * Typed page props from a catalog: `Router.PageProps<typeof Site, "docs", "chapter">`.
+ *
+ * @public
+ */
+export type PageProps<
+  Api extends {
+    readonly groups: Record<
+      string,
+      { readonly routes: Record<string, unknown> }
+    >;
+  },
+  GroupId extends keyof Api["groups"] & string,
+  EndpointId extends keyof Api["groups"][GroupId]["routes"] & string,
+> = Route.PageProps<Api, GroupId, EndpointId>;
+
 // =============================================================================
 // Types
 // =============================================================================

@@ -93,12 +93,22 @@ type ApiHandleEntry = {
   request: unknown,
 ) => Effect.Effect<unknown, unknown, unknown>);
 
-type HandleAllEntry = PageHandleEntry | ApiHandleEntry;
-
 type HandleAllHandlers<
   EndpointsByIdentifier extends Record<string, uiRoute.Constraint>,
 > = {
-  readonly [Identifier in keyof EndpointsByIdentifier]?: HandleAllEntry;
+  readonly [Identifier in keyof EndpointsByIdentifier]?:
+    | pageSuccess.HandlerForEndpoint<EndpointsByIdentifier[Identifier]>
+    | {
+      readonly page: pageSuccess.HandlerForEndpoint<
+        EndpointsByIdentifier[Identifier]
+      >;
+      readonly options?: HandleOptions | undefined;
+    }
+    | {
+      readonly handler: pageSuccess.HandlerForEndpoint<
+        EndpointsByIdentifier[Identifier]
+      >;
+    };
 };
 
 type HandleAllExtraKeys<
@@ -148,14 +158,12 @@ export interface Handlers<
   readonly handlers: Map<string, HandlerRuntime>;
 
   /**
-   * Page success → React page; Json/other success → Effect handler
-   * (`HttpApiEndpoint.Handler` shape).
+   * Page success → React page typed from endpoint params/query; Json/other →
+   * Effect handler (`HttpApiEndpoint.Handler` shape).
    */
   handle<Identifier extends keyof EndpointsByIdentifier & string>(
     identifier: Identifier & NotHandledIdentifier<Identifier, HandledIdentifiers>,
-    handler:
-      | React.ComponentType<Route.HandleArgs>
-      | ((request: unknown) => Effect.Effect<unknown, unknown, unknown>),
+    handler: pageSuccess.HandlerForEndpoint<EndpointsByIdentifier[Identifier]>,
     options?: HandleOptions,
   ): Handlers<EndpointsByIdentifier, HandledIdentifiers | Identifier>;
 
@@ -275,15 +283,31 @@ const HandlersProto = {
   },
   handleAll(
     this: Handlers<any, any>,
-    handlers: Record<string, HandleAllEntry>,
+    handlers: Record<string, unknown>,
   ) {
     for (const [identifier, entry] of Object.entries(handlers)) {
       if (typeof entry === "function") {
-        registerHandler(this, identifier, entry);
-      } else if ("page" in entry) {
-        registerHandler(this, identifier, entry.page, entry.options);
-      } else {
-        registerHandler(this, identifier, entry.handler);
+        registerHandler(this, identifier, entry as never);
+      } else if (
+        entry !== null &&
+        typeof entry === "object" &&
+        "page" in entry
+      ) {
+        const e = entry as {
+          readonly page: never;
+          readonly options?: HandleOptions;
+        };
+        registerHandler(this, identifier, e.page, e.options);
+      } else if (
+        entry !== null &&
+        typeof entry === "object" &&
+        "handler" in entry
+      ) {
+        registerHandler(
+          this,
+          identifier,
+          (entry as { readonly handler: never }).handler,
+        );
       }
     }
     return this;
@@ -330,7 +354,9 @@ export const group = <
   groupIdentifier: Identifier,
   layout: Layout,
   build: (
-    handlers: Handlers.FromGroup<A["groups"][Identifier] & GroupTop>,
+    // Do not intersect with GroupTop — its `Record<string, …>` routes widen
+    // keyof to `string` and breaks ValidateReturn completeness.
+    handlers: Handlers.FromGroup<A["groups"][Identifier]>,
   ) => Handlers.ValidateReturn<Return>,
 ): Layer.Layer<
   catalog.Group.Service<ApiIdOf<A>, Identifier>,

@@ -50,7 +50,8 @@ import * as catalog from "./internal/routes";
 // =============================================================================
 
 /**
- * Args passed to a route {@link handle} when {@link ./Router.Outlet} renders a match.
+ * Loose args passed to a route {@link handle} / Outlet when schemas are erased.
+ * Prefer {@link PageProps} / {@link PagePropsFrom} for typed pages.
  *
  * @public
  */
@@ -62,6 +63,29 @@ export type HandleArgs = {
   /** `pathname` + search (`/users/1?tab=bio`). */
   readonly href: string;
 };
+
+/**
+ * Typed page props from an endpoint (params/query schemas + pathname/href).
+ *
+ * @public
+ */
+export type PagePropsFrom<E> = endpoint.pageSuccess.PagePropsFromEndpoint<E>;
+
+/**
+ * Typed page props from a catalog path: `PageProps<typeof Site, "app", "home">`.
+ *
+ * @public
+ */
+export type PageProps<
+  Api extends {
+    readonly groups: Record<
+      string,
+      { readonly routes: Record<string, unknown> }
+    >;
+  },
+  GroupId extends keyof Api["groups"] & string,
+  EndpointId extends keyof Api["groups"][GroupId]["routes"] & string,
+> = endpoint.pageSuccess.PageProps<Api, GroupId, EndpointId>;
 
 /**
  * Render function for a matched destination (`HttpApiBuilder.handle` analogue for UI).
@@ -119,15 +143,17 @@ export type Path = endpoint.Path;
 export type Endpoint<
   Id extends string = string,
   PathType extends Path = Path,
-  Params extends Schema.Top = any,
-> = endpoint.Route<Id, PathType, Params>;
+  Params extends Schema.Top = never,
+  Query extends Schema.Top = never,
+> = endpoint.Route<Id, PathType, Params, Query>;
 
 /** @deprecated Use {@link Endpoint}. @public */
 export type Route<
   Id extends string = string,
   PathType extends Path = Path,
-  Params extends Schema.Top = any,
-> = Endpoint<Id, PathType, Params>;
+  Params extends Schema.Top = never,
+  Query extends Schema.Top = never,
+> = Endpoint<Id, PathType, Params, Query>;
 
 /** @public */
 export type Constraint = endpoint.Constraint;

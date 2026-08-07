@@ -263,9 +263,7 @@ export type RouteFromHttpApiEndpoint<E> = E extends HttpApiEndpoint.Constraint
   ? E & uiRoute.Constraint
   : never;
 
-type ExtractRouteLikes<Item> =
-  | Extract<Item, uiRoute.Constraint>
-  | RouteFromHttpApiEndpoint<Extract<Item, HttpApiEndpoint.Constraint>>;
+type ExtractRouteLikes<Item> = Extract<Item, uiRoute.Constraint>;
 
 /**
  * Router {@link Group} projected from an Effect `HttpApiGroup`

@@ -17,62 +17,77 @@ export const TypeId = "~effect/httpapi/HttpApiEndpoint" as const;
 export type Path = `/${string}`;
 
 /**
- * Page destination — `HttpApiEndpoint.get` with {@link pageSuccess.Page} success.
- */
-export type Route<
-  Id extends string = string,
-  PathType extends Path = Path,
-  _Params extends Schema.Top = any,
-  _Query extends Schema.Top = any,
-  _Headers extends Schema.Top = any,
-  _Success extends Schema.Top = Schema.Top,
-> = Constraint & {
-  readonly identifier: Id;
-  readonly path: PathType;
-};
-
-/**
- * Erased destination — prefer over `HttpApiEndpoint.Top` (GET has `Payload =
- * never`, which is not assignable into Top’s `Schema.Top` payload slot).
+ * Erased destination. Wider than `HttpApiEndpoint.Top` so GET endpoints with
+ * `Payload = never` stay assignable while keeping path + phantoms for
+ * {@link pageSuccess.PagePropsFromEndpoint}.
  */
 export type Constraint = HttpApiEndpoint.Constraint & {
   readonly path: string;
-  readonly params: Schema.Top | undefined;
-  readonly query: Schema.Top | undefined;
-  readonly headers: Schema.Top | undefined;
-  readonly success: ReadonlySet<Schema.Top>;
-  readonly error: ReadonlySet<Schema.Top>;
+  readonly "~Params": any;
+  readonly "~Query": any;
+  readonly "~Success": any;
+  readonly params?: Schema.Top | undefined;
+  readonly query?: Schema.Top | undefined;
+  readonly headers?: Schema.Top | undefined;
+  readonly success?: ReadonlySet<Schema.Top> | undefined;
   readonly annotations: Context.Context<never>;
-  prefix(prefix: Path): Constraint;
+  prefix(prefix: string): Constraint;
   annotate<I, S>(tag: Context.Key<I, S>, value: S): Constraint;
   annotateMerge<I>(context: Context.Context<I>): Constraint;
 };
 
+/**
+ * Page destination — `HttpApiEndpoint.get` with {@link pageSuccess.Page} success.
+ * Params/Query phantoms preserved for {@link pageSuccess.PagePropsFromEndpoint}.
+ */
+export type Route<
+  Id extends string = string,
+  PathType extends Path = Path,
+  Params extends Schema.Top = never,
+  Query extends Schema.Top = never,
+  Headers extends Schema.Top = never,
+> = HttpApiEndpoint.HttpApiEndpoint<
+  Id,
+  "GET",
+  PathType,
+  Params,
+  Query,
+  never,
+  Headers,
+  pageSuccess.Page,
+  never
+>;
+
 export const isRoute = (u: unknown): u is Constraint =>
   HttpApiEndpoint.isHttpApiEndpoint(u);
 
-/** Single destination — `HttpApiEndpoint.get` with Page success by default. */
+/** Single destination — `HttpApiEndpoint.get` with Page success (always). */
 export const get = <
   const Id extends string,
   const PathType extends Path,
+  Params extends Schema.Top | Schema.Struct.Fields = never,
+  Query extends Schema.Top | Schema.Struct.Fields = never,
+  Headers extends Schema.Top | Schema.Struct.Fields = never,
 >(
   identifier: Id,
   path: PathType,
   options?: {
-    readonly params?: Schema.Top | Schema.Struct.Fields | undefined;
-    readonly query?: Schema.Top | Schema.Struct.Fields | undefined;
-    readonly headers?: Schema.Top | Schema.Struct.Fields | undefined;
-    readonly success?: Schema.Top | undefined;
+    readonly params?: Params | undefined;
+    readonly query?: Query | undefined;
+    readonly headers?: Headers | undefined;
     readonly error?: Schema.Top | ReadonlyArray<Schema.Top> | undefined;
   },
-): Route<Id, PathType> =>
-  HttpApiEndpoint.get(identifier, path, {
+) => {
+  const endpoint = HttpApiEndpoint.get(identifier, path, {
     params: options?.params,
     query: options?.query,
     headers: options?.headers,
-    success: options?.success ?? pageSuccess.Page,
+    success: pageSuccess.Page,
     error: options?.error as never,
-  }) as unknown as Route<Id, PathType>;
+  });
+  // Brand so IsPageEndpoint survives success codec wraps.
+  return endpoint as typeof endpoint & pageSuccess.PageEndpointBrand;
+};
 
 /**
  * Attach / replace params schema (rebuilds the endpoint — HttpApi has no setter).
@@ -83,8 +98,10 @@ export const params: {
   ): (self: Constraint) => Constraint;
   <S extends Schema.Top>(self: Constraint, schema: S): Constraint;
 } = dual(2, (self: Constraint, schema: Schema.Top): Constraint => {
-  const success = Array.from(self.success);
-  const error = Array.from(self.error);
+  const success = Array.from(self.success ?? [pageSuccess.Page]);
+  const error = Array.from(
+    (self as { readonly error?: ReadonlySet<Schema.Top> }).error ?? [],
+  );
   const next = HttpApiEndpoint.get(self.identifier, self.path as Path, {
     params: schema,
     query: self.query as Schema.Top | undefined,
@@ -99,7 +116,7 @@ export const params: {
   });
   return next.annotateMerge(
     self.annotations as Context.Context<never>,
-  ) as unknown as Constraint;
+  ) as unknown as Constraint & pageSuccess.PageEndpointBrand;
 });
 
 /** Join `/a` + `/b` → `/a/b`; `/a` + `/` → `/a`. */

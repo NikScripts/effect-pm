@@ -40,6 +40,28 @@ export declare namespace Handlers {
   export type Context<A> = internal.Handlers.Context<A>;
 }
 
+/**
+ * Typed page props from a catalog path (same as {@link ./Router.PageProps}).
+ *
+ * @example
+ * ```ts
+ * type ChapterProps = RouterBuilder.PageProps<typeof Site, "docs", "chapter">
+ * const Chapter = (props: ChapterProps) => <h1>{props.params.chapter}</h1>
+ * ```
+ *
+ * @public
+ */
+export type PageProps<
+  Api extends {
+    readonly groups: Record<
+      string,
+      { readonly routes: Record<string, unknown> }
+    >;
+  },
+  GroupId extends keyof Api["groups"] & string,
+  EndpointId extends keyof Api["groups"][GroupId]["routes"] & string,
+> = import("./internal/pageSuccess").PageProps<Api, GroupId, EndpointId>;
+
 /** @deprecated Use {@link Handlers} */
 export type HandlersBuilder<
   Endpoints extends Record<string, import("./internal/route").Constraint>,
