@@ -90,6 +90,7 @@ describe("Route", () => {
     expect(urls.home()).toBe("/");
     expect(urls.users.getUser("42")).toBe("/users/42");
     expect(Option.getOrThrow(Route.match(site, "/users/42")).identifiers).toEqual([
+      "users",
       "getUser",
     ]);
   });

@@ -70,7 +70,7 @@ export interface GroupTop extends Pipeable {
   add(
     ...items: ReadonlyArray<
       uiRoute.Constraint | GroupTop | HttpApiEndpoint.Constraint
-    >,
+    >
   ): GroupTop;
   /**
    * Merge destinations from an Effect (`HttpRouter.addAll` analogue).
@@ -364,7 +364,7 @@ const optionsFromGroup = (g: GroupTop) => ({
  * @internal
  */
 export const fromHttpApiEndpoint = (
-  endpoint: HttpApiEndpoint.Constraint,
+  endpoint: HttpApiEndpoint.Top,
 ): uiRoute.Constraint | undefined => {
   const path = endpoint.path;
   if (typeof path !== "string" || !path.startsWith("/") || path === "*") {
@@ -381,7 +381,7 @@ export const fromHttpApiEndpoint = (
  * @internal
  */
 export const fromHttpApiGroup = (
-  httpGroup: HttpApiGroup.Constraint,
+  httpGroup: HttpApiGroup.Top,
 ): GroupTop => {
   const routes: Array<uiRoute.Constraint> = [];
   for (const endpoint of Object.values(httpGroup.endpoints)) {
@@ -414,7 +414,7 @@ const groupProto = {
         }
       } else if (uiRoute.isRoute(item)) {
         routes = { ...routes, [item.identifier]: item };
-      } else {
+      } else if (isGroup(item)) {
         groups = { ...groups, [item.identifier]: item };
       }
     }
@@ -570,7 +570,7 @@ const appProto = {
         const id = "__top";
         const existing = groups[id] ?? group(id, { topLevel: true });
         groups = { ...groups, [id]: existing.add(item) };
-      } else {
+      } else if (isGroup(item)) {
         // Keep group identity (incl. topLevel) — matches HttpApi; urlBuilder
         // flattens via `topLevel`, RouterBuilder.group keys by identifier.
         groups = { ...groups, [item.identifier]: item };
@@ -587,7 +587,7 @@ const appProto = {
   ): ApiConstraint {
     // Whole HttpApi → mix each HttpApiGroup into this catalog.
     return this.add(
-      ...(Object.values(api.groups) as Array<HttpApiGroup.Constraint>),
+      ...(Object.values(api.groups) as Array<HttpApiGroup.Top>),
     );
   },
   prefix(this: ApiConstraint, prefix: Path): ApiConstraint {
@@ -659,9 +659,7 @@ export const addHttpApi = <
   api: HttpApi.HttpApi<Id, Groups>,
 ): GroupTop => {
   let bag: GroupTop = group(api.identifier, { topLevel: true });
-  for (const httpGroup of Object.values(api.groups) as Array<
-    HttpApiGroup.Constraint
-  >) {
+  for (const httpGroup of Object.values(api.groups) as Array<HttpApiGroup.Top>) {
     const converted = fromHttpApiGroup(httpGroup);
     if (converted.topLevel) {
       bag = bag.add(...Object.values(converted.routes));
