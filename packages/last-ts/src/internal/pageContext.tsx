@@ -1,40 +1,26 @@
 /**
- * Page.Request + Document — Effect services with React bridges for nested UI.
+ * Page React bridges for nested UI under Router.Outlet.
  *
  * @internal
  */
+"use client";
+
 import * as React from "react";
-import { Context, Effect } from "effect";
+import { Effect } from "effect";
+import type {
+  DocumentApi,
+  DocumentValue,
+  RequestValue,
+} from "./pageServices";
 
 // =============================================================================
-// Page.Request
+// Page.Request bridge
 // =============================================================================
-
-/**
- * Matched page request (params/query/pathname/href) — HttpApi `~Request` slice.
- *
- * @public
- */
-export type RequestValue = {
-  readonly params: Record<string, string>;
-  readonly query: Record<string, string>;
-  readonly pathname: string;
-  readonly href: string;
-};
-
-/**
- * Effect service for the current match (`yield* Page.Request`).
- *
- * @public
- */
-export class Request extends Context.Service<Request, RequestValue>()(
-  "last-ts/Page/Request",
-) {}
 
 const RequestReact = React.createContext<RequestValue | null>(null);
 
 /**
- * Provide {@link Request} to descendant React (mirror of the Effect service).
+ * Provide Request to descendant React (mirror of the Effect service).
  *
  * @internal
  */
@@ -49,7 +35,7 @@ export const RequestProvider = (props: {
   );
 
 /**
- * Read {@link Request} from the React bridge (nested regular components).
+ * Read Request from the React bridge (nested regular components).
  *
  * @public
  */
@@ -68,36 +54,8 @@ export const useRequestOption = (): RequestValue | null =>
   React.useContext(RequestReact);
 
 // =============================================================================
-// Document (title — set anywhere)
+// Document bridge
 // =============================================================================
-
-/**
- * Document chrome bag (title today; extend later).
- *
- * @public
- */
-export type DocumentValue = {
-  readonly title: string | undefined;
-};
-
-/**
- * Effect API for document chrome (`yield* Page.Document`, then `.set`).
- *
- * @public
- */
-export type DocumentApi = {
-  readonly set: (title: string) => Effect.Effect<void>;
-  readonly get: Effect.Effect<DocumentValue>;
-};
-
-/**
- * Set-anywhere document chrome (`yield* Page.Document`).
- *
- * @public
- */
-export class Document extends Context.Service<Document, DocumentApi>()(
-  "last-ts/Page/Document",
-) {}
 
 type DocumentBridge = {
   readonly value: DocumentValue;
@@ -108,8 +66,6 @@ const DocumentReact = React.createContext<DocumentBridge | null>(null);
 
 /**
  * Mutable document bag for one Outlet match — Effect service + React state.
- * `set` is deferred so page Effects can run during render without updating
- * React state mid-render.
  *
  * @internal
  */
@@ -168,7 +124,7 @@ export const useDocument = (): DocumentValue => {
 };
 
 /**
- * Effect {@link Document} API from the React bridge (for baked views).
+ * Effect Document API from the React bridge (for baked views).
  *
  * @internal
  */

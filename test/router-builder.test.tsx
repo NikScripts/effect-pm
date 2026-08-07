@@ -10,6 +10,7 @@ import type { Layout } from "last-ts/Layout";
 import * as Last from "last-ts/Last";
 import * as Memory from "last-ts/Memory";
 import * as Page from "last-ts/Page";
+import { useRequest } from "last-ts/Page/react";
 import * as Route from "last-ts/Route";
 import * as Router from "last-ts/Router";
 import * as RouterBuilder from "last-ts/RouterBuilder";
@@ -253,7 +254,7 @@ const effectHome = Effect.gen(function* () {
 });
 
 const NestedProbe = (): React.ReactElement => {
-  const req = Page.useRequest();
+  const req = useRequest();
   return React.createElement(
     "span",
     { "data-nested": "ok" },

@@ -31,6 +31,10 @@
       "types": "./src/Page.ts",
       "default": "./src/Page.ts"
     },
+    "./Page/react": {
+      "types": "./src/Page/react.tsx",
+      "default": "./src/Page/react.tsx"
+    },
     "./Route": {
       "types": "./src/Route.ts",
       "default": "./src/Route.ts"

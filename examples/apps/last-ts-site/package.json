@@ -1,0 +1,25 @@
+{
+  "name": "last-ts-site",
+  "private": true,
+  "type": "module",
+  "description": "last.ts RSC demo — Waku pages + Page stamps (not Hyperlink docs).",
+  "scripts": {
+    "dev": "waku dev --host 0.0.0.0 --port 5220",
+    "build": "waku build",
+    "start": "waku start --host 0.0.0.0 --port 5220"
+  },
+  "dependencies": {
+    "effect": "4.0.0-beta.102",
+    "last-ts": "workspace:*",
+    "react": "~19.2.6",
+    "react-dom": "~19.2.6",
+    "react-server-dom-webpack": "~19.2.6",
+    "waku": "1.0.0-beta.3"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^6.0.1",
+    "typescript": "^5.9.0"
+  }
+}

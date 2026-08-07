@@ -24,8 +24,8 @@
  * web engine internally (`createPages`). Apps never write Waku `getConfig`.
  */
 import type * as React from "react";
-import { Data, type Effect } from "effect";
-import type * as pageContext from "./internal/pageContext";
+import { Data, Effect } from "effect";
+import type * as pageServices from "./internal/pageServices";
 
 // =============================================================================
 // Render mode (owned PascalCase)
@@ -216,23 +216,74 @@ export const renderModeOf = (
   return "static";
 };
 
+/**
+ * Waku `getConfig` derived from a stamped default export.
+ *
+ * Until the file-router/`createPages` adapter reads {@link stampOf} directly:
+ *
+ * ```ts
+ * const About = Page.static("/about", () => <h1>About</h1>, { title: "About" })
+ * export default About
+ * export const getConfig = Page.getConfig(About)
+ * ```
+ *
+ * @public
+ */
+export const getConfig = (
+  stamped: object,
+  options?: { readonly dev?: boolean },
+): (() => Promise<
+  | { readonly render: "static" | "dynamic" }
+  | {
+      readonly render: "static";
+      readonly staticPaths: ReadonlyArray<string>;
+    }
+>) => {
+  const stampValue = stampOf(stamped);
+  return async () => {
+    const dev =
+      options?.dev ??
+      (typeof import.meta !== "undefined" &&
+        Boolean(
+          (import.meta as ImportMeta & { readonly env?: { DEV?: boolean } })
+            .env?.DEV,
+        ));
+    if (stampValue === undefined) {
+      return { render: "static" as const };
+    }
+    const mode = renderModeOf(stampValue, { dev });
+    if (
+      stampValue.render._tag === "Build" &&
+      mode === "static" &&
+      stampValue.paths !== undefined
+    ) {
+      const staticPaths = await Effect.runPromise(stampValue.paths);
+      return { render: "static" as const, staticPaths };
+    }
+    return { render: mode };
+  };
+};
+
 // =============================================================================
-// Live route bridges (Router.Outlet)
+// Live route services (Router.Outlet) — RSC-safe Effect tags
 // =============================================================================
 
 /** Matched request bag (`params` / `query` / `pathname` / `href`). @public */
-export type RequestValue = pageContext.RequestValue;
+export type RequestValue = pageServices.RequestValue;
 
 /** Document chrome bag (title today). @public */
-export type DocumentValue = pageContext.DocumentValue;
+export type DocumentValue = pageServices.DocumentValue;
 
 /** Effect API for {@link Document}. @public */
-export type DocumentApi = pageContext.DocumentApi;
+export type DocumentApi = pageServices.DocumentApi;
 
-/** Current match (`yield* Page.Request`) + React bridge. @public */
+/**
+ * Current match (`yield* Page.Request`).
+ * React hooks: `import { useRequest, useDocument } from "last-ts/Page/react"`.
+ *
+ * @public
+ */
 export {
   Request,
   Document,
-  useRequest,
-  useDocument,
-} from "./internal/pageContext";
+} from "./internal/pageServices";
