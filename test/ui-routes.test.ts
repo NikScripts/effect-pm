@@ -89,17 +89,17 @@ describe("Route", () => {
     };
     expect(urls.home()).toBe("/");
     expect(urls.users.getUser("42")).toBe("/users/42");
-    expect(Option.getOrThrow(Route.match(site, "/users/42")).identifiers).toEqual([
-      "users",
-      "getUser",
-    ]);
+    // UI match is Page success only — bare HttpApiEndpoint is Json/NoContent.
+    expect(Option.isSome(Route.match(site, "/"))).toBe(true);
+    expect(Option.isNone(Route.match(site, "/users/42"))).toBe(true);
   });
 
   it("mixes HttpApiEndpoint with Route.get inside a router group", () => {
     const site = Route.make("site").add(
       Route.group("app").add(
         Route.get("dashboard", "/app"),
-        HttpApiEndpoint.get("legacy", "/app/legacy"),
+        // Page success on a wire endpoint — same as Route.get
+        HttpApiEndpoint.get("legacy", "/app/legacy", { success: Route.Page }),
       ),
     );
     const urls = Route.urlBuilder(site) as Route.UrlBuilderLoose & {

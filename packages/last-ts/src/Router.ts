@@ -5,19 +5,14 @@
  *
  * ```ts
  * class Site extends Router.make("site").add(
- *   Router.group("marketing", { topLevel: true }).add(
- *     Route.get("home", "/"),
- *     // HttpApiEndpoint mixes in as a URL destination alongside Route.get
- *     HttpApiEndpoint.get("legacy", "/legacy"),
- *   ),
- *   // HttpApiGroup mixes in alongside Router.group (URL surface only)
- *   HttpApiGroup.make("users").add(
- *     HttpApiEndpoint.get("getUser", "/users/:id"),
+ *   Router.group("app").add(
+ *     Route.get("home", "/"), // Page success
+ *     HttpApiEndpoint.get("getUser", "/users/:id", { success: User }),
  *   ),
  * ) {}
  *
- * const marketing = RouterBuilder.group(Site, "marketing", Layout, (h) =>
- *   h.handle("home", Home),
+ * const app = RouterBuilder.group(Site, "app", Layout, (h) =>
+ *   h.handle("home", Home).handle("getUser", (req) => Effect.succeed(…)),
  * )
  * const routes = RouterBuilder.layer(Site).pipe(Layer.provide(marketing))
  * export const provider = Last.provider(
@@ -32,6 +27,7 @@ import { Context, Layer } from "effect";
 import type { HttpApi, HttpApiGroup } from "effect/unstable/httpapi";
 import * as fileRouter from "./internal/fileRouter";
 import * as internal from "./internal/router";
+import * as routerBuilder from "./internal/routerBuilder";
 import * as catalog from "./internal/routes";
 import type { ApiConstraint } from "./internal/routes";
 import * as Route from "./Route";
@@ -349,19 +345,10 @@ export const Outlet = (): React.ReactElement | null => {
     href: router.href,
   };
 
-  // RouterBuilder handlers (+ optional layout)
+  // RouterBuilder handlers (+ optional layout) — Page success only
   const bag = router._handlers;
   if (bag !== undefined) {
-    const resolved = (() => {
-      const impl = bag.groups.get(match.group.identifier);
-      if (impl === undefined) return null;
-      const h = impl.handlers.get(match.route.identifier);
-      if (h === undefined) return null;
-      return {
-        page: h.page,
-        layout: h.layout === false ? null : impl.layout,
-      };
-    })();
+    const resolved = routerBuilder.resolveRender(bag, match);
     if (resolved !== null) {
       const page = React.createElement(resolved.page, args);
       if (resolved.layout !== null) {

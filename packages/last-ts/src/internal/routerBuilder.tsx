@@ -14,21 +14,39 @@ import type { Layout } from "../Layout";
 import type * as Route from "../Route";
 import * as catalog from "./routes";
 import type { Api, ApiConstraint, GroupTop, Match } from "./routes";
+import * as pageSuccess from "./pageSuccess";
 import type * as uiRoute from "./route";
 
 // =============================================================================
 // Collected registry (transport Layers — ours; Effect registers into HttpRouter)
 // =============================================================================
 
+/** @deprecated Use {@link HandlerRuntime} */
 export type PageHandler = {
   readonly page: React.ComponentType<Route.HandleArgs>;
   /** `false` = no layout; omit = use group layout. */
   readonly layout: false | undefined;
 };
 
+/**
+ * Per-endpoint handler — Page success → React; otherwise Effect API handler.
+ */
+export type HandlerRuntime =
+  | {
+      readonly _tag: "Page";
+      readonly page: React.ComponentType<Route.HandleArgs>;
+      readonly layout: false | undefined;
+    }
+  | {
+      readonly _tag: "Api";
+      readonly handler: (
+        request: unknown,
+      ) => Effect.Effect<unknown, unknown, unknown>;
+    };
+
 export type GroupImpl = {
   readonly layout: Layout;
-  readonly handlers: ReadonlyMap<string, PageHandler>;
+  readonly handlers: ReadonlyMap<string, HandlerRuntime>;
 };
 
 /**
@@ -62,10 +80,20 @@ type NotHandledIdentifier<
   HandledIdentifiers extends PropertyKey,
 > = Identifier extends HandledIdentifiers ? never : unknown;
 
-type HandleAllEntry = {
+type PageHandleEntry = {
   readonly page: React.ComponentType<Route.HandleArgs>;
   readonly options?: HandleOptions | undefined;
 } | React.ComponentType<Route.HandleArgs>;
+
+type ApiHandleEntry = {
+  readonly handler: (
+    request: unknown,
+  ) => Effect.Effect<unknown, unknown, unknown>;
+} | ((
+  request: unknown,
+) => Effect.Effect<unknown, unknown, unknown>);
+
+type HandleAllEntry = PageHandleEntry | ApiHandleEntry;
 
 type HandleAllHandlers<
   EndpointsByIdentifier extends Record<string, uiRoute.Constraint>,
@@ -117,11 +145,17 @@ export interface Handlers<
   /** @internal */
   readonly group: GroupTop;
   /** @internal */
-  readonly handlers: Map<string, PageHandler>;
+  readonly handlers: Map<string, HandlerRuntime>;
 
+  /**
+   * Page success → React page; Json/other success → Effect handler
+   * (`HttpApiEndpoint.Handler` shape).
+   */
   handle<Identifier extends keyof EndpointsByIdentifier & string>(
     identifier: Identifier & NotHandledIdentifier<Identifier, HandledIdentifiers>,
-    page: React.ComponentType<Route.HandleArgs>,
+    handler:
+      | React.ComponentType<Route.HandleArgs>
+      | ((request: unknown) => Effect.Effect<unknown, unknown, unknown>),
     options?: HandleOptions,
   ): Handlers<EndpointsByIdentifier, HandledIdentifiers | Identifier>;
 
@@ -179,7 +213,9 @@ export type HandlersBuilder<
 const registerHandler = (
   self: Handlers<any, any>,
   identifier: string,
-  page: React.ComponentType<Route.HandleArgs>,
+  handler:
+    | React.ComponentType<Route.HandleArgs>
+    | ((request: unknown) => Effect.Effect<unknown, unknown, unknown>),
   options?: HandleOptions,
 ): Handlers<any, any> => {
   // `group.from(Service)` defers destinations until RouterBuilder.layer — skip
@@ -198,10 +234,26 @@ const registerHandler = (
       `Handler for Route "${identifier}" is already registered in Router.Group "${self.group.identifier}"`,
     );
   }
-  self.handlers.set(identifier, {
-    page,
-    layout: options?.layout === false ? false : undefined,
-  });
+  const endpoint = self.group.routes[identifier];
+  // Deferred file destinations + missing static map → Page; else success kind.
+  const asPage =
+    Option.isSome(deferred) ||
+    endpoint === undefined ||
+    pageSuccess.isPageEndpoint(endpoint);
+  if (asPage) {
+    self.handlers.set(identifier, {
+      _tag: "Page",
+      page: handler as React.ComponentType<Route.HandleArgs>,
+      layout: options?.layout === false ? false : undefined,
+    });
+  } else {
+    self.handlers.set(identifier, {
+      _tag: "Api",
+      handler: handler as (
+        request: unknown,
+      ) => Effect.Effect<unknown, unknown, unknown>,
+    });
+  }
   return self;
 };
 
@@ -214,10 +266,12 @@ const HandlersProto = {
   handle(
     this: Handlers<any, any>,
     identifier: string,
-    page: React.ComponentType<Route.HandleArgs>,
+    handler:
+      | React.ComponentType<Route.HandleArgs>
+      | ((request: unknown) => Effect.Effect<unknown, unknown, unknown>),
     options?: HandleOptions,
   ) {
-    return registerHandler(this, identifier, page, options);
+    return registerHandler(this, identifier, handler, options);
   },
   handleAll(
     this: Handlers<any, any>,
@@ -226,8 +280,10 @@ const HandlersProto = {
     for (const [identifier, entry] of Object.entries(handlers)) {
       if (typeof entry === "function") {
         registerHandler(this, identifier, entry);
-      } else {
+      } else if ("page" in entry) {
         registerHandler(this, identifier, entry.page, entry.options);
+      } else {
+        registerHandler(this, identifier, entry.handler);
       }
     }
     return this;
@@ -251,7 +307,7 @@ const makeHandlers = <G extends GroupTop>(
 ): Handlers.FromGroup<G> => {
   const self = Object.create(HandlersProto);
   self.group = group;
-  self.handlers = new Map<string, PageHandler>();
+  self.handlers = new Map<string, HandlerRuntime>();
   return self;
 };
 
@@ -375,7 +431,7 @@ export const resolveRender = (
   const impl = bag.groups.get(match.group.identifier);
   if (impl === undefined) return null;
   const h = impl.handlers.get(match.route.identifier);
-  if (h === undefined) return null;
+  if (h === undefined || h._tag !== "Page") return null;
   return {
     page: h.page,
     layout: h.layout === false ? null : impl.layout,

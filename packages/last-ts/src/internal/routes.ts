@@ -257,14 +257,10 @@ export type ApiAddLike =
   | HttpApiGroup.Constraint;
 
 /**
- * URL-surface Route projected from an Effect `HttpApiEndpoint`
- * (`identifier` + `path` + optional `params`).
+ * Catalog destination from an Effect `HttpApiEndpoint` (identity).
  */
-export type RouteFromHttpApiEndpoint<E> = E extends {
-  readonly identifier: infer Id extends string;
-  readonly path: infer PathType;
-} ? PathType extends Path ? uiRoute.Route<Id, PathType>
-  : never
+export type RouteFromHttpApiEndpoint<E> = E extends HttpApiEndpoint.Constraint
+  ? E & uiRoute.Constraint
   : never;
 
 type ExtractRouteLikes<Item> =
@@ -359,24 +355,24 @@ const optionsFromGroup = (g: GroupTop) => ({
 });
 
 /**
- * Effect `HttpApiEndpoint` → Router destination (URL surface only).
+ * Effect `HttpApiEndpoint` → catalog destination (identity when path is routable).
+ * Page vs Json is the success schema — no projection to a thinner Route.
  *
  * @internal
  */
 export const fromHttpApiEndpoint = (
-  endpoint: HttpApiEndpoint.Top,
+  endpoint: HttpApiEndpoint.Constraint,
 ): uiRoute.Constraint | undefined => {
-  const path = endpoint.path;
+  if (!HttpApiEndpoint.isHttpApiEndpoint(endpoint)) return undefined;
+  const path = (endpoint as HttpApiEndpoint.Top).path;
   if (typeof path !== "string" || !path.startsWith("/") || path === "*") {
     return undefined;
   }
-  return uiRoute.get(endpoint.identifier, path as Path, {
-    params: endpoint.params,
-  });
+  return endpoint as uiRoute.Constraint;
 };
 
 /**
- * Effect `HttpApiGroup` → Router {@link Group} (same id / topLevel; endpoints → routes).
+ * Effect `HttpApiGroup` → Router {@link Group} (same id / topLevel; endpoints kept).
  *
  * @internal
  */
@@ -697,7 +693,7 @@ export const flatten = (self: ApiConstraint): ReadonlyArray<FlatEntry> => {
     for (const route of Object.values(g.routes)) {
       out.push({
         identifiers: [...ids, route.identifier],
-        path: route.path,
+        path: route.path as Path,
         route,
         group: g,
         annotations: Context.merge(merged, route.annotations),
@@ -738,6 +734,13 @@ export const match = (
   let bestScore = -1;
 
   for (const entry of flatten(self)) {
+    // UI match is Page destinations only — Json endpoints are wire handlers.
+    if (
+      HttpApiEndpoint.isHttpApiEndpoint(entry.route) &&
+      !uiRoute.pageSuccess.isPageEndpoint(entry.route)
+    ) {
+      continue;
+    }
     const compiled = uiRoute.compilePath(entry.path);
     const paramsOpt = compiled.match(normalized);
     if (Option.isNone(paramsOpt)) continue;

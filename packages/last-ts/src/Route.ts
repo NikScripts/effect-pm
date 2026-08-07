@@ -92,19 +92,10 @@ export class Handler extends Context.Service<Handler, Handle>()(
  * @public
  */
 export const handle: {
-  (fn: Handle): <Id extends string, PathType extends Path, Params>(
-    self: Endpoint<Id, PathType, Params>,
-  ) => Endpoint<Id, PathType, Params>;
-  <Id extends string, PathType extends Path, Params>(
-    self: Endpoint<Id, PathType, Params>,
-    fn: Handle,
-  ): Endpoint<Id, PathType, Params>;
-} = dual(
-  2,
-  <Id extends string, PathType extends Path, Params>(
-    self: Endpoint<Id, PathType, Params>,
-    fn: Handle,
-  ): Endpoint<Id, PathType, Params> => self.annotate(Handler, fn),
+  (fn: Handle): <E extends Constraint>(self: E) => E;
+  <E extends Constraint>(self: E, fn: Handle): E;
+} = dual(2, <E extends Constraint>(self: E, fn: Handle): E =>
+  self.annotate(Handler, fn) as E,
 );
 
 /**
@@ -121,21 +112,21 @@ export const handleOf = (hit: Match | undefined): Handle | undefined =>
 export type Path = endpoint.Path;
 
 /**
- * Declared destination — `HttpApiEndpoint` analogue.
+ * Declared destination — `HttpApiEndpoint.get` with Page success by default.
  *
  * @public
  */
-export interface Endpoint<
-  out Id extends string = string,
-  out PathType extends Path = Path,
-  out Params = never,
-> extends endpoint.Route<Id, PathType, Params> {}
+export type Endpoint<
+  Id extends string = string,
+  PathType extends Path = Path,
+  Params extends Schema.Top = any,
+> = endpoint.Route<Id, PathType, Params>;
 
 /** @deprecated Use {@link Endpoint}. @public */
 export type Route<
   Id extends string = string,
   PathType extends Path = Path,
-  Params = never,
+  Params extends Schema.Top = any,
 > = Endpoint<Id, PathType, Params>;
 
 /** @public */
@@ -148,17 +139,21 @@ export const isEndpoint: (u: unknown) => u is Constraint = endpoint.isRoute;
 export const isRoute = isEndpoint;
 
 /**
- * Declare a destination (`HttpApiEndpoint.get`).
+ * Page success schema (`text/html` peer of Json) — default for {@link get}.
  *
  * @public
  */
-export const get: <const Id extends string, const PathType extends Path>(
-  identifier: Id,
-  path: PathType,
-  options?: {
-    readonly params?: Schema.Top | undefined;
-  },
-) => Endpoint<Id, PathType> = endpoint.get;
+export const Page: typeof endpoint.pageSuccess.Page = endpoint.pageSuccess.Page;
+
+/**
+ * Declare a page destination (`HttpApiEndpoint.get` + {@link Page} success).
+ *
+ * Same options bag as Effect `HttpApiEndpoint.get` (`params` / `query` /
+ * `headers` / `success` / `error`). Default `success` is {@link Page}.
+ *
+ * @public
+ */
+export const get: typeof endpoint.get = endpoint.get;
 
 /**
  * Attach a params schema. Dual.
@@ -172,21 +167,21 @@ export const params: typeof endpoint.params = endpoint.params;
  *
  * @public
  */
-export const prefix = <Id extends string, PathType extends Path, Params>(
-  self: Endpoint<Id, PathType, Params>,
+export const prefix = <E extends Constraint>(
+  self: E,
   prefixPath: Path,
-): Endpoint<Id, Path, Params> => self.prefix(prefixPath);
+): Constraint => self.prefix(prefixPath);
 
 /**
  * Annotate a destination.
  *
  * @public
  */
-export const annotate = <Id extends string, PathType extends Path, Params, I, S>(
-  self: Endpoint<Id, PathType, Params>,
+export const annotate = <E extends Constraint, I, S>(
+  self: E,
   tag: Context.Key<I, S>,
   value: S,
-): Endpoint<Id, PathType, Params> => self.annotate(tag, value);
+): E => self.annotate(tag, value) as E;
 
 /** Join two absolute path templates. @public */
 export const joinPath: (prefix: Path | "/", path: Path | "/") => Path =

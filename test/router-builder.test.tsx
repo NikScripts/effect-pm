@@ -2,7 +2,8 @@
  * RouterBuilder + Memory.layer + Last.provider (HttpApi-shaped lock).
  */
 import { describe, expect, it } from "@effect/vitest";
-import { Context, Effect, Layer, ManagedRuntime } from "effect";
+import { Context, Effect, Layer, ManagedRuntime, Schema } from "effect";
+import { HttpApiEndpoint } from "effect/unstable/httpapi";
 import * as React from "react";
 import { renderToString } from "react-dom/server";
 import type { Layout } from "last-ts/Layout";
@@ -155,6 +156,63 @@ describe("RouterBuilder group.from(Service)", () => {
       );
       expect(router.urls.index()).toBe("/");
       expect(router.urls.about()).toBe("/about");
+    } finally {
+      await runtime.dispose();
+    }
+  });
+});
+
+const User = Schema.Struct({ id: Schema.String });
+
+class MixedSite extends Router.make("mixed").add(
+  Router.group("app").add(
+    Route.get("dashboard", "/app"),
+    HttpApiEndpoint.get("getUser", "/users/:id", {
+      params: { id: Schema.String },
+      success: User,
+    }),
+  ),
+) {}
+
+const mixed = RouterBuilder.group(MixedSite, "app", RootLayout, (h) =>
+  h
+    .handle("dashboard", () => React.createElement("span", null, "dash"))
+    .handle("getUser", (req) => {
+      const params = (req as { readonly params: { readonly id: string } })
+        .params;
+      return Effect.succeed({ id: params.id });
+    }),
+);
+
+const mixedRoutes = RouterBuilder.layer(MixedSite).pipe(Layer.provide(mixed));
+const mixedProvider = Last.provider(
+  Memory.layer.pipe(Layer.provide(mixedRoutes)),
+);
+
+describe("RouterBuilder mixed Page + Json handlers", () => {
+  it("completes ValidateReturn for Page page + Effect API handler", () => {
+    const html = renderToString(
+      React.createElement(
+        mixedProvider,
+        null,
+        React.createElement(Router.Outlet),
+      ),
+    );
+    // Memory starts at `/` — no Page match; builder still constructs.
+    expect(html.length).toBeGreaterThanOrEqual(0);
+  });
+
+  it("registers Page + Api handler runtimes by success kind", async () => {
+    const runtime = ManagedRuntime.make(mixedRoutes);
+    try {
+      const registry = await runtime.runPromise(
+        Effect.gen(function* () {
+          return yield* RouterBuilder.Registry;
+        }),
+      );
+      const impl = registry.groups.get("app");
+      expect(impl?.handlers.get("dashboard")?._tag).toBe("Page");
+      expect(impl?.handlers.get("getUser")?._tag).toBe("Api");
     } finally {
       await runtime.dispose();
     }

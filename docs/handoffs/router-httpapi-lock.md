@@ -1,7 +1,7 @@
 # Router — HttpApi lock (Page = success kind)
 
 **Branch:** `cursor/file-router-prototype-125f`  
-**Status:** design locked — Eng pending rewrite  
+**Status:** Eng (Page success on tip)  
 **Package:** `last-ts`
 
 ## One-sentence lock
@@ -116,5 +116,11 @@ export const provider = Last.provider(
 
 ## Tip note
 
-Current tip still has the **URL-surface mix-in** (`fromHttpApiEndpoint` →
-`Route.get`). That was an interim step; this lock replaces it.
+On tip:
+
+- `Route.get` → `HttpApiEndpoint.get` with `success: Route.Page` (`text/html`)
+- Catalog keeps real endpoints (no URL-only projection)
+- `RouterBuilder.handle` dispatches: Page → React, other success → Effect
+- UI `match` / Outlet are Page-only; urlBuilder includes all endpoints
+- Catalog shell (`Router.make` / nested groups / `from(Service)`) still last-ts;
+  full thin-wrap onto Effect `HttpApi` types is follow-on

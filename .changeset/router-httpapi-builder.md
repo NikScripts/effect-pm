@@ -12,4 +12,7 @@ HttpApi-shaped Router aligned with Effect `HttpApi` / `HttpApiBuilder`:
 - `Memory` / `History` / `Waku` require `Catalog` | `Registry`
 - `group.from(Service)` + `Router.layerDestinations`; flat `Group.asRoutes`
 - Layouts require `children`; `{ layout: false }` opts out on `handle`
-- Mix Effect HttpApi peers into the URL catalog: `Router.make(...).add(HttpApiGroup, Router.group)` and `Router.group(...).add(Route.get, HttpApiEndpoint)` (URL surface only); `.addHttpApi(api)` spreads groups
+- Mix Effect HttpApi peers into the catalog; `.addHttpApi(api)` spreads groups
+- `Route.Page` success (`text/html`); `Route.get` is `HttpApiEndpoint.get` + Page default
+- `RouterBuilder.handle` dispatches Page → React / other success → Effect handler
+- UI match/Outlet are Page-only; urlBuilder includes all endpoints

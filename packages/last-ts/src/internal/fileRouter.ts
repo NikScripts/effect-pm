@@ -16,9 +16,10 @@ export type PathEntry = {
   readonly routePath: string;
 };
 
-export type EntryRoute<E extends PathEntry> = E["routePath"] extends Path
-  ? Route.Endpoint<E["id"], E["routePath"]>
-  : Route.Endpoint<E["id"], Path>;
+export type EntryRoute<E extends PathEntry> = Route.Constraint & {
+  readonly identifier: E["id"];
+  readonly path: E["routePath"] extends Path ? E["routePath"] : Path;
+};
 
 export type RoutesOf<Entries extends ReadonlyArray<PathEntry>> = EntryRoute<
   Entries[number]
@@ -28,9 +29,9 @@ export type RoutesOf<Entries extends ReadonlyArray<PathEntry>> = EntryRoute<
 export const destinationsOf = <const Entries extends ReadonlyArray<PathEntry>>(
   entries: Entries,
 ): ReadonlyArray<RoutesOf<Entries>> =>
-  entries.map((entry) =>
-    Route.get(entry.id, entry.routePath as Path),
-  ) as ReadonlyArray<RoutesOf<Entries>>;
+  entries.map(
+    (entry) => Route.get(entry.id, entry.routePath as Path) as RoutesOf<Entries>,
+  );
 
 /**
  * Effect of Route destinations from a typed file-router table.

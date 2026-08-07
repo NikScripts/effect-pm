@@ -1,15 +1,14 @@
 /**
- * Internal impl for {@link ../ui/Route} — UI route declarations (HttpApiEndpoint-shaped,
- * without HTTP methods).
+ * Internal impl for {@link ../Route} — HttpApiEndpoint with Page default success.
  */
 import * as Context from "effect/Context";
-import * as Option from "effect/Option";
 import { dual } from "effect/Function";
-import { type Pipeable, pipeArguments } from "effect/Pipeable";
-import * as Predicate from "effect/Predicate";
+import * as Option from "effect/Option";
 import type * as Schema from "effect/Schema";
+import { HttpApiEndpoint } from "effect/unstable/httpapi";
+import * as pageSuccess from "./pageSuccess";
 
-export const TypeId = "~last-ts/Route" as const;
+export const TypeId = "~effect/httpapi/HttpApiEndpoint" as const;
 
 /**
  * Pathname template — always absolute.
@@ -17,112 +16,91 @@ export const TypeId = "~last-ts/Route" as const;
  */
 export type Path = `/${string}`;
 
-export interface Route<
-  out Id extends string = string,
-  out PathType extends Path = Path,
-  out Params = never,
-> extends Pipeable {
-  readonly [TypeId]: typeof TypeId;
+/**
+ * Page destination — `HttpApiEndpoint.get` with {@link pageSuccess.Page} success.
+ */
+export type Route<
+  Id extends string = string,
+  PathType extends Path = Path,
+  _Params extends Schema.Top = any,
+  _Query extends Schema.Top = any,
+  _Headers extends Schema.Top = any,
+  _Success extends Schema.Top = Schema.Top,
+> = Constraint & {
   readonly identifier: Id;
   readonly path: PathType;
-  readonly params: Schema.Top | undefined;
-  readonly annotations: Context.Context<never>;
-  prefix(prefix: Path): Route<Id, Path, Params>;
-  annotate<I, S>(tag: Context.Key<I, S>, value: S): Route<Id, PathType, Params>;
-  annotateMerge(context: Context.Context<never>): Route<Id, PathType, Params>;
-}
+};
 
-export type Constraint = Route<string, Path, any>;
+/**
+ * Erased destination — prefer over `HttpApiEndpoint.Top` (GET has `Payload =
+ * never`, which is not assignable into Top’s `Schema.Top` payload slot).
+ */
+export type Constraint = HttpApiEndpoint.Constraint & {
+  readonly path: string;
+  readonly params: Schema.Top | undefined;
+  readonly query: Schema.Top | undefined;
+  readonly headers: Schema.Top | undefined;
+  readonly success: ReadonlySet<Schema.Top>;
+  readonly error: ReadonlySet<Schema.Top>;
+  readonly annotations: Context.Context<never>;
+  prefix(prefix: Path): Constraint;
+  annotate<I, S>(tag: Context.Key<I, S>, value: S): Constraint;
+  annotateMerge<I>(context: Context.Context<I>): Constraint;
+};
 
 export const isRoute = (u: unknown): u is Constraint =>
-  Predicate.hasProperty(u, TypeId);
+  HttpApiEndpoint.isHttpApiEndpoint(u);
 
-const optionsFromRoute = (route: Constraint) => ({
-  identifier: route.identifier,
-  path: route.path,
-  params: route.params,
-  annotations: route.annotations,
-});
-
-const Proto = {
-  [TypeId]: TypeId,
-  pipe() {
-    // Effect Pipeable protocol — `arguments` is required by `pipeArguments`.
-    // eslint-disable-next-line prefer-rest-params -- pipeArguments(this, arguments)
-    return pipeArguments(this, arguments);
-  },
-  prefix(this: Constraint, prefix: Path) {
-    return makeProto({
-      ...optionsFromRoute(this),
-      path: joinPath(prefix, this.path),
-    });
-  },
-  annotate<I, S>(this: Constraint, tag: Context.Key<I, S>, value: S) {
-    return makeProto({
-      ...optionsFromRoute(this),
-      annotations: Context.add(this.annotations, tag, value),
-    });
-  },
-  annotateMerge(this: Constraint, context: Context.Context<never>) {
-    return makeProto({
-      ...optionsFromRoute(this),
-      annotations: Context.merge(this.annotations, context),
-    });
-  },
-};
-
-/** Constructor-shaped like `HttpApiEndpoint` — supports `class X extends Route.get(…)`. */
-const makeProto = <Id extends string, PathType extends Path, Params>(options: {
-  readonly identifier: Id;
-  readonly path: PathType;
-  readonly params: Schema.Top | undefined;
-  readonly annotations: Context.Context<never>;
-}): Route<Id, PathType, Params> => {
-  function RouterRoute() {}
-  Object.setPrototypeOf(RouterRoute, Proto);
-  return Object.assign(RouterRoute, options) as unknown as Route<
-    Id,
-    PathType,
-    Params
-  >;
-};
-
-/** Single destination — `HttpApiEndpoint.get` analogue. */
-export const get = <const Id extends string, const PathType extends Path>(
+/** Single destination — `HttpApiEndpoint.get` with Page success by default. */
+export const get = <
+  const Id extends string,
+  const PathType extends Path,
+>(
   identifier: Id,
   path: PathType,
   options?: {
-    readonly params?: Schema.Top | undefined;
+    readonly params?: Schema.Top | Schema.Struct.Fields | undefined;
+    readonly query?: Schema.Top | Schema.Struct.Fields | undefined;
+    readonly headers?: Schema.Top | Schema.Struct.Fields | undefined;
+    readonly success?: Schema.Top | undefined;
+    readonly error?: Schema.Top | ReadonlyArray<Schema.Top> | undefined;
   },
 ): Route<Id, PathType> =>
-  makeProto({
-    identifier,
-    path,
+  HttpApiEndpoint.get(identifier, path, {
     params: options?.params,
-    annotations: Context.empty(),
-  });
+    query: options?.query,
+    headers: options?.headers,
+    success: options?.success ?? pageSuccess.Page,
+    error: options?.error as never,
+  }) as unknown as Route<Id, PathType>;
 
+/**
+ * Attach / replace params schema (rebuilds the endpoint — HttpApi has no setter).
+ */
 export const params: {
-  <Id extends string, PathType extends Path, S extends Schema.Top>(
+  <S extends Schema.Top>(
     schema: S,
-  ): (self: Route<Id, PathType>) => Route<Id, PathType, S["Type"]>;
-  <Id extends string, PathType extends Path, S extends Schema.Top>(
-    self: Route<Id, PathType>,
-    schema: S,
-  ): Route<Id, PathType, S["Type"]>;
-} = dual(
-  2,
-  <Id extends string, PathType extends Path, S extends Schema.Top>(
-    self: Route<Id, PathType>,
-    schema: S,
-  ): Route<Id, PathType, S["Type"]> =>
-    makeProto({
-      identifier: self.identifier,
-      path: self.path,
-      params: schema,
-      annotations: self.annotations,
-    }),
-);
+  ): (self: Constraint) => Constraint;
+  <S extends Schema.Top>(self: Constraint, schema: S): Constraint;
+} = dual(2, (self: Constraint, schema: Schema.Top): Constraint => {
+  const success = Array.from(self.success);
+  const error = Array.from(self.error);
+  const next = HttpApiEndpoint.get(self.identifier, self.path as Path, {
+    params: schema,
+    query: self.query as Schema.Top | undefined,
+    headers: self.headers as Schema.Top | undefined,
+    success:
+      success.length === 0 ? pageSuccess.Page
+      : success.length === 1 ? success[0]!
+      : success,
+    error: (error.length === 0 ? undefined
+    : error.length === 1 ? error[0]!
+    : error) as never,
+  });
+  return next.annotateMerge(
+    self.annotations as Context.Context<never>,
+  ) as unknown as Constraint;
+});
 
 /** Join `/a` + `/b` → `/a/b`; `/a` + `/` → `/a`. */
 export const joinPath = (prefix: Path | "/", path: Path | "/"): Path => {
@@ -266,3 +244,5 @@ export const compilePath = (path: string): CompiledPath => {
 
 const escapeRegex = (s: string): string =>
   s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+export { pageSuccess };
