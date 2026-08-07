@@ -281,9 +281,14 @@ Child of [Lookup membership](/docs/launcher-lookup-membership): `examples/launch
 `examples/launcher/ensure-lookup.ts` · `pnpm run example:launcher-ensure-lookup` — `Launcher.ensureLookup` then app `up`  
 Guide: [Launcher — Lookup node](/docs/launcher#lookup-node-ensure-lookup-first)
 
-### [planUpdate + restartSuccessor](/docs/launcher-plan-update)
+### [planUpdate (blocked)](/docs/launcher-plan-update)
 
 `examples/launcher/plan-update.ts` · `pnpm run example:launcher-plan-update` — dry-run impact Layers, then `restartSuccessor` blocked before spawn  
+Guide: [Launcher — Lookup node](/docs/launcher#lookup-node-ensure-lookup-first)
+
+### [restartSuccessor live A→B](/docs/launcher-restart-successor)
+
+`examples/launcher/restart-successor.ts` · `pnpm run example:launcher-restart-successor` — OS A→B; Directory dial moves; B answers  
 Guide: [Launcher — Lookup node](/docs/launcher#lookup-node-ensure-lookup-first)
 
 ### [minimal up](/docs/launcher-minimal-up)

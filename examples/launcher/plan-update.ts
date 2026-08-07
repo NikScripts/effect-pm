@@ -1,8 +1,10 @@
 /**
  * @module examples/launcher/plan-update
  *
- * **Plan → restartSuccessor** — dry-run `Lookup.planUpdate`, ambient Layers,
- * then `Launcher.restartSuccessor` (blocked by default when wires are removed).
+ * **Plan blocked** — dry-run `Lookup.planUpdate`, ambient Layers, then
+ * `Launcher.restartSuccessor` refuse before spawn when wires are removed.
+ *
+ * Live happy path: `pnpm run example:launcher-restart-successor`.
  *
  * ```bash
  * pnpm run example:launcher-plan-update

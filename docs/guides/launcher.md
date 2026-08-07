@@ -232,7 +232,8 @@ outgoing node. See
 | Ready errors (`_tag`) | `pnpm run example:launcher-ready-timeout` |
 | Custody → Directory | `pnpm run example:launcher-lookup-membership` |
 | Ensure Lookup first | `pnpm run example:launcher-ensure-lookup` |
-| planUpdate + restartSuccessor | `pnpm run example:launcher-plan-update` |
+| planUpdate (blocked) | `pnpm run example:launcher-plan-update` |
+| restartSuccessor live A→B | `pnpm run example:launcher-restart-successor` |
 
 Hub: [Examples → launcher](/docs/examples#launcher).
 
