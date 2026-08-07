@@ -207,8 +207,16 @@ yield* Launcher.restartSuccessor({
   successor: { node: workerB, process: … },
   tags: [JobsV2],
   incumbent: [JobsV1],
+  // prefer: true (default) — Advice.prefer(B) after up(B), before shutdown(A)
 })
 ```
+
+**Binary update (file-swap dream):** keep a stable `Launcher.command(…, activePath, …)`
+entry; copy v1→active, `up(A)`, drive sticky `lookupClient` + WorkPool traffic, copy
+v2→active, then `restartSuccessor` so B loads the swapped file. Same `nodeKey`, new dial;
+sticky tip moves; pending hands off via baked WorkPool migration. Full API walkthrough:
+[dream redeploy](/docs/launcher-dream-redeploy) ·
+`pnpm run example:launcher-dream-redeploy`.
 
 **Lookup A/B:** one address; A/B = successive owners; `Lookup.follow` + Policy for the gap.
 Runnable: `pnpm run example:node-lookup-follow-handoff` ·
