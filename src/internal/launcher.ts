@@ -64,6 +64,7 @@ import {
 } from "./lookupPlanUpdate";
 import * as Directory from "../Directory";
 import * as Advice from "../Advice";
+import * as Dialers from "../Dialers";
 import { shutdown as nodeShutdown } from "./nodeShutdownClient";
 import type { HandoffDeferred } from "../Hyperlink";
 
@@ -1386,6 +1387,7 @@ export const restartSuccessor = (
   | ConfigError,
   | Directory.Tag
   | Advice.Tag
+  | Dialers.Tag
   | ChildProcessSpawner.ChildProcessSpawner
   | Scope.Scope
 > =>

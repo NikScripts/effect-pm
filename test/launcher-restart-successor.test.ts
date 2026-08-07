@@ -10,7 +10,6 @@ import {
   Layer,
   Schedule,
   Schema,
-  type Scope,
 } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import * as Directory from "../src/Directory";
@@ -32,10 +31,10 @@ const tmpSock = (label: string) =>
     return `/tmp/hyperlink-ts-restart-${label}-${process.pid}-${now}.sock`;
   });
 
-const withLookup = <A, E>(
+const withLookup = <A, E, R>(
   server: Layer.Layer<never, Lookup.LookupUnaddressed>,
   client: Layer.Layer<Lookup.Services, Lookup.LookupUnaddressed>,
-  use: Effect.Effect<A, E, Lookup.Services | Scope.Scope>,
+  use: Effect.Effect<A, E, R>,
 ) =>
   Effect.gen(function* () {
     const serverCtx = yield* Layer.build(server);

@@ -55,9 +55,9 @@ import {
 } from "./Advice";
 import {
   Tag as Dialers,
-  RegisterRequest,
-  UnregisterRequest,
-  ListForTargetRequest,
+  RegisterRequest as DialersRegisterRequest,
+  UnregisterRequest as DialersUnregisterRequest,
+  ListForTargetRequest as DialersListForTargetRequest,
   DialerEntry,
 } from "./Dialers";
 import {
@@ -141,10 +141,10 @@ export {
 } from "./Advice";
 export {
   DialerEntry,
-  RegisterRequest as DialersRegisterRequest,
-  UnregisterRequest as DialersUnregisterRequest,
-  ListForTargetRequest as DialersListForTargetRequest,
-} from "./Dialers";
+  DialersRegisterRequest,
+  DialersUnregisterRequest,
+  DialersListForTargetRequest,
+};
 
 /**
  * Lookup node has no dialable address — need `{ path }` / url, or use {@link layer} /
@@ -458,7 +458,7 @@ const lookupServeLayers = (serverOnConflict: OnConflictResolved) =>
         ),
       });
       const dialers = Hyperlink.serve(Dialers, {
-        register: (req: RegisterRequest) =>
+        register: (req: DialersRegisterRequest) =>
           registries.dialers.register({
             dialerId: req.dialerId,
             serviceKey: req.serviceKey,
@@ -473,9 +473,9 @@ const lookupServeLayers = (serverOnConflict: OnConflictResolved) =>
                 }),
             ),
           ),
-        unregister: (req: UnregisterRequest) =>
+        unregister: (req: DialersUnregisterRequest) =>
           registries.dialers.unregister(req.dialerId),
-        listForTarget: (req: ListForTargetRequest) =>
+        listForTarget: (req: DialersListForTargetRequest) =>
           registries.dialers.listForTarget(req.nodeKey).pipe(
             Effect.map((entries) =>
               entries.map(

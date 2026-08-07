@@ -373,29 +373,29 @@ export const planUpdate = (
     const coUpdate = [...coUpdateSet].sort();
 
     const live = yield* Dialers.listForTarget(target);
-    const clientsAtRisk: Array<UpdateImpact["clientsAtRisk"][number]> =
-      live.length > 0
-        ? live.map((row) => ({
-            dialerId: row.dialerId,
-            serviceKey: row.serviceKey,
-            target: row.target,
-          }))
-        : yield* Effect.gen(function* () {
-            // Soft fallback — Advice prefer still signals placement risk when
-            // no lookupClient / peersLayer has registered yet.
-            const proxy: Array<UpdateImpact["clientsAtRisk"][number]> = [];
-            for (const key of served) {
-              const prefer = yield* Advice.preferred(key);
-              if (Option.isSome(prefer) && prefer.value === target) {
-                proxy.push({
-                  dialerId: `advice:${key}`,
-                  serviceKey: key,
-                  target,
-                });
-              }
-            }
-            return proxy;
+    const clientsAtRisk: Array<UpdateImpact["clientsAtRisk"][number]> = [];
+    if (live.length > 0) {
+      for (const row of live) {
+        clientsAtRisk.push({
+          dialerId: row.dialerId,
+          serviceKey: row.serviceKey,
+          target: row.target,
+        });
+      }
+    } else {
+      // Soft fallback — Advice prefer still signals placement risk when
+      // no lookupClient / peersLayer has registered yet.
+      for (const key of served) {
+        const prefer = yield* Advice.preferred(key);
+        if (Option.isSome(prefer) && prefer.value === target) {
+          clientsAtRisk.push({
+            dialerId: `advice:${key}`,
+            serviceKey: key,
+            target,
           });
+        }
+      }
+    }
 
     const migrationGaps: Array<UpdateImpact["migrationGaps"][number]> = [];
     const contractDrifts: Array<UpdateImpact["contractDrifts"][number]> = [];
