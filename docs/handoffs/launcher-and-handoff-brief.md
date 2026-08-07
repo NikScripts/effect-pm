@@ -8,7 +8,7 @@
 
 ## Locked (2026-07-27, owner)
 
-1. **Spine α — dumb spawn-and-exit launcher.** Bring-up only; exits when the spawn job is done. Not a long-lived fleet supervisor. Nodes own processes after start; Lookup is the control brain. (Rejects spine β: launcher-as-`Layer.launch(Fleet…)` lifecycle owner.)
+1. **Spine α — dumb spawn-and-exit launcher.** Bring-up only; exits when the spawn job is done. Not a long-lived fleet supervisor. Nodes own processes after start; Lookup is the control brain. (Rejects spine β: launcher-as-`Layer.launch(Fleet…)` lifecycle owner.) **Owner 2026-08-08:** possibly revisit — resident **Update/Machine** node that watches processes + runs updates may absorb or wrap Launcher (`Machine.spawn`); see [`node-addresses-and-update-api.md`](./node-addresses-and-update-api.md) §7. **Not unlocked** until owner locks the fork.
 2. **No Eng until API is locked with the owner.** Design → owner go on concrete API surface → then build. No APIs from `launcher-decisions.md` memory.
 3. **Bake order:** Track **A** (spawn+exit launcher API) first; then B (Lookup-directed startup), C (handoff), D (clients). Do not tangle tracks.
 4. **Track A exit gate = Ready** (not merely spawned, not Lookup-registered). Launcher waits until the child is ready, then exits. Registration / Lookup remains the child’s (node’s) job after that.
