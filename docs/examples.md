@@ -291,6 +291,11 @@ Guide: [Launcher — Lookup node](/docs/launcher#lookup-node-ensure-lookup-first
 `examples/launcher/restart-successor.ts` · `pnpm run example:launcher-restart-successor` — OS A→B; Directory dial moves; B answers  
 Guide: [Launcher — Lookup node](/docs/launcher#lookup-node-ensure-lookup-first)
 
+### [dream redeploy (file-swap v1→v2)](/docs/launcher-dream-redeploy)
+
+`examples/launcher/dream-redeploy.ts` · `pnpm run example:launcher-dream-redeploy` — swap worker file to v2, `restartSuccessor`, sticky tip + WorkPool handoff  
+Guide: [Launcher](/docs/launcher)
+
 ### [minimal up](/docs/launcher-minimal-up)
 
 `examples/launcher/minimal-up.ts` · `pnpm run example:launcher-minimal-up`

@@ -237,6 +237,7 @@ outgoing node. See
 | Ensure Lookup first | `pnpm run example:launcher-ensure-lookup` |
 | planUpdate (blocked) | `pnpm run example:launcher-plan-update` |
 | restartSuccessor live A→B | `pnpm run example:launcher-restart-successor` |
+| dream redeploy (file-swap v1→v2) | `pnpm run example:launcher-dream-redeploy` |
 
 Hub: [Examples → launcher](/docs/examples#launcher).
 

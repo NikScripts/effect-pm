@@ -47,6 +47,10 @@ pnpm-debug.log*
 coverage/
 .nyc_output/
 
+# Dream-redeploy active worker (file-swap target; regenerated each run)
+examples/launcher/dream-redeploy-worker.active.ts
+examples/launcher/dream-redeploy-worker.active-*.ts
+
 # Misc
 scratchpad/
 .turbo
