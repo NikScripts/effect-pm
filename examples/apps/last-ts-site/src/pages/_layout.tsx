@@ -1,19 +1,16 @@
 import type { ReactNode } from "react";
-import * as Page from "last-ts/Page";
 import { Nav } from "../islands/Nav.js";
-import { RouterProvider } from "../islands/RouterProvider.js";
+import { provider as Provider } from "../islands/provider.js";
 
-function Layout({ children }: { readonly children: ReactNode }) {
+export default function Layout(props: {
+  readonly children: ReactNode;
+}) {
   return (
-    <RouterProvider>
+    <Provider>
       <div className="shell">
         <Nav />
-        <main className="main">{children}</main>
+        <main className="main">{props.children}</main>
       </div>
-    </RouterProvider>
+    </Provider>
   );
 }
-
-const Stamped = Page.layout("/", Layout);
-export default Stamped;
-export const getConfig = Page.getConfig(Stamped);

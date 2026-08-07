@@ -15,9 +15,9 @@ owns typed urls + soft-nav. This is the runnable demo under
 
 | Layer | Job |
 |-------|-----|
-| `src/pages/**` + `Page.static` / `build` / `layout` | **RSC render** (SSG/SSR) |
+| `src/pages/**` | **RSC render** (Waku file routes) |
 | `Router.make` catalog + `Route.urlBuilder` | Typed destinations / `urls.*` |
-| `last-ts/Router/waku` | Soft-nav (`Link` / `useRouter`) over Waku |
+| `Last.provider(Waku.fromApi(Site))` | Soft-nav provider (children only) |
 | Client islands (`View.Service`, …) | Interactive DI inside an RSC page |
 
 **Not** used for page bodies here: `RouterBuilder` + `Router.Outlet` + Memory /
@@ -25,10 +25,14 @@ History. Those are for SPA / in-process catalogs. RSC file routes stay the
 document SSOT; `Outlet` would fight Waku.
 
 ```text
-URL  →  Waku file page (RSC)     ← render
-urls →  Router.make catalog      ← typed hrefs
-Link →  Waku.router(waku(Site))  ← soft-nav
+URL  →  Waku file page (RSC)           ← render
+urls →  Router.make catalog            ← typed hrefs
+Link →  Last.provider(Waku.fromApi(…)) ← soft-nav
 ```
+
+`Page.Service` / `createPages` (stamp → engine) is not Eng’d yet. Until then,
+pages are ordinary Waku modules — **no** `Page.getConfig`, **no** Stamped
+default-export theater.
 
 ## 1. Catalog — `Router.make`
 
@@ -38,15 +42,33 @@ Top-level group so `urls.home()` is flat (not `urls.app.home()`).
 ``` ts
 ```
 
-## 2. Waku layer — `Last.app` + `Waku.router`
+## 2. Provider — `Last.provider` + `Waku.fromApi`
 
-Bake the binding into a children-only Provider. Mount once in the layout island.
+Bake the catalog into a children-only provider. Mount once in the layout.
 
-{.twoslash include="examples/apps/last-ts-site/src/islands/RouterProvider.tsx"}
+Wrong (do not copy):
+
+```ts
+// 1. Last.app is deprecated
+// 2. Layer.empty is fake debt
+// 3. Waku.router pipe is the deprecated install path
+// 4. Waku.waku is a binding, not the Layer
+// 5. Peeling .Provider — Last.provider already returns the component
+const Provider = Last.app(Layer.empty).pipe(
+  Waku.router(Waku.waku(Site)),
+).Provider
+```
+
+Right:
+
+{.twoslash include="examples/apps/last-ts-site/src/islands/provider.tsx"}
 ``` tsx
 ```
 
-## 3. Soft-nav — `Link` from `last-ts/Router/waku`
+For SPA / Outlet trees use `Waku.layer.pipe(Layer.provide(routes))` instead of
+`fromApi`.
+
+## 3. Soft-nav — `Link` from `last-ts/Waku`
 
 Client island. Prefer string `to` values from `urls` when the caller is near
 RSC (function builders are fine in client components).
@@ -55,27 +77,23 @@ RSC (function builders are fine in client components).
 ``` tsx
 ```
 
-## 4. Layout — `Page.layout` + Provider
+## 4. Layout — mount `provider` directly
 
-RSC layout wraps children with the Router Provider + nav island.
+No wrapper component around the provider. Alias for JSX capitalization only.
 
 {.twoslash include="examples/apps/last-ts-site/src/pages/_layout.tsx"}
 ``` tsx
 ```
 
-`Page.getConfig(Stamped)` is the temporary Waku bridge until `createPages`
-reads `stampOf` directly. Stamps stay on `last-ts/Page` (RSC-safe). React
-hooks for Outlet trees live on `last-ts/Page/react`.
+## 5. Pages — plain Waku RSC modules
 
-## 5. Pages — `Page.static` / `Page.build`
-
-Home (static RSC):
+Home:
 
 {.twoslash include="examples/apps/last-ts-site/src/pages/index.tsx"}
 ``` tsx
 ```
 
-Param guide (build paths; dynamic in DEV):
+Param guide:
 
 {.twoslash include="examples/apps/last-ts-site/src/pages/guides/[slug].tsx"}
 ``` tsx

@@ -1,24 +1,22 @@
-import * as Page from "last-ts/Page";
-
-function Home() {
+export default function Home() {
   return (
     <article data-page="home">
       <h1>last.ts</h1>
       <p>
-        RSC demo — Waku file pages stamped with <code>Page.static</code> /
-        <code>Page.build</code>. Not Hyperlink docs.
+        RSC demo — Waku file pages + Router catalog soft-nav. Not Hyperlink
+        docs.
       </p>
       <dl className="meta">
         <div>
           <dt>render</dt>
           <dd>
-            <code>Page.static("/", …)</code> → Waku RSC / SSG
+            Waku <code>src/pages/**</code> (RSC / SSG)
           </dd>
         </div>
         <div>
           <dt>soft-nav</dt>
           <dd>
-            <code>last-ts/Router/waku</code> Link (client island in layout)
+            <code>Last.provider(Waku.fromApi(Site))</code>
           </dd>
         </div>
         <div>
@@ -31,7 +29,3 @@ function Home() {
     </article>
   );
 }
-
-const Stamped = Page.static("/", Home, { title: "last.ts" });
-export default Stamped;
-export const getConfig = Page.getConfig(Stamped);

@@ -1,27 +1,38 @@
 /**
  * @module Page
  *
- * File-router page marks — path + Static / Dynamic / Build (+ metadata) — plus
- * live-route bridges {@link Request} / {@link Document} for Outlet trees.
+ * File-router page marks — Static / Dynamic / Build — plus live-route bridges
+ * {@link Request} / {@link Document} for Outlet trees.
+ *
+ * Destination shape (`Page.Service` — not Eng’d yet):
  *
  * ```ts
- * import * as Page from "last-ts/Page"
+ * class DocsChapter extends Page.Service<DocsChapter, { chapter: string }>()(
+ *   "app/page/docs-chapter",
+ *   { path: "/docs/:chapter", render: Page.Render.Build(), paths: listSlugs },
+ * ) {}
+ * export default Page.build(DocsChapter)
+ * ```
  *
- * export default Page.static("/about", AboutView, { title: "About" })
+ * Escape hatches until then (path may be explicit; file-router owns disk path):
+ *
+ * ```ts
+ * export default Page.static("/about", AboutView)
  * export default Page.dynamic("/search", SearchView)
  * export default Page.build("/docs/:chapter", ChapterView, {
  *   paths: listChapterSlugs, // Effect
  * })
- * export const layout = Page.layout("/", BookChrome)
- *
- * // In a page Effect / nested component under Router.Outlet:
- * const req = yield* Page.Request
- * yield* (yield* Page.Document).set("Home")
- * const title = Page.useDocument().title
  * ```
  *
- * The file-router reads {@link stampOf} on the default export and maps to the
- * web engine internally (`createPages`). Apps never write Waku `getConfig`.
+ * The file-router / `createPages` adapter reads {@link stampOf} on the default
+ * export. Apps never write Waku `getConfig` and there is no `Page.getConfig`.
+ *
+ * Outlet trees:
+ *
+ * ```ts
+ * const req = yield* Page.Request
+ * yield* (yield* Page.Document).set("Home")
+ * ```
  */
 import type * as React from "react";
 import { Data, Effect } from "effect";
@@ -214,54 +225,6 @@ export const renderModeOf = (
   if (stampValue.render._tag === "Dynamic") return "dynamic";
   if (stampValue.render._tag === "Build" && options.dev) return "dynamic";
   return "static";
-};
-
-/**
- * Waku `getConfig` derived from a stamped default export.
- *
- * Until the file-router/`createPages` adapter reads {@link stampOf} directly:
- *
- * ```ts
- * const About = Page.static("/about", () => <h1>About</h1>, { title: "About" })
- * export default About
- * export const getConfig = Page.getConfig(About)
- * ```
- *
- * @public
- */
-export const getConfig = (
-  stamped: object,
-  options?: { readonly dev?: boolean },
-): (() => Promise<
-  | { readonly render: "static" | "dynamic" }
-  | {
-      readonly render: "static";
-      readonly staticPaths: ReadonlyArray<string>;
-    }
->) => {
-  const stampValue = stampOf(stamped);
-  return async () => {
-    const dev =
-      options?.dev ??
-      (typeof import.meta !== "undefined" &&
-        Boolean(
-          (import.meta as ImportMeta & { readonly env?: { DEV?: boolean } })
-            .env?.DEV,
-        ));
-    if (stampValue === undefined) {
-      return { render: "static" as const };
-    }
-    const mode = renderModeOf(stampValue, { dev });
-    if (
-      stampValue.render._tag === "Build" &&
-      mode === "static" &&
-      stampValue.paths !== undefined
-    ) {
-      const staticPaths = await Effect.runPromise(stampValue.paths);
-      return { render: "static" as const, staticPaths };
-    }
-    return { render: mode };
-  };
 };
 
 // =============================================================================

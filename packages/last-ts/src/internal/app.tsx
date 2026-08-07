@@ -162,19 +162,50 @@ export const toProvider = <R, E = never>(
     : make(layer).pipe(router(service)).Provider;
 
 /**
+ * Optional mount override keyed by {@link Service._tag} (e.g. Waku registers
+ * a live-hook bridge so Layer stubs are not sealed into {@link Router.Provider}).
+ *
+ * @internal
+ */
+const routerMounts = new Map<
+  Service["_tag"],
+  (service: Service, children: React.ReactNode) => React.ReactElement
+>();
+
+/**
+ * Register a React mount for a router engine tag. Used by {@link ../Waku}
+ * so {@link provider} can hydrate live Waku nav without a hard `waku` import
+ * on the Last core path.
+ *
+ * @internal
+ */
+export const registerRouterMount = (
+  tag: Service["_tag"],
+  mount: (service: Service, children: React.ReactNode) => React.ReactElement,
+): void => {
+  routerMounts.set(tag, mount);
+};
+
+const defaultRouterMount = (
+  service: Service,
+  children: React.ReactNode,
+): React.ReactElement =>
+  React.createElement(Router.Provider, { value: service, children });
+
+/**
  * Bake a fulfilled Layer into a children-only React provider. Bridges
  * {@link ../Router.Router} from the Atom runtime into {@link ../Router.Provider}
  * when present.
  *
  * Builds the Layer **once**, then feeds that Context to both
- * `Atom.runtime(Layer.succeedContext(ctx))` and {@link ../Router.Provider}.
+ * `Atom.runtime(Layer.succeedContext(ctx))` and the router mount.
  * A second `Layer.build` would mint a divergent History/Memory service
  * (soft-nav updates one instance; Outlet reads another).
  *
  * @example
  * ```tsx
  * export const provider = Last.provider(
- *   Layer.mergeAll(routes, History.layer),
+ *   History.layer.pipe(Layer.provide(routes)),
  * )
  * // <provider>…</provider>
  * ```
@@ -204,10 +235,10 @@ export const provider = <R, E = never>(
     }, []);
     const body =
       boot.router !== null
-        ? React.createElement(Router.Provider, {
-            value: boot.router,
-            children: props.children,
-          })
+        ? (routerMounts.get(boot.router._tag) ?? defaultRouterMount)(
+            boot.router,
+            props.children,
+          )
         : props.children;
     return React.createElement(
       AtomReact.RegistryProvider,

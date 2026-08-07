@@ -11,11 +11,11 @@ Waku RSC app using **last-ts** only (not Hyperlink docs).
 ## Layout
 
 ```
-src/lib/site.ts              Router.make catalog + urls
-src/islands/RouterProvider   Last.app + Waku.router(waku(Site))
-src/islands/Nav              Waku Link soft-nav
-src/pages/**                 Page.static / Page.build / Page.layout (RSC)
-src/islands/ViewDemo         View.Service(key, default) client island
+src/lib/site.ts           Router.make catalog + urls
+src/islands/provider.tsx  Last.provider(Waku.fromApi(Site))
+src/islands/Nav           Waku Link soft-nav
+src/pages/**              plain Waku RSC modules
+src/islands/ViewDemo      View.Service(key, default) client island
 ```
 
-File routes render; the Router catalog + Waku layer soft-nav.
+File routes render; the Router catalog + `Last.provider` soft-nav.

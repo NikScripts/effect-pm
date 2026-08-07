@@ -1,21 +1,13 @@
-import * as Page from "last-ts/Page";
-
-function About() {
+export default function About() {
   return (
     <article data-page="about">
       <h1>About</h1>
       <p>
-        <code>{`Page.static("/about", About, { title: "About" })`}</code>
-      </p>
-      <p>
-        File-router / Waku reads the stamp via <code>Page.getConfig</code>{" "}
-        today; <code>createPages</code> will read <code>stampOf</code> directly
-        later.
+        Plain Waku RSC page. File routes own render; the Router catalog owns
+        typed urls. <code>Page.Service</code> / <code>createPages</code> will
+        stamp modules later — no <code>Page.getConfig</code>, no Stamped
+        theater.
       </p>
     </article>
   );
 }
-
-const Stamped = Page.static("/about", About, { title: "About" });
-export default Stamped;
-export const getConfig = Page.getConfig(Stamped);

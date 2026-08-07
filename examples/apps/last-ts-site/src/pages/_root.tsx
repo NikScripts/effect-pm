@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
-import * as Page from "last-ts/Page";
 
-function Root({ children }: { readonly children: ReactNode }) {
+export default function Root(props: { readonly children: ReactNode }) {
   return (
     <html lang="en">
       <head>
@@ -20,11 +19,7 @@ function Root({ children }: { readonly children: ReactNode }) {
         />
         <link rel="stylesheet" href="/styles.css" />
       </head>
-      <body>{children}</body>
+      <body>{props.children}</body>
     </html>
   );
 }
-
-const Stamped = Page.static("/", Root);
-export default Stamped;
-export const getConfig = Page.getConfig(Stamped);

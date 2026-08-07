@@ -18,12 +18,15 @@ pnpm run example:apps-last-ts-site
 
 | Piece | Role |
 |-------|------|
-| `src/pages/**` | **RSC** file routes |
-| `Page.static` / `Page.build` / `Page.layout` | stamps on default export |
-| `Page.getConfig(Stamped)` | Waku `getConfig` until createPages reads stamps |
+| `src/pages/**` | **RSC** file routes (plain Waku modules) |
+| `Last.provider(Waku.fromApi(Site))` | children-only soft-nav provider |
 | `Router.make` + `urls` | typed catalog |
-| `Router/waku` + client `Nav` | soft-nav (layout island) |
+| `last-ts/Waku` `Link` | soft-nav (layout island) |
 | `View.Service` | client island on `/view` |
 
+**Removed / never approved:** `Page.getConfig`, Stamped default-export theater,
+`Last.app(Layer.empty).pipe(Waku.router(…)).Provider`, `RouterProvider` wrapper.
+
 File routes = render SSOT. Catalog (`Site`) is typed urls only. Soft-nav verified
-via Waku `Link` (URL + RSC page swap).
+via Waku `Link` (URL + RSC page swap). `Page.Service` / `createPages` still
+deferred — do not invent interim `getConfig` bridges.

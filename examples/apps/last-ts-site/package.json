@@ -2,7 +2,7 @@
   "name": "last-ts-site",
   "private": true,
   "type": "module",
-  "description": "last.ts RSC demo — Waku pages + Page stamps (not Hyperlink docs).",
+  "description": "last.ts RSC demo — Waku file pages + Last.provider soft-nav (not Hyperlink docs).",
   "scripts": {
     "dev": "waku dev --host 0.0.0.0 --port 5220",
     "build": "waku build",

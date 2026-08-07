@@ -2,21 +2,16 @@
  * @module ui/RouterWaku
  *
  * **Waku layer only** for the one {@link ./Router} service — not a second Router
- * namespace. Prefer baking into {@link ../Last.app} via {@link router}; the
- * paramful {@link Provider} remains for escape hatches.
+ * namespace. Prefer {@link ../Waku.layer} / {@link ../Waku.fromApi} baked with
+ * {@link ../Last.provider}. The paramful {@link Provider} remains for escape
+ * hatches.
  *
  * ```tsx
  * import * as Last from "last-ts/Last"
- * import { Layer } from "effect"
- * import { waku, router, Link } from "last-ts/Router/waku"
+ * import * as Waku from "last-ts/Waku"
  *
- * export const Provider = Last.app(Layer.empty).pipe(
- *   router(waku(site)),
- * ).Provider
- *
- * <Provider>
- *   <Link to={(u) => u.home()}>Home</Link>
- * </Provider>
+ * export const provider = Last.provider(Waku.fromApi(site))
+ * // <provider>…</provider>
  * ```
  *
  * Hooks require Waku's router in the tree (every Waku app has one).
@@ -71,14 +66,8 @@ export const isWakuBinding: typeof internal.isWakuBinding =
   internal.isWakuBinding;
 
 /**
- * Bake a {@link waku} binding into a {@link Last.App} shell (pipeable).
- *
- * @example
- * ```tsx
- * export const Provider = Last.app(appLayer).pipe(
- *   Waku.router(Waku.waku(site)),
- * ).Provider
- * ```
+ * @deprecated Prefer {@link ../Waku.layer} / {@link ../Waku.fromApi} with
+ * {@link ../Last.provider}.
  *
  * @public
  */
@@ -107,7 +96,8 @@ export const router: {
 
 /**
  * One Provider: lite {@link ./Router.Service} **or** {@link waku} binding.
- * Prefer {@link router} + {@link ../Last.app} so call sites take children only.
+ * Prefer {@link ../Last.provider} + {@link ../Waku.fromApi} so call sites take
+ * children only.
  *
  * @public
  */
