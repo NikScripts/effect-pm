@@ -10,6 +10,7 @@ import * as AtomReact from "../AtomReact";
 import type * as Route from "../Route";
 import { handleOf } from "../Route";
 import * as pageContext from "./pageContext";
+import * as pageServices from "./pageServices";
 import * as routerBuilder from "./routerBuilder";
 import type { Match } from "./routes";
 import type { Service } from "./router";
@@ -42,8 +43,8 @@ const toNode = (
 /** Run a page Effect with Request + Document, via the Atom runtime. */
 const PageEffectView = (props: {
   readonly effect: Effect.Effect<React.ReactNode, unknown, unknown>;
-  readonly request: pageContext.RequestValue;
-  readonly document: pageContext.DocumentApi;
+  readonly request: pageServices.RequestValue;
+  readonly document: pageServices.DocumentApi;
   readonly args: Route.HandleArgs;
 }): React.ReactElement | null => {
   const runtime = AtomReact.useRuntime();
@@ -51,8 +52,8 @@ const PageEffectView = (props: {
     () =>
       runtime.atom(
         props.effect.pipe(
-          Effect.provideService(pageContext.Request, props.request),
-          Effect.provideService(pageContext.Document, props.document),
+          Effect.provideService(pageServices.Request, props.request),
+          Effect.provideService(pageServices.Document, props.document),
         ) as Effect.Effect<
           React.ReactNode | React.ComponentType<Record<string, never>>,
           unknown
@@ -93,7 +94,7 @@ const wrapLayout = (
 const MatchedBody = (props: {
   readonly router: Service;
   readonly match: Match;
-  readonly request: pageContext.RequestValue;
+  readonly request: pageServices.RequestValue;
 }): React.ReactElement | null => {
   const documentApi = pageContext.useDocumentApi();
   const args: Route.HandleArgs = props.request;
@@ -143,7 +144,7 @@ export const Outlet = (props: {
   const match = props.router.match as Match | undefined;
   if (match === undefined) return null;
 
-  const request: pageContext.RequestValue = {
+  const request: pageServices.RequestValue = {
     params: match.params,
     query: queryFromSearch(props.router.search),
     pathname: match.pathname,

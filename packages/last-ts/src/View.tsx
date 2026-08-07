@@ -25,6 +25,7 @@ import { AsyncResult } from "effect/unstable/reactivity";
 import * as AtomReact from "./AtomReact";
 import * as Last from "./Last";
 import * as pageContext from "./internal/pageContext";
+import * as pageServices from "./internal/pageServices";
 
 // =============================================================================
 // Keys / layout hints
@@ -300,12 +301,12 @@ export const effect = <E = never, R = never>(
       let next: Effect.Effect<React.ReactNode, unknown, unknown> = program;
       if (request !== null) {
         next = next.pipe(
-          Effect.provideService(pageContext.Request, request),
+          Effect.provideService(pageServices.Request, request),
         );
       }
       if (documentApi !== null) {
         next = next.pipe(
-          Effect.provideService(pageContext.Document, documentApi),
+          Effect.provideService(pageServices.Document, documentApi),
         );
       }
       return runtime.atom(next);
