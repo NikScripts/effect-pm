@@ -1,31 +1,27 @@
 /**
  * Policy — composable behaviour fragments (client dial, verify, advertise conflict, yield).
  *
- * Fragments are thin {@link Layer}s over Context references with defaults. Compose with
- * {@link provide} / {@link layer} — mix {@link make} bundles and fragment values freely.
- * Node / Listen call-site stamps (`onConflict`, `onYield`) remain overrides that win over
- * ambient Policy.
+ * Every fragment is a {@link Policy} — already a `Layer.Layer<never>` branded with the
+ * modes it sets. {@link layer} merges Layers **and** expands the config type (last write
+ * wins per key). {@link provide} pipes those Layers onto clients / nodes.
  *
  * ```ts
  * import * as Policy from "hyperlink-ts/Policy"
  *
- * // Typed bundle — already a Layer (no Layer.Layer wrapper)
- * const cutover = Policy.make({
- *   Sticky: true,
- *   StreamGap: "stall",
- *   ColdAmbiguous: "fail",
- *   Verify: "reject",
- * })
- * // cutover: Policy.Policy<{ Sticky: true; StreamGap: "stall"; … }>
+ * const cutover = Policy.layer(
+ *   Policy.make({ Sticky: true, StreamGap: "stall", Verify: "reject" }),
+ *   Policy.verifyOff,
+ *   Policy.streamGap("buffer"),
+ * )
+ * // Policy.Policy<{ Sticky: true; StreamGap: "buffer"; Verify: false }>
  *
  * Hyperlink.lookupClient(Mail).pipe(
- *   Policy.provide(cutover, Policy.verifyOff), // make + fragment Layers
+ *   Policy.provide(cutover),
  *   Layer.provide(Lookup.layer),
  * )
  *
- * // Fragments alone — same pipe
+ * // Fragments alone — same typed merge
  * const fleet = Policy.layer(Policy.askIncumbent, Policy.yieldAccept)
- * Node.unix(Worker, serves).pipe(Policy.provide(fleet))
  * ```
  *
  * @module Policy
@@ -37,7 +33,7 @@ import type { DirectoryEntry } from "./Directory";
 const TypeId = "~hyperlink-ts/Policy" as const;
 
 // =============================================================================
-// Dial / cutover
+// Models
 // =============================================================================
 
 /**
@@ -73,6 +69,123 @@ export type StreamGap = "stall" | "drop" | "buffer";
  * @public
  */
 export type ColdAmbiguous = "fail" | "pickFirst" | "waitAdvice";
+
+/**
+ * Default-on client connection verify mode.
+ *
+ * - `"reject"` — probe and fail the client Layer on verify errors (default)
+ * - `"status"` — probe; record status without failing the Layer build
+ * - `false` — skip the probe
+ *
+ * @category models
+ * @public
+ */
+export type Verify = false | "reject" | "status";
+
+/**
+ * Directory advertise conflict preference.
+ *
+ * - `livenessReplace` — ping incumbent; dead → replace; alive → `IncumbentAlive`
+ * - `askIncumbent` — cooperative yield ask on a live incumbent
+ * - `reject` — alive → reject; dead → still replace
+ * - `inherit` — continue up the resolve chain
+ *
+ * @category models
+ * @public
+ */
+export type OnConflict =
+  | "livenessReplace"
+  | "askIncumbent"
+  | "reject"
+  | "inherit";
+
+/**
+ * Concrete advertise conflict policy (no `"inherit"`) — what Lookup runs.
+ *
+ * @category models
+ * @public
+ */
+export type OnConflictResolved = Exclude<OnConflict, "inherit">;
+
+/**
+ * Object form for {@link make} / fragment config brands. Keys match Context
+ * references (PascalCase).
+ *
+ * `Yield` accepts `true` / `false` (accept / refuse) or a custom
+ * `Effect.Effect<boolean>`.
+ *
+ * @category models
+ * @public
+ */
+export type Config = {
+  readonly Sticky?: boolean;
+  readonly StreamGap?: StreamGap;
+  readonly ColdAmbiguous?: ColdAmbiguous;
+  readonly Pick?: Pick;
+  readonly Verify?: Verify;
+  readonly Conflict?: OnConflict;
+  readonly Yield?: boolean | Effect.Effect<boolean>;
+};
+
+/**
+ * Patch `Prev` with `Patch` — patch keys win (same as Layer merge last-write).
+ *
+ * @category models
+ * @public
+ */
+export type MergeConfigs<Prev extends Config, Patch extends Config> = Omit<
+  Prev,
+  keyof Patch
+> &
+  Patch;
+
+/**
+ * Left-to-right {@link MergeConfigs} over a list of {@link Policy} values.
+ *
+ * @category models
+ * @public
+ */
+export type MergePolicyList<Ps extends ReadonlyArray<Policy<Config>>> =
+  Ps extends readonly []
+    ? {}
+    : Ps extends readonly [Policy<infer H>]
+      ? H
+      : Ps extends readonly [Policy<infer H>, ...infer Rest]
+        ? Rest extends ReadonlyArray<Policy<Config>>
+          ? MergeConfigs<H, MergePolicyList<Rest>>
+          : H
+        : {};
+
+/**
+ * A policy fragment / bundle that **is** a `Layer.Layer<never>`. The type
+ * parameter records which modes it sets; {@link layer} expands that config as
+ * Layers merge.
+ *
+ * ```ts
+ * const cutover = Policy.layer(
+ *   Policy.make({ StreamGap: "stall", Verify: "reject" }),
+ *   Policy.verifyOff,
+ * )
+ * // Policy.Policy<{ StreamGap: "stall"; Verify: false }>
+ * ```
+ *
+ * @category models
+ * @public
+ */
+export interface Policy<out C extends Config = Config>
+  extends Layer.Layer<never>
+{
+  readonly [TypeId]: C;
+}
+
+/** Brand a succeed Layer as {@link Policy}. @internal */
+const branded = <const C extends Config>(
+  layer: Layer.Layer<never>,
+): Policy<C> => layer as Policy<C>;
+
+// =============================================================================
+// Dial / cutover references + fragments
+// =============================================================================
 
 /**
  * Warm dual-serve stickiness. Default `true`.
@@ -119,38 +232,33 @@ export const Pick: Context.Reference<Pick | undefined> = Context.Reference<
 });
 
 /** Keep the current dial across dual-serve (default on). @category layers @public */
-export const sticky: Layer.Layer<never> = Layer.succeed(Sticky, true);
+export const sticky: Policy<{ Sticky: true }> = branded(
+  Layer.succeed(Sticky, true),
+);
 
 /** Disable warm stickiness. @category layers @public */
-export const unsticky: Layer.Layer<never> = Layer.succeed(Sticky, false);
+export const unsticky: Policy<{ Sticky: false }> = branded(
+  Layer.succeed(Sticky, false),
+);
 
 /** Stream seam mode. @category layers @public */
-export const streamGap = (mode: StreamGap): Layer.Layer<never> =>
-  Layer.succeed(StreamGap, mode);
+export const streamGap = <const M extends StreamGap>(
+  mode: M,
+): Policy<{ StreamGap: M }> => branded(Layer.succeed(StreamGap, mode));
 
 /** Cold N&gt;1 behaviour. @category layers @public */
-export const coldAmbiguous = (mode: ColdAmbiguous): Layer.Layer<never> =>
-  Layer.succeed(ColdAmbiguous, mode);
+export const coldAmbiguous = <const M extends ColdAmbiguous>(
+  mode: M,
+): Policy<{ ColdAmbiguous: M }> =>
+  branded(Layer.succeed(ColdAmbiguous, mode));
 
 /** Soft pick when N&gt;1 and Advice misses. @category layers @public */
-export const pick = (mode: Pick): Layer.Layer<never> =>
-  Layer.succeed(Pick, mode);
+export const pick = <const M extends Pick>(mode: M): Policy<{ Pick: M }> =>
+  branded(Layer.succeed(Pick, mode));
 
 // =============================================================================
-// Client verify (was Hyperlink.ClientVerify)
+// Client verify
 // =============================================================================
-
-/**
- * Default-on client connection verify mode.
- *
- * - `"reject"` — probe and fail the client Layer on verify errors (default)
- * - `"status"` — probe; record status without failing the Layer build
- * - `false` — skip the probe
- *
- * @category models
- * @public
- */
-export type Verify = false | "reject" | "status";
 
 /**
  * Ambient client-verify mode. Default `"reject"`.
@@ -164,46 +272,28 @@ export const Verify: Context.Reference<Verify> = Context.Reference<Verify>(
 );
 
 /** Verify and reject on failure (default). @category layers @public */
-export const verifyReject: Layer.Layer<never> = Layer.succeed(Verify, "reject");
+export const verifyReject: Policy<{ Verify: "reject" }> = branded(
+  Layer.succeed(Verify, "reject"),
+);
 
 /** Verify; keep status without failing Layer build. @category layers @public */
-export const verifyStatus: Layer.Layer<never> = Layer.succeed(Verify, "status");
+export const verifyStatus: Policy<{ Verify: "status" }> = branded(
+  Layer.succeed(Verify, "status"),
+);
 
 /** Skip client verify probe. @category layers @public */
-export const verifyOff: Layer.Layer<never> = Layer.succeed(Verify, false);
+export const verifyOff: Policy<{ Verify: false }> = branded(
+  Layer.succeed(Verify, false),
+);
 
 /** Set client verify mode. @category layers @public */
-export const verify = (mode: Verify): Layer.Layer<never> =>
-  Layer.succeed(Verify, mode);
+export const verify = <const M extends Verify>(
+  mode: M,
+): Policy<{ Verify: M }> => branded(Layer.succeed(Verify, mode));
 
 // =============================================================================
-// Advertise conflict (was Node / Lookup OnConflict)
+// Advertise conflict
 // =============================================================================
-
-/**
- * Directory advertise conflict preference.
- *
- * - `livenessReplace` — ping incumbent; dead → replace; alive → `IncumbentAlive`
- * - `askIncumbent` — cooperative yield ask on a live incumbent
- * - `reject` — alive → reject; dead → still replace
- * - `inherit` — continue up the resolve chain
- *
- * @category models
- * @public
- */
-export type OnConflict =
-  | "livenessReplace"
-  | "askIncumbent"
-  | "reject"
-  | "inherit";
-
-/**
- * Concrete advertise conflict policy (no `"inherit"`) — what Lookup runs.
- *
- * @category models
- * @public
- */
-export type OnConflictResolved = Exclude<OnConflict, "inherit">;
 
 /**
  * Ambient advertise conflict preference (call-site / node stamp still win).
@@ -255,32 +345,28 @@ export const onConflictOf = (node: unknown): OnConflict | undefined => {
 };
 
 /** Advertise: liveness ping replace. @category layers @public */
-export const livenessReplace: Layer.Layer<never> = Layer.succeed(
-  Conflict,
-  "livenessReplace",
-);
+export const livenessReplace: Policy<{ Conflict: "livenessReplace" }> =
+  branded(Layer.succeed(Conflict, "livenessReplace"));
 
 /** Advertise: ask incumbent to yield. @category layers @public */
-export const askIncumbent: Layer.Layer<never> = Layer.succeed(
-  Conflict,
-  "askIncumbent",
+export const askIncumbent: Policy<{ Conflict: "askIncumbent" }> = branded(
+  Layer.succeed(Conflict, "askIncumbent"),
 );
 
 /** Advertise: reject when incumbent alive. @category layers @public */
-export const conflictReject: Layer.Layer<never> = Layer.succeed(
-  Conflict,
-  "reject",
+export const conflictReject: Policy<{ Conflict: "reject" }> = branded(
+  Layer.succeed(Conflict, "reject"),
 );
 
 /** Advertise: inherit up the chain (default ambient). @category layers @public */
-export const conflictInherit: Layer.Layer<never> = Layer.succeed(
-  Conflict,
-  "inherit",
+export const conflictInherit: Policy<{ Conflict: "inherit" }> = branded(
+  Layer.succeed(Conflict, "inherit"),
 );
 
 /** Set advertise conflict preference. @category layers @public */
-export const onConflict = (mode: OnConflict): Layer.Layer<never> =>
-  Layer.succeed(Conflict, mode);
+export const onConflict = <const M extends OnConflict>(
+  mode: M,
+): Policy<{ Conflict: M }> => branded(Layer.succeed(Conflict, mode));
 
 // =============================================================================
 // Yield (askIncumbent cooperative accept / refuse)
@@ -299,129 +385,73 @@ export const Yield: Context.Reference<Effect.Effect<boolean>> =
   });
 
 /** Accept askIncumbent yield (default). @category layers @public */
-export const yieldAccept: Layer.Layer<never> = Layer.succeed(
-  Yield,
-  Effect.succeed(true),
+export const yieldAccept: Policy<{ Yield: true }> = branded(
+  Layer.succeed(Yield, Effect.succeed(true)),
 );
 
 /** Refuse askIncumbent yield. @category layers @public */
-export const yieldRefuse: Layer.Layer<never> = Layer.succeed(
-  Yield,
-  Effect.succeed(false),
+export const yieldRefuse: Policy<{ Yield: false }> = branded(
+  Layer.succeed(Yield, Effect.succeed(false)),
 );
 
 /** Custom yield handler. @category layers @public */
-export const onYield = (
-  handler: Effect.Effect<boolean>,
-): Layer.Layer<never> => Layer.succeed(Yield, handler);
+export const onYield = <E extends Effect.Effect<boolean>>(
+  handler: E,
+): Policy<{ Yield: E }> => branded(Layer.succeed(Yield, handler));
 
 // =============================================================================
-// Helpers
+// layer / make / provide
 // =============================================================================
 
 /**
- * Merge policy fragments into one Layer (last write wins per reference).
- * Prefer {@link make} when you want the modes in the type.
+ * Merge policy Layers into one {@link Policy} (last write wins per reference).
+ * Config types expand left → right via {@link MergePolicyList}.
+ *
+ * ```ts
+ * const cutover = Policy.layer(
+ *   Policy.make({ StreamGap: "stall", Verify: "reject" }),
+ *   Policy.verifyOff,
+ *   Policy.streamGap("buffer"),
+ * )
+ * // Policy.Policy<{ StreamGap: "buffer"; Verify: false }>
+ * ```
  *
  * @category layers
  * @public
  */
-export const layer = (
-  ...policies: ReadonlyArray<Layer.Layer<never>>
-): Layer.Layer<never> =>
-  policies.length === 0
-    ? Layer.empty
-    : policies.length === 1
-      ? policies[0]!
-      : Layer.mergeAll(policies[0]!, policies[1]!, ...policies.slice(2));
-
-// =============================================================================
-// Typed make (Policy is already a Layer)
-// =============================================================================
-
-/**
- * Object form for {@link make}. Keys match Context references (PascalCase);
- * omitted keys leave ambient defaults alone.
- *
- * `Yield` accepts `true` / `false` (accept / refuse) or a custom
- * `Effect.Effect<boolean>`.
- *
- * @category models
- * @public
- */
-export type Config = {
-  readonly Sticky?: boolean;
-  readonly StreamGap?: StreamGap;
-  readonly ColdAmbiguous?: ColdAmbiguous;
-  readonly Pick?: Pick;
-  readonly Verify?: Verify;
-  readonly Conflict?: OnConflict;
-  readonly Yield?: boolean | Effect.Effect<boolean>;
+export const layer = <const Ps extends ReadonlyArray<Policy<Config>>>(
+  ...policies: Ps
+): Policy<MergePolicyList<Ps>> => {
+  if (policies.length === 0) {
+    return branded(Layer.empty);
+  }
+  if (policies.length === 1) {
+    return policies[0] as Policy<MergePolicyList<Ps>>;
+  }
+  return branded(
+    Layer.mergeAll(policies[0]!, policies[1]!, ...policies.slice(2)),
+  );
 };
 
 /**
- * A policy bundle that **is** a `Layer.Layer<never>` — use anywhere a Layer goes
- * (`Effect.provide`, `Layer.provide`, {@link provide}, {@link layer}) without wrapping.
- * The type parameter records which modes {@link make} set (hover / docs).
- *
- * Compose with regular fragment Layers via {@link provide} / {@link layer} — they are
- * the same kind of value.
+ * Build a typed {@link Policy} from an object. Already a Layer — compose with
+ * fragments via {@link layer} / {@link provide}; types expand on {@link layer}.
  *
  * ```ts
- * const cutover: Policy.Policy<{
- *   StreamGap: "stall"
- *   ColdAmbiguous: "fail"
- *   Verify: "reject"
- * }> = Policy.make({
- *   StreamGap: "stall",
- *   ColdAmbiguous: "fail",
- *   Verify: "reject",
- * })
- *
- * Hyperlink.lookupClient(Mail).pipe(
- *   Policy.provide(cutover, Policy.streamGap("buffer")),
+ * const cutover = Policy.layer(
+ *   Policy.make({ Sticky: true, StreamGap: "stall", Verify: "reject" }),
+ *   Policy.verifyOff,
  * )
- * ```
- *
- * @category models
- * @public
- */
-export interface Policy<out C extends Config = Config>
-  extends Layer.Layer<never>
-{
-  readonly [TypeId]: C;
-}
-
-/**
- * Build a typed {@link Policy} from an object. Already a Layer — pass to
- * {@link provide} / {@link layer} with fragment Layers (no special merge API).
- *
- * ```ts
- * const cutover = Policy.make({
- *   Sticky: true,
- *   StreamGap: "stall",
- *   ColdAmbiguous: "fail",
- *   Verify: "reject",
- * })
- *
- * Hyperlink.lookupClient(Mail).pipe(
- *   Policy.provide(cutover),
- *   Layer.provide(Lookup.layer),
- * )
- *
- * // Swap / add with regular fragments — last write wins per reference
- * Hyperlink.lookupClient(Mail).pipe(
- *   Policy.provide(cutover, Policy.verifyOff, Policy.streamGap("buffer")),
- * )
+ * // Policy.Policy<{ Sticky: true; StreamGap: "stall"; Verify: false }>
  * ```
  *
  * @category constructors
  * @public
  */
 export const make = <const C extends Config>(config: C): Policy<C> => {
-  const parts: Array<Layer.Layer<never>> = [];
+  const parts: Array<Policy<Config>> = [];
   if (config.Sticky !== undefined) {
-    parts.push(Layer.succeed(Sticky, config.Sticky));
+    parts.push(branded(Layer.succeed(Sticky, config.Sticky)));
   }
   if (config.StreamGap !== undefined) {
     parts.push(streamGap(config.StreamGap));
@@ -446,27 +476,29 @@ export const make = <const C extends Config>(config: C): Policy<C> => {
     parts.push(onYield(handler));
   }
   return (
-    parts.length === 0 ? Layer.empty : layer(...parts)
+    parts.length === 0 ? branded(Layer.empty) : layer(...parts)
   ) as Policy<C>;
 };
 
 /**
  * Provide policy Layers onto a Layer (no stacked `Layer.provide`s).
- * Accepts {@link make} bundles, fragment values (`sticky`, `streamGap(…)`, …),
- * `Policy.layer(...)`, or a mix — last write wins per reference.
+ * Accepts {@link make} bundles, typed fragments, {@link layer} results, or a
+ * mix — last write wins per reference.
  *
  * ```ts
  * Hyperlink.lookupClient(Mail).pipe(
- *   Policy.provide(Policy.make({ Sticky: true, StreamGap: "stall" })),
+ *   Policy.provide(
+ *     Policy.layer(
+ *       Policy.make({ Sticky: true, StreamGap: "stall" }),
+ *       Policy.verifyOff,
+ *     ),
+ *   ),
  *   Layer.provide(Lookup.layer),
  * )
  *
  * Hyperlink.lookupClient(Mail).pipe(
  *   Policy.provide(Policy.sticky, Policy.streamGap("stall"), Policy.verifyOff),
  * )
- *
- * const cutover = Policy.layer(Policy.sticky, Policy.verifyOff)
- * client.pipe(Policy.provide(cutover, Policy.streamGap("buffer")))
  * ```
  *
  * @category layers
@@ -474,5 +506,11 @@ export const make = <const C extends Config>(config: C): Policy<C> => {
  */
 export const provide =
   (...policies: ReadonlyArray<Layer.Layer<never>>) =>
-  <A, E, R>(self: Layer.Layer<A, E, R>): Layer.Layer<A, E, R> =>
-    policies.length === 0 ? self : self.pipe(Layer.provide(layer(...policies)));
+  <A, E, R>(self: Layer.Layer<A, E, R>): Layer.Layer<A, E, R> => {
+    if (policies.length === 0) return self;
+    const merged =
+      policies.length === 1
+        ? policies[0]!
+        : Layer.mergeAll(policies[0]!, policies[1]!, ...policies.slice(2));
+    return self.pipe(Layer.provide(merged));
+  };

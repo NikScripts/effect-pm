@@ -90,13 +90,12 @@ const program = Effect.gen(function* () {
     ]).pipe(Layer.provide(lookupClient)),
   );
 
-  // Typed Policy.make — already a Layer; modes show up on Policy.Policy<{…}>.
-  const cutover = Policy.make({
-    Sticky: true,
-    StreamGap: "stall",
-    ColdAmbiguous: "fail",
-    Verify: "reject",
-  });
+  // Typed Policy.layer — fragments are Policy.Policy<{…}>; config expands.
+  const cutover = Policy.layer(
+    Policy.make({ Sticky: true, ColdAmbiguous: "fail" }),
+    Policy.streamGap("stall"),
+    Policy.verifyReject,
+  );
   const clientCtx = yield* Layer.build(
     Hyperlink.lookupClient(Jobs).pipe(
       Policy.provide(cutover),

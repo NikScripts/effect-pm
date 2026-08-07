@@ -2,7 +2,8 @@
 "hyperlink-ts": minor
 ---
 
-**`Policy.make`** — typed policy bundle. `Policy.make({ StreamGap: "stall", Verify:
-"reject", … })` returns `Policy.Policy<{ … }>` which **is** a `Layer.Layer<never>`
-(no wrapper). Compose with fragment Layers via `Policy.provide` / `Policy.layer`
-(last write wins) — same pipe as `Policy.sticky` / `Policy.streamGap(…)`.
+**`Policy.Policy<{…}>` typing** — every fragment (`sticky`, `streamGap(…)`,
+`verifyOff`, …) is already a branded `Layer.Layer<never>` carrying its modes.
+`Policy.layer(…)` merges Layers and expands the config type (last write wins).
+`Policy.make({ … })` is object-form sugar for the same `Policy.Policy` values.
+`Policy.provide` unchanged.

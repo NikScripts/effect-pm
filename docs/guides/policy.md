@@ -15,32 +15,29 @@ import * as Policy from "hyperlink-ts/Policy"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import * as Lookup from "hyperlink-ts/Lookup"
 
-// Typed bundle — already a Layer (no Layer.Layer wrapper)
-const cutover = Policy.make({
-  Sticky: true,
-  StreamGap: "stall",
-  ColdAmbiguous: "fail",
-  Verify: "reject",
-})
-// cutover: Policy.Policy<{ Sticky: true; StreamGap: "stall"; … }>
+// Every fragment is Policy.Policy<{…}> — layer merges Layers and expands the type
+const cutover = Policy.layer(
+  Policy.make({ Sticky: true, StreamGap: "stall", Verify: "reject" }),
+  Policy.verifyOff,
+  Policy.streamGap("buffer"),
+)
+// Policy.Policy<{ Sticky: true; StreamGap: "buffer"; Verify: false }>
 
 Hyperlink.lookupClient(Mail).pipe(
   Policy.provide(cutover),
   Layer.provide(Lookup.layer),
 )
 
-// Same pipe with fragment Layers — mix freely; last write wins per reference
+// Fragments alone — same typed merge
 Hyperlink.lookupClient(Mail).pipe(
-  Policy.provide(cutover, Policy.verifyOff, Policy.streamGap("buffer")),
-)
-Hyperlink.lookupClient(Mail).pipe(
-  Policy.provide(Policy.sticky, Policy.streamGap("stall"), Policy.verifyOff),
+  Policy.provide(
+    Policy.layer(Policy.sticky, Policy.streamGap("stall"), Policy.verifyOff),
+  ),
 )
 ```
 
 Zero-arg fragments are **values** (`Policy.sticky`, not `Policy.sticky()`).
-`Policy.make({ … })` is optional sugar when you want the modes in the type — both are
-just Layers.
+`Policy.make({ … })` is object-form sugar; `Policy.layer` is how configs expand.
 
 Runnable demo: [`examples/node/policy-lookup-cutover.ts`](../../examples/node/policy-lookup-cutover.ts)
 (`pnpm run example:node-policy-lookup-cutover`).
@@ -142,21 +139,26 @@ Lookup stamp → hard `livenessReplace`.
 
 ## Compose
 
-### `Policy.make` (typed object form)
+### Typed fragments + `Policy.layer`
 
-Object keys match Context references (`Sticky`, `StreamGap`, `ColdAmbiguous`, `Pick`,
-`Verify`, `Conflict`, `Yield`). `Yield` accepts `true` / `false` or a custom
-`Effect<boolean>`. Omitted keys leave ambient defaults alone. The value **is** a
-`Layer.Layer<never>` branded as `Policy.Policy<{ …modes }>`. Compose with fragment
-Layers via `Policy.provide` / `Policy.layer` — no special merge API.
+Every fragment is `Policy.Policy<{ … }>`. `Policy.layer` merges the Layers and
+**expands the config type** (last write wins per key). `Policy.make({ … })` is
+object-form sugar for the same brand.
 
 ```ts
-const cutover = Policy.make({
-  Sticky: true,
-  StreamGap: "stall",
-  Conflict: "askIncumbent",
-  Yield: true,
-})
+const cutover = Policy.layer(
+  Policy.make({ Sticky: true, StreamGap: "stall", Verify: "reject" }),
+  Policy.verifyOff,
+  Policy.askIncumbent,
+  Policy.yieldAccept,
+)
+// Policy.Policy<{
+//   Sticky: true
+//   StreamGap: "stall"
+//   Verify: false
+//   Conflict: "askIncumbent"
+//   Yield: true
+// }>
 
 Hyperlink.lookupClient(Mail).pipe(
   Policy.provide(cutover),
@@ -164,12 +166,12 @@ Hyperlink.lookupClient(Mail).pipe(
 )
 
 Node.unix(Worker, serves).pipe(
-  Policy.provide(cutover, Policy.verifyOff), // make + fragment
+  Policy.provide(cutover),
   Layer.provide(Lookup.client(lookupNode)),
 )
 ```
 
-### Fragment Layers
+Fragments alone:
 
 ```ts
 const cutover = Policy.layer(
@@ -177,16 +179,6 @@ const cutover = Policy.layer(
   Policy.streamGap("stall"),
   Policy.askIncumbent,
   Policy.yieldAccept,
-)
-
-Hyperlink.lookupClient(Mail).pipe(
-  Policy.provide(cutover),
-  Layer.provide(Lookup.layer),
-)
-
-Node.unix(Worker, serves).pipe(
-  Policy.provide(cutover, Policy.verifyOff), // last write wins per reference
-  Layer.provide(Lookup.client(lookupNode)),
 )
 ```
 

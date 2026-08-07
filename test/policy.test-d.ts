@@ -1,6 +1,5 @@
 /**
- * Policy public types — make typed Layers; fragments are Layers;
- * LookupClientPick aliases Policy.Pick.
+ * Policy public types — fragments are Policy.Policy<{…}>; layer expands configs.
  */
 import { Effect, type Layer } from "effect";
 import type {
@@ -11,18 +10,34 @@ import type {
   Pick,
   Config,
   Policy,
+  MergePolicyList,
 } from "../src/Policy";
 import * as PolicyMod from "../src/Policy";
 import type { LookupClientPick } from "../src/Hyperlink";
 
 type AssertExtends<A, B> = [A] extends [B] ? true : false;
+type AssertEqual<A, B> =
+  [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 
-type _Sticky = Layer.Layer<never>;
-type _StreamGapFn = (mode: StreamGap) => Layer.Layer<never>;
-type _ColdFn = (mode: ColdAmbiguous) => Layer.Layer<never>;
-type _VerifyFn = (mode: Verify) => Layer.Layer<never>;
-type _ConflictFn = (mode: OnConflict) => Layer.Layer<never>;
-type _OnYield = (handler: Effect.Effect<boolean>) => Layer.Layer<never>;
+const _stickyFragOk: AssertExtends<
+  typeof PolicyMod.sticky,
+  Policy<{ Sticky: true }>
+> = true;
+type _StreamGapFn = <M extends StreamGap>(mode: M) => Policy<{ StreamGap: M }>;
+type _ColdFn = <M extends ColdAmbiguous>(
+  mode: M,
+) => Policy<{ ColdAmbiguous: M }>;
+type _VerifyFn = <M extends Verify>(mode: M) => Policy<{ Verify: M }>;
+type _ConflictFn = <M extends OnConflict>(mode: M) => Policy<{ Conflict: M }>;
+type _OnYield = <E extends Effect.Effect<boolean>>(
+  handler: E,
+) => Policy<{ Yield: E }>;
+
+const _gapFn: _StreamGapFn = PolicyMod.streamGap;
+const _coldFn: _ColdFn = PolicyMod.coldAmbiguous;
+const _verifyFn: _VerifyFn = PolicyMod.verify;
+const _conflictFn: _ConflictFn = PolicyMod.onConflict;
+const _onYield: _OnYield = PolicyMod.onYield;
 
 const _gap: StreamGap = "stall";
 const _cold: ColdAmbiguous = "waitAdvice";
@@ -30,7 +45,6 @@ const _verify: Verify = "status";
 const _conflict: OnConflict = "askIncumbent";
 const _pick: Pick = "first";
 
-// Call-site sugar stays assignable to Policy.Pick
 const _lookupPick: LookupClientPick = _pick;
 const _lookupPickFn: LookupClientPick = (rows) => rows[0]!;
 
@@ -48,9 +62,8 @@ const cutover = PolicyMod.make({
   Verify: "reject",
 });
 const _asLayer: Layer.Layer<never> = cutover;
-type _Cutover = typeof cutover;
 type _CutoverOk = AssertExtends<
-  _Cutover,
+  typeof cutover,
   Policy<{
     Sticky: true;
     StreamGap: "stall";
@@ -60,28 +73,64 @@ type _CutoverOk = AssertExtends<
 >;
 const _cutoverOk: _CutoverOk = true;
 
-// Fragments are Layers too — layer / provide accept make + fragments mixed
-const _mixed: Layer.Layer<never> = PolicyMod.layer(
+// layer expands config — last write wins (Verify / StreamGap patched)
+const expanded = PolicyMod.layer(
   cutover,
-  PolicyMod.streamGap("buffer"),
   PolicyMod.verifyOff,
+  PolicyMod.streamGap("buffer"),
 );
-const _fragOnly: Layer.Layer<never> = PolicyMod.layer(
+type _Expanded = typeof expanded;
+type _ExpandedOk = AssertExtends<
+  _Expanded,
+  Policy<{
+    Sticky: true;
+    StreamGap: "buffer";
+    ColdAmbiguous: "fail";
+    Verify: false;
+  }>
+>;
+const _expandedOk: _ExpandedOk = true;
+
+// Fragments alone also expand through layer
+const fragOnly = PolicyMod.layer(
   PolicyMod.sticky,
   PolicyMod.streamGap("stall"),
+  PolicyMod.verifyOff,
 );
+type _FragOnlyOk = AssertExtends<
+  typeof fragOnly,
+  Policy<{ Sticky: true; StreamGap: "stall"; Verify: false }>
+>;
+const _fragOnlyOk: _FragOnlyOk = true;
 
-// Config accepts Yield boolean or Effect
-const _yieldCfg: Config = {
-  Yield: true,
-};
-const _yieldEffectCfg: Config = {
-  Yield: Effect.succeed(false),
-};
+// MergePolicyList last-wins
+type _Merged = MergePolicyList<
+  [
+    Policy<{ StreamGap: "stall"; Verify: "reject" }>,
+    Policy<{ Verify: false }>,
+    Policy<{ StreamGap: "buffer" }>,
+  ]
+>;
+type _MergedGap = AssertEqual<_Merged["StreamGap"], "buffer">;
+type _MergedVerify = AssertEqual<_Merged["Verify"], false>;
+const _mergedGap: _MergedGap = true;
+const _mergedVerify: _MergedVerify = true;
+
+const _yieldCfg: Config = { Yield: true };
+const _yieldEffectCfg: Config = { Yield: Effect.succeed(false) };
 
 // @ts-expect-error — StreamGap closed union in make
 PolicyMod.make({ StreamGap: "restart" });
 
+// @ts-expect-error — StreamGap closed union on fragment
+PolicyMod.streamGap("restart");
+
+void _stickyFragOk;
+void _gapFn;
+void _coldFn;
+void _verifyFn;
+void _conflictFn;
+void _onYield;
 void _gap;
 void _cold;
 void _verify;
@@ -92,13 +141,14 @@ void _badGap;
 void _badVerify;
 void _asLayer;
 void _cutoverOk;
-void _mixed;
-void _fragOnly;
+void _expandedOk;
+void _fragOnlyOk;
+void _mergedGap;
+void _mergedVerify;
 void _yieldCfg;
 void _yieldEffectCfg;
 
 export type {
-  _Sticky,
   _StreamGapFn,
   _ColdFn,
   _VerifyFn,
