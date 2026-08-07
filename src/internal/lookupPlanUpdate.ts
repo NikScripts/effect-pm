@@ -9,19 +9,20 @@
  * @internal
  */
 import {
+  Context,
   Data,
   Duration,
   Effect,
   Exit,
   Layer,
   Option,
-  Predicate,
   Schema,
 } from "effect";
 import * as Advice from "../Advice";
 import * as Directory from "../Directory";
+import * as Identity from "../Identity";
 import * as Hyperlink from "../Hyperlink";
-import { kindOf, specSym, wireKeySym } from "../Hyperlink";
+import { isWireSpecLeaf, kindOf, specSym, wireKeySym } from "../Hyperlink";
 import type { FlatSpec } from "../Hyperlink";
 import * as Policy from "../Policy";
 import * as Versioned from "../Versioned";
@@ -103,7 +104,7 @@ export interface UpdateImpact {
 export interface PlanUpdateOptions {
   /**
    * When `true`, return the impact even if {@link UpdateImpact.blocked}.
-   * Default `false` — fail closed with {@link UpdateBlocked}.
+   * Overrides ambient {@link PlanForce}. Default ambient `false` (fail closed).
    */
   readonly force?: boolean;
   /**
@@ -112,12 +113,46 @@ export interface PlanUpdateOptions {
    */
   readonly incumbent?: ReadonlyArray<PlanUpdateTag>;
   /**
-   * Dial peer node-status for `contractHash` / `schemaVersion` (default `true`).
-   * Set `false` for Directory/Advice-only dry-runs (or under `TestClock`, where
-   * unreachable dials + Clock-bound timeouts hang).
+   * Dial peer node-status for `contractHash` / `schemaVersion`.
+   * Overrides ambient {@link PlanStatus}. Default ambient `true`.
+   * Set ambient/off for Directory-only dry-runs or TestClock.
    */
   readonly status?: boolean;
 }
+
+/**
+ * Ambient fail-closed vs force for {@link planUpdate}. Default `false`.
+ *
+ * @category references
+ * @public
+ */
+export const PlanForce: Context.Reference<boolean> = Context.Reference<boolean>(
+  "hyperlink-ts/Lookup/PlanForce",
+  { defaultValue: (): boolean => false },
+);
+
+/**
+ * Ambient status-dial for {@link planUpdate}. Default `true`.
+ *
+ * @category references
+ * @public
+ */
+export const PlanStatus: Context.Reference<boolean> =
+  Context.Reference<boolean>("hyperlink-ts/Lookup/PlanStatus", {
+    defaultValue: (): boolean => true,
+  });
+
+/** Fail closed on blockers (default). @category layers @public */
+export const planFailClosed: Layer.Layer<never> = Layer.succeed(PlanForce, false);
+
+/** Return blocked impact instead of {@link UpdateBlocked}. @category layers @public */
+export const planForce: Layer.Layer<never> = Layer.succeed(PlanForce, true);
+
+/** Dial peer status (default). @category layers @public */
+export const planStatusOn: Layer.Layer<never> = Layer.succeed(PlanStatus, true);
+
+/** Skip status dials (Directory/Advice only / TestClock). @category layers @public */
+export const planStatusOff: Layer.Layer<never> = Layer.succeed(PlanStatus, false);
 
 /**
  * Target `nodeKey` is not advertised under any successor HyperService key.
@@ -146,23 +181,16 @@ export class UpdateBlocked extends Data.TaggedError("UpdateBlocked")<{
 // =============================================================================
 
 const LOOKUP_SERVICE_KEYS = new Set([
-  "hyperlink-ts/Lookup/Identity",
-  "hyperlink-ts/Lookup/Directory",
-  "hyperlink-ts/Lookup/Advice",
+  Identity.Tag.key,
+  Directory.Tag.key,
+  Advice.Tag.key,
 ]);
-
-const MethodTypeId = "~hyperlink-ts/Hyperlink/Method";
-const DeprecatedMethodTypeId = "~hyperlink-ts/Hyperlink/DeprecatedMethod";
-
-const isWireLeaf = (m: unknown): boolean =>
-  Predicate.hasProperty(m, MethodTypeId) ||
-  Predicate.hasProperty(m, DeprecatedMethodTypeId);
 
 /** Wire method path keys still on the Spec (includes deprecated — still on the wire). */
 const wireMethodKeys = (tag: PlanUpdateTag): ReadonlySet<string> => {
   const keys = new Set<string>();
   for (const [path, leaf] of Object.entries(tag[specSym])) {
-    if (isWireLeaf(leaf)) keys.add(path);
+    if (isWireSpecLeaf(leaf)) keys.add(path);
   }
   return keys;
 };
@@ -213,6 +241,7 @@ const dialStatus = (
   if (target === undefined) {
     return Effect.succeed(Option.none());
   }
+  // Short wall — dry-run should not stall on unreachable dials.
   const probe = Effect.gen(function* () {
     const { NodeStatusTag } = yield* Effect.promise(
       () => import("./nodeStatus"),
@@ -234,8 +263,6 @@ const dialStatus = (
         schemaVersion: row.schemaVersion,
       })),
     } satisfies StatusSnap;
-  // Short wall — dry-run should not stall on unreachable dials (Directory-only
-  // fields still populate; status comparisons are best-effort).
   }).pipe(Effect.scoped, Effect.timeout(Duration.millis(250)));
   return Effect.map(Effect.exit(probe), (exit) =>
     Exit.isSuccess(exit) ? Option.some(exit.value) : Option.none(),
@@ -327,6 +354,8 @@ export const planUpdate = (
     const entry = yield* findTargetEntry(target, successor);
     const served = [...entry.serves];
     const byKey = new Map(successor.map((tag) => [tag.key, tag] as const));
+    const force = options?.force ?? (yield* PlanForce);
+    const dialStatusEnabled = options?.status ?? (yield* PlanStatus);
 
     const coUpdateSet = new Set<string>();
     const peerEntries = new Map<string, Directory.DirectoryEntry>();
@@ -351,7 +380,7 @@ export const planUpdate = (
     const migrationGaps: Array<UpdateImpact["migrationGaps"][number]> = [];
     const contractDrifts: Array<UpdateImpact["contractDrifts"][number]> = [];
 
-    if (options?.status !== false) {
+    if (dialStatusEnabled) {
       for (const peer of peerEntries.values()) {
         const snapOpt = yield* dialStatus(peer);
         if (Option.isNone(snapOpt)) continue;
@@ -398,7 +427,7 @@ export const planUpdate = (
       blocked,
     } satisfies UpdateImpact;
 
-    if (blocked && options?.force !== true) {
+    if (blocked && force !== true) {
       return yield* new UpdateBlocked({ impact });
     }
     return impact;

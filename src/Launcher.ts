@@ -8,8 +8,9 @@
  * {@link Node.assume} on the child; Ready uses existing `withReadiness` / node status.
  * Ensure-Lookup-first: {@link ensureLookup} (or {@link UpOptions.lookup}) adopts a live
  * Lookup or spawns a Lookup-only child before app units — never Soft-bakes onto apps.
- * App already-up: {@link spawn} / default {@link up} **fail** {@link NodeAlreadyUp};
- * opt-in {@link AlreadyUp} `"adopt"` on `up` skips spawn (Ready-proved; no Handle).
+ * App already-up: ambient {@link AlreadyUpRef} (default fail → {@link NodeAlreadyUp});
+ * {@link alreadyUpAdopt} or per-call `"adopt"` skips spawn (Ready-proved; no Handle).
+ * Updates: {@link restartSuccessor} = plan → up B → shutdown A.
  * Node-platform only (`ChildProcessSpawner` + `Scope` at the app edge — provide {@link layer}).
  *
  * Observability: phases log under spans `launcher.spawn` / `launcher.awaitReady` /
@@ -32,11 +33,16 @@ export {
   spawn,
   up,
   ensureLookup,
+  restartSuccessor,
   command,
   entry,
   layer,
   readyTimeoutConfig,
   readyPollConfig,
+  AlreadyUpRef,
+  alreadyUp,
+  alreadyUpFail,
+  alreadyUpAdopt,
   ReadyTimedOut,
   ChildExited,
   HandleSpent,
@@ -57,5 +63,6 @@ export type {
   UpOptions,
   EnsureLookupOptions,
   EnsureLookupResult,
+  RestartSuccessorOptions,
   AlreadyUp,
 } from "./internal/launcher";

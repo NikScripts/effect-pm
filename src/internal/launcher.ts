@@ -55,6 +55,17 @@ import {
 } from "./nodeCore";
 import type { NodeStatus } from "./nodeStatus";
 import { mintAssumeToken, type Token } from "./launcherToken";
+import {
+  planUpdate,
+  type PlanUpdateTag,
+  type UpdateImpact,
+  UpdateBlocked,
+  UpdateTargetUnknown,
+} from "./lookupPlanUpdate";
+import * as Directory from "../Directory";
+import * as Advice from "../Advice";
+import { shutdown as nodeShutdown } from "./nodeShutdownClient";
+import type { HandoffDeferred } from "../Hyperlink";
 
 export type { Token } from "./launcherToken";
 
@@ -184,10 +195,44 @@ interface ResolvedReady {
  * Bare skip without a Ready probe is rejected. Never implies migration-handoff or
  * Directory replace — membership stays on Lookup.
  *
+ * Ambient default: {@link AlreadyUpRef} / {@link alreadyUpFail} / {@link alreadyUpAdopt}.
+ * Per-call {@link UpOptions.alreadyUp} / {@link SpawnSpec.alreadyUp} override.
+ *
  * @category models
  * @public
  */
 export type AlreadyUp = "fail" | "adopt";
+
+/**
+ * Ambient already-up Policy for {@link up}. Default `"fail"`.
+ *
+ * ```ts
+ * Launcher.up(unit).pipe(Effect.provide(Launcher.alreadyUpAdopt))
+ * ```
+ *
+ * @category references
+ * @public
+ */
+export const AlreadyUpRef: Context.Reference<AlreadyUp> =
+  Context.Reference<AlreadyUp>("hyperlink-ts/Launcher/AlreadyUp", {
+    defaultValue: (): AlreadyUp => "fail",
+  });
+
+/** Already-up: fail with {@link NodeAlreadyUp} (default). @category layers @public */
+export const alreadyUpFail: Layer.Layer<never> = Layer.succeed(
+  AlreadyUpRef,
+  "fail",
+);
+
+/** Already-up: adopt Ready peers (no Handle). @category layers @public */
+export const alreadyUpAdopt: Layer.Layer<never> = Layer.succeed(
+  AlreadyUpRef,
+  "adopt",
+);
+
+/** Set ambient already-up mode. @category layers @public */
+export const alreadyUp = (mode: AlreadyUp): Layer.Layer<never> =>
+  Layer.succeed(AlreadyUpRef, mode);
 
 /**
  * One spawn unit — dial target + Effect `ChildProcess` command (or a factory that receives the
@@ -270,9 +315,32 @@ export interface UpOptions {
   readonly lookup?: EnsureLookupOptions;
   /**
    * Default {@link AlreadyUp} for units that omit {@link SpawnSpec.alreadyUp}.
-   * Default `"fail"` — `up` stays create-shaped unless you opt into `"adopt"`.
+   * Overrides ambient {@link AlreadyUpRef} for this call. Default ambient `"fail"`.
    */
   readonly alreadyUp?: AlreadyUp;
+}
+
+/**
+ * Options for {@link restartSuccessor} — plan → spawn B → shutdown A.
+ *
+ * @category models
+ * @public
+ */
+export interface RestartSuccessorOptions {
+  /** Directory `nodeKey` of the outgoing node (A). */
+  readonly target: string;
+  /** Successor unit to bring up (B) — usually a new dial for the same identity. */
+  readonly successor: SpawnSpec;
+  /** Tags B will serve — inputs to {@link Lookup.planUpdate}. */
+  readonly tags: ReadonlyArray<PlanUpdateTag>;
+  /** Local Specs for A — enables wireRemovals in the plan. */
+  readonly incumbent?: ReadonlyArray<PlanUpdateTag>;
+  /** Override ambient {@link PlanForce} for this plan. */
+  readonly force?: boolean;
+  /** Override ambient plan status dial for this plan. */
+  readonly status?: boolean;
+  /** Skip {@link Lookup.planUpdate} (ops escape hatch). */
+  readonly skipPlan?: boolean;
 }
 
 // =============================================================================
@@ -726,8 +794,6 @@ const probeReady = (
     return Effect.fail(new UnaddressedNode({ node: node.key }));
   }
   const address = nodeAddress(node);
-  // Dynamic import keeps Hyperlink⇄nodeStatus acyclic; Layer.build + Context provide
-  // (not Effect.provide(Layer)) so R stays never for this internal dial.
   return Effect.gen(function* () {
     const { NodeStatusTag } = yield* Effect.promise(() => import("./nodeStatus"));
     const ctx = yield* Layer.build(
@@ -1213,7 +1279,9 @@ export const up = (
         yield* ensureLookup(options.lookup);
       }
       const units = isSpawnSpec(spec) ? [spec] : spec;
-      const defaultAlreadyUp: AlreadyUp = options?.alreadyUp ?? "fail";
+      const ambientAlreadyUp = yield* AlreadyUpRef;
+      const defaultAlreadyUp: AlreadyUp =
+        options?.alreadyUp ?? ambientAlreadyUp;
       yield* Effect.logInfo("Launcher.up starting").pipe(
         Effect.annotateLogs({
           "launcher.units": String(units.length),
@@ -1244,5 +1312,117 @@ export const up = (
         { concurrency: options?.concurrency ?? 1 },
       );
       yield* Effect.logInfo("Launcher.up complete");
+    }),
+  );
+
+/** Directory row → addressed Node Tag for {@link nodeShutdown}. @internal */
+const nodeFromDirectoryEntry = (
+  entry: Directory.DirectoryEntry,
+): AnyNode => {
+  if (entry.kind === "IpcSocket" && entry.path !== undefined) {
+    return makeNode()(entry.nodeKey, { path: entry.path });
+  }
+  if (entry.url !== undefined) {
+    return makeNode()(entry.nodeKey, {
+      url: entry.url,
+      kind: entry.kind,
+    });
+  }
+  return makeNode()(entry.nodeKey);
+};
+
+/**
+ * App-node A→B update: {@link Lookup.planUpdate} → {@link up}(successor) →
+ * {@link Node.shutdown}(target).
+ *
+ * Spine α — still exits when done (not a long-lived fleet supervisor). Lookup
+ * same-sock ownership moves stay on the follow/handoff recipe; this is Directory
+ * dial-replace for app units (B visible before A leaves).
+ *
+ * ```ts
+ * yield* Launcher.restartSuccessor({
+ *   target: "fleet/Worker#a",
+ *   successor: { node: workerB, process: … },
+ *   tags: [JobsV2],
+ *   incumbent: [JobsV1],
+ * }).pipe(
+ *   Effect.provide(Launcher.alreadyUpFail),
+ *   Effect.provide(Lookup.planFailClosed),
+ * )
+ * ```
+ *
+ * @category constructors
+ * @public
+ */
+export const restartSuccessor = (
+  options: RestartSuccessorOptions,
+): Effect.Effect<
+  UpdateImpact | undefined,
+  | UpdateBlocked
+  | UpdateTargetUnknown
+  | LookupNotRunning
+  | LookupAddressRequired
+  | NodeAlreadyUp
+  | ReadyTimedOut
+  | ChildExited
+  | HandleSpent
+  | HandleNotReady
+  | AssumeTokenMismatch
+  | AssumeTokenReused
+  | AssumeNotReady
+  | NodeUnreachable
+  | ProtocolUnanswered
+  | ServiceNotReady
+  | ServiceNotServed
+  | UnaddressedNode
+  | HandoffDeferred
+  | PlatformError
+  | ConfigError,
+  | Directory.Tag
+  | Advice.Tag
+  | ChildProcessSpawner.ChildProcessSpawner
+  | Scope.Scope
+> =>
+  withLauncherPhase(
+    options.target,
+    "restartSuccessor",
+    Effect.gen(function* () {
+      yield* Effect.logInfo("restartSuccessor starting").pipe(
+        Effect.annotateLogs({
+          "launcher.target": options.target,
+          "launcher.successor": options.successor.node.key,
+          "launcher.skip_plan": String(options.skipPlan === true),
+        }),
+      );
+
+      // Capture A's dial before B advertises (same nodeKey dial-replace would hide A).
+      const seed = options.tags[0];
+      if (seed === undefined) {
+        return yield* new UpdateTargetUnknown({ target: options.target });
+      }
+      const rows = yield* Directory.nodesServing(seed);
+      const entry = rows.find((row) => row.nodeKey === options.target);
+      if (entry === undefined) {
+        return yield* new UpdateTargetUnknown({ target: options.target });
+      }
+      const outgoing = nodeFromDirectoryEntry(entry);
+
+      let impact: UpdateImpact | undefined;
+      if (options.skipPlan !== true) {
+        impact = yield* planUpdate(options.target, options.tags, {
+          ...(options.incumbent !== undefined
+            ? { incumbent: options.incumbent }
+            : {}),
+          ...(options.force !== undefined ? { force: options.force } : {}),
+          ...(options.status !== undefined ? { status: options.status } : {}),
+        });
+      }
+
+      yield* up(options.successor);
+      yield* nodeShutdown(outgoing);
+      yield* Effect.logInfo("restartSuccessor complete").pipe(
+        Effect.annotateLogs({ "launcher.target": options.target }),
+      );
+      return impact;
     }),
   );

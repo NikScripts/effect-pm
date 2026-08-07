@@ -782,6 +782,23 @@ const isDeprecatedMethod = (
   m: AnyMethod | AnyLocalMethod | AnyDefaultMethod | AnyDeprecatedMethod | Spec,
 ): m is AnyDeprecatedMethod => Predicate.hasProperty(m, DeprecatedMethodTypeId);
 
+/**
+ * True when a flat-spec leaf is a wire {@link Method} (includes {@link DeprecatedMethod}).
+ *
+ * @internal
+ */
+export const isWireSpecLeaf = (m: unknown): boolean =>
+  Predicate.hasProperty(m, MethodTypeId) ||
+  Predicate.hasProperty(m, DeprecatedMethodTypeId);
+
+/**
+ * True when a flat-spec leaf is a {@link DeprecatedMethod}.
+ *
+ * @internal
+ */
+export const isDeprecatedSpecLeaf = (m: unknown): boolean =>
+  Predicate.hasProperty(m, DeprecatedMethodTypeId);
+
 /** Runtime guard: is a value a wire {@link Method} (incl. {@link DeprecatedMethod})? @internal */
 const isMethod = (
   m: unknown,

@@ -172,11 +172,13 @@ yield* Launcher.up({ node: worker, process: … })
 Lookup-only child uses `Lookup.layerNode(node, { assumeToken })` — no app HyperServices.
 App children pipe `Lookup.clientOptions({ path })` themselves.
 
-**Already up (app nodes):** `spawn` / default `up` **fail** with `NodeAlreadyUp` when the
-dial target is already Ready (create-shaped). Opt-in ensure:
+**Already up (app nodes):** ambient **`Launcher.AlreadyUpRef`** (default `"fail"` →
+`NodeAlreadyUp` when the dial target is already Ready). Provide
+`Launcher.alreadyUpAdopt` at the edge, or override per-call / per-unit:
 
 ```ts
-yield* Launcher.up(workerSpec, { alreadyUp: "adopt" }) // Ready-proved; no Handle
+yield* Launcher.up(workerSpec).pipe(Effect.provide(Launcher.alreadyUpAdopt))
+// or: Launcher.up(workerSpec, { alreadyUp: "adopt" }) // Ready-proved; no Handle
 // or per unit: { …workerSpec, alreadyUp: "adopt" }
 ```
 
@@ -185,16 +187,30 @@ Directory steal. Custody `Handle.handoff` is only for children **this** Launcher
 Directory conflicts use `Policy.onConflict` / `askIncumbent`. Intentional Lookup A→B is an
 orchestrated same-address ownership move (Launcher/orchestrator as middleman).
 
-**Who owns what:** Lookup = membership + dial truth (+ `Lookup.planUpdate` dry-run);
-Launcher = custody + exclusive-bind sequencing; nodes = migration `{ handoff }` on shutdown.
+**Who owns what:** Lookup = membership + dial truth (+ `Lookup.planUpdate`);
+Launcher = custody + exclusive-bind sequencing (+ `restartSuccessor`); nodes =
+migration `{ handoff }` on shutdown.
 
-**Before an update spawn:** dry-run with `Lookup.planUpdate(target, successorTags)` — fail-closed
-on migration gaps / wire removals / contract drifts (`force: true` to inspect). Launcher does
-not plan; it executes units after the plan says safe.
+**Before / during an update:** dry-run with `Lookup.planUpdate(target, successorTags)` —
+fail-closed on migration gaps / wire removals / contract drifts. Ambient Layers:
+`Lookup.planFailClosed` / `planForce`, `planStatusOn` / `planStatusOff` (per-call
+`force` / `status` still override). Execute with **`Launcher.restartSuccessor`**
+(plan → `up(B)` → shutdown `A`; captures A's Directory dial **before** `up` so
+same-`nodeKey` dial-replace does not hide the outgoing node).
+
+```ts
+yield* Launcher.restartSuccessor({
+  target: "fleet/Worker#a",
+  successor: { node: workerB, process: … },
+  tags: [JobsV2],
+  incumbent: [JobsV1],
+})
+```
 
 **Lookup A/B:** one address; A/B = successive owners; `Lookup.follow` + Policy for the gap.
 Runnable: `pnpm run example:node-lookup-follow-handoff` ·
-`pnpm run example:launcher-ensure-lookup`. Independent launch (no Launcher) still Soft-bakes
+`pnpm run example:launcher-ensure-lookup` ·
+`pnpm run example:launcher-plan-update`. Independent launch (no Launcher) still Soft-bakes
 first node = Lookup. See
 [`versioned-schema-decisions.md`](../handoffs/versioned-schema-decisions.md#desired-bring-up-launcher--ensure-lookup-first-locked)
 and [Policy — Lookup.follow](./policy.md#lookupfollow-same-address-lookup-ab).
@@ -216,12 +232,14 @@ outgoing node. See
 | Ready errors (`_tag`) | `pnpm run example:launcher-ready-timeout` |
 | Custody → Directory | `pnpm run example:launcher-lookup-membership` |
 | Ensure Lookup first | `pnpm run example:launcher-ensure-lookup` |
+| planUpdate + restartSuccessor | `pnpm run example:launcher-plan-update` |
 
 Hub: [Examples → launcher](/docs/examples#launcher).
 
 ## Deferred (not beta Launcher)
 
-- Lookup-first spawn when no address / no safe default; Lookup A/B / restart (#36)
+- Lookup-first spawn when no address / no safe default (#36 remainder)
+- Dual-serve / redirect during A→B; live dialer registry for `clientsAtRisk`
 - Explicit less-automated A/B launcher (replacement addressing = same `nodeKey` + new dial today)
 - Explicit A/B launcher automation (`lookupClient` + `peersLayer` rebind + [Policy](./policy.md) sticky / streams already ship)
 - Blank worker + remote assign; HTTP/WS Lookup; nameless Launcher discovery

@@ -10,8 +10,8 @@
  * holder + `RpcClientError` retry + {@link Policy.streamGap}. Compose gap Policy at the
  * call site; orchestration (who binds the sock) is outside this module.
  *
- * **Updates:** {@link planUpdate} dry-runs Directory / status / Versioned impact before
- * spawn (Launcher still executes units; Node owns drain/shutdown/handoff).
+ * **Updates:** {@link planUpdate} dry-runs Directory / status / Versioned impact;
+ * `Launcher.restartSuccessor` executes plan → up B → shutdown A (Node owns drain/handoff).
  *
  * **Tags are sibling modules** — not members of this namespace:
  *
@@ -80,6 +80,12 @@ import * as internal from "./internal/lookup";
 import { followLayer } from "./internal/lookupFollow";
 import {
   planUpdate as planUpdateInternal,
+  PlanForce,
+  PlanStatus,
+  planFailClosed,
+  planForce,
+  planStatusOff,
+  planStatusOn,
   UpdateBlocked,
   UpdateTargetUnknown,
   type PlanUpdateOptions,
@@ -257,12 +263,7 @@ const incumbentAlive = (
   if (target === undefined) {
     return Effect.succeed(false);
   }
-  // Layer.build + Context provide (not Effect.provide(Layer)) — library helper, not an app entry.
-  // Addressed target → Hyperlink.client auto-wires connect (shared MemoMap Layer).
-  // Skip default-on verify — this *is* the liveness probe (`ping`); nested verify deadlocks
-  // under claim (verify dials the incumbent while claim holds the registry fiber).
   const probe = Effect.gen(function* () {
-    // Node-status engine is Hyperlink-internal (dynamic import dodges the Hyperlink⇄Lookup cycle).
     const { NodeStatusTag } = yield* Effect.promise(
       () => import("./internal/nodeStatus"),
     );
@@ -302,7 +303,6 @@ const incumbentYield = (
   if (target === undefined) {
     return Effect.succeed(false);
   }
-  // Same as incumbentAlive — skip nested default-on verify around the yield RPC.
   const ask = Effect.gen(function* () {
     const { NodeStatusTag } = yield* Effect.promise(
       () => import("./internal/nodeStatus"),
@@ -730,19 +730,30 @@ export const layer: Layer.Layer<Services> = layerOptions();
 // ============================================================================
 
 export type { PlanUpdateOptions, PlanUpdateTag, UpdateImpact };
-export { UpdateBlocked, UpdateTargetUnknown };
+export {
+  PlanForce,
+  PlanStatus,
+  planFailClosed,
+  planForce,
+  planStatusOff,
+  planStatusOn,
+  UpdateBlocked,
+  UpdateTargetUnknown,
+};
 
 /**
  * Dry-run update impact for replacing Directory `target` with `successor` Tags.
  *
  * Membership + impact query on Lookup — does **not** spawn. Fail-closed
  * ({@link UpdateBlocked}) when gaps / wire removals / contract drifts are present
- * unless `{ force: true }`. See
+ * unless ambient {@link planForce} / `{ force: true }`. Status dials follow
+ * ambient {@link PlanStatus} (override with `{ status }`). Execute with
+ * `Launcher.restartSuccessor`. See
  * `docs/handoffs/versioned-schema-decisions.md` (update impact).
  *
  * ```ts
  * const impact = yield* Lookup.planUpdate("fleet/Worker#a", [WorkerV2])
- * // then Launcher.up(successorSpec) / Node.shutdown(a)
+ * // then Launcher.restartSuccessor({ target, successor, tags })
  * ```
  *
  * @category constructors

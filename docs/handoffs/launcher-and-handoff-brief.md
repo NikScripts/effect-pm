@@ -1,6 +1,6 @@
 # Brief — Launcher + node handoff (Agent 5)
 
-**Status:** Track A + **Track B Eng'd** on tip. **Track C Locked #27–34 + #39 Eng'd**. **Track D v1 + advice early-move Eng'd** — `lookupClient` build-then-swap + `RpcClientError` retry + `Advice.changes` dial move. **#44 sibling Tags Eng'd**. **#45 peersLayer parity Eng'd**. **#46 Policy Eng'd**. **#35** superseded (Versioned + `deprecated` Eng'd). **#36 Lookup A/B re-opened (high priority)** + Lookup-first launcher. **#37** deferred. Explicit app-node A/B / `restartSuccessor` behind impact.  
+**Status:** Track A + **Track B Eng'd** on tip. **Track C Locked #27–34 + #39 Eng'd**. **Track D v1 + advice early-move Eng'd** — `lookupClient` build-then-swap + `RpcClientError` retry + `Advice.changes` dial move. **#44 sibling Tags Eng'd**. **#45 peersLayer parity Eng'd**. **#46 Policy Eng'd**. **#35** superseded (Versioned + `deprecated` Eng'd). **#36** Lookup A/B + Lookup-first + `planUpdate` + **`restartSuccessor` Eng'd**. **#37** deferred. Next: dual-serve / redirect / live `clientsAtRisk`.  
 **Opened:** 2026-07-25 (owner via Agent G).  
 **Audience:** next agent picking up launcher + handoff / migration discussion.
 
@@ -149,7 +149,7 @@
     - **Retry** = bounded re-run of that service's handoff. **Defer** / **NoPeer** / **RetryExhausted** / **Failed** (defect/`orDie`) = do **not** leave / shut down — restore `phase: "running"`, clear the shutting-down latch, surface typed `HandoffDeferred` (`_tag: "HandoffDeferred"`, `.reason` PascalCase via `handoffDeferralReason`) to the shutdown caller (over the wire on the node-status `shutdown` RPC error channel). Match by `_tag`, never message strings.
     - **No peer when handoff set ⇒ `HandoffDeferred({ reason: "NoPeer" })`** (keep up, log warning).
     - **WorkPool:** handoff **baked into** `WorkPool.serve` / `serveRemote` (`releaseEnqueueHandoff`). Config override/opt-out deferred. **Daemon / Gate:** optional `handoff` in config bag → `Hyperlink.serve` options (no baked migrate).
-    - **Deferred:** `restartSuccessor`; full `Node.http` 3rd-arg unify (serve `{ node }` currently threads registration only, not a tag re-stamp for `client(Tag)`).
+    - **Deferred:** full `Node.http` 3rd-arg unify (serve `{ node }` currently threads registration only, not a tag re-stamp for `client(Tag)`). `restartSuccessor` **Eng'd** (plan → up B → shutdown A).
 38. **Replacement addressing recipe (owner lock 2026-07-29)** — not an A/B product mode.
     - You **give addresses** (or mint at listen); you do not “configure as A/B.”
     - Typical cutover: **same `nodeKey`, new dial** → Directory `dialChanged` → clients rebind (`lookupClient` / directory `peersLayer`).
@@ -189,7 +189,7 @@ Shipped on tip (owner Eng go + refinements):
 
 Eng defaults: 32-byte hex token; Ready poll `100 millis` with per-dial `2 seconds` bound; outer default `"30 seconds"`.
 
-**Next bake:** stream resume tokens / dedupe (optional); explicit A/B launcher / `restartSuccessor`; #35–37 stay deferred.
+**Next bake:** stream resume tokens / dedupe (optional); dual-serve / redirect; #37 stays deferred.
 
 ### Track D v1 — Eng'd (2026-07-29, owner go “make the dream happen”)
 
@@ -262,7 +262,7 @@ Owner locked #22–26; Eng on tip:
     - Binary `contractHash` / `ContractMismatch` stays for whole-Spec drift.
     - Cross-version **payload** path: [`versioned-schema-decisions.md`](./versioned-schema-decisions.md) — per-tip `schemaVersion`; retires numeric `withSchemaVersion`.
     - Method retirement: [`docs/guides/deprecated.md`](../guides/deprecated.md) (`Fn.dual`, prefer pipe).
-    - **Next:** ~~Lookup-first + Lookup A/B + update-impact~~ **Eng'd**; then explicit A/B / `restartSuccessor`.
+    - **Next:** ~~Lookup-first + Lookup A/B + update-impact + `restartSuccessor`~~ **Eng'd**; dual-serve / redirect / live `clientsAtRisk`.
 
 36. **Lookup-node handoff — re-opened (high priority; owner 2026-08-03).**
     - Soft-bake / “first node = Lookup” stays for **independent** launch (no Launcher).
@@ -355,7 +355,7 @@ How **clients** handle node handoff (redirect, dual-serve, drain, retry, discove
 ## Suggested first moves
 
 1. ~~Framing / A+B / lock #27–34+#39 / Eng / peersLayer + lookupClient rebind / serve-site `{ handoff }` + `releaseEnqueueHandoff` + live A→B suite~~ — done.
-2. **Owner later:** explicit A/B launcher; re-lock #35–37 if Eng wanted; Track D redirect / dual-serve; `restartSuccessor`.
+2. **Owner later:** Track D redirect / dual-serve; live `clientsAtRisk` registry; re-lock #37 if Eng wanted.
 3. ~~Track D `lookupClient` hot-rebind~~ — Eng'd (with directory `peersLayer`).
 
 **Live cutover SSOT:** `test/handoff-ab-cutover.test.ts` (B Directory-visible first; peer by dial; same-`nodeKey` + `askIncumbent` variants). Unit/orchestration: `test/hyperlink-handoff.test.ts`.
@@ -391,8 +391,7 @@ Contract drift (contractHash / verify / loud-failures) is solid — reuse it.
 
 Track D v1 + Advice.changes + peersLayer parity + Policy (#46) Eng'd on tip.
 Versioned + Hyperlink.deprecated Eng'd (#35 superseded).
-Next: Lookup-first launcher + Lookup A/B (#36 re-opened, high priority);
-  then update-impact; then restartSuccessor / explicit A/B for app nodes.
-Optional: stream resume tokens / seam dedupe.
+#36 Eng'd: Lookup.follow, ensureLookup, planUpdate, restartSuccessor.
+Next: dual-serve / redirect / live clientsAtRisk; optional stream resume tokens.
 Plan-first; no new nouns unless really good.
 ```

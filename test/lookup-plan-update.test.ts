@@ -32,6 +32,7 @@ const withLookup = <A, E>(
     const serverCtx = yield* Layer.build(server);
     const clientCtx = yield* Layer.build(client);
     return yield* use.pipe(
+      Effect.provide(Lookup.planStatusOff),
       Effect.provide(Context.merge(serverCtx, clientCtx)),
     );
   }).pipe(Effect.scoped);
@@ -116,9 +117,7 @@ describe("Lookup.planUpdate", () => {
               }),
             );
 
-            const impact = yield* Lookup.planUpdate("worker-a", [Jobs], {
-              status: false,
-            });
+            const impact = yield* Lookup.planUpdate("worker-a", [Jobs]);
             expect(impact.target).toBe("worker-a");
             expect(impact.served).toEqual(["lookup-plan/Jobs"]);
             expect(impact.coUpdate).toEqual(["worker-b"]);
@@ -153,9 +152,7 @@ describe("Lookup.planUpdate", () => {
             );
             yield* Advice.prefer(Jobs, "worker-a");
 
-            const impact = yield* Lookup.planUpdate("worker-a", [Jobs], {
-              status: false,
-            });
+            const impact = yield* Lookup.planUpdate("worker-a", [Jobs]);
             expect(impact.clientsAtRisk).toEqual([
               { node: "worker-a", serviceKey: "lookup-plan/Jobs" },
             ]);
@@ -193,7 +190,6 @@ describe("Lookup.planUpdate", () => {
             const impact = yield* Lookup.planUpdate(
               "lookup-a",
               [Directory.Tag],
-              { status: false },
             );
             expect(impact.lookupFirst).toBe(true);
           }),
@@ -227,7 +223,6 @@ describe("Lookup.planUpdate", () => {
             const blocked = yield* Effect.exit(
               Lookup.planUpdate("worker-a", [jobsNext], {
                 incumbent: [Jobs],
-                status: false,
               }),
             );
             const err = expectTaggedFailure(blocked, "UpdateBlocked");
@@ -239,7 +234,6 @@ describe("Lookup.planUpdate", () => {
             const forced = yield* Lookup.planUpdate("worker-a", [jobsNext], {
               incumbent: [Jobs],
               force: true,
-              status: false,
             });
             expect(forced.blocked).toBe(true);
             expect(forced.wireRemovals).toEqual([
@@ -249,7 +243,7 @@ describe("Lookup.planUpdate", () => {
             const deprecatedOk = yield* Lookup.planUpdate(
               "worker-a",
               [jobsDeprecatedLegacy],
-              { incumbent: [Jobs], status: false },
+              { incumbent: [Jobs] },
             );
             expect(deprecatedOk.wireRemovals).toEqual([]);
             expect(deprecatedOk.blocked).toBe(false);
