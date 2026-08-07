@@ -1,15 +1,20 @@
 # Node addresses + update API — design notes
 
-**Status:** **Design only** (owner 2026-08-07). Not locked. Not Eng’d. Not SSOT.  
-**Owner lean:** pivot cutover around a **stable main address** (+ optional additional /
-A·B addresses), and **fix the current `Launcher.restartSuccessor` shape before** building
-address plumbing on top of it.  
+**Status:** **Design only** (owner 2026-08-07 → 2026-08-08). Not locked. Not Eng’d. Not SSOT.  
+**Owner leans (so far):**
+- Stable **main address** + **additional A/B** (often Unix); optional Http→Unix proxy
+- Replace options-bag `restartSuccessor` with **`Update.plan` → `Update.execute`**
+- **`Update` module separate from `Versioned`** (Versioned = schema chains; Update = fleet cutover)
+- Plans are **fleet-wide**, ordered; declare contract/version from→to + audit
+- **Simulate/mock** helper for test-run before real execute
+- Deploy path: **Update node** (maybe → **Machine** that watches processes); reopen spine α
+- Update packages / webhook / pull — later, design-docked
+
 **Branch:** Agent 5 · `cursor/lifecycle-defer-start-929b`  
-**Related:** [`multi-protocol-nodes.md`](./multi-protocol-nodes.md) (Eng’d — per-kind
-`endpoints`, not multi-address) · [`versioned-schema-decisions.md`](./versioned-schema-decisions.md)
-(Lookup single-address lock; app dial-replace) · [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md)
+**Related:** [`multi-protocol-nodes.md`](./multi-protocol-nodes.md) · [`versioned-schema-decisions.md`](./versioned-schema-decisions.md)
+· [`launcher-and-handoff-brief.md`](./launcher-and-handoff-brief.md) (spine α may be revisited — §9)
 · dream recipe [`docs/examples/launcher/dream-redeploy.md`](../examples/launcher/dream-redeploy.md)
-(**provisional** — documents today’s Eng’d surface, not the desired API)
+(**provisional**)
 
 ---
 
@@ -223,72 +228,211 @@ that separately. This doc is about **app nodes** (and possibly a proxy role in f
 
 ---
 
-## 5. Update API shape — owner lean (2026-08-07): compose plan → execute
+## 5. `Update` module — owner lean (2026-08-07/08)
 
-**Rejected poles:**
+### 5.1 Module home
 
-| Pole | Why not |
-|------|---------|
-| Raw verb salad only (`up` / `prefer` / `shutdown` hand-rolled) | Easy to get wrong; no impact SSOT; dream scripts forever |
-| Mega options bag (`restartSuccessor({ target, successor, tags, … })`) | Trash — not composable, forges `nodeB`, buries prefer/tags |
+| Choice | Owner |
+|--------|--------|
+| New public namespace `hyperlink-ts/Update` | **Yes lean** |
+| Merge Update into `Versioned` (keep name Update) | Considered; **prefer separate** |
+| Keep `Versioned` = schema upcast chains only | **Yes** — Update *uses* Versioned / `contractHash` for validation |
 
-**Owner lean — middle:** **compose an update plan, then execute it.**
+`Lookup.planUpdate` impact brain folds into or feeds `Update.plan`. Custody/spawn may stay
+on today’s Launcher **or** move under Machine (§9) — Update orchestrates, doesn’t re-own
+Node listen.
+
+### 5.2 Compose plan → execute (middle path)
+
+**Rejected poles:** raw verb salad · mega `restartSuccessor({…})` options bag.
 
 ```ts
-// SKETCH — names TBD; spirit only
-const plan = yield* Update.plan(worker, {
-  // composed fragments — not a restart RPC blob
-  // e.g. onto role "b", process, ready, tags/serve discovery, …
+// SKETCH — names TBD
+const plan = yield* Update.plan({
+  // fleet-wide — not a single A→B forgery
+  steps: [/* ordered node updates */],
+  contracts: [/* from→to version audit — §5.3 */],
 })
 
-// inspect / gate / log impact (today’s planUpdate brain lives here or feeds this)
-if (plan.blocked) { /* … */ }
-
-yield* Update.execute(plan)
-// → spawn successor role → flip (prefer / proxy) → drain incumbent → …
+// inspect / gate / audit
+yield* Update.simulate(plan) // mock production-like run — §5.4
+yield* Update.execute(plan)  // real cutover
 ```
 
-Properties we want from that middle:
+Properties:
 
-1. **Plan is a value** — inspectable impact (co-update, migration gaps, clients at risk),
-   composable from fragments / pipes, not hidden inside execute.
-2. **Execute is dumb-ish** — runs a validated plan (custody/spawn/flip/drain); does not
-   re-encode the whole design as optional flags.
-3. **One Node identity** + **which additional address / role** is coming up — not forged
-   `nodeA` / `nodeB` Tags that only share a string key.
-4. **Lookup keeps impact brain** (`planUpdate` or successor folded into `Update.plan`);
-   **Launcher keeps custody** for spawn units the plan names.
-5. **Prefer / sticky / stream gap** stay Policy/Advice (or plan fragments that *produce*
-   those), not `prefer?: boolean` on execute.
-6. Happy path still aims at main Http + Unix A/B (+ optional proxy).
+1. **Plan is a value** — inspectable, serializable enough for audit/CI, not hidden in execute.
+2. **Execute is dumb-ish** — runs a validated plan; narrow overrides only if needed.
+3. **One Node identity per step** + role/address — not forged `nodeA`/`nodeB` Tags.
+4. Policy/Advice stay for dial/seam; not `prefer?: boolean` on execute.
+5. Happy path still aims at main Http + Unix A/B (+ optional proxy).
 
-**Still open inside the lean:** module home (`Update` vs `Launcher.update` vs `Lookup` +
-`Launcher.execute`), whether `plan` is Effect-built Layer-like vs a plain struct +
-schema, and how much of today’s `planUpdate` fields become first-class plan members.
+### 5.3 Contracts / versions on the plan (optional but first-class)
 
-**Explicit non-goal until discussion locks further:** rewriting the dream example as SSOT.
-Mark it provisional; fix the API design first.
+Plans should be able to declare **which contracts change** and **from→to versions** so
+execute can **validate** you’re updating the expected tips and emit an **audit** trail.
+
+```ts
+// SKETCH
+Update.plan({
+  contracts: [
+    {
+      tag: Jobs,                         // or wire key
+      from: "jobs/payload@2",          // Versioned.schemaVersion / live Directory tip
+      to: "jobs/payload@3",
+      // contractHash from→to optional
+    },
+  ],
+  steps: [/* … */],
+})
+```
+
+- **Not required** on every plan (ops escape / same-tip binary bump with no schema move).
+- When present: fail closed if live incumbent tip ≠ `from`, or successor won’t serve `to`,
+  or Versioned has no path `from→to`.
+- Audit: who planned, declared from/to, observed tips, step order, outcome — shape TBD
+  (structured log / HistoryStore / Update journal).
+
+Uses Eng’d `Versioned` + `contractHash` / status rows — does **not** absorb Versioned into
+Update.
+
+### 5.4 Simulate / mock test-run helper
+
+Owner: provide a helper that **runs a full mock of the setup and runs the update on it** —
+a test-run before production execute.
+
+- Node under test should run **like production** (real serve/listen/Directory/WorkPool
+  handoff paths). If you write proper tests you already do that; Update should add
+  **tools to simulate an update** so the extra work is small.
+- `Update.simulate(plan)` (name TBD) ≈ execute against in-process or temp-address fleet:
+  bring up incumbent tip → apply plan → assert Directory/tips/payloads/audit — then tear
+  down. Not a second fake handoff engine.
+- Live suite today (`test/launcher-dream-redeploy.test.ts`) is the spirit; productize as
+  Update test utilities, not a one-off example script.
+
+### 5.5 Fleet-wide plans + ordered handoffs
+
+**An update plan is not “A→B for one node.”** It covers **every affected node**, with
+**strategic ordering**.
+
+```ts
+// SKETCH
+Update.plan({
+  contracts: [/* Jobs @2→@3, … */],
+  steps: [
+    { node: LookupWorker, /* … */ },     // or omit if Lookup tip unchanged
+    { node: MailWorker, order: 1 },
+    { node: JobsWorker, order: 2 },      // after Mail if Jobs depends on Mail tip
+    { node: EdgeProxy, order: 3 },
+  ],
+  // or explicit: order: [MailWorker, JobsWorker, EdgeProxy]
+})
+```
+
+Open: parallel steps vs strict sequence; failure policy (stop / continue / rollback);
+whether order is DAG or total list; co-update groups from today’s `planUpdate.coUpdate`.
+
+Today’s single-target `Lookup.planUpdate` / `restartSuccessor` become **one step** inside
+a fleet plan — not the whole API.
 
 ---
 
-## 6. Open forks (for the discussion — do not resolve in this doc alone)
+## 6. Deployable updates — Update node / packages (design dock)
 
-1. ~~**Compose vs single verb**~~ — **owner lean: compose plan → execute** (§5). Refine names/home next.
-2. **Proxy ownership:** Launcher? dedicated proxy Node? Lookup feature? per-service sidecar?
-3. **Directory advertise:** main only vs main+backends vs proxy row separate from worker key.
-4. **Type model:** extend `endpoints` vs new `addresses: ReadonlyArray<{ role, … }>` vs
-   both (protocol set ∪ role list).
-5. **HyperServices see main only** — enforced by types (strip additional) or by convention?
-6. **Http/WS address-from-key** — in scope or Unix-only v1?
-7. **Relation to `Node.withProtocol`** — pipe sibling (`withAddresses`) vs overload.
-8. **Deprecation path** for Eng’d `restartSuccessor` + dream-redeploy docs/example.
-9. **Plan composition surface** — object fragments / `Update.layer`-style / pipe builders?
-10. **What execute may still take** — only `plan`, or plan + narrow runtime overrides (force,
-    dryRun already done, token injection)?
+Plan for **actual deployable updates**, not only local file-swap demos.
+
+### 6.1 Update node
+
+A long-lived **Update node** (name TBD) that:
+
+- Listens for update signals (config-driven — e.g. GitHub webhook)
+- Knows how to **pull** the new artifact (git origin, image, bundle, …)
+- Participates in `Update.plan` / `execute` for nodes on that machine / cohort
+- Is reachable via Lookup (Directory membership) like other nodes
+
+Class-shaped like **HttpApi / Router rewrite** (Agent G): a **class that holds
+configuration**, not necessarily a HyperService Tag you `yield*`. Job = listen + configure
+pull/apply; implementations swap (webhook vs poll vs CLI push).
+
+```ts
+// SKETCH — HttpApi-like holder, not a Context.Tag service
+class FleetUpdate extends Update.Node("fleet/Update") {
+  // webhook route, pull strategy, which local nodeKeys it owns, …
+}
+```
+
+Exact parallel to Router/HttpApi is a discussion fork (§10) — don’t Eng Node→HttpApi
+conversion for all nodes in this dock; scope is **Update’s** declaration style first.
+
+### 6.2 Update packages
+
+Later: **update packages** — artifact (code/bundle) sent from CLI or TUI to every relevant
+Update node, **directed via Lookup**. Push path complements pull/webhook.
+
+```
+CLI/TUI ──package──► Lookup ──direct──► Update nodes ──apply──► local workers
+```
+
+v1 can be pull-only; packages are a planned deploy surface.
+
+### 6.3 Relation to addresses / proxy
+
+Deployable update still wants **stable main** + backend A/B (or proxy flip). File-swap on
+an active path is one local apply strategy; image replace / package extract are others —
+plan steps name the strategy, execute/Update-node perform it.
 
 ---
 
-## 7. Current Eng’d facts (do not confuse with §3–§5)
+## 7. Machine / Launcher spine — reopen for discussion
+
+**Locked today (launcher brief spine α):** Launcher is **dumb spawn-and-exit** — not a
+long-lived fleet supervisor; nodes + Lookup own ongoing control.
+
+**Owner (2026-08-08):** maybe wrong. If updates are automatic and processes need watching:
+
+| Idea | Sketch |
+|------|--------|
+| **Update.Node → Machine.Node** (or `Machine`) | Resident per host: watch processes, listen for updates, run `Update.execute` locally |
+| **Merge Launcher into Machine** | e.g. `Machine.spawn` / `Machine.up` instead of (or wrapping) `Launcher.up` |
+| **Launcher stays library helper** | Thin spawn used *by* Machine/Update; public “stay and watch” is Machine |
+
+This **reopens spine α** — do not silently unlock. Record as a design fork: either keep
+spine α and put watch/update on a separate Machine/Update node, or replace spine α with
+Machine-as-resident supervisor that includes spawn.
+
+Lookup remains control-plane membership/advice; Machine would be **host agent**, not a
+second Directory.
+
+---
+
+## 8. Open forks (discussion — do not resolve alone)
+
+### Update API
+1. ~~Compose vs bag~~ — **lean: plan → execute** (§5.2).
+2. ~~Update vs Versioned merge~~ — **lean: separate modules** (§5.1).
+3. Plan composition surface — fragments / pipes / object steps?
+4. Execute overrides — only `plan`, or force/token narrow args?
+5. Fleet order model — total order vs DAG; parallel steps; failure/rollback.
+6. Contract declarations — required vs optional; audit sink.
+
+### Addresses (still)
+7. Proxy ownership — Update/Machine? dedicated proxy Node? Lookup feature?
+8. Directory advertise — main only vs main+backends vs proxy row.
+9. Type model — `endpoints` vs role address list vs both.
+10. HyperServices see main only — types vs convention.
+11. Address-from-`nodeKey` — Unix-only v1?
+12. `withAddresses` vs overload `withProtocol`.
+
+### Deploy / Machine
+13. **Update.Node class shape** — HttpApi-like config class vs HyperService Tag vs both.
+14. **Spine α reopen** — keep spawn-and-exit Launcher + separate Machine, or merge into
+    Machine (§7).
+15. Webhook / pull / package push — which ship in first deployable slice.
+16. Deprecation path for Eng’d `restartSuccessor` + dream-redeploy.
+
+---
+
+## 9. Current Eng’d facts (do not confuse with desired)
 
 | Fact | Where |
 |------|--------|
@@ -296,17 +440,20 @@ Mark it provisional; fix the API design first.
 | Directory: one dial row per `nodeKey` | `DirectoryEntry` |
 | App A/B today = same key, new dial, sticky + prefer | `restartSuccessor`, Policy |
 | Lookup A/B = one address, orchestrated ownership | `Lookup.follow` |
-| No address-from-`nodeKey` helper | — |
-| No role-tagged additional address list | — |
-| No proxy-as-main-address | — |
+| Schema tips / upcast | `Versioned` |
+| Impact dry-run (single target) | `Lookup.planUpdate` |
+| Spine α spawn-and-exit | `Launcher` |
+| No `Update` module / fleet plan / simulate helper / Update node | — |
+| No address-from-`nodeKey` / role address list / proxy-as-main | — |
 
 ---
 
-## 8. Next
+## 10. Next
 
-1. ~~Compose vs bag vs verb salad~~ — **lean locked: plan → execute** (§5).
-2. Discuss plan composition surface + module home (§6.1 / §6.9 / §6.10).
-3. Lock address model forks (§6.2–§6.7) enough to sketch plan inputs (roles, main, proxy).
-4. Only then Eng: types → Directory/advertise → proxy or dual-dial path → migrate examples.
-5. Demote / rewrite dream-redeploy once the new API exists; until then keep the banner:
-   **provisional, not the desired SSOT.**
+1. ~~plan → execute~~ · ~~Update ≠ Versioned~~ recorded.
+2. Discuss **fleet plan ordering** + **contract audit** shape (§5.3–5.5).
+3. Discuss **Machine vs Launcher spine α** (§7) — biggest lock tension.
+4. Discuss Update.Node declaration style (HttpApi-like) + first deploy slice (§6).
+5. Lock address forks enough for plan step inputs (roles, main, proxy).
+6. Only then Eng — types → simulate helper → execute → Update/Machine node → migrate examples.
+7. Dream-redeploy stays **provisional** until the new API exists.

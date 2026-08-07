@@ -546,15 +546,16 @@ Spine α stays: Launcher is not a long-lived fleet supervisor. **Plan** is Looku
 - Durable tip gaps without live status rows  
 - Cross-process dialer identity beyond Lookup Dialers HyperService
 
-### Redesign dock — addresses + `restartSuccessor` shape (owner 2026-08-07)
+### Redesign dock — `Update` module + addresses (owner 2026-08-07/08)
 
-**Not locked.** Owner: Eng’d `Launcher.restartSuccessor({ target, successor, tags, … })` is
-**bad design / not SSOT** — fix that API in discussion before building on it. Pivot lean:
-**main address + additional A/B addresses** (main often Http; backends often Unix); optional
-**stable main as proxy** to A/B; generate addresses from `nodeKey` (Unix-easy); pipe
-additional addresses so HyperServices see **main only**. Full notes:
+**Not locked.** Owner: Eng’d `Launcher.restartSuccessor({…})` is **bad design / not SSOT**.
+Lean: public **`Update`** (separate from **`Versioned`**) — `Update.plan` → simulate →
+`execute`; fleet-wide **ordered** steps; optional contract from→to audit via
+`Versioned.schemaVersion` / `contractHash`; Update/Machine node for deployable updates.
+Addresses: main + A/B, optional proxy. Full notes:
 [`node-addresses-and-update-api.md`](./node-addresses-and-update-api.md).
 ---
+
 
 ## End-to-end skew story (one narrative)
 
