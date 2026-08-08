@@ -12,6 +12,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   Config,
+  Context,
   Data,
   Duration,
   Effect,
@@ -32,6 +33,8 @@ import {
   ChildProcessSpawner,
 } from "effect/unstable/process";
 import * as Hyperlink from "../Hyperlink";
+import * as Identity from "../Identity";
+import * as Lookup from "../Lookup";
 import * as Policy from "../Policy";
 import {
   AssumeNotReady,
@@ -40,16 +43,30 @@ import {
 } from "./nodeAssume";
 import { ASSUME_TOKEN_ENV, assume as nodeAssume } from "./nodeAssumeClient";
 import {
+  asLookup,
   isAddressedNode,
   NodeUnreachable,
   ProtocolUnanswered,
   ServiceNotReady,
   ServiceNotServed,
+  Tag as makeNode,
   UnaddressedNode,
   type AnyNode,
 } from "./nodeCore";
 import type { NodeStatus } from "./nodeStatus";
 import { mintAssumeToken, type Token } from "./launcherToken";
+import {
+  planUpdate,
+  type PlanUpdateTag,
+  type UpdateImpact,
+  UpdateBlocked,
+  UpdateTargetUnknown,
+} from "./lookupPlanUpdate";
+import * as Directory from "../Directory";
+import * as Advice from "../Advice";
+import * as Dialers from "../Dialers";
+import { shutdown as nodeShutdown } from "./nodeShutdownClient";
+import type { HandoffDeferred } from "../Hyperlink";
 
 export type { Token } from "./launcherToken";
 
@@ -171,6 +188,54 @@ interface ResolvedReady {
 }
 
 /**
+ * When {@link SpawnSpec.node} is already Ready at its dial address.
+ *
+ * - `"fail"` (default) — {@link NodeAlreadyUp}; `spawn` / `up` stay create-shaped
+ * - `"adopt"` — skip spawn for that unit (no Handle; not custody). Ready-proved only.
+ *
+ * Bare skip without a Ready probe is rejected. Never implies migration-handoff or
+ * Directory replace — membership stays on Lookup.
+ *
+ * Ambient default: {@link AlreadyUpRef} / {@link alreadyUpFail} / {@link alreadyUpAdopt}.
+ * Per-call {@link UpOptions.alreadyUp} / {@link SpawnSpec.alreadyUp} override.
+ *
+ * @category models
+ * @public
+ */
+export type AlreadyUp = "fail" | "adopt";
+
+/**
+ * Ambient already-up Policy for {@link up}. Default `"fail"`.
+ *
+ * ```ts
+ * Launcher.up(unit).pipe(Effect.provide(Launcher.alreadyUpAdopt))
+ * ```
+ *
+ * @category references
+ * @public
+ */
+export const AlreadyUpRef: Context.Reference<AlreadyUp> =
+  Context.Reference<AlreadyUp>("hyperlink-ts/Launcher/AlreadyUp", {
+    defaultValue: (): AlreadyUp => "fail",
+  });
+
+/** Already-up: fail with {@link NodeAlreadyUp} (default). @category layers @public */
+export const alreadyUpFail: Layer.Layer<never> = Layer.succeed(
+  AlreadyUpRef,
+  "fail",
+);
+
+/** Already-up: adopt Ready peers (no Handle). @category layers @public */
+export const alreadyUpAdopt: Layer.Layer<never> = Layer.succeed(
+  AlreadyUpRef,
+  "adopt",
+);
+
+/** Set ambient already-up mode. @category layers @public */
+export const alreadyUp = (mode: AlreadyUp): Layer.Layer<never> =>
+  Layer.succeed(AlreadyUpRef, mode);
+
+/**
  * One spawn unit — dial target + Effect `ChildProcess` command (or a factory that receives the
  * minted cleartext token for open injection into env/argv). Prefer {@link command} / {@link entry}.
  *
@@ -183,6 +248,54 @@ export interface SpawnSpec {
     | ChildProcess.Command
     | ((token: string) => ChildProcess.Command);
   readonly ready?: ReadyOptions;
+  /**
+   * Already-up Policy for this unit (overrides {@link UpOptions.alreadyUp}).
+   * {@link spawn} always treats already-Ready as {@link NodeAlreadyUp} (create-only).
+   */
+  readonly alreadyUp?: AlreadyUp;
+}
+
+/**
+ * Options for {@link ensureLookup} — resolve an ipc Lookup address, adopt when
+ * already up, otherwise spawn a Lookup-only child under launcher custody.
+ *
+ * @category models
+ * @public
+ */
+export interface EnsureLookupOptions {
+  /**
+   * Unix socket path. Omit ⇒ {@link Lookup.defaultIpcPath} (safe same-machine default).
+   */
+  readonly path?: string;
+  /**
+   * Lookup node. When omitted, a Tag is minted at {@link path} and branded
+   * `Node.asLookup`. Must be ipc-addressed (`path` set) when provided.
+   */
+  readonly node?: AnyNode & { readonly key: string; readonly path?: string };
+  /**
+   * Spawn factory when Lookup is not answering. Receives the minted cleartext
+   * assume token (same as {@link SpawnSpec.process}). Omit ⇒ fail
+   * {@link LookupNotRunning} when not already up.
+   */
+  readonly process?:
+    | ChildProcess.Command
+    | ((token: string) => ChildProcess.Command);
+  readonly ready?: ReadyOptions;
+}
+
+/**
+ * Result of {@link ensureLookup} — dial target for app units (`Lookup.client` /
+ * `Lookup.follow` / child argv).
+ *
+ * @category models
+ * @public
+ */
+export interface EnsureLookupResult {
+  /** Addressed Lookup node (branded `asLookup`). */
+  readonly node: AnyNode & { readonly path: string };
+  readonly path: string;
+  /** True when this call spawned + handed off a Lookup-only child. */
+  readonly spawned: boolean;
 }
 
 /**
@@ -194,6 +307,46 @@ export interface SpawnSpec {
 export interface UpOptions {
   /** `Effect.forEach` concurrency. Default `1` (ordered custody). */
   readonly concurrency?: number | "unbounded";
+  /**
+   * Ensure a Lookup is available **before** app units (ensure-Lookup-first).
+   * Already answering at the path → adopt (no spawn). Otherwise spawn a
+   * Lookup-only child via {@link EnsureLookupOptions.process}, or fail closed.
+   * Does **not** Soft-bake Lookup onto app nodes.
+   */
+  readonly lookup?: EnsureLookupOptions;
+  /**
+   * Default {@link AlreadyUp} for units that omit {@link SpawnSpec.alreadyUp}.
+   * Overrides ambient {@link AlreadyUpRef} for this call. Default ambient `"fail"`.
+   */
+  readonly alreadyUp?: AlreadyUp;
+}
+
+/**
+ * Options for {@link restartSuccessor} — plan → spawn B → shutdown A.
+ *
+ * @category models
+ * @public
+ */
+export interface RestartSuccessorOptions {
+  /** Directory `nodeKey` of the outgoing node (A). */
+  readonly target: string;
+  /** Successor unit to bring up (B) — usually a new dial for the same identity. */
+  readonly successor: SpawnSpec;
+  /** Tags B will serve — inputs to {@link Lookup.planUpdate}. */
+  readonly tags: ReadonlyArray<PlanUpdateTag>;
+  /** Local Specs for A — enables wireRemovals in the plan. */
+  readonly incumbent?: ReadonlyArray<PlanUpdateTag>;
+  /** Override ambient {@link PlanForce} for this plan. */
+  readonly force?: boolean;
+  /** Override ambient plan status dial for this plan. */
+  readonly status?: boolean;
+  /** Skip {@link Lookup.planUpdate} (ops escape hatch). */
+  readonly skipPlan?: boolean;
+  /**
+   * After `up(B)`, stamp {@link Advice.prefer} for each tag → successor `nodeKey`
+   * so sticky dialers move before A dies (dream dual-serve). Default `true`.
+   */
+  readonly prefer?: boolean;
 }
 
 // =============================================================================
@@ -264,6 +417,63 @@ export class HandleNotReady extends Data.TaggedError("HandleNotReady")<{
 }> {
   override get message() {
     return `Launcher.Handle for "${this.node}" is not Ready — call awaitReady() before handoff().`;
+  }
+}
+
+/**
+ * {@link ensureLookup} found no answering Lookup and no {@link EnsureLookupOptions.process}
+ * to spawn one — fail closed (do not Soft-bake onto an app node).
+ *
+ * @category errors
+ * @public
+ */
+export class LookupNotRunning extends Data.TaggedError("LookupNotRunning")<{
+  readonly path: string;
+}> {
+  override get message() {
+    return (
+      `Launcher.ensureLookup: nothing answering at "${this.path}" and no ` +
+      `process to spawn a Lookup-only child.`
+    );
+  }
+}
+
+/**
+ * {@link ensureLookup} has no dialable Lookup address (unaddressed node; no path and
+ * no safe default applies).
+ *
+ * @category errors
+ * @public
+ */
+export class LookupAddressRequired extends Data.TaggedError(
+  "LookupAddressRequired",
+)<{
+  readonly node: string;
+}> {
+  override get message() {
+    return (
+      `Launcher.ensureLookup: node "${this.node}" has no ipc path — provide ` +
+      `{ path } or an addressed Lookup node.`
+    );
+  }
+}
+
+/**
+ * Dial target for a {@link SpawnSpec} is already Ready — create refused.
+ * Opt into {@link AlreadyUp} `"adopt"` on {@link up} to skip spawn for that unit
+ * (no Handle). Never means migration-handoff or Directory steal.
+ *
+ * @category errors
+ * @public
+ */
+export class NodeAlreadyUp extends Data.TaggedError("NodeAlreadyUp")<{
+  readonly node: string;
+}> {
+  override get message() {
+    return (
+      `Launcher: node "${this.node}" is already Ready at its dial address — ` +
+      `spawn refused (use alreadyUp: "adopt" on up to ensure without custody).`
+    );
   }
 }
 
@@ -590,8 +800,6 @@ const probeReady = (
     return Effect.fail(new UnaddressedNode({ node: node.key }));
   }
   const address = nodeAddress(node);
-  // Dynamic import keeps Hyperlink⇄nodeStatus acyclic; Layer.build + Context provide
-  // (not Effect.provide(Layer)) so R stays never for this internal dial.
   return Effect.gen(function* () {
     const { NodeStatusTag } = yield* Effect.promise(() => import("./nodeStatus"));
     const ctx = yield* Layer.build(
@@ -845,10 +1053,23 @@ const makeHandle = (options: {
 // Public constructors
 // =============================================================================
 
+/** True when node-status reports Ready for the unit's services. @internal */
+const probePeerReady = (
+  node: AnyNode,
+  services: ReadonlyArray<string> | undefined,
+): Effect.Effect<boolean> =>
+  probeReady(node, services).pipe(
+    Effect.as(true),
+    Effect.catch(() => Effect.succeed(false)),
+  );
+
 /**
  * Spawn one OS child under launcher custody — mints an assume token, resolves Ready Config,
  * runs `process`, returns a {@link Handle}. Requires `ChildProcessSpawner` + `Scope`
  * (provide {@link layer} at the app edge).
+ *
+ * Create-only: if the dial target is already Ready, fails {@link NodeAlreadyUp}.
+ * Ensure-with-adopt is on {@link up} via {@link AlreadyUp} `"adopt"` (no Handle).
  *
  * @category constructors
  * @public
@@ -857,18 +1078,23 @@ export const spawn = (
   spec: SpawnSpec,
 ): Effect.Effect<
   Handle,
-  PlatformError | ConfigError,
+  | NodeAlreadyUp
+  | PlatformError
+  | ConfigError,
   ChildProcessSpawner.ChildProcessSpawner | Scope.Scope
 > =>
   withLauncherPhase(
     spec.node.key,
     "spawn",
     Effect.gen(function* () {
+      const ready = yield* resolveReady(spec.ready);
+      if (yield* probePeerReady(spec.node, ready.services)) {
+        return yield* new NodeAlreadyUp({ node: spec.node.key });
+      }
       const token = yield* mintToken;
       const clear = Redacted.value(token);
       const processCommand =
         typeof spec.process === "function" ? spec.process(clear) : spec.process;
-      const ready = yield* resolveReady(spec.ready);
       const child = yield* processCommand;
       const phase = yield* Ref.make<HandlePhase>("spawned");
       const gate = yield* Semaphore.make(1);
@@ -886,10 +1112,143 @@ export const spawn = (
     }),
   );
 
+/** Probe whether Identity answers at the Lookup address (scoped; no Soft-bake). @internal */
+const probeLookupAnswering = (
+  node: AnyNode & { readonly path: string },
+): Effect.Effect<boolean> =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const ctx = yield* Layer.build(
+        Lookup.client(node).pipe(Policy.provide(Policy.verifyOff)),
+      );
+      const id = Context.get(ctx, Identity.Tag);
+      yield* id
+        .resolve(
+          new Identity.ResolveRequest({
+            key: "hyperlink-ts/Launcher/ensureLookup/probe",
+          }),
+        )
+        .pipe(Effect.provide(ctx));
+    }),
+  ).pipe(
+    Effect.timeout(Duration.seconds(1)),
+    Effect.as(true),
+    Effect.catch(() => Effect.succeed(false)),
+  );
+
 /**
- * One-shot bring-up: spawn → awaitReady → handoff per unit, then the launcher may exit.
- * Accepts one {@link SpawnSpec} or a readonly array (not {@link Group}). Units run with
- * {@link UpOptions.concurrency} (default `1`) so custody stays ordered unless opted out.
+ * Ensure a Lookup is available at an ipc path **before** app units (ensure-Lookup-first).
+ *
+ * | Situation | Behaviour |
+ * |-----------|-----------|
+ * | Lookup already answering | Adopt — no spawn, no migration-handoff |
+ * | Not answering + {@link EnsureLookupOptions.process} | Spawn Lookup-only → awaitReady → handoff |
+ * | Not answering + no process | {@link LookupNotRunning} (fail closed) |
+ * | Unaddressed node / no path | {@link LookupAddressRequired} |
+ *
+ * Soft-bake stays for independent launch only — this never pipes `Lookup.layer` onto app nodes.
+ *
+ * ```ts
+ * const lookup = yield* Launcher.ensureLookup({
+ *   path: lookupSock,
+ *   process: Launcher.command("pnpm", ["exec", "tsx", lookupEntry, lookupSock], {
+ *     token: "argv",
+ *   }),
+ * })
+ * yield* Launcher.up({ node: worker, process: … })
+ * // children dial Lookup.clientOptions({ path: lookup.path })
+ * ```
+ *
+ * Or compose via {@link UpOptions.lookup} on {@link up}.
+ *
+ * @category constructors
+ * @public
+ */
+export const ensureLookup = (
+  options?: EnsureLookupOptions,
+): Effect.Effect<
+  EnsureLookupResult,
+  | LookupNotRunning
+  | LookupAddressRequired
+  | NodeAlreadyUp
+  | ReadyTimedOut
+  | ChildExited
+  | HandleSpent
+  | HandleNotReady
+  | AssumeTokenMismatch
+  | AssumeTokenReused
+  | AssumeNotReady
+  | NodeUnreachable
+  | ProtocolUnanswered
+  | ServiceNotReady
+  | ServiceNotServed
+  | UnaddressedNode
+  | PlatformError
+  | ConfigError,
+  ChildProcessSpawner.ChildProcessSpawner | Scope.Scope
+> =>
+  withLauncherPhase(
+    options?.node?.key ?? "lookup",
+    "ensureLookup",
+    Effect.gen(function* () {
+      const path =
+        options?.path ?? options?.node?.path ?? Lookup.defaultIpcPath;
+      if (
+        options?.node !== undefined &&
+        options.node.path === undefined &&
+        options.path === undefined
+      ) {
+        return yield* new LookupAddressRequired({ node: options.node.key });
+      }
+      const seed = (
+        options?.node !== undefined
+          ? makeNode()(options.node.key, { path }).pipe(asLookup)
+          : makeNode()("hyperlink-ts/Launcher/Lookup", { path }).pipe(asLookup)
+      ) as AnyNode & { readonly path: string };
+
+      yield* Effect.logInfo("ensureLookup probing").pipe(
+        Effect.annotateLogs({
+          "launcher.lookup_path": seed.path,
+          "launcher.lookup_node": seed.key,
+        }),
+      );
+
+      if (yield* probeLookupAnswering(seed)) {
+        yield* Effect.logInfo("ensureLookup adopted live Lookup (no spawn)");
+        return {
+          node: seed,
+          path: seed.path,
+          spawned: false,
+        } satisfies EnsureLookupResult;
+      }
+
+      if (options?.process === undefined) {
+        return yield* new LookupNotRunning({ path: seed.path });
+      }
+
+      yield* Effect.logInfo("ensureLookup spawning Lookup-only child");
+      const handle = yield* spawn({
+        node: seed,
+        process: options.process,
+        ready: options.ready,
+      });
+      yield* handle.awaitReady();
+      yield* handle.handoff();
+      yield* Effect.logInfo("ensureLookup Lookup-only child handed off");
+      return {
+        node: seed,
+        path: seed.path,
+        spawned: true,
+      } satisfies EnsureLookupResult;
+    }),
+  );
+
+/**
+ * One-shot bring-up: optional {@link UpOptions.lookup} (ensure-Lookup-first), then
+ * per unit either adopt an already-Ready peer ({@link AlreadyUp} `"adopt"`) or
+ * spawn → awaitReady → handoff. Default already-up Policy is `"fail"`
+ * ({@link NodeAlreadyUp}). Accepts one {@link SpawnSpec} or a readonly array
+ * (not {@link Group}). Units run with {@link UpOptions.concurrency} (default `1`).
  *
  * @category constructors
  * @public
@@ -899,6 +1258,9 @@ export const up = (
   options?: UpOptions,
 ): Effect.Effect<
   void,
+  | LookupNotRunning
+  | LookupAddressRequired
+  | NodeAlreadyUp
   | ReadyTimedOut
   | ChildExited
   | HandleSpent
@@ -919,19 +1281,169 @@ export const up = (
     "up",
     "up",
     Effect.gen(function* () {
+      if (options?.lookup !== undefined) {
+        yield* ensureLookup(options.lookup);
+      }
       const units = isSpawnSpec(spec) ? [spec] : spec;
+      const ambientAlreadyUp = yield* AlreadyUpRef;
+      const defaultAlreadyUp: AlreadyUp =
+        options?.alreadyUp ?? ambientAlreadyUp;
       yield* Effect.logInfo("Launcher.up starting").pipe(
-        Effect.annotateLogs({ "launcher.units": String(units.length) }),
+        Effect.annotateLogs({
+          "launcher.units": String(units.length),
+          "launcher.already_up": defaultAlreadyUp,
+        }),
       );
       yield* Effect.forEach(
         units,
         (unit) =>
-          spawn(unit).pipe(
-            Effect.flatMap((handle) => handle.awaitReady()),
-            Effect.flatMap((handle) => handle.handoff()),
-          ),
+          Effect.gen(function* () {
+            const mode: AlreadyUp = unit.alreadyUp ?? defaultAlreadyUp;
+            if (mode === "adopt") {
+              const ready = yield* resolveReady(unit.ready);
+              if (yield* probePeerReady(unit.node, ready.services)) {
+                yield* Effect.logInfo(
+                  "adopted already-up peer (no spawn / no Handle)",
+                ).pipe(
+                  Effect.annotateLogs({ "launcher.node": unit.node.key }),
+                );
+                return;
+              }
+            }
+            yield* spawn(unit).pipe(
+              Effect.flatMap((handle) => handle.awaitReady()),
+              Effect.flatMap((handle) => handle.handoff()),
+            );
+          }),
         { concurrency: options?.concurrency ?? 1 },
       );
       yield* Effect.logInfo("Launcher.up complete");
+    }),
+  );
+
+/** Directory row → addressed Node Tag for {@link nodeShutdown}. @internal */
+const nodeFromDirectoryEntry = (
+  entry: Directory.DirectoryEntry,
+): AnyNode => {
+  if (entry.kind === "IpcSocket" && entry.path !== undefined) {
+    return makeNode()(entry.nodeKey, { path: entry.path });
+  }
+  if (entry.url !== undefined) {
+    return makeNode()(entry.nodeKey, {
+      url: entry.url,
+      kind: entry.kind,
+    });
+  }
+  return makeNode()(entry.nodeKey);
+};
+
+/**
+ * App-node A→B update: {@link Lookup.planUpdate} → {@link up}(successor) →
+ * {@link Advice.prefer}(B) → {@link Node.shutdown}(target).
+ *
+ * Spine α — still exits when done (not a long-lived fleet supervisor). Lookup
+ * same-sock ownership moves stay on the follow/handoff recipe; this is Directory
+ * dial-replace for app units (B visible before A leaves). Prefer stamps (default
+ * on) move sticky `lookupClient` / `peersLayer` dialers while A is still up.
+ *
+ * ```ts
+ * yield* Launcher.restartSuccessor({
+ *   target: "fleet/Worker#a",
+ *   successor: { node: workerB, process: … },
+ *   tags: [JobsV2],
+ *   incumbent: [JobsV1],
+ * }).pipe(
+ *   Effect.provide(Launcher.alreadyUpFail),
+ *   Effect.provide(Lookup.planFailClosed),
+ * )
+ * ```
+ *
+ * @category constructors
+ * @public
+ */
+export const restartSuccessor = (
+  options: RestartSuccessorOptions,
+): Effect.Effect<
+  UpdateImpact | undefined,
+  | UpdateBlocked
+  | UpdateTargetUnknown
+  | LookupNotRunning
+  | LookupAddressRequired
+  | NodeAlreadyUp
+  | ReadyTimedOut
+  | ChildExited
+  | HandleSpent
+  | HandleNotReady
+  | AssumeTokenMismatch
+  | AssumeTokenReused
+  | AssumeNotReady
+  | NodeUnreachable
+  | ProtocolUnanswered
+  | ServiceNotReady
+  | ServiceNotServed
+  | UnaddressedNode
+  | HandoffDeferred
+  | PlatformError
+  | ConfigError,
+  | Directory.Tag
+  | Advice.Tag
+  | Dialers.Tag
+  | ChildProcessSpawner.ChildProcessSpawner
+  | Scope.Scope
+> =>
+  withLauncherPhase(
+    options.target,
+    "restartSuccessor",
+    Effect.gen(function* () {
+      yield* Effect.logInfo("restartSuccessor starting").pipe(
+        Effect.annotateLogs({
+          "launcher.target": options.target,
+          "launcher.successor": options.successor.node.key,
+          "launcher.skip_plan": String(options.skipPlan === true),
+          "launcher.prefer": String(options.prefer !== false),
+        }),
+      );
+
+      // Capture A's dial before B advertises (same nodeKey dial-replace would hide A).
+      const seed = options.tags[0];
+      if (seed === undefined) {
+        return yield* new UpdateTargetUnknown({ target: options.target });
+      }
+      const rows = yield* Directory.nodesServing(seed);
+      const entry = rows.find((row) => row.nodeKey === options.target);
+      if (entry === undefined) {
+        return yield* new UpdateTargetUnknown({ target: options.target });
+      }
+      const outgoing = nodeFromDirectoryEntry(entry);
+
+      let impact: UpdateImpact | undefined;
+      if (options.skipPlan !== true) {
+        impact = yield* planUpdate(options.target, options.tags, {
+          ...(options.incumbent !== undefined
+            ? { incumbent: options.incumbent }
+            : {}),
+          ...(options.force !== undefined ? { force: options.force } : {}),
+          ...(options.status !== undefined ? { status: options.status } : {}),
+        });
+      }
+
+      yield* up(options.successor);
+
+      // Sticky dual-serve: stamp Advice.prefer(B) while A is still up so
+      // lookupClient / peersLayer rebinds before shutdown tears A down.
+      if (options.prefer !== false) {
+        const successorKey = options.successor.node.key;
+        yield* Effect.forEach(
+          options.tags,
+          (tag) => Advice.prefer(tag.key, successorKey),
+          { concurrency: "unbounded", discard: true },
+        );
+      }
+
+      yield* nodeShutdown(outgoing);
+      yield* Effect.logInfo("restartSuccessor complete").pipe(
+        Effect.annotateLogs({ "launcher.target": options.target }),
+      );
+      return impact;
     }),
   );

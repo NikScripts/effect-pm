@@ -14,6 +14,7 @@ Pre-1.0: breaking changes land as minor bumps.
 
 ## Orchestration
 
+- **`Update` module + addresses / Machine** — design only: `Update.plan`→simulate→`execute` (fleet-ordered, contract from→to audit); main+A/B addresses / proxy; Update/Machine node (deploy, webhook/pull/packages); possible Launcher→Machine spine reopen. Separate from Eng’d `Versioned`. Notes: [`../handoffs/node-addresses-and-update-api.md`](../handoffs/node-addresses-and-update-api.md).
 - **Weighted middle scheduling** — diversify the queue's middle priority into many weighted numeric/named groups pulled by a non-starving algorithm (DRR / strict), fixing strict-priority starvation. Design spec: [weighted-middle-scheduling.md](./weighted-middle-scheduling.md).
 - **Non-serializable queue items** — local-only enqueue for function/`Effect` items; wire control + observability stay served. [queue-nonserializable-items.md](./queue-nonserializable-items.md).
 - **Standalone spawns** — `Daemon.spawn` / `WorkPool.open`: multi-instance ergonomics where spawned handles are plain caller-scoped Effects (alongside `Group`).

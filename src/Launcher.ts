@@ -6,6 +6,11 @@
  * Phases: {@link spawn} → {@link Handle.awaitReady} → {@link Handle.handoff}
  * (convenience {@link up}). Abort with {@link Handle.kill}. Ownership ack is
  * {@link Node.assume} on the child; Ready uses existing `withReadiness` / node status.
+ * Ensure-Lookup-first: {@link ensureLookup} (or {@link UpOptions.lookup}) adopts a live
+ * Lookup or spawns a Lookup-only child before app units — never Soft-bakes onto apps.
+ * App already-up: ambient {@link AlreadyUpRef} (default fail → {@link NodeAlreadyUp});
+ * {@link alreadyUpAdopt} or per-call `"adopt"` skips spawn (Ready-proved; no Handle).
+ * Updates: {@link restartSuccessor} = plan → up B → Advice.prefer(B) → shutdown A.
  * Node-platform only (`ChildProcessSpawner` + `Scope` at the app edge — provide {@link layer}).
  *
  * Observability: phases log under spans `launcher.spawn` / `launcher.awaitReady` /
@@ -17,7 +22,8 @@
  * resolved at {@link spawn}. Ready timeout kill-reaps the child (fail-closed).
  *
  * Errors: {@link ReadyTimedOut}, {@link ChildExited}, {@link HandleSpent},
- * {@link HandleNotReady}, plus assume / reachability failures from `Node.assume`.
+ * {@link HandleNotReady}, {@link NodeAlreadyUp}, plus assume / reachability failures
+ * from `Node.assume`.
  *
  * @see `docs/guides/launcher.md`
  * @module Launcher
@@ -26,15 +32,24 @@ export {
   mintToken,
   spawn,
   up,
+  ensureLookup,
+  restartSuccessor,
   command,
   entry,
   layer,
   readyTimeoutConfig,
   readyPollConfig,
+  AlreadyUpRef,
+  alreadyUp,
+  alreadyUpFail,
+  alreadyUpAdopt,
   ReadyTimedOut,
   ChildExited,
   HandleSpent,
   HandleNotReady,
+  LookupNotRunning,
+  LookupAddressRequired,
+  NodeAlreadyUp,
 } from "./internal/launcher";
 export type {
   Handle,
@@ -46,4 +61,8 @@ export type {
   EntryOptions,
   ServiceRef,
   UpOptions,
+  EnsureLookupOptions,
+  EnsureLookupResult,
+  RestartSuccessorOptions,
+  AlreadyUp,
 } from "./internal/launcher";

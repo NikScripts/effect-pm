@@ -52,6 +52,9 @@ Node.unix([Hyperlink.serve(Worker, impl)]).pipe(Layer.provide(lookup)) // advert
 
 Lookup stays **pipe-only** on listens — never bake `lookupPath` into listen options.
 
+When Lookup itself may **restart / A→B** on the same address, dial with `Lookup.follow` (not
+static `client`) and compose `Policy.streamGap` — see [Policy](/docs/policy#lookupfollow-same-address-lookup-ab).
+
 ### 3. Publish prefer (optional, M5)
 
 ```ts
@@ -100,7 +103,8 @@ Custody    Launcher.up / Node.assume   OS process Ready → self-owned
 Membership Lookup Identity/Directory/Advice   who wins / where clients dial
 ```
 
-- **Launcher** stays custody-only (stable addressed node; exits after assume).
+- **Launcher** stays custody-only (stable addressed node; exits after assume). Use
+  `Launcher.ensureLookup` so Lookup is available before app units (no Soft-bake on apps).
 - **Child** pipes `Lookup.client` / `layerOptions` on listen — advertise + identity claim.
 - Directory-row replace: `Policy.askIncumbent` (or stamp / `ListenOptions.onConflict`) +
   `Policy.yieldRefuse` / `ListenOptions.onYield` (`false` refuses).
@@ -138,6 +142,12 @@ membership (dial move / join / leave). Escape hatch: `import * as Directory from
 when prefer flips (before A leaves / before the first transport error). Keep B Directory-visible.
 Live streams stay one outer Stream across dial swaps (`Policy.streamGap`, default `"stall"`).
 See [Policy](/docs/policy).
+
+**Lookup A→B (same address):** `Lookup.follow(lookupNode)` — hot dialer for Identity /
+Directory / Advice across an orchestrated sock ownership move. `Lookup.client` stays static.
+Compose `Policy.streamGap`; orchestration (start B → shut down A → B binds) is outside Policy.
+Runnable: [`examples/node/lookup-follow-handoff.ts`](../../examples/node/lookup-follow-handoff.ts)
+(`pnpm run example:node-lookup-follow-handoff`).
 
 ### A→B cutover recipe (state transfer)
 

@@ -69,6 +69,7 @@ import {
   assertQueueInstanceSpec,
   assertPriorityInstanceSpec,
 } from "./internal/workPoolSpecAssert";
+import { isVersioned, payloadWireSchema } from "./internal/versioned";
 import * as Store from "./Store";
 import { facetStoreRegistration } from "./internal/store/facetStore";
 import {
@@ -878,13 +879,20 @@ const materializeQueueTag = <
 ): HyperlinkTag<Self, QueueInstanceSpec<F, Success, Error>> &
   QueueItemSchemaCarrier<F> => {
   const wire = { success: resolved.success, error: resolved.error };
+  // Versioned payloads keep the tip as the Tag/item type; the Spec uses {@link Versioned.wireSchema}
+  // so older tip shapes still decode (upcast) on the wire.
+  const wirePayload = (
+    isVersioned(resolved.payload)
+      ? payloadWireSchema(resolved.payload)
+      : resolved.payload
+  ) as Schema.Struct<F>;
   // The wired spec carries the tag's real `success`/`error` wire slots; its type
   // (`QueueInstanceSpec<F, Success, Error>`) *is* the tag's contract, so it drives the tag type
   // directly. `assertQueueInstanceSpec` runs the runtime shape/round-trip validation (only the
   // `events` element may differ from the erased baseline) as a side effect — no boundary cast is
   // needed now that the wired type and the tag type coincide.
-  const spec: QueueInstanceSpec<F, Success, Error> = queueSpec(resolved.payload, wire);
-  assertQueueInstanceSpec(spec, queueSpec(resolved.payload), wire);
+  const spec: QueueInstanceSpec<F, Success, Error> = queueSpec(wirePayload, wire);
+  assertQueueInstanceSpec(spec, queueSpec(wirePayload), wire);
   const tagOptions = { description: resolved.description, kind };
   const base =
     resolved.node === undefined

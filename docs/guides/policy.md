@@ -15,18 +15,26 @@ import * as Policy from "hyperlink-ts/Policy"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import * as Lookup from "hyperlink-ts/Lookup"
 
+// Every fragment is a real Policy (Layer + runtime config). layer is dual:
+const cutover = Policy.make({ Sticky: true, StreamGap: "stall", Verify: "reject" }).pipe(
+  Policy.layer(Policy.verifyOff),
+  Policy.layer(Policy.streamGap("buffer")),
+)
+// Policy.Policy<{ Sticky: true; StreamGap: "buffer"; Verify: false }>
+// Policy.config(cutover) → { Sticky: true, StreamGap: "buffer", Verify: false }
+
+// Same expand, data-first
+Policy.layer(Policy.sticky, Policy.streamGap("stall"), Policy.verifyOff)
+
 Hyperlink.lookupClient(Mail).pipe(
-  Policy.provide(
-    Policy.sticky,
-    Policy.streamGap("stall"),
-    Policy.verifyOff, // only when you need it (bootstrap / nested dials)
-  ),
+  Policy.provide(cutover),
   Layer.provide(Lookup.layer),
 )
 ```
 
-Zero-arg fragments are **values** (`Policy.sticky`, not `Policy.sticky()`). Fragments that need
-a mode keep the call: `Policy.streamGap("stall")`.
+Zero-arg fragments are **values** (`Policy.sticky`, not `Policy.sticky()`).
+`Policy.make({ … })` stamps the object as runtime config; `Policy.layer` merges
+Layers **and** configs (pipe or data-first) — not a phantom cast.
 
 Runnable demo: [`examples/node/policy-lookup-cutover.ts`](../../examples/node/policy-lookup-cutover.ts)
 (`pnpm run example:node-policy-lookup-cutover`).
@@ -72,6 +80,25 @@ Runnable: [`examples/node/peers-layer-rebind.ts`](../../examples/node/peers-laye
 (`pnpm run example:node-peers-layer-rebind`). Membership push notes:
 [Identity coordinator](/docs/identity-coordinator#custody-vs-membership-launcher--lookup).
 
+### `Lookup.follow` (same address, Lookup A→B)
+
+`Lookup.client` is a **static** dial. `Lookup.follow(lookupNode)` is the hot dialer for **one**
+Lookup address across an orchestrated ownership move (A releases sock → B binds the same path).
+Dialers never track two Lookup endpoints — compose gap Policy only:
+
+```ts
+Lookup.follow(lookupNode).pipe(
+  Policy.provide(Policy.streamGap("stall")),
+)
+```
+
+Effect RPCs retry on `RpcClientError` while reinstalling to the same seed; streams follow dial
+generations under `streamGap`. Orchestration (who binds the sock) is outside Policy — see
+[Launcher](/docs/launcher) and the decisions handoff.
+
+Runnable: [`examples/node/lookup-follow-handoff.ts`](../../examples/node/lookup-follow-handoff.ts)
+(`pnpm run example:node-lookup-follow-handoff`) — fork B bind-retry → release A → follow lands on B.
+
 ### Client verify (addressed `Hyperlink.client`)
 
 | Fragment | Mode |
@@ -109,6 +136,35 @@ Lookup stamp → hard `livenessReplace`.
 
 ## Compose
 
+### Typed fragments + `Policy.layer` (dual)
+
+Every fragment is a real `Policy.Policy<{ … }>` (Layer + stamped config).
+`Policy.layer` is Effect-style `dual`: `.pipe(Policy.layer(other))` or
+`Policy.layer(a, b, c)`. Configs merge with last write wins — runtime
+`Policy.config(p)` matches the type.
+
+```ts
+const cutover = Policy.make({ Sticky: true, StreamGap: "stall", Verify: "reject" }).pipe(
+  Policy.layer(Policy.verifyOff),
+  Policy.layer(Policy.askIncumbent),
+  Policy.layer(Policy.yieldAccept),
+)
+// Policy.Policy<{
+//   Sticky: true
+//   StreamGap: "stall"
+//   Verify: false
+//   Conflict: "askIncumbent"
+//   Yield: true
+// }>
+
+Hyperlink.lookupClient(Mail).pipe(
+  Policy.provide(cutover),
+  Layer.provide(Lookup.layer),
+)
+```
+
+Data-first:
+
 ```ts
 const cutover = Policy.layer(
   Policy.sticky,
@@ -116,39 +172,31 @@ const cutover = Policy.layer(
   Policy.askIncumbent,
   Policy.yieldAccept,
 )
-
-Hyperlink.lookupClient(Mail).pipe(
-  Policy.provide(cutover),
-  Layer.provide(Lookup.layer),
-)
-
-Node.unix(Worker, serves).pipe(
-  Policy.provide(cutover, Policy.verifyOff), // last write wins per reference
-  Layer.provide(Lookup.client(lookupNode)),
-)
 ```
 
 ## Cutover recipe (clients)
 
 1. Start Lookup; start **B** so Directory has a target.
-2. Dialers use `lookupClient` (defaults: sticky + stream stall + cold fail).
-3. Optionally `Advice.prefer(Tag, bNodeKey)` so dialers move **before** A dies.
-4. Dual-serve window: A+B both advertised — sticky keeps current until prefer / death.
+2. Clients use `lookupClient` (defaults: sticky + stream stall + cold fail) — soft-registers on **`Dialers`** for `planUpdate.clientsAtRisk`.
+3. `Advice.prefer(Tag, bNodeKey)` (or `Launcher.restartSuccessor` default prefer) so dials move **before** A dies.
+4. Dual-serve window: A+B both advertised — sticky keeps current until prefer / death (no Redirect module).
 5. `Node.shutdown(A)` / handoff — see [Identity coordinator — A→B](/docs/identity-coordinator#ab-cutover-recipe-state-transfer).
 
 ## Sibling Tags (not under Lookup)
 
 ```ts
 import * as Advice from "hyperlink-ts/Advice"
+import * as Dialers from "hyperlink-ts/Dialers"
 import * as Directory from "hyperlink-ts/Directory"
 import * as Identity from "hyperlink-ts/Identity"
 
 yield* Advice.prefer(Mail, "fleet/Mail#w2")
 yield* Directory.nodesServing(Mail)
+yield* Dialers.listForTarget("fleet/Mail#w2")
 yield* Advice.changes.pipe(Stream.runDrain)
 ```
 
-Never `import { Advice } from "hyperlink-ts/Lookup"` / `Lookup.Advice.*`.
+Never `import { Advice } from "hyperlink-ts/Lookup"` / `Lookup.Advice.*` (same for Dialers).
 
 ## See also
 

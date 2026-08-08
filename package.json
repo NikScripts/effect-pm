@@ -116,6 +116,10 @@
       "types": "./dist/Advice.d.ts",
       "default": "./dist/Advice.js"
     },
+    "./Dialers": {
+      "types": "./dist/Dialers.d.ts",
+      "default": "./dist/Dialers.js"
+    },
     "./Directory": {
       "types": "./dist/Directory.d.ts",
       "default": "./dist/Directory.js"
@@ -131,6 +135,10 @@
     "./Lifecycle": {
       "types": "./dist/Lifecycle.d.ts",
       "default": "./dist/Lifecycle.js"
+    },
+    "./Versioned": {
+      "types": "./dist/Versioned.d.ts",
+      "default": "./dist/Versioned.js"
     },
     "./DynamicConfig": {
       "types": "./dist/DynamicConfig.d.ts",
@@ -351,6 +359,7 @@
     "example:node-identity-coordinator": "tsx examples/node/identity-coordinator.ts",
     "example:node-handoff-ab-cutover": "tsx examples/node/handoff-ab-cutover.ts",
     "example:node-policy-lookup-cutover": "tsx examples/node/policy-lookup-cutover.ts",
+    "example:node-lookup-follow-handoff": "tsx examples/node/lookup-follow-handoff.ts",
     "example:node-drain-yield-refuse": "tsx examples/node/drain-yield-refuse.ts",
     "example:node-ask-incumbent-takeover": "tsx examples/node/ask-incumbent-takeover.ts",
     "example:node-serve-handoff": "tsx examples/node/serve-handoff.ts",
@@ -365,6 +374,10 @@
     "example:fleet-shardmap-persist": "tsx examples/fleet/shardmap-persist.ts",
     "example:fleet-health-with-readiness": "tsx examples/fleet/health-with-readiness.ts",
     "example:launcher-lookup-membership": "tsx examples/launcher/lookup-membership.ts",
+    "example:launcher-ensure-lookup": "tsx examples/launcher/ensure-lookup.ts",
+    "example:launcher-plan-update": "tsx examples/launcher/plan-update.ts",
+    "example:launcher-restart-successor": "tsx examples/launcher/restart-successor.ts",
+    "example:launcher-dream-redeploy": "tsx examples/launcher/dream-redeploy.ts",
     "example:launcher-minimal-up": "tsx examples/launcher/minimal-up.ts",
     "example:launcher-handle-phases": "tsx examples/launcher/handle-phases.ts",
     "example:launcher-token-injection": "tsx examples/launcher/token-injection.ts",

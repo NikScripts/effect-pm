@@ -147,6 +147,85 @@ membership with `Lookup.nodesServing(Jobs)` (Tag or wire key) — sugar over Dir
 schema’d request. See:
 [`examples/launcher/lookup-membership.ts`](../../examples/launcher/lookup-membership.ts).
 
+### Lookup node (ensure-Lookup-first)
+
+Prefer an **explicit Lookup node** for multi-node fleets so Lookup has no app services to
+skew when those services A/B. Eng'd via `Launcher.ensureLookup` / `UpOptions.lookup`:
+
+1. Lookup **already up** at the target / default address → **adopt** (no second spawn).  
+2. Lookup **not** up + `process` → spawn **Lookup-only** child there **first** (Ready → assume).  
+3. Path omitted → `Lookup.defaultIpcPath` (safe same-machine default).  
+4. Not up + no `process` → `LookupNotRunning` (fail closed — never Soft-bake onto app nodes).  
+5. Unaddressed node without path → `LookupAddressRequired`.
+
+```ts
+const lookup = yield* Launcher.ensureLookup({
+  path: lookupSock,
+  process: Launcher.command("pnpm", ["exec", "tsx", lookupEntry, lookupSock], {
+    token: "env",
+  }),
+})
+yield* Launcher.up({ node: worker, process: … })
+// or: Launcher.up(workerSpec, { lookup: { path, process } })
+```
+
+Lookup-only child uses `Lookup.layerNode(node, { assumeToken })` — no app HyperServices.
+App children pipe `Lookup.clientOptions({ path })` themselves.
+
+**Already up (app nodes):** ambient **`Launcher.AlreadyUpRef`** (default `"fail"` →
+`NodeAlreadyUp` when the dial target is already Ready). Provide
+`Launcher.alreadyUpAdopt` at the edge, or override per-call / per-unit:
+
+```ts
+yield* Launcher.up(workerSpec).pipe(Effect.provide(Launcher.alreadyUpAdopt))
+// or: Launcher.up(workerSpec, { alreadyUp: "adopt" }) // Ready-proved; no Handle
+// or per unit: { …workerSpec, alreadyUp: "adopt" }
+```
+
+Bare skip without a Ready probe is rejected. Adopt never means migration-handoff or
+Directory steal. Custody `Handle.handoff` is only for children **this** Launcher spawned.
+Directory conflicts use `Policy.onConflict` / `askIncumbent`. Intentional Lookup A→B is an
+orchestrated same-address ownership move (Launcher/orchestrator as middleman).
+
+**Who owns what:** Lookup = membership + dial truth (+ `Lookup.planUpdate`);
+Launcher = custody + exclusive-bind sequencing (+ `restartSuccessor`); nodes =
+migration `{ handoff }` on shutdown.
+
+**Before / during an update:** dry-run with `Lookup.planUpdate(target, successorTags)` —
+fail-closed on migration gaps / wire removals / contract drifts. Ambient Layers:
+`Lookup.planFailClosed` / `planForce`, `planStatusOn` / `planStatusOff` (per-call
+`force` / `status` still override). Execute with **`Launcher.restartSuccessor`**
+(plan → `up(B)` → `Advice.prefer(B)` → shutdown `A`; captures A's Directory dial
+**before** `up` so same-`nodeKey` dial-replace does not hide the outgoing node).
+Prefer is on by default (`prefer: false` to skip) — sticky dual-serve while A is
+still up. Live dial census for impact is `hyperlink-ts/Dialers`
+(`planUpdate.clientsAtRisk`).
+
+```ts
+yield* Launcher.restartSuccessor({
+  target: "fleet/Worker#a",
+  successor: { node: workerB, process: … },
+  tags: [JobsV2],
+  incumbent: [JobsV1],
+  // prefer: true (default) — Advice.prefer(B) after up(B), before shutdown(A)
+})
+```
+
+**Binary update (file-swap dream) — provisional:** today’s Eng’d path is file-swap +
+`restartSuccessor` + sticky tip move. **Owner: that options-bag API is not the desired
+SSOT.** Design for main + additional (A/B) addresses / optional stable Http proxy:
+[`node-addresses-and-update-api.md`](../handoffs/node-addresses-and-update-api.md).
+Provisional walkthrough: [dream redeploy](/docs/launcher-dream-redeploy) ·
+`pnpm run example:launcher-dream-redeploy`.
+
+**Lookup A/B:** one address; A/B = successive owners; `Lookup.follow` + Policy for the gap.
+Runnable: `pnpm run example:node-lookup-follow-handoff` ·
+`pnpm run example:launcher-ensure-lookup` ·
+`pnpm run example:launcher-plan-update`. Independent launch (no Launcher) still Soft-bakes
+first node = Lookup. See
+[`versioned-schema-decisions.md`](../handoffs/versioned-schema-decisions.md#desired-bring-up-launcher--ensure-lookup-first-locked)
+and [Policy — Lookup.follow](./policy.md#lookupfollow-same-address-lookup-ab).
+
 **Do not confuse** Launcher custody `Handle.handoff` with **node migration** handoff
 (`Hyperlink.serve(…, { handoff })` / WorkPool `releaseEnqueueHandoff` during `Node.shutdown`).
 Custody = “I own myself; launcher may exit.” Migration = move HyperService work A→B on the
@@ -163,12 +242,29 @@ outgoing node. See
 | `ready.services` | `pnpm run example:launcher-ready-services` |
 | Ready errors (`_tag`) | `pnpm run example:launcher-ready-timeout` |
 | Custody → Directory | `pnpm run example:launcher-lookup-membership` |
+| Ensure Lookup first | `pnpm run example:launcher-ensure-lookup` |
+| planUpdate (blocked) | `pnpm run example:launcher-plan-update` |
+| restartSuccessor live A→B | `pnpm run example:launcher-restart-successor` |
+| dream redeploy (file-swap v1→v2) | `pnpm run example:launcher-dream-redeploy` |
 
 Hub: [Examples → launcher](/docs/examples#launcher).
 
+## Dual-serve (Eng'd — sticky + Advice, not a Redirect module)
+
+A→B dual-serve is **Policy sticky** + **`Advice.prefer`** + `lookupClient` /
+`peersLayer` build-then-swap — not a separate client-redirect SDK. While A and B
+are both Directory-visible, sticky keeps warm dials until prefer (or A's death)
+moves them. `restartSuccessor` stamps prefer(B) after `up(B)` by default.
+`Lookup.planUpdate.clientsAtRisk` reads live **`Dialers`** (soft register from
+`lookupClient` / directory `peersLayer`); Advice-prefer is the empty-census fallback.
+
 ## Deferred (not beta Launcher)
 
+- Lookup-first spawn when no address / no safe default (#36 remainder)
+- Explicit client-redirect SDK (rejected for v1 — sticky + Advice is enough)
 - Explicit less-automated A/B launcher (replacement addressing = same `nodeKey` + new dial today)
-- Explicit A/B launcher automation (`lookupClient` + `peersLayer` rebind + [Policy](./policy.md) sticky / streams already ship)
 - Blank worker + remote assign; HTTP/WS Lookup; nameless Launcher discovery
 - `Handle.events` Stream; stdout/stderr tap; thin `hl up` CLI
+
+Live custody proof for `restartSuccessor` (plan ok → OS `up(B)` → prefer → shutdown `A`,
+same-`nodeKey` dial-replace via `askIncumbent`): `test/launcher-restart-successor.test.ts`.

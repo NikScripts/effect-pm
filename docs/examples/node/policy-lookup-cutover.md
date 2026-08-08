@@ -19,8 +19,9 @@
 
 ## What this shows
 
-Composable `Policy.provide` on `lookupClient`: warm sticky while A+B dual-serve, then
-`Advice.prefer(B)` early-moves the same client facade before A shuts down.
+Composable `Policy.make({ … })` (typed `Policy.Policy<{…}>`, already a Layer) provided onto
+`lookupClient`: warm sticky while A+B dual-serve, then `Advice.prefer(B)` early-moves the
+same client facade before A shuts down.
 
 {.twoslash include="examples/node/policy-lookup-cutover.ts"}
 ``` ts

@@ -134,6 +134,9 @@ const httpServerBase = (
           kind: entry.kind,
           ready: result.ready,
           contractHash: entry.contractHash,
+          ...(entry.schemaVersion !== undefined
+            ? { schemaVersion: entry.schemaVersion }
+            : {}),
           ...(result.detail !== undefined ? { detail: result.detail } : {}),
         })),
       );

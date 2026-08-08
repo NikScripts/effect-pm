@@ -1,11 +1,12 @@
 /**
- * In-memory Lookup registries — identity claims, node directory, placement advice.
+ * In-memory Lookup registries — identity claims, node directory, placement advice,
+ * live dialer census.
  *
  * Structural shapes only (no import from `Lookup.ts`) so the public module can own Schema
  * classes without a cycle. Directory mutations publish onto {@link LookupRegistries.directoryChanges}
  * for membership-push (Track C A→B dial swap notify). Advice mutations publish onto
  * {@link LookupRegistries.adviceChanges} so {@link Hyperlink.lookupClient} can move dials
- * when prefer flips (Track D early move).
+ * when prefer flips (Track D early move). Dialers feed {@link Lookup.planUpdate} clientsAtRisk.
  *
  * @internal
  */
@@ -128,11 +129,30 @@ export type AdviceRegistry = {
   ) => Effect.Effect<Option.Option<string>>;
 };
 
+/** Live dial session — dialerId → serviceKey + Directory target. @internal */
+export type StoredDialerEntry = {
+  readonly dialerId: string;
+  readonly serviceKey: string;
+  readonly target: string;
+};
+
+/** Dial-session census for planUpdate clientsAtRisk. @internal */
+export type DialerRegistry = {
+  readonly register: (
+    entry: StoredDialerEntry,
+  ) => Effect.Effect<StoredDialerEntry>;
+  readonly unregister: (dialerId: string) => Effect.Effect<boolean>;
+  readonly listForTarget: (
+    nodeKey: string,
+  ) => Effect.Effect<ReadonlyArray<StoredDialerEntry>>;
+};
+
 /** Combined registries for one Lookup server process. @internal */
 export type LookupRegistries = {
   readonly claims: ClaimRegistry;
   readonly directory: DirectoryRegistry;
   readonly advice: AdviceRegistry;
+  readonly dialers: DialerRegistry;
   /** Sliding fan-out of directory upserts / removes (membership push). */
   readonly directoryChanges: PubSub.PubSub<StoredDirectoryChange>;
   /** Sliding fan-out of advice prefer / clear (Track D early dial move). */
@@ -142,7 +162,7 @@ export type LookupRegistries = {
 /** Sliding buffer for directory / advice change subscribers. @internal */
 const CHANGES_CAPACITY = 1024;
 
-/** Build empty claim + directory + advice registries (one per lookup server). @internal */
+/** Build empty claim + directory + advice + dialer registries (one per lookup server). @internal */
 export const makeRegistries = (): Effect.Effect<LookupRegistries> =>
   Effect.gen(function* () {
     const claimMap = yield* Ref.make(new Map<string, StoredEndpoint>());
@@ -150,6 +170,7 @@ export const makeRegistries = (): Effect.Effect<LookupRegistries> =>
       new Map<string, StoredDirectoryEntry>(),
     );
     const adviceMap = yield* Ref.make(new Map<string, string>());
+    const dialerMap = yield* Ref.make(new Map<string, StoredDialerEntry>());
     const directoryChanges = yield* PubSub.sliding<StoredDirectoryChange>(
       CHANGES_CAPACITY,
     );
@@ -334,6 +355,29 @@ export const makeRegistries = (): Effect.Effect<LookupRegistries> =>
           Ref.get(adviceMap).pipe(
             Effect.map((current) =>
               Option.fromNullishOr(current.get(serviceKey)),
+            ),
+          ),
+      },
+      dialers: {
+        register: (entry) =>
+          Ref.update(dialerMap, (current) => {
+            const next = new Map(current);
+            next.set(entry.dialerId, entry);
+            return next;
+          }).pipe(Effect.as(entry)),
+        unregister: (dialerId) =>
+          Ref.modify(dialerMap, (current) => {
+            if (!current.has(dialerId)) {
+              return [false, current] as const;
+            }
+            const next = new Map(current);
+            next.delete(dialerId);
+            return [true, next] as const;
+          }),
+        listForTarget: (nodeKey) =>
+          Ref.get(dialerMap).pipe(
+            Effect.map((current) =>
+              [...current.values()].filter((entry) => entry.target === nodeKey),
             ),
           ),
       },

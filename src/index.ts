@@ -159,10 +159,12 @@ export * as Lookup from "./Lookup";
 // Sibling Tag modules — `import * as Advice from "hyperlink-ts/Advice"` → `Advice.Service` /
 // `Advice.changes`. Never nest Tags under Lookup.
 export * as Advice from "./Advice";
+export * as Dialers from "./Dialers";
 export * as Directory from "./Directory";
 export * as Identity from "./Identity";
 export * as Policy from "./Policy";
 export * as Lifecycle from "./Lifecycle";
+export * as Versioned from "./Versioned";
 export type {
   AnyDefaultMethod,
   AnyLocalMethod,

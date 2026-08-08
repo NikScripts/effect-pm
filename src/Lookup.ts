@@ -1,20 +1,32 @@
 /**
- * Lookup — bind/dial layers that serve Identity / Directory / Advice Tags together.
+ * Lookup — bind/dial layers that serve Identity / Directory / Advice / Dialers Tags together.
  *
  * Same-machine default: {@link layer} / {@link layerOptions} on a well-known `ipc` path
  * (OS exclusivity; bind-or-dial). Cross-network: {@link layerNode} / {@link client} on an
  * explicit {@link Node.asLookup}-branded node — no self-elect (L1).
+ *
+ * **Dialers:** {@link client} is a **static** dial (one install). {@link follow} is the
+ * hot dialer for the **same address** across an orchestrated Lookup A→B ownership move —
+ * holder + `RpcClientError` retry + {@link Policy.streamGap}. Compose gap Policy at the
+ * call site; orchestration (who binds the sock) is outside this module.
+ *
+ * **Updates:** {@link planUpdate} dry-runs Directory / status / Versioned impact;
+ * `Launcher.restartSuccessor` executes plan → up B → shutdown A (Node owns drain/handoff).
  *
  * **Tags are sibling modules** — not members of this namespace:
  *
  * ```ts
  * import * as Lookup from "hyperlink-ts/Lookup"
  * import * as Advice from "hyperlink-ts/Advice"
+ * import * as Dialers from "hyperlink-ts/Dialers"
  * import * as Directory from "hyperlink-ts/Directory"
+ * import * as Policy from "hyperlink-ts/Policy"
  *
  * Layer.provide(Lookup.layer)
+ * Lookup.follow(lookupNode).pipe(Policy.provide(Policy.streamGap("stall")))
  * yield* Advice.prefer(Mail, "fleet/Mail#w2")
  * yield* Directory.changes.pipe(Stream.runDrain)
+ * yield* Dialers.listForTarget("fleet/Worker#a")
  * ```
  *
  * Never `import { Advice } from "hyperlink-ts/Lookup"` / `Lookup.Advice.*`.
@@ -28,6 +40,7 @@ import {
   Exit,
   Layer,
   Option,
+  Redacted,
   Stream,
 } from "effect";
 import * as Hyperlink from "./Hyperlink";
@@ -41,7 +54,14 @@ import {
   type AdviceChange,
 } from "./Advice";
 import {
-  Service as Directory,
+  Tag as Dialers,
+  RegisterRequest as DialersRegisterRequest,
+  UnregisterRequest as DialersUnregisterRequest,
+  ListForTargetRequest as DialersListForTargetRequest,
+  DialerEntry,
+} from "./Dialers";
+import {
+  Tag as Directory,
   DirectoryEntry,
   DirectoryUpserted,
   DirectoryRemoved,
@@ -66,12 +86,27 @@ import * as Policy from "./Policy";
 import { connectIpc } from "./internal/node";
 import { ipcServer } from "./internal/nodeIpcServer";
 import * as internal from "./internal/lookup";
+import { followLayer } from "./internal/lookupFollow";
+import {
+  planUpdate as planUpdateInternal,
+  PlanForce,
+  PlanStatus,
+  planFailClosed,
+  planForce,
+  planStatusOff,
+  planStatusOn,
+  UpdateBlocked,
+  UpdateTargetUnknown,
+  type PlanUpdateOptions,
+  type PlanUpdateTag,
+  type UpdateImpact,
+} from "./internal/lookupPlanUpdate";
 
 /** Wire + resolve helpers — SSOT is {@link Policy}. @public */
 export type { OnConflict, OnConflictResolved } from "./Policy";
 export { resolveOnConflict } from "./Policy";
 
-// Wire schemas + sugars from sibling modules (Tags stay on Advice/Directory/Identity).
+// Wire schemas + sugars from sibling modules (Tags stay on siblings).
 export {
   Endpoint,
   ClaimRequest,
@@ -104,6 +139,12 @@ export {
   clearAdvice,
   preferred,
 } from "./Advice";
+export {
+  DialerEntry,
+  DialersRegisterRequest,
+  DialersUnregisterRequest,
+  DialersListForTargetRequest,
+};
 
 /**
  * Lookup node has no dialable address — need `{ path }` / url, or use {@link layer} /
@@ -125,12 +166,13 @@ export class LookupUnaddressed extends Data.TaggedError("LookupUnaddressed")<{
 export const kind = "hyperlink-ts/Lookup";
 
 /**
- * Services a Lookup client layer provides — identity, directory, and placement advice.
+ * Services a Lookup client layer provides — identity, directory, placement advice,
+ * and live dialer census.
  *
  * @category models
  * @public
  */
-export type Services = Identity | Directory | Advice;
+export type Services = Identity | Directory | Advice | Dialers;
 
 // ============================================================================
 // Defaults (L1) — Lookup node = Tag node branded with {@link Node.asLookup}
@@ -237,12 +279,7 @@ const incumbentAlive = (
   if (target === undefined) {
     return Effect.succeed(false);
   }
-  // Layer.build + Context provide (not Effect.provide(Layer)) — library helper, not an app entry.
-  // Addressed target → Hyperlink.client auto-wires connect (shared MemoMap Layer).
-  // Skip default-on verify — this *is* the liveness probe (`ping`); nested verify deadlocks
-  // under claim (verify dials the incumbent while claim holds the registry fiber).
   const probe = Effect.gen(function* () {
-    // Node-status engine is Hyperlink-internal (dynamic import dodges the Hyperlink⇄Lookup cycle).
     const { NodeStatusTag } = yield* Effect.promise(
       () => import("./internal/nodeStatus"),
     );
@@ -282,7 +319,6 @@ const incumbentYield = (
   if (target === undefined) {
     return Effect.succeed(false);
   }
-  // Same as incumbentAlive — skip nested default-on verify around the yield RPC.
   const ask = Effect.gen(function* () {
     const { NodeStatusTag } = yield* Effect.promise(
       () => import("./internal/nodeStatus"),
@@ -302,7 +338,7 @@ const incumbentYield = (
   );
 };
 
-/** Identity + Directory + Advice impl over one shared in-memory registry. */
+/** Identity + Directory + Advice + Dialers impl over one shared in-memory registry. */
 const lookupServeLayers = (serverOnConflict: OnConflictResolved) =>
   Layer.unwrap(
     Effect.gen(function* () {
@@ -421,12 +457,47 @@ const lookupServeLayers = (serverOnConflict: OnConflictResolved) =>
           Stream.map(toAdviceChange),
         ),
       });
-      return Layer.mergeAll(identity, directory, advice);
+      const dialers = Hyperlink.serve(Dialers, {
+        register: (req: DialersRegisterRequest) =>
+          registries.dialers.register({
+            dialerId: req.dialerId,
+            serviceKey: req.serviceKey,
+            target: req.target,
+          }).pipe(
+            Effect.map(
+              (entry) =>
+                new DialerEntry({
+                  dialerId: entry.dialerId,
+                  serviceKey: entry.serviceKey,
+                  target: entry.target,
+                }),
+            ),
+          ),
+        unregister: (req: DialersUnregisterRequest) =>
+          registries.dialers.unregister(req.dialerId),
+        listForTarget: (req: DialersListForTargetRequest) =>
+          registries.dialers.listForTarget(req.nodeKey).pipe(
+            Effect.map((entries) =>
+              entries.map(
+                (entry) =>
+                  new DialerEntry({
+                    dialerId: entry.dialerId,
+                    serviceKey: entry.serviceKey,
+                    target: entry.target,
+                  }),
+              ),
+            ),
+          ),
+      });
+      return Layer.mergeAll(identity, directory, advice, dialers);
     }),
   );
 
 /**
- * Serve {@link Identity} + {@link Directory} + {@link Advice} on a Unix-domain path.
+ * Serve {@link Identity} + {@link Directory} + {@link Advice} + {@link Dialers} on a Unix-domain path.
+ *
+ * Pass `assumeToken` / `node` when this Lookup is a Launcher-custody child
+ * (`Launcher.ensureLookup`).
  *
  * @category layers & serving
  * @public
@@ -437,6 +508,12 @@ export const layerIpc = (
     readonly unlink?: boolean;
     /** Fleet-parent conflict policy (concrete). Default `livenessReplace`. */
     readonly onConflict?: OnConflictResolved;
+    /** Node key for auto-mounted node-status / {@link Node.assume}. */
+    readonly node?: string | { readonly key: string };
+    /** Expected launcher ownership-ack token for {@link Node.assume}. */
+    readonly assumeToken?: string | Redacted.Redacted<string>;
+    /** Cooperative `askIncumbent` handler on node-status `yield`. */
+    readonly onYield?: Effect.Effect<boolean>;
   },
 ) =>
   ipcServer(
@@ -450,6 +527,11 @@ export const layerIpc = (
     {
       path,
       ...(options?.unlink === undefined ? {} : { unlink: options.unlink }),
+      ...(options?.node !== undefined ? { node: options.node } : {}),
+      ...(options?.assumeToken !== undefined
+        ? { assumeToken: options.assumeToken }
+        : {}),
+      ...(options?.onYield !== undefined ? { onYield: options.onYield } : {}),
     },
   );
 
@@ -469,12 +551,20 @@ const lookupUnaddressedLayer = <A = never>(
  * Reads concrete {@link OnConflict} from the Lookup node stamp.
  * Same-machine bind-or-dial without a Node: {@link layer} / {@link layerOptions}.
  *
+ * For Launcher custody of a Lookup-only child, pass `assumeToken` (and optionally
+ * `onYield`) — the node's key is forwarded to auto-mounted node-status for
+ * `Node.assume`.
+ *
  * @category layers & serving
  * @public
  */
 export const layerNode = (
   node: AnyNode & { readonly key: string },
-  options?: { readonly unlink?: boolean },
+  options?: {
+    readonly unlink?: boolean;
+    readonly assumeToken?: string | Redacted.Redacted<string>;
+    readonly onYield?: Effect.Effect<boolean>;
+  },
 ): Layer.Layer<never, LookupUnaddressed> => {
   if (node.kind === "IpcSocket" && node.path !== undefined) {
     const stamped = onConflictOf(node);
@@ -482,6 +572,7 @@ export const layerNode = (
     return layerIpc(node.path, {
       ...options,
       onConflict,
+      node: node.key,
     });
   }
   return lookupUnaddressedLayer(node.key);
@@ -553,6 +644,9 @@ export const directoryAdvertiseLayer = (
 /**
  * Client for {@link Identity} + {@link Directory} via an ipc {@link LookupNode}.
  *
+ * Static dial — one install for the process lifetime. For Lookup A→B on the **same**
+ * address (orchestrated ownership handoff), use {@link follow}.
+ *
  * @category clients
  * @public
  */
@@ -574,6 +668,7 @@ export const client = (
     Hyperlink.client(Identity, node) as any,
     Hyperlink.client(Directory, node) as any,
     Hyperlink.client(Advice, node) as any,
+    Hyperlink.client(Dialers, node) as any,
   ) as any;
   return clients.pipe(
     Layer.provide(node.pipe(connectIpc(path))),
@@ -594,6 +689,55 @@ export const clientOptions = (options?: {
   const path = options?.path ?? defaultIpcPath;
   const node = NodeTag()("hyperlink-ts/Lookup/default", { path }).pipe(asLookup);
   return client(node);
+};
+
+/**
+ * Hot dialer for one Lookup address — survives orchestrated A→B ownership moves on the
+ * **same** `path` (build-then-swap; Effect RPCs retry on `RpcClientError`; streams follow
+ * dial generations via {@link Policy.streamGap}).
+ *
+ * Unlike {@link client} (static install), {@link follow} reinstalls to the **same** seed
+ * when the sock owner changes. Dialers never track two Lookup endpoints — orchestration
+ * (start B → shut down A → B binds) is outside Policy.
+ *
+ * ```ts
+ * Lookup.follow(lookupNode).pipe(
+ *   Policy.provide(Policy.streamGap("stall")),
+ * )
+ * ```
+ *
+ * @category clients
+ * @public
+ */
+export const follow = (
+  node: AnyNode & { readonly path?: string },
+): Layer.Layer<Services, LookupUnaddressed> => {
+  if (node.path === undefined) {
+    return lookupUnaddressedLayer(
+      "key" in node && typeof node.key === "string" ? node.key : "lookup",
+    );
+  }
+  return followLayer(
+    node as AnyNode & { readonly path: string },
+  ).pipe(Policy.provide(Policy.verifyOff)) as Layer.Layer<
+    Services,
+    LookupUnaddressed
+  >;
+};
+
+/**
+ * {@link follow} on {@link defaultIpcPath} or `options.path` — options factory beside
+ * {@link follow}, mirroring {@link clientOptions}.
+ *
+ * @category clients
+ * @public
+ */
+export const followOptions = (options?: {
+  readonly path?: string;
+}): Layer.Layer<Services, LookupUnaddressed> => {
+  const path = options?.path ?? defaultIpcPath;
+  const node = NodeTag()("hyperlink-ts/Lookup/default", { path }).pipe(asLookup);
+  return follow(node);
 };
 
 /**
@@ -629,3 +773,39 @@ export const layerOptions = (options?: {
  * @public
  */
 export const layer: Layer.Layer<Services> = layerOptions();
+
+// ============================================================================
+// Update impact (dry-run planner)
+// ============================================================================
+
+export type { PlanUpdateOptions, PlanUpdateTag, UpdateImpact };
+export {
+  PlanForce,
+  PlanStatus,
+  planFailClosed,
+  planForce,
+  planStatusOff,
+  planStatusOn,
+  UpdateBlocked,
+  UpdateTargetUnknown,
+};
+
+/**
+ * Dry-run update impact for replacing Directory `target` with `successor` Tags.
+ *
+ * Membership + impact query on Lookup — does **not** spawn. Fail-closed
+ * ({@link UpdateBlocked}) when gaps / wire removals / contract drifts are present
+ * unless ambient {@link planForce} / `{ force: true }`. Status dials follow
+ * ambient {@link PlanStatus} (override with `{ status }`). Execute with
+ * `Launcher.restartSuccessor`. See
+ * `docs/handoffs/versioned-schema-decisions.md` (update impact).
+ *
+ * ```ts
+ * const impact = yield* Lookup.planUpdate("fleet/Worker#a", [WorkerV2])
+ * // then Launcher.restartSuccessor({ target, successor, tags })
+ * ```
+ *
+ * @category constructors
+ * @public
+ */
+export const planUpdate = planUpdateInternal;

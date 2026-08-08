@@ -213,6 +213,11 @@ Guides: [Identity coordinator](/docs/identity-coordinator) · [Policy](/docs/pol
 `examples/node/policy-lookup-cutover.ts` · `pnpm run example:node-policy-lookup-cutover`  
 Guide: [Policy](/docs/policy)
 
+### [Lookup.follow ownership handoff](/docs/node-lookup-follow-handoff)
+
+`examples/node/lookup-follow-handoff.ts` · `pnpm run example:node-lookup-follow-handoff` — same-address Lookup A→B  
+Guide: [Policy — Lookup.follow](/docs/policy#lookupfollow-same-address-lookup-ab)
+
 ### [peersLayer rebind](/docs/node-peers-layer-rebind)
 
 `examples/node/peers-layer-rebind.ts` · `pnpm run example:node-peers-layer-rebind`
@@ -270,6 +275,38 @@ Guide: [Launcher](/docs/launcher)
 `examples/launcher/lookup-membership.ts` · `pnpm run example:launcher-lookup-membership`
 
 Child of [Lookup membership](/docs/launcher-lookup-membership): `examples/launcher/lookup-membership-child.ts`
+
+### [Ensure Lookup first](/docs/launcher-ensure-lookup)
+
+`examples/launcher/ensure-lookup.ts` · `pnpm run example:launcher-ensure-lookup` — `Launcher.ensureLookup` then app `up`  
+Guide: [Launcher — Lookup node](/docs/launcher#lookup-node-ensure-lookup-first)
+
+### [planUpdate (blocked)](/docs/launcher-plan-update)
+
+`examples/launcher/plan-update.ts` · `pnpm run example:launcher-plan-update` — dry-run impact Layers, then `restartSuccessor` blocked before spawn  
+Guide: [Launcher — Lookup node](/docs/launcher#lookup-node-ensure-lookup-first)
+
+### [restartSuccessor live A→B](/docs/launcher-restart-successor)
+
+`examples/launcher/restart-successor.ts` · `pnpm run example:launcher-restart-successor` — OS A→B; Directory dial moves; B answers  
+Guide: [Launcher — Lookup node](/docs/launcher#lookup-node-ensure-lookup-first)
+
+### [dream redeploy (file-swap v1→v2)](/docs/launcher-dream-redeploy)
+
+`examples/launcher/dream-redeploy.ts` · `pnpm run example:launcher-dream-redeploy` — file-swap worker entry v1→v2, then:
+
+```ts
+const cutover = Policy.make({ Sticky: true, ColdAmbiguous: "fail", StreamGap: "stall" })
+const sticky = Hyperlink.lookupClient(Probe).pipe(Policy.provide(cutover), …)
+
+yield* Launcher.restartSuccessor({
+  target: WORKER_NODE_KEY,
+  successor: { node: nodeB, process: child(portB), ready: { timeout: "25 seconds" } },
+  tags: [Jobs, Probe], // prefer(B) default → sticky Probe.tip "v1"→"v2"; WorkPool handoff
+})
+```
+
+Guide: [Launcher](/docs/launcher) · [Policy](/docs/policy) · suite `test/launcher-dream-redeploy.test.ts`
 
 ### [minimal up](/docs/launcher-minimal-up)
 

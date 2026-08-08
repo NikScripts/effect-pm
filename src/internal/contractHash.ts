@@ -11,10 +11,11 @@ import type { AnyMethod, FlatSpec } from "../Hyperlink";
 
 const LocalMethodTypeId = "~hyperlink-ts/Hyperlink/LocalMethod";
 const DefaultMethodTypeId = "~hyperlink-ts/Hyperlink/DefaultMethod";
+const DeprecatedMethodTypeId = "~hyperlink-ts/Hyperlink/DeprecatedMethod";
 const MethodTypeId = "~hyperlink-ts/Hyperlink/Method";
 
-/** Strip annotation / encoding noise so two equivalent schemas fingerprint the same. */
-const fingerprintAst = (ast: unknown): unknown => {
+/** Strip annotation / encoding noise so two equivalent schemas fingerprint the same. @internal */
+export const fingerprintAst = (ast: unknown): unknown => {
   const seen = new WeakSet<object>();
   const walk = (node: unknown): unknown => {
     if (node === null || typeof node !== "object") {
@@ -75,8 +76,21 @@ const isWireMethod = (m: FlatSpec[string]): m is AnyMethod =>
   !Predicate.hasProperty(m, LocalMethodTypeId) &&
   !Predicate.hasProperty(m, DefaultMethodTypeId);
 
+/** Unwrap {@link DeprecatedMethod} wrapper → inner Method for fingerprinting. */
+const wireLeaf = (m: FlatSpec[string] | undefined): AnyMethod | undefined => {
+  if (m === undefined) return undefined;
+  if (Predicate.hasProperty(m, DeprecatedMethodTypeId)) {
+    const inner = (m as { readonly method: unknown }).method;
+    return isWireMethod(inner as FlatSpec[string])
+      ? (inner as AnyMethod)
+      : undefined;
+  }
+  return isWireMethod(m) ? m : undefined;
+};
+
 /**
  * Canonical wire descriptor for a flat Spec — sorted method keys, wire-only members.
+ * {@link DeprecatedMethod} wrappers fingerprint like their inner Method (skew-stable).
  *
  * @internal
  */
@@ -87,8 +101,8 @@ export const contractDescriptor = (
 ): unknown => {
   const methods: Record<string, unknown> = {};
   for (const key of Object.keys(spec).sort()) {
-    const m = spec[key];
-    if (m === undefined || !isWireMethod(m)) {
+    const m = wireLeaf(spec[key]);
+    if (m === undefined) {
       continue;
     }
     methods[key] = {

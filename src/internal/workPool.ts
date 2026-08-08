@@ -126,6 +126,13 @@ import type {
 import * as Hyperlink from "../Hyperlink";
 import * as Lifecycle from "../Lifecycle";
 import {
+  decodePersisted,
+  isVersioned,
+  MigrationDecodeFailed,
+  MigrationPathMissing,
+  schemaVersion,
+} from "./versioned";
+import {
   configureLayer,
   configureWrapEffectField,
   foldConfiguredSpec,
@@ -243,10 +250,8 @@ export interface QueueItemCodecDescriptor {
 export const schemaVersionAnnotation = "schemaVersion";
 
 /**
- * Stamp an item schema with its version. Bump it on any **breaking** change to the item shape;
- * evolve **additively** within a version (so a newer receiver still accepts same-version entries
- * from an older sender). The version flows into {@link makeQueueItemCodecDescriptor}'s `id`
- * (`…/item@vN`) and `version`, making every released/handoff entry self-describing.
+ * @deprecated Prefer {@link Versioned.make} / tip `Schema.Class.identifier`. Stamps an
+ * `identifier` annotation so {@link schemaVersion} picks it up; kept for one release.
  *
  * @category item codecs
  * @public
@@ -254,23 +259,25 @@ export const schemaVersionAnnotation = "schemaVersion";
 export const withSchemaVersion = <S extends Schema.Top>(
   schema: S,
   version: number,
-): S["Rebuild"] => schema.annotate({ schemaVersion: version });
+): S["Rebuild"] => schema.annotate({ identifier: `v${String(version)}` });
 
 /**
- * Read an item schema's {@link withSchemaVersion | version}; defaults to `1` when unannotated.
+ * @deprecated Prefer `Versioned.schemaVersion(schema)` (string tip id).
  *
  * @category item codecs
  * @public
  */
 export const schemaVersionOf = (schema: Schema.Top): number => {
   const annotated = Schema.resolveAnnotations(schema)?.[schemaVersionAnnotation];
-  return typeof annotated === "number" ? annotated : 1;
+  if (typeof annotated === "number") return annotated;
+  const id = schemaVersion(schema);
+  const match = /^v(\d+)$/.exec(id);
+  return match !== null ? Number(match[1]) : 1;
 };
 
 /**
  * Build a {@link QueueItemCodecDescriptor} from a live Effect `Schema` value. The descriptor's
- * `id` (`…/item@vN`) and `version` are taken from the schema's {@link withSchemaVersion} stamp
- * (default `1`), so the descriptor self-describes the schema version for handoff / drift checks.
+ * `version` is the tip {@link schemaVersion} string (Class identifier or AST hash).
  *
  * @category item codecs
  * @public
@@ -280,12 +287,13 @@ export const makeQueueItemCodecDescriptor = <T>(
   itemSchema: Schema.Codec<T, unknown, never, never>,
   options?: { readonly version?: string },
 ): QueueItemCodecDescriptor => {
-  const version = schemaVersionOf(itemSchema);
-  const wrapped = Schema.toStandardJSONSchemaV1(itemSchema);
+  const version = options?.version ?? schemaVersion(itemSchema);
+  const tip = isVersioned(itemSchema) ? itemSchema.current : itemSchema;
+  const wrapped = Schema.toStandardJSONSchemaV1(tip as Schema.Codec<T, unknown, never, never>);
   const jsonSchema = wrapped["~standard"].jsonSchema.input({ target: "draft-07" });
   return {
-    id: `${key}/item@v${String(version)}`,
-    version: options?.version ?? String(version),
+    id: `${key}/item@${version}`,
+    version,
     encoding: "json",
     jsonSchema,
   };
@@ -1352,6 +1360,13 @@ type ReleaseEntryEncoder<T> = (
 type PersistCodec<T> = {
   readonly encode: (item: T) => Exit.Exit<unknown, unknown>;
   readonly decode: (json: unknown) => Exit.Exit<T, unknown>;
+  /** Tip {@link schemaVersion} stamped on durable rows. */
+  readonly schemaVersion: string;
+  /** Version-aware reopen decode (falls back to {@link decode} when unused). */
+  readonly decodeRow: (
+    json: unknown,
+    fromVersion: string | undefined,
+  ) => Effect.Effect<T, MigrationPathMissing | MigrationDecodeFailed>;
 };
 
 /** Normalize public enqueue input without treating arbitrary iterables as batches. */
@@ -1791,7 +1806,24 @@ const makeQueueEffectWithSchema = <
       ) =>
         validateItemsWithSchema(queueName, config.itemSchema, codecId, items, operation),
       encodeForRelease,
-      persistCodec: { encode: encodeItem, decode: Schema.decodeUnknownExit(config.itemSchema) },
+      persistCodec: {
+        encode: encodeItem,
+        decode: Schema.decodeUnknownExit(config.itemSchema),
+        schemaVersion: schemaVersion(config.itemSchema),
+        decodeRow: (
+          json: unknown,
+          fromVersion: string | undefined,
+        ): Effect.Effect<
+          InferQueueItem<C>,
+          MigrationPathMissing | MigrationDecodeFailed
+        > =>
+          decodePersisted(config.itemSchema, fromVersion, json, {
+            serviceKey: queueName,
+          }) as Effect.Effect<
+            InferQueueItem<C>,
+            MigrationPathMissing | MigrationDecodeFailed
+          >,
+      },
     } as never) as never,
   );
 };
@@ -2486,6 +2518,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
                         dedupKey: internal.key,
                         priority,
                         payload,
+                        schemaVersion: persist.codec.schemaVersion,
                       })
                       .pipe(
                         Effect.catch((error) =>
@@ -2943,35 +2976,43 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
                 return;
               }
               const entry = taken.value;
-              yield* Exit.match(persist.codec.decode(entry.payload), {
-                onSuccess: (item) => {
-                  const level = levelOf(entry.priority);
-                  return Effect.andThen(
-                    laneStore.offer(
-                      {
-                        item,
-                        entryId: entry.id,
-                        retries: Math.max(0, entry.attempts - 1),
-                        level,
-                        enqueuedAt: entry.enqueuedAtMillis,
-                        key: entry.dedupKey ?? undefined,
-                      },
-                      level,
-                    ),
-                    // wake a worker blocked in `takeNext` (offer alone doesn't signal)
-                    signalWorkerWake,
-                  );
-                },
-                onFailure: (cause) =>
-                  persist.store.complete(entry.id).pipe(
-                    Effect.catch(() => Effect.void),
-                    Effect.andThen(
-                      Effect.logError(
-                        `Queue "${queueName}" persist decode failed (dropped ${entry.id}): ${Cause.pretty(cause)}`,
+              const fromVersion =
+                entry.schemaVersion === "" ? undefined : entry.schemaVersion;
+              yield* Effect.exit(
+                persist.codec.decodeRow(entry.payload, fromVersion),
+              ).pipe(
+                Effect.flatMap((decoded) =>
+                  Exit.match(decoded, {
+                    onSuccess: (item) => {
+                      const level = levelOf(entry.priority);
+                      return Effect.andThen(
+                        laneStore.offer(
+                          {
+                            item,
+                            entryId: entry.id,
+                            retries: Math.max(0, entry.attempts - 1),
+                            level,
+                            enqueuedAt: entry.enqueuedAtMillis,
+                            key: entry.dedupKey ?? undefined,
+                          },
+                          level,
+                        ),
+                        // wake a worker blocked in `takeNext` (offer alone doesn't signal)
+                        signalWorkerWake,
+                      );
+                    },
+                    onFailure: (cause) =>
+                      persist.store.complete(entry.id).pipe(
+                        Effect.catch(() => Effect.void),
+                        Effect.andThen(
+                          Effect.logError(
+                            `Queue "${queueName}" persist decode failed (dropped ${entry.id}): ${Cause.pretty(cause)}`,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-              });
+                  }),
+                ),
+              );
             }),
           );
 
@@ -3121,6 +3162,7 @@ const makeQueueRuntime = <T, E, EEnqueue, R, A = void>(
                           dedupKey: item.key,
                           priority: levelToPriority(item.level),
                           payload,
+                          schemaVersion: persist.codec.schemaVersion,
                         })
                         .pipe(Effect.asVoid, Effect.catch(() => Effect.void))
                     : Effect.void,

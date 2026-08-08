@@ -53,8 +53,8 @@ export interface DurableEntryInput {
   readonly priority: DurablePriority;
   /** Already-encoded JSON payload. */
   readonly payload: unknown;
-  /** Schema version stamped on the row, for decode/upcast on take. */
-  readonly schemaVersion?: number;
+  /** Tip {@link Versioned.schemaVersion} stamped on the row, for decode/upcast on take. */
+  readonly schemaVersion?: string;
 }
 
 /**
@@ -71,7 +71,7 @@ export interface DurableEntry {
   readonly sequence: number;
   readonly attempts: number;
   readonly payload: unknown;
-  readonly schemaVersion: number;
+  readonly schemaVersion: string;
   readonly enqueuedAtMillis: number;
 }
 

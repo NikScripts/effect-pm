@@ -66,7 +66,6 @@ export const shutdown = (
     }),
     Effect.mapError((cause) => {
       if (Predicate.isTagged(cause, "UnaddressedNode")) return cause;
-      // A deferred handoff (node stayed up) is a legible typed outcome, not unreachability.
       if (Predicate.isTagged(cause, "HandoffDeferred")) return cause;
       return new NodeUnreachable({
         node: node.key,

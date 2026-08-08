@@ -41,6 +41,7 @@
  * A method is {@link effect} (one-shot read), {@link effectFn} (mutation), or
  * {@link Hyperlink.stream} (a live `Stream` source, e.g. `changes`). Tag-baked
  * defaults use {@link default} (one Spec leaf) or piped {@link defaults} (a bag).
+ * Retire a verb from the Handle (keep wire for skew) with {@link deprecated}.
  *
  * For a repeated dependency-monitor shape (`status` + `changes` + readiness from
  * status), {@link monitoredDependency} builds the spec and readiness together —
@@ -48,6 +49,7 @@
  *
  * Lookup / cutover (living docs under `docs/guides/`):
  * - {@link identity} + pipe `Lookup.client` / `Lookup.layer` on listens — Directory advertise
+ * - `Lookup.follow` — hot dialer for one Lookup address across A→B ownership replace (gap Policy)
  * - {@link lookupClient} — dial without a named Node; compose `hyperlink-ts/Policy` for sticky /
  *   stream gap / cold ambiguous
  * - Directory-mode {@link peersLayer} — same hot-rebind parity as `lookupClient`
@@ -57,6 +59,7 @@
  * @see docs/guides/identity-coordinator.md
  * @see docs/guides/policy.md
  * @see docs/guides/client-verify.md
+ * @see docs/guides/versioned.md
  *
  * @module Hyperlink
  */
@@ -129,6 +132,11 @@ import {
   UnaddressedNode,
 } from "./internal/nodeCore";
 import { hashContract } from "./internal/contractHash";
+import {
+  followDialStream,
+  isDialTransportError as isLookupDialTransportError,
+} from "./internal/dialFollow";
+import { schemaVersionFromTag } from "./internal/versioned";
 import {
   bindNodeProtocolBuilders,
   connectAddressed,
@@ -661,20 +669,61 @@ export interface DefaultMethod<out V> {
  */
 export type AnyDefaultMethod = DefaultMethod<unknown>;
 
+/** Identity brand for a {@link DeprecatedMethod} — wire + required impl, omitted from the Handle. */
+const DeprecatedMethodTypeId = "~hyperlink-ts/Hyperlink/DeprecatedMethod" as const;
+
 /**
- * A HyperService contract: method name → wire {@link Method}, off-wire {@link LocalMethod}, or
- * Tag-baked {@link DefaultMethod}. The single source of truth.
+ * A **deprecated** wire member — built by {@link deprecated}. Invert of {@link local}: a **wrapper**
+ * leaf (like {@link LocalMethod} / {@link DefaultMethod}, not `Method & brand`) so `ServiceOf` can
+ * key-remap without open-interface `Method extends brand` deferrals under generic Specs.
+ * Stays on the RPC / `contractHash` surface (impl required); omitted from {@link ServiceOf}.
+ *
+ * Prefer `.pipe(Hyperlink.deprecated)` at authoring time. Branding does **not** change
+ * {@link contractHash} (same schemas ⇒ same fingerprint); delete the leaf to break the hash.
+ *
+ * @category models
+ * @public
+ */
+export interface DeprecatedMethod<M extends AnyMethod = AnyMethod> {
+  readonly [DeprecatedMethodTypeId]: typeof DeprecatedMethodTypeId;
+  /** The underlying wire {@link Method} — schemas / kind / stream for RpcGroup + serve. */
+  readonly method: M;
+}
+
+/**
+ * Any {@link DeprecatedMethod}, erased.
+ *
+ * @category models
+ * @public
+ */
+export type AnyDeprecatedMethod = DeprecatedMethod<AnyMethod>;
+
+/**
+ * Poison type for a {@link deprecated} leaf on {@link ServiceOf} — the key may still appear under
+ * some generic Spec expansions, but it is not a callable Handle member. Prefer concrete Tags where
+ * the key is absent at runtime.
+ *
+ * @category models
+ * @public
+ */
+export interface DeprecatedOmitted {
+  readonly _tag: "Hyperlink.DeprecatedOmitted";
+}
+
+/**
+ * A HyperService contract: method name → wire {@link Method} (optionally {@link deprecated}),
+ * off-wire {@link LocalMethod}, or Tag-baked {@link DefaultMethod}. The single source of truth.
  *
  * @category models
  * @public
  */
 export interface Spec {
-  readonly [k: string]: AnyMethod | AnyLocalMethod | AnyDefaultMethod | Spec;
+  readonly [k: string]: AnyMethod | AnyLocalMethod | AnyDefaultMethod | AnyDeprecatedMethod | Spec;
 }
 
 /** A **flat** spec — a path-keyed record of leaves (no nested groups). The wire machinery runs on this;
  *  a (possibly nested) {@link Spec} flattens to it via {@link flattenSpec}. @internal */
-export type FlatSpec = Record<string, AnyMethod | AnyLocalMethod | AnyDefaultMethod>;
+export type FlatSpec = Record<string, AnyMethod | AnyLocalMethod | AnyDefaultMethod | AnyDeprecatedMethod>;
 
 /** Union → intersection — folds the per-leaf records from {@link FlatSpecOf}. @internal */
 type UnionToIntersection<U> = (U extends unknown ? (k: U) => void : never) extends (
@@ -691,11 +740,13 @@ export type FlatSpecOf<S, Prefix extends string = ""> = UnionToIntersection<
   {
     [K in keyof S & string]: S[K] extends { readonly kind: MethodKind }
       ? { readonly [P in `${Prefix}${K}`]: AsMethod<S[K]> }
-      : S[K] extends AnyLocalMethod | AnyDefaultMethod
+      : S[K] extends AnyDeprecatedMethod
         ? { readonly [P in `${Prefix}${K}`]: S[K] }
-        : S[K] extends Spec
-          ? FlatSpecOf<S[K], `${Prefix}${K}.`>
-          : never;
+        : S[K] extends AnyLocalMethod | AnyDefaultMethod
+          ? { readonly [P in `${Prefix}${K}`]: S[K] }
+          : S[K] extends Spec
+            ? FlatSpecOf<S[K], `${Prefix}${K}.`>
+            : never;
   }[keyof S & string]
 >;
 
@@ -718,25 +769,59 @@ type AsMethod<T> = T extends {
 
 /** Runtime guard: is a spec entry a {@link LocalMethod} (vs a wire {@link Method})? */
 const isLocalMethod = (
-  m: AnyMethod | AnyLocalMethod | AnyDefaultMethod | Spec,
+  m: AnyMethod | AnyLocalMethod | AnyDefaultMethod | AnyDeprecatedMethod | Spec,
 ): m is AnyLocalMethod => Predicate.hasProperty(m, LocalMethodTypeId);
 
 /** Runtime guard: is a spec entry a {@link DefaultMethod}? */
 const isDefaultMethod = (
-  m: AnyMethod | AnyLocalMethod | AnyDefaultMethod | Spec,
+  m: AnyMethod | AnyLocalMethod | AnyDefaultMethod | AnyDeprecatedMethod | Spec,
 ): m is AnyDefaultMethod => Predicate.hasProperty(m, DefaultMethodTypeId);
 
-/** Runtime guard: is a spec entry a **leaf** (wire/local/default method) vs a nested **group**? @internal */
+/** Runtime guard: is a spec entry a {@link DeprecatedMethod}? */
+const isDeprecatedMethod = (
+  m: AnyMethod | AnyLocalMethod | AnyDefaultMethod | AnyDeprecatedMethod | Spec,
+): m is AnyDeprecatedMethod => Predicate.hasProperty(m, DeprecatedMethodTypeId);
+
+/**
+ * True when a flat-spec leaf is a wire {@link Method} (includes {@link DeprecatedMethod}).
+ *
+ * @internal
+ */
+export const isWireSpecLeaf = (m: unknown): boolean =>
+  Predicate.hasProperty(m, MethodTypeId) ||
+  Predicate.hasProperty(m, DeprecatedMethodTypeId);
+
+/**
+ * True when a flat-spec leaf is a {@link DeprecatedMethod}.
+ *
+ * @internal
+ */
+export const isDeprecatedSpecLeaf = (m: unknown): boolean =>
+  Predicate.hasProperty(m, DeprecatedMethodTypeId);
+
+/** Runtime guard: is a value a wire {@link Method} (incl. {@link DeprecatedMethod})? @internal */
+const isMethod = (
+  m: unknown,
+): m is AnyMethod => Predicate.hasProperty(m, MethodTypeId);
+
+/** Runtime guard: is a spec entry a **leaf** (wire/local/default/deprecated) vs a nested **group**? @internal */
 const isSpecLeaf = (
-  v: AnyMethod | AnyLocalMethod | AnyDefaultMethod | Spec,
-): v is AnyMethod | AnyLocalMethod | AnyDefaultMethod =>
+  v: AnyMethod | AnyLocalMethod | AnyDefaultMethod | AnyDeprecatedMethod | Spec,
+): v is AnyMethod | AnyLocalMethod | AnyDefaultMethod | AnyDeprecatedMethod =>
   Predicate.hasProperty(v, MethodTypeId) ||
   Predicate.hasProperty(v, LocalMethodTypeId) ||
-  Predicate.hasProperty(v, DefaultMethodTypeId);
+  Predicate.hasProperty(v, DefaultMethodTypeId) ||
+  Predicate.hasProperty(v, DeprecatedMethodTypeId);
+
+/** Underlying wire {@link Method} for a leaf (unwraps {@link DeprecatedMethod}). @internal */
+const wireMethodOf = (
+  m: AnyMethod | AnyLocalMethod | AnyDefaultMethod | AnyDeprecatedMethod,
+): AnyMethod | AnyLocalMethod | AnyDefaultMethod =>
+  isDeprecatedMethod(m) ? m.method : m;
 
 /** Flatten a nested spec to a flat path-keyed record (identity for a flat spec). @internal */
 const flattenSpec = (spec: Spec, prefix = ""): FlatSpec => {
-  const flat: Record<string, AnyMethod | AnyLocalMethod | AnyDefaultMethod> = {};
+  const flat: Record<string, AnyMethod | AnyLocalMethod | AnyDefaultMethod | AnyDeprecatedMethod> = {};
   for (const [k, v] of Object.entries(spec)) {
     if (isSpecLeaf(v)) flat[`${prefix}${k}`] = v;
     else Object.assign(flat, flattenSpec(v, `${prefix}${k}.`));
@@ -1073,6 +1158,48 @@ export const local: typeof localFn & BareLocal = Object.assign(localFn, {
   [bareLocalSym]: true as const,
 });
 
+/** Wrap a wire {@link Method} as {@link DeprecatedMethod}. @internal */
+const wrapDeprecated = <M extends AnyMethod>(method: M): DeprecatedMethod<M> => ({
+  [DeprecatedMethodTypeId]: DeprecatedMethodTypeId,
+  method,
+});
+
+/**
+ * Retire a wire {@link Method} from the typed Handle while keeping it on the RPC / `contractHash`
+ * surface — invert of {@link local}. Serve/layer **impl stays required** so old clients can dial
+ * during skew; `yield* Tag` / {@link ServiceOf} omit the member so new app code cannot call it.
+ *
+ * **`Fn.dual`** — data-first and pipeable; **canonical authoring is piped**.
+ *
+ * ```ts
+ * class Files extends Hyperlink.Tag<Files>()("app/Files", {
+ *   move: Hyperlink.effectFn({
+ *     payload: Schema.Struct({ from: Schema.String, to: Schema.String }),
+ *     success: Schema.Void,
+ *   }),
+ *   rename: Hyperlink.effectFn({
+ *     payload: Schema.Struct({ from: Schema.String, to: Schema.String }),
+ *     success: Schema.Void,
+ *   }).pipe(Hyperlink.deprecated),
+ * }) {}
+ * ```
+ *
+ * Branding does **not** change {@link contractHash}. After the fleet is past skew, **delete** the
+ * leaf so the hash moves and remaining old clients fail loud.
+ *
+ * @category spec fields
+ * @public
+ */
+export const deprecated: {
+  // data-last first (pipe / `deprecated()`); data-first last so the value type is `(method) => …`
+  // for `.pipe(Hyperlink.deprecated)` (TS uses the last overload as the function’s value type).
+  <M extends AnyMethod>(): (self: M) => DeprecatedMethod<M>;
+  <M extends AnyMethod>(self: M): DeprecatedMethod<M>;
+} = Fn.dual(
+  (args) => args.length >= 1 && isMethod(args[0]),
+  <M extends AnyMethod>(self: M): DeprecatedMethod<M> => wrapDeprecated(self),
+);
+
 /**
  * Declare a **single Tag-baked default** in the contract — identical local and remote, no wire,
  * no impl slot. Accepts a literal or a sync function (Promise-returning fns are a type error —
@@ -1385,8 +1512,9 @@ export function unsafeEffect<Client = Derive>() {
 export type ValueField<M extends AnyMethod> = Marked<M, { readonly _tag: "value" }>;
 
 /** Runtime guard: is a spec entry a {@link value} field? */
-const isValueMethod = (m: AnyMethod | AnyLocalMethod | AnyDefaultMethod): boolean =>
-  Predicate.hasProperty(m, "_tag") && m._tag === "value";
+const isValueMethod = (
+  m: AnyMethod | AnyLocalMethod | AnyDefaultMethod | AnyDeprecatedMethod,
+): boolean => Predicate.hasProperty(m, "_tag") && m._tag === "value";
 
 /**
  * Define a **`value`** field — materialize a plain property (`p.x: A`, no `yield*`) **once** when the
@@ -1425,8 +1553,9 @@ export function value(
 export type RefField<M extends AnyMethod> = Marked<M, { readonly _tag: "ref" }>;
 
 /** Runtime guard: is a spec entry a {@link ref} field? */
-const isRefMethod = (m: AnyMethod | AnyLocalMethod | AnyDefaultMethod): boolean =>
-  Predicate.hasProperty(m, "_tag") && m._tag === "ref";
+const isRefMethod = (
+  m: AnyMethod | AnyLocalMethod | AnyDefaultMethod | AnyDeprecatedMethod,
+): boolean => Predicate.hasProperty(m, "_tag") && m._tag === "ref";
 
 /**
  * Define a **`ref`** field — reactive state surfaced as a {@link Subscribable}<A> (`get` + `changes`),
@@ -1776,13 +1905,19 @@ export const mapEffects = <Impl, const S extends Spec, Out = Impl>(
   const mapped: Record<string, unknown> = {};
   for (const [path, member] of Object.entries(flatImpl)) {
     const leaf = flatSpec[path];
+    const wire =
+      leaf === undefined || isLocalMethod(leaf) || isDefaultMethod(leaf)
+        ? undefined
+        : wireMethodOf(leaf);
     // Leave streams (and `ref` → Subscribable, which is `stream: true`) and local members untouched;
-    // map only the Effect methods.
+    // map only the Effect methods. Deprecated wrappers unwrap to their inner Method.
     if (
       leaf === undefined ||
       isLocalMethod(leaf) ||
       isDefaultMethod(leaf) ||
-      (Predicate.hasProperty(leaf, "stream") && leaf.stream === true)
+      (wire !== undefined &&
+        Predicate.hasProperty(wire, "stream") &&
+        wire.stream === true)
     ) {
       mapped[path] = member;
     } else {
@@ -2232,6 +2367,7 @@ type ClientMethod<M extends AnyMethod, Client> = [Client] extends [Derive] ? Ser
  * `Effect`/function members; off-wire {@link LocalMethod}s surface as
  * `Effect<T, never, Local<Self>>` — `yield*` to obtain the value, requiring the local layer
  * ({@link Local}) (so they're uncallable through {@link Hyperlink.client}).
+ * {@link DeprecatedMethod}s are **omitted** (wire + impl stay; Handle hides them).
  *
  * @category models
  * @public
@@ -2240,22 +2376,29 @@ type ClientMethod<M extends AnyMethod, Client> = [Client] extends [Derive] ? Ser
 // wire `kind` check — brand checks are schema-independent. An old `: S[K] extends AnyMethod`
 // else-gate dragged payload schemas into the conditional and deferred the whole type under a
 // free type parameter (e.g. a factory generic over the item schema).
+//
+// Deprecated: value → {@link DeprecatedOmitted} (not key-remap). Key-remap
+// `as S[K] extends AnyDeprecatedMethod ? never` defers on open `Method` under generic Specs
+// (Gate/Daemon Tag factories) and poisons `keyof` for unrelated members. Runtime Handle still
+// omits the key (buildLocalContext / buildClientService skip).
 export type ServiceOf<S extends Spec, Self = unknown> = Simplify<{
-  readonly [K in keyof S]: S[K] extends FromLocalMethod<infer M>
-    ? InjectLocal<M, Self> // interface-Tag local: interface-shaped, gains `Local`
-    : S[K] extends LocalMethod<infer T>
-    ? LocalEffect<T, never, Self>
-    : S[K] extends DefaultMethod<infer F>
-      ? F // Tag-baked default — identical local and remote
-      : S[K] extends { readonly _tag: "value" }
-        ? SuccessOf<AsMethod<S[K]>>
-        : S[K] extends { readonly _tag: "ref" }
-          ? Subscribable<SuccessOf<AsMethod<S[K]>>>
-          : S[K] extends { readonly kind: MethodKind } // leaf (F-independent; reconstruct via AsMethod)
-            ? ClientMethod<AsMethod<S[K]>, ClientOverrideOf<S[K]>> // client handle → override or derived
-            : S[K] extends Spec
-              ? ServiceOf<S[K], Self> // nested group → nested service
-              : never;
+  readonly [K in keyof S]: S[K] extends AnyDeprecatedMethod
+    ? DeprecatedOmitted
+    : S[K] extends FromLocalMethod<infer M>
+      ? InjectLocal<M, Self> // interface-Tag local: interface-shaped, gains `Local`
+      : S[K] extends LocalMethod<infer T>
+        ? LocalEffect<T, never, Self>
+        : S[K] extends DefaultMethod<infer F>
+          ? F // Tag-baked default — identical local and remote
+          : S[K] extends { readonly _tag: "value" }
+            ? SuccessOf<AsMethod<S[K]>>
+            : S[K] extends { readonly _tag: "ref" }
+              ? Subscribable<SuccessOf<AsMethod<S[K]>>>
+              : S[K] extends { readonly kind: MethodKind } // leaf (F-independent; reconstruct via AsMethod)
+                ? ClientMethod<AsMethod<S[K]>, ClientOverrideOf<S[K]>> // client handle → override or derived
+                : S[K] extends Spec
+                  ? ServiceOf<S[K], Self> // nested group → nested service
+                  : never;
 }>;
 
 /**
@@ -2269,11 +2412,13 @@ export type ServiceOf<S extends Spec, Self = unknown> = Simplify<{
 export type ValueErrorsOf<S extends Spec> = unknown extends S
   ? never
   : {
-      [K in keyof S]: S[K] extends { readonly _tag: "value" }
-        ? ErrorOf<AsMethod<S[K]>>
-        : S[K] extends Spec
-          ? ValueErrorsOf<S[K]>
-          : never;
+      [K in keyof S]: S[K] extends AnyDeprecatedMethod
+        ? never // omitted from Handle acquire (still required on serve impl)
+        : S[K] extends { readonly _tag: "value" }
+          ? ErrorOf<AsMethod<S[K]>>
+          : S[K] extends Spec
+            ? ValueErrorsOf<S[K]>
+            : never;
     }[keyof S];
 
 // ── Tag<Self, I>(): an existing service interface as the source of truth ─────────────────────────
@@ -2425,11 +2570,13 @@ type WireServiceOf<S extends Spec> = {
     readonly _tag: "ref";
   }
     ? Subscribable<SuccessOf<AsMethod<S[K]>>> // impl provides the Subscribable; wire serves its .changes
-    : S[K] extends { readonly kind: MethodKind }
-      ? ServiceMethod<AsMethod<S[K]>>
-      : S[K] extends Spec
-        ? WireServiceOf<S[K]>
-        : never;
+    : S[K] extends DeprecatedMethod<infer M>
+      ? ServiceMethod<AsMethod<M>>
+      : S[K] extends { readonly kind: MethodKind }
+        ? ServiceMethod<AsMethod<S[K]>>
+        : S[K] extends Spec
+          ? WireServiceOf<S[K]>
+          : never;
 };
 
 /**
@@ -2441,30 +2588,34 @@ type WireServiceOf<S extends Spec> = {
 export type Wire<S extends Spec> = WireServiceOf<S>;
 
 /** A **peer's** service as seen by {@link peers} — the per-instance ("leaf") wire methods only:
- *  {@link FleetField}s and {@link LocalMethod}s are excluded, so a fold can't recurse into a peer's
- *  own fleet field. A full {@link ServiceOf} is assignable to it (width), so real clients fit. */
+ *  {@link FleetField}s, {@link LocalMethod}s, and {@link DeprecatedMethod}s are excluded, so a fold
+ *  can't recurse into a peer's own fleet field or call retired Handle verbs. A full {@link ServiceOf}
+ *  is assignable to it (width), so real clients fit. */
 type PeerServiceOf<S extends Spec> = {
   readonly [K in keyof S as S[K] extends { readonly fleet: true }
     ? never
     : S[K] extends AnyLocalMethod | AnyDefaultMethod
       ? never
-      : K]: S[K] extends { readonly _tag: "ref" }
-    ? // a peer reads a `ref` **one-shot** (its current value, lazily) — not a live subscription, so
-      // folding it never opens a persistent connection at build (see buildPeerService).
-      Effect.Effect<SuccessOf<AsMethod<S[K]>>>
-    : S[K] extends { readonly kind: MethodKind }
-      ? ServiceMethod<AsMethod<S[K]>>
-      : S[K] extends Spec
-        ? PeerServiceOf<S[K]>
-        : never;
+      : K]: S[K] extends AnyDeprecatedMethod
+    ? never // Handle-omitted; runtime peer facade skips (no key-remap — see ServiceOf)
+    : S[K] extends { readonly _tag: "ref" }
+      ? // a peer reads a `ref` **one-shot** (its current value, lazily) — not a live subscription, so
+        // folding it never opens a persistent connection at build (see buildPeerService).
+        Effect.Effect<SuccessOf<AsMethod<S[K]>>>
+      : S[K] extends { readonly kind: MethodKind }
+        ? ServiceMethod<AsMethod<S[K]>>
+        : S[K] extends Spec
+          ? PeerServiceOf<S[K]>
+          : never;
 };
 
 /**
  * The **implementation** a {@link localLayer} / {@link serve} expects: wire members are their
  * `Effect`/`Stream`/function, and each {@link LocalMethod} is its **raw** value `T` (the toolkit wraps
- * it to require the {@link Local}). When an impl needs a capability (e.g. {@link peers}) to
- * build, provide it via the **`Effect` form** of {@link Hyperlink.layer} / {@link Hyperlink.serve}
- * — resolve it once, and the members close over it.
+ * it to require the {@link Local}). {@link DeprecatedMethod}s are **required** here (and on
+ * {@link ServeImplOf}) even though {@link ServiceOf} omits them — old clients still dial the RPC.
+ * When an impl needs a capability (e.g. {@link peers}) to build, provide it via the **`Effect` form**
+ * of {@link Hyperlink.layer} / {@link Hyperlink.serve} — resolve it once, and the members close over it.
  *
  * A {@link value} field's impl is the `Effect<A, E>` resolved once at acquire — that differs from how
  * it *surfaces* in {@link ServiceOf} (a plain `A`), so annotate an impl with `ImplOf`, not
@@ -2483,13 +2634,15 @@ export type ImplOf<S extends Spec> = {
     ? M // interface-Tag local: the impl provides the interface member itself
     : S[K] extends LocalMethod<infer T>
       ? T
-      : S[K] extends { readonly _tag: "ref" }
-        ? Subscribable<SuccessOf<AsMethod<S[K]>>> // impl owns the SubscriptionRef, provided via subscribable()
-        : S[K] extends { readonly kind: MethodKind }
-          ? ServiceMethod<AsMethod<S[K]>>
-          : S[K] extends Spec
-            ? ImplOf<S[K]> // nested group → nested impl
-            : never;
+      : S[K] extends DeprecatedMethod<infer M>
+        ? ServiceMethod<AsMethod<M>> // deprecated: impl required; Handle omits
+        : S[K] extends { readonly _tag: "ref" }
+          ? Subscribable<SuccessOf<AsMethod<S[K]>>> // impl owns the SubscriptionRef, provided via subscribable()
+          : S[K] extends { readonly kind: MethodKind }
+            ? ServiceMethod<AsMethod<S[K]>>
+            : S[K] extends Spec
+              ? ImplOf<S[K]> // nested group → nested impl
+              : never;
 };
 
 /**
@@ -2571,15 +2724,18 @@ type RpcOf<K extends string, M extends AnyMethod> = M["stream"] extends true
   : Rpc.Rpc<K, PayloadSchemaOf<M>, M["success"], M["error"]>;
 
 /** The union of every wire method's {@link RpcOf} — **path-keyed** across nested groups (local methods
- *  excluded). The `kind` check + {@link AsMethod} keep it reducing under a generic item schema. */
+ *  excluded; {@link DeprecatedMethod} included via its inner method). The `kind` check + {@link AsMethod}
+ *  keep it reducing under a generic item schema. */
 type RpcUnionOf<S extends Spec, Prefix extends string = ""> = {
   readonly [K in keyof S & string]: S[K] extends { readonly kind: MethodKind }
     ? RpcOf<`${Prefix}${K}`, AsMethod<S[K]>>
-    : S[K] extends AnyLocalMethod | AnyDefaultMethod
-      ? never
-      : S[K] extends Spec
-        ? RpcUnionOf<S[K], `${Prefix}${K}.`>
-        : never;
+    : S[K] extends DeprecatedMethod<infer M>
+      ? RpcOf<`${Prefix}${K}`, AsMethod<M>>
+      : S[K] extends AnyLocalMethod | AnyDefaultMethod
+        ? never
+        : S[K] extends Spec
+          ? RpcUnionOf<S[K], `${Prefix}${K}.`>
+          : never;
 }[keyof S & string];
 
 /**
@@ -2628,6 +2784,9 @@ export const buildRpcGroup = (
   const rpcs = Object.entries(spec).flatMap(([method, m]) => {
     // local / default members are off-wire — they get no rpc.
     if (isLocalMethod(m) || isDefaultMethod(m)) return [];
+    // deprecated: wrapper leaf — Rpc uses the inner Method (Handle omits; wire keeps).
+    const wire = wireMethodOf(m);
+    if (isLocalMethod(wire) || isDefaultMethod(wire) || !isMethod(wire)) return [];
     const tag = wireTag(wireKey, method);
     const options: {
       payload?: Schema.Struct.Fields | Schema.Top;
@@ -2635,12 +2794,12 @@ export const buildRpcGroup = (
       error: Schema.Top;
       stream?: boolean;
     } = {
-      success: m.success,
-      error: m.error,
+      success: wire.success,
+      error: wire.error,
     };
-    if (m.payload !== undefined) options.payload = m.payload;
+    if (wire.payload !== undefined) options.payload = wire.payload;
     // streaming methods become an `RpcSchema.Stream` on the wire (element + stream-error).
-    if (m.stream) options.stream = true;
+    if (wire.stream) options.stream = true;
     return [Rpc.make(tag, options)];
   });
   // Boundary assertion (runtime-correct): each entry is built to be exactly the `Rpc`
@@ -4089,6 +4248,8 @@ const buildLocalContext = <Self, E = never>(
       // local members surface as `Effect<T, never, Local>` (require Local to obtain the
       // value); default members install the Tag-baked value; value fields are resolved once here into a
       // plain value; ref fields and other wire members pass through unchanged.
+      // deprecated: wire + impl stay (flattenImpl / serve); omitted from the Handle.
+      if (isDeprecatedMethod(m)) continue;
       if (isLocalMethod(m)) {
         const member = members[key];
         const interfaceShaped =
@@ -4321,6 +4482,8 @@ export interface ServedHyperlink {
   readonly readiness: Effect.Effect<Readiness>;
   /** F4 wire-contract fingerprint — stamped at serve from the tag Spec. */
   readonly contractHash: string;
+  /** WorkPool payload tip id when the served tag carries an item schema. */
+  readonly schemaVersion?: string;
   /** Opt-in handoff fn (serve `{ handoff }`, Locked #39); materialized in {@link runServedHandoffs}. */
   readonly handoff?: ServedHandoff;
   /** Node log key when the served tag is bound to a {@link Node} (`options.node`). */
@@ -4398,11 +4561,13 @@ export type ServeImplOf<S extends Spec, R> = {
     readonly _tag: "ref";
   }
     ? Subscribable<SuccessOf<AsMethod<S[K]>>>
-    : S[K] extends { readonly kind: MethodKind }
-      ? ServeMethod<AsMethod<S[K]>, R>
-      : S[K] extends Spec
-        ? ServeImplOf<S[K], R>
-        : never;
+    : S[K] extends DeprecatedMethod<infer M>
+      ? ServeMethod<AsMethod<M>, R>
+      : S[K] extends { readonly kind: MethodKind }
+        ? ServeMethod<AsMethod<S[K]>, R>
+        : S[K] extends Spec
+          ? ServeImplOf<S[K], R>
+          : never;
 };
 
 /**
@@ -4506,14 +4671,17 @@ const getOrCreateSharedHandlerLayer = (
         );
       }
       const member = flatImpl[method];
+      const leaf = spec[method];
+      const wire =
+        leaf !== undefined && !isLocalMethod(leaf) && !isDefaultMethod(leaf)
+          ? wireMethodOf(leaf)
+          : undefined;
+      if (wire === undefined || !isMethod(wire)) {
+        return Effect.die(new MissingContractMethod({ method }));
+      }
       return workerContext === undefined
-        ? invokeWireMethod(member, spec[method] as AnyMethod, payload)
-        : invokeWireMethodWithContext(
-            member,
-            spec[method] as AnyMethod,
-            payload,
-            workerContext,
-          );
+        ? invokeWireMethod(member, wire, payload)
+        : invokeWireMethodWithContext(member, wire, payload, workerContext);
     };
   }
   const toHandlerLayer = retype<(handlers: never) => Layer.Any>(
@@ -4529,6 +4697,7 @@ const getOrCreateSharedHandlerLayer = (
           onSome: (registry) => {
             const bound = nodeOf(tag);
             const boundKinds = nodeKindsOf(tag);
+            const schemaVersion = schemaVersionFromTag(tag);
             return registry.register({
               wireKey,
               group: retype(group as never),
@@ -4536,6 +4705,7 @@ const getOrCreateSharedHandlerLayer = (
               contractHash: hashContract(wireKey, kind, spec),
               readiness: Effect.suspend(() => allReady(state.readiness)),
               // Shared instance handoffs live on SharedWireState — see {@link runServedHandoffs}.
+              ...(schemaVersion !== undefined ? { schemaVersion } : {}),
               ...(bound !== undefined ? { nodeLogKey: bound.key } : {}),
               ...(boundKinds.length > 0 ? { nodeKinds: boundKinds } : {}),
             });
@@ -4638,15 +4808,16 @@ const serveRemoteHandlers = (
   // flatten a (possibly nested) impl to path keys matching the flat spec + path-keyed group procedures.
   const flatImpl = flattenImpl(wireImpl as Record<string, unknown>, tag[specSym]);
   for (const [key, member] of Object.entries(flatImpl)) {
+    const leaf = tag[specSym][key];
+    const wire =
+      leaf !== undefined && !isLocalMethod(leaf) && !isDefaultMethod(leaf)
+        ? wireMethodOf(leaf)
+        : undefined;
+    if (wire === undefined || !isMethod(wire)) continue;
     handlers[wireTag(tag[wireKeySym], key)] = (payload) =>
       workerContext === undefined
-        ? invokeWireMethod(member, tag[specSym][key] as AnyMethod, payload)
-        : invokeWireMethodWithContext(
-            member,
-            tag[specSym][key] as AnyMethod,
-            payload,
-            workerContext,
-          );
+        ? invokeWireMethod(member, wire, payload)
+        : invokeWireMethodWithContext(member, wire, payload, workerContext);
   }
   // RpcGroup.toLayer is a dynamically-keyed factory — bridge with retype so `any`/`unknown`
   // never enter Layer E/R channels.
@@ -4670,6 +4841,7 @@ const serveRemoteHandlers = (
                 : nodeKindsOf(tag);
             const kind = kindOf(tag) ?? "hyperlink";
             const handoff = servedHandoff(tag, wireImpl, handoffFn);
+            const schemaVersion = schemaVersionFromTag(tag);
             return registry.register({
               wireKey: tag[wireKeySym],
               group: retype(group as never),
@@ -4677,6 +4849,7 @@ const serveRemoteHandlers = (
               contractHash: hashContract(tag[wireKeySym], kind, tag[specSym]),
               readiness: readinessCheckServed(tag, wireImpl),
               ...(handoff !== undefined ? { handoff } : {}),
+              ...(schemaVersion !== undefined ? { schemaVersion } : {}),
               ...(bound !== undefined ? { nodeLogKey: bound.key } : {}),
               ...(boundKinds.length > 0 ? { nodeKinds: boundKinds } : {}),
             });
@@ -4988,6 +5161,8 @@ export const forwardClient = <S extends Spec>(
   for (const [key, m] of Object.entries(flattenSpec(spec as unknown as Spec))) {
     // local / default aren't on the wire — locals are stubbed in clientLayer; defaults installed there.
     if (isLocalMethod(m) || isDefaultMethod(m)) continue;
+    const wire = wireMethodOf(m);
+    if (!isMethod(wire)) continue;
     // the wire tag is wireKey-prefixed; the service surface keeps the bare method name
     const call = calls[wireTag(wireKey, key)];
     // completeness + callability check — `typeof` narrows `call` to a callable, so the
@@ -4996,9 +5171,9 @@ export const forwardClient = <S extends Spec>(
       throw new MissingContractMethod({ method: key });
     }
     service[key] =
-      m.payload === undefined
+      wire.payload === undefined
         ? remapProtocolMismatch(instanceKey, key, call(undefined, { headers }))
-        : m.annotations.callStyle === "pair"
+        : wire.annotations.callStyle === "pair"
           ? (arg0: unknown, arg1?: unknown) =>
               remapProtocolMismatch(instanceKey, key, call([arg0, arg1], { headers }))
           : (payload: unknown) =>
@@ -6009,54 +6184,14 @@ const definePathGetter = (
 };
 
 /**
- * True when a lookup-client RPC failed on the transport (peer gone / socket closed
- * mid-call). App-declared errors and remapped {@link ProtocolMismatch} stay out.
+ * Stable service facade over a replaceable dial holder — used by {@link lookupClient}
+ * and `Lookup.follow`. Always reads `holder.current` so build-then-swap can replace the
+ * underlying client without changing the Context value. Effect methods retry once on
+ * transport error; streams follow dial generations ({@link followDialStream}).
  *
  * @internal
  */
-const isLookupDialTransportError = (err: unknown): boolean =>
-  Predicate.hasProperty(err, "_tag") && err._tag === "RpcClientError";
-
-/**
- * One outer Stream across dial generations — transport death does not end the
- * consumer fold; {@link Policy.StreamGap} chooses stall / drop / buffer.
- *
- * @internal
- */
-const followDialStream = (
-  installGen: SubscriptionRef.SubscriptionRef<number>,
-  streamGap: Policy.StreamGap,
-  getInner: () => Stream.Stream<unknown>,
-): Stream.Stream<unknown> => {
-  const switched = SubscriptionRef.changes(installGen).pipe(
-    Stream.switchMap(() =>
-      Stream.suspend(() => getInner()).pipe(
-        Stream.catch((err) => {
-          if (!isLookupDialTransportError(err)) {
-            return Stream.fail(err);
-          }
-          // Gap until the next successful install (switchMap cancels this branch).
-          return streamGap === "drop" ? Stream.empty : Stream.never;
-        }),
-      ),
-    ),
-  );
-  return streamGap === "buffer"
-    ? switched.pipe(Stream.buffer({ capacity: 64 }))
-    : switched;
-};
-
-/**
- * Stable service facade that always reads {@link holder}.current — so Directory
- * dial swaps can replace the underlying client without changing the Context value.
- *
- * Effect methods (query / mutate) run through {@link withDialRetry} once so a brief
- * A→B rebind gap does not surface `RpcClientError` to the app. Streams / `ref.changes`
- * follow dial generations as one outer Stream ({@link followDialStream}).
- *
- * @internal
- */
-const makeLiveLookupService = <Self, S extends Spec>(
+export const makeLiveDialService = <Self, S extends Spec>(
   tag: HyperlinkTag<Self, S>,
   holder: { current: ServiceOf<S, Self> },
   withDialRetry: <A, E, R>(
@@ -6069,6 +6204,7 @@ const makeLiveLookupService = <Self, S extends Spec>(
   const service: Record<string, unknown> = {};
   const cap = tag[localCapSym];
   for (const [path, m] of Object.entries(tag[specSym])) {
+    if (isDeprecatedMethod(m)) continue;
     if (isLocalMethod(m)) {
       setPath(
         service,
@@ -6157,7 +6293,7 @@ const makeLivePeerService = <Self, S extends Spec>(
 ): PeerServiceOf<S> => {
   const service: Record<string, unknown> = {};
   for (const [path, m] of Object.entries(tag[specSym])) {
-    if (isLocalMethod(m) || isDefaultMethod(m)) continue;
+    if (isLocalMethod(m) || isDefaultMethod(m) || isDeprecatedMethod(m)) continue;
     if (Predicate.hasProperty(m, "fleet") && m.fleet === true) continue;
     if (isRefMethod(m)) {
       // Peer refs surface as one-shot Effects (see buildPeerService).
@@ -6407,10 +6543,18 @@ export const lookupClient = <Self, S extends Spec>(
           }),
         );
 
+      const Dialers = yield* Effect.promise(() => import("./Dialers"));
+      const dialerId = yield* Dialers.mintId;
+
       const endpoint = yield* resolve;
       yield* install(endpoint);
       currentKey = lookupDialKey(endpoint);
       currentNodeKey = endpoint.nodeKey;
+      yield* Dialers.registerOption({
+        dialerId,
+        serviceKey: tag.key,
+        target: endpoint.nodeKey,
+      });
 
       const tryResolveAdopt = Effect.gen(function* () {
         const next = yield* Effect.option(resolve);
@@ -6421,6 +6565,11 @@ export const lookupClient = <Self, S extends Spec>(
         if (Exit.isSuccess(installed)) {
           currentKey = nextKey;
           currentNodeKey = next.value.nodeKey;
+          yield* Dialers.registerOption({
+            dialerId,
+            serviceKey: tag.key,
+            target: next.value.nodeKey,
+          });
           return;
         }
         yield* Effect.logWarning(
@@ -6498,15 +6647,18 @@ export const lookupClient = <Self, S extends Spec>(
         );
 
       yield* Effect.addFinalizer(() =>
-        clientScope === undefined
-          ? Effect.void
-          : Scope.close(clientScope, Exit.void),
+        Effect.gen(function* () {
+          yield* Dialers.unregisterOption(dialerId);
+          if (clientScope !== undefined) {
+            yield* Scope.close(clientScope, Exit.void);
+          }
+        }),
       );
 
       const followStream = (getInner: () => Stream.Stream<unknown>) =>
         followDialStream(installGen, streamGap, getInner);
 
-      return makeLiveLookupService(tag, holder, withDialRetry, followStream);
+      return makeLiveDialService(tag, holder, withDialRetry, followStream);
     }),
   ) as Layer.Layer<
     Self,
@@ -6709,6 +6861,9 @@ const buildPeerService = <Self, S extends Spec>(
   >;
   const service: Record<string, unknown> = {};
   for (const [key, m] of Object.entries(tag[specSym])) {
+    // local / default / deprecated aren't on the peer Handle (deprecated stays on RpcGroup only).
+    if (isLocalMethod(m) || isDefaultMethod(m) || isDeprecatedMethod(m)) continue;
+    if (Predicate.hasProperty(m, "fleet") && m.fleet === true) continue;
     if (isRefMethod(m)) {
       // one-shot current value: subscribe, take the first (the replayed current), close. Lazy — no
       // connection until folded; fails (dropped by combineQuery) if the peer is unreachable.
@@ -6930,7 +7085,8 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
         // Live rebind on Directory.changes when dial moves / peers appear or leave.
         if (stamped !== undefined && stamped.length === 0) {
           const Directory = yield* Effect.promise(() => import("./Directory"));
-          const dirOpt = yield* Effect.serviceOption(Directory.Service);
+          const Dialers = yield* Effect.promise(() => import("./Dialers"));
+          const dirOpt = yield* Effect.serviceOption(Directory.Tag);
           if (Option.isNone(dirOpt)) {
             return {} as Record<string, PeerServiceOf<S>>;
           }
@@ -6949,6 +7105,7 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
             readonly generation: Ref.Ref<number>;
             readonly installGen: SubscriptionRef.SubscriptionRef<number>;
             readonly gate: Semaphore.Semaphore;
+            readonly dialerId: string;
           };
           const peersRecord = Object.create(null) as Record<
             string,
@@ -6978,6 +7135,7 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
               if (slot === undefined) return;
               slots.delete(nodeKey);
               delete peersRecord[nodeKey];
+              yield* Dialers.unregisterOption(slot.dialerId);
               if (slot.scope !== undefined) {
                 yield* Scope.close(slot.scope, Exit.void);
               }
@@ -7055,6 +7213,7 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
                 const generation = yield* Ref.make(0);
                 const installGen = yield* SubscriptionRef.make(0);
                 const gate = yield* Semaphore.make(1);
+                const dialerId = yield* Dialers.mintId;
                 const streamGap = yield* Policy.StreamGap;
                 const facade = makeLivePeerService(
                   tag,
@@ -7070,6 +7229,7 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
                   generation,
                   installGen,
                   gate,
+                  dialerId,
                 };
                 slots.set(row.nodeKey, slot);
                 peersRecord[row.nodeKey] = facade;
@@ -7103,6 +7263,11 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
                     (n) => n + 1,
                   );
                   yield* SubscriptionRef.set(active.installGen, gen);
+                  yield* Dialers.registerOption({
+                    dialerId: active.dialerId,
+                    serviceKey: tag.key,
+                    target: row.nodeKey,
+                  });
                   if (prev !== undefined) {
                     yield* Scope.close(prev, Exit.void);
                   }
@@ -7254,6 +7419,8 @@ const buildClientService = <Self, S extends Spec>(
     // consumer holds; `wire` + `tag[specSym]` are flat path keys.
     const service: Record<string, unknown> = {};
     for (const [key, m] of Object.entries(tag[specSym])) {
+      // deprecated: still on RpcGroup / forwardClient; omitted from the typed Handle.
+      if (isDeprecatedMethod(m)) continue;
       if (isLocalMethod(m)) {
         setPath(
           service,

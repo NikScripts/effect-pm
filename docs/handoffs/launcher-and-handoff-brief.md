@@ -1,6 +1,6 @@
 # Brief — Launcher + node handoff (Agent 5)
 
-**Status:** Track A + **Track B Eng'd** on tip. **Track C Locked #27–34 + #39 Eng'd**. **Track D v1 + advice early-move Eng'd** — `lookupClient` build-then-swap + `RpcClientError` retry + `Advice.changes` dial move. **#44 sibling Tags Eng'd**. **#45 peersLayer parity Eng'd**. **#46 Policy Eng'd** — composable `hyperlink-ts/Policy` (sticky / streamGap / coldAmbiguous); warm dual-serve sticky + continuous streams default on. **#35–37** deferred. Explicit A/B launcher / `restartSuccessor` deferred.  
+**Status:** Track A + **Track B Eng'd** on tip. **Track C Locked #27–34 + #39 Eng'd**. **Track D v1 + advice early-move Eng'd** — `lookupClient` build-then-swap + `RpcClientError` retry + `Advice.changes` dial move. **#44 sibling Tags Eng'd**. **#45 peersLayer parity Eng'd**. **#46 Policy Eng'd**. **#35** superseded (Versioned + `deprecated` Eng'd). **#36** Lookup A/B + Lookup-first + `planUpdate` + **`restartSuccessor` Eng'd** (owner 2026-08-07: **options-bag shape rejected as SSOT** — redesign + main/additional addresses: [`node-addresses-and-update-api.md`](./node-addresses-and-update-api.md)). **A1+B2** sticky dual-serve + **Dialers** census Eng'd. **#37** deferred. Optional: stream resume tokens; client-redirect SDK rejected for v1 (proxy-as-main lean is a separate dock).  
 **Opened:** 2026-07-25 (owner via Agent G).  
 **Audience:** next agent picking up launcher + handoff / migration discussion.
 
@@ -8,7 +8,7 @@
 
 ## Locked (2026-07-27, owner)
 
-1. **Spine α — dumb spawn-and-exit launcher.** Bring-up only; exits when the spawn job is done. Not a long-lived fleet supervisor. Nodes own processes after start; Lookup is the control brain. (Rejects spine β: launcher-as-`Layer.launch(Fleet…)` lifecycle owner.)
+1. **Spine α — dumb spawn-and-exit launcher.** Bring-up only; exits when the spawn job is done. Not a long-lived fleet supervisor. Nodes own processes after start; Lookup is the control brain. (Rejects spine β: launcher-as-`Layer.launch(Fleet…)` lifecycle owner.) **Owner 2026-08-08:** possibly revisit — resident **Update/Machine** node that watches processes + runs updates may absorb or wrap Launcher (`Machine.spawn`); see [`node-addresses-and-update-api.md`](./node-addresses-and-update-api.md) §7. **Not unlocked** until owner locks the fork.
 2. **No Eng until API is locked with the owner.** Design → owner go on concrete API surface → then build. No APIs from `launcher-decisions.md` memory.
 3. **Bake order:** Track **A** (spawn+exit launcher API) first; then B (Lookup-directed startup), C (handoff), D (clients). Do not tangle tracks.
 4. **Track A exit gate = Ready** (not merely spawned, not Lookup-registered). Launcher waits until the child is ready, then exits. Registration / Lookup remains the child’s (node’s) job after that.
@@ -149,7 +149,7 @@
     - **Retry** = bounded re-run of that service's handoff. **Defer** / **NoPeer** / **RetryExhausted** / **Failed** (defect/`orDie`) = do **not** leave / shut down — restore `phase: "running"`, clear the shutting-down latch, surface typed `HandoffDeferred` (`_tag: "HandoffDeferred"`, `.reason` PascalCase via `handoffDeferralReason`) to the shutdown caller (over the wire on the node-status `shutdown` RPC error channel). Match by `_tag`, never message strings.
     - **No peer when handoff set ⇒ `HandoffDeferred({ reason: "NoPeer" })`** (keep up, log warning).
     - **WorkPool:** handoff **baked into** `WorkPool.serve` / `serveRemote` (`releaseEnqueueHandoff`). Config override/opt-out deferred. **Daemon / Gate:** optional `handoff` in config bag → `Hyperlink.serve` options (no baked migrate).
-    - **Deferred:** `restartSuccessor`; full `Node.http` 3rd-arg unify (serve `{ node }` currently threads registration only, not a tag re-stamp for `client(Tag)`).
+    - **Deferred:** full `Node.http` 3rd-arg unify (serve `{ node }` currently threads registration only, not a tag re-stamp for `client(Tag)`). `restartSuccessor` **Eng'd** (plan → up B → shutdown A).
 38. **Replacement addressing recipe (owner lock 2026-07-29)** — not an A/B product mode.
     - You **give addresses** (or mint at listen); you do not “configure as A/B.”
     - Typical cutover: **same `nodeKey`, new dial** → Directory `dialChanged` → clients rebind (`lookupClient` / directory `peersLayer`).
@@ -189,7 +189,7 @@ Shipped on tip (owner Eng go + refinements):
 
 Eng defaults: 32-byte hex token; Ready poll `100 millis` with per-dial `2 seconds` bound; outer default `"30 seconds"`.
 
-**Next bake:** stream resume tokens / dedupe (optional); explicit A/B launcher / `restartSuccessor`; #35–37 stay deferred.
+**Next bake:** stream resume tokens / dedupe (optional); #37 stays deferred. Sticky dual-serve + Dialers Eng'd.
 
 ### Track D v1 — Eng'd (2026-07-29, owner go “make the dream happen”)
 
@@ -203,7 +203,7 @@ North star: `lookupClient` callers never notice A→B. **v1 slice Eng'd:**
 45. **peersLayer D parity (Eng'd)** — directory-mode `peersLayer` matches `lookupClient`: **build-then-swap** peer dials (prior stays until next succeeds); Effect peer RPCs that hit `RpcClientError` **retry once** after rebind. Streams follow dial generations (Policy). Stable `peers[nodeKey]` facade identity across swaps.
 46. **Policy (Eng'd)** — `hyperlink-ts/Policy`: composable Layer fragments for dial (`sticky` / `streamGap` / `coldAmbiguous` / `pick`), verify (`verifyOff` / `verifyStatus` — replaces `Hyperlink.clientVerify`), advertise conflict (`askIncumbent` / `livenessReplace` / `OnConflict` SSOT), and yield (`yieldAccept` / `yieldRefuse`). Helpers: `Policy.provide` / `Policy.layer`. Node/Listen call-site stamps remain overrides. Defaults: sticky + stall + cold fail + verify reject + conflict inherit + yield accept.
 
-**Still open for D:** optional stream resume tokens / seam dedupe; not dual-serve sticky (shipped via Policy).
+**Still open for D:** optional stream resume tokens / seam dedupe. Dual-serve sticky + `Advice.prefer` + Dialers census shipped (`restartSuccessor` stamps prefer by default).
 
 ### Track B — research note (2026-07-27): what already exists
 
@@ -258,15 +258,19 @@ Owner locked #22–26; Eng on tip:
 
 **No Eng on #35–37 until re-locked** (gate #2). #28–34 are Locked above. Owner rubber-stamped deferral 2026-07-29.
 
-35. **Version / contract gate — superseded by Versioned schema bake (2026-07-30; locked 2026-08-03).** *(Versioned design locked, not Eng'd)*
+35. **Version / contract gate — superseded by Versioned schema bake.** *(Versioned + `Hyperlink.deprecated` Eng'd 2026-08-03)*
     - Binary `contractHash` / `ContractMismatch` stays for whole-Spec drift.
-    - Cross-version **payload** path: [`versioned-schema-decisions.md`](./versioned-schema-decisions.md) — per-tip `schemaVersion` (`Schema.Class.identifier` else AST hash); chain has no separate `.id`; retires numeric `withSchemaVersion`.
-    - **Queued after Versioned** (documented, no early Eng): `Hyperlink.deprecated` as `Fn.dual` (prefer `.pipe(Hyperlink.deprecated)`); Lookup/Node **update impact** plan; then explicit A/B / `restartSuccessor`.
-    - **Do not Eng** Versioned until owner go; do not start deprecated/impact until Versioned v1 finishes.
+    - Cross-version **payload** path: [`versioned-schema-decisions.md`](./versioned-schema-decisions.md) — per-tip `schemaVersion`; retires numeric `withSchemaVersion`.
+    - Method retirement: [`docs/guides/deprecated.md`](../guides/deprecated.md) (`Fn.dual`, prefer pipe).
+    - **Next:** ~~Lookup-first + Lookup A/B + update-impact + `restartSuccessor`~~ **Eng'd**; dual-serve / redirect / live `clientsAtRisk`.
 
-36. **Lookup-node handoff = explicitly deferred (not special-cased in C v1).**
-    - Soft-bake / IPC Lookup topology stays B.
-    - Migrating the Lookup node itself is out of C v1; treat later as “any node” once C verbs exist.
+36. **Lookup-node handoff — re-opened (high priority; owner 2026-08-03).**
+    - Soft-bake / “first node = Lookup” stays for **independent** launch (no Launcher).
+    - **Launcher ensure-Lookup-first (locked):** if Lookup not running → spawn Lookup-only first (operator address, else safe default when supported); if already running → use it. No Soft-bake onto app nodes under Launcher. No address + no default → fail closed.
+    - **Already up ≠ always hand off** — custody handoff only for spawned children; migration `{ handoff }` opt-in; Directory conflicts via `Policy.onConflict` / `askIncumbent`; Lookup replace only when orchestrating A→B.
+    - **Single address lock:** one Lookup endpoint; A/B = successive owners; `Lookup.follow` + Policy for the gap (**follow + handoff + `ensureLookup` Eng'd**).
+    - Eng order: ~~`Lookup.follow` + gap~~ → ~~orchestrated handoff~~ → ~~Launcher ensure-Lookup-first~~.
+    - Detail: [`versioned-schema-decisions.md`](./versioned-schema-decisions.md#desired-bring-up-launcher--ensure-lookup-first-locked).
 
 37. **Track D boundary — C emits signals only; no client redirect API in C.** *(confirmed; `lookupClient` / `peersLayer` rebind already Eng'd on D substrate)*
     - **C ships:** draining status, drain-then-cut, WorkPool peer transfer (#34), Node shutdown sequence, Directory/Advice composition.
@@ -351,7 +355,7 @@ How **clients** handle node handoff (redirect, dual-serve, drain, retry, discove
 ## Suggested first moves
 
 1. ~~Framing / A+B / lock #27–34+#39 / Eng / peersLayer + lookupClient rebind / serve-site `{ handoff }` + `releaseEnqueueHandoff` + live A→B suite~~ — done.
-2. **Owner later:** explicit A/B launcher; re-lock #35–37 if Eng wanted; Track D redirect / dual-serve; `restartSuccessor`.
+2. **Owner later:** Track D redirect / dual-serve; live `clientsAtRisk` registry; re-lock #37 if Eng wanted.
 3. ~~Track D `lookupClient` hot-rebind~~ — Eng'd (with directory `peersLayer`).
 
 **Live cutover SSOT:** `test/handoff-ab-cutover.test.ts` (B Directory-visible first; peer by dial; same-`nodeKey` + `askIncumbent` variants). Unit/orchestration: `test/hyperlink-handoff.test.ts`.
@@ -386,10 +390,8 @@ launcher-decisions.md stays reference-only if redesigning Track A further.
 Contract drift (contractHash / verify / loud-failures) is solid — reuse it.
 
 Track D v1 + Advice.changes + peersLayer parity + Policy (#46) Eng'd on tip.
-Versioned schema bake: docs/handoffs/versioned-schema-decisions.md (#35 superseded).
-Eng Versioned on owner go first. After Versioned (doc'd, no early Eng):
-  Hyperlink.deprecated (Fn.dual, prefer pipe); Lookup/Node update impact;
-  then restartSuccessor / explicit A/B. #36–37 stay deferred.
-Optional: stream resume tokens / seam dedupe.
+Versioned + Hyperlink.deprecated Eng'd (#35 superseded).
+#36 Eng'd: Lookup.follow, ensureLookup, planUpdate, restartSuccessor.
+Next: dual-serve / redirect / live clientsAtRisk; optional stream resume tokens.
 Plan-first; no new nouns unless really good.
 ```
