@@ -35,7 +35,6 @@ Route.get("chapter", "/guides/:slug").pipe(
 ## Not yet
 
 - Wire `pagesByIdFromModules` + `paths.gen` into a real app catalog (RSC Provider must not import page modules — keep shared options / server-only catalog)
-- Mixed static+dynamic **two** literal sets on one `Route.get` (annotation helper polish)
 - `group.fromEffect` emitting full param unions
 
 ## Eng’d inject / merge
@@ -46,6 +45,7 @@ Route.get("chapter", "/guides/:slug").pipe(
 - `Route.fromPage(id, path, page)` — options + static Literals → catalog route
 - `Router.destinationsFromPages(entries, { id: PageClass })` — path table + page merge
 - `Router.pagesByIdFromModules(glob)` — Vite eager glob → `{ [routeId]: Page }`
+- `Route.mixedFromEffect({ static, dynamic })` — two closed literal sets; only static bakes
 
 ## Surface
 
