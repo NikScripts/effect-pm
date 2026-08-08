@@ -202,6 +202,7 @@ export {
   staticFromEffect,
   mixedFromEffect,
   type ParamBag,
+  type WithParamBags,
 } from "./internal/routeFromEffect";
 
 /** @internal */
@@ -412,6 +413,15 @@ export const fileSystem: typeof fileRouter.routeFileSystem =
  * @public
  */
 export const fileRoot: typeof fileRouter.fileRoot = fileRouter.fileRoot;
+
+/**
+ * {@link fileRoot} with {@link ./Router.destinationsFromPages} merge — page
+ * classes by route id (options + static Literals bags).
+ *
+ * @public
+ */
+export const fileRootFromPages: typeof fileRouter.fileRootFromPages =
+  fileRouter.fileRootFromPages;
 
 // =============================================================================
 // asRoutes brand (shared with hyperlink Group.asRoutes)

@@ -46,6 +46,14 @@ export const runSync = <A, E>(
   effect: Effect.Effect<A, E, FileRouterServices>,
 ): A => Effect.runSync(effect.pipe(Effect.provide(nodeLayer)));
 
+/**
+ * Async OS-edge runner — Node FileSystem is async; Vite hooks must use this
+ * (not {@link runSync}) for discover/emit/check.
+ */
+export const runPromise = <A, E>(
+  effect: Effect.Effect<A, E, FileRouterServices>,
+): Promise<A> => Effect.runPromise(effect.pipe(Effect.provide(nodeLayer)));
+
 const walkFiles = (
   abs: string,
 ): Effect.Effect<ReadonlyArray<string>, PlatformError, FileRouterServices> =>

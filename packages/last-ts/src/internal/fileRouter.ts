@@ -11,6 +11,7 @@ import {
 } from "./asRoutesBrand";
 import { toRouteId } from "./fileRouterPaths";
 import * as endpoint from "./route";
+import * as pageSuccess from "./pageSuccess";
 import { fromPage } from "./routeFromPage";
 import * as catalog from "./routes";
 
@@ -67,11 +68,12 @@ export type PathEntry = {
   readonly routePath: string;
 };
 
-export type EntryRoute<E extends PathEntry> = endpoint.Constraint & {
-  readonly identifier: E["id"];
-  readonly path: E["routePath"] extends endpoint.Path ? E["routePath"]
-    : endpoint.Path;
-};
+export type EntryRoute<E extends PathEntry> = endpoint.Constraint &
+  pageSuccess.PageEndpointBrand & {
+    readonly identifier: E["id"];
+    readonly path: E["routePath"] extends endpoint.Path ? E["routePath"]
+      : endpoint.Path;
+  };
 
 export type RoutesOf<Entries extends ReadonlyArray<PathEntry>> = EntryRoute<
   Entries[number]
@@ -131,6 +133,7 @@ export const destinationsFromPages = <
  * ```
  *
  * Prefer {@link layerDestinations} with `group.from(Service)` for builder catalogs.
+ * For page-class merge, use {@link fileSystemFromPages}.
  */
 export const fileSystem = <const Entries extends ReadonlyArray<PathEntry>>(
   entries: Entries,
@@ -138,6 +141,30 @@ export const fileSystem = <const Entries extends ReadonlyArray<PathEntry>>(
   const effect = Effect.sync(() => destinationsOf(entries));
   return Object.assign(effect, {
     [AsRoutesTypeId]: { root: { key: "fileSystem", members: {} } },
+  }) as unknown as AsRoutesEffect<RoutesOf<Entries>>;
+};
+
+/**
+ * Like {@link fileSystem}, but merge {@link Page.AnyPage} classes by id
+ * (`Route.fromPage` — options + static Literals bags).
+ *
+ * Catalog twins stay client-safe (shared options bags); do **not** pass
+ * RSC page modules into the soft-nav Provider. Server tooling can build the
+ * page map with {@link pagesByIdFromModules}.
+ *
+ * @public
+ */
+export const fileSystemFromPages = <
+  const Entries extends ReadonlyArray<PathEntry>,
+>(
+  entries: Entries,
+  pages: {
+    readonly [K in Entries[number]["id"]]?: Page.AnyPage;
+  },
+): AsRoutesEffect<RoutesOf<Entries>> => {
+  const effect = Effect.sync(() => destinationsFromPages(entries, pages));
+  return Object.assign(effect, {
+    [AsRoutesTypeId]: { root: { key: "fileSystemFromPages", members: {} } },
   }) as unknown as AsRoutesEffect<RoutesOf<Entries>>;
 };
 
@@ -189,3 +216,32 @@ export const routeFileSystem = <
 export const fileRoot = <const Entries extends ReadonlyArray<PathEntry>>(
   entries: Entries,
 ) => routeFileSystem("root", entries, { topLevel: true });
+
+/**
+ * {@link fileRoot} + {@link destinationsFromPages} — path table ids + optional
+ * page-class merge (Literals → static bags).
+ *
+ * ```ts
+ * class GuidesSlug extends Page.static(chapterOptions) {}
+ * class Site extends Router.make("app").add(
+ *   Route.fileRootFromPages(fileEntries, { guides_slug: GuidesSlug }),
+ * ) {}
+ * ```
+ *
+ * @public
+ */
+export const fileRootFromPages = <
+  const Entries extends ReadonlyArray<PathEntry>,
+>(
+  entries: Entries,
+  pages: {
+    readonly [K in Entries[number]["id"]]?: Page.AnyPage;
+  },
+  options?: { readonly topLevel?: boolean },
+) => {
+  const effect = fileSystemFromPages(entries, pages);
+  const topLevel = options?.topLevel !== false;
+  return topLevel
+    ? catalog.group("root", { topLevel: true }).fromEffect(effect)
+    : catalog.group("root").fromEffect(effect);
+};

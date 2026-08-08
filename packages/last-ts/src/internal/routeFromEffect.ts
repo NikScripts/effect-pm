@@ -57,8 +57,16 @@ type BagsSchema<Bags extends ParamBag> = Schema.Top & {
 const bagsSchema = <Bags extends ParamBag>(): BagsSchema<Bags> =>
   Schema.Record(Schema.String, Schema.String) as unknown as BagsSchema<Bags>;
 
-/** Endpoint with params Type = literal bag union. @public */
+/**
+ * Endpoint branded with a literal param-bag union.
+ *
+ * Uses `~ParamBags` (not `~Params`) so it does not collapse against
+ * HttpApiEndpoint’s `Params = never` intersection.
+ *
+ * @public
+ */
 export type WithParamBags<E extends Constraint, Bags extends ParamBag> = E & {
+  readonly "~ParamBags": Bags;
   readonly "~Params": BagsSchema<Bags>;
 };
 

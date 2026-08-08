@@ -9,33 +9,47 @@ server** (`docs/last/site`) — not Hyperlink `docs/site`, not an example app.
 | Layer | Job |
 |-------|-----|
 | `Page.make` / `Page.static` classes | File page contract + request schemas |
-| `Router.make` + `Route.get` | Typed catalog / `urls.*` |
+| `paths.gen` + `Route.fileRootFromPages` | Typed catalog / `urls.*` (file ids) |
 | `Last.provider(Waku.layer.pipe(Layer.provide(routes)))` | Soft-nav provider |
 | Client islands (`View.Service`, …) | Interactive DI |
 
 ## Catalog
 
+Drive the catalog from the generated path table. Merge **catalog twin** page
+classes (shared options bags) — never import RSC page modules into the
+Provider / client island graph.
+
 ```ts
-import { Schema } from "effect"
 import * as Page from "last-ts/Page"
 import * as Route from "last-ts/Route"
 import * as Router from "last-ts/Router"
+import { fileEntries } from "./paths.gen"
+import { chapterOptions } from "./chapter"
 
-class ChapterRoute extends Page.static({
-  params: { slug: Schema.Literals(["routing", "view-service"]) },
-}) {}
+class GuidesSlug extends Page.static(chapterOptions) {}
 
 export class Site extends Router.make("last-ts").add(
-  Route.get("home", "/"),
-  Route.fromPage("chapter", "/guides/:slug", ChapterRoute),
+  Route.fileRootFromPages(fileEntries, {
+    guides_slug: GuidesSlug,
+  }),
 ) {}
 
 export const urls = Route.urlBuilder(Site)
+// urls.index() · urls.guides_slug("routing") · urls.docs_path("a/b")
 ```
 
-`Route.get` is **dynamic** by default. `Route.fromPage` copies the page’s
-options bag; `Page.static` + Literals attaches `staticFromEffect` bags (no hand
-`paths` list). Same bags type the links.
+Server tooling that *can* import page modules:
+
+```ts
+const pages = Router.pagesByIdFromModules(
+  import.meta.glob("./pages/**/*.{tsx,ts}", { eager: true }),
+)
+// → { index, about, guides_slug, docs_path, view }
+```
+
+`Route.get` is **dynamic** by default. `Route.fromPage` / `fileRootFromPages`
+copies the page’s options bag; `Page.static` + Literals attaches
+`staticFromEffect` bags (no hand `paths` list).
 
 ## Page classes
 
@@ -43,7 +57,7 @@ options bag; `Page.static` + Literals attaches `staticFromEffect` bags (no hand
 import * as Page from "last-ts/Page"
 import { Schema } from "effect"
 
-class Chapter extends Page.make({
+class Chapter extends Page.static({
   params: { slug: Schema.Literals(["routing", "view-service"]) },
 }) {
   static Component = (props: Page.Props<typeof Chapter>) => (
@@ -58,11 +72,24 @@ class Home extends Page.static() {
   static Component = () => <h1>last.ts</h1>
 }
 export default Page.asDefault(Home)
+
+// disk `[...path]` → `*path` / id `docs_path`
+class DocsPath extends Page.make({
+  params: { path: Schema.String },
+}) {
+  static Component = (props: Page.Props<typeof DocsPath>) => (
+    <h1>{props.params.path}</h1>
+  )
+}
+export default Page.asDefault(DocsPath)
 ```
 
 Optional request options are the **first** argument (same bag as `Route.get`).
-`Page.make` = dynamic; `Page.static` = bake. Not a Service. Waku’s default
-export is `Page.asDefault(…)` so the class brand stays for `Page.extract`.
+`Page.make` = dynamic; `Page.static` = bake. Use `Page.Props<typeof X>` outside
+the class; inside `static Component`, prefer
+`Page.PropsFromOptions<typeof options>` (avoids circular `typeof` on the class).
+Waku’s default export is `Page.asDefault(…)` so the class brand stays for
+`Page.extract`. Apps never write `getConfig` — `pageConfig()` injects it.
 
 ## Provider
 
@@ -80,6 +107,6 @@ PascalCase `Provider` — no rename at the import site.
 import { Link } from "last-ts/Waku"
 import { urls } from "../lib/site"
 
-<Link to={urls.home()}>Home</Link>
-<Link to={urls.chapter("routing")}>Guide</Link>
+<Link to={urls.index()}>Home</Link>
+<Link to={urls.guides_slug("routing")}>Guide</Link>
 ```
