@@ -34,7 +34,7 @@ export function Nav(): React.ReactElement {
           <code>Page.make</code> / <code>Page.static</code>
         </li>
         <li>
-          <code>Route.staticFromEffect</code>
+          <code>Route.fromPage</code>
         </li>
         <li>
           <code>Last.provider</code>
