@@ -44,4 +44,22 @@ describe("Route.fromPage", () => {
     const urls = Route.urlBuilder(Site);
     expect(urls.chapter("routing")).toBe("/guides/routing");
   });
+
+  it("destinationsFromPages merges by id", () => {
+    class Chapter extends Page.static({
+      params: { slug: Schema.Literals(["routing", "view-service"]) },
+    }) {}
+    const table = [
+      { id: "home", routePath: "/" },
+      { id: "chapter", routePath: "/guides/:slug" },
+    ] as const;
+    const routes = Router.destinationsFromPages(table, {
+      chapter: Chapter,
+    });
+    expect(routes).toHaveLength(2);
+    expect(Route.fromEffectOf(routes[1]!)?.static).toBe(true);
+    expect(
+      Effect.runSync(Route.expandStaticPaths(routes[1]!)),
+    ).toEqual(["/guides/routing", "/guides/view-service"]);
+  });
 });

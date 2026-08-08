@@ -4,11 +4,13 @@
  * {@link layerDestinations} for RouterBuilder catalogs.
  */
 import { Context, Effect, Layer } from "effect";
+import type * as Page from "../Page";
 import {
   AsRoutesTypeId,
   type AsRoutesEffect,
 } from "./asRoutesBrand";
 import * as endpoint from "./route";
+import { fromPage } from "./routeFromPage";
 import * as catalog from "./routes";
 
 export type PathEntry = {
@@ -36,6 +38,40 @@ export const destinationsOf = <const Entries extends ReadonlyArray<PathEntry>>(
         Entries
       >,
   );
+
+/**
+ * Like {@link destinationsOf}, but merge {@link Page.AnyPage} classes by id
+ * (`Route.fromPage`) when present — options + static Literals bags.
+ *
+ * ```ts
+ * Router.fileSystem(fileEntries) // path-only
+ * destinationsFromPages(fileEntries, { docs_chapter: Chapter })
+ * ```
+ *
+ * @public
+ */
+export const destinationsFromPages = <
+  const Entries extends ReadonlyArray<PathEntry>,
+>(
+  entries: Entries,
+  pages: {
+    readonly [K in Entries[number]["id"]]?: Page.AnyPage;
+  },
+): ReadonlyArray<RoutesOf<Entries>> =>
+  entries.map((entry) => {
+    const page = pages[entry.id as Entries[number]["id"]];
+    if (page !== undefined) {
+      return fromPage(
+        entry.id,
+        entry.routePath as endpoint.Path,
+        page,
+      ) as RoutesOf<Entries>;
+    }
+    return endpoint.get(
+      entry.id,
+      entry.routePath as endpoint.Path,
+    ) as RoutesOf<Entries>;
+  });
 
 /**
  * Effect of Route destinations from a typed file-router table.

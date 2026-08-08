@@ -16,9 +16,10 @@ server** (`docs/last/site`) — not Hyperlink `docs/site`, not an example app.
 ## Catalog
 
 ```ts
+import { Schema } from "effect"
+import * as Page from "last-ts/Page"
 import * as Route from "last-ts/Route"
 import * as Router from "last-ts/Router"
-import { Effect } from "effect"
 
 class ChapterRoute extends Page.static({
   params: { slug: Schema.Literals(["routing", "view-service"]) },

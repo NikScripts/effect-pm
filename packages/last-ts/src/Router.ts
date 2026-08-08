@@ -111,6 +111,14 @@ export const destinationsOf: typeof fileRouter.destinationsOf =
   fileRouter.destinationsOf;
 
 /**
+ * Path table + optional page classes by id (`Route.fromPage` merge).
+ *
+ * @public
+ */
+export const destinationsFromPages: typeof fileRouter.destinationsFromPages =
+  fileRouter.destinationsFromPages;
+
+/**
  * `Layer.succeed(tag, destinationsOf(entries))` for `group.from(tag)`.
  *
  * @public
