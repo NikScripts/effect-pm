@@ -51,8 +51,8 @@ array order**, attaches `impact`, audits contracts, and returns an
 |---------|------|
 | `EmptyUpdatePlan` | `steps` is `[]` |
 | `EmptyUpdateStepTags` | A step has `tags: []` |
-| `EmptyUpdateTarget` | A step `target` is empty / whitespace |
-| `EmptyUpdateTagKey` | A step or contract tag has a blank `key` |
+| `EmptyUpdateTarget` | A step `target` is empty, whitespace, or untrimmed |
+| `EmptyUpdateTagKey` | A step or contract tag has a blank / untrimmed `key` |
 | `DuplicateUpdateTarget` | Two steps share the same `target` |
 | `DuplicateUpdateContract` | Two contracts share the same `tag.key` |
 | `UpdateBlocked` | Hard impact blockers on the **target** (same as planUpdate fail-closed) |

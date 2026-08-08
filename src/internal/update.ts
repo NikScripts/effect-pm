@@ -259,7 +259,9 @@ export class EmptyStepTags extends Data.TaggedError("EmptyUpdateStepTags")<{
 }
 
 /**
- * A step `target` is empty or whitespace-only.
+ * A step `target` is empty, whitespace-only, or has leading/trailing space.
+ *
+ * Directory `nodeKey` matching is exact — untrimmed targets are refused.
  *
  * @category errors
  * @public
@@ -268,12 +270,12 @@ export class EmptyTarget extends Data.TaggedError("EmptyUpdateTarget")<{
   readonly order: number;
 }> {
   override get message() {
-    return `Update step[${String(this.order)}] has an empty target.`;
+    return `Update step[${String(this.order)}] has an empty or untrimmed target.`;
   }
 }
 
 /**
- * A step tag (or contract tag) has a blank `key`.
+ * A step tag (or contract tag) has a blank or untrimmed `key`.
  *
  * @category errors
  * @public
@@ -283,7 +285,7 @@ export class EmptyTagKey extends Data.TaggedError("EmptyUpdateTagKey")<{
   readonly order: number;
 }> {
   override get message() {
-    return `Update step[${String(this.order)}] target "${this.target}" has a blank tag key.`;
+    return `Update step[${String(this.order)}] target "${this.target}" has a blank or untrimmed tag key.`;
   }
 }
 
@@ -518,14 +520,15 @@ const validateSteps = (steps: ReadonlyArray<Step>): ShapeError | undefined => {
   if (steps.length === 0) return new EmptyPlan();
   const seen = new Map<string, Array<number>>();
   for (const [order, step] of steps.entries()) {
-    if (step.target.trim().length === 0) {
+    // Reject empty / whitespace-only and untrimmed targets (Directory keys are exact).
+    if (step.target.trim().length === 0 || step.target !== step.target.trim()) {
       return new EmptyTarget({ order });
     }
     if (step.tags.length === 0) {
       return new EmptyStepTags({ target: step.target, order });
     }
     for (const tag of step.tags) {
-      if (tag.key.trim().length === 0) {
+      if (tag.key.trim().length === 0 || tag.key !== tag.key.trim()) {
         return new EmptyTagKey({ target: step.target, order });
       }
     }
@@ -547,7 +550,7 @@ const validateContracts = (
   const seen = new Set<string>();
   for (const [order, c] of contracts.entries()) {
     const key = c.tag.key;
-    if (key.trim().length === 0) {
+    if (key.trim().length === 0 || key !== key.trim()) {
       return new EmptyTagKey({ target: "(contract)", order });
     }
     if (seen.has(key)) {
@@ -633,7 +636,15 @@ const validatePlan = (
   );
 
 type RestartSuccessorEffect = ReturnType<typeof restartSuccessor>;
-type ExecuteError = ValidateError | Effect.Error<RestartSuccessorEffect>;
+
+/**
+ * Failures from {@link execute} (validate gate + custody).
+ *
+ * @category errors
+ * @public
+ */
+export type ExecuteError = ValidateError | Effect.Error<RestartSuccessorEffect>;
+
 type ExecuteEnv = Effect.Services<RestartSuccessorEffect>;
 
 type PlanServices =

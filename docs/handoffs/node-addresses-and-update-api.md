@@ -1,14 +1,16 @@
 # Node addresses + update API — design notes
 
-**Status:** **Partial Eng** (2026-08-08). `Update.plan` → `simulate` → `execute` **shipped + refined**
-(`hyperlink-ts/Update`, guide [`docs/guides/update.md`](../guides/update.md)). Remaining
-(address model, `Node.make`, locality Host/Machine, proxy, deploy node) still **design only**.  
+**Status:** **Partial Eng** (2026-08-08). `Update.plan` → `simulate` → `execute` **shipped +
+second-pass perfected** (`hyperlink-ts/Update`, guide [`docs/guides/update.md`](../guides/update.md)).
+Remaining (address model, `Node.make`, locality Host/Machine, proxy, deploy node) still
+**design only**.  
 **Owner leans (so far):**
 - Stable **main address** + **additional A/B** (often Unix); optional Http→Unix proxy
 - ~~Replace options-bag `restartSuccessor` with `Update.plan` → execute~~ **Eng'd** (restartSuccessor remains; Update preferred)
 - **`Update` module separate from `Versioned`** — Eng'd
-- Plans are **fleet-wide**, ordered; contract from→to audit — Eng'd (`liveTips`, target-scoped blockers, `coUpdate` rollup, empty/dup guards)
-- **Simulate** / execute share a plan-value gate — Eng'd; full mock = boot prod-like + plan→sim→exec
+- Plans are **fleet-wide**, ordered; contract from→to audit — Eng'd (`liveTips`, target-scoped blockers, `coUpdate` rollup, empty/dup/blank-key guards)
+- **Simulate** / execute share a plan-value gate — Eng'd (re-derive blockers from impact arrays; re-validate shape; `UpdateReport`; `update.*` spans)
+- **`Node.shutdown` leave** — Eng'd: dial-matched unregister first; Advice clear only when prefer still points at departing `nodeKey` (keeps `prefer(B)` / same-identity stamps)
 - Deploy path / locality Host|Machine / `Node.make` — still design
 
 **Branch:** Agent 5 · `cursor/lifecycle-defer-start-929b`  

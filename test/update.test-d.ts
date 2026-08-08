@@ -8,6 +8,7 @@ import type * as Directory from "../src/Directory";
 import type {
   AuditEntry,
   AuditReason,
+  ExecuteError,
   Input,
   Plan,
   PlanError,
@@ -45,6 +46,7 @@ function typeLock(
   mismatch: Update.UpdateContractMismatch,
   planError: PlanError,
   validateError: ValidateError,
+  executeError: ExecuteError,
 ): void {
   type PlanEff = ReturnType<typeof planFn>;
   type SimEff = ReturnType<typeof simulateFn>;
@@ -101,6 +103,8 @@ function typeLock(
     ErrOf<RestartEff>,
     ErrOf<ExecEff>
   > = true;
+  const _execError: AssertExtends<ErrOf<ExecEff>, ExecuteError> = true;
+  const _execErrorRev: AssertExtends<ExecuteError, ErrOf<ExecEff>> = true;
 
   const _tag: "UpdatePlan" = planValue._tag;
   const _reportTag: "UpdateReport" = report._tag;
@@ -150,6 +154,8 @@ function typeLock(
   void _execContract;
   void _execShape;
   void _execCoversRestart;
+  void _execError;
+  void _execErrorRev;
   void _tag;
   void _reportTag;
   void _order;
@@ -170,6 +176,7 @@ function typeLock(
   void _liveTips;
   void planError;
   void validateError;
+  void executeError;
 }
 
 void typeLock;

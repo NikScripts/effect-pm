@@ -191,6 +191,30 @@ describe("Update.plan / simulate", () => {
     }),
   );
 
+  it.effect("fails EmptyUpdateTarget when target has leading/trailing space", () =>
+    Effect.gen(function* () {
+      const path = yield* tmpSock("trim-target");
+      const node = Node.Service()("update/trim-target", { path }).pipe(
+        Node.asLookup,
+      );
+      yield* withLookup(
+        Lookup.layerNode(node),
+        Lookup.client(node),
+        Effect.gen(function* () {
+          const successor = dummySuccessor("trim-target");
+          expectTaggedFailure(
+            yield* Effect.exit(
+              Update.plan({
+                steps: [{ target: " mail-a ", successor, tags: [Mail] }],
+              }),
+            ),
+            "EmptyUpdateTarget",
+          );
+        }),
+      );
+    }),
+  );
+
   it.effect("fails EmptyUpdateTagKey when a tag key is blank", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("blank-key");
@@ -880,6 +904,113 @@ describe("Update.plan / simulate", () => {
               expect(err.observed.from).toBe("update/job@2");
             }
           }
+        }),
+      );
+    }),
+  );
+
+  it.effect("multi-contract mismatch carries full audit", () =>
+    Effect.gen(function* () {
+      const path = yield* tmpSock("multi-contract");
+      const node = Node.Service()("update/multi-contract", { path }).pipe(
+        Node.asLookup,
+      );
+      yield* withLookup(
+        Lookup.layerNode(node),
+        Lookup.client(node),
+        Effect.gen(function* () {
+          yield* advertiseIpc("mail-mc", "/tmp/mail-mc.sock", [
+            "update-plan/Mail",
+          ]);
+          yield* advertiseIpc("vj-mc", "/tmp/vj-mc.sock", [
+            "update-plan/VersionedJobs",
+          ]);
+          const successor = dummySuccessor("multi-contract");
+          const tip = Versioned.schemaVersion(JobChain);
+          const exit = yield* Effect.exit(
+            Update.plan({
+              steps: [
+                { target: "mail-mc", successor, tags: [Mail] },
+                { target: "vj-mc", successor, tags: [VersionedJobs] },
+              ],
+              contracts: [
+                { tag: Mail, to: "not-a-tip" },
+                { tag: VersionedJobs, to: tip },
+              ],
+            }),
+          );
+          expectTaggedFailure(exit, "UpdateContractMismatch");
+          if (Exit.isFailure(exit)) {
+            const err = Option.getOrThrow(Cause.findErrorOption(exit.cause));
+            expect(err).toBeInstanceOf(Update.UpdateContractMismatch);
+            if (err instanceof Update.UpdateContractMismatch) {
+              expect(err.serviceKey).toBe(Mail.key);
+              expect(err.reason).toBe("To");
+              expect(err.audit).toHaveLength(2);
+              expect(err.audit[0]?.ok).toBe(false);
+              expect(err.audit[1]?.ok).toBe(true);
+            }
+          }
+        }),
+      );
+    }),
+  );
+
+  it.effect("simulate refuses forged empty steps", () =>
+    Effect.gen(function* () {
+      const path = yield* tmpSock("forged-empty");
+      const node = Node.Service()("update/forged-empty", { path }).pipe(
+        Node.asLookup,
+      );
+      yield* withLookup(
+        Lookup.layerNode(node),
+        Lookup.client(node),
+        Effect.gen(function* () {
+          yield* advertiseIpc("mail-empty", "/tmp/mail-empty.sock", [
+            "update-plan/Mail",
+          ]);
+          const successor = dummySuccessor("forged-empty");
+          const real = yield* Update.plan({
+            steps: [{ target: "mail-empty", successor, tags: [Mail] }],
+          });
+          const forged: Update.Plan = { ...real, steps: [] };
+          expectTaggedFailure(
+            yield* Effect.exit(Update.simulate(forged)),
+            "EmptyUpdatePlan",
+          );
+        }),
+      );
+    }),
+  );
+
+  it.effect("step.force overrides Input.force false", () =>
+    Effect.gen(function* () {
+      const path = yield* tmpSock("step-force");
+      const node = Node.Service()("update/step-force", { path }).pipe(
+        Node.asLookup,
+      );
+      yield* withLookup(
+        Lookup.layerNode(node),
+        Lookup.client(node),
+        Effect.gen(function* () {
+          yield* advertiseIpc("jobs-sf", "/tmp/jobs-sf.sock", [
+            "update-plan/Jobs",
+          ]);
+          const successor = dummySuccessor("step-force");
+          const plan = yield* Update.plan({
+            force: false,
+            steps: [
+              {
+                target: "jobs-sf",
+                successor,
+                tags: [jobsNext],
+                incumbent: [Jobs],
+                force: true,
+              },
+            ],
+          });
+          expect(plan.blocked).toBe(true);
+          expect(plan.steps[0]?.force).toBe(true);
         }),
       );
     }),

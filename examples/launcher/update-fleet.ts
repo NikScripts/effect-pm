@@ -85,8 +85,8 @@ const program = Effect.gen(function* () {
 
     yield* Effect.logInfo(
       `2) steps=${String(plan.steps.length)} blocked=${String(plan.blocked)} ` +
-        `coUpdate=${JSON.stringify(plan.coUpdate)} ` +
-        `uncovered=${JSON.stringify(plan.uncoveredCoUpdate)}`,
+        `coUpdate=[${plan.coUpdate.join(", ")}] ` +
+        `uncovered=[${plan.uncoveredCoUpdate.join(", ")}]`,
     );
 
     yield* Effect.logInfo("3) Update.simulate — validate without spawn");

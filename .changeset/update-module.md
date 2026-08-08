@@ -6,7 +6,7 @@
 ordered fleet cutovers with optional contract from→to audit. Preferred app API
 over options-bag `Launcher.restartSuccessor` (`hyperlink-ts/Update`). Short
 public types (`Plan`, `Step`, `Input`, `Contract`, `PlanError`,
-`ValidateError`, …); fail-closed empty tags / empty targets / blank tag keys /
+`ValidateError`, `ExecuteError`, …); fail-closed empty tags / empty targets / blank tag keys /
 duplicate targets / duplicate contracts / `from` with no observation;
 target-scoped `migrationGaps`/`contractDrifts` so fleet order works; shared
 simulate/execute gate re-derives blockers from impact arrays (forged

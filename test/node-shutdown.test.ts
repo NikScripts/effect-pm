@@ -8,9 +8,11 @@ import {
   Effect,
   Fiber,
   Layer,
+  Option,
   Schema,
 } from "effect";
 import { describe, expect, it } from "@effect/vitest";
+import * as Advice from "../src/Advice";
 import * as Hyperlink from "../src/Hyperlink";
 import * as Lookup from "../src/Lookup";
 import * as Directory from "../src/Directory";
@@ -107,6 +109,84 @@ describe("Node.shutdown", () => {
       yield* Fiber.join(listenFiber).pipe(
         Effect.timeout(Duration.seconds(5)),
       );
+    }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
+  );
+
+  it.live("clears Advice only when prefer points at the departing node", () =>
+    Effect.gen(function* () {
+      const lookupPath = yield* tmpSock("advice-lookup");
+      const workerPath = yield* tmpSock("advice-worker");
+      const lookupNode = Node.Service()("shutdown/advice-lookup", {
+        path: lookupPath,
+      }).pipe(Node.asLookup);
+
+      class Worker extends Node.Service<Worker, Jobs>()("shutdown/AdviceWorker", {
+        path: workerPath,
+      }) {}
+
+      const lookupServer = yield* Layer.build(Lookup.layerNode(lookupNode));
+      const lookupClient = yield* Layer.build(Lookup.client(lookupNode));
+      const lookupCtx = Context.merge(lookupServer, lookupClient);
+
+      yield* Layer.build(
+        Node.unix(Worker, [
+          Hyperlink.serve(Jobs, { ping: Effect.succeed("ok") }),
+        ]).pipe(Layer.provide(Lookup.client(lookupNode))),
+      );
+
+      yield* Advice.prefer(Jobs, Worker.key).pipe(Effect.provide(lookupCtx));
+      const before = yield* Advice.preferred(Jobs.key).pipe(
+        Effect.provide(lookupCtx),
+      );
+      expect(Option.isSome(before)).toBe(true);
+
+      yield* Node.shutdown(Worker);
+      yield* Effect.sleep(Duration.millis(100));
+
+      const after = yield* Advice.preferred(Jobs.key).pipe(
+        Effect.provide(lookupCtx),
+      );
+      expect(Option.isNone(after)).toBe(true);
+    }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
+  );
+
+  it.live("keeps Advice.prefer(B) when shutting down A", () =>
+    Effect.gen(function* () {
+      const lookupPath = yield* tmpSock("prefer-b-lookup");
+      const workerPath = yield* tmpSock("prefer-b-worker");
+      const lookupNode = Node.Service()("shutdown/prefer-b-lookup", {
+        path: lookupPath,
+      }).pipe(Node.asLookup);
+
+      class Worker extends Node.Service<Worker, Jobs>()("shutdown/PreferA", {
+        path: workerPath,
+      }) {}
+
+      const lookupServer = yield* Layer.build(Lookup.layerNode(lookupNode));
+      const lookupClient = yield* Layer.build(Lookup.client(lookupNode));
+      const lookupCtx = Context.merge(lookupServer, lookupClient);
+
+      yield* Layer.build(
+        Node.unix(Worker, [
+          Hyperlink.serve(Jobs, { ping: Effect.succeed("ok") }),
+        ]).pipe(Layer.provide(Lookup.client(lookupNode))),
+      );
+
+      // Dual-serve stamp for a different identity — must survive A's leave.
+      yield* Advice.prefer(Jobs, "shutdown/PreferB").pipe(
+        Effect.provide(lookupCtx),
+      );
+
+      yield* Node.shutdown(Worker);
+      yield* Effect.sleep(Duration.millis(100));
+
+      const after = yield* Advice.preferred(Jobs.key).pipe(
+        Effect.provide(lookupCtx),
+      );
+      expect(Option.isSome(after)).toBe(true);
+      if (Option.isSome(after)) {
+        expect(after.value).toBe("shutdown/PreferB");
+      }
     }).pipe(Effect.scoped, Effect.timeout(Duration.seconds(20))),
   );
 });

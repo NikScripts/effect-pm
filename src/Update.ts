@@ -48,6 +48,7 @@ export type {
   Report,
   PlanError,
   ValidateError,
+  ExecuteError,
 } from "./internal/update";
 
 /** Impact dry-run types / errors — SSOT on {@link Lookup}. */
