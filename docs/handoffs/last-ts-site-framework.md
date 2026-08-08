@@ -24,6 +24,8 @@ pnpm run docs:last-site
 | `last-ts/Waku` `Link` | soft-nav (layout island) |
 | `View.Service` | client island on `/view` |
 
-**Removed / never approved:** `Page.getConfig`, `Page.build`, Stamped theater,
-`Last.app(Layer.empty).pipe(Waku.router(…)).Provider`, `RouterProvider`,
-`examples/apps/last-ts-site`.
+**Removed / never approved:** `Page.getConfig`, `pageConfig` Vite inject,
+`Page.build`, Stamped theater, `Last.app(Layer.empty).pipe(Waku.router(…)).Provider`,
+`RouterProvider`, `examples/apps/last-ts-site`. Do not invent interim getConfig
+bridges — `createPages` is the adapter; until then engine `getConfig` on the
+param/dynamic file only.

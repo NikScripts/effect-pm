@@ -1,9 +1,10 @@
 import * as Page from "last-ts/Page";
-import { chapterOptions } from "../../lib/chapter";
+import { chapterBags, chapterOptions } from "../../lib/chapter";
 
 /**
- * Static chapter — Literals + `Page.static` → `pageConfig` injects
- * `getConfig` / `staticPaths` (apps never write engine config).
+ * Static chapter — Literals + `Page.static`. Param SSG needs Waku’s own
+ * `getConfig` / `staticPaths` on this file (engine wire — not a last-ts API;
+ * `createPages` replaces it later).
  *
  * Props use {@link Page.PropsFromOptions} inside the class body (avoids a
  * circular `typeof Chapter` on `static Component`). Outside: `Page.Props<typeof Chapter>`.
@@ -25,3 +26,10 @@ class Chapter extends Page.static(chapterOptions) {
 }
 
 export default Page.asDefault(Chapter);
+
+/** Waku engine config — not Page.*; createPages will replace this later. */
+export const getConfig = async () =>
+  ({
+    render: "static",
+    staticPaths: chapterBags.map((bag) => bag.slug),
+  }) as const;

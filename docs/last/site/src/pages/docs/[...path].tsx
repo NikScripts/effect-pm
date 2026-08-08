@@ -7,6 +7,8 @@ const docsPathOptions = {
 
 /**
  * Rest / splat dogfood — disk `[...path]` → route `*path` (`docs_path`).
+ * Open-ended splat is dynamic; Waku’s own `getConfig` is engine wire only
+ * (not a last-ts API — `createPages` replaces it later).
  */
 class DocsPath extends Page.make(docsPathOptions) {
   static Component = (
@@ -24,3 +26,9 @@ class DocsPath extends Page.make(docsPathOptions) {
 }
 
 export default Page.asDefault(DocsPath);
+
+/** Waku engine config — not Page.*; createPages will replace this later. */
+export const getConfig = async () =>
+  ({
+    render: "dynamic",
+  }) as const;

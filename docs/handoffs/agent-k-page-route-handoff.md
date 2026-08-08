@@ -22,27 +22,22 @@ export const Provider = Last.provider(
 )
 ```
 
-- Apps **never** write Waku `getConfig` / invent `Page.getConfig` — Vite `pageConfig()` injects.
+- **No** `pageConfig`, **no** `Page.getConfig`, **no** interim getConfig Vite inject.
+  Param SSG / open dynamic use **Waku’s own `getConfig` on that file** until `createPages`.
 - RSC Provider / client islands **must not** import file page modules. Catalog twins from shared options (`chapter.ts`) or path-only rows. Server tooling may use `Router.pagesByIdFromModules(glob)`.
 
 ---
 
-## Tip state when handed off
-
-Uncommitted work on the branch (commit this first if still dirty):
+## Tip state
 
 | Area | Change |
 |------|--------|
 | `Route.fileRootFromPages` / `Router.fileSystemFromPages` | Path table + page-class merge as catalog root |
 | `Route.WithParamBags` | Public re-export |
-| `RoutesOf` / `EntryRoute` | Includes `PageEndpointBrand` so `RouterBuilder.handle` stays page-typed (not Effect API) |
-| `docs/last/site` catalog | `fileRootFromPages(fileEntries, { guides_slug })` — ids = `paths.gen` (`index`, `guides_slug`, …) |
-| Chapter page | `Page.static(chapterOptions)` → `configOf` emits `staticPaths` |
-| Rest dogfood | `pages/docs/[...path].tsx` → `docs_path` / `/docs/*path` |
-| Nav / urls | `urls.index()`, `urls.guides_slug(…)`, `urls.docs_path(…)` |
-| Docs / lock / changeset | Updated for the above |
-
-**Branch tip:** same as `origin/integration` — run `git rev-parse` (synced).
+| `RoutesOf` / `EntryRoute` | Includes `PageEndpointBrand` so `RouterBuilder.handle` stays page-typed |
+| `docs/last/site` catalog | `fileRootFromPages(fileEntries, { guides_slug })` |
+| Chapter / rest pages | Engine `getConfig` on those files only (staticPaths / dynamic) |
+| **Deleted** | `last-ts/vite` `pageConfig` (+ align pass) — never-approved bridge |
 
 ---
 
@@ -51,7 +46,6 @@ Uncommitted work on the branch (commit this first if still dirty):
 ```bash
 pnpm exec vitest run \
   test/page-make.test.ts \
-  test/page-config-vite.test.ts \
   test/route-from-effect.test.ts \
   test/route-from-page.test.ts \
   test/file-router-rest.test.ts
@@ -63,7 +57,7 @@ pnpm run docs:last-site
 # curl :5220 / /guides/routing /docs/intro/rest → 200
 ```
 
-`Page.configOf(Page.static({ params: { slug: Schema.Literals([...]) } }))` must include `staticPaths`.
+`Page.configOf(Page.static({ params: { slug: Schema.Literals([...]) } }))` still maps Literals → `staticPaths` (adapter helper — not app getConfig).
 
 ---
 
@@ -73,15 +67,14 @@ pnpm run docs:last-site
 2. **`Schema.Literals` is a function** — `typeof === "object"` misses it in `literalsOf` / `configOf` (already fixed; don’t regress).
 3. **fileRouter Vite plugin** — Node FS is async; emit must use `runPromise`, not `runSync`.
 4. **`asDefault` brand** — stamp `TypeId` / `options` / `mode` on subclasses or extract breaks.
-5. Waku defaults pages to static; dynamic `[slug]` / `[...path]` without inject → 500 — rely on `pageConfig()`.
-6. **Waku `pages.gen.ts` typegen** only sees on-disk `getConfig`. Inject is transform-only, so typegen would mark `Page.make` routes `static`. `pageConfig()` also aligns literal `render` rows from `Page.make` / `Page.static` after typegen writes.
+5. Waku defaults file pages to static; param SSG needs engine `staticPaths`; open `[...path]` needs engine `{ render: "dynamic" }` — **not** a last-ts inject plugin.
 
 ---
 
 ## Sensible next improvements (pick, don’t boil ocean)
 
-1. ~~Smoke `:5220`~~ — Eng’d (`/` `/guides/routing` `/docs/intro/rest` 200).
-2. ~~Confirm vite regen~~ — `paths.gen` stable; `pages.gen` was flipping `docs/[...path]` → `static` (Waku typegen blind to inject). Fixed via `pageConfig` align pass.
+1. ~~Smoke `:5220`~~ — Eng’d.
+2. ~~Delete `pageConfig`~~ — Eng’d (owner lock).
 3. Optional: server-only assert that `pagesByIdFromModules` ids ⊆ `fileEntries` ids (never import that into Provider).
 4. Optional: `layerDestinationsFromPages` sibling of `layerDestinations` if builder catalogs need the merge.
 5. Owner-gated: PR land + `pnpm run version` (changeset already at `.changeset/page-make-route-from-effect.md`).
@@ -92,11 +85,12 @@ pnpm run docs:last-site
 
 - Touch Hyperlink `docs/site` for this stack.
 - Reintroduce `examples/apps/last-ts-site`.
-- Open PRs / run `pnpm run version` without owner.
+- Reintroduce `pageConfig` / `Page.getConfig` / any interim getConfig bridge.
+- Open ready PRs / run `pnpm run version` without owner.
 - Commit on `main` / `develop` / owner branches.
 
 ---
 
 ## Agent-status row
 
-Replace Agent G with Agent K on `cursor/file-router-prototype-125f`; tip SHA = commit after landing the WIP above; gaps = live smoke + owner PR/version.
+Agent K on `cursor/agent-k-page-route-6d0e`; gaps = owner PR/version.

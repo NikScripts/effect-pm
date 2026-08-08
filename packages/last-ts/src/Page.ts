@@ -30,7 +30,9 @@
  * constructor-shaped like `HttpApi.make` / `Router.make`.
  *
  * File-router extracts {@link optionsOf} / {@link modeOf} from the class.
- * Apps never write Waku `getConfig`.
+ * Do not invent interim `getConfig` bridges (`pageConfig`, `Page.getConfig`).
+ * Until `createPages`, param SSG / open dynamic may use Waku’s own `getConfig`
+ * on that file only (engine wire).
  *
  * Outlet trees:
  *
@@ -311,8 +313,8 @@ const staticPathsFromBags = (
 };
 
 /**
- * Derive Waku `getConfig` payload from a page class / {@link asDefault} export.
- * Used by `last-ts/vite` `pageConfig()` inject — not called from app pages.
+ * Derive Waku-shaped `{ render, staticPaths? }` from a page class.
+ * For adapters / tests — not an app-facing `getConfig` API.
  *
  * @public
  */

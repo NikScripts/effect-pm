@@ -1,7 +1,7 @@
 # Page.make + Route.fromEffect — lock
 
 **Branch:** `cursor/agent-k-page-route-6d0e`  
-**Status:** Eng’d (API surface + `pages.gen` align)
+**Status:** Eng’d (API surface)
 
 ## Locked
 
@@ -32,11 +32,20 @@ Route.get("chapter", "/guides/:slug").pipe(
 // File disk: [slug]→:slug, [...path]→*path
 ```
 
-## Eng’d inject / merge
+## Where static is set (do not invent bridges)
 
-- `Page.configOf(page)` — `{ render }` + `staticPaths` from `Schema.Literals` params
+| Place | Role |
+|-------|------|
+| `Page.static` / `Page.make` | Page class mode (bake vs dynamic) |
+| `Route.staticFromEffect` / Literals / `mixedFromEffect` static set | Catalog bake bags |
+| Waku’s own `getConfig` on **that one file** | Engine wire for param `staticPaths` / open `dynamic` only — until `createPages` |
+
+**Forbidden:** `pageConfig` Vite inject, `Page.getConfig`, any interim getConfig bridge.  
+`Page.configOf` / `Page.paramBagsOf` are adapter/test helpers — not app `getConfig`.
+
+## Eng’d merge
+
 - `Page.paramBagsOf(page)` — union-of-bags for `Route.staticFromEffect`
-- `last-ts/vite` `pageConfig()` — stamps `export const getConfig = () => Page.configOf(X)` (apps never write it); aligns Waku `pages.gen.ts` literal `render` modes (`Page.make` → `dynamic`) after typegen
 - `Route.fromPage(id, path, page)` — options + static Literals → catalog route
 - `Router.destinationsFromPages(entries, { id: PageClass })` — path table + page merge
 - `Route.fileRootFromPages` / `Router.fileSystemFromPages` — path table + page merge as catalog root
@@ -48,8 +57,8 @@ Route.get("chapter", "/guides/:slug").pipe(
 
 - Catalog: `Route.fileRootFromPages(fileEntries, { guides_slug: GuidesSlug })` — ids match `paths.gen`
 - Catalog twins from shared `chapterOptions` (Provider stays RSC-safe)
-- Chapter file page is `Page.static` → injected `staticPaths`
-- Rest page: `pages/docs/[...path]` → `docs_path` / `/docs/*path`
+- Chapter file: `Page.static` + engine `getConfig` / `staticPaths` (Literals list)
+- Rest page: `pages/docs/[...path]` → `docs_path` / `/docs/*path` + engine `getConfig` `{ render: "dynamic" }`
 
 ## Surface
 

@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "waku/config";
-import { fileRouter, pageConfig } from "last-ts/vite";
+import { fileRouter } from "last-ts/vite";
 
 const lastTsSrc = fileURLToPath(
   new URL("../../../packages/last-ts/src", import.meta.url),
@@ -10,7 +10,6 @@ const lastTsSrc = fileURLToPath(
 export default defineConfig({
   vite: {
     plugins: [
-      pageConfig(),
       fileRouter({
         pagesDir: "src/pages",
         outFile: "src/paths.gen.ts",
