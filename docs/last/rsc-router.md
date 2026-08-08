@@ -89,7 +89,9 @@ Optional request options are the **first** argument (same bag as `Route.get`).
 the class; inside `static Component`, prefer
 `Page.PropsFromOptions<typeof options>` (avoids circular `typeof` on the class).
 Waku’s default export is `Page.asDefault(…)` so the class brand stays for
-`Page.extract`. Apps never write `getConfig` — `pageConfig()` injects it.
+`Page.extract`. Apps never write `getConfig` — `pageConfig()` injects it and
+keeps `pages.gen.ts` `render` modes aligned (`Page.make` → `dynamic`) because
+Waku typegen only sees on-disk `getConfig`.
 
 ## Provider
 

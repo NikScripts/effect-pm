@@ -1,7 +1,7 @@
 # Page.make + Route.fromEffect — lock
 
-**Branch:** `cursor/file-router-prototype-125f`  
-**Status:** Eng’d on tip (API surface)
+**Branch:** `cursor/agent-k-page-route-6d0e`  
+**Status:** Eng’d (API surface + `pages.gen` align)
 
 ## Locked
 
@@ -36,7 +36,7 @@ Route.get("chapter", "/guides/:slug").pipe(
 
 - `Page.configOf(page)` — `{ render }` + `staticPaths` from `Schema.Literals` params
 - `Page.paramBagsOf(page)` — union-of-bags for `Route.staticFromEffect`
-- `last-ts/vite` `pageConfig()` — stamps `export const getConfig = () => Page.configOf(X)` (apps never write it)
+- `last-ts/vite` `pageConfig()` — stamps `export const getConfig = () => Page.configOf(X)` (apps never write it); aligns Waku `pages.gen.ts` literal `render` modes (`Page.make` → `dynamic`) after typegen
 - `Route.fromPage(id, path, page)` — options + static Literals → catalog route
 - `Router.destinationsFromPages(entries, { id: PageClass })` — path table + page merge
 - `Route.fileRootFromPages` / `Router.fileSystemFromPages` — path table + page merge as catalog root

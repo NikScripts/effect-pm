@@ -1,8 +1,8 @@
 # Agent K — Page.make / Route / last-ts site handoff
 
 **From:** Agent G (fired mid-turn)  
-**Branch:** `cursor/file-router-prototype-125f`  
-**Base / sync:** keep tip = `integration` (FF or merge both ways; do not open PRs unless owner asks)  
+**Branch:** `cursor/agent-k-page-route-6d0e` (continues `cursor/file-router-prototype-125f`)  
+**Base / sync:** base = `integration` (do not open ready PRs / `pnpm run version` unless owner asks)  
 **Lock:** [`page-route-make-lock.md`](./page-route-make-lock.md)  
 **Guide:** [`docs/last/rsc-router.md`](../last/rsc-router.md)  
 **Surface:** `docs/last/site` only (`pnpm run docs:last-site` → `:5220`) — **not** Hyperlink `docs/site`, not example apps
@@ -74,16 +74,17 @@ pnpm run docs:last-site
 3. **fileRouter Vite plugin** — Node FS is async; emit must use `runPromise`, not `runSync`.
 4. **`asDefault` brand** — stamp `TypeId` / `options` / `mode` on subclasses or extract breaks.
 5. Waku defaults pages to static; dynamic `[slug]` / `[...path]` without inject → 500 — rely on `pageConfig()`.
+6. **Waku `pages.gen.ts` typegen** only sees on-disk `getConfig`. Inject is transform-only, so typegen would mark `Page.make` routes `static`. `pageConfig()` also aligns literal `render` rows from `Page.make` / `Page.static` after typegen writes.
 
 ---
 
 ## Sensible next improvements (pick, don’t boil ocean)
 
-1. Smoke `:5220` after commit (prior agent did not finish live smoke — tmux pane attach failed).
-2. Confirm vite regen of `paths.gen.ts` / `pages.gen.ts` matches committed tables after adding `docs/[...path]`.
+1. ~~Smoke `:5220`~~ — Eng’d (`/` `/guides/routing` `/docs/intro/rest` 200).
+2. ~~Confirm vite regen~~ — `paths.gen` stable; `pages.gen` was flipping `docs/[...path]` → `static` (Waku typegen blind to inject). Fixed via `pageConfig` align pass.
 3. Optional: server-only assert that `pagesByIdFromModules` ids ⊆ `fileEntries` ids (never import that into Provider).
 4. Optional: `layerDestinationsFromPages` sibling of `layerDestinations` if builder catalogs need the merge.
-5. Owner-gated: PR + `pnpm run version` (changeset already at `.changeset/page-make-route-from-effect.md`).
+5. Owner-gated: PR land + `pnpm run version` (changeset already at `.changeset/page-make-route-from-effect.md`).
 
 ---
 
