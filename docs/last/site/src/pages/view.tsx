@@ -1,7 +1,8 @@
-import { ViewDemo } from "../islands/ViewDemo.js";
+import * as Page from "last-ts/Page";
+import { ViewDemo } from "../islands/ViewDemo";
 
-export default function ViewPage() {
-  return (
+class ViewPage extends Page.static() {
+  static Component = () => (
     <article data-page="view">
       <h1>View.Service</h1>
       <p>
@@ -12,3 +13,5 @@ export default function ViewPage() {
     </article>
   );
 }
+
+export default Page.asDefault(ViewPage);

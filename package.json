@@ -437,7 +437,7 @@
     "example:apps-web-server": "tsx examples/apps/web/server.ts",
     "example:apps-view-compose": "vite --config examples/apps/view-compose/vite.config.ts",
     "example:apps-title-live": "vite --config examples/apps/title-live/vite.config.ts",
-    "example:apps-last-ts-site": "pnpm --dir examples/apps/last-ts-site dev",
+    "docs:last-site": "pnpm --dir docs/last/site dev",
     "example:apps-router-docs": "vite --config examples/apps/router-docs/vite.config.ts",
     "example:ui-router-mini-docs": "tsx examples/ui/router-mini-docs.ts",
     "example:ui-group-nav": "tsx examples/ui/group-nav.ts",

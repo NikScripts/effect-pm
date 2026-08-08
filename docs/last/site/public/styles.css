@@ -117,13 +117,6 @@ code {
   padding: 1.5rem 1.75rem 2rem;
 }
 
-.crumb {
-  margin-bottom: 1rem;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
-  font-size: 0.75rem;
-  color: var(--muted);
-}
-
 article h1 {
   margin: 0 0 0.75rem;
   font-size: 1.65rem;

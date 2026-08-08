@@ -174,12 +174,15 @@ export const Page: typeof endpoint.pageSuccess.Page = endpoint.pageSuccess.Page;
 /**
  * Declare a page destination (`HttpApiEndpoint.get` + {@link Page} success).
  *
- * Same options bag as Effect `HttpApiEndpoint.get` (`params` / `query` /
- * `headers` / `success` / `error`). Default `success` is {@link Page}.
+ * **Dynamic by default** (SSR). Same {@link RequestOptions} bag as
+ * {@link ./Page.make}. Opt into SSG with {@link staticFromEffect}.
  *
  * @public
  */
 export const get: typeof endpoint.get = endpoint.get;
+
+/** Shared with {@link ./Page.make}. @public */
+export type RequestOptions = endpoint.RequestOptions;
 
 /**
  * Attach a params schema. Dual.
@@ -187,6 +190,37 @@ export const get: typeof endpoint.get = endpoint.get;
  * @public
  */
 export const params: typeof endpoint.params = endpoint.params;
+
+/**
+ * Typed param rows from an Effect (dynamic — links / SSR). Helper fills the
+ * params phantom; no manual annotations.
+ *
+ * @public
+ */
+export {
+  fromEffect,
+  staticFromEffect,
+  mixedFromEffect,
+  type ParamBag,
+} from "./internal/routeFromEffect";
+
+/** @internal */
+export { fromEffectOf, FromEffect } from "./internal/routeFromEffect";
+
+/**
+ * SSG hrefs from {@link staticFromEffect} rows + the route path template.
+ *
+ * @public
+ */
+export { expandStaticPaths } from "./internal/routeExpand";
+
+/**
+ * Catalog destination from a {@link ./Page} class — options + static Literals
+ * bags (file-router / catalog merge).
+ *
+ * @public
+ */
+export { fromPage } from "./internal/routeFromPage";
 
 /**
  * Prefix a destination path.

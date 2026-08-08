@@ -80,15 +80,22 @@ export const toFilePath = (
   return "/" + segs.join("/");
 };
 
-/** `/docs/[chapter]` → `/docs/:chapter` */
+/**
+ * Disk → Route path template.
+ * `[chapter]` → `:chapter`; `[...path]` → `*path` (rest / splat).
+ */
 export const toRoutePath = (filePath: string): string =>
-  filePath.replace(/\[(\w+)\?\]/g, ":$1?").replace(/\[(\w+)\]/g, ":$1");
+  filePath
+    .replace(/\[\.\.\.(\w+)\]/g, "*$1")
+    .replace(/\[(\w+)\?\]/g, ":$1?")
+    .replace(/\[(\w+)\]/g, ":$1");
 
-/** `/docs/[chapter]` → `docs_chapter` */
+/** `/docs/[chapter]` → `docs_chapter`; `/docs/[...path]` → `docs_path` */
 export const toRouteId = (filePath: string): string => {
   if (filePath === "/") return "index";
   return filePath
     .slice(1)
+    .replace(/\[\.\.\.(\w+)\]/g, "$1")
     .replace(/\[(\w+)\??\]/g, "$1")
     .replace(/\//g, "_");
 };

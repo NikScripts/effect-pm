@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { Nav } from "../islands/Nav.js";
-import { provider as Provider } from "../islands/provider.js";
+import { Nav } from "../islands/Nav";
+import { Provider } from "../lib/Provider";
 
 export default function Layout(props: {
   readonly children: ReactNode;

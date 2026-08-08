@@ -1,37 +1,17 @@
 /**
- * Page.static / .dynamic / .build stamps — file-router marks (no Page.Service yet).
+ * Page.make / Page.static classes (replaces path+component stamps).
  */
-import { Effect } from "effect";
+import { Schema } from "effect";
 import { expectTypeOf } from "vitest";
-import * as Page from "../src/ui/Page";
+import * as Page from "last-ts/Page";
 
-const About = Page.static(
-  "/about",
-  (_props: {}) => null,
-  { title: "About" },
-);
+class About extends Page.make() {}
+class Search extends Page.make({
+  query: { q: Schema.optionalKey(Schema.String) },
+}) {}
+class Home extends Page.static() {}
 
-const Search = Page.dynamic("/search", (_props: {}) => null);
-
-const Chapter = Page.build(
-  "/docs/:chapter",
-  (_props: { readonly chapter: string }) => null,
-  {
-    title: "Docs",
-    paths: Effect.succeed(["routing"] as const),
-  },
-);
-
-expectTypeOf(Page.stampOf(About)?.render._tag).toEqualTypeOf<
-  "Static" | undefined
->();
-expectTypeOf(Page.stampOf(Search)?.render._tag).toEqualTypeOf<
-  "Dynamic" | undefined
->();
-expectTypeOf(Page.stampOf(Chapter)?.render._tag).toEqualTypeOf<
-  "Build" | undefined
->();
-
-expectTypeOf(
-  Page.renderModeOf(Page.stampOf(Chapter)!, { dev: true }),
-).toEqualTypeOf<"static" | "dynamic">();
+expectTypeOf(Page.modeOf(About)).toEqualTypeOf<"dynamic">();
+expectTypeOf(Page.modeOf(Search)).toEqualTypeOf<"dynamic">();
+expectTypeOf(Page.modeOf(Home)).toEqualTypeOf<"static">();
+expectTypeOf(Page.isPage(About)).toEqualTypeOf<boolean>();
