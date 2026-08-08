@@ -77,16 +77,20 @@ const program = Effect.gen(function* () {
 
     yield* Effect.logInfo("1) Update.plan — ordered Mail then Jobs");
     const plan = yield* Update.plan({
+      prefer: true,
       steps: [
         { target: "fleet/Mail", successor: dummy, tags: [Mail] },
         { target: "fleet/Jobs", successor: dummy, tags: [Jobs] },
       ],
+      // Same-tip binary bump — `to` omitted; inspect audit is empty unless set.
+      contracts: [],
     });
 
     yield* Effect.logInfo(
       `2) steps=${String(plan.steps.length)} blocked=${String(plan.blocked)} ` +
         `coUpdate=[${plan.coUpdate.join(", ")}] ` +
-        `uncovered=[${plan.uncoveredCoUpdate.join(", ")}]`,
+        `uncovered=[${plan.uncoveredCoUpdate.join(", ")}] ` +
+        `(spare Jobs peer is advisory until scheduled)`,
     );
 
     yield* Effect.logInfo("3) Update.simulate — validate without spawn");

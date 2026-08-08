@@ -56,6 +56,7 @@ import {
 import type { NodeStatus } from "./nodeStatus";
 import { mintAssumeToken, type Token } from "./launcherToken";
 import {
+  findTargetEntry,
   planUpdate,
   type PlanUpdateTag,
   type UpdateImpact,
@@ -1409,15 +1410,8 @@ export const restartSuccessor = (
       );
 
       // Capture A's dial before B advertises (same nodeKey dial-replace would hide A).
-      const seed = options.tags[0];
-      if (seed === undefined) {
-        return yield* new UpdateTargetUnknown({ target: options.target });
-      }
-      const rows = yield* Directory.nodesServing(seed);
-      const entry = rows.find((row) => row.nodeKey === options.target);
-      if (entry === undefined) {
-        return yield* new UpdateTargetUnknown({ target: options.target });
-      }
+      // Walk every tag (same as planUpdate) — not only tags[0].
+      const entry = yield* findTargetEntry(options.target, options.tags);
       const outgoing = nodeFromDirectoryEntry(entry);
 
       let impact: UpdateImpact | undefined;

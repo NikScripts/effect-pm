@@ -33,6 +33,7 @@ export {
   EmptyTarget,
   EmptyTagKey,
   DuplicateTarget,
+  DuplicateTag,
   DuplicateContract,
   UpdateContractMismatch,
   PlanBlocked,

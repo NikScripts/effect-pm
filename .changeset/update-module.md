@@ -21,5 +21,10 @@ dial-matched row was removed and prefer still points at the departing
 `nodeKey` — so `Advice.prefer(B)` / same-identity cutovers survive A's leave
 (was blanketing every served key).
 
+**Custody align:** `restartSuccessor` resolves the outgoing dial via the same
+tag walk as `planUpdate` (not only `tags[0]`). Contracts with `from`+`to` and
+no observation fail closed when the tag is not Versioned. `Input.prefer`,
+`DuplicateUpdateTag`, `plan.lookupFirst` rollup.
+
 Also completes Tag→Service renames for Dialers + Lookup sibling Context keys
 left broken after the Effect v4 mint rename.

@@ -78,8 +78,9 @@ export interface Step {
    */
   readonly skipPlan?: boolean;
   /**
-   * After `up(B)`, stamp Advice.prefer per tag. Default `true`.
-   * Forwarded to {@link Launcher.restartSuccessor} on execute.
+   * After `up(B)`, stamp Advice.prefer per tag. Default `true` (or
+   * {@link Input.prefer} when set). Forwarded to
+   * {@link Launcher.restartSuccessor} on execute.
    */
   readonly prefer?: boolean;
 }
@@ -125,6 +126,11 @@ export interface Input {
   readonly force?: boolean;
   /** Default `status` for every step that omits its own. */
   readonly status?: boolean;
+  /**
+   * Default `prefer` for every step that omits its own.
+   * Forwarded to custody on {@link execute} (unlike plan-time `force` / `status`).
+   */
+  readonly prefer?: boolean;
 }
 
 /**
@@ -184,6 +190,11 @@ export interface Plan {
    * set {@link Plan.blocked} (fleet coverage is still owner-shaped).
    */
   readonly uncoveredCoUpdate: ReadonlyArray<string>;
+  /**
+   * Step targets whose impact flagged `lookupFirst` — schedule Lookup cutovers
+   * before app nodes that depend on membership.
+   */
+  readonly lookupFirst: ReadonlyArray<string>;
   /**
    * True when any step impact has hard blocker arrays (re-derived from
    * `wireRemovals` / `migrationGaps` / `contractDrifts` — not a forgeable flag).
@@ -283,9 +294,28 @@ export class EmptyTarget extends Data.TaggedError("EmptyUpdateTarget")<{
 export class EmptyTagKey extends Data.TaggedError("EmptyUpdateTagKey")<{
   readonly target: string;
   readonly order: number;
+  readonly role: "step" | "contract";
 }> {
   override get message() {
-    return `Update step[${String(this.order)}] target "${this.target}" has a blank or untrimmed tag key.`;
+    return this.role === "contract"
+      ? `Update contract[${String(this.order)}] has a blank or untrimmed tag key.`
+      : `Update step[${String(this.order)}] target "${this.target}" has a blank or untrimmed tag key.`;
+  }
+}
+
+/**
+ * A step lists the same `tag.key` more than once.
+ *
+ * @category errors
+ * @public
+ */
+export class DuplicateTag extends Data.TaggedError("DuplicateUpdateTag")<{
+  readonly target: string;
+  readonly serviceKey: string;
+  readonly order: number;
+}> {
+  override get message() {
+    return `Update step[${String(this.order)}] target "${this.target}" duplicates tag "${this.serviceKey}".`;
   }
 }
 
@@ -380,6 +410,7 @@ export type PlanError =
   | EmptyTarget
   | EmptyTagKey
   | DuplicateTarget
+  | DuplicateTag
   | DuplicateContract
   | UpdateBlocked
   | UpdateTargetUnknown
@@ -397,6 +428,7 @@ export type ValidateError =
   | EmptyTarget
   | EmptyTagKey
   | DuplicateTarget
+  | DuplicateTag
   | DuplicateContract
   | PlanBlocked
   | UpdateContractMismatch;
@@ -451,16 +483,16 @@ const auditContracts = (
           reason = "From";
         }
       } else if (c.to !== undefined) {
-        // No live tip / gap — verify Versioned path from→to when schemas allow.
+        // No live tip / gap — Versioned path from→to, else fail closed.
         const item = itemSchemaOf(c.tag);
-        if (
-          item !== undefined &&
-          Versioned.isVersioned(item) &&
-          c.from !== c.to &&
-          !versionInChain(item, c.from)
-        ) {
+        if (item !== undefined && Versioned.isVersioned(item)) {
+          if (c.from !== c.to && !versionInChain(item, c.from)) {
+            ok = false;
+            reason = "Path";
+          }
+        } else {
           ok = false;
-          reason = "Path";
+          reason = "From";
         }
       } else {
         // Asserted `from` with nothing observed and no `to` for a path check.
@@ -496,17 +528,22 @@ const rollupCoUpdate = (
 ): {
   readonly coUpdate: ReadonlyArray<string>;
   readonly uncoveredCoUpdate: ReadonlyArray<string>;
+  readonly lookupFirst: ReadonlyArray<string>;
 } => {
   const targets = new Set(planned.map((s) => s.target));
   const peers = new Set<string>();
+  const lookupFirst: Array<string> = [];
   for (const step of planned) {
     for (const peer of step.impact?.coUpdate ?? []) {
       peers.add(peer);
     }
+    if (step.impact?.lookupFirst === true) {
+      lookupFirst.push(step.target);
+    }
   }
   const coUpdate = [...peers].sort();
   const uncoveredCoUpdate = coUpdate.filter((peer) => !targets.has(peer));
-  return { coUpdate, uncoveredCoUpdate };
+  return { coUpdate, uncoveredCoUpdate, lookupFirst };
 };
 
 type ShapeError =
@@ -514,7 +551,8 @@ type ShapeError =
   | EmptyStepTags
   | EmptyTarget
   | EmptyTagKey
-  | DuplicateTarget;
+  | DuplicateTarget
+  | DuplicateTag;
 
 const validateSteps = (steps: ReadonlyArray<Step>): ShapeError | undefined => {
   if (steps.length === 0) return new EmptyPlan();
@@ -527,10 +565,23 @@ const validateSteps = (steps: ReadonlyArray<Step>): ShapeError | undefined => {
     if (step.tags.length === 0) {
       return new EmptyStepTags({ target: step.target, order });
     }
+    const tagKeys = new Set<string>();
     for (const tag of step.tags) {
       if (tag.key.trim().length === 0 || tag.key !== tag.key.trim()) {
-        return new EmptyTagKey({ target: step.target, order });
+        return new EmptyTagKey({
+          target: step.target,
+          order,
+          role: "step",
+        });
       }
+      if (tagKeys.has(tag.key)) {
+        return new DuplicateTag({
+          target: step.target,
+          serviceKey: tag.key,
+          order,
+        });
+      }
+      tagKeys.add(tag.key);
     }
     const orders = seen.get(step.target);
     if (orders === undefined) seen.set(step.target, [order]);
@@ -551,7 +602,11 @@ const validateContracts = (
   for (const [order, c] of contracts.entries()) {
     const key = c.tag.key;
     if (key.trim().length === 0 || key !== key.trim()) {
-      return new EmptyTagKey({ target: "(contract)", order });
+      return new EmptyTagKey({
+        target: "",
+        order,
+        role: "contract",
+      });
     }
     if (seen.has(key)) {
       return new DuplicateContract({ serviceKey: key });
@@ -615,7 +670,8 @@ const validatePlan = (
       }
 
       const blocked = steps.some((s) => impactArraysBlocked(s.impact));
-      const { coUpdate, uncoveredCoUpdate } = rollupCoUpdate(steps);
+      const { coUpdate, uncoveredCoUpdate, lookupFirst } =
+        rollupCoUpdate(steps);
       const next: Plan = {
         ...updatePlan,
         steps,
@@ -623,6 +679,7 @@ const validatePlan = (
         blocked,
         coUpdate,
         uncoveredCoUpdate,
+        lookupFirst,
       };
       if (blocked) {
         return yield* new PlanBlocked({ plan: next });
@@ -694,6 +751,7 @@ export const plan = (
       for (const [order, step] of input.steps.entries()) {
         const force = step.force ?? input.force;
         const status = step.status ?? input.status;
+        const prefer = step.prefer ?? input.prefer;
         let impact: UpdateImpact | undefined;
         if (step.skipPlan !== true) {
           impact = yield* planUpdate(step.target, step.tags, {
@@ -715,6 +773,7 @@ export const plan = (
           impact: rederiveImpact(impact),
           ...(force !== undefined ? { force } : {}),
           ...(status !== undefined ? { status } : {}),
+          ...(prefer !== undefined ? { prefer } : {}),
         });
       }
 
@@ -726,7 +785,8 @@ export const plan = (
         return yield* mismatch;
       }
 
-      const { coUpdate, uncoveredCoUpdate } = rollupCoUpdate(planned);
+      const { coUpdate, uncoveredCoUpdate, lookupFirst } =
+        rollupCoUpdate(planned);
       const blocked = planned.some((s) => impactArraysBlocked(s.impact));
 
       return {
@@ -736,6 +796,7 @@ export const plan = (
         audit,
         coUpdate,
         uncoveredCoUpdate,
+        lookupFirst,
         blocked,
       };
     }),
@@ -777,6 +838,10 @@ export const simulate = (
  * inspecting blocked impacts — execute still refuses until the plan is
  * unblocked. Only step `prefer` is forwarded to custody.
  *
+ * Steps run in array order and **short-circuit** on the first custody failure
+ * (earlier steps already cut over; no automatic rollback — fleet recovery is
+ * owner-shaped).
+ *
  * @category constructors
  * @public
  */
@@ -813,6 +878,7 @@ export const execute = (
     }),
     {
       "update.steps": String(updatePlan.steps.length),
+      "update.contracts": String(updatePlan.contracts.length),
     },
   );
 
@@ -835,6 +901,7 @@ export const isPlan = (u: unknown): u is Plan => {
   if (!("uncoveredCoUpdate" in u) || !Array.isArray(u.uncoveredCoUpdate)) {
     return false;
   }
+  if (!("lookupFirst" in u) || !Array.isArray(u.lookupFirst)) return false;
   if (!("blocked" in u) || typeof u.blocked !== "boolean") return false;
   return true;
 };

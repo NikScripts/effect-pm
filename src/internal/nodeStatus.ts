@@ -384,6 +384,20 @@ export const buildNodeStatusImpl = (options: {
               }
             }),
           { discard: true },
+        ).pipe(
+          Effect.annotateLogs({
+            "node.leave": membership.nodeKey,
+            "node.leave.removed": "true",
+          }),
+          Effect.withLogSpan("node.leave.advice"),
+        );
+      } else {
+        yield* Effect.logDebug("node leave kept Advice (row not removed)").pipe(
+          Effect.annotateLogs({
+            "node.leave": membership.nodeKey,
+            "node.leave.removed": String(removed),
+          }),
+          Effect.withLogSpan("node.leave.advice"),
         );
       }
     });

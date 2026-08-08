@@ -61,10 +61,12 @@ function typeLock(
     true;
   const _hasEmptyKey: AssertExtends<Update.EmptyTagKey, ErrOf<PlanEff>> = true;
   const _hasDup: AssertExtends<Update.DuplicateTarget, ErrOf<PlanEff>> = true;
+  const _hasDupTag: AssertExtends<Update.DuplicateTag, ErrOf<PlanEff>> = true;
   const _hasDupContract: AssertExtends<
     Update.DuplicateContract,
     ErrOf<PlanEff>
   > = true;
+  const _planErrorEq: AssertExtends<PlanError, ErrOf<PlanEff>> = true;
   const _hasContract: AssertExtends<
     Update.UpdateContractMismatch,
     ErrOf<PlanEff>
@@ -112,8 +114,10 @@ function typeLock(
   const _blocked: boolean = planValue.blocked;
   const _coUpdate: ReadonlyArray<string> = planValue.coUpdate;
   const _uncovered: ReadonlyArray<string> = planValue.uncoveredCoUpdate;
+  const _lookupFirst: ReadonlyArray<string> = planValue.lookupFirst;
   const _target: string = step.target;
   const _prefer: boolean | undefined = step.prefer;
+  const _inputPrefer: boolean | undefined = input.prefer;
   const _forcePlanTime: boolean | undefined = step.force;
   const _steps: ReadonlyArray<Step> = input.steps;
   const _auditOk: boolean = audit.ok;
@@ -135,7 +139,9 @@ function typeLock(
   void _hasEmptyTarget;
   void _hasEmptyKey;
   void _hasDup;
+  void _hasDupTag;
   void _hasDupContract;
+  void _planErrorEq;
   void _hasContract;
   void _hasBlocked;
   void _hasUnknown;
@@ -162,8 +168,10 @@ function typeLock(
   void _blocked;
   void _coUpdate;
   void _uncovered;
+  void _lookupFirst;
   void _target;
   void _prefer;
+  void _inputPrefer;
   void _forcePlanTime;
   void _steps;
   void _auditOk;

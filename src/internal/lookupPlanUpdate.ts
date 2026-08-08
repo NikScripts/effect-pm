@@ -233,7 +233,14 @@ const wireMethodKeys = (tag: PlanUpdateTag): ReadonlySet<string> => {
 const contractHashOf = (tag: PlanUpdateTag): string =>
   hashContract(tag[wireKeySym], kindOf(tag) ?? "hyperlink", tag[specSym]);
 
-const findTargetEntry = (
+/**
+ * Resolve a Directory row for `target` by walking successor tags (any match).
+ * Shared by {@link planUpdate} and {@link Launcher.restartSuccessor} so execute
+ * does not only seed on `tags[0]`.
+ *
+ * @internal
+ */
+export const findTargetEntry = (
   target: string,
   successor: ReadonlyArray<PlanUpdateTag>,
 ): Effect.Effect<
@@ -349,7 +356,8 @@ const wireRemovalsFor = (
  * Spec method removals need {@link PlanUpdateOptions.incumbent}.
  *
  * Fail-closed: {@link UpdateBlocked} when {@link UpdateImpact.blocked} unless
- * `{ force: true }`. Does **not** spawn — pass the plan to {@link Launcher.up}.
+ * `{ force: true }`. Does **not** spawn — compose with {@link Update.plan} /
+ * {@link Update.execute} (or {@link Launcher.restartSuccessor} for one step).
  *
  * @category constructors
  * @public

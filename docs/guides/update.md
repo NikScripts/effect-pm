@@ -54,6 +54,7 @@ array order**, attaches `impact`, audits contracts, and returns an
 | `EmptyUpdateTarget` | A step `target` is empty, whitespace, or untrimmed |
 | `EmptyUpdateTagKey` | A step or contract tag has a blank / untrimmed `key` |
 | `DuplicateUpdateTarget` | Two steps share the same `target` |
+| `DuplicateUpdateTag` | One step lists the same `tag.key` twice |
 | `DuplicateUpdateContract` | Two contracts share the same `tag.key` |
 | `UpdateBlocked` | Hard impact blockers on the **target** (same as planUpdate fail-closed) |
 | `UpdateContractMismatch` | Bad `contracts.to` / `from` / Versioned path (carries full `audit`) |
@@ -77,10 +78,10 @@ Per-step `skipPlan: true` skips impact dry-run (ops escape; impact is
 
 ### Prefer
 
-Step `prefer` (default `true`) is the only custody flag execute forwards to
-`Launcher.restartSuccessor`. After `up(B)`, sticky `Advice.prefer` stamps the
-successor so dialers move before A shuts down. Set `prefer: false` to skip that
-stamp (rare; dual-serve ops that manage Advice themselves).
+`Input.prefer` / `Step.prefer` (default `true`) is the only custody flag execute
+forwards to `Launcher.restartSuccessor`. After `up(B)`, sticky `Advice.prefer`
+stamps the successor so dialers move before A shuts down. Set `prefer: false`
+to skip that stamp (rare; dual-serve ops that manage Advice themselves).
 
 `Node.shutdown` on A does **not** blanket-clear Advice for every served key. It
 unregisters A's dial-matched Directory row first; Advice is cleared only when
@@ -106,6 +107,7 @@ examples often use `Lookup.planStatusOff` when no live nodes answer status.
 | `plan.audit` | Contract from→to rows |
 | `plan.coUpdate` | Union of peer nodeKeys sharing served keys |
 | `plan.uncoveredCoUpdate` | Peers in `coUpdate` that are not step targets (advisory) |
+| `plan.lookupFirst` | Targets whose impact flagged Lookup-first sequencing |
 | `plan.blocked` | Any **target** step has hard blocker arrays |
 
 `blocked` is re-derived from `wireRemovals` / `migrationGaps` / `contractDrifts`
@@ -129,7 +131,11 @@ you would in prod (real Http Node / WorkPool / Directory), then
 `Update.execute(plan)` re-runs the simulate gate, then each step via
 `Launcher.restartSuccessor` with `skipPlan: true`. Returns each step's
 **planned** impact (execute does not re-run planUpdate). Only step `prefer`
-is forwarded to custody.
+is forwarded to custody. Target resolve walks **every** step tag (same as
+`planUpdate`), not only `tags[0]`.
+
+Steps short-circuit on the first custody failure — earlier steps already cut
+over; there is no automatic rollback (fleet recovery stays owner-shaped).
 
 Phases emit `update.{plan,validate,simulate,execute}` spans / log spans
 (mirroring Launcher's phase instrumentation).
@@ -141,7 +147,7 @@ Optional `contracts: [{ tag, from?, to? }]` (unique `tag.key` each):
 | Field | Meaning |
 |-------|---------|
 | `to` | Successor tip must equal `schemaVersion` / Versioned tip of `tag` |
-| `from` | Live tip on the **target** (`impact.liveTips` / migration gaps); else with `to`, Versioned path must allow `from→to`; `from` alone with no observation fails closed |
+| `from` | Live tip on the **target** (`impact.liveTips` / migration gaps); else with `to`, Versioned path must allow `from→to`; non-Versioned tags with no observation fail closed; `from` alone with no observation fails closed |
 
 `from` is strongest when status dial is on (`Lookup.planStatusOn` / step
 `status: true`) so `liveTips` carry `schemaVersion`. With `planStatusOff`, use

@@ -1015,6 +1015,144 @@ describe("Update.plan / simulate", () => {
       );
     }),
   );
+
+  it.effect("fails DuplicateUpdateTag when a step lists a key twice", () =>
+    Effect.gen(function* () {
+      const path = yield* tmpSock("dup-tag");
+      const node = Node.Service()("update/dup-tag", { path }).pipe(Node.asLookup);
+      yield* withLookup(
+        Lookup.layerNode(node),
+        Lookup.client(node),
+        Effect.gen(function* () {
+          const successor = dummySuccessor("dup-tag");
+          expectTaggedFailure(
+            yield* Effect.exit(
+              Update.plan({
+                steps: [
+                  {
+                    target: "mail-dup-tag",
+                    successor,
+                    tags: [Mail, Mail],
+                  },
+                ],
+              }),
+            ),
+            "DuplicateUpdateTag",
+          );
+        }),
+      );
+    }),
+  );
+
+  it.effect("Input.prefer lands on PlannedStep", () =>
+    Effect.gen(function* () {
+      const path = yield* tmpSock("input-prefer");
+      const node = Node.Service()("update/input-prefer", { path }).pipe(
+        Node.asLookup,
+      );
+      yield* withLookup(
+        Lookup.layerNode(node),
+        Lookup.client(node),
+        Effect.gen(function* () {
+          yield* advertiseIpc("mail-pref", "/tmp/mail-pref.sock", [
+            "update-plan/Mail",
+          ]);
+          const successor = dummySuccessor("input-prefer");
+          const plan = yield* Update.plan({
+            prefer: false,
+            steps: [{ target: "mail-pref", successor, tags: [Mail] }],
+          });
+          expect(plan.steps[0]?.prefer).toBe(false);
+          expect(plan.lookupFirst).toEqual([]);
+        }),
+      );
+    }),
+  );
+
+  it.effect("contract.from+to fails closed when tag is not Versioned", () =>
+    Effect.gen(function* () {
+      const path = yield* tmpSock("non-versioned-path");
+      const node = Node.Service()("update/non-versioned-path", { path }).pipe(
+        Node.asLookup,
+      );
+      yield* withLookup(
+        Lookup.layerNode(node),
+        Lookup.client(node),
+        Effect.gen(function* () {
+          yield* advertiseIpc("plain-nv", "/tmp/plain-nv.sock", [
+            "update-plan/PlainJobs",
+          ]);
+          const successor = dummySuccessor("non-versioned-path");
+          // Tip matches `to`, but item schema is not a Versioned chain — no path check.
+          const PlainJobs = Object.assign(
+            {
+              key: "update-plan/PlainJobs",
+              [Hyperlink.wireKeySym]: "update-plan/PlainJobs",
+              [Hyperlink.specSym]: {
+                run: Hyperlink.effect(Schema.Number),
+              },
+            } satisfies Lookup.PlanUpdateTag,
+            { [workPoolItemSchemaSym]: JobV2 },
+          );
+          const tip = Versioned.schemaVersion(JobV2);
+          const exit = yield* Effect.exit(
+            Update.plan({
+              steps: [{ target: "plain-nv", successor, tags: [PlainJobs] }],
+              contracts: [
+                { tag: PlainJobs, from: "update/job@1", to: tip },
+              ],
+            }),
+          );
+          expectTaggedFailure(exit, "UpdateContractMismatch");
+          if (Exit.isFailure(exit)) {
+            const err = Option.getOrThrow(Cause.findErrorOption(exit.cause));
+            expect(err).toBeInstanceOf(Update.UpdateContractMismatch);
+            if (err instanceof Update.UpdateContractMismatch) {
+              expect(err.reason).toBe("From");
+            }
+          }
+        }),
+      );
+    }),
+  );
+
+  it.effect("plan resolves target via a later tag (not only tags[0])", () =>
+    Effect.gen(function* () {
+      const path = yield* tmpSock("later-tag");
+      const node = Node.Service()("update/later-tag", { path }).pipe(
+        Node.asLookup,
+      );
+      yield* withLookup(
+        Lookup.layerNode(node),
+        Lookup.client(node),
+        Effect.gen(function* () {
+          // Advertised under Mail only — first tag key is absent.
+          yield* advertiseIpc("mail-later", "/tmp/mail-later.sock", [
+            "update-plan/Mail",
+          ]);
+          const successor = dummySuccessor("later-tag");
+          const absent: Lookup.PlanUpdateTag = {
+            key: "update-plan/Absent",
+            [Hyperlink.wireKeySym]: "update-plan/Absent",
+            [Hyperlink.specSym]: {
+              ping: Hyperlink.effect(Schema.String),
+            },
+          };
+          const plan = yield* Update.plan({
+            steps: [
+              {
+                target: "mail-later",
+                successor,
+                tags: [absent, Mail],
+              },
+            ],
+          });
+          expect(plan.blocked).toBe(false);
+          expect(plan.steps[0]?.impact?.target).toBe("mail-later");
+        }),
+      );
+    }),
+  );
 });
 
 describe("Update.execute live A→B", () => {
