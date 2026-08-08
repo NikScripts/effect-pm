@@ -42,7 +42,9 @@ Uncommitted work on the branch (commit this first if still dirty):
 | Nav / urls | `urls.index()`, `urls.guides_slug(…)`, `urls.docs_path(…)` |
 | Docs / lock / changeset | Updated for the above |
 
-Last **pushed** tip before this WIP: `19dd76c16` (same as `integration` at that moment).
+**Pushed tip:** `1fcf851c4` on `origin/cursor/file-router-prototype-125f`.
+
+`integration` FF-sync was **blocked** here (`integration` checked out in another worktree at `/Users/nikolasstow/Coding/packages/effect-pm`). Agent K should FF-merge this tip into `integration` from a worktree that can check it out.
 
 ---
 
