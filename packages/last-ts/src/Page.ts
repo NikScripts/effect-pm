@@ -225,6 +225,86 @@ export const extract = (page: unknown): Extracted | undefined => {
   };
 };
 
+/**
+ * Waku fs-router config derived from a page class (apps never author this).
+ *
+ * - {@link make} → `{ render: "dynamic" }`
+ * - {@link static_} without params → `{ render: "static" }`
+ * - {@link static_} with `Schema.Literals` params → `{ render: "static", staticPaths }`
+ *
+ * @public
+ */
+export type WakuConfig =
+  | { readonly render: "dynamic" }
+  | {
+      readonly render: "static";
+      readonly staticPaths?: ReadonlyArray<string | ReadonlyArray<string>>;
+    };
+
+const literalsOf = (schema: unknown): ReadonlyArray<string> | undefined => {
+  // Schema values are callable objects (`typeof` → "function").
+  if (
+    (typeof schema === "object" || typeof schema === "function") &&
+    schema !== null &&
+    "literals" in schema &&
+    Array.isArray((schema as { literals: unknown }).literals)
+  ) {
+    const out: Array<string> = [];
+    for (const value of (schema as { literals: ReadonlyArray<unknown> })
+      .literals) {
+      if (typeof value !== "string") return undefined;
+      out.push(value);
+    }
+    return out;
+  }
+  return undefined;
+};
+
+/**
+ * Expand closed `Schema.Literals` param fields into Waku `staticPaths`.
+ * One param → `string[]`; several → cartesian `string[][]`.
+ *
+ * @internal
+ */
+const staticPathsFromParams = (
+  params: unknown,
+): ReadonlyArray<string | ReadonlyArray<string>> | undefined => {
+  if (params === null || typeof params !== "object") return undefined;
+  const entries = Object.entries(params as Record<string, unknown>);
+  if (entries.length === 0) return undefined;
+  const axes: Array<ReadonlyArray<string>> = [];
+  for (const [, schema] of entries) {
+    const lit = literalsOf(schema);
+    if (lit === undefined || lit.length === 0) return undefined;
+    axes.push(lit);
+  }
+  if (axes.length === 1) return axes[0];
+  // cartesian product of literal axes (stable key order = Object.entries)
+  let rows: Array<Array<string>> = [[]];
+  for (const axis of axes) {
+    const next: Array<Array<string>> = [];
+    for (const prefix of rows) {
+      for (const value of axis) next.push([...prefix, value]);
+    }
+    rows = next;
+  }
+  return rows;
+};
+
+/**
+ * Derive Waku `getConfig` payload from a page class / {@link asDefault} export.
+ * Used by `last-ts/vite` `pageConfig()` inject — not called from app pages.
+ *
+ * @public
+ */
+export const configOf = (page: AnyPage): WakuConfig => {
+  if (page.mode === "dynamic") return { render: "dynamic" };
+  const staticPaths = staticPathsFromParams(page.options.params);
+  return staticPaths === undefined
+    ? { render: "static" }
+    : { render: "static", staticPaths };
+};
+
 const hostReserved = new Set([
   "path",
   "pathname",

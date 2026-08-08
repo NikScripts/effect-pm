@@ -35,13 +35,13 @@ Route.get("chapter", "/guides/:slug").pipe(
 ## Not yet
 
 - File-router loader reading `Page.make` class → catalog merge
-- `pageConfig` Vite inject → expand `Page.static` + Literals into Waku `staticPaths`
 - Mixed static+dynamic **two** literal sets on one `Route.get` (annotation helper polish)
 - `group.fromEffect` emitting full param unions
 
 ## Eng’d inject
 
-- `last-ts/vite` `pageConfig()` — stamps Waku `getConfig` from `Page.make`/`Page.static` (apps never write it). Waku fs-router defaults pages to static; slug routes need the dynamic override.
+- `Page.configOf(page)` — `{ render }` + `staticPaths` from `Schema.Literals` params
+- `last-ts/vite` `pageConfig()` — stamps `export const getConfig = () => Page.configOf(X)` (apps never write it)
 
 ## Surface
 

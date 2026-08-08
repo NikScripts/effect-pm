@@ -4,7 +4,7 @@
  *
  * Waku’s fs-router defaults every file page to `render: "static"`. Slug routes
  * then require `staticPaths` unless we override to `dynamic`. This plugin
- * stamps the override from the page class factory used in the module.
+ * stamps `Page.configOf(<PageClass>)` from the `Page.asDefault(X)` call site.
  *
  * @module vite/pageConfig
  * @internal
@@ -17,6 +17,10 @@ const hasOwnGetConfig =
 const usesPageStatic = /extends\s+Page\.static\s*\(/;
 const usesPageMake = /extends\s+Page\.make\s*\(/;
 const usesAsDefault = /Page\.asDefault\s*\(/;
+const asDefaultName =
+  /export\s+default\s+Page\.asDefault\s*\(\s*([A-Za-z_$][\w$]*)\s*\)/;
+const pageNamespace =
+  /import\s*\*\s*as\s+([A-Za-z_$][\w$]*)\s+from\s+["']last-ts\/Page["']/;
 
 const injectedBanner = "/* last-ts: injected Page → Waku getConfig */";
 
@@ -33,18 +37,31 @@ export const pageConfig = (): Plugin => ({
     if (!pageFile.test(file.replace(/\\/g, "/"))) return null;
     if (code.includes(injectedBanner)) return null;
     if (hasOwnGetConfig.test(code)) return null;
-    if (!usesAsDefault.test(code) && !usesPageMake.test(code) && !usesPageStatic.test(code)) {
+    if (
+      !usesAsDefault.test(code) &&
+      !usesPageMake.test(code) &&
+      !usesPageStatic.test(code)
+    ) {
       return null;
     }
 
-    // Page.make = dynamic (SSR). Page.static = bake. Waku defaults to static.
-    const render = usesPageStatic.test(code) ? "static" : "dynamic";
-    const suffix = `
+    const ns = code.match(pageNamespace)?.[1] ?? "Page";
+    const pageName = code.match(asDefaultName)?.[1];
+
+    const suffix =
+      pageName !== undefined
+        ? `
+
+${injectedBanner}
+export const getConfig = async () => ${ns}.configOf(${pageName});
+`
+        : `
 
 ${injectedBanner}
 export const getConfig = async () =>
-  ({ render: ${JSON.stringify(render)} } as const);
+  ({ render: ${JSON.stringify(usesPageStatic.test(code) ? "static" : "dynamic")} } as const);
 `;
+
     return { code: code + suffix, map: null };
   },
 });

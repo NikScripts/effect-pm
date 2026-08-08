@@ -53,4 +53,20 @@ describe("Page.make", () => {
       query: "",
     } as never);
   });
+
+  it("Page.configOf maps mode + Literals to Waku config", () => {
+    class About extends Page.make() {}
+    expect(Page.configOf(About)).toEqual({ render: "dynamic" });
+
+    class Home extends Page.static() {}
+    expect(Page.configOf(Home)).toEqual({ render: "static" });
+
+    class Chapter extends Page.static({
+      params: { slug: Schema.Literals(["routing", "view-service"]) },
+    }) {}
+    expect(Page.configOf(Chapter)).toEqual({
+      render: "static",
+      staticPaths: ["routing", "view-service"],
+    });
+  });
 });

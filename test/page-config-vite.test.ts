@@ -11,7 +11,7 @@ const transform = plugin.transform as (
 ) => { code: string; map: null } | null;
 
 describe("pageConfig vite plugin", () => {
-  it("injects dynamic getConfig for Page.make", () => {
+  it("injects Page.configOf for Page.asDefault(Class)", () => {
     const src = `
 import * as Page from "last-ts/Page"
 class Chapter extends Page.make({ params: {} }) {
@@ -20,11 +20,11 @@ class Chapter extends Page.make({ params: {} }) {
 export default Page.asDefault(Chapter)
 `;
     const out = transform(src, "/app/src/pages/guides/[slug].tsx");
-    expect(out?.code).toContain('render: "dynamic"');
     expect(out?.code).toContain("export const getConfig");
+    expect(out?.code).toContain("Page.configOf(Chapter)");
   });
 
-  it("injects static getConfig for Page.static", () => {
+  it("injects Page.configOf for Page.static classes", () => {
     const src = `
 import * as Page from "last-ts/Page"
 class Home extends Page.static() {
@@ -33,7 +33,7 @@ class Home extends Page.static() {
 export default Page.asDefault(Home)
 `;
     const out = transform(src, "/app/src/pages/index.tsx");
-    expect(out?.code).toContain('render: "static"');
+    expect(out?.code).toContain("Page.configOf(Home)");
   });
 
   it("skips modules that already export getConfig", () => {
