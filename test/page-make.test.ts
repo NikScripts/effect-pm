@@ -35,10 +35,11 @@ describe("Page.make", () => {
   });
 
   it("Page.asDefault adapts Waku flat props into Page.Props", () => {
-    class Chapter extends Page.make({
-      params: { slug: Schema.Literals(["routing", "view-service"]) },
-    }) {
-      static Component = (props: Page.Props<typeof Chapter>) => {
+    const params = { slug: Schema.Literals(["routing", "view-service"]) };
+    class Chapter extends Page.make({ params }) {
+      static Component = (
+        props: Page.PropsFromOptions<{ readonly params: typeof params }>,
+      ) => {
         expect(props.params.slug).toBe("routing");
         expect(props.pathname).toBe("/guides/routing");
         return null;

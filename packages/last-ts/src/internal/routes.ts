@@ -804,9 +804,30 @@ type UrlMethodArgs<Keys extends readonly string[]> = Keys extends readonly []
   ? [] | [options: UrlQueryOptions]
   : PathArgTuple<Keys> | [...PathArgTuple<Keys>, options: UrlQueryOptions];
 
+/** One bag → positional literals in path-key order (distributive over unions). */
+type PathArgTupleFromBag<
+  Bag extends { readonly [key: string]: string },
+  Keys extends readonly string[],
+> = {
+  [I in keyof Keys]: Keys[I] extends keyof Bag ? Bag[Keys[I] & keyof Bag]
+    : string;
+};
+
+type UrlMethodArgsFromBags<
+  Bags extends { readonly [key: string]: string },
+  Keys extends readonly string[],
+> = Keys extends readonly [] ? [] | [options: UrlQueryOptions]
+  : Bags extends unknown
+    ?
+      | PathArgTupleFromBag<Bags, Keys>
+      | [...PathArgTupleFromBag<Bags, Keys>, options: UrlQueryOptions]
+  : never;
+
 type UrlMethod<E extends uiRoute.Constraint> = E extends
-  uiRoute.Route<string, infer PathType, infer _Params>
-  ? (...args: UrlMethodArgs<PathKeys<PathType>>) => string
+  { readonly "~ParamBags": infer Bags extends { readonly [key: string]: string } }
+  ? (...args: UrlMethodArgsFromBags<Bags, PathKeys<E["path"]>>) => string
+  : E extends uiRoute.Route<string, infer PathType, infer _Params>
+    ? (...args: UrlMethodArgs<PathKeys<PathType>>) => string
   : UrlMethodLoose;
 
 const isUrlQueryOptions = (value: unknown): value is UrlQueryOptions =>

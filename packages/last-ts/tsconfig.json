@@ -23,7 +23,13 @@
     "../../test/view-service.test-d.ts",
     "../../test/view-service-default.test-d.ts",
     "../../test/view-service-default.test.ts",
-    "../../test/router-page-props.test-d.ts"
+    "../../test/router-page-props.test-d.ts",
+    "../../test/page-make.test-d.ts",
+    "../../test/page-make.test.ts",
+    "../../test/route-from-effect.test-d.ts",
+    "../../test/route-from-effect.test.ts",
+    "../../test/route-from-page.test.ts",
+    "../../test/page-config-vite.test.ts"
   ],
   "exclude": ["node_modules"]
 }
