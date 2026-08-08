@@ -25,7 +25,7 @@ import * as Path from "effect/Path";
 import {
   checkPaths,
   emitPaths,
-  runSync,
+  runPromise,
 } from "../internal/fileRouterPaths";
 
 export type FileRouterPluginOptions = {
@@ -40,8 +40,8 @@ export type FileRouterPluginOptions = {
   readonly check?: boolean;
 };
 
-const resolveFromRoot = (root: string, p: string): string =>
-  runSync(
+const resolveFromRoot = (root: string, p: string): Promise<string> =>
+  runPromise(
     Effect.gen(function* () {
       const path = yield* Path.Path;
       return path.isAbsolute(p) ? p : path.resolve(root, p);
@@ -58,10 +58,10 @@ export const fileRouter = (options: FileRouterPluginOptions): Plugin => {
   let pagesDir = options.pagesDir;
   let outFile = options.outFile;
 
-  const runEmit = (log: (msg: string) => void): void => {
-    const result = runSync(emitPaths({ pagesDir, outFile }));
+  const runEmit = async (log: (msg: string) => void): Promise<void> => {
+    const result = await runPromise(emitPaths({ pagesDir, outFile }));
     if (result.changed) {
-      const rel = runSync(
+      const rel = await runPromise(
         Effect.gen(function* () {
           const path = yield* Path.Path;
           return path.relative(root, outFile);
@@ -75,25 +75,25 @@ export const fileRouter = (options: FileRouterPluginOptions): Plugin => {
 
   return {
     name: "last-ts-file-router",
-    configResolved(config) {
+    async configResolved(config) {
       root = config.root;
-      pagesDir = resolveFromRoot(root, options.pagesDir);
-      outFile = resolveFromRoot(root, options.outFile);
+      pagesDir = await resolveFromRoot(root, options.pagesDir);
+      outFile = await resolveFromRoot(root, options.outFile);
     },
-    buildStart() {
+    async buildStart() {
       if (options.check === true) {
-        runSync(checkPaths({ pagesDir, outFile }));
+        await runPromise(checkPaths({ pagesDir, outFile }));
         return;
       }
-      runEmit((msg) => {
+      await runEmit((msg) => {
         this.info(msg);
       });
     },
-    configureServer(server) {
-      runEmit((msg) => {
+    async configureServer(server) {
+      await runEmit((msg) => {
         server.config.logger.info(msg);
       });
-      const watchGlob = runSync(
+      const watchGlob = await runPromise(
         Effect.gen(function* () {
           const path = yield* Path.Path;
           return path.join(pagesDir, "**/*");
@@ -101,17 +101,19 @@ export const fileRouter = (options: FileRouterPluginOptions): Plugin => {
       );
       server.watcher.add(watchGlob);
       const onFs = (file: string): void => {
-        const abs = runSync(
-          Effect.gen(function* () {
-            const path = yield* Path.Path;
-            return path.resolve(file);
-          }),
-        );
-        if (!abs.startsWith(pagesDir)) return;
-        if (abs === outFile) return;
-        runEmit((msg) => {
-          server.config.logger.info(msg);
-        });
+        void (async () => {
+          const abs = await runPromise(
+            Effect.gen(function* () {
+              const path = yield* Path.Path;
+              return path.resolve(file);
+            }),
+          );
+          if (!abs.startsWith(pagesDir)) return;
+          if (abs === outFile) return;
+          await runEmit((msg) => {
+            server.config.logger.info(msg);
+          });
+        })();
       };
       server.watcher.on("add", onFs);
       server.watcher.on("unlink", onFs);
@@ -128,6 +130,7 @@ export {
   emitPaths,
   formatPathsModule,
   nodeLayer,
+  runPromise,
   runSync,
   toFilePath,
   toRouteId,
