@@ -20,7 +20,7 @@ const program =
     : Effect.gen(function* () {
         const token = yield* Node.assumeTokenConfig;
         // Same key as Launcher.ensureLookup's default seed when path-only.
-        const node = Node.Tag()("hyperlink-ts/Launcher/Lookup", {
+        const node = Node.Service()("hyperlink-ts/Launcher/Lookup", {
           path: pathArg,
         }).pipe(Node.asLookup);
         const live = Lookup.layerNode(node, {

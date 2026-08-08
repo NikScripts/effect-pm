@@ -165,6 +165,7 @@ export * as Identity from "./Identity";
 export * as Policy from "./Policy";
 export * as Lifecycle from "./Lifecycle";
 export * as Versioned from "./Versioned";
+export * as Update from "./Update";
 export type {
   AnyDefaultMethod,
   AnyLocalMethod,

@@ -4,7 +4,7 @@ import * as Node from "../src/Node";
 
 // Lookup.follow / followOptions — same Services + LookupUnaddressed as client.
 
-const lookupNode = Node.Tag()("lookup-follow-d/Lookup", {
+const lookupNode = Node.Service()("lookup-follow-d/Lookup", {
   path: "/tmp/lookup-follow-d.sock",
 }).pipe(Node.asLookup);
 
@@ -18,7 +18,7 @@ const clientParity: Layer.Layer<Lookup.Services, Lookup.LookupUnaddressed> =
   Lookup.client(lookupNode);
 
 const unaddressed: Layer.Layer<Lookup.Services, Lookup.LookupUnaddressed> =
-  Lookup.follow(Node.Tag()("lookup-follow-d/NoPath"));
+  Lookup.follow(Node.Service()("lookup-follow-d/NoPath"));
 
 void follow;
 void followOpts;

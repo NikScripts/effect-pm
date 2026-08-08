@@ -29,7 +29,7 @@ import * as Launcher from "../../src/Launcher";
 import * as Lookup from "../../src/Lookup";
 import * as Node from "../../src/Node";
 
-class Jobs extends Hyperlink.Tag<Jobs>()(
+class Jobs extends Hyperlink.Service<Jobs>()(
   "examples/launcher-restart-successor/Jobs",
   {
     ping: Hyperlink.effect(Schema.String),
@@ -37,7 +37,7 @@ class Jobs extends Hyperlink.Tag<Jobs>()(
 ) {}
 
 const workerNode = (port: number) =>
-  Node.Tag()("examples/launcher-restart-successor/Worker", {
+  Node.Service()("examples/launcher-restart-successor/Worker", {
     url: `http://127.0.0.1:${String(port)}/rpc`,
     kind: "Http",
   });
@@ -50,7 +50,7 @@ const program = Effect.gen(function* () {
   const portA = 28_800 + (now % 100);
   const portB = portA + 1;
 
-  const lookupNode = Node.Tag()("examples/launcher-restart-successor/Lookup", {
+  const lookupNode = Node.Service()("examples/launcher-restart-successor/Lookup", {
     path: lookupPath,
   }).pipe(Node.asLookup);
   const lookupServer = yield* Layer.build(

@@ -18,7 +18,7 @@ const program =
   tokenArg.length === 0
     ? Effect.die("launcher-lookup-child: need <lookup-sock> <assume-token>")
     : Effect.gen(function* () {
-        const node = Node.Tag()("launcher/ensure-lookup", {
+        const node = Node.Service()("launcher/ensure-lookup", {
           path: pathArg,
         }).pipe(Node.asLookup);
         const live = Lookup.layerNode(node, {

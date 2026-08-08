@@ -1,14 +1,15 @@
 # Node addresses + update API — design notes
 
-**Status:** **Design only** (owner 2026-08-07 → 2026-08-08). Not locked. Not Eng’d. Not SSOT.  
+**Status:** **Partial Eng** (2026-08-08). `Update.plan` → `simulate` → `execute` **shipped**
+(`hyperlink-ts/Update`, guide [`docs/guides/update.md`](../guides/update.md)). Remaining
+(address model, `Node.make`, locality Host/Machine, proxy, deploy node) still **design only**.  
 **Owner leans (so far):**
 - Stable **main address** + **additional A/B** (often Unix); optional Http→Unix proxy
-- Replace options-bag `restartSuccessor` with **`Update.plan` → `Update.execute`**
-- **`Update` module separate from `Versioned`** (Versioned = schema chains; Update = fleet cutover)
-- Plans are **fleet-wide**, ordered; declare contract/version from→to + audit
-- **Simulate/mock** helper for test-run before real execute
-- Deploy path: **Update node** (maybe → **Machine** that watches processes); reopen spine α
-- Update packages / webhook / pull — later, design-docked
+- ~~Replace options-bag `restartSuccessor` with `Update.plan` → execute~~ **Eng'd** (restartSuccessor remains; Update preferred)
+- **`Update` module separate from `Versioned`** — Eng'd
+- Plans are **fleet-wide**, ordered; contract from→to audit — Eng'd (v1)
+- **Simulate** validates without spawn — Eng'd; full mock = boot prod-like + plan→sim→exec
+- Deploy path / locality Host|Machine / `Node.make` — still design
 
 **Branch:** Agent 5 · `cursor/lifecycle-defer-start-929b`  
 **Related:** [`multi-protocol-nodes.md`](./multi-protocol-nodes.md) · [`versioned-schema-decisions.md`](./versioned-schema-decisions.md)
@@ -51,7 +52,7 @@ Not a polish list — design failures:
 |---------|--------|
 | **Not SSOT** | Update story is split across `Lookup.planUpdate`, `Launcher.restartSuccessor`, `Advice.prefer`, Directory dial-replace, Policy sticky, and dream docs — no single declarative “this node updates like this.” |
 | **Options bag** | `target` + nested `successor: SpawnSpec` + `tags` + `incumbent` + force/status/skip/prefer flags. Looks like a CLI struct, not a Hyperlink composition. |
-| **Identity lie** | Apps mint `nodeA` / `nodeB` as separate `Node.Tag` values that share a `nodeKey` but different dials. The “same node” is reconstructed from Directory after the fact. |
+| **Identity lie** | Apps mint `nodeA` / `nodeB` as separate `Node.Service` values that share a `nodeKey` but different dials. The “same node” is reconstructed from Directory after the fact. |
 | **Address is the cutover** | Cutover = invent a second dial and hope Directory + sticky + prefer stitch it. No first-class stable public address. |
 | **Tags as plan input** | Caller re-lists what B will serve; easy to drift from the child’s actual `Node.http(…, [serve…])`. |
 | **Prefer as a boolean** | Dual-serve / early-move is a Policy/Advice concern stuffed into a launcher flag. |
@@ -81,7 +82,7 @@ A node has:
 
 ```ts
 // SKETCH ONLY — not Eng’d
-Node.Tag()("fleet/Worker", {
+Node.Service()("fleet/Worker", {
   // main — what most of the world dials
   url: "http://workers.example/rpc",
   kind: "Http",
@@ -93,7 +94,7 @@ Or config-first (same idea: main in the base declaration):
 
 ```ts
 // SKETCH — main in Tag config
-Node.Tag()("fleet/Worker", {
+Node.Service()("fleet/Worker", {
   main: { url: "http://workers.example/rpc", kind: "Http" },
   // addresses?: […]  — or only via pipe
 })
@@ -131,7 +132,7 @@ backend, or a proxy row + backend rows) — open.
 
 ```ts
 // SKETCH — composition shape, names TBD
-const WorkerMain = Node.Tag()("fleet/Worker", {
+const WorkerMain = Node.Service()("fleet/Worker", {
   url: "http://127.0.0.1:8080/rpc",
   kind: "Http",
 })
@@ -512,11 +513,11 @@ one Node identity.
 API nest under Node (owner already floated `Node.Machine` + keep Launcher). If HTTP
 “host” bothers you, `Node.Machine` is the clearer nested name.
 
-### 7.5 `Node.Tag` → `Node.Service` — corrected sync (Agent 5, 2026-08-08)
+### 7.5 `Node.Service` → `Node.Service` — corrected sync (Agent 5, 2026-08-08)
 
 **Earlier Agent 5 note was stale.** On current `integration` tip, the rename **did** land
 via Agent G’s `a3831b5f` (*Effect v4 Tag→Service across last-ts and hyperlink-ts*), then
-G tip-synced (`1b8ab7c6`). Public factory is **`Node.Service()`** — not `Node.Tag()`.
+G tip-synced (`1b8ab7c6`). Public factory is **`Node.Service()`** — not `Node.Service()`.
 
 | Surface | Tip now |
 |---------|---------|

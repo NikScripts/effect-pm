@@ -17,10 +17,10 @@ import {
   Stream,
   SubscriptionRef,
 } from "effect";
-import { Tag as Advice } from "../Advice";
-import { Tag as Dialers } from "../Dialers";
-import { Tag as Directory } from "../Directory";
-import { Tag as Identity } from "../Identity";
+import { Service as Advice } from "../Advice";
+import { Service as Dialers } from "../Dialers";
+import { Service as Directory } from "../Directory";
+import { Service as Identity } from "../Identity";
 import * as Hyperlink from "../Hyperlink";
 import type { AnyNode } from "./nodeCore";
 import {

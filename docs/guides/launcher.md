@@ -188,6 +188,7 @@ Directory conflicts use `Policy.onConflict` / `askIncumbent`. Intentional Lookup
 orchestrated same-address ownership move (Launcher/orchestrator as middleman).
 
 **Who owns what:** Lookup = membership + dial truth (+ `Lookup.planUpdate`);
+**Update** = compose plan → simulate → ordered execute ([Update](/docs/update));
 Launcher = custody + exclusive-bind sequencing (+ `restartSuccessor`); nodes =
 migration `{ handoff }` on shutdown.
 
@@ -211,12 +212,11 @@ yield* Launcher.restartSuccessor({
 })
 ```
 
-**Binary update (file-swap dream) — provisional:** today’s Eng’d path is file-swap +
-`restartSuccessor` + sticky tip move. **Owner: that options-bag API is not the desired
-SSOT.** Design for main + additional (A/B) addresses / optional stable Http proxy:
+**Binary update (file-swap dream):** prefer **`Update.plan` → `simulate` → `execute`**
+([Update](/docs/update)) over options-bag `restartSuccessor`. Walkthrough:
+[dream redeploy](/docs/launcher-dream-redeploy) ·
+`pnpm run example:launcher-dream-redeploy`. Address / proxy design still open:
 [`node-addresses-and-update-api.md`](../handoffs/node-addresses-and-update-api.md).
-Provisional walkthrough: [dream redeploy](/docs/launcher-dream-redeploy) ·
-`pnpm run example:launcher-dream-redeploy`.
 
 **Lookup A/B:** one address; A/B = successive owners; `Lookup.follow` + Policy for the gap.
 Runnable: `pnpm run example:node-lookup-follow-handoff` ·

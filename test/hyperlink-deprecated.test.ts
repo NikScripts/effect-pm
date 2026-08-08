@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
 import { hashContract } from "../src/internal/contractHash";
 
-class Files extends Hyperlink.Tag<Files>()("deprecated/Files", {
+class Files extends Hyperlink.Service<Files>()("deprecated/Files", {
   move: Hyperlink.effectFn({
     payload: Schema.Struct({ from: Schema.String, to: Schema.String }),
     success: Schema.Void,

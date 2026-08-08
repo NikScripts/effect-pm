@@ -55,7 +55,7 @@ const waitUntil = <A, E, R>(
   });
 
 /** Live child Spec — matches `launcher-restart-child.ts`. */
-class Jobs extends Hyperlink.Tag<Jobs>()("restart-successor/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("restart-successor/Jobs", {
   ping: Hyperlink.effect(Schema.String),
 }) {}
 
@@ -78,7 +78,7 @@ const jobsNext: Lookup.PlanUpdateTag = {
 };
 
 const workerNode = (port: number) =>
-  Node.Tag()("restart/worker", {
+  Node.Service()("restart/worker", {
     url: `http://127.0.0.1:${String(port)}/rpc`,
     kind: "Http",
   });
@@ -106,14 +106,14 @@ describe("Launcher.restartSuccessor", () => {
     () =>
       Effect.gen(function* () {
         const path = yield* tmpSock("blocked");
-        const node = Node.Tag()("lookup/restart-blocked", { path }).pipe(
+        const node = Node.Service()("lookup/restart-blocked", { path }).pipe(
           Node.asLookup,
         );
         yield* withLookup(
           Lookup.layerNode(node),
           Lookup.client(node),
           Effect.gen(function* () {
-            const dir = yield* Directory.Tag;
+            const dir = yield* Directory.Service;
             yield* dir.advertise(
               new Lookup.AdvertiseRequest({
                 nodeKey: "worker-a",
@@ -123,7 +123,7 @@ describe("Launcher.restartSuccessor", () => {
               }),
             );
 
-            const successor = Node.Tag()("restart/worker-b", {
+            const successor = Node.Service()("restart/worker-b", {
               url: "http://127.0.0.1:1/rpc",
               kind: "Http",
             });
@@ -169,7 +169,7 @@ describe("Launcher.restartSuccessor", () => {
         const portA = ephemeralPort(now.toString(16), 31);
         const portB = ephemeralPort(now.toString(16), 32);
 
-        const lookupNode = Node.Tag()("lookup/restart-live", {
+        const lookupNode = Node.Service()("lookup/restart-live", {
           path: lookupPath,
         }).pipe(Node.asLookup);
 

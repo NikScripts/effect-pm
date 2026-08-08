@@ -140,6 +140,10 @@
       "types": "./dist/Versioned.d.ts",
       "default": "./dist/Versioned.js"
     },
+    "./Update": {
+      "types": "./dist/Update.d.ts",
+      "default": "./dist/Update.js"
+    },
     "./DynamicConfig": {
       "types": "./dist/DynamicConfig.d.ts",
       "default": "./dist/DynamicConfig.js"

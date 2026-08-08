@@ -2,13 +2,13 @@
  * @module examples/launcher/dream-redeploy
  *
  * **Dream redeploy** — launch v1 → live traffic → **file-swap** to v2 →
- * `Launcher.restartSuccessor` → WorkPool pending handoff → sticky client on v2.
+ * `Update.plan` → `simulate` → `execute` → WorkPool pending handoff → sticky v2.
  *
  * 1. Copy `dream-redeploy-worker.v1.ts` → `dream-redeploy-worker.active.ts`
  * 2. `Launcher.up(A)` from the **active** path (OS loads v1)
  * 3. Sticky `lookupClient` reads Probe `"v1"`; enqueue WorkPool jobs on A
  * 4. Copy `dream-redeploy-worker.v2.ts` over the **same** active path (update)
- * 5. `restartSuccessor` ups B from that path (OS loads v2), prefer, shutdown A
+ * 5. `Update.execute` ups B from that path (OS loads v2), prefer, shutdown A
  * 6. Directory dial → B; sticky Probe `"v2"`; B holds exact pending payloads
  *
  * Active path stays beside the v1/v2 sources so relative imports keep resolving.
@@ -40,6 +40,7 @@ import * as Launcher from "../../src/Launcher";
 import * as Lookup from "../../src/Lookup";
 import * as Node from "../../src/Node";
 import * as Policy from "../../src/Policy";
+import * as Update from "../../src/Update";
 import {
   Jobs,
   Probe,
@@ -57,7 +58,7 @@ const waitUntil = <A, E, R>(
   });
 
 const workerNode = (port: number) =>
-  Node.Tag()(WORKER_NODE_KEY, {
+  Node.Service()(WORKER_NODE_KEY, {
     url: `http://127.0.0.1:${String(port)}/rpc`,
     kind: "Http",
   });
@@ -83,7 +84,7 @@ const program = Effect.gen(function* () {
   yield* fs.copyFile(v1Src, active);
   yield* Effect.logInfo(`1) Active worker = v1 → ${active}`);
 
-  const lookupNode = Node.Tag()("examples/dream-redeploy/Lookup", {
+  const lookupNode = Node.Service()("examples/dream-redeploy/Lookup", {
     path: lookupPath,
   }).pipe(Node.asLookup);
   const lookupServer = yield* Layer.build(
@@ -163,20 +164,23 @@ const program = Effect.gen(function* () {
     }
 
     yield* Effect.logInfo(
-      `6) restartSuccessor → up B (v2) on :${String(portB)} → prefer → shutdown A`,
+      `6) Update.plan → simulate → execute → up B (v2) on :${String(portB)}`,
     );
-    const impact = yield* Launcher.restartSuccessor({
-      target: WORKER_NODE_KEY,
-      successor: {
-        node: nodeB,
-        process: child(portB),
-        ready: { timeout: "25 seconds" },
-      },
-      tags: [Jobs, Probe],
+    const plan = yield* Update.plan({
+      steps: [
+        {
+          target: WORKER_NODE_KEY,
+          successor: {
+            node: nodeB,
+            process: child(portB),
+            ready: { timeout: "25 seconds" },
+          },
+          tags: [Jobs, Probe],
+        },
+      ],
     });
-    if (impact?.blocked === true) {
-      return yield* Effect.die("planUpdate blocked unexpectedly");
-    }
+    yield* Update.simulate(plan);
+    yield* Update.execute(plan);
 
     yield* waitUntil(
       Directory.nodesServing(Jobs),
@@ -208,9 +212,15 @@ const program = Effect.gen(function* () {
     }).pipe(Effect.provide(Hyperlink.client(Jobs, nodeB)), Effect.scoped);
 
     const got = released.map((e) => e.item);
-    if (JSON.stringify(got) !== JSON.stringify(payloads)) {
+    const same =
+      got.length === payloads.length &&
+      got.every(
+        (item, i) =>
+          item.id === payloads[i]!.id && item.note === payloads[i]!.note,
+      );
+    if (!same) {
       return yield* Effect.die(
-        `payload mismatch: ${JSON.stringify(got)} !== ${JSON.stringify(payloads)}`,
+        `payload mismatch: expected ${payloads.length} exact jobs on B`,
       );
     }
     yield* Effect.logInfo(
@@ -232,8 +242,7 @@ const program = Effect.gen(function* () {
   );
 }).pipe(
   Effect.scoped,
-  Effect.provide(Launcher.layer),
-  Effect.provide(NodeFileSystem.layer),
+  Effect.provide(Layer.merge(Launcher.layer, NodeFileSystem.layer)),
 );
 
 // ---cut-after---

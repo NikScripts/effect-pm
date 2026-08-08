@@ -13,7 +13,7 @@ import * as Hyperlink from "../../src/Hyperlink";
 import * as Lookup from "../../src/Lookup";
 import * as Node from "../../src/Node";
 
-class Jobs extends Hyperlink.Tag<Jobs>()(
+class Jobs extends Hyperlink.Service<Jobs>()(
   "examples/launcher-ensure-lookup/Jobs",
   {
     ping: Hyperlink.effect(Schema.String),
@@ -32,7 +32,7 @@ const program =
     ? Effect.die("ensure-lookup-worker: need <port> <lookup-sock>")
     : Effect.gen(function* () {
         const token = yield* Node.assumeTokenConfig;
-        const node = Node.Tag()("examples/launcher-ensure-lookup/Worker", {
+        const node = Node.Service()("examples/launcher-ensure-lookup/Worker", {
           url: `http://127.0.0.1:${String(port)}/rpc`,
           kind: "Http",
         });

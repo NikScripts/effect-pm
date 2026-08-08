@@ -53,7 +53,7 @@ describe("Launcher.ensureLookup", () => {
   it.live("adopts Lookup already answering at path (no spawn)", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("adopt");
-      const lookupNode = Node.Tag()("launcher/ensure-adopt", { path }).pipe(
+      const lookupNode = Node.Service()("launcher/ensure-adopt", { path }).pipe(
         Node.asLookup,
       );
       yield* Layer.build(Lookup.layerNode(lookupNode, { unlink: true }));
@@ -63,7 +63,7 @@ describe("Launcher.ensureLookup", () => {
       expect(result.path).toBe(path);
 
       const ctx = yield* Layer.build(Lookup.client(result.node));
-      const id = Context.get(ctx, Identity.Tag);
+      const id = Context.get(ctx, Identity.Service);
       const resolved = yield* id
         .resolve(
           new Lookup.ResolveRequest({
@@ -94,7 +94,7 @@ describe("Launcher.ensureLookup", () => {
       expect(result.path).toBe(path);
 
       const ctx = yield* Layer.build(Lookup.client(result.node));
-      const id = Context.get(ctx, Identity.Tag);
+      const id = Context.get(ctx, Identity.Service);
       const resolved = yield* id
         .resolve(
           new Lookup.ResolveRequest({
@@ -134,7 +134,7 @@ describe("Launcher.ensureLookup", () => {
 
   it.live("fails LookupAddressRequired for unaddressed node without path", () =>
     Effect.gen(function* () {
-      const bare = Node.Tag()("launcher/ensure-bare");
+      const bare = Node.Service()("launcher/ensure-bare");
       const exit = yield* Effect.exit(
         Launcher.ensureLookup({ node: bare }),
       );
@@ -150,7 +150,7 @@ describe("Launcher.ensureLookup", () => {
   it.live("UpOptions.lookup runs ensure before app units", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("up-lookup");
-      const lookupNode = Node.Tag()("launcher/ensure-up", { path }).pipe(
+      const lookupNode = Node.Service()("launcher/ensure-up", { path }).pipe(
         Node.asLookup,
       );
       // Already up — up({ lookup }) should adopt, then we skip real app spawn
@@ -164,7 +164,7 @@ describe("Launcher.ensureLookup", () => {
 
       // Still answering after up (adopt path — no kill).
       const ctx = yield* Layer.build(Lookup.client(lookupNode));
-      const id = Context.get(ctx, Identity.Tag);
+      const id = Context.get(ctx, Identity.Service);
       expect(
         Option.isNone(
           yield* id

@@ -28,7 +28,7 @@ const program =
     ? Effect.die("dream-redeploy-worker.v2: need <port> <lookup-sock>")
     : Effect.gen(function* () {
         const token = yield* Node.assumeTokenConfig;
-        const node = Node.Tag()(WORKER_NODE_KEY, {
+        const node = Node.Service()(WORKER_NODE_KEY, {
           url: `http://127.0.0.1:${String(port)}/rpc`,
           kind: "Http",
         });

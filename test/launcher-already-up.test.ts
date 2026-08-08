@@ -25,7 +25,7 @@ describe("Launcher already-up Policy", () => {
         const { root, entry } = childEntryPaths();
         const tokenHex = Redacted.value(yield* Launcher.mintToken);
         const port = ephemeralPort(tokenHex, 11);
-        const node = Node.Tag()("launcher/already-up-spawn", {
+        const node = Node.Service()("launcher/already-up-spawn", {
           url: `http://127.0.0.1:${String(port)}/rpc`,
           kind: "Http",
         });
@@ -65,7 +65,7 @@ describe("Launcher already-up Policy", () => {
         const { root, entry } = childEntryPaths();
         const tokenHex = Redacted.value(yield* Launcher.mintToken);
         const port = ephemeralPort(tokenHex, 12);
-        const node = Node.Tag()("launcher/already-up-fail", {
+        const node = Node.Service()("launcher/already-up-fail", {
           url: `http://127.0.0.1:${String(port)}/rpc`,
           kind: "Http",
         });
@@ -91,7 +91,7 @@ describe("Launcher already-up Policy", () => {
         const { root, entry } = childEntryPaths();
         const tokenHex = Redacted.value(yield* Launcher.mintToken);
         const port = ephemeralPort(tokenHex, 13);
-        const node = Node.Tag()("launcher/already-up-adopt", {
+        const node = Node.Service()("launcher/already-up-adopt", {
           url: `http://127.0.0.1:${String(port)}/rpc`,
           kind: "Http",
         });
@@ -117,7 +117,7 @@ describe("Launcher already-up Policy", () => {
         const { root, entry } = childEntryPaths();
         const tokenHex = Redacted.value(yield* Launcher.mintToken);
         const port = ephemeralPort(tokenHex, 14);
-        const node = Node.Tag()("launcher/already-up-unit", {
+        const node = Node.Service()("launcher/already-up-unit", {
           url: `http://127.0.0.1:${String(port)}/rpc`,
           kind: "Http",
         });

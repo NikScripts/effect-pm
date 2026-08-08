@@ -101,12 +101,12 @@ const dialersSpec = {
 };
 
 /**
- * Dial-session census Tag — Context key for the Dialers HyperService.
+ * Dial-session census Service — Context key for the Dialers HyperService.
  *
  * @category services
  * @public
  */
-export class Tag extends Hyperlink.Tag<Tag>()(
+export class Service extends Hyperlink.Service<Service>()(
   "hyperlink-ts/Lookup/Dialers",
   dialersSpec,
   { kind },
@@ -126,7 +126,7 @@ export const mintId: Effect.Effect<string> = Effect.sync(() => {
 });
 
 /**
- * Upsert a dial session (requires {@link Tag} in context).
+ * Upsert a dial session (requires {@link Service} in context).
  *
  * @category constructors
  * @public
@@ -135,8 +135,8 @@ export const register = (input: {
   readonly dialerId: string;
   readonly serviceKey: string;
   readonly target: string;
-}): Effect.Effect<DialerEntry, never, Tag> =>
-  Effect.flatMap(Tag, (svc) =>
+}): Effect.Effect<DialerEntry, never, Service> =>
+  Effect.flatMap(Service, (svc) =>
     svc.register(
       new RegisterRequest({
         dialerId: input.dialerId,
@@ -147,7 +147,7 @@ export const register = (input: {
   );
 
 /**
- * Soft register — no-op when {@link Tag} is absent (graphs without Lookup Dialers).
+ * Soft register — no-op when {@link Service} is absent (graphs without Lookup Dialers).
  *
  * @category constructors
  * @public
@@ -157,7 +157,7 @@ export const registerOption = (input: {
   readonly serviceKey: string;
   readonly target: string;
 }): Effect.Effect<void> =>
-  Effect.serviceOption(Tag).pipe(
+  Effect.serviceOption(Service).pipe(
     Effect.flatMap((opt) =>
       Option.match(opt, {
         onNone: () => Effect.void,
@@ -183,19 +183,19 @@ export const registerOption = (input: {
  */
 export const unregister = (
   dialerId: string,
-): Effect.Effect<boolean, never, Tag> =>
-  Effect.flatMap(Tag, (svc) =>
+): Effect.Effect<boolean, never, Service> =>
+  Effect.flatMap(Service, (svc) =>
     svc.unregister(new UnregisterRequest({ dialerId })),
   );
 
 /**
- * Soft unregister — no-op when {@link Tag} is absent.
+ * Soft unregister — no-op when {@link Service} is absent.
  *
  * @category constructors
  * @public
  */
 export const unregisterOption = (dialerId: string): Effect.Effect<void> =>
-  Effect.serviceOption(Tag).pipe(
+  Effect.serviceOption(Service).pipe(
     Effect.flatMap((opt) =>
       Option.match(opt, {
         onNone: () => Effect.void,
@@ -213,7 +213,7 @@ export const unregisterOption = (dialerId: string): Effect.Effect<void> =>
  */
 export const listForTarget = (
   nodeKey: string,
-): Effect.Effect<ReadonlyArray<DialerEntry>, never, Tag> =>
-  Effect.flatMap(Tag, (svc) =>
+): Effect.Effect<ReadonlyArray<DialerEntry>, never, Service> =>
+  Effect.flatMap(Service, (svc) =>
     svc.listForTarget(new ListForTargetRequest({ nodeKey })),
   );

@@ -47,7 +47,7 @@ const tmpSock = (label: string) =>
 const program = Effect.gen(function* () {
   const path = yield* tmpSock("sock");
   // One address forever — A and B are successive owners, not two endpoints.
-  const lookupNode = Node.Tag()("examples/lookup-follow-handoff/Lookup", {
+  const lookupNode = Node.Service()("examples/lookup-follow-handoff/Lookup", {
     path,
   }).pipe(Node.asLookup);
 
@@ -66,7 +66,7 @@ const program = Effect.gen(function* () {
     ),
   );
 
-  const id = Context.get(followCtx, Identity.Tag);
+  const id = Context.get(followCtx, Identity.Service);
   const resolveProbe = id
     .resolve(
       new Lookup.ResolveRequest({

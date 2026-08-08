@@ -15,7 +15,7 @@ import * as Hyperlink from "../../src/Hyperlink";
 import * as Lookup from "../../src/Lookup";
 import * as Node from "../../src/Node";
 
-class Jobs extends Hyperlink.Tag<Jobs>()("restart-successor/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("restart-successor/Jobs", {
   ping: Hyperlink.effect(Schema.String),
 }) {}
 
@@ -31,7 +31,7 @@ const program =
     ? Effect.die("launcher-restart-child: need <port> <lookup-sock>")
     : Effect.gen(function* () {
         const token = yield* Node.assumeTokenConfig;
-        const node = Node.Tag()("restart/worker", {
+        const node = Node.Service()("restart/worker", {
           url: `http://127.0.0.1:${String(port)}/rpc`,
           kind: "Http",
         });
