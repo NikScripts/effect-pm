@@ -32,10 +32,6 @@ Route.get("chapter", "/guides/:slug").pipe(
 // File disk: [slug]→:slug, [...path]→*path
 ```
 
-## Not yet
-
-- Wire `pagesByIdFromModules` + `paths.gen` into a real app catalog (RSC Provider must not import page modules — keep shared options / server-only catalog)
-
 ## Eng’d inject / merge
 
 - `Page.configOf(page)` — `{ render }` + `staticPaths` from `Schema.Literals` params
@@ -43,9 +39,17 @@ Route.get("chapter", "/guides/:slug").pipe(
 - `last-ts/vite` `pageConfig()` — stamps `export const getConfig = () => Page.configOf(X)` (apps never write it)
 - `Route.fromPage(id, path, page)` — options + static Literals → catalog route
 - `Router.destinationsFromPages(entries, { id: PageClass })` — path table + page merge
-- `Router.pagesByIdFromModules(glob)` — Vite eager glob → `{ [routeId]: Page }`
+- `Route.fileRootFromPages` / `Router.fileSystemFromPages` — path table + page merge as catalog root
+- `Router.pagesByIdFromModules(glob)` — Vite eager glob → `{ [routeId]: Page }` (server tooling; not Provider)
 - `Route.mixedFromEffect({ static, dynamic })` — two closed literal sets; only static bakes
-- `~ParamBags` brand + UrlBuilder positional bag-union args (survives `group.add` / topLevel)
+- `~ParamBags` / `Route.WithParamBags` + UrlBuilder positional bag-union args (survives `group.add` / topLevel)
+
+## Dogfood (`docs/last/site`)
+
+- Catalog: `Route.fileRootFromPages(fileEntries, { guides_slug: GuidesSlug })` — ids match `paths.gen`
+- Catalog twins from shared `chapterOptions` (Provider stays RSC-safe)
+- Chapter file page is `Page.static` → injected `staticPaths`
+- Rest page: `pages/docs/[...path]` → `docs_path` / `/docs/*path`
 
 ## Surface
 

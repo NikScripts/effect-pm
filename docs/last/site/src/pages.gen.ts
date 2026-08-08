@@ -7,6 +7,7 @@ import type { PathsForPages } from 'waku/router';
 type Page =
 | { path: '/_root'; render: 'static' }
 | { path: '/about'; render: 'static' }
+| { path: '/docs/[...path]'; render: 'dynamic' }
 | { path: '/guides/[slug]'; render: 'static' }
 | { path: '/'; render: 'static' }
 | { path: '/view'; render: 'static' };

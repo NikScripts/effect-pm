@@ -13,6 +13,11 @@ export const fileEntries = [
     "routePath": "/about"
   },
   {
+    "id": "docs_path",
+    "filePath": "/docs/[...path]",
+    "routePath": "/docs/*path"
+  },
+  {
     "id": "guides_slug",
     "filePath": "/guides/[slug]",
     "routePath": "/guides/:slug"
@@ -27,6 +32,7 @@ export const fileEntries = [
 export const filePaths = [
   "/",
   "/about",
+  "/docs/[...path]",
   "/guides/[slug]",
   "/view",
 ] as const;
@@ -34,11 +40,12 @@ export const filePaths = [
 export const routePaths = [
   "/",
   "/about",
+  "/docs/*path",
   "/guides/:slug",
   "/view",
 ] as const;
 
-export type FilePath = "/" | "/about" | "/guides/[slug]" | "/view";
-export type RoutePath = "/" | "/about" | "/guides/:slug" | "/view";
-export type FileRouteId = "index" | "about" | "guides_slug" | "view";
+export type FilePath = "/" | "/about" | "/docs/[...path]" | "/guides/[slug]" | "/view";
+export type RoutePath = "/" | "/about" | "/docs/*path" | "/guides/:slug" | "/view";
+export type FileRouteId = "index" | "about" | "docs_path" | "guides_slug" | "view";
 export type FileEntry = (typeof fileEntries)[number];

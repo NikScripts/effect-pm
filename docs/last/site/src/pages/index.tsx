@@ -19,7 +19,7 @@ class Home extends Page.static() {
         <div>
           <dt>catalog</dt>
           <dd>
-            <code>Router.make</code> + <code>Route.staticFromEffect</code>
+            <code>Route.fileRootFromPages</code> + <code>paths.gen</code>
           </dd>
         </div>
         <div>

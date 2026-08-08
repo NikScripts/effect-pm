@@ -119,6 +119,22 @@ export const destinationsFromPages: typeof fileRouter.destinationsFromPages =
   fileRouter.destinationsFromPages;
 
 /**
+ * {@link destinations} + page-class merge (AsRoutes Effect for `group.fromEffect`).
+ *
+ * @public
+ */
+export const fileSystemFromPages: typeof fileRouter.fileSystemFromPages =
+  fileRouter.fileSystemFromPages;
+
+/**
+ * `root` + `topLevel` over {@link destinationsFromPages}.
+ *
+ * @public
+ */
+export const fileRootFromPages: typeof fileRouter.fileRootFromPages =
+  fileRouter.fileRootFromPages;
+
+/**
  * Vite glob modules → `{ [routeId]: Page class }` for {@link destinationsFromPages}.
  *
  * @public

@@ -87,4 +87,26 @@ describe("Route.fromPage", () => {
       "/guides/[slug]",
     );
   });
+
+  it("fileRootFromPages merges Literals into typed urls", () => {
+    class GuidesSlug extends Page.static({
+      params: { slug: Schema.Literals(["routing", "view-service"]) },
+    }) {}
+    const table = [
+      { id: "index", routePath: "/" },
+      { id: "guides_slug", routePath: "/guides/:slug" },
+      { id: "docs_path", routePath: "/docs/*path" },
+    ] as const;
+    class Site extends Router.make("file-root-pages").add(
+      Route.fileRootFromPages(table, { guides_slug: GuidesSlug }),
+    ) {}
+    const urls = Route.urlBuilder(Site);
+    expect(urls.index()).toBe("/");
+    expect(urls.guides_slug("routing")).toBe("/guides/routing");
+    expect(urls.docs_path("intro/rest")).toBe("/docs/intro/rest");
+    const routes = Router.destinationsFromPages(table, {
+      guides_slug: GuidesSlug,
+    });
+    expect(Route.fromEffectOf(routes[1]!)?.static).toBe(true);
+  });
 });
