@@ -51,18 +51,39 @@ array order**, attaches `impact`, audits contracts, and returns an
 |---------|------|
 | `EmptyUpdatePlan` | `steps` is `[]` |
 | `EmptyUpdateStepTags` | A step has `tags: []` |
+| `EmptyUpdateTarget` | A step `target` is empty / whitespace |
+| `EmptyUpdateTagKey` | A step or contract tag has a blank `key` |
 | `DuplicateUpdateTarget` | Two steps share the same `target` |
+| `DuplicateUpdateContract` | Two contracts share the same `tag.key` |
 | `UpdateBlocked` | Hard impact blockers on the **target** (same as planUpdate fail-closed) |
 | `UpdateContractMismatch` | Bad `contracts.to` / `from` / Versioned path (carries full `audit`) |
 | `UpdateTargetUnknown` | Step `target` missing from Directory |
 
-Ambient `force: true` (plan-level or per-step) collects blocked impacts onto the
-plan instead of failing at planUpdate — `plan.blocked` stays `true` and
-`simulate` / `execute` still refuse. Use force to **inspect**, not to push a
-broken cutover through execute.
+### Force: Input vs ambient Lookup
+
+Two independent knobs can collect a blocked impact onto the plan instead of
+failing at `planUpdate`:
+
+| Knob | Where |
+|------|-------|
+| `Input.force` / `Step.force` | Update plan options |
+| `Lookup.planForce` | Ambient Context layer |
+
+Neither lets `simulate` / `execute` through — `plan.blocked` stays `true` and
+the gate refuses. Use force to **inspect**, not to push a broken cutover.
 
 Per-step `skipPlan: true` skips impact dry-run (ops escape; impact is
 `undefined`). Prefer the fail-closed path in app code.
+
+### Prefer
+
+Step `prefer` (default `true`) is the only custody flag execute forwards to
+`Launcher.restartSuccessor`. After `up(B)`, sticky `Advice.prefer` stamps the
+successor so dialers move before A shuts down. Set `prefer: false` to skip that
+stamp (rare; dual-serve ops that manage Advice themselves).
+
+Plan-time-only fields retained for inspectability but **not** forwarded on
+execute: `force`, `status`, `incumbent`, `skipPlan`.
 
 ### Status dial vs fleet order
 
@@ -79,13 +100,18 @@ examples often use `Lookup.planStatusOff` when no live nodes answer status.
 | `plan.audit` | Contract from→to rows |
 | `plan.coUpdate` | Union of peer nodeKeys sharing served keys |
 | `plan.uncoveredCoUpdate` | Peers in `coUpdate` that are not step targets (advisory) |
-| `plan.blocked` | Any **target** step impact blocked |
+| `plan.blocked` | Any **target** step has hard blocker arrays |
+
+`blocked` is re-derived from `wireRemovals` / `migrationGaps` / `contractDrifts`
+— flipping the boolean alone does not fool `simulate` / `execute`.
 
 ## Simulate
 
-`Update.simulate(plan)` re-validates audit / blocked **without spawning** — a pure
-plan-value gate (does not re-dial Directory/status). Fails with
-`UpdatePlanBlocked` or `UpdateContractMismatch`.
+`Update.simulate(plan)` re-validates **shape**, contract audit, and blockers
+**without spawning** — a pure plan-value gate (does not re-dial Directory/status).
+Fails with shape errors (`EmptyUpdate*`, `DuplicateUpdate*`),
+`UpdatePlanBlocked`, or `UpdateContractMismatch`. Returns
+`Update.Report` (`_tag: "UpdateReport"`).
 
 For a **full production-like mock**: boot Lookup + incumbent nodes the same way
 you would in prod (real Http Node / WorkPool / Directory), then
@@ -99,9 +125,12 @@ you would in prod (real Http Node / WorkPool / Directory), then
 **planned** impact (execute does not re-run planUpdate). Only step `prefer`
 is forwarded to custody.
 
+Phases emit `update.{plan,validate,simulate,execute}` spans / log spans
+(mirroring Launcher's phase instrumentation).
+
 ## Contracts
 
-Optional `contracts: [{ tag, from?, to? }]`:
+Optional `contracts: [{ tag, from?, to? }]` (unique `tag.key` each):
 
 | Field | Meaning |
 |-------|---------|
@@ -109,8 +138,8 @@ Optional `contracts: [{ tag, from?, to? }]`:
 | `from` | Live tip on the **target** (`impact.liveTips` / migration gaps); else with `to`, Versioned path must allow `from→to`; `from` alone with no observation fails closed |
 
 `from` is strongest when status dial is on (`Lookup.planStatusOn` / step
-`status: true`). With `planStatusOff`, use `from`+`to` so the Versioned path
-check can run.
+`status: true`) so `liveTips` carry `schemaVersion`. With `planStatusOff`, use
+`from`+`to` so the Versioned path check can run.
 
 Audit failure reasons are PascalCase: `From` | `To` | `Path`.
 

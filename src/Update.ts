@@ -27,9 +27,13 @@ export {
   simulate,
   execute,
   isPlan,
+  isReport,
   EmptyPlan,
   EmptyStepTags,
+  EmptyTarget,
+  EmptyTagKey,
   DuplicateTarget,
+  DuplicateContract,
   UpdateContractMismatch,
   PlanBlocked,
 } from "./internal/update";
@@ -42,6 +46,8 @@ export type {
   AuditReason,
   Plan,
   Report,
+  PlanError,
+  ValidateError,
 } from "./internal/update";
 
 /** Impact dry-run types / errors — SSOT on {@link Lookup}. */

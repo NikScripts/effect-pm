@@ -2,9 +2,10 @@
  * Update — compose a fleet plan, simulate (validate), then execute.
  *
  * Plan is an inspectable value (impacts + contract audit). Execute re-validates
- * the plan value, then runs ordered steps via {@link Launcher.restartSuccessor}
- * with `skipPlan: true`. Simulate is the same gate without spawning — use with a
- * production-like Lookup+incumbent boot in tests.
+ * the plan value (shape + re-derived blockers + contracts), then runs ordered
+ * steps via {@link Launcher.restartSuccessor} with `skipPlan: true`. Simulate
+ * is the same gate without spawning — use with a production-like Lookup+incumbent
+ * boot in tests.
  *
  * @module internal/update
  * @internal
@@ -50,22 +51,35 @@ export type AuditReason = "From" | "To" | "Path";
  * @public
  */
 export interface Step {
-  /** Directory `nodeKey` of the outgoing node. */
+  /** Directory `nodeKey` of the outgoing node (non-empty after trim). */
   readonly target: string;
   /** Successor unit (new dial / same identity). */
   readonly successor: SpawnSpec;
   /** Tags the successor will serve — inputs to {@link planUpdate}. */
   readonly tags: ReadonlyArray<PlanUpdateTag>;
-  /** Local Specs for the incumbent — enables wireRemovals. */
+  /**
+   * Local Specs for the incumbent — enables wireRemovals.
+   * Plan-time only: execute does not forward this to custody.
+   */
   readonly incumbent?: ReadonlyArray<PlanUpdateTag>;
-  /** Override ambient plan force for this step. */
+  /**
+   * Override ambient {@link Lookup.planForce} for this step's dry-run.
+   * Plan-time only — does not bypass {@link simulate} / {@link execute}.
+   */
   readonly force?: boolean;
-  /** Override ambient plan status dial for this step. */
+  /**
+   * Override ambient {@link Lookup.planStatus} for this step's dry-run.
+   * Plan-time only: execute does not re-dial status.
+   */
   readonly status?: boolean;
-  /** Skip {@link planUpdate} for this step (ops escape). */
+  /**
+   * Skip {@link planUpdate} for this step (ops escape; impact is `undefined`).
+   * Plan-time only — execute always uses `skipPlan: true` on custody.
+   */
   readonly skipPlan?: boolean;
   /**
    * After `up(B)`, stamp Advice.prefer per tag. Default `true`.
+   * Forwarded to {@link Launcher.restartSuccessor} on execute.
    */
   readonly prefer?: boolean;
 }
@@ -94,12 +108,20 @@ export interface Contract {
 export interface Input {
   /**
    * Ordered steps — index is execution order (strategic handoff sequence).
-   * Must be non-empty; each step needs at least one tag; targets must be unique.
+   * Must be non-empty; each step needs at least one tag with a non-blank key;
+   * targets must be unique and non-blank.
    */
   readonly steps: ReadonlyArray<Step>;
-  /** Optional contract from→to audit (fail closed when mismatched). */
+  /**
+   * Optional contract from→to audit (fail closed when mismatched).
+   * Service keys must be unique across the list.
+   */
   readonly contracts?: ReadonlyArray<Contract>;
-  /** Default `force` for every step that omits its own. */
+  /**
+   * Default `force` for every step that omits its own.
+   * Distinct from ambient {@link Lookup.planForce} — either can collect a
+   * blocked impact onto the plan; neither lets execute through.
+   */
   readonly force?: boolean;
   /** Default `status` for every step that omits its own. */
   readonly status?: boolean;
@@ -107,6 +129,10 @@ export interface Input {
 
 /**
  * A step after planning — carries dry-run {@link UpdateImpact}.
+ *
+ * Fields `force`, `status`, `incumbent`, and `skipPlan` are plan-time metadata
+ * retained for inspectability; {@link execute} only forwards `prefer` to
+ * custody (plus `target` / `successor` / `tags` with `skipPlan: true`).
  *
  * @category models
  * @public
@@ -159,9 +185,10 @@ export interface Plan {
    */
   readonly uncoveredCoUpdate: ReadonlyArray<string>;
   /**
-   * True when any step impact is blocked. Contract failures fail closed as
-   * {@link UpdateContractMismatch} from {@link plan} / {@link simulate} /
-   * {@link execute} rather than returning a plan with a failed audit.
+   * True when any step impact has hard blocker arrays (re-derived from
+   * `wireRemovals` / `migrationGaps` / `contractDrifts` — not a forgeable flag).
+   * Contract failures fail closed as {@link UpdateContractMismatch} rather than
+   * returning a plan with a failed audit.
    */
   readonly blocked: boolean;
 }
@@ -173,9 +200,32 @@ export interface Plan {
  * @public
  */
 export interface Report {
+  readonly _tag: "UpdateReport";
   readonly plan: Plan;
   readonly audit: ReadonlyArray<AuditEntry>;
 }
+
+// =============================================================================
+// Blocker helpers (used by errors + gate)
+// =============================================================================
+
+/**
+ * Hard blockers are the impact arrays — never trust a forgeable `blocked` flag.
+ */
+const impactArraysBlocked = (impact: UpdateImpact | undefined): boolean =>
+  impact !== undefined &&
+  (impact.wireRemovals.length > 0 ||
+    impact.migrationGaps.length > 0 ||
+    impact.contractDrifts.length > 0);
+
+/** Re-stamp `impact.blocked` from arrays (identity when already consistent). */
+const rederiveImpact = (
+  impact: UpdateImpact | undefined,
+): UpdateImpact | undefined => {
+  if (impact === undefined) return undefined;
+  const blocked = impactArraysBlocked(impact);
+  return impact.blocked === blocked ? impact : { ...impact, blocked };
+};
 
 // =============================================================================
 // Errors
@@ -209,6 +259,35 @@ export class EmptyStepTags extends Data.TaggedError("EmptyUpdateStepTags")<{
 }
 
 /**
+ * A step `target` is empty or whitespace-only.
+ *
+ * @category errors
+ * @public
+ */
+export class EmptyTarget extends Data.TaggedError("EmptyUpdateTarget")<{
+  readonly order: number;
+}> {
+  override get message() {
+    return `Update step[${String(this.order)}] has an empty target.`;
+  }
+}
+
+/**
+ * A step tag (or contract tag) has a blank `key`.
+ *
+ * @category errors
+ * @public
+ */
+export class EmptyTagKey extends Data.TaggedError("EmptyUpdateTagKey")<{
+  readonly target: string;
+  readonly order: number;
+}> {
+  override get message() {
+    return `Update step[${String(this.order)}] target "${this.target}" has a blank tag key.`;
+  }
+}
+
+/**
  * Two steps share the same Directory `target` — fleet order would race.
  *
  * @category errors
@@ -220,6 +299,22 @@ export class DuplicateTarget extends Data.TaggedError("DuplicateUpdateTarget")<{
 }> {
   override get message() {
     return `Update plan duplicates target "${this.target}" at steps [${this.orders.join(", ")}].`;
+  }
+}
+
+/**
+ * Two {@link Contract} rows share the same `tag.key`.
+ *
+ * @category errors
+ * @public
+ */
+export class DuplicateContract extends Data.TaggedError(
+  "DuplicateUpdateContract",
+)<{
+  readonly serviceKey: string;
+}> {
+  override get message() {
+    return `Update plan duplicates contract for "${this.serviceKey}".`;
   }
 }
 
@@ -263,13 +358,46 @@ export class PlanBlocked extends Data.TaggedError("UpdatePlanBlocked")<{
 }> {
   override get message() {
     const targets = this.plan.steps
-      .filter((s) => s.impact?.blocked === true)
+      .filter((s) => impactArraysBlocked(s.impact))
       .map((s) => s.target);
     return targets.length === 0
       ? "Update plan is blocked."
       : `Update plan blocked for target(s): ${targets.join(", ")}.`;
   }
 }
+
+/**
+ * Failures from {@link plan} (shape + impact dry-run + contracts).
+ *
+ * @category errors
+ * @public
+ */
+export type PlanError =
+  | EmptyPlan
+  | EmptyStepTags
+  | EmptyTarget
+  | EmptyTagKey
+  | DuplicateTarget
+  | DuplicateContract
+  | UpdateBlocked
+  | UpdateTargetUnknown
+  | UpdateContractMismatch;
+
+/**
+ * Failures from the shared simulate/execute plan-value gate.
+ *
+ * @category errors
+ * @public
+ */
+export type ValidateError =
+  | EmptyPlan
+  | EmptyStepTags
+  | EmptyTarget
+  | EmptyTagKey
+  | DuplicateTarget
+  | DuplicateContract
+  | PlanBlocked
+  | UpdateContractMismatch;
 
 // =============================================================================
 // Helpers
@@ -379,14 +507,27 @@ const rollupCoUpdate = (
   return { coUpdate, uncoveredCoUpdate };
 };
 
-const validateSteps = (
-  steps: ReadonlyArray<Step>,
-): EmptyPlan | EmptyStepTags | DuplicateTarget | undefined => {
+type ShapeError =
+  | EmptyPlan
+  | EmptyStepTags
+  | EmptyTarget
+  | EmptyTagKey
+  | DuplicateTarget;
+
+const validateSteps = (steps: ReadonlyArray<Step>): ShapeError | undefined => {
   if (steps.length === 0) return new EmptyPlan();
   const seen = new Map<string, Array<number>>();
   for (const [order, step] of steps.entries()) {
+    if (step.target.trim().length === 0) {
+      return new EmptyTarget({ order });
+    }
     if (step.tags.length === 0) {
       return new EmptyStepTags({ target: step.target, order });
+    }
+    for (const tag of step.tags) {
+      if (tag.key.trim().length === 0) {
+        return new EmptyTagKey({ target: step.target, order });
+      }
     }
     const orders = seen.get(step.target);
     if (orders === undefined) seen.set(step.target, [order]);
@@ -400,47 +541,99 @@ const validateSteps = (
   return undefined;
 };
 
-const impactBlocked = (plan: Plan): boolean =>
-  plan.steps.some((s) => s.impact?.blocked === true);
+const validateContracts = (
+  contracts: ReadonlyArray<Contract>,
+): EmptyTagKey | DuplicateContract | undefined => {
+  const seen = new Set<string>();
+  for (const [order, c] of contracts.entries()) {
+    const key = c.tag.key;
+    if (key.trim().length === 0) {
+      return new EmptyTagKey({ target: "(contract)", order });
+    }
+    if (seen.has(key)) {
+      return new DuplicateContract({ serviceKey: key });
+    }
+    seen.add(key);
+  }
+  return undefined;
+};
+
+const withUpdatePhase = <A, E, R>(
+  phase: string,
+  effect: Effect.Effect<A, E, R>,
+  attributes?: Record<string, string>,
+): Effect.Effect<A, E, R> =>
+  effect.pipe(
+    Effect.annotateLogs({
+      "update.phase": phase,
+      ...attributes,
+    }),
+    Effect.withLogSpan(`update.${phase}`),
+    Effect.withSpan(`update.${phase}`, {
+      attributes: {
+        "update.phase": phase,
+        ...attributes,
+      },
+    }),
+  );
 
 /**
- * Shared simulate/execute gate — re-audit contracts; refuse blocked impacts.
+ * Shared simulate/execute gate — re-check shape, re-audit contracts, re-derive
+ * blockers from impact arrays (refuse forged `blocked: false`).
  */
 const validatePlan = (
   updatePlan: Plan,
 ): Effect.Effect<
   { readonly plan: Plan; readonly audit: ReadonlyArray<AuditEntry> },
-  PlanBlocked | UpdateContractMismatch
+  ValidateError
 > =>
-  Effect.gen(function* () {
-    const { audit, mismatch } = auditContracts(
-      updatePlan.contracts,
-      updatePlan.steps.map((s) => s.impact),
-    );
-    if (mismatch !== undefined) {
-      return yield* mismatch;
-    }
-    const blocked = impactBlocked(updatePlan);
-    const next: Plan = { ...updatePlan, audit, blocked };
-    if (blocked) {
-      return yield* new PlanBlocked({ plan: next });
-    }
-    return { plan: next, audit };
-  });
+  withUpdatePhase(
+    "validate",
+    Effect.gen(function* () {
+      const shape = validateSteps(updatePlan.steps);
+      if (shape !== undefined) {
+        return yield* shape;
+      }
+      const contractsInvalid = validateContracts(updatePlan.contracts);
+      if (contractsInvalid !== undefined) {
+        return yield* contractsInvalid;
+      }
 
-type PlanError =
-  | EmptyPlan
-  | EmptyStepTags
-  | DuplicateTarget
-  | UpdateBlocked
-  | UpdateTargetUnknown
-  | UpdateContractMismatch;
+      const steps = updatePlan.steps.map((step) => {
+        const impact = rederiveImpact(step.impact);
+        return impact === step.impact ? step : { ...step, impact };
+      });
+      const { audit, mismatch } = auditContracts(
+        updatePlan.contracts,
+        steps.map((s) => s.impact),
+      );
+      if (mismatch !== undefined) {
+        return yield* mismatch;
+      }
+
+      const blocked = steps.some((s) => impactArraysBlocked(s.impact));
+      const { coUpdate, uncoveredCoUpdate } = rollupCoUpdate(steps);
+      const next: Plan = {
+        ...updatePlan,
+        steps,
+        audit,
+        blocked,
+        coUpdate,
+        uncoveredCoUpdate,
+      };
+      if (blocked) {
+        return yield* new PlanBlocked({ plan: next });
+      }
+      return { plan: next, audit };
+    }),
+    {
+      "update.steps": String(updatePlan.steps.length),
+      "update.contracts": String(updatePlan.contracts.length),
+    },
+  );
 
 type RestartSuccessorEffect = ReturnType<typeof restartSuccessor>;
-type ExecuteError =
-  | PlanBlocked
-  | UpdateContractMismatch
-  | Effect.Error<RestartSuccessorEffect>;
+type ExecuteError = ValidateError | Effect.Error<RestartSuccessorEffect>;
 type ExecuteEnv = Effect.Services<RestartSuccessorEffect>;
 
 type PlanServices =
@@ -473,61 +666,78 @@ type PlanServices =
 export const plan = (
   input: Input,
 ): Effect.Effect<Plan, PlanError, PlanServices> =>
-  Effect.gen(function* () {
-    const invalid = validateSteps(input.steps);
-    if (invalid !== undefined) {
-      return yield* invalid;
-    }
+  withUpdatePhase(
+    "plan",
+    Effect.gen(function* () {
+      const invalid = validateSteps(input.steps);
+      if (invalid !== undefined) {
+        return yield* invalid;
+      }
+      const contracts = input.contracts ?? [];
+      const contractsInvalid = validateContracts(contracts);
+      if (contractsInvalid !== undefined) {
+        return yield* contractsInvalid;
+      }
 
-    const planned: Array<PlannedStep> = [];
-    for (const [order, step] of input.steps.entries()) {
-      const force = step.force ?? input.force;
-      const status = step.status ?? input.status;
-      let impact: UpdateImpact | undefined;
-      if (step.skipPlan !== true) {
-        impact = yield* planUpdate(step.target, step.tags, {
-          ...(step.incumbent !== undefined
-            ? { incumbent: step.incumbent }
-            : {}),
+      const planned: Array<PlannedStep> = [];
+      for (const [order, step] of input.steps.entries()) {
+        const force = step.force ?? input.force;
+        const status = step.status ?? input.status;
+        let impact: UpdateImpact | undefined;
+        if (step.skipPlan !== true) {
+          impact = yield* planUpdate(step.target, step.tags, {
+            ...(step.incumbent !== undefined
+              ? { incumbent: step.incumbent }
+              : {}),
+            ...(force !== undefined ? { force } : {}),
+            ...(status !== undefined ? { status } : {}),
+          }).pipe(
+            Effect.annotateLogs({
+              "update.target": step.target,
+              "update.order": String(order),
+            }),
+          );
+        }
+        planned.push({
+          ...step,
+          order,
+          impact: rederiveImpact(impact),
           ...(force !== undefined ? { force } : {}),
           ...(status !== undefined ? { status } : {}),
         });
       }
-      planned.push({
-        ...step,
-        order,
-        impact,
-        ...(force !== undefined ? { force } : {}),
-        ...(status !== undefined ? { status } : {}),
-      });
-    }
 
-    const contracts = input.contracts ?? [];
-    const { audit, mismatch } = auditContracts(
-      contracts,
-      planned.map((s) => s.impact),
-    );
-    if (mismatch !== undefined) {
-      return yield* mismatch;
-    }
+      const { audit, mismatch } = auditContracts(
+        contracts,
+        planned.map((s) => s.impact),
+      );
+      if (mismatch !== undefined) {
+        return yield* mismatch;
+      }
 
-    const { coUpdate, uncoveredCoUpdate } = rollupCoUpdate(planned);
-    const blocked = planned.some((s) => s.impact?.blocked === true);
+      const { coUpdate, uncoveredCoUpdate } = rollupCoUpdate(planned);
+      const blocked = planned.some((s) => impactArraysBlocked(s.impact));
 
-    return {
-      _tag: "UpdatePlan" as const,
-      steps: planned,
-      contracts,
-      audit,
-      coUpdate,
-      uncoveredCoUpdate,
-      blocked,
-    };
-  });
+      return {
+        _tag: "UpdatePlan" as const,
+        steps: planned,
+        contracts,
+        audit,
+        coUpdate,
+        uncoveredCoUpdate,
+        blocked,
+      };
+    }),
+    {
+      "update.steps": String(input.steps.length),
+      "update.contracts": String(input.contracts?.length ?? 0),
+    },
+  );
 
 /**
- * Validate a {@link Plan} without spawning — re-checks contract audit and
- * blocked flags (pure plan-value gate; does not re-dial Directory/status).
+ * Validate a {@link Plan} without spawning — re-checks shape, contract audit,
+ * and blockers re-derived from impact arrays (pure plan-value gate; does not
+ * re-dial Directory/status).
  *
  * For a full production-like mock: boot Lookup + incumbents, then
  * `plan` → `simulate` → `execute` (see guide / dream-redeploy suite).
@@ -537,19 +747,24 @@ export const plan = (
  */
 export const simulate = (
   updatePlan: Plan,
-): Effect.Effect<Report, PlanBlocked | UpdateContractMismatch> =>
-  Effect.map(validatePlan(updatePlan), ({ plan: next, audit }) => ({
-    plan: next,
-    audit,
-  }));
+): Effect.Effect<Report, ValidateError> =>
+  withUpdatePhase(
+    "simulate",
+    Effect.map(validatePlan(updatePlan), ({ plan: next, audit }) => ({
+      _tag: "UpdateReport" as const,
+      plan: next,
+      audit,
+    })),
+  );
 
 /**
  * Execute a validated {@link Plan} — re-runs the {@link simulate} gate, then
  * ordered {@link restartSuccessor} steps with `skipPlan: true`.
  *
  * Returns each step's **planned** impact (execute does not re-run planUpdate).
- * `force: true` on {@link plan} is for inspecting blocked impacts — execute
- * still refuses until the plan is unblocked.
+ * `force: true` on {@link plan} (or ambient {@link Lookup.planForce}) is for
+ * inspecting blocked impacts — execute still refuses until the plan is
+ * unblocked. Only step `prefer` is forwarded to custody.
  *
  * @category constructors
  * @public
@@ -561,22 +776,34 @@ export const execute = (
   ExecuteError,
   ExecuteEnv
 > =>
-  Effect.gen(function* () {
-    const { plan: next } = yield* validatePlan(updatePlan);
-    const impacts: Array<UpdateImpact | undefined> = [];
-    for (const step of next.steps) {
-      // Plan already ran — only custody flags belong here (prefer).
-      yield* restartSuccessor({
-        target: step.target,
-        successor: step.successor,
-        tags: step.tags,
-        skipPlan: true,
-        ...(step.prefer !== undefined ? { prefer: step.prefer } : {}),
-      });
-      impacts.push(step.impact);
-    }
-    return impacts;
-  });
+  withUpdatePhase(
+    "execute",
+    Effect.gen(function* () {
+      const { plan: next } = yield* validatePlan(updatePlan);
+      const impacts: Array<UpdateImpact | undefined> = [];
+      for (const step of next.steps) {
+        // Plan already ran — only custody flags belong here (prefer).
+        yield* restartSuccessor({
+          target: step.target,
+          successor: step.successor,
+          tags: step.tags,
+          skipPlan: true,
+          ...(step.prefer !== undefined ? { prefer: step.prefer } : {}),
+        }).pipe(
+          Effect.annotateLogs({
+            "update.target": step.target,
+            "update.order": String(step.order),
+            "update.prefer": String(step.prefer !== false),
+          }),
+        );
+        impacts.push(step.impact);
+      }
+      return impacts;
+    }),
+    {
+      "update.steps": String(updatePlan.steps.length),
+    },
+  );
 
 /**
  * Type guard for {@link Plan}.
@@ -598,5 +825,19 @@ export const isPlan = (u: unknown): u is Plan => {
     return false;
   }
   if (!("blocked" in u) || typeof u.blocked !== "boolean") return false;
+  return true;
+};
+
+/**
+ * Type guard for {@link Report}.
+ *
+ * @category refinements
+ * @public
+ */
+export const isReport = (u: unknown): u is Report => {
+  if (typeof u !== "object" || u === null) return false;
+  if (!("_tag" in u) || u._tag !== "UpdateReport") return false;
+  if (!("plan" in u) || !isPlan(u.plan)) return false;
+  if (!("audit" in u) || !Array.isArray(u.audit)) return false;
   return true;
 };
