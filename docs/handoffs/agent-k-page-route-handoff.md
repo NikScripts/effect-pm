@@ -42,7 +42,7 @@ Uncommitted work on the branch (commit this first if still dirty):
 | Nav / urls | `urls.index()`, `urls.guides_slug(…)`, `urls.docs_path(…)` |
 | Docs / lock / changeset | Updated for the above |
 
-**Pushed tip:** `a3f62e2ef` on `origin/cursor/file-router-prototype-125f`.
+**Branch tip:** `origin/cursor/file-router-prototype-125f` — run `git rev-parse` (handoff landed on/after `a3f62e2ef`).
 
 `integration` FF-sync was **blocked** here (`integration` checked out in another worktree at `/Users/nikolasstow/Coding/packages/effect-pm`). Agent K should FF-merge this tip into `integration` from a worktree that can check it out.
 
