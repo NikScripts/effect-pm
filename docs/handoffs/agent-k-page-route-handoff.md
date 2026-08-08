@@ -29,7 +29,8 @@ export const Provider = Last.provider(
 ```
 
 - **No** `pageConfig`, **no** `Page.getConfig`, **no** interim getConfig Vite inject.
-  Param SSG / open dynamic use **Waku’s own `getConfig` on that file** until `createPages`.
+  Param SSG / open dynamic use **Waku’s own `getConfig` on that file** (engine wire).
+  Do not wait on / invent “createPages” for static/dynamic — that API is locked here.
 - RSC Provider / client islands **must not** import file page modules. Catalog twins from shared options (`chapter.ts`) or path-only rows. Server tooling may use `Router.pagesByIdFromModules(glob)`.
 
 ---

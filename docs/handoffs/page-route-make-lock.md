@@ -38,10 +38,12 @@ Route.get("chapter", "/guides/:slug").pipe(
 |-------|------|
 | `Page.static` / `Page.make` | Page class mode (bake vs dynamic) |
 | `Route.staticFromEffect` / Literals / `mixedFromEffect` static set | Catalog bake bags |
-| Waku’s own `getConfig` on **that one file** | Engine wire for param `staticPaths` / open `dynamic` only — until `createPages` |
+| Waku’s own `getConfig` on **that one file** | Engine wire for param `staticPaths` / open `dynamic` only |
 
 **Forbidden:** `pageConfig` Vite inject, `Page.getConfig`, any interim getConfig bridge.  
 `Page.configOf` / `Page.paramBagsOf` are adapter/test helpers — not app `getConfig`.
+
+**Not part of this lock:** Waku’s `createPages` / a future internal host adapter. Those must not reopen static/dynamic — see notes in [`page-layout-design.md`](./page-layout-design.md) (“createPages provenance”).
 
 ## Eng’d merge
 

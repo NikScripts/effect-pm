@@ -27,5 +27,6 @@ pnpm run docs:last-site
 **Removed / never approved:** `Page.getConfig`, `pageConfig` Vite inject,
 `Page.build`, Stamped theater, `Last.app(Layer.empty).pipe(Waku.router(…)).Provider`,
 `RouterProvider`, `examples/apps/last-ts-site`. Do not invent interim getConfig
-bridges — `createPages` is the adapter; until then engine `getConfig` on the
-param/dynamic file only.
+bridges — use Waku’s own `getConfig` on the param/dynamic file only. Static/dynamic
+is locked via `Page.make` / `Page.static` (+ catalog `staticFromEffect`); Waku
+`createPages` is not a last-ts requirement (see [`page-layout-design.md`](./page-layout-design.md)).

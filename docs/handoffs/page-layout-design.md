@@ -31,7 +31,7 @@
 | **Layout** | Chrome around an outlet; declares **Requirement** (values the page must provide). |
 | **Provide (upward)** | Register a **value** into a bag (not a DOM title node). Last wins. |
 | **Requirement** | R-style debt (same idea as View Prototype) — keys the layout needs. |
-| **Stamp** | Runtime metadata on the default export (`stampOf`) for the file-router / `createPages` adapter. |
+| **Stamp** | Older note — runtime metadata on the default export (`stampOf`) for a future host adapter. **Not** how locked `Page.make` / `Page.static` work today; see “createPages provenance” below. |
 | **View** | Separate: DI components + `View.gen` / `fromEffect`. Pages *may* use Views inside; Page ≠ View. |
 | **Views.Page** | Hyperlink dashboard **size** — never file-router Page. |
 
@@ -72,6 +72,74 @@ Layout.provide(BookLayout, ({ Outlet, values }) => …)
 
 Outlet naming: **Outlet** (router-familiar) preferred over Slot; final name open.
 
+### Layout like View — default Component, swap by provide (owner lean 2026-08-08)
+
+Treat **Layout as View-shaped**: a Tag/Service (or make-handle) that carries a
+**default chrome Component**, same spirit as a View with a default implementation.
+Call sites depend on the **Layout identity** (Requirement + Outlet contract), not
+on a hard-wired chrome function.
+
+Swap chrome by **providing an alternative implementation** (Layer / `Layout.provide`
+/ the same vocabulary Views already use) — no second layout type, no rename at every
+page module:
+
+```ts
+// Default chrome lives on the Layout (like a View default component)
+class Book extends Layout.Tag<Book, { readonly title: string }>()(
+  "app/layout/book",
+) {
+  static Component = ({ Outlet, values }: Layout.Chrome<Book>) => (
+    <shell title={values.title}>
+      <Outlet />
+    </shell>
+  )
+}
+
+// Pages / router close over `Book` — not over a concrete function
+export default Page.static(Book, AboutView)
+
+// Tests / alternate skins: provide a different Component for the same Tag
+Layer.provide(
+  Layout.succeed(Book, ({ Outlet, values }) => (
+    <minimal title={values.title}>
+      <Outlet />
+    </minimal>
+  )),
+)
+```
+
+**Why:** same DI story as View — identity + default impl; override via provide.
+Keeps file pages stable when chrome changes. Non-DI `Layout.make(key, chrome)` can
+remain the sugar that mints a Tag already provided with that Component.
+
+**Open (not locked):** exact mint (`Layout.Tag` + `static Component` vs
+`Layout.make` that returns a handle with `.Component`); whether default chrome is
+a class static, a `succeed` bag, or both.
+
+### `createPages` — provenance (do not confuse with locked static/dynamic)
+
+**`createPages` is Waku’s API** (`waku/router` — programmatic page registration /
+fs-router sibling). It is **not** a last-ts public surface and **not** how
+`Page.make` / `Page.static` / `Route.staticFromEffect` set bake vs dynamic.
+
+Older notes (this file, `effect-app-router-plan`, `file-router-prototype`) used
+“`createPages` adapter” as shorthand for a **future** internal bridge: read page
+marks/stamps → register with the host engine so apps never invent getConfig
+bridges. That product cutover is still design-only (L4 / B6) and **must not** be
+read as: “static/dynamic isn’t done until createPages.”
+
+**Locked today (see [`page-route-make-lock.md`](./page-route-make-lock.md)):**
+
+| Concern | Where it is set |
+|---------|-----------------|
+| Page dynamic vs SSG | `Page.make` (default) / `Page.static` |
+| Catalog bake bags | `Route.staticFromEffect` / Literals / `mixedFromEffect` |
+| Host engine `staticPaths` / open dynamic | Waku’s own `getConfig` on **that file** only (engine wire) |
+
+**Forbidden:** `pageConfig`, `Page.getConfig`, inventing interim getConfig injects
+“until createPages.” If/when an internal host adapter lands, it maps the **already
+locked** marks — it does not reopen the static/dynamic API.
+
 ### Metadata
 
 - **`title` / `description` are not built into Page core.**
@@ -100,8 +168,8 @@ MyLayout.static(component, values)
 
 ### Open product follow-ons (out of this design doc’s Eng slice)
 
-- Docs-site cutover → `createPages`.
-- Dogfood `fileRouter` in `docs/site` waku config.
+- Optional internal host adapter (historically nicknamed “createPages” after Waku’s API) — maps locked Page marks → engine; **does not** redefine static/dynamic.
+- Dogfood `fileRouter` in Hyperlink `docs/site` waku config (separate from `docs/last/site`).
 - Tip-sync work branch → `integration` (owner).
 
 ---

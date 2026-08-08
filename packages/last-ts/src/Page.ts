@@ -31,8 +31,9 @@
  *
  * File-router extracts {@link optionsOf} / {@link modeOf} from the class.
  * Do not invent interim `getConfig` bridges (`pageConfig`, `Page.getConfig`).
- * Until `createPages`, param SSG / open dynamic may use Waku’s own `getConfig`
- * on that file only (engine wire).
+ * Param SSG / open dynamic may use Waku’s own `getConfig` on that file only
+ * (engine wire). Static/dynamic mode is `Page.make` / `Page.static` — not a
+ * host `createPages` API.
  *
  * Outlet trees:
  *

@@ -89,9 +89,9 @@ Optional request options are the **first** argument (same bag as `Route.get`).
 the class; inside `static Component`, prefer
 `Page.PropsFromOptions<typeof options>` (avoids circular `typeof` on the class).
 Waku’s default export is `Page.asDefault(…)` so the class brand stays for
-`Page.extract`. **No** `pageConfig` / `Page.getConfig`. Until `createPages`,
-param SSG and open dynamic use Waku’s own `getConfig` on that file only
-(engine wire — see owner lock in `page-route-make-lock.md`).
+`Page.extract`. **No** `pageConfig` / `Page.getConfig`. Param SSG and open
+dynamic use Waku’s own `getConfig` on that file only (engine wire — see
+`page-route-make-lock.md`). Mode itself is `Page.make` / `Page.static`.
 
 ## Provider
 
