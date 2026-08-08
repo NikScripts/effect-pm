@@ -445,6 +445,131 @@ Owner narrowed to these two for the **resident agent** (clarity undecided). Earl
 agent,” pairs cleanly with Lookup/Node, and `Host.spawn` reads better than `Machine.spawn`
 for “start a process here.” Re-accept `Machine` only if you want distance from HTTP “host.”
 
+### 7.3 Owner lean — keep `Launcher`, nest locality under `Node` (2026-08-08)
+
+```
+Launcher          → still spawn-and-exit (spine α may stay for the *library*)
+Node.make(…)      → declare a node like HttpApi (config holder) — §7.5
+Node.<Locality>   → “these processes/runtimes are local to each other” — §7.4
+Update / Rollout  → plan → simulate → execute (separate)
+```
+
+Sketch (name of locality TBD — was `Machine`):
+
+```ts
+// SKETCH
+class Worker extends Node.make("fleet/Worker", {
+  main: { url: "http://127.0.0.1:8080/rpc", kind: "Http" },
+}) {}
+
+class ThisBox extends Node.Machine(/* or Host / Island / … */)("box-1", {
+  nodes: [Worker, Mail, …],
+  // watch, update listen, pull strategy, …
+}) {}
+
+yield* Launcher.up({ node: Worker, process: … }) // or Host/Machine asks Launcher
+```
+
+**Not locked** — records the composition: Launcher stays; locality is a **Node-namespaced**
+concept, not a top-level `Machine` module competing with Launcher.
+
+### 7.4 What word means “processes/runtimes local to each other”?
+
+Desired meaning (owner): **multiple processes/runtimes that share locality** — same OS
+host, cheap IPC (Unix), shared update/supervise plane — **not** the whole fleet, **not**
+one Node identity.
+
+| Term | Fit | Notes |
+|------|-----|-------|
+| **Host** | Strong | Industry “same host”; clear vs fleet/Lookup |
+| **Machine** | Strong | Ops “on this machine”; pairs as `Node.Machine` |
+| **Box** | Informal | Very clear; maybe too slang for public API |
+| **Locale** / **Locality** | Exact | Emphasizes *local-to-each-other*; a bit academic |
+| **Site** | Medium | Often means datacenter/region — bigger than one OS |
+| **Station** | Medium | Cute; unclear |
+| **Island** | Medium | Co-located + bounded; “island of runtimes” |
+| **Pod** | Weak here | K8s baggage (often multi-container one IP) |
+| **Colony** / **Compound** | Weak | Obscure |
+| **Yard** / **Depot** / **Base** | Weak | Stretch metaphors |
+| **Siblings** / **SiblingSet** | Medium | “Sibling processes”; not a place |
+| **Colo** / **Colocation** | Medium | Exact meaning; ugly as type name |
+| **Vicinity** / **Neighborhood** | Weak | Soft |
+| **Chassis** | Medium | Hardware-flavored “one box” |
+| **Runtime** | Clash | Effect Runtime |
+| **Cluster** | Wrong | Usually multi-machine |
+| **Fleet** | Wrong | Whole mesh |
+| **Group** | Wrong | Already Hyperlink handle-trees; not OS locality |
+| **Cell** | Parked | Toolkit history |
+
+**Best clarity for the definition you gave:**
+
+1. **`Host`** — “runtimes on this host”
+2. **`Machine`** — “runtimes on this machine” (esp. as `Node.Machine`)
+3. **`Locale`** — if you want the word to mean *locality itself*, not the hardware
+4. **`Island`** — if you want “bounded co-located set” without saying host/machine
+
+**Agent lean:** **`Host`** for the concept; **`Node.Host`** or **`Node.Machine`** as the
+API nest under Node (owner already floated `Node.Machine` + keep Launcher). If HTTP
+“host” bothers you, `Node.Machine` is the clearer nested name.
+
+### 7.5 `Node.make` — HttpApi-shaped declaration (design)
+
+**Today:** `Node.Tag()` is a **Context.Service** — `yield* Worker` resolves transport;
+address is stamped on the Tag class via `assembleNode`.
+
+```ts
+// Eng'd today
+class Worker extends Node.Tag<Worker>()("fleet/Worker", {
+  url: "http://127.0.0.1:8080/rpc",
+  kind: "Http",
+}) {}
+```
+
+**Effect HttpApi pattern** (`repos/effect/.../HttpApi.ts`): constructable config holder —
+`class Api extends HttpApi.make("api").add(Groups) {}` — **not** a Context service.
+Builders (`HttpApiBuilder`) turn description → layers. Same spirit as UI `Route.make`
+(catalog); Router’s live tag is separate.
+
+**Desired direction (owner):** same config ergonomics, but **`Node.make`**:
+
+```ts
+// SKETCH — description first (like HttpApi.make)
+class Worker extends Node.make("fleet/Worker", {
+  // main + later additional addresses / roles — §3
+  url: "http://127.0.0.1:8080/rpc",
+  kind: "Http",
+}) {}
+
+// pipe / methods widen like HttpApi.add
+class WorkerFull extends Worker.pipe(
+  Node.withAddresses({ a: { path: "…" }, b: { path: "…" } }),
+) {}
+
+// runtime still needs a serve/listen/launch edge — Tag-as-Context may remain
+// *derived* from the description, or a separate Node.service / launch binder
+```
+
+| | Today `Node.Tag()` | Target `Node.make` (sketch) |
+|--|-------------------|----------------------------|
+| Kind | Context key + address blob | Config/description (HttpApi-like) |
+| `class extends` | Yes | Yes (`makeProto` / constructable) |
+| `yield* Worker` | Transport service | Maybe **not** — or only after bind |
+| Address | On the Tag | On the description; main vs additional |
+| Locality | — | `Node.Host` / `Node.Machine` lists these makes |
+| Prototype | `Node.Prototype` + `.make` for clones | Fold into `Node.make` / instance helpers? |
+
+**Open forks inside this shift:**
+
+1. Does `Node.make` **replace** `Node.Tag`, or does Tag become the Context projection of a
+   make-description?
+2. Keep `yield* Node` for transport, or only `Node.connect` / `Hyperlink.client(Tag, desc)`?
+3. Catalog type param `ROut` (served Tags) — on make, on a `.serves(…)` method, or elsewhere?
+4. Migration: `Tag()` as deprecated alias of `make` + service binder, or hard cut.
+
+**Closest Eng’d cousin today:** `Node.Prototype` + `.make(instanceKey, address)` — instance
+clones, not HttpApi catalog. `Node.make` would be the **primary declaration** for every
+node, Prototype-shaped templates optional.
+
 ---
 
 ## 8. Open forks (discussion — do not resolve alone)
@@ -465,13 +590,14 @@ for “start a process here.” Re-accept `Machine` only if you want distance fr
 11. Address-from-`nodeKey` — Unix-only v1?
 12. `withAddresses` vs overload `withProtocol`.
 
-### Deploy / resident agent
-13. **Resident agent class shape** — HttpApi-like config class vs HyperService Tag vs both.
-14. **Spine α reopen** — keep spawn-and-exit Launcher + separate resident agent, or merge (§7).
-15. **Name** — not `Machine`, not `Update.Node` (§7.1).
-16. Webhook / pull / package push — which ship in first deployable slice.
-17. Deprecation path for Eng’d `restartSuccessor` + dream-redeploy.
-18. Whether cutover module keeps the name `Update` while the node uses another name.
+### Deploy / locality / Node.make
+13. **Locality name** — `Host` vs `Machine` vs `Locale` / `Island`; nest as `Node.*` (§7.3–7.4).
+14. **Keep Launcher** + locality under Node vs merge spawn into locality agent (§7.3).
+15. **`Node.make` vs `Node.Tag`** — replace, dual, or Tag-as-projection of make (§7.5).
+16. Does `yield* Worker` survive make, or description-only until bind?
+17. Webhook / pull / package push — first deployable slice.
+18. Cutover module name (`Update` vs `Rollout` / …) vs locality name.
+19. Deprecation path for Eng’d `restartSuccessor` + dream-redeploy + `Node.Tag`.
 
 ---
 
@@ -495,8 +621,8 @@ for “start a process here.” Re-accept `Machine` only if you want distance fr
 
 1. ~~plan → execute~~ · ~~Update ≠ Versioned~~ recorded.
 2. Discuss **fleet plan ordering** + **contract audit** shape (§5.3–5.5).
-3. Pick **names** (§7.1) then **spine α** (Launcher vs resident agent) (§7).
-4. Discuss resident-agent declaration style (HttpApi-like) + first deploy slice (§6).
-5. Lock address forks enough for plan step inputs (roles, main, proxy).
-6. Only then Eng — types → simulate helper → execute → resident agent → migrate examples.
+3. Lock **locality word** (`Host` / `Machine` / …) + **keep Launcher** (§7.3–7.4).
+4. Lock **`Node.make`** shape vs Tag (§7.5) — biggest Node API tension.
+5. Lock address forks enough for make() config (roles, main, proxy).
+6. Only then Eng — Node.make → locality → Update plan/simulate/execute → migrate examples.
 7. Dream-redeploy stays **provisional** until the new API exists.
