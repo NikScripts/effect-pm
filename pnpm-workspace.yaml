@@ -1,4 +1,4 @@
 packages:
   - "."
   - "packages/*"
-  - "examples/apps/last-ts-site"
+  - "docs/last/site"

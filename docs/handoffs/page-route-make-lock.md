@@ -32,7 +32,11 @@ Route.get("chapter", "/guides/:slug").pipe(
 
 ## Not yet
 
-- File-router loader reading `Page.make` class → catalog merge
-- `docs/last/site` (last-ts docs server; not example, not Hyperlink `docs/site`)
+- File-router loader reading `Page.make` class → catalog merge / Waku config inject (no app `getConfig`)
 - Mixed static+dynamic **two** literal sets on one `Route.get` (annotation helper polish)
 - `group.fromEffect` emitting full param unions
+
+## Surface
+
+- **`docs/last/site`** — last-ts docs server (`pnpm run docs:last-site` → `:5220`)
+- Removed `examples/apps/last-ts-site` (was never the product surface)

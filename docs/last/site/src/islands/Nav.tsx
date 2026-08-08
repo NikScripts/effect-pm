@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Link } from "last-ts/Waku";
-import { urls } from "../lib/site.js";
+import { urls } from "../lib/site";
 
 export function Nav(): React.ReactElement {
   return (
@@ -10,13 +10,13 @@ export function Nav(): React.ReactElement {
       <Link className="brand" to={urls.home()}>
         last.ts
       </Link>
-      <h2>RSC pages</h2>
+      <h2>Docs</h2>
       <ul>
         <li>
           <Link to={urls.home()}>Home</Link>
         </li>
         <li>
-          <Link to={urls.view()}>View.Service island</Link>
+          <Link to={urls.view()}>View.Service</Link>
         </li>
         <li>
           <Link to={urls.about()}>About</Link>
@@ -24,20 +24,23 @@ export function Nav(): React.ReactElement {
         <li>
           <Link to={urls.chapter("routing")}>Guide · routing</Link>
         </li>
+        <li>
+          <Link to={urls.chapter("view-service")}>Guide · view-service</Link>
+        </li>
       </ul>
-      <h2>Imports</h2>
+      <h2>Surface</h2>
       <ul className="imports">
         <li>
-          <code>last-ts/Last</code>
+          <code>Page.make</code> / <code>Page.static</code>
         </li>
         <li>
-          <code>last-ts/Waku</code>
+          <code>Route.staticFromEffect</code>
         </li>
         <li>
-          <code>last-ts/View</code>
+          <code>Last.provider</code>
         </li>
         <li>
-          <code>waku</code> RSC
+          <code>docs/last/site</code>
         </li>
       </ul>
     </aside>

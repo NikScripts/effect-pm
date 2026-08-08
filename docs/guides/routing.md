@@ -220,18 +220,17 @@ Guide pages: [Router mini-docs](/docs/ui-router-mini-docs) ·
 
 | Piece | Module | Job |
 |-------|--------|-----|
-| File pages | `Page.static` / `build` / `layout` | RSC render SSOT |
+| File pages | `Page.make` / `Page.static` classes | RSC render SSOT |
 | Catalog | `Router.make` + `Route.urlBuilder` | Typed `urls.*` |
-| Soft-nav | `last-ts/Router/waku` | `Link` / `useRouter` |
+| Soft-nav | `Last.provider` + `last-ts/Waku` | `Link` / `useRouter` |
 | SPA handlers | `RouterBuilder` + `Outlet` | Memory/History only — not RSC bodies |
 
-Full walkthrough with **live source includes** from
-`examples/apps/last-ts-site`:
+Full walkthrough:
 
 → **[RSC + Router](/docs/rsc-router)** (`docs/last/rsc-router.md`)
 
 ```bash
-pnpm run example:apps-last-ts-site   # http://100.67.32.32:5220/
+pnpm run docs:last-site   # http://100.67.32.32:5220/  (docs/last/site)
 ```
 
 `RouterBuilder` + Effect page handlers (SPA / in-process) stay in package tests

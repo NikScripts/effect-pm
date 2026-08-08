@@ -1,32 +1,29 @@
-# Last.ts RSC site demo
+# Last.ts docs server (`docs/last/site`)
 
 **Branch:** `cursor/file-router-prototype-125f`  
-**Status:** Eng — Waku RSC  
-**Not Hyperlink docs** (`docs/site` / `:5190`).
+**Status:** Eng — Waku RSC docs surface  
+**Not Hyperlink docs** (`docs/site` / `:5190`). Not an example app.
 
 ## Run
 
 ```bash
-pnpm run example:apps-last-ts-site
+pnpm run docs:last-site
 # → http://100.67.32.32:5220/
 ```
 
-**Docs (API setup + source includes):** [`../last/rsc-router.md`](../last/rsc-router.md)
-→ `/docs/rsc-router` on the docs site.
+**Docs (API setup):** [`../last/rsc-router.md`](../last/rsc-router.md)
+→ `/docs/rsc-router` on the Hyperlink book when mirrored.
 
 ## Shape
 
 | Piece | Role |
 |-------|------|
-| `src/pages/**` | **RSC** file routes (plain Waku modules) |
-| `Last.provider(Waku.fromApi(Site))` | children-only soft-nav provider |
-| `Router.make` + `urls` | typed catalog |
+| `Page.make` / `Page.static` + `Page.asDefault` | RSC file page classes |
+| `Last.provider(Waku.layer.pipe(Layer.provide(routes)))` | children-only soft-nav |
+| `Router.make` + `Route.staticFromEffect` + `urls` | typed catalog |
 | `last-ts/Waku` `Link` | soft-nav (layout island) |
 | `View.Service` | client island on `/view` |
 
-**Removed / never approved:** `Page.getConfig`, Stamped default-export theater,
-`Last.app(Layer.empty).pipe(Waku.router(…)).Provider`, `RouterProvider` wrapper.
-
-File routes = render SSOT. Catalog (`Site`) is typed urls only. Soft-nav verified
-via Waku `Link` (URL + RSC page swap). `Page.Service` / `createPages` still
-deferred — do not invent interim `getConfig` bridges.
+**Removed / never approved:** `Page.getConfig`, `Page.build`, Stamped theater,
+`Last.app(Layer.empty).pipe(Waku.router(…)).Provider`, `RouterProvider`,
+`examples/apps/last-ts-site`.

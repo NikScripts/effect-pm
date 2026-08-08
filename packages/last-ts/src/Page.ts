@@ -6,23 +6,24 @@
  *
  * ```ts
  * // optional request options first (same bag as Route.get)
- * export default class Chapter extends Page.make({
- *   params: { slug: Schema.Literal("routing", "view-service") },
+ * class Chapter extends Page.make({
+ *   params: { slug: Schema.Literals(["routing", "view-service"]) },
  * }) {
  *   static Component = (props: Page.Props<Chapter>) => (
  *     <h1>{props.params.slug}</h1>
  *   )
  * }
+ * export default Page.asDefault(Chapter)
  *
- * // no options
- * export default class About extends Page.make() {
+ * class About extends Page.make() {
  *   static Component = () => <h1>About</h1>
  * }
+ * export default Page.asDefault(About)
  *
- * // SSG opt-in
- * export default class Home extends Page.static() {
+ * class Home extends Page.static() {
  *   static Component = () => <h1>Home</h1>
  * }
+ * export default Page.asDefault(Home)
  * ```
  *
  * `Page.make` = dynamic (default). `Page.static` = bake. Not a Service —
@@ -142,7 +143,7 @@ const makePageClass = <
  * @example
  * ```ts
  * class Chapter extends Page.make({
- *   params: { slug: Schema.Literal("routing", "view-service") },
+ *   params: { slug: Schema.Literals(["routing", "view-service"]) },
  * }) {}
  *
  * class About extends Page.make() {}
@@ -165,7 +166,7 @@ export const make: {
  * ```ts
  * class Home extends Page.static() {}
  * class Chapter extends Page.static({
- *   params: { slug: Schema.Literal("routing", "view-service") },
+ *   params: { slug: Schema.Literals(["routing", "view-service"]) },
  * }) {}
  * ```
  *
@@ -200,6 +201,114 @@ export const componentOf = <P extends AnyPage>(
   page: P,
 ): Component<Props<P>> | undefined =>
   page.Component as Component<Props<P>> | undefined;
+
+/**
+ * What the file-router / catalog merge reads off a page class.
+ *
+ * @public
+ */
+export type Extracted = {
+  readonly mode: Mode;
+  readonly options: RequestOptions;
+  readonly Component: Component<PropsFromOptions<RequestOptions>> | undefined;
+};
+
+/** Extract mode + {@link RequestOptions} (+ Component) from a page class. @public */
+export const extract = (page: unknown): Extracted | undefined => {
+  if (!isPage(page)) return undefined;
+  return {
+    mode: page.mode,
+    options: page.options,
+    Component: page.Component as
+      | Component<PropsFromOptions<RequestOptions>>
+      | undefined,
+  };
+};
+
+const hostReserved = new Set([
+  "path",
+  "pathname",
+  "href",
+  "query",
+  "hash",
+  "searchParams",
+  "children",
+  "params",
+]);
+
+/**
+ * Map host props (Waku: `path` / segment keys / `query` string) into
+ * {@link Props}. Pass-through when the host already sends `params`.
+ *
+ * @internal
+ */
+const propsFromHost = <P extends AnyPage>(
+  page: P,
+  raw: Record<string, unknown>,
+): Props<P> => {
+  if (
+    "params" in raw &&
+    typeof raw.params === "object" &&
+    raw.params !== null
+  ) {
+    return raw as Props<P>;
+  }
+  const pathname =
+    typeof raw.path === "string"
+      ? raw.path
+      : typeof raw.pathname === "string"
+        ? raw.pathname
+        : "";
+  const declared =
+    page.options.params !== undefined
+      ? Object.keys(page.options.params as object)
+      : [];
+  const params: Record<string, string> = {};
+  const keys =
+    declared.length > 0
+      ? declared
+      : Object.keys(raw).filter((k) => !hostReserved.has(k));
+  for (const key of keys) {
+    const value = raw[key];
+    if (typeof value === "string") params[key] = value;
+  }
+  const queryRaw = raw.query;
+  const query =
+    typeof queryRaw === "string"
+      ? Object.fromEntries(new URLSearchParams(queryRaw))
+      : typeof queryRaw === "object" && queryRaw !== null
+        ? queryRaw
+        : {};
+  return {
+    pathname,
+    href: pathname,
+    params,
+    query,
+  } as Props<P>;
+};
+
+/**
+ * Default-export bridge for hosts that need a function component (e.g. Waku
+ * fs-router) while keeping the page class brand for {@link extract}.
+ *
+ * Adapts Waku’s flat segment props into {@link Props} (`params` / `pathname`).
+ *
+ * ```ts
+ * class Home extends Page.static() {
+ *   static Component = () => <h1>Home</h1>
+ * }
+ * export default Page.asDefault(Home)
+ * ```
+ *
+ * @public
+ */
+export const asDefault = <P extends AnyPage>(
+  page: P & { readonly Component: Component<Props<P>> },
+): Component<Props<P>> & P => {
+  const Comp = (raw: Props<P> | Record<string, unknown>) =>
+    page.Component(propsFromHost(page, raw as Record<string, unknown>));
+  return Object.assign(Comp, page) as Component<Props<P>> & P;
+};
 
 // =============================================================================
 // Live route services (Router.Outlet) — RSC-safe Effect tags

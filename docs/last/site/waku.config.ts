@@ -5,7 +5,7 @@ const lastTsSrc = fileURLToPath(
   new URL("../../../packages/last-ts/src", import.meta.url),
 );
 
-/** last.ts RSC demo — Waku pages + Page stamps. */
+/** last.ts docs server — not Hyperlink docs/site. */
 export default defineConfig({
   vite: {
     resolve: {
@@ -16,8 +16,12 @@ export default defineConfig({
         "last-ts/Route": `${lastTsSrc}/Route.ts`,
         "last-ts/Router/waku": `${lastTsSrc}/Router/waku.ts`,
         "last-ts/Router": `${lastTsSrc}/Router.ts`,
+        "last-ts/RouterBuilder": `${lastTsSrc}/RouterBuilder.ts`,
+        "last-ts/Layout": `${lastTsSrc}/Layout.ts`,
+        "last-ts/Waku": `${lastTsSrc}/Waku.ts`,
         "last-ts/View": `${lastTsSrc}/View.tsx`,
         "last-ts/Last": `${lastTsSrc}/Last.ts`,
+        "last-ts/Memory": `${lastTsSrc}/Memory.ts`,
         "last-ts/AtomReact": `${lastTsSrc}/AtomReact.tsx`,
         "waku/router/client": fileURLToPath(
           new URL("./node_modules/waku/dist/router/client.js", import.meta.url),

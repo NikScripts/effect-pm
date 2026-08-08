@@ -24,4 +24,33 @@ describe("Page.make", () => {
     class Home extends Page.static() {}
     expect(Page.modeOf(Home)).toBe("static");
   });
+
+  it("Page.extract reads class brand", () => {
+    class Home extends Page.static() {
+      static Component = () => null;
+    }
+    const extracted = Page.extract(Home);
+    expect(extracted?.mode).toBe("static");
+    expect(extracted?.Component).toBe(Home.Component);
+  });
+
+  it("Page.asDefault adapts Waku flat props into Page.Props", () => {
+    class Chapter extends Page.make({
+      params: { slug: Schema.Literals(["routing", "view-service"]) },
+    }) {
+      static Component = (props: Page.Props<Chapter>) => {
+        expect(props.params.slug).toBe("routing");
+        expect(props.pathname).toBe("/guides/routing");
+        return null;
+      };
+    }
+    const Default = Page.asDefault(Chapter);
+    expect(Page.isPage(Default)).toBe(true);
+    expect(Page.modeOf(Default)).toBe("dynamic");
+    Default({
+      path: "/guides/routing",
+      slug: "routing",
+      query: "",
+    } as never);
+  });
 });

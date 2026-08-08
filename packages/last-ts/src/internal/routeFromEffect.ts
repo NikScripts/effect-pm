@@ -44,21 +44,28 @@ export class FromEffect extends Context.Service<FromEffect, FromEffectValue>()(
  *
  * @internal
  */
-const bagsSchema = <Bags extends ParamBag>(): Schema.Top =>
-  Schema.Record(Schema.String, Schema.String) as unknown as Schema.Top & {
-    readonly Type: Bags;
-  };
+type BagsSchema<Bags extends ParamBag> = Schema.Top & {
+  readonly Type: Bags;
+};
+
+const bagsSchema = <Bags extends ParamBag>(): BagsSchema<Bags> =>
+  Schema.Record(Schema.String, Schema.String) as unknown as BagsSchema<Bags>;
+
+/** Endpoint with params Type = literal bag union. @public */
+export type WithParamBags<E extends Constraint, Bags extends ParamBag> = E & {
+  readonly "~Params": BagsSchema<Bags>;
+};
 
 const attach = <E extends Constraint, Bags extends ParamBag>(
   self: E,
   effect: Effect.Effect<ReadonlyArray<Bags>>,
   isStatic: boolean,
-): E => {
+): WithParamBags<E, Bags> => {
   const next = route.params(self, bagsSchema<Bags>());
   return next.annotate(FromEffect, {
     effect: effect as Effect.Effect<ReadonlyArray<ParamBag>>,
     static: isStatic,
-  }) as unknown as E;
+  }) as unknown as WithParamBags<E, Bags>;
 };
 
 /**
@@ -79,17 +86,17 @@ const attach = <E extends Constraint, Bags extends ParamBag>(
 export const fromEffect: {
   <Bags extends ParamBag>(
     effect: Effect.Effect<ReadonlyArray<Bags>>,
-  ): <E extends Constraint>(self: E) => E;
+  ): <E extends Constraint>(self: E) => WithParamBags<E, Bags>;
   <E extends Constraint, Bags extends ParamBag>(
     self: E,
     effect: Effect.Effect<ReadonlyArray<Bags>>,
-  ): E;
+  ): WithParamBags<E, Bags>;
 } = dual(
   2,
   <E extends Constraint, Bags extends ParamBag>(
     self: E,
     effect: Effect.Effect<ReadonlyArray<Bags>>,
-  ): E => attach(self, effect, false),
+  ): WithParamBags<E, Bags> => attach(self, effect, false),
 );
 
 /**
@@ -107,17 +114,17 @@ export const fromEffect: {
 export const staticFromEffect: {
   <Bags extends ParamBag>(
     effect: Effect.Effect<ReadonlyArray<Bags>>,
-  ): <E extends Constraint>(self: E) => E;
+  ): <E extends Constraint>(self: E) => WithParamBags<E, Bags>;
   <E extends Constraint, Bags extends ParamBag>(
     self: E,
     effect: Effect.Effect<ReadonlyArray<Bags>>,
-  ): E;
+  ): WithParamBags<E, Bags>;
 } = dual(
   2,
   <E extends Constraint, Bags extends ParamBag>(
     self: E,
     effect: Effect.Effect<ReadonlyArray<Bags>>,
-  ): E => attach(self, effect, true),
+  ): WithParamBags<E, Bags> => attach(self, effect, true),
 );
 
 /** Read {@link FromEffect} annotation if present. @internal */

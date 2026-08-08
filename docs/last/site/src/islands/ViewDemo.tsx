@@ -8,7 +8,7 @@ import { Effect, Layer } from "effect";
 import * as View from "last-ts/View";
 
 class Sidebar extends View.Service<Sidebar>()(
-  "last-ts-site/Sidebar",
+  "last-ts/docs/Sidebar",
   () => (
     <nav data-sidebar="default" className="slot-nav">
       <span className="slot-label">default</span>
@@ -17,7 +17,7 @@ class Sidebar extends View.Service<Sidebar>()(
   ),
 ) {}
 
-class Shell extends View.Service<Shell>()("last-ts-site/Shell") {
+class Shell extends View.Service<Shell>()("last-ts/docs/Shell") {
   static layer = Layer.effect(
     Shell,
     Effect.gen(function* () {
@@ -33,7 +33,7 @@ class Shell extends View.Service<Shell>()("last-ts-site/Shell") {
 }
 
 class SettingsShell extends View.Service<SettingsShell>()(
-  "last-ts-site/SettingsShell",
+  "last-ts/docs/SettingsShell",
 ) {
   static layer = Layer.effect(
     SettingsShell,
