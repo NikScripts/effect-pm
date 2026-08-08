@@ -512,10 +512,56 @@ one Node identity.
 API nest under Node (owner already floated `Node.Machine` + keep Launcher). If HTTP
 “host” bothers you, `Node.Machine` is the clearer nested name.
 
-### 7.5 `Node.make` — HttpApi-shaped declaration (design)
+### 7.5 `Node.Tag` was never renamed to `Node.Service` (fact sync — Agent 5, 2026-08-08)
 
-**Today:** `Node.Tag()` is a **Context.Service** — `yield* Worker` resolves transport;
-address is stamped on the Tag class via `assembleNode`.
+**Fact on tip:** public constructor is still **`Node.Tag()`**. There is **no** `Node.Service`
+export. No Eng’d rename Tag→Service landed for Node.
+
+| Surface | What it is today |
+|---------|------------------|
+| `Node.Tag()` | Public factory — class-extends declaration |
+| Under the hood | Assembled onto **`Context.Service`** (node *is* a Context key; `yield* Worker` works) |
+| `WorkPool.Tag` / `Gate.Tag` / `Daemon.Tag` / `Hyperlink.Tag` | HyperService **contract** tags (standards: “HyperService tag — `X.Tag`”) |
+| `WorkPool.Service` / `Gate.Service` | **Different meaning** — Tag + baked in-process `.layer` (Agent D M2: unify typed Service≡Tag+layer; **not** “rename Tag→Service”) |
+| Effect v4 | Context keys are `Context.Service`, not `Context.Tag` |
+
+So: Node already *behaves* like a Context service, but the **factory name stayed `Tag`** to
+rhyme with HyperService `.Tag` factories — even though a Node is not a HyperService contract.
+
+**Owner poke:** “Node.Tag was never replaced with Node.Service?” — correct; it wasn’t.
+Whether it *should* be is now tangled with **`Node.make`** (HttpApi description) below:
+
+| Name | Role if we split cleanly |
+|------|---------------------------|
+| `Node.make` | Description / config holder (HttpApi-like) — **not** Context |
+| `Node.Service` (or keep `Tag`) | Context projection you `yield*` / dial — **is** Context |
+| Today’s `Node.Tag` | Both jobs smashed together |
+
+**Do not Eng a Tag→Service rename in isolation** — lock with `Node.make` + Agent G’s
+HttpApi/`Route.make` pattern (§7.6 sync).
+
+### 7.6 Sync note for Agent G (HttpApi / Router / Page) — Agent 5 first
+
+Agent 5 dock (this file) and Agent G’s catalog work should stay aligned:
+
+1. **Effect pattern:** `class Api extends HttpApi.make("api").add(…) {}` — constructable
+   **description**, not Context.Service. Builders install runtime.
+2. **Agent G Eng’d:** `Route.make` catalog (HttpApi analogue); `Router` is separate
+   `Context.Service`. Planned: `Page.Tag` + `Page.build` (file-router) — class holds config.
+3. **Agent 5 lean:** `Node.make(…)` = same description shape; locality nest
+   (`Node.Host` / `Node.Machine`); keep `Launcher`; cutover = separate `Update`/`Rollout`.
+4. **Tension:** today `Node.Tag` = description **and** Context key. HttpApi/`Route.make`
+   deliberately are **not** Context keys. Moving Node to `make` implies splitting those jobs
+   (and then naming the Context half `Service` vs keeping `Tag`).
+5. **Ask Agent G when syncing:** does Page stay `Page.Tag` (HyperService-ish) or move toward
+   `Page.make` (catalog-only)? That answer should match Node’s make vs Tag/Service split.
+
+**Agent 5 will not Eng Node.make / Tag→Service until owner + G sync on the naming split.**
+
+### 7.7 `Node.make` — HttpApi-shaped declaration (design)
+
+**Today:** `Node.Tag()` is a **Context.Service** under the hood — `yield* Worker` resolves
+transport; address is stamped on the Tag class via `assembleNode`.
 
 ```ts
 // Eng'd today
@@ -553,18 +599,18 @@ class WorkerFull extends Worker.pipe(
 |--|-------------------|----------------------------|
 | Kind | Context key + address blob | Config/description (HttpApi-like) |
 | `class extends` | Yes | Yes (`makeProto` / constructable) |
-| `yield* Worker` | Transport service | Maybe **not** — or only after bind |
+| `yield* Worker` | Transport service | Via separate `Node.Service` / bind — or keep Tag as projection |
 | Address | On the Tag | On the description; main vs additional |
 | Locality | — | `Node.Host` / `Node.Machine` lists these makes |
 | Prototype | `Node.Prototype` + `.make` for clones | Fold into `Node.make` / instance helpers? |
 
 **Open forks inside this shift:**
 
-1. Does `Node.make` **replace** `Node.Tag`, or does Tag become the Context projection of a
-   make-description?
-2. Keep `yield* Node` for transport, or only `Node.connect` / `Hyperlink.client(Tag, desc)`?
-3. Catalog type param `ROut` (served Tags) — on make, on a `.serves(…)` method, or elsewhere?
-4. Migration: `Tag()` as deprecated alias of `make` + service binder, or hard cut.
+1. `Node.make` + **`Node.Service`** (Context half) vs `make` + keep name **`Tag`** for Context?
+2. Does `make` **replace** today’s dual-duty `Tag`, or is Tag a deprecated alias?
+3. Keep `yield* Node` for transport after bind?
+4. Catalog type param `ROut` — on make, `.serves(…)`, or elsewhere?
+5. Align naming with Agent G `Route.make` / planned `Page.*` (§7.6).
 
 **Closest Eng’d cousin today:** `Node.Prototype` + `.make(instanceKey, address)` — instance
 clones, not HttpApi catalog. `Node.make` would be the **primary declaration** for every
