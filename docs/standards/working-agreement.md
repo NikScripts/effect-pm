@@ -79,6 +79,26 @@ While a design is being discussed, discuss it — do not write the implementatio
 certainty is not. "Let's discuss first" means stop. And never build a design that hasn't been approved
 — or one that was already rejected — hoping it lands; it only earns a revert.
 
+{#confirm-handoff-actions .must appliesTo=process}
+## Confirm handoff actions before taking them
+
+A handoff (or a pointer to one) is **not** a go to implement. Before changing code, the agent
+**lists the concrete actions** it is about to take and **waits for owner confirmation**. That
+applies even when the handoff forgot to say so — this rule is always on.
+
+Also, before acting on a handoff (and whenever it has been more than a short session since the last
+read), the agent **reviews `docs/standards/`** (at least Agent Rules / Principles / the chapters that
+touch the work) so handoff prose cannot override locked standards, rejected shapes, or “do not
+resurrect” decisions.
+
+``` text
+❌ open handoff → immediately commit “sensible next improvements”
+✅ open handoff → review standards → propose action list → owner confirms → then Eng
+```
+
+Handoff authors must include both requirements in every handoff (see Documentation standards).
+Omitting them does **not** waive this rule for the reader.
+
 {#decisions-doc-is-ssot .must appliesTo=process}
 ## The decisions doc is the source of truth
 

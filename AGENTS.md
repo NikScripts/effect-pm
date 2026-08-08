@@ -2,6 +2,11 @@
 
 Start with [`docs/handoffs/agent-status.md`](./docs/handoffs/agent-status.md) for the supervisor bus, [`docs/standards/`](./docs/standards/) for invariants, and the live book under [`docs/index.md`](./docs/index.md).
 
+**Handoffs are not a go.** Before changing code from a handoff, (re)read `docs/standards/` if you
+have not recently, list the concrete actions you will take, and **wait for owner confirmation**.
+That rule holds even when the handoff forgot to say so — see
+[`docs/standards/working-agreement.md`](./docs/standards/working-agreement.md) (`confirm-handoff-actions`).
+
 **Repo CLI:** **`pnpm hyp`** (Effect CLI under `dev/cli/`) owns developer gates. Prefer
 `pnpm verify` / `pnpm hyp …` over adding new root scripts. Green gate:
 `deps → typecheck → lint → test → build → markers`. See `.cursor/rules/hyp-verify.mdc`.

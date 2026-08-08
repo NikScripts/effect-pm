@@ -7,6 +7,12 @@
 **Guide:** [`docs/last/rsc-router.md`](../last/rsc-router.md)  
 **Surface:** `docs/last/site` only (`pnpm run docs:last-site` → `:5220`) — **not** Hyperlink `docs/site`, not example apps
 
+### Before you Eng
+
+1. (Re)read `docs/standards/` if you have not recently — especially Agent Rules / Principles / anything touching this surface.
+2. List the concrete actions you will take and **wait for owner confirmation**. This handoff is not a go.
+   (Always-on rule: `confirm-handoff-actions` in `docs/standards/working-agreement.md`.)
+
 ---
 
 ## Owner locks (do not reopen)

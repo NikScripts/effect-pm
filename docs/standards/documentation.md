@@ -269,6 +269,16 @@ did. State what they must build and know — paths, constraints, the real gotcha
 so they never have to reconstruct your session to act. If it only makes sense to someone who was there,
 it isn't a handoff.
 
+Every handoff **must** also include, in the reader-facing body:
+
+1. **Confirm before acting** — the next agent must list the concrete actions it will take and wait
+   for owner confirmation before changing code (a handoff is not itself a go).
+2. **Review standards** — the next agent must (re)read `docs/standards/` if it has not already /
+   recently, and must not let handoff prose override locked standards or rejected shapes.
+
+Agents observe both rules even when a handoff omits them — see Agent Rules
+(`confirm-handoff-actions`).
+
 {#glossary-defines-concepts .should appliesTo=docs}
 ## The glossary defines what the API docs can't
 
