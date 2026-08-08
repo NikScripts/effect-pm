@@ -422,6 +422,29 @@ Cutover API may keep or drop the name `Update` independently of the resident nod
 
 Pick metaphor first (host vs deploy vs fleet), then module/node split.
 
+### 7.2 Shortlist — `Machine` vs `Host` (owner 2026-08-08)
+
+Owner narrowed to these two for the **resident agent** (clarity undecided). Earlier veto of
+`Machine` is soft-reopened for comparison only — **not locked**.
+
+| | `Host` | `Machine` |
+|---|--------|-----------|
+| Means | The computer / OS environment where processes run | Same, slightly more “box we operate” |
+| Clarity | Very plain; “host agent” is industry-normal | Plain; less overloaded in *this* repo than `Host`? |
+| Clash risk | Mild — “host” also means HTTP Host header / hosting provider | Mild — OS/VM/K8s “machine”; not used as a Hyperlink module today |
+| API taste | `Host.spawn`, `Host.Node`, `yield* Host` | `Machine.spawn`, `Machine.Node`, `yield* Machine` |
+| Pair with cutover module | `Rollout`/`Update` + `Host` reads clean (“plan on Rollout, run on Host”) | `Rollout`/`Update` + `Machine` also fine |
+| Vs Lookup | Clear: Lookup = fleet brain, Host = this box | Same split |
+| Vs Node | “Host runs Nodes” is natural English | “Machine runs Nodes” also natural; “node on a machine” is ops-common |
+| Risk | Sounds like *only* networking/bind, not update/supervise | Sounds like *only* hardware/VM, not update/supervise |
+
+**Neither name carries “update”** — cutover API stays a separate module name (`Update` /
+`Rollout` / …). The resident thing is “the box agent,” not the plan type.
+
+**Agent lean (not owner lock):** prefer **`Host`**. Clearest English for “this machine’s
+agent,” pairs cleanly with Lookup/Node, and `Host.spawn` reads better than `Machine.spawn`
+for “start a process here.” Re-accept `Machine` only if you want distance from HTTP “host.”
+
 ---
 
 ## 8. Open forks (discussion — do not resolve alone)
