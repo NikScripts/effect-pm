@@ -259,7 +259,7 @@ URL → Router.match(chapter)
 | **B3** | Align `Last.toLayer` with Router close | deep child provide satisfies layout |
 | **B4** | `Page.static/dynamic/build` + stamp on Result | modes + Build paths |
 | **B5** | `Route` Schema helpers + `Page.params` | typed href/params |
-| **B6** | File codegen / `createPages` adapter | docs-site cutover path |
+| **B6** | File codegen / optional host adapter | docs-site cutover path (does not reopen static/dynamic) |
 | **B7** | `Page.Service` / `Layout.Tag` when identity earned | DI optional |
 
 **Do not** Eng Layout chrome before B1–B2 agree on body-only Page + Provide harvest.
