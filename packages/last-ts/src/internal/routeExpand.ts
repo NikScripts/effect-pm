@@ -19,8 +19,9 @@ export const expandStaticPaths = (
   if (meta === undefined || meta.static !== true) {
     return Effect.succeed([]);
   }
+  const bake = meta.bake ?? meta.effect;
   const compiled = route.compilePath(self.path);
-  return meta.effect.pipe(
+  return bake.pipe(
     Effect.map((rows) =>
       rows.map((row: ParamBag) => compiled.build({ ...row })),
     ),

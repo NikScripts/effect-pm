@@ -200,6 +200,7 @@ export const params: typeof endpoint.params = endpoint.params;
 export {
   fromEffect,
   staticFromEffect,
+  mixedFromEffect,
   type ParamBag,
 } from "./internal/routeFromEffect";
 

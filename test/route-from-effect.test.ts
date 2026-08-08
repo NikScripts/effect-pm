@@ -39,4 +39,22 @@ describe("Route.fromEffect", () => {
     const hrefs = Effect.runSync(Route.expandStaticPaths(route));
     expect(hrefs).toEqual(["/guides/routing", "/guides/view-service"]);
   });
+
+  it("mixedFromEffect bakes only the static set", () => {
+    const route = Route.get("chapter", "/guides/:slug").pipe(
+      Route.mixedFromEffect({
+        static: Effect.succeed([{ slug: "routing" as const }]),
+        dynamic: Effect.succeed([{ slug: "draft" as const }]),
+      }),
+    );
+    const meta = fromEffectOf(route);
+    expect(meta?.static).toBe(true);
+    expect(Effect.runSync(meta!.effect)).toEqual([
+      { slug: "routing" },
+      { slug: "draft" },
+    ]);
+    expect(Effect.runSync(Route.expandStaticPaths(route))).toEqual([
+      "/guides/routing",
+    ]);
+  });
 });
