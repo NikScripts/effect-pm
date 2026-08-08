@@ -7,8 +7,8 @@
 - Stable **main address** + **additional A/B** (often Unix); optional Http→Unix proxy
 - ~~Replace options-bag `restartSuccessor` with `Update.plan` → execute~~ **Eng'd** (restartSuccessor remains; Update preferred)
 - **`Update` module separate from `Versioned`** — Eng'd
-- Plans are **fleet-wide**, ordered; contract from→to audit — Eng'd (`liveTips`, `coUpdate` rollup, empty/dup guards)
-- **Simulate** validates without spawn — Eng'd; full mock = boot prod-like + plan→sim→exec
+- Plans are **fleet-wide**, ordered; contract from→to audit — Eng'd (`liveTips`, target-scoped blockers, `coUpdate` rollup, empty/dup guards)
+- **Simulate** / execute share a plan-value gate — Eng'd; full mock = boot prod-like + plan→sim→exec
 - Deploy path / locality Host|Machine / `Node.make` — still design
 
 **Branch:** Agent 5 · `cursor/lifecycle-defer-start-929b`  
@@ -248,7 +248,7 @@ Node listen.
 **Rejected poles:** raw verb salad · mega `restartSuccessor({…})` options bag.
 
 ```ts
-// SKETCH — names TBD
+// Eng'd — hyperlink-ts/Update
 const plan = yield* Update.plan({
   // fleet-wide — not a single A→B forgery
   steps: [/* ordered node updates */],
@@ -256,8 +256,8 @@ const plan = yield* Update.plan({
 })
 
 // inspect / gate / audit
-yield* Update.simulate(plan) // mock production-like run — §5.4
-yield* Update.execute(plan)  // real cutover
+yield* Update.simulate(plan) // plan-value gate — §5.4
+yield* Update.execute(plan)  // real cutover (re-runs gate)
 ```
 
 Properties:

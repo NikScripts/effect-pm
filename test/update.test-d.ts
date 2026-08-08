@@ -7,6 +7,7 @@ import type * as Dialers from "../src/Dialers";
 import type * as Directory from "../src/Directory";
 import type {
   AuditEntry,
+  AuditReason,
   Input,
   Plan,
   Report,
@@ -31,6 +32,8 @@ function typeLock(
   input: Input,
   audit: AuditEntry,
   report: Report,
+  reason: AuditReason,
+  mismatch: Update.UpdateContractMismatch,
 ): void {
   type PlanEff = ReturnType<typeof planFn>;
   type SimEff = ReturnType<typeof simulateFn>;
@@ -62,7 +65,10 @@ function typeLock(
   > = true;
 
   const _execBlocked: AssertExtends<Update.PlanBlocked, ErrOf<ExecEff>> = true;
-  // execute error channel covers every restartSuccessor failure.
+  const _execContract: AssertExtends<
+    Update.UpdateContractMismatch,
+    ErrOf<ExecEff>
+  > = true;
   const _execCoversRestart: AssertExtends<
     ErrOf<RestartEff>,
     ErrOf<ExecEff>
@@ -76,8 +82,11 @@ function typeLock(
   const _target: string = step.target;
   const _steps: ReadonlyArray<Step> = input.steps;
   const _auditOk: boolean = audit.ok;
-  const _reportOk: boolean = report.ok;
+  const _reportAudit: ReadonlyArray<AuditEntry> = report.audit;
   const _isPlan: boolean = isPlanFn(planValue);
+  const _reason: AuditReason = reason;
+  const _mismatchAudit: ReadonlyArray<AuditEntry> = mismatch.audit;
+  const _mismatchReason: AuditReason = mismatch.reason;
   const _liveTips: ReadonlyArray<{
     readonly node: string;
     readonly serviceKey: string;
@@ -98,6 +107,7 @@ function typeLock(
   void _simBlocked;
   void _simContract;
   void _execBlocked;
+  void _execContract;
   void _execCoversRestart;
   void _tag;
   void _order;
@@ -107,8 +117,11 @@ function typeLock(
   void _target;
   void _steps;
   void _auditOk;
-  void _reportOk;
+  void _reportAudit;
   void _isPlan;
+  void _reason;
+  void _mismatchAudit;
+  void _mismatchReason;
   void _liveTips;
 }
 

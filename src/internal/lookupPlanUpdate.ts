@@ -74,7 +74,10 @@ export interface UpdateImpact {
     readonly serviceKey: string;
     readonly target: string;
   }>;
-  /** Peer status tip with no Versioned path to the successor tip. */
+  /**
+   * Target status tip with no Versioned path to the successor tip.
+   * Co-update peers are not hard-blockers (fleet rolls schedule them as later steps).
+   */
   readonly migrationGaps: ReadonlyArray<{
     readonly serviceKey: string;
     readonly leaf: string;
@@ -89,7 +92,10 @@ export interface UpdateImpact {
     readonly serviceKey: string;
     readonly method: string;
   }>;
-  /** Live status `contractHash` ≠ successor {@link Hyperlink.contractHash}. */
+  /**
+   * Target live status `contractHash` ≠ successor {@link Hyperlink.contractHash}.
+   * Peer drifts are omitted so ordered fleet plans are not fail-closed on later steps.
+   */
   readonly contractDrifts: ReadonlyArray<{
     readonly node: string;
     readonly serviceKey: string;
@@ -97,8 +103,9 @@ export interface UpdateImpact {
     readonly actual: string | undefined;
   }>;
   /**
-   * Live `schemaVersion` rows from status dial (empty when status is off or
-   * peers do not answer). Used by {@link Update.plan} contract `from` audit.
+   * Live `schemaVersion` rows from status dial (target + coUpdate peers; empty when
+   * status is off or peers do not answer). Update contract `from` audits the
+   * **target** row only.
    */
   readonly liveTips: ReadonlyArray<{
     readonly node: string;
@@ -107,7 +114,10 @@ export interface UpdateImpact {
   }>;
   /** Target advertises Lookup Identity/Directory/Advice — sequence Lookup A/B first. */
   readonly lookupFirst: boolean;
-  /** True when hard signals are present (gaps, removals, or contract drifts). */
+  /**
+   * True when hard signals are present on the **target** (gaps, removals, or
+   * contract drifts). Peer status never sets this.
+   */
   readonly blocked: boolean;
 }
 
@@ -180,7 +190,11 @@ export class UpdateTargetUnknown extends Data.TaggedError(
   "UpdateTargetUnknown",
 )<{
   readonly target: string;
-}> {}
+}> {
+  override get message() {
+    return `Lookup.planUpdate: target "${this.target}" is not advertised in Directory.`;
+  }
+}
 
 /**
  * Impact has hard blockers and {@link PlanUpdateOptions.force} was not set.
@@ -190,7 +204,11 @@ export class UpdateTargetUnknown extends Data.TaggedError(
  */
 export class UpdateBlocked extends Data.TaggedError("UpdateBlocked")<{
   readonly impact: UpdateImpact;
-}> {}
+}> {
+  override get message() {
+    return `Lookup.planUpdate blocked for target "${this.impact.target}".`;
+  }
+}
 
 // =============================================================================
 // Helpers
@@ -398,6 +416,7 @@ export const planUpdate = (
         const snapOpt = yield* dialStatus(peer);
         if (Option.isNone(snapOpt)) continue;
         const snap = snapOpt.value;
+        const isTarget = snap.node === target;
         for (const row of snap.services) {
           const next = byKey.get(row.key);
           if (next === undefined) continue;
@@ -406,6 +425,9 @@ export const planUpdate = (
             serviceKey: row.key,
             schemaVersion: row.schemaVersion,
           });
+          // Hard blockers are target-scoped — coUpdate peers stay advisory so
+          // ordered fleet plans (A then B) are not fail-closed on B's old tip.
+          if (!isTarget) continue;
           const expected = contractHashOf(next);
           if (row.contractHash !== expected) {
             contractDrifts.push({
@@ -426,7 +448,7 @@ export const planUpdate = (
       }
     }
 
-    const wireRemovals = [...wireRemovalsFor(options?.incumbent, byKey)];
+    const wireRemovals = wireRemovalsFor(options?.incumbent, byKey);
     const lookupFirst = served.some((key) => LOOKUP_SERVICE_KEYS.has(key));
     const blocked =
       migrationGaps.length > 0 ||

@@ -52,8 +52,8 @@ array order**, attaches `impact`, audits contracts, and returns an
 | `EmptyUpdatePlan` | `steps` is `[]` |
 | `EmptyUpdateStepTags` | A step has `tags: []` |
 | `DuplicateUpdateTarget` | Two steps share the same `target` |
-| `UpdateBlocked` | Hard impact blockers (same as planUpdate fail-closed) |
-| `UpdateContractMismatch` | Bad `contracts.to` / `from` / Versioned path |
+| `UpdateBlocked` | Hard impact blockers on the **target** (same as planUpdate fail-closed) |
+| `UpdateContractMismatch` | Bad `contracts.to` / `from` / Versioned path (carries full `audit`) |
 | `UpdateTargetUnknown` | Step `target` missing from Directory |
 
 Ambient `force: true` (plan-level or per-step) collects blocked impacts onto the
@@ -64,6 +64,13 @@ broken cutover through execute.
 Per-step `skipPlan: true` skips impact dry-run (ops escape; impact is
 `undefined`). Prefer the fail-closed path in app code.
 
+### Status dial vs fleet order
+
+Hard blockers (`migrationGaps`, `contractDrifts`, `blocked`) are **target-scoped**.
+Co-update peers keep old tips until their own step runs — they appear on
+`coUpdate` / `liveTips` but do **not** fail-close an earlier step. Dry-run
+examples often use `Lookup.planStatusOff` when no live nodes answer status.
+
 ### Inspect
 
 | Field | Meaning |
@@ -72,13 +79,13 @@ Per-step `skipPlan: true` skips impact dry-run (ops escape; impact is
 | `plan.audit` | Contract from→to rows |
 | `plan.coUpdate` | Union of peer nodeKeys sharing served keys |
 | `plan.uncoveredCoUpdate` | Peers in `coUpdate` that are not step targets (advisory) |
-| `plan.blocked` | Any step impact blocked |
+| `plan.blocked` | Any **target** step impact blocked |
 
 ## Simulate
 
-`Update.simulate(plan)` re-validates audit / blocked **without spawning**. Use it
-in CI or before a live cutover. Fails with `UpdatePlanBlocked` when the plan is
-blocked; `UpdateContractMismatch` if contract audit fails on re-check.
+`Update.simulate(plan)` re-validates audit / blocked **without spawning** — a pure
+plan-value gate (does not re-dial Directory/status). Fails with
+`UpdatePlanBlocked` or `UpdateContractMismatch`.
 
 For a **full production-like mock**: boot Lookup + incumbent nodes the same way
 you would in prod (real Http Node / WorkPool / Directory), then
@@ -87,13 +94,10 @@ you would in prod (real Http Node / WorkPool / Directory), then
 
 ## Execute
 
-`Update.execute(plan)` runs each step via `Launcher.restartSuccessor` with
-`skipPlan: true` (planning already done). Fails with `UpdatePlanBlocked` if
-`plan.blocked`. Returns the per-step impacts (from restartSuccessor, falling
-back to the planned impact).
-
-Default per step still stamps `Advice.prefer(B)` before shutdown (override with
-`prefer: false` on the step).
+`Update.execute(plan)` re-runs the simulate gate, then each step via
+`Launcher.restartSuccessor` with `skipPlan: true`. Returns each step's
+**planned** impact (execute does not re-run planUpdate). Only step `prefer`
+is forwarded to custody.
 
 ## Contracts
 
@@ -102,14 +106,16 @@ Optional `contracts: [{ tag, from?, to? }]`:
 | Field | Meaning |
 |-------|---------|
 | `to` | Successor tip must equal `schemaVersion` / Versioned tip of `tag` |
-| `from` | Live tip from status (`impact.liveTips`) or migration gaps; else Versioned path must allow `from→to` |
+| `from` | Live tip on the **target** (`impact.liveTips` / migration gaps); else with `to`, Versioned path must allow `from→to`; `from` alone with no observation fails closed |
 
 `from` is strongest when status dial is on (`Lookup.planStatusOn` / step
-`status: true`). With `planStatusOff`, Update falls back to Versioned path
-checks when both `from` and `to` are set.
+`status: true`). With `planStatusOff`, use `from`+`to` so the Versioned path
+check can run.
+
+Audit failure reasons are PascalCase: `From` | `To` | `Path`.
 
 Not required for same-tip binary bumps. Matching contracts land on
-`plan.audit` with `ok: true` — useful for CI assertions without spawning.
+`plan.audit` with `ok: true`.
 
 ## Migration from `restartSuccessor`
 

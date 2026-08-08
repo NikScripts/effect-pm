@@ -39,16 +39,11 @@ export type {
   Input,
   PlannedStep,
   AuditEntry,
+  AuditReason,
   Plan,
   Report,
 } from "./internal/update";
 
-/** @public Impact dry-run types — same as {@link Lookup.planUpdate}. */
-export type {
-  PlanUpdateTag,
-  UpdateImpact,
-} from "./internal/lookupPlanUpdate";
-export {
-  UpdateBlocked,
-  UpdateTargetUnknown,
-} from "./internal/lookupPlanUpdate";
+/** Impact dry-run types / errors — SSOT on {@link Lookup}. */
+export type { PlanUpdateTag, UpdateImpact } from "./Lookup";
+export { UpdateBlocked, UpdateTargetUnknown } from "./Lookup";

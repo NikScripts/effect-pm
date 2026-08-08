@@ -3,8 +3,11 @@
  */
 import { describe, expect, it } from "@effect/vitest";
 import {
+  Cause,
   Clock,
   Effect,
+  Exit,
+  Option,
   Schema,
   SchemaTransformation,
 } from "effect";
@@ -133,13 +136,7 @@ describe("Update.plan / simulate", () => {
           const successor = dummySuccessor("empty-tags");
           const exit = yield* Effect.exit(
             Update.plan({
-              steps: [
-                {
-                  target: "mail-a",
-                  successor,
-                  tags: [],
-                },
-              ],
+              steps: [{ target: "mail-a", successor, tags: [] }],
             }),
           );
           expectTaggedFailure(exit, "EmptyUpdateStepTags");
@@ -171,6 +168,30 @@ describe("Update.plan / simulate", () => {
     }),
   );
 
+  it.effect("fails UpdateTargetUnknown when target is not advertised", () =>
+    Effect.gen(function* () {
+      const path = yield* tmpSock("unknown");
+      const node = Node.Service()("update/unknown", { path }).pipe(
+        Node.asLookup,
+      );
+      yield* withLookup(
+        Lookup.layerNode(node),
+        Lookup.client(node),
+        Effect.gen(function* () {
+          const successor = dummySuccessor("unknown");
+          const exit = yield* Effect.exit(
+            Update.plan({
+              steps: [
+                { target: "missing-worker", successor, tags: [Mail] },
+              ],
+            }),
+          );
+          expectTaggedFailure(exit, "UpdateTargetUnknown");
+        }),
+      );
+    }),
+  );
+
   it.effect("orders steps, attaches impacts, rolls up coUpdate", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("order");
@@ -185,7 +206,6 @@ describe("Update.plan / simulate", () => {
           yield* advertiseIpc("jobs-a", "/tmp/jobs-a.sock", [
             "update-plan/Jobs",
           ]);
-          // Peer sharing Jobs — surfaces on coUpdate / uncoveredCoUpdate.
           yield* advertiseIpc("jobs-b", "/tmp/jobs-b.sock", [
             "update-plan/Jobs",
           ]);
@@ -193,16 +213,8 @@ describe("Update.plan / simulate", () => {
           const successor = dummySuccessor("order");
           const plan = yield* Update.plan({
             steps: [
-              {
-                target: "mail-a",
-                successor,
-                tags: [Mail],
-              },
-              {
-                target: "jobs-a",
-                successor,
-                tags: [Jobs],
-              },
+              { target: "mail-a", successor, tags: [Mail] },
+              { target: "jobs-a", successor, tags: [Jobs] },
             ],
           });
 
@@ -217,9 +229,9 @@ describe("Update.plan / simulate", () => {
           expect(plan.uncoveredCoUpdate).toEqual(["jobs-b"]);
 
           const sim = yield* Update.simulate(plan);
-          expect(sim.ok).toBe(true);
+          expect(sim.plan._tag).toBe("UpdatePlan");
+          expect(sim.audit).toEqual(plan.audit);
 
-          // Covering the peer clears uncoveredCoUpdate.
           const covered = yield* Update.plan({
             steps: [
               { target: "jobs-a", successor, tags: [Jobs] },
@@ -247,8 +259,7 @@ describe("Update.plan / simulate", () => {
             "update-plan/VersionedJobs",
           ]);
           const successor = dummySuccessor("contract");
-          const tip = Versioned.schemaVersion(JobChain);
-          expect(tip).toBe("update/job@2");
+          expect(Versioned.schemaVersion(JobChain)).toBe("update/job@2");
 
           const exit = yield* Effect.exit(
             Update.plan({
@@ -259,15 +270,19 @@ describe("Update.plan / simulate", () => {
                   tags: [VersionedJobs],
                 },
               ],
-              contracts: [
-                {
-                  tag: VersionedJobs,
-                  to: "update/job@1",
-                },
-              ],
+              contracts: [{ tag: VersionedJobs, to: "update/job@1" }],
             }),
           );
           expectTaggedFailure(exit, "UpdateContractMismatch");
+          if (Exit.isFailure(exit)) {
+            const err = Option.getOrThrow(Cause.findErrorOption(exit.cause));
+            expect(err).toBeInstanceOf(Update.UpdateContractMismatch);
+            if (err instanceof Update.UpdateContractMismatch) {
+              expect(err.reason).toBe("To");
+              expect(err.audit.length).toBeGreaterThan(0);
+              expect(err.audit.some((row) => !row.ok)).toBe(true);
+            }
+          }
         }),
       );
     }),
@@ -303,8 +318,7 @@ describe("Update.plan / simulate", () => {
           expect(plan.audit).toHaveLength(1);
           expect(plan.audit[0]?.ok).toBe(true);
           expect(plan.audit[0]?.observed.to).toBe(tip);
-          const sim = yield* Update.simulate(plan);
-          expect(sim.ok).toBe(true);
+          yield* Update.simulate(plan);
         }),
       );
     }),
@@ -345,6 +359,54 @@ describe("Update.plan / simulate", () => {
             }),
           );
           expectTaggedFailure(exit, "UpdateContractMismatch");
+          if (Exit.isFailure(exit)) {
+            const err = Option.getOrThrow(Cause.findErrorOption(exit.cause));
+            expect(err).toBeInstanceOf(Update.UpdateContractMismatch);
+            if (err instanceof Update.UpdateContractMismatch) {
+              expect(err.reason).toBe("Path");
+            }
+          }
+        }),
+      );
+    }),
+  );
+
+  it.effect("contract.from alone fails closed when nothing observed", () =>
+    Effect.gen(function* () {
+      const path = yield* tmpSock("contract-from-only");
+      const node = Node.Service()("update/contract-from-only", { path }).pipe(
+        Node.asLookup,
+      );
+      yield* withLookup(
+        Lookup.layerNode(node),
+        Lookup.client(node),
+        Effect.gen(function* () {
+          yield* advertiseIpc("vj-from", "/tmp/vj-from.sock", [
+            "update-plan/VersionedJobs",
+          ]);
+          const successor = dummySuccessor("contract-from-only");
+
+          const exit = yield* Effect.exit(
+            Update.plan({
+              steps: [
+                {
+                  target: "vj-from",
+                  successor,
+                  tags: [VersionedJobs],
+                },
+              ],
+              // status off → no liveTips; from alone must fail closed
+              contracts: [{ tag: VersionedJobs, from: "update/job@1" }],
+            }),
+          );
+          expectTaggedFailure(exit, "UpdateContractMismatch");
+          if (Exit.isFailure(exit)) {
+            const err = Option.getOrThrow(Cause.findErrorOption(exit.cause));
+            expect(err).toBeInstanceOf(Update.UpdateContractMismatch);
+            if (err instanceof Update.UpdateContractMismatch) {
+              expect(err.reason).toBe("From");
+            }
+          }
         }),
       );
     }),
@@ -452,11 +514,9 @@ describe("Update.plan / simulate", () => {
             Update.isPlan({
               _tag: "UpdatePlan",
               steps: [],
-              // missing audit / coUpdate — not a Plan
             }),
           ).toBe(false);
-          const sim = yield* Update.simulate(plan);
-          expect(sim.ok).toBe(true);
+          yield* Update.simulate(plan);
         }),
       );
     }),
@@ -503,6 +563,40 @@ describe("Update.plan / simulate", () => {
       );
     }).pipe(Effect.provide(platform)),
   );
+
+  it.effect("execute refuses a forged plan with blocked impact", () =>
+    Effect.gen(function* () {
+      const path = yield* tmpSock("forged");
+      const node = Node.Service()("update/forged", { path }).pipe(Node.asLookup);
+      yield* withLookup(
+        Lookup.layerNode(node),
+        Lookup.client(node),
+        Effect.gen(function* () {
+          yield* advertiseIpc("jobs-forge", "/tmp/jobs-forge.sock", [
+            "update-plan/Jobs",
+          ]);
+          const successor = dummySuccessor("forged");
+          const real = yield* Update.plan({
+            force: true,
+            steps: [
+              {
+                target: "jobs-forge",
+                successor,
+                tags: [jobsNext],
+                incumbent: [Jobs],
+              },
+            ],
+          });
+          // Lie about blocked — execute must re-validate from impacts.
+          const forged: Update.Plan = { ...real, blocked: false };
+          const exit = yield* Effect.exit(
+            Update.execute(forged).pipe(Effect.provide(Launcher.layer)),
+          );
+          expectTaggedFailure(exit, "UpdatePlanBlocked");
+        }),
+      );
+    }).pipe(Effect.provide(platform)),
+  );
 });
 
 describe("Update.execute live A→B", () => {
@@ -514,7 +608,6 @@ describe("Update.execute live A→B", () => {
         const { root, entry } = restartChildEntryPaths();
         const lookupPath = yield* tmpSock("exec");
         const now = yield* Clock.currentTimeMillis;
-        // pid salt avoids EADDRINUSE when this suite runs beside other live launchers.
         const portA = ephemeralPort(
           `${process.pid.toString(16)}${now.toString(16)}`,
           241,
@@ -572,7 +665,9 @@ describe("Update.execute live A→B", () => {
             expect(plan.blocked).toBe(false);
             expect(plan.uncoveredCoUpdate).toEqual([]);
             yield* Update.simulate(plan);
-            yield* Update.execute(plan);
+            const impacts = yield* Update.execute(plan);
+            expect(impacts).toHaveLength(1);
+            expect(impacts[0]?.target).toBe("restart/worker");
 
             yield* waitUntil(
               Directory.nodesServing(RestartJobs),
