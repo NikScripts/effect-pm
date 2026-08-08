@@ -7,13 +7,15 @@
 
 ```ts
 // Page classes (HttpApi-shaped) — options optional **first** arg
-export default class Chapter extends Page.make({
+class Chapter extends Page.make({
   params: { slug: Schema.Literals(["routing", "view-service"]) },
 }) {
-  static Component = (props: Page.Props<Chapter>) => …
+  static Component = (props: Page.Props<typeof Chapter>) => …
 }
+export default Page.asDefault(Chapter)
 
-export default class Home extends Page.static() { … } // SSG opt-in
+class Home extends Page.static() { … } // SSG opt-in
+export default Page.asDefault(Home)
 // Page.make = dynamic (default). No Page.Service. No Page.dynamic name.
 
 // Route.get = dynamic by default
@@ -32,9 +34,14 @@ Route.get("chapter", "/guides/:slug").pipe(
 
 ## Not yet
 
-- File-router loader reading `Page.make` class → catalog merge / Waku config inject (no app `getConfig`)
+- File-router loader reading `Page.make` class → catalog merge
+- `pageConfig` Vite inject → expand `Page.static` + Literals into Waku `staticPaths`
 - Mixed static+dynamic **two** literal sets on one `Route.get` (annotation helper polish)
 - `group.fromEffect` emitting full param unions
+
+## Eng’d inject
+
+- `last-ts/vite` `pageConfig()` — stamps Waku `getConfig` from `Page.make`/`Page.static` (apps never write it). Waku fs-router defaults pages to static; slug routes need the dynamic override.
 
 ## Surface
 

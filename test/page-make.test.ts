@@ -38,7 +38,7 @@ describe("Page.make", () => {
     class Chapter extends Page.make({
       params: { slug: Schema.Literals(["routing", "view-service"]) },
     }) {
-      static Component = (props: Page.Props<Chapter>) => {
+      static Component = (props: Page.Props<typeof Chapter>) => {
         expect(props.params.slug).toBe("routing");
         expect(props.pathname).toBe("/guides/routing");
         return null;

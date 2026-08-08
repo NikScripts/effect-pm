@@ -9,7 +9,7 @@
  * class Chapter extends Page.make({
  *   params: { slug: Schema.Literals(["routing", "view-service"]) },
  * }) {
- *   static Component = (props: Page.Props<Chapter>) => (
+ *   static Component = (props: Page.Props<typeof Chapter>) => (
  *     <h1>{props.params.slug}</h1>
  *   )
  * }
@@ -307,7 +307,15 @@ export const asDefault = <P extends AnyPage>(
 ): Component<Props<P>> & P => {
   const Comp = (raw: Props<P> | Record<string, unknown>) =>
     page.Component(propsFromHost(page, raw as Record<string, unknown>));
-  return Object.assign(Comp, page) as Component<Props<P>> & P;
+  // Subclass own props omit brand fields inherited from `Page.make()` —
+  // stamp them explicitly so {@link isPage} / {@link extract} keep working.
+  Object.setPrototypeOf(Comp, Object.getPrototypeOf(page));
+  return Object.assign(Comp, {
+    [TypeId]: page[TypeId],
+    options: page.options,
+    mode: page.mode,
+    Component: page.Component,
+  }) as Component<Props<P>> & P;
 };
 
 // =============================================================================

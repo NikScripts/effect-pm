@@ -21,15 +21,13 @@ import * as Router from "last-ts/Router"
 import { Effect } from "effect"
 
 export class Site extends Router.make("last-ts").add(
-  Router.group("app", { topLevel: true }).add(
-    Route.get("home", "/"),
-    Route.get("chapter", "/guides/:slug").pipe(
-      Route.staticFromEffect(
-        Effect.succeed([
-          { slug: "routing" as const },
-          { slug: "view-service" as const },
-        ]),
-      ),
+  Route.get("home", "/"),
+  Route.get("chapter", "/guides/:slug").pipe(
+    Route.staticFromEffect(
+      Effect.succeed([
+        { slug: "routing" as const },
+        { slug: "view-service" as const },
+      ]),
     ),
   ),
 ) {}
@@ -49,7 +47,7 @@ import { Schema } from "effect"
 class Chapter extends Page.make({
   params: { slug: Schema.Literals(["routing", "view-service"]) },
 }) {
-  static Component = (props: Page.Props<Chapter>) => (
+  static Component = (props: Page.Props<typeof Chapter>) => (
     <article>
       <h1>{props.params.slug}</h1>
     </article>

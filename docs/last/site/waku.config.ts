@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "waku/config";
+import { pageConfig } from "last-ts/vite";
 
 const lastTsSrc = fileURLToPath(
   new URL("../../../packages/last-ts/src", import.meta.url),
@@ -8,6 +9,7 @@ const lastTsSrc = fileURLToPath(
 /** last.ts docs server — not Hyperlink docs/site. */
 export default defineConfig({
   vite: {
+    plugins: [pageConfig()],
     resolve: {
       dedupe: ["react", "react-dom", "react/jsx-runtime", "effect", "waku"],
       alias: {
@@ -23,6 +25,7 @@ export default defineConfig({
         "last-ts/Last": `${lastTsSrc}/Last.ts`,
         "last-ts/Memory": `${lastTsSrc}/Memory.ts`,
         "last-ts/AtomReact": `${lastTsSrc}/AtomReact.tsx`,
+        "last-ts/vite": `${lastTsSrc}/vite/fileRouter.ts`,
         "waku/router/client": fileURLToPath(
           new URL("./node_modules/waku/dist/router/client.js", import.meta.url),
         ),

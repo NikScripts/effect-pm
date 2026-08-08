@@ -137,3 +137,5 @@ export {
   type FileEntry,
   type FileRouterServices,
 } from "../internal/fileRouterPaths";
+
+export { pageConfig } from "./pageConfig";

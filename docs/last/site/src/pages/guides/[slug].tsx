@@ -1,10 +1,12 @@
 import { Schema } from "effect";
 import * as Page from "last-ts/Page";
 
-class Chapter extends Page.make({
+const chapterOptions = {
   params: { slug: Schema.Literals(["routing", "view-service"]) },
-}) {
-  static Component = (props: Page.Props<Chapter>) => (
+} as const;
+
+class Chapter extends Page.make(chapterOptions) {
+  static Component = (props: Page.PropsFromOptions<typeof chapterOptions>) => (
     <article data-page="chapter">
       <h1>Guide · {props.params.slug}</h1>
       <p>
