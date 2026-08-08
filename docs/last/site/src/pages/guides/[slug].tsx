@@ -1,9 +1,5 @@
-import { Schema } from "effect";
 import * as Page from "last-ts/Page";
-
-const chapterOptions = {
-  params: { slug: Schema.Literals(["routing", "view-service"]) },
-} as const;
+import { chapterOptions } from "../../lib/chapter";
 
 class Chapter extends Page.make(chapterOptions) {
   static Component = (props: Page.PropsFromOptions<typeof chapterOptions>) => (
@@ -13,7 +9,7 @@ class Chapter extends Page.make(chapterOptions) {
         Param page under <code>pages/guides/[slug]</code>. Params come from{" "}
         <code>Page.make</code>’s options bag (same as <code>Route.get</code>).
         Soft-nav via <code>urls.chapter(…)</code> from the catalog’s{" "}
-        <code>Route.staticFromEffect</code> bags.
+        <code>Route.fromPage</code> twin.
       </p>
     </article>
   );

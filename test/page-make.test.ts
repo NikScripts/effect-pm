@@ -64,6 +64,10 @@ describe("Page.make", () => {
     class Chapter extends Page.static({
       params: { slug: Schema.Literals(["routing", "view-service"]) },
     }) {}
+    expect(Page.paramBagsOf(Chapter)).toEqual([
+      { slug: "routing" },
+      { slug: "view-service" },
+    ]);
     expect(Page.configOf(Chapter)).toEqual({
       render: "static",
       staticPaths: ["routing", "view-service"],

@@ -261,25 +261,26 @@ const literalsOf = (schema: unknown): ReadonlyArray<string> | undefined => {
 };
 
 /**
- * Expand closed `Schema.Literals` param fields into Waku `staticPaths`.
- * One param → `string[]`; several → cartesian `string[][]`.
+ * Expand closed `Schema.Literals` param fields into concrete param bags
+ * (union-of-bags shape for {@link ./Route.staticFromEffect}).
  *
- * @internal
+ * @public
  */
-const staticPathsFromParams = (
-  params: unknown,
-): ReadonlyArray<string | ReadonlyArray<string>> | undefined => {
+export const paramBagsOf = (
+  page: AnyPage,
+): ReadonlyArray<{ readonly [key: string]: string }> | undefined => {
+  const params = page.options.params;
   if (params === null || typeof params !== "object") return undefined;
   const entries = Object.entries(params as Record<string, unknown>);
   if (entries.length === 0) return undefined;
+  const keys: Array<string> = [];
   const axes: Array<ReadonlyArray<string>> = [];
-  for (const [, schema] of entries) {
+  for (const [key, schema] of entries) {
     const lit = literalsOf(schema);
     if (lit === undefined || lit.length === 0) return undefined;
+    keys.push(key);
     axes.push(lit);
   }
-  if (axes.length === 1) return axes[0];
-  // cartesian product of literal axes (stable key order = Object.entries)
   let rows: Array<Array<string>> = [[]];
   for (const axis of axes) {
     const next: Array<Array<string>> = [];
@@ -288,7 +289,25 @@ const staticPathsFromParams = (
     }
     rows = next;
   }
-  return rows;
+  return rows.map((values) => {
+    const bag: { [key: string]: string } = {};
+    for (let i = 0; i < keys.length; i++) {
+      bag[keys[i]!] = values[i]!;
+    }
+    return bag;
+  });
+};
+
+/** Waku `staticPaths` from {@link paramBagsOf} (1 key → strings; n → tuples). */
+const staticPathsFromBags = (
+  bags: ReadonlyArray<{ readonly [key: string]: string }>,
+): ReadonlyArray<string | ReadonlyArray<string>> => {
+  const keys = Object.keys(bags[0] ?? {});
+  if (keys.length === 1) {
+    const key = keys[0]!;
+    return bags.map((bag) => bag[key]!);
+  }
+  return bags.map((bag) => keys.map((key) => bag[key]!));
 };
 
 /**
@@ -299,10 +318,10 @@ const staticPathsFromParams = (
  */
 export const configOf = (page: AnyPage): WakuConfig => {
   if (page.mode === "dynamic") return { render: "dynamic" };
-  const staticPaths = staticPathsFromParams(page.options.params);
-  return staticPaths === undefined
+  const bags = paramBagsOf(page);
+  return bags === undefined
     ? { render: "static" }
-    : { render: "static", staticPaths };
+    : { render: "static", staticPaths: staticPathsFromBags(bags) };
 };
 
 const hostReserved = new Set([

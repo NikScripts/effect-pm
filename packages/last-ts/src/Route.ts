@@ -214,6 +214,14 @@ export { fromEffectOf, FromEffect } from "./internal/routeFromEffect";
 export { expandStaticPaths } from "./internal/routeExpand";
 
 /**
+ * Catalog destination from a {@link ./Page} class — options + static Literals
+ * bags (file-router / catalog merge).
+ *
+ * @public
+ */
+export { fromPage } from "./internal/routeFromPage";
+
+/**
  * Prefix a destination path.
  *
  * @public

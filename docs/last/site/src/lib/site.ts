@@ -3,25 +3,26 @@
  *
  * Bare endpoints land on the synthetic `__top` group (type + runtime), so
  * `RouterBuilder.group(Site, "__top", …)` matches and `urls.*` stay flat.
+ *
+ * Chapter params/mode come from the same options bag as the file page
+ * (`chapterOptions`) via {@link Route.fromPage} — no RSC import into Provider.
  */
-import { Effect, Layer } from "effect";
+import { Layer } from "effect";
 import type { Layout } from "last-ts/Layout";
+import * as Page from "last-ts/Page";
 import * as Route from "last-ts/Route";
 import * as Router from "last-ts/Router";
 import * as RouterBuilder from "last-ts/RouterBuilder";
+import { chapterOptions } from "./chapter";
+
+/** Catalog twin of `pages/guides/[slug]` — options SSOT in `chapter.ts`. */
+class ChapterRoute extends Page.static(chapterOptions) {}
 
 export class Site extends Router.make("last-ts").add(
   Route.get("home", "/"),
   Route.get("view", "/view"),
   Route.get("about", "/about"),
-  Route.get("chapter", "/guides/:slug").pipe(
-    Route.staticFromEffect(
-      Effect.succeed([
-        { slug: "routing" as const },
-        { slug: "view-service" as const },
-      ]),
-    ),
-  ),
+  Route.fromPage("chapter", "/guides/:slug", ChapterRoute),
 ) {}
 
 export const urls = Route.urlBuilder(Site);

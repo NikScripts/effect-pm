@@ -34,14 +34,16 @@ Route.get("chapter", "/guides/:slug").pipe(
 
 ## Not yet
 
-- File-router loader reading `Page.make` class → catalog merge
+- Auto `import.meta.glob` loader joining `paths.gen` ↔ page defaults (still hand `Route.fromPage` / shared options)
 - Mixed static+dynamic **two** literal sets on one `Route.get` (annotation helper polish)
 - `group.fromEffect` emitting full param unions
 
-## Eng’d inject
+## Eng’d inject / merge
 
 - `Page.configOf(page)` — `{ render }` + `staticPaths` from `Schema.Literals` params
+- `Page.paramBagsOf(page)` — union-of-bags for `Route.staticFromEffect`
 - `last-ts/vite` `pageConfig()` — stamps `export const getConfig = () => Page.configOf(X)` (apps never write it)
+- `Route.fromPage(id, path, page)` — options + static Literals → catalog route
 
 ## Surface
 
