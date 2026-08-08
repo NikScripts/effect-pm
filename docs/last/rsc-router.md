@@ -20,23 +20,21 @@ import * as Route from "last-ts/Route"
 import * as Router from "last-ts/Router"
 import { Effect } from "effect"
 
+class ChapterRoute extends Page.static({
+  params: { slug: Schema.Literals(["routing", "view-service"]) },
+}) {}
+
 export class Site extends Router.make("last-ts").add(
   Route.get("home", "/"),
-  Route.get("chapter", "/guides/:slug").pipe(
-    Route.staticFromEffect(
-      Effect.succeed([
-        { slug: "routing" as const },
-        { slug: "view-service" as const },
-      ]),
-    ),
-  ),
+  Route.fromPage("chapter", "/guides/:slug", ChapterRoute),
 ) {}
 
 export const urls = Route.urlBuilder(Site)
 ```
 
-`Route.get` is **dynamic** by default. `Route.staticFromEffect` opts into SSG
-from **literal param bags** (no hand `paths` list). Same bags type the links.
+`Route.get` is **dynamic** by default. `Route.fromPage` copies the page’s
+options bag; `Page.static` + Literals attaches `staticFromEffect` bags (no hand
+`paths` list). Same bags type the links.
 
 ## Page classes
 
