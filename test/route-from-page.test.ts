@@ -62,4 +62,29 @@ describe("Route.fromPage", () => {
       Effect.runSync(Route.expandStaticPaths(routes[1]!)),
     ).toEqual(["/guides/routing", "/guides/view-service"]);
   });
+
+  it("pagesByIdFromModules reads Page.asDefault from a glob map", () => {
+    class Chapter extends Page.static({
+      params: { slug: Schema.Literals(["routing", "view-service"]) },
+    }) {
+      static Component = () => null;
+    }
+    const Default = Page.asDefault(Chapter);
+    const pages = Router.pagesByIdFromModules({
+      "/app/src/pages/guides/[slug].tsx": { default: Default },
+      "/app/src/pages/_layout.tsx": { default: () => null },
+      "/app/src/pages/index.tsx": {
+        default: Page.asDefault(
+          class Home extends Page.static() {
+            static Component = () => null;
+          },
+        ),
+      },
+    });
+    expect(Object.keys(pages).sort()).toEqual(["guides_slug", "index"]);
+    expect(Page.modeOf(pages.guides_slug!)).toBe("static");
+    expect(Router.filePathFromGlobKey("/x/pages/guides/[slug].tsx")).toBe(
+      "/guides/[slug]",
+    );
+  });
 });

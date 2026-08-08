@@ -119,6 +119,18 @@ export const destinationsFromPages: typeof fileRouter.destinationsFromPages =
   fileRouter.destinationsFromPages;
 
 /**
+ * Vite glob modules → `{ [routeId]: Page class }` for {@link destinationsFromPages}.
+ *
+ * @public
+ */
+export const pagesByIdFromModules: typeof fileRouter.pagesByIdFromModules =
+  fileRouter.pagesByIdFromModules;
+
+/** Glob key → `/guides/[slug]` filePath. @public */
+export const filePathFromGlobKey: typeof fileRouter.filePathFromGlobKey =
+  fileRouter.filePathFromGlobKey;
+
+/**
  * `Layer.succeed(tag, destinationsOf(entries))` for `group.from(tag)`.
  *
  * @public

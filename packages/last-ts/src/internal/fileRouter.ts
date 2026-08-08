@@ -4,14 +4,63 @@
  * {@link layerDestinations} for RouterBuilder catalogs.
  */
 import { Context, Effect, Layer } from "effect";
-import type * as Page from "../Page";
+import * as Page from "../Page";
 import {
   AsRoutesTypeId,
   type AsRoutesEffect,
 } from "./asRoutesBrand";
+import { toRouteId } from "./fileRouterPaths";
 import * as endpoint from "./route";
 import { fromPage } from "./routeFromPage";
 import * as catalog from "./routes";
+
+const EXT = /\.(tsx|ts|jsx|js)$/;
+
+/**
+ * Vite `import.meta.glob` key → disk filePath (`/guides/[slug]`).
+ * Skips `_layout` / `_root` / other `_` segments.
+ *
+ * @public
+ */
+export const filePathFromGlobKey = (key: string): string | undefined => {
+  const normalized = key.replace(/\\/g, "/");
+  const marker = "/pages/";
+  const idx = normalized.lastIndexOf(marker);
+  if (idx === -1) return undefined;
+  const rel = normalized.slice(idx + marker.length).replace(EXT, "");
+  const segs = rel.split("/").filter((s) => s.length > 0);
+  if (segs.length === 0) return "/";
+  if (segs.some((s) => s.startsWith("_"))) return undefined;
+  if (segs[segs.length - 1] === "index") segs.pop();
+  return "/" + segs.join("/");
+};
+
+/**
+ * Collect {@link Page.isPage} default exports from a Vite glob map, keyed by
+ * route id (`guides/[slug].tsx` → `guides_slug`).
+ *
+ * Feed the result of Vite `import.meta.glob` (eager) over the pages tree.
+ *
+ * @public
+ */
+export const pagesByIdFromModules = (
+  modules: Record<string, unknown>,
+): Record<string, Page.AnyPage> => {
+  const out: Record<string, Page.AnyPage> = {};
+  for (const [key, mod] of Object.entries(modules)) {
+    const filePath = filePathFromGlobKey(key);
+    if (filePath === undefined) continue;
+    const def =
+      mod !== null &&
+      typeof mod === "object" &&
+      "default" in (mod as object)
+        ? (mod as { readonly default: unknown }).default
+        : mod;
+    if (!Page.isPage(def)) continue;
+    out[toRouteId(filePath)] = def;
+  }
+  return out;
+};
 
 export type PathEntry = {
   readonly id: string;
