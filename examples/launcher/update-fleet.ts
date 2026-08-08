@@ -91,7 +91,9 @@ const program = Effect.gen(function* () {
 
     yield* Effect.logInfo("3) Update.simulate — validate without spawn");
     const report = yield* Update.simulate(plan);
-    yield* Effect.logInfo(`4) simulate ok=${String(report.ok)}`);
+    yield* Effect.logInfo(
+      `4) simulate ok plan=${report.plan._tag} auditRows=${String(report.audit.length)}`,
+    );
   }).pipe(
     Effect.provide(Lookup.planStatusOff),
     Effect.provide(Context.merge(serverCtx, clientCtx)),
