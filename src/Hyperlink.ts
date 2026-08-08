@@ -1172,7 +1172,7 @@ const wrapDeprecated = <M extends AnyMethod>(method: M): DeprecatedMethod<M> => 
  * **`Fn.dual`** — data-first and pipeable; **canonical authoring is piped**.
  *
  * ```ts
- * class Files extends Hyperlink.Tag<Files>()("app/Files", {
+ * class Files extends Hyperlink.Service<Files>()("app/Files", {
  *   move: Hyperlink.effectFn({
  *     payload: Schema.Struct({ from: Schema.String, to: Schema.String }),
  *     success: Schema.Void,
@@ -7086,7 +7086,7 @@ export const peersLayer = <Self, S extends Spec, EIn = never, RIn = never>(
         if (stamped !== undefined && stamped.length === 0) {
           const Directory = yield* Effect.promise(() => import("./Directory"));
           const Dialers = yield* Effect.promise(() => import("./Dialers"));
-          const dirOpt = yield* Effect.serviceOption(Directory.Tag);
+          const dirOpt = yield* Effect.serviceOption(Directory.Service);
           if (Option.isNone(dirOpt)) {
             return {} as Record<string, PeerServiceOf<S>>;
           }

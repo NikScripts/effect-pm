@@ -22,9 +22,9 @@ function typeLock(
 
   const _hasBlocked: AssertExtends<Lookup.UpdateBlocked, Errs> = true;
   const _hasUnknown: AssertExtends<Lookup.UpdateTargetUnknown, Errs> = true;
-  const _needsDirectory: AssertExtends<Directory.Tag, Ctx> = true;
-  const _needsAdvice: AssertExtends<Advice.Tag, Ctx> = true;
-  const _needsDialers: AssertExtends<Dialers.Tag, Ctx> = true;
+  const _needsDirectory: AssertExtends<Directory.Service, Ctx> = true;
+  const _needsAdvice: AssertExtends<Advice.Service, Ctx> = true;
+  const _needsDialers: AssertExtends<Dialers.Service, Ctx> = true;
   const _blockedFlag: boolean = impact.blocked;
   const _lookupFirst: boolean = impact.lookupFirst;
   const _risk: {

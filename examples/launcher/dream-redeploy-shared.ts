@@ -16,7 +16,7 @@ export const Job = Schema.Struct({
 });
 export type Job = typeof Job.Type;
 
-export class Jobs extends WorkPool.Tag<Jobs>()(
+export class Jobs extends WorkPool.Service<Jobs>()(
   "examples/dream-redeploy/Jobs",
   { payload: Job },
 ) {}
@@ -25,7 +25,7 @@ export class Jobs extends WorkPool.Tag<Jobs>()(
  * Tip probe — v1 answers `"v1"`, v2 answers `"v2"` so a sticky `lookupClient`
  * proves the facade moved to the swapped binary.
  */
-export class Probe extends Hyperlink.Tag<Probe>()(
+export class Probe extends Hyperlink.Service<Probe>()(
   "examples/dream-redeploy/Probe",
   {
     tip: Hyperlink.effect(Schema.String),

@@ -29,7 +29,7 @@ describe("Lookup.follow", () => {
   it.live("static path: Identity works against live Lookup", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("static");
-      const lookupNode = Node.Tag()("lookup-follow/static", { path }).pipe(
+      const lookupNode = Node.Service()("lookup-follow/static", { path }).pipe(
         Node.asLookup,
       );
 
@@ -40,7 +40,7 @@ describe("Lookup.follow", () => {
         ),
       );
 
-      const id = Context.get(followCtx, Identity.Tag);
+      const id = Context.get(followCtx, Identity.Service);
       const resolved = yield* id
         .resolve(new Lookup.ResolveRequest({ key: "lookup-follow/none" }))
         .pipe(Effect.provide(followCtx));
@@ -51,7 +51,7 @@ describe("Lookup.follow", () => {
   it.live("same-sock replace: RPCs succeed after A→B ownership move", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("replace");
-      const lookupNode = Node.Tag()("lookup-follow/replace", { path }).pipe(
+      const lookupNode = Node.Service()("lookup-follow/replace", { path }).pipe(
         Node.asLookup,
       );
 
@@ -67,7 +67,7 @@ describe("Lookup.follow", () => {
         ),
       );
 
-      const id = Context.get(followCtx, Identity.Tag);
+      const id = Context.get(followCtx, Identity.Service);
       const resolveNone = id
         .resolve(new Lookup.ResolveRequest({ key: "lookup-follow/probe" }))
         .pipe(Effect.provide(followCtx));
@@ -97,7 +97,7 @@ describe("Lookup.follow", () => {
     () =>
       Effect.gen(function* () {
         const path = yield* tmpSock("retry");
-        const lookupNode = Node.Tag()("lookup-follow/retry", { path }).pipe(
+        const lookupNode = Node.Service()("lookup-follow/retry", { path }).pipe(
           Node.asLookup,
         );
 
@@ -112,7 +112,7 @@ describe("Lookup.follow", () => {
           ),
         );
 
-        const id = Context.get(followCtx, Identity.Tag);
+        const id = Context.get(followCtx, Identity.Service);
         const hammer = Effect.repeat(
           id
             .resolve(new Lookup.ResolveRequest({ key: "lookup-follow/hammer" }))

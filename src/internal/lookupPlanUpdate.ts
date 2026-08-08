@@ -28,7 +28,7 @@ import type { FlatSpec } from "../Hyperlink";
 import * as Policy from "../Policy";
 import * as Versioned from "../Versioned";
 import { hashContract } from "./contractHash";
-import { Tag as NodeTag } from "./nodeCore";
+import { Service as NodeTag } from "./nodeCore";
 import { schemaVersionFromTag } from "./versioned";
 
 /**
@@ -183,10 +183,10 @@ export class UpdateBlocked extends Data.TaggedError("UpdateBlocked")<{
 // =============================================================================
 
 const LOOKUP_SERVICE_KEYS = new Set([
-  Identity.Tag.key,
-  Directory.Tag.key,
-  Advice.Tag.key,
-  Dialers.Tag.key,
+  Identity.Service.key,
+  Directory.Service.key,
+  Advice.Service.key,
+  Dialers.Service.key,
 ]);
 
 /** Wire method path keys still on the Spec (includes deprecated — still on the wire). */
@@ -207,7 +207,7 @@ const findTargetEntry = (
 ): Effect.Effect<
   Directory.DirectoryEntry,
   UpdateTargetUnknown,
-  Directory.Tag
+  Directory.Service
 > =>
   Effect.gen(function* () {
     for (const tag of successor) {
@@ -351,7 +351,7 @@ export const planUpdate = (
 ): Effect.Effect<
   UpdateImpact,
   UpdateBlocked | UpdateTargetUnknown,
-  Directory.Tag | Advice.Tag | Dialers.Tag
+  Directory.Service | Advice.Service | Dialers.Service
 > =>
   Effect.gen(function* () {
     const entry = yield* findTargetEntry(target, successor);

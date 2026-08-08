@@ -1,7 +1,7 @@
 import { Effect, Schema } from "effect";
 import * as Hyperlink from "../src/Hyperlink";
 
-class Files extends Hyperlink.Tag<Files>()("deprecated-d/Files", {
+class Files extends Hyperlink.Service<Files>()("deprecated-d/Files", {
   move: Hyperlink.effectFn({
     payload: Schema.Struct({ from: Schema.String, to: Schema.String }),
     success: Schema.Void,

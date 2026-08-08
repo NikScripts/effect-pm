@@ -33,7 +33,7 @@ describe("Lookup follow ownership handoff (orchestrated)", () => {
     () =>
       Effect.gen(function* () {
         const path = yield* tmpSock("main");
-        const lookupNode = Node.Tag()("lookup-orch/Lookup", { path }).pipe(
+        const lookupNode = Node.Service()("lookup-orch/Lookup", { path }).pipe(
           Node.asLookup,
         );
 
@@ -49,7 +49,7 @@ describe("Lookup follow ownership handoff (orchestrated)", () => {
           ),
         );
 
-        const id = Context.get(followCtx, Identity.Tag);
+        const id = Context.get(followCtx, Identity.Service);
         const claimKey = "lookup-orch/Mail";
 
         // Claim on A — proves live Identity; will be gone after cold replace.
@@ -118,7 +118,7 @@ describe("Lookup follow ownership handoff (orchestrated)", () => {
     () =>
       Effect.gen(function* () {
         const path = yield* tmpSock("inflight");
-        const lookupNode = Node.Tag()("lookup-orch/LookupInflight", {
+        const lookupNode = Node.Service()("lookup-orch/LookupInflight", {
           path,
         }).pipe(Node.asLookup);
 
@@ -133,7 +133,7 @@ describe("Lookup follow ownership handoff (orchestrated)", () => {
           ),
         );
 
-        const id = Context.get(followCtx, Identity.Tag);
+        const id = Context.get(followCtx, Identity.Service);
         // Ignore transport gaps on the hammer — follow retries; fiber must not fail the suite.
         const hammer = yield* Effect.repeat(
           id

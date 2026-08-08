@@ -52,7 +52,7 @@ const program = Effect.gen(function* () {
     `3) Re-ensure spawned=${String(again.spawned)} (expect false)`,
   );
 
-  const worker = Node.Tag()("examples/launcher-ensure-lookup/Worker", {
+  const worker = Node.Service()("examples/launcher-ensure-lookup/Worker", {
     url: `http://127.0.0.1:${String(port)}/rpc`,
     kind: "Http",
   });

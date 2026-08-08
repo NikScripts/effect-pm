@@ -41,6 +41,7 @@ export const nav: ReadonlyArray<NavGroup> = [
       "policy",
       "lifecycle",
       "versioned",
+      "update",
       "deprecated",
       "configuration",
     ],

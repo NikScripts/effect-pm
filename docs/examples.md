@@ -296,17 +296,18 @@ Guide: [Launcher — Lookup node](/docs/launcher#lookup-node-ensure-lookup-first
 `examples/launcher/dream-redeploy.ts` · `pnpm run example:launcher-dream-redeploy` — file-swap worker entry v1→v2, then:
 
 ```ts
-const cutover = Policy.make({ Sticky: true, ColdAmbiguous: "fail", StreamGap: "stall" })
-const sticky = Hyperlink.lookupClient(Probe).pipe(Policy.provide(cutover), …)
-
-yield* Launcher.restartSuccessor({
-  target: WORKER_NODE_KEY,
-  successor: { node: nodeB, process: child(portB), ready: { timeout: "25 seconds" } },
-  tags: [Jobs, Probe], // prefer(B) default → sticky Probe.tip "v1"→"v2"; WorkPool handoff
+const plan = yield* Update.plan({
+  steps: [{
+    target: WORKER_NODE_KEY,
+    successor: { node: nodeB, process: child(portB), ready: { timeout: "25 seconds" } },
+    tags: [Jobs, Probe],
+  }],
 })
+yield* Update.simulate(plan)
+yield* Update.execute(plan) // sticky Probe.tip "v1"→"v2"; WorkPool handoff
 ```
 
-Guide: [Launcher](/docs/launcher) · [Policy](/docs/policy) · suite `test/launcher-dream-redeploy.test.ts`
+Guide: [Update](/docs/update) · [Launcher](/docs/launcher) · [Policy](/docs/policy)
 
 ### [minimal up](/docs/launcher-minimal-up)
 

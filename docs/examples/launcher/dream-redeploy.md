@@ -7,10 +7,10 @@
 # Launcher — dream redeploy (file-swap v1→v2)
 
 {.draft}
-**Draft / provisional** — proves today’s Eng’d mechanics (file-swap + sticky + WorkPool
-handoff). **Not the desired SSOT.** `Launcher.restartSuccessor({ target, successor, tags, … })`
-is under redesign; address model (main + additional A/B, optional proxy) is design-only.
-See [`docs/handoffs/node-addresses-and-update-api.md`](../../handoffs/node-addresses-and-update-api.md).
+**Draft** — file-swap + sticky + WorkPool handoff driven by **`Update.plan` →
+`simulate` → `execute`**. Address model (main + additional A/B / proxy) remains
+design-only: [`node-addresses-and-update-api.md`](../../handoffs/node-addresses-and-update-api.md).
+Guide: [Update](/docs/update).
 
 **Source:** [`examples/launcher/dream-redeploy.ts`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/launcher/dream-redeploy.ts)  
 **Workers:** [`dream-redeploy-worker.v1.ts`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/launcher/dream-redeploy-worker.v1.ts) · [`dream-redeploy-worker.v2.ts`](https://github.com/nikolasstow/Hyperlink/blob/integration/examples/launcher/dream-redeploy-worker.v2.ts)  
@@ -30,7 +30,7 @@ End-to-end **binary update** without a Redirect SDK:
 1. Copy v1 onto `dream-redeploy-worker.active.ts`; `Launcher.up(A)` loads that file
 2. Sticky `lookupClient` reads `Probe.tip === "v1"`; enqueue WorkPool jobs on A
 3. **File-swap** the same active path to v2 (A keeps v1 in memory)
-4. `Launcher.restartSuccessor` ups B from the swapped path (loads v2), prefers B, shuts A
+4. `Update.plan` → `simulate` → `execute` ups B from the swapped path (loads v2), prefers B, shuts A
 5. Directory dial moves (same `nodeKey`); sticky tip becomes `"v2"`
 6. WorkPool pending transfers with **exact** payloads (baked `releaseEnqueueHandoff`)
 
@@ -45,6 +45,7 @@ import * as Launcher from "hyperlink-ts/Launcher"
 import * as Lookup from "hyperlink-ts/Lookup"
 import * as Node from "hyperlink-ts/Node"
 import * as Policy from "hyperlink-ts/Policy"
+import * as Update from "hyperlink-ts/Update"
 import * as WorkPool from "hyperlink-ts/WorkPool"
 ```
 
@@ -58,12 +59,12 @@ export const WORKER_NODE_KEY = "examples/dream-redeploy/Worker"
 
 export const Job = Schema.Struct({ id: Schema.String, note: Schema.String })
 
-export class Jobs extends WorkPool.Tag<Jobs>()(
+export class Jobs extends WorkPool.Service<Jobs>()(
   "examples/dream-redeploy/Jobs",
   { payload: Job },
 ) {}
 
-export class Probe extends Hyperlink.Tag<Probe>()(
+export class Probe extends Hyperlink.Service<Probe>()(
   "examples/dream-redeploy/Probe",
   { tip: Hyperlink.effect(Schema.String) },
 ) {}

@@ -49,7 +49,7 @@ import {
   ProtocolUnanswered,
   ServiceNotReady,
   ServiceNotServed,
-  Tag as makeNode,
+  Service as makeNode,
   UnaddressedNode,
   type AnyNode,
 } from "./nodeCore";
@@ -1121,7 +1121,7 @@ const probeLookupAnswering = (
       const ctx = yield* Layer.build(
         Lookup.client(node).pipe(Policy.provide(Policy.verifyOff)),
       );
-      const id = Context.get(ctx, Identity.Tag);
+      const id = Context.get(ctx, Identity.Service);
       yield* id
         .resolve(
           new Identity.ResolveRequest({
@@ -1385,9 +1385,9 @@ export const restartSuccessor = (
   | HandoffDeferred
   | PlatformError
   | ConfigError,
-  | Directory.Tag
-  | Advice.Tag
-  | Dialers.Tag
+  | Directory.Service
+  | Advice.Service
+  | Dialers.Service
   | ChildProcessSpawner.ChildProcessSpawner
   | Scope.Scope
 > =>

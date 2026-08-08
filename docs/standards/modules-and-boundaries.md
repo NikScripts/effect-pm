@@ -43,7 +43,7 @@ yield* Advice.prefer(Mail, "fleet/Mail#w2")
 yield* Advice.changes.pipe(Stream.runDrain)
 yield* Directory.nodesServing(Mail)
 yield* Dialers.listForTarget("fleet/Mail#w2")
-const board = yield* Advice.Tag
+const board = yield* Advice.Service
 ```
 
 {#filename-matches-export .must appliesTo=src}

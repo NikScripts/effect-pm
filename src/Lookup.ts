@@ -1,5 +1,5 @@
 /**
- * Lookup — bind/dial layers that serve Identity / Directory / Advice / Dialers Tags together.
+ * Lookup — bind/dial layers that serve Identity / Directory / Advice / Dialers Services together.
  *
  * Same-machine default: {@link layer} / {@link layerOptions} on a well-known `ipc` path
  * (OS exclusivity; bind-or-dial). Cross-network: {@link layerNode} / {@link client} on an
@@ -10,10 +10,11 @@
  * holder + `RpcClientError` retry + {@link Policy.streamGap}. Compose gap Policy at the
  * call site; orchestration (who binds the sock) is outside this module.
  *
- * **Updates:** {@link planUpdate} dry-runs Directory / status / Versioned impact;
- * `Launcher.restartSuccessor` executes plan → up B → shutdown A (Node owns drain/handoff).
+ * **Updates:** {@link planUpdate} dry-runs Directory / status / Versioned impact.
+ * Prefer `Update.plan` → `Update.simulate` → `Update.execute` (`hyperlink-ts/Update`)
+ * for fleet cutovers; `Launcher.restartSuccessor` remains the single-step custody engine.
  *
- * **Tags are sibling modules** — not members of this namespace:
+ * **Sibling Services** — not members of this namespace:
  *
  * ```ts
  * import * as Lookup from "hyperlink-ts/Lookup"
@@ -54,14 +55,14 @@ import {
   type AdviceChange,
 } from "./Advice";
 import {
-  Tag as Dialers,
+  Service as Dialers,
   RegisterRequest as DialersRegisterRequest,
   UnregisterRequest as DialersUnregisterRequest,
   ListForTargetRequest as DialersListForTargetRequest,
   DialerEntry,
 } from "./Dialers";
 import {
-  Tag as Directory,
+  Service as Directory,
   DirectoryEntry,
   DirectoryUpserted,
   DirectoryRemoved,

@@ -20,7 +20,7 @@ import * as Launcher from "../../src/Launcher";
 import * as Lookup from "../../src/Lookup";
 import * as Node from "../../src/Node";
 
-class Jobs extends Hyperlink.Tag<Jobs>()("examples/plan-update/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("examples/plan-update/Jobs", {
   run: Hyperlink.effect(Schema.Number),
   legacy: Hyperlink.effect(Schema.String),
 }) {}
@@ -36,7 +36,7 @@ const jobsNext: Lookup.PlanUpdateTag = {
 const program = Effect.gen(function* () {
   const now = yield* Clock.currentTimeMillis;
   const path = `/tmp/hyperlink-ts-plan-update-${String(now)}.sock`;
-  const lookup = Node.Tag()("examples/plan-update/Lookup", { path }).pipe(
+  const lookup = Node.Service()("examples/plan-update/Lookup", { path }).pipe(
     Node.asLookup,
   );
 
@@ -45,7 +45,7 @@ const program = Effect.gen(function* () {
   const ctx = Context.merge(serverCtx, clientCtx);
 
   yield* Effect.gen(function* () {
-    const dir = yield* Directory.Tag;
+    const dir = yield* Directory.Service;
     yield* dir.advertise(
       new Lookup.AdvertiseRequest({
         nodeKey: "worker-a",
@@ -75,7 +75,7 @@ const program = Effect.gen(function* () {
     yield* Effect.logInfo(
       "3) restartSuccessor stops before spawn when plan blocks",
     );
-    const successor = Node.Tag()("examples/plan-update/worker-b", {
+    const successor = Node.Service()("examples/plan-update/worker-b", {
       url: "http://127.0.0.1:1/rpc",
       kind: "Http",
     });

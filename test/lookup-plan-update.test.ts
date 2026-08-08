@@ -38,7 +38,7 @@ const withLookup = <A, E>(
     );
   }).pipe(Effect.scoped);
 
-class Jobs extends Hyperlink.Tag<Jobs>()("lookup-plan/Jobs", {
+class Jobs extends Hyperlink.Service<Jobs>()("lookup-plan/Jobs", {
   run: Hyperlink.effect(Schema.Number),
   legacy: Hyperlink.effect(Schema.String),
 }) {}
@@ -71,7 +71,7 @@ describe("Lookup.planUpdate", () => {
     () =>
       Effect.gen(function* () {
         const path = yield* tmpSock("unknown");
-        const node = Node.Tag()("lookup/plan-unknown", { path }).pipe(
+        const node = Node.Service()("lookup/plan-unknown", { path }).pipe(
           Node.asLookup,
         );
         yield* withLookup(
@@ -93,14 +93,14 @@ describe("Lookup.planUpdate", () => {
     () =>
       Effect.gen(function* () {
         const path = yield* tmpSock("coupd");
-        const node = Node.Tag()("lookup/plan-coupd", { path }).pipe(
+        const node = Node.Service()("lookup/plan-coupd", { path }).pipe(
           Node.asLookup,
         );
         yield* withLookup(
           Lookup.layerNode(node),
           Lookup.client(node),
           Effect.gen(function* () {
-            const dir = yield* Directory.Tag;
+            const dir = yield* Directory.Service;
             yield* dir.advertise(
               new Lookup.AdvertiseRequest({
                 nodeKey: "worker-a",
@@ -135,14 +135,14 @@ describe("Lookup.planUpdate", () => {
     () =>
       Effect.gen(function* () {
         const path = yield* tmpSock("advice");
-        const node = Node.Tag()("lookup/plan-advice", { path }).pipe(
+        const node = Node.Service()("lookup/plan-advice", { path }).pipe(
           Node.asLookup,
         );
         yield* withLookup(
           Lookup.layerNode(node),
           Lookup.client(node),
           Effect.gen(function* () {
-            const dir = yield* Directory.Tag;
+            const dir = yield* Directory.Service;
             yield* dir.advertise(
               new Lookup.AdvertiseRequest({
                 nodeKey: "worker-a",
@@ -172,14 +172,14 @@ describe("Lookup.planUpdate", () => {
     () =>
       Effect.gen(function* () {
         const path = yield* tmpSock("dialers");
-        const node = Node.Tag()("lookup/plan-dialers", { path }).pipe(
+        const node = Node.Service()("lookup/plan-dialers", { path }).pipe(
           Node.asLookup,
         );
         yield* withLookup(
           Lookup.layerNode(node),
           Lookup.client(node),
           Effect.gen(function* () {
-            const dir = yield* Directory.Tag;
+            const dir = yield* Directory.Service;
             yield* dir.advertise(
               new Lookup.AdvertiseRequest({
                 nodeKey: "worker-a",
@@ -216,14 +216,14 @@ describe("Lookup.planUpdate", () => {
     () =>
       Effect.gen(function* () {
         const path = yield* tmpSock("lookup");
-        const node = Node.Tag()("lookup/plan-lookup", { path }).pipe(
+        const node = Node.Service()("lookup/plan-lookup", { path }).pipe(
           Node.asLookup,
         );
         yield* withLookup(
           Lookup.layerNode(node),
           Lookup.client(node),
           Effect.gen(function* () {
-            const dir = yield* Directory.Tag;
+            const dir = yield* Directory.Service;
             yield* dir.advertise(
               new Lookup.AdvertiseRequest({
                 nodeKey: "lookup-a",
@@ -238,7 +238,7 @@ describe("Lookup.planUpdate", () => {
 
             const impact = yield* Lookup.planUpdate(
               "lookup-a",
-              [Directory.Tag],
+              [Directory.Service],
             );
             expect(impact.lookupFirst).toBe(true);
           }),
@@ -252,14 +252,14 @@ describe("Lookup.planUpdate", () => {
     () =>
       Effect.gen(function* () {
         const path = yield* tmpSock("wire");
-        const node = Node.Tag()("lookup/plan-wire", { path }).pipe(
+        const node = Node.Service()("lookup/plan-wire", { path }).pipe(
           Node.asLookup,
         );
         yield* withLookup(
           Lookup.layerNode(node),
           Lookup.client(node),
           Effect.gen(function* () {
-            const dir = yield* Directory.Tag;
+            const dir = yield* Directory.Service;
             yield* dir.advertise(
               new Lookup.AdvertiseRequest({
                 nodeKey: "worker-a",

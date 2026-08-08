@@ -1,5 +1,5 @@
 /**
- * Dream redeploy — file-swap v1→v2 + restartSuccessor + WorkPool handoff + sticky client.
+ * Dream redeploy — file-swap v1→v2 + Update.plan→simulate→execute + WorkPool handoff.
  *
  * Hard live assertions:
  * - Active file content swaps to v2 before B spawn
@@ -26,6 +26,7 @@ import * as Launcher from "../src/Launcher";
 import * as Lookup from "../src/Lookup";
 import * as Node from "../src/Node";
 import * as Policy from "../src/Policy";
+import * as Update from "../src/Update";
 import {
   Jobs,
   Probe,
@@ -44,7 +45,7 @@ const waitUntil = <A, E, R>(
   });
 
 const workerNode = (port: number) =>
-  Node.Tag()(WORKER_NODE_KEY, {
+  Node.Service()(WORKER_NODE_KEY, {
     url: `http://127.0.0.1:${String(port)}/rpc`,
     kind: "Http",
   });
@@ -73,7 +74,7 @@ const reapDreamChildren = ChildProcess.make("pkill", [
 
 describe("Launcher dream redeploy (file-swap v1→v2)", () => {
   it.live(
-    "file-swap → restartSuccessor → sticky tip v2 + WorkPool exact payloads",
+    "file-swap → Update.execute → sticky tip v2 + WorkPool exact payloads",
     () =>
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
@@ -97,7 +98,7 @@ describe("Launcher dream redeploy (file-swap v1→v2)", () => {
         yield* reapDreamChildren;
         yield* fs.copyFile(v1Src, active);
 
-        const lookupNode = Node.Tag()("lookup/dream-redeploy", {
+        const lookupNode = Node.Service()("lookup/dream-redeploy", {
           path: lookupPath,
         }).pipe(Node.asLookup);
 
@@ -187,17 +188,24 @@ describe("Launcher dream redeploy (file-swap v1→v2)", () => {
             }).pipe(Effect.provide(stickyCtx));
             expect(tipStillA).toBe("v1");
 
-            const impact = yield* Launcher.restartSuccessor({
-              target: WORKER_NODE_KEY,
-              successor: {
-                node: nodeB,
-                process: child(portB),
-                ready: { timeout: "25 seconds" },
-              },
-              tags: [Jobs, Probe],
+            const plan = yield* Update.plan({
+              steps: [
+                {
+                  target: WORKER_NODE_KEY,
+                  successor: {
+                    node: nodeB,
+                    process: child(portB),
+                    ready: { timeout: "25 seconds" },
+                  },
+                  tags: [Jobs, Probe],
+                },
+              ],
             });
-            expect(impact?.blocked).toBe(false);
-            expect(impact?.target).toBe(WORKER_NODE_KEY);
+            expect(plan.blocked).toBe(false);
+            expect(plan.steps[0]?.impact?.target).toBe(WORKER_NODE_KEY);
+            yield* Update.simulate(plan);
+            const impacts = yield* Update.execute(plan);
+            expect(impacts[0]?.blocked).toBe(false);
 
             const rows = yield* waitUntil(
               Directory.nodesServing(Jobs),
@@ -245,8 +253,7 @@ describe("Launcher dream redeploy (file-swap v1→v2)", () => {
         );
       }).pipe(
         Effect.timeout(Duration.seconds(90)),
-        Effect.provide(platform),
-        Effect.provide(NodeFileSystem.layer),
+        Effect.provide(Layer.merge(platform, NodeFileSystem.layer)),
       ),
     { timeout: 90_000 },
   );
