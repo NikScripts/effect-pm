@@ -30,8 +30,8 @@
 
 ### Active (owner approval required)
 1. **Agent 4:** Examples Ideas 1–9 + Related notes Eng’d. **Release-prep cleanup Eng’d** (archive completed handoffs/plans, dead scripts, npmignore, legacy example aliases). Idea 10 Apps/E5 still owner-gated. Owner still: changeset consolidate before `version`/publish.
-2. **Agent G / TUI:** last-ts + file-router on `cursor/file-router-prototype-125f` — merging `integration` tip. Route static/dynamic + param-literal design in flight. Park: [`owned-string-casing-park.md`](./owned-string-casing-park.md).
-3. **Agent 5 (Launcher + handoff):** **Lifecycle L0–L7 closed**. Chrome → **Agent G**. **`Update` module Eng'd** (`plan`→`simulate`→`execute`, guide [`update.md`](../guides/update.md)). Tag→Service cleanup (Dialers + Lookup siblings). Address/`Node.make`/locality still design dock. Gated: #37.
+2. **Agent K:** last-ts + file-router on `cursor/file-router-prototype-125f` — takeover from G. Handoff: [`agent-k-page-route-handoff.md`](./agent-k-page-route-handoff.md). Park: [`owned-string-casing-park.md`](./owned-string-casing-park.md).
+3. **Agent 5 (Launcher + handoff):** **Lifecycle L0–L7 closed**. Chrome → **Agent K** (was G). **`Update` module Eng'd** (`plan`→`simulate`→`execute`, guide [`update.md`](../guides/update.md)). Tag→Service cleanup (Dialers + Lookup siblings). Address/`Node.make`/locality still design dock. Gated: #37.
 4. **Docs site:** Live — apex coming-soon (inlined CSS + `(book)` chrome); docs on `dev`. Origin host-gate via `serve-production.mjs` (before Waku static). Islands: `hyperlink-ts` alias + `.hl-dashboard`. Getting Started em-dash/voice polish.
 
 ### Frozen / dead (do not assign)
@@ -60,7 +60,7 @@
 - Agent C standards audit (plan-first)
 
 ### Branch hygiene (2026-07-26)
-Owner: only **Agent 4**, **Agent 5**, and **Agent G** remain active.
+Owner: only **Agent 4**, **Agent 5**, and **Agent K** remain active.
 
 **Deleted (superseded / contained):** Agent 1 `cursor/docs-corpus-phase3-ce05` (+ closed [#68](https://github.com/nikolasstow/Hyperlink/pull/68)); Agent 3 `cursor/logs-store-followers-plan-906e` + `cursor/agent-03-byhyperlink-full-key-a009`; plus earlier contained tips (`ask-incumbent`, catalog bake stack, `feat/*` tip-contained, etc.).
 
