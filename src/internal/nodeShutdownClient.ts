@@ -14,7 +14,8 @@ import {
 } from "./nodeCore";
 
 /**
- * Compose Track C leave on `node`: drain → Advice clear → Directory unregister →
+ * Compose Track C leave on `node`: drain → Directory unregister → Advice clear
+ * (only when the dial-matched row was removed and prefer still points here) →
  * close the listen scope (socket unlink / Layer.launch exits). Idempotent.
  *
  * Prefer this over chaining {@link Node.drain} + manual Lookup calls. Does **not** use

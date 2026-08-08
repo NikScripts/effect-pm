@@ -150,16 +150,18 @@ export class NodeStatusTag extends Hyperlink.Service<NodeStatusTag>()(
       "Enter draining phase (Directory row held; yield refuse). Idempotent; no process exit.",
   }),
   /**
-   * Compose leave + exit listen scope (Track C #32): drain → clear Advice → Directory
-   * unregister → close listen (finalizers unlink / etc.). Idempotent.
+   * Compose leave + exit listen scope (Track C #32): drain → Directory unregister →
+   * clear Advice that still prefers this `nodeKey` (only when the dial-matched row
+   * was removed) → close listen. Idempotent.
    */
   shutdown: Hyperlink.effect({
     success: Schema.Void,
     error: Hyperlink.HandoffDeferred,
   }).annotate({
     description:
-      "Drain, run per-service handoffs, leave membership (Advice clear + Directory unregister), " +
-      "then exit the listen scope. Fails with HandoffDeferred (node stays up) when a handoff defers.",
+      "Drain, run per-service handoffs, leave membership (Directory unregister; Advice clear " +
+      "only when this node's dial row was removed and prefer still points here), then exit the " +
+      "listen scope. Fails with HandoffDeferred (node stays up) when a handoff defers.",
   }),
   /**
    * Launcher → node ownership ack — child assumes self-custody so the launcher may exit.
@@ -343,20 +345,14 @@ export const buildNodeStatusImpl = (options: {
       if (membership === undefined) return;
       const Advice = yield* Effect.promise(() => import("../Advice"));
       const Directory = yield* Effect.promise(() => import("../Directory"));
-      const adviceOpt = yield* Effect.serviceOption(Advice.Service);
-      if (Option.isSome(adviceOpt)) {
-        yield* Effect.forEach(
-          membership.serves,
-          (serviceKey) =>
-            adviceOpt.value
-              .clear(new Advice.ClearAdviceRequest({ serviceKey }))
-              .pipe(Effect.ignore),
-          { discard: true },
-        );
-      }
+      // Unregister first (dial-matched). Same-identity A→B leaves B's row in
+      // place — do not wipe Advice.prefer(B) / prefer(sharedKey) in that case.
+      // True departure removes the row; then clear prefer only when it still
+      // points at this nodeKey (never blanket-clear every served key).
       const dirOpt = yield* Effect.serviceOption(Directory.Service);
+      let removed = false;
       if (Option.isSome(dirOpt)) {
-        yield* dirOpt.value
+        removed = yield* dirOpt.value
           .unregister(
             new Directory.UnregisterRequest({
               nodeKey: membership.nodeKey,
@@ -367,7 +363,28 @@ export const buildNodeStatusImpl = (options: {
               ...(membership.url !== undefined ? { url: membership.url } : {}),
             }),
           )
-          .pipe(Effect.ignore);
+          .pipe(Effect.orElseSucceed(() => false));
+      }
+      const adviceOpt = yield* Effect.serviceOption(Advice.Service);
+      if (Option.isSome(adviceOpt) && removed) {
+        yield* Effect.forEach(
+          membership.serves,
+          (serviceKey) =>
+            Effect.gen(function* () {
+              const pref = yield* adviceOpt.value.preferred(
+                new Advice.PreferredRequest({ serviceKey }),
+              );
+              if (
+                Option.isSome(pref) &&
+                pref.value === membership.nodeKey
+              ) {
+                yield* adviceOpt.value
+                  .clear(new Advice.ClearAdviceRequest({ serviceKey }))
+                  .pipe(Effect.ignore);
+              }
+            }),
+          { discard: true },
+        );
       }
     });
     const shutdown = Effect.gen(function* () {

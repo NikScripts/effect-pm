@@ -14,6 +14,12 @@ simulate/execute gate re-derives blockers from impact arrays (forged
 impacts and forwards only `prefer`; `UpdateContractMismatch` carries full
 `audit` (distinct from Node verify); PascalCase audit reasons; `Report` tagged
 `UpdateReport`; `update.*` spans/log spans; `coUpdate` / `uncoveredCoUpdate`
-rollup; `liveTips` for contract `from`. Also completes Tag→Service renames for
-Dialers + Lookup sibling Context keys left broken after the Effect v4 mint
-rename.
+rollup; `liveTips` for contract `from`.
+
+**Node.shutdown leave:** unregister Directory first; clear Advice only when the
+dial-matched row was removed and prefer still points at the departing
+`nodeKey` — so `Advice.prefer(B)` / same-identity cutovers survive A's leave
+(was blanketing every served key).
+
+Also completes Tag→Service renames for Dialers + Lookup sibling Context keys
+left broken after the Effect v4 mint rename.

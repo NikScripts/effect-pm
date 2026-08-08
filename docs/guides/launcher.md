@@ -199,7 +199,9 @@ fail-closed on migration gaps / wire removals / contract drifts. Ambient Layers:
 (plan → `up(B)` → `Advice.prefer(B)` → shutdown `A`; captures A's Directory dial
 **before** `up` so same-`nodeKey` dial-replace does not hide the outgoing node).
 Prefer is on by default (`prefer: false` to skip) — sticky dual-serve while A is
-still up. Live dial census for impact is `hyperlink-ts/Dialers`
+still up. A's `Node.shutdown` keeps that stamp when B already replaced the
+Directory dial (same-identity) or when prefer points at a different `nodeKey`.
+Live dial census for impact is `hyperlink-ts/Dialers`
 (`planUpdate.clientsAtRisk`).
 
 ```ts

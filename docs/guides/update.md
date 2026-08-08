@@ -82,6 +82,12 @@ Step `prefer` (default `true`) is the only custody flag execute forwards to
 successor so dialers move before A shuts down. Set `prefer: false` to skip that
 stamp (rare; dual-serve ops that manage Advice themselves).
 
+`Node.shutdown` on A does **not** blanket-clear Advice for every served key. It
+unregisters A's dial-matched Directory row first; Advice is cleared only when
+that row was actually removed **and** prefer still points at A's `nodeKey`.
+Same-identity A→B (B already replaced the dial) and different-identity
+`prefer(B)` both keep the stamp through execute.
+
 Plan-time-only fields retained for inspectability but **not** forwarded on
 execute: `force`, `status`, `incumbent`, `skipPlan`.
 
