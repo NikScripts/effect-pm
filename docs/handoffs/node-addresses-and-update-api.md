@@ -6,7 +6,7 @@ Remaining (address model, `Node.make`, locality Host/Machine, proxy, deploy node
 **design only**.  
 **Owner leans (so far):**
 - Stable **main address** + **additional A/B** (often Unix); optional Http→Unix proxy
-- **`Address.*` factories** — consolidate dials (`Address.http(":3001")`, labeled / array / object overloads); **no** `addressFromKey` — node key fills path/identity when the address is bound to a Node (§3)
+- **`Address.*` factories** — consolidate dials (`Address.http(":3001")`, labeled / array / object overloads); every `Address.*` carries an **explicit dial** (no address-less Address). Node-key derivation only fills a **missing main** on the Node (§3) — **no** `addressFromKey`
 - ~~Replace options-bag `restartSuccessor` with `Update.plan` → execute~~ **Eng'd** (restartSuccessor remains; Update preferred)
 - **`Update` module separate from `Versioned`** — Eng'd
 - Plans are **fleet-wide**, ordered; contract from→to audit — Eng'd (`liveTips`, target-scoped blockers, `coUpdate` rollup, empty/dup/blank-key guards)
@@ -83,8 +83,8 @@ could be `hyperlink-ts/Address` or nested under `Node`). Protocol helpers + over
 
 ```ts
 // SKETCH — owner lean
-Address.http(":3001")                    // single nameless
-Address.unix("A", path)                  // labeled (+ optional explicit path)
+Address.http(":3001")                    // single nameless — dial required
+Address.unix("A", path)                  // labeled — dial required
 Address.ws([4000, 4001])                 // nameless multiples, same protocol
 Address.http({ A: 3000, B: 3001 })       // labeled object, same protocol
 ```
@@ -98,34 +98,42 @@ Overload shapes (same idea per protocol — `http` / `ws` / `unix` / …):
 | Array | Several **nameless** addresses, same protocol |
 | Object `{ Label: dial }` | Several **labeled** addresses, same protocol |
 
-Dial fragments are ports / `":port"` / paths as appropriate — not full `{ kind, url }`
-blobs apps hand-assemble today.
+**Every `Address.*` value carries an explicit dial.** There is no address-less /
+“derive me later” Address (no `Address.unix("A")` without a path). Dial fragments are
+ports / `":port"` / paths as appropriate — not full `{ kind, url }` blobs apps
+hand-assemble today.
 
 **Contrast with today’s multi-protocol `endpoints`:** Eng’d X1 is **one dial per protocol
 kind** for connect selection. `Address.*` is the product surface for **many addresses**
 (same kind, labeled or not) that Node/Update/proxy compose — exact merge with `endpoints`
 / `withProtocol` is still an open fork (§8).
 
-### 3.2 Node key fills the dial — **no** `addressFromKey`
+### 3.2 Node-key derivation — **only missing main**; **no** `addressFromKey`
 
-**Rejected:** a manual `Node.addressFromKey(key, …)` (or equivalent) that apps call to
-mint sock paths.
+**Rejected:**
 
-**Owner:** when an address is bound to a Node, the **node key is the source of truth** for
-identity-derived dials (Unix path slug, default roots, labeled `.a` / `.b` suffixes, etc.).
-You declare protocol + port/label (and only override path when you truly mean to) — you do
-**not** hand-build `/tmp/….sock` from the key.
+- Manual `Node.addressFromKey(key, …)` (or equivalent) as an app API.
+- Address-less `Address.*` that hope the node key fills them in later.
+
+**Owner:** derivation from the node key applies **only** when the Node’s **main**
+address is omitted. Additional / labeled addresses always come from explicit
+`Address.*` dials. Key→path (Unix slug, default root, etc.) is bind-internal for that
+missing-main case — not a public helper and not a path for A/B backends.
 
 ```ts
-// SKETCH — key→path is internal to bind, not an app API
+// SKETCH
 class Worker extends Node.make("fleet/Worker", {
-  // … Address.http / Address.unix composed here or piped — TBD
+  // main omitted → derived from "fleet/Worker" at bind (protocol default TBD)
 })
-// Unix without an explicit path → derived from "fleet/Worker" (+ label if any)
+
+const WorkerWithBackends = Worker.pipe(
+  // A/B must carry real dials — never “derive from key”
+  /* Address.unix("A", "/var/run/worker.a.sock"), … */
+)
 ```
 
-Open: slug rules, directory root Config, collision policy, Windows named-pipe story —
-implementation detail behind bind, not a public helper.
+Open: which protocol/default dial the missing-main derivation produces; slug rules;
+directory root Config; Windows named-pipe story — all behind bind, not app API.
 
 ### 3.3 Main + additional / roles
 
@@ -612,9 +620,11 @@ clones, not HttpApi catalog. `Router.make` (G) is the catalog precedent.
 8. Directory advertise — main only vs main+backends vs proxy row.
 9. Type model — `Address.*` vs today’s `endpoints` / `withProtocol` merge.
 10. HyperServices see main only — types vs convention.
-11. ~~Manual `addressFromKey`~~ — **rejected**; key→dial is bind-internal (§3.2).
+11. ~~Manual `addressFromKey`~~ — **rejected**. ~~Address-less Address~~ — **rejected**.
+    Key→dial only for **missing main** (§3.2).
 12. Where `Address` lives — own subpath vs `Node.Address` / `Node.http` sugar.
 12b. Default main selection when multiple `Address.*` are composed (first? labeled `main`?).
+12c. Missing-main derivation — which protocol / dial shape when main is omitted.
 
 ### Deploy / locality / Node.make
 13. **Locality name** — `Host` vs `Machine` vs `Locale` / `Island`; nest as `Node.*` (§7.3–7.4).
