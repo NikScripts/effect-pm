@@ -386,7 +386,7 @@ Mirror View’s `Requirement` / `IsFulfilled` / `AnnotationsOf` naming where it 
 1. Module default export = stamped component (`stampOf`).
 2. Codegen path table unchanged (`paths.gen.ts`).
 3. Loader: read stamp → render mode + paths + layout chrome + values bag.
-4. `createPages` adapter (later) maps stamp → engine; apps never write Waku `getConfig`.
+4. Optional internal host adapter (later) maps locked marks → engine; apps never invent getConfig bridges.
 5. Disk `[param]` ↔ Route `:param` unchanged.
 
 Dream file-router module:
