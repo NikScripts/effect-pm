@@ -512,60 +512,55 @@ one Node identity.
 API nest under Node (owner already floated `Node.Machine` + keep Launcher). If HTTP
 “host” bothers you, `Node.Machine` is the clearer nested name.
 
-### 7.5 `Node.Tag` was never renamed to `Node.Service` (fact sync — Agent 5, 2026-08-08)
+### 7.5 `Node.Tag` → `Node.Service` — corrected sync (Agent 5, 2026-08-08)
 
-**Fact on tip:** public constructor is still **`Node.Tag()`**. There is **no** `Node.Service`
-export. No Eng’d rename Tag→Service landed for Node.
+**Earlier Agent 5 note was stale.** On current `integration` tip, the rename **did** land
+via Agent G’s `a3831b5f` (*Effect v4 Tag→Service across last-ts and hyperlink-ts*), then
+G tip-synced (`1b8ab7c6`). Public factory is **`Node.Service()`** — not `Node.Tag()`.
 
-| Surface | What it is today |
-|---------|------------------|
-| `Node.Tag()` | Public factory — class-extends declaration |
-| Under the hood | Assembled onto **`Context.Service`** (node *is* a Context key; `yield* Worker` works) |
-| `WorkPool.Tag` / `Gate.Tag` / `Daemon.Tag` / `Hyperlink.Tag` | HyperService **contract** tags (standards: “HyperService tag — `X.Tag`”) |
-| `WorkPool.Service` / `Gate.Service` | **Different meaning** — Tag + baked in-process `.layer` (Agent D M2: unify typed Service≡Tag+layer; **not** “rename Tag→Service”) |
-| Effect v4 | Context keys are `Context.Service`, not `Context.Tag` |
+| Surface | Tip now |
+|---------|---------|
+| `Node.Service()` | Public factory — class-extends declaration |
+| Under the hood | Still **`Context.Service`** (node *is* a Context key; `yield* Worker`) |
+| HyperService mints | Also `*.Service` after the same rename (was `*.Tag`) |
+| Old baked `*.Service` (Tag+layer) | Renamed **`*.define`** in that refactor |
+| Effect v4 | Context keys are `Context.Service` |
 
-So: Node already *behaves* like a Context service, but the **factory name stayed `Tag`** to
-rhyme with HyperService `.Tag` factories — even though a Node is not a HyperService contract.
+**Owner poke answered:** Tag **was** replaced with Service on tip — Agent 5’s branch had
+just been behind G’s merge when we first checked.
 
-**Owner poke:** “Node.Tag was never replaced with Node.Service?” — correct; it wasn’t.
-Whether it *should* be is now tangled with **`Node.make`** (HttpApi description) below:
+**Still open with `Node.make`:** Service today still smashes **description + Context key**
+together. HttpApi/`Router.make` keep those jobs split:
 
 | Name | Role if we split cleanly |
 |------|---------------------------|
 | `Node.make` | Description / config holder (HttpApi-like) — **not** Context |
-| `Node.Service` (or keep `Tag`) | Context projection you `yield*` / dial — **is** Context |
-| Today’s `Node.Tag` | Both jobs smashed together |
+| `Node.Service` | Context projection you `yield*` / dial — **is** Context (today = both) |
 
-**Do not Eng a Tag→Service rename in isolation** — lock with `Node.make` + Agent G’s
-HttpApi/`Route.make` pattern (§7.6 sync).
+### 7.6 Sync with Agent G — what Agent 5 sees (2026-08-08)
 
-### 7.6 Sync note for Agent G (HttpApi / Router / Page) — Agent 5 first
+Pulled G’s run + tip. **No written reply** to §7.6 ask yet; mechanical tip-sync only.
 
-Agent 5 dock (this file) and Agent G’s catalog work should stay aligned:
+| G fact | Detail |
+|--------|--------|
+| Status | IDLE · branch `cursor/file-router-prototype-125f` · tip-synced into `integration` |
+| Tag→Service | Eng’d (`a3831b5f`) — includes `Node.Service`; on tip |
+| Router | **HttpApi lock** — `Router.make` / `Router.group` / `RouterBuilder` ([`router-httpapi-lock.md`](./router-httpapi-lock.md)) |
+| Page | `Page.static` / `Page.dynamic` / `Page.Request` / `Page.Document` — **not** `Page.Tag` / `Page.make` locked; `Page.build` owner-snapped earlier |
+| View | Still `View.Service` (Context key + props); deeper redesign parked |
+| Sync reply to A5 | **None** on Node.make vs Service split / Page naming |
 
-1. **Effect pattern:** `class Api extends HttpApi.make("api").add(…) {}` — constructable
-   **description**, not Context.Service. Builders install runtime.
-2. **Agent G Eng’d:** `Route.make` catalog (HttpApi analogue); `Router` is separate
-   `Context.Service`. Planned: `Page.Tag` + `Page.build` (file-router) — class holds config.
-3. **Agent 5 lean:** `Node.make(…)` = same description shape; locality nest
-   (`Node.Host` / `Node.Machine`); keep `Launcher`; cutover = separate `Update`/`Rollout`.
-4. **Tension:** today `Node.Tag` = description **and** Context key. HttpApi/`Route.make`
-   deliberately are **not** Context keys. Moving Node to `make` implies splitting those jobs
-   (and then naming the Context half `Service` vs keeping `Tag`).
-5. **Ask Agent G when syncing:** does Page stay `Page.Tag` (HyperService-ish) or move toward
-   `Page.make` (catalog-only)? That answer should match Node’s make vs Tag/Service split.
-
-**Agent 5 will not Eng Node.make / Tag→Service until owner + G sync on the naming split.**
+**Still asking G (unchanged):** when Page gets a class mint, is it catalog `Page.make`
+(HttpApi-like) or Context `Page.Service`? That should match Node’s make vs Service split.
 
 ### 7.7 `Node.make` — HttpApi-shaped declaration (design)
 
-**Today:** `Node.Tag()` is a **Context.Service** under the hood — `yield* Worker` resolves
-transport; address is stamped on the Tag class via `assembleNode`.
+**Today:** `Node.Service()` is description **and** Context key — `yield* Worker` resolves
+transport; address stamped via `assembleNode`.
 
 ```ts
-// Eng'd today
-class Worker extends Node.Tag<Worker>()("fleet/Worker", {
+// Eng'd on tip
+class Worker extends Node.Service<Worker>()("fleet/Worker", {
   url: "http://127.0.0.1:8080/rpc",
   kind: "Http",
 }) {}
@@ -595,26 +590,24 @@ class WorkerFull extends Worker.pipe(
 // *derived* from the description, or a separate Node.service / launch binder
 ```
 
-| | Today `Node.Tag()` | Target `Node.make` (sketch) |
-|--|-------------------|----------------------------|
+| | Today `Node.Service()` | Target `Node.make` (sketch) |
+|--|----------------------|----------------------------|
 | Kind | Context key + address blob | Config/description (HttpApi-like) |
 | `class extends` | Yes | Yes (`makeProto` / constructable) |
-| `yield* Worker` | Transport service | Via separate `Node.Service` / bind — or keep Tag as projection |
-| Address | On the Tag | On the description; main vs additional |
+| `yield* Worker` | Transport service | Keep via `Node.Service` bind, or only after install |
+| Address | On the Service class | On the description; main vs additional |
 | Locality | — | `Node.Host` / `Node.Machine` lists these makes |
 | Prototype | `Node.Prototype` + `.make` for clones | Fold into `Node.make` / instance helpers? |
 
 **Open forks inside this shift:**
 
-1. `Node.make` + **`Node.Service`** (Context half) vs `make` + keep name **`Tag`** for Context?
-2. Does `make` **replace** today’s dual-duty `Tag`, or is Tag a deprecated alias?
-3. Keep `yield* Node` for transport after bind?
-4. Catalog type param `ROut` — on make, `.serves(…)`, or elsewhere?
-5. Align naming with Agent G `Route.make` / planned `Page.*` (§7.6).
+1. Does `Node.make` become primary declaration with `Service` as Context projection only?
+2. Keep `yield* Node` for transport after bind?
+3. Catalog type param `ROut` — on make, `.serves(…)`, or elsewhere?
+4. Align with Agent G `Router.make` / Page mint (§7.6) — G has not answered yet.
 
 **Closest Eng’d cousin today:** `Node.Prototype` + `.make(instanceKey, address)` — instance
-clones, not HttpApi catalog. `Node.make` would be the **primary declaration** for every
-node, Prototype-shaped templates optional.
+clones, not HttpApi catalog. `Router.make` (G) is the catalog precedent.
 
 ---
 
@@ -639,11 +632,11 @@ node, Prototype-shaped templates optional.
 ### Deploy / locality / Node.make
 13. **Locality name** — `Host` vs `Machine` vs `Locale` / `Island`; nest as `Node.*` (§7.3–7.4).
 14. **Keep Launcher** + locality under Node vs merge spawn into locality agent (§7.3).
-15. **`Node.make` vs `Node.Tag`** — replace, dual, or Tag-as-projection of make (§7.5).
+15. **`Node.make` vs today’s dual-duty `Node.Service`** — split description vs Context (§7.5–7.7).
 16. Does `yield* Worker` survive make, or description-only until bind?
 17. Webhook / pull / package push — first deployable slice.
 18. Cutover module name (`Update` vs `Rollout` / …) vs locality name.
-19. Deprecation path for Eng’d `restartSuccessor` + dream-redeploy + `Node.Tag`.
+19. Deprecation path for Eng’d `restartSuccessor` + dream-redeploy; migrate examples off dual-duty Service if `make` lands.
 
 ---
 
@@ -651,7 +644,7 @@ node, Prototype-shaped templates optional.
 
 | Fact | Where |
 |------|--------|
-| One primary `(kind, url\|path)` + optional per-kind `endpoints` | `Node.Tag` / `withProtocol` |
+| One primary `(kind, url\|path)` + optional per-kind `endpoints` | `Node.Service` / `withProtocol` |
 | Directory: one dial row per `nodeKey` | `DirectoryEntry` |
 | App A/B today = same key, new dial, sticky + prefer | `restartSuccessor`, Policy |
 | Lookup A/B = one address, orchestrated ownership | `Lookup.follow` |
@@ -668,7 +661,7 @@ node, Prototype-shaped templates optional.
 1. ~~plan → execute~~ · ~~Update ≠ Versioned~~ recorded.
 2. Discuss **fleet plan ordering** + **contract audit** shape (§5.3–5.5).
 3. Lock **locality word** (`Host` / `Machine` / …) + **keep Launcher** (§7.3–7.4).
-4. Lock **`Node.make`** shape vs Tag (§7.5) — biggest Node API tension.
+4. Lock **`Node.make`** vs dual-duty `Node.Service` (§7.7) — await G Page mint answer (§7.6).
 5. Lock address forks enough for make() config (roles, main, proxy).
 6. Only then Eng — Node.make → locality → Update plan/simulate/execute → migrate examples.
 7. Dream-redeploy stays **provisional** until the new API exists.
