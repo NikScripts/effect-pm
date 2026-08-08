@@ -238,23 +238,24 @@ Two cutover shapes on the table:
 Clients learn A’s Http, then B’s Http (same `nodeKey`, dial-replace + sticky + prefer).
 **No stable URL** across the update. Dream file-swap still needs a second port/`nodeB`.
 
-### Shape β — stable main + proxy to A/B (**owner lean**)
+### Shape β — stable primary + proxy to A/B (**owner lean**)
 
 ```
-clients ──Http──►  main (proxy / stable address)
+clients ──Http──►  primary (proxy / stable address)
                       │
           ┌───────────┴───────────┐
           ▼                       ▼
        A (Unix)                B (Unix)
 ```
 
-- **Main address** stays fixed (Http). Clients never rebind for a binary update.
-- **Proxy** (Lookup-adjacent, Launcher-owned, or a small Node role — TBD) directs traffic to
-  the live backend (A or B).
-- **Backend hop** may use a **different protocol** than main (Http out front, Unix to the
-  real process) for cheap local forwarding and exclusive-bind clarity.
-- Update = bring up B on its additional address → point proxy at B → drain/shutdown A.
-  Clients keep dialing main.
+- **Primary** address(es) stay fixed (often Http). Clients never rebind for a binary update.
+- **Proxy** behavior is **Node policy** (§3.5): primaries forward to the live labeled
+  backend (A or B). Other configs remain valid — Address does not force proxy-only.
+- **Proxy owner** (Lookup-adjacent, Launcher-owned, or a small Node role — TBD).
+- **Backend hop** may use a **different protocol** than primary (Http out front, Unix to
+  the real process) for cheap local forwarding and exclusive-bind clarity.
+- Update = bring up B on its labeled address → retarget policy/proxy to B → drain/shutdown A.
+  Clients keep dialing primary.
 
 This reopens / reframes “explicit Redirect SDK” (earlier rejected for v1 sticky+Advice): the
 lean is **not** a client-side redirect API — it’s a **server-side stable address** with
