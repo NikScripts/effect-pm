@@ -1,31 +1,35 @@
 /**
  * @module Page
  *
- * File-router page marks — Static / Dynamic / Build — plus live-route bridges
+ * File-router **page classes** (HttpApi-shaped) plus live-route bridges
  * {@link Request} / {@link Document} for Outlet trees.
  *
- * Destination shape (`Page.Service` — not Eng’d yet):
- *
  * ```ts
- * class DocsChapter extends Page.Service<DocsChapter, { chapter: string }>()(
- *   "app/page/docs-chapter",
- *   { path: "/docs/:chapter", render: Page.Render.Build(), paths: listSlugs },
- * ) {}
- * export default Page.build(DocsChapter)
+ * // optional request options first (same bag as Route.get)
+ * export default class Chapter extends Page.make({
+ *   params: { slug: Schema.Literal("routing", "view-service") },
+ * }) {
+ *   static Component = (props: Page.Props<Chapter>) => (
+ *     <h1>{props.params.slug}</h1>
+ *   )
+ * }
+ *
+ * // no options
+ * export default class About extends Page.make() {
+ *   static Component = () => <h1>About</h1>
+ * }
+ *
+ * // SSG opt-in
+ * export default class Home extends Page.static() {
+ *   static Component = () => <h1>Home</h1>
+ * }
  * ```
  *
- * Escape hatches until then (path may be explicit; file-router owns disk path):
+ * `Page.make` = dynamic (default). `Page.static` = bake. Not a Service —
+ * constructor-shaped like `HttpApi.make` / `Router.make`.
  *
- * ```ts
- * export default Page.static("/about", AboutView)
- * export default Page.dynamic("/search", SearchView)
- * export default Page.build("/docs/:chapter", ChapterView, {
- *   paths: listChapterSlugs, // Effect
- * })
- * ```
- *
- * The file-router / `createPages` adapter reads {@link stampOf} on the default
- * export. Apps never write Waku `getConfig` and there is no `Page.getConfig`.
+ * File-router extracts {@link optionsOf} / {@link modeOf} from the class.
+ * Apps never write Waku `getConfig`.
  *
  * Outlet trees:
  *
@@ -35,82 +39,71 @@
  * ```
  */
 import type * as React from "react";
-import { Data, Effect } from "effect";
 import type * as pageServices from "./internal/pageServices";
+import type {
+  ParamsTypeOf,
+  QueryTypeOf,
+  RequestOptions,
+} from "./internal/routeRequest";
+
+export type { RequestOptions } from "./internal/routeRequest";
 
 // =============================================================================
-// Render mode (owned PascalCase)
+// Mode
 // =============================================================================
 
 /**
- * How the file router registers the page with the web engine.
- * Lowercase wire strings stay inside the Waku/`createPages` adapter.
+ * How the file router / engine registers the page.
  *
  * @public
  */
-export type Render = Data.TaggedEnum<{
-  Static: {};
-  Dynamic: {};
-  Build: {};
-}>;
-
-/**
- * Constructors / `$match` for {@link Render}.
- *
- * @public
- */
-export const Render = Data.taggedEnum<Render>();
+export type Mode = "static" | "dynamic";
 
 // =============================================================================
-// Stamp
+// Page class (HttpApi-shaped)
 // =============================================================================
 
-/** Brand key on stamped page / layout components. @internal */
-export const StampTypeId = "~last-ts/Page/stamp" as const;
+/** Brand on {@link make} / {@link static_} constructors. @internal */
+export const TypeId = "~last-ts/Page" as const;
 
 /**
- * Metadata + render plan attached to a page module default export.
+ * Page class — request options + mode. Extend with {@link make} / {@link static_}.
  *
  * @public
  */
-type StampBase = {
-  readonly path: "/" | `/${string}`;
-  readonly title?: string;
-  readonly description?: string;
-  /**
-   * SSG path args for {@link Render.Build} / param routes.
-   * Effect so listing can use FileSystem / services without raw Promises.
-   */
-  readonly paths?: Effect.Effect<ReadonlyArray<string>>;
-};
+export interface AnyPage<
+  out Options extends RequestOptions = RequestOptions,
+  out M extends Mode = Mode,
+> {
+  new(_: never): {};
+  readonly [TypeId]: typeof TypeId;
+  readonly options: Options;
+  readonly mode: M;
+  /** Optional React view; file-router / builders read {@link componentOf}. */
+  readonly Component?: Component<PropsFromOptions<Options>>;
+}
 
 /**
- * Metadata + render plan attached to a page module default export.
+ * Props derived from a page class’s request options.
  *
  * @public
  */
-export type Stamp = StampBase & {
-  readonly render: Render;
-};
-
-/** @public */
-export type StaticStamp = StampBase & {
-  readonly render: ReturnType<typeof Render.Static>;
-};
-
-/** @public */
-export type DynamicStamp = StampBase & {
-  readonly render: ReturnType<typeof Render.Dynamic>;
-};
-
-/** @public */
-export type BuildStamp = StampBase & {
-  readonly render: ReturnType<typeof Render.Build>;
-  readonly paths: Effect.Effect<ReadonlyArray<string>>;
+export type PropsFromOptions<O extends RequestOptions> = {
+  readonly pathname: string;
+  readonly href: string;
+  readonly params: ParamsTypeOf<O>;
+  readonly query: QueryTypeOf<O>;
 };
 
 /**
- * React page / layout component the file router loads.
+ * Props for a page class: `Page.Props<typeof Chapter>`.
+ *
+ * @public
+ */
+export type Props<P extends AnyPage> = PropsFromOptions<P["options"]>;
+
+/**
+ * React page component.
  *
  * @public
  */
@@ -118,114 +111,95 @@ export type Component<P extends object = {}> = (
   props: P,
 ) => React.ReactElement | null;
 
-type Stamped<C> = C & { readonly [StampTypeId]: Stamp };
+const pageProto = {
+  pipe() {
+    // eslint-disable-next-line prefer-rest-params -- pipeArguments-style
+    return arguments[0];
+  },
+};
 
-const stamp = <C extends Component<any>, S extends Stamp>(
-  Comp: C,
-  value: S,
-): C & { readonly [StampTypeId]: S } => Object.assign(Comp, { [StampTypeId]: value });
-
-/**
- * Read the file-router stamp from a default export (if present).
- *
- * @public
- */
-export const stampOf = <S extends Stamp>(
-  comp: { readonly [StampTypeId]: S } | object,
-): S | undefined => {
-  if (StampTypeId in comp) {
-    return (comp as { readonly [StampTypeId]: S })[StampTypeId];
-  }
-  return undefined;
+const makePageClass = <
+  const Options extends RequestOptions,
+  const M extends Mode,
+>(
+  options: Options,
+  mode: M,
+): AnyPage<Options, M> => {
+  function PageClass(_: never) {}
+  Object.setPrototypeOf(PageClass, pageProto);
+  return Object.assign(PageClass, {
+    [TypeId]: TypeId,
+    options,
+    mode,
+  }) as unknown as AnyPage<Options, M>;
 };
 
 /**
- * Whether `u` carries a {@link Stamp}.
+ * Dynamic page class (SSR) — optional request options as the **first** argument.
+ *
+ * Same options bag as {@link ./Route.get}.
+ *
+ * @example
+ * ```ts
+ * class Chapter extends Page.make({
+ *   params: { slug: Schema.Literal("routing", "view-service") },
+ * }) {}
+ *
+ * class About extends Page.make() {}
+ * ```
  *
  * @public
  */
-export const isStamped = (u: unknown): u is Stamped<Component> =>
-  typeof u === "function" && StampTypeId in u;
-
-// =============================================================================
-// Helpers (camelCase) — path string is the key
-// =============================================================================
-
-export type Meta = {
-  readonly title?: string;
-  readonly description?: string;
-};
-
-export type BuildMeta = Meta & {
-  readonly paths: Effect.Effect<ReadonlyArray<string>>;
-};
+export const make: {
+  <const Options extends RequestOptions>(
+    options: Options,
+  ): AnyPage<Options, "dynamic">;
+  (): AnyPage<RequestOptions, "dynamic">;
+} = ((options?: RequestOptions) =>
+  makePageClass(options ?? ({} as RequestOptions), "dynamic")) as typeof make;
 
 /**
- * SSG this path. Fixed routes default to Static when unmarked; spelling it out
- * documents intent.
+ * Static page class (SSG bake) — optional request options first.
+ *
+ * @example
+ * ```ts
+ * class Home extends Page.static() {}
+ * class Chapter extends Page.static({
+ *   params: { slug: Schema.Literal("routing", "view-service") },
+ * }) {}
+ * ```
  *
  * @public
  */
-export const static_ = <P extends object>(
-  path: Stamp["path"],
-  Comp: Component<P>,
-  meta?: Meta,
-): Component<P> & { readonly [StampTypeId]: StaticStamp } =>
-  stamp(Comp, { path, render: Render.Static(), ...meta });
+export const static_: {
+  <const Options extends RequestOptions>(
+    options: Options,
+  ): AnyPage<Options, "static">;
+  (): AnyPage<RequestOptions, "static">;
+} = ((options?: RequestOptions) =>
+  makePageClass(options ?? ({} as RequestOptions), "static")) as typeof static_;
 
 export { static_ as static };
 
-/**
- * SSR every request.
- *
- * @public
- */
-export const dynamic = <P extends object>(
-  path: Stamp["path"],
-  Comp: Component<P>,
-  meta?: Meta,
-): Component<P> & { readonly [StampTypeId]: DynamicStamp } =>
-  stamp(Comp, { path, render: Render.Dynamic(), ...meta });
+/** Whether `u` is a {@link make} / {@link static_} page class. @public */
+export const isPage = (u: unknown): u is AnyPage =>
+  typeof u === "function" &&
+  u !== null &&
+  TypeId in u &&
+  (u as AnyPage)[TypeId] === TypeId;
 
-/**
- * Param / build-time path set — dynamic in DEV, static + {@link BuildMeta.paths}
- * in production (file-router / Vite plugin apply the fork).
- *
- * @public
- */
-export const build = <P extends object>(
-  path: Stamp["path"],
-  Comp: Component<P>,
-  meta: BuildMeta,
-): Component<P> & { readonly [StampTypeId]: BuildStamp } =>
-  stamp(Comp, { path, render: Render.Build(), ...meta });
+/** Request options on a page class. @public */
+export const optionsOf = <P extends AnyPage>(page: P): P["options"] =>
+  page.options;
 
-/**
- * Layout chrome (`_layout`). camelCase helper; a `Layout` class later only if earned.
- *
- * @public
- */
-export const layout = (
-  path: Stamp["path"],
-  Comp: Component<{ readonly children: React.ReactNode }>,
-  meta?: Meta,
-): Component<{ readonly children: React.ReactNode }> & {
-  readonly [StampTypeId]: StaticStamp;
-} => stamp(Comp, { path, render: Render.Static(), ...meta });
+/** `static` | `dynamic` on a page class. @public */
+export const modeOf = <P extends AnyPage>(page: P): P["mode"] => page.mode;
 
-/**
- * Map a stamp’s render mode for the web engine (internal wire).
- *
- * @internal
- */
-export const renderModeOf = (
-  stampValue: Stamp,
-  options: { readonly dev: boolean },
-): "static" | "dynamic" => {
-  if (stampValue.render._tag === "Dynamic") return "dynamic";
-  if (stampValue.render._tag === "Build" && options.dev) return "dynamic";
-  return "static";
-};
+/** `static Component` when present. @public */
+export const componentOf = <P extends AnyPage>(
+  page: P,
+): Component<Props<P>> | undefined =>
+  page.Component as Component<Props<P>> | undefined;
 
 // =============================================================================
 // Live route services (Router.Outlet) — RSC-safe Effect tags
@@ -250,3 +224,37 @@ export {
   Request,
   Document,
 } from "./internal/pageServices";
+
+// =============================================================================
+// Deprecated stamp helpers (path + component) — prefer {@link make} classes
+// =============================================================================
+
+/** @deprecated Prefer {@link make} / {@link static_} page classes. @internal */
+export const StampTypeId = "~last-ts/Page/stamp" as const;
+
+/** @deprecated @internal */
+export type Stamp = {
+  readonly path: "/" | `/${string}`;
+  readonly render: { readonly _tag: "Static" | "Dynamic" | "Build" };
+  readonly title?: string;
+  readonly description?: string;
+  readonly paths?: import("effect/Effect").Effect<ReadonlyArray<string>>;
+};
+
+/** @deprecated Prefer {@link isPage}. @public */
+export const stampOf = (comp: object): Stamp | undefined => {
+  if (StampTypeId in comp) {
+    return (comp as { readonly [StampTypeId]: Stamp })[StampTypeId];
+  }
+  return undefined;
+};
+
+/** @deprecated Prefer {@link modeOf}. @internal */
+export const renderModeOf = (
+  stampValue: Stamp,
+  options: { readonly dev: boolean },
+): "static" | "dynamic" => {
+  if (stampValue.render._tag === "Dynamic") return "dynamic";
+  if (stampValue.render._tag === "Build" && options.dev) return "dynamic";
+  return "static";
+};

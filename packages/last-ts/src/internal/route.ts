@@ -7,6 +7,7 @@ import * as Option from "effect/Option";
 import type * as Schema from "effect/Schema";
 import { HttpApiEndpoint } from "effect/unstable/httpapi";
 import * as pageSuccess from "./pageSuccess";
+import type { RequestOptions } from "./routeRequest";
 
 export const TypeId = "~effect/httpapi/HttpApiEndpoint" as const;
 
@@ -61,7 +62,12 @@ export type Route<
 export const isRoute = (u: unknown): u is Constraint =>
   HttpApiEndpoint.isHttpApiEndpoint(u);
 
-/** Single destination — `HttpApiEndpoint.get` with Page success (always). */
+/**
+ * Page destination — dynamic by default (SSR). Opt into SSG with
+ * {@link ./routeFromEffect.staticFromEffect} (literal param bags).
+ *
+ * Same {@link RequestOptions} bag as {@link ../Page.make}.
+ */
 export const get = <
   const Id extends string,
   const PathType extends Path,
@@ -71,12 +77,7 @@ export const get = <
 >(
   identifier: Id,
   path: PathType,
-  options?: {
-    readonly params?: Params | undefined;
-    readonly query?: Query | undefined;
-    readonly headers?: Headers | undefined;
-    readonly error?: Schema.Top | ReadonlyArray<Schema.Top> | undefined;
-  },
+  options?: RequestOptions<Params, Query, Headers>,
 ) => {
   const endpoint = HttpApiEndpoint.get(identifier, path, {
     params: options?.params,
@@ -88,6 +89,8 @@ export const get = <
   // Brand so IsPageEndpoint survives success codec wraps.
   return endpoint as typeof endpoint & pageSuccess.PageEndpointBrand;
 };
+
+export type { RequestOptions } from "./routeRequest";
 
 /**
  * Attach / replace params schema (rebuilds the endpoint — HttpApi has no setter).
