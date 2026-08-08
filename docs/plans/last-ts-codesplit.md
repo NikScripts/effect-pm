@@ -128,7 +128,7 @@ Optional temporary re-exports on `hyperlink-ts/ui/Route` etc. during migration �
 ## Open (next locks)
 
 - Publish cadence for last-ts beyond workspace `0.0.1`.
-- **`Page.Service` + Layout** — design in [`page-layout-design.md`](../handoffs/page-layout-design.md); lock then Eng. Docs-site createPages after.
+- **`Page.Service` + Layout** — design in [`page-layout-design.md`](../handoffs/page-layout-design.md); lock then Eng. Optional host adapter after (not a reopen of static/dynamic).
 - **P4** — drop hyperlink re-export shims once callers on `last-ts/*`; guide polish.
 - `Last` module earned (`kindSym` / `kindOf`) — done; grow only with real cross-cuts.
 - Fold `RuntimeProvider` stays on `AtomReact` unless size hurts.

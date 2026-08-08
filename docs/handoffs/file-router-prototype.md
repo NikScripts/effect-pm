@@ -68,7 +68,7 @@ Dynamic. Layout: `Page.layout` (camelCase); `Page.Layout` class only if earned.
 
 - Vite plugin (`hyperlink-ts/vite`): watch `pages/**`, atomic `paths.gen.ts`
 - `hyp … --check` in CI
-- Soft-nav: existing `Router/waku`; file table → `createPages` internally
+- Soft-nav: existing `Router/waku`; file table → host registration internally (Waku today; optional later adapter — not a static/dynamic API)
 
 ## Landed (this branch)
 
@@ -85,6 +85,6 @@ Dynamic. Layout: `Page.layout` (camelCase); `Page.Layout` class only if earned.
 
 ## Still open
 
-1. **`Page.Service` + Layout** — design plan (not locked): [`page-layout-design.md`](./page-layout-design.md)
-2. Docs-site cutover off Waku fs-router → `createPages` adapter
+1. **`Page.Service` + Layout** — design plan (not locked): [`page-layout-design.md`](./page-layout-design.md) (includes Layout-as-View default Component + provide-swap lean)
+2. Optional docs-site host-adapter cutover — maps locked marks; static/dynamic already locked via `Page.make` / `Page.static`
 3. Wire docs `waku.config.ts` to `fileRouter` plugin (optional dogfood)

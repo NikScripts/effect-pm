@@ -182,7 +182,7 @@ Router.make(layout, pages)
 ### 8. File adapter (later)
 
 - Vite / `hyp file-router` codegen → typed path union + default exports
-- `createPages` maps `stampOf` → engine
+- Optional internal host adapter (historically nicknamed after Waku’s `createPages`) maps locked Page marks → engine — **not** a last-ts public API; does not redefine static/dynamic (see [`page-layout-design.md`](./page-layout-design.md))
 - Disk is UX; **Schema routes are SSOT**
 
 ---

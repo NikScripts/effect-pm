@@ -15,7 +15,7 @@
 2. **Upward values** — a View/Layout **requires** keys; some **descendant View** (or seed bag) **provides** them. Missing when the tree is closed ⇒ **type error**. The page module itself need **not** be the provider.
 3. **`Last.provide`** / **`Last.context`** — write/read the bag; **last write wins**.
 4. **Eng order:** get require/provide working on **Views first**, then Layout/Page file-router.
-5. Layout chrome via a **non-DI constructor** (outlet render-prop); optional **`Layout.Tag`** when DI is wanted.
+5. Layout chrome via a **non-DI constructor** (outlet render-prop); optional **`Layout.Tag`** when DI is wanted — lean: **View-shaped default Component, swap via provide** (see notes dump).
 
 **Not goals (v1):** JSX child-type proofs for arbitrary `<div>` trees; builtin Page `title`/`description`; colliding with Hyperlink `Views.Page` size chrome.
 
@@ -442,7 +442,7 @@ export default Book.build(
 | **L1** | `Page.static(Book, …)` / class type param; seed optional; closed-tree discharge |
 | **L2** | Demote builtin meta off Page stamp; Build `paths` only |
 | **L3** | Nested layouts; file-router stamp |
-| **L4** | Docs-site `createPages` cutover (product) |
+| **L4** | Optional internal host adapter (Waku registration) — maps locked marks; does not reopen static/dynamic |
 
 Acceptance (V0): deep provide satisfies parent require at compose; `Last.context` typed; last-wins runtime; no Hyperlink in last-ts.
 
