@@ -212,7 +212,7 @@ yield* Launcher.restartSuccessor({
 })
 ```
 
-**Binary update (file-swap dream):** prefer **`Update.plan` → `simulate` → `execute`**
+**Binary / fleet update:** prefer **`Update.plan` → `simulate` → `execute`**
 ([Update](/docs/update)) over options-bag `restartSuccessor`. Walkthrough:
 [dream redeploy](/docs/launcher-dream-redeploy) ·
 `pnpm run example:launcher-dream-redeploy`. Address / proxy design still open:

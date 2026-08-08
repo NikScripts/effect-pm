@@ -380,6 +380,7 @@
     "example:launcher-lookup-membership": "tsx examples/launcher/lookup-membership.ts",
     "example:launcher-ensure-lookup": "tsx examples/launcher/ensure-lookup.ts",
     "example:launcher-plan-update": "tsx examples/launcher/plan-update.ts",
+    "example:launcher-update-fleet": "tsx examples/launcher/update-fleet.ts",
     "example:launcher-restart-successor": "tsx examples/launcher/restart-successor.ts",
     "example:launcher-dream-redeploy": "tsx examples/launcher/dream-redeploy.ts",
     "example:launcher-minimal-up": "tsx examples/launcher/minimal-up.ts",

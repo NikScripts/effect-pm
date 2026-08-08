@@ -4,11 +4,7 @@
 import { describe, expect, it } from "@effect/vitest";
 import {
   Clock,
-  Context,
-  Duration,
   Effect,
-  Layer,
-  Schedule,
   Schema,
   SchemaTransformation,
 } from "effect";
@@ -26,38 +22,14 @@ import {
   reapRestartChildren,
   restartChildEntryPaths,
 } from "./fixtures/launcherHarness";
-
-/** WorkPool stamps this; Update contracts read tip via the same symbol. */
-const workPoolItemSchemaSym = Symbol.for("hyperlink-ts/WorkPool/itemSchema");
-
-const tmpSock = (label: string) =>
-  Effect.gen(function* () {
-    const now = yield* Clock.currentTimeMillis;
-    return `/tmp/hyperlink-ts-update-${label}-${process.pid}-${now}.sock`;
-  });
-
-const withLookup = <A, E, R>(
-  server: Layer.Layer<never, Lookup.LookupUnaddressed>,
-  client: Layer.Layer<Lookup.Services, Lookup.LookupUnaddressed>,
-  use: Effect.Effect<A, E, R>,
-) =>
-  Effect.gen(function* () {
-    const serverCtx = yield* Layer.build(server);
-    const clientCtx = yield* Layer.build(client);
-    return yield* use.pipe(
-      Effect.provide(Lookup.planStatusOff),
-      Effect.provide(Context.merge(serverCtx, clientCtx)),
-    );
-  }).pipe(Effect.scoped);
-
-const waitUntil = <A, E, R>(
-  effect: Effect.Effect<A, E, R>,
-  until: (value: A) => boolean,
-) =>
-  Effect.repeat(effect, {
-    until,
-    schedule: Schedule.spaced(Duration.millis(25)),
-  });
+import {
+  advertiseIpc,
+  dummySuccessor,
+  tmpSock,
+  waitUntil,
+  withLookup,
+  workPoolItemSchemaSym,
+} from "./fixtures/updateHarness";
 
 class Jobs extends Hyperlink.Service<Jobs>()("update-plan/Jobs", {
   run: Hyperlink.effect(Schema.Number),
@@ -148,7 +120,58 @@ describe("Update.plan / simulate", () => {
     }),
   );
 
-  it.effect("orders steps and attaches planUpdate impacts", () =>
+  it.effect("fails EmptyUpdateStepTags when a step has no tags", () =>
+    Effect.gen(function* () {
+      const path = yield* tmpSock("empty-tags");
+      const node = Node.Service()("update/empty-tags", { path }).pipe(
+        Node.asLookup,
+      );
+      yield* withLookup(
+        Lookup.layerNode(node),
+        Lookup.client(node),
+        Effect.gen(function* () {
+          const successor = dummySuccessor("empty-tags");
+          const exit = yield* Effect.exit(
+            Update.plan({
+              steps: [
+                {
+                  target: "mail-a",
+                  successor,
+                  tags: [],
+                },
+              ],
+            }),
+          );
+          expectTaggedFailure(exit, "EmptyUpdateStepTags");
+        }),
+      );
+    }),
+  );
+
+  it.effect("fails DuplicateUpdateTarget when targets collide", () =>
+    Effect.gen(function* () {
+      const path = yield* tmpSock("dup");
+      const node = Node.Service()("update/dup", { path }).pipe(Node.asLookup);
+      yield* withLookup(
+        Lookup.layerNode(node),
+        Lookup.client(node),
+        Effect.gen(function* () {
+          const successor = dummySuccessor("dup");
+          const exit = yield* Effect.exit(
+            Update.plan({
+              steps: [
+                { target: "mail-a", successor, tags: [Mail] },
+                { target: "mail-a", successor, tags: [Mail] },
+              ],
+            }),
+          );
+          expectTaggedFailure(exit, "DuplicateUpdateTarget");
+        }),
+      );
+    }),
+  );
+
+  it.effect("orders steps, attaches impacts, rolls up coUpdate", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("order");
       const node = Node.Service()("update/order", { path }).pipe(Node.asLookup);
@@ -156,39 +179,28 @@ describe("Update.plan / simulate", () => {
         Lookup.layerNode(node),
         Lookup.client(node),
         Effect.gen(function* () {
-          const dir = yield* Directory.Service;
-          yield* dir.advertise(
-            new Directory.AdvertiseRequest({
-              nodeKey: "mail-a",
-              kind: "IpcSocket",
-              path: "/tmp/mail-a.sock",
-              serves: ["update-plan/Mail"],
-            }),
-          );
-          yield* dir.advertise(
-            new Directory.AdvertiseRequest({
-              nodeKey: "jobs-a",
-              kind: "IpcSocket",
-              path: "/tmp/jobs-a.sock",
-              serves: ["update-plan/Jobs"],
-            }),
-          );
+          yield* advertiseIpc("mail-a", "/tmp/mail-a.sock", [
+            "update-plan/Mail",
+          ]);
+          yield* advertiseIpc("jobs-a", "/tmp/jobs-a.sock", [
+            "update-plan/Jobs",
+          ]);
+          // Peer sharing Jobs — surfaces on coUpdate / uncoveredCoUpdate.
+          yield* advertiseIpc("jobs-b", "/tmp/jobs-b.sock", [
+            "update-plan/Jobs",
+          ]);
 
-          const dummy = Node.Service()("update/order-b", {
-            path: "/tmp/order-b.sock",
-          });
-          const process = Launcher.command("true", [], { token: "env" });
-
+          const successor = dummySuccessor("order");
           const plan = yield* Update.plan({
             steps: [
               {
                 target: "mail-a",
-                successor: { node: dummy, process },
+                successor,
                 tags: [Mail],
               },
               {
                 target: "jobs-a",
-                successor: { node: dummy, process },
+                successor,
                 tags: [Jobs],
               },
             ],
@@ -201,15 +213,27 @@ describe("Update.plan / simulate", () => {
           expect(plan.steps[0]?.impact?.target).toBe("mail-a");
           expect(plan.steps[1]?.impact?.target).toBe("jobs-a");
           expect(plan.blocked).toBe(false);
+          expect(plan.coUpdate).toEqual(["jobs-b"]);
+          expect(plan.uncoveredCoUpdate).toEqual(["jobs-b"]);
 
           const sim = yield* Update.simulate(plan);
           expect(sim.ok).toBe(true);
+
+          // Covering the peer clears uncoveredCoUpdate.
+          const covered = yield* Update.plan({
+            steps: [
+              { target: "jobs-a", successor, tags: [Jobs] },
+              { target: "jobs-b", successor, tags: [Jobs] },
+            ],
+          });
+          expect(covered.coUpdate).toEqual(["jobs-a", "jobs-b"]);
+          expect(covered.uncoveredCoUpdate).toEqual([]);
         }),
       );
     }),
   );
 
-  it.effect("fails ContractMismatch when successor tip ≠ contract.to", () =>
+  it.effect("fails UpdateContractMismatch when successor tip ≠ contract.to", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("contract");
       const node = Node.Service()("update/contract", { path }).pipe(
@@ -219,20 +243,10 @@ describe("Update.plan / simulate", () => {
         Lookup.layerNode(node),
         Lookup.client(node),
         Effect.gen(function* () {
-          const dir = yield* Directory.Service;
-          yield* dir.advertise(
-            new Directory.AdvertiseRequest({
-              nodeKey: "vj-a",
-              kind: "IpcSocket",
-              path: "/tmp/vj-a.sock",
-              serves: ["update-plan/VersionedJobs"],
-            }),
-          );
-          const dummy = Node.Service()("update/contract-b", {
-            path: "/tmp/contract-b.sock",
-          });
-          const process = Launcher.command("true", [], { token: "env" });
-
+          yield* advertiseIpc("vj-a", "/tmp/vj-a.sock", [
+            "update-plan/VersionedJobs",
+          ]);
+          const successor = dummySuccessor("contract");
           const tip = Versioned.schemaVersion(JobChain);
           expect(tip).toBe("update/job@2");
 
@@ -241,7 +255,7 @@ describe("Update.plan / simulate", () => {
               steps: [
                 {
                   target: "vj-a",
-                  successor: { node: dummy, process },
+                  successor,
                   tags: [VersionedJobs],
                 },
               ],
@@ -253,49 +267,7 @@ describe("Update.plan / simulate", () => {
               ],
             }),
           );
-          expectTaggedFailure(exit, "ContractMismatch");
-        }),
-      );
-    }),
-  );
-
-  it.effect("plan surfaces UpdateBlocked for wireRemovals (fail closed)", () =>
-    Effect.gen(function* () {
-      const path = yield* tmpSock("blocked");
-      const node = Node.Service()("update/blocked", { path }).pipe(
-        Node.asLookup,
-      );
-      yield* withLookup(
-        Lookup.layerNode(node),
-        Lookup.client(node),
-        Effect.gen(function* () {
-          const dir = yield* Directory.Service;
-          yield* dir.advertise(
-            new Directory.AdvertiseRequest({
-              nodeKey: "jobs-a",
-              kind: "IpcSocket",
-              path: "/tmp/jobs-blocked.sock",
-              serves: ["update-plan/Jobs"],
-            }),
-          );
-          const dummy = Node.Service()("update/blocked-b", {
-            path: "/tmp/blocked-b.sock",
-          });
-          const process = Launcher.command("true", [], { token: "env" });
-
-          const exit = yield* Effect.exit(
-            Update.plan({
-              steps: [
-                {
-                  target: "jobs-a",
-                  successor: { node: dummy, process },
-                  tags: [jobsNext],
-                  incumbent: [Jobs],
-                },
-              ],
-            }),
-          );
-          expectTaggedFailure(exit, "UpdateBlocked");
+          expectTaggedFailure(exit, "UpdateContractMismatch");
         }),
       );
     }),
@@ -311,26 +283,17 @@ describe("Update.plan / simulate", () => {
         Lookup.layerNode(node),
         Lookup.client(node),
         Effect.gen(function* () {
-          const dir = yield* Directory.Service;
-          yield* dir.advertise(
-            new Directory.AdvertiseRequest({
-              nodeKey: "vj-ok",
-              kind: "IpcSocket",
-              path: "/tmp/vj-ok.sock",
-              serves: ["update-plan/VersionedJobs"],
-            }),
-          );
-          const dummy = Node.Service()("update/contract-ok-b", {
-            path: "/tmp/contract-ok-b.sock",
-          });
-          const process = Launcher.command("true", [], { token: "env" });
+          yield* advertiseIpc("vj-ok", "/tmp/vj-ok.sock", [
+            "update-plan/VersionedJobs",
+          ]);
+          const successor = dummySuccessor("contract-ok");
           const tip = Versioned.schemaVersion(JobChain);
 
           const plan = yield* Update.plan({
             steps: [
               {
                 target: "vj-ok",
-                successor: { node: dummy, process },
+                successor,
                 tags: [VersionedJobs],
               },
             ],
@@ -347,6 +310,120 @@ describe("Update.plan / simulate", () => {
     }),
   );
 
+  it.effect("contract.from fails path when Versioned chain lacks from", () =>
+    Effect.gen(function* () {
+      const path = yield* tmpSock("contract-path");
+      const node = Node.Service()("update/contract-path", { path }).pipe(
+        Node.asLookup,
+      );
+      yield* withLookup(
+        Lookup.layerNode(node),
+        Lookup.client(node),
+        Effect.gen(function* () {
+          yield* advertiseIpc("vj-path", "/tmp/vj-path.sock", [
+            "update-plan/VersionedJobs",
+          ]);
+          const successor = dummySuccessor("contract-path");
+          const tip = Versioned.schemaVersion(JobChain);
+
+          const exit = yield* Effect.exit(
+            Update.plan({
+              steps: [
+                {
+                  target: "vj-path",
+                  successor,
+                  tags: [VersionedJobs],
+                },
+              ],
+              contracts: [
+                {
+                  tag: VersionedJobs,
+                  from: "update/job@99",
+                  to: tip,
+                },
+              ],
+            }),
+          );
+          expectTaggedFailure(exit, "UpdateContractMismatch");
+        }),
+      );
+    }),
+  );
+
+  it.effect("contract.from→to ok when Versioned path exists (status off)", () =>
+    Effect.gen(function* () {
+      const path = yield* tmpSock("contract-path-ok");
+      const node = Node.Service()("update/contract-path-ok", { path }).pipe(
+        Node.asLookup,
+      );
+      yield* withLookup(
+        Lookup.layerNode(node),
+        Lookup.client(node),
+        Effect.gen(function* () {
+          yield* advertiseIpc("vj-path-ok", "/tmp/vj-path-ok.sock", [
+            "update-plan/VersionedJobs",
+          ]);
+          const successor = dummySuccessor("contract-path-ok");
+          const tip = Versioned.schemaVersion(JobChain);
+
+          const plan = yield* Update.plan({
+            steps: [
+              {
+                target: "vj-path-ok",
+                successor,
+                tags: [VersionedJobs],
+              },
+            ],
+            contracts: [
+              {
+                tag: VersionedJobs,
+                from: "update/job@1",
+                to: tip,
+              },
+            ],
+          });
+          expect(plan.blocked).toBe(false);
+          expect(plan.audit[0]?.ok).toBe(true);
+          expect(plan.audit[0]?.observed.from).toBeUndefined();
+          expect(plan.audit[0]?.observed.to).toBe(tip);
+        }),
+      );
+    }),
+  );
+
+  it.effect("plan surfaces UpdateBlocked for wireRemovals (fail closed)", () =>
+    Effect.gen(function* () {
+      const path = yield* tmpSock("blocked");
+      const node = Node.Service()("update/blocked", { path }).pipe(
+        Node.asLookup,
+      );
+      yield* withLookup(
+        Lookup.layerNode(node),
+        Lookup.client(node),
+        Effect.gen(function* () {
+          yield* advertiseIpc("jobs-a", "/tmp/jobs-blocked.sock", [
+            "update-plan/Jobs",
+          ]);
+          const successor = dummySuccessor("blocked");
+
+          const exit = yield* Effect.exit(
+            Update.plan({
+              steps: [
+                {
+                  target: "jobs-a",
+                  successor,
+                  tags: [jobsNext],
+                  incumbent: [Jobs],
+                },
+              ],
+            }),
+          );
+          expectTaggedFailure(exit, "UpdateBlocked");
+        }),
+      );
+    }),
+  );
+
   it.effect("skipPlan omits impact; simulate still ok", () =>
     Effect.gen(function* () {
       const path = yield* tmpSock("skip");
@@ -355,15 +432,12 @@ describe("Update.plan / simulate", () => {
         Lookup.layerNode(node),
         Lookup.client(node),
         Effect.gen(function* () {
-          const dummy = Node.Service()("update/skip-b", {
-            path: "/tmp/skip-b.sock",
-          });
-          const process = Launcher.command("true", [], { token: "env" });
+          const successor = dummySuccessor("skip");
           const plan = yield* Update.plan({
             steps: [
               {
                 target: "ghost",
-                successor: { node: dummy, process },
+                successor,
                 tags: [Mail],
                 skipPlan: true,
               },
@@ -371,8 +445,16 @@ describe("Update.plan / simulate", () => {
           });
           expect(plan.steps[0]?.impact).toBeUndefined();
           expect(plan.blocked).toBe(false);
+          expect(plan.coUpdate).toEqual([]);
           expect(Update.isPlan(plan)).toBe(true);
           expect(Update.isPlan({ _tag: "Nope" })).toBe(false);
+          expect(
+            Update.isPlan({
+              _tag: "UpdatePlan",
+              steps: [],
+              // missing audit / coUpdate — not a Plan
+            }),
+          ).toBe(false);
           const sim = yield* Update.simulate(plan);
           expect(sim.ok).toBe(true);
         }),
@@ -390,26 +472,17 @@ describe("Update.plan / simulate", () => {
         Lookup.layerNode(node),
         Lookup.client(node),
         Effect.gen(function* () {
-          const dir = yield* Directory.Service;
-          yield* dir.advertise(
-            new Directory.AdvertiseRequest({
-              nodeKey: "jobs-force",
-              kind: "IpcSocket",
-              path: "/tmp/jobs-force.sock",
-              serves: ["update-plan/Jobs"],
-            }),
-          );
-          const dummy = Node.Service()("update/force-b", {
-            path: "/tmp/force-b.sock",
-          });
-          const process = Launcher.command("true", [], { token: "env" });
+          yield* advertiseIpc("jobs-force", "/tmp/jobs-force.sock", [
+            "update-plan/Jobs",
+          ]);
+          const successor = dummySuccessor("force");
 
           const plan = yield* Update.plan({
             force: true,
             steps: [
               {
                 target: "jobs-force",
-                successor: { node: dummy, process },
+                successor,
                 tags: [jobsNext],
                 incumbent: [Jobs],
               },
@@ -417,11 +490,11 @@ describe("Update.plan / simulate", () => {
           });
           expect(plan.blocked).toBe(true);
           expect(plan.steps[0]?.impact?.blocked).toBe(true);
+          expect(plan.steps[0]?.impact?.liveTips).toEqual([]);
 
           const simExit = yield* Effect.exit(Update.simulate(plan));
           expectTaggedFailure(simExit, "UpdatePlanBlocked");
 
-          // blocked short-circuits before spawn — still needs Launcher env typed.
           const execExit = yield* Effect.exit(
             Update.execute(plan).pipe(Effect.provide(Launcher.layer)),
           );
@@ -430,7 +503,6 @@ describe("Update.plan / simulate", () => {
       );
     }).pipe(Effect.provide(platform)),
   );
-
 });
 
 describe("Update.execute live A→B", () => {
@@ -443,8 +515,14 @@ describe("Update.execute live A→B", () => {
         const lookupPath = yield* tmpSock("exec");
         const now = yield* Clock.currentTimeMillis;
         // pid salt avoids EADDRINUSE when this suite runs beside other live launchers.
-        const portA = ephemeralPort(`${process.pid.toString(16)}${now.toString(16)}`, 241);
-        const portB = ephemeralPort(`${process.pid.toString(16)}${now.toString(16)}`, 242);
+        const portA = ephemeralPort(
+          `${process.pid.toString(16)}${now.toString(16)}`,
+          241,
+        );
+        const portB = ephemeralPort(
+          `${process.pid.toString(16)}${now.toString(16)}`,
+          242,
+        );
 
         const lookupNode = Node.Service()("update/exec-lookup", {
           path: lookupPath,
@@ -492,6 +570,7 @@ describe("Update.execute live A→B", () => {
               ],
             });
             expect(plan.blocked).toBe(false);
+            expect(plan.uncoveredCoUpdate).toEqual([]);
             yield* Update.simulate(plan);
             yield* Update.execute(plan);
 

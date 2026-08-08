@@ -27,21 +27,23 @@ export {
   simulate,
   execute,
   isPlan,
-  EmptyUpdatePlan,
-  ContractMismatch,
-  UpdatePlanBlocked,
+  EmptyPlan,
+  EmptyStepTags,
+  DuplicateTarget,
+  UpdateContractMismatch,
+  PlanBlocked,
 } from "./internal/update";
 export type {
-  UpdateStep,
-  ContractExpectation,
-  PlanInput,
+  Step,
+  Contract,
+  Input,
   PlannedStep,
-  ContractAuditEntry,
-  UpdatePlan,
-  SimulateReport,
+  AuditEntry,
+  Plan,
+  Report,
 } from "./internal/update";
 
-// Re-export impact/blocked types apps already use from Lookup for one-stop imports.
+/** @public Impact dry-run types — same as {@link Lookup.planUpdate}. */
 export type {
   PlanUpdateTag,
   UpdateImpact,

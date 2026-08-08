@@ -1,13 +1,13 @@
 # Node addresses + update API — design notes
 
-**Status:** **Partial Eng** (2026-08-08). `Update.plan` → `simulate` → `execute` **shipped**
+**Status:** **Partial Eng** (2026-08-08). `Update.plan` → `simulate` → `execute` **shipped + refined**
 (`hyperlink-ts/Update`, guide [`docs/guides/update.md`](../guides/update.md)). Remaining
 (address model, `Node.make`, locality Host/Machine, proxy, deploy node) still **design only**.  
 **Owner leans (so far):**
 - Stable **main address** + **additional A/B** (often Unix); optional Http→Unix proxy
 - ~~Replace options-bag `restartSuccessor` with `Update.plan` → execute~~ **Eng'd** (restartSuccessor remains; Update preferred)
 - **`Update` module separate from `Versioned`** — Eng'd
-- Plans are **fleet-wide**, ordered; contract from→to audit — Eng'd (v1)
+- Plans are **fleet-wide**, ordered; contract from→to audit — Eng'd (`liveTips`, `coUpdate` rollup, empty/dup guards)
 - **Simulate** validates without spawn — Eng'd; full mock = boot prod-like + plan→sim→exec
 - Deploy path / locality Host|Machine / `Node.make` — still design
 

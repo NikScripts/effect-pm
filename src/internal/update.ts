@@ -9,35 +9,14 @@
  * @module internal/update
  * @internal
  */
-import {
-  Data,
-  Effect,
-  Schema,
-  type Scope,
-} from "effect";
-import type { ConfigError } from "effect/Config";
-import type { PlatformError } from "effect/PlatformError";
-import type { ChildProcessSpawner } from "effect/unstable/process";
+import { Data, Effect } from "effect";
 import * as Advice from "../Advice";
 import * as Dialers from "../Dialers";
 import * as Directory from "../Directory";
-import type { HandoffDeferred } from "../Hyperlink";
 import * as Versioned from "../Versioned";
-import {
-  AssumeNotReady,
-  AssumeTokenMismatch,
-  AssumeTokenReused,
-} from "./nodeAssume";
 import {
   restartSuccessor,
   type SpawnSpec,
-  ChildExited,
-  HandleNotReady,
-  HandleSpent,
-  LookupAddressRequired,
-  LookupNotRunning,
-  NodeAlreadyUp,
-  ReadyTimedOut,
 } from "./launcher";
 import {
   planUpdate,
@@ -47,25 +26,22 @@ import {
   UpdateTargetUnknown,
 } from "./lookupPlanUpdate";
 import {
-  NodeUnreachable,
-  ProtocolUnanswered,
-  ServiceNotReady,
-  ServiceNotServed,
-  UnaddressedNode,
-} from "./nodeCore";
-import { schemaVersionFromTag } from "./versioned";
+  itemSchemaOf,
+  schemaVersionFromTag,
+  versionInChain,
+} from "./versioned";
 
 // =============================================================================
 // Models
 // =============================================================================
 
 /**
- * One node cutover step inside an {@link UpdatePlan}.
+ * One node cutover step inside an {@link Plan}.
  *
  * @category models
  * @public
  */
-export interface UpdateStep {
+export interface Step {
   /** Directory `nodeKey` of the outgoing node. */
   readonly target: string;
   /** Successor unit (new dial / same identity). */
@@ -92,7 +68,7 @@ export interface UpdateStep {
  * @category models
  * @public
  */
-export interface ContractExpectation {
+export interface Contract {
   /** Successor (or shared) Tag whose tip is being asserted. */
   readonly tag: PlanUpdateTag;
   /** Expected live incumbent `schemaVersion` (when known). */
@@ -107,14 +83,14 @@ export interface ContractExpectation {
  * @category models
  * @public
  */
-export interface PlanInput {
+export interface Input {
   /**
    * Ordered steps — index is execution order (strategic handoff sequence).
-   * Must be non-empty.
+   * Must be non-empty; each step needs at least one tag; targets must be unique.
    */
-  readonly steps: ReadonlyArray<UpdateStep>;
+  readonly steps: ReadonlyArray<Step>;
   /** Optional contract from→to audit (fail closed when mismatched). */
-  readonly contracts?: ReadonlyArray<ContractExpectation>;
+  readonly contracts?: ReadonlyArray<Contract>;
   /** Default `force` for every step that omits its own. */
   readonly force?: boolean;
   /** Default `status` for every step that omits its own. */
@@ -127,18 +103,18 @@ export interface PlanInput {
  * @category models
  * @public
  */
-export interface PlannedStep extends UpdateStep {
+export interface PlannedStep extends Step {
   readonly order: number;
   readonly impact: UpdateImpact | undefined;
 }
 
 /**
- * One contract audit row on an {@link UpdatePlan}.
+ * One contract audit row on an {@link Plan}.
  *
  * @category models
  * @public
  */
-export interface ContractAuditEntry {
+export interface AuditEntry {
   readonly serviceKey: string;
   readonly expected: {
     readonly from: string | undefined;
@@ -159,11 +135,21 @@ export interface ContractAuditEntry {
  * @category models
  * @public
  */
-export interface UpdatePlan {
+export interface Plan {
   readonly _tag: "UpdatePlan";
   readonly steps: ReadonlyArray<PlannedStep>;
-  readonly contracts: ReadonlyArray<ContractExpectation>;
-  readonly audit: ReadonlyArray<ContractAuditEntry>;
+  readonly contracts: ReadonlyArray<Contract>;
+  readonly audit: ReadonlyArray<AuditEntry>;
+  /**
+   * Union of per-step {@link UpdateImpact.coUpdate} peers (Directory nodes that
+   * share a served key with a planned target).
+   */
+  readonly coUpdate: ReadonlyArray<string>;
+  /**
+   * `coUpdate` peers that are not themselves step targets — advisory; does not
+   * set {@link Plan.blocked} (fleet coverage is still owner-shaped).
+   */
+  readonly uncoveredCoUpdate: ReadonlyArray<string>;
   /** True when any step impact is blocked or any contract audit failed. */
   readonly blocked: boolean;
 }
@@ -174,10 +160,10 @@ export interface UpdatePlan {
  * @category models
  * @public
  */
-export interface SimulateReport {
-  readonly plan: UpdatePlan;
+export interface Report {
+  readonly plan: Plan;
   readonly ok: boolean;
-  readonly audit: ReadonlyArray<ContractAuditEntry>;
+  readonly audit: ReadonlyArray<AuditEntry>;
 }
 
 // =============================================================================
@@ -190,15 +176,41 @@ export interface SimulateReport {
  * @category errors
  * @public
  */
-export class EmptyUpdatePlan extends Data.TaggedError("EmptyUpdatePlan") {}
+export class EmptyPlan extends Data.TaggedError("EmptyUpdatePlan") {}
 
 /**
- * A {@link ContractExpectation} did not match observed tips / Versioned path.
+ * A step declared `tags: []` — nothing to plan or spawn.
  *
  * @category errors
  * @public
  */
-export class ContractMismatch extends Data.TaggedError("ContractMismatch")<{
+export class EmptyStepTags extends Data.TaggedError("EmptyUpdateStepTags")<{
+  readonly target: string;
+  readonly order: number;
+}> {}
+
+/**
+ * Two steps share the same Directory `target` — fleet order would race.
+ *
+ * @category errors
+ * @public
+ */
+export class DuplicateTarget extends Data.TaggedError("DuplicateUpdateTarget")<{
+  readonly target: string;
+  readonly orders: ReadonlyArray<number>;
+}> {}
+
+/**
+ * A {@link Contract} did not match observed tips / Versioned path.
+ *
+ * Distinct `_tag` from Node verify `ContractMismatch` (binary Spec drift).
+ *
+ * @category errors
+ * @public
+ */
+export class UpdateContractMismatch extends Data.TaggedError(
+  "UpdateContractMismatch",
+)<{
   readonly serviceKey: string;
   readonly expected: {
     readonly from: string | undefined;
@@ -212,40 +224,18 @@ export class ContractMismatch extends Data.TaggedError("ContractMismatch")<{
 }> {}
 
 /**
- * Plan has hard blockers (step impact or contract audit) and was not forced.
+ * Plan has hard blockers (step impact or contract audit).
  *
  * @category errors
  * @public
  */
-export class UpdatePlanBlocked extends Data.TaggedError("UpdatePlanBlocked")<{
-  readonly plan: UpdatePlan;
+export class PlanBlocked extends Data.TaggedError("UpdatePlanBlocked")<{
+  readonly plan: Plan;
 }> {}
 
 // =============================================================================
 // Helpers
 // =============================================================================
-
-const workPoolItemSchemaSym = Symbol.for("hyperlink-ts/WorkPool/itemSchema");
-
-const itemSchemaOf = (tag: PlanUpdateTag): unknown => {
-  if (
-    (typeof tag === "object" || typeof tag === "function") &&
-    tag !== null &&
-    workPoolItemSchemaSym in tag
-  ) {
-    return Reflect.get(tag, workPoolItemSchemaSym);
-  }
-  return undefined;
-};
-
-const versionInChain = (schema: unknown, from: string): boolean => {
-  if (!Versioned.isVersioned(schema)) {
-    return Schema.isSchema(schema) && Versioned.schemaVersion(schema) === from;
-  }
-  return schema[Versioned.VersionedTypeId].steps.some(
-    (step: { readonly version: string }) => step.version === from,
-  );
-};
 
 const observedFromInImpacts = (
   serviceKey: string,
@@ -255,26 +245,35 @@ const observedFromInImpacts = (
     if (impact === undefined) continue;
     const gap = impact.migrationGaps.find((g) => g.serviceKey === serviceKey);
     if (gap !== undefined) return gap.from;
-    // Same tip / path ok — migrationGaps empty; fall through.
+  }
+  for (const impact of impacts) {
+    if (impact === undefined) continue;
+    const tip = impact.liveTips.find(
+      (row) =>
+        row.serviceKey === serviceKey &&
+        row.node === impact.target &&
+        row.schemaVersion !== undefined,
+    );
+    if (tip?.schemaVersion !== undefined) return tip.schemaVersion;
   }
   return undefined;
 };
 
 const auditContracts = (
-  contracts: ReadonlyArray<ContractExpectation>,
+  contracts: ReadonlyArray<Contract>,
   impacts: ReadonlyArray<UpdateImpact | undefined>,
 ): {
-  readonly audit: ReadonlyArray<ContractAuditEntry>;
-  readonly mismatch: ContractMismatch | undefined;
+  readonly audit: ReadonlyArray<AuditEntry>;
+  readonly mismatch: UpdateContractMismatch | undefined;
 } => {
-  const audit: Array<ContractAuditEntry> = [];
-  let mismatch: ContractMismatch | undefined;
+  const audit: Array<AuditEntry> = [];
+  let mismatch: UpdateContractMismatch | undefined;
   for (const c of contracts) {
     const serviceKey = c.tag.key;
     const observedTo = schemaVersionFromTag(c.tag);
     const observedFrom = observedFromInImpacts(serviceKey, impacts);
     let ok = true;
-    let reason: ContractAuditEntry["reason"];
+    let reason: AuditEntry["reason"];
 
     if (c.to !== undefined && observedTo !== c.to) {
       ok = false;
@@ -284,7 +283,7 @@ const auditContracts = (
         ok = false;
         reason = "from";
       } else if (observedFrom === undefined && c.to !== undefined) {
-        // No gap reported — verify Versioned path from→to when schemas allow.
+        // No live tip / gap — verify Versioned path from→to when schemas allow.
         const item = itemSchemaOf(c.tag);
         if (
           item !== undefined &&
@@ -298,7 +297,7 @@ const auditContracts = (
       }
     }
 
-    const entry: ContractAuditEntry = {
+    const entry: AuditEntry = {
       serviceKey,
       expected: { from: c.from, to: c.to },
       observed: { from: observedFrom, to: observedTo },
@@ -307,7 +306,7 @@ const auditContracts = (
     };
     audit.push(entry);
     if (!ok && mismatch === undefined && reason !== undefined) {
-      mismatch = new ContractMismatch({
+      mismatch = new UpdateContractMismatch({
         serviceKey,
         expected: entry.expected,
         observed: entry.observed,
@@ -318,45 +317,65 @@ const auditContracts = (
   return { audit, mismatch };
 };
 
-type PlanError = EmptyUpdatePlan | UpdateBlocked | UpdateTargetUnknown | ContractMismatch;
+const rollupCoUpdate = (
+  planned: ReadonlyArray<PlannedStep>,
+): {
+  readonly coUpdate: ReadonlyArray<string>;
+  readonly uncoveredCoUpdate: ReadonlyArray<string>;
+} => {
+  const targets = new Set(planned.map((s) => s.target));
+  const peers = new Set<string>();
+  for (const step of planned) {
+    for (const peer of step.impact?.coUpdate ?? []) {
+      peers.add(peer);
+    }
+  }
+  const coUpdate = [...peers].sort();
+  const uncoveredCoUpdate = coUpdate.filter((peer) => !targets.has(peer));
+  return { coUpdate, uncoveredCoUpdate };
+};
 
-type ExecuteError =
-  | UpdatePlanBlocked
+const validateSteps = (
+  steps: ReadonlyArray<Step>,
+): EmptyPlan | EmptyStepTags | DuplicateTarget | undefined => {
+  if (steps.length === 0) return new EmptyPlan();
+  const seen = new Map<string, Array<number>>();
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i]!;
+    if (step.tags.length === 0) {
+      return new EmptyStepTags({ target: step.target, order: i });
+    }
+    const orders = seen.get(step.target);
+    if (orders === undefined) seen.set(step.target, [i]);
+    else orders.push(i);
+  }
+  for (const [target, orders] of seen) {
+    if (orders.length > 1) {
+      return new DuplicateTarget({ target, orders });
+    }
+  }
+  return undefined;
+};
+
+type PlanError =
+  | EmptyPlan
+  | EmptyStepTags
+  | DuplicateTarget
   | UpdateBlocked
   | UpdateTargetUnknown
-  | LookupNotRunning
-  | LookupAddressRequired
-  | NodeAlreadyUp
-  | ReadyTimedOut
-  | ChildExited
-  | HandleSpent
-  | HandleNotReady
-  | AssumeTokenMismatch
-  | AssumeTokenReused
-  | AssumeNotReady
-  | NodeUnreachable
-  | ProtocolUnanswered
-  | ServiceNotReady
-  | ServiceNotServed
-  | UnaddressedNode
-  | HandoffDeferred
-  | PlatformError
-  | ConfigError;
+  | UpdateContractMismatch;
 
-type ExecuteEnv =
-  | Directory.Service
-  | Advice.Service
-  | Dialers.Service
-  | ChildProcessSpawner.ChildProcessSpawner
-  | Scope.Scope;
+type RestartSuccessorEffect = ReturnType<typeof restartSuccessor>;
+type ExecuteError = PlanBlocked | Effect.Error<RestartSuccessorEffect>;
+type ExecuteEnv = Effect.Services<RestartSuccessorEffect>;
 
 // =============================================================================
 // Public API
 // =============================================================================
 
 /**
- * Compose an inspectable {@link UpdatePlan}: run {@link planUpdate} per step
- * (in order), audit optional contracts, fail closed on blockers / mismatches.
+ * Compose an inspectable {@link Plan}: run {@link planUpdate} per step (in
+ * order), audit optional contracts, fail closed on blockers / mismatches.
  *
  * @example
  * ```ts
@@ -373,15 +392,16 @@ type ExecuteEnv =
  * @public
  */
 export const plan = (
-  input: PlanInput,
+  input: Input,
 ): Effect.Effect<
-  UpdatePlan,
+  Plan,
   PlanError,
   Directory.Service | Advice.Service | Dialers.Service
 > =>
   Effect.gen(function* () {
-    if (input.steps.length === 0) {
-      return yield* new EmptyUpdatePlan();
+    const invalid = validateSteps(input.steps);
+    if (invalid !== undefined) {
+      return yield* invalid;
     }
 
     const planned: Array<PlannedStep> = [];
@@ -417,37 +437,22 @@ export const plan = (
       return yield* mismatch;
     }
 
-    const blocked =
-      planned.some((s) => s.impact?.blocked === true) ||
-      audit.some((a) => !a.ok);
+    const { coUpdate, uncoveredCoUpdate } = rollupCoUpdate(planned);
+    const blocked = planned.some((s) => s.impact?.blocked === true);
 
-    const result: UpdatePlan = {
+    return {
       _tag: "UpdatePlan",
       steps: planned,
       contracts,
       audit,
+      coUpdate,
+      uncoveredCoUpdate,
       blocked,
-    };
-
-    if (blocked && input.force !== true) {
-      // Per-step planUpdate already threw UpdateBlocked when ambient fail-closed.
-      // Reach here when force collected blocked impacts, or audit-only block.
-      if (audit.some((a) => !a.ok)) {
-        const bad = audit.find((a) => !a.ok)!;
-        return yield* new ContractMismatch({
-          serviceKey: bad.serviceKey,
-          expected: bad.expected,
-          observed: bad.observed,
-          reason: bad.reason ?? "to",
-        });
-      }
-    }
-
-    return result;
+    } satisfies Plan;
   });
 
 /**
- * Validate an {@link UpdatePlan} without spawning — re-checks contract audit and
+ * Validate an {@link Plan} without spawning — re-checks contract audit and
  * blocked flags. For a full production-like mock: boot Lookup + incumbents, then
  * `plan` → `simulate` → `execute` (see guide / dream-redeploy suite).
  *
@@ -455,8 +460,8 @@ export const plan = (
  * @public
  */
 export const simulate = (
-  updatePlan: UpdatePlan,
-): Effect.Effect<SimulateReport, UpdatePlanBlocked | ContractMismatch> =>
+  updatePlan: Plan,
+): Effect.Effect<Report, PlanBlocked | UpdateContractMismatch> =>
   Effect.gen(function* () {
     const { audit, mismatch } = auditContracts(
       updatePlan.contracts,
@@ -468,29 +473,35 @@ export const simulate = (
     const blocked =
       updatePlan.steps.some((s) => s.impact?.blocked === true) ||
       audit.some((a) => !a.ok);
-    const report: SimulateReport = {
-      plan: { ...updatePlan, audit, blocked },
+    const next: Plan = {
+      ...updatePlan,
+      audit,
+      blocked,
+    };
+    const report: Report = {
+      plan: next,
       ok: !blocked,
       audit,
     };
     if (blocked) {
-      return yield* new UpdatePlanBlocked({ plan: report.plan });
+      return yield* new PlanBlocked({ plan: next });
     }
     return report;
   });
 
 /**
- * Execute a validated {@link UpdatePlan} — ordered steps, each via
+ * Execute a validated {@link Plan} — ordered steps, each via
  * {@link restartSuccessor} with `skipPlan: true`.
  *
- * Fails with {@link UpdatePlanBlocked} if `plan.blocked` (call {@link simulate}
- * first, or pass a plan built with `force: true` only when you intend to proceed).
+ * Fails with {@link PlanBlocked} if `plan.blocked` (call {@link simulate}
+ * first). `force: true` on {@link plan} is for inspecting blocked impacts —
+ * execute still refuses until the plan is unblocked.
  *
  * @category constructors
  * @public
  */
 export const execute = (
-  updatePlan: UpdatePlan,
+  updatePlan: Plan,
 ): Effect.Effect<
   ReadonlyArray<UpdateImpact | undefined>,
   ExecuteError,
@@ -498,7 +509,7 @@ export const execute = (
 > =>
   Effect.gen(function* () {
     if (updatePlan.blocked) {
-      return yield* new UpdatePlanBlocked({ plan: updatePlan });
+      return yield* new PlanBlocked({ plan: updatePlan });
     }
     const impacts: Array<UpdateImpact | undefined> = [];
     for (const step of updatePlan.steps) {
@@ -518,14 +529,24 @@ export const execute = (
   });
 
 /**
- * Type guard for {@link UpdatePlan}.
+ * Type guard for {@link Plan}.
+ *
+ * Checks `_tag` plus the inspectable shape apps/CI assert on (steps, audit,
+ * coUpdate rollups, blocked). Does not deep-validate impacts.
  *
  * @category refinements
  * @public
  */
-export const isPlan = (u: unknown): u is UpdatePlan => {
-  if (typeof u !== "object" || u === null || !("_tag" in u)) {
+export const isPlan = (u: unknown): u is Plan => {
+  if (typeof u !== "object" || u === null) return false;
+  if (!("_tag" in u) || u._tag !== "UpdatePlan") return false;
+  if (!("steps" in u) || !Array.isArray(u.steps)) return false;
+  if (!("audit" in u) || !Array.isArray(u.audit)) return false;
+  if (!("contracts" in u) || !Array.isArray(u.contracts)) return false;
+  if (!("coUpdate" in u) || !Array.isArray(u.coUpdate)) return false;
+  if (!("uncoveredCoUpdate" in u) || !Array.isArray(u.uncoveredCoUpdate)) {
     return false;
   }
-  return u._tag === "UpdatePlan";
+  if (!("blocked" in u) || typeof u.blocked !== "boolean") return false;
+  return true;
 };

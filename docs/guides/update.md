@@ -45,29 +45,40 @@ yield* Update.execute(plan)  // ordered Launcher cutovers (skipPlan)
 
 `Update.plan({ steps, contracts? })` runs `Lookup.planUpdate` for each step **in
 array order**, attaches `impact`, audits contracts, and returns an
-`UpdatePlan` value (`_tag: "UpdatePlan"`).
+`Update.Plan` value (`_tag: "UpdatePlan"`).
 
 | Failure | When |
 |---------|------|
 | `EmptyUpdatePlan` | `steps` is `[]` |
+| `EmptyUpdateStepTags` | A step has `tags: []` |
+| `DuplicateUpdateTarget` | Two steps share the same `target` |
 | `UpdateBlocked` | Hard impact blockers (same as planUpdate fail-closed) |
-| `ContractMismatch` | Bad `contracts.to` / `from` / Versioned path |
+| `UpdateContractMismatch` | Bad `contracts.to` / `from` / Versioned path |
 | `UpdateTargetUnknown` | Step `target` missing from Directory |
 
 Ambient `force: true` (plan-level or per-step) collects blocked impacts onto the
 plan instead of failing at planUpdate — `plan.blocked` stays `true` and
-`simulate` / `execute` still refuse unless you intentionally override later.
+`simulate` / `execute` still refuse. Use force to **inspect**, not to push a
+broken cutover through execute.
 
 Per-step `skipPlan: true` skips impact dry-run (ops escape; impact is
 `undefined`). Prefer the fail-closed path in app code.
 
-Inspect `plan.steps[i].impact`, `plan.audit`, `plan.blocked` before execute.
+### Inspect
+
+| Field | Meaning |
+|-------|---------|
+| `plan.steps[i].impact` | Per-step `Lookup.planUpdate` result |
+| `plan.audit` | Contract from→to rows |
+| `plan.coUpdate` | Union of peer nodeKeys sharing served keys |
+| `plan.uncoveredCoUpdate` | Peers in `coUpdate` that are not step targets (advisory) |
+| `plan.blocked` | Any step impact blocked |
 
 ## Simulate
 
 `Update.simulate(plan)` re-validates audit / blocked **without spawning**. Use it
 in CI or before a live cutover. Fails with `UpdatePlanBlocked` when the plan is
-blocked; `ContractMismatch` if contract audit fails on re-check.
+blocked; `UpdateContractMismatch` if contract audit fails on re-check.
 
 For a **full production-like mock**: boot Lookup + incumbent nodes the same way
 you would in prod (real Http Node / WorkPool / Directory), then
@@ -91,7 +102,11 @@ Optional `contracts: [{ tag, from?, to? }]`:
 | Field | Meaning |
 |-------|---------|
 | `to` | Successor tip must equal `schemaVersion` / Versioned tip of `tag` |
-| `from` | Incumbent tip (from planUpdate gaps) / Versioned path must allow `from→to` |
+| `from` | Live tip from status (`impact.liveTips`) or migration gaps; else Versioned path must allow `from→to` |
+
+`from` is strongest when status dial is on (`Lookup.planStatusOn` / step
+`status: true`). With `planStatusOff`, Update falls back to Versioned path
+checks when both `from` and `to` are set.
 
 Not required for same-tip binary bumps. Matching contracts land on
 `plan.audit` with `ok: true` — useful for CI assertions without spawning.
@@ -115,14 +130,16 @@ yield* Update.execute(plan)
 ```
 
 Multi-node rollouts: put every affected node in `steps` in the order you want
-handoffs to run.
+handoffs to run. Check `plan.uncoveredCoUpdate` for peers Directory says share
+keys but you did not schedule.
 
 ## Examples
 
 | Form | Run |
 |------|-----|
+| Fleet plan dry-run (`coUpdate` inspect) | `pnpm run example:launcher-update-fleet` |
 | Dream redeploy (file-swap + Update) | `pnpm run example:launcher-dream-redeploy` |
 | Suite | `pnpm exec vitest run test/update.test.ts` |
 
-Design dock (addresses / Node.make / locality — future): 
+Design dock (addresses / Node.make / locality — future):
 [`node-addresses-and-update-api.md`](../handoffs/node-addresses-and-update-api.md).

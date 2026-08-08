@@ -1,9 +1,11 @@
 /**
  * Lookup update-impact planner — dry-run before spawn / A→B.
  *
- * Membership + impact query only (Lookup plane). Launcher still executes spawn units;
- * Node owns drain / shutdown / handoff. `clientsAtRisk` reads live {@link Dialers}
- * sessions (Advice-prefer proxy when the census is empty).
+ * Membership + impact query only (Lookup plane). Prefer fleet
+ * `Update.plan` → `simulate` → `execute` for multi-node cutovers; this remains
+ * the per-step impact brain. `clientsAtRisk` reads live {@link Dialers}
+ * sessions (Advice-prefer proxy when the census is empty). `liveTips` records
+ * status `schemaVersion` rows for Update contract `from` audit.
  *
  * @module internal/lookupPlanUpdate
  * @internal
@@ -16,7 +18,6 @@ import {
   Exit,
   Layer,
   Option,
-  Schema,
 } from "effect";
 import * as Advice from "../Advice";
 import * as Dialers from "../Dialers";
@@ -29,7 +30,11 @@ import * as Policy from "../Policy";
 import * as Versioned from "../Versioned";
 import { hashContract } from "./contractHash";
 import { Service as NodeTag } from "./nodeCore";
-import { schemaVersionFromTag } from "./versioned";
+import {
+  itemSchemaOf,
+  schemaVersionFromTag,
+  versionInChain,
+} from "./versioned";
 
 /**
  * Minimal tag shape {@link planUpdate} needs — key + flat Spec + F4 hash inputs.
@@ -90,6 +95,15 @@ export interface UpdateImpact {
     readonly serviceKey: string;
     readonly expected: string;
     readonly actual: string | undefined;
+  }>;
+  /**
+   * Live `schemaVersion` rows from status dial (empty when status is off or
+   * peers do not answer). Used by {@link Update.plan} contract `from` audit.
+   */
+  readonly liveTips: ReadonlyArray<{
+    readonly node: string;
+    readonly serviceKey: string;
+    readonly schemaVersion: string | undefined;
   }>;
   /** Target advertises Lookup Identity/Directory/Advice — sequence Lookup A/B first. */
   readonly lookupFirst: boolean;
@@ -272,28 +286,6 @@ const dialStatus = (
   );
 };
 
-const workPoolItemSchemaSym = Symbol.for("hyperlink-ts/WorkPool/itemSchema");
-
-const itemSchemaOf = (tag: PlanUpdateTag): unknown => {
-  if (
-    (typeof tag === "object" || typeof tag === "function") &&
-    tag !== null &&
-    workPoolItemSchemaSym in tag
-  ) {
-    return Reflect.get(tag, workPoolItemSchemaSym);
-  }
-  return undefined;
-};
-
-const versionInChain = (schema: unknown, from: string): boolean => {
-  if (!Versioned.isVersioned(schema)) {
-    return Schema.isSchema(schema) && Versioned.schemaVersion(schema) === from;
-  }
-  return schema[Versioned.VersionedTypeId].steps.some(
-    (step) => step.version === from,
-  );
-};
-
 const migrationGapsFor = (
   serviceKey: string,
   from: string | undefined,
@@ -399,6 +391,7 @@ export const planUpdate = (
 
     const migrationGaps: Array<UpdateImpact["migrationGaps"][number]> = [];
     const contractDrifts: Array<UpdateImpact["contractDrifts"][number]> = [];
+    const liveTips: Array<UpdateImpact["liveTips"][number]> = [];
 
     if (dialStatusEnabled) {
       for (const peer of peerEntries.values()) {
@@ -408,6 +401,11 @@ export const planUpdate = (
         for (const row of snap.services) {
           const next = byKey.get(row.key);
           if (next === undefined) continue;
+          liveTips.push({
+            node: snap.node,
+            serviceKey: row.key,
+            schemaVersion: row.schemaVersion,
+          });
           const expected = contractHashOf(next);
           if (row.contractHash !== expected) {
             contractDrifts.push({
@@ -443,6 +441,7 @@ export const planUpdate = (
       migrationGaps,
       wireRemovals,
       contractDrifts,
+      liveTips,
       lookupFirst,
       blocked,
     } satisfies UpdateImpact;

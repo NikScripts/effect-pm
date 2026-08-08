@@ -6,13 +6,14 @@ import type * as Advice from "../src/Advice";
 import type * as Dialers from "../src/Dialers";
 import type * as Directory from "../src/Directory";
 import type {
-  ContractAuditEntry,
-  PlanInput,
-  SimulateReport,
-  UpdatePlan,
-  UpdateStep,
+  AuditEntry,
+  Input,
+  Plan,
+  Report,
+  Step,
 } from "../src/Update";
 import type * as Update from "../src/Update";
+import type * as Launcher from "../src/Launcher";
 
 type ErrOf<T> = T extends Effect.Effect<infer _A, infer E, infer _R> ? E : never;
 type CtxOf<T> = T extends Effect.Effect<infer _A, infer _E, infer R> ? R : never;
@@ -24,20 +25,27 @@ function typeLock(
   simulateFn: typeof Update.simulate,
   executeFn: typeof Update.execute,
   isPlanFn: typeof Update.isPlan,
-  planValue: UpdatePlan,
-  step: UpdateStep,
-  input: PlanInput,
-  audit: ContractAuditEntry,
-  report: SimulateReport,
+  restartFn: typeof Launcher.restartSuccessor,
+  planValue: Plan,
+  step: Step,
+  input: Input,
+  audit: AuditEntry,
+  report: Report,
 ): void {
   type PlanEff = ReturnType<typeof planFn>;
   type SimEff = ReturnType<typeof simulateFn>;
   type ExecEff = ReturnType<typeof executeFn>;
+  type RestartEff = ReturnType<typeof restartFn>;
 
-  const _planOk: AssertExtends<UpdatePlan, OkOf<PlanEff>> = true;
-  const _hasEmpty: AssertExtends<Update.EmptyUpdatePlan, ErrOf<PlanEff>> = true;
-  const _hasContract: AssertExtends<Update.ContractMismatch, ErrOf<PlanEff>> =
+  const _planOk: AssertExtends<Plan, OkOf<PlanEff>> = true;
+  const _hasEmpty: AssertExtends<Update.EmptyPlan, ErrOf<PlanEff>> = true;
+  const _hasEmptyTags: AssertExtends<Update.EmptyStepTags, ErrOf<PlanEff>> =
     true;
+  const _hasDup: AssertExtends<Update.DuplicateTarget, ErrOf<PlanEff>> = true;
+  const _hasContract: AssertExtends<
+    Update.UpdateContractMismatch,
+    ErrOf<PlanEff>
+  > = true;
   const _hasBlocked: AssertExtends<Update.UpdateBlocked, ErrOf<PlanEff>> = true;
   const _hasUnknown: AssertExtends<Update.UpdateTargetUnknown, ErrOf<PlanEff>> =
     true;
@@ -46,30 +54,40 @@ function typeLock(
   const _needsAdvice: AssertExtends<Advice.Service, CtxOf<PlanEff>> = true;
   const _needsDialers: AssertExtends<Dialers.Service, CtxOf<PlanEff>> = true;
 
-  const _simOk: AssertExtends<SimulateReport, OkOf<SimEff>> = true;
-  const _simBlocked: AssertExtends<
-    Update.UpdatePlanBlocked,
+  const _simOk: AssertExtends<Report, OkOf<SimEff>> = true;
+  const _simBlocked: AssertExtends<Update.PlanBlocked, ErrOf<SimEff>> = true;
+  const _simContract: AssertExtends<
+    Update.UpdateContractMismatch,
     ErrOf<SimEff>
   > = true;
-  const _simContract: AssertExtends<Update.ContractMismatch, ErrOf<SimEff>> =
-    true;
 
-  const _execBlocked: AssertExtends<
-    Update.UpdatePlanBlocked,
+  const _execBlocked: AssertExtends<Update.PlanBlocked, ErrOf<ExecEff>> = true;
+  // execute error channel covers every restartSuccessor failure.
+  const _execCoversRestart: AssertExtends<
+    ErrOf<RestartEff>,
     ErrOf<ExecEff>
   > = true;
 
   const _tag: "UpdatePlan" = planValue._tag;
   const _order: number = planValue.steps[0]!.order;
   const _blocked: boolean = planValue.blocked;
+  const _coUpdate: ReadonlyArray<string> = planValue.coUpdate;
+  const _uncovered: ReadonlyArray<string> = planValue.uncoveredCoUpdate;
   const _target: string = step.target;
-  const _steps: ReadonlyArray<UpdateStep> = input.steps;
+  const _steps: ReadonlyArray<Step> = input.steps;
   const _auditOk: boolean = audit.ok;
   const _reportOk: boolean = report.ok;
   const _isPlan: boolean = isPlanFn(planValue);
+  const _liveTips: ReadonlyArray<{
+    readonly node: string;
+    readonly serviceKey: string;
+    readonly schemaVersion: string | undefined;
+  }> = planValue.steps[0]!.impact?.liveTips ?? [];
 
   void _planOk;
   void _hasEmpty;
+  void _hasEmptyTags;
+  void _hasDup;
   void _hasContract;
   void _hasBlocked;
   void _hasUnknown;
@@ -80,14 +98,18 @@ function typeLock(
   void _simBlocked;
   void _simContract;
   void _execBlocked;
+  void _execCoversRestart;
   void _tag;
   void _order;
   void _blocked;
+  void _coUpdate;
+  void _uncovered;
   void _target;
   void _steps;
   void _auditOk;
   void _reportOk;
   void _isPlan;
+  void _liveTips;
 }
 
 void typeLock;

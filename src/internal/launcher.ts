@@ -1338,8 +1338,12 @@ const nodeFromDirectoryEntry = (
 };
 
 /**
- * App-node A→B update: {@link Lookup.planUpdate} → {@link up}(successor) →
+ * Single-step app-node A→B update: {@link planUpdate} → {@link up}(successor) →
  * {@link Advice.prefer}(B) → {@link Node.shutdown}(target).
+ *
+ * Prefer fleet-shaped `Update.plan` → `Update.simulate` → `Update.execute`
+ * (`hyperlink-ts/Update`) for new code — this remains the custody engine each
+ * plan step runs with `skipPlan: true`.
  *
  * Spine α — still exits when done (not a long-lived fleet supervisor). Lookup
  * same-sock ownership moves stay on the follow/handoff recipe; this is Directory
