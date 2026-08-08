@@ -383,25 +383,44 @@ plan steps name the strategy, execute/Update-node perform it.
 
 ---
 
-## 7. Machine / Launcher spine — reopen for discussion
+## 7. Resident host agent + Launcher spine — reopen for discussion
 
 **Locked today (launcher brief spine α):** Launcher is **dumb spawn-and-exit** — not a
 long-lived fleet supervisor; nodes + Lookup own ongoing control.
 
-**Owner (2026-08-08):** maybe wrong. If updates are automatic and processes need watching:
+**Owner (2026-08-08):** maybe wrong. If updates are automatic and processes need watching,
+something **resident per host** should: watch processes, listen for update signals, run
+plan execute locally, optionally wrap spawn. **Names `Machine` and `Update.Node` rejected** —
+candidates in §7.1.
 
 | Idea | Sketch |
 |------|--------|
-| **Update.Node → Machine.Node** (or `Machine`) | Resident per host: watch processes, listen for updates, run `Update.execute` locally |
-| **Merge Launcher into Machine** | e.g. `Machine.spawn` / `Machine.up` instead of (or wrapping) `Launcher.up` |
-| **Launcher stays library helper** | Thin spawn used *by* Machine/Update; public “stay and watch” is Machine |
+| **Resident host agent** (name TBD) | Per host: watch, listen, execute plans for local workers |
+| **Merge Launcher into that agent** | e.g. `Host.spawn` wrapping today’s `Launcher.up` |
+| **Launcher stays library helper** | Thin spawn used *by* the resident agent |
 
-This **reopens spine α** — do not silently unlock. Record as a design fork: either keep
-spine α and put watch/update on a separate Machine/Update node, or replace spine α with
-Machine-as-resident supervisor that includes spawn.
+This **reopens spine α** — do not silently unlock. Lookup stays membership/advice; the
+resident agent is a **host agent**, not a second Directory.
 
-Lookup remains control-plane membership/advice; Machine would be **host agent**, not a
-second Directory.
+Cutover API may keep or drop the name `Update` independently of the resident node’s name.
+
+### 7.1 Naming candidates (not Machine, not Update.Node)
+
+**None locked.** Module vs node may share a name or split (`Rollout.plan` + `Host` node).
+
+**Host / runtime:** `Host`, `Runtime` (Effect clash), `Agent` (AI clash), `Daemon` (HyperService clash), `Supervisor`, `Watchman`/`Watcher`, `Keeper`, `Steward`, `Caretaker`, `Custodian` (Launcher custody overlap).
+
+**Fleet / ops:** `Fleet`, `Ops`, `Control` (Lookup clash), `Bridge`, `Relay`, `Deck`.
+
+**Deploy / release:** `Release`, `Deploy`, `Rollout`, `Ship`, `Stage`, `Cutover`, `Migrate` (Versioned clash).
+
+**Hyperlink-flavored:** `Anchor`, `Mooring`, `Pier`, `Dock` (design-dock clash), `Harbor`/`Harbour`, `Port` (protocol clash), `Beacon`, `Signal`, `Pulse`. (`Link` historically rejected — POSIX.)
+
+**Process / spawn lineage:** keep/`grow` `Launcher`, `Spawn`, `Process`, `Unit`/`ServiceUnit`, `Squad`, `Crew`, `Hive`, `Nest`. (`Cell` parked/rejected elsewhere.)
+
+**Pairings (API + resident node):** `Rollout`+`Host`, `Fleet`+`Steward`, `Release`+`Keeper`, `Cutover`+`Anchor`, `Ship`+`Harbor`.
+
+Pick metaphor first (host vs deploy vs fleet), then module/node split.
 
 ---
 
@@ -416,19 +435,20 @@ second Directory.
 6. Contract declarations — required vs optional; audit sink.
 
 ### Addresses (still)
-7. Proxy ownership — Update/Machine? dedicated proxy Node? Lookup feature?
+7. Proxy ownership — resident agent? dedicated proxy Node? Lookup feature?
 8. Directory advertise — main only vs main+backends vs proxy row.
 9. Type model — `endpoints` vs role address list vs both.
 10. HyperServices see main only — types vs convention.
 11. Address-from-`nodeKey` — Unix-only v1?
 12. `withAddresses` vs overload `withProtocol`.
 
-### Deploy / Machine
-13. **Update.Node class shape** — HttpApi-like config class vs HyperService Tag vs both.
-14. **Spine α reopen** — keep spawn-and-exit Launcher + separate Machine, or merge into
-    Machine (§7).
-15. Webhook / pull / package push — which ship in first deployable slice.
-16. Deprecation path for Eng’d `restartSuccessor` + dream-redeploy.
+### Deploy / resident agent
+13. **Resident agent class shape** — HttpApi-like config class vs HyperService Tag vs both.
+14. **Spine α reopen** — keep spawn-and-exit Launcher + separate resident agent, or merge (§7).
+15. **Name** — not `Machine`, not `Update.Node` (§7.1).
+16. Webhook / pull / package push — which ship in first deployable slice.
+17. Deprecation path for Eng’d `restartSuccessor` + dream-redeploy.
+18. Whether cutover module keeps the name `Update` while the node uses another name.
 
 ---
 
@@ -452,8 +472,8 @@ second Directory.
 
 1. ~~plan → execute~~ · ~~Update ≠ Versioned~~ recorded.
 2. Discuss **fleet plan ordering** + **contract audit** shape (§5.3–5.5).
-3. Discuss **Machine vs Launcher spine α** (§7) — biggest lock tension.
-4. Discuss Update.Node declaration style (HttpApi-like) + first deploy slice (§6).
+3. Pick **names** (§7.1) then **spine α** (Launcher vs resident agent) (§7).
+4. Discuss resident-agent declaration style (HttpApi-like) + first deploy slice (§6).
 5. Lock address forks enough for plan step inputs (roles, main, proxy).
-6. Only then Eng — types → simulate helper → execute → Update/Machine node → migrate examples.
+6. Only then Eng — types → simulate helper → execute → resident agent → migrate examples.
 7. Dream-redeploy stays **provisional** until the new API exists.
