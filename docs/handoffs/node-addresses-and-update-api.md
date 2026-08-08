@@ -6,11 +6,13 @@ Remaining (address model, `Node.make`, locality Host/Machine, proxy, deploy node
 **design only**.  
 **Owner leans (so far):**
 - Stable **main address** + **additional A/B** (often Unix); optional Http→Unix proxy
+- **`Address.*` factories** — consolidate dials (`Address.http(":3001")`, labeled / array / object overloads); **no** `addressFromKey` — node key fills path/identity when the address is bound to a Node (§3)
 - ~~Replace options-bag `restartSuccessor` with `Update.plan` → execute~~ **Eng'd** (restartSuccessor remains; Update preferred)
 - **`Update` module separate from `Versioned`** — Eng'd
 - Plans are **fleet-wide**, ordered; contract from→to audit — Eng'd (`liveTips`, target-scoped blockers, `coUpdate` rollup, empty/dup/blank-key guards)
 - **Simulate** / execute share a plan-value gate — Eng'd (re-derive blockers from impact arrays; re-validate shape; `UpdateReport`; `update.*` spans)
 - **`Node.shutdown` leave** — Eng'd: dial-matched unregister first; Advice clear only when prefer still points at departing `nodeKey` (keeps `prefer(B)` / same-identity stamps)
+- **Update plan dream shape** — parked for a later pass (more attention after Address / Node.make)
 - Deploy path / locality Host|Machine / `Node.make` — still design
 
 **Branch:** Agent 5 · `cursor/lifecycle-defer-start-929b`  
@@ -74,45 +76,64 @@ for app nodes** are what’s in the dock.
 
 ## 3. Desired address model (design — not locked)
 
-### 3.1 Main address + additional addresses
+### 3.1 `Address.*` factories (owner lean — 2026-08-08)
 
-A node has:
-
-1. **Main address** — the public / durable dial clients and HyperServices care about.
-2. **Additional addresses** — a list of extra dials (roles such as **A**, **B**, backend,
-   internal) used for cutover, proxy backends, local IPC, etc.
+Consolidate dial construction under a single **`Address`** namespace (name/module TBD —
+could be `hyperlink-ts/Address` or nested under `Node`). Protocol helpers + overloads:
 
 ```ts
-// SKETCH ONLY — not Eng’d
-Node.Service()("fleet/Worker", {
-  // main — what most of the world dials
-  url: "http://workers.example/rpc",
-  kind: "Http",
-})
-// …later pipe additional addresses (see §3.3)
+// SKETCH — owner lean
+Address.http(":3001")                    // single nameless
+Address.unix("A", path)                  // labeled (+ optional explicit path)
+Address.ws([4000, 4001])                 // nameless multiples, same protocol
+Address.http({ A: 3000, B: 3001 })       // labeled object, same protocol
 ```
 
-Or config-first (same idea: main in the base declaration):
+Overload shapes (same idea per protocol — `http` / `ws` / `unix` / …):
 
-```ts
-// SKETCH — main in Tag config
-Node.Service()("fleet/Worker", {
-  main: { url: "http://workers.example/rpc", kind: "Http" },
-  // addresses?: […]  — or only via pipe
-})
-```
+| Form | Meaning |
+|------|---------|
+| Scalar (`":3001"`, port, path) | One nameless address of that protocol |
+| `(label, dial)` | One **labeled** address (A/B/backend/…) |
+| Array | Several **nameless** addresses, same protocol |
+| Object `{ Label: dial }` | Several **labeled** addresses, same protocol |
+
+Dial fragments are ports / `":port"` / paths as appropriate — not full `{ kind, url }`
+blobs apps hand-assemble today.
 
 **Contrast with today’s multi-protocol `endpoints`:** Eng’d X1 is **one dial per protocol
-kind** (`http` / `ws` / `ipc`) for connect selection. That is **not** “many addresses of the
-same kind” and **not** role-tagged A/B backends. Additional addresses are a **list**
-(possibly same kind, role-labeled), orthogonal to per-kind endpoint sets — exact type merge
-is an open design fork (§6).
+kind** for connect selection. `Address.*` is the product surface for **many addresses**
+(same kind, labeled or not) that Node/Update/proxy compose — exact merge with `endpoints`
+/ `withProtocol` is still an open fork (§8).
 
-### 3.2 Roles — A / B (and friends)
+### 3.2 Node key fills the dial — **no** `addressFromKey`
 
-Additional addresses can carry a **role** (name TBD: `"a"` | `"b"` | `"backend"` | …) so
-orchestration and proxy routing know which dial is incumbent vs successor without minting a
-second `nodeKey`.
+**Rejected:** a manual `Node.addressFromKey(key, …)` (or equivalent) that apps call to
+mint sock paths.
+
+**Owner:** when an address is bound to a Node, the **node key is the source of truth** for
+identity-derived dials (Unix path slug, default roots, labeled `.a` / `.b` suffixes, etc.).
+You declare protocol + port/label (and only override path when you truly mean to) — you do
+**not** hand-build `/tmp/….sock` from the key.
+
+```ts
+// SKETCH — key→path is internal to bind, not an app API
+class Worker extends Node.make("fleet/Worker", {
+  // … Address.http / Address.unix composed here or piped — TBD
+})
+// Unix without an explicit path → derived from "fleet/Worker" (+ label if any)
+```
+
+Open: slug rules, directory root Config, collision policy, Windows named-pipe story —
+implementation detail behind bind, not a public helper.
+
+### 3.3 Main + additional / roles
+
+A node still has:
+
+1. **Main address** — public / durable dial clients and HyperServices care about.
+2. **Additional addresses** — labeled (A/B/…) or nameless extras for cutover, proxy
+   backends, local IPC.
 
 Owner sketch:
 
@@ -123,38 +144,20 @@ Owner sketch:
 Directory today: **one row per `nodeKey`**. That may need to grow (advertise main vs
 backend, or a proxy row + backend rows) — open.
 
-### 3.3 Declare main first; pipe additional later
+### 3.4 Declare on the Node; HyperServices see main only
 
 **Owner preference for best DX:**
 
-1. Put the **main address on the original Node** (Tag config / first declaration).
-2. **Pipe on** Unix (or other) additional addresses afterward.
-3. The `Node` value passed into **HyperServices** (`Hyperlink.serve` / `WorkPool.serve` /
+1. Put addresses on the Node declaration / pipe (`Address.*` fragments — exact
+   `Node.make` / pipe API TBD with §7.7).
+2. The `Node` value passed into **HyperServices** (`Hyperlink.serve` / `WorkPool.serve` /
    clients that shouldn’t see backends) **only carries the main address**.
-
-```ts
-// SKETCH — composition shape, names TBD
-const WorkerMain = Node.Service()("fleet/Worker", {
-  url: "http://127.0.0.1:8080/rpc",
-  kind: "Http",
-})
-
-const WorkerWithBackends = WorkerMain.pipe(
-  Node.withAddresses({
-    a: { path: "/tmp/hyperlink-ts/fleet-Worker.a.sock" }, // or generated — §3.5
-    b: { path: "/tmp/hyperlink-ts/fleet-Worker.b.sock" },
-  }),
-)
-
-// HyperServices see WorkerMain (main only)
-// Launcher / proxy / update plane see WorkerWithBackends
-```
+3. Launcher / proxy / update plane see the full address set.
 
 Rationale: serve/client layers stay simple; cutover plumbing doesn’t leak into every
-`serve` call. Mirrors the mental model of `Node.withProtocol` (pipe widens capability)
-without overloading protocol-kind sets as A/B slots.
+`serve` call.
 
-### 3.4 How addresses are used (policy / config)
+### 3.5 How addresses are used (policy / config)
 
 Addresses need **usage config**, not just presence. Owner direction for interruption-free
 updates:
@@ -171,26 +174,6 @@ Usage knobs to design (names TBD):
 - Which address Launcher binds / assumes / shuts down.
 - Whether main is a **proxy** that forwards to A or B (see §4).
 - Prefer / sticky / stream-gap still compose via **Policy** — not buried in restart options.
-
-### 3.5 Generate addresses from `nodeKey`
-
-**Owner want:** derive dials from the node key so ops don’t hand-mint `/tmp/….sock` strings.
-
-| Kind | Feasibility (design) |
-|------|----------------------|
-| **IpcSocket / Unix** | Easy — e.g. `/tmp/hyperlink-ts/<slug(nodeKey)>.sock` or `.a.sock` / `.b.sock` |
-| **Http / WS** | Harder — need host/port policy, conflict with exclusive bind, multi-tenant hosts |
-| **Lookup default** | Already has `Lookup.defaultIpcPath`; app nodes have **no** key→path helper today |
-
-Sketch:
-
-```ts
-// SKETCH
-Node.addressFromKey(WORKER_NODE_KEY, { kind: "IpcSocket", role: "a" })
-// → { path: "/tmp/hyperlink-ts/examples-dream-redeploy-Worker.a.sock", kind: "IpcSocket" }
-```
-
-Open: slug rules, directory root Config, collision policy, Windows named-pipe story.
 
 ---
 
@@ -627,10 +610,11 @@ clones, not HttpApi catalog. `Router.make` (G) is the catalog precedent.
 ### Addresses (still)
 7. Proxy ownership — resident agent? dedicated proxy Node? Lookup feature?
 8. Directory advertise — main only vs main+backends vs proxy row.
-9. Type model — `endpoints` vs role address list vs both.
+9. Type model — `Address.*` vs today’s `endpoints` / `withProtocol` merge.
 10. HyperServices see main only — types vs convention.
-11. Address-from-`nodeKey` — Unix-only v1?
-12. `withAddresses` vs overload `withProtocol`.
+11. ~~Manual `addressFromKey`~~ — **rejected**; key→dial is bind-internal (§3.2).
+12. Where `Address` lives — own subpath vs `Node.Address` / `Node.http` sugar.
+12b. Default main selection when multiple `Address.*` are composed (first? labeled `main`?).
 
 ### Deploy / locality / Node.make
 13. **Locality name** — `Host` vs `Machine` vs `Locale` / `Island`; nest as `Node.*` (§7.3–7.4).
@@ -654,17 +638,18 @@ clones, not HttpApi catalog. `Router.make` (G) is the catalog precedent.
 | Schema tips / upcast | `Versioned` |
 | Impact dry-run (single target) | `Lookup.planUpdate` |
 | Spine α spawn-and-exit | `Launcher` |
-| No `Update` module / fleet plan / simulate helper / Update node | — |
-| No address-from-`nodeKey` / role address list / proxy-as-main | — |
+| `Update.plan` → simulate → execute Eng’d; dream A/B + proxy-as-main still design | `hyperlink-ts/Update` |
+| No `Address.*` factories / role address list / proxy-as-main | — |
+| Manual `addressFromKey` | **rejected** (owner) — key→dial bind-internal |
 
 ---
 
 ## 10. Next
 
 1. ~~plan → execute~~ · ~~Update ≠ Versioned~~ recorded.
-2. Discuss **fleet plan ordering** + **contract audit** shape (§5.3–5.5).
+2. **Lock `Address.*` surface** (§3.1–3.2) — overloads, module home, bind-time key→path.
 3. Lock **locality word** (`Host` / `Machine` / …) + **keep Launcher** (§7.3–7.4).
-4. Lock **`Node.make`** vs dual-duty `Node.Service` (§7.7) — await G Page mint answer (§7.6).
-5. Lock address forks enough for make() config (roles, main, proxy).
-6. Only then Eng — Node.make → locality → Update plan/simulate/execute → migrate examples.
-7. Dream-redeploy stays **provisional** until the new API exists.
+4. Lock **`Node.make`** vs dual-duty `Node.Service` (§7.7) — await K Page mint answer (§7.6).
+5. Lock proxy / Directory advertise enough to compose with Address.
+6. Eng Address + Node.make (+ locality) before revisiting **Update plan dream shape** (parked).
+7. Dream-redeploy stays **provisional** until the new address/make API exists.
