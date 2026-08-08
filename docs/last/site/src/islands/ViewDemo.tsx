@@ -1,23 +1,24 @@
 "use client";
 
 /**
- * Client island — View.Service(key, default) + provideService override.
+ * Client island — View.make(key, default) + provideService override.
+ * Prefer `pipe(layer, Layer.provide(…))` over `layer.pipe(…)`.
  */
 import * as React from "react";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, pipe } from "effect";
 import * as View from "last-ts/View";
 
-class Sidebar extends View.Service<Sidebar>()(
+class Sidebar extends View.make<Sidebar>()(
   "last-ts/docs/Sidebar",
   () => (
     <nav data-sidebar="default" className="slot-nav">
       <span className="slot-label">default</span>
-      <p>View.Service(key, default)</p>
+      <p>View.make(key, default)</p>
     </nav>
   ),
 ) {}
 
-class Shell extends View.Service<Shell>()("last-ts/docs/Shell") {
+class Shell extends View.make<Shell>()("last-ts/docs/Shell") {
   static layer = Layer.effect(
     Shell,
     Effect.gen(function* () {
@@ -32,21 +33,24 @@ class Shell extends View.Service<Shell>()("last-ts/docs/Shell") {
   );
 }
 
-class SettingsShell extends View.Service<SettingsShell>()(
+class SettingsShell extends View.make<SettingsShell>()(
   "last-ts/docs/SettingsShell",
 ) {
-  static layer = Layer.effect(
-    SettingsShell,
-    Effect.gen(function* () {
-      const Side = yield* Sidebar;
-      return () => (
-        <div data-demo="settings-shell" className="slot-shell">
-          <Side />
-          <div className="slot-body">Settings</div>
-        </div>
-      );
-    }).pipe(
-      Effect.provideService(Sidebar, () => (
+  static layer = pipe(
+    Layer.effect(
+      SettingsShell,
+      Effect.gen(function* () {
+        const Side = yield* Sidebar;
+        return () => (
+          <div data-demo="settings-shell" className="slot-shell">
+            <Side />
+            <div className="slot-body">Settings</div>
+          </div>
+        );
+      }),
+    ),
+    Layer.provide(
+      Layer.succeed(Sidebar, () => (
         <nav data-sidebar="settings" className="slot-nav settings">
           <span className="slot-label">override</span>
           <p>Effect.provideService(Sidebar, …)</p>

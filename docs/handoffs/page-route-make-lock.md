@@ -1,68 +1,20 @@
-# Page.make + Route.fromEffect — lock
+# Page / Route — superseded note
 
-**Branch:** `cursor/agent-k-page-route-6d0e`  
-**Status:** Eng’d (API surface)
+**Superseded by:** [`last-ts-api-corrections.md`](./last-ts-api-corrections.md) +
+[`router-httpapi-lock.md`](./router-httpapi-lock.md)
 
-## Locked
+Agent G’s Page.asDefault / `getConfig` / `fileRootFromPages` / `fromEffect*` bake
+stack in this file was **never owner-approved**. Do not Eng from the old prose
+below the corrections lock.
 
-```ts
-// Page classes (HttpApi-shaped) — options optional **first** arg
-class Chapter extends Page.make({
-  params: { slug: Schema.Literals(["routing", "view-service"]) },
-}) {
-  static Component = (props: Page.Props<typeof Chapter>) => …
-}
-export default Page.asDefault(Chapter)
+## Still true (HttpApi)
 
-class Home extends Page.static() { … } // SSG opt-in
-export default Page.asDefault(Home)
-// Page.make = dynamic (default). No Page.Service. No Page.dynamic name.
+- `Router.make` / `Route.get(id, path, options?)` — dynamic by default
+- Request options bag shared with page marks
+- No manual path lists / `Literal|String` unions as the product story
+- Provider: `Last.provider(Waku.layer.pipe(Layer.provide(routes)))`
+- `View.make` (not `View.Service`)
 
-// Route.get = dynamic by default
-Route.get("chapter", "/guides/:slug").pipe(
-  Route.staticFromEffect(loadRows), // literal bags → bake
-)
-Route.get("chapter", "/guides/:slug").pipe(
-  Route.fromEffect(loadRows), // typed bags, SSR
-)
+## Forbidden
 
-// Shared RequestOptions bag (params / query / headers / error)
-// No manual paths: list. No Literal|String unions.
-// Param shape = union of bags (from effect rows / Literals), not struct-of-unions.
-// File disk: [slug]→:slug, [...path]→*path
-```
-
-## Where static is set (do not invent bridges)
-
-| Place | Role |
-|-------|------|
-| `Page.static` / `Page.make` | Page class mode (bake vs dynamic) |
-| `Route.staticFromEffect` / Literals / `mixedFromEffect` static set | Catalog bake bags |
-| Waku’s own `getConfig` on **that one file** | Engine wire for param `staticPaths` / open `dynamic` only |
-
-**Forbidden:** `pageConfig` Vite inject, `Page.getConfig`, any interim getConfig bridge.  
-`Page.configOf` / `Page.paramBagsOf` are adapter/test helpers — not app `getConfig`.
-
-**Not part of this lock:** Waku’s `createPages` / a future internal host adapter. Those must not reopen static/dynamic — see notes in [`page-layout-design.md`](./page-layout-design.md) (“createPages provenance”).
-
-## Eng’d merge
-
-- `Page.paramBagsOf(page)` — union-of-bags for `Route.staticFromEffect`
-- `Route.fromPage(id, path, page)` — options + static Literals → catalog route
-- `Router.destinationsFromPages(entries, { id: PageClass })` — path table + page merge
-- `Route.fileRootFromPages` / `Router.fileSystemFromPages` — path table + page merge as catalog root
-- `Router.pagesByIdFromModules(glob)` — Vite eager glob → `{ [routeId]: Page }` (server tooling; not Provider)
-- `Route.mixedFromEffect({ static, dynamic })` — two closed literal sets; only static bakes
-- `~ParamBags` / `Route.WithParamBags` + UrlBuilder positional bag-union args (survives `group.add` / topLevel)
-
-## Dogfood (`docs/last/site`)
-
-- Catalog: `Route.fileRootFromPages(fileEntries, { guides_slug: GuidesSlug })` — ids match `paths.gen`
-- Catalog twins from shared `chapterOptions` (Provider stays RSC-safe)
-- Chapter file: `Page.static` + engine `getConfig` / `staticPaths` (Literals list)
-- Rest page: `pages/docs/[...path]` → `docs_path` / `/docs/*path` + engine `getConfig` `{ render: "dynamic" }`
-
-## Surface
-
-- **`docs/last/site`** — last-ts docs server (`pnpm run docs:last-site` → `:5220`)
-- Removed `examples/apps/last-ts-site` (was never the product surface)
+See corrections lock — especially **any `getConfig`**.

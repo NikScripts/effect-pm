@@ -17,7 +17,7 @@
 | Nested layout chrome | Outlet; values like `title` for `<head>` |
 | Leaf fills ancestor values | Page (or deep View) supplies what layout `yield*`s |
 | Type error if missing | Close/router won’t typecheck incomplete Document (etc.) |
-| View DI still works | `View.Service` / `Layer` / `View.mount(Service)` |
+| View DI still works | `View.make` / `Layer` / `View.mount(Service)` |
 | File modules optional | Codegen from disk later; **types don’t depend on folders** |
 | Composable building blocks | Small Effect-shaped modules; apps assemble Layers |
 | No JSX-as-proof | Stock React JSX; proof on Effects / Layers / View values |
@@ -148,7 +148,7 @@ class Document extends Context.Service<Document, string>()("app/Document") {
 
 ### 4. `View`
 
-- **Down `R`:** `View.Service` + plain `Layer.succeed` / `Layer.effect` + `Effect.gen`; `yield*` Service for the component; `View.mount(Service)` (uses `Service.layer`) is the only JSX edge — no View Layer masks; never `View.mount(Hello, Hello.layer.pipe(…))`
+- **Down `R`:** `View.make` + plain `Layer.succeed` / `Layer.effect` + `Effect.gen`; `yield*` Service for the component; `View.mount(Service)` (uses `Service.layer`) is the only JSX edge — no View Layer masks; never `View.mount(Hello, Hello.layer.pipe(…))`
 - **Compose services:** `yield* Effect.all({ Shell, Hello })` inside `Effect.gen`, then JSX on resolved views; satisfy Layer `R` with `Layer.provide` on `static layer`
 - **Naming:** handle mint is `*.Service` (not `*.Tag`); baked config+layer factories are `*.define` (`Gate.define` / `WorkPool.define` / `Daemon.define`)
 - **Up Provides:** `Last.provide` → `Last.toLayer(Svc, function*)` — [view-provide-draft](./view-provide-draft.md)

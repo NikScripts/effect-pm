@@ -99,6 +99,15 @@ resurrect” decisions.
 Handoff authors must include both requirements in every handoff (see Documentation standards).
 Omitting them does **not** waive this rule for the reader.
 
+{#no-waku-getconfig .must appliesTo="src examples docs"}
+## Never author Waku `getConfig` (or inject bridges)
+
+last-ts / Hyperlink apps **do not** write `export const getConfig`, `Page.getConfig`,
+or Vite inject plugins that stamp it (`pageConfig`). Static vs dynamic is owned by
+our Route/Page API. If the host engine seems to require `getConfig`, **stop and
+raise it** — do not add the export as a workaround. SSOT:
+[`../handoffs/last-ts-api-corrections.md`](../handoffs/last-ts-api-corrections.md).
+
 {#decisions-doc-is-ssot .must appliesTo=process}
 ## The decisions doc is the source of truth
 

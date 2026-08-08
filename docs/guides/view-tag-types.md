@@ -112,7 +112,7 @@ export const layer = Layer.succeed(DenseCard, (props) => {
 })
 ```
 
-Naked (no size): `View.Service<Greeter, { name: string }>()("…")`.
+Naked (no size): `View.make<Greeter, { name: string }>()("…")`.
 
 Open-`R` compose + `View.mount` (bag `gen` / `succeed`):
 [Typed Views](/docs/view-typed-jsx) — Twoslash + live demo.

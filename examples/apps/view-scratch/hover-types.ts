@@ -155,7 +155,7 @@ export const shipped_denseLayer = Layer.succeed(DenseCard, (props) => {
 // 4. Shipped View — naked Tag + Detail / Page sizes
 // =============================================================================
 
-export class Greeter extends View.Service<
+export class Greeter extends View.make<
   Greeter,
   { readonly name: string }
 >()("hyperlink-ts/examples/apps/view-scratch/hover-types/Greeter") {}

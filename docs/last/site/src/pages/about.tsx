@@ -1,17 +1,9 @@
-import * as Page from "last-ts/Page";
-
-class About extends Page.static() {
-  static Component = () => (
+/** Plain Waku RSC page — no Page.asDefault / getConfig (banned). */
+export default function About() {
+  return (
     <article data-page="about">
       <h1>About</h1>
-      <p>
-        File pages are classes — <code>Page.make</code> /{" "}
-        <code>Page.static</code> — not Services. Waku’s default export is{" "}
-        <code>Page.asDefault(…)</code> so the class brand stays for{" "}
-        <code>Page.extract</code>. Apps never write <code>getConfig</code>.
-      </p>
+      <p>last.ts docs surface — not Hyperlink docs/site.</p>
     </article>
   );
 }
-
-export default Page.asDefault(About);

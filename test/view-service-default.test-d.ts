@@ -1,17 +1,17 @@
 /**
- * View.Service(key, default) — Reference does not appear in Effect R.
+ * View.make(key, default) — Reference does not appear in Effect R.
  */
 import { expectTypeOf } from "vitest";
 import { Context, Effect, Layer } from "effect";
 import * as React from "react";
 import * as View from "last-ts/View";
 
-class Sidebar extends View.Service<Sidebar>()(
+class Sidebar extends View.make<Sidebar>()(
   "test/view-default-d/Sidebar",
   () => React.createElement("nav", null, "Menu"),
 ) {}
 
-class Required extends View.Service<Required>()(
+class Required extends View.make<Required>()(
   "test/view-default-d/Required",
 ) {}
 
@@ -34,7 +34,7 @@ expectTypeOf(withRequired).toEqualTypeOf<
 >();
 
 // Annotations second-arg overload still works (object, not function)
-class Annotated extends View.Service<Annotated>()(
+class Annotated extends View.make<Annotated>()(
   "test/view-default-d/Annotated",
   { spec: { kind: "slot" } as const },
 ) {}
@@ -50,7 +50,7 @@ expectTypeOf(needsAnnotated).toEqualTypeOf<
 >();
 
 // default + annotations
-class Both extends View.Service<Both, { readonly label: string }>()(
+class Both extends View.make<Both, { readonly label: string }>()(
   "test/view-default-d/Both",
   ({ label }) => React.createElement("span", null, label),
   { spec: { kind: "both" } as const },

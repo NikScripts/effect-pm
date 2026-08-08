@@ -150,7 +150,7 @@ describe("Views.group + kit.for", () => {
   });
 });
 
-describe("View.Service / Prototype", () => {
+describe("View.make / Prototype", () => {
   it("card prototype stamps size annotation + Last kind", () => {
     expect(View.getAnnotations(PoolCard).size).toEqual(Views.ViewKind.Card());
     expect(View.getAnnotations(PoolDetail).size).toEqual(Views.ViewKind.Detail());

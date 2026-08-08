@@ -10,11 +10,11 @@
 ## Destination
 
 ```tsx
-class Greeter extends View.Service<Greeter, { readonly name: string }>()("…") {
+class Greeter extends View.make<Greeter, { readonly name: string }>()("…") {
   static layer = Layer.succeed(Greeter, ({ name }) => <span>{name}</span>)
 }
 
-class Hello extends View.Service<Hello, { readonly who: string }>()("…") {
+class Hello extends View.make<Hello, { readonly who: string }>()("…") {
   static layer = Layer.effect(
     Hello,
     Effect.gen(function* () {
@@ -37,7 +37,7 @@ Compose deps on `static layer`. Call site is only `View.mount(RootService)`.
 
 | Piece | Behavior |
 |-------|----------|
-| `View.Service` | Context slot; `yield*` → component |
+| `View.make` | Context slot; `yield*` → component |
 | `Layer.succeed` / `Layer.effect` | Build the service Layer (Effect APIs) |
 | `Effect.gen` | Yield Services, return render fn |
 | `static layer` | Fulfilled Layer (`R = never`); camelCase; never `*Live` |

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * @deprecated Prefer {@link BookSidebarIsland} — View.Service sidebar slot.
+ * @deprecated Prefer {@link BookSidebarIsland} — View.make sidebar slot.
  * Kept as a thin alias so older imports keep working.
  */
 import * as React from "react";

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Desktop book sidebar — View.Service default slot; standards book swaps chrome.
+ * Desktop book sidebar — View.make default slot; standards book swaps chrome.
  */
 import * as React from "react";
 import type { NavGroup } from "../lib/docs-content.js";

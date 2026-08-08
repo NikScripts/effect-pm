@@ -1,5 +1,5 @@
 /**
- * Page.make / Page.static classes (replaces path+component stamps).
+ * Page.make / Page.static classes — mode on the class (no deleted helpers).
  */
 import { Schema } from "effect";
 import { expectTypeOf } from "vitest";
@@ -11,7 +11,7 @@ class Search extends Page.make({
 }) {}
 class Home extends Page.static() {}
 
-expectTypeOf(Page.modeOf(About)).toEqualTypeOf<"dynamic">();
-expectTypeOf(Page.modeOf(Search)).toEqualTypeOf<"dynamic">();
-expectTypeOf(Page.modeOf(Home)).toEqualTypeOf<"static">();
+expectTypeOf(About.mode).toEqualTypeOf<"dynamic">();
+expectTypeOf(Search.mode).toEqualTypeOf<"dynamic">();
+expectTypeOf(Home.mode).toEqualTypeOf<"static">();
 expectTypeOf(Page.isPage(About)).toEqualTypeOf<boolean>();

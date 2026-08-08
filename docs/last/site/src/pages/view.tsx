@@ -1,17 +1,15 @@
-import * as Page from "last-ts/Page";
 import { ViewDemo } from "../islands/ViewDemo";
 
-class ViewPage extends Page.static() {
-  static Component = () => (
+/** Plain Waku RSC page hosting the View.make dogfood island. */
+export default function ViewPage() {
+  return (
     <article data-page="view">
-      <h1>View.Service</h1>
+      <h1>View.make</h1>
       <p>
-        Server page shell; interactive slot lives in a client island. Positional{" "}
-        <code>default</code> → <code>Context.Reference</code>.
+        DI components via <code>View.make</code> + <code>View.mount</code>. Swap
+        slots with <code>Effect.provideService</code> / Layer provide.
       </p>
       <ViewDemo />
     </article>
   );
 }
-
-export default Page.asDefault(ViewPage);

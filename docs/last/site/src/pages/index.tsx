@@ -1,25 +1,23 @@
-import * as Page from "last-ts/Page";
-
-class Home extends Page.static() {
-  static Component = () => (
+/** Plain Waku RSC page — no Page.asDefault / getConfig (banned). */
+export default function Home() {
+  return (
     <article data-page="home">
       <h1>last.ts</h1>
       <p>
-        Official docs server — Waku file pages as <code>Page.make</code> /
-        <code>Page.static</code> classes, soft-nav via{" "}
+        Official docs server — Waku file pages + soft-nav via{" "}
         <code>Last.provider(Waku.layer.pipe(Layer.provide(routes)))</code>.
       </p>
       <dl className="meta">
         <div>
-          <dt>pages</dt>
+          <dt>catalog</dt>
           <dd>
-            <code>Page.make</code> (dynamic) · <code>Page.static</code> (SSG)
+            <code>Router.make</code> + <code>Route.get</code> (HttpApi lock)
           </dd>
         </div>
         <div>
-          <dt>catalog</dt>
+          <dt>view DI</dt>
           <dd>
-            <code>Route.fileRootFromPages</code> + <code>paths.gen</code>
+            <code>View.make</code> + <code>View.mount</code>
           </dd>
         </div>
         <div>
@@ -32,5 +30,3 @@ class Home extends Page.static() {
     </article>
   );
 }
-
-export default Page.asDefault(Home);

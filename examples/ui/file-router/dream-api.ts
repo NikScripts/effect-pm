@@ -201,7 +201,7 @@ export const Search = Page.dynamic(
 );
 
 // =============================================================================
-// Preferred — Page.Service (+ nested View.Service) + camelCase `provides` layer
+// Preferred — Page.Service (+ nested View.make) + camelCase `provides` layer
 // =============================================================================
 
 /**
@@ -214,10 +214,10 @@ export class ChapterParams extends Schema.Class<ChapterParams>("ChapterParams")(
 ) {}
 
 /**
- * Nested chrome inside the page — ordinary {@link View.Service} (DI), **not** part of
+ * Nested chrome inside the page — ordinary {@link View.make} (DI), **not** part of
  * the file-router stamp. Pay with `View.succeed` on a camelCase `provides` layer.
  */
-export class ChapterAside extends View.Service<
+export class ChapterAside extends View.make<
   ChapterAside,
   { readonly chapter: string }
 >()("examples/file-router/chapter-aside") {}
@@ -229,9 +229,9 @@ export class ChapterAside extends View.Service<
  * this bag. Nested View Tags stack Layer `R` until `provides` pays them — unrelated
  * to SSG mode. `Page.Service` still needs work (schema of statics, build(Tag), …).
  *
- * Stand-in mint: View.Service + page statics until `hyperlink-ts/ui/Page` exists.
+ * Stand-in mint: View.make + page statics until `hyperlink-ts/ui/Page` exists.
  */
-export class DocsChapter extends View.Service<
+export class DocsChapter extends View.make<
   DocsChapter,
   { readonly chapter: string }
 >()("examples/file-router/docs-chapter", {

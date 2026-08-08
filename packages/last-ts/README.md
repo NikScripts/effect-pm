@@ -10,14 +10,15 @@ Group Target helpers, dashboard compose (`Ui`), and family views stay on
 ## Imports
 
 ```ts
-import * as View from "last-ts/View"
+import * as View from "last-ts/View"       // View.make — not View.Service
 import * as Route from "last-ts/Route"
 import * as Router from "last-ts/Router"
-import * as Page from "last-ts/Page"
-import * as AtomReact from "last-ts/AtomReact"
-import { fileRouter } from "last-ts/vite"
-import * as Extractor from "last-ts/docgen/Extractor"
+import * as Page from "last-ts/Page"       // Request / Document; no asDefault / getConfig
+import * as Last from "last-ts/Last"
+import { fileRouter } from "last-ts/vite"  // path codegen — design pass still owed
 ```
 
-Root barrels real modules only. A `Last` namespace ships only when it has a real
-cross-cutting API.
+**Corrections lock:** `docs/handoffs/last-ts-api-corrections.md` — never author
+`getConfig` / `pageConfig` / `Page.asDefault` / deleted Route bake merges.
+
+Root barrels real modules only.

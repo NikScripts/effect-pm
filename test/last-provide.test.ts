@@ -22,7 +22,7 @@ function* helloProvides() {
   yield* Last.provide(ShellMeta, { title: "uDumb" });
 }
 
-class Page extends View.Service<Page>()("test/last-provide/Page") {
+class Page extends View.make<Page>()("test/last-provide/Page") {
   static layer = Layer.effect(
     Page,
     Effect.gen(function* () {
@@ -52,7 +52,7 @@ describe("yield* Last.provide → Context.Service → View", () => {
       yield* Last.provide(ShellMeta, { title: "second" });
     }
 
-    class Show extends View.Service<Show>()("test/last-provide/Show") {
+    class Show extends View.make<Show>()("test/last-provide/Show") {
       static layer = Layer.effect(
         Show,
         Effect.gen(function* () {
@@ -72,7 +72,7 @@ describe("yield* Last.provide → Context.Service → View", () => {
       yield* Last.provide(ModalMeta, { title: "Modal" });
     }
 
-    class Both extends View.Service<Both>()("test/last-provide/Both") {
+    class Both extends View.make<Both>()("test/last-provide/Both") {
       static layer = Layer.effect(
         Both,
         Effect.gen(function* () {

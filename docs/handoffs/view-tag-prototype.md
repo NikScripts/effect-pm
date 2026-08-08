@@ -1,4 +1,4 @@
-# View.Service + Prototype — notes (2026-07-27)
+# View.make + Prototype — notes (2026-07-27)
 
 **Branch:** `cursor/tui-dashboard-parity-125f`  
 **Status:** Eng’d — Tag/Prototype + size add-ons + Dashboard `views` + WorkerPool `View.only` e2e.
@@ -7,7 +7,7 @@
 
 ## Intent
 
-1. **`View.Service` = THE tool for DI components** (Context.Service) on **last-ts**. Not dashboard matchers.
+1. **`View.make` = THE tool for DI components** (Context.Service) on **last-ts**. Not dashboard matchers.
 2. **Shape is reversed:** Self is the **input props** interface (what the component receives), not a callable service API. `Layer.succeed(PoolCard, Comp)` → `Comp` must accept props from the Tag’s Props.
 3. **`View.Prototype`** accumulates **props (type)** + **annotations (runtime bag)** before minting a Tag.
 4. **Dashboard size + Registry + bind + `react` matchers = Hyperlink `Views`.** Not last-ts. Current match/kit is a v1; must be **redesigned into a composable system** later — DI Views are far more than “match Card/Detail/Page.”
@@ -67,7 +67,7 @@ Last.kindOf(ScheduleCard)             // "last-ts/View"
 | `View.Prototype<Props>()(statics?)` | Root proto (curried so Statics infer) |
 | `proto.Prototype<NewProps>()(statics?)` | Extend props + merge statics |
 | `proto.Tag<Self extends Props>()(key)` | Mint Context.Service handle |
-| `View.Service` | Convenience = empty proto’s Tag (naked DI) |
+| `View.make` | Convenience = empty proto’s Tag (naked DI) |
 | `View.Card` / `.Detail` / `.Page` | Sized add-on protos (`ViewProps` + `size` static) |
 
 Statics are for things we used to jam into Tag args (`size`, later `spec`, etc.).
@@ -79,7 +79,7 @@ Statics are for things we used to jam into Tag args (`size`, later `spec`, etc.)
 - Matchers: `ui.Card` / `ui.Detail` / `ui.Page` from `View.react` / `compose`, or `View.useMatch()`.
 - Registry bind still needs a **size** — `yield* View.annotations(view)` (or sync peek) from sized prototypes.
 - `Views.bind` / `Views.only` only accept handles with `size: ViewKind`.
-- Naked `View.Service` = DI only (no matcher registration without a size annotation).
+- Naked `View.make` = DI only (no matcher registration without a size annotation).
 
 ---
 
@@ -93,7 +93,7 @@ Statics are for things we used to jam into Tag args (`size`, later `spec`, etc.)
 
 ## Acceptance
 
-1. `View.Service` / `Prototype` have no required `card|detail|page` arg  
+1. `View.make` / `Prototype` have no required `card|detail|page` arg  
 2. `Layer.succeed(PoolCard, fn)` types `fn` props as `PoolCard`  
 3. `View.Card.Service` stamps `size: ViewKind.Card()`; matchers still work via bind  
 4. Notes kept here; sync (commit/push) at green checkpoints  

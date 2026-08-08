@@ -13,7 +13,7 @@ type Expect<T extends true> = T;
 class Greeter extends Context.Service<Greeter, string>()("test/jsx/Greeter") {}
 class Clock extends Context.Service<Clock, number>()("test/jsx/Clock") {}
 
-class Child extends View.Service<Child>()("test/jsx/Child") {
+class Child extends View.make<Child>()("test/jsx/Child") {
   static layer = Layer.effect(
     Child,
     Effect.gen(function* () {
@@ -35,7 +35,7 @@ expectTypeOf(Child.layer).toMatchTypeOf<Layer.Layer<Child>>();
 // @ts-expect-error Service class is not a JSX component — mount or yield*
 const _badChildJsx = <Child />;
 
-class Both extends View.Service<Both>()("test/jsx/Both") {
+class Both extends View.make<Both>()("test/jsx/Both") {
   static layer = Layer.effect(
     Both,
     Effect.gen(function* () {
@@ -59,7 +59,7 @@ const App = View.mount(Child);
 expectTypeOf(App).toMatchTypeOf<View.Component>();
 const _okAppJsx = <App />;
 
-class Wrap extends View.Service<Wrap>()("test/jsx/Wrap") {
+class Wrap extends View.make<Wrap>()("test/jsx/Wrap") {
   static layer = Layer.effect(
     Wrap,
     Effect.gen(function* () {
@@ -83,7 +83,7 @@ const _okPlain = <Plain label="x" />;
 // @ts-expect-error Plain requires label
 const _badPlain = <Plain />;
 
-class Pure extends View.Service<Pure>()("test/jsx/Pure") {
+class Pure extends View.make<Pure>()("test/jsx/Pure") {
   static layer = Layer.succeed(Pure, (_props: {}) => <span>ok</span>);
 }
 const PureApp = View.mount(Pure);

@@ -1,103 +1,26 @@
-# Agent K — Page.make / Route / last-ts site handoff
+# Agent K — corrections pass
 
-**From:** Agent G (fired mid-turn)  
-**Branch:** `cursor/agent-k-page-route-6d0e` (continues `cursor/file-router-prototype-125f`)  
-**Base / sync:** base = `integration` (do not open ready PRs / `pnpm run version` unless owner asks)  
-**Lock:** [`page-route-make-lock.md`](./page-route-make-lock.md)  
-**Guide:** [`docs/last/rsc-router.md`](../last/rsc-router.md)  
-**Surface:** `docs/last/site` only (`pnpm run docs:last-site` → `:5220`) — **not** Hyperlink `docs/site`, not example apps
+**Branch:** `cursor/agent-k-page-route-6d0e`  
+**SSOT:** [`last-ts-api-corrections.md`](./last-ts-api-corrections.md) ·
+[`router-httpapi-lock.md`](./router-httpapi-lock.md)
 
 ### Before you Eng
 
-1. (Re)read `docs/standards/` if you have not recently — especially Agent Rules / Principles / anything touching this surface.
-2. List the concrete actions you will take and **wait for owner confirmation**. This handoff is not a go.
-   (Always-on rule: `confirm-handoff-actions` in `docs/standards/working-agreement.md`.)
+1. (Re)read `docs/standards/` (including `no-waku-getconfig`).
+2. List actions; wait for owner confirmation. This handoff is not a go.
 
----
+## Done this branch
 
-## Owner locks (do not reopen)
+- Deleted `pageConfig`, all `getConfig` on dogfood pages
+- Deleted `Page.asDefault` + Page introspection helpers
+- Deleted Route `fromEffect*` / `fromPage` / `*FromPages` catalog merges
+- Renamed `View.Service` → `View.make`
+- Dogfood: plain Waku pages + `Router.make` / `Route.get`
+- Documented bans in standards + corrections lock
 
-- Pages are **classes** (HttpApi-shaped), not Services. `Page.make` = dynamic; `Page.static` = SSG.
-- Request options = **optional first arg** (same bag as `Route.get`).
-- `Route.get` dynamic by default; static via `staticFromEffect` / Literals — **no** manual path lists, no `Literal|String` unions.
-- Provider shape only:
+## Still open (owner)
 
-```ts
-export const Provider = Last.provider(
-  Waku.layer.pipe(Layer.provide(routes)),
-)
-```
-
-- **No** `pageConfig`, **no** `Page.getConfig`, **no** interim getConfig Vite inject.
-  Param SSG / open dynamic use **Waku’s own `getConfig` on that file** (engine wire).
-  Do not wait on / invent “createPages” for static/dynamic — that API is locked here.
-- RSC Provider / client islands **must not** import file page modules. Catalog twins from shared options (`chapter.ts`) or path-only rows. Server tooling may use `Router.pagesByIdFromModules(glob)`.
-
----
-
-## Tip state
-
-| Area | Change |
-|------|--------|
-| `Route.fileRootFromPages` / `Router.fileSystemFromPages` | Path table + page-class merge as catalog root |
-| `Route.WithParamBags` | Public re-export |
-| `RoutesOf` / `EntryRoute` | Includes `PageEndpointBrand` so `RouterBuilder.handle` stays page-typed |
-| `docs/last/site` catalog | `fileRootFromPages(fileEntries, { guides_slug })` |
-| Chapter / rest pages | Engine `getConfig` on those files only (staticPaths / dynamic) |
-| **Deleted** | `last-ts/vite` `pageConfig` (+ align pass) — never-approved bridge |
-
----
-
-## Verify before continuing
-
-```bash
-pnpm exec vitest run \
-  test/page-make.test.ts \
-  test/route-from-effect.test.ts \
-  test/route-from-page.test.ts \
-  test/file-router-rest.test.ts
-
-pnpm exec tsc -p packages/last-ts/tsconfig.json --noEmit
-pnpm exec tsc -p docs/last/site/tsconfig.json --noEmit
-
-pnpm run docs:last-site
-# curl :5220 / /guides/routing /docs/intro/rest → 200
-```
-
-`Page.configOf(Page.static({ params: { slug: Schema.Literals([...]) } }))` still maps Literals → `staticPaths` (adapter helper — not app getConfig).
-
----
-
-## Known gotchas
-
-1. **`Page.Props<typeof X>` inside `static Component`** → TS7022 circularity. In class body use `Page.PropsFromOptions<typeof options>`; outside use `Page.Props<typeof X>`.
-2. **`Schema.Literals` is a function** — `typeof === "object"` misses it in `literalsOf` / `configOf` (already fixed; don’t regress).
-3. **fileRouter Vite plugin** — Node FS is async; emit must use `runPromise`, not `runSync`.
-4. **`asDefault` brand** — stamp `TypeId` / `options` / `mode` on subclasses or extract breaks.
-5. Waku defaults file pages to static; param SSG needs engine `staticPaths`; open `[...path]` needs engine `{ render: "dynamic" }` — **not** a last-ts inject plugin.
-
----
-
-## Sensible next improvements (pick, don’t boil ocean)
-
-1. ~~Smoke `:5220`~~ — Eng’d.
-2. ~~Delete `pageConfig`~~ — Eng’d (owner lock).
-3. Optional: server-only assert that `pagesByIdFromModules` ids ⊆ `fileEntries` ids (never import that into Provider).
-4. Optional: `layerDestinationsFromPages` sibling of `layerDestinations` if builder catalogs need the merge.
-5. Owner-gated: PR land + `pnpm run version` (changeset already at `.changeset/page-make-route-from-effect.md`).
-
----
-
-## Do not
-
-- Touch Hyperlink `docs/site` for this stack.
-- Reintroduce `examples/apps/last-ts-site`.
-- Reintroduce `pageConfig` / `Page.getConfig` / any interim getConfig bridge.
-- Open ready PRs / run `pnpm run version` without owner.
-- Commit on `main` / `develop` / owner branches.
-
----
-
-## Agent-status row
-
-Agent K on `cursor/agent-k-page-route-6d0e`; gaps = owner PR/version.
+- Page title / document product API (beyond `Page.Document` lean)
+- Combined single-provider teaching (don’t invent)
+- File-router full design/standards pass
+- Layout provide-swap lean (design only)

@@ -26,7 +26,7 @@ const readVersion = Effect.gen(function* () {
 export default async function BookLayout({ children }: { children: ReactNode }) {
   const groups = await navGroups();
   const version = await runServer(readVersion);
-  // Standards is its own book: BookSidebarIsland swaps View.Service chrome (default →
+  // Standards is its own book: BookSidebarIsland swaps View.make chrome (default →
   // standards override) while you're inside; the regular sidebar carries a single entry link.
   const standardsGroup = groups.find((g) => g.label === "Standards");
   const mainGroups = groups

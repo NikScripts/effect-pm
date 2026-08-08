@@ -110,38 +110,6 @@ export const destinations: typeof fileRouter.fileSystem = fileRouter.fileSystem;
 export const destinationsOf: typeof fileRouter.destinationsOf =
   fileRouter.destinationsOf;
 
-/**
- * Path table + optional page classes by id (`Route.fromPage` merge).
- *
- * @public
- */
-export const destinationsFromPages: typeof fileRouter.destinationsFromPages =
-  fileRouter.destinationsFromPages;
-
-/**
- * {@link destinations} + page-class merge (AsRoutes Effect for `group.fromEffect`).
- *
- * @public
- */
-export const fileSystemFromPages: typeof fileRouter.fileSystemFromPages =
-  fileRouter.fileSystemFromPages;
-
-/**
- * `root` + `topLevel` over {@link destinationsFromPages}.
- *
- * @public
- */
-export const fileRootFromPages: typeof fileRouter.fileRootFromPages =
-  fileRouter.fileRootFromPages;
-
-/**
- * Vite glob modules → `{ [routeId]: Page class }` for {@link destinationsFromPages}.
- *
- * @public
- */
-export const pagesByIdFromModules: typeof fileRouter.pagesByIdFromModules =
-  fileRouter.pagesByIdFromModules;
-
 /** Glob key → `/guides/[slug]` filePath. @public */
 export const filePathFromGlobKey: typeof fileRouter.filePathFromGlobKey =
   fileRouter.filePathFromGlobKey;

@@ -1,5 +1,5 @@
 /**
- * Book chrome — View.Service default sidebar + standards override.
+ * Book chrome — View.make default sidebar + standards override.
  */
 import { describe, expect, it } from "@effect/vitest";
 import { Context } from "effect";

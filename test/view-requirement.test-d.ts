@@ -133,7 +133,7 @@ class OpenCard extends Open.Service<OpenCard>()("app/view/open-card") {}
 // @ts-expect-error fulfill WithSize before bind
 Views.bind("app/queue", OpenCard);
 
-class Greeter extends View.Service<Greeter, { readonly name: string }>()(
+class Greeter extends View.make<Greeter, { readonly name: string }>()(
   "app/view/greeter",
 ) {}
 // @ts-expect-error no size

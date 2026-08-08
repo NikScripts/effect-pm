@@ -1,11 +1,15 @@
 # last.ts docs server
 
-Official Waku RSC surface for **last.ts** (`docs/last/site`).
+Waku RSC surface for **last-ts** (`pnpm run docs:last-site` → `:5220`).
 
-Not Hyperlink `docs/site`. Not an example app.
+Not Hyperlink `docs/site`.
 
-| | |
-|---|---|
-| Run | `pnpm run docs:last-site` → `:5220` |
-| Pages | `Page.make` / `Page.static` classes + `Page.asDefault` |
-| Soft-nav | `export const Provider = Last.provider(Waku.layer.pipe(Layer.provide(routes)))` |
+| Piece | Shape |
+|-------|--------|
+| Pages | Plain Waku default exports (no `getConfig` / `Page.asDefault`) |
+| Catalog | `Router.make` + `Route.get` + `urls` |
+| Soft-nav | `Last.provider(Waku.layer…)` |
+| View DI | `View.make` + `View.mount` |
+
+**Locks:** [`../../handoffs/last-ts-api-corrections.md`](../../handoffs/last-ts-api-corrections.md) ·
+[`../../handoffs/router-httpapi-lock.md`](../../handoffs/router-httpapi-lock.md)

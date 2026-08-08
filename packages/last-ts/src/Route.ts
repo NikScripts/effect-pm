@@ -175,7 +175,7 @@ export const Page: typeof endpoint.pageSuccess.Page = endpoint.pageSuccess.Page;
  * Declare a page destination (`HttpApiEndpoint.get` + {@link Page} success).
  *
  * **Dynamic by default** (SSR). Same {@link RequestOptions} bag as
- * {@link ./Page.make}. Opt into SSG with {@link staticFromEffect}.
+ * {@link ./Page.make}. Static vs dynamic is owned here — never `getConfig`.
  *
  * @public
  */
@@ -190,38 +190,6 @@ export type RequestOptions = endpoint.RequestOptions;
  * @public
  */
 export const params: typeof endpoint.params = endpoint.params;
-
-/**
- * Typed param rows from an Effect (dynamic — links / SSR). Helper fills the
- * params phantom; no manual annotations.
- *
- * @public
- */
-export {
-  fromEffect,
-  staticFromEffect,
-  mixedFromEffect,
-  type ParamBag,
-  type WithParamBags,
-} from "./internal/routeFromEffect";
-
-/** @internal */
-export { fromEffectOf, FromEffect } from "./internal/routeFromEffect";
-
-/**
- * SSG hrefs from {@link staticFromEffect} rows + the route path template.
- *
- * @public
- */
-export { expandStaticPaths } from "./internal/routeExpand";
-
-/**
- * Catalog destination from a {@link ./Page} class — options + static Literals
- * bags (file-router / catalog merge).
- *
- * @public
- */
-export { fromPage } from "./internal/routeFromPage";
 
 /**
  * Prefix a destination path.
@@ -413,15 +381,6 @@ export const fileSystem: typeof fileRouter.routeFileSystem =
  * @public
  */
 export const fileRoot: typeof fileRouter.fileRoot = fileRouter.fileRoot;
-
-/**
- * {@link fileRoot} with {@link ./Router.destinationsFromPages} merge — page
- * classes by route id (options + static Literals bags).
- *
- * @public
- */
-export const fileRootFromPages: typeof fileRouter.fileRootFromPages =
-  fileRouter.fileRootFromPages;
 
 // =============================================================================
 // asRoutes brand (shared with hyperlink Group.asRoutes)

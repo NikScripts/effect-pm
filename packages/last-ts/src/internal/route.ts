@@ -63,10 +63,9 @@ export const isRoute = (u: unknown): u is Constraint =>
   HttpApiEndpoint.isHttpApiEndpoint(u);
 
 /**
- * Page destination — dynamic by default (SSR). Opt into SSG with
- * {@link ./routeFromEffect.staticFromEffect} (literal param bags).
- *
- * Same {@link RequestOptions} bag as {@link ../Page.make}.
+ * Page destination — dynamic by default (SSR). Same {@link RequestOptions} bag
+ * as {@link ../Page.make}. Static bake is owned by Route/Page API — never
+ * `getConfig` (see `docs/handoffs/last-ts-api-corrections.md`).
  */
 export const get = <
   const Id extends string,

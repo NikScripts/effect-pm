@@ -548,7 +548,7 @@ Pulled G’s run + tip. **No written reply** to §7.6 ask yet; mechanical tip-sy
 | Tag→Service | Eng’d (`a3831b5f`) — includes `Node.Service`; on tip |
 | Router | **HttpApi lock** — `Router.make` / `Router.group` / `RouterBuilder` ([`router-httpapi-lock.md`](./router-httpapi-lock.md)) |
 | Page | `Page.static` / `Page.dynamic` / `Page.Request` / `Page.Document` — **not** `Page.Tag` / `Page.make` locked; `Page.build` owner-snapped earlier |
-| View | Still `View.Service` (Context key + props); deeper redesign parked |
+| View | Still `View.make` (Context key + props); deeper redesign parked |
 | Sync reply to A5 | **None** on Node.make vs Service split / Page naming |
 
 **Still asking G (unchanged):** when Page gets a class mint, is it catalog `Page.make`

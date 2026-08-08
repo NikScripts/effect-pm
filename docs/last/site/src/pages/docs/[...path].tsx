@@ -1,34 +1,15 @@
-import { Schema } from "effect";
-import * as Page from "last-ts/Page";
-
-const docsPathOptions = {
-  params: { path: Schema.String },
-} as const;
-
 /**
- * Rest / splat dogfood — disk `[...path]` → route `*path` (`docs_path`).
- * Open-ended splat is dynamic; Waku’s own `getConfig` is engine wire only
- * (not a last-ts API — `createPages` replaces it later).
+ * Plain Waku RSC page — no Page.asDefault / getConfig (banned).
+ * See `docs/handoffs/last-ts-api-corrections.md`.
  */
-class DocsPath extends Page.make(docsPathOptions) {
-  static Component = (
-    props: Page.PropsFromOptions<typeof docsPathOptions>,
-  ) => (
+export default function DocsPath(props: { readonly path: string }) {
+  return (
     <article data-page="docs-path">
-      <h1>Docs rest · {props.params.path}</h1>
+      <h1>Docs rest · {props.path}</h1>
       <p>
         File <code>pages/docs/[...path]</code> maps to catalog id{" "}
-        <code>docs_path</code> and path <code>/docs/*path</code>. Soft-nav:{" "}
-        <code>urls.docs_path(&quot;a/b&quot;)</code>.
+        <code>docs_path</code>. Soft-nav: <code>urls.docs_path(…)</code>.
       </p>
     </article>
   );
 }
-
-export default Page.asDefault(DocsPath);
-
-/** Waku engine config — not Page.*; createPages will replace this later. */
-export const getConfig = async () =>
-  ({
-    render: "dynamic",
-  }) as const;

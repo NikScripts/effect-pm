@@ -4,14 +4,15 @@
  * View — Effect × React components (Last).
  *
  * Use Effect/Layer directly — no View-shaped Layer masks:
- * - **Mint:** {@link Service} — Context slot; service shape is a {@link ViewFn}
+ * - **Mint:** {@link make} — Context slot; service shape is a {@link ViewFn}
  * - **Build:** `Layer.succeed` / `Layer.effect` + `Effect.gen`
  * - **Default Layer:** `static layer = Layer.succeed(This, impl)` (compose deps there)
- * - **Edge:** {@link mount}`(Service)` — uses `Service.layer` (`R` must be `never`)
+ * - **Edge:** {@link mount}`(Tag)` — uses `Tag.layer` (`R` must be `never`)
  * - **Up:** {@link Last.provide} → {@link Last.toLayer}
  *
  * There is no freestanding View value you call as JSX. Always `yield*` a
- * Service (or {@link mount} one at the app edge).
+ * minted view (or {@link mount} one at the app edge). Name is {@link make}
+ * (HttpApi-shaped), not `Service`.
  *
  * Prototype metadata: {@link annotations} / {@link getAnnotations}.
  * Factory brand: {@link kind} via {@link Last.kindSym}.
@@ -657,24 +658,27 @@ export const Prototype =
  *
  * @example
  * ```ts
- * class Greeter extends View.Service<Greeter, { readonly name: string }>()(
+ * class Greeter extends View.make<Greeter, { readonly name: string }>()(
  *   "app/view/greeter",
  * ) {
  *   static layer = Layer.succeed(Greeter, ({ name }) => <h1>{name}</h1>)
  * }
  *
- * class Hello extends View.Service<Hello, { who: string }>()("app/Hello") {
- *   static layer = Layer.effect(
- *     Hello,
- *     Effect.gen(function* () {
- *       const G = yield* Greeter
- *       return (props: { who: string }) => <G name={props.who} />
- *     }),
- *   ).pipe(Layer.provide(Greeter.layer))
+ * class Hello extends View.make<Hello, { who: string }>()("app/Hello") {
+ *   static layer = pipe(
+ *     Layer.effect(
+ *       Hello,
+ *       Effect.gen(function* () {
+ *         const G = yield* Greeter
+ *         return (props: { who: string }) => <G name={props.who} />
+ *       }),
+ *     ),
+ *     Layer.provide(Greeter.layer),
+ *   )
  * }
  *
  * // Optional slot — default sidebar; pages can swap
- * class Sidebar extends View.Service<Sidebar>()(
+ * class Sidebar extends View.make<Sidebar>()(
  *   "app/Sidebar",
  *   () => <nav data-sidebar="default">Menu</nav>,
  * ) {}
@@ -682,9 +686,11 @@ export const Prototype =
  * const App = View.mount(Hello)
  * ```
  *
+ * Prefer `pipe(layer, Layer.provide(…))` over `layer.pipe(…)`.
+ *
  * @public
  */
-export const Service = Prototype()().Service;
+export const make = Prototype()().Service;
 
 /**
  * A View service handle (DI identity + key). Prototype metadata via

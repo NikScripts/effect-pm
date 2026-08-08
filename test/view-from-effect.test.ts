@@ -13,7 +13,7 @@ class Prefix extends Context.Service<Prefix, string>()(
 
 describe("Layer + View.mount", () => {
   it("Layer.succeed(Service, impl) mounts via View.mount(Service)", () => {
-    class Greeter extends View.Service<
+    class Greeter extends View.make<
       Greeter,
       { readonly name: string }
     >()("test/view-fx/Greeter") {
@@ -28,7 +28,7 @@ describe("Layer + View.mount", () => {
   });
 
   it("Layer.effect yields services at layer build", () => {
-    class Greeter extends View.Service<
+    class Greeter extends View.make<
       Greeter,
       { readonly name: string }
     >()("test/view-fx/GreeterGen") {

@@ -134,11 +134,11 @@ read as: “static/dynamic isn’t done until createPages.”
 |---------|-----------------|
 | Page dynamic vs SSG | `Page.make` (default) / `Page.static` |
 | Catalog bake bags | `Route.staticFromEffect` / Literals / `mixedFromEffect` |
-| Host engine `staticPaths` / open dynamic | Waku’s own `getConfig` on **that file** only (engine wire) |
+| Host `getConfig` | **Forbidden** — see [`last-ts-api-corrections.md`](./last-ts-api-corrections.md) |
 
-**Forbidden:** `pageConfig`, `Page.getConfig`, inventing interim getConfig injects
-“until createPages.” If/when an internal host adapter lands, it maps the **already
-locked** marks — it does not reopen the static/dynamic API.
+**Forbidden:** any `getConfig` / `pageConfig` / `Page.getConfig`. If/when an internal
+host adapter lands, it maps locked marks — it does not reopen static/dynamic and
+does not ask apps to author `getConfig`.
 
 ### Metadata
 

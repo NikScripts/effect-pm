@@ -1,9 +1,9 @@
 /**
- * Book sidebar as View.Service default slot — standards book swaps via provideService.
+ * Book sidebar as View.make default slot — standards book swaps via provideService.
  *
  * Presentational nav (plain anchors + shared `.nav-*` classes). Soft-nav /
  * collapse stay on `GroupedNav` in the mobile overlay; this slot dogfoods
- * View.Service defaults without pulling Waku into the chrome layer.
+ * View.make defaults without pulling Waku into the chrome layer.
  */
 import * as React from "react";
 import { Effect, Layer } from "effect";
@@ -75,7 +75,7 @@ const bookNav = (
  * Desktop sidebar slot — default = main book nav.
  * Standards book overrides with {@link standardsSidebar}.
  */
-export class BookSidebar extends View.Service<BookSidebar, BookSidebarProps>()(
+export class BookSidebar extends View.make<BookSidebar, BookSidebarProps>()(
   "docs/site/BookSidebar",
   (props) => bookNav(props, "main"),
 ) {}
@@ -85,7 +85,7 @@ export const standardsSidebar = (
   props: BookSidebarProps,
 ): React.ReactElement => bookNav(props, "standards");
 
-class BookShell extends View.Service<BookShell, BookSidebarProps>()(
+class BookShell extends View.make<BookShell, BookSidebarProps>()(
   "docs/site/BookShell",
 ) {
   static layer = Layer.effect(
@@ -97,7 +97,7 @@ class BookShell extends View.Service<BookShell, BookSidebarProps>()(
   );
 }
 
-class StandardsShell extends View.Service<StandardsShell, BookSidebarProps>()(
+class StandardsShell extends View.make<StandardsShell, BookSidebarProps>()(
   "docs/site/StandardsShell",
 ) {
   static layer = Layer.effect(

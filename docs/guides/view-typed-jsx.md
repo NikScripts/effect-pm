@@ -10,7 +10,7 @@
 TypeScript does not carry services `R` through `<Child />` expressions. Last
 keeps `R` on **Layers** instead of inventing View-shaped masks:
 
-1. **`View.Service`** — `Context.Service` whose shape is a render fn (`ViewFn`)
+1. **`View.make`** — `Context.Service` whose shape is a render fn (`ViewFn`)
 2. **`Layer.succeed` / `Layer.effect` + `Effect.gen`** — build the service Layer
 3. **`static layer`** — compose deps with `Layer.provide` until `R = never`
 4. **`View.mount(Service)`** — only JSX edge; uses `Service.layer`
@@ -42,7 +42,7 @@ Hover **`Hello`** → **`App`**.
 ## Providing
 
 ```ts
-class Greeter extends View.Service<Greeter, { readonly name: string }>()(
+class Greeter extends View.make<Greeter, { readonly name: string }>()(
   "app/view/greeter",
 ) {
   static layer = Layer.succeed(
@@ -51,7 +51,7 @@ class Greeter extends View.Service<Greeter, { readonly name: string }>()(
   )
 }
 
-class Hello extends View.Service<Hello, { readonly who: string }>()("app/Hello") {
+class Hello extends View.make<Hello, { readonly who: string }>()("app/Hello") {
   static layer = Layer.effect(
     Hello,
     Effect.gen(function* () {
@@ -76,7 +76,7 @@ Pass a default component as the second argument — mint becomes a
 override with `Effect.provideService` or `Layer.provideMerge`.
 
 ```ts
-class Sidebar extends View.Service<Sidebar>()(
+class Sidebar extends View.make<Sidebar>()(
   "app/Sidebar",
   () => <nav data-sidebar="default">Menu</nav>,
 ) {}

@@ -1,5 +1,5 @@
 /**
- * View.Service reversed props + Views.react R = never.
+ * View.make reversed props + Views.react R = never.
  */
 import { Effect, Layer, Schema } from "effect";
 import { expectTypeOf } from "vitest";

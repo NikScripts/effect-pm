@@ -6,7 +6,7 @@
 import { Effect, Layer } from "effect";
 import * as View from "last-ts/View";
 
-class Greeter extends View.Service<Greeter, { readonly name: string }>()(
+class Greeter extends View.make<Greeter, { readonly name: string }>()(
   "examples/ui/view-typed-jsx/Greeter",
 ) {
   static layer = Layer.succeed(Greeter, (props) => (
@@ -14,7 +14,7 @@ class Greeter extends View.Service<Greeter, { readonly name: string }>()(
   ));
 }
 
-class Hello extends View.Service<Hello, { readonly who: string }>()(
+class Hello extends View.make<Hello, { readonly who: string }>()(
   "examples/ui/view-typed-jsx/Hello",
 ) {
   static layer = Layer.effect(
@@ -28,7 +28,7 @@ class Hello extends View.Service<Hello, { readonly who: string }>()(
   ).pipe(Layer.provide(Greeter.layer));
 }
 
-class AppRoot extends View.Service<AppRoot>()(
+class AppRoot extends View.make<AppRoot>()(
   "examples/ui/view-typed-jsx/App",
 ) {
   static layer = Layer.effect(

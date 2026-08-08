@@ -68,7 +68,7 @@ Copy `HttpApiBuilder` shape:
 | Document title | `Page.Document` set-anywhere service + `Page.useDocument` bridge |
 | Layout | component + `children` (no Outlet-as-service) |
 | Baked Effect view | `View.effect(effect)` → `ComponentType` (no `<Run effect={…} />`) |
-| `View.Service` redesign | **Parked for later** |
+| `View.make` redesign | **Parked for later** |
 
 ```ts
 class Site extends Router.make("site").add(
@@ -129,7 +129,7 @@ export const provider = Last.provider(
 
 1. ~~Page success + `Route.get` + builder dispatch + PageProps~~ (on tip).
 2. ~~Handlers target shape (Request / Document / Effect→ReactNode /
-   `View.effect` / layout=`children`)~~ — Eng on tip; **`View.Service`
+   `View.effect` / layout=`children`)~~ — Eng on tip; **`View.make`
    redesign parked**.
 3. Catalog shell thin-wrap onto Effect `HttpApi` types (follow-on).
 4. Migrate remaining tip tests / file-router consumers as needed.
@@ -147,4 +147,4 @@ On tip:
 - UI `match` / Outlet are Page-only; urlBuilder includes all endpoints
 - Catalog shell (`Router.make` / nested groups / `from(Service)`) still last-ts;
   full thin-wrap onto Effect `HttpApi` types is follow-on
-- `View.Service()(key, default)` — optional Reference slots (Eng’d); no HttpApi-shaped View catalog
+- `View.make()(key, default)` — optional Reference slots (Eng’d); no HttpApi-shaped View catalog

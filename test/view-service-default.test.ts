@@ -1,5 +1,5 @@
 /**
- * View.Service(key, default) — Context.Reference slot; override via provideService.
+ * View.make(key, default) — Context.Reference slot; override via provideService.
  */
 import { describe, expect, it } from "@effect/vitest";
 import { Context, Effect, Layer } from "effect";
@@ -7,12 +7,12 @@ import * as React from "react";
 import { renderToString } from "react-dom/server";
 import * as View from "last-ts/View";
 
-class Sidebar extends View.Service<Sidebar>()(
+class Sidebar extends View.make<Sidebar>()(
   "test/view-default/Sidebar",
   () => React.createElement("nav", { "data-sidebar": "default" }, "Menu"),
 ) {}
 
-class Shell extends View.Service<Shell>()("test/view-default/Shell") {
+class Shell extends View.make<Shell>()("test/view-default/Shell") {
   static layer = Layer.effect(
     Shell,
     Effect.gen(function* () {
@@ -28,7 +28,7 @@ class Shell extends View.Service<Shell>()("test/view-default/Shell") {
   );
 }
 
-describe("View.Service default (Reference)", () => {
+describe("View.make default (Reference)", () => {
   it("yields the default component with no Layer for the slot", () => {
     const App = View.mount(Shell);
     const html = renderToString(React.createElement(App));
@@ -38,7 +38,7 @@ describe("View.Service default (Reference)", () => {
   });
 
   it("swaps the slot via Effect.provideService (nested settings chrome)", () => {
-    class SettingsShell extends View.Service<SettingsShell>()(
+    class SettingsShell extends View.make<SettingsShell>()(
       "test/view-default/SettingsShell",
     ) {
       static layer = Layer.effect(
@@ -75,7 +75,7 @@ describe("View.Service default (Reference)", () => {
 
   it("swaps the slot via Layer.provideMerge (theme / section)", () => {
     // Reference is not in R — Layer.provide won't attach it; provideMerge does.
-    class ThemedShell extends View.Service<ThemedShell>()(
+    class ThemedShell extends View.make<ThemedShell>()(
       "test/view-default/ThemedShell",
     ) {
       static layer = Layer.effect(

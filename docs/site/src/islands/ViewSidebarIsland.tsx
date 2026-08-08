@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Live Sidebar slot — default vs settings override (`View.Service` default).
+ * Live Sidebar slot — default vs settings override (`View.make` default).
  */
 import * as React from "react";
 import "../styles/widgets.css";
@@ -14,7 +14,7 @@ export function ViewSidebarIsland(): React.ReactElement {
     <div className="hl-dashboard grid gap-3 p-4 rounded-xl text-sm">
       <div className="flex items-center justify-between border-b border-border pb-2 gap-2">
         <span className="font-medium text-card-foreground">
-          View.Service(key, default)
+          View.make(key, default)
         </span>
         <div className="flex gap-1">
           <button

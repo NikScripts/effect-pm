@@ -167,7 +167,7 @@ Hyperlink.fn     // command
 | Type intersect | `BaseSpec & { schedule: … }` (daemon grafts) |
 | Store merge | `mergeSpecs` (`Object.assign`) — precedent for combining records |
 
-`View.Service` `spec` uses the **family** Spec as Needs SSOT.
+`View.make` `spec` uses the **family** Spec as Needs SSOT.
 
 ### Keys & annotation (notes)
 
@@ -254,7 +254,7 @@ Owner (2026-07-26): **identity and matching are shared; the React/Ink component 
 
 | Piece | Lives where | Shared? |
 |-------|-------------|---------|
-| View **service** (key + kind + Spec) | `View.Service` — Context service whose **Svc = Component** | Yes — identity + binds/pipe |
+| View **service** (key + kind + Spec) | `View.make` — Context service whose **Svc = Component** | Yes — identity + binds/pipe |
 | Match / bind / `Hyperlink.components` | Registry + HS pin (Effect) | Yes |
 | **TSX implementation** | **`Layer.succeed(PoolCard, Comp)`** (or equiv) — provide the service | No — swap provide Layer |
 
@@ -262,12 +262,12 @@ Owner (2026-07-26): **identity and matching are shared; the React/Ink component 
 
 ```ts
 // Shared — View services (no TSX baked into the tag definition)
-class PoolCard extends View.Service<PoolCard>()(
+class PoolCard extends View.make<PoolCard>()(
   "hyperlink/view/pool-card",
   "card",
   WorkPool.queueControlSpec,
 ) {}
-class PoolDetail extends View.Service<PoolDetail>()(
+class PoolDetail extends View.make<PoolDetail>()(
   "hyperlink/view/pool-detail",
   "detail",
   WorkPool.queueControlSpec,
@@ -299,7 +299,7 @@ const { Card, Detail, Provider } = View.react(
 End-to-end at runtime (one process):
 
 ```
-View.Service → View service (key, kind, spec; Svc = Component)
+View.make → View service (key, kind, spec; Svc = Component)
 View.bind* + Layer.succeed(ViewSvc, Comp)    // binds + provide implementations
 View.react(viewLayer)                        // run Layer (R must be never) → kit
   └─ resolve Component from Context for matched View services
@@ -317,7 +317,7 @@ type Handle = {
 }
 ```
 
-- `class X extends View.Service<X>()(key, kind, spec) {}` — class handle. **No Component field.**
+- `class X extends View.make<X>()(key, kind, spec) {}` — class handle. **No Component field.**
 - Pipe targets and binds refer to Handles (or their keys).
 - Same Handle module can be imported by web and TUI packages.
 
@@ -328,7 +328,7 @@ type Handle = {
 | `byTagKey` | `tag.key` | `AnyView[]` (ordered) | `View.bindTag` |
 | `byKind` | stamped contract kind (`WorkPool.kind`, …) | `AnyView[]` | `View.bindKind` |
 
-- **View service** from `View.Service` = class `Context.Service` whose Svc is `View.View`, plus `key` / `size` / `spec`.
+- **View service** from `View.make` = class `Context.Service` whose Svc is `View.View`, plus `key` / `size` / `spec`.
 - **Provide TSX** with `Layer.succeed(PoolCard, Comp)` (or `effect` / `sync`).
 - **Binds require** those View services (`yield*` at bind build) so they appear in Layer `R` until provided.
 - **No `groupId` in View.** Match: `tag.key` → `kindOf(tag)` → fallback; pins via `Hyperlink.components([…])` replace per kind.
@@ -379,7 +379,7 @@ View.react(layer) → {
 
 | Package / folder | Owns |
 |------------------|------|
-| Shared | View services (`View.Service`) + bind Layers |
+| Shared | View services (`View.make`) + bind Layers |
 | App (web or TUI) | `Layer.succeed(View, Comp)` for that process + `View.react(fullyProvidedLayer)` |
 
 One provide Layer per process — not web+TUI in the same merge.
@@ -488,10 +488,10 @@ View.react(Layer.mergeAll(binds, View.bindKind(WorkPool.kind, CustomCard), chrom
 
 **Web vs TUI:** each app merges binds + its own `Layer.succeed` chrome, then `View.react` — same View services, different Svc values.
 
-#### View.Service / bind → Layer `R` — LOCKED lean (2026-07-26)
+#### View.make / bind → Layer `R` — LOCKED lean (2026-07-26)
 
 ```ts
-class PoolCard extends View.Service<PoolCard>()(
+class PoolCard extends View.make<PoolCard>()(
   "hyperlink/view/pool-card",
   "card",
   WorkPool.queueControlSpec,
@@ -513,18 +513,18 @@ View.react(layer)  // layer: Layer<Registry, E, never> — runs build (runSync/r
 #### Define + register (one entry = one kind)
 
 ```ts
-class PoolCard extends View.Service<PoolCard>()(
+class PoolCard extends View.make<PoolCard>()(
   "hyperlink/view/pool-card",
   "card",
   WorkPool.queueControlSpec,
 ) {}
-class PoolDetail extends View.Service<PoolDetail>()(
+class PoolDetail extends View.make<PoolDetail>()(
   "hyperlink/view/pool-detail",
   "detail",
   WorkPool.queueControlSpec,
 ) {}
 // Page — when we care about full desktop; not v1 priority
-class PoolPage extends View.Service<PoolPage>()(
+class PoolPage extends View.make<PoolPage>()(
   "hyperlink/view/pool-page",
   "page",
   WorkPool.queueControlSpec,
@@ -618,7 +618,7 @@ Effect modules are **large namespaces** and still tree-shake when exports are si
 | **Fat namespace** (`import * as View` / `View/WorkPool` with many flat exports) | Fine if TSX/platform code is not eagerly imported by shared handle modules |
 | **Separate export paths** | Still useful for **platform chrome** (`web/View/WorkPool` vs `tui/…`) and for apps that want a minimal import surface |
 
-**Still banned:** `export const View = { WorkPoolCard }` object-as-namespace (module-layout rule). Prefer flat `export class WorkPoolCard extends View.Service<WorkPoolCard>()(…)` on a module, or `import * as WorkPoolView from "…/View/WorkPool"`.
+**Still banned:** `export const View = { WorkPoolCard }` object-as-namespace (module-layout rule). Prefer flat `export class WorkPoolCard extends View.make<WorkPoolCard>()(…)` on a module, or `import * as WorkPoolView from "…/View/WorkPool"`.
 
 **Hard rule that remains:** shared handle/bind modules must **not** import DOM/Ink default components. Platform `Layer.succeed` lives in web/tui entry points (subpath or app-local). That — not namespace size — is what keeps TUI from pulling web TSX.
 

@@ -1,5 +1,5 @@
 /**
- * Runtime: View.Service + Layer.effect alongside Radix / shadcn-style wrappers.
+ * Runtime: View.make + Layer.effect alongside Radix / shadcn-style wrappers.
  */
 import { describe, expect, it } from "@effect/vitest";
 import { Context, Effect, Layer } from "effect";
@@ -20,7 +20,7 @@ const DialogTrigger = (
   <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />
 );
 
-class Page extends View.Service<Page>()("test/jsx-rt/Page") {
+class Page extends View.make<Page>()("test/jsx-rt/Page") {
   static layer = Layer.effect(
     Page,
     Effect.gen(function* () {
@@ -51,7 +51,7 @@ describe("View.jsx + Radix", () => {
   });
 
   it("Effect.gen void becomes () => null", () => {
-    class Empty extends View.Service<Empty>()("test/jsx-rt/Empty") {
+    class Empty extends View.make<Empty>()("test/jsx-rt/Empty") {
       static layer = Layer.effect(
         Empty,
         Effect.gen(function* () {
@@ -65,14 +65,14 @@ describe("View.jsx + Radix", () => {
   });
 
   it("Layer.succeed mounts a plain component Service", () => {
-    class Outside extends View.Service<Outside, { readonly label: string }>()(
+    class Outside extends View.make<Outside, { readonly label: string }>()(
       "test/jsx-rt/Outside",
     ) {
       static layer = Layer.succeed(Outside, (props) => (
         <button type="button">{props.label}</button>
       ));
     }
-    class Wrap extends View.Service<Wrap>()("test/jsx-rt/Wrap") {
+    class Wrap extends View.make<Wrap>()("test/jsx-rt/Wrap") {
       static layer = Layer.effect(
         Wrap,
         Effect.gen(function* () {

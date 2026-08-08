@@ -16,7 +16,7 @@ export function Nav(): React.ReactElement {
           <Link to={urls.index()}>Home</Link>
         </li>
         <li>
-          <Link to={urls.view()}>View.Service</Link>
+          <Link to={urls.view()}>View.make</Link>
         </li>
         <li>
           <Link to={urls.about()}>About</Link>
@@ -34,10 +34,10 @@ export function Nav(): React.ReactElement {
       <h2>Surface</h2>
       <ul className="imports">
         <li>
-          <code>Page.make</code> / <code>Page.static</code>
+          <code>Router.make</code> / <code>Route.get</code>
         </li>
         <li>
-          <code>Route.fileRootFromPages</code>
+          <code>View.make</code> / <code>View.mount</code>
         </li>
         <li>
           <code>Last.provider</code>

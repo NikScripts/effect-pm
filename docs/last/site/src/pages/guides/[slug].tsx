@@ -1,35 +1,16 @@
-import * as Page from "last-ts/Page";
-import { chapterBags, chapterOptions } from "../../lib/chapter";
-
 /**
- * Static chapter — Literals + `Page.static`. Param SSG needs Waku’s own
- * `getConfig` / `staticPaths` on this file (engine wire — not a last-ts API;
- * `createPages` replaces it later).
- *
- * Props use {@link Page.PropsFromOptions} inside the class body (avoids a
- * circular `typeof Chapter` on `static Component`). Outside: `Page.Props<typeof Chapter>`.
+ * Plain Waku RSC page — no Page.asDefault / getConfig (banned).
+ * Static vs dynamic is owned by last-ts Route/Page API, not Waku getConfig.
+ * See `docs/handoffs/last-ts-api-corrections.md`.
  */
-class Chapter extends Page.static(chapterOptions) {
-  static Component = (
-    props: Page.PropsFromOptions<typeof chapterOptions>,
-  ) => (
+export default function Chapter(props: { readonly slug: string }) {
+  return (
     <article data-page="chapter">
-      <h1>Guide · {props.params.slug}</h1>
+      <h1>Guide · {props.slug}</h1>
       <p>
-        Param page under <code>pages/guides/[slug]</code>. Same options bag as
-        the catalog twin (<code>GuidesSlug</code> via{" "}
-        <code>Route.fileRootFromPages</code>). Soft-nav:{" "}
+        Param page under <code>pages/guides/[slug]</code>. Soft-nav:{" "}
         <code>urls.guides_slug(…)</code>.
       </p>
     </article>
   );
 }
-
-export default Page.asDefault(Chapter);
-
-/** Waku engine config — not Page.*; createPages will replace this later. */
-export const getConfig = async () =>
-  ({
-    render: "static",
-    staticPaths: chapterBags.map((bag) => bag.slug),
-  }) as const;

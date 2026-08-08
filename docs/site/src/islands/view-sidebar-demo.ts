@@ -1,11 +1,11 @@
 /**
- * View.Service(key, default) — Sidebar slot + nested settings override.
+ * View.make(key, default) — Sidebar slot + nested settings override.
  */
 import * as React from "react";
 import { Effect, Layer } from "effect";
 import * as View from "last-ts/View";
 
-class Sidebar extends View.Service<Sidebar>()(
+class Sidebar extends View.make<Sidebar>()(
   "docs/site/view-sidebar/Sidebar",
   () =>
     React.createElement(
@@ -15,7 +15,7 @@ class Sidebar extends View.Service<Sidebar>()(
     ),
 ) {}
 
-class Shell extends View.Service<Shell>()("docs/site/view-sidebar/Shell") {
+class Shell extends View.make<Shell>()("docs/site/view-sidebar/Shell") {
   static layer = Layer.effect(
     Shell,
     Effect.gen(function* () {
@@ -38,7 +38,7 @@ class Shell extends View.Service<Shell>()("docs/site/view-sidebar/Shell") {
   );
 }
 
-class SettingsShell extends View.Service<SettingsShell>()(
+class SettingsShell extends View.make<SettingsShell>()(
   "docs/site/view-sidebar/SettingsShell",
 ) {
   static layer = Layer.effect(

@@ -19,7 +19,7 @@ function* helloProvides() {
   yield* Last.provide(ShellMeta, { title: "uDumb" }) // partial OK
 }
 
-class Page extends View.Service<Page>()("app/Page") {
+class Page extends View.make<Page>()("app/Page") {
   static layer = Layer.effect(
     Page,
     Effect.gen(function* () {
