@@ -625,16 +625,13 @@ Builders (`HttpApiBuilder`) turn description → layers. Same spirit as UI `Rout
 **Desired direction (owner):** same config ergonomics, but **`Node.make`**:
 
 ```ts
-// SKETCH — description first (like HttpApi.make)
-class Worker extends Node.make("fleet/Worker", {
-  // main + later additional addresses / roles — §3
-  url: "http://127.0.0.1:8080/rpc",
-  kind: "Http",
-}) {}
+// SKETCH — description first (like HttpApi.make); addresses via Address.* (§3)
+class Worker extends Node.make("fleet/Worker", Address.http(":8080")) {}
 
-// pipe / methods widen like HttpApi.add
+// pipe Address.* directly (prefer — not withAddresses wrapper)
 class WorkerFull extends Worker.pipe(
-  Node.withAddresses({ a: { path: "…" }, b: { path: "…" } }),
+  Address.unix("A", "/var/run/w.a.sock"),
+  Address.unix("B", "/var/run/w.b.sock"),
 ) {}
 
 // runtime still needs a serve/listen/launch edge — Tag-as-Context may remain
@@ -683,7 +680,8 @@ clones, not HttpApi catalog. `Router.make` (G) is the catalog precedent.
 12b. `Node.make` arity — `(key, Address|Address[], options?)` vs options bag with addresses (§3.4).
 12c. Multi-primary client pick — Policy default when several primaries exist.
 12d. Same label+protocol, different dials — how Policy names/disambiguates them.
-12e. Pipe API name — `Node.withAddresses` vs overload `withProtocol`.
+12e. ~~`withAddresses` wrapper~~ — **prefer pipe `Address.*` directly** (§3.4);
+    `withAddresses` at most optional sugar.
 
 ### Deploy / locality / Node.make
 13. **Locality name** — `Host` vs `Machine` vs `Locale` / `Island`; nest as `Node.*` (§7.3–7.4).
