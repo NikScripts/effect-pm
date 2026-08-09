@@ -247,7 +247,7 @@ the product surface (same kind, labeled or not, multiple primaries allowed).
 `withProtocol` becomes sugar or a migration path onto piping `Address.*`. X1’s “one per
 kind” becomes a **Policy default** for client pick, not a hard Node shape limit.
 
-### 3.3.2 Primary vs labeled; no overlapping dials (parked)
+### 3.4.2 Primary vs labeled; no overlapping dials (parked)
 
 **Unnamed addresses are primary addresses.** Primaries are what clients treat as the
 default connect surface (Directory / `lookupClient` / advertise — exact wiring TBD).
@@ -272,7 +272,7 @@ Address.http({ A: 3000 }) + Address.http({ A: 3001 }) // same name+protocol, dif
 Address.unix("A", "/tmp/x.sock") twice       // same dial — REJECT
 ```
 
-### 3.3.3 `Address.unixFromKey` — key-derived primary only (parked)
+### 3.4.3 `Address.unixFromKey` — key-derived primary only (parked)
 
 Owner: key→Unix dial is expressed as the sentinel **`Address.unixFromKey`** (no `()`),
 not a missing field and not a function apps pass the key into. At bind, the Node’s key
@@ -290,7 +290,7 @@ class Worker extends Node.make("fleet/Worker", Address.unixFromKey) {}
 
 Open: slug rules, directory root Config, Windows named-pipe story — behind bind.
 
-### 3.3.4 `Node.make` — address / address array as second arg; keep pipe + options (parked)
+### 3.4.4 `Node.make` — address / address array as second arg; keep pipe + options (parked)
 
 **Arity locked (2026-08-09):** `Node.make(key, Address | Address[], options?)`.
 
@@ -328,7 +328,7 @@ most — **not** the preferred DX.
 `…rest` args for addresses were considered; owner expects we **still have uses for an
 options arg**, so don’t make the signature rest-only.
 
-### 3.3.5 Address policies — define knobs, then defaults (parked)
+### 3.4.5 Address policies — define knobs, then defaults (parked)
 
 Address marks **identity + primary (unnamed) vs labeled + dial**. That is description
 only. **Policy** decides what the runtime does with each address. Prefer / sticky /
