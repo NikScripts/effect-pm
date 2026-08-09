@@ -12,7 +12,9 @@ Remaining (address model, `Node.make`, locality Host/Machine, proxy, deploy node
 - **`Node.make(key, Address | Address[], options?)`** — **locked** arity; **pipe `Address.*`
   directly** (prefer over `withAddresses` wrapper) (§3.4)
 - Unnamed = **primary**; overlap = same concrete dial (forbidden); multiple primaries /
-  same name+protocol allowed when dials differ; **usage is Node policy** (§3.5–3.6)
+  same name+protocol allowed when dials differ
+- **Default Node policy:** listen/serve + advertise/dial on **primaries**; labeled
+  addresses unbound until policy says otherwise (role A/B, proxy→backend, …) (§3.5)
 - ~~Replace options-bag `restartSuccessor` with `Update.plan` → execute~~ **Eng'd** (restartSuccessor remains; Update preferred)
 - **`Update` module separate from `Versioned`** — Eng'd
 - Plans are **fleet-wide**, ordered; contract from→to audit — Eng'd
@@ -173,68 +175,76 @@ Open: slug rules, directory root Config, Windows named-pipe story — behind bin
 **Arity locked (2026-08-09):** `Node.make(key, Address | Address[], options?)`.
 
 ```ts
-// SKETCH — locked shape
-Node.make("fleet/Worker", Address.http(":8080"))
-Node.make("fleet/Worker", [
-  Address.http(":8080"),                 // primary
+// SKETCH — locked shape (class extends — not const)
+class Worker extends Node.make("fleet/Worker", Address.http(":8080")) {}
+
+class WorkerPorts extends Node.make("fleet/Worker", [
+  Address.http(":8080"),
   Address.unix("A", "/var/run/w.a.sock"),
   Address.unix("B", "/var/run/w.b.sock"),
-])
-Node.make("fleet/Worker", Address.unixFromKey)
-Node.make("fleet/Worker", Address.http(":8080"), { /* non-address options */ })
+]) {}
+
+class WorkerKey extends Node.make("fleet/Worker", Address.unixFromKey) {}
+
+class WorkerOpts extends Node.make("fleet/Worker", Address.http(":8080"), {
+  /* non-address options */
+}) {}
 ```
 
 **Keep the piped form** for widening after the fact. **Owner prefer: pipe `Address.*`
 directly** onto the Node — not wrapped in `Node.withAddresses([…])`:
 
 ```ts
-// SKETCH — preferred pipe
-const Worker = Node.make("fleet/Worker", Address.http(":8080"))
-const WorkerLocal = Worker.pipe(
+// SKETCH — preferred pipe (still class extends)
+class Worker extends Node.make("fleet/Worker", Address.http(":8080")).pipe(
   Address.unix("A", "/var/run/w.a.sock"),
   Address.unix("B", "/var/run/w.b.sock"),
-)
-
-// Also fine if make took only primary:
-const Worker2 = Node.make("fleet/Worker", Address.unixFromKey).pipe(
-  Address.http(":8080"), // another primary
-  Address.unix("A", "/var/run/w.a.sock"),
-)
+) {}
 ```
 
-`Address` values are pipeable fragments (same spirit as `Node.withProtocol`). A
-`withAddresses` bag remains optional sugar at most — **not** the preferred DX.
-
-**HyperServices** (`Hyperlink.serve` / `WorkPool.serve` / clients that shouldn’t see
-backends) see **primary** address(es) only. Launcher / proxy / update plane see the
-full set. (Types vs convention — open.)
+`Address` values are pipeable fragments. A `withAddresses` bag remains optional sugar at
+most — **not** the preferred DX.
 
 `…rest` args for addresses were considered; owner expects we **still have uses for an
 options arg**, so don’t make the signature rest-only.
 
-### 3.5 Usage = Node policy (primaries as proxy is one config)
+### 3.5 Default Node policy — primaries active; labeled idle
 
-Marking addresses **primary** tells clients **which dials to connect to**. That is not
-the same as how the node **uses** those dials internally.
+Address marks **identity + primary vs labeled + dial**. **Policy** decides listen,
+advertise, dial, proxy, role bind. Prefer / sticky / stream-gap stay on Policy — not
+restart options.
 
-**Actual routing / bind / proxy / A/B selection is Node policy configuration** — highly
-flexible:
+**Default (no extra policy) — owner 2026-08-09:**
 
-| Config lean (example) | Meaning |
-|-----------------------|---------|
-| Primaries as **proxy** → labeled A/B | Stable client URL; backends swap on update (§4 β) |
-| Primaries = process listens | Today’s dual-public / dial-replace trajectory (α) |
+- **Listen / serve** on **primary** address(es) only.
+- **Advertise / client dial** those same primaries.
+- **Labeled** addresses (A/B/…) are on the Node description but **not bound** and not
+  advertised — until policy activates them (this process is role A, primary proxies to
+  A/B, etc.).
+
+```ts
+class Worker extends Node.make("fleet/Worker", Address.http(":8080")).pipe(
+  Address.unix("A", "/var/run/w.a.sock"),
+  Address.unix("B", "/var/run/w.b.sock"),
+) {}
+
+// Default: process listens on :8080 only. A/B exist on the Node but are ignored
+// for bind/advertise until policy says otherwise.
+```
+
+That is the boring path — not a special “HyperService primary view” type. `serve` /
+listen just follow policy; default policy = primaries.
+
+**Non-default configs** (still first-class, not forced):
+
+| Policy lean | Meaning |
+|-------------|---------|
+| Primaries as **proxy** → labeled A/B | Stable client URL; backends swap (§4 β) |
+| This instance **binds role A** (or B) | Process listens on the labeled dial; primary may be proxy or unused |
+| Multi-primary pick | Which primary clients prefer when several exist |
 | Other layouts | Owner wants room — don’t hard-wire proxy-only into Address |
 
-So: Address surface marks **identity + primary vs labeled + dial**. Policy decides
-advertise, listen, proxy target, sticky/Advice, etc. Prefer / sticky / stream-gap stay on
-**Policy** — not buried in restart options.
-
-Usage knobs to design (names TBD): Directory advertise, `lookupClient` dial, Launcher
-bind/assume/shutdown, proxy forward target, multi-primary pick.
-
-Directory today: **one row per `nodeKey`**. May need to grow for main+backends / proxy
-row — open.
+Directory today: **one row per `nodeKey`**. May need to grow for proxy/backends — open.
 
 ---
 
@@ -625,16 +635,13 @@ Builders (`HttpApiBuilder`) turn description → layers. Same spirit as UI `Rout
 **Desired direction (owner):** same config ergonomics, but **`Node.make`**:
 
 ```ts
-// SKETCH — description first (like HttpApi.make); addresses via Address.* (§3)
-class Worker extends Node.make("fleet/Worker", Address.http(":8080")) {}
-
-// pipe Address.* directly (prefer — not withAddresses wrapper)
-class WorkerFull extends Worker.pipe(
+// SKETCH — class extends Node.make; pipe Address.* (§3)
+class Worker extends Node.make("fleet/Worker", Address.http(":8080")).pipe(
   Address.unix("A", "/var/run/w.a.sock"),
   Address.unix("B", "/var/run/w.b.sock"),
 ) {}
 
-// runtime still needs a serve/listen/launch edge — Tag-as-Context may remain
+// runtime still needs a serve/listen/launch edge — Context bind may remain
 // *derived* from the description, or a separate Node.service / launch binder
 ```
 
@@ -674,7 +681,8 @@ clones, not HttpApi catalog. `Router.make` (G) is the catalog precedent.
 8. Directory advertise — primaries only vs primaries+backends vs proxy row.
 9. ~~Type model — `Address.*` vs `endpoints` / `withProtocol`~~ — **locked: Address.*
    replaces** for new code; `withProtocol` → sugar/migrate; one-per-kind = Policy default.
-10. HyperServices see primaries only — types vs convention.
+10. ~~HyperServices “primary view” types~~ — **rejected framing**. Default policy =
+    listen/advertise **primaries**, leave labeled idle (§3.5). Non-default = Policy config.
 11. ~~Manual `addressFromKey`~~ / ~~address-less Address~~ — **rejected**.
     **`Address.unixFromKey`** sentinel (no `()`) — **lean** (§3.3).
 12. ~~Where `Address` lives~~ — **locked: `hyperlink-ts/Address`** (own subpath).
@@ -716,12 +724,11 @@ clones, not HttpApi catalog. `Router.make` (G) is the catalog precedent.
 
 ## 10. Next
 
-1. ~~plan → execute~~ · ~~Update ≠ Versioned~~ recorded.
-2. **Lock `Address.*` + `Node.make(key, Address|Address[])`** (§3) — sentinel, overlap,
-   primary, pipe, options arity.
-3. Lock **Node policy** surface for how primaries/A/B/proxy are used (§3.5–4).
-4. Lock **locality word** (`Host` / `Machine` / …) + **keep Launcher** (§7.3–7.4).
-5. Lock **`Node.make` vs dual-duty `Node.Service`** (§7.7) — await K Page mint (§7.6).
-6. Eng Address + Node.make (+ locality); then deepen **Update** (backup-build simulate,
-   dream step shape).
-7. Dream-redeploy stays **provisional** until the new address/make API exists.
+1. ~~Address subpath / make arity / replace endpoints / default policy (primaries)~~ recorded.
+2. Lock remaining **Policy** knobs — multi-primary pick, role bind, proxy→A/B config shape
+   (§3.5–4). **Do not** deepen Update plan API in this pass.
+3. Lock **locality word** (`Host` / `Machine` / …) + **keep Launcher** (§7.3–7.4).
+4. Lock **`Node.make` vs dual-duty `Node.Service`** (§7.7) — await K Page mint (§7.6).
+5. Eng Address + Node.make (+ locality + default policy).
+6. Update dream / backup-build simulate — **later**, focused pass.
+7. Dream-redeploy stays **provisional** until address/make exists.
