@@ -1,27 +1,18 @@
 # Node addresses + update API — design notes
 
-**Status:** **Partial Eng** (2026-08-08). `Update.plan` → `simulate` → `execute` **shipped +
-second-pass perfected** (`hyperlink-ts/Update`, guide [`docs/guides/update.md`](../guides/update.md)).
-Remaining (address model, `Node.make`, locality Host/Machine, proxy, deploy node) still
-**design only**.  
-**Owner leans (so far):**
-- Stable **primary** address(es) + labeled A/B backends; optional primaries-as-proxy (§3–4)
-- **`Address.*` factories** — own subpath **`hyperlink-ts/Address`** (not nested under Node);
-  scalar / `(label, dial)` / array / object; explicit dials; sentinel **`Address.unixFromKey`**
-  (no call — zero args) for key-derived Unix primary (§3)
-- **`Node.make(key, Address | Address[], options?)`** — **locked** arity; **pipe `Address.*`
-  directly** (prefer over `withAddresses` wrapper) (§3.4)
-- Unnamed = **primary**; overlap = same concrete dial (forbidden); multiple primaries /
-  same name+protocol allowed when dials differ
-- **Node address Policy** — define knobs first (listen / advertise / dial / proxy /
-  role), **then** pick defaults (§3.5). Do not assume labeled addresses sit idle.
-- ~~Replace options-bag `restartSuccessor` with `Update.plan` → execute~~ **Eng'd** (restartSuccessor remains; Update preferred)
-- **`Update` module separate from `Versioned`** — Eng'd
-- Plans are **fleet-wide**, ordered; contract from→to audit — Eng'd
-- **Simulate** plan-value gate Eng'd; dream: **backup-build tools** for real upgrade mocks (§5.4)
-- **`Node.shutdown` leave** — Eng'd (prefer survives dial-replace leave)
-- **Update plan dream shape** — more attention after Address / Node.make
-- Deploy path / locality Host|Machine / `Node.make` — still design
+**Status:** **Partial Eng** (2026-08-09). `Update.plan` → `simulate` → `execute` shipped
+(guide [`docs/guides/update.md`](../guides/update.md)). Address / Node.make / policy API
+sketches from 2026-08-08–09 are **parked** — owner reset: catalogue **configuration
+scenarios** before picking an API (§3). Piped vs declared addresses must be **equivalent**
+when we return to surface design.
+
+**Still true from Eng’d tip:**
+- ~~options-bag as SSOT~~ — Update preferred over `restartSuccessor` for new code
+- Update ≠ Versioned; fleet plan + contracts + simulate gate Eng’d
+- `Node.shutdown` leave keeps prefer across dial-replace
+- Update dream / backup-build simulate / deploy / locality — later
+
+**Active design step:** §3 scenarios — many ways to configure a node — **then** API.
 
 **Branch:** Agent 5 · `cursor/lifecycle-defer-start-929b`  
 **Related:** [`multi-protocol-nodes.md`](./multi-protocol-nodes.md) · [`versioned-schema-decisions.md`](./versioned-schema-decisions.md)
@@ -82,9 +73,95 @@ for app nodes** are what’s in the dock.
 
 ---
 
-## 3. Desired address model (design — not locked)
+## 3. Node configuration scenarios (before API)
 
-### 3.1 `Address.*` factories (owner lean — 2026-08-08/09)
+**Owner (2026-08-09): start over on address/policy API.** First list the **ways you want
+to run a node**. Do not invent listen/advertise defaults or factory shapes until these
+are shared. Constraint for later: whether an address was on `make` or piped on afterward,
+the **result is the same**.
+
+Each scenario is an outcome. Concrete dials are illustrative only — not an API proposal.
+
+### 3.0 Catalogue
+
+| # | Scenario | What you want |
+|---|----------|---------------|
+| S1 | Single dial | One process, one address (Http or Unix). Listen, advertise, dial that one thing. |
+| S2 | Multi-protocol, one process | Same process speaks Http + WS + Unix (or any subset). Clients pick a protocol. |
+| S3 | Several dials, same protocol | e.g. two Http ports both live on one process (or two Unix paths). |
+| S4 | Public + private | Public edge dial for clients; private IPC only for siblings / proxy / ops. |
+| S5 | Stable front, swappable back | Clients always hit the same dial; backends A/B take turns behind it (proxy or equivalent). |
+| S6 | Dual public cutover (today) | Clients move from dial A to dial B (Directory replace + sticky/Advice). No stable URL. |
+| S7 | Role-split processes | Same logical node identity; one OS process is “A”, another is “B” (or edge vs worker). |
+| S8 | Local-only | Unix/IPC only — no public Http. Dev, sidecars, same-host mesh. |
+| S9 | Key-derived local dial | Don’t hand-mint sock paths; identity (node key) implies the local dial. |
+| S10 | Config-varying dials | Same Node class in dev/stage/prod; host/port/path from Config/env, not baked in source. |
+| S11 | Listen ≠ advertise ≠ dial | Bind more than you publish; or publish a front clients dial while you also listen on backends. |
+| S12 | Lookup-style single seat | One address for the control plane; ownership moves across processes (`Lookup.follow` today). |
+| S13 | Co-located cohort | Several nodes on one host share cheap IPC + a local supervise/update plane (Host/Machine — later). |
+| S14 | Multi-primary HA | More than one client-facing dial, all valid; client policy picks among them. |
+
+### 3.1 Walkthrough (outcomes, not API)
+
+**S1 — Single dial.** Simplest app node. One listen, one Directory row, clients dial that.
+
+**S2 — Multi-protocol.** One process, several protocols at once. Connect selection picks
+kind (today’s X1 instinct). No cutover story required.
+
+**S3 — Same protocol, several dials.** Two Http ports or two socks on one process. Need a
+rule for which clients prefer when several are public.
+
+**S4 — Public + private.** Clients only ever learn the public dial. Private dials exist for
+same-host peers, proxy backends, or admin — not for random fleet clients.
+
+**S5 — Stable front, swappable back.** Interruption-free binary update lean: client URL
+never changes; A/B (often Unix) swap behind a proxy or equivalent. Front may be Http;
+backs another protocol.
+
+**S6 — Dual public cutover.** What Eng’d dream/restart does today: new dial, Directory
+replace, sticky/Advice. Works; no stable client URL across the cut.
+
+**S7 — Role-split processes.** Not everything lives in one OS process. “A” and “B” (or
+edge vs worker) may be separate processes sharing a node identity or a declared
+relationship. Who listens on what is per-process.
+
+**S8 — Local-only.** No public port. Path/IPC only.
+
+**S9 — Key-derived local dial.** Ops doesn’t invent `/tmp/….sock` strings; the node’s
+identity implies the local address (how is TBD after scenarios).
+
+**S10 — Config-varying dials.** Source describes the node; runtime fills host/port/path
+from Config so the same class runs in many environments.
+
+**S11 — Listen ≠ advertise ≠ dial.** Deliberate split: e.g. listen on front+backs, advertise
+only front, clients dial only front. Or listen on everything declared but advertise a
+subset. This is why “policy knobs” exist — but we name the **outcomes** first.
+
+**S12 — Lookup seat.** Already Eng’d pattern: one Lookup address, successive owners,
+`follow` across the gap. App nodes may or may not mirror this.
+
+**S13 — Co-located cohort.** Later (locality Host/Machine): many nodes on one box, cheap
+IPC, shared update/supervise. Depends on S4/S5/S8 more than on factory syntax.
+
+**S14 — Multi-primary HA.** Several client-facing dials all legitimate; ambiguity handled
+by client Policy (sticky, prefer, fail-closed) — same family as multi-row Directory today.
+
+### 3.2 What we need from the owner next
+
+For each scenario you care about (especially S4–S7 and S11): which processes exist, what
+each binds, what Directory shows, what clients dial, and what changes on an update. Once
+those outcomes are agreed, design Address / Node.make / Policy to hit them — with
+**make ≡ pipe** for the same address set.
+
+### 3.3 Parked — prior Address API sketch (do not treat as locked)
+
+> The following subsections (former §3.1–3.5) recorded an API-first pass. **Parked**
+> 2026-08-09 pending scenario lock. Kept for reference only.
+
+### 3.3.1 `Address.*` factories (parked sketch)
+
+Consolidate dial construction under **`hyperlink-ts/Address`** (own subpath — **locked**
+2026-08-09; not nested under `Node`). Protocol helpers + overloads:
 
 Consolidate dial construction under **`hyperlink-ts/Address`** (own subpath — **locked**
 2026-08-09; not nested under `Node`). Protocol helpers + overloads:
@@ -126,7 +203,7 @@ the product surface (same kind, labeled or not, multiple primaries allowed).
 `withProtocol` becomes sugar or a migration path onto piping `Address.*`. X1’s “one per
 kind” becomes a **Policy default** for client pick, not a hard Node shape limit.
 
-### 3.2 Primary vs labeled; no overlapping dials
+### 3.3.2 Primary vs labeled; no overlapping dials (parked)
 
 **Unnamed addresses are primary addresses.** Primaries are what clients treat as the
 default connect surface (Directory / `lookupClient` / advertise — exact wiring TBD).
@@ -151,7 +228,7 @@ Address.http({ A: 3000 }) + Address.http({ A: 3001 }) // same name+protocol, dif
 Address.unix("A", "/tmp/x.sock") twice       // same dial — REJECT
 ```
 
-### 3.3 `Address.unixFromKey` — key-derived primary only
+### 3.3.3 `Address.unixFromKey` — key-derived primary only (parked)
 
 Owner: key→Unix dial is expressed as the sentinel **`Address.unixFromKey`** (no `()`),
 not a missing field and not a function apps pass the key into. At bind, the Node’s key
@@ -169,7 +246,7 @@ class Worker extends Node.make("fleet/Worker", Address.unixFromKey) {}
 
 Open: slug rules, directory root Config, Windows named-pipe story — behind bind.
 
-### 3.4 `Node.make` — address / address array as second arg; keep pipe + options
+### 3.3.4 `Node.make` — address / address array as second arg; keep pipe + options (parked)
 
 **Arity locked (2026-08-09):** `Node.make(key, Address | Address[], options?)`.
 
@@ -207,7 +284,7 @@ most — **not** the preferred DX.
 `…rest` args for addresses were considered; owner expects we **still have uses for an
 options arg**, so don’t make the signature rest-only.
 
-### 3.5 Address policies — define knobs, then defaults
+### 3.3.5 Address policies — define knobs, then defaults (parked)
 
 Address marks **identity + primary (unnamed) vs labeled + dial**. That is description
 only. **Policy** decides what the runtime does with each address. Prefer / sticky /
@@ -733,12 +810,10 @@ clones, not HttpApi catalog. `Router.make` (G) is the catalog precedent.
 
 ## 10. Next
 
-1. ~~Address subpath / make arity / replace endpoints~~ recorded.
-2. **Define address Policy knobs** (listen / advertise / dial / proxy / role), **then**
-   choose defaults (§3.5–4). Candidate lean (not locked): listen all declared; dial /
-   advertise bias to primaries. **Do not** deepen Update in this pass.
-3. Lock **locality word** (`Host` / `Machine` / …) + **keep Launcher** (§7.3–7.4).
-4. Lock **`Node.make` vs dual-duty `Node.Service`** (§7.7) — await K Page mint (§7.6).
-5. Eng Address + Node.make (+ locality + default policy).
-6. Update dream / backup-build simulate — **later**, focused pass.
-7. Dream-redeploy stays **provisional** until address/make exists.
+1. **Walk configuration scenarios** (§3.0–3.2) — especially S4–S7 and S11 — until
+   outcomes are agreed. Constraint: make ≡ pipe for the same address set.
+2. Only then revisit Address / Node.make / Policy API (parked sketch §3.3.* is reference).
+3. Locality word + `Node.make` vs `Service` — after address outcomes.
+4. Eng Address + Node.make (+ locality).
+5. Update dream / backup-build simulate — **later**, focused pass.
+6. Dream-redeploy stays **provisional** until address/make exists.
