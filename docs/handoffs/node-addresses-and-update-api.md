@@ -163,7 +163,6 @@ addresses may still default somehow (TBD) — prefer making derivation **visible
 sentinel rather than silent magic.
 
 ```ts
-// SKETCH
 class Worker extends Node.make("fleet/Worker", Address.unixFromKey) {}
 // primary Unix path derived from "fleet/Worker"
 ```
