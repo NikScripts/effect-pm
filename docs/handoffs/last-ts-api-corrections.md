@@ -31,7 +31,8 @@ stale — fix on sight.
 
 | Banned | Why it appeared (log only — not approval) | Correct direction |
 |--------|---------------------------------------------|-------------------|
-| **`getConfig` anywhere** (app file, `Page.getConfig`, Vite inject `pageConfig`, “Waku’s own getConfig on that file”) | Agents treated Waku’s engine knob as an escape hatch when marks weren’t wired | **Our Page/Route API owns static vs dynamic.** Never author `getConfig`. |
+| **Direct `waku` / `waku/*` imports in apps** | Agents treated Waku as the app framework (fs-router + `getConfig`) | **Apps import only `last-ts/*`.** `waku` is an optional peer inside last-ts (`last-ts/config`, `last-ts/server`, `last-ts/Waku`). |
+| **`getConfig` anywhere** (app file, `Page.getConfig`, Vite inject `pageConfig`, “Waku’s own getConfig on that file”) | Symptom of using Waku’s fs-router | Impossible / irrelevant when apps never use that router. Never author `getConfig`. |
 | **`pageConfig` Vite plugin** | Interim inject bridge | Deleted; stays deleted |
 | **`Page.asDefault`** | Bridge so Waku fs-router accepts a class default export | Not approved; do not reintroduce |
 | **`static Component` on Page classes** as the app pattern | Mimicked React class fields for RSC file modules | Not approved teaching shape |
@@ -67,12 +68,26 @@ Follow **[`router-httpapi-lock.md`](./router-httpapi-lock.md)** for Router / Rou
 1. Handoff ≠ go. List actions; wait for confirmation.
 2. (Re)read `docs/standards/` before Eng.
 3. Build from **this file + router-httpapi-lock + owner decisions** — not from Agent G tip prose, not from “sensible next improvements,” not from Waku docs.
-4. If a constraint pushes you toward `getConfig` / inject / asDefault — **stop and raise it**.
+4. If a constraint pushes you toward importing `waku`, `getConfig`, inject, or asDefault — **stop and raise it**. The fix is the last-ts façade, not a Waku app API.
+
+---
+
+## Host boundary (locked)
+
+| App imports | last-ts only |
+|-------------|--------------|
+| Config | `last-ts/config` (`defineConfig`) — file may still be named `waku.config.ts` for the CLI |
+| RSC server entry | `last-ts/server` (`createPages` + `adapter`) — not `fsRouter` |
+| Soft-nav transport | `last-ts/Waku` |
+| Path codegen | `last-ts/vite` `fileRouter` → `paths.gen.ts` |
+
+Legacy `docs/site/**` still imports `waku` (grandfather until cutover).
 
 ---
 
 ## Do not resurrect
 
+- App-level `import … from "waku"` / `"waku/…"`
 - `getConfig` / `pageConfig` / `Page.getConfig`
 - `Page.asDefault` / Page introspection helpers listed above
 - Route `fromEffect*` / `fromPage` / `*FromPages` catalog merges

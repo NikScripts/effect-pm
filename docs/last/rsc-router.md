@@ -11,17 +11,20 @@ server** (`docs/last/site`) — not Hyperlink `docs/site`.
 
 | Layer | Job |
 |-------|-----|
-| Waku `src/pages/**` | RSC file bodies (plain default exports) |
+| `last-ts/server` (`createPages` + `adapter`) | RSC host registration (no Waku `fsRouter`) |
+| `last-ts/vite` `fileRouter` → `paths.gen.ts` | Typed file path table |
 | `Router.make` + `Route.get` | Typed catalog / `urls.*` |
-| `Last.provider(Waku.layer.pipe(Layer.provide(routes)))` | Soft-nav provider |
+| `Last.provider(…)` + `last-ts/Waku` | Soft-nav provider |
 | `View.make` + `View.mount` | Client islands |
+
+Apps **never** `import` from `waku`. Host CLI filenames (`waku.config.ts`,
+`waku.server.tsx`) may remain; imports are `last-ts/config` / `last-ts/server`.
 
 ## Forbidden
 
-**Never** `getConfig`, `pageConfig`, `Page.asDefault`, Page introspection helpers
-(`modeOf` / `optionsOf` / `extract` / `paramBagsOf` / `configOf`), or Route
-`fromEffect` / `fromPage` / `*FromPages` catalog merges. Static vs dynamic is
-owned by our Route/Page API — not Waku.
+**Never** direct `waku` imports, `getConfig`, `pageConfig`, `Page.asDefault`,
+Page introspection helpers, or Route `fromEffect` / `fromPage` / `*FromPages`
+catalog merges.
 
 ## Catalog
 
@@ -43,19 +46,25 @@ export class Site extends Router.make("last-ts").add(
 export const urls = Route.urlBuilder(Site)
 ```
 
-## File page (plain)
+## Host server entry
 
 ```tsx
-export default function Chapter(props: { readonly slug: string }) {
-  return <h1>{props.slug}</h1>
-}
+import { adapter, createPages } from "last-ts/server"
+import Home from "./pages/index"
+
+export default adapter(
+  createPages(async ({ createPage, createRoot }) => [
+    createRoot({ render: "static", component: Root }),
+    createPage({ render: "static", path: "/", component: Home }),
+  ]),
+)
 ```
 
 ## Provider
 
 ```ts
 export const Provider = Last.provider(
-  Waku.layer.pipe(Layer.provide(routes)),
+  pipe(Waku.layer, Layer.provide(routes)),
 )
 ```
 
@@ -79,6 +88,5 @@ const App = View.mount(Shell)
 
 ## Open (do not invent)
 
-- Document title product API beyond `Page.Document` — owner lock first
-- Combined provider story (one `Last.provider`) — do not invent nested provider recipes
-- File-router (`paths.gen` / `fileRouter`) feature/standards write-up still owed
+See corrections lock — title / single-provider teaching / file-router design pass /
+Layout provide-swap.

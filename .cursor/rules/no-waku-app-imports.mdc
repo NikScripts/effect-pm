@@ -1,0 +1,19 @@
+---
+description: Apps never import waku — last-ts owns the host boundary
+alwaysApply: true
+---
+
+# No direct `waku` imports in apps
+
+Hyperlink / last-ts apps **do not import `waku` or `waku/*`**.
+
+- File routing, typed paths, and static/dynamic policy are **last-ts** (`fileRouter`, Page/Route).
+- Soft-nav / transport: `last-ts/Waku`, `last-ts/History`, `last-ts/Memory`.
+- Host config / RSC server entry: `last-ts/config`, `last-ts/server`.
+- `waku` is an **optional peer of `last-ts` only**. CLI entry filenames (`waku.config.ts`, `waku.server.tsx`) may stay; the import path must be `last-ts/*`.
+
+**Never** author `getConfig`, `pageConfig`, `Page.asDefault`, or “bridges for Waku’s file router.” That router is not ours.
+
+**Allowed to import `waku`:** `packages/last-ts/**` only. Legacy `docs/site/**` is grandfathered until cutover — do not copy it.
+
+ESLint enforces this (`no-restricted-imports`). SSOT: `docs/standards/working-agreement.md` (`no-waku-app-imports`).

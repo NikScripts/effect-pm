@@ -1,4 +1,4 @@
-/** Plain Waku RSC page — no Page.asDefault / getConfig (banned). */
+/** RSC page module — registered via `last-ts/server`. */
 export default function About() {
   return (
     <article data-page="about">

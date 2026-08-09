@@ -1,7 +1,7 @@
 /**
  * Typed catalog — HttpApi-shaped `Router.make` + `Route.get` (see
- * `docs/handoffs/router-httpapi-lock.md`). No `fileRootFromPages` / Page-class
- * merge / `getConfig` (banned — `docs/handoffs/last-ts-api-corrections.md`).
+ * `docs/handoffs/router-httpapi-lock.md`). Host registration is
+ * `last-ts/server`; path table is `last-ts/vite` `fileRouter`.
  */
 import { Layer, Schema } from "effect";
 import type { Layout } from "last-ts/Layout";
@@ -25,7 +25,7 @@ export const urls = Route.urlBuilder(Site);
 
 const Passthrough: Layout = ({ children }) => children as never;
 
-/** Catalog + registry for Waku.layer (file routes own page bodies). */
+/** Catalog + registry for `last-ts/Waku` layer (page bodies via `last-ts/server`). */
 const app = RouterBuilder.group(Site, "__top", Passthrough, (h) =>
   h
     .handle("index", () => null)

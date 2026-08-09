@@ -13,12 +13,15 @@ Group Target helpers, dashboard compose (`Ui`), and family views stay on
 import * as View from "last-ts/View"       // View.make — not View.Service
 import * as Route from "last-ts/Route"
 import * as Router from "last-ts/Router"
-import * as Page from "last-ts/Page"       // Request / Document; no asDefault / getConfig
+import * as Page from "last-ts/Page"
 import * as Last from "last-ts/Last"
-import { fileRouter } from "last-ts/vite"  // path codegen — design pass still owed
+import { defineConfig } from "last-ts/config"  // never import waku in apps
+import { adapter, createPages } from "last-ts/server"
+import { fileRouter } from "last-ts/vite"
 ```
 
-**Corrections lock:** `docs/handoffs/last-ts-api-corrections.md` — never author
-`getConfig` / `pageConfig` / `Page.asDefault` / deleted Route bake merges.
+**Host boundary:** apps import **only** `last-ts/*`. `waku` is an optional peer
+inside this package. **Corrections lock:**
+`docs/handoffs/last-ts-api-corrections.md`.
 
 Root barrels real modules only.

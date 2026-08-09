@@ -1,7 +1,6 @@
 /**
- * Plain Waku RSC page — no Page.asDefault / getConfig (banned).
- * Static vs dynamic is owned by last-ts Route/Page API, not Waku getConfig.
- * See `docs/handoffs/last-ts-api-corrections.md`.
+ * RSC page module — registered via `last-ts/server` (staticPaths there).
+ * Soft-nav catalog: `urls.guides_slug` on `last-ts` Router.
  */
 export default function Chapter(props: { readonly slug: string }) {
   return (

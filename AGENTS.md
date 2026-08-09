@@ -7,6 +7,10 @@ have not recently, list the concrete actions you will take, and **wait for owner
 That rule holds even when the handoff forgot to say so — see
 [`docs/standards/working-agreement.md`](./docs/standards/working-agreement.md) (`confirm-handoff-actions`).
 
+**last-ts host boundary:** apps never `import` from `waku` / `waku/*` — only `last-ts/*`
+(`config`, `server`, `Waku`, `vite`, …). `waku` is an optional peer of `last-ts`. See
+`no-waku-app-imports` in the working agreement and `.cursor/rules/no-waku-app-imports.mdc`.
+
 **Repo CLI:** **`pnpm hyp`** (Effect CLI under `dev/cli/`) owns developer gates. Prefer
 `pnpm verify` / `pnpm hyp …` over adding new root scripts. Green gate:
 `deps → typecheck → lint → test → build → markers`. See `.cursor/rules/hyp-verify.mdc`.

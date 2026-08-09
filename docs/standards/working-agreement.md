@@ -99,14 +99,21 @@ resurrect” decisions.
 Handoff authors must include both requirements in every handoff (see Documentation standards).
 Omitting them does **not** waive this rule for the reader.
 
-{#no-waku-getconfig .must appliesTo="src examples docs"}
-## Never author Waku `getConfig` (or inject bridges)
+{#no-waku-app-imports .must appliesTo="src examples docs"}
+## Never import `waku` in apps — only `last-ts`
 
-last-ts / Hyperlink apps **do not** write `export const getConfig`, `Page.getConfig`,
-or Vite inject plugins that stamp it (`pageConfig`). Static vs dynamic is owned by
-our Route/Page API. If the host engine seems to require `getConfig`, **stop and
-raise it** — do not add the export as a workaround. SSOT:
-[`../handoffs/last-ts-api-corrections.md`](../handoffs/last-ts-api-corrections.md).
+Apps and dogfood **do not** `import … from "waku"` / `"waku/…"`. Route everything
+through **last-ts** (`last-ts/config`, `last-ts/server`, `last-ts/Waku`,
+`last-ts/vite`, Page/Route). `waku` is an **optional peer of `last-ts` only**.
+
+File routing and static/dynamic are ours — not Waku’s fs-router. Therefore apps
+never author `getConfig`, `pageConfig`, `Page.asDefault`, or any “bridge for
+Waku file routing.” Host CLI filenames (`waku.config.ts`, `waku.server.tsx`) may
+remain; the **import path** must be `last-ts/*`.
+
+ESLint `no-restricted-imports` enforces this outside `packages/last-ts/**`.
+Legacy Hyperlink `docs/site/**` is grandfathered until cutover — do not copy it.
+SSOT: [`../handoffs/last-ts-api-corrections.md`](../handoffs/last-ts-api-corrections.md).
 
 {#decisions-doc-is-ssot .must appliesTo=process}
 ## The decisions doc is the source of truth

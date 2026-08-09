@@ -1,12 +1,12 @@
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "waku/config";
+import { defineConfig } from "last-ts/config";
 import { fileRouter } from "last-ts/vite";
 
 const lastTsSrc = fileURLToPath(
   new URL("../../../packages/last-ts/src", import.meta.url),
 );
 
-/** last.ts docs server — not Hyperlink docs/site. */
+/** last.ts docs server — host CLI entry; apps import last-ts only, never waku. */
 export default defineConfig({
   vite: {
     plugins: [
@@ -31,9 +31,8 @@ export default defineConfig({
         "last-ts/Memory": `${lastTsSrc}/Memory.ts`,
         "last-ts/AtomReact": `${lastTsSrc}/AtomReact.tsx`,
         "last-ts/vite": `${lastTsSrc}/vite/fileRouter.ts`,
-        "waku/router/client": fileURLToPath(
-          new URL("./node_modules/waku/dist/router/client.js", import.meta.url),
-        ),
+        "last-ts/config": `${lastTsSrc}/config.ts`,
+        "last-ts/server": `${lastTsSrc}/server.ts`,
       },
     },
     server: {

@@ -1,11 +1,11 @@
-/** Plain Waku RSC page — no Page.asDefault / getConfig (banned). */
+/** RSC page module — registered via `last-ts/server` (not Waku fsRouter). */
 export default function Home() {
   return (
     <article data-page="home">
       <h1>last.ts</h1>
       <p>
-        Official docs server — Waku file pages + soft-nav via{" "}
-        <code>Last.provider(Waku.layer.pipe(Layer.provide(routes)))</code>.
+        Official docs server — last-ts file router + soft-nav via{" "}
+        <code>Last.provider</code> / <code>last-ts/Waku</code>.
       </p>
       <dl className="meta">
         <div>

@@ -23,7 +23,14 @@ export default [
   },
   ...tseslint.configs.recommended.map((config) => ({
     ...config,
-    files: ["src/**/*.ts", "test/**/*.ts", "examples/**/*.ts", "dev/**/*.ts"],
+    files: [
+      "src/**/*.ts",
+      "test/**/*.ts",
+      "examples/**/*.ts",
+      "dev/**/*.ts",
+      "packages/last-ts/**/*.{ts,tsx}",
+      "docs/last/**/*.{ts,tsx}",
+    ],
     languageOptions: {
       ...config.languageOptions,
       parserOptions: {
@@ -91,7 +98,7 @@ export default [
       "react/react-in-jsx-scope": "off"
     }
   },
-  // F5 split-dial: dashboard data must not re-dial Nodes from stamped tag urls (loud-failures §10).
+  // F5 split-dial + no direct waku (merged — flat config replaces the whole rule).
   {
     files: ["src/ui/**/*.{ts,tsx}", "src/web/**/*.{ts,tsx}", "src/tui/**/*.{ts,tsx}"],
     rules: {
@@ -116,10 +123,58 @@ export default [
               importNames: ["connect", "connectHttp", "connectSocket", "connectIpc"],
               message:
                 "F5 split-dial: provide Hyperlink.ws / Node.connect* in Atom.runtime and yield* the Node — do not re-dial from the tag url (docs/handoffs/loud-failures-design.md §10)."
-            }
-          ]
-        }
-      ]
-    }
-  }
+            },
+            {
+              name: "waku",
+              message:
+                "Do not import waku in apps. Use last-ts/config, last-ts/server, last-ts/Waku, last-ts/vite. waku is an optional peer of last-ts only.",
+            },
+          ],
+          patterns: [
+            {
+              group: ["waku/*"],
+              message:
+                "Do not import waku/* in apps. Use last-ts/config, last-ts/server, last-ts/Waku, last-ts/vite. waku is an optional peer of last-ts only.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  // App trees never import waku — optional peer of last-ts only (see no-waku-app-imports).
+  // Grandfather: docs/site still on Waku fs-router until cutover; last-ts internals may import.
+  {
+    files: ["**/*.{ts,tsx,js,mjs,cjs}"],
+    ignores: [
+      "packages/last-ts/**",
+      "docs/site/**",
+      "repos/**",
+      "node_modules/**",
+      "dist/**",
+      "src/ui/**",
+      "src/web/**",
+      "src/tui/**",
+    ],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "waku",
+              message:
+                "Do not import waku in apps. Use last-ts/config, last-ts/server, last-ts/Waku, last-ts/vite. waku is an optional peer of last-ts only.",
+            },
+          ],
+          patterns: [
+            {
+              group: ["waku/*"],
+              message:
+                "Do not import waku/* in apps. Use last-ts/config, last-ts/server, last-ts/Waku, last-ts/vite. waku is an optional peer of last-ts only.",
+            },
+          ],
+        },
+      ],
+    },
+  },
 ];

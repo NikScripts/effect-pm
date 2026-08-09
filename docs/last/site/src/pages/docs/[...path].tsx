@@ -1,7 +1,4 @@
-/**
- * Plain Waku RSC page — no Page.asDefault / getConfig (banned).
- * See `docs/handoffs/last-ts-api-corrections.md`.
- */
+/** RSC page module — registered via `last-ts/server` (dynamic host render). */
 export default function DocsPath(props: { readonly path: string }) {
   return (
     <article data-page="docs-path">

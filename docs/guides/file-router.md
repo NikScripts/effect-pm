@@ -7,10 +7,10 @@
 # File router
 
 {.draft}
-**Draft** — path-table codegen + Vite plugin are Eng’d; docs-site cutover off Waku
-`getConfig` still open. Page marks live on `last-ts/Page`
-(`Page.static` / `dynamic` / `build` + `stampOf`); soft-nav stays on
-[Routing](/docs/routing).
+**Draft** — path-table codegen + Vite plugin are Eng’d. Apps never import `waku`;
+host façades are `last-ts/config` / `last-ts/server`. Legacy Hyperlink
+`docs/site` cutover onto that boundary is still open. Page marks live on
+`last-ts/Page`; soft-nav stays on [Routing](/docs/routing).
 
 ```ts
 import * as Page from "last-ts/Page"
@@ -67,22 +67,25 @@ urls.api_pkg("effect")       // "/api/effect"
 
 ## Is it plugged into Vite?
 
-**Yes — as an opt-in plugin** exported from `hyperlink-ts/vite`. Add it to your
-Vite (or Waku) config; it is **not** auto-injected and the docs site does not
-dogfood it yet (still Waku `pages.gen` + `getConfig`).
+**Yes — as an opt-in plugin** exported from `last-ts/vite` (also mirrored on
+Hyperlink where applicable). Add it via `last-ts/config` — apps never import
+`waku`. last-ts dogfood (`docs/last/site`) uses it; legacy Hyperlink `docs/site`
+cutover is still open.
 
 ```ts
-// vite.config.ts / waku.config.ts
-import { defineConfig } from "vite" // or Waku’s defineConfig
-import { fileRouter } from "hyperlink-ts/vite"
+// waku.config.ts — CLI filename only
+import { defineConfig } from "last-ts/config"
+import { fileRouter } from "last-ts/vite"
 
 export default defineConfig({
-  plugins: [
-    fileRouter({
-      pagesDir: "src/pages",
-      outFile: "src/paths.gen.ts",
-    }),
-  ],
+  vite: {
+    plugins: [
+      fileRouter({
+        pagesDir: "src/pages",
+        outFile: "src/paths.gen.ts",
+      }),
+    ],
+  },
 })
 ```
 
@@ -195,8 +198,9 @@ the type source. Design for three states:
 
 **Still open (honest gaps):**
 
-- Docs site not on this plugin yet (Waku `getConfig` + its own `pages.gen`).
-- No loader yet that reads `Page.stampOf` → Waku `createPages`.
+- Legacy Hyperlink `docs/site` still on Waku fs-router (grandfathered); cutover
+  onto `last-ts/config` + `last-ts/server` + this plugin.
+- No loader yet that reads Page marks → `last-ts/server` `createPages`.
 - `Page.Service` class mint deferred — helpers only.
 
 ## Related

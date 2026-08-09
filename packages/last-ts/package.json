@@ -87,6 +87,14 @@
       "types": "./src/vite/fileRouter.ts",
       "default": "./src/vite/fileRouter.ts"
     },
+    "./config": {
+      "types": "./src/config.ts",
+      "default": "./src/config.ts"
+    },
+    "./server": {
+      "types": "./src/server.ts",
+      "default": "./src/server.ts"
+    },
     "./package.json": "./package.json",
     "./docgen": {
       "types": "./src/docgen/index.ts",
