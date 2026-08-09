@@ -1,14 +1,13 @@
 ---
-description: Fluid pre-1.0 surface — no compatibility shims; rename in one complete change
-globs: "{src,test,examples}/**/*.{ts,tsx}"
+description: No backward-compat shims — rename in one complete change
+globs: "{src,packages/last-ts/src,test,examples}/**/*.{ts,tsx}"
 alwaysApply: false
 ---
 
-# No backward-compat shims
+# No shims
 
-Full rule: [`docs/standards/no-backward-compat.md`](../../docs/standards/no-backward-compat.md).
+SSOT: [`docs/standards/no-backward-compat.md`](../../docs/standards/no-backward-compat.md).
 
-- While unlocked, break freely: rename/remove outright — no alias, no `@deprecated` re-export.
-- A rename is **one** change: symbol, call sites, tests, examples, docs together.
-- `@locked` only by explicit owner decision; no unapproved `@since` before 1.0.
-- Never silence Effect language-service / typescript diagnostics with inline disables to "ship later."
+- Pre-1.0: rename/remove outright — no alias / `@deprecated` re-export.
+- One change updates symbol, call sites, tests, examples, docs.
+- No inline diagnostic disables to “ship later.”

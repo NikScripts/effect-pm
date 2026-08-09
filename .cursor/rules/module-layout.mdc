@@ -1,58 +1,15 @@
 ---
-description: Effect-true module layout — filenames, namespaces, and the internal split
-alwaysApply: true
+description: Module layout + public/internal — pointer to standards SSOT
+globs: "{src,packages/last-ts/src,examples,test}/**/*.{ts,tsx}"
+alwaysApply: false
 ---
 
-# Module layout (Effect-true)
+# Module layout
 
-Canonical precedent: the vendored `repos/effect/packages/effect` (and `repos/effect/packages/rpc`).
-Match it. When unsure, open the analogous Effect module and copy its shape.
+SSOT: [`docs/standards/modules-and-boundaries.md`](../../docs/standards/modules-and-boundaries.md).
+Match vendored Effect (`repos/effect/packages/effect`).
 
-## The module is the file is the namespace
-
-- One public module = **one `PascalCase.ts` in a role folder** (usually `src/`). The file **is** the
-  namespace, consumed as `import * as Name from "hyperlink-ts/Name"`.
-- Members are **flat top-level** `export const` / `export function` / `export type`.
-- **Never an object-as-namespace for the public surface** — no `export const Name = { … }`.
-  (Effect has no `export const Effect = {}`; `Effect.ts` is flat `export const succeed`, etc.)
-- Associated types attach **in the same file** via `export declare namespace Name { … }`
-  (see `repos/effect/packages/effect/src/Layer.ts`).
-
-## Filenames match their module
-
-- Filename === the namespace / class / type it exports. No orphan names that export nothing of that name.
-- **Banned for public modules:** `*Contract`, `*Namespace`, and object-engine files. Name by role/noun,
-  like Effect's `RpcServer` / `RpcClient` / `RpcGroup` — a monorepo-wide search of Effect finds zero
-  `*Contract` files.
-
-## Heavy / private impl → `src/internal/<camelCase>.ts` (name mirror)
-
-- The public `Foo.ts` is a thin re-export shell over a name-mirrored internal impl:
-  `import * as internal from "./internal/foo"` (Effect: `Cache.ts` ↔ `internal/cache.ts`).
-- Internal modules are camelCase, get **no subpath**, and are **never imported by apps**.
-
-## Namespaced short vs internal full type names
-
-- **Public namespace member** (flat export on `src/WorkPool.ts`, seen as `WorkPool.X`): use the
-  **short** name — `PriorityConfig`, `Tag`, `Handle`.
-- **`src/internal/*`** (no ambient module namespace): use the
-  **full** prefix — `WorkPoolPriorityConfig`, `WorkPoolPriorityHandle`.
-- Public modules re-export or alias internals under the short name; apps never import `internal/`.
-  Detail: `docs/standards/types-and-naming.md` (`namespaced-short-vs-internal-full`).
-
-## Subpaths never point into `internal/`
-
-- `hyperlink-ts/Name` resolves to the public `src/Name.ts` (surfaced via the barrel
-  `export * as Name from "./Name"`). It must **not** resolve to `src/internal/*Namespace.ts`.
-- Barrel `src/index.ts`: one `export * as Name from "./Name"` per module.
-
-## Exceptions (already ruled — do not "fix")
-
-- **Storage facets** (if any) keep their own convention (see `public-vs-internal.mdc`): a camelCase
-  file under a PascalCase `store/<Domain>` subpath. WorkPool / Daemon / Gate / log durable history uses
-  `*.store(tag)` / `Node.logs` on the Store bridge — not a `store/*` facet subpath.
-
-## Concrete
-
-- ✅ `src/WorkPool.ts` (flat namespace: `Tag`, `layer`, `serve`, `make`, …) + `src/internal/workPool.ts` (engine impl).
-- ❌ `src/WorkPool.ts` (orphan name) **+** `src/WorkPool.ts` exporting `export const WorkPool = { … }` (object engine) **+** the `./WorkPool` subpath resolving to `src/internal/workPoolNamespace.ts`.
+- One public module = one `PascalCase.ts`, flat exports (`import * as Name`).
+- No object-as-namespace public surface. No `*Contract` / `*Namespace` public files.
+- Heavy impl → `src/internal/<camelCase>.ts` (name-mirrored); no app imports; no subpath into `internal/`.
+- Public = apps import; `internal/` = package-only. Storage facets (if any) → `src/store/` + `store/<Domain>` subpath.

@@ -9,11 +9,14 @@ That rule holds even when the handoff forgot to say so — see
 
 **last-ts host boundary:** apps never `import` from `waku` / `waku/*` — only `last-ts/*`
 (`config`, `server`, `Waku`, `vite`, …). `waku` is an optional peer of `last-ts`. See
-`no-waku-app-imports` in the working agreement and `.cursor/rules/no-waku-app-imports.mdc`.
+`no-waku-app-imports` in the working agreement (ESLint enforces).
 
 **Repo CLI:** **`pnpm hyp`** (Effect CLI under `dev/cli/`) owns developer gates. Prefer
 `pnpm verify` / `pnpm hyp …` over adding new root scripts. Green gate:
-`deps → typecheck → lint → test → build → markers`. See `.cursor/rules/hyp-verify.mdc`.
+`deps → typecheck → lint → test → build → markers`.
+
+**Editor rules:** `.cursor/rules/*.mdc` are **glob-scoped pointers** into `docs/standards/` —
+not always-on essays. Do not grow alwaysApply rules; put SSOT in standards.
 
 **Persistence:** Live recipe SSOT — [`docs/guides/stores.md`](./docs/guides/stores.md). Shapes — [`docs/standards/storage.md`](./docs/standards/storage.md). Cutover history — [`docs/handoffs/store-cutover-00-store-core.md`](./docs/handoffs/store-cutover-00-store-core.md) (prefer the guide when they disagree). Logs — [`docs/guides/logs.md`](./docs/guides/logs.md) (+ lookup tables in [`docs/LOGS.md`](./docs/LOGS.md)).
 
