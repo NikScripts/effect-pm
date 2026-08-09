@@ -118,9 +118,11 @@ blobs apps hand-assemble today.
 - Calling `Address.unixFromKey()` — it is a **zero-arg sentinel**, written without `()`.
 
 **Contrast with today’s multi-protocol `endpoints`:** Eng’d X1 is **one dial per protocol
-kind** for connect selection. `Address.*` is the product surface for **many addresses**
-(same kind, labeled or not) that Node/Update/proxy compose — exact merge with `endpoints`
-/ `withProtocol` is still an open fork (§8).
+kind** for connect selection. **Locked (2026-08-09):** `Address.*` is the **single**
+address list on the Node for new code — it **replaces** `endpoints` / `withProtocol` as
+the product surface (same kind, labeled or not, multiple primaries allowed).
+`withProtocol` becomes sugar or a migration path onto piping `Address.*`. X1’s “one per
+kind” becomes a **Policy default** for client pick, not a hard Node shape limit.
 
 ### 3.2 Primary vs labeled; no overlapping dials
 
@@ -670,7 +672,8 @@ clones, not HttpApi catalog. `Router.make` (G) is the catalog precedent.
 ### Addresses (still)
 7. Proxy ownership — resident agent? dedicated proxy Node? Lookup feature?
 8. Directory advertise — primaries only vs primaries+backends vs proxy row.
-9. Type model — `Address.*` vs today’s `endpoints` / `withProtocol` merge.
+9. ~~Type model — `Address.*` vs `endpoints` / `withProtocol`~~ — **locked: Address.*
+   replaces** for new code; `withProtocol` → sugar/migrate; one-per-kind = Policy default.
 10. HyperServices see primaries only — types vs convention.
 11. ~~Manual `addressFromKey`~~ / ~~address-less Address~~ — **rejected**.
     **`Address.unixFromKey`** sentinel (no `()`) — **lean** (§3.3).
