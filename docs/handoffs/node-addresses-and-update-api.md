@@ -9,8 +9,8 @@ Remaining (address model, `Node.make`, locality Host/Machine, proxy, deploy node
 - **`Address.*` factories** — own subpath **`hyperlink-ts/Address`** (not nested under Node);
   scalar / `(label, dial)` / array / object; explicit dials; sentinel **`Address.unixFromKey`**
   (no call — zero args) for key-derived Unix primary (§3)
-- **`Node.make(key, address | Address[])`** (+ keep options); **pipe `Address.*` directly**
-  (prefer over `withAddresses` wrapper) (§3.4)
+- **`Node.make(key, Address | Address[], options?)`** — **locked** arity; **pipe `Address.*`
+  directly** (prefer over `withAddresses` wrapper) (§3.4)
 - Unnamed = **primary**; overlap = same concrete dial (forbidden); multiple primaries /
   same name+protocol allowed when dials differ; **usage is Node policy** (§3.5–3.6)
 - ~~Replace options-bag `restartSuccessor` with `Update.plan` → execute~~ **Eng'd** (restartSuccessor remains; Update preferred)
@@ -168,10 +168,10 @@ Open: slug rules, directory root Config, Windows named-pipe story — behind bin
 
 ### 3.4 `Node.make` — address / address array as second arg; keep pipe + options
 
-**Owner lean for declaration:**
+**Arity locked (2026-08-09):** `Node.make(key, Address | Address[], options?)`.
 
 ```ts
-// SKETCH
+// SKETCH — locked shape
 Node.make("fleet/Worker", Address.http(":8080"))
 Node.make("fleet/Worker", [
   Address.http(":8080"),                 // primary
@@ -179,10 +179,7 @@ Node.make("fleet/Worker", [
   Address.unix("B", "/var/run/w.b.sock"),
 ])
 Node.make("fleet/Worker", Address.unixFromKey)
-
-// Still need an options bag for non-address config — exact arity TBD:
-// Node.make(key, addresses, options?)  or  Node.make(key, options & { addresses? })
-// Prefer: second arg = Address | Address[]; options remain available (not …rest-only).
+Node.make("fleet/Worker", Address.http(":8080"), { /* non-address options */ })
 ```
 
 **Keep the piped form** for widening after the fact. **Owner prefer: pipe `Address.*`
@@ -678,7 +675,7 @@ clones, not HttpApi catalog. `Router.make` (G) is the catalog precedent.
 11. ~~Manual `addressFromKey`~~ / ~~address-less Address~~ — **rejected**.
     **`Address.unixFromKey`** sentinel (no `()`) — **lean** (§3.3).
 12. ~~Where `Address` lives~~ — **locked: `hyperlink-ts/Address`** (own subpath).
-12b. `Node.make` arity — `(key, Address|Address[], options?)` vs options bag with addresses (§3.4).
+12b. ~~`Node.make` arity~~ — **locked: `(key, Address|Address[], options?)`** (§3.4).
 12c. Multi-primary client pick — Policy default when several primaries exist.
 12d. Same label+protocol, different dials — how Policy names/disambiguates them.
 12e. ~~`withAddresses` wrapper~~ — **prefer pipe `Address.*` directly** (§3.4);
