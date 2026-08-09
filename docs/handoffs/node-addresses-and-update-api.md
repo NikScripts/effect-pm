@@ -13,8 +13,8 @@ Remaining (address model, `Node.make`, locality Host/Machine, proxy, deploy node
   directly** (prefer over `withAddresses` wrapper) (§3.4)
 - Unnamed = **primary**; overlap = same concrete dial (forbidden); multiple primaries /
   same name+protocol allowed when dials differ
-- **Default Node policy:** listen/serve + advertise/dial on **primaries**; labeled
-  addresses unbound until policy says otherwise (role A/B, proxy→backend, …) (§3.5)
+- **Node address Policy** — define knobs first (listen / advertise / dial / proxy /
+  role), **then** pick defaults (§3.5). Do not assume labeled addresses sit idle.
 - ~~Replace options-bag `restartSuccessor` with `Update.plan` → execute~~ **Eng'd** (restartSuccessor remains; Update preferred)
 - **`Update` module separate from `Versioned`** — Eng'd
 - Plans are **fleet-wide**, ordered; contract from→to audit — Eng'd
@@ -207,19 +207,28 @@ most — **not** the preferred DX.
 `…rest` args for addresses were considered; owner expects we **still have uses for an
 options arg**, so don’t make the signature rest-only.
 
-### 3.5 Default Node policy — primaries active; labeled idle
+### 3.5 Address policies — define knobs, then defaults
 
-Address marks **identity + primary vs labeled + dial**. **Policy** decides listen,
-advertise, dial, proxy, role bind. Prefer / sticky / stream-gap stay on Policy — not
-restart options.
+Address marks **identity + primary (unnamed) vs labeled + dial**. That is description
+only. **Policy** decides what the runtime does with each address. Prefer / sticky /
+stream-gap stay on Policy — not restart options.
 
-**Default (no extra policy) — owner 2026-08-09:**
+**Owner (2026-08-09):** do **not** invent a default like “labeled sit idle” before the
+policy surface exists. If an address is on the Node, the obvious assumption is you meant
+to use it — especially for listen. Define the knobs first; pick defaults second.
 
-- **Listen / serve** on **primary** address(es) only.
-- **Advertise / client dial** those same primaries.
-- **Labeled** addresses (A/B/…) are on the Node description but **not bound** and not
-  advertised — until policy activates them (this process is role A, primary proxies to
-  A/B, etc.).
+#### Policy knobs (design — names TBD)
+
+| Knob | Question it answers |
+|------|---------------------|
+| **Listen** | Which addresses does this process **bind**? |
+| **Advertise** | Which addresses land in **Directory** (fleet membership)? |
+| **Dial** | Which addresses do **clients** (`lookupClient` / peers) connect to? |
+| **Proxy** | Does an address **forward** to another (primary → live A/B)? |
+| **Role** | Is this process instance **bound to a label** (A vs B) for cutover? |
+
+Primary vs labeled is an input to those knobs (e.g. dial defaults toward primaries;
+proxy often primary→labeled), not a hidden “don’t listen” flag.
 
 ```ts
 class Worker extends Node.make("fleet/Worker", Address.http(":8080")).pipe(
@@ -227,23 +236,24 @@ class Worker extends Node.make("fleet/Worker", Address.http(":8080")).pipe(
   Address.unix("B", "/var/run/w.b.sock"),
 ) {}
 
-// Default: process listens on :8080 only. A/B exist on the Node but are ignored
-// for bind/advertise until policy says otherwise.
+// Policy (sketch — API TBD) configures listen / advertise / dial / proxy / role
+// against Worker’s address set. Defaults undecided until knobs lock.
 ```
 
-That is the boring path — not a special “HyperService primary view” type. `serve` /
-listen just follow policy; default policy = primaries.
+#### Example configurations (not defaults yet)
 
-**Non-default configs** (still first-class, not forced):
-
-| Policy lean | Meaning |
-|-------------|---------|
-| Primaries as **proxy** → labeled A/B | Stable client URL; backends swap (§4 β) |
-| This instance **binds role A** (or B) | Process listens on the labeled dial; primary may be proxy or unused |
-| Multi-primary pick | Which primary clients prefer when several exist |
-| Other layouts | Owner wants room — don’t hard-wire proxy-only into Address |
+| Intent | Listen | Advertise | Dial | Proxy / role |
+|--------|--------|-----------|------|----------------|
+| Serve everything declared | all | primaries? / all? | primaries | — |
+| Stable primary, A/B backends (§4 β) | primary (proxy) + live role | primary | primary | primary → A or B |
+| This box is role A only | A (maybe + primary) | primary and/or A | primary | role = A |
+| Multi-primary edge | all primaries | all primaries | Policy pick | — |
 
 Directory today: **one row per `nodeKey`**. May need to grow for proxy/backends — open.
+
+**Next in this section:** lock each knob’s value space, then choose defaults (likely
+candidate: listen **all** declared addresses — why list a protocol you won’t bind? —
+with dial/advertise biased to **primaries**). Not locked until owner says so.
 
 ---
 
@@ -680,8 +690,8 @@ clones, not HttpApi catalog. `Router.make` (G) is the catalog precedent.
 8. Directory advertise — primaries only vs primaries+backends vs proxy row.
 9. ~~Type model — `Address.*` vs `endpoints` / `withProtocol`~~ — **locked: Address.*
    replaces** for new code; `withProtocol` → sugar/migrate; one-per-kind = Policy default.
-10. ~~HyperServices “primary view” types~~ — **rejected framing**. Default policy =
-    listen/advertise **primaries**, leave labeled idle (§3.5). Non-default = Policy config.
+10. ~~HyperServices “primary view” / labeled-idle default~~ — **rejected**. Policy knobs
+    first (listen / advertise / dial / proxy / role), **then** defaults (§3.5).
 11. ~~Manual `addressFromKey`~~ / ~~address-less Address~~ — **rejected**.
     **`Address.unixFromKey`** sentinel (no `()`) — **lean** (§3.3).
 12. ~~Where `Address` lives~~ — **locked: `hyperlink-ts/Address`** (own subpath).
@@ -723,9 +733,10 @@ clones, not HttpApi catalog. `Router.make` (G) is the catalog precedent.
 
 ## 10. Next
 
-1. ~~Address subpath / make arity / replace endpoints / default policy (primaries)~~ recorded.
-2. Lock remaining **Policy** knobs — multi-primary pick, role bind, proxy→A/B config shape
-   (§3.5–4). **Do not** deepen Update plan API in this pass.
+1. ~~Address subpath / make arity / replace endpoints~~ recorded.
+2. **Define address Policy knobs** (listen / advertise / dial / proxy / role), **then**
+   choose defaults (§3.5–4). Candidate lean (not locked): listen all declared; dial /
+   advertise bias to primaries. **Do not** deepen Update in this pass.
 3. Lock **locality word** (`Host` / `Machine` / …) + **keep Launcher** (§7.3–7.4).
 4. Lock **`Node.make` vs dual-duty `Node.Service`** (§7.7) — await K Page mint (§7.6).
 5. Eng Address + Node.make (+ locality + default policy).
