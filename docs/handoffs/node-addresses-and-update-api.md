@@ -6,8 +6,9 @@ Remaining (address model, `Node.make`, locality Host/Machine, proxy, deploy node
 **design only**.  
 **Owner leans (so far):**
 - Stable **primary** address(es) + labeled A/B backends; optional primaries-as-proxy (§3–4)
-- **`Address.*` factories** — scalar / `(label, dial)` / array / object; explicit dials; sentinel
-  **`Address.unixFromKey`** (no call — zero args) for key-derived Unix primary (§3)
+- **`Address.*` factories** — own subpath **`hyperlink-ts/Address`** (not nested under Node);
+  scalar / `(label, dial)` / array / object; explicit dials; sentinel **`Address.unixFromKey`**
+  (no call — zero args) for key-derived Unix primary (§3)
 - **`Node.make(key, address | Address[])`** (+ keep options); **pipe `Address.*` directly**
   (prefer over `withAddresses` wrapper) (§3.4)
 - Unnamed = **primary**; overlap = same concrete dial (forbidden); multiple primaries /
@@ -83,8 +84,8 @@ for app nodes** are what’s in the dock.
 
 ### 3.1 `Address.*` factories (owner lean — 2026-08-08/09)
 
-Consolidate dial construction under a single **`Address`** namespace (name/module TBD —
-could be `hyperlink-ts/Address` or nested under `Node`). Protocol helpers + overloads:
+Consolidate dial construction under **`hyperlink-ts/Address`** (own subpath — **locked**
+2026-08-09; not nested under `Node`). Protocol helpers + overloads:
 
 ```ts
 // SKETCH — owner lean
@@ -676,7 +677,7 @@ clones, not HttpApi catalog. `Router.make` (G) is the catalog precedent.
 10. HyperServices see primaries only — types vs convention.
 11. ~~Manual `addressFromKey`~~ / ~~address-less Address~~ — **rejected**.
     **`Address.unixFromKey`** sentinel (no `()`) — **lean** (§3.3).
-12. Where `Address` lives — own subpath vs `Node.Address`.
+12. ~~Where `Address` lives~~ — **locked: `hyperlink-ts/Address`** (own subpath).
 12b. `Node.make` arity — `(key, Address|Address[], options?)` vs options bag with addresses (§3.4).
 12c. Multi-primary client pick — Policy default when several primaries exist.
 12d. Same label+protocol, different dials — how Policy names/disambiguates them.
