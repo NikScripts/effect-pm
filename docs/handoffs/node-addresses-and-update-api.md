@@ -8,7 +8,8 @@ Remaining (address model, `Node.make`, locality Host/Machine, proxy, deploy node
 - Stable **primary** address(es) + labeled A/B backends; optional primaries-as-proxy (§3–4)
 - **`Address.*` factories** — scalar / `(label, dial)` / array / object; explicit dials; sentinel
   **`Address.unixFromKey`** (no call — zero args) for key-derived Unix primary (§3)
-- **`Node.make(key, address | Address[])`** (+ keep options; keep pipe) (§3.4)
+- **`Node.make(key, address | Address[])`** (+ keep options); **pipe `Address.*` directly**
+  (prefer over `withAddresses` wrapper) (§3.4)
 - Unnamed = **primary**; overlap = same concrete dial (forbidden); multiple primaries /
   same name+protocol allowed when dials differ; **usage is Node policy** (§3.5–3.6)
 - ~~Replace options-bag `restartSuccessor` with `Update.plan` → execute~~ **Eng'd** (restartSuccessor remains; Update preferred)
@@ -183,18 +184,26 @@ Node.make("fleet/Worker", Address.unixFromKey)
 // Prefer: second arg = Address | Address[]; options remain available (not …rest-only).
 ```
 
-**Keep the piped form** for widening after the fact:
+**Keep the piped form** for widening after the fact. **Owner prefer: pipe `Address.*`
+directly** onto the Node — not wrapped in `Node.withAddresses([…])`:
 
 ```ts
-// SKETCH
+// SKETCH — preferred pipe
 const Worker = Node.make("fleet/Worker", Address.http(":8080"))
 const WorkerLocal = Worker.pipe(
-  Node.withAddresses([
-    Address.unix("A", "/var/run/w.a.sock"),
-    Address.unix("B", "/var/run/w.b.sock"),
-  ]),
+  Address.unix("A", "/var/run/w.a.sock"),
+  Address.unix("B", "/var/run/w.b.sock"),
+)
+
+// Also fine if make took only primary:
+const Worker2 = Node.make("fleet/Worker", Address.unixFromKey).pipe(
+  Address.http(":8080"), // another primary
+  Address.unix("A", "/var/run/w.a.sock"),
 )
 ```
+
+`Address` values are pipeable fragments (same spirit as `Node.withProtocol`). A
+`withAddresses` bag remains optional sugar at most — **not** the preferred DX.
 
 **HyperServices** (`Hyperlink.serve` / `WorkPool.serve` / clients that shouldn’t see
 backends) see **primary** address(es) only. Launcher / proxy / update plane see the
