@@ -138,4 +138,4 @@ Optional temporary re-exports on `hyperlink-ts/ui/Route` etc. during migration â
 - [file-router prototype](../handoffs/file-router-prototype.md)
 - [view-page-naming](../handoffs/view-page-naming.md)
 - [file-router guide](../guides/file-router.md)
-- Module layout: `.cursor/rules/module-layout.mdc`
+- Module layout: `docs/standards/modules-and-boundaries.md` (slim Cursor pointer: `.cursor/rules/module-layout.mdc`)
