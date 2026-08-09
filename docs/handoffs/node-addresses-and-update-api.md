@@ -12,7 +12,8 @@ when we return to surface design.
 - `Node.shutdown` leave keeps prefer across dial-replace
 - Update dream / backup-build simulate / deploy / locality — later
 
-**Active design step:** §3 scenarios — many ways to configure a node — **then** API.
+**Active design step:** §3.4 **core features + API** (scenarios catalogue kept above as
+background; API sketch un-parked in slim form).
 
 **Branch:** Agent 5 · `cursor/lifecycle-defer-start-929b`  
 **Related:** [`multi-protocol-nodes.md`](./multi-protocol-nodes.md) · [`versioned-schema-decisions.md`](./versioned-schema-decisions.md)
@@ -146,25 +147,68 @@ IPC, shared update/supervise. Depends on S4/S5/S8 more than on factory syntax.
 **S14 — Multi-primary HA.** Several client-facing dials all legitimate; ambiguity handled
 by client Policy (sticky, prefer, fail-closed) — same family as multi-row Directory today.
 
-### 3.2 What we need from the owner next
+### 3.2 Core features (slim)
 
-For each scenario you care about (especially S4–S7 and S11): which processes exist, what
-each binds, what Directory shows, what clients dial, and what changes on an update. Once
-those outcomes are agreed, design Address / Node.make / Policy to hit them — with
-**make ≡ pipe** for the same address set.
+| Feature | Meaning |
+|---------|---------|
+| **Address list** | A Node carries many addresses (any protocol mix). |
+| **Primary vs labeled** | Unnamed = primary (client-facing). Labeled (A/B/…) = roles / backends. |
+| **make ≡ pipe** | Same address set whether passed to `make` or piped on afterward. |
+| **Listen** | Process binds the addresses it runs with (default: all declared — Policy can narrow). |
+| **Dial / advertise** | Clients and Directory default to **primaries**; Policy can widen or proxy. |
+| **Policy** | Non-defaults: proxy primary→labeled, bind this instance to a role, multi-primary pick, listen subset. |
+| **Key-derived Unix** | `Address.unixFromKey` — Unix primary from node key (no manual path helper). |
+| **One list** | Replaces today’s `endpoints` / `withProtocol` for new code. |
 
-### 3.3 Parked — prior Address API sketch (do not treat as locked)
+Cutover shapes (stable front+A/B, dual-public replace, role-split processes) are **Policy +
+deploy** on top of this list — not separate address models. Update API stayed parked.
 
-> The following subsections (former §3.1–3.5) recorded an API-first pass. **Parked**
-> 2026-08-09 pending scenario lock. Kept for reference only.
+### 3.3 API (sketch)
 
-### 3.3.1 `Address.*` factories (parked sketch)
+```ts
+import * as Address from "hyperlink-ts/Address"
+import * as Node from "hyperlink-ts/Node"
 
-Consolidate dial construction under **`hyperlink-ts/Address`** (own subpath — **locked**
-2026-08-09; not nested under `Node`). Protocol helpers + overloads:
+// Factories — dial always explicit (except unixFromKey sentinel)
+Address.http(":8080")
+Address.unix("A", "/var/run/w.a.sock")
+Address.ws([4000, 4001])
+Address.http({ A: 3000, B: 3001 })
+Address.unixFromKey                         // no ()
 
-Consolidate dial construction under **`hyperlink-ts/Address`** (own subpath — **locked**
-2026-08-09; not nested under `Node`). Protocol helpers + overloads:
+// make(key, Address | Address[], options?)
+class Worker extends Node.make("fleet/Worker", Address.http(":8080")).pipe(
+  Address.unix("A", "/var/run/w.a.sock"),
+  Address.unix("B", "/var/run/w.b.sock"),
+) {}
+
+class Local extends Node.make("fleet/Local", Address.unixFromKey) {}
+
+class DualHttp extends Node.make("fleet/Edge", [
+  Address.http(":8080"),
+  Address.http(":8081"),
+]) {}
+
+// equivalent — addresses on make vs pipe are the same
+class WorkerAlt extends Node.make("fleet/Worker", [
+  Address.http(":8080"),
+  Address.unix("A", "/var/run/w.a.sock"),
+  Address.unix("B", "/var/run/w.b.sock"),
+]) {}
+```
+
+**Defaults (candidate):** listen **all** declared; advertise/dial **primaries**. Overlap =
+same concrete dial → reject. Policy configures proxy / role / listen subset / multi-primary
+pick — surface TBD after this core sticks.
+
+### 3.4 Parked — prior long Address API notes
+
+> Former detailed §3.1–3.5 pass. Prefer §3.2–3.3. Kept for reference.
+
+### 3.4.1 `Address.*` factories (parked detail)
+
+Consolidate dial construction under **`hyperlink-ts/Address`** (own subpath). Protocol
+helpers + overloads:
 
 ```ts
 // SKETCH — owner lean
@@ -810,10 +854,9 @@ clones, not HttpApi catalog. `Router.make` (G) is the catalog precedent.
 
 ## 10. Next
 
-1. **Walk configuration scenarios** (§3.0–3.2) — especially S4–S7 and S11 — until
-   outcomes are agreed. Constraint: make ≡ pipe for the same address set.
-2. Only then revisit Address / Node.make / Policy API (parked sketch §3.3.* is reference).
-3. Locality word + `Node.make` vs `Service` — after address outcomes.
-4. Eng Address + Node.make (+ locality).
-5. Update dream / backup-build simulate — **later**, focused pass.
+1. Confirm **core features + API** (§3.2–3.3) — or cut/change.
+2. Lock **Policy** surface for proxy / role / listen subset / multi-primary.
+3. Locality word + `Node.make` vs `Service`.
+4. Eng Address + Node.make (+ default policy).
+5. Update dream / backup-build simulate — **later**.
 6. Dream-redeploy stays **provisional** until address/make exists.
