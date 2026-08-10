@@ -3,8 +3,8 @@
  * (`LookupPolicy`, `NodePolicy`; today’s Eng’d `Policy` is the Lookup family).
  *
  * **Two layers:**
- * 1. **Constructable** (private name, e.g. `Keys`) —
- *    `class Keys extends PolicyBuilder.make(id).key(name, schema, opts)`.
+ * 1. **Constructable** (plural, e.g. `LookupPolicies` / `NodePolicies`) —
+ *    `class LookupPolicies extends PolicyBuilder.make(id).key(name, schema, opts)`.
  *    Each key is a PascalCase {@link Context.Reference} on the Def.
  * 2. **Module** (`import * as LookupPolicy`) — re-export References + recreate
  *    camelCase Layer helpers (`sticky`, `streamGap`, …) and mode presets.
@@ -14,8 +14,8 @@
  * import * as PolicyBuilder from "hyperlink-ts/PolicyBuilder"
  * import { Effect, Schema } from "effect"
  *
- * // private constructable — not the public module name
- * class Keys extends PolicyBuilder.make("hyperlink-ts/LookupPolicy")
+ * // plural constructable — singular module namespace
+ * class LookupPolicies extends PolicyBuilder.make("hyperlink-ts/LookupPolicy")
  *   .key("Sticky", Schema.Boolean, { defaultValue: () => true })
  *   .key("Yield", Schema.Boolean, {
  *     defaultValue: () => Effect.succeed(true),
@@ -23,9 +23,9 @@
  *   })
  * {}
  *
- * export const Sticky = Keys.Sticky
- * export const sticky = Keys.succeed({ _tag: "Sticky", value: true })
- * export const make = Keys.make
+ * export const Sticky = LookupPolicies.Sticky
+ * export const sticky = LookupPolicies.succeed({ _tag: "Sticky", value: true })
+ * export const make = LookupPolicies.make
  * ```
  *
  * Apps import the module (`LookupPolicy` / `NodePolicy`), not this builder.
@@ -163,8 +163,7 @@ export type Def<
  * Empty constructable (HttpApi.`make(id)` analogue).
  *
  * Widen with `.key(name, schema, { defaultValue, toRuntime? })`, then
- * `class Keys extends` (name the constructable something other than the public
- * module namespace). Each key becomes a PascalCase Reference on the Def.
+ * `class LookupPolicies extends` (plural constructable; singular module namespace). Each key becomes a PascalCase Reference on the Def.
  *
  * @category constructors
  * @public

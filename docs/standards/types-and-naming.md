@@ -216,12 +216,12 @@ plain struct value for **inline or anonymous** shapes, where a class is just cer
 Layers are camelCase. The canonical toolkit entrypoint is `layer` (and `layer*` variants like
 `layerMemory`); a composed or auxiliary layer takes a `*Layer` suffix (`peersLayer`). Policy
 modules use HttpApi-shaped constructables with Schema keys —
-`class Keys extends PolicyBuilder.make(id).key(name, schema, { defaultValue })` —
-constructable name ≠ module namespace; `defaultValue` is the `Context.Reference`
-default. Module re-exports PascalCase refs and camelCase Layer helpers
-(`sticky`, `streamGap`, …). Compose with dual `Policy.layer` / `Policy.provide` /
-product bag `Policy.make({ StreamGap: "stall", … })`. Either way the name says
-"layer."
+`class LookupPolicies extends PolicyBuilder.make(id).key(…)` — plural
+constructable, singular module (`LookupPolicy` / `NodePolicy`); `defaultValue`
+is the `Context.Reference` default. Module re-exports PascalCase refs and
+camelCase Layer helpers (`sticky`, `streamGap`, …). Compose with dual
+`Policy.layer` / `Policy.provide` / product bag `Policy.make({ StreamGap: "stall", … })`.
+Either way the name says "layer."
 
 {#owned-string-literals-pascalcase .must appliesTo="src examples"}
 ## Owned string literals are PascalCase

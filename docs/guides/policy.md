@@ -10,10 +10,11 @@ Client and advertise behaviour as **Layer fragments** on `hyperlink-ts/Policy`. 
 `Policy.provide` / `Policy.layer` — nothing stamped onto every Node by default. Call-site
 `ListenOptions` / Node `onConflict` stamps remain overrides that win over ambient Policy.
 
-Built on shared **`hyperlink-ts/PolicyBuilder`**: a private constructable
-declares Schema keys / PascalCase References; this module recreates camelCase
-Layer helpers (`sticky`, `streamGap`, …) and mode presets. Same kernel for
-future `LookupPolicy` / `NodePolicy`. Apps import the module — not the builder.
+Built on shared **`hyperlink-ts/PolicyBuilder`**: a private plural constructable
+(`Policies`; future `LookupPolicies` / `NodePolicies`) declares Schema keys /
+PascalCase References; this singular module recreates camelCase Layer helpers
+(`sticky`, `streamGap`, …) and mode presets. Apps import the module — not the
+builder.
 
 ```ts
 import * as Policy from "hyperlink-ts/Policy"

@@ -2,10 +2,10 @@
  * PolicyBuilder engine — HttpApi-shaped constructable families with Schema keys.
  *
  * `PolicyBuilder.make(id).key(name, schema, { defaultValue, toRuntime? })` returns
- * a constructor so `class Keys extends … {}` works (HttpApi / Router). Each
+ * a constructor so `class LookupPolicies extends … {}` works (HttpApi / Router). Each
  * key is a PascalCase `Context.Reference` on the Def. Domain modules re-export
  * those refs and recreate camelCase Layer helpers — constructable name ≠ module
- * namespace (e.g. private `Keys`, public `LookupPolicy`).
+ * namespace (e.g. `LookupPolicies` / `NodePolicies`, public `LookupPolicy` / `NodePolicy`).
  *
  * @internal
  */

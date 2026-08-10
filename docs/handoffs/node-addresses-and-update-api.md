@@ -268,21 +268,19 @@ node stamps still win for conflict / yield where they already did.
 
 **Two layers:**
 
-1. **Constructable** (private name, e.g. `Keys`) — declare **key name + Schema**
-   (+ Reference `defaultValue` / optional `toRuntime`). HttpApi-shaped:
-   `make(id).key(…).key(…)` then `class Keys extends`. Derives
-   `Context.Reference` at `` `${id}/${name}` ``. **Do not** name the class the
-   same as the public module namespace.
-2. **Module** (`import * as LookupPolicy`) — re-export PascalCase References +
-   recreate camelCase Layer helpers (`sticky`, `streamGap`, …) + mode presets
-   (`verifyOff`, `askIncumbent`, …). Never a nested `Family` API.
+1. **Constructable** (plural) — e.g. `LookupPolicies` / `NodePolicies`. Declare
+   **key name + Schema** (+ Reference `defaultValue` / optional `toRuntime`).
+   HttpApi-shaped: `make(id).key(…).key(…)` then `class LookupPolicies extends`.
+   Derives `Context.Reference` at `` `${id}/${name}` ``.
+2. **Module** (singular) — `import * as LookupPolicy` / `NodePolicy`. Re-export
+   PascalCase References + recreate camelCase Layer helpers (`sticky`,
+   `streamGap`, …) + mode presets. Never a nested `Family` API.
 
 ```ts
 import * as PolicyBuilder from "hyperlink-ts/PolicyBuilder"
 import { Effect, Schema } from "effect"
 
-// constructable ≠ module name
-class Keys extends PolicyBuilder.make("hyperlink-ts/LookupPolicy")
+class LookupPolicies extends PolicyBuilder.make("hyperlink-ts/LookupPolicy")
   .key("Sticky", Schema.Boolean, { defaultValue: () => true })
   .key("Verify", verifySchema, { defaultValue: () => "reject" })
   .key("Yield", yieldSchema, {
@@ -292,23 +290,24 @@ class Keys extends PolicyBuilder.make("hyperlink-ts/LookupPolicy")
   })
 {}
 
-export const Sticky = Keys.Sticky                              // Reference
-export const sticky = Keys.succeed({ _tag: "Sticky", value: true }) // Layer
-export const verifyOff = Keys.succeed({ _tag: "Verify", value: false })
-export const make = Keys.make
+export const Sticky = LookupPolicies.Sticky
+export const sticky = LookupPolicies.succeed({ _tag: "Sticky", value: true })
+export const verifyOff = LookupPolicies.succeed({ _tag: "Verify", value: false })
+export const make = LookupPolicies.make
 ```
 
 | Piece | Role |
 |-------|------|
 | **`PolicyBuilder.make(id)`** | Empty constructable (HttpApi.`make`) |
 | **`.key(name, schema, opts)`** | Adds PascalCase Reference on the Def |
-| **`class Keys extends`** | Private constructable (≠ module namespace) |
+| **`class LookupPolicies` / `NodePolicies`** | Plural constructable (≠ singular module) |
 | **`$is` / `$match` / `$fromConfig` / `$toConfig`** | Fragment data sum helpers on the Def |
 | **`.make` / `layer` / `provide` / `succeed`** | Branded Layer override toolkit |
 | **Module helpers** | camelCase Layers + mode presets — hand-written DX |
 
-**Eng’d today:** private `Keys` inside `Policy` + PascalCase refs + camelCase
-helpers. **Next:** Eng `NodePolicy` the same way; rename `Policy` → `LookupPolicy`.
+**Eng’d today:** private `Policies` inside `Policy` (interim Lookup family) +
+PascalCase refs + camelCase helpers. **Next:** Eng `NodePolicy` /
+`NodePolicies`; rename `Policy` → `LookupPolicy` / `LookupPolicies`.
 
 Apps normally import **`LookupPolicy` / `NodePolicy`**, not the builder.
 

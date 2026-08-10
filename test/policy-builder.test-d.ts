@@ -13,20 +13,20 @@ type AssertEqual<A, B> =
 
 const bSchema = Schema.Literals(["x", "y"]);
 
-class Keys extends PolicyBuilder.make("policy-builder-d/Demo")
+class DemoPolicies extends PolicyBuilder.make("policy-builder-d/Demo")
   .key("A", Schema.Boolean, { defaultValue: () => true })
   .key("B", bSchema, {
     defaultValue: (): Schema.Schema.Type<typeof bSchema> => "x",
   }) {}
 
-const made = Keys.make({ A: true, B: "y" });
-const fromFrags = Keys.make([
+const made = DemoPolicies.make({ A: true, B: "y" });
+const fromFrags = DemoPolicies.make([
   { _tag: "A", value: true },
   { _tag: "B", value: "y" },
 ]);
-const piped = made.pipe(Keys.layer(Keys.succeed({ _tag: "A", value: false })));
-const single = Keys.succeed({ _tag: "A", value: true });
-const matched = Keys.$match({ _tag: "A", value: true }, {
+const piped = made.pipe(DemoPolicies.layer(DemoPolicies.succeed({ _tag: "A", value: false })));
+const single = DemoPolicies.succeed({ _tag: "A", value: true });
+const matched = DemoPolicies.$match({ _tag: "A", value: true }, {
   A: (x) => x.value,
   B: (x) => x.value,
 });
@@ -51,7 +51,7 @@ type _Checks = [
   >,
   AssertExtends<typeof Policy.sticky, EngPolicy<{ Sticky: true }>>,
   AssertEqual<
-    PolicyBuilder.FragmentOfKeys<(typeof Keys)["keys"]>,
+    PolicyBuilder.FragmentOfKeys<(typeof DemoPolicies)["keys"]>,
     | { readonly _tag: "A"; readonly value: boolean }
     | { readonly _tag: "B"; readonly value: "x" | "y" }
   >,
@@ -59,12 +59,12 @@ type _Checks = [
 ];
 
 // @ts-expect-error — Demo brand is not Eng’d Policy brand
-export const _cross: EngPolicy<{ Sticky: true }> = Keys.succeed({
+export const _cross: EngPolicy<{ Sticky: true }> = DemoPolicies.succeed({
   _tag: "A",
   value: true,
 });
 
 // @ts-expect-error — two-arg succeed removed
-Keys.succeed("A", true);
+DemoPolicies.succeed("A", true);
 
 export type { _Checks };
