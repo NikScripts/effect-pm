@@ -2,10 +2,10 @@
  * PolicyBuilder engine — HttpApi-shaped constructable families with Schema keys.
  *
  * `PolicyBuilder.make(id).key(name, schema, { defaultValue, toRuntime? })` returns
- * a constructor so `class X extends … {}` works (HttpApi / Router). Each key is
- * one PascalCase **handle**: a `Context.Reference` that is also callable
- * `(value) => branded Policy Layer`. No separate Fragment / camelCase Layer
- * mirror.
+ * a constructor so `class Keys extends … {}` works (HttpApi / Router). Each
+ * key is a PascalCase `Context.Reference` on the Def. Domain modules re-export
+ * those refs and recreate camelCase Layer helpers — constructable name ≠ module
+ * namespace (e.g. private `Keys`, public `LookupPolicy`).
  *
  * @internal
  */
@@ -153,27 +153,13 @@ export type PolicyBuilderConfigFromFragments<
       : { readonly [P in H["_tag"]]: H["value"] }
     : {};
 
-/**
- * One key handle: Context.Reference **and** `(value) => branded Policy Layer`.
- *
- * @internal
- */
-export type PolicyBuilderHandle<
-  Id extends string,
-  K extends string,
-  Spec extends PolicyBuilderKeySpec<any, any>,
-> = Context.Reference<PolicyBuilderRuntimeOf<Spec>> & {
-  <const V extends PolicyBuilderInputOf<Spec>>(
-    value: V,
-  ): PolicyBuilderPolicy<Id, { readonly [P in K]: V }>;
-};
-
-/** Flat PascalCase handles on a Def. @internal */
-export type PolicyBuilderHandlesOfKeys<
-  Id extends string,
+/** Flat PascalCase Context.References on a Def (one per key). @internal */
+export type PolicyBuilderRefsOfKeys<
   Keys extends Record<string, PolicyBuilderKeySpec<any, any>>,
 > = {
-  readonly [K in keyof Keys & string]: PolicyBuilderHandle<Id, K, Keys[K]>;
+  readonly [K in keyof Keys & string]: Context.Reference<
+    PolicyBuilderRuntimeOf<Keys[K]>
+  >;
 };
 
 /**
@@ -271,7 +257,7 @@ const layerForKey = <S extends Schema.Top, Runtime>(
 };
 
 /**
- * Constructable family methods — intersected with flat key handles.
+ * Constructable family methods — intersected with flat key References.
  *
  * @internal
  */
@@ -286,7 +272,8 @@ export interface PolicyBuilderDefMethods<
   /**
    * Widen with a Schema-backed key (HttpApi.`add` analogue).
    *
-   * Adds a PascalCase handle: Reference + `(value) => Policy Layer`.
+   * Adds a PascalCase `Context.Reference` on the Def. Modules recreate
+   * camelCase Layer helpers (`sticky`, `streamGap`, …).
    *
    * - `defaultValue` — **same form as** `Context.Reference(id, { defaultValue })`.
    * - `toRuntime` — optional when Layer runtime ≠ schema decoded type.
@@ -379,14 +366,14 @@ export interface PolicyBuilderDefMethods<
 }
 
 /**
- * Constructable family — methods + flat PascalCase handles per key.
+ * Constructable family — methods + flat PascalCase References per key.
  *
  * @internal
  */
 export type PolicyBuilderDef<
   Id extends string,
   Keys extends Record<string, PolicyBuilderKeySpec<any, any>>,
-> = PolicyBuilderDefMethods<Id, Keys> & PolicyBuilderHandlesOfKeys<Id, Keys>;
+> = PolicyBuilderDefMethods<Id, Keys> & PolicyBuilderRefsOfKeys<Keys>;
 
 type DefData = {
   readonly id: string;
@@ -404,30 +391,12 @@ export const brandPolicy = <Id extends string, const C extends object>(
     [ConfigKey]: Object.freeze({ ...cfg }),
   }) as PolicyBuilderPolicy<Id, C>;
 
-const buildHandle = (
-  familyId: string,
-  name: string,
-  spec: PolicyBuilderKeySpec<any, any>,
-): ((value: unknown) => PolicyBuilderPolicy<string, object>) &
-  Context.Reference<unknown> => {
-  const ref = spec.reference;
-  const handle = ((value: unknown) => {
-    const { layer, decoded } = layerForKey(spec, value);
-    return brandPolicy(familyId, layer, { [name]: decoded });
-  }) as ((value: unknown) => PolicyBuilderPolicy<string, object>) &
-    Context.Reference<unknown>;
-  Object.setPrototypeOf(handle, Object.getPrototypeOf(ref));
-  Object.assign(handle, ref);
-  return handle;
-};
-
-const handlesOf = (
-  familyId: string,
+const refsOf = (
   keys: Record<string, PolicyBuilderKeySpec<any, any>>,
-): Record<string, unknown> => {
-  const out: Record<string, unknown> = {};
+): Record<string, Context.Reference<unknown>> => {
+  const out: Record<string, Context.Reference<unknown>> = {};
   for (const keyName of Object.keys(keys)) {
-    out[keyName] = buildHandle(familyId, keyName, keys[keyName]!);
+    out[keyName] = keys[keyName]!.reference;
   }
   return out;
 };
@@ -607,7 +576,7 @@ export const makeProto = (options: DefData): PolicyBuilderDef<any, any> => {
       keys: options.keys,
       ...matchers,
     },
-    handlesOf(options.id, options.keys),
+    refsOf(options.keys),
   ) as unknown as PolicyBuilderDef<any, any>;
 };
 

@@ -24,7 +24,7 @@
  * import * as Policy from "hyperlink-ts/Policy"
  *
  * Layer.provide(Lookup.layer)
- * Lookup.follow(lookupNode).pipe(Policy.provide(Policy.StreamGap("stall")))
+ * Lookup.follow(lookupNode).pipe(Policy.provide(Policy.streamGap("stall")))
  * yield* Advice.prefer(Mail, "fleet/Mail#w2")
  * yield* Directory.changes.pipe(Stream.runDrain)
  * yield* Dialers.listForTarget("fleet/Worker#a")
@@ -703,7 +703,7 @@ export const clientOptions = (options?: {
  *
  * ```ts
  * Lookup.follow(lookupNode).pipe(
- *   Policy.provide(Policy.StreamGap("stall")),
+ *   Policy.provide(Policy.streamGap("stall")),
  * )
  * ```
  *

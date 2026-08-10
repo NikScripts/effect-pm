@@ -126,7 +126,7 @@ import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import { Layer } from "effect"
 
 Hyperlink.lookupClient(Jobs).pipe(
-  Policy.provide(Policy.Sticky(true), Policy.StreamGap("stall")),
+  Policy.provide(Policy.sticky, Policy.streamGap("stall")),
   Layer.provide(Lookup.layer),
 )
 ```

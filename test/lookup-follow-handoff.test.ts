@@ -45,7 +45,7 @@ describe("Lookup follow ownership handoff (orchestrated)", () => {
 
         const followCtx = yield* Layer.build(
           Lookup.follow(lookupNode).pipe(
-            Policy.provide(Policy.StreamGap("stall")),
+            Policy.provide(Policy.streamGap("stall")),
           ),
         );
 
@@ -129,7 +129,7 @@ describe("Lookup follow ownership handoff (orchestrated)", () => {
 
         const followCtx = yield* Layer.build(
           Lookup.follow(lookupNode).pipe(
-            Policy.provide(Policy.StreamGap("stall")),
+            Policy.provide(Policy.streamGap("stall")),
           ),
         );
 

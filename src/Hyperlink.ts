@@ -6353,7 +6353,7 @@ const makeLivePeerService = <Self, S extends Spec>(
  * (via {@link Lookup.nodesServing} / the Directory tag as a Context key).
  *
  * **Resolve order:** Identity `resolve` (ignores Policy / Advice / pick) → Directory
- * rows → live Advice prefer → warm {@link Policy.Sticky(true)} keep-current →
+ * rows → live Advice prefer → warm {@link Policy.sticky} keep-current →
  * {@link Policy.Pick} / call-site `{ pick }` → {@link Policy.ColdAmbiguous}
  * (`"fail"` default → {@link LookupClientError} `ambiguous`).
  *
@@ -6373,12 +6373,12 @@ const makeLivePeerService = <Self, S extends Spec>(
  * Hyperlink.lookupClient(Mail).pipe(Layer.provide(Lookup.layer))
  *
  * Hyperlink.lookupClient(Mail).pipe(
- *   Policy.provide(Policy.Sticky(true), Policy.StreamGap("stall")),
+ *   Policy.provide(Policy.sticky, Policy.streamGap("stall")),
  *   Layer.provide(Lookup.layer),
  * )
  *
  * yield* Advice.prefer(Mail, "fleet/Mail#w2")
- * Hyperlink.lookupClient(Mail, { pick: "first" }) // or Policy.Pick("first")
+ * Hyperlink.lookupClient(Mail, { pick: "first" }) // or Policy.pick("first")
  * Hyperlink.client(Mail, East)
  * ```
  *

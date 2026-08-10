@@ -1,18 +1,21 @@
 /**
- * PolicyBuilder — HttpApi-shaped constructable kernel for policy modules
- * (`Policy` / future `LookupPolicy` / `NodePolicy`).
+ * PolicyBuilder — HttpApi-shaped constructable kernel for policy **modules**
+ * (`LookupPolicy`, `NodePolicy`; today’s Eng’d `Policy` is the Lookup family).
  *
  * **Two layers:**
- * 1. **Constructable** — `class X extends PolicyBuilder.make(id).key(name, schema, opts)`.
- *    Each key is one PascalCase **handle**: a {@link Context.Reference} that is
- *    also callable `(value) => branded Policy Layer`.
- * 2. **Module** — re-export handles + mode presets (`verifyOff`, `askIncumbent`, …).
+ * 1. **Constructable** (private name, e.g. `Keys`) —
+ *    `class Keys extends PolicyBuilder.make(id).key(name, schema, opts)`.
+ *    Each key is a PascalCase {@link Context.Reference} on the Def.
+ * 2. **Module** (`import * as LookupPolicy`) — re-export References + recreate
+ *    camelCase Layer helpers (`sticky`, `streamGap`, …) and mode presets.
+ *    Constructable name ≠ module namespace.
  *
  * ```ts
  * import * as PolicyBuilder from "hyperlink-ts/PolicyBuilder"
  * import { Effect, Schema } from "effect"
  *
- * class Demo extends PolicyBuilder.make("demo/Policy")
+ * // private constructable — not the public module name
+ * class Keys extends PolicyBuilder.make("hyperlink-ts/LookupPolicy")
  *   .key("Sticky", Schema.Boolean, { defaultValue: () => true })
  *   .key("Yield", Schema.Boolean, {
  *     defaultValue: () => Effect.succeed(true),
@@ -20,11 +23,12 @@
  *   })
  * {}
  *
- * export const Sticky = Demo.Sticky
- * // yield* Sticky          — Reference
- * // Sticky(true)           — Policy Layer
- * // Demo.make({ Sticky: true }).pipe(Demo.layer(Sticky(false)))
+ * export const Sticky = Keys.Sticky
+ * export const sticky = Keys.succeed({ _tag: "Sticky", value: true })
+ * export const make = Keys.make
  * ```
+ *
+ * Apps import the module (`LookupPolicy` / `NodePolicy`), not this builder.
  *
  * @module PolicyBuilder
  */
@@ -121,27 +125,14 @@ export type ConfigFromFragments<
 > = internal.PolicyBuilderConfigFromFragments<Fs>;
 
 /**
- * One key handle — Reference + `(value) => Policy Layer`.
+ * Flat PascalCase Context.References derived from a keys map.
  *
  * @category models
  * @public
  */
-export type Handle<
-  Id extends string,
-  K extends string,
-  Spec extends KeySpec<any, any>,
-> = internal.PolicyBuilderHandle<Id, K, Spec>;
-
-/**
- * Flat PascalCase handles derived from a keys map.
- *
- * @category models
- * @public
- */
-export type HandlesOfKeys<
-  Id extends string,
+export type RefsOfKeys<
   Keys extends Record<string, KeySpec<any, any>>,
-> = internal.PolicyBuilderHandlesOfKeys<Id, Keys>;
+> = internal.PolicyBuilderRefsOfKeys<Keys>;
 
 /**
  * Fragment `$is` / `$match` / bag converters on a Def.
@@ -172,14 +163,8 @@ export type Def<
  * Empty constructable (HttpApi.`make(id)` analogue).
  *
  * Widen with `.key(name, schema, { defaultValue, toRuntime? })`, then
- * `class extends`. Each key becomes a PascalCase handle on the Def.
- *
- * ```ts
- * class Demo extends PolicyBuilder.make("demo/Policy")
- *   .key("Sticky", Schema.Boolean, { defaultValue: () => true })
- * {}
- * // Demo.Sticky — yield* / Sticky(true)
- * ```
+ * `class Keys extends` (name the constructable something other than the public
+ * module namespace). Each key becomes a PascalCase Reference on the Def.
  *
  * @category constructors
  * @public

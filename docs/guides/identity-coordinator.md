@@ -78,7 +78,7 @@ Hyperlink.lookupClient(Worker).pipe(Layer.provide(Lookup.layer))
 
 // Explicit cutover bundle + soft pick
 Hyperlink.lookupClient(Worker).pipe(
-  Policy.provide(Policy.Sticky(true), Policy.Pick("first")),
+  Policy.provide(Policy.sticky, Policy.pick("first")),
   Layer.provide(Lookup.layer),
 )
 ```

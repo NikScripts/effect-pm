@@ -268,19 +268,22 @@ node stamps still win for conflict / yield where they already did.
 
 **Two layers:**
 
-1. **Constructable** — declare **key name + Schema** (+ Reference `defaultValue` /
-   optional `toRuntime`). HttpApi-shaped: `make(id).key(…).key(…)` then
-   `class extends`. Derives `Context.Reference` at `` `${id}/${name}` ``.
-2. **Module** — re-export handles (`Sticky`, …) + mode presets (`verifyOff`,
-   `askIncumbent`, …). Constructable stays private or is the module’s named class —
-   never a nested `Family` API.
+1. **Constructable** (private name, e.g. `Keys`) — declare **key name + Schema**
+   (+ Reference `defaultValue` / optional `toRuntime`). HttpApi-shaped:
+   `make(id).key(…).key(…)` then `class Keys extends`. Derives
+   `Context.Reference` at `` `${id}/${name}` ``. **Do not** name the class the
+   same as the public module namespace.
+2. **Module** (`import * as LookupPolicy`) — re-export PascalCase References +
+   recreate camelCase Layer helpers (`sticky`, `streamGap`, …) + mode presets
+   (`verifyOff`, `askIncumbent`, …). Never a nested `Family` API.
 
 ```ts
 import * as PolicyBuilder from "hyperlink-ts/PolicyBuilder"
 import { Effect, Schema } from "effect"
 
-class LookupPolicy extends PolicyBuilder.make("hyperlink-ts/LookupPolicy")
-  .key("Sticky", Schema.Boolean, { defaultValue: () => true }) // Reference default
+// constructable ≠ module name
+class Keys extends PolicyBuilder.make("hyperlink-ts/LookupPolicy")
+  .key("Sticky", Schema.Boolean, { defaultValue: () => true })
   .key("Verify", verifySchema, { defaultValue: () => "reject" })
   .key("Yield", yieldSchema, {
     defaultValue: () => Effect.succeed(true),
@@ -289,53 +292,41 @@ class LookupPolicy extends PolicyBuilder.make("hyperlink-ts/LookupPolicy")
   })
 {}
 
-export const Sticky = LookupPolicy.Sticky   // yield* Sticky / Sticky(true) → Layer
-export const verifyOff = Verify(false)      // mode preset
-export const make = LookupPolicy.make
+export const Sticky = Keys.Sticky                              // Reference
+export const sticky = Keys.succeed({ _tag: "Sticky", value: true }) // Layer
+export const verifyOff = Keys.succeed({ _tag: "Verify", value: false })
+export const make = Keys.make
 ```
 
 | Piece | Role |
 |-------|------|
 | **`PolicyBuilder.make(id)`** | Empty constructable (HttpApi.`make`) |
-| **`.key(name, schema, opts)`** | Adds PascalCase **handle** (Reference + callable Layer) |
-| **`class extends`** | Name the constructable (or keep private in the module) |
+| **`.key(name, schema, opts)`** | Adds PascalCase Reference on the Def |
+| **`class Keys extends`** | Private constructable (≠ module namespace) |
 | **`$is` / `$match` / `$fromConfig` / `$toConfig`** | Fragment data sum helpers on the Def |
 | **`.make` / `layer` / `provide` / `succeed`** | Branded Layer override toolkit |
-| **Mode presets** | Named wire choices (`verifyOff`, `askIncumbent`) — not key mirrors |
+| **Module helpers** | camelCase Layers + mode presets — hand-written DX |
 
-**Eng’d today:** private `Keys` + flat callable handles + mode presets. **Next:**
-Eng `NodePolicy` the same way; rename `Policy` → `LookupPolicy`.
+**Eng’d today:** private `Keys` inside `Policy` + PascalCase refs + camelCase
+helpers. **Next:** Eng `NodePolicy` the same way; rename `Policy` → `LookupPolicy`.
 
 Apps normally import **`LookupPolicy` / `NodePolicy`**, not the builder.
 
 #### `_tag` — key vs value (Eng’d: **key**)
 
-Effect uses `_tag` for **closed sums** you `Match` / decode as variants (`Data.TaggedError`,
-`Schema.TaggedStruct`, `Match.tag`). It does **not** put `_tag` on Context.Reference
-identity — refs are keyed by their string id / record field (`Sticky`, `StreamGap`).
-
-| Shape | Kind | API |
-|-------|------|-----|
-| `make({ Sticky: true, StreamGap: "stall" })` | **Product** bag | untagged object |
-| `Sticky(true)` / `StreamGap("stall")` | **Handle** → Layer | one PascalCase name |
-| `{ _tag: "Sticky", value: true }` | **Fragment** data sum | literals / `$fromConfig` |
-| Mode strings (`"stall"`, `"reject"`) | value sum (later) | optional PascalCase `_tag` modes |
-
-**Locked + Eng’d: one handle per knob — no `Fragment.Sticky` / `sticky` triple.**
+Effect uses `_tag` for **closed sums**. Context.References stay PascalCase field
+identity (`Sticky`). Layer helpers stay camelCase (`sticky`). Fragment data uses
+`_tag` on the key when you need the sum.
 
 ```ts
 yield* Policy.Sticky
-Policy.Sticky(true)                                    // Layer
-Policy.layer(Policy.Sticky(true), Policy.StreamGap("stall"))
-Policy.make({ Sticky: true, StreamGap: "stall" })      // product bag
-Policy.$fromConfig({ Sticky: true })                   // → Fragment[]
+Policy.sticky
+Policy.layer(Policy.sticky, Policy.streamGap("stall"))
+Policy.make({ Sticky: true, StreamGap: "stall" })
+Policy.$fromConfig({ Sticky: true })  // → Fragment[]
 ```
 
-Why not value-only `_tag`: Sticky/Yield are booleans / Effects — no useful value tag.
-Mode values can stay string literals for now, or later move to PascalCase `_tag` modes
-under the payload — separate cut.
-
-**Eng’d** on `PolicyBuilder` / `Policy` (callable handles / mode presets / product bag).
+**Eng’d** on `PolicyBuilder` / `Policy` (refs + camelCase helpers + product bag).
 
 ### 3.4 Parked — prior long Address API notes
 

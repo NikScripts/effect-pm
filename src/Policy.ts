@@ -1,22 +1,22 @@
 /**
  * Policy — composable behaviour fragments (client dial, verify, advertise conflict, yield).
  *
- * Built on {@link PolicyBuilder}: each knob is one PascalCase **handle** —
- * a Context.Reference (`yield* Policy.Sticky`) that is also callable
- * (`Policy.Sticky(true)` → branded {@link Policy} Layer). Mode presets
- * (`verifyOff`, `askIncumbent`, …) name concrete wire choices; there is no
- * camelCase Layer mirror and no `Fragment.*` nest.
+ * Interim Lookup-family module (rename target: `LookupPolicy`). Built on
+ * {@link PolicyBuilder}: a private `Keys` constructable declares Schema keys /
+ * References; this module re-exports PascalCase refs and recreates camelCase
+ * Layer helpers (`sticky`, `streamGap`, …). Apps import this namespace — not
+ * the builder, and not the private constructable.
  *
  * ```ts
  * import * as Policy from "hyperlink-ts/Policy"
  *
  * const cutover = Policy.make({ Sticky: true, StreamGap: "stall", Verify: "reject" }).pipe(
  *   Policy.layer(Policy.verifyOff),
- *   Policy.layer(Policy.StreamGap("buffer")),
+ *   Policy.layer(Policy.streamGap("buffer")),
  * )
  * // Policy.Policy<{ Sticky: true; StreamGap: "buffer"; Verify: false }>
  *
- * Policy.layer(Policy.Sticky(true), Policy.StreamGap("stall"), Policy.verifyOff)
+ * Policy.layer(Policy.sticky, Policy.streamGap("stall"), Policy.verifyOff)
  *
  * Hyperlink.lookupClient(Mail).pipe(
  *   Policy.provide(cutover),
@@ -202,8 +202,8 @@ export type Config = {
 
 /**
  * Tagged override entry — `_tag` is the knob name; `value` is the schema input.
- * Prefer handles (`Policy.Sticky(true)`) for Layers; use literals /
- * {@link $fromConfig} when you need the data sum.
+ * Prefer camelCase Layer helpers for apps; use literals / {@link $fromConfig}
+ * when you need the data sum.
  *
  * @category models
  * @public
@@ -265,11 +265,11 @@ export type MergePolicyList<Ps extends ReadonlyArray<Policy<Config>>> =
 // =============================================================================
 
 /**
- * Schema-backed keys for this module. Not exported — use flat `Policy.*` handles.
+ * Private constructable — not the public module name (`Policy` / future
+ * `LookupPolicy`). Re-export refs + recreate camelCase Layer helpers below.
  *
  * `defaultValue` on each key is the Context.Reference default (ambient
- * `yield* Sticky` when no override Layer is provided). Handles / `make`
- * override via Layer.
+ * `yield* Sticky` when no override Layer is provided).
  */
 class Keys extends PolicyBuilder.make(builderId)
   .key("Sticky", Schema.Boolean, { defaultValue: () => true })
@@ -293,31 +293,29 @@ class Keys extends PolicyBuilder.make(builderId)
   }) {}
 
 // =============================================================================
-// Handles (Reference + callable Layer)
+// References (PascalCase — Context.Reference)
 // =============================================================================
 
 /**
- * Warm dual-serve stickiness. Default `true`.
- * `yield* Sticky` / `Sticky(true)` → Layer.
+ * Warm dual-serve stickiness. Default `true` (Reference default).
  *
- * @category handles
+ * @category references
  * @public
  */
 export const Sticky = Keys.Sticky;
 
 /**
- * Stream seam across dial rebind. Default `"stall"`.
- * `yield* StreamGap` / `StreamGap("buffer")` → Layer.
+ * Stream seam across dial rebind. Default `"stall"` (Reference default).
  *
- * @category handles
+ * @category references
  * @public
  */
 export const StreamGap = Keys.StreamGap;
 
 /**
- * Cold N&gt;1 without Advice. Default `"fail"`.
+ * Cold N&gt;1 without Advice. Default `"fail"` (Reference default).
  *
- * @category handles
+ * @category references
  * @public
  */
 export const ColdAmbiguous = Keys.ColdAmbiguous;
@@ -325,71 +323,91 @@ export const ColdAmbiguous = Keys.ColdAmbiguous;
 /**
  * Optional soft pick (D4). Default unset — cold policy applies instead.
  *
- * @category handles
+ * @category references
  * @public
  */
 export const Pick = Keys.Pick;
 
 /**
- * Ambient client-verify mode. Default `"reject"`.
+ * Ambient client-verify mode. Default `"reject"` (Reference default).
  *
- * @category handles
+ * @category references
  * @public
  */
 export const Verify = Keys.Verify;
 
 /**
  * Ambient advertise conflict preference (call-site / node stamp still win).
- * Default `"inherit"`.
+ * Default `"inherit"` (Reference default).
  *
- * @category handles
+ * @category references
  * @public
  */
 export const Conflict = Keys.Conflict;
 
 /**
  * Cooperative yield handler for `"askIncumbent"` — `true` = step aside.
- * Default accept. ListenOptions.`onYield` wins when set.
+ * Default accept (Reference default). ListenOptions.`onYield` wins when set.
  *
- * @category handles
+ * @category references
  * @public
  */
 export const Yield = Keys.Yield;
 
 // =============================================================================
-// Mode presets (named wire choices — not key mirrors)
+// Layer helpers (camelCase)
 // =============================================================================
 
+/** Keep the current dial across dual-serve (default on). @category layers @public */
+export const sticky: Policy<{ Sticky: true }> = Keys.succeed({
+  _tag: "Sticky",
+  value: true,
+});
+
+/** Disable warm stickiness. @category layers @public */
+export const unsticky: Policy<{ Sticky: false }> = Keys.succeed({
+  _tag: "Sticky",
+  value: false,
+});
+
+/** Stream seam mode. @category layers @public */
+export const streamGap = <const M extends StreamGap>(
+  mode: M,
+): Policy<{ StreamGap: M }> =>
+  Keys.succeed({ _tag: "StreamGap", value: mode });
+
+/** Cold N&gt;1 behaviour. @category layers @public */
+export const coldAmbiguous = <const M extends ColdAmbiguous>(
+  mode: M,
+): Policy<{ ColdAmbiguous: M }> =>
+  Keys.succeed({ _tag: "ColdAmbiguous", value: mode });
+
+/** Soft pick when N&gt;1 and Advice misses. @category layers @public */
+export const pick = <const M extends Pick>(mode: M): Policy<{ Pick: M }> =>
+  Keys.succeed({ _tag: "Pick", value: mode });
+
 /** Verify and reject on failure (default). @category layers @public */
-export const verifyReject: Policy<{ Verify: "reject" }> = Verify("reject");
+export const verifyReject: Policy<{ Verify: "reject" }> = Keys.succeed({
+  _tag: "Verify",
+  value: "reject",
+});
 
 /** Verify; keep status without failing Layer build. @category layers @public */
-export const verifyStatus: Policy<{ Verify: "status" }> = Verify("status");
+export const verifyStatus: Policy<{ Verify: "status" }> = Keys.succeed({
+  _tag: "Verify",
+  value: "status",
+});
 
 /** Skip client verify probe. @category layers @public */
-export const verifyOff: Policy<{ Verify: false }> = Verify(false);
+export const verifyOff: Policy<{ Verify: false }> = Keys.succeed({
+  _tag: "Verify",
+  value: false,
+});
 
-/** Advertise: liveness ping replace. @category layers @public */
-export const livenessReplace: Policy<{ Conflict: "livenessReplace" }> =
-  Conflict("livenessReplace");
-
-/** Advertise: ask incumbent to yield. @category layers @public */
-export const askIncumbent: Policy<{ Conflict: "askIncumbent" }> =
-  Conflict("askIncumbent");
-
-/** Advertise: reject when incumbent alive. @category layers @public */
-export const conflictReject: Policy<{ Conflict: "reject" }> =
-  Conflict("reject");
-
-/** Advertise: inherit up the chain (default ambient). @category layers @public */
-export const conflictInherit: Policy<{ Conflict: "inherit" }> =
-  Conflict("inherit");
-
-/** Accept askIncumbent yield (default). @category layers @public */
-export const yieldAccept: Policy<{ Yield: true }> = Yield(true);
-
-/** Refuse askIncumbent yield. @category layers @public */
-export const yieldRefuse: Policy<{ Yield: false }> = Yield(false);
+/** Set client verify mode. @category layers @public */
+export const verify = <const M extends Verify>(
+  mode: M,
+): Policy<{ Verify: M }> => Keys.succeed({ _tag: "Verify", value: mode });
 
 /**
  * Walk preference layers (first concrete wins). Hard fallback: `livenessReplace`.
@@ -427,6 +445,49 @@ export const onConflictOf = (node: unknown): OnConflict | undefined => {
   }
   return undefined;
 };
+
+/** Advertise: liveness ping replace. @category layers @public */
+export const livenessReplace: Policy<{ Conflict: "livenessReplace" }> =
+  Keys.succeed({ _tag: "Conflict", value: "livenessReplace" });
+
+/** Advertise: ask incumbent to yield. @category layers @public */
+export const askIncumbent: Policy<{ Conflict: "askIncumbent" }> =
+  Keys.succeed({ _tag: "Conflict", value: "askIncumbent" });
+
+/** Advertise: reject when incumbent alive. @category layers @public */
+export const conflictReject: Policy<{ Conflict: "reject" }> = Keys.succeed({
+  _tag: "Conflict",
+  value: "reject",
+});
+
+/** Advertise: inherit up the chain (default ambient). @category layers @public */
+export const conflictInherit: Policy<{ Conflict: "inherit" }> = Keys.succeed({
+  _tag: "Conflict",
+  value: "inherit",
+});
+
+/** Set advertise conflict preference. @category layers @public */
+export const onConflict = <const M extends OnConflict>(
+  mode: M,
+): Policy<{ Conflict: M }> =>
+  Keys.succeed({ _tag: "Conflict", value: mode });
+
+/** Accept askIncumbent yield (default). @category layers @public */
+export const yieldAccept: Policy<{ Yield: true }> = Keys.succeed({
+  _tag: "Yield",
+  value: true,
+});
+
+/** Refuse askIncumbent yield. @category layers @public */
+export const yieldRefuse: Policy<{ Yield: false }> = Keys.succeed({
+  _tag: "Yield",
+  value: false,
+});
+
+/** Custom yield handler. @category layers @public */
+export const onYield = <E extends Effect.Effect<boolean>>(
+  handler: E,
+): Policy<{ Yield: E }> => Keys.succeed({ _tag: "Yield", value: handler });
 
 // =============================================================================
 // Fragment matchers / bag converters
@@ -493,11 +554,11 @@ export const config = <C extends Config>(self: Policy<C>): C =>
  * ```ts
  * const cutover = Policy.make({ StreamGap: "stall", Verify: "reject" }).pipe(
  *   Policy.layer(Policy.verifyOff),
- *   Policy.layer(Policy.StreamGap("buffer")),
+ *   Policy.layer(Policy.streamGap("buffer")),
  * )
  * // Policy.Policy<{ StreamGap: "buffer"; Verify: false }>
  *
- * Policy.layer(Policy.Sticky(true), Policy.StreamGap("stall"), Policy.verifyOff)
+ * Policy.layer(Policy.sticky, Policy.streamGap("stall"), Policy.verifyOff)
  * ```
  *
  * @category layers
@@ -507,7 +568,7 @@ export const layer: typeof Keys.layer = Keys.layer;
 
 /**
  * One tagged {@link Fragment} → branded single-key {@link Policy}.
- * Prefer the handle call (`Policy.Sticky(true)`) for the same result.
+ * Prefer camelCase helpers (`sticky`, `streamGap`, …) for the same result.
  *
  * @category constructors
  * @public
@@ -539,7 +600,7 @@ export const make: {
 
 /**
  * Provide policy Layers onto a Layer (no stacked `Layer.provide`s).
- * Accepts {@link make} bundles, handle calls, mode presets, {@link layer}
+ * Accepts {@link make} bundles, typed fragments, mode presets, {@link layer}
  * results, or a mix — last write wins per reference.
  *
  * ```ts

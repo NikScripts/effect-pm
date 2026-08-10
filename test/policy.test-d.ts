@@ -1,5 +1,5 @@
 /**
- * Policy public types — callable handles; layer dual expands configs.
+ * Policy public types — camelCase Layer helpers; layer dual expands configs.
  */
 import { Effect, type Layer } from "effect";
 import type {
@@ -20,9 +20,8 @@ type AssertExtends<A, B> = [A] extends [B] ? true : false;
 type AssertEqual<A, B> =
   [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 
-const stickyTrue = PolicyMod.Sticky(true);
 const _stickyOk: AssertExtends<
-  typeof stickyTrue,
+  typeof PolicyMod.sticky,
   Policy<{ Sticky: true }>
 > = true;
 type _StreamGapFn = <M extends StreamGap>(mode: M) => Policy<{ StreamGap: M }>;
@@ -35,11 +34,11 @@ type _OnYield = <E extends Effect.Effect<boolean>>(
   handler: E,
 ) => Policy<{ Yield: E }>;
 
-const _gapFn: _StreamGapFn = PolicyMod.StreamGap;
-const _coldFn: _ColdFn = PolicyMod.ColdAmbiguous;
-const _verifyFn: _VerifyFn = PolicyMod.Verify;
-const _conflictFn: _ConflictFn = PolicyMod.Conflict;
-const _onYield: _OnYield = PolicyMod.Yield;
+const _gapFn: _StreamGapFn = PolicyMod.streamGap;
+const _coldFn: _ColdFn = PolicyMod.coldAmbiguous;
+const _verifyFn: _VerifyFn = PolicyMod.verify;
+const _conflictFn: _ConflictFn = PolicyMod.onConflict;
+const _onYield: _OnYield = PolicyMod.onYield;
 
 const _gap: StreamGap = "stall";
 const _cold: ColdAmbiguous = "waitAdvice";
@@ -62,13 +61,12 @@ const cutover = PolicyMod.make({
   ColdAmbiguous: "fail",
   Verify: "reject",
 });
-const cutoverHandles = PolicyMod.layer(
-  PolicyMod.Sticky(true),
-  PolicyMod.StreamGap("stall"),
-  PolicyMod.ColdAmbiguous("fail"),
-  PolicyMod.Verify("reject"),
+const cutoverLayers = PolicyMod.layer(
+  PolicyMod.sticky,
+  PolicyMod.streamGap("stall"),
+  PolicyMod.coldAmbiguous("fail"),
+  PolicyMod.verify("reject"),
 );
-const stickyLayer = PolicyMod.Sticky(true);
 const _asLayer: Layer.Layer<never> = cutover;
 const _cutoverOk: AssertExtends<
   typeof cutover,
@@ -79,8 +77,8 @@ const _cutoverOk: AssertExtends<
     Verify: "reject";
   }>
 > = true;
-const _cutoverHandlesOk: AssertExtends<
-  typeof cutoverHandles,
+const _cutoverLayersOk: AssertExtends<
+  typeof cutoverLayers,
   Policy<{
     Sticky: true;
     StreamGap: "stall";
@@ -88,15 +86,11 @@ const _cutoverHandlesOk: AssertExtends<
     Verify: "reject";
   }>
 > = true;
-const _stickyLayerOk: AssertExtends<
-  typeof stickyLayer,
-  Policy<{ Sticky: true }>
-> = true;
 
 // pipe(Policy.layer(...)) expands config — last write wins
 const piped = cutover.pipe(
   PolicyMod.layer(PolicyMod.verifyOff),
-  PolicyMod.layer(PolicyMod.StreamGap("buffer")),
+  PolicyMod.layer(PolicyMod.streamGap("buffer")),
 );
 const _pipedOk: AssertExtends<
   typeof piped,
@@ -110,11 +104,10 @@ const _pipedOk: AssertExtends<
 type _PipedCfg = ConfigOf<typeof piped>;
 const _pipedGap: AssertEqual<_PipedCfg["StreamGap"], "buffer"> = true;
 
-// data-first layer also expands
 const expanded = PolicyMod.layer(
   cutover,
   PolicyMod.verifyOff,
-  PolicyMod.StreamGap("buffer"),
+  PolicyMod.streamGap("buffer"),
 );
 const _expandedOk: AssertExtends<
   typeof expanded,
@@ -127,8 +120,8 @@ const _expandedOk: AssertExtends<
 > = true;
 
 const fragOnly = PolicyMod.layer(
-  PolicyMod.Sticky(true),
-  PolicyMod.StreamGap("stall"),
+  PolicyMod.sticky,
+  PolicyMod.streamGap("stall"),
   PolicyMod.verifyOff,
 );
 const _fragOnlyOk: AssertExtends<
@@ -152,15 +145,14 @@ const _yieldEffectCfg: Config = { Yield: Effect.succeed(false) };
 // @ts-expect-error — StreamGap closed union in make
 PolicyMod.make({ StreamGap: "restart" });
 
-// @ts-expect-error — StreamGap closed union on handle
-PolicyMod.StreamGap("restart");
+// @ts-expect-error — StreamGap closed union on helper
+PolicyMod.streamGap("restart");
 
 // @ts-expect-error — two-arg succeed removed
 PolicyMod.succeed("Sticky", true);
 
 void _stickyOk;
-void _cutoverHandlesOk;
-void _stickyLayerOk;
+void _cutoverLayersOk;
 void _gapFn;
 void _coldFn;
 void _verifyFn;

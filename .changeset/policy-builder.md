@@ -2,12 +2,11 @@
 "hyperlink-ts": minor
 ---
 
-`PolicyBuilder`: HttpApi-shaped constructables with Schema keys. Each key is one
-PascalCase **handle** — a `Context.Reference` that is also callable
-`(value) => branded Policy Layer`. `defaultValue` is the Reference default
-(ambient `yield* Ref`). No `Family`, no `Fragment.*` nest, no camelCase Layer
-mirrors.
+`PolicyBuilder`: HttpApi-shaped constructables with Schema keys. Each key is a
+PascalCase `Context.Reference` on the Def (`defaultValue` = Reference default).
+Domain modules use a private constructable name (e.g. `Keys`) — not the public
+module namespace — then re-export refs and recreate camelCase Layer helpers
+(`sticky`, `streamGap`, …) plus mode presets. No `Family`, no `Fragment.*` nest.
 
-`Policy.Sticky(true)` / `Policy.StreamGap("stall")` / …; mode presets
-(`verifyOff`, `askIncumbent`, …); `make` product bag; Def `$is` / `$match` /
+`make` accepts a product bag or `Fragment[]`; Def `$is` / `$match` /
 `$fromConfig` / `$toConfig` for the fragment data sum.

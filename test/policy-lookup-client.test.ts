@@ -188,7 +188,7 @@ describe("Policy + lookupClient", () => {
 
       const clientCtx = yield* Layer.build(
         Hyperlink.lookupClient(Jobs).pipe(
-          Policy.provide(Policy.ColdAmbiguous("pickFirst")),
+          Policy.provide(Policy.coldAmbiguous("pickFirst")),
           Layer.provide(lookupClientLayer),
         ),
       );
@@ -248,7 +248,7 @@ describe("Policy + lookupClient", () => {
 
       const clientCtx = yield* Layer.build(
         Hyperlink.lookupClient(Jobs).pipe(
-          Policy.provide(Policy.StreamGap("stall")),
+          Policy.provide(Policy.streamGap("stall")),
           Layer.provide(lookupClientLayer),
         ),
       );

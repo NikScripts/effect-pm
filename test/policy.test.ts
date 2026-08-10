@@ -90,19 +90,19 @@ describe("Policy defaults + compose", () => {
     }),
   );
 
-  it.effect("handles + $fromConfig/$toConfig/$is match bag stamps", () =>
+  it.effect("camelCase helpers + $fromConfig/$toConfig/$is match bag stamps", () =>
     Effect.gen(function* () {
       const fromHandles = Policy.layer(
-        Policy.Sticky(false),
-        Policy.StreamGap("buffer"),
-        Policy.Verify(false),
+        Policy.unsticky,
+        Policy.streamGap("buffer"),
+        Policy.verify(false),
       );
       expect(Policy.config(fromHandles)).toEqual({
         Sticky: false,
         StreamGap: "buffer",
         Verify: false,
       });
-      const tagged = Policy.StreamGap("drop");
+      const tagged = Policy.streamGap("drop");
       expect(Policy.config(tagged)).toEqual({ StreamGap: "drop" });
       expect(
         Policy.$is("StreamGap")({ _tag: "StreamGap", value: "drop" }),
@@ -129,7 +129,7 @@ describe("Policy defaults + compose", () => {
         Verify: "reject",
         Sticky: true,
       }).pipe(
-        Policy.layer(Policy.StreamGap("buffer")),
+        Policy.layer(Policy.streamGap("buffer")),
         Policy.layer(Policy.verifyOff),
         Policy.layer(Policy.livenessReplace),
       );
@@ -146,7 +146,7 @@ describe("Policy defaults + compose", () => {
           Verify: "reject",
           Sticky: true,
         }),
-        Policy.StreamGap("buffer"),
+        Policy.streamGap("buffer"),
         Policy.verifyOff,
         Policy.livenessReplace,
       );
@@ -163,10 +163,10 @@ describe("Policy defaults + compose", () => {
   it.effect("layer + provide: last fragment wins per reference", () =>
     Effect.gen(function* () {
       const bundle = Policy.layer(
-        Policy.Sticky(true),
-        Policy.Sticky(false),
-        Policy.StreamGap("drop"),
-        Policy.StreamGap("buffer"),
+        Policy.sticky,
+        Policy.unsticky,
+        Policy.streamGap("drop"),
+        Policy.streamGap("buffer"),
         Policy.verifyReject,
         Policy.verifyOff,
         Policy.askIncumbent,
@@ -185,10 +185,10 @@ describe("Policy defaults + compose", () => {
 
   it.effect("Policy.provide accepts a Policy.layer bundle + more fragments", () =>
     Effect.gen(function* () {
-      const cutover = Policy.layer(Policy.Sticky(false), Policy.verifyOff);
+      const cutover = Policy.layer(Policy.unsticky, Policy.verifyOff);
       const d = yield* readPolicy.pipe(
         Effect.provide(
-          Policy.layer(cutover, Policy.StreamGap("drop"), Policy.ColdAmbiguous("pickFirst")),
+          Policy.layer(cutover, Policy.streamGap("drop"), Policy.coldAmbiguous("pickFirst")),
         ),
       );
       expect(d.sticky).toBe(false);
@@ -240,7 +240,7 @@ describe("Policy dial: unsticky + waitAdvice", () => {
 
       const clientCtx = yield* Layer.build(
         Hyperlink.lookupClient(Jobs).pipe(
-          Policy.provide(Policy.Sticky(false), Policy.Pick("first")),
+          Policy.provide(Policy.unsticky, Policy.pick("first")),
           Layer.provide(lookupClientLayer),
         ),
       );
@@ -300,7 +300,7 @@ describe("Policy dial: unsticky + waitAdvice", () => {
       const fiber = yield* Effect.forkChild(
         Layer.build(
           Hyperlink.lookupClient(Jobs).pipe(
-            Policy.provide(Policy.ColdAmbiguous("waitAdvice")),
+            Policy.provide(Policy.coldAmbiguous("waitAdvice")),
             Layer.provide(lookupClientLayer),
           ),
         ),

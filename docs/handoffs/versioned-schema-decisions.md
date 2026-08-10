@@ -447,7 +447,7 @@ clients ──dial──►  lookup.sock  (one address)
 ```ts
 // Dialers — one address forever; Policy shapes the gap only
 Lookup.follow(lookupNode /* same path before & after */).pipe(
-  Policy.provide(Policy.StreamGap("stall")),
+  Policy.provide(Policy.streamGap("stall")),
 )
 
 // Orchestrator (Launcher / script) — not Policy
