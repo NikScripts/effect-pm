@@ -10,6 +10,10 @@ Client and advertise behaviour as **Layer fragments** on `hyperlink-ts/Policy`. 
 `Policy.provide` / `Policy.layer` — nothing stamped onto every Node by default. Call-site
 `ListenOptions` / Node `onConflict` stamps remain overrides that win over ambient Policy.
 
+Built on shared **`hyperlink-ts/PolicyBuilder`** (`define` / `key` / `keyEncoded`) — the same
+kernel future `LookupPolicy` / `NodePolicy` families use. Apps keep importing `Policy`; reach
+for `PolicyBuilder` only when minting another family.
+
 ```ts
 import * as Policy from "hyperlink-ts/Policy"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"

@@ -42,6 +42,7 @@ export default defineConfig([
       Directory: "src/Directory.ts",
       Identity: "src/Identity.ts",
       Policy: "src/Policy.ts",
+      PolicyBuilder: "src/PolicyBuilder.ts",
       Lifecycle: "src/Lifecycle.ts",
       Update: "src/Update.ts",
       Versioned: "src/Versioned.ts",

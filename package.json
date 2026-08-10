@@ -132,6 +132,10 @@
       "types": "./dist/Policy.d.ts",
       "default": "./dist/Policy.js"
     },
+    "./PolicyBuilder": {
+      "types": "./dist/PolicyBuilder.d.ts",
+      "default": "./dist/PolicyBuilder.js"
+    },
     "./Lifecycle": {
       "types": "./dist/Lifecycle.d.ts",
       "default": "./dist/Lifecycle.js"

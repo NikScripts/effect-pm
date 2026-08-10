@@ -163,6 +163,7 @@ export * as Dialers from "./Dialers";
 export * as Directory from "./Directory";
 export * as Identity from "./Identity";
 export * as Policy from "./Policy";
+export * as PolicyBuilder from "./PolicyBuilder";
 export * as Lifecycle from "./Lifecycle";
 export * as Versioned from "./Versioned";
 export * as Update from "./Update";

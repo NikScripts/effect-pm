@@ -256,6 +256,50 @@ labeled address side is this process?* → `NodePolicy.as("A")`.
 **Why no Dial on NodePolicy:** participants dial what Directory advertises; soft-pick /
 sticky / wait-advice stay on **`LookupPolicy`**. One dial story, not two.
 
+### 3.3.1 PolicyBuilder — shared architecture (locked)
+
+Both policy modules share one builder kernel — **`hyperlink-ts/PolicyBuilder`**. Domain
+modules declare keys (Context references + optional encode); the builder supplies the
+typed `Policy` brand, `make` / `layer` / `provide` / `succeed` / `is` / `config`.
+
+```ts
+import * as PolicyBuilder from "hyperlink-ts/PolicyBuilder"
+import { Context, Effect, Layer } from "effect"
+
+// each family picks a stable brand id
+const family = PolicyBuilder.define({
+  id: "hyperlink-ts/LookupPolicy",
+  keys: {
+    Sticky: PolicyBuilder.key(Sticky),
+    Verify: PolicyBuilder.key(Verify),
+    Yield: PolicyBuilder.key(Yield, {
+      encode: (input: boolean | Effect.Effect<boolean>) =>
+        typeof input === "boolean" ? Effect.succeed(input) : input,
+    }),
+  },
+})
+
+family.make({ Sticky: true, Verify: "reject" })
+family.succeed("Sticky", true)
+family.layer(a, b)
+family.provide(bundle)(someLayer)
+```
+
+| Piece | Role |
+|-------|------|
+| **`PolicyBuilder.define`** | Mint a policy family from `id` + `keys` |
+| **`PolicyBuilder.key`** | Bind a `Context.Reference` (+ optional `encode` for input≠runtime) |
+| **`family.make` / `layer` / `provide`** | Same DX as today’s Eng’d `Policy` |
+| **`family.succeed`** | One-key fragment (`LookupPolicy.sticky`, `NodePolicy.as("A")`, …) |
+| **Brand** | Per-family id — `LookupPolicy.is` ≠ `NodePolicy.is` |
+
+**Eng order:** (1) land `PolicyBuilder` + refactor today’s `Policy` onto it (public name
+still `Policy` until rename cut). (2) Eng `NodePolicy` via the same `define`. (3) Rename
+`Policy` → `LookupPolicy` in that cut.
+
+Apps normally import **`LookupPolicy` / `NodePolicy`**, not the builder. The builder is
+the extension point when the package (or a rare app) defines another policy family.
+
 ### 3.4 Parked — prior long Address API notes
 
 > Former detailed §3.1–3.5 pass. Prefer §3.2–3.3. Kept for reference.
@@ -895,6 +939,7 @@ clones, not HttpApi catalog. `Router.make` (G) is the catalog precedent.
 
 1. Confirm **Address + NodePolicy API** (§3.3) — `as` / value spaces / defaults.
 2. Locality word + `Node.make` vs `Service`.
-3. Eng Address + Node.make + `NodePolicy` **and** rename `Policy` → `LookupPolicy` (same cut).
-4. Update dream / backup-build simulate — **later**.
-5. Dream-redeploy stays **provisional** until address/make exists.
+3. ~~`PolicyBuilder` kernel + refactor Eng’d `Policy` onto it~~ — **Eng’d**.
+4. Eng Address + Node.make + `NodePolicy` **and** rename `Policy` → `LookupPolicy` (same cut).
+5. Update dream / backup-build simulate — **later**.
+6. Dream-redeploy stays **provisional** until address/make exists.

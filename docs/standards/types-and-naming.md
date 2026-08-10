@@ -215,11 +215,12 @@ plain struct value for **inline or anonymous** shapes, where a class is just cer
 
 Layers are camelCase. The canonical toolkit entrypoint is `layer` (and `layer*` variants like
 `layerMemory`); a composed or auxiliary layer takes a `*Layer` suffix (`peersLayer`). Policy
-fragments are real `Policy.Policy<{…}>` values (Layer + runtime config;
-`Policy.verifyOff` → `Policy.Policy<{ Verify: false }>`). Compose with dual
-`Policy.layer` (`.pipe(Policy.layer(other))` or `Policy.layer(a, b, c)` — config
-expands) / `Policy.provide`, or object-form `Policy.make({ StreamGap: "stall", … })`.
-Either way the name says "layer."
+families are minted with `PolicyBuilder.define` (shared kernel); domain fragments are real
+`Policy.Policy<{…}>` values (Layer + runtime config; `Policy.verifyOff` →
+`Policy.Policy<{ Verify: false }>`). Compose with dual `Policy.layer`
+(`.pipe(Policy.layer(other))` or `Policy.layer(a, b, c)` — config expands) /
+`Policy.provide`, or object-form `Policy.make({ StreamGap: "stall", … })`. Either way the
+name says "layer."
 
 {#owned-string-literals-pascalcase .must appliesTo="src examples"}
 ## Owned string literals are PascalCase
