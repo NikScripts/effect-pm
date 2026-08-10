@@ -1,7 +1,7 @@
 import { Effect, Exit, Layer } from "effect";
 import { afterEach, expect, it } from "vitest";
 import * as Hyperlink from "../src/Hyperlink";
-import * as Policy from "../src/Policy";
+import * as LookupPolicy from "../src/LookupPolicy";
 import * as Node from "../src/Node";
 
 // P5 (impossible-states): the http client transport starves at the browser's ~6-connection HTTP/1.1
@@ -44,7 +44,7 @@ it("ws is NOT guarded — it's the correct browser transport", () => {
   // default-on client verify, which would otherwise eagerly probe the bogus `wss://x/rpc` and fail.
   return buildLayer(
     Hyperlink.ws(Hub, { url: "wss://x/rpc" }).pipe(
-      Policy.provide(Policy.verifyOff),
+      LookupPolicy.provide(LookupPolicy.verifyOff),
     ),
   ).then((exit) => expect(Exit.isSuccess(exit)).toBe(true));
 });

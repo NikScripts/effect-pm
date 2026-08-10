@@ -12,8 +12,8 @@ import type {
   Policy,
   MergePolicyList,
   ConfigOf,
-} from "../src/Policy";
-import * as PolicyMod from "../src/Policy";
+} from "../src/LookupPolicy";
+import * as PolicyMod from "../src/LookupPolicy";
 import type { LookupClientPick } from "../src/Hyperlink";
 
 type AssertExtends<A, B> = [A] extends [B] ? true : false;
@@ -87,7 +87,7 @@ const _cutoverLayersOk: AssertExtends<
   }>
 > = true;
 
-// pipe(Policy.layer(...)) expands config — last write wins
+// pipe(LookupPolicy.layer(...)) expands config — last write wins
 const piped = cutover.pipe(
   PolicyMod.layer(PolicyMod.verifyOff),
   PolicyMod.layer(PolicyMod.streamGap("buffer")),

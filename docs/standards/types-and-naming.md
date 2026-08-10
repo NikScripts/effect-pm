@@ -221,8 +221,8 @@ constructable, singular module (`LookupPolicy` / `NodePolicy`); `defaultValue`
 is the `Context.Reference` default. Key / `_tag` strings stay PascalCase; the
 Def derives camelCase Layer methods via `Uncapitalize` (`"Sticky"` → `sticky`,
 `"StreamGap"` → `streamGap`). Module re-exports those refs + helpers / mode
-presets. Compose with dual `Policy.layer` / `Policy.provide` / product bag
-`Policy.make({ StreamGap: "stall", … })`. Either way the name says "layer."
+presets. Compose with dual `LookupPolicy.layer` / `LookupPolicy.provide` / product bag
+`LookupPolicy.make({ StreamGap: "stall", … })`. Either way the name says "layer."
 
 {#owned-string-literals-pascalcase .must appliesTo="src examples"}
 ## Owned string literals are PascalCase

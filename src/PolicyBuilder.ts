@@ -1,13 +1,13 @@
 /**
  * PolicyBuilder — HttpApi-shaped constructable kernel for policy **modules**
- * (`LookupPolicy`, `NodePolicy`; today’s Eng’d `Policy` is the Lookup family).
+ * (`LookupPolicy`, `NodePolicy`; Eng’d `LookupPolicy` is the Lookup family).
  *
  * **Two layers:**
  * 1. **Constructable** (plural, e.g. `LookupPolicies` / `NodePolicies`) —
  *    `class LookupPolicies extends PolicyBuilder.make(id).key(name, schema, opts)`.
  *    Each key is a PascalCase {@link Context.Reference} on the Def.
- * 2. **Module** (`import * as LookupPolicy`) — re-export References + recreate
- *    camelCase Layer helpers (`sticky`, `streamGap`, …) and mode presets.
+ * 2. **Module** (`import * as LookupPolicy` / `NodePolicy`) — re-export
+ *    References + camelCase Layer methods + mode presets.
  *    Constructable name ≠ module namespace.
  *
  * ```ts

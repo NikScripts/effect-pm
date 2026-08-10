@@ -4,7 +4,7 @@
 import { Context, Effect, Layer, Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import * as PolicyBuilder from "../src/PolicyBuilder";
-import * as Policy from "../src/Policy";
+import * as LookupPolicy from "../src/LookupPolicy";
 
 const modeSchema = Schema.Literals(["a", "b"]);
 
@@ -96,12 +96,12 @@ describe("PolicyBuilder", () => {
       expect(got.flag).toBe(false);
       expect(got.mode).toBe("b");
 
-      expect(DemoPolicies.is(Policy.sticky)).toBe(false);
-      expect(Policy.isPolicy(DemoPolicies.flag(true))).toBe(false);
-      expect(Policy.isPolicy(Policy.sticky)).toBe(true);
-      expect(Policy.Sticky.key).toBe("hyperlink-ts/Policy/Sticky");
-      expect(yield* Policy.Sticky).toBe(true);
-      expect(yield* Policy.Verify).toBe("reject");
+      expect(DemoPolicies.is(LookupPolicy.sticky)).toBe(false);
+      expect(LookupPolicy.isPolicy(DemoPolicies.flag(true))).toBe(false);
+      expect(LookupPolicy.isPolicy(LookupPolicy.sticky)).toBe(true);
+      expect(LookupPolicy.Sticky.key).toBe("hyperlink-ts/LookupPolicy/Sticky");
+      expect(yield* LookupPolicy.Sticky).toBe(true);
+      expect(yield* LookupPolicy.Verify).toBe("reject");
     }),
   );
 

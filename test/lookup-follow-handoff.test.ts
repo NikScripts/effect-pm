@@ -18,7 +18,7 @@ import {
 import { describe, expect, it } from "@effect/vitest";
 import * as Lookup from "../src/Lookup";
 import * as Identity from "../src/Identity";
-import * as Policy from "../src/Policy";
+import * as LookupPolicy from "../src/LookupPolicy";
 import * as Node from "../src/Node";
 
 const tmpSock = (label: string) =>
@@ -45,7 +45,7 @@ describe("Lookup follow ownership handoff (orchestrated)", () => {
 
         const followCtx = yield* Layer.build(
           Lookup.follow(lookupNode).pipe(
-            Policy.provide(Policy.streamGap("stall")),
+            LookupPolicy.provide(LookupPolicy.streamGap("stall")),
           ),
         );
 
@@ -129,7 +129,7 @@ describe("Lookup follow ownership handoff (orchestrated)", () => {
 
         const followCtx = yield* Layer.build(
           Lookup.follow(lookupNode).pipe(
-            Policy.provide(Policy.streamGap("stall")),
+            LookupPolicy.provide(LookupPolicy.streamGap("stall")),
           ),
         );
 

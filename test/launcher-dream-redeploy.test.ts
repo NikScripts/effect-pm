@@ -25,7 +25,7 @@ import * as Hyperlink from "../src/Hyperlink";
 import * as Launcher from "../src/Launcher";
 import * as Lookup from "../src/Lookup";
 import * as Node from "../src/Node";
-import * as Policy from "../src/Policy";
+import * as LookupPolicy from "../src/LookupPolicy";
 import * as Update from "../src/Update";
 import {
   Jobs,
@@ -118,7 +118,7 @@ describe("Launcher dream redeploy (file-swap v1→v2)", () => {
           Lookup.layerNode(lookupNode, { unlink: true }),
           Lookup.client(lookupNode),
           Effect.gen(function* () {
-            const cutover = Policy.make({
+            const cutover = LookupPolicy.make({
               Sticky: true,
               ColdAmbiguous: "fail",
               StreamGap: "stall",
@@ -145,7 +145,7 @@ describe("Launcher dream redeploy (file-swap v1→v2)", () => {
 
             const stickyCtx = yield* Layer.build(
               Hyperlink.lookupClient(Probe).pipe(
-                Policy.provide(cutover),
+                LookupPolicy.provide(cutover),
                 Layer.provide(Lookup.client(lookupNode)),
               ),
             );

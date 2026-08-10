@@ -1,40 +1,36 @@
 /**
- * Policy — composable behaviour fragments (client dial, verify, advertise conflict, yield).
+ * LookupPolicy — Lookup / Directory participation (dial, verify, claim, yield).
  *
- * Interim Lookup-family module (rename target: `LookupPolicy`). Built on
- * {@link PolicyBuilder}: a private `Policies` constructable declares Schema keys /
- * PascalCase References and camelCase Layer methods (`Uncapitalize` —
- * `"Sticky"` → `sticky`). This module re-exports those plus mode presets.
- * Apps import this namespace — not the builder, and not the private constructable.
+ * Built on {@link PolicyBuilder}: private plural constructable `LookupPolicies`
+ * declares Schema keys / PascalCase References and camelCase Layer methods
+ * (`Uncapitalize` — `"Sticky"` → `sticky`). This singular module re-exports
+ * those plus mode presets. Apps import this namespace — not the builder.
+ *
+ * Pairs with `Lookup`. Sister module: {@link NodePolicy} (this-process address
+ * list knobs).
  *
  * ```ts
- * import * as Policy from "hyperlink-ts/Policy"
+ * import * as LookupPolicy from "hyperlink-ts/LookupPolicy"
  *
- * const cutover = Policy.make({ Sticky: true, StreamGap: "stall", Verify: "reject" }).pipe(
- *   Policy.layer(Policy.verifyOff),
- *   Policy.layer(Policy.streamGap("buffer")),
+ * const cutover = LookupPolicy.make({ Sticky: true, StreamGap: "stall", Verify: "reject" }).pipe(
+ *   LookupPolicy.layer(LookupPolicy.verifyOff),
+ *   LookupPolicy.layer(LookupPolicy.streamGap("buffer")),
  * )
- * // Policy.Policy<{ Sticky: true; StreamGap: "buffer"; Verify: false }>
- *
- * Policy.layer(Policy.sticky, Policy.streamGap("stall"), Policy.verifyOff)
  *
  * Hyperlink.lookupClient(Mail).pipe(
- *   Policy.provide(cutover),
+ *   LookupPolicy.provide(cutover),
  *   Layer.provide(Lookup.layer),
  * )
  * ```
  *
- * @module Policy
+ * @module LookupPolicy
  */
 import { Effect, Layer, Schema } from "effect";
 import type { DirectoryEntry } from "./Directory";
 import * as PolicyBuilder from "./PolicyBuilder";
 
-/**
- * Brand id + Context.Reference prefix (`${id}/Sticky`, …).
- * Future rename target: `LookupPolicy` / `hyperlink-ts/LookupPolicy`.
- */
-const builderId = "hyperlink-ts/Policy" as const;
+/** Brand id + Context.Reference prefix (`${id}/Sticky`, …). */
+const builderId = "hyperlink-ts/LookupPolicy" as const;
 
 // =============================================================================
 // Schemas (value shapes for PolicyBuilder keys)
@@ -261,19 +257,18 @@ export type MergePolicyList<Ps extends ReadonlyArray<Policy<Config>>> =
   PolicyBuilder.MergePolicyList<typeof builderId, Ps>;
 
 // =============================================================================
-// Policies (private constructable — module recreates helpers below)
+// LookupPolicies (private constructable — module re-exports below)
 // =============================================================================
 
 /**
- * Private constructable — plural (`Policies`); public module is singular
- * (`Policy` / future `LookupPolicy`). Each key adds a PascalCase Reference and a
- * camelCase Layer method (`Uncapitalize` — `"StreamGap"` → `streamGap`); the
- * module re-exports those plus mode presets below.
+ * Private plural constructable. Singular module namespace is `LookupPolicy`.
+ * Each key adds a PascalCase Reference and a camelCase Layer method
+ * (`Uncapitalize` — `"StreamGap"` → `streamGap`).
  *
  * `defaultValue` on each key is the Context.Reference default (ambient
  * `yield* Sticky` when no override Layer is provided).
  */
-class Policies extends PolicyBuilder.make(builderId)
+class LookupPolicies extends PolicyBuilder.make(builderId)
   .key("Sticky", Schema.Boolean, { defaultValue: () => true })
   .key("StreamGap", streamGapSchema, {
     defaultValue: (): StreamGap => "stall",
@@ -304,7 +299,7 @@ class Policies extends PolicyBuilder.make(builderId)
  * @category references
  * @public
  */
-export const Sticky = Policies.Sticky;
+export const Sticky = LookupPolicies.Sticky;
 
 /**
  * Stream seam across dial rebind. Default `"stall"` (Reference default).
@@ -312,7 +307,7 @@ export const Sticky = Policies.Sticky;
  * @category references
  * @public
  */
-export const StreamGap = Policies.StreamGap;
+export const StreamGap = LookupPolicies.StreamGap;
 
 /**
  * Cold N&gt;1 without Advice. Default `"fail"` (Reference default).
@@ -320,7 +315,7 @@ export const StreamGap = Policies.StreamGap;
  * @category references
  * @public
  */
-export const ColdAmbiguous = Policies.ColdAmbiguous;
+export const ColdAmbiguous = LookupPolicies.ColdAmbiguous;
 
 /**
  * Optional soft pick (D4). Default unset — cold policy applies instead.
@@ -328,7 +323,7 @@ export const ColdAmbiguous = Policies.ColdAmbiguous;
  * @category references
  * @public
  */
-export const Pick = Policies.Pick;
+export const Pick = LookupPolicies.Pick;
 
 /**
  * Ambient client-verify mode. Default `"reject"` (Reference default).
@@ -336,7 +331,7 @@ export const Pick = Policies.Pick;
  * @category references
  * @public
  */
-export const Verify = Policies.Verify;
+export const Verify = LookupPolicies.Verify;
 
 /**
  * Ambient advertise conflict preference (call-site / node stamp still win).
@@ -345,7 +340,7 @@ export const Verify = Policies.Verify;
  * @category references
  * @public
  */
-export const Conflict = Policies.Conflict;
+export const Conflict = LookupPolicies.Conflict;
 
 /**
  * Cooperative yield handler for `"askIncumbent"` — `true` = step aside.
@@ -354,40 +349,40 @@ export const Conflict = Policies.Conflict;
  * @category references
  * @public
  */
-export const Yield = Policies.Yield;
+export const Yield = LookupPolicies.Yield;
 
 // =============================================================================
 // Layer helpers (camelCase — Uncapitalize of PascalCase key / `_tag`)
 // =============================================================================
 
 /** Keep the current dial across dual-serve (default on). @category layers @public */
-export const sticky: Policy<{ Sticky: true }> = Policies.sticky(true);
+export const sticky: Policy<{ Sticky: true }> = LookupPolicies.sticky(true);
 
 /** Disable warm stickiness. @category layers @public */
-export const unsticky: Policy<{ Sticky: false }> = Policies.sticky(false);
+export const unsticky: Policy<{ Sticky: false }> = LookupPolicies.sticky(false);
 
 /** Stream seam mode. @category layers @public */
-export const streamGap = Policies.streamGap;
+export const streamGap = LookupPolicies.streamGap;
 
 /** Cold N&gt;1 behaviour. @category layers @public */
-export const coldAmbiguous = Policies.coldAmbiguous;
+export const coldAmbiguous = LookupPolicies.coldAmbiguous;
 
 /** Soft pick when N&gt;1 and Advice misses. @category layers @public */
-export const pick = Policies.pick;
+export const pick = LookupPolicies.pick;
 
 /** Verify and reject on failure (default). @category layers @public */
 export const verifyReject: Policy<{ Verify: "reject" }> =
-  Policies.verify("reject");
+  LookupPolicies.verify("reject");
 
 /** Verify; keep status without failing Layer build. @category layers @public */
 export const verifyStatus: Policy<{ Verify: "status" }> =
-  Policies.verify("status");
+  LookupPolicies.verify("status");
 
 /** Skip client verify probe. @category layers @public */
-export const verifyOff: Policy<{ Verify: false }> = Policies.verify(false);
+export const verifyOff: Policy<{ Verify: false }> = LookupPolicies.verify(false);
 
 /** Set client verify mode. @category layers @public */
-export const verify = Policies.verify;
+export const verify = LookupPolicies.verify;
 
 /**
  * Walk preference layers (first concrete wins). Hard fallback: `livenessReplace`.
@@ -428,19 +423,19 @@ export const onConflictOf = (node: unknown): OnConflict | undefined => {
 
 /** Advertise: liveness ping replace. @category layers @public */
 export const livenessReplace: Policy<{ Conflict: "livenessReplace" }> =
-  Policies.conflict("livenessReplace");
+  LookupPolicies.conflict("livenessReplace");
 
 /** Advertise: ask incumbent to yield. @category layers @public */
 export const askIncumbent: Policy<{ Conflict: "askIncumbent" }> =
-  Policies.conflict("askIncumbent");
+  LookupPolicies.conflict("askIncumbent");
 
 /** Advertise: reject when incumbent alive. @category layers @public */
 export const conflictReject: Policy<{ Conflict: "reject" }> =
-  Policies.conflict("reject");
+  LookupPolicies.conflict("reject");
 
 /** Advertise: inherit up the chain (default ambient). @category layers @public */
 export const conflictInherit: Policy<{ Conflict: "inherit" }> =
-  Policies.conflict("inherit");
+  LookupPolicies.conflict("inherit");
 
 /**
  * Set advertise conflict preference (`Uncapitalize("Conflict")` → `conflict`
@@ -449,13 +444,13 @@ export const conflictInherit: Policy<{ Conflict: "inherit" }> =
  * @category layers
  * @public
  */
-export const onConflict = Policies.conflict;
+export const onConflict = LookupPolicies.conflict;
 
 /** Accept askIncumbent yield (default). @category layers @public */
-export const yieldAccept: Policy<{ Yield: true }> = Policies.yield(true);
+export const yieldAccept: Policy<{ Yield: true }> = LookupPolicies.yield(true);
 
 /** Refuse askIncumbent yield. @category layers @public */
-export const yieldRefuse: Policy<{ Yield: false }> = Policies.yield(false);
+export const yieldRefuse: Policy<{ Yield: false }> = LookupPolicies.yield(false);
 
 /**
  * Custom yield handler (`Uncapitalize("Yield")` → `yield` on the constructable;
@@ -464,7 +459,7 @@ export const yieldRefuse: Policy<{ Yield: false }> = Policies.yield(false);
  * @category layers
  * @public
  */
-export const onYield = Policies.yield;
+export const onYield = LookupPolicies.yield;
 
 // =============================================================================
 // Fragment matchers / bag converters
@@ -476,7 +471,7 @@ export const onYield = Policies.yield;
  * @category guards
  * @public
  */
-export const isFragment = Policies.isFragment;
+export const isFragment = LookupPolicies.isFragment;
 
 /**
  * Exhaustive match over a {@link Fragment} (dual).
@@ -484,7 +479,7 @@ export const isFragment = Policies.isFragment;
  * @category utils
  * @public
  */
-export const matchFragment = Policies.matchFragment;
+export const matchFragment = LookupPolicies.matchFragment;
 
 /**
  * Product {@link Config} → {@link Fragment} list (present keys only).
@@ -492,7 +487,7 @@ export const matchFragment = Policies.matchFragment;
  * @category constructors
  * @public
  */
-export const fromConfig = Policies.fromConfig.bind(Policies);
+export const fromConfig = LookupPolicies.fromConfig.bind(LookupPolicies);
 
 /**
  * {@link Fragment} list → product bag (last write wins).
@@ -500,7 +495,7 @@ export const fromConfig = Policies.fromConfig.bind(Policies);
  * @category constructors
  * @public
  */
-export const toConfig = Policies.toConfig.bind(Policies);
+export const toConfig = LookupPolicies.toConfig.bind(LookupPolicies);
 
 // =============================================================================
 // layer / make / provide / guards
@@ -512,7 +507,7 @@ export const toConfig = Policies.toConfig.bind(Policies);
  * @category guards
  * @public
  */
-export const isPolicy = (u: unknown): u is Policy<Config> => Policies.is(u);
+export const isPolicy = (u: unknown): u is Policy<Config> => LookupPolicies.is(u);
 
 /**
  * Read the runtime config stamped on a {@link Policy}.
@@ -521,7 +516,7 @@ export const isPolicy = (u: unknown): u is Policy<Config> => Policies.is(u);
  * @public
  */
 export const config = <C extends Config>(self: Policy<C>): C =>
-  Policies.config(self);
+  LookupPolicies.config(self);
 
 /**
  * Merge policy Layers (last write wins per reference) **and** expand configs.
@@ -529,19 +524,19 @@ export const config = <C extends Config>(self: Policy<C>): C =>
  * `dual`: pipeable unary or data-first variadic (2+).
  *
  * ```ts
- * const cutover = Policy.make({ StreamGap: "stall", Verify: "reject" }).pipe(
- *   Policy.layer(Policy.verifyOff),
- *   Policy.layer(Policy.streamGap("buffer")),
+ * const cutover = LookupPolicy.make({ StreamGap: "stall", Verify: "reject" }).pipe(
+ *   LookupPolicy.layer(LookupPolicy.verifyOff),
+ *   LookupPolicy.layer(LookupPolicy.streamGap("buffer")),
  * )
- * // Policy.Policy<{ StreamGap: "buffer"; Verify: false }>
+ * // LookupPolicy.Policy<{ StreamGap: "buffer"; Verify: false }>
  *
- * Policy.layer(Policy.sticky, Policy.streamGap("stall"), Policy.verifyOff)
+ * LookupPolicy.layer(LookupPolicy.sticky, LookupPolicy.streamGap("stall"), LookupPolicy.verifyOff)
  * ```
  *
  * @category layers
  * @public
  */
-export const layer: typeof Policies.layer = Policies.layer;
+export const layer: typeof LookupPolicies.layer = LookupPolicies.layer;
 
 /**
  * One tagged {@link Fragment} → branded single-key {@link Policy}.
@@ -550,7 +545,8 @@ export const layer: typeof Policies.layer = Policies.layer;
  * @category constructors
  * @public
  */
-export const succeed: typeof Policies.succeed = Policies.succeed.bind(Policies);
+export const succeed: typeof LookupPolicies.succeed =
+  LookupPolicies.succeed.bind(LookupPolicies);
 
 /**
  * Build a {@link Policy} from a product {@link Config} bag **or** a
@@ -558,11 +554,11 @@ export const succeed: typeof Policies.succeed = Policies.succeed.bind(Policies);
  * compose with {@link layer} (pipe or data-first).
  *
  * ```ts
- * const cutover = Policy.make({
+ * const cutover = LookupPolicy.make({
  *   Sticky: true,
  *   StreamGap: "stall",
  *   Verify: "reject",
- * }).pipe(Policy.layer(Policy.verifyOff))
+ * }).pipe(LookupPolicy.layer(LookupPolicy.verifyOff))
  * ```
  *
  * @category constructors
@@ -573,7 +569,7 @@ export const make: {
   <const Fs extends ReadonlyArray<Fragment>>(
     fragments: Fs,
   ): Policy<PolicyBuilder.ConfigFromFragments<Fs>>;
-} = Policies.make.bind(Policies);
+} = LookupPolicies.make.bind(LookupPolicies);
 
 /**
  * Provide policy Layers onto a Layer (no stacked `Layer.provide`s).
@@ -582,9 +578,9 @@ export const make: {
  *
  * ```ts
  * Hyperlink.lookupClient(Mail).pipe(
- *   Policy.provide(
- *     Policy.make({ Sticky: true, StreamGap: "stall" }).pipe(
- *       Policy.layer(Policy.verifyOff),
+ *   LookupPolicy.provide(
+ *     LookupPolicy.make({ Sticky: true, StreamGap: "stall" }).pipe(
+ *       LookupPolicy.layer(LookupPolicy.verifyOff),
  *     ),
  *   ),
  *   Layer.provide(Lookup.layer),
@@ -597,4 +593,4 @@ export const make: {
 export const provide =
   (...policies: ReadonlyArray<Layer.Layer<never>>) =>
   <A, E, R>(self: Layer.Layer<A, E, R>): Layer.Layer<A, E, R> =>
-    Policies.provide(...policies)(self);
+    LookupPolicies.provide(...policies)(self);

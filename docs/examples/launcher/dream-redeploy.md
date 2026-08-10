@@ -44,7 +44,7 @@ import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import * as Launcher from "hyperlink-ts/Launcher"
 import * as Lookup from "hyperlink-ts/Lookup"
 import * as Node from "hyperlink-ts/Node"
-import * as Policy from "hyperlink-ts/Policy"
+import * as LookupPolicy from "hyperlink-ts/LookupPolicy"
 import * as Update from "hyperlink-ts/Update"
 import * as WorkPool from "hyperlink-ts/WorkPool"
 ```
@@ -130,7 +130,7 @@ const child = (port: number) =>
 ### 4. Sticky `lookupClient` (build after Directory has a row)
 
 ```ts
-const cutover = Policy.make({
+const cutover = LookupPolicy.make({
   Sticky: true,
   ColdAmbiguous: "fail",
   StreamGap: "stall",
@@ -144,7 +144,7 @@ yield* waitUntil(Directory.nodesServing(Jobs), (rows) =>
 
 const stickyClient = yield* Layer.build(
   Hyperlink.lookupClient(Probe).pipe(
-    Policy.provide(cutover),
+    LookupPolicy.provide(cutover),
     Layer.provide(Lookup.client(lookupNode)),
   ),
 )
@@ -242,7 +242,7 @@ const released = yield* Effect.gen(function* () {
 |---------|-----|
 | Membership / dial truth / dry-run | `Lookup` + `Directory` + `Lookup.planUpdate` |
 | Custody / spawn / exclusive bind | `Launcher.up` / `Launcher.restartSuccessor` |
-| Sticky dual-serve + stream seam | `Policy.make({ Sticky, StreamGap, … })` on `lookupClient` |
+| Sticky dual-serve + stream seam | `LookupPolicy.make({ Sticky, StreamGap, … })` on `lookupClient` |
 | Early move while A still up | `Advice.prefer(B)` (default inside `restartSuccessor`) |
 | Pending WorkPool migration | baked `releaseEnqueueHandoff` on `Node.shutdown(A)` |
 | Live dial census / at-risk clients | `Dialers` (`planUpdate.clientsAtRisk`) |

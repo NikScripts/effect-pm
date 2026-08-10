@@ -2,7 +2,7 @@
  * @module examples/node/verify-connection
  *
  * **Eager node verify** — free-standing `Hyperlink.verifyConnection` tiers, plus
- * addressed `Hyperlink.client` mode via `Policy.verify*` fragments.
+ * addressed `Hyperlink.client` mode via `LookupPolicy.verify*` fragments.
  *
  * ```bash
  * pnpm run example:node-verify-connection
@@ -19,7 +19,7 @@ import { Effect, Layer, Schema } from "effect"
 import { HttpServer } from "effect/unstable/http"
 import * as Node from "../../src/Node"
 import * as Hyperlink from "../../src/Hyperlink"
-import * as Policy from "../../src/Policy"
+import * as LookupPolicy from "../../src/LookupPolicy"
 
 class Droplet extends Node.Service<Droplet>()("verify/Droplet") {}
 
@@ -47,21 +47,21 @@ const program = Effect.gen(function* () {
   })
   yield* Effect.logInfo(`verifyConnection ok — ${url} serves Emails ready`)
 
-  // Addressed client — default Policy.verifyReject (probe before handle usable).
+  // Addressed client — default LookupPolicy.verifyReject (probe before handle usable).
   const clientCtx = yield* Layer.build(
-    Hyperlink.client(Emails, node).pipe(Policy.provide(Policy.verifyReject)),
+    Hyperlink.client(Emails, node).pipe(LookupPolicy.provide(LookupPolicy.verifyReject)),
   )
   const pong = yield* Effect.gen(function* () {
     const emails = yield* Emails
     return yield* emails.ping
   }).pipe(Effect.provide(clientCtx))
-  yield* Effect.logInfo(`Policy.verifyReject client ping → ${pong}`)
+  yield* Effect.logInfo(`LookupPolicy.verifyReject client ping → ${pong}`)
 
   // Nested / bootstrap dials opt out:
   yield* Layer.build(
-    Hyperlink.client(Emails, node).pipe(Policy.provide(Policy.verifyOff)),
+    Hyperlink.client(Emails, node).pipe(LookupPolicy.provide(LookupPolicy.verifyOff)),
   )
-  yield* Effect.logInfo("Policy.verifyOff — client Layer built without probe fail-closed")
+  yield* Effect.logInfo("LookupPolicy.verifyOff — client Layer built without probe fail-closed")
 }).pipe(Effect.provide(Server), Effect.scoped)
 
 // ---cut-after---

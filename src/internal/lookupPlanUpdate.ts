@@ -26,7 +26,7 @@ import * as Identity from "../Identity";
 import * as Hyperlink from "../Hyperlink";
 import { isWireSpecLeaf, kindOf, specSym, wireKeySym } from "../Hyperlink";
 import type { FlatSpec } from "../Hyperlink";
-import * as Policy from "../Policy";
+import * as LookupPolicy from "../LookupPolicy";
 import * as Versioned from "../Versioned";
 import { hashContract } from "./contractHash";
 import { Service as NodeTag } from "./nodeCore";
@@ -290,7 +290,7 @@ const dialStatus = (
     );
     const ctx = yield* Layer.build(
       Hyperlink.client(NodeStatusTag, target).pipe(
-        Policy.provide(Policy.verifyOff),
+        LookupPolicy.provide(LookupPolicy.verifyOff),
       ),
     );
     const snap = yield* Effect.gen(function* () {

@@ -27,7 +27,7 @@ import {
 import * as Hyperlink from "../../src/Hyperlink";
 import * as Lookup from "../../src/Lookup";
 import * as Directory from "../../src/Directory";
-import * as Policy from "../../src/Policy";
+import * as LookupPolicy from "../../src/LookupPolicy";
 import * as Node from "../../src/Node";
 
 const tmpSock = (label: string) =>
@@ -75,14 +75,14 @@ const program = Effect.gen(function* () {
     Node.unix(Worker, [
       Hyperlink.serve(Jobs, { ping: Effect.succeed("alive") }),
     ]).pipe(
-      Policy.provide(Policy.askIncumbent, Policy.yieldAccept),
+      LookupPolicy.provide(LookupPolicy.askIncumbent, LookupPolicy.yieldAccept),
       Layer.provide(lookupClient),
     ),
   );
 
   const clientCtx = yield* Layer.build(
     Hyperlink.client(Jobs, Worker).pipe(
-      Policy.provide(Policy.verifyOff),
+      LookupPolicy.provide(LookupPolicy.verifyOff),
       Layer.provide(lookupClient),
     ),
   );
@@ -98,7 +98,7 @@ const program = Effect.gen(function* () {
   }
 
   const nodeCtx = yield* Layer.build(
-    Node.connect(Worker).pipe(Policy.provide(Policy.verifyOff)),
+    Node.connect(Worker).pipe(LookupPolicy.provide(LookupPolicy.verifyOff)),
   );
   const before = yield* Effect.gen(function* () {
     const node = yield* Worker;

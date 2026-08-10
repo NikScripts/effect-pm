@@ -7,7 +7,7 @@
  *
  * **Dialers:** {@link client} is a **static** dial (one install). {@link follow} is the
  * hot dialer for the **same address** across an orchestrated Lookup A→B ownership move —
- * holder + `RpcClientError` retry + {@link Policy.StreamGap}. Compose gap Policy at the
+ * holder + `RpcClientError` retry + {@link LookupPolicy.StreamGap}. Compose gap Policy at the
  * call site; orchestration (who binds the sock) is outside this module.
  *
  * **Updates:** {@link planUpdate} dry-runs Directory / status / Versioned impact.
@@ -21,10 +21,10 @@
  * import * as Advice from "hyperlink-ts/Advice"
  * import * as Dialers from "hyperlink-ts/Dialers"
  * import * as Directory from "hyperlink-ts/Directory"
- * import * as Policy from "hyperlink-ts/Policy"
+ * import * as LookupPolicy from "hyperlink-ts/LookupPolicy"
  *
  * Layer.provide(Lookup.layer)
- * Lookup.follow(lookupNode).pipe(Policy.provide(Policy.streamGap("stall")))
+ * Lookup.follow(lookupNode).pipe(LookupPolicy.provide(LookupPolicy.streamGap("stall")))
  * yield* Advice.prefer(Mail, "fleet/Mail#w2")
  * yield* Directory.changes.pipe(Stream.runDrain)
  * yield* Dialers.listForTarget("fleet/Worker#a")
@@ -81,9 +81,9 @@ import {
 } from "./Identity";
 import type { AnyNode } from "./internal/nodeCore";
 import { asLookup, Service as NodeTag } from "./internal/nodeCore";
-import type { OnConflict, OnConflictResolved } from "./Policy";
-import { onConflictOf, resolveOnConflict } from "./Policy";
-import * as Policy from "./Policy";
+import type { OnConflict, OnConflictResolved } from "./LookupPolicy";
+import { onConflictOf, resolveOnConflict } from "./LookupPolicy";
+import * as LookupPolicy from "./LookupPolicy";
 import { connectIpc } from "./internal/node";
 import { ipcServer } from "./internal/nodeIpcServer";
 import * as internal from "./internal/lookup";
@@ -104,8 +104,8 @@ import {
 } from "./internal/lookupPlanUpdate";
 
 /** Wire + resolve helpers — SSOT is {@link Policy}. @public */
-export type { OnConflict, OnConflictResolved } from "./Policy";
-export { resolveOnConflict } from "./Policy";
+export type { OnConflict, OnConflictResolved } from "./LookupPolicy";
+export { resolveOnConflict } from "./LookupPolicy";
 
 // Wire schemas + sugars from sibling modules (Tags stay on siblings).
 export {
@@ -286,7 +286,7 @@ const incumbentAlive = (
     );
     const ctx = yield* Layer.build(
       Hyperlink.client(NodeStatusTag, target).pipe(
-        Policy.provide(Policy.verifyOff),
+        LookupPolicy.provide(LookupPolicy.verifyOff),
       ),
     );
     yield* Effect.gen(function* () {
@@ -326,7 +326,7 @@ const incumbentYield = (
     );
     const ctx = yield* Layer.build(
       Hyperlink.client(NodeStatusTag, target).pipe(
-        Policy.provide(Policy.verifyOff),
+        LookupPolicy.provide(LookupPolicy.verifyOff),
       ),
     );
     return yield* Effect.gen(function* () {
@@ -608,10 +608,10 @@ export const directoryAdvertiseLayer = (
       if (kind === undefined) {
         return;
       }
-      // Advertiser: call-site → node stamp → Policy.Conflict; leave `"inherit"` for Lookup.
+      // Advertiser: call-site → node stamp → LookupPolicy.Conflict; leave `"inherit"` for Lookup.
       const callSite = options?.onConflict;
       const nodeStamp = onConflictOf(node);
-      const ambient = yield* Policy.Conflict;
+      const ambient = yield* LookupPolicy.Conflict;
       const wirePref: OnConflict =
         [callSite, nodeStamp, ambient].find(
           (pref): pref is OnConflictResolved =>
@@ -673,7 +673,7 @@ export const client = (
   ) as any;
   return clients.pipe(
     Layer.provide(node.pipe(connectIpc(path))),
-    Policy.provide(Policy.verifyOff),
+    LookupPolicy.provide(LookupPolicy.verifyOff),
   ) as any;
 };
 
@@ -695,15 +695,15 @@ export const clientOptions = (options?: {
 /**
  * Hot dialer for one Lookup address — survives orchestrated A→B ownership moves on the
  * **same** `path` (build-then-swap; Effect RPCs retry on `RpcClientError`; streams follow
- * dial generations via {@link Policy.StreamGap}).
+ * dial generations via {@link LookupPolicy.StreamGap}).
  *
  * Unlike {@link client} (static install), {@link follow} reinstalls to the **same** seed
  * when the sock owner changes. Dialers never track two Lookup endpoints — orchestration
- * (start B → shut down A → B binds) is outside Policy.
+ * (start B → shut down A → B binds) is outside LookupPolicy.
  *
  * ```ts
  * Lookup.follow(lookupNode).pipe(
- *   Policy.provide(Policy.streamGap("stall")),
+ *   LookupPolicy.provide(LookupPolicy.streamGap("stall")),
  * )
  * ```
  *
@@ -720,7 +720,7 @@ export const follow = (
   }
   return followLayer(
     node as AnyNode & { readonly path: string },
-  ).pipe(Policy.provide(Policy.verifyOff)) as Layer.Layer<
+  ).pipe(LookupPolicy.provide(LookupPolicy.verifyOff)) as Layer.Layer<
     Services,
     LookupUnaddressed
   >;

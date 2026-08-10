@@ -26,7 +26,7 @@ import { combineQuery, combineSum } from "../../src/MultiNode";
 import * as Hyperlink from "../../src/Hyperlink";
 import * as Lookup from "../../src/Lookup";
 import * as Directory from "../../src/Directory";
-import * as Policy from "../../src/Policy";
+import * as LookupPolicy from "../../src/LookupPolicy";
 import * as Node from "../../src/Node";
 
 const tmpSock = (label: string) =>
@@ -92,7 +92,7 @@ const program = Effect.gen(function* () {
 
   const peersCtx = yield* Layer.build(
     Hyperlink.peersLayer(Pool, East).pipe(
-      Policy.provide(Policy.verifyOff),
+      LookupPolicy.provide(LookupPolicy.verifyOff),
       Layer.provide(lookupClient),
     ),
   );

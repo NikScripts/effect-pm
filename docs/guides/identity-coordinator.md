@@ -53,7 +53,7 @@ Node.unix([Hyperlink.serve(Worker, impl)]).pipe(Layer.provide(lookup)) // advert
 Lookup stays **pipe-only** on listens — never bake `lookupPath` into listen options.
 
 When Lookup itself may **restart / A→B** on the same address, dial with `Lookup.follow` (not
-static `client`) and compose `Policy.StreamGap` — see [Policy](/docs/policy#lookupfollow-same-address-lookup-ab).
+static `client`) and compose `LookupPolicy.StreamGap` — see [Policy](/docs/policy#lookupfollow-same-address-lookup-ab).
 
 ### 3. Publish prefer (optional, M5)
 
@@ -71,14 +71,14 @@ Directory queries: `yield* Directory.nodesServing(Jobs)` (or Lookup’s re-expor
 ### 4. Dial hands
 
 ```ts
-import * as Policy from "hyperlink-ts/Policy"
+import * as LookupPolicy from "hyperlink-ts/LookupPolicy"
 
 // Defaults: sticky dual-serve, stream stall, cold fail-closed
 Hyperlink.lookupClient(Worker).pipe(Layer.provide(Lookup.layer))
 
 // Explicit cutover bundle + soft pick
 Hyperlink.lookupClient(Worker).pipe(
-  Policy.provide(Policy.sticky, Policy.pick("first")),
+  LookupPolicy.provide(LookupPolicy.sticky, LookupPolicy.pick("first")),
   Layer.provide(Lookup.layer),
 )
 ```
@@ -140,12 +140,12 @@ membership (dial move / join / leave). Escape hatch: `import * as Directory from
 **Track D (`lookupClient` / peersLayer):** build-then-swap dials; Effect RPCs that hit
 `RpcClientError` **retry once** after rebind; sibling-module **`Advice.changes`** moves the dial
 when prefer flips (before A leaves / before the first transport error). Keep B Directory-visible.
-Live streams stay one outer Stream across dial swaps (`Policy.StreamGap`, default `"stall"`).
+Live streams stay one outer Stream across dial swaps (`LookupPolicy.StreamGap`, default `"stall"`).
 See [Policy](/docs/policy).
 
 **Lookup A→B (same address):** `Lookup.follow(lookupNode)` — hot dialer for Identity /
 Directory / Advice across an orchestrated sock ownership move. `Lookup.client` stays static.
-Compose `Policy.StreamGap`; orchestration (start B → shut down A → B binds) is outside Policy.
+Compose `LookupPolicy.StreamGap`; orchestration (start B → shut down A → B binds) is outside Policy.
 Runnable: [`examples/node/lookup-follow-handoff.ts`](../../examples/node/lookup-follow-handoff.ts)
 (`pnpm run example:node-lookup-follow-handoff`).
 

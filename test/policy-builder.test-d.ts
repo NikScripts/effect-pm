@@ -4,8 +4,8 @@
 import { Schema, type Layer } from "effect";
 import type { Policy as BuilderPolicy } from "../src/PolicyBuilder";
 import * as PolicyBuilder from "../src/PolicyBuilder";
-import type { Policy as EngPolicy } from "../src/Policy";
-import * as Policy from "../src/Policy";
+import type { Policy as EngPolicy } from "../src/LookupPolicy";
+import * as LookupPolicy from "../src/LookupPolicy";
 
 type AssertExtends<A, B> = [A] extends [B] ? true : false;
 type AssertEqual<A, B> =
@@ -59,7 +59,7 @@ type _Checks = [
     typeof viaMethodB,
     BuilderPolicy<"policy-builder-d/Demo", { B: "y" }>
   >,
-  AssertExtends<typeof Policy.sticky, EngPolicy<{ Sticky: true }>>,
+  AssertExtends<typeof LookupPolicy.sticky, EngPolicy<{ Sticky: true }>>,
   AssertEqual<
     PolicyBuilder.FragmentOfKeys<(typeof DemoPolicies)["keys"]>,
     | { readonly _tag: "A"; readonly value: boolean }

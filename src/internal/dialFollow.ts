@@ -6,7 +6,7 @@
  * @internal
  */
 import { Predicate, Stream, SubscriptionRef } from "effect";
-import type * as Policy from "../Policy";
+import type * as LookupPolicy from "../LookupPolicy";
 
 /**
  * True when an RPC failed on the transport (peer gone / socket closed mid-call).
@@ -19,13 +19,13 @@ export const isDialTransportError = (err: unknown): boolean =>
 
 /**
  * One outer Stream across dial generations — transport death does not end the
- * consumer fold; {@link Policy.StreamGap} chooses stall / drop / buffer.
+ * consumer fold; {@link LookupPolicy.StreamGap} chooses stall / drop / buffer.
  *
  * @internal
  */
 export const followDialStream = (
   installGen: SubscriptionRef.SubscriptionRef<number>,
-  streamGap: Policy.StreamGap,
+  streamGap: LookupPolicy.StreamGap,
   getInner: () => Stream.Stream<unknown>,
 ): Stream.Stream<unknown> => {
   const switched = SubscriptionRef.changes(installGen).pipe(

@@ -64,7 +64,7 @@ Not a polish list — design failures:
 
 **Standards it falls short of (owner):** Effect-true composition (layers/pipes over option
 blobs), namespace SSOT (one place owns “how this node is addressed / updated”), and the
-bar set by `Policy.make` / `Node.withProtocol` (typed fragments you compose, not a restart
+bar set by `LookupPolicy.make` / `Node.withProtocol` (typed fragments you compose, not a restart
 RPC).
 
 **What stays valuable from Eng’d work:** `Lookup.planUpdate` impact shape, Directory as
@@ -157,7 +157,7 @@ by client Policy (sticky, prefer, fail-closed) — same family as multi-row Dire
 | **Listen** | Process binds the addresses it runs with (default: all declared — `NodePolicy` can narrow). |
 | **Advertise** | Directory default = **primaries**; `NodePolicy` can widen. Clients dial what Directory publishes (+ client `Policy` pick). |
 | **NodePolicy** | Node-side: listen / advertise / proxy / which labeled process this is. |
-| **LookupPolicy** | Lookup / Directory participation (today’s Eng’d `Policy`): sticky, verify, stream-gap, pick, conflict, yield. |
+| **LookupPolicy** | Lookup / Directory participation (Eng’d `LookupPolicy`): sticky, verify, stream-gap, pick, conflict, yield. |
 | **Key-derived Unix** | `Address.unixFromKey` — Unix primary from node key (no manual path helper). |
 | **One list** | Replaces today’s `endpoints` / `withProtocol` for new code. |
 
@@ -168,13 +168,13 @@ stayed parked.
 ### 3.3 API (sketch)
 
 Two policy modules — different jobs. **Locked (Agent 5 call):** rename Eng’d
-`hyperlink-ts/Policy` → **`hyperlink-ts/LookupPolicy`** when `NodePolicy` Engs (same
+`hyperlink-ts/LookupPolicy` → **`hyperlink-ts/LookupPolicy`** when `NodePolicy` Engs (same
 change set — no long-lived ambiguous `Policy`). Not `ClientPolicy`: “client” is vague
 and undersells Directory claim/yield.
 
 | Module | Owns |
 |--------|------|
-| **`hyperlink-ts/LookupPolicy`** | How Lookup / Directory participation behaves (today’s Eng’d `Policy`): dial (`Sticky`, `Verify`, `StreamGap`, `Pick`, `ColdAmbiguous`) **and** claim / yield (`Conflict`, `Yield`) |
+| **`hyperlink-ts/LookupPolicy`** | How Lookup / Directory participation behaves (Eng’d `LookupPolicy`): dial (`Sticky`, `Verify`, `StreamGap`, `Pick`, `ColdAmbiguous`) **and** claim / yield (`Conflict`, `Yield`) |
 | **`hyperlink-ts/NodePolicy`** | **This process** vs its address list: bind, publish, proxy, which labeled side it is |
 
 Pairs with modules: `Lookup`↔`LookupPolicy`, `Node`↔`NodePolicy`. `Conflict` / `Yield`
@@ -202,7 +202,7 @@ NodePolicy.advertise("primary")             // | "all" | ReadonlyArray<label>
 NodePolicy.proxy("prefer")                  // primary forwards → live labeled (Advice)
 NodePolicy.as("A")                          // this OS process is the "A" side
 
-NodePolicy.make({
+NodeLookupPolicy.make({
   Listen: "all",
   Advertise: "primary",
   Proxy: "prefer",
@@ -261,7 +261,7 @@ sticky / wait-advice stay on **`LookupPolicy`**. One dial story, not two.
 Both policy modules share one builder kernel — **`hyperlink-ts/PolicyBuilder`**.
 
 **Defaults:** Policies **are** `Context.Reference`s. Ambient defaults are Reference
-`defaultValue` — same system as before PolicyBuilder (`yield* Policy.Sticky` with no
+`defaultValue` — same system as before PolicyBuilder (`yield* LookupPolicy.Sticky` with no
 Layer → `true`). Builder `.key(…, { defaultValue })` **is** that Reference option,
 not a second defaults mechanism. Fragments / `make` override via Layer. Call-site /
 node stamps still win for conflict / yield where they already did.
@@ -309,11 +309,9 @@ export const make = LookupPolicies.make
 Layer methods are `Uncapitalize(key)` (`sticky`, `streamGap`). Classes / types /
 References stay PascalCase.
 
-**Eng’d today:** private `Policies` inside `Policy` (interim Lookup family) +
-PascalCase refs + camelCase Def methods. **Next:** Eng `NodePolicy` /
-`NodePolicies`; rename `Policy` → `LookupPolicy` / `LookupPolicies`.
-
-Apps normally import **`LookupPolicy` / `NodePolicy`**, not the builder.
+**Eng’d:** `LookupPolicy` / `LookupPolicies` + `NodePolicy` / `NodePolicies`
+(PascalCase refs + camelCase Def methods). Apps import the singular modules, not
+the builder. **Next:** Address factories + `Node.make` pipe composition.
 
 #### `_tag` — key vs value (Eng’d: **key**)
 
@@ -322,14 +320,14 @@ identity (`Sticky`). Layer helpers stay camelCase (`sticky` = `Uncapitalize("Sti
 Fragment data uses `_tag` on the key when you need the sum.
 
 ```ts
-yield* Policy.Sticky
-Policy.sticky
-Policy.layer(Policy.sticky, Policy.streamGap("stall"))
-Policy.make({ Sticky: true, StreamGap: "stall" })
+yield* LookupPolicy.Sticky
+LookupPolicy.sticky
+LookupPolicy.layer(LookupPolicy.sticky, LookupPolicy.streamGap("stall"))
+LookupPolicy.make({ Sticky: true, StreamGap: "stall" })
 Policy.fromConfig({ Sticky: true })  // → Fragment[]
 ```
 
-**Eng’d** on `PolicyBuilder` / `Policy` (refs + camelCase methods + product bag).
+**Eng’d** on `PolicyBuilder` / `LookupPolicy` / `NodePolicy` (refs + camelCase methods + product bag).
 
 ### 3.4 Parked — prior long Address API notes
 
@@ -461,7 +459,7 @@ options arg**, so don’t make the signature rest-only.
 ### 3.4.5 Address policies — define knobs, then defaults (parked)
 
 **API surface lives in §3.3** (`NodePolicy.listen` / `advertise` / `proxy` / `as` +
-`NodePolicy.make`). Dial / claim / yield stay on **`LookupPolicy`** (rename of Eng’d
+`NodeLookupPolicy.make`). Dial / claim / yield stay on **`LookupPolicy`** (rename of Eng’d
 `Policy`). This subsection keeps rationale + example matrix.
 
 Address marks **identity + primary (unnamed) vs labeled + dial**. That is description

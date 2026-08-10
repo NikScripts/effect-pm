@@ -1,8 +1,8 @@
 /**
  * @module examples/node/ask-incumbent-takeover
  *
- * **Same `nodeKey`, new dial** — `Policy.askIncumbent` + `Policy.yieldAccept` lets a
- * newcomer replace the Directory row. Contrast: `Policy.yieldRefuse` → `IncumbentAlive`.
+ * **Same `nodeKey`, new dial** — `LookupPolicy.askIncumbent` + `LookupPolicy.yieldAccept` lets a
+ * newcomer replace the Directory row. Contrast: `LookupPolicy.yieldRefuse` → `IncumbentAlive`.
  *
  * Not Launcher custody handoff — membership plane only.
  *
@@ -28,7 +28,7 @@ import {
 import * as Hyperlink from "../../src/Hyperlink";
 import * as Lookup from "../../src/Lookup";
 import * as Directory from "../../src/Directory";
-import * as Policy from "../../src/Policy";
+import * as LookupPolicy from "../../src/LookupPolicy";
 import * as Node from "../../src/Node";
 
 const tmpSock = (label: string) =>
@@ -77,7 +77,7 @@ const program = Effect.gen(function* () {
     Node.unix(Worker, [
       Hyperlink.serve(Jobs, { ping: Effect.succeed("from-a") }),
     ]).pipe(
-      Policy.provide(Policy.yieldAccept),
+      LookupPolicy.provide(LookupPolicy.yieldAccept),
       Layer.provide(lookupClient),
     ),
   );
@@ -110,7 +110,7 @@ const program = Effect.gen(function* () {
 
   const clientB = yield* Layer.build(
     Hyperlink.client(Jobs, WorkerB).pipe(
-      Policy.provide(Policy.verifyOff),
+      LookupPolicy.provide(LookupPolicy.verifyOff),
       Layer.provide(lookupClient),
     ),
   );
@@ -139,7 +139,7 @@ const program = Effect.gen(function* () {
     Node.unix(WorkerHold, [
       Hyperlink.serve(Jobs, { ping: Effect.succeed("hold") }),
     ]).pipe(
-      Policy.provide(Policy.askIncumbent, Policy.yieldRefuse),
+      LookupPolicy.provide(LookupPolicy.askIncumbent, LookupPolicy.yieldRefuse),
       Layer.provide(lookupClient),
     ),
   );

@@ -35,7 +35,7 @@ import {
 import * as Hyperlink from "../Hyperlink";
 import * as Identity from "../Identity";
 import * as Lookup from "../Lookup";
-import * as Policy from "../Policy";
+import * as LookupPolicy from "../LookupPolicy";
 import {
   AssumeNotReady,
   AssumeTokenMismatch,
@@ -805,7 +805,7 @@ const probeReady = (
     const { NodeStatusTag } = yield* Effect.promise(() => import("./nodeStatus"));
     const ctx = yield* Layer.build(
       Hyperlink.client(NodeStatusTag, node).pipe(
-        Policy.provide(Policy.verifyOff),
+        LookupPolicy.provide(LookupPolicy.verifyOff),
       ),
     );
     const snap = yield* Effect.gen(function* () {
@@ -1120,7 +1120,7 @@ const probeLookupAnswering = (
   Effect.scoped(
     Effect.gen(function* () {
       const ctx = yield* Layer.build(
-        Lookup.client(node).pipe(Policy.provide(Policy.verifyOff)),
+        Lookup.client(node).pipe(LookupPolicy.provide(LookupPolicy.verifyOff)),
       );
       const id = Context.get(ctx, Identity.Service);
       yield* id

@@ -27,7 +27,7 @@ import {
   followDialStream,
   isDialTransportError,
 } from "./dialFollow";
-import * as Policy from "../Policy";
+import * as LookupPolicy from "../LookupPolicy";
 
 /** Identity + Directory + Advice + Dialers — same surface as {@link Lookup.client}. @internal */
 export type LookupFollowServices = Identity | Directory | Advice | Dialers;
@@ -43,7 +43,7 @@ export const followLayer = (
 ): Layer.Layer<LookupFollowServices> =>
   Layer.unwrap(
     Effect.gen(function* () {
-      const streamGap = yield* Policy.StreamGap;
+      const streamGap = yield* LookupPolicy.StreamGap;
 
       let clientScope: Scope.Closeable | undefined;
       const identityHolder: { current: Identity["Service"] } = {
@@ -71,7 +71,7 @@ export const followLayer = (
         Hyperlink.client(Directory, seed) as any,
         Hyperlink.client(Advice, seed) as any,
         Hyperlink.client(Dialers, seed) as any,
-      ).pipe(Policy.provide(Policy.verifyOff)) as any;
+      ).pipe(LookupPolicy.provide(LookupPolicy.verifyOff)) as any;
 
       /** Build-then-swap — prior dial stays until the next install succeeds. */
       const install = () =>

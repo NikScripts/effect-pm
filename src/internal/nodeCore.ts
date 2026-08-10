@@ -97,8 +97,8 @@ export interface Endpoints {
   readonly IpcSocket?: { readonly path: string };
 }
 
-import type { OnConflict, OnConflictResolved } from "../Policy";
-import { resolveOnConflict, onConflictOf } from "../Policy";
+import type { OnConflict, OnConflictResolved } from "../LookupPolicy";
+import { resolveOnConflict, onConflictOf } from "../LookupPolicy";
 
 /** Re-export Policy conflict types/helpers for Node internals. @public */
 export type { OnConflict, OnConflictResolved };
@@ -237,8 +237,8 @@ export type ListenOptions = {
   readonly node?: string | { readonly key: string };
   readonly unlink?: boolean;
   /**
-   * Directory advertise conflict (call-site; wins over node stamp / {@link Policy.Conflict}).
-   * Prefer ambient `Policy.askIncumbent` etc. Omit / `"inherit"` → continue resolve chain.
+   * Directory advertise conflict (call-site; wins over node stamp / {@link LookupPolicy.Conflict}).
+   * Prefer ambient `LookupPolicy.askIncumbent` etc. Omit / `"inherit"` → continue resolve chain.
    */
   readonly onConflict?: OnConflict;
   /**
@@ -257,8 +257,8 @@ export type ListenOptions = {
    */
   readonly assumeToken?: string | Redacted.Redacted<string>;
   /**
-   * Cooperative yield for {@link Policy.askIncumbent} — call-site override of
-   * {@link Policy.Yield} (`Policy.yieldAccept` / `yieldRefuse`). `true` = step aside;
+   * Cooperative yield for {@link LookupPolicy.askIncumbent} — call-site override of
+   * {@link LookupPolicy.Yield} (`LookupPolicy.yieldAccept` / `yieldRefuse`). `true` = step aside;
    * `false` / timeout → `IncumbentAlive`. While `phase: "draining"`, yield always refuses.
    */
   readonly onYield?: Effect.Effect<boolean>;

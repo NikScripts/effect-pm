@@ -60,8 +60,8 @@ export type {
   WsListenArg,
   IpcListenArg,
 } from "./internal/nodeCore"
-export type { OnConflict, OnConflictResolved } from "./Policy"
-export { resolveOnConflict } from "./Policy"
+export type { OnConflict, OnConflictResolved } from "./LookupPolicy"
+export { resolveOnConflict } from "./LookupPolicy"
 export { listen } from "./internal/nodeListen"
 export { unix } from "./internal/nodeUnix"
 export { http } from "./internal/nodeHttp"

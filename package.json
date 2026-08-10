@@ -128,9 +128,13 @@
       "types": "./dist/Identity.d.ts",
       "default": "./dist/Identity.js"
     },
-    "./Policy": {
-      "types": "./dist/Policy.d.ts",
-      "default": "./dist/Policy.js"
+    "./LookupPolicy": {
+      "types": "./dist/LookupPolicy.d.ts",
+      "default": "./dist/LookupPolicy.js"
+    },
+    "./NodePolicy": {
+      "types": "./dist/NodePolicy.d.ts",
+      "default": "./dist/NodePolicy.js"
     },
     "./PolicyBuilder": {
       "types": "./dist/PolicyBuilder.d.ts",

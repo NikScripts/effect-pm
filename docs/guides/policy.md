@@ -1,42 +1,43 @@
-{#policy title="Policy" status="stable" done="api" appliesTo=all}
+{#policy title="LookupPolicy" status="stable" done="api" appliesTo=all}
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
 > and live type previews — is at <https://dev.hyperlink.cool/docs/policy>.
 <!-- docs-site-link:end -->
-# Policy — composable cutover, verify, conflict, yield
+# LookupPolicy — dial, verify, conflict, yield
 
-Client and advertise behaviour as **Layer fragments** on `hyperlink-ts/Policy`. Compose with
-`Policy.provide` / `Policy.layer` — nothing stamped onto every Node by default. Call-site
-`ListenOptions` / Node `onConflict` stamps remain overrides that win over ambient Policy.
+Lookup / Directory participation as **Layer fragments** on `hyperlink-ts/LookupPolicy`.
+Compose with `LookupPolicy.provide` / `LookupPolicy.layer` — nothing stamped onto every
+Node by default. Call-site `ListenOptions` / Node `onConflict` stamps remain overrides
+that win over ambient LookupPolicy. Sister module: `hyperlink-ts/NodePolicy` (this-process
+address-list knobs).
 
-Built on shared **`hyperlink-ts/PolicyBuilder`**: a private plural constructable
-(`Policies`; future `LookupPolicies` / `NodePolicies`) declares Schema keys /
-PascalCase References and camelCase Layer methods (`Uncapitalize` —
-`"Sticky"` → `sticky`). This singular module re-exports those helpers plus mode
-presets. Apps import the module — not the builder.
+Built on shared **`hyperlink-ts/PolicyBuilder`**: private plural constructable
+`LookupPolicies` declares Schema keys / PascalCase References and camelCase Layer
+methods (`Uncapitalize` — `"Sticky"` → `sticky`). This singular module re-exports those
+helpers plus mode presets. Apps import the module — not the builder.
 
 ```ts
-import * as Policy from "hyperlink-ts/Policy"
+import * as LookupPolicy from "hyperlink-ts/LookupPolicy"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import * as Lookup from "hyperlink-ts/Lookup"
 
-const cutover = Policy.make({ Sticky: true, StreamGap: "stall", Verify: "reject" }).pipe(
-  Policy.layer(Policy.verifyOff),
-  Policy.layer(Policy.streamGap("buffer")),
+const cutover = LookupPolicy.make({ Sticky: true, StreamGap: "stall", Verify: "reject" }).pipe(
+  LookupPolicy.layer(LookupPolicy.verifyOff),
+  LookupPolicy.layer(LookupPolicy.streamGap("buffer")),
 )
-// Policy.Policy<{ Sticky: true; StreamGap: "buffer"; Verify: false }>
-// Policy.config(cutover) → { Sticky: true, StreamGap: "buffer", Verify: false }
+// LookupPolicy.Policy<{ Sticky: true; StreamGap: "buffer"; Verify: false }>
+// LookupPolicy.config(cutover) → { Sticky: true, StreamGap: "buffer", Verify: false }
 
-Policy.layer(Policy.sticky, Policy.streamGap("stall"), Policy.verifyOff)
+LookupPolicy.layer(LookupPolicy.sticky, LookupPolicy.streamGap("stall"), LookupPolicy.verifyOff)
 
 Hyperlink.lookupClient(Mail).pipe(
-  Policy.provide(cutover),
+  LookupPolicy.provide(cutover),
   Layer.provide(Lookup.layer),
 )
 ```
 
-`Policy.make({ … })` stamps a **product** config; `Policy.layer` merges Layers
+`LookupPolicy.make({ … })` stamps a **product** config; `LookupPolicy.layer` merges Layers
 **and** configs (pipe or data-first) — not a phantom cast.
 
 Runnable demo: [`examples/node/policy-lookup-cutover.ts`](../../examples/node/policy-lookup-cutover.ts)
@@ -48,10 +49,10 @@ Runnable demo: [`examples/node/policy-lookup-cutover.ts`](../../examples/node/po
 
 | Fragment | Default | Meaning |
 |----------|---------|---------|
-| `Policy.sticky` / `unsticky` | sticky **on** | Warm N&gt;1, no Advice → keep current dial |
-| `Policy.streamGap("stall"\|"drop"\|"buffer")` | `"stall"` | One outer Stream across dial swap |
-| `Policy.coldAmbiguous("fail"\|"pickFirst"\|"waitAdvice")` | `"fail"` | Cold N&gt;1 without Advice |
-| `Policy.pick("first"\|fn)` | unset | Soft pick before cold rule |
+| `LookupPolicy.sticky` / `unsticky` | sticky **on** | Warm N&gt;1, no Advice → keep current dial |
+| `LookupPolicy.streamGap("stall"\|"drop"\|"buffer")` | `"stall"` | One outer Stream across dial swap |
+| `LookupPolicy.coldAmbiguous("fail"\|"pickFirst"\|"waitAdvice")` | `"fail"` | Cold N&gt;1 without Advice |
+| `LookupPolicy.pick("first"\|fn)` | unset | Soft pick before cold rule |
 
 **Resolve order** for `Hyperlink.lookupClient(Tag)`:
 
@@ -59,8 +60,8 @@ Runnable demo: [`examples/node/policy-lookup-cutover.ts`](../../examples/node/po
 2. Directory `nodesServing`
 3. Live `Advice.prefer` matching a row
 4. Warm sticky keep-current (if still Directory-visible)
-5. `Policy.pick` / call-site `{ pick }`
-6. `Policy.coldAmbiguous`
+5. `LookupPolicy.pick` / call-site `{ pick }`
+6. `LookupPolicy.coldAmbiguous`
 
 Advice early-move: `import * as Advice from "hyperlink-ts/Advice"` — prefer flips rebind **before**
 A leaves / before the first transport error. Effect RPCs retry once on `RpcClientError`. Streams /
@@ -70,11 +71,11 @@ A leaves / before the first transport error. Effect RPCs retry once on `RpcClien
 
 Directory-mode `Hyperlink.peersLayer(Tag, ThisNode)` shares Track D parity with `lookupClient`:
 build-then-swap peer dials, one `RpcClientError` retry, stable `peers[nodeKey]` facade, streams
-under `Policy.streamGap`. Compose Policy on the peers layer the same way:
+under `LookupPolicy.streamGap`. Compose Policy on the peers layer the same way:
 
 ```ts
 Hyperlink.peersLayer(Pool, East).pipe(
-  Policy.provide(Policy.streamGap("stall")),
+  LookupPolicy.provide(LookupPolicy.streamGap("stall")),
   Layer.provide(Lookup.client(lookupNode)),
 )
 ```
@@ -91,7 +92,7 @@ Dialers never track two Lookup endpoints — compose gap Policy only:
 
 ```ts
 Lookup.follow(lookupNode).pipe(
-  Policy.provide(Policy.streamGap("stall")),
+  LookupPolicy.provide(LookupPolicy.streamGap("stall")),
 )
 ```
 
@@ -106,10 +107,10 @@ Runnable: [`examples/node/lookup-follow-handoff.ts`](../../examples/node/lookup-
 
 | Fragment | Mode |
 |----------|------|
-| `Policy.verifyReject` | `"reject"` (default) — Layer fails on probe error |
-| `Policy.verifyStatus` | `"status"` — probe soft |
-| `Policy.verifyOff` | skip probe |
-| `Policy.verify(mode)` | sugar for any of the above |
+| `LookupPolicy.verifyReject` | `"reject"` (default) — Layer fails on probe error |
+| `LookupPolicy.verifyStatus` | `"status"` — probe soft |
+| `LookupPolicy.verifyOff` | skip probe |
+| `LookupPolicy.verify(mode)` | sugar for any of the above |
 
 See [Client verify](/docs/client-verify). Nested Lookup / status dials use `verifyOff` internally.
 
@@ -139,20 +140,20 @@ Lookup stamp → hard `livenessReplace`.
 
 ## Compose
 
-### Typed fragments + `Policy.layer` (dual)
+### Typed fragments + `LookupPolicy.layer` (dual)
 
-Every fragment is a real `Policy.Policy<{ … }>` (Layer + stamped config).
-`Policy.layer` is Effect-style `dual`: `.pipe(Policy.layer(other))` or
-`Policy.layer(a, b, c)`. Configs merge with last write wins — runtime
-`Policy.config(p)` matches the type.
+Every fragment is a real `LookupPolicy.Policy<{ … }>` (Layer + stamped config).
+`LookupPolicy.layer` is Effect-style `dual`: `.pipe(LookupPolicy.layer(other))` or
+`LookupPolicy.layer(a, b, c)`. Configs merge with last write wins — runtime
+`LookupPolicy.config(p)` matches the type.
 
 ```ts
-const cutover = Policy.make({ Sticky: true, StreamGap: "stall", Verify: "reject" }).pipe(
-  Policy.layer(Policy.verifyOff),
-  Policy.layer(Policy.askIncumbent),
-  Policy.layer(Policy.yieldAccept),
+const cutover = LookupPolicy.make({ Sticky: true, StreamGap: "stall", Verify: "reject" }).pipe(
+  LookupPolicy.layer(LookupPolicy.verifyOff),
+  LookupPolicy.layer(Policy.askIncumbent),
+  LookupPolicy.layer(Policy.yieldAccept),
 )
-// Policy.Policy<{
+// LookupPolicy.Policy<{
 //   Sticky: true
 //   StreamGap: "stall"
 //   Verify: false
@@ -161,7 +162,7 @@ const cutover = Policy.make({ Sticky: true, StreamGap: "stall", Verify: "reject"
 // }>
 
 Hyperlink.lookupClient(Mail).pipe(
-  Policy.provide(cutover),
+  LookupPolicy.provide(cutover),
   Layer.provide(Lookup.layer),
 )
 ```
@@ -169,9 +170,9 @@ Hyperlink.lookupClient(Mail).pipe(
 Data-first:
 
 ```ts
-const cutover = Policy.layer(
-  Policy.sticky,
-  Policy.streamGap("stall"),
+const cutover = LookupPolicy.layer(
+  LookupPolicy.sticky,
+  LookupPolicy.streamGap("stall"),
   Policy.askIncumbent,
   Policy.yieldAccept,
 )

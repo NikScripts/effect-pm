@@ -3,7 +3,7 @@ import { HttpServer } from "effect/unstable/http";
 import { NodeHttpServer } from "@effect/platform-node";
 import { describe, expect, it } from "@effect/vitest";
 import * as Hyperlink from "../src/Hyperlink";
-import * as Policy from "../src/Policy";
+import * as LookupPolicy from "../src/LookupPolicy";
 import * as Node from "../src/Node";
 import * as WorkPool from "../src/WorkPool";
 
@@ -65,7 +65,7 @@ describe("F5 split-dial: runtime transport override", () => {
         const transport = OverrideNode.pipe(Node.connectSocket(`ws://127.0.0.1:${port}/rpc`));
         // Verify still probes the tag's stamped url (:1) — opt out; this test is the dial target.
         const layer = Hyperlink.client(OverrideQ).pipe(
-          Policy.provide(Policy.verifyOff),
+          LookupPolicy.provide(LookupPolicy.verifyOff),
           Layer.provideMerge(transport),
         );
         const [queueHead, nodeHead] = yield* Effect.all(

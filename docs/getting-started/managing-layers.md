@@ -117,16 +117,16 @@ Effect.provide(app, Hyperlink.layerProtocol(Hyperlink.protocolWebsocket(3000))) 
 
 When Lookup owns placement, dial with **`Hyperlink.lookupClient(Tag)`** instead of naming a
 Node. Pipe `Lookup.layer` / `Lookup.client`. Dial behaviour (sticky dual-serve, stream gap,
-cold N&gt;1) is [Policy](/docs/policy) — compose with `Policy.provide`:
+cold N&gt;1) is [Policy](/docs/policy) — compose with `LookupPolicy.provide`:
 
 ```ts
-import * as Policy from "hyperlink-ts/Policy"
+import * as LookupPolicy from "hyperlink-ts/LookupPolicy"
 import * as Lookup from "hyperlink-ts/Lookup"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import { Layer } from "effect"
 
 Hyperlink.lookupClient(Jobs).pipe(
-  Policy.provide(Policy.sticky, Policy.streamGap("stall")),
+  LookupPolicy.provide(LookupPolicy.sticky, LookupPolicy.streamGap("stall")),
   Layer.provide(Lookup.layer),
 )
 ```
@@ -137,12 +137,12 @@ Full recipe: [Identity coordinator](/docs/identity-coordinator). Runnable:
 ### Default-on client verify
 
 Addressed `Hyperlink.client` / `Hyperlink.ws` **probe the peer before the handle is usable**
-(`Policy.verifyReject` by default). Nested / bootstrap dials use `Policy.verifyOff`.
+(`LookupPolicy.verifyReject` by default). Nested / bootstrap dials use `LookupPolicy.verifyOff`.
 Nodeless `Hyperlink.connect(tag, protocol)` does not probe — call
 `Hyperlink.verifyConnection` yourself when you want fail-fast there.
 
 ```ts
-Hyperlink.client(Emails, WorkerNode).pipe(Policy.provide(Policy.verifyOff))
+Hyperlink.client(Emails, WorkerNode).pipe(LookupPolicy.provide(LookupPolicy.verifyOff))
 ```
 
 Guide: [Client verify](/docs/client-verify). Example: `pnpm run example:node-verify-connection`.

@@ -5,7 +5,7 @@
  */
 import { Effect, Layer, Predicate } from "effect";
 import * as Hyperlink from "../Hyperlink";
-import * as Policy from "../Policy";
+import * as LookupPolicy from "../LookupPolicy";
 import {
   isAddressedNode,
   NodeUnreachable,
@@ -49,7 +49,7 @@ export const shutdown = (
     const { NodeStatusTag } = yield* Effect.promise(() => import("./nodeStatus"));
     const ctx = yield* Layer.build(
       Hyperlink.client(NodeStatusTag, node).pipe(
-        Policy.provide(Policy.verifyOff),
+        LookupPolicy.provide(LookupPolicy.verifyOff),
       ),
     );
     yield* Effect.gen(function* () {

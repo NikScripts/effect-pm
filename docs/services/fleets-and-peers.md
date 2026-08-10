@@ -41,7 +41,7 @@ parity as `Hyperlink.lookupClient`:
 - **Build-then-swap** peer dials — prior stays until the next succeeds
 - Effect peer RPCs that hit `RpcClientError` **retry once** after rebind
 - Stable `peers[nodeKey]` facade identity across dial swaps
-- Live streams follow dial generations (`Policy.StreamGap`)
+- Live streams follow dial generations (`LookupPolicy.StreamGap`)
 
 Same `nodeKey`, new dial (A→B replacement): Directory updates the row; peersLayer rebinds.
 Runnable: [`examples/node/peers-layer-rebind.ts`](../../examples/node/peers-layer-rebind.ts)
@@ -58,13 +58,13 @@ Advice + [Policy](/docs/policy) sticky / cold / stream gap. Recipe:
 [Identity coordinator](/docs/identity-coordinator).
 
 ```ts
-import * as Policy from "hyperlink-ts/Policy"
+import * as LookupPolicy from "hyperlink-ts/LookupPolicy"
 import * as Lookup from "hyperlink-ts/Lookup"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import { Layer } from "effect"
 
 Hyperlink.lookupClient(Jobs).pipe(
-  Policy.provide(Policy.sticky, Policy.streamGap("stall")),
+  LookupPolicy.provide(LookupPolicy.sticky, LookupPolicy.streamGap("stall")),
   Layer.provide(Lookup.layer),
 )
 ```
