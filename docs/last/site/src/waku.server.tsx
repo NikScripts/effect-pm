@@ -1,19 +1,19 @@
 /**
  * Host server entry (CLI filename). Routes register through `last-ts/server` —
- * not Waku `fsRouter` / `getConfig`. Page modules under `./pages` are ordinary
- * imports; last-ts `fileRouter` owns the typed path table (`paths.gen.ts`).
+ * not Waku `fsRouter` / `getConfig`. Bake mode comes from Page mints via
+ * `Server.fromPage`; paths come from the files.
  */
-import { adapter, createPages } from "last-ts/server";
-import About from "./pages/about";
-import DocsPath from "./pages/docs/[...path]";
-import Chapter from "./pages/guides/[slug]";
-import Home from "./pages/index";
-import ViewPage from "./pages/view";
+import * as Server from "last-ts/server";
+import { About } from "./pages/about";
+import { DocsPath } from "./pages/docs/[...path]";
+import { Chapter } from "./pages/guides/[slug]";
+import { Home } from "./pages/index";
+import { ViewPage } from "./pages/view";
 import Layout from "./pages/_layout";
 import Root from "./pages/_root";
 
-export default adapter(
-  createPages(async ({ createPage, createLayout, createRoot }) => [
+export default Server.adapter(
+  Server.createPages(async ({ createPage, createLayout, createRoot }) => [
     createRoot({
       render: "static",
       component: Root,
@@ -24,30 +24,25 @@ export default adapter(
       component: Layout,
     }),
     createPage({
-      render: "static",
       path: "/",
-      component: Home,
+      ...Server.fromPage(Home),
     }),
     createPage({
-      render: "static",
       path: "/about",
-      component: About,
+      ...Server.fromPage(About),
     }),
     createPage({
-      render: "static",
       path: "/view",
-      component: ViewPage,
+      ...Server.fromPage(ViewPage),
     }),
     createPage({
-      render: "static",
       path: "/guides/[slug]",
-      component: Chapter,
+      ...Server.fromPage(Chapter),
       staticPaths: ["routing", "view-service"],
     }),
     createPage({
-      render: "dynamic",
       path: "/docs/[...path]",
-      component: DocsPath,
+      ...Server.fromPage(DocsPath),
     }),
   ]),
 );

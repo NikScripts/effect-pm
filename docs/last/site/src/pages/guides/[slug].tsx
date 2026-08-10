@@ -1,9 +1,15 @@
 /**
- * RSC page module — registered via `last-ts/server` (staticPaths there).
- * Soft-nav catalog: `urls.guides_slug` on `last-ts` Router.
+ * Path `/guides/[slug]` from this file. Mint has no path.
+ * Host `staticPaths` stay on createPages for SSG fan-out.
  */
-export default function Chapter(props: { readonly slug: string }) {
-  return (
+import { Schema } from "effect";
+import * as Page from "last-ts/Page";
+
+export class Chapter extends Page.static(
+  {
+    params: { slug: Schema.Literals(["routing", "view-service"]) },
+  },
+  (props: { readonly slug: string }) => (
     <article data-page="chapter">
       <h1>Guide · {props.slug}</h1>
       <p>
@@ -11,5 +17,5 @@ export default function Chapter(props: { readonly slug: string }) {
         <code>urls.guides_slug(…)</code>.
       </p>
     </article>
-  );
-}
+  ),
+) {}

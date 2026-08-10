@@ -6,10 +6,13 @@ Not Hyperlink `docs/site`.
 
 | Piece | Shape |
 |-------|--------|
-| Pages | Plain Waku default exports (no `getConfig` / `Page.asDefault`) |
-| Catalog | `Router.make` + `Route.get` + `urls` |
-| Soft-nav | `Last.provider(Waku.layer…)` |
+| Pages | `Page.make` / `Page.static` (path from file; mode on mint) |
+| Host | `Server.fromPage(Mint)` → `createPage({ path, render, component })` |
+| Catalog | `Router.make` + `Route.get` + `handle(id, Mint)` |
+| Soft-nav | `Last.provider` + `Document.provide` + `last-ts/Waku` |
 | View DI | `View.make` + `View.mount` |
 
-**Locks:** [`../../handoffs/last-ts-api-corrections.md`](../../handoffs/last-ts-api-corrections.md) ·
-[`../../handoffs/router-httpapi-lock.md`](../../handoffs/router-httpapi-lock.md)
+**Locks:** [`../../handoffs/page-mint-lock.md`](../../handoffs/page-mint-lock.md) ·
+[`../../handoffs/page-document-lock.md`](../../handoffs/page-document-lock.md) ·
+[`../../handoffs/page-layout-lock.md`](../../handoffs/page-layout-lock.md) ·
+[`../../handoffs/last-ts-api-corrections.md`](../../handoffs/last-ts-api-corrections.md)

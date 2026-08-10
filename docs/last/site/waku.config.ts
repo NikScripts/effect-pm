@@ -1,16 +1,16 @@
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "last-ts/config";
-import { fileRouter } from "last-ts/vite";
+import * as Config from "last-ts/config";
+import * as Vite from "last-ts/vite";
 
 const lastTsSrc = fileURLToPath(
   new URL("../../../packages/last-ts/src", import.meta.url),
 );
 
 /** last.ts docs server — host CLI entry; apps import last-ts only, never waku. */
-export default defineConfig({
+export default Config.defineConfig({
   vite: {
     plugins: [
-      fileRouter({
+      Vite.fileRouter({
         pagesDir: "src/pages",
         outFile: "src/paths.gen.ts",
       }),
@@ -25,6 +25,7 @@ export default defineConfig({
         "last-ts/Router": `${lastTsSrc}/Router.ts`,
         "last-ts/RouterBuilder": `${lastTsSrc}/RouterBuilder.ts`,
         "last-ts/Layout": `${lastTsSrc}/Layout.tsx`,
+        "last-ts/RootLayout": `${lastTsSrc}/RootLayout.tsx`,
         "last-ts/Document": `${lastTsSrc}/Document.tsx`,
         "last-ts/Waku": `${lastTsSrc}/Waku.ts`,
         "last-ts/View": `${lastTsSrc}/View.tsx`,

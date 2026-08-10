@@ -48,6 +48,20 @@ export class Chapter extends Page.make(
 ) {}
 ```
 
+## Host registration
+
+```ts
+import * as Server from "last-ts/server"
+import { Home } from "./pages/index"
+
+createPage({ path: "/", ...Server.fromPage(Home) })
+```
+
+- `path` — from the file (same string createPages already uses)
+- `render` — `page.mode` (`Server.fromPage`)
+- `component` — unwrapped `.default`
+- `fileRouter` / `paths.gen` stay **path-only** (no mode codegen)
+
 ## Forbidden
 
 - Path argument on `Page.make` / `Page.static`

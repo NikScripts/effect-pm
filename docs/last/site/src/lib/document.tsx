@@ -1,7 +1,7 @@
 /**
- * Site Document — shared cell for RSC root + Last.provider.
+ * Site Document — Layer fulfill via Document.provide (Last.provider edge).
  */
-import { Effect, Layer } from "effect";
+import { Effect } from "effect";
 import * as Document from "last-ts/Document";
 
 export class SiteDocument extends Document.make()(
@@ -53,7 +53,8 @@ export class SiteDocument extends Document.make()(
   }),
 ) {}
 
-const provideArgs = [
+export const siteDocumentLayer = Document.provide(
+  SiteDocument,
   Document.title("last.ts"),
   Document.titleTransform((t: string) =>
     t === "last.ts" ? t : `${t} · last.ts`,
@@ -71,12 +72,4 @@ const provideArgs = [
     href: "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap",
   }),
   Document.styleSheet("/styles.css"),
-] as const;
-
-/** One cell for root Head + Effect `Page.document`. */
-export const siteCell = Document.makeCell(SiteDocument, ...provideArgs);
-
-export const siteDocumentLayer: Layer.Layer<Document.Cell> = Layer.succeed(
-  Document.Cell,
-  siteCell,
 );

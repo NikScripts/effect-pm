@@ -1,13 +1,16 @@
 /**
- * Typed catalog — HttpApi-shaped `Router.make` + `Route.get` (see
- * `docs/handoffs/router-httpapi-lock.md`). Host registration is
- * `last-ts/server`; path table is `last-ts/vite` `fileRouter`.
+ * Typed catalog — paths align with fileRouter `paths.gen`; bodies are Page mints.
  */
 import { Layer, pipe, Schema } from "effect";
 import * as Layout from "last-ts/Layout";
 import * as Route from "last-ts/Route";
 import * as Router from "last-ts/Router";
 import * as RouterBuilder from "last-ts/RouterBuilder";
+import { About } from "../pages/about";
+import { DocsPath } from "../pages/docs/[...path]";
+import { Chapter } from "../pages/guides/[slug]";
+import { Home } from "../pages/index";
+import { ViewPage } from "../pages/view";
 
 export class Site extends Router.make("last-ts").add(
   Route.get("index", "/"),
@@ -23,15 +26,14 @@ export class Site extends Router.make("last-ts").add(
 
 export const urls = Route.urlBuilder(Site);
 
-/** Catalog + registry for `last-ts/Waku` layer (page bodies via `last-ts/server`). */
 const app = pipe(
   RouterBuilder.group(Site, "__top", (h) =>
     h
-      .handle("index", () => null)
-      .handle("about", () => null)
-      .handle("guides_slug", () => null)
-      .handle("view", () => null)
-      .handle("docs_path", () => null),
+      .handle("index", Home)
+      .handle("about", About)
+      .handle("guides_slug", Chapter)
+      .handle("view", ViewPage)
+      .handle("docs_path", DocsPath),
   ),
   Layout.provide(Layout.Passthrough),
 );

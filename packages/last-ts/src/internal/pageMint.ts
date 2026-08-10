@@ -15,11 +15,14 @@ export type Mode = "static" | "dynamic";
 /**
  * Default body for a page mint.
  *
+ * Props components are accepted via {@link make} / {@link static_} overloads
+ * (host/Outlet supply props at runtime).
+ *
  * @public
  */
 export type Default =
   | React.ReactElement
-  | React.ComponentType<object>
+  | React.ComponentType
   | Effect.Effect<React.ReactNode, unknown, unknown>;
 
 /**
@@ -35,7 +38,7 @@ export interface AnyPage<
   readonly [TypeId]: typeof TypeId;
   readonly options: Options;
   readonly mode: M;
-  /** JSX | component | Effect — unwrapped by RouterBuilder. */
+  /** JSX | component | Effect — unwrapped by RouterBuilder / Server.fromPage. */
   readonly default: Default;
 }
 
@@ -78,71 +81,75 @@ const makeProto = <
   }) as unknown as AnyPage<Options, M>;
 };
 
-type MakeArgs =
-  | [Default]
-  | [RequestOptions, Default];
+type Body =
+  | React.ReactElement
+  | React.ComponentType
+  | Effect.Effect<React.ReactNode, unknown, unknown>;
+
+type MakeOverload = {
+  <const O extends RequestOptions, P extends object>(
+    options: O,
+    body: React.ComponentType<P> | React.ReactElement | Effect.Effect<
+      React.ReactNode,
+      unknown,
+      unknown
+    >,
+  ): AnyPage<O, "dynamic">;
+  (
+    body: Body,
+  ): AnyPage<RequestOptions, "dynamic">;
+};
+
+type StaticOverload = {
+  <const O extends RequestOptions, P extends object>(
+    options: O,
+    body: React.ComponentType<P> | React.ReactElement | Effect.Effect<
+      React.ReactNode,
+      unknown,
+      unknown
+    >,
+  ): AnyPage<O, "static">;
+  (
+    body: Body,
+  ): AnyPage<RequestOptions, "static">;
+};
 
 const parseArgs = (
-  args: MakeArgs,
+  args: ReadonlyArray<unknown>,
 ): { readonly options: RequestOptions; readonly default: Default } => {
   if (args.length === 1) {
-    return { options: {}, default: args[0] };
+    return { options: {}, default: args[0] as Default };
   }
   const [first, second] = args;
   if (isOptionsBag(first)) {
-    return { options: first, default: second };
+    return { options: first, default: second as Default };
   }
   throw new Error(
     "Page.make: expected Page.make(default) or Page.make(options, default)",
   );
 };
 
-/**
- * Dynamic page mint.
- *
- * @internal
- */
-export const make = ((...args: MakeArgs) => {
+/** @internal */
+export const make = ((...args: ReadonlyArray<unknown>) => {
   const parsed = parseArgs(args);
   return makeProto({
     options: parsed.options,
     mode: "dynamic",
     default: parsed.default,
   });
-}) as {
-  <const O extends RequestOptions>(
-    options: O,
-    body: Default,
-  ): AnyPage<O, "dynamic">;
-  (body: Default): AnyPage<RequestOptions, "dynamic">;
-};
+}) as MakeOverload;
 
-/**
- * Static page mint (sugar). Prefer {@link remintStatic} / `Route.static` to
- * flip an existing page.
- *
- * @internal
- */
-export const static_ = ((...args: MakeArgs) => {
+/** @internal */
+export const static_ = ((...args: ReadonlyArray<unknown>) => {
   const parsed = parseArgs(args);
   return makeProto({
     options: parsed.options,
     mode: "static",
     default: parsed.default,
   });
-}) as {
-  <const O extends RequestOptions>(
-    options: O,
-    body: Default,
-  ): AnyPage<O, "static">;
-  (body: Default): AnyPage<RequestOptions, "static">;
-};
+}) as StaticOverload;
 
-/**
- * Clone a page with mode `"static"` (used by `Route.static`).
- *
- * @internal
- */
+/** @internal */
 export const remintStatic = <
   Options extends RequestOptions,
   M extends Mode,
