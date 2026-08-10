@@ -17,11 +17,15 @@ import * as Page from "last-ts/Page"
 import * as Last from "last-ts/Last"
 import { defineConfig } from "last-ts/config"  // never import waku in apps
 import { adapter, createPages } from "last-ts/server"
+import * as Document from "last-ts/Document"
+import * as Page from "last-ts/Page"
 import { fileRouter } from "last-ts/vite"
+
+yield* Page.document(Document.title("Chapter"))
 ```
 
 **Host boundary:** apps import **only** `last-ts/*`. `waku` is an optional peer
-inside this package. **Corrections lock:**
-`docs/handoffs/last-ts-api-corrections.md`.
+inside this package. **Document chrome:** `docs/handoffs/page-document-lock.md`.
+**Corrections:** `docs/handoffs/last-ts-api-corrections.md`.
 
 Root barrels real modules only.
