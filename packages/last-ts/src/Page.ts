@@ -1,26 +1,27 @@
 /**
  * @module Page
  *
- * Live-route bridges {@link Request} / {@link Document} for Outlet trees, plus
- * HttpApi-shaped page class mints ({@link make} / {@link static_}).
+ * Live-route bridges {@link Request} for Outlet trees, {@link document} for
+ * head chrome, plus HttpApi-shaped page class mints ({@link make} / {@link static_}).
  *
- * **Approved teaching shape** — see [`router-httpapi-lock.md`](../../../docs/handoffs/router-httpapi-lock.md)
- * and [`last-ts-api-corrections.md`](../../../docs/handoffs/last-ts-api-corrections.md):
+ * **Document chrome** — [`page-document-lock.md`](../../../docs/handoffs/page-document-lock.md):
  *
  * ```ts
+ * import * as Page from "last-ts/Page"
+ * import * as Document from "last-ts/Document"
+ *
  * const Chapter = Effect.gen(function* () {
  *   const req = yield* Page.Request
- *   yield* (yield* Page.Document).set(`Chapter ${req.params.chapter}`)
+ *   yield* Page.document(Document.title(`Chapter ${req.params.chapter}`))
  *   return <h1>{req.params.chapter}</h1>
  * })
  * ```
  *
- * **Rejected / deleted (do not resurrect):** `Page.asDefault`, `static Component`
- * as the app pattern, `modeOf` / `optionsOf` / `extract` / `paramBagsOf` /
- * `configOf`, any `getConfig` / `pageConfig` bridge. Static vs dynamic is owned
- * by our Route/Page API — never Waku `getConfig`.
+ * Never `yield*` inside `()`. Never `getConfig` / `Page.asDefault`.
  */
 import type * as React from "react";
+import { Effect } from "effect";
+import * as Document from "./Document";
 import type * as pageServices from "./internal/pageServices";
 import type {
   ParamsTypeOf,
@@ -149,23 +150,44 @@ export const isPage = (u: unknown): u is AnyPage =>
 /** Matched request bag (`params` / `query` / `pathname` / `href`). @public */
 export type RequestValue = pageServices.RequestValue;
 
-/** Document chrome bag (title today). @public */
+/**
+ * @deprecated Legacy Outlet bag — prefer {@link document} + `last-ts/Document`.
+ * @public
+ */
 export type DocumentValue = pageServices.DocumentValue;
 
-/** Effect API for {@link Document}. @public */
+/**
+ * @deprecated Legacy Outlet API — prefer {@link document}.
+ * @public
+ */
 export type DocumentApi = pageServices.DocumentApi;
 
 /**
  * Current match (`yield* Page.Request`).
- * React hooks: `import { useRequest, useDocument } from "last-ts/Page/react"`.
- * Document title: `yield* (yield* Page.Document).set("…")` — expand only via owner lock.
+ * React: `import * as Page from "last-ts/Page/react"` → `Page.useRequest`.
  *
  * @public
  */
-export {
-  Request,
-  Document,
-} from "./internal/pageServices";
+export { Request } from "./internal/pageServices";
+
+/**
+ * @deprecated Prefer {@link document}. Kept for Outlet bridge.
+ * @public
+ */
+export { Document } from "./internal/pageServices";
+
+/**
+ * Merge head-chrome patches / partials into the current {@link Document.Cell}.
+ *
+ * Overloads: patches; partial + patches; `Doc` class + patches; `Doc` + partial + patches.
+ * Never `yield*` inside `()`.
+ *
+ * @public
+ */
+export const document = (
+  ...args: Array<unknown>
+): Effect.Effect<void, never, Document.Cell> =>
+  Document.applyDocumentArgs(...args);
 
 // =============================================================================
 // Deprecated stamp helpers — park; do not grow

@@ -15,6 +15,7 @@ import {
 } from "effect";
 import { Atom } from "effect/unstable/reactivity";
 import * as AtomReact from "../AtomReact";
+import * as Document from "../Document";
 import * as Router from "../Router";
 import type { Service } from "./router";
 
@@ -228,10 +229,11 @@ export const provider = <R, E = never>(
       const router = Option.getOrNull(
         Context.getOption(ctx, Router.Router),
       ) as Service | null;
+      const cell = Option.getOrNull(Context.getOption(ctx, Document.Cell));
       const runtime = Atom.runtime(
         Layer_.succeedContext(ctx) as Layer.Layer<any, never, never> as never,
       );
-      return { runtime, router };
+      return { runtime, router, cell };
     }, []);
     const body =
       boot.router !== null
@@ -240,13 +242,21 @@ export const provider = <R, E = never>(
             props.children,
           )
         : props.children;
+    const cell = boot.cell;
+    const withDocument =
+      cell !== null
+        ? React.createElement(Document.FieldsProvider, {
+            cell,
+            children: body,
+          })
+        : body;
     return React.createElement(
       AtomReact.RegistryProvider,
       null,
       React.createElement(
         AtomReact.RuntimeProvider as never,
         { runtime: boot.runtime },
-        body,
+        withDocument,
       ),
     );
   };

@@ -1,16 +1,20 @@
 # Page.document + Document (owner lock)
 
-**Status:** LOCK — design SSOT; **not Eng’d** until owner go  
+**Status:** LOCK + **Eng’d** on `cursor/agent-k-page-route-6d0e` (2026-08-10)  
 **Branch:** `cursor/agent-k-page-route-6d0e`  
 **Date:** 2026-08-10  
-**Package:** `last-ts`  
+**Package:** `last-ts` (`Document.tsx`, `Page.document`, `Layout.tsx`)  
 **Supersedes lean in:** [`router-httpapi-lock.md`](./router-httpapi-lock.md) (`(yield* Page.Document).set`), ad-hoc `Last.provide(ShellMeta)` as product title story  
 **Related:** [`last-ts-api-corrections.md`](./last-ts-api-corrections.md) · [`page-layout-design.md`](./page-layout-design.md) · host boundary in corrections
 
-### Before you Eng
+### Eng’d
 
-1. (Re)read `docs/standards/` (incl. `no-waku-app-imports`).
-2. List concrete Eng actions; **wait for owner confirmation**. This handoff is not a go.
+- `last-ts/Document` — `make`, `Default`, `Head`, `Fields`, `Cell`, `transform` + sugars, `provide` / `makeCell`
+- `Page.document` — patch / partial / class overloads
+- `Layout.Outlet` (component) + `Layout.Root.make` / `DefaultRoot`
+- `Last.provider` wraps `Document.FieldsProvider` when `Cell` is in the Layer
+- Dogfood: `SiteDocument` + shared `siteCell` in `_root` + provider layer
+- Tests: `test/document-chrome.test.ts`
 
 ---
 
@@ -294,8 +298,8 @@ export const Provider = Last.provider(
 
 ## Out of scope / later
 
-- Full Eng of `Document` / `Layout.Root` modules (this file is design lock only).
-- Per-attribute completeness of meta/link/script (v1 table above is enough to start).
+- Per-attribute completeness of meta/link/script (v1 table is enough).
+- Stronger type-level “provide incomplete ⇒ error” (runtime throw today; object-form tests cover).
 - File-router standards pass; single-provider teaching polish; Hyperlink `docs/site` cutover.
 - React write hooks / `<Title>` — rejected for v1.
 

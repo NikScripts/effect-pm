@@ -64,8 +64,12 @@
       "default": "./src/Waku.ts"
     },
     "./Layout": {
-      "types": "./src/Layout.ts",
-      "default": "./src/Layout.ts"
+      "types": "./src/Layout.tsx",
+      "default": "./src/Layout.tsx"
+    },
+    "./Document": {
+      "types": "./src/Document.tsx",
+      "default": "./src/Document.tsx"
     },
     "./Router/waku": {
       "types": "./src/Router/waku.ts",

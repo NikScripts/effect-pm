@@ -9,9 +9,10 @@
  * @see docs/plans/last-ts-codesplit.md
  */
 export * as AtomReact from "./AtomReact";
+export * as Document from "./Document";
 export * as History from "./History";
 export * as Last from "./Last";
-export * as Layout from "./Layout";
+export * as Layout from "./Layout.tsx";
 export * as Memory from "./Memory";
 export * as Page from "./Page";
 export * as Route from "./Route";
