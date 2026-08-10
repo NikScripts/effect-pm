@@ -1,5 +1,5 @@
 /**
- * PolicyBuilder — Schema keys; References on Def; module recreates Layer helpers.
+ * PolicyBuilder — Schema keys; PascalCase refs; camelCase Layer methods.
  */
 import { Context, Effect, Layer, Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
@@ -46,7 +46,7 @@ describe("PolicyBuilder", () => {
       expect(yield* got.handler).toBe(7);
 
       const fromFrags = DemoPolicies.make(
-        DemoPolicies.$fromConfig({ Flag: true, Mode: "b", Handler: 7 }),
+        DemoPolicies.fromConfig({ Flag: true, Mode: "b", Handler: 7 }),
       );
       expect(DemoPolicies.config(fromFrags)).toEqual({
         Flag: true,
@@ -56,34 +56,40 @@ describe("PolicyBuilder", () => {
     }),
   );
 
-  it.effect("References + $is/$match; layer last-write; brands do not cross", () =>
+  it.effect("PascalCase refs + camelCase methods; fragment matchers; brands do not cross", () =>
     Effect.gen(function* () {
       expect(Flag.key).toBe("policy-builder-test/Demo/Flag");
       expect(yield* Flag).toBe(false); // Reference default
 
+      // Tag string "Flag" → method flag; "Mode" → mode
+      const viaMethod = DemoPolicies.flag(true).pipe(
+        DemoPolicies.layer(DemoPolicies.mode("b")),
+      );
+      expect(DemoPolicies.config(viaMethod)).toEqual({ Flag: true, Mode: "b" });
+
       const frag = { _tag: "Flag" as const, value: true };
-      expect(DemoPolicies.$is("Flag")(frag)).toBe(true);
-      expect(DemoPolicies.$is("Mode")(frag)).toBe(false);
-      const label = DemoPolicies.$match(frag, {
+      expect(DemoPolicies.isFragment("Flag")(frag)).toBe(true);
+      expect(DemoPolicies.isFragment("Mode")(frag)).toBe(false);
+      const label = DemoPolicies.matchFragment(frag, {
         Flag: (x) => `flag:${x.value}`,
         Mode: (x) => `mode:${x.value}`,
         Handler: (x) => `handler:${x.value}`,
       });
       expect(label).toBe("flag:true");
-      expect(DemoPolicies.$fromConfig({ Flag: false, Mode: "b" })).toEqual([
+      expect(DemoPolicies.fromConfig({ Flag: false, Mode: "b" })).toEqual([
         { _tag: "Flag", value: false },
         { _tag: "Mode", value: "b" },
       ]);
       expect(
-        DemoPolicies.$toConfig([
+        DemoPolicies.toConfig([
           { _tag: "Flag", value: true },
           { _tag: "Mode", value: "a" },
         ]),
       ).toEqual({ Flag: true, Mode: "a" });
 
       const merged = DemoPolicies.make({ Flag: true, Mode: "a" }).pipe(
-        DemoPolicies.layer(DemoPolicies.succeed({ _tag: "Mode", value: "b" })),
-        DemoPolicies.layer(DemoPolicies.succeed({ _tag: "Flag", value: false })),
+        DemoPolicies.layer(DemoPolicies.mode("b")),
+        DemoPolicies.layer(DemoPolicies.flag(false)),
       );
       expect(DemoPolicies.config(merged)).toEqual({ Flag: false, Mode: "b" });
       const got = yield* readDemo.pipe(Effect.provide(merged));
@@ -91,9 +97,7 @@ describe("PolicyBuilder", () => {
       expect(got.mode).toBe("b");
 
       expect(DemoPolicies.is(Policy.sticky)).toBe(false);
-      expect(
-        Policy.isPolicy(DemoPolicies.succeed({ _tag: "Flag", value: true })),
-      ).toBe(false);
+      expect(Policy.isPolicy(DemoPolicies.flag(true))).toBe(false);
       expect(Policy.isPolicy(Policy.sticky)).toBe(true);
       expect(Policy.Sticky.key).toBe("hyperlink-ts/Policy/Sticky");
       expect(yield* Policy.Sticky).toBe(true);
@@ -113,9 +117,7 @@ describe("PolicyBuilder", () => {
           return { flag: yield* Flag };
         }),
       );
-      const built = dependent.pipe(
-        DemoPolicies.provide(DemoPolicies.succeed({ _tag: "Flag", value: true })),
-      );
+      const built = dependent.pipe(DemoPolicies.provide(DemoPolicies.flag(true)));
       const got = yield* Out.pipe(Effect.provide(built));
       expect(got.flag).toBe(true);
     }),

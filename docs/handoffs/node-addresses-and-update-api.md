@@ -290,23 +290,27 @@ class LookupPolicies extends PolicyBuilder.make("hyperlink-ts/LookupPolicy")
   })
 {}
 
-export const Sticky = LookupPolicies.Sticky
-export const sticky = LookupPolicies.succeed({ _tag: "Sticky", value: true })
-export const verifyOff = LookupPolicies.succeed({ _tag: "Verify", value: false })
+export const Sticky = LookupPolicies.Sticky // PascalCase Reference
+export const sticky = LookupPolicies.sticky(true) // Uncapitalize("Sticky")
+export const verifyOff = LookupPolicies.verify(false)
 export const make = LookupPolicies.make
 ```
 
 | Piece | Role |
 |-------|------|
 | **`PolicyBuilder.make(id)`** | Empty constructable (HttpApi.`make`) |
-| **`.key(name, schema, opts)`** | Adds PascalCase Reference on the Def |
+| **`.key(name, schema, opts)`** | PascalCase Reference + camelCase Layer method on the Def |
 | **`class LookupPolicies` / `NodePolicies`** | Plural constructable (≠ singular module) |
-| **`$is` / `$match` / `$fromConfig` / `$toConfig`** | Fragment data sum helpers on the Def |
+| **`isFragment` / `matchFragment` / `fromConfig` / `toConfig`** | Fragment data sum helpers on the Def |
 | **`.make` / `layer` / `provide` / `succeed`** | Branded Layer override toolkit |
-| **Module helpers** | camelCase Layers + mode presets — hand-written DX |
+| **Module helpers** | Re-export / mode presets over Def camelCase methods |
+
+**Casing:** owned key / `_tag` strings are PascalCase (`"Sticky"`, `"StreamGap"`);
+Layer methods are `Uncapitalize(key)` (`sticky`, `streamGap`). Classes / types /
+References stay PascalCase.
 
 **Eng’d today:** private `Policies` inside `Policy` (interim Lookup family) +
-PascalCase refs + camelCase helpers. **Next:** Eng `NodePolicy` /
+PascalCase refs + camelCase Def methods. **Next:** Eng `NodePolicy` /
 `NodePolicies`; rename `Policy` → `LookupPolicy` / `LookupPolicies`.
 
 Apps normally import **`LookupPolicy` / `NodePolicy`**, not the builder.
@@ -314,18 +318,18 @@ Apps normally import **`LookupPolicy` / `NodePolicy`**, not the builder.
 #### `_tag` — key vs value (Eng’d: **key**)
 
 Effect uses `_tag` for **closed sums**. Context.References stay PascalCase field
-identity (`Sticky`). Layer helpers stay camelCase (`sticky`). Fragment data uses
-`_tag` on the key when you need the sum.
+identity (`Sticky`). Layer helpers stay camelCase (`sticky` = `Uncapitalize("Sticky")`).
+Fragment data uses `_tag` on the key when you need the sum.
 
 ```ts
 yield* Policy.Sticky
 Policy.sticky
 Policy.layer(Policy.sticky, Policy.streamGap("stall"))
 Policy.make({ Sticky: true, StreamGap: "stall" })
-Policy.$fromConfig({ Sticky: true })  // → Fragment[]
+Policy.fromConfig({ Sticky: true })  // → Fragment[]
 ```
 
-**Eng’d** on `PolicyBuilder` / `Policy` (refs + camelCase helpers + product bag).
+**Eng’d** on `PolicyBuilder` / `Policy` (refs + camelCase methods + product bag).
 
 ### 3.4 Parked — prior long Address API notes
 

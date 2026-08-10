@@ -218,10 +218,11 @@ Layers are camelCase. The canonical toolkit entrypoint is `layer` (and `layer*` 
 modules use HttpApi-shaped constructables with Schema keys —
 `class LookupPolicies extends PolicyBuilder.make(id).key(…)` — plural
 constructable, singular module (`LookupPolicy` / `NodePolicy`); `defaultValue`
-is the `Context.Reference` default. Module re-exports PascalCase refs and
-camelCase Layer helpers (`sticky`, `streamGap`, …). Compose with dual
-`Policy.layer` / `Policy.provide` / product bag `Policy.make({ StreamGap: "stall", … })`.
-Either way the name says "layer."
+is the `Context.Reference` default. Key / `_tag` strings stay PascalCase; the
+Def derives camelCase Layer methods via `Uncapitalize` (`"Sticky"` → `sticky`,
+`"StreamGap"` → `streamGap`). Module re-exports those refs + helpers / mode
+presets. Compose with dual `Policy.layer` / `Policy.provide` / product bag
+`Policy.make({ StreamGap: "stall", … })`. Either way the name says "layer."
 
 {#owned-string-literals-pascalcase .must appliesTo="src examples"}
 ## Owned string literals are PascalCase

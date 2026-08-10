@@ -2,10 +2,12 @@
  * PolicyBuilder engine — HttpApi-shaped constructable families with Schema keys.
  *
  * `PolicyBuilder.make(id).key(name, schema, { defaultValue, toRuntime? })` returns
- * a constructor so `class LookupPolicies extends … {}` works (HttpApi / Router). Each
- * key is a PascalCase `Context.Reference` on the Def. Domain modules re-export
- * those refs and recreate camelCase Layer helpers — constructable name ≠ module
- * namespace (e.g. `LookupPolicies` / `NodePolicies`, public `LookupPolicy` / `NodePolicy`).
+ * a constructor so `class LookupPolicies extends … {}` works (HttpApi / Router).
+ * Each key string is PascalCase (owned tag). On the Def:
+ * - PascalCase binding → `Context.Reference` (`Sticky`)
+ * - camelCase method → Layer factory (`sticky(value)`), via `Uncapitalize`
+ * Constructable is plural (`LookupPolicies` / `NodePolicies`); module namespace
+ * is singular (`LookupPolicy` / `NodePolicy`).
  *
  * @internal
  */
@@ -113,7 +115,7 @@ export type PolicyBuilderRuntimeOf<S> =
 
 /**
  * Tagged fragment sum — `_tag` is the knob name. Product bags stay untagged.
- * Built via literals / `$fromConfig`; handles call to Layers, not data.
+ * Built via literals / `fromConfig`; Layer methods are camelCase, not data.
  *
  * @internal
  */
@@ -163,19 +165,36 @@ export type PolicyBuilderRefsOfKeys<
 };
 
 /**
- * Fragment matchers / bag converters on the Def (no per-key data ctors).
+ * camelCase Layer factories derived from PascalCase key strings
+ * (`"Sticky"` → `sticky(value)`).
+ *
+ * @internal
+ */
+export type PolicyBuilderMethodsOfKeys<
+  Id extends string,
+  Keys extends Record<string, PolicyBuilderKeySpec<any, any>>,
+> = {
+  readonly [K in keyof Keys & string as Uncapitalize<K>]: <
+    const V extends PolicyBuilderInputOf<Keys[K]>,
+  >(
+    value: V,
+  ) => PolicyBuilderPolicy<Id, { readonly [P in K]: V }>;
+};
+
+/**
+ * Fragment matchers / bag converters on the Def (camelCase methods).
  *
  * @internal
  */
 export type PolicyBuilderMatchersOfKeys<
   Keys extends Record<string, PolicyBuilderKeySpec<any, any>>,
 > = {
-  readonly $is: <Tag extends keyof Keys & string>(
+  readonly isFragment: <Tag extends keyof Keys & string>(
     tag: Tag,
   ) => (
     u: unknown,
   ) => u is Extract<PolicyBuilderFragmentOfKeys<Keys>, { readonly _tag: Tag }>;
-  readonly $match: {
+  readonly matchFragment: {
     <
       Cases extends {
         readonly [Tag in keyof Keys & string]: (
@@ -204,10 +223,10 @@ export type PolicyBuilderMatchersOfKeys<
       cases: Cases,
     ): ReturnType<Cases[keyof Keys & string]>;
   };
-  readonly $fromConfig: (
+  readonly fromConfig: (
     config: PolicyBuilderConfigOfKeys<Keys>,
   ) => ReadonlyArray<PolicyBuilderFragmentOfKeys<Keys>>;
-  readonly $toConfig: <
+  readonly toConfig: <
     const Fs extends ReadonlyArray<PolicyBuilderFragmentOfKeys<Keys>>,
   >(
     fragments: Fs,
@@ -272,8 +291,8 @@ export interface PolicyBuilderDefMethods<
   /**
    * Widen with a Schema-backed key (HttpApi.`add` analogue).
    *
-   * Adds a PascalCase `Context.Reference` on the Def. Modules recreate
-   * camelCase Layer helpers (`sticky`, `streamGap`, …).
+   * Adds a PascalCase key string / Reference, plus a camelCase Layer method
+   * (`Uncapitalize` — `"StreamGap"` → `streamGap(value)`).
    *
    * - `defaultValue` — **same form as** `Context.Reference(id, { defaultValue })`.
    * - `toRuntime` — optional when Layer runtime ≠ schema decoded type.
@@ -366,14 +385,16 @@ export interface PolicyBuilderDefMethods<
 }
 
 /**
- * Constructable family — methods + flat PascalCase References per key.
+ * Constructable family — toolkit + PascalCase References + camelCase Layer methods.
  *
  * @internal
  */
 export type PolicyBuilderDef<
   Id extends string,
   Keys extends Record<string, PolicyBuilderKeySpec<any, any>>,
-> = PolicyBuilderDefMethods<Id, Keys> & PolicyBuilderRefsOfKeys<Keys>;
+> = PolicyBuilderDefMethods<Id, Keys> &
+  PolicyBuilderRefsOfKeys<Keys> &
+  PolicyBuilderMethodsOfKeys<Id, Keys>;
 
 type DefData = {
   readonly id: string;
@@ -391,6 +412,12 @@ export const brandPolicy = <Id extends string, const C extends object>(
     [ConfigKey]: Object.freeze({ ...cfg }),
   }) as PolicyBuilderPolicy<Id, C>;
 
+/** PascalCase key string → camelCase method name. */
+const toMethodName = (keyName: string): string =>
+  keyName.length === 0
+    ? keyName
+    : `${keyName.charAt(0).toLowerCase()}${keyName.slice(1)}`;
+
 const refsOf = (
   keys: Record<string, PolicyBuilderKeySpec<any, any>>,
 ): Record<string, Context.Reference<unknown>> => {
@@ -401,23 +428,41 @@ const refsOf = (
   return out;
 };
 
+const methodsOf = (
+  familyId: string,
+  keys: Record<string, PolicyBuilderKeySpec<any, any>>,
+): Record<string, (value: unknown) => PolicyBuilderPolicy<string, object>> => {
+  const out: Record<
+    string,
+    (value: unknown) => PolicyBuilderPolicy<string, object>
+  > = {};
+  for (const keyName of Object.keys(keys)) {
+    const spec = keys[keyName]!;
+    out[toMethodName(keyName)] = (value: unknown) => {
+      const { layer, decoded } = layerForKey(spec, value);
+      return brandPolicy(familyId, layer, { [keyName]: decoded });
+    };
+  }
+  return out;
+};
+
 const matchersOf = (
   keys: Record<string, PolicyBuilderKeySpec<any, any>>,
 ): PolicyBuilderMatchersOfKeys<any> => {
-  const $is =
+  const isFragment =
     (tag: string) =>
     (u: unknown): boolean =>
       typeof u === "object" &&
       u !== null &&
       (u as { readonly _tag?: unknown })._tag === tag;
-  const $match = dual(
+  const matchFragment = dual(
     2,
     (
       value: { readonly _tag: string },
       cases: Record<string, (fragment: unknown) => unknown>,
     ): unknown => cases[value._tag]!(value),
   );
-  const $fromConfig = (
+  const fromConfig = (
     config: Record<string, unknown>,
   ): ReadonlyArray<{ readonly _tag: string; readonly value: unknown }> => {
     const out: Array<{ readonly _tag: string; readonly value: unknown }> = [];
@@ -429,14 +474,19 @@ const matchersOf = (
     }
     return out;
   };
-  const $toConfig = (
+  const toConfig = (
     fragments: ReadonlyArray<{
       readonly _tag: string;
       readonly value: unknown;
     }>,
   ): Record<string, unknown> =>
     Object.fromEntries(fragments.map((f) => [f._tag, f.value] as const));
-  return { $is, $match, $fromConfig, $toConfig } as PolicyBuilderMatchersOfKeys<any>;
+  return {
+    isFragment,
+    matchFragment,
+    fromConfig,
+    toConfig,
+  } as PolicyBuilderMatchersOfKeys<any>;
 };
 
 const defProto = {
@@ -577,6 +627,7 @@ export const makeProto = (options: DefData): PolicyBuilderDef<any, any> => {
       ...matchers,
     },
     refsOf(options.keys),
+    methodsOf(options.id, options.keys),
   ) as unknown as PolicyBuilderDef<any, any>;
 };
 

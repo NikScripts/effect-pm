@@ -90,7 +90,7 @@ describe("Policy defaults + compose", () => {
     }),
   );
 
-  it.effect("camelCase helpers + $fromConfig/$toConfig/$is match bag stamps", () =>
+  it.effect("camelCase helpers + fromConfig/toConfig/isFragment match bag stamps", () =>
     Effect.gen(function* () {
       const fromHandles = Policy.layer(
         Policy.unsticky,
@@ -105,11 +105,11 @@ describe("Policy defaults + compose", () => {
       const tagged = Policy.streamGap("drop");
       expect(Policy.config(tagged)).toEqual({ StreamGap: "drop" });
       expect(
-        Policy.$is("StreamGap")({ _tag: "StreamGap", value: "drop" }),
+        Policy.isFragment("StreamGap")({ _tag: "StreamGap", value: "drop" }),
       ).toBe(true);
-      expect(
-        Policy.$toConfig(Policy.$fromConfig({ Sticky: true })),
-      ).toEqual({ Sticky: true });
+      expect(Policy.toConfig(Policy.fromConfig({ Sticky: true }))).toEqual({
+        Sticky: true,
+      });
       const d = yield* readPolicy.pipe(
         Effect.provide(
           Policy.layer(fromHandles, tagged, Policy.yieldRefuse),

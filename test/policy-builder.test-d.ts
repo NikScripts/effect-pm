@@ -26,10 +26,12 @@ const fromFrags = DemoPolicies.make([
 ]);
 const piped = made.pipe(DemoPolicies.layer(DemoPolicies.succeed({ _tag: "A", value: false })));
 const single = DemoPolicies.succeed({ _tag: "A", value: true });
-const matched = DemoPolicies.$match({ _tag: "A", value: true }, {
+const matched = DemoPolicies.matchFragment({ _tag: "A", value: true }, {
   A: (x) => x.value,
   B: (x) => x.value,
 });
+const viaMethod = DemoPolicies.a(true);
+const viaMethodB = DemoPolicies.b("y");
 
 type _Checks = [
   AssertExtends<typeof made, Layer.Layer<never>>,
@@ -49,6 +51,14 @@ type _Checks = [
     typeof single,
     BuilderPolicy<"policy-builder-d/Demo", { A: true }>
   >,
+  AssertExtends<
+    typeof viaMethod,
+    BuilderPolicy<"policy-builder-d/Demo", { A: true }>
+  >,
+  AssertExtends<
+    typeof viaMethodB,
+    BuilderPolicy<"policy-builder-d/Demo", { B: "y" }>
+  >,
   AssertExtends<typeof Policy.sticky, EngPolicy<{ Sticky: true }>>,
   AssertEqual<
     PolicyBuilder.FragmentOfKeys<(typeof DemoPolicies)["keys"]>,
@@ -59,12 +69,12 @@ type _Checks = [
 ];
 
 // @ts-expect-error — Demo brand is not Eng’d Policy brand
-export const _cross: EngPolicy<{ Sticky: true }> = DemoPolicies.succeed({
-  _tag: "A",
-  value: true,
-});
+export const _cross: EngPolicy<{ Sticky: true }> = DemoPolicies.a(true);
 
 // @ts-expect-error — two-arg succeed removed
 DemoPolicies.succeed("A", true);
+
+// @ts-expect-error — Layer method is Uncapitalize(tag), not PascalCase
+DemoPolicies.A(true);
 
 export type { _Checks };

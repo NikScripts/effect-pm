@@ -23,10 +23,13 @@
  *   })
  * {}
  *
- * export const Sticky = LookupPolicies.Sticky
- * export const sticky = LookupPolicies.succeed({ _tag: "Sticky", value: true })
+ * export const Sticky = LookupPolicies.Sticky // PascalCase Reference
+ * export const sticky = LookupPolicies.sticky(true) // Uncapitalize("Sticky")
  * export const make = LookupPolicies.make
  * ```
+ *
+ * Key strings / `_tag`s stay PascalCase; Layer methods on the Def are
+ * `Uncapitalize(key)` (`"StreamGap"` → `streamGap`).
  *
  * Apps import the module (`LookupPolicy` / `NodePolicy`), not this builder.
  *
@@ -135,7 +138,19 @@ export type RefsOfKeys<
 > = internal.PolicyBuilderRefsOfKeys<Keys>;
 
 /**
- * Fragment `$is` / `$match` / bag converters on a Def.
+ * camelCase Layer factories derived from PascalCase key strings
+ * (`"Sticky"` → `sticky(value)`).
+ *
+ * @category models
+ * @public
+ */
+export type MethodsOfKeys<
+  Id extends string,
+  Keys extends Record<string, KeySpec<any, any>>,
+> = internal.PolicyBuilderMethodsOfKeys<Id, Keys>;
+
+/**
+ * Fragment `isFragment` / `matchFragment` / bag converters on a Def.
  *
  * @category models
  * @public
@@ -146,6 +161,7 @@ export type MatchersOfKeys<
 
 /**
  * Constructable returned by {@link make} — the `class extends` target (HttpApi-shaped).
+ * Carries PascalCase refs, camelCase Layer methods, and fragment matchers.
  *
  * @category models
  * @public
@@ -163,7 +179,9 @@ export type Def<
  * Empty constructable (HttpApi.`make(id)` analogue).
  *
  * Widen with `.key(name, schema, { defaultValue, toRuntime? })`, then
- * `class LookupPolicies extends` (plural constructable; singular module namespace). Each key becomes a PascalCase Reference on the Def.
+ * `class LookupPolicies extends` (plural constructable; singular module
+ * namespace). Each key becomes a PascalCase Reference plus a camelCase Layer
+ * method (`Uncapitalize` — `"StreamGap"` → `streamGap`).
  *
  * @category constructors
  * @public

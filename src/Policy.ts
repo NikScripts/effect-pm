@@ -3,9 +3,9 @@
  *
  * Interim Lookup-family module (rename target: `LookupPolicy`). Built on
  * {@link PolicyBuilder}: a private `Policies` constructable declares Schema keys /
- * References; this module re-exports PascalCase refs and recreates camelCase
- * Layer helpers (`sticky`, `streamGap`, …). Apps import this namespace — not
- * the builder, and not the private constructable.
+ * PascalCase References and camelCase Layer methods (`Uncapitalize` —
+ * `"Sticky"` → `sticky`). This module re-exports those plus mode presets.
+ * Apps import this namespace — not the builder, and not the private constructable.
  *
  * ```ts
  * import * as Policy from "hyperlink-ts/Policy"
@@ -202,7 +202,7 @@ export type Config = {
 
 /**
  * Tagged override entry — `_tag` is the knob name; `value` is the schema input.
- * Prefer camelCase Layer helpers for apps; use literals / {@link $fromConfig}
+ * Prefer camelCase Layer helpers for apps; use literals / {@link fromConfig}
  * when you need the data sum.
  *
  * @category models
@@ -266,8 +266,9 @@ export type MergePolicyList<Ps extends ReadonlyArray<Policy<Config>>> =
 
 /**
  * Private constructable — plural (`Policies`); public module is singular
- * (`Policy` / future `LookupPolicy`). Re-export refs + recreate camelCase Layer
- * helpers below.
+ * (`Policy` / future `LookupPolicy`). Each key adds a PascalCase Reference and a
+ * camelCase Layer method (`Uncapitalize` — `"StreamGap"` → `streamGap`); the
+ * module re-exports those plus mode presets below.
  *
  * `defaultValue` on each key is the Context.Reference default (ambient
  * `yield* Sticky` when no override Layer is provided).
@@ -356,59 +357,37 @@ export const Conflict = Policies.Conflict;
 export const Yield = Policies.Yield;
 
 // =============================================================================
-// Layer helpers (camelCase)
+// Layer helpers (camelCase — Uncapitalize of PascalCase key / `_tag`)
 // =============================================================================
 
 /** Keep the current dial across dual-serve (default on). @category layers @public */
-export const sticky: Policy<{ Sticky: true }> = Policies.succeed({
-  _tag: "Sticky",
-  value: true,
-});
+export const sticky: Policy<{ Sticky: true }> = Policies.sticky(true);
 
 /** Disable warm stickiness. @category layers @public */
-export const unsticky: Policy<{ Sticky: false }> = Policies.succeed({
-  _tag: "Sticky",
-  value: false,
-});
+export const unsticky: Policy<{ Sticky: false }> = Policies.sticky(false);
 
 /** Stream seam mode. @category layers @public */
-export const streamGap = <const M extends StreamGap>(
-  mode: M,
-): Policy<{ StreamGap: M }> =>
-  Policies.succeed({ _tag: "StreamGap", value: mode });
+export const streamGap = Policies.streamGap;
 
 /** Cold N&gt;1 behaviour. @category layers @public */
-export const coldAmbiguous = <const M extends ColdAmbiguous>(
-  mode: M,
-): Policy<{ ColdAmbiguous: M }> =>
-  Policies.succeed({ _tag: "ColdAmbiguous", value: mode });
+export const coldAmbiguous = Policies.coldAmbiguous;
 
 /** Soft pick when N&gt;1 and Advice misses. @category layers @public */
-export const pick = <const M extends Pick>(mode: M): Policy<{ Pick: M }> =>
-  Policies.succeed({ _tag: "Pick", value: mode });
+export const pick = Policies.pick;
 
 /** Verify and reject on failure (default). @category layers @public */
-export const verifyReject: Policy<{ Verify: "reject" }> = Policies.succeed({
-  _tag: "Verify",
-  value: "reject",
-});
+export const verifyReject: Policy<{ Verify: "reject" }> =
+  Policies.verify("reject");
 
 /** Verify; keep status without failing Layer build. @category layers @public */
-export const verifyStatus: Policy<{ Verify: "status" }> = Policies.succeed({
-  _tag: "Verify",
-  value: "status",
-});
+export const verifyStatus: Policy<{ Verify: "status" }> =
+  Policies.verify("status");
 
 /** Skip client verify probe. @category layers @public */
-export const verifyOff: Policy<{ Verify: false }> = Policies.succeed({
-  _tag: "Verify",
-  value: false,
-});
+export const verifyOff: Policy<{ Verify: false }> = Policies.verify(false);
 
 /** Set client verify mode. @category layers @public */
-export const verify = <const M extends Verify>(
-  mode: M,
-): Policy<{ Verify: M }> => Policies.succeed({ _tag: "Verify", value: mode });
+export const verify = Policies.verify;
 
 /**
  * Walk preference layers (first concrete wins). Hard fallback: `livenessReplace`.
@@ -449,46 +428,43 @@ export const onConflictOf = (node: unknown): OnConflict | undefined => {
 
 /** Advertise: liveness ping replace. @category layers @public */
 export const livenessReplace: Policy<{ Conflict: "livenessReplace" }> =
-  Policies.succeed({ _tag: "Conflict", value: "livenessReplace" });
+  Policies.conflict("livenessReplace");
 
 /** Advertise: ask incumbent to yield. @category layers @public */
 export const askIncumbent: Policy<{ Conflict: "askIncumbent" }> =
-  Policies.succeed({ _tag: "Conflict", value: "askIncumbent" });
+  Policies.conflict("askIncumbent");
 
 /** Advertise: reject when incumbent alive. @category layers @public */
-export const conflictReject: Policy<{ Conflict: "reject" }> = Policies.succeed({
-  _tag: "Conflict",
-  value: "reject",
-});
+export const conflictReject: Policy<{ Conflict: "reject" }> =
+  Policies.conflict("reject");
 
 /** Advertise: inherit up the chain (default ambient). @category layers @public */
-export const conflictInherit: Policy<{ Conflict: "inherit" }> = Policies.succeed({
-  _tag: "Conflict",
-  value: "inherit",
-});
+export const conflictInherit: Policy<{ Conflict: "inherit" }> =
+  Policies.conflict("inherit");
 
-/** Set advertise conflict preference. @category layers @public */
-export const onConflict = <const M extends OnConflict>(
-  mode: M,
-): Policy<{ Conflict: M }> =>
-  Policies.succeed({ _tag: "Conflict", value: mode });
+/**
+ * Set advertise conflict preference (`Uncapitalize("Conflict")` → `conflict`
+ * on the constructable; module export keeps the `on*` mode-preset name).
+ *
+ * @category layers
+ * @public
+ */
+export const onConflict = Policies.conflict;
 
 /** Accept askIncumbent yield (default). @category layers @public */
-export const yieldAccept: Policy<{ Yield: true }> = Policies.succeed({
-  _tag: "Yield",
-  value: true,
-});
+export const yieldAccept: Policy<{ Yield: true }> = Policies.yield(true);
 
 /** Refuse askIncumbent yield. @category layers @public */
-export const yieldRefuse: Policy<{ Yield: false }> = Policies.succeed({
-  _tag: "Yield",
-  value: false,
-});
+export const yieldRefuse: Policy<{ Yield: false }> = Policies.yield(false);
 
-/** Custom yield handler. @category layers @public */
-export const onYield = <E extends Effect.Effect<boolean>>(
-  handler: E,
-): Policy<{ Yield: E }> => Policies.succeed({ _tag: "Yield", value: handler });
+/**
+ * Custom yield handler (`Uncapitalize("Yield")` → `yield` on the constructable;
+ * module export keeps the `on*` mode-preset name).
+ *
+ * @category layers
+ * @public
+ */
+export const onYield = Policies.yield;
 
 // =============================================================================
 // Fragment matchers / bag converters
@@ -500,7 +476,7 @@ export const onYield = <E extends Effect.Effect<boolean>>(
  * @category guards
  * @public
  */
-export const $is = Policies.$is;
+export const isFragment = Policies.isFragment;
 
 /**
  * Exhaustive match over a {@link Fragment} (dual).
@@ -508,7 +484,7 @@ export const $is = Policies.$is;
  * @category utils
  * @public
  */
-export const $match = Policies.$match;
+export const matchFragment = Policies.matchFragment;
 
 /**
  * Product {@link Config} → {@link Fragment} list (present keys only).
@@ -516,7 +492,7 @@ export const $match = Policies.$match;
  * @category constructors
  * @public
  */
-export const $fromConfig = Policies.$fromConfig.bind(Policies);
+export const fromConfig = Policies.fromConfig.bind(Policies);
 
 /**
  * {@link Fragment} list → product bag (last write wins).
@@ -524,7 +500,7 @@ export const $fromConfig = Policies.$fromConfig.bind(Policies);
  * @category constructors
  * @public
  */
-export const $toConfig = Policies.$toConfig.bind(Policies);
+export const toConfig = Policies.toConfig.bind(Policies);
 
 // =============================================================================
 // layer / make / provide / guards

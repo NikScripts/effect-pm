@@ -12,9 +12,9 @@ Client and advertise behaviour as **Layer fragments** on `hyperlink-ts/Policy`. 
 
 Built on shared **`hyperlink-ts/PolicyBuilder`**: a private plural constructable
 (`Policies`; future `LookupPolicies` / `NodePolicies`) declares Schema keys /
-PascalCase References; this singular module recreates camelCase Layer helpers
-(`sticky`, `streamGap`, …) and mode presets. Apps import the module — not the
-builder.
+PascalCase References and camelCase Layer methods (`Uncapitalize` —
+`"Sticky"` → `sticky`). This singular module re-exports those helpers plus mode
+presets. Apps import the module — not the builder.
 
 ```ts
 import * as Policy from "hyperlink-ts/Policy"
