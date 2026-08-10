@@ -83,6 +83,8 @@ class Site extends Router.make("site").add(
   ),
 ) {}
 
+// import * as Page from "last-ts/Page"
+// import * as Document from "last-ts/Document"
 const Chapter = Effect.gen(function* () {
   const req = yield* Page.Request
   yield* Page.document(Document.title(`Chapter ${req.params.chapter}`))
