@@ -10,7 +10,9 @@
  *    `X.references.*`) — hand-written DX in most cases.
  *
  * Fragments are a **tagged sum** (`_tag` = knob name). Product bags stay
- * untagged; `make` accepts either a bag or a `Fragment[]`.
+ * untagged; `make` accepts either a bag or a `Fragment[]`. Use
+ * {@link Def.fragments} for value-first ctors / `$is` / `$match` / bag converters
+ * (Data.`taggedEnum`-shaped; ctors take the payload, not `{ value }`).
  *
  * ```ts
  * import * as PolicyBuilder from "hyperlink-ts/PolicyBuilder"
@@ -26,12 +28,13 @@
  *
  * // module recreates helpers
  * export const Sticky = Demo.references.Sticky
- * export const sticky = Demo.succeed({ _tag: "Sticky", value: true })
+ * export const Fragment = Demo.fragments
+ * export const sticky = Demo.succeed(Fragment.Sticky(true))
  *
  * const bundle = Demo.make({ Sticky: true }).pipe(
- *   Demo.layer(Demo.succeed({ _tag: "Sticky", value: false })),
+ *   Demo.layer(Demo.succeed(Fragment.Sticky(false))),
  * )
- * // or: Demo.make([{ _tag: "Sticky", value: true }])
+ * // or: Demo.make([Fragment.Sticky(true), Fragment.Yield(false)])
  * ```
  *
  * @module PolicyBuilder
@@ -127,6 +130,17 @@ export type ConfigFromFragments<
     readonly value: unknown;
   }>,
 > = internal.PolicyBuilderConfigFromFragments<Fs>;
+
+/**
+ * Fragment data kit derived from a keys map — per-key ctors, `$is`, `$match`,
+ * `$fromConfig`, `$toConfig`.
+ *
+ * @category models
+ * @public
+ */
+export type FragmentsOfKeys<
+  Keys extends Record<string, KeySpec<any, any>>,
+> = internal.PolicyBuilderFragmentsOfKeys<Keys>;
 
 /**
  * Constructable returned by {@link make} — the `class extends` target (HttpApi-shaped).

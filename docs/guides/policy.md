@@ -17,13 +17,15 @@ future `LookupPolicy` / `NodePolicy`. Apps keep importing `Policy`.
 
 Override entries are a **tagged sum** (`_tag` = knob name). Product bags stay
 untagged; `Policy.make` accepts either a bag or a `Fragment[]`.
+`Policy.Fragment` is the data kit (ctors / `$is` / `$match`); Layer helpers
+(`sticky`, …) stay separate from Context.References (`Policy.Sticky`).
 
 ```ts
 import * as Policy from "hyperlink-ts/Policy"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import * as Lookup from "hyperlink-ts/Lookup"
 
-// Every fragment is a real Policy (Layer + runtime config). layer is dual:
+// Every Layer fragment is a real Policy (Layer + runtime config). layer is dual:
 const cutover = Policy.make({ Sticky: true, StreamGap: "stall", Verify: "reject" }).pipe(
   Policy.layer(Policy.verifyOff),
   Policy.layer(Policy.streamGap("buffer")),
@@ -31,8 +33,8 @@ const cutover = Policy.make({ Sticky: true, StreamGap: "stall", Verify: "reject"
 // Policy.Policy<{ Sticky: true; StreamGap: "buffer"; Verify: false }>
 // Policy.config(cutover) → { Sticky: true, StreamGap: "buffer", Verify: false }
 
-Policy.succeed({ _tag: "Sticky", value: true })
-Policy.make([{ _tag: "Sticky", value: true }, { _tag: "StreamGap", value: "stall" }])
+Policy.succeed(Policy.Fragment.Sticky(true))
+Policy.make([Policy.Fragment.Sticky(true), Policy.Fragment.StreamGap("stall")])
 
 // Same expand, data-first
 Policy.layer(Policy.sticky, Policy.streamGap("stall"), Policy.verifyOff)
@@ -43,8 +45,8 @@ Hyperlink.lookupClient(Mail).pipe(
 )
 ```
 
-Zero-arg fragments are **values** (`Policy.sticky`, not `Policy.sticky()`).
-`Policy.make({ … })` / `Policy.make([{ _tag, value }, …])` stamp a **product**
+Zero-arg Layer fragments are **values** (`Policy.sticky`, not `Policy.sticky()`).
+`Policy.make({ … })` / `Policy.make([Policy.Fragment.…, …])` stamp a **product**
 config; `Policy.layer` merges Layers **and** configs (pipe or data-first) — not
 a phantom cast.
 

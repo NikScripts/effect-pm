@@ -62,12 +62,17 @@ const cutover = PolicyMod.make({
   Verify: "reject",
 });
 const cutoverFrags = PolicyMod.make([
-  { _tag: "Sticky", value: true },
-  { _tag: "StreamGap", value: "stall" },
-  { _tag: "ColdAmbiguous", value: "fail" },
-  { _tag: "Verify", value: "reject" },
+  PolicyMod.Fragment.Sticky(true),
+  PolicyMod.Fragment.StreamGap("stall"),
+  PolicyMod.Fragment.ColdAmbiguous("fail"),
+  PolicyMod.Fragment.Verify("reject"),
 ]);
-const stickyTagged = PolicyMod.succeed({ _tag: "Sticky", value: true });
+const stickyTagged = PolicyMod.succeed(PolicyMod.Fragment.Sticky(true));
+const fragBuilt = PolicyMod.Fragment.StreamGap("stall");
+const _fragBuiltOk: AssertExtends<
+  typeof fragBuilt,
+  { readonly _tag: "StreamGap"; readonly value: "stall" }
+> = true;
 const _asLayer: Layer.Layer<never> = cutover;
 const _cutoverOk: AssertExtends<
   typeof cutover,
@@ -151,8 +156,8 @@ const _yieldEffectCfg: Config = { Yield: Effect.succeed(false) };
 // @ts-expect-error — StreamGap closed union in make
 PolicyMod.make({ StreamGap: "restart" });
 
-// @ts-expect-error — StreamGap closed union on tagged fragment
-PolicyMod.succeed({ _tag: "StreamGap", value: "restart" });
+// @ts-expect-error — StreamGap closed union on Fragment ctor
+PolicyMod.Fragment.StreamGap("restart");
 
 // @ts-expect-error — StreamGap closed union on fragment helper
 PolicyMod.streamGap("restart");
@@ -163,6 +168,7 @@ PolicyMod.succeed("Sticky", true);
 void _stickyFragOk;
 void _cutoverFragsOk;
 void _stickyTaggedOk;
+void _fragBuiltOk;
 void _gapFn;
 void _coldFn;
 void _verifyFn;

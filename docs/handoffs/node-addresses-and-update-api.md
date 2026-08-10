@@ -290,7 +290,8 @@ class LookupPolicy extends PolicyBuilder.make("hyperlink-ts/LookupPolicy")
 {}
 
 export const Sticky = LookupPolicy.references.Sticky
-export const sticky = LookupPolicy.succeed({ _tag: "Sticky", value: true })
+export const Fragment = LookupPolicy.fragments
+export const sticky = LookupPolicy.succeed(Fragment.Sticky(true))
 export const make = LookupPolicy.make
 ```
 
@@ -300,12 +301,13 @@ export const make = LookupPolicy.make
 | **`.key(name, schema, opts)`** | Schema + Reference (`defaultValue` = Reference default) |
 | **`class extends`** | Name the constructable (or keep private in the module) |
 | **`.references`** | Derived Context.References to re-export |
+| **`.fragments`** | Data kit — value-first ctors / `$is` / `$match` / bag converters |
 | **`.make` / `layer` / `provide` / `succeed`** | Branded Layer override toolkit |
 | **Module helpers** | Recreated DX — not auto-generated |
 
 **Eng’d today:** private `Keys` constructable inside `Policy` + flat helpers +
-key-`_tag` fragments. **Next:** Eng `NodePolicy` the same way; rename `Policy` →
-`LookupPolicy`.
+key-`_tag` fragments + `Policy.Fragment` kit. **Next:** Eng `NodePolicy` the
+same way; rename `Policy` → `LookupPolicy`.
 
 Apps normally import **`LookupPolicy` / `NodePolicy`**, not the builder.
 
@@ -335,11 +337,17 @@ type Fragment =
   | { readonly _tag: "Verify"; readonly value: Verify }
   // …
 
-Policy.succeed({ _tag: "Sticky", value: true })
-Policy.make([{ _tag: "Sticky", value: true }, { _tag: "StreamGap", value: "stall" }])
+Policy.succeed(Policy.Fragment.Sticky(true))
+Policy.make([Policy.Fragment.Sticky(true), Policy.Fragment.StreamGap("stall")])
 // product bag sugar → same product config stamp
 Policy.make({ Sticky: true, StreamGap: "stall" })
 ```
+
+`Policy.Fragment` (from `Def.fragments`) is Data.`taggedEnum`-shaped but **value-first**
+ctors (`Sticky(true)` not `Sticky({ value: true })`) because every variant shares a
+uniform `value` payload. Also `$is` / `$match` / `$fromConfig` / `$toConfig`. Layer
+helpers (`Policy.sticky`) stay separate from References (`Policy.Sticky`) and data
+ctors (`Policy.Fragment.Sticky`).
 
 Why not value-only `_tag`: Sticky/Yield are booleans / Effects — no useful value tag.
 Key-tag gives one uniform fragment shape for every knob (including booleans). Mode values
@@ -350,7 +358,8 @@ Why not `_tag` instead of Context.Reference: ambient `yield* Policy.Sticky` and 
 overrides stay Reference-based (Effect Context). `_tag` is for the **fragment / config
 entry** sum, not for replacing refs.
 
-**Eng’d** on `PolicyBuilder` / `Policy` (`succeed` / `make(Fragment[])` / product bag).
+**Eng’d** on `PolicyBuilder` / `Policy` (`Fragment` kit / `succeed` / `make(Fragment[])` /
+product bag).
 
 ### 3.4 Parked — prior long Address API notes
 

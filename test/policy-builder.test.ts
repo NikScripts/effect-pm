@@ -45,10 +45,11 @@ describe("PolicyBuilder", () => {
       expect(got.mode).toBe("b");
       expect(yield* got.handler).toBe(7);
 
+      const { Flag: flagF, Mode: modeF, Handler: handlerF } = Demo.fragments;
       const fromFrags = Demo.make([
-        { _tag: "Flag", value: true },
-        { _tag: "Mode", value: "b" },
-        { _tag: "Handler", value: 7 },
+        flagF(true),
+        modeF("b"),
+        handlerF(7),
       ]);
       expect(Demo.config(fromFrags)).toEqual({
         Flag: true,
@@ -62,11 +63,32 @@ describe("PolicyBuilder", () => {
     }),
   );
 
-  it.effect("layer last-write wins; brands do not cross; refs keep Reference defaults", () =>
+  it.effect("fragments kit: ctors, $is, $match, bag converters", () =>
     Effect.gen(function* () {
+      const f = Demo.fragments.Flag(true);
+      expect(f).toEqual({ _tag: "Flag", value: true });
+      expect(Demo.fragments.$is("Flag")(f)).toBe(true);
+      expect(Demo.fragments.$is("Mode")(f)).toBe(false);
+      const label = Demo.fragments.$match(f, {
+        Flag: (x) => `flag:${x.value}`,
+        Mode: (x) => `mode:${x.value}`,
+        Handler: (x) => `handler:${x.value}`,
+      });
+      expect(label).toBe("flag:true");
+      const bag = { Flag: false as const, Mode: "b" as const };
+      expect(Demo.fragments.$fromConfig(bag)).toEqual([
+        { _tag: "Flag", value: false },
+        { _tag: "Mode", value: "b" },
+      ]);
+      expect(
+        Demo.fragments.$toConfig([
+          Demo.fragments.Flag(true),
+          Demo.fragments.Mode("a"),
+        ]),
+      ).toEqual({ Flag: true, Mode: "a" });
       const merged = Demo.make({ Flag: true, Mode: "a" }).pipe(
-        Demo.layer(Demo.succeed({ _tag: "Mode", value: "b" })),
-        Demo.layer(Demo.succeed({ _tag: "Flag", value: false })),
+        Demo.layer(Demo.succeed(Demo.fragments.Mode("b"))),
+        Demo.layer(Demo.succeed(Demo.fragments.Flag(false))),
       );
       expect(Demo.config(merged)).toEqual({ Flag: false, Mode: "b" });
       const got = yield* readDemo.pipe(Effect.provide(merged));
@@ -75,11 +97,10 @@ describe("PolicyBuilder", () => {
 
       expect(Demo.is(Policy.sticky)).toBe(false);
       expect(
-        Policy.isPolicy(Demo.succeed({ _tag: "Flag", value: true })),
+        Policy.isPolicy(Demo.succeed(Demo.fragments.Flag(true))),
       ).toBe(false);
       expect(Policy.isPolicy(Policy.sticky)).toBe(true);
       expect(Policy.Sticky.key).toBe("hyperlink-ts/Policy/Sticky");
-      // Ambient Reference default (no Layer) — same system as pre-PolicyBuilder
       expect(yield* Policy.Sticky).toBe(true);
       expect(yield* Policy.Verify).toBe("reject");
     }),
@@ -98,7 +119,7 @@ describe("PolicyBuilder", () => {
         }),
       );
       const built = dependent.pipe(
-        Demo.provide(Demo.succeed({ _tag: "Flag", value: true })),
+        Demo.provide(Demo.succeed(Demo.fragments.Flag(true))),
       );
       const got = yield* Out.pipe(Effect.provide(built));
       expect(got.flag).toBe(true);

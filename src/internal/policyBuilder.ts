@@ -155,6 +155,67 @@ export type PolicyBuilderConfigFromFragments<
       : { readonly [P in H["_tag"]]: H["value"] }
     : {};
 
+/**
+ * Fragment data helpers (Data.`taggedEnum`-shaped): per-key ctors (value-first),
+ * `$is` / `$match`, bag ↔ list. Separate from Layer helpers (`succeed` / `make`).
+ *
+ * @internal
+ */
+export type PolicyBuilderFragmentsOfKeys<
+  Keys extends Record<string, PolicyBuilderKeySpec<any, any>>,
+> = {
+  readonly [K in keyof Keys & string]: <
+    const V extends PolicyBuilderInputOf<Keys[K]>,
+  >(
+    value: V,
+  ) => { readonly _tag: K; readonly value: V };
+} & {
+  readonly $is: <Tag extends keyof Keys & string>(
+    tag: Tag,
+  ) => (
+    u: unknown,
+  ) => u is Extract<PolicyBuilderFragmentOfKeys<Keys>, { readonly _tag: Tag }>;
+  readonly $match: {
+    <
+      Cases extends {
+        readonly [Tag in keyof Keys & string]: (
+          fragment: Extract<
+            PolicyBuilderFragmentOfKeys<Keys>,
+            { readonly _tag: Tag }
+          >,
+        ) => any;
+      },
+    >(
+      cases: Cases,
+    ): (
+      value: PolicyBuilderFragmentOfKeys<Keys>,
+    ) => ReturnType<Cases[keyof Keys & string]>;
+    <
+      Cases extends {
+        readonly [Tag in keyof Keys & string]: (
+          fragment: Extract<
+            PolicyBuilderFragmentOfKeys<Keys>,
+            { readonly _tag: Tag }
+          >,
+        ) => any;
+      },
+    >(
+      value: PolicyBuilderFragmentOfKeys<Keys>,
+      cases: Cases,
+    ): ReturnType<Cases[keyof Keys & string]>;
+  };
+  /** Product bag → fragment list (only keys present; skips `undefined`). */
+  readonly $fromConfig: (
+    config: PolicyBuilderConfigOfKeys<Keys>,
+  ) => ReadonlyArray<PolicyBuilderFragmentOfKeys<Keys>>;
+  /** Fragment list → product bag (last write wins). */
+  readonly $toConfig: <
+    const Fs extends ReadonlyArray<PolicyBuilderFragmentOfKeys<Keys>>,
+  >(
+    fragments: Fs,
+  ) => PolicyBuilderConfigFromFragments<Fs>;
+};
+
 const buildKeySpec = <S extends Schema.Top, Runtime>(options: {
   readonly familyId: string;
   readonly name: string;
@@ -208,6 +269,11 @@ export interface PolicyBuilderDef<
   readonly keys: Keys;
   /** Context.Reference per key — domain modules re-export these. */
   readonly references: PolicyBuilderRefsOfKeys<Keys>;
+  /**
+   * Fragment data kit — ctors / `$is` / `$match` / bag converters.
+   * Domain modules re-export as e.g. `Policy.Fragment`.
+   */
+  readonly fragments: PolicyBuilderFragmentsOfKeys<Keys>;
   new (_: never): {};
   /**
    * Widen with a Schema-backed key (HttpApi.`add` analogue).
@@ -324,6 +390,52 @@ const refsOf = (
     refs[keyName] = keys[keyName]!.reference;
   }
   return refs;
+};
+
+const fragmentsOf = (
+  keys: Record<string, PolicyBuilderKeySpec<any, any>>,
+): PolicyBuilderFragmentsOfKeys<any> => {
+  const ctors: Record<string, (value: unknown) => { readonly _tag: string; readonly value: unknown }> =
+    {};
+  for (const keyName of Object.keys(keys)) {
+    ctors[keyName] = (value: unknown) => ({ _tag: keyName, value });
+  }
+  const $is =
+    (tag: string) =>
+    (u: unknown): boolean =>
+      typeof u === "object" &&
+      u !== null &&
+      (u as { readonly _tag?: unknown })._tag === tag;
+  const $match = dual(
+    2,
+    (
+      value: { readonly _tag: string },
+      cases: Record<string, (fragment: unknown) => unknown>,
+    ): unknown => cases[value._tag]!(value),
+  );
+  const $fromConfig = (
+    config: Record<string, unknown>,
+  ): ReadonlyArray<{ readonly _tag: string; readonly value: unknown }> => {
+    const out: Array<{ readonly _tag: string; readonly value: unknown }> = [];
+    for (const keyName of Object.keys(keys)) {
+      if (!Object.prototype.hasOwnProperty.call(config, keyName)) continue;
+      const value = config[keyName];
+      if (value === undefined) continue;
+      out.push({ _tag: keyName, value });
+    }
+    return out;
+  };
+  const $toConfig = (
+    fragments: ReadonlyArray<{ readonly _tag: string; readonly value: unknown }>,
+  ): Record<string, unknown> =>
+    Object.fromEntries(fragments.map((f) => [f._tag, f.value] as const));
+  return {
+    ...ctors,
+    $is,
+    $match,
+    $fromConfig,
+    $toConfig,
+  } as PolicyBuilderFragmentsOfKeys<any>;
 };
 
 const defProto = {
@@ -470,6 +582,7 @@ export const makeProto = (options: DefData): PolicyBuilderDef<any, any> => {
     id: options.id,
     keys: options.keys,
     references: refsOf(options.keys),
+    fragments: fragmentsOf(options.keys),
   }) as unknown as PolicyBuilderDef<any, any>;
 };
 

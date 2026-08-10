@@ -20,12 +20,14 @@ class Demo extends PolicyBuilder.make("policy-builder-d/Demo")
   }) {}
 
 const made = Demo.make({ A: true, B: "y" });
-const fromFrags = Demo.make([
-  { _tag: "A", value: true },
-  { _tag: "B", value: "y" },
-]);
-const piped = made.pipe(Demo.layer(Demo.succeed({ _tag: "A", value: false })));
-const single = Demo.succeed({ _tag: "A", value: true });
+const fromFrags = Demo.make([Demo.fragments.A(true), Demo.fragments.B("y")]);
+const piped = made.pipe(Demo.layer(Demo.succeed(Demo.fragments.A(false))));
+const single = Demo.succeed(Demo.fragments.A(true));
+const fragA = Demo.fragments.A(true);
+const matched = Demo.fragments.$match(fragA, {
+  A: (x) => x.value,
+  B: (x) => x.value,
+});
 
 type _Checks = [
   AssertExtends<typeof made, Layer.Layer<never>>,
@@ -51,15 +53,19 @@ type _Checks = [
     | { readonly _tag: "A"; readonly value: boolean }
     | { readonly _tag: "B"; readonly value: "x" | "y" }
   >,
+  AssertExtends<typeof fragA, { readonly _tag: "A"; readonly value: true }>,
+  AssertExtends<typeof matched, boolean | "x" | "y">,
 ];
 
 // @ts-expect-error — Demo brand is not Eng’d Policy brand
-export const _cross: EngPolicy<{ Sticky: true }> = Demo.succeed({
-  _tag: "A",
-  value: true,
-});
+export const _cross: EngPolicy<{ Sticky: true }> = Demo.succeed(
+  Demo.fragments.A(true),
+);
 
 // @ts-expect-error — two-arg succeed removed
 Demo.succeed("A", true);
+
+// @ts-expect-error — Fragment ctor takes value, not Data.taggedEnum props bag
+Demo.fragments.A({ value: true });
 
 export type { _Checks };
