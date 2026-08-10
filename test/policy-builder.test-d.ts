@@ -1,7 +1,7 @@
 /**
- * PolicyBuilder type locks — class extends make+key; families are distinct brands.
+ * PolicyBuilder type locks — Schema keys; class extends; distinct brands.
  */
-import { Context, type Layer } from "effect";
+import { Schema, type Layer } from "effect";
 import type { Policy as BuilderPolicy } from "../src/PolicyBuilder";
 import * as PolicyBuilder from "../src/PolicyBuilder";
 import type { Policy as EngPolicy } from "../src/Policy";
@@ -9,16 +9,13 @@ import * as Policy from "../src/Policy";
 
 type AssertExtends<A, B> = [A] extends [B] ? true : false;
 
-const A = Context.Reference<boolean>("policy-builder-d/A", {
-  defaultValue: (): boolean => true,
-});
-const B = Context.Reference<"x" | "y">("policy-builder-d/B", {
-  defaultValue: (): "x" => "x",
-});
+const bSchema = Schema.Literals(["x", "y"]);
 
 class Demo extends PolicyBuilder.make("policy-builder-d/Demo")
-  .key("A", A)
-  .key("B", B) {}
+  .key("A", Schema.Boolean, { defaultValue: () => true })
+  .key("B", bSchema, {
+    defaultValue: (): Schema.Schema.Type<typeof bSchema> => "x",
+  }) {}
 
 const made = Demo.make({ A: true, B: "y" });
 const piped = made.pipe(Demo.layer(Demo.succeed("A", false)));

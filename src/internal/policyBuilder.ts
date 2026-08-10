@@ -1,13 +1,15 @@
 /**
- * PolicyBuilder engine — HttpApi-shaped constructable policy families.
+ * PolicyBuilder engine — HttpApi-shaped constructable families with Schema keys.
  *
- * `PolicyBuilder.make(id).key(...).keyEncoded(...)` returns a constructor so
- * `class X extends … {}` works (same trick as HttpApi / Router).
+ * `PolicyBuilder.make(id).key(name, schema, { defaultValue, toRuntime? })` returns
+ * a constructor so `class X extends … {}` works (HttpApi / Router). Each key owns
+ * a Schema (config value), a derived `Context.Reference` (`${id}/${name}`), and
+ * optional encode to Layer runtime.
  *
  * @internal
  */
 import type { Context } from "effect";
-import { Layer } from "effect";
+import { Context as ContextMod, Layer, Schema } from "effect";
 import { dual } from "effect/Function";
 import { pipeArguments } from "effect/Pipeable";
 import { hasProperty } from "effect/Predicate";
@@ -22,13 +24,17 @@ export const ConfigKey = "~hyperlink-ts/PolicyBuilder/Config" as const;
 export const FamilyTypeId = "~hyperlink-ts/PolicyBuilder/Family" as const;
 
 /**
- * One config key: Context reference + encode (input → runtime).
+ * One config key: Schema (config input) + Reference (runtime) + encode.
  *
  * @internal
  */
-export interface PolicyBuilderKeySpec<in out Input, in out Runtime = Input> {
+export interface PolicyBuilderKeySpec<
+  S extends Schema.Top,
+  in out Runtime = Schema.Schema.Type<S>,
+> {
+  readonly schema: S;
   readonly reference: Context.Reference<Runtime>;
-  readonly encode: (input: Input) => Runtime;
+  readonly encode: (input: Schema.Schema.Type<S>) => Runtime;
 }
 
 /**
@@ -82,93 +88,69 @@ export type PolicyBuilderMergePolicyList<
       : {};
 
 /**
- * Config object shape derived from a keys map (optional per key, input types).
+ * Config object shape derived from a keys map (optional per key, schema types).
  *
  * @internal
  */
 export type PolicyBuilderConfigOfKeys<
   Keys extends Record<string, PolicyBuilderKeySpec<any, any>>,
 > = {
-  readonly [K in keyof Keys]?: Keys[K] extends PolicyBuilderKeySpec<
-    infer I,
-    any
-  >
-    ? I
+  readonly [K in keyof Keys]?: Keys[K] extends PolicyBuilderKeySpec<infer S, any>
+    ? Schema.Schema.Type<S>
     : never;
 };
 
-/** Input type of one key spec. @internal */
+/** Schema input type of one key spec. @internal */
 export type PolicyBuilderInputOf<S> =
-  S extends PolicyBuilderKeySpec<infer I, any> ? I : never;
+  S extends PolicyBuilderKeySpec<infer Sch, any>
+    ? Schema.Schema.Type<Sch>
+    : never;
 
-/**
- * Bind a Context reference as a policy key (identity encode).
- *
- * @internal
- */
-export const key = <Runtime>(
-  reference: Context.Reference<Runtime>,
-): PolicyBuilderKeySpec<Runtime, Runtime> => ({
-  reference,
-  encode: (input) => input,
-});
+/** References map derived from keys. @internal */
+export type PolicyBuilderRefsOfKeys<
+  Keys extends Record<string, PolicyBuilderKeySpec<any, any>>,
+> = {
+  readonly [K in keyof Keys]: Keys[K]["reference"];
+};
 
-/**
- * Bind a Context reference with a custom input→runtime encode.
- *
- * @internal
- */
-export const keyEncoded = <Input, Runtime>(
-  reference: Context.Reference<Runtime>,
-  encode: (input: Input) => Runtime,
-): PolicyBuilderKeySpec<Input, Runtime> => ({ reference, encode });
-
-/** Brand an underlying Layer with family id + frozen config. @internal */
-export const brandPolicy = <Id extends string, const C extends object>(
-  id: Id,
-  underlying: Layer.Layer<never>,
-  cfg: C,
-): PolicyBuilderPolicy<Id, C> =>
-  Object.assign(Object.create(Object.getPrototypeOf(underlying)), underlying, {
-    [BrandKey]: id,
-    [ConfigKey]: Object.freeze({ ...cfg }),
-  }) as PolicyBuilderPolicy<Id, C>;
-
-/** Merge Layers + configs (last write wins). @internal */
-export const combine = <Id extends string>(
-  id: Id,
-  policies: ReadonlyArray<PolicyBuilderPolicy<Id, object>>,
-): PolicyBuilderPolicy<Id, object> => {
-  let cfg: object = {};
-  for (const p of policies) {
-    cfg = { ...cfg, ...p[ConfigKey] };
-  }
-  if (policies.length === 0) {
-    return brandPolicy(id, Layer.empty, cfg);
-  }
-  if (policies.length === 1) {
-    return brandPolicy(id, policies[0]!, cfg);
-  }
-  return brandPolicy(
-    id,
-    Layer.mergeAll(policies[0]!, policies[1]!, ...policies.slice(2)),
-    cfg,
+const buildKeySpec = <S extends Schema.Top, Runtime>(options: {
+  readonly familyId: string;
+  readonly name: string;
+  readonly schema: S;
+  readonly defaultValue: () => Runtime;
+  readonly toRuntime?: (input: Schema.Schema.Type<S>) => Runtime;
+}): PolicyBuilderKeySpec<S, Runtime> => {
+  const reference = ContextMod.Reference<Runtime>(
+    `${options.familyId}/${options.name}`,
+    { defaultValue: options.defaultValue },
   );
+  const encode =
+    options.toRuntime !== undefined
+      ? options.toRuntime
+      : (input: Schema.Schema.Type<S>) => input as Runtime;
+  return { schema: options.schema, reference, encode };
 };
 
-/** Merge Layers only (for provide). @internal */
-export const mergeLayers = (
-  policies: ReadonlyArray<Layer.Layer<never>>,
-): Layer.Layer<never> => {
-  if (policies.length === 0) return Layer.empty;
-  if (policies.length === 1) return policies[0]!;
-  return Layer.mergeAll(policies[0]!, policies[1]!, ...policies.slice(2));
-};
+type SyncDecoder = Parameters<typeof Schema.decodeUnknownSync>[0];
 
-const layerForKey = <Input, Runtime>(
-  spec: PolicyBuilderKeySpec<Input, Runtime>,
-  input: Input,
-): Layer.Layer<never> => Layer.succeed(spec.reference, spec.encode(input));
+const decodeInput = <S extends Schema.Top>(
+  schema: S,
+  input: unknown,
+): Schema.Schema.Type<S> =>
+  Schema.decodeUnknownSync(schema as unknown as SyncDecoder)(
+    input,
+  ) as Schema.Schema.Type<S>;
+
+const layerForKey = <S extends Schema.Top, Runtime>(
+  spec: PolicyBuilderKeySpec<S, Runtime>,
+  input: unknown,
+): { readonly layer: Layer.Layer<never>; readonly decoded: Schema.Schema.Type<S> } => {
+  const decoded = decodeInput(spec.schema, input);
+  return {
+    decoded,
+    layer: Layer.succeed(spec.reference, spec.encode(decoded)),
+  };
+};
 
 /**
  * Constructable family — `new (_: never) => {}` so `class extends` works.
@@ -182,36 +164,31 @@ export interface PolicyBuilderFamily<
   readonly [FamilyTypeId]: typeof FamilyTypeId;
   readonly id: Id;
   readonly keys: Keys;
+  /** Context.Reference per key — domain modules re-export these. */
+  readonly references: PolicyBuilderRefsOfKeys<Keys>;
   new (_: never): {};
   /**
-   * Widen with an identity-encoded key (HttpApi.`add` analogue).
+   * Widen with a Schema-backed key (HttpApi.`add` analogue).
+   *
+   * Builds `Context.Reference` at `` `${id}/${name}` ``. Optional `toRuntime`
+   * when Layer runtime ≠ schema decoded type (e.g. Yield boolean → Effect).
    */
   key: <
     const K extends string,
-    Runtime,
+    S extends Schema.Top,
+    Runtime = Schema.Schema.Type<S>,
   >(
     name: K,
-    reference: Context.Reference<Runtime>,
+    schema: S,
+    options: {
+      readonly defaultValue: () => Runtime;
+      readonly toRuntime?: (input: Schema.Schema.Type<S>) => Runtime;
+    },
   ) => PolicyBuilderFamily<
     Id,
-    Keys & { readonly [P in K]: PolicyBuilderKeySpec<Runtime, Runtime> }
+    Keys & { readonly [P in K]: PolicyBuilderKeySpec<S, Runtime> }
   >;
-  /**
-   * Widen with a custom-encoded key.
-   */
-  keyEncoded: <
-    const K extends string,
-    Input,
-    Runtime,
-  >(
-    name: K,
-    reference: Context.Reference<Runtime>,
-    encode: (input: Input) => Runtime,
-  ) => PolicyBuilderFamily<
-    Id,
-    Keys & { readonly [P in K]: PolicyBuilderKeySpec<Input, Runtime> }
-  >;
-  /** Object-form → branded policy Layer (last-write config stamp). */
+  /** Object-form → branded policy Layer (schema-decoded; last-write config stamp). */
   make: <const C extends PolicyBuilderConfigOfKeys<Keys>>(
     config: C,
   ) => PolicyBuilderPolicy<Id, C>;
@@ -276,16 +253,23 @@ export interface PolicyBuilderFamily<
   ) => C;
   pipe: <A>(
     this: A,
-    ...args: [
-      ...Array<(a: any) => any>,
-      (a: any) => any,
-    ]
+    ...args: Array<(a: any) => any>
   ) => unknown;
 }
 
 type FamilyData = {
   readonly id: string;
   readonly keys: Record<string, PolicyBuilderKeySpec<any, any>>;
+};
+
+const refsOf = (
+  keys: Record<string, PolicyBuilderKeySpec<any, any>>,
+): Record<string, Context.Reference<unknown>> => {
+  const refs: Record<string, Context.Reference<unknown>> = {};
+  for (const keyName of Object.keys(keys)) {
+    refs[keyName] = keys[keyName]!.reference;
+  }
+  return refs;
 };
 
 const familyProto = {
@@ -297,39 +281,42 @@ const familyProto = {
   key(
     this: FamilyData,
     name: string,
-    reference: Context.Reference<unknown>,
+    schema: Schema.Top,
+    options: {
+      readonly defaultValue: () => unknown;
+      readonly toRuntime?: (input: unknown) => unknown;
+    },
   ) {
-    return makeProto({
-      id: this.id,
-      keys: { ...this.keys, [name]: key(reference) },
+    const spec = buildKeySpec({
+      familyId: this.id,
+      name,
+      schema,
+      defaultValue: options.defaultValue,
+      toRuntime: options.toRuntime,
     });
-  },
-  keyEncoded(
-    this: FamilyData,
-    name: string,
-    reference: Context.Reference<unknown>,
-    encode: (input: unknown) => unknown,
-  ) {
     return makeProto({
       id: this.id,
-      keys: { ...this.keys, [name]: keyEncoded(reference, encode) },
+      keys: { ...this.keys, [name]: spec },
     });
   },
   make(this: FamilyData, config: Record<string, unknown>) {
     const parts: Array<Layer.Layer<never>> = [];
+    const decodedConfig: Record<string, unknown> = {};
     for (const keyName of Object.keys(this.keys)) {
       if (!Object.prototype.hasOwnProperty.call(config, keyName)) continue;
       const input = config[keyName];
       if (input === undefined) continue;
       const spec = this.keys[keyName]!;
-      parts.push(layerForKey(spec, input));
+      const { layer, decoded } = layerForKey(spec, input);
+      parts.push(layer);
+      decodedConfig[keyName] = decoded;
     }
-    return brandPolicy(this.id, mergeLayers(parts), config);
+    return brandPolicy(this.id, mergeLayers(parts), decodedConfig);
   },
   succeed(this: FamilyData, keyName: string, value: unknown) {
     const spec = this.keys[keyName]!;
-    const cfg = { [keyName]: value };
-    return brandPolicy(this.id, layerForKey(spec, value), cfg);
+    const { layer, decoded } = layerForKey(spec, value);
+    return brandPolicy(this.id, layer, { [keyName]: decoded });
   },
   layer: dual(
     (args) => args.length >= 2,
@@ -362,6 +349,48 @@ const familyProto = {
   },
 };
 
+/** Brand an underlying Layer with family id + frozen config. @internal */
+export const brandPolicy = <Id extends string, const C extends object>(
+  id: Id,
+  underlying: Layer.Layer<never>,
+  cfg: C,
+): PolicyBuilderPolicy<Id, C> =>
+  Object.assign(Object.create(Object.getPrototypeOf(underlying)), underlying, {
+    [BrandKey]: id,
+    [ConfigKey]: Object.freeze({ ...cfg }),
+  }) as PolicyBuilderPolicy<Id, C>;
+
+/** Merge Layers + configs (last write wins). @internal */
+export const combine = <Id extends string>(
+  id: Id,
+  policies: ReadonlyArray<PolicyBuilderPolicy<Id, object>>,
+): PolicyBuilderPolicy<Id, object> => {
+  let cfg: object = {};
+  for (const p of policies) {
+    cfg = { ...cfg, ...p[ConfigKey] };
+  }
+  if (policies.length === 0) {
+    return brandPolicy(id, Layer.empty, cfg);
+  }
+  if (policies.length === 1) {
+    return brandPolicy(id, policies[0]!, cfg);
+  }
+  return brandPolicy(
+    id,
+    Layer.mergeAll(policies[0]!, policies[1]!, ...policies.slice(2)),
+    cfg,
+  );
+};
+
+/** Merge Layers only (for provide). @internal */
+export const mergeLayers = (
+  policies: ReadonlyArray<Layer.Layer<never>>,
+): Layer.Layer<never> => {
+  if (policies.length === 0) return Layer.empty;
+  if (policies.length === 1) return policies[0]!;
+  return Layer.mergeAll(policies[0]!, policies[1]!, ...policies.slice(2));
+};
+
 /**
  * Constructor-shaped family so `class X extends PolicyBuilder.make(…).key(…)` works.
  *
@@ -374,6 +403,7 @@ export const makeProto = (options: FamilyData): PolicyBuilderFamily<any, any> =>
     [FamilyTypeId]: FamilyTypeId,
     id: options.id,
     keys: options.keys,
+    references: refsOf(options.keys),
   }) as unknown as PolicyBuilderFamily<any, any>;
 };
 

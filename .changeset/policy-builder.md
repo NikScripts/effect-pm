@@ -2,8 +2,7 @@
 "hyperlink-ts": minor
 ---
 
-Add `PolicyBuilder` — HttpApi-shaped constructable kernel for policy families
-(`class X extends PolicyBuilder.make(id).key(…).keyEncoded(…)` → `make` / `layer` /
-`provide` / `succeed`). Eng’d `Policy` exposes `Policy.Family` and keeps the flat
-`Policy.make` / fragment API. Foundation for `NodePolicy` and the `Policy` →
-`LookupPolicy` rename.
+`PolicyBuilder` is Schema-first and HttpApi-shaped: declare keys with
+`.key(name, schema, { defaultValue, toRuntime? })`, `class extends` the family, then
+recreate module helpers (`sticky`, …) and re-export `Family.references`. Eng’d `Policy`
+uses that split; public fragment / `make` / `provide` DX unchanged.

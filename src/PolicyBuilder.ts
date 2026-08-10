@@ -2,42 +2,36 @@
  * PolicyBuilder — HttpApi-shaped constructable kernel for policy families
  * (`Policy` / future `LookupPolicy` / `NodePolicy`).
  *
- * `make(id)` returns a **constructor** you `class extends`, then widen with
- * fluent {@link Family.key} / {@link Family.keyEncoded} (HttpApi.`add` style).
- * The class carries `make` / `layer` / `provide` / `succeed` for branded
- * Layer+config values.
+ * **Two layers:**
+ * 1. **Family** — `make(id).key(name, schema, { defaultValue, toRuntime? })` then
+ *    `class extends` (keys + value Schemas + derived Context.References).
+ * 2. **Module** — recreate helpers on top (`sticky`, `streamGap`, re-export
+ *    `Family.references.*`) — hand-written DX in most cases.
  *
  * ```ts
  * import * as PolicyBuilder from "hyperlink-ts/PolicyBuilder"
- * import { Context, Effect } from "effect"
- *
- * const Sticky = Context.Reference<boolean>("demo/Sticky", {
- *   defaultValue: () => true,
- * })
- * const Yield = Context.Reference<Effect.Effect<boolean>>("demo/Yield", {
- *   defaultValue: () => Effect.succeed(true),
- * })
+ * import { Effect, Schema } from "effect"
  *
  * class Demo extends PolicyBuilder.make("demo/Policy")
- *   .key("Sticky", Sticky)
- *   .keyEncoded(
- *     "Yield",
- *     Yield,
- *     (input: boolean | Effect.Effect<boolean>) =>
- *       typeof input === "boolean" ? Effect.succeed(input) : input,
- *   )
+ *   .key("Sticky", Schema.Boolean, { defaultValue: () => true })
+ *   .key("Yield", Schema.Boolean, {
+ *     defaultValue: () => Effect.succeed(true),
+ *     toRuntime: (b) => Effect.succeed(b),
+ *   })
  * {}
  *
- * const bundle = Demo.make({ Sticky: true, Yield: false }).pipe(
+ * // module recreates helpers
+ * export const Sticky = Demo.references.Sticky
+ * export const sticky = Demo.succeed("Sticky", true)
+ *
+ * const bundle = Demo.make({ Sticky: true }).pipe(
  *   Demo.layer(Demo.succeed("Sticky", false)),
  * )
  * ```
  *
- * Apps normally import domain modules (`Policy`, …). Use this builder when
- * minting another family that must share the architecture.
- *
  * @module PolicyBuilder
  */
+import type { Schema } from "effect";
 import type * as internal from "./internal/policyBuilder";
 import * as engine from "./internal/policyBuilder";
 
@@ -46,15 +40,15 @@ import * as engine from "./internal/policyBuilder";
 // =============================================================================
 
 /**
- * One config key: Context reference + encode (input → runtime value on the Layer).
+ * One config key: Schema (config input) + Reference (runtime) + encode.
  *
  * @category models
  * @public
  */
-export type KeySpec<Input, Runtime = Input> = internal.PolicyBuilderKeySpec<
-  Input,
-  Runtime
->;
+export type KeySpec<
+  S extends Schema.Top,
+  Runtime = Schema.Schema.Type<S>,
+> = internal.PolicyBuilderKeySpec<S, Runtime>;
 
 /**
  * A branded policy fragment / bundle — a `Layer.Layer<never>` plus frozen config.
@@ -121,32 +115,14 @@ export type Family<
 // =============================================================================
 
 /**
- * Bind a `Context.Reference` as a key spec (identity encode). Prefer fluent
- * {@link Family.key} on a {@link make} constructable; this helper is for
- * composing specs by hand.
- *
- * @category constructors
- * @public
- */
-export const key: typeof engine.key = engine.key;
-
-/**
- * Bind a `Context.Reference` with a custom encode. Prefer fluent
- * {@link Family.keyEncoded} on a {@link make} constructable.
- *
- * @category constructors
- * @public
- */
-export const keyEncoded: typeof engine.keyEncoded = engine.keyEncoded;
-
-/**
  * Empty policy family constructable (HttpApi.`make(id)` analogue).
  *
- * Widen with `.key` / `.keyEncoded`, then `class extends`:
+ * Widen with `.key(name, schema, { defaultValue, toRuntime? })`, then
+ * `class extends`. Domain modules recreate helpers on top of the class.
  *
  * ```ts
  * class Demo extends PolicyBuilder.make("demo/Policy")
- *   .key("Sticky", Sticky)
+ *   .key("Sticky", Schema.Boolean, { defaultValue: () => true })
  * {}
  * ```
  *

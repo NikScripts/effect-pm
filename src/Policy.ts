@@ -1,11 +1,11 @@
 /**
  * Policy — composable behaviour fragments (client dial, verify, advertise conflict, yield).
  *
- * Built on {@link PolicyBuilder} as an HttpApi-shaped family class
- * (`class Family extends PolicyBuilder.make(id).key(…)`). Every fragment is a
- * {@link Policy}: a real `Layer` that carries its mode config at runtime (not a
- * phantom cast). {@link layer} is `dual` — data-first merge or
- * `.pipe(Policy.layer(other))` — and expands the config type (last write wins).
+ * Built on {@link PolicyBuilder}: family declares **keys + Schemas**; this module
+ * **recreates helpers** (`sticky`, `streamGap`, …) and re-exports
+ * `Family.references`. Every fragment is a {@link Policy}: a real `Layer` that
+ * carries its mode config at runtime. {@link layer} is `dual` — data-first merge
+ * or `.pipe(Policy.layer(other))` — and expands the config type (last write wins).
  *
  * ```ts
  * import * as Policy from "hyperlink-ts/Policy"
@@ -27,12 +27,90 @@
  *
  * @module Policy
  */
-import { Context, Effect, Layer } from "effect";
+import { Effect, Layer, Schema } from "effect";
 import type { DirectoryEntry } from "./Directory";
 import * as PolicyBuilder from "./PolicyBuilder";
 
-/** Stable brand id for this family (future rename target: `LookupPolicy`). */
-const FamilyId = "~hyperlink-ts/Policy" as const;
+/**
+ * Stable family id — brand + Context.Reference prefix (`${id}/Sticky`, …).
+ * Future rename target: `LookupPolicy` / `hyperlink-ts/LookupPolicy`.
+ */
+const FamilyId = "hyperlink-ts/Policy" as const;
+
+// =============================================================================
+// Schemas (value shapes for PolicyBuilder keys)
+// =============================================================================
+
+/**
+ * Soft pick when directory N&gt;1 and no live Advice prefer matches a row.
+ *
+ * @category schemas
+ * @public
+ */
+export const pickSchema = Schema.Union([
+  Schema.Literal("first"),
+  Schema.declare(
+    (u: unknown): u is (rows: ReadonlyArray<DirectoryEntry>) => DirectoryEntry =>
+      typeof u === "function",
+  ),
+]);
+
+/**
+ * Stream seam across dial rebind.
+ *
+ * @category schemas
+ * @public
+ */
+export const streamGapSchema = Schema.Literals(["stall", "drop", "buffer"]);
+
+/**
+ * Cold N&gt;1 without Advice.
+ *
+ * @category schemas
+ * @public
+ */
+export const coldAmbiguousSchema = Schema.Literals([
+  "fail",
+  "pickFirst",
+  "waitAdvice",
+]);
+
+/**
+ * Client connection verify mode.
+ *
+ * @category schemas
+ * @public
+ */
+export const verifySchema = Schema.Union([
+  Schema.Literal(false),
+  Schema.Literals(["reject", "status"]),
+]);
+
+/**
+ * Directory advertise conflict preference.
+ *
+ * @category schemas
+ * @public
+ */
+export const onConflictSchema = Schema.Literals([
+  "livenessReplace",
+  "askIncumbent",
+  "reject",
+  "inherit",
+]);
+
+/**
+ * Yield config input — boolean shorthand or a custom Effect handler.
+ *
+ * @category schemas
+ * @public
+ */
+export const yieldSchema = Schema.Union([
+  Schema.Boolean,
+  Schema.declare((u: unknown): u is Effect.Effect<boolean> =>
+    Effect.isEffect(u),
+  ),
+]);
 
 // =============================================================================
 // Models
@@ -44,9 +122,7 @@ const FamilyId = "~hyperlink-ts/Policy" as const;
  * @category models
  * @public
  */
-export type Pick =
-  | "first"
-  | ((rows: ReadonlyArray<DirectoryEntry>) => DirectoryEntry);
+export type Pick = Schema.Schema.Type<typeof pickSchema>;
 
 /**
  * How a live client Stream behaves across a dial swap / transport gap.
@@ -58,7 +134,7 @@ export type Pick =
  * @category models
  * @public
  */
-export type StreamGap = "stall" | "drop" | "buffer";
+export type StreamGap = Schema.Schema.Type<typeof streamGapSchema>;
 
 /**
  * Cold {@link Hyperlink.lookupClient} when Directory has N&gt;1 rows and Advice misses.
@@ -70,7 +146,7 @@ export type StreamGap = "stall" | "drop" | "buffer";
  * @category models
  * @public
  */
-export type ColdAmbiguous = "fail" | "pickFirst" | "waitAdvice";
+export type ColdAmbiguous = Schema.Schema.Type<typeof coldAmbiguousSchema>;
 
 /**
  * Default-on client connection verify mode.
@@ -82,7 +158,7 @@ export type ColdAmbiguous = "fail" | "pickFirst" | "waitAdvice";
  * @category models
  * @public
  */
-export type Verify = false | "reject" | "status";
+export type Verify = Schema.Schema.Type<typeof verifySchema>;
 
 /**
  * Directory advertise conflict preference.
@@ -95,11 +171,7 @@ export type Verify = false | "reject" | "status";
  * @category models
  * @public
  */
-export type OnConflict =
-  | "livenessReplace"
-  | "askIncumbent"
-  | "reject"
-  | "inherit";
+export type OnConflict = Schema.Schema.Type<typeof onConflictSchema>;
 
 /**
  * Concrete advertise conflict policy (no `"inherit"`) — what Lookup runs.
@@ -170,7 +242,39 @@ export type MergePolicyList<Ps extends ReadonlyArray<Policy<Config>>> =
   PolicyBuilder.MergePolicyList<typeof FamilyId, Ps>;
 
 // =============================================================================
-// Dial / cutover references
+// Family (PolicyBuilder — keys + schemas; module recreates helpers below)
+// =============================================================================
+
+/**
+ * Eng’d Lookup/Directory policy family — Schema-backed keys only.
+ * Prefer the flat module exports (`Policy.make`, `Policy.sticky`, …).
+ *
+ * @category constructors
+ * @public
+ */
+export class Family extends PolicyBuilder.make(FamilyId)
+  .key("Sticky", Schema.Boolean, { defaultValue: () => true })
+  .key("StreamGap", streamGapSchema, {
+    defaultValue: (): StreamGap => "stall",
+  })
+  .key("ColdAmbiguous", coldAmbiguousSchema, {
+    defaultValue: (): ColdAmbiguous => "fail",
+  })
+  .key("Pick", Schema.Union([pickSchema, Schema.Undefined]), {
+    defaultValue: (): Pick | undefined => undefined,
+  })
+  .key("Verify", verifySchema, { defaultValue: (): Verify => "reject" })
+  .key("Conflict", onConflictSchema, {
+    defaultValue: (): OnConflict => "inherit",
+  })
+  .key("Yield", yieldSchema, {
+    defaultValue: (): Effect.Effect<boolean> => Effect.succeed(true),
+    toRuntime: (input: Schema.Schema.Type<typeof yieldSchema>) =>
+      typeof input === "boolean" ? Effect.succeed(input) : input,
+  }) {}
+
+// =============================================================================
+// References (re-exported from Family — stable `hyperlink-ts/Policy/*` ids)
 // =============================================================================
 
 /**
@@ -179,9 +283,7 @@ export type MergePolicyList<Ps extends ReadonlyArray<Policy<Config>>> =
  * @category references
  * @public
  */
-export const Sticky = Context.Reference<boolean>("hyperlink-ts/Policy/Sticky", {
-  defaultValue: (): boolean => true,
-});
+export const Sticky = Family.references.Sticky;
 
 /**
  * Stream seam across dial rebind. Default `"stall"`.
@@ -189,10 +291,7 @@ export const Sticky = Context.Reference<boolean>("hyperlink-ts/Policy/Sticky", {
  * @category references
  * @public
  */
-export const StreamGap: Context.Reference<StreamGap> =
-  Context.Reference<StreamGap>("hyperlink-ts/Policy/StreamGap", {
-    defaultValue: (): StreamGap => "stall",
-  });
+export const StreamGap = Family.references.StreamGap;
 
 /**
  * Cold N&gt;1 without Advice. Default `"fail"`.
@@ -200,10 +299,7 @@ export const StreamGap: Context.Reference<StreamGap> =
  * @category references
  * @public
  */
-export const ColdAmbiguous: Context.Reference<ColdAmbiguous> =
-  Context.Reference<ColdAmbiguous>("hyperlink-ts/Policy/ColdAmbiguous", {
-    defaultValue: (): ColdAmbiguous => "fail",
-  });
+export const ColdAmbiguous = Family.references.ColdAmbiguous;
 
 /**
  * Optional soft pick (D4). Default unset — cold policy applies instead.
@@ -211,15 +307,7 @@ export const ColdAmbiguous: Context.Reference<ColdAmbiguous> =
  * @category references
  * @public
  */
-export const Pick: Context.Reference<Pick | undefined> = Context.Reference<
-  Pick | undefined
->("hyperlink-ts/Policy/Pick", {
-  defaultValue: (): undefined => undefined,
-});
-
-// =============================================================================
-// Client verify
-// =============================================================================
+export const Pick = Family.references.Pick;
 
 /**
  * Ambient client-verify mode. Default `"reject"`.
@@ -227,14 +315,7 @@ export const Pick: Context.Reference<Pick | undefined> = Context.Reference<
  * @category references
  * @public
  */
-export const Verify: Context.Reference<Verify> = Context.Reference<Verify>(
-  "hyperlink-ts/Policy/Verify",
-  { defaultValue: (): Verify => "reject" },
-);
-
-// =============================================================================
-// Advertise conflict
-// =============================================================================
+export const Verify = Family.references.Verify;
 
 /**
  * Ambient advertise conflict preference (call-site / node stamp still win).
@@ -243,14 +324,7 @@ export const Verify: Context.Reference<Verify> = Context.Reference<Verify>(
  * @category references
  * @public
  */
-export const Conflict: Context.Reference<OnConflict> =
-  Context.Reference<OnConflict>("hyperlink-ts/Policy/Conflict", {
-    defaultValue: (): OnConflict => "inherit",
-  });
-
-// =============================================================================
-// Yield (askIncumbent cooperative accept / refuse)
-// =============================================================================
+export const Conflict = Family.references.Conflict;
 
 /**
  * Cooperative yield handler for `"askIncumbent"` — `true` = step aside.
@@ -259,36 +333,7 @@ export const Conflict: Context.Reference<OnConflict> =
  * @category references
  * @public
  */
-export const Yield: Context.Reference<Effect.Effect<boolean>> =
-  Context.Reference<Effect.Effect<boolean>>("hyperlink-ts/Policy/Yield", {
-    defaultValue: (): Effect.Effect<boolean> => Effect.succeed(true),
-  });
-
-// =============================================================================
-// Family (PolicyBuilder — HttpApi-shaped class)
-// =============================================================================
-
-/**
- * Eng’d Lookup/Directory policy family. Prefer the flat module exports
- * (`Policy.make`, `Policy.sticky`, …); extend {@link PolicyBuilder.make} the
- * same way when minting another family.
- *
- * @category constructors
- * @public
- */
-export class Family extends PolicyBuilder.make(FamilyId)
-  .key("Sticky", Sticky)
-  .key("StreamGap", StreamGap)
-  .key("ColdAmbiguous", ColdAmbiguous)
-  .key("Pick", Pick)
-  .key("Verify", Verify)
-  .key("Conflict", Conflict)
-  .keyEncoded(
-    "Yield",
-    Yield,
-    (input: boolean | Effect.Effect<boolean>) =>
-      typeof input === "boolean" ? Effect.succeed(input) : input,
-  ) {}
+export const Yield = Family.references.Yield;
 
 // =============================================================================
 // Dial / cutover fragments

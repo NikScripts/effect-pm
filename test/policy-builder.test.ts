@@ -1,35 +1,26 @@
 /**
- * PolicyBuilder — HttpApi-shaped family class (make / key / succeed / layer).
+ * PolicyBuilder — Schema keys + class extends; module recreates helpers.
  */
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Layer, Schema } from "effect";
 import { describe, expect, it } from "@effect/vitest";
 import * as PolicyBuilder from "../src/PolicyBuilder";
 import * as Policy from "../src/Policy";
 
-const Flag = Context.Reference<boolean>("policy-builder-test/Flag", {
-  defaultValue: (): boolean => false,
-});
-
-const Mode = Context.Reference<"a" | "b">("policy-builder-test/Mode", {
-  defaultValue: (): "a" => "a",
-});
-
-const Handler = Context.Reference<Effect.Effect<number>>(
-  "policy-builder-test/Handler",
-  {
-    defaultValue: (): Effect.Effect<number> => Effect.succeed(0),
-  },
-);
+const modeSchema = Schema.Literals(["a", "b"]);
 
 class Demo extends PolicyBuilder.make("policy-builder-test/Demo")
-  .key("Flag", Flag)
-  .key("Mode", Mode)
-  .keyEncoded(
-    "Handler",
-    Handler,
-    (input: number | Effect.Effect<number>) =>
-      typeof input === "number" ? Effect.succeed(input) : input,
-  ) {}
+  .key("Flag", Schema.Boolean, { defaultValue: () => false })
+  .key("Mode", modeSchema, {
+    defaultValue: (): Schema.Schema.Type<typeof modeSchema> => "a",
+  })
+  .key("Handler", Schema.Number, {
+    defaultValue: (): Effect.Effect<number> => Effect.succeed(0),
+    toRuntime: (n: number) => Effect.succeed(n),
+  }) {}
+
+const Flag = Demo.references.Flag;
+const Mode = Demo.references.Mode;
+const Handler = Demo.references.Handler;
 
 const readDemo = Effect.gen(function* () {
   return {
@@ -40,7 +31,7 @@ const readDemo = Effect.gen(function* () {
 });
 
 describe("PolicyBuilder family", () => {
-  it.effect("class extends make+key; make/succeed stamp config", () =>
+  it.effect("class extends make+key(schema); make/succeed stamp decoded config", () =>
     Effect.gen(function* () {
       const bundle = Demo.make({ Flag: true, Mode: "b", Handler: 7 });
       expect(Demo.is(bundle)).toBe(true);
@@ -71,6 +62,7 @@ describe("PolicyBuilder family", () => {
       expect(Policy.isPolicy(Demo.succeed("Flag", true))).toBe(false);
       expect(Policy.isPolicy(Policy.sticky)).toBe(true);
       expect(Policy.Family.is(Policy.sticky)).toBe(true);
+      expect(Policy.Sticky.key).toBe("hyperlink-ts/Policy/Sticky");
     }),
   );
 
