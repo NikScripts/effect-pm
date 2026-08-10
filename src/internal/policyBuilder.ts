@@ -113,6 +113,48 @@ export type PolicyBuilderRefsOfKeys<
   readonly [K in keyof Keys]: Keys[K]["reference"];
 };
 
+/**
+ * Tagged fragment sum — `_tag` is the knob name (matches `.key` / Reference).
+ * Payload is `value` (schema input). Product bags stay untagged.
+ *
+ * @internal
+ */
+export type PolicyBuilderFragmentOfKeys<
+  Keys extends Record<string, PolicyBuilderKeySpec<any, any>>,
+> = {
+  [K in keyof Keys & string]: {
+    readonly _tag: K;
+    readonly value: PolicyBuilderInputOf<Keys[K]>;
+  };
+}[keyof Keys & string];
+
+/**
+ * Product config stamped from a fragment list (last write wins per `_tag`).
+ *
+ * @internal
+ */
+export type PolicyBuilderConfigFromFragments<
+  Fs extends ReadonlyArray<{
+    readonly _tag: string;
+    readonly value: unknown;
+  }>,
+> = Fs extends readonly []
+  ? {}
+  : Fs extends readonly [
+      infer H extends { readonly _tag: string; readonly value: unknown },
+      ...infer Rest,
+    ]
+    ? Rest extends ReadonlyArray<{
+        readonly _tag: string;
+        readonly value: unknown;
+      }>
+      ? PolicyBuilderMergeConfigs<
+          { readonly [P in H["_tag"]]: H["value"] },
+          PolicyBuilderConfigFromFragments<Rest>
+        >
+      : { readonly [P in H["_tag"]]: H["value"] }
+    : {};
+
 const buildKeySpec = <S extends Schema.Top, Runtime>(options: {
   readonly familyId: string;
   readonly name: string;
@@ -192,16 +234,24 @@ export interface PolicyBuilderDef<
     Id,
     Keys & { readonly [P in K]: PolicyBuilderKeySpec<S, Runtime> }
   >;
-  /** Object-form → branded policy Layer (schema-decoded; last-write config stamp). */
-  make: <const C extends PolicyBuilderConfigOfKeys<Keys>>(
-    config: C,
-  ) => PolicyBuilderPolicy<Id, C>;
+  /**
+   * Product bag **or** tagged {@link PolicyBuilderFragmentOfKeys} list → branded
+   * Layer. Array form expands to the same product config stamp (last write wins).
+   */
+  make: {
+    <const C extends PolicyBuilderConfigOfKeys<Keys>>(
+      config: C,
+    ): PolicyBuilderPolicy<Id, C>;
+    <const Fs extends ReadonlyArray<PolicyBuilderFragmentOfKeys<Keys>>>(
+      fragments: Fs,
+    ): PolicyBuilderPolicy<Id, PolicyBuilderConfigFromFragments<Fs>>;
+  };
+  /** One tagged fragment → branded single-key Layer. */
   succeed: <
     const K extends keyof Keys & string,
     const V extends PolicyBuilderInputOf<Keys[K]>,
   >(
-    keyName: K,
-    value: V,
+    fragment: { readonly _tag: K; readonly value: V },
   ) => PolicyBuilderPolicy<Id, { readonly [P in K]: V }>;
   layer: {
     <
@@ -303,23 +353,35 @@ const defProto = {
       keys: { ...this.keys, [name]: spec },
     });
   },
-  make(this: DefData, config: Record<string, unknown>) {
+  make(
+    this: DefData,
+    input:
+      | Record<string, unknown>
+      | ReadonlyArray<{ readonly _tag: string; readonly value: unknown }>,
+  ) {
+    const config: Record<string, unknown> = Array.isArray(input)
+      ? Object.fromEntries(input.map((f) => [f._tag, f.value] as const))
+      : input;
     const parts: Array<Layer.Layer<never>> = [];
     const decodedConfig: Record<string, unknown> = {};
     for (const keyName of Object.keys(this.keys)) {
       if (!Object.prototype.hasOwnProperty.call(config, keyName)) continue;
-      const input = config[keyName];
-      if (input === undefined) continue;
+      const value = config[keyName];
+      if (value === undefined) continue;
       const spec = this.keys[keyName]!;
-      const { layer, decoded } = layerForKey(spec, input);
+      const { layer, decoded } = layerForKey(spec, value);
       parts.push(layer);
       decodedConfig[keyName] = decoded;
     }
     return brandPolicy(this.id, mergeLayers(parts), decodedConfig);
   },
-  succeed(this: DefData, keyName: string, value: unknown) {
+  succeed(
+    this: DefData,
+    fragment: { readonly _tag: string; readonly value: unknown },
+  ) {
+    const keyName = fragment._tag;
     const spec = this.keys[keyName]!;
-    const { layer, decoded } = layerForKey(spec, value);
+    const { layer, decoded } = layerForKey(spec, fragment.value);
     return brandPolicy(this.id, layer, { [keyName]: decoded });
   },
   layer: dual(

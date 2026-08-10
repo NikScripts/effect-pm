@@ -9,6 +9,9 @@
  * data-first merge or `.pipe(Policy.layer(other))` — and expands the config
  * type (last write wins).
  *
+ * Override entries are a **tagged sum** (`_tag` = knob name). Product bags
+ * stay untagged; {@link make} accepts either.
+ *
  * ```ts
  * import * as Policy from "hyperlink-ts/Policy"
  *
@@ -17,6 +20,9 @@
  *   Policy.layer(Policy.streamGap("buffer")),
  * )
  * // Policy.Policy<{ Sticky: true; StreamGap: "buffer"; Verify: false }>
+ *
+ * Policy.succeed({ _tag: "Sticky", value: true })
+ * Policy.make([{ _tag: "Sticky", value: true }, { _tag: "StreamGap", value: "stall" }])
  *
  * // Same expand, data-first
  * Policy.layer(cutover, Policy.askIncumbent, Policy.yieldAccept)
@@ -184,8 +190,8 @@ export type OnConflict = Schema.Schema.Type<typeof onConflictSchema>;
 export type OnConflictResolved = Exclude<OnConflict, "inherit">;
 
 /**
- * Object form for {@link make} / fragment config. Keys match Context references
- * (PascalCase).
+ * Product bag for {@link make} / stamped {@link config}. Keys match Context
+ * references (PascalCase). Untagged — see {@link Fragment} for the sum form.
  *
  * `Yield` accepts `true` / `false` (accept / refuse) or a custom
  * `Effect.Effect<boolean>`.
@@ -202,6 +208,24 @@ export type Config = {
   readonly Conflict?: OnConflict;
   readonly Yield?: boolean | Effect.Effect<boolean>;
 };
+
+/**
+ * Tagged override entry — `_tag` is the knob name; `value` is the schema input.
+ *
+ * @category models
+ * @public
+ */
+export type Fragment =
+  | { readonly _tag: "Sticky"; readonly value: boolean }
+  | { readonly _tag: "StreamGap"; readonly value: StreamGap }
+  | { readonly _tag: "ColdAmbiguous"; readonly value: ColdAmbiguous }
+  | { readonly _tag: "Pick"; readonly value: Pick }
+  | { readonly _tag: "Verify"; readonly value: Verify }
+  | { readonly _tag: "Conflict"; readonly value: OnConflict }
+  | {
+      readonly _tag: "Yield";
+      readonly value: boolean | Effect.Effect<boolean>;
+    };
 
 /**
  * Patch `Prev` with `Patch` — patch keys win (same as Layer merge last-write).
@@ -342,50 +366,55 @@ export const Yield = Keys.references.Yield;
 // =============================================================================
 
 /** Keep the current dial across dual-serve (default on). @category layers @public */
-export const sticky: Policy<{ Sticky: true }> = Keys.succeed("Sticky", true);
+export const sticky: Policy<{ Sticky: true }> = Keys.succeed({
+  _tag: "Sticky",
+  value: true,
+});
 
 /** Disable warm stickiness. @category layers @public */
-export const unsticky: Policy<{ Sticky: false }> = Keys.succeed(
-  "Sticky",
-  false,
-);
+export const unsticky: Policy<{ Sticky: false }> = Keys.succeed({
+  _tag: "Sticky",
+  value: false,
+});
 
 /** Stream seam mode. @category layers @public */
 export const streamGap = <const M extends StreamGap>(
   mode: M,
-): Policy<{ StreamGap: M }> => Keys.succeed("StreamGap", mode);
+): Policy<{ StreamGap: M }> =>
+  Keys.succeed({ _tag: "StreamGap", value: mode });
 
 /** Cold N&gt;1 behaviour. @category layers @public */
 export const coldAmbiguous = <const M extends ColdAmbiguous>(
   mode: M,
-): Policy<{ ColdAmbiguous: M }> => Keys.succeed("ColdAmbiguous", mode);
+): Policy<{ ColdAmbiguous: M }> =>
+  Keys.succeed({ _tag: "ColdAmbiguous", value: mode });
 
 /** Soft pick when N&gt;1 and Advice misses. @category layers @public */
 export const pick = <const M extends Pick>(mode: M): Policy<{ Pick: M }> =>
-  Keys.succeed("Pick", mode);
+  Keys.succeed({ _tag: "Pick", value: mode });
 
 /** Verify and reject on failure (default). @category layers @public */
-export const verifyReject: Policy<{ Verify: "reject" }> = Keys.succeed(
-  "Verify",
-  "reject",
-);
+export const verifyReject: Policy<{ Verify: "reject" }> = Keys.succeed({
+  _tag: "Verify",
+  value: "reject",
+});
 
 /** Verify; keep status without failing Layer build. @category layers @public */
-export const verifyStatus: Policy<{ Verify: "status" }> = Keys.succeed(
-  "Verify",
-  "status",
-);
+export const verifyStatus: Policy<{ Verify: "status" }> = Keys.succeed({
+  _tag: "Verify",
+  value: "status",
+});
 
 /** Skip client verify probe. @category layers @public */
-export const verifyOff: Policy<{ Verify: false }> = Keys.succeed(
-  "Verify",
-  false,
-);
+export const verifyOff: Policy<{ Verify: false }> = Keys.succeed({
+  _tag: "Verify",
+  value: false,
+});
 
 /** Set client verify mode. @category layers @public */
 export const verify = <const M extends Verify>(
   mode: M,
-): Policy<{ Verify: M }> => Keys.succeed("Verify", mode);
+): Policy<{ Verify: M }> => Keys.succeed({ _tag: "Verify", value: mode });
 
 /**
  * Walk preference layers (first concrete wins). Hard fallback: `livenessReplace`.
@@ -426,45 +455,46 @@ export const onConflictOf = (node: unknown): OnConflict | undefined => {
 
 /** Advertise: liveness ping replace. @category layers @public */
 export const livenessReplace: Policy<{ Conflict: "livenessReplace" }> =
-  Keys.succeed("Conflict", "livenessReplace");
+  Keys.succeed({ _tag: "Conflict", value: "livenessReplace" });
 
 /** Advertise: ask incumbent to yield. @category layers @public */
 export const askIncumbent: Policy<{ Conflict: "askIncumbent" }> =
-  Keys.succeed("Conflict", "askIncumbent");
+  Keys.succeed({ _tag: "Conflict", value: "askIncumbent" });
 
 /** Advertise: reject when incumbent alive. @category layers @public */
-export const conflictReject: Policy<{ Conflict: "reject" }> = Keys.succeed(
-  "Conflict",
-  "reject",
-);
+export const conflictReject: Policy<{ Conflict: "reject" }> = Keys.succeed({
+  _tag: "Conflict",
+  value: "reject",
+});
 
 /** Advertise: inherit up the chain (default ambient). @category layers @public */
-export const conflictInherit: Policy<{ Conflict: "inherit" }> = Keys.succeed(
-  "Conflict",
-  "inherit",
-);
+export const conflictInherit: Policy<{ Conflict: "inherit" }> = Keys.succeed({
+  _tag: "Conflict",
+  value: "inherit",
+});
 
 /** Set advertise conflict preference. @category layers @public */
 export const onConflict = <const M extends OnConflict>(
   mode: M,
-): Policy<{ Conflict: M }> => Keys.succeed("Conflict", mode);
+): Policy<{ Conflict: M }> =>
+  Keys.succeed({ _tag: "Conflict", value: mode });
 
 /** Accept askIncumbent yield (default). @category layers @public */
-export const yieldAccept: Policy<{ Yield: true }> = Keys.succeed(
-  "Yield",
-  true,
-);
+export const yieldAccept: Policy<{ Yield: true }> = Keys.succeed({
+  _tag: "Yield",
+  value: true,
+});
 
 /** Refuse askIncumbent yield. @category layers @public */
-export const yieldRefuse: Policy<{ Yield: false }> = Keys.succeed(
-  "Yield",
-  false,
-);
+export const yieldRefuse: Policy<{ Yield: false }> = Keys.succeed({
+  _tag: "Yield",
+  value: false,
+});
 
 /** Custom yield handler. @category layers @public */
 export const onYield = <E extends Effect.Effect<boolean>>(
   handler: E,
-): Policy<{ Yield: E }> => Keys.succeed("Yield", handler);
+): Policy<{ Yield: E }> => Keys.succeed({ _tag: "Yield", value: handler });
 
 // =============================================================================
 // layer / make / provide / guards
@@ -508,8 +538,21 @@ export const config = <C extends Config>(self: Policy<C>): C =>
 export const layer: typeof Keys.layer = Keys.layer;
 
 /**
- * Build a {@link Policy} from an object. Stamps the same object as runtime
- * {@link config}; compose with {@link layer} (pipe or data-first).
+ * One tagged {@link Fragment} → branded single-key {@link Policy}.
+ *
+ * ```ts
+ * Policy.succeed({ _tag: "Sticky", value: true })
+ * ```
+ *
+ * @category constructors
+ * @public
+ */
+export const succeed: typeof Keys.succeed = Keys.succeed.bind(Keys);
+
+/**
+ * Build a {@link Policy} from a product {@link Config} bag **or** a
+ * {@link Fragment} list. Stamps a product bag as runtime {@link config};
+ * compose with {@link layer} (pipe or data-first).
  *
  * ```ts
  * const cutover = Policy.make({
@@ -518,13 +561,22 @@ export const layer: typeof Keys.layer = Keys.layer;
  *   Verify: "reject",
  * }).pipe(Policy.layer(Policy.verifyOff))
  * // Policy.Policy<{ Sticky: true; StreamGap: "stall"; Verify: false }>
+ *
+ * Policy.make([
+ *   { _tag: "Sticky", value: true },
+ *   { _tag: "StreamGap", value: "stall" },
+ * ])
  * ```
  *
  * @category constructors
  * @public
  */
-export const make = <const C extends Config>(config: C): Policy<C> =>
-  Keys.make(config);
+export const make: {
+  <const C extends Config>(config: C): Policy<C>;
+  <const Fs extends ReadonlyArray<Fragment>>(
+    fragments: Fs,
+  ): Policy<PolicyBuilder.ConfigFromFragments<Fs>>;
+} = Keys.make.bind(Keys);
 
 /**
  * Provide policy Layers onto a Layer (no stacked `Layer.provide`s).

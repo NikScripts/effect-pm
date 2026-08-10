@@ -90,6 +90,32 @@ describe("Policy defaults + compose", () => {
     }),
   );
 
+  it.effect("make from Fragment[] + succeed(_tag) match bag stamps", () =>
+    Effect.gen(function* () {
+      const fromFrags = Policy.make([
+        { _tag: "Sticky", value: false },
+        { _tag: "StreamGap", value: "buffer" },
+        { _tag: "Verify", value: false },
+      ]);
+      expect(Policy.config(fromFrags)).toEqual({
+        Sticky: false,
+        StreamGap: "buffer",
+        Verify: false,
+      });
+      const tagged = Policy.succeed({ _tag: "StreamGap", value: "drop" });
+      expect(Policy.config(tagged)).toEqual({ StreamGap: "drop" });
+      const d = yield* readPolicy.pipe(
+        Effect.provide(
+          Policy.layer(fromFrags, tagged, Policy.yieldRefuse),
+        ),
+      );
+      expect(d.sticky).toBe(false);
+      expect(d.streamGap).toBe("drop");
+      expect(d.verify).toBe(false);
+      expect(yield* d.yield).toBe(false);
+    }),
+  );
+
   it.effect("layer pipe + data-first expand config (last write wins)", () =>
     Effect.gen(function* () {
       const piped = Policy.make({

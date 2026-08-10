@@ -219,10 +219,12 @@ modules use HttpApi-shaped constructables with Schema keys —
 `class X extends PolicyBuilder.make(id).key(name, schema, { defaultValue })` — where
 `defaultValue` is the `Context.Reference` default; the domain module recreates helpers.
 Fragments are real `Policy.Policy<{…}>` values (Layer overrides; `Policy.verifyOff` →
-`Policy.Policy<{ Verify: false }>`). Compose with dual `Policy.layer`
-(`.pipe(Policy.layer(other))` or `Policy.layer(a, b, c)` — config expands) /
-`Policy.provide`, or object-form `Policy.make({ StreamGap: "stall", … })`. Either way the
-name says "layer."
+`Policy.Policy<{ Verify: false }>`). Override entries are a tagged sum
+(`Policy.succeed({ _tag: "StreamGap", value: "stall" })` — `_tag` names the knob).
+Compose with dual `Policy.layer` (`.pipe(Policy.layer(other))` or
+`Policy.layer(a, b, c)` — config expands) / `Policy.provide`, product bag
+`Policy.make({ StreamGap: "stall", … })`, or `Policy.make([{ _tag, value }, …])`.
+Either way the name says "layer."
 
 {#owned-string-literals-pascalcase .must appliesTo="src examples"}
 ## Owned string literals are PascalCase

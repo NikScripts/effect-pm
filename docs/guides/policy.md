@@ -15,6 +15,9 @@ Schemas (each key is a `Context.Reference` — ambient defaults are Reference
 `defaultValue`); this module recreates helpers (`sticky`, …). Same kernel for
 future `LookupPolicy` / `NodePolicy`. Apps keep importing `Policy`.
 
+Override entries are a **tagged sum** (`_tag` = knob name). Product bags stay
+untagged; `Policy.make` accepts either a bag or a `Fragment[]`.
+
 ```ts
 import * as Policy from "hyperlink-ts/Policy"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
@@ -28,6 +31,9 @@ const cutover = Policy.make({ Sticky: true, StreamGap: "stall", Verify: "reject"
 // Policy.Policy<{ Sticky: true; StreamGap: "buffer"; Verify: false }>
 // Policy.config(cutover) → { Sticky: true, StreamGap: "buffer", Verify: false }
 
+Policy.succeed({ _tag: "Sticky", value: true })
+Policy.make([{ _tag: "Sticky", value: true }, { _tag: "StreamGap", value: "stall" }])
+
 // Same expand, data-first
 Policy.layer(Policy.sticky, Policy.streamGap("stall"), Policy.verifyOff)
 
@@ -38,8 +44,9 @@ Hyperlink.lookupClient(Mail).pipe(
 ```
 
 Zero-arg fragments are **values** (`Policy.sticky`, not `Policy.sticky()`).
-`Policy.make({ … })` stamps the object as runtime config; `Policy.layer` merges
-Layers **and** configs (pipe or data-first) — not a phantom cast.
+`Policy.make({ … })` / `Policy.make([{ _tag, value }, …])` stamp a **product**
+config; `Policy.layer` merges Layers **and** configs (pipe or data-first) — not
+a phantom cast.
 
 Runnable demo: [`examples/node/policy-lookup-cutover.ts`](../../examples/node/policy-lookup-cutover.ts)
 (`pnpm run example:node-policy-lookup-cutover`).

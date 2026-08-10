@@ -290,7 +290,7 @@ class LookupPolicy extends PolicyBuilder.make("hyperlink-ts/LookupPolicy")
 {}
 
 export const Sticky = LookupPolicy.references.Sticky
-export const sticky = LookupPolicy.succeed("Sticky", true)
+export const sticky = LookupPolicy.succeed({ _tag: "Sticky", value: true })
 export const make = LookupPolicy.make
 ```
 
@@ -303,26 +303,27 @@ export const make = LookupPolicy.make
 | **`.make` / `layer` / `provide` / `succeed`** | Branded Layer override toolkit |
 | **Module helpers** | Recreated DX — not auto-generated |
 
-**Eng’d today:** private `Keys` constructable inside `Policy` + flat helpers. **Next:**
-Eng `NodePolicy` the same way; rename `Policy` → `LookupPolicy`.
+**Eng’d today:** private `Keys` constructable inside `Policy` + flat helpers +
+key-`_tag` fragments. **Next:** Eng `NodePolicy` the same way; rename `Policy` →
+`LookupPolicy`.
 
 Apps normally import **`LookupPolicy` / `NodePolicy`**, not the builder.
 
-#### `_tag` — key vs value (evaluation → lean: **key**)
+#### `_tag` — key vs value (Eng’d: **key**)
 
 Effect uses `_tag` for **closed sums** you `Match` / decode as variants (`Data.TaggedError`,
 `Schema.TaggedStruct`, `Match.tag`). It does **not** put `_tag` on Context.Reference
 identity — refs are keyed by their string id / record field (`Sticky`, `StreamGap`).
 
-Policy has two shapes today:
+Policy has two shapes:
 
 | Shape | Kind | `_tag` fit |
 |-------|------|------------|
 | `make({ Sticky: true, StreamGap: "stall" })` | **Product** (many knobs at once) | `_tag` on the bag doesn’t work (one object, many keys) |
-| `sticky` / `streamGap("stall")` fragments | **Sum** (which knob is this override?) | `_tag` names the knob — Effect-consistent |
-| Mode strings (`"stall"`, `"reject"`) | **Sum** (which mode?) | `_tag` on the **value** fits standards (`{ _tag: "Stall" }`) |
+| `succeed({ _tag, value })` / helpers | **Sum** (which knob is this override?) | `_tag` names the knob — Effect-consistent |
+| Mode strings (`"stall"`, `"reject"`) | **Sum** (which mode?) | `_tag` on the **value** fits standards (`{ _tag: "Stall" }`) — later cut |
 
-**Lean (owner + Effect check): `_tag` on the key (fragment), not the Reference bag.**
+**Locked + Eng’d: `_tag` on the key (fragment), not the Reference bag.**
 
 Each override is a tagged struct; `_tag` is the knob name (PascalCase, matches Reference /
 `.key("Sticky", …)`). Payload is the value (boolean, mode, …):
@@ -336,7 +337,7 @@ type Fragment =
 
 Policy.succeed({ _tag: "Sticky", value: true })
 Policy.make([{ _tag: "Sticky", value: true }, { _tag: "StreamGap", value: "stall" }])
-// product bag can stay as sugar → expands to Fragment[]
+// product bag sugar → same product config stamp
 Policy.make({ Sticky: true, StreamGap: "stall" })
 ```
 
@@ -349,8 +350,7 @@ Why not `_tag` instead of Context.Reference: ambient `yield* Policy.Sticky` and 
 overrides stay Reference-based (Effect Context). `_tag` is for the **fragment / config
 entry** sum, not for replacing refs.
 
-**Not Eng’d yet** — lock the lean; migrate `succeed` / fragment Schema when we Eng the
-cut (with `LookupPolicy` rename or sooner if desired).
+**Eng’d** on `PolicyBuilder` / `Policy` (`succeed` / `make(Fragment[])` / product bag).
 
 ### 3.4 Parked — prior long Address API notes
 

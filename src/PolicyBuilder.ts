@@ -9,6 +9,9 @@
  * 2. **Module** — recreate helpers (`sticky`, `streamGap`, re-export
  *    `X.references.*`) — hand-written DX in most cases.
  *
+ * Fragments are a **tagged sum** (`_tag` = knob name). Product bags stay
+ * untagged; `make` accepts either a bag or a `Fragment[]`.
+ *
  * ```ts
  * import * as PolicyBuilder from "hyperlink-ts/PolicyBuilder"
  * import { Effect, Schema } from "effect"
@@ -23,11 +26,12 @@
  *
  * // module recreates helpers
  * export const Sticky = Demo.references.Sticky
- * export const sticky = Demo.succeed("Sticky", true)
+ * export const sticky = Demo.succeed({ _tag: "Sticky", value: true })
  *
  * const bundle = Demo.make({ Sticky: true }).pipe(
- *   Demo.layer(Demo.succeed("Sticky", false)),
+ *   Demo.layer(Demo.succeed({ _tag: "Sticky", value: false })),
  * )
+ * // or: Demo.make([{ _tag: "Sticky", value: true }])
  * ```
  *
  * @module PolicyBuilder
@@ -99,6 +103,30 @@ export type MergePolicyList<
 export type ConfigOfKeys<
   Keys extends Record<string, KeySpec<any, any>>,
 > = internal.PolicyBuilderConfigOfKeys<Keys>;
+
+/**
+ * Tagged fragment sum for a keys map — `_tag` names the knob; `value` is the
+ * schema input. Product bags (`make({ Sticky: true })`) stay untagged.
+ *
+ * @category models
+ * @public
+ */
+export type FragmentOfKeys<
+  Keys extends Record<string, KeySpec<any, any>>,
+> = internal.PolicyBuilderFragmentOfKeys<Keys>;
+
+/**
+ * Product config stamped from a fragment list (last write wins per `_tag`).
+ *
+ * @category models
+ * @public
+ */
+export type ConfigFromFragments<
+  Fs extends ReadonlyArray<{
+    readonly _tag: string;
+    readonly value: unknown;
+  }>,
+> = internal.PolicyBuilderConfigFromFragments<Fs>;
 
 /**
  * Constructable returned by {@link make} — the `class extends` target (HttpApi-shaped).
