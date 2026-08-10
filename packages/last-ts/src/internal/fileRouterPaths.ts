@@ -11,6 +11,7 @@ import type { PlatformError } from "effect/PlatformError";
 import { NodeFileSystem, NodePath } from "@effect/platform-node";
 
 const EXT = /\.(tsx|ts|jsx|js)$/;
+const GROUP_SEGMENT = /^\(.*\)$/;
 
 export type FileEntry = {
   readonly id: string;
@@ -75,7 +76,13 @@ const walkFiles = (
     return out;
   });
 
-/** `[chapter].tsx` under docs → `/docs/[chapter]` */
+/**
+ * `[chapter].tsx` under docs → `/docs/[chapter]`.
+ *
+ * Organizational `(group)` segments (Waku-style route groups) are stripped —
+ * they change nothing about the served path, only the on-disk layout, so
+ * `(book)/docs/[chapter]` → `/docs/[chapter]`.
+ */
 export const toFilePath = (
   pagesDir: string,
   absFile: string,
@@ -83,7 +90,9 @@ export const toFilePath = (
 ): string => {
   const rel = path.relative(pagesDir, absFile).replace(/\\/g, "/");
   const noExt = rel.replace(EXT, "");
-  const segs = noExt.split("/").filter((s) => s.length > 0);
+  const segs = noExt
+    .split("/")
+    .filter((s) => s.length > 0 && !GROUP_SEGMENT.test(s));
   if (segs[segs.length - 1] === "index") segs.pop();
   return "/" + segs.join("/");
 };

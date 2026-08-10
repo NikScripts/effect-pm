@@ -16,10 +16,13 @@ import * as pageSuccess from "./pageSuccess";
 import * as catalog from "./routes";
 
 const EXT = /\.(tsx|ts|jsx|js)$/;
+const GROUP_SEGMENT = /^\(.*\)$/;
 
 /**
  * Vite `import.meta.glob` key → disk filePath (`/guides/[slug]`).
- * Skips `_layout` / `_root` / other `_` segments.
+ * Skips `_layout` / `_root` / other `_` segments. Strips organizational
+ * `(group)` segments (Waku-style route groups) — `(book)/docs/[chapter]` →
+ * `/docs/[chapter]`.
  *
  * @public
  */
@@ -29,9 +32,10 @@ export const filePathFromGlobKey = (key: string): string | undefined => {
   const idx = normalized.lastIndexOf(marker);
   if (idx === -1) return undefined;
   const rel = normalized.slice(idx + marker.length).replace(EXT, "");
-  const segs = rel.split("/").filter((s) => s.length > 0);
-  if (segs.length === 0) return "/";
-  if (segs.some((s) => s.startsWith("_"))) return undefined;
+  const rawSegs = rel.split("/").filter((s) => s.length > 0);
+  if (rawSegs.length === 0) return "/";
+  if (rawSegs.some((s) => s.startsWith("_"))) return undefined;
+  const segs = rawSegs.filter((s) => !GROUP_SEGMENT.test(s));
   if (segs[segs.length - 1] === "index") segs.pop();
   return "/" + segs.join("/");
 };

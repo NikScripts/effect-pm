@@ -52,6 +52,36 @@ describe("fileRouterPaths", () => {
     }).pipe(Effect.provide(nodeLayer)),
   );
 
+  it.effect("strips (group) segments from the served path", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const dir = yield* fs.makeTempDirectory({ prefix: "hl-fr-group-" });
+      const bookDir = path.join(dir, "(book)");
+      yield* fs.makeDirectory(path.join(bookDir, "docs"), {
+        recursive: true,
+      });
+      yield* fs.writeFileString(
+        path.join(bookDir, "docs", "[chapter].tsx"),
+        "export default function Chapter() { return null }\n",
+      );
+      yield* fs.writeFileString(
+        path.join(bookDir, "search.tsx"),
+        "export default function Search() { return null }\n",
+      );
+      const entries = yield* discover(dir);
+      expect(entries.map((e) => e.filePath)).toEqual([
+        "/docs/[chapter]",
+        "/search",
+      ]);
+      expect(entries.map((e) => e.routePath)).toEqual([
+        "/docs/:chapter",
+        "/search",
+      ]);
+      yield* fs.remove(dir, { recursive: true, force: true });
+    }).pipe(Effect.provide(nodeLayer)),
+  );
+
   it.effect("emit is idempotent and check passes", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
