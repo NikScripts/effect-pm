@@ -65,7 +65,7 @@ Copy `HttpApiBuilder` shape:
 |-------|--------|
 | Page handler | `Effect → ReactNode` (plus JSX overload `<Home />`; legacy `ComponentType<PageProps>` still accepted) |
 | Nested regular components | `Page.Request` Effect service + React bridge `Page.useRequest` |
-| Document title | `Page.Document` set-anywhere service + `Page.useDocument` bridge |
+| Document chrome | **`Page.document` / `Document.*`** — see [`page-document-lock.md`](./page-document-lock.md); do **not** teach `(yield* Page.Document).set` |
 | Layout | component + `children` (no Outlet-as-service) |
 | Baked Effect view | `View.effect(effect)` → `ComponentType` (no `<Run effect={…} />`) |
 | `View.make` redesign | **Parked for later** |
@@ -85,7 +85,7 @@ class Site extends Router.make("site").add(
 
 const Chapter = Effect.gen(function* () {
   const req = yield* Page.Request
-  yield* (yield* Page.Document).set(`Chapter ${req.params.chapter}`)
+  yield* Page.document(Document.title(`Chapter ${req.params.chapter}`))
   return <h1>{req.params.chapter}</h1>
 })
 

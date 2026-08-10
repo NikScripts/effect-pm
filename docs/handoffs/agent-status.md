@@ -7,7 +7,7 @@
 | Agent | Branch | Handoff | State | Tip SHA | Verification | Gaps / blockers | Updated (UTC) |
 |-------|--------|---------|-------|---------|--------------|-----------------|---------------|
 | **4** | `cursor/hyperservice-open-deps-5679` | [gap proposals](./examples-gap-proposals.md) · [E5 apps](./examples-apps-e5-plan.md) · [release cleanup](./release-prep-cleanup.md) | **tip-synced** — examples + release-prep cleanup | same tip as `integration` | Related 97/97; archive pass | Idea 10 E5 owner-gated; changeset consolidate owner | 2026-07-29 |
-| **K** | `cursor/agent-k-page-route-6d0e` | [**corrections**](./last-ts-api-corrections.md) · [HttpApi lock](./router-httpapi-lock.md) | **ahead** — deleted getConfig/asDefault/fromEffect*/FromPages; View.make | ea924cf14 | pending verify after purge | owner review | 2026-08-08 |
+| **K** | `cursor/agent-k-page-route-6d0e` | [**corrections**](./last-ts-api-corrections.md) · [Document lock](./page-document-lock.md) · [HttpApi](./router-httpapi-lock.md) | **ahead** — host façades + Document design lock (not Eng’d) | (push tip) | dogfood build OK | Eng Document needs go | 2026-08-10 |
 | **G / TUI** | *(fired)* | was page/route + last-ts site | **handed to K** | — | — | Do not assign | 2026-08-08 |
 | **Hygiene** | merged to `integration` | branch tidy + `hyp` land + landing polish | **landed** | same tip as `integration` | typecheck + lint (env: suite needs newer Node `node:sqlite` backup) | Active agents: **4**, **5**, **K** | 2026-07-26 |
 | **5** | `cursor/lifecycle-defer-start-929b` | [launcher brief](./launcher-and-handoff-brief.md) · [Update](../guides/update.md) · [addresses dock](./node-addresses-and-update-api.md) · [Versioned](./versioned-schema-decisions.md) | **tip-synced** — `Update` Eng'd + hardened tests/docs; Lookup Tag→Service fix | same tip as `integration` | `test/update.test.ts` (8) + dream-redeploy + launcher/lookup suites | Node.make / Host|Machine / proxy still design | 2026-08-08 |
@@ -30,7 +30,7 @@
 
 ### Active (owner approval required)
 1. **Agent 4:** Examples Ideas 1–9 + Related notes Eng’d. **Release-prep cleanup Eng’d** (archive completed handoffs/plans, dead scripts, npmignore, legacy example aliases). Idea 10 Apps/E5 still owner-gated. Owner still: changeset consolidate before `version`/publish.
-2. **Agent K:** corrections lock [`last-ts-api-corrections.md`](./last-ts-api-corrections.md) — no `getConfig` / asDefault / Route bake merges; `View.make`. Park: [`owned-string-casing-park.md`](./owned-string-casing-park.md).
+2. **Agent K:** corrections + host boundary Eng’d; **Document chrome design locked** ([`page-document-lock.md`](./page-document-lock.md)) — **Eng needs go**. Park: [`owned-string-casing-park.md`](./owned-string-casing-park.md).
 3. **Agent 5 (Launcher + handoff):** **Lifecycle L0–L7 closed**. Chrome → **Agent K** (was G). **`Update` module Eng'd** (`plan`→`simulate`→`execute`, guide [`update.md`](../guides/update.md)). Tag→Service cleanup (Dialers + Lookup siblings). Address/`Node.make`/locality still design dock. Gated: #37.
 4. **Docs site:** Live — apex coming-soon (inlined CSS + `(book)` chrome); docs on `dev`. Origin host-gate via `serve-production.mjs` (before Waku static). Islands: `hyperlink-ts` alias + `.hl-dashboard`. Getting Started em-dash/voice polish.
 

@@ -54,12 +54,17 @@ Follow **[`router-httpapi-lock.md`](./router-httpapi-lock.md)** for Router / Rou
 - `View.make` + `View.mount` + Layers for DI components
 - `History` / `Memory` / `Waku` as transport namespaces
 
+### Document chrome — locked (design; not Eng’d)
+
+SSOT: [`page-document-lock.md`](./page-document-lock.md) — `Page.document`,
+`Document.make` / `Document.provide` / `Document.transform`, `Layout.Root` +
+`<Layout.Outlet />`. Supersedes HttpApi-lock `(yield* Page.Document).set` teaching.
+
 ### Not locked yet — design only, do not Eng from vibes
 
-1. **Page title / document chrome API** — `Page.Document` is the lean in the HttpApi lock; expand only after owner item-by-item lock (not ad-hoc `Last.provide(ShellMeta)` as the product story).
-2. **Single combined provider story** — baking one `Last.provider(…)` before use is the point; do not invent extra `RegistryProvider` / nested provider recipes in examples until locked.
-3. **File-router** (`last-ts/vite` `fileRouter`, `paths.gen`) — Eng’d without a full feature/standards write-up. Needs a proper design pass (capabilities, honesty of codegen, CI check, alignment with HttpApi Router). Do not grow catalog-merge APIs until that exists.
-4. **Layout as View-shaped default Component + provide-swap** — lean captured in [`page-layout-design.md`](./page-layout-design.md); **not Eng’d**.
+1. **Single combined provider story** — baking one `Last.provider(…)` before use is the point; do not invent extra `RegistryProvider` / nested provider recipes in examples until locked.
+2. **File-router** (`last-ts/vite` `fileRouter`, `paths.gen`) — Eng’d without a full feature/standards write-up. Needs a proper design pass (capabilities, honesty of codegen, CI check, alignment with HttpApi Router). Do not grow catalog-merge APIs until that exists.
+3. **Layout as View-shaped default Component + provide-swap** — lean captured in [`page-layout-design.md`](./page-layout-design.md); overlaps `Layout.Root` in the Document lock — **not Eng’d**.
 
 ---
 
