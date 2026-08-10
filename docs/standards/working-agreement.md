@@ -112,7 +112,7 @@ Waku file routing.” Host CLI filenames (`waku.config.ts`, `waku.server.tsx`) m
 remain; the **import path** must be `last-ts/*`.
 
 ESLint `no-restricted-imports` enforces this outside `packages/last-ts/**`.
-Legacy Hyperlink `docs/site/**` is grandfathered until cutover — do not copy it.
+Apps (including Hyperlink `docs/site` and Last `docs/last/site`) import `last-ts/*` only — never `waku`.
 SSOT: [`../handoffs/last-ts-api-corrections.md`](../handoffs/last-ts-api-corrections.md).
 
 {#decisions-doc-is-ssot .must appliesTo=process}

@@ -54,9 +54,35 @@ export const manifest = () =>
   run("pnpm", ["-C", "docs/site", "docs:manifest:check"]);
 
 /**
+ * Dogfood `paths.gen.ts` freshness (Last site + Hyperlink docs site).
+ * Lock: `docs/handoffs/file-router-lock.md`.
+ */
+export const fileRouter = () =>
+  Effect.gen(function* () {
+    yield* run("pnpm", [
+      "hyp",
+      "file-router",
+      "check",
+      "--pages",
+      "docs/last/site/src/pages",
+      "--out",
+      "docs/last/site/src/paths.gen.ts",
+    ]);
+    yield* run("pnpm", [
+      "hyp",
+      "file-router",
+      "check",
+      "--pages",
+      "docs/site/src/pages",
+      "--out",
+      "docs/site/src/paths.gen.ts",
+    ]);
+  });
+
+/**
  * Default green gate for agents and CI.
  *
- * deps → typecheck → lint → test → build → markers.
+ * deps → typecheck → lint → test → build → markers → file-router.
  *
  * Matches working-agreement green-before-commit, plus deps + markers.
  * `treeshake` stays opt-in (`hyp check treeshake`).
@@ -71,4 +97,5 @@ export const verify = () =>
     yield* test();
     yield* build();
     yield* markers();
+    yield* fileRouter();
   });

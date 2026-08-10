@@ -10,7 +10,8 @@
 "use client";
 
 import * as React from "react";
-import { Context, Effect, Layer } from "effect";import * as core from "./internal/documentCore";
+import { Context, Effect, Layer } from "effect";
+import * as core from "./internal/documentCore";
 import * as docReact from "./internal/documentReact";
 
 export type DocumentMeta = core.DocumentMeta;
@@ -18,7 +19,10 @@ export type DocumentLink = core.DocumentLink;
 export type DocumentScript = core.DocumentScript;
 export type BaseFields = core.BaseFields;
 export type FieldsOf<Extras extends object = {}> = core.FieldsOf<Extras>;
-export type Patch<F extends object = BaseFields> = core.Patch<F>;
+export type Patch<
+  F extends object = BaseFields,
+  C extends object = {},
+> = core.Patch<F, C>;
 
 export const PatchTypeId = core.PatchTypeId;
 export const isPatch = core.isPatch;
@@ -149,15 +153,17 @@ export const Head: Context.Reference<React.FC> = Context.Reference(
  * @public
  */
 export const transform: {
-  <F extends object>(fn: (prev: F) => F): Patch<F>;
-  <D extends AnyDocument<any>>(
+  <F extends object, C extends object = {}>(
+    fn: (prev: F) => F,
+  ): Patch<F, C>;
+  <D extends AnyDocument<any>, C extends object = {}>(
     doc: D,
     fn: (prev: D["~last-ts/Document/fields"]) => D["~last-ts/Document/fields"],
-  ): Patch<D["~last-ts/Document/fields"]>;
+  ): Patch<D["~last-ts/Document/fields"], C>;
 } = ((
   first: ((prev: any) => any) | AnyDocument,
   second?: (prev: any) => any,
-): Patch<any> => {
+): Patch<any, any> => {
   if (typeof first === "function" && !isDocumentClass(first) && second === undefined) {
     return core.makePatch(first as (prev: any) => any);
   }
@@ -165,33 +171,43 @@ export const transform: {
 }) as typeof transform;
 
 /** @public */
-export const title = (value: string): Patch<BaseFields> =>
-  transform((prev) => ({ ...prev, title: value }));
+export const title = (
+  value: string,
+): Patch<BaseFields, { readonly title: string }> =>
+  core.makePatch((prev) => ({ ...prev, title: value }));
 
 /** @public */
 export const titleTransform = (
   fn: (title: string) => string,
-): Patch<BaseFields> => transform((prev) => ({ ...prev, titleTransform: fn }));
+): Patch<BaseFields, { readonly titleTransform: (title: string) => string }> =>
+  core.makePatch((prev) => ({ ...prev, titleTransform: fn }));
 
 /** @public */
 export const description = (
   value: string | undefined,
-): Patch<BaseFields> => transform((prev) => ({ ...prev, description: value }));
+): Patch<BaseFields, { readonly description: string | undefined }> =>
+  core.makePatch((prev) => ({ ...prev, description: value }));
 
 /** @public */
-export const lang = (value: string): Patch<BaseFields> =>
-  transform((prev) => ({ ...prev, lang: value }));
+export const lang = (
+  value: string,
+): Patch<BaseFields, { readonly lang: string }> =>
+  core.makePatch((prev) => ({ ...prev, lang: value }));
 
 /** @public */
-export const meta = (entry: DocumentMeta): Patch<BaseFields> =>
-  transform((prev) => ({
+export const meta = (
+  entry: DocumentMeta,
+): Patch<BaseFields, { readonly meta: ReadonlyArray<DocumentMeta> }> =>
+  core.makePatch((prev) => ({
     ...prev,
     meta: [...(prev.meta ?? []), entry],
   }));
 
 /** @public */
-export const link = (entry: DocumentLink): Patch<BaseFields> =>
-  transform((prev) => ({
+export const link = (
+  entry: DocumentLink,
+): Patch<BaseFields, { readonly links: ReadonlyArray<DocumentLink> }> =>
+  core.makePatch((prev) => ({
     ...prev,
     links: [...(prev.links ?? []), entry],
   }));
@@ -200,19 +216,23 @@ export const link = (entry: DocumentLink): Patch<BaseFields> =>
 export const styleSheet = (
   href: string,
   opts?: { readonly media?: string },
-): Patch<BaseFields> =>
+): Patch<BaseFields, { readonly links: ReadonlyArray<DocumentLink> }> =>
   link({ rel: "stylesheet", href, media: opts?.media });
 
 /** @public */
-export const style = (css: string): Patch<BaseFields> =>
-  transform((prev) => ({
+export const style = (
+  css: string,
+): Patch<BaseFields, { readonly styles: ReadonlyArray<string> }> =>
+  core.makePatch((prev) => ({
     ...prev,
     styles: [...(prev.styles ?? []), css],
   }));
 
 /** @public */
-export const script = (entry: DocumentScript): Patch<BaseFields> =>
-  transform((prev) => ({
+export const script = (
+  entry: DocumentScript,
+): Patch<BaseFields, { readonly scripts: ReadonlyArray<DocumentScript> }> =>
+  core.makePatch((prev) => ({
     ...prev,
     scripts: [...(prev.scripts ?? []), entry],
   }));
@@ -223,6 +243,7 @@ type ProvideArg = core.ProvideArg<
 
 /**
  * Build the fields cell from a full provide fold (shared by Layer + RSC root).
+ * Incomplete required fields throw at runtime; prefer {@link provide} for Layers.
  *
  * @public
  */
@@ -241,15 +262,20 @@ export const makeCell = (
 };
 
 /**
- * Layer fulfill — complete bag required; installs {@link Cell} for
- * {@link ./Page.document} + React {@link FieldsProvider} via {@link ./Last.provider}.
+ * Layer fulfill — `title` + `titleTransform` required (type + runtime).
+ * Installs {@link Cell} for {@link ./Page.document} + React {@link FieldsProvider}
+ * via {@link ./Last.provider}.
  *
  * @public
  */
-export const provide = (
+export const provide = <const Args extends ReadonlyArray<ProvideArg>>(
   doc: AnyDocument<any>,
-  ...args: ReadonlyArray<ProvideArg>
-): Layer.Layer<Cell> => Layer.succeed(Cell, makeCell(doc, ...args));
+  ...args: Args
+): core.ProvideResult<Cell, Args> =>
+  Layer.succeed(Cell, makeCell(doc, ...args)) as core.ProvideResult<
+    Cell,
+    Args
+  >;
 
 /**
  * Apply `Page.document` args to {@link Cell}.

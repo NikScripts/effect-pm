@@ -94,7 +94,6 @@ const App = View.mount(Shell)
 // Prefer pipe(layer, Layer.provide(…)) over layer.pipe(…)
 ```
 
-## Open (do not invent)
+## Spine
 
-See corrections lock — title / single-provider teaching / file-router design pass /
-Layout provide-swap.
+Full walkthrough: [`../handoffs/last-ts-spine.md`](../handoffs/last-ts-spine.md).

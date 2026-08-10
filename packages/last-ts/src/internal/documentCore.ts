@@ -3,8 +3,6 @@
  *
  * @internal
  */
-import type { Effect } from "effect";
-
 export const PatchTypeId = "~last-ts/Document/Patch" as const;
 
 export type DocumentMeta = {
@@ -64,28 +62,98 @@ export type FieldsOf<Extras extends object = {}> = BaseFields & Extras;
 export type FieldsPartialOf<Extras extends object = {}> = BaseFieldsPartial &
   Partial<Extras>;
 
+/** Phantom contrib bag on sugars for {@link ProvideResult}. @internal */
+export const ContributesTypeId = "~last-ts/Document/contributes" as const;
+
 /**
  * Branded field patch for `Page.document` / `Document.provide` only.
+ * `C` is a phantom of keys this patch contributes (for provide completeness).
  *
  * @public
  */
-export type Patch<F extends object = BaseFields> = {
+export type Patch<F extends object = BaseFields, C extends object = {}> = {
   readonly [PatchTypeId]: typeof PatchTypeId;
   readonly transform: (prev: F) => F;
+  readonly [ContributesTypeId]?: C;
 };
 
-export const isPatch = (u: unknown): u is Patch<any> =>
+export const isPatch = (u: unknown): u is Patch<any, any> =>
   typeof u === "object" &&
   u !== null &&
   PatchTypeId in u &&
   (u as Patch)[PatchTypeId] === PatchTypeId;
 
-export const makePatch = <F extends object>(
+export const makePatch = <F extends object, C extends object = {}>(
   transform: (prev: F) => F,
-): Patch<F> => ({
+): Patch<F, C> => ({
   [PatchTypeId]: PatchTypeId,
   transform,
 });
+
+/** Flatten `&` nests for readable hovers. @internal */
+type Flat<T extends object> = { readonly [K in keyof T]: T[K] } & {};
+
+/** Last-wins merge. @internal */
+export type MergeLast<A extends object, B extends object> = Flat<
+  Omit<A, keyof B> & B
+>;
+
+export type RequiredKeys<S extends object> = {
+  [K in keyof S]-?: undefined extends S[K] ? never : K;
+}[keyof S];
+
+export type MissingKeys<S extends object, P extends object> = Exclude<
+  RequiredKeys<S>,
+  keyof P
+>;
+
+export type IsComplete<S extends object, P extends object> =
+  [MissingKeys<S, P>] extends [never]
+    ? [RequiredKeys<S>] extends [never]
+      ? true
+      : {
+          [K in RequiredKeys<S>]: K extends keyof P
+            ? [P[K]] extends [S[K]]
+              ? true
+              : false
+            : false;
+        }[RequiredKeys<S>] extends true
+        ? true
+        : false
+    : false;
+
+/** Keys required after {@link ../Document.provide} fold. @internal */
+export type ProvideRequired = {
+  readonly title: string;
+  readonly titleTransform: (title: string) => string;
+};
+
+/** Contrib bag of one provide arg (patch phantom or object literal). @internal */
+export type ContribOf<A> = A extends Patch<any, infer C> ? C
+  : A extends object ? A
+  : {};
+
+/** Left→right fold of provide arg contribs. @internal */
+export type FoldContribs<Args extends ReadonlyArray<unknown>> =
+  Args extends readonly [] ? {}
+  : Args extends readonly [infer Head, ...infer Tail]
+    ? MergeLast<ContribOf<Head>, FoldContribs<Tail>>
+    : {};
+
+/**
+ * {@link Layer} when contribs cover provide-required keys; else a diagnostic.
+ *
+ * @internal
+ */
+export type ProvideResult<
+  CellTag,
+  Args extends ReadonlyArray<unknown>,
+> = IsComplete<ProvideRequired, FoldContribs<Args>> extends true
+  ? import("effect/Layer").Layer<CellTag>
+  : {
+      readonly _error: "Document.provide: incomplete";
+      readonly missing: MissingKeys<ProvideRequired, FoldContribs<Args>>;
+    };
 
 /** Empty lists + identity transform; title unset until provide/page fills it. */
 export const emptyPartial = (): BaseFieldsPartial => ({

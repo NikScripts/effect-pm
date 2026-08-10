@@ -1,4 +1,4 @@
-{#file-router title="File router" status="draft" appliesTo=all}
+{#file-router title="File router" status="stable" appliesTo=all}
 <!-- docs-site-link:begin -->
 > [!NOTE]
 > You're reading this page's **source**. The rendered version — with navigation, search,
@@ -6,32 +6,24 @@
 <!-- docs-site-link:end -->
 # File router
 
-{.draft}
-**Draft** — path-table codegen + Vite plugin are Eng’d. Apps never import `waku`;
-host façades are `last-ts/config` / `last-ts/server`. Legacy Hyperlink
-`docs/site` cutover onto that boundary is still open. Page marks live on
-`last-ts/Page`; soft-nav stays on [Routing](/docs/routing).
+**Lock:** [`../handoffs/file-router-lock.md`](../handoffs/file-router-lock.md) ·
+**Spine:** [`../handoffs/last-ts-spine.md`](../handoffs/last-ts-spine.md)
 
-```ts
-import * as Page from "last-ts/Page"
+`fileRouter` walks `pages/**` and emits a **path-only** typed table
+(`paths.gen.ts`). It is not the soft-nav catalog, not host registration, and not
+Page mint mode.
 
-export default Page.static("/about", AboutView, { title: "About" })
-export default Page.dynamic("/search", SearchView)
-export default Page.build("/docs/:chapter", ChapterView, {
-  paths: listChapterSlugs, // Effect
-})
-```
-
-Hyperlink owns a **typed path table** for file-based routes: walk `pages/**`,
-emit `paths.gen.ts`, feed `Route.fileRoot` so `urls.*` is a closed builder — not
-`string` hrefs from `import.meta.glob`.
+Apps never import `waku`. Host façades: `last-ts/config` / `last-ts/server`.
+Page bodies: `Page.make` / `Page.static` (path from the file). Soft-nav:
+`Router.make` + `Route.get` (hand-authored params).
 
 ```text
 pages/**  →  paths.gen.ts (FilePath | RoutePath | ids)
-          →  Route.fileRoot(fileEntries) → urls.docs_chapter("routing")
+          →  align by hand with Router.make / Server.fromPage
 ```
 
-Disk keeps `[param]`; Hyperlink `Route` keeps `:param`. The emitter translates.
+Disk keeps `[param]`; Route keeps `:param`. Organizational `(group)` segments
+are stripped from the typed URL path (`(book)/docs/x` → `/docs/x`).
 
 ## Demo — closed unions
 
@@ -43,8 +35,7 @@ Run: `pnpm run example:ui-file-router-codegen`
 ``` ts
 ```
 
-Type lock (wrong paths are compile errors):
-`test/ui-file-router-proto.test-d.ts`.
+Type lock: `test/ui-file-router-proto.test-d.ts`.
 
 ```ts
 type FilePath = "/" | "/api/[pkg]" | "/docs/[chapter]" | "/search"
@@ -52,8 +43,10 @@ type RoutePath = "/" | "/api/:pkg" | "/docs/:chapter" | "/search"
 type FileRouteId = "index" | "api_pkg" | "docs_chapter" | "search"
 ```
 
+Optional UrlBuilder-only bridge (no params schemas — weaker than a real catalog):
+
 ```ts
-import * as Route from "hyperlink-ts/ui/Route"
+import * as Route from "last-ts/Route"
 import { fileEntries } from "./paths.gen"
 
 const site = Route.make("app").add(Route.fileRoot(fileEntries))
@@ -61,26 +54,21 @@ const urls = Route.urlBuilder(site)
 
 urls.index()                 // "/"
 urls.docs_chapter("routing") // "/docs/routing"
-urls.api_pkg("effect")       // "/api/effect"
-// urls.nope()               // type error — id not in the table
 ```
 
-## Is it plugged into Vite?
+Product catalogs with `params` stay hand-written (see Last / Hyperlink dogfood).
 
-**Yes — as an opt-in plugin** exported from `last-ts/vite` (also mirrored on
-Hyperlink where applicable). Add it via `last-ts/config` — apps never import
-`waku`. last-ts dogfood (`docs/last/site`) uses it; legacy Hyperlink `docs/site`
-cutover is still open.
+## Vite plugin
 
 ```ts
 // waku.config.ts — CLI filename only
-import { defineConfig } from "last-ts/config"
-import { fileRouter } from "last-ts/vite"
+import * as Config from "last-ts/config"
+import * as Vite from "last-ts/vite"
 
-export default defineConfig({
+export default Config.defineConfig({
   vite: {
     plugins: [
-      fileRouter({
+      Vite.fileRouter({
         pagesDir: "src/pages",
         outFile: "src/paths.gen.ts",
       }),
@@ -92,54 +80,17 @@ export default defineConfig({
 | Hook | Behavior |
 |------|----------|
 | `buildStart` | Emit (or `check: true` → fail if dirty) |
-| `configureServer` | Emit once, then watch `pages/**` (add/unlink/change) |
+| `configureServer` | Emit once, then watch `pages/**` |
 | Write | Atomic temp + rename |
-
-Same emit for CI / scripts:
 
 ```bash
 hyp file-router emit --pages src/pages --out src/paths.gen.ts
 hyp file-router check --pages src/pages --out src/paths.gen.ts
 ```
 
-## API surface
+`hyp verify` checks Last site + Hyperlink `docs/site` gens.
 
-| Piece | Import | Job |
-|-------|--------|-----|
-| Plugin | `hyperlink-ts/vite` → `fileRouter` | Watch + emit `paths.gen.ts` |
-| Emit/check helpers | `hyperlink-ts/vite` → `emitPaths` / `checkPaths` / `discover` | Programmatic / tests |
-| CLI | `hyp file-router emit\|check` | Local + CI |
-| Catalog | `Route.fileRoot` / `Route.fileSystem` / `Router.fileSystem` | Table → destinations |
-| Page marks | `hyperlink-ts/ui/Page` → `static` / `dynamic` / `build` / `layout` | Render mode stamp (loader → `createPages` still open) |
-
-```ts
-import * as Route from "hyperlink-ts/ui/Route"
-import * as Router from "hyperlink-ts/ui/Router"
-import { fileEntries } from "./paths.gen"
-
-// Common case — flatten onto UrlBuilder
-Route.make("app").add(Route.fileRoot(fileEntries))
-
-// Named group
-Route.make("app").add(Route.fileSystem("docs", fileEntries))
-
-// Same table via Router helper
-Route.group("root", { topLevel: true }).fromEffect(
-  Router.fileSystem(fileEntries),
-)
-```
-
-`fileRouter` options:
-
-```ts
-type FileRouterPluginOptions = {
-  readonly pagesDir: string  // walk root
-  readonly outFile: string   // generated module
-  readonly check?: boolean   // buildStart fails if emit would change outFile
-}
-```
-
-Generated module shape (do not hand-edit):
+## Generated module (do not hand-edit)
 
 ```ts
 export const fileEntries = [ /* { id, filePath, routePath } */ ] as const
@@ -150,61 +101,16 @@ export type RoutePath = /* union of routePaths */
 export type FileRouteId = /* union of ids */
 ```
 
-Page marks (separate from the path table — stamp the default export):
+## Contract
 
-```ts
-import * as Page from "hyperlink-ts/ui/Page"
-
-export default Page.build("/docs/:chapter", ChapterView, {
-  paths: listChapterSlugs, // Effect
-})
-```
-
-## Good DX whether or not codegen is “working”
-
-TypeScript cannot glob the filesystem into a closed union. The gen file **is**
-the type source. Design for three states:
-
-| State | What you want |
-|-------|----------------|
-| Fresh clone, no Vite yet | Editor + `tsc` still see real unions |
-| `vite` / `waku` dev | Gen stays aligned as files appear/disappear |
-| CI | Fail if someone committed a stale or missing table |
-
-**Contract we ship:**
-
-1. **Commit `paths.gen.ts`.** Clone and typecheck work cold — you do not need
-   Vite running to open the project. Treat the file as generated *and* checked in
-   (like many GraphQL / Prisma clients).
-2. **Vite plugin is the happy path in dev.** `buildStart` + watcher rewrite the
-   file; no manual emit while iterating on `pages/**`.
-3. **`hyp file-router check` in CI.** Same bytes as emit; fails with
-   `PathsMissingError` / `PathsStaleError` if dirty. Optional:
-   `fileRouter({ check: true })` on `buildStart` for the same gate in Vite builds.
-4. **Never widen to `string`.** Empty pages tree → union `never` (loud). Unknown
-   path / id → type error. That is better than silently accepting any href.
-5. **Escape hatch without the file router.** Hand-write `Route.get` / groups —
-   soft-nav does not require codegen. Skip the plugin when the catalog is small
-   and stable.
-
-**If emit is broken or skipped:**
-
-- Committed gen still typechecks last-known tree (edit pages → types lag until
-  emit/check; CI catches the lag).
-- Delete the gen file without regenerating → import fails loudly (fixable), not
-  a silent `string` fallback.
-- Offline / no Node FS → use the committed file; run `hyp file-router emit` when
-  you can.
-
-**Still open (honest gaps):**
-
-- Legacy Hyperlink `docs/site` still on Waku fs-router (grandfathered); cutover
-  onto `last-ts/config` + `last-ts/server` + this plugin.
-- No loader yet that reads Page marks → `last-ts/server` `createPages`.
-- `Page.Service` class mint deferred — helpers only.
+1. **Commit `paths.gen.ts`.** Cold typecheck works without Vite.
+2. **Vite plugin** keeps gen aligned in dev.
+3. **`hyp file-router check` in CI** (`PathsMissingError` / `PathsStaleError`).
+4. **Never widen to `string`.** Empty tree → `never`.
+5. **Catalog / host stay hand-authored.** No auto-merge from gen into `Router.make` or `createPages`.
 
 ## Related
 
-- [Routing](/docs/routing) — catalog, Router layers, GroupNav
-- [File-router dream API](/docs/ui-file-router-dream) — Page mark teaching sketch
-- Handoff: [`file-router-prototype.md`](../handoffs/file-router-prototype.md)
+- [Routing](/docs/routing) — catalog, Router layers
+- Spine: [`last-ts-spine.md`](../handoffs/last-ts-spine.md)
+- Lock: [`file-router-lock.md`](../handoffs/file-router-lock.md)

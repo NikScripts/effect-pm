@@ -298,16 +298,15 @@ export const Provider = Last.provider(
 ## Out of scope / later
 
 - Per-attribute completeness of meta/link/script (v1 table is enough).
-- Stronger type-level “provide incomplete ⇒ error” (runtime throw today; object-form tests cover).
-- File-router standards pass; single-provider teaching polish; Hyperlink `docs/site` cutover.
+- Required class-extras completeness on `Document.provide` (base `title` + `titleTransform` only for v1).
 - React write hooks / `<Title>` — rejected for v1.
 
 ---
 
-## Acceptance (when Eng’d)
+## Acceptance (Eng’d)
 
 1. No public teaching of `(yield* Document)` / `.set` / `yield*` in `()`.
 2. `Page.document` + `Document.transform` sugars typecheck against class extras.
-3. `Document.provide` incomplete required fields ⇒ **type error**.
+3. `Document.provide` incomplete required fields ⇒ **type error** (`test/document-provide.test-d.ts`).
 4. Dogfood root uses `RootLayout` + `Document.Head`; no hardcoded product title story divorced from `Page.document`.
 5. Apps still never import `waku`.

@@ -54,18 +54,22 @@ Follow **[`router-httpapi-lock.md`](./router-httpapi-lock.md)** for Router / Rou
 - `View.make` + `View.mount` + Layers for DI components
 - `History` / `Memory` / `Waku` as transport namespaces
 
-### Document chrome — locked (design; not Eng’d)
+### Eng’d locks (do not invent past these)
 
-SSOT: [`page-document-lock.md`](./page-document-lock.md) — `Page.document`,
-`Document.make` / `Document.provide` / `Document.transform`, `Layout.Root` +
-`<Layout.Outlet />`. Supersedes HttpApi-lock `(yield* Page.Document).set` teaching.
+| Lock | Surface |
+|------|---------|
+| [`page-document-lock.md`](./page-document-lock.md) | `Page.document`, `Document.make` / `provide` / `transform` |
+| [`page-layout-lock.md`](./page-layout-lock.md) | `RootLayout` / `Layout.make` / `Layout.provide` / `Outlet` |
+| [`page-mint-lock.md`](./page-mint-lock.md) | `Page.make` / `Page.static` + `Route.static`; no path on mint |
+| [`last-provider-lock.md`](./last-provider-lock.md) | One `Last.provider(layer)` bake |
+| [`file-router-lock.md`](./file-router-lock.md) | Path-only `paths.gen`; no catalog-merge APIs |
+| [`last-ts-spine.md`](./last-ts-spine.md) | Canonical teaching walkthrough |
 
-### Not locked yet — design only, do not Eng from vibes
+### Do not Eng from vibes
 
-1. **Single combined provider story** — baking one `Last.provider(…)` before use is the point; do not invent extra `RegistryProvider` / nested provider recipes in examples until locked.
-2. **File-router** (`last-ts/vite` `fileRouter`, `paths.gen`) — Eng’d without a full feature/standards write-up. Needs a proper design pass (capabilities, honesty of codegen, CI check, alignment with HttpApi Router). Do not grow catalog-merge APIs until that exists.
-3. **Layout as View-shaped default Component + provide-swap** — Eng’d in [`page-layout-lock.md`](./page-layout-lock.md) (`RootLayout` / `Layout.make` / `Layout.provide`).
-4. **Page mint** — Eng’d in [`page-mint-lock.md`](./page-mint-lock.md) (`Page.make` / `Page.static` + `Route.static`; no path on mint).
+- Catalog-merge / Page-class bake into Router (`*FromPages`, etc.) — **forbidden**
+- Extra nested product providers beyond `Last.provider`
+- View.make redesign (parked)
 
 ---
 
@@ -87,7 +91,7 @@ SSOT: [`page-document-lock.md`](./page-document-lock.md) — `Page.document`,
 | Soft-nav transport | `last-ts/Waku` |
 | Path codegen | `last-ts/vite` `fileRouter` → `paths.gen.ts` |
 
-Legacy `docs/site/**` still imports `waku` (grandfather until cutover).
+Hyperlink `docs/site/**` cut over — same host boundary as Last site (no app `waku`).
 
 ---
 
@@ -97,4 +101,4 @@ Legacy `docs/site/**` still imports `waku` (grandfather until cutover).
 - `getConfig` / `pageConfig` / `Page.getConfig`
 - `Page.asDefault` / Page introspection helpers listed above
 - Route `fromEffect*` / `fromPage` / `*FromPages` catalog merges
-- `View.make` as the public mint name
+- Teaching `View.Service` as the public mint name (use `View.make`)

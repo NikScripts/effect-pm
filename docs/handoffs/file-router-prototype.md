@@ -83,8 +83,8 @@ Dynamic. Layout: `Page.layout` (camelCase); `Page.Layout` class only if earned.
   `pnpm run example:ui-file-router-codegen`
 - Dream Page marks: [`docs/examples/ui/ui-file-router-dream.md`](../examples/ui/ui-file-router-dream.md)
 
-## Still open
+## Superseded
 
-1. **`Page.Service` + Layout** — design plan (not locked): [`page-layout-design.md`](./page-layout-design.md) (includes Layout-as-View default Component + provide-swap lean)
-2. Optional docs-site host-adapter cutover — maps locked marks; static/dynamic already locked via `Page.make` / `Page.static`
-3. Wire docs `waku.config.ts` to `fileRouter` plugin (optional dogfood)
+Owner lock: [`file-router-lock.md`](./file-router-lock.md). Layout Eng’d in
+[`page-layout-lock.md`](./page-layout-lock.md). Host cutover Eng’d for Last site
++ Hyperlink `docs/site`. Do not grow catalog-merge APIs from this prototype note.
