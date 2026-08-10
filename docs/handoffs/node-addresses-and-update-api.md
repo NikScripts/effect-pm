@@ -165,21 +165,57 @@ deploy** on top of this list — not separate address models. Update API stayed 
 
 ### 3.3 API (sketch)
 
+Address = identity + dial. **Policy** = what this process does with those addresses
+(listen / advertise / dial / proxy / role). Same `hyperlink-ts/Policy` module as today’s
+client fragments (`Sticky`, `Verify`, …) — address knobs are additional fragments, not a
+second policy type.
+
 ```ts
 import * as Address from "hyperlink-ts/Address"
 import * as Node from "hyperlink-ts/Node"
+import * as Policy from "hyperlink-ts/Policy"
 
-// Factories — dial always explicit (except unixFromKey sentinel)
+// ── Address factories ──────────────────────────────────────────────
 Address.http(":8080")
 Address.unix("A", "/var/run/w.a.sock")
 Address.ws([4000, 4001])
 Address.http({ A: 3000, B: 3001 })
 Address.unixFromKey                         // no ()
 
-// make(key, Address | Address[], options?)
+// ── Address Policy fragments (pipe onto Node — same style as Address.*) ──
+Policy.listen("all")                        // | "primary" | ReadonlyArray<label>
+Policy.advertise("primary")                 // | "all" | ReadonlyArray<label>
+Policy.dial("primary")                      // | "all" | ReadonlyArray<label> | Pick
+Policy.proxy("prefer")                      // primary → live labeled (Advice)
+Policy.role("A")                            // this OS process is bound to label A
+
+// object form — same knobs, merges with Eng’d client Policy.make
+Policy.make({
+  Listen: "all",
+  Advertise: "primary",
+  Dial: "primary",
+  Proxy: "prefer",
+  Role: "A",
+  Sticky: true,                             // existing client knobs stay here
+  Verify: "reject",
+})
+
+// ── Node.make + pipe Address.* + pipe Policy.* ─────────────────────
 class Worker extends Node.make("fleet/Worker", Address.http(":8080")).pipe(
   Address.unix("A", "/var/run/w.a.sock"),
   Address.unix("B", "/var/run/w.b.sock"),
+  // defaults if omitted: listen all, advertise/dial primary — explicit when non-default:
+  Policy.proxy("prefer"),
+) {}
+
+class WorkerA extends Node.make("fleet/Worker", [
+  Address.http(":8080"),
+  Address.unix("A", "/var/run/w.a.sock"),
+  Address.unix("B", "/var/run/w.b.sock"),
+]).pipe(
+  Policy.role("A"),
+  Policy.listen(["A"]),                     // this process only binds A
+  Policy.advertise("primary"),              // still publish primary (or not — Policy)
 ) {}
 
 class Local extends Node.make("fleet/Local", Address.unixFromKey) {}
@@ -187,19 +223,22 @@ class Local extends Node.make("fleet/Local", Address.unixFromKey) {}
 class DualHttp extends Node.make("fleet/Edge", [
   Address.http(":8080"),
   Address.http(":8081"),
-]) {}
-
-// equivalent — addresses on make vs pipe are the same
-class WorkerAlt extends Node.make("fleet/Worker", [
-  Address.http(":8080"),
-  Address.unix("A", "/var/run/w.a.sock"),
-  Address.unix("B", "/var/run/w.b.sock"),
-]) {}
+]).pipe(
+  Policy.advertise("all"),                  // multi-primary: publish both
+  Policy.dial("first"),                     // or custom Pick — client soft pick
+) {}
 ```
 
-**Defaults (candidate):** listen **all** declared; advertise/dial **primaries**. Overlap =
-same concrete dial → reject. Policy configures proxy / role / listen subset / multi-primary
-pick — surface TBD after this core sticks.
+**Defaults (candidate):** listen **all** declared; advertise/dial **primaries**; no proxy;
+no role. Overlap = same concrete dial → reject.
+
+| Knob | Meaning |
+|------|---------|
+| **Listen** | Which declared addresses this process **binds** |
+| **Advertise** | Which land in **Directory** |
+| **Dial** | Which clients / peers **connect** to by default |
+| **Proxy** | Primary **forwards** to live labeled (e.g. via Advice prefer) |
+| **Role** | This OS process instance is bound to a **label** (A vs B) |
 
 ### 3.4 Parked — prior long Address API notes
 
@@ -330,6 +369,9 @@ options arg**, so don’t make the signature rest-only.
 
 ### 3.4.5 Address policies — define knobs, then defaults (parked)
 
+**API surface lives in §3.3** (`Policy.listen` / `advertise` / `dial` / `proxy` / `role`
++ `Policy.make({ Listen, … })`). This subsection keeps rationale + example matrix.
+
 Address marks **identity + primary (unnamed) vs labeled + dial**. That is description
 only. **Policy** decides what the runtime does with each address. Prefer / sticky /
 stream-gap stay on Policy — not restart options.
@@ -338,28 +380,8 @@ stream-gap stay on Policy — not restart options.
 policy surface exists. If an address is on the Node, the obvious assumption is you meant
 to use it — especially for listen. Define the knobs first; pick defaults second.
 
-#### Policy knobs (design — names TBD)
-
-| Knob | Question it answers |
-|------|---------------------|
-| **Listen** | Which addresses does this process **bind**? |
-| **Advertise** | Which addresses land in **Directory** (fleet membership)? |
-| **Dial** | Which addresses do **clients** (`lookupClient` / peers) connect to? |
-| **Proxy** | Does an address **forward** to another (primary → live A/B)? |
-| **Role** | Is this process instance **bound to a label** (A vs B) for cutover? |
-
 Primary vs labeled is an input to those knobs (e.g. dial defaults toward primaries;
 proxy often primary→labeled), not a hidden “don’t listen” flag.
-
-```ts
-class Worker extends Node.make("fleet/Worker", Address.http(":8080")).pipe(
-  Address.unix("A", "/var/run/w.a.sock"),
-  Address.unix("B", "/var/run/w.b.sock"),
-) {}
-
-// Policy (sketch — API TBD) configures listen / advertise / dial / proxy / role
-// against Worker’s address set. Defaults undecided until knobs lock.
-```
 
 #### Example configurations (not defaults yet)
 
@@ -371,10 +393,6 @@ class Worker extends Node.make("fleet/Worker", Address.http(":8080")).pipe(
 | Multi-primary edge | all primaries | all primaries | Policy pick | — |
 
 Directory today: **one row per `nodeKey`**. May need to grow for proxy/backends — open.
-
-**Next in this section:** lock each knob’s value space, then choose defaults (likely
-candidate: listen **all** declared addresses — why list a protocol you won’t bind? —
-with dial/advertise biased to **primaries**). Not locked until owner says so.
 
 ---
 
