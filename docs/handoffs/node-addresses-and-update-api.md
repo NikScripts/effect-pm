@@ -157,7 +157,7 @@ by client Policy (sticky, prefer, fail-closed) — same family as multi-row Dire
 | **Listen** | Process binds the addresses it runs with (default: all declared — `NodePolicy` can narrow). |
 | **Advertise** | Directory default = **primaries**; `NodePolicy` can widen. Clients dial what Directory publishes (+ client `Policy` pick). |
 | **NodePolicy** | Node-side: listen / advertise / proxy / which labeled process this is. |
-| **Policy** | Client-side (Eng’d): sticky, verify, stream-gap, pick, conflict, yield — unchanged. |
+| **ClientPolicy** | Participant / lookup (today’s Eng’d `Policy`): sticky, verify, stream-gap, pick, conflict, yield. |
 | **Key-derived Unix** | `Address.unixFromKey` — Unix primary from node key (no manual path helper). |
 | **One list** | Replaces today’s `endpoints` / `withProtocol` for new code. |
 
@@ -167,27 +167,28 @@ stayed parked.
 
 ### 3.3 API (sketch)
 
-Two policy modules — different jobs:
+Two policy modules — different jobs. **Locked (owner lean + Agent 5 call):** rename
+Eng’d `hyperlink-ts/Policy` → **`hyperlink-ts/ClientPolicy`** when `NodePolicy` Engs
+(same change set — no long-lived ambiguous `Policy`).
 
 | Module | Owns |
 |--------|------|
-| **`hyperlink-ts/Policy`** | Lookup / membership behavior (Eng’d): dial (`Sticky`, `Verify`, `StreamGap`, `Pick`, `ColdAmbiguous`) **and** advertise conflict / yield (`Conflict`, `Yield`) |
+| **`hyperlink-ts/ClientPolicy`** | Participant toward the fleet (today’s Eng’d `Policy`): dial (`Sticky`, `Verify`, `StreamGap`, `Pick`, `ColdAmbiguous`) **and** Directory claim / yield (`Conflict`, `Yield`) |
 | **`hyperlink-ts/NodePolicy`** | **This process** vs its address list: bind, publish, proxy, which labeled side it is |
 
-**Keep the name `Policy` — do not rename to `ClientPolicy`.** Symmetry with `NodePolicy`
-is tempting, but Eng’d `Policy` is not client-only (`Conflict` / `Yield` are Directory /
-incumbent). Renaming would also tax a shipped public surface for a worse name. Asymmetry
-is fine: short `Policy` for the established fragment bag; `NodePolicy` for the node×address
-specialist.
+“Client” here means **caller / participant**, not “HTTP client only.” `Conflict` /
+`Yield` stay on `ClientPolicy` (how you claim or give up a Directory row) — they are not
+address-list knobs. If they ever move, it would be a later cut; not a reason to keep a
+naked `Policy` name next to `NodePolicy`.
 
 Address = identity + dial target. **NodePolicy** = what this OS process does with that
-list. Do **not** stuff node knobs into `Policy.make`.
+list. Do **not** stuff node knobs into `ClientPolicy.make`.
 
 ```ts
 import * as Address from "hyperlink-ts/Address"
 import * as Node from "hyperlink-ts/Node"
 import * as NodePolicy from "hyperlink-ts/NodePolicy"
-import * as Policy from "hyperlink-ts/Policy"   // client only
+import * as ClientPolicy from "hyperlink-ts/ClientPolicy"
 
 // ── Address factories ──────────────────────────────────────────────
 Address.http(":8080")
@@ -209,8 +210,8 @@ NodePolicy.make({
   As: "A",
 })
 
-// Client Policy stays separate — provide on lookupClient, not on Node.make
-Policy.make({ Sticky: true, Verify: "reject" })
+// ClientPolicy — provide on lookupClient / membership, not on Node.make
+ClientPolicy.make({ Sticky: true, Verify: "reject" })
 
 // ── Node.make + pipe Address.* + pipe NodePolicy.* ─────────────────
 class Worker extends Node.make("fleet/Worker", Address.http(":8080")).pipe(
@@ -237,7 +238,7 @@ class DualHttp extends Node.make("fleet/Edge", [
 ]).pipe(
   NodePolicy.advertise("all"),              // publish both primaries
 ) {}
-// multi-primary client pick → Policy.pick / ColdAmbiguous (client), not NodePolicy
+// multi-primary client pick → ClientPolicy.pick / ColdAmbiguous, not NodePolicy
 ```
 
 **Defaults (candidate):** listen **all** declared; advertise **primaries**; no proxy; no
@@ -253,8 +254,8 @@ class DualHttp extends Node.make("fleet/Edge", [
 **Why not `Role`:** “role” reads like RBAC / job title. The question is only: *which
 labeled address side is this process?* → `NodePolicy.as("A")`.
 
-**Why no Dial on NodePolicy:** clients dial what Directory advertises; soft-pick /
-sticky / wait-advice stay on client **`Policy`**. One dial story, not two.
+**Why no Dial on NodePolicy:** participants dial what Directory advertises; soft-pick /
+sticky / wait-advice stay on **`ClientPolicy`**. One dial story, not two.
 
 ### 3.4 Parked — prior long Address API notes
 
@@ -386,19 +387,20 @@ options arg**, so don’t make the signature rest-only.
 ### 3.4.5 Address policies — define knobs, then defaults (parked)
 
 **API surface lives in §3.3** (`NodePolicy.listen` / `advertise` / `proxy` / `as` +
-`NodePolicy.make`). Client dial pick stays on Eng’d **`Policy`**. This subsection keeps
-rationale + example matrix.
+`NodePolicy.make`). Participant dial pick stays on **`ClientPolicy`** (rename of Eng’d
+`Policy`). This subsection keeps rationale + example matrix.
 
 Address marks **identity + primary (unnamed) vs labeled + dial**. That is description
 only. **NodePolicy** decides what *this process* does with each address. Prefer /
-sticky / stream-gap stay on client **Policy** — not restart options, not NodePolicy.
+sticky / stream-gap stay on **ClientPolicy** — not restart options, not NodePolicy.
 
 **Owner (2026-08-09):** do **not** invent a default like “labeled sit idle” before the
 policy surface exists. If an address is on the Node, the obvious assumption is you meant
 to use it — especially for listen. Define the knobs first; pick defaults second.
 
-**Owner (2026-08-10):** separate module **`NodePolicy`** (not stuffed into client
-`Policy`); rename vague **Role** → **`as`** (“this process is labeled side A”).
+**Owner (2026-08-10):** separate module **`NodePolicy`**; rename vague **Role** →
+**`as`**. **Agent 5 call (same day):** Eng’d `Policy` → **`ClientPolicy`** alongside
+`NodePolicy` (paired names; no ambiguous naked `Policy`).
 
 Primary vs labeled is an input to those knobs (advertise defaults toward primaries;
 proxy often primary→labeled), not a hidden “don’t listen” flag.
@@ -410,7 +412,7 @@ proxy often primary→labeled), not a hidden “don’t listen” flag.
 | Serve everything declared | all | primaries | — | Directory primaries |
 | Stable primary, A/B backends (§4 β) | primary + live side | primary | proxy prefer; as = A or B on backends | primary |
 | This box is A only | `["A"]` | primary (and/or A) | `as("A")` | primary |
-| Multi-primary edge | all primaries | all primaries | — | `Policy.pick` / ColdAmbiguous |
+| Multi-primary edge | all primaries | all primaries | — | `ClientPolicy.pick` / ColdAmbiguous |
 
 Directory today: **one row per `nodeKey`**. May need to grow for proxy/backends — open.
 
@@ -894,6 +896,6 @@ clones, not HttpApi catalog. `Router.make` (G) is the catalog precedent.
 
 1. Confirm **Address + NodePolicy API** (§3.3) — `as` / value spaces / defaults.
 2. Locality word + `Node.make` vs `Service`.
-3. Eng Address + Node.make + `NodePolicy`.
+3. Eng Address + Node.make + `NodePolicy` **and** rename `Policy` → `ClientPolicy` (same cut).
 4. Update dream / backup-build simulate — **later**.
 5. Dream-redeploy stays **provisional** until address/make exists.
