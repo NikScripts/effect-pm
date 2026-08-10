@@ -36,7 +36,7 @@ describe("Lookup.follow", () => {
       yield* Layer.build(Lookup.layerNode(lookupNode));
       const followCtx = yield* Layer.build(
         Lookup.follow(lookupNode).pipe(
-          Policy.provide(Policy.streamGap("stall")),
+          Policy.provide(Policy.StreamGap("stall")),
         ),
       );
 
@@ -63,7 +63,7 @@ describe("Lookup.follow", () => {
 
       const followCtx = yield* Layer.build(
         Lookup.follow(lookupNode).pipe(
-          Policy.provide(Policy.streamGap("stall")),
+          Policy.provide(Policy.StreamGap("stall")),
         ),
       );
 
@@ -108,7 +108,7 @@ describe("Lookup.follow", () => {
 
         const followCtx = yield* Layer.build(
           Lookup.follow(lookupNode).pipe(
-            Policy.provide(Policy.streamGap("stall")),
+            Policy.provide(Policy.StreamGap("stall")),
           ),
         );
 

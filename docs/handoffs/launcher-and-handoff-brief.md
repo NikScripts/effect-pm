@@ -267,7 +267,7 @@ Owner locked #22–26; Eng on tip:
 36. **Lookup-node handoff — re-opened (high priority; owner 2026-08-03).**
     - Soft-bake / “first node = Lookup” stays for **independent** launch (no Launcher).
     - **Launcher ensure-Lookup-first (locked):** if Lookup not running → spawn Lookup-only first (operator address, else safe default when supported); if already running → use it. No Soft-bake onto app nodes under Launcher. No address + no default → fail closed.
-    - **Already up ≠ always hand off** — custody handoff only for spawned children; migration `{ handoff }` opt-in; Directory conflicts via `Policy.onConflict` / `askIncumbent`; Lookup replace only when orchestrating A→B.
+    - **Already up ≠ always hand off** — custody handoff only for spawned children; migration `{ handoff }` opt-in; Directory conflicts via `Policy.Conflict` / `askIncumbent`; Lookup replace only when orchestrating A→B.
     - **Single address lock:** one Lookup endpoint; A/B = successive owners; `Lookup.follow` + Policy for the gap (**follow + handoff + `ensureLookup` Eng'd**).
     - Eng order: ~~`Lookup.follow` + gap~~ → ~~orchestrated handoff~~ → ~~Launcher ensure-Lookup-first~~.
     - Detail: [`versioned-schema-decisions.md`](./versioned-schema-decisions.md#desired-bring-up-launcher--ensure-lookup-first-locked).

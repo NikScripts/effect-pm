@@ -1,5 +1,5 @@
 /**
- * Policy public types — real Policy values; layer dual expands configs (pipe + data-first).
+ * Policy public types — callable handles; layer dual expands configs.
  */
 import { Effect, type Layer } from "effect";
 import type {
@@ -20,8 +20,9 @@ type AssertExtends<A, B> = [A] extends [B] ? true : false;
 type AssertEqual<A, B> =
   [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 
-const _stickyFragOk: AssertExtends<
-  typeof PolicyMod.sticky,
+const stickyTrue = PolicyMod.Sticky(true);
+const _stickyOk: AssertExtends<
+  typeof stickyTrue,
   Policy<{ Sticky: true }>
 > = true;
 type _StreamGapFn = <M extends StreamGap>(mode: M) => Policy<{ StreamGap: M }>;
@@ -34,11 +35,11 @@ type _OnYield = <E extends Effect.Effect<boolean>>(
   handler: E,
 ) => Policy<{ Yield: E }>;
 
-const _gapFn: _StreamGapFn = PolicyMod.streamGap;
-const _coldFn: _ColdFn = PolicyMod.coldAmbiguous;
-const _verifyFn: _VerifyFn = PolicyMod.verify;
-const _conflictFn: _ConflictFn = PolicyMod.onConflict;
-const _onYield: _OnYield = PolicyMod.onYield;
+const _gapFn: _StreamGapFn = PolicyMod.StreamGap;
+const _coldFn: _ColdFn = PolicyMod.ColdAmbiguous;
+const _verifyFn: _VerifyFn = PolicyMod.Verify;
+const _conflictFn: _ConflictFn = PolicyMod.Conflict;
+const _onYield: _OnYield = PolicyMod.Yield;
 
 const _gap: StreamGap = "stall";
 const _cold: ColdAmbiguous = "waitAdvice";
@@ -61,18 +62,13 @@ const cutover = PolicyMod.make({
   ColdAmbiguous: "fail",
   Verify: "reject",
 });
-const cutoverFrags = PolicyMod.make([
-  PolicyMod.Fragment.Sticky(true),
-  PolicyMod.Fragment.StreamGap("stall"),
-  PolicyMod.Fragment.ColdAmbiguous("fail"),
-  PolicyMod.Fragment.Verify("reject"),
-]);
-const stickyTagged = PolicyMod.succeed(PolicyMod.Fragment.Sticky(true));
-const fragBuilt = PolicyMod.Fragment.StreamGap("stall");
-const _fragBuiltOk: AssertExtends<
-  typeof fragBuilt,
-  { readonly _tag: "StreamGap"; readonly value: "stall" }
-> = true;
+const cutoverHandles = PolicyMod.layer(
+  PolicyMod.Sticky(true),
+  PolicyMod.StreamGap("stall"),
+  PolicyMod.ColdAmbiguous("fail"),
+  PolicyMod.Verify("reject"),
+);
+const stickyLayer = PolicyMod.Sticky(true);
 const _asLayer: Layer.Layer<never> = cutover;
 const _cutoverOk: AssertExtends<
   typeof cutover,
@@ -83,8 +79,8 @@ const _cutoverOk: AssertExtends<
     Verify: "reject";
   }>
 > = true;
-const _cutoverFragsOk: AssertExtends<
-  typeof cutoverFrags,
+const _cutoverHandlesOk: AssertExtends<
+  typeof cutoverHandles,
   Policy<{
     Sticky: true;
     StreamGap: "stall";
@@ -92,15 +88,15 @@ const _cutoverFragsOk: AssertExtends<
     Verify: "reject";
   }>
 > = true;
-const _stickyTaggedOk: AssertExtends<
-  typeof stickyTagged,
+const _stickyLayerOk: AssertExtends<
+  typeof stickyLayer,
   Policy<{ Sticky: true }>
 > = true;
 
 // pipe(Policy.layer(...)) expands config — last write wins
 const piped = cutover.pipe(
   PolicyMod.layer(PolicyMod.verifyOff),
-  PolicyMod.layer(PolicyMod.streamGap("buffer")),
+  PolicyMod.layer(PolicyMod.StreamGap("buffer")),
 );
 const _pipedOk: AssertExtends<
   typeof piped,
@@ -118,7 +114,7 @@ const _pipedGap: AssertEqual<_PipedCfg["StreamGap"], "buffer"> = true;
 const expanded = PolicyMod.layer(
   cutover,
   PolicyMod.verifyOff,
-  PolicyMod.streamGap("buffer"),
+  PolicyMod.StreamGap("buffer"),
 );
 const _expandedOk: AssertExtends<
   typeof expanded,
@@ -131,8 +127,8 @@ const _expandedOk: AssertExtends<
 > = true;
 
 const fragOnly = PolicyMod.layer(
-  PolicyMod.sticky,
-  PolicyMod.streamGap("stall"),
+  PolicyMod.Sticky(true),
+  PolicyMod.StreamGap("stall"),
   PolicyMod.verifyOff,
 );
 const _fragOnlyOk: AssertExtends<
@@ -156,19 +152,15 @@ const _yieldEffectCfg: Config = { Yield: Effect.succeed(false) };
 // @ts-expect-error — StreamGap closed union in make
 PolicyMod.make({ StreamGap: "restart" });
 
-// @ts-expect-error — StreamGap closed union on Fragment ctor
-PolicyMod.Fragment.StreamGap("restart");
-
-// @ts-expect-error — StreamGap closed union on fragment helper
-PolicyMod.streamGap("restart");
+// @ts-expect-error — StreamGap closed union on handle
+PolicyMod.StreamGap("restart");
 
 // @ts-expect-error — two-arg succeed removed
 PolicyMod.succeed("Sticky", true);
 
-void _stickyFragOk;
-void _cutoverFragsOk;
-void _stickyTaggedOk;
-void _fragBuiltOk;
+void _stickyOk;
+void _cutoverHandlesOk;
+void _stickyLayerOk;
 void _gapFn;
 void _coldFn;
 void _verifyFn;

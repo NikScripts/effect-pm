@@ -90,29 +90,29 @@ describe("Policy defaults + compose", () => {
     }),
   );
 
-  it.effect("Fragment kit + make/succeed match bag stamps", () =>
+  it.effect("handles + $fromConfig/$toConfig/$is match bag stamps", () =>
     Effect.gen(function* () {
-      const fromFrags = Policy.make([
-        Policy.Fragment.Sticky(false),
-        Policy.Fragment.StreamGap("buffer"),
-        Policy.Fragment.Verify(false),
-      ]);
-      expect(Policy.config(fromFrags)).toEqual({
+      const fromHandles = Policy.layer(
+        Policy.Sticky(false),
+        Policy.StreamGap("buffer"),
+        Policy.Verify(false),
+      );
+      expect(Policy.config(fromHandles)).toEqual({
         Sticky: false,
         StreamGap: "buffer",
         Verify: false,
       });
-      const tagged = Policy.succeed(Policy.Fragment.StreamGap("drop"));
+      const tagged = Policy.StreamGap("drop");
       expect(Policy.config(tagged)).toEqual({ StreamGap: "drop" });
-      expect(Policy.Fragment.$is("StreamGap")(Policy.Fragment.StreamGap("drop"))).toBe(
-        true,
-      );
       expect(
-        Policy.Fragment.$toConfig(Policy.Fragment.$fromConfig({ Sticky: true })),
+        Policy.$is("StreamGap")({ _tag: "StreamGap", value: "drop" }),
+      ).toBe(true);
+      expect(
+        Policy.$toConfig(Policy.$fromConfig({ Sticky: true })),
       ).toEqual({ Sticky: true });
       const d = yield* readPolicy.pipe(
         Effect.provide(
-          Policy.layer(fromFrags, tagged, Policy.yieldRefuse),
+          Policy.layer(fromHandles, tagged, Policy.yieldRefuse),
         ),
       );
       expect(d.sticky).toBe(false);
@@ -129,7 +129,7 @@ describe("Policy defaults + compose", () => {
         Verify: "reject",
         Sticky: true,
       }).pipe(
-        Policy.layer(Policy.streamGap("buffer")),
+        Policy.layer(Policy.StreamGap("buffer")),
         Policy.layer(Policy.verifyOff),
         Policy.layer(Policy.livenessReplace),
       );
@@ -146,7 +146,7 @@ describe("Policy defaults + compose", () => {
           Verify: "reject",
           Sticky: true,
         }),
-        Policy.streamGap("buffer"),
+        Policy.StreamGap("buffer"),
         Policy.verifyOff,
         Policy.livenessReplace,
       );
@@ -163,10 +163,10 @@ describe("Policy defaults + compose", () => {
   it.effect("layer + provide: last fragment wins per reference", () =>
     Effect.gen(function* () {
       const bundle = Policy.layer(
-        Policy.sticky,
-        Policy.unsticky,
-        Policy.streamGap("drop"),
-        Policy.streamGap("buffer"),
+        Policy.Sticky(true),
+        Policy.Sticky(false),
+        Policy.StreamGap("drop"),
+        Policy.StreamGap("buffer"),
         Policy.verifyReject,
         Policy.verifyOff,
         Policy.askIncumbent,
@@ -185,10 +185,10 @@ describe("Policy defaults + compose", () => {
 
   it.effect("Policy.provide accepts a Policy.layer bundle + more fragments", () =>
     Effect.gen(function* () {
-      const cutover = Policy.layer(Policy.unsticky, Policy.verifyOff);
+      const cutover = Policy.layer(Policy.Sticky(false), Policy.verifyOff);
       const d = yield* readPolicy.pipe(
         Effect.provide(
-          Policy.layer(cutover, Policy.streamGap("drop"), Policy.coldAmbiguous("pickFirst")),
+          Policy.layer(cutover, Policy.StreamGap("drop"), Policy.ColdAmbiguous("pickFirst")),
         ),
       );
       expect(d.sticky).toBe(false);
@@ -240,7 +240,7 @@ describe("Policy dial: unsticky + waitAdvice", () => {
 
       const clientCtx = yield* Layer.build(
         Hyperlink.lookupClient(Jobs).pipe(
-          Policy.provide(Policy.unsticky, Policy.pick("first")),
+          Policy.provide(Policy.Sticky(false), Policy.Pick("first")),
           Layer.provide(lookupClientLayer),
         ),
       );
@@ -300,7 +300,7 @@ describe("Policy dial: unsticky + waitAdvice", () => {
       const fiber = yield* Effect.forkChild(
         Layer.build(
           Hyperlink.lookupClient(Jobs).pipe(
-            Policy.provide(Policy.coldAmbiguous("waitAdvice")),
+            Policy.provide(Policy.ColdAmbiguous("waitAdvice")),
             Layer.provide(lookupClientLayer),
           ),
         ),

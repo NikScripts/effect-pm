@@ -440,14 +440,14 @@ clients ──dial──►  lookup.sock  (one address)
 
 | Plane | Owns | API sketch |
 |-------|------|------------|
-| **1. Dial (Policy)** | Survive the A-down / B-up **gap** on the **same** address | `Lookup.follow(seed)` — stable `Identity\|Directory\|Advice` Context; holder + `RpcClientError` retry + `Policy.streamGap` (reuse `lookupClient` machinery). `Lookup.client` stays **static**. |
+| **1. Dial (Policy)** | Survive the A-down / B-up **gap** on the **same** address | `Lookup.follow(seed)` — stable `Identity\|Directory\|Advice` Context; holder + `RpcClientError` retry + `Policy.StreamGap` (reuse `lookupClient` machinery). `Lookup.client` stays **static**. |
 | **2. Registry** | Optional state | v1: **cold** + apps re-advertise. Later: optional snapshot handoff. Not a Policy fragment. |
 | **3. Orchestration** | Who owns the address | Start B → A `Node.shutdown` / leave sock → B binds **same** path → dialers’ retries land on B. Launcher or DIY. Beyond Policy. |
 
 ```ts
 // Dialers — one address forever; Policy shapes the gap only
 Lookup.follow(lookupNode /* same path before & after */).pipe(
-  Policy.provide(Policy.streamGap("stall")),
+  Policy.provide(Policy.StreamGap("stall")),
 )
 
 // Orchestrator (Launcher / script) — not Policy

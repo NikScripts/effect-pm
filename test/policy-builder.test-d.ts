@@ -1,5 +1,5 @@
 /**
- * PolicyBuilder type locks — Schema keys; tagged fragments; distinct brands.
+ * PolicyBuilder type locks — callable handles; distinct brands.
  */
 import { Schema, type Layer } from "effect";
 import type { Policy as BuilderPolicy } from "../src/PolicyBuilder";
@@ -20,11 +20,11 @@ class Demo extends PolicyBuilder.make("policy-builder-d/Demo")
   }) {}
 
 const made = Demo.make({ A: true, B: "y" });
-const fromFrags = Demo.make([Demo.fragments.A(true), Demo.fragments.B("y")]);
-const piped = made.pipe(Demo.layer(Demo.succeed(Demo.fragments.A(false))));
-const single = Demo.succeed(Demo.fragments.A(true));
-const fragA = Demo.fragments.A(true);
-const matched = Demo.fragments.$match(fragA, {
+const fromHandles = Demo.layer(Demo.A(true), Demo.B("y"));
+const piped = made.pipe(Demo.layer(Demo.A(false)));
+const single = Demo.A(true);
+const stickyLayer = Policy.Sticky(true);
+const matched = Demo.$match({ _tag: "A", value: true }, {
   A: (x) => x.value,
   B: (x) => x.value,
 });
@@ -36,7 +36,7 @@ type _Checks = [
     BuilderPolicy<"policy-builder-d/Demo", { A: true; B: "y" }>
   >,
   AssertExtends<
-    typeof fromFrags,
+    typeof fromHandles,
     BuilderPolicy<"policy-builder-d/Demo", { A: true; B: "y" }>
   >,
   AssertExtends<
@@ -47,25 +47,22 @@ type _Checks = [
     typeof single,
     BuilderPolicy<"policy-builder-d/Demo", { A: true }>
   >,
-  AssertExtends<typeof Policy.sticky, EngPolicy<{ Sticky: true }>>,
+  AssertExtends<typeof stickyLayer, EngPolicy<{ Sticky: true }>>,
   AssertEqual<
     PolicyBuilder.FragmentOfKeys<(typeof Demo)["keys"]>,
     | { readonly _tag: "A"; readonly value: boolean }
     | { readonly _tag: "B"; readonly value: "x" | "y" }
   >,
-  AssertExtends<typeof fragA, { readonly _tag: "A"; readonly value: true }>,
   AssertExtends<typeof matched, boolean | "x" | "y">,
 ];
 
 // @ts-expect-error — Demo brand is not Eng’d Policy brand
-export const _cross: EngPolicy<{ Sticky: true }> = Demo.succeed(
-  Demo.fragments.A(true),
-);
+export const _cross: EngPolicy<{ Sticky: true }> = Demo.A(true);
 
 // @ts-expect-error — two-arg succeed removed
 Demo.succeed("A", true);
 
-// @ts-expect-error — Fragment ctor takes value, not Data.taggedEnum props bag
-Demo.fragments.A({ value: true });
+// @ts-expect-error — handle takes schema value, not props bag
+Demo.A({ value: true });
 
 export type { _Checks };

@@ -2,14 +2,12 @@
 "hyperlink-ts": minor
 ---
 
-`PolicyBuilder`: HttpApi-shaped constructables with Schema keys. Each key is a
-`Context.Reference` — `defaultValue` is the Reference default (ambient
-`yield* Ref`), not a second defaults system. Domain modules recreate helpers and
-re-export references; no public `Family` API.
+`PolicyBuilder`: HttpApi-shaped constructables with Schema keys. Each key is one
+PascalCase **handle** — a `Context.Reference` that is also callable
+`(value) => branded Policy Layer`. `defaultValue` is the Reference default
+(ambient `yield* Ref`). No `Family`, no `Fragment.*` nest, no camelCase Layer
+mirrors.
 
-Fragments are a tagged sum (`_tag` = knob name, `value` = payload).
-`succeed({ _tag, value })`; `make` accepts a product bag or `Fragment[]`
-(same product config stamp). Two-arg `succeed(name, value)` removed.
-
-`Def.fragments` / `Policy.Fragment`: value-first ctors, `$is`, `$match`,
-`$fromConfig`, `$toConfig` (Data.`taggedEnum`-shaped; ctors take the payload).
+`Policy.Sticky(true)` / `Policy.StreamGap("stall")` / …; mode presets
+(`verifyOff`, `askIncumbent`, …); `make` product bag; Def `$is` / `$match` /
+`$fromConfig` / `$toConfig` for the fragment data sum.

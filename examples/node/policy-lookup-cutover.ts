@@ -92,7 +92,7 @@ const program = Effect.gen(function* () {
 
   // Typed Policy — pipe layer to expand config (also Policy.layer(a, b, c)).
   const cutover = Policy.make({ Sticky: true, ColdAmbiguous: "fail" }).pipe(
-    Policy.layer(Policy.streamGap("stall")),
+    Policy.layer(Policy.StreamGap("stall")),
     Policy.layer(Policy.verifyReject),
   );
   const clientCtx = yield* Layer.build(
@@ -123,7 +123,7 @@ const program = Effect.gen(function* () {
 
   // Warm sticky: stay on A while both are Directory-visible and Advice is clear.
   yield* Effect.sleep(Duration.millis(80));
-  yield* step("4) Still on A (Policy.sticky)", yield* readJobs, 5);
+  yield* step("4) Still on A (Policy.Sticky(true))", yield* readJobs, 5);
 
   yield* Effect.logInfo("5) Advice.prefer(B) — early move before A leaves");
   yield* Advice.prefer(Jobs, WorkerB.key).pipe(Effect.provide(lookupCtx));

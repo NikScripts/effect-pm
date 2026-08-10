@@ -5,7 +5,7 @@
  * `lookup.sock`; dialers keep one {@link Lookup.follow} facade across the gap.
  *
  * Planes (do not collapse):
- * 1. **Dial** — `Lookup.follow` + `Policy.streamGap` (survive A-down / B-up)
+ * 1. **Dial** — `Lookup.follow` + `Policy.StreamGap` (survive A-down / B-up)
  * 2. **Registry** — v1 cold; claims / ads die with A; apps re-advertise on B
  * 3. **Orchestration** — start B (bind-retry) → release A → B binds same path
  *
@@ -58,11 +58,11 @@ const program = Effect.gen(function* () {
   );
 
   yield* Effect.logInfo(
-    "2) Dialers: Lookup.follow (same path) + Policy.streamGap — not Lookup.client",
+    "2) Dialers: Lookup.follow (same path) + Policy.StreamGap — not Lookup.client",
   );
   const followCtx = yield* Layer.build(
     Lookup.follow(lookupNode).pipe(
-      Policy.provide(Policy.streamGap("stall")),
+      Policy.provide(Policy.StreamGap("stall")),
     ),
   );
 

@@ -3041,7 +3041,7 @@ export class LookupClientError extends Data.TaggedError("LookupClientError")<{
 
 /**
  * Soft pick when {@link lookupClient} sees N&gt;1 directory rows (D4) and no live
- * Advice prefer matches a row. Prefer {@link Policy.pick} — this call-site field
+ * Advice prefer matches a row. Prefer {@link Policy.Pick} — this call-site field
  * remains for back-compat (wins over the Policy reference when set).
  *
  * @category models
@@ -6353,14 +6353,14 @@ const makeLivePeerService = <Self, S extends Spec>(
  * (via {@link Lookup.nodesServing} / the Directory tag as a Context key).
  *
  * **Resolve order:** Identity `resolve` (ignores Policy / Advice / pick) → Directory
- * rows → live Advice prefer → warm {@link Policy.sticky} keep-current →
- * {@link Policy.pick} / call-site `{ pick }` → {@link Policy.coldAmbiguous}
+ * rows → live Advice prefer → warm {@link Policy.Sticky(true)} keep-current →
+ * {@link Policy.Pick} / call-site `{ pick }` → {@link Policy.ColdAmbiguous}
  * (`"fail"` default → {@link LookupClientError} `ambiguous`).
  *
  * **Hot-rebind:** watches Directory / Advice `changes`; prior dial stays until the
  * next dial builds successfully. Effect RPCs retry **once** on `RpcClientError`.
  * Streams / `ref.changes` stay one outer Stream across dial swaps
- * ({@link Policy.streamGap}, default `"stall"`).
+ * ({@link Policy.StreamGap}, default `"stall"`).
  *
  * **Policy:** composable Layers — `import * as Policy from "hyperlink-ts/Policy"`.
  * Defaults apply with zero provide; override via `Policy.provide(...)`.
@@ -6373,12 +6373,12 @@ const makeLivePeerService = <Self, S extends Spec>(
  * Hyperlink.lookupClient(Mail).pipe(Layer.provide(Lookup.layer))
  *
  * Hyperlink.lookupClient(Mail).pipe(
- *   Policy.provide(Policy.sticky, Policy.streamGap("stall")),
+ *   Policy.provide(Policy.Sticky(true), Policy.StreamGap("stall")),
  *   Layer.provide(Lookup.layer),
  * )
  *
  * yield* Advice.prefer(Mail, "fleet/Mail#w2")
- * Hyperlink.lookupClient(Mail, { pick: "first" }) // or Policy.pick("first")
+ * Hyperlink.lookupClient(Mail, { pick: "first" }) // or Policy.Pick("first")
  * Hyperlink.client(Mail, East)
  * ```
  *

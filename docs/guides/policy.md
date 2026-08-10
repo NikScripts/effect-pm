@@ -10,34 +10,24 @@ Client and advertise behaviour as **Layer fragments** on `hyperlink-ts/Policy`. 
 `Policy.provide` / `Policy.layer` — nothing stamped onto every Node by default. Call-site
 `ListenOptions` / Node `onConflict` stamps remain overrides that win over ambient Policy.
 
-Built on shared **`hyperlink-ts/PolicyBuilder`**: a constructable declares keys +
-Schemas (each key is a `Context.Reference` — ambient defaults are Reference
-`defaultValue`); this module recreates helpers (`sticky`, …). Same kernel for
-future `LookupPolicy` / `NodePolicy`. Apps keep importing `Policy`.
-
-Override entries are a **tagged sum** (`_tag` = knob name). Product bags stay
-untagged; `Policy.make` accepts either a bag or a `Fragment[]`.
-`Policy.Fragment` is the data kit (ctors / `$is` / `$match`); Layer helpers
-(`sticky`, …) stay separate from Context.References (`Policy.Sticky`).
+Built on shared **`hyperlink-ts/PolicyBuilder`**: each knob is one PascalCase
+**handle** — a `Context.Reference` (`yield* Policy.Sticky`) that is also callable
+(`Policy.Sticky(true)` → Layer). Mode presets (`verifyOff`, `askIncumbent`, …)
+name wire choices. Same kernel for future `LookupPolicy` / `NodePolicy`.
 
 ```ts
 import * as Policy from "hyperlink-ts/Policy"
 import * as Hyperlink from "hyperlink-ts/Hyperlink"
 import * as Lookup from "hyperlink-ts/Lookup"
 
-// Every Layer fragment is a real Policy (Layer + runtime config). layer is dual:
 const cutover = Policy.make({ Sticky: true, StreamGap: "stall", Verify: "reject" }).pipe(
   Policy.layer(Policy.verifyOff),
-  Policy.layer(Policy.streamGap("buffer")),
+  Policy.layer(Policy.StreamGap("buffer")),
 )
 // Policy.Policy<{ Sticky: true; StreamGap: "buffer"; Verify: false }>
 // Policy.config(cutover) → { Sticky: true, StreamGap: "buffer", Verify: false }
 
-Policy.succeed(Policy.Fragment.Sticky(true))
-Policy.make([Policy.Fragment.Sticky(true), Policy.Fragment.StreamGap("stall")])
-
-// Same expand, data-first
-Policy.layer(Policy.sticky, Policy.streamGap("stall"), Policy.verifyOff)
+Policy.layer(Policy.Sticky(true), Policy.StreamGap("stall"), Policy.verifyOff)
 
 Hyperlink.lookupClient(Mail).pipe(
   Policy.provide(cutover),
@@ -45,10 +35,8 @@ Hyperlink.lookupClient(Mail).pipe(
 )
 ```
 
-Zero-arg Layer fragments are **values** (`Policy.sticky`, not `Policy.sticky()`).
-`Policy.make({ … })` / `Policy.make([Policy.Fragment.…, …])` stamp a **product**
-config; `Policy.layer` merges Layers **and** configs (pipe or data-first) — not
-a phantom cast.
+`Policy.make({ … })` stamps a **product** config; `Policy.layer` merges Layers
+**and** configs (pipe or data-first) — not a phantom cast.
 
 Runnable demo: [`examples/node/policy-lookup-cutover.ts`](../../examples/node/policy-lookup-cutover.ts)
 (`pnpm run example:node-policy-lookup-cutover`).
@@ -57,12 +45,12 @@ Runnable demo: [`examples/node/policy-lookup-cutover.ts`](../../examples/node/po
 
 ### Dial / cutover (`lookupClient`)
 
-| Fragment | Default | Meaning |
-|----------|---------|---------|
-| `Policy.sticky` / `unsticky` | sticky **on** | Warm N&gt;1, no Advice → keep current dial |
-| `Policy.streamGap("stall"\|"drop"\|"buffer")` | `"stall"` | One outer Stream across dial swap |
-| `Policy.coldAmbiguous("fail"\|"pickFirst"\|"waitAdvice")` | `"fail"` | Cold N&gt;1 without Advice |
-| `Policy.pick("first"\|fn)` | unset | Soft pick before cold rule |
+| Handle | Default | Meaning |
+|--------|---------|---------|
+| `Policy.Sticky(true\|false)` | `true` | Warm N&gt;1, no Advice → keep current dial |
+| `Policy.StreamGap("stall"\|"drop"\|"buffer")` | `"stall"` | One outer Stream across dial swap |
+| `Policy.ColdAmbiguous("fail"\|"pickFirst"\|"waitAdvice")` | `"fail"` | Cold N&gt;1 without Advice |
+| `Policy.Pick("first"\|fn)` | unset | Soft pick before cold rule |
 
 **Resolve order** for `Hyperlink.lookupClient(Tag)`:
 
@@ -70,8 +58,8 @@ Runnable demo: [`examples/node/policy-lookup-cutover.ts`](../../examples/node/po
 2. Directory `nodesServing`
 3. Live `Advice.prefer` matching a row
 4. Warm sticky keep-current (if still Directory-visible)
-5. `Policy.pick` / call-site `{ pick }`
-6. `Policy.coldAmbiguous`
+5. `Policy.Pick` / call-site `{ pick }`
+6. `Policy.ColdAmbiguous`
 
 Advice early-move: `import * as Advice from "hyperlink-ts/Advice"` — prefer flips rebind **before**
 A leaves / before the first transport error. Effect RPCs retry once on `RpcClientError`. Streams /
@@ -81,11 +69,11 @@ A leaves / before the first transport error. Effect RPCs retry once on `RpcClien
 
 Directory-mode `Hyperlink.peersLayer(Tag, ThisNode)` shares Track D parity with `lookupClient`:
 build-then-swap peer dials, one `RpcClientError` retry, stable `peers[nodeKey]` facade, streams
-under `Policy.streamGap`. Compose Policy on the peers layer the same way:
+under `Policy.StreamGap`. Compose Policy on the peers layer the same way:
 
 ```ts
 Hyperlink.peersLayer(Pool, East).pipe(
-  Policy.provide(Policy.streamGap("stall")),
+  Policy.provide(Policy.StreamGap("stall")),
   Layer.provide(Lookup.client(lookupNode)),
 )
 ```
@@ -102,7 +90,7 @@ Dialers never track two Lookup endpoints — compose gap Policy only:
 
 ```ts
 Lookup.follow(lookupNode).pipe(
-  Policy.provide(Policy.streamGap("stall")),
+  Policy.provide(Policy.StreamGap("stall")),
 )
 ```
 
@@ -120,7 +108,7 @@ Runnable: [`examples/node/lookup-follow-handoff.ts`](../../examples/node/lookup-
 | `Policy.verifyReject` | `"reject"` (default) — Layer fails on probe error |
 | `Policy.verifyStatus` | `"status"` — probe soft |
 | `Policy.verifyOff` | skip probe |
-| `Policy.verify(mode)` | sugar for any of the above |
+| `Policy.Verify(mode)` | sugar for any of the above |
 
 See [Client verify](/docs/client-verify). Nested Lookup / status dials use `verifyOff` internally.
 
@@ -132,7 +120,7 @@ See [Client verify](/docs/client-verify). Nested Lookup / status dials use `veri
 | `Policy.askIncumbent` | cooperative yield |
 | `Policy.conflictReject` | alive → reject |
 | `Policy.conflictInherit` | continue chain (ambient default) |
-| `Policy.onConflict(mode)` | sugar for any of the above |
+| `Policy.Conflict(mode)` | sugar for any of the above |
 
 Types + `Policy.resolveOnConflict` live here; `Node` / `Lookup` re-export them. Resolve for
 advertise: call-site `ListenOptions.onConflict` → Node stamp → ambient `Policy.Conflict` →
@@ -144,7 +132,7 @@ Lookup stamp → hard `livenessReplace`.
 |----------|---------|
 | `Policy.yieldAccept` | `true` (default) |
 | `Policy.yieldRefuse` | `false` |
-| `Policy.onYield(effect)` | custom `Effect<boolean>` |
+| `Policy.Yield(effect)` | custom `Effect<boolean>` |
 
 `ListenOptions.onYield` wins when set. While `phase: "draining"`, yield **always refuses**.
 
@@ -181,8 +169,8 @@ Data-first:
 
 ```ts
 const cutover = Policy.layer(
-  Policy.sticky,
-  Policy.streamGap("stall"),
+  Policy.Sticky(true),
+  Policy.StreamGap("stall"),
   Policy.askIncumbent,
   Policy.yieldAccept,
 )

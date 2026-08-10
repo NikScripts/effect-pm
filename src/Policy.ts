@@ -1,32 +1,22 @@
 /**
  * Policy — composable behaviour fragments (client dial, verify, advertise conflict, yield).
  *
- * Built on {@link PolicyBuilder}: a private constructable declares **keys +
- * Schemas** (each key is a Context.Reference — ambient defaults use Reference
- * `defaultValue`); this module **recreates helpers** (`sticky`, `streamGap`, …)
- * and re-exports those references. Every fragment is a {@link Policy}: a real
- * `Layer` that overrides ambient Reference defaults. {@link layer} is `dual` —
- * data-first merge or `.pipe(Policy.layer(other))` — and expands the config
- * type (last write wins).
- *
- * Override entries are a **tagged sum** (`_tag` = knob name). Product bags
- * stay untagged; {@link make} accepts either. {@link Fragment} is the data kit
- * (ctors / `$is` / `$match`); Layer helpers (`sticky`, …) stay separate.
+ * Built on {@link PolicyBuilder}: each knob is one PascalCase **handle** —
+ * a Context.Reference (`yield* Policy.Sticky`) that is also callable
+ * (`Policy.Sticky(true)` → branded {@link Policy} Layer). Mode presets
+ * (`verifyOff`, `askIncumbent`, …) name concrete wire choices; there is no
+ * camelCase Layer mirror and no `Fragment.*` nest.
  *
  * ```ts
  * import * as Policy from "hyperlink-ts/Policy"
  *
  * const cutover = Policy.make({ Sticky: true, StreamGap: "stall", Verify: "reject" }).pipe(
  *   Policy.layer(Policy.verifyOff),
- *   Policy.layer(Policy.streamGap("buffer")),
+ *   Policy.layer(Policy.StreamGap("buffer")),
  * )
  * // Policy.Policy<{ Sticky: true; StreamGap: "buffer"; Verify: false }>
  *
- * Policy.succeed(Policy.Fragment.Sticky(true))
- * Policy.make([Policy.Fragment.Sticky(true), Policy.Fragment.StreamGap("stall")])
- *
- * // Same expand, data-first
- * Policy.layer(cutover, Policy.askIncumbent, Policy.yieldAccept)
+ * Policy.layer(Policy.Sticky(true), Policy.StreamGap("stall"), Policy.verifyOff)
  *
  * Hyperlink.lookupClient(Mail).pipe(
  *   Policy.provide(cutover),
@@ -212,7 +202,8 @@ export type Config = {
 
 /**
  * Tagged override entry — `_tag` is the knob name; `value` is the schema input.
- * Build with {@link Fragment} ctors (e.g. `Policy.Fragment.Sticky(true)`).
+ * Prefer handles (`Policy.Sticky(true)`) for Layers; use literals /
+ * {@link $fromConfig} when you need the data sum.
  *
  * @category models
  * @public
@@ -274,11 +265,11 @@ export type MergePolicyList<Ps extends ReadonlyArray<Policy<Config>>> =
 // =============================================================================
 
 /**
- * Schema-backed keys for this module. Not exported — use flat `Policy.*` helpers.
+ * Schema-backed keys for this module. Not exported — use flat `Policy.*` handles.
  *
  * `defaultValue` on each key is the Context.Reference default (ambient
- * `yield* Sticky` when no override Layer is provided). Fragments / `make`
- * override via Layer — same system as before PolicyBuilder.
+ * `yield* Sticky` when no override Layer is provided). Handles / `make`
+ * override via Layer.
  */
 class Keys extends PolicyBuilder.make(builderId)
   .key("Sticky", Schema.Boolean, { defaultValue: () => true })
@@ -301,136 +292,104 @@ class Keys extends PolicyBuilder.make(builderId)
       typeof input === "boolean" ? Effect.succeed(input) : input,
   }) {}
 
-/**
- * Fragment data kit (ctors / `$is` / `$match` / `$fromConfig` / `$toConfig`).
- * Distinct from Context.Reference exports (`Policy.Sticky`) and Layer helpers
- * (`Policy.sticky`).
- *
- * ```ts
- * const f = Policy.Fragment.StreamGap("stall")
- * Policy.Fragment.$is("StreamGap")(f) // true
- * Policy.Fragment.$match(f, {
- *   Sticky: (x) => x.value,
- *   StreamGap: (x) => x.value,
- *   // …exhaustive
- * })
- * ```
- *
- * @category constructors
- * @public
- */
-export const Fragment = Keys.fragments;
-
 // =============================================================================
-// References (Context.Reference — ambient defaults from Keys above)
+// Handles (Reference + callable Layer)
 // =============================================================================
 
 /**
- * Warm dual-serve stickiness. Default `true` (Reference default).
+ * Warm dual-serve stickiness. Default `true`.
+ * `yield* Sticky` / `Sticky(true)` → Layer.
  *
- * @category references
+ * @category handles
  * @public
  */
-export const Sticky = Keys.references.Sticky;
+export const Sticky = Keys.Sticky;
 
 /**
- * Stream seam across dial rebind. Default `"stall"` (Reference default).
+ * Stream seam across dial rebind. Default `"stall"`.
+ * `yield* StreamGap` / `StreamGap("buffer")` → Layer.
  *
- * @category references
+ * @category handles
  * @public
  */
-export const StreamGap = Keys.references.StreamGap;
+export const StreamGap = Keys.StreamGap;
 
 /**
- * Cold N&gt;1 without Advice. Default `"fail"` (Reference default).
+ * Cold N&gt;1 without Advice. Default `"fail"`.
  *
- * @category references
+ * @category handles
  * @public
  */
-export const ColdAmbiguous = Keys.references.ColdAmbiguous;
+export const ColdAmbiguous = Keys.ColdAmbiguous;
 
 /**
  * Optional soft pick (D4). Default unset — cold policy applies instead.
  *
- * @category references
+ * @category handles
  * @public
  */
-export const Pick = Keys.references.Pick;
+export const Pick = Keys.Pick;
 
 /**
- * Ambient client-verify mode. Default `"reject"` (Reference default).
+ * Ambient client-verify mode. Default `"reject"`.
  *
- * @category references
+ * @category handles
  * @public
  */
-export const Verify = Keys.references.Verify;
+export const Verify = Keys.Verify;
 
 /**
  * Ambient advertise conflict preference (call-site / node stamp still win).
- * Default `"inherit"` (Reference default).
+ * Default `"inherit"`.
  *
- * @category references
+ * @category handles
  * @public
  */
-export const Conflict = Keys.references.Conflict;
+export const Conflict = Keys.Conflict;
 
 /**
  * Cooperative yield handler for `"askIncumbent"` — `true` = step aside.
- * Default accept (Reference default). ListenOptions.`onYield` wins when set.
+ * Default accept. ListenOptions.`onYield` wins when set.
  *
- * @category references
+ * @category handles
  * @public
  */
-export const Yield = Keys.references.Yield;
+export const Yield = Keys.Yield;
 
 // =============================================================================
-// Dial / cutover fragments
+// Mode presets (named wire choices — not key mirrors)
 // =============================================================================
-
-/** Keep the current dial across dual-serve (default on). @category layers @public */
-export const sticky: Policy<{ Sticky: true }> = Keys.succeed(
-  Fragment.Sticky(true),
-);
-
-/** Disable warm stickiness. @category layers @public */
-export const unsticky: Policy<{ Sticky: false }> = Keys.succeed(
-  Fragment.Sticky(false),
-);
-
-/** Stream seam mode. @category layers @public */
-export const streamGap = <const M extends StreamGap>(
-  mode: M,
-): Policy<{ StreamGap: M }> => Keys.succeed(Fragment.StreamGap(mode));
-
-/** Cold N&gt;1 behaviour. @category layers @public */
-export const coldAmbiguous = <const M extends ColdAmbiguous>(
-  mode: M,
-): Policy<{ ColdAmbiguous: M }> =>
-  Keys.succeed(Fragment.ColdAmbiguous(mode));
-
-/** Soft pick when N&gt;1 and Advice misses. @category layers @public */
-export const pick = <const M extends Pick>(mode: M): Policy<{ Pick: M }> =>
-  Keys.succeed(Fragment.Pick(mode));
 
 /** Verify and reject on failure (default). @category layers @public */
-export const verifyReject: Policy<{ Verify: "reject" }> = Keys.succeed(
-  Fragment.Verify("reject"),
-);
+export const verifyReject: Policy<{ Verify: "reject" }> = Verify("reject");
 
 /** Verify; keep status without failing Layer build. @category layers @public */
-export const verifyStatus: Policy<{ Verify: "status" }> = Keys.succeed(
-  Fragment.Verify("status"),
-);
+export const verifyStatus: Policy<{ Verify: "status" }> = Verify("status");
 
 /** Skip client verify probe. @category layers @public */
-export const verifyOff: Policy<{ Verify: false }> = Keys.succeed(
-  Fragment.Verify(false),
-);
+export const verifyOff: Policy<{ Verify: false }> = Verify(false);
 
-/** Set client verify mode. @category layers @public */
-export const verify = <const M extends Verify>(
-  mode: M,
-): Policy<{ Verify: M }> => Keys.succeed(Fragment.Verify(mode));
+/** Advertise: liveness ping replace. @category layers @public */
+export const livenessReplace: Policy<{ Conflict: "livenessReplace" }> =
+  Conflict("livenessReplace");
+
+/** Advertise: ask incumbent to yield. @category layers @public */
+export const askIncumbent: Policy<{ Conflict: "askIncumbent" }> =
+  Conflict("askIncumbent");
+
+/** Advertise: reject when incumbent alive. @category layers @public */
+export const conflictReject: Policy<{ Conflict: "reject" }> =
+  Conflict("reject");
+
+/** Advertise: inherit up the chain (default ambient). @category layers @public */
+export const conflictInherit: Policy<{ Conflict: "inherit" }> =
+  Conflict("inherit");
+
+/** Accept askIncumbent yield (default). @category layers @public */
+export const yieldAccept: Policy<{ Yield: true }> = Yield(true);
+
+/** Refuse askIncumbent yield. @category layers @public */
+export const yieldRefuse: Policy<{ Yield: false }> = Yield(false);
 
 /**
  * Walk preference layers (first concrete wins). Hard fallback: `livenessReplace`.
@@ -469,43 +428,41 @@ export const onConflictOf = (node: unknown): OnConflict | undefined => {
   return undefined;
 };
 
-/** Advertise: liveness ping replace. @category layers @public */
-export const livenessReplace: Policy<{ Conflict: "livenessReplace" }> =
-  Keys.succeed(Fragment.Conflict("livenessReplace"));
+// =============================================================================
+// Fragment matchers / bag converters
+// =============================================================================
 
-/** Advertise: ask incumbent to yield. @category layers @public */
-export const askIncumbent: Policy<{ Conflict: "askIncumbent" }> =
-  Keys.succeed(Fragment.Conflict("askIncumbent"));
+/**
+ * Type guard for a tagged {@link Fragment} by `_tag`.
+ *
+ * @category guards
+ * @public
+ */
+export const $is = Keys.$is;
 
-/** Advertise: reject when incumbent alive. @category layers @public */
-export const conflictReject: Policy<{ Conflict: "reject" }> = Keys.succeed(
-  Fragment.Conflict("reject"),
-);
+/**
+ * Exhaustive match over a {@link Fragment} (dual).
+ *
+ * @category utils
+ * @public
+ */
+export const $match = Keys.$match;
 
-/** Advertise: inherit up the chain (default ambient). @category layers @public */
-export const conflictInherit: Policy<{ Conflict: "inherit" }> = Keys.succeed(
-  Fragment.Conflict("inherit"),
-);
+/**
+ * Product {@link Config} → {@link Fragment} list (present keys only).
+ *
+ * @category constructors
+ * @public
+ */
+export const $fromConfig = Keys.$fromConfig.bind(Keys);
 
-/** Set advertise conflict preference. @category layers @public */
-export const onConflict = <const M extends OnConflict>(
-  mode: M,
-): Policy<{ Conflict: M }> => Keys.succeed(Fragment.Conflict(mode));
-
-/** Accept askIncumbent yield (default). @category layers @public */
-export const yieldAccept: Policy<{ Yield: true }> = Keys.succeed(
-  Fragment.Yield(true),
-);
-
-/** Refuse askIncumbent yield. @category layers @public */
-export const yieldRefuse: Policy<{ Yield: false }> = Keys.succeed(
-  Fragment.Yield(false),
-);
-
-/** Custom yield handler. @category layers @public */
-export const onYield = <E extends Effect.Effect<boolean>>(
-  handler: E,
-): Policy<{ Yield: E }> => Keys.succeed(Fragment.Yield(handler));
+/**
+ * {@link Fragment} list → product bag (last write wins).
+ *
+ * @category constructors
+ * @public
+ */
+export const $toConfig = Keys.$toConfig.bind(Keys);
 
 // =============================================================================
 // layer / make / provide / guards
@@ -536,11 +493,11 @@ export const config = <C extends Config>(self: Policy<C>): C =>
  * ```ts
  * const cutover = Policy.make({ StreamGap: "stall", Verify: "reject" }).pipe(
  *   Policy.layer(Policy.verifyOff),
- *   Policy.layer(Policy.streamGap("buffer")),
+ *   Policy.layer(Policy.StreamGap("buffer")),
  * )
  * // Policy.Policy<{ StreamGap: "buffer"; Verify: false }>
  *
- * Policy.layer(Policy.sticky, Policy.streamGap("stall"), Policy.verifyOff)
+ * Policy.layer(Policy.Sticky(true), Policy.StreamGap("stall"), Policy.verifyOff)
  * ```
  *
  * @category layers
@@ -550,10 +507,7 @@ export const layer: typeof Keys.layer = Keys.layer;
 
 /**
  * One tagged {@link Fragment} → branded single-key {@link Policy}.
- *
- * ```ts
- * Policy.succeed(Policy.Fragment.Sticky(true))
- * ```
+ * Prefer the handle call (`Policy.Sticky(true)`) for the same result.
  *
  * @category constructors
  * @public
@@ -571,12 +525,6 @@ export const succeed: typeof Keys.succeed = Keys.succeed.bind(Keys);
  *   StreamGap: "stall",
  *   Verify: "reject",
  * }).pipe(Policy.layer(Policy.verifyOff))
- * // Policy.Policy<{ Sticky: true; StreamGap: "stall"; Verify: false }>
- *
- * Policy.make([
- *   Policy.Fragment.Sticky(true),
- *   Policy.Fragment.StreamGap("stall"),
- * ])
  * ```
  *
  * @category constructors
@@ -591,8 +539,8 @@ export const make: {
 
 /**
  * Provide policy Layers onto a Layer (no stacked `Layer.provide`s).
- * Accepts {@link make} bundles, typed fragments, {@link layer} results, or a
- * mix — last write wins per reference.
+ * Accepts {@link make} bundles, handle calls, mode presets, {@link layer}
+ * results, or a mix — last write wins per reference.
  *
  * ```ts
  * Hyperlink.lookupClient(Mail).pipe(

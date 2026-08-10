@@ -217,13 +217,10 @@ Layers are camelCase. The canonical toolkit entrypoint is `layer` (and `layer*` 
 `layerMemory`); a composed or auxiliary layer takes a `*Layer` suffix (`peersLayer`). Policy
 modules use HttpApi-shaped constructables with Schema keys —
 `class X extends PolicyBuilder.make(id).key(name, schema, { defaultValue })` — where
-`defaultValue` is the `Context.Reference` default; the domain module recreates helpers.
-Fragments are real `Policy.Policy<{…}>` values (Layer overrides; `Policy.verifyOff` →
-`Policy.Policy<{ Verify: false }>`). Override **data** is a tagged sum
-(`Policy.Fragment.StreamGap("stall")` — `_tag` names the knob). Compose with dual
-`Policy.layer` (`.pipe(Policy.layer(other))` or `Policy.layer(a, b, c)` — config
-expands) / `Policy.provide`, product bag `Policy.make({ StreamGap: "stall", … })`,
-or `Policy.make([Policy.Fragment.…, …])`. Either way the name says "layer."
+`defaultValue` is the `Context.Reference` default. Each key is one PascalCase **handle**
+(`yield* Policy.Sticky` / `Policy.Sticky(true)` → Layer). Mode presets (`verifyOff`, …)
+name wire choices. Compose with dual `Policy.layer` / `Policy.provide` / product bag
+`Policy.make({ StreamGap: "stall", … })`. Either way the name says "layer."
 
 {#owned-string-literals-pascalcase .must appliesTo="src examples"}
 ## Owned string literals are PascalCase

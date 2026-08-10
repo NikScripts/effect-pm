@@ -4,15 +4,9 @@
  *
  * **Two layers:**
  * 1. **Constructable** — `class X extends PolicyBuilder.make(id).key(name, schema, opts)`.
- *    Each key is a Schema + a derived {@link Context.Reference}
- *    (`defaultValue` is the Reference default — same form as Effect).
- * 2. **Module** — recreate helpers (`sticky`, `streamGap`, re-export
- *    `X.references.*`) — hand-written DX in most cases.
- *
- * Fragments are a **tagged sum** (`_tag` = knob name). Product bags stay
- * untagged; `make` accepts either a bag or a `Fragment[]`. Use
- * {@link Def.fragments} for value-first ctors / `$is` / `$match` / bag converters
- * (Data.`taggedEnum`-shaped; ctors take the payload, not `{ value }`).
+ *    Each key is one PascalCase **handle**: a {@link Context.Reference} that is
+ *    also callable `(value) => branded Policy Layer`.
+ * 2. **Module** — re-export handles + mode presets (`verifyOff`, `askIncumbent`, …).
  *
  * ```ts
  * import * as PolicyBuilder from "hyperlink-ts/PolicyBuilder"
@@ -26,15 +20,10 @@
  *   })
  * {}
  *
- * // module recreates helpers
- * export const Sticky = Demo.references.Sticky
- * export const Fragment = Demo.fragments
- * export const sticky = Demo.succeed(Fragment.Sticky(true))
- *
- * const bundle = Demo.make({ Sticky: true }).pipe(
- *   Demo.layer(Demo.succeed(Fragment.Sticky(false))),
- * )
- * // or: Demo.make([Fragment.Sticky(true), Fragment.Yield(false)])
+ * export const Sticky = Demo.Sticky
+ * // yield* Sticky          — Reference
+ * // Sticky(true)           — Policy Layer
+ * // Demo.make({ Sticky: true }).pipe(Demo.layer(Sticky(false)))
  * ```
  *
  * @module PolicyBuilder
@@ -132,15 +121,37 @@ export type ConfigFromFragments<
 > = internal.PolicyBuilderConfigFromFragments<Fs>;
 
 /**
- * Fragment data kit derived from a keys map — per-key ctors, `$is`, `$match`,
- * `$fromConfig`, `$toConfig`.
+ * One key handle — Reference + `(value) => Policy Layer`.
  *
  * @category models
  * @public
  */
-export type FragmentsOfKeys<
+export type Handle<
+  Id extends string,
+  K extends string,
+  Spec extends KeySpec<any, any>,
+> = internal.PolicyBuilderHandle<Id, K, Spec>;
+
+/**
+ * Flat PascalCase handles derived from a keys map.
+ *
+ * @category models
+ * @public
+ */
+export type HandlesOfKeys<
+  Id extends string,
   Keys extends Record<string, KeySpec<any, any>>,
-> = internal.PolicyBuilderFragmentsOfKeys<Keys>;
+> = internal.PolicyBuilderHandlesOfKeys<Id, Keys>;
+
+/**
+ * Fragment `$is` / `$match` / bag converters on a Def.
+ *
+ * @category models
+ * @public
+ */
+export type MatchersOfKeys<
+  Keys extends Record<string, KeySpec<any, any>>,
+> = internal.PolicyBuilderMatchersOfKeys<Keys>;
 
 /**
  * Constructable returned by {@link make} — the `class extends` target (HttpApi-shaped).
@@ -161,13 +172,13 @@ export type Def<
  * Empty constructable (HttpApi.`make(id)` analogue).
  *
  * Widen with `.key(name, schema, { defaultValue, toRuntime? })`, then
- * `class extends`. `defaultValue` is the Context.Reference default — ambient
- * `yield* Ref` when no override Layer is provided.
+ * `class extends`. Each key becomes a PascalCase handle on the Def.
  *
  * ```ts
  * class Demo extends PolicyBuilder.make("demo/Policy")
  *   .key("Sticky", Schema.Boolean, { defaultValue: () => true })
  * {}
+ * // Demo.Sticky — yield* / Sticky(true)
  * ```
  *
  * @category constructors

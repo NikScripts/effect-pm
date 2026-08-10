@@ -184,7 +184,7 @@ yield* Launcher.up(workerSpec).pipe(Effect.provide(Launcher.alreadyUpAdopt))
 
 Bare skip without a Ready probe is rejected. Adopt never means migration-handoff or
 Directory steal. Custody `Handle.handoff` is only for children **this** Launcher spawned.
-Directory conflicts use `Policy.onConflict` / `askIncumbent`. Intentional Lookup A→B is an
+Directory conflicts use `Policy.Conflict` / `askIncumbent`. Intentional Lookup A→B is an
 orchestrated same-address ownership move (Launcher/orchestrator as middleman).
 
 **Who owns what:** Lookup = membership + dial truth (+ `Lookup.planUpdate`);

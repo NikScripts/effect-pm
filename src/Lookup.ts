@@ -7,7 +7,7 @@
  *
  * **Dialers:** {@link client} is a **static** dial (one install). {@link follow} is the
  * hot dialer for the **same address** across an orchestrated Lookup A→B ownership move —
- * holder + `RpcClientError` retry + {@link Policy.streamGap}. Compose gap Policy at the
+ * holder + `RpcClientError` retry + {@link Policy.StreamGap}. Compose gap Policy at the
  * call site; orchestration (who binds the sock) is outside this module.
  *
  * **Updates:** {@link planUpdate} dry-runs Directory / status / Versioned impact.
@@ -24,7 +24,7 @@
  * import * as Policy from "hyperlink-ts/Policy"
  *
  * Layer.provide(Lookup.layer)
- * Lookup.follow(lookupNode).pipe(Policy.provide(Policy.streamGap("stall")))
+ * Lookup.follow(lookupNode).pipe(Policy.provide(Policy.StreamGap("stall")))
  * yield* Advice.prefer(Mail, "fleet/Mail#w2")
  * yield* Directory.changes.pipe(Stream.runDrain)
  * yield* Dialers.listForTarget("fleet/Worker#a")
@@ -695,7 +695,7 @@ export const clientOptions = (options?: {
 /**
  * Hot dialer for one Lookup address — survives orchestrated A→B ownership moves on the
  * **same** `path` (build-then-swap; Effect RPCs retry on `RpcClientError`; streams follow
- * dial generations via {@link Policy.streamGap}).
+ * dial generations via {@link Policy.StreamGap}).
  *
  * Unlike {@link client} (static install), {@link follow} reinstalls to the **same** seed
  * when the sock owner changes. Dialers never track two Lookup endpoints — orchestration
@@ -703,7 +703,7 @@ export const clientOptions = (options?: {
  *
  * ```ts
  * Lookup.follow(lookupNode).pipe(
- *   Policy.provide(Policy.streamGap("stall")),
+ *   Policy.provide(Policy.StreamGap("stall")),
  * )
  * ```
  *

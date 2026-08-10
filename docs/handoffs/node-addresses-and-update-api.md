@@ -271,9 +271,9 @@ node stamps still win for conflict / yield where they already did.
 1. **Constructable** — declare **key name + Schema** (+ Reference `defaultValue` /
    optional `toRuntime`). HttpApi-shaped: `make(id).key(…).key(…)` then
    `class extends`. Derives `Context.Reference` at `` `${id}/${name}` ``.
-2. **Module** — **recreate** DX: re-export `X.references.*`, hand-write `sticky` /
-   `streamGap` / … (constructable stays private or is the module’s named class —
-   never a nested `Family` API).
+2. **Module** — re-export handles (`Sticky`, …) + mode presets (`verifyOff`,
+   `askIncumbent`, …). Constructable stays private or is the module’s named class —
+   never a nested `Family` API.
 
 ```ts
 import * as PolicyBuilder from "hyperlink-ts/PolicyBuilder"
@@ -289,25 +289,22 @@ class LookupPolicy extends PolicyBuilder.make("hyperlink-ts/LookupPolicy")
   })
 {}
 
-export const Sticky = LookupPolicy.references.Sticky
-export const Fragment = LookupPolicy.fragments
-export const sticky = LookupPolicy.succeed(Fragment.Sticky(true))
+export const Sticky = LookupPolicy.Sticky   // yield* Sticky / Sticky(true) → Layer
+export const verifyOff = Verify(false)      // mode preset
 export const make = LookupPolicy.make
 ```
 
 | Piece | Role |
 |-------|------|
 | **`PolicyBuilder.make(id)`** | Empty constructable (HttpApi.`make`) |
-| **`.key(name, schema, opts)`** | Schema + Reference (`defaultValue` = Reference default) |
+| **`.key(name, schema, opts)`** | Adds PascalCase **handle** (Reference + callable Layer) |
 | **`class extends`** | Name the constructable (or keep private in the module) |
-| **`.references`** | Derived Context.References to re-export |
-| **`.fragments`** | Data kit — value-first ctors / `$is` / `$match` / bag converters |
+| **`$is` / `$match` / `$fromConfig` / `$toConfig`** | Fragment data sum helpers on the Def |
 | **`.make` / `layer` / `provide` / `succeed`** | Branded Layer override toolkit |
-| **Module helpers** | Recreated DX — not auto-generated |
+| **Mode presets** | Named wire choices (`verifyOff`, `askIncumbent`) — not key mirrors |
 
-**Eng’d today:** private `Keys` constructable inside `Policy` + flat helpers +
-key-`_tag` fragments + `Policy.Fragment` kit. **Next:** Eng `NodePolicy` the
-same way; rename `Policy` → `LookupPolicy`.
+**Eng’d today:** private `Keys` + flat callable handles + mode presets. **Next:**
+Eng `NodePolicy` the same way; rename `Policy` → `LookupPolicy`.
 
 Apps normally import **`LookupPolicy` / `NodePolicy`**, not the builder.
 
@@ -317,49 +314,28 @@ Effect uses `_tag` for **closed sums** you `Match` / decode as variants (`Data.T
 `Schema.TaggedStruct`, `Match.tag`). It does **not** put `_tag` on Context.Reference
 identity — refs are keyed by their string id / record field (`Sticky`, `StreamGap`).
 
-Policy has two shapes:
+| Shape | Kind | API |
+|-------|------|-----|
+| `make({ Sticky: true, StreamGap: "stall" })` | **Product** bag | untagged object |
+| `Sticky(true)` / `StreamGap("stall")` | **Handle** → Layer | one PascalCase name |
+| `{ _tag: "Sticky", value: true }` | **Fragment** data sum | literals / `$fromConfig` |
+| Mode strings (`"stall"`, `"reject"`) | value sum (later) | optional PascalCase `_tag` modes |
 
-| Shape | Kind | `_tag` fit |
-|-------|------|------------|
-| `make({ Sticky: true, StreamGap: "stall" })` | **Product** (many knobs at once) | `_tag` on the bag doesn’t work (one object, many keys) |
-| `succeed({ _tag, value })` / helpers | **Sum** (which knob is this override?) | `_tag` names the knob — Effect-consistent |
-| Mode strings (`"stall"`, `"reject"`) | **Sum** (which mode?) | `_tag` on the **value** fits standards (`{ _tag: "Stall" }`) — later cut |
-
-**Locked + Eng’d: `_tag` on the key (fragment), not the Reference bag.**
-
-Each override is a tagged struct; `_tag` is the knob name (PascalCase, matches Reference /
-`.key("Sticky", …)`). Payload is the value (boolean, mode, …):
+**Locked + Eng’d: one handle per knob — no `Fragment.Sticky` / `sticky` triple.**
 
 ```ts
-type Fragment =
-  | { readonly _tag: "Sticky"; readonly value: boolean }
-  | { readonly _tag: "StreamGap"; readonly value: StreamGap }
-  | { readonly _tag: "Verify"; readonly value: Verify }
-  // …
-
-Policy.succeed(Policy.Fragment.Sticky(true))
-Policy.make([Policy.Fragment.Sticky(true), Policy.Fragment.StreamGap("stall")])
-// product bag sugar → same product config stamp
-Policy.make({ Sticky: true, StreamGap: "stall" })
+yield* Policy.Sticky
+Policy.Sticky(true)                                    // Layer
+Policy.layer(Policy.Sticky(true), Policy.StreamGap("stall"))
+Policy.make({ Sticky: true, StreamGap: "stall" })      // product bag
+Policy.$fromConfig({ Sticky: true })                   // → Fragment[]
 ```
 
-`Policy.Fragment` (from `Def.fragments`) is Data.`taggedEnum`-shaped but **value-first**
-ctors (`Sticky(true)` not `Sticky({ value: true })`) because every variant shares a
-uniform `value` payload. Also `$is` / `$match` / `$fromConfig` / `$toConfig`. Layer
-helpers (`Policy.sticky`) stay separate from References (`Policy.Sticky`) and data
-ctors (`Policy.Fragment.Sticky`).
-
 Why not value-only `_tag`: Sticky/Yield are booleans / Effects — no useful value tag.
-Key-tag gives one uniform fragment shape for every knob (including booleans). Mode values
-can stay string literals for now, or later move to PascalCase `_tag` modes under the
-payload (`value: { _tag: "Stall" }`) per owned-string standards — separate cut.
+Mode values can stay string literals for now, or later move to PascalCase `_tag` modes
+under the payload — separate cut.
 
-Why not `_tag` instead of Context.Reference: ambient `yield* Policy.Sticky` and Layer
-overrides stay Reference-based (Effect Context). `_tag` is for the **fragment / config
-entry** sum, not for replacing refs.
-
-**Eng’d** on `PolicyBuilder` / `Policy` (`Fragment` kit / `succeed` / `make(Fragment[])` /
-product bag).
+**Eng’d** on `PolicyBuilder` / `Policy` (callable handles / mode presets / product bag).
 
 ### 3.4 Parked — prior long Address API notes
 
