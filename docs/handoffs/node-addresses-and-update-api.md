@@ -171,11 +171,17 @@ Two policy modules — different jobs:
 
 | Module | Owns |
 |--------|------|
-| **`hyperlink-ts/Policy`** | **Client** dial behavior (Eng’d): `Sticky`, `Verify`, `StreamGap`, `Pick`, `ColdAmbiguous`, `Conflict`, `Yield` |
+| **`hyperlink-ts/Policy`** | Lookup / membership behavior (Eng’d): dial (`Sticky`, `Verify`, `StreamGap`, `Pick`, `ColdAmbiguous`) **and** advertise conflict / yield (`Conflict`, `Yield`) |
 | **`hyperlink-ts/NodePolicy`** | **This process** vs its address list: bind, publish, proxy, which labeled side it is |
 
+**Keep the name `Policy` — do not rename to `ClientPolicy`.** Symmetry with `NodePolicy`
+is tempting, but Eng’d `Policy` is not client-only (`Conflict` / `Yield` are Directory /
+incumbent). Renaming would also tax a shipped public surface for a worse name. Asymmetry
+is fine: short `Policy` for the established fragment bag; `NodePolicy` for the node×address
+specialist.
+
 Address = identity + dial target. **NodePolicy** = what this OS process does with that
-list. Do **not** stuff node knobs into client `Policy.make`.
+list. Do **not** stuff node knobs into `Policy.make`.
 
 ```ts
 import * as Address from "hyperlink-ts/Address"
