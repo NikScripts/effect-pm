@@ -23,6 +23,8 @@ const readVersion = Effect.gen(function* () {
 }).pipe(Effect.orElseSucceed(() => ""));
 
 // Book chrome — docs / API / search / releases only. Coming-soon `/` is outside this group.
+// Host shell (createLayout, path "/(book)") — never a Page mint. Render mode
+// (DEV dynamic / prod static) lives on `waku.server.tsx`, not `getConfig`.
 export default async function BookLayout({ children }: { children: ReactNode }) {
   const groups = await navGroups();
   const version = await runServer(readVersion);
@@ -97,6 +99,3 @@ export default async function BookLayout({ children }: { children: ReactNode }) 
     </>
   );
 }
-
-export const getConfig = async () =>
-  import.meta.env.DEV ? ({ render: "dynamic" } as const) : ({ render: "static" } as const);

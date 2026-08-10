@@ -2,7 +2,10 @@ import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import compression from "compression";
-import { defineConfig } from "waku/config";
+import * as Config from "last-ts/config";
+import * as Vite from "last-ts/vite";
+
+const lastTsSrc = fileURLToPath(new URL("../../packages/last-ts/src", import.meta.url));
 
 // DEV-MODE compression: the hover-dense pages are megabytes raw but ~95% compressible (repetitive
 // shiki spans), and Vite's dev server sends identity encoding — browsing the dev box from a phone
@@ -84,9 +87,27 @@ const watchDocsContent = {
 // `@vitejs/plugin-react` wires the `react-server` export condition Waku's RSC
 // renderer requires. Waku is pinned to 1.0.0-beta.3 — beta.6 regressed that
 // condition wiring (500 on every route). Revisit the pin when a later beta fixes it.
-export default defineConfig({
+//
+// Host CLI entry only — apps import `last-ts/config` / `last-ts/vite`, never `waku/config`
+// directly (docs/handoffs/last-ts-api-corrections.md host boundary).
+export default Config.defineConfig({
   vite: {
-    plugins: [tailwindcss(), react(), watchDocsContent, devCompression, clientPlatformNodeStub],
+    // Cast: docs/site pins its own `vite` major (peer of `@tailwindcss/vite` /
+    // `@vitejs/plugin-react`) independently of the `vite` last-ts/waku resolve
+    // as a peer — two distinct package instances make `Plugin<any>` structurally
+    // unrelated enough to blow TS's comparison stack. Runtime shape is identical
+    // (plain Vite plugin objects); only the type identity differs.
+    plugins: [
+      Vite.fileRouter({
+        pagesDir: "src/pages",
+        outFile: "src/paths.gen.ts",
+      }),
+      tailwindcss(),
+      react(),
+      watchDocsContent,
+      devCompression,
+      clientPlatformNodeStub,
+    ] as NonNullable<Config.Config["vite"]>["plugins"],
     // Content `.md` is Djot source, not JS. Declaring it an asset stops Vite from running
     // JS import-analysis on it (which errors on edit and breaks the HMR signal), so `?raw`
     // imports and hot-reload work cleanly.
@@ -109,36 +130,25 @@ export default defineConfig({
         ),
         "hyperlink-ts": fileURLToPath(new URL("../../src", import.meta.url)),
         // Pin last-ts subpaths (avoid resolving bare `last-ts` → src/index barrel on the client).
-        "last-ts/AtomReact": fileURLToPath(
-          new URL("../../packages/last-ts/src/AtomReact.tsx", import.meta.url),
-        ),
-        "last-ts/View": fileURLToPath(
-          new URL("../../packages/last-ts/src/View.tsx", import.meta.url),
-        ),
-        "last-ts/Last": fileURLToPath(
-          new URL("../../packages/last-ts/src/Last.ts", import.meta.url),
-        ),
-        "last-ts/Page": fileURLToPath(
-          new URL("../../packages/last-ts/src/Page.ts", import.meta.url),
-        ),
-        "last-ts/Route": fileURLToPath(
-          new URL("../../packages/last-ts/src/Route.ts", import.meta.url),
-        ),
-        "last-ts/RouterBuilder": fileURLToPath(
-          new URL("../../packages/last-ts/src/RouterBuilder.ts", import.meta.url),
-        ),
-        "last-ts/Memory": fileURLToPath(
-          new URL("../../packages/last-ts/src/Memory.ts", import.meta.url),
-        ),
-        "last-ts/Layout": fileURLToPath(
-          new URL("../../packages/last-ts/src/Layout.ts", import.meta.url),
-        ),
-        "last-ts/Router/waku": fileURLToPath(
-          new URL("../../packages/last-ts/src/Router/waku.ts", import.meta.url),
-        ),
-        "last-ts/Router": fileURLToPath(
-          new URL("../../packages/last-ts/src/Router.ts", import.meta.url),
-        ),
+        "last-ts/Page/react": `${lastTsSrc}/Page/react.tsx`,
+        "last-ts/Page": `${lastTsSrc}/Page.ts`,
+        "last-ts/Route": `${lastTsSrc}/Route.ts`,
+        "last-ts/Router/waku": `${lastTsSrc}/Router/waku.ts`,
+        "last-ts/Router": `${lastTsSrc}/Router.ts`,
+        "last-ts/RouterBuilder": `${lastTsSrc}/RouterBuilder.ts`,
+        "last-ts/RouterClient": `${lastTsSrc}/RouterClient.ts`,
+        "last-ts/Layout": `${lastTsSrc}/Layout.tsx`,
+        "last-ts/RootLayout": `${lastTsSrc}/RootLayout.tsx`,
+        "last-ts/Document": `${lastTsSrc}/Document.tsx`,
+        "last-ts/Waku": `${lastTsSrc}/Waku.ts`,
+        "last-ts/View": `${lastTsSrc}/View.tsx`,
+        "last-ts/Last": `${lastTsSrc}/Last.ts`,
+        "last-ts/Memory": `${lastTsSrc}/Memory.ts`,
+        "last-ts/History": `${lastTsSrc}/History.ts`,
+        "last-ts/AtomReact": `${lastTsSrc}/AtomReact.tsx`,
+        "last-ts/vite": `${lastTsSrc}/vite/fileRouter.ts`,
+        "last-ts/config": `${lastTsSrc}/config.ts`,
+        "last-ts/server": `${lastTsSrc}/server.ts`,
         // Package source pulls `waku/router/client` via repo root — pin to THIS
         // app's waku so hooks share the site's Router context (no dual instance).
         "waku/router/client": fileURLToPath(

@@ -1,7 +1,9 @@
+import { Schema } from "effect";
+import * as Page from "last-ts/Page";
 import { ApiSymbolRow } from "../../../../../components/ApiSymbol.js";
 import { PageMeta } from "../../../../../components/PageMeta.js";
 import { ModuleAside } from "../../../../../components/ApiAside.js";
-import { moduleSummary, packages } from "../../../../../lib/api-data.js";
+import { moduleSummary } from "../../../../../lib/api-data.js";
 import { groupSymbols } from "../../../../../lib/api-groups.js";
 import { urls } from "../../../../../lib/siteRoutes.js";
 import { runServer } from "../../../../../lib/runtime.js";
@@ -10,7 +12,10 @@ import * as Router from "../../../../../ui/Router.js";
 // A module page — its symbols in sections (no Shiki, so it stays small): curated @category
 // groups where the source tags them, kind buckets otherwise (see lib/api-groups.ts). Loads only
 // this module's summary file; each row links to the symbol's own page.
-export default async function ApiModulePage({ pkg, module }: { pkg: string; module: string }) {
+async function ApiModuleBody(props: {
+  readonly params: { readonly pkg: string; readonly module: string };
+}) {
+  const { pkg, module } = props.params;
   const m = await runServer(moduleSummary(pkg, module));
   if (m === undefined)
     return (
@@ -65,12 +70,8 @@ export default async function ApiModulePage({ pkg, module }: { pkg: string; modu
   );
 }
 
-export const getConfig = async () =>
-  import.meta.env.DEV
-    ? ({ render: "dynamic" } as const)
-    : ({
-        render: "static",
-        staticPaths: (await runServer(packages())).flatMap((p) =>
-          p.modules.map((m) => [p.slug, m.slug] as const)
-        ),
-      } as const);
+// DEV-dynamic / prod-static render mode (+ staticPaths) is chosen on `waku.server.tsx`.
+export class ApiModulePage extends Page.make(
+  { params: { pkg: Schema.String, module: Schema.String } },
+  ApiModuleBody,
+) {}

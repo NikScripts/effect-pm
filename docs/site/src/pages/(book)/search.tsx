@@ -1,10 +1,11 @@
+import * as Page from "last-ts/Page";
 import { SearchResults } from "../../islands/SearchResults.js";
 import { PageMeta } from "../../components/PageMeta.js";
 import { SearchAside } from "../../components/ApiAside.js";
 
 // Full search results: a static shell + the client island (the island reads ?q= from the URL and
 // runs the same engine/ranking the typeahead uses, over the same lazily-fetched index).
-export default function SearchPage() {
+function SearchPage() {
   return (
     <>
       <PageMeta
@@ -20,3 +21,6 @@ export default function SearchPage() {
     </>
   );
 }
+
+// No original getConfig (fs-router default `render: "static"`).
+export class SearchResultsPage extends Page.static(SearchPage) {}

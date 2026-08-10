@@ -1,5 +1,7 @@
+import { Schema } from "effect";
+import * as Page from "last-ts/Page";
 import { PageMeta } from "../../../../components/PageMeta.js";
-import { moduleSummary, packageBySlug, packages, type ModuleInfo } from "../../../../lib/api-data.js";
+import { moduleSummary, packageBySlug, type ModuleInfo } from "../../../../lib/api-data.js";
 import { urls } from "../../../../lib/siteRoutes.js";
 import { runServer } from "../../../../lib/runtime.js";
 import * as Router from "../../../../ui/Router.js";
@@ -84,7 +86,8 @@ const HeroLayout = async ({ p }: { p: { slug: string; modules: ReadonlyArray<Mod
 };
 
 // A package page — the list of its modules. Loads only the top index (module names + counts).
-export default async function ApiPackagePage({ pkg }: { pkg: string }) {
+async function ApiPackageBody(props: { readonly params: { readonly pkg: string } }) {
+  const { pkg } = props.params;
   const p = await runServer(packageBySlug(pkg));
   if (p === undefined) return <p className="prose">Package not found: {pkg}</p>;
   const total = p.modules.reduce((n, m) => n + m.count, 0);
@@ -125,10 +128,8 @@ export default async function ApiPackagePage({ pkg }: { pkg: string }) {
   );
 }
 
-export const getConfig = async () =>
-  import.meta.env.DEV
-    ? ({ render: "dynamic" } as const)
-    : ({
-        render: "static",
-        staticPaths: (await runServer(packages())).map((p) => p.slug),
-      } as const);
+// DEV-dynamic / prod-static render mode (+ staticPaths) is chosen on `waku.server.tsx`.
+export class ApiPackagePage extends Page.make(
+  { params: { pkg: Schema.String } },
+  ApiPackageBody,
+) {}

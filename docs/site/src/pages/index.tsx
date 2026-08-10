@@ -1,3 +1,4 @@
+import * as Page from "last-ts/Page";
 import { PageMeta } from "../components/PageMeta.js";
 // Inline so brand-host `/` paints without fetching `/assets/*.css` (a bad edge
 // redirect or stale cache previously left this page as bare text).
@@ -5,7 +6,7 @@ import landingCss from "../styles/landing.css?inline";
 
 // Brand host (`hyperlink.cool`) — coming-soon lockup only. The docs demo is on
 // `dev.hyperlink.cool` (host gate redirects `/` there to `/docs/index`).
-export default function LandingPage() {
+function LandingPage() {
   return (
     <>
       <style>{landingCss}</style>
@@ -34,4 +35,4 @@ export default function LandingPage() {
   );
 }
 
-export const getConfig = async () => ({ render: "static" }) as const;
+export class Home extends Page.static(LandingPage) {}

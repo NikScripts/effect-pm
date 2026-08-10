@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import * as nodePath from "node:path";
+import * as Page from "last-ts/Page";
 import { PageMeta } from "../../components/PageMeta.js";
 import { loadHighlighter, renderJsdocToReact } from "../../lib/highlight.js";
 import { runServer } from "../../lib/runtime.js";
@@ -36,7 +37,7 @@ const parseReleases = (text: string): ReadonlyArray<Release> =>
       };
     });
 
-export default async function ReleasesPage() {
+async function ReleasesBody() {
   const text = await runServer(readChangelog);
   await loadHighlighter();
   const releases = parseReleases(text);
@@ -76,5 +77,5 @@ export default async function ReleasesPage() {
   );
 }
 
-export const getConfig = async () =>
-  import.meta.env.DEV ? ({ render: "dynamic" } as const) : ({ render: "static" } as const);
+// DEV-dynamic / prod-static render mode is chosen on `waku.server.tsx`.
+export class ReleasesPage extends Page.make(ReleasesBody) {}

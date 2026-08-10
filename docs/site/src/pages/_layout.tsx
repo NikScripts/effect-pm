@@ -4,6 +4,9 @@ import type { ReactNode } from "react";
  * Root shell for every route — document chrome only (no docs stylesheet).
  * Book routes import `docs.css` from `(book)/_layout.tsx`. Coming-soon `/`
  * inlines its own CSS so a failed `/assets/*` fetch cannot unstyle the brand host.
+ *
+ * Host shell (createLayout) — never a Page mint. Render mode (DEV dynamic /
+ * prod static) lives on `waku.server.tsx`, not `getConfig`.
  */
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
@@ -21,6 +24,3 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     </>
   );
 }
-
-export const getConfig = async () =>
-  import.meta.env.DEV ? ({ render: "dynamic" } as const) : ({ render: "static" } as const);

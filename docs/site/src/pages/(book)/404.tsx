@@ -1,3 +1,4 @@
+import * as Page from "last-ts/Page";
 import { NotFoundSearch } from "../../islands/NotFoundSearch.js";
 import { PageMeta } from "../../components/PageMeta.js";
 import { urls } from "../../lib/siteRoutes.js";
@@ -5,7 +6,7 @@ import * as Router from "../../ui/Router.js";
 
 // Custom 404 — the dead URL's last segment seeds a live search, so mistyped or moved links land
 // next to what they meant instead of on a blank wall.
-export default function NotFound() {
+function NotFound() {
   return (
     <div className="notfound">
       <PageMeta
@@ -27,4 +28,4 @@ export default function NotFound() {
   );
 }
 
-export const getConfig = async () => ({ render: "static" } as const);
+export class NotFoundPage extends Page.static(NotFound) {}

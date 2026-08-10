@@ -6,8 +6,8 @@
  *
  * **SSOT:** {@link catalog} holds every navigable Route path once. Waku file
  * templates are derived (`:param` → `[param]`). Exhaustively checked against
- * `pages.gen` in `test/site-routes.test-d.ts`. File routes remain render /
- * Twoslash SSOT; this catalog is the typed nav SSOT.
+ * `paths.gen` (last-ts file router) in `test/site-routes.test-d.ts`. File
+ * routes remain render / Twoslash SSOT; this catalog is the typed nav SSOT.
  *
  * ```ts
  * import { urls } from "./siteRoutes"
@@ -19,9 +19,7 @@
  * ```
  */
 import * as Route from "last-ts/Route";
-import type { CreatePagesConfig } from "waku/router";
-import type { Unstable_InferredPaths as WakuPath } from "waku/router/client";
-import "../pages.gen.js";
+import type { FilePath } from "../paths.gen.js";
 
 // =============================================================================
 // SSOT — path catalog (one string each; Waku templates derived)
@@ -94,20 +92,20 @@ export const destinations: ReadonlyArray<{
   })),
 ];
 
-/** Waku `Page.path` union from `pages.gen` module augmentation. */
-export type WakuFilePath = CreatePagesConfig extends { pages: infer P }
-  ? P extends { path: infer Path } ? Path
-  : never
-  : never;
+/**
+ * File paths from the last-ts file router (`paths.gen.ts`, `(book)` group
+ * stripped — it never appears in served URLs).
+ */
+export type WakuFilePath = FilePath;
 
 /**
  * File routes we intentionally omit from the nav catalog.
- * - `/_root` — layout chrome
  * - `/api/hyperlink-ts/…` — static specialize of `api.symbol`
+ *
+ * (`_root` / `_layout` shells never appear in `paths.gen` — the file router
+ * skips `_`-prefixed files.)
  */
-export type WakuFilePathExcluded =
-  | "/_root"
-  | "/api/hyperlink-ts/[module]/[symbol]";
+export type WakuFilePathExcluded = "/api/hyperlink-ts/[module]/[symbol]";
 
 export type WakuFilePathRequired = Exclude<WakuFilePath, WakuFilePathExcluded>;
 
@@ -240,8 +238,22 @@ export const urls = {
 
 export type Urls = typeof urls;
 
-/** Waku `Link` / `push` path union. */
-export type SitePath = WakuPath;
+/**
+ * Soft-nav `Link` / `push` path union — mirrors {@link isSitePath} /
+ * {@link requireSitePath} runtime checks (no `waku/router/client` type import).
+ */
+export type SitePath =
+  | "/"
+  | "/search"
+  | "/releases"
+  | "/404"
+  | "/docs/hyperlinks"
+  | "/docs/resources"
+  | `/docs/${string}`
+  | "/api"
+  | `/api/${string}`
+  | `/api/${string}/${string}`
+  | `/api/${string}/${string}/${string}`;
 
 /** Strip `?query` and `#hash` — pathname only. */
 export const pathOnly = (href: string): string => {

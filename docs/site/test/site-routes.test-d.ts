@@ -1,8 +1,7 @@
 /**
- * Route.make catalog + positional urls + SSOT vs pages.gen.
+ * Route.make catalog + positional urls + SSOT vs paths.gen (last-ts file router).
  */
 import { expectTypeOf } from "vitest";
-import "../src/pages.gen.js";
 import {
   catalog,
   destinations,
@@ -45,7 +44,7 @@ void catalog;
 const _junk: SitePath = "/totally-fake";
 void _junk;
 
-// ----- SSOT: catalog paths → Waku templates ↔ pages.gen -----
+// ----- SSOT: catalog paths → Waku templates ↔ paths.gen -----
 
 expectTypeOf<ToWaku<"/docs/:chapter">>().toEqualTypeOf<"/docs/[chapter]">();
 expectTypeOf<

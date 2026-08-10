@@ -1,3 +1,4 @@
+import * as Page from "last-ts/Page";
 import { PageMeta } from "../../../components/PageMeta.js";
 import { packages } from "../../../lib/api-data.js";
 import { urls } from "../../../lib/siteRoutes.js";
@@ -5,7 +6,7 @@ import { runServer } from "../../../lib/runtime.js";
 import * as Router from "../../../ui/Router.js";
 
 // The API landing — the list of documented packages. Loads only the tiny top index.
-export default async function ApiIndex() {
+async function ApiIndex() {
   const pkgs = await runServer(packages());
   return (
     <>
@@ -37,5 +38,5 @@ export default async function ApiIndex() {
   );
 }
 
-export const getConfig = async () =>
-  import.meta.env.DEV ? ({ render: "dynamic" } as const) : ({ render: "static" } as const);
+// DEV-dynamic / prod-static render mode is chosen on `waku.server.tsx`, not here.
+export class ApiIndexPage extends Page.make(ApiIndex) {}

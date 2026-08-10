@@ -1,3 +1,4 @@
+import * as Page from "last-ts/Page";
 import { PageMeta } from "../../../components/PageMeta.js";
 import { urls } from "../../../lib/siteRoutes.js";
 import * as Router from "../../../ui/Router.js";
@@ -8,7 +9,7 @@ import * as Router from "../../../ui/Router.js";
  */
 const target = urls.docs("hyperlink-services");
 
-export default function HyperlinksRedirect() {
+function HyperlinksRedirect() {
   return (
     <>
       <PageMeta
@@ -29,4 +30,4 @@ export default function HyperlinksRedirect() {
   );
 }
 
-export const getConfig = async () => ({ render: "static" } as const);
+export class HyperlinksRedirectPage extends Page.static(HyperlinksRedirect) {}
