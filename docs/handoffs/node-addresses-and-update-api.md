@@ -872,9 +872,8 @@ clones, not HttpApi catalog. `Router.make` (G) is the catalog precedent.
 
 ## 10. Next
 
-1. Confirm **core features + API** (§3.2–3.3) — or cut/change.
-2. Lock **Policy** surface for proxy / role / listen subset / multi-primary.
-3. Locality word + `Node.make` vs `Service`.
-4. Eng Address + Node.make (+ default policy).
-5. Update dream / backup-build simulate — **later**.
-6. Dream-redeploy stays **provisional** until address/make exists.
+1. Confirm **Address + Policy API** (§3.3) — fragment names / value spaces / defaults.
+2. Locality word + `Node.make` vs `Service`.
+3. Eng Address + Node.make + address Policy fragments.
+4. Update dream / backup-build simulate — **later**.
+5. Dream-redeploy stays **provisional** until address/make exists.
