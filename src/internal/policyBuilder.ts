@@ -1,11 +1,15 @@
 /**
- * PolicyBuilder engine — branded Layer+config families with typed make/layer/provide.
+ * PolicyBuilder engine — HttpApi-shaped constructable policy families.
+ *
+ * `PolicyBuilder.make(id).key(...).keyEncoded(...)` returns a constructor so
+ * `class X extends … {}` works (same trick as HttpApi / Router).
  *
  * @internal
  */
 import type { Context } from "effect";
 import { Layer } from "effect";
 import { dual } from "effect/Function";
+import { pipeArguments } from "effect/Pipeable";
 import { hasProperty } from "effect/Predicate";
 
 /** Brand key shared by every policy family (value = family id). */
@@ -13,6 +17,9 @@ export const BrandKey = "~hyperlink-ts/PolicyBuilder" as const;
 
 /** Runtime config slot on a branded policy. */
 export const ConfigKey = "~hyperlink-ts/PolicyBuilder/Config" as const;
+
+/** TypeId on family constructables. */
+export const FamilyTypeId = "~hyperlink-ts/PolicyBuilder/Family" as const;
 
 /**
  * One config key: Context reference + encode (input → runtime).
@@ -164,7 +171,7 @@ const layerForKey = <Input, Runtime>(
 ): Layer.Layer<never> => Layer.succeed(spec.reference, spec.encode(input));
 
 /**
- * Family API returned by {@link define}.
+ * Constructable family — `new (_: never) => {}` so `class extends` works.
  *
  * @internal
  */
@@ -172,19 +179,50 @@ export interface PolicyBuilderFamily<
   Id extends string,
   Keys extends Record<string, PolicyBuilderKeySpec<any, any>>,
 > {
+  readonly [FamilyTypeId]: typeof FamilyTypeId;
   readonly id: Id;
   readonly keys: Keys;
-  readonly make: <const C extends PolicyBuilderConfigOfKeys<Keys>>(
+  new (_: never): {};
+  /**
+   * Widen with an identity-encoded key (HttpApi.`add` analogue).
+   */
+  key: <
+    const K extends string,
+    Runtime,
+  >(
+    name: K,
+    reference: Context.Reference<Runtime>,
+  ) => PolicyBuilderFamily<
+    Id,
+    Keys & { readonly [P in K]: PolicyBuilderKeySpec<Runtime, Runtime> }
+  >;
+  /**
+   * Widen with a custom-encoded key.
+   */
+  keyEncoded: <
+    const K extends string,
+    Input,
+    Runtime,
+  >(
+    name: K,
+    reference: Context.Reference<Runtime>,
+    encode: (input: Input) => Runtime,
+  ) => PolicyBuilderFamily<
+    Id,
+    Keys & { readonly [P in K]: PolicyBuilderKeySpec<Input, Runtime> }
+  >;
+  /** Object-form → branded policy Layer (last-write config stamp). */
+  make: <const C extends PolicyBuilderConfigOfKeys<Keys>>(
     config: C,
   ) => PolicyBuilderPolicy<Id, C>;
-  readonly succeed: <
+  succeed: <
     const K extends keyof Keys & string,
     const V extends PolicyBuilderInputOf<Keys[K]>,
   >(
     keyName: K,
     value: V,
   ) => PolicyBuilderPolicy<Id, { readonly [P in K]: V }>;
-  readonly layer: {
+  layer: {
     <
       const That extends PolicyBuilderPolicy<
         Id,
@@ -227,85 +265,124 @@ export interface PolicyBuilderFamily<
       PolicyBuilderMergePolicyList<Id, readonly [Self, That, ...Rest]>
     >;
   };
-  readonly provide: (
+  provide: (
     ...policies: ReadonlyArray<Layer.Layer<never>>
   ) => <A, E, R>(self: Layer.Layer<A, E, R>) => Layer.Layer<A, E, R>;
-  readonly is: (
+  is: (
     u: unknown,
   ) => u is PolicyBuilderPolicy<Id, PolicyBuilderConfigOfKeys<Keys>>;
-  readonly config: <C extends PolicyBuilderConfigOfKeys<Keys>>(
+  config: <C extends PolicyBuilderConfigOfKeys<Keys>>(
     self: PolicyBuilderPolicy<Id, C>,
   ) => C;
+  pipe: <A>(
+    this: A,
+    ...args: [
+      ...Array<(a: any) => any>,
+      (a: any) => any,
+    ]
+  ) => unknown;
 }
 
-/**
- * Define a policy family from a stable id + key map.
- *
- * @internal
- */
-export const define = <
-  const Id extends string,
-  const Keys extends Record<string, PolicyBuilderKeySpec<any, any>>,
->(options: {
-  readonly id: Id;
-  readonly keys: Keys;
-}): PolicyBuilderFamily<Id, Keys> => {
-  type Config = PolicyBuilderConfigOfKeys<Keys>;
-  const { id, keys } = options;
+type FamilyData = {
+  readonly id: string;
+  readonly keys: Record<string, PolicyBuilderKeySpec<any, any>>;
+};
 
-  const make = <const C extends Config>(
-    config: C,
-  ): PolicyBuilderPolicy<Id, C> => {
+const familyProto = {
+  pipe() {
+    // Effect Pipeable protocol — `arguments` required by `pipeArguments`.
+    // eslint-disable-next-line prefer-rest-params -- pipeArguments(this, arguments)
+    return pipeArguments(this, arguments);
+  },
+  key(
+    this: FamilyData,
+    name: string,
+    reference: Context.Reference<unknown>,
+  ) {
+    return makeProto({
+      id: this.id,
+      keys: { ...this.keys, [name]: key(reference) },
+    });
+  },
+  keyEncoded(
+    this: FamilyData,
+    name: string,
+    reference: Context.Reference<unknown>,
+    encode: (input: unknown) => unknown,
+  ) {
+    return makeProto({
+      id: this.id,
+      keys: { ...this.keys, [name]: keyEncoded(reference, encode) },
+    });
+  },
+  make(this: FamilyData, config: Record<string, unknown>) {
     const parts: Array<Layer.Layer<never>> = [];
-    for (const keyName of Object.keys(keys) as Array<keyof Keys & string>) {
+    for (const keyName of Object.keys(this.keys)) {
       if (!Object.prototype.hasOwnProperty.call(config, keyName)) continue;
-      const input = (config as Record<string, unknown>)[keyName];
+      const input = config[keyName];
       if (input === undefined) continue;
-      const spec = keys[keyName]!;
-      parts.push(
-        layerForKey(
-          spec,
-          input as PolicyBuilderInputOf<(typeof keys)[typeof keyName]>,
-        ),
-      );
+      const spec = this.keys[keyName]!;
+      parts.push(layerForKey(spec, input));
     }
-    return brandPolicy(id, mergeLayers(parts), config);
-  };
-
-  const succeed = <
-    const K extends keyof Keys & string,
-    const V extends PolicyBuilderInputOf<Keys[K]>,
-  >(
-    keyName: K,
-    value: V,
-  ): PolicyBuilderPolicy<Id, { readonly [P in K]: V }> => {
-    const spec = keys[keyName]!;
-    const cfg = { [keyName]: value } as { readonly [P in K]: V };
-    return brandPolicy(id, layerForKey(spec, value), cfg);
-  };
-
-  const layer = dual(
+    return brandPolicy(this.id, mergeLayers(parts), config);
+  },
+  succeed(this: FamilyData, keyName: string, value: unknown) {
+    const spec = this.keys[keyName]!;
+    const cfg = { [keyName]: value };
+    return brandPolicy(this.id, layerForKey(spec, value), cfg);
+  },
+  layer: dual(
     (args) => args.length >= 2,
     (
-      self: PolicyBuilderPolicy<Id, Config>,
-      that: PolicyBuilderPolicy<Id, Config>,
-      ...rest: ReadonlyArray<PolicyBuilderPolicy<Id, Config>>
-    ): PolicyBuilderPolicy<Id, object> => combine(id, [self, that, ...rest]),
-  );
-
-  const provide =
-    (...policies: ReadonlyArray<Layer.Layer<never>>) =>
-    <A, E, R>(self: Layer.Layer<A, E, R>): Layer.Layer<A, E, R> => {
+      self: PolicyBuilderPolicy<string, object>,
+      that: PolicyBuilderPolicy<string, object>,
+      ...rest: ReadonlyArray<PolicyBuilderPolicy<string, object>>
+    ): PolicyBuilderPolicy<string, object> => {
+      const id = self[BrandKey];
+      return combine(id, [self, that, ...rest]);
+    },
+  ),
+  provide(
+    this: FamilyData,
+    ...policies: ReadonlyArray<Layer.Layer<never>>
+  ) {
+    return <A, E, R>(self: Layer.Layer<A, E, R>): Layer.Layer<A, E, R> => {
       if (policies.length === 0) return self;
       return self.pipe(Layer.provide(mergeLayers(policies)));
     };
-
-  const is = (u: unknown): u is PolicyBuilderPolicy<Id, Config> =>
-    hasProperty(u, BrandKey) &&
-    (u as { readonly [BrandKey]: unknown })[BrandKey] === id;
-
-  const config = <C extends Config>(self: PolicyBuilderPolicy<Id, C>): C =>
-    self[ConfigKey];
-
-  return { id, keys, make, succeed, layer, provide, is, config };
+  },
+  is(this: FamilyData, u: unknown) {
+    return (
+      hasProperty(u, BrandKey) &&
+      (u as { readonly [BrandKey]: unknown })[BrandKey] === this.id
+    );
+  },
+  config(this: FamilyData, self: PolicyBuilderPolicy<string, object>) {
+    return self[ConfigKey];
+  },
 };
+
+/**
+ * Constructor-shaped family so `class X extends PolicyBuilder.make(…).key(…)` works.
+ *
+ * @internal
+ */
+export const makeProto = (options: FamilyData): PolicyBuilderFamily<any, any> => {
+  function PolicyFamily(_: never) {}
+  Object.setPrototypeOf(PolicyFamily, familyProto);
+  return Object.assign(PolicyFamily, {
+    [FamilyTypeId]: FamilyTypeId,
+    id: options.id,
+    keys: options.keys,
+  }) as unknown as PolicyBuilderFamily<any, any>;
+};
+
+/**
+ * Empty family constructable — HttpApi.`make(id)` analogue.
+ *
+ * @internal
+ */
+export const make = <const Id extends string>(
+  id: Id,
+): PolicyBuilderFamily<Id, {}> =>
+  makeProto({ id, keys: {} }) as PolicyBuilderFamily<Id, {}>;

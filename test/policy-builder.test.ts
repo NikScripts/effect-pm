@@ -1,5 +1,5 @@
 /**
- * PolicyBuilder — shared family kernel (define / make / layer / succeed / is).
+ * PolicyBuilder — HttpApi-shaped family class (make / key / succeed / layer).
  */
 import { Context, Effect, Layer } from "effect";
 import { describe, expect, it } from "@effect/vitest";
@@ -21,18 +21,15 @@ const Handler = Context.Reference<Effect.Effect<number>>(
   },
 );
 
-const Demo = PolicyBuilder.define({
-  id: "policy-builder-test/Demo",
-  keys: {
-    Flag: PolicyBuilder.key(Flag),
-    Mode: PolicyBuilder.key(Mode),
-    Handler: PolicyBuilder.keyEncoded(
-      Handler,
-      (input: number | Effect.Effect<number>) =>
-        typeof input === "number" ? Effect.succeed(input) : input,
-    ),
-  },
-});
+class Demo extends PolicyBuilder.make("policy-builder-test/Demo")
+  .key("Flag", Flag)
+  .key("Mode", Mode)
+  .keyEncoded(
+    "Handler",
+    Handler,
+    (input: number | Effect.Effect<number>) =>
+      typeof input === "number" ? Effect.succeed(input) : input,
+  ) {}
 
 const readDemo = Effect.gen(function* () {
   return {
@@ -43,7 +40,7 @@ const readDemo = Effect.gen(function* () {
 });
 
 describe("PolicyBuilder family", () => {
-  it.effect("make + succeed set refs; config stamps inputs", () =>
+  it.effect("class extends make+key; make/succeed stamp config", () =>
     Effect.gen(function* () {
       const bundle = Demo.make({ Flag: true, Mode: "b", Handler: 7 });
       expect(Demo.is(bundle)).toBe(true);
@@ -70,16 +67,15 @@ describe("PolicyBuilder family", () => {
       expect(got.flag).toBe(false);
       expect(got.mode).toBe("b");
 
-      // Eng’d Policy family uses a different brand id
       expect(Demo.is(Policy.sticky)).toBe(false);
       expect(Policy.isPolicy(Demo.succeed("Flag", true))).toBe(false);
       expect(Policy.isPolicy(Policy.sticky)).toBe(true);
+      expect(Policy.Family.is(Policy.sticky)).toBe(true);
     }),
   );
 
   it.effect("provide supplies family layers to a dependent Layer", () =>
     Effect.gen(function* () {
-      // Same shape as Policy.provide(cutover)(lookupClient): dependent requires Flag.
       class Out extends Context.Service<
         Out,
         { readonly flag: boolean }

@@ -258,47 +258,42 @@ sticky / wait-advice stay on **`LookupPolicy`**. One dial story, not two.
 
 ### 3.3.1 PolicyBuilder — shared architecture (locked)
 
-Both policy modules share one builder kernel — **`hyperlink-ts/PolicyBuilder`**. Domain
-modules declare keys (Context references + optional encode); the builder supplies the
-typed `Policy` brand, `make` / `layer` / `provide` / `succeed` / `is` / `config`.
+Both policy modules share one builder kernel — **`hyperlink-ts/PolicyBuilder`**.
+**HttpApi-shaped:** `make(id)` returns a constructable; widen with fluent `.key` /
+`.keyEncoded`; `class extends` names the family (same trick as `HttpApi` / `Router`).
 
 ```ts
 import * as PolicyBuilder from "hyperlink-ts/PolicyBuilder"
-import { Context, Effect, Layer } from "effect"
 
-// each family picks a stable brand id
-const family = PolicyBuilder.define({
-  id: "hyperlink-ts/LookupPolicy",
-  keys: {
-    Sticky: PolicyBuilder.key(Sticky),
-    Verify: PolicyBuilder.key(Verify),
-    Yield: PolicyBuilder.key(Yield, {
-      encode: (input: boolean | Effect.Effect<boolean>) =>
-        typeof input === "boolean" ? Effect.succeed(input) : input,
-    }),
-  },
-})
+class LookupPolicy extends PolicyBuilder.make("hyperlink-ts/LookupPolicy")
+  .key("Sticky", Sticky)
+  .key("Verify", Verify)
+  .keyEncoded(
+    "Yield",
+    Yield,
+    (input: boolean | Effect.Effect<boolean>) =>
+      typeof input === "boolean" ? Effect.succeed(input) : input,
+  )
+{}
 
-family.make({ Sticky: true, Verify: "reject" })
-family.succeed("Sticky", true)
-family.layer(a, b)
-family.provide(bundle)(someLayer)
+LookupPolicy.make({ Sticky: true, Verify: "reject" })
+LookupPolicy.succeed("Sticky", true)
+LookupPolicy.layer(a, b)
+LookupPolicy.provide(bundle)(someLayer)
 ```
 
 | Piece | Role |
 |-------|------|
-| **`PolicyBuilder.define`** | Mint a policy family from `id` + `keys` |
-| **`PolicyBuilder.key`** | Bind a `Context.Reference` (+ optional `encode` for input≠runtime) |
-| **`family.make` / `layer` / `provide`** | Same DX as today’s Eng’d `Policy` |
-| **`family.succeed`** | One-key fragment (`LookupPolicy.sticky`, `NodePolicy.as("A")`, …) |
+| **`PolicyBuilder.make(id)`** | Empty family constructable (HttpApi.`make`) |
+| **`.key` / `.keyEncoded`** | Widen keys (HttpApi.`add` analogue) |
+| **`class extends`** | Name the family |
+| **`Family.make` / `layer` / `provide` / `succeed`** | Branded Layer+config toolkit |
 | **Brand** | Per-family id — `LookupPolicy.is` ≠ `NodePolicy.is` |
 
-**Eng order:** (1) land `PolicyBuilder` + refactor today’s `Policy` onto it (public name
-still `Policy` until rename cut). (2) Eng `NodePolicy` via the same `define`. (3) Rename
-`Policy` → `LookupPolicy` in that cut.
+**Eng’d today:** `Policy.Family` is that class; flat `Policy.make` / `sticky` / … re-export
+its toolkit. **Next:** Eng `NodePolicy` the same way; rename `Policy` → `LookupPolicy`.
 
-Apps normally import **`LookupPolicy` / `NodePolicy`**, not the builder. The builder is
-the extension point when the package (or a rare app) defines another policy family.
+Apps normally import **`LookupPolicy` / `NodePolicy`**, not the builder.
 
 ### 3.4 Parked — prior long Address API notes
 

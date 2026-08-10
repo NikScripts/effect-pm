@@ -1,10 +1,11 @@
 /**
  * Policy — composable behaviour fragments (client dial, verify, advertise conflict, yield).
  *
- * Built on {@link PolicyBuilder} — the shared kernel for policy families. Every fragment
- * is a {@link Policy}: a real `Layer` that carries its mode config at runtime (not a
- * phantom cast). {@link layer} is `dual` — data-first merge or `.pipe(Policy.layer(other))`
- * — and expands the config type (last write wins).
+ * Built on {@link PolicyBuilder} as an HttpApi-shaped family class
+ * (`class Family extends PolicyBuilder.make(id).key(…)`). Every fragment is a
+ * {@link Policy}: a real `Layer` that carries its mode config at runtime (not a
+ * phantom cast). {@link layer} is `dual` — data-first merge or
+ * `.pipe(Policy.layer(other))` — and expands the config type (last write wins).
  *
  * ```ts
  * import * as Policy from "hyperlink-ts/Policy"
@@ -26,7 +27,7 @@
  *
  * @module Policy
  */
-import { Context, Effect } from "effect";
+import { Context, Effect, Layer } from "effect";
 import type { DirectoryEntry } from "./Directory";
 import * as PolicyBuilder from "./PolicyBuilder";
 
@@ -264,35 +265,40 @@ export const Yield: Context.Reference<Effect.Effect<boolean>> =
   });
 
 // =============================================================================
-// Family (PolicyBuilder)
+// Family (PolicyBuilder — HttpApi-shaped class)
 // =============================================================================
 
-const family = PolicyBuilder.define({
-  id: FamilyId,
-  keys: {
-    Sticky: PolicyBuilder.key(Sticky),
-    StreamGap: PolicyBuilder.key(StreamGap),
-    ColdAmbiguous: PolicyBuilder.key(ColdAmbiguous),
-    Pick: PolicyBuilder.key(Pick),
-    Verify: PolicyBuilder.key(Verify),
-    Conflict: PolicyBuilder.key(Conflict),
-    Yield: PolicyBuilder.keyEncoded(
-      Yield,
-      (input: boolean | Effect.Effect<boolean>) =>
-        typeof input === "boolean" ? Effect.succeed(input) : input,
-    ),
-  },
-});
+/**
+ * Eng’d Lookup/Directory policy family. Prefer the flat module exports
+ * (`Policy.make`, `Policy.sticky`, …); extend {@link PolicyBuilder.make} the
+ * same way when minting another family.
+ *
+ * @category constructors
+ * @public
+ */
+export class Family extends PolicyBuilder.make(FamilyId)
+  .key("Sticky", Sticky)
+  .key("StreamGap", StreamGap)
+  .key("ColdAmbiguous", ColdAmbiguous)
+  .key("Pick", Pick)
+  .key("Verify", Verify)
+  .key("Conflict", Conflict)
+  .keyEncoded(
+    "Yield",
+    Yield,
+    (input: boolean | Effect.Effect<boolean>) =>
+      typeof input === "boolean" ? Effect.succeed(input) : input,
+  ) {}
 
 // =============================================================================
 // Dial / cutover fragments
 // =============================================================================
 
 /** Keep the current dial across dual-serve (default on). @category layers @public */
-export const sticky: Policy<{ Sticky: true }> = family.succeed("Sticky", true);
+export const sticky: Policy<{ Sticky: true }> = Family.succeed("Sticky", true);
 
 /** Disable warm stickiness. @category layers @public */
-export const unsticky: Policy<{ Sticky: false }> = family.succeed(
+export const unsticky: Policy<{ Sticky: false }> = Family.succeed(
   "Sticky",
   false,
 );
@@ -300,31 +306,31 @@ export const unsticky: Policy<{ Sticky: false }> = family.succeed(
 /** Stream seam mode. @category layers @public */
 export const streamGap = <const M extends StreamGap>(
   mode: M,
-): Policy<{ StreamGap: M }> => family.succeed("StreamGap", mode);
+): Policy<{ StreamGap: M }> => Family.succeed("StreamGap", mode);
 
 /** Cold N&gt;1 behaviour. @category layers @public */
 export const coldAmbiguous = <const M extends ColdAmbiguous>(
   mode: M,
-): Policy<{ ColdAmbiguous: M }> => family.succeed("ColdAmbiguous", mode);
+): Policy<{ ColdAmbiguous: M }> => Family.succeed("ColdAmbiguous", mode);
 
 /** Soft pick when N&gt;1 and Advice misses. @category layers @public */
 export const pick = <const M extends Pick>(mode: M): Policy<{ Pick: M }> =>
-  family.succeed("Pick", mode);
+  Family.succeed("Pick", mode);
 
 /** Verify and reject on failure (default). @category layers @public */
-export const verifyReject: Policy<{ Verify: "reject" }> = family.succeed(
+export const verifyReject: Policy<{ Verify: "reject" }> = Family.succeed(
   "Verify",
   "reject",
 );
 
 /** Verify; keep status without failing Layer build. @category layers @public */
-export const verifyStatus: Policy<{ Verify: "status" }> = family.succeed(
+export const verifyStatus: Policy<{ Verify: "status" }> = Family.succeed(
   "Verify",
   "status",
 );
 
 /** Skip client verify probe. @category layers @public */
-export const verifyOff: Policy<{ Verify: false }> = family.succeed(
+export const verifyOff: Policy<{ Verify: false }> = Family.succeed(
   "Verify",
   false,
 );
@@ -332,7 +338,7 @@ export const verifyOff: Policy<{ Verify: false }> = family.succeed(
 /** Set client verify mode. @category layers @public */
 export const verify = <const M extends Verify>(
   mode: M,
-): Policy<{ Verify: M }> => family.succeed("Verify", mode);
+): Policy<{ Verify: M }> => Family.succeed("Verify", mode);
 
 /**
  * Walk preference layers (first concrete wins). Hard fallback: `livenessReplace`.
@@ -373,20 +379,20 @@ export const onConflictOf = (node: unknown): OnConflict | undefined => {
 
 /** Advertise: liveness ping replace. @category layers @public */
 export const livenessReplace: Policy<{ Conflict: "livenessReplace" }> =
-  family.succeed("Conflict", "livenessReplace");
+  Family.succeed("Conflict", "livenessReplace");
 
 /** Advertise: ask incumbent to yield. @category layers @public */
 export const askIncumbent: Policy<{ Conflict: "askIncumbent" }> =
-  family.succeed("Conflict", "askIncumbent");
+  Family.succeed("Conflict", "askIncumbent");
 
 /** Advertise: reject when incumbent alive. @category layers @public */
-export const conflictReject: Policy<{ Conflict: "reject" }> = family.succeed(
+export const conflictReject: Policy<{ Conflict: "reject" }> = Family.succeed(
   "Conflict",
   "reject",
 );
 
 /** Advertise: inherit up the chain (default ambient). @category layers @public */
-export const conflictInherit: Policy<{ Conflict: "inherit" }> = family.succeed(
+export const conflictInherit: Policy<{ Conflict: "inherit" }> = Family.succeed(
   "Conflict",
   "inherit",
 );
@@ -394,16 +400,16 @@ export const conflictInherit: Policy<{ Conflict: "inherit" }> = family.succeed(
 /** Set advertise conflict preference. @category layers @public */
 export const onConflict = <const M extends OnConflict>(
   mode: M,
-): Policy<{ Conflict: M }> => family.succeed("Conflict", mode);
+): Policy<{ Conflict: M }> => Family.succeed("Conflict", mode);
 
 /** Accept askIncumbent yield (default). @category layers @public */
-export const yieldAccept: Policy<{ Yield: true }> = family.succeed(
+export const yieldAccept: Policy<{ Yield: true }> = Family.succeed(
   "Yield",
   true,
 );
 
 /** Refuse askIncumbent yield. @category layers @public */
-export const yieldRefuse: Policy<{ Yield: false }> = family.succeed(
+export const yieldRefuse: Policy<{ Yield: false }> = Family.succeed(
   "Yield",
   false,
 );
@@ -411,7 +417,7 @@ export const yieldRefuse: Policy<{ Yield: false }> = family.succeed(
 /** Custom yield handler. @category layers @public */
 export const onYield = <E extends Effect.Effect<boolean>>(
   handler: E,
-): Policy<{ Yield: E }> => family.succeed("Yield", handler);
+): Policy<{ Yield: E }> => Family.succeed("Yield", handler);
 
 // =============================================================================
 // layer / make / provide / guards
@@ -423,7 +429,7 @@ export const onYield = <E extends Effect.Effect<boolean>>(
  * @category guards
  * @public
  */
-export const isPolicy: (u: unknown) => u is Policy<Config> = family.is;
+export const isPolicy = (u: unknown): u is Policy<Config> => Family.is(u);
 
 /**
  * Read the runtime config stamped on a {@link Policy}.
@@ -431,7 +437,8 @@ export const isPolicy: (u: unknown) => u is Policy<Config> = family.is;
  * @category getters
  * @public
  */
-export const config: <C extends Config>(self: Policy<C>) => C = family.config;
+export const config = <C extends Config>(self: Policy<C>): C =>
+  Family.config(self);
 
 /**
  * Merge policy Layers (last write wins per reference) **and** expand configs.
@@ -451,7 +458,7 @@ export const config: <C extends Config>(self: Policy<C>) => C = family.config;
  * @category layers
  * @public
  */
-export const layer: typeof family.layer = family.layer;
+export const layer: typeof Family.layer = Family.layer;
 
 /**
  * Build a {@link Policy} from an object. Stamps the same object as runtime
@@ -469,8 +476,8 @@ export const layer: typeof family.layer = family.layer;
  * @category constructors
  * @public
  */
-export const make: <const C extends Config>(config: C) => Policy<C> =
-  family.make;
+export const make = <const C extends Config>(config: C): Policy<C> =>
+  Family.make(config);
 
 /**
  * Provide policy Layers onto a Layer (no stacked `Layer.provide`s).
@@ -491,4 +498,7 @@ export const make: <const C extends Config>(config: C) => Policy<C> =
  * @category layers
  * @public
  */
-export const provide: typeof family.provide = family.provide;
+export const provide =
+  (...policies: ReadonlyArray<Layer.Layer<never>>) =>
+  <A, E, R>(self: Layer.Layer<A, E, R>): Layer.Layer<A, E, R> =>
+    Family.provide(...policies)(self);

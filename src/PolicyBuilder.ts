@@ -1,11 +1,11 @@
 /**
- * PolicyBuilder — shared kernel for typed policy families (`LookupPolicy`,
- * `NodePolicy`, …).
+ * PolicyBuilder — HttpApi-shaped constructable kernel for policy families
+ * (`Policy` / future `LookupPolicy` / `NodePolicy`).
  *
- * Each family is a branded `Layer` + frozen config object. Domain modules call
- * {@link define} with a stable `id` and a `keys` map (`Context.Reference` per
- * knob); the builder returns `make` / `layer` / `provide` / `succeed` / `is` /
- * `config` with last-write-wins merge — the same DX as today’s Eng’d `Policy`.
+ * `make(id)` returns a **constructor** you `class extends`, then widen with
+ * fluent {@link Family.key} / {@link Family.keyEncoded} (HttpApi.`add` style).
+ * The class carries `make` / `layer` / `provide` / `succeed` for branded
+ * Layer+config values.
  *
  * ```ts
  * import * as PolicyBuilder from "hyperlink-ts/PolicyBuilder"
@@ -18,24 +18,23 @@
  *   defaultValue: () => Effect.succeed(true),
  * })
  *
- * const Demo = PolicyBuilder.define({
- *   id: "demo/Policy",
- *   keys: {
- *     Sticky: PolicyBuilder.key(Sticky),
- *     Yield: PolicyBuilder.keyEncoded(Yield, (input: boolean | Effect.Effect<boolean>) =>
+ * class Demo extends PolicyBuilder.make("demo/Policy")
+ *   .key("Sticky", Sticky)
+ *   .keyEncoded(
+ *     "Yield",
+ *     Yield,
+ *     (input: boolean | Effect.Effect<boolean>) =>
  *       typeof input === "boolean" ? Effect.succeed(input) : input,
- *     ),
- *   },
- * })
+ *   )
+ * {}
  *
  * const bundle = Demo.make({ Sticky: true, Yield: false }).pipe(
  *   Demo.layer(Demo.succeed("Sticky", false)),
  * )
  * ```
  *
- * Apps normally import domain modules (`Policy` / future `LookupPolicy` /
- * `NodePolicy`), not this builder. Use {@link define} when minting another
- * family that must share the architecture.
+ * Apps normally import domain modules (`Policy`, …). Use this builder when
+ * minting another family that must share the architecture.
  *
  * @module PolicyBuilder
  */
@@ -97,7 +96,7 @@ export type MergePolicyList<
 > = internal.PolicyBuilderMergePolicyList<Id, Ps>;
 
 /**
- * Config object shape derived from a {@link define} keys map.
+ * Config object shape derived from a family’s keys map.
  *
  * @category models
  * @public
@@ -107,7 +106,7 @@ export type ConfigOfKeys<
 > = internal.PolicyBuilderConfigOfKeys<Keys>;
 
 /**
- * Family API returned by {@link define}.
+ * Constructable family returned by {@link make} — `class extends` target.
  *
  * @category models
  * @public
@@ -122,7 +121,9 @@ export type Family<
 // =============================================================================
 
 /**
- * Bind a `Context.Reference` as a policy key (identity encode — input = runtime).
+ * Bind a `Context.Reference` as a key spec (identity encode). Prefer fluent
+ * {@link Family.key} on a {@link make} constructable; this helper is for
+ * composing specs by hand.
  *
  * @category constructors
  * @public
@@ -130,8 +131,8 @@ export type Family<
 export const key: typeof engine.key = engine.key;
 
 /**
- * Bind a `Context.Reference` with a custom input→runtime encode (e.g. Yield
- * `boolean | Effect` → `Effect`).
+ * Bind a `Context.Reference` with a custom encode. Prefer fluent
+ * {@link Family.keyEncoded} on a {@link make} constructable.
  *
  * @category constructors
  * @public
@@ -139,9 +140,17 @@ export const key: typeof engine.key = engine.key;
 export const keyEncoded: typeof engine.keyEncoded = engine.keyEncoded;
 
 /**
- * Define a policy family from a stable brand `id` and a `keys` map.
+ * Empty policy family constructable (HttpApi.`make(id)` analogue).
+ *
+ * Widen with `.key` / `.keyEncoded`, then `class extends`:
+ *
+ * ```ts
+ * class Demo extends PolicyBuilder.make("demo/Policy")
+ *   .key("Sticky", Sticky)
+ * {}
+ * ```
  *
  * @category constructors
  * @public
  */
-export const define: typeof engine.define = engine.define;
+export const make: typeof engine.make = engine.make;

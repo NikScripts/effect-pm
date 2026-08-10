@@ -1,5 +1,5 @@
 /**
- * PolicyBuilder type locks — define expands configs; families are distinct brands.
+ * PolicyBuilder type locks — class extends make+key; families are distinct brands.
  */
 import { Context, type Layer } from "effect";
 import type { Policy as BuilderPolicy } from "../src/PolicyBuilder";
@@ -16,13 +16,9 @@ const B = Context.Reference<"x" | "y">("policy-builder-d/B", {
   defaultValue: (): "x" => "x",
 });
 
-const Demo = PolicyBuilder.define({
-  id: "policy-builder-d/Demo",
-  keys: {
-    A: PolicyBuilder.key(A),
-    B: PolicyBuilder.key(B),
-  },
-});
+class Demo extends PolicyBuilder.make("policy-builder-d/Demo")
+  .key("A", A)
+  .key("B", B) {}
 
 const made = Demo.make({ A: true, B: "y" });
 const piped = made.pipe(Demo.layer(Demo.succeed("A", false)));
