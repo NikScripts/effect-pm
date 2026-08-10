@@ -49,16 +49,24 @@ export const urls = Route.urlBuilder(Site)
 ## Host server entry
 
 ```tsx
-import { adapter, createPages } from "last-ts/server"
-import Home from "./pages/index"
+import * as Server from "last-ts/server"
+import { Home } from "./pages/index"
+import { Chapter } from "./pages/guides/[slug]"
 
-export default adapter(
-  createPages(async ({ createPage, createRoot }) => [
+export default Server.adapter(
+  Server.createPages(async ({ createPage, createRoot }) => [
     createRoot({ render: "static", component: Root }),
-    createPage({ render: "static", path: "/", component: Home }),
+    createPage({ ...Server.fromPage("/", Home) }),
+    createPage({
+      ...Server.fromPage("/guides/[slug]", Chapter),
+      staticPaths: ["routing"],
+    }),
   ]),
 )
 ```
+
+Page components take soft-nav props (`params.slug`). `Server.fromPage(path, mint)`
+adapts Waku’s flat `{ slug, path, query }` at the host boundary.
 
 ## Provider
 

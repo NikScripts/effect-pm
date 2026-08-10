@@ -46,9 +46,7 @@ describe("Page.make", () => {
 describe("RouterBuilder.handle Page mint", () => {
   it("unwraps Page.default as PageEffect", async () => {
     const { Layer, ManagedRuntime, pipe } = await import("effect");
-    const Last = await import("last-ts/Last");
     const Layout = await import("last-ts/Layout");
-    const Memory = await import("last-ts/Memory");
     const Router = await import("last-ts/Router");
     const RouterBuilder = await import("last-ts/RouterBuilder");
 
@@ -88,7 +86,5 @@ describe("RouterBuilder.handle Page mint", () => {
     } finally {
       await rt.dispose();
     }
-    void Last;
-    void Memory;
   });
 });

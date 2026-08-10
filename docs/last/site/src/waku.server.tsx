@@ -1,7 +1,7 @@
 /**
  * Host server entry (CLI filename). Routes register through `last-ts/server` —
- * not Waku `fsRouter` / `getConfig`. Bake mode comes from Page mints via
- * `Server.fromPage`; paths come from the files.
+ * not Waku `fsRouter` / `getConfig`. Bake mode + prop adapt via
+ * `Server.fromPage(path, mint)`; paths come from the files.
  */
 import * as Server from "last-ts/server";
 import { About } from "./pages/about";
@@ -24,25 +24,20 @@ export default Server.adapter(
       component: Layout,
     }),
     createPage({
-      path: "/",
-      ...Server.fromPage(Home),
+      ...Server.fromPage("/", Home),
     }),
     createPage({
-      path: "/about",
-      ...Server.fromPage(About),
+      ...Server.fromPage("/about", About),
     }),
     createPage({
-      path: "/view",
-      ...Server.fromPage(ViewPage),
+      ...Server.fromPage("/view", ViewPage),
     }),
     createPage({
-      path: "/guides/[slug]",
-      ...Server.fromPage(Chapter),
+      ...Server.fromPage("/guides/[slug]", Chapter),
       staticPaths: ["routing", "view-service"],
     }),
     createPage({
-      path: "/docs/[...path]",
-      ...Server.fromPage(DocsPath),
+      ...Server.fromPage("/docs/[...path]", DocsPath),
     }),
   ]),
 );

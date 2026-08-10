@@ -53,13 +53,19 @@ export class Chapter extends Page.make(
 ```ts
 import * as Server from "last-ts/server"
 import { Home } from "./pages/index"
+import { Chapter } from "./pages/guides/[slug]"
 
-createPage({ path: "/", ...Server.fromPage(Home) })
+createPage({ ...Server.fromPage("/", Home) })
+createPage({
+  ...Server.fromPage("/guides/[slug]", Chapter),
+  staticPaths: ["routing"],
+})
 ```
 
-- `path` — from the file (same string createPages already uses)
+- `path` — file path string (prefer `fromPage(path, mint)` so it is included)
 - `render` — `page.mode` (`Server.fromPage`)
-- `component` — unwrapped `.default`
+- `component` — unwrapped `.default`, with **Waku flat props → soft-nav `{ params, query, pathname, href }`**
+- Page bodies are written against soft-nav / `Page.Props` (nested `params`), not Waku flats
 - `fileRouter` / `paths.gen` stay **path-only** (no mode codegen)
 
 ## Forbidden

@@ -11,10 +11,17 @@
  * export default Server.adapter(
  *   Server.createPages(async ({ createPage, createRoot }) => [
  *     createRoot({ render: "static", component: Root }),
- *     createPage({ path: "/", ...Server.fromPage(Home) }),
+ *     createPage({ ...Server.fromPage("/", Home) }),
+ *     createPage({
+ *       ...Server.fromPage("/guides/[slug]", Chapter),
+ *       staticPaths: ["intro"],
+ *     }),
  *   ]),
  * )
  * ```
+ *
+ * Prefer `fromPage(path, mint)` so the host adapts Waku flat props
+ * (`{ slug }`) into soft-nav {@link ./Page} props (`{ params }`).
  *
  * @public
  */
