@@ -30,6 +30,7 @@ export default [
       "dev/**/*.ts",
       "packages/last-ts/**/*.{ts,tsx}",
       "docs/last/**/*.{ts,tsx}",
+      "docs/site/**/*.{ts,tsx}",
     ],
     languageOptions: {
       ...config.languageOptions,
@@ -142,12 +143,11 @@ export default [
     },
   },
   // App trees never import waku — optional peer of last-ts only (see no-waku-app-imports).
-  // Grandfather: docs/site still on Waku fs-router until cutover; last-ts internals may import.
+  // docs/site cut over to last-ts host façades (Server.fromPage / Page.make) — no grandfather.
   {
     files: ["**/*.{ts,tsx,js,mjs,cjs}"],
     ignores: [
       "packages/last-ts/**",
-      "docs/site/**",
       "repos/**",
       "node_modules/**",
       "dist/**",

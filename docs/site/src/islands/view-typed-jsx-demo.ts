@@ -22,7 +22,7 @@ class AppRoot extends View.make<AppRoot>()("docs/site/view-typed-jsx/App") {
     AppRoot,
     Effect.gen(function* () {
       const GreeterView = yield* Greeter;
-      return (_props: {}) =>
+      return (_props: Record<string, never>) =>
         React.createElement(
           "div",
           { "data-demo": "outer" },
