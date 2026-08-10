@@ -33,7 +33,7 @@ type _Checks = [
   AssertExtends<typeof Policy.sticky, EngPolicy<{ Sticky: true }>>,
 ];
 
-// @ts-expect-error — Demo family is not Eng’d Policy brand
+// @ts-expect-error — Demo brand is not Eng’d Policy brand
 export const _cross: EngPolicy<{ Sticky: true }> = Demo.succeed("A", true);
 
 export type { _Checks };

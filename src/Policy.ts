@@ -1,11 +1,13 @@
 /**
  * Policy — composable behaviour fragments (client dial, verify, advertise conflict, yield).
  *
- * Built on {@link PolicyBuilder}: family declares **keys + Schemas**; this module
- * **recreates helpers** (`sticky`, `streamGap`, …) and re-exports
- * `Family.references`. Every fragment is a {@link Policy}: a real `Layer` that
- * carries its mode config at runtime. {@link layer} is `dual` — data-first merge
- * or `.pipe(Policy.layer(other))` — and expands the config type (last write wins).
+ * Built on {@link PolicyBuilder}: a private constructable declares **keys +
+ * Schemas** (each key is a Context.Reference — ambient defaults use Reference
+ * `defaultValue`); this module **recreates helpers** (`sticky`, `streamGap`, …)
+ * and re-exports those references. Every fragment is a {@link Policy}: a real
+ * `Layer` that overrides ambient Reference defaults. {@link layer} is `dual` —
+ * data-first merge or `.pipe(Policy.layer(other))` — and expands the config
+ * type (last write wins).
  *
  * ```ts
  * import * as Policy from "hyperlink-ts/Policy"
@@ -32,10 +34,10 @@ import type { DirectoryEntry } from "./Directory";
 import * as PolicyBuilder from "./PolicyBuilder";
 
 /**
- * Stable family id — brand + Context.Reference prefix (`${id}/Sticky`, …).
+ * Brand id + Context.Reference prefix (`${id}/Sticky`, …).
  * Future rename target: `LookupPolicy` / `hyperlink-ts/LookupPolicy`.
  */
-const FamilyId = "hyperlink-ts/Policy" as const;
+const builderId = "hyperlink-ts/Policy" as const;
 
 // =============================================================================
 // Schemas (value shapes for PolicyBuilder keys)
@@ -220,7 +222,7 @@ export type MergeConfigs<
  * @public
  */
 export type Policy<C extends Config = Config> = PolicyBuilder.Policy<
-  typeof FamilyId,
+  typeof builderId,
   C
 >;
 
@@ -239,20 +241,20 @@ export type ConfigOf<P> = PolicyBuilder.ConfigOf<P>;
  * @public
  */
 export type MergePolicyList<Ps extends ReadonlyArray<Policy<Config>>> =
-  PolicyBuilder.MergePolicyList<typeof FamilyId, Ps>;
+  PolicyBuilder.MergePolicyList<typeof builderId, Ps>;
 
 // =============================================================================
-// Family (PolicyBuilder — keys + schemas; module recreates helpers below)
+// Keys (private constructable — module recreates helpers below)
 // =============================================================================
 
 /**
- * Eng’d Lookup/Directory policy family — Schema-backed keys only.
- * Prefer the flat module exports (`Policy.make`, `Policy.sticky`, …).
+ * Schema-backed keys for this module. Not exported — use flat `Policy.*` helpers.
  *
- * @category constructors
- * @public
+ * `defaultValue` on each key is the Context.Reference default (ambient
+ * `yield* Sticky` when no override Layer is provided). Fragments / `make`
+ * override via Layer — same system as before PolicyBuilder.
  */
-export class Family extends PolicyBuilder.make(FamilyId)
+class Keys extends PolicyBuilder.make(builderId)
   .key("Sticky", Schema.Boolean, { defaultValue: () => true })
   .key("StreamGap", streamGapSchema, {
     defaultValue: (): StreamGap => "stall",
@@ -274,32 +276,32 @@ export class Family extends PolicyBuilder.make(FamilyId)
   }) {}
 
 // =============================================================================
-// References (re-exported from Family — stable `hyperlink-ts/Policy/*` ids)
+// References (Context.Reference — ambient defaults from Keys above)
 // =============================================================================
 
 /**
- * Warm dual-serve stickiness. Default `true`.
+ * Warm dual-serve stickiness. Default `true` (Reference default).
  *
  * @category references
  * @public
  */
-export const Sticky = Family.references.Sticky;
+export const Sticky = Keys.references.Sticky;
 
 /**
- * Stream seam across dial rebind. Default `"stall"`.
+ * Stream seam across dial rebind. Default `"stall"` (Reference default).
  *
  * @category references
  * @public
  */
-export const StreamGap = Family.references.StreamGap;
+export const StreamGap = Keys.references.StreamGap;
 
 /**
- * Cold N&gt;1 without Advice. Default `"fail"`.
+ * Cold N&gt;1 without Advice. Default `"fail"` (Reference default).
  *
  * @category references
  * @public
  */
-export const ColdAmbiguous = Family.references.ColdAmbiguous;
+export const ColdAmbiguous = Keys.references.ColdAmbiguous;
 
 /**
  * Optional soft pick (D4). Default unset — cold policy applies instead.
@@ -307,43 +309,43 @@ export const ColdAmbiguous = Family.references.ColdAmbiguous;
  * @category references
  * @public
  */
-export const Pick = Family.references.Pick;
+export const Pick = Keys.references.Pick;
 
 /**
- * Ambient client-verify mode. Default `"reject"`.
+ * Ambient client-verify mode. Default `"reject"` (Reference default).
  *
  * @category references
  * @public
  */
-export const Verify = Family.references.Verify;
+export const Verify = Keys.references.Verify;
 
 /**
  * Ambient advertise conflict preference (call-site / node stamp still win).
- * Default `"inherit"`.
+ * Default `"inherit"` (Reference default).
  *
  * @category references
  * @public
  */
-export const Conflict = Family.references.Conflict;
+export const Conflict = Keys.references.Conflict;
 
 /**
  * Cooperative yield handler for `"askIncumbent"` — `true` = step aside.
- * Default accept. ListenOptions.`onYield` wins when set.
+ * Default accept (Reference default). ListenOptions.`onYield` wins when set.
  *
  * @category references
  * @public
  */
-export const Yield = Family.references.Yield;
+export const Yield = Keys.references.Yield;
 
 // =============================================================================
 // Dial / cutover fragments
 // =============================================================================
 
 /** Keep the current dial across dual-serve (default on). @category layers @public */
-export const sticky: Policy<{ Sticky: true }> = Family.succeed("Sticky", true);
+export const sticky: Policy<{ Sticky: true }> = Keys.succeed("Sticky", true);
 
 /** Disable warm stickiness. @category layers @public */
-export const unsticky: Policy<{ Sticky: false }> = Family.succeed(
+export const unsticky: Policy<{ Sticky: false }> = Keys.succeed(
   "Sticky",
   false,
 );
@@ -351,31 +353,31 @@ export const unsticky: Policy<{ Sticky: false }> = Family.succeed(
 /** Stream seam mode. @category layers @public */
 export const streamGap = <const M extends StreamGap>(
   mode: M,
-): Policy<{ StreamGap: M }> => Family.succeed("StreamGap", mode);
+): Policy<{ StreamGap: M }> => Keys.succeed("StreamGap", mode);
 
 /** Cold N&gt;1 behaviour. @category layers @public */
 export const coldAmbiguous = <const M extends ColdAmbiguous>(
   mode: M,
-): Policy<{ ColdAmbiguous: M }> => Family.succeed("ColdAmbiguous", mode);
+): Policy<{ ColdAmbiguous: M }> => Keys.succeed("ColdAmbiguous", mode);
 
 /** Soft pick when N&gt;1 and Advice misses. @category layers @public */
 export const pick = <const M extends Pick>(mode: M): Policy<{ Pick: M }> =>
-  Family.succeed("Pick", mode);
+  Keys.succeed("Pick", mode);
 
 /** Verify and reject on failure (default). @category layers @public */
-export const verifyReject: Policy<{ Verify: "reject" }> = Family.succeed(
+export const verifyReject: Policy<{ Verify: "reject" }> = Keys.succeed(
   "Verify",
   "reject",
 );
 
 /** Verify; keep status without failing Layer build. @category layers @public */
-export const verifyStatus: Policy<{ Verify: "status" }> = Family.succeed(
+export const verifyStatus: Policy<{ Verify: "status" }> = Keys.succeed(
   "Verify",
   "status",
 );
 
 /** Skip client verify probe. @category layers @public */
-export const verifyOff: Policy<{ Verify: false }> = Family.succeed(
+export const verifyOff: Policy<{ Verify: false }> = Keys.succeed(
   "Verify",
   false,
 );
@@ -383,7 +385,7 @@ export const verifyOff: Policy<{ Verify: false }> = Family.succeed(
 /** Set client verify mode. @category layers @public */
 export const verify = <const M extends Verify>(
   mode: M,
-): Policy<{ Verify: M }> => Family.succeed("Verify", mode);
+): Policy<{ Verify: M }> => Keys.succeed("Verify", mode);
 
 /**
  * Walk preference layers (first concrete wins). Hard fallback: `livenessReplace`.
@@ -424,20 +426,20 @@ export const onConflictOf = (node: unknown): OnConflict | undefined => {
 
 /** Advertise: liveness ping replace. @category layers @public */
 export const livenessReplace: Policy<{ Conflict: "livenessReplace" }> =
-  Family.succeed("Conflict", "livenessReplace");
+  Keys.succeed("Conflict", "livenessReplace");
 
 /** Advertise: ask incumbent to yield. @category layers @public */
 export const askIncumbent: Policy<{ Conflict: "askIncumbent" }> =
-  Family.succeed("Conflict", "askIncumbent");
+  Keys.succeed("Conflict", "askIncumbent");
 
 /** Advertise: reject when incumbent alive. @category layers @public */
-export const conflictReject: Policy<{ Conflict: "reject" }> = Family.succeed(
+export const conflictReject: Policy<{ Conflict: "reject" }> = Keys.succeed(
   "Conflict",
   "reject",
 );
 
 /** Advertise: inherit up the chain (default ambient). @category layers @public */
-export const conflictInherit: Policy<{ Conflict: "inherit" }> = Family.succeed(
+export const conflictInherit: Policy<{ Conflict: "inherit" }> = Keys.succeed(
   "Conflict",
   "inherit",
 );
@@ -445,16 +447,16 @@ export const conflictInherit: Policy<{ Conflict: "inherit" }> = Family.succeed(
 /** Set advertise conflict preference. @category layers @public */
 export const onConflict = <const M extends OnConflict>(
   mode: M,
-): Policy<{ Conflict: M }> => Family.succeed("Conflict", mode);
+): Policy<{ Conflict: M }> => Keys.succeed("Conflict", mode);
 
 /** Accept askIncumbent yield (default). @category layers @public */
-export const yieldAccept: Policy<{ Yield: true }> = Family.succeed(
+export const yieldAccept: Policy<{ Yield: true }> = Keys.succeed(
   "Yield",
   true,
 );
 
 /** Refuse askIncumbent yield. @category layers @public */
-export const yieldRefuse: Policy<{ Yield: false }> = Family.succeed(
+export const yieldRefuse: Policy<{ Yield: false }> = Keys.succeed(
   "Yield",
   false,
 );
@@ -462,7 +464,7 @@ export const yieldRefuse: Policy<{ Yield: false }> = Family.succeed(
 /** Custom yield handler. @category layers @public */
 export const onYield = <E extends Effect.Effect<boolean>>(
   handler: E,
-): Policy<{ Yield: E }> => Family.succeed("Yield", handler);
+): Policy<{ Yield: E }> => Keys.succeed("Yield", handler);
 
 // =============================================================================
 // layer / make / provide / guards
@@ -474,7 +476,7 @@ export const onYield = <E extends Effect.Effect<boolean>>(
  * @category guards
  * @public
  */
-export const isPolicy = (u: unknown): u is Policy<Config> => Family.is(u);
+export const isPolicy = (u: unknown): u is Policy<Config> => Keys.is(u);
 
 /**
  * Read the runtime config stamped on a {@link Policy}.
@@ -483,7 +485,7 @@ export const isPolicy = (u: unknown): u is Policy<Config> => Family.is(u);
  * @public
  */
 export const config = <C extends Config>(self: Policy<C>): C =>
-  Family.config(self);
+  Keys.config(self);
 
 /**
  * Merge policy Layers (last write wins per reference) **and** expand configs.
@@ -503,7 +505,7 @@ export const config = <C extends Config>(self: Policy<C>): C =>
  * @category layers
  * @public
  */
-export const layer: typeof Family.layer = Family.layer;
+export const layer: typeof Keys.layer = Keys.layer;
 
 /**
  * Build a {@link Policy} from an object. Stamps the same object as runtime
@@ -522,7 +524,7 @@ export const layer: typeof Family.layer = Family.layer;
  * @public
  */
 export const make = <const C extends Config>(config: C): Policy<C> =>
-  Family.make(config);
+  Keys.make(config);
 
 /**
  * Provide policy Layers onto a Layer (no stacked `Layer.provide`s).
@@ -546,4 +548,4 @@ export const make = <const C extends Config>(config: C): Policy<C> =>
 export const provide =
   (...policies: ReadonlyArray<Layer.Layer<never>>) =>
   <A, E, R>(self: Layer.Layer<A, E, R>): Layer.Layer<A, E, R> =>
-    Family.provide(...policies)(self);
+    Keys.provide(...policies)(self);

@@ -215,11 +215,12 @@ plain struct value for **inline or anonymous** shapes, where a class is just cer
 
 Layers are camelCase. The canonical toolkit entrypoint is `layer` (and `layer*` variants like
 `layerMemory`); a composed or auxiliary layer takes a `*Layer` suffix (`peersLayer`). Policy
-families are HttpApi-shaped classes with Schema keys —
-`class X extends PolicyBuilder.make(id).key(name, schema, { defaultValue })` — then the
-domain module recreates helpers; fragments are real `Policy.Policy<{…}>` values (Layer +
-runtime config; `Policy.verifyOff` → `Policy.Policy<{ Verify: false }>`). Compose with dual
-`Policy.layer` (`.pipe(Policy.layer(other))` or `Policy.layer(a, b, c)` — config expands) /
+modules use HttpApi-shaped constructables with Schema keys —
+`class X extends PolicyBuilder.make(id).key(name, schema, { defaultValue })` — where
+`defaultValue` is the `Context.Reference` default; the domain module recreates helpers.
+Fragments are real `Policy.Policy<{…}>` values (Layer overrides; `Policy.verifyOff` →
+`Policy.Policy<{ Verify: false }>`). Compose with dual `Policy.layer`
+(`.pipe(Policy.layer(other))` or `Policy.layer(a, b, c)` — config expands) /
 `Policy.provide`, or object-form `Policy.make({ StreamGap: "stall", … })`. Either way the
 name says "layer."
 

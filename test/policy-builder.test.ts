@@ -30,7 +30,7 @@ const readDemo = Effect.gen(function* () {
   };
 });
 
-describe("PolicyBuilder family", () => {
+describe("PolicyBuilder", () => {
   it.effect("class extends make+key(schema); make/succeed stamp decoded config", () =>
     Effect.gen(function* () {
       const bundle = Demo.make({ Flag: true, Mode: "b", Handler: 7 });
@@ -47,7 +47,7 @@ describe("PolicyBuilder family", () => {
     }),
   );
 
-  it.effect("layer last-write wins; brands do not cross families", () =>
+  it.effect("layer last-write wins; brands do not cross; refs keep Reference defaults", () =>
     Effect.gen(function* () {
       const merged = Demo.make({ Flag: true, Mode: "a" }).pipe(
         Demo.layer(Demo.succeed("Mode", "b")),
@@ -61,8 +61,10 @@ describe("PolicyBuilder family", () => {
       expect(Demo.is(Policy.sticky)).toBe(false);
       expect(Policy.isPolicy(Demo.succeed("Flag", true))).toBe(false);
       expect(Policy.isPolicy(Policy.sticky)).toBe(true);
-      expect(Policy.Family.is(Policy.sticky)).toBe(true);
       expect(Policy.Sticky.key).toBe("hyperlink-ts/Policy/Sticky");
+      // Ambient Reference default (no Layer) — same system as pre-PolicyBuilder
+      expect(yield* Policy.Sticky).toBe(true);
+      expect(yield* Policy.Verify).toBe("reject");
     }),
   );
 

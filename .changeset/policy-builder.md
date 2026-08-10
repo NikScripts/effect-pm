@@ -2,7 +2,7 @@
 "hyperlink-ts": minor
 ---
 
-`PolicyBuilder` is Schema-first and HttpApi-shaped: declare keys with
-`.key(name, schema, { defaultValue, toRuntime? })`, `class extends` the family, then
-recreate module helpers (`sticky`, …) and re-export `Family.references`. Eng’d `Policy`
-uses that split; public fragment / `make` / `provide` DX unchanged.
+`PolicyBuilder`: HttpApi-shaped constructables with Schema keys. Each key is a
+`Context.Reference` — `defaultValue` is the Reference default (ambient
+`yield* Ref`), not a second defaults system. Domain modules recreate helpers and
+re-export references; no public `Family` API.

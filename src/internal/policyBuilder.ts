@@ -21,7 +21,7 @@ export const BrandKey = "~hyperlink-ts/PolicyBuilder" as const;
 export const ConfigKey = "~hyperlink-ts/PolicyBuilder/Config" as const;
 
 /** TypeId on family constructables. */
-export const FamilyTypeId = "~hyperlink-ts/PolicyBuilder/Family" as const;
+export const DefTypeId = "~hyperlink-ts/PolicyBuilder/Def" as const;
 
 /**
  * One config key: Schema (config input) + Reference (runtime) + encode.
@@ -157,11 +157,11 @@ const layerForKey = <S extends Schema.Top, Runtime>(
  *
  * @internal
  */
-export interface PolicyBuilderFamily<
+export interface PolicyBuilderDef<
   Id extends string,
   Keys extends Record<string, PolicyBuilderKeySpec<any, any>>,
 > {
-  readonly [FamilyTypeId]: typeof FamilyTypeId;
+  readonly [DefTypeId]: typeof DefTypeId;
   readonly id: Id;
   readonly keys: Keys;
   /** Context.Reference per key — domain modules re-export these. */
@@ -170,8 +170,12 @@ export interface PolicyBuilderFamily<
   /**
    * Widen with a Schema-backed key (HttpApi.`add` analogue).
    *
-   * Builds `Context.Reference` at `` `${id}/${name}` ``. Optional `toRuntime`
-   * when Layer runtime ≠ schema decoded type (e.g. Yield boolean → Effect).
+   * Builds `Context.Reference` at `` `${id}/${name}` ``.
+   *
+   * - `defaultValue` — **same form as** `Context.Reference(id, { defaultValue })`.
+   *   Ambient `yield* Ref` uses this when no override Layer is provided.
+   * - `toRuntime` — optional when Layer runtime ≠ schema decoded type
+   *   (e.g. Yield config `boolean` → runtime `Effect`).
    */
   key: <
     const K extends string,
@@ -184,7 +188,7 @@ export interface PolicyBuilderFamily<
       readonly defaultValue: () => Runtime;
       readonly toRuntime?: (input: Schema.Schema.Type<S>) => Runtime;
     },
-  ) => PolicyBuilderFamily<
+  ) => PolicyBuilderDef<
     Id,
     Keys & { readonly [P in K]: PolicyBuilderKeySpec<S, Runtime> }
   >;
@@ -257,7 +261,7 @@ export interface PolicyBuilderFamily<
   ) => unknown;
 }
 
-type FamilyData = {
+type DefData = {
   readonly id: string;
   readonly keys: Record<string, PolicyBuilderKeySpec<any, any>>;
 };
@@ -272,14 +276,14 @@ const refsOf = (
   return refs;
 };
 
-const familyProto = {
+const defProto = {
   pipe() {
     // Effect Pipeable protocol — `arguments` required by `pipeArguments`.
     // eslint-disable-next-line prefer-rest-params -- pipeArguments(this, arguments)
     return pipeArguments(this, arguments);
   },
   key(
-    this: FamilyData,
+    this: DefData,
     name: string,
     schema: Schema.Top,
     options: {
@@ -299,7 +303,7 @@ const familyProto = {
       keys: { ...this.keys, [name]: spec },
     });
   },
-  make(this: FamilyData, config: Record<string, unknown>) {
+  make(this: DefData, config: Record<string, unknown>) {
     const parts: Array<Layer.Layer<never>> = [];
     const decodedConfig: Record<string, unknown> = {};
     for (const keyName of Object.keys(this.keys)) {
@@ -313,7 +317,7 @@ const familyProto = {
     }
     return brandPolicy(this.id, mergeLayers(parts), decodedConfig);
   },
-  succeed(this: FamilyData, keyName: string, value: unknown) {
+  succeed(this: DefData, keyName: string, value: unknown) {
     const spec = this.keys[keyName]!;
     const { layer, decoded } = layerForKey(spec, value);
     return brandPolicy(this.id, layer, { [keyName]: decoded });
@@ -330,7 +334,7 @@ const familyProto = {
     },
   ),
   provide(
-    this: FamilyData,
+    this: DefData,
     ...policies: ReadonlyArray<Layer.Layer<never>>
   ) {
     return <A, E, R>(self: Layer.Layer<A, E, R>): Layer.Layer<A, E, R> => {
@@ -338,13 +342,13 @@ const familyProto = {
       return self.pipe(Layer.provide(mergeLayers(policies)));
     };
   },
-  is(this: FamilyData, u: unknown) {
+  is(this: DefData, u: unknown) {
     return (
       hasProperty(u, BrandKey) &&
       (u as { readonly [BrandKey]: unknown })[BrandKey] === this.id
     );
   },
-  config(this: FamilyData, self: PolicyBuilderPolicy<string, object>) {
+  config(this: DefData, self: PolicyBuilderPolicy<string, object>) {
     return self[ConfigKey];
   },
 };
@@ -396,15 +400,15 @@ export const mergeLayers = (
  *
  * @internal
  */
-export const makeProto = (options: FamilyData): PolicyBuilderFamily<any, any> => {
-  function PolicyFamily(_: never) {}
-  Object.setPrototypeOf(PolicyFamily, familyProto);
-  return Object.assign(PolicyFamily, {
-    [FamilyTypeId]: FamilyTypeId,
+export const makeProto = (options: DefData): PolicyBuilderDef<any, any> => {
+  function PolicyDef(_: never) {}
+  Object.setPrototypeOf(PolicyDef, defProto);
+  return Object.assign(PolicyDef, {
+    [DefTypeId]: DefTypeId,
     id: options.id,
     keys: options.keys,
     references: refsOf(options.keys),
-  }) as unknown as PolicyBuilderFamily<any, any>;
+  }) as unknown as PolicyBuilderDef<any, any>;
 };
 
 /**
@@ -414,5 +418,5 @@ export const makeProto = (options: FamilyData): PolicyBuilderFamily<any, any> =>
  */
 export const make = <const Id extends string>(
   id: Id,
-): PolicyBuilderFamily<Id, {}> =>
-  makeProto({ id, keys: {} }) as PolicyBuilderFamily<Id, {}>;
+): PolicyBuilderDef<Id, {}> =>
+  makeProto({ id, keys: {} }) as PolicyBuilderDef<Id, {}>;

@@ -1,12 +1,13 @@
 /**
- * PolicyBuilder — HttpApi-shaped constructable kernel for policy families
+ * PolicyBuilder — HttpApi-shaped constructable kernel for policy modules
  * (`Policy` / future `LookupPolicy` / `NodePolicy`).
  *
  * **Two layers:**
- * 1. **Family** — `make(id).key(name, schema, { defaultValue, toRuntime? })` then
- *    `class extends` (keys + value Schemas + derived Context.References).
- * 2. **Module** — recreate helpers on top (`sticky`, `streamGap`, re-export
- *    `Family.references.*`) — hand-written DX in most cases.
+ * 1. **Constructable** — `class X extends PolicyBuilder.make(id).key(name, schema, opts)`.
+ *    Each key is a Schema + a derived {@link Context.Reference}
+ *    (`defaultValue` is the Reference default — same form as Effect).
+ * 2. **Module** — recreate helpers (`sticky`, `streamGap`, re-export
+ *    `X.references.*`) — hand-written DX in most cases.
  *
  * ```ts
  * import * as PolicyBuilder from "hyperlink-ts/PolicyBuilder"
@@ -79,7 +80,7 @@ export type MergeConfigs<
 export type ConfigOf<P> = internal.PolicyBuilderConfigOf<P>;
 
 /**
- * Left-to-right {@link MergeConfigs} over a list of policies in one family.
+ * Left-to-right {@link MergeConfigs} over a list of branded policies.
  *
  * @category models
  * @public
@@ -90,7 +91,7 @@ export type MergePolicyList<
 > = internal.PolicyBuilderMergePolicyList<Id, Ps>;
 
 /**
- * Config object shape derived from a family’s keys map.
+ * Config object shape derived from a constructable’s keys map.
  *
  * @category models
  * @public
@@ -100,25 +101,26 @@ export type ConfigOfKeys<
 > = internal.PolicyBuilderConfigOfKeys<Keys>;
 
 /**
- * Constructable family returned by {@link make} — `class extends` target.
+ * Constructable returned by {@link make} — the `class extends` target (HttpApi-shaped).
  *
  * @category models
  * @public
  */
-export type Family<
+export type Def<
   Id extends string,
   Keys extends Record<string, KeySpec<any, any>>,
-> = internal.PolicyBuilderFamily<Id, Keys>;
+> = internal.PolicyBuilderDef<Id, Keys>;
 
 // =============================================================================
 // Constructors
 // =============================================================================
 
 /**
- * Empty policy family constructable (HttpApi.`make(id)` analogue).
+ * Empty constructable (HttpApi.`make(id)` analogue).
  *
  * Widen with `.key(name, schema, { defaultValue, toRuntime? })`, then
- * `class extends`. Domain modules recreate helpers on top of the class.
+ * `class extends`. `defaultValue` is the Context.Reference default — ambient
+ * `yield* Ref` when no override Layer is provided.
  *
  * ```ts
  * class Demo extends PolicyBuilder.make("demo/Policy")

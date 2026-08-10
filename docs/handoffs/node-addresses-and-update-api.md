@@ -259,21 +259,28 @@ sticky / wait-advice stay on **`LookupPolicy`**. One dial story, not two.
 ### 3.3.1 PolicyBuilder — shared architecture (locked)
 
 Both policy modules share one builder kernel — **`hyperlink-ts/PolicyBuilder`**.
+
+**Defaults:** Policies **are** `Context.Reference`s. Ambient defaults are Reference
+`defaultValue` — same system as before PolicyBuilder (`yield* Policy.Sticky` with no
+Layer → `true`). Builder `.key(…, { defaultValue })` **is** that Reference option,
+not a second defaults mechanism. Fragments / `make` override via Layer. Call-site /
+node stamps still win for conflict / yield where they already did.
+
 **Two layers:**
 
-1. **Family (builder)** — declare **key name + Schema** (+ default / optional
-   `toRuntime`). HttpApi-shaped: `make(id).key(…).key(…)` then `class extends`.
-   Builder derives `Context.Reference` at `` `${id}/${name}` `` and supplies
-   branded `make` / `layer` / `provide` / `succeed`.
-2. **Module (helpers)** — **recreate** the DX on top in most cases: re-export
-   `Family.references.*`, hand-write `sticky` / `streamGap` / `verifyOff` / …
+1. **Constructable** — declare **key name + Schema** (+ Reference `defaultValue` /
+   optional `toRuntime`). HttpApi-shaped: `make(id).key(…).key(…)` then
+   `class extends`. Derives `Context.Reference` at `` `${id}/${name}` ``.
+2. **Module** — **recreate** DX: re-export `X.references.*`, hand-write `sticky` /
+   `streamGap` / … (constructable stays private or is the module’s named class —
+   never a nested `Family` API).
 
 ```ts
 import * as PolicyBuilder from "hyperlink-ts/PolicyBuilder"
 import { Effect, Schema } from "effect"
 
 class LookupPolicy extends PolicyBuilder.make("hyperlink-ts/LookupPolicy")
-  .key("Sticky", Schema.Boolean, { defaultValue: () => true })
+  .key("Sticky", Schema.Boolean, { defaultValue: () => true }) // Reference default
   .key("Verify", verifySchema, { defaultValue: () => "reject" })
   .key("Yield", yieldSchema, {
     defaultValue: () => Effect.succeed(true),
@@ -282,25 +289,22 @@ class LookupPolicy extends PolicyBuilder.make("hyperlink-ts/LookupPolicy")
   })
 {}
 
-// module recreates helpers
 export const Sticky = LookupPolicy.references.Sticky
 export const sticky = LookupPolicy.succeed("Sticky", true)
 export const make = LookupPolicy.make
-
-LookupPolicy.make({ Sticky: true, Verify: "reject" })
 ```
 
 | Piece | Role |
 |-------|------|
-| **`PolicyBuilder.make(id)`** | Empty family constructable (HttpApi.`make`) |
-| **`.key(name, schema, opts)`** | Key + value Schema (+ `defaultValue`, optional `toRuntime`) |
-| **`class extends`** | Name the family |
-| **`Family.references`** | Derived Context.References for the module to re-export |
-| **`Family.make` / `layer` / `provide` / `succeed`** | Branded Layer+config toolkit |
-| **Module helpers** | Recreated DX (`sticky`, `streamGap`, …) — not auto-generated |
+| **`PolicyBuilder.make(id)`** | Empty constructable (HttpApi.`make`) |
+| **`.key(name, schema, opts)`** | Schema + Reference (`defaultValue` = Reference default) |
+| **`class extends`** | Name the constructable (or keep private in the module) |
+| **`.references`** | Derived Context.References to re-export |
+| **`.make` / `layer` / `provide` / `succeed`** | Branded Layer override toolkit |
+| **Module helpers** | Recreated DX — not auto-generated |
 
-**Eng’d today:** `Policy.Family` + schemas + recreated flat helpers. **Next:** Eng
-`NodePolicy` the same way; rename `Policy` → `LookupPolicy`.
+**Eng’d today:** private `Keys` constructable inside `Policy` + flat helpers. **Next:**
+Eng `NodePolicy` the same way; rename `Policy` → `LookupPolicy`.
 
 Apps normally import **`LookupPolicy` / `NodePolicy`**, not the builder.
 
